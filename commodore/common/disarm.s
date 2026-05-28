@@ -31,31 +31,21 @@ disarm_command:
 
 !has_trap:
     jsr player_disarm_get_effective_chance
-    sta df_disarm_chance
+    sta df_disarm_total
     ldx df_disarm_trap_idx
     lda trap_type,x
     tax
-    lda df_disarm_chance
-    clc
-    adc #100
-    bcs !chance_cap+
-    sec
-    sbc trap_difficulty,x
-    bcs !chance_ok+
-    lda #0
-    beq !chance_ok+
-!chance_cap:
-    lda #255
-!chance_ok:
+    lda df_disarm_total
+    jsr disarm_calc_success_threshold
     sta df_disarm_chance
     lda #100
     jsr rng_range
     cmp df_disarm_chance
     bcc !success+
 
-    lda #5
-    jsr rng_range
-    beq !bad_fail+
+    lda df_disarm_total
+    jsr disarm_roll_bad_fail
+    bcs !bad_fail+
     lda #<disarm_fail_str
     sta zp_ptr0
     lda #>disarm_fail_str

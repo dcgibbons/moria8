@@ -4,7 +4,7 @@
 //        mon_atk_apply_damage, player_death_check, poison effect,
 //        paralysis effect, aggravation effect.
 //
-// Results at $0400-$040c: $01 = pass, $00 = fail per test
+// Results at $0400-$040f: $01 = pass, $00 = fail per test
 // NOTE: msg_print writes to screen row 0 ($0400+), so we store results
 // in tc_results[] and copy to $0400 at the very end.
 
@@ -18,7 +18,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #12
+    ldx #15
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -95,7 +95,7 @@ press_key_str:
 // Test scratch
 tc_loop:    .byte 0
 tc_ok:      .byte 0
-tc_results: .fill 13, $ff      // Result buffer (copied to $0400 at end)
+tc_results: .fill 16, $ff      // Result buffer (copied to $0400 at end)
 
 test_start:
     // Seed RNG deterministically
@@ -552,10 +552,112 @@ test_start:
 !t13_fail:
     lda #$00
     sta tc_results + 12
-    jmp !tests_done+
+    jmp !t14+
 !t13_ok:
     lda #$01
     sta tc_results + 12
+
+    // ==========================================
+    // Test 14: bless contributes +2 effective AC for monster damage reduction.
+    // AC 98 + bless 2, damage 10: reduction 5, result 5.
+    // ==========================================
+!t14:
+    lda #98
+    sta zp_player_ac
+    lda #1
+    sta zp_eff_bless
+    lda #10
+    sta zp_combat_dmg
+
+    jsr mon_atk_ac_reduce
+
+    lda #0
+    sta zp_eff_bless
+    lda zp_combat_dmg
+    cmp #5
+    bne !t14_fail+
+    lda #$01
+    sta tc_results + 13
+    jmp !t15+
+!t14_fail:
+    lda #$00
+    sta tc_results + 13
+
+    // ==========================================
+    // Test 15: heroism blocks new fear from monster attacks.
+    // ==========================================
+!t15:
+    lda #0
+    sta eff_fear_timer
+    lda #5
+    sta zp_eff_hero
+    lda #0                      // White Harpy
+    sta mat_type2
+
+    jsr mon_atk_effect_fear
+
+    lda #0
+    sta zp_eff_hero
+    lda eff_fear_timer
+    bne !t15_fail+
+    lda #$01
+    sta tc_results + 14
+    jmp !t16+
+!t15_fail:
+    lda #$00
+    sta tc_results + 14
+
+    // ==========================================
+    // Test 16: heroism expiration removes temporary HP and clamps current HP.
+    // ==========================================
+!t16:
+    lda #1
+    sta zp_eff_hero
+    lda #50
+    sta player_data + PL_MHP_LO
+    lda #0
+    sta player_data + PL_MHP_HI
+    lda #55
+    sta zp_player_hp_lo
+    sta player_data + PL_HP_LO
+    lda #0
+    sta zp_player_hp_hi
+    sta player_data + PL_HP_HI
+    sta zp_eff_poison
+    sta zp_eff_blind
+    sta zp_eff_confuse
+    sta zp_eff_paralyze
+    sta zp_eff_speed
+    sta zp_eff_protect
+    sta zp_eff_invis
+    sta zp_eff_infra
+    sta zp_eff_bless
+    sta zp_eff_regen
+    sta zp_eff_word_recall
+    sta eff_detect_timer
+    sta eff_fear_timer
+    sta zp_pseudo_id_timer
+    sta player_data + PL_SPELL_TYPE
+
+    jsr turn_tick_effects
+
+    lda zp_eff_hero
+    bne !t16_fail+
+    lda player_data + PL_MHP_LO
+    cmp #40
+    bne !t16_fail+
+    lda zp_player_hp_lo
+    cmp #40
+    bne !t16_fail+
+    lda player_data + PL_HP_LO
+    cmp #40
+    bne !t16_fail+
+    lda #$01
+    sta tc_results + 15
+    jmp !tests_done+
+!t16_fail:
+    lda #$00
+    sta tc_results + 15
 
 !tests_done:
     jmp test_exit_trampoline

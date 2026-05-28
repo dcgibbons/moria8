@@ -57,6 +57,7 @@
 :C128AuditBelowIo("tramp_player_tunnel", tramp_player_tunnel)
 :C128AuditBelowIo("tramp_throw_item", tramp_throw_item)
 :C128AuditBelowIo("tramp_bash_command", tramp_bash_command)
+:C128AuditBelowIo("tramp_disarm_command", tramp_disarm_command)
 :C128AuditBelowIo("tramp_dig_ability", tramp_dig_ability)
 :C128AuditBelowIo("tramp_level_generate", tramp_level_generate)
 :C128AuditBelowIo("tramp_assign_special_room", tramp_assign_special_room)
@@ -199,5 +200,7 @@
 :C128AuditItemsOverlay("throw_item", throw_item)
 :C128AuditItemsOverlay("bash_command", bash_command)
 :C128AuditItemsOverlay("eff_earthquake", eff_earthquake)
+:C128AuditDisarmOverlay("disarm_command", disarm_command)
+:C128AuditDisarmOverlay("player_disarm_get_effective_chance", player_disarm_get_effective_chance)
 // Spell UI display literals must stay with the UI overlay, not in low common RAM.
 .assert "AUDIT-IO-C128 pm_header_str stays in the UI overlay", pm_header_str >= $E000 && pm_header_str < $F000, true

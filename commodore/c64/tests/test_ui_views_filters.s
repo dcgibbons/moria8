@@ -32,6 +32,7 @@ combat_msg_buf:  .fill 42, 0
 .label cmb_period = $00
 cmb_type:   .byte 0
 cmb_damage: .byte 0
+eff_fear_timer: .byte 0
 cr_mflags:  .fill 65, 0
 current_tier: .byte 0
 tier_loaded:  .byte 0

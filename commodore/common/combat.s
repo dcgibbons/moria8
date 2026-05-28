@@ -14,6 +14,13 @@ cmb_damage:      .byte 0        // Damage for current blow
 cmb_dead:        .byte 0        // Monster died flag
 cmb_any_hit:     .byte 0        // Any blow connected this round
 cmb_buf_idx:     .byte 0        // Buffer write index for msg builder
+cmb_hit_count:   .byte 0        // Successful blows this round
+cmb_blow_count:  .byte 0        // Initial blows this round
+cmb_total_tohit: .byte 0        // Signed melee plus-to-hit after melee penalties
+cmb_target_x:    .byte 0        // Target tile for light-sensitive melee BTH
+cmb_target_y:    .byte 0
+cmb_target_light_valid: .byte 0
+cmb_target_lit:  .byte 1
 
 #if C128
 .const COMBAT_MSG_BUF_SIZE = 54
@@ -25,10 +32,12 @@ cmb_buf_idx:     .byte 0        // Buffer write index for msg builder
 // Message composition buffer. C128 is sized for the longest current
 // combat feedback string plus a 31-byte monster name and terminator.
 combat_msg_buf:  .fill COMBAT_MSG_BUF_SIZE, 0
+combat_msg_buf_end:
 
 // ============================================================
 // Combat strings (screen codes via inherited encoding)
 // ============================================================
+#if !COMBAT_STRINGS_EXTERNAL
 cmb_you_str:     .text "You " ; .byte 0
 cmb_the_str:     .text " the " ; .byte 0
 cmb_hit_str:     .text "hit" ; .byte 0
@@ -36,6 +45,7 @@ cmb_miss_str:    .text "miss" ; .byte 0
 cmb_kill_str:    .text "have slain" ; .byte 0
 // cmb_lvlup_str migrated to Huffman (HSTR_CMB_LVLUP)
 cmb_period:      .byte $2e, 0   // "."
+#endif
 
 // ============================================================
 // Subroutines
@@ -46,20 +56,42 @@ cmb_period:      .byte $2e, 0   // "."
 // Output: always returns with carry SET (turn consumed)
 // Clobbers: everything
 player_attack_monster:
-    pha
+    sta cmb_target_x
+    sty cmb_target_y
     jsr player_search_mode_off
-    pla
 
     // Find the monster at this position
+    lda cmb_target_x
+    ldy cmb_target_y
     jsr monster_find_at         // A=x, Y=y → carry set, X=slot
     bcs !pam_found+
     // No monster found (shouldn't happen, but be safe)
+    lda #0
+    sta cmb_target_light_valid
     sec
     rts
 
 !pam_found:
     // Save slot index and load creature type
     stx cmb_slot
+    lda #1
+    sta cmb_target_light_valid
+    ldy cmb_target_y
+    lda map_row_lo,y
+    sta zp_ptr0
+    lda map_row_hi,y
+    sta zp_ptr0_hi
+    ldy cmb_target_x
+    lda (zp_ptr0),y
+    and #FLAG_LIT
+    beq !pam_dark+
+    lda #1
+    bne !pam_store_light+
+!pam_dark:
+    lda #0
+!pam_store_light:
+    sta cmb_target_lit
+    ldx cmb_slot
     jsr monster_get_ptr         // zp_ptr0 = entry
     ldy #MX_TYPE
     lda (zp_ptr0),y
@@ -74,10 +106,13 @@ player_attack_monster:
     // Calculate to-hit chance and number of blows
     jsr combat_calc_tohit       // → zp_combat_tohit
     jsr combat_calc_blows       // → zp_combat_blows
+    lda zp_combat_blows
+    sta cmb_blow_count
 
     lda #0
     sta cmb_dead
     sta cmb_any_hit
+    sta cmb_hit_count
 
     // Load monster AC for all rolls
     ldx cmb_type
@@ -97,6 +132,7 @@ player_attack_monster:
     // --- Hit ---
     lda #1
     sta cmb_any_hit
+    inc cmb_hit_count
 
     // Check confuse-on-hit from Monster Confusion scroll
     lda zp_confuse_melee
@@ -105,12 +141,25 @@ player_attack_monster:
     sta zp_confuse_melee            // Clear — one-time use
     // Set monster's confusion timer
     ldy #MX_CONFUSE
-    lda #20                         // 20 turns confused
+    lda (zp_ptr0),y
+    bne !pam_confuse_stack+
+    lda #16
+    jsr rng_range                   // [0, 15]
+    clc
+    adc #2                          // [2, 17]
+    bne !pam_confuse_store+
+!pam_confuse_stack:
+    clc
+    adc #3
+    bcc !pam_confuse_store+
+    lda #255
+!pam_confuse_store:
     sta (zp_ptr0),y
 !pam_no_confuse:
 
     jsr combat_roll_damage      // → cmb_damage
     jsr combat_critical_blow    // May multiply cmb_damage (weapon hits only)
+    jsr combat_add_damage_bonus // Add PL_TODMG after ego/slay/crit
 
     // Apply damage to monster
     ldx cmb_slot
@@ -160,6 +209,7 @@ player_attack_monster:
     lda #<cmb_hit_str
     ldy #>cmb_hit_str
     jsr msg_build_action
+    jsr combat_append_blow_summary
     jsr cmb_print_buf
 
     lda #SFX_HIT
@@ -177,31 +227,77 @@ player_attack_monster:
     jsr hal_sound_play
 
 !pam_done:
+    lda #0
+    sta cmb_target_light_valid
     sec                         // Turn consumed
     rts
 
 cct_bth_offset: .byte 0
 cct_lvl_offset: .byte 0
+cct_bonus_mult: .byte 3
 
 // combat_calc_tohit — Compute melee hit chance (entry point)
 // Output: zp_combat_tohit = hit chance (capped at 255)
 // Clobbers: A, X, Y, zp_math_a/b, zp_temp0
 combat_calc_tohit:
+    jsr combat_calc_melee_total_tohit_bonus
     lda #3                          // Melee BTH offset in class_properties
     ldx #0                          // Melee level adj offset
-    jsr combat_calc_tohit_common
+    jmp combat_calc_tohit_common
+
+// combat_calc_bow_tohit — Compute ranged launcher hit chance.
+// Output: zp_combat_tohit = hit chance (capped at 255)
+#if !C128_COMBAT_COMMON_HELPERS_EXTERNAL
+combat_calc_bow_tohit:
+    lda player_data + PL_TOHIT
+    sta cmb_total_tohit
+    lda #4                          // BTH_BOW offset in class_properties
+    ldx #1                          // BOW level adj offset
+    jmp combat_calc_tohit_common
+
+// combat_calc_melee_total_tohit_bonus — PL_TOHIT plus Umoria melee penalties.
+// Bare hands are -3. Too-heavy weapons add (STR*15 - weight), a negative value.
+// Ranged launchers/ammo used in melee keep the plain PL_TOHIT bonus.
+combat_calc_melee_total_tohit_bonus:
+    lda player_data + PL_TOHIT
+    sta cmb_total_tohit
+
     lda inv_item_id + EQUIP_WEAPON
     cmp #FI_EMPTY
-    bne !cct_done+
-    lda zp_combat_tohit
+    beq !ccmt_unarmed+
+
+    cmp #IT_MISSILE_BASE
+    bcc !ccmt_weapon+
+    cmp #55
+    bcc !ccmt_done+
+!ccmt_weapon:
+    tay
+    lda it_weight,y
+    beq !ccmt_unarmed+
+    sta ccb_wt_save
+    lda player_data + PL_STR_CUR
+    ldx #15
+    jsr math_multiply
+    lda zp_math_b
+    bne !ccmt_done+
+    lda zp_math_a
+    cmp ccb_wt_save
+    bcs !ccmt_done+
     sec
-    sbc #9                          // Bare-hand total_to_hit penalty -3.
-    bcs !cct_store_unarmed+
-    lda #0
-!cct_store_unarmed:
-    sta zp_combat_tohit
-!cct_done:
+    sbc ccb_wt_save                // Signed negative penalty.
+    clc
+    adc cmb_total_tohit
+    sta cmb_total_tohit
     rts
+
+!ccmt_unarmed:
+    lda cmb_total_tohit
+    sec
+    sbc #3
+    sta cmb_total_tohit
+!ccmt_done:
+    rts
+#endif
 
 // combat_calc_tohit_common — Shared hit chance calculation
 // Input: A = class property offset (3=melee BTH, 4=bow BTH_BOW)
@@ -222,12 +318,18 @@ combat_calc_tohit_common:
     lda class_properties,x
     sta zp_combat_tohit         // Start with base BTH
 
-    // Add race BTH (race_properties offset 7, signed byte)
+    // Add race BTH/BOW (race_properties offsets 7/8, signed bytes)
     lda player_data + PL_RACE
     ldx #RACE_PROP_SIZE
     jsr math_multiply           // A = race * RACE_PROP_SIZE
     clc
     adc #7                      // Offset to BTH field
+    ldx cct_bth_offset
+    cpx #4
+    bne !cct_race_index+
+    clc
+    adc #1                      // BOW field
+!cct_race_index:
     tax
     lda race_properties,x       // Race BTH (signed)
     bmi !cct_race_neg+
@@ -249,17 +351,52 @@ combat_calc_tohit_common:
 !cct_race_done:
     sta zp_combat_tohit
 
-    // Add PL_TOHIT * 3
-    lda player_data + PL_TOHIT
+    // Blessing and heroism directly improve BTH/BOW in Umoria.
+    lda zp_eff_bless
+    beq !cct_no_bless+
+    lda zp_combat_tohit
+    clc
+    adc #5
+    bcc !cct_store_bless+
+    lda #255
+!cct_store_bless:
+    sta zp_combat_tohit
+!cct_no_bless:
+    lda zp_eff_hero
+    beq !cct_status_done+
+    lda zp_combat_tohit
+    clc
+    adc #12
+    bcc !cct_store_hero+
+    lda #255
+!cct_store_hero:
+    sta zp_combat_tohit
+!cct_status_done:
+
+    lda #3
+    sta cct_bonus_mult
+    lda cct_lvl_offset
+    bne !cct_lit_ok+
+    lda cmb_target_light_valid
+    beq !cct_lit_ok+
+    lda cmb_target_lit
+    bne !cct_lit_ok+
+    lsr zp_combat_tohit         // Unlit target halves base BTH and level BTH.
+    lda #1
+    sta cct_bonus_mult
+!cct_lit_ok:
+
+    // Add signed total_to_hit * multiplier.
+    lda cmb_total_tohit
     // Check sign — PL_TOHIT can be negative (signed)
     bmi !cct_neg_tohit+
 
-    // Positive: if PL_TOHIT >= 86, then PL_TOHIT * 3 already exceeds 255.
-    cmp #86
-    bcs !cct_pos_sat+
-    sta zp_temp0
-    asl                         // *2; carry stays clear for values < 86
-    adc zp_temp0                // *3
+    ldx cct_bonus_mult
+    jsr math_multiply
+    lda zp_math_b
+    bne !cct_pos_sat+
+    lda zp_math_a
+    clc
     adc zp_combat_tohit
     bcc !cct_tohit_ok+
 !cct_pos_sat:
@@ -267,20 +404,16 @@ combat_calc_tohit_common:
     bne !cct_tohit_ok+
 
 !cct_neg_tohit:
-    // Negative to-hit: if abs(PL_TOHIT) >= 86, subtracting *3 always floors to 0.
     eor #$ff
     clc
-    adc #1                      // abs(PL_TOHIT)
-    cmp #86
-    bcs !cct_neg_floor+
-    sta zp_temp0
-    asl                         // *2; carry stays clear for values < 86
-    adc zp_temp0                // *3 (positive value)
-    sta zp_temp0
-    // Subtract from tohit
+    adc #1                      // abs(total_to_hit)
+    ldx cct_bonus_mult
+    jsr math_multiply
+    lda zp_math_b
+    bne !cct_neg_floor+
     lda zp_combat_tohit
     sec
-    sbc zp_temp0
+    sbc zp_math_a
     bcs !cct_tohit_ok+
 !cct_neg_floor:
     lda #0                      // Floor at 0
@@ -298,6 +431,14 @@ combat_calc_tohit_common:
     lda class_level_adj,x       // BTH per level
     ldx zp_player_lvl
     jsr math_multiply           // zp_math_a = level * bth_per_level
+    lda cct_lvl_offset
+    bne !cct_level_full+
+    lda cmb_target_light_valid
+    beq !cct_level_full+
+    lda cmb_target_lit
+    bne !cct_level_full+
+    lsr zp_math_a
+!cct_level_full:
     lda zp_math_a
     clc
     adc zp_combat_tohit
@@ -439,10 +580,9 @@ combat_roll_tohit:
     sec
     rts
 
-// combat_roll_damage — Roll weapon or unarmed damage
-// If weapon equipped: it_dmg_dice[type] d it_dmg_sides[type] + PL_TODMG
-// If unarmed: 1d2 + PL_TODMG
-// Output: cmb_damage = damage amount (min 0)
+// combat_roll_damage — Roll weapon or unarmed damage, then apply ego damage.
+// PL_TODMG is added after criticals by combat_add_damage_bonus.
+// Output: cmb_damage = damage amount
 // Clobbers: A, X, Y, zp_math_a/b, zp_temp3, zp_temp4
 combat_roll_damage:
     // Check for equipped weapon
@@ -477,22 +617,7 @@ combat_roll_damage:
     jsr math_dice               // result in zp_math_a (1 or 2)
 
 !crd_add_bonus:
-    // Add PL_TODMG (signed)
-    lda player_data + PL_TODMG
-    bmi !crd_neg+
-    // Positive bonus
-    clc
-    adc zp_math_a
-    jmp !crd_ego+
-
-!crd_neg:
-    // Negative bonus — clamp to min 0
-    clc
-    adc zp_math_a               // Signed add (may underflow)
-    bpl !crd_ego+
-    lda #0                      // Clamp to 0
-
-!crd_ego:
+    lda zp_math_a
     sta cmb_damage
 
     // --- Ego damage modifiers (banked at $F000) ---
@@ -503,6 +628,31 @@ combat_roll_damage:
 
 !crd_ego_done:
     rts
+
+// combat_add_damage_bonus — Add signed PL_TODMG after ego/slay/critical.
+// Output: cmb_damage clamped to [0,255]
+#if !C128_COMBAT_COMMON_HELPERS_EXTERNAL
+combat_add_damage_bonus:
+    lda player_data + PL_TODMG
+    bmi !cadb_neg+
+    // Positive bonus
+    clc
+    adc cmb_damage
+    bcc !cadb_store+
+    lda #255
+    bne !cadb_store+
+
+!cadb_neg:
+    // Negative bonus — clamp to min 0
+    clc
+    adc cmb_damage              // Signed add (may underflow)
+    bpl !cadb_store+
+    lda #0                      // Clamp to 0
+
+!cadb_store:
+    sta cmb_damage
+    rts
+#endif
 
 // combat_critical_blow — Chance for weapon hits to deal 2-5x damage
 // Based on umoria playerWeaponCriticalBlow.
@@ -555,9 +705,10 @@ combat_critical_blow:
     adc zp_math_b
     sta ccb_chance_hi
 
-    // Add signed 5 * PL_TOHIT. This is the player's plus-to-hit, not the
-    // full BTH hit chance in zp_combat_tohit.
-    lda player_data + PL_TOHIT
+    // Add signed 5 * melee total_to_hit, including bare-hand/too-heavy
+    // penalties. This is not the full BTH chance in zp_combat_tohit.
+    jsr combat_calc_melee_total_tohit_bonus
+    lda cmb_total_tohit
     bpl !ccb_pos_plus+
 !ccb_neg_plus:
     eor #$ff
@@ -1101,6 +1252,40 @@ msg_build_action:
 mba_action_lo: .byte 0
 mba_action_hi: .byte 0
 
+// combat_append_blow_summary — Replace trailing "." with " (hits/blows)."
+// Used only when the player had multiple blows this round.
+#if !C128_COMBAT_COMMON_HELPERS_EXTERNAL
+combat_append_blow_summary:
+    lda cmb_blow_count
+    cmp #2
+    bcs !cabs_do+
+    rts
+!cabs_do:
+    lda cmb_buf_idx
+    beq !cabs_append+
+    dec cmb_buf_idx
+!cabs_append:
+    lda #$20                    // space
+    jsr combat_append_char
+    lda #$28                    // (
+    jsr combat_append_char
+    lda cmb_hit_count
+    jsr combat_append_decimal
+    lda #$2f                    // /
+    jsr combat_append_char
+    lda cmb_blow_count
+    jsr combat_append_decimal
+    lda #$29                    // )
+    jsr combat_append_char
+    lda #$2e                    // .
+    jsr combat_append_char
+    jsr combat_clamp_msg_idx
+    ldx cmb_buf_idx
+    lda #0
+    sta combat_msg_buf,x
+    rts
+#endif
+
 // combat_kill_message — Kill monster, print "You have slain the <name>.", play SFX
 // Input: X = monster slot index
 // Calls eff_kill_monster (awards XP, removes monster), builds and prints
@@ -1184,12 +1369,14 @@ combat_msg_monster_suffix:
     jsr combat_append_str
     jmp cmb_term_and_print
 
+#if !COMBAT_STRINGS_EXTERNAL
 cmb_the_cap_str:
     .text "The " ; .byte 0
 cmb_shudders_str:
     .text " shudders." ; .byte 0
 cmb_dissolves_str:
     .text " dissolves!" ; .byte 0
+#endif
 #if !PMU_TURN_FEEDBACK_EXTERNAL
 cmb_runs_frantically_str:
     .text " runs frantically!" ; .byte 0
@@ -1308,4 +1495,4 @@ combat_clamp_msg_idx:
 // ============================================================
 // Compile-time validation
 // ============================================================
-.assert "combat_msg_buf size", cmb_you_str - combat_msg_buf, COMBAT_MSG_BUF_SIZE
+.assert "combat_msg_buf size", combat_msg_buf_end - combat_msg_buf, COMBAT_MSG_BUF_SIZE

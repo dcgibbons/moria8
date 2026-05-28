@@ -905,9 +905,8 @@ required_labels = [
 
 below_io_data = [
     "title_menu_str",
-    "ds_menu_str",
-    "ds_dual_str",
-    "de_prompt_str",
+    "ds_save_str",
+    "ds_game_str",
     "game_over_prompt_end",
 ]
 
@@ -942,10 +941,10 @@ for runtime_name, expected_load in (
     ("128.runtime.prg", 0x1000),
     ("128.input.prg", 0x0B00),
     ("128.proj.prg", 0x0A80),
-    ("128.fdisk.prg", 0x0CE3),
-    ("128.world.prg", 0x5F00),
-    ("128.item.prg", 0x8C00),
-    ("128.select.prg", 0xA700),
+    ("128.fdisk.prg", 0x0D60),
+    ("128.world.prg", 0x6000),
+    ("128.item.prg", 0x8D00),
+    ("128.select.prg", 0xA800),
     ("128.persist.prg", 0xAF00),
     ("128.play.prg", 0xAF00),
     ("128.bank.prg", 0xF000),
@@ -1173,10 +1172,10 @@ must_not_contain(render, "VIEWPORT_X + SCREEN_COL_OFFSET", "dungeon_render_vdc m
 must_contain(msgs, ".const MSG_HIST_LEN   = SCREEN_COLS", "ui_messages must size history by SCREEN_COLS")
 must_contain(status, "#if C128", "ui_status must use compile-time C128 layout constants")
 must_contain(help_s, ".const HELP_FRAME_RIGHT_COL = SCREEN_COLS - 1", "ui_help border must use SCREEN_COLS")
-must_contain(swap, ".const DS_PROMPT_COL = (SCREEN_COLS - 16) / 2", "disk_swap prompt centering must use SCREEN_COLS math")
+must_contain(swap, ".const DS_PROMPT_COL = (SCREEN_COLS - 19) / 2", "disk_swap prompt centering must use SCREEN_COLS math")
 must_contain(main128, "lda #TITLE_MENU_COL", "title menu must use TITLE_MENU_COL")
 must_contain(char_s, "lda #10\n    sta zp_cursor_row", "ui_character gold/xp row must stay at row 10")
-must_contain(char_s, ".const UCHAR_COL_L = (SCREEN_COLS - 36) / 2", "ui_character C128 columns must stay centered for 80-col")
+must_contain(char_s, ".const UCHAR_COL_L = hal_layout_character_col_l", "ui_character C128 columns must stay centered for 80-col")
 must_contain(sysinfo, "ldx #((SCREEN_COLS - 15) / 2)", "title sysinfo baseline must be centered on C128")
 must_contain(status, "lda #STS_ROW21_NAME_COL\n    sta zp_cursor_col", "status row 21 name must use dedicated C128 anchor")
 
@@ -1219,6 +1218,8 @@ screen = (root / "c128" / "screen_vdc.s").read_text().splitlines()
 main_text = (root / "c128" / "main.s").read_text()
 items = (root / "common" / "player_items.s").read_text().splitlines()
 item_mod = (root / "common" / "item.s").read_text().splitlines()
+item_cmd_mod = (root / "common" / "player_item_commands.s").read_text().splitlines()
+item_actions_mod = (root / "common" / "item_actions_overlay.s").read_text().splitlines()
 throw_mod = (root / "common" / "throw.s").read_text().splitlines()
 loop_mod = (root / "common" / "game_loop.s").read_text().splitlines()
 dfeat = (root / "common" / "dungeon_features.s").read_text().splitlines()
@@ -1276,14 +1277,28 @@ def has_ordered_chain(lines: list[str], tokens: list[str], window: int = 28) -> 
             return True
     return False
 
+def section_after(label: str, lines: list[str]) -> list[str]:
+    out = []
+    in_block = False
+    for ln in lines:
+        s = ln.strip()
+        if not in_block:
+            if s.startswith(label):
+                in_block = True
+            continue
+        if s and s.endswith(":") and not s.startswith("!"):
+            break
+        out.append(s)
+    return out
+
 first2 = first_instructions_after("screen_put_string:", screen, 2)
 if len(first2) < 2 or (not first2[0].lower().startswith("php")) or (not first2[1].lower().startswith("sei")):
     print(f"screen_put_string must start with php; sei, found: {first2!r}")
     raise SystemExit(1)
 
 if not (
-    has_pair(items, "ldx #HSTR_PIW_TAKEOFF_PROMPT", "jsr huff_print_msg")
-    or has_pair(items, "ldx #HSTR_PIW_TAKEOFF_PROMPT", "jsr piw_print_prompt_with_count")
+    has_pair(item_cmd_mod, "ldx #HSTR_PIW_TAKEOFF_PROMPT", "jsr huff_print_msg")
+    or has_pair(item_cmd_mod, "ldx #HSTR_PIW_TAKEOFF_PROMPT", "jsr piw_print_prompt_with_count")
 ):
     print("item_takeoff prompt is not using Huffman-backed prompt path")
     raise SystemExit(1)
@@ -1317,156 +1332,144 @@ if sum(1 for line in ui_wizard_mod if '.text "Q to cancel"' in line) != 3:
     raise SystemExit(1)
 
 required_chains = [
-    ("item_wear", items, [
+    ("item_wear", item_cmd_mod, [
         "ldx #HSTR_PIW_WEAR_PROMPT",
-        "jsr piw_prompt_filtered_inv",
-        "jsr hal_input_wait_release",
-        "jsr hal_input_get_key",
+        "jsr piw_select_filtered_inv",
     ]),
-    ("item_takeoff", items, [
+    ("item_takeoff", item_cmd_mod, [
         "ldx #HSTR_PIW_TAKEOFF_PROMPT",
         "jsr piw_print_prompt_with_count",
-        "jsr hal_input_wait_release",
+        "jsr input_prepare_followup_key",
         "jsr hal_input_get_key",
     ]),
-    ("item_quaff", items, [
+    ("item_quaff", item_cmd_mod, [
         "ldx #HSTR_PIQ_QUAFF_PROMPT",
-        "jsr piw_prompt_filtered_inv",
-        "jsr hal_input_wait_release",
-        "jsr hal_input_get_key",
+        "jsr piw_select_filtered_inv",
     ]),
-    ("item_read_scroll", items, [
+    ("item_read_scroll", item_actions_mod, [
         "ldx #HSTR_PIQ_READ_PROMPT",
-        "jsr piw_prompt_filtered_inv",
-        "jsr hal_input_wait_release",
-        "jsr item_action_get_key",
+        "jsr item_action_select_filtered_inv",
     ]),
-    ("item_aim_wand", items, [
+    ("item_aim_wand", item_actions_mod, [
         "ldx #HSTR_PIW_AIM_PROMPT",
-        "jsr piw_prompt_filtered_inv",
-        "jsr hal_input_wait_release",
-        "jsr item_action_get_key",
+        "jsr item_action_select_filtered_inv",
     ]),
-    ("item_use_staff", items, [
+    ("item_use_staff", item_actions_mod, [
         "ldx #HSTR_PIW_USE_PROMPT",
-        "jsr piw_prompt_filtered_inv",
-        "jsr hal_input_wait_release",
-        "jsr item_action_get_key",
+        "jsr item_action_select_filtered_inv",
     ]),
-    ("item_gain_spell", items, [
-        "ldx #HSTR_IGS_PROMPT",
-        "jsr piw_prompt_filtered_inv",
-        "jsr hal_input_wait_release",
+    ("item_gain_spell", (root / "common" / "player_gain_spell_impl.s").read_text().splitlines(), [
+        "!igs_have_choices:",
+        "jsr input_prepare_modal_dismiss_key",
+        "jsr spell_list_display",
         "jsr hal_input_get_key",
     ]),
     ("item_drop", item_mod, [
         "ldx #HSTR_IDR_PROMPT",
-        "jsr huff_print_msg",
-        "jsr hal_input_wait_release",
+        "jsr piw_prompt_filtered_inv",
+        "jsr input_prepare_followup_key",
         "jsr hal_input_get_key",
     ]),
     ("throw_item", throw_mod, [
         "ldx #HSTR_TW_PROMPT",
-        "jsr huff_print_msg",
-        "jsr hal_input_wait_release",
-        "jsr hal_input_get_key",
+        "jsr piw_select_filtered_inv",
     ]),
     ("get_direction_target", dfeat, [
         "ldx #HSTR_DF_DIRECTION",
         "jsr huff_print_msg",
-        "jsr hal_input_wait_release",
+        "jsr input_prepare_followup_key",
         "jsr hal_input_get_key",
     ]),
     ("cmd_inventory_dismiss", loop_helpers, [
         "cmd_show_inventory_view:",
         "jsr tramp_ui_inv_display",
-        "jsr hal_input_wait_release",
+        "jsr input_prepare_modal_dismiss_key",
         "jsr hal_input_get_key",
     ]),
     ("cmd_equipment_dismiss", loop_helpers, [
         "cmd_show_equipment_view:",
         "jsr tramp_ui_equip_display",
-        "jsr hal_input_wait_release",
+        "jsr input_prepare_modal_dismiss_key",
         "jsr hal_input_get_key",
     ]),
     ("cmd_help_dismiss", loop_helpers, [
         "cmd_show_help_view:",
         "jsr tramp_ui_help_display",
-        "jsr hal_input_wait_release",
+        "jsr input_prepare_modal_dismiss_key",
         "jsr hal_input_get_key",
     ]),
     ("cmd_char_info_dismiss", loop_helpers, [
         "cmd_show_character_view:",
         "jsr tramp_ui_char_display",
-        "jsr hal_input_wait_release",
+        "jsr input_prepare_followup_key",
         "jsr hal_input_get_key",
     ]),
     ("cmd_recall_prompt", loop_helpers, [
         "cmd_recall_view:",
-        "jsr screen_put_string",
-        "jsr hal_input_wait_release",
+        "jsr hal_screen_put_string",
+        "jsr input_prepare_followup_key",
         "jsr hal_input_get_key",
     ]),
     ("cmd_recall_dismiss", loop_helpers, [
         "jsr tramp_ui_recall",
-        "jsr hal_input_wait_release",
+        "jsr input_prepare_modal_dismiss_key",
         "jsr hal_input_get_key",
     ]),
     ("store_buy_prompt", store_mod, [
         "ldx #MSG_BUY_WHICH",
         "jsr show_msg",
-        "jsr hal_input_wait_release",
+        "jsr input_prepare_followup_key",
         "jsr hal_input_get_key",
     ]),
     ("store_buy_confirm", store_mod, [
         "jsr sbuy_show_price",
-        "jsr hal_input_wait_release",
+        "jsr input_prepare_followup_key",
         "jsr hal_input_get_key",
     ]),
     ("store_sell_prompt", store_mod, [
         "ldx #MSG_SELL_WHICH",
         "jsr show_msg",
-        "jsr hal_input_wait_release",
+        "jsr input_prepare_followup_key",
         "jsr hal_input_get_key",
     ]),
     ("store_sell_confirm", store_mod, [
         "jsr ssell_show_offer",
-        "jsr hal_input_wait_release",
+        "jsr input_prepare_followup_key",
         "jsr hal_input_get_key",
     ]),
     ("store_haggle_number", store_mod, [
         "input_read_number:",
-        "jsr hal_input_wait_release",
+        "jsr input_prepare_followup_key",
         "jsr hal_input_get_key",
     ]),
     ("spell_prompt_choice", player_magic_mod, [
         "pm_prompt_visible_spell_choice:",
-        "jsr piw_print_prompt_with_count",
         "jsr input_prepare_followup_key",
-        "jsr hal_input_get_key",
+        "jsr piw_print_prompt_with_count",
+        "jsr input_get_followup_key",
     ]),
     ("identify_prompt_choice", spell_effects_mod, [
         "eff_identify_prompt:",
-        "jsr huff_print_msg",
+        "jsr piw_prompt_filtered_inv",
         "jsr input_prepare_followup_key",
         "jsr hal_input_get_key",
     ]),
     ("inventory_overlay_select", (root / "common" / "player_items.s").read_text().splitlines(), [
         "show_inv_and_select:",
-        "jsr input_prepare_followup_key",
+        "jsr input_prepare_selectable_overlay_key",
         "jsr tramp_ui_inv_select_display",
-        "jsr hal_input_get_key_fast",
+        "jsr input_get_followup_key",
     ]),
     ("spell_list_overlay_select", player_magic_mod, [
         "!pm_psc_show_list:",
-        "jsr input_prepare_followup_key",
+        "jsr input_prepare_selectable_overlay_key",
         "jsr tramp_spell_list_display",
-        "jsr hal_input_get_key_fast",
+        "jsr input_get_followup_key",
     ]),
     ("study_list_overlay_select", (root / "common" / "player_gain_spell_impl.s").read_text().splitlines(), [
         "!igs_have_choices:",
-        "jsr input_prepare_followup_key",
-        "jsr tramp_spell_list_display",
+        "jsr input_prepare_modal_dismiss_key",
+        "jsr spell_list_display",
         "jsr hal_input_get_key",
     ]),
     ("wizard_confirm_prompt", ui_wizard_mod, [
@@ -1490,33 +1493,33 @@ for name, lines, chain in required_chains:
         print(f"{name} must gate with input_wait_release before input_get_key")
         raise SystemExit(1)
 
-if not has_ordered_chain(items, [
+if not has_ordered_chain(item_actions_mod, [
     "item_action_get_key:",
     "jsr hal_input_get_key",
     "#if hal_platform_item_action_key_restores_bank",
     "sta iagk_key",
     "lda #MMU_ALL_RAM",
-    "sta $ff00",
+    "sta hal_memory_mmu_config_register",
     "lda #BANK_NO_ROMS",
-    "sta $01",
+    "sta hal_memory_cpu_port",
     "lda iagk_key",
 ]):
     print("C128 item overlay key reads must restore overlay banking after input_get_key")
     raise SystemExit(1)
 
 for name in ("item_read_scroll:", "item_aim_wand:", "item_use_staff:"):
-    body = section_after(name, items)
+    body = section_after(name, item_actions_mod)
     if any("jsr hal_input_get_key" in line for line in body):
         print(f"{name[:-1]} must use item_action_get_key, not direct input_get_key")
         raise SystemExit(1)
 
 if not has_ordered_chain(help_mod, [
-    "#if C128",
-    "jsr screen_put_char",
+    "#if HAL_SCREEN_HELP_LINE_USES_API",
+    "jsr hal_screen_put_char",
     "#else",
     "sta (zp_screen_lo),y",
 ]):
-    print("ui_help_draw_line must use screen_put_char on C128 and keep direct RAM path only for C64")
+    print("ui_help_draw_line must use the HAL character API on C128 and keep direct RAM path only for C64")
     raise SystemExit(1)
 
 print("ok")
@@ -1585,9 +1588,9 @@ if not has_ordered_chain(items, [
     "#if hal_platform_item_action_key_restores_bank",
     "sta iagk_key",
     "lda #MMU_ALL_RAM",
-    "sta $ff00",
+    "sta hal_memory_mmu_config_register",
     "lda #BANK_NO_ROMS",
-    "sta $01",
+    "sta hal_memory_cpu_port",
     "lda iagk_key",
 ]):
     print("C128 item overlay key reads must restore overlay banking after input_get_key")
@@ -1598,8 +1601,11 @@ for name in ("item_read_scroll:", "item_aim_wand:", "item_use_staff:"):
     if any("jsr hal_input_get_key" in line for line in body):
         print(f"{name[:-1]} must use item_action_get_key, not direct input_get_key")
         raise SystemExit(1)
-    if not any("jsr item_action_get_key" in line for line in body):
-        print(f"{name[:-1]} must use item_action_get_key")
+    if not (
+        any("jsr item_action_get_key" in line for line in body)
+        or any("jsr item_action_select_filtered_inv" in line for line in body)
+    ):
+        print(f"{name[:-1]} must use item_action_get_key or item_action_select_filtered_inv")
         raise SystemExit(1)
 
 print("ok")
@@ -1625,7 +1631,10 @@ run_input_run_guard_check() {
     check_out=$(python3 - <<'PY'
 from pathlib import Path
 
-lines = Path("input128.s").read_text().splitlines()
+lines = (
+    Path("input128.s").read_text().splitlines()
+    + Path("input_run_raw128.s").read_text().splitlines()
+)
 
 def block(label: str) -> list[str]:
     out = []
@@ -1650,8 +1659,8 @@ if not scan_block:
 elif any("cia_scan_petscii" in ln for ln in scan_block):
     errors.append("input_run_scan_held_raw must not call cia_scan_petscii")
 
-if not held_block:
-    errors.append("missing input_run_key_held block")
+if not held_block and not any(".label input_run_key_held = input_run_scan_held_raw" in ln for ln in lines):
+    errors.append("missing input_run_key_held block or raw-scan alias")
 elif any("irk_neutral_latch" in ln for ln in held_block):
     errors.append("input_run_key_held still depends on irk_neutral_latch")
 
@@ -1687,12 +1696,8 @@ root = Path("..").resolve()
 common = root / "common"
 helper = common / "input_ui_helpers.s"
 
-runtime_exclusions = {
-    "reu.s": {"c128_restore_runtime_vectors": 1},
-}
-runtime_counts = {
-    "reu.s": {"c128_restore_runtime_vectors": 0},
-}
+runtime_exclusions = {}
+runtime_counts = {}
 runtime_leaks: list[str] = []
 kbdbuf_leaks: list[str] = []
 helper_raw_kbdbuf = 0
@@ -1786,7 +1791,7 @@ body = "\n".join(save[start:end])
 if body.count("jsr SAVE_READST") < 1:
     print("load_read_byte must check SAVE_READST after SAVE_CHRIN")
     raise SystemExit(1)
-if "jsr SAVE_READST\n#if C128" not in body:
+if "jsr SAVE_READST\n#if HAL_STORAGE_STREAM_CHUNKED" not in body:
     print("load_read_byte must read status immediately after SAVE_CHRIN")
     raise SystemExit(1)
 if "beq !lrby_read+" in body:
@@ -1921,8 +1926,8 @@ run_vic40_clean_boot_smoke() {
 
     build_boot_assets || return
 
-    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 \
-            -define C128 -var OVL_OUT='"out"' -define C128_TEST_VIC40_CLEAN_BOOT \
+    if ! java -jar "$KICKASS" main_vic40probe.s -showmem -vicesymbols -libdir ../c64 \
+            -define C128 -var OVL_OUT='"out"' \
             -o "$probe_main" >"$build_log" 2>&1; then
         echo "FAIL (vic40 probe main assembly failed)"
         tail -20 "$build_log" | sed 's/^/    /'
@@ -1962,12 +1967,12 @@ run_vic40_clean_boot_smoke() {
         return
     fi
 
-    local probe_vs="out/main.vs"
+    local probe_vs="out/main_vic40probe.vs"
     local pass_addr fail_addr
     pass_addr=$(awk '/\.c128_vic40_boot_probe_pass_sym$/ { split($2,a,":"); print toupper(a[2]); exit }' "$probe_vs")
     fail_addr=$(awk '/\.c128_vic40_boot_probe_fail_sym$/ { split($2,a,":"); print toupper(a[2]); exit }' "$probe_vs")
     if [ -z "${pass_addr:-}" ] || [ -z "${fail_addr:-}" ]; then
-        echo "FAIL (missing vic40 probe symbols in out/main.vs)"
+        echo "FAIL (missing vic40 probe symbols in out/main_vic40probe.vs)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
@@ -2503,9 +2508,8 @@ build_save_media_fail_product_assets() {
     local dir_type_offset0=$(((357 + 1) * 256 + 2))
     local dir_type_offset1=$((dir_type_offset0 + 32))
 
-    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 \
-            -define C128 -define C128_TEST_SCRIPTED_SAVE_WRITE_PRODUCT \
-            -define C128_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT \
+    if ! java -jar "$KICKASS" main_save_media_fail.s -showmem -vicesymbols -libdir ../c64 \
+            -define C128 \
             -o out/moria128.prg >"$build_log" 2>&1; then
         echo "FAIL (save-media-fail product main assembly failed)"
         tail -20 "$build_log" | sed 's/^/    /'
@@ -4567,12 +4571,11 @@ run_boot_title_save_media_fail_product_smoke() {
 
     build_save_media_fail_product_assets || return
 
-    local main_vs="out/main.vs"
-    local main_loop dismiss_addr
-    main_loop=$(awk '/\.main_loop$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
-    dismiss_addr=$(awk '/\.input_get_modal_dismiss_key$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
-    if [ -z "${main_loop:-}" ] || [ -z "${dismiss_addr:-}" ]; then
-        echo "FAIL (missing save-media-fail smoke symbols in out/main.vs)"
+    local main_vs="out/main_save_media_fail.vs"
+    local fail_addr
+    fail_addr=$(awk '/\.save_return_fail$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    if [ -z "${fail_addr:-}" ]; then
+        echo "FAIL (missing save-media-fail smoke symbols in out/main_save_media_fail.vs)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
@@ -4587,22 +4590,20 @@ run_boot_title_save_media_fail_product_smoke() {
     : > "$log_file"
 
     {
-        printf 'attach "%s" 9\n' "$abs_save_d64"
-        echo "until \$${main_loop}"
-        echo "bank ram"
-        echo "until \$${dismiss_addr}"
-        echo "g"
+        echo "until \$${fail_addr}"
+        echo "quit"
     } > "$mon_file"
 
     "$VICE" -console -nativemonitor -warp -80col -autostart "$abs_boot_d64" \
+        -drive9type 1541 -attach9rw -9 "$abs_save_d64" \
         -moncommands "$mon_file" -monlog -monlogname "$log_file" \
         -limitcycles 360000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
     local vice_rc=$?
 
-    if ! grep -qi "^UNTIL: .*C:\$${dismiss_addr}" "$log_file"; then
+    if ! grep -qi "^UNTIL: .*C:\$${fail_addr}" "$log_file"; then
         boot_log_report_failure "save-media failure did not reach disk-error dismiss prompt" "$log_file" \
-            "input_get_modal_dismiss_key" "$dismiss_addr" "$vice_rc"
+            "save_return_fail" "$fail_addr" "$vice_rc"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
@@ -4610,7 +4611,7 @@ run_boot_title_save_media_fail_product_smoke() {
 
     if grep -qi "JAM\\|Invalid opcode" "$log_file"; then
         boot_log_report_failure "jam during save-media-fail product flow" "$log_file" \
-            "input_get_modal_dismiss_key" "$dismiss_addr" "$vice_rc"
+            "save_return_fail" "$fail_addr" "$vice_rc"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return

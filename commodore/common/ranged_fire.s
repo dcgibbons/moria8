@@ -108,7 +108,7 @@ ranged_fire:
     sta cmb_type
 
     // Calculate to-hit
-    jsr combat_calc_tohit
+    jsr combat_calc_bow_tohit
 
     // Load monster AC
     ldx cmb_type

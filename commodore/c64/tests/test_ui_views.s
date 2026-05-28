@@ -40,6 +40,7 @@ df_target_y: .byte 0
 .label cmb_period = $00
 cmb_type:   .byte 0
 cmb_damage: .byte 0
+eff_fear_timer: .byte 0
 
 reu_show_status:
 reu_load_all_tiers:

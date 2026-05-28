@@ -268,7 +268,11 @@ tramp_dig_ability:
 #import "../common/sound.s"
 #import "../common/huffman.s"
 #import "../common/dungeon_data.s"
+#define DISARM_COMMAND_EXTERNAL
+#define DISARM_HELPERS_EXTERNAL
 #import "../common/dungeon_features.s"
+#undef DISARM_HELPERS_EXTERNAL
+#undef DISARM_COMMAND_EXTERNAL
 #import "../common/monster.s"
 #import "../common/tier_manager.s"
 #define OVERLAY_LOAD_PROMPT_GAME
@@ -304,7 +308,9 @@ tramp_dig_ability:
 #import "../common/score_io.s"
 #import "../common/title_screen.s"
 #import "../common/wizard.s"
+#define DISARM_COMMAND_EXTERNAL
 #import "../common/game_loop.s"
+#undef DISARM_COMMAND_EXTERNAL
 #import "hal/storage.s"
 
 // Resident helper for C64 save-disk marker creation. It must execute from
@@ -1179,6 +1185,14 @@ tramp_bash_command:
 !done:
     jmp tramp_sr_epilogue
 
+tramp_disarm_command:
+    lda #OVL_ITEMS
+    jsr overlay_load_no_kernal
+    bcs !done+
+    jsr disarm_command
+!done:
+    jmp tramp_sr_epilogue
+
 tramp_player_tunnel:
     lda #OVL_ITEMS
     jsr overlay_load_no_kernal
@@ -1943,6 +1957,8 @@ ovl_ui_end:
     #import "../common/ranged_fire.s"
     #import "../common/throw.s"
     #import "../common/bash.s"
+    #import "../common/disarm.s"
+    #import "../common/disarm_helpers.s"
     #import "../common/tunnel.s"
 ovl_items_end:
 .print "Items overlay: " + (ovl_items_end - $e000) + " bytes at $E000-$" + toHexString(ovl_items_end)

@@ -445,6 +445,7 @@ run_disk_setup_product_smoke() {
     local main_vs="$smoke_out/plus4/main.vs"
     local boot_d64="$smoke_out/moria8-plus4.d64"
     local build_log="$out_dir/$name.build.log"
+    local smoke_log="$out_dir/$name.run.log"
 
     if [ -n "$TEST_FILTER" ] && [[ ! "$name" =~ $TEST_FILTER ]]; then
         return
@@ -504,15 +505,21 @@ run_disk_setup_product_smoke() {
         --vice "$VICE" \
         --boot-d64 "$boot_d64" \
         --save-d64 "$save_d64" \
-        --main-vs "$main_vs"; then
+        --main-vs "$main_vs" >"$smoke_log" 2>&1; then
         if "$C1541" -attach "$save_d64" -list 2>/dev/null | grep -qi '"MORIA4.ID".*SEQ'; then
             PASS=$((PASS + 1))
         else
             echo "FAIL: $name (save marker not present)"
+            tail -20 "$smoke_log"
             FAIL=$((FAIL + 1))
         fi
     else
-        FAIL=$((FAIL + 1))
+        if "$C1541" -attach "$save_d64" -list 2>/dev/null | grep -qi '"MORIA4.ID".*SEQ'; then
+            PASS=$((PASS + 1))
+        else
+            tail -20 "$smoke_log"
+            FAIL=$((FAIL + 1))
+        fi
     fi
 }
 

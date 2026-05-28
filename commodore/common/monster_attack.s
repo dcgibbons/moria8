@@ -227,12 +227,16 @@ mon_atk_roll_tohit:
     cmp #20
     beq !mart_hit+
 
-    // Normal: rng_range(hit_chance) >= player_AC → hit
+    // Normal: rng_range(hit_chance) >= effective player AC → hit
     lda zp_combat_tohit
     cmp #2
     bcc !mart_miss+             // tohit too low
     jsr rng_range               // [0, tohit-1]
-    cmp zp_player_ac            // >= AC?
+    pha
+    jsr mon_atk_effective_ac
+    sta mat_eff_ac
+    pla
+    cmp mat_eff_ac              // >= AC?
     bcs !mart_hit+              // Greater or equal = hit
 
 !mart_miss:
@@ -284,7 +288,7 @@ mon_atk_apply_damage:
 // Clobbers: A, X, Y, zp_math_a/b, zp_math_tmp0/1
 mon_atk_ac_reduce:
     // Compute AC * damage
-    lda zp_player_ac
+    jsr mon_atk_effective_ac
     ldx zp_combat_dmg
     jsr math_multiply           // zp_math_a/b = AC * damage (16-bit)
 
@@ -300,6 +304,22 @@ mon_atk_ac_reduce:
     lda #0                      // Floor at 0
 !macr_ok:
     sta zp_combat_dmg
+    rts
+
+mat_eff_ac: .byte 0
+
+// mon_atk_effective_ac — Player AC with active bless/protection adjustments.
+// Umoria bless grants +2 AC; protection-from-evil contact gating is elsewhere.
+// Output: A = effective AC, capped at 255.
+mon_atk_effective_ac:
+    lda zp_player_ac
+    ldx zp_eff_bless
+    beq !maea_done+
+    clc
+    adc #2
+    bcc !maea_done+
+    lda #255
+!maea_done:
     rts
 
 // mon_atk_effect_dispatch — Route to type-specific handler
@@ -492,6 +512,8 @@ mon_atk_effect_acid:
 // Replace timer only if new value > current (no stacking, just extend).
 // Clobbers: A, X, zp_temp3, zp_temp4
 mon_atk_effect_fear:
+    lda zp_eff_hero
+    bne !mef_done+
     // Compute new timer: rng_range(cr_level) + 3
     ldx mat_type2
     lda cr_level,x

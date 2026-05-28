@@ -147,6 +147,7 @@ ol_check_disk:
     sta current_overlay
     rts
 
+#if HAL_PLATFORM_OVERLAY_REU_STASH_ENABLED
 !ol_reu:
     // --- REU path: DMA overlay from REU to $E000 ---
     ldx ol_target
@@ -155,6 +156,7 @@ ol_check_disk:
     sta current_overlay
     clc                     // REU always succeeds
     rts
+#endif
 
 #if HAL_PLATFORM_OVERLAY_CACHE_ENABLED
 !ol_cache_ok:
@@ -305,6 +307,7 @@ overlay_load_disk:
 #endif
 
 
+#if HAL_PLATFORM_OVERLAY_REU_STASH_ENABLED
 // ============================================================
 // overlay_fetch_reu — DMA overlay from REU to $E000
 // ============================================================
@@ -348,6 +351,7 @@ overlay_fetch_reu:
 #endif
     plp
     rts
+#endif
 
 #if HAL_PLATFORM_OVERLAY_STATE_LOCAL
 

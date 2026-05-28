@@ -96,11 +96,11 @@ player_try_move:
     lda map_row_hi,x
     sta zp_ptr0_hi
     ldy zp_temp3            // map column
-#if hal_platform_player_move_diag_labels
+#if HAL_PLATFORM_GAME_LOOP_PLAYER_MOVE_DIAG_LABELS
 c128_town_move_diag_after_map_ptr_setup:
 #endif
     :MapRead_ptr0_y()
-#if hal_platform_player_move_diag_labels
+#if HAL_PLATFORM_GAME_LOOP_PLAYER_MOVE_DIAG_LABELS
 c128_town_move_diag_after_map_read:
 #endif
     sta zp_temp0
@@ -124,11 +124,11 @@ c128_town_move_diag_after_map_read:
     lsr
 
     // Check walkability (closed doors are blocked — use 'o' to open)
-#if hal_platform_player_move_diag_labels
+#if HAL_PLATFORM_GAME_LOOP_PLAYER_MOVE_DIAG_LABELS
 c128_town_move_diag_before_walkable:
 #endif
     jsr tile_is_walkable
-#if hal_platform_player_move_diag_labels
+#if HAL_PLATFORM_GAME_LOOP_PLAYER_MOVE_DIAG_LABELS
 c128_town_move_diag_after_walkable:
 #endif
     bcs !walkable+
@@ -138,12 +138,12 @@ c128_town_move_diag_after_walkable:
 
     // Check FLAG_OCCUPIED (monster present)
     ldy zp_temp3                // target_x (column offset)
-#if hal_platform_player_move_diag_labels
+#if HAL_PLATFORM_GAME_LOOP_PLAYER_MOVE_DIAG_LABELS
 c128_town_move_diag_before_occupied_read:
 #endif
     :MapRead_ptr0_y()             // Re-read map byte (zp_ptr0 still valid)
     and #FLAG_OCCUPIED
-#if hal_platform_player_move_diag_labels
+#if HAL_PLATFORM_GAME_LOOP_PLAYER_MOVE_DIAG_LABELS
 c128_town_move_diag_after_occupied_read:
 #endif
     beq !not_occupied+          // No monster → continue to move
@@ -173,7 +173,7 @@ c128_town_move_diag_after_occupied_read:
     rts
 
 !not_occupied:
-#if hal_platform_player_move_diag_labels
+#if HAL_PLATFORM_GAME_LOOP_PLAYER_MOVE_DIAG_LABELS
 c128_town_move_diag_move_success:
 #endif
     // Move succeeded — update player position
@@ -191,7 +191,7 @@ c128_town_move_diag_move_success:
     rts
 
 !blocked:
-#if hal_platform_player_move_diag_labels
+#if HAL_PLATFORM_GAME_LOOP_PLAYER_MOVE_DIAG_LABELS
 c128_town_move_diag_move_blocked:
 #endif
     // Suppress bump sound during running

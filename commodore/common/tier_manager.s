@@ -186,7 +186,9 @@ tier_init:
 
     // REU present: load all 4 tier files from disk into REU
     jsr reu_load_all_tiers
+#if HAL_PLATFORM_OVERLAY_REU_STASH_ENABLED
     jsr reu_stash_overlays
+#endif
 
     // Clean up KERNAL file table — LOAD's internal close is unreliable
     // across multiple calls. Stale file #2 entry would cause load_game's

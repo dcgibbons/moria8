@@ -2017,7 +2017,11 @@ cmd_bash:
 
 cmd_disarm:
     jsr msg_clear
+#if DISARM_COMMAND_EXTERNAL
+    jsr tramp_disarm_command
+#else
     jsr disarm_command
+#endif
     jmp command_result_main_or_update_visibility
 
 cmd_tunnel:
@@ -2392,9 +2396,12 @@ press_key_str:
     .text "Press any key" ; .byte 0
 #endif
 
+#if !WELCOME_STR_EXTERNAL
 welcome_str:
     .text "Welcome to Moria8! Shift+Q to quit." ; .byte 0
+#endif
 
+#if !GAME_LOOP_NAV_STRINGS_EXTERNAL
 search_mode_on_str:
     .text "Search mode on." ; .byte 0
 
@@ -2409,6 +2416,7 @@ ascend_str:
 
 at_surface_str:
     .text "You are already at the surface." ; .byte 0
+#endif
 
 no_stairs_str:
     .text "You see no stairs here." ; .byte 0

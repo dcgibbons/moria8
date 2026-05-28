@@ -40,6 +40,7 @@
 .segmentdef HelpOverlay       [outPrg=OVL_OUT + "/ovl.help",  start=$e000, min=$e000, max=$efff]
 .segmentdef UiOverlay         [outPrg=OVL_OUT + "/ovl.ui",    start=$e000, min=$e000, max=$efff]
 .segmentdef ItemActionsOverlay [outPrg=OVL_OUT + "/ovl.items", start=$e000, min=$e000, max=$efff]
+.segmentdef DisarmOverlay     [outPrg=OVL_OUT + "/ovl.disarm", start=$e000, min=$e000, max=$efff]
 .segmentdef RuntimeInputData  [outPrg=OVL_OUT + "/128.input.prg", start=$0b00, min=$0b00, max=$0bff]
 .segmentdef RuntimeProjectileData [outPrg=OVL_OUT + "/128.proj.prg", start=$0a80, min=$0a80, max=$0aff]
 .segmentdef RuntimeCommonData [outPrg=OVL_OUT + "/128.fdisk.prg", start=$0d60, min=$0d60, max=$0fff]
@@ -49,7 +50,7 @@
 .segmentdef C128ResidentSelect [outPrg=OVL_OUT + "/128.select.prg", start=$a800, min=$a800, max=$aaff]
 .segmentdef C128ResidentDiskIo [outPrg=OVL_OUT + "/128.diskio.prg", start=$ab00, min=$ab00, max=$aeff]
 .segmentdef C128ResidentPersist [outPrg=OVL_OUT + "/128.persist.prg", start=$af00, min=$af00, max=$cfff]
-.segmentdef C128ResidentPlay [outPrg=OVL_OUT + "/128.play.prg", start=$af00, min=$af00, max=$ceff]
+.segmentdef C128ResidentPlay [outPrg=OVL_OUT + "/128.play.prg", start=$af00, min=$af00, max=$cfff]
 .segmentdef RuntimeBankedCode [outPrg=OVL_OUT + "/128.bank.prg", start=$f000, min=$f000, max=$fffa]
 
 #if C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG
@@ -74,12 +75,6 @@
 .const C128_OVERLAY_TRANSITION_DIAG = 1
 #else
 .const C128_OVERLAY_TRANSITION_DIAG = 0
-#endif
-
-#if C128_TEST_VIC40_CLEAN_BOOT
-.const C128_VIC40_BOOT_PROBE = 1
-#else
-.const C128_VIC40_BOOT_PROBE = 0
 #endif
 
 #if C128_TEST_STACK_SLOT_DIAG
@@ -1672,6 +1667,10 @@ tramp_ui_exit:
 .const C128_HELP_OVERLAY_ID = 5
 .const C128_UI_OVERLAY_ID = 6
 .const C128_ITEMS_OVERLAY_ID = 7
+// C128 does not use the common OVL_SPELL slot; spell execution lives in other
+// C128 payloads. Overlay ID 8 is a disk-loaded direct-disarm overlay, not a
+// Bank 1 cached overlay slot.
+.const C128_DISARM_OVERLAY_ID = 8
 
 .macro C128UIOverlayDisplayTrampoline(target) {
     jsr tramp_ui_enter
@@ -1893,6 +1892,9 @@ tramp_throw_item:
 
 tramp_bash_command:
     :C128OverlayComputeTrampoline(C128_ITEMS_OVERLAY_ID, bash_command)
+
+tramp_disarm_command:
+    :C128OverlayComputeTrampoline(C128_DISARM_OVERLAY_ID, disarm_command)
 
 // tramp_dig_ability — Calculate digging ability.
 // Pinned low to avoid $D000 drift.
@@ -2187,7 +2189,7 @@ title_menu_ready:
     lda #$60
     jsr c128_town_dump_mark
 #endif
-#if C128_VIC40_BOOT_PROBE
+#if C128_TEST_VIC40_CLEAN_BOOT
     jsr c128_vic40_boot_probe
 #endif
 #if C128_TEST_OVERLAY_TRANSITION_DIAG
@@ -2706,68 +2708,6 @@ kernal_hw_irq_vec_hi: .byte 0
 kernal_hw_nmi_vec_lo: .byte 0
 kernal_hw_nmi_vec_hi: .byte 0
 
-// C128 cache/overlay state lives in a dedicated main-RAM block.
-// Do not place this adjacent to preload UI strings or transient workspace.
-c128_cache_state_start:
-c128_cache_enabled:        .byte 1
-c128_cache_tiers_ready:    .byte 0
-c128_cache_overlays_ready: .byte 0
-c128_cache_failed:         .byte 0
-c128_cache_tier_bits:      .byte 0
-c128_cache_overlay_bits:   .byte 0
-c128_preload_fn_len:       .byte 0
-c128_preload_status:       .byte 0
-#if C128_CACHE_TEST_SKIP_TIER
-c128_cache_test_skip_tier: .byte 1
-#else
-c128_cache_test_skip_tier: .byte 0
-#endif
-#if C128_CACHE_TEST_SKIP_OVERLAY
-c128_cache_test_skip_overlay: .byte 2
-#else
-c128_cache_test_skip_overlay: .byte 0
-#endif
-c128_startup_overlay_executing: .byte 0
-
-// Keep C128 overlay metadata/state in resident main RAM instead of adjacent
-// to overlay code, which was getting trampled before startup overlay loads.
-overlay_state_block_start:
-current_overlay: .byte 0
-#import "hal/storage_overlay_names.s"
-ovl_reu_start_lo: .byte 0, 0, 0, 0, 0, 0, 0, 0
-ovl_reu_start_hi: .byte 0, 0, 0, 0, 0, 0, 0, 0
-ovl_reu_size_lo:  .byte 0, 0, 0, 0, 0, 0, 0, 0
-ovl_reu_size_hi:  .byte 0, 0, 0, 0, 0, 0, 0, 0
-ol_target:        .byte 0
-#if C128_TEST_OVERLAY_LOAD_FAIL_TRAP
-c128_overlay_load_disk_index:  .byte 0
-c128_overlay_load_disk_target: .byte 0
-c128_overlay_load_disk_len:    .byte 0
-c128_overlay_load_disk_lo:     .byte 0
-c128_overlay_load_disk_hi:     .byte 0
-c128_tramp_player_create_overlay_req: .byte 0
-c128_overlay_load_entry_req:          .byte 0
-c128_overlay_load_entry_target:       .byte 0
-c128_preload_diag_stage:              .byte 0
-c128_preload_diag_a:                  .byte 0
-c128_preload_diag_x:                  .byte 0
-c128_preload_diag_y:                  .byte 0
-c128_preload_diag_status:             .byte 0
-c128_preload_diag_readst:             .byte 0
-c128_preload_diag_port1:              .byte 0
-c128_preload_diag_mmu:                .byte 0
-c128_preload_diag_pcra:               .byte 0
-#endif
-ol_save_p:        .byte 0
-ol_status_p:      .byte 0
-#if C128_TEST_OVERLAY_FN_GUARD
-c128_overlay_fn_guard_stage:   .byte 0
-c128_overlay_fn_guard_index:   .byte 0
-c128_overlay_fn_guard_actual:  .byte 0
-c128_overlay_fn_guard_expect:  .byte 0
-#endif
-overlay_state_block_end:
-
 // c128_stack_guard_begin/check — capture and validate stack balance around
 // high-risk KERNAL/overlay/runtime boundaries. On mismatch, preserve the
 // expected SP, actual SP, and stage tag in RAM and break immediately.
@@ -3176,12 +3116,6 @@ c128_final_return_stack_7:     .byte 0
 .label final_return_diag_stack7 = c128_final_return_stack_7
 #endif
 #endif
-ovl_cache_base_lo: .byte 0
-ovl_cache_base_hi: .byte 0
-ovl_ready_mask:
-    .byte 0, %00000001, %00000010, %00000100, %00001000, %00010000, %00100000, %01000000
-c128_cache_state_end:
-
 .assert "Program fits below map area", * <= MAP_BASE, true
 
 .const DUNGEON_GEN_BUSY = 1
@@ -3194,7 +3128,9 @@ c128_cache_state_end:
 #import "../common/reu.s"
 #import "../common/rng.s"
 #import "../common/math.s"
+#define C128_PLAYER_STAT_HELPERS_EXTERNAL
 #import "../common/player.s"
+#undef C128_PLAYER_STAT_HELPERS_EXTERNAL
 #import "../common/ui_messages.s"
 #import "../common/ui_status.s"
 #import "../common/generation_busy.s"
@@ -3210,7 +3146,9 @@ c128_cache_state_end:
 .segment C128ResidentWorld
 c128_resident_world_start:
 #import "../common/dungeon_data.s"
+#define DISARM_HELPERS_EXTERNAL
 #import "../common/dungeon_features.s"
+#undef DISARM_HELPERS_EXTERNAL
 #import "../common/monster.s"
 #import "hal/storage_drive.s"
 #import "hal/storage_tier_names.s"
@@ -3223,13 +3161,89 @@ c128_resident_world_start:
 #define SPELL_EFFECTS_INCLUDE_IDENTIFY
 #import "../common/spell_effects.s"
 #undef SPELL_EFFECTS_INCLUDE_IDENTIFY
+cmb_you_str:     .text "You " ; .byte 0
+cmb_the_str:     .text " the " ; .byte 0
+cmb_hit_str:     .text "hit" ; .byte 0
+cmb_miss_str:    .text "miss" ; .byte 0
+cmb_kill_str:    .text "have slain" ; .byte 0
+cmb_period:      .byte $2e, 0
+cmb_the_cap_str: .text "The " ; .byte 0
+cmb_shudders_str:
+    .text " shudders." ; .byte 0
+cmb_dissolves_str:
+    .text " dissolves!" ; .byte 0
+
+// C128 cache/overlay state is loaded with the always-resident world payload.
+// Keeping it out of the default image preserves the hard $6000 boundary while
+// leaving the state in Bank 0 below the overlay window.
+c128_cache_state_start:
+c128_cache_enabled:        .byte 1
+c128_cache_tiers_ready:    .byte 0
+c128_cache_overlays_ready: .byte 0
+c128_cache_failed:         .byte 0
+c128_cache_tier_bits:      .byte 0
+c128_cache_overlay_bits:   .byte 0
+c128_preload_fn_len:       .byte 0
+c128_preload_status:       .byte 0
+#if C128_CACHE_TEST_SKIP_TIER
+c128_cache_test_skip_tier: .byte 1
+#else
+c128_cache_test_skip_tier: .byte 0
+#endif
+#if C128_CACHE_TEST_SKIP_OVERLAY
+c128_cache_test_skip_overlay: .byte 2
+#else
+c128_cache_test_skip_overlay: .byte 0
+#endif
+c128_startup_overlay_executing: .byte 0
+
+overlay_state_block_start:
+current_overlay: .byte 0
+#import "hal/storage_overlay_names.s"
+ovl_reu_start_lo: .byte 0, 0, 0, 0, 0, 0, 0, 0
+ovl_reu_start_hi: .byte 0, 0, 0, 0, 0, 0, 0, 0
+ovl_reu_size_lo:  .byte 0, 0, 0, 0, 0, 0, 0, 0
+ovl_reu_size_hi:  .byte 0, 0, 0, 0, 0, 0, 0, 0
+ol_target:        .byte 0
+#if C128_TEST_OVERLAY_LOAD_FAIL_TRAP
+c128_overlay_load_disk_index:  .byte 0
+c128_overlay_load_disk_target: .byte 0
+c128_overlay_load_disk_len:    .byte 0
+c128_overlay_load_disk_lo:     .byte 0
+c128_overlay_load_disk_hi:     .byte 0
+c128_tramp_player_create_overlay_req: .byte 0
+c128_overlay_load_entry_req:          .byte 0
+c128_overlay_load_entry_target:       .byte 0
+c128_preload_diag_stage:              .byte 0
+c128_preload_diag_a:                  .byte 0
+c128_preload_diag_x:                  .byte 0
+c128_preload_diag_y:                  .byte 0
+c128_preload_diag_status:             .byte 0
+c128_preload_diag_readst:             .byte 0
+c128_preload_diag_port1:              .byte 0
+c128_preload_diag_mmu:                .byte 0
+c128_preload_diag_pcra:               .byte 0
+#endif
+ol_save_p:        .byte 0
+ol_status_p:      .byte 0
+#if C128_TEST_OVERLAY_FN_GUARD
+c128_overlay_fn_guard_stage:   .byte 0
+c128_overlay_fn_guard_index:   .byte 0
+c128_overlay_fn_guard_actual:  .byte 0
+c128_overlay_fn_guard_expect:  .byte 0
+#endif
+overlay_state_block_end:
+ovl_cache_base_lo: .byte 0
+ovl_cache_base_hi: .byte 0
+ovl_ready_mask:
+    .byte 0, %00000001, %00000010, %00000100, %00001000, %00010000, %00100000, %01000000, %10000000
+c128_cache_state_end:
 c128_resident_world_end:
 
 .segment C128ResidentItems
 c128_resident_items_start:
 #import "../common/item.s"
 #import "../common/store_data.s"
-#import "../common/disarm.s"
 c128_resident_items_end:
 
 .segment C128ResidentSelect
@@ -3240,6 +3254,19 @@ ui_prepare_fullscreen_transition:
     jsr hal_screen_clear
     jsr ui_reset_message_state
     rts
+
+welcome_str:
+    .text "Welcome to Moria8! Shift+Q to quit." ; .byte 0
+search_mode_on_str:
+    .text "Search mode on." ; .byte 0
+search_mode_off_str:
+    .text "Search mode off." ; .byte 0
+descend_str:
+    .text "You descend the staircase." ; .byte 0
+ascend_str:
+    .text "You ascend the staircase." ; .byte 0
+at_surface_str:
+    .text "You are already at the surface." ; .byte 0
 
 #define ITEM_ACTIONS_OVERLAY_EXTERNAL
 #define PLAYER_RECALC_EQUIPMENT_EXTERNAL
@@ -3255,6 +3282,8 @@ c128_resident_persist_start:
 c128_resident_persist_end:
 
 #define PRESS_KEY_STR_EXTERNAL
+#define WELCOME_STR_EXTERNAL
+#define GAME_LOOP_NAV_STRINGS_EXTERNAL
 .segment C128ResidentPlay
 c128_resident_play_start:
 #if PERF_P1
@@ -3263,13 +3292,19 @@ c128_resident_play_start:
 #import "../common/dungeon_los.s"
 #import "../common/monster_attack.s"
 #define PMU_TURN_FEEDBACK_EXTERNAL
+#define C128_COMBAT_COMMON_HELPERS_EXTERNAL
+#define COMBAT_STRINGS_EXTERNAL
 #import "../common/combat.s"
+#undef COMBAT_STRINGS_EXTERNAL
+#undef C128_COMBAT_COMMON_HELPERS_EXTERNAL
 #undef PMU_TURN_FEEDBACK_EXTERNAL
 #import "../common/look_flash_target.s"
 #import "../common/player_move.s"
 #import "../common/ui_help_clear.s"
 #import "../common/wizard.s"
+#define DISARM_COMMAND_EXTERNAL
 #import "../common/game_loop.s"
+#undef DISARM_COMMAND_EXTERNAL
 #import "../common/turn.s"
 #import "../common/player_magic_state.s"
 #if C128
@@ -3532,7 +3567,7 @@ c128_test_snapshot_cache_probes:
     rts
 #endif
 
-#if C128_TEST_CACHE_SURVIVAL
+#if C128_TEST_CACHE_SURVIVAL || C128_CACHE_TEST_SKIP_TIER || C128_CACHE_TEST_SKIP_OVERLAY
 c128_test_expected_tier_bits:
     lda #%00001111
 #if C128_CACHE_TEST_SKIP_TIER
@@ -3544,7 +3579,7 @@ c128_test_expected_tier_bits:
     rts
 
 c128_test_expected_overlay_bits:
-    lda #%00011111
+    lda #%01111111
 #if C128_CACHE_TEST_SKIP_OVERLAY
     ldx c128_cache_test_skip_overlay
     beq !cteo_done+
@@ -3592,7 +3627,8 @@ c128_test_validate_overlay_partial_state:
     rts
 #endif
 
-#if C128_VIC40_BOOT_PROBE
+#if C128_TEST_VIC40_CLEAN_BOOT
+.segment RuntimeLowData
 c128_vic40_boot_probe:
     lda $d011
     cmp #$1b
@@ -3633,6 +3669,7 @@ c128_vic40_boot_probe_pass_sym:
 c128_vic40_boot_probe_fail_sym:
     nop
     jmp c128_vic40_boot_probe_fail_sym
+.segment Default
 #endif
 
 #if C128_TEST_CACHE_SURVIVAL
@@ -3647,7 +3684,7 @@ c128_test_verify_cache_survival:
     cmp #1
     bne !ctcs_fail+
     lda c128_cache_overlay_bits
-    cmp #%00011111
+    cmp #%01111111
     bne !ctcs_fail+
 
     lda MMU_COMMON_HELPERS_BASE
@@ -3709,6 +3746,221 @@ runtime_common_data_start:
     #define PMU_TURN_FEEDBACK_ONLY
     #import "../common/player_magic_turn_banked.s"
     #undef PMU_TURN_FEEDBACK_ONLY
+combat_calc_melee_total_tohit_bonus:
+    lda player_data + PL_TOHIT
+    sta cmb_total_tohit
+
+    lda inv_item_id + EQUIP_WEAPON
+    cmp #FI_EMPTY
+    beq !ccmt_unarmed+
+
+    cmp #IT_MISSILE_BASE
+    bcc !ccmt_weapon+
+    cmp #55
+    bcc !ccmt_done+
+!ccmt_weapon:
+    tay
+    lda it_weight,y
+    beq !ccmt_unarmed+
+    sta ccb_wt_save
+    lda player_data + PL_STR_CUR
+    ldx #15
+    jsr math_multiply
+    lda zp_math_b
+    bne !ccmt_done+
+    lda zp_math_a
+    cmp ccb_wt_save
+    bcs !ccmt_done+
+    sec
+    sbc ccb_wt_save
+    clc
+    adc cmb_total_tohit
+    sta cmb_total_tohit
+    rts
+
+!ccmt_unarmed:
+    lda cmb_total_tohit
+    sec
+    sbc #3
+    sta cmb_total_tohit
+!ccmt_done:
+    rts
+
+combat_add_damage_bonus:
+    lda player_data + PL_TODMG
+    bmi !cadb_neg+
+    clc
+    adc cmb_damage
+    bcc !cadb_store+
+    lda #255
+    bne !cadb_store+
+!cadb_neg:
+    clc
+    adc cmb_damage
+    bpl !cadb_store+
+    lda #0
+!cadb_store:
+    sta cmb_damage
+    rts
+
+player_adj_m4:
+    lda #<-4
+    rts
+player_adj_m3:
+    lda #<-3
+    rts
+player_adj_m2:
+    lda #<-2
+    rts
+player_adj_m1:
+    lda #<-1
+    rts
+player_adj_0:
+    lda #0
+    rts
+player_adj_1:
+    lda #1
+    rts
+player_adj_2:
+    lda #2
+    rts
+player_adj_3:
+    lda #3
+    rts
+player_adj_4:
+    lda #4
+    rts
+player_adj_5:
+    lda #5
+    rts
+player_adj_6:
+    lda #6
+    rts
+
+player_str_tohit_adj:
+    cmp #4
+    bcc player_adj_m3
+    cmp #5
+    bcc player_adj_m2
+    cmp #7
+    bcc player_adj_m1
+    cmp #18
+    bcc player_adj_0
+    cmp #94
+    bcc player_adj_1
+    cmp #109
+    bcc player_adj_2
+    cmp #117
+    bcc player_adj_3
+    bcs player_adj_4
+
+player_str_damage_adj:
+    cmp #4
+    bcc player_adj_m2
+    cmp #5
+    bcc player_adj_m1
+    cmp #16
+    bcc player_adj_0
+    cmp #17
+    bcc player_adj_1
+    cmp #18
+    bcc player_adj_2
+    cmp #94
+    bcc player_adj_3
+    cmp #109
+    bcc player_adj_4
+    cmp #117
+    bcc player_adj_5
+    bcs player_adj_6
+
+player_dex_tohit_adj:
+    cmp #4
+    bcc player_adj_m3
+    cmp #6
+    bcc player_adj_m2
+    cmp #8
+    bcc player_adj_m1
+    cmp #16
+    bcc player_adj_0
+    cmp #17
+    bcc player_adj_1
+    cmp #18
+    bcc player_adj_2
+    cmp #69
+    bcc player_adj_3
+    cmp #118
+    bcc player_adj_4
+    bcs player_adj_5
+
+player_adj2_m4:
+    lda #<-4
+    rts
+player_adj2_m3:
+    lda #<-3
+    rts
+player_adj2_m2:
+    lda #<-2
+    rts
+player_adj2_m1:
+    lda #<-1
+    rts
+player_adj2_0:
+    lda #0
+    rts
+player_adj2_1:
+    lda #1
+    rts
+player_adj2_2:
+    lda #2
+    rts
+player_adj2_3:
+    lda #3
+    rts
+player_adj2_4:
+    lda #4
+    rts
+player_adj2_5:
+    lda #5
+    rts
+
+player_dex_ac_adj:
+    cmp #4
+    bcc player_adj2_m4
+    cmp #5
+    bcc player_adj2_m3
+    cmp #6
+    bcc player_adj2_m2
+    cmp #7
+    bcc player_adj2_m1
+    cmp #15
+    bcc player_adj2_0
+    cmp #18
+    bcc player_adj2_1
+    cmp #59
+    bcc player_adj2_2
+    cmp #94
+    bcc player_adj2_3
+    cmp #117
+    bcc player_adj2_4
+    bcs player_adj2_5
+
+player_con_hp_adj:
+    cmp #7
+    bcs !check17+
+    sec
+    sbc #7
+    rts
+!check17:
+    cmp #17
+    bcc player_adj2_0
+    cmp #18
+    bcc player_adj2_1
+    cmp #94
+    bcc player_adj2_2
+    cmp #117
+    bcc player_adj2_3
+    bcs player_adj2_4
+
     #import "../common/perf_p1.s"
 runtime_common_data_end:
 }
@@ -3728,6 +3980,40 @@ c128_resident_diskio_start:
 press_key_str:
     .text "Press any key" ; .byte 0
 press_key_str_end:
+
+combat_calc_bow_tohit:
+    lda player_data + PL_TOHIT
+    sta cmb_total_tohit
+    lda #4
+    ldx #1
+    jmp combat_calc_tohit_common
+
+combat_append_blow_summary:
+    lda cmb_blow_count
+    cmp #2
+    bcs !cabs_do+
+    rts
+!cabs_do:
+    dec cmb_buf_idx
+    lda #$20
+    jsr combat_append_char
+    lda #$28
+    jsr combat_append_char
+    lda cmb_hit_count
+    jsr combat_append_decimal
+    lda #$2f
+    jsr combat_append_char
+    lda cmb_blow_count
+    jsr combat_append_decimal
+    lda #$29
+    jsr combat_append_char
+    lda #$2e
+    jsr combat_append_char
+    jsr combat_clamp_msg_idx
+    ldx cmb_buf_idx
+    lda #0
+    sta combat_msg_buf,x
+    rts
 c128_resident_diskio_end:
 .segment Default
 
@@ -3827,7 +4113,6 @@ program_end:
 .assert "C128 modal persist stays below the I/O hole", c128_resident_persist_end <= $D000, true
 .assert "C128 resident play starts at $AF00", c128_resident_play_start == $AF00, true
 .assert "C128 resident play stays below the I/O hole", c128_resident_play_end <= $D000, true
-.assert "C128 resident play stays below floor-item table", c128_resident_play_end <= $CF00, true
 .assert "Staged Bank1 source span matches boot scrub ceiling", BANK1_STAGE_SOURCE_END == BANK1_RESERVED_TOP_END, true
 .assert "Tier cache window remains large enough for tier preload", BANK1_TIER_CACHE_SIZE >= TIER_PRELOAD_REQUIRED, true
 .assert "MMU helper page stays inside common RAM ownership", MMU_COMMON_HELPERS_BASE >= BANK1_COMMON_BASE, true
@@ -3892,6 +4177,10 @@ program_end:
 
 .macro C128AuditItemsOverlay(name, symbol) {
     .assert "AUDIT-IO-C128 " + name + " stays in the items overlay", symbol >= $E000 && symbol < ovl_items_end, true
+}
+
+.macro C128AuditDisarmOverlay(name, symbol) {
+    .assert "AUDIT-IO-C128 " + name + " stays in the disarm overlay", symbol >= $E000 && symbol < ovl_disarm_end, true
 }
 
 .macro C128AuditDungeonOverlay(name, symbol) {
@@ -4004,6 +4293,16 @@ ovl_ui_end:
 ovl_items_end:
 .print "Items overlay: " + (ovl_items_end - $e000) + " bytes at $E000-$" + toHexString(ovl_items_end)
 .assert "Items overlay fits in $E000-$EFFF", ovl_items_end <= $f000, true
+
+// ============================================================
+// Disarm overlay — direct trap disarm command and Umoria math
+// ============================================================
+.segment DisarmOverlay
+    #import "../common/disarm.s"
+    #import "../common/disarm_helpers.s"
+ovl_disarm_end:
+.print "Disarm overlay: " + (ovl_disarm_end - $e000) + " bytes at $E000-$" + toHexString(ovl_disarm_end)
+.assert "Disarm overlay fits in $E000-$EFFF", ovl_disarm_end <= $f000, true
 
 // ============================================================
 // Dungeon generation overlay

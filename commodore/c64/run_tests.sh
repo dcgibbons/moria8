@@ -2010,12 +2010,12 @@ run_test "input"  "tests/test_input.s"  "0400 040d" 14
 run_test "main_loop" "tests/test_main_loop.s" "0400 0424" 37 500000000
 run_test "turn" "tests/test_turn.s" "0400 0416" 23 500000000
 run_test "player" "tests/test_player.s" "0400 0409" 10
-run_test "dungeon" "tests/test_dungeon.s" "0400 0427" 40 500000000
+run_test "dungeon" "tests/test_dungeon.s" "0400 042a" 43 500000000
 run_test "monster" "tests/test_monster.s" "0400 040c" 13 500000000
 run_test "monster_ai" "tests/test_monster_ai.s" "0400 0419" 26 500000000
-run_test "combat" "tests/test_combat.s" "0400 0421" 34 500000000
+run_test "combat" "tests/test_combat.s" "0400 0427" 40 500000000
 run_test "msg_long" "tests/test_msg_long.s" "0400 0400" 1 20000000
-run_test "monster_attack" "tests/test_monster_attack.s" "0400 040c" 13 500000000
+run_test "monster_attack" "tests/test_monster_attack.s" "0400 040f" 16 500000000
 run_test "effects" "tests/test_effects.s" "0400 0431" 27 1000000000
 run_test "effects_magic" "tests/test_effects_magic.s" "0400 0433" 23 1000000000
 run_test "cure_light_wounds" "tests/test_cure_light_wounds.s" "0400 0402" 3 500000000

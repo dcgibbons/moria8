@@ -40,6 +40,8 @@ df_death_source: .byte 0 // Trap death source for lethal trap damage
 df_death_hstr:   .byte 0 // Trap death cause string for lethal trap damage
 df_disarm_chance: .byte 0
 df_disarm_trap_idx: .byte 0
+df_disarm_total: .byte 0
+df_disarm_base: .byte 0
 
 // ============================================================
 // Trap name Huffman indices (indexed by trap type 0-5)
@@ -428,31 +430,21 @@ disarm_command:
 
 !has_trap:
     jsr player_disarm_get_effective_chance
-    sta df_disarm_chance
+    sta df_disarm_total
     ldx df_disarm_trap_idx
     lda trap_type,x
     tax
-    lda df_disarm_chance
-    clc
-    adc #100
-    bcs !chance_cap+
-    sec
-    sbc trap_difficulty,x
-    bcs !chance_ok+
-    lda #0
-    beq !chance_ok+
-!chance_cap:
-    lda #255
-!chance_ok:
+    lda df_disarm_total
+    jsr disarm_calc_success_threshold
     sta df_disarm_chance
     lda #100
     jsr rng_range
     cmp df_disarm_chance
     bcc !success+
 
-    lda #5
-    jsr rng_range
-    beq !bad_fail+
+    lda df_disarm_total
+    jsr disarm_roll_bad_fail
+    bcs !bad_fail+
     lda #<disarm_fail_str
     sta zp_ptr0
     lda #>disarm_fail_str
@@ -527,132 +519,8 @@ disarm_award_trap_xp:
 
 #endif
 
-#if !DISARM_COMMAND_EXTERNAL
-player_disarm_get_effective_chance:
-    lda player_data + PL_CLASS
-    ldx #CLASS_PROP_SIZE
-    jsr math_multiply
-    clc
-    adc #5
-    tax
-    lda class_properties,x
-    sta df_disarm_chance
-
-    lda player_data + PL_RACE
-    ldx #RACE_PROP_SIZE
-    jsr math_multiply
-    clc
-    adc #3
-    tax
-    lda race_properties,x
-    clc
-    adc df_disarm_chance
-    sta df_disarm_chance
-
-    jsr player_disarm_dex_adj
-    asl
-    clc
-    adc df_disarm_chance
-    sta df_disarm_chance
-
-    jsr player_disarm_int_adj
-    clc
-    adc df_disarm_chance
-    sta df_disarm_chance
-
-    lda player_data + PL_CLASS
-    ldx #CLASS_LVL_SIZE
-    jsr math_multiply
-    clc
-    adc #3
-    tax
-    lda class_level_adj,x
-    ldx zp_player_lvl
-    jsr math_multiply
-    ldx #3
-    jsr math_div_16x8
-    lda df_disarm_chance
-    clc
-    adc zp_math_a
-    sta df_disarm_chance
-
-    lda zp_eff_confuse
-    beq !not_confused+
-    lda df_disarm_chance
-    jsr player_search_divide_by_10
-    sta df_disarm_chance
-!not_confused:
-    lda zp_eff_blind
-    bne !dim+
-    jsr player_search_has_no_light
-    bcc !done+
-!dim:
-    lda df_disarm_chance
-    jsr player_search_divide_by_10
-    sta df_disarm_chance
-!done:
-    lda df_disarm_chance
-    rts
-
-player_disarm_dex_adj:
-    lda player_data + PL_DEX_CUR
-    cmp #19
-    bcs !dex18xx+
-    tax
-    dex
-    dex
-    dex
-    lda dex_disarm_bonus,x
-    rts
-!dex18xx:
-    cmp #69
-    bcc !dex5+
-    cmp #109
-    bcc !dex6+
-    lda #8
-    rts
-!dex6:
-    lda #6
-    rts
-!dex5:
-    lda #5
-    rts
-
-player_disarm_int_adj:
-    lda player_data + PL_INT_CUR
-    cmp #8
-    bcs !ge8+
-    cmp #6
-    bcs !zero+
-    sec
-    sbc #6
-    rts
-!zero:
-    lda #0
-    rts
-!ge8:
-    cmp #15
-    bcs !ge15+
-    lda #1
-    rts
-!ge15:
-    cmp #18
-    bcs !ge18+
-    lda #2
-    rts
-!ge18:
-    cmp #19
-    bcs !int18xx+
-    lda #3
-    rts
-!int18xx:
-    cmp #69
-    bcc !int4+
-    lda #5
-    rts
-!int4:
-    lda #4
-    rts
+#if !DISARM_HELPERS_EXTERNAL
+#import "disarm_helpers.s"
 #endif
 
 // ============================================================

@@ -165,12 +165,9 @@ throw_item:
     ldy #0                      // No bonus on dice
     jsr math_dice               // Result in zp_math_a
 
-    // Add STR damage bonus from str_damage_bonus[STR-3]
-    ldx zp_player_str
-    dex
-    dex
-    dex                         // X = STR - 3
-    lda str_damage_bonus,x
+    // Add STR damage bonus, including exceptional 18/xx thresholds.
+    lda zp_player_str
+    jsr player_str_damage_adj
     bmi !tw_str_neg+
     clc
     adc zp_math_a
@@ -296,6 +293,8 @@ tw_consume_item:
 // Clobbers: A, X, Y, zp_math_a/b, zp_temp0
 // ============================================================
 throw_calc_tohit:
+    lda player_data + PL_TOHIT
+    sta cmb_total_tohit
     lda #4                          // BTH_BOW offset in class_properties
     ldx #1                          // BOW level adj offset
     jsr combat_calc_tohit_common

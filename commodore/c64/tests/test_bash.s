@@ -81,8 +81,41 @@ test_exit_trampoline:
 #import "../../common/ranged_fire.s"
 #import "../../common/throw.s"
 #import "../../common/bash.s"
-#import "../../common/monster_attack.s"
-#import "../../common/turn.s"
+#import "../../common/turn_render_state.s"
+eff_fear_timer: .byte 0
+monster_attack_player:
+player_update_hunger_state:
+    sec
+    rts
+mon_atk_apply_damage:
+    lda zp_player_hp_lo
+    sec
+    sbc zp_combat_dmg
+    sta zp_player_hp_lo
+    sta player_data + PL_HP_LO
+    lda zp_player_hp_hi
+    sbc #0
+    sta zp_player_hp_hi
+    sta player_data + PL_HP_HI
+    bmi !mad_dead+
+    ora zp_player_hp_lo
+    beq !mad_dead+
+    clc
+    rts
+!mad_dead:
+    sec
+    rts
+player_death_check:
+    lda zp_player_hp_hi
+    bmi !pdc_dead+
+    ora zp_player_hp_lo
+    beq !pdc_dead+
+    rts
+!pdc_dead:
+    lda zp_game_flags
+    ora #$01
+    sta zp_game_flags
+    rts
 #import "../../common/store_data.s"
 #import "../../common/store.s"
 #import "../../common/ui_store.s"

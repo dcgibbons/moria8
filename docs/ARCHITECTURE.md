@@ -47,31 +47,60 @@ helpers, VDC display code, and fixed overlay/cache ownership.
 
 ### Bank 0
 
+Current product build occupancy is listed with linked endpoints. Segment
+definitions still provide the hard maximums, and the build asserts both the
+start addresses and all cross-boundary limits.
+
 | Range | Owner |
 | ---: | --- |
 | `$0000-$03FF` | Zero page, stack, vectors |
 | `$0400-$07FF` | Scratch/test/BFS path area |
-| `$0A80-$0AFF` | `128.proj` projectile runtime payload |
-| `$0B00-$0BFF` | `128.input` raw-input runtime payload |
+| `$0A80-$0AFB` | `128.proj` projectile runtime payload |
+| `$0B00-$0BFD` | `128.input` raw-input runtime payload |
 | `$0C00-$0C05` | MMU/KERNAL save bytes |
 | `$0C06` | MMU helper blob in common RAM |
-| `$0D60-$0FFF` | Runtime-common payload |
-| `$1000-$3FFF` | `128.runtime` low runtime payload |
+| `$0D60-$0FF3` | Runtime-common / feature-disk payload |
+| `$1000-$19EC` | `128.runtime` low runtime payload |
 | `$1A00-$1AFF` | Floor-item table |
 | `$1B00-$1BFF` | Creature scratch |
-| `$1C01-$5FFF` | Boot, loaders, trampolines, wrappers, cache state |
-| `$6000-$8CFF` | `128.world` payload |
-| `$8D00-$A7FF` | `128.item` payload |
-| `$A800-$AAFF` | `128.select` payload |
+| `$1C01-$5F84` | Main program image: boot path, loaders, trampolines, wrappers |
+| `$6000-$8C33` | `128.world` resident world payload, including C128 cache/overlay state and overlay filename tables |
+| `$8D00-$A686` | `128.item` resident item payload |
+| `$A800-$AAE8` | `128.select` resident selector payload |
 | `$AB00-$AEFF` | `128.diskio` payload |
-| `$AF00-$CFFF` | Modal slot: `128.play` or `128.persist` |
+| `$AF00-$B826` | `128.persist` save/modal payload when loaded |
+| `$AF00-$CF28` | `128.play` gameplay payload when loaded |
 | `$D000-$DFFF` | I/O hole; forbidden for ordinary runtime payloads |
 | `$E000-$EFFF` | Overlay execution window |
-| `$F000-$FFFA` | Reloadable banked runtime payload, asserted below `$FF00` |
+| `$F000-$FEBD` | Reloadable banked runtime payload, asserted below `$FF00` |
 
-The modal slot is mutually exclusive. Save/load uses resident broker routines
-to load `128.persist`, perform the operation, then restore `128.play` before
-returning to gameplay.
+The `$AF00-$CFFF` resident slot is mutually exclusive. Save/load uses resident
+broker routines to load `128.persist`, perform the operation, then restore
+`128.play` before returning to gameplay. `128.play` must remain entirely below
+`$D000`; the current product build leaves `$CF29-$CFFF` free before the I/O
+hole.
+
+Recent size pressure in `128.play` was handled by moving data, not by weakening
+the boundary. Combat message strings and the C128 overlay/cache state now live
+in `128.world`, while shared combat/stat helpers are externalized from the play
+payload where needed. Direct trap disarm is a separate `128.disarm` overlay
+loaded into `$E000-$EFFF`; it is intentionally disk-loaded on demand rather
+than preloaded into the seven-slot Bank 1 overlay cache.
+
+The C128 segment definition maxima are:
+
+| Payload | Declared max |
+| --- | ---: |
+| `128.proj` | `$0AFF` |
+| `128.input` | `$0BFF` |
+| `128.fdisk` | `$0FFF` |
+| `128.runtime` | `$3FFF`, with runtime-low asserted below the floor-item table |
+| `128.world` | `$8CFF` |
+| `128.item` | `$A7FF` |
+| `128.select` | `$AAFF` |
+| `128.diskio` | `$AEFF` |
+| `128.persist` / `128.play` | `$CFFF` |
+| `128.bank` | `$FFFA`, with linked code asserted below `$FF00` |
 
 ### Bank 1
 
@@ -81,9 +110,9 @@ returning to gameplay.
 | `$1000-$1FFF` | Overlay cache slot for `OVL_UI` |
 | `$2000-$2FFF` | Overlay cache slot for `OVL_HELP` |
 | `$3000-$3FFF` | Overlay cache slot for `OVL_ITEMS` |
-| `$4000-$730B` | Live dungeon/town map |
+| `$4000-$730B` | Reserved future map span / live dungeon-town map ownership |
 | `$7400-$7FFF` | Bank 1 DB/data region |
-| `$8000-$94F7` | Active monster tier-cache window |
+| `$8000-$94F7` | Active monster tier-cache window, 5368 bytes |
 | `$94F8-$9FFF` | C128 title cache / reserved gap |
 | `$A000-$AFFF` | Overlay cache slot for `OVL_STARTUP` |
 | `$B000-$BFFF` | Overlay cache slot for `OVL_TOWN` |
@@ -92,8 +121,15 @@ returning to gameplay.
 | `$E000-$EFFF` | Overlay cache slot for `OVL_DUNGEON_GEN` |
 | `$F000-$FEFF` | Reserved top gap |
 
+The C128 product disk carries eight overlay files: `128.start`, `128.town`,
+`128.death`, `128.gen`, `128.help`, `128.ui`, `128.items`, and `128.disarm`.
+Only the first seven have Bank 1 cache slots. `128.disarm` still executes in
+the normal `$E000-$EFFF` overlay window, but the trampoline loads it from disk
+when the player invokes direct disarm.
+
 The source of truth for C128 ownership constants and overlap assertions is
-`commodore/c128/memory128.s`.
+`commodore/c128/memory128.s`; the product segment definitions and Bank 0
+payload asserts live in `commodore/c128/main.s`.
 
 ## C128 MMU Rules
 

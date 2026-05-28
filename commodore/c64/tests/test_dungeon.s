@@ -17,7 +17,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #39
+    ldx #42
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -90,8 +90,40 @@ recall_clear: rts
 #import "../../common/dungeon_los.s"
 #import "../../common/player_move.s"
 #import "../../common/combat.s"
-#import "../../common/monster_attack.s"
-#import "../../common/turn.s"
+eff_fear_timer: .byte 0
+monster_attack_player:
+player_update_hunger_state:
+    sec
+    rts
+mon_atk_apply_damage:
+    lda zp_player_hp_lo
+    sec
+    sbc zp_combat_dmg
+    sta zp_player_hp_lo
+    sta player_data + PL_HP_LO
+    lda zp_player_hp_hi
+    sbc #0
+    sta zp_player_hp_hi
+    sta player_data + PL_HP_HI
+    bmi !mad_dead+
+    ora zp_player_hp_lo
+    beq !mad_dead+
+    clc
+    rts
+!mad_dead:
+    sec
+    rts
+player_death_check:
+    lda zp_player_hp_hi
+    bmi !pdc_dead+
+    ora zp_player_hp_lo
+    beq !pdc_dead+
+    rts
+!pdc_dead:
+    lda zp_game_flags
+    ora #$01
+    sta zp_game_flags
+    rts
 store_init_all:
     rts
 
@@ -127,12 +159,12 @@ t29_retry:     .byte 0                   // Retry counter for test 29
 t32_pre_count: .byte 0                   // Pre-spawn monster count for test 32
 t32_post_count:.byte 0                   // Post-spawn monster count for test 32
 t32_check_type:.byte 0                   // Saved creature type for test 32
-tc_results: .fill 40, $ff              // Test results buffer (copied to $0400 before brk)
+tc_results: .fill 43, $ff              // Test results buffer (copied to $0400 before brk)
 t38_rockfall_name: .text "falling rock." ; .byte 0
 
 test_start:
     // Initialize result area to $ff (untested)
-    ldx #38
+    ldx #42
     lda #$ff
 !clr:
     sta tc_results,x
@@ -2352,6 +2384,66 @@ test_start:
     lda #$00
     sta tc_results + 39
 !t40_done:
+
+    // ============================================================
+    // Test 41: disarm ability uses Umoria trap-command formula
+    // Human warrior, DEX 18, INT 18, level 1:
+    // (class 25 + race 0 + dex_adj 4 + 2) * dex_adj 4 + int_adj 3 = 127.
+    // ============================================================
+    lda #0
+    sta player_data + PL_RACE
+    sta player_data + PL_CLASS
+    sta zp_eff_confuse
+    sta zp_eff_blind
+    lda #1
+    sta player_data + PL_LEVEL
+    sta zp_player_lvl
+    sta zp_light_radius
+    lda #18
+    sta player_data + PL_DEX_CUR
+    sta player_data + PL_INT_CUR
+
+    jsr player_disarm_get_effective_chance
+    cmp #127
+    bne !t41_fail+
+    lda #$01
+    sta tc_results + 40
+    jmp !t41_done+
+!t41_fail:
+    lda #$00
+    sta tc_results + 40
+!t41_done:
+
+    // ============================================================
+    // Test 42: Umoria floor-trap threshold conversion is not off by one.
+    // total 5 vs open-pit difficulty 5 gives threshold 99, not 100.
+    // ============================================================
+    lda #5
+    ldx #TRAP_OPEN_PIT
+    jsr disarm_calc_success_threshold
+    cmp #99
+    bne !t42_fail+
+    lda #$01
+    sta tc_results + 41
+    jmp !t42_done+
+!t42_fail:
+    lda #$00
+    sta tc_results + 41
+!t42_done:
+
+    // ============================================================
+    // Test 43: Umoria bad-fail rule always sets off the trap at total <= 5.
+    // ============================================================
+    lda #5
+    jsr disarm_roll_bad_fail
+    bcc !t43_fail+
+    lda #$01
+    sta tc_results + 42
+    jmp !t43_done+
+!t43_fail:
+    lda #$00
+    sta tc_results + 42
+!t43_done:
 
     // Done — jump to exit trampoline (copies tc_results to $0400, then brk)
     jmp test_exit_trampoline

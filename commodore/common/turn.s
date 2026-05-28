@@ -142,12 +142,14 @@ turn_tick_effects:
 !no_speed:
 
     // Simple-dec effects: protect($55), invis($56), infra($57),
-    // heat/fire resist($58), [skip bless($59)], hero($5a), regen($5b),
+    // heat/fire resist($58), [skip bless($59)], [skip hero($5a)], regen($5b),
     // cold resist($5c)
     .assert "Simple-dec range", eff_resist_cold_timer - zp_eff_protect, 7
     ldy #zp_eff_protect
 !tse_loop:
     cpy #zp_eff_bless
+    beq !tse_next+
+    cpy #zp_eff_hero
     beq !tse_next+
     lda $00,y
     beq !tse_next+
@@ -172,6 +174,42 @@ turn_tick_effects:
     sta zp_ptr0_hi
     jsr msg_print
 !no_bless:
+
+    // Heroism: expiration removes the temporary +10 HP granted on activation.
+    lda zp_eff_hero
+    beq !no_hero+
+    sec
+    sbc #1
+    sta zp_eff_hero
+    bne !no_hero+
+
+    lda player_data + PL_MHP_LO
+    sec
+    sbc #10
+    sta player_data + PL_MHP_LO
+    sta zp_player_mhp_lo
+    lda player_data + PL_MHP_HI
+    sbc #0
+    sta player_data + PL_MHP_HI
+    sta zp_player_mhp_hi
+
+    // If current HP is now above max, clamp current HP down to max.
+    lda zp_player_hp_hi
+    cmp zp_player_mhp_hi
+    bcc !no_hero+
+    bne !hero_clamp+
+    lda zp_player_hp_lo
+    cmp zp_player_mhp_lo
+    bcc !no_hero+
+    beq !no_hero+
+!hero_clamp:
+    lda zp_player_mhp_lo
+    sta zp_player_hp_lo
+    sta player_data + PL_HP_LO
+    lda zp_player_mhp_hi
+    sta zp_player_hp_hi
+    sta player_data + PL_HP_HI
+!no_hero:
 
     // Word of recall
     lda zp_eff_word_recall

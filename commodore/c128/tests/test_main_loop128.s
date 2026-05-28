@@ -591,7 +591,7 @@ c128_cache_test_skip_overlay: .byte 0
 ovl_cache_base_lo: .byte 0
 ovl_cache_base_hi: .byte 0
 ovl_ready_mask:
-    .byte 0, %00000001, %00000010, %00000100, %00001000, %00010000, %00100000
+    .byte 0, %00000001, %00000010, %00000100, %00001000, %00010000, %00100000, %01000000, %10000000
 .const SPELL_MAGE = 1
 .const OVL_DUNGEON_GEN = 4
 .const EQUIP_WEAPON = 22

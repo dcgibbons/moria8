@@ -18,7 +18,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #33
+    ldx #39
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -137,7 +137,7 @@ press_key_str:
 // Test scratch
 tc_loop:    .byte 0
 tc_ok:      .byte 0
-tc_results: .fill 34, $ff      // Result buffer (copied to $0400 at end)
+tc_results: .fill 40, $ff      // Result buffer (copied to $0400 at end)
 
 test_start:
     // Seed RNG deterministically
@@ -167,9 +167,13 @@ test_start:
     // ==========================================
     lda #CLASS_WARRIOR
     sta player_data + PL_CLASS
+    lda #RACE_HUMAN
+    sta player_data + PL_RACE
     lda #1
     sta zp_player_lvl
     sta player_data + PL_LEVEL
+    lda #18
+    sta player_data + PL_STR_CUR
     lda #0
     sta player_data + PL_TOHIT
 
@@ -192,9 +196,13 @@ test_start:
 !t2:
     lda #CLASS_WARRIOR
     sta player_data + PL_CLASS
+    lda #RACE_HUMAN
+    sta player_data + PL_RACE
     lda #1
     sta zp_player_lvl
     sta player_data + PL_LEVEL
+    lda #18
+    sta player_data + PL_STR_CUR
     lda #2
     sta player_data + PL_TOHIT
 
@@ -1345,10 +1353,192 @@ test_start:
     bne !t34_fail+
     lda #$01
     sta tc_results + 33
-    jmp !tests_done+
+    jmp !t35+
 !t34_fail:
     lda #$00
     sta tc_results + 33
+
+    // ==========================================
+    // Test 35: exceptional STR/DEX use Umoria 18/xx combat buckets.
+    // STR 18/100 -> +4 to-hit, +6 damage; DEX 18/100 -> +5 to-hit, +5 AC.
+    // ==========================================
+!t35:
+    lda #118
+    sta player_data + PL_STR_CUR
+    sta player_data + PL_DEX_CUR
+    lda #FI_EMPTY
+    sta inv_item_id + EQUIP_BODY
+    sta inv_item_id + EQUIP_SHIELD
+    sta inv_item_id + EQUIP_HEAD
+    sta inv_item_id + EQUIP_HANDS
+    sta inv_item_id + EQUIP_FEET
+    sta inv_item_id + EQUIP_RING
+
+    jsr player_calc_combat
+
+    lda player_data + PL_TOHIT
+    cmp #9
+    bne !t35_fail+
+    lda player_data + PL_TODMG
+    cmp #6
+    bne !t35_fail+
+    lda player_data + PL_AC
+    cmp #5
+    bne !t35_fail+
+    lda #$01
+    sta tc_results + 34
+    jmp !t36+
+!t35_fail:
+    lda #$00
+    sta tc_results + 34
+
+    // ==========================================
+    // Test 36: unlit melee target halves base and level BTH and uses x1 to-hit.
+    // Warrior level 1, PL_TOHIT=2: 70/2 + 2 + 4/2 = 39.
+    // ==========================================
+!t36:
+    lda #CLASS_WARRIOR
+    sta player_data + PL_CLASS
+    lda #RACE_HUMAN
+    sta player_data + PL_RACE
+    lda #1
+    sta zp_player_lvl
+    sta player_data + PL_LEVEL
+    lda #2
+    sta player_data + PL_TOHIT
+    lda #2
+    sta inv_item_id + EQUIP_WEAPON
+    lda #1
+    sta cmb_target_light_valid
+    lda #0
+    sta cmb_target_lit
+
+    jsr combat_calc_tohit
+
+    lda #0
+    sta cmb_target_light_valid
+    lda zp_combat_tohit
+    cmp #39
+    bne !t36_fail+
+    lda #$01
+    sta tc_results + 35
+    jmp !t37+
+!t36_fail:
+    lda #$00
+    sta tc_results + 35
+
+    // ==========================================
+    // Test 37: bless and heroism add direct Umoria BTH bonuses.
+    // Warrior level 1, PL_TOHIT=0: 70 + bless 5 + hero 12 + level 4 = 91.
+    // ==========================================
+!t37:
+    lda #CLASS_WARRIOR
+    sta player_data + PL_CLASS
+    lda #RACE_HUMAN
+    sta player_data + PL_RACE
+    lda #1
+    sta zp_player_lvl
+    sta player_data + PL_LEVEL
+    lda #0
+    sta player_data + PL_TOHIT
+    lda #2
+    sta inv_item_id + EQUIP_WEAPON
+    lda #1
+    sta zp_eff_bless
+    sta zp_eff_hero
+
+    jsr combat_calc_tohit
+
+    lda #0
+    sta zp_eff_bless
+    sta zp_eff_hero
+    lda zp_combat_tohit
+    cmp #91
+    bne !t37_fail+
+    lda #$01
+    sta tc_results + 36
+    jmp !t38+
+!t37_fail:
+    lda #$00
+    sta tc_results + 36
+
+    // ==========================================
+    // Test 38: too-heavy weapon applies signed to-hit penalty.
+    // STR 4 with 120-weight armor-as-weapon: 70 - (60*3) floored + level 4 = 4.
+    // ==========================================
+!t38:
+    lda #CLASS_WARRIOR
+    sta player_data + PL_CLASS
+    lda #RACE_HUMAN
+    sta player_data + PL_RACE
+    lda #1
+    sta zp_player_lvl
+    sta player_data + PL_LEVEL
+    lda #4
+    sta player_data + PL_STR_CUR
+    lda #0
+    sta player_data + PL_TOHIT
+    lda #8
+    sta inv_item_id + EQUIP_WEAPON
+
+    jsr combat_calc_tohit
+
+    lda zp_combat_tohit
+    cmp #4
+    bne !t38_fail+
+    lda #$01
+    sta tc_results + 37
+    jmp !t39+
+!t38_fail:
+    lda #$00
+    sta tc_results + 37
+
+    // ==========================================
+    // Test 39: ranged to-hit uses BOW tables.
+    // Warrior level 1, PL_TOHIT=2: BOW 55 + 2*3 + level bow 4 = 65.
+    // ==========================================
+!t39:
+    lda #CLASS_WARRIOR
+    sta player_data + PL_CLASS
+    lda #RACE_HUMAN
+    sta player_data + PL_RACE
+    lda #1
+    sta zp_player_lvl
+    sta player_data + PL_LEVEL
+    lda #2
+    sta player_data + PL_TOHIT
+
+    jsr combat_calc_bow_tohit
+
+    lda zp_combat_tohit
+    cmp #65
+    bne !t39_fail+
+    lda #$01
+    sta tc_results + 38
+    jmp !t40+
+!t39_fail:
+    lda #$00
+    sta tc_results + 38
+
+    // ==========================================
+    // Test 40: signed damage bonus is applied after dice/ego/critical and floors at zero.
+    // ==========================================
+!t40:
+    lda #2
+    sta cmb_damage
+    lda #<-3
+    sta player_data + PL_TODMG
+
+    jsr combat_add_damage_bonus
+
+    lda cmb_damage
+    bne !t40_fail+
+    lda #$01
+    sta tc_results + 39
+    jmp !tests_done+
+!t40_fail:
+    lda #$00
+    sta tc_results + 39
 
 !tests_done:
     jmp test_exit_trampoline

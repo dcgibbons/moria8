@@ -581,9 +581,33 @@ iq_effect_restore_mana:
     rts
 
 iq_effect_heroism:
+    // Heroism: first activation grants +10 max/current HP and clears fear.
+    lda zp_eff_hero
+    bne !iq_hero_timer+
+    lda player_data + PL_MHP_LO
+    clc
+    adc #10
+    sta player_data + PL_MHP_LO
+    sta zp_player_mhp_lo
+    lda player_data + PL_MHP_HI
+    adc #0
+    sta player_data + PL_MHP_HI
+    sta zp_player_mhp_hi
+
+    lda player_data + PL_HP_LO
+    clc
+    adc #10
+    sta player_data + PL_HP_LO
+    sta zp_player_hp_lo
+    lda player_data + PL_HP_HI
+    adc #0
+    sta player_data + PL_HP_HI
+    sta zp_player_hp_hi
+!iq_hero_timer:
+    lda #0
+    sta eff_fear_timer
+
     // Set zp_eff_hero timer (rng(25)+25), stacks
-    // NOTE: Timer is infrastructure only — gameplay effects (to-hit/HP bonus)
-    // will be integrated when effect consumption is added in a later phase.
     lda #25
     jsr rng_range                   // [0, 24]
     clc
