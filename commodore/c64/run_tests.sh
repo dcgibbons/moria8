@@ -1983,6 +1983,12 @@ check_static_contract "wizard_reveal_uses_spell_overlay_contract" "main.s" \
     "tramp_reveal_floorplan:|||lda #OVL_SPELL|||jsr overlay_load_no_kernal|||jsr eff_reveal_floorplan|||jmp tramp_sr_epilogue"
 check_static_contract "c64_game_over_returns_to_title_contract" "main.s" \
     "game_over_prompt:|||lda #OVL_DEATH|||jsr overlay_load|||sei|||lda #BANK_NO_KERNAL|||sta \$01|||jmp game_restart_overlay"
+check_static_contract "title_screen_clear_ownership_contract" "../common/title_screen.s" \
+    "title_clear_full_screen:|||jsr hal_screen_clear_row|||cmp #SCREEN_ROWS|||title_clear_below_menu:|||lda #TITLE_CLEAR_FIRST_ROW|||sta title_clear_row|||jsr hal_screen_clear_row|||cmp #TITLE_CLEAR_AFTER_LAST_ROW|||title_load_and_draw:|||jsr title_clear_full_screen|||jsr title_render_data|||title_fallback_render:|||jsr title_clear_full_screen"
+check_static_contract "c64_title_reentry_uses_owned_clear_contract" "main.s" \
+    "title_enter_menu:|||jsr title_clear_full_screen|||jsr title_load_and_draw|||jsr title_clear_below_menu|||jsr msg_init|||jsr title_show_sysinfo|||jsr title_draw_menu"
+check_static_contract "modal_restore_uses_safe_full_clear_contract" "../common/ui_restore.s" \
+    "ui_view_redraw_gameplay_view:|||jsr ui_reset_message_state|||jsr ui_clear_full_screen_safe|||jsr viewport_update|||jsr render_viewport|||jsr status_draw"
 check_static_contract "c64_hidden_kernal_irq_vector_contract" "main.s" \
     "c64_irq_hidden_rom:|||lda \$dc0d|||lda \$dd0d|||lda \$d019|||sta \$d019|||rti|||c64_install_ram_irq_vectors:|||lda #BANK_NO_KERNAL|||sta \$01|||sta \$fffa|||sta \$fffe|||sta \$fffb|||sta \$ffff|||overlay_load_no_kernal:|||pha|||lda #BANK_NO_BASIC|||sta \$01|||cli|||pla|||jsr overlay_load|||sei|||jsr c64_install_ram_irq_vectors|||lda #BANK_NO_KERNAL"
 check_static_contract "c64_disk_call_preserves_args_contract" "main.s" \

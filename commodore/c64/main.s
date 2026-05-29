@@ -495,23 +495,15 @@ c64_test_after_save_restart_start:
     lda #COL_LGREY
     sta zp_text_color
 
-    // Clear screen now so stale status bar (rows 21–23) from any prior session
-    // is gone before KERNAL LOAD starts printing "SEARCHING...".
-    // title_load_and_draw also clears after KERNAL LOAD to remove those messages.
-    jsr screen_clear
+    // Title is a full-screen view; clear before KERNAL LOAD starts printing
+    // "SEARCHING...", then title_load_and_draw clears again after the load.
+    jsr title_clear_full_screen
 
     // Load and display title (clears screen internally after KERNAL LOAD)
     jsr title_load_and_draw
 
-    // Explicitly clear status rows 21–23 before sysinfo draws on row 23.
-    // title_load_and_draw + KERNAL LOAD together may leave stale status bar
-    // data in those rows (e.g. from title_render_data parsing MAP_BASE).
-    lda #STATUS_ROW             // row 21
-    jsr screen_clear_row
-    lda #STATUS_ROW + 1         // row 22
-    jsr screen_clear_row
-    lda #STATUS_ROW + 2         // row 23
-    jsr screen_clear_row
+    // The title art stream owns the art, not the rows below the menu.
+    jsr title_clear_below_menu
 
     // Title re-entry must rebuild message/title UI state from scratch after
     // any failed load attempt, not just branch back into the old loop.

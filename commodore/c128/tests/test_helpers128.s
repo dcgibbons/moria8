@@ -22,3 +22,6 @@ hal_input_followup_prepare:
 msg_show_more:
     clc
     rts
+
+ui_clear_full_screen_safe:
+    rts

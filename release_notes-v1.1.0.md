@@ -179,7 +179,17 @@ Known limits:
 
 - Monster and item catalogs are curated and reduced from the full upstream
   catalogs.
+- Classic Moria chests are not implemented yet.
 - Monster recall display exists, but recall persistence is not complete.
+- Some upstream monster special attacks and content effects are not implemented
+  yet. Supported combat, spell, prayer, trap, and storage behavior has focused
+  regression coverage, but v1.1.0 should not be read as full Umoria content
+  parity.
+- Combat follows Moria and Umoria mechanics closely where implemented, but exact
+  message timing, feedback granularity, and every edge-case probability are not
+  guaranteed to be byte-identical to upstream.
+- Unlike VMS Moria and Umoria, Moria8 does not enforce permadeath by deleting or
+  invalidating your save file after death. Your save game remains intact.
 - Some UI text, message timing, and terminal behavior differ from upstream
   Moria and Umoria.
 - Some disk/storage failures still use compact diagnostic text.

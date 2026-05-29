@@ -41,7 +41,7 @@ ui_view_redraw_gameplay_view:
     // restore must re-establish the current dungeon tier before redraw.
     jsr tier_restore_after_overlay
 #endif
-	    jsr hal_screen_clear
+	    jsr ui_clear_full_screen_safe
 	    jsr viewport_update
 #if hal_platform_mark_modal_restore_perf && PERF_P1
     jsr perf_p1_mark_full_reason_modal_restore

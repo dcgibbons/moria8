@@ -25,6 +25,29 @@ input, memory, and loader services behind target-specific APIs.
 Entity data follows struct-of-arrays layout. Arithmetic should use the existing
 math helpers, and random behavior should use the project RNG.
 
+## Screen Ownership
+
+Screen redraws must be owned by the view being entered, not by incidental
+cleanup in the caller. Full-screen views should establish their whole visible
+contract before drawing dynamic text; modal or overlay exits should restore the
+gameplay view through the platform-safe full-screen clear path before rendering
+viewport, status, and messages.
+
+The title screen has an explicit shared clear contract:
+
+- `title_clear_full_screen` clears all rows before and after KERNAL title-art
+  loading, removing loader/status residue before the title art is rendered.
+- `title_clear_below_menu` clears only the title screen's unowned lower band
+  between the title art bottom border and the system-information row. On the
+  25-row targets this is rows 20-22; row 19 is title-art border, row 23 is
+  system information, and row 24 is left untouched.
+- C128 mirrors the same behavior in its resident title/menu code, including the
+  Bank 1 title-art cache path.
+
+Gameplay-view restoration uses `ui_clear_full_screen_safe` rather than raw
+platform clears so C64, C128, and Plus/4 can preserve their own clear semantics
+while still rebuilding the viewport from a clean screen.
+
 ## C64 Runtime Model
 
 - BASIC stub loads and enters machine code.
@@ -63,13 +86,13 @@ start addresses and all cross-boundary limits.
 | `$1000-$19EC` | `128.runtime` low runtime payload |
 | `$1A00-$1AFF` | Floor-item table |
 | `$1B00-$1BFF` | Creature scratch |
-| `$1C01-$5F8F` | Main program image: boot path, loaders, trampolines, wrappers |
+| `$1C01-$5FB0` | Main program image: boot path, loaders, trampolines, wrappers |
 | `$6000-$8C3D` | `128.world` resident world payload, including C128 cache/overlay state and overlay filename tables |
 | `$8D00-$A686` | `128.item` resident item payload |
 | `$A800-$AAE8` | `128.select` resident selector payload |
 | `$AB00-$AEFF` | `128.diskio` payload |
 | `$AF00-$B826` | `128.persist` save/modal payload when loaded |
-| `$AF00-$CF28` | `128.play` gameplay payload when loaded |
+| `$AF00-$CF30` | `128.play` gameplay payload when loaded |
 | `$D000-$DFFF` | I/O hole; forbidden for ordinary runtime payloads |
 | `$E000-$EFFF` | Overlay execution window |
 | `$F000-$FEBD` | Reloadable banked runtime payload, asserted below `$FF00` |
@@ -77,7 +100,7 @@ start addresses and all cross-boundary limits.
 The `$AF00-$CFFF` resident slot is mutually exclusive. Save/load uses resident
 broker routines to load `128.persist`, perform the operation, then restore
 `128.play` before returning to gameplay. `128.play` must remain entirely below
-`$D000`; the current product build leaves `$CF29-$CFFF` free before the I/O
+`$D000`; the current product build leaves `$CF31-$CFFF` free before the I/O
 hole.
 
 Recent size pressure in `128.play` was handled by moving data, not by weakening

@@ -10,6 +10,47 @@
 
 .const TITLE_FALLBACK_COL = (SCREEN_COLS - 10) / 2
 .const TITLE_ART_COL_OFFSET = hal_layout_title_art_col_offset
+.const TITLE_MENU_ROW = 18
+.const TITLE_CLEAR_FIRST_ROW = TITLE_MENU_ROW + 2
+.const TITLE_CLEAR_LAST_ROW = SCREEN_ROWS - 3
+.const TITLE_CLEAR_AFTER_LAST_ROW = TITLE_CLEAR_LAST_ROW + 1
+
+// ============================================================
+// Title-screen clear ownership
+//
+// The title screen is a full-screen view. Its art stream does not necessarily
+// draw every row, and gameplay/title re-entry can happen after arbitrary
+// dungeon, modal, or status contents were visible. Use row-owned clears here
+// instead of relying on platform bulk-clear behavior or local row patches.
+// ============================================================
+#if !C128
+title_clear_full_screen:
+    lda #0
+    sta title_clear_row
+!tcf_loop:
+    lda title_clear_row
+    jsr hal_screen_clear_row
+    inc title_clear_row
+    lda title_clear_row
+    cmp #SCREEN_ROWS
+    bcc !tcf_loop-
+    rts
+
+title_clear_below_menu:
+    lda #TITLE_CLEAR_FIRST_ROW
+    sta title_clear_row
+!tcb_loop:
+    lda title_clear_row
+    jsr hal_screen_clear_row
+    inc title_clear_row
+    lda title_clear_row
+    cmp #TITLE_CLEAR_AFTER_LAST_ROW
+    bcc !tcb_loop-
+    rts
+
+title_clear_row: .byte 0
+#endif
+
 // ============================================================
 // title_load_and_draw — Load and render the title screen
 // Clobbers: A, X, Y, zp_ptr0, zp_ptr1, zp_cursor_row/col, zp_text_color
@@ -27,7 +68,7 @@ title_load_and_draw:
     sta zp_kernal_status
 
     // Clear screen after KERNAL LOAD (removes "SEARCHING..." messages)
-    jsr hal_screen_clear
+    jsr title_clear_full_screen
 
     // Render the loaded art data
     jsr title_render_data
@@ -40,7 +81,7 @@ title_load_and_draw:
 
 title_fallback_render:
     // Simple text title (no disk art available)
-    jsr hal_screen_clear        // Clear KERNAL residue from failed load too
+    jsr title_clear_full_screen // Clear KERNAL residue from failed load too
     lda #0
     sta zp_cursor_col
     lda #10

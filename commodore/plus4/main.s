@@ -533,23 +533,15 @@ title_enter_menu:
     lda #COL_LGREY
     sta zp_text_color
 
-    // Clear screen now so stale status bar (rows 21–23) from any prior session
-    // is gone before KERNAL LOAD starts printing "SEARCHING...".
-    // title_load_and_draw also clears after KERNAL LOAD to remove those messages.
-    jsr screen_clear
+    // Title is a full-screen view; clear before KERNAL LOAD starts printing
+    // "SEARCHING...", then title_load_and_draw clears again after the load.
+    jsr title_clear_full_screen
 
     // Load and display title (clears screen internally after KERNAL LOAD)
     jsr title_load_and_draw
 
-    // Explicitly clear status rows 21–23 before sysinfo draws on row 23.
-    // title_load_and_draw + KERNAL LOAD together may leave stale status bar
-    // data in those rows (e.g. from title_render_data parsing MAP_BASE).
-    lda #STATUS_ROW             // row 21
-    jsr screen_clear_row
-    lda #STATUS_ROW + 1         // row 22
-    jsr screen_clear_row
-    lda #STATUS_ROW + 2         // row 23
-    jsr screen_clear_row
+    // The title art stream owns the art, not the rows below the menu.
+    jsr title_clear_below_menu
 
     // Title re-entry must rebuild message/title UI state from scratch after
     // any failed load attempt, not just branch back into the old loop.
@@ -559,7 +551,6 @@ title_enter_menu:
     jsr title_show_sysinfo
 
     jsr title_draw_menu
-    jsr plus4_title_clear_lower_rows
 
 #if PLUS4_TEST_SCRIPTED_OVERLAY_LOAD_PRODUCT
     jsr plus4_test_overlay_load_all
@@ -601,18 +592,12 @@ plus4_title_redraw_cached:
     beq title_enter_menu
     lda #COL_LGREY
     sta zp_text_color
-    jsr screen_clear
+    jsr title_clear_full_screen
     jsr title_render_data
-    lda #STATUS_ROW
-    jsr screen_clear_row
-    lda #STATUS_ROW + 1
-    jsr screen_clear_row
-    lda #STATUS_ROW + 2
-    jsr screen_clear_row
+    jsr title_clear_below_menu
     jsr msg_init
     jsr title_show_sysinfo
     jsr title_draw_menu
-    jsr plus4_title_clear_lower_rows
     jmp title_menu_loop
 
 title_draw_menu:
@@ -630,21 +615,6 @@ title_draw_menu:
     jsr screen_put_string
     rts
 
-plus4_title_clear_lower_rows:
-    lda #COL_BLACK
-    sta zp_text_color
-    lda #20
-    sta plus4_title_clear_row
-!clear:
-    lda plus4_title_clear_row
-    jsr screen_clear_row
-    inc plus4_title_clear_row
-    lda plus4_title_clear_row
-    cmp #SCREEN_ROWS
-    bcc !clear-
-    rts
-
-plus4_title_clear_row: .byte 0
 plus4_title_art_cached: .byte 0
 
 #if PLUS4_TEST_SCRIPTED_OVERLAY_LOAD_PRODUCT

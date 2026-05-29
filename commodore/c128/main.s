@@ -1950,6 +1950,36 @@ title_show_sysinfo:
     :C128BankedStatusTrampoline(title_show_sysinfo_banked)
 
 tsi_krev_cached: .byte 0
+.const TITLE_MENU_ROW_C128 = 18
+.const TITLE_CLEAR_FIRST_ROW_C128 = TITLE_MENU_ROW_C128 + 2
+.const TITLE_CLEAR_LAST_ROW_C128 = SCREEN_ROWS - 3
+.const TITLE_CLEAR_AFTER_LAST_ROW_C128 = TITLE_CLEAR_LAST_ROW_C128 + 1
+
+title_clear_full_screen:
+    lda #0
+    sta title_clear_row
+!tcf_loop:
+    lda title_clear_row
+    jsr screen_clear_row
+    inc title_clear_row
+    lda title_clear_row
+    cmp #SCREEN_ROWS
+    bcc !tcf_loop-
+    rts
+
+title_clear_below_menu:
+    lda #TITLE_CLEAR_FIRST_ROW_C128
+    sta title_clear_row
+!tcb_loop:
+    lda title_clear_row
+    jsr screen_clear_row
+    inc title_clear_row
+    lda title_clear_row
+    cmp #TITLE_CLEAR_AFTER_LAST_ROW_C128
+    bcc !tcb_loop-
+    rts
+
+title_clear_row: .byte 0
 
 // tramp_reu_show_status — banked status display hook.
 // Pinned low to avoid drifting into $D000 I/O space.
@@ -2158,12 +2188,7 @@ title_menu_after_art:
 
 title_menu_draw:
     sei
-    lda #STATUS_ROW
-    jsr screen_clear_row
-    lda #STATUS_ROW + 1
-    jsr screen_clear_row
-    lda #STATUS_ROW + 2
-    jsr screen_clear_row
+    jsr title_clear_below_menu
 
     jsr title_show_sysinfo
 

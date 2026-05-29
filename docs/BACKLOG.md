@@ -126,6 +126,14 @@ The immediate fix clears row 18 before drawing the Home footer, but the cleaner
 design is to stop making Home call a renderer that draws the wrong footer in the
 first place.
 
+A second concrete case was found on C64: quitting a live game back to the title
+menu could leave dungeon glyphs visible below the title menu and above the
+system-information line. The release-candidate fix gave the title screen an
+explicit shared clear contract for full-screen entry and below-menu ownership,
+and routed modal gameplay restores through the platform-safe full-screen clear.
+This is still evidence that view transitions need explicit ownership contracts
+rather than incidental partial cleanup.
+
 Required work:
 
 - Split shared store/Home drawing so the item/body layout and footer/menu

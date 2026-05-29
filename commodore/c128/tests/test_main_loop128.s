@@ -281,6 +281,9 @@ screen_blank:
 screen_clear:
     jmp test_screen_clear
 
+ui_clear_full_screen_safe:
+    jmp test_screen_clear
+
 item_init_identification:
     rts
 
