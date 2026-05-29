@@ -181,7 +181,7 @@ ped_tbl_lo:
     .byte <(ped_s8-1), <(eff_teleport_self-1), <(ped_s10-1), <(ped_s11-1)
     .byte <(ped_s12-1), <(ped_s13-1), <(ped_s14-1), <(ped_s15-1)
     .byte <(pmx_cure_poison_msg-1), <(ped_s17-1), <(ped_s18-1), <(ped_s19-1)
-    .byte <(ped_s20-1), <(PMX_EARTHQUAKE_TARGET-1), <(PMX_EARTHQUAKE_TARGET-1), <(ped_s23-1)
+    .byte <(ped_s20-1), <(PMX_EARTHQUAKE_TARGET-1), <(ped_s22-1), <(ped_s23-1)
     .byte <(eff_turn_undead-1), <(ped_s25-1), <(ped_s26-1), <(ped_s27-1)
     .byte <(ped_s28-1), <(ped_s29-1), <(ped_s30-1)
 ped_tbl_hi:
@@ -190,7 +190,7 @@ ped_tbl_hi:
     .byte >(ped_s8-1), >(eff_teleport_self-1), >(ped_s10-1), >(ped_s11-1)
     .byte >(ped_s12-1), >(ped_s13-1), >(ped_s14-1), >(ped_s15-1)
     .byte >(pmx_cure_poison_msg-1), >(ped_s17-1), >(ped_s18-1), >(ped_s19-1)
-    .byte >(ped_s20-1), >(PMX_EARTHQUAKE_TARGET-1), >(PMX_EARTHQUAKE_TARGET-1), >(ped_s23-1)
+    .byte >(ped_s20-1), >(PMX_EARTHQUAKE_TARGET-1), >(ped_s22-1), >(ped_s23-1)
     .byte >(eff_turn_undead-1), >(ped_s25-1), >(ped_s26-1), >(ped_s27-1)
     .byte >(ped_s28-1), >(ped_s29-1), >(ped_s30-1)
 
@@ -258,6 +258,8 @@ ped_s19:
     jmp eff_sense_invisible
 ped_s20:
     jmp eff_protect_from_evil
+ped_s22:
+    jmp eff_map_area
 ped_s23:
     lda #16
     ldx #4
