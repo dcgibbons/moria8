@@ -1,10 +1,9 @@
 #importonce
 // monster.s — Creature data & active monster table
 //
-// Embedded creature stats for dungeon levels 1-5 (26 types).
-// Production tier loads replace dungeon creature rows before dungeon generation.
-// C64/C128 omit the raw embedded names except in tests; Plus/4 retains them
-// until its product scripted startup path is audited for the same layout shift.
+// Resident active creature buffers.
+// Dungeon rows are storage only: generated tier data must be loaded before
+// dungeon creature selection/spawning. Town rows remain resident literal data.
 // Active monster table: 32 slots x 12 bytes each.
 // Spawn, find, remove subroutines for the monster system.
 
@@ -69,33 +68,50 @@
 // Town creatures at TOWN_CREATURE_BASE (57) are pre-populated below.
 // ============================================================
 
-// How many dungeon creatures are currently loaded in the active buffer
-active_dungeon_count: .byte 26  // Initial: 26 embedded dungeon creatures
+// How many dungeon creatures are currently loaded in the active buffer.
+// Startup owns no dungeon roster; tier loading activates rows 0..count-1.
+#if COMPILE_EMBEDDED_DUNGEON_TEST_ROSTER
+active_dungeon_count: .byte 26
+#else
+active_dungeon_count: .byte 0
+#endif
 
 // Display character (screen codes)
 cr_display:
+#if COMPILE_EMBEDDED_DUNGEON_TEST_ROSTER
     .byte $08, $12, $17, $13, $0b, $09, $0d, $03, $05, $0a  // 0-9
     .byte $17, $06, $12, $07, $02, $24, $0d, $03, $0d, $01  // 10-19
     .byte $0b, $01, $10, $10, $13, $0f                       // 20-25
-    .fill 31, 0                                              // 26-56: unused
+    .fill MAX_DUNGEON_CREATURES - 26, 0                      // 26-56
+#else
+    .fill MAX_DUNGEON_CREATURES, 0                            // 0-56: loaded from tier data
+#endif
     .byte $10, $10, $10, $10, $10, $10, $10, $10              // 57-64: town (P)
 
 // Color
 cr_color:
+#if COMPILE_EMBEDDED_DUNGEON_TEST_ROSTER
     .byte COL_WHITE, COL_GREEN, COL_WHITE, COL_GREEN, COL_GREEN     // 0-4
     .byte COL_WHITE, COL_ORANGE, COL_GREEN, COL_GREEN, COL_YELLOW   // 5-9
     .byte COL_GREEN, COL_GREEN, COL_YELLOW, COL_LGREY, COL_ORANGE   // 10-14
-    .byte COL_YELLOW, COL_GREY, COL_GREEN, COL_YELLOW, COL_LGREY   // 15-19
+    .byte COL_YELLOW, COL_GREY, COL_GREEN, COL_YELLOW, COL_LGREY    // 15-19
     .byte COL_RED, COL_WHITE, COL_CYAN, COL_LGREEN, COL_RED, COL_GREEN  // 20-25
-    .fill 31, 0                                                     // 26-56: unused
+    .fill MAX_DUNGEON_CREATURES - 26, 0                            // 26-56
+#else
+    .fill MAX_DUNGEON_CREATURES, 0                                  // 0-56: loaded from tier data
+#endif
     .byte COL_LGREY, COL_LGREY, COL_LGREY, COL_LGREY, COL_CYAN, COL_LGREY, COL_CYAN, COL_RED  // 57-64: town
 
 // Speed (0=slow/every-other-turn, 1=normal, 2=fast)
 cr_speed:
+#if COMPILE_EMBEDDED_DUNGEON_TEST_ROSTER
     .byte 1, 1, 0, 1, 1, 1, 1, 1, 1, 1                     // 0-9
     .byte 0, 1, 1, 2, 2, 0, 1, 2, 1, 1                     // 10-19
     .byte 1, 1, 1, 1, 1, 1                                  // 20-25
-    .fill 31, 0                                              // 26-56
+    .fill MAX_DUNGEON_CREATURES - 26, 0                    // 26-56
+#else
+    .fill MAX_DUNGEON_CREATURES, 0                           // 0-56: loaded from tier data
+#endif
     .byte 1, 1, 1, 1, 1, 1, 1, 1                             // 57-64: town
 
 // Movement/classification flags
@@ -106,130 +122,196 @@ cr_speed:
 .const CF_DRAGON      = $10
 .const CF_GROUP       = $20   // Pack creature: spawns extras, wakes neighbors
 .const CF_BREEDER     = $40   // Multiplying creature: chance to clone each turn
+.const CF_INFRA       = $80   // Warm creature: visible to player infravision
 
 cr_mflags:
+#if COMPILE_EMBEDDED_DUNGEON_TEST_ROSTER
     .byte CF_EVIL, CF_ANIMAL, CF_ANIMAL|CF_BREEDER, CF_ANIMAL, CF_EVIL|CF_GROUP         // 0-4
     .byte CF_BREEDER, CF_ATTACK_ONLY, CF_ANIMAL, CF_ATTACK_ONLY, CF_ANIMAL|CF_GROUP     // 5-9
     .byte CF_ANIMAL|CF_BREEDER, CF_ANIMAL, CF_ANIMAL, CF_UNDEAD|CF_EVIL, CF_ANIMAL      // 10-14
     .byte 0, CF_ATTACK_ONLY|CF_BREEDER, CF_ANIMAL, CF_ATTACK_ONLY|CF_BREEDER, CF_ANIMAL // 15-19
     .byte CF_EVIL|CF_GROUP, CF_ANIMAL, CF_EVIL, CF_EVIL, CF_ANIMAL, CF_EVIL|CF_GROUP    // 20-25
-    .fill 31, 0                                                           // 26-56
-    .byte  0,  0,  0,  0,  0,  0,  0,  0                                  // 57-64: town
+    .fill MAX_DUNGEON_CREATURES - 26, 0                                                // 26-56
+#else
+    .fill MAX_DUNGEON_CREATURES, 0                                        // 0-56: loaded from tier data
+#endif
+    .byte $8c, $88, $88, $88, $8c, $88, $8c, $88                          // 57-64: town
 
 // Creature level
 cr_level:
+#if COMPILE_EMBEDDED_DUNGEON_TEST_ROSTER
     .byte 2, 1, 1, 1, 1, 1, 2, 1, 1, 4                     // 0-9
     .byte 2, 2, 4, 3, 3, 4, 1, 2, 3, 2                     // 10-19
     .byte 3, 4, 4, 4, 5, 5                                  // 20-25
-    .fill 31, 0                                              // 26-56
+    .fill MAX_DUNGEON_CREATURES - 26, 0                    // 26-56
+#else
+    .fill MAX_DUNGEON_CREATURES, 0                          // 0-56: loaded from tier data
+#endif
     .byte 0, 0, 0, 0, 0, 0, 0, 0                             // 57-64: town level 0
 
 // Hit dice count (number of dice for HP)
 cr_hd_num:
+#if COMPILE_EMBEDDED_DUNGEON_TEST_ROSTER
     .byte 2, 1, 4, 3, 3, 3, 1, 3, 3, 3                     // 0-9
     .byte 6, 2, 2, 2, 2, 7, 1, 4, 8, 3                     // 10-19
     .byte 3, 5, 3, 4, 6, 5                                  // 20-25
-    .fill 31, 0                                              // 26-56
+    .fill MAX_DUNGEON_CREATURES - 26, 0                    // 26-56
+#else
+    .fill MAX_DUNGEON_CREATURES, 0                          // 0-56: loaded from tier data
+#endif
     .byte 1, 1, 1, 1, 2, 2, 5, 7                             // 57-64: town
 
 // Hit dice sides
 cr_hd_sides:
+#if COMPILE_EMBEDDED_DUNGEON_TEST_ROSTER
     .byte 5, 3, 4, 6, 7, 5, 1, 5, 6, 8                     // 0-9
     .byte 4, 8, 2, 5, 6, 8, 2, 4, 8, 6                     // 10-19
     .byte 6, 8, 6, 6, 8, 8                                  // 20-25
-    .fill 31, 0                                              // 26-56
+    .fill MAX_DUNGEON_CREATURES - 26, 0                    // 26-56
+#else
+    .fill MAX_DUNGEON_CREATURES, 0                          // 0-56: loaded from tier data
+#endif
     .byte 4, 2, 4, 1, 8, 3, 8, 8                             // 57-64: town
 
 // Armor class
 cr_ac:
+#if COMPILE_EMBEDDED_DUNGEON_TEST_ROSTER
     .byte 17, 4, 1, 30, 16, 7, 1, 10, 6, 16                // 0-9
     .byte  3, 8, 7, 15, 12, 24, 1, 4, 10, 20               // 10-19
     .byte 14, 20, 6, 10, 18, 16                             // 20-25
-    .fill 31, 0                                              // 26-56
+    .fill MAX_DUNGEON_CREATURES - 26, 0                    // 26-56
+#else
+    .fill MAX_DUNGEON_CREATURES, 0                          // 0-56: loaded from tier data
+#endif
     .byte  1, 1, 1, 1, 8, 1, 20, 30                          // 57-64: town
 
 // Base sleep value (higher = deeper sleeper)
 cr_sleep:
+#if COMPILE_EMBEDDED_DUNGEON_TEST_ROSTER
     .byte 10, 20, 10, 99, 10, 10,  0, 40, 10, 30           // 0-9
     .byte 10, 30, 30, 10, 40, 10,  0, 10, 99, 80           // 10-19
     .byte 20, 40, 10, 10, 30, 15                            // 20-25
-    .fill 31, 0                                              // 26-56
+    .fill MAX_DUNGEON_CREATURES - 26, 0                    // 26-56
+#else
+    .fill MAX_DUNGEON_CREATURES, 0                          // 0-56: loaded from tier data
+#endif
     .byte 40,  0, 40, 50, 99,  0, 250, 250                   // 57-64: town
 
 // Area affect radius (awareness factor)
 cr_aaf:
+#if COMPILE_EMBEDDED_DUNGEON_TEST_ROSTER
     .byte 16,  8,  7,  4, 20, 12,  2,  7,  2, 12           // 0-9
     .byte  7, 12,  8,  8,  8,  3,  2,  5,  2,  8           // 10-19
     .byte 15, 10, 16, 14, 10, 16                            // 20-25
-    .fill 31, 0                                              // 26-56
+    .fill MAX_DUNGEON_CREATURES - 26, 0                    // 26-56
+#else
+    .fill MAX_DUNGEON_CREATURES, 0                          // 0-56: loaded from tier data
+#endif
     .byte  4,  6, 10, 10, 10, 10, 10, 10                     // 57-64: town
 
 // Experience value (16-bit)
 cr_xp_lo:
+#if COMPILE_EMBEDDED_DUNGEON_TEST_ROSTER
     .byte 5, 1, 2, 2, 5, 2, 1, 2, 1, 8                     // 0-9
     .byte 3, 6, 1, 6, 4, 9, 1, 3, 9, 8                     // 10-19
     .byte 12, 15, 18, 16, 25, 22                            // 20-25
-    .fill 31, 0                                              // 26-56
+    .fill MAX_DUNGEON_CREATURES - 26, 0                    // 26-56
+#else
+    .fill MAX_DUNGEON_CREATURES, 0                          // 0-56: loaded from tier data
+#endif
     .fill 8, 0                                               // 57-64: town 0 XP
 cr_xp_hi:
-    .fill 26, 0                                              // 0-25: all zero
-    .fill 31, 0                                              // 26-56
+#if COMPILE_EMBEDDED_DUNGEON_TEST_ROSTER
+    .fill 26, 0                                              // 0-25
+    .fill MAX_DUNGEON_CREATURES - 26, 0                      // 26-56
+#else
+    .fill MAX_DUNGEON_CREATURES, 0                          // 0-56: loaded from tier data
+#endif
     .fill 8, 0                                               // 57-64: town 0 XP
 
 // Attack 0 dice
 cr_atk0_dice:
+#if COMPILE_EMBEDDED_DUNGEON_TEST_ROSTER
     .byte 1, 1, 1, 1, 1, 1, 0, 1, 0, 1                     // 0-9
     .byte 1, 1, 1, 1, 1, 1, 1, 1, 1, 1                     // 10-19
     .byte 1, 2, 1, 1, 2, 1                                  // 20-25
-    .fill 31, 0                                              // 26-56
+    .fill MAX_DUNGEON_CREATURES - 26, 0                    // 26-56
+#else
+    .fill MAX_DUNGEON_CREATURES, 0                          // 0-56: loaded from tier data
+#endif
     .byte 0, 0, 0, 0, 1, 0, 1, 2                             // 57-64: town
 cr_atk0_sides:
+#if COMPILE_EMBEDDED_DUNGEON_TEST_ROSTER
     .byte 1, 2, 2, 1, 6, 2, 0, 2, 0, 6                     // 0-9
     .byte 3, 3, 3, 1, 2, 4, 4, 1, 4, 4                     // 10-19
     .byte 4, 4, 6, 5, 6, 8                                  // 20-25
-    .fill 31, 0                                              // 26-56
+    .fill MAX_DUNGEON_CREATURES - 26, 0                    // 26-56
+#else
+    .fill MAX_DUNGEON_CREATURES, 0                          // 0-56: loaded from tier data
+#endif
     .byte 0, 0, 0, 0, 6, 0, 10, 6                            // 57-64: town
 
 // Attack 0 type
 cr_atk0_type:
-    .byte ATK_NORMAL, ATK_NORMAL, ATK_POISON, ATK_NORMAL, ATK_NORMAL     // 0-4
+#if COMPILE_EMBEDDED_DUNGEON_TEST_ROSTER
+    .byte ATK_NORMAL, ATK_NORMAL, ATK_POISON, ATK_NORMAL, ATK_NORMAL      // 0-4
     .byte ATK_NORMAL, ATK_AGGRAVATE, ATK_NORMAL, ATK_PARALYZE, ATK_NORMAL // 5-9
-    .byte ATK_CORRODE, ATK_NORMAL, ATK_POISON, ATK_FEAR, ATK_NORMAL      // 10-14
-    .byte ATK_NORMAL, ATK_CONFUSE, ATK_NORMAL, ATK_NORMAL, ATK_NORMAL    // 15-19
+    .byte ATK_CORRODE, ATK_NORMAL, ATK_POISON, ATK_FEAR, ATK_NORMAL       // 10-14
+    .byte ATK_NORMAL, ATK_CONFUSE, ATK_NORMAL, ATK_NORMAL, ATK_NORMAL     // 15-19
     .byte ATK_NORMAL, ATK_NORMAL, ATK_NORMAL, ATK_NORMAL, ATK_NORMAL, ATK_NORMAL // 20-25
-    .fill 31, 0                                                           // 26-56
+    .fill MAX_DUNGEON_CREATURES - 26, 0                                  // 26-56
+#else
+    .fill MAX_DUNGEON_CREATURES, 0                                        // 0-56: loaded from tier data
+#endif
     .byte ATK_NORMAL, ATK_NORMAL, ATK_NORMAL, ATK_NORMAL, ATK_NORMAL, ATK_NORMAL, ATK_NORMAL, ATK_NORMAL // 57-64: town
 
 // Attack slot 1 (type, dice, sides — 0 = no second attack)
 cr_atk1_type:
+#if COMPILE_EMBEDDED_DUNGEON_TEST_ROSTER
     .byte ATK_NORMAL, 0, 0, 0, 0, 0, 0, ATK_NORMAL, 0, 0   // 0-9
     .byte          0, 0, 0, 0, 0, ATK_POISON, 0, 0, 0, 0   // 10-19
     .byte          0, 0, 0, 0, 0, 0                          // 20-25
-    .fill 31, 0                                              // 26-56
+    .fill MAX_DUNGEON_CREATURES - 26, 0                    // 26-56
+#else
+    .fill MAX_DUNGEON_CREATURES, 0                          // 0-56: loaded from tier data
+#endif
     .byte ATK_NORMAL, 0, 0, 0, ATK_NORMAL, 0, 0, 0           // 57-64: town
 cr_atk1_dice:
+#if COMPILE_EMBEDDED_DUNGEON_TEST_ROSTER
     .byte 1, 0, 0, 0, 0, 0, 0, 1, 0, 0                     // 0-9
     .byte 0, 0, 0, 0, 0, 2, 0, 0, 0, 0                     // 10-19
     .byte 0, 0, 0, 0, 0, 0                                  // 20-25
-    .fill 31, 0                                              // 26-56
+    .fill MAX_DUNGEON_CREATURES - 26, 0                    // 26-56
+#else
+    .fill MAX_DUNGEON_CREATURES, 0                          // 0-56: loaded from tier data
+#endif
     .fill 8, 0                                               // 57-64: town
 cr_atk1_sides:
+#if COMPILE_EMBEDDED_DUNGEON_TEST_ROSTER
     .byte 1, 0, 0, 0, 0, 0, 0, 2, 0, 0                     // 0-9
     .byte 0, 0, 0, 0, 0, 4, 0, 0, 0, 0                     // 10-19
     .byte 0, 0, 0, 0, 0, 0                                  // 20-25
-    .fill 31, 0                                              // 26-56
+    .fill MAX_DUNGEON_CREATURES - 26, 0                    // 26-56
+#else
+    .fill MAX_DUNGEON_CREATURES, 0                          // 0-56: loaded from tier data
+#endif
     .fill 8, 0                                               // 57-64: town
 
 // Spell chance (probability out of 100 that monster casts instead of melee)
 cr_spell_chance:
+#if COMPILE_EMBEDDED_DUNGEON_TEST_ROSTER
     .byte  0,  0,  0,  0,  0,  0,  0,  0,  0,  0           // 0-9
     .byte  0,  0,  0,  0,  0,  0,  0,  0,  0,  0           // 10-19
-    .byte 30,  0, 40, 35, 25, 35                            // 20-25: spellcasters
-    .fill 31, 0                                              // 26-56
+    .byte 30,  0, 40, 35, 25, 35                            // 20-25
+    .fill MAX_DUNGEON_CREATURES - 26, 0                    // 26-56
+#else
+    .fill MAX_DUNGEON_CREATURES, 0                          // 0-56: loaded from tier data
+#endif
     .fill 8, 0                                               // 57-64: town
 
 // Spell flags (bitmask of available spells)
 cr_spell_flags:
+#if COMPILE_EMBEDDED_DUNGEON_TEST_ROSTER
     .byte  0,  0,  0,  0,  0,  0,  0,  0,  0,  0           // 0-9
     .byte  0,  0,  0,  0,  0,  0,  0,  0,  0,  0           // 10-19
     .byte MSF_BOLT | MSF_HEAL                               // 20: Kobold shaman
@@ -238,38 +320,42 @@ cr_spell_flags:
     .byte MSF_HEAL | MSF_SUMMON                             // 23: Novice priest
     .byte MSF_BREATH                                        // 24: Giant salamander
     .byte MSF_BOLT | MSF_CONFUSE | MSF_HEAL                 // 25: Orc shaman
-    .fill 31, 0                                              // 26-56
+    .fill MAX_DUNGEON_CREATURES - 26, 0                    // 26-56
+#else
+    .fill MAX_DUNGEON_CREATURES, 0                          // 0-56: loaded from tier data
+#endif
     .fill 8, 0                                               // 57-64: town
 
 // Name pointer tables (lo/hi)
 cr_name_lo:
-#if PLUS4 || C64_UNIT_TEST || COMPILE_EMBEDDED_DUNGEON_TEST_ROSTER
+#if COMPILE_EMBEDDED_DUNGEON_TEST_ROSTER
     .byte <crn_0,  <crn_1,  <crn_2,  <crn_3,  <crn_4       // 0-4
     .byte <crn_5,  <crn_6,  <crn_7,  <crn_8,  <crn_9       // 5-9
     .byte <crn_10, <crn_11, <crn_12, <crn_13, <crn_14       // 10-14
     .byte <crn_15, <crn_16, <crn_17, <crn_18, <crn_19       // 15-19
     .byte <crn_20, <crn_21, <crn_22, <crn_23, <crn_24, <crn_25  // 20-25
 #else
-    .fill 26, 0                                              // 0-25: loaded from tier data in production
+    .fill 26, 0                                              // 0-25: loaded from tier data
 #endif
-    .fill 31, 0                                              // 26-56
+    .fill MAX_DUNGEON_CREATURES - 26, 0                      // 26-56: loaded from tier data
     .byte <crn_t0, <crn_t1, <crn_t2, <crn_t3, <crn_t4, <crn_t5, <crn_t6, <crn_t7 // 57-64: town
 cr_name_hi:
-#if PLUS4 || C64_UNIT_TEST || COMPILE_EMBEDDED_DUNGEON_TEST_ROSTER
+#if COMPILE_EMBEDDED_DUNGEON_TEST_ROSTER
     .byte >crn_0,  >crn_1,  >crn_2,  >crn_3,  >crn_4       // 0-4
     .byte >crn_5,  >crn_6,  >crn_7,  >crn_8,  >crn_9       // 5-9
     .byte >crn_10, >crn_11, >crn_12, >crn_13, >crn_14       // 10-14
     .byte >crn_15, >crn_16, >crn_17, >crn_18, >crn_19       // 15-19
     .byte >crn_20, >crn_21, >crn_22, >crn_23, >crn_24, >crn_25  // 20-25
 #else
-    .fill 26, 0                                              // 0-25: loaded from tier data in production
+    .fill 26, 0                                              // 0-25: loaded from tier data
 #endif
-    .fill 31, 0                                              // 26-56
+    .fill MAX_DUNGEON_CREATURES - 26, 0                      // 26-56: loaded from tier data
     .byte >crn_t0, >crn_t1, >crn_t2, >crn_t3, >crn_t4, >crn_t5, >crn_t6, >crn_t7 // 57-64: town
+cr_name_tables_end:
 
 // Name strings (screen codes, null-terminated)
-// Dungeon creatures
-#if PLUS4 || C64_UNIT_TEST || COMPILE_EMBEDDED_DUNGEON_TEST_ROSTER
+// Embedded dungeon names are available only to tests that explicitly opt in.
+#if COMPILE_EMBEDDED_DUNGEON_TEST_ROSTER
 crn_0:  .text "White Harpy" ; .byte 0
 crn_1:  .text "Giant White Mouse" ; .byte 0
 crn_2:  .text "White Worm Mass" ; .byte 0
@@ -923,12 +1009,30 @@ monster_remove:
 .assert "Monster table >256 bytes", MAX_MONSTERS * MONSTER_ENTRY_SIZE > 256, true
 .assert "Max creatures", MAX_CREATURES, 65
 .assert "Town creature base", TOWN_CREATURE_BASE, 57
+.assert "Town creature base follows dungeon rows", TOWN_CREATURE_BASE, MAX_DUNGEON_CREATURES
+.assert "Town creature count", MAX_TOWN_CREATURES, TOWN_CREATURE_COUNT
 .assert "cr_display size", cr_color - cr_display, MAX_CREATURES
 .assert "cr_color size", cr_speed - cr_color, MAX_CREATURES
 .assert "cr_speed size", cr_mflags - cr_speed, MAX_CREATURES
 .assert "cr_mflags size", cr_level - cr_mflags, MAX_CREATURES
 .assert "cr_level size", cr_hd_num - cr_level, MAX_CREATURES
+.assert "cr_hd_num size", cr_hd_sides - cr_hd_num, MAX_CREATURES
+.assert "cr_hd_sides size", cr_ac - cr_hd_sides, MAX_CREATURES
+.assert "cr_ac size", cr_sleep - cr_ac, MAX_CREATURES
+.assert "cr_sleep size", cr_aaf - cr_sleep, MAX_CREATURES
+.assert "cr_aaf size", cr_xp_lo - cr_aaf, MAX_CREATURES
+.assert "cr_xp_lo size", cr_xp_hi - cr_xp_lo, MAX_CREATURES
+.assert "cr_xp_hi size", cr_atk0_dice - cr_xp_hi, MAX_CREATURES
+.assert "cr_atk0_dice size", cr_atk0_sides - cr_atk0_dice, MAX_CREATURES
+.assert "cr_atk0_sides size", cr_atk0_type - cr_atk0_sides, MAX_CREATURES
+.assert "cr_atk0_type size", cr_atk1_type - cr_atk0_type, MAX_CREATURES
+.assert "cr_atk1_type size", cr_atk1_dice - cr_atk1_type, MAX_CREATURES
+.assert "cr_atk1_dice size", cr_atk1_sides - cr_atk1_dice, MAX_CREATURES
+.assert "cr_atk1_sides size", cr_spell_chance - cr_atk1_sides, MAX_CREATURES
 .assert "cr_spell_chance size", cr_spell_flags - cr_spell_chance, MAX_CREATURES
+.assert "cr_spell_flags size", cr_name_lo - cr_spell_flags, MAX_CREATURES
+.assert "cr_name_lo size", cr_name_hi - cr_name_lo, MAX_CREATURES
+.assert "cr_name_hi size", cr_name_tables_end - cr_name_hi, MAX_CREATURES
 
 // ============================================================
 // load_tier_to_buffer — Copy tier SoA data into active creature buffers
@@ -1000,6 +1104,10 @@ ltb_dst_hi:
     .byte >cr_atk1_type, >cr_atk1_dice, >cr_atk1_sides
     .byte >cr_spell_chance, >cr_spell_flags
     .byte >cr_name_lo, >cr_name_hi
+ltb_dst_end:
+
+.assert "tier loader dst lo count", ltb_dst_hi - ltb_dst_lo, NUM_SOA_FIELDS
+.assert "tier loader dst hi count", ltb_dst_end - ltb_dst_hi, NUM_SOA_FIELDS
 
 
 // ============================================================

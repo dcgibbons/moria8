@@ -18,6 +18,13 @@
 .const VIEW_SCROLL_MARGIN_X = 12
 .const VIEW_SCROLL_MARGIN_Y = 4
 
+// C128 VDC row staging uses the documented Bank 0 scratch span instead of
+// RuntimeLowData, which must stay below FLOOR_ITEM_BASE.
+.label row_char_buf = $0500
+.label row_attr_buf = row_char_buf + VIEWPORT_W
+.label rv_row_occ   = row_attr_buf + VIEWPORT_W
+.label rv_row_scratch_end = rv_row_occ + VIEWPORT_W
+
 // viewport_update — Center viewport on player, clamp to map edges
 // Updates zp_view_x, zp_view_y
 // Preserves: nothing
@@ -199,7 +206,8 @@ render_viewport:
 
     // Not visited — check if detect monsters reveals an occupant
     lda eff_detect_timer
-    beq !rv_detect_blank+
+    bne !rv_detect_chk+
+    jmp rv_check_infra_unvisited
 !rv_detect_chk:
     ldy zp_render_x
     lda rv_row_occ,y
@@ -296,7 +304,7 @@ render_viewport:
     // |dy| > light_radius: entire tile guaranteed outside torch range
     lda #VDC_DGREY              // Pre-translated VDC dark grey (Opt 2)
     sta zp_temp1
-    bne !rv_no_monster+         // Dimmed tiles never show monsters
+    jmp rv_check_infra_dimmed
 
 !rv_check_dx:
     // |dy| <= light_radius: check |dx| = abs(map_x - player_x)
@@ -322,7 +330,7 @@ render_viewport:
     // Outside light radius → dimmed (remembered tile)
     lda #VDC_DGREY              // Pre-translated VDC dark grey (Opt 2)
     sta zp_temp1
-    bne !rv_no_monster+         // Dimmed tiles never show monsters
+    jmp rv_check_infra_dimmed
 
 !rv_vis_ok:
     // Item check (visible tiles only)
@@ -370,6 +378,7 @@ render_viewport:
     lda vic_to_vdc_color,x      // Translate to VDC RGBI (Opt 2: inline)
     sta zp_temp1
 
+rv_no_monster:
 !rv_no_monster:
     lda zp_tile_tmp
     and #FLAG_OCCUPIED
@@ -396,6 +405,7 @@ rv_apply_player_override_vdc:
     lda #VDC_WHITE          // Pre-translated VDC white (Opt 2: COL_PLAYER = COL_WHITE)
     sta zp_temp1
     bne !write_tile+
+rv_draw_blank:
 !draw_blank:
     lda #SC_SPACE
     sta zp_temp0
@@ -475,6 +485,53 @@ rv_apply_player_override_vdc:
     beq !done+
     jmp !row_loop-
 !done:
+    rts
+
+rv_check_infra_unvisited:
+    lda zp_tile_tmp
+    and #FLAG_OCCUPIED
+    bne !has_occ+
+    jmp rv_draw_blank
+!has_occ:
+    jsr rv_try_infra_current_tile
+    bcs !visible+
+    jmp rv_draw_blank
+!visible:
+    jmp rv_apply_player_override_vdc
+
+rv_check_infra_dimmed:
+    lda zp_tile_tmp
+    and #FLAG_OCCUPIED
+    bne !has_occ+
+    jmp rv_no_monster
+!has_occ:
+    jsr rv_try_infra_current_tile
+    bcs !visible+
+    jmp rv_no_monster
+!visible:
+    jmp rv_apply_player_override_vdc
+
+rv_try_infra_current_tile:
+    lda zp_view_x
+    clc
+    adc zp_render_x
+    ldy rv_row_map_y
+    jsr monster_is_infra_visible_at
+    bcc !no+
+    jsr rv_set_monster_type_vdc
+    sec
+    rts
+!no:
+    clc
+    rts
+
+rv_set_monster_type_vdc:
+    lda cr_display,x
+    sta zp_temp0
+    jsr monster_get_threat_color
+    tax
+    lda vic_to_vdc_color,x
+    sta zp_temp1
     rts
 
 // render_viewport_scroll_delta — Fast path for 1-tile viewport scroll
@@ -894,11 +951,6 @@ rvsd_map_y:    .byte 0
 rv_row_map_y:  .byte 0        // Current map row for item/monster caches
 rv_row_col_idx: .byte 0       // Column scratch for caches
 
-// Row char/attribute buffers — filled during col_loop, streamed to VDC after
-row_char_buf: .fill VIEWPORT_W, 0
-row_attr_buf: .fill VIEWPORT_W, 0
-rv_row_occ:     .fill VIEWPORT_W, 0
-
 rvsd_src_char_lo: .byte 0
 rvsd_src_char_hi: .byte 0
 rvsd_dst_char_lo: .byte 0
@@ -972,6 +1024,13 @@ render_single_tile:
     // Check visited flag
     and #FLAG_VISITED
     bne !rst_visited+
+    lda zp_tile_tmp
+    and #FLAG_OCCUPIED
+    beq !rst_not_infra_unvisited+
+    jsr rst_try_infra_current_tile
+    bcc !rst_not_infra_unvisited+
+    jmp rst_apply_player_override_vdc
+!rst_not_infra_unvisited:
     jmp !rst_blank+
 !rst_visited:
 
@@ -1064,7 +1123,12 @@ render_single_tile:
     // Dimmed
     lda #VDC_DGREY              // Pre-translated VDC dark grey (Opt 2)
     sta zp_temp4
-    bne !rst_no_monster+        // Dimmed tiles never show monsters
+    lda zp_tile_tmp
+    and #FLAG_OCCUPIED
+    beq !rst_no_monster+
+    jsr rst_try_infra_current_tile
+    bcc !rst_no_monster+
+    jmp rst_apply_player_override_vdc
 
 !rst_vis_ok:
     ldy zp_temp1                // Y = map_y for both item and glyph lookups
@@ -1160,9 +1224,47 @@ rst_apply_player_override_vdc:
     cli                         // IRQ on: char + attr written consistently
     rts
 
+rst_try_infra_current_tile:
+    lda zp_temp0
+    sta rst_saved_map_x
+    lda zp_temp1
+    sta rst_saved_map_y
+    lda rst_saved_map_x
+    ldy rst_saved_map_y
+    jsr monster_is_infra_visible_at
+    bcc !no+
+    stx rst_infra_type
+    lda rst_saved_map_x
+    sta zp_temp0
+    lda rst_saved_map_y
+    sta zp_temp1
+    ldx rst_infra_type
+    jsr rst_set_monster_type_vdc
+    sec
+    rts
+!no:
+    lda rst_saved_map_x
+    sta zp_temp0
+    lda rst_saved_map_y
+    sta zp_temp1
+    clc
+    rts
+
+rst_set_monster_type_vdc:
+    lda cr_display,x
+    sta zp_temp3
+    jsr monster_get_threat_color
+    tax
+    lda vic_to_vdc_color,x
+    sta zp_temp4
+    rts
+
 rst_col_tmp: .byte 0
 rst_row_tmp: .byte 0
 rst_dim_tmp: .byte 0          // Scratch for dimming distance calc
+rst_saved_map_x: .byte 0
+rst_saved_map_y: .byte 0
+rst_infra_type:  .byte 0
 rv_mon_x:    .byte 0          // Cached player viewport X / monster scratch
 rv_row_dy:   .byte 0          // Pre-computed |dy| for current row (Opt 4)
 // Saved positions for dirty render detection
@@ -1316,3 +1418,5 @@ rla_cur_y: .byte 0
 // ============================================================
 .assert "Viewport width", VIEWPORT_W, 78
 .assert "Viewport height", VIEWPORT_H, 19
+.assert "C128 VDC row char buffer does not overlap copied map row", row_char_buf >= SCREEN_RAM + VIEWPORT_W, true
+.assert "C128 VDC row scratch stays below scratch/test limit", rv_row_scratch_end <= $0800, true

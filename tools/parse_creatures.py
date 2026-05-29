@@ -184,6 +184,7 @@ CF_UNDEAD      = 0x02  # Our undead flag
 CF_EVIL        = 0x04  # Evil creature (ego slay)
 CF_ANIMAL      = 0x08  # Animal creature (ego slay)
 CF_DRAGON      = 0x10  # Dragon creature (future ego slay)
+CF_INFRA       = 0x80  # Warm creature visible to infravision
 
 def map_mflags(cmove, cdefense, name):
     """Map umoria CMOVE/CDEFENSE flags to our cr_mflags byte."""
@@ -204,6 +205,9 @@ def map_mflags(cmove, cdefense, name):
     # Dragon check: CDEFENSE bit 1 (0x0002) = dragon
     if cdefense & 0x0002:
         flags |= CF_DRAGON
+    # Infravision check: CDEFENSE bit 13 (0x2000) = can be seen with infravision
+    if cdefense & 0x2000:
+        flags |= CF_INFRA
     return flags
 
 # ============================================================
@@ -616,6 +620,8 @@ def main():
     if not os.path.exists(src_path):
         src_path = '/tmp/umoria_creatures.cpp'
     if not os.path.exists(src_path):
+        src_path = os.path.expanduser('~/Projects/thirdparty/umoria/src/data_creatures.cpp')
+    if not os.path.exists(src_path):
         print(f"ERROR: Cannot find umoria_creatures.cpp", file=sys.stderr)
         print(f"  Copy from: https://raw.githubusercontent.com/dungeons-of-moria/umoria/master/src/data_creatures.cpp", file=sys.stderr)
         sys.exit(1)
@@ -795,11 +801,11 @@ def print_stats(creatures, selected_indices):
     print(f"\nSpeed distribution: slow={speeds[0]}, normal={speeds[1]}, fast={speeds[2]}")
 
     # Flag distribution
-    flag_counts = {'ATTACK_ONLY': 0, 'UNDEAD': 0, 'INVISIBLE': 0}
+    flag_counts = {'ATTACK_ONLY': 0, 'UNDEAD': 0, 'INFRA': 0}
     for idx, cr in selected:
         if cr['c64_mflags'] & CF_ATTACK_ONLY: flag_counts['ATTACK_ONLY'] += 1
         if cr['c64_mflags'] & CF_UNDEAD: flag_counts['UNDEAD'] += 1
-        if cr['c64_mflags'] & CF_INVISIBLE: flag_counts['INVISIBLE'] += 1
+        if cr['c64_mflags'] & CF_INFRA: flag_counts['INFRA'] += 1
     print(f"\nFlag counts: {flag_counts}")
 
     # Spellcaster count
@@ -947,7 +953,7 @@ def generate_asm_tier(tier_idx, tier, creatures, selected_indices, outdir):
 def generate_asm(creatures, selected_indices):
     """Generate all tier .s files."""
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    outdir = os.path.join(script_dir, '..', 'creature_data')
+    outdir = os.path.join(script_dir, '..', 'commodore', 'c64', 'creature_data')
     os.makedirs(outdir, exist_ok=True)
 
     print(f"Generating assembly data in {os.path.abspath(outdir)}/\n")

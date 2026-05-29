@@ -8,6 +8,11 @@
 #import "../../common/color.s"
 #import "../screen_vdc.s"
 #import "../monster_threat_vdc.s"
+
+.const RACE_PROP_SIZE = 10
+.const MX_TYPE = 2
+.const CF_INFRA = $80
+
 #import "../../common/dungeon_los.s"
 
 .pc = $0801 "BASIC Stub"
@@ -16,6 +21,19 @@
 .pc = $3000 "Test Code"
 
 c128_restore_runtime_state:
+    rts
+
+math_multiply:
+    lda #0
+    sta zp_math_a
+    sta zp_math_b
+    rts
+
+monster_find_at:
+    clc
+    rts
+
+monster_get_ptr:
     rts
 
 mmu_safe_map_read_ptr0:
@@ -284,3 +302,5 @@ test_pass:
 
 cr_color: .fill 65, 0
 cr_level: .fill 65, 0
+cr_mflags: .fill 1, 0
+race_properties: .fill RACE_PROP_SIZE, 0

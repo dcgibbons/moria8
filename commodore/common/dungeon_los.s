@@ -476,3 +476,89 @@ los_is_visible:
     pla                         // Discard saved y
     sec
     rts
+
+#if !C128
+// player_get_infra_range — Effective Umoria-style infravision range
+// Output: A = race infravision + 1 while timed infravision is active
+// Clobbers: A, X, Y, zp_math_a/b
+player_get_infra_range:
+    ldx zp_player_race
+    lda #RACE_PROP_SIZE
+    jsr math_multiply
+    ldx zp_math_a
+    lda race_properties + 1,x
+    ldx zp_eff_infra
+    beq !pgir_done+
+    clc
+    adc #1
+!pgir_done:
+    rts
+
+// monster_is_infra_visible_at — Check player infravision for a monster tile
+// Input: A = map x, Y = map y
+// Output: carry set = infra-visible and X = creature type; carry clear = hidden
+// Clobbers: A, X, Y, zp_ptr0, zp_ptr0_hi, zp_temp0-4, zp_los_*
+monster_is_infra_visible_at:
+    sta zp_los_dx
+    sty zp_los_dy
+
+    lda zp_eff_blind
+    bne !miiva_no+
+
+    lda zp_los_dx
+    ldy zp_los_dy
+    jsr monster_find_at
+    bcc !miiva_no+
+
+    jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda (zp_ptr0),y
+    tax
+    lda cr_mflags,x
+    and #CF_INFRA
+    beq !miiva_no+
+
+    txa
+    pha
+    jsr player_get_infra_range
+    sta zp_los_step
+    pla
+    tax
+
+    lda zp_los_step
+    beq !miiva_no+
+
+    // Chebyshev range check.
+    lda zp_los_dx
+    sec
+    sbc zp_player_x
+    bcs !miiva_dx_pos+
+    eor #$ff
+    clc
+    adc #1
+!miiva_dx_pos:
+    sta zp_temp0
+
+    lda zp_los_dy
+    sec
+    sbc zp_player_y
+    bcs !miiva_dy_pos+
+    eor #$ff
+    clc
+    adc #1
+!miiva_dy_pos:
+    cmp zp_temp0
+    bcs !miiva_have_dist+
+    lda zp_temp0
+!miiva_have_dist:
+    cmp zp_los_step
+    beq !miiva_range_ok+
+    bcs !miiva_no+
+!miiva_range_ok:
+    sec
+    rts
+
+!miiva_no:
+    clc
+    rts
+#endif

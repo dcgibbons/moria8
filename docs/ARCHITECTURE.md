@@ -77,17 +77,17 @@ start addresses and all cross-boundary limits.
 | Range | Owner |
 | ---: | --- |
 | `$0000-$03FF` | Zero page, stack, vectors |
-| `$0400-$07FF` | Scratch/test/BFS path area |
+| `$0400-$07FF` | Scratch/test/BFS path area; C128 VDC renderer stages row buffers at `$0500-$05ED` |
 | `$0A80-$0AFB` | `128.proj` projectile runtime payload |
 | `$0B00-$0BFD` | `128.input` raw-input runtime payload |
 | `$0C00-$0C05` | MMU/KERNAL save bytes |
 | `$0C06` | MMU helper blob in common RAM |
 | `$0D60-$0FF3` | Runtime-common / feature-disk payload |
-| `$1000-$19EC` | `128.runtime` low runtime payload |
+| `$1000-$19B4` | `128.runtime` low runtime payload |
 | `$1A00-$1AFF` | Floor-item table |
 | `$1B00-$1BFF` | Creature scratch |
 | `$1C01-$5FB0` | Main program image: boot path, loaders, trampolines, wrappers |
-| `$6000-$8C3D` | `128.world` resident world payload, including C128 cache/overlay state and overlay filename tables |
+| `$6000-$8CB7` | `128.world` resident world payload, including C128 cache/overlay state, overlay filename tables, and C128 infravision helpers |
 | `$8D00-$A686` | `128.item` resident item payload |
 | `$A800-$AAE8` | `128.select` resident selector payload |
 | `$AB00-$AEFF` | `128.diskio` payload |

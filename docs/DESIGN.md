@@ -54,8 +54,12 @@ can be loaded from disk or fetched from REU when available. On C128, tier data
 uses the documented Bank 1 cache and runtime ownership model.
 
 The implementation uses struct-of-arrays data for compactness and efficient
-6502 indexing. Only one dungeon tier is copied into the active creature buffer
-at a time; the C128 can cache the dungeon tiers in Bank 1.
+6502 indexing. The resident creature arrays are the active runtime buffer, not
+authoritative dungeon source data: dungeon rows start empty and are populated
+only when a generated tier is activated. Town creature rows remain resident
+because town creatures are always available. Only one dungeon tier is copied
+into the active creature buffer at a time; the C128 can cache the dungeon tiers
+in Bank 1.
 
 ## Items
 

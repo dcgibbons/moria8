@@ -1,9 +1,8 @@
 # Moria8
 
 Moria8 is a port of the classic roguelike game, Moria, for 8-bit platforms
-written in platform-specific assembly. Current releases target the Commodore 64
-and Commodore 128. A Commodore Plus/4 port is in active pre-release testing,
-with additional 8-bit ports planned.
+written in platform-specific assembly. Current releases target the Commodore
+64, Plus/4, and 128 systems.
 
 ![Animated GIF of Commodore 64 Play Testing](docs/assets/moria8-c64-gameplay.gif)
 
@@ -11,9 +10,9 @@ with additional 8-bit ports planned.
 
 | Platform | Status | Download |
 | -------- | ------ | -------- |
-| Commodore 64 (C64) | Released ([notes](docs/release_notes/commodore.md)) | [moria8-c64.d64](https://github.com/dcgibbons/moria8/releases/download/v1.0.0/moria8-c64.d64) |
+| Commodore 64 (C64) | Released ([notes](docs/release_notes/v1.10.md)) | [moria8-c64.d64](https://github.com/dcgibbons/moria8/releases/download/v1.1.0/moria8-c64.d64) [moria8-c64.zip](https://github.com/dcgibbons/moria8/releases/download/v1.1.0/moria8-c64.zip) |
+| Commodore Plus/4 | Released ([notes](docs/release_notes/v1.1.0.md)) | [moria8-plus4.d64](https://github.com/dcgibbons/moria8/releases/download/v1.1.0/moria8-plus4.d64) |
 | Commodore 128 (C128) | Released ([notes](docs/release_notes/commodore.md)) | [moria8-c128.d71](https://github.com/dcgibbons/moria8/releases/download/v1.0.0/moria8-c128.d71) |
-| Commodore Plus/4 | Pre-release testing | |
 | Commodore PET | Maybe | |
 | Commodore VIC-20 | Maybe | |
 | Commander X16 | Planned | |
@@ -31,6 +30,11 @@ platform-specific behavior for each target.
 
 See the [Cross Platform Strategy](docs/CROSS_PLATFORM_STRATEGY.md) for more
 details on upcoming ports.
+
+### Real Floppy Users
+
+Want a real floppy disk of Moria8? Please fill out fill out the
+[Google Form](https://forms.gle/aVDEXfVxjjsaLFNm6) to indicate interest.
 
 ## Building from Source
 
@@ -102,12 +106,6 @@ and town paths, and `make test128` is the broader C128 shell harness.
 - [Spell And Prayer Reference](docs/SPELLS.md)
 - [Player Guide](docs/PLAYER_GUIDE.md)
 - [Development Process](docs/DEVELOPMENT_PROCESS.md)
-- [Design Reference](docs/DESIGN.md)
-- [Architecture Reference](docs/ARCHITECTURE.md)
-- [Cross Platform Strategy](docs/CROSS_PLATFORM_STRATEGY.md)
-- [Internal Mandates](docs/INTERNAL_MANDATES.md)
-- [Release Checklist](docs/RELEASE_CHECKLIST.md)
-- [Backlog](docs/BACKLOG.md)
 
 ## Credits
 

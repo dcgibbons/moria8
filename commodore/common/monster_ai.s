@@ -348,6 +348,16 @@ mat_mark_tile_dirty_if_nonlocal:
     cmp #(FLAG_VISITED | FLAG_LIT)
     beq !mtd_mark+
 
+#if !C64_UNIT_TEST
+    lda zp_mon_scratch1
+    and #FLAG_OCCUPIED
+    beq !mtd_unvisited+
+    lda zp_temp0
+    ldy zp_temp1
+    jsr monster_is_infra_visible_at
+    bcs !mtd_mark+
+#endif
+
 !mtd_unvisited:
     // Unvisited tiles only matter while a detect effect is drawing monsters.
     lda eff_detect_timer

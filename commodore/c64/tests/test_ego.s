@@ -29,6 +29,8 @@ test_exit_trampoline:
 
 .encoding "screencode_mixed"
 
+#define COMPILE_EMBEDDED_DUNGEON_TEST_ROSTER
+
 #import "../../common/zeropage.s"
 #import "../memory.s"
 #import "../../common/reu.s"

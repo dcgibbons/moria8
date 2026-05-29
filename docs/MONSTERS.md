@@ -17,8 +17,8 @@ current Commodore builds.
 
 Moria8 tracks these shipped monster fields:
 
-- Tier: active creature data group. C64 loads these from disk or REU; C128
-  caches through its banked model.
+- Tier: active creature data group. C64 loads these from disk or REU, Plus/4
+  loads them from disk, and C128 caches them through its banked model.
 - DL: native dungeon level. Deeper monsters are generally more dangerous.
 - Speed: slow, normal, or fast. Fast monsters can act more often.
 - HD: hit dice. More and larger dice mean more hit points.
@@ -36,7 +36,9 @@ or status-heavy, treat it as dangerous until proven otherwise.
 
 ## Town Tier
 
-Town creatures are level 0 and are always part of the town creature set.
+Town creatures are level 0 and are always resident. Dungeon creature rows start
+empty at boot and are populated from the generated tier data when a dungeon
+tier is activated.
 
 | DL | Creature |
 | ---: | -------- |
@@ -270,4 +272,10 @@ These are exact shipped tier-4 values for the obvious breath/endgame threats.
 
 Moria8 uses the shipped tier roster above. Full Umoria creature breadth,
 stable global creature IDs for every upstream monster, and complete persistent
-monster recall remain future work.
+monster recall remain future work. Monster attacks and spells use the compact
+shipped implementation; several upstream special attacks and content effects
+are not implemented yet.
+
+The creature data now imports Umoria's infravision visibility bit for warm
+monsters. C64, C128, and Plus/4 render those monsters through player
+infravision in darkness without revealing the underlying map.

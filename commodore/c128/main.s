@@ -2165,6 +2165,7 @@ restart_entry:
     jsr c128_load_core_residents
     lda #C128_MEDIA_PROGRAM
     sta c128_media_state
+    jsr screen_clear_for_font_restore
     jsr c128_restore_vdc_rom_font
     jsr tier_init
     lda #1
@@ -3179,6 +3180,85 @@ c128_resident_world_start:
 #import "../common/tier_manager.s"
 #import "../common/overlay.s"
 #import "../common/monster_ai.s"
+
+// C128 keeps infravision helpers in the resident world payload so VDC rendering
+// can call them without increasing the byte-tight 128.play segment.
+player_get_infra_range:
+    ldx zp_player_race
+    lda #RACE_PROP_SIZE
+    jsr math_multiply
+    ldx zp_math_a
+    lda race_properties + 1,x
+    ldx zp_eff_infra
+    beq !pgir_done+
+    clc
+    adc #1
+!pgir_done:
+    rts
+
+monster_is_infra_visible_at:
+    sta zp_temp2
+    sty zp_temp3
+
+    lda zp_eff_blind
+    bne !miiva_no+
+
+    lda zp_temp2
+    ldy zp_temp3
+    jsr monster_find_at
+    bcc !miiva_no+
+
+    jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda (zp_ptr0),y
+    tax
+    lda cr_mflags,x
+    and #CF_INFRA
+    beq !miiva_no+
+
+    txa
+    pha
+    jsr player_get_infra_range
+    sta zp_temp4
+    pla
+    tax
+
+    lda zp_temp4
+    beq !miiva_no+
+
+    lda zp_temp2
+    sec
+    sbc zp_player_x
+    bcs !miiva_dx_pos+
+    eor #$ff
+    clc
+    adc #1
+!miiva_dx_pos:
+    sta zp_temp0
+
+    lda zp_temp3
+    sec
+    sbc zp_player_y
+    bcs !miiva_dy_pos+
+    eor #$ff
+    clc
+    adc #1
+!miiva_dy_pos:
+    cmp zp_temp0
+    bcs !miiva_have_dist+
+    lda zp_temp0
+!miiva_have_dist:
+    cmp zp_temp4
+    beq !miiva_range_ok+
+    bcs !miiva_no+
+!miiva_range_ok:
+    sec
+    rts
+
+!miiva_no:
+    clc
+    rts
+
 #import "../common/recall.s"
 #import "../common/monster_magic.s"
 #import "../common/spell_data.s"

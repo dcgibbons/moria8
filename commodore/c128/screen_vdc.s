@@ -275,6 +275,52 @@ screen_clear:
     sta zp_ui_dirty
     rts
 
+// screen_clear_for_font_restore — hide stale custom-charset contents before
+// switching back to the ROM font.  Attribute RAM is cleared first so any
+// intermediate character bytes are black-on-black while the VDC is live.
+screen_clear_for_font_restore:
+    php
+    sei
+
+    lda #>VDC_ATTRIB_BASE
+    ldy #<VDC_ATTRIB_BASE
+    jsr vdc_set_update_addr
+    ldx #31
+    jsr vdc_select_reg
+
+    lda #8
+    sta sc_page_cnt
+    ldy #0
+    lda #VDC_BLACK
+!attr_loop:
+    jsr vdc_wait
+    sta VDC_DATA_REG
+    dey
+    bne !attr_loop-
+    dec sc_page_cnt
+    bne !attr_loop-
+
+    lda #>VDC_SCREEN_BASE
+    ldy #<VDC_SCREEN_BASE
+    jsr vdc_set_update_addr
+    ldx #31
+    jsr vdc_select_reg
+
+    lda #8
+    sta sc_page_cnt
+    ldy #0
+    lda #SC_SPACE
+!char_loop:
+    jsr vdc_wait
+    sta VDC_DATA_REG
+    dey
+    bne !char_loop-
+    dec sc_page_cnt
+    bne !char_loop-
+
+    plp
+    rts
+
 // screen_blank / screen_unblank — C128 VDC policy hooks
 // VDC has no VIC-II DEN equivalent on $D011. These hooks keep the shared
 // interface platform-correct and intentionally no-op on C128 for now.

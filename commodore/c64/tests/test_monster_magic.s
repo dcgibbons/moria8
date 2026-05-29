@@ -27,6 +27,8 @@ test_exit_trampoline:
 
 .encoding "screencode_mixed"
 
+#define COMPILE_EMBEDDED_DUNGEON_TEST_ROSTER
+
 player_cast_spell:
     rts
 

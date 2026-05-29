@@ -146,6 +146,26 @@ render_viewport:
     and #FLAG_OCCUPIED
     bne !rv_detect_render+
 !rv_detect_blank:
+    lda zp_tile_tmp
+    and #FLAG_OCCUPIED
+    beq !rv_detect_no_infra+
+    lda zp_view_x
+    clc
+    adc zp_render_x
+    pha
+    lda zp_view_y
+    clc
+    adc zp_render_y
+    tay
+    pla
+    jsr monster_is_infra_visible_at
+    bcc !rv_detect_no_infra+
+    lda cr_display,x
+    sta zp_temp0
+    lda cr_color,x
+    sta zp_temp1
+    jmp rv_apply_player_override
+!rv_detect_no_infra:
     jmp !draw_blank+
 !rv_detect_render:
     // Detected monster on unvisited tile — blank background, then normal item/monster overlay.
@@ -266,6 +286,29 @@ render_viewport:
     beq !rv_vis_ok+             // Exactly at radius → visible
     bcc !rv_vis_ok+             // Within radius → visible
 
+    // Outside light radius — infravision can show warm monsters without
+    // revealing terrain/items/glyphs.
+    lda zp_tile_tmp
+    and #FLAG_OCCUPIED
+    beq !rv_dim_tile+
+    lda zp_view_x
+    clc
+    adc zp_render_x
+    pha
+    lda zp_view_y
+    clc
+    adc zp_render_y
+    tay
+    pla
+    jsr monster_is_infra_visible_at
+    bcc !rv_dim_tile+
+    lda cr_display,x
+    sta zp_temp0
+    lda cr_color,x
+    sta zp_temp1
+    jmp !rv_no_monster+
+
+!rv_dim_tile:
     // Outside light radius → dimmed (remembered tile)
     lda #COL_DGREY
     sta zp_temp1                // Override color to dark grey
@@ -446,6 +489,19 @@ render_single_tile:
     // Check visited flag
     and #FLAG_VISITED
     bne !rst_visited+
+    lda zp_tile_tmp
+    and #FLAG_OCCUPIED
+    beq !rst_no_infra_blank+
+    ldy zp_temp1                // Y = map_y
+    lda zp_temp0                // A = map_x
+    jsr monster_is_infra_visible_at
+    bcc !rst_no_infra_blank+
+    lda cr_display,x
+    sta zp_temp3
+    lda cr_color,x
+    sta zp_temp4
+    jmp rst_apply_player_override
+!rst_no_infra_blank:
     jmp !rst_blank+
 !rst_visited:
 
@@ -535,6 +591,22 @@ render_single_tile:
     beq !rst_vis_ok+
     bcc !rst_vis_ok+
 
+    // Infravision can show warm monsters on remembered dark tiles without
+    // revealing terrain/items/glyphs.
+    lda zp_tile_tmp
+    and #FLAG_OCCUPIED
+    beq !rst_dim_tile+
+    ldy zp_temp1                // Y = map_y
+    lda zp_temp0                // A = map_x
+    jsr monster_is_infra_visible_at
+    bcc !rst_dim_tile+
+    lda cr_display,x
+    sta zp_temp3
+    lda cr_color,x
+    sta zp_temp4
+    jmp !rst_no_monster+
+
+!rst_dim_tile:
     // Dimmed
     lda #COL_DGREY
     sta zp_temp4

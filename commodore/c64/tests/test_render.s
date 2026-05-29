@@ -9,6 +9,10 @@
 //  6. Player still renders on an unvisited tile
 //  7. Visible glyph renders when no item/monster overrides it
 //  8. Town viewport clamps to the fixed 66x22 town bounds
+//  9. Infravision renders a warm monster on an unvisited dark tile
+// 10. Infravision does not render cold monsters
+// 11. Timed infravision gives humans adjacent warm-monster vision
+// 12. Blindness blocks infravision
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_bootstrap)
@@ -20,7 +24,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #7
+    ldx #11
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -60,6 +64,7 @@ mmu_safe_map_write_ptr1:
 .const MX_Y = 1
 .const MX_TYPE = 2
 .const DETECT_TIMER_EVIL_ONLY = $80 | 20
+.const CF_INFRA = $80
 
 eff_detect_timer: .byte 0
 test_item_active:   .byte 0
@@ -76,7 +81,9 @@ test_glyph_x:       .byte 0
 test_glyph_y:       .byte 0
 test_expect_char:   .byte 0
 test_expect_color:  .byte 0
-tc_results:         .fill 8, $ff
+tc_results:         .fill 12, $ff
+test_infra_x:       .byte 0
+test_infra_y:       .byte 0
 
 fi_item_id: .fill 1, 0
 it_display: .fill 2, 0
@@ -145,6 +152,74 @@ glyph_find_at:
     clc
     rts
 
+monster_is_infra_visible_at:
+    sta test_infra_x
+    sty test_infra_y
+    lda zp_eff_blind
+    bne !no_early+
+    lda test_infra_x
+    ldy test_infra_y
+    jsr monster_find_at
+    bcc !no_early+
+    jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda (zp_ptr0),y
+    tax
+    lda cr_mflags,x
+    and #CF_INFRA
+    beq !no_early+
+    txa
+    pha
+    lda #0
+    ldx zp_player_race
+    cpx #5                      // Dwarf
+    bne !range_base_done+
+    lda #5
+!range_base_done:
+    ldx zp_eff_infra
+    beq !range_done+
+    clc
+    adc #1
+!range_done:
+    sta zp_los_step
+    beq !no+
+    pla
+    tax
+
+    lda test_infra_x
+    sec
+    sbc zp_player_x
+    bcs !dx_pos+
+    eor #$ff
+    clc
+    adc #1
+!dx_pos:
+    sta zp_temp2
+
+    lda test_infra_y
+    sec
+    sbc zp_player_y
+    bcs !dy_pos+
+    eor #$ff
+    clc
+    adc #1
+!dy_pos:
+    cmp zp_temp2
+    bcs !have_dist+
+    lda zp_temp2
+!have_dist:
+    cmp zp_los_step
+    beq !yes+
+    bcs !no_early+
+!yes:
+    sec
+    rts
+!no:
+    pla
+!no_early:
+    clc
+    rts
+
 #import "../dungeon_render.s"
 
 test_start:
@@ -153,7 +228,7 @@ test_start:
     ldx #$ff
     txs
 
-    ldx #6
+    ldx #11
     lda #$ff
 !clr:
     sta tc_results,x
@@ -168,6 +243,10 @@ test_start:
     jsr test_player_on_unvisited_tile
     jsr test_visible_glyph
     jsr test_town_viewport_clamp
+    jsr test_infra_dwarf_unvisited_warm
+    jsr test_infra_cold_hidden
+    jsr test_infra_timed_human_adjacent
+    jsr test_infra_blind_hidden
     jmp test_exit_trampoline
 
 setup_scene:
@@ -190,6 +269,10 @@ setup_scene:
     lda #1
     sta zp_light_radius
     sta zp_player_dlvl
+    lda #0
+    sta zp_eff_infra
+    sta zp_eff_blind
+    sta zp_player_race
     lda #$69
     sta it_display + 1
     lda #COL_GREEN
@@ -471,6 +554,163 @@ test_visible_glyph:
 !fail:
     lda #$00
     sta tc_results + 6
+    rts
+
+test_infra_dwarf_unvisited_warm:
+    jsr setup_scene
+    lda #0
+    sta zp_light_radius
+    lda #5
+    sta zp_player_race
+    lda #1
+    sta zp_eff_infra
+    lda #1
+    sta test_mon_active
+    lda #21
+    sta test_mon_x
+    lda #20
+    sta test_mon_y
+    lda #1
+    sta test_mon_type
+    lda #CF_INFRA
+    sta cr_mflags + 1
+    ldx #21
+    ldy #20
+    lda #((TILE_FLOOR << 4) | FLAG_OCCUPIED)
+    jsr map_set_tile
+    lda #21
+    sta zp_temp0
+    lda #20
+    sta zp_temp1
+    jsr render_single_tile
+    lda cr_display + 1
+    sta test_expect_char
+    lda cr_color + 1
+    sta test_expect_color
+    jsr assert_rendered_tile
+    bcs !fail+
+    lda #$01
+    sta tc_results + 8
+    rts
+!fail:
+    lda #$00
+    sta tc_results + 8
+    rts
+
+test_infra_cold_hidden:
+    jsr setup_scene
+    lda #5
+    sta zp_player_race
+    lda #1
+    sta test_mon_active
+    lda #24
+    sta test_mon_x
+    lda #20
+    sta test_mon_y
+    lda #1
+    sta test_mon_type
+    lda #0
+    sta cr_mflags + 1
+    ldx #24
+    ldy #20
+    lda #((TILE_FLOOR << 4) | FLAG_OCCUPIED)
+    jsr map_set_tile
+    lda #24
+    sta zp_temp0
+    lda #20
+    sta zp_temp1
+    jsr render_single_tile
+    lda #SC_SPACE
+    sta test_expect_char
+    lda #COL_BLACK
+    sta test_expect_color
+    jsr assert_rendered_tile
+    bcs !fail+
+    lda #$01
+    sta tc_results + 9
+    rts
+!fail:
+    lda #$00
+    sta tc_results + 9
+    rts
+
+test_infra_timed_human_adjacent:
+    jsr setup_scene
+    lda #0
+    sta zp_light_radius
+    sta zp_player_race
+    lda #10
+    sta zp_eff_infra
+    lda #1
+    sta test_mon_active
+    lda #21
+    sta test_mon_x
+    lda #20
+    sta test_mon_y
+    lda #1
+    sta test_mon_type
+    lda #CF_INFRA
+    sta cr_mflags + 1
+    ldx #21
+    ldy #20
+    lda #((TILE_FLOOR << 4) | FLAG_OCCUPIED)
+    jsr map_set_tile
+    lda #21
+    sta zp_temp0
+    lda #20
+    sta zp_temp1
+    jsr render_single_tile
+    lda cr_display + 1
+    sta test_expect_char
+    lda cr_color + 1
+    sta test_expect_color
+    jsr assert_rendered_tile
+    bcs !fail+
+    lda #$01
+    sta tc_results + 10
+    rts
+!fail:
+    lda #$00
+    sta tc_results + 10
+    rts
+
+test_infra_blind_hidden:
+    jsr setup_scene
+    lda #5
+    sta zp_player_race
+    lda #10
+    sta zp_eff_blind
+    lda #1
+    sta test_mon_active
+    lda #24
+    sta test_mon_x
+    lda #20
+    sta test_mon_y
+    lda #1
+    sta test_mon_type
+    lda #CF_INFRA
+    sta cr_mflags + 1
+    ldx #24
+    ldy #20
+    lda #((TILE_FLOOR << 4) | FLAG_OCCUPIED)
+    jsr map_set_tile
+    lda #24
+    sta zp_temp0
+    lda #20
+    sta zp_temp1
+    jsr render_single_tile
+    lda #SC_SPACE
+    sta test_expect_char
+    lda #COL_BLACK
+    sta test_expect_color
+    jsr assert_rendered_tile
+    bcs !fail+
+    lda #$01
+    sta tc_results + 11
+    rts
+!fail:
+    lda #$00
+    sta tc_results + 11
     rts
 
 assert_rendered_tile:

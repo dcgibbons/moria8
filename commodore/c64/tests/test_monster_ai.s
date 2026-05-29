@@ -14,6 +14,8 @@
 
 .encoding "screencode_mixed"
 
+#define COMPILE_EMBEDDED_DUNGEON_TEST_ROSTER
+
 // Bootstrap — must be before imports so it's in RAM below $A000.
 bootstrap:
     lda $01

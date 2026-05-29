@@ -30,7 +30,7 @@ tier0_cr_speed:
 
 // Monster flags
 tier0_cr_mflags:
-    .byte $0c, $08, $08, $08, $0c, $08, $0c, $08
+    .byte $8c, $88, $88, $88, $8c, $88, $8c, $88
 
 // Dungeon level
 tier0_cr_level:

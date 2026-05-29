@@ -3,10 +3,10 @@
 Status: source-backed audit plus repair notes for the combat-parity fixes in
 this branch.
 
-Primary oracle: `~/Projects/thirdparty/umoria/src`. A local VMS Moria source
-tree also exists at `~/Projects/thirdparty/vms-moria`; it is useful lineage
-evidence, but this audit treats local Umoria as the active behavior oracle
-because Moria8 comments and data-table ports already cite Umoria.
+Primary oracle: a local Umoria source checkout. A local VMS Moria source
+checkout was also used as lineage evidence, but this audit treats Umoria as the
+active behavior oracle because Moria8 comments and data-table ports already
+cite Umoria.
 
 Verdicts:
 
@@ -174,8 +174,8 @@ validated with build and runtime tests.
 
 Commands/paths inspected:
 
-- `rg` and `sed` over `~/Projects/thirdparty/umoria/src`.
-- `rg` and `sed` over `~/Projects/thirdparty/vms-moria/source/include`.
+- `rg` and `sed` over a local Umoria source checkout.
+- `rg` and `sed` over a local VMS Moria source checkout.
 - `rg` and `sed` over `commodore/common`, `commodore/c64/tests`, and
   `commodore/c128/tests`.
 

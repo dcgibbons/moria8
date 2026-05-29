@@ -1,24 +1,31 @@
 # Moria8 Manual
 
-Moria8 is a Commodore 64 and Commodore 128 adaptation of the classic Moria
-roguelike. You create one adventurer, prepare in town, descend through the
-dungeon, grow stronger, and try to defeat the Balrog.
+Moria8 is a Commodore 64, Commodore 128, and Commodore Plus/4 adaptation of the
+classic Moria roguelike. You create one adventurer, prepare in town, descend
+through the dungeon, grow stronger, and try to defeat the Balrog.
 
 This manual covers the current Commodore releases. Moria8 follows Moria and
 Umoria closely in spirit, but it is not a byte-for-byte reproduction. The C64
-port uses a compact 40-column interface and a smaller active map; the C128 port
-uses an 80-column VDC display and a wider memory model.
+and Plus/4 ports use compact 40-column interfaces and smaller active maps; the
+C128 port uses an 80-column VDC display and a wider memory model.
 
 ## Starting The Game
 
 Use the disk image for your machine:
 
 - C64: `moria8-c64.d64`
+- Plus/4: `moria8-plus4.d64`
 - C128: `moria8-c128.d71`
 
 The C64 version benefits from REU support when available because some creature
 data can be fetched without as much disk loading. The C128 version uses its own
-banked-memory path.
+banked-memory path. The Plus/4 version uses a standard 1541-compatible disk
+path.
+
+Use `D)isk Setup` on the title screen before loading or saving if your save
+disk is not already initialized. Program media and save media are deliberately
+separated; the game blocks using the program disk as the save disk. Save device
+selection supports devices 8-11 where the target platform supports them.
 
 On first start, create a character by choosing race, class, sex, and rolled
 stats. The game then generates a background, starting gold, hit points, mana
@@ -46,6 +53,12 @@ Experience raises your level, which improves hit points, mana, combat ability,
 searching, disarming, saving throws, and spell/prayer access. Level 40 is the
 maximum. Different races and classes advance at different rates; powerful
 combinations usually require more experience.
+
+Several non-human races have infravision. Infravision can show nearby warm
+monsters while you are in darkness. It does not reveal terrain, items, traps,
+doors, or cold creatures, and blindness blocks it. Dwarves have the longest
+natural infravision; potions of infravision temporarily add to the effective
+range.
 
 ## Main Commands
 
@@ -150,8 +163,8 @@ Important dungeon habits:
 - Use `X` to look and `/` to check monster recall by symbol.
 - Use run carefully; attacks, hazards, and interruptions should stop a run.
 
-The C64 dungeon uses a compact active map and 40-column view. The C128 view is
-wider and closer to terminal Moria, but the same core rules apply.
+The C64 and Plus/4 dungeons use compact active maps and 40-column views. The
+C128 view is wider and closer to terminal Moria, but the same core rules apply.
 
 ## Items And Equipment
 

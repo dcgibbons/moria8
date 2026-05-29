@@ -5,6 +5,55 @@ unreleased for release notes.
 
 ## Commodore Ports
 
+### Add exact line-of-sight blocking for infravision
+
+The current infravision implementation is deliberately compact: it uses
+Umoria-style range and warm-monster flags, but it does not yet perform full
+wall-blocking line-of-sight for infra-only monsters. This restores the missing
+racial dark-vision gameplay on C64, C128, and Plus/4 without revealing terrain,
+items, traps, doors, or cold creatures.
+
+Required work:
+
+- Add a compact shared LOS trace that can test player-to-monster visibility
+  without marking tiles visited.
+- Block infravision through walls, closed doors, secret doors, magma, quartz,
+  and other opaque/non-walkable intermediate terrain.
+- Keep the target monster tile eligible even though it is occupied.
+- Prove the helper is safe on C64, Plus/4, and C128 memory layouts.
+
+Acceptance target:
+
+- Infravision matches Umoria's monster visibility rule closely enough that
+  walls and closed opaque terrain block infra-only monster display.
+
+### Implement Plus/4 TED sound effects
+
+The Plus/4 has TED sound hardware, but Moria8's Plus/4 backend currently
+silences every sound request. `commodore/plus4/sound.s` initializes and clears
+TED sound registers, and `sound_play` immediately clears them again instead of
+using the existing frequency/control tables.
+
+Required work:
+
+- Implement `sound_play` for TED using the existing `SFX_*` IDs shared by C64,
+  C128, and Plus/4.
+- Implement `hal_sound_update` so effects stop cleanly and cannot leave stuck
+  tones.
+- Preserve TED display state: sound writes must not corrupt bitmap/character
+  mode bits that `plus4_display_resync` protects.
+- Tune TED approximations for bump, hit, miss, pickup, death, level-up, spell,
+  spell-fail, hunger warning, and fainting.
+- Add Plus/4 coverage proving sound init/play/update touch the expected TED
+  registers and return to silence.
+- Document any intentional TED approximation versus SID behavior if the audible
+  effect set cannot match C64/C128 closely.
+
+Acceptance target:
+
+- Plus/4 gameplay produces audible, bounded sound effects for the existing
+  shared `SFX_*` events without stuck tones or display-mode regressions.
+
 ### Complete auto-rest disturbance model
 
 Moria8 now has a first-pass `CTRL+R` rest-until-recovered command. It keeps `.`
@@ -68,6 +117,50 @@ Acceptance target:
   timing. Otherwise the current `(hits/blows)` summary is the documented Moria8
   approximation.
 
+### Implement numeric repeat prefixes
+
+The C64 and Plus/4 input parsers explicitly leave numeric repeat prefixes
+deferred, and `zp_input_count` is currently always 1. Classic Moria supports
+repeat counts for commands where repeating is safe and meaningful.
+
+Required work:
+
+- Define which commands accept numeric repeat prefixes on each Commodore
+  keyboard layout.
+- Parse multi-digit prefixes without conflicting with movement, inventory
+  letters, `SHIFT` commands, or C128 keypad input.
+- Route accepted counts through one shared repeat path and reject or ignore
+  unsafe repeats consistently.
+- Add tests for one-turn commands, movement/run interactions, prompt
+  cancellation, and non-repeatable commands.
+
+Acceptance target:
+
+- Numeric prefixes work for supported repeatable commands without changing
+  single-key command behavior or prompt input semantics.
+
+### Expand unsupported monster special attacks
+
+Moria8 maps several Umoria monster attack effects into compact substitutes.
+For example, fire/cold/lightning, blindness, stealing, disenchant, eating food,
+eating light, eating charges, stat drains, and experience drain are not all
+implemented as distinct effects.
+
+Required work:
+
+- Prioritize high-impact special attacks from the shipped monster roster before
+  expanding the full monster catalog.
+- Add compact effect handlers for each accepted attack type.
+- Update `tools/parse_creatures.py` so imported data maps to real handlers
+  instead of normal/poison approximations when support exists.
+- Add per-effect tests for damage/status, messages, inventory/light/resource
+  mutation, and save/load impact where relevant.
+
+Acceptance target:
+
+- Shipped monsters no longer silently collapse high-impact upstream attacks
+  into misleading normal attacks.
+
 ### Add classic Moria chests
 
 Moria8 currently has floor objects, traps, doors, searching, opening, bashing,
@@ -102,6 +195,49 @@ Acceptance target:
 - A generated or placed chest can be found, searched, opened, bashed, disarmed,
   trapped, looted, ruined, and saved/loaded with behavior consistent with
   Umoria/VMS-Moria within Moria8 memory limits.
+
+### Add Balrog victory and retirement flow
+
+Moria8 ships the Balrog as the level-100 endgame monster, but killing it
+currently follows the ordinary monster-death path: the player sees the normal
+slain message, receives XP, and the game continues. There is no winner flag,
+victory message, save prohibition, retirement path, royal ending, or winner
+score treatment.
+
+Upstream behavior:
+
+- VMS Moria sets `total_winner` when the Balrog dies, prints congratulations,
+  and tells the player to quit when ready.
+- Umoria sets `game.total_winner`, prints `*** CONGRATULATIONS *** You have
+  won the game.`, and tells the player the game cannot be saved but may be
+  retired.
+- Save-and-exit is blocked for total winners; the character must retire.
+- Final exit uses the royal/winner death-screen path and enters the score table
+  as a winner.
+
+Required work:
+
+- Add a compact winner flag to Moria8 state and save handling, or define an
+  intentional non-persistent retirement-only state if save format pressure makes
+  persistence unacceptable.
+- Mark the Balrog as the unique win creature in shipped monster data without
+  depending on active tier-local index accidents.
+- On Balrog death, set the winner state, print a victory message, and prevent
+  ordinary save-and-quit from treating the character as alive and resumable.
+- Add a retirement/quit path that shows a winner-specific ending instead of the
+  normal `* You have died *` death screen.
+- Decide whether Moria8 keeps the upstream "cannot save after winning" rule
+  despite its non-permadeath save policy, and document the chosen behavior in
+  the manual/release notes.
+- Add C64/C128/Plus/4 coverage for Balrog kill detection, winner-state display,
+  save blocking or chosen save behavior, retirement, score insertion, and
+  wizard/no-rank interaction.
+
+Acceptance target:
+
+- Killing the Balrog is visibly and mechanically the win condition on every
+  supported Commodore platform, with documented retirement/save behavior and no
+  ordinary monster-kill continuation.
 
 ### Split Home/store screen ownership
 
