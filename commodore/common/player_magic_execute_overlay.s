@@ -102,6 +102,9 @@ med_tbl_hi:
     .byte >(med_s24-1), >(med_s25-1), >(eff_teleport_other-1), >(med_s27-1)
     .byte >(med_s28-1), >(eff_destroy_area-1), >(eff_genocide-1)
 
+.assert "Mage dispatch lo count", med_tbl_hi - med_tbl_lo, SPELL_CATALOG_COUNT
+.assert "Mage dispatch hi count", med_s0 - med_tbl_hi, SPELL_CATALOG_COUNT
+
 med_s0:
     lda #2
     ldx #6
@@ -193,6 +196,9 @@ ped_tbl_hi:
     .byte >(ped_s20-1), >(PMX_EARTHQUAKE_TARGET-1), >(ped_s22-1), >(ped_s23-1)
     .byte >(eff_turn_undead-1), >(ped_s25-1), >(ped_s26-1), >(ped_s27-1)
     .byte >(ped_s28-1), >(ped_s29-1), >(ped_s30-1)
+
+.assert "Priest dispatch lo count", ped_tbl_hi - ped_tbl_lo, SPELL_CATALOG_COUNT
+.assert "Priest dispatch hi count", ped_s0 - ped_tbl_hi, SPELL_CATALOG_COUNT
 
 ped_s0:
     jmp eff_detect_evil
