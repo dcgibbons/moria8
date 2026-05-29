@@ -65,6 +65,55 @@ run_test() {
     fi
 }
 
+run_plus4_static_contracts() {
+    local name="plus4_static_contracts"
+
+    if [ -n "$TEST_FILTER" ] && [[ ! "$name" =~ $TEST_FILTER ]]; then
+        return
+    fi
+
+    TOTAL=$((TOTAL + 1))
+    if python3 - <<'PY'
+from pathlib import Path
+
+root = Path("..").resolve()
+player_items = (root / "common" / "player_items.s").read_text().splitlines()
+
+def has_ordered_chain(lines: list[str], tokens: list[str], window: int = 40) -> bool:
+    for i, line in enumerate(lines):
+        if tokens[0] not in line:
+            continue
+        pos = i
+        for token in tokens[1:]:
+            for j in range(pos + 1, min(pos + 1 + window, len(lines))):
+                if token in lines[j]:
+                    pos = j
+                    break
+            else:
+                break
+        else:
+            return True
+    return False
+
+if not has_ordered_chain(player_items, [
+    "show_inv_and_select:",
+    "lda #OVL_ITEMS",
+    "jsr overlay_load",
+    "#if PLUS4_PRODUCT_OVERLAY_RUNTIME",
+    "jsr plus4_install_ram_irq_vectors",
+    "jsr plus4_bank_ram",
+]):
+    print("Plus/4 inventory selector must restore RAM-visible overlay execution after reloading OVL_ITEMS")
+    raise SystemExit(1)
+PY
+    then
+        PASS=$((PASS + 1))
+    else
+        echo "FAIL: $name"
+        FAIL=$((FAIL + 1))
+    fi
+}
+
 run_boot_title_smoke() {
     local name="boot_title_plus4"
     local out_dir="$PLUS4_DIR/out"
@@ -871,6 +920,7 @@ run_load_resume_product_smoke() {
     fi
 }
 
+run_plus4_static_contracts
 run_test "minimalplus4" "tests/test_minimalplus4.s"
 run_boot_title_smoke
 run_new_game_to_town_smoke

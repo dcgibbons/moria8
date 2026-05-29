@@ -126,7 +126,10 @@ show_inv_and_select:
 #if C64_PRODUCT_IRQ_VECTOR_RUNTIME
     jsr hal_irq_install_runtime
 #endif
-#if !PLUS4
+#if PLUS4_PRODUCT_OVERLAY_RUNTIME
+    jsr plus4_install_ram_irq_vectors
+    jsr plus4_bank_ram
+#else
     lda #BANK_NO_KERNAL
     sta hal_memory_cpu_port
 #endif
