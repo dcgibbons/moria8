@@ -138,7 +138,7 @@ Insert or mount the C64 game media, then load from the device you are using.
 For the usual device 8 setup, type:
 
 ```text
-LOAD "*",8
+LOAD "MORIA8",8
 RUN
 ```
 
@@ -148,7 +148,7 @@ Insert or mount the Plus/4 game media, then load from the device you are using.
 For the usual device 8 setup, type:
 
 ```text
-LOAD "*",8
+LOAD "MORIA8",8
 RUN
 ```
 
