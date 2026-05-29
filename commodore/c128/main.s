@@ -3281,7 +3281,7 @@ ui_prepare_fullscreen_transition:
     rts
 
 welcome_str:
-    .text "Welcome to Moria8! Shift+Q to quit." ; .byte 0
+    .text "Welcome to Moria! ?=help. Shift+Q=quit." ; .byte 0
 search_mode_on_str:
     .text "Search mode on." ; .byte 0
 search_mode_off_str:

@@ -2405,7 +2405,7 @@ press_key_str:
 
 #if !WELCOME_STR_EXTERNAL
 welcome_str:
-    .text "Welcome to Moria8! Shift+Q to quit." ; .byte 0
+    .text "Welcome to Moria! ?=help. Shift+Q=quit." ; .byte 0
 #endif
 
 #if !GAME_LOOP_NAV_STRINGS_EXTERNAL
