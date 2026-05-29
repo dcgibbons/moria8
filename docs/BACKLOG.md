@@ -5,13 +5,15 @@ unreleased for release notes.
 
 ## Commodore Ports
 
-### Harden auto-rest disturbance coverage
+### Complete auto-rest disturbance model
 
 Moria8 now has a first-pass `CTRL+R` rest-until-recovered command. It keeps `.`
 as one-turn rest, `R` as Read Scroll, and `SHIFT+R` as Refuel. The current
 implementation advances ordinary rest turns until HP and mana are full, clears
 search mode when started, stops on cancel input, and stops when a message asks
-for player attention.
+for player attention. Existing C64/C128 tests cover full-recovery no-turn
+behavior, HP/mana recovery, attention-message interruption, held-key
+interruption, and search-mode clearing.
 
 Remaining polish:
 
@@ -24,17 +26,21 @@ Remaining polish:
   path.
 - Add compact status text such as `Rest *` or `Resting` if resident memory or an
   overlay-owned display path can afford it.
-- Keep C128 resident play below `$CF00`; the first implementation fits by only a
-  few bytes.
+- Keep C128 resident play below `$D000`.
 
-### Align melee multi-blow feedback and blow counts with Umoria
+### Optional: exact Umoria per-blow melee messages
 
-Moria8 currently performs multiple melee blows inside one attack command, but
-the player-facing message is collapsed into one summary. This makes combat feel
-too swingy and can make a multi-blow kill look like a one-hit kill. A saved C128
-gnome rogue on dungeon level 3 showed this ambiguity clearly: the character had
-a plain dagger and could appear to kill a high-HP nearby monster in "one hit",
-when the engine may have resolved several blows under one command.
+Moria8 now calculates melee blow counts from the Umoria-style STR/DEX/weapon
+weight buckets, including exceptional stats, too-heavy weapons, bare hands, and
+launcher/ammo-as-melee handling. Focused combat tests cover the reported C128
+gnome rogue/dagger case, top exceptional DEX, too-heavy weapon handling, and
+ranged launcher melee forcing one blow.
+
+The remaining difference is player-facing feedback. Umoria prints one message
+per blow; Moria8 prints one round summary and appends `(hits/blows)` when the
+attack had multiple blows, for example `You hit the skeleton kobold (2/3).`.
+This prevents multi-blow attacks from looking like single-hit attacks, but it is
+not byte-faithful Umoria message timing.
 
 Upstream behavior:
 
@@ -48,39 +54,19 @@ Upstream behavior:
 - Bare hands get 2 blows with a to-hit penalty; missile/ammo melee attacks are
   forced to 1 blow.
 
-Known Moria8 gaps:
-
-- Moria8 currently prints one aggregate attack result instead of per-blow
-  messages.
-- The saved/displayed `PL_BLOWS` value can be stale or misleading because the
-  runtime combat loop recalculates blows separately.
-- Moria8's blow table is coarser than Umoria's 7x6 STR/DEX table and may grant
-  too many blows for some light-weapon stat combinations.
-- For the observed level-3 gnome rogue with dagger, Umoria-style bucketing
-  likely yields 3 blows, while the current Moria8 table can yield 4.
-
 Required work:
 
-- Audit `combat_calc_blows` against Umoria's `playerAttackBlows`,
-  `playerAttackBlowsStrength`, `playerAttackBlowsDexterity`, and
-  `blows_table`.
-- Decide whether Moria8 should exactly port the 7x6 Umoria table or use a
-  compressed equivalent with documented deviations.
-- Make the character sheet/displayed blows match the runtime calculation, or
-  explicitly stop displaying a value that is not authoritative.
-- Change melee feedback so multiple blows are visible to the player. The
-  simplest parity target is one message per blow, with kill stopping the loop.
-- Preserve existing critical-hit and ego-damage behavior unless the audit finds
-  a specific upstream mismatch worth fixing in the same pass.
-- Add focused tests for a light weapon/high DEX case, a normal one-blow case,
-  too-heavy weapon forcing one blow, ammo forced to one blow, and per-blow
-  message/kill-loop behavior.
+- Decide whether exact per-blow message parity is worth the extra message
+  traffic on 40-column targets.
+- If yes, change melee feedback so each miss/hit/slay blow is visible as its own
+  message and killing blows stop the loop immediately.
+- Add focused coverage for per-blow message order and kill-loop stopping.
 
 Acceptance target:
 
-- A multi-blow attack can no longer look like a single-hit kill, and Moria8's
-  blow count for representative STR/DEX/weapon-weight combinations matches
-  Umoria or a documented intentional approximation.
+- If this item is implemented, melee feedback matches Umoria per-blow message
+  timing. Otherwise the current `(hits/blows)` summary is the documented Moria8
+  approximation.
 
 ### Add classic Moria chests
 
@@ -117,7 +103,7 @@ Acceptance target:
   trapped, looted, ruined, and saved/loaded with behavior consistent with
   Umoria/VMS-Moria within Moria8 memory limits.
 
-### Audit screen clear and shared-screen ownership paths
+### Split Home/store screen ownership
 
 The Home screen currently reuses the store renderer, then overrides the store
 footer. That produced stale footer text such as `Q)uituit` because the store
@@ -126,33 +112,25 @@ The immediate fix clears row 18 before drawing the Home footer, but the cleaner
 design is to stop making Home call a renderer that draws the wrong footer in the
 first place.
 
-A second concrete case was found on C64: quitting a live game back to the title
-menu could leave dungeon glyphs visible below the title menu and above the
-system-information line. The release-candidate fix gave the title screen an
-explicit shared clear contract for full-screen entry and below-menu ownership,
-and routed modal gameplay restores through the platform-safe full-screen clear.
-This is still evidence that view transitions need explicit ownership contracts
-rather than incidental partial cleanup.
+The broader screen-clear audit was handled during the v1.1.0 release-candidate
+work. Title entry now has an explicit full-screen clear and below-menu clear
+contract, C128 title-cache redraws use the same contract, and modal gameplay
+restore uses the platform-safe full-screen clear path. The remaining cleanup is
+the older Home/store renderer ownership problem.
 
 Required work:
 
 - Split shared store/Home drawing so the item/body layout and footer/menu
   drawing have separate ownership.
-- Replace local row-clearing patches with explicit draw contracts where a view
-  owns each row it writes.
-- Audit all screen clear, row clear, modal redraw, and overlay redraw paths
-  across C64, C128, and Plus/4 for similar stale-text or inherited-state
-  behavior.
-- Pay special attention to code that writes shorter text over longer text,
-  reuses another view's renderer, or relies on prior full-screen clears to make
-  later partial redraws safe.
-- Add focused regression coverage for any discovered cases where stale text,
-  color residue, or previous-view state can survive a redraw.
+- Remove the Home-specific row-clear patch once Home no longer calls a renderer
+  that draws the wrong footer.
+- Add focused regression coverage proving Home cannot inherit stale Store footer
+  text or color residue.
 
 Acceptance target:
 
-- Screen redraw behavior is owned by explicit view contracts, not incidental
-  cleanup, and no UI path depends on hidden stale-text assumptions.
+- Store and Home draw their shared body without either view writing the other's
+  footer, and no Home path depends on clearing over stale Store text.
 
 ### Friendlier Commodore I/O error messages
 
@@ -216,52 +194,6 @@ Acceptance target:
 - Pressing `V` in gameplay opens a clear Version/System Info view on every
   supported Commodore platform, with enough diagnostic detail for user support
   and hardware-feature verification.
-
-### Investigate C64U SoftwareIEC fast runtime asset loading
-
-Hardware testing showed that C64U SoftwareIEC/UCI fast-loading is not safe
-enough to ship. Early REU preload experiments appeared dramatically faster, but
-later real-hardware tests produced corrupted dungeon/runtime assets: unknown
-monster names rendered as `?`, and changing dungeon levels could show a
-checkerboard-corrupted screen with overlay filenames such as `64.start`,
-`64.town`, and `64.spell`.
-
-Boot-time UCI `LOAD_SU` was also tested against a loose-file C64U package on
-USB. BASIC could load `UCIPROBE` from SoftwareIEC device 11, proving the visible
-SoftwareIEC directory was correct, but UCI `LOAD_SU` returned status `$01`
-(`FILE NOT FOUND`) for all tested request forms, including `MORIA64`,
-`UCIPROBE`, and `$`. This means BASIC device-11 visibility does not imply that
-UCI target `$05` can resolve the same file context on the tested C64U
-configuration/firmware.
-
-Observed monitor state while testing:
-
-```text
-m 0852 0856
-0852: 0B 00 00 00 0C
-```
-
-Required work:
-
-- Prefer hyperspeed KERNAL/JiffyDOS-style loading on C64U instead of UCI
-  `LOAD_SU`/`LOAD_EX` unless new firmware documentation or example code proves a
-  working path.
-- Keep the product runtime loader on the known-good KERNAL path.
-- If UCI loading is revisited, start from a standalone probe that validates both
-  file resolution and byte-for-byte RAM/REU contents against known-good
-  KERNAL-loaded data before enabling it in product.
-- Confirm the exact command sequence, status handling, response acceptance, DMA
-  mode, target address behavior, banking state, and SoftwareIEC filesystem
-  context on real C64U hardware.
-- Add an explicit hardware-test checklist covering REU preload, dungeon
-  transition, visible monster names, stores, spells, and overlay-heavy actions.
-
-Acceptance target:
-
-- C64U SoftwareIEC/UCI loading is only re-enabled after real hardware shows
-  working file resolution, clean byte validation, and normal gameplay across
-  runtime overlay/tier transitions. Until then, C64U acceleration should use the
-  hyperspeed KERNAL path.
 
 ### Expand monster catalog toward full Umoria roster
 
