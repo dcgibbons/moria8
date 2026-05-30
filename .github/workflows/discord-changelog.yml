@@ -45,23 +45,24 @@ jobs:
           fi
 
           jq -n \
-            --arg username "moria8 Bot" \
-            --arg avatar "https://raw.githubusercontent.com/dcgibbons/moria8/main/artwork/moria8_loading_art_c64.png" \
-            --arg color "$COLOR" \
-            --arg title "$TITLE" \
-            --arg desc "$DESC" \
-            --arg url "$URL" \
-            '{
-              username: $username,
-              avatar_url: $avatar,
-              embeds: [{
-                color: ($color | tonumber),
-                title: $title,
-                description: $desc,
-                url: $url,
-                footer: { text: "moria8 • dcgibbons/moria8" },
-                timestamp: now | todate
-              }]
-            }' | curl -H "Content-Type: application/json" \
-                     -d @- \
-                     ${{ secrets.DISCORD_WEBHOOK_URL }}
+    --arg username "moria8 Bot" \
+    --arg avatar "https://raw.githubusercontent.com/dcgibbons/moria8/main/artwork/moria8_loading_art_c64.png" \
+    --arg color "$COLOR_DEC" \ # Use the calculated decimal value here!
+    --arg title "$TITLE" \
+    --arg desc "$DESC" \
+    --arg url "$URL" \
+    '{
+      username: $username,
+      avatar_url: $avatar,
+      embeds: [{
+        color: $color, # No need for | tonumber now that it is an integer string
+        title: $title,
+        description: $desc,
+        url: $url,
+        footer: { text: "moria8 • dcgibbons/moria8" },
+        timestamp: now | todate
+      }]
+    }' | curl -H "Content-Type: application/json" \
+             -d @- \
+             ${{ secrets.DISCORD_WEBHOOK_URL }}
+
