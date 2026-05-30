@@ -48,6 +48,15 @@ item_action_select_filtered_inv:
 !ias_have_choices:
     jsr input_prepare_followup_key
     jsr item_action_get_key
+#if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME
+    cmp #$3f
+    bne !ias_no_selector_overlay_hint+
+    pha
+    lda #OVL_ITEMS
+    sta piw_return_overlay
+    pla
+!ias_no_selector_overlay_hint:
+#endif
     jmp piw_select_filtered_inv_key
 
 // ============================================================

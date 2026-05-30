@@ -556,6 +556,10 @@ title_enter_menu:
     jsr plus4_test_overlay_load_all
 #endif
 
+#if PLUS4_TEST_SCRIPTED_WAND_SELECTOR_PRODUCT
+    jsr plus4_test_wand_selector_overlay_return
+#endif
+
 #if PLUS4_TEST_SCRIPTED_LOAD_RESUME_PRODUCT || PLUS4_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || PLUS4_TEST_SCRIPTED_LOAD_WRONG_MEDIA_PRODUCT
     ldx #9
     jsr hal_storage_probe_media
@@ -636,6 +640,42 @@ plus4_test_overlay_load_fail_sym:
 
 plus4_test_overlay_id:
     .byte 0
+#endif
+
+#if PLUS4_TEST_SCRIPTED_WAND_SELECTOR_PRODUCT
+plus4_test_wand_selector_overlay_return:
+    sei
+    jsr plus4_bank_ram
+    jsr msg_init
+    jsr item_init_inventory
+
+    lda #39
+    sta inv_item_id + 0
+    lda #40
+    sta inv_item_id + 1
+    lda #42
+    sta inv_item_id + 2
+    lda #1
+    sta inv_qty + 0
+    sta inv_qty + 1
+    sta inv_qty + 2
+    lda #0
+    sta inv_p1 + 0
+    sta inv_p1 + 1
+    sta inv_p1 + 2
+    sta inv_flags + 0
+    sta inv_flags + 1
+    sta inv_flags + 2
+    sta piw_return_overlay
+
+    lda #OVL_ITEMS
+    jsr overlay_load_no_kernal
+    bcs plus4_test_wand_selector_fail_sym
+    jsr item_aim_wand
+plus4_test_wand_selector_pass_sym:
+    jmp plus4_test_wand_selector_pass_sym
+plus4_test_wand_selector_fail_sym:
+    jmp plus4_test_wand_selector_fail_sym
 #endif
 
 title_load_game:

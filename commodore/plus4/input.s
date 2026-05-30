@@ -50,7 +50,7 @@ input_noop:
     rts
 
 input_get_key:
-#if PLUS4_TEST_SCRIPTED_DISK_SETUP_PRODUCT || PLUS4_TEST_SCRIPTED_LOAD_RESUME_PRODUCT || PLUS4_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || PLUS4_TEST_SCRIPTED_LOAD_WRONG_MEDIA_PRODUCT || PLUS4_TEST_SCRIPTED_NEW_GAME_PRODUCT || PLUS4_TEST_SCRIPTED_DUNGEON_ENTRY_PRODUCT
+#if PLUS4_TEST_SCRIPTED_DISK_SETUP_PRODUCT || PLUS4_TEST_SCRIPTED_LOAD_RESUME_PRODUCT || PLUS4_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || PLUS4_TEST_SCRIPTED_LOAD_WRONG_MEDIA_PRODUCT || PLUS4_TEST_SCRIPTED_NEW_GAME_PRODUCT || PLUS4_TEST_SCRIPTED_DUNGEON_ENTRY_PRODUCT || PLUS4_TEST_SCRIPTED_WAND_SELECTOR_PRODUCT
     ldx plus4_test_key_index
     lda plus4_test_key_script,x
     beq !wait+
@@ -70,6 +70,8 @@ plus4_test_key_script:
     .byte $4e, $41, $0d, $41, $41, $0d, $41, $20, 0 // N, race A, accept stats, class A, name A, gender A, dismiss summary
 #elif PLUS4_TEST_SCRIPTED_DUNGEON_ENTRY_PRODUCT
     .byte $4e, $41, $0d, $41, $41, $0d, $41, $20, $4c, $3e, 0 // New game, move east to stairs, descend
+#elif PLUS4_TEST_SCRIPTED_WAND_SELECTOR_PRODUCT
+    .byte $3f, $43, 0                         // ?, C
 #else
     .byte $44, $32, $39, $0d, $33, $20, $59, 0 // D, 2, 9, RETURN, 3, SPACE, Y
 #endif

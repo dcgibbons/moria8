@@ -83,22 +83,32 @@ equip_slot_for_cat:
 show_inv_and_select:
     sta piw_filter
 #if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME
-    lda #OVL_NONE
-    sta piw_return_overlay
-    // Only restore an overlay when the immediate return target is inside the
-    // overlay window. Resident prompts can run while an overlay is current on
-    // the outer stack, but they must not reload that overlay before returning.
+    lda piw_return_overlay
+    bne !sias_have_return_overlay+
+    // Restore an item overlay when either the immediate return target or the
+    // selector's outer continuation is inside the overlay window.
     tsx
     lda $0102,x
+    cmp #$e0
+    bcc !sias_check_outer_return+
+    cmp #$f0
+    bcc !sias_return_overlay+
+!sias_check_outer_return:
+    lda $0104,x
     cmp #$e0
     bcc !sias_return_resident+
     cmp #$f0
     bcs !sias_return_resident+
+!sias_return_overlay:
     lda current_overlay
     cmp #OVL_ITEMS
+    beq !sias_store_return_overlay+
+    cmp #OVL_SPELL
     bne !sias_return_resident+
+!sias_store_return_overlay:
     sta piw_return_overlay
 !sias_return_resident:
+!sias_have_return_overlay:
 #endif
     jsr input_prepare_selectable_overlay_key
     jsr tramp_ui_inv_select_display
@@ -109,14 +119,19 @@ show_inv_and_select:
     pha
     jsr ui_view_restore_modal_overlay
 #if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME
-    // Prompt-time inventory can be opened from OVL.ITEMS command handlers.
-    // Reload the caller overlay before returning to code in the $E000 window.
-    lda piw_return_overlay
-    cmp #OVL_ITEMS
-    bne !sias_no_items_reload+
-    lda #OVL_ITEMS
+    // Prompt-time inventory can be opened from $E000 command handlers. Reload
+    // the caller overlay before returning to code in the overlay window.
+    ldx piw_return_overlay
+    lda #OVL_NONE
+    sta piw_return_overlay
+    txa
+    beq !sias_no_overlay_reload+
     jsr overlay_load
-    bcs !sias_no_items_reload+
+    bcc !sias_overlay_loaded+
+    // The saved continuation is in an overlay. Returning without that overlay
+    // resident would execute arbitrary $E000 contents.
+    brk
+!sias_overlay_loaded:
 #if C128_PRODUCT_OVERLAY_RUNTIME
     jsr hal_platform_runtime_resync
     lda #MMU_ALL_RAM
@@ -134,6 +149,7 @@ show_inv_and_select:
     sta hal_memory_cpu_port
 #endif
 !sias_no_items_reload:
+!sias_no_overlay_reload:
 #endif
     pla
     rts
