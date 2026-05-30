@@ -1,0 +1,20 @@
+name: Post Release to Discord
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  notify-discord:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send release to #changelog
+        run: |
+          curl -H "Content-Type: application/json" \
+            -d '{
+              "content": "**🪓 moria8 ${{ github.event.release.tag_name }}** released!\n\n${{ github.event.release.body }}\n\nDownload: ${{ github.event.release.html_url }}",
+              "username": "moria8 Releases",
+              "avatar_url": "https://github.com/${{ github.repository_owner }}.png"
+            }' \
+            ${{ secrets.DISCORD_WEBHOOK_URL }}
+
