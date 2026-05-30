@@ -1,8 +1,15 @@
 name: Post Release to Discord
 
 on:
+  push:
+    branches: []
+  issues:
+    types: []
+  pull_request:
+    types: []
   release:
     types: [published]
+  workflow_dispatch:
 
 jobs:
   notify-discord:
