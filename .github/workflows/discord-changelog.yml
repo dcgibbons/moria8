@@ -18,45 +18,50 @@ jobs:
       - name: Send pretty notification to #changelog
         run: |
           if [ "${{ github.event_name }}" = "release" ]; then
-            COLOR="0x22C55E"
+            COLOR=0x22C55E
             TITLE="📦 moria8 ${{ github.event.release.tag_name }} RELEASED!"
             DESC="${{ github.event.release.body || 'No release notes provided.' }}"
             URL="${{ github.event.release.html_url }}"
           elif [ "${{ github.event_name }}" = "push" ]; then
-            COLOR="0x3B82F6"
+            COLOR=0x3B82F6
             TITLE="🪓 Push to \`${{ github.ref_name }}\`"
             DESC="${{ github.event.commits[0].message || 'Multiple commits pushed' }}"
             URL="${{ github.event.compare }}"
           elif [ "${{ github.event_name }}" = "issues" ]; then
-            COLOR="0xEF4444"
+            COLOR=0xEF4444
             TITLE="🐛 New Issue #${{ github.event.issue.number }}"
             DESC="${{ github.event.issue.title }}\nby ${{ github.event.issue.user.login }}"
             URL="${{ github.event.issue.html_url }}"
           elif [ "${{ github.event_name }}" = "pull_request" ]; then
-            COLOR="0xA855F7"
+            COLOR=0xA855F7
             TITLE="🔀 New Pull Request #${{ github.event.pull_request.number }}"
             DESC="${{ github.event.pull_request.title }}\nby ${{ github.event.pull_request.user.login }}"
             URL="${{ github.event.pull_request.html_url }}"
           else
-            COLOR="0x64748B"
+            COLOR=0x64748B
             TITLE="Test Notification"
-            DESC="Manual trigger from GitHub Actions"
+            DESC="Manual trigger"
             URL="https://github.com/${{ github.repository }}"
           fi
 
-          curl -H "Content-Type: application/json" \
-            -d '{
-              "username": "moria8 Bot",
-              "avatar_url": "https://raw.githubusercontent.com/dcgibbons/moria8/main/artwork/moria8_loading_art_c64.png",
-              "embeds": [{
-                "color": '"${COLOR}"',
-                "title": "'"${TITLE}"'",
-                "description": "'"${DESC}"'",
-                "url": "'"${URL}"'",
-                "footer": {
-                  "text": "moria8 • dcgibbons/moria8"
-                },
-                "timestamp": "'"$(date -u +"%Y-%m-%dT%H:%M:%SZ")"'"
+          jq -n \
+            --arg username "moria8 Bot" \
+            --arg avatar "https://raw.githubusercontent.com/dcgibbons/moria8/main/artwork/moria8_loading_art_c64.png" \
+            --arg color "$COLOR" \
+            --arg title "$TITLE" \
+            --arg desc "$DESC" \
+            --arg url "$URL" \
+            '{
+              username: $username,
+              avatar_url: $avatar,
+              embeds: [{
+                color: ($color | tonumber),
+                title: $title,
+                description: $desc,
+                url: $url,
+                footer: { text: "moria8 • dcgibbons/moria8" },
+                timestamp: now | todate
               }]
-            }' \
-            ${{ secrets.DISCORD_WEBHOOK_URL }}
+            }' | curl -H "Content-Type: application/json" \
+                     -d @- \
+                     ${{ secrets.DISCORD_WEBHOOK_URL }}
