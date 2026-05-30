@@ -242,11 +242,11 @@ Acceptance target:
 ### Split Home/store screen ownership
 
 The Home screen currently reuses the store renderer, then overrides the store
-footer. That produced stale footer text such as `Q)uituit` because the store
-renderer drew row 18 first and Home replaced it with shorter text afterward.
-The immediate fix clears row 18 before drawing the Home footer, but the cleaner
-design is to stop making Home call a renderer that draws the wrong footer in the
-first place.
+footer. That previously produced stale footer text such as `Q)uituit` because
+the store renderer drew row 18 first and Home replaced it with shorter text
+afterward. That visible bug is fixed: Home clears row 18 before drawing the Home
+footer. The remaining issue is architectural ownership. Home should not call a
+renderer that draws the wrong footer in the first place.
 
 The broader screen-clear audit was handled during the v1.1.0 release-candidate
 work. Title entry now has an explicit full-screen clear and below-menu clear
@@ -299,19 +299,19 @@ Acceptance target:
   missing file, and wrong save disk show clear end-user messages while retaining
   enough diagnostic detail for debugging.
 
-### Promote `V` to an in-game Version/System Info command
+### Promote `F8` to an in-game Version/System Info command
 
-The C64 product currently has a hidden `V` diagnostic command for proving C64
-Ultimate turbo behavior. That key was previously unused in gameplay and maps to
-the dormant `CMD_VERSION` command slot. This should eventually become a real
-cross-platform Version/System Info command instead of a one-off C64U probe.
+The C64 product currently has a hidden diagnostic command for proving C64
+Ultimate turbo behavior. The polished player-facing command should use `F8` and
+map to the dormant `CMD_VERSION` command slot. This should eventually become a
+real cross-platform Version/System Info command instead of a one-off C64U probe.
 
 The command is likely text-heavy enough to justify a platform-owned overlay or
 paged modal rather than forcing all details into resident message-line code.
 
 Required work:
 
-- Define the shared `V` command behavior across C64, C128, and Plus/4.
+- Define the shared `F8` command behavior across C64, C128, and Plus/4.
 - Show game version/build identity, platform, save-format version, and relevant
   runtime hardware details.
 - On C64, include machine identity, KERNAL revision, REU size, C64 Ultimate
@@ -327,7 +327,7 @@ Required work:
 
 Acceptance target:
 
-- Pressing `V` in gameplay opens a clear Version/System Info view on every
+- Pressing `F8` in gameplay opens a clear Version/System Info view on every
   supported Commodore platform, with enough diagnostic detail for user support
   and hardware-feature verification.
 
