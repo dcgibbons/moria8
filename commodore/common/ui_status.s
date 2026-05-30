@@ -134,15 +134,28 @@ status_draw:
     lda zp_hunger_state
     cmp status_prev_hunger
     bne !sd_row23_dirty+
-    lda player_data + PL_FLAGS
-    and #PLF_SEARCHING
-    cmp status_prev_searching
-    bne !sd_row23_dirty+
-    jmp !sd_dirty_ready+
+    jmp !sd_check_search+
 !sd_row23_dirty:
     lda status_dirty_rows
     ora #$04
     sta status_dirty_rows
+
+!sd_check_search:
+    lda player_data + PL_FLAGS
+    and #PLF_SEARCHING
+    cmp status_prev_searching
+    beq !sd_dirty_ready+
+    .if (hal_layout_status_searching_on_row21 != 0) {
+        lda status_dirty_rows
+        ora #$01
+        sta status_dirty_rows
+    }
+    .if (hal_layout_status_searching_on_row23 != 0) {
+        lda status_dirty_rows
+        ora #$04
+        sta status_dirty_rows
+    }
+    jmp !sd_dirty_ready+
 
 !sd_dirty_ready:
     // Full clears and explicit status-row clears force a full repaint via bit7.
@@ -207,21 +220,21 @@ status_draw:
     sta zp_ptr0_hi
     jsr hal_screen_put_string
 
-#if hal_layout_status_searching_on_row21
-    lda player_data + PL_FLAGS
-    and #PLF_SEARCHING
-    beq !sd_row21_state_done+
-    lda #COL_STATUS
-    sta zp_text_color
-    lda #STS_ROW21_STATE_COL
-    sta zp_cursor_col
-    lda #<status_searching_str
-    sta zp_ptr0
-    lda #>status_searching_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    .if (hal_layout_status_searching_on_row21 != 0) {
+        lda player_data + PL_FLAGS
+        and #PLF_SEARCHING
+        beq !sd_row21_state_done+
+        lda #COL_YELLOW
+        sta zp_text_color
+        lda #STS_ROW21_STATE_COL
+        sta zp_cursor_col
+        lda #<status_searching_str
+        sta zp_ptr0
+        lda #>status_searching_str
+        sta zp_ptr0_hi
+        jsr hal_screen_put_string
 !sd_row21_state_done:
-#endif
+    }
 
     lda #STS_ROW21_LV_COL
     sta zp_cursor_col
@@ -483,21 +496,21 @@ status_draw:
     sta zp_ptr0_hi
     jsr hal_screen_put_string
 
-#if hal_layout_status_searching_on_row23
-    lda player_data + PL_FLAGS
-    and #PLF_SEARCHING
-    beq !sd_row23_state_done+
-    lda #COL_STATUS
-    sta zp_text_color
-    lda #STS_ROW23_STATE_COL
-    sta zp_cursor_col
-    lda #<status_searching_str
-    sta zp_ptr0
-    lda #>status_searching_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    .if (hal_layout_status_searching_on_row23 != 0) {
+        lda player_data + PL_FLAGS
+        and #PLF_SEARCHING
+        beq !sd_row23_state_done+
+        lda #COL_YELLOW
+        sta zp_text_color
+        lda #STS_ROW23_STATE_COL
+        sta zp_cursor_col
+        lda #<status_searching_str
+        sta zp_ptr0
+        lda #>status_searching_str
+        sta zp_ptr0_hi
+        jsr hal_screen_put_string
 !sd_row23_state_done:
-#endif
+    }
 
 !sd_update_cache:
     // Update status cache after successful redraw.
@@ -679,7 +692,7 @@ status_au_str:
 status_exp_str:
     .text "EXP:" ; .byte $00
 status_searching_str:
-    .text "Searching" ; .byte $00
+    .text "Search*" ; .byte $00
 
 // ============================================================
 // Status cache (skip redraw when visible values are unchanged)

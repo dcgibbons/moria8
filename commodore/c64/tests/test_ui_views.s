@@ -248,6 +248,7 @@ test_start:
     jsr test_home_view
     jsr test_status_redraw_shrinks_numbers
     jsr test_screen_clear_forces_status_redraw
+    jsr test_status_search_indicator_row21
     jsr test_inventory_identify_select_view_six_items
     jsr test_screen_put_string_clamps_to_row
     jsr test_equipment_select_view
@@ -1104,6 +1105,63 @@ test_screen_clear_forces_status_redraw:
     sta tc_results + 12
     rts
 
+test_status_search_indicator_row21:
+    jsr reset_shared_state
+
+    lda #0
+    sta player_data + PL_NAME
+    sta status_cache_valid
+    sta player_data + PL_FLAGS
+    sta zp_player_hp_hi
+    sta zp_player_mhp_hi
+    sta player_data + PL_HP_HI
+    sta player_data + PL_MHP_HI
+    sta zp_player_mp
+    sta zp_player_mmp
+    sta zp_player_ac
+    sta zp_hunger_state
+    lda #1
+    sta zp_player_lvl
+    sta zp_player_dlvl
+    lda #21
+    sta zp_player_hp_lo
+    sta player_data + PL_HP_LO
+    lda #34
+    sta zp_player_mhp_lo
+    sta player_data + PL_MHP_LO
+    jsr status_draw
+
+    lda player_data + PL_FLAGS
+    ora #PLF_SEARCHING
+    sta player_data + PL_FLAGS
+    lda zp_ui_dirty
+    ora #$01
+    sta zp_ui_dirty
+    sei
+    jsr status_draw
+    cli
+
+    lda #<expected_status_search
+    sta zp_ptr0
+    lda #>expected_status_search
+    sta zp_ptr0_hi
+    lda #21
+    ldx #19
+    sei
+    jsr assert_screen_string
+    bcc !string_fail+
+
+    cli
+
+    lda #$01
+    bne !store+
+!string_fail:
+    cli
+    lda #$02
+!store:
+    sta tc_results + 16
+    rts
+
 test_inventory_identify_select_view_six_items:
     jsr reset_shared_state
 
@@ -1310,6 +1368,8 @@ expected_status_hp_after_clear:
     .text "HP:21/34" ; .byte 0
 expected_status_hp_after_modal_clear:
     .text "HP:21/34" ; .byte 0
+expected_status_search:
+    .text "Search*" ; .byte 0
 long_row_string:
     .text "1234567890123456789012345678901234567890" ; .byte 0
 
