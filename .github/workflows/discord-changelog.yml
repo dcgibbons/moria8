@@ -2,11 +2,12 @@ name: Discord Notifications
 
 on:
   push:
-    branches: []
+    branches:
+      - '**'
   issues:
-    types: []
+    types: [opened, edited]
   pull_request:
-    types: []
+    types: [opened, synchronize, reopened]
   release:
     types: [published]
   workflow_dispatch:
@@ -16,53 +17,76 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Send pretty notification to #changelog
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          
+          # Event payloads mapped securely to env vars to prevent shell injection
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_BODY: ${{ github.event.release.body }}
+          RELEASE_URL: ${{ github.event.release.html_url }}
+          
+          COMMIT_MSG: ${{ github.event.commits[0].message }}
+          COMPARE_URL: ${{ github.event.compare }}
+          
+          ISSUE_NUM: ${{ github.event.issue.number }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_USER: ${{ github.event.issue.user.login }}
+          ISSUE_URL: ${{ github.event.issue.html_url }}
+          
+          PR_NUM: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_USER: ${{ github.event.pull_request.user.login }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
         run: |
-          if [ "${{ github.event_name }}" = "release" ]; then
-            COLOR=0x22C55E
-            TITLE="📦 moria8 ${{ github.event.release.tag_name }} RELEASED!"
-            DESC="${{ github.event.release.body || 'No release notes provided.' }}"
-            URL="${{ github.event.release.html_url }}"
-          elif [ "${{ github.event_name }}" = "push" ]; then
-            COLOR=0x3B82F6
-            TITLE="🪓 Push to \`${{ github.ref_name }}\`"
-            DESC="${{ github.event.commits[0].message || 'Multiple commits pushed' }}"
-            URL="${{ github.event.compare }}"
-          elif [ "${{ github.event_name }}" = "issues" ]; then
-            COLOR=0xEF4444
-            TITLE="🐛 New Issue #${{ github.event.issue.number }}"
-            DESC="${{ github.event.issue.title }}\nby ${{ github.event.issue.user.login }}"
-            URL="${{ github.event.issue.html_url }}"
-          elif [ "${{ github.event_name }}" = "pull_request" ]; then
-            COLOR=0xA855F7
-            TITLE="🔀 New Pull Request #${{ github.event.pull_request.number }}"
-            DESC="${{ github.event.pull_request.title }}\nby ${{ github.event.pull_request.user.login }}"
-            URL="${{ github.event.pull_request.html_url }}"
+          if [ "$EVENT_NAME" = "release" ]; then
+            COLOR_HEX="22C55E"
+            TITLE="📦 moria8 $RELEASE_TAG RELEASED!"
+            DESC="${RELEASE_BODY:-No release notes provided.}"
+            URL="$RELEASE_URL"
+          elif [ "$EVENT_NAME" = "push" ]; then
+            COLOR_HEX="3B82F6"
+            TITLE="🪓 Push to \`$REF_NAME\`"
+            DESC="${COMMIT_MSG:-Multiple commits pushed}"
+            URL="$COMPARE_URL"
+          elif [ "$EVENT_NAME" = "issues" ]; then
+            COLOR_HEX="EF4444"
+            TITLE="🐛 New Issue #$ISSUE_NUM"
+            DESC="$ISSUE_TITLE"$'\n'"by $ISSUE_USER"
+            URL="$ISSUE_URL"
+          elif [ "$EVENT_NAME" = "pull_request" ]; then
+            COLOR_HEX="A855F7"
+            TITLE="🔀 New Pull Request #$PR_NUM"
+            DESC="$PR_TITLE"$'\n'"by $PR_USER"
+            URL="$PR_URL"
           else
-            COLOR=0x64748B
+            COLOR_HEX="64748B"
             TITLE="Test Notification"
             DESC="Manual trigger"
-            URL="https://github.com/${{ github.repository }}"
+            URL="https://github.com/$REPO"
           fi
 
-          jq -n \
-    --arg username "moria8 Bot" \
-    --arg avatar "https://raw.githubusercontent.com/dcgibbons/moria8/main/artwork/moria8_loading_art_c64.png" \
-    --arg color "$COLOR_DEC" \ # Use the calculated decimal value here!
-    --arg title "$TITLE" \
-    --arg desc "$DESC" \
-    --arg url "$URL" \
-    '{
-      username: $username,
-      avatar_url: $avatar,
-      embeds: [{
-        color: $color, # No need for | tonumber now that it is an integer string
-        title: $title,
-        description: $desc,
-        url: $url,
-        footer: { text: "moria8 • dcgibbons/moria8" },
-        timestamp: now | todate
-      }]
-    }' | curl -H "Content-Type: application/json" \
-             -d @- \
-             ${{ secrets.DISCORD_WEBHOOK_URL }}
+          # Convert Hex to Decimal for Discord API compatibility
+          COLOR_DEC=$((16#$COLOR_HEX))
 
+          jq -n \
+            --arg username "moria8 Bot" \
+            --arg avatar "https://raw.githubusercontent.com/dcgibbons/moria8/main/artwork/moria8_loading_art_c64.png" \
+            --argjson color "$COLOR_DEC" \
+            --arg title "$TITLE" \
+            --arg desc "$DESC" \
+            --arg url "$URL" \
+            '{
+              username: $username,
+              avatar_url: $avatar,
+              embeds: [{
+                color: $color,
+                title: $title,
+                description: $desc,
+                url: $url,
+                footer: { text: "moria8 • dcgibbons/moria8" },
+                timestamp: (now | todate)
+              }]
+            }' | curl -H "Content-Type: application/json" -d @- "$DISCORD_WEBHOOK_URL"
