@@ -678,29 +678,11 @@ pid_item_enchanted:
     clc
     rts
 
-// pid_print_sense_msg — Print the exact umoria auto-sense wording for slot X
+// pid_print_sense_msg — Print compact Moria8 auto-sense wording.
 // Input: X = inventory slot index
 // Preserves: nothing
 pid_print_sense_msg:
-    cpx #MAX_INV_SLOTS
-    bcc !pid_pack_msg+
-    txa
-    sec
-    sbc #EQUIP_WEAPON
-    tay
-    ldx pid_huff_msg,y
-    jmp huff_print_msg
-!pid_pack_msg:
-    ldx #HSTR_PID_PACK
+    ldx #HSTR_PID_CARRY
     jmp huff_print_msg
 
-pid_huff_msg:
-    .byte HSTR_PID_WIELDING
-    .byte HSTR_PID_BODY
-    .byte HSTR_PID_ARM
-    .byte HSTR_PID_HEAD
-    .byte HSTR_PID_HANDS
-    .byte HSTR_PID_FEET
-    .byte HSTR_PID_LIGHT
-    .byte HSTR_PID_RIGHT
 pid_slot: .byte 0

@@ -49,9 +49,10 @@ make disk
 Expected disk artifacts:
 
 - `commodore/out/moria8-c64.d64`
+- `commodore/out/moria8-c64.zip`
 - `commodore/out/moria8-c128.d71`
 - `commodore/out/moria8-plus4.d64`
-- `commodore/out/c64-dist/` for the C64 Ultimate loose-file distribution
+- `commodore/out/c64-dist/` staging directory for the C64 Ultimate loose-file distribution
 
 ## Automated Gates
 

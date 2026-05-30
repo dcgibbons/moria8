@@ -14,6 +14,7 @@ C128 port uses an 80-column VDC display and a wider memory model.
 Use the disk image for your machine:
 
 - C64: `moria8-c64.d64`
+- C64 Ultimate / SoftwareIEC: `moria8-c64.zip`
 - Plus/4: `moria8-plus4.d64`
 - C128: `moria8-c128.d71`
 
@@ -26,6 +27,12 @@ Use `D)isk Setup` on the title screen before loading or saving if your save
 disk is not already initialized. Program media and save media are deliberately
 separated; the game blocks using the program disk as the save disk. Save device
 selection supports devices 8-11 where the target platform supports them.
+
+On C64 Ultimate or other SoftwareIEC-style storage, the C64 `.zip` distribution
+contains the loose program files normally stored on `moria8-c64.d64`. Extract
+the archive to a directory and `LOAD "MORIA8"` from that directory. Disk Setup
+and the save marker still apply; Moria8 writes `MORIA8.ID` and `THE.GAME` to
+the selected save media.
 
 On first start, create a character by choosing race, class, sex, and rolled
 stats. The game then generates a background, starting gold, hit points, mana

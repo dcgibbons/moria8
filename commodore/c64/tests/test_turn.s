@@ -49,15 +49,7 @@ eff_detect_timer:    .byte 0
 .const HSTR_TTL_DIM          = 45
 .const HSTR_TTL_OUT          = 46
 .const HSTR_RECALL_ARRIVE    = 47
-.const HSTR_PID_WIELDING     = 178
-.const HSTR_PID_BODY         = 179
-.const HSTR_PID_ARM          = 180
-.const HSTR_PID_HEAD         = 181
-.const HSTR_PID_HANDS        = 182
-.const HSTR_PID_FEET         = 183
-.const HSTR_PID_LIGHT        = 184
-.const HSTR_PID_RIGHT        = 185
-.const HSTR_PID_PACK         = 186
+.const HSTR_PID_CARRY        = 178
 .const DEATH_POISON  = $FE
 .const DEATH_STARVE  = $FF
 .const SFX_HUNGER_WARN  = $08
@@ -806,7 +798,7 @@ t19_test:
     cmp #1
     bne !t19_fail+
     lda test_last_huff_id
-    cmp #HSTR_PID_WIELDING
+    cmp #HSTR_PID_CARRY
     bne !t19_fail+
     lda test_msg_calls
     bne !t19_fail+
@@ -819,7 +811,7 @@ t19_test:
     jmp t20_test
 
 t20_test:
-    // Test 20: carried positive gear uses the pack wording and sensing path.
+    // Test 20: carried positive gear uses the common carry wording and sensing path.
     jsr reset_state
     lda #1
     sta zp_player_lvl
@@ -839,7 +831,7 @@ t20_test:
     cmp #1
     bne !t20_fail+
     lda test_last_huff_id
-    cmp #HSTR_PID_PACK
+    cmp #HSTR_PID_CARRY
     bne !t20_fail+
     lda test_msg_calls
     bne !t20_fail+

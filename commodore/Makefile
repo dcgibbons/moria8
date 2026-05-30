@@ -4,6 +4,7 @@
 #   make build              Build both platform payloads into out/c64 and out/c128
 #   make disk               Build both shipping disk images
 #   make disk64             Build the C64 shipping disk at out/moria8-c64.d64
+#   make zip64              Build the C64 loose-file archive at out/moria8-c64.zip
 #   make disk128            Build the C128 shipping disk at out/moria8-c128.d71
 #   make run                Launch the C64 shipping disk in C64 VICE
 #   make run128             Launch the C128 shipping disk in C128 VICE
@@ -93,9 +94,9 @@ C64_TIER_DIR       = c64/creature_data
 PLUS4_MAIN_SRC     = plus4/main.s
 PLUS4_BOOT_SRC     = plus4/boot.s
 
-C64_SOURCES        := $(shell find c64 common -type f -name '*.s')
-C128_SOURCES       := $(shell find c128 common c64 -type f -name '*.s')
-PLUS4_SOURCES      := $(shell find plus4 common -type f -name '*.s')
+C64_SOURCES        := $(shell find c64 common -path '*/out' -prune -o -type f -name '*.s' -print)
+C128_SOURCES       := $(shell find c128 common c64 -path '*/out' -prune -o -type f -name '*.s' -print)
+PLUS4_SOURCES      := $(shell find plus4 common -path '*/out' -prune -o -type f -name '*.s' -print)
 
 # ── C64 artifacts ─────────────────────────────────────────
 C64_MAIN_PRG       = $(OUT64)/moria8.prg
@@ -165,6 +166,7 @@ C128_BOOTART_PREVIEW_PPM = $(OUT128)/bootart128_preview.ppm
 
 # ── Disk artifacts ────────────────────────────────────────
 DISK64_IMAGE       = $(OUT)/moria8-c64.d64
+C64_ZIP_IMAGE      = $(OUT)/moria8-c64.zip
 DISK128_IMAGE      = $(OUT)/moria8-c128.d71
 DISKPLUS4_IMAGE    = $(OUT)/moria8-plus4.d64
 C64_DIST_DIR       = $(OUT)/c64-dist
@@ -192,7 +194,7 @@ C128_MAIN_OUTPUTS = $(C128_MAIN_PRG) $(C128_OVL_START) $(C128_OVL_TOWN) $(C128_O
 	$(C128_RESIDENT_WORLD) $(C128_RESIDENT_ITEMS) $(C128_RESIDENT_SELECT) \
 	$(C128_RESIDENT_PERSIST) $(C128_RESIDENT_PLAY) $(C128_RUNTIME_BANKED)
 
-.PHONY: all build build64 build128 buildplus4 disk disk64 c64-dist disk128 diskplus4 run run64 run128 runplus4 \
+.PHONY: all build build64 build128 buildplus4 disk disk64 zip64 c64-dist disk128 diskplus4 run run64 run128 runplus4 \
 	bootart128-charset-demo \
 	test test64 test128 test128-fast test128-fast-smoke testplus4 testplus4-build testplus4-runtime clean \
 	check-zp check-6502-lint check-hal-boundaries ensure-kickass kickass
@@ -213,9 +215,11 @@ buildplus4: $(PLUS4_BUILD_ARTIFACTS)
 	mkdir -p plus4/out
 	cp -f $(OUTPLUS4)/* plus4/out/
 
-disk: $(DISK64_IMAGE) $(C64_DIST_STAMP) $(DISK128_IMAGE) $(DISKPLUS4_IMAGE)
+disk: $(DISK64_IMAGE) $(C64_ZIP_IMAGE) $(DISK128_IMAGE) $(DISKPLUS4_IMAGE)
 
-disk64: $(DISK64_IMAGE) $(C64_DIST_STAMP)
+disk64: $(DISK64_IMAGE) $(C64_ZIP_IMAGE)
+
+zip64: $(C64_ZIP_IMAGE)
 
 c64-dist: $(C64_DIST_STAMP)
 
@@ -481,6 +485,10 @@ $(C64_DIST_STAMP): $(C64_BUILD_ARTIFACTS) $(LICENSE_DISK_FILE) $(SOURCE_OFFER_DI
 	cp -f $(LICENSE_DISK_FILE) "$(C64_DIST_DIR)/license"
 	cp -f $(SOURCE_OFFER_DISK_FILE) "$(C64_DIST_DIR)/source-offer"
 	touch $(C64_DIST_STAMP)
+
+$(C64_ZIP_IMAGE): $(C64_DIST_STAMP)
+	rm -f $(C64_ZIP_IMAGE)
+	cd $(C64_DIST_DIR) && zip -q -r ../$(notdir $(C64_ZIP_IMAGE)) . -x .stamp
 
 $(DISK64_IMAGE): $(C64_BUILD_ARTIFACTS) $(DISKART) $(VERSION_FILE) $(LICENSE_DISK_FILE) $(SOURCE_OFFER_DISK_FILE) | $(OUT)
 	printf '\x01\x08' > $(EMPTY_PRG)

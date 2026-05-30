@@ -41,6 +41,10 @@ PASS=0
 FAIL=0
 TOTAL=0
 
+make_product_out() {
+    mktemp -d "${TMPDIR:-/tmp}/moria8-plus4-$1.XXXXXX"
+}
+
 run_test() {
     local name="$1"
     local source="$2"
@@ -117,8 +121,9 @@ PY
 run_boot_title_smoke() {
     local name="boot_title_plus4"
     local out_dir="$PLUS4_DIR/out"
-    local smoke_out_rel="plus4/out/product-boot-title-smoke"
-    local smoke_out="$PLUS4_DIR/out/product-boot-title-smoke"
+    local smoke_out
+    smoke_out="$(make_product_out "$name")"
+    local smoke_out_rel="$smoke_out"
     local smoke_plus4="$smoke_out/plus4"
     local save_d64="$out_dir/test-boot-title-save.d64"
     local main_vs="$smoke_out/plus4/main.vs"
@@ -197,8 +202,9 @@ run_boot_title_smoke() {
 run_new_game_to_town_smoke() {
     local name="new_game_to_town_plus4"
     local out_dir="$PLUS4_DIR/out"
-    local smoke_out_rel="plus4/out/product-new-game-smoke"
-    local smoke_out="$PLUS4_DIR/out/product-new-game-smoke"
+    local smoke_out
+    smoke_out="$(make_product_out "$name")"
+    local smoke_out_rel="$smoke_out"
     local smoke_plus4="$smoke_out/plus4"
     local save_d64="$out_dir/test-new-game-save.d64"
     local main_vs="$smoke_out/plus4/main.vs"
@@ -276,8 +282,9 @@ run_new_game_to_town_smoke() {
 run_dungeon_entry_smoke() {
     local name="dungeon_entry_plus4"
     local out_dir="$PLUS4_DIR/out"
-    local smoke_out_rel="plus4/out/product-dungeon-entry-smoke"
-    local smoke_out="$PLUS4_DIR/out/product-dungeon-entry-smoke"
+    local smoke_out
+    smoke_out="$(make_product_out "$name")"
+    local smoke_out_rel="$smoke_out"
     local smoke_plus4="$smoke_out/plus4"
     local save_d64="$out_dir/test-dungeon-entry-save.d64"
     local main_vs="$smoke_out/plus4/main.vs"
@@ -355,8 +362,9 @@ run_dungeon_entry_smoke() {
 run_overlay_load_smoke() {
     local name="overlay_load_plus4"
     local out_dir="$PLUS4_DIR/out"
-    local smoke_out_rel="plus4/out/product-overlay-load-smoke"
-    local smoke_out="$PLUS4_DIR/out/product-overlay-load-smoke"
+    local smoke_out
+    smoke_out="$(make_product_out "$name")"
+    local smoke_out_rel="$smoke_out"
     local smoke_plus4="$smoke_out/plus4"
     local save_d64="$out_dir/test-overlay-load-save.d64"
     local main_vs="$smoke_out/plus4/main.vs"
@@ -487,8 +495,9 @@ run_marker_init_smoke() {
 run_disk_setup_product_smoke() {
     local name="disk_setup_product_plus4"
     local out_dir="$PLUS4_DIR/out"
-    local smoke_out_rel="plus4/out/product-smoke"
-    local smoke_out="$PLUS4_DIR/out/product-smoke"
+    local smoke_out
+    smoke_out="$(make_product_out "$name")"
+    local smoke_out_rel="$smoke_out"
     local smoke_plus4="$smoke_out/plus4"
     local save_d64="$out_dir/test-disk-setup-product-save.d64"
     local main_vs="$smoke_out/plus4/main.vs"
@@ -575,8 +584,9 @@ run_disk_setup_product_smoke() {
 run_disk_setup_missing_save_smoke() {
     local name="disk_setup_missing_save_plus4"
     local out_dir="$PLUS4_DIR/out"
-    local smoke_out_rel="plus4/out/product-missing-save-smoke"
-    local smoke_out="$PLUS4_DIR/out/product-missing-save-smoke"
+    local smoke_out
+    smoke_out="$(make_product_out "$name")"
+    local smoke_out_rel="$smoke_out"
     local smoke_plus4="$smoke_out/plus4"
     local main_vs="$smoke_out/plus4/main.vs"
     local boot_d64="$smoke_out/moria8-plus4.d64"
@@ -643,8 +653,9 @@ run_disk_setup_missing_save_smoke() {
 run_save_write_product_smoke() {
     local name="save_write_product_plus4"
     local out_dir="$PLUS4_DIR/out"
-    local smoke_out_rel="plus4/out/product-save-write-smoke"
-    local smoke_out="$PLUS4_DIR/out/product-save-write-smoke"
+    local smoke_out
+    smoke_out="$(make_product_out "$name")"
+    local smoke_out_rel="$smoke_out"
     local smoke_plus4="$smoke_out/plus4"
     local save_d64="$out_dir/test-save-write-product-save.d64"
     local save_blob="$out_dir/P4.THE.GAME"
@@ -741,8 +752,9 @@ run_save_write_product_smoke() {
 run_load_wrong_media_product_smoke() {
     local name="load_wrong_media_product_plus4"
     local out_dir="$PLUS4_DIR/out"
-    local smoke_out_rel="plus4/out/product-load-wrong-media-smoke"
-    local smoke_out="$PLUS4_DIR/out/product-load-wrong-media-smoke"
+    local smoke_out
+    smoke_out="$(make_product_out "$name")"
+    local smoke_out_rel="$smoke_out"
     local smoke_plus4="$smoke_out/plus4"
     local save_d64="$out_dir/test-load-wrong-media-product-save.d64"
     local marker_blob="$out_dir/WRONG.MORIA4.ID"
@@ -831,8 +843,9 @@ run_load_wrong_media_product_smoke() {
 run_load_resume_product_smoke() {
     local name="load_resume_product_plus4"
     local out_dir="$PLUS4_DIR/out"
-    local smoke_out_rel="plus4/out/product-load-resume-smoke"
-    local smoke_out="$PLUS4_DIR/out/product-load-resume-smoke"
+    local smoke_out
+    smoke_out="$(make_product_out "$name")"
+    local smoke_out_rel="$smoke_out"
     local smoke_plus4="$smoke_out/plus4"
     local save_d64="$out_dir/test-load-resume-product-save.d64"
     local save_blob="$out_dir/P4.THE.GAME"
