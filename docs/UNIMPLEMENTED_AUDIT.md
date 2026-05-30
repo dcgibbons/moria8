@@ -26,7 +26,7 @@ Verdicts:
 | Plus/4 TED sound | Sound backend is still silent despite TED hardware. | Missing | `commodore/plus4/sound.s`; `docs/BACKLOG.md` | Backlog item already exists. |
 | Version/System Info command | `CMD_VERSION` exists as a hidden/probe-oriented path, not a polished cross-platform view. | Partial | `docs/BACKLOG.md`; input/command dispatch | Backlog item already exists. |
 | Friendlier storage errors | Raw storage diagnostics exist; some player-facing messages remain terse or device-specific. | Partial | `docs/BACKLOG.md`; storage HAL/save/disk setup sources | Backlog item already exists. |
-| Home/store ownership split | Immediate stale-footer fixes exist, but Home still shares too much store rendering ownership. | Partial | `docs/BACKLOG.md`; store/Home UI code | Backlog item already exists. |
+| Home/store ownership split | The visible stale-footer bug is fixed, but Home still shares too much store rendering ownership. | Partial | `docs/BACKLOG.md`; store/Home UI code | Backlog item already exists. |
 
 ## Follow-Up Rules
 
