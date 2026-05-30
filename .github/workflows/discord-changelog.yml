@@ -1,4 +1,4 @@
-name: Post Release to Discord
+name: Discord Notifications
 
 on:
   push:
@@ -9,19 +9,30 @@ on:
     types: []
   release:
     types: [published]
-  workflow_dispatch:
+  workflow_dispatch:            # allows manual testing
 
 jobs:
   notify-discord:
     runs-on: ubuntu-latest
     steps:
-      - name: Send release to #changelog
+      - name: Send notification to #changelog
         run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            CONTENT="**🪓 Push to \`${{ github.ref_name }}\`** by ${{ github.actor }}\n${{ github.event.commits[0].message || 'Multiple commits pushed' }}\n\n${{ github.event.compare }}"
+          elif [ "${{ github.event_name }}" = "issues" ]; then
+            CONTENT="**🐛 New Issue** #${{ github.event.issue.number }}: ${{ github.event.issue.title }}\nby ${{ github.event.issue.user.login }}\n\n${{ github.event.issue.html_url }}"
+          elif [ "${{ github.event_name }}" = "pull_request" ]; then
+            CONTENT="**🔀 New Pull Request** #${{ github.event.pull_request.number }}: ${{ github.event.pull_request.title }}\nby ${{ github.event.pull_request.user.login }}\n\n${{ github.event.pull_request.html_url }}"
+          elif [ "${{ github.event_name }}" = "release" ]; then
+            CONTENT="**📦 moria8 ${{ github.event.release.tag_name }}** released!\n\n${{ github.event.release.body }}\n\n[Download & verify](${{ github.event.release.html_url }})"
+          else
+            CONTENT="**Test notification** from manual trigger"
+          fi
+
           curl -H "Content-Type: application/json" \
             -d '{
-              "content": "**🪓 moria8 ${{ github.event.release.tag_name }}** released!\n\n${{ github.event.release.body }}\n\nDownload: ${{ github.event.release.html_url }}",
-              "username": "moria8 Releases",
+              "content": "'"${CONTENT}"'",
+              "username": "moria8 Bot",
               "avatar_url": "https://github.com/${{ github.repository_owner }}.png"
             }' \
             ${{ secrets.DISCORD_WEBHOOK_URL }}
-
