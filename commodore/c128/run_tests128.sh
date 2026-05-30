@@ -1596,6 +1596,29 @@ if not has_ordered_chain(items, [
     print("C128 item overlay key reads must restore overlay banking after input_get_key")
     raise SystemExit(1)
 
+if not has_ordered_chain(items, [
+    "item_action_select_filtered_inv:",
+    "jsr item_action_get_key",
+    "cmp #$3f",
+    "lda #OVL_ITEMS",
+    "sta piw_return_overlay",
+    "jmp piw_select_filtered_inv_key",
+]):
+    print("C128 item overlay must mark ?-opened inventory selectors as returning to OVL_ITEMS")
+    raise SystemExit(1)
+
+magic_execute = (root / "common" / "player_magic_execute_overlay.s").read_text().splitlines()
+if not has_ordered_chain(magic_execute, [
+    "pmx_pick_recharge_item:",
+    "jsr hal_input_get_key",
+    "cmp #$3f",
+    "lda #OVL_SPELL",
+    "sta piw_return_overlay",
+    "jmp piw_select_filtered_inv_key",
+]):
+    print("C128 spell overlay must mark ?-opened recharge selectors as returning to OVL_SPELL")
+    raise SystemExit(1)
+
 for name in ("item_read_scroll:", "item_aim_wand:", "item_use_staff:"):
     body = section_after(name, items)
     if any("jsr hal_input_get_key" in line for line in body):

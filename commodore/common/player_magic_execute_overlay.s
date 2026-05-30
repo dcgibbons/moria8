@@ -43,6 +43,15 @@ pmx_pick_recharge_item:
     jsr msg_print
     jsr input_prepare_followup_key
     jsr hal_input_get_key
+#if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME
+    cmp #$3f
+    bne !pmx_no_selector_overlay_hint+
+    pha
+    lda #OVL_SPELL
+    sta piw_return_overlay
+    pla
+!pmx_no_selector_overlay_hint:
+#endif
     jmp piw_select_filtered_inv_key
 
 pmx_print_recharged_item:

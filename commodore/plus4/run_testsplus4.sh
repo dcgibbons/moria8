@@ -82,6 +82,7 @@ from pathlib import Path
 
 root = Path("..").resolve()
 player_items = (root / "common" / "player_items.s").read_text().splitlines()
+item_actions_overlay = (root / "common" / "item_actions_overlay.s").read_text().splitlines()
 
 def has_ordered_chain(lines: list[str], tokens: list[str], window: int = 40) -> bool:
     for i, line in enumerate(lines):
@@ -101,13 +102,27 @@ def has_ordered_chain(lines: list[str], tokens: list[str], window: int = 40) -> 
 
 if not has_ordered_chain(player_items, [
     "show_inv_and_select:",
-    "lda #OVL_ITEMS",
+    "$0102,x",
+    "$0104,x",
+    "cmp #OVL_NONE",
     "jsr overlay_load",
+    "brk",
     "#if PLUS4_PRODUCT_OVERLAY_RUNTIME",
     "jsr plus4_install_ram_irq_vectors",
     "jsr plus4_bank_ram",
 ]):
-    print("Plus/4 inventory selector must restore RAM-visible overlay execution after reloading OVL_ITEMS")
+    print("Plus/4 inventory selector must detect outer overlay continuations and restore RAM-visible overlay execution after reloading the caller overlay")
+    raise SystemExit(1)
+
+if not has_ordered_chain(item_actions_overlay, [
+    "item_action_select_filtered_inv:",
+    "jsr item_action_get_key",
+    "cmp #$3f",
+    "lda #OVL_ITEMS",
+    "sta piw_return_overlay",
+    "jmp piw_select_filtered_inv_key",
+]):
+    print("Plus/4 item overlay must mark ?-opened inventory selectors as returning to OVL_ITEMS")
     raise SystemExit(1)
 PY
     then
@@ -431,6 +446,79 @@ run_overlay_load_smoke() {
         --name "$name" \
         --pass-symbol ".plus4_test_overlay_load_pass_sym" \
         --fail-symbol ".plus4_test_overlay_load_fail_sym" \
+        --main-vs "$main_vs" \
+        --boot-d64 "$boot_d64" \
+        --vice "$VICE"; then
+        PASS=$((PASS + 1))
+    else
+        FAIL=$((FAIL + 1))
+    fi
+}
+
+run_wand_selector_product_smoke() {
+    local name="wand_selector_product_plus4"
+    local out_dir="$PLUS4_DIR/out"
+    local smoke_out
+    smoke_out="$(make_product_out "$name")"
+    local smoke_out_rel="$smoke_out"
+    local smoke_plus4="$smoke_out/plus4"
+    local main_vs="$smoke_out/plus4/main.vs"
+    local boot_d64="$smoke_out/moria8-plus4.d64"
+    local build_log="$out_dir/$name.build.log"
+
+    if [ -n "$TEST_FILTER" ] && [[ ! "$name" =~ $TEST_FILTER ]]; then
+        return
+    fi
+
+    TOTAL=$((TOTAL + 1))
+    mkdir -p "$out_dir"
+
+    if ! make -s -B -C "$REPO_ROOT/commodore" \
+        KICKASS="$KICKASS" \
+        OUT="$smoke_out_rel" \
+        KA_FLAGSPLUS4="-showmem -vicesymbols -libdir c64 -define PLUS4 -define PLUS4_TEST_SCRIPTED_WAND_SELECTOR_PRODUCT" \
+        "$smoke_out_rel/plus4/boot4.prg" \
+        "$smoke_out_rel/plus4/moria4.prg" \
+        "$smoke_out_rel/plus4/title" \
+        "$smoke_out_rel/plus4/monster.db.1" \
+        "$smoke_out_rel/plus4/monster.db.2" \
+        "$smoke_out_rel/plus4/monster.db.3" \
+        "$smoke_out_rel/plus4/monster.db.4" >"$build_log" 2>&1; then
+        echo "FAIL: $name (product disk build)"
+        tail -80 "$build_log"
+        FAIL=$((FAIL + 1))
+        return
+    fi
+
+    rm -f "$boot_d64"
+    if ! "$C1541" -format "moria8 plus4,m8" d64 "$boot_d64" \
+        -attach "$boot_d64" \
+        -write "$smoke_plus4/boot4.prg" "moria8" \
+        -write "$smoke_plus4/boot4.prg" "boot4" \
+        -write "$smoke_plus4/moria4.prg" "moria4" \
+        -write "$smoke_plus4/title" "t64" \
+        -write "$smoke_plus4/monster.db.1" "monster.db.1" \
+        -write "$smoke_plus4/monster.db.2" "monster.db.2" \
+        -write "$smoke_plus4/monster.db.3" "monster.db.3" \
+        -write "$smoke_plus4/monster.db.4" "monster.db.4" \
+        -write "$smoke_plus4/ovl.start" "4.start" \
+        -write "$smoke_plus4/ovl.town" "4.town" \
+        -write "$smoke_plus4/ovl.death" "4.death" \
+        -write "$smoke_plus4/ovl.gen" "4.gen" \
+        -write "$smoke_plus4/ovl.help" "4.help" \
+        -write "$smoke_plus4/ovl.ui" "4.ui" \
+        -write "$smoke_plus4/ovl.items" "4.items" \
+        -write "$smoke_plus4/ovl.spell" "4.spell" \
+        -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
+        echo "FAIL: $name (product disk image)"
+        FAIL=$((FAIL + 1))
+        return
+    fi
+
+    if python3 -u tests/product_scripted_smoke.py \
+        --name "$name" \
+        --pass-symbol ".plus4_test_wand_selector_pass_sym" \
+        --fail-symbol ".plus4_test_wand_selector_fail_sym" \
         --main-vs "$main_vs" \
         --boot-d64 "$boot_d64" \
         --vice "$VICE"; then
@@ -939,6 +1027,7 @@ run_boot_title_smoke
 run_new_game_to_town_smoke
 run_dungeon_entry_smoke
 run_overlay_load_smoke
+run_wand_selector_product_smoke
 run_disk_setup_product_smoke
 run_disk_setup_missing_save_smoke
 run_load_wrong_media_product_smoke
