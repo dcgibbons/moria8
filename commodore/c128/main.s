@@ -1714,12 +1714,15 @@ tramp_ui_char_display:
 
 tramp_ui_inv_display:
     lda #<ui_inv_display
+    ldx #>ui_inv_display
     jmp tramp_ui_inv_common
 
 tramp_ui_inv_select_display:
     lda #<ui_inv_select_display
+    ldx #>ui_inv_select_display
 tramp_ui_inv_common:
     sta !inv_target+ + 1
+    stx !inv_target+ + 2
     jsr tramp_ui_enter
     lda #C128_HELP_OVERLAY_ID
     jsr overlay_load
@@ -1731,12 +1734,15 @@ tramp_ui_inv_common:
 
 tramp_ui_equip_display:
     lda #<ui_equip_display
+    ldx #>ui_equip_display
     jmp tramp_ui_equip_common
 
 tramp_ui_equip_select_display:
     lda #<ui_equip_select_display
+    ldx #>ui_equip_select_display
 tramp_ui_equip_common:
     sta !equip_target+ + 1
+    stx !equip_target+ + 2
     jsr tramp_ui_enter
     lda #C128_HELP_OVERLAY_ID
     jsr overlay_load
