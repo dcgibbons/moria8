@@ -178,6 +178,7 @@ player_attack_monster:
     ldx cmb_slot
     jsr monster_remove
     inc zp_dirty_count          // Force redraw of the killed monster tile
+    jsr combat_note_kill
 
 !pam_next_blow:
     dec zp_combat_blows
@@ -199,6 +200,7 @@ player_attack_monster:
 
     lda #SFX_HIT
     jsr hal_sound_play
+    jsr combat_print_winner_message
     jmp !pam_done+
 
 !pam_not_dead:
@@ -1297,8 +1299,48 @@ combat_kill_message:
     ldy #>cmb_kill_str
     jsr msg_build_action
     jsr cmb_print_buf
+    jsr combat_print_winner_message
     lda #SFX_HIT
     jmp hal_sound_play
+
+// combat_note_kill — Set winner state when the killed creature is Balrog.
+// Input: cmb_type = killed creature type.
+// Clobbers: A
+combat_note_kill:
+    lda zp_game_flags
+    and #GAME_FLAG_WINNER
+    bne !no_win+
+    lda cmb_type
+    cmp #CREATURE_BALROG
+    bne !no_win+
+    lda cr_level + CREATURE_BALROG
+    cmp #100
+    bne !no_win+
+    lda zp_game_flags
+    ora #GAME_FLAG_WINNER
+    sta zp_game_flags
+    lda #1
+    sta cmb_winner_pending
+    sec
+    rts
+!no_win:
+    clc
+    rts
+
+// combat_print_winner_message — Print the retirement notice once winner is set.
+// Clobbers: A, X, Y, zp_ptr0/hi
+combat_print_winner_message:
+    lda cmb_winner_pending
+    beq !done+
+    lda #0
+    sta cmb_winner_pending
+    lda #<cmb_winner_str
+    sta zp_ptr0
+    lda #>cmb_winner_str
+    sta zp_ptr0_hi
+    jsr msg_print
+!done:
+    rts
 
 // cmb_term_and_print — Null-terminate combat_msg_buf and print it
 // Clobbers: A, X
@@ -1315,6 +1357,11 @@ cmb_print_buf:
     lda #>combat_msg_buf
     sta zp_ptr0_hi
     jmp msg_print
+
+cmb_winner_str:
+    .text "You have won! Shift+Q to claim victory." ; .byte 0
+cmb_winner_pending:
+    .byte 0
 
 // projectile_msg_suffix — Append " VERB THE <name>." and print
 // Input: X = HSTR ID for verb string (e.g., HSTR_RF_HITS, HSTR_RF_MISSES)

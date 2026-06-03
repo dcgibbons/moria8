@@ -17,6 +17,9 @@
 .const TIER4_COUNT = 57
 .const TIER4_MIN_DLVL = 20
 .const TIER4_MAX_DLVL = 100
+.const CREATURE_BALROG = 56
+.const CREATE_BALROG = 56
+.const CREATURE_BALROG_TIER = 4
 
 // Tier file sizes (approximate, for REU allocation)
 .const TIER0_SIZE = 342

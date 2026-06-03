@@ -139,6 +139,33 @@ Acceptance target:
 - Numeric prefixes work for supported repeatable commands without changing
   single-key command behavior or prompt input semantics.
 
+### Fix equipment screen item wrapping
+
+Long equipped item names can still overrun the 40-column equipment layout
+instead of wrapping or clipping cleanly. A reproduced example is a weapon line
+for `Mace (Holy Avenger) (+13,+25)` extending past the visible row, while the
+next equipment slot begins normally underneath it. This is a display/layout
+bug, not an item naming problem.
+
+Required work:
+
+- Audit the equipment renderer's item-description path and compare it with the
+  inventory/list paths that already handle constrained-width descriptions.
+- Define a per-platform equipment description width for C64, C128, and Plus/4
+  instead of relying on the full message/string output path.
+- Wrap, elide, or split long equipment descriptions consistently without
+  corrupting the next slot, prompt row, or color state.
+- Preserve full item identity where possible; do not shorten player-facing item
+  names as a byte-saving workaround.
+- Add focused coverage for long ego/artifact names with combat bonuses, armor
+  bonuses, lights with turn counts, and rings/amulets.
+
+Acceptance target:
+
+- Every equipped-item line remains legible and bounded on 40-column and
+  80-column equipment screens, with no text spilling into adjacent rows or off
+  the visible display.
+
 ### Expand unsupported monster special attacks
 
 Moria8 maps several Umoria monster attack effects into compact substitutes.
@@ -160,6 +187,41 @@ Acceptance target:
 
 - Shipped monsters no longer silently collapse high-impact upstream attacks
   into misleading normal attacks.
+
+### Add monster door opening and bashing
+
+Moria8 monsters currently use the shared walkability table in
+`monster_try_step`: open doors are walkable, but closed doors and secret doors
+are simply blocked. Classic VMS Moria and Umoria have a distinct monster
+movement bit for door-capable creatures (`CMOVE`/`CM_OPEN_DOOR = $00020000`).
+Door-capable monsters can open ordinary closed doors, work through locked or
+stuck doors, and use secret doors; monsters without that bit can still try to
+bash ordinary closed doors based on their strength/HP.
+
+Required work:
+
+- Add a compact door-capability bit to Moria8 creature flags or another
+  generated sidecar without breaking the current one-byte `cr_mflags` budget.
+- Update `tools/parse_creatures.py` to preserve Umoria `CM_OPEN_DOOR` data for
+  generated creature tiers.
+- Extend `monster_try_step` so a blocked closed-door target can become an open
+  door when the monster can open doors, and can sometimes be bashed open by
+  non-door-capable monsters.
+- Decide how much of classic locked/stuck-door state can be represented with
+  Moria8's current tile-only door model, and document any approximation.
+- Keep secret-door behavior faithful enough that door-capable monsters can use
+  them without making every monster reveal or pass through them.
+- Mark changed door tiles dirty so C64, C128, and Plus/4 redraw consistently
+  when a visible or detected monster opens/bashes a door.
+- Add focused C64/C128 coverage for: open-door-capable monster opens closed
+  door, non-capable monster remains blocked or bashes by chance, secret door
+  handling, occupied target protection, and redraw/turn-consumption behavior.
+
+Acceptance target:
+
+- Monster door behavior matches VMS Moria/Umoria closely enough that closing or
+  spiking doors is tactically useful but not an absolute wall against
+  humanoid/intelligent or large monsters, within Moria8 memory limits.
 
 ### Add classic Moria chests
 
@@ -198,11 +260,11 @@ Acceptance target:
 
 ### Add Balrog victory and retirement flow
 
-Moria8 ships the Balrog as the level-100 endgame monster, but killing it
-currently follows the ordinary monster-death path: the player sees the normal
-slain message, receives XP, and the game continues. There is no winner flag,
-victory message, save prohibition, retirement path, royal ending, or winner
-score treatment.
+Status: implemented in product code. Remaining work is focused coverage.
+
+Moria8 ships the Balrog as the level-100 endgame monster. Killing it now sets a
+winner flag, prints a victory notice, blocks ordinary save-and-quit, and routes
+Shift+Q through retirement, royal art, and winner score treatment.
 
 Upstream behavior:
 
@@ -215,20 +277,18 @@ Upstream behavior:
 - Final exit uses the royal/winner death-screen path and enters the score table
   as a winner.
 
-Required work:
+Implemented behavior:
 
-- Add a compact winner flag to Moria8 state and save handling, or define an
-  intentional non-persistent retirement-only state if save format pressure makes
-  persistence unacceptable.
-- Mark the Balrog as the unique win creature in shipped monster data without
-  depending on active tier-local index accidents.
-- On Balrog death, set the winner state, print a victory message, and prevent
-  ordinary save-and-quit from treating the character as alive and resumable.
-- Add a retirement/quit path that shows a winner-specific ending instead of the
-  normal `* You have died *` death screen.
-- Decide whether Moria8 keeps the upstream "cannot save after winning" rule
-  despite its non-permadeath save policy, and document the chosen behavior in
-  the manual/release notes.
+- `CREATURE_BALROG` and `CREATURE_BALROG_TIER` are generated from creature data,
+  with assembly asserts guarding the win-creature invariant.
+- Balrog death through melee, spell/effect kill helpers, earthquake/dispel paths,
+  and bash sets `GAME_FLAG_WINNER`.
+- Save-and-exit is blocked for total winners; the character must retire.
+- Retirement applies the compact winner bonus, shows the royal overlay, and
+  records the score with a winner marker.
+
+Remaining work:
+
 - Add C64/C128/Plus/4 coverage for Balrog kill detection, winner-state display,
   save blocking or chosen save behavior, retirement, score insertion, and
   wizard/no-rank interaction.

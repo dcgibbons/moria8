@@ -196,17 +196,23 @@ score_death_screen:
     sta zp_text_color
     jsr ui_clear_full_screen_safe
 
-    // Row 1: "* YOU HAVE DIED *"
+    // Row 1: death or winner heading
     lda #1
     sta zp_cursor_row
     lda #SDS_DIED_COL
     sta zp_cursor_col
     lda #COL_RED
     sta zp_text_color
-    lda #<sds_died_str
-    sta zp_ptr0
-    lda #>sds_died_str
-    sta zp_ptr0_hi
+    ldx #<sds_winner_title_str
+    ldy #>sds_winner_title_str
+    lda zp_game_flags
+    and #GAME_FLAG_WINNER
+    bne !sds_title_selected+
+    ldx #<sds_died_str
+    ldy #>sds_died_str
+!sds_title_selected:
+    stx zp_ptr0
+    sty zp_ptr0_hi
     jsr hal_screen_put_string
 
     // Row 3: Player name
@@ -267,19 +273,29 @@ score_death_screen:
     lda player_data + PL_MAX_DLVL
     jsr screen_put_decimal
 
-    // Row 7: "KILLED BY <source>"
+    // Row 7: death source or winner retirement cause
     lda #7
     sta zp_cursor_row
     lda #SDS_INFO_COL
     sta zp_cursor_col
     lda #COL_ORANGE
     sta zp_text_color
-    lda #<sds_killed_by_str
-    sta zp_ptr0
-    lda #>sds_killed_by_str
-    sta zp_ptr0_hi
+    ldx #<sds_retired_by_str
+    ldy #>sds_retired_by_str
+    lda zp_game_flags
+    and #GAME_FLAG_WINNER
+    bne !sds_cause_print+
+    ldx #<sds_killed_by_str
+    ldy #>sds_killed_by_str
+!sds_cause_print:
+    stx zp_ptr0
+    sty zp_ptr0_hi
     jsr hal_screen_put_string
+    lda zp_game_flags
+    and #GAME_FLAG_WINNER
+    bne !sds_cause_done+
     jsr sds_print_death_source
+!sds_cause_done:
 
     // Row 9: "EXPERIENCE:" + value
     lda #9
@@ -640,7 +656,16 @@ hiscore_insert:
     sta hiscore_table + 21,x
 
     // Class
-    lda player_data + PL_CLASS
+    ldy player_data + PL_CLASS
+    lda zp_game_flags
+    and #GAME_FLAG_WINNER
+    beq !hi_not_winner+
+    tya
+    ora #$80
+    jmp !hi_store_class+
+!hi_not_winner:
+    tya
+!hi_store_class:
     sta hiscore_table + 22,x
 
     lda hi_insert_idx
@@ -757,6 +782,17 @@ hiscore_display:
     ldx hd_offset
     lda hiscore_table + 19,x
     jsr screen_put_decimal_rj2
+    ldx hd_offset
+    lda hiscore_table + 22,x
+    bpl !hd_no_winner+
+    lda #$20
+    jsr hal_screen_put_char
+    lda #<sds_win_str
+    sta zp_ptr0
+    lda #>sds_win_str
+    sta zp_ptr0_hi
+    jsr hal_screen_put_string
+!hd_no_winner:
 
     inc hd_row
     inc hd_idx
@@ -769,9 +805,11 @@ hiscore_display:
 // Screen-code strings for death screen
 // ============================================================
 sds_died_str:      .text "* You have died *" ; .byte 0
+sds_winner_title_str: .text "* Total Winner *" ; .byte 0
 sds_level_str:     .text "  Level " ; .byte 0
 sds_dungeon_str:   .text "Killed on dungeon level " ; .byte 0
 sds_killed_by_str: .text "Killed by " ; .byte 0
+sds_retired_by_str: .text "Ripe Old Age" ; .byte 0
 sds_a_str:         .text "a " ; .byte 0
 sds_src_poison:    .text "Poison" ; .byte 0
 sds_src_starve:    .text "Starvation" ; .byte 0
@@ -784,4 +822,5 @@ sds_total_str:     .text "Total Score:" ; .byte 0
 sds_wizard_str:    .text "WIZARD RUN - NO RANK" ; .byte 0
 sds_hiscore_hdr:   .text "-------- High Scores --------" ; .byte 0
 sds_lv_str:        .text "LV" ; .byte 0
+sds_win_str:       .text "WIN" ; .byte 0
 sds_anykey_str:    .text "Press any key" ; .byte 0

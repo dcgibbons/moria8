@@ -215,6 +215,7 @@ eq_hit_monster:
     jsr combat_apply_damage_16
     bcc !eq_mon_alive+
     jsr eff_kill_monster
+    jsr combat_print_winner_message
     lda #1
     sta eq_changed
     clc

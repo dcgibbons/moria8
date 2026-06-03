@@ -107,6 +107,7 @@ C64_TIER_PRGS      = $(OUT64)/monster.db.1 $(OUT64)/monster.db.2 $(OUT64)/monste
 C64_OVL_START      = $(OUT64)/ovl.start
 C64_OVL_TOWN       = $(OUT64)/ovl.town
 C64_OVL_DEATH      = $(OUT64)/ovl.death
+C64_OVL_ROYAL      = $(OUT64)/ovl.royal
 C64_OVL_GEN        = $(OUT64)/ovl.gen
 C64_OVL_HELP       = $(OUT64)/ovl.help
 C64_OVL_UI         = $(OUT64)/ovl.ui
@@ -122,6 +123,7 @@ PLUS4_TIER_PRGS      = $(OUTPLUS4)/monster.db.1 $(OUTPLUS4)/monster.db.2 $(OUTPL
 PLUS4_OVL_START      = $(OUTPLUS4)/ovl.start
 PLUS4_OVL_TOWN       = $(OUTPLUS4)/ovl.town
 PLUS4_OVL_DEATH      = $(OUTPLUS4)/ovl.death
+PLUS4_OVL_ROYAL      = $(OUTPLUS4)/ovl.royal
 PLUS4_OVL_GEN        = $(OUTPLUS4)/ovl.gen
 PLUS4_OVL_HELP       = $(OUTPLUS4)/ovl.help
 PLUS4_OVL_UI         = $(OUTPLUS4)/ovl.ui
@@ -138,6 +140,7 @@ C128_TIER_PRGS     = $(OUT128)/monster.db.1 $(OUT128)/monster.db.2 $(OUT128)/mon
 C128_OVL_START     = $(OUT128)/ovl.start
 C128_OVL_TOWN      = $(OUT128)/ovl.town
 C128_OVL_DEATH     = $(OUT128)/ovl.death
+C128_OVL_ROYAL     = $(OUT128)/ovl.royal
 C128_OVL_GEN       = $(OUT128)/ovl.gen
 C128_OVL_HELP      = $(OUT128)/ovl.help
 C128_OVL_UI        = $(OUT128)/ovl.ui
@@ -178,17 +181,17 @@ DISKPLUS4_LABEL    = "moria8 plus4,m8"
 
 # ── Aggregate groups ──────────────────────────────────────
 C64_BUILD_ARTIFACTS  = $(C64_MAIN_PRG) $(C64_BOOT_PRG) $(C64_BOOTART_PRG) $(C64_TITLE_PRG) $(C64_TIER_PRGS) \
-	$(C64_OVL_START) $(C64_OVL_TOWN) $(C64_OVL_DEATH) $(C64_OVL_GEN) $(C64_OVL_HELP) $(C64_OVL_UI) $(C64_OVL_ITEMS) $(C64_OVL_SPELL) \
+	$(C64_OVL_START) $(C64_OVL_TOWN) $(C64_OVL_DEATH) $(C64_OVL_ROYAL) $(C64_OVL_GEN) $(C64_OVL_HELP) $(C64_OVL_UI) $(C64_OVL_ITEMS) $(C64_OVL_SPELL) \
 	$(C64_RUNTIME_BANKED)
 PLUS4_BUILD_ARTIFACTS  = $(PLUS4_MAIN_PRG) $(PLUS4_BOOT_PRG) $(PLUS4_TITLE_PRG) $(PLUS4_TIER_PRGS) \
-	$(PLUS4_OVL_START) $(PLUS4_OVL_TOWN) $(PLUS4_OVL_DEATH) $(PLUS4_OVL_GEN) $(PLUS4_OVL_HELP) $(PLUS4_OVL_UI) $(PLUS4_OVL_ITEMS) $(PLUS4_OVL_SPELL) \
+	$(PLUS4_OVL_START) $(PLUS4_OVL_TOWN) $(PLUS4_OVL_DEATH) $(PLUS4_OVL_ROYAL) $(PLUS4_OVL_GEN) $(PLUS4_OVL_HELP) $(PLUS4_OVL_UI) $(PLUS4_OVL_ITEMS) $(PLUS4_OVL_SPELL) \
 	$(PLUS4_RUNTIME_BANKED)
 C128_BUILD_ARTIFACTS = $(C128_MAIN_PRG) $(C128_BOOT_PRG) $(C128_BOOT_CHAIN_PRG) $(C128_BOOTSECT_PRG) \
 	$(C128_BOOTART_DIAG_PRG) \
-	$(C128_TITLE_PRG) $(C128_TIER_PRGS) $(C128_OVL_START) $(C128_OVL_TOWN) $(C128_OVL_DEATH) \
+	$(C128_TITLE_PRG) $(C128_TIER_PRGS) $(C128_OVL_START) $(C128_OVL_TOWN) $(C128_OVL_DEATH) $(C128_OVL_ROYAL) \
 		$(C128_OVL_GEN) $(C128_OVL_HELP) $(C128_OVL_UI) $(C128_OVL_ITEMS) $(C128_OVL_DISARM) $(C128_RUNTIME_INPUT) $(C128_RUNTIME_PROJECTILE) $(C128_RUNTIME_LOW) $(C128_RUNTIME_COMMON) $(C128_RUNTIME_DISKIO) \
 	$(C128_RESIDENT_WORLD) $(C128_RESIDENT_ITEMS) $(C128_RESIDENT_SELECT) $(C128_RESIDENT_PERSIST) $(C128_RESIDENT_PLAY) $(C128_RUNTIME_BANKED)
-C128_MAIN_OUTPUTS = $(C128_MAIN_PRG) $(C128_OVL_START) $(C128_OVL_TOWN) $(C128_OVL_DEATH) \
+C128_MAIN_OUTPUTS = $(C128_MAIN_PRG) $(C128_OVL_START) $(C128_OVL_TOWN) $(C128_OVL_DEATH) $(C128_OVL_ROYAL) \
 	$(C128_OVL_GEN) $(C128_OVL_HELP) $(C128_OVL_UI) $(C128_OVL_ITEMS) $(C128_OVL_DISARM) \
 		$(C128_RUNTIME_INPUT) $(C128_RUNTIME_PROJECTILE) $(C128_RUNTIME_LOW) $(C128_RUNTIME_COMMON) $(C128_RUNTIME_DISKIO) \
 	$(C128_RESIDENT_WORLD) $(C128_RESIDENT_ITEMS) $(C128_RESIDENT_SELECT) \
@@ -298,6 +301,7 @@ $(C64_MAIN_PRG): $(C64_SOURCES) $(VERSION_INC) | ensure-kickass $(OUT64)
 	mv -f c64/out/ovl.start $(C64_OVL_START)
 	mv -f c64/out/ovl.town $(C64_OVL_TOWN)
 	mv -f c64/out/ovl.death $(C64_OVL_DEATH)
+	mv -f c64/out/ovl.royal $(C64_OVL_ROYAL)
 	mv -f c64/out/ovl.gen $(C64_OVL_GEN)
 	mv -f c64/out/ovl.help $(C64_OVL_HELP)
 	mv -f c64/out/ovl.ui $(C64_OVL_UI)
@@ -308,6 +312,7 @@ $(C64_MAIN_PRG): $(C64_SOURCES) $(VERSION_INC) | ensure-kickass $(OUT64)
 $(C64_OVL_START): $(C64_MAIN_PRG)
 $(C64_OVL_TOWN): $(C64_MAIN_PRG)
 $(C64_OVL_DEATH): $(C64_MAIN_PRG)
+$(C64_OVL_ROYAL): $(C64_MAIN_PRG)
 $(C64_OVL_GEN): $(C64_MAIN_PRG)
 $(C64_OVL_HELP): $(C64_MAIN_PRG)
 $(C64_OVL_UI): $(C64_MAIN_PRG)
@@ -346,6 +351,7 @@ $(PLUS4_MAIN_PRG): $(PLUS4_SOURCES) $(VERSION_INC) | ensure-kickass $(OUTPLUS4)
 	mv -f plus4/out/ovl.start $(PLUS4_OVL_START)
 	mv -f plus4/out/ovl.town $(PLUS4_OVL_TOWN)
 	mv -f plus4/out/ovl.death $(PLUS4_OVL_DEATH)
+	mv -f plus4/out/ovl.royal $(PLUS4_OVL_ROYAL)
 	mv -f plus4/out/ovl.gen $(PLUS4_OVL_GEN)
 	mv -f plus4/out/ovl.help $(PLUS4_OVL_HELP)
 	mv -f plus4/out/ovl.ui $(PLUS4_OVL_UI)
@@ -356,6 +362,7 @@ $(PLUS4_MAIN_PRG): $(PLUS4_SOURCES) $(VERSION_INC) | ensure-kickass $(OUTPLUS4)
 $(PLUS4_OVL_START): $(PLUS4_MAIN_PRG)
 $(PLUS4_OVL_TOWN): $(PLUS4_MAIN_PRG)
 $(PLUS4_OVL_DEATH): $(PLUS4_MAIN_PRG)
+$(PLUS4_OVL_ROYAL): $(PLUS4_MAIN_PRG)
 $(PLUS4_OVL_GEN): $(PLUS4_MAIN_PRG)
 $(PLUS4_OVL_HELP): $(PLUS4_MAIN_PRG)
 $(PLUS4_OVL_UI): $(PLUS4_MAIN_PRG)
@@ -388,6 +395,7 @@ $(C128_MAIN_STAMP): $(C128_SOURCES) $(VERSION_INC) | ensure-kickass $(OUT128)
 	mv -f "c128/out/ovl.start" "$(C128_OVL_START)"
 	mv -f "c128/out/ovl.town" "$(C128_OVL_TOWN)"
 	mv -f "c128/out/ovl.death" "$(C128_OVL_DEATH)"
+	mv -f "c128/out/ovl.royal" "$(C128_OVL_ROYAL)"
 	mv -f "c128/out/ovl.gen" "$(C128_OVL_GEN)"
 	mv -f "c128/out/ovl.help" "$(C128_OVL_HELP)"
 	mv -f "c128/out/ovl.ui" "$(C128_OVL_UI)"
@@ -476,6 +484,7 @@ $(C64_DIST_STAMP): $(C64_BUILD_ARTIFACTS) $(LICENSE_DISK_FILE) $(SOURCE_OFFER_DI
 	cp -f $(C64_OVL_START) "$(C64_DIST_DIR)/64.start"
 	cp -f $(C64_OVL_TOWN) "$(C64_DIST_DIR)/64.town"
 	cp -f $(C64_OVL_DEATH) "$(C64_DIST_DIR)/64.death"
+	cp -f $(C64_OVL_ROYAL) "$(C64_DIST_DIR)/64.royal"
 	cp -f $(C64_OVL_GEN) "$(C64_DIST_DIR)/64.gen"
 	cp -f $(C64_OVL_HELP) "$(C64_DIST_DIR)/64.help"
 	cp -f $(C64_OVL_UI) "$(C64_DIST_DIR)/64.ui"
@@ -512,6 +521,7 @@ $(DISK64_IMAGE): $(C64_BUILD_ARTIFACTS) $(DISKART) $(VERSION_FILE) $(LICENSE_DIS
 		-write $(C64_OVL_START) "64.start" \
 		-write $(C64_OVL_TOWN) "64.town" \
 		-write $(C64_OVL_DEATH) "64.death" \
+		-write $(C64_OVL_ROYAL) "64.royal" \
 			-write $(C64_OVL_GEN) "64.gen" \
 			-write $(C64_OVL_HELP) "64.help" \
 			-write $(C64_OVL_UI) "64.ui" \
@@ -546,6 +556,7 @@ $(DISKPLUS4_IMAGE): $(PLUS4_BUILD_ARTIFACTS) $(DISKART) $(VERSION_FILE) $(LICENS
 		-write $(PLUS4_OVL_START) "4.start" \
 		-write $(PLUS4_OVL_TOWN) "4.town" \
 		-write $(PLUS4_OVL_DEATH) "4.death" \
+		-write $(PLUS4_OVL_ROYAL) "4.royal" \
 		-write $(PLUS4_OVL_GEN) "4.gen" \
 		-write $(PLUS4_OVL_HELP) "4.help" \
 		-write $(PLUS4_OVL_UI) "4.ui" \
@@ -582,6 +593,7 @@ $(DISK128_IMAGE): $(C128_BUILD_ARTIFACTS) $(C128_BOOT_CHAIN_PRG) $(C128_BOOTSECT
 		-write $(C128_OVL_START) "128.start" \
 		-write $(C128_OVL_TOWN) "128.town" \
 		-write $(C128_OVL_DEATH) "128.death" \
+		-write $(C128_OVL_ROYAL) "128.royal" \
 		-write $(C128_OVL_GEN) "128.gen" \
 		-write $(C128_OVL_HELP) "128.help" \
 		-write $(C128_OVL_UI) "128.ui" \

@@ -219,6 +219,10 @@ hal_storage_overlay_spell_name:
     .byte $34,$2e,$53,$50,$45,$4c,$4c           // "4.SPELL"
 .label hal_storage_overlay_spell_name_len = * - hal_storage_overlay_spell_name
     .byte 0
+hal_storage_royal_name:
+    .byte $34,$2e,$52,$4f,$59,$41,$4c           // "4.ROYAL"
+.label hal_storage_royal_name_len = * - hal_storage_royal_name
+    .byte 0
 
 hal_storage_overlay_name_lo:
     .byte <hal_storage_overlay_start_name, <hal_storage_overlay_town_name, <hal_storage_overlay_death_name, <hal_storage_overlay_gen_name, <hal_storage_overlay_help_name, <hal_storage_overlay_ui_name, <hal_storage_overlay_items_name, <hal_storage_overlay_spell_name

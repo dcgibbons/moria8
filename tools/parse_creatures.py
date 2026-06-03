@@ -976,6 +976,11 @@ def generate_asm(creatures, selected_indices):
             f.write(f".const TIER{tier_idx}_COUNT = {len(members)}\n")
             f.write(f".const TIER{tier_idx}_MIN_DLVL = {tier['min_dlvl']}\n")
             f.write(f".const TIER{tier_idx}_MAX_DLVL = {tier['max_dlvl']}\n")
+            for local_idx, creature_idx in enumerate(members):
+                if creatures[creature_idx]['name'] == "Balrog":
+                    f.write(f".const CREATURE_BALROG = {local_idx}\n")
+                    f.write(f".const CREATE_BALROG = {local_idx}\n")
+                    f.write(f".const CREATURE_BALROG_TIER = {tier_idx}\n")
         f.write(f"\n// Tier file sizes (approximate, for REU allocation)\n")
         for tier_idx, tier in enumerate(TIERS):
             members = [(idx, creatures[idx]) for idx in sorted(selected_indices)

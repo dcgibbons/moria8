@@ -36,6 +36,7 @@
 .segmentdef StartupOverlay    [outPrg=OVL_OUT + "/ovl.start", start=$e000, min=$e000, max=$efff]
 .segmentdef TownOverlay       [outPrg=OVL_OUT + "/ovl.town",  start=$e000, min=$e000, max=$efff]
 .segmentdef DeathOverlay      [outPrg=OVL_OUT + "/ovl.death", start=$e000, min=$e000, max=$efff]
+.segmentdef RoyalOverlay      [outPrg=OVL_OUT + "/ovl.royal", start=$e000, min=$e000, max=$efff]
 .segmentdef DungeonGenOverlay [outPrg=OVL_OUT + "/ovl.gen",   start=$e000, min=$e000, max=$efff]
 .segmentdef HelpOverlay       [outPrg=OVL_OUT + "/ovl.help",  start=$e000, min=$e000, max=$efff]
 .segmentdef UiOverlay         [outPrg=OVL_OUT + "/ovl.ui",    start=$e000, min=$e000, max=$efff]
@@ -858,7 +859,12 @@ tramp_game_over:
     sta zp_death_source
 
     // 1. Resolve death source text while tier data still at $E000
+    lda zp_game_flags
+    and #GAME_FLAG_WINNER
+    bne !tgo_load_overlay+
     lda zp_death_source
+    cmp #DEATH_ALIVE
+    beq !tgo_load_overlay+
     cmp #DEATH_TRAP_PIT         // Special sources ($F9-$FF) don't need name
     bcs !tgo_load_overlay+
     tax
@@ -917,6 +923,58 @@ tramp_game_over:
 
     // 7. Display death screen (death overlay code at $E000)
     jmp score_death_screen
+
+tramp_winner_royal:
+    jsr disk_prompt_game
+    lda #hal_storage_royal_name_len
+    ldx #<hal_storage_royal_name
+    ldy #>hal_storage_royal_name
+    jsr hal_asset_load_prg_header
+    bcs !done+
+    lda #0
+    sta current_overlay
+    jsr royal_screen
+!done:
+    rts
+
+winner_apply_retirement_bonus:
+    .const WIN_PL_LEVEL = 19
+    .const WIN_PL_GOLD_0 = 43
+    .const WIN_PL_GOLD_1 = 44
+    .const WIN_PL_GOLD_2 = 45
+    .const WIN_PL_XP_0 = 46
+    .const WIN_PL_XP_1 = 47
+    .const WIN_PL_XP_2 = 48
+    lda player_data + WIN_PL_LEVEL
+    cmp #41
+    bcs !gold+
+    clc
+    adc #40
+    sta player_data + WIN_PL_LEVEL
+    sta zp_player_lvl
+!gold:
+    lda player_data + WIN_PL_GOLD_0
+    clc
+    adc #$90
+    sta player_data + WIN_PL_GOLD_0
+    lda player_data + WIN_PL_GOLD_1
+    adc #$d0
+    sta player_data + WIN_PL_GOLD_1
+    lda player_data + WIN_PL_GOLD_2
+    adc #$03
+    sta player_data + WIN_PL_GOLD_2
+    lda player_data + WIN_PL_XP_0
+    clc
+    adc #$40
+    sta player_data + WIN_PL_XP_0
+    lda player_data + WIN_PL_XP_1
+    adc #$4b
+    sta player_data + WIN_PL_XP_1
+    lda player_data + WIN_PL_XP_2
+    adc #$4c
+    sta player_data + WIN_PL_XP_2
+!done:
+    rts
 
 tramp_store_init_all:
     lda #7                      // OVL_ITEMS (transition-only store maintenance)
@@ -4366,6 +4424,15 @@ ovl_start_end:
 ovl_death_end:
 .print "Death overlay: " + (ovl_death_end - $e000) + " bytes at $E000-$" + toHexString(ovl_death_end)
 .assert "Death overlay fits in $E000-$EFFF", ovl_death_end <= $f000, true
+
+// ============================================================
+// Royal overlay — winner retirement art at $E000
+// ============================================================
+.segment RoyalOverlay
+    #import "../common/royal.s"
+ovl_royal_end:
+.print "Royal overlay: " + (ovl_royal_end - $e000) + " bytes at $E000-$" + toHexString(ovl_royal_end)
+.assert "Royal overlay fits in $E000-$EFFF", ovl_royal_end <= $f000, true
 
 // ============================================================
 // Help overlay — dedicated help screen at $E000

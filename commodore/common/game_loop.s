@@ -1014,6 +1014,12 @@ c128_town_move_diag_after_input_get_command:
     // Save and quit?
     cmp #CMD_SAVE
     bne !not_save+
+    lda zp_game_flags
+    and #GAME_FLAG_WINNER
+    beq !save_not_winner+
+    jsr winner_print_save_blocked
+    jmp !save_return_view+
+!save_not_winner:
     lda disk_setup_done
     bne !save_setup_ready+
     jsr tramp_disk_setup
@@ -1071,6 +1077,11 @@ plus4_test_after_save_game:
     // Quit?
     cmp #CMD_QUIT
     bne !not_quit+
+    lda zp_game_flags
+    and #GAME_FLAG_WINNER
+    beq !quit_not_winner+
+    jmp player_retired
+!quit_not_winner:
     jmp !quit+
 !not_quit:
 
@@ -2391,6 +2402,35 @@ player_died:
 !quit:
     jmp game_over_prompt    // Platform hook returns to title/menu.
 
+player_retired:
+    jsr winner_apply_retirement_bonus
+    jsr tramp_winner_royal
+    lda #DEATH_ALIVE
+    sta death_source_saved
+    sta zp_death_source
+    lda disk_setup_done
+    bne !pr_disk_ready+
+    jsr tramp_disk_setup
+    bcs !pr_skip_disk_io+
+!pr_disk_ready:
+    jsr disk_prompt_save
+    jsr player_sync_from_zp
+    jsr tramp_game_over
+    jsr disk_prompt_game
+    jmp !pr_done+
+!pr_skip_disk_io:
+    jsr tramp_game_over
+!pr_done:
+    jsr input_get_modal_dismiss_key
+    jmp !quit-
+
+winner_print_save_blocked:
+    lda #<winner_save_blocked_str
+    sta zp_ptr0
+    lda #>winner_save_blocked_str
+    sta zp_ptr0_hi
+    jmp msg_print
+
 #import "ui_restore.s"
 #import "game_loop_helpers.s"
 
@@ -2407,6 +2447,8 @@ press_key_str:
 welcome_str:
     .text "Welcome to Moria! ?=help. Shift+Q=quit." ; .byte 0
 #endif
+winner_save_blocked_str:
+    .text "Winner: Shift+Q to claim victory." ; .byte 0
 
 #if !GAME_LOOP_NAV_STRINGS_EXTERNAL
 search_mode_on_str:
