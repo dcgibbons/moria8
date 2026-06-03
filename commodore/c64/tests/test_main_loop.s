@@ -17,7 +17,7 @@ bootstrap:
     jmp test_start
 
 test_finish:
-    ldx #37
+    ldx #38
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -46,6 +46,12 @@ tramp_level_generate:
     rts
 
 tramp_game_over:
+    rts
+
+tramp_winner_royal:
+    rts
+
+winner_apply_retirement_bonus:
     rts
 
 wizard_reset_session_state:
@@ -248,7 +254,7 @@ random_floor_in_room:
 save_welcome_str:
     .text "WELCOME BACK" ; .byte 0
 
-tc_results: .fill 38, $ff
+tc_results: .fill 39, $ff
 
 test_cmd_idx: .byte 0
 test_cmd_len: .byte 0
@@ -847,7 +853,7 @@ test_start:
     ldx #$ff
     txs
 
-    ldx #32
+    ldx #38
     lda #$ff
 !clr:
     sta tc_results,x
@@ -2212,8 +2218,34 @@ test_start:
     bne !t38_fail+
     lda #$01
     sta tc_results + 37
-    jmp test_finish
+    jmp !t39+
 !t38_fail:
     lda #$00
     sta tc_results + 37
+    jmp !t39+
+
+    // Test 39: Balrog kill detection uses the killed creature identity, not
+    // ambient tier state that C64 overlay/string-bank traffic can invalidate.
+!t39:
+    jsr reset_state
+    lda #0
+    sta current_tier
+    sta tier_loaded
+    lda #CREATURE_BALROG
+    sta cmb_type
+    lda #100
+    sta cr_level + CREATURE_BALROG
+    jsr combat_note_kill
+    lda zp_game_flags
+    and #GAME_FLAG_WINNER
+    beq !t39_fail+
+    lda cmb_winner_pending
+    cmp #1
+    bne !t39_fail+
+    lda #$01
+    sta tc_results + 38
+    jmp test_finish
+!t39_fail:
+    lda #$00
+    sta tc_results + 38
     jmp test_finish

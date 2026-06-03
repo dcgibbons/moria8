@@ -299,6 +299,8 @@ bash_monster:
 
     jsr combat_award_xp
     jsr combat_check_levelup
+    jsr combat_note_kill
+    jsr combat_print_winner_message
 
     lda #SFX_HIT
     jsr hal_sound_play

@@ -749,6 +749,7 @@ eff_damage_adjacent:
     bcc !eda_skip+              // Still alive
     // Monster killed
     jsr eff_kill_monster        // X preserved by helper
+    jsr combat_print_winner_message
 !eda_skip:
     rts
 
@@ -994,6 +995,7 @@ eff_kill_monster:
     // Award XP using existing combat function
     jsr combat_award_xp
     jsr combat_check_levelup
+    jsr combat_note_kill
 
     rts
 

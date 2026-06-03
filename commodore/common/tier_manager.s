@@ -25,6 +25,21 @@
 
 #import "creature_data/creature_tiers.s"
 
+.assert "Balrog remains the tier-4 win creature", CREATURE_BALROG_TIER, 4
+.assert "Balrog remains the last deep-dungeon creature row", CREATURE_BALROG, TIER4_COUNT - 1
+
+// pick_wizard_summon_creature_type — test helper for wizard summon.
+// At DL100+, force the Balrog so the win condition can be exercised directly.
+// Callers must run tier_check_transition before entering.
+pick_wizard_summon_creature_type:
+    lda zp_player_dlvl
+    cmp #100
+    bcc !normal+
+    lda #CREATE_BALROG
+    rts
+!normal:
+    jmp pick_creature_type
+
 // ============================================================
 // State variables
 // ============================================================

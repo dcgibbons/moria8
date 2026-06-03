@@ -28,6 +28,7 @@
 
 .const GAME_FLAG_OVER   = $01
 .const GAME_FLAG_WIZARD = $02
+.const GAME_FLAG_WINNER = $04
 
 // ============================================================
 // SAFE ZONE — never touched by KERNAL

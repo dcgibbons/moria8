@@ -36,6 +36,10 @@ hal_storage_overlay_disarm_name:
     .byte $31,$32,$38,$2e,$44,$49,$53,$41,$52,$4d // "128.DISARM"
 .label hal_storage_overlay_disarm_name_len = * - hal_storage_overlay_disarm_name
     .byte 0
+hal_storage_royal_name:
+    .byte $31,$32,$38,$2e,$52,$4f,$59,$41,$4c   // "128.ROYAL"
+.label hal_storage_royal_name_len = * - hal_storage_royal_name
+    .byte 0
 
 hal_storage_overlay_name_lo:
     .byte <hal_storage_overlay_start_name, <hal_storage_overlay_town_name, <hal_storage_overlay_death_name, <hal_storage_overlay_gen_name, <hal_storage_overlay_help_name, <hal_storage_overlay_ui_name, <hal_storage_overlay_items_name, <hal_storage_overlay_disarm_name

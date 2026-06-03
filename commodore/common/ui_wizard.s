@@ -387,7 +387,8 @@ ui_wizard_cmd_summon:
     bcs !wiz_adj_ok+
     jmp ui_wizard_fail_message
 !wiz_adj_ok:
-    jsr pick_creature_type
+    jsr tier_check_transition
+    jsr pick_wizard_summon_creature_type
     jsr monster_spawn_one
     bcs !wiz_summon_ok+
     jmp ui_wizard_fail_message

@@ -19,6 +19,7 @@ test_start:
 .const IF_IDENTIFIED = $02
 .const IF_SENSED = $08
 .const SFX_PICKUP = 0
+.const DEATH_ALIVE = $00
 
 .macro MapRead_ptr0_y() {
     jsr mmu_safe_map_read_ptr0
@@ -118,6 +119,12 @@ generation_busy_end:
 
 tramp_game_over:
     inc test_tramp_game_over_calls
+    rts
+
+tramp_winner_royal:
+    rts
+
+winner_apply_retirement_bonus:
     rts
 
 wizard_reset_session_state:

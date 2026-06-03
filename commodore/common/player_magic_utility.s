@@ -139,6 +139,7 @@ eff_dispel_flagged:
 !edf_kill:
     jsr eff_kill_monster
     jsr combat_msg_monster_dissolves
+    jsr combat_print_winner_message
 !edf_next:
     inc pmx_work_idx
     jmp !edf_loop-
