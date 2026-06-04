@@ -4,7 +4,7 @@
 // recount_monsters, recount_floor_items, save-version compatibility helpers,
 // split item stat save/load persistence.
 //
-// Results at $0400-$0416: $01 = pass, $00 = fail per test (23 tests)
+// Results at $0400-$0417: $01 = pass, $00 = fail per test (24 tests)
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(bootstrap)
@@ -25,7 +25,7 @@ bootstrap:
 // Must be in low memory (before imports) so BRK address is below $A000.
 // VICE breakpoint on $A000+ can false-trigger during BASIC ROM execution.
 test_finish:
-    ldx #22
+    ldx #23
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -134,7 +134,8 @@ random_floor_in_room:
 .const hal_storage_marker_sec_write = 2
 .const hal_storage_program_file_num = 7
 .const hal_storage_save_v1_version = $0f
-.const hal_storage_save_version = $10
+.const hal_storage_save_known96_version = $10
+.const hal_storage_save_version = $11
 .const KERNAL_ERR_DEVICE_NOT_PRESENT = 5
 .const KERNAL_SETNAM = test_save_setnam
 .const KERNAL_SETLFS = test_save_setlfs
@@ -294,7 +295,7 @@ rle_decompress_map:
 !:  rts
 
 // Test result buffer — copy to $0400 at end (msg_print clobbers $0400)
-tc_results: .fill 23, $ff
+tc_results: .fill 24, $ff
 tc_count: .byte 0
 
 // Verification buffer — 256 bytes at $CF00 (floor item area, safe during tests 2-3)
@@ -387,10 +388,10 @@ test_save_chrout:
     sty test_save_tmp_y
     ldy #0
     pla
-    sta (zp_ptr1),y
-    inc zp_ptr1
+    sta (zp_ptr2),y
+    inc zp_ptr2
     bne !+
-    inc zp_ptr1_hi
+    inc zp_ptr2_hi
 !:  ldy test_save_tmp_y
     clc
     rts
@@ -402,10 +403,10 @@ test_save_chrout:
 test_save_chrin:
     sty test_save_tmp_y
     ldy #0
-    lda (zp_ptr1),y
-    inc zp_ptr1
+    lda (zp_ptr2),y
+    inc zp_ptr2
     bne !+
-    inc zp_ptr1_hi
+    inc zp_ptr2_hi
 !:  ldy test_save_tmp_y
     clc
     rts
@@ -425,16 +426,16 @@ test_modal_dismiss_key:
 
 test_stream_reset_write:
     lda #<SAVE_STREAM_BUF
-    sta zp_ptr1
+    sta zp_ptr2
     lda #>SAVE_STREAM_BUF
-    sta zp_ptr1_hi
+    sta zp_ptr2_hi
     rts
 
 test_stream_reset_read:
     lda #<SAVE_STREAM_BUF
-    sta zp_ptr1
+    sta zp_ptr2
     lda #>SAVE_STREAM_BUF
-    sta zp_ptr1_hi
+    sta zp_ptr2_hi
     rts
 
 test_clear_store_items:
@@ -458,14 +459,7 @@ test_clear_store_items:
     rts
 
 test_save_item_state_blocks:
-    :save_block(inv_item_id, TOTAL_INV_SLOTS)
-    :save_block(inv_qty, TOTAL_INV_SLOTS)
-    :save_block(inv_p1, TOTAL_INV_SLOTS)
-    :save_block(inv_to_hit, TOTAL_INV_SLOTS)
-    :save_block(inv_to_dam, TOTAL_INV_SLOTS)
-    :save_block(inv_to_ac, TOTAL_INV_SLOTS)
-    :save_block(inv_flags, TOTAL_INV_SLOTS)
-    :save_block(inv_ego, TOTAL_INV_SLOTS)
+    jsr save_write_inventory_state
     :save_block(si_item_id, STORE_TOTAL_SLOTS)
     :save_block(si_qty, STORE_TOTAL_SLOTS)
     :save_block(si_p1, STORE_TOTAL_SLOTS)
@@ -477,14 +471,9 @@ test_save_item_state_blocks:
     rts
 
 test_load_item_state_blocks:
-    :load_block(inv_item_id, TOTAL_INV_SLOTS)
-    :load_block(inv_qty, TOTAL_INV_SLOTS)
-    :load_block(inv_p1, TOTAL_INV_SLOTS)
-    :load_block(inv_to_hit, TOTAL_INV_SLOTS)
-    :load_block(inv_to_dam, TOTAL_INV_SLOTS)
-    :load_block(inv_to_ac, TOTAL_INV_SLOTS)
-    :load_block(inv_flags, TOTAL_INV_SLOTS)
-    :load_block(inv_ego, TOTAL_INV_SLOTS)
+    lda #SAVE_VERSION
+    sta load_save_version
+    jsr load_read_inventory_state
     :load_block(si_item_id, STORE_TOTAL_SLOTS)
     :load_block(si_qty, STORE_TOTAL_SLOTS)
     :load_block(si_p1, STORE_TOTAL_SLOTS)
@@ -492,10 +481,16 @@ test_load_item_state_blocks:
     :load_block(si_to_dam, STORE_TOTAL_SLOTS)
     :load_block(si_to_ac, STORE_TOTAL_SLOTS)
     :load_block(si_meta, STORE_TOTAL_SLOTS)
-    lda #SAVE_VERSION
-    sta load_save_version
     jsr load_read_floor_items
     rts
+
+test_save_legacy_inventory_state_blocks:
+    lda #<save_block_table_inventory_legacy
+    sta zp_ptr1
+    lda #>save_block_table_inventory_legacy
+    sta zp_ptr1_hi
+    lda #SAVE_BLOCK_INVENTORY_LEGACY_COUNT
+    jmp save_write_block_table
 
 .macro t13_expect(value) {
     cmp #value
@@ -517,7 +512,7 @@ test_start:
     sta rle_work_hi
 
     // Initialize result area to $ff (untested)
-    ldx #22
+    ldx #23
     lda #$ff
 !clr:
     sta tc_results,x
@@ -1174,6 +1169,16 @@ t7_set_slot31:
     lda #IF_IDENTIFIED
     sta inv_flags + EQUIP_BODY
 
+    // New V3 amulet slot: save/load must preserve the 31st slot.
+    lda #24
+    sta inv_item_id + EQUIP_AMULET
+    lda #1
+    sta inv_qty + EQUIP_AMULET
+    lda #$7f
+    sta inv_p1 + EQUIP_AMULET
+    lda #IF_IDENTIFIED
+    sta inv_flags + EQUIP_AMULET
+
     // Store/home slot 10: packed flags+ego plus split stat sidecars.
     lda #1
     sta si_item_id + 10
@@ -1240,6 +1245,15 @@ t7_set_slot31:
     lda inv_to_ac + EQUIP_BODY
     :t13_expect(5)
     lda inv_flags + EQUIP_BODY
+    :t13_expect(IF_IDENTIFIED)
+
+    lda inv_item_id + EQUIP_AMULET
+    :t13_expect(24)
+    lda inv_qty + EQUIP_AMULET
+    :t13_expect(1)
+    lda inv_p1 + EQUIP_AMULET
+    :t13_expect($7f)
+    lda inv_flags + EQUIP_AMULET
     :t13_expect(IF_IDENTIFIED)
 
     lda si_item_id + 10
@@ -1861,6 +1875,74 @@ t22_fail_code:
 t23_fail_code:
 !t23_store:
     sta tc_results + 22
+
+    // ============================================================
+    // Test 24: legacy 30-slot inventory saves leave amulet slot empty.
+    // ============================================================
+    lda #0
+    sta save_cksum_lo
+    sta save_cksum_hi
+    sta save_io_error
+    sta test_save_sink_writes
+    jsr item_init_inventory
+    lda #2
+    sta inv_item_id + 2
+    lda #1
+    sta inv_qty + 2
+    lda #$44
+    sta inv_p1 + 2
+    jsr test_stream_reset_write
+    jsr test_save_legacy_inventory_state_blocks
+
+    jsr item_init_inventory
+    lda #24
+    sta inv_item_id + EQUIP_AMULET
+    lda #1
+    sta inv_qty + EQUIP_AMULET
+    lda #$7f
+    sta inv_p1 + EQUIP_AMULET
+    lda #SAVE_KNOWN96_VERSION
+    sta load_save_version
+    jsr test_stream_reset_read
+    lda #0
+    sta save_cksum_lo
+    sta save_cksum_hi
+    sta save_io_error
+    jsr load_read_inventory_state
+
+    lda inv_item_id + 2
+    cmp #2
+    beq !t24_slot2_id_ok+
+    lda #2
+    jmp t24_fail_code
+!t24_slot2_id_ok:
+    lda inv_p1 + 2
+    cmp #$44
+    beq !t24_slot2_p1_ok+
+    lda #3
+    jmp t24_fail_code
+!t24_slot2_p1_ok:
+    lda inv_item_id + EQUIP_AMULET
+    cmp #FI_EMPTY
+    beq !t24_amulet_id_ok+
+    lda #4
+    jmp t24_fail_code
+!t24_amulet_id_ok:
+    lda inv_qty + EQUIP_AMULET
+    beq !t24_amulet_qty_ok+
+    lda #5
+    jmp t24_fail_code
+!t24_amulet_qty_ok:
+    lda inv_p1 + EQUIP_AMULET
+    beq !t24_amulet_p1_ok+
+    lda #6
+    jmp t24_fail_code
+!t24_amulet_p1_ok:
+    lda #$01
+    bne !t24_store+
+t24_fail_code:
+!t24_store:
+    sta tc_results + 23
 
     jmp test_finish
 

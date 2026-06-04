@@ -50,6 +50,9 @@ c128_preload_asset_load:
     rts
 c128_preload_all_overlays:
     rts
+pick_creature_type:
+    lda #0
+    rts
 
 #import "../../common/tier_manager.s"
 

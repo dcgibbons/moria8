@@ -19,7 +19,8 @@
 .const hal_storage_disk_setup_done_value = 2
 .const hal_storage_disk_setup_commit_sets_ui_ok = 0
 .const hal_storage_save_v1_version = $0f
-.const hal_storage_save_version = $10
+.const hal_storage_save_known96_version = $10
+.const hal_storage_save_version = $11
 
 #define HAL_STORAGE_SAVE_MEDIA_STATUS_LEGACY
 #define HAL_STORAGE_SWAP_PROMPT_LEGACY_SETUP_SKIP

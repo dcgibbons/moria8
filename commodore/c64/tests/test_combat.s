@@ -738,7 +738,7 @@ test_start:
 !t18_clr:
     sta inv_item_id,x
     inx
-    cpx #EQUIP_RING + 1
+    cpx #EQUIP_END
     bne !t18_clr-
 
     lda #18
@@ -771,7 +771,7 @@ test_start:
 !t19_clr:
     sta inv_item_id,x
     inx
-    cpx #EQUIP_RING + 1
+    cpx #EQUIP_END
     bne !t19_clr-
 
     lda #12
@@ -807,7 +807,7 @@ test_start:
 !t20_clr:
     sta inv_item_id,x
     inx
-    cpx #EQUIP_RING + 1
+    cpx #EQUIP_END
     bne !t20_clr-
 
     lda #18

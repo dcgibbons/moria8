@@ -4,7 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 import sys
 
-SAVE_VERSION = 0x02
+SAVE_VERSION = 0x03
 
 PL_STRUCT_SIZE = 111
 ITEM_TYPE_COUNT = 64
@@ -20,7 +20,7 @@ RECALL_DATA_SIZE = 260
 # the checksum. Keep this explicit until the storage HAL owns per-platform
 # record layout instead of inheriting the C64 save shape implicitly.
 LOAD_SAVE_MAP_SIZE = 3676
-TOTAL_INV_SLOTS = 30
+TOTAL_INV_SLOTS = 31
 
 PL_LEVEL = 19
 PL_DLEVEL = 20

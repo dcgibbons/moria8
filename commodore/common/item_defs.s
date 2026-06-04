@@ -20,7 +20,7 @@
 .const MAX_GLYPHS      = 4
 .const FI_EMPTY        = $ff
 
-// Equipment Slot Constants (indices 22-29 in unified table)
+// Equipment Slot Constants (indices 22-30 in unified table)
 .const EQUIP_WEAPON = 22
 .const EQUIP_BODY   = 23
 .const EQUIP_SHIELD = 24
@@ -29,11 +29,15 @@
 .const EQUIP_FEET   = 27
 .const EQUIP_LIGHT  = 28
 .const EQUIP_RING   = 29
+.const EQUIP_AMULET = 30
+.const EQUIP_LAST   = EQUIP_AMULET
+.const EQUIP_END    = EQUIP_LAST + 1
 
 // Inventory Constants
 .const MAX_INV_SLOTS   = 22
-.const MAX_EQUIP_SLOTS = 8
-.const TOTAL_INV_SLOTS = 30
+.const MAX_EQUIP_SLOTS = 9
+.const TOTAL_INV_SLOTS = 31
+.const LEGACY_TOTAL_INV_SLOTS = 30
 
 // Item Category for Digging Tools
 .const ICAT_DIGGING = 0

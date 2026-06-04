@@ -135,10 +135,10 @@ Suggested layout milestones:
 
 | Layout | Meaning |
 |---|---|
-| `SAVE_LAYOUT_V1` | current 64-item byte `id_known` |
-| `SAVE_LAYOUT_V2` | fixed-capacity or bitset item identification |
-| `SAVE_LAYOUT_V3` | chest sidecars |
-| `SAVE_LAYOUT_V4` | split catalog / extended item state |
+| `SAVE_LAYOUT_V1` | 64-byte `id_known`, 30 inventory/equipment slots |
+| `SAVE_LAYOUT_V2` | 96-byte fixed-capacity `id_known`, 30 inventory/equipment slots |
+| `SAVE_LAYOUT_V3` | 96-byte fixed-capacity `id_known`, 31 inventory/equipment slots with `EQUIP_AMULET` |
+| future layout | chest sidecars or split catalog / extended item state |
 
 Example migration:
 
@@ -148,7 +148,7 @@ load V1:
   convert to 128-bit id_known_bits
   initialize new item IDs as unknown/known by default
   read old floor/inventory/store layouts
-  initialize new fields to zero
+  initialize future known-item bytes and the amulet slot to empty/zero
 ```
 
 ## Append New Save Blocks Where Possible

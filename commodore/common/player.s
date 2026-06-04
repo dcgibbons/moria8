@@ -669,7 +669,7 @@ player_calc_combat:
     jsr player_dex_ac_adj
     sta pcc_ac_accum            // Signed accumulator (may be negative)
 
-    // Loop equipment slots: body, shield, head, hands, feet, ring
+    // Loop armor-relevant equipment slots: body through current equipment end.
     ldx #EQUIP_BODY
 !ac_equip_loop:
     lda inv_item_id,x
@@ -688,7 +688,7 @@ player_calc_combat:
     sta pcc_ac_accum
 !ac_next_slot:
     inx
-    cpx #EQUIP_RING + 1        // Past last armor-relevant slot
+    cpx #EQUIP_END             // Past last armor-relevant slot
     bne !ac_equip_loop-
 
     // Clamp AC to [0, 60]

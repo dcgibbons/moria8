@@ -177,6 +177,7 @@ tunnel_spawn_gold:
 monster_remove:
 combat_award_xp:
 combat_check_levelup:
+combat_note_kill:
 find_random_floor:
 monster_find_at:
 combat_apply_damage_16:
@@ -188,6 +189,7 @@ screen_flash_set_color:
 screen_flash_reset_color:
 screen_flash_at:
 combat_kill_message:
+combat_print_winner_message:
 floor_item_find_at:
 floor_item_remove:
 floor_item_add:

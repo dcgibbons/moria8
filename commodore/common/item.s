@@ -196,7 +196,7 @@ item_init_floor:
     jsr glyph_clear_all
     rts
 
-// item_init_inventory — Clear all 30 inventory/equipment slots
+// item_init_inventory — Clear all inventory/equipment slots
 // Clobbers: A, X
 item_init_inventory:
     ldx #TOTAL_INV_SLOTS - 1
@@ -1688,4 +1688,4 @@ re_negate_a:
 .assert "it_display size", it_color - it_display, ITEM_TYPE_COUNT
 .assert "it_color size", it_weight - it_color, ITEM_TYPE_COUNT
 // Hardcoded assertion removed for cross-platform compatibility
-.assert "Inventory total slots", TOTAL_INV_SLOTS, 30
+.assert "Inventory total slots", TOTAL_INV_SLOTS, 31

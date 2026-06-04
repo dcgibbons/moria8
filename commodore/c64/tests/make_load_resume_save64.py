@@ -4,7 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 import sys
 
-SAVE_VERSION = 0x10
+SAVE_VERSION = 0x11
 
 PL_STRUCT_SIZE = 111
 ITEM_TYPE_COUNT = 64
@@ -17,7 +17,7 @@ MONSTER_ENTRY_SIZE = 12
 MAX_FLOOR_ITEMS = 42
 RECALL_DATA_SIZE = 260
 MAP_SIZE = 3840
-TOTAL_INV_SLOTS = 30
+TOTAL_INV_SLOTS = 31
 
 PL_LEVEL = 19
 PL_DLEVEL = 20

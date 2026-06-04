@@ -135,6 +135,7 @@ show_inv_and_select:
 tramp_spell_list_display:
 monster_get_ptr:
 combat_kill_message:
+combat_print_winner_message:
 monster_wake:
 monster_apply_sleep:
 projectile_msg_suffix:
@@ -148,6 +149,7 @@ tunnel_spawn_gold:
 monster_remove:
 combat_award_xp:
 combat_check_levelup:
+combat_note_kill:
     rts
 
 find_random_floor:

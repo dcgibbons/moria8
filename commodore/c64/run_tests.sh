@@ -1954,7 +1954,7 @@ check_static_contract "c64_input_restores_bank_before_irq_contract" "input.s" \
 check_static_contract "inventory_overlay_fresh_key_contract" "../common/player_items.s" \
     "show_inv_and_select:|||jsr input_prepare_selectable_overlay_key|||jsr tramp_ui_inv_select_display|||jsr input_get_followup_key"
 check_static_contract "inventory_overlay_items_reload_contract" "../common/player_items.s" \
-    "show_inv_and_select:|||lda #OVL_NONE|||sta piw_return_overlay|||tsx|||lda \$0102,x|||cmp #\$e0|||!sias_check_outer_return:|||lda \$0104,x|||cmp #\$e0|||!sias_return_overlay:|||lda current_overlay|||cmp #OVL_ITEMS|||!sias_store_return_overlay:|||sta piw_return_overlay|||jsr ui_view_restore_modal_overlay|||cmp #OVL_NONE|||jsr overlay_load|||brk|||sei|||jsr hal_irq_install_runtime|||lda #BANK_NO_KERNAL|||sta hal_memory_cpu_port"
+    "show_inv_and_select:|||lda piw_return_overlay|||bne !sias_have_return_overlay+|||tsx|||lda \$0102,x|||cmp #\$e0|||!sias_check_outer_return:|||lda \$0104,x|||cmp #\$e0|||!sias_return_overlay:|||lda current_overlay|||cmp #OVL_ITEMS|||!sias_store_return_overlay:|||sta piw_return_overlay|||jsr ui_view_restore_modal_overlay|||lda #OVL_NONE|||sta piw_return_overlay|||txa|||beq !sias_no_overlay_reload+|||jsr overlay_load|||brk|||sei|||jsr hal_irq_install_runtime|||lda #BANK_NO_KERNAL|||sta hal_memory_cpu_port"
 check_static_contract "item_action_inventory_overlay_hint_contract" "../common/item_actions_overlay.s" \
     "item_action_select_filtered_inv:|||jsr item_action_get_key|||cmp #\$3f|||lda #OVL_ITEMS|||sta piw_return_overlay|||jmp piw_select_filtered_inv_key"
 check_static_contract "spell_recharge_inventory_overlay_hint_contract" "../common/player_magic_execute_overlay.s" \
@@ -1964,7 +1964,7 @@ check_static_contract "identify_scroll_resident_completion_contract" "../common/
 check_static_contract "itemdesc_armor_brackets_screen_code_contract" "../common/item_desc_banked.s" \
     "!idps_armor:|||lda #\$1b                    // '[' screen code|||lda #\$1d                    // ']' screen code|||!idps_ring:|||lda #\$1b                    // '[' screen code|||lda #\$1d                    // ']' screen code"
 check_static_contract "save_split_item_stats_contract" "../common/save.s" \
-    ":save_block_desc(inv_p1, TOTAL_INV_SLOTS)|||:save_block_desc(inv_to_hit, TOTAL_INV_SLOTS)|||:save_block_desc(inv_to_dam, TOTAL_INV_SLOTS)|||:save_block_desc(inv_to_ac, TOTAL_INV_SLOTS)|||:save_block_desc(si_p1, STORE_TOTAL_SLOTS)|||:save_block_desc(si_to_hit, STORE_TOTAL_SLOTS)|||:save_block_desc(si_to_dam, STORE_TOTAL_SLOTS)|||:save_block_desc(si_to_ac, STORE_TOTAL_SLOTS)|||jsr load_read_block_table|||:save_block(fi_to_hit, MAX_FLOOR_ITEMS)|||:save_block(fi_to_dam, MAX_FLOOR_ITEMS)|||:save_block(fi_to_ac, MAX_FLOOR_ITEMS)|||lda #<fi_to_hit|||jsr load_read_block|||lda #<fi_to_dam|||jsr load_read_block|||lda #<fi_to_ac|||jsr load_read_block"
+    "save_block_table_inventory_current:|||:save_block_desc(inv_p1, TOTAL_INV_SLOTS)|||:save_block_desc(inv_to_hit, TOTAL_INV_SLOTS)|||:save_block_desc(inv_to_dam, TOTAL_INV_SLOTS)|||:save_block_desc(inv_to_ac, TOTAL_INV_SLOTS)|||save_block_table_inventory_legacy:|||:save_block_desc(inv_p1, LEGACY_TOTAL_INV_SLOTS)|||:save_block_desc(si_p1, STORE_TOTAL_SLOTS)|||:save_block_desc(si_to_hit, STORE_TOTAL_SLOTS)|||:save_block_desc(si_to_dam, STORE_TOTAL_SLOTS)|||:save_block_desc(si_to_ac, STORE_TOTAL_SLOTS)|||save_write_inventory_state:|||lda #<save_block_table_inventory_current|||jmp save_write_block_table|||load_read_inventory_state:|||jsr item_init_inventory|||cmp #SAVE_INV31_VERSION|||!lris_legacy:|||lda #<save_block_table_inventory_legacy|||jmp load_read_block_table|||:save_block(fi_to_hit, MAX_FLOOR_ITEMS)|||:save_block(fi_to_dam, MAX_FLOOR_ITEMS)|||:save_block(fi_to_ac, MAX_FLOOR_ITEMS)|||lda #<fi_to_hit|||jsr load_read_block|||lda #<fi_to_dam|||jsr load_read_block|||lda #<fi_to_ac|||jsr load_read_block"
 check_static_contract "item_action_messages_stat_desc_contract" "../common/item.s" \
     "Build message: \"You picked up a <name>.\"|||lda fi_add_id|||jsr item_append_desc|||Build message: \"You drop a <name>.\"|||lda fi_add_id|||jsr item_append_desc|||item_append_desc:|||jsr item_append_name|||and #IF_IDENTIFIED"
 check_static_contract "equip_action_messages_stat_desc_contract" "../common/player_item_commands.s" \
@@ -2103,7 +2103,7 @@ run_test "ui_views" "tests/test_ui_views.s" "0400 0413" 17 500000000
 run_test "ui_views_filters" "tests/test_ui_views_filters.s" "0400 0413" 7 500000000
 run_test "subsystems" "tests/test_subsystems.s" "0400 0409" 10
 run_sound_monitor_test
-run_test "save"  "tests/test_save.s"  "0400 0416" 23 1000000000
+run_test "save"  "tests/test_save.s"  "0400 0417" 24 1000000000
 run_test "score" "tests/test_score.s" "0400 040b" 12 500000000
 run_test "wands_staves" "tests/test_wands_staves.s" "0400 0406" 7 100000000
 run_test "monster_magic" "tests/test_monster_magic.s" "0400 040a" 11 500000000

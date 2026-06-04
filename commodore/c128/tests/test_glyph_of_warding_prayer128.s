@@ -161,6 +161,7 @@ show_inv_and_select:
 tramp_spell_list_display:
 monster_get_ptr:
 combat_kill_message:
+combat_print_winner_message:
 combat_msg_monster_shudders:
 combat_msg_monster_dissolves:
 combat_msg_monster_runs_frantically:
@@ -179,6 +180,7 @@ tunnel_spawn_gold:
 monster_remove:
 combat_award_xp:
 combat_check_levelup:
+combat_note_kill:
 find_random_floor:
 monster_find_at:
 combat_apply_damage_16:

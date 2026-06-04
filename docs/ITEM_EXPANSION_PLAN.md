@@ -27,8 +27,8 @@ Relevant current constants:
 | `ITEM_TYPE_COUNT` | 64 | Current item catalog size |
 | `MAX_FLOOR_ITEMS` | 42 | Max live floor item slots |
 | `MAX_INV_SLOTS` | 22 | Carried inventory slots |
-| `MAX_EQUIP_SLOTS` | 8 | Equipment slots |
-| `TOTAL_INV_SLOTS` | 30 | Inventory + equipment slots |
+| `MAX_EQUIP_SLOTS` | 9 | Equipment slots |
+| `TOTAL_INV_SLOTS` | 31 | Inventory + equipment slots |
 | `FI_EMPTY` | `$ff` | Empty item slot sentinel |
 
 Current linked headroom:
@@ -404,6 +404,23 @@ Recommended plan:
 3. Introduce behavior profiles/effect IDs while expanding.
 4. Move names and full catalog metadata to banked/disk-loaded data.
 5. Defer 16-bit item IDs until a full-source-fidelity requirement is confirmed.
+
+Implementation checkpoints:
+
+- Save runway is in place for 96 known-item bytes: old 64-byte saves load with
+  future known-item bytes cleared, and new saves write the fixed 96-byte block.
+- Equipment loops now use `EQUIP_END` instead of hard-coded `EQUIP_RING + 1`;
+  this prepares for adding an amulet slot without hunting every current ring-end
+  loop again.
+- Inventory capacity has moved to 31 total slots with `EQUIP_AMULET = 30`;
+  `LEGACY_TOTAL_INV_SLOTS` records the prior 30-slot save/layout value for
+  loading older saves.
+- C128 resident selector layout is extremely tight: `128.select.prg` currently
+  ends at `$AAFE`, one byte before the `$AB00` disk-I/O payload. Future selector
+  work must recover bytes or move code before adding behavior there.
+- Verification checkpoint: `make build`, `make test64`, and the relevant C128
+  static layout/overlay guards pass. Full `make test128-fast` is blocked by the
+  existing `tier128` fixture missing a `pick_creature_type` stub.
 
 Good 128-item target mix:
 

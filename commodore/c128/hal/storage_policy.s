@@ -19,7 +19,8 @@
 .const hal_storage_disk_setup_done_value = 1
 .const hal_storage_disk_setup_commit_sets_ui_ok = 1
 .const hal_storage_save_v1_version = $10
-.const hal_storage_save_version = $11
+.const hal_storage_save_known96_version = $11
+.const hal_storage_save_version = $12
 
 #define HAL_STORAGE_DISK_SETUP_OTHER_DRIVE
 #define HAL_STORAGE_DISK_SETUP_COMMIT_SETS_UI_OK

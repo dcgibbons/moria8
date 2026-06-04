@@ -18,7 +18,8 @@
 .const SAVE_V1_VERSION = hal_storage_save_v1_version
 .const OLDEST_SAVE_VERSION = SAVE_V1_VERSION
 .const SAVE_FLOOR42_VERSION = SAVE_V1_VERSION
-.const SAVE_KNOWN96_VERSION = SAVE_VERSION
+.const SAVE_KNOWN96_VERSION = hal_storage_save_known96_version
+.const SAVE_INV31_VERSION = SAVE_VERSION
 .const LOAD_RESULT_OK        = 0
 .const LOAD_RESULT_NOTFOUND  = 1
 .const LOAD_RESULT_CORRUPT   = 2
@@ -251,12 +252,15 @@ save_drive_not_ready_str:
 
 .const SAVE_BLOCK_DESC_SIZE = 4
 
-save_block_table_pre_known:
+save_block_table_pre_inventory:
     :save_block_desc(player_data, PL_STRUCT_SIZE)
     :save_block_desc(player_background, 160)
     :save_block_desc(ZP_STATE_START, ZP_STATE_SIZE)
     :save_block_desc(eff_fear_timer, 1)
     :save_block_desc(ZP_RNG_START, ZP_RNG_SIZE)
+save_block_table_pre_inventory_end:
+
+save_block_table_inventory_current:
     :save_block_desc(inv_item_id, TOTAL_INV_SLOTS)
     :save_block_desc(inv_qty, TOTAL_INV_SLOTS)
     :save_block_desc(inv_p1, TOTAL_INV_SLOTS)
@@ -265,7 +269,18 @@ save_block_table_pre_known:
     :save_block_desc(inv_to_ac, TOTAL_INV_SLOTS)
     :save_block_desc(inv_flags, TOTAL_INV_SLOTS)
     :save_block_desc(inv_ego, TOTAL_INV_SLOTS)
-save_block_table_pre_known_end:
+save_block_table_inventory_current_end:
+
+save_block_table_inventory_legacy:
+    :save_block_desc(inv_item_id, LEGACY_TOTAL_INV_SLOTS)
+    :save_block_desc(inv_qty, LEGACY_TOTAL_INV_SLOTS)
+    :save_block_desc(inv_p1, LEGACY_TOTAL_INV_SLOTS)
+    :save_block_desc(inv_to_hit, LEGACY_TOTAL_INV_SLOTS)
+    :save_block_desc(inv_to_dam, LEGACY_TOTAL_INV_SLOTS)
+    :save_block_desc(inv_to_ac, LEGACY_TOTAL_INV_SLOTS)
+    :save_block_desc(inv_flags, LEGACY_TOTAL_INV_SLOTS)
+    :save_block_desc(inv_ego, LEGACY_TOTAL_INV_SLOTS)
+save_block_table_inventory_legacy_end:
 
 save_block_table_post_known:
     :save_block_desc(potion_shuffle, 12)
@@ -303,13 +318,19 @@ save_block_table_post_floor:
 #endif
 save_block_table_post_floor_end:
 
-.const SAVE_BLOCK_PRE_KNOWN_COUNT = (save_block_table_pre_known_end - save_block_table_pre_known) / SAVE_BLOCK_DESC_SIZE
+.const SAVE_BLOCK_PRE_INVENTORY_COUNT = (save_block_table_pre_inventory_end - save_block_table_pre_inventory) / SAVE_BLOCK_DESC_SIZE
+.const SAVE_BLOCK_INVENTORY_CURRENT_COUNT = (save_block_table_inventory_current_end - save_block_table_inventory_current) / SAVE_BLOCK_DESC_SIZE
+.const SAVE_BLOCK_INVENTORY_LEGACY_COUNT = (save_block_table_inventory_legacy_end - save_block_table_inventory_legacy) / SAVE_BLOCK_DESC_SIZE
 .const SAVE_BLOCK_POST_KNOWN_COUNT = (save_block_table_post_known_end - save_block_table_post_known) / SAVE_BLOCK_DESC_SIZE
 .const SAVE_BLOCK_POST_FLOOR_COUNT = (save_block_table_post_floor_end - save_block_table_post_floor) / SAVE_BLOCK_DESC_SIZE
-.assert "Pre-known save block table entries are 4 bytes", SAVE_BLOCK_PRE_KNOWN_COUNT * SAVE_BLOCK_DESC_SIZE, save_block_table_pre_known_end - save_block_table_pre_known
+.assert "Pre-inventory save block table entries are 4 bytes", SAVE_BLOCK_PRE_INVENTORY_COUNT * SAVE_BLOCK_DESC_SIZE, save_block_table_pre_inventory_end - save_block_table_pre_inventory
+.assert "Current inventory save block table entries are 4 bytes", SAVE_BLOCK_INVENTORY_CURRENT_COUNT * SAVE_BLOCK_DESC_SIZE, save_block_table_inventory_current_end - save_block_table_inventory_current
+.assert "Legacy inventory save block table entries are 4 bytes", SAVE_BLOCK_INVENTORY_LEGACY_COUNT * SAVE_BLOCK_DESC_SIZE, save_block_table_inventory_legacy_end - save_block_table_inventory_legacy
 .assert "Post-known save block table entries are 4 bytes", SAVE_BLOCK_POST_KNOWN_COUNT * SAVE_BLOCK_DESC_SIZE, save_block_table_post_known_end - save_block_table_post_known
 .assert "Post-floor save block table entries are 4 bytes", SAVE_BLOCK_POST_FLOOR_COUNT * SAVE_BLOCK_DESC_SIZE, save_block_table_post_floor_end - save_block_table_post_floor
-.assert "Pre-known save block table count fits in one page", SAVE_BLOCK_PRE_KNOWN_COUNT < 64, true
+.assert "Pre-inventory save block table count fits in one page", SAVE_BLOCK_PRE_INVENTORY_COUNT < 64, true
+.assert "Current inventory save block table count fits in one page", SAVE_BLOCK_INVENTORY_CURRENT_COUNT < 64, true
+.assert "Legacy inventory save block table count fits in one page", SAVE_BLOCK_INVENTORY_LEGACY_COUNT < 64, true
 .assert "Post-known save block table count fits in one page", SAVE_BLOCK_POST_KNOWN_COUNT < 64, true
 .assert "Post-floor save block table count fits in one page", SAVE_BLOCK_POST_FLOOR_COUNT < 64, true
 
@@ -506,13 +527,16 @@ save_return_c64_with_carry:
     // 1. Magic header (8 bytes)
     :save_block(save_magic, SAVE_MAGIC_SIZE)
 
-    // 2. Regular resident state through inventory/equipment.
-    lda #<save_block_table_pre_known
+    // 2. Regular resident state before inventory/equipment.
+    lda #<save_block_table_pre_inventory
     sta zp_ptr1
-    lda #>save_block_table_pre_known
+    lda #>save_block_table_pre_inventory
     sta zp_ptr1_hi
-    lda #SAVE_BLOCK_PRE_KNOWN_COUNT
+    lda #SAVE_BLOCK_PRE_INVENTORY_COUNT
     jsr save_write_block_table
+
+    // 2b. Current inventory/equipment layout.
+    jsr save_write_inventory_state
 
     // 3. Known-item state uses the V2 96-byte runway.
     jsr save_write_known_items
@@ -741,13 +765,16 @@ plus4_test_after_load_magic:
 
     // --- Read all blocks in same order as save ---
 
-    // 2. Regular resident state through inventory/equipment.
-    lda #<save_block_table_pre_known
+    // 2. Regular resident state before inventory/equipment.
+    lda #<save_block_table_pre_inventory
     sta zp_ptr1
-    lda #>save_block_table_pre_known
+    lda #>save_block_table_pre_inventory
     sta zp_ptr1_hi
-    lda #SAVE_BLOCK_PRE_KNOWN_COUNT
+    lda #SAVE_BLOCK_PRE_INVENTORY_COUNT
     jsr load_read_block_table
+
+    // 2b. Inventory/equipment state is 30 slots before V3, 31 slots in V3.
+    jsr load_read_inventory_state
 
     // 3. Known-item state is 64 bytes in V1, 96 bytes in V2.
     jsr load_read_known_items
@@ -1195,6 +1222,43 @@ save_write_byte_raw:
     lda zp_temp0
 #endif
     rts
+
+// ============================================================
+// save_write_inventory_state / load_read_inventory_state
+//
+// Save V3 expands the unified carried/equipped item table from 30 to 31 slots
+// by adding EQUIP_AMULET. Older supported saves read only 30 slots and leave
+// the new amulet slot empty via item_init_inventory.
+// ============================================================
+save_write_inventory_state:
+    lda #<save_block_table_inventory_current
+    sta zp_ptr1
+    lda #>save_block_table_inventory_current
+    sta zp_ptr1_hi
+    lda #SAVE_BLOCK_INVENTORY_CURRENT_COUNT
+    jmp save_write_block_table
+
+load_read_inventory_state:
+    jsr item_init_inventory
+    lda load_save_version
+    cmp #SAVE_INV31_VERSION
+    bcs !lris_current+
+    jmp !lris_legacy+
+!lris_current:
+    lda #<save_block_table_inventory_current
+    sta zp_ptr1
+    lda #>save_block_table_inventory_current
+    sta zp_ptr1_hi
+    lda #SAVE_BLOCK_INVENTORY_CURRENT_COUNT
+    jmp load_read_block_table
+
+!lris_legacy:
+    lda #<save_block_table_inventory_legacy
+    sta zp_ptr1
+    lda #>save_block_table_inventory_legacy
+    sta zp_ptr1_hi
+    lda #SAVE_BLOCK_INVENTORY_LEGACY_COUNT
+    jmp load_read_block_table
 
 // ============================================================
 // save_write_known_items / load_read_known_items

@@ -635,7 +635,7 @@ turn_tick_pseudo_id:
 
 !pid_next:
     inx
-    cpx #EQUIP_RING + 1
+    cpx #EQUIP_END
     bcc !pid_scan_gear-
 !pid_done:
     rts
