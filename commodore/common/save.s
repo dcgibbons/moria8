@@ -15,8 +15,10 @@
 // ============================================================
 .const SAVE_MAGIC_SIZE = 8
 .const SAVE_VERSION    = hal_storage_save_version
-.const OLDEST_SAVE_VERSION = SAVE_VERSION
-.const SAVE_FLOOR42_VERSION = SAVE_VERSION
+.const SAVE_V1_VERSION = hal_storage_save_v1_version
+.const OLDEST_SAVE_VERSION = SAVE_V1_VERSION
+.const SAVE_FLOOR42_VERSION = SAVE_V1_VERSION
+.const SAVE_KNOWN96_VERSION = SAVE_VERSION
 .const LOAD_RESULT_OK        = 0
 .const LOAD_RESULT_NOTFOUND  = 1
 .const LOAD_RESULT_CORRUPT   = 2
@@ -249,7 +251,7 @@ save_drive_not_ready_str:
 
 .const SAVE_BLOCK_DESC_SIZE = 4
 
-save_block_table_pre_floor:
+save_block_table_pre_known:
     :save_block_desc(player_data, PL_STRUCT_SIZE)
     :save_block_desc(player_background, 160)
     :save_block_desc(ZP_STATE_START, ZP_STATE_SIZE)
@@ -263,7 +265,9 @@ save_block_table_pre_floor:
     :save_block_desc(inv_to_ac, TOTAL_INV_SLOTS)
     :save_block_desc(inv_flags, TOTAL_INV_SLOTS)
     :save_block_desc(inv_ego, TOTAL_INV_SLOTS)
-    :save_block_desc(id_known, ITEM_TYPE_COUNT)
+save_block_table_pre_known_end:
+
+save_block_table_post_known:
     :save_block_desc(potion_shuffle, 12)
     :save_block_desc(scroll_shuffle, 12)
     :save_block_desc(ring_shuffle, 4)
@@ -290,7 +294,7 @@ save_block_table_pre_floor:
     :save_block_desc(trap_y, MAX_TRAPS)
     :save_block_desc(trap_type, MAX_TRAPS)
     :save_block_desc(monster_table, MAX_MONSTERS * MONSTER_ENTRY_SIZE)
-save_block_table_pre_floor_end:
+save_block_table_post_known_end:
 
 save_block_table_post_floor:
     :save_block_desc(recall_data_start, RECALL_DATA_SIZE)
@@ -299,11 +303,14 @@ save_block_table_post_floor:
 #endif
 save_block_table_post_floor_end:
 
-.const SAVE_BLOCK_PRE_FLOOR_COUNT = (save_block_table_pre_floor_end - save_block_table_pre_floor) / SAVE_BLOCK_DESC_SIZE
+.const SAVE_BLOCK_PRE_KNOWN_COUNT = (save_block_table_pre_known_end - save_block_table_pre_known) / SAVE_BLOCK_DESC_SIZE
+.const SAVE_BLOCK_POST_KNOWN_COUNT = (save_block_table_post_known_end - save_block_table_post_known) / SAVE_BLOCK_DESC_SIZE
 .const SAVE_BLOCK_POST_FLOOR_COUNT = (save_block_table_post_floor_end - save_block_table_post_floor) / SAVE_BLOCK_DESC_SIZE
-.assert "Pre-floor save block table entries are 4 bytes", SAVE_BLOCK_PRE_FLOOR_COUNT * SAVE_BLOCK_DESC_SIZE, save_block_table_pre_floor_end - save_block_table_pre_floor
+.assert "Pre-known save block table entries are 4 bytes", SAVE_BLOCK_PRE_KNOWN_COUNT * SAVE_BLOCK_DESC_SIZE, save_block_table_pre_known_end - save_block_table_pre_known
+.assert "Post-known save block table entries are 4 bytes", SAVE_BLOCK_POST_KNOWN_COUNT * SAVE_BLOCK_DESC_SIZE, save_block_table_post_known_end - save_block_table_post_known
 .assert "Post-floor save block table entries are 4 bytes", SAVE_BLOCK_POST_FLOOR_COUNT * SAVE_BLOCK_DESC_SIZE, save_block_table_post_floor_end - save_block_table_post_floor
-.assert "Pre-floor save block table count fits in one page", SAVE_BLOCK_PRE_FLOOR_COUNT < 64, true
+.assert "Pre-known save block table count fits in one page", SAVE_BLOCK_PRE_KNOWN_COUNT < 64, true
+.assert "Post-known save block table count fits in one page", SAVE_BLOCK_POST_KNOWN_COUNT < 64, true
 .assert "Post-floor save block table count fits in one page", SAVE_BLOCK_POST_FLOOR_COUNT < 64, true
 
 // ============================================================
@@ -499,12 +506,23 @@ save_return_c64_with_carry:
     // 1. Magic header (8 bytes)
     :save_block(save_magic, SAVE_MAGIC_SIZE)
 
-    // 2-15. Regular resident state blocks through monster table
-    lda #<save_block_table_pre_floor
+    // 2. Regular resident state through inventory/equipment.
+    lda #<save_block_table_pre_known
     sta zp_ptr1
-    lda #>save_block_table_pre_floor
+    lda #>save_block_table_pre_known
     sta zp_ptr1_hi
-    lda #SAVE_BLOCK_PRE_FLOOR_COUNT
+    lda #SAVE_BLOCK_PRE_KNOWN_COUNT
+    jsr save_write_block_table
+
+    // 3. Known-item state uses the V2 96-byte runway.
+    jsr save_write_known_items
+
+    // 4. Remaining resident state through monster table.
+    lda #<save_block_table_post_known
+    sta zp_ptr1
+    lda #>save_block_table_post_known
+    sta zp_ptr1_hi
+    lda #SAVE_BLOCK_POST_KNOWN_COUNT
     jsr save_write_block_table
 
     // 16. Floor items (logical 8-field layout, serialized from packed RAM)
@@ -723,12 +741,23 @@ plus4_test_after_load_magic:
 
     // --- Read all blocks in same order as save ---
 
-    // 2-15. Regular resident state blocks through monster table
-    lda #<save_block_table_pre_floor
+    // 2. Regular resident state through inventory/equipment.
+    lda #<save_block_table_pre_known
     sta zp_ptr1
-    lda #>save_block_table_pre_floor
+    lda #>save_block_table_pre_known
     sta zp_ptr1_hi
-    lda #SAVE_BLOCK_PRE_FLOOR_COUNT
+    lda #SAVE_BLOCK_PRE_KNOWN_COUNT
+    jsr load_read_block_table
+
+    // 3. Known-item state is 64 bytes in V1, 96 bytes in V2.
+    jsr load_read_known_items
+
+    // 4. Remaining resident state through monster table.
+    lda #<save_block_table_post_known
+    sta zp_ptr1
+    lda #>save_block_table_post_known
+    sta zp_ptr1_hi
+    lda #SAVE_BLOCK_POST_KNOWN_COUNT
     jsr load_read_block_table
 
     // 16. Floor items
@@ -1165,6 +1194,35 @@ save_write_byte_raw:
     tax
     lda zp_temp0
 #endif
+    rts
+
+// ============================================================
+// save_write_known_items / load_read_known_items
+//
+// Save V1 wrote ITEM_TYPE_COUNT bytes because the shipped catalog had exactly
+// 64 IDs. Save V2 writes ITEM_ID_CAPACITY bytes so IDs 64-95 can be appended
+// without changing the save stream again.
+// ============================================================
+save_write_known_items:
+    :save_block(id_known, ITEM_ID_CAPACITY)
+    rts
+
+load_read_known_items:
+    lda load_save_version
+    cmp #SAVE_KNOWN96_VERSION
+    bcc !lrki_v1+
+    :load_block(id_known, ITEM_ID_CAPACITY)
+    rts
+
+!lrki_v1:
+    :load_block(id_known, LEGACY_ITEM_TYPE_COUNT)
+    ldx #LEGACY_ITEM_TYPE_COUNT
+    lda #0
+!lrki_clear_future:
+    sta id_known,x
+    inx
+    cpx #ITEM_ID_CAPACITY
+    bcc !lrki_clear_future-
     rts
 
 // ============================================================

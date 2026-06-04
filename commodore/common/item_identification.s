@@ -27,6 +27,8 @@ id_known:
     .byte 1, 1, 1, 1, 1, 1      // 55-60: Books — always known
     .byte 1                      // 61: Flask of Oil — always known
     .byte 1, 1                  // 62-63: Digging tools — always known
+    .fill ITEM_ID_CAPACITY - ITEM_TYPE_COUNT, 0
+.assert "id_known capacity", potion_shuffle - id_known, ITEM_ID_CAPACITY
 
 // Shuffle tables: map category-local index → description index
 // 12 potions, 12 scrolls, 4 rings — full pool shuffled, first N used
@@ -143,6 +145,13 @@ item_init_identification:
     inx
     cpx #ITEM_TYPE_COUNT
     bcc !iid_known_2-
+    ldx #ITEM_TYPE_COUNT
+    lda #0
+!iid_future_unknown:
+    sta id_known,x
+    inx
+    cpx #ITEM_ID_CAPACITY
+    bcc !iid_future_unknown-
 
     // Initialize shuffle tables to identity (0..11 / 0..3 / 0..4)
     ldx #11                         // For 12 elements (0-11)

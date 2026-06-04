@@ -84,7 +84,11 @@ show_inv_and_select:
     sta piw_filter
 #if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME
     lda piw_return_overlay
-    bne !sias_have_return_overlay+
+    pha
+    lda #OVL_NONE
+    sta piw_return_overlay
+    pla
+    bne !sias_restore_explicit_overlay+
     // Restore an item overlay when either the immediate return target or the
     // selector's outer continuation is inside the overlay window.
     tsx
@@ -108,6 +112,9 @@ show_inv_and_select:
 !sias_store_return_overlay:
     sta piw_return_overlay
 !sias_return_resident:
+    jmp !sias_have_return_overlay+
+!sias_restore_explicit_overlay:
+    sta piw_return_overlay
 !sias_have_return_overlay:
 #endif
     jsr input_prepare_selectable_overlay_key
@@ -125,6 +132,7 @@ show_inv_and_select:
     lda #OVL_NONE
     sta piw_return_overlay
     txa
+    cmp #OVL_NONE
     beq !sias_no_overlay_reload+
     jsr overlay_load
     bcc !sias_overlay_loaded+

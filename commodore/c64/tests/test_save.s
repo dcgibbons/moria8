@@ -4,7 +4,7 @@
 // recount_monsters, recount_floor_items, save-version compatibility helpers,
 // split item stat save/load persistence.
 //
-// Results at $0400-$0415: $01 = pass, $00 = fail per test (22 tests)
+// Results at $0400-$0416: $01 = pass, $00 = fail per test (23 tests)
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(bootstrap)
@@ -25,7 +25,7 @@ bootstrap:
 // Must be in low memory (before imports) so BRK address is below $A000.
 // VICE breakpoint on $A000+ can false-trigger during BASIC ROM execution.
 test_finish:
-    ldx #21
+    ldx #22
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -133,7 +133,8 @@ random_floor_in_room:
 .const hal_storage_marker_sec_read = 2
 .const hal_storage_marker_sec_write = 2
 .const hal_storage_program_file_num = 7
-.const hal_storage_save_version = $0f
+.const hal_storage_save_v1_version = $0f
+.const hal_storage_save_version = $10
 .const KERNAL_ERR_DEVICE_NOT_PRESENT = 5
 .const KERNAL_SETNAM = test_save_setnam
 .const KERNAL_SETLFS = test_save_setlfs
@@ -293,7 +294,7 @@ rle_decompress_map:
 !:  rts
 
 // Test result buffer — copy to $0400 at end (msg_print clobbers $0400)
-tc_results: .fill 22, $ff
+tc_results: .fill 23, $ff
 tc_count: .byte 0
 
 // Verification buffer — 256 bytes at $CF00 (floor item area, safe during tests 2-3)
@@ -516,7 +517,7 @@ test_start:
     sta rle_work_hi
 
     // Initialize result area to $ff (untested)
-    ldx #21
+    ldx #22
     lda #$ff
 !clr:
     sta tc_results,x
@@ -1109,17 +1110,17 @@ t7_set_slot31:
     sta tc_results + 10
 
     // ============================================================
-    // Test 12: unsupported/floor-layout helpers reject non-current versions.
+    // Test 12: V1 is supported and uses the current floor layout.
     // ============================================================
-    lda #(SAVE_VERSION - 1)
+    lda #SAVE_V1_VERSION
     jsr save_version_supported
-    bcs !t12_fail+
+    bcc !t12_fail+
     lda #(SAVE_VERSION + 1)
     jsr save_version_supported
     bcs !t12_fail+
-    lda #(SAVE_VERSION - 1)
+    lda #SAVE_V1_VERSION
     jsr save_version_uses_legacy_floor_layout
-    bcc !t12_fail+
+    bcs !t12_fail+
     lda #SAVE_VERSION
     jsr save_version_uses_legacy_floor_layout
     bcs !t12_fail+
@@ -1139,6 +1140,7 @@ t7_set_slot31:
     sta save_cksum_lo
     sta save_cksum_hi
     sta save_io_error
+    sta test_save_sink_writes
 
     jsr item_init_inventory
     jsr item_init_floor
@@ -1753,6 +1755,112 @@ t21_fail_code:
 t22_fail_code:
 !t22_store:
     sta tc_results + 21
+
+    // ============================================================
+    // Test 23: known-item save migration reads V1 as 64 bytes,
+    // clears future IDs, and round-trips the V2 96-byte runway.
+    // ============================================================
+    lda #0
+    sta save_cksum_lo
+    sta save_cksum_hi
+    sta save_io_error
+    jsr test_stream_reset_write
+    ldx #0
+!t23_seed_v1_stream:
+    txa
+    eor #$5a
+    sta SAVE_STREAM_BUF,x
+    inx
+    cpx #ITEM_TYPE_COUNT
+    bcc !t23_seed_v1_stream-
+    lda SAVE_STREAM_BUF
+    cmp #$5a
+    beq !t23_v1_stream_ok+
+    lda #5
+    jmp t23_fail_code
+!t23_v1_stream_ok:
+
+    ldx #0
+    lda #$ff
+!t23_poison_known:
+    sta id_known,x
+    inx
+    cpx #ITEM_ID_CAPACITY
+    bcc !t23_poison_known-
+
+    lda #SAVE_V1_VERSION
+    sta load_save_version
+    jsr test_stream_reset_read
+    jsr load_read_known_items
+
+    ldx #0
+!t23_check_v1_known:
+    txa
+    eor #$5a
+    cmp id_known,x
+    beq !t23_v1_next+
+    lda #2
+    jmp t23_fail_code
+!t23_v1_next:
+    inx
+    cpx #ITEM_TYPE_COUNT
+    bcc !t23_check_v1_known-
+
+    ldx #ITEM_TYPE_COUNT
+!t23_check_v1_future:
+    lda id_known,x
+    beq !t23_future_next+
+    lda #3
+    jmp t23_fail_code
+!t23_future_next:
+    inx
+    cpx #ITEM_ID_CAPACITY
+    bcc !t23_check_v1_future-
+
+    lda #0
+    sta save_cksum_lo
+    sta save_cksum_hi
+    sta save_io_error
+    sta test_save_sink_writes
+    ldx #0
+!t23_seed_v2_known:
+    txa
+    sta id_known,x
+    inx
+    cpx #ITEM_ID_CAPACITY
+    bcc !t23_seed_v2_known-
+    jsr test_stream_reset_write
+    jsr save_write_known_items
+
+    ldx #0
+    lda #0
+!t23_clear_v2_known:
+    sta id_known,x
+    inx
+    cpx #ITEM_ID_CAPACITY
+    bcc !t23_clear_v2_known-
+    lda #SAVE_VERSION
+    sta load_save_version
+    jsr test_stream_reset_read
+    jsr load_read_known_items
+
+    ldx #0
+!t23_check_v2_known:
+    txa
+    cmp id_known,x
+    beq !t23_v2_next+
+    lda #4
+    jmp t23_fail_code
+!t23_v2_next:
+    inx
+    cpx #ITEM_ID_CAPACITY
+    bcc !t23_check_v2_known-
+
+    lda #$01
+    bne !t23_store+
+t23_fail_code:
+!t23_store:
+    sta tc_results + 22
 
     jmp test_finish
 

@@ -4,10 +4,11 @@ from __future__ import annotations
 from pathlib import Path
 import sys
 
-SAVE_VERSION = 0x0F
+SAVE_VERSION = 0x10
 
 PL_STRUCT_SIZE = 111
 ITEM_TYPE_COUNT = 64
+ITEM_ID_CAPACITY = 96
 STORE_TOTAL_SLOTS = 96
 MAX_ROOMS = 8
 MAX_TRAPS = 16
@@ -55,7 +56,7 @@ def main() -> int:
     payload.extend(block(4))    # rng
     for _ in range(8):
         payload.extend(block(TOTAL_INV_SLOTS))
-    payload.extend(block(ITEM_TYPE_COUNT))
+    payload.extend(block(ITEM_ID_CAPACITY))
     payload.extend(block(12))  # potion_shuffle
     payload.extend(block(12))  # scroll_shuffle
     payload.extend(block(4))   # ring_shuffle
