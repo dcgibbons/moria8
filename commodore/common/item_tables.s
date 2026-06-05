@@ -81,6 +81,10 @@ it_category:
     .byte ICAT_WEAPON   // 67: Broad Sword
     .byte ICAT_WEAPON   // 68: Bastard Sword
     .byte ICAT_WEAPON   // 69: Two-Handed Sword
+    .byte ICAT_WEAPON   // 70: Scimitar
+    .byte ICAT_WEAPON   // 71: Battle Axe
+    .byte ICAT_WEAPON   // 72: War Hammer
+    .byte ICAT_WEAPON   // 73: Morningstar
 
 // Display character (screen codes)
 it_display:
@@ -154,6 +158,10 @@ it_display:
     .byte $2f   // 67: '/' Broad Sword
     .byte $2f   // 68: '/' Bastard Sword
     .byte $2f   // 69: '/' Two-Handed Sword
+    .byte $2f   // 70: '/' Scimitar
+    .byte $2f   // 71: '/' Battle Axe
+    .byte $2f   // 72: '/' War Hammer
+    .byte $2f   // 73: '/' Morningstar
 
 // Color
 it_color:
@@ -227,6 +235,10 @@ it_color:
     .byte COL_WHITE     // 67: Broad Sword
     .byte COL_WHITE     // 68: Bastard Sword
     .byte COL_LGREY     // 69: Two-Handed Sword
+    .byte COL_WHITE     // 70: Scimitar
+    .byte COL_LGREY     // 71: Battle Axe
+    .byte COL_LGREY     // 72: War Hammer
+    .byte COL_WHITE     // 73: Morningstar
 
 // Weight (in 1/10 lbs)
 it_weight:
@@ -242,6 +254,7 @@ it_weight:
     .byte 60, 50                            // 62: Shovel, 63: Pick
     .byte 30, 90                            // 64-65: new weapon/armor
     .byte 40, 75, 140, 200                  // 66-69: expanded swords
+    .byte 40, 170, 120, 150                 // 70-73: expanded hafted/axe
 
 // Damage dice count
 it_dmg_dice:
@@ -257,6 +270,7 @@ it_dmg_dice:
     .byte 1, 1                              // 62: Shovel (1d2), 63: Pick (1d3)
     .byte 1, 0                              // 64-65: new weapon/armor
     .byte 1, 2, 3, 3                        // 66-69: expanded swords
+    .byte 1, 3, 3, 2                        // 70-73: expanded hafted/axe
 
 // Damage dice sides
 it_dmg_sides:
@@ -272,6 +286,7 @@ it_dmg_sides:
     .byte 2, 3                              // 62: Shovel (1d2), 63: Pick (1d3)
     .byte 5, 0                              // 64-65: new weapon/armor
     .byte 6, 5, 4, 6                        // 66-69: expanded swords
+    .byte 8, 4, 3, 6                        // 70-73: expanded hafted/axe
 
 // Base armor class
 it_base_ac:
@@ -287,6 +302,7 @@ it_base_ac:
     .byte 0, 0                              // 62: Shovel, 63: Pick (no AC)
     .byte 0, 5                              // 64-65: new weapon/armor
     .byte 0, 0, 0, 0                        // 66-69: expanded swords
+    .byte 0, 0, 0, 0                        // 70-73: expanded hafted/axe
 
 // Base cost (lo)
 it_cost_lo:
@@ -303,6 +319,7 @@ it_cost_lo:
     .byte <15, <50                          // 62: Shovel (15gp), 63: Pick (50gp)
     .byte <25, <75
     .byte <42, <70, <120, <180
+    .byte <50, <120, <90, <100
 
 // Base cost (hi)
 it_cost_hi:
@@ -319,6 +336,7 @@ it_cost_hi:
     .byte >15, >50                          // 62: Shovel (15gp), 63: Pick (50gp)
     .byte >25, >75
     .byte >42, >70, >120, >180
+    .byte >50, >120, >90, >100
 
 // Minimum dungeon level to appear
 it_min_level:
@@ -334,6 +352,7 @@ it_min_level:
     .byte 0, 0                              // 62: Shovel, 63: Pick (available immediately)
     .byte 1, 3                              // 64-65: new weapon/armor
     .byte 2, 4, 6, 8                        // 66-69: expanded swords
+    .byte 3, 7, 5, 6                        // 70-73: expanded hafted/axe
 
 // Missile type table — encodes ranged weapon/ammo relationships
 // Only stored for types 49-54 (ranged items). Types < 49 are not ranged (return 0).
@@ -383,6 +402,7 @@ it_name_lo:
     .byte <itn_61, <itn_62, <itn_63
     .byte <itn_64, <itn_65
     .byte <itn_66, <itn_67, <itn_68, <itn_69
+    .byte <itn_70, <itn_71, <itn_72, <itn_73
 it_name_hi:
     .byte >itn_0,  >itn_1,  >itn_2,  >itn_3,  >itn_4
     .byte >itn_5,  >itn_6,  >itn_7,  >itn_8,  >itn_9
@@ -400,6 +420,7 @@ it_name_hi:
     .byte >itn_61, >itn_62, >itn_63
     .byte >itn_64, >itn_65
     .byte >itn_66, >itn_67, >itn_68, >itn_69
+    .byte >itn_70, >itn_71, >itn_72, >itn_73
 it_name_hi_end:
 
 // Tokenized item-name string pool.
@@ -428,7 +449,9 @@ it_name_hi_end:
 .const ITOK_A_COPPER          = $93
 .const ITOK_CLOUD_SUFFIX      = $94
 .const ITOK_SWORD_SUFFIX      = $95
-.const ITEM_NAME_TOKEN_COUNT  = $16
+.const ITOK_A_SPACE           = $96
+.const ITOK_AN_SPACE          = $97
+.const ITEM_NAME_TOKEN_COUNT  = $18
 
 item_name_token_lo:
     .byte <itok_scroll_of_art, <itok_potion_suffix, <itok_of, <itok_scroll
@@ -436,14 +459,14 @@ item_name_token_lo:
     .byte <itok_detect_monsters, <itok_staff, <itok_ring_suffix, <itok_teleportation
     .byte <itok_wounds_suffix, <itok_magick, <itok_gold, <itok_confusion
     .byte <itok_cure, <itok_beginners, <itok_enchant, <itok_a_copper
-    .byte <itok_cloud_suffix, <itok_sword_suffix
+    .byte <itok_cloud_suffix, <itok_sword_suffix, <itok_a_space, <itok_an_space
 item_name_token_hi:
     .byte >itok_scroll_of_art, >itok_potion_suffix, >itok_of, >itok_scroll
     .byte >itok_light, >itok_wand, >itok_a_silver, >itok_leather
     .byte >itok_detect_monsters, >itok_staff, >itok_ring_suffix, >itok_teleportation
     .byte >itok_wounds_suffix, >itok_magick, >itok_gold, >itok_confusion
     .byte >itok_cure, >itok_beginners, >itok_enchant, >itok_a_copper
-    .byte >itok_cloud_suffix, >itok_sword_suffix
+    .byte >itok_cloud_suffix, >itok_sword_suffix, >itok_a_space, >itok_an_space
 
 itok_scroll_of_art:   .text "a Scroll of " ; .byte 0
 itok_potion_suffix:   .text " Potion" ; .byte 0
@@ -467,6 +490,8 @@ itok_enchant:         .text "Enchant " ; .byte 0
 itok_a_copper:        .text "a Copper" ; .byte 0
 itok_cloud_suffix:    .text " Cloud" ; .byte 0
 itok_sword_suffix:    .text " Sword" ; .byte 0
+itok_a_space:         .text "a " ; .byte 0
+itok_an_space:        .text "an " ; .byte 0
 
 // Name streams (screen codes plus item-name tokens, null-terminated)
 itn_0:  .byte ITOK_GOLD ; .text " (small)" ; .byte 0
@@ -539,3 +564,7 @@ itn_66: .text "Rapier" ; .byte 0
 itn_67: .text "Broad" ; .byte ITOK_SWORD_SUFFIX ; .byte 0
 itn_68: .text "Bastard" ; .byte ITOK_SWORD_SUFFIX ; .byte 0
 itn_69: .text "Two-Handed" ; .byte ITOK_SWORD_SUFFIX ; .byte 0
+itn_70: .text "Scimitar" ; .byte 0
+itn_71: .text "Battle Axe" ; .byte 0
+itn_72: .text "War Hammer" ; .byte 0
+itn_73: .text "Morningstar" ; .byte 0

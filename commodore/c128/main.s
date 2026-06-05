@@ -3413,28 +3413,6 @@ c128_resident_world_end:
 c128_resident_items_start:
 #import "../common/item.s"
 #import "../common/store_data.s"
-at_surface_str:
-    .text "You are already at the surface." ; .byte 0
-slain_str:
-    .text "You have been slain." ; .byte 0
-death_source_saved:
-    .byte 0
-recall_query_sc:   .byte 0
-recall_found_type: .byte 0
-recall_last_sc:    .byte 0
-recall_last_idx:   .byte 0
-run_input_armed:   .byte 0
-auto_rest_active:  .byte 0
-ptep_temp: .byte 0
-ego_tool_prefix_gnomish: .text "Gnomish " ; .byte 0
-ego_tool_prefix_orcish:  .text "Orcish " ; .byte 0
-ego_tool_prefix_dwarven: .text "Dwarven " ; .byte 0
-tool_ego_prefix_lo:
-    .byte <ego_tool_prefix_gnomish, <ego_tool_prefix_dwarven
-    .byte <ego_tool_prefix_orcish,  <ego_tool_prefix_dwarven
-tool_ego_prefix_hi:
-    .byte >ego_tool_prefix_gnomish, >ego_tool_prefix_dwarven
-    .byte >ego_tool_prefix_orcish,  >ego_tool_prefix_dwarven
 c128_resident_items_end:
 
 .segment C128ResidentSelect
@@ -3477,6 +3455,28 @@ c128_resident_persist_end:
 #define GAME_LOOP_LOW_DATA_EXTERNAL
 .segment C128ResidentPlay
 c128_resident_play_start:
+at_surface_str:
+    .text "You are already at the surface." ; .byte 0
+slain_str:
+    .text "You have been slain." ; .byte 0
+death_source_saved:
+    .byte 0
+recall_query_sc:   .byte 0
+recall_found_type: .byte 0
+recall_last_sc:    .byte 0
+recall_last_idx:   .byte 0
+run_input_armed:   .byte 0
+auto_rest_active:  .byte 0
+ptep_temp: .byte 0
+ego_tool_prefix_gnomish: .text "Gnomish " ; .byte 0
+ego_tool_prefix_orcish:  .text "Orcish " ; .byte 0
+ego_tool_prefix_dwarven: .text "Dwarven " ; .byte 0
+tool_ego_prefix_lo:
+    .byte <ego_tool_prefix_gnomish, <ego_tool_prefix_dwarven
+    .byte <ego_tool_prefix_orcish,  <ego_tool_prefix_dwarven
+tool_ego_prefix_hi:
+    .byte >ego_tool_prefix_gnomish, >ego_tool_prefix_dwarven
+    .byte >ego_tool_prefix_orcish,  >ego_tool_prefix_dwarven
 #if PERF_P1
 #import "../common/perf_p1_data.s"
 #endif

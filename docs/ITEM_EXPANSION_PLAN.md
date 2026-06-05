@@ -32,7 +32,7 @@ Relevant current constants:
 
 | Constant | Value | Meaning |
 |---|---:|---|
-| `ITEM_TYPE_COUNT` | 70 | Current item catalog size |
+| `ITEM_TYPE_COUNT` | 74 | Current item catalog size |
 | `MAX_FLOOR_ITEMS` | 42 | Max live floor item slots |
 | `MAX_INV_SLOTS` | 22 | Carried inventory slots |
 | `MAX_EQUIP_SLOTS` | 9 | Equipment slots |
@@ -100,6 +100,10 @@ The first expansion from 64 to 66 IDs added:
 | 67 | Broad Sword | weapon |
 | 68 | Bastard Sword | weapon |
 | 69 | Two-Handed Sword | weapon |
+| 70 | Scimitar | weapon |
+| 71 | Battle Axe | weapon |
+| 72 | War Hammer | weapon |
+| 73 | Morningstar | weapon |
 
 This exposed several important contracts:
 
@@ -109,6 +113,7 @@ This exposed several important contracts:
 | Item names | Appended equipment could be treated as unknown staff-like data | Unknown-name logic must be category-safe and migration defaults must keep mundane always-known items known. |
 | Save migration | V1 saves contained only 64 known-item bytes | Legacy loads must initialize every byte beyond `LEGACY_ITEM_TYPE_COUNT` deterministically. |
 | Ranged metadata | Melee IDs above the missile table could read adjacent code as missile metadata | Narrow per-class tables need explicit lower and upper bounds before IDs from other classes can live above them. |
+| Resident memory | The second melee slice crossed both the C64 runtime `$C000` boundary and the C128 resident-items `$A800` boundary | Every slice must be treated as memory work, not only catalog data work; recover bytes or shrink the slice before testing. |
 | C128 layout | Small data growth still stressed resident/banked placement | Any catalog growth can require C128 layout work and full C128 verification. |
 | Tests | Isolated table tests missed product wizard-to-inventory corruption, and explicit expected-name fixtures stopped at the old high ID | Product-path smoke tests are required for appended IDs, and every explicit catalog fixture must grow with `ITEM_TYPE_COUNT`. |
 
@@ -409,6 +414,10 @@ This is cleaner long-term but larger and invasive.
 | 67 | Broad Sword | Weapon |
 | 68 | Bastard Sword | Weapon |
 | 69 | Two-Handed Sword | Weapon |
+| 70 | Scimitar | Weapon |
+| 71 | Battle Axe | Weapon |
+| 72 | War Hammer | Weapon |
+| 73 | Morningstar | Weapon |
 
 ## Source Catalog Comparison
 
@@ -542,6 +551,14 @@ Phase 0 implementation status:
   spacious.
 - The first Phase 1 melee slice raised `ITEM_TYPE_COUNT` to 70 by adding
   `Rapier`, `Broad Sword`, `Bastard Sword`, and `Two-Handed Sword`.
+- The second Phase 1 melee slice raised `ITEM_TYPE_COUNT` to 74 by adding
+  `Scimitar`, `Battle Axe`, `War Hammer`, and `Morningstar`.
+- The second slice initially failed memory assertions. The accepted layout
+  recovered shared resident bytes by tokenizing repeated unknown-name articles
+  and shrinking the dedicated item-name decode buffer to the current catalog's
+  maximum needs. It recovered C128 resident-items space by moving C128
+  game-loop low data from `C128ResidentItems` to `C128ResidentPlay`, where the
+  game-loop code already lives.
 - That slice also hardened `item_get_missile` with an upper bound, because
   melee IDs above the compact ranged table must return non-ranged rather than
   reading the following code bytes.

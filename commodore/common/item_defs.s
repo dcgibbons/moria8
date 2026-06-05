@@ -45,5 +45,5 @@
 // Master Item Type Count
 // Save Format V1 serializes 64 known-item bytes. Do not renumber IDs 0-63.
 .const LEGACY_ITEM_TYPE_COUNT = 64
-.const ITEM_TYPE_COUNT = 70
+.const ITEM_TYPE_COUNT = 74
 .const ITEM_ID_CAPACITY = 96

@@ -168,7 +168,7 @@ test_start:
     jsr item_get_missile
     cmp #$83
     bne !t4_fail+
-    ldx #69
+    ldx #73
     jsr item_get_missile
     cmp #0
     bne !t4_fail+
