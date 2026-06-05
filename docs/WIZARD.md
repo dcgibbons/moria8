@@ -29,7 +29,7 @@ Commands:
 - `Q` - cancel / exit menu
 
 Prompts:
-- Item generation: `ITEM 0-73: `
+- Item generation: `ITEM 0-77: `
 - Level jump: `DLVL 0-99: `
 
 Feedback:
@@ -40,7 +40,7 @@ Feedback:
 
 ## Generate Item
 
-Wizard item generation uses item IDs `0-73`.
+Wizard item generation uses item IDs `0-77`.
 
 Behavior:
 - Non-gold items try to go into inventory first
@@ -187,6 +187,10 @@ or `Neutralize Poison` feedback:
 | 71 | Battle Axe |
 | 72 | War Hammer |
 | 73 | Morningstar |
+| 74 | Spear |
+| 75 | Pike |
+| 76 | Halberd |
+| 77 | Quarterstaff |
 
 ## Source References
 

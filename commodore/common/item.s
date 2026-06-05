@@ -1311,44 +1311,53 @@ tunnel_spawn_gold:
 // Uses: zp_temp0 (pool_size), zp_temp1 (best_idx), zp_temp2 (tier_lo)
 //       zp_temp4 used internally by rng_range
 // ============================================================
+#if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME
+.segment DungeonGenOverlay
+#endif
 .const PIT_MAX_LEVEL = 12
 
 // Items 2-(ITEM_TYPE_COUNT-1) sorted ascending by it_min_level
 pit_sorted:
     // Level 0 (5 items)
     .byte 13, 15, 61, 62, 63
-    // Level 1 (16 items)
-    .byte 2, 3, 6, 11, 12, 16, 17, 19, 20, 28, 29, 37, 51, 52, 54, 64
-    // Level 2 (11 items)
-    .byte 5, 7, 9, 14, 21, 30, 31, 47, 48, 49, 53
-    // Level 3 (12 items)
-    .byte 4, 10, 18, 22, 25, 36, 39, 43, 44, 46, 50, 65
-    // Level 4 (9 items)
-    .byte 8, 23, 27, 33, 38, 40, 42, 55, 58
-    // Level 5 (5 items)
-    .byte 24, 26, 32, 41, 45
-    // Level 6 (2 items)
-    .byte 34, 35
-    // Level 8 (2 items)
-    .byte 56, 59
+    // Level 1 (17 items)
+    .byte 2, 3, 6, 11, 12, 16, 17, 19, 20, 28, 29, 37, 51, 52, 54, 64, 77
+    // Level 2 (13 items)
+    .byte 5, 7, 9, 14, 21, 30, 31, 47, 48, 49, 53, 66, 74
+    // Level 3 (13 items)
+    .byte 4, 10, 18, 22, 25, 36, 39, 43, 44, 46, 50, 65, 70
+    // Level 4 (10 items)
+    .byte 8, 23, 27, 33, 38, 40, 42, 55, 58, 67
+    // Level 5 (6 items)
+    .byte 24, 26, 32, 41, 45, 72
+    // Level 6 (4 items)
+    .byte 34, 35, 68, 73
+    // Level 7 (1 item)
+    .byte 71
+    // Level 8 (4 items)
+    .byte 56, 59, 69, 75
+    // Level 9 (1 item)
+    .byte 76
     // Level 12 (2 items)
     .byte 57, 60
+pit_sorted_end:
 
 // Cumulative item count per level (0-12)
 pit_level_bounds:
     .byte 5      // level 0: 5 items
-    .byte 21     // level 1: +16 = 21
-    .byte 32     // level 2: +11 = 32
-    .byte 44     // level 3: +12 = 44
-    .byte 53     // level 4: +9 = 53
-    .byte 58     // level 5: +5 = 58
-    .byte 60     // level 6: +2 = 60
-    .byte 60     // level 7: (no items)
-    .byte 62     // level 8: +2 = 62
-    .byte 62     // level 9: (no items)
-    .byte 62     // level 10: (no items)
-    .byte 62     // level 11: (no items)
-    .byte 64     // level 12: +2 = 64
+    .byte 22     // level 1: +17 = 22
+    .byte 35     // level 2: +13 = 35
+    .byte 48     // level 3: +13 = 48
+    .byte 58     // level 4: +10 = 58
+    .byte 64     // level 5: +6 = 64
+    .byte 68     // level 6: +4 = 68
+    .byte 69     // level 7: +1 = 69
+    .byte 73     // level 8: +4 = 73
+    .byte 74     // level 9: +1 = 74
+    .byte 74     // level 10: (no items)
+    .byte 74     // level 11: (no items)
+    .byte 76     // level 12: +2 = 76
+pit_level_bounds_end:
 
 pick_item_type:
     // Calculate effective level = min(dlvl + 2, PIT_MAX_LEVEL)
@@ -1427,6 +1436,13 @@ pick_item_type:
     lda pit_level_bounds         // level_bounds[0] = count at level 0
     jsr rng_range                // [0, count-1]
     jmp !pit_return_idx-
+
+#if C64_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME
+.segment Default
+#endif
+#if C128_PRODUCT_OVERLAY_RUNTIME
+.segment C128ResidentItems
+#endif
 
 // ============================================================
 // roll_enchantment — Roll enchantment value for a spawned item
@@ -1683,7 +1699,7 @@ re_negate_a:
 // ============================================================
 // Compile-time validation
 // ============================================================
-.assert "Item type count", ITEM_TYPE_COUNT, 74
+.assert "Item type count", ITEM_TYPE_COUNT, 78
 .assert "it_category size", it_display - it_category, ITEM_TYPE_COUNT
 .assert "it_display size", it_color - it_display, ITEM_TYPE_COUNT
 .assert "it_color size", it_weight - it_color, ITEM_TYPE_COUNT
@@ -1696,5 +1712,7 @@ re_negate_a:
 .assert "it_min_level size", it_missile - it_min_level, ITEM_TYPE_COUNT
 .assert "it_name_lo size", it_name_hi - it_name_lo, ITEM_TYPE_COUNT
 .assert "it_name_hi size", it_name_hi_end - it_name_hi, ITEM_TYPE_COUNT
+.assert "pit_sorted size", pit_sorted_end - pit_sorted, ITEM_TYPE_COUNT - 2
+.assert "pit_level_bounds size", pit_level_bounds_end - pit_level_bounds, PIT_MAX_LEVEL + 1
 // Hardcoded assertion removed for cross-platform compatibility
 .assert "Inventory total slots", TOTAL_INV_SLOTS, 31

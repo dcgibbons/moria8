@@ -240,7 +240,7 @@ store_pick_item:
     sta srr_retry
 
 !spi_loop:
-    lda #62
+    lda #ITEM_TYPE_COUNT - 2
     jsr rng_range
     clc
     adc #2

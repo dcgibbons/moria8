@@ -124,6 +124,7 @@ c128_test_seed_scripted_prayer_state:
     sta player_data + PL_SPELL_ORDER
     rts
 
+.segment C128ResidentPlay
 c128_test_prayer_msg_str:
     .text "You feel righteous!" ; .byte 0
 
@@ -157,7 +158,6 @@ c128_test_prayer_history_has_bless:
 !c128_tp_found:
     sec
     rts
-.segment C128ResidentPlay
 #endif
 
 #if C64_TEST_SCRIPTED_SCROLL_SELECTOR

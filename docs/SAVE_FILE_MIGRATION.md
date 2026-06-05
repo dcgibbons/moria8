@@ -78,7 +78,7 @@ save capacity separate from the number of currently implemented item rows:
 
 ```asm
 .const LEGACY_ITEM_TYPE_COUNT = 64
-.const ITEM_TYPE_COUNT = 74
+.const ITEM_TYPE_COUNT = 78
 .const ITEM_ID_CAPACITY = 96
 ```
 

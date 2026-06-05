@@ -336,6 +336,7 @@ expected_item_name_lo:
     .byte <ein_64, <ein_65
     .byte <ein_66, <ein_67, <ein_68, <ein_69
     .byte <ein_70, <ein_71, <ein_72, <ein_73
+    .byte <ein_74, <ein_75, <ein_76, <ein_77
 expected_item_name_hi:
     .byte >ein_0, >ein_1, >ein_2, >ein_3, >ein_4, >ein_5, >ein_6, >ein_7
     .byte >ein_8, >ein_9, >ein_10, >ein_11, >ein_12, >ein_13, >ein_14, >ein_15
@@ -348,6 +349,7 @@ expected_item_name_hi:
     .byte >ein_64, >ein_65
     .byte >ein_66, >ein_67, >ein_68, >ein_69
     .byte >ein_70, >ein_71, >ein_72, >ein_73
+    .byte >ein_74, >ein_75, >ein_76, >ein_77
 
 ein_0:  .text "Gold (small)" ; .byte 0
 ein_1:  .text "Gold (large)" ; .byte 0
@@ -423,6 +425,10 @@ ein_70: .text "Scimitar" ; .byte 0
 ein_71: .text "Battle Axe" ; .byte 0
 ein_72: .text "War Hammer" ; .byte 0
 ein_73: .text "Morningstar" ; .byte 0
+ein_74: .text "Spear" ; .byte 0
+ein_75: .text "Pike" ; .byte 0
+ein_76: .text "Halberd" ; .byte 0
+ein_77: .text "Quarterstaff" ; .byte 0
 
 assert_col: .byte 0
 assert_idx: .byte 0

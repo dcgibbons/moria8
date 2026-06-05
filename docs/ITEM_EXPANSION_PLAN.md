@@ -32,7 +32,7 @@ Relevant current constants:
 
 | Constant | Value | Meaning |
 |---|---:|---|
-| `ITEM_TYPE_COUNT` | 74 | Current item catalog size |
+| `ITEM_TYPE_COUNT` | 78 | Current item catalog size |
 | `MAX_FLOOR_ITEMS` | 42 | Max live floor item slots |
 | `MAX_INV_SLOTS` | 22 | Carried inventory slots |
 | `MAX_EQUIP_SLOTS` | 9 | Equipment slots |
@@ -104,6 +104,10 @@ The first expansion from 64 to 66 IDs added:
 | 71 | Battle Axe | weapon |
 | 72 | War Hammer | weapon |
 | 73 | Morningstar | weapon |
+| 74 | Spear | weapon |
+| 75 | Pike | weapon |
+| 76 | Halberd | weapon |
+| 77 | Quarterstaff | weapon |
 
 This exposed several important contracts:
 
@@ -115,6 +119,7 @@ This exposed several important contracts:
 | Ranged metadata | Melee IDs above the missile table could read adjacent code as missile metadata | Narrow per-class tables need explicit lower and upper bounds before IDs from other classes can live above them. |
 | Resident memory | The second melee slice crossed both the C64 runtime `$C000` boundary and the C128 resident-items `$A800` boundary | Every slice must be treated as memory work, not only catalog data work; recover bytes or shrink the slice before testing. |
 | C128 layout | Small data growth still stressed resident/banked placement | Any catalog growth can require C128 layout work and full C128 verification. |
+| Generation pool | IDs can exist in wizard/tests but still be absent from random dungeon loot or stores | `pit_sorted`/`pit_level_bounds` and store sampling must grow with the catalog, with asserts or constants instead of old literal ceilings. |
 | Tests | Isolated table tests missed product wizard-to-inventory corruption, and explicit expected-name fixtures stopped at the old high ID | Product-path smoke tests are required for appended IDs, and every explicit catalog fixture must grow with `ITEM_TYPE_COUNT`. |
 
 The root failure was not that item ID 64 is special. The root failure was that
@@ -132,6 +137,8 @@ The fix was to make catalog growth explicit:
 - Add direct item-description tests for appended IDs.
 - Bound class-specific compact tables on both ends; do not let a high item ID
   index through adjacent data or code.
+- Keep normal-game acquisition paths in sync: random floor generation and store
+  restocking must include intended appended IDs, not only wizard item grant.
 - Smoke the real wizard grant plus inventory display path on C64, C128, and
   Plus/4.
 - Verify save/load with appended items in inventory.
@@ -147,6 +154,7 @@ Before accepting any future item batch, all of these must be true:
 | Name safety | Known and unknown name paths are valid for every appended ID category. |
 | Identification defaults | New mundane equipment is known by default; randomized/identified item classes use intentional defaults. |
 | Generation | Level pools or rarity buckets include only valid item IDs. |
+| Store stock | Store restocking samples through `ITEM_TYPE_COUNT` and filters by explicit store category. |
 | Wizard/debug | Prompts and input bounds match the implemented ID range. |
 | Save migration | Old saves initialize all new known-state and live-state fields deterministically. |
 | Product path | Wizard grant -> inventory display works for first and last appended ID. |
@@ -553,6 +561,15 @@ Phase 0 implementation status:
   `Rapier`, `Broad Sword`, `Bastard Sword`, and `Two-Handed Sword`.
 - The second Phase 1 melee slice raised `ITEM_TYPE_COUNT` to 74 by adding
   `Scimitar`, `Battle Axe`, `War Hammer`, and `Morningstar`.
+- The third Phase 1 melee slice raised `ITEM_TYPE_COUNT` to 78 by adding
+  `Spear`, `Pike`, `Halberd`, and `Quarterstaff`.
+- That slice also corrected normal acquisition coverage for appended melee:
+  `pit_sorted` now includes IDs `66-77`, `pit_level_bounds` has compile-time
+  size assertions, and store restocking samples through `ITEM_TYPE_COUNT`
+  before applying store-category filters.
+- The item-type picker and its depth tables moved into the dungeon-generation
+  overlay for product builds on C64, C128, and Plus/4. This recovered resident
+  bytes without moving item names, item instances, or wizard enchantment logic.
 - The second slice initially failed memory assertions. The accepted layout
   recovered shared resident bytes by tokenizing repeated unknown-name articles
   and shrinking the dedicated item-name decode buffer to the current catalog's

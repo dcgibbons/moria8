@@ -104,13 +104,13 @@ if not has_ordered_chain(player_items, [
     "show_inv_and_select:",
     "$0102,x",
     "$0104,x",
-    "cmp #OVL_NONE",
+    "lda #OVL_NONE",
     "jsr overlay_load",
     "brk",
     "#if PLUS4_PRODUCT_OVERLAY_RUNTIME",
     "jsr plus4_install_ram_irq_vectors",
     "jsr plus4_bank_ram",
-]):
+], window=80):
     print("Plus/4 inventory selector must detect outer overlay continuations and restore RAM-visible overlay execution after reloading the caller overlay")
     raise SystemExit(1)
 

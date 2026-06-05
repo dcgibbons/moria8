@@ -85,6 +85,10 @@ it_category:
     .byte ICAT_WEAPON   // 71: Battle Axe
     .byte ICAT_WEAPON   // 72: War Hammer
     .byte ICAT_WEAPON   // 73: Morningstar
+    .byte ICAT_WEAPON   // 74: Spear
+    .byte ICAT_WEAPON   // 75: Pike
+    .byte ICAT_WEAPON   // 76: Halberd
+    .byte ICAT_WEAPON   // 77: Quarterstaff
 
 // Display character (screen codes)
 it_display:
@@ -162,6 +166,10 @@ it_display:
     .byte $2f   // 71: '/' Battle Axe
     .byte $2f   // 72: '/' War Hammer
     .byte $2f   // 73: '/' Morningstar
+    .byte $2f   // 74: '/' Spear
+    .byte $2f   // 75: '/' Pike
+    .byte $2f   // 76: '/' Halberd
+    .byte $2f   // 77: '/' Quarterstaff
 
 // Color
 it_color:
@@ -239,6 +247,10 @@ it_color:
     .byte COL_LGREY     // 71: Battle Axe
     .byte COL_LGREY     // 72: War Hammer
     .byte COL_WHITE     // 73: Morningstar
+    .byte COL_LGREY     // 74: Spear
+    .byte COL_LGREY     // 75: Pike
+    .byte COL_LGREY     // 76: Halberd
+    .byte COL_BROWN     // 77: Quarterstaff
 
 // Weight (in 1/10 lbs)
 it_weight:
@@ -255,6 +267,7 @@ it_weight:
     .byte 30, 90                            // 64-65: new weapon/armor
     .byte 40, 75, 140, 200                  // 66-69: expanded swords
     .byte 40, 170, 120, 150                 // 70-73: expanded hafted/axe
+    .byte 50, 160, 190, 40                  // 74-77: polearms/staff
 
 // Damage dice count
 it_dmg_dice:
@@ -271,6 +284,7 @@ it_dmg_dice:
     .byte 1, 0                              // 64-65: new weapon/armor
     .byte 1, 2, 3, 3                        // 66-69: expanded swords
     .byte 1, 3, 3, 2                        // 70-73: expanded hafted/axe
+    .byte 1, 2, 3, 1                        // 74-77: polearms/staff
 
 // Damage dice sides
 it_dmg_sides:
@@ -287,6 +301,7 @@ it_dmg_sides:
     .byte 5, 0                              // 64-65: new weapon/armor
     .byte 6, 5, 4, 6                        // 66-69: expanded swords
     .byte 8, 4, 3, 6                        // 70-73: expanded hafted/axe
+    .byte 6, 5, 4, 9                        // 74-77: polearms/staff
 
 // Base armor class
 it_base_ac:
@@ -303,6 +318,7 @@ it_base_ac:
     .byte 0, 5                              // 64-65: new weapon/armor
     .byte 0, 0, 0, 0                        // 66-69: expanded swords
     .byte 0, 0, 0, 0                        // 70-73: expanded hafted/axe
+    .byte 0, 0, 0, 0                        // 74-77: polearms/staff
 
 // Base cost (lo)
 it_cost_lo:
@@ -320,6 +336,7 @@ it_cost_lo:
     .byte <25, <75
     .byte <42, <70, <120, <180
     .byte <50, <120, <90, <100
+    .byte <36, <100, <150, <20
 
 // Base cost (hi)
 it_cost_hi:
@@ -337,6 +354,7 @@ it_cost_hi:
     .byte >25, >75
     .byte >42, >70, >120, >180
     .byte >50, >120, >90, >100
+    .byte >36, >100, >150, >20
 
 // Minimum dungeon level to appear
 it_min_level:
@@ -353,6 +371,7 @@ it_min_level:
     .byte 1, 3                              // 64-65: new weapon/armor
     .byte 2, 4, 6, 8                        // 66-69: expanded swords
     .byte 3, 7, 5, 6                        // 70-73: expanded hafted/axe
+    .byte 2, 8, 9, 1                        // 74-77: polearms/staff
 
 // Missile type table — encodes ranged weapon/ammo relationships
 // Only stored for types 49-54 (ranged items). Types < 49 are not ranged (return 0).
@@ -403,6 +422,7 @@ it_name_lo:
     .byte <itn_64, <itn_65
     .byte <itn_66, <itn_67, <itn_68, <itn_69
     .byte <itn_70, <itn_71, <itn_72, <itn_73
+    .byte <itn_74, <itn_75, <itn_76, <itn_77
 it_name_hi:
     .byte >itn_0,  >itn_1,  >itn_2,  >itn_3,  >itn_4
     .byte >itn_5,  >itn_6,  >itn_7,  >itn_8,  >itn_9
@@ -421,6 +441,7 @@ it_name_hi:
     .byte >itn_64, >itn_65
     .byte >itn_66, >itn_67, >itn_68, >itn_69
     .byte >itn_70, >itn_71, >itn_72, >itn_73
+    .byte >itn_74, >itn_75, >itn_76, >itn_77
 it_name_hi_end:
 
 // Tokenized item-name string pool.
@@ -568,3 +589,7 @@ itn_70: .text "Scimitar" ; .byte 0
 itn_71: .text "Battle Axe" ; .byte 0
 itn_72: .text "War Hammer" ; .byte 0
 itn_73: .text "Morningstar" ; .byte 0
+itn_74: .text "Spear" ; .byte 0
+itn_75: .text "Pike" ; .byte 0
+itn_76: .text "Halberd" ; .byte 0
+itn_77: .text "Quarterstaff" ; .byte 0

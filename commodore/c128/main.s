@@ -3407,10 +3407,32 @@ ovl_cache_pages:   .byte 0
 ovl_ready_mask:
     .byte 0, %00000001, %00000010, %00000100, %00001000, %00010000, %00100000, %01000000, %10000000
 c128_cache_state_end:
+#if !(C128_CACHE_TEST_SKIP_TIER || C128_CACHE_TEST_SKIP_OVERLAY)
+at_surface_str:
+    .text "You are already at the surface." ; .byte 0
+#endif
 c128_resident_world_end:
 
 .segment C128ResidentItems
 c128_resident_items_start:
+#if C128_CACHE_TEST_SKIP_TIER || C128_CACHE_TEST_SKIP_OVERLAY
+at_surface_str:
+    .text "You are already at the surface." ; .byte 0
+#endif
+slain_str:
+    .text "You have been slain." ; .byte 0
+death_source_saved:
+    .byte 0
+recall_query_sc:   .byte 0
+recall_found_type: .byte 0
+recall_last_sc:    .byte 0
+recall_last_idx:   .byte 0
+run_input_armed:   .byte 0
+auto_rest_active:  .byte 0
+ptep_temp: .byte 0
+tool_ego_prefix_hi:
+    .byte >ego_tool_prefix_gnomish, >ego_tool_prefix_dwarven
+    .byte >ego_tool_prefix_orcish,  >ego_tool_prefix_dwarven
 #import "../common/item.s"
 #import "../common/store_data.s"
 c128_resident_items_end:
@@ -3455,28 +3477,6 @@ c128_resident_persist_end:
 #define GAME_LOOP_LOW_DATA_EXTERNAL
 .segment C128ResidentPlay
 c128_resident_play_start:
-at_surface_str:
-    .text "You are already at the surface." ; .byte 0
-slain_str:
-    .text "You have been slain." ; .byte 0
-death_source_saved:
-    .byte 0
-recall_query_sc:   .byte 0
-recall_found_type: .byte 0
-recall_last_sc:    .byte 0
-recall_last_idx:   .byte 0
-run_input_armed:   .byte 0
-auto_rest_active:  .byte 0
-ptep_temp: .byte 0
-ego_tool_prefix_gnomish: .text "Gnomish " ; .byte 0
-ego_tool_prefix_orcish:  .text "Orcish " ; .byte 0
-ego_tool_prefix_dwarven: .text "Dwarven " ; .byte 0
-tool_ego_prefix_lo:
-    .byte <ego_tool_prefix_gnomish, <ego_tool_prefix_dwarven
-    .byte <ego_tool_prefix_orcish,  <ego_tool_prefix_dwarven
-tool_ego_prefix_hi:
-    .byte >ego_tool_prefix_gnomish, >ego_tool_prefix_dwarven
-    .byte >ego_tool_prefix_orcish,  >ego_tool_prefix_dwarven
 #if PERF_P1
 #import "../common/perf_p1_data.s"
 #endif
@@ -4282,6 +4282,12 @@ runtime_low_data_end:
 // ============================================================
 .segment RuntimeBankedCode
 banked_payload:
+ego_tool_prefix_gnomish: .text "Gnomish " ; .byte 0
+ego_tool_prefix_orcish:  .text "Orcish " ; .byte 0
+ego_tool_prefix_dwarven: .text "Dwarven " ; .byte 0
+tool_ego_prefix_lo:
+    .byte <ego_tool_prefix_gnomish, <ego_tool_prefix_dwarven
+    .byte <ego_tool_prefix_orcish,  <ego_tool_prefix_dwarven
 first_banked_function:
     #import "../common/ui_home.s"
     #import "../common/item_desc_banked.s"
