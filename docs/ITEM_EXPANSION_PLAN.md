@@ -32,7 +32,7 @@ Relevant current constants:
 
 | Constant | Value | Meaning |
 |---|---:|---|
-| `ITEM_TYPE_COUNT` | 66 | Current item catalog size |
+| `ITEM_TYPE_COUNT` | 70 | Current item catalog size |
 | `MAX_FLOOR_ITEMS` | 42 | Max live floor item slots |
 | `MAX_INV_SLOTS` | 22 | Carried inventory slots |
 | `MAX_EQUIP_SLOTS` | 9 | Equipment slots |
@@ -96,6 +96,10 @@ The first expansion from 64 to 66 IDs added:
 |---:|---|---|
 | 64 | Main Gauche | weapon |
 | 65 | Studded Leather Armor | armor |
+| 66 | Rapier | weapon |
+| 67 | Broad Sword | weapon |
+| 68 | Bastard Sword | weapon |
+| 69 | Two-Handed Sword | weapon |
 
 This exposed several important contracts:
 
@@ -104,8 +108,9 @@ This exposed several important contracts:
 | Wizard/debug UI | Prompt still advertised `ITEM 0-63` | Every range-bearing user/debug string must be updated with the catalog count. |
 | Item names | Appended equipment could be treated as unknown staff-like data | Unknown-name logic must be category-safe and migration defaults must keep mundane always-known items known. |
 | Save migration | V1 saves contained only 64 known-item bytes | Legacy loads must initialize every byte beyond `LEGACY_ITEM_TYPE_COUNT` deterministically. |
+| Ranged metadata | Melee IDs above the missile table could read adjacent code as missile metadata | Narrow per-class tables need explicit lower and upper bounds before IDs from other classes can live above them. |
 | C128 layout | Small data growth still stressed resident/banked placement | Any catalog growth can require C128 layout work and full C128 verification. |
-| Tests | Isolated table tests missed product wizard-to-inventory corruption | Product-path smoke tests are required for appended IDs, not only direct descriptor tests. |
+| Tests | Isolated table tests missed product wizard-to-inventory corruption, and explicit expected-name fixtures stopped at the old high ID | Product-path smoke tests are required for appended IDs, and every explicit catalog fixture must grow with `ITEM_TYPE_COUNT`. |
 
 The root failure was not that item ID 64 is special. The root failure was that
 unknown-name lookup had ID-range assumptions from the old randomized
@@ -120,6 +125,8 @@ The fix was to make catalog growth explicit:
 - Migrate V1 known-state by reading the 64 legacy bytes, clearing future bytes,
   and marking appended mundane always-known items as known.
 - Add direct item-description tests for appended IDs.
+- Bound class-specific compact tables on both ends; do not let a high item ID
+  index through adjacent data or code.
 - Smoke the real wizard grant plus inventory display path on C64, C128, and
   Plus/4.
 - Verify save/load with appended items in inventory.
@@ -398,6 +405,10 @@ This is cleaner long-term but larger and invasive.
 | 63 | Pick | Digging |
 | 64 | Main Gauche | Weapon |
 | 65 | Studded Leather Armor | Armor |
+| 66 | Rapier | Weapon |
+| 67 | Broad Sword | Weapon |
+| 68 | Bastard Sword | Weapon |
+| 69 | Two-Handed Sword | Weapon |
 
 ## Source Catalog Comparison
 
@@ -524,10 +535,16 @@ Phase 0 implementation status:
 
 - C64 resident bytes were recovered by removing the hidden C64U `V` timing
   diagnostic. Actual C64U detection and fast/normal wrappers remain in place.
-- The C64 product build moved from a clean baseline around `$C166`, to `$C06A`
-  after byte recovery, to about `$C0C4` after metadata hardening. This still
-  leaves the build above `MAP_BASE` in the linked address report, but the
-  existing boundary assert passes. Treat this as tight, not spacious.
+- The C64 build log's default-segment end includes an init-only startup tail
+  that runs before the dungeon map owns `MAP_BASE`. The runtime `program_end`
+  after metadata hardening was below `$C000`, but the emitted PRG still reports
+  addresses above `$C000`. Treat this as tight and easy to misread, not
+  spacious.
+- The first Phase 1 melee slice raised `ITEM_TYPE_COUNT` to 70 by adding
+  `Rapier`, `Broad Sword`, `Bastard Sword`, and `Two-Handed Sword`.
+- That slice also hardened `item_get_missile` with an upper bound, because
+  melee IDs above the compact ranged table must return non-ranged rather than
+  reading the following code bytes.
 - `it_unknown_desc` is now the explicit per-row unknown-description descriptor.
   It asserts to `ITEM_TYPE_COUNT`.
 - Unknown name and floor-color routing now use descriptor class/index instead

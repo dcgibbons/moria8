@@ -1359,6 +1359,9 @@ test_start:
     lda id_known + 65
     cmp #1
     bne !t29_fail+
+    lda id_known + 69
+    cmp #1
+    bne !t29_fail+
     lda id_known + ITEM_TYPE_COUNT
     cmp #0
     bne !t29_fail+
@@ -1366,8 +1369,8 @@ test_start:
     // If an appended fixed item is forced unknown by bad state, it still
     // resolves through fixed item data instead of a shuffled class table.
     lda #0
-    sta id_known + 64
-    lda #64
+    sta id_known + 69
+    lda #69
     jsr item_get_name_ptr
     lda #<t29_expected_appended_name
     sta zp_ptr1
@@ -1383,9 +1386,9 @@ test_start:
     iny
     bne !t29_cmp_appended-
 !t29_check_color:
-    lda #64
+    lda #69
     jsr item_get_floor_color
-    ldx #64
+    ldx #69
     cmp it_color,x
     bne !t29_fail+
 
@@ -2374,7 +2377,7 @@ test_start:
 t27_expected_name:
     .text "Dagger" ; .byte 0
 t29_expected_appended_name:
-    .text "Main Gauche" ; .byte 0
+    .text "Two-Handed Sword" ; .byte 0
 
 item_test_body_end:
 
