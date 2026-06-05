@@ -29,7 +29,32 @@ id_known:
     .byte 1, 1                  // 62-63: Digging tools — always known
     .fill ITEM_TYPE_COUNT - LEGACY_ITEM_TYPE_COUNT, 1
     .fill ITEM_ID_CAPACITY - ITEM_TYPE_COUNT, 0
-.assert "id_known capacity", potion_shuffle - id_known, ITEM_ID_CAPACITY
+.assert "id_known capacity", it_unknown_desc - id_known, ITEM_ID_CAPACITY
+
+.const IUK_FIXED  = 0
+.const IUK_POTION = $10
+.const IUK_SCROLL = $20
+.const IUK_RING   = $30
+.const IUK_WAND   = $40
+.const IUK_STAFF  = $50
+.const IUK_CLASS_MASK = $f0
+.const IUK_INDEX_MASK = $0f
+
+// Packed unknown-description metadata: high nibble = class, low nibble = class-local index.
+// Fixed rows render their real name/color even if a bad save marks them unknown.
+it_unknown_desc:
+    .fill 17, IUK_FIXED
+    .byte IUK_POTION | 0, IUK_POTION | 1, IUK_POTION | 2
+    .byte IUK_SCROLL | 0, IUK_SCROLL | 1, IUK_SCROLL | 2
+    .byte IUK_RING | 0, IUK_RING | 1
+    .byte IUK_POTION | 3, IUK_POTION | 4, IUK_POTION | 5, IUK_POTION | 6
+    .byte IUK_POTION | 7, IUK_POTION | 8, IUK_POTION | 9
+    .byte IUK_SCROLL | 3, IUK_SCROLL | 4, IUK_SCROLL | 5, IUK_SCROLL | 6
+    .byte IUK_SCROLL | 7, IUK_SCROLL | 8, IUK_SCROLL | 9
+    .byte IUK_WAND | 0, IUK_WAND | 1, IUK_WAND | 2, IUK_WAND | 3
+    .byte IUK_STAFF | 0, IUK_STAFF | 1, IUK_STAFF | 2, IUK_STAFF | 3
+    .fill ITEM_TYPE_COUNT - 47, IUK_FIXED
+.assert "it_unknown_desc size", potion_shuffle - it_unknown_desc, ITEM_TYPE_COUNT
 
 // Shuffle tables: map category-local index → description index
 // 12 potions, 12 scrolls, 4 rings — full pool shuffled, first N used
@@ -125,34 +150,24 @@ staff_colors:  .byte COL_WHITE, COL_BROWN, COL_ORANGE, COL_LGREEN, COL_LGREY
 // Clobbers: A, X, Y
 // ============================================================
 item_init_identification:
-    // Reset id_known: types 0-16 = known(1), 17-46 = unknown(0), 47-48 = known(1)
-    ldx #16
-    lda #1
-!iid_known_1:
+    // Clear the full save runway, then mark implemented fixed-description IDs known.
+    ldx #ITEM_ID_CAPACITY - 1
+    lda #0
+!iid_clear:
     sta id_known,x
     dex
-    bpl !iid_known_1-
-    ldx #17
-    lda #0
-!iid_unknown:
-    sta id_known,x
-    inx
-    cpx #47                     // Up to type 46 (inclusive)
-    bcc !iid_unknown-
-    ldx #47
+    bpl !iid_clear-
+    ldx #0
+!iid_default:
+    lda it_unknown_desc,x
+    and #IUK_CLASS_MASK
+    bne !iid_next+
     lda #1
-!iid_known_2:
     sta id_known,x
+!iid_next:
     inx
     cpx #ITEM_TYPE_COUNT
-    bcc !iid_known_2-
-    ldx #ITEM_TYPE_COUNT
-    lda #0
-!iid_future_unknown:
-    sta id_known,x
-    inx
-    cpx #ITEM_ID_CAPACITY
-    bcc !iid_future_unknown-
+    bcc !iid_default-
 
     // Initialize shuffle tables to identity (0..11 / 0..3 / 0..4)
     ldx #11                         // For 12 elements (0-11)
@@ -253,24 +268,25 @@ item_get_name_ptr:
 
     // Unknown — look up randomized description
 !ignp_unknown:
-    cpx #20
-    bcc !ignp_potion_low+
-    cpx #23
-    bcc !ignp_scroll_low+
-    cpx #25
-    bcc !ignp_ring+
-    cpx #32
-    bcc !ignp_potion_high+
-    cpx #39
-    bcc !ignp_scroll_high+
-    cpx #43
-    bcc !ignp_wand+
+    stx item_display_id
+    lda it_unknown_desc,x
+    and #IUK_CLASS_MASK
+    cmp #IUK_POTION
+    beq !ignp_potion+
+    cmp #IUK_SCROLL
+    beq !ignp_scroll+
+    cmp #IUK_RING
+    beq !ignp_ring+
+    cmp #IUK_WAND
+    beq !ignp_wand+
+    cmp #IUK_STAFF
+    beq !ignp_staff+
+    jmp !ignp_known+
 
 !ignp_staff:
-    // Local index = type - 43
-    txa
-    sec
-    sbc #43
+    ldx item_display_id
+    lda it_unknown_desc,x
+    and #IUK_INDEX_MASK
     tax
     lda staff_shuffle,x
     tax
@@ -280,18 +296,11 @@ item_get_name_ptr:
     sta zp_ptr0_hi
     jmp item_decode_name_ptr
 
-!ignp_potion_high:
-    txa
-    sec
-    sbc #22                        // 25-31 -> 3-9
+!ignp_potion:
+    ldx item_display_id
+    lda it_unknown_desc,x
+    and #IUK_INDEX_MASK
     tax
-    bcs !ignp_potion_have_idx+
-!ignp_potion_low:
-    txa
-    sec
-    sbc #17                        // 17-19 -> 0-2
-    tax
-!ignp_potion_have_idx:
     lda potion_shuffle,x            // Shuffled description index
     tax
     lda potion_name_lo,x
@@ -300,18 +309,11 @@ item_get_name_ptr:
     sta zp_ptr0_hi
     jmp item_decode_name_ptr
 
-!ignp_scroll_high:
-    txa
-    sec
-    sbc #29                        // 32-38 -> 3-9
+!ignp_scroll:
+    ldx item_display_id
+    lda it_unknown_desc,x
+    and #IUK_INDEX_MASK
     tax
-    bcs !ignp_scroll_have_idx+
-!ignp_scroll_low:
-    txa
-    sec
-    sbc #20                        // 20-22 -> 0-2
-    tax
-!ignp_scroll_have_idx:
     lda scroll_shuffle,x
     tax
     lda scroll_name_lo,x
@@ -326,10 +328,9 @@ item_get_name_ptr:
     jmp item_decode_name_ptr
 
 !ignp_ring:
-    // Local index = type - 23
-    txa
-    sec
-    sbc #23
+    ldx item_display_id
+    lda it_unknown_desc,x
+    and #IUK_INDEX_MASK
     tax
     lda ring_shuffle,x
     tax
@@ -340,10 +341,9 @@ item_get_name_ptr:
     jmp item_decode_name_ptr
 
 !ignp_wand:
-    // Local index = type - 39
-    txa
-    sec
-    sbc #39
+    ldx item_display_id
+    lda it_unknown_desc,x
+    and #IUK_INDEX_MASK
     tax
     lda wand_shuffle,x
     tax
@@ -498,23 +498,25 @@ item_get_floor_color:
     bne !igfc_known+
 
     // Unknown — return randomized color
-    cpx #20
-    bcc !igfc_potion_low+
-    cpx #23
-    bcc !igfc_scroll_low+
-    cpx #25
-    bcc !igfc_ring+
-    cpx #32
-    bcc !igfc_potion_high+
-    cpx #39
-    bcc !igfc_scroll_high+
-    cpx #43
-    bcc !igfc_wand+
+    stx item_display_id
+    lda it_unknown_desc,x
+    and #IUK_CLASS_MASK
+    cmp #IUK_POTION
+    beq !igfc_potion+
+    cmp #IUK_SCROLL
+    beq !igfc_scroll+
+    cmp #IUK_RING
+    beq !igfc_ring+
+    cmp #IUK_WAND
+    beq !igfc_wand+
+    cmp #IUK_STAFF
+    beq !igfc_staff+
+    jmp !igfc_known+
 
 !igfc_staff:
-    txa
-    sec
-    sbc #43
+    ldx item_display_id
+    lda it_unknown_desc,x
+    and #IUK_INDEX_MASK
     tax
     lda staff_shuffle,x
     tax
@@ -525,44 +527,30 @@ item_get_floor_color:
     lda it_color,x
     rts
 
-!igfc_potion_high:
-    txa
-    sec
-    sbc #22
+!igfc_potion:
+    ldx item_display_id
+    lda it_unknown_desc,x
+    and #IUK_INDEX_MASK
     tax
-    bcs !igfc_potion_have_idx+
-!igfc_potion_low:
-    txa
-    sec
-    sbc #17
-    tax
-!igfc_potion_have_idx:
     lda potion_shuffle,x
     tax
     lda potion_colors,x
     rts
 
-!igfc_scroll_high:
-    txa
-    sec
-    sbc #29
+!igfc_scroll:
+    ldx item_display_id
+    lda it_unknown_desc,x
+    and #IUK_INDEX_MASK
     tax
-    bcs !igfc_scroll_have_idx+
-!igfc_scroll_low:
-    txa
-    sec
-    sbc #20
-    tax
-!igfc_scroll_have_idx:
     lda scroll_shuffle,x
     tax
     lda scroll_colors,x
     rts
 
 !igfc_ring:
-    txa
-    sec
-    sbc #23
+    ldx item_display_id
+    lda it_unknown_desc,x
+    and #IUK_INDEX_MASK
     tax
     lda ring_shuffle,x
     tax
@@ -570,9 +558,9 @@ item_get_floor_color:
     rts
 
 !igfc_wand:
-    txa
-    sec
-    sbc #39
+    ldx item_display_id
+    lda it_unknown_desc,x
+    and #IUK_INDEX_MASK
     tax
     lda wand_shuffle,x
     tax

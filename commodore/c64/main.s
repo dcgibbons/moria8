@@ -88,7 +88,6 @@ c64u_turbo_prev: .byte 0
 .const C64U_TURBO_DISABLED = $ff
 .const C64U_TURBO_NORMAL  = $00
 .const C64U_TURBO_FAST    = $0f
-.const KERNAL_RDTIM       = $ffde
 #if C64_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT
 c64_test_save_media_fail_armed: .byte 0
 #endif
@@ -673,124 +672,6 @@ c64u_turbo_force_normal:
     sta c64_hw_flags
 !done:
     rts
-
-// c64u_turbo_probe — Hidden in-game diagnostic on C64 `V`.
-// Displays elapsed KERNAL jiffies for the same CPU-bound loop at normal and
-// requested-fast speed. Lower F than N proves the C64U turbo register is
-// affecting CPU execution, not just being detected.
-c64u_turbo_probe:
-    php
-    lda $01
-    pha
-    lda #BANK_NO_BASIC
-    sta $01
-    cli
-
-    lda C64U_TURBO_CONTROL
-    sta c64u_probe_d031_before
-    jsr c64u_turbo_force_normal
-    jsr c64u_probe_measure
-    sta c64u_probe_normal_ticks
-
-    jsr c64u_turbo_fast
-    lda C64U_TURBO_CONTROL
-    sta c64u_probe_d031_fast
-    jsr c64u_probe_measure
-    sta c64u_probe_fast_ticks
-
-    jsr c64u_turbo_force_normal
-    lda C64U_TURBO_CONTROL
-    sta c64u_probe_d031_after
-
-    pla
-    sta $01
-    plp
-    jmp c64u_probe_print
-
-c64u_probe_measure:
-    jsr KERNAL_RDTIM
-    sta c64u_probe_start_tick
-    ldx #4
-!outer:
-    ldy #0
-!middle:
-    lda #0
-!inner:
-    sec
-    sbc #1
-    bne !inner-
-    dey
-    bne !middle-
-    dex
-    bne !outer-
-    jsr KERNAL_RDTIM
-    sec
-    sbc c64u_probe_start_tick
-    rts
-
-c64u_probe_print:
-    lda #COL_WHITE
-    jsr screen_set_color
-    lda #0
-    jsr screen_clear_row
-    lda #1
-    jsr screen_clear_row
-
-    lda #0
-    sta zp_cursor_row
-    sta zp_cursor_col
-    lda #<c64u_probe_msg
-    sta zp_ptr0
-    lda #>c64u_probe_msg
-    sta zp_ptr0_hi
-    jsr screen_put_string
-    lda c64u_probe_normal_ticks
-    jsr screen_put_decimal
-    lda #<c64u_probe_fast_msg
-    sta zp_ptr0
-    lda #>c64u_probe_fast_msg
-    sta zp_ptr0_hi
-    jsr screen_put_string
-    lda c64u_probe_fast_ticks
-    jsr screen_put_decimal
-
-    lda #1
-    sta zp_cursor_row
-    lda #0
-    sta zp_cursor_col
-    lda #<c64u_probe_flags_msg
-    sta zp_ptr0
-    lda #>c64u_probe_flags_msg
-    sta zp_ptr0_hi
-    jsr screen_put_string
-    lda c64_hw_flags
-    jsr screen_put_hex
-    lda #<c64u_probe_d031_msg
-    sta zp_ptr0
-    lda #>c64u_probe_d031_msg
-    sta zp_ptr0_hi
-    jsr screen_put_string
-    lda c64u_probe_d031_before
-    jsr screen_put_hex
-    lda #$2f
-    jsr screen_put_char
-    lda c64u_probe_d031_fast
-    jsr screen_put_hex
-    lda #$2f
-    jsr screen_put_char
-    lda c64u_probe_d031_after
-    jmp screen_put_hex
-
-c64u_probe_msg:       .text "Turbo probe N:" ; .byte 0
-c64u_probe_fast_msg:  .text " F:" ; .byte 0
-c64u_probe_flags_msg: .text "Flags:" ; .byte 0
-c64u_probe_d031_msg:  .text " D031:" ; .byte 0
-c64u_probe_start_tick:   .byte 0
-c64u_probe_normal_ticks: .byte 0
-c64u_probe_fast_ticks:   .byte 0
-c64u_probe_d031_before:  .byte 0
-c64u_probe_d031_fast:    .byte 0
-c64u_probe_d031_after:   .byte 0
 
 // ============================================================
 // Dungeon gen overlay trampoline — bank KERNAL out, call $E000 overlay

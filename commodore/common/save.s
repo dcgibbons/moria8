@@ -1281,14 +1281,25 @@ load_read_known_items:
 !lrki_v1:
     :load_block(id_known, LEGACY_ITEM_TYPE_COUNT)
     ldx #LEGACY_ITEM_TYPE_COUNT
+!lrki_apply_defaults:
+    lda it_unknown_desc,x
+    and #IUK_CLASS_MASK
+    bne !lrki_unknown_default+
+    lda #1
+    bne !lrki_store_default+
+!lrki_unknown_default:
+    lda #0
+!lrki_store_default:
+    sta id_known,x
+    inx
+    cpx #ITEM_TYPE_COUNT
+    bcc !lrki_apply_defaults-
     lda #0
 !lrki_clear_future:
     sta id_known,x
     inx
     cpx #ITEM_ID_CAPACITY
     bcc !lrki_clear_future-
-    inc id_known + 64
-    inc id_known + 65
     rts
 
 // ============================================================

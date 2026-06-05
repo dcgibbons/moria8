@@ -248,9 +248,9 @@ The RAM cost is manageable. The code churn is the problem. Every item lookup,
 pickup/drop, store operation, inventory display, save/load path, item action,
 and generation routine must become 16-bit-aware or `tval/sval`-aware.
 
-## Recommended Product Path
+## Architecture Strategy Overview
 
-### Phase 1: Curated Abbreviated Catalog
+### Strategy A: Curated Abbreviated Catalog
 
 Target: 96 or 128 item IDs.
 
@@ -279,7 +279,7 @@ Best additions:
 | Full trap objects | no | map feature, not item catalog priority |
 | Store-door/stair/door fixtures | no | not inventory items |
 
-### Phase 2: Split Catalog
+### Strategy B: Split Catalog
 
 Introduce a compact resident item descriptor and move full catalog data out.
 
@@ -311,7 +311,7 @@ Banked/disk fields:
 | generation rarity |
 | store availability |
 
-### Phase 3: Optional 16-Bit or `tval/sval`
+### Strategy C: Optional 16-Bit or `tval/sval`
 
 Only do this if the explicit product requirement becomes full source catalog
 fidelity.
@@ -467,19 +467,270 @@ Total proposed chest sidecar RAM: 126 bytes.
 
 This should stay outside the fixed 256-byte floor item page.
 
+## Phased Product Plan
+
+The catalog plan has two near-term milestones:
+
+| Milestone | Target | Meaning |
+|---|---:|---|
+| 96 items | IDs `0-95` | Controlled append within the existing `ITEM_ID_CAPACITY = 96` save runway |
+| 128 items | IDs `0-127` | Requires catalog representation cleanup before broad row growth |
+
+The 96 milestone should be treated as a hardening milestone. The 128 milestone
+should be treated as an architecture milestone.
+
+### Phase 0: Expansion Hardening
+
+Goal: make the next item batch boring before adding many rows.
+
+Required work:
+
+0. Recover C64 resident bytes before adding any new resident catalog-routing
+   code. Current clean C64 product build ends at `$C166`, and the boundary
+   assert has effectively no usable slack. During Phase 0 implementation, a
+   66-byte packed unknown-description table failed C64 layout, and even a
+   7-byte `item_get_name_ptr` guard moved the image to `$C16D` and failed the
+   product boundary assert. This means the design is sound but cannot be landed
+   as resident code until bytes are recovered or the routing metadata moves out
+   of the hot C64 image.
+1. Add an explicit unknown-identification class per item row.
+   Suggested classes: fixed, potion, scroll, ring, wand, staff, and future
+   amulet. Unknown-name and unknown-color logic must switch on this class, not
+   numeric ID ranges.
+2. Add an explicit migration known-default per item row or per appended range.
+   Mundane equipment, food, books, and fixed-name tools default to known.
+   Randomized identification classes default to unknown only when their
+   shuffled unknown-name/color tables cover the ID.
+3. Replace remaining `0-63` assumptions in generation, stores, wizard/debug UI,
+   and tests with `ITEM_TYPE_COUNT`, explicit item lists, or documented legacy
+   constants.
+4. Add product-path smoke coverage for the first and last appended ID in each
+   batch: wizard grant, inventory display, floor display/color, save/load, and
+   resume.
+5. Recover or relocate resident bytes before adding the full 96-row batch.
+
+Acceptance gate:
+
+| Gate | Required proof |
+|---|---|
+| Resident space | C64 has enough reclaimed bytes to add metadata/routing without crossing the product boundary. |
+| Name routing | No unknown item can fall through into the wrong shuffled table. |
+| Save defaults | Legacy saves initialize every appended ID deterministically. |
+| Table coverage | Every `it_*` table and new class/default table asserts to `ITEM_TYPE_COUNT`. |
+| Product smoke | C64, C128, and Plus/4 can grant, display, save, and reload appended IDs. |
+| Memory | C64/C128/Plus4 layout asserts pass without weakening boundaries. |
+
+Phase 0 implementation status:
+
+- C64 resident bytes were recovered by removing the hidden C64U `V` timing
+  diagnostic. Actual C64U detection and fast/normal wrappers remain in place.
+- The C64 product build moved from a clean baseline around `$C166`, to `$C06A`
+  after byte recovery, to about `$C0C4` after metadata hardening. This still
+  leaves the build above `MAP_BASE` in the linked address report, but the
+  existing boundary assert passes. Treat this as tight, not spacious.
+- `it_unknown_desc` is now the explicit per-row unknown-description descriptor.
+  It asserts to `ITEM_TYPE_COUNT`.
+- Unknown name and floor-color routing now use descriptor class/index instead
+  of numeric ID ranges. Fixed-name rows forced to unknown fall back to real
+  item name/color rather than indexing a shuffled table out of bounds.
+- Legacy save migration now derives appended known-state defaults from
+  `it_unknown_desc`: fixed rows default known, randomized rows default unknown,
+  and future capacity bytes are cleared.
+- When adding IDs `66-95`, extend `it_unknown_desc` in lockstep with
+  `ITEM_TYPE_COUNT`. Do not add randomized appended IDs unless their shuffled
+  unknown-name/color pools cover the class-local descriptor indexes.
+
+### Phase 1: Reach 96 Items
+
+Goal: fill the existing 96-ID runway with high-value ordinary loot and a small
+number of low-risk consumable/magic rows.
+
+Rules:
+
+- Preserve one-byte item IDs.
+- Preserve IDs `0-63`.
+- Keep `ITEM_ID_CAPACITY = 96`.
+- Grow `ITEM_TYPE_COUNT` only as implemented rows are added.
+- Prefer fixed-known equipment before randomized classes.
+- Do not add chest sidecar state in this milestone.
+
+Target appended rows:
+
+| ID | Item | Class | Notes |
+|---:|---|---|---|
+| 66 | Rapier | weapon | Fixed-known melee progression |
+| 67 | Broad Sword | weapon | Fixed-known melee progression |
+| 68 | Bastard Sword | weapon | Fixed-known melee progression |
+| 69 | Two-Handed Sword | weapon | Fixed-known heavy melee |
+| 70 | Scimitar | weapon | Fixed-known melee variety |
+| 71 | Battle Axe | weapon | Fixed-known hafted/axe role |
+| 72 | War Hammer | weapon | Fixed-known hafted role |
+| 73 | Morningstar | weapon | Fixed-known hafted role |
+| 74 | Spear | weapon | Fixed-known polearm role |
+| 75 | Pike | weapon | Fixed-known polearm role |
+| 76 | Halberd | weapon | Fixed-known polearm role |
+| 77 | Quarterstaff | weapon | Fixed-known light blunt role |
+| 78 | Large Shield | shield | Fixed-known defensive progression |
+| 79 | Hard Leather Armor | armor | Fixed-known soft armor tier |
+| 80 | Scale Mail | armor | Fixed-known hard armor tier |
+| 81 | Plate Mail | armor | Fixed-known hard armor tier |
+| 82 | Cloak | armor | Fixed-known missing slot family |
+| 83 | Steel Helm | helm | Fixed-known head progression |
+| 84 | Gauntlets | gloves | Fixed-known hand progression |
+| 85 | Soft Leather Boots | boots | Fixed-known foot progression |
+| 86 | Hard Leather Boots | boots | Fixed-known foot progression |
+| 87 | Metal Cap | helm | Fixed-known low head tier |
+| 88 | Potion of Cure Critical Wounds | potion | Randomized; needs potion unknown coverage |
+| 89 | Potion of Healing | potion | Randomized; needs potion unknown coverage |
+| 90 | Scroll of Magic Mapping | scroll | Randomized; needs scroll unknown coverage |
+| 91 | Scroll of Trap/Door Detection | scroll | Randomized; needs scroll unknown coverage |
+| 92 | Ring of Accuracy | ring | Randomized; persistent effect |
+| 93 | Ring of Damage | ring | Randomized; persistent effect |
+| 94 | Wand of Fire | wand | Randomized; charge/effect reuse if possible |
+| 95 | Staff of Speed | staff | Randomized; charge/effect reuse if possible |
+
+Why this shape:
+
+- 22 of 30 new rows are fixed-known equipment, which minimizes identification
+  and behavior risk.
+- The batch restores missing melee, polearm, armor, shield, helm, glove, and
+  boot variety before adding lower-priority systems.
+- The eight randomized rows intentionally exercise the hardened unknown-name
+  model without making the milestone mostly effect work.
+
+Implementation slices:
+
+1. Add class/default metadata and tests without changing `ITEM_TYPE_COUNT`.
+2. Add a two-to-four-row fixed-known equipment slice and run product smoke.
+3. Add the rest of the fixed-known equipment rows in small batches.
+4. Expand potion/scroll/ring/wand/staff unknown descriptor pools.
+5. Add IDs `88-95` one randomized family at a time.
+6. Update wizard docs and item catalog docs after each accepted slice.
+
+Phase 1 acceptance gate:
+
+| Gate | Required proof |
+|---|---|
+| Build | `make build` passes. |
+| C64 | `make test64` passes and product smoke covers IDs 66 and 95. |
+| C128 | `make test128` passes after any C128 layout/banking/runtime-loaded change. |
+| Plus/4 | `make testplus4` or relevant product smoke passes for appended IDs. |
+| Save/load | Old 64-ID saves, current 66-ID saves, and new 96-ID saves load deterministically. |
+| Manual smoke | Wizard grant of IDs 66 and 95 renders correct inventory text after save/load. |
+
+### Phase 2: Prepare 128-Capable Catalog
+
+Goal: reduce resident cost and save-state cost before growing beyond 96.
+
+Required work before setting `ITEM_ID_CAPACITY = 128`:
+
+1. Convert `id_known` to a bitset, or hide it behind accessors with a compact
+   save/load representation.
+2. Move cold item names and name-token streams out of scarce resident catalog
+   space where practical.
+3. Pack or profile duplicate combat/stat fields:
+   - damage dice count/sides
+   - base AC
+   - weight
+   - cost
+   - equip slot/profile
+4. Replace generation and store selection range logic with explicit eligible
+   lists or bucket tables.
+5. Decide the amulet category/store-mask model before adding amulet rows.
+6. Update save layout documentation and migration code for the 128-capacity
+   known-state representation.
+
+Resident target:
+
+| Data | Target |
+|---|---|
+| Hot item row | about 7-9 resident bytes |
+| Known state | 16 bytes for 128 IDs if bitset |
+| Names | banked/cold where possible |
+| Generation/store rarity | explicit lists or banked/cold tables |
+
+Phase 2 acceptance gate:
+
+| Gate | Required proof |
+|---|---|
+| Compatibility | Saves from V1, 66-item V2/V3, and 96-item saves migrate correctly. |
+| Accessors | All known-state reads/writes go through the new representation. |
+| Memory | C128 has real headroom, not byte-level luck. |
+| Product paths | Unknown randomized display, fixed-known display, store display, and save/load work under product smoke. |
+
+### Phase 3: Reach 128 Items
+
+Goal: add high-value consumables, rings, wands, staves, and first amulets after
+the 128-capable representation exists.
+
+Target appended rows:
+
+| ID | Item | Class | Notes |
+|---:|---|---|---|
+| 96 | Potion of Restore Strength | potion | Randomized stat restoration |
+| 97 | Potion of Restore Intelligence | potion | Randomized stat restoration |
+| 98 | Potion of Restore Wisdom | potion | Randomized stat restoration |
+| 99 | Potion of Restore Dexterity | potion | Randomized stat restoration |
+| 100 | Potion of Restore Constitution | potion | Randomized stat restoration |
+| 101 | Potion of Resist Heat | potion | Randomized resistance |
+| 102 | Potion of Resist Cold | potion | Randomized resistance |
+| 103 | Potion of Cure Poison | potion | Randomized utility |
+| 104 | Scroll of Phase Door | scroll | Randomized mobility |
+| 105 | Scroll of Treasure Detection | scroll | Randomized detection |
+| 106 | Scroll of Object Detection | scroll | Randomized detection |
+| 107 | Scroll of Detect Curse | scroll | Randomized identification support |
+| 108 | Scroll of Rune of Protection | scroll | Randomized tactical utility |
+| 109 | Scroll of Create Monster | scroll | Randomized risk item |
+| 110 | Scroll of Sleep Monster | scroll | Randomized control |
+| 111 | Scroll of Genocide | scroll | Randomized high-value effect |
+| 112 | Ring of Dexterity | ring | Persistent stat choice |
+| 113 | Ring of Constitution | ring | Persistent stat choice |
+| 114 | Ring of Searching | ring | Persistent utility |
+| 115 | Ring of See Invisible | ring | Persistent utility |
+| 116 | Ring of Speed | ring | Persistent speed |
+| 117 | Ring of Sustain Strength | ring | Persistent sustain effect |
+| 118 | Wand of Slow Monster | wand | Charged control |
+| 119 | Wand of Polymorph | wand | Charged transformation |
+| 120 | Wand of Sleep Monster | wand | Charged control |
+| 121 | Wand of Stone-to-Mud | wand | Charged utility |
+| 122 | Staff of Detect Evil | staff | Charged detection |
+| 123 | Staff of Cure Serious Wounds | staff | Charged healing |
+| 124 | Staff of Remove Curse | staff | Charged utility |
+| 125 | Staff of Dispel Evil | staff | Charged damage/control |
+| 126 | Amulet of Wisdom | amulet | Requires amulet slot/category decision |
+| 127 | Amulet of Charisma | amulet | Requires amulet slot/category decision |
+
+Phase 3 acceptance gate:
+
+| Gate | Required proof |
+|---|---|
+| Full build/test | `make build`, `make test64`, `make test128`, and Plus/4 product smoke pass. |
+| Boundary IDs | Wizard grant/display/save/load works for IDs 96 and 127. |
+| Randomized classes | Unknown-name/color tables cover every randomized class-local index. |
+| Store/generation | New eligible-list/bucket generation produces only valid implemented IDs. |
+| Amulets | Equip, remove, save/load, and display work through `EQUIP_AMULET`. |
+
+### Deferred: Chests And Full Source Fidelity
+
+Chests remain deferred until after 128 unless product priorities change. They
+are not just rows; they require live sidecar state for trap/content/source-level
+data.
+
+Full 420-row source fidelity remains a separate architecture project requiring
+16-bit IDs or a `tval/sval` identity model.
+
 ## Product Recommendation
 
 Recommended plan:
 
-1. Expand missing ordinary catalog families toward the 96-slot runway.
-2. Move names and full catalog metadata to banked/disk-loaded data before
-   attempting broad row batches.
-3. Introduce behavior profiles/effect IDs while expanding.
-4. Defer chests until the ordinary catalog has better melee/armor/consumable
-   coverage.
-5. Defer 16-bit item IDs until a full-source-fidelity requirement is confirmed.
+1. Complete Phase 0 before adding more than tiny fixed-known equipment slices.
+2. Reach 96 with ordinary catalog breadth and limited randomized rows.
+3. Complete the 128-capable representation before raising capacity beyond 96.
+4. Reach 128 with high-value consumables, rings, wands, staves, and first
+   amulets.
+5. Defer chests and 16-bit item IDs until the ordinary catalog is balanced.
 
-Implementation checkpoints:
+Implementation checkpoints already completed:
 
 - Save runway is in place for 96 known-item bytes: old 64-byte saves load with
   future known-item bytes cleared, and new saves write the fixed 96-byte block.

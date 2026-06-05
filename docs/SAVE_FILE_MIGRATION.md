@@ -243,18 +243,44 @@ continue to work because saved item IDs remain stable.
 
 ## Recommended Migration Project
 
-Before adding many items:
+Use the current 96-ID runway before introducing another save capacity.
+
+For the 96-item milestone:
 
 1. Freeze IDs `0-63`.
-2. Introduce `ITEM_ID_CAPACITY = 128`.
-3. Convert `id_known` from byte-per-item to a bitset, or save/load it through a
-   fixed-capacity compatibility wrapper.
-4. Add version-aware save loading for current saves.
-5. Add explicit migration defaults for future item ranges.
+2. Keep `ITEM_ID_CAPACITY = 96`.
+3. Grow `ITEM_TYPE_COUNT` only as rows are implemented.
+4. Add explicit migration defaults for every appended item or appended range.
+5. Keep old 64-byte known-state loading deterministic: read legacy bytes,
+   initialize appended bytes from documented defaults, and clear future
+   capacity bytes.
 6. Document append-only item IDs as a hard rule.
 
-After that, future catalog expansion to 96 or 128 items does not need to break
-saves.
+Implementation status: C64 resident bytes were recovered by removing the hidden
+C64U timing diagnostic, and the 96-ID migration runway now uses explicit
+per-row metadata. `it_unknown_desc` drives both unknown-name/color routing and
+legacy appended known-state defaults:
+
+- Fixed-name rows default known.
+- Randomized identification rows default unknown.
+- Future capacity bytes from `ITEM_TYPE_COUNT` through `ITEM_ID_CAPACITY - 1`
+  are cleared.
+
+When adding more rows, extend `it_unknown_desc` in lockstep with
+`ITEM_TYPE_COUNT`; do not add randomized appended rows unless their
+unknown-name/color pools cover the descriptor's class-local index.
+
+Before the 128-item milestone:
+
+1. Introduce `ITEM_ID_CAPACITY = 128`.
+2. Convert `id_known` from byte-per-item to a bitset, or save/load it through a
+   compact compatibility wrapper.
+3. Add version-aware save loading for 64-byte, 96-byte, and 128-capacity known
+   state.
+4. Add explicit migration defaults for future item ranges.
+5. Verify old saves containing IDs `64-95` before adding IDs `96-127`.
+
+After that, future catalog expansion to 128 items does not need to break saves.
 
 For full 420-row support, a later breaking or migrating format would still be
 needed because one-byte item IDs cap out at 255. Planning around 128 now gives
