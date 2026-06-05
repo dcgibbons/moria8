@@ -29,7 +29,7 @@ Commands:
 - `Q` - cancel / exit menu
 
 Prompts:
-- Item generation: `ITEM 0-63: `
+- Item generation: `ITEM 0-65: `
 - Level jump: `DLVL 0-99: `
 
 Feedback:
@@ -40,7 +40,7 @@ Feedback:
 
 ## Generate Item
 
-Wizard item generation uses item IDs `0-63`.
+Wizard item generation uses item IDs `0-65`.
 
 Behavior:
 - Non-gold items try to go into inventory first
@@ -177,6 +177,8 @@ or `Neutralize Poison` feedback:
 | 61 | Flask of Oil |
 | 62 | Shovel |
 | 63 | Pick |
+| 64 | Main Gauche |
+| 65 | Studded Leather Armor |
 
 ## Source References
 

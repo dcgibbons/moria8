@@ -58,6 +58,7 @@ itemdesc_put_staged:
     lda itemdesc_item_id
     tax
     lda it_category,x
+    cmp #ICAT_DIGGING
     bne !idps_not_tool+
     lda itemdesc_ego
     beq !idps_not_tool+

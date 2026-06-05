@@ -7,6 +7,14 @@ raising `ITEM_TYPE_COUNT` and appending table rows.
 
 Confidence: high.
 
+The first post-64 expansion proved the main risk: catalog growth is a schema,
+memory-layout, and product-path compatibility change. It is not just a table
+append. The failure mode was an appended mundane equipment item entering an
+old randomized unknown-name path, indexing past the staff shuffle table, and
+rendering unrelated memory as inventory text. Future item batches must treat
+identification defaults, wizard/debug paths, save migration, and per-platform
+layout as first-class work.
+
 The full catalog is possible only with a different implementation: split live
 item instance state from catalog definition data, keep a compact resident
 catalog, and move names/full metadata/generation tables into banked or
@@ -18,13 +26,13 @@ architecture project.
 
 ## Current Moria8 Constraints
 
-Current Moria8 has 64 item type IDs.
+Current Moria8 has 66 item type IDs.
 
 Relevant current constants:
 
 | Constant | Value | Meaning |
 |---|---:|---|
-| `ITEM_TYPE_COUNT` | 64 | Current item catalog size |
+| `ITEM_TYPE_COUNT` | 66 | Current item catalog size |
 | `MAX_FLOOR_ITEMS` | 42 | Max live floor item slots |
 | `MAX_INV_SLOTS` | 22 | Carried inventory slots |
 | `MAX_EQUIP_SLOTS` | 9 | Equipment slots |
@@ -75,6 +83,67 @@ Each new item also usually costs:
 | behavior/action code | highly variable |
 | generation table changes | variable |
 | save/load compatibility | variable |
+
+The hidden cost is old range assumptions. Code that was correct for a 64-row
+catalog may still contain literal prompts, table bounds, unknown-name category
+rules, or save/load block sizes that assume item IDs `0-63`.
+
+## Lessons From The First Expansion
+
+The first expansion from 64 to 66 IDs added:
+
+| ID | Item | Category |
+|---:|---|---|
+| 64 | Main Gauche | weapon |
+| 65 | Studded Leather Armor | armor |
+
+This exposed several important contracts:
+
+| Area | What went wrong | Required rule |
+|---|---|---|
+| Wizard/debug UI | Prompt still advertised `ITEM 0-63` | Every range-bearing user/debug string must be updated with the catalog count. |
+| Item names | Appended equipment could be treated as unknown staff-like data | Unknown-name logic must be category-safe and migration defaults must keep mundane always-known items known. |
+| Save migration | V1 saves contained only 64 known-item bytes | Legacy loads must initialize every byte beyond `LEGACY_ITEM_TYPE_COUNT` deterministically. |
+| C128 layout | Small data growth still stressed resident/banked placement | Any catalog growth can require C128 layout work and full C128 verification. |
+| Tests | Isolated table tests missed product wizard-to-inventory corruption | Product-path smoke tests are required for appended IDs, not only direct descriptor tests. |
+
+The root failure was not that item ID 64 is special. The root failure was that
+unknown-name lookup had ID-range assumptions from the old randomized
+identification model. An appended equipment ID with `id_known = 0` was routed
+through a staff-description shuffle table that did not contain that ID. The
+inventory renderer then printed unrelated memory.
+
+The fix was to make catalog growth explicit:
+
+- Append IDs without renumbering legacy `0-63`.
+- Keep a stable `ITEM_ID_CAPACITY` larger than `ITEM_TYPE_COUNT`.
+- Migrate V1 known-state by reading the 64 legacy bytes, clearing future bytes,
+  and marking appended mundane always-known items as known.
+- Add direct item-description tests for appended IDs.
+- Smoke the real wizard grant plus inventory display path on C64, C128, and
+  Plus/4.
+- Verify save/load with appended items in inventory.
+
+## Expansion Gate Checklist
+
+Before accepting any future item batch, all of these must be true:
+
+| Gate | Required proof |
+|---|---|
+| Catalog constants | `ITEM_TYPE_COUNT`, `LEGACY_ITEM_TYPE_COUNT`, and `ITEM_ID_CAPACITY` have the intended relationship. |
+| Table completeness | Every per-item table has one row for each implemented ID. |
+| Name safety | Known and unknown name paths are valid for every appended ID category. |
+| Identification defaults | New mundane equipment is known by default; randomized/identified item classes use intentional defaults. |
+| Generation | Level pools or rarity buckets include only valid item IDs. |
+| Wizard/debug | Prompts and input bounds match the implemented ID range. |
+| Save migration | Old saves initialize all new known-state and live-state fields deterministically. |
+| Product path | Wizard grant -> inventory display works for first and last appended ID. |
+| Save/load path | Save and reload preserves appended IDs and renders their names correctly. |
+| Platform layout | C64, C128, and Plus/4 memory assertions still pass. |
+| Docs | `docs/WIZARD.md`, this plan, and save migration notes reflect the new catalog. |
+
+For broad C128 banking, loader, layout, or runtime-loaded changes, `make
+test128` is the acceptance gate. Narrow direct harnesses are diagnostics only.
 
 ## Catalog Size Reality
 
@@ -327,6 +396,8 @@ This is cleaner long-term but larger and invasive.
 | 61 | Flask of Oil | Light/throwable |
 | 62 | Shovel | Digging |
 | 63 | Pick | Digging |
+| 64 | Main Gauche | Weapon |
+| 65 | Studded Leather Armor | Armor |
 
 ## Source Catalog Comparison
 
@@ -366,10 +437,11 @@ This is cleaner long-term but larger and invasive.
 | Store doors | 6 | 5 parsed | town/map feature |
 | Nothing / sentinel | 2 | 0 parsed | 0 |
 
-## Chests as First Expansion Candidate
+## Chests as Deferred Expansion Candidate
 
-Chests are a good first test of the split-data idea because they add meaningful
-gameplay without requiring hundreds of source rows.
+Chests are useful, but they are not the next catalog priority. The breadth-first
+catalog expansion should add missing melee, armor, potions, scrolls, wands,
+staves, rings, and lights before spending resident/item-state budget on chests.
 
 Source-faithful chest rows:
 
@@ -399,10 +471,12 @@ This should stay outside the fixed 256-byte floor item page.
 
 Recommended plan:
 
-1. Do chests first.
-2. Expand item catalog to 96 or 128, not full 420.
+1. Expand missing ordinary catalog families toward the 96-slot runway.
+2. Move names and full catalog metadata to banked/disk-loaded data before
+   attempting broad row batches.
 3. Introduce behavior profiles/effect IDs while expanding.
-4. Move names and full catalog metadata to banked/disk-loaded data.
+4. Defer chests until the ordinary catalog has better melee/armor/consumable
+   coverage.
 5. Defer 16-bit item IDs until a full-source-fidelity requirement is confirmed.
 
 Implementation checkpoints:
@@ -415,20 +489,24 @@ Implementation checkpoints:
 - Inventory capacity has moved to 31 total slots with `EQUIP_AMULET = 30`;
   `LEGACY_TOTAL_INV_SLOTS` records the prior 30-slot save/layout value for
   loading older saves.
+- The first catalog breadth slice added two append-only equipment rows:
+  `Main Gauche` and `Studded Leather Armor`. A four-row resident slice
+  (`Main Gauche`, `Rapier`, `Studded Leather Armor`, `Large Shield`) crossed the
+  C64 main-segment fit assert, so additional rows need byte recovery or catalog
+  data relocation first.
 - C128 resident selector layout is extremely tight: `128.select.prg` currently
   ends at `$AAFE`, one byte before the `$AB00` disk-I/O payload. Future selector
   work must recover bytes or move code before adding behavior there.
-- Verification checkpoint: `make build`, `make test64`, and the relevant C128
-  static layout/overlay guards pass. Full `make test128-fast` is blocked by the
-  existing `tier128` fixture missing a `pick_creature_type` stub.
+- Verification checkpoint: `make build`, `make test64`, and `make test128-fast`
+  pass after the first catalog breadth slice.
 
 Good 128-item target mix:
 
 | Family | Current | Suggested target |
 |---|---:|---:|
 | Gold | 2 | 4-6 |
-| Weapons/ammo | 13 | 25-32 |
-| Armor/shields/helms/etc. | 8 | 20-28 |
+| Weapons/ammo | 14 | 25-32 |
+| Armor/shields/helms/etc. | 9 | 20-28 |
 | Food/light/digging | 7 | 10-14 |
 | Potions | 10 | 18-24 |
 | Scrolls | 10 | 18-24 |

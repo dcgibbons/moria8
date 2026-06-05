@@ -82,6 +82,13 @@ equip_slot_for_cat:
 // Preserves: nothing
 show_inv_and_select:
     sta piw_filter
+    jsr input_prepare_selectable_overlay_key
+    jsr tramp_ui_inv_select_display
+#if C64_TEST_SCRIPTED_BOOK_OVERLAY || C128_TEST_SCRIPTED_BOOK_OVERLAY
+    jmp test_assert_book_overlay
+#endif
+    jsr input_get_followup_key
+    tay
 #if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME
     lda piw_return_overlay
     bne !sias_have_return_overlay+
@@ -110,12 +117,7 @@ show_inv_and_select:
 !sias_return_resident:
 !sias_have_return_overlay:
 #endif
-    jsr input_prepare_selectable_overlay_key
-    jsr tramp_ui_inv_select_display
-#if C64_TEST_SCRIPTED_BOOK_OVERLAY || C128_TEST_SCRIPTED_BOOK_OVERLAY
-    jmp test_assert_book_overlay
-#endif
-    jsr input_get_followup_key
+    tya
     pha
     jsr ui_view_restore_modal_overlay
 #if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME

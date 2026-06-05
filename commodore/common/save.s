@@ -1287,6 +1287,8 @@ load_read_known_items:
     inx
     cpx #ITEM_ID_CAPACITY
     bcc !lrki_clear_future-
+    inc id_known + 64
+    inc id_known + 65
     rts
 
 // ============================================================

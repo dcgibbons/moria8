@@ -333,6 +333,7 @@ expected_item_name_lo:
     .byte <ein_40, <ein_41, <ein_42, <ein_43, <ein_44, <ein_45, <ein_46, <ein_47
     .byte <ein_48, <ein_49, <ein_50, <ein_51, <ein_52, <ein_53, <ein_54, <ein_55
     .byte <ein_56, <ein_57, <ein_58, <ein_59, <ein_60, <ein_61, <ein_62, <ein_63
+    .byte <ein_64, <ein_65
 expected_item_name_hi:
     .byte >ein_0, >ein_1, >ein_2, >ein_3, >ein_4, >ein_5, >ein_6, >ein_7
     .byte >ein_8, >ein_9, >ein_10, >ein_11, >ein_12, >ein_13, >ein_14, >ein_15
@@ -342,6 +343,7 @@ expected_item_name_hi:
     .byte >ein_40, >ein_41, >ein_42, >ein_43, >ein_44, >ein_45, >ein_46, >ein_47
     .byte >ein_48, >ein_49, >ein_50, >ein_51, >ein_52, >ein_53, >ein_54, >ein_55
     .byte >ein_56, >ein_57, >ein_58, >ein_59, >ein_60, >ein_61, >ein_62, >ein_63
+    .byte >ein_64, >ein_65
 
 ein_0:  .text "Gold (small)" ; .byte 0
 ein_1:  .text "Gold (large)" ; .byte 0
@@ -407,6 +409,8 @@ ein_60: .text "Holy Book of Prayers Exorcism" ; .byte 0
 ein_61: .text "Flask of Oil" ; .byte 0
 ein_62: .text "Shovel" ; .byte 0
 ein_63: .text "Pick" ; .byte 0
+ein_64: .text "Main Gauche" ; .byte 0
+ein_65: .text "Studded Leather Armor" ; .byte 0
 
 assert_col: .byte 0
 assert_idx: .byte 0

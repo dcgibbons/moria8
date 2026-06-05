@@ -1785,7 +1785,7 @@ t22_fail_code:
     eor #$5a
     sta SAVE_STREAM_BUF,x
     inx
-    cpx #ITEM_TYPE_COUNT
+    cpx #LEGACY_ITEM_TYPE_COUNT
     bcc !t23_seed_v1_stream-
     lda SAVE_STREAM_BUF
     cmp #$5a
@@ -1817,8 +1817,20 @@ t22_fail_code:
     jmp t23_fail_code
 !t23_v1_next:
     inx
-    cpx #ITEM_TYPE_COUNT
+    cpx #LEGACY_ITEM_TYPE_COUNT
     bcc !t23_check_v1_known-
+
+    ldx #LEGACY_ITEM_TYPE_COUNT
+!t23_check_v1_appended:
+    lda id_known,x
+    cmp #1
+    beq !t23_appended_next+
+    lda #3
+    jmp t23_fail_code
+!t23_appended_next:
+    inx
+    cpx #ITEM_TYPE_COUNT
+    bcc !t23_check_v1_appended-
 
     ldx #ITEM_TYPE_COUNT
 !t23_check_v1_future:

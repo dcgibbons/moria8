@@ -79,6 +79,7 @@ c128_test_seed_scripted_spell_state:
 #endif
 
 #if C128_TEST_SCRIPTED_PRAYER
+.segment C128ResidentItems
 c128_test_seed_scripted_prayer_state:
     lda #0
     sta c128_test_spell_success_count
@@ -156,6 +157,7 @@ c128_test_prayer_history_has_bless:
 !c128_tp_found:
     sec
     rts
+.segment C128ResidentPlay
 #endif
 
 #if C64_TEST_SCRIPTED_SCROLL_SELECTOR
@@ -2447,8 +2449,10 @@ press_key_str:
 welcome_str:
     .text "Welcome to Moria! ?=help. Shift+Q=quit." ; .byte 0
 #endif
+#if !GAME_LOOP_LOW_DATA_EXTERNAL
 winner_save_blocked_str:
     .text "Winner: Shift+Q to claim victory." ; .byte 0
+#endif
 
 #if !GAME_LOOP_NAV_STRINGS_EXTERNAL
 search_mode_on_str:
@@ -2467,9 +2471,12 @@ at_surface_str:
     .text "You are already at the surface." ; .byte 0
 #endif
 
+#if !GAME_LOOP_NO_STAIRS_STR_EXTERNAL
 no_stairs_str:
     .text "You see no stairs here." ; .byte 0
+#endif
 
+#if !GAME_LOOP_LOW_DATA_EXTERNAL
 slain_str:
     .text "You have been slain." ; .byte 0
 
@@ -2484,6 +2491,7 @@ recall_last_sc:    .byte 0             // Screen code of last recall shown (0 = 
 recall_last_idx:   .byte 0             // Creature index last shown (for cycling)
 run_input_armed:   .byte 0             // Running cancel armed after first neutral scan
 auto_rest_active:  .byte 0             // Auto-rest is repeating ordinary rest turns
+#endif
 
 #if C128_TEST_FORCE_DUNGEON_MELEE
 c128_test_force_dungeon_melee_pending: .byte 1
@@ -2673,6 +2681,11 @@ roll_tool_ego_check:
 // Clobbers: A, X, Y, zp_ptr0
 // ============================================================
 put_tool_ego_prefix:
+    cpx #62
+    beq !ptep_valid_tool+
+    cpx #63
+    bne !ptep_done+
+!ptep_valid_tool:
     // Compute index = (type - 62) * 2 + (ego - 1)
     sec
     sbc #1                      // ego - 1 (0 or 1)
@@ -2689,8 +2702,10 @@ put_tool_ego_prefix:
     lda tool_ego_prefix_hi,x
     sta zp_ptr0_hi
     jsr hal_screen_put_string       // Print prefix (e.g., "Dwarven ")
+!ptep_done:
     rts
 
+#if !GAME_LOOP_LOW_DATA_EXTERNAL
 ptep_temp: .byte 0
 
 // Prefix strings (screen codes, null-terminated)
@@ -2710,6 +2725,7 @@ tool_ego_prefix_lo:
 tool_ego_prefix_hi:
     .byte >ego_tool_prefix_gnomish, >ego_tool_prefix_dwarven
     .byte >ego_tool_prefix_orcish,  >ego_tool_prefix_dwarven
+#endif
 
 // ============================================================
 // banked_ego_put_suffix — Write ego suffix to screen

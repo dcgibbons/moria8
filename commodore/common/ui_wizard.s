@@ -627,7 +627,7 @@ wiz_done_str:
 wiz_fail_str:
     .text "FAIL" ; .byte 0
 wiz_item_prompt_str:
-    .text "ITEM 0-63: " ; .byte 0
+    .text "ITEM 0-65: " ; .byte 0
 wiz_jump_prompt_str:
     .text "DLVL 0-99: " ; .byte 0
 wiz_bad_value_str:

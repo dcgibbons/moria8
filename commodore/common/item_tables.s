@@ -6,7 +6,7 @@
 .const LANTERN_MAX_CHARGES = 250
 
 // ============================================================
-// Master Item Type Table — Struct-of-Arrays (25 types)
+// Master Item Type Table — Struct-of-Arrays
 // ============================================================
 
 // Category
@@ -75,6 +75,8 @@ it_category:
     .byte ICAT_LIGHT    // 61: Flask of Oil
     .byte ICAT_DIGGING  // 62: Shovel
     .byte ICAT_DIGGING  // 63: Pick
+    .byte ICAT_WEAPON   // 64: Main Gauche
+    .byte ICAT_ARMOR    // 65: Studded Leather Armor
 
 // Display character (screen codes)
 it_display:
@@ -142,6 +144,8 @@ it_display:
     .byte $21   // 61: '!' Flask of Oil
     .byte $5c   // 62: '\' Shovel
     .byte $5c   // 63: '\' Pick
+    .byte $2f   // 64: '/' Main Gauche
+    .byte $5b   // 65: '[' Studded Leather Armor
 
 // Color
 it_color:
@@ -209,6 +213,8 @@ it_color:
     .byte COL_ORANGE    // 61: Flask of Oil
     .byte COL_BROWN     // 62: Shovel
     .byte COL_LGREY     // 63: Pick
+    .byte COL_LGREY     // 64: Main Gauche
+    .byte COL_BROWN     // 65: Studded Leather Armor
 
 // Weight (in 1/10 lbs)
 it_weight:
@@ -222,6 +228,7 @@ it_weight:
     .byte 30, 30, 30, 30, 30, 30           // Books (55-60)
     .byte 10                               // 61: Flask of Oil
     .byte 60, 50                            // 62: Shovel, 63: Pick
+    .byte 30, 90                            // 64-65: new weapon/armor
 
 // Damage dice count
 it_dmg_dice:
@@ -235,6 +242,7 @@ it_dmg_dice:
     .byte 0, 0, 0, 0, 0, 0                  // Books (55-60)
     .byte 2                                  // 61: Flask of Oil (2d6)
     .byte 1, 1                              // 62: Shovel (1d2), 63: Pick (1d3)
+    .byte 1, 0                              // 64-65: new weapon/armor
 
 // Damage dice sides
 it_dmg_sides:
@@ -248,6 +256,7 @@ it_dmg_sides:
     .byte 0, 0, 0, 0, 0, 0                  // Books (55-60)
     .byte 6                                  // 61: Flask of Oil (2d6)
     .byte 2, 3                              // 62: Shovel (1d2), 63: Pick (1d3)
+    .byte 5, 0                              // 64-65: new weapon/armor
 
 // Base armor class
 it_base_ac:
@@ -261,6 +270,7 @@ it_base_ac:
     .byte 0, 0, 0, 0, 0, 0                  // Books (55-60): no AC
     .byte 0                                  // 61: Flask of Oil: no AC
     .byte 0, 0                              // 62: Shovel, 63: Pick (no AC)
+    .byte 0, 5                              // 64-65: new weapon/armor
 
 // Base cost (lo)
 it_cost_lo:
@@ -275,6 +285,7 @@ it_cost_lo:
     .byte <300, <500, <800, <300, <500, <800 // Books (55-60)
     .byte <10                                // 61: Flask of Oil
     .byte <15, <50                          // 62: Shovel (15gp), 63: Pick (50gp)
+    .byte <25, <75
 
 // Base cost (hi)
 it_cost_hi:
@@ -289,6 +300,7 @@ it_cost_hi:
     .byte >300, >500, >800, >300, >500, >800 // Books (55-60)
     .byte >10                                // 61: Flask of Oil
     .byte >15, >50                          // 62: Shovel (15gp), 63: Pick (50gp)
+    .byte >25, >75
 
 // Minimum dungeon level to appear
 it_min_level:
@@ -302,6 +314,7 @@ it_min_level:
     .byte 4, 8, 12, 4, 8, 12                // Books (55-60)
     .byte 0                                  // 61: Flask of Oil (available immediately)
     .byte 0, 0                              // 62: Shovel, 63: Pick (available immediately)
+    .byte 1, 3                              // 64-65: new weapon/armor
 
 // Missile type table — encodes ranged weapon/ammo relationships
 // Only stored for types 49-54 (ranged items). Types < 49 are not ranged (return 0).
@@ -346,6 +359,7 @@ it_name_lo:
     .byte <itn_49, <itn_50, <itn_51, <itn_52, <itn_53, <itn_54
     .byte <itn_55, <itn_56, <itn_57, <itn_58, <itn_59, <itn_60
     .byte <itn_61, <itn_62, <itn_63
+    .byte <itn_64, <itn_65
 it_name_hi:
     .byte >itn_0,  >itn_1,  >itn_2,  >itn_3,  >itn_4
     .byte >itn_5,  >itn_6,  >itn_7,  >itn_8,  >itn_9
@@ -361,6 +375,8 @@ it_name_hi:
     .byte >itn_49, >itn_50, >itn_51, >itn_52, >itn_53, >itn_54
     .byte >itn_55, >itn_56, >itn_57, >itn_58, >itn_59, >itn_60
     .byte >itn_61, >itn_62, >itn_63
+    .byte >itn_64, >itn_65
+it_name_hi_end:
 
 // Tokenized item-name string pool.
 // Bytes below $80 are literal screen codes; bytes $80-$95 expand through
@@ -493,3 +509,5 @@ itn_60: .text "Exorcism" ; .byte 0
 itn_61: .text "Flask" ; .byte ITOK_OF ; .text "Oil" ; .byte 0
 itn_62: .text "Shovel" ; .byte 0
 itn_63: .text "Pick" ; .byte 0
+itn_64: .text "Main Gauche" ; .byte 0
+itn_65: .text "Studded " ; .byte ITOK_LEATHER ; .text "Armor" ; .byte 0

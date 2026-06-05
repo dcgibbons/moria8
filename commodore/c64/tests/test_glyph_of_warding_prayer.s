@@ -11,6 +11,7 @@ tgw_results: .fill 3, $ff
 .encoding "screencode_mixed"
 
 test_bootstrap:
+    sei
     :BankOutBasic()
     jmp test_start
 
@@ -27,7 +28,11 @@ test_finish:
     :BankInKernal()
     jmp test_done_break
 
-.pc = $0840 "Test Code"
+.pc = $0839 "Test Code"
+test_done_break:
+    brk
+
+.pc = $0840 "Glyph Test Body"
 
 #import "../../common/zeropage.s"
 #import "../memory.s"
@@ -353,6 +358,3 @@ test_start:
     lda #$00
     sta tgw_results + 2
     jmp test_finish
-
-test_done_break:
-    brk

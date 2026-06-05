@@ -73,12 +73,13 @@ maps old IDs to new IDs.
 
 ## Reserve Future Item Capacity
 
-Before expanding the item catalog, define a stable save capacity separate from
-the number of currently implemented item rows:
+Before expanding the item catalog beyond the legacy ABI range, define a stable
+save capacity separate from the number of currently implemented item rows:
 
 ```asm
-.const ITEM_TYPE_COUNT = 64
-.const ITEM_ID_CAPACITY = 128
+.const LEGACY_ITEM_TYPE_COUNT = 64
+.const ITEM_TYPE_COUNT = 66
+.const ITEM_ID_CAPACITY = 96
 ```
 
 The save format should serialize the stable capacity, not the current
@@ -199,6 +200,22 @@ Every new field needs a deterministic old-save default.
 | New inventory flags | 0 |
 | New store stock fields | 0 |
 | Catalog generation version | current default |
+
+Do not treat `id_known = 0` as a harmless universal default. Unknown-name
+rendering is category-sensitive: potions, scrolls, staves, wands, and similar
+randomized identification classes may use shuffled description tables, while
+ordinary equipment should normally render its real name. If an appended mundane
+item is left unknown during legacy-save migration, it can be routed through the
+wrong randomized-name table and read outside that table. That produces garbage
+inventory text and can corrupt the running product.
+
+For every appended item range, migration must explicitly choose one of:
+
+| Item class | Migration default |
+|---|---|
+| Mundane equipment, food, books, fixed-name tools | known |
+| Randomized potions, scrolls, wands, staves, rings, amulets | unknown only if the category-specific unknown-name table covers the new ID |
+| New special behavior items | explicit default documented with the item batch |
 
 ## Keep Save Identity Stable
 

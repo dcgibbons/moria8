@@ -1306,23 +1306,23 @@ tunnel_spawn_gold:
 // 50% best-of-3 random picks (highest index wins), then re-roll
 //      within the winner's depth tier for uniform intra-tier distribution.
 // 1-in-12 "great item" chance sets effective level to max (full pool).
-// Output: A = item type ID (2-63)
+// Output: A = item type ID (2-ITEM_TYPE_COUNT-1)
 // Clobbers: A, X, Y
 // Uses: zp_temp0 (pool_size), zp_temp1 (best_idx), zp_temp2 (tier_lo)
 //       zp_temp4 used internally by rng_range
 // ============================================================
 .const PIT_MAX_LEVEL = 12
 
-// Items 2-63 sorted ascending by it_min_level
+// Items 2-(ITEM_TYPE_COUNT-1) sorted ascending by it_min_level
 pit_sorted:
     // Level 0 (5 items)
     .byte 13, 15, 61, 62, 63
-    // Level 1 (15 items)
-    .byte 2, 3, 6, 11, 12, 16, 17, 19, 20, 28, 29, 37, 51, 52, 54
+    // Level 1 (16 items)
+    .byte 2, 3, 6, 11, 12, 16, 17, 19, 20, 28, 29, 37, 51, 52, 54, 64
     // Level 2 (11 items)
     .byte 5, 7, 9, 14, 21, 30, 31, 47, 48, 49, 53
-    // Level 3 (11 items)
-    .byte 4, 10, 18, 22, 25, 36, 39, 43, 44, 46, 50
+    // Level 3 (12 items)
+    .byte 4, 10, 18, 22, 25, 36, 39, 43, 44, 46, 50, 65
     // Level 4 (9 items)
     .byte 8, 23, 27, 33, 38, 40, 42, 55, 58
     // Level 5 (5 items)
@@ -1337,18 +1337,18 @@ pit_sorted:
 // Cumulative item count per level (0-12)
 pit_level_bounds:
     .byte 5      // level 0: 5 items
-    .byte 20     // level 1: +15 = 20
-    .byte 31     // level 2: +11 = 31
-    .byte 42     // level 3: +11 = 42
-    .byte 51     // level 4: +9 = 51
-    .byte 56     // level 5: +5 = 56
-    .byte 58     // level 6: +2 = 58
-    .byte 58     // level 7: (no items)
-    .byte 60     // level 8: +2 = 60
-    .byte 60     // level 9: (no items)
-    .byte 60     // level 10: (no items)
-    .byte 60     // level 11: (no items)
-    .byte 62     // level 12: +2 = 62
+    .byte 21     // level 1: +16 = 21
+    .byte 32     // level 2: +11 = 32
+    .byte 44     // level 3: +12 = 44
+    .byte 53     // level 4: +9 = 53
+    .byte 58     // level 5: +5 = 58
+    .byte 60     // level 6: +2 = 60
+    .byte 60     // level 7: (no items)
+    .byte 62     // level 8: +2 = 62
+    .byte 62     // level 9: (no items)
+    .byte 62     // level 10: (no items)
+    .byte 62     // level 11: (no items)
+    .byte 64     // level 12: +2 = 64
 
 pick_item_type:
     // Calculate effective level = min(dlvl + 2, PIT_MAX_LEVEL)
@@ -1683,9 +1683,18 @@ re_negate_a:
 // ============================================================
 // Compile-time validation
 // ============================================================
-.assert "Item type count", ITEM_TYPE_COUNT, 64
+.assert "Item type count", ITEM_TYPE_COUNT, 66
 .assert "it_category size", it_display - it_category, ITEM_TYPE_COUNT
 .assert "it_display size", it_color - it_display, ITEM_TYPE_COUNT
 .assert "it_color size", it_weight - it_color, ITEM_TYPE_COUNT
+.assert "it_weight size", it_dmg_dice - it_weight, ITEM_TYPE_COUNT
+.assert "it_dmg_dice size", it_dmg_sides - it_dmg_dice, ITEM_TYPE_COUNT
+.assert "it_dmg_sides size", it_base_ac - it_dmg_sides, ITEM_TYPE_COUNT
+.assert "it_base_ac size", it_cost_lo - it_base_ac, ITEM_TYPE_COUNT
+.assert "it_cost_lo size", it_cost_hi - it_cost_lo, ITEM_TYPE_COUNT
+.assert "it_cost_hi size", it_min_level - it_cost_hi, ITEM_TYPE_COUNT
+.assert "it_min_level size", it_missile - it_min_level, ITEM_TYPE_COUNT
+.assert "it_name_lo size", it_name_hi - it_name_lo, ITEM_TYPE_COUNT
+.assert "it_name_hi size", it_name_hi_end - it_name_hi, ITEM_TYPE_COUNT
 // Hardcoded assertion removed for cross-platform compatibility
 .assert "Inventory total slots", TOTAL_INV_SLOTS, 31

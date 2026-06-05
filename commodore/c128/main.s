@@ -3413,6 +3413,28 @@ c128_resident_world_end:
 c128_resident_items_start:
 #import "../common/item.s"
 #import "../common/store_data.s"
+at_surface_str:
+    .text "You are already at the surface." ; .byte 0
+slain_str:
+    .text "You have been slain." ; .byte 0
+death_source_saved:
+    .byte 0
+recall_query_sc:   .byte 0
+recall_found_type: .byte 0
+recall_last_sc:    .byte 0
+recall_last_idx:   .byte 0
+run_input_armed:   .byte 0
+auto_rest_active:  .byte 0
+ptep_temp: .byte 0
+ego_tool_prefix_gnomish: .text "Gnomish " ; .byte 0
+ego_tool_prefix_orcish:  .text "Orcish " ; .byte 0
+ego_tool_prefix_dwarven: .text "Dwarven " ; .byte 0
+tool_ego_prefix_lo:
+    .byte <ego_tool_prefix_gnomish, <ego_tool_prefix_dwarven
+    .byte <ego_tool_prefix_orcish,  <ego_tool_prefix_dwarven
+tool_ego_prefix_hi:
+    .byte >ego_tool_prefix_gnomish, >ego_tool_prefix_dwarven
+    .byte >ego_tool_prefix_orcish,  >ego_tool_prefix_dwarven
 c128_resident_items_end:
 
 .segment C128ResidentSelect
@@ -3434,8 +3456,6 @@ descend_str:
     .text "You descend the staircase." ; .byte 0
 ascend_str:
     .text "You ascend the staircase." ; .byte 0
-at_surface_str:
-    .text "You are already at the surface." ; .byte 0
 
 #define ITEM_ACTIONS_OVERLAY_EXTERNAL
 #define PLAYER_RECALC_EQUIPMENT_EXTERNAL
@@ -3453,6 +3473,8 @@ c128_resident_persist_end:
 #define PRESS_KEY_STR_EXTERNAL
 #define WELCOME_STR_EXTERNAL
 #define GAME_LOOP_NAV_STRINGS_EXTERNAL
+#define GAME_LOOP_NO_STAIRS_STR_EXTERNAL
+#define GAME_LOOP_LOW_DATA_EXTERNAL
 .segment C128ResidentPlay
 c128_resident_play_start:
 #if PERF_P1
@@ -4229,6 +4251,12 @@ runtime_low_data_start:
     #import "monster_threat_vdc.s"
     #import "dungeon_render_vdc.s"
     #import "../common/ego_items.s"
+winner_save_blocked_str:
+    .text "Winner: Shift+Q to claim victory." ; .byte 0
+no_stairs_str:
+    .text "You see no stairs here." ; .byte 0
+recall_prompt_str:
+    .text "Recall which? " ; .byte 0
 pmx_cure_poison_msg:
     lda zp_eff_poison
     beq !pcpm_done+
