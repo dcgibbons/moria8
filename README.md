@@ -10,9 +10,9 @@ written in platform-specific assembly. Current releases target the Commodore
 
 | Platform | Status | Download |
 | -------- | ------ | -------- |
-| Commodore 64 (C64) | Released ([notes](docs/release_notes/v1.10.md)) | [moria8-c64.d64](https://github.com/dcgibbons/moria8/releases/download/v1.1.0/moria8-c64.d64) [moria8-c64.zip](https://github.com/dcgibbons/moria8/releases/download/v1.1.0/moria8-c64.zip) |
-| Commodore Plus/4 | Released ([notes](docs/release_notes/v1.1.0.md)) | [moria8-plus4.d64](https://github.com/dcgibbons/moria8/releases/download/v1.1.0/moria8-plus4.d64) |
-| Commodore 128 (C128) | Released ([notes](docs/release_notes/commodore.md)) | [moria8-c128.d71](https://github.com/dcgibbons/moria8/releases/download/v1.0.0/moria8-c128.d71) |
+| Commodore 64 (C64) | Released ([notes](docs/release_notes/v1.2.0.md)) | [moria8-c64.d64](https://github.com/dcgibbons/moria8/releases/download/v1.2.0/moria8-c64.d64) [moria8-c64.zip](https://github.com/dcgibbons/moria8/releases/download/v1.2.0/moria8-c64.zip) |
+| Commodore Plus/4 | Released ([notes](docs/release_notes/v1.2.0.md)) | [moria8-plus4.d64](https://github.com/dcgibbons/moria8/releases/download/v1.2.0/moria8-plus4.d64) |
+| Commodore 128 (C128) | Released ([notes](docs/release_notes/v1.2.0.md)) | [moria8-c128.d71](https://github.com/dcgibbons/moria8/releases/download/v1.2.0/moria8-c128.d71) |
 | Commodore PET | Maybe | |
 | Commodore VIC-20 | Maybe | |
 | Commander X16 | Planned | |
@@ -105,7 +105,13 @@ and town paths, and `make test128` is the broader C128 shell harness.
 - [Monster Reference](docs/MONSTERS.md)
 - [Spell And Prayer Reference](docs/SPELLS.md)
 - [Player Guide](docs/PLAYER_GUIDE.md)
-- [Development Process](docs/DEVELOPMENT_PROCESS.md)
+- [Development Process](docs/DEVELOPMENT_PROCESS.md) - the story of Moria8,
+  including how it was built with modern tooling.
+
+## Community
+
+Join our [Discord Server](https://discord.gg/b5rFSDZ8Yk) to get help, chat
+with community, and discuss new features!
 
 ## Credits
 

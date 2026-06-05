@@ -196,8 +196,8 @@ Known limits:
 - Some UI text, message timing, and screen behavior differ from upstream
   VMS Moria and Umoria.
 - Some disk/storage failures still use compact diagnostic text.
-- v1.1.0 ships Save Format V1. Future item/catalog expansion must either load
-  v1.1.0 saves through an explicit migration path or reject them with a clear
+- v1.2.0 ships Save Format V1. Future item/catalog expansion must either load
+  v1.2.0 saves through an explicit migration path or reject them with a clear
   incompatible-save message.
 
 ## Reporting Issues
@@ -218,3 +218,8 @@ To help fix it faster, please include:
 - Any error messages or screenshots.
 
 Quick tip: search existing issues first. Your bug may already be listed.
+
+## Community
+
+Join our [Discord Server](https://discord.gg/b5rFSDZ8Yk) to get help, chat
+with community, and discuss new features!
