@@ -412,6 +412,69 @@ dungeon_generate:
 dg_gen_retries: .byte 0
 
 // ============================================================
+// place_traps — Place hidden traps on the dungeon floor
+// Called from dungeon_generate after place_doors.
+// Number of traps: rng_range(dlvl+1) + 2, capped at MAX_TRAPS.
+// Traps placed at random floor tiles (corridors or rooms).
+// ============================================================
+place_traps:
+    // Don't place traps on town level
+    lda zp_player_dlvl
+    bne !not_town+
+    rts
+!not_town:
+    // Number of traps = rng_range(dlvl+1) + 2
+    lda zp_player_dlvl
+    clc
+    adc #1
+    cmp #MAX_TRAPS
+    bcc !cap_ok+
+    lda #MAX_TRAPS
+!cap_ok:
+    jsr rng_range           // [0, dlvl]
+    clc
+    adc #2                  // [2, dlvl+2]
+    cmp #MAX_TRAPS + 1
+    bcc !count_ok+
+    lda #MAX_TRAPS
+!count_ok:
+    sta trap_count
+
+    lda #0
+    sta dg_idx              // Reuse dungeon gen scratch as trap index
+
+!pt_loop:
+    lda dg_idx
+    cmp trap_count
+    beq !pt_done+
+
+    // Find a random floor tile
+    jsr find_random_floor
+    bcc !pt_finalize+
+
+    // Store in trap table
+    ldx dg_idx
+    lda df_target_x
+    sta trap_x,x
+    lda df_target_y
+    sta trap_y,x
+
+    // Random trap type: rng_range(TRAP_TYPE_COUNT)
+    lda #TRAP_TYPE_COUNT
+    jsr rng_range
+    ldx dg_idx
+    sta trap_type,x
+
+    inc dg_idx
+    jmp !pt_loop-
+
+!pt_finalize:
+    lda dg_idx
+    sta trap_count
+!pt_done:
+    rts
+
+// ============================================================
 // darken_rooms — Strip FLAG_LIT from dark rooms
 // Called after all generation so corridors can detect room walls during
 // carving (FLAG_LIT distinguishes room wall from rock). For each dark

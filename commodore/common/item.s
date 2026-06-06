@@ -1311,10 +1311,10 @@ tunnel_spawn_gold:
 // Uses: zp_temp0 (pool_size), zp_temp1 (best_idx), zp_temp2 (tier_lo)
 //       zp_temp4 used internally by rng_range
 // ============================================================
-#if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME
+.const PIT_MAX_LEVEL = 12
+#if C128_PRODUCT_OVERLAY_RUNTIME
 .segment DungeonGenOverlay
 #endif
-.const PIT_MAX_LEVEL = 12
 
 // Items 2-(ITEM_TYPE_COUNT-1) sorted ascending by it_min_level
 pit_sorted:
@@ -1437,9 +1437,6 @@ pick_item_type:
     jsr rng_range                // [0, count-1]
     jmp !pit_return_idx-
 
-#if C64_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME
-.segment Default
-#endif
 #if C128_PRODUCT_OVERLAY_RUNTIME
 .segment C128ResidentItems
 #endif
@@ -1714,5 +1711,8 @@ re_negate_a:
 .assert "it_name_hi size", it_name_hi_end - it_name_hi, ITEM_TYPE_COUNT
 .assert "pit_sorted size", pit_sorted_end - pit_sorted, ITEM_TYPE_COUNT - 2
 .assert "pit_level_bounds size", pit_level_bounds_end - pit_level_bounds, PIT_MAX_LEVEL + 1
+#if !C128_PRODUCT_OVERLAY_RUNTIME
+.assert "pick_item_type stays visible after dungeon-generation trampoline", pick_item_type < $e000, true
+#endif
 // Hardcoded assertion removed for cross-platform compatibility
 .assert "Inventory total slots", TOTAL_INV_SLOTS, 31

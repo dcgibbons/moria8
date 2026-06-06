@@ -7,19 +7,6 @@
 #import "input_ui_helpers.s"
 
 // ============================================================
-// Constants
-// ============================================================
-.const MAX_TRAPS = 16
-// Trap type indices
-.const TRAP_OPEN_PIT    = 0   // 1d4 damage
-.const TRAP_ARROW       = 1   // 1d8 damage
-.const TRAP_POISON_GAS  = 2   // Set poison timer
-.const TRAP_TELEPORT    = 3   // Random teleport
-.const TRAP_POISON_DART = 4   // 1d4 damage + 50% CON loss
-.const TRAP_ROCKFALL    = 5   // 2d8 damage
-.const TRAP_TYPE_COUNT  = 6
-
-// ============================================================
 // Trap table — parallel arrays (SoA)
 // Hidden traps stored here; NOT in map tiles until triggered/found.
 // ============================================================
@@ -67,69 +54,6 @@ disarm_bad_fail_str:
     .text "You set the trap off!" ; .byte 0
 #endif
 
-
-// ============================================================
-// place_traps — Place hidden traps on the dungeon floor
-// Called from dungeon_generate after place_doors.
-// Number of traps: rng_range(dlvl+1) + 2, capped at MAX_TRAPS.
-// Traps placed at random floor tiles (corridors or rooms).
-// ============================================================
-place_traps:
-    // Don't place traps on town level
-    lda zp_player_dlvl
-    bne !not_town+
-    rts
-!not_town:
-    // Number of traps = rng_range(dlvl+1) + 2
-    lda zp_player_dlvl
-    clc
-    adc #1
-    cmp #MAX_TRAPS
-    bcc !cap_ok+
-    lda #MAX_TRAPS
-!cap_ok:
-    jsr rng_range           // [0, dlvl]
-    clc
-    adc #2                  // [2, dlvl+2]
-    cmp #MAX_TRAPS + 1
-    bcc !count_ok+
-    lda #MAX_TRAPS
-!count_ok:
-    sta trap_count
-
-    lda #0
-    sta dg_idx              // Reuse dungeon gen scratch as trap index
-
-!pt_loop:
-    lda dg_idx
-    cmp trap_count
-    beq !pt_done+
-
-    // Find a random floor tile
-    jsr find_random_floor
-    bcc !pt_finalize+
-
-    // Store in trap table
-    ldx dg_idx
-    lda df_target_x
-    sta trap_x,x
-    lda df_target_y
-    sta trap_y,x
-
-    // Random trap type: rng_range(TRAP_TYPE_COUNT)
-    lda #TRAP_TYPE_COUNT
-    jsr rng_range
-    ldx dg_idx
-    sta trap_type,x
-
-    inc dg_idx
-    jmp !pt_loop-
-
-!pt_finalize:
-    lda dg_idx
-    sta trap_count
-!pt_done:
-    rts
 
 // ============================================================
 // find_random_floor — Find a random walkable floor tile on the map

@@ -73,6 +73,17 @@
 .const RT_VAULT  = 2
 .const RT_NEST   = 3
 
+// Trap table/type constants are shared by generation, save/load, search, and
+// trap gameplay. Trap storage itself lives in dungeon_features.s.
+.const MAX_TRAPS = 16
+.const TRAP_OPEN_PIT    = 0   // 1d4 damage
+.const TRAP_ARROW       = 1   // 1d8 damage
+.const TRAP_POISON_GAS  = 2   // Set poison timer
+.const TRAP_TELEPORT    = 3   // Random teleport
+.const TRAP_POISON_DART = 4   // 1d4 damage + 50% CON loss
+.const TRAP_ROCKFALL    = 5   // 2d8 damage
+.const TRAP_TYPE_COUNT  = 6
+
 // ============================================================
 // Pre-computed row address table
 // map_row_lo[n] / map_row_hi[n] = MAP_BASE + n*MAP_COLS
