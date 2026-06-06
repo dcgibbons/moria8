@@ -304,9 +304,8 @@ store_draw_screen:
 // Clobbers: everything
 store_buy:
     // Prompt: "BUY WHICH ITEM? (A-L)"
-    jsr store_clear_msg_area
     ldx #MSG_BUY_WHICH
-    jsr show_msg
+    jsr store_clear_show_msg
 
     // Get key
     jsr input_prepare_followup_key
@@ -385,9 +384,8 @@ store_buy:
     ldx zp_store_idx
     lda hg_kicked,x
     beq !sb_do_haggle+
-    jsr store_clear_msg_area
     ldx #MSG_KICKED
-    jsr show_msg
+    jsr store_clear_show_msg
     jmp hal_input_get_key           // Wait for key, tail call returns
 
 !sb_do_haggle:
@@ -446,9 +444,8 @@ sbuy_execute:
     sta si_meta,x
 
     // Success message
-    jsr store_clear_msg_area
     ldx #MSG_BOUGHT
-    jsr show_msg
+    jsr store_clear_show_msg
 
     lda #SFX_PICKUP
     jsr hal_sound_play
@@ -456,9 +453,8 @@ sbuy_execute:
 
 // sbuy_show_price — Display price confirmation for buy
 sbuy_show_price:
-    jsr store_clear_msg_area
     ldx #MSG_PRICE
-    jsr show_msg
+    jsr store_clear_show_msg
 
     lda #COL_YELLOW
     sta zp_text_color
@@ -475,14 +471,12 @@ sbuy_show_price:
     jmp uis_screen_put_inline   // Tail call
 
 sbuy_no_gold:
-    jsr store_clear_msg_area
     ldx #MSG_NO_AFFORD
-    jmp show_msg                // Tail call
+    jmp store_clear_show_msg    // Tail call
 
 sbuy_full:
-    jsr store_clear_msg_area
     ldx #MSG_PACK_FULL
-    jmp show_msg                // Tail call
+    jmp store_clear_show_msg    // Tail call
 
 // ============================================================
 // Sell flow
@@ -798,6 +792,14 @@ uis_screen_put_inline:
     sty zp_ptr0_hi
     jmp hal_screen_put_string
 
+store_clear_show_msg:
+    txa
+    pha
+    jsr store_clear_msg_area
+    pla
+    tax
+    jmp show_msg
+
 // check_cancel — Check if A is a cancel key (Q, escape-equivalent, SPACE)
 // Input: A = key code
 // Output: Z set if cancel, Z clear if not; A preserved
@@ -1062,9 +1064,8 @@ hg_show_retry_msg:
 // Input: A = prompt message index (MSG_YOUR_OFFER / MSG_YOUR_PRICE)
 hg_show_final_prompt:
     pha
-    jsr store_clear_msg_area
     ldx #MSG_FINAL
-    jsr show_msg
+    jsr store_clear_show_msg
 
     lda #COL_YELLOW
     sta zp_text_color
@@ -1519,9 +1520,8 @@ hg_do_kick:
     ldx zp_store_idx
     lda #1
     sta hg_kicked,x
-    jsr store_clear_msg_area
     ldx #MSG_KICKED
-    jsr show_msg
+    jsr store_clear_show_msg
     jsr input_prepare_followup_key
     jsr hal_input_get_key
     clc
@@ -1534,9 +1534,8 @@ hg_do_accept:
     sta sb_price_lo
     lda hg_ask_hi
     sta sb_price_hi
-    jsr store_clear_msg_area
     ldx #MSG_AGREED
-    jsr show_msg
+    jsr store_clear_show_msg
     sec
     rts
 
@@ -1564,9 +1563,8 @@ hg_show_insult_msg:
 
 // hg_show_ask — Display "ASKS [price] GP." + "YOUR OFFER? (Q=CANCEL)"
 hg_show_ask:
-    jsr store_clear_msg_area
     ldx #MSG_ASKS
-    jsr show_msg
+    jsr store_clear_show_msg
 
     lda #COL_YELLOW
     sta zp_text_color
@@ -1595,9 +1593,8 @@ hg_show_ask:
 
 // hg_show_offer — Display "OFFERS [price] GP." + "YOUR PRICE? (Q=CANCEL)"
 hg_show_offer:
-    jsr store_clear_msg_area
     ldx #MSG_OFFERS
-    jsr show_msg
+    jsr store_clear_show_msg
 
     lda #COL_YELLOW
     sta zp_text_color
@@ -1626,9 +1623,8 @@ hg_show_offer:
 
 // hg_show_counter — Display "HOW ABOUT [ask] GP?"
 hg_show_counter:
-    jsr store_clear_msg_area
     ldx #MSG_COUNTER
-    jsr show_msg
+    jsr store_clear_show_msg
 
     lda #COL_YELLOW
     sta zp_text_color
@@ -1646,9 +1642,8 @@ hg_show_counter:
 
 // hg_show_final — Display "FINAL OFFER: [ask] GP." + "TAKE IT? (Y/N)"
 hg_show_final:
-    jsr store_clear_msg_area
     ldx #MSG_FINAL
-    jsr show_msg
+    jsr store_clear_show_msg
 
     lda #COL_YELLOW
     sta zp_text_color
