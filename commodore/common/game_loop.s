@@ -79,7 +79,7 @@ c128_test_seed_scripted_spell_state:
 #endif
 
 #if C128_TEST_SCRIPTED_PRAYER
-.segment C128ResidentItems
+.segment Default
 c128_test_seed_scripted_prayer_state:
     lda #0
     sta c128_test_spell_success_count

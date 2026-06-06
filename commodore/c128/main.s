@@ -3407,18 +3407,12 @@ ovl_cache_pages:   .byte 0
 ovl_ready_mask:
     .byte 0, %00000001, %00000010, %00000100, %00001000, %00010000, %00100000, %01000000, %10000000
 c128_cache_state_end:
-#if !(C128_CACHE_TEST_SKIP_TIER || C128_CACHE_TEST_SKIP_OVERLAY)
 at_surface_str:
     .text "You are already at the surface." ; .byte 0
-#endif
 c128_resident_world_end:
 
 .segment C128ResidentItems
 c128_resident_items_start:
-#if C128_CACHE_TEST_SKIP_TIER || C128_CACHE_TEST_SKIP_OVERLAY
-at_surface_str:
-    .text "You are already at the surface." ; .byte 0
-#endif
 slain_str:
     .text "You have been slain." ; .byte 0
 death_source_saved:

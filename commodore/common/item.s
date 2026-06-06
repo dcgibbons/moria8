@@ -1332,12 +1332,14 @@ pit_sorted:
     .byte 24, 26, 32, 41, 45, 72, 79
     // Level 6 (4 items)
     .byte 34, 35, 68, 73
-    // Level 7 (1 item)
-    .byte 71
+    // Level 7 (2 items)
+    .byte 71, 80
     // Level 8 (4 items)
     .byte 56, 59, 69, 75
     // Level 9 (1 item)
     .byte 76
+    // Level 10 (1 item)
+    .byte 81
     // Level 12 (2 items)
     .byte 57, 60
 pit_sorted_end:
@@ -1351,12 +1353,12 @@ pit_level_bounds:
     .byte 59     // level 4: +11 = 59
     .byte 66     // level 5: +7 = 66
     .byte 70     // level 6: +4 = 70
-    .byte 71     // level 7: +1 = 71
-    .byte 75     // level 8: +4 = 75
-    .byte 76     // level 9: +1 = 76
-    .byte 76     // level 10: (no items)
-    .byte 76     // level 11: (no items)
-    .byte 78     // level 12: +2 = 78
+    .byte 72     // level 7: +2 = 72
+    .byte 76     // level 8: +4 = 76
+    .byte 77     // level 9: +1 = 77
+    .byte 78     // level 10: +1 = 78
+    .byte 78     // level 11: (no items)
+    .byte 80     // level 12: +2 = 80
 pit_level_bounds_end:
 
 #if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME
@@ -1746,7 +1748,7 @@ re_negate_a:
 // ============================================================
 // Compile-time validation
 // ============================================================
-.assert "Item type count", ITEM_TYPE_COUNT, 80
+.assert "Item type count", ITEM_TYPE_COUNT, 82
 .assert "it_category size", it_display - it_category, ITEM_TYPE_COUNT
 .assert "it_display size", it_color - it_display, ITEM_TYPE_COUNT
 .assert "it_color size", it_weight - it_color, ITEM_TYPE_COUNT

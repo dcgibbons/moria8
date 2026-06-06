@@ -83,19 +83,19 @@ start addresses and all cross-boundary limits.
 | `$0C00-$0C05` | MMU/KERNAL save bytes |
 | `$0C06` | MMU helper blob in common RAM |
 | `$0D60-$0FF3` | Runtime-common / feature-disk payload |
-| `$1000-$19B4` | `128.runtime` low runtime payload |
+| `$1000-$19FD` | `128.runtime` low runtime payload |
 | `$1A00-$1AFF` | Floor-item table |
 | `$1B00-$1BFF` | Creature scratch |
-| `$1C01-$5FB0` | Main program image: boot path, loaders, trampolines, wrappers |
-| `$6000-$8CB7` | `128.world` resident world payload, including C128 cache/overlay state, overlay filename tables, and C128 infravision helpers |
-| `$8D00-$A686` | `128.item` resident item payload |
-| `$A800-$AAE8` | `128.select` resident selector payload |
+| `$1C01-$5F60` | Main program image: boot path, loaders, trampolines, wrappers |
+| `$6000-$8C9B` | `128.world` resident world payload, including C128 cache/overlay state, overlay filename tables, and C128 infravision helpers |
+| `$8D00-$A7FF` | `128.item` resident item payload |
+| `$A800-$AAE0` | `128.select` resident selector payload |
 | `$AB00-$AEFF` | `128.diskio` payload |
-| `$AF00-$B826` | `128.persist` save/modal payload when loaded |
-| `$AF00-$CF30` | `128.play` gameplay payload when loaded |
+| `$AF00-$B908` | `128.persist` save/modal payload when loaded |
+| `$AF00-$CF75` | `128.play` gameplay payload when loaded |
 | `$D000-$DFFF` | I/O hole; forbidden for ordinary runtime payloads |
 | `$E000-$EFFF` | Overlay execution window |
-| `$F000-$FEBD` | Reloadable banked runtime payload, asserted below `$FF00` |
+| `$F000-$FEDD` | Reloadable banked runtime payload, asserted below `$FF00` |
 
 The `$AF00-$CFFF` resident slot is mutually exclusive. Save/load uses resident
 broker routines to load `128.persist`, perform the operation, then restore

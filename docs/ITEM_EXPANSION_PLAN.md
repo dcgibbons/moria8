@@ -26,13 +26,13 @@ architecture project.
 
 ## Current Moria8 Constraints
 
-Current Moria8 has 80 item type IDs.
+Current Moria8 has 82 item type IDs.
 
 Relevant current constants:
 
 | Constant | Value | Meaning |
 |---|---:|---|
-| `ITEM_TYPE_COUNT` | 80 | Current item catalog size |
+| `ITEM_TYPE_COUNT` | 82 | Current item catalog size |
 | `MAX_FLOOR_ITEMS` | 42 | Max live floor item slots |
 | `MAX_INV_SLOTS` | 22 | Carried inventory slots |
 | `MAX_EQUIP_SLOTS` | 9 | Equipment slots |
@@ -569,8 +569,15 @@ Phase 0 implementation status:
   the C64 resident boundary, so the accepted slice stayed at two rows and
   recovered bytes by returning picker/depth ownership to the generation
   overlay.
+- The second defensive-equipment slice raised `ITEM_TYPE_COUNT` to 82 by
+  adding `Scale Mail` and `Plate Mail`. This continued the fixed-known body
+  armor path without adding randomized unknown descriptors or new item
+  behavior. It initially overflowed the C128 resident-items segment by 14
+  bytes; suffix-tokenizing repeated item-name fragments (`Armor`, ` Mail`, and
+  ` Shield`) preserved player-facing names and brought the segment back to the
+  `$A7FF` boundary.
 - That slice also corrected normal acquisition coverage for appended melee:
-  `pit_sorted` now includes IDs `66-79`, `pit_level_bounds` has compile-time
+  `pit_sorted` now includes IDs `66-81`, `pit_level_bounds` has compile-time
   size assertions, and store restocking samples through `ITEM_TYPE_COUNT`
   before applying store-category filters.
 - The item-type picker and its depth tables moved into the dungeon-generation
@@ -827,9 +834,11 @@ Implementation checkpoints already completed:
   (`Main Gauche`, `Rapier`, `Studded Leather Armor`, `Large Shield`) crossed the
   C64 main-segment fit assert, so additional rows need byte recovery or catalog
   data relocation first.
-- C128 resident selector layout is extremely tight: `128.select.prg` currently
-  ends at `$AAFE`, one byte before the `$AB00` disk-I/O payload. Future selector
-  work must recover bytes or move code before adding behavior there.
+- C128 resident items and selector layout is extremely tight: `128.item.prg`
+  currently ends at `$A7FF`, exactly at the selector boundary, and
+  `128.select.prg` currently ends at `$AAE0`, 31 bytes before the `$AB00`
+  disk-I/O payload. Future item or selector work must recover bytes or move
+  code before adding behavior there.
 - Verification checkpoint: `make build`, `make test64`, and `make test128-fast`
   pass after the first catalog breadth slice.
 

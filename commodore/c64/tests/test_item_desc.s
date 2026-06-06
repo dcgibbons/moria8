@@ -455,6 +455,7 @@ expected_item_name_lo:
     .byte <ein_70, <ein_71, <ein_72, <ein_73
     .byte <ein_74, <ein_75, <ein_76, <ein_77
     .byte <ein_78, <ein_79
+    .byte <ein_80, <ein_81
 expected_item_name_hi:
     .byte >ein_0, >ein_1, >ein_2, >ein_3, >ein_4, >ein_5, >ein_6, >ein_7
     .byte >ein_8, >ein_9, >ein_10, >ein_11, >ein_12, >ein_13, >ein_14, >ein_15
@@ -469,6 +470,7 @@ expected_item_name_hi:
     .byte >ein_70, >ein_71, >ein_72, >ein_73
     .byte >ein_74, >ein_75, >ein_76, >ein_77
     .byte >ein_78, >ein_79
+    .byte >ein_80, >ein_81
 
 ein_0:  .text "Gold (small)" ; .byte 0
 ein_1:  .text "Gold (large)" ; .byte 0
@@ -550,6 +552,8 @@ ein_76: .text "Halberd" ; .byte 0
 ein_77: .text "Quarterstaff" ; .byte 0
 ein_78: .text "Large Shield" ; .byte 0
 ein_79: .text "Hard Leather Armor" ; .byte 0
+ein_80: .text "Scale Mail" ; .byte 0
+ein_81: .text "Plate Mail" ; .byte 0
 
 item_name_test_id: .byte 0
 tc_results: .fill 9, $ff

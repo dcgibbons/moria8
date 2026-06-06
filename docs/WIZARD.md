@@ -193,6 +193,8 @@ or `Neutralize Poison` feedback:
 | 77 | Quarterstaff |
 | 78 | Large Shield |
 | 79 | Hard Leather Armor |
+| 80 | Scale Mail |
+| 81 | Plate Mail |
 
 ## Source References
 
