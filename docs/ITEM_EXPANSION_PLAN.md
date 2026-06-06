@@ -26,13 +26,13 @@ architecture project.
 
 ## Current Moria8 Constraints
 
-Current Moria8 has 66 item type IDs.
+Current Moria8 has 80 item type IDs.
 
 Relevant current constants:
 
 | Constant | Value | Meaning |
 |---|---:|---|
-| `ITEM_TYPE_COUNT` | 78 | Current item catalog size |
+| `ITEM_TYPE_COUNT` | 80 | Current item catalog size |
 | `MAX_FLOOR_ITEMS` | 42 | Max live floor item slots |
 | `MAX_INV_SLOTS` | 22 | Carried inventory slots |
 | `MAX_EQUIP_SLOTS` | 9 | Equipment slots |
@@ -546,6 +546,7 @@ Acceptance gate:
 | Save defaults | Legacy saves initialize every appended ID deterministically. |
 | Table coverage | Every `it_*` table and new class/default table asserts to `ITEM_TYPE_COUNT`. |
 | Product smoke | C64, C128, and Plus/4 can grant, display, save, and reload appended IDs. |
+| Dungeon transition smoke | C64 and Plus/4 can descend into a generated dungeon, accept the immediate up-stairs command, and enter the town-return path after item spawning. |
 | Memory | C64/C128/Plus4 layout asserts pass without weakening boundaries. |
 
 Phase 0 implementation status:
@@ -573,11 +574,33 @@ Phase 0 implementation status:
   size assertions, and store restocking samples through `ITEM_TYPE_COUNT`
   before applying store-category filters.
 - The item-type picker and its depth tables moved into the dungeon-generation
-  overlay for product builds on C64, C128, and Plus/4. Product trampolines call
-  `item_spawn_level` while the generation overlay is still visible; unit tests
-  keep the old direct call because their `tramp_level_generate` stubs do not
-  execute the product trampoline body. This recovered resident bytes without
-  moving item names, item instances, or wizard enchantment logic.
+  overlay for product builds on C64, C128, and Plus/4. The public
+  `pick_item_type` label remains a resident wrapper, because callers cannot
+  assume the generation overlay is still visible after other product
+  trampolines run. This recovered resident bytes without moving item names,
+  item instances, or wizard enchantment logic.
+- The initial overlay ownership attempt was wrong: putting `item_spawn_level`
+  itself inside the generation trampoline assumed the generation overlay would
+  stay visible for every nested call. Item spawning can call special-room and
+  ego trampolines that restore normal banking before returning, so the next
+  `pick_item_type` call jumped into non-overlay memory and produced a C64 CPU
+  JAM on stairs-up generation. The corrected rule is narrower: keep
+  `item_spawn_level` resident, keep `pick_item_type` as a resident entry point,
+  and put only the picker implementation plus `pit_sorted`/`pit_level_bounds`
+  in the dungeon-generation overlay.
+- Plus/4 needs a platform-specific `pick_item_type` wrapper. During dungeon
+  generation it must not call the prompt-capable generic `overlay_load`, and it
+  must leave Plus/4 RAM visible before calling the `$E000` overlay
+  implementation. The accepted path checks `current_overlay`, calls
+  `overlay_load_disk` only when the generation overlay is absent, sets
+  `current_overlay`, banks RAM visible with `plus4_bank_ram`, and falls back to
+  item ID `2` if the program disk load fails.
+- C64 and Plus/4 now have product dungeon-ascent smokes for this failure class.
+  They script a new game, move onto the town stairs, descend, and immediately
+  press `<`. Passing requires reaching `tramp_store_restock_all`, which proves
+  that item spawning completed, input resumed, the player remained on the
+  generated up-stairs, and the town-return transition began without a JAM or
+  hidden media prompt.
 - The second slice initially failed memory assertions. The accepted layout
   recovered shared resident bytes by tokenizing repeated unknown-name articles
   and shrinking the dedicated item-name decode buffer to the current catalog's

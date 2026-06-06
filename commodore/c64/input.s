@@ -64,7 +64,7 @@ input_lock_charset_switch:
 // Output: A = nonzero if any key held, 0 if no key
 // Preserves: X, Y
 input_run_key_held:
-#if C64_TEST_SCRIPTED_SPELL || C64_TEST_SCRIPTED_DISK_SETUP_PRODUCT || C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || C64_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT || C64_TEST_SCRIPTED_LOAD_RESUME_PRODUCT
+#if C64_TEST_SCRIPTED_SPELL || C64_TEST_SCRIPTED_DISK_SETUP_PRODUCT || C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || C64_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT || C64_TEST_SCRIPTED_LOAD_RESUME_PRODUCT || C64_TEST_SCRIPTED_DUNGEON_ASCENT_PRODUCT
     lda #0
     rts
 #else
@@ -166,7 +166,7 @@ input_noop:
     rts
 
 input_get_key:
-#if C64_TEST_SCRIPTED_SPELL || C64_TEST_SCRIPTED_DISK_SETUP_PRODUCT || C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || C64_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT || C64_TEST_SCRIPTED_LOAD_RESUME_PRODUCT
+#if C64_TEST_SCRIPTED_SPELL || C64_TEST_SCRIPTED_DISK_SETUP_PRODUCT || C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || C64_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT || C64_TEST_SCRIPTED_LOAD_RESUME_PRODUCT || C64_TEST_SCRIPTED_DUNGEON_ASCENT_PRODUCT
     ldx c64_test_input_idx
     lda c64_test_input_script,x
     bne !igk_script_ok+
@@ -182,7 +182,11 @@ input_get_key:
 #if C64_TEST_SCRIPTED_LOAD_RESUME_PRODUCT
     jmp c64_test_load_resume_fail_input_sym
 #else
+#if C64_TEST_SCRIPTED_DUNGEON_ASCENT_PRODUCT
+    jmp c64_test_dungeon_ascent_fail_input_sym
+#else
     jmp c64_test_spell_fail_input_sym
+#endif
 #endif
 #endif
 #endif
@@ -281,7 +285,7 @@ igk_key: .byte 0
 // not auto-dismiss the next screen.
 // Preserves: X, Y
 input_wait_release:
-#if C64_TEST_SCRIPTED_SPELL || C64_TEST_SCRIPTED_DISK_SETUP_PRODUCT || C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || C64_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT || C64_TEST_SCRIPTED_LOAD_RESUME_PRODUCT
+#if C64_TEST_SCRIPTED_SPELL || C64_TEST_SCRIPTED_DISK_SETUP_PRODUCT || C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || C64_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT || C64_TEST_SCRIPTED_LOAD_RESUME_PRODUCT || C64_TEST_SCRIPTED_DUNGEON_ASCENT_PRODUCT
     rts
 #else
 #if C64_TEST_SCRIPTED_BOOK_OVERLAY || C64_TEST_SCRIPTED_SCROLL_SELECTOR
@@ -355,7 +359,7 @@ input_sound_update:
 // Output: A = 1 when both CTRL and R are down, 0 otherwise
 // Preserves: X, Y
 input_ctrl_r_held:
-#if C64_TEST_SCRIPTED_SPELL || C64_TEST_SCRIPTED_DISK_SETUP_PRODUCT || C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || C64_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT || C64_TEST_SCRIPTED_LOAD_RESUME_PRODUCT
+#if C64_TEST_SCRIPTED_SPELL || C64_TEST_SCRIPTED_DISK_SETUP_PRODUCT || C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || C64_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT || C64_TEST_SCRIPTED_LOAD_RESUME_PRODUCT || C64_TEST_SCRIPTED_DUNGEON_ASCENT_PRODUCT
     lda #0
     rts
 #else
@@ -421,7 +425,7 @@ input_ctrl_r_held:
 
 icr_result: .byte 0
 
-#if C64_TEST_SCRIPTED_SPELL || C64_TEST_SCRIPTED_DISK_SETUP_PRODUCT || C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || C64_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT || C64_TEST_SCRIPTED_LOAD_RESUME_PRODUCT
+#if C64_TEST_SCRIPTED_SPELL || C64_TEST_SCRIPTED_DISK_SETUP_PRODUCT || C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || C64_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT || C64_TEST_SCRIPTED_LOAD_RESUME_PRODUCT || C64_TEST_SCRIPTED_DUNGEON_ASCENT_PRODUCT
 c64_test_input_idx: .byte 0
 c64_test_input_script:
 #if C64_TEST_SCRIPTED_DISK_SETUP_PRODUCT
@@ -464,6 +468,20 @@ c64_test_input_script:
     .byte $33              // 3 = done
     .byte $00
 #else
+#if C64_TEST_SCRIPTED_DUNGEON_ASCENT_PRODUCT
+    .byte $4e              // N = New
+    .byte $41              // A = race
+    .byte $0d              // RETURN = accept stats
+    .byte $42              // B = mage
+    .byte $41              // A = first name character
+    .byte $0d              // RETURN = finish name
+    .byte $42              // B = female
+    .byte $20              // SPACE = dismiss summary
+    .byte $4c              // L = step onto town stairs
+    .byte $3e              // > = descend into dungeon
+    .byte $3c              // < = immediately ascend from dungeon up-stairs
+    .byte $00
+#else
     .byte $4e              // N = New
     .byte $41              // A = race
     .byte $0d              // RETURN = accept stats
@@ -497,6 +515,7 @@ c64_test_input_script:
     .byte $4d, $41, $41, $4c, $20
 #endif
     .byte $00
+#endif
 #endif
 #endif
 #endif

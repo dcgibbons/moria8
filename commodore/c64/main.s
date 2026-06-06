@@ -1319,6 +1319,10 @@ c64_test_spell_fail_input_sym:
 c64_test_spell_pass_sym:
     brk
 #else
+#if C64_TEST_SCRIPTED_DUNGEON_ASCENT_PRODUCT
+c64_test_dungeon_ascent_fail_input_sym:
+    brk
+#else
 #if C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
 c64_test_spell_fail_no_cast_sym:
     brk
@@ -1336,6 +1340,7 @@ c64_test_spell_fail_input_sym:
     brk
 c64_test_spell_pass_sym:
     brk
+#endif
 #endif
 #endif
 #endif
