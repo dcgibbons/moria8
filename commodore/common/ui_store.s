@@ -385,8 +385,7 @@ store_buy:
     lda hg_kicked,x
     beq !sb_do_haggle+
     ldx #MSG_KICKED
-    jsr store_clear_show_msg
-    jmp hal_input_get_key           // Wait for key, tail call returns
+    jmp store_clear_show_msg_wait
 
 !sb_do_haggle:
     jsr haggle_buy
@@ -456,27 +455,17 @@ sbuy_show_price:
     ldx #MSG_PRICE
     jsr store_clear_show_msg
 
-    lda #COL_YELLOW
-    sta zp_text_color
-    lda sb_price_lo
-    sta zp_temp0
-    lda sb_price_hi
-    sta zp_temp1
-    jsr screen_put_decimal_16
-
-    lda #COL_WHITE
-    sta zp_text_color
     lda #<uis_gp_buy_str
     ldy #>uis_gp_buy_str
-    jmp uis_screen_put_inline   // Tail call
+    jmp store_print_sb_price_suffix
 
 sbuy_no_gold:
     ldx #MSG_NO_AFFORD
-    jmp store_clear_show_msg    // Tail call
+    jmp store_clear_show_msg_wait
 
 sbuy_full:
     ldx #MSG_PACK_FULL
-    jmp store_clear_show_msg    // Tail call
+    jmp store_clear_show_msg_wait
 
 // ============================================================
 // Sell flow
@@ -752,19 +741,9 @@ ssell_show_offer:
     ldx #MSG_OFFER
     jsr show_msg
 
-    lda #COL_YELLOW
-    sta zp_text_color
-    lda sb_price_lo
-    sta zp_temp0
-    lda sb_price_hi
-    sta zp_temp1
-    jsr screen_put_decimal_16
-
-    lda #COL_WHITE
-    sta zp_text_color
     lda #<uis_gp_sell_str
     ldy #>uis_gp_sell_str
-    jmp uis_screen_put_inline   // Tail call
+    jmp store_print_sb_price_suffix
 
 // ============================================================
 // Helpers
@@ -792,6 +771,22 @@ uis_screen_put_inline:
     sty zp_ptr0_hi
     jmp hal_screen_put_string
 
+store_print_sb_price_suffix:
+    pha
+    tya
+    pha
+    lda sb_price_lo
+    sta zp_temp0
+    lda sb_price_hi
+    sta zp_temp1
+    jsr store_print_decimal_yellow
+    lda #COL_WHITE
+    sta zp_text_color
+    pla
+    tay
+    pla
+    jmp uis_screen_put_inline
+
 store_clear_show_msg:
     txa
     pha
@@ -799,6 +794,11 @@ store_clear_show_msg:
     pla
     tax
     jmp show_msg
+
+store_clear_show_msg_wait:
+    jsr store_clear_show_msg
+    jsr input_prepare_followup_key
+    jmp hal_input_get_key
 
 // check_cancel — Check if A is a cancel key (Q, escape-equivalent, SPACE)
 // Input: A = key code
@@ -1566,17 +1566,7 @@ hg_show_ask:
     ldx #MSG_ASKS
     jsr store_clear_show_msg
 
-    lda #COL_YELLOW
-    sta zp_text_color
-    lda hg_ask_lo
-    sta zp_temp0
-    lda hg_ask_hi
-    sta zp_temp1
-    jsr screen_put_decimal_16
-
-    lda #COL_WHITE
-    sta zp_text_color
-    jsr hg_print_gp_suffix
+    jsr hg_print_ask_gp
 
     // Row 21: prompt
     ldx #MSG_YOUR_OFFER
@@ -1596,17 +1586,7 @@ hg_show_offer:
     ldx #MSG_OFFERS
     jsr store_clear_show_msg
 
-    lda #COL_YELLOW
-    sta zp_text_color
-    lda hg_ask_lo
-    sta zp_temp0
-    lda hg_ask_hi
-    sta zp_temp1
-    jsr screen_put_decimal_16
-
-    lda #COL_WHITE
-    sta zp_text_color
-    jsr hg_print_gp_suffix
+    jsr hg_print_ask_gp
 
     // Row 21: prompt
     ldx #MSG_YOUR_PRICE
@@ -1626,16 +1606,7 @@ hg_show_counter:
     ldx #MSG_COUNTER
     jsr store_clear_show_msg
 
-    lda #COL_YELLOW
-    sta zp_text_color
-    lda hg_ask_lo
-    sta zp_temp0
-    lda hg_ask_hi
-    sta zp_temp1
-    jsr screen_put_decimal_16
-
-    lda #COL_WHITE
-    sta zp_text_color
+    jsr hg_print_ask_white
     lda #<hg_qmark_str
     ldy #>hg_qmark_str
     jmp uis_screen_put_inline
@@ -1645,21 +1616,30 @@ hg_show_final:
     ldx #MSG_FINAL
     jsr store_clear_show_msg
 
-    lda #COL_YELLOW
-    sta zp_text_color
-    lda hg_ask_lo
-    sta zp_temp0
-    lda hg_ask_hi
-    sta zp_temp1
-    jsr screen_put_decimal_16
-
-    lda #COL_WHITE
-    sta zp_text_color
-    jsr hg_print_gp_suffix
+    jsr hg_print_ask_gp
 
     // Row 21: "TAKE IT? (Y/N)"
     ldx #MSG_TAKE
     jmp show_msg
+
+hg_print_ask_gp:
+    jsr hg_print_ask_white
+    jmp hg_print_gp_suffix
+
+hg_print_ask_white:
+    lda hg_ask_lo
+    sta zp_temp0
+    lda hg_ask_hi
+    sta zp_temp1
+    jsr store_print_decimal_yellow
+    lda #COL_WHITE
+    sta zp_text_color
+    rts
+
+store_print_decimal_yellow:
+    lda #COL_YELLOW
+    sta zp_text_color
+    jmp screen_put_decimal_16
 
 hg_print_gp_suffix:
     lda #<hg_gp_str
