@@ -223,10 +223,8 @@ store_draw_screen:
     jsr screen_put_decimal_16
 
     lda #<uis_store_gp_pad_str
-    sta zp_ptr0
-    lda #>uis_store_gp_pad_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>uis_store_gp_pad_str
+    jsr uis_screen_put_inline
 
     jmp !sds_next_slot+
 
@@ -709,7 +707,7 @@ ssell_execute:
 
     // Success
     ldx #MSG_SOLD
-    jsr show_msg
+    jsr store_clear_show_msg
 
     lda #SFX_PICKUP
     jsr hal_sound_play
@@ -1047,10 +1045,8 @@ hg_show_retry_msg:
     lda #1
     sta zp_cursor_col
     lda #<hg_retry_str
-    sta zp_ptr0
-    lda #>hg_retry_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>hg_retry_str
+    jsr uis_screen_put_inline
     jsr hg_wait_for_ack
     rts
 
@@ -1061,17 +1057,7 @@ hg_show_final_prompt:
     ldx #MSG_FINAL
     jsr store_clear_show_msg
 
-    lda #COL_YELLOW
-    sta zp_text_color
-    lda hg_ask_lo
-    sta zp_temp0
-    lda hg_ask_hi
-    sta zp_temp1
-    jsr screen_put_decimal_16
-
-    lda #COL_WHITE
-    sta zp_text_color
-    jsr hg_print_gp_suffix
+    jsr hg_print_ask_gp
 
     pla
     tax
