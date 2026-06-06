@@ -339,6 +339,7 @@ expected_item_name_lo:
     .byte <ein_74, <ein_75, <ein_76, <ein_77
     .byte <ein_78, <ein_79
     .byte <ein_80, <ein_81
+    .byte <ein_82, <ein_83, <ein_84, <ein_85, <ein_86, <ein_87
 expected_item_name_hi:
     .byte >ein_0, >ein_1, >ein_2, >ein_3, >ein_4, >ein_5, >ein_6, >ein_7
     .byte >ein_8, >ein_9, >ein_10, >ein_11, >ein_12, >ein_13, >ein_14, >ein_15
@@ -354,6 +355,7 @@ expected_item_name_hi:
     .byte >ein_74, >ein_75, >ein_76, >ein_77
     .byte >ein_78, >ein_79
     .byte >ein_80, >ein_81
+    .byte >ein_82, >ein_83, >ein_84, >ein_85, >ein_86, >ein_87
 
 ein_0:  .text "Gold (small)" ; .byte 0
 ein_1:  .text "Gold (large)" ; .byte 0
@@ -437,6 +439,12 @@ ein_78: .text "Large Shield" ; .byte 0
 ein_79: .text "Hard Leather Armor" ; .byte 0
 ein_80: .text "Scale Mail" ; .byte 0
 ein_81: .text "Plate Mail" ; .byte 0
+ein_82: .text "Cloak" ; .byte 0
+ein_83: .text "Steel Helm" ; .byte 0
+ein_84: .text "Gauntlets" ; .byte 0
+ein_85: .text "Soft Leather Boots" ; .byte 0
+ein_86: .text "Hard Leather Boots" ; .byte 0
+ein_87: .text "Metal Cap" ; .byte 0
 
 assert_col: .byte 0
 assert_idx: .byte 0

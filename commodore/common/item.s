@@ -1320,18 +1320,18 @@ tunnel_spawn_gold:
 pit_sorted:
     // Level 0 (5 items)
     .byte 13, 15, 61, 62, 63
-    // Level 1 (17 items)
-    .byte 2, 3, 6, 11, 12, 16, 17, 19, 20, 28, 29, 37, 51, 52, 54, 64, 77
-    // Level 2 (13 items)
-    .byte 5, 7, 9, 14, 21, 30, 31, 47, 48, 49, 53, 66, 74
-    // Level 3 (13 items)
-    .byte 4, 10, 18, 22, 25, 36, 39, 43, 44, 46, 50, 65, 70
-    // Level 4 (11 items)
-    .byte 8, 23, 27, 33, 38, 40, 42, 55, 58, 67, 78
+    // Level 1 (18 items)
+    .byte 2, 3, 6, 11, 12, 16, 17, 19, 20, 28, 29, 37, 51, 52, 54, 64, 77, 85
+    // Level 2 (15 items)
+    .byte 5, 7, 9, 14, 21, 30, 31, 47, 48, 49, 53, 66, 74, 82, 84
+    // Level 3 (14 items)
+    .byte 4, 10, 18, 22, 25, 36, 39, 43, 44, 46, 50, 65, 70, 86
+    // Level 4 (12 items)
+    .byte 8, 23, 27, 33, 38, 40, 42, 55, 58, 67, 78, 87
     // Level 5 (7 items)
     .byte 24, 26, 32, 41, 45, 72, 79
-    // Level 6 (4 items)
-    .byte 34, 35, 68, 73
+    // Level 6 (5 items)
+    .byte 34, 35, 68, 73, 83
     // Level 7 (2 items)
     .byte 71, 80
     // Level 8 (4 items)
@@ -1347,18 +1347,18 @@ pit_sorted_end:
 // Cumulative item count per level (0-12)
 pit_level_bounds:
     .byte 5      // level 0: 5 items
-    .byte 22     // level 1: +17 = 22
-    .byte 35     // level 2: +13 = 35
-    .byte 48     // level 3: +13 = 48
-    .byte 59     // level 4: +11 = 59
-    .byte 66     // level 5: +7 = 66
-    .byte 70     // level 6: +4 = 70
-    .byte 72     // level 7: +2 = 72
-    .byte 76     // level 8: +4 = 76
-    .byte 77     // level 9: +1 = 77
-    .byte 78     // level 10: +1 = 78
-    .byte 78     // level 11: (no items)
-    .byte 80     // level 12: +2 = 80
+    .byte 23     // level 1: +18 = 23
+    .byte 38     // level 2: +15 = 38
+    .byte 52     // level 3: +14 = 52
+    .byte 64     // level 4: +12 = 64
+    .byte 71     // level 5: +7 = 71
+    .byte 76     // level 6: +5 = 76
+    .byte 78     // level 7: +2 = 78
+    .byte 82     // level 8: +4 = 82
+    .byte 83     // level 9: +1 = 83
+    .byte 84     // level 10: +1 = 84
+    .byte 84     // level 11: (no items)
+    .byte 86     // level 12: +2 = 86
 pit_level_bounds_end:
 
 #if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME
@@ -1748,7 +1748,7 @@ re_negate_a:
 // ============================================================
 // Compile-time validation
 // ============================================================
-.assert "Item type count", ITEM_TYPE_COUNT, 82
+.assert "Item type count", ITEM_TYPE_COUNT, 88
 .assert "it_category size", it_display - it_category, ITEM_TYPE_COUNT
 .assert "it_display size", it_color - it_display, ITEM_TYPE_COUNT
 .assert "it_color size", it_weight - it_color, ITEM_TYPE_COUNT

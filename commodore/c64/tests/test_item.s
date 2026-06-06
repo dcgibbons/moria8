@@ -2380,7 +2380,7 @@ test_start:
 t27_expected_name:
     .text "Dagger" ; .byte 0
 t29_expected_appended_name:
-    .text "Plate Mail" ; .byte 0
+    .text "Metal Cap" ; .byte 0
 
 item_test_body_end:
 

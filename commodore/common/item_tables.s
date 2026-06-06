@@ -93,6 +93,12 @@ it_category:
     .byte ICAT_ARMOR    // 79: Hard Leather Armor
     .byte ICAT_ARMOR    // 80: Scale Mail
     .byte ICAT_ARMOR    // 81: Plate Mail
+    .byte ICAT_ARMOR    // 82: Cloak
+    .byte ICAT_HELM     // 83: Steel Helm
+    .byte ICAT_GLOVES   // 84: Gauntlets
+    .byte ICAT_BOOTS    // 85: Soft Leather Boots
+    .byte ICAT_BOOTS    // 86: Hard Leather Boots
+    .byte ICAT_HELM     // 87: Metal Cap
 
 // Display character (screen codes)
 it_display:
@@ -178,6 +184,12 @@ it_display:
     .byte $5b   // 79: '[' Hard Leather Armor
     .byte $5b   // 80: '[' Scale Mail
     .byte $5b   // 81: '[' Plate Mail
+    .byte $5b   // 82: '[' Cloak
+    .byte $5d   // 83: ']' Steel Helm
+    .byte $5d   // 84: ']' Gauntlets
+    .byte $5d   // 85: ']' Soft Leather Boots
+    .byte $5d   // 86: ']' Hard Leather Boots
+    .byte $5d   // 87: ']' Metal Cap
 
 // Color
 it_color:
@@ -263,6 +275,12 @@ it_color:
     .byte COL_BROWN     // 79: Hard Leather Armor
     .byte COL_GREY      // 80: Scale Mail
     .byte COL_LGREY     // 81: Plate Mail
+    .byte COL_LGREY     // 82: Cloak
+    .byte COL_LGREY     // 83: Steel Helm
+    .byte COL_LGREY     // 84: Gauntlets
+    .byte COL_BROWN     // 85: Soft Leather Boots
+    .byte COL_BROWN     // 86: Hard Leather Boots
+    .byte COL_GREY      // 87: Metal Cap
 
 // Weight (in 1/10 lbs)
 it_weight:
@@ -282,6 +300,7 @@ it_weight:
     .byte 50, 160, 190, 40                  // 74-77: polearms/staff
     .byte 100, 120                          // 78-79: shield/armor
     .byte 250, 380                          // 80-81: heavier armor
+    .byte 10, 60, 25, 5, 20, 20             // 82-87: cloak/helm/gloves/boots/cap
 
 // Damage dice count
 it_dmg_dice:
@@ -301,6 +320,7 @@ it_dmg_dice:
     .byte 1, 2, 3, 1                        // 74-77: polearms/staff
     .byte 0, 0                              // 78-79: shield/armor
     .byte 0, 0                              // 80-81: armor
+    .byte 0, 0, 0, 0, 0, 0                  // 82-87: defensive equipment
 
 // Damage dice sides
 it_dmg_sides:
@@ -320,6 +340,7 @@ it_dmg_sides:
     .byte 6, 5, 4, 9                        // 74-77: polearms/staff
     .byte 0, 0                              // 78-79: shield/armor
     .byte 0, 0                              // 80-81: armor
+    .byte 0, 0, 0, 0, 0, 0                  // 82-87: defensive equipment
 
 // Base armor class
 it_base_ac:
@@ -339,6 +360,7 @@ it_base_ac:
     .byte 0, 0, 0, 0                        // 74-77: polearms/staff
     .byte 3, 6                              // 78-79: shield/armor
     .byte 7, 9                              // 80-81: armor
+    .byte 1, 2, 1, 1, 2, 1                  // 82-87: cloak/helm/gloves/boots/cap
 
 // Base cost (lo)
 it_cost_lo:
@@ -359,6 +381,7 @@ it_cost_lo:
     .byte <36, <100, <150, <20
     .byte <40, <100
     .byte <350, <900
+    .byte <20, <120, <35, <8, <30, <50
 
 // Base cost (hi)
 it_cost_hi:
@@ -379,6 +402,7 @@ it_cost_hi:
     .byte >36, >100, >150, >20
     .byte >40, >100
     .byte >350, >900
+    .byte >20, >120, >35, >8, >30, >50
 
 // Minimum dungeon level to appear
 it_min_level:
@@ -398,6 +422,7 @@ it_min_level:
     .byte 2, 8, 9, 1                        // 74-77: polearms/staff
     .byte 4, 5                              // 78-79: shield/armor
     .byte 7, 10                             // 80-81: armor
+    .byte 2, 6, 2, 1, 3, 4                  // 82-87: cloak/helm/gloves/boots/cap
 
 // Missile type table — encodes ranged weapon/ammo relationships
 // Only stored for types 49-54 (ranged items). Types < 49 are not ranged (return 0).
@@ -451,6 +476,7 @@ it_name_lo:
     .byte <itn_74, <itn_75, <itn_76, <itn_77
     .byte <itn_78, <itn_79
     .byte <itn_80, <itn_81
+    .byte <itn_82, <itn_83, <itn_84, <itn_85, <itn_86, <itn_87
 it_name_hi:
     .byte >itn_0,  >itn_1,  >itn_2,  >itn_3,  >itn_4
     .byte >itn_5,  >itn_6,  >itn_7,  >itn_8,  >itn_9
@@ -472,6 +498,7 @@ it_name_hi:
     .byte >itn_74, >itn_75, >itn_76, >itn_77
     .byte >itn_78, >itn_79
     .byte >itn_80, >itn_81
+    .byte >itn_82, >itn_83, >itn_84, >itn_85, >itn_86, >itn_87
 it_name_hi_end:
 
 // Tokenized item-name string pool.
@@ -635,3 +662,9 @@ itn_78: .text "Large" ; .byte ITOK_SHIELD_SUFFIX ; .byte 0
 itn_79: .text "Hard " ; .byte ITOK_LEATHER ; .byte ITOK_ARMOR_SUFFIX ; .byte 0
 itn_80: .text "Scale" ; .byte ITOK_MAIL_SUFFIX ; .byte 0
 itn_81: .text "Plate" ; .byte ITOK_MAIL_SUFFIX ; .byte 0
+itn_82: .text "Cloak" ; .byte 0
+itn_83: .text "Steel Helm" ; .byte 0
+itn_84: .text "Gauntlets" ; .byte 0
+itn_85: .text "Soft " ; .byte ITOK_LEATHER ; .text "Boots" ; .byte 0
+itn_86: .text "Hard " ; .byte ITOK_LEATHER ; .text "Boots" ; .byte 0
+itn_87: .text "Metal Cap" ; .byte 0

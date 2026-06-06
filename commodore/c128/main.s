@@ -47,7 +47,7 @@
 .segmentdef RuntimeCommonData [outPrg=OVL_OUT + "/128.fdisk.prg", start=$0d60, min=$0d60, max=$0fff]
 .segmentdef RuntimeLowData    [outPrg=OVL_OUT + "/128.runtime.prg", start=$1000, min=$1000, max=$3fff]
 .segmentdef C128ResidentWorld [outPrg=OVL_OUT + "/128.world.prg", start=$6000, min=$6000, max=$8cff]
-.segmentdef C128ResidentItems [outPrg=OVL_OUT + "/128.item.prg", start=$8d00, min=$8d00, max=$a7ff]
+.segmentdef C128ResidentItems [outPrg=OVL_OUT + "/128.item.prg", start=$8c70, min=$8c70, max=$a7ff]
 .segmentdef C128ResidentSelect [outPrg=OVL_OUT + "/128.select.prg", start=$a800, min=$a800, max=$aaff]
 .segmentdef C128ResidentDiskIo [outPrg=OVL_OUT + "/128.diskio.prg", start=$ab00, min=$ab00, max=$aeff]
 .segmentdef C128ResidentPersist [outPrg=OVL_OUT + "/128.persist.prg", start=$af00, min=$af00, max=$cfff]
@@ -2499,7 +2499,7 @@ c128_load_runtime_projectile_prg:
     sta zp_ptr0
     lda #>runtime_projectile_filename
     sta zp_ptr0_hi
-    lda #$80
+    lda #$70
     sta zp_ptr1
     lda #$0a
     sta zp_ptr1_hi
@@ -2555,7 +2555,19 @@ c128_load_resident_world_prg:
     :C128RuntimeLoadFile(RESIDENT_WORLD_FILE_NUM, RESIDENT_WORLD_FILENAME_LEN, resident_world_filename, $60)
 
 c128_load_resident_items_prg:
-    :C128RuntimeLoadFile(RESIDENT_ITEMS_FILE_NUM, RESIDENT_ITEMS_FILENAME_LEN, resident_items_filename, $8d)
+    lda #RESIDENT_ITEMS_FILE_NUM
+    sta disk_temp
+    lda #RESIDENT_ITEMS_FILENAME_LEN
+    sta disk_status
+    lda #<resident_items_filename
+    sta zp_ptr0
+    lda #>resident_items_filename
+    sta zp_ptr0_hi
+    lda #$80
+    sta zp_ptr1
+    lda #$8c
+    sta zp_ptr1_hi
+    jmp c128_load_runtime_prg
 
 c128_load_resident_select_prg:
     :C128RuntimeLoadFile(RESIDENT_SELECT_FILE_NUM, RESIDENT_SELECT_FILENAME_LEN, resident_select_filename, $a8)
@@ -3407,8 +3419,6 @@ ovl_cache_pages:   .byte 0
 ovl_ready_mask:
     .byte 0, %00000001, %00000010, %00000100, %00001000, %00010000, %00100000, %01000000, %10000000
 c128_cache_state_end:
-at_surface_str:
-    .text "You are already at the surface." ; .byte 0
 c128_resident_world_end:
 
 .segment C128ResidentItems
@@ -3471,6 +3481,8 @@ c128_resident_persist_end:
 #define GAME_LOOP_LOW_DATA_EXTERNAL
 .segment C128ResidentPlay
 c128_resident_play_start:
+at_surface_str:
+    .text "You are already at the surface." ; .byte 0
 #if PERF_P1
 #import "../common/perf_p1_data.s"
 #endif
@@ -4310,8 +4322,8 @@ program_end:
 #if C128
 .assert "C128 main image stays below resident world payload", program_end <= c128_resident_world_start, true
 .assert "C128 resident world starts at $6000", c128_resident_world_start == $6000, true
-.assert "C128 resident world fits below items payload", c128_resident_world_end <= $8D00, true
-.assert "C128 resident items starts at $8D00", c128_resident_items_start == $8D00, true
+.assert "C128 resident world fits below items payload", c128_resident_world_end <= c128_resident_items_start, true
+.assert "C128 resident items starts at $8C70", c128_resident_items_start == $8C70, true
 .assert "C128 resident items fits below selector payload", c128_resident_items_end <= $A800, true
 .assert "C128 resident selector starts at $A800", c128_resident_select_start == $A800, true
 .assert "C128 resident selector fits below disk-I/O payload", c128_resident_select_end <= $AB00, true

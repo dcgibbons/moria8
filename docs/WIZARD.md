@@ -29,7 +29,7 @@ Commands:
 - `Q` - cancel / exit menu
 
 Prompts:
-- Item generation: `ITEM 0-79: `
+- Item generation: `ITEM 0-87: `
 - Level jump: `DLVL 0-99: `
 
 Feedback:
@@ -40,7 +40,7 @@ Feedback:
 
 ## Generate Item
 
-Wizard item generation uses item IDs `0-79`.
+Wizard item generation uses item IDs `0-87`.
 
 Behavior:
 - Non-gold items try to go into inventory first
@@ -195,6 +195,12 @@ or `Neutralize Poison` feedback:
 | 79 | Hard Leather Armor |
 | 80 | Scale Mail |
 | 81 | Plate Mail |
+| 82 | Cloak |
+| 83 | Steel Helm |
+| 84 | Gauntlets |
+| 85 | Soft Leather Boots |
+| 86 | Hard Leather Boots |
+| 87 | Metal Cap |
 
 ## Source References
 

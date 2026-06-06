@@ -576,6 +576,11 @@ Phase 0 implementation status:
   bytes; suffix-tokenizing repeated item-name fragments (`Armor`, ` Mail`, and
   ` Shield`) preserved player-facing names and brought the segment back to the
   `$A7FF` boundary.
+- The third defensive-equipment slice raised `ITEM_TYPE_COUNT` to 88 by adding
+  `Cloak`, `Steel Helm`, `Gauntlets`, `Soft Leather Boots`, `Hard Leather
+  Boots`, and `Metal Cap`. These remain fixed-known equipment rows within the
+  current simplified slot model; `Cloak` uses the existing armor/body slot
+  rather than introducing a new cloak slot.
 - That slice also corrected normal acquisition coverage for appended melee:
   `pit_sorted` now includes IDs `66-81`, `pit_level_bounds` has compile-time
   size assertions, and store restocking samples through `ITEM_TYPE_COUNT`
