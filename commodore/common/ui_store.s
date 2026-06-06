@@ -212,18 +212,8 @@ store_draw_screen:
     lda #$20
     jsr hal_screen_put_char
 
-    ldy sb_abs_slot
-    :LoadStoreEgoY()
-    sta sb_item_ego             // Pass ego for pricing (R14)
-    lda si_p1,y
-    sta sb_item_p1              // Pass charges/type-specific p1 for pricing
-    lda si_to_hit,y
-    sta sb_item_to_hit
-    lda si_to_dam,y
-    sta sb_item_to_dam
-    lda si_to_ac,y
-    sta sb_item_to_ac
-    lda si_item_id,y
+    ldx sb_abs_slot
+    jsr store_load_price_fields_x
     jsr calc_store_buy_price    // Dispatches to BM or normal pricing
 
     lda sb_price_lo
@@ -347,17 +337,7 @@ store_buy:
 
     // Calculate buy price
     ldx sb_abs_slot
-    :LoadStoreEgoX()
-    sta sb_item_ego             // Pass ego for pricing (R14)
-    lda si_p1,x
-    sta sb_item_p1              // Pass charges/type-specific p1 for pricing
-    lda si_to_hit,x
-    sta sb_item_to_hit
-    lda si_to_dam,x
-    sta sb_item_to_dam
-    lda si_to_ac,x
-    sta sb_item_to_ac
-    lda si_item_id,x
+    jsr store_load_price_fields_x
     jsr calc_store_buy_price    // Dispatches to BM or normal pricing
 
     // Cheap items (≤ 10 GP) or BM: use simple Y/N flow (no haggling)
@@ -391,6 +371,20 @@ store_buy:
     jsr haggle_buy
     bcs sbuy_execute            // Carry set = deal made
     rts                         // Cancelled or no deal
+
+store_load_price_fields_x:
+    :LoadStoreEgoX()
+    sta sb_item_ego             // Pass ego for pricing (R14)
+    lda si_p1,x
+    sta sb_item_p1              // Pass charges/type-specific p1 for pricing
+    lda si_to_hit,x
+    sta sb_item_to_hit
+    lda si_to_dam,x
+    sta sb_item_to_dam
+    lda si_to_ac,x
+    sta sb_item_to_ac
+    lda si_item_id,x
+    rts
 
 sbuy_execute:
     // Check if player can afford it
