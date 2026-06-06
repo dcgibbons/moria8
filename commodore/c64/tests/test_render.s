@@ -59,6 +59,19 @@ mmu_safe_map_write_ptr1:
 
 #import "../../common/dungeon_data.s"
 
+// Test-only map write helper. Product code no longer exposes map_set_tile.
+map_set_tile:
+    pha
+    lda map_row_lo,y
+    sta zp_ptr0
+    lda map_row_hi,y
+    sta zp_ptr0_hi
+    txa
+    tay
+    pla
+    :MapWrite_ptr0_y()
+    rts
+
 .const EMPTY_SLOT = $ff
 .const MX_X = 0
 .const MX_Y = 1

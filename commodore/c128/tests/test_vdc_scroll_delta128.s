@@ -20,6 +20,20 @@
 .const CF_INFRA = $80
 
 #import "../../common/dungeon_data.s"
+
+// Test-only map write helper. Product code no longer exposes map_set_tile.
+map_set_tile:
+    pha
+    lda map_row_lo,y
+    sta zp_ptr0
+    lda map_row_hi,y
+    sta zp_ptr0_hi
+    txa
+    tay
+    pla
+    :MapWrite_ptr0_y()
+    rts
+
 #import "../../common/color.s"
 #import "../screen_vdc.s"
 #import "../dungeon_render_vdc.s"

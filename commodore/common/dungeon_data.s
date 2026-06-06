@@ -94,10 +94,10 @@ map_row_hi:
     .fill MAP_ROWS, >(MAP_BASE + i * MAP_COLS)
 
 // ============================================================
-// Map accessors (single-tile API boundary)
+// Map accessor (single-tile API boundary)
 // ============================================================
 // Input: X = column, Y = row
-// Output (get): A = tile byte
+// Output: A = tile byte
 // Clobbers: A, Y, zp_ptr0/zp_ptr0_hi
 map_get_tile:
     lda map_row_lo,y
@@ -107,20 +107,6 @@ map_get_tile:
     txa
     tay
     :MapRead_ptr0_y()
-    rts
-
-// Input: X = column, Y = row, A = tile byte
-// Clobbers: Y, zp_ptr0/zp_ptr0_hi
-map_set_tile:
-    pha
-    lda map_row_lo,y
-    sta zp_ptr0
-    lda map_row_hi,y
-    sta zp_ptr0_hi
-    txa
-    tay
-    pla
-    :MapWrite_ptr0_y()
     rts
 
 // ============================================================
