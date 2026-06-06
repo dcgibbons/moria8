@@ -1312,7 +1312,7 @@ tunnel_spawn_gold:
 //       zp_temp4 used internally by rng_range
 // ============================================================
 .const PIT_MAX_LEVEL = 12
-#if C128_PRODUCT_OVERLAY_RUNTIME
+#if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME
 .segment DungeonGenOverlay
 #endif
 
@@ -1326,10 +1326,10 @@ pit_sorted:
     .byte 5, 7, 9, 14, 21, 30, 31, 47, 48, 49, 53, 66, 74
     // Level 3 (13 items)
     .byte 4, 10, 18, 22, 25, 36, 39, 43, 44, 46, 50, 65, 70
-    // Level 4 (10 items)
-    .byte 8, 23, 27, 33, 38, 40, 42, 55, 58, 67
-    // Level 5 (6 items)
-    .byte 24, 26, 32, 41, 45, 72
+    // Level 4 (11 items)
+    .byte 8, 23, 27, 33, 38, 40, 42, 55, 58, 67, 78
+    // Level 5 (7 items)
+    .byte 24, 26, 32, 41, 45, 72, 79
     // Level 6 (4 items)
     .byte 34, 35, 68, 73
     // Level 7 (1 item)
@@ -1348,18 +1348,22 @@ pit_level_bounds:
     .byte 22     // level 1: +17 = 22
     .byte 35     // level 2: +13 = 35
     .byte 48     // level 3: +13 = 48
-    .byte 58     // level 4: +10 = 58
-    .byte 64     // level 5: +6 = 64
-    .byte 68     // level 6: +4 = 68
-    .byte 69     // level 7: +1 = 69
-    .byte 73     // level 8: +4 = 73
-    .byte 74     // level 9: +1 = 74
-    .byte 74     // level 10: (no items)
-    .byte 74     // level 11: (no items)
-    .byte 76     // level 12: +2 = 76
+    .byte 59     // level 4: +11 = 59
+    .byte 66     // level 5: +7 = 66
+    .byte 70     // level 6: +4 = 70
+    .byte 71     // level 7: +1 = 71
+    .byte 75     // level 8: +4 = 75
+    .byte 76     // level 9: +1 = 76
+    .byte 76     // level 10: (no items)
+    .byte 76     // level 11: (no items)
+    .byte 78     // level 12: +2 = 78
 pit_level_bounds_end:
 
+#if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME
+pick_item_type_overlay:
+#else
 pick_item_type:
+#endif
     // Calculate effective level = min(dlvl + 2, PIT_MAX_LEVEL)
     lda zp_player_dlvl
     clc
@@ -1439,6 +1443,52 @@ pick_item_type:
 
 #if C128_PRODUCT_OVERLAY_RUNTIME
 .segment C128ResidentItems
+#elif C64_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME
+.segment Default
+#endif
+
+#if PLUS4_PRODUCT_OVERLAY_RUNTIME
+pick_item_type:
+    lda current_overlay
+    cmp #OVL_DUNGEON_GEN
+    beq !pit_overlay_loaded+
+
+    ldx #OVL_DUNGEON_GEN - 1
+    jsr overlay_load_disk        // No media prompt while generating a dungeon.
+    bcc !pit_disk_loaded+
+    lda #OVL_NONE
+    sta current_overlay
+    lda #2                      // Fallback to first non-gold type on media error.
+    rts
+!pit_disk_loaded:
+    lda #OVL_DUNGEON_GEN
+    sta current_overlay
+
+!pit_overlay_loaded:
+    sei
+    jsr plus4_bank_ram
+    jsr pick_item_type_overlay
+    pha
+    jsr plus4_bank_ram
+    cli
+    pla
+    rts
+#elif C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME
+pick_item_type:
+    lda #OVL_DUNGEON_GEN
+    jsr overlay_load
+    bcc !pit_overlay_loaded+
+    lda #2                      // Fallback to first non-gold type on media error.
+    rts
+!pit_overlay_loaded:
+    sei
+    :BankOutKernal()
+    jsr pick_item_type_overlay
+    pha
+    :BankInKernal()
+    cli
+    pla
+    rts
 #endif
 
 // ============================================================
@@ -1696,7 +1746,7 @@ re_negate_a:
 // ============================================================
 // Compile-time validation
 // ============================================================
-.assert "Item type count", ITEM_TYPE_COUNT, 78
+.assert "Item type count", ITEM_TYPE_COUNT, 80
 .assert "it_category size", it_display - it_category, ITEM_TYPE_COUNT
 .assert "it_display size", it_color - it_display, ITEM_TYPE_COUNT
 .assert "it_color size", it_weight - it_color, ITEM_TYPE_COUNT
@@ -1711,8 +1761,9 @@ re_negate_a:
 .assert "it_name_hi size", it_name_hi_end - it_name_hi, ITEM_TYPE_COUNT
 .assert "pit_sorted size", pit_sorted_end - pit_sorted, ITEM_TYPE_COUNT - 2
 .assert "pit_level_bounds size", pit_level_bounds_end - pit_level_bounds, PIT_MAX_LEVEL + 1
-#if !C128_PRODUCT_OVERLAY_RUNTIME
-.assert "pick_item_type stays visible after dungeon-generation trampoline", pick_item_type < $e000, true
+.assert "pick_item_type entry stays resident", pick_item_type < $e000, true
+#if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME
+.assert "pick_item_type overlay impl lives in dungeon overlay", pick_item_type_overlay >= $e000 && pick_item_type_overlay < $f000, true
 #endif
 // Hardcoded assertion removed for cross-platform compatibility
 .assert "Inventory total slots", TOTAL_INV_SLOTS, 31

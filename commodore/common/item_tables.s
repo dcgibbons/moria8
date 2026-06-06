@@ -89,6 +89,8 @@ it_category:
     .byte ICAT_WEAPON   // 75: Pike
     .byte ICAT_WEAPON   // 76: Halberd
     .byte ICAT_WEAPON   // 77: Quarterstaff
+    .byte ICAT_SHIELD   // 78: Large Shield
+    .byte ICAT_ARMOR    // 79: Hard Leather Armor
 
 // Display character (screen codes)
 it_display:
@@ -170,6 +172,8 @@ it_display:
     .byte $2f   // 75: '/' Pike
     .byte $2f   // 76: '/' Halberd
     .byte $2f   // 77: '/' Quarterstaff
+    .byte $29   // 78: ')' Large Shield
+    .byte $5b   // 79: '[' Hard Leather Armor
 
 // Color
 it_color:
@@ -251,6 +255,8 @@ it_color:
     .byte COL_LGREY     // 75: Pike
     .byte COL_LGREY     // 76: Halberd
     .byte COL_BROWN     // 77: Quarterstaff
+    .byte COL_LGREY     // 78: Large Shield
+    .byte COL_BROWN     // 79: Hard Leather Armor
 
 // Weight (in 1/10 lbs)
 it_weight:
@@ -268,6 +274,7 @@ it_weight:
     .byte 40, 75, 140, 200                  // 66-69: expanded swords
     .byte 40, 170, 120, 150                 // 70-73: expanded hafted/axe
     .byte 50, 160, 190, 40                  // 74-77: polearms/staff
+    .byte 100, 120                          // 78-79: shield/armor
 
 // Damage dice count
 it_dmg_dice:
@@ -285,6 +292,7 @@ it_dmg_dice:
     .byte 1, 2, 3, 3                        // 66-69: expanded swords
     .byte 1, 3, 3, 2                        // 70-73: expanded hafted/axe
     .byte 1, 2, 3, 1                        // 74-77: polearms/staff
+    .byte 0, 0                              // 78-79: shield/armor
 
 // Damage dice sides
 it_dmg_sides:
@@ -302,6 +310,7 @@ it_dmg_sides:
     .byte 6, 5, 4, 6                        // 66-69: expanded swords
     .byte 8, 4, 3, 6                        // 70-73: expanded hafted/axe
     .byte 6, 5, 4, 9                        // 74-77: polearms/staff
+    .byte 0, 0                              // 78-79: shield/armor
 
 // Base armor class
 it_base_ac:
@@ -319,6 +328,7 @@ it_base_ac:
     .byte 0, 0, 0, 0                        // 66-69: expanded swords
     .byte 0, 0, 0, 0                        // 70-73: expanded hafted/axe
     .byte 0, 0, 0, 0                        // 74-77: polearms/staff
+    .byte 3, 6                              // 78-79: shield/armor
 
 // Base cost (lo)
 it_cost_lo:
@@ -337,6 +347,7 @@ it_cost_lo:
     .byte <42, <70, <120, <180
     .byte <50, <120, <90, <100
     .byte <36, <100, <150, <20
+    .byte <40, <100
 
 // Base cost (hi)
 it_cost_hi:
@@ -355,6 +366,7 @@ it_cost_hi:
     .byte >42, >70, >120, >180
     .byte >50, >120, >90, >100
     .byte >36, >100, >150, >20
+    .byte >40, >100
 
 // Minimum dungeon level to appear
 it_min_level:
@@ -372,6 +384,7 @@ it_min_level:
     .byte 2, 4, 6, 8                        // 66-69: expanded swords
     .byte 3, 7, 5, 6                        // 70-73: expanded hafted/axe
     .byte 2, 8, 9, 1                        // 74-77: polearms/staff
+    .byte 4, 5                              // 78-79: shield/armor
 
 // Missile type table — encodes ranged weapon/ammo relationships
 // Only stored for types 49-54 (ranged items). Types < 49 are not ranged (return 0).
@@ -423,6 +436,7 @@ it_name_lo:
     .byte <itn_66, <itn_67, <itn_68, <itn_69
     .byte <itn_70, <itn_71, <itn_72, <itn_73
     .byte <itn_74, <itn_75, <itn_76, <itn_77
+    .byte <itn_78, <itn_79
 it_name_hi:
     .byte >itn_0,  >itn_1,  >itn_2,  >itn_3,  >itn_4
     .byte >itn_5,  >itn_6,  >itn_7,  >itn_8,  >itn_9
@@ -442,6 +456,7 @@ it_name_hi:
     .byte >itn_66, >itn_67, >itn_68, >itn_69
     .byte >itn_70, >itn_71, >itn_72, >itn_73
     .byte >itn_74, >itn_75, >itn_76, >itn_77
+    .byte >itn_78, >itn_79
 it_name_hi_end:
 
 // Tokenized item-name string pool.
@@ -593,3 +608,5 @@ itn_74: .text "Spear" ; .byte 0
 itn_75: .text "Pike" ; .byte 0
 itn_76: .text "Halberd" ; .byte 0
 itn_77: .text "Quarterstaff" ; .byte 0
+itn_78: .text "Large Shield" ; .byte 0
+itn_79: .text "Hard " ; .byte ITOK_LEATHER ; .text "Armor" ; .byte 0

@@ -563,13 +563,21 @@ Phase 0 implementation status:
   `Scimitar`, `Battle Axe`, `War Hammer`, and `Morningstar`.
 - The third Phase 1 melee slice raised `ITEM_TYPE_COUNT` to 78 by adding
   `Spear`, `Pike`, `Halberd`, and `Quarterstaff`.
+- The first defensive-equipment slice raised `ITEM_TYPE_COUNT` to 80 by adding
+  `Large Shield` and `Hard Leather Armor`. A four-row defensive slice crossed
+  the C64 resident boundary, so the accepted slice stayed at two rows and
+  recovered bytes by returning picker/depth ownership to the generation
+  overlay.
 - That slice also corrected normal acquisition coverage for appended melee:
-  `pit_sorted` now includes IDs `66-77`, `pit_level_bounds` has compile-time
+  `pit_sorted` now includes IDs `66-79`, `pit_level_bounds` has compile-time
   size assertions, and store restocking samples through `ITEM_TYPE_COUNT`
   before applying store-category filters.
 - The item-type picker and its depth tables moved into the dungeon-generation
-  overlay for product builds on C64, C128, and Plus/4. This recovered resident
-  bytes without moving item names, item instances, or wizard enchantment logic.
+  overlay for product builds on C64, C128, and Plus/4. Product trampolines call
+  `item_spawn_level` while the generation overlay is still visible; unit tests
+  keep the old direct call because their `tramp_level_generate` stubs do not
+  execute the product trampoline body. This recovered resident bytes without
+  moving item names, item instances, or wizard enchantment logic.
 - The second slice initially failed memory assertions. The accepted layout
   recovered shared resident bytes by tokenizing repeated unknown-name articles
   and shrinking the dedicated item-name decode buffer to the current catalog's
