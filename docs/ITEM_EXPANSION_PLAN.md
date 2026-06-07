@@ -35,7 +35,8 @@ Relevant current constants:
 | `ITEM_TYPE_COUNT` | 96 | Current item catalog size |
 | `MAX_FLOOR_ITEMS` | 42 | Max live floor item slots |
 | `MAX_INV_SLOTS` | 22 | Carried inventory slots |
-| `MAX_EQUIP_SLOTS` | 9 | Equipment slots |
+| `MAX_EQUIP_SLOTS` | 9 | Stored equipment slots |
+| `VISIBLE_EQUIP_SLOTS` | 8 | Currently displayed equipment slots |
 | `TOTAL_INV_SLOTS` | 31 | Inventory + equipment slots |
 | `FI_EMPTY` | `$ff` | Empty item slot sentinel |
 
@@ -997,6 +998,10 @@ Implementation checkpoints already completed:
 - Inventory capacity has moved to 31 total slots with `EQUIP_AMULET = 30`;
   `LEGACY_TOTAL_INV_SLOTS` records the prior 30-slot save/layout value for
   loading older saves.
+- The amulet slot is save-reserved but intentionally hidden from the equipment
+  UI and prompt-time take-off selector until actual amulet item types exist.
+  User-visible equipment stops at `VISIBLE_EQUIP_END`/`VISIBLE_EQUIP_SLOTS`;
+  storage and migration continue to use `EQUIP_END`/`TOTAL_INV_SLOTS`.
 - The first catalog breadth slice added two append-only equipment rows:
   `Main Gauche` and `Studded Leather Armor`. A four-row resident slice
   (`Main Gauche`, `Rapier`, `Studded Leather Armor`, `Large Shield`) crossed the

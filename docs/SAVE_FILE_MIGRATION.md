@@ -141,6 +141,10 @@ Suggested layout milestones:
 | `SAVE_LAYOUT_V3` | 96-byte fixed-capacity `id_known`, 31 inventory/equipment slots with `EQUIP_AMULET` |
 | future layout | chest sidecars or split catalog / extended item state |
 
+`EQUIP_AMULET` is currently a storage and migration reservation only. The
+equipment UI and take-off selector hide the amulet row until amulet item types
+are present in the catalog.
+
 Example migration:
 
 ```text

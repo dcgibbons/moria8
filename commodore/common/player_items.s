@@ -330,7 +330,7 @@ piw_build_visible_equip_cache:
     iny
 !piw_count_eq_next:
     inx
-    cpx #EQUIP_END
+    cpx #VISIBLE_EQUIP_END
     bcc !piw_count_eq_loop-
     sty piw_visible_count
     tya
