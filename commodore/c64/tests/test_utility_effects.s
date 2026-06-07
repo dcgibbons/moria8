@@ -40,10 +40,9 @@ test_finish:
 #import "../../common/item_defs.s"
 #import "../../common/player.s"
 #import "../../common/ui_messages.s"
-#import "../../common/ui_status.s"
 #import "../../common/ui_help_clear.s"
-#import "../../common/ui_character.s"
-#import "../../common/stat_display.s"
+put_stat_val:
+    rts
 .segmentdef TestCreateOverlay [start=$D000]
 .segment TestCreateOverlay
 #import "../../common/background_data.s"
@@ -58,26 +57,17 @@ test_finish:
 #import "../../common/monster.s"
 #import "../../common/tier_manager.s"
 #import "../../common/overlay.s"
-#import "../../common/monster_ai.s"
-#import "../../common/recall.s"
-#import "../../common/monster_magic.s"
 #import "../../common/item.s"
-#import "../../common/special_rooms.s"
-#import "../../common/ego_items.s"
-#import "../../common/special_rooms_stubs.s"
 #import "../../common/player_items.s"
 #import "../../common/spell_data.s"
 #import "../../common/projectile.s"
 #import "../../common/spell_effects.s"
 #import "../../common/player_magic_state.s"
 #import "../../common/player_magic_state_ops.s"
-#import "../../common/player_magic.s"
 #import "../../common/player_magic_map.s"
 #import "../../common/player_magic_feedback.s"
 #import "../../common/player_magic_earthquake.s"
 #import "../../common/player_magic_utility.s"
-#import "../../common/ui_inventory.s"
-#import "../../common/ui_equipment.s"
 #import "../dungeon_render.s"
 #import "../../common/dungeon_los.s"
 #import "../../common/player_move.s"
@@ -127,11 +117,51 @@ store_restock_all:
 store_enter:
     rts
 
+tramp_assign_special_room:
+tramp_vault_seal_entrance:
+tramp_spawn_special_room_monsters:
+    rts
+
+tramp_find_special_room:
+    clc
+    rts
+
+tramp_spawn_nest_gold:
+    rts
+
+tramp_roll_ego_type:
+    lda #0
+    rts
+
+tramp_ego_get_ac_bonus:
+    lda #0
+    rts
+
+tramp_ego_apply_damage:
+    rts
+
+tramp_ego_append_suffix:
+    rts
+
+pm_consume_mana:
+magic_recalc_mana:
+magic_check_new_spells:
+status_draw:
+    rts
+
+recall_kills:
+    .fill MAX_CREATURES, 0
+
 ui_help_show_paged:
 ui_help_display:
+ui_char_display:
+ui_inv_display:
+ui_inv_select_display:
+ui_equip_display:
 help_draw_line:
 help_draw_hborder:
     rts
+
 #import "../../common/ui_trampoline_stubs.s"
 
 press_key_str:

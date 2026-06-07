@@ -26,13 +26,13 @@ architecture project.
 
 ## Current Moria8 Constraints
 
-Current Moria8 has 88 item type IDs.
+Current Moria8 has 96 item type IDs.
 
 Relevant current constants:
 
 | Constant | Value | Meaning |
 |---|---:|---|
-| `ITEM_TYPE_COUNT` | 88 | Current item catalog size |
+| `ITEM_TYPE_COUNT` | 96 | Current item catalog size |
 | `MAX_FLOOR_ITEMS` | 42 | Max live floor item slots |
 | `MAX_INV_SLOTS` | 22 | Carried inventory slots |
 | `MAX_EQUIP_SLOTS` | 9 | Equipment slots |
@@ -43,9 +43,9 @@ Current linked headroom after the 88-item slice:
 
 | Target | Most relevant free space | Verdict |
 |---|---:|---|
-| C64 | town overlay 30 bytes, UI overlay 94 bytes, items overlay 236 bytes, banked runtime 69 bytes | Tight; overlay-only growth |
-| C128 | `128.item` 773 bytes, Bank 1 DB/data region 2,319 bytes free, `128.world` 6 bytes, town overlay 136 bytes, UI overlay 11 bytes, death overlay 8 bytes | Enough runway for the next 8-row slice; still overlay-tight |
-| Plus/4 | banked runtime 564 bytes, UI overlay 94 bytes, items overlay 952 bytes | Workable but still tight |
+| C64 | must be remeasured after each batch | Tight; overlay-only growth |
+| C128 | must be remeasured after each batch | Item storage has runway, but UI/death/world/play remain tight |
+| Plus/4 | must be remeasured after each batch | Workable but still tight |
 
 The C128 is the limiting platform.
 
@@ -507,27 +507,49 @@ This is cleaner long-term but larger and invasive.
 | 71 | Battle Axe | Weapon |
 | 72 | War Hammer | Weapon |
 | 73 | Morningstar | Weapon |
+| 74 | Spear | Weapon |
+| 75 | Pike | Weapon |
+| 76 | Halberd | Weapon |
+| 77 | Quarterstaff | Weapon |
+| 78 | Large Shield | Shield |
+| 79 | Hard Leather Armor | Armor |
+| 80 | Scale Mail | Armor |
+| 81 | Plate Mail | Armor |
+| 82 | Cloak | Armor |
+| 83 | Steel Helm | Helm |
+| 84 | Gauntlets | Gloves |
+| 85 | Soft Leather Boots | Boots |
+| 86 | Hard Leather Boots | Boots |
+| 87 | Metal Cap | Helm |
+| 88 | Sabre | Weapon |
+| 89 | Cutlass | Weapon |
+| 90 | Tulwar | Weapon |
+| 91 | Katana | Weapon |
+| 92 | Flail | Weapon |
+| 93 | Lucerne Hammer | Weapon |
+| 94 | Broad Axe | Weapon |
+| 95 | Awl-Pike | Weapon |
 
 ## Source Catalog Comparison
 
 | Item class | Umoria | VMS Moria | Moria8 |
 |---|---:|---:|---:|
 | Food / mushrooms | 34 | 33 | 2 |
-| Swords / daggers | 24 | 29 | 3 collapsed |
-| Hafted weapons / axes | 9 | 16 | 1 collapsed |
-| Polearms | 13 | 13 | 0 |
+| Swords / daggers | 24 | 29 | 15 selected |
+| Hafted weapons / axes | 9 | 16 | 7 selected |
+| Polearms | 13 | 13 | 5 selected |
 | Bows | 6 | 10 raw, 6 meaningful | 3 |
 | Ammo | 6 raw, 4 meaningful | 7 raw, 4 meaningful | 3 |
 | Spikes | 1 | 2 raw, 1 meaningful | 0 |
 | Light / oil | 6 raw, 3 meaningful | 5 raw, 3 meaningful | 3 |
 | Digging | 6 | 6 | 2 |
-| Boots | 3 | 5 raw, 3 meaningful | 1 collapsed |
-| Gloves | 2 | 4 raw, 2 meaningful | 1 |
-| Cloaks | 1 | 2 raw, 1 meaningful | 0 |
-| Helms / crowns | 8 | 11 raw, 8 meaningful | 1 |
-| Shields | 6 | 9 raw, 6 meaningful | 1 collapsed |
-| Hard armor | 12 | 16 raw, 12 meaningful | 1 collapsed |
-| Soft armor | 10 | 15 raw, 10 meaningful | 2 collapsed |
+| Boots | 3 | 5 raw, 3 meaningful | 3 selected |
+| Gloves | 2 | 4 raw, 2 meaningful | 2 selected |
+| Cloaks | 1 | 2 raw, 1 meaningful | 1 |
+| Helms / crowns | 8 | 11 raw, 8 meaningful | 3 selected |
+| Shields | 6 | 9 raw, 6 meaningful | 2 selected |
+| Hard armor | 12 | 16 raw, 12 meaningful | 3 selected |
+| Soft armor | 10 | 15 raw, 10 meaningful | 3 selected |
 | Amulets | 9 | 13 raw, 9 meaningful | 0 |
 | Rings | 30 | 35 raw, 30 meaningful | 2 |
 | Staffs | 25 raw, 23 meaningful | 29 raw, 23 meaningful | 4 |
@@ -720,11 +742,9 @@ Phase 0 implementation status:
 Goal: fill the existing 96-ID runway with high-value ordinary loot and a small
 number of low-risk consumable/magic rows.
 
-Current status: IDs `0-87` are implemented. Phase 1A/1B catalog-storage relief
-is complete: C128 `128.item` now leaves 773 bytes before the selector boundary,
-and C128 known-name streams live in the boot-loaded Bank 1 `128.names` payload.
-IDs `88-95` may proceed, but should still land one randomized item family at a
-time.
+Current status: IDs `0-95` are implemented. Phase 1A/1B catalog-storage relief
+is complete: C128 known-name streams live in the boot-loaded Bank 1
+`128.names` payload, and the 96-ID save runway is now filled.
 
 Rules:
 
@@ -734,6 +754,10 @@ Rules:
 - Grow `ITEM_TYPE_COUNT` only as implemented rows are added.
 - Prefer fixed-known equipment before randomized classes.
 - Do not add chest sidecar state in this milestone.
+- For the release parking point, IDs `88-95` intentionally use fixed-known
+  ordinary weapons instead of the earlier randomized consumable/magic proposal.
+  This keeps the 96-item milestone data-only and avoids adding potion, scroll,
+  ring, wand, or staff behavior during release stabilization.
 
 Target appended rows:
 
@@ -761,14 +785,14 @@ Target appended rows:
 | 85 | Soft Leather Boots | boots | Fixed-known foot progression |
 | 86 | Hard Leather Boots | boots | Fixed-known foot progression |
 | 87 | Metal Cap | helm | Fixed-known low head tier |
-| 88 | Potion of Cure Critical Wounds | potion | Randomized; needs potion unknown coverage |
-| 89 | Potion of Healing | potion | Randomized; needs potion unknown coverage |
-| 90 | Scroll of Magic Mapping | scroll | Randomized; needs scroll unknown coverage |
-| 91 | Scroll of Trap/Door Detection | scroll | Randomized; needs scroll unknown coverage |
-| 92 | Ring of Accuracy | ring | Randomized; persistent effect |
-| 93 | Ring of Damage | ring | Randomized; persistent effect |
-| 94 | Wand of Fire | wand | Randomized; charge/effect reuse if possible |
-| 95 | Staff of Speed | staff | Randomized; charge/effect reuse if possible |
+| 88 | Sabre | weapon | Fixed-known blade progression |
+| 89 | Cutlass | weapon | Fixed-known blade progression |
+| 90 | Tulwar | weapon | Fixed-known blade progression |
+| 91 | Katana | weapon | Fixed-known premium blade |
+| 92 | Flail | weapon | Fixed-known hafted role |
+| 93 | Lucerne Hammer | weapon | Fixed-known hafted role |
+| 94 | Broad Axe | weapon | Fixed-known axe role |
+| 95 | Awl-Pike | weapon | Fixed-known polearm role |
 
 Why this shape:
 
@@ -776,15 +800,14 @@ Why this shape:
   and behavior risk.
 - The batch restores missing melee, polearm, armor, shield, helm, glove, and
   boot variety before adding lower-priority systems.
-- The eight randomized rows intentionally exercise the hardened unknown-name
-  model without making the milestone mostly effect work.
+- The final eight rows intentionally avoid randomized identification and
+  effect-code growth so 96 can serve as a release parking point.
 
 Implementation slices:
 
 1. Complete Phase 1A/1B C128 catalog-storage relief. Done.
-2. Expand potion/scroll/ring/wand/staff unknown descriptor pools as needed.
-3. Add IDs `88-95` one randomized family at a time, starting with potions or
-   scrolls because their effects mostly reuse existing spell/prayer behavior.
+2. Add IDs `88-95` as fixed-known ordinary equipment.
+3. Defer randomized potion/scroll/ring/wand/staff rows to the post-96 design.
 4. Update wizard docs and item catalog docs after each accepted slice.
 
 #### Phase 1A/1B: C128 Catalog-Storage Relief

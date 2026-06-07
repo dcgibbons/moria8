@@ -1324,16 +1324,16 @@ pit_sorted:
     .byte 2, 3, 6, 11, 12, 16, 17, 19, 20, 28, 29, 37, 51, 52, 54, 64, 77, 85
     // Level 2 (15 items)
     .byte 5, 7, 9, 14, 21, 30, 31, 47, 48, 49, 53, 66, 74, 82, 84
-    // Level 3 (14 items)
-    .byte 4, 10, 18, 22, 25, 36, 39, 43, 44, 46, 50, 65, 70, 86
-    // Level 4 (12 items)
-    .byte 8, 23, 27, 33, 38, 40, 42, 55, 58, 67, 78, 87
-    // Level 5 (7 items)
-    .byte 24, 26, 32, 41, 45, 72, 79
-    // Level 6 (5 items)
-    .byte 34, 35, 68, 73, 83
-    // Level 7 (2 items)
-    .byte 71, 80
+    // Level 3 (15 items)
+    .byte 4, 10, 18, 22, 25, 36, 39, 43, 44, 46, 50, 65, 70, 86, 88
+    // Level 4 (14 items)
+    .byte 8, 23, 27, 33, 38, 40, 42, 55, 58, 67, 78, 87, 89, 95
+    // Level 5 (10 items)
+    .byte 24, 26, 32, 41, 45, 72, 79, 90, 92, 94
+    // Level 6 (6 items)
+    .byte 34, 35, 68, 73, 83, 93
+    // Level 7 (3 items)
+    .byte 71, 80, 91
     // Level 8 (4 items)
     .byte 56, 59, 69, 75
     // Level 9 (1 item)
@@ -1349,16 +1349,16 @@ pit_level_bounds:
     .byte 5      // level 0: 5 items
     .byte 23     // level 1: +18 = 23
     .byte 38     // level 2: +15 = 38
-    .byte 52     // level 3: +14 = 52
-    .byte 64     // level 4: +12 = 64
-    .byte 71     // level 5: +7 = 71
-    .byte 76     // level 6: +5 = 76
-    .byte 78     // level 7: +2 = 78
-    .byte 82     // level 8: +4 = 82
-    .byte 83     // level 9: +1 = 83
-    .byte 84     // level 10: +1 = 84
-    .byte 84     // level 11: (no items)
-    .byte 86     // level 12: +2 = 86
+    .byte 53     // level 3: +15 = 53
+    .byte 67     // level 4: +14 = 67
+    .byte 77     // level 5: +10 = 77
+    .byte 83     // level 6: +6 = 83
+    .byte 86     // level 7: +3 = 86
+    .byte 90     // level 8: +4 = 90
+    .byte 91     // level 9: +1 = 91
+    .byte 92     // level 10: +1 = 92
+    .byte 92     // level 11: (no items)
+    .byte 94     // level 12: +2 = 94
 pit_level_bounds_end:
 
 #if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME
@@ -1748,7 +1748,7 @@ re_negate_a:
 // ============================================================
 // Compile-time validation
 // ============================================================
-.assert "Item type count", ITEM_TYPE_COUNT, 88
+.assert "Item type count", ITEM_TYPE_COUNT, 96
 .assert "it_category size", it_display - it_category, ITEM_TYPE_COUNT
 .assert "it_display size", it_color - it_display, ITEM_TYPE_COUNT
 .assert "it_color size", it_weight - it_color, ITEM_TYPE_COUNT

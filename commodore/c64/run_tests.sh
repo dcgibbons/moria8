@@ -2053,7 +2053,7 @@ check_static_contract "wizard_cancel_text_contract" "../common/wizard.s" \
 check_static_contract "wizard_menu_aligned_rows_contract" "../common/wizard.s" \
     "wiz_row1_str:|||.text \"L jump    A reveal    H heal\"|||wiz_row2_str:|||.text \"I ident   X level     G item\"|||wiz_row3_str:|||.text \"S summon  T tele      W wall\""
 check_static_contract "wizard_item_prompt_range_contract" "../common/wizard.s" \
-    "wiz_item_prompt_str:|||.text \"ITEM 0-87: \""
+    "wiz_item_prompt_str:|||.text \"ITEM 0-95: \""
 check_static_contract "wizard_bad_prompt_cleanup_contract" "../common/wizard.s" \
     "wizard_prompt_bad_value:|||jsr msg_print|||jmp wizard_prompt_clear_digits|||wizard_prompt_two_digit:|||jsr wizard_prompt_bad_value|||jmp !wiz_num_loop-"
 check_static_contract "c64_disk_prompt_dismiss_clears_full_modal_contract" "../common/disk_swap.s" \

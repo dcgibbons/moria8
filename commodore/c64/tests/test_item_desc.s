@@ -457,6 +457,8 @@ expected_item_name_lo:
     .byte <ein_78, <ein_79
     .byte <ein_80, <ein_81
     .byte <ein_82, <ein_83, <ein_84, <ein_85, <ein_86, <ein_87
+    .byte <ein_88, <ein_89, <ein_90, <ein_91
+    .byte <ein_92, <ein_93, <ein_94, <ein_95
 expected_item_name_hi:
     .byte >ein_0, >ein_1, >ein_2, >ein_3, >ein_4, >ein_5, >ein_6, >ein_7
     .byte >ein_8, >ein_9, >ein_10, >ein_11, >ein_12, >ein_13, >ein_14, >ein_15
@@ -473,6 +475,8 @@ expected_item_name_hi:
     .byte >ein_78, >ein_79
     .byte >ein_80, >ein_81
     .byte >ein_82, >ein_83, >ein_84, >ein_85, >ein_86, >ein_87
+    .byte >ein_88, >ein_89, >ein_90, >ein_91
+    .byte >ein_92, >ein_93, >ein_94, >ein_95
 
 ein_0:  .text "Gold (small)" ; .byte 0
 ein_1:  .text "Gold (large)" ; .byte 0
@@ -562,6 +566,14 @@ ein_84: .text "Gauntlets" ; .byte 0
 ein_85: .text "Soft Leather Boots" ; .byte 0
 ein_86: .text "Hard Leather Boots" ; .byte 0
 ein_87: .text "Metal Cap" ; .byte 0
+ein_88: .text "Sabre" ; .byte 0
+ein_89: .text "Cutlass" ; .byte 0
+ein_90: .text "Tulwar" ; .byte 0
+ein_91: .text "Katana" ; .byte 0
+ein_92: .text "Flail" ; .byte 0
+ein_93: .text "Lucerne Hammer" ; .byte 0
+ein_94: .text "Broad Axe" ; .byte 0
+ein_95: .text "Awl-Pike" ; .byte 0
 
 item_name_test_id: .byte 0
 tc_results: .fill 9, $ff

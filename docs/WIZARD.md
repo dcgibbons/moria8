@@ -29,7 +29,7 @@ Commands:
 - `Q` - cancel / exit menu
 
 Prompts:
-- Item generation: `ITEM 0-87: `
+- Item generation: `ITEM 0-95: `
 - Level jump: `DLVL 0-99: `
 
 Feedback:
@@ -40,7 +40,7 @@ Feedback:
 
 ## Generate Item
 
-Wizard item generation uses item IDs `0-87`.
+Wizard item generation uses item IDs `0-95`.
 
 Behavior:
 - Non-gold items try to go into inventory first
@@ -201,6 +201,14 @@ or `Neutralize Poison` feedback:
 | 85 | Soft Leather Boots |
 | 86 | Hard Leather Boots |
 | 87 | Metal Cap |
+| 88 | Sabre |
+| 89 | Cutlass |
+| 90 | Tulwar |
+| 91 | Katana |
+| 92 | Flail |
+| 93 | Lucerne Hammer |
+| 94 | Broad Axe |
+| 95 | Awl-Pike |
 
 ## Source References
 

@@ -99,6 +99,14 @@ it_category:
     .byte ICAT_BOOTS    // 85: Soft Leather Boots
     .byte ICAT_BOOTS    // 86: Hard Leather Boots
     .byte ICAT_HELM     // 87: Metal Cap
+    .byte ICAT_WEAPON   // 88: Sabre
+    .byte ICAT_WEAPON   // 89: Cutlass
+    .byte ICAT_WEAPON   // 90: Tulwar
+    .byte ICAT_WEAPON   // 91: Katana
+    .byte ICAT_WEAPON   // 92: Flail
+    .byte ICAT_WEAPON   // 93: Lucerne Hammer
+    .byte ICAT_WEAPON   // 94: Broad Axe
+    .byte ICAT_WEAPON   // 95: Awl-Pike
 
 // Display character (screen codes)
 it_display:
@@ -190,6 +198,14 @@ it_display:
     .byte $5d   // 85: ']' Soft Leather Boots
     .byte $5d   // 86: ']' Hard Leather Boots
     .byte $5d   // 87: ']' Metal Cap
+    .byte $2f   // 88: '/' Sabre
+    .byte $2f   // 89: '/' Cutlass
+    .byte $2f   // 90: '/' Tulwar
+    .byte $2f   // 91: '/' Katana
+    .byte $2f   // 92: '/' Flail
+    .byte $2f   // 93: '/' Lucerne Hammer
+    .byte $2f   // 94: '/' Broad Axe
+    .byte $2f   // 95: '/' Awl-Pike
 
 // Color
 it_color:
@@ -281,6 +297,14 @@ it_color:
     .byte COL_BROWN     // 85: Soft Leather Boots
     .byte COL_BROWN     // 86: Hard Leather Boots
     .byte COL_GREY      // 87: Metal Cap
+    .byte COL_WHITE     // 88: Sabre
+    .byte COL_WHITE     // 89: Cutlass
+    .byte COL_LGREY     // 90: Tulwar
+    .byte COL_LGREY     // 91: Katana
+    .byte COL_LGREY     // 92: Flail
+    .byte COL_LGREY     // 93: Lucerne Hammer
+    .byte COL_LGREY     // 94: Broad Axe
+    .byte COL_LGREY     // 95: Awl-Pike
 
 // Weight (in 1/10 lbs)
 it_weight:
@@ -301,6 +325,8 @@ it_weight:
     .byte 100, 120                          // 78-79: shield/armor
     .byte 250, 380                          // 80-81: heavier armor
     .byte 10, 60, 25, 5, 20, 20             // 82-87: cloak/helm/gloves/boots/cap
+    .byte 50, 110, 100, 120                 // 88-91: added blades
+    .byte 150, 120, 160, 160                // 92-95: added hafted/pole weapons
 
 // Damage dice count
 it_dmg_dice:
@@ -321,6 +347,8 @@ it_dmg_dice:
     .byte 0, 0                              // 78-79: shield/armor
     .byte 0, 0                              // 80-81: armor
     .byte 0, 0, 0, 0, 0, 0                  // 82-87: defensive equipment
+    .byte 1, 1, 2, 3                        // 88-91: added blades
+    .byte 2, 2, 2, 1                        // 92-95: added hafted/pole weapons
 
 // Damage dice sides
 it_dmg_sides:
@@ -341,6 +369,8 @@ it_dmg_sides:
     .byte 0, 0                              // 78-79: shield/armor
     .byte 0, 0                              // 80-81: armor
     .byte 0, 0, 0, 0, 0, 0                  // 82-87: defensive equipment
+    .byte 7, 7, 4, 4                        // 88-91: added blades
+    .byte 6, 5, 6, 8                        // 92-95: added hafted/pole weapons
 
 // Base armor class
 it_base_ac:
@@ -361,6 +391,7 @@ it_base_ac:
     .byte 3, 6                              // 78-79: shield/armor
     .byte 7, 9                              // 80-81: armor
     .byte 1, 2, 1, 1, 2, 1                  // 82-87: cloak/helm/gloves/boots/cap
+    .byte 0, 0, 0, 0, 0, 0, 0, 0            // 88-95: weapons
 it_base_ac_end:
 
 #if C64_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME
@@ -387,6 +418,8 @@ it_cost_lo:
     .byte <40, <100
     .byte <350, <900
     .byte <20, <120, <35, <8, <30, <50
+    .byte <60, <85, <100, <400
+    .byte <120, <110, <100, <80
 it_cost_lo_end:
 
 #if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME
@@ -394,9 +427,9 @@ it_cost_lo_end:
 // only non-zero high bytes. C64/Plus4 place them in the town overlay; C128
 // keeps them with the resident item payload so town overlay entry remains code.
 it_cost_hi_extra_id:
-    .byte 45, 55, 56, 57, 58, 59, 60, 80, 81
+    .byte 45, 55, 56, 57, 58, 59, 60, 80, 81, 91
 it_cost_hi_extra_value:
-    .byte >300, >300, >500, >800, >300, >500, >800, >350, >900
+    .byte >300, >300, >500, >800, >300, >500, >800, >350, >900, >400
 it_cost_hi_extra_end:
 .const IT_COST_HI_EXTRA_COUNT = it_cost_hi_extra_value - it_cost_hi_extra_id
 
@@ -424,6 +457,8 @@ it_cost_hi:
     .byte >40, >100
     .byte >350, >900
     .byte >20, >120, >35, >8, >30, >50
+    .byte >60, >85, >100, >400
+    .byte >120, >110, >100, >80
 it_cost_hi_end:
 #endif
 
@@ -450,6 +485,8 @@ it_min_level:
     .byte 4, 5                              // 78-79: shield/armor
     .byte 7, 10                             // 80-81: armor
     .byte 2, 6, 2, 1, 3, 4                  // 82-87: cloak/helm/gloves/boots/cap
+    .byte 3, 4, 5, 7                        // 88-91: added blades
+    .byte 5, 6, 5, 4                        // 92-95: added hafted/pole weapons
 it_min_level_end:
 
 #if C64_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME
@@ -509,6 +546,8 @@ it_name_lo:
     .byte <itn_78, <itn_79
     .byte <itn_80, <itn_81
     .byte <itn_82, <itn_83, <itn_84, <itn_85, <itn_86, <itn_87
+    .byte <itn_88, <itn_89, <itn_90, <itn_91
+    .byte <itn_92, <itn_93, <itn_94, <itn_95
 it_name_lo_end:
 #if !(C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME)
 it_name_hi:
@@ -533,6 +572,8 @@ it_name_hi:
     .byte >itn_78, >itn_79
     .byte >itn_80, >itn_81
     .byte >itn_82, >itn_83, >itn_84, >itn_85, >itn_86, >itn_87
+    .byte >itn_88, >itn_89, >itn_90, >itn_91
+    .byte >itn_92, >itn_93, >itn_94, >itn_95
 it_name_hi_end:
 #else
 it_name_hi_end:
@@ -709,6 +750,14 @@ itn_84: .text "Gauntlets" ; .byte 0
 itn_85: .text "Soft " ; .byte ITOK_LEATHER ; .text "Boots" ; .byte 0
 itn_86: .text "Hard " ; .byte ITOK_LEATHER ; .text "Boots" ; .byte 0
 itn_87: .text "Metal Cap" ; .byte 0
+itn_88: .text "Sabre" ; .byte 0
+itn_89: .text "Cutlass" ; .byte 0
+itn_90: .text "Tulwar" ; .byte 0
+itn_91: .text "Katana" ; .byte 0
+itn_92: .text "Flail" ; .byte 0
+itn_93: .text "Lucerne Hammer" ; .byte 0
+itn_94: .text "Broad Axe" ; .byte 0
+itn_95: .text "Awl-Pike" ; .byte 0
 #if C128_PRODUCT_OVERLAY_RUNTIME
 c128_item_name_streams_end:
 .assert "C128 item name streams live in Bank 1 DB region", c128_item_name_streams_start >= BANK1_DB_BASE && c128_item_name_streams_end <= BANK1_DB_END + 1, true

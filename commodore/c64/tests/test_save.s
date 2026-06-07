@@ -54,6 +54,9 @@ player_pray:
 magic_recalc_mana:
 magic_check_new_spells:
 ui_help_display:
+ui_inv_display:
+ui_inv_select_display:
+ui_equip_display:
     rts
 
 #import "../../common/zeropage.s"
@@ -101,8 +104,6 @@ random_floor_in_room:
 #import "../../common/spell_data.s"
 #import "../../common/projectile.s"
 #import "../../common/spell_effects.s"
-#import "../../common/ui_inventory.s"
-#import "../../common/ui_equipment.s"
 #import "../dungeon_render.s"
 #import "../../common/dungeon_los.s"
 #import "../../common/player_move.s"

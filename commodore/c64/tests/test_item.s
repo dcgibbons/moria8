@@ -1365,9 +1365,11 @@ test_start:
     lda id_known + ITEM_TYPE_COUNT - 1
     cmp #1
     bne !t29_fail+
-    lda id_known + ITEM_TYPE_COUNT
-    cmp #0
-    bne !t29_fail+
+    .if (ITEM_TYPE_COUNT < ITEM_ID_CAPACITY) {
+        lda id_known + ITEM_TYPE_COUNT
+        cmp #0
+        bne !t29_fail+
+    }
 
     // If an appended fixed item is forced unknown by bad state, it still
     // resolves through fixed item data instead of a shuffled class table.
@@ -2380,7 +2382,7 @@ test_start:
 t27_expected_name:
     .text "Dagger" ; .byte 0
 t29_expected_appended_name:
-    .text "Metal Cap" ; .byte 0
+    .text "Awl-Pike" ; .byte 0
 
 item_test_body_end:
 
