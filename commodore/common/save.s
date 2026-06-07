@@ -449,6 +449,9 @@ save_game:
 !save_media_after_print:
     jsr input_get_modal_dismiss_key
 save_return_fail:
+#if C64_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT
+c64_test_after_save_media_fail:
+#endif
 #if HAL_STORAGE_CPU_PORT_RESTORE_AFTER_IO
     clc
 save_return_c64_with_carry:

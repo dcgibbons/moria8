@@ -1595,16 +1595,8 @@ run_save_write_product_smoke() {
         return
     fi
 
-    local dir_type_offset0=$(((357 + 1) * 256 + 2))
-    local dir_type_offset1=$((dir_type_offset0 + 32))
-    if ! printf '\201' | dd of="$save_d64" bs=1 seek="$dir_type_offset0" conv=notrunc status=none 2>>"$build_log"; then
-        echo "FAIL (marker directory patch error)"
-        tail -20 "$build_log"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-    if ! printf '\201' | dd of="$save_d64" bs=1 seek="$dir_type_offset1" conv=notrunc status=none 2>>"$build_log"; then
+    local save_dir_type_offset=$(((357 + 1) * 256 + 2 + 32))
+    if ! printf '\201' | dd of="$save_d64" bs=1 seek="$save_dir_type_offset" conv=notrunc status=none 2>>"$build_log"; then
         echo "FAIL (savefile directory patch error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -1795,7 +1787,7 @@ run_save_media_fail_product_smoke() {
 
     local main_vs="out/main.vs"
     local pass_addr fail_addr
-    pass_addr=$(awk '/\.c64_test_after_save_game$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    pass_addr=$(awk '/\.c64_test_after_save_media_fail$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     fail_addr=$(awk '/\.save_select_output_name_c64$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     if [ -z "${pass_addr:-}" ] || [ -z "${fail_addr:-}" ]; then
         echo "FAIL (missing save-media-fail smoke symbols in out/main.vs)"

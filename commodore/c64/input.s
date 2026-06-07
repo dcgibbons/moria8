@@ -444,21 +444,26 @@ c64_test_input_script:
     .byte $39              // 9
     .byte $0d              // RETURN
     .byte $33              // 3 = done
+    .byte $20              // SPACE = acknowledge insert-save-disk prompt
+    .byte $59              // Y = initialize marker if the fixture marker is not accepted
+    .byte $d3              // SHIFT+S = absorbed by post-load fresh-key path
     .byte $d3              // SHIFT+S = save in gameplay
     .byte $59              // Y = overwrite existing save
     .byte $53              // S = start from title after save
 #else
 #if C64_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT
-    .byte $4e              // N = New
-    .byte $41              // A = race
-    .byte $0d              // RETURN = accept stats
-    .byte $42              // B = mage
-    .byte $41              // A = first name character
-    .byte $0d              // RETURN = finish name
-    .byte $42              // B = female
-    .byte $20              // SPACE = dismiss summary
+    .byte $4c              // L = load from title
+    .byte $32              // 2 = save drive if Disk Setup prompts
+    .byte $39              // 9
+    .byte $0d              // RETURN
+    .byte $33              // 3 = done
+    .byte $20              // SPACE = acknowledge insert-save-disk prompt
+    .byte $59              // Y = initialize marker if the fixture marker is not accepted
+    .byte $d3              // SHIFT+S = absorbed by post-load fresh-key path
     .byte $d3              // SHIFT+S = save in gameplay
+    .byte $20              // SPACE = dismiss save-disk prompt
     .byte $20              // SPACE = dismiss disk error
+    .byte $00
 #else
 #if C64_TEST_SCRIPTED_LOAD_RESUME_PRODUCT
     .byte $4c              // L = load from title

@@ -44,7 +44,6 @@ hg_den_hi:     .byte 0
 hg_pct:        .byte 0     // Derived concession percentage (8-bit)
 hg_round:      .byte 0     // Round counter (0-3)
 hg_insults:    .byte 0     // Insult counter per visit
-hg_kicked:     .fill 8, 0  // Per-store kicked flag (resets on town re-entry)
 hg_tmp0:       .byte 0     // Temp for gap/step calculation
 hg_tmp1:       .byte 0
 hg_digit_cnt:  .byte 0     // Digit count for number input
