@@ -366,10 +366,14 @@ item_get_name_ptr:
     cmp #ICAT_BOOK
     beq !ignp_book_prefix+
 !ignp_raw_known:
+#if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME
+    jsr item_load_known_name_ptr
+#else
     lda it_name_lo,x
     sta zp_ptr0
     lda it_name_hi,x
     sta zp_ptr0_hi
+#endif
     jmp item_decode_name_ptr
 !ignp_qualified:
     ldy #0
@@ -382,10 +386,14 @@ item_get_name_ptr:
 !ignp_prefix_done:
     sty item_name_dst_idx
     ldx item_display_id
+#if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME
+    jsr item_load_known_name_ptr
+#else
     lda it_name_lo,x
     sta zp_ptr0
     lda it_name_hi,x
     sta zp_ptr0_hi
+#endif
     jmp item_decode_name_ptr_at_dst
 
 !ignp_potion_prefix:
@@ -423,6 +431,35 @@ idgp_ring_prefix:        .text "Ring of " ; .byte 0
 idgp_mage_book_prefix:   .text "Spellbook " ; .byte 0
 idgp_priest_book_prefix: .text "Holy Book of Prayers " ; .byte 0
 item_display_id: .byte 0
+
+#if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME
+// item_load_known_name_ptr — Resolve a known-name stream pointer without the
+// resident high-byte table. Name streams are emitted in item-ID order, so a
+// low-byte wrap between adjacent entries means the stream crossed a page.
+// Input: X = item type ID
+// Output: zp_ptr0/zp_ptr0_hi = tokenized known-name stream
+// Clobbers: A, Y
+item_load_known_name_ptr:
+    stx item_display_id
+    lda it_name_lo,x
+    sta zp_ptr0
+    lda #>itn_0
+    sta zp_ptr0_hi
+    txa
+    beq !ilkn_done+
+    ldy #0
+!ilkn_loop:
+    lda it_name_lo + 1,y
+    cmp it_name_lo,y
+    bcs !ilkn_same_page+
+    inc zp_ptr0_hi
+!ilkn_same_page:
+    iny
+    cpy item_display_id
+    bcc !ilkn_loop-
+!ilkn_done:
+    rts
+#endif
 
 // Decode an item-name token stream from zp_ptr0 into item_name_decode_buf.
 // Bytes below $80 copy literally; bytes $80+ index item_name_token_lo/hi.

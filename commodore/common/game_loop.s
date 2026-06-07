@@ -33,6 +33,7 @@ c128_test_seed_scroll_selector_state:
 #endif
 
 #if C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_SPELL_CANCEL || C128_TEST_SCRIPTED_BOOK_OVERLAY || C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY
+#if !C128_SCRIPTED_SPELL_SEED_EXTERNAL
 c128_test_seed_scripted_spell_state:
     lda #0
     sta c128_test_spell_success_count
@@ -76,6 +77,7 @@ c128_test_seed_scripted_spell_state:
     lda #0
     sta player_data + PL_SPELL_ORDER
     rts
+#endif
 #endif
 
 #if C128_TEST_SCRIPTED_PRAYER
@@ -124,7 +126,6 @@ c128_test_seed_scripted_prayer_state:
     sta player_data + PL_SPELL_ORDER
     rts
 
-.segment C128ResidentPlay
 c128_test_prayer_msg_str:
     .text "You feel righteous!" ; .byte 0
 
@@ -158,6 +159,7 @@ c128_test_prayer_history_has_bless:
 !c128_tp_found:
     sec
     rts
+.segment C128ResidentPlay
 #endif
 
 #if C64_TEST_SCRIPTED_SCROLL_SELECTOR
@@ -438,6 +440,7 @@ game_new_start:
     lda #0
     sta zp_game_flags
     jsr wizard_reset_session_state
+    jsr item_init_inventory
 
     // Clear status effect timers ($50–$5f) — BASIC ZP may have residual values
     ldx #0
@@ -2480,6 +2483,7 @@ auto_rest_active:  .byte 0             // Auto-rest is repeating ordinary rest t
 #endif
 
 #if C128_TEST_FORCE_DUNGEON_MELEE
+.segment Default
 c128_test_force_dungeon_melee_pending: .byte 1
 
 c128_test_force_dungeon_melee:
@@ -2545,6 +2549,7 @@ c128_test_force_dungeon_melee:
 
 c128_test_force_melee_x: .byte 0
 c128_test_force_melee_y: .byte 0
+.segment C128ResidentPlay
 #endif
 
 // ============================================================

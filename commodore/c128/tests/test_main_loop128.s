@@ -605,6 +605,8 @@ ovl_ready_mask:
     .byte 0, %00000001, %00000010, %00000100, %00001000, %00010000, %00100000, %01000000, %10000000
 .const SPELL_MAGE = 1
 .const OVL_DUNGEON_GEN = 4
+.const FI_EMPTY = $ff
+.const TOTAL_INV_SLOTS = 31
 .const EQUIP_WEAPON = 22
 .const EQUIP_BODY = 23
 .const EQUIP_LIGHT = 28
@@ -637,11 +639,14 @@ map_row_hi: .fill TEST_MAP_ROWS, >($8000 + i * TEST_MAP_COLS)
 player_data: .fill 80, 0
 player_move_relocated: .byte 0
 it_category: .fill 256, 0
-inv_item_id: .fill 30, 0
-inv_ego: .fill 30, 0
-inv_qty: .fill 30, 0
-inv_p1: .fill 30, 0
-inv_flags: .fill 30, 0
+inv_item_id: .fill TOTAL_INV_SLOTS, 0
+inv_ego: .fill TOTAL_INV_SLOTS, 0
+inv_qty: .fill TOTAL_INV_SLOTS, 0
+inv_p1: .fill TOTAL_INV_SLOTS, 0
+inv_to_hit: .fill TOTAL_INV_SLOTS, 0
+inv_to_dam: .fill TOTAL_INV_SLOTS, 0
+inv_to_ac: .fill TOTAL_INV_SLOTS, 0
+inv_flags: .fill TOTAL_INV_SLOTS, 0
 uinv_filter: .byte $ff
 tun_dig_ability: .byte 0
 old_player_x: .byte 0
@@ -661,6 +666,27 @@ recall_spells: .fill MAX_CREATURES, 0
 #import "../memory128.s"
 #import "../input128.s"
 #import "../../common/game_loop.s"
+
+item_init_inventory:
+    ldx #TOTAL_INV_SLOTS - 1
+    lda #FI_EMPTY
+!iiv_loop:
+    sta inv_item_id,x
+    dex
+    bpl !iiv_loop-
+    ldx #TOTAL_INV_SLOTS - 1
+    lda #0
+!iiv_stat_loop:
+    sta inv_qty,x
+    sta inv_p1,x
+    sta inv_to_hit,x
+    sta inv_to_dam,x
+    sta inv_to_ac,x
+    sta inv_flags,x
+    sta inv_ego,x
+    dex
+    bpl !iiv_stat_loop-
+    rts
 
 save_welcome_str:
     .text "WELCOME BACK" ; .byte 0
@@ -1981,6 +2007,68 @@ test_entry:
     jsr run_case
     lda test_pray_calls
     cmp #1
+    beq *+5
+    jmp test_fail
+
+    // Test 30: new game clears inventory/equipment left by a loaded game before
+    // adding starter gear.
+    lda #30
+    sta test_case_id
+    jsr reset_state
+    lda #66
+    sta inv_item_id + 2
+    lda #7
+    sta inv_qty + 2
+    sta inv_p1 + 2
+    sta inv_to_hit + EQUIP_WEAPON
+    sta inv_to_dam + EQUIP_WEAPON
+    sta inv_to_ac + EQUIP_BODY
+    sta inv_flags + 2
+    sta inv_ego + 2
+    lda #$20
+    sta test_key_script
+    lda #1
+    sta test_key_len
+    jsr game_new_start
+    lda inv_item_id + 2
+    cmp #FI_EMPTY
+    beq *+5
+    jmp test_fail
+    lda inv_qty + 2
+    beq *+5
+    jmp test_fail
+    lda inv_p1 + 2
+    beq *+5
+    jmp test_fail
+    lda inv_flags + 2
+    beq *+5
+    jmp test_fail
+    lda inv_ego + 2
+    beq *+5
+    jmp test_fail
+    lda inv_to_hit + EQUIP_WEAPON
+    beq *+5
+    jmp test_fail
+    lda inv_to_dam + EQUIP_WEAPON
+    beq *+5
+    jmp test_fail
+    lda inv_to_ac + EQUIP_BODY
+    beq *+5
+    jmp test_fail
+    lda inv_item_id + 0
+    cmp #15
+    beq *+5
+    jmp test_fail
+    lda inv_item_id + EQUIP_LIGHT
+    cmp #13
+    beq *+5
+    jmp test_fail
+    lda inv_item_id + EQUIP_WEAPON
+    cmp #2
+    beq *+5
+    jmp test_fail
+    lda inv_item_id + EQUIP_BODY
+    cmp #7
     beq *+5
     jmp test_fail
     jmp test_pass

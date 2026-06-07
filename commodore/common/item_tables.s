@@ -361,6 +361,11 @@ it_base_ac:
     .byte 3, 6                              // 78-79: shield/armor
     .byte 7, 9                              // 80-81: armor
     .byte 1, 2, 1, 1, 2, 1                  // 82-87: cloak/helm/gloves/boots/cap
+it_base_ac_end:
+
+#if C64_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME
+.segment TownOverlay
+#endif
 
 // Base cost (lo)
 it_cost_lo:
@@ -382,7 +387,23 @@ it_cost_lo:
     .byte <40, <100
     .byte <350, <900
     .byte <20, <120, <35, <8, <30, <50
+it_cost_lo_end:
 
+#if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME
+// Base cost high bytes are sparse in the current catalog. Product builds keep
+// only non-zero high bytes. C64/Plus4 place them in the town overlay; C128
+// keeps them with the resident item payload so town overlay entry remains code.
+it_cost_hi_extra_id:
+    .byte 45, 55, 56, 57, 58, 59, 60, 80, 81
+it_cost_hi_extra_value:
+    .byte >300, >300, >500, >800, >300, >500, >800, >350, >900
+it_cost_hi_extra_end:
+.const IT_COST_HI_EXTRA_COUNT = it_cost_hi_extra_value - it_cost_hi_extra_id
+
+#if C64_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME
+.segment Default
+#endif
+#else
 // Base cost (hi)
 it_cost_hi:
     .byte >0, >0, >10, >25, >60, >45, >15, >30, >80, >20
@@ -403,6 +424,12 @@ it_cost_hi:
     .byte >40, >100
     .byte >350, >900
     .byte >20, >120, >35, >8, >30, >50
+it_cost_hi_end:
+#endif
+
+#if C64_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME
+.segment DungeonGenOverlay
+#endif
 
 // Minimum dungeon level to appear
 it_min_level:
@@ -423,6 +450,11 @@ it_min_level:
     .byte 4, 5                              // 78-79: shield/armor
     .byte 7, 10                             // 80-81: armor
     .byte 2, 6, 2, 1, 3, 4                  // 82-87: cloak/helm/gloves/boots/cap
+it_min_level_end:
+
+#if C64_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME
+.segment Default
+#endif
 
 // Missile type table — encodes ranged weapon/ammo relationships
 // Only stored for types 49-54 (ranged items). Types < 49 are not ranged (return 0).
@@ -477,6 +509,8 @@ it_name_lo:
     .byte <itn_78, <itn_79
     .byte <itn_80, <itn_81
     .byte <itn_82, <itn_83, <itn_84, <itn_85, <itn_86, <itn_87
+it_name_lo_end:
+#if !(C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME)
 it_name_hi:
     .byte >itn_0,  >itn_1,  >itn_2,  >itn_3,  >itn_4
     .byte >itn_5,  >itn_6,  >itn_7,  >itn_8,  >itn_9
@@ -500,6 +534,9 @@ it_name_hi:
     .byte >itn_80, >itn_81
     .byte >itn_82, >itn_83, >itn_84, >itn_85, >itn_86, >itn_87
 it_name_hi_end:
+#else
+it_name_hi_end:
+#endif
 
 // Tokenized item-name string pool.
 // Bytes below $80 are literal screen codes; bytes $80-$95 expand through

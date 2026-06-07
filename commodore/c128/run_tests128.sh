@@ -943,7 +943,7 @@ for runtime_name, expected_load in (
     ("128.proj.prg", 0x0A80),
     ("128.fdisk.prg", 0x0D60),
     ("128.world.prg", 0x6000),
-    ("128.item.prg", 0x8D00),
+    ("128.item.prg", 0x8C70),
     ("128.select.prg", 0xA800),
     ("128.persist.prg", 0xAF00),
     ("128.play.prg", 0xAF00),
@@ -1417,7 +1417,7 @@ required_chains = [
     ]),
     ("store_buy_prompt", store_mod, [
         "ldx #MSG_BUY_WHICH",
-        "jsr show_msg",
+        "jsr store_clear_show_msg",
         "jsr input_prepare_followup_key",
         "jsr hal_input_get_key",
     ]),

@@ -1755,12 +1755,16 @@ re_negate_a:
 .assert "it_weight size", it_dmg_dice - it_weight, ITEM_TYPE_COUNT
 .assert "it_dmg_dice size", it_dmg_sides - it_dmg_dice, ITEM_TYPE_COUNT
 .assert "it_dmg_sides size", it_base_ac - it_dmg_sides, ITEM_TYPE_COUNT
-.assert "it_base_ac size", it_cost_lo - it_base_ac, ITEM_TYPE_COUNT
-.assert "it_cost_lo size", it_cost_hi - it_cost_lo, ITEM_TYPE_COUNT
-.assert "it_cost_hi size", it_min_level - it_cost_hi, ITEM_TYPE_COUNT
-.assert "it_min_level size", it_missile - it_min_level, ITEM_TYPE_COUNT
-.assert "it_name_lo size", it_name_hi - it_name_lo, ITEM_TYPE_COUNT
+.assert "it_base_ac size", it_base_ac_end - it_base_ac, ITEM_TYPE_COUNT
+.assert "it_cost_lo size", it_cost_lo_end - it_cost_lo, ITEM_TYPE_COUNT
+#if !(C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME)
+.assert "it_cost_hi size", it_cost_hi_end - it_cost_hi, ITEM_TYPE_COUNT
+#endif
+.assert "it_min_level size", it_min_level_end - it_min_level, ITEM_TYPE_COUNT
+.assert "it_name_lo size", it_name_lo_end - it_name_lo, ITEM_TYPE_COUNT
+#if !(C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME)
 .assert "it_name_hi size", it_name_hi_end - it_name_hi, ITEM_TYPE_COUNT
+#endif
 .assert "pit_sorted size", pit_sorted_end - pit_sorted, ITEM_TYPE_COUNT - 2
 .assert "pit_level_bounds size", pit_level_bounds_end - pit_level_bounds, PIT_MAX_LEVEL + 1
 .assert "pick_item_type entry stays resident", pick_item_type < $e000, true

@@ -1179,6 +1179,7 @@ c128_test_cache_survival_fail_sym:
 c128_test_cache_survival_pass_sym:
     brk
 #endif
+
 #if C128_TEST_TITLE_ART_CONTENT
 c128_test_title_art_fail_sym:
     brk
@@ -3439,7 +3440,56 @@ tool_ego_prefix_hi:
     .byte >ego_tool_prefix_orcish,  >ego_tool_prefix_dwarven
 #import "../common/item.s"
 #import "../common/store_data.s"
+ego_str_holy_avenger_common:
+    .text " (Holy Avenger)" ; .byte 0
 c128_resident_items_end:
+
+.segment Default
+#if C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_SPELL_CANCEL || C128_TEST_SCRIPTED_BOOK_OVERLAY || C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY
+c128_test_seed_scripted_spell_state:
+    lda #0
+    sta c128_test_spell_success_count
+    sta c128_test_spell_return_pending
+    sta c128_test_spell_return_count
+    lda #CLASS_MAGE
+    sta player_data + PL_CLASS
+    lda #SPELL_MAGE
+    sta player_data + PL_SPELL_TYPE
+    lda #50
+    sta zp_player_lvl
+    sta player_data + PL_LEVEL
+    lda #18
+    sta player_data + PL_INT_CUR
+    lda #20
+    sta zp_player_mp
+    sta player_data + PL_MANA
+    sta zp_player_mmp
+    sta player_data + PL_MAX_MANA
+    lda #1
+    sta player_data + PL_SPELLS_LEARNT_0
+    lda #0
+    sta player_data + PL_SPELLS_LEARNT_1
+    sta player_data + PL_SPELLS_LEARNT_2
+    sta player_data + PL_SPELLS_LEARNT_3
+    sta player_data + PL_SPELLS_WORKED_0
+    sta player_data + PL_SPELLS_WORKED_1
+    sta player_data + PL_SPELLS_WORKED_2
+    sta player_data + PL_SPELLS_WORKED_3
+    sta player_data + PL_SPELLS_FORGOTTEN_0
+    sta player_data + PL_SPELLS_FORGOTTEN_1
+    sta player_data + PL_SPELLS_FORGOTTEN_2
+    sta player_data + PL_SPELLS_FORGOTTEN_3
+    sta player_data + PL_NEW_SPELLS
+    lda #99
+    ldx #31
+!c128_test_spell_order_clear:
+    sta player_data + PL_SPELL_ORDER,x
+    dex
+    bpl !c128_test_spell_order_clear-
+    lda #0
+    sta player_data + PL_SPELL_ORDER
+    rts
+#endif
 
 .segment C128ResidentSelect
 c128_resident_select_start:
@@ -3499,15 +3549,13 @@ at_surface_str:
 #import "../common/player_move.s"
 #import "../common/ui_help_clear.s"
 #import "../common/wizard.s"
+#define C128_SCRIPTED_SPELL_SEED_EXTERNAL
 #define DISARM_COMMAND_EXTERNAL
 #import "../common/game_loop.s"
 #undef DISARM_COMMAND_EXTERNAL
+#undef C128_SCRIPTED_SPELL_SEED_EXTERNAL
 #import "../common/turn.s"
 #import "../common/player_magic_state.s"
-#if C128
-ego_str_holy_avenger_common:
-    .text " (Holy Avenger)" ; .byte 0
-#endif
 #if C128_TEST_PERF_P1_TRACE
 perf_p1_decision:
     .byte PERF_P1_DECISION_NONE

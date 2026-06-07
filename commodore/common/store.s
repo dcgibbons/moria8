@@ -62,9 +62,26 @@ load_item_base_cost:
     tax
     lda it_cost_lo,x
     sta zp_temp0
+#if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME
+    lda #0
+    sta zp_temp1
+    txa
+    ldy #IT_COST_HI_EXTRA_COUNT - 1
+!libc_hi_loop:
+    cmp it_cost_hi_extra_id,y
+    beq !libc_hi_found+
+    dey
+    bpl !libc_hi_loop-
+    rts
+!libc_hi_found:
+    lda it_cost_hi_extra_value,y
+    sta zp_temp1
+    rts
+#else
     lda it_cost_hi,x
     sta zp_temp1
     rts
+#endif
 
 // apply_tool_ego_multiplier — Multiply base cost by ego factor for digging tools (R14)
 // Input: zp_temp0/1 = base cost, sb_item_type and sb_item_ego set

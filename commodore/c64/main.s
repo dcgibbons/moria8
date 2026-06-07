@@ -275,6 +275,16 @@ tramp_dig_ability:
 #undef DISARM_COMMAND_EXTERNAL
 #import "../common/monster.s"
 #import "../common/tier_manager.s"
+
+// Overlay state is platform-owned so product/test variant layout changes
+// cannot place these bytes inside later resident code.
+current_overlay: .byte 0
+ovl_reu_start_lo: .byte 0, 0, 0, 0, 0, 0, 0, 0, 0
+ovl_reu_start_hi: .byte 0, 0, 0, 0, 0, 0, 0, 0, 0
+ovl_reu_size_lo:  .byte 0, 0, 0, 0, 0, 0, 0, 0, 0
+ovl_reu_size_hi:  .byte 0, 0, 0, 0, 0, 0, 0, 0, 0
+ol_target:        .byte 0
+
 #define OVERLAY_LOAD_PROMPT_GAME
 #import "../common/overlay.s"
 #undef OVERLAY_LOAD_PROMPT_GAME

@@ -86,21 +86,21 @@ start addresses and all cross-boundary limits.
 | `$1000-$19FD` | `128.runtime` low runtime payload |
 | `$1A00-$1AFF` | Floor-item table |
 | `$1B00-$1BFF` | Creature scratch |
-| `$1C01-$5F60` | Main program image: boot path, loaders, trampolines, wrappers |
-| `$6000-$8C9B` | `128.world` resident world payload, including C128 cache/overlay state, overlay filename tables, and C128 infravision helpers |
-| `$8D00-$A7FF` | `128.item` resident item payload |
+| `$1C0E-$5F60` | Main program image: boot path, loaders, trampolines, wrappers |
+| `$6000-$8C69` | `128.world` resident world payload, including C128 cache/overlay state, overlay filename tables, and C128 infravision helpers |
+| `$8C70-$A780` | `128.item` resident item payload |
 | `$A800-$AAE0` | `128.select` resident selector payload |
 | `$AB00-$AEFF` | `128.diskio` payload |
-| `$AF00-$B908` | `128.persist` save/modal payload when loaded |
-| `$AF00-$CF75` | `128.play` gameplay payload when loaded |
+| `$AF00-$B849` | `128.persist` save/modal payload when loaded |
+| `$AF00-$CFBD` | `128.play` gameplay payload when loaded |
 | `$D000-$DFFF` | I/O hole; forbidden for ordinary runtime payloads |
 | `$E000-$EFFF` | Overlay execution window |
-| `$F000-$FEDD` | Reloadable banked runtime payload, asserted below `$FF00` |
+| `$F000-$FE9A` | Reloadable banked runtime payload, asserted below `$FF00` |
 
 The `$AF00-$CFFF` resident slot is mutually exclusive. Save/load uses resident
 broker routines to load `128.persist`, perform the operation, then restore
 `128.play` before returning to gameplay. `128.play` must remain entirely below
-`$D000`; the current product build leaves `$CF31-$CFFF` free before the I/O
+`$D000`; the current product build leaves `$CFBE-$CFFF` free before the I/O
 hole.
 
 Recent size pressure in `128.play` was handled by moving data, not by weakening

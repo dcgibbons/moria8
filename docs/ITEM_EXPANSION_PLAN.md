@@ -26,28 +26,90 @@ architecture project.
 
 ## Current Moria8 Constraints
 
-Current Moria8 has 82 item type IDs.
+Current Moria8 has 88 item type IDs.
 
 Relevant current constants:
 
 | Constant | Value | Meaning |
 |---|---:|---|
-| `ITEM_TYPE_COUNT` | 82 | Current item catalog size |
+| `ITEM_TYPE_COUNT` | 88 | Current item catalog size |
 | `MAX_FLOOR_ITEMS` | 42 | Max live floor item slots |
 | `MAX_INV_SLOTS` | 22 | Carried inventory slots |
 | `MAX_EQUIP_SLOTS` | 9 | Equipment slots |
 | `TOTAL_INV_SLOTS` | 31 | Inventory + equipment slots |
 | `FI_EMPTY` | `$ff` | Empty item slot sentinel |
 
-Current linked headroom:
+Current linked headroom after the 88-item slice:
 
-| Target | Main/free | Items overlay/free | Banked/free | Verdict |
-|---|---:|---:|---:|---|
-| C64 | 1156 bytes below `$C000` | 972 bytes | 7 bytes below `$FFFA` | Tight; overlay-only growth |
-| C128 | 60 bytes below current limit | 157 bytes | about 367 bytes below `$FFFA` | Blocked without layout work |
-| Plus/4 | 1610 bytes below `$C800` | 972 bytes | 502 bytes below `$FF00` | Workable but not free |
+| Target | Most relevant free space | Verdict |
+|---|---:|---|
+| C64 | town overlay 30 bytes, UI overlay 94 bytes, items overlay 236 bytes, banked runtime 69 bytes | Tight; overlay-only growth |
+| C128 | `128.item` 127 bytes, `128.world` 6 bytes, town overlay 136 bytes, UI overlay 11 bytes, death overlay 8 bytes | Not enough for the next 8-row slice without one more catalog-local relief step |
+| Plus/4 | banked runtime 52 bytes, UI overlay 94 bytes, items overlay 952 bytes | Workable but still tight |
 
 The C128 is the limiting platform.
+
+## Measured C128 Resident Item Ledger
+
+Before Phase 1A, the C128 problem was not theoretical. `128.item.prg` occupied
+7,051 bytes at `$8C70-$A7FA`, leaving only 5 bytes before the resident selector
+at `$A800`.
+
+Current measured chunks from `commodore/c128/main.sym`:
+
+| Chunk | Address range | Bytes | Notes |
+|---|---:|---:|---|
+| C128 resident item prefix | `$8C70-$8C90` | 33 | C128-only strings/scratch before common item import |
+| fixed SoA tables `category..min_level` | `$8C91-$9000` | 880 | 10 resident bytes per item |
+| compact missile table | `$9001-$9015` | 21 | Bounded ranged-only table |
+| known-name pointer tables | `$9016-$90C5` | 176 | 2 resident bytes per item |
+| name-token pointer tables | `$90C6-$90FB` | 54 | 27 token pointers |
+| name-token strings | `$90FC-$91CC` | 209 | Shared name fragments |
+| known item-name streams | `$91CD-$94BD` | 753 | Fixed/tokenized item names |
+| inventory/equipment arrays | `$94BE-$95B5` | 248 | Live item slots |
+| floor stat sidecars | `$95B6-$9633` | 126 | Split floor hit/dam/AC sidecars |
+| glyph arrays | `$9634-$963F` | 12 | Glyph-of-warding state |
+| item add/generation scratch | `$9640-$964B` | 12 | Floor-add scratch |
+| core item code before spawn | `$964C-$990D` | 706 | Add/remove/find helpers |
+| spawn/pickup/description/drop code | `$990E-$9DF1` | 1,252 | Live gameplay item logic |
+| enchantment scratch/code | `$9DF2-$9F5F` | 366 | Generation-time equipment magic |
+| `id_known` save runway | `$9F60-$9FBF` | 96 | Already fixed at `ITEM_ID_CAPACITY = 96` |
+| unknown-description metadata | `$9FC0-$A017` | 88 | 1 byte per implemented item |
+| shuffle RAM tables | `$A018-$A03D` | 38 | Potion/scroll/ring/wand/staff shuffles |
+| unknown-name strings | `$A03E-$A106` | 201 | Randomized class names |
+| unknown-name pointers/colors | `$A107-$A1B6` | 176 | Randomized class pointer/color tables |
+| identification code/decode buffer | `$A1B7-$A7FA` | 1,604 | Init, lookup, decode, and buffer |
+
+Raw growth from 88 to 96 is not eight bytes. It is at least:
+
+| Data | 8-item growth |
+|---|---:|
+| fixed SoA tables | 80 bytes |
+| known-name pointers | 16 bytes |
+| unknown-description metadata | 8 bytes |
+| item-name streams | usually 50-120 bytes |
+| generation bucket table | 8 bytes, but already in the dungeon-generation overlay |
+| `id_known` | 0 bytes until capacity exceeds 96 |
+
+That meant the next 8 rows needed roughly 150-230 bytes of `128.item` relief
+before behavior/effect code. Reaching 128 with the current byte-per-row model
+would still need roughly 900-1,200 resident bytes plus effect code.
+
+Phase 1A recovered resident space by replacing full base-cost high bytes with
+sparse high-byte exceptions and removing the product known-name high-byte table.
+An attempted C128 move of `it_cost_lo` to `TownOverlay` was rejected after
+runtime testing because town entry could CPU JAM when the executable overlay
+started with data. C64 and Plus/4 still place the low cost table in
+`TownOverlay`; C128 keeps it in `128.item`.
+
+| Change | C128 `128.item` impact | Tradeoff |
+|---|---:|---|
+| Keep `it_cost_lo` resident on C128 | 0 resident bytes | Correctness fix: town overlay entry remains code-owned. |
+| Replace `it_cost_hi` with sparse high-byte exceptions | -79 resident bytes net | Store pricing scans 9 high-byte exceptions. |
+| Remove product `it_name_hi` and derive high bytes from `it_name_lo` page crossings | about -62 resident bytes net | Name lookup spends a small loop instead of a resident high-byte table. |
+
+After the corrected Phase 1A, `128.item.prg` occupies `$8C70-$A780`, leaving
+127 bytes before `128.select` at `$A800`.
 
 ## Current Resident Item Model
 
@@ -639,6 +701,10 @@ Phase 0 implementation status:
 Goal: fill the existing 96-ID runway with high-value ordinary loot and a small
 number of low-risk consumable/magic rows.
 
+Current status: IDs `0-87` are implemented. Corrected Phase 1A leaves 127 bytes
+before the C128 selector boundary, so IDs `88-95` should not proceed until one
+more catalog-local relief step lands.
+
 Rules:
 
 - Preserve one-byte item IDs.
@@ -694,12 +760,58 @@ Why this shape:
 
 Implementation slices:
 
-1. Add class/default metadata and tests without changing `ITEM_TYPE_COUNT`.
-2. Add a two-to-four-row fixed-known equipment slice and run product smoke.
-3. Add the rest of the fixed-known equipment rows in small batches.
-4. Expand potion/scroll/ring/wand/staff unknown descriptor pools.
-5. Add IDs `88-95` one randomized family at a time.
-6. Update wizard docs and item catalog docs after each accepted slice.
+1. Complete Phase 1A C128 catalog-storage relief.
+2. Expand potion/scroll/ring/wand/staff unknown descriptor pools only after
+   the C128 relief has landed.
+3. Add IDs `88-95` one randomized family at a time.
+4. Update wizard docs and item catalog docs after each accepted slice.
+
+#### Phase 1A: C128 Catalog-Storage Relief
+
+Goal: create enough `128.item` space for IDs `88-95` without weakening memory
+asserts, shortening player-facing strings, or moving the `$A800` selector
+boundary.
+
+Preferred order:
+
+1. Move known-name pointer tables and known-name streams behind a C128-safe
+   name lookup boundary, or otherwise remove their per-row resident growth from
+   `128.item`. Current resident cost is 929 bytes for known-name pointers plus
+   known name streams, before token tables.
+2. If name relocation is too broad for the first pass, introduce compact
+   numeric/stat profiles for fixed equipment fields. Current fixed SoA tables
+   cost 880 bytes and grow by 10 bytes per row.
+3. Keep `pit_sorted` and `pit_level_bounds` in the dungeon-generation overlay;
+   they are already relocated for product builds and are not the next
+   meaningful resident target.
+4. Avoid moving `C128ResidentSelect`, `C128ResidentDiskIo`, or the `$AF00`
+   play/persist boundary unless the catalog-local options fail. Those are
+   broader C128 layout changes.
+
+Phase 1A acceptance gate:
+
+| Gate | Required proof |
+|---|---|
+| Memory | `128.item` has at least 230 bytes free before `$A800`; more is better. Current corrected Phase 1A leaves 127 bytes, so this gate is not yet met. |
+| No disk churn | Inventory/store/name display does not require per-item disk loads. |
+| Name correctness | All implemented item names still pass item-description tests on C64 and C128. |
+| Product paths | Wizard grant, inventory display, store display, dungeon pickup, and save/load still work. |
+| C128 layout | `make test128` passes if the implementation changes C128 loading, banking, copied code, or runtime segment starts. |
+
+Phase 1A implementation status:
+
+- Partially complete. C64 and Plus/4 move `it_cost_lo` to `TownOverlay`, but
+  C128 keeps `it_cost_lo` resident after runtime testing exposed a town-entry
+  CPU JAM when the executable town overlay started with cost data.
+- Complete. Product builds replaced the full resident `it_cost_hi` table with
+  sparse high-byte exceptions used by store pricing.
+- Complete. Product builds no longer emit the resident `it_name_hi` table.
+  Known-name lookup derives the stream high byte by counting low-byte page
+  crossings in the existing `it_name_lo` table. Names remain resident; this is
+  not a disk-backed name path.
+- C128 `128.item` now ends at `$A780`, leaving 127 bytes before `$A800`.
+  C128 town overlay now ends at `$EF78`, leaving 136 bytes; C64 and Plus/4
+  town overlays still end at `$EFE1`, leaving 30 bytes.
 
 Phase 1 acceptance gate:
 
@@ -840,12 +952,13 @@ Implementation checkpoints already completed:
   C64 main-segment fit assert, so additional rows need byte recovery or catalog
   data relocation first.
 - C128 resident items and selector layout is extremely tight: `128.item.prg`
-  currently ends at `$A7FF`, exactly at the selector boundary, and
-  `128.select.prg` currently ends at `$AAE0`, 31 bytes before the `$AB00`
-  disk-I/O payload. Future item or selector work must recover bytes or move
-  code before adding behavior there.
-- Verification checkpoint: `make build`, `make test64`, and `make test128-fast`
-  pass after the first catalog breadth slice.
+  currently occupies `$8C70-$A7FA`, leaving 5 bytes before the `$A800`
+  selector payload, and `128.select.prg` currently ends at `$AAE0`, 31 bytes
+  before the `$AB00` disk-I/O payload. Future item work must recover catalog
+  bytes before adding IDs `88-95`.
+- Verification checkpoint: `make build`, focused C64 item/store/save tests,
+  `make test128-fast`, and focused Plus/4 runtime smoke passed after the
+  88-item slice.
 
 Good 128-item target mix:
 
