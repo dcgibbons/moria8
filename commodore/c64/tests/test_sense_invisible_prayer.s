@@ -3,8 +3,7 @@
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_bootstrap)
 
-.pc = $E000 "Result Buffer"
-tc_results: .fill 3, $ff
+.label tc_results = $0400
 
 .pc = $080E "Bootstrap"
 
@@ -319,5 +318,7 @@ test_start:
     sta tc_results + 2
     jmp test_finish
 
+    // Keep the harness-selected Test Code end out of imported product code.
+    .fill $bff0 - *, $ea
 test_done_break:
     brk

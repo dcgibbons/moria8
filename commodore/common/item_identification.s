@@ -27,6 +27,34 @@ id_known:
     .byte 1, 1, 1, 1, 1, 1      // 55-60: Books — always known
     .byte 1                      // 61: Flask of Oil — always known
     .byte 1, 1                  // 62-63: Digging tools — always known
+    .fill ITEM_TYPE_COUNT - LEGACY_ITEM_TYPE_COUNT, 1
+    .fill ITEM_ID_CAPACITY - ITEM_TYPE_COUNT, 0
+.assert "id_known capacity", it_unknown_desc - id_known, ITEM_ID_CAPACITY
+
+.const IUK_FIXED  = 0
+.const IUK_POTION = $10
+.const IUK_SCROLL = $20
+.const IUK_RING   = $30
+.const IUK_WAND   = $40
+.const IUK_STAFF  = $50
+.const IUK_CLASS_MASK = $f0
+.const IUK_INDEX_MASK = $0f
+
+// Packed unknown-description metadata: high nibble = class, low nibble = class-local index.
+// Fixed rows render their real name/color even if a bad save marks them unknown.
+it_unknown_desc:
+    .fill 17, IUK_FIXED
+    .byte IUK_POTION | 0, IUK_POTION | 1, IUK_POTION | 2
+    .byte IUK_SCROLL | 0, IUK_SCROLL | 1, IUK_SCROLL | 2
+    .byte IUK_RING | 0, IUK_RING | 1
+    .byte IUK_POTION | 3, IUK_POTION | 4, IUK_POTION | 5, IUK_POTION | 6
+    .byte IUK_POTION | 7, IUK_POTION | 8, IUK_POTION | 9
+    .byte IUK_SCROLL | 3, IUK_SCROLL | 4, IUK_SCROLL | 5, IUK_SCROLL | 6
+    .byte IUK_SCROLL | 7, IUK_SCROLL | 8, IUK_SCROLL | 9
+    .byte IUK_WAND | 0, IUK_WAND | 1, IUK_WAND | 2, IUK_WAND | 3
+    .byte IUK_STAFF | 0, IUK_STAFF | 1, IUK_STAFF | 2, IUK_STAFF | 3
+    .fill ITEM_TYPE_COUNT - 47, IUK_FIXED
+.assert "it_unknown_desc size", potion_shuffle - it_unknown_desc, ITEM_TYPE_COUNT
 
 // Shuffle tables: map category-local index → description index
 // 12 potions, 12 scrolls, 4 rings — full pool shuffled, first N used
@@ -37,24 +65,24 @@ wand_shuffle:   .fill 5, 0
 staff_shuffle:  .fill 5, 0
 
 // Unidentified name strings (screen codes, null-terminated)
-pn_0:  .text "a Blue" ; .byte ITOK_POTION_SUFFIX ; .byte 0
-pn_1:  .text "a Red" ; .byte ITOK_POTION_SUFFIX ; .byte 0
-pn_2:  .text "a Green" ; .byte ITOK_POTION_SUFFIX ; .byte 0
-pn_3:  .text "a Yellow" ; .byte ITOK_POTION_SUFFIX ; .byte 0
-pn_4:  .text "a Clear" ; .byte ITOK_POTION_SUFFIX ; .byte 0
-pn_5:  .text "an Azure" ; .byte ITOK_POTION_SUFFIX ; .byte 0
-pn_6:  .text "a Smoky" ; .byte ITOK_POTION_SUFFIX ; .byte 0
-pn_7:  .text "a Brown" ; .byte ITOK_POTION_SUFFIX ; .byte 0
+pn_0:  .byte ITOK_A_SPACE ; .text "Blue" ; .byte ITOK_POTION_SUFFIX ; .byte 0
+pn_1:  .byte ITOK_A_SPACE ; .text "Red" ; .byte ITOK_POTION_SUFFIX ; .byte 0
+pn_2:  .byte ITOK_A_SPACE ; .text "Green" ; .byte ITOK_POTION_SUFFIX ; .byte 0
+pn_3:  .byte ITOK_A_SPACE ; .text "Yellow" ; .byte ITOK_POTION_SUFFIX ; .byte 0
+pn_4:  .byte ITOK_A_SPACE ; .text "Clear" ; .byte ITOK_POTION_SUFFIX ; .byte 0
+pn_5:  .byte ITOK_AN_SPACE ; .text "Azure" ; .byte ITOK_POTION_SUFFIX ; .byte 0
+pn_6:  .byte ITOK_A_SPACE ; .text "Smoky" ; .byte ITOK_POTION_SUFFIX ; .byte 0
+pn_7:  .byte ITOK_A_SPACE ; .text "Brown" ; .byte ITOK_POTION_SUFFIX ; .byte 0
 pn_8:  .byte ITOK_A_SILVER ; .byte ITOK_POTION_SUFFIX ; .byte 0
-pn_9:  .text "a Pink" ; .byte ITOK_POTION_SUFFIX ; .byte 0
+pn_9:  .byte ITOK_A_SPACE ; .text "Pink" ; .byte ITOK_POTION_SUFFIX ; .byte 0
 pn_10: .text "a" ; .byte ITOK_CLOUD_SUFFIX ; .text "y" ; .byte ITOK_POTION_SUFFIX ; .byte 0
-pn_11: .text "a " ; .byte ITOK_GOLD ; .text "en" ; .byte ITOK_POTION_SUFFIX ; .byte 0
+pn_11: .byte ITOK_A_SPACE ; .byte ITOK_GOLD ; .text "en" ; .byte ITOK_POTION_SUFFIX ; .byte 0
 
-sn_0:  .text "a White " ; .byte ITOK_SCROLL ; .byte 0
-sn_1:  .text "a Brown " ; .byte ITOK_SCROLL ; .byte 0
-sn_2:  .text "a Grey " ; .byte ITOK_SCROLL ; .byte 0
-sn_3:  .text "a Faded " ; .byte ITOK_SCROLL ; .byte 0
-sn_4:  .text "a Glowing " ; .byte ITOK_SCROLL ; .byte 0
+sn_0:  .byte ITOK_A_SPACE ; .text "White " ; .byte ITOK_SCROLL ; .byte 0
+sn_1:  .byte ITOK_A_SPACE ; .text "Brown " ; .byte ITOK_SCROLL ; .byte 0
+sn_2:  .byte ITOK_A_SPACE ; .text "Grey " ; .byte ITOK_SCROLL ; .byte 0
+sn_3:  .byte ITOK_A_SPACE ; .text "Faded " ; .byte ITOK_SCROLL ; .byte 0
+sn_4:  .byte ITOK_A_SPACE ; .text "Glowing " ; .byte ITOK_SCROLL ; .byte 0
 sn_5:  .byte ITOK_SCROLL_OF_ART ; .text "Lumen" ; .byte 0
 sn_6:  .byte ITOK_SCROLL_OF_ART ; .text "Veritas" ; .byte 0
 sn_7:  .byte ITOK_SCROLL_OF_ART ; .text "Dura" ; .byte 0
@@ -63,7 +91,7 @@ sn_9:  .byte ITOK_SCROLL_OF_ART ; .text "Acuta" ; .byte 0
 sn_10: .byte ITOK_SCROLL_OF_ART ; .text "Ferox" ; .byte 0
 sn_11: .byte ITOK_SCROLL_OF_ART ; .text "Tutela" ; .byte 0
 
-rn_0: .text "a " ; .byte ITOK_GOLD ; .byte ITOK_RING_SUFFIX ; .byte 0
+rn_0: .byte ITOK_A_SPACE ; .byte ITOK_GOLD ; .byte ITOK_RING_SUFFIX ; .byte 0
 rn_1: .byte ITOK_A_SILVER ; .byte ITOK_RING_SUFFIX ; .byte 0
 rn_2: .text "a Bronze" ; .byte ITOK_RING_SUFFIX ; .byte 0
 rn_3: .byte ITOK_A_COPPER ; .byte ITOK_RING_SUFFIX ; .byte 0
@@ -95,22 +123,22 @@ scroll_colors:
 ring_colors:   .byte COL_YELLOW, COL_LGREY, COL_BROWN, COL_ORANGE
 
 // Wand identification
-wn_0: .text "an Iron " ; .byte ITOK_WAND ; .byte 0
+wn_0: .byte ITOK_AN_SPACE ; .text "Iron " ; .byte ITOK_WAND ; .byte 0
 wn_1: .byte ITOK_A_COPPER ; .text " " ; .byte ITOK_WAND ; .byte 0
 wn_2: .byte ITOK_A_SILVER ; .text " " ; .byte ITOK_WAND ; .byte 0
-wn_3: .text "a Bone " ; .byte ITOK_WAND ; .byte 0
-wn_4: .text "an Oak " ; .byte ITOK_WAND ; .byte 0
+wn_3: .byte ITOK_A_SPACE ; .text "Bone " ; .byte ITOK_WAND ; .byte 0
+wn_4: .byte ITOK_AN_SPACE ; .text "Oak " ; .byte ITOK_WAND ; .byte 0
 
 wand_name_lo: .byte <wn_0, <wn_1, <wn_2, <wn_3, <wn_4
 wand_name_hi: .byte >wn_0, >wn_1, >wn_2, >wn_3, >wn_4
 wand_colors:  .byte COL_LGREY, COL_ORANGE, COL_WHITE, COL_LGREY, COL_BROWN
 
 // Staff identification
-sfn_0: .text "a Birch " ; .byte ITOK_STAFF ; .byte 0
-sfn_1: .text "a Pine " ; .byte ITOK_STAFF ; .byte 0
-sfn_2: .text "a Maple " ; .byte ITOK_STAFF ; .byte 0
-sfn_3: .text "a Willow " ; .byte ITOK_STAFF ; .byte 0
-sfn_4: .text "an Ash " ; .byte ITOK_STAFF ; .byte 0
+sfn_0: .byte ITOK_A_SPACE ; .text "Birch " ; .byte ITOK_STAFF ; .byte 0
+sfn_1: .byte ITOK_A_SPACE ; .text "Pine " ; .byte ITOK_STAFF ; .byte 0
+sfn_2: .byte ITOK_A_SPACE ; .text "Maple " ; .byte ITOK_STAFF ; .byte 0
+sfn_3: .byte ITOK_A_SPACE ; .text "Willow " ; .byte ITOK_STAFF ; .byte 0
+sfn_4: .byte ITOK_AN_SPACE ; .text "Ash " ; .byte ITOK_STAFF ; .byte 0
 
 staff_name_lo: .byte <sfn_0, <sfn_1, <sfn_2, <sfn_3, <sfn_4
 staff_name_hi: .byte >sfn_0, >sfn_1, >sfn_2, >sfn_3, >sfn_4
@@ -122,27 +150,24 @@ staff_colors:  .byte COL_WHITE, COL_BROWN, COL_ORANGE, COL_LGREEN, COL_LGREY
 // Clobbers: A, X, Y
 // ============================================================
 item_init_identification:
-    // Reset id_known: types 0-16 = known(1), 17-46 = unknown(0), 47-48 = known(1)
-    ldx #16
-    lda #1
-!iid_known_1:
+    // Clear the full save runway, then mark implemented fixed-description IDs known.
+    ldx #ITEM_ID_CAPACITY - 1
+    lda #0
+!iid_clear:
     sta id_known,x
     dex
-    bpl !iid_known_1-
-    ldx #17
-    lda #0
-!iid_unknown:
-    sta id_known,x
-    inx
-    cpx #47                     // Up to type 46 (inclusive)
-    bcc !iid_unknown-
-    ldx #47
+    bpl !iid_clear-
+    ldx #0
+!iid_default:
+    lda it_unknown_desc,x
+    and #IUK_CLASS_MASK
+    bne !iid_next+
     lda #1
-!iid_known_2:
     sta id_known,x
+!iid_next:
     inx
     cpx #ITEM_TYPE_COUNT
-    bcc !iid_known_2-
+    bcc !iid_default-
 
     // Initialize shuffle tables to identity (0..11 / 0..3 / 0..4)
     ldx #11                         // For 12 elements (0-11)
@@ -243,24 +268,25 @@ item_get_name_ptr:
 
     // Unknown — look up randomized description
 !ignp_unknown:
-    cpx #20
-    bcc !ignp_potion_low+
-    cpx #23
-    bcc !ignp_scroll_low+
-    cpx #25
-    bcc !ignp_ring+
-    cpx #32
-    bcc !ignp_potion_high+
-    cpx #39
-    bcc !ignp_scroll_high+
-    cpx #43
-    bcc !ignp_wand+
+    stx item_display_id
+    lda it_unknown_desc,x
+    and #IUK_CLASS_MASK
+    cmp #IUK_POTION
+    beq !ignp_potion+
+    cmp #IUK_SCROLL
+    beq !ignp_scroll+
+    cmp #IUK_RING
+    beq !ignp_ring+
+    cmp #IUK_WAND
+    beq !ignp_wand+
+    cmp #IUK_STAFF
+    beq !ignp_staff+
+    jmp !ignp_known+
 
 !ignp_staff:
-    // Local index = type - 43
-    txa
-    sec
-    sbc #43
+    ldx item_display_id
+    lda it_unknown_desc,x
+    and #IUK_INDEX_MASK
     tax
     lda staff_shuffle,x
     tax
@@ -270,18 +296,11 @@ item_get_name_ptr:
     sta zp_ptr0_hi
     jmp item_decode_name_ptr
 
-!ignp_potion_high:
-    txa
-    sec
-    sbc #22                        // 25-31 -> 3-9
+!ignp_potion:
+    ldx item_display_id
+    lda it_unknown_desc,x
+    and #IUK_INDEX_MASK
     tax
-    bcs !ignp_potion_have_idx+
-!ignp_potion_low:
-    txa
-    sec
-    sbc #17                        // 17-19 -> 0-2
-    tax
-!ignp_potion_have_idx:
     lda potion_shuffle,x            // Shuffled description index
     tax
     lda potion_name_lo,x
@@ -290,18 +309,11 @@ item_get_name_ptr:
     sta zp_ptr0_hi
     jmp item_decode_name_ptr
 
-!ignp_scroll_high:
-    txa
-    sec
-    sbc #29                        // 32-38 -> 3-9
+!ignp_scroll:
+    ldx item_display_id
+    lda it_unknown_desc,x
+    and #IUK_INDEX_MASK
     tax
-    bcs !ignp_scroll_have_idx+
-!ignp_scroll_low:
-    txa
-    sec
-    sbc #20                        // 20-22 -> 0-2
-    tax
-!ignp_scroll_have_idx:
     lda scroll_shuffle,x
     tax
     lda scroll_name_lo,x
@@ -316,10 +328,9 @@ item_get_name_ptr:
     jmp item_decode_name_ptr
 
 !ignp_ring:
-    // Local index = type - 23
-    txa
-    sec
-    sbc #23
+    ldx item_display_id
+    lda it_unknown_desc,x
+    and #IUK_INDEX_MASK
     tax
     lda ring_shuffle,x
     tax
@@ -330,10 +341,9 @@ item_get_name_ptr:
     jmp item_decode_name_ptr
 
 !ignp_wand:
-    // Local index = type - 39
-    txa
-    sec
-    sbc #39
+    ldx item_display_id
+    lda it_unknown_desc,x
+    and #IUK_INDEX_MASK
     tax
     lda wand_shuffle,x
     tax
@@ -356,11 +366,19 @@ item_get_name_ptr:
     cmp #ICAT_BOOK
     beq !ignp_book_prefix+
 !ignp_raw_known:
+#if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME
+    jsr item_load_known_name_ptr
+#else
     lda it_name_lo,x
     sta zp_ptr0
     lda it_name_hi,x
     sta zp_ptr0_hi
+#endif
+#if C128_PRODUCT_OVERLAY_RUNTIME
+    jmp item_decode_name_ptr_bank1
+#else
     jmp item_decode_name_ptr
+#endif
 !ignp_qualified:
     ldy #0
 !ignp_copy_prefix:
@@ -372,11 +390,19 @@ item_get_name_ptr:
 !ignp_prefix_done:
     sty item_name_dst_idx
     ldx item_display_id
+#if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME
+    jsr item_load_known_name_ptr
+#else
     lda it_name_lo,x
     sta zp_ptr0
     lda it_name_hi,x
     sta zp_ptr0_hi
+#endif
+#if C128_PRODUCT_OVERLAY_RUNTIME
+    jmp item_decode_name_ptr_bank1_at_dst
+#else
     jmp item_decode_name_ptr_at_dst
+#endif
 
 !ignp_potion_prefix:
     lda #<idgp_potion_prefix
@@ -413,6 +439,35 @@ idgp_ring_prefix:        .text "Ring of " ; .byte 0
 idgp_mage_book_prefix:   .text "Spellbook " ; .byte 0
 idgp_priest_book_prefix: .text "Holy Book of Prayers " ; .byte 0
 item_display_id: .byte 0
+
+#if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME
+// item_load_known_name_ptr — Resolve a known-name stream pointer without the
+// resident high-byte table. Name streams are emitted in item-ID order, so a
+// low-byte wrap between adjacent entries means the stream crossed a page.
+// Input: X = item type ID
+// Output: zp_ptr0/zp_ptr0_hi = tokenized known-name stream
+// Clobbers: A, Y
+item_load_known_name_ptr:
+    stx item_display_id
+    lda it_name_lo,x
+    sta zp_ptr0
+    lda #>itn_0
+    sta zp_ptr0_hi
+    txa
+    beq !ilkn_done+
+    ldy #0
+!ilkn_loop:
+    lda it_name_lo + 1,y
+    cmp it_name_lo,y
+    bcs !ilkn_same_page+
+    inc zp_ptr0_hi
+!ilkn_same_page:
+    iny
+    cpy item_display_id
+    bcc !ilkn_loop-
+!ilkn_done:
+    rts
+#endif
 
 // Decode an item-name token stream from zp_ptr0 into item_name_decode_buf.
 // Bytes below $80 copy literally; bytes $80+ index item_name_token_lo/hi.
@@ -469,7 +524,65 @@ item_decode_name_ptr_at_dst:
     sta zp_ptr0_hi
     rts
 
-item_name_decode_buf: .fill HD_DECODE_BUF_SIZE, 0
+#if C128_PRODUCT_OVERLAY_RUNTIME
+// C128 known item-name streams live in Bank 1 DB RAM. Token strings remain in
+// Bank 0 resident item data, so only source stream reads use the MMU helper.
+item_decode_name_ptr_bank1:
+    lda #0
+    sta item_name_dst_idx
+item_decode_name_ptr_bank1_at_dst:
+    lda zp_ptr1
+    sta item_name_save_ptr1
+    lda zp_ptr1_hi
+    sta item_name_save_ptr1_hi
+    lda #0
+    sta item_name_src_idx
+!idnp_loop:
+    ldy item_name_src_idx
+    jsr mmu_safe_db_read_ptr0
+    beq !idnp_done+
+    bmi !idnp_token+
+    ldx item_name_dst_idx
+    sta item_name_decode_buf,x
+    inc item_name_dst_idx
+    inc item_name_src_idx
+    bne !idnp_loop-
+!idnp_token:
+    and #$7f
+    tax
+    lda item_name_token_lo,x
+    sta zp_ptr1
+    lda item_name_token_hi,x
+    sta zp_ptr1_hi
+    ldy #0
+!idnp_copy_token:
+    lda (zp_ptr1),y
+    beq !idnp_token_done+
+    ldx item_name_dst_idx
+    sta item_name_decode_buf,x
+    inc item_name_dst_idx
+    iny
+    bne !idnp_copy_token-
+!idnp_token_done:
+    inc item_name_src_idx
+    bne !idnp_loop-
+!idnp_done:
+    ldx item_name_dst_idx
+    lda #0
+    sta item_name_decode_buf,x
+    lda item_name_save_ptr1
+    sta zp_ptr1
+    lda item_name_save_ptr1_hi
+    sta zp_ptr1_hi
+    lda #<item_name_decode_buf
+    sta zp_ptr0
+    lda #>item_name_decode_buf
+    sta zp_ptr0_hi
+    rts
+#endif
+
+.const ITEM_NAME_DECODE_BUF_SIZE = 48
+item_name_decode_buf: .fill ITEM_NAME_DECODE_BUF_SIZE, 0
 item_name_src_idx: .byte 0
 item_name_dst_idx: .byte 0
 item_name_save_ptr1: .byte 0
@@ -488,23 +601,25 @@ item_get_floor_color:
     bne !igfc_known+
 
     // Unknown — return randomized color
-    cpx #20
-    bcc !igfc_potion_low+
-    cpx #23
-    bcc !igfc_scroll_low+
-    cpx #25
-    bcc !igfc_ring+
-    cpx #32
-    bcc !igfc_potion_high+
-    cpx #39
-    bcc !igfc_scroll_high+
-    cpx #43
-    bcc !igfc_wand+
+    stx item_display_id
+    lda it_unknown_desc,x
+    and #IUK_CLASS_MASK
+    cmp #IUK_POTION
+    beq !igfc_potion+
+    cmp #IUK_SCROLL
+    beq !igfc_scroll+
+    cmp #IUK_RING
+    beq !igfc_ring+
+    cmp #IUK_WAND
+    beq !igfc_wand+
+    cmp #IUK_STAFF
+    beq !igfc_staff+
+    jmp !igfc_known+
 
 !igfc_staff:
-    txa
-    sec
-    sbc #43
+    ldx item_display_id
+    lda it_unknown_desc,x
+    and #IUK_INDEX_MASK
     tax
     lda staff_shuffle,x
     tax
@@ -515,44 +630,30 @@ item_get_floor_color:
     lda it_color,x
     rts
 
-!igfc_potion_high:
-    txa
-    sec
-    sbc #22
+!igfc_potion:
+    ldx item_display_id
+    lda it_unknown_desc,x
+    and #IUK_INDEX_MASK
     tax
-    bcs !igfc_potion_have_idx+
-!igfc_potion_low:
-    txa
-    sec
-    sbc #17
-    tax
-!igfc_potion_have_idx:
     lda potion_shuffle,x
     tax
     lda potion_colors,x
     rts
 
-!igfc_scroll_high:
-    txa
-    sec
-    sbc #29
+!igfc_scroll:
+    ldx item_display_id
+    lda it_unknown_desc,x
+    and #IUK_INDEX_MASK
     tax
-    bcs !igfc_scroll_have_idx+
-!igfc_scroll_low:
-    txa
-    sec
-    sbc #20
-    tax
-!igfc_scroll_have_idx:
     lda scroll_shuffle,x
     tax
     lda scroll_colors,x
     rts
 
 !igfc_ring:
-    txa
-    sec
-    sbc #23
+    ldx item_display_id
+    lda it_unknown_desc,x
+    and #IUK_INDEX_MASK
     tax
     lda ring_shuffle,x
     tax
@@ -560,9 +661,9 @@ item_get_floor_color:
     rts
 
 !igfc_wand:
-    txa
-    sec
-    sbc #39
+    ldx item_display_id
+    lda it_unknown_desc,x
+    and #IUK_INDEX_MASK
     tax
     lda wand_shuffle,x
     tax

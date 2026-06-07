@@ -145,6 +145,7 @@ input_get_key_fast:
 show_inv_and_select:
 tramp_spell_list_display:
 combat_kill_message:
+combat_print_winner_message:
 monster_wake:
 projectile_msg_suffix:
 player_calc_hp:
@@ -157,6 +158,7 @@ tunnel_spawn_gold:
 monster_remove:
 combat_award_xp:
 combat_check_levelup:
+combat_note_kill:
 find_random_floor:
 combat_apply_damage_16:
 hal_sound_play:

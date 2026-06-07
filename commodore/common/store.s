@@ -44,7 +44,6 @@ hg_den_hi:     .byte 0
 hg_pct:        .byte 0     // Derived concession percentage (8-bit)
 hg_round:      .byte 0     // Round counter (0-3)
 hg_insults:    .byte 0     // Insult counter per visit
-hg_kicked:     .fill 8, 0  // Per-store kicked flag (resets on town re-entry)
 hg_tmp0:       .byte 0     // Temp for gap/step calculation
 hg_tmp1:       .byte 0
 hg_digit_cnt:  .byte 0     // Digit count for number input
@@ -62,9 +61,26 @@ load_item_base_cost:
     tax
     lda it_cost_lo,x
     sta zp_temp0
+#if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME
+    lda #0
+    sta zp_temp1
+    txa
+    ldy #IT_COST_HI_EXTRA_COUNT - 1
+!libc_hi_loop:
+    cmp it_cost_hi_extra_id,y
+    beq !libc_hi_found+
+    dey
+    bpl !libc_hi_loop-
+    rts
+!libc_hi_found:
+    lda it_cost_hi_extra_value,y
+    sta zp_temp1
+    rts
+#else
     lda it_cost_hi,x
     sta zp_temp1
     rts
+#endif
 
 // apply_tool_ego_multiplier — Multiply base cost by ego factor for digging tools (R14)
 // Input: zp_temp0/1 = base cost, sb_item_type and sb_item_ego set

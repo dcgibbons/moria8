@@ -157,6 +157,7 @@ tunnel_spawn_gold:
 monster_remove:
 combat_award_xp:
 combat_check_levelup:
+combat_note_kill:
 find_random_floor:
 piw_prompt_filtered_inv:
 piw_pick_filtered_inv_key:
@@ -245,6 +246,7 @@ combat_apply_damage_16:
     rts
 
 combat_kill_message:
+combat_print_winner_message:
     inc test_kill_calls
     jsr monster_get_ptr
     ldy #MX_TYPE

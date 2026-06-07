@@ -15,8 +15,11 @@
 // ============================================================
 .const SAVE_MAGIC_SIZE = 8
 .const SAVE_VERSION    = hal_storage_save_version
-.const OLDEST_SAVE_VERSION = SAVE_VERSION
-.const SAVE_FLOOR42_VERSION = SAVE_VERSION
+.const SAVE_V1_VERSION = hal_storage_save_v1_version
+.const OLDEST_SAVE_VERSION = SAVE_V1_VERSION
+.const SAVE_FLOOR42_VERSION = SAVE_V1_VERSION
+.const SAVE_KNOWN96_VERSION = hal_storage_save_known96_version
+.const SAVE_INV31_VERSION = SAVE_VERSION
 .const LOAD_RESULT_OK        = 0
 .const LOAD_RESULT_NOTFOUND  = 1
 .const LOAD_RESULT_CORRUPT   = 2
@@ -249,12 +252,15 @@ save_drive_not_ready_str:
 
 .const SAVE_BLOCK_DESC_SIZE = 4
 
-save_block_table_pre_floor:
+save_block_table_pre_inventory:
     :save_block_desc(player_data, PL_STRUCT_SIZE)
     :save_block_desc(player_background, 160)
     :save_block_desc(ZP_STATE_START, ZP_STATE_SIZE)
     :save_block_desc(eff_fear_timer, 1)
     :save_block_desc(ZP_RNG_START, ZP_RNG_SIZE)
+save_block_table_pre_inventory_end:
+
+save_block_table_inventory_current:
     :save_block_desc(inv_item_id, TOTAL_INV_SLOTS)
     :save_block_desc(inv_qty, TOTAL_INV_SLOTS)
     :save_block_desc(inv_p1, TOTAL_INV_SLOTS)
@@ -263,7 +269,20 @@ save_block_table_pre_floor:
     :save_block_desc(inv_to_ac, TOTAL_INV_SLOTS)
     :save_block_desc(inv_flags, TOTAL_INV_SLOTS)
     :save_block_desc(inv_ego, TOTAL_INV_SLOTS)
-    :save_block_desc(id_known, ITEM_TYPE_COUNT)
+save_block_table_inventory_current_end:
+
+save_block_table_inventory_legacy:
+    :save_block_desc(inv_item_id, LEGACY_TOTAL_INV_SLOTS)
+    :save_block_desc(inv_qty, LEGACY_TOTAL_INV_SLOTS)
+    :save_block_desc(inv_p1, LEGACY_TOTAL_INV_SLOTS)
+    :save_block_desc(inv_to_hit, LEGACY_TOTAL_INV_SLOTS)
+    :save_block_desc(inv_to_dam, LEGACY_TOTAL_INV_SLOTS)
+    :save_block_desc(inv_to_ac, LEGACY_TOTAL_INV_SLOTS)
+    :save_block_desc(inv_flags, LEGACY_TOTAL_INV_SLOTS)
+    :save_block_desc(inv_ego, LEGACY_TOTAL_INV_SLOTS)
+save_block_table_inventory_legacy_end:
+
+save_block_table_post_known:
     :save_block_desc(potion_shuffle, 12)
     :save_block_desc(scroll_shuffle, 12)
     :save_block_desc(ring_shuffle, 4)
@@ -290,7 +309,7 @@ save_block_table_pre_floor:
     :save_block_desc(trap_y, MAX_TRAPS)
     :save_block_desc(trap_type, MAX_TRAPS)
     :save_block_desc(monster_table, MAX_MONSTERS * MONSTER_ENTRY_SIZE)
-save_block_table_pre_floor_end:
+save_block_table_post_known_end:
 
 save_block_table_post_floor:
     :save_block_desc(recall_data_start, RECALL_DATA_SIZE)
@@ -299,11 +318,36 @@ save_block_table_post_floor:
 #endif
 save_block_table_post_floor_end:
 
-.const SAVE_BLOCK_PRE_FLOOR_COUNT = (save_block_table_pre_floor_end - save_block_table_pre_floor) / SAVE_BLOCK_DESC_SIZE
+save_block_table_floor_items_direct:
+    :save_block_desc(fi_item_id, MAX_FLOOR_ITEMS)
+    :save_block_desc(fi_x, MAX_FLOOR_ITEMS)
+    :save_block_desc(fi_y, MAX_FLOOR_ITEMS)
+    :save_block_desc(fi_qty, MAX_FLOOR_ITEMS)
+    :save_block_desc(fi_to_hit, MAX_FLOOR_ITEMS)
+    :save_block_desc(fi_to_dam, MAX_FLOOR_ITEMS)
+    :save_block_desc(fi_to_ac, MAX_FLOOR_ITEMS)
+save_block_table_floor_items_direct_end:
+
+.const SAVE_BLOCK_PRE_INVENTORY_COUNT = (save_block_table_pre_inventory_end - save_block_table_pre_inventory) / SAVE_BLOCK_DESC_SIZE
+.const SAVE_BLOCK_INVENTORY_CURRENT_COUNT = (save_block_table_inventory_current_end - save_block_table_inventory_current) / SAVE_BLOCK_DESC_SIZE
+.const SAVE_BLOCK_INVENTORY_LEGACY_COUNT = (save_block_table_inventory_legacy_end - save_block_table_inventory_legacy) / SAVE_BLOCK_DESC_SIZE
+.const SAVE_BLOCK_POST_KNOWN_COUNT = (save_block_table_post_known_end - save_block_table_post_known) / SAVE_BLOCK_DESC_SIZE
 .const SAVE_BLOCK_POST_FLOOR_COUNT = (save_block_table_post_floor_end - save_block_table_post_floor) / SAVE_BLOCK_DESC_SIZE
-.assert "Pre-floor save block table entries are 4 bytes", SAVE_BLOCK_PRE_FLOOR_COUNT * SAVE_BLOCK_DESC_SIZE, save_block_table_pre_floor_end - save_block_table_pre_floor
+.const SAVE_BLOCK_FLOOR_ITEMS_DIRECT_COUNT = (save_block_table_floor_items_direct_end - save_block_table_floor_items_direct) / SAVE_BLOCK_DESC_SIZE
+.const SAVE_BLOCK_FLOOR_ITEMS_HEAD_COUNT = 4
+.const SAVE_BLOCK_FLOOR_ITEMS_STAT_COUNT = 3
+.const SAVE_BLOCK_FLOOR_ITEMS_STAT_TABLE = save_block_table_floor_items_direct + (SAVE_BLOCK_FLOOR_ITEMS_HEAD_COUNT * SAVE_BLOCK_DESC_SIZE)
+.assert "Pre-inventory save block table entries are 4 bytes", SAVE_BLOCK_PRE_INVENTORY_COUNT * SAVE_BLOCK_DESC_SIZE, save_block_table_pre_inventory_end - save_block_table_pre_inventory
+.assert "Current inventory save block table entries are 4 bytes", SAVE_BLOCK_INVENTORY_CURRENT_COUNT * SAVE_BLOCK_DESC_SIZE, save_block_table_inventory_current_end - save_block_table_inventory_current
+.assert "Legacy inventory save block table entries are 4 bytes", SAVE_BLOCK_INVENTORY_LEGACY_COUNT * SAVE_BLOCK_DESC_SIZE, save_block_table_inventory_legacy_end - save_block_table_inventory_legacy
+.assert "Post-known save block table entries are 4 bytes", SAVE_BLOCK_POST_KNOWN_COUNT * SAVE_BLOCK_DESC_SIZE, save_block_table_post_known_end - save_block_table_post_known
 .assert "Post-floor save block table entries are 4 bytes", SAVE_BLOCK_POST_FLOOR_COUNT * SAVE_BLOCK_DESC_SIZE, save_block_table_post_floor_end - save_block_table_post_floor
-.assert "Pre-floor save block table count fits in one page", SAVE_BLOCK_PRE_FLOOR_COUNT < 64, true
+.assert "Floor-item direct save block table entries are 4 bytes", SAVE_BLOCK_FLOOR_ITEMS_DIRECT_COUNT * SAVE_BLOCK_DESC_SIZE, save_block_table_floor_items_direct_end - save_block_table_floor_items_direct
+.assert "Floor-item direct save block table count is stable", SAVE_BLOCK_FLOOR_ITEMS_DIRECT_COUNT, SAVE_BLOCK_FLOOR_ITEMS_HEAD_COUNT + SAVE_BLOCK_FLOOR_ITEMS_STAT_COUNT
+.assert "Pre-inventory save block table count fits in one page", SAVE_BLOCK_PRE_INVENTORY_COUNT < 64, true
+.assert "Current inventory save block table count fits in one page", SAVE_BLOCK_INVENTORY_CURRENT_COUNT < 64, true
+.assert "Legacy inventory save block table count fits in one page", SAVE_BLOCK_INVENTORY_LEGACY_COUNT < 64, true
+.assert "Post-known save block table count fits in one page", SAVE_BLOCK_POST_KNOWN_COUNT < 64, true
 .assert "Post-floor save block table count fits in one page", SAVE_BLOCK_POST_FLOOR_COUNT < 64, true
 
 // ============================================================
@@ -405,6 +449,9 @@ save_game:
 !save_media_after_print:
     jsr input_get_modal_dismiss_key
 save_return_fail:
+#if C64_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT
+c64_test_after_save_media_fail:
+#endif
 #if HAL_STORAGE_CPU_PORT_RESTORE_AFTER_IO
     clc
 save_return_c64_with_carry:
@@ -499,12 +546,26 @@ save_return_c64_with_carry:
     // 1. Magic header (8 bytes)
     :save_block(save_magic, SAVE_MAGIC_SIZE)
 
-    // 2-15. Regular resident state blocks through monster table
-    lda #<save_block_table_pre_floor
+    // 2. Regular resident state before inventory/equipment.
+    lda #<save_block_table_pre_inventory
     sta zp_ptr1
-    lda #>save_block_table_pre_floor
+    lda #>save_block_table_pre_inventory
     sta zp_ptr1_hi
-    lda #SAVE_BLOCK_PRE_FLOOR_COUNT
+    lda #SAVE_BLOCK_PRE_INVENTORY_COUNT
+    jsr save_write_block_table
+
+    // 2b. Current inventory/equipment layout.
+    jsr save_write_inventory_state
+
+    // 3. Known-item state uses the V2 96-byte runway.
+    jsr save_write_known_items
+
+    // 4. Remaining resident state through monster table.
+    lda #<save_block_table_post_known
+    sta zp_ptr1
+    lda #>save_block_table_post_known
+    sta zp_ptr1_hi
+    lda #SAVE_BLOCK_POST_KNOWN_COUNT
     jsr save_write_block_table
 
     // 16. Floor items (logical 8-field layout, serialized from packed RAM)
@@ -723,12 +784,26 @@ plus4_test_after_load_magic:
 
     // --- Read all blocks in same order as save ---
 
-    // 2-15. Regular resident state blocks through monster table
-    lda #<save_block_table_pre_floor
+    // 2. Regular resident state before inventory/equipment.
+    lda #<save_block_table_pre_inventory
     sta zp_ptr1
-    lda #>save_block_table_pre_floor
+    lda #>save_block_table_pre_inventory
     sta zp_ptr1_hi
-    lda #SAVE_BLOCK_PRE_FLOOR_COUNT
+    lda #SAVE_BLOCK_PRE_INVENTORY_COUNT
+    jsr load_read_block_table
+
+    // 2b. Inventory/equipment state is 30 slots before V3, 31 slots in V3.
+    jsr load_read_inventory_state
+
+    // 3. Known-item state is 64 bytes in V1, 96 bytes in V2.
+    jsr load_read_known_items
+
+    // 4. Remaining resident state through monster table.
+    lda #<save_block_table_post_known
+    sta zp_ptr1
+    lda #>save_block_table_post_known
+    sta zp_ptr1_hi
+    lda #SAVE_BLOCK_POST_KNOWN_COUNT
     jsr load_read_block_table
 
     // 16. Floor items
@@ -993,6 +1068,34 @@ load_read_block_table:
 !lrbt_done:
     rts
 
+load_read_floor_block_table:
+    sta zp_temp2
+    ldy #0
+!lrfbt_loop:
+    lda zp_temp2
+    beq !lrfbt_done+
+    lda (zp_ptr1),y
+    sta zp_ptr0
+    iny
+    lda (zp_ptr1),y
+    sta zp_ptr0_hi
+    iny
+    iny
+    iny
+    lda load_floor_item_count
+    sta save_count_lo
+    lda #0
+    sta save_count_hi
+    tya
+    pha
+    jsr load_read_block
+    pla
+    tay
+    dec zp_temp2
+    jmp !lrfbt_loop-
+!lrfbt_done:
+    rts
+
 // ============================================================
 // save_write_block — Write N bytes from addr to file with checksum
 // Input: save_block_lo/hi = source addr, save_count_lo/hi = byte count
@@ -1168,16 +1271,97 @@ save_write_byte_raw:
     rts
 
 // ============================================================
+// save_write_inventory_state / load_read_inventory_state
+//
+// Save V3 expands the unified carried/equipped item table from 30 to 31 slots
+// by adding EQUIP_AMULET. Older supported saves read only 30 slots and leave
+// the new amulet slot empty via item_init_inventory.
+// ============================================================
+save_write_inventory_state:
+    lda #<save_block_table_inventory_current
+    sta zp_ptr1
+    lda #>save_block_table_inventory_current
+    sta zp_ptr1_hi
+    lda #SAVE_BLOCK_INVENTORY_CURRENT_COUNT
+    jmp save_write_block_table
+
+load_read_inventory_state:
+    jsr item_init_inventory
+    lda load_save_version
+    cmp #SAVE_INV31_VERSION
+    bcs !lris_current+
+    jmp !lris_legacy+
+!lris_current:
+    lda #<save_block_table_inventory_current
+    sta zp_ptr1
+    lda #>save_block_table_inventory_current
+    sta zp_ptr1_hi
+    lda #SAVE_BLOCK_INVENTORY_CURRENT_COUNT
+    jmp load_read_block_table
+
+!lris_legacy:
+    lda #<save_block_table_inventory_legacy
+    sta zp_ptr1
+    lda #>save_block_table_inventory_legacy
+    sta zp_ptr1_hi
+    lda #SAVE_BLOCK_INVENTORY_LEGACY_COUNT
+    jmp load_read_block_table
+
+// ============================================================
+// save_write_known_items / load_read_known_items
+//
+// Save V1 wrote ITEM_TYPE_COUNT bytes because the shipped catalog had exactly
+// 64 IDs. Save V2 writes ITEM_ID_CAPACITY bytes so IDs 64-95 can be appended
+// without changing the save stream again.
+// ============================================================
+save_write_known_items:
+    :save_block(id_known, ITEM_ID_CAPACITY)
+    rts
+
+load_read_known_items:
+    lda load_save_version
+    cmp #SAVE_KNOWN96_VERSION
+    bcc !lrki_v1+
+    :load_block(id_known, ITEM_ID_CAPACITY)
+    rts
+
+!lrki_v1:
+    :load_block(id_known, LEGACY_ITEM_TYPE_COUNT)
+    ldx #LEGACY_ITEM_TYPE_COUNT
+!lrki_apply_defaults:
+    lda it_unknown_desc,x
+    and #IUK_CLASS_MASK
+    bne !lrki_unknown_default+
+    lda #1
+    bne !lrki_store_default+
+!lrki_unknown_default:
+    lda #0
+!lrki_store_default:
+    sta id_known,x
+    inx
+    cpx #ITEM_TYPE_COUNT
+    bcc !lrki_apply_defaults-
+    lda #0
+!lrki_clear_future:
+    sta id_known,x
+    inx
+    cpx #ITEM_ID_CAPACITY
+    bcc !lrki_clear_future-
+    rts
+
+// ============================================================
 // save_write_floor_items — Serialize packed floor-item RAM as the legacy
 // logical field layout:
 //   id, x, y, qty, qty_hi, p1, flags, ego
 // This preserves item semantics while allowing a denser in-RAM layout.
 // ============================================================
 save_write_floor_items:
-    :save_block(fi_item_id, MAX_FLOOR_ITEMS)
-    :save_block(fi_x, MAX_FLOOR_ITEMS)
-    :save_block(fi_y, MAX_FLOOR_ITEMS)
-    :save_block(fi_qty, MAX_FLOOR_ITEMS)
+    lda #<save_block_table_floor_items_direct
+    sta zp_ptr1
+    lda #>save_block_table_floor_items_direct
+    sta zp_ptr1_hi
+    lda #SAVE_BLOCK_FLOOR_ITEMS_HEAD_COUNT
+    jsr save_write_block_table
 
     ldx #0
 !swfi_qty_hi:
@@ -1219,9 +1403,12 @@ save_write_floor_items:
     jmp !swfi_ego-
 
 !swfi_to_hit_start:
-    :save_block(fi_to_hit, MAX_FLOOR_ITEMS)
-    :save_block(fi_to_dam, MAX_FLOOR_ITEMS)
-    :save_block(fi_to_ac, MAX_FLOOR_ITEMS)
+    lda #<SAVE_BLOCK_FLOOR_ITEMS_STAT_TABLE
+    sta zp_ptr1
+    lda #>SAVE_BLOCK_FLOOR_ITEMS_STAT_TABLE
+    sta zp_ptr1_hi
+    lda #SAVE_BLOCK_FLOOR_ITEMS_STAT_COUNT
+    jsr save_write_block_table
 !swfi_done:
     rts
 
@@ -1423,45 +1610,12 @@ load_read_floor_items:
 !lrfi_count_ready:
     jsr item_init_floor
 
-    lda #<fi_item_id
-    sta zp_ptr0
-    lda #>fi_item_id
-    sta zp_ptr0_hi
-    lda load_floor_item_count
-    sta save_count_lo
-    lda #0
-    sta save_count_hi
-    jsr load_read_block
-
-    lda #<fi_x
-    sta zp_ptr0
-    lda #>fi_x
-    sta zp_ptr0_hi
-    lda load_floor_item_count
-    sta save_count_lo
-    lda #0
-    sta save_count_hi
-    jsr load_read_block
-
-    lda #<fi_y
-    sta zp_ptr0
-    lda #>fi_y
-    sta zp_ptr0_hi
-    lda load_floor_item_count
-    sta save_count_lo
-    lda #0
-    sta save_count_hi
-    jsr load_read_block
-
-    lda #<fi_qty
-    sta zp_ptr0
-    lda #>fi_qty
-    sta zp_ptr0_hi
-    lda load_floor_item_count
-    sta save_count_lo
-    lda #0
-    sta save_count_hi
-    jsr load_read_block
+    lda #<save_block_table_floor_items_direct
+    sta zp_ptr1
+    lda #>save_block_table_floor_items_direct
+    sta zp_ptr1_hi
+    lda #SAVE_BLOCK_FLOOR_ITEMS_HEAD_COUNT
+    jsr load_read_floor_block_table
 
     ldx #0
 !lrfi_qty_hi:
@@ -1525,35 +1679,12 @@ load_read_floor_items:
     inx
     jmp !lrfi_ego-
 !lrfi_stats:
-    lda #<fi_to_hit
-    sta zp_ptr0
-    lda #>fi_to_hit
-    sta zp_ptr0_hi
-    lda load_floor_item_count
-    sta save_count_lo
-    lda #0
-    sta save_count_hi
-    jsr load_read_block
-
-    lda #<fi_to_dam
-    sta zp_ptr0
-    lda #>fi_to_dam
-    sta zp_ptr0_hi
-    lda load_floor_item_count
-    sta save_count_lo
-    lda #0
-    sta save_count_hi
-    jsr load_read_block
-
-    lda #<fi_to_ac
-    sta zp_ptr0
-    lda #>fi_to_ac
-    sta zp_ptr0_hi
-    lda load_floor_item_count
-    sta save_count_lo
-    lda #0
-    sta save_count_hi
-    jsr load_read_block
+    lda #<SAVE_BLOCK_FLOOR_ITEMS_STAT_TABLE
+    sta zp_ptr1
+    lda #>SAVE_BLOCK_FLOOR_ITEMS_STAT_TABLE
+    sta zp_ptr1_hi
+    lda #SAVE_BLOCK_FLOOR_ITEMS_STAT_COUNT
+    jsr load_read_floor_block_table
 !lrfi_done:
     rts
 

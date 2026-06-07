@@ -6,7 +6,7 @@
 .const LANTERN_MAX_CHARGES = 250
 
 // ============================================================
-// Master Item Type Table — Struct-of-Arrays (25 types)
+// Master Item Type Table — Struct-of-Arrays
 // ============================================================
 
 // Category
@@ -75,6 +75,38 @@ it_category:
     .byte ICAT_LIGHT    // 61: Flask of Oil
     .byte ICAT_DIGGING  // 62: Shovel
     .byte ICAT_DIGGING  // 63: Pick
+    .byte ICAT_WEAPON   // 64: Main Gauche
+    .byte ICAT_ARMOR    // 65: Studded Leather Armor
+    .byte ICAT_WEAPON   // 66: Rapier
+    .byte ICAT_WEAPON   // 67: Broad Sword
+    .byte ICAT_WEAPON   // 68: Bastard Sword
+    .byte ICAT_WEAPON   // 69: Two-Handed Sword
+    .byte ICAT_WEAPON   // 70: Scimitar
+    .byte ICAT_WEAPON   // 71: Battle Axe
+    .byte ICAT_WEAPON   // 72: War Hammer
+    .byte ICAT_WEAPON   // 73: Morningstar
+    .byte ICAT_WEAPON   // 74: Spear
+    .byte ICAT_WEAPON   // 75: Pike
+    .byte ICAT_WEAPON   // 76: Halberd
+    .byte ICAT_WEAPON   // 77: Quarterstaff
+    .byte ICAT_SHIELD   // 78: Large Shield
+    .byte ICAT_ARMOR    // 79: Hard Leather Armor
+    .byte ICAT_ARMOR    // 80: Scale Mail
+    .byte ICAT_ARMOR    // 81: Plate Mail
+    .byte ICAT_ARMOR    // 82: Cloak
+    .byte ICAT_HELM     // 83: Steel Helm
+    .byte ICAT_GLOVES   // 84: Gauntlets
+    .byte ICAT_BOOTS    // 85: Soft Leather Boots
+    .byte ICAT_BOOTS    // 86: Hard Leather Boots
+    .byte ICAT_HELM     // 87: Metal Cap
+    .byte ICAT_WEAPON   // 88: Sabre
+    .byte ICAT_WEAPON   // 89: Cutlass
+    .byte ICAT_WEAPON   // 90: Tulwar
+    .byte ICAT_WEAPON   // 91: Katana
+    .byte ICAT_WEAPON   // 92: Flail
+    .byte ICAT_WEAPON   // 93: Lucerne Hammer
+    .byte ICAT_WEAPON   // 94: Broad Axe
+    .byte ICAT_WEAPON   // 95: Awl-Pike
 
 // Display character (screen codes)
 it_display:
@@ -142,6 +174,38 @@ it_display:
     .byte $21   // 61: '!' Flask of Oil
     .byte $5c   // 62: '\' Shovel
     .byte $5c   // 63: '\' Pick
+    .byte $2f   // 64: '/' Main Gauche
+    .byte $5b   // 65: '[' Studded Leather Armor
+    .byte $2f   // 66: '/' Rapier
+    .byte $2f   // 67: '/' Broad Sword
+    .byte $2f   // 68: '/' Bastard Sword
+    .byte $2f   // 69: '/' Two-Handed Sword
+    .byte $2f   // 70: '/' Scimitar
+    .byte $2f   // 71: '/' Battle Axe
+    .byte $2f   // 72: '/' War Hammer
+    .byte $2f   // 73: '/' Morningstar
+    .byte $2f   // 74: '/' Spear
+    .byte $2f   // 75: '/' Pike
+    .byte $2f   // 76: '/' Halberd
+    .byte $2f   // 77: '/' Quarterstaff
+    .byte $29   // 78: ')' Large Shield
+    .byte $5b   // 79: '[' Hard Leather Armor
+    .byte $5b   // 80: '[' Scale Mail
+    .byte $5b   // 81: '[' Plate Mail
+    .byte $5b   // 82: '[' Cloak
+    .byte $5d   // 83: ']' Steel Helm
+    .byte $5d   // 84: ']' Gauntlets
+    .byte $5d   // 85: ']' Soft Leather Boots
+    .byte $5d   // 86: ']' Hard Leather Boots
+    .byte $5d   // 87: ']' Metal Cap
+    .byte $2f   // 88: '/' Sabre
+    .byte $2f   // 89: '/' Cutlass
+    .byte $2f   // 90: '/' Tulwar
+    .byte $2f   // 91: '/' Katana
+    .byte $2f   // 92: '/' Flail
+    .byte $2f   // 93: '/' Lucerne Hammer
+    .byte $2f   // 94: '/' Broad Axe
+    .byte $2f   // 95: '/' Awl-Pike
 
 // Color
 it_color:
@@ -209,6 +273,38 @@ it_color:
     .byte COL_ORANGE    // 61: Flask of Oil
     .byte COL_BROWN     // 62: Shovel
     .byte COL_LGREY     // 63: Pick
+    .byte COL_LGREY     // 64: Main Gauche
+    .byte COL_BROWN     // 65: Studded Leather Armor
+    .byte COL_LGREY     // 66: Rapier
+    .byte COL_WHITE     // 67: Broad Sword
+    .byte COL_WHITE     // 68: Bastard Sword
+    .byte COL_LGREY     // 69: Two-Handed Sword
+    .byte COL_WHITE     // 70: Scimitar
+    .byte COL_LGREY     // 71: Battle Axe
+    .byte COL_LGREY     // 72: War Hammer
+    .byte COL_WHITE     // 73: Morningstar
+    .byte COL_LGREY     // 74: Spear
+    .byte COL_LGREY     // 75: Pike
+    .byte COL_LGREY     // 76: Halberd
+    .byte COL_BROWN     // 77: Quarterstaff
+    .byte COL_LGREY     // 78: Large Shield
+    .byte COL_BROWN     // 79: Hard Leather Armor
+    .byte COL_GREY      // 80: Scale Mail
+    .byte COL_LGREY     // 81: Plate Mail
+    .byte COL_LGREY     // 82: Cloak
+    .byte COL_LGREY     // 83: Steel Helm
+    .byte COL_LGREY     // 84: Gauntlets
+    .byte COL_BROWN     // 85: Soft Leather Boots
+    .byte COL_BROWN     // 86: Hard Leather Boots
+    .byte COL_GREY      // 87: Metal Cap
+    .byte COL_WHITE     // 88: Sabre
+    .byte COL_WHITE     // 89: Cutlass
+    .byte COL_LGREY     // 90: Tulwar
+    .byte COL_LGREY     // 91: Katana
+    .byte COL_LGREY     // 92: Flail
+    .byte COL_LGREY     // 93: Lucerne Hammer
+    .byte COL_LGREY     // 94: Broad Axe
+    .byte COL_LGREY     // 95: Awl-Pike
 
 // Weight (in 1/10 lbs)
 it_weight:
@@ -222,6 +318,15 @@ it_weight:
     .byte 30, 30, 30, 30, 30, 30           // Books (55-60)
     .byte 10                               // 61: Flask of Oil
     .byte 60, 50                            // 62: Shovel, 63: Pick
+    .byte 30, 90                            // 64-65: new weapon/armor
+    .byte 40, 75, 140, 200                  // 66-69: expanded swords
+    .byte 40, 170, 120, 150                 // 70-73: expanded hafted/axe
+    .byte 50, 160, 190, 40                  // 74-77: polearms/staff
+    .byte 100, 120                          // 78-79: shield/armor
+    .byte 250, 380                          // 80-81: heavier armor
+    .byte 10, 60, 25, 5, 20, 20             // 82-87: cloak/helm/gloves/boots/cap
+    .byte 50, 110, 100, 120                 // 88-91: added blades
+    .byte 150, 120, 160, 160                // 92-95: added hafted/pole weapons
 
 // Damage dice count
 it_dmg_dice:
@@ -235,6 +340,15 @@ it_dmg_dice:
     .byte 0, 0, 0, 0, 0, 0                  // Books (55-60)
     .byte 2                                  // 61: Flask of Oil (2d6)
     .byte 1, 1                              // 62: Shovel (1d2), 63: Pick (1d3)
+    .byte 1, 0                              // 64-65: new weapon/armor
+    .byte 1, 2, 3, 3                        // 66-69: expanded swords
+    .byte 1, 3, 3, 2                        // 70-73: expanded hafted/axe
+    .byte 1, 2, 3, 1                        // 74-77: polearms/staff
+    .byte 0, 0                              // 78-79: shield/armor
+    .byte 0, 0                              // 80-81: armor
+    .byte 0, 0, 0, 0, 0, 0                  // 82-87: defensive equipment
+    .byte 1, 1, 2, 3                        // 88-91: added blades
+    .byte 2, 2, 2, 1                        // 92-95: added hafted/pole weapons
 
 // Damage dice sides
 it_dmg_sides:
@@ -248,6 +362,15 @@ it_dmg_sides:
     .byte 0, 0, 0, 0, 0, 0                  // Books (55-60)
     .byte 6                                  // 61: Flask of Oil (2d6)
     .byte 2, 3                              // 62: Shovel (1d2), 63: Pick (1d3)
+    .byte 5, 0                              // 64-65: new weapon/armor
+    .byte 6, 5, 4, 6                        // 66-69: expanded swords
+    .byte 8, 4, 3, 6                        // 70-73: expanded hafted/axe
+    .byte 6, 5, 4, 9                        // 74-77: polearms/staff
+    .byte 0, 0                              // 78-79: shield/armor
+    .byte 0, 0                              // 80-81: armor
+    .byte 0, 0, 0, 0, 0, 0                  // 82-87: defensive equipment
+    .byte 7, 7, 4, 4                        // 88-91: added blades
+    .byte 6, 5, 6, 8                        // 92-95: added hafted/pole weapons
 
 // Base armor class
 it_base_ac:
@@ -261,6 +384,19 @@ it_base_ac:
     .byte 0, 0, 0, 0, 0, 0                  // Books (55-60): no AC
     .byte 0                                  // 61: Flask of Oil: no AC
     .byte 0, 0                              // 62: Shovel, 63: Pick (no AC)
+    .byte 0, 5                              // 64-65: new weapon/armor
+    .byte 0, 0, 0, 0                        // 66-69: expanded swords
+    .byte 0, 0, 0, 0                        // 70-73: expanded hafted/axe
+    .byte 0, 0, 0, 0                        // 74-77: polearms/staff
+    .byte 3, 6                              // 78-79: shield/armor
+    .byte 7, 9                              // 80-81: armor
+    .byte 1, 2, 1, 1, 2, 1                  // 82-87: cloak/helm/gloves/boots/cap
+    .byte 0, 0, 0, 0, 0, 0, 0, 0            // 88-95: weapons
+it_base_ac_end:
+
+#if C64_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME
+.segment TownOverlay
+#endif
 
 // Base cost (lo)
 it_cost_lo:
@@ -275,7 +411,32 @@ it_cost_lo:
     .byte <300, <500, <800, <300, <500, <800 // Books (55-60)
     .byte <10                                // 61: Flask of Oil
     .byte <15, <50                          // 62: Shovel (15gp), 63: Pick (50gp)
+    .byte <25, <75
+    .byte <42, <70, <120, <180
+    .byte <50, <120, <90, <100
+    .byte <36, <100, <150, <20
+    .byte <40, <100
+    .byte <350, <900
+    .byte <20, <120, <35, <8, <30, <50
+    .byte <60, <85, <100, <400
+    .byte <120, <110, <100, <80
+it_cost_lo_end:
 
+#if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME
+// Base cost high bytes are sparse in the current catalog. Product builds keep
+// only non-zero high bytes. C64/Plus4 place them in the town overlay; C128
+// keeps them with the resident item payload so town overlay entry remains code.
+it_cost_hi_extra_id:
+    .byte 45, 55, 56, 57, 58, 59, 60, 80, 81, 91
+it_cost_hi_extra_value:
+    .byte >300, >300, >500, >800, >300, >500, >800, >350, >900, >400
+it_cost_hi_extra_end:
+.const IT_COST_HI_EXTRA_COUNT = it_cost_hi_extra_value - it_cost_hi_extra_id
+
+#if C64_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME
+.segment Default
+#endif
+#else
 // Base cost (hi)
 it_cost_hi:
     .byte >0, >0, >10, >25, >60, >45, >15, >30, >80, >20
@@ -289,6 +450,21 @@ it_cost_hi:
     .byte >300, >500, >800, >300, >500, >800 // Books (55-60)
     .byte >10                                // 61: Flask of Oil
     .byte >15, >50                          // 62: Shovel (15gp), 63: Pick (50gp)
+    .byte >25, >75
+    .byte >42, >70, >120, >180
+    .byte >50, >120, >90, >100
+    .byte >36, >100, >150, >20
+    .byte >40, >100
+    .byte >350, >900
+    .byte >20, >120, >35, >8, >30, >50
+    .byte >60, >85, >100, >400
+    .byte >120, >110, >100, >80
+it_cost_hi_end:
+#endif
+
+#if C64_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME
+.segment DungeonGenOverlay
+#endif
 
 // Minimum dungeon level to appear
 it_min_level:
@@ -302,6 +478,20 @@ it_min_level:
     .byte 4, 8, 12, 4, 8, 12                // Books (55-60)
     .byte 0                                  // 61: Flask of Oil (available immediately)
     .byte 0, 0                              // 62: Shovel, 63: Pick (available immediately)
+    .byte 1, 3                              // 64-65: new weapon/armor
+    .byte 2, 4, 6, 8                        // 66-69: expanded swords
+    .byte 3, 7, 5, 6                        // 70-73: expanded hafted/axe
+    .byte 2, 8, 9, 1                        // 74-77: polearms/staff
+    .byte 4, 5                              // 78-79: shield/armor
+    .byte 7, 10                             // 80-81: armor
+    .byte 2, 6, 2, 1, 3, 4                  // 82-87: cloak/helm/gloves/boots/cap
+    .byte 3, 4, 5, 7                        // 88-91: added blades
+    .byte 5, 6, 5, 4                        // 92-95: added hafted/pole weapons
+it_min_level_end:
+
+#if C64_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME
+.segment Default
+#endif
 
 // Missile type table — encodes ranged weapon/ammo relationships
 // Only stored for types 49-54 (ranged items). Types < 49 are not ranged (return 0).
@@ -309,6 +499,7 @@ it_min_level:
 // 0=not ranged, 1=fires arrows, 2=fires bolts, 3=fires rocks
 // $81=IS arrow, $82=IS bolt, $83=IS rock
 .const IT_MISSILE_BASE = 49     // First type with missile data
+.const IT_MISSILE_END  = 55     // One past last type with missile data
 it_missile:
     .byte 1             // 49: Short Bow — fires arrows
     .byte 2             // 50: Light Crossbow — fires bolts
@@ -324,6 +515,8 @@ it_missile:
 item_get_missile:
     cpx #IT_MISSILE_BASE
     bcc !igm_zero+
+    cpx #IT_MISSILE_END
+    bcs !igm_zero+
     lda it_missile - IT_MISSILE_BASE,x
     rts
 !igm_zero:
@@ -346,6 +539,17 @@ it_name_lo:
     .byte <itn_49, <itn_50, <itn_51, <itn_52, <itn_53, <itn_54
     .byte <itn_55, <itn_56, <itn_57, <itn_58, <itn_59, <itn_60
     .byte <itn_61, <itn_62, <itn_63
+    .byte <itn_64, <itn_65
+    .byte <itn_66, <itn_67, <itn_68, <itn_69
+    .byte <itn_70, <itn_71, <itn_72, <itn_73
+    .byte <itn_74, <itn_75, <itn_76, <itn_77
+    .byte <itn_78, <itn_79
+    .byte <itn_80, <itn_81
+    .byte <itn_82, <itn_83, <itn_84, <itn_85, <itn_86, <itn_87
+    .byte <itn_88, <itn_89, <itn_90, <itn_91
+    .byte <itn_92, <itn_93, <itn_94, <itn_95
+it_name_lo_end:
+#if !(C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME)
 it_name_hi:
     .byte >itn_0,  >itn_1,  >itn_2,  >itn_3,  >itn_4
     .byte >itn_5,  >itn_6,  >itn_7,  >itn_8,  >itn_9
@@ -361,6 +565,19 @@ it_name_hi:
     .byte >itn_49, >itn_50, >itn_51, >itn_52, >itn_53, >itn_54
     .byte >itn_55, >itn_56, >itn_57, >itn_58, >itn_59, >itn_60
     .byte >itn_61, >itn_62, >itn_63
+    .byte >itn_64, >itn_65
+    .byte >itn_66, >itn_67, >itn_68, >itn_69
+    .byte >itn_70, >itn_71, >itn_72, >itn_73
+    .byte >itn_74, >itn_75, >itn_76, >itn_77
+    .byte >itn_78, >itn_79
+    .byte >itn_80, >itn_81
+    .byte >itn_82, >itn_83, >itn_84, >itn_85, >itn_86, >itn_87
+    .byte >itn_88, >itn_89, >itn_90, >itn_91
+    .byte >itn_92, >itn_93, >itn_94, >itn_95
+it_name_hi_end:
+#else
+it_name_hi_end:
+#endif
 
 // Tokenized item-name string pool.
 // Bytes below $80 are literal screen codes; bytes $80-$95 expand through
@@ -388,7 +605,12 @@ it_name_hi:
 .const ITOK_A_COPPER          = $93
 .const ITOK_CLOUD_SUFFIX      = $94
 .const ITOK_SWORD_SUFFIX      = $95
-.const ITEM_NAME_TOKEN_COUNT  = $16
+.const ITOK_A_SPACE           = $96
+.const ITOK_AN_SPACE          = $97
+.const ITOK_ARMOR_SUFFIX      = $98
+.const ITOK_MAIL_SUFFIX       = $99
+.const ITOK_SHIELD_SUFFIX     = $9a
+.const ITEM_NAME_TOKEN_COUNT  = $1b
 
 item_name_token_lo:
     .byte <itok_scroll_of_art, <itok_potion_suffix, <itok_of, <itok_scroll
@@ -396,14 +618,16 @@ item_name_token_lo:
     .byte <itok_detect_monsters, <itok_staff, <itok_ring_suffix, <itok_teleportation
     .byte <itok_wounds_suffix, <itok_magick, <itok_gold, <itok_confusion
     .byte <itok_cure, <itok_beginners, <itok_enchant, <itok_a_copper
-    .byte <itok_cloud_suffix, <itok_sword_suffix
+    .byte <itok_cloud_suffix, <itok_sword_suffix, <itok_a_space, <itok_an_space
+    .byte <itok_armor_suffix, <itok_mail_suffix, <itok_shield_suffix
 item_name_token_hi:
     .byte >itok_scroll_of_art, >itok_potion_suffix, >itok_of, >itok_scroll
     .byte >itok_light, >itok_wand, >itok_a_silver, >itok_leather
     .byte >itok_detect_monsters, >itok_staff, >itok_ring_suffix, >itok_teleportation
     .byte >itok_wounds_suffix, >itok_magick, >itok_gold, >itok_confusion
     .byte >itok_cure, >itok_beginners, >itok_enchant, >itok_a_copper
-    .byte >itok_cloud_suffix, >itok_sword_suffix
+    .byte >itok_cloud_suffix, >itok_sword_suffix, >itok_a_space, >itok_an_space
+    .byte >itok_armor_suffix, >itok_mail_suffix, >itok_shield_suffix
 
 itok_scroll_of_art:   .text "a Scroll of " ; .byte 0
 itok_potion_suffix:   .text " Potion" ; .byte 0
@@ -427,8 +651,17 @@ itok_enchant:         .text "Enchant " ; .byte 0
 itok_a_copper:        .text "a Copper" ; .byte 0
 itok_cloud_suffix:    .text " Cloud" ; .byte 0
 itok_sword_suffix:    .text " Sword" ; .byte 0
+itok_a_space:         .text "a " ; .byte 0
+itok_an_space:        .text "an " ; .byte 0
+itok_armor_suffix:    .text "Armor" ; .byte 0
+itok_mail_suffix:     .text " Mail" ; .byte 0
+itok_shield_suffix:   .text " Shield" ; .byte 0
 
 // Name streams (screen codes plus item-name tokens, null-terminated)
+#if C128_PRODUCT_OVERLAY_RUNTIME
+.segment C128ResidentItemNames
+c128_item_name_streams_start:
+#endif
 itn_0:  .byte ITOK_GOLD ; .text " (small)" ; .byte 0
 itn_1:  .byte ITOK_GOLD ; .text " (large)" ; .byte 0
 itn_2:  .text "Dagger" ; .byte 0
@@ -436,9 +669,9 @@ itn_3:  .text "Short" ; .byte ITOK_SWORD_SUFFIX ; .byte 0
 itn_4:  .text "Long" ; .byte ITOK_SWORD_SUFFIX ; .byte 0
 itn_5:  .text "Mace" ; .byte 0
 itn_6:  .text "Robe" ; .byte 0
-itn_7:  .byte ITOK_LEATHER ; .text "Armor" ; .byte 0
-itn_8:  .text "Chain Mail" ; .byte 0
-itn_9:  .text "Small Shield" ; .byte 0
+itn_7:  .byte ITOK_LEATHER ; .byte ITOK_ARMOR_SUFFIX ; .byte 0
+itn_8:  .text "Chain" ; .byte ITOK_MAIL_SUFFIX ; .byte 0
+itn_9:  .text "Small" ; .byte ITOK_SHIELD_SUFFIX ; .byte 0
 itn_10: .text "Iron Helm" ; .byte 0
 itn_11: .byte ITOK_LEATHER ; .text "Gloves" ; .byte 0
 itn_12: .byte ITOK_LEATHER ; .text "Boots" ; .byte 0
@@ -464,7 +697,7 @@ itn_31: .text "Infravision" ; .byte 0
 itn_32: .text "Word" ; .byte ITOK_OF ; .text "Recall" ; .byte 0
 itn_33: .text "Remove Curse" ; .byte 0
 itn_34: .byte ITOK_ENCHANT ; .text "Weapon" ; .byte 0
-itn_35: .byte ITOK_ENCHANT ; .text "Armor" ; .byte 0
+itn_35: .byte ITOK_ENCHANT ; .byte ITOK_ARMOR_SUFFIX ; .byte 0
 itn_36: .text "Monster " ; .byte ITOK_CONFUSION ; .byte 0
 itn_37: .text "Aggravate" ; .byte 0
 itn_38: .text "Protect from Evil" ; .byte 0
@@ -493,3 +726,40 @@ itn_60: .text "Exorcism" ; .byte 0
 itn_61: .text "Flask" ; .byte ITOK_OF ; .text "Oil" ; .byte 0
 itn_62: .text "Shovel" ; .byte 0
 itn_63: .text "Pick" ; .byte 0
+itn_64: .text "Main Gauche" ; .byte 0
+itn_65: .text "Studded " ; .byte ITOK_LEATHER ; .byte ITOK_ARMOR_SUFFIX ; .byte 0
+itn_66: .text "Rapier" ; .byte 0
+itn_67: .text "Broad" ; .byte ITOK_SWORD_SUFFIX ; .byte 0
+itn_68: .text "Bastard" ; .byte ITOK_SWORD_SUFFIX ; .byte 0
+itn_69: .text "Two-Handed" ; .byte ITOK_SWORD_SUFFIX ; .byte 0
+itn_70: .text "Scimitar" ; .byte 0
+itn_71: .text "Battle Axe" ; .byte 0
+itn_72: .text "War Hammer" ; .byte 0
+itn_73: .text "Morningstar" ; .byte 0
+itn_74: .text "Spear" ; .byte 0
+itn_75: .text "Pike" ; .byte 0
+itn_76: .text "Halberd" ; .byte 0
+itn_77: .text "Quarterstaff" ; .byte 0
+itn_78: .text "Large" ; .byte ITOK_SHIELD_SUFFIX ; .byte 0
+itn_79: .text "Hard " ; .byte ITOK_LEATHER ; .byte ITOK_ARMOR_SUFFIX ; .byte 0
+itn_80: .text "Scale" ; .byte ITOK_MAIL_SUFFIX ; .byte 0
+itn_81: .text "Plate" ; .byte ITOK_MAIL_SUFFIX ; .byte 0
+itn_82: .text "Cloak" ; .byte 0
+itn_83: .text "Steel Helm" ; .byte 0
+itn_84: .text "Gauntlets" ; .byte 0
+itn_85: .text "Soft " ; .byte ITOK_LEATHER ; .text "Boots" ; .byte 0
+itn_86: .text "Hard " ; .byte ITOK_LEATHER ; .text "Boots" ; .byte 0
+itn_87: .text "Metal Cap" ; .byte 0
+itn_88: .text "Sabre" ; .byte 0
+itn_89: .text "Cutlass" ; .byte 0
+itn_90: .text "Tulwar" ; .byte 0
+itn_91: .text "Katana" ; .byte 0
+itn_92: .text "Flail" ; .byte 0
+itn_93: .text "Lucerne Hammer" ; .byte 0
+itn_94: .text "Broad Axe" ; .byte 0
+itn_95: .text "Awl-Pike" ; .byte 0
+#if C128_PRODUCT_OVERLAY_RUNTIME
+c128_item_name_streams_end:
+.assert "C128 item name streams live in Bank 1 DB region", c128_item_name_streams_start >= BANK1_DB_BASE && c128_item_name_streams_end <= BANK1_DB_END + 1, true
+.segment C128ResidentItems
+#endif

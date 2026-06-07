@@ -29,7 +29,7 @@ Commands:
 - `Q` - cancel / exit menu
 
 Prompts:
-- Item generation: `ITEM 0-63: `
+- Item generation: `ITEM 0-95: `
 - Level jump: `DLVL 0-99: `
 
 Feedback:
@@ -40,7 +40,7 @@ Feedback:
 
 ## Generate Item
 
-Wizard item generation uses item IDs `0-63`.
+Wizard item generation uses item IDs `0-95`.
 
 Behavior:
 - Non-gold items try to go into inventory first
@@ -177,6 +177,38 @@ or `Neutralize Poison` feedback:
 | 61 | Flask of Oil |
 | 62 | Shovel |
 | 63 | Pick |
+| 64 | Main Gauche |
+| 65 | Studded Leather Armor |
+| 66 | Rapier |
+| 67 | Broad Sword |
+| 68 | Bastard Sword |
+| 69 | Two-Handed Sword |
+| 70 | Scimitar |
+| 71 | Battle Axe |
+| 72 | War Hammer |
+| 73 | Morningstar |
+| 74 | Spear |
+| 75 | Pike |
+| 76 | Halberd |
+| 77 | Quarterstaff |
+| 78 | Large Shield |
+| 79 | Hard Leather Armor |
+| 80 | Scale Mail |
+| 81 | Plate Mail |
+| 82 | Cloak |
+| 83 | Steel Helm |
+| 84 | Gauntlets |
+| 85 | Soft Leather Boots |
+| 86 | Hard Leather Boots |
+| 87 | Metal Cap |
+| 88 | Sabre |
+| 89 | Cutlass |
+| 90 | Tulwar |
+| 91 | Katana |
+| 92 | Flail |
+| 93 | Lucerne Hammer |
+| 94 | Broad Axe |
+| 95 | Awl-Pike |
 
 ## Source References
 

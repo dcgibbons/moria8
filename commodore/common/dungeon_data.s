@@ -73,6 +73,17 @@
 .const RT_VAULT  = 2
 .const RT_NEST   = 3
 
+// Trap table/type constants are shared by generation, save/load, search, and
+// trap gameplay. Trap storage itself lives in dungeon_features.s.
+.const MAX_TRAPS = 16
+.const TRAP_OPEN_PIT    = 0   // 1d4 damage
+.const TRAP_ARROW       = 1   // 1d8 damage
+.const TRAP_POISON_GAS  = 2   // Set poison timer
+.const TRAP_TELEPORT    = 3   // Random teleport
+.const TRAP_POISON_DART = 4   // 1d4 damage + 50% CON loss
+.const TRAP_ROCKFALL    = 5   // 2d8 damage
+.const TRAP_TYPE_COUNT  = 6
+
 // ============================================================
 // Pre-computed row address table
 // map_row_lo[n] / map_row_hi[n] = MAP_BASE + n*MAP_COLS
@@ -83,10 +94,10 @@ map_row_hi:
     .fill MAP_ROWS, >(MAP_BASE + i * MAP_COLS)
 
 // ============================================================
-// Map accessors (single-tile API boundary)
+// Map accessor (single-tile API boundary)
 // ============================================================
 // Input: X = column, Y = row
-// Output (get): A = tile byte
+// Output: A = tile byte
 // Clobbers: A, Y, zp_ptr0/zp_ptr0_hi
 map_get_tile:
     lda map_row_lo,y
@@ -96,20 +107,6 @@ map_get_tile:
     txa
     tay
     :MapRead_ptr0_y()
-    rts
-
-// Input: X = column, Y = row, A = tile byte
-// Clobbers: Y, zp_ptr0/zp_ptr0_hi
-map_set_tile:
-    pha
-    lda map_row_lo,y
-    sta zp_ptr0
-    lda map_row_hi,y
-    sta zp_ptr0_hi
-    txa
-    tay
-    pla
-    :MapWrite_ptr0_y()
     rts
 
 // ============================================================

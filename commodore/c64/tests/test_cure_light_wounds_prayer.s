@@ -6,7 +6,7 @@
 .pc = $E000 "Result Buffer"
 tc_results: .fill 3, $ff
 
-.pc = $080E "Bootstrap"
+.pc = $080E "Test Code"
 
 .encoding "screencode_mixed"
 
@@ -25,9 +25,9 @@ test_finish:
     dex
     bpl !copy-
     :BankInKernal()
-    jmp test_done_break
+    brk
 
-.pc = $0840 "Test Code"
+.pc = $0840 "Test Body"
 
 #import "../../common/zeropage.s"
 #import "../memory.s"

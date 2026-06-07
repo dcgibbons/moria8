@@ -1244,6 +1244,133 @@ run_scripted_detect_evil_smoke() {
     TOTAL=$((TOTAL + 1))
 }
 
+run_dungeon_ascent_product_smoke() {
+    local name="dungeon_ascent_product_smoke"
+    echo -n "  $name: "
+
+    local build_log
+    build_log=$(mktemp -t "build_${name}_log")
+    mkdir -p out
+
+    if ! make -s -C .. out/c64/boot.prg out/c64/bootart64.prg out/c64/title \
+            out/c64/monster.db.1 out/c64/monster.db.2 out/c64/monster.db.3 out/c64/monster.db.4 \
+            >"$build_log" 2>&1; then
+        echo "FAIL (asset build error)"
+        tail -20 "$build_log"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    if ! java -jar "$KICKASS" "${KICKASS_TRACE_DEFINE[@]}" main.s -showmem -vicesymbols \
+            -define C64_TEST_SCRIPTED_DUNGEON_ASCENT_PRODUCT \
+            -o out/moria_dungeon_ascent_smoke.prg >"$build_log" 2>&1; then
+        echo "FAIL (assembly error)"
+        grep -i error "$build_log" | head -5
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    local scripted_d64="out/moria_dungeon_ascent_smoke.d64"
+    rm -f "$scripted_d64"
+    if ! "$C1541" -format "moria8 c64,m8" d64 "$scripted_d64" \
+            -attach "$scripted_d64" \
+            -write ../out/c64/boot.prg "moria8" \
+            -write ../out/c64/boot.prg "boot64" \
+            -write ../out/c64/bootart64.prg "bootart64" \
+            -write out/moria_dungeon_ascent_smoke.prg "moria64" \
+            -write out/64.bank "64.bank" \
+            -write ../out/c64/title "t64" \
+            -write ../out/c64/monster.db.1 "monster.db.1" \
+            -write ../out/c64/monster.db.2 "monster.db.2" \
+            -write ../out/c64/monster.db.3 "monster.db.3" \
+            -write ../out/c64/monster.db.4 "monster.db.4" \
+            -write out/ovl.start "64.start" \
+            -write out/ovl.town "64.town" \
+            -write out/ovl.death "64.death" \
+            -write out/ovl.gen "64.gen" \
+            -write out/ovl.help "64.help" \
+            -write out/ovl.ui "64.ui" \
+            -write out/ovl.items "64.items" \
+            -write out/ovl.spell "64.spell" >>"$build_log" 2>&1; then
+        echo "FAIL (disk build error)"
+        tail -20 "$build_log"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    local main_vs="out/main.vs"
+    local pass_addr fail_addr
+    pass_addr=$(awk '/\.tramp_store_restock_all$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    fail_addr=$(awk '/\.c64_test_dungeon_ascent_fail_input_sym$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    if [ -z "${pass_addr:-}" ] || [ -z "${fail_addr:-}" ]; then
+        echo "FAIL (missing dungeon-ascent smoke symbols in out/main.vs)"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    local mon_file
+    mon_file=$(mktemp -t "test_${name}_mon")
+    local tty_log
+    tty_log=$(mktemp -t "test_${name}_ttylog")
+    local pass_lc fail_lc
+    pass_lc=$(echo "$pass_addr" | tr '[:upper:]' '[:lower:]')
+    fail_lc=$(echo "$fail_addr" | tr '[:upper:]' '[:lower:]')
+
+    {
+        echo "break \$${fail_addr}"
+        echo "break \$${pass_addr}"
+        echo "g"
+        echo "quit"
+    } > "$mon_file"
+
+    script -q "$tty_log" \
+        "$VICE" -warp -config /dev/null -default -console -nativemonitor -autostartprgmode 1 \
+        -8 "$scripted_d64" -autostart "$scripted_d64" \
+        -moncommands "$mon_file" \
+        -limitcycles 900000000 +sound -sounddev dummy \
+        +remotemonitor +binarymonitor > /dev/null 2>&1
+
+    if grep -qiE "Stop on  exec ${pass_lc}" "$tty_log" || grep -qi "^BREAK: .*C:\$${pass_addr}" "$tty_log"; then
+        echo "PASS"
+        PASS=$((PASS + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    if grep -qiE "Stop on  exec ${fail_lc}" "$tty_log" || grep -qi "^BREAK: .*C:\$${fail_addr}" "$tty_log"; then
+        echo "FAIL (scripted input exhausted before ascent)"
+        echo "    Log: $tty_log"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    if grep -qiE "JAM|Invalid opcode" "$tty_log"; then
+        echo "FAIL (dungeon ascent flow jammed)"
+        echo "    Log: $tty_log"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    if grep -qi "cycle limit reached" "$tty_log"; then
+        echo "FAIL (dungeon ascent flow timed out)"
+        echo "    Log: $tty_log"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    echo "FAIL (did not reach dungeon-ascent pass trap)"
+    echo "    Log: $tty_log"
+    FAIL=$((FAIL + 1))
+    TOTAL=$((TOTAL + 1))
+}
+
 run_disk_setup_product_smoke() {
     local name="disk_setup_product_smoke"
     echo -n "  $name: "
@@ -1468,16 +1595,8 @@ run_save_write_product_smoke() {
         return
     fi
 
-    local dir_type_offset0=$(((357 + 1) * 256 + 2))
-    local dir_type_offset1=$((dir_type_offset0 + 32))
-    if ! printf '\201' | dd of="$save_d64" bs=1 seek="$dir_type_offset0" conv=notrunc status=none 2>>"$build_log"; then
-        echo "FAIL (marker directory patch error)"
-        tail -20 "$build_log"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-    if ! printf '\201' | dd of="$save_d64" bs=1 seek="$dir_type_offset1" conv=notrunc status=none 2>>"$build_log"; then
+    local save_dir_type_offset=$(((357 + 1) * 256 + 2 + 32))
+    if ! printf '\201' | dd of="$save_d64" bs=1 seek="$save_dir_type_offset" conv=notrunc status=none 2>>"$build_log"; then
         echo "FAIL (savefile directory patch error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -1668,7 +1787,7 @@ run_save_media_fail_product_smoke() {
 
     local main_vs="out/main.vs"
     local pass_addr fail_addr
-    pass_addr=$(awk '/\.c64_test_after_save_game$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    pass_addr=$(awk '/\.c64_test_after_save_media_fail$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     fail_addr=$(awk '/\.save_select_output_name_c64$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     if [ -z "${pass_addr:-}" ] || [ -z "${fail_addr:-}" ]; then
         echo "FAIL (missing save-media-fail smoke symbols in out/main.vs)"
@@ -1933,6 +2052,10 @@ check_static_contract "wizard_cancel_text_contract" "../common/wizard.s" \
     "wiz_row4_str:|||.text \"Q to cancel\""
 check_static_contract "wizard_menu_aligned_rows_contract" "../common/wizard.s" \
     "wiz_row1_str:|||.text \"L jump    A reveal    H heal\"|||wiz_row2_str:|||.text \"I ident   X level     G item\"|||wiz_row3_str:|||.text \"S summon  T tele      W wall\""
+check_static_contract "wizard_item_prompt_range_contract" "../common/wizard.s" \
+    "wiz_item_prompt_str:|||.text \"ITEM 0-95: \""
+check_static_contract "wizard_bad_prompt_cleanup_contract" "../common/wizard.s" \
+    "wizard_prompt_bad_value:|||jsr msg_print|||jmp wizard_prompt_clear_digits|||wizard_prompt_two_digit:|||jsr wizard_prompt_bad_value|||jmp !wiz_num_loop-"
 check_static_contract "c64_disk_prompt_dismiss_clears_full_modal_contract" "../common/disk_swap.s" \
     "disk_prompt:|||jsr hal_input_get_key|||jsr ui_clear_full_screen_safe|||jsr msg_init|||jsr hal_storage_init_selected_drive"
 check_static_contract "disk_setup_insert_dismiss_clears_modal_contract" "../common/ui_disk_setup.s" \
@@ -1954,7 +2077,7 @@ check_static_contract "c64_input_restores_bank_before_irq_contract" "input.s" \
 check_static_contract "inventory_overlay_fresh_key_contract" "../common/player_items.s" \
     "show_inv_and_select:|||jsr input_prepare_selectable_overlay_key|||jsr tramp_ui_inv_select_display|||jsr input_get_followup_key"
 check_static_contract "inventory_overlay_items_reload_contract" "../common/player_items.s" \
-    "show_inv_and_select:|||lda #OVL_NONE|||sta piw_return_overlay|||tsx|||lda \$0102,x|||cmp #\$e0|||!sias_check_outer_return:|||lda \$0104,x|||cmp #\$e0|||!sias_return_overlay:|||lda current_overlay|||cmp #OVL_ITEMS|||!sias_store_return_overlay:|||sta piw_return_overlay|||jsr ui_view_restore_modal_overlay|||cmp #OVL_NONE|||jsr overlay_load|||brk|||sei|||jsr hal_irq_install_runtime|||lda #BANK_NO_KERNAL|||sta hal_memory_cpu_port"
+    "show_inv_and_select:|||lda piw_return_overlay|||bne !sias_have_return_overlay+|||tsx|||lda \$0102,x|||cmp #\$e0|||!sias_check_outer_return:|||lda \$0104,x|||cmp #\$e0|||!sias_return_overlay:|||lda current_overlay|||cmp #OVL_ITEMS|||!sias_store_return_overlay:|||sta piw_return_overlay|||jsr ui_view_restore_modal_overlay|||lda #OVL_NONE|||sta piw_return_overlay|||txa|||beq !sias_no_overlay_reload+|||jsr overlay_load|||brk|||sei|||jsr hal_irq_install_runtime|||lda #BANK_NO_KERNAL|||sta hal_memory_cpu_port"
 check_static_contract "item_action_inventory_overlay_hint_contract" "../common/item_actions_overlay.s" \
     "item_action_select_filtered_inv:|||jsr item_action_get_key|||cmp #\$3f|||lda #OVL_ITEMS|||sta piw_return_overlay|||jmp piw_select_filtered_inv_key"
 check_static_contract "spell_recharge_inventory_overlay_hint_contract" "../common/player_magic_execute_overlay.s" \
@@ -1964,7 +2087,7 @@ check_static_contract "identify_scroll_resident_completion_contract" "../common/
 check_static_contract "itemdesc_armor_brackets_screen_code_contract" "../common/item_desc_banked.s" \
     "!idps_armor:|||lda #\$1b                    // '[' screen code|||lda #\$1d                    // ']' screen code|||!idps_ring:|||lda #\$1b                    // '[' screen code|||lda #\$1d                    // ']' screen code"
 check_static_contract "save_split_item_stats_contract" "../common/save.s" \
-    ":save_block_desc(inv_p1, TOTAL_INV_SLOTS)|||:save_block_desc(inv_to_hit, TOTAL_INV_SLOTS)|||:save_block_desc(inv_to_dam, TOTAL_INV_SLOTS)|||:save_block_desc(inv_to_ac, TOTAL_INV_SLOTS)|||:save_block_desc(si_p1, STORE_TOTAL_SLOTS)|||:save_block_desc(si_to_hit, STORE_TOTAL_SLOTS)|||:save_block_desc(si_to_dam, STORE_TOTAL_SLOTS)|||:save_block_desc(si_to_ac, STORE_TOTAL_SLOTS)|||jsr load_read_block_table|||:save_block(fi_to_hit, MAX_FLOOR_ITEMS)|||:save_block(fi_to_dam, MAX_FLOOR_ITEMS)|||:save_block(fi_to_ac, MAX_FLOOR_ITEMS)|||lda #<fi_to_hit|||jsr load_read_block|||lda #<fi_to_dam|||jsr load_read_block|||lda #<fi_to_ac|||jsr load_read_block"
+    "save_block_table_inventory_current:|||:save_block_desc(inv_p1, TOTAL_INV_SLOTS)|||:save_block_desc(inv_to_hit, TOTAL_INV_SLOTS)|||:save_block_desc(inv_to_dam, TOTAL_INV_SLOTS)|||:save_block_desc(inv_to_ac, TOTAL_INV_SLOTS)|||save_block_table_inventory_legacy:|||:save_block_desc(inv_p1, LEGACY_TOTAL_INV_SLOTS)|||:save_block_desc(si_p1, STORE_TOTAL_SLOTS)|||:save_block_desc(si_to_hit, STORE_TOTAL_SLOTS)|||:save_block_desc(si_to_dam, STORE_TOTAL_SLOTS)|||:save_block_desc(si_to_ac, STORE_TOTAL_SLOTS)|||save_block_table_floor_items_direct:|||:save_block_desc(fi_qty, MAX_FLOOR_ITEMS)|||:save_block_desc(fi_to_hit, MAX_FLOOR_ITEMS)|||:save_block_desc(fi_to_dam, MAX_FLOOR_ITEMS)|||:save_block_desc(fi_to_ac, MAX_FLOOR_ITEMS)|||load_read_floor_block_table:|||lda load_floor_item_count|||jsr load_read_block|||save_write_floor_items:|||lda #<save_block_table_floor_items_direct|||jsr save_write_block_table|||lda #<SAVE_BLOCK_FLOOR_ITEMS_STAT_TABLE|||jsr save_write_block_table|||load_read_floor_items:|||lda #<save_block_table_floor_items_direct|||jsr load_read_floor_block_table|||lda #<SAVE_BLOCK_FLOOR_ITEMS_STAT_TABLE|||jsr load_read_floor_block_table"
 check_static_contract "item_action_messages_stat_desc_contract" "../common/item.s" \
     "Build message: \"You picked up a <name>.\"|||lda fi_add_id|||jsr item_append_desc|||Build message: \"You drop a <name>.\"|||lda fi_add_id|||jsr item_append_desc|||item_append_desc:|||jsr item_append_name|||and #IF_IDENTIFIED"
 check_static_contract "equip_action_messages_stat_desc_contract" "../common/player_item_commands.s" \
@@ -2096,14 +2219,14 @@ run_test "orb_of_draining_prayer" "tests/test_orb_of_draining_prayer.s" "0400 04
     run_test "prayer_feedback" "tests/test_prayer_feedback.s" "0400 040c" 13 500000000
 run_test "detect_feedback" "tests/test_detect_feedback.s" "0400 0403" 4 500000000
 run_test "item" "tests/test_item.s" "0400 042e" 47 1000000000
-run_test "item_desc" "tests/test_item_desc.s" "0400 0406" 7 500000000
+run_test "item_desc" "tests/test_item_desc.s" "0400 0408" 9 500000000
 run_test "item_ui" "tests/test_item_ui.s" "0400 040f" 16 1000000000
 run_test "store" "tests/test_store.s" "0400 0428" 41 1000000000
 run_test "ui_views" "tests/test_ui_views.s" "0400 0413" 17 500000000
 run_test "ui_views_filters" "tests/test_ui_views_filters.s" "0400 0413" 7 500000000
 run_test "subsystems" "tests/test_subsystems.s" "0400 0409" 10
 run_sound_monitor_test
-run_test "save"  "tests/test_save.s"  "0400 0415" 22 1000000000
+run_test "save"  "tests/test_save.s"  "0400 0417" 24 1000000000
 run_test "score" "tests/test_score.s" "0400 040b" 12 500000000
 run_test "wands_staves" "tests/test_wands_staves.s" "0400 0406" 7 100000000
 run_test "monster_magic" "tests/test_monster_magic.s" "0400 040a" 11 500000000
@@ -2121,6 +2244,7 @@ run_scripted_book_overlay_smoke
 run_scripted_scroll_selector_smoke
 run_scripted_spell_list_overlay_smoke
 run_scripted_dungeon_target_spell_smoke
+run_dungeon_ascent_product_smoke
 run_disk_setup_product_smoke
 run_load_resume_product_smoke
 run_save_media_fail_product_smoke

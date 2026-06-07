@@ -83,24 +83,24 @@ start addresses and all cross-boundary limits.
 | `$0C00-$0C05` | MMU/KERNAL save bytes |
 | `$0C06` | MMU helper blob in common RAM |
 | `$0D60-$0FF3` | Runtime-common / feature-disk payload |
-| `$1000-$19B4` | `128.runtime` low runtime payload |
+| `$1000-$19FD` | `128.runtime` low runtime payload |
 | `$1A00-$1AFF` | Floor-item table |
 | `$1B00-$1BFF` | Creature scratch |
-| `$1C01-$5FB0` | Main program image: boot path, loaders, trampolines, wrappers |
-| `$6000-$8CB7` | `128.world` resident world payload, including C128 cache/overlay state, overlay filename tables, and C128 infravision helpers |
-| `$8D00-$A686` | `128.item` resident item payload |
-| `$A800-$AAE8` | `128.select` resident selector payload |
+| `$1C0E-$5F9E` | Main program image: boot path, loaders, trampolines, wrappers |
+| `$6000-$8C69` | `128.world` resident world payload, including C128 cache/overlay state, overlay filename tables, and C128 infravision helpers |
+| `$8C70-$A4FA` | `128.item` resident item payload |
+| `$A800-$AAE0` | `128.select` resident selector payload |
 | `$AB00-$AEFF` | `128.diskio` payload |
-| `$AF00-$B826` | `128.persist` save/modal payload when loaded |
-| `$AF00-$CF30` | `128.play` gameplay payload when loaded |
+| `$AF00-$B849` | `128.persist` save/modal payload when loaded |
+| `$AF00-$CFBD` | `128.play` gameplay payload when loaded |
 | `$D000-$DFFF` | I/O hole; forbidden for ordinary runtime payloads |
 | `$E000-$EFFF` | Overlay execution window |
-| `$F000-$FEBD` | Reloadable banked runtime payload, asserted below `$FF00` |
+| `$F000-$FE9A` | Reloadable banked runtime payload, asserted below `$FF00` |
 
 The `$AF00-$CFFF` resident slot is mutually exclusive. Save/load uses resident
 broker routines to load `128.persist`, perform the operation, then restore
 `128.play` before returning to gameplay. `128.play` must remain entirely below
-`$D000`; the current product build leaves `$CF31-$CFFF` free before the I/O
+`$D000`; the current product build leaves `$CFBE-$CFFF` free before the I/O
 hole.
 
 Recent size pressure in `128.play` was handled by moving data, not by weakening
@@ -118,6 +118,7 @@ The C128 segment definition maxima are:
 | `128.input` | `$0BFF` |
 | `128.fdisk` | `$0FFF` |
 | `128.runtime` | `$3FFF`, with runtime-low asserted below the floor-item table |
+| `128.names` | `$7FFF`, loaded into Bank 1 DB/data RAM |
 | `128.world` | `$8CFF` |
 | `128.item` | `$A7FF` |
 | `128.select` | `$AAFF` |
@@ -151,6 +152,12 @@ All eight are preloaded into Bank 1 before gameplay. The first seven use full
 4 KB cache slots; `128.disarm` uses a page-counted small cache slot at `$9D00`
 because it currently needs only three pages. Runtime overlay fetches copy the
 descriptor's page count, not an unconditional 4 KB.
+
+The C128 product disk also carries `128.names`, a resident Bank 1 DB payload
+loaded after the boot copy/scrub sequence. It currently occupies `$7400-$76F0`
+inside the Bank 1 DB/data window and stores fixed known item-name token streams.
+The token dictionary remains in Bank 0 `128.item`, and C128 known-name decoding
+reads Bank 1 source bytes through the DB MMU helpers.
 
 The source of truth for C128 ownership constants and overlap assertions is
 `commodore/c128/memory128.s`; the product segment definitions and Bank 0

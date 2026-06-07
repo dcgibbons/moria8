@@ -12,6 +12,7 @@ wizard_num_buf0:          .byte 0
 wizard_num_buf1:          .byte 0
 wizard_prompt_max:        .byte 0
 wizard_prompt_value:      .byte 0
+wizard_prompt_input_col:  .byte 0
 wizard_target_depth:      .byte 0
 wizard_entry_dir:         .byte 0
 
@@ -239,6 +240,34 @@ cmd_wizard_entry:
     jmp wizard_cmd_level_jump
 #endif
 
+wizard_prompt_clear_digits:
+    lda #0
+    sta wizard_num_digits
+    lda #5
+    sta zp_cursor_row
+    lda wizard_prompt_input_col
+    sta zp_cursor_col
+    lda #$20
+    jsr hal_screen_put_char
+    lda #$20
+    jsr hal_screen_put_char
+    lda #5
+    sta zp_cursor_row
+    lda wizard_prompt_input_col
+    sta zp_cursor_col
+    rts
+
+wizard_prompt_bad_value:
+    lda #<wizard_bad_value_str
+    sta zp_ptr0
+    lda #>wizard_bad_value_str
+    sta zp_ptr0_hi
+    jsr msg_print
+    jmp wizard_prompt_clear_digits
+
+wizard_bad_value_str:
+    .text "BAD" ; .byte 0
+
 #if HAL_PLATFORM_WIZARD_40COL_RESIDENT
 wizard_cmd_heal_cure:
     lda player_data + PL_MHP_LO
@@ -411,6 +440,8 @@ wizard_prompt_two_digit:
     lda #8
     sta zp_cursor_col
     jsr hal_screen_put_string
+    lda zp_cursor_col
+    sta wizard_prompt_input_col
     lda #0
     sta wizard_num_digits
 !wiz_num_loop:
@@ -421,11 +452,7 @@ wizard_prompt_two_digit:
     beq !wiz_num_loop-
     jsr wizard_parse_two_digit
     bcs !wiz_num_ok+
-    lda #<wiz_bad_value_str
-    sta zp_ptr0
-    lda #>wiz_bad_value_str
-    sta zp_ptr0_hi
-    jsr msg_print
+    jsr wizard_prompt_bad_value
     jmp !wiz_num_loop-
 !wiz_num_ok:
     sec
@@ -615,11 +642,9 @@ wiz_done_str:
 wiz_fail_str:
     .text "FAIL" ; .byte 0
 wiz_item_prompt_str:
-    .text "ITEM 0-63: " ; .byte 0
+    .text "ITEM 0-95: " ; .byte 0
 wiz_jump_prompt_str:
     .text "DLVL 0-99: " ; .byte 0
-wiz_bad_value_str:
-    .text "BAD" ; .byte 0
 wiz_title_str:
     .text "WIZARD MODE" ; .byte 0
 wiz_row1_str:

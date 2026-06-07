@@ -46,8 +46,9 @@
 .segmentdef RuntimeProjectileData [outPrg=OVL_OUT + "/128.proj.prg", start=$0a80, min=$0a80, max=$0aff]
 .segmentdef RuntimeCommonData [outPrg=OVL_OUT + "/128.fdisk.prg", start=$0d60, min=$0d60, max=$0fff]
 .segmentdef RuntimeLowData    [outPrg=OVL_OUT + "/128.runtime.prg", start=$1000, min=$1000, max=$3fff]
+.segmentdef C128ResidentItemNames [outPrg=OVL_OUT + "/128.names.prg", start=$7400, min=$7400, max=$7fff]
 .segmentdef C128ResidentWorld [outPrg=OVL_OUT + "/128.world.prg", start=$6000, min=$6000, max=$8cff]
-.segmentdef C128ResidentItems [outPrg=OVL_OUT + "/128.item.prg", start=$8d00, min=$8d00, max=$a7ff]
+.segmentdef C128ResidentItems [outPrg=OVL_OUT + "/128.item.prg", start=$8c70, min=$8c70, max=$a7ff]
 .segmentdef C128ResidentSelect [outPrg=OVL_OUT + "/128.select.prg", start=$a800, min=$a800, max=$aaff]
 .segmentdef C128ResidentDiskIo [outPrg=OVL_OUT + "/128.diskio.prg", start=$ab00, min=$ab00, max=$aeff]
 .segmentdef C128ResidentPersist [outPrg=OVL_OUT + "/128.persist.prg", start=$af00, min=$af00, max=$cfff]
@@ -1179,6 +1180,7 @@ c128_test_cache_survival_fail_sym:
 c128_test_cache_survival_pass_sym:
     brk
 #endif
+
 #if C128_TEST_TITLE_ART_CONTENT
 c128_test_title_art_fail_sym:
     brk
@@ -2392,6 +2394,12 @@ resident_items_filename:
 resident_items_filename_end:
     .byte 0
 .const RESIDENT_ITEMS_FILENAME_LEN = resident_items_filename_end - resident_items_filename
+.const RESIDENT_ITEM_NAMES_FILE_NUM = 14
+resident_item_names_filename:
+    .text "128.NAMES"
+resident_item_names_filename_end:
+    .byte 0
+.const RESIDENT_ITEM_NAMES_FILENAME_LEN = resident_item_names_filename_end - resident_item_names_filename
 .const RESIDENT_SELECT_FILE_NUM = 9
 resident_select_filename:
     .text "128.SELECT"
@@ -2418,7 +2426,7 @@ runtime_banked_filename_end:
 .const RUNTIME_BANKED_FILENAME_LEN = runtime_banked_filename_end - runtime_banked_filename
 
 c128_load_runtime_prg:
-    lda #0
+    lda c128_runtime_load_bank
     ldx #0
     jsr safe_setbnk
 
@@ -2446,6 +2454,7 @@ c128_load_runtime_prg:
     jsr w_clrchn
 
     lda #0
+    sta c128_runtime_load_bank
     ldx #0
     jsr safe_setbnk
 
@@ -2499,7 +2508,7 @@ c128_load_runtime_projectile_prg:
     sta zp_ptr0
     lda #>runtime_projectile_filename
     sta zp_ptr0_hi
-    lda #$80
+    lda #$70
     sta zp_ptr1
     lda #$0a
     sta zp_ptr1_hi
@@ -2555,7 +2564,36 @@ c128_load_resident_world_prg:
     :C128RuntimeLoadFile(RESIDENT_WORLD_FILE_NUM, RESIDENT_WORLD_FILENAME_LEN, resident_world_filename, $60)
 
 c128_load_resident_items_prg:
-    :C128RuntimeLoadFile(RESIDENT_ITEMS_FILE_NUM, RESIDENT_ITEMS_FILENAME_LEN, resident_items_filename, $8d)
+    lda #RESIDENT_ITEMS_FILE_NUM
+    sta disk_temp
+    lda #RESIDENT_ITEMS_FILENAME_LEN
+    sta disk_status
+    lda #<resident_items_filename
+    sta zp_ptr0
+    lda #>resident_items_filename
+    sta zp_ptr0_hi
+    lda #$80
+    sta zp_ptr1
+    lda #$8c
+    sta zp_ptr1_hi
+    jmp c128_load_runtime_prg
+
+c128_load_resident_item_names_prg:
+    lda #RESIDENT_ITEM_NAMES_FILE_NUM
+    sta disk_temp
+    lda #RESIDENT_ITEM_NAMES_FILENAME_LEN
+    sta disk_status
+    lda #<resident_item_names_filename
+    sta zp_ptr0
+    lda #>resident_item_names_filename
+    sta zp_ptr0_hi
+    lda #<BANK1_DB_BASE
+    sta zp_ptr1
+    lda #>BANK1_DB_BASE
+    sta zp_ptr1_hi
+    lda #1
+    sta c128_runtime_load_bank
+    jmp c128_load_runtime_prg
 
 c128_load_resident_select_prg:
     :C128RuntimeLoadFile(RESIDENT_SELECT_FILE_NUM, RESIDENT_SELECT_FILENAME_LEN, resident_select_filename, $a8)
@@ -2574,6 +2612,12 @@ c128_load_core_residents:
     jmp runtime_load_failed
 !resident_items_loaded:
     lda #3
+    sta c128_runtime_load_stage
+    jsr c128_load_resident_item_names_prg
+    bcc !resident_item_names_loaded+
+    jmp runtime_load_failed
+!resident_item_names_loaded:
+    lda #4
     sta c128_runtime_load_stage
     jsr c128_load_resident_select_prg
     bcc !resident_select_loaded+
@@ -2787,6 +2831,7 @@ kernal_irq_vec_lo: .byte 0
 kernal_irq_vec_hi: .byte 0
 c128_kernal_irq_tail_runtime_owned: .byte 0
 c128_runtime_load_stage: .byte 0
+c128_runtime_load_bank: .byte 0
 c128_runtime_load_result_a: .byte 0
 c128_runtime_load_readst: .byte 0
 c128_modal_result: .byte 0
@@ -3411,9 +3456,72 @@ c128_resident_world_end:
 
 .segment C128ResidentItems
 c128_resident_items_start:
+slain_str:
+    .text "You have been slain." ; .byte 0
+death_source_saved:
+    .byte 0
+recall_query_sc:   .byte 0
+recall_found_type: .byte 0
+recall_last_sc:    .byte 0
+recall_last_idx:   .byte 0
+run_input_armed:   .byte 0
+auto_rest_active:  .byte 0
+ptep_temp: .byte 0
+tool_ego_prefix_hi:
+    .byte >ego_tool_prefix_gnomish, >ego_tool_prefix_dwarven
+    .byte >ego_tool_prefix_orcish,  >ego_tool_prefix_dwarven
 #import "../common/item.s"
 #import "../common/store_data.s"
+ego_str_holy_avenger_common:
+    .text " (Holy Avenger)" ; .byte 0
 c128_resident_items_end:
+
+.segment Default
+#if C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_SPELL_CANCEL || C128_TEST_SCRIPTED_BOOK_OVERLAY || C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY
+c128_test_seed_scripted_spell_state:
+    lda #0
+    sta c128_test_spell_success_count
+    sta c128_test_spell_return_pending
+    sta c128_test_spell_return_count
+    lda #CLASS_MAGE
+    sta player_data + PL_CLASS
+    lda #SPELL_MAGE
+    sta player_data + PL_SPELL_TYPE
+    lda #50
+    sta zp_player_lvl
+    sta player_data + PL_LEVEL
+    lda #18
+    sta player_data + PL_INT_CUR
+    lda #20
+    sta zp_player_mp
+    sta player_data + PL_MANA
+    sta zp_player_mmp
+    sta player_data + PL_MAX_MANA
+    lda #1
+    sta player_data + PL_SPELLS_LEARNT_0
+    lda #0
+    sta player_data + PL_SPELLS_LEARNT_1
+    sta player_data + PL_SPELLS_LEARNT_2
+    sta player_data + PL_SPELLS_LEARNT_3
+    sta player_data + PL_SPELLS_WORKED_0
+    sta player_data + PL_SPELLS_WORKED_1
+    sta player_data + PL_SPELLS_WORKED_2
+    sta player_data + PL_SPELLS_WORKED_3
+    sta player_data + PL_SPELLS_FORGOTTEN_0
+    sta player_data + PL_SPELLS_FORGOTTEN_1
+    sta player_data + PL_SPELLS_FORGOTTEN_2
+    sta player_data + PL_SPELLS_FORGOTTEN_3
+    sta player_data + PL_NEW_SPELLS
+    lda #99
+    ldx #31
+!c128_test_spell_order_clear:
+    sta player_data + PL_SPELL_ORDER,x
+    dex
+    bpl !c128_test_spell_order_clear-
+    lda #0
+    sta player_data + PL_SPELL_ORDER
+    rts
+#endif
 
 .segment C128ResidentSelect
 c128_resident_select_start:
@@ -3434,8 +3542,6 @@ descend_str:
     .text "You descend the staircase." ; .byte 0
 ascend_str:
     .text "You ascend the staircase." ; .byte 0
-at_surface_str:
-    .text "You are already at the surface." ; .byte 0
 
 #define ITEM_ACTIONS_OVERLAY_EXTERNAL
 #define PLAYER_RECALC_EQUIPMENT_EXTERNAL
@@ -3453,8 +3559,12 @@ c128_resident_persist_end:
 #define PRESS_KEY_STR_EXTERNAL
 #define WELCOME_STR_EXTERNAL
 #define GAME_LOOP_NAV_STRINGS_EXTERNAL
+#define GAME_LOOP_NO_STAIRS_STR_EXTERNAL
+#define GAME_LOOP_LOW_DATA_EXTERNAL
 .segment C128ResidentPlay
 c128_resident_play_start:
+at_surface_str:
+    .text "You are already at the surface." ; .byte 0
 #if PERF_P1
 #import "../common/perf_p1_data.s"
 #endif
@@ -3471,15 +3581,13 @@ c128_resident_play_start:
 #import "../common/player_move.s"
 #import "../common/ui_help_clear.s"
 #import "../common/wizard.s"
+#define C128_SCRIPTED_SPELL_SEED_EXTERNAL
 #define DISARM_COMMAND_EXTERNAL
 #import "../common/game_loop.s"
 #undef DISARM_COMMAND_EXTERNAL
+#undef C128_SCRIPTED_SPELL_SEED_EXTERNAL
 #import "../common/turn.s"
 #import "../common/player_magic_state.s"
-#if C128
-ego_str_holy_avenger_common:
-    .text " (Holy Avenger)" ; .byte 0
-#endif
 #if C128_TEST_PERF_P1_TRACE
 perf_p1_decision:
     .byte PERF_P1_DECISION_NONE
@@ -4229,6 +4337,12 @@ runtime_low_data_start:
     #import "monster_threat_vdc.s"
     #import "dungeon_render_vdc.s"
     #import "../common/ego_items.s"
+winner_save_blocked_str:
+    .text "Winner: Shift+Q to claim victory." ; .byte 0
+no_stairs_str:
+    .text "You see no stairs here." ; .byte 0
+recall_prompt_str:
+    .text "Recall which? " ; .byte 0
 pmx_cure_poison_msg:
     lda zp_eff_poison
     beq !pcpm_done+
@@ -4254,6 +4368,12 @@ runtime_low_data_end:
 // ============================================================
 .segment RuntimeBankedCode
 banked_payload:
+ego_tool_prefix_gnomish: .text "Gnomish " ; .byte 0
+ego_tool_prefix_orcish:  .text "Orcish " ; .byte 0
+ego_tool_prefix_dwarven: .text "Dwarven " ; .byte 0
+tool_ego_prefix_lo:
+    .byte <ego_tool_prefix_gnomish, <ego_tool_prefix_dwarven
+    .byte <ego_tool_prefix_orcish,  <ego_tool_prefix_dwarven
 first_banked_function:
     #import "../common/ui_home.s"
     #import "../common/item_desc_banked.s"
@@ -4282,8 +4402,8 @@ program_end:
 #if C128
 .assert "C128 main image stays below resident world payload", program_end <= c128_resident_world_start, true
 .assert "C128 resident world starts at $6000", c128_resident_world_start == $6000, true
-.assert "C128 resident world fits below items payload", c128_resident_world_end <= $8D00, true
-.assert "C128 resident items starts at $8D00", c128_resident_items_start == $8D00, true
+.assert "C128 resident world fits below items payload", c128_resident_world_end <= c128_resident_items_start, true
+.assert "C128 resident items starts at $8C70", c128_resident_items_start == $8C70, true
 .assert "C128 resident items fits below selector payload", c128_resident_items_end <= $A800, true
 .assert "C128 resident selector starts at $A800", c128_resident_select_start == $A800, true
 .assert "C128 resident selector fits below disk-I/O payload", c128_resident_select_end <= $AB00, true
@@ -4309,7 +4429,8 @@ program_end:
 .assert "Runtime projectile helpers stay in pre-input low page", runtime_projectile_data_start >= $0a80 && runtime_projectile_data_end <= $0b00, true
 .assert "Runtime input code stays inside boot-sector page ownership", runtime_input_data_start >= $0b00 && runtime_input_data_end <= $0c00, true
 .assert "C128 FEAT-DISK common runtime stays in common RAM", runtime_common_data_end <= $1000, true
-.assert "C128 disk marker logical file avoids runtime loader files", hal_storage_marker_file_num > RUNTIME_BANKED_FILE_NUM && hal_storage_marker_file_num < hal_storage_cmd_channel, true
+.assert "C128 disk marker logical file avoids runtime loader files", hal_storage_marker_file_num > RUNTIME_BANKED_FILE_NUM && hal_storage_marker_file_num != RESIDENT_ITEM_NAMES_FILE_NUM && hal_storage_marker_file_num < hal_storage_cmd_channel, true
+.assert "C128 item-name logical file avoids marker and command channel", RESIDENT_ITEM_NAMES_FILE_NUM != hal_storage_marker_file_num && RESIDENT_ITEM_NAMES_FILE_NUM < hal_storage_cmd_channel, true
 .assert "Low runtime code stays below floor-item table", runtime_low_data_end <= FLOOR_ITEM_BASE, true
 .assert "Ego roll routine stays in low runtime RAM", roll_ego_type < FLOOR_ITEM_BASE, true
 .assert "Ego damage routine stays in low runtime RAM", ego_apply_damage < FLOOR_ITEM_BASE, true

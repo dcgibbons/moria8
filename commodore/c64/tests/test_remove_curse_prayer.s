@@ -380,5 +380,8 @@ test_start:
     sta tc_results + 2
     jmp test_finish
 
+// Keep the monitor stop address away from BASIC ROM execution reached during
+// autostart before the test program banks BASIC out.
+.fill $22, $ea
 test_done_break:
     brk

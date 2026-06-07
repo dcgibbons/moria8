@@ -444,6 +444,8 @@ ui_wizard_prompt_two_digit:
     lda #(SCREEN_COLS - 24) / 2
     sta zp_cursor_col
     jsr hal_screen_put_string
+    lda zp_cursor_col
+    sta wizard_prompt_input_col
     lda #0
     sta wizard_num_digits
 !wiz_num_loop:
@@ -455,11 +457,7 @@ ui_wizard_prompt_two_digit:
     beq !wiz_num_loop-
     jsr ui_wizard_parse_two_digit
     bcs !wiz_num_ok+
-    lda #<wiz_bad_value_str
-    sta zp_ptr0
-    lda #>wiz_bad_value_str
-    sta zp_ptr0_hi
-    jsr msg_print
+    jsr wizard_prompt_bad_value
     jmp !wiz_num_loop-
 !wiz_num_ok:
     sec
@@ -627,8 +625,6 @@ wiz_done_str:
 wiz_fail_str:
     .text "FAIL" ; .byte 0
 wiz_item_prompt_str:
-    .text "ITEM 0-63: " ; .byte 0
+    .text "ITEM 0-95: " ; .byte 0
 wiz_jump_prompt_str:
     .text "DLVL 0-99: " ; .byte 0
-wiz_bad_value_str:
-    .text "BAD" ; .byte 0

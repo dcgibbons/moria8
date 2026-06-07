@@ -76,7 +76,14 @@ map_bulk_exit:
 
 // Minimal generation-path stubs for features outside C4.7 soak scope.
 trap_count: .byte 0
-place_traps: rts
+trap_x: .fill MAX_TRAPS, 0
+trap_y: .fill MAX_TRAPS, 0
+trap_type: .fill MAX_TRAPS, 0
+df_target_x: .byte 0
+df_target_y: .byte 0
+find_random_floor:
+    clc
+    rts
 place_secrets: rts
 tramp_assign_special_room: rts
 tramp_vault_seal_entrance: rts

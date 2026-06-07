@@ -194,6 +194,8 @@ tramp_ui_recall:
 tramp_dig_ability:
     rts
 
+tun_dig_ability: .byte 0
+
 #import "../../common/zeropage.s"
 #import "../memory.s"
 #import "../../common/reu.s"
@@ -242,10 +244,6 @@ random_floor_in_room:
 #import "../../common/dungeon_los.s"
 #import "../../common/player_move.s"
 #import "../../common/combat.s"
-#import "../../common/ranged_fire.s"
-#import "../../common/throw.s"
-#import "../../common/bash.s"
-#import "../../common/tunnel.s"
 #import "../../common/monster_attack.s"
 #import "../../common/turn.s"
 #import "../../common/generation_busy.s"
@@ -385,7 +383,6 @@ install_jump_patch:
     :PatchJump(creature_get_name, test_creature_get_name)
     :PatchJump(monster_spawn_level, test_monster_spawn_level)
     :PatchJump(item_spawn_level, test_item_spawn_level)
-    :PatchJump(ranged_fire, test_ranged_fire)
     rts
 
 restore_real_input_get_command:

@@ -143,6 +143,11 @@ beps_save_y2: .byte 0
 // put_tool_ego_prefix — Print ego prefix for digging tools
 // Input: A = ego (1 or 2), X = item type ID (62 or 63)
 put_tool_ego_prefix:
+    cpx #62
+    beq !ptep_valid_tool+
+    cpx #63
+    bne !ptep_done+
+!ptep_valid_tool:
     sec
     sbc #1                      // ego - 1
     sta ptep_temp2
@@ -158,6 +163,7 @@ put_tool_ego_prefix:
     lda tool_ego_pfx_hi,x
     sta zp_ptr0_hi
     jsr hal_screen_put_string
+!ptep_done:
     rts
 
 ptep_temp2: .byte 0
@@ -182,6 +188,7 @@ put_inv_name_with_ego:
     stx pinwe_sl
     tax
     lda it_category,x
+    cmp #ICAT_DIGGING
     bne !pinwe_not_tool+
     ldx pinwe_sl
     lda inv_ego,x

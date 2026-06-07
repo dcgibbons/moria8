@@ -1,13 +1,14 @@
 #importonce
 // ui_equipment.s — Equipment display screen
 //
-// Full-screen equipment view for slots 22-29.
+// Full-screen equipment view for currently visible slots.
 
 .const UEQ_TITLE_COL = hal_layout_equipment_title_col
 .const UEQ_FOOTER_COL = hal_layout_equipment_footer_col
 
-// ui_equip_display — Show equipped items (slots 22-29)
-// 8 slots: WEAPON, BODY, SHIELD, HEAD, HANDS, FEET, LIGHT, RING
+// ui_equip_display — Show equipped items.
+// Storage includes EQUIP_AMULET, but no amulet item types exist yet; keep that
+// save slot hidden until the catalog has real amulets.
 // Preserves: nothing
 ui_equip_display:
     lda #<press_key_str
@@ -50,14 +51,14 @@ ui_equip_display_common:
     sta zp_ptr0_hi
     jsr hal_screen_put_string
 
-    // Iterate 8 equipment slots
+    // Iterate equipment slots
     lda #0
-    sta ueq_slot               // 0-7 (maps to inv slot 22-29)
+    sta ueq_slot               // maps visible rows to equipment slots
     sta ueq_visible            // Visible ordinal for non-empty selection rows
 
 !ueq_loop:
     lda ueq_slot
-    cmp #MAX_EQUIP_SLOTS
+    cmp #VISIBLE_EQUIP_SLOTS
     bcc !ueq_cont+
     jmp !ueq_done+
 !ueq_cont:
@@ -71,7 +72,7 @@ ui_equip_display_common:
 
     lda ueq_slot
     clc
-    adc #EQUIP_WEAPON          // Map 0-7 -> 22-29
+    adc #EQUIP_WEAPON
     sta ueq_equip_idx
     tax
     lda inv_item_id,x

@@ -333,6 +333,15 @@ expected_item_name_lo:
     .byte <ein_40, <ein_41, <ein_42, <ein_43, <ein_44, <ein_45, <ein_46, <ein_47
     .byte <ein_48, <ein_49, <ein_50, <ein_51, <ein_52, <ein_53, <ein_54, <ein_55
     .byte <ein_56, <ein_57, <ein_58, <ein_59, <ein_60, <ein_61, <ein_62, <ein_63
+    .byte <ein_64, <ein_65
+    .byte <ein_66, <ein_67, <ein_68, <ein_69
+    .byte <ein_70, <ein_71, <ein_72, <ein_73
+    .byte <ein_74, <ein_75, <ein_76, <ein_77
+    .byte <ein_78, <ein_79
+    .byte <ein_80, <ein_81
+    .byte <ein_82, <ein_83, <ein_84, <ein_85, <ein_86, <ein_87
+    .byte <ein_88, <ein_89, <ein_90, <ein_91
+    .byte <ein_92, <ein_93, <ein_94, <ein_95
 expected_item_name_hi:
     .byte >ein_0, >ein_1, >ein_2, >ein_3, >ein_4, >ein_5, >ein_6, >ein_7
     .byte >ein_8, >ein_9, >ein_10, >ein_11, >ein_12, >ein_13, >ein_14, >ein_15
@@ -342,6 +351,15 @@ expected_item_name_hi:
     .byte >ein_40, >ein_41, >ein_42, >ein_43, >ein_44, >ein_45, >ein_46, >ein_47
     .byte >ein_48, >ein_49, >ein_50, >ein_51, >ein_52, >ein_53, >ein_54, >ein_55
     .byte >ein_56, >ein_57, >ein_58, >ein_59, >ein_60, >ein_61, >ein_62, >ein_63
+    .byte >ein_64, >ein_65
+    .byte >ein_66, >ein_67, >ein_68, >ein_69
+    .byte >ein_70, >ein_71, >ein_72, >ein_73
+    .byte >ein_74, >ein_75, >ein_76, >ein_77
+    .byte >ein_78, >ein_79
+    .byte >ein_80, >ein_81
+    .byte >ein_82, >ein_83, >ein_84, >ein_85, >ein_86, >ein_87
+    .byte >ein_88, >ein_89, >ein_90, >ein_91
+    .byte >ein_92, >ein_93, >ein_94, >ein_95
 
 ein_0:  .text "Gold (small)" ; .byte 0
 ein_1:  .text "Gold (large)" ; .byte 0
@@ -407,6 +425,38 @@ ein_60: .text "Holy Book of Prayers Exorcism" ; .byte 0
 ein_61: .text "Flask of Oil" ; .byte 0
 ein_62: .text "Shovel" ; .byte 0
 ein_63: .text "Pick" ; .byte 0
+ein_64: .text "Main Gauche" ; .byte 0
+ein_65: .text "Studded Leather Armor" ; .byte 0
+ein_66: .text "Rapier" ; .byte 0
+ein_67: .text "Broad Sword" ; .byte 0
+ein_68: .text "Bastard Sword" ; .byte 0
+ein_69: .text "Two-Handed Sword" ; .byte 0
+ein_70: .text "Scimitar" ; .byte 0
+ein_71: .text "Battle Axe" ; .byte 0
+ein_72: .text "War Hammer" ; .byte 0
+ein_73: .text "Morningstar" ; .byte 0
+ein_74: .text "Spear" ; .byte 0
+ein_75: .text "Pike" ; .byte 0
+ein_76: .text "Halberd" ; .byte 0
+ein_77: .text "Quarterstaff" ; .byte 0
+ein_78: .text "Large Shield" ; .byte 0
+ein_79: .text "Hard Leather Armor" ; .byte 0
+ein_80: .text "Scale Mail" ; .byte 0
+ein_81: .text "Plate Mail" ; .byte 0
+ein_82: .text "Cloak" ; .byte 0
+ein_83: .text "Steel Helm" ; .byte 0
+ein_84: .text "Gauntlets" ; .byte 0
+ein_85: .text "Soft Leather Boots" ; .byte 0
+ein_86: .text "Hard Leather Boots" ; .byte 0
+ein_87: .text "Metal Cap" ; .byte 0
+ein_88: .text "Sabre" ; .byte 0
+ein_89: .text "Cutlass" ; .byte 0
+ein_90: .text "Tulwar" ; .byte 0
+ein_91: .text "Katana" ; .byte 0
+ein_92: .text "Flail" ; .byte 0
+ein_93: .text "Lucerne Hammer" ; .byte 0
+ein_94: .text "Broad Axe" ; .byte 0
+ein_95: .text "Awl-Pike" ; .byte 0
 
 assert_col: .byte 0
 assert_idx: .byte 0

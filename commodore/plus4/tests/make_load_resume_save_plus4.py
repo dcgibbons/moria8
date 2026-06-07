@@ -4,10 +4,11 @@ from __future__ import annotations
 from pathlib import Path
 import sys
 
-SAVE_VERSION = 0x01
+SAVE_VERSION = 0x03
 
 PL_STRUCT_SIZE = 111
-ITEM_TYPE_COUNT = 64
+ITEM_TYPE_COUNT = 96
+ITEM_ID_CAPACITY = 96
 STORE_TOTAL_SLOTS = 96
 MAX_ROOMS = 8
 MAX_TRAPS = 16
@@ -19,7 +20,7 @@ RECALL_DATA_SIZE = 260
 # the checksum. Keep this explicit until the storage HAL owns per-platform
 # record layout instead of inheriting the C64 save shape implicitly.
 LOAD_SAVE_MAP_SIZE = 3676
-TOTAL_INV_SLOTS = 30
+TOTAL_INV_SLOTS = 31
 
 PL_LEVEL = 19
 PL_DLEVEL = 20
@@ -58,7 +59,7 @@ def main() -> int:
     payload.extend(block(4))    # rng
     for _ in range(8):
         payload.extend(block(TOTAL_INV_SLOTS))
-    payload.extend(block(ITEM_TYPE_COUNT))
+    payload.extend(block(ITEM_ID_CAPACITY))
     payload.extend(block(12))  # potion_shuffle
     payload.extend(block(12))  # scroll_shuffle
     payload.extend(block(4))   # ring_shuffle

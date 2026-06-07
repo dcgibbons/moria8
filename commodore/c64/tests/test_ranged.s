@@ -149,7 +149,8 @@ test_start:
 !t3_done:
 
     // ==========================================
-    // Test 4: Crossbow(50)→2, Bolt(53)→$82, Sling(51)→3, Rock(54)→$83
+    // Test 4: Crossbow(50)→2, Bolt(53)→$82, Sling(51)→3, Rock(54)→$83,
+    // and melee IDs above the missile table remain non-ranged.
     // ==========================================
     ldx #50
     jsr item_get_missile
@@ -166,6 +167,10 @@ test_start:
     ldx #54
     jsr item_get_missile
     cmp #$83
+    bne !t4_fail+
+    ldx #77
+    jsr item_get_missile
+    cmp #0
     bne !t4_fail+
     lda #$01
     sta tc_results+3

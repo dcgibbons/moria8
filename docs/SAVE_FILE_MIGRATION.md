@@ -73,12 +73,13 @@ maps old IDs to new IDs.
 
 ## Reserve Future Item Capacity
 
-Before expanding the item catalog, define a stable save capacity separate from
-the number of currently implemented item rows:
+Before expanding the item catalog beyond the legacy ABI range, define a stable
+save capacity separate from the number of currently implemented item rows:
 
 ```asm
-.const ITEM_TYPE_COUNT = 64
-.const ITEM_ID_CAPACITY = 128
+.const LEGACY_ITEM_TYPE_COUNT = 64
+.const ITEM_TYPE_COUNT = 96
+.const ITEM_ID_CAPACITY = 96
 ```
 
 The save format should serialize the stable capacity, not the current
@@ -135,10 +136,14 @@ Suggested layout milestones:
 
 | Layout | Meaning |
 |---|---|
-| `SAVE_LAYOUT_V1` | current 64-item byte `id_known` |
-| `SAVE_LAYOUT_V2` | fixed-capacity or bitset item identification |
-| `SAVE_LAYOUT_V3` | chest sidecars |
-| `SAVE_LAYOUT_V4` | split catalog / extended item state |
+| `SAVE_LAYOUT_V1` | 64-byte `id_known`, 30 inventory/equipment slots |
+| `SAVE_LAYOUT_V2` | 96-byte fixed-capacity `id_known`, 30 inventory/equipment slots |
+| `SAVE_LAYOUT_V3` | 96-byte fixed-capacity `id_known`, 31 inventory/equipment slots with `EQUIP_AMULET` |
+| future layout | chest sidecars or split catalog / extended item state |
+
+`EQUIP_AMULET` is currently a storage and migration reservation only. The
+equipment UI and take-off selector hide the amulet row until amulet item types
+are present in the catalog.
 
 Example migration:
 
@@ -148,7 +153,7 @@ load V1:
   convert to 128-bit id_known_bits
   initialize new item IDs as unknown/known by default
   read old floor/inventory/store layouts
-  initialize new fields to zero
+  initialize future known-item bytes and the amulet slot to empty/zero
 ```
 
 ## Append New Save Blocks Where Possible
@@ -200,6 +205,22 @@ Every new field needs a deterministic old-save default.
 | New store stock fields | 0 |
 | Catalog generation version | current default |
 
+Do not treat `id_known = 0` as a harmless universal default. Unknown-name
+rendering is category-sensitive: potions, scrolls, staves, wands, and similar
+randomized identification classes may use shuffled description tables, while
+ordinary equipment should normally render its real name. If an appended mundane
+item is left unknown during legacy-save migration, it can be routed through the
+wrong randomized-name table and read outside that table. That produces garbage
+inventory text and can corrupt the running product.
+
+For every appended item range, migration must explicitly choose one of:
+
+| Item class | Migration default |
+|---|---|
+| Mundane equipment, food, books, fixed-name tools | known |
+| Randomized potions, scrolls, wands, staves, rings, amulets | unknown only if the category-specific unknown-name table covers the new ID |
+| New special behavior items | explicit default documented with the item batch |
+
 ## Keep Save Identity Stable
 
 Old saves should store stable item identity, not derived names or table order.
@@ -226,18 +247,44 @@ continue to work because saved item IDs remain stable.
 
 ## Recommended Migration Project
 
-Before adding many items:
+Use the current 96-ID runway before introducing another save capacity.
+
+For the 96-item milestone:
 
 1. Freeze IDs `0-63`.
-2. Introduce `ITEM_ID_CAPACITY = 128`.
-3. Convert `id_known` from byte-per-item to a bitset, or save/load it through a
-   fixed-capacity compatibility wrapper.
-4. Add version-aware save loading for current saves.
-5. Add explicit migration defaults for future item ranges.
+2. Keep `ITEM_ID_CAPACITY = 96`.
+3. Grow `ITEM_TYPE_COUNT` only as rows are implemented.
+4. Add explicit migration defaults for every appended item or appended range.
+5. Keep old 64-byte known-state loading deterministic: read legacy bytes,
+   initialize appended bytes from documented defaults, and clear future
+   capacity bytes.
 6. Document append-only item IDs as a hard rule.
 
-After that, future catalog expansion to 96 or 128 items does not need to break
-saves.
+Implementation status: C64 resident bytes were recovered by removing the hidden
+C64U timing diagnostic, and the 96-ID migration runway now uses explicit
+per-row metadata. `it_unknown_desc` drives both unknown-name/color routing and
+legacy appended known-state defaults:
+
+- Fixed-name rows default known.
+- Randomized identification rows default unknown.
+- Future capacity bytes from `ITEM_TYPE_COUNT` through `ITEM_ID_CAPACITY - 1`
+  are cleared.
+
+When adding more rows, extend `it_unknown_desc` in lockstep with
+`ITEM_TYPE_COUNT`; do not add randomized appended rows unless their
+unknown-name/color pools cover the descriptor's class-local index.
+
+Before the 128-item milestone:
+
+1. Introduce `ITEM_ID_CAPACITY = 128`.
+2. Convert `id_known` from byte-per-item to a bitset, or save/load it through a
+   compact compatibility wrapper.
+3. Add version-aware save loading for 64-byte, 96-byte, and 128-capacity known
+   state.
+4. Add explicit migration defaults for future item ranges.
+5. Verify old saves containing IDs `64-95` before adding IDs `96-127`.
+
+After that, future catalog expansion to 128 items does not need to break saves.
 
 For full 420-row support, a later breaking or migrating format would still be
 needed because one-byte item IDs cap out at 255. Planning around 128 now gives

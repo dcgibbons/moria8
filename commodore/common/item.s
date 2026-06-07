@@ -196,7 +196,7 @@ item_init_floor:
     jsr glyph_clear_all
     rts
 
-// item_init_inventory — Clear all 30 inventory/equipment slots
+// item_init_inventory — Clear all inventory/equipment slots
 // Clobbers: A, X
 item_init_inventory:
     ldx #TOTAL_INV_SLOTS - 1
@@ -1306,51 +1306,66 @@ tunnel_spawn_gold:
 // 50% best-of-3 random picks (highest index wins), then re-roll
 //      within the winner's depth tier for uniform intra-tier distribution.
 // 1-in-12 "great item" chance sets effective level to max (full pool).
-// Output: A = item type ID (2-63)
+// Output: A = item type ID (2-ITEM_TYPE_COUNT-1)
 // Clobbers: A, X, Y
 // Uses: zp_temp0 (pool_size), zp_temp1 (best_idx), zp_temp2 (tier_lo)
 //       zp_temp4 used internally by rng_range
 // ============================================================
 .const PIT_MAX_LEVEL = 12
+#if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME
+.segment DungeonGenOverlay
+#endif
 
-// Items 2-63 sorted ascending by it_min_level
+// Items 2-(ITEM_TYPE_COUNT-1) sorted ascending by it_min_level
 pit_sorted:
     // Level 0 (5 items)
     .byte 13, 15, 61, 62, 63
-    // Level 1 (15 items)
-    .byte 2, 3, 6, 11, 12, 16, 17, 19, 20, 28, 29, 37, 51, 52, 54
-    // Level 2 (11 items)
-    .byte 5, 7, 9, 14, 21, 30, 31, 47, 48, 49, 53
-    // Level 3 (11 items)
-    .byte 4, 10, 18, 22, 25, 36, 39, 43, 44, 46, 50
-    // Level 4 (9 items)
-    .byte 8, 23, 27, 33, 38, 40, 42, 55, 58
-    // Level 5 (5 items)
-    .byte 24, 26, 32, 41, 45
-    // Level 6 (2 items)
-    .byte 34, 35
-    // Level 8 (2 items)
-    .byte 56, 59
+    // Level 1 (18 items)
+    .byte 2, 3, 6, 11, 12, 16, 17, 19, 20, 28, 29, 37, 51, 52, 54, 64, 77, 85
+    // Level 2 (15 items)
+    .byte 5, 7, 9, 14, 21, 30, 31, 47, 48, 49, 53, 66, 74, 82, 84
+    // Level 3 (15 items)
+    .byte 4, 10, 18, 22, 25, 36, 39, 43, 44, 46, 50, 65, 70, 86, 88
+    // Level 4 (14 items)
+    .byte 8, 23, 27, 33, 38, 40, 42, 55, 58, 67, 78, 87, 89, 95
+    // Level 5 (10 items)
+    .byte 24, 26, 32, 41, 45, 72, 79, 90, 92, 94
+    // Level 6 (6 items)
+    .byte 34, 35, 68, 73, 83, 93
+    // Level 7 (3 items)
+    .byte 71, 80, 91
+    // Level 8 (4 items)
+    .byte 56, 59, 69, 75
+    // Level 9 (1 item)
+    .byte 76
+    // Level 10 (1 item)
+    .byte 81
     // Level 12 (2 items)
     .byte 57, 60
+pit_sorted_end:
 
 // Cumulative item count per level (0-12)
 pit_level_bounds:
     .byte 5      // level 0: 5 items
-    .byte 20     // level 1: +15 = 20
-    .byte 31     // level 2: +11 = 31
-    .byte 42     // level 3: +11 = 42
-    .byte 51     // level 4: +9 = 51
-    .byte 56     // level 5: +5 = 56
-    .byte 58     // level 6: +2 = 58
-    .byte 58     // level 7: (no items)
-    .byte 60     // level 8: +2 = 60
-    .byte 60     // level 9: (no items)
-    .byte 60     // level 10: (no items)
-    .byte 60     // level 11: (no items)
-    .byte 62     // level 12: +2 = 62
+    .byte 23     // level 1: +18 = 23
+    .byte 38     // level 2: +15 = 38
+    .byte 53     // level 3: +15 = 53
+    .byte 67     // level 4: +14 = 67
+    .byte 77     // level 5: +10 = 77
+    .byte 83     // level 6: +6 = 83
+    .byte 86     // level 7: +3 = 86
+    .byte 90     // level 8: +4 = 90
+    .byte 91     // level 9: +1 = 91
+    .byte 92     // level 10: +1 = 92
+    .byte 92     // level 11: (no items)
+    .byte 94     // level 12: +2 = 94
+pit_level_bounds_end:
 
+#if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME
+pick_item_type_overlay:
+#else
 pick_item_type:
+#endif
     // Calculate effective level = min(dlvl + 2, PIT_MAX_LEVEL)
     lda zp_player_dlvl
     clc
@@ -1427,6 +1442,56 @@ pick_item_type:
     lda pit_level_bounds         // level_bounds[0] = count at level 0
     jsr rng_range                // [0, count-1]
     jmp !pit_return_idx-
+
+#if C128_PRODUCT_OVERLAY_RUNTIME
+.segment C128ResidentItems
+#elif C64_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME
+.segment Default
+#endif
+
+#if PLUS4_PRODUCT_OVERLAY_RUNTIME
+pick_item_type:
+    lda current_overlay
+    cmp #OVL_DUNGEON_GEN
+    beq !pit_overlay_loaded+
+
+    ldx #OVL_DUNGEON_GEN - 1
+    jsr overlay_load_disk        // No media prompt while generating a dungeon.
+    bcc !pit_disk_loaded+
+    lda #OVL_NONE
+    sta current_overlay
+    lda #2                      // Fallback to first non-gold type on media error.
+    rts
+!pit_disk_loaded:
+    lda #OVL_DUNGEON_GEN
+    sta current_overlay
+
+!pit_overlay_loaded:
+    sei
+    jsr plus4_bank_ram
+    jsr pick_item_type_overlay
+    pha
+    jsr plus4_bank_ram
+    cli
+    pla
+    rts
+#elif C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME
+pick_item_type:
+    lda #OVL_DUNGEON_GEN
+    jsr overlay_load
+    bcc !pit_overlay_loaded+
+    lda #2                      // Fallback to first non-gold type on media error.
+    rts
+!pit_overlay_loaded:
+    sei
+    :BankOutKernal()
+    jsr pick_item_type_overlay
+    pha
+    :BankInKernal()
+    cli
+    pla
+    rts
+#endif
 
 // ============================================================
 // roll_enchantment — Roll enchantment value for a spawned item
@@ -1683,9 +1748,28 @@ re_negate_a:
 // ============================================================
 // Compile-time validation
 // ============================================================
-.assert "Item type count", ITEM_TYPE_COUNT, 64
+.assert "Item type count", ITEM_TYPE_COUNT, 96
 .assert "it_category size", it_display - it_category, ITEM_TYPE_COUNT
 .assert "it_display size", it_color - it_display, ITEM_TYPE_COUNT
 .assert "it_color size", it_weight - it_color, ITEM_TYPE_COUNT
+.assert "it_weight size", it_dmg_dice - it_weight, ITEM_TYPE_COUNT
+.assert "it_dmg_dice size", it_dmg_sides - it_dmg_dice, ITEM_TYPE_COUNT
+.assert "it_dmg_sides size", it_base_ac - it_dmg_sides, ITEM_TYPE_COUNT
+.assert "it_base_ac size", it_base_ac_end - it_base_ac, ITEM_TYPE_COUNT
+.assert "it_cost_lo size", it_cost_lo_end - it_cost_lo, ITEM_TYPE_COUNT
+#if !(C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME)
+.assert "it_cost_hi size", it_cost_hi_end - it_cost_hi, ITEM_TYPE_COUNT
+#endif
+.assert "it_min_level size", it_min_level_end - it_min_level, ITEM_TYPE_COUNT
+.assert "it_name_lo size", it_name_lo_end - it_name_lo, ITEM_TYPE_COUNT
+#if !(C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME)
+.assert "it_name_hi size", it_name_hi_end - it_name_hi, ITEM_TYPE_COUNT
+#endif
+.assert "pit_sorted size", pit_sorted_end - pit_sorted, ITEM_TYPE_COUNT - 2
+.assert "pit_level_bounds size", pit_level_bounds_end - pit_level_bounds, PIT_MAX_LEVEL + 1
+.assert "pick_item_type entry stays resident", pick_item_type < $e000, true
+#if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME
+.assert "pick_item_type overlay impl lives in dungeon overlay", pick_item_type_overlay >= $e000 && pick_item_type_overlay < $f000, true
+#endif
 // Hardcoded assertion removed for cross-platform compatibility
-.assert "Inventory total slots", TOTAL_INV_SLOTS, 30
+.assert "Inventory total slots", TOTAL_INV_SLOTS, 31

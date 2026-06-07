@@ -24,6 +24,14 @@ hm_store_slot: .byte 0     // Store slot for retrieve
 hm_row:        .byte 0     // Current screen row
 hm_save_x:     .byte 0     // Saved index register
 
+home_put_col1_string:
+    sta zp_cursor_row
+    lda #1
+    sta zp_cursor_col
+    stx zp_ptr0
+    sty zp_ptr0_hi
+    jmp hal_screen_put_string
+
 // ============================================================
 // home_enter — Main home mode loop
 // Input: zp_store_idx = STORE_HOME (7)
@@ -38,14 +46,9 @@ home_enter:
     lda #18
     jsr hal_screen_clear_row
     lda #18
-    sta zp_cursor_row
-    lda #1
-    sta zp_cursor_col
-    lda #<hm_menu_str
-    sta zp_ptr0
-    lda #>hm_menu_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldx #<hm_menu_str
+    ldy #>hm_menu_str
+    jsr home_put_col1_string
 
 !he_loop:
     jsr hal_input_get_key
@@ -90,14 +93,9 @@ home_retrieve:
     lda #COL_WHITE
     sta zp_text_color
     lda #20
-    sta zp_cursor_row
-    lda #1
-    sta zp_cursor_col
-    lda #<hm_retrieve_str
-    sta zp_ptr0
-    lda #>hm_retrieve_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldx #<hm_retrieve_str
+    ldy #>hm_retrieve_str
+    jsr home_put_col1_string
 
 #if C128
     jsr input_prepare_followup_key
@@ -150,14 +148,9 @@ home_retrieve:
     lda #COL_RED
     sta zp_text_color
     lda #22
-    sta zp_cursor_row
-    lda #1
-    sta zp_cursor_col
-    lda #<hm_inv_full_str
-    sta zp_ptr0
-    lda #>hm_inv_full_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldx #<hm_inv_full_str
+    ldy #>hm_inv_full_str
+    jsr home_put_col1_string
     jmp hal_input_get_key           // Wait, tail call
 
 !hr_has_room:
@@ -197,14 +190,9 @@ home_retrieve:
     lda #COL_LGREEN
     sta zp_text_color
     lda #22
-    sta zp_cursor_row
-    lda #1
-    sta zp_cursor_col
-    lda #<hm_retrieved_str
-    sta zp_ptr0
-    lda #>hm_retrieved_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldx #<hm_retrieved_str
+    ldy #>hm_retrieved_str
+    jsr home_put_col1_string
 
     lda #SFX_PICKUP
     jsr hal_sound_play
@@ -223,14 +211,9 @@ home_deposit:
     lda #COL_WHITE
     sta zp_text_color
     lda #0
-    sta zp_cursor_row
-    lda #1
-    sta zp_cursor_col
-    lda #<hm_deposit_title
-    sta zp_ptr0
-    lda #>hm_deposit_title
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldx #<hm_deposit_title
+    ldy #>hm_deposit_title
+    jsr home_put_col1_string
 
     // List inventory items
     lda #2
@@ -282,14 +265,9 @@ home_deposit:
     lda #COL_WHITE
     sta zp_text_color
     lda #23
-    sta zp_cursor_row
-    lda #1
-    sta zp_cursor_col
-    lda #<hm_which_str
-    sta zp_ptr0
-    lda #>hm_which_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldx #<hm_which_str
+    ldy #>hm_which_str
+    jsr home_put_col1_string
 
 #if C128
     jsr input_prepare_followup_key
@@ -334,14 +312,9 @@ home_deposit:
     lda #COL_RED
     sta zp_text_color
     lda #22
-    sta zp_cursor_row
-    lda #1
-    sta zp_cursor_col
-    lda #<hm_home_full_str
-    sta zp_ptr0
-    lda #>hm_home_full_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldx #<hm_home_full_str
+    ldy #>hm_home_full_str
+    jsr home_put_col1_string
     jmp hal_input_get_key           // Wait, tail call
 
 !hd_has_slot:
@@ -372,14 +345,9 @@ home_deposit:
     lda #COL_LGREEN
     sta zp_text_color
     lda #22
-    sta zp_cursor_row
-    lda #1
-    sta zp_cursor_col
-    lda #<hm_deposited_str
-    sta zp_ptr0
-    lda #>hm_deposited_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldx #<hm_deposited_str
+    ldy #>hm_deposited_str
+    jsr home_put_col1_string
 
     lda #SFX_PICKUP
     jsr hal_sound_play

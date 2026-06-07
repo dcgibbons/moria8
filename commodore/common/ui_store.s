@@ -212,18 +212,8 @@ store_draw_screen:
     lda #$20
     jsr hal_screen_put_char
 
-    ldy sb_abs_slot
-    :LoadStoreEgoY()
-    sta sb_item_ego             // Pass ego for pricing (R14)
-    lda si_p1,y
-    sta sb_item_p1              // Pass charges/type-specific p1 for pricing
-    lda si_to_hit,y
-    sta sb_item_to_hit
-    lda si_to_dam,y
-    sta sb_item_to_dam
-    lda si_to_ac,y
-    sta sb_item_to_ac
-    lda si_item_id,y
+    ldx sb_abs_slot
+    jsr store_load_price_fields_x
     jsr calc_store_buy_price    // Dispatches to BM or normal pricing
 
     lda sb_price_lo
@@ -233,10 +223,8 @@ store_draw_screen:
     jsr screen_put_decimal_16
 
     lda #<uis_store_gp_pad_str
-    sta zp_ptr0
-    lda #>uis_store_gp_pad_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>uis_store_gp_pad_str
+    jsr uis_screen_put_inline
 
     jmp !sds_next_slot+
 
@@ -304,9 +292,8 @@ store_draw_screen:
 // Clobbers: everything
 store_buy:
     // Prompt: "BUY WHICH ITEM? (A-L)"
-    jsr store_clear_msg_area
     ldx #MSG_BUY_WHICH
-    jsr show_msg
+    jsr store_clear_show_msg
 
     // Get key
     jsr input_prepare_followup_key
@@ -348,17 +335,7 @@ store_buy:
 
     // Calculate buy price
     ldx sb_abs_slot
-    :LoadStoreEgoX()
-    sta sb_item_ego             // Pass ego for pricing (R14)
-    lda si_p1,x
-    sta sb_item_p1              // Pass charges/type-specific p1 for pricing
-    lda si_to_hit,x
-    sta sb_item_to_hit
-    lda si_to_dam,x
-    sta sb_item_to_dam
-    lda si_to_ac,x
-    sta sb_item_to_ac
-    lda si_item_id,x
+    jsr store_load_price_fields_x
     jsr calc_store_buy_price    // Dispatches to BM or normal pricing
 
     // Cheap items (≤ 10 GP) or BM: use simple Y/N flow (no haggling)
@@ -385,15 +362,27 @@ store_buy:
     ldx zp_store_idx
     lda hg_kicked,x
     beq !sb_do_haggle+
-    jsr store_clear_msg_area
     ldx #MSG_KICKED
-    jsr show_msg
-    jmp hal_input_get_key           // Wait for key, tail call returns
+    jmp store_clear_show_msg_wait
 
 !sb_do_haggle:
     jsr haggle_buy
     bcs sbuy_execute            // Carry set = deal made
     rts                         // Cancelled or no deal
+
+store_load_price_fields_x:
+    :LoadStoreEgoX()
+    sta sb_item_ego             // Pass ego for pricing (R14)
+    lda si_p1,x
+    sta sb_item_p1              // Pass charges/type-specific p1 for pricing
+    lda si_to_hit,x
+    sta sb_item_to_hit
+    lda si_to_dam,x
+    sta sb_item_to_dam
+    lda si_to_ac,x
+    sta sb_item_to_ac
+    lda si_item_id,x
+    rts
 
 sbuy_execute:
     // Check if player can afford it
@@ -446,9 +435,8 @@ sbuy_execute:
     sta si_meta,x
 
     // Success message
-    jsr store_clear_msg_area
     ldx #MSG_BOUGHT
-    jsr show_msg
+    jsr store_clear_show_msg
 
     lda #SFX_PICKUP
     jsr hal_sound_play
@@ -456,33 +444,20 @@ sbuy_execute:
 
 // sbuy_show_price — Display price confirmation for buy
 sbuy_show_price:
-    jsr store_clear_msg_area
     ldx #MSG_PRICE
-    jsr show_msg
+    jsr store_clear_show_msg
 
-    lda #COL_YELLOW
-    sta zp_text_color
-    lda sb_price_lo
-    sta zp_temp0
-    lda sb_price_hi
-    sta zp_temp1
-    jsr screen_put_decimal_16
-
-    lda #COL_WHITE
-    sta zp_text_color
     lda #<uis_gp_buy_str
     ldy #>uis_gp_buy_str
-    jmp uis_screen_put_inline   // Tail call
+    jmp store_print_sb_price_suffix
 
 sbuy_no_gold:
-    jsr store_clear_msg_area
     ldx #MSG_NO_AFFORD
-    jmp show_msg                // Tail call
+    jmp store_clear_show_msg_wait
 
 sbuy_full:
-    jsr store_clear_msg_area
     ldx #MSG_PACK_FULL
-    jmp show_msg                // Tail call
+    jmp store_clear_show_msg_wait
 
 // ============================================================
 // Sell flow
@@ -732,7 +707,7 @@ ssell_execute:
 
     // Success
     ldx #MSG_SOLD
-    jsr show_msg
+    jsr store_clear_show_msg
 
     lda #SFX_PICKUP
     jsr hal_sound_play
@@ -758,19 +733,9 @@ ssell_show_offer:
     ldx #MSG_OFFER
     jsr show_msg
 
-    lda #COL_YELLOW
-    sta zp_text_color
-    lda sb_price_lo
-    sta zp_temp0
-    lda sb_price_hi
-    sta zp_temp1
-    jsr screen_put_decimal_16
-
-    lda #COL_WHITE
-    sta zp_text_color
     lda #<uis_gp_sell_str
     ldy #>uis_gp_sell_str
-    jmp uis_screen_put_inline   // Tail call
+    jmp store_print_sb_price_suffix
 
 // ============================================================
 // Helpers
@@ -797,6 +762,35 @@ uis_screen_put_inline:
     sta zp_ptr0
     sty zp_ptr0_hi
     jmp hal_screen_put_string
+
+store_print_sb_price_suffix:
+    pha
+    tya
+    pha
+    lda sb_price_lo
+    sta zp_temp0
+    lda sb_price_hi
+    sta zp_temp1
+    jsr store_print_decimal_yellow
+    lda #COL_WHITE
+    sta zp_text_color
+    pla
+    tay
+    pla
+    jmp uis_screen_put_inline
+
+store_clear_show_msg:
+    txa
+    pha
+    jsr store_clear_msg_area
+    pla
+    tax
+    jmp show_msg
+
+store_clear_show_msg_wait:
+    jsr store_clear_show_msg
+    jsr input_prepare_followup_key
+    jmp hal_input_get_key
 
 // check_cancel — Check if A is a cancel key (Q, escape-equivalent, SPACE)
 // Input: A = key code
@@ -1051,10 +1045,8 @@ hg_show_retry_msg:
     lda #1
     sta zp_cursor_col
     lda #<hg_retry_str
-    sta zp_ptr0
-    lda #>hg_retry_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>hg_retry_str
+    jsr uis_screen_put_inline
     jsr hg_wait_for_ack
     rts
 
@@ -1062,21 +1054,10 @@ hg_show_retry_msg:
 // Input: A = prompt message index (MSG_YOUR_OFFER / MSG_YOUR_PRICE)
 hg_show_final_prompt:
     pha
-    jsr store_clear_msg_area
     ldx #MSG_FINAL
-    jsr show_msg
+    jsr store_clear_show_msg
 
-    lda #COL_YELLOW
-    sta zp_text_color
-    lda hg_ask_lo
-    sta zp_temp0
-    lda hg_ask_hi
-    sta zp_temp1
-    jsr screen_put_decimal_16
-
-    lda #COL_WHITE
-    sta zp_text_color
-    jsr hg_print_gp_suffix
+    jsr hg_print_ask_gp
 
     pla
     tax
@@ -1519,9 +1500,8 @@ hg_do_kick:
     ldx zp_store_idx
     lda #1
     sta hg_kicked,x
-    jsr store_clear_msg_area
     ldx #MSG_KICKED
-    jsr show_msg
+    jsr store_clear_show_msg
     jsr input_prepare_followup_key
     jsr hal_input_get_key
     clc
@@ -1534,9 +1514,8 @@ hg_do_accept:
     sta sb_price_lo
     lda hg_ask_hi
     sta sb_price_hi
-    jsr store_clear_msg_area
     ldx #MSG_AGREED
-    jsr show_msg
+    jsr store_clear_show_msg
     sec
     rts
 
@@ -1564,21 +1543,10 @@ hg_show_insult_msg:
 
 // hg_show_ask — Display "ASKS [price] GP." + "YOUR OFFER? (Q=CANCEL)"
 hg_show_ask:
-    jsr store_clear_msg_area
     ldx #MSG_ASKS
-    jsr show_msg
+    jsr store_clear_show_msg
 
-    lda #COL_YELLOW
-    sta zp_text_color
-    lda hg_ask_lo
-    sta zp_temp0
-    lda hg_ask_hi
-    sta zp_temp1
-    jsr screen_put_decimal_16
-
-    lda #COL_WHITE
-    sta zp_text_color
-    jsr hg_print_gp_suffix
+    jsr hg_print_ask_gp
 
     // Row 21: prompt
     ldx #MSG_YOUR_OFFER
@@ -1595,21 +1563,10 @@ hg_show_ask:
 
 // hg_show_offer — Display "OFFERS [price] GP." + "YOUR PRICE? (Q=CANCEL)"
 hg_show_offer:
-    jsr store_clear_msg_area
     ldx #MSG_OFFERS
-    jsr show_msg
+    jsr store_clear_show_msg
 
-    lda #COL_YELLOW
-    sta zp_text_color
-    lda hg_ask_lo
-    sta zp_temp0
-    lda hg_ask_hi
-    sta zp_temp1
-    jsr screen_put_decimal_16
-
-    lda #COL_WHITE
-    sta zp_text_color
-    jsr hg_print_gp_suffix
+    jsr hg_print_ask_gp
 
     // Row 21: prompt
     ldx #MSG_YOUR_PRICE
@@ -1626,45 +1583,43 @@ hg_show_offer:
 
 // hg_show_counter — Display "HOW ABOUT [ask] GP?"
 hg_show_counter:
-    jsr store_clear_msg_area
     ldx #MSG_COUNTER
-    jsr show_msg
+    jsr store_clear_show_msg
 
-    lda #COL_YELLOW
-    sta zp_text_color
-    lda hg_ask_lo
-    sta zp_temp0
-    lda hg_ask_hi
-    sta zp_temp1
-    jsr screen_put_decimal_16
-
-    lda #COL_WHITE
-    sta zp_text_color
+    jsr hg_print_ask_white
     lda #<hg_qmark_str
     ldy #>hg_qmark_str
     jmp uis_screen_put_inline
 
 // hg_show_final — Display "FINAL OFFER: [ask] GP." + "TAKE IT? (Y/N)"
 hg_show_final:
-    jsr store_clear_msg_area
     ldx #MSG_FINAL
-    jsr show_msg
+    jsr store_clear_show_msg
 
-    lda #COL_YELLOW
-    sta zp_text_color
-    lda hg_ask_lo
-    sta zp_temp0
-    lda hg_ask_hi
-    sta zp_temp1
-    jsr screen_put_decimal_16
-
-    lda #COL_WHITE
-    sta zp_text_color
-    jsr hg_print_gp_suffix
+    jsr hg_print_ask_gp
 
     // Row 21: "TAKE IT? (Y/N)"
     ldx #MSG_TAKE
     jmp show_msg
+
+hg_print_ask_gp:
+    jsr hg_print_ask_white
+    jmp hg_print_gp_suffix
+
+hg_print_ask_white:
+    lda hg_ask_lo
+    sta zp_temp0
+    lda hg_ask_hi
+    sta zp_temp1
+    jsr store_print_decimal_yellow
+    lda #COL_WHITE
+    sta zp_text_color
+    rts
+
+store_print_decimal_yellow:
+    lda #COL_YELLOW
+    sta zp_text_color
+    jmp screen_put_decimal_16
 
 hg_print_gp_suffix:
     lda #<hg_gp_str

@@ -1,6 +1,6 @@
 // test_item_desc.s — Runtime tests for the real item description formatter
 //
-// Results at $0400-$0406: $01 = pass, $00 = fail per test (7 tests)
+// Results at $0400-$0408: $01 = pass, $00 = fail per test (9 tests)
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_bootstrap)
@@ -10,7 +10,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_finish:
-    ldx #6
+    ldx #8
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -80,7 +80,7 @@ fi_add_ego:   .byte 0
 test_start:
     jsr screen_clear
 
-    ldx #6
+    ldx #8
     lda #$ff
 !clr:
     sta tc_results,x
@@ -280,16 +280,76 @@ test_start:
     lda #$00
     sta tc_results+5
 
-    // Test 7: every known base item name decodes exactly.
+    // Test 7: inventory formatter renders appended weapon ID 64.
 !t7:
-    jsr test_all_known_item_names
+    jsr test_prepare_row0
+    lda #64
+    sta inv_item_id
+    lda #1
+    sta inv_qty
+    lda #0
+    sta inv_p1
+    sta inv_to_hit
+    sta inv_to_dam
+    sta inv_to_ac
+    sta inv_flags
+    sta inv_ego
+    ldx #0
+    jsr itemdesc_put_inv_slot
+
+    lda #<expected_main_gauche_desc
+    sta zp_ptr0
+    lda #>expected_main_gauche_desc
+    sta zp_ptr0_hi
+    jsr assert_row0_prefix
     bcc !t7_fail+
     lda #$01
     sta tc_results+6
-    jmp !tests_done+
+    jmp !t8+
 !t7_fail:
     lda #$00
     sta tc_results+6
+
+    // Test 8: inventory formatter renders appended armor ID 65.
+!t8:
+    jsr test_prepare_row0
+    lda #65
+    sta inv_item_id
+    lda #1
+    sta inv_qty
+    lda #0
+    sta inv_p1
+    sta inv_to_hit
+    sta inv_to_dam
+    sta inv_to_ac
+    sta inv_flags
+    sta inv_ego
+    ldx #0
+    jsr itemdesc_put_inv_slot
+
+    lda #<expected_studded_leather_desc
+    sta zp_ptr0
+    lda #>expected_studded_leather_desc
+    sta zp_ptr0_hi
+    jsr assert_row0_prefix
+    bcc !t8_fail+
+    lda #$01
+    sta tc_results+7
+    jmp !t9+
+!t8_fail:
+    lda #$00
+    sta tc_results+7
+
+    // Test 9: every known base item name decodes exactly.
+!t9:
+    jsr test_all_known_item_names
+    bcc !t9_fail+
+    lda #$01
+    sta tc_results+8
+    jmp !tests_done+
+!t9_fail:
+    lda #$00
+    sta tc_results+8
 
 !tests_done:
     jmp test_finish
@@ -376,6 +436,10 @@ expected_identify_scroll_desc:
     .text "Scroll of Identify" ; .byte 0
 expected_prayer_book_desc:
     .text "Holy Book of Prayers Beginners Handbook" ; .byte 0
+expected_main_gauche_desc:
+    .text "Main Gauche" ; .byte 0
+expected_studded_leather_desc:
+    .text "Studded Leather Armor" ; .byte 0
 
 expected_item_name_lo:
     .byte <ein_0, <ein_1, <ein_2, <ein_3, <ein_4, <ein_5, <ein_6, <ein_7
@@ -386,6 +450,15 @@ expected_item_name_lo:
     .byte <ein_40, <ein_41, <ein_42, <ein_43, <ein_44, <ein_45, <ein_46, <ein_47
     .byte <ein_48, <ein_49, <ein_50, <ein_51, <ein_52, <ein_53, <ein_54, <ein_55
     .byte <ein_56, <ein_57, <ein_58, <ein_59, <ein_60, <ein_61, <ein_62, <ein_63
+    .byte <ein_64, <ein_65
+    .byte <ein_66, <ein_67, <ein_68, <ein_69
+    .byte <ein_70, <ein_71, <ein_72, <ein_73
+    .byte <ein_74, <ein_75, <ein_76, <ein_77
+    .byte <ein_78, <ein_79
+    .byte <ein_80, <ein_81
+    .byte <ein_82, <ein_83, <ein_84, <ein_85, <ein_86, <ein_87
+    .byte <ein_88, <ein_89, <ein_90, <ein_91
+    .byte <ein_92, <ein_93, <ein_94, <ein_95
 expected_item_name_hi:
     .byte >ein_0, >ein_1, >ein_2, >ein_3, >ein_4, >ein_5, >ein_6, >ein_7
     .byte >ein_8, >ein_9, >ein_10, >ein_11, >ein_12, >ein_13, >ein_14, >ein_15
@@ -395,6 +468,15 @@ expected_item_name_hi:
     .byte >ein_40, >ein_41, >ein_42, >ein_43, >ein_44, >ein_45, >ein_46, >ein_47
     .byte >ein_48, >ein_49, >ein_50, >ein_51, >ein_52, >ein_53, >ein_54, >ein_55
     .byte >ein_56, >ein_57, >ein_58, >ein_59, >ein_60, >ein_61, >ein_62, >ein_63
+    .byte >ein_64, >ein_65
+    .byte >ein_66, >ein_67, >ein_68, >ein_69
+    .byte >ein_70, >ein_71, >ein_72, >ein_73
+    .byte >ein_74, >ein_75, >ein_76, >ein_77
+    .byte >ein_78, >ein_79
+    .byte >ein_80, >ein_81
+    .byte >ein_82, >ein_83, >ein_84, >ein_85, >ein_86, >ein_87
+    .byte >ein_88, >ein_89, >ein_90, >ein_91
+    .byte >ein_92, >ein_93, >ein_94, >ein_95
 
 ein_0:  .text "Gold (small)" ; .byte 0
 ein_1:  .text "Gold (large)" ; .byte 0
@@ -460,9 +542,43 @@ ein_60: .text "Holy Book of Prayers Exorcism" ; .byte 0
 ein_61: .text "Flask of Oil" ; .byte 0
 ein_62: .text "Shovel" ; .byte 0
 ein_63: .text "Pick" ; .byte 0
+ein_64: .text "Main Gauche" ; .byte 0
+ein_65: .text "Studded Leather Armor" ; .byte 0
+ein_66: .text "Rapier" ; .byte 0
+ein_67: .text "Broad Sword" ; .byte 0
+ein_68: .text "Bastard Sword" ; .byte 0
+ein_69: .text "Two-Handed Sword" ; .byte 0
+ein_70: .text "Scimitar" ; .byte 0
+ein_71: .text "Battle Axe" ; .byte 0
+ein_72: .text "War Hammer" ; .byte 0
+ein_73: .text "Morningstar" ; .byte 0
+ein_74: .text "Spear" ; .byte 0
+ein_75: .text "Pike" ; .byte 0
+ein_76: .text "Halberd" ; .byte 0
+ein_77: .text "Quarterstaff" ; .byte 0
+ein_78: .text "Large Shield" ; .byte 0
+ein_79: .text "Hard Leather Armor" ; .byte 0
+ein_80: .text "Scale Mail" ; .byte 0
+ein_81: .text "Plate Mail" ; .byte 0
+ein_82: .text "Cloak" ; .byte 0
+ein_83: .text "Steel Helm" ; .byte 0
+ein_84: .text "Gauntlets" ; .byte 0
+ein_85: .text "Soft Leather Boots" ; .byte 0
+ein_86: .text "Hard Leather Boots" ; .byte 0
+ein_87: .text "Metal Cap" ; .byte 0
+ein_88: .text "Sabre" ; .byte 0
+ein_89: .text "Cutlass" ; .byte 0
+ein_90: .text "Tulwar" ; .byte 0
+ein_91: .text "Katana" ; .byte 0
+ein_92: .text "Flail" ; .byte 0
+ein_93: .text "Lucerne Hammer" ; .byte 0
+ein_94: .text "Broad Axe" ; .byte 0
+ein_95: .text "Awl-Pike" ; .byte 0
 
 item_name_test_id: .byte 0
-tc_results: .fill 7, $ff
+tc_results: .fill 9, $ff
+tc_results_end:
 
 item_desc_test_body_end:
+.assert "Item desc result count", tc_results_end - tc_results, 9
 .assert "Item desc test stays below MAP_BASE", item_desc_test_body_end <= MAP_BASE, true

@@ -44,6 +44,7 @@ si_to_hit:      .fill STORE_TOTAL_SLOTS, 0
 si_to_dam:      .fill STORE_TOTAL_SLOTS, 0
 si_to_ac:       .fill STORE_TOTAL_SLOTS, 0
 si_meta:        .fill STORE_TOTAL_SLOTS, 0   // bits 0-3 flags, bits 4-6 ego
+hg_kicked:      .fill 8, 0                    // Resets on town re-entry
 
 // Base index into SoA arrays for each store (store * 12)
 store_base_idx:
