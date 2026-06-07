@@ -14,6 +14,7 @@
 :C128AuditBelowIo("c128_load_resident_diskio_prg", c128_load_resident_diskio_prg)
 :C128AuditBelowIo("c128_load_resident_world_prg", c128_load_resident_world_prg)
 :C128AuditBelowIo("c128_load_resident_items_prg", c128_load_resident_items_prg)
+:C128AuditBelowIo("c128_load_resident_item_names_prg", c128_load_resident_item_names_prg)
 :C128AuditBelowIo("c128_load_resident_select_prg", c128_load_resident_select_prg)
 :C128AuditBelowIo("c128_load_resident_persist_prg", c128_load_resident_persist_prg)
 :C128AuditBelowIo("c128_load_resident_play_prg", c128_load_resident_play_prg)

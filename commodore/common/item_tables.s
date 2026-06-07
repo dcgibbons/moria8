@@ -617,6 +617,10 @@ itok_mail_suffix:     .text " Mail" ; .byte 0
 itok_shield_suffix:   .text " Shield" ; .byte 0
 
 // Name streams (screen codes plus item-name tokens, null-terminated)
+#if C128_PRODUCT_OVERLAY_RUNTIME
+.segment C128ResidentItemNames
+c128_item_name_streams_start:
+#endif
 itn_0:  .byte ITOK_GOLD ; .text " (small)" ; .byte 0
 itn_1:  .byte ITOK_GOLD ; .text " (large)" ; .byte 0
 itn_2:  .text "Dagger" ; .byte 0
@@ -705,3 +709,8 @@ itn_84: .text "Gauntlets" ; .byte 0
 itn_85: .text "Soft " ; .byte ITOK_LEATHER ; .text "Boots" ; .byte 0
 itn_86: .text "Hard " ; .byte ITOK_LEATHER ; .text "Boots" ; .byte 0
 itn_87: .text "Metal Cap" ; .byte 0
+#if C128_PRODUCT_OVERLAY_RUNTIME
+c128_item_name_streams_end:
+.assert "C128 item name streams live in Bank 1 DB region", c128_item_name_streams_start >= BANK1_DB_BASE && c128_item_name_streams_end <= BANK1_DB_END + 1, true
+.segment C128ResidentItems
+#endif

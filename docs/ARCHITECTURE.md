@@ -86,9 +86,9 @@ start addresses and all cross-boundary limits.
 | `$1000-$19FD` | `128.runtime` low runtime payload |
 | `$1A00-$1AFF` | Floor-item table |
 | `$1B00-$1BFF` | Creature scratch |
-| `$1C0E-$5F60` | Main program image: boot path, loaders, trampolines, wrappers |
+| `$1C0E-$5F9E` | Main program image: boot path, loaders, trampolines, wrappers |
 | `$6000-$8C69` | `128.world` resident world payload, including C128 cache/overlay state, overlay filename tables, and C128 infravision helpers |
-| `$8C70-$A780` | `128.item` resident item payload |
+| `$8C70-$A4FA` | `128.item` resident item payload |
 | `$A800-$AAE0` | `128.select` resident selector payload |
 | `$AB00-$AEFF` | `128.diskio` payload |
 | `$AF00-$B849` | `128.persist` save/modal payload when loaded |
@@ -118,6 +118,7 @@ The C128 segment definition maxima are:
 | `128.input` | `$0BFF` |
 | `128.fdisk` | `$0FFF` |
 | `128.runtime` | `$3FFF`, with runtime-low asserted below the floor-item table |
+| `128.names` | `$7FFF`, loaded into Bank 1 DB/data RAM |
 | `128.world` | `$8CFF` |
 | `128.item` | `$A7FF` |
 | `128.select` | `$AAFF` |
@@ -151,6 +152,12 @@ All eight are preloaded into Bank 1 before gameplay. The first seven use full
 4 KB cache slots; `128.disarm` uses a page-counted small cache slot at `$9D00`
 because it currently needs only three pages. Runtime overlay fetches copy the
 descriptor's page count, not an unconditional 4 KB.
+
+The C128 product disk also carries `128.names`, a resident Bank 1 DB payload
+loaded after the boot copy/scrub sequence. It currently occupies `$7400-$76F0`
+inside the Bank 1 DB/data window and stores fixed known item-name token streams.
+The token dictionary remains in Bank 0 `128.item`, and C128 known-name decoding
+reads Bank 1 source bytes through the DB MMU helpers.
 
 The source of truth for C128 ownership constants and overlap assertions is
 `commodore/c128/memory128.s`; the product segment definitions and Bank 0

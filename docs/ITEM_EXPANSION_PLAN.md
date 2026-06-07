@@ -44,8 +44,8 @@ Current linked headroom after the 88-item slice:
 | Target | Most relevant free space | Verdict |
 |---|---:|---|
 | C64 | town overlay 30 bytes, UI overlay 94 bytes, items overlay 236 bytes, banked runtime 69 bytes | Tight; overlay-only growth |
-| C128 | `128.item` 127 bytes, `128.world` 6 bytes, town overlay 136 bytes, UI overlay 11 bytes, death overlay 8 bytes | Not enough for the next 8-row slice without one more catalog-local relief step |
-| Plus/4 | banked runtime 52 bytes, UI overlay 94 bytes, items overlay 952 bytes | Workable but still tight |
+| C128 | `128.item` 773 bytes, Bank 1 DB/data region 2,319 bytes free, `128.world` 6 bytes, town overlay 136 bytes, UI overlay 11 bytes, death overlay 8 bytes | Enough runway for the next 8-row slice; still overlay-tight |
+| Plus/4 | banked runtime 564 bytes, UI overlay 94 bytes, items overlay 952 bytes | Workable but still tight |
 
 The C128 is the limiting platform.
 
@@ -55,7 +55,8 @@ Before Phase 1A, the C128 problem was not theoretical. `128.item.prg` occupied
 7,051 bytes at `$8C70-$A7FA`, leaving only 5 bytes before the resident selector
 at `$A800`.
 
-Current measured chunks from `commodore/c128/main.sym`:
+Original measured chunks from `commodore/c128/main.sym` before the Bank 1
+name-stream relocation:
 
 | Chunk | Address range | Bytes | Notes |
 |---|---:|---:|---|
@@ -108,8 +109,26 @@ started with data. C64 and Plus/4 still place the low cost table in
 | Replace `it_cost_hi` with sparse high-byte exceptions | -79 resident bytes net | Store pricing scans 9 high-byte exceptions. |
 | Remove product `it_name_hi` and derive high bytes from `it_name_lo` page crossings | about -62 resident bytes net | Name lookup spends a small loop instead of a resident high-byte table. |
 
-After the corrected Phase 1A, `128.item.prg` occupies `$8C70-$A780`, leaving
+After the corrected Phase 1A, `128.item.prg` occupied `$8C70-$A780`, leaving
 127 bytes before `128.select` at `$A800`.
+
+Phase 1B then moved only the known item-name token streams into a new C128
+Bank 1 resident data payload, `128.names.prg`, loaded at `$7400`. The token
+dictionary and all unknown/randomized-name tables remain in `128.item`; only
+known-name source bytes are read through the existing C128 Bank 1 DB helpers.
+Current C128 product layout:
+
+| Payload | Current range | Free/notes |
+|---|---:|---|
+| `128.names` | `$7400-$76F0` | Lives inside Bank 1 DB/data `$7400-$7FFF`; 2,319 bytes remain in that DB window. |
+| `128.item` | `$8C70-$A4FA` | 773 bytes free before `128.select` at `$A800`. |
+| Main program | `$1C0E-$5F9E` | 97 bytes free before `128.world` at `$6000`; loader growth is now tight. |
+
+The C128 runtime loader now has an explicit Bank 1 load path for this payload:
+`128.names` uses logical file 14, the save/media marker remains logical file 13,
+and the command channel remains 15. The preload sequence loads world, item
+resident data, Bank 1 item names, then selector data before gameplay can decode
+known item names.
 
 ## Current Resident Item Model
 
@@ -701,9 +720,11 @@ Phase 0 implementation status:
 Goal: fill the existing 96-ID runway with high-value ordinary loot and a small
 number of low-risk consumable/magic rows.
 
-Current status: IDs `0-87` are implemented. Corrected Phase 1A leaves 127 bytes
-before the C128 selector boundary, so IDs `88-95` should not proceed until one
-more catalog-local relief step lands.
+Current status: IDs `0-87` are implemented. Phase 1A/1B catalog-storage relief
+is complete: C128 `128.item` now leaves 773 bytes before the selector boundary,
+and C128 known-name streams live in the boot-loaded Bank 1 `128.names` payload.
+IDs `88-95` may proceed, but should still land one randomized item family at a
+time.
 
 Rules:
 
@@ -760,13 +781,13 @@ Why this shape:
 
 Implementation slices:
 
-1. Complete Phase 1A C128 catalog-storage relief.
-2. Expand potion/scroll/ring/wand/staff unknown descriptor pools only after
-   the C128 relief has landed.
-3. Add IDs `88-95` one randomized family at a time.
+1. Complete Phase 1A/1B C128 catalog-storage relief. Done.
+2. Expand potion/scroll/ring/wand/staff unknown descriptor pools as needed.
+3. Add IDs `88-95` one randomized family at a time, starting with potions or
+   scrolls because their effects mostly reuse existing spell/prayer behavior.
 4. Update wizard docs and item catalog docs after each accepted slice.
 
-#### Phase 1A: C128 Catalog-Storage Relief
+#### Phase 1A/1B: C128 Catalog-Storage Relief
 
 Goal: create enough `128.item` space for IDs `88-95` without weakening memory
 asserts, shortening player-facing strings, or moving the `$A800` selector
@@ -788,17 +809,17 @@ Preferred order:
    play/persist boundary unless the catalog-local options fail. Those are
    broader C128 layout changes.
 
-Phase 1A acceptance gate:
+Phase 1A/1B acceptance gate:
 
 | Gate | Required proof |
 |---|---|
-| Memory | `128.item` has at least 230 bytes free before `$A800`; more is better. Current corrected Phase 1A leaves 127 bytes, so this gate is not yet met. |
+| Memory | `128.item` has at least 230 bytes free before `$A800`; more is better. Current Phase 1B leaves 773 bytes. |
 | No disk churn | Inventory/store/name display does not require per-item disk loads. |
 | Name correctness | All implemented item names still pass item-description tests on C64 and C128. |
 | Product paths | Wizard grant, inventory display, store display, dungeon pickup, and save/load still work. |
 | C128 layout | `make test128` passes if the implementation changes C128 loading, banking, copied code, or runtime segment starts. |
 
-Phase 1A implementation status:
+Phase 1A/1B implementation status:
 
 - Partially complete. C64 and Plus/4 move `it_cost_lo` to `TownOverlay`, but
   C128 keeps `it_cost_lo` resident after runtime testing exposed a town-entry
@@ -809,9 +830,16 @@ Phase 1A implementation status:
   Known-name lookup derives the stream high byte by counting low-byte page
   crossings in the existing `it_name_lo` table. Names remain resident; this is
   not a disk-backed name path.
-- C128 `128.item` now ends at `$A780`, leaving 127 bytes before `$A800`.
+- Complete. C128 known-name streams now live in `128.names.prg`, loaded once at
+  startup into Bank 1 `$7400-$76F0`. The token dictionary remains in
+  `128.item`; known-name decoding reads only stream source bytes through
+  `mmu_safe_db_read_ptr0`.
+- C128 `128.item` now ends at `$A4FA`, leaving 773 bytes before `$A800`.
   C128 town overlay now ends at `$EF78`, leaving 136 bytes; C64 and Plus/4
   town overlays still end at `$EFE1`, leaving 30 bytes.
+- Validation: focused C128 `memory128|item_desc128|boot_title|town|load_resume|main_loop128`
+  passed 15/15, full `make test128` passed 118/118, and `make disk128` builds
+  the product disk with `128.names`.
 
 Phase 1 acceptance gate:
 

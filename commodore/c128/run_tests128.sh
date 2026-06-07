@@ -944,6 +944,7 @@ for runtime_name, expected_load in (
     ("128.fdisk.prg", 0x0D60),
     ("128.world.prg", 0x6000),
     ("128.item.prg", 0x8C70),
+    ("128.names.prg", 0x7400),
     ("128.select.prg", 0xA800),
     ("128.persist.prg", 0xAF00),
     ("128.play.prg", 0xAF00),
@@ -1895,7 +1896,7 @@ build_boot_assets() {
     if [ "$PERF_P1_MODE" != "1" ] && c128_active_variant_is "base" && ! c128_outputs_need_refresh \
             out/boot128.prg out/boot128.chain.prg out/bootsect128.prg out/bootart128.prg out/moria128.prg out/moria128.d71 out/title out/monster.db.1 out/monster.db.2 \
             out/monster.db.3 out/monster.db.4 out/ovl.town out/ovl.start out/ovl.death \
-            out/ovl.gen out/128.runtime.prg out/128.input.prg out/128.proj.prg out/128.fdisk.prg out/128.world.prg out/128.item.prg out/128.select.prg out/128.persist.prg out/128.play.prg out/128.bank.prg out/main.vs -- \
+            out/ovl.gen out/128.runtime.prg out/128.input.prg out/128.proj.prg out/128.fdisk.prg out/128.world.prg out/128.item.prg out/128.names.prg out/128.select.prg out/128.persist.prg out/128.play.prg out/128.bank.prg out/main.vs -- \
             main.s boot128.s bootart128.s bootsect128.s Makefile ../version.json \
             ../artwork/moria8_C128loadingart_tile_native.png \
             ../tools/png_to_ppm.py ../tools/make_version_include.py ../tools/ppm_to_c128_bootart.py \
@@ -1979,6 +1980,7 @@ run_vic40_clean_boot_smoke() {
             -write out/128.diskio.prg "128.diskio" \
             -write out/128.world.prg "128.world" \
             -write out/128.item.prg "128.item" \
+            -write out/128.names.prg "128.names" \
             -write out/128.select.prg "128.select" \
             -write out/128.persist.prg "128.persist" \
             -write out/128.play.prg "128.play" \
@@ -2060,7 +2062,7 @@ build_real_boot_diag_assets() {
             out/moria128.realdiag.prg out/moria128_realdiag.d64 out/main.vs -- \
             main.s out/boot128.prg out/title out/monster.db.1 out/monster.db.2 \
             out/monster.db.3 out/monster.db.4 out/ovl.town out/ovl.start out/ovl.death \
-            out/ovl.gen out/128.runtime.prg out/128.input.prg out/128.proj.prg out/128.fdisk.prg out/128.world.prg out/128.item.prg out/128.select.prg out/128.persist.prg out/128.play.prg out/128.bank.prg; then
+            out/ovl.gen out/128.runtime.prg out/128.input.prg out/128.proj.prg out/128.fdisk.prg out/128.world.prg out/128.item.prg out/128.names.prg out/128.select.prg out/128.persist.prg out/128.play.prg out/128.bank.prg; then
         REAL_BOOT_DIAG_ASSETS_BUILT=1
         return 0
     fi
@@ -2101,6 +2103,7 @@ build_real_boot_diag_assets() {
             -write out/128.diskio.prg "128.diskio" \
             -write out/128.world.prg "128.world" \
             -write out/128.item.prg "128.item" \
+            -write out/128.names.prg "128.names" \
             -write out/128.select.prg "128.select" \
             -write out/128.persist.prg "128.persist" \
             -write out/128.play.prg "128.play" \
@@ -2128,7 +2131,7 @@ build_overlay_transition_diag_assets() {
             out/moria128.overlaydiag.prg out/moria128_overlaydiag.d64 out/main.vs -- \
             main.s out/boot128.prg out/title out/monster.db.1 out/monster.db.2 \
             out/monster.db.3 out/monster.db.4 out/ovl.town out/ovl.start out/ovl.death \
-            out/ovl.gen out/128.runtime.prg out/128.input.prg out/128.proj.prg out/128.fdisk.prg out/128.world.prg out/128.item.prg out/128.select.prg out/128.persist.prg out/128.play.prg out/128.bank.prg; then
+            out/ovl.gen out/128.runtime.prg out/128.input.prg out/128.proj.prg out/128.fdisk.prg out/128.world.prg out/128.item.prg out/128.names.prg out/128.select.prg out/128.persist.prg out/128.play.prg out/128.bank.prg; then
         OVERLAY_TRANSITION_DIAG_ASSETS_BUILT=1
         return 0
     fi
@@ -2169,6 +2172,7 @@ build_overlay_transition_diag_assets() {
             -write out/128.diskio.prg "128.diskio" \
             -write out/128.world.prg "128.world" \
             -write out/128.item.prg "128.item" \
+            -write out/128.names.prg "128.names" \
             -write out/128.select.prg "128.select" \
             -write out/128.persist.prg "128.persist" \
             -write out/128.play.prg "128.play" \
@@ -2196,7 +2200,7 @@ build_title_art_boot_assets() {
             out/moria128.titleart.prg out/moria128_titleart.d64 out/main.vs -- \
             main.s out/boot128.prg out/title out/monster.db.1 out/monster.db.2 \
             out/monster.db.3 out/monster.db.4 out/ovl.town out/ovl.start out/ovl.death \
-            out/ovl.gen out/128.runtime.prg out/128.input.prg out/128.proj.prg out/128.fdisk.prg out/128.world.prg out/128.item.prg out/128.select.prg out/128.persist.prg out/128.play.prg out/128.bank.prg ../common/*.s ../c64/*.s; then
+            out/ovl.gen out/128.runtime.prg out/128.input.prg out/128.proj.prg out/128.fdisk.prg out/128.world.prg out/128.item.prg out/128.names.prg out/128.select.prg out/128.persist.prg out/128.play.prg out/128.bank.prg ../common/*.s ../c64/*.s; then
         TITLE_ART_BOOT_ASSETS_BUILT=1
         return 0
     fi
@@ -2237,6 +2241,7 @@ build_title_art_boot_assets() {
             -write out/128.diskio.prg "128.diskio" \
             -write out/128.world.prg "128.world" \
             -write out/128.item.prg "128.item" \
+            -write out/128.names.prg "128.names" \
             -write out/128.select.prg "128.select" \
             -write out/128.persist.prg "128.persist" \
             -write out/128.play.prg "128.play" \
@@ -2455,6 +2460,7 @@ build_save_write_product_assets() {
             -write out/128.diskio.prg "128.diskio" \
             -write out/128.world.prg "128.world" \
             -write out/128.item.prg "128.item" \
+            -write out/128.names.prg "128.names" \
             -write out/128.select.prg "128.select" \
             -write out/128.persist.prg "128.persist" \
             -write out/128.play.prg "128.play" \
@@ -2561,6 +2567,7 @@ build_save_media_fail_product_assets() {
             -write out/128.diskio.prg "128.diskio" \
             -write out/128.world.prg "128.world" \
             -write out/128.item.prg "128.item" \
+            -write out/128.names.prg "128.names" \
             -write out/128.select.prg "128.select" \
             -write out/128.persist.prg "128.persist" \
             -write out/128.play.prg "128.play" \
@@ -2631,7 +2638,7 @@ build_partial_failure_boot_assets() {
             out/moria128.skip1.prg out/moria128_skip1.d64 out/main.vs -- \
             main.s out/boot128.prg out/title out/monster.db.1 out/monster.db.2 \
             out/monster.db.3 out/monster.db.4 out/ovl.town out/ovl.start out/ovl.death \
-            out/ovl.gen out/128.runtime.prg out/128.input.prg out/128.proj.prg out/128.fdisk.prg out/128.world.prg out/128.item.prg out/128.select.prg out/128.persist.prg out/128.play.prg out/128.bank.prg; then
+            out/ovl.gen out/128.runtime.prg out/128.input.prg out/128.proj.prg out/128.fdisk.prg out/128.world.prg out/128.item.prg out/128.names.prg out/128.select.prg out/128.persist.prg out/128.play.prg out/128.bank.prg; then
         PARTIAL_BOOT_ASSETS_BUILT=1
         return 0
     fi
@@ -2670,6 +2677,7 @@ build_partial_failure_boot_assets() {
             -write out/128.diskio.prg "128.diskio" \
             -write out/128.world.prg "128.world" \
             -write out/128.item.prg "128.item" \
+            -write out/128.names.prg "128.names" \
             -write out/128.select.prg "128.select" \
             -write out/128.persist.prg "128.persist" \
             -write out/128.play.prg "128.play" \
@@ -2697,7 +2705,7 @@ build_overlay_partial_failure_boot_assets() {
             out/moria128.skipovl2.prg out/moria128_skipovl2.d64 out/main.vs -- \
             main.s out/boot128.prg out/title out/monster.db.1 out/monster.db.2 \
             out/monster.db.3 out/monster.db.4 out/ovl.town out/ovl.start out/ovl.death \
-            out/ovl.gen out/128.runtime.prg out/128.input.prg out/128.proj.prg out/128.fdisk.prg out/128.world.prg out/128.item.prg out/128.select.prg out/128.persist.prg out/128.play.prg out/128.bank.prg; then
+            out/ovl.gen out/128.runtime.prg out/128.input.prg out/128.proj.prg out/128.fdisk.prg out/128.world.prg out/128.item.prg out/128.names.prg out/128.select.prg out/128.persist.prg out/128.play.prg out/128.bank.prg; then
         OVERLAY_PARTIAL_BOOT_ASSETS_BUILT=1
         return 0
     fi
@@ -2736,6 +2744,7 @@ build_overlay_partial_failure_boot_assets() {
             -write out/128.diskio.prg "128.diskio" \
             -write out/128.world.prg "128.world" \
             -write out/128.item.prg "128.item" \
+            -write out/128.names.prg "128.names" \
             -write out/128.select.prg "128.select" \
             -write out/128.persist.prg "128.persist" \
             -write out/128.play.prg "128.play" \
@@ -2763,7 +2772,7 @@ build_death_overlay_boot_assets() {
             out/moria128.death.prg out/moria128_death.d64 out/main.vs -- \
             main.s out/boot128.prg out/title out/monster.db.1 out/monster.db.2 \
             out/monster.db.3 out/monster.db.4 out/ovl.town out/ovl.start out/ovl.death \
-            out/ovl.gen out/128.runtime.prg out/128.input.prg out/128.proj.prg out/128.fdisk.prg out/128.world.prg out/128.item.prg out/128.select.prg out/128.persist.prg out/128.play.prg out/128.bank.prg; then
+            out/ovl.gen out/128.runtime.prg out/128.input.prg out/128.proj.prg out/128.fdisk.prg out/128.world.prg out/128.item.prg out/128.names.prg out/128.select.prg out/128.persist.prg out/128.play.prg out/128.bank.prg; then
         DEATH_BOOT_ASSETS_BUILT=1
         return 0
     fi
@@ -2802,6 +2811,7 @@ build_death_overlay_boot_assets() {
             -write out/128.diskio.prg "128.diskio" \
             -write out/128.world.prg "128.world" \
             -write out/128.item.prg "128.item" \
+            -write out/128.names.prg "128.names" \
             -write out/128.select.prg "128.select" \
             -write out/128.persist.prg "128.persist" \
             -write out/128.play.prg "128.play" \
@@ -2829,7 +2839,7 @@ build_overlay_state_boot_assets() {
             out/moria128.overlaystate.prg out/moria128_overlaystate.d64 out/main.vs -- \
             main.s out/boot128.prg out/title out/monster.db.1 out/monster.db.2 \
             out/monster.db.3 out/monster.db.4 out/ovl.town out/ovl.start out/ovl.death \
-            out/ovl.gen out/128.runtime.prg out/128.input.prg out/128.proj.prg out/128.fdisk.prg out/128.world.prg out/128.item.prg out/128.select.prg out/128.persist.prg out/128.play.prg out/128.bank.prg; then
+            out/ovl.gen out/128.runtime.prg out/128.input.prg out/128.proj.prg out/128.fdisk.prg out/128.world.prg out/128.item.prg out/128.names.prg out/128.select.prg out/128.persist.prg out/128.play.prg out/128.bank.prg; then
         OVERLAY_STATE_BOOT_ASSETS_BUILT=1
         return 0
     fi
@@ -2868,6 +2878,7 @@ build_overlay_state_boot_assets() {
             -write out/128.diskio.prg "128.diskio" \
             -write out/128.world.prg "128.world" \
             -write out/128.item.prg "128.item" \
+            -write out/128.names.prg "128.names" \
             -write out/128.select.prg "128.select" \
             -write out/128.persist.prg "128.persist" \
             -write out/128.play.prg "128.play" \
@@ -2895,7 +2906,7 @@ build_scripted_input_boot_assets() {
             out/moria128.prg out/moria128_scriptedinput.d64 out/main.vs -- \
             main.s out/boot128.prg out/title out/monster.db.1 out/monster.db.2 \
             out/monster.db.3 out/monster.db.4 out/ovl.town out/ovl.start out/ovl.death \
-            out/ovl.gen out/128.runtime.prg out/128.input.prg out/128.proj.prg out/128.fdisk.prg out/128.world.prg out/128.item.prg out/128.select.prg out/128.persist.prg out/128.play.prg out/128.bank.prg; then
+            out/ovl.gen out/128.runtime.prg out/128.input.prg out/128.proj.prg out/128.fdisk.prg out/128.world.prg out/128.item.prg out/128.names.prg out/128.select.prg out/128.persist.prg out/128.play.prg out/128.bank.prg; then
         SCRIPTED_INPUT_BOOT_ASSETS_BUILT=1
         return 0
     fi
@@ -2939,6 +2950,7 @@ build_scripted_input_boot_assets() {
             -write out/128.diskio.prg "128.diskio" \
             -write out/128.world.prg "128.world" \
             -write out/128.item.prg "128.item" \
+            -write out/128.names.prg "128.names" \
             -write out/128.select.prg "128.select" \
             -write out/128.persist.prg "128.persist" \
             -write out/128.play.prg "128.play" \
@@ -3109,6 +3121,7 @@ build_perf_p1_trace_boot_assets() {
             -write out/128.diskio.prg "128.diskio" \
                 -write out/128.world.prg "128.world" \
                 -write out/128.item.prg "128.item" \
+            -write out/128.names.prg "128.names" \
                 -write out/128.select.prg "128.select" \
                 -write out/128.persist.prg "128.persist" \
                 -write out/128.play.prg "128.play" \
@@ -3146,7 +3159,7 @@ build_scripted_spell_boot_assets() {
             out/moria128.prg out/moria128_scriptedspell.d64 out/main.vs -- \
             main.s out/boot128.prg out/title out/monster.db.1 out/monster.db.2 \
             out/monster.db.3 out/monster.db.4 out/ovl.town out/ovl.start out/ovl.death \
-            out/ovl.gen out/128.runtime.prg out/128.input.prg out/128.proj.prg out/128.fdisk.prg out/128.world.prg out/128.item.prg out/128.select.prg out/128.persist.prg out/128.play.prg out/128.bank.prg; then
+            out/ovl.gen out/128.runtime.prg out/128.input.prg out/128.proj.prg out/128.fdisk.prg out/128.world.prg out/128.item.prg out/128.names.prg out/128.select.prg out/128.persist.prg out/128.play.prg out/128.bank.prg; then
         SCRIPTED_SPELL_BOOT_ASSETS_BUILT=1
         return 0
     fi
@@ -3184,6 +3197,7 @@ build_scripted_spell_boot_assets() {
             -write out/128.diskio.prg "128.diskio" \
             -write out/128.world.prg "128.world" \
             -write out/128.item.prg "128.item" \
+            -write out/128.names.prg "128.names" \
             -write out/128.select.prg "128.select" \
             -write out/128.persist.prg "128.persist" \
             -write out/128.play.prg "128.play" \
@@ -3212,7 +3226,7 @@ build_scripted_spell_cancel_boot_assets() {
             out/moria128.prg out/moria128_scriptedspellcancel.d64 out/main.vs -- \
             main.s out/boot128.prg out/title out/monster.db.1 out/monster.db.2 \
             out/monster.db.3 out/monster.db.4 out/ovl.town out/ovl.start out/ovl.death \
-            out/ovl.gen out/128.runtime.prg out/128.input.prg out/128.proj.prg out/128.fdisk.prg out/128.world.prg out/128.item.prg out/128.select.prg out/128.persist.prg out/128.play.prg out/128.bank.prg; then
+            out/ovl.gen out/128.runtime.prg out/128.input.prg out/128.proj.prg out/128.fdisk.prg out/128.world.prg out/128.item.prg out/128.names.prg out/128.select.prg out/128.persist.prg out/128.play.prg out/128.bank.prg; then
         SCRIPTED_SPELL_CANCEL_BOOT_ASSETS_BUILT=1
         return 0
     fi
@@ -3250,6 +3264,7 @@ build_scripted_spell_cancel_boot_assets() {
             -write out/128.diskio.prg "128.diskio" \
             -write out/128.world.prg "128.world" \
             -write out/128.item.prg "128.item" \
+            -write out/128.names.prg "128.names" \
             -write out/128.select.prg "128.select" \
             -write out/128.persist.prg "128.persist" \
             -write out/128.play.prg "128.play" \
@@ -3278,7 +3293,7 @@ build_scripted_book_overlay_boot_assets() {
             out/moria128.prg out/moria128_scriptedbookoverlay.d64 out/main.vs -- \
             main.s out/boot128.prg out/title out/monster.db.1 out/monster.db.2 \
             out/monster.db.3 out/monster.db.4 out/ovl.town out/ovl.start out/ovl.death \
-            out/ovl.gen out/128.runtime.prg out/128.input.prg out/128.proj.prg out/128.fdisk.prg out/128.world.prg out/128.item.prg out/128.select.prg out/128.persist.prg out/128.play.prg out/128.bank.prg; then
+            out/ovl.gen out/128.runtime.prg out/128.input.prg out/128.proj.prg out/128.fdisk.prg out/128.world.prg out/128.item.prg out/128.names.prg out/128.select.prg out/128.persist.prg out/128.play.prg out/128.bank.prg; then
         SCRIPTED_BOOK_OVERLAY_BOOT_ASSETS_BUILT=1
         return 0
     fi
@@ -3316,6 +3331,7 @@ build_scripted_book_overlay_boot_assets() {
             -write out/128.diskio.prg "128.diskio" \
             -write out/128.world.prg "128.world" \
             -write out/128.item.prg "128.item" \
+            -write out/128.names.prg "128.names" \
             -write out/128.select.prg "128.select" \
             -write out/128.persist.prg "128.persist" \
             -write out/128.play.prg "128.play" \
@@ -3344,7 +3360,7 @@ build_scripted_spell_list_overlay_boot_assets() {
             out/moria128.prg out/moria128_scriptedspelllistoverlay.d64 out/main.vs -- \
             main.s out/boot128.prg out/title out/monster.db.1 out/monster.db.2 \
             out/monster.db.3 out/monster.db.4 out/ovl.town out/ovl.start out/ovl.death \
-            out/ovl.gen out/128.runtime.prg out/128.input.prg out/128.proj.prg out/128.fdisk.prg out/128.world.prg out/128.item.prg out/128.select.prg out/128.persist.prg out/128.play.prg out/128.bank.prg; then
+            out/ovl.gen out/128.runtime.prg out/128.input.prg out/128.proj.prg out/128.fdisk.prg out/128.world.prg out/128.item.prg out/128.names.prg out/128.select.prg out/128.persist.prg out/128.play.prg out/128.bank.prg; then
         SCRIPTED_SPELL_LIST_OVERLAY_BOOT_ASSETS_BUILT=1
         return 0
     fi
@@ -3382,6 +3398,7 @@ build_scripted_spell_list_overlay_boot_assets() {
             -write out/128.diskio.prg "128.diskio" \
             -write out/128.world.prg "128.world" \
             -write out/128.item.prg "128.item" \
+            -write out/128.names.prg "128.names" \
             -write out/128.select.prg "128.select" \
             -write out/128.persist.prg "128.persist" \
             -write out/128.play.prg "128.play" \
@@ -3410,7 +3427,7 @@ build_scripted_prayer_boot_assets() {
             out/moria128.prg out/moria128_scriptedprayer.d64 out/main.vs -- \
             main.s out/boot128.prg out/title out/monster.db.1 out/monster.db.2 \
             out/monster.db.3 out/monster.db.4 out/ovl.town out/ovl.start out/ovl.death \
-            out/ovl.gen out/128.runtime.prg out/128.input.prg out/128.proj.prg out/128.fdisk.prg out/128.world.prg out/128.item.prg out/128.select.prg out/128.persist.prg out/128.play.prg out/128.bank.prg; then
+            out/ovl.gen out/128.runtime.prg out/128.input.prg out/128.proj.prg out/128.fdisk.prg out/128.world.prg out/128.item.prg out/128.names.prg out/128.select.prg out/128.persist.prg out/128.play.prg out/128.bank.prg; then
         SCRIPTED_PRAYER_BOOT_ASSETS_BUILT=1
         return 0
     fi
@@ -3448,6 +3465,7 @@ build_scripted_prayer_boot_assets() {
             -write out/128.diskio.prg "128.diskio" \
             -write out/128.world.prg "128.world" \
             -write out/128.item.prg "128.item" \
+            -write out/128.names.prg "128.names" \
             -write out/128.select.prg "128.select" \
             -write out/128.persist.prg "128.persist" \
             -write out/128.play.prg "128.play" \
@@ -3477,7 +3495,7 @@ build_cache_survival_boot_assets() {
             out/moria128.prg out/moria128_cache_survival.d64 out/main.vs -- \
             main.s out/boot128.prg out/title out/monster.db.1 out/monster.db.2 \
             out/monster.db.3 out/monster.db.4 out/ovl.town out/ovl.start out/ovl.death \
-            out/ovl.gen out/128.runtime.prg out/128.input.prg out/128.proj.prg out/128.fdisk.prg out/128.world.prg out/128.item.prg out/128.select.prg out/128.persist.prg out/128.play.prg out/128.bank.prg; then
+            out/ovl.gen out/128.runtime.prg out/128.input.prg out/128.proj.prg out/128.fdisk.prg out/128.world.prg out/128.item.prg out/128.names.prg out/128.select.prg out/128.persist.prg out/128.play.prg out/128.bank.prg; then
         CACHE_SURVIVAL_BOOT_ASSETS_BUILT=1
         return 0
     fi
@@ -3514,6 +3532,7 @@ build_cache_survival_boot_assets() {
             -write "$target_out/128.fdisk.prg" "128.fdisk" \
             -write "$target_out/128.world.prg" "128.world" \
             -write "$target_out/128.item.prg" "128.item" \
+            -write "$target_out/128.names.prg" "128.names" \
             -write "$target_out/128.select.prg" "128.select" \
             -write "$target_out/128.persist.prg" "128.persist" \
             -write "$target_out/128.play.prg" "128.play" \
@@ -3545,7 +3564,7 @@ build_load_resume_boot_assets() {
             tests/make_load_resume_save.py out/boot128.prg out/moria128.prg out/title \
             out/monster.db.1 out/monster.db.2 out/monster.db.3 out/monster.db.4 \
             out/ovl.town out/ovl.start out/ovl.death out/ovl.gen \
-            out/128.runtime.prg out/128.input.prg out/128.proj.prg out/128.fdisk.prg out/128.world.prg out/128.item.prg out/128.select.prg out/128.persist.prg out/128.play.prg out/128.bank.prg; then
+            out/128.runtime.prg out/128.input.prg out/128.proj.prg out/128.fdisk.prg out/128.world.prg out/128.item.prg out/128.names.prg out/128.select.prg out/128.persist.prg out/128.play.prg out/128.bank.prg; then
         LOAD_RESUME_BOOT_ASSETS_BUILT=1
         return 0
     fi
@@ -3584,6 +3603,7 @@ build_load_resume_boot_assets() {
             -write out/128.diskio.prg "128.diskio" \
             -write out/128.world.prg "128.world" \
             -write out/128.item.prg "128.item" \
+            -write out/128.names.prg "128.names" \
             -write out/128.select.prg "128.select" \
             -write out/128.persist.prg "128.persist" \
             -write out/128.play.prg "128.play" \
@@ -4158,6 +4178,7 @@ run_boot_d64_smoke() {
             -write out/128.diskio.prg "128.diskio" \
             -write out/128.world.prg "128.world" \
             -write out/128.item.prg "128.item" \
+            -write out/128.names.prg "128.names" \
             -write out/128.select.prg "128.select" \
             -write out/128.persist.prg "128.persist" \
             -write out/128.play.prg "128.play" \

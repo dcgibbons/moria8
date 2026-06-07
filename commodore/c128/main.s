@@ -46,6 +46,7 @@
 .segmentdef RuntimeProjectileData [outPrg=OVL_OUT + "/128.proj.prg", start=$0a80, min=$0a80, max=$0aff]
 .segmentdef RuntimeCommonData [outPrg=OVL_OUT + "/128.fdisk.prg", start=$0d60, min=$0d60, max=$0fff]
 .segmentdef RuntimeLowData    [outPrg=OVL_OUT + "/128.runtime.prg", start=$1000, min=$1000, max=$3fff]
+.segmentdef C128ResidentItemNames [outPrg=OVL_OUT + "/128.names.prg", start=$7400, min=$7400, max=$7fff]
 .segmentdef C128ResidentWorld [outPrg=OVL_OUT + "/128.world.prg", start=$6000, min=$6000, max=$8cff]
 .segmentdef C128ResidentItems [outPrg=OVL_OUT + "/128.item.prg", start=$8c70, min=$8c70, max=$a7ff]
 .segmentdef C128ResidentSelect [outPrg=OVL_OUT + "/128.select.prg", start=$a800, min=$a800, max=$aaff]
@@ -2393,6 +2394,12 @@ resident_items_filename:
 resident_items_filename_end:
     .byte 0
 .const RESIDENT_ITEMS_FILENAME_LEN = resident_items_filename_end - resident_items_filename
+.const RESIDENT_ITEM_NAMES_FILE_NUM = 14
+resident_item_names_filename:
+    .text "128.NAMES"
+resident_item_names_filename_end:
+    .byte 0
+.const RESIDENT_ITEM_NAMES_FILENAME_LEN = resident_item_names_filename_end - resident_item_names_filename
 .const RESIDENT_SELECT_FILE_NUM = 9
 resident_select_filename:
     .text "128.SELECT"
@@ -2419,7 +2426,7 @@ runtime_banked_filename_end:
 .const RUNTIME_BANKED_FILENAME_LEN = runtime_banked_filename_end - runtime_banked_filename
 
 c128_load_runtime_prg:
-    lda #0
+    lda c128_runtime_load_bank
     ldx #0
     jsr safe_setbnk
 
@@ -2447,6 +2454,7 @@ c128_load_runtime_prg:
     jsr w_clrchn
 
     lda #0
+    sta c128_runtime_load_bank
     ldx #0
     jsr safe_setbnk
 
@@ -2570,6 +2578,23 @@ c128_load_resident_items_prg:
     sta zp_ptr1_hi
     jmp c128_load_runtime_prg
 
+c128_load_resident_item_names_prg:
+    lda #RESIDENT_ITEM_NAMES_FILE_NUM
+    sta disk_temp
+    lda #RESIDENT_ITEM_NAMES_FILENAME_LEN
+    sta disk_status
+    lda #<resident_item_names_filename
+    sta zp_ptr0
+    lda #>resident_item_names_filename
+    sta zp_ptr0_hi
+    lda #<BANK1_DB_BASE
+    sta zp_ptr1
+    lda #>BANK1_DB_BASE
+    sta zp_ptr1_hi
+    lda #1
+    sta c128_runtime_load_bank
+    jmp c128_load_runtime_prg
+
 c128_load_resident_select_prg:
     :C128RuntimeLoadFile(RESIDENT_SELECT_FILE_NUM, RESIDENT_SELECT_FILENAME_LEN, resident_select_filename, $a8)
 
@@ -2587,6 +2612,12 @@ c128_load_core_residents:
     jmp runtime_load_failed
 !resident_items_loaded:
     lda #3
+    sta c128_runtime_load_stage
+    jsr c128_load_resident_item_names_prg
+    bcc !resident_item_names_loaded+
+    jmp runtime_load_failed
+!resident_item_names_loaded:
+    lda #4
     sta c128_runtime_load_stage
     jsr c128_load_resident_select_prg
     bcc !resident_select_loaded+
@@ -2800,6 +2831,7 @@ kernal_irq_vec_lo: .byte 0
 kernal_irq_vec_hi: .byte 0
 c128_kernal_irq_tail_runtime_owned: .byte 0
 c128_runtime_load_stage: .byte 0
+c128_runtime_load_bank: .byte 0
 c128_runtime_load_result_a: .byte 0
 c128_runtime_load_readst: .byte 0
 c128_modal_result: .byte 0
@@ -4397,7 +4429,8 @@ program_end:
 .assert "Runtime projectile helpers stay in pre-input low page", runtime_projectile_data_start >= $0a80 && runtime_projectile_data_end <= $0b00, true
 .assert "Runtime input code stays inside boot-sector page ownership", runtime_input_data_start >= $0b00 && runtime_input_data_end <= $0c00, true
 .assert "C128 FEAT-DISK common runtime stays in common RAM", runtime_common_data_end <= $1000, true
-.assert "C128 disk marker logical file avoids runtime loader files", hal_storage_marker_file_num > RUNTIME_BANKED_FILE_NUM && hal_storage_marker_file_num < hal_storage_cmd_channel, true
+.assert "C128 disk marker logical file avoids runtime loader files", hal_storage_marker_file_num > RUNTIME_BANKED_FILE_NUM && hal_storage_marker_file_num != RESIDENT_ITEM_NAMES_FILE_NUM && hal_storage_marker_file_num < hal_storage_cmd_channel, true
+.assert "C128 item-name logical file avoids marker and command channel", RESIDENT_ITEM_NAMES_FILE_NUM != hal_storage_marker_file_num && RESIDENT_ITEM_NAMES_FILE_NUM < hal_storage_cmd_channel, true
 .assert "Low runtime code stays below floor-item table", runtime_low_data_end <= FLOOR_ITEM_BASE, true
 .assert "Ego roll routine stays in low runtime RAM", roll_ego_type < FLOOR_ITEM_BASE, true
 .assert "Ego damage routine stays in low runtime RAM", ego_apply_damage < FLOOR_ITEM_BASE, true

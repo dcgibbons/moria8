@@ -374,7 +374,11 @@ item_get_name_ptr:
     lda it_name_hi,x
     sta zp_ptr0_hi
 #endif
+#if C128_PRODUCT_OVERLAY_RUNTIME
+    jmp item_decode_name_ptr_bank1
+#else
     jmp item_decode_name_ptr
+#endif
 !ignp_qualified:
     ldy #0
 !ignp_copy_prefix:
@@ -394,7 +398,11 @@ item_get_name_ptr:
     lda it_name_hi,x
     sta zp_ptr0_hi
 #endif
+#if C128_PRODUCT_OVERLAY_RUNTIME
+    jmp item_decode_name_ptr_bank1_at_dst
+#else
     jmp item_decode_name_ptr_at_dst
+#endif
 
 !ignp_potion_prefix:
     lda #<idgp_potion_prefix
@@ -515,6 +523,63 @@ item_decode_name_ptr_at_dst:
     lda #>item_name_decode_buf
     sta zp_ptr0_hi
     rts
+
+#if C128_PRODUCT_OVERLAY_RUNTIME
+// C128 known item-name streams live in Bank 1 DB RAM. Token strings remain in
+// Bank 0 resident item data, so only source stream reads use the MMU helper.
+item_decode_name_ptr_bank1:
+    lda #0
+    sta item_name_dst_idx
+item_decode_name_ptr_bank1_at_dst:
+    lda zp_ptr1
+    sta item_name_save_ptr1
+    lda zp_ptr1_hi
+    sta item_name_save_ptr1_hi
+    lda #0
+    sta item_name_src_idx
+!idnp_loop:
+    ldy item_name_src_idx
+    jsr mmu_safe_db_read_ptr0
+    beq !idnp_done+
+    bmi !idnp_token+
+    ldx item_name_dst_idx
+    sta item_name_decode_buf,x
+    inc item_name_dst_idx
+    inc item_name_src_idx
+    bne !idnp_loop-
+!idnp_token:
+    and #$7f
+    tax
+    lda item_name_token_lo,x
+    sta zp_ptr1
+    lda item_name_token_hi,x
+    sta zp_ptr1_hi
+    ldy #0
+!idnp_copy_token:
+    lda (zp_ptr1),y
+    beq !idnp_token_done+
+    ldx item_name_dst_idx
+    sta item_name_decode_buf,x
+    inc item_name_dst_idx
+    iny
+    bne !idnp_copy_token-
+!idnp_token_done:
+    inc item_name_src_idx
+    bne !idnp_loop-
+!idnp_done:
+    ldx item_name_dst_idx
+    lda #0
+    sta item_name_decode_buf,x
+    lda item_name_save_ptr1
+    sta zp_ptr1
+    lda item_name_save_ptr1_hi
+    sta zp_ptr1_hi
+    lda #<item_name_decode_buf
+    sta zp_ptr0
+    lda #>item_name_decode_buf
+    sta zp_ptr0_hi
+    rts
+#endif
 
 .const ITEM_NAME_DECODE_BUF_SIZE = 48
 item_name_decode_buf: .fill ITEM_NAME_DECODE_BUF_SIZE, 0
