@@ -327,7 +327,24 @@ pm_select_book:
     lda #PIW_FILTER_MAGE_BOOK + 1
     sec
     sbc pm_spell_type
+#if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME
+    ldy pm_mode
+    beq !pm_select_no_ui_return_hint+
+    pha
+    lda #OVL_UI
+    sta piw_return_overlay
+    pla
+!pm_select_no_ui_return_hint:
+#endif
     jsr piw_select_filtered_inv
+#if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME
+    php
+    pha
+    lda #OVL_NONE
+    sta piw_return_overlay
+    pla
+    plp
+#endif
     bcs !pm_book_slot_ok+
     rts
 !pm_book_slot_ok:

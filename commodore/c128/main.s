@@ -1016,7 +1016,7 @@ tramp_store_enter:
     jsr c128_restore_runtime_guards
     jmp store_enter
 
-#if C128_TEST_SCRIPTED_BOOK_OVERLAY || C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY
+#if C128_TEST_SCRIPTED_BOOK_OVERLAY || C128_TEST_SCRIPTED_STUDY_BOOK_OVERLAY || C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY
 test_expect_screen_string:
     sta test_expect_row
     stx test_expect_col
@@ -1123,7 +1123,7 @@ c128_test_town_fail_sym:
     brk
 c128_test_town_pass_sym:
     brk
-#elif C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_PRAYER || C128_TEST_SCRIPTED_SPELL_CANCEL || C128_TEST_SCRIPTED_BOOK_OVERLAY || C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY || C128_TEST_SCRIPTED_SCROLL_SELECTOR
+#elif C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_PRAYER || C128_TEST_SCRIPTED_SPELL_CANCEL || C128_TEST_SCRIPTED_BOOK_OVERLAY || C128_TEST_SCRIPTED_STUDY_BOOK_OVERLAY || C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY || C128_TEST_SCRIPTED_SCROLL_SELECTOR
 c128_test_spell_fail_no_cast_sym:
     brk
 c128_test_spell_fail_level_sym:
@@ -1142,7 +1142,7 @@ c128_test_spell_pass_sym:
 c128_test_spell_cancel_pass_sym:
     brk
 #endif
-#if C128_TEST_SCRIPTED_BOOK_OVERLAY
+#if C128_TEST_SCRIPTED_BOOK_OVERLAY || C128_TEST_SCRIPTED_STUDY_BOOK_OVERLAY
 c128_test_book_overlay_fail_sym:
     brk
 c128_test_book_overlay_pass_sym:
@@ -3479,7 +3479,7 @@ ego_str_holy_avenger_common:
 c128_resident_items_end:
 
 .segment Default
-#if C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_SPELL_CANCEL || C128_TEST_SCRIPTED_BOOK_OVERLAY || C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY
+#if C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_SPELL_CANCEL || C128_TEST_SCRIPTED_BOOK_OVERLAY || C128_TEST_SCRIPTED_STUDY_BOOK_OVERLAY || C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY
 c128_test_seed_scripted_spell_state:
     lda #0
     sta c128_test_spell_success_count
@@ -3513,6 +3513,11 @@ c128_test_seed_scripted_spell_state:
     sta player_data + PL_SPELLS_FORGOTTEN_1
     sta player_data + PL_SPELLS_FORGOTTEN_2
     sta player_data + PL_SPELLS_FORGOTTEN_3
+#if C128_TEST_SCRIPTED_STUDY_BOOK_OVERLAY
+    lda #1
+#else
+    lda #0
+#endif
     sta player_data + PL_NEW_SPELLS
     lda #99
     ldx #31
