@@ -69,7 +69,9 @@ images.
 Disk images are emitted under `commodore/out/`:
 
 - `commodore/out/moria8-c64.d64`
+- `commodore/out/moria8-c128.d64`
 - `commodore/out/moria8-c128.d71`
+- `commodore/out/moria8-c128.d81`
 - `commodore/out/moria8-plus4.d64`
 
 ### Run

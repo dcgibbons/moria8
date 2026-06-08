@@ -43,15 +43,24 @@ untracked files, unstaged edits, local planning docs, or generated leftovers.
 
 ```sh
 make clean
-make disk
+make artifacts
 ```
+
+`make artifacts` signs with GPG and is intended to run from your own
+interactive terminal after preparing or unlocking the signing key. Use
+`make artifact-checksums` when you only need to rebuild images and
+`SHA256SUMS` without touching GPG.
 
 Expected disk artifacts:
 
 - `commodore/out/moria8-c64.d64`
 - `commodore/out/moria8-c64.zip`
+- `commodore/out/moria8-c128.d64`
 - `commodore/out/moria8-c128.d71`
+- `commodore/out/moria8-c128.d81`
 - `commodore/out/moria8-plus4.d64`
+- `commodore/out/SHA256SUMS`
+- `commodore/out/*.asc`
 - `commodore/out/c64-dist/` staging directory for the C64 Ultimate loose-file distribution
 
 ## Automated Gates
@@ -83,7 +92,8 @@ make test128-fast-smoke
 ## Artifact Review
 
 - Verify disk image names and version metadata.
-- Generate and record SHA256 checksums for all uploaded artifacts.
+- Verify `commodore/out/SHA256SUMS` covers all uploaded artifacts.
+- Verify detached GPG signatures for uploaded artifacts and `SHA256SUMS`.
 - Confirm generated outputs are not staged as source.
 - Confirm no monitor logs, local paths, private planning notes, or agent process
   files are present in the public tree.

@@ -5,7 +5,9 @@
 #   make disk               Build both shipping disk images
 #   make disk64             Build the C64 shipping disk at out/moria8-c64.d64
 #   make zip64              Build the C64 loose-file archive at out/moria8-c64.zip
-#   make disk128            Build the C128 shipping disk at out/moria8-c128.d71
+#   make disk128            Build the C128 shipping disks at out/moria8-c128.d64/.d71/.d81
+#   make artifact-checksums Build disks and SHA256SUMS without signing
+#   make artifacts          Build disks, SHA256SUMS, and detached GPG signatures
 #   make run                Launch the C64 shipping disk in C64 VICE
 #   make run128             Launch the C128 shipping disk in C128 VICE
 #   make test               Run the default regression mix (C64 + fast C128 coverage)
@@ -34,6 +36,9 @@ KICKASS_DIR_RESOLVED = $(KICKASS_DIR)
 endif
 JAVA        ?= java
 C1541       ?= c1541
+GPG         ?= gpg
+GPG_SIGN_FLAGS ?= --armor --detach-sign
+SHASUM      ?= shasum
 VICE64      ?= x64sc
 VICE128     ?= x128
 VICEPLUS4   ?= xplus4
@@ -171,7 +176,11 @@ C128_BOOTART_PREVIEW_PPM = $(OUT128)/bootart128_preview.ppm
 # ── Disk artifacts ────────────────────────────────────────
 DISK64_IMAGE       = $(OUT)/moria8-c64.d64
 C64_ZIP_IMAGE      = $(OUT)/moria8-c64.zip
-DISK128_IMAGE      = $(OUT)/moria8-c128.d71
+DISK128_D64_IMAGE  = $(OUT)/moria8-c128.d64
+DISK128_D71_IMAGE  = $(OUT)/moria8-c128.d71
+DISK128_D81_IMAGE  = $(OUT)/moria8-c128.d81
+DISK128_IMAGE      = $(DISK128_D71_IMAGE)
+DISK128_IMAGES     = $(DISK128_D64_IMAGE) $(DISK128_D71_IMAGE) $(DISK128_D81_IMAGE)
 DISKPLUS4_IMAGE    = $(OUT)/moria8-plus4.d64
 C64_DIST_DIR       = $(OUT)/c64-dist
 C64_DIST_STAMP     = $(C64_DIST_DIR)/.stamp
@@ -179,6 +188,9 @@ EMPTY_PRG          = $(OUT)/empty.prg
 DISK64_LABEL       = "moria8 c64,m8"
 DISK128_LABEL      = "moria8 c128,m8"
 DISKPLUS4_LABEL    = "moria8 plus4,m8"
+RELEASE_ARTIFACTS  = $(DISK64_IMAGE) $(C64_ZIP_IMAGE) $(DISK128_D64_IMAGE) $(DISK128_D71_IMAGE) $(DISK128_D81_IMAGE) $(DISKPLUS4_IMAGE)
+ARTIFACT_MANIFEST  = $(OUT)/SHA256SUMS
+ARTIFACT_SIGNATURES = $(addsuffix .asc,$(RELEASE_ARTIFACTS) $(ARTIFACT_MANIFEST))
 
 # ── Aggregate groups ──────────────────────────────────────
 C64_BUILD_ARTIFACTS  = $(C64_MAIN_PRG) $(C64_BOOT_PRG) $(C64_BOOTART_PRG) $(C64_TITLE_PRG) $(C64_TIER_PRGS) \
@@ -198,7 +210,7 @@ C128_MAIN_OUTPUTS = $(C128_MAIN_PRG) $(C128_OVL_START) $(C128_OVL_TOWN) $(C128_O
 		$(C128_RESIDENT_WORLD) $(C128_RESIDENT_ITEMS) $(C128_RESIDENT_ITEM_NAMES) $(C128_RESIDENT_SELECT) \
 	$(C128_RESIDENT_PERSIST) $(C128_RESIDENT_PLAY) $(C128_RUNTIME_BANKED)
 
-.PHONY: all build build64 build128 buildplus4 disk disk64 zip64 c64-dist disk128 diskplus4 run run64 run128 runplus4 \
+.PHONY: all build build64 build128 buildplus4 disk disk64 zip64 c64-dist disk128 diskplus4 artifact artifact-checksums artifacts run run64 run128 runplus4 \
 	bootart128-charset-demo \
 	test test64 test128 test128-fast test128-fast-smoke testplus4 testplus4-build testplus4-runtime clean \
 	check-zp check-6502-lint check-hal-boundaries ensure-kickass kickass
@@ -219,7 +231,7 @@ buildplus4: $(PLUS4_BUILD_ARTIFACTS)
 	mkdir -p plus4/out
 	cp -f $(OUTPLUS4)/* plus4/out/
 
-disk: $(DISK64_IMAGE) $(C64_ZIP_IMAGE) $(DISK128_IMAGE) $(DISKPLUS4_IMAGE)
+disk: $(DISK64_IMAGE) $(C64_ZIP_IMAGE) $(DISK128_IMAGES) $(DISKPLUS4_IMAGE)
 
 disk64: $(DISK64_IMAGE) $(C64_ZIP_IMAGE)
 
@@ -227,9 +239,13 @@ zip64: $(C64_ZIP_IMAGE)
 
 c64-dist: $(C64_DIST_STAMP)
 
-disk128: $(DISK128_IMAGE)
+disk128: $(DISK128_IMAGES)
 
 diskplus4: $(DISKPLUS4_IMAGE)
+
+artifact-checksums: $(ARTIFACT_MANIFEST)
+
+artifact artifacts: $(ARTIFACT_MANIFEST) $(ARTIFACT_SIGNATURES)
 
 run: $(DISK64_IMAGE)
 	$(VICE64) -drive8truedrive -drive8type 1541 +busdevice8 $(RUN_FLAGS64) -autostart $(DISK64_IMAGE)
@@ -572,12 +588,13 @@ $(DISKPLUS4_IMAGE): $(PLUS4_BUILD_ARTIFACTS) $(DISKART) $(VERSION_FILE) $(LICENS
 	cp -f $(DISKPLUS4_IMAGE) plus4/out/moria8-plus4.d64
 	rm -f $(EMPTY_PRG)
 
-$(DISK128_IMAGE): $(C128_BUILD_ARTIFACTS) $(C128_BOOT_CHAIN_PRG) $(C128_BOOTSECT_PRG) $(DISKART) $(RESERVE_SECTOR) $(VERSION_FILE) $(LICENSE_DISK_FILE) $(SOURCE_OFFER_DISK_FILE) | $(OUT)
-	printf '\x01\x08' > $(EMPTY_PRG)
-	rm -f $(DISK128_IMAGE)
-	$(C1541) -format $(DISK128_LABEL) d71 $(DISK128_IMAGE)
-	python3 $(RESERVE_SECTOR) $(DISK128_IMAGE) 1 0
-	$(C1541) -attach $(DISK128_IMAGE) \
+$(ARTIFACT_MANIFEST): $(RELEASE_ARTIFACTS) | $(OUT)
+	cd $(OUT) && $(SHASUM) -a 256 $(notdir $(RELEASE_ARTIFACTS)) > $(notdir $@)
+
+%.asc: %
+	$(GPG) --yes $(GPG_SIGN_FLAGS) --output $@ $<
+
+define C128_DISK_WRITE_FILES
 		-write $(C128_BOOTSECT_PRG) "art1" \
 		-write $(C128_BOOTSECT_PRG) "art2" \
 		-write $(C128_BOOTSECT_PRG) "art3" \
@@ -602,24 +619,44 @@ $(DISK128_IMAGE): $(C128_BUILD_ARTIFACTS) $(C128_BOOT_CHAIN_PRG) $(C128_BOOTSECT
 		-write $(C128_OVL_ITEMS) "128.items" \
 		-write $(C128_OVL_DISARM) "128.disarm" \
 		-write $(C128_RUNTIME_INPUT) "128.input" \
-			-write $(C128_RUNTIME_PROJECTILE) "128.proj" \
-				-write $(C128_RUNTIME_LOW) "128.runtime" \
-				-write $(C128_RUNTIME_COMMON) "128.fdisk" \
-					-write $(C128_RUNTIME_DISKIO) "128.diskio" \
-					-write $(C128_RESIDENT_WORLD) "128.world" \
-				-write $(C128_RESIDENT_ITEMS) "128.item" \
-				-write $(C128_RESIDENT_ITEM_NAMES) "128.names" \
-				-write $(C128_RESIDENT_SELECT) "128.select" \
-			-write $(C128_RESIDENT_PERSIST) "128.persist" \
-			-write $(C128_RESIDENT_PLAY) "128.play" \
-			-write $(C128_RUNTIME_BANKED) "128.bank" \
-			-write $(LICENSE_DISK_FILE) "license,s" \
-			-write $(SOURCE_OFFER_DISK_FILE) "source-offer,s"
-	python3 $(PATCH_D64) $(DISK128_IMAGE) 1 0 $(C128_BOOTSECT_PRG) 0x0b00
-	python3 $(DISKART) $(DISK128_IMAGE) c128
+		-write $(C128_RUNTIME_PROJECTILE) "128.proj" \
+		-write $(C128_RUNTIME_LOW) "128.runtime" \
+		-write $(C128_RUNTIME_COMMON) "128.fdisk" \
+		-write $(C128_RUNTIME_DISKIO) "128.diskio" \
+		-write $(C128_RESIDENT_WORLD) "128.world" \
+		-write $(C128_RESIDENT_ITEMS) "128.item" \
+		-write $(C128_RESIDENT_ITEM_NAMES) "128.names" \
+		-write $(C128_RESIDENT_SELECT) "128.select" \
+		-write $(C128_RESIDENT_PERSIST) "128.persist" \
+		-write $(C128_RESIDENT_PLAY) "128.play" \
+		-write $(C128_RUNTIME_BANKED) "128.bank" \
+		-write $(LICENSE_DISK_FILE) "license,s" \
+		-write $(SOURCE_OFFER_DISK_FILE) "source-offer,s"
+endef
+
+define BUILD_C128_DISK_IMAGE
+	printf '\x01\x08' > $(EMPTY_PRG)
+	rm -f $@
+	$(C1541) -format $(DISK128_LABEL) $(1) $@
+	python3 $(RESERVE_SECTOR) $@ 1 0
+	$(C1541) -attach $@ \
+$(C128_DISK_WRITE_FILES)
+	python3 $(PATCH_D64) $@ 1 0 $(C128_BOOTSECT_PRG) 0x0b00
+	python3 $(DISKART) $@ c128
 	mkdir -p c128/out
-	cp -f $(DISK128_IMAGE) c128/out/moria128.d71
+	cp -f $@ c128/out/$(notdir $@)
+	cp -f $@ c128/out/moria128.$(1)
 	rm -f $(EMPTY_PRG)
+endef
+
+$(DISK128_D64_IMAGE): $(C128_BUILD_ARTIFACTS) $(C128_BOOT_CHAIN_PRG) $(C128_BOOTSECT_PRG) $(DISKART) $(RESERVE_SECTOR) $(VERSION_FILE) $(LICENSE_DISK_FILE) $(SOURCE_OFFER_DISK_FILE) | $(OUT)
+	$(call BUILD_C128_DISK_IMAGE,d64)
+
+$(DISK128_D71_IMAGE): $(C128_BUILD_ARTIFACTS) $(C128_BOOT_CHAIN_PRG) $(C128_BOOTSECT_PRG) $(DISKART) $(RESERVE_SECTOR) $(VERSION_FILE) $(LICENSE_DISK_FILE) $(SOURCE_OFFER_DISK_FILE) | $(OUT)
+	$(call BUILD_C128_DISK_IMAGE,d71)
+
+$(DISK128_D81_IMAGE): $(C128_BUILD_ARTIFACTS) $(C128_BOOT_CHAIN_PRG) $(C128_BOOTSECT_PRG) $(DISKART) $(RESERVE_SECTOR) $(VERSION_FILE) $(LICENSE_DISK_FILE) $(SOURCE_OFFER_DISK_FILE) | $(OUT)
+	$(call BUILD_C128_DISK_IMAGE,d81)
 
 # ── Tool bootstrap / directories ──────────────────────────
 kickass: ensure-kickass

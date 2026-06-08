@@ -9,6 +9,7 @@ from pathlib import Path
 
 SECTORS_1541 = [0] + [21] * 17 + [19] * 7 + [18] * 6 + [17] * 5
 SECTORS_1571 = SECTORS_1541 + SECTORS_1541[1:]
+SECTORS_1581 = [0] + [40] * 80
 
 
 def sector_offset(track: int, sector: int, sectors_per_track: list[int]) -> int:
@@ -23,10 +24,19 @@ def detect_geometry(image_size: int) -> tuple[str, list[int]]:
         return ("d64", SECTORS_1541)
     if image_size == 349696:
         return ("d71", SECTORS_1571)
+    if image_size == 819200:
+        return ("d81", SECTORS_1581)
     raise ValueError(f"unsupported disk image size {image_size}")
 
 
 def bam_entry_offset(track: int, image_kind: str) -> tuple[int, int]:
+    if image_kind == "d81":
+        bam_track = 40
+        bam_sector = 1 if track <= 40 else 2
+        bam_slot = track if track <= 40 else track - 40
+        bam_base = sector_offset(bam_track, bam_sector, SECTORS_1581)
+        return bam_base + 0x10 + 6 * (bam_slot - 1), bam_track
+
     if image_kind == "d64" or track <= 35:
         bam_track = 18
         bam_slot = track
