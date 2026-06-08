@@ -4,32 +4,24 @@
 // so title-time disk setup is callable regardless of the current C128 banking state.
 
 tramp_disk_setup_ui_action:
-    lda #C128_HELP_OVERLAY_ID
-    jsr overlay_load
-    bcs !tdsua_fail+
     jsr ui_disk_setup_dispatch
-    rts
-!tdsua_fail:
-    lda #1
-    sta disk_ui_result
-    sec
     rts
 
 tramp_disk_setup:
-    lda #1
-    sta disk_ui_result
     lda #0
     sta disk_ui_value
     jsr tramp_ui_enter
-    jsr disk_setup_run
-!tds_done:
+    lda #C128_HELP_OVERLAY_ID
+    jsr overlay_load
+    bcc !tds_run+
     jsr tramp_ui_exit
-    lda disk_ui_result
-    beq !tds_ok+
     sec
     rts
-!tds_ok:
-    clc
+!tds_run:
+    jsr disk_setup_run
+    php
+    jsr tramp_ui_exit
+    plp
     rts
 
 title_require_disk_setup:

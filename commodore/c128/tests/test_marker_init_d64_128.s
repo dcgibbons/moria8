@@ -71,6 +71,10 @@ save_stream_status:
 load_stream_status:
     rts
 
+save_file_exists:
+    clc
+    rts
+
 c128_media_state: .byte C128_MEDIA_UNKNOWN
 
 ds_save_str:

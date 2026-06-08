@@ -160,7 +160,11 @@ disk_accept_plus4_program_device:
     rts
 !store_program_device:
 #else
+#if C128
+    lda #8
+#else
     lda $ba                     // KERNAL current device from the boot/load path
+#endif
     sta program_device
 #endif
     ldx #9
@@ -414,7 +418,15 @@ disk_prompt_save:
 #endif
     lda #<ds_save_str
     ldx #>ds_save_str
-    jmp disk_prompt
+    jsr disk_prompt
+    bcs !dps_done+
+#if HAL_STORAGE_MEDIA_STATE_TRACKING
+    lda #C128_MEDIA_SAVE
+    sta c128_media_state
+    clc
+#endif
+!dps_done:
+    rts
 
 disk_prompt_game:
     lda program_device
@@ -426,12 +438,21 @@ disk_prompt_game:
     lda c128_media_state
     cmp #C128_MEDIA_PROGRAM
     bne !dpg_prompt+
+    clc
     rts
 !dpg_prompt:
 #endif
     lda #<ds_game_str
     ldx #>ds_game_str
-    jmp disk_prompt
+    jsr disk_prompt
+    bcs !dpg_done+
+#if HAL_STORAGE_MEDIA_STATE_TRACKING
+    lda #C128_MEDIA_PROGRAM
+    sta c128_media_state
+    clc
+#endif
+!dpg_done:
+    rts
 
 disk_prompt:
     sta zp_ptr0
@@ -439,6 +460,7 @@ disk_prompt:
     lda disk_mode
     cmp #1
     beq !dp_show+
+    clc
     rts
 !dp_show:
 #if HAL_STORAGE_SWAP_PROMPT_FULLSCREEN
@@ -591,7 +613,7 @@ disk_marker_present:
     sta disk_diag_carry
     lda #$81
     sta disk_status
-    jmp !dmp_done+
+    jmp !dmp_close+
 !dmp_open_ok:
     lda #0
     sta disk_diag_carry

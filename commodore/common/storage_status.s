@@ -41,10 +41,15 @@ storage_status_from_dos_digits:
     bne !unknown+
     cpx #$32
     beq !disk_full+
+    cpx #$33                    // 73, DOS/version banner after init/reset
+    beq !ok+
     cpx #$34                    // 74, DRIVE NOT READY
     beq !not_ready+
 !unknown:
     lda #HAL_STORAGE_STATUS_UNKNOWN
+    rts
+!ok:
+    lda #HAL_STORAGE_STATUS_OK
     rts
 !disk_full:
     lda #HAL_STORAGE_STATUS_DISK_FULL

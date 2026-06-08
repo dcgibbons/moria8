@@ -667,6 +667,12 @@ load_game:
     lda disk_setup_done
     beq !load_media_fail+
 !load_wrong_media:
+#if HAL_STORAGE_LOAD_ALLOW_UNMARKED_SAVE
+    jsr disk_kernal_enter
+    jsr save_file_exists
+    jsr disk_kernal_exit
+    bcs !load_media_ok+
+#endif
     jsr hal_storage_save_media_status
     cmp #HAL_STORAGE_STATUS_WRONG_MEDIA
     beq !load_bad_media+
@@ -1845,8 +1851,10 @@ save_file_exists:
     ldy #hal_storage_check_sec_read
     jsr SAVE_SETLFS
     jsr SAVE_OPEN
-#if HAL_STORAGE_SAVE_SELECT_OUTPUT_NAME_LEGACY
+#if HAL_STORAGE_SAVE_EXISTS_OPEN_ONLY
     bcc !sfe_exists+
+    lda #hal_storage_check_file_num
+    jsr SAVE_CLOSE
     clc
     rts
 !sfe_exists:

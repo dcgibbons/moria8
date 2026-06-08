@@ -2304,6 +2304,7 @@ title_menu_ready:
 !not_l:
     cmp #$44                // 'D' — disk setup
     bne !title_menu_loop-
+    jsr c128_modal_require_persist
     jsr tramp_disk_setup
     jmp title_enter_menu
 
@@ -2312,13 +2313,14 @@ title_load_game:
     lda #SFX_PICKUP
     jsr hal_sound_play
     jsr msg_init
+    jsr c128_modal_require_persist
     jsr title_require_disk_setup
     bcc !title_setup_ready+
     jsr c128_require_program_media
     jmp title_enter_menu
 !title_setup_ready:
-    jsr c128_modal_require_persist
     jsr c128_require_save_media
+    bcs !title_load_fail+
     jsr ui_prepare_fullscreen_transition
     jsr load_game
     lda #0

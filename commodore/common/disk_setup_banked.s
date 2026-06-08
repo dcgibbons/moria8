@@ -295,18 +295,19 @@ disk_setup_call_ui:
 disk_setup_commit_ready:
     lda #hal_storage_disk_setup_done_value
     sta disk_setup_done
+#if HAL_STORAGE_MEDIA_STATE_TRACKING
+    lda #C128_MEDIA_SAVE
+    sta c128_media_state
+#endif
     clc
     rts
 
 disk_setup_commit_initialized:
-    lda #hal_storage_disk_setup_done_value
-    sta disk_setup_done
 #if HAL_STORAGE_DISK_SETUP_COMMIT_SETS_UI_OK
     lda #DISK_UI_RES_OK
     sta disk_ui_result
 #endif
-    clc
-    rts
+    jmp disk_setup_commit_ready
 
 disk_setup_prepare_selected:
 !retry:
@@ -321,6 +322,12 @@ disk_setup_prepare_selected:
 #endif
     jsr disk_marker_present
     bcc disk_setup_commit_ready
+#if HAL_STORAGE_DISK_SETUP_ACCEPT_SAVE_FILE
+    jsr disk_kernal_enter
+    jsr save_file_exists
+    jsr disk_kernal_exit
+    bcs disk_setup_commit_ready
+#endif
 #if HAL_STORAGE_DISK_SETUP_MARKER_PROBE_DOS
     jsr disk_setup_plus4_marker_missing
     bcs !show_marker_probe_fail+
@@ -370,7 +377,7 @@ disk_setup_run:
 !same_drive:
     lda program_device
     sta save_device
-    jmp !menu-
+    bne !prepare+
 
 #if HAL_STORAGE_DISK_SETUP_OTHER_DRIVE
 !pick_drive:
@@ -392,7 +399,11 @@ disk_setup_run:
 #endif
 
 !prepare:
+#if HAL_STORAGE_SHARED_PROGRAM_SAVE_NO_SWAP
+    lda #2
+#else
     lda #1
+#endif
     ldx save_device
     cpx program_device
     beq !mode_set+

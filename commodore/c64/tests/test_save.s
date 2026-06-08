@@ -4,7 +4,7 @@
 // recount_monsters, recount_floor_items, save-version compatibility helpers,
 // split item stat save/load persistence.
 //
-// Results at $0400-$0417: $01 = pass, $00 = fail per test (24 tests)
+// Results at $0400-$0418: $01 = pass, $00 = fail per test (25 tests)
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(bootstrap)
@@ -25,7 +25,7 @@ bootstrap:
 // Must be in low memory (before imports) so BRK address is below $A000.
 // VICE breakpoint on $A000+ can false-trigger during BASIC ROM execution.
 test_finish:
-    ldx #23
+    ldx #24
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -46,6 +46,7 @@ test_finish:
 #define HAL_STORAGE_SWAP_PROMPT_CPU_PORT_RESTORE
 #define HAL_STORAGE_MARKER_PRESENT_DIRECT
 #define HAL_STORAGE_SAVE_SELECT_OUTPUT_NAME_LEGACY
+#define HAL_STORAGE_LOAD_ALLOW_UNMARKED_SAVE
 #define HAL_STORAGE_CPU_PORT_RESTORE_AFTER_IO
 #define HAL_STORAGE_VIC_BANK_RESTORE_AFTER_SERIAL
 
@@ -296,7 +297,7 @@ rle_decompress_map:
 !:  rts
 
 // Test result buffer — copy to $0400 at end (msg_print clobbers $0400)
-tc_results: .fill 24, $ff
+tc_results: .fill 25, $ff
 tc_count: .byte 0
 
 // Verification buffer — 256 bytes at $CF00 (floor item area, safe during tests 2-3)
@@ -417,6 +418,11 @@ test_save_file_not_exists:
     clc
     rts
 
+test_save_file_exists:
+    inc test_save_file_exists_calls
+    sec
+    rts
+
 test_huff_print_msg:
     stx test_save_last_msg
     rts
@@ -513,7 +519,7 @@ test_start:
     sta rle_work_hi
 
     // Initialize result area to $ff (untested)
-    ldx #23
+    ldx #24
     lda #$ff
 !clr:
     sta tc_results,x
@@ -1956,6 +1962,54 @@ t23_fail_code:
 t24_fail_code:
 !t24_store:
     sta tc_results + 23
+
+    // ============================================================
+    // Test 25: load_game accepts a markerless configured disk when
+    // the save file itself exists. This guards the C128 single-drive
+    // path where Disk Setup accepts THE.GAME but the load precheck
+    // used to reject the same disk on marker-only validation.
+    // ============================================================
+    :PatchJump(save_file_exists, test_save_file_exists)
+    lda #0
+    sta test_save_last_msg
+    sta test_save_dismiss_calls
+    sta test_save_readst_value
+    sta test_save_close_arms_readst
+    sta test_save_sink_writes
+    sta test_save_marker_present
+    sta test_save_file_exists_calls
+    sta test_save_open_calls
+    lda #1
+    sta disk_setup_done
+    lda #2
+    sta disk_mode
+    lda #8
+    sta save_device
+    jsr test_stream_reset_read
+    jsr load_game
+    lda test_save_file_exists_calls
+    cmp #1
+    beq !t25_exists_ok+
+    lda #2
+    jmp t25_fail_code
+!t25_exists_ok:
+    lda test_save_open_calls
+    cmp #1
+    beq !t25_open_ok+
+    lda #3
+    jmp t25_fail_code
+!t25_open_ok:
+    lda test_save_last_msg
+    cmp #HSTR_SAVE_NEED_SAVE
+    bne !t25_msg_ok+
+    lda #4
+    jmp t25_fail_code
+!t25_msg_ok:
+    lda #$01
+    bne !t25_store+
+t25_fail_code:
+!t25_store:
+    sta tc_results + 24
 
     jmp test_finish
 

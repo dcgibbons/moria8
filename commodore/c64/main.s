@@ -567,15 +567,16 @@ title_load_game:
     jsr ui_clear_full_screen_safe
     jsr ui_reset_message_state
     jsr load_game
-    php
-    jsr disk_prompt_game        // Swap back for tier loading
-    plp
     // Fail closed on the explicit load carry result before resuming gameplay.
     bcc !title_load_fail+
+    jsr disk_prompt_game        // Swap back for tier loading
     jmp load_resume_game
 !title_load_fail:
     jsr input_get_modal_dismiss_key
-    jsr disk_prompt_game        // Swap back for tier loading after dismissal
+    jsr disk_prompt_game        // Swap back after the load failure is acknowledged
+#if C64_TEST_SCRIPTED_LOAD_MISSING_SAVE_PRODUCT
+c64_test_after_load_missing_save_return:
+#endif
     jmp title_enter_menu
 
 // ============================================================
@@ -1370,6 +1371,11 @@ c64_test_save_write_fail_input_sym:
 
 #if C64_TEST_SCRIPTED_LOAD_RESUME_PRODUCT
 c64_test_load_resume_fail_input_sym:
+    brk
+#endif
+
+#if C64_TEST_SCRIPTED_LOAD_MISSING_SAVE_PRODUCT
+c64_test_load_missing_save_fail_input_sym:
     brk
 #endif
 

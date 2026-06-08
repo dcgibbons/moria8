@@ -35,6 +35,7 @@
 #define HAL_STORAGE_DISK_SETUP_UI_TRAMPOLINE
 #define HAL_STORAGE_DISK_SETUP_OTHER_DRIVE
 #define HAL_STORAGE_DISK_SETUP_COMMIT_SETS_UI_OK
+#define HAL_STORAGE_DISK_SETUP_ACCEPT_SAVE_FILE
 
 #import "../../common/zeropage.s"
 
@@ -112,6 +113,8 @@ command_read_count:      .byte 0
 marker_readst_override:  .byte 0
 marker_bad_byte:         .byte 0
 marker_missing_until_write:.byte 0
+marker_open_fail:        .byte 0
+save_file_exists_result: .byte 0
 command_open_fail:       .byte 0
 w_chkin_lfn_seen:        .byte 0
 c128_media_state:        .byte C128_MEDIA_UNKNOWN
@@ -196,6 +199,15 @@ hal_storage_init_selected_drive:
     jsr w_close
 !done:
     jsr w_clrchn
+    rts
+
+save_file_exists:
+    lda save_file_exists_result
+    beq !missing+
+    sec
+    rts
+!missing:
+    clc
     rts
 
 #import "../../common/runtime_ui_strings.s"
@@ -312,6 +324,14 @@ w_open:
     clc
     rts
 !check_marker:
+    lda w_setlfs_lfn_seen
+    cmp #DISK_MARKER_FILE_NUM
+    bne !marker_ok+
+    lda marker_open_fail
+    beq !marker_ok+
+    sec
+    rts
+!marker_ok:
     clc
 !ok:
     rts
@@ -504,7 +524,7 @@ test_start:
     sta $ba
     jsr disk_reset_session_state
     lda program_device
-    cmp #9
+    cmp #8
     beq *+5
     jmp test_fail
     lda save_device
@@ -525,7 +545,10 @@ test_start:
     sta disk_mode
     lda #C128_MEDIA_PROGRAM
     sta c128_media_state
+    sec
     jsr disk_prompt_game
+    bcc *+5
+    jmp test_fail
     lda game_prompt_count
     beq *+5
     jmp test_fail
@@ -582,6 +605,29 @@ test_start:
     beq *+5
     jmp test_fail
 
+    // Test 3b: in one-drive mode, a save prompt on the shared program/save
+    // device must leave the mounted media classified as SAVE, not PROGRAM.
+    jsr reset_harness_state
+    lda #1
+    sta disk_mode
+    lda #8
+    sta program_device
+    sta save_device
+    lda #C128_MEDIA_PROGRAM
+    sta c128_media_state
+    sec
+    jsr disk_prompt_save
+    bcc *+5
+    jmp test_fail
+    lda c128_media_state
+    cmp #C128_MEDIA_SAVE
+    beq *+5
+    jmp test_fail
+    lda save_prompt_count
+    cmp #1
+    beq *+5
+    jmp test_fail
+
     // Test 4: after one-drive setup completes, disk_prompt_save skips UI but
     // still re-inits the current save drive.
     jsr reset_harness_state
@@ -592,7 +638,10 @@ test_start:
     sta save_device
     lda #C128_MEDIA_SAVE
     sta c128_media_state
+    sec
     jsr disk_prompt_save
+    bcc *+5
+    jmp test_fail
     lda screen_put_string_calls
     beq *+5
     jmp test_fail
@@ -634,7 +683,10 @@ test_start:
     jsr reset_harness_state
     lda #0
     sta disk_mode
+    sec
     jsr disk_prompt_game
+    bcc *+5
+    jmp test_fail
     lda screen_put_string_calls
     beq *+5
     jmp test_fail
@@ -755,6 +807,18 @@ test_start:
     jmp test_fail
     lda disk_diag_write_status1
     cmp #$30
+    beq *+5
+    jmp test_fail
+
+    // Test 8c: DOS status 73 is the drive DOS/version banner after init/reset,
+    // not a failed media swap.
+    jsr reset_harness_state
+    lda #$37
+    sta disk_diag_cmd_status0
+    lda #$33
+    sta disk_diag_cmd_status1
+    jsr disk_command_status
+    cmp #HAL_STORAGE_STATUS_OK
     beq *+5
     jmp test_fail
 
@@ -1120,6 +1184,125 @@ test_start:
     beq *+5
     jmp test_fail
     lda ui_action_log + 4
+    cmp #DISK_UI_ACT_INIT_PROMPT
+    beq *+5
+    jmp test_fail
+
+    // Test 13b: a legacy/markerless disk that already has THE.GAME is a
+    // valid load/save disk and must not be sent to the initialize prompt.
+    jsr reset_harness_state
+    lda #1
+    sta marker_missing_until_write
+    sta save_file_exists_result
+    lda #DISK_UI_RES_TWO_DRIVE
+    sta ui_menu_result
+    lda #9
+    sta ui_device_result
+    sec
+    jsr disk_setup_run
+    bcc *+5
+    jmp test_fail
+    lda disk_setup_done
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda disk_mode
+    cmp #2
+    beq *+5
+    jmp test_fail
+    lda save_device
+    cmp #9
+    beq *+5
+    jmp test_fail
+    lda c128_media_state
+    cmp #C128_MEDIA_SAVE
+    beq *+5
+    jmp test_fail
+    lda marker_write_count
+    beq *+5
+    jmp test_fail
+    lda ui_action_count
+    cmp #4
+    beq *+5
+    jmp test_fail
+    lda ui_action_log + 3
+    cmp #DISK_UI_ACT_INSERT_DISK
+    beq *+5
+    jmp test_fail
+
+    // Test 13c: marker OPEN failure is still cleaned up before falling back to
+    // THE.GAME detection on a legacy save disk.
+    jsr reset_harness_state
+    lda #1
+    sta marker_open_fail
+    sta save_file_exists_result
+    lda #DISK_UI_RES_ONE_DRIVE
+    sta ui_menu_result
+    sec
+    jsr disk_setup_run
+    bcc *+5
+    jmp test_fail
+    lda disk_setup_done
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda c128_media_state
+    cmp #C128_MEDIA_SAVE
+    beq *+5
+    jmp test_fail
+    lda w_clrchn_calls
+    beq *+5
+    jmp test_fail
+    lda w_close_calls
+    beq *+5
+    jmp test_fail
+    lda ui_action_count
+    cmp #2
+    beq *+5
+    jmp test_fail
+
+    // Test 13d: choosing "same as program disk" is an action, not a menu
+    // state toggle. It proceeds directly to save-disk preparation.
+    jsr reset_harness_state
+    lda #1
+    sta marker_missing_until_write
+    lda #DISK_UI_RES_ONE_DRIVE
+    sta ui_menu_result
+    lda #DISK_UI_RES_YES
+    sta ui_init_result
+    sec
+    jsr disk_setup_run
+    bcc *+5
+    jmp test_fail
+    lda disk_setup_done
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda disk_mode
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda save_device
+    cmp #8
+    beq *+5
+    jmp test_fail
+    lda c128_media_state
+    cmp #C128_MEDIA_SAVE
+    beq *+5
+    jmp test_fail
+    lda ui_action_count
+    cmp #3
+    beq *+5
+    jmp test_fail
+    lda ui_action_log
+    cmp #DISK_UI_ACT_MENU
+    beq *+5
+    jmp test_fail
+    lda ui_action_log + 1
+    cmp #DISK_UI_ACT_INSERT_DISK
+    beq *+5
+    jmp test_fail
+    lda ui_action_log + 2
     cmp #DISK_UI_ACT_INIT_PROMPT
     beq *+5
     jmp test_fail
