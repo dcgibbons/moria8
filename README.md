@@ -10,9 +10,9 @@ written in platform-specific assembly. Current releases target the Commodore
 
 | Platform | Status | Download |
 | -------- | ------ | -------- |
-| Commodore 64 (C64) | Released ([notes](docs/release_notes/release_notes-v1.2.0.md)) | [moria8-c64.d64](https://github.com/dcgibbons/moria8/releases/download/v1.2.0/moria8-c64.d64) [moria8-c64.zip](https://github.com/dcgibbons/moria8/releases/download/v1.2.0/moria8-c64.zip) |
-| Commodore Plus/4 | Released ([notes](docs/release_notes/release_notes-v1.2.0.md)) | [moria8-plus4.d64](https://github.com/dcgibbons/moria8/releases/download/v1.2.0/moria8-plus4.d64) |
-| Commodore 128 (C128) | Released ([notes](docs/release_notes/release_notes-v1.2.0.md)) | [moria8-c128.d71](https://github.com/dcgibbons/moria8/releases/download/v1.2.0/moria8-c128.d71) |
+| Commodore 64 (C64) | Released ([notes](docs/release_notes/release_notes-v1.3.0.md)) | [moria8-c64.d64](https://github.com/dcgibbons/moria8/releases/download/v1.3.0/moria8-c64.d64) [moria8-c64.zip](https://github.com/dcgibbons/moria8/releases/download/v1.3.0/moria8-c64.zip) |
+| Commodore Plus/4 | Released ([notes](docs/release_notes/release_notes-v1.3.0.md)) | [moria8-plus4.d64](https://github.com/dcgibbons/moria8/releases/download/v1.3.0/moria8-plus4.d64) |
+| Commodore 128 (C128) | Released ([notes](docs/release_notes/release_notes-v1.3.0.md)) | [moria8-c128.d64](https://github.com/dcgibbons/moria8/releases/download/v1.3.0/moria8-c128.d64) |
 | Commodore PET | Maybe | |
 | Commodore VIC-20 | Maybe | |
 | Commander X16 | Planned | |

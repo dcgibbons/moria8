@@ -16,7 +16,7 @@ Use the disk image for your machine:
 - C64: `moria8-c64.d64`
 - C64 Ultimate / SoftwareIEC: `moria8-c64.zip`
 - Plus/4: `moria8-plus4.d64`
-- C128: `moria8-c128.d71`
+- C128: `moria8-c128.d64`
 
 The C64 version benefits from REU support when available because some creature
 data can be fetched without as much disk loading. The C128 version uses its own
