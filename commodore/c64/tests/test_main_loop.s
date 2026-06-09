@@ -92,6 +92,12 @@ disk_prompt_game:
     inc test_disk_prompt_game_calls
     rts
 
+ds_game_str:
+    .text "INSERT PROGRAM DISK" ; .byte 0
+
+ds_game_error_str:
+    .text "PROGRAM DISK NOT FOUND" ; .byte 0
+
 tramp_disk_setup:
     inc test_tramp_disk_setup_calls
     lda test_disk_setup_success

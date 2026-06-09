@@ -17,6 +17,8 @@ if str(C128_TESTS_DIR) not in sys.path:
 from vice_connector import MonitorTestResult, VICEConnector, normalize_addr, parse_vs_symbols
 
 BYTE_DUMP_RE = re.compile(r"C:([0-9A-Fa-f]{4})\s+([0-9A-Fa-f]{2})")
+SCREEN_EXPECT_RE = re.compile(r"^([^:]+):([0-9]+):([0-9]+)$")
+HEX_BYTE_RE = re.compile(r"^[0-9A-Fa-f]{2}$")
 
 
 def build_vice_command(args: argparse.Namespace) -> list[str]:
@@ -85,6 +87,42 @@ def read_monitor_byte(connector: VICEConnector, addr: int | str) -> int | None:
     return int(match.group(2), 16)
 
 
+def read_monitor_bytes(connector: VICEConnector, start: int, end: int) -> list[int]:
+    response = connector.send_command(f"m {normalize_addr(start)} {normalize_addr(end)}")
+    values: list[int] = []
+    for line in response.splitlines():
+        if not line.startswith(">C:"):
+            continue
+        for token in line.split()[1:]:
+            if not HEX_BYTE_RE.match(token):
+                break
+            values.append(int(token, 16))
+    return values
+
+
+def read_monitor_string(connector: VICEConnector, addr: int, max_len: int = 80) -> list[int]:
+    result: list[int] = []
+    for value in read_monitor_bytes(connector, addr, addr + max_len - 1):
+        if value == 0:
+            return result
+        result.append(value)
+    return result
+
+
+def check_screen_expectations(connector: VICEConnector, args: argparse.Namespace) -> str | None:
+    for symbol, row, col in args.expect_screen:
+        source_addr = int(args.symbols[symbol], 16)
+        expected = read_monitor_string(connector, source_addr)
+        screen_addr = args.screen_base + row * args.screen_cols + col
+        actual = read_monitor_bytes(connector, screen_addr, screen_addr + len(expected) - 1)
+        if actual != expected:
+            return (
+                f"screen mismatch for {symbol} at row {row}, col {col}: "
+                f"expected {bytes(expected).hex(' ')}, got {bytes(actual).hex(' ')}"
+            )
+    return None
+
+
 def scripted_input_exhausted(connector: VICEConnector, args: argparse.Namespace) -> bool:
     key_index_addr = getattr(args, "key_index_addr", None)
     key_script_addr = getattr(args, "key_script_addr", None)
@@ -95,6 +133,10 @@ def scripted_input_exhausted(connector: VICEConnector, args: argparse.Namespace)
         return False
     script_byte = read_monitor_byte(connector, int(key_script_addr, 16) + key_index)
     return script_byte == 0
+
+
+def attach_drive8(connector: VICEConnector, disk_path: Path) -> None:
+    connector.send_command(f'attach 8 "{disk_path.resolve()}"')
 
 
 def run_vice(args: argparse.Namespace, pass_addr: str, fail_addr: str | None, dump_ranges: list[tuple[str, str]]) -> tuple[MonitorTestResult, list[str]]:
@@ -114,16 +156,53 @@ def run_vice(args: argparse.Namespace, pass_addr: str, fail_addr: str | None, du
             )
             if args.start_symbol:
                 connector.run_until(args.start_addr, timeout=args.timeout)
+                if args.attach8_at_start_d64:
+                    attach_drive8(connector, args.attach8_at_start_d64)
             connector.clear_breakpoints()
-            connector.break_at(pass_addr)
-            if fail_addr:
-                connector.break_at(fail_addr)
-            connector.go()
-            result = connector.wait_for_stop(
-                pass_addr=pass_addr,
-                fail_addr=fail_addr,
-                timeout=args.timeout,
-            )
+            if args.swap_addr:
+                connector.break_at(args.swap_addr)
+                connector.break_at(pass_addr)
+                if fail_addr:
+                    connector.break_at(fail_addr)
+                swap_hits = 0
+                resume_addr = args.resume_addr
+                while True:
+                    connector.go(resume_addr)
+                    resume_addr = None
+                    result = connector.wait_for_stop(
+                        pass_addr=args.swap_addr,
+                        fail_addr=pass_addr,
+                        timeout=args.timeout,
+                    )
+                    if result.passed:
+                        swap_hits += 1
+                        if swap_hits >= args.swap_attach_after_hits:
+                            attach_drive8(connector, args.swap_attach8_d64)
+                            connector.clear_breakpoints()
+                            connector.break_at(pass_addr)
+                            if fail_addr:
+                                connector.break_at(fail_addr)
+                            connector.go()
+                            result = connector.wait_for_stop(
+                                pass_addr=pass_addr,
+                                fail_addr=fail_addr,
+                                timeout=args.timeout,
+                            )
+                            break
+                        continue
+                    if pass_addr in result.last_status.upper().replace("$", ""):
+                        result = MonitorTestResult(False, f"reached pass before swap symbol ${args.swap_addr}", result.last_status)
+                    break
+            else:
+                connector.break_at(pass_addr)
+                if fail_addr:
+                    connector.break_at(fail_addr)
+                connector.go(args.resume_addr)
+                result = connector.wait_for_stop(
+                    pass_addr=pass_addr,
+                    fail_addr=fail_addr,
+                    timeout=args.timeout,
+                )
             if (
                 args.pass_on_script_exhausted
                 and not result.passed
@@ -131,6 +210,13 @@ def run_vice(args: argparse.Namespace, pass_addr: str, fail_addr: str | None, du
                 and scripted_input_exhausted(connector, args)
             ):
                 result = MonitorTestResult(True, "script exhausted at next input wait", result.last_status)
+            if result.passed:
+                screen_error = check_screen_expectations(connector, args)
+                if screen_error:
+                    result = MonitorTestResult(False, screen_error, result.last_status)
+                    start = args.screen_base
+                    end = args.screen_base + args.screen_cols * 25 - 1
+                    dumps.append(connector.send_command(f"m {normalize_addr(start)} {normalize_addr(end)}"))
         except ConnectionError as exc:
             result = MonitorTestResult(False, str(exc), "")
         if not result.passed:
@@ -166,10 +252,15 @@ def main() -> int:
     parser.add_argument("--pass-symbol", required=True)
     parser.add_argument("--fail-symbol")
     parser.add_argument("--start-symbol")
+    parser.add_argument("--resume-symbol")
     parser.add_argument("--limitcycles", type=int, default=0)
     parser.add_argument("--drive8-type", default="1541")
     parser.add_argument("--drive9-type", default="1541")
     parser.add_argument("--enable-drive9-bus", action="store_true")
+    parser.add_argument("--attach8-at-start-d64", type=Path)
+    parser.add_argument("--swap-symbol")
+    parser.add_argument("--swap-attach8-d64", type=Path)
+    parser.add_argument("--swap-attach-after-hits", type=int, default=1)
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=6510)
     parser.add_argument("--timeout", type=float, default=30.0)
@@ -177,9 +268,13 @@ def main() -> int:
     parser.add_argument("--connect-retry-delay", type=float, default=0.1)
     parser.add_argument("--socket-timeout", type=float, default=0.5)
     parser.add_argument("--pass-on-script-exhausted", action="store_true")
+    parser.add_argument("--screen-base", type=lambda value: int(value, 0), default=0x0c00)
+    parser.add_argument("--screen-cols", type=int, default=40)
+    parser.add_argument("--expect-screen-symbol", action="append", default=[])
     args = parser.parse_args()
 
     symbols = parse_vs_symbols(args.main_vs)
+    args.symbols = symbols
     pass_addr = symbols.get(args.pass_symbol)
     if not pass_addr:
         print(f"FAIL: missing symbol {args.pass_symbol} in {args.main_vs}")
@@ -197,8 +292,36 @@ def main() -> int:
             print(f"FAIL: missing symbol {args.start_symbol} in {args.main_vs}")
             return 2
         args.start_addr = normalize_addr(args.start_addr)
+    args.resume_addr = None
+    if args.resume_symbol:
+        args.resume_addr = symbols.get(args.resume_symbol)
+        if not args.resume_addr:
+            print(f"FAIL: missing symbol {args.resume_symbol} in {args.main_vs}")
+            return 2
+        args.resume_addr = normalize_addr(args.resume_addr)
     args.key_index_addr = symbols.get(".plus4_test_key_index")
     args.key_script_addr = symbols.get(".plus4_test_key_script")
+    args.expect_screen = []
+    for value in args.expect_screen_symbol:
+        match = SCREEN_EXPECT_RE.match(value)
+        if not match:
+            print(f"FAIL: invalid --expect-screen-symbol {value!r}; expected SYMBOL:ROW:COL")
+            return 2
+        symbol, row, col = match.groups()
+        if symbol not in symbols:
+            print(f"FAIL: missing symbol {symbol} in {args.main_vs}")
+            return 2
+        args.expect_screen.append((symbol, int(row), int(col)))
+    args.swap_addr = None
+    if args.swap_symbol:
+        args.swap_addr = symbols.get(args.swap_symbol)
+        if not args.swap_addr:
+            print(f"FAIL: missing symbol {args.swap_symbol} in {args.main_vs}")
+            return 2
+        if not args.swap_attach8_d64:
+            print("FAIL: --swap-symbol requires --swap-attach8-d64")
+            return 2
+        args.swap_addr = normalize_addr(args.swap_addr)
 
     dump_ranges: list[tuple[str, str]] = []
     dump_symbols = (
@@ -219,8 +342,12 @@ def main() -> int:
         ".disk_error_readst",
         ".disk_error_dos0",
         ".disk_error_dos1",
+        ".disk_error_actual",
+        ".disk_error_expect",
+        ".disk_error_index",
         ".plus4_test_key_index",
         ".plus4_test_key_script",
+        ".plus4_test_single_drive_stage",
     )
     for symbol in dump_symbols:
         addr = symbols.get(symbol)

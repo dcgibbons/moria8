@@ -581,6 +581,44 @@ title_enter_menu:
     lda #1
     sta disk_setup_done
 #endif
+#if PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_SAVE_RETURN_PRODUCT
+    lda plus4_test_single_drive_save_return_ran
+    bne !plus4_test_single_drive_save_return_skip+
+    inc plus4_test_single_drive_save_return_ran
+    lda #8
+    sta save_device
+    lda #1
+    sta disk_mode
+    lda #2
+    sta disk_setup_done
+plus4_test_single_drive_wait_for_harness:
+    jmp plus4_test_single_drive_wait_for_harness
+plus4_test_single_drive_before_save:
+    lda #1
+    sta plus4_test_single_drive_stage
+    lda #8
+    sta save_device
+    lda #8
+    sta disk_prompt_device
+    jsr disk_init_drive
+    jsr disk_marker_init
+    bcc !marker_ok+
+    jmp plus4_test_single_drive_save_return_fail
+!marker_ok:
+    lda #2
+    sta plus4_test_single_drive_stage
+    jsr save_game
+    bcc plus4_test_single_drive_save_return_fail
+    lda #3
+    sta plus4_test_single_drive_stage
+    lda #8
+    sta program_device
+    jsr disk_prompt_game_required
+    lda #4
+    sta plus4_test_single_drive_stage
+    jmp title_enter_menu
+!plus4_test_single_drive_save_return_skip:
+#endif
 
 title_menu_loop:
     jsr input_get_key
@@ -604,7 +642,9 @@ title_menu_loop:
 
 plus4_title_redraw_cached:
     lda plus4_title_art_cached
-    beq title_enter_menu
+    bne !cached+
+    jmp title_enter_menu
+!cached:
     lda #COL_LGREY
     sta zp_text_color
     jsr title_clear_full_screen
@@ -631,6 +671,13 @@ title_draw_menu:
     rts
 
 plus4_title_art_cached: .byte 0
+
+#if PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_SAVE_RETURN_PRODUCT
+plus4_test_single_drive_save_return_ran: .byte 0
+plus4_test_single_drive_stage: .byte 0
+plus4_test_single_drive_save_return_fail:
+    jmp plus4_test_single_drive_save_return_fail
+#endif
 
 #if PLUS4_TEST_SCRIPTED_OVERLAY_LOAD_PRODUCT
 plus4_test_overlay_load_all:

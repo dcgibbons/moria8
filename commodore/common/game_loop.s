@@ -723,6 +723,57 @@ game_new_start:
 #endif
 
     jmp main_loop
+
+#if !C128_PRODUCT_MODAL_PERSIST
+.const DPGR_GAME_ERROR_COL = (SCREEN_COLS - 22) / 2
+.const DPGR_PROMPT_COL = (SCREEN_COLS - 19) / 2
+.const DPGR_PRESS_ANY_KEY_COL = (SCREEN_COLS - 13) / 2
+.const DPGR_PROMPT_ROW = 10
+.const DPGR_PROMPT_KEY_ROW = 11
+
+disk_prompt_game_required:
+!prompt:
+    jsr disk_prompt_game
+    bcc !ready+
+disk_prompt_game_required_error:
+    jsr ui_clear_full_screen_safe
+    jsr msg_init
+    lda #COL_WHITE
+    sta zp_text_color
+    lda #DPGR_PROMPT_ROW - 2
+    sta zp_cursor_row
+    lda #DPGR_GAME_ERROR_COL
+    sta zp_cursor_col
+    lda #<ds_game_error_str
+    sta zp_ptr0
+    lda #>ds_game_error_str
+    sta zp_ptr0_hi
+    jsr hal_screen_put_string
+    lda #DPGR_PROMPT_ROW
+    sta zp_cursor_row
+    lda #DPGR_PROMPT_COL
+    sta zp_cursor_col
+    lda #<ds_game_str
+    sta zp_ptr0
+    lda #>ds_game_str
+    sta zp_ptr0_hi
+    jsr hal_screen_put_string
+    lda #DPGR_PROMPT_KEY_ROW + 1
+    sta zp_cursor_row
+    lda #DPGR_PRESS_ANY_KEY_COL
+    sta zp_cursor_col
+    lda #<press_key_str
+    sta zp_ptr0
+    lda #>press_key_str
+    sta zp_ptr0_hi
+    jsr hal_screen_put_string
+disk_prompt_game_required_error_shown:
+    jsr input_get_modal_dismiss_key
+    jmp !prompt-
+!ready:
+    rts
+#endif
+
 // ============================================================
 // load_resume_game — Entry point after successful load
 // ============================================================
@@ -1059,7 +1110,7 @@ plus4_test_after_save_game:
     adc #0
     pha
 #if !C128_PRODUCT_MODAL_PERSIST
-    jsr disk_prompt_game        // Swap back to game disk if dual
+    jsr disk_prompt_game_required // Swap back to game disk if dual
 #if HAL_PLATFORM_GAME_LOOP_RUNTIME_RESYNC
     jsr hal_platform_runtime_resync
 #endif

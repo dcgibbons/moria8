@@ -2415,6 +2415,8 @@ resident_persist_filename_end:
     .byte 0
 .const RESIDENT_PERSIST_FILENAME_LEN = resident_persist_filename_end - resident_persist_filename
 .const RESIDENT_PLAY_FILE_NUM = 11
+.const C128_PROGRAM_PROBE_FILE_NUM = 7
+.const C128_PROGRAM_CMD_FILE_NUM = 15
 resident_play_filename:
     .text "128.PLAY"
 resident_play_filename_end:
@@ -2640,6 +2642,8 @@ c128_load_resident_play_prg:
 c128_require_program_media:
     jsr disk_prompt_game
     bcs !program_fail+
+    jsr c128_program_play_exists
+    bcc !program_fail+
     lda #C128_MEDIA_PROGRAM
     sta c128_media_state
     clc
@@ -2649,6 +2653,12 @@ c128_require_program_media:
     sta c128_media_state
     sec
     rts
+
+c128_program_media_error_prompt:
+    lda #C128_MEDIA_UNKNOWN
+    sta c128_media_state
+c128_program_media_error_shown:
+    jmp disk_prompt_game
 
 c128_require_save_media:
     jsr disk_prompt_save
@@ -2664,15 +2674,19 @@ c128_require_save_media:
     rts
 
 c128_modal_require_persist:
+!retry:
     lda c128_modal_slot_state
     cmp #C128_MODAL_PERSIST
     beq !persist_loaded+
     jsr c128_require_program_media
+    bcs !persist_load_failed+
     lda #10
     sta c128_runtime_load_stage
     jsr c128_load_resident_persist_prg
     bcc !persist_loaded+
-    jmp runtime_load_failed
+!persist_load_failed:
+    jsr c128_program_media_error_prompt
+    jmp !retry-
 !persist_loaded:
     lda #C128_MODAL_PERSIST
     sta c128_modal_slot_state
@@ -2704,15 +2718,22 @@ c128_modal_load_game:
     rts
 
 c128_modal_require_play:
+!retry:
     lda c128_modal_slot_state
     cmp #C128_MODAL_PLAY
     beq !play_loaded+
     jsr c128_require_program_media
+    bcs !play_load_failed+
     lda #11
     sta c128_runtime_load_stage
     jsr c128_load_resident_play_prg
-    bcc !play_loaded+
-    jmp runtime_load_failed
+    bcs !play_load_failed+
+    lda c128_resident_play_sig
+    cmp #$c8
+    beq !play_loaded+
+!play_load_failed:
+    jsr c128_program_media_error_prompt
+    jmp !retry-
 !play_loaded:
     lda #C128_MODAL_PLAY
     sta c128_modal_slot_state
@@ -3476,6 +3497,68 @@ tool_ego_prefix_hi:
 #import "../common/store_data.s"
 ego_str_holy_avenger_common:
     .text " (Holy Avenger)" ; .byte 0
+
+c128_program_play_exists:
+    lda #c128_program_play_read_filename_len
+    ldx #<c128_program_play_read_filename
+    ldy #>c128_program_play_read_filename
+    jsr w_setnam
+    lda #C128_PROGRAM_PROBE_FILE_NUM
+    ldx program_device
+    ldy #2
+    jsr w_setlfs
+    jsr w_open
+    bcs !missing+
+    jsr c128_program_read_command_status
+    jsr disk_command_status
+    cmp #HAL_STORAGE_STATUS_OK
+    bne !missing+
+    sec
+    bcs !done+
+!missing:
+    clc
+!done:
+    php
+    lda #C128_PROGRAM_PROBE_FILE_NUM
+    jsr w_close
+    jsr w_clrchn
+    plp
+    rts
+
+c128_program_read_command_status:
+    lda #$ff
+    sta disk_diag_cmd_status0
+    sta disk_diag_cmd_status1
+    lda #0
+    ldx #0
+    ldy #0
+    jsr w_setnam
+    lda #C128_PROGRAM_CMD_FILE_NUM
+    ldx program_device
+    ldy #C128_PROGRAM_CMD_FILE_NUM
+    jsr w_setlfs
+    jsr w_open
+    bcs !done+
+    ldx #C128_PROGRAM_CMD_FILE_NUM
+    jsr w_chkin
+    bcs !close+
+    jsr w_chrin
+    sta disk_diag_cmd_status0
+    jsr w_chrin
+    sta disk_diag_cmd_status1
+!close:
+    jsr w_clrchn
+    lda #C128_PROGRAM_CMD_FILE_NUM
+    jsr w_close
+!done:
+    rts
+
+c128_program_play_read_filename:
+    .byte $30, $3a                              // "0:"
+    .text "128.PLAY"
+    .byte $2c, $50, $2c, $52                    // ",P,R"
+.label c128_program_play_read_filename_len = * - c128_program_play_read_filename
+
 c128_resident_items_end:
 
 .segment Default
@@ -3570,6 +3653,7 @@ c128_resident_persist_end:
 #define GAME_LOOP_LOW_DATA_EXTERNAL
 .segment C128ResidentPlay
 c128_resident_play_start:
+c128_resident_play_sig: .byte $c8
 at_surface_str:
     .text "You are already at the surface." ; .byte 0
 #if PERF_P1
