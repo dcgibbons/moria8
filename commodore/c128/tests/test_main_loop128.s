@@ -158,6 +158,10 @@ save_game:
 c128_modal_save_game:
     jmp save_game
 
+c128_modal_require_persist:
+    inc test_c128_modal_require_persist_calls
+    rts
+
 load_game:
     jmp test_load_game
 
@@ -740,6 +744,7 @@ test_disk_prompt_game_calls: .byte 0
 test_tramp_disk_setup_calls: .byte 0
 test_tramp_game_over_calls: .byte 0
 test_delete_savefile_calls: .byte 0
+test_c128_modal_require_persist_calls: .byte 0
 test_store_enter_calls: .byte 0
 test_store_door_idx: .byte $ff
 msg_row1_col: .byte 0
@@ -836,6 +841,7 @@ reset_state:
     sta test_tramp_disk_setup_calls
     sta test_tramp_game_over_calls
     sta test_delete_savefile_calls
+    sta test_c128_modal_require_persist_calls
     sta test_store_enter_calls
     sta test_cast_ok
     sta test_save_success
@@ -1757,8 +1763,8 @@ test_entry:
     beq *+5
     jmp test_fail
 
-    // Test 20: a successful CMD_SAVE in C128 one-drive flow still routes
-    // through disk setup, save, and the shared game-return owner.
+    // Test 20: a successful first CMD_SAVE on C128 preloads modal persist
+    // before Disk Setup, then stays on save media for the write.
     lda #20
     sta test_case_id
     jsr reset_state
@@ -1775,6 +1781,10 @@ test_entry:
     cmp #1
     beq *+5
     jmp test_fail
+    lda test_c128_modal_require_persist_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
     lda test_disk_prompt_save_calls
     beq *+5
     jmp test_fail
@@ -1783,7 +1793,6 @@ test_entry:
     beq *+5
     jmp test_fail
     lda test_disk_prompt_game_calls
-    cmp #1
     beq *+5
     jmp test_fail
     lda test_game_over_prompt_calls
@@ -1794,8 +1803,8 @@ test_entry:
     beq *+5
     jmp test_fail
 
-    // Test 21: a failed CMD_SAVE still routes through the shared game-return
-    // owner before resuming gameplay.
+    // Test 21: a failed first CMD_SAVE keeps the same no-extra-program-prompt
+    // ordering before resuming gameplay.
     lda #21
     sta test_case_id
     jsr reset_state
@@ -1814,6 +1823,10 @@ test_entry:
     cmp #1
     beq *+5
     jmp test_fail
+    lda test_c128_modal_require_persist_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
     lda test_save_game_calls
     cmp #1
     beq *+5
@@ -1822,7 +1835,6 @@ test_entry:
     beq *+5
     jmp test_fail
     lda test_disk_prompt_game_calls
-    cmp #1
     beq *+5
     jmp test_fail
     lda test_player_try_move_calls

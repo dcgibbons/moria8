@@ -2700,7 +2700,9 @@ c128_modal_save_game:
     lda #0
     adc #0
     sta c128_modal_result
+    bne !save_done+
     jsr c128_modal_require_play
+!save_done:
     lda c128_modal_result
     lsr
     rts

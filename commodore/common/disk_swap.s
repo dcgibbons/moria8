@@ -613,7 +613,7 @@ disk_marker_present:
     sta disk_diag_carry
     lda #$81
     sta disk_status
-    jmp !dmp_close+
+    jmp !dmp_done+
 !dmp_open_ok:
     lda #0
     sta disk_diag_carry

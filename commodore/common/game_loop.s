@@ -1101,6 +1101,9 @@ c128_town_move_diag_after_input_get_command:
 !save_not_winner:
     lda disk_setup_done
     bne !save_setup_ready+
+#if C128_PRODUCT_MODAL_PERSIST
+    jsr c128_modal_require_persist
+#endif
     jsr tramp_disk_setup
     lda disk_setup_done
     beq !save_return_view+
