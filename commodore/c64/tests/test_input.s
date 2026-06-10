@@ -14,6 +14,7 @@ input_tree_idx: .byte 0
 input_tree_keys:
     .byte $4b, $4a, $48, $4c, $59, $55, $42, $4e
     .byte $91, $11, $9d, $1d
+    .byte $38, $32, $34, $36, $37, $39, $31, $33, $35
     .byte $3e, $3c, $2e, $53, $4f, $43, $47, $2c
     .byte $44, $49, $45, $57, $54, $51, $52, $41
     .byte $5a, $4d, $50, $3f, $58, $46, $66
@@ -25,7 +26,10 @@ input_tree_cmds:
     .byte CMD_MOVE_N, CMD_MOVE_S, CMD_MOVE_W, CMD_MOVE_E
     .byte CMD_MOVE_NW, CMD_MOVE_NE, CMD_MOVE_SW, CMD_MOVE_SE
     .byte CMD_MOVE_N, CMD_MOVE_S, CMD_MOVE_W, CMD_MOVE_E
-    .byte CMD_STAIRS_DN, CMD_STAIRS_UP, CMD_REST, CMD_SEARCH
+    .byte CMD_MOVE_N, CMD_MOVE_S, CMD_MOVE_W, CMD_MOVE_E
+    .byte CMD_MOVE_NW, CMD_MOVE_NE, CMD_MOVE_SW, CMD_MOVE_SE
+    .byte CMD_REST
+    .byte CMD_STAIRS_DN, CMD_STAIRS_UP, CMD_RUN, CMD_SEARCH
     .byte CMD_OPEN, CMD_CLOSE, CMD_PICKUP, CMD_PICKUP
     .byte CMD_DROP, CMD_INVENTORY, CMD_EQUIPMENT, CMD_WEAR
     .byte CMD_TAKEOFF, CMD_QUAFF, CMD_READ, CMD_AIM
@@ -133,6 +137,57 @@ test_start:
     lda #$00
     sta $0402
 !t3_done:
+
+    // ==========================================
+    // Test 3b: top-row numbers map to movement
+    // ==========================================
+    lda #$38               // 8
+    jsr petscii_to_command
+    cmp #CMD_MOVE_N
+    bne !t3b_fail+
+    lda #$32               // 2
+    jsr petscii_to_command
+    cmp #CMD_MOVE_S
+    bne !t3b_fail+
+    lda #$34               // 4
+    jsr petscii_to_command
+    cmp #CMD_MOVE_W
+    bne !t3b_fail+
+    lda #$36               // 6
+    jsr petscii_to_command
+    cmp #CMD_MOVE_E
+    bne !t3b_fail+
+    lda #$37               // 7
+    jsr petscii_to_command
+    cmp #CMD_MOVE_NW
+    bne !t3b_fail+
+    lda #$39               // 9
+    jsr petscii_to_command
+    cmp #CMD_MOVE_NE
+    bne !t3b_fail+
+    lda #$31               // 1
+    jsr petscii_to_command
+    cmp #CMD_MOVE_SW
+    bne !t3b_fail+
+    lda #$33               // 3
+    jsr petscii_to_command
+    cmp #CMD_MOVE_SE
+    bne !t3b_fail+
+    lda #$35               // 5
+    jsr petscii_to_command
+    cmp #CMD_REST
+    bne !t3b_fail+
+    lda #$2e               // .
+    jsr petscii_to_command
+    cmp #CMD_RUN
+    bne !t3b_fail+
+    lda #$01
+    sta $040e
+    jmp !t3b_done+
+!t3b_fail:
+    lda #$00
+    sta $040e
+!t3b_done:
 
     // ==========================================
     // Test 4: common commands map correctly

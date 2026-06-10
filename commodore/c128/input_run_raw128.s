@@ -33,7 +33,7 @@ input_run_scan_held_raw:
     lda #$ff
     sta CIA1_PORTA
     lda irs_ext_save
-    ora #%11000000
+    ora #%00000111
     sta C128_KBD_EXT
 
     lda #$fe
@@ -55,27 +55,25 @@ input_run_scan_held_raw:
 
     lda #$ff
     sta CIA1_PORTA
+    ldy #0
+!irs_ext_row:
     lda irs_ext_save
-    ora #%11000000
-    and #%10111111      // Drive line 8 low, keep line 9 high
+    ora #%00000111
+    and irs_ext_masks,y
     sta C128_KBD_EXT
     nop
     nop
-    ldx #8
+    tya
+    clc
+    adc #8
+    tax
     lda CIA1_PORTB
     jsr input_run_row_has_nonmodifier
     bne !irs_pressed+
-
-    lda irs_ext_save
-    ora #%11000000
-    and #%01111111      // Drive line 9 low, keep line 8 high
-    sta C128_KBD_EXT
-    nop
-    nop
-    ldx #9
-    lda CIA1_PORTB
-    jsr input_run_row_has_nonmodifier
-    beq !irs_none+
+    iny
+    cpy #3
+    bcc !irs_ext_row-
+    bcs !irs_none+
 
 !irs_pressed:
     ldx #1
@@ -122,7 +120,7 @@ input_run_row_has_nonmodifier:
     ora #$24            // Ignore CTRL and C=
     sta irs_row_raw
 !irrn_not_ctrl:
-    cpx #8
+    cpx #10
     bne !irrn_not_alt+
     lda irs_row_raw
     ora #$01            // Ignore ALT
@@ -143,6 +141,8 @@ irs_save_ddrb:  .byte 0
 irs_ext_save:   .byte 0
 irs_drive_mask: .byte 0
 irs_row_raw:    .byte 0
+irs_ext_masks:
+    .byte %11111110, %11111101, %11111011
 
 #if !C128_INPUT_TEST
 // Restore the spell-execution overlay after a cross-overlay Earthquake call so

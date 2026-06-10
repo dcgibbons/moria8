@@ -183,8 +183,23 @@ input_get_command:
 !get_key:
     jsr input_get_key
     jsr petscii_to_command
+    cmp #CMD_RUN
+    beq !run_prefix+
     cmp #CMD_NONE
     beq !get_key-
+    sta zp_input_cmd
+    rts
+
+!run_prefix:
+    jsr input_wait_release
+    jsr input_get_key
+    jsr petscii_to_command
+    cmp #CMD_MOVE_N
+    bcc !get_key-
+    cmp #CMD_MOVE_SE + 1
+    bcs !get_key-
+    clc
+    adc #(CMD_RUN_N - CMD_MOVE_N)
     sta zp_input_cmd
     rts
 

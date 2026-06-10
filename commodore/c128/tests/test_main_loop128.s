@@ -1,6 +1,8 @@
 #importonce
 // test_main_loop128.s — Focused dispatch tests for common/game_loop.s on C128
 
+#define C128_PRODUCT_MODAL_PERSIST
+
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_start)
 
@@ -152,6 +154,9 @@ save_game:
 !save_fail:
     clc
     rts
+
+c128_modal_save_game:
+    jmp save_game
 
 load_game:
     jmp test_load_game
@@ -1590,6 +1595,45 @@ test_entry:
     cmp #PLF_SEARCHING
     beq *+5
     jmp test_fail
+
+    // Test 16b: real "." run-prefix waits for a fresh direction key and runs.
+    lda #16
+    sta test_case_id
+    jsr restore_real_input_get_command
+    jsr reset_state
+    lda #1
+    sta test_move_ok
+    sta test_run_should_stop
+    lda #$2e
+    sta test_key_script + 0
+    lda #$36
+    sta test_key_script + 1
+    lda #$d1
+    sta test_key_script + 2
+    lda #3
+    sta test_key_len
+    jsr run_case
+    lda test_wait_release_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda test_get_key_calls
+    cmp #2
+    beq *+5
+    jmp test_fail
+    lda test_player_try_move_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda test_last_move_cmd
+    cmp #CMD_MOVE_E
+    beq *+5
+    jmp test_fail
+    lda zp_run_dir
+    cmp #$ff
+    beq *+5
+    jmp test_fail
+    jsr install_jump_patch
 
     // Test 17: running onto a town store door enters the store.
     lda #17

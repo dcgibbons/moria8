@@ -30,9 +30,9 @@
 .const CIA1_PORTB = $DC01   // Column read: 0 = key pressed (active low)
 .const CIA1_DDRA  = $DC02
 .const CIA1_DDRB  = $DC03
-.const C128_KBD_EXT = $D02F // Extended keyboard line drive (bit6=line8, bit7=line9)
+.const C128_KBD_EXT = $D02F // Extended keyboard line drive (bit0=K2, bit1=K1, bit2=K0)
 
-// Virtual key codes for C128 extended keypad keys (rows 8/9).
+// Virtual key codes for C128 extended keypad keys (K2/K1/K0 columns).
 // Chosen from currently-unused PETSCII range in this project path.
 .const KEY_ALT      = $a0
 .const KEY_KP0      = $a1
@@ -47,7 +47,6 @@
 .const KEY_KP9      = $aa
 .const KEY_KP_PLUS  = $ab
 .const KEY_KP_MINUS = $ac
-.const KEY_KP_DOT   = $ad
 .const KEY_ESC      = $ae
 .const KEY_LF       = $af
 
@@ -463,11 +462,11 @@ cia_scan_petscii:
     lda #$00
     sta CIA1_DDRB
 
-    // Save extended keyboard drive register and force lines 8/9 idle-high.
+    // Save extended keyboard drive register and force K0/K1/K2 idle-high.
     // We must always restore this register before returning.
     lda C128_KBD_EXT
     sta csp_ext_save
-    ora #%11000000
+    ora #%00000111
     sta C128_KBD_EXT
 
     // Default shift state: unshifted ($80). Updated inline during row scan.
@@ -570,29 +569,40 @@ cia_scan_petscii:
     cpx #8
     bcc !csp_row-
 
-    // No key in CIA rows 0-7; scan extended C128 row 8 (line 8).
+    // No key in CIA rows 0-7; scan C128 extended column K2.
     lda #$ff
     sta CIA1_PORTA
     lda csp_ext_save
-    ora #%11000000
-    and #%10111111      // Drive line 8 low, keep line 9 high
+    ora #%00000111
+    and #%11111110      // Drive K2 low, keep K1/K0 high
     sta C128_KBD_EXT
     nop
     nop
     lda CIA1_PORTB
     eor #$FF            // Active low -> 1=pressed
-    bne !csp_key_row8+
+    bne !csp_key_ext_k2+
 
-    // No key in row 8; scan extended row 9 (line 9).
+    // No key on K2; scan extended column K1.
     lda csp_ext_save
-    ora #%11000000
-    and #%01111111      // Drive line 9 low, keep line 8 high
+    ora #%00000111
+    and #%11111101      // Drive K1 low, keep K2/K0 high
     sta C128_KBD_EXT
     nop
     nop
     lda CIA1_PORTB
     eor #$FF            // Active low -> 1=pressed
-    bne !csp_key_row9+
+    bne !csp_key_ext_k1+
+
+    // No key on K1; scan extended column K0.
+    lda csp_ext_save
+    ora #%00000111
+    and #%11111011      // Drive K0 low, keep K2/K1 high
+    sta C128_KBD_EXT
+    nop
+    nop
+    lda CIA1_PORTB
+    eor #$FF            // Active low -> 1=pressed
+    bne !csp_key_ext_k0+
 
     // No key found in any row — restore state and return 0.
     lda #$FF
@@ -602,14 +612,19 @@ cia_scan_petscii:
     lda #0
     jmp !csp_return+
 
-!csp_key_row8:
+!csp_key_ext_k2:
     sta csp_col_bits
     ldx #8
     jmp !csp_key_post_scan+
 
-!csp_key_row9:
+!csp_key_ext_k1:
     sta csp_col_bits
     ldx #9
+    jmp !csp_key_post_scan+
+
+!csp_key_ext_k0:
+    sta csp_col_bits
+    ldx #10
     jmp !csp_key_post_scan+
 
 !csp_key_found:
@@ -685,7 +700,7 @@ csp_ext_save: .byte 0
 csp_row_raw:  .byte 0
 
 // ============================================================
-// CIA1/C128 scan code (0–79) → unshifted PETSCII/virtual-key lookup table
+// CIA1/C128 scan code (0–87) → unshifted PETSCII/virtual-key lookup table
 // Scan code = row_index * 8 + column_bit_index
 // 0 = key not used by game (will be ignored)
 // C64/C128 keyboard matrix layout (row, col):
@@ -697,8 +712,9 @@ csp_row_raw:  .byte 0
 //   Row 5 (drive $DF): +   P    L      -  .  :  @  ,
 //   Row 6 (drive $BF): £   *    ;   HOME  RSHIFT = ↑  /
 //   Row 7 (drive $7F): 1   ←  CTRL     2  SPC C= Q  STOP
-//   Row 8 (line8):     ALT KP8  KP5   KP2  KP4 KP7 KP1 KP0
-//   Row 9 (line9):     ESC KP+  KP-   LF   KP9 KP6 KP3 KP.
+//   Row 8 (K2):        HELP KP8  KP5  TAB  KP2 KP4 KP7 KP1
+//   Row 9 (K1):        ESC  KP+  KP-  LF   KPENT KP6 KP9 KP3
+//   Row 10 (K0):       ALT  KP0  KP.  UP   DOWN LEFT RIGHT NO-SCROLL
 // ============================================================
 cia_scancode_table:
     // Row 0 (scan  0– 7): DEL RET CRSR-R F7 F1 F3 F5 CRSR-D
@@ -717,10 +733,12 @@ cia_scancode_table:
     .byte 0,    0,    0,    0,   0,   0,   0,   $2F
     // Row 7 (scan 56–63): 1  ←  CTRL   2  SPC  C=   Q  STOP
     .byte $31,  0,    0,    $32, $20, 0,   $51, $03
-    // Row 8 (scan 64–71): ALT KP8  KP5  KP2  KP4  KP7  KP1  KP0
-    .byte KEY_ALT, KEY_KP8, KEY_KP5, KEY_KP2, KEY_KP4, KEY_KP7, KEY_KP1, KEY_KP0
-    // Row 9 (scan 72–79): ESC KP+  KP-  LF   KP9  KP6  KP3  KP.
-    .byte KEY_ESC, KEY_KP_PLUS, KEY_KP_MINUS, KEY_LF, KEY_KP9, KEY_KP6, KEY_KP3, KEY_KP_DOT
+    // Row 8 (scan 64–71, K2): HELP KP8  KP5  TAB  KP2  KP4  KP7  KP1
+    .byte 0, $38, $35, 0, $32, $34, $37, $31
+    // Row 9 (scan 72–79, K1): ESC KP+  KP-  LF   KPENT KP6  KP9  KP3
+    .byte KEY_ESC, $2b, KEY_KP_MINUS, KEY_LF, 0, $36, $39, $33
+    // Row 10 (scan 80–87, K0): ALT KP0  KP.  UP   DOWN LEFT RIGHT NO-SCROLL
+    .byte KEY_ALT, KEY_KP0, $2e, $91, $11, $9d, $1d, 0
 
 // input_get_command — Wait for a keypress, return command ID
 // Output: A = command ID, zp_input_cmd = same, zp_input_count = 1
@@ -868,25 +886,13 @@ petscii_to_command:
 
 key_map_petscii:
     :EmitBasePetsciiKeyMap()
-    // C128 keypad/extended keys (virtual codes from cia_scancode_table rows 8/9)
-    .byte KEY_KP8      // keypad 8 — north
-    .byte KEY_KP2      // keypad 2 — south
-    .byte KEY_KP4      // keypad 4 — west
-    .byte KEY_KP6      // keypad 6 — east
-    .byte KEY_KP7      // keypad 7 — northwest
-    .byte KEY_KP9      // keypad 9 — northeast
-    .byte KEY_KP1      // keypad 1 — southwest
-    .byte KEY_KP3      // keypad 3 — southeast
-    .byte KEY_KP5      // keypad 5 — rest
-    .byte KEY_KP_PLUS  // keypad + — tunnel
+    // C128 extended keys not covered by shared PETSCII mappings.
     .byte KEY_ESC      // ESC — quit shortcut
 
 key_map_cmd:
     :EmitBaseCommandKeyMap()
-    // C128 keypad/extended key command mappings
-    .byte CMD_MOVE_N, CMD_MOVE_S, CMD_MOVE_W, CMD_MOVE_E
-    .byte CMD_MOVE_NW, CMD_MOVE_NE, CMD_MOVE_SW, CMD_MOVE_SE
-    .byte CMD_REST, CMD_TUNNEL, CMD_QUIT
+    // C128 extended key command mappings
+    .byte CMD_QUIT
 
 key_map_end:
 .label key_map_count = key_map_cmd - key_map_petscii

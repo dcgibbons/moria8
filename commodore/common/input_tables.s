@@ -16,10 +16,20 @@
     .byte $11   // Cursor down — south
     .byte $9d   // Cursor left — west
     .byte $1d   // Cursor right — east
+    // Top-row number keys (numeric movement fallback)
+    .byte $38   // 8 — north
+    .byte $32   // 2 — south
+    .byte $34   // 4 — west
+    .byte $36   // 6 — east
+    .byte $37   // 7 — northwest
+    .byte $39   // 9 — northeast
+    .byte $31   // 1 — southwest
+    .byte $33   // 3 — southeast
+    .byte $35   // 5 — rest
     // Game commands
     .byte $3e   // > — stairs down
     .byte $3c   // < — stairs up
-    .byte $2e   // . — rest
+    .byte $2e   // . — run prefix
     .byte $53   // S — search
     .byte $4f   // O — open
     .byte $43   // C — close
@@ -71,7 +81,10 @@
     .byte CMD_MOVE_N, CMD_MOVE_S, CMD_MOVE_W, CMD_MOVE_E
     .byte CMD_MOVE_NW, CMD_MOVE_NE, CMD_MOVE_SW, CMD_MOVE_SE
     .byte CMD_MOVE_N, CMD_MOVE_S, CMD_MOVE_W, CMD_MOVE_E
-    .byte CMD_STAIRS_DN, CMD_STAIRS_UP, CMD_REST, CMD_SEARCH
+    .byte CMD_MOVE_N, CMD_MOVE_S, CMD_MOVE_W, CMD_MOVE_E
+    .byte CMD_MOVE_NW, CMD_MOVE_NE, CMD_MOVE_SW, CMD_MOVE_SE
+    .byte CMD_REST
+    .byte CMD_STAIRS_DN, CMD_STAIRS_UP, CMD_RUN, CMD_SEARCH
     .byte CMD_OPEN, CMD_CLOSE, CMD_PICKUP, CMD_PICKUP
     .byte CMD_DROP, CMD_INVENTORY, CMD_EQUIPMENT, CMD_WEAR
     .byte CMD_TAKEOFF, CMD_QUAFF, CMD_READ, CMD_AIM

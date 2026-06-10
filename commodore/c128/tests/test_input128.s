@@ -1,6 +1,7 @@
 #importonce
 // test_input128.s — C128 input mapping smoke test for C2.5
 
+#define C128
 #define C128_INPUT_TEST
 #import "../../common/zeropage.s"
 #import "../input128.s"
@@ -19,22 +20,24 @@ input_tree_idx: .byte 0
 input_tree_keys:
     .byte $4b, $4a, $48, $4c, $59, $55, $42, $4e
     .byte $91, $11, $9d, $1d
+    .byte $38, $32, $34, $36, $37, $39, $31, $33, $35
     .byte $3e, $3c, $2e, $53, $4f, $43, $47, $2c
     .byte $44, $49, $45, $57, $54, $51, $52, $41
     .byte $5a, $4d, $50, $3f, $58, $46, $66
     .byte $c3, $d1, $c5, $d3, $c6, $d4, $d2, $c4, $02
     .byte $12, $23, $2b, $2f, $17
     .byte $cb, $ca, $c8, $cc, $d9, $d5, $c2, $ce
-    .byte KEY_KP8, KEY_KP2, KEY_KP4, KEY_KP6
-    .byte KEY_KP7, KEY_KP9, KEY_KP1, KEY_KP3
-    .byte KEY_KP5, KEY_KP_PLUS, KEY_ESC
-    .byte KEY_KP_MINUS, KEY_KP_DOT, KEY_KP0, KEY_ALT, KEY_LF
+    .byte KEY_ESC
+    .byte KEY_KP_MINUS, KEY_KP0, KEY_ALT, KEY_LF
 
 input_tree_cmds:
     .byte CMD_MOVE_N, CMD_MOVE_S, CMD_MOVE_W, CMD_MOVE_E
     .byte CMD_MOVE_NW, CMD_MOVE_NE, CMD_MOVE_SW, CMD_MOVE_SE
     .byte CMD_MOVE_N, CMD_MOVE_S, CMD_MOVE_W, CMD_MOVE_E
-    .byte CMD_STAIRS_DN, CMD_STAIRS_UP, CMD_REST, CMD_SEARCH
+    .byte CMD_MOVE_N, CMD_MOVE_S, CMD_MOVE_W, CMD_MOVE_E
+    .byte CMD_MOVE_NW, CMD_MOVE_NE, CMD_MOVE_SW, CMD_MOVE_SE
+    .byte CMD_REST
+    .byte CMD_STAIRS_DN, CMD_STAIRS_UP, CMD_RUN, CMD_SEARCH
     .byte CMD_OPEN, CMD_CLOSE, CMD_PICKUP, CMD_PICKUP
     .byte CMD_DROP, CMD_INVENTORY, CMD_EQUIPMENT, CMD_WEAR
     .byte CMD_TAKEOFF, CMD_QUAFF, CMD_READ, CMD_AIM
@@ -45,10 +48,8 @@ input_tree_cmds:
     .byte CMD_AUTOREST, CMD_SEARCH_MODE, CMD_TUNNEL, CMD_RECALL, CMD_WIZARD
     .byte CMD_RUN_N, CMD_RUN_S, CMD_RUN_W, CMD_RUN_E
     .byte CMD_RUN_NW, CMD_RUN_NE, CMD_RUN_SW, CMD_RUN_SE
-    .byte CMD_MOVE_N, CMD_MOVE_S, CMD_MOVE_W, CMD_MOVE_E
-    .byte CMD_MOVE_NW, CMD_MOVE_NE, CMD_MOVE_SW, CMD_MOVE_SE
-    .byte CMD_REST, CMD_TUNNEL, CMD_QUIT
-    .byte CMD_NONE, CMD_NONE, CMD_NONE, CMD_NONE, CMD_NONE
+    .byte CMD_QUIT
+    .byte CMD_NONE, CMD_NONE, CMD_NONE, CMD_NONE
 
 .label input_tree_expected_count = input_tree_cmds - input_tree_keys
 .assert "input128 tree expected table sizes match", input_tree_expected_count, * - input_tree_cmds
@@ -65,63 +66,121 @@ test_fail0:
 
 !test0_start:
 
-    // Keypad directional movement mappings
-    lda #KEY_KP8
+    // Top-row number movement mappings. The C128 keypad scanner emits these
+    // same PETSCII values for keypad 1-9/+.
+    lda #$38
     jsr petscii_to_command
     cmp #CMD_MOVE_N
     bne test_fail0
 
-    lda #KEY_KP2
+    lda #$32
     jsr petscii_to_command
     cmp #CMD_MOVE_S
     bne test_fail0
 
-    lda #KEY_KP4
+    lda #$34
     jsr petscii_to_command
     cmp #CMD_MOVE_W
     bne test_fail0
 
-    lda #KEY_KP6
+    lda #$36
     jsr petscii_to_command
     cmp #CMD_MOVE_E
     bne test_fail0
 
-    lda #KEY_KP7
+    lda #$37
     jsr petscii_to_command
     cmp #CMD_MOVE_NW
     bne test_fail0
 
-    lda #KEY_KP9
+    lda #$39
     jsr petscii_to_command
     cmp #CMD_MOVE_NE
     bne test_fail0
 
-    lda #KEY_KP1
+    lda #$31
     jsr petscii_to_command
     cmp #CMD_MOVE_SW
     bne test_fail0
 
-    lda #KEY_KP3
+    lda #$33
     jsr petscii_to_command
     cmp #CMD_MOVE_SE
     bne test_fail0
 
-    lda #KEY_KP5
+    lda #$35
     jsr petscii_to_command
     cmp #CMD_REST
     bne test_fail0
 
-    lda #KEY_KP_PLUS
+    lda #$2e
+    jsr petscii_to_command
+    cmp #CMD_RUN
+    bne test_fail0
+
+    lda #$2b
     jsr petscii_to_command
     cmp #CMD_TUNNEL
     bne test_fail0
+
+    // C128 extended matrix table layout:
+    // K2: HELP, KP8, KP5, TAB, KP2, KP4, KP7, KP1
+    // K1: ESC, KP+, KP-, LF, KPENTER, KP6, KP9, KP3
+    // K0: ALT, KP0, KP., UP, DOWN, LEFT, RIGHT, NO-SCROLL
+    ldx #65
+    lda cia_scancode_table,x
+    cmp #$38
+    bne !ext_table_fail+
+
+    ldx #66
+    lda cia_scancode_table,x
+    cmp #$35
+    bne !ext_table_fail+
+
+    ldx #68
+    lda cia_scancode_table,x
+    cmp #$32
+    bne !ext_table_fail+
+
+    ldx #77
+    lda cia_scancode_table,x
+    cmp #$36
+    bne !ext_table_fail+
+
+    ldx #78
+    lda cia_scancode_table,x
+    cmp #$39
+    bne !ext_table_fail+
+
+    ldx #81
+    lda cia_scancode_table,x
+    cmp #KEY_KP0
+    bne !ext_table_fail+
+
+    ldx #82
+    lda cia_scancode_table,x
+    cmp #$2e
+    bne !ext_table_fail+
+    lda irs_ext_masks
+    cmp #%11111110
+    bne !ext_table_fail+
+    lda irs_ext_masks + 1
+    cmp #%11111101
+    bne !ext_table_fail+
+    lda irs_ext_masks + 2
+    cmp #%11111011
+    bne !ext_table_fail+
+    jmp !ext_table_done+
+!ext_table_fail:
+    jmp test_fail_loop
+!ext_table_done:
     
     // Ctrl+W normalization helper should rescue fast-path chord races.
     lda #$57               // W
     ldy #1                 // Ctrl held
     jsr input_normalize_ctrl_chords_with_state
     cmp #$17
-    bne test_fail0
+    bne test_fail
 
     lda #$d7               // SHIFT+W fallback
     ldy #1
@@ -260,11 +319,6 @@ test_continue:
 
     // Unmapped keypad/extended keys should return CMD_NONE
     lda #KEY_KP_MINUS
-    jsr petscii_to_command
-    cmp #CMD_NONE
-    bne test_fail2
-
-    lda #KEY_KP_DOT
     jsr petscii_to_command
     cmp #CMD_NONE
     bne test_fail2
@@ -489,19 +543,25 @@ test_run_raw_row_checks:
     cmp #1
     bne test_fail3
 
-    lda #$fe               // Row 8: ALT only
-    ldx #8
+    lda #$fe               // Row 10/K0: ALT only
+    ldx #10
     jsr input_run_row_has_nonmodifier
     cmp #0
     bne test_fail3
 
-    lda #$fd               // Row 8: keypad 8 pressed
+    lda #$fd               // Row 8/K2: keypad 8 pressed
     ldx #8
     jsr input_run_row_has_nonmodifier
     cmp #1
     bne test_fail3
 
-    lda #$fe               // Row 9: ESC pressed
+    lda #$fd               // Row 10/K0: keypad 0 pressed
+    ldx #10
+    jsr input_run_row_has_nonmodifier
+    cmp #1
+    bne test_fail3
+
+    lda #$fe               // Row 9/K1: ESC pressed
     ldx #9
     jsr input_run_row_has_nonmodifier
     cmp #1

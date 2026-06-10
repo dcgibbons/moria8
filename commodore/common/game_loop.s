@@ -1065,6 +1065,24 @@ c128_town_move_diag_loop_top:
 #if HAL_PLATFORM_GAME_LOOP_PLAYER_MOVE_DIAG_LABELS
 c128_town_move_diag_after_input_get_command:
 #endif
+#if C128
+    cmp #CMD_RUN
+    bne !c128_run_prefix_done+
+    jsr input_prepare_followup_key
+    jsr hal_input_get_key
+    jsr petscii_to_command
+    cmp #CMD_MOVE_N
+    bcc !c128_run_prefix_restart+
+    cmp #CMD_MOVE_SE + 1
+    bcs !c128_run_prefix_restart+
+    clc
+    adc #(CMD_RUN_N - CMD_MOVE_N)
+    sta zp_input_cmd
+    jmp !c128_run_prefix_done+
+!c128_run_prefix_restart:
+    jmp main_loop
+!c128_run_prefix_done:
+#endif
 #if C128_TEST_TOWN_SELF_DUMP
     lda #$12
     jsr c128_town_dump_log
