@@ -422,7 +422,11 @@ save_game:
 !save_wrong_media:
     jsr hal_storage_save_media_status
     cmp #HAL_STORAGE_STATUS_WRONG_MEDIA
-    beq !save_bad_media+
+    bne !save_not_bad_media+
+    jsr tramp_disk_prepare_selected
+    bcc !save_media_ok+
+    jmp save_return_fail
+!save_not_bad_media:
 #if HAL_STORAGE_FRIENDLY_STATUS_MESSAGES
     jsr save_print_storage_status
     jmp !save_media_after_print+
@@ -430,8 +434,6 @@ save_game:
     ldx #HSTR_SAVE_IOERR
 #endif
     jmp !save_media_fail+
-!save_bad_media:
-    ldx #HSTR_SAVE_BAD_SAVE
 !save_media_fail:
 #if HAL_STORAGE_APPEND_DISK_DETAIL
     txa

@@ -115,6 +115,7 @@ marker_bad_byte:         .byte 0
 marker_missing_until_write:.byte 0
 marker_open_fail:        .byte 0
 save_file_exists_result: .byte 0
+program_file_present:    .byte 0
 command_open_fail:       .byte 0
 w_chkin_lfn_seen:        .byte 0
 c128_media_state:        .byte C128_MEDIA_UNKNOWN
@@ -151,6 +152,9 @@ hal_storage_marker_scratch_name:
     .byte $53, $30, $3a
     .byte $4d, $4f, $52, $49, $41, $38, $2e, $49, $44
 .label hal_storage_marker_scratch_name_len = * - hal_storage_marker_scratch_name
+hal_storage_title_name:
+    .byte $54, $31, $32, $38                    // "T128"
+.label hal_storage_title_name_len = * - hal_storage_title_name
 .label disk_marker_magic = hal_storage_marker_magic
 .label DISK_MARKER_MAGIC_LEN = hal_storage_marker_magic_len
 .label hal_storage_read_command_status = test_storage_read_command_status
@@ -325,6 +329,17 @@ w_open:
     rts
 !check_marker:
     lda w_setlfs_lfn_seen
+    cmp #hal_storage_program_file_num
+    bne !check_marker_file+
+    lda program_file_present
+    bne !program_ok+
+    sec
+    rts
+!program_ok:
+    clc
+    rts
+!check_marker_file:
+    lda w_setlfs_lfn_seen
     cmp #DISK_MARKER_FILE_NUM
     bne !marker_ok+
     lda marker_open_fail
@@ -490,6 +505,15 @@ tramp_disk_setup_ui_action:
     clc
     rts
 !not_init:
+    cmp #DISK_UI_ACT_SHOW_PROGRAM
+    bne !default_ok+
+    lda #0
+    sta program_file_present
+    lda #DISK_UI_RES_CANCEL
+    sta disk_ui_result
+    clc
+    rts
+!default_ok:
     lda #DISK_UI_RES_OK
     sta disk_ui_result
     clc
@@ -1303,6 +1327,54 @@ test_start:
     beq *+5
     jmp test_fail
     lda ui_action_log + 2
+    cmp #DISK_UI_ACT_INIT_PROMPT
+    beq *+5
+    jmp test_fail
+
+    // Test 13e: leaving program media in the save-disk prompt is rejected
+    // before marker handling. This still rejects a program disk that was
+    // accidentally contaminated with a save marker by an older build.
+    jsr reset_harness_state
+    lda #1
+    sta marker_missing_until_write
+    sta program_file_present
+    lda #DISK_UI_RES_ONE_DRIVE
+    sta ui_menu_result
+    lda #DISK_UI_RES_YES
+    sta ui_init_result
+    sec
+    jsr disk_setup_run
+    bcc *+5
+    jmp test_fail
+    lda disk_setup_done
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda marker_write_count
+    cmp #DISK_MARKER_MAGIC_LEN
+    beq *+5
+    jmp test_fail
+    lda ui_action_count
+    cmp #5
+    beq *+5
+    jmp test_fail
+    lda ui_action_log
+    cmp #DISK_UI_ACT_MENU
+    beq *+5
+    jmp test_fail
+    lda ui_action_log + 1
+    cmp #DISK_UI_ACT_INSERT_DISK
+    beq *+5
+    jmp test_fail
+    lda ui_action_log + 2
+    cmp #DISK_UI_ACT_SHOW_PROGRAM
+    beq *+5
+    jmp test_fail
+    lda ui_action_log + 3
+    cmp #DISK_UI_ACT_INSERT_DISK
+    beq *+5
+    jmp test_fail
+    lda ui_action_log + 4
     cmp #DISK_UI_ACT_INIT_PROMPT
     beq *+5
     jmp test_fail

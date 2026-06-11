@@ -86,7 +86,7 @@ def main() -> int:
 
     out_path.write_bytes(payload)
     if marker_path is not None:
-        marker_path.write_bytes(b"M8P4SV")
+        marker_path.write_bytes(b"M8SAVE")
     return 0
 
 

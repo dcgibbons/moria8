@@ -320,6 +320,12 @@ disk_setup_prepare_selected:
 #if HAL_STORAGE_COMMAND_STATUS_FROM_DISK_DIAG
     jsr disk_setup_capture_init_status
 #endif
+    jsr disk_program_media_present
+    bcs !not_program_media+
+    lda #DISK_UI_ACT_SHOW_PROGRAM
+    jsr disk_setup_call_ui
+    jmp !retry-
+!not_program_media:
     jsr disk_marker_present
     bcc disk_setup_commit_ready
 #if HAL_STORAGE_DISK_SETUP_ACCEPT_SAVE_FILE
@@ -345,6 +351,46 @@ disk_setup_prepare_selected:
 !fail:
     sec
     rts
+
+#if !HAL_STORAGE_PROGRAM_MEDIA_PRESENT_EXTERNAL
+// Detect program media on the selected save drive.
+// Output: carry clear = program media present, carry set = not program media
+disk_program_media_present:
+#if HAL_STORAGE_KERNAL_ENTER_REQUIRED
+    jsr disk_kernal_enter
+#endif
+    lda #hal_storage_title_name_len
+    ldx #<hal_storage_title_name
+    ldy #>hal_storage_title_name
+    jsr FEAT_SETNAM
+    lda #hal_storage_program_file_num
+    ldx save_device
+    ldy #0
+    jsr FEAT_SETLFS
+    jsr FEAT_OPEN
+    bcc !dpmp_open_ok+
+    jsr FEAT_CLRCHN
+#if HAL_STORAGE_KERNAL_ENTER_REQUIRED
+    jsr disk_kernal_exit
+#endif
+    sec
+    rts
+!dpmp_open_ok:
+    jsr hal_storage_read_command_status
+#if HAL_STORAGE_COMMAND_STATUS_FROM_DISK_DIAG || HAL_STORAGE_COMMAND_STATUS_FROM_ERROR_DIAG
+    jsr hal_storage_command_status
+#else
+    lda disk_status
+#endif
+    pha
+    lda #hal_storage_program_file_num
+    jsr FEAT_CLOSE
+    jsr FEAT_CLRCHN
+    jsr disk_kernal_exit
+    pla
+    cmp #1
+    rts
+#endif
 
 #if HAL_STORAGE_DISK_SETUP_MARKER_PROBE_DOS
 disk_setup_plus4_marker_missing:

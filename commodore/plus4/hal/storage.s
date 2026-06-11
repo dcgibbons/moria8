@@ -10,7 +10,7 @@
 
 .label hal_storage_enter_os = plus4_bank_rom
 .label hal_storage_exit_os = plus4_bank_ram
-.label hal_storage_require_program_media = disk_prompt_game
+.label hal_storage_require_program_media = plus4_require_program_media
 .label hal_storage_require_save_media = disk_require_save_media
 .label hal_storage_marker_present = plus4_storage_marker_present
 .label hal_storage_marker_init = disk_marker_init
@@ -87,12 +87,17 @@ hal_storage_init_selected_drive:
     ldy #hal_storage_cmd_channel
     jsr plus4_kernal_setlfs
     jsr plus4_kernal_open
-    bcs !done+
+    bcs !fail+
     lda #hal_storage_cmd_channel
     jsr plus4_kernal_close
-!done:
     jsr plus4_kernal_clrchn
     jsr plus4_bank_ram
+    clc
+    rts
+!fail:
+    jsr plus4_kernal_clrchn
+    jsr plus4_bank_ram
+    sec
     rts
 
 // Platform-owned save-disk marker filenames and marker bytes. These must live
@@ -102,24 +107,24 @@ hal_storage_init_command:
     .byte $49, $30                              // "I0"
 
 hal_storage_marker_magic:
-    .byte $4d, $38, $50, $34, $53, $56          // "M8P4SV"
+    .byte $4d, $38, $53, $41, $56, $45          // "M8SAVE"
 .label hal_storage_marker_magic_len = * - hal_storage_marker_magic
 
 hal_storage_marker_read_name:
     .byte $30, $3a                              // "0:"
-    .byte $4d, $4f, $52, $49, $41, $34, $2e, $49, $44 // "MORIA4.ID"
+    .byte $4d, $4f, $52, $49, $41, $38, $2e, $49, $44 // "MORIA8.ID"
     .byte $2c, $53, $2c, $52                    // ",S,R"
 .label hal_storage_marker_read_name_len = * - hal_storage_marker_read_name
 
 hal_storage_marker_write_name:
     .byte $40, $30, $3a                         // "@0:"
-    .byte $4d, $4f, $52, $49, $41, $34, $2e, $49, $44 // "MORIA4.ID"
+    .byte $4d, $4f, $52, $49, $41, $38, $2e, $49, $44 // "MORIA8.ID"
     .byte $2c, $53, $2c, $57                    // ",S,W"
 .label hal_storage_marker_write_name_len = * - hal_storage_marker_write_name
 
 hal_storage_marker_scratch_name:
     .byte $53, $30, $3a                         // "S0:"
-    .byte $4d, $4f, $52, $49, $41, $34, $2e, $49, $44 // "MORIA4.ID"
+    .byte $4d, $4f, $52, $49, $41, $38, $2e, $49, $44 // "MORIA8.ID"
 .label hal_storage_marker_scratch_name_len = * - hal_storage_marker_scratch_name
 
 // Platform-owned save-record filenames. PETSCII bytes for KERNAL SETNAM.
@@ -127,7 +132,7 @@ hal_storage_marker_scratch_name:
 // KERNAL reads filename bytes while ROM is visible over $8000-$BFFF.
 hal_storage_save_write_name:
     .byte $40, $30, $3a                         // "@0:"
-    .byte $50, $34, $2e, $54, $48, $45, $2e, $47, $41, $4d, $45 // "P4.THE.GAME"
+    .byte $54, $48, $45, $2e, $47, $41, $4d, $45 // "THE.GAME"
     .byte $2c, $53, $2c, $57                    // ",S,W"
 .label hal_storage_save_write_name_len = * - hal_storage_save_write_name
 .label hal_storage_save_probe_name = hal_storage_save_write_name + 1
@@ -135,7 +140,7 @@ hal_storage_save_write_name:
 
 hal_storage_save_read_name:
     .byte $30, $3a                              // "0:"
-    .byte $50, $34, $2e, $54, $48, $45, $2e, $47, $41, $4d, $45 // "P4.THE.GAME"
+    .byte $54, $48, $45, $2e, $47, $41, $4d, $45 // "THE.GAME"
     .byte $2c, $53, $2c, $52                    // ",S,R"
 .label hal_storage_save_read_name_len = * - hal_storage_save_read_name
 

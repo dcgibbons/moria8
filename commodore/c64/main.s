@@ -1138,6 +1138,19 @@ tramp_disk_setup:
 !tds_done:
     rts
 
+tramp_disk_prepare_selected:
+    lda #OVL_HELP
+    jsr overlay_load
+    bcs !tdps_done+
+    sei
+    lda #BANK_NO_ROMS
+    sta $01
+    jsr disk_setup_prepare_selected
+    php
+    jsr platform_runtime_resync_c64
+    plp
+!tdps_done:
+    rts
 
 
 // ============================================================

@@ -199,6 +199,17 @@ c64_disk_marker_present:
 c64_disk_marker_write_resident:
     clc
     rts
+tramp_disk_prepare_selected:
+    inc test_save_prepare_selected_calls
+    lda test_save_prepare_selected_result
+    beq !fail+
+    lda #1
+    sta test_save_marker_present
+    clc
+    rts
+!fail:
+    sec
+    rts
 hal_storage_init_command:
     .byte $49, $30
 hal_storage_save_write_name:
@@ -328,6 +339,8 @@ test_save_file_exists_calls: .byte 0
 test_save_open_calls: .byte 0
 test_save_chkout_calls: .byte 0
 test_save_chrout_calls: .byte 0
+test_save_prepare_selected_result: .byte 0
+test_save_prepare_selected_calls: .byte 0
 
 .macro PatchJump(target, replacement) {
     lda #$4c
@@ -1361,9 +1374,8 @@ t14_fail_code:
     sta tc_results + 13
 
     // ============================================================
-    // Test 15: C64 save-media validation failures are modal.
-    // Otherwise the caller can immediately redraw gameplay and erase
-    // the error before the user sees it.
+    // Test 15: saving to a configured non-save disk enters the selected-disk
+    // prepare/init flow instead of reporting "Wrong Save Disk" directly.
     // ============================================================
     lda #0
     sta save_cksum_lo
@@ -1381,6 +1393,8 @@ t14_fail_code:
     sta test_save_chkout_calls
     sta test_save_chrout_calls
     sta test_save_marker_status
+    sta test_save_prepare_selected_result
+    sta test_save_prepare_selected_calls
     lda #1
     sta disk_setup_done
     lda #2
@@ -1392,23 +1406,23 @@ t14_fail_code:
     lda #2
     jmp t15_fail_code
 !t15_carry_ok:
-    lda test_save_last_msg
-    cmp #HSTR_SAVE_BAD_SAVE
-    beq !t15_msg_ok+
+    lda test_save_prepare_selected_calls
+    cmp #1
+    beq !t15_prepare_ok+
     lda #3
     jmp t15_fail_code
-!t15_msg_ok:
-    lda test_save_dismiss_calls
-    cmp #1
-    beq !t15_dismiss_ok+
+!t15_prepare_ok:
+    lda test_save_last_msg
+    beq !t15_msg_ok+
     lda #4
     jmp t15_fail_code
-!t15_dismiss_ok:
+!t15_msg_ok:
     lda #0
     sta test_save_marker_present
     sta test_save_marker_status
     sta test_save_marker_lsr_return
     sta test_save_sink_writes
+    sta test_save_prepare_selected_calls
     lda #$01
     bne !t15_store+
 t15_fail_code:
@@ -1417,6 +1431,7 @@ t15_fail_code:
     sta test_save_marker_status
     sta test_save_marker_lsr_return
     sta test_save_sink_writes
+    sta test_save_prepare_selected_calls
     pla
 !t15_store:
     sta tc_results + 14

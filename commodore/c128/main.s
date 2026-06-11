@@ -28,6 +28,7 @@
 // ============================================================
 #define C128_PRODUCT_OVERLAY_RUNTIME
 #define C128_PRODUCT_MODAL_PERSIST
+#define HAL_STORAGE_PROGRAM_MEDIA_PRESENT_EXTERNAL
 #define STORAGE_STATUS_HELPER
 .const C128_MEDIA_UNKNOWN = 0
 .const C128_MEDIA_PROGRAM = 1
@@ -3500,6 +3501,40 @@ tool_ego_prefix_hi:
 ego_str_holy_avenger_common:
     .text " (Holy Avenger)" ; .byte 0
 
+// Detect program media on the selected save drive.
+// Output: carry clear = program media present, carry set = not program media
+disk_program_media_present:
+    jsr disk_kernal_enter
+    lda #hal_storage_title_name_len
+    ldx #<hal_storage_title_name
+    ldy #>hal_storage_title_name
+    jsr hal_storage_setnam
+    lda #hal_storage_program_file_num
+    ldx save_device
+    ldy #0
+    jsr hal_storage_setlfs
+    jsr hal_storage_open
+    bcc !open_ok+
+    jsr hal_storage_clrchn
+    jsr disk_kernal_exit
+    sec
+    rts
+!open_ok:
+    jsr hal_storage_read_command_status
+    jsr disk_command_status
+    sta disk_temp
+    lda #hal_storage_program_file_num
+    jsr hal_storage_close
+    jsr hal_storage_clrchn
+    jsr disk_kernal_exit
+    lda disk_temp
+    bne !not_program+
+    clc
+    rts
+!not_program:
+    sec
+    rts
+
 c128_program_play_exists:
     lda #c128_program_play_read_filename_len
     ldx #<c128_program_play_read_filename
@@ -4132,6 +4167,7 @@ runtime_common_data_start:
     #define PMU_TURN_FEEDBACK_ONLY
     #import "../common/player_magic_turn_banked.s"
     #undef PMU_TURN_FEEDBACK_ONLY
+
 combat_calc_melee_total_tohit_bonus:
     lda player_data + PL_TOHIT
     sta cmb_total_tohit

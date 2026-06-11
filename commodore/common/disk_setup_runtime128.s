@@ -4,8 +4,7 @@
 // so title-time disk setup is callable regardless of the current C128 banking state.
 
 tramp_disk_setup_ui_action:
-    jsr ui_disk_setup_dispatch
-    rts
+    jmp ui_disk_setup_dispatch
 
 tramp_disk_setup:
     lda #0
@@ -24,19 +23,30 @@ tramp_disk_setup:
     plp
     rts
 
+tramp_disk_prepare_selected:
+    jsr tramp_ui_enter
+    lda #C128_HELP_OVERLAY_ID
+    jsr overlay_load
+    bcc !tdps_run+
+    jsr tramp_ui_exit
+    sec
+    rts
+!tdps_run:
+    jsr disk_setup_prepare_selected
+    php
+    jsr tramp_ui_exit
+    plp
+    rts
+
 title_require_disk_setup:
     lda disk_setup_done
     bne !trds_ready+
-    jsr tramp_disk_setup
-    bcs !trds_done+
-    clc
-    rts
-!trds_done:
-    rts
+    jmp tramp_disk_setup
 !trds_ready:
     clc
     rts
 
+.segment C128ResidentItems
 title_draw_save_disk_indicator:
     lda #STATUS_ROW
     jsr hal_screen_clear_row
@@ -61,4 +71,5 @@ title_draw_save_disk_indicator:
     sta zp_text_color
     rts
 
+.segment C128ResidentDiskIo
     #import "disk_setup_banked.s"

@@ -136,7 +136,10 @@ def scripted_input_exhausted(connector: VICEConnector, args: argparse.Namespace)
 
 
 def attach_drive8(connector: VICEConnector, disk_path: Path) -> None:
-    connector.send_command(f'attach 8 "{disk_path.resolve()}"')
+    connector.send_command("detach 8")
+    response = connector.send_command(f'attach "{disk_path.resolve()}" 8')
+    if "Cannot" in response or "Error" in response:
+        raise RuntimeError(f"failed to attach drive 8 image {disk_path}: {response.strip()}")
 
 
 def run_vice(args: argparse.Namespace, pass_addr: str, fail_addr: str | None, dump_ranges: list[tuple[str, str]]) -> tuple[MonitorTestResult, list[str]]:
@@ -348,6 +351,9 @@ def main() -> int:
         ".plus4_test_key_index",
         ".plus4_test_key_script",
         ".plus4_test_single_drive_stage",
+        ".program_device",
+        ".save_device",
+        ".disk_prompt_device",
     )
     for symbol in dump_symbols:
         addr = symbols.get(symbol)

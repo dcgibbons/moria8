@@ -733,7 +733,12 @@ game_new_start:
 
 disk_prompt_game_required:
 !prompt:
+#if PLUS4
+!probe:
+    jsr hal_storage_require_program_media
+#else
     jsr disk_prompt_game
+#endif
     bcc !ready+
 disk_prompt_game_required_error:
     jsr ui_clear_full_screen_safe
@@ -769,7 +774,14 @@ disk_prompt_game_required_error:
     jsr hal_screen_put_string
 disk_prompt_game_required_error_shown:
     jsr input_get_modal_dismiss_key
+#if PLUS4
+    lda program_device
+    sta disk_prompt_device
+    jsr hal_storage_init_selected_drive
+    jmp !probe-
+#else
     jmp !prompt-
+#endif
 !ready:
     rts
 #endif
@@ -1131,6 +1143,9 @@ plus4_test_after_save_game:
     adc #0
     pha
 #if !C128_PRODUCT_MODAL_PERSIST
+#if PLUS4
+    jsr disk_prompt_game
+#endif
     jsr disk_prompt_game_required // Swap back to game disk if dual
 #if HAL_PLATFORM_GAME_LOOP_RUNTIME_RESYNC
     jsr hal_platform_runtime_resync

@@ -124,7 +124,11 @@ ol_check_disk:
 
     // --- Disk path: KERNAL LOAD overlay PRG ---
 #if HAL_PLATFORM_OVERLAY_PROMPT_PROGRAM_MEDIA && OVERLAY_LOAD_PROMPT_GAME
+#if PLUS4
+    jsr disk_prompt_game_required
+#else
     jsr disk_prompt_game
+#endif
 #endif
 #if C128_CACHE_TEST_SKIP_OVERLAY
     lda ol_target

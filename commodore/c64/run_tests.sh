@@ -2281,7 +2281,7 @@ check_static_contract "c64_disk_call_preserves_args_contract" "main.s" \
 check_static_contract "c64_game_over_overlay_exit_contract" "main.s" \
     "game_restart_overlay:|||lda #>(title_enter_menu - 1)|||pha|||lda #<(title_enter_menu - 1)|||pha|||jmp platform_runtime_resync_c64"
 check_static_contract "c64_save_media_hal_contract" "../common/save.s" \
-    "!save_wrong_media:|||jsr hal_storage_save_media_status|||cmp #HAL_STORAGE_STATUS_WRONG_MEDIA|||beq !save_bad_media+|||ldx #HSTR_SAVE_IOERR"
+    "!save_wrong_media:|||jsr hal_storage_save_media_status|||cmp #HAL_STORAGE_STATUS_WRONG_MEDIA|||jsr tramp_disk_prepare_selected|||bcc !save_media_ok+"
 check_static_contract "c64_storage_classifier_export_contract" "hal/storage.s" \
     ".label hal_storage_save_media_status = disk_save_media_status"
 check_static_contract "c64_storage_diag_export_contract" "hal/storage.s" \

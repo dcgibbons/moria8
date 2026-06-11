@@ -571,7 +571,7 @@ title_enter_menu:
     jsr plus4_test_wand_selector_overlay_return
 #endif
 
-#if PLUS4_TEST_SCRIPTED_LOAD_RESUME_PRODUCT || PLUS4_TEST_SCRIPTED_LOAD_MISSING_SAVE_PRODUCT || PLUS4_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || PLUS4_TEST_SCRIPTED_LOAD_WRONG_MEDIA_PRODUCT
+#if PLUS4_TEST_SCRIPTED_LOAD_RESUME_PRODUCT || PLUS4_TEST_SCRIPTED_LOAD_MISSING_SAVE_PRODUCT || PLUS4_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || PLUS4_TEST_SCRIPTED_LOAD_WRONG_MEDIA_PRODUCT || PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_RETURN_PRODUCT
     ldx #9
     jsr hal_storage_probe_media
     lda #9
@@ -580,6 +580,12 @@ title_enter_menu:
     sta disk_mode
     lda #1
     sta disk_setup_done
+#endif
+#if PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_RETURN_PRODUCT
+plus4_test_single_drive_load_return_wait_for_harness:
+    jmp plus4_test_single_drive_load_return_wait_for_harness
+plus4_test_single_drive_load_return_before_load:
+    jmp title_load_game
 #endif
 #if PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_SAVE_RETURN_PRODUCT
     lda plus4_test_single_drive_save_return_ran
@@ -614,6 +620,7 @@ plus4_test_single_drive_before_save:
     lda #8
     sta program_device
     jsr disk_prompt_game_required
+plus4_test_single_drive_after_program_prompt:
     lda #4
     sta plus4_test_single_drive_stage
     jmp title_enter_menu
@@ -746,7 +753,10 @@ title_load_game:
     jsr load_game
     // Fail closed on the explicit load carry result before resuming gameplay.
     bcc !title_load_fail+
-    jsr disk_prompt_game        // Swap back for tier loading
+#if PLUS4
+    jsr disk_prompt_game
+#endif
+    jsr disk_prompt_game_required // Swap back for tier loading
     jmp load_resume_game
 !title_load_fail:
     jsr input_get_modal_dismiss_key
@@ -1188,7 +1198,18 @@ tramp_disk_setup:
 !tds_done:
     rts
 
-
+tramp_disk_prepare_selected:
+    lda #OVL_HELP
+    jsr overlay_load
+    bcs !tdps_done+
+    sei
+    jsr plus4_bank_ram
+    jsr disk_setup_prepare_selected
+    php
+    jsr plus4_platform_runtime_resync
+    plp
+!tdps_done:
+    rts
 
 // ============================================================
 // Store overlay trampolines — load overlay, bank out KERNAL, call $E000+
@@ -1616,6 +1637,34 @@ plus4_banked_fname:
     #import "../common/ui_home.s"
     #import "../common/item_desc_banked.s"
     #import "../common/disk_setup_banked.s"
+
+// Verify that the selected program disk is actually present.
+// Output: carry clear = program media present, carry set = absent/wrong media.
+plus4_require_program_media:
+    lda #$5a
+    sta $e000
+    lda #$a5
+    sta $e001
+    lda #hal_storage_overlay_help_name_len
+    ldx #<hal_storage_overlay_help_name
+    ldy #>hal_storage_overlay_help_name
+    jsr hal_asset_load_prg_header
+    bcs !fail+
+    lda $e000
+    cmp #$43
+    bne !fail+
+    lda $e001
+    cmp #$0f
+    bne !fail+
+    lda #OVL_HELP
+    sta current_overlay
+    clc
+    rts
+!fail:
+    lda #0
+    sta current_overlay
+    sec
+    rts
 
 save_append_disk_detail_plus4:
     lda #$20
