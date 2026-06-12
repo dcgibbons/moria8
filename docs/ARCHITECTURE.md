@@ -8,12 +8,14 @@
 | `commodore/Makefile` | Main build, disk, run, and test orchestration |
 | `commodore/c64/` | C64 entry, platform code, tests, and harness scripts |
 | `commodore/c128/` | C128 boot, VDC/MMU code, tests, and harness scripts |
+| `commodore/plus4/` | Plus/4 entry, TED platform code, tests, and harness scripts |
 | `commodore/common/` | Shared gameplay, UI, data, and utility modules |
 | `data/` | Source data used by generators |
 | `tools/` | Build-time conversion, generation, lint, and disk helpers |
 | `artwork/` | Source artwork and public art credits |
 
-Primary entry points are `commodore/c64/main.s` and `commodore/c128/main.s`.
+Primary entry points are `commodore/c64/main.s`, `commodore/c128/main.s`,
+and `commodore/plus4/main.s`.
 
 ## Shared Runtime Modules
 
@@ -24,6 +26,24 @@ input, memory, and loader services behind target-specific APIs.
 
 Entity data follows struct-of-arrays layout. Arithmetic should use the existing
 math helpers, and random behavior should use the project RNG.
+
+## Current Footprint
+
+These figures are derived from the product PRG artifacts emitted by
+`make build`. They count PRG payload bytes and exclude the two-byte load
+address headers, boot stubs, and title art. The flat total is the hypothetical
+size required if the resident payloads, banked/runtime payloads, and every
+mutually exclusive overlay had to coexist in one contiguous address space.
+
+| Port | Resident / non-overlay | Overlay total | Largest overlay slot | Flat contiguous total |
+| --- | ---: | ---: | ---: | ---: |
+| C64 | 51,481 bytes | 28,002 bytes | 4,068 bytes | 79,483 bytes / 77.6 KiB |
+| C128 | 56,114 bytes | 29,254 bytes | 4,088 bytes | 85,368 bytes / 83.4 KiB |
+| Plus/4 | 50,494 bytes | 27,793 bytes | 4,068 bytes | 78,287 bytes / 76.5 KiB |
+
+The overlay architecture is therefore not optional polish: every current port
+would exceed a practical flat 64 KB target if all loaded pieces had to be
+resident at once.
 
 ## Screen Ownership
 
@@ -62,6 +82,51 @@ while still rebuilding the viewport from a clean screen.
 All code and data movement around these boundaries must be checked with the
 assembler memory map and existing `.assert` guards.
 
+Current product payloads:
+
+| Payload | Linked range | Size |
+| --- | ---: | ---: |
+| `moria8.prg` | `$0801-$C129` | 47,401 bytes |
+| `64.bank` | `$F000-$FFEF` | 4,080 bytes |
+| `ovl.start` | `$E000-$EFDF` | 4,064 bytes |
+| `ovl.town` | `$E000-$EFE3` | 4,068 bytes |
+| `ovl.death` | `$E000-$E644` | 1,605 bytes |
+| `ovl.royal` | `$E000-$E233` | 564 bytes |
+| `ovl.help` | `$E000-$EEAC` | 3,757 bytes |
+| `ovl.ui` | `$E000-$EFA1` | 4,002 bytes |
+| `ovl.items` | `$E000-$EF13` | 3,860 bytes |
+| `ovl.spell` | `$E000-$E9C9` | 2,506 bytes |
+| `ovl.gen` | `$E000-$EDF7` | 3,576 bytes |
+
+## Plus/4 Runtime Model
+
+The Plus/4 port follows the C64 40-column gameplay model and disk-loaded
+overlay strategy, but TED screen/color ownership moves the product image start
+and main payload boundaries for this target.
+
+- BASIC stub loads at `$1001`.
+- The main product image currently occupies `$1001-$C806`.
+- `$D000-$DFFF` is not the C64 VIC-II/CIA/SID model; Plus/4 platform code owns
+  TED and ROM/RAM switching behind its HAL.
+- `$E000-$EFFF` is the overlay window.
+- `$F000-$FD37` currently holds the banked runtime payload.
+
+Current product payloads:
+
+| Payload | Linked range | Size |
+| --- | ---: | ---: |
+| `moria4.prg` | `$1001-$C806` | 47,110 bytes |
+| `4.bank` | `$F000-$FD37` | 3,384 bytes |
+| `ovl.start` | `$E000-$EFDF` | 4,064 bytes |
+| `ovl.town` | `$E000-$EFE3` | 4,068 bytes |
+| `ovl.death` | `$E000-$E85A` | 2,139 bytes |
+| `ovl.royal` | `$E000-$E233` | 564 bytes |
+| `ovl.help` | `$E000-$EE9D` | 3,742 bytes |
+| `ovl.ui` | `$E000-$EFA1` | 4,002 bytes |
+| `ovl.items` | `$E000-$EC47` | 3,144 bytes |
+| `ovl.spell` | `$E000-$E9BD` | 2,494 bytes |
+| `ovl.gen` | `$E000-$EDF7` | 3,576 bytes |
+
 ## C128 Runtime Model
 
 The C128 build keeps game execution in Bank 0 except for scoped Bank 1 data
@@ -79,28 +144,28 @@ start addresses and all cross-boundary limits.
 | `$0000-$03FF` | Zero page, stack, vectors |
 | `$0400-$07FF` | Scratch/test/BFS path area; C128 VDC renderer stages row buffers at `$0500-$05ED` |
 | `$0A80-$0AFB` | `128.proj` projectile runtime payload |
-| `$0B00-$0BFD` | `128.input` raw-input runtime payload |
+| `$0B00-$0BF7` | `128.input` raw-input runtime payload |
 | `$0C00-$0C05` | MMU/KERNAL save bytes |
 | `$0C06` | MMU helper blob in common RAM |
 | `$0D60-$0FF3` | Runtime-common / feature-disk payload |
 | `$1000-$19FD` | `128.runtime` low runtime payload |
 | `$1A00-$1AFF` | Floor-item table |
 | `$1B00-$1BFF` | Creature scratch |
-| `$1C0E-$5F9E` | Main program image: boot path, loaders, trampolines, wrappers |
+| `$1C01-$5FFF` | Main program image: boot path, loaders, trampolines, wrappers |
 | `$6000-$8C69` | `128.world` resident world payload, including C128 cache/overlay state, overlay filename tables, and C128 infravision helpers |
-| `$8C70-$A4FA` | `128.item` resident item payload |
+| `$8C70-$A648` | `128.item` resident item payload |
 | `$A800-$AAE0` | `128.select` resident selector payload |
-| `$AB00-$AEFF` | `128.diskio` payload |
-| `$AF00-$B849` | `128.persist` save/modal payload when loaded |
-| `$AF00-$CFBD` | `128.play` gameplay payload when loaded |
+| `$AB00-$AEE0` | `128.diskio` payload |
+| `$AF00-$B85A` | `128.persist` save/modal payload when loaded |
+| `$AF00-$CFE7` | `128.play` gameplay payload when loaded |
 | `$D000-$DFFF` | I/O hole; forbidden for ordinary runtime payloads |
 | `$E000-$EFFF` | Overlay execution window |
-| `$F000-$FE9A` | Reloadable banked runtime payload, asserted below `$FF00` |
+| `$F000-$FEAF` | Reloadable banked runtime payload, asserted below `$FF00` |
 
 The `$AF00-$CFFF` resident slot is mutually exclusive. Save/load uses resident
 broker routines to load `128.persist`, perform the operation, then restore
 `128.play` before returning to gameplay. `128.play` must remain entirely below
-`$D000`; the current product build leaves `$CFBE-$CFFF` free before the I/O
+`$D000`; the current product build leaves `$CFE8-$CFFF` free before the I/O
 hole.
 
 Recent size pressure in `128.play` was handled by moving data, not by weakening
@@ -154,10 +219,37 @@ because it currently needs only three pages. Runtime overlay fetches copy the
 descriptor's page count, not an unconditional 4 KB.
 
 The C128 product disk also carries `128.names`, a resident Bank 1 DB payload
-loaded after the boot copy/scrub sequence. It currently occupies `$7400-$76F0`
+loaded after the boot copy/scrub sequence. It currently occupies `$7400-$7734`
 inside the Bank 1 DB/data window and stores fixed known item-name token streams.
 The token dictionary remains in Bank 0 `128.item`, and C128 known-name decoding
 reads Bank 1 source bytes through the DB MMU helpers.
+
+Current product payloads:
+
+| Payload | Linked range | Size |
+| --- | ---: | ---: |
+| `moria128.prg` | `$1C01-$5FFF` | 17,407 bytes |
+| `128.input.prg` | `$0B00-$0BF7` | 248 bytes |
+| `128.proj.prg` | `$0A80-$0AFB` | 124 bytes |
+| `128.fdisk.prg` | `$0D60-$0FF3` | 660 bytes |
+| `128.runtime.prg` | `$1000-$19FD` | 2,558 bytes |
+| `128.names.prg` | `$7400-$7734` | 821 bytes |
+| `128.world.prg` | `$6000-$8C69` | 11,370 bytes |
+| `128.item.prg` | `$8C70-$A648` | 6,617 bytes |
+| `128.select.prg` | `$A800-$AAE0` | 737 bytes |
+| `128.diskio.prg` | `$AB00-$AEE0` | 993 bytes |
+| `128.persist.prg` | `$AF00-$B85A` | 2,395 bytes |
+| `128.play.prg` | `$AF00-$CFE7` | 8,424 bytes |
+| `128.bank.prg` | `$F000-$FEAF` | 3,760 bytes |
+| `ovl.start` | `$E000-$EFDF` | 4,064 bytes |
+| `ovl.town` | `$E000-$EF6F` | 3,952 bytes |
+| `ovl.death` | `$E000-$EFF7` | 4,088 bytes |
+| `ovl.royal` | `$E000-$E233` | 564 bytes |
+| `ovl.gen` | `$E000-$EFE7` | 4,072 bytes |
+| `ovl.help` | `$E000-$EEA6` | 3,751 bytes |
+| `ovl.ui` | `$E000-$EFF4` | 4,085 bytes |
+| `ovl.items` | `$E000-$EF79` | 3,962 bytes |
+| `ovl.disarm` | `$E000-$E2CB` | 716 bytes |
 
 The source of truth for C128 ownership constants and overlap assertions is
 `commodore/c128/memory128.s`; the product segment definitions and Bank 0

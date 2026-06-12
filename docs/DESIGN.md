@@ -14,6 +14,20 @@ system areas are accounted for. The port therefore reduces and tiers data,
 keeps the live map compact on C64, and uses disk or REU paths for content that
 does not need to be resident all the time.
 
+The current product builds confirm that overlays are required rather than just
+convenient. Counting resident payloads, banked/runtime payloads, and all
+mutually exclusive overlays as if they had to occupy one contiguous flat memory
+space, the game is already larger than a practical 64 KB target:
+
+| Port | Flat contiguous equivalent |
+| --- | ---: |
+| C64 | 79,483 bytes / 77.6 KiB |
+| C128 | 85,368 bytes / 83.4 KiB |
+| Plus/4 | 78,287 bytes / 76.5 KiB |
+
+See `docs/ARCHITECTURE.md` for the per-payload memory map and current linked
+addresses.
+
 The display is also narrower. C64 gameplay is designed for 40 columns. C128
 gameplay can use VDC 80-column display paths, but the shared game UI must still
 respect 40-column-era text and layout constraints where shared code is used.
@@ -32,6 +46,19 @@ respect 40-column-era text and layout constraints where shared code is used.
 
 The main segment must stay below `$C000`. The banked payload must stay below
 `$FFFA`. Overlay segments must fit in `$E000-$EFFF`.
+
+## Plus/4 Memory Budget
+
+| Region | Address | Use |
+| --- | ---: | --- |
+| Program | `$1001-$C806` | BASIC stub and current resident product image |
+| I/O / ROM switching | platform-owned | TED and Plus/4 ROM/RAM policy behind HAL |
+| Overlays | `$E000-$EFFF` | Runtime overlay window |
+| Banked runtime | `$F000-$FD37` | Current banked code/data payload |
+
+The Plus/4 target shares the C64 40-column gameplay model and overlay strategy,
+but it owns a different screen/color/ROM-switching layout through TED-specific
+platform code.
 
 ## Dungeon Map
 
