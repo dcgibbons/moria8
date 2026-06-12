@@ -192,6 +192,12 @@ disk_prompt_save:
     rts
 
 disk_prompt_game:
+    lda test_tramp_game_over_calls
+    beq !dpg_count+
+    lda test_death_screen_dismissed
+    bne !dpg_count+
+    inc test_disk_prompt_before_death_dismiss
+!dpg_count:
     inc test_disk_prompt_game_calls
     rts
 
@@ -743,6 +749,8 @@ test_disk_prompt_save_calls: .byte 0
 test_disk_prompt_game_calls: .byte 0
 test_tramp_disk_setup_calls: .byte 0
 test_tramp_game_over_calls: .byte 0
+test_death_screen_dismissed: .byte 0
+test_disk_prompt_before_death_dismiss: .byte 0
 test_delete_savefile_calls: .byte 0
 test_c128_modal_require_persist_calls: .byte 0
 test_store_enter_calls: .byte 0
@@ -840,6 +848,8 @@ reset_state:
     sta test_disk_prompt_game_calls
     sta test_tramp_disk_setup_calls
     sta test_tramp_game_over_calls
+    sta test_death_screen_dismissed
+    sta test_disk_prompt_before_death_dismiss
     sta test_delete_savefile_calls
     sta test_c128_modal_require_persist_calls
     sta test_store_enter_calls
@@ -1016,6 +1026,11 @@ test_input_wait_release:
 
 test_input_get_key:
     inc test_get_key_calls
+    lda test_tramp_game_over_calls
+    beq !not_death_dismiss+
+    lda #1
+    sta test_death_screen_dismissed
+!not_death_dismiss:
     ldx test_key_idx
     cpx test_key_len
     bcs !default+
@@ -1865,6 +1880,13 @@ test_entry:
     jmp test_fail
     lda test_tramp_game_over_calls
     cmp #1
+    beq *+5
+    jmp test_fail
+    lda test_death_screen_dismissed
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda test_disk_prompt_before_death_dismiss
     beq *+5
     jmp test_fail
     lda test_disk_prompt_game_calls

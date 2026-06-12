@@ -2434,14 +2434,15 @@ player_died:
     lda death_source_saved
     sta zp_death_source
     jsr tramp_game_over         // Score, hiscore load/insert/save, death screen
+    jsr input_get_modal_dismiss_key
     jsr disk_prompt_game        // Swap back to game disk if dual
     jmp !pd_done+
 !pd_skip_disk_io:
     lda death_source_saved
     sta zp_death_source
     jsr tramp_game_over
-!pd_done:
     jsr input_get_modal_dismiss_key
+!pd_done:
     jmp !quit+
 
 !quit:
@@ -2461,12 +2462,13 @@ player_retired:
     jsr disk_prompt_save
     jsr player_sync_from_zp
     jsr tramp_game_over
+    jsr input_get_modal_dismiss_key
     jsr disk_prompt_game
     jmp !pr_done+
 !pr_skip_disk_io:
     jsr tramp_game_over
-!pr_done:
     jsr input_get_modal_dismiss_key
+!pr_done:
     jmp !quit-
 
 winner_print_save_blocked:
