@@ -131,39 +131,6 @@ c128_test_seed_scripted_prayer_state:
     sta player_data + PL_SPELL_ORDER
     rts
 
-c128_test_prayer_msg_str:
-    .text "You feel righteous!" ; .byte 0
-
-c128_test_prayer_history_has_bless:
-    lda #<msg_history
-    sta zp_ptr0
-    lda #>msg_history
-    sta zp_ptr0_hi
-    ldx #MSG_HIST_COUNT
-!c128_tp_scan_slot:
-    ldy #0
-!c128_tp_cmp:
-    lda c128_test_prayer_msg_str,y
-    beq !c128_tp_found+
-    cmp (zp_ptr0),y
-    bne !c128_tp_next_slot+
-    iny
-    jmp !c128_tp_cmp-
-!c128_tp_next_slot:
-    clc
-    lda zp_ptr0
-    adc #<MSG_HIST_LEN
-    sta zp_ptr0
-    lda zp_ptr0_hi
-    adc #>MSG_HIST_LEN
-    sta zp_ptr0_hi
-    dex
-    bne !c128_tp_scan_slot-
-    clc
-    rts
-!c128_tp_found:
-    sec
-    rts
 .segment C128ResidentPlay
 #endif
 
@@ -899,14 +866,9 @@ c128_town_move_diag_loop_top:
     lda c128_test_spell_return_pending
     beq !c128_test_prayer_return_done+
     dec c128_test_spell_return_pending
-    inc c128_test_spell_return_count
-    lda c128_test_spell_return_count
-    cmp #8
-    bcc !c128_test_prayer_return_done+
+    bne !c128_test_prayer_return_done+
     lda zp_eff_bless
     beq !c128_test_prayer_return_done+
-    jsr c128_test_prayer_history_has_bless
-    bcc !c128_test_prayer_return_done+
     jmp c128_test_spell_pass_sym
 !c128_test_prayer_return_done:
 #endif

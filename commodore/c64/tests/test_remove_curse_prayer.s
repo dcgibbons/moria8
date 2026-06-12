@@ -3,9 +3,6 @@
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_bootstrap)
 
-.pc = $E000 "Result Buffer"
-tc_results: .fill 3, $ff
-
 .pc = $080E "Bootstrap"
 
 .encoding "screencode_mixed"
@@ -107,6 +104,7 @@ trc_spell_exec_calls: .byte 0
 trc_huff_calls: .byte 0
 trc_last_huff_id: .byte 0
 trc_last_spell_idx: .byte $ff
+tc_results: .fill 3, $ff
 
 .macro PatchJump(target, replacement) {
     lda #$4c

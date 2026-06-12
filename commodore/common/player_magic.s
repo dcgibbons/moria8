@@ -233,7 +233,7 @@ player_pray:
     inc c128_test_spell_success_count
     lda c128_test_spell_return_pending
     bne !pp_test_pending_set128+
-    lda #20
+    lda #8
     sta c128_test_spell_return_pending
 !pp_test_pending_set128:
 #endif

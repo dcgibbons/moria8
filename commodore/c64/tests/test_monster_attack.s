@@ -92,7 +92,7 @@ test_exit_trampoline:
 
 // Strings referenced by imported modules but defined in main.s
 press_key_str:
-    .text "PRESS ANY KEY" ; .byte 0
+    .byte 0
 
 // Test scratch
 tc_loop:    .byte 0

@@ -754,9 +754,8 @@ import re
 import sys
 
 prg = Path("out/moria128.prg")
-sym = Path("main.sym")
 vs = Path("out/main.vs")
-if not prg.exists() or not sym.exists() or not vs.exists():
+if not prg.exists() or not vs.exists():
     print("missing build outputs")
     raise SystemExit(1)
 
@@ -768,10 +767,10 @@ load = data[0] | (data[1] << 8)
 end = load + len(data) - 2 - 1
 
 labels = {}
-for line in sym.read_text().splitlines():
-    m = re.match(r"\.label\s+([A-Za-z0-9_]+)=\$(\w+)", line)
+for line in vs.read_text().splitlines():
+    m = re.match(r"al\s+C:([0-9A-Fa-f]+)\s+\.([A-Za-z0-9_]+)$", line)
     if m:
-        labels[m.group(1)] = int(m.group(2), 16)
+        labels[m.group(2)] = int(m.group(1), 16)
 
 required = ["banked_code_end", "first_banked_function"]
 missing = [name for name in required if name not in labels]
@@ -831,7 +830,7 @@ PY
 run_symbol_placement_check() {
     echo -n "  main128_layout: "
 
-    local sym_file="main.sym"
+    local sym_file="out/main.vs"
     if [ ! -f "$sym_file" ]; then
         echo "FAIL (missing $sym_file)"
         FAIL=$((FAIL + 1))
@@ -843,15 +842,15 @@ run_symbol_placement_check() {
     check_out=$(python3 - <<'PY'
 from pathlib import Path
 import re
-sym = Path("main.sym").read_text().splitlines()
+sym = Path("out/main.vs").read_text().splitlines()
 main_text = Path("main.s").read_text()
 contract_source = Path("io_contracts.s").read_text().splitlines()
 labels = {}
 for line in sym:
-    m = re.match(r"\.label\s+([A-Za-z0-9_]+)=\$(\w+)", line)
+    m = re.match(r"al\s+C:([0-9A-Fa-f]+)\s+\.([A-Za-z0-9_]+)$", line)
     if not m:
         continue
-    labels[m.group(1)] = int(m.group(2), 16)
+    labels[m.group(2)] = int(m.group(1), 16)
 
 contract_patterns = {
     "below_io_hole": re.compile(r':C128AuditBelowIo\("([^"]+)",\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)'),
