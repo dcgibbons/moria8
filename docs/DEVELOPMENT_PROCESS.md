@@ -41,8 +41,8 @@ in particular) have been developed with 8-bit constraints, so surely Moria with
 its simpler terminal UI (TUI) could be made to work? And of course, it could
 be, but not using the original source as is.
 
-[BASIC][basic] isn't an option for a full port - it is much too slow and the
-memory isn't ample enough on most platforms. The Commodore 128 BASIC would
+[BASIC][basic] isn't a great option for a full port - it is much too slow and 
+the memory isn't ample enough on most platforms. The Commodore 128 BASIC would
 work, but even there the combination of code + data would be difficult to
 manage in the available address space without a lot of overlays.
 
@@ -262,7 +262,7 @@ incapable of selecting a choice that resulted in good performance. This is
 really where an experienced engineer comes into the picture and can set the
 stage for the AI agents to implement something useful and performant.
 
-For example, even as of the v1.0.0 release, moving to the left on the C128
+For example, even as of the v1.3.0 release, moving to the left on the C128
 version of the game is significantly slower than moving to the right given
 the limitations of how we must communicate with the VDC chip. This will take
 some clever rethinking of the VDC update logic to resolve.
@@ -281,7 +281,7 @@ pivoted to build and code constraints as much as possible.
 ## Parting Thoughts
 
 Development of the Commodore 64 and 128 versions of Moria8 was started on
-February 8th, 2026 and version 1.0.0 was released on May 5th, 2026.
+February 8th, 2026 and version 1.3.0 was released on June 12th, 2026.
 
 My own estimate of how much time the AI tooling saved here is double my own
 rate of speed, assuming I could work on the effort full-time. I would have
@@ -293,7 +293,7 @@ While I absolutely have loved coding directly over my career, it is even more
 fun to build something fast and focus more on the architecture, design, and
 features than the tedium of typing in code. What a time to be alive.
 
-*Written by [Chad Gibbons](https://github.com/dcgibbons), May 2026.*
+*Written by [Chad Gibbons](https://github.com/dcgibbons), June 2026.*
 
 [original-readme]: https://github.com/dcgibbons/moria8/blob/26067eabef4b8bd51be13e606542893077576b5e/README.md
 [original-buildplan]: https://github.com/dcgibbons/moria8/blob/26067eabef4b8bd51be13e606542893077576b5e/BUILDPLAN.md

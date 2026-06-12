@@ -1,6 +1,6 @@
 # Release Notes for Moria8 v1.3.0
 
-Moria8 v1.3.0 is the fourth release for the Commodore 64, Plus/4, and 128 systems.
+Moria8 v1.3.0 is the first public release for the Commodore 64, Plus/4, and 128 systems.
 
 It runs on supported original Commodore hardware, the [FPGA-based C64 Ultimate](https://commodore.net/computer/), and emulators such as [VICE](https://vice-emu.sourceforge.io/).
 
