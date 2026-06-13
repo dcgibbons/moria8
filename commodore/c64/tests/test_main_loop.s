@@ -45,6 +45,12 @@ game_over_prompt:
 tramp_level_generate:
     rts
 
+tramp_game_over_prepare:
+    rts
+
+tramp_game_over_run:
+    rts
+
 tramp_game_over:
     rts
 

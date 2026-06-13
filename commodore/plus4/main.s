@@ -587,6 +587,27 @@ plus4_test_single_drive_load_return_wait_for_harness:
 plus4_test_single_drive_load_return_before_load:
     jmp title_load_game
 #endif
+#if PLUS4_TEST_SCRIPTED_DEATH_RETURN_PRODUCT
+    lda #8
+    sta program_device
+    sta save_device
+    lda #1
+    sta disk_mode
+    lda #2
+    sta disk_setup_done
+    lda #DEATH_TRAP_PIT
+    sta death_source_saved
+    sta zp_death_source
+plus4_test_death_return_wait_for_harness:
+    jmp plus4_test_death_return_wait_for_harness
+plus4_test_death_return_before_prepare:
+    jsr tramp_game_over_prepare
+plus4_test_death_return_after_prepare:
+    jsr disk_prompt_save
+    jsr tramp_game_over_run
+plus4_test_death_return_after_score:
+    jmp plus4_test_death_return_after_score
+#endif
 #if PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_SAVE_RETURN_PRODUCT
     lda plus4_test_single_drive_save_return_ran
     bne !plus4_test_single_drive_save_return_skip+
@@ -1431,7 +1452,7 @@ tramp_player_create:
 // ============================================================
 // Interleaves overlay calls ($E000, $01=$34) with KERNAL I/O ($01=$36).
 // Pre-resolves creature name before overlay overwrites tier data.
-tramp_game_over:
+tramp_game_over_prepare:
     lda death_source_saved
     sta zp_death_source
 
@@ -1451,7 +1472,11 @@ tramp_game_over:
     // 2. Load death overlay (replaces tier data at $E000)
     lda #OVL_DEATH
     jsr overlay_load
+    rts
 
+tramp_game_over:
+    jsr tramp_game_over_prepare
+tramp_game_over_run:
     // 3. Calculate score (overlay code, no KERNAL needed)
     sei
     jsr plus4_bank_ram
@@ -1637,6 +1662,46 @@ plus4_banked_fname:
     #import "../common/ui_home.s"
     #import "../common/item_desc_banked.s"
     #import "../common/disk_setup_banked.s"
+
+tramp_game_over_stash:
+    lda #<$e000
+    sta zp_ptr0
+    lda #>$e000
+    sta zp_ptr0_hi
+    lda #<MAP_BASE
+    sta zp_ptr1
+    lda #>MAP_BASE
+    sta zp_ptr1_hi
+    jmp plus4_copy_overlay_window
+
+tramp_game_over_restore_stash:
+    lda #<MAP_BASE
+    sta zp_ptr0
+    lda #>MAP_BASE
+    sta zp_ptr0_hi
+    lda #<$e000
+    sta zp_ptr1
+    lda #>$e000
+    sta zp_ptr1_hi
+    lda #OVL_DEATH
+    sta current_overlay
+    jmp plus4_copy_overlay_window
+
+plus4_copy_overlay_window:
+    lda #$10
+    sta zp_temp0
+!copy_page:
+    ldy #0
+!copy_byte:
+    lda (zp_ptr0),y
+    sta (zp_ptr1),y
+    iny
+    bne !copy_byte-
+    inc zp_ptr0_hi
+    inc zp_ptr1_hi
+    dec zp_temp0
+    bne !copy_page-
+    rts
 
 // Verify that the selected program disk is actually present.
 // Output: carry clear = program media present, carry set = absent/wrong media.

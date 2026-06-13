@@ -1409,7 +1409,7 @@ tramp_player_create:
 // ============================================================
 // Interleaves overlay calls ($E000, $01=$34) with KERNAL I/O ($01=$36).
 // Pre-resolves creature name before overlay overwrites tier data.
-tramp_game_over:
+tramp_game_over_prepare:
     lda death_source_saved
     sta zp_death_source
 
@@ -1429,7 +1429,11 @@ tramp_game_over:
     // 2. Load death overlay (replaces tier data at $E000)
     lda #OVL_DEATH
     jsr overlay_load
+    rts
 
+tramp_game_over:
+    jsr tramp_game_over_prepare
+tramp_game_over_run:
     // 3. Calculate score (overlay code, no KERNAL needed)
     sei
     lda #BANK_NO_ROMS
