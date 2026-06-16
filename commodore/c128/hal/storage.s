@@ -60,10 +60,13 @@ c128_storage_read_command_status:
     ldx #hal_storage_cmd_channel
     jsr KERNAL_CHKIN
     bcs !cs_close+
+    jsr KERNAL_READST
+    bne !cs_close+
     jsr KERNAL_CHRIN
     sta disk_diag_cmd_status0
     jsr KERNAL_READST
     sta disk_diag_readst
+    bne !cs_close+
     jsr KERNAL_CHRIN
     sta disk_diag_cmd_status1
     jsr KERNAL_READST

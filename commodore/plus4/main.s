@@ -440,7 +440,7 @@ plus4_disk_read_command_status:
     ldy #0
     jsr plus4_kernal_setnam
     lda #hal_storage_cmd_channel
-    ldx save_device
+    ldx disk_prompt_device
     ldy #hal_storage_cmd_channel
     jsr plus4_kernal_setlfs
     jsr plus4_kernal_open
@@ -472,17 +472,28 @@ plus4_disk_status_to_disk_status:
     cmp #$30                    // "0"
     bne !done+
     lda #0
+    sta disk_status
+    lda #0
     sta disk_error_dos0
     sta disk_error_dos1
     rts
 !check_26:
     lda disk_error_dos0
     cmp #$32                    // "2"
-    bne !check_72+
+    bne !check_62+
     lda disk_error_dos1
     cmp #$36                    // "6"
     bne !done+
     lda #26
+    sta disk_status
+    rts
+!check_62:
+    cmp #$36                    // "6"
+    bne !check_72+
+    lda disk_error_dos1
+    cmp #$32                    // "2"
+    bne !done+
+    lda #62
     sta disk_status
     rts
 !check_72:
@@ -540,6 +551,15 @@ restart_entry:
     jsr rng_seed
 
 title_enter_menu:
+#if PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT
+    lda plus4_test_single_drive_fresh_save_armed
+    beq !plus4_test_single_drive_fresh_save_not_restart+
+plus4_test_single_drive_fresh_save_after_restart:
+    lda #0
+    sta plus4_test_single_drive_fresh_save_armed
+!plus4_test_single_drive_fresh_save_not_restart:
+#endif
+
     // Set default text color
     lda #COL_LGREY
     sta zp_text_color
@@ -562,6 +582,10 @@ title_enter_menu:
     jsr title_show_sysinfo
 
     jsr title_draw_menu
+
+#if PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT
+!plus4_test_single_drive_fresh_save_start:
+#endif
 
 #if PLUS4_TEST_SCRIPTED_OVERLAY_LOAD_PRODUCT
     jsr plus4_test_overlay_load_all
@@ -586,6 +610,59 @@ plus4_test_single_drive_load_return_wait_for_harness:
     jmp plus4_test_single_drive_load_return_wait_for_harness
 plus4_test_single_drive_load_return_before_load:
     jmp title_load_game
+#endif
+#if PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_CORRUPT_PRODUCT
+    lda #8
+    sta program_device
+    sta save_device
+    lda #1
+    sta disk_mode
+    lda #1
+    sta disk_setup_done
+plus4_test_single_drive_load_corrupt_wait_for_harness:
+    jmp plus4_test_single_drive_load_corrupt_wait_for_harness
+plus4_test_single_drive_load_corrupt_before_load:
+    jmp title_load_game
+#endif
+#if PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_SAVE_WRONG_MEDIA_PRODUCT
+    lda #8
+    sta program_device
+    sta save_device
+    lda #1
+    sta disk_mode
+    sta disk_setup_done
+plus4_test_single_drive_save_wrong_media_wait_for_harness:
+    jmp plus4_test_single_drive_save_wrong_media_wait_for_harness
+plus4_test_single_drive_save_wrong_media_before_save:
+    jsr disk_prompt_save
+    jsr save_game
+plus4_test_single_drive_save_wrong_media_unexpected_return:
+    brk
+#endif
+#if PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT
+    lda #8
+    sta program_device
+    sta save_device
+    lda #1
+    sta disk_mode
+    lda #2
+    sta disk_setup_done
+    lda #OVL_HELP
+    jsr overlay_load
+    bcs plus4_test_single_drive_fresh_save_unexpected_return
+plus4_test_single_drive_fresh_save_wait_for_harness:
+    jmp plus4_test_single_drive_fresh_save_wait_for_harness
+plus4_test_single_drive_fresh_save_before_save:
+    jsr disk_prompt_save
+    bcs plus4_test_single_drive_fresh_save_unexpected_return
+    jsr save_game
+    bcc plus4_test_single_drive_fresh_save_unexpected_return
+    lda #1
+    sta plus4_test_single_drive_fresh_save_armed
+    jsr disk_prompt_game_required
+    jmp game_over_prompt
+plus4_test_single_drive_fresh_save_unexpected_return:
+    brk
 #endif
 #if PLUS4_TEST_SCRIPTED_DEATH_RETURN_PRODUCT
     lda #8
@@ -706,6 +783,9 @@ plus4_test_single_drive_stage: .byte 0
 plus4_test_single_drive_save_return_fail:
     jmp plus4_test_single_drive_save_return_fail
 #endif
+#if PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT
+plus4_test_single_drive_fresh_save_armed: .byte 0
+#endif
 
 #if PLUS4_TEST_SCRIPTED_OVERLAY_LOAD_PRODUCT
 plus4_test_overlay_load_all:
@@ -781,7 +861,7 @@ title_load_game:
     jmp load_resume_game
 !title_load_fail:
     jsr input_get_modal_dismiss_key
-    jsr disk_prompt_game        // Swap back after the load failure is acknowledged
+    jsr disk_prompt_game_required // Verify program media before returning to title
     jmp title_enter_menu
 
 // ============================================================
@@ -1452,6 +1532,19 @@ tramp_player_create:
 // ============================================================
 // Interleaves overlay calls ($E000, $01=$34) with KERNAL I/O ($01=$36).
 // Pre-resolves creature name before overlay overwrites tier data.
+tramp_game_over_disk_setup:
+    jsr tramp_game_over_prepare // Disk Setup loads OVL_HELP into $E000.
+    jsr tramp_game_over_stash
+    jsr tramp_disk_setup
+    bcs !done+
+    jsr tramp_game_over_restore_stash
+    clc
+!done:
+    rts
+
+tramp_game_over_disk_setup_failed:
+    jmp disk_prompt_game
+
 tramp_game_over_prepare:
     lda death_source_saved
     sta zp_death_source
@@ -1561,7 +1654,7 @@ winner_apply_retirement_bonus:
 // Shown at all exit points (save+quit, voluntary quit, death).
 // ============================================================
 game_over_prompt:
-    jmp game_restart
+    jmp restart_entry
 
 // ============================================================
 // game_restart — reset game state, return to title screen
@@ -1706,23 +1799,29 @@ plus4_copy_overlay_window:
 // Verify that the selected program disk is actually present.
 // Output: carry clear = program media present, carry set = absent/wrong media.
 plus4_require_program_media:
-    lda #$5a
-    sta $e000
-    lda #$a5
-    sta $e001
+    jsr plus4_kernal_clrchn
+    lda #hal_storage_program_file_num
+    jsr plus4_kernal_close
     lda #hal_storage_overlay_help_name_len
     ldx #<hal_storage_overlay_help_name
     ldy #>hal_storage_overlay_help_name
-    jsr hal_asset_load_prg_header
+    jsr plus4_kernal_setnam
+    lda #hal_storage_program_file_num
+    ldx program_device
+    ldy #0
+    jsr plus4_kernal_setlfs
+    jsr plus4_kernal_open
+    php
+    lda #hal_storage_program_file_num
+    jsr plus4_kernal_close
+    jsr plus4_kernal_clrchn
+    plp
     bcs !fail+
-    lda $e000
-    cmp #$43
+    lda program_device
+    sta disk_prompt_device
+    jsr plus4_disk_read_command_status
+    lda disk_status
     bne !fail+
-    lda $e001
-    cmp #$0f
-    bne !fail+
-    lda #OVL_HELP
-    sta current_overlay
     clc
     rts
 !fail:

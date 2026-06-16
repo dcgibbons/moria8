@@ -129,9 +129,7 @@ hal_asset_load_title:
     lda #2
     jsr $ffc3               // CLOSE
     jsr $ffcc               // CLRCHN
-    lda $dd00
-    ora #%00000011
-    sta $dd00
+    jsr platform_runtime_resync_c64
     plp
     rts
 #else

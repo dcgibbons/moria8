@@ -13,7 +13,4 @@ title_menu_str:
 
 ds_save_str:       .text "Insert save disk" ; .byte 0
 ds_game_str:       .text "Insert program disk" ; .byte 0
-#if !C128
-ds_game_error_str: .text "Program disk not found" ; .byte 0
-#endif
 ds_ind_pfx:        .text "[Save: " ; .byte 0

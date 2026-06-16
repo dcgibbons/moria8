@@ -700,7 +700,7 @@ game_new_start:
 
 disk_prompt_game_required:
 !prompt:
-#if PLUS4
+#if PLUS4 || C64_PRODUCT_OVERLAY_RUNTIME
 !probe:
     jsr hal_storage_require_program_media
 #else
@@ -712,15 +712,6 @@ disk_prompt_game_required_error:
     jsr msg_init
     lda #COL_WHITE
     sta zp_text_color
-    lda #DPGR_PROMPT_ROW - 2
-    sta zp_cursor_row
-    lda #DPGR_GAME_ERROR_COL
-    sta zp_cursor_col
-    lda #<ds_game_error_str
-    sta zp_ptr0
-    lda #>ds_game_error_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
     lda #DPGR_PROMPT_ROW
     sta zp_cursor_row
     lda #DPGR_PROMPT_COL
@@ -741,7 +732,7 @@ disk_prompt_game_required_error:
     jsr hal_screen_put_string
 disk_prompt_game_required_error_shown:
     jsr input_get_modal_dismiss_key
-#if PLUS4
+#if PLUS4 || C64_PRODUCT_OVERLAY_RUNTIME
     lda program_device
     sta disk_prompt_device
     jsr hal_storage_init_selected_drive
@@ -757,6 +748,9 @@ disk_prompt_game_required_error_shown:
 // load_resume_game — Entry point after successful load
 // ============================================================
 load_resume_game:
+#if C64_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_RETURN_PRODUCT
+c64_test_single_drive_load_return_resume_entry:
+#endif
     jsr wizard_reset_session_state
     jsr player_search_clear_transient_state
 
@@ -819,7 +813,7 @@ load_resume_game:
     sta c64_test_save_media_fail_armed
 #endif
 
-#if C64_TEST_SCRIPTED_LOAD_RESUME_PRODUCT
+#if C64_TEST_SCRIPTED_LOAD_RESUME_PRODUCT || C64_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_RETURN_PRODUCT
 c64_test_after_load_resume_game:
 #endif
 main_loop:
@@ -1105,9 +1099,7 @@ plus4_test_after_save_game:
     adc #0
     pha
 #if !C128_PRODUCT_MODAL_PERSIST
-#if PLUS4
     jsr disk_prompt_game
-#endif
     jsr disk_prompt_game_required // Swap back to game disk if dual
 #if HAL_PLATFORM_GAME_LOOP_RUNTIME_RESYNC
     jsr hal_platform_runtime_resync
@@ -2424,47 +2416,12 @@ player_died:
     jsr hal_input_get_key
 
     // Now do disk I/O (player sees -more- prompt, knows they died)
-    lda disk_setup_done
-    bne !pd_prepare_death+
-#if PLUS4
-    jsr tramp_game_over_prepare // Load death overlay before Disk Setup clobbers $E000
-    jsr tramp_game_over_stash
-#endif
-    jsr tramp_disk_setup
+    jsr game_over_prepare_for_disk_io
     bcs !pd_skip_disk_io+
-#if PLUS4
-    jsr tramp_game_over_restore_stash
-    jmp !pd_disk_ready+
-#else
-#if C64
-    jsr disk_prompt_game        // Disk Setup used the overlay window; reload from program media
-    lda #1
-    sta disk_setup_done         // Save disk is no longer mounted in one-drive mode
-    jsr tramp_game_over_prepare
-    jmp !pd_disk_ready+
-#endif
-#endif
-!pd_prepare_death:
-#if C64 || PLUS4
-    jsr tramp_game_over_prepare // Load death overlay while program media is current
-#endif
-!pd_disk_ready:
-    jsr disk_prompt_save        // Swap to save disk if dual
-    jsr player_sync_from_zp
-    lda death_source_saved
-    sta zp_death_source
-#if C64 || PLUS4
-    jsr tramp_game_over_run     // Score, hiscore load/insert/save, death screen
-#else
-    jsr tramp_game_over
-#endif
-    jsr input_get_modal_dismiss_key
-    jsr disk_prompt_game        // Swap back to game disk if dual
+    jsr game_over_save_and_show
     jmp !pd_done+
 !pd_skip_disk_io:
-#if C64 || PLUS4
-    jsr disk_prompt_game
-#endif
+    jsr tramp_game_over_disk_setup_failed
     lda death_source_saved
     sta zp_death_source
     jsr tramp_game_over
@@ -2481,49 +2438,46 @@ player_retired:
     lda #DEATH_ALIVE
     sta death_source_saved
     sta zp_death_source
-    lda disk_setup_done
-    bne !pr_prepare_death+
-#if PLUS4
-    jsr tramp_game_over_prepare
-    jsr tramp_game_over_stash
-#endif
-    jsr tramp_disk_setup
+    jsr game_over_prepare_for_disk_io
     bcs !pr_skip_disk_io+
-#if PLUS4
-    jsr tramp_game_over_restore_stash
-    jmp !pr_disk_ready+
-#else
-#if C64
-    jsr disk_prompt_game
-    lda #1
-    sta disk_setup_done
-    jsr tramp_game_over_prepare
-    jmp !pr_disk_ready+
-#endif
-#endif
-!pr_prepare_death:
-#if C64 || PLUS4
-    jsr tramp_game_over_prepare
-#endif
-!pr_disk_ready:
-    jsr disk_prompt_save
-    jsr player_sync_from_zp
-#if C64 || PLUS4
-    jsr tramp_game_over_run
-#else
-    jsr tramp_game_over
-#endif
-    jsr input_get_modal_dismiss_key
-    jsr disk_prompt_game
+    jsr game_over_save_and_show
     jmp !pr_done+
 !pr_skip_disk_io:
-#if C64 || PLUS4
-    jsr disk_prompt_game
-#endif
+    jsr tramp_game_over_disk_setup_failed
     jsr tramp_game_over
     jsr input_get_modal_dismiss_key
 !pr_done:
     jmp !quit-
+
+game_over_prepare_for_disk_io:
+    lda disk_setup_done
+    bne !configured+
+#if C128
+    jmp tramp_game_over_disk_setup
+#else
+    jsr tramp_game_over_disk_setup
+    rts
+!configured:
+    jsr tramp_game_over_prepare
+    clc
+    rts
+#endif
+#if C128
+!configured:
+    clc
+    rts
+#endif
+
+game_over_save_and_show:
+    jsr disk_prompt_save        // Swap to save disk if dual
+    jsr player_sync_from_zp
+#if !C128
+    lda death_source_saved
+    sta zp_death_source
+#endif
+    jsr tramp_game_over_run     // Score, hiscore load/insert/save, death screen
+    jsr input_get_modal_dismiss_key
+    jmp disk_prompt_game        // Swap back to game disk if dual
 
 winner_print_save_blocked:
     lda #<winner_save_blocked_str

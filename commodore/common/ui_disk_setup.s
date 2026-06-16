@@ -328,6 +328,10 @@ uds_show_no_device:
     rts
 
 uds_show_program_disk:
+#if C64_TEST_SCRIPTED_SINGLE_DRIVE_SAVE_WRONG_MEDIA_PRODUCT || C64_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_WRONG_MEDIA_PRODUCT || PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_SAVE_WRONG_MEDIA_PRODUCT || C128_TEST_SCRIPTED_SINGLE_DRIVE_SAVE_WRONG_MEDIA_PRODUCT
+    lda #1
+    sta disk_test_program_warning_seen
+#endif
     jsr ui_clear_full_screen_safe
     :UDSPrint(0, UDS_TITLE_COL, uds_title_str)
     :UDSPrint(3, UDS_LINE_COL, uds_program_disk_str)

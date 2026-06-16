@@ -195,6 +195,10 @@ disk_marker_init:
     jsr disk_kernal_exit
     lda disk_status
     bne !dmi_fail+
+#if C128_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT
+    clc
+    rts
+#endif
     jsr disk_marker_present
     bcc !dmi_ok+
 !dmi_fail:
@@ -243,6 +247,7 @@ disk_setup_capture_init_status:
     sta disk_status
     lda #0
     sta disk_ui_value
+#if !HAL_STORAGE_MARKER_INIT_SKIP_SCRATCH
     lda #hal_storage_marker_scratch_name_len
     ldx #<hal_storage_marker_scratch_name
     ldy #>hal_storage_marker_scratch_name
@@ -256,6 +261,7 @@ disk_setup_capture_init_status:
     lda #hal_storage_cmd_channel
     jsr FEAT_CLOSE
     jsr FEAT_CLRCHN
+#endif
 !dmi_create:
     jsr hal_storage_marker_write_resident
 !dmi_done:
@@ -263,6 +269,10 @@ disk_setup_capture_init_status:
 #if HAL_STORAGE_DISK_SETUP_MARKER_WRITE_STATUS_REQUIRED
     lda disk_status
     bne !dmi_fail+
+#endif
+#if C128_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT
+    clc
+    rts
 #endif
     jsr disk_marker_present
     bcs !dmi_fail+
@@ -326,6 +336,9 @@ disk_setup_prepare_selected:
     jsr disk_setup_call_ui
     jmp !retry-
 !not_program_media:
+#if C128_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT
+    jmp !prompt_init+
+#endif
     jsr disk_marker_present
     bcc disk_setup_commit_ready
 #if HAL_STORAGE_DISK_SETUP_ACCEPT_SAVE_FILE
@@ -338,6 +351,7 @@ disk_setup_prepare_selected:
     jsr disk_setup_plus4_marker_missing
     bcs !show_marker_probe_fail+
 #endif
+!prompt_init:
     lda #DISK_UI_ACT_INIT_PROMPT
     jsr disk_setup_call_ui
     lda disk_ui_result

@@ -854,9 +854,14 @@ tramp_player_create_return_site:
 #endif
 #endif
     jsr c128_restore_runtime_guards
+tramp_game_over_disk_setup_failed:
+tramp_game_over_prepare:
     rts
 
+.label tramp_game_over_disk_setup = tramp_disk_setup
+
 tramp_game_over:
+tramp_game_over_run:
     lda death_source_saved
     sta zp_death_source
 
@@ -2230,6 +2235,45 @@ restart_entry:
     jmp runtime_load_failed
 !runtime_banked_loaded:
     jsr c128_load_core_residents
+#if C128_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT
+    jsr screen_clear_for_font_restore
+    jsr c128_restore_vdc_rom_font
+    lda c128_test_single_drive_fresh_save_armed
+    beq !c128_test_single_drive_fresh_save_start+
+c128_test_single_drive_fresh_save_after_restart:
+    lda #0
+    sta c128_test_single_drive_fresh_save_armed
+    jmp c128_test_single_drive_fresh_save_after_restart
+!c128_test_single_drive_fresh_save_start:
+    lda #8
+    sta program_device
+    sta save_device
+    lda #1
+    sta disk_mode
+    sta disk_setup_done
+    lda #C128_MEDIA_PROGRAM
+    sta c128_media_state
+    lda #10
+    sta c128_runtime_load_stage
+    jsr c128_load_resident_persist_prg
+    bcc !c128_test_single_drive_fresh_save_persist_loaded+
+    jmp runtime_load_failed
+!c128_test_single_drive_fresh_save_persist_loaded:
+    lda #2                  // C128_MODAL_PERSIST; const is declared later.
+    sta c128_modal_slot_state
+c128_test_single_drive_fresh_save_wait_for_harness:
+    jmp c128_test_single_drive_fresh_save_wait_for_harness
+c128_test_single_drive_fresh_save_before_save:
+    lda #C128_MEDIA_PROGRAM
+    sta c128_media_state
+    jsr c128_modal_save_game
+    bcc c128_test_single_drive_fresh_save_unexpected_return
+    lda #1
+    sta c128_test_single_drive_fresh_save_armed
+    jmp game_over_prompt
+c128_test_single_drive_fresh_save_unexpected_return:
+    jmp c128_test_single_drive_fresh_save_unexpected_return
+#endif
     lda #C128_MEDIA_PROGRAM
     sta c128_media_state
     jsr screen_clear_for_font_restore
@@ -2287,6 +2331,25 @@ title_menu_ready:
 #if C128_TEST_OVERLAY_TRANSITION_DIAG
     jmp c128_overlay_transition_pass_sym
 #endif
+#if C128_TEST_SCRIPTED_SINGLE_DRIVE_SAVE_WRONG_MEDIA_PRODUCT
+    lda #8
+    sta program_device
+    sta save_device
+    lda #1
+    sta disk_mode
+    sta disk_setup_done
+    lda #C128_MEDIA_PROGRAM
+    sta c128_media_state
+    lda #2                  // C128_MODAL_PERSIST; const is declared later.
+    sta c128_modal_slot_state
+c128_test_single_drive_save_wrong_media_wait_for_harness:
+c128_test_single_drive_save_wrong_media_before_save:
+    jsr c128_modal_save_game
+c128_test_single_drive_save_wrong_media_unexpected_return:
+    jmp c128_test_single_drive_save_wrong_media_unexpected_return
+c128_test_single_drive_save_wrong_media_script_exhausted:
+    jmp c128_test_single_drive_save_wrong_media_script_exhausted
+#endif
     cli
 !title_menu_loop:
     jsr input_get_key
@@ -2324,19 +2387,13 @@ title_load_game:
     bcs !title_load_fail+
     jsr ui_prepare_fullscreen_transition
     jsr load_game
-    lda #0
-    adc #0
-    sta c128_modal_result
-    lda c128_modal_result
-    lsr
-    bcs !title_load_ok+
+    bcc !title_load_fail+
+    jsr c128_modal_require_play
+    jmp load_resume_game
 !title_load_fail:
     jsr input_get_modal_dismiss_key
     jsr c128_require_program_media
     jmp title_enter_menu
-!title_load_ok:
-    jsr c128_modal_require_play
-    jmp load_resume_game
 
 runtime_load_failed:
     sei
@@ -2656,22 +2713,44 @@ c128_require_program_media:
     rts
 
 c128_program_media_error_prompt:
+#if C128_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
+    lda c128_test_after_save_media_check_active
+    beq !not_after_save_check+
+    jmp c128_test_unexpected_post_save_program_prompt
+!not_after_save_check:
+#endif
     lda #C128_MEDIA_UNKNOWN
     sta c128_media_state
 c128_program_media_error_shown:
     jmp disk_prompt_game
 
+#if C128_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
+c128_test_unexpected_post_save_program_prompt:
+    lda program_device
+    sta c128_test_post_save_prompt_diag
+    lda save_device
+    sta c128_test_post_save_prompt_diag + 1
+    lda disk_mode
+    sta c128_test_post_save_prompt_diag + 2
+    lda c128_media_state
+    sta c128_test_post_save_prompt_diag + 3
+    jmp c128_test_unexpected_post_save_program_prompt
+#endif
+
 c128_require_save_media:
-    jsr disk_prompt_save
-    bcs !save_fail+
-    lda #C128_MEDIA_SAVE
-    sta c128_media_state
-    clc
+    lda disk_mode
+    cmp #1
+    bne !prompt_save+
+    lda c128_media_state
+    cmp #C128_MEDIA_SAVE
+    bne !prepare_selected+
+    jsr disk_init_drive
     rts
-!save_fail:
-    lda #C128_MEDIA_UNKNOWN
-    sta c128_media_state
-    sec
+!prepare_selected:
+    jsr tramp_disk_prepare_selected
+    rts
+!prompt_save:
+    jsr disk_prompt_save
     rts
 
 c128_modal_require_persist:
@@ -2696,16 +2775,21 @@ c128_modal_require_persist:
 c128_modal_save_game:
     jsr c128_modal_require_persist
     jsr c128_require_save_media
+    bcs !save_fail+
     jsr ui_prepare_fullscreen_transition
     jsr save_game
-    lda #0
-    adc #0
-    sta c128_modal_result
-    bne !save_done+
+    bcc !save_done+
+#if C128_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
+c128_test_after_save_before_play_media:
+    lda #1
+    sta c128_test_after_save_media_check_active
+#endif
     jsr c128_modal_require_play
+    sec
 !save_done:
-    lda c128_modal_result
-    lsr
+    rts
+!save_fail:
+    clc
     rts
 
 c128_modal_load_game:
@@ -2713,11 +2797,6 @@ c128_modal_load_game:
     jsr c128_require_save_media
     jsr ui_prepare_fullscreen_transition
     jsr load_game
-    lda #0
-    adc #0
-    sta c128_modal_result
-    lda c128_modal_result
-    lsr
     rts
 
 c128_modal_require_play:
@@ -2860,9 +2939,15 @@ c128_runtime_load_stage: .byte 0
 c128_runtime_load_bank: .byte 0
 c128_runtime_load_result_a: .byte 0
 c128_runtime_load_readst: .byte 0
-c128_modal_result: .byte 0
 c128_modal_slot_state: .byte C128_MODAL_UNKNOWN
 c128_media_state: .byte C128_MEDIA_UNKNOWN
+#if C128_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
+c128_test_after_save_media_check_active: .byte 0
+c128_test_post_save_prompt_diag: .fill 4, 0
+#endif
+#if C128_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT
+c128_test_single_drive_fresh_save_armed: .byte 0
+#endif
 kernal_hw_irq_vec_lo: .byte 0
 kernal_hw_irq_vec_hi: .byte 0
 kernal_hw_nmi_vec_lo: .byte 0
@@ -3504,31 +3589,16 @@ ego_str_holy_avenger_common:
 // Detect program media on the selected save drive.
 // Output: carry clear = program media present, carry set = not program media
 disk_program_media_present:
-    jsr disk_kernal_enter
-    lda #hal_storage_title_name_len
-    ldx #<hal_storage_title_name
-    ldy #>hal_storage_title_name
-    jsr hal_storage_setnam
-    lda #hal_storage_program_file_num
-    ldx save_device
-    ldy #0
-    jsr hal_storage_setlfs
-    jsr hal_storage_open
-    bcc !open_ok+
-    jsr hal_storage_clrchn
-    jsr disk_kernal_exit
-    sec
-    rts
-!open_ok:
-    jsr hal_storage_read_command_status
-    jsr disk_command_status
+    lda program_device
     sta disk_temp
-    lda #hal_storage_program_file_num
-    jsr hal_storage_close
-    jsr hal_storage_clrchn
-    jsr disk_kernal_exit
+    lda save_device
+    sta program_device
+    jsr c128_program_play_exists
+    php
     lda disk_temp
-    bne !not_program+
+    sta program_device
+    plp
+    bcc !not_program+
     clc
     rts
 !not_program:
@@ -3542,7 +3612,7 @@ c128_program_play_exists:
     jsr w_setnam
     lda #C128_PROGRAM_PROBE_FILE_NUM
     ldx program_device
-    ldy #2
+    ldy #0
     jsr w_setlfs
     jsr w_open
     bcs !missing+
@@ -3579,8 +3649,12 @@ c128_program_read_command_status:
     ldx #C128_PROGRAM_CMD_FILE_NUM
     jsr w_chkin
     bcs !close+
+    jsr w_readst
+    bne !close+
     jsr w_chrin
     sta disk_diag_cmd_status0
+    jsr w_readst
+    bne !close+
     jsr w_chrin
     sta disk_diag_cmd_status1
 !close:

@@ -43,6 +43,9 @@ disk_status:       .byte 0
 .label disk_ui_result = disk_status    // 0=success, 1=cancel/failure
 #endif
 disk_prompt_device:.byte 8
+#if C64_TEST_SCRIPTED_SINGLE_DRIVE_SAVE_WRONG_MEDIA_PRODUCT || C64_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_WRONG_MEDIA_PRODUCT || PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_SAVE_WRONG_MEDIA_PRODUCT || C128_TEST_SCRIPTED_SINGLE_DRIVE_SAVE_WRONG_MEDIA_PRODUCT
+disk_test_program_warning_seen: .byte 0
+#endif
 #if HAL_STORAGE_EXTENDED_DISK_DIAG
 disk_error_phase:  .byte 0
 disk_error_readst: .byte 0
@@ -268,6 +271,9 @@ disk_save_media_status:
     lda #HAL_STORAGE_STATUS_UNKNOWN
     rts
 #elif HAL_STORAGE_SAVE_MEDIA_STATUS_ERROR_DIAG
+    lda disk_error_phase
+    cmp #$83                    // Marker bytes were readable but did not match.
+    beq !wrong+
     lda disk_status
     cmp #74
     bne !check_readst+
@@ -291,8 +297,10 @@ disk_save_media_status:
     lda disk_status
     cmp #$83                    // Marker bytes read, but contents mismatch.
     beq !wrong+
-    cmp #$84                    // Marker READ failed; READST alone is ambiguous.
-    bne !ioerr+
+    cmp #$85
+    bcs !ioerr+
+    cmp #$81                    // Marker open/chkin/read failures need DOS detail.
+    bcc !ioerr+
 !check_dos:
     jsr disk_kernal_enter
     jsr hal_storage_read_command_status
@@ -411,6 +419,7 @@ disk_prompt_save:
     cmp #2
     bne !dps_prompt+
     dec disk_setup_done
+    clc
     rts
 #endif
 #if HAL_STORAGE_SWAP_PROMPT_FULLSCREEN || HAL_STORAGE_MEDIA_STATE_TRACKING
@@ -421,8 +430,12 @@ disk_prompt_save:
     jsr disk_prompt
     bcs !dps_done+
 #if HAL_STORAGE_MEDIA_STATE_TRACKING
+    lda disk_mode
+    cmp #1
+    beq !dps_media_done+
     lda #C128_MEDIA_SAVE
     sta c128_media_state
+!dps_media_done:
     clc
 #endif
 !dps_done:
