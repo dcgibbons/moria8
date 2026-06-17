@@ -1477,7 +1477,7 @@ run_load_resume_product_smoke() {
     local boot_d64="$smoke_out/moria8-plus4.d64"
     local build_log="$out_dir/$name.build.log"
 
-    if [ -n "$TEST_FILTER" ] && [[ ! "$name" =~ $TEST_FILTER ]]; then
+    if ! suite_selected "$name" "load_initialized_save"; then
         return
     fi
 

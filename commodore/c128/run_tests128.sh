@@ -7129,7 +7129,7 @@ run_selected_suites() {
     run_named_suite vic40_clean_boot_smoke run_vic40_clean_boot_smoke || return 1
     run_named_suite new_key_stability_smoke run_new_key_stability_smoke || return 1
     run_named_suite boot_title_newgame_smoke run_boot_title_newgame_smoke || return 1
-    run_named_suite boot_title_load_resume_smoke run_boot_title_load_resume_smoke || return 1
+    run_named_suite load_initialized_save --alias boot_title_load_resume_smoke run_boot_title_load_resume_smoke || return 1
     run_named_suite boot_tier_transition_smoke run_boot_tier_transition_smoke || return 1
     run_named_suite town_overlay_smoke run_town_overlay_smoke || return 1
     run_named_suite town_overlay_female_smoke run_town_overlay_female_smoke || return 1

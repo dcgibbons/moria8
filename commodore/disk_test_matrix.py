@@ -165,10 +165,19 @@ SCENARIOS: tuple[Scenario, ...] = (
     Scenario(
         "load_initialized_save",
         {
-            "c64": legacy("load_resume_product_smoke"),
-            "c128": legacy("boot_title_load_resume_smoke", "boot_title_load_mounted_save_smoke"),
-            "plus4": legacy("load_resume_product_plus4"),
+            "c64": strict("load_resume_product_smoke"),
+            "c128": strict("boot_title_load_resume_smoke"),
+            "plus4": strict("load_resume_product_plus4"),
         },
+        ScenarioContract(
+            media="program disk remains mounted while initialized save media is available on the selected save device",
+            start="title load command with a valid initialized save disk",
+            ordered_events=("load_success", "gameplay_resume_after_load"),
+            event_counts=("load_success=1",),
+            forbidden_events=("save_disk_prompt", "wrong_save_disk", "corrupt_save_error", "program_disk_prompt_after_load"),
+            screen_assertions=("title load flow", "gameplay screen after load"),
+            final_proof=("load reaches the gameplay resume path from THE.GAME",),
+        ),
     ),
     Scenario(
         "prompt_sequence_no_repeat",
