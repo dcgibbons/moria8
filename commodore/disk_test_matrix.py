@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -328,6 +329,10 @@ PLATFORM_COMMANDS = {
 }
 
 
+RESULT_RE = re.compile(r"=== Results: \d+ passed, \d+ failed \(of (\d+) suites\) ===")
+PLUS4_RESULT_RE = re.compile(r"=== Plus/4 runtime summary: \d+ passed, \d+ failed, (\d+) total ===")
+
+
 def selected_scenarios(pattern: str | None) -> tuple[Scenario, ...]:
     if not pattern:
         return SCENARIOS
@@ -375,6 +380,16 @@ def filters_by_platform(scenarios: tuple[Scenario, ...]) -> dict[str, str]:
     return result
 
 
+def platform_suite_count(platform: str, output: str) -> int | None:
+    if platform == "plus4":
+        match = PLUS4_RESULT_RE.search(output)
+    else:
+        match = RESULT_RE.search(output)
+    if not match:
+        return None
+    return int(match.group(1))
+
+
 def print_plan(scenarios: tuple[Scenario, ...], filters: dict[str, str]) -> None:
     print("=== Cross-platform disk scenario matrix ===")
     for scenario in scenarios:
@@ -418,7 +433,25 @@ def run_platform(root: Path, platform: str, test_filter: str, args: argparse.Nam
     print(f"=== {platform}: {filter_var}={test_filter} ===", flush=True)
     if args.dry_run:
         return 0
-    return subprocess.run(command, cwd=root / workdir_name, env=env).returncode
+    result = subprocess.run(
+        command,
+        cwd=root / workdir_name,
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+    )
+    print(result.stdout, end="")
+    if result.returncode != 0:
+        return result.returncode
+    suite_count = platform_suite_count(platform, result.stdout)
+    if suite_count is None:
+        print(f"FAIL: {platform} did not print a suite summary")
+        return 1
+    if suite_count == 0:
+        print(f"FAIL: {platform} ran zero suites for {filter_var}={test_filter}")
+        return 1
+    return 0
 
 
 def main() -> int:
