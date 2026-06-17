@@ -18,6 +18,11 @@ class PlatformCoverage:
     strict: bool = False
     note: str = ""
 
+    def filter_names(self, scenario_id: str) -> tuple[str, ...]:
+        if self.strict:
+            return (scenario_id,)
+        return self.tests
+
 
 @dataclass(frozen=True)
 class ScenarioContract:
@@ -35,6 +40,9 @@ class Scenario:
     scenario_id: str
     coverage: dict[str, PlatformCoverage]
     contract: ScenarioContract | None = None
+
+    def platform_coverage(self, platform: str) -> PlatformCoverage | None:
+        return self.coverage.get(platform)
 
 
 def legacy(*tests: str, note: str = "") -> PlatformCoverage:
@@ -316,12 +324,13 @@ def validate_matrix(scenarios: tuple[Scenario, ...], require_strict_contracts: b
             errors.append(f"duplicate scenario id {scenario.scenario_id}")
         seen.add(scenario.scenario_id)
         for platform in PLATFORMS:
-            if not scenario.coverage.get(platform):
+            coverage = scenario.platform_coverage(platform)
+            if not coverage:
                 errors.append(f"{scenario.scenario_id}: missing {platform} adapter")
                 continue
-            if not scenario.coverage[platform].tests:
+            if not coverage.tests:
                 errors.append(f"{scenario.scenario_id}: empty {platform} test filter")
-            if require_strict_contracts and scenario.contract and not scenario.coverage[platform].strict:
+            if require_strict_contracts and scenario.contract and not coverage.strict:
                 errors.append(f"{scenario.scenario_id}: {platform} adapter is legacy, not strict")
     return errors
 
@@ -331,12 +340,8 @@ def filters_by_platform(scenarios: tuple[Scenario, ...]) -> dict[str, str]:
     for platform in PLATFORMS:
         names: list[str] = []
         for scenario in scenarios:
-            # Strict contract scenarios are selected by the shared scenario ID.
-            # Platform-specific smoke names are adapters, not the public matrix
-            # interface. Legacy scenarios keep their existing platform filters
-            # until they are promoted to strict contracts.
-            adapter_names = (scenario.scenario_id,) if scenario.coverage[platform].strict else scenario.coverage[platform].tests
-            for name in adapter_names:
+            coverage = scenario.coverage[platform]
+            for name in coverage.filter_names(scenario.scenario_id):
                 if name not in names:
                     names.append(name)
         result[platform] = "|".join(names)
@@ -359,8 +364,9 @@ def print_plan(scenarios: tuple[Scenario, ...], filters: dict[str, str]) -> None
         for platform in PLATFORMS:
             coverage = scenario.coverage[platform]
             strict_label = "strict" if coverage.strict else "legacy"
+            filters_label = ", ".join(coverage.filter_names(scenario.scenario_id))
             note = f" ({coverage.note})" if coverage.note else ""
-            print(f"    {platform}: {strict_label}: {', '.join(coverage.tests)}{note}")
+            print(f"    {platform}: {strict_label}: {filters_label}; adapter: {', '.join(coverage.tests)}{note}")
     print("")
     print("=== Platform filters ===")
     for platform in PLATFORMS:
