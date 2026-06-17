@@ -355,6 +355,9 @@ def validate_matrix(scenarios: tuple[Scenario, ...], require_strict_contracts: b
         if scenario.scenario_id in seen:
             errors.append(f"duplicate scenario id {scenario.scenario_id}")
         seen.add(scenario.scenario_id)
+        has_strict_adapter = any(coverage.strict for coverage in scenario.coverage.values())
+        if has_strict_adapter and scenario.contract is None:
+            errors.append(f"{scenario.scenario_id}: strict adapter requires a scenario contract")
         for platform in PLATFORMS:
             coverage = scenario.platform_coverage(platform)
             if not coverage:
