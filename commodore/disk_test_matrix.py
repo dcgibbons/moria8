@@ -184,10 +184,19 @@ SCENARIOS: tuple[Scenario, ...] = (
     Scenario(
         "prompt_sequence_no_repeat",
         {
-            "c64": legacy("load_resume_product_smoke", "single_drive_load_return_product_smoke", "single_drive_fresh_save_product_smoke"),
-            "c128": legacy("boot_title_load_mounted_save_smoke", "boot_title_single_drive_fresh_save_smoke"),
-            "plus4": legacy("single_drive_load_return_plus4", "single_drive_save_return_plus4", "single_drive_fresh_save_plus4"),
+            "c64": strict("single_drive_load_return_product_smoke"),
+            "c128": strict("boot_title_single_drive_load_return_smoke"),
+            "plus4": strict("single_drive_load_return_plus4"),
         },
+        ScenarioContract(
+            media="single drive 8 starts with save media for load, then requires program media before returning to title/gameplay flow",
+            start="title load command in one-drive disk setup",
+            ordered_events=("save_disk_prompt", "load_success", "program_disk_prompt"),
+            event_counts=("load_success=1", "program_disk_prompt=1"),
+            forbidden_events=("duplicate_save_disk_prompt", "duplicate_program_disk_prompt", "load_fail"),
+            screen_assertions=("Insert program disk", "press any key"),
+            final_proof=("load reaches success path before program-media recovery",),
+        ),
     ),
     Scenario(
         "save_existing_overwrite",
@@ -210,7 +219,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         "load_then_save_new_empty_disk",
         {
             "c64": legacy("single_drive_load_return_product_smoke", "save_write_product_smoke"),
-            "c128": legacy("boot_title_load_mounted_save_smoke", "boot_title_save_write_product_smoke"),
+            "c128": legacy("boot_title_single_drive_load_return_smoke", "boot_title_save_write_product_smoke"),
             "plus4": legacy("single_drive_load_return_plus4"),
         },
     ),
@@ -242,10 +251,19 @@ SCENARIOS: tuple[Scenario, ...] = (
     Scenario(
         "wrong_media_recovery",
         {
-            "c64": legacy("load_missing_savefile_product_smoke", "save_media_fail_product_smoke"),
-            "c128": legacy("boot_title_load_missing_savefile_smoke", "boot_title_save_media_fail_product_smoke"),
-            "plus4": legacy("load_wrong_media_product_plus4", "load_missing_savefile_product_plus4"),
+            "c64": strict("single_drive_save_wrong_media_product_smoke", "single_drive_load_wrong_media_product_smoke"),
+            "c128": strict("boot_title_single_drive_save_wrong_media_smoke", "boot_title_single_drive_load_wrong_media_smoke"),
+            "plus4": strict("single_drive_save_wrong_media_plus4", "single_drive_load_wrong_media_plus4"),
         },
+        ScenarioContract(
+            media="single-drive setup keeps the program disk mounted when save media is required",
+            start="save and load flows that require save media on drive 8",
+            ordered_events=("save_disk_prompt", "program_disk_rejected_for_save", "save_disk_prompt"),
+            event_counts=("program_disk_rejected_for_save=1",),
+            forbidden_events=("save_success", "load_success", "wrong_save_disk"),
+            screen_assertions=("program disk cannot be used as save media", "press any key"),
+            final_proof=("recovery stays in the save-media prompt path instead of accepting the program disk",),
+        ),
     ),
     Scenario(
         "missing_device_or_no_disk",

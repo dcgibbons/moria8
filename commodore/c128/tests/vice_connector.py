@@ -236,8 +236,8 @@ class VICEConnector:
         timeout: float = 5.0,
     ) -> MonitorTestResult:
         deadline = time.monotonic() + timeout
-        pass_marker = f"C:${normalize_addr(pass_addr)}"
-        fail_marker = f"C:${normalize_addr(fail_addr)}" if fail_addr is not None else None
+        pass_norm = normalize_addr(pass_addr)
+        fail_norm = normalize_addr(fail_addr) if fail_addr is not None else None
         try:
             last_status = self.read_until_prompt(deadline=deadline)
         except TimeoutError:
@@ -246,13 +246,22 @@ class VICEConnector:
             return MonitorTestResult(False, str(exc), "")
 
         upper_status = last_status.upper()
-        if pass_marker in upper_status:
+        if monitor_status_has_pc(upper_status, pass_norm):
             return MonitorTestResult(True, "", last_status)
-        if fail_marker and fail_marker in upper_status:
+        if fail_norm and monitor_status_has_pc(upper_status, fail_norm):
             return MonitorTestResult(False, f"reached test_fail label at ${normalize_addr(fail_addr)}", last_status)
         if "JAM" in upper_status or "INVALID OPCODE" in upper_status:
             return MonitorTestResult(False, "CPU JAM", last_status)
         return MonitorTestResult(False, "stopped without reaching pass/fail breakpoint", last_status)
+
+
+def monitor_status_has_pc(upper_status: str, addr: str) -> bool:
+    return any(marker in upper_status for marker in (
+        f"C:${addr}",
+        f"C:{addr}",
+        f".C:{addr}",
+        f"EXEC {addr}",
+    ))
 
 
 def run_test_case(

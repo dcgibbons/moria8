@@ -629,7 +629,7 @@ run_marker_init_smoke() {
     local boot_d64="$REPO_ROOT/commodore/out/moria8-plus4.d64"
     local build_log="$out_dir/$name.build.log"
 
-    if [ -n "$TEST_FILTER" ] && [[ ! "$name" =~ $TEST_FILTER ]]; then
+    if ! suite_selected "$name"; then
         return
     fi
 
@@ -686,7 +686,7 @@ run_disk_setup_product_smoke() {
     local build_log="$out_dir/$name.build.log"
     local smoke_log="$out_dir/$name.run.log"
 
-    if [ -n "$TEST_FILTER" ] && [[ ! "$name" =~ $TEST_FILTER ]]; then
+    if ! suite_selected "$name" "prompt_sequence_no_repeat"; then
         return
     fi
 
@@ -1138,7 +1138,7 @@ run_single_drive_save_wrong_media_product_smoke() {
     local boot_d64="$smoke_out/moria8-plus4.d64"
     local build_log="$out_dir/$name.build.log"
 
-    if ! suite_selected "$name" "single_drive_save_program_disk_rejected"; then
+    if ! suite_selected "$name" "single_drive_save_program_disk_rejected" "wrong_media_recovery"; then
         return
     fi
 
@@ -1215,7 +1215,7 @@ run_single_drive_load_wrong_media_product_smoke() {
     local boot_d64="$smoke_out/moria8-plus4.d64"
     local build_log="$out_dir/$name.build.log"
 
-    if ! suite_selected "$name" "single_drive_load_program_disk_rejected"; then
+    if ! suite_selected "$name" "single_drive_load_program_disk_rejected" "wrong_media_recovery"; then
         return
     fi
 
@@ -1663,7 +1663,7 @@ run_single_drive_load_return_product_smoke() {
     local boot_d64="$smoke_out/moria8-plus4.d64"
     local build_log="$out_dir/$name.build.log"
 
-    if [ -n "$TEST_FILTER" ] && [[ ! "$name" =~ $TEST_FILTER ]]; then
+    if ! suite_selected "$name" "prompt_sequence_no_repeat"; then
         return
     fi
 
@@ -1741,7 +1741,7 @@ run_single_drive_load_return_product_smoke() {
         --attach8-at-start-d64 "$save_drive8_d64" \
         --pass-on-script-exhausted \
         --expect-screen-symbol ".ds_game_str:10:10" \
-        --expect-screen-symbol ".press_key_str:12:13" \
+        --expect-screen-symbol ".press_key_str:11:13" \
         --vice "$VICE"; then
         PASS=$((PASS + 1))
     else

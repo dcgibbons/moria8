@@ -2414,6 +2414,22 @@ c128_test_single_drive_load_corrupt_before_load:
 c128_test_single_drive_load_corrupt_unexpected_gameplay:
     jmp c128_test_single_drive_load_corrupt_unexpected_gameplay
 #endif
+#if C128_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_RETURN_PRODUCT
+    lda #8
+    sta program_device
+    sta save_device
+    lda #1
+    sta disk_mode
+    sta disk_setup_done
+    lda #C128_MEDIA_PROGRAM
+    sta c128_media_state
+c128_test_single_drive_load_return_wait_for_harness:
+    jmp c128_test_single_drive_load_return_wait_for_harness
+c128_test_single_drive_load_return_before_load:
+    jmp title_load_game
+c128_test_single_drive_load_return_load_fail:
+    jmp c128_test_single_drive_load_return_load_fail
+#endif
     cli
 !title_menu_loop:
     jsr input_get_key
@@ -2450,14 +2466,23 @@ title_load_game:
     bcc !title_setup_ready+
     jmp c128_title_require_program_media
 !title_setup_ready:
+#if C128_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_RETURN_PRODUCT
+c128_test_single_drive_load_return_before_save_media:
+#endif
     jsr c128_require_save_media
     bcs !title_load_fail+
     jsr ui_prepare_fullscreen_transition
     jsr load_game
     bcc !title_load_fail+
+#if C128_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_RETURN_PRODUCT
+c128_test_single_drive_load_return_loaded:
+#endif
     jsr c128_modal_require_play
     jmp load_resume_game
 !title_load_fail:
+#if C128_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_RETURN_PRODUCT
+    jmp c128_test_single_drive_load_return_load_fail
+#endif
     jsr c128_restore_runtime_vectors
     jsr input_get_modal_dismiss_key
     jmp c128_title_require_program_media

@@ -617,7 +617,7 @@ plus4_test_disk_setup_single_drive_return_before_disk_setup:
     jsr plus4_test_wand_selector_overlay_return
 #endif
 
-#if PLUS4_TEST_SCRIPTED_LOAD_RESUME_PRODUCT || PLUS4_TEST_SCRIPTED_LOAD_MISSING_SAVE_PRODUCT || PLUS4_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || PLUS4_TEST_SCRIPTED_LOAD_WRONG_MEDIA_PRODUCT || PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_RETURN_PRODUCT
+#if PLUS4_TEST_SCRIPTED_LOAD_RESUME_PRODUCT || PLUS4_TEST_SCRIPTED_LOAD_MISSING_SAVE_PRODUCT || PLUS4_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || PLUS4_TEST_SCRIPTED_LOAD_WRONG_MEDIA_PRODUCT
     ldx #9
     jsr hal_storage_probe_media
     lda #9
@@ -628,6 +628,12 @@ plus4_test_disk_setup_single_drive_return_before_disk_setup:
     sta disk_setup_done
 #endif
 #if PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_RETURN_PRODUCT
+    lda #8
+    sta program_device
+    sta save_device
+    lda #1
+    sta disk_mode
+    sta disk_setup_done
 plus4_test_single_drive_load_return_wait_for_harness:
     jmp plus4_test_single_drive_load_return_wait_for_harness
 plus4_test_single_drive_load_return_before_load:

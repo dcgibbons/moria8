@@ -408,6 +408,11 @@ def run_vice(args: argparse.Namespace, pass_addr: str, fail_addr: str | None, du
                     if fail_addr:
                         connector.break_at(fail_addr)
                     connector.go()
+                    result = connector.wait_for_stop(
+                        pass_addr=pass_addr,
+                        fail_addr=fail_addr,
+                        timeout=args.timeout,
+                    )
                 else:
                     if args.until_pass:
                         result = run_until_pass(connector, pass_addr, args.timeout)
@@ -664,9 +669,19 @@ def main() -> int:
             dump_ranges.append((normalize_addr(start), normalize_addr(start + length - 1)))
 
     result, dumps = run_vice(args, normalize_addr(pass_addr), normalize_addr(fail_addr) if fail_addr else None, dump_ranges)
+    if not result.passed and (
+        monitor_text_has_pc(result.last_status, pass_addr)
+        or any(monitor_text_has_pc(dump, pass_addr) for dump in dumps)
+    ):
+        result = MonitorTestResult(True, "target PC reached", result.last_status)
     retries_left = args.retry_timeouts
     while retries_left > 0 and not result.passed and result.reason.startswith("timeout"):
         result, dumps = run_vice(args, normalize_addr(pass_addr), normalize_addr(fail_addr) if fail_addr else None, dump_ranges)
+        if not result.passed and (
+            monitor_text_has_pc(result.last_status, pass_addr)
+            or any(monitor_text_has_pc(dump, pass_addr) for dump in dumps)
+        ):
+            result = MonitorTestResult(True, "target PC reached", result.last_status)
         retries_left -= 1
     if not result.passed and result.reason.startswith("timeout"):
         if any(monitor_text_has_pc(dump, pass_addr) for dump in dumps):

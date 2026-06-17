@@ -540,7 +540,7 @@ describe_phase_token() {
             printf 'units\tminimal128,config128,memory128,db128,tier128,input128,disk_swap128,main_loop128,msg_prompt128,vdc_attr128,item_desc128,vdc_scroll_delta128,status_coherence128,dungeon128,soak128,monster128,detect_monsters128,detect_evil128,cure_light_wounds128,cure_poison128,cure_light_wounds_prayer128,bless_prayer128,remove_fear_prayer128,call_light_prayer128,find_traps_prayer128,detect_doors_stairs_prayer128,slow_poison_prayer128,blind_creature_prayer128,portal_prayer128,cure_medium_wounds_prayer128,cure_serious_wounds_prayer128,sense_invisible_prayer128,protection_from_evil_prayer128,earthquake_prayer128,sense_surroundings_prayer128,cure_critical_wounds_prayer128,turn_undead_prayer128,prayer_prayer128,dispel_undead_prayer128,dispel_evil_prayer128,glyph_of_warding_prayer128,holy_word_prayer128,heal_prayer128,chant_prayer128,sanctuary_prayer128,neutralize_poison_prayer128,create_food_prayer128,remove_curse_prayer128,resist_heat_cold_prayer128,orb_of_draining_prayer128,find_hidden_traps_doors128,stinking_cloud128,frost_ball128,teleport_other128,haste_self128,fire_ball128,word_of_destruction128,genocide128,confusion128,lightning_bolt128,trap_door_destruction128,sleep_i128,sleep_ii128,sleep_iii128,fire_bolt128,slow_monster128,polymorph_other128,identify128,teleport_self128,recharge_item_ii128\n'
             ;;
         smokes)
-            printf 'smokes\tboot_d64_smoke,boot_title_idle_smoke,title_art_smoke,marker_init_d64_smoke,boot_title_load_missing_savefile_smoke,boot_title_load_mounted_save_smoke,boot_title_save_write_product_smoke,boot_title_save_media_fail_product_smoke,boot_title_single_drive_save_wrong_media_smoke,boot_title_single_drive_load_wrong_media_smoke,boot_title_single_drive_load_corrupt_smoke,boot_title_single_drive_fresh_save_smoke,vic40_clean_boot_smoke,new_key_stability_smoke,boot_title_newgame_smoke,boot_title_load_resume_smoke,boot_tier_transition_smoke,town_overlay_smoke,town_overlay_female_smoke,town_overlay_state_smoke,scripted_summary_to_town_smoke,scripted_spell_cast_smoke,scripted_book_overlay_smoke,scripted_spell_list_overlay_smoke,scripted_spell_list_cancel_smoke,scripted_prayer_cast_smoke,cache_survival_smoke,dungeon_attack_stability_smoke,death_overlay_smoke,restart_to_title_smoke,preload_partial_failure_smoke,overlay_partial_failure_smoke\n'
+            printf 'smokes\tboot_d64_smoke,boot_title_idle_smoke,title_art_smoke,marker_init_d64_smoke,boot_title_load_missing_savefile_smoke,boot_title_load_mounted_save_smoke,boot_title_save_write_product_smoke,boot_title_save_media_fail_product_smoke,boot_title_single_drive_save_wrong_media_smoke,boot_title_single_drive_load_wrong_media_smoke,boot_title_single_drive_load_corrupt_smoke,boot_title_single_drive_load_return_smoke,boot_title_single_drive_fresh_save_smoke,vic40_clean_boot_smoke,new_key_stability_smoke,boot_title_newgame_smoke,boot_title_load_resume_smoke,boot_tier_transition_smoke,town_overlay_smoke,town_overlay_female_smoke,town_overlay_state_smoke,scripted_summary_to_town_smoke,scripted_spell_cast_smoke,scripted_book_overlay_smoke,scripted_spell_list_overlay_smoke,scripted_spell_list_cancel_smoke,scripted_prayer_cast_smoke,cache_survival_smoke,dungeon_attack_stability_smoke,death_overlay_smoke,restart_to_title_smoke,preload_partial_failure_smoke,overlay_partial_failure_smoke\n'
             ;;
         boot)
             printf 'boot\tboot_d64_smoke,boot_title_idle_smoke,title_art_smoke,boot_title_load_missing_savefile_smoke,boot_title_load_mounted_save_smoke,boot_title_save_write_product_smoke,boot_title_save_media_fail_product_smoke,vic40_clean_boot_smoke,new_key_stability_smoke,boot_title_newgame_smoke,boot_title_load_resume_smoke,boot_tier_transition_smoke,boot_diag_copy\n'
@@ -582,7 +582,7 @@ suite_matches_phase_token() {
             ;;
         smokes)
             case "$suite_name" in
-                boot_d64_smoke|boot_title_idle_smoke|title_art_smoke|marker_init_d64_smoke|boot_title_load_missing_savefile_smoke|boot_title_load_mounted_save_smoke|boot_title_save_write_product_smoke|boot_title_save_media_fail_product_smoke|boot_title_single_drive_save_wrong_media_smoke|boot_title_single_drive_load_wrong_media_smoke|boot_title_single_drive_load_corrupt_smoke|boot_title_single_drive_fresh_save_smoke|vic40_clean_boot_smoke|new_key_stability_smoke|boot_title_newgame_smoke|boot_title_load_resume_smoke|boot_tier_transition_smoke|town_overlay_smoke|town_overlay_female_smoke|town_overlay_state_smoke|scripted_summary_to_town_smoke|scripted_spell_cast_smoke|scripted_book_overlay_smoke|scripted_spell_list_overlay_smoke|scripted_spell_list_cancel_smoke|scripted_prayer_cast_smoke|cache_survival_smoke|dungeon_attack_stability_smoke|death_overlay_smoke|restart_to_title_smoke|preload_partial_failure_smoke|overlay_partial_failure_smoke) return 0 ;;
+                boot_d64_smoke|boot_title_idle_smoke|title_art_smoke|marker_init_d64_smoke|boot_title_load_missing_savefile_smoke|boot_title_load_mounted_save_smoke|boot_title_save_write_product_smoke|boot_title_save_media_fail_product_smoke|boot_title_single_drive_save_wrong_media_smoke|boot_title_single_drive_load_wrong_media_smoke|boot_title_single_drive_load_corrupt_smoke|boot_title_single_drive_load_return_smoke|boot_title_single_drive_fresh_save_smoke|vic40_clean_boot_smoke|new_key_stability_smoke|boot_title_newgame_smoke|boot_title_load_resume_smoke|boot_tier_transition_smoke|town_overlay_smoke|town_overlay_female_smoke|town_overlay_state_smoke|scripted_summary_to_town_smoke|scripted_spell_cast_smoke|scripted_book_overlay_smoke|scripted_spell_list_overlay_smoke|scripted_spell_list_cancel_smoke|scripted_prayer_cast_smoke|cache_survival_smoke|dungeon_attack_stability_smoke|death_overlay_smoke|restart_to_title_smoke|preload_partial_failure_smoke|overlay_partial_failure_smoke) return 0 ;;
             esac
             ;;
         boot)
@@ -4998,6 +4998,107 @@ run_boot_title_single_drive_load_corrupt_smoke() {
     TOTAL=$((TOTAL + 1))
 }
 
+run_boot_title_single_drive_load_return_smoke() {
+    local name="boot_title_single_drive_load_return_smoke"
+    echo -n "  $name: "
+
+    build_boot_assets || return
+
+    local build_log
+    build_log="$(test128_tmp_file test128_single_drive_load_return_build.log)"
+    local c1541_bin="${C1541:-c1541}"
+    local boot_d64="out/moria128_single_drive_load_return.d71"
+    local save_d64="out/moria128_single_drive_load_return_save.d64"
+    local marker_blob="out/MORIA8.ID"
+    local save_blob="out/THE.GAME"
+
+    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 \
+            -define C128 -define C128_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_RETURN_PRODUCT \
+            -o out/moria128.prg >"$build_log" 2>&1; then
+        echo "FAIL (single-drive load return product main assembly failed)"
+        tail -20 "$build_log" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    rm -f "$boot_d64"
+    cp out/moria128.d71 "$boot_d64"
+    if ! "$c1541_bin" -attach "$boot_d64" \
+            -delete "moria128" \
+            -delete "128.runtime" \
+            -delete "128.input" \
+            -delete "128.proj" \
+            -delete "128.fdisk" \
+            -delete "128.diskio" \
+            -delete "128.world" \
+            -delete "128.item" \
+            -delete "128.names" \
+            -delete "128.select" \
+            -delete "128.persist" \
+            -delete "128.play" \
+            -delete "128.bank" \
+            -write out/moria128.prg "moria128" \
+            -write out/128.runtime.prg "128.runtime" \
+            -write out/128.input.prg "128.input" \
+            -write out/128.proj.prg "128.proj" \
+            -write out/128.fdisk.prg "128.fdisk" \
+            -write out/128.diskio.prg "128.diskio" \
+            -write out/128.world.prg "128.world" \
+            -write out/128.item.prg "128.item" \
+            -write out/128.names.prg "128.names" \
+            -write out/128.select.prg "128.select" \
+            -write out/128.persist.prg "128.persist" \
+            -write out/128.play.prg "128.play" \
+            -write out/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
+        echo "FAIL (single-drive load return product disk patch failed)"
+        tail -20 "$build_log" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    if ! python3 tests/make_load_resume_save.py "$save_blob" >"$build_log" 2>&1; then
+        echo "FAIL (single-drive load return save generation failed)"
+        tail -20 "$build_log" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+    printf 'M8SAVE' > "$marker_blob"
+
+    rm -f "$save_d64"
+    if ! "$c1541_bin" -format "moria8 save,m8" d64 "$save_d64" \
+            -attach "$save_d64" \
+            -write "$marker_blob" "MORIA8.ID,s" \
+            -write "$save_blob" "THE.GAME,s" >>"$build_log" 2>&1; then
+        echo "FAIL (single-drive load return save disk build failed)"
+        tail -20 "$build_log" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    if python3 -u ../plus4/tests/product_scripted_smoke.py \
+            --name "$name" \
+            --vice "$VICE" \
+            --boot-d64 "$boot_d64" \
+            --main-vs out/main.vs \
+            --start-symbol ".c128_test_single_drive_load_return_wait_for_harness" \
+            --resume-symbol ".c128_test_single_drive_load_return_before_load" \
+            --pass-symbol ".c128_program_media_error_prompt" \
+            --fail-symbol ".c128_test_single_drive_load_return_load_fail" \
+            --attach8-at-start-d64 "$save_d64" \
+            --reset8-after-attach \
+            --require-hit-symbol ".c128_test_single_drive_load_return_loaded" \
+            --screen-base 0x0400; then
+        PASS=$((PASS + 1))
+    else
+        FAIL=$((FAIL + 1))
+    fi
+    TOTAL=$((TOTAL + 1))
+}
+
 run_boot_title_disk_setup_single_drive_return_smoke() {
     local name="boot_title_disk_setup_single_drive_return_smoke"
     echo -n "  $name: "
@@ -7147,9 +7248,10 @@ run_selected_suites() {
     run_named_suite boot_title_load_mounted_save_smoke run_boot_title_load_mounted_save_smoke || return 1
     run_named_suite dual_drive_load_then_save_no_program_prompt --alias save_existing_overwrite --alias boot_title_save_write_product_smoke run_boot_title_save_write_product_smoke || return 1
     run_named_suite boot_title_save_media_fail_product_smoke run_boot_title_save_media_fail_product_smoke || return 1
-    run_named_suite single_drive_save_program_disk_rejected --alias boot_title_single_drive_save_wrong_media_smoke run_boot_title_single_drive_save_wrong_media_smoke || return 1
-    run_named_suite single_drive_load_program_disk_rejected --alias boot_title_single_drive_load_wrong_media_smoke run_boot_title_single_drive_load_wrong_media_smoke || return 1
+    run_named_suite single_drive_save_program_disk_rejected --alias boot_title_single_drive_save_wrong_media_smoke --alias wrong_media_recovery run_boot_title_single_drive_save_wrong_media_smoke || return 1
+    run_named_suite single_drive_load_program_disk_rejected --alias boot_title_single_drive_load_wrong_media_smoke --alias wrong_media_recovery run_boot_title_single_drive_load_wrong_media_smoke || return 1
     run_named_suite single_drive_corrupt_save_recovery_requires_program_disk --alias boot_title_single_drive_load_corrupt_smoke --alias corrupt_save_file run_boot_title_single_drive_load_corrupt_smoke || return 1
+    run_named_suite prompt_sequence_no_repeat --alias boot_title_single_drive_load_return_smoke run_boot_title_single_drive_load_return_smoke || return 1
     run_named_suite title_disk_setup_single_drive_returns_program_prompt --alias boot_title_disk_setup_single_drive_return_smoke run_boot_title_disk_setup_single_drive_return_smoke || return 1
     run_named_suite new_save_empty_init_writes --alias boot_title_single_drive_fresh_save_smoke run_boot_title_single_drive_fresh_save_smoke || return 1
     run_named_suite vic40_clean_boot_smoke run_vic40_clean_boot_smoke || return 1
