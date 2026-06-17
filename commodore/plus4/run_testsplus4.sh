@@ -41,6 +41,19 @@ PASS=0
 FAIL=0
 TOTAL=0
 
+suite_selected() {
+    local name
+    if [ -z "$TEST_FILTER" ]; then
+        return 0
+    fi
+    for name in "$@"; do
+        if [ -n "$name" ] && [[ "$name" =~ $TEST_FILTER ]]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
 make_product_out() {
     mktemp -d "${TMPDIR:-/tmp}/moria8-plus4-$1.XXXXXX"
 }
@@ -51,7 +64,7 @@ run_test() {
     local prg="${source%.s}.prg"
     local vs="${source%.s}.vs"
 
-    if [ -n "$TEST_FILTER" ] && [[ ! "$name" =~ $TEST_FILTER ]]; then
+    if ! suite_selected "$name"; then
         return
     fi
 
@@ -72,7 +85,7 @@ run_test() {
 run_plus4_static_contracts() {
     local name="plus4_static_contracts"
 
-    if [ -n "$TEST_FILTER" ] && [[ ! "$name" =~ $TEST_FILTER ]]; then
+    if ! suite_selected "$name"; then
         return
     fi
 
@@ -145,7 +158,7 @@ run_boot_title_smoke() {
     local boot_d64="$smoke_out/moria8-plus4.d64"
     local build_log="$out_dir/$name.build.log"
 
-    if [ -n "$TEST_FILTER" ] && [[ ! "$name" =~ $TEST_FILTER ]]; then
+    if ! suite_selected "$name"; then
         return
     fi
 
@@ -226,7 +239,7 @@ run_new_game_to_town_smoke() {
     local boot_d64="$smoke_out/moria8-plus4.d64"
     local build_log="$out_dir/$name.build.log"
 
-    if [ -n "$TEST_FILTER" ] && [[ ! "$name" =~ $TEST_FILTER ]]; then
+    if ! suite_selected "$name"; then
         return
     fi
 
@@ -306,7 +319,7 @@ run_dungeon_entry_smoke() {
     local boot_d64="$smoke_out/moria8-plus4.d64"
     local build_log="$out_dir/$name.build.log"
 
-    if [ -n "$TEST_FILTER" ] && [[ ! "$name" =~ $TEST_FILTER ]]; then
+    if ! suite_selected "$name"; then
         return
     fi
 
@@ -386,7 +399,7 @@ run_dungeon_ascent_smoke() {
     local boot_d64="$smoke_out/moria8-plus4.d64"
     local build_log="$out_dir/$name.build.log"
 
-    if [ -n "$TEST_FILTER" ] && [[ ! "$name" =~ $TEST_FILTER ]]; then
+    if ! suite_selected "$name"; then
         return
     fi
 
@@ -466,7 +479,7 @@ run_overlay_load_smoke() {
     local boot_d64="$smoke_out/moria8-plus4.d64"
     local build_log="$out_dir/$name.build.log"
 
-    if [ -n "$TEST_FILTER" ] && [[ ! "$name" =~ $TEST_FILTER ]]; then
+    if ! suite_selected "$name"; then
         return
     fi
 
@@ -546,7 +559,7 @@ run_wand_selector_product_smoke() {
     local boot_d64="$smoke_out/moria8-plus4.d64"
     local build_log="$out_dir/$name.build.log"
 
-    if [ -n "$TEST_FILTER" ] && [[ ! "$name" =~ $TEST_FILTER ]]; then
+    if ! suite_selected "$name"; then
         return
     fi
 
@@ -832,7 +845,7 @@ run_save_write_product_smoke() {
     local boot_d64="$smoke_out/moria8-plus4.d64"
     local build_log="$out_dir/$name.build.log"
 
-    if [ -n "$TEST_FILTER" ] && [[ ! "$name" =~ $TEST_FILTER ]]; then
+    if ! suite_selected "$name" "dual_drive_load_then_save_no_program_prompt"; then
         return
     fi
 
@@ -1125,7 +1138,7 @@ run_single_drive_save_wrong_media_product_smoke() {
     local boot_d64="$smoke_out/moria8-plus4.d64"
     local build_log="$out_dir/$name.build.log"
 
-    if [ -n "$TEST_FILTER" ] && [[ ! "$name" =~ $TEST_FILTER ]]; then
+    if ! suite_selected "$name" "single_drive_save_program_disk_rejected"; then
         return
     fi
 
@@ -1184,6 +1197,174 @@ run_single_drive_save_wrong_media_product_smoke() {
         --expect-byte-symbol ".disk_test_program_warning_seen=1" \
         --expect-screen-symbol ".uds_insert_one_drive_str:3:8" \
         --expect-screen-symbol ".press_key_str:6:10" \
+        --vice "$VICE"; then
+        PASS=$((PASS + 1))
+    else
+        FAIL=$((FAIL + 1))
+    fi
+}
+
+run_single_drive_load_wrong_media_product_smoke() {
+    local name="single_drive_load_wrong_media_plus4"
+    local out_dir="$PLUS4_DIR/out"
+    local smoke_out
+    smoke_out="$(make_product_out "$name")"
+    local smoke_out_rel="$smoke_out"
+    local smoke_plus4="$smoke_out/plus4"
+    local main_vs="$smoke_out/plus4/main.vs"
+    local boot_d64="$smoke_out/moria8-plus4.d64"
+    local build_log="$out_dir/$name.build.log"
+
+    if ! suite_selected "$name" "single_drive_load_program_disk_rejected"; then
+        return
+    fi
+
+    TOTAL=$((TOTAL + 1))
+    mkdir -p "$out_dir"
+
+    if ! make -s -B -C "$REPO_ROOT/commodore" \
+        KICKASS="$KICKASS" \
+        OUT="$smoke_out_rel" \
+        KA_FLAGSPLUS4="-showmem -vicesymbols -libdir c64 -define PLUS4 -define PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_WRONG_MEDIA_PRODUCT" \
+        "$smoke_out_rel/plus4/moria4.prg" \
+        "$smoke_out_rel/plus4/title" \
+        "$smoke_out_rel/plus4/monster.db.1" \
+        "$smoke_out_rel/plus4/monster.db.2" \
+        "$smoke_out_rel/plus4/monster.db.3" \
+        "$smoke_out_rel/plus4/monster.db.4" >"$build_log" 2>&1; then
+        echo "FAIL: $name (product disk build)"
+        tail -80 "$build_log"
+        FAIL=$((FAIL + 1))
+        return
+    fi
+
+    rm -f "$boot_d64"
+    if ! "$C1541" -format "moria8 plus4,m8" d64 "$boot_d64" \
+        -attach "$boot_d64" \
+        -write "$smoke_plus4/moria4.prg" "moria8" \
+        -write "$smoke_plus4/moria4.prg" "moria4" \
+        -write "$smoke_plus4/title" "t64" \
+        -write "$smoke_plus4/monster.db.1" "monster.db.1" \
+        -write "$smoke_plus4/monster.db.2" "monster.db.2" \
+        -write "$smoke_plus4/monster.db.3" "monster.db.3" \
+        -write "$smoke_plus4/monster.db.4" "monster.db.4" \
+        -write "$smoke_plus4/ovl.start" "4.start" \
+        -write "$smoke_plus4/ovl.town" "4.town" \
+        -write "$smoke_plus4/ovl.death" "4.death" \
+        -write "$smoke_plus4/ovl.gen" "4.gen" \
+        -write "$smoke_plus4/ovl.help" "4.help" \
+        -write "$smoke_plus4/ovl.ui" "4.ui" \
+        -write "$smoke_plus4/ovl.items" "4.items" \
+        -write "$smoke_plus4/ovl.spell" "4.spell" \
+        -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
+        echo "FAIL: $name (product disk image)"
+        FAIL=$((FAIL + 1))
+        return
+    fi
+
+    if python3 -u tests/product_scripted_smoke.py \
+        --name "$name" \
+        --start-symbol ".plus4_test_single_drive_load_wrong_media_wait_for_harness" \
+        --resume-symbol ".plus4_test_single_drive_load_wrong_media_before_load" \
+        --pass-symbol ".title_menu_loop" \
+        --main-vs "$main_vs" \
+        --boot-d64 "$boot_d64" \
+        --pass-on-script-exhausted \
+        --expect-byte-symbol ".disk_test_program_warning_seen=1" \
+        --expect-screen-symbol ".uds_program_disk_str:3:8" \
+        --expect-screen-symbol ".press_key_str:5:10" \
+        --vice "$VICE"; then
+        PASS=$((PASS + 1))
+    else
+        FAIL=$((FAIL + 1))
+    fi
+}
+
+run_disk_setup_single_drive_return_product_smoke() {
+    local name="disk_setup_single_drive_return_plus4"
+    local out_dir="$PLUS4_DIR/out"
+    local smoke_out
+    smoke_out="$(make_product_out "$name")"
+    local smoke_out_rel="$smoke_out"
+    local smoke_plus4="$smoke_out/plus4"
+    local main_vs="$smoke_out/plus4/main.vs"
+    local boot_d64="$smoke_out/moria8-plus4.d64"
+    local save_d64="$smoke_out/moria8-plus4-save.d64"
+    local program_d64="$smoke_out/moria8-plus4-program.d64"
+    local marker_blob="$smoke_out/MORIA8.ID"
+    local build_log="$out_dir/$name.build.log"
+
+    if ! suite_selected "$name" "title_disk_setup_single_drive_returns_program_prompt"; then
+        return
+    fi
+
+    TOTAL=$((TOTAL + 1))
+    mkdir -p "$out_dir"
+
+    if ! make -s -B -C "$REPO_ROOT/commodore" \
+        KICKASS="$KICKASS" \
+        OUT="$smoke_out_rel" \
+        KA_FLAGSPLUS4="-showmem -vicesymbols -libdir c64 -define PLUS4 -define PLUS4_TEST_SCRIPTED_DISK_SETUP_SINGLE_DRIVE_RETURN_PRODUCT" \
+        "$smoke_out_rel/plus4/moria4.prg" \
+        "$smoke_out_rel/plus4/title" \
+        "$smoke_out_rel/plus4/monster.db.1" \
+        "$smoke_out_rel/plus4/monster.db.2" \
+        "$smoke_out_rel/plus4/monster.db.3" \
+        "$smoke_out_rel/plus4/monster.db.4" >"$build_log" 2>&1; then
+        echo "FAIL: $name (product disk build)"
+        tail -80 "$build_log"
+        FAIL=$((FAIL + 1))
+        return
+    fi
+
+    rm -f "$boot_d64" "$save_d64" "$program_d64"
+    if ! "$C1541" -format "moria8 plus4,m8" d64 "$boot_d64" \
+        -attach "$boot_d64" \
+        -write "$smoke_plus4/moria4.prg" "moria8" \
+        -write "$smoke_plus4/moria4.prg" "moria4" \
+        -write "$smoke_plus4/title" "t64" \
+        -write "$smoke_plus4/monster.db.1" "monster.db.1" \
+        -write "$smoke_plus4/monster.db.2" "monster.db.2" \
+        -write "$smoke_plus4/monster.db.3" "monster.db.3" \
+        -write "$smoke_plus4/monster.db.4" "monster.db.4" \
+        -write "$smoke_plus4/ovl.start" "4.start" \
+        -write "$smoke_plus4/ovl.town" "4.town" \
+        -write "$smoke_plus4/ovl.death" "4.death" \
+        -write "$smoke_plus4/ovl.gen" "4.gen" \
+        -write "$smoke_plus4/ovl.help" "4.help" \
+        -write "$smoke_plus4/ovl.ui" "4.ui" \
+        -write "$smoke_plus4/ovl.items" "4.items" \
+        -write "$smoke_plus4/ovl.spell" "4.spell" \
+        -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
+        echo "FAIL: $name (product disk image)"
+        FAIL=$((FAIL + 1))
+        return
+    fi
+
+    printf 'M8SAVE' > "$marker_blob"
+    if ! "$C1541" -format "moria8 save,m8" d64 "$save_d64" \
+        -attach "$save_d64" \
+        -write "$marker_blob" "moria8.id,s" >"$build_log" 2>&1; then
+        echo "FAIL: $name (save disk fixture)"
+        tail -20 "$build_log"
+        FAIL=$((FAIL + 1))
+        return
+    fi
+    cp "$boot_d64" "$program_d64"
+
+    if python3 -u tests/product_scripted_smoke.py \
+        --name "$name" \
+        --start-symbol ".plus4_test_disk_setup_single_drive_return_wait_for_harness" \
+        --resume-symbol ".plus4_test_disk_setup_single_drive_return_before_disk_setup" \
+        --pass-symbol ".plus4_test_after_disk_setup_single_drive_return" \
+        --swap-symbol ".uds_show_insert_prompt" \
+        --swap-attach8-d64 "$save_d64" \
+        --swap2-symbol ".disk_prompt_game_required_error_shown" \
+        --swap2-attach8-d64 "$program_d64" \
+        --expect-screen-symbol ".title_menu_str:18:7" \
+        --main-vs "$main_vs" \
+        --boot-d64 "$boot_d64" \
+        --attach-delay 5.0 \
         --vice "$VICE"; then
         PASS=$((PASS + 1))
     else
@@ -1583,7 +1764,7 @@ run_single_drive_load_corrupt_product_smoke() {
     local boot_d64="$smoke_out/moria8-plus4.d64"
     local build_log="$out_dir/$name.build.log"
 
-    if [ -n "$TEST_FILTER" ] && [[ ! "$name" =~ $TEST_FILTER ]]; then
+    if ! suite_selected "$name" "single_drive_corrupt_save_recovery_requires_program_disk"; then
         return
     fi
 
@@ -1774,6 +1955,8 @@ run_save_write_product_smoke
 run_single_drive_save_return_product_smoke
 run_single_drive_fresh_save_product_smoke
 run_single_drive_save_wrong_media_product_smoke
+run_single_drive_load_wrong_media_product_smoke
+run_disk_setup_single_drive_return_product_smoke
 run_death_hiscore_single_drive_product_smoke
 run_load_resume_product_smoke
 run_single_drive_load_return_product_smoke

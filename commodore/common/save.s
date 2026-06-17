@@ -934,6 +934,9 @@ plus4_test_after_load_magic:
 #if PLUS4_TEST_SCRIPTED_LOAD_RESUME_PRODUCT || PLUS4_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
 plus4_test_load_success:
 #endif
+#if C128_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_CORRUPT_PRODUCT
+c128_test_load_corrupt_unexpected_success:
+#endif
     // Close file after successful read
     jsr load_close_file_restore
 
@@ -958,6 +961,9 @@ plus4_test_load_success:
 !load_corrupt_nocl:
 #if PLUS4_TEST_SCRIPTED_LOAD_RESUME_PRODUCT || PLUS4_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
 plus4_test_load_corrupt:
+#endif
+#if C128_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_CORRUPT_PRODUCT
+c128_test_load_corrupt_detected:
 #endif
     lda #LOAD_RESULT_CORRUPT
     sta load_result
@@ -1474,6 +1480,8 @@ load_read_block:
     beq !lrb_c128_done+
     jsr save_prepare_chunk_len_c128
     jsr c128_load_stream_chunk
+    lda save_io_error
+    bne !lrb_c128_done+
     jsr load_unstage_to_ptr0_c128
     jmp !lrb_c128_loop-
 !lrb_c128_done:

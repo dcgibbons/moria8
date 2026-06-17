@@ -2235,9 +2235,11 @@ restart_entry:
     jmp runtime_load_failed
 !runtime_banked_loaded:
     jsr c128_load_core_residents
-#if C128_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT
+#if C128_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT || C128_TEST_SCRIPTED_DISK_SETUP_SINGLE_DRIVE_RETURN_PRODUCT
     jsr screen_clear_for_font_restore
     jsr c128_restore_vdc_rom_font
+#endif
+#if C128_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT
     lda c128_test_single_drive_fresh_save_armed
     beq !c128_test_single_drive_fresh_save_start+
 c128_test_single_drive_fresh_save_after_restart:
@@ -2321,6 +2323,31 @@ title_menu_draw:
     jsr title_draw_save_disk_indicator
 
 title_menu_ready:
+#if C128_TEST_SCRIPTED_DISK_SETUP_SINGLE_DRIVE_RETURN_PRODUCT
+    lda c128_test_disk_setup_single_drive_return_armed
+    beq !c128_disk_setup_return_test_not_armed+
+    lda #0
+    sta c128_test_disk_setup_single_drive_return_armed
+c128_test_after_disk_setup_single_drive_return:
+    jmp c128_test_after_disk_setup_single_drive_return
+!c128_disk_setup_return_test_not_armed:
+#endif
+#if C128_TEST_SCRIPTED_DISK_SETUP_SINGLE_DRIVE_RETURN_PRODUCT
+    lda #8
+    sta program_device
+    sta save_device
+    lda #1
+    sta disk_mode
+    lda #0
+    sta disk_setup_done
+    lda #C128_MEDIA_PROGRAM
+    sta c128_media_state
+    lda #2                  // C128_MODAL_PERSIST; const is declared later.
+    sta c128_modal_slot_state
+c128_test_disk_setup_single_drive_return_wait_for_harness:
+    jmp c128_test_disk_setup_single_drive_return_wait_for_harness
+c128_test_disk_setup_single_drive_return_before_disk_setup:
+#endif
 #if C128_TEST_TOWN_SELF_DUMP
     lda #$60
     jsr c128_town_dump_mark
@@ -2350,6 +2377,43 @@ c128_test_single_drive_save_wrong_media_unexpected_return:
 c128_test_single_drive_save_wrong_media_script_exhausted:
     jmp c128_test_single_drive_save_wrong_media_script_exhausted
 #endif
+#if C128_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_WRONG_MEDIA_PRODUCT
+    lda #8
+    sta program_device
+    sta save_device
+    lda #1
+    sta disk_mode
+    sta disk_setup_done
+    lda #C128_MEDIA_PROGRAM
+    sta c128_media_state
+    lda #2                  // C128_MODAL_PERSIST; const is declared later.
+    sta c128_modal_slot_state
+c128_test_single_drive_load_wrong_media_wait_for_harness:
+c128_test_single_drive_load_wrong_media_before_load:
+    jmp title_load_game
+c128_test_single_drive_load_wrong_media_unexpected_return:
+    jmp c128_test_single_drive_load_wrong_media_unexpected_return
+c128_test_single_drive_load_wrong_media_script_exhausted:
+    jmp c128_test_single_drive_load_wrong_media_script_exhausted
+#endif
+#if C128_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_CORRUPT_PRODUCT
+    lda #8
+    sta program_device
+    sta save_device
+    lda #1
+    sta disk_mode
+    sta disk_setup_done
+    lda #C128_MEDIA_PROGRAM
+    sta c128_media_state
+    lda #2                  // C128_MODAL_PERSIST; const is declared later.
+    sta c128_modal_slot_state
+c128_test_single_drive_load_corrupt_wait_for_harness:
+    jmp c128_test_single_drive_load_corrupt_wait_for_harness
+c128_test_single_drive_load_corrupt_before_load:
+    jmp title_load_game
+c128_test_single_drive_load_corrupt_unexpected_gameplay:
+    jmp c128_test_single_drive_load_corrupt_unexpected_gameplay
+#endif
     cli
 !title_menu_loop:
     jsr input_get_key
@@ -2370,7 +2434,11 @@ c128_test_single_drive_save_wrong_media_script_exhausted:
     bne !title_menu_loop-
     jsr c128_modal_require_persist
     jsr tramp_disk_setup
-    jmp title_enter_menu
+#if C128_TEST_SCRIPTED_DISK_SETUP_SINGLE_DRIVE_RETURN_PRODUCT
+    lda #1
+    sta c128_test_disk_setup_single_drive_return_armed
+#endif
+    jmp c128_title_require_program_media
 
 title_load_game:
     jsr rng_seed
@@ -2380,8 +2448,7 @@ title_load_game:
     jsr c128_modal_require_persist
     jsr title_require_disk_setup
     bcc !title_setup_ready+
-    jsr c128_require_program_media
-    jmp title_enter_menu
+    jmp c128_title_require_program_media
 !title_setup_ready:
     jsr c128_require_save_media
     bcs !title_load_fail+
@@ -2391,8 +2458,19 @@ title_load_game:
     jsr c128_modal_require_play
     jmp load_resume_game
 !title_load_fail:
+    jsr c128_restore_runtime_vectors
     jsr input_get_modal_dismiss_key
+    jmp c128_title_require_program_media
+
+c128_title_require_program_media:
     jsr c128_require_program_media
+    bcc !title_program_ready+
+    jsr c128_program_media_error_prompt
+    jmp c128_title_require_program_media
+!title_program_ready:
+#if C128_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_CORRUPT_PRODUCT
+c128_test_single_drive_load_corrupt_program_ready:
+#endif
     jmp title_enter_menu
 
 runtime_load_failed:
@@ -2947,6 +3025,9 @@ c128_test_post_save_prompt_diag: .fill 4, 0
 #endif
 #if C128_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT
 c128_test_single_drive_fresh_save_armed: .byte 0
+#endif
+#if C128_TEST_SCRIPTED_DISK_SETUP_SINGLE_DRIVE_RETURN_PRODUCT
+c128_test_disk_setup_single_drive_return_armed: .byte 0
 #endif
 kernal_hw_irq_vec_lo: .byte 0
 kernal_hw_irq_vec_hi: .byte 0

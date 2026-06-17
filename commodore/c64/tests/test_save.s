@@ -2000,6 +2000,8 @@ t24_fail_code:
     sta disk_mode
     lda #8
     sta save_device
+    lda #9
+    sta program_device
     jsr test_stream_reset_read
     jsr load_game
     lda test_save_file_exists_calls

@@ -160,6 +160,9 @@ c64_test_save_media_fail_armed: .byte 0
 #if C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || C64_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT
 c64_test_restart_after_save_armed: .byte 0
 #endif
+#if C64_TEST_SCRIPTED_DISK_SETUP_SINGLE_DRIVE_RETURN_PRODUCT
+c64_test_disk_setup_single_drive_return_armed: .byte 0
+#endif
 #if C64_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_RETURN_PRODUCT
 c64_test_single_drive_load_return_resume_low:
     lda #$36                // Monitor attach/resume may expose BASIC ROM.
@@ -554,6 +557,16 @@ c64_test_after_save_restart_start:
 
     jsr title_draw_menu
 
+#if C64_TEST_SCRIPTED_DISK_SETUP_SINGLE_DRIVE_RETURN_PRODUCT
+    lda c64_test_disk_setup_single_drive_return_armed
+    beq !disk_setup_return_test_not_armed+
+    lda #0
+    sta c64_test_disk_setup_single_drive_return_armed
+c64_test_after_disk_setup_single_drive_return:
+    jmp c64_test_after_disk_setup_single_drive_return
+!disk_setup_return_test_not_armed:
+#endif
+
 #if C64_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_RETURN_PRODUCT
     lda #8
     sta program_device
@@ -577,6 +590,18 @@ c64_test_single_drive_load_return_before_load:
 c64_test_single_drive_load_wrong_media_wait_for_harness:
     jmp c64_test_single_drive_load_wrong_media_wait_for_harness
 c64_test_single_drive_load_wrong_media_before_load:
+    jmp title_load_game
+#endif
+#if C64_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_CORRUPT_PRODUCT
+    lda #8
+    sta program_device
+    sta save_device
+    lda #1
+    sta disk_mode
+    sta disk_setup_done
+c64_test_single_drive_load_corrupt_wait_for_harness:
+    jmp c64_test_single_drive_load_corrupt_wait_for_harness
+c64_test_single_drive_load_corrupt_before_load:
     jmp title_load_game
 #endif
 #if C64_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT
@@ -636,6 +661,18 @@ c64_test_single_drive_fresh_save_before_save:
 c64_test_single_drive_fresh_save_unexpected_return:
     brk
 #endif
+#if C64_TEST_SCRIPTED_DISK_SETUP_SINGLE_DRIVE_RETURN_PRODUCT
+    lda #8
+    sta program_device
+    sta save_device
+    lda #1
+    sta disk_mode
+    lda #0
+    sta disk_setup_done
+c64_test_disk_setup_single_drive_return_wait_for_harness:
+    jmp c64_test_disk_setup_single_drive_return_wait_for_harness
+c64_test_disk_setup_single_drive_return_before_disk_setup:
+#endif
 
 title_menu_loop:
     jsr input_get_key
@@ -655,6 +692,12 @@ title_menu_loop:
     cmp #$44                // 'D' — disk setup
     bne title_menu_loop
     jsr tramp_disk_setup
+    bcs title_enter_menu
+    jsr disk_prompt_game_required
+#if C64_TEST_SCRIPTED_DISK_SETUP_SINGLE_DRIVE_RETURN_PRODUCT
+    lda #1
+    sta c64_test_disk_setup_single_drive_return_armed
+#endif
 #if C64_TEST_SCRIPTED_DISK_SETUP_PRODUCT
 c64_test_after_disk_setup_product:
 #endif

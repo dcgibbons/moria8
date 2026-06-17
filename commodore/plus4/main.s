@@ -583,6 +583,28 @@ plus4_test_single_drive_fresh_save_after_restart:
 
     jsr title_draw_menu
 
+#if PLUS4_TEST_SCRIPTED_DISK_SETUP_SINGLE_DRIVE_RETURN_PRODUCT
+    lda plus4_test_disk_setup_single_drive_return_armed
+    beq !plus4_disk_setup_return_test_not_armed+
+    lda #0
+    sta plus4_test_disk_setup_single_drive_return_armed
+plus4_test_after_disk_setup_single_drive_return:
+    jmp plus4_test_after_disk_setup_single_drive_return
+!plus4_disk_setup_return_test_not_armed:
+#endif
+#if PLUS4_TEST_SCRIPTED_DISK_SETUP_SINGLE_DRIVE_RETURN_PRODUCT
+    lda #8
+    sta program_device
+    sta save_device
+    lda #1
+    sta disk_mode
+    lda #0
+    sta disk_setup_done
+plus4_test_disk_setup_single_drive_return_wait_for_harness:
+    jmp plus4_test_disk_setup_single_drive_return_wait_for_harness
+plus4_test_disk_setup_single_drive_return_before_disk_setup:
+#endif
+
 #if PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT
 !plus4_test_single_drive_fresh_save_start:
 #endif
@@ -622,6 +644,18 @@ plus4_test_single_drive_load_return_before_load:
 plus4_test_single_drive_load_corrupt_wait_for_harness:
     jmp plus4_test_single_drive_load_corrupt_wait_for_harness
 plus4_test_single_drive_load_corrupt_before_load:
+    jmp title_load_game
+#endif
+#if PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_WRONG_MEDIA_PRODUCT
+    lda #8
+    sta program_device
+    sta save_device
+    lda #1
+    sta disk_mode
+    sta disk_setup_done
+plus4_test_single_drive_load_wrong_media_wait_for_harness:
+    jmp plus4_test_single_drive_load_wrong_media_wait_for_harness
+plus4_test_single_drive_load_wrong_media_before_load:
     jmp title_load_game
 #endif
 #if PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_SAVE_WRONG_MEDIA_PRODUCT
@@ -743,6 +777,12 @@ title_menu_loop:
     cmp #$44                // 'D' — disk setup
     bne title_menu_loop
     jsr tramp_disk_setup
+    bcs plus4_title_redraw_cached
+    jsr disk_prompt_game_required
+#if PLUS4_TEST_SCRIPTED_DISK_SETUP_SINGLE_DRIVE_RETURN_PRODUCT
+    lda #1
+    sta plus4_test_disk_setup_single_drive_return_armed
+#endif
     jmp plus4_title_redraw_cached
 
 plus4_title_redraw_cached:
@@ -758,6 +798,14 @@ plus4_title_redraw_cached:
     jsr msg_init
     jsr title_show_sysinfo
     jsr title_draw_menu
+#if PLUS4_TEST_SCRIPTED_DISK_SETUP_SINGLE_DRIVE_RETURN_PRODUCT
+    lda plus4_test_disk_setup_single_drive_return_armed
+    beq !plus4_disk_setup_return_cached_not_armed+
+    lda #0
+    sta plus4_test_disk_setup_single_drive_return_armed
+    jmp plus4_test_after_disk_setup_single_drive_return
+!plus4_disk_setup_return_cached_not_armed:
+#endif
     jmp title_menu_loop
 
 title_draw_menu:
@@ -785,6 +833,9 @@ plus4_test_single_drive_save_return_fail:
 #endif
 #if PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT
 plus4_test_single_drive_fresh_save_armed: .byte 0
+#endif
+#if PLUS4_TEST_SCRIPTED_DISK_SETUP_SINGLE_DRIVE_RETURN_PRODUCT
+plus4_test_disk_setup_single_drive_return_armed: .byte 0
 #endif
 
 #if PLUS4_TEST_SCRIPTED_OVERLAY_LOAD_PRODUCT

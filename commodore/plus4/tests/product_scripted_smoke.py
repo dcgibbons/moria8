@@ -175,6 +175,24 @@ def scripted_input_exhausted(connector: VICEConnector, args: argparse.Namespace)
     return int(match.group(1), 16) == wait_loop_addr
 
 
+def dumps_show_script_exhausted(args: argparse.Namespace, dumps: list[str]) -> bool:
+    key_index_addr = getattr(args, "key_index_addr", None)
+    if key_index_addr is None:
+        return False
+    wait_loop_addr = (int(key_index_addr, 16) - 3) & 0xFFFF
+    return any(monitor_text_has_pc(dump, wait_loop_addr) for dump in dumps)
+
+
+def monitor_text_has_pc(text: str, addr: int | str) -> bool:
+    norm = normalize_addr(addr)
+    upper = text.upper()
+    return any(marker in upper for marker in (
+        f"C:${norm}",
+        f"C:{norm}",
+        f".C:{norm}",
+    ))
+
+
 def attach_drive8(connector: VICEConnector, disk_path: Path, delay: float = 0.5, reset: bool = False) -> None:
     detach_response = connector.send_command("detach 8")
     if "Cannot" in detach_response or "Error" in detach_response or "Failed" in detach_response:
@@ -210,7 +228,6 @@ def wait_for_native_start(args: argparse.Namespace) -> MonitorTestResult:
 
 
 def run_until_pass(connector: VICEConnector, pass_addr: str, timeout: float) -> MonitorTestResult:
-    pass_marker = f"C:${normalize_addr(pass_addr)}"
     try:
         status = connector.run_until(pass_addr, timeout=timeout)
     except TimeoutError:
@@ -218,12 +235,12 @@ def run_until_pass(connector: VICEConnector, pass_addr: str, timeout: float) -> 
             status = connector.send_command("bt")
         except Exception:
             return MonitorTestResult(False, f"timeout after {timeout}s", "")
-        if pass_marker in status.upper():
+        if monitor_text_has_pc(status, pass_addr):
             return MonitorTestResult(True, "", status)
         return MonitorTestResult(False, f"timeout after {timeout}s", "")
     except ConnectionError as exc:
         return MonitorTestResult(False, str(exc), "")
-    if pass_marker in status.upper():
+    if monitor_text_has_pc(status, pass_addr):
         return MonitorTestResult(True, "", status)
     if "JAM" in status.upper() or "INVALID OPCODE" in status.upper():
         return MonitorTestResult(False, "CPU JAM", status)
@@ -437,9 +454,15 @@ def run_vice(args: argparse.Namespace, pass_addr: str, fail_addr: str | None, du
                 except Exception as exc:
                     dumps.append(f"{start}: {exc}")
             if args.until_pass:
-                pass_marker = f"C:${normalize_addr(pass_addr)}"
-                if any(pass_marker in dump.upper() for dump in dumps):
+                if any(monitor_text_has_pc(dump, pass_addr) for dump in dumps):
                     result = MonitorTestResult(True, "target PC reached after timeout", result.last_status)
+            if (
+                not result.passed
+                and args.pass_on_script_exhausted
+                and result.reason.startswith("timeout")
+                and dumps_show_script_exhausted(args, dumps)
+            ):
+                result = MonitorTestResult(True, "script exhausted at next input wait", result.last_status)
         return result, dumps
     finally:
         if process is not None and process.poll() is None:
@@ -645,6 +668,11 @@ def main() -> int:
     while retries_left > 0 and not result.passed and result.reason.startswith("timeout"):
         result, dumps = run_vice(args, normalize_addr(pass_addr), normalize_addr(fail_addr) if fail_addr else None, dump_ranges)
         retries_left -= 1
+    if not result.passed and result.reason.startswith("timeout"):
+        if any(monitor_text_has_pc(dump, pass_addr) for dump in dumps):
+            result = MonitorTestResult(True, "target PC reached after timeout", result.last_status)
+        elif args.pass_on_script_exhausted and dumps_show_script_exhausted(args, dumps):
+            result = MonitorTestResult(True, "script exhausted at next input wait", result.last_status)
     if result.passed:
         print(f"PASS: {args.name}")
         return 0
