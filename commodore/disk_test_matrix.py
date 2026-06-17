@@ -433,7 +433,7 @@ def run_platform(root: Path, platform: str, test_filter: str, args: argparse.Nam
     print(f"=== {platform}: {filter_var}={test_filter} ===", flush=True)
     if args.dry_run:
         return 0
-    result = subprocess.run(
+    process = subprocess.Popen(
         command,
         cwd=root / workdir_name,
         env=env,
@@ -441,10 +441,16 @@ def run_platform(root: Path, platform: str, test_filter: str, args: argparse.Nam
         stderr=subprocess.STDOUT,
         text=True,
     )
-    print(result.stdout, end="")
-    if result.returncode != 0:
-        return result.returncode
-    suite_count = platform_suite_count(platform, result.stdout)
+    output_parts: list[str] = []
+    assert process.stdout is not None
+    for line in process.stdout:
+        output_parts.append(line)
+        print(line, end="", flush=True)
+    rc = process.wait()
+    if rc != 0:
+        return rc
+    output = "".join(output_parts)
+    suite_count = platform_suite_count(platform, output)
     if suite_count is None:
         print(f"FAIL: {platform} did not print a suite summary")
         return 1
