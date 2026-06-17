@@ -148,10 +148,19 @@ SCENARIOS: tuple[Scenario, ...] = (
     Scenario(
         "new_save_empty_init_writes",
         {
-            "c64": legacy("disk_setup_product_smoke", "single_drive_fresh_save_product_smoke"),
-            "c128": legacy("marker_init_d64_smoke", "boot_title_single_drive_fresh_save_smoke"),
-            "plus4": legacy("disk_setup_product_plus4", "single_drive_fresh_save_plus4"),
+            "c64": strict("single_drive_fresh_save_product_smoke"),
+            "c128": strict("boot_title_single_drive_fresh_save_smoke"),
+            "plus4": strict("single_drive_fresh_save_plus4"),
         },
+        ScenarioContract(
+            media="drive 8 starts as program disk, then an empty save disk is attached to drive 8 for the save path",
+            start="new game reaches town save path in one-drive disk setup",
+            ordered_events=("save_disk_prompt", "initialize_prompt", "save_success", "program_disk_prompt", "gameplay_resume_after_save"),
+            event_counts=("initialize_prompt=1", "save_success=1", "program_disk_prompt=1"),
+            forbidden_events=("overwrite_prompt", "program_disk_rejected_for_save", "garbled_title_return"),
+            screen_assertions=("initialize prompt", "Saving game", "Game Saved", "Insert program disk"),
+            final_proof=("save disk contains MORIA8.ID and THE.GAME", "gameplay resumes after program media is restored"),
+        ),
     ),
     Scenario(
         "load_initialized_save",

@@ -1036,7 +1036,7 @@ run_single_drive_fresh_save_product_smoke() {
     local swap_program_d64="/tmp/moria8-plus4-single-drive-fresh-program-$$.d64"
     local build_log="$out_dir/$name.build.log"
 
-    if [ -n "$TEST_FILTER" ] && [[ ! "$name" =~ $TEST_FILTER ]]; then
+    if ! suite_selected "$name" "new_save_empty_init_writes"; then
         return
     fi
 
