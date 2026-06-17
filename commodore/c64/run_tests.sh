@@ -2227,6 +2227,141 @@ run_single_drive_load_return_product_smoke() {
     TOTAL=$((TOTAL + 1))
 }
 
+run_load_then_save_new_empty_product_smoke() {
+    local name="load_then_save_new_empty_product_smoke"
+    echo -n "  $name: "
+
+    local build_log
+    build_log=$(mktemp -t "build_${name}_log")
+    mkdir -p out
+
+    if ! make -s -C .. out/c64/boot.prg out/c64/bootart64.prg out/c64/title \
+            out/c64/monster.db.1 out/c64/monster.db.2 out/c64/monster.db.3 out/c64/monster.db.4 \
+            >"$build_log" 2>&1; then
+        echo "FAIL (asset build error)"
+        tail -20 "$build_log"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    if ! java -jar "$KICKASS" "${KICKASS_TRACE_DEFINE[@]}" main.s -showmem -vicesymbols \
+            -define C64_TEST_SCRIPTED_LOAD_THEN_SAVE_NEW_EMPTY_PRODUCT \
+            -o out/moria_load_then_save_new_empty.prg >"$build_log" 2>&1; then
+        echo "FAIL (assembly error)"
+        grep -i error "$build_log" | head -5
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    local scripted_d64="out/moria_load_then_save_new_empty.d64"
+    rm -f "$scripted_d64"
+    if ! "$C1541" -format "moria8 c64,m8" d64 "$scripted_d64" \
+            -attach "$scripted_d64" \
+            -write ../out/c64/boot.prg "moria8" \
+            -write ../out/c64/boot.prg "boot64" \
+            -write ../out/c64/bootart64.prg "bootart64" \
+            -write out/moria_load_then_save_new_empty.prg "moria64" \
+            -write out/64.bank "64.bank" \
+            -write ../out/c64/title "t64" \
+            -write ../out/c64/monster.db.1 "monster.db.1" \
+            -write ../out/c64/monster.db.2 "monster.db.2" \
+            -write ../out/c64/monster.db.3 "monster.db.3" \
+            -write ../out/c64/monster.db.4 "monster.db.4" \
+            -write out/ovl.start "64.start" \
+            -write out/ovl.town "64.town" \
+            -write out/ovl.death "64.death" \
+            -write out/ovl.gen "64.gen" \
+            -write out/ovl.help "64.help" \
+            -write out/ovl.ui "64.ui" \
+            -write out/ovl.items "64.items" \
+            -write out/ovl.spell "64.spell" >>"$build_log" 2>&1; then
+        echo "FAIL (disk build error)"
+        tail -20 "$build_log"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    local save_blob="out/THE.GAME"
+    local marker_blob="out/MORIA8.ID"
+    local load_save_d64="/tmp/moria_load_then_save_new_empty_load_$$.d64"
+    local new_save_d64="/tmp/moria_load_then_save_new_empty_$$.d64"
+    local swap_program_d64="/tmp/moria_load_then_save_new_empty_program_$$.d64"
+    if ! python3 tests/make_load_resume_save64.py "$save_blob" "$marker_blob" >"$build_log" 2>&1; then
+        echo "FAIL (save generation error)"
+        tail -20 "$build_log"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    rm -f "$load_save_d64" "$new_save_d64" "$swap_program_d64"
+    if ! "$C1541" -format "moria8 load,m8" d64 "$load_save_d64" \
+            -attach "$load_save_d64" \
+            -write "$marker_blob" "moria8.id,s" \
+            -write "$save_blob" "the.game,s" >>"$build_log" 2>&1; then
+        echo "FAIL (load save disk build error)"
+        tail -20 "$build_log"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    if ! "$C1541" -format "moria8 save,m8" d64 "$new_save_d64" >>"$build_log" 2>&1; then
+        echo "FAIL (new save disk build error)"
+        tail -20 "$build_log"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+    if ! cp "$scripted_d64" "$swap_program_d64"; then
+        echo "FAIL (program disk swap copy error)"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    if python3 -u ../plus4/tests/product_scripted_smoke.py \
+            --name "$name" \
+            --vice "$VICE" \
+            --boot-d64 "$scripted_d64" \
+            --main-vs "out/main.vs" \
+            --start-symbol ".c64_test_load_then_save_new_empty_wait_for_harness" \
+            --resume-symbol ".c64_test_load_then_save_new_empty_resume_low" \
+            --attach8-at-start-d64 "$load_save_d64" \
+            --swap-symbol ".c64_test_load_then_save_new_empty_before_save" \
+            --swap-attach8-d64 "$new_save_d64" \
+            --swap2-symbol ".disk_prompt_game_required_error_shown" \
+            --swap2-attach8-d64 "$swap_program_d64" \
+            --pass-symbol ".c64_test_load_then_save_new_empty_done" \
+            --fail-symbol ".c64_test_load_then_save_new_empty_fail" \
+            --limitcycles 900000000 \
+            --screen-base 0x0400; then
+        local dir_list
+        if ! dir_list=$("$C1541" -attach "$new_save_d64" -list 2>&1); then
+            echo "FAIL (new save disk listing error)"
+            echo "$dir_list" | tail -20 | sed 's/^/    /'
+            FAIL=$((FAIL + 1))
+            TOTAL=$((TOTAL + 1))
+            return
+        fi
+        if echo "$dir_list" | grep -qi '"MORIA8.ID".*SEQ' && \
+                echo "$dir_list" | grep -qi '"THE.GAME".*SEQ'; then
+            echo "PASS"
+            PASS=$((PASS + 1))
+        else
+            echo "FAIL (new save disk missing marker or save file)"
+            echo "$dir_list" | tail -20 | sed 's/^/    /'
+            FAIL=$((FAIL + 1))
+        fi
+    else
+        FAIL=$((FAIL + 1))
+    fi
+    TOTAL=$((TOTAL + 1))
+}
+
 run_single_drive_save_wrong_media_product_smoke() {
     local name="single_drive_save_wrong_media_product_smoke"
     echo -n "  $name: "
@@ -2992,6 +3127,7 @@ run_suite_function "disk_setup_product_smoke" run_disk_setup_product_smoke
 run_suite_function "title_disk_setup_single_drive_returns_program_prompt" run_disk_setup_single_drive_return_product_smoke "disk_setup_single_drive_return_product_smoke"
 run_suite_function "load_initialized_save" run_load_resume_product_smoke "load_resume_product_smoke"
 run_suite_function "prompt_sequence_no_repeat" run_single_drive_load_return_product_smoke "single_drive_load_return_product_smoke"
+run_suite_function "load_then_save_new_empty_disk" run_load_then_save_new_empty_product_smoke "load_then_save_new_empty_product_smoke"
 run_suite_function "single_drive_save_program_disk_rejected" run_single_drive_save_wrong_media_product_smoke "single_drive_save_wrong_media_product_smoke" "wrong_media_recovery"
 run_suite_function "single_drive_load_program_disk_rejected" run_single_drive_load_wrong_media_product_smoke "single_drive_load_wrong_media_product_smoke" "wrong_media_recovery"
 run_suite_function "single_drive_corrupt_save_recovery_requires_program_disk" run_single_drive_load_corrupt_product_smoke "single_drive_load_corrupt_product_smoke" "corrupt_save_file"

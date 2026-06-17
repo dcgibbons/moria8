@@ -218,9 +218,19 @@ SCENARIOS: tuple[Scenario, ...] = (
     Scenario(
         "load_then_save_new_empty_disk",
         {
-            "c64": legacy("single_drive_load_return_product_smoke", "save_write_product_smoke"),
-            "c128": legacy("boot_title_single_drive_load_return_smoke", "boot_title_save_write_product_smoke"),
-            "plus4": legacy("single_drive_load_return_plus4"),
+            "c64": legacy(
+                "load_then_save_new_empty_product_smoke",
+                note="real single-drive load-save, fresh-save, program-restore flow; strict promotion waits for C128 and Plus/4 adapters",
+            ),
+            "c128": legacy(
+                "boot_title_single_drive_load_return_smoke",
+                "boot_title_save_write_product_smoke",
+                note="proxy only: load-return plus independent save-write, not one continuous load-then-fresh-save flow",
+            ),
+            "plus4": legacy(
+                "single_drive_load_return_plus4",
+                note="proxy only: load-return, not one continuous load-then-fresh-save flow",
+            ),
         },
     ),
     Scenario(

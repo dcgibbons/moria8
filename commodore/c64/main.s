@@ -171,6 +171,12 @@ c64_test_single_drive_load_return_resume_low:
 c64_test_single_drive_load_return_loaded_low:
     jmp c64_test_single_drive_load_return_loaded_low
 #endif
+#if C64_TEST_SCRIPTED_LOAD_THEN_SAVE_NEW_EMPTY_PRODUCT
+c64_test_load_then_save_new_empty_resume_low:
+    lda #$36                // Monitor attach/resume may expose BASIC ROM.
+    sta $01
+    jmp title_load_game
+#endif
 
 c64_disk_call:
     pha
@@ -580,6 +586,19 @@ c64_test_single_drive_load_return_wait_for_harness:
 c64_test_single_drive_load_return_before_load:
     jmp title_load_game
 #endif
+#if C64_TEST_SCRIPTED_LOAD_THEN_SAVE_NEW_EMPTY_PRODUCT
+    lda #8
+    sta program_device
+    sta save_device
+    lda #1
+    sta disk_mode
+    lda #1
+    sta disk_setup_done
+c64_test_load_then_save_new_empty_wait_for_harness:
+    jmp c64_test_load_then_save_new_empty_wait_for_harness
+c64_test_load_then_save_new_empty_before_load:
+    jmp title_load_game
+#endif
 #if C64_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_WRONG_MEDIA_PRODUCT
     lda #8
     sta program_device
@@ -732,6 +751,19 @@ title_load_game:
 c64_test_single_drive_load_return_before_program_prompt:
     jmp c64_test_single_drive_load_return_loaded_low
 #endif
+#if C64_TEST_SCRIPTED_LOAD_THEN_SAVE_NEW_EMPTY_PRODUCT
+c64_test_load_then_save_new_empty_loaded:
+c64_test_load_then_save_new_empty_before_save:
+    jsr disk_prompt_save
+    bcs c64_test_load_then_save_new_empty_fail
+    jsr save_game
+    bcc c64_test_load_then_save_new_empty_fail
+    jsr disk_prompt_game_required
+c64_test_load_then_save_new_empty_done:
+    jmp c64_test_load_then_save_new_empty_done
+c64_test_load_then_save_new_empty_fail:
+    brk
+#endif
     jsr disk_prompt_game        // Swap back for tier loading
     jsr disk_prompt_game_required // Verify program media before resume loads tiers
 #if C64_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_RETURN_PRODUCT
@@ -742,6 +774,9 @@ c64_test_single_drive_load_return_media_ready:
 #if C64_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_RETURN_PRODUCT
 c64_test_single_drive_load_return_load_fail:
     brk
+#endif
+#if C64_TEST_SCRIPTED_LOAD_THEN_SAVE_NEW_EMPTY_PRODUCT
+    jmp c64_test_load_then_save_new_empty_fail
 #endif
     jsr input_get_modal_dismiss_key
     jsr disk_prompt_game_required // Verify program media before returning to title
