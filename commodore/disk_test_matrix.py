@@ -190,10 +190,19 @@ SCENARIOS: tuple[Scenario, ...] = (
     Scenario(
         "save_existing_overwrite",
         {
-            "c64": legacy("save_write_product_smoke"),
-            "c128": legacy("boot_title_save_write_product_smoke"),
-            "plus4": legacy("save_write_product_plus4"),
+            "c64": strict("save_write_product_smoke"),
+            "c128": strict("boot_title_save_write_product_smoke"),
+            "plus4": strict("save_write_product_plus4"),
         },
+        ScenarioContract(
+            media="drive 8 contains program disk; selected save device contains an existing initialized save",
+            start="gameplay save command with an existing THE.GAME on the save disk",
+            ordered_events=("overwrite_prompt", "save_success", "gameplay_resume_after_save"),
+            event_counts=("overwrite_prompt=1", "save_success=1"),
+            forbidden_events=("initialize_prompt", "program_disk_prompt_after_save", "program_media_error_after_save"),
+            screen_assertions=("overwrite prompt", "Saving game", "Game Saved"),
+            final_proof=("save disk still contains MORIA8.ID and THE.GAME after overwrite",),
+        ),
     ),
     Scenario(
         "load_then_save_new_empty_disk",

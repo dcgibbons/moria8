@@ -650,22 +650,48 @@ suite_matches_phase() {
 
 suite_matches_filter() {
     local suite_name="$1"
-    local suite_alias="${2:-}"
+    local suite_aliases="${2:-}"
+    local suite_alias
     if ! suite_matches_rerun "$suite_name"; then
         return 1
     fi
-    if ! suite_matches_phase "$suite_name" && { [ -z "$suite_alias" ] || ! suite_matches_phase "$suite_alias"; }; then
-        return 1
+    if ! suite_matches_phase "$suite_name"; then
+        local phase_match=1
+        for suite_alias in $suite_aliases; do
+            if [ -n "$suite_alias" ] && suite_matches_phase "$suite_alias"; then
+                phase_match=0
+                break
+            fi
+        done
+        if [ "$phase_match" -ne 0 ]; then
+            return 1
+        fi
     fi
 
     if [ -z "$TEST_FILTER" ]; then
         :
-    elif ! [[ "$suite_name" =~ $TEST_FILTER ]] && { [ -z "$suite_alias" ] || ! [[ "$suite_alias" =~ $TEST_FILTER ]]; }; then
-        return 1
+    elif ! [[ "$suite_name" =~ $TEST_FILTER ]]; then
+        local filter_match=1
+        for suite_alias in $suite_aliases; do
+            if [ -n "$suite_alias" ] && [[ "$suite_alias" =~ $TEST_FILTER ]]; then
+                filter_match=0
+                break
+            fi
+        done
+        if [ "$filter_match" -ne 0 ]; then
+            return 1
+        fi
     fi
 
-    if [ -n "$TEST_SKIP" ] && { [[ "$suite_name" =~ $TEST_SKIP ]] || { [ -n "$suite_alias" ] && [[ "$suite_alias" =~ $TEST_SKIP ]]; }; }; then
-        return 1
+    if [ -n "$TEST_SKIP" ]; then
+        if [[ "$suite_name" =~ $TEST_SKIP ]]; then
+            return 1
+        fi
+        for suite_alias in $suite_aliases; do
+            if [ -n "$suite_alias" ] && [[ "$suite_alias" =~ $TEST_SKIP ]]; then
+                return 1
+            fi
+        done
     fi
 
     return 0
@@ -673,13 +699,13 @@ suite_matches_filter() {
 
 run_named_suite() {
     local suite_name="$1"
-    local suite_alias=""
-    if [ "${2:-}" = "--alias" ]; then
-        suite_alias="$3"
+    local suite_aliases=""
+    while [ "${2:-}" = "--alias" ]; do
+        suite_aliases="$suite_aliases ${3:-}"
         shift 2
-    fi
+    done
     shift
-    if ! suite_matches_filter "$suite_name" "$suite_alias"; then
+    if ! suite_matches_filter "$suite_name" "$suite_aliases"; then
         return 0
     fi
     if [ "$TEST_LIST" != "0" ]; then
@@ -7119,7 +7145,7 @@ run_selected_suites() {
     run_named_suite marker_init_d64_smoke run_marker_init_d64_smoke || return 1
     run_named_suite boot_title_load_missing_savefile_smoke run_boot_title_load_missing_savefile_smoke || return 1
     run_named_suite boot_title_load_mounted_save_smoke run_boot_title_load_mounted_save_smoke || return 1
-    run_named_suite dual_drive_load_then_save_no_program_prompt --alias boot_title_save_write_product_smoke run_boot_title_save_write_product_smoke || return 1
+    run_named_suite dual_drive_load_then_save_no_program_prompt --alias save_existing_overwrite --alias boot_title_save_write_product_smoke run_boot_title_save_write_product_smoke || return 1
     run_named_suite boot_title_save_media_fail_product_smoke run_boot_title_save_media_fail_product_smoke || return 1
     run_named_suite single_drive_save_program_disk_rejected --alias boot_title_single_drive_save_wrong_media_smoke run_boot_title_single_drive_save_wrong_media_smoke || return 1
     run_named_suite single_drive_load_program_disk_rejected --alias boot_title_single_drive_load_wrong_media_smoke run_boot_title_single_drive_load_wrong_media_smoke || return 1

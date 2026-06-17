@@ -56,8 +56,8 @@ suite_selected_any() {
 run_suite_function() {
     local name="$1"
     local fn="$2"
-    local alias="${3:-}"
-    if ! suite_selected_any "$name" "$alias"; then
+    shift 2
+    if ! suite_selected_any "$name" "$@"; then
         return
     fi
     "$fn"
@@ -2998,7 +2998,7 @@ run_suite_function "single_drive_corrupt_save_recovery_requires_program_disk" ru
 run_suite_function "new_save_empty_init_writes" run_single_drive_fresh_save_product_smoke "single_drive_fresh_save_product_smoke"
 run_suite_function "load_missing_savefile_product_smoke" run_load_missing_savefile_product_smoke
 run_suite_function "save_media_fail_product_smoke" run_save_media_fail_product_smoke
-run_suite_function "dual_drive_load_then_save_no_program_prompt" run_save_write_product_smoke "save_write_product_smoke"
+run_suite_function "dual_drive_load_then_save_no_program_prompt" run_save_write_product_smoke "save_existing_overwrite" "save_write_product_smoke"
 echo ""
 echo "=== Results: $PASS passed, $FAIL failed (of $TOTAL suites) ==="
 if [ $FAIL -gt 0 ]; then

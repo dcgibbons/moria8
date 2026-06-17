@@ -845,7 +845,7 @@ run_save_write_product_smoke() {
     local boot_d64="$smoke_out/moria8-plus4.d64"
     local build_log="$out_dir/$name.build.log"
 
-    if ! suite_selected "$name" "dual_drive_load_then_save_no_program_prompt"; then
+    if ! suite_selected "$name" "dual_drive_load_then_save_no_program_prompt" "save_existing_overwrite"; then
         return
     fi
 
