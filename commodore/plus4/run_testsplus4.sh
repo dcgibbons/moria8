@@ -1764,7 +1764,7 @@ run_single_drive_load_corrupt_product_smoke() {
     local boot_d64="$smoke_out/moria8-plus4.d64"
     local build_log="$out_dir/$name.build.log"
 
-    if ! suite_selected "$name" "single_drive_corrupt_save_recovery_requires_program_disk"; then
+    if ! suite_selected "$name" "single_drive_corrupt_save_recovery_requires_program_disk" "corrupt_save_file"; then
         return
     fi
 

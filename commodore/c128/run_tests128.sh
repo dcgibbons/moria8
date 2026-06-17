@@ -7149,7 +7149,7 @@ run_selected_suites() {
     run_named_suite boot_title_save_media_fail_product_smoke run_boot_title_save_media_fail_product_smoke || return 1
     run_named_suite single_drive_save_program_disk_rejected --alias boot_title_single_drive_save_wrong_media_smoke run_boot_title_single_drive_save_wrong_media_smoke || return 1
     run_named_suite single_drive_load_program_disk_rejected --alias boot_title_single_drive_load_wrong_media_smoke run_boot_title_single_drive_load_wrong_media_smoke || return 1
-    run_named_suite single_drive_corrupt_save_recovery_requires_program_disk --alias boot_title_single_drive_load_corrupt_smoke run_boot_title_single_drive_load_corrupt_smoke || return 1
+    run_named_suite single_drive_corrupt_save_recovery_requires_program_disk --alias boot_title_single_drive_load_corrupt_smoke --alias corrupt_save_file run_boot_title_single_drive_load_corrupt_smoke || return 1
     run_named_suite title_disk_setup_single_drive_returns_program_prompt --alias boot_title_disk_setup_single_drive_return_smoke run_boot_title_disk_setup_single_drive_return_smoke || return 1
     run_named_suite new_save_empty_init_writes --alias boot_title_single_drive_fresh_save_smoke run_boot_title_single_drive_fresh_save_smoke || return 1
     run_named_suite vic40_clean_boot_smoke run_vic40_clean_boot_smoke || return 1

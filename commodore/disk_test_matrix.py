@@ -11,6 +11,7 @@ from pathlib import Path
 
 
 PLATFORMS = ("c64", "c128", "plus4")
+SCENARIO_ID_RE = re.compile(r"^[a-z0-9]+(?:_[a-z0-9]+)*$")
 
 
 @dataclass(frozen=True)
@@ -289,10 +290,19 @@ SCENARIOS: tuple[Scenario, ...] = (
     Scenario(
         "corrupt_save_file",
         {
-            "c64": legacy("load_missing_savefile_product_smoke", note="missing dedicated corrupt-save fixture"),
-            "c128": legacy("boot_title_load_missing_savefile_smoke", note="missing dedicated corrupt-save fixture"),
-            "plus4": legacy("load_missing_savefile_product_plus4"),
+            "c64": strict("single_drive_load_corrupt_product_smoke"),
+            "c128": strict("boot_title_single_drive_load_corrupt_smoke"),
+            "plus4": strict("single_drive_load_corrupt_plus4"),
         },
+        ScenarioContract(
+            media="selected save device contains a corrupt THE.GAME with a valid MORIA8.ID marker",
+            start="title load command against corrupt save media",
+            ordered_events=("corrupt_save_error", "safe_return_after_corrupt_save"),
+            event_counts=("corrupt_save_error=1",),
+            forbidden_events=("load_success", "main_loop_from_corrupt_save"),
+            screen_assertions=("Save file corrupt",),
+            final_proof=("load does not resume gameplay from corrupt THE.GAME",),
+        ),
     ),
     Scenario(
         "single_drive_corrupt_save_recovery_requires_program_disk",
@@ -333,11 +343,16 @@ RESULT_RE = re.compile(r"=== Results: \d+ passed, \d+ failed \(of (\d+) suites\)
 PLUS4_RESULT_RE = re.compile(r"=== Plus/4 runtime summary: \d+ passed, \d+ failed, (\d+) total ===")
 
 
-def selected_scenarios(pattern: str | None) -> tuple[Scenario, ...]:
-    if not pattern:
-        return SCENARIOS
-    wanted = {part.strip() for part in pattern.split(",") if part.strip()}
-    return tuple(scenario for scenario in SCENARIOS if scenario.scenario_id in wanted)
+def selected_scenarios(pattern: str | None, strict_only: bool, legacy_only: bool) -> tuple[Scenario, ...]:
+    scenarios = SCENARIOS
+    wanted = {part.strip() for part in pattern.split(",") if part.strip()} if pattern else set()
+    if wanted:
+        scenarios = tuple(scenario for scenario in scenarios if scenario.scenario_id in wanted)
+    if strict_only:
+        scenarios = tuple(scenario for scenario in scenarios if scenario.contract)
+    if legacy_only:
+        scenarios = tuple(scenario for scenario in scenarios if not scenario.contract)
+    return scenarios
 
 
 def unknown_scenarios(pattern: str | None) -> tuple[str, ...]:
@@ -352,9 +367,14 @@ def validate_matrix(scenarios: tuple[Scenario, ...], require_strict_contracts: b
     errors: list[str] = []
     seen: set[str] = set()
     for scenario in scenarios:
+        if not SCENARIO_ID_RE.fullmatch(scenario.scenario_id):
+            errors.append(f"{scenario.scenario_id}: scenario id must be lowercase snake_case")
         if scenario.scenario_id in seen:
             errors.append(f"duplicate scenario id {scenario.scenario_id}")
         seen.add(scenario.scenario_id)
+        extra_platforms = sorted(set(scenario.coverage) - set(PLATFORMS))
+        for platform in extra_platforms:
+            errors.append(f"{scenario.scenario_id}: unknown platform adapter {platform}")
         has_strict_adapter = any(coverage.strict for coverage in scenario.coverage.values())
         if has_strict_adapter and scenario.contract is None:
             errors.append(f"{scenario.scenario_id}: strict adapter requires a scenario contract")
@@ -367,6 +387,8 @@ def validate_matrix(scenarios: tuple[Scenario, ...], require_strict_contracts: b
                 continue
             if not coverage.tests:
                 errors.append(f"{scenario.scenario_id}: empty {platform} test filter")
+            if len(set(coverage.tests)) != len(coverage.tests):
+                errors.append(f"{scenario.scenario_id}: duplicate {platform} adapter filter")
             if scenario.contract and not coverage.strict:
                 errors.append(f"{scenario.scenario_id}: {platform} adapter is legacy, not strict")
     return errors
@@ -395,7 +417,29 @@ def platform_suite_count(platform: str, output: str) -> int | None:
     return int(match.group(1))
 
 
+def scenario_status(scenario: Scenario) -> str:
+    return "strict" if scenario.contract else "legacy"
+
+
+def print_summary(scenarios: tuple[Scenario, ...]) -> None:
+    strict_count = sum(1 for scenario in scenarios if scenario.contract)
+    legacy = tuple(scenario for scenario in scenarios if not scenario.contract)
+    print("=== Matrix summary ===")
+    print(f"  scenarios: {len(scenarios)}")
+    print(f"  strict contracts: {strict_count}")
+    print(f"  legacy adapters: {len(legacy)}")
+    if legacy:
+        print(f"  legacy ids: {', '.join(scenario.scenario_id for scenario in legacy)}")
+    print("")
+
+
+def print_list(scenarios: tuple[Scenario, ...]) -> None:
+    for scenario in scenarios:
+        print(f"{scenario.scenario_id}\t{scenario_status(scenario)}")
+
+
 def print_plan(scenarios: tuple[Scenario, ...], filters: dict[str, str]) -> None:
+    print_summary(scenarios)
     print("=== Cross-platform disk scenario matrix ===")
     for scenario in scenarios:
         contract_label = "contract" if scenario.contract else "legacy"
@@ -469,6 +513,9 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Run the shared cross-platform disk test matrix")
     parser.add_argument("--platform", action="append", choices=PLATFORMS)
     parser.add_argument("--scenario", help="comma-separated scenario IDs to run")
+    parser.add_argument("--strict-only", action="store_true", help="select only strict contract scenarios")
+    parser.add_argument("--legacy-only", action="store_true", help="select only legacy adapter scenarios")
+    parser.add_argument("--list-scenarios", action="store_true", help="list selected scenario IDs and exit")
     parser.add_argument("--kickass", default="tools/kickass/KickAss.jar", type=Path)
     parser.add_argument("--c1541", default="c1541")
     parser.add_argument("--vice64", default="x64sc")
@@ -487,7 +534,11 @@ def main() -> int:
     if not args.kickass.is_absolute():
         args.kickass = repo_root / args.kickass
 
-    scenarios = selected_scenarios(args.scenario)
+    if args.strict_only and args.legacy_only:
+        print("FAIL: --strict-only and --legacy-only are mutually exclusive")
+        return 2
+
+    scenarios = selected_scenarios(args.scenario, args.strict_only, args.legacy_only)
     unknown = unknown_scenarios(args.scenario)
     if unknown:
         print(f"FAIL: unknown disk scenario(s): {', '.join(unknown)}")
@@ -501,6 +552,10 @@ def main() -> int:
         for error in errors:
             print(f"FAIL: {error}")
         return 2
+
+    if args.list_scenarios:
+        print_list(scenarios)
+        return 0
 
     filters = filters_by_platform(scenarios)
     print_plan(scenarios, filters)
