@@ -15,7 +15,9 @@
 #   make test128            Run the full C128 suite
 #   make test128-fast       Run the fast C128 compare harness
 #   make test128-fast-smoke Run the high-value C128 smoke subset
+#   make test-disk          Run the disk release gate, excluding deferred scenarios
 #   make test-disk-static   Validate the shared disk matrix without VICE
+#   make test-disk-debt     List non-strict/deferred disk matrix coverage
 #   make clean              Remove unified outputs plus transitional legacy test outputs
 #
 # Debug targets:
@@ -213,7 +215,7 @@ C128_MAIN_OUTPUTS = $(C128_MAIN_PRG) $(C128_OVL_START) $(C128_OVL_TOWN) $(C128_O
 
 .PHONY: all build build64 build128 buildplus4 disk disk64 zip64 c64-dist disk128 diskplus4 artifact artifact-checksums artifacts run run64 run128 runplus4 \
 	bootart128-charset-demo \
-	test test-disk test-disk-static test64 test128 test128-fast test128-fast-smoke testplus4 testplus4-build testplus4-runtime clean \
+	test test-disk test-disk-static test-disk-debt test64 test128 test128-fast test128-fast-smoke testplus4 testplus4-build testplus4-runtime clean \
 	check-zp check-6502-lint check-hal-boundaries ensure-kickass kickass
 
 all: build
@@ -265,6 +267,7 @@ test: test64 test128-fast test128-fast-smoke testplus4
 
 test-disk: ensure-kickass
 	python3 -u disk_test_matrix.py \
+		--exclude-adapter-mode deferred \
 		--kickass "$(KICKASS_RESOLVED)" \
 		--c1541 "$(C1541)" \
 		--vice64 "$(VICE64)" \
@@ -273,6 +276,10 @@ test-disk: ensure-kickass
 
 test-disk-static:
 	python3 -u disk_test_matrix.py --check-only
+	python3 -u disk_test_matrix.py --exclude-adapter-mode deferred --fail-on-adapter-mode deferred --check-only
+
+test-disk-debt:
+	python3 -u disk_test_matrix.py --list-debt --list-platform-modes
 
 test64: ensure-kickass
 	cd c64 && KICKASS="$(KICKASS_RESOLVED)" ./run_tests.sh

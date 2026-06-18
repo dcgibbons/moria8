@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 PLATFORMS = ("c64", "c128", "plus4")
 SCENARIO_ID_RE = re.compile(r"^[a-z0-9]+(?:_[a-z0-9]+)*$")
-ADAPTER_MODES = ("strict", "real", "proxy", "legacy")
+ADAPTER_MODES = ("strict", "real", "proxy", "deferred", "legacy")
 
 
 @dataclass(frozen=True)
@@ -58,6 +58,10 @@ def proxy(*tests: str, note: str = "") -> PlatformCoverage:
     return PlatformCoverage(tests, mode="proxy", note=note)
 
 
+def deferred(*tests: str, note: str = "") -> PlatformCoverage:
+    return PlatformCoverage(tests, mode="deferred", note=note)
+
+
 def strict(*tests: str, note: str = "") -> PlatformCoverage:
     return PlatformCoverage(tests, mode="strict", note=note)
 
@@ -66,33 +70,33 @@ SCENARIOS: tuple[Scenario, ...] = (
     Scenario(
         "media_drive8_attach_read_write",
         {
-            "c64": legacy("disk_swap"),
-            "c128": legacy("disk_swap128", "marker_init_d64_smoke"),
-            "plus4": legacy("disk_setup_product_plus4"),
+            "c64": legacy("disk_swap", note="legacy low-level disk-swap coverage; not yet a named shared drive-8 media sanity contract"),
+            "c128": legacy("disk_swap128", "marker_init_d64_smoke", note="legacy low-level disk-swap/marker coverage; not yet a named shared drive-8 media sanity contract"),
+            "plus4": legacy("disk_setup_product_plus4", note="legacy product disk-setup coverage; not yet a named shared drive-8 media sanity contract"),
         },
     ),
     Scenario(
         "media_drive9_attach_read_write",
         {
-            "c64": legacy("disk_setup_product_smoke", "save_write_product_smoke"),
-            "c128": legacy("marker_init_d64_smoke", "boot_title_save_write_product_smoke"),
-            "plus4": legacy("disk_setup_product_plus4", "save_write_product_plus4"),
+            "c64": legacy("disk_setup_product_smoke", "save_write_product_smoke", note="legacy save-device coverage; not yet a named shared drive-9 read/write sanity contract"),
+            "c128": legacy("marker_init_d64_smoke", "boot_title_save_write_product_smoke", note="legacy marker/save coverage; not yet a named shared drive-9 read/write sanity contract"),
+            "plus4": legacy("disk_setup_product_plus4", "save_write_product_plus4", note="legacy disk-setup/save coverage; not yet a named shared drive-9 read/write sanity contract"),
         },
     ),
     Scenario(
         "media_drive10_11_device_probe",
         {
-            "c64": legacy("disk_swap"),
-            "c128": legacy("disk_swap128"),
-            "plus4": legacy("disk_setup_product_plus4"),
+            "c64": legacy("disk_swap", note="legacy device-selection coverage; not yet a named drive-10/11 probe"),
+            "c128": legacy("disk_swap128", note="legacy device-selection coverage; not yet a named drive-10/11 probe"),
+            "plus4": legacy("disk_setup_product_plus4", note="legacy device-selection coverage; not yet a named drive-10/11 probe"),
         },
     ),
     Scenario(
         "wrong_media_detection_selected_devices",
         {
-            "c64": legacy("load_missing_savefile_product_smoke", "save_media_fail_product_smoke"),
-            "c128": legacy("boot_title_load_missing_savefile_smoke", "boot_title_save_media_fail_product_smoke"),
-            "plus4": legacy("load_wrong_media_product_plus4", "load_missing_savefile_product_plus4"),
+            "c64": legacy("load_missing_savefile_product_smoke", "save_media_fail_product_smoke", note="legacy wrong/missing-media coverage; selected-device matrix is not yet strict"),
+            "c128": legacy("boot_title_load_missing_savefile_smoke", "boot_title_save_media_fail_product_smoke", note="legacy wrong/missing-media coverage; selected-device matrix is not yet strict"),
+            "plus4": legacy("load_wrong_media_product_plus4", "load_missing_savefile_product_plus4", note="legacy wrong/missing-media coverage; selected-device matrix is not yet strict"),
         },
     ),
     Scenario(
@@ -149,9 +153,9 @@ SCENARIOS: tuple[Scenario, ...] = (
     Scenario(
         "new_save_empty_no_init_returns_setup",
         {
-            "c64": legacy("load_missing_savefile_product_smoke"),
-            "c128": legacy("boot_title_load_missing_savefile_smoke"),
-            "plus4": legacy("disk_setup_missing_save_plus4"),
+            "c64": proxy("load_missing_savefile_product_smoke", note="proxy only: missing-save behavior, not explicit initialize prompt cancel returning to Disk Setup"),
+            "c128": proxy("boot_title_load_missing_savefile_smoke", note="proxy only: missing-save behavior, not explicit initialize prompt cancel returning to Disk Setup"),
+            "plus4": proxy("disk_setup_missing_save_plus4", note="proxy only: missing-save behavior, not explicit initialize prompt cancel returning to Disk Setup"),
         },
     ),
     Scenario(
@@ -227,16 +231,16 @@ SCENARIOS: tuple[Scenario, ...] = (
         {
             "c64": real(
                 "load_then_save_new_empty_product_smoke",
-                note="real single-drive load-save, fresh-save, program-restore flow; strict promotion waits for C128 and Plus/4 adapters",
+                note="real single-drive load-save, fresh-save, program-restore flow; cross-platform strict promotion intentionally deferred",
             ),
-            "c128": proxy(
+            "c128": deferred(
                 "boot_title_single_drive_load_return_smoke",
                 "boot_title_save_write_product_smoke",
-                note="proxy only: load-return plus independent save-write, not one continuous load-then-fresh-save flow",
+                note="deferred: proxy only, load-return plus independent save-write, not one continuous load-then-fresh-save flow",
             ),
-            "plus4": proxy(
+            "plus4": deferred(
                 "single_drive_load_return_plus4",
-                note="proxy only: load-return, not one continuous load-then-fresh-save flow",
+                note="deferred: proxy only, load-return, not one continuous load-then-fresh-save flow",
             ),
         },
     ),
@@ -260,9 +264,9 @@ SCENARIOS: tuple[Scenario, ...] = (
     Scenario(
         "change_save_drive_after_save",
         {
-            "c64": legacy("disk_swap", "save_write_product_smoke"),
-            "c128": legacy("disk_swap128", "boot_title_save_write_product_smoke"),
-            "plus4": legacy("single_drive_save_return_plus4", "save_write_product_plus4"),
+            "c64": legacy("disk_swap", "save_write_product_smoke", note="legacy drive-change/save coverage; does not yet prove old save device is unused after migration"),
+            "c128": legacy("disk_swap128", "boot_title_save_write_product_smoke", note="legacy drive-change/save coverage; does not yet prove old save device is unused after migration"),
+            "plus4": legacy("single_drive_save_return_plus4", "save_write_product_plus4", note="legacy drive-change/save coverage; does not yet prove old save device is unused after migration"),
         },
     ),
     Scenario(
@@ -285,41 +289,41 @@ SCENARIOS: tuple[Scenario, ...] = (
     Scenario(
         "missing_device_or_no_disk",
         {
-            "c64": legacy("load_missing_savefile_product_smoke"),
-            "c128": legacy("boot_title_load_missing_savefile_smoke"),
-            "plus4": legacy("disk_setup_missing_save_plus4"),
+            "c64": legacy("load_missing_savefile_product_smoke", note="legacy missing-save fixture; selected absent-device/no-disk behavior is not yet strict"),
+            "c128": legacy("boot_title_load_missing_savefile_smoke", note="legacy missing-save fixture; selected absent-device/no-disk behavior is not yet strict"),
+            "plus4": legacy("disk_setup_missing_save_plus4", note="legacy missing-save fixture; selected absent-device/no-disk behavior is not yet strict"),
         },
     ),
     Scenario(
         "cancel_supported_prompts",
         {
-            "c64": legacy("load_missing_savefile_product_smoke"),
-            "c128": legacy("boot_title_load_missing_savefile_smoke"),
-            "plus4": legacy("disk_setup_missing_save_plus4"),
+            "c64": proxy("load_missing_savefile_product_smoke", note="proxy only: does not exercise supported initialize/overwrite cancel prompts"),
+            "c128": proxy("boot_title_load_missing_savefile_smoke", note="proxy only: does not exercise supported initialize/overwrite cancel prompts"),
+            "plus4": proxy("disk_setup_missing_save_plus4", note="proxy only: does not exercise supported initialize/overwrite cancel prompts"),
         },
     ),
     Scenario(
         "alternate_drive10_11_save_load_smoke",
         {
-            "c64": legacy("disk_swap"),
-            "c128": legacy("disk_swap128"),
-            "plus4": legacy("disk_setup_product_plus4"),
+            "c64": legacy("disk_swap", note="legacy alternate-device coverage; not yet a named save/load smoke on drives 10 and 11"),
+            "c128": legacy("disk_swap128", note="legacy alternate-device coverage; not yet a named save/load smoke on drives 10 and 11"),
+            "plus4": legacy("disk_setup_product_plus4", note="legacy alternate-device coverage; not yet a named save/load smoke on drives 10 and 11"),
         },
     ),
     Scenario(
         "alternate_drive_change_smoke",
         {
-            "c64": legacy("disk_swap"),
-            "c128": legacy("disk_swap128"),
-            "plus4": legacy("single_drive_save_return_plus4"),
+            "c64": legacy("disk_swap", note="legacy alternate-device coverage; not yet a named post-save device-change smoke"),
+            "c128": legacy("disk_swap128", note="legacy alternate-device coverage; not yet a named post-save device-change smoke"),
+            "plus4": legacy("single_drive_save_return_plus4", note="legacy alternate-device coverage; not yet a named post-save device-change smoke"),
         },
     ),
     Scenario(
         "alternate_drive_prompt_no_repeat",
         {
-            "c64": legacy("disk_swap", "single_drive_load_return_product_smoke"),
-            "c128": legacy("disk_swap128"),
-            "plus4": legacy("single_drive_load_return_plus4"),
+            "c64": legacy("disk_swap", "single_drive_load_return_product_smoke", note="legacy alternate-device plus no-repeat coverage; not yet one alternate-device prompt-order contract"),
+            "c128": legacy("disk_swap128", note="legacy alternate-device coverage; not yet one alternate-device prompt-order contract"),
+            "plus4": legacy("single_drive_load_return_plus4", note="legacy no-repeat coverage; not yet one alternate-device prompt-order contract"),
         },
     ),
     Scenario(
@@ -359,9 +363,9 @@ SCENARIOS: tuple[Scenario, ...] = (
     Scenario(
         "write_protected_or_forced_write_error",
         {
-            "c64": legacy("save_media_fail_product_smoke"),
-            "c128": legacy("boot_title_save_media_fail_product_smoke"),
-            "plus4": legacy("load_wrong_media_product_plus4"),
+            "c64": legacy("save_media_fail_product_smoke", note="legacy save-failure fixture; write-protected/full-disk fixture is not yet deterministic"),
+            "c128": legacy("boot_title_save_media_fail_product_smoke", note="legacy save-failure fixture; write-protected/full-disk fixture is not yet deterministic"),
+            "plus4": proxy("load_wrong_media_product_plus4", note="proxy only: wrong-media load failure, not write-protected or forced write-error save behavior"),
         },
     ),
 )

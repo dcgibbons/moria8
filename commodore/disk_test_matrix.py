@@ -39,6 +39,7 @@ def selected_scenarios(
     strict_only: bool,
     legacy_only: bool,
     adapter_modes: tuple[str, ...],
+    excluded_adapter_modes: tuple[str, ...],
 ) -> tuple[Scenario, ...]:
     scenarios = SCENARIOS
     wanted = {part.strip() for part in pattern.split(",") if part.strip()} if pattern else set()
@@ -54,6 +55,13 @@ def selected_scenarios(
             scenario
             for scenario in scenarios
             if any(coverage.mode in wanted_modes for coverage in scenario.coverage.values())
+        )
+    if excluded_adapter_modes:
+        blocked_modes = set(excluded_adapter_modes)
+        scenarios = tuple(
+            scenario
+            for scenario in scenarios
+            if not any(coverage.mode in blocked_modes for coverage in scenario.coverage.values())
         )
     return scenarios
 
@@ -167,6 +175,8 @@ def validate_matrix(
                 errors.append(f"{scenario.scenario_id}: empty {platform} test filter")
             if coverage.mode not in ADAPTER_MODES:
                 errors.append(f"{scenario.scenario_id}: invalid {platform} adapter mode {coverage.mode}")
+            if coverage.mode != "strict" and not coverage.note:
+                errors.append(f"{scenario.scenario_id}: non-strict {platform} adapter requires a debt note")
             if coverage.mode in blocked_modes:
                 errors.append(f"{scenario.scenario_id}: {platform} adapter mode {coverage.mode} is blocked")
             for test_filter in coverage.filter_names(scenario.scenario_id):
@@ -211,7 +221,14 @@ def build_platform_env(adapter: PlatformAdapter, test_filter: str, args: argpars
 
 
 def scenario_status(scenario: Scenario) -> str:
-    return "strict" if scenario.contract else "legacy"
+    if scenario.contract:
+        return "strict"
+    modes = {coverage.mode for coverage in scenario.coverage.values()}
+    if "deferred" in modes:
+        return "deferred"
+    if "proxy" in modes or "real" in modes:
+        return "proxy"
+    return "legacy"
 
 
 def adapter_mode_counts(scenarios: tuple[Scenario, ...]) -> dict[str, int]:
@@ -231,21 +248,31 @@ def scenario_ids_with_mode(scenarios: tuple[Scenario, ...], mode: str) -> tuple[
 
 def print_summary(scenarios: tuple[Scenario, ...]) -> None:
     strict_count = sum(1 for scenario in scenarios if scenario.contract)
-    legacy = tuple(scenario for scenario in scenarios if not scenario.contract)
+    status_counts = {
+        status: sum(1 for scenario in scenarios if scenario_status(scenario) == status)
+        for status in ("strict", "proxy", "deferred", "legacy")
+    }
+    debt = tuple(scenario for scenario in scenarios if scenario_has_debt(scenario))
     mode_counts = adapter_mode_counts(scenarios)
     real_ids = scenario_ids_with_mode(scenarios, "real")
     proxy_ids = scenario_ids_with_mode(scenarios, "proxy")
+    deferred_ids = scenario_ids_with_mode(scenarios, "deferred")
     print("=== Matrix summary ===")
     print(f"  scenarios: {len(scenarios)}")
     print(f"  strict contracts: {strict_count}")
-    print(f"  legacy scenarios: {len(legacy)}")
+    print(
+        "  scenario status: "
+        + ", ".join(f"{status}={status_counts[status]}" for status in ("strict", "proxy", "deferred", "legacy"))
+    )
     print("  adapter modes: " + ", ".join(f"{mode}={mode_counts[mode]}" for mode in ADAPTER_MODES))
     if real_ids:
         print(f"  real adapter ids: {', '.join(real_ids)}")
     if proxy_ids:
         print(f"  proxy adapter ids: {', '.join(proxy_ids)}")
-    if legacy:
-        print(f"  legacy ids: {', '.join(scenario.scenario_id for scenario in legacy)}")
+    if deferred_ids:
+        print(f"  deferred adapter ids: {', '.join(deferred_ids)}")
+    if debt:
+        print(f"  debt ids: {', '.join(scenario.scenario_id for scenario in debt)}")
     print("")
 
 
@@ -353,6 +380,12 @@ def main() -> int:
         help="select scenarios with at least one platform adapter in this mode",
     )
     parser.add_argument(
+        "--exclude-adapter-mode",
+        action="append",
+        choices=ADAPTER_MODES,
+        help="exclude scenarios with any platform adapter in this mode",
+    )
+    parser.add_argument(
         "--fail-on-adapter-mode",
         action="append",
         choices=ADAPTER_MODES,
@@ -384,7 +417,13 @@ def main() -> int:
         print("FAIL: --strict-only and --legacy-only are mutually exclusive")
         return 2
 
-    scenarios = selected_scenarios(args.scenario, args.strict_only, args.legacy_only, tuple(args.adapter_mode or ()))
+    scenarios = selected_scenarios(
+        args.scenario,
+        args.strict_only,
+        args.legacy_only,
+        tuple(args.adapter_mode or ()),
+        tuple(args.exclude_adapter_mode or ()),
+    )
     unknown = unknown_scenarios(args.scenario)
     if unknown:
         print(f"FAIL: unknown disk scenario(s): {', '.join(unknown)}")
