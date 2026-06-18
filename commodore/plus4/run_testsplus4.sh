@@ -82,6 +82,42 @@ run_test() {
     fi
 }
 
+run_disk_media_probe() {
+    local name="$1"
+
+    if ! suite_selected "$name"; then
+        return
+    fi
+
+    TOTAL=$((TOTAL + 1))
+    if python3 -u ../disk_media_probe.py --scenario "$name" --platform plus4 --c1541 "$C1541"; then
+        PASS=$((PASS + 1))
+    else
+        FAIL=$((FAIL + 1))
+    fi
+}
+
+run_media_drive8_attach_read_write() {
+    if ! suite_selected "media_drive8_attach_read_write"; then
+        return
+    fi
+    run_disk_media_probe "media_drive8_attach_read_write"
+}
+
+run_media_drive9_attach_read_write() {
+    if ! suite_selected "media_drive9_attach_read_write"; then
+        return
+    fi
+    run_disk_media_probe "media_drive9_attach_read_write"
+}
+
+run_media_drive10_11_device_probe() {
+    if ! suite_selected "media_drive10_11_device_probe"; then
+        return
+    fi
+    run_disk_media_probe "media_drive10_11_device_probe"
+}
+
 run_plus4_static_contracts() {
     local name="plus4_static_contracts"
 
@@ -1189,11 +1225,11 @@ run_single_drive_save_wrong_media_product_smoke() {
         --name "$name" \
         --start-symbol ".plus4_test_single_drive_save_wrong_media_wait_for_harness" \
         --resume-symbol ".plus4_test_single_drive_save_wrong_media_before_save" \
-        --pass-symbol ".title_menu_loop" \
+        --pass-symbol ".uds_insert_prompt_wait_key" \
         --fail-symbol ".plus4_test_single_drive_save_wrong_media_unexpected_return" \
+        --require-hit-symbol ".uds_show_program_disk" \
         --main-vs "$main_vs" \
         --boot-d64 "$boot_d64" \
-        --pass-on-script-exhausted \
         --expect-byte-symbol ".disk_test_program_warning_seen=1" \
         --expect-screen-symbol ".uds_insert_one_drive_str:3:8" \
         --expect-screen-symbol ".press_key_str:6:10" \
@@ -1942,6 +1978,9 @@ run_load_missing_savefile_product_smoke() {
 
 run_plus4_static_contracts
 run_test "minimalplus4" "tests/test_minimalplus4.s"
+run_media_drive8_attach_read_write
+run_media_drive9_attach_read_write
+run_media_drive10_11_device_probe
 run_boot_title_smoke
 run_new_game_to_town_smoke
 run_dungeon_entry_smoke

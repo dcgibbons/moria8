@@ -63,6 +63,30 @@ run_suite_function() {
     "$fn"
 }
 
+run_disk_media_probe() {
+    local name="$1"
+
+    echo -n "  $name: "
+    if python3 -u ../disk_media_probe.py --scenario "$name" --platform c64 --c1541 "$C1541"; then
+        PASS=$((PASS + 1))
+    else
+        FAIL=$((FAIL + 1))
+    fi
+    TOTAL=$((TOTAL + 1))
+}
+
+run_media_drive8_attach_read_write() {
+    run_disk_media_probe "media_drive8_attach_read_write"
+}
+
+run_media_drive9_attach_read_write() {
+    run_disk_media_probe "media_drive9_attach_read_write"
+}
+
+run_media_drive10_11_device_probe() {
+    run_disk_media_probe "media_drive10_11_device_probe"
+}
+
 check_static_contract() {
     local name="$1"
     local file="$2"
@@ -3117,6 +3141,9 @@ run_test "throw" "tests/test_throw.s" "0400 040a" 11 500000000
 run_test "bash" "tests/test_bash.s" "0400 0407" 8 500000000
 run_test "tunnel" "tests/test_tunnel.s" "0400 0407" 8 500000000
 run_test "background" "tests/test_background.s" "0400 0407" 8
+run_suite_function "media_drive8_attach_read_write" run_media_drive8_attach_read_write
+run_suite_function "media_drive9_attach_read_write" run_media_drive9_attach_read_write
+run_suite_function "media_drive10_11_device_probe" run_media_drive10_11_device_probe
 run_suite_function "scripted_spell_cast_smoke" run_scripted_spell_cast_smoke
 run_suite_function "scripted_book_overlay_smoke" run_scripted_book_overlay_smoke
 run_suite_function "scripted_scroll_selector_smoke" run_scripted_scroll_selector_smoke

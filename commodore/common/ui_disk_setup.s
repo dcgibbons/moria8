@@ -173,6 +173,7 @@ uds_show_insert_prompt:
     jsr hal_screen_put_char
 !prep_wait:
     :UDSPrint(6, UDS_PROMPT_COL, press_key_str)
+uds_insert_prompt_wait_key:
     jsr input_get_modal_dismiss_key
     lda #DISK_UI_RES_OK
     sta disk_ui_result

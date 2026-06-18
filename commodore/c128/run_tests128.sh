@@ -736,6 +736,30 @@ run_named_suite() {
     return "$suite_rc"
 }
 
+run_disk_media_probe() {
+    local name="$1"
+
+    echo -n "  $name: "
+    if python3 -u ../disk_media_probe.py --scenario "$name" --platform c128 --c1541 "$C1541"; then
+        PASS=$((PASS + 1))
+    else
+        FAIL=$((FAIL + 1))
+    fi
+    TOTAL=$((TOTAL + 1))
+}
+
+run_media_drive8_attach_read_write() {
+    run_disk_media_probe "media_drive8_attach_read_write"
+}
+
+run_media_drive9_attach_read_write() {
+    run_disk_media_probe "media_drive9_attach_read_write"
+}
+
+run_media_drive10_11_device_probe() {
+    run_disk_media_probe "media_drive10_11_device_probe"
+}
+
 run_main_assembly_check() {
     echo -n "  main128_asm: "
 
@@ -7238,6 +7262,10 @@ run_selected_suites() {
     run_named_suite c128_80col_layout_guard run_80col_layout_guard_check || return 1
 
     run_parallel_unit_tests || return 1
+
+    run_named_suite media_drive8_attach_read_write run_media_drive8_attach_read_write || return 1
+    run_named_suite media_drive9_attach_read_write run_media_drive9_attach_read_write || return 1
+    run_named_suite media_drive10_11_device_probe run_media_drive10_11_device_probe || return 1
 
     run_named_suite boot_d64_smoke run_boot_d64_smoke || return 1
 
