@@ -316,9 +316,13 @@ c128_test_input_script:
     .byte $20              // SPACE = acknowledge insert-save-disk prompt
 #elif C128_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT
     .byte $20              // SPACE = acknowledge insert-save-disk prompt
+#if C128_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_NO_INIT
+    .byte $4e              // N = do not initialize fresh save disk
+#else
     .byte $59              // Y = initialize fresh save disk
     .byte $20              // SPACE = dismiss save-success prompt
     .byte $20              // SPACE = acknowledge insert-program-disk prompt
+#endif
 #elif C128_TEST_SCRIPTED_DISK_SETUP_SINGLE_DRIVE_RETURN_PRODUCT
     .byte $44              // D = Disk Setup from title
     .byte $33              // 3 = done; keep default save drive 8

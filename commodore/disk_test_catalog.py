@@ -189,10 +189,19 @@ SCENARIOS: tuple[Scenario, ...] = (
     Scenario(
         "new_save_empty_no_init_returns_setup",
         {
-            "c64": proxy("load_missing_savefile_product_smoke", note="proxy only: missing-save behavior, not explicit initialize prompt cancel returning to Disk Setup"),
-            "c128": proxy("boot_title_load_missing_savefile_smoke", note="proxy only: missing-save behavior, not explicit initialize prompt cancel returning to Disk Setup"),
-            "plus4": proxy("disk_setup_missing_save_plus4", note="proxy only: missing-save behavior, not explicit initialize prompt cancel returning to Disk Setup"),
+            "c64": strict("single_drive_fresh_save_no_init_product_smoke"),
+            "c128": strict("boot_title_single_drive_fresh_save_no_init_smoke"),
+            "plus4": strict("single_drive_fresh_save_no_init_plus4"),
         },
+        ScenarioContract(
+            media="drive 8 starts as program disk, then an empty save disk is attached to drive 8 for the save path",
+            start="new game reaches town save path in one-drive disk setup",
+            ordered_events=("save_disk_prompt", "initialize_prompt", "initialize_declined", "disk_setup_return"),
+            event_counts=("initialize_prompt=1", "initialize_declined=1", "save_success=0"),
+            forbidden_events=("save_success", "program_disk_prompt_after_decline", "garbled_title_return"),
+            screen_assertions=("initialize prompt", "Disk Setup or save-media recovery path"),
+            final_proof=("save disk does not contain THE.GAME after declining initialization",),
+        ),
     ),
     Scenario(
         "new_save_empty_init_writes",
@@ -342,10 +351,19 @@ SCENARIOS: tuple[Scenario, ...] = (
     Scenario(
         "cancel_supported_prompts",
         {
-            "c64": proxy("load_missing_savefile_product_smoke", note="proxy only: does not exercise supported initialize/overwrite cancel prompts"),
-            "c128": proxy("boot_title_load_missing_savefile_smoke", note="proxy only: does not exercise supported initialize/overwrite cancel prompts"),
-            "plus4": proxy("disk_setup_missing_save_plus4", note="proxy only: does not exercise supported initialize/overwrite cancel prompts"),
+            "c64": strict("single_drive_fresh_save_no_init_product_smoke"),
+            "c128": strict("boot_title_single_drive_fresh_save_no_init_smoke"),
+            "plus4": strict("single_drive_fresh_save_no_init_plus4"),
         },
+        ScenarioContract(
+            media="empty save disk selected during a one-drive save path",
+            start="initialize prompt shown while preparing save media",
+            ordered_events=("initialize_prompt", "cancel_input", "safe_recovery_prompt"),
+            event_counts=("initialize_prompt=1", "save_success=0"),
+            forbidden_events=("save_success", "program_disk_prompt_after_decline"),
+            screen_assertions=("Initialize this disk? (Y/N)",),
+            final_proof=("declining initialize exits the save attempt without writing THE.GAME",),
+        ),
     ),
     Scenario(
         "alternate_drive10_11_save_load_smoke",

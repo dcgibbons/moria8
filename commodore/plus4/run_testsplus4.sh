@@ -1163,6 +1163,106 @@ run_single_drive_fresh_save_product_smoke() {
     fi
 }
 
+run_single_drive_fresh_save_no_init_product_smoke() {
+    local name="single_drive_fresh_save_no_init_plus4"
+    local out_dir="$PLUS4_DIR/out"
+    local smoke_out
+    smoke_out="$(make_product_out "$name")"
+    local smoke_out_rel="$smoke_out"
+    local smoke_plus4="$smoke_out/plus4"
+    local main_vs="$smoke_out/plus4/main.vs"
+    local boot_d64="$smoke_out/moria8-plus4.d64"
+    local save_d64="/tmp/moria8-plus4-single-drive-fresh-save-no-init-$$.d64"
+    local build_log="$out_dir/$name.build.log"
+
+    if ! suite_selected "$name" "new_save_empty_no_init_returns_setup" "cancel_supported_prompts"; then
+        return
+    fi
+
+    TOTAL=$((TOTAL + 1))
+    mkdir -p "$out_dir"
+
+    if ! make -s -B -C "$REPO_ROOT/commodore" \
+        KICKASS="$KICKASS" \
+        OUT="$smoke_out_rel" \
+        KA_FLAGSPLUS4="-showmem -vicesymbols -libdir c64 -define PLUS4 -define PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT -define PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_NO_INIT" \
+        "$smoke_out_rel/plus4/moria4.prg" \
+        "$smoke_out_rel/plus4/title" \
+        "$smoke_out_rel/plus4/monster.db.1" \
+        "$smoke_out_rel/plus4/monster.db.2" \
+        "$smoke_out_rel/plus4/monster.db.3" \
+        "$smoke_out_rel/plus4/monster.db.4" >"$build_log" 2>&1; then
+        echo "FAIL: $name (product disk build)"
+        tail -80 "$build_log"
+        FAIL=$((FAIL + 1))
+        return
+    fi
+
+    rm -f "$boot_d64"
+    if ! "$C1541" -format "moria8 plus4,m8" d64 "$boot_d64" \
+        -attach "$boot_d64" \
+        -write "$smoke_plus4/moria4.prg" "moria8" \
+        -write "$smoke_plus4/moria4.prg" "moria4" \
+        -write "$smoke_plus4/title" "t64" \
+        -write "$smoke_plus4/monster.db.1" "monster.db.1" \
+        -write "$smoke_plus4/monster.db.2" "monster.db.2" \
+        -write "$smoke_plus4/monster.db.3" "monster.db.3" \
+        -write "$smoke_plus4/monster.db.4" "monster.db.4" \
+        -write "$smoke_plus4/ovl.start" "4.start" \
+        -write "$smoke_plus4/ovl.town" "4.town" \
+        -write "$smoke_plus4/ovl.death" "4.death" \
+        -write "$smoke_plus4/ovl.gen" "4.gen" \
+        -write "$smoke_plus4/ovl.help" "4.help" \
+        -write "$smoke_plus4/ovl.ui" "4.ui" \
+        -write "$smoke_plus4/ovl.items" "4.items" \
+        -write "$smoke_plus4/ovl.spell" "4.spell" \
+        -write "$smoke_plus4/4.bank" "4.bank" >>"$build_log" 2>&1; then
+        echo "FAIL: $name (product disk fixture)"
+        tail -40 "$build_log"
+        FAIL=$((FAIL + 1))
+        return
+    fi
+
+    rm -f "$save_d64"
+    if ! "$C1541" -format "moria8 save,m8" d64 "$save_d64" >"$build_log" 2>&1; then
+        echo "FAIL: $name (save disk fixture)"
+        tail -20 "$build_log"
+        FAIL=$((FAIL + 1))
+        return
+    fi
+
+    if python3 -u tests/product_scripted_smoke.py \
+        --name "$name" \
+        --start-symbol ".plus4_test_single_drive_fresh_save_wait_for_harness" \
+        --resume-symbol ".plus4_test_single_drive_fresh_save_before_save" \
+        --pass-symbol ".plus4_test_single_drive_fresh_save_no_init_return" \
+        --fail-symbol ".plus4_test_single_drive_fresh_save_unexpected_return" \
+        --swap-symbol ".uds_show_insert_prompt" \
+        --swap-attach8-d64 "$save_d64" \
+        --main-vs "$main_vs" \
+        --boot-d64 "$boot_d64" \
+        --attach-delay 5.0 \
+        --startup-delay 2.0 \
+        --vice "$VICE"; then
+        local dir_list
+        if ! dir_list=$("$C1541" -attach "$save_d64" -list 2>&1); then
+            echo "FAIL: $name (save disk listing)"
+            echo "$dir_list" | tail -20
+            FAIL=$((FAIL + 1))
+            return
+        fi
+        if echo "$dir_list" | grep -qi '"THE.GAME"'; then
+            echo "FAIL: $name (no-init path wrote THE.GAME)"
+            echo "$dir_list" | tail -20
+            FAIL=$((FAIL + 1))
+        else
+            PASS=$((PASS + 1))
+        fi
+    else
+        FAIL=$((FAIL + 1))
+    fi
+}
+
 run_single_drive_save_wrong_media_product_smoke() {
     local name="single_drive_save_wrong_media_plus4"
     local out_dir="$PLUS4_DIR/out"
@@ -1993,6 +2093,7 @@ run_load_wrong_media_product_smoke
 run_save_write_product_smoke
 run_single_drive_save_return_product_smoke
 run_single_drive_fresh_save_product_smoke
+run_single_drive_fresh_save_no_init_product_smoke
 run_single_drive_save_wrong_media_product_smoke
 run_single_drive_load_wrong_media_product_smoke
 run_disk_setup_single_drive_return_product_smoke

@@ -76,7 +76,11 @@ plus4_test_key_script:
 #elif PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_WRONG_MEDIA_PRODUCT
     .byte $20, $20, 0                              // Save prompt, setup insert prompt
 #elif PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT
+#if PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_NO_INIT
+    .byte $20, $4e, 0                              // Setup insert, do not initialize
+#else
     .byte $20, $59, $20, 0                         // Setup insert, initialize, program prompt
+#endif
 #elif PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_RETURN_PRODUCT
     .byte $20, 0                                  // Dismiss insert-program prompt
 #elif PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_CORRUPT_PRODUCT

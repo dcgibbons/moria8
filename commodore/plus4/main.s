@@ -694,6 +694,13 @@ plus4_test_single_drive_fresh_save_wait_for_harness:
     jmp plus4_test_single_drive_fresh_save_wait_for_harness
 plus4_test_single_drive_fresh_save_before_save:
     jsr disk_prompt_save
+#if PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_NO_INIT
+    bcs plus4_test_single_drive_fresh_save_unexpected_return
+    jsr save_game
+    bcs plus4_test_single_drive_fresh_save_unexpected_return
+plus4_test_single_drive_fresh_save_no_init_return:
+    jmp plus4_test_single_drive_fresh_save_no_init_return
+#else
     bcs plus4_test_single_drive_fresh_save_unexpected_return
     jsr save_game
     bcc plus4_test_single_drive_fresh_save_unexpected_return
@@ -701,6 +708,7 @@ plus4_test_single_drive_fresh_save_before_save:
     sta plus4_test_single_drive_fresh_save_armed
     jsr disk_prompt_game_required
     jmp game_over_prompt
+#endif
 plus4_test_single_drive_fresh_save_unexpected_return:
     brk
 #endif

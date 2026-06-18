@@ -670,6 +670,13 @@ c64_test_single_drive_fresh_save_wait_for_harness:
     jmp c64_test_single_drive_fresh_save_wait_for_harness
 c64_test_single_drive_fresh_save_before_save:
     jsr disk_prompt_save
+#if C64_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_NO_INIT
+    bcs c64_test_single_drive_fresh_save_unexpected_return
+    jsr save_game
+    bcs c64_test_single_drive_fresh_save_unexpected_return
+c64_test_single_drive_fresh_save_no_init_return:
+    jmp c64_test_single_drive_fresh_save_no_init_return
+#else
     bcs c64_test_single_drive_fresh_save_unexpected_return
     jsr save_game
     bcc c64_test_single_drive_fresh_save_unexpected_return
@@ -677,6 +684,7 @@ c64_test_single_drive_fresh_save_before_save:
     sta c64_test_restart_after_save_armed
     jsr disk_prompt_game_required
     jmp game_over_prompt
+#endif
 c64_test_single_drive_fresh_save_unexpected_return:
     brk
 #endif

@@ -540,8 +540,12 @@ c64_test_input_script:
 #else
 #if C64_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT
     .byte $20              // SPACE = acknowledge insert-save-disk prompt
+#if C64_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_NO_INIT
+    .byte $4e              // N = do not initialize fresh save disk
+#else
     .byte $59              // Y = initialize fresh save disk
     .byte $20              // SPACE = acknowledge insert-program-disk prompt
+#endif
     .byte $00
 #else
 #if C64_TEST_SCRIPTED_LOAD_THEN_SAVE_NEW_EMPTY_PRODUCT

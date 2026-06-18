@@ -2268,10 +2268,16 @@ c128_test_single_drive_fresh_save_before_save:
     lda #C128_MEDIA_PROGRAM
     sta c128_media_state
     jsr c128_modal_save_game
+#if C128_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_NO_INIT
+    bcs c128_test_single_drive_fresh_save_unexpected_return
+c128_test_single_drive_fresh_save_no_init_return:
+    jmp c128_test_single_drive_fresh_save_no_init_return
+#else
     bcc c128_test_single_drive_fresh_save_unexpected_return
     lda #1
     sta c128_test_single_drive_fresh_save_armed
     jmp game_over_prompt
+#endif
 c128_test_single_drive_fresh_save_unexpected_return:
     jmp c128_test_single_drive_fresh_save_unexpected_return
 #endif

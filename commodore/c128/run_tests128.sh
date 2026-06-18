@@ -5328,6 +5328,110 @@ run_boot_title_single_drive_fresh_save_smoke() {
     TOTAL=$((TOTAL + 1))
 }
 
+run_boot_title_single_drive_fresh_save_no_init_smoke() {
+    local name="boot_title_single_drive_fresh_save_no_init_smoke"
+    echo -n "  $name: "
+
+    build_boot_assets || return
+
+    local build_log
+    build_log="$(test128_tmp_file test128_single_drive_fresh_save_no_init_build.log)"
+    local c1541_bin="${C1541:-c1541}"
+    local fresh_d64="out/moria128_single_drive_fresh_save_no_init.d64"
+    local save_d64="out/moria128_single_drive_fresh_save_no_init_save.d64"
+
+    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 \
+            -define C128 -define C128_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT \
+            -define C128_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_NO_INIT \
+            -o out/moria128.prg >"$build_log" 2>&1; then
+        echo "FAIL (single-drive fresh-save no-init product main assembly failed)"
+        tail -20 "$build_log" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    rm -f "$fresh_d64"
+    if ! "$c1541_bin" -format "moria128,m8" d64 "$fresh_d64" \
+            -attach "$fresh_d64" \
+            -write out/boot128.prg "moria8.128" \
+            -write out/moria128.prg "moria128" \
+            -write out/title "title" \
+            -write out/monster.db.1 "monster.db.1" \
+            -write out/monster.db.2 "monster.db.2" \
+            -write out/monster.db.3 "monster.db.3" \
+            -write out/monster.db.4 "monster.db.4" \
+            -write out/ovl.town "ovl.town" \
+            -write out/ovl.start "ovl.start" \
+            -write out/ovl.death "ovl.death" \
+            -write out/ovl.gen "ovl.gen" \
+            -write out/ovl.help "128.help" \
+            -write out/128.runtime.prg "128.runtime" \
+            -write out/128.input.prg "128.input" \
+            -write out/128.proj.prg "128.proj" \
+            -write out/128.fdisk.prg "128.fdisk" \
+            -write out/128.diskio.prg "128.diskio" \
+            -write out/128.world.prg "128.world" \
+            -write out/128.item.prg "128.item" \
+            -write out/128.names.prg "128.names" \
+            -write out/128.select.prg "128.select" \
+            -write out/128.persist.prg "128.persist" \
+            -write out/128.play.prg "128.play" \
+            -write out/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
+        echo "FAIL (single-drive fresh-save no-init product disk build failed)"
+        tail -20 "$build_log" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    rm -f "$save_d64"
+    if ! "$c1541_bin" -format "moria128 save,m8" d64 "$save_d64" >"$build_log" 2>&1; then
+        echo "FAIL (single-drive fresh-save no-init blank save disk build failed)"
+        tail -20 "$build_log" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    if python3 -u ../plus4/tests/product_scripted_smoke.py \
+            --name "$name" \
+            --vice "$VICE" \
+            --boot-d64 "$fresh_d64" \
+            --main-vs out/main.vs \
+            --start-symbol ".c128_test_single_drive_fresh_save_wait_for_harness" \
+            --resume-symbol ".c128_test_single_drive_fresh_save_before_save" \
+            --attach-delay 5.0 \
+            --swap-symbol ".uds_show_insert_prompt" \
+            --swap-attach8-d64 "$save_d64" \
+            --pass-symbol ".c128_test_single_drive_fresh_save_no_init_return" \
+            --fail-symbol ".c128_test_single_drive_fresh_save_unexpected_return" \
+            --limitcycles 0 \
+            --reset8-after-attach \
+            --autostart-only-drive8 \
+            --screen-base 0x0400; then
+        local dir_list
+        if ! dir_list=$("$c1541_bin" -attach "$save_d64" -list 2>&1); then
+            echo "FAIL (single-drive fresh-save no-init disk listing failed)"
+            echo "$dir_list" | tail -20 | sed 's/^/    /'
+            FAIL=$((FAIL + 1))
+            TOTAL=$((TOTAL + 1))
+            return
+        fi
+        if echo "$dir_list" | grep -qi '"THE.GAME"'; then
+            echo "FAIL (no-init path wrote THE.GAME)"
+            echo "$dir_list" | tail -20 | sed 's/^/    /'
+            FAIL=$((FAIL + 1))
+        else
+            echo "PASS"
+            PASS=$((PASS + 1))
+        fi
+    else
+        FAIL=$((FAIL + 1))
+    fi
+    TOTAL=$((TOTAL + 1))
+}
+
 run_boot_title_load_resume_smoke() {
     local name="boot_title_load_resume_smoke"
     echo -n "  $name: "
@@ -7282,6 +7386,7 @@ run_selected_suites() {
     run_named_suite prompt_sequence_no_repeat --alias boot_title_single_drive_load_return_smoke run_boot_title_single_drive_load_return_smoke || return 1
     run_named_suite title_disk_setup_single_drive_returns_program_prompt --alias boot_title_disk_setup_single_drive_return_smoke run_boot_title_disk_setup_single_drive_return_smoke || return 1
     run_named_suite new_save_empty_init_writes --alias boot_title_single_drive_fresh_save_smoke run_boot_title_single_drive_fresh_save_smoke || return 1
+    run_named_suite new_save_empty_no_init_returns_setup --alias cancel_supported_prompts --alias boot_title_single_drive_fresh_save_no_init_smoke run_boot_title_single_drive_fresh_save_no_init_smoke || return 1
     run_named_suite vic40_clean_boot_smoke run_vic40_clean_boot_smoke || return 1
     run_named_suite new_key_stability_smoke run_new_key_stability_smoke || return 1
     run_named_suite boot_title_newgame_smoke run_boot_title_newgame_smoke || return 1
