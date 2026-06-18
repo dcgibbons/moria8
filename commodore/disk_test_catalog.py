@@ -121,10 +121,19 @@ SCENARIOS: tuple[Scenario, ...] = (
     Scenario(
         "wrong_media_detection_selected_devices",
         {
-            "c64": legacy("load_missing_savefile_product_smoke", "save_media_fail_product_smoke", note="legacy wrong/missing-media coverage; selected-device matrix is not yet strict"),
-            "c128": legacy("boot_title_load_missing_savefile_smoke", "boot_title_save_media_fail_product_smoke", note="legacy wrong/missing-media coverage; selected-device matrix is not yet strict"),
-            "plus4": legacy("load_wrong_media_product_plus4", "load_missing_savefile_product_plus4", note="legacy wrong/missing-media coverage; selected-device matrix is not yet strict"),
+            "c64": strict("single_drive_load_wrong_media_product_smoke", "save_media_fail_product_smoke"),
+            "c128": strict("boot_title_single_drive_load_wrong_media_smoke", "boot_title_save_media_fail_product_smoke"),
+            "plus4": strict("load_wrong_media_product_plus4", "single_drive_load_wrong_media_plus4"),
         },
+        ScenarioContract(
+            media="selected save device contains wrong media: either the program disk or a disk with the wrong MORIA8.ID marker",
+            start="title load/save path uses the configured save device rather than assuming drive 8",
+            ordered_events=("save_device_selected", "wrong_media_detected", "safe_recovery_prompt"),
+            event_counts=("wrong_media_detected=1",),
+            forbidden_events=("load_success_from_wrong_media", "save_success_to_wrong_media"),
+            screen_assertions=("program disk cannot be used as save media or wrong save disk is reported", "press any key"),
+            final_proof=("load/save does not proceed as successful when selected media is wrong",),
+        ),
     ),
     Scenario(
         "single_drive_save_program_disk_rejected",
@@ -316,10 +325,19 @@ SCENARIOS: tuple[Scenario, ...] = (
     Scenario(
         "missing_device_or_no_disk",
         {
-            "c64": legacy("load_missing_savefile_product_smoke", note="legacy missing-save fixture; selected absent-device/no-disk behavior is not yet strict"),
-            "c128": legacy("boot_title_load_missing_savefile_smoke", note="legacy missing-save fixture; selected absent-device/no-disk behavior is not yet strict"),
-            "plus4": legacy("disk_setup_missing_save_plus4", note="legacy missing-save fixture; selected absent-device/no-disk behavior is not yet strict"),
+            "c64": strict("load_missing_savefile_product_smoke"),
+            "c128": strict("boot_title_load_missing_savefile_smoke"),
+            "plus4": strict("disk_setup_missing_save_plus4", "load_missing_savefile_product_plus4"),
         },
+        ScenarioContract(
+            media="selected save device is absent, has no usable save file, or cannot complete Disk Setup validation",
+            start="title load or Disk Setup path reaches the selected save device check",
+            ordered_events=("save_device_selected", "missing_or_unusable_save_detected", "safe_recovery_prompt"),
+            event_counts=("missing_or_unusable_save_detected=1",),
+            forbidden_events=("load_success_without_save_file", "disk_setup_success_without_usable_save_media"),
+            screen_assertions=("missing save/no device setup failure prompt", "title or Disk Setup recovery screen"),
+            final_proof=("flow returns to a safe prompt/title path without treating missing media as success",),
+        ),
     ),
     Scenario(
         "cancel_supported_prompts",

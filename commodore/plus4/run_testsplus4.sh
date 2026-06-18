@@ -809,7 +809,7 @@ run_disk_setup_missing_save_smoke() {
     local boot_d64="$smoke_out/moria8-plus4.d64"
     local build_log="$out_dir/$name.build.log"
 
-    if [ -n "$TEST_FILTER" ] && [[ ! "$name" =~ $TEST_FILTER ]]; then
+    if ! suite_selected "$name" "missing_device_or_no_disk"; then
         return
     fi
 
@@ -980,7 +980,7 @@ run_single_drive_save_return_product_smoke() {
     local boot_d64="$smoke_out/moria8-plus4.d64"
     local build_log="$out_dir/$name.build.log"
 
-    if [ -n "$TEST_FILTER" ] && [[ ! "$name" =~ $TEST_FILTER ]]; then
+    if ! suite_selected "$name"; then
         return
     fi
 
@@ -1251,7 +1251,7 @@ run_single_drive_load_wrong_media_product_smoke() {
     local boot_d64="$smoke_out/moria8-plus4.d64"
     local build_log="$out_dir/$name.build.log"
 
-    if ! suite_selected "$name" "single_drive_load_program_disk_rejected" "wrong_media_recovery"; then
+    if ! suite_selected "$name" "single_drive_load_program_disk_rejected" "wrong_media_recovery" "wrong_media_detection_selected_devices"; then
         return
     fi
 
@@ -1421,7 +1421,7 @@ run_load_wrong_media_product_smoke() {
     local boot_d64="$smoke_out/moria8-plus4.d64"
     local build_log="$out_dir/$name.build.log"
 
-    if [ -n "$TEST_FILTER" ] && [[ ! "$name" =~ $TEST_FILTER ]]; then
+    if ! suite_selected "$name" "wrong_media_detection_selected_devices"; then
         return
     fi
 
@@ -1605,7 +1605,7 @@ run_death_hiscore_single_drive_product_smoke() {
     local boot_d64="$smoke_out/moria8-plus4.d64"
     local build_log="$out_dir/$name.build.log"
 
-    if [ -n "$TEST_FILTER" ] && [[ ! "$name" =~ $TEST_FILTER ]]; then
+    if ! suite_selected "$name"; then
         return
     fi
 
@@ -1898,7 +1898,7 @@ run_load_missing_savefile_product_smoke() {
     local boot_d64="$smoke_out/moria8-plus4.d64"
     local build_log="$out_dir/$name.build.log"
 
-    if [ -n "$TEST_FILTER" ] && [[ ! "$name" =~ $TEST_FILTER ]]; then
+    if ! suite_selected "$name" "missing_device_or_no_disk"; then
         return
     fi
 
