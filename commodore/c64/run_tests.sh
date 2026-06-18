@@ -3263,7 +3263,7 @@ run_suite_function "single_drive_corrupt_save_recovery_requires_program_disk" ru
 run_suite_function "new_save_empty_init_writes" run_single_drive_fresh_save_product_smoke "single_drive_fresh_save_product_smoke"
 run_suite_function "new_save_empty_no_init_returns_setup" run_single_drive_fresh_save_no_init_product_smoke "single_drive_fresh_save_no_init_product_smoke" "cancel_supported_prompts"
 run_suite_function "load_missing_savefile_product_smoke" run_load_missing_savefile_product_smoke "missing_device_or_no_disk"
-run_suite_function "save_media_fail_product_smoke" run_save_media_fail_product_smoke "wrong_media_detection_selected_devices"
+run_suite_function "save_media_fail_product_smoke" run_save_media_fail_product_smoke "wrong_media_detection_selected_devices" "write_protected_or_forced_write_error"
 run_suite_function "dual_drive_load_then_save_no_program_prompt" run_save_write_product_smoke "save_existing_overwrite" "save_write_product_smoke"
 echo ""
 echo "=== Results: $PASS passed, $FAIL failed (of $TOTAL suites) ==="

@@ -968,6 +968,121 @@ run_save_write_product_smoke() {
     fi
 }
 
+run_save_media_fail_product_smoke() {
+    local name="save_media_fail_plus4"
+    local out_dir="$PLUS4_DIR/out"
+    local smoke_out
+    smoke_out="$(make_product_out "$name")"
+    local smoke_out_rel="$smoke_out"
+    local smoke_plus4="$smoke_out/plus4"
+    local save_d64="$out_dir/test-save-media-fail-plus4.d64"
+    local marker_blob="$out_dir/MORIA8.ID"
+    local save_blob="$out_dir/THE.GAME"
+    local main_vs="$smoke_out/plus4/main.vs"
+    local boot_d64="$smoke_out/moria8-plus4.d64"
+    local build_log="$out_dir/$name.build.log"
+    local dir_type_offset0=$(((357 + 1) * 256 + 2))
+    local dir_type_offset1=$((dir_type_offset0 + 32))
+
+    if ! suite_selected "$name" "write_protected_or_forced_write_error"; then
+        return
+    fi
+
+    TOTAL=$((TOTAL + 1))
+    mkdir -p "$out_dir"
+
+    if ! make -s -B -C "$REPO_ROOT/commodore" \
+        KICKASS="$KICKASS" \
+        OUT="$smoke_out_rel" \
+        KA_FLAGSPLUS4="-showmem -vicesymbols -libdir c64 -define PLUS4 -define PLUS4_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT" \
+        "$smoke_out_rel/plus4/moria4.prg" \
+        "$smoke_out_rel/plus4/title" \
+        "$smoke_out_rel/plus4/monster.db.1" \
+        "$smoke_out_rel/plus4/monster.db.2" \
+        "$smoke_out_rel/plus4/monster.db.3" \
+        "$smoke_out_rel/plus4/monster.db.4" >"$build_log" 2>&1; then
+        echo "FAIL: $name (product disk build)"
+        tail -80 "$build_log"
+        FAIL=$((FAIL + 1))
+        return
+    fi
+
+    rm -f "$boot_d64"
+    if ! "$C1541" -format "moria8 plus4,m8" d64 "$boot_d64" \
+        -attach "$boot_d64" \
+        -write "$smoke_plus4/moria4.prg" "moria8" \
+        -write "$smoke_plus4/moria4.prg" "moria4" \
+        -write "$smoke_plus4/title" "t64" \
+        -write "$smoke_plus4/monster.db.1" "monster.db.1" \
+        -write "$smoke_plus4/monster.db.2" "monster.db.2" \
+        -write "$smoke_plus4/monster.db.3" "monster.db.3" \
+        -write "$smoke_plus4/monster.db.4" "monster.db.4" \
+        -write "$smoke_plus4/ovl.start" "4.start" \
+        -write "$smoke_plus4/ovl.town" "4.town" \
+        -write "$smoke_plus4/ovl.death" "4.death" \
+        -write "$smoke_plus4/ovl.gen" "4.gen" \
+        -write "$smoke_plus4/ovl.help" "4.help" \
+        -write "$smoke_plus4/ovl.ui" "4.ui" \
+        -write "$smoke_plus4/ovl.items" "4.items" \
+        -write "$smoke_plus4/ovl.spell" "4.spell" \
+        -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
+        echo "FAIL: $name (product disk image)"
+        FAIL=$((FAIL + 1))
+        return
+    fi
+
+    if ! printf 'M8SAVE' > "$marker_blob"; then
+        echo "FAIL: $name (marker generation)"
+        FAIL=$((FAIL + 1))
+        return
+    fi
+    if ! python3 "$PLUS4_DIR/tests/make_load_resume_save_plus4.py" "$save_blob" >"$build_log" 2>&1; then
+        echo "FAIL: $name (save generation)"
+        tail -20 "$build_log"
+        FAIL=$((FAIL + 1))
+        return
+    fi
+
+    rm -f "$save_d64"
+    if ! "$C1541" -format "moria8 save,m8" d64 "$save_d64" \
+        -attach "$save_d64" \
+        -write "$marker_blob" "moria8.id,s" \
+        -write "$save_blob" "the.game,s" >"$build_log" 2>&1; then
+        echo "FAIL: $name (save disk fixture)"
+        tail -20 "$build_log"
+        FAIL=$((FAIL + 1))
+        return
+    fi
+    if ! printf '\201' | dd of="$save_d64" bs=1 seek="$dir_type_offset0" conv=notrunc status=none 2>>"$build_log"; then
+        echo "FAIL: $name (marker directory patch)"
+        tail -20 "$build_log"
+        FAIL=$((FAIL + 1))
+        return
+    fi
+    if ! printf '\201' | dd of="$save_d64" bs=1 seek="$dir_type_offset1" conv=notrunc status=none 2>>"$build_log"; then
+        echo "FAIL: $name (savefile directory patch)"
+        tail -20 "$build_log"
+        FAIL=$((FAIL + 1))
+        return
+    fi
+
+    if python3 -u tests/product_scripted_smoke.py \
+        --name "$name" \
+        --start-symbol ".plus4_test_save_media_fail_wait_for_harness" \
+        --resume-symbol ".plus4_test_save_media_fail_before_save" \
+        --pass-symbol ".plus4_test_after_save_media_fail" \
+        --fail-symbol ".plus4_test_save_media_fail_unexpected_return" \
+        --main-vs "$main_vs" \
+        --boot-d64 "$boot_d64" \
+        --save-d64 "$save_d64" \
+        --enable-drive9-bus \
+        --vice "$VICE"; then
+        PASS=$((PASS + 1))
+    else
+        FAIL=$((FAIL + 1))
+    fi
+}
+
 run_single_drive_save_return_product_smoke() {
     local name="single_drive_save_return_plus4"
     local out_dir="$PLUS4_DIR/out"
@@ -2092,6 +2207,7 @@ run_disk_setup_product_smoke
 run_disk_setup_missing_save_smoke
 run_load_wrong_media_product_smoke
 run_save_write_product_smoke
+run_save_media_fail_product_smoke
 run_single_drive_save_return_product_smoke
 run_single_drive_fresh_save_product_smoke
 run_single_drive_fresh_save_no_init_product_smoke

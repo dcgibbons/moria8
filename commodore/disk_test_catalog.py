@@ -435,9 +435,18 @@ SCENARIOS: tuple[Scenario, ...] = (
     Scenario(
         "write_protected_or_forced_write_error",
         {
-            "c64": legacy("save_media_fail_product_smoke", note="legacy save-failure fixture; write-protected/full-disk fixture is not yet deterministic"),
-            "c128": legacy("boot_title_save_media_fail_product_smoke", note="legacy save-failure fixture; write-protected/full-disk fixture is not yet deterministic"),
-            "plus4": proxy("load_wrong_media_product_plus4", note="proxy only: wrong-media load failure, not write-protected or forced write-error save behavior"),
+            "c64": strict("save_media_fail_product_smoke", note="deterministic forced save-media failure fixture; physical write-protect remains separate debt"),
+            "c128": strict("boot_title_save_media_fail_product_smoke", note="deterministic forced save-media failure fixture; physical write-protect remains separate debt"),
+            "plus4": strict("save_media_fail_plus4", note="deterministic forced save-media failure fixture; physical write-protect remains separate debt"),
         },
+        ScenarioContract(
+            media="selected save device contains a deterministic failure fixture that cannot be accepted for writing",
+            start="gameplay save path attempts to use the configured save device",
+            ordered_events=("save_device_selected", "forced_save_media_failure", "save_failure_prompt"),
+            event_counts=("forced_save_media_failure=1", "save_success=0"),
+            forbidden_events=("save_success", "game_saved_message", "write_success_after_failure"),
+            screen_assertions=("save failure prompt",),
+            final_proof=("save path reaches the failure/dismiss prompt instead of reporting success",),
+        ),
     ),
 )

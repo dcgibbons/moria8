@@ -627,6 +627,22 @@ plus4_test_disk_setup_single_drive_return_before_disk_setup:
     lda #1
     sta disk_setup_done
 #endif
+#if PLUS4_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT
+    lda #8
+    sta program_device
+    lda #9
+    sta save_device
+    lda #2
+    sta disk_mode
+    lda #1
+    sta disk_setup_done
+plus4_test_save_media_fail_wait_for_harness:
+    jmp plus4_test_save_media_fail_wait_for_harness
+plus4_test_save_media_fail_before_save:
+    jsr save_game
+plus4_test_save_media_fail_unexpected_return:
+    brk
+#endif
 #if PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_RETURN_PRODUCT
     lda #8
     sta program_device

@@ -383,6 +383,12 @@ disk_require_save_media:
     sec
     rts
 !drsm_marker:
+#if PLUS4_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT
+    lda #74
+    sta disk_status
+    sec
+    rts
+#endif
     jsr disk_marker_present
     rts
 

@@ -477,6 +477,9 @@ save_game:
 #if C64_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT
 c64_test_after_save_media_fail:
 #endif
+#if PLUS4_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT
+plus4_test_after_save_media_fail:
+#endif
     jsr input_get_modal_dismiss_key
 save_return_fail:
 #if HAL_STORAGE_CPU_PORT_RESTORE_AFTER_IO
