@@ -4,374 +4,42 @@ from __future__ import annotations
 import argparse
 import os
 import re
+import shlex
 import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-
-PLATFORMS = ("c64", "c128", "plus4")
-SCENARIO_ID_RE = re.compile(r"^[a-z0-9]+(?:_[a-z0-9]+)*$")
-
-
-@dataclass(frozen=True)
-class PlatformCoverage:
-    tests: tuple[str, ...]
-    strict: bool = False
-    note: str = ""
-
-    def filter_names(self, scenario_id: str) -> tuple[str, ...]:
-        if self.strict:
-            return (scenario_id,)
-        return self.tests
-
-
-@dataclass(frozen=True)
-class ScenarioContract:
-    media: str
-    start: str
-    ordered_events: tuple[str, ...]
-    event_counts: tuple[str, ...]
-    forbidden_events: tuple[str, ...]
-    screen_assertions: tuple[str, ...]
-    final_proof: tuple[str, ...]
-
-
-@dataclass(frozen=True)
-class Scenario:
-    scenario_id: str
-    coverage: dict[str, PlatformCoverage]
-    contract: ScenarioContract | None = None
-
-    def platform_coverage(self, platform: str) -> PlatformCoverage | None:
-        return self.coverage.get(platform)
-
-
-def legacy(*tests: str, note: str = "") -> PlatformCoverage:
-    return PlatformCoverage(tests, strict=False, note=note)
-
-
-def strict(*tests: str, note: str = "") -> PlatformCoverage:
-    return PlatformCoverage(tests, strict=True, note=note)
-
-
-SCENARIOS: tuple[Scenario, ...] = (
-    Scenario(
-        "media_drive8_attach_read_write",
-        {
-            "c64": legacy("disk_swap"),
-            "c128": legacy("disk_swap128", "marker_init_d64_smoke"),
-            "plus4": legacy("disk_setup_product_plus4"),
-        },
-    ),
-    Scenario(
-        "media_drive9_attach_read_write",
-        {
-            "c64": legacy("disk_setup_product_smoke", "save_write_product_smoke"),
-            "c128": legacy("marker_init_d64_smoke", "boot_title_save_write_product_smoke"),
-            "plus4": legacy("disk_setup_product_plus4", "save_write_product_plus4"),
-        },
-    ),
-    Scenario(
-        "media_drive10_11_device_probe",
-        {
-            "c64": legacy("disk_swap"),
-            "c128": legacy("disk_swap128"),
-            "plus4": legacy("disk_setup_product_plus4"),
-        },
-    ),
-    Scenario(
-        "wrong_media_detection_selected_devices",
-        {
-            "c64": legacy("load_missing_savefile_product_smoke", "save_media_fail_product_smoke"),
-            "c128": legacy("boot_title_load_missing_savefile_smoke", "boot_title_save_media_fail_product_smoke"),
-            "plus4": legacy("load_wrong_media_product_plus4", "load_missing_savefile_product_plus4"),
-        },
-    ),
-    Scenario(
-        "single_drive_save_program_disk_rejected",
-        {
-            "c64": strict("single_drive_save_wrong_media_product_smoke"),
-            "c128": strict("boot_title_single_drive_save_wrong_media_smoke"),
-            "plus4": strict("single_drive_save_wrong_media_plus4"),
-        },
-        ScenarioContract(
-            media="drive 8 contains program disk; save device is also drive 8",
-            start="title/new game reaches town save path with one-drive disk setup",
-            ordered_events=("save_disk_prompt", "program_disk_rejected_for_save", "save_disk_prompt"),
-            event_counts=("program_disk_rejected_for_save=1",),
-            forbidden_events=("save_success", "gameplay_resume_after_save"),
-            screen_assertions=("program disk cannot be used as save media", "press any key"),
-            final_proof=("returns to save-disk prompt without writing THE.GAME",),
-        ),
-    ),
-    Scenario(
-        "single_drive_load_program_disk_rejected",
-        {
-            "c64": strict("single_drive_load_wrong_media_product_smoke"),
-            "c128": strict("boot_title_single_drive_load_wrong_media_smoke"),
-            "plus4": strict("single_drive_load_wrong_media_plus4"),
-        },
-        ScenarioContract(
-            media="drive 8 contains program disk; save device is also drive 8",
-            start="title load command in one-drive disk setup",
-            ordered_events=("save_disk_prompt", "program_disk_rejected_for_save", "save_disk_prompt"),
-            event_counts=("program_disk_rejected_for_save=1",),
-            forbidden_events=("wrong_save_disk", "load_success"),
-            screen_assertions=("program disk cannot be used as save media", "press any key"),
-            final_proof=("remains in save-disk recovery path",),
-        ),
-    ),
-    Scenario(
-        "title_disk_setup_single_drive_returns_program_prompt",
-        {
-            "c64": strict("disk_setup_single_drive_return_product_smoke"),
-            "c128": strict("boot_title_disk_setup_single_drive_return_smoke"),
-            "plus4": strict("disk_setup_single_drive_return_plus4"),
-        },
-        ScenarioContract(
-            media="drive 8 starts as program disk, title Disk Setup validates a save disk on drive 8, then program disk is reattached only at the program-media prompt",
-            start="title D)isk Setup command in one-drive mode with save device 8",
-            ordered_events=("disk_setup_save_media_valid", "program_disk_prompt", "title_menu_ready"),
-            event_counts=("program_disk_prompt=1",),
-            forbidden_events=("title_load_from_save_disk", "garbled_title_return"),
-            screen_assertions=("Insert program disk", "title menu text"),
-            final_proof=("title menu redraws only after verified program media",),
-        ),
-    ),
-    Scenario(
-        "new_save_empty_no_init_returns_setup",
-        {
-            "c64": legacy("load_missing_savefile_product_smoke"),
-            "c128": legacy("boot_title_load_missing_savefile_smoke"),
-            "plus4": legacy("disk_setup_missing_save_plus4"),
-        },
-    ),
-    Scenario(
-        "new_save_empty_init_writes",
-        {
-            "c64": strict("single_drive_fresh_save_product_smoke"),
-            "c128": strict("boot_title_single_drive_fresh_save_smoke"),
-            "plus4": strict("single_drive_fresh_save_plus4"),
-        },
-        ScenarioContract(
-            media="drive 8 starts as program disk, then an empty save disk is attached to drive 8 for the save path",
-            start="new game reaches town save path in one-drive disk setup",
-            ordered_events=("save_disk_prompt", "initialize_prompt", "save_success", "program_disk_prompt", "gameplay_resume_after_save"),
-            event_counts=("initialize_prompt=1", "save_success=1", "program_disk_prompt=1"),
-            forbidden_events=("overwrite_prompt", "program_disk_rejected_for_save", "garbled_title_return"),
-            screen_assertions=("initialize prompt", "Saving game", "Game Saved", "Insert program disk"),
-            final_proof=("save disk contains MORIA8.ID and THE.GAME", "gameplay resumes after program media is restored"),
-        ),
-    ),
-    Scenario(
-        "load_initialized_save",
-        {
-            "c64": strict("load_resume_product_smoke"),
-            "c128": strict("boot_title_load_resume_smoke"),
-            "plus4": strict("load_resume_product_plus4"),
-        },
-        ScenarioContract(
-            media="program disk remains mounted while initialized save media is available on the selected save device",
-            start="title load command with a valid initialized save disk",
-            ordered_events=("load_success", "gameplay_resume_after_load"),
-            event_counts=("load_success=1",),
-            forbidden_events=("save_disk_prompt", "wrong_save_disk", "corrupt_save_error", "program_disk_prompt_after_load"),
-            screen_assertions=("title load flow", "gameplay screen after load"),
-            final_proof=("load reaches the gameplay resume path from THE.GAME",),
-        ),
-    ),
-    Scenario(
-        "prompt_sequence_no_repeat",
-        {
-            "c64": strict("single_drive_load_return_product_smoke"),
-            "c128": strict("boot_title_single_drive_load_return_smoke"),
-            "plus4": strict("single_drive_load_return_plus4"),
-        },
-        ScenarioContract(
-            media="single drive 8 starts with save media for load, then requires program media before returning to title/gameplay flow",
-            start="title load command in one-drive disk setup",
-            ordered_events=("save_disk_prompt", "load_success", "program_disk_prompt"),
-            event_counts=("load_success=1", "program_disk_prompt=1"),
-            forbidden_events=("duplicate_save_disk_prompt", "duplicate_program_disk_prompt", "load_fail"),
-            screen_assertions=("Insert program disk", "press any key"),
-            final_proof=("load reaches success path before program-media recovery",),
-        ),
-    ),
-    Scenario(
-        "save_existing_overwrite",
-        {
-            "c64": strict("save_write_product_smoke"),
-            "c128": strict("boot_title_save_write_product_smoke"),
-            "plus4": strict("save_write_product_plus4"),
-        },
-        ScenarioContract(
-            media="drive 8 contains program disk; selected save device contains an existing initialized save",
-            start="gameplay save command with an existing THE.GAME on the save disk",
-            ordered_events=("overwrite_prompt", "save_success", "gameplay_resume_after_save"),
-            event_counts=("overwrite_prompt=1", "save_success=1"),
-            forbidden_events=("initialize_prompt", "program_disk_prompt_after_save", "program_media_error_after_save"),
-            screen_assertions=("overwrite prompt", "Saving game", "Game Saved"),
-            final_proof=("save disk still contains MORIA8.ID and THE.GAME after overwrite",),
-        ),
-    ),
-    Scenario(
-        "load_then_save_new_empty_disk",
-        {
-            "c64": legacy(
-                "load_then_save_new_empty_product_smoke",
-                note="real single-drive load-save, fresh-save, program-restore flow; strict promotion waits for C128 and Plus/4 adapters",
-            ),
-            "c128": legacy(
-                "boot_title_single_drive_load_return_smoke",
-                "boot_title_save_write_product_smoke",
-                note="proxy only: load-return plus independent save-write, not one continuous load-then-fresh-save flow",
-            ),
-            "plus4": legacy(
-                "single_drive_load_return_plus4",
-                note="proxy only: load-return, not one continuous load-then-fresh-save flow",
-            ),
-        },
-    ),
-    Scenario(
-        "dual_drive_load_then_save_no_program_prompt",
-        {
-            "c64": strict("save_write_product_smoke"),
-            "c128": strict("boot_title_save_write_product_smoke"),
-            "plus4": strict("save_write_product_plus4"),
-        },
-        ScenarioContract(
-            media="drive 8 contains program disk; drive 9 contains existing save disk",
-            start="load existing save, then save back to selected save device",
-            ordered_events=("load_success", "overwrite_prompt", "save_success"),
-            event_counts=("program_disk_prompt_after_save=0", "save_success=1"),
-            forbidden_events=("program_disk_prompt_after_save", "program_media_error_after_save"),
-            screen_assertions=("overwrite prompt", "Saving game", "Game Saved"),
-            final_proof=("save completes on drive 9 without requiring program media from drive 9",),
-        ),
-    ),
-    Scenario(
-        "change_save_drive_after_save",
-        {
-            "c64": legacy("disk_swap", "save_write_product_smoke"),
-            "c128": legacy("disk_swap128", "boot_title_save_write_product_smoke"),
-            "plus4": legacy("single_drive_save_return_plus4", "save_write_product_plus4"),
-        },
-    ),
-    Scenario(
-        "wrong_media_recovery",
-        {
-            "c64": strict("single_drive_save_wrong_media_product_smoke", "single_drive_load_wrong_media_product_smoke"),
-            "c128": strict("boot_title_single_drive_save_wrong_media_smoke", "boot_title_single_drive_load_wrong_media_smoke"),
-            "plus4": strict("single_drive_save_wrong_media_plus4", "single_drive_load_wrong_media_plus4"),
-        },
-        ScenarioContract(
-            media="single-drive setup keeps the program disk mounted when save media is required",
-            start="save and load flows that require save media on drive 8",
-            ordered_events=("save_disk_prompt", "program_disk_rejected_for_save", "save_disk_prompt"),
-            event_counts=("program_disk_rejected_for_save=1",),
-            forbidden_events=("save_success", "load_success", "wrong_save_disk"),
-            screen_assertions=("program disk cannot be used as save media", "press any key"),
-            final_proof=("recovery stays in the save-media prompt path instead of accepting the program disk",),
-        ),
-    ),
-    Scenario(
-        "missing_device_or_no_disk",
-        {
-            "c64": legacy("load_missing_savefile_product_smoke"),
-            "c128": legacy("boot_title_load_missing_savefile_smoke"),
-            "plus4": legacy("disk_setup_missing_save_plus4"),
-        },
-    ),
-    Scenario(
-        "cancel_supported_prompts",
-        {
-            "c64": legacy("load_missing_savefile_product_smoke"),
-            "c128": legacy("boot_title_load_missing_savefile_smoke"),
-            "plus4": legacy("disk_setup_missing_save_plus4"),
-        },
-    ),
-    Scenario(
-        "alternate_drive10_11_save_load_smoke",
-        {
-            "c64": legacy("disk_swap"),
-            "c128": legacy("disk_swap128"),
-            "plus4": legacy("disk_setup_product_plus4"),
-        },
-    ),
-    Scenario(
-        "alternate_drive_change_smoke",
-        {
-            "c64": legacy("disk_swap"),
-            "c128": legacy("disk_swap128"),
-            "plus4": legacy("single_drive_save_return_plus4"),
-        },
-    ),
-    Scenario(
-        "alternate_drive_prompt_no_repeat",
-        {
-            "c64": legacy("disk_swap", "single_drive_load_return_product_smoke"),
-            "c128": legacy("disk_swap128"),
-            "plus4": legacy("single_drive_load_return_plus4"),
-        },
-    ),
-    Scenario(
-        "corrupt_save_file",
-        {
-            "c64": strict("single_drive_load_corrupt_product_smoke"),
-            "c128": strict("boot_title_single_drive_load_corrupt_smoke"),
-            "plus4": strict("single_drive_load_corrupt_plus4"),
-        },
-        ScenarioContract(
-            media="selected save device contains a corrupt THE.GAME with a valid MORIA8.ID marker",
-            start="title load command against corrupt save media",
-            ordered_events=("corrupt_save_error", "safe_return_after_corrupt_save"),
-            event_counts=("corrupt_save_error=1",),
-            forbidden_events=("load_success", "main_loop_from_corrupt_save"),
-            screen_assertions=("Save file corrupt",),
-            final_proof=("load does not resume gameplay from corrupt THE.GAME",),
-        ),
-    ),
-    Scenario(
-        "single_drive_corrupt_save_recovery_requires_program_disk",
-        {
-            "c64": strict("single_drive_load_corrupt_product_smoke"),
-            "c128": strict("boot_title_single_drive_load_corrupt_smoke"),
-            "plus4": strict("single_drive_load_corrupt_plus4"),
-        },
-        ScenarioContract(
-            media="drive 8 starts with wrong-platform save disk; program disk is reattached only after program-media prompt",
-            start="title load command in one-drive disk setup",
-            ordered_events=("corrupt_save_error", "program_disk_prompt", "title_menu_ready"),
-            event_counts=("corrupt_save_error=1", "program_disk_prompt=1"),
-            forbidden_events=("main_loop", "garbled_title_return"),
-            screen_assertions=("Save file corrupt", "Insert program disk", "title menu text"),
-            final_proof=("title menu redraws after verified program media",),
-        ),
-    ),
-    Scenario(
-        "write_protected_or_forced_write_error",
-        {
-            "c64": legacy("save_media_fail_product_smoke"),
-            "c128": legacy("boot_title_save_media_fail_product_smoke"),
-            "plus4": legacy("load_wrong_media_product_plus4"),
-        },
-    ),
-)
-
-
-PLATFORM_COMMANDS = {
-    "c64": ("c64", "./run_tests.sh", "TEST_FILTER"),
-    "c128": ("c128", "./run_tests128.sh", "TEST_FILTER"),
-    "plus4": ("plus4", "./run_testsplus4.sh", "TEST_FILTER"),
-}
+from disk_test_catalog import ADAPTER_MODES, PLATFORMS, SCENARIOS, SCENARIO_ID_RE, Scenario
 
 
 RESULT_RE = re.compile(r"=== Results: \d+ passed, \d+ failed \(of (\d+) suites\) ===")
 PLUS4_RESULT_RE = re.compile(r"=== Plus/4 runtime summary: \d+ passed, \d+ failed, (\d+) total ===")
 
 
-def selected_scenarios(pattern: str | None, strict_only: bool, legacy_only: bool) -> tuple[Scenario, ...]:
+@dataclass(frozen=True)
+class PlatformAdapter:
+    workdir: str
+    script: str
+    filter_var: str
+    vice_env: str
+    vice_arg: str
+    summary_re: re.Pattern[str]
+
+
+PLATFORM_ADAPTERS = {
+    "c64": PlatformAdapter("c64", "./run_tests.sh", "TEST_FILTER", "VICE", "vice64", RESULT_RE),
+    "c128": PlatformAdapter("c128", "./run_tests128.sh", "TEST_FILTER", "VICE", "vice128", RESULT_RE),
+    "plus4": PlatformAdapter("plus4", "./run_testsplus4.sh", "TEST_FILTER", "VICEPLUS4", "viceplus4", PLUS4_RESULT_RE),
+}
+
+
+def selected_scenarios(
+    pattern: str | None,
+    strict_only: bool,
+    legacy_only: bool,
+    adapter_modes: tuple[str, ...],
+) -> tuple[Scenario, ...]:
     scenarios = SCENARIOS
     wanted = {part.strip() for part in pattern.split(",") if part.strip()} if pattern else set()
     if wanted:
@@ -380,6 +48,13 @@ def selected_scenarios(pattern: str | None, strict_only: bool, legacy_only: bool
         scenarios = tuple(scenario for scenario in scenarios if scenario.contract)
     if legacy_only:
         scenarios = tuple(scenario for scenario in scenarios if not scenario.contract)
+    if adapter_modes:
+        wanted_modes = set(adapter_modes)
+        scenarios = tuple(
+            scenario
+            for scenario in scenarios
+            if any(coverage.mode in wanted_modes for coverage in scenario.coverage.values())
+        )
     return scenarios
 
 
@@ -391,8 +66,82 @@ def unknown_scenarios(pattern: str | None) -> tuple[str, ...]:
     return tuple(sorted(wanted - known))
 
 
-def validate_matrix(scenarios: tuple[Scenario, ...], require_strict_contracts: bool) -> list[str]:
+def declared_filter_names(root: Path, platform: str) -> tuple[str, ...]:
+    adapter = PLATFORM_ADAPTERS[platform]
+    script_path = root / adapter.workdir / adapter.script.removeprefix("./")
+    text = script_path.read_text()
+    names: set[str] = set()
+    if platform == "c64":
+        for line in text.splitlines():
+            if "run_suite_function" in line or "run_test" in line:
+                names.update(re.findall(r'"([a-z0-9_]+)"', line))
+    elif platform == "c128":
+        for line in text.splitlines():
+            stripped = line.strip()
+            if stripped.startswith("run_named_suite"):
+                tokens = shlex.split(stripped)
+                names.add(tokens[1])
+                for index, token in enumerate(tokens[:-1]):
+                    if token == "--alias":
+                        names.add(tokens[index + 1])
+            for quoted in re.findall(r'"([a-z0-9_]+ [^"]+)"', line):
+                names.add(quoted.split()[0])
+    elif platform == "plus4":
+        for line in text.splitlines():
+            match = re.search(r'local name="([a-z0-9_]+)"', line)
+            if match:
+                names.add(match.group(1))
+            if "suite_selected" in line:
+                for name in re.findall(r'"([a-z0-9_]+)"', line):
+                    names.add(name)
+    return tuple(sorted(names))
+
+
+def validate_contract(scenario: Scenario) -> list[str]:
+    if not scenario.contract:
+        return []
     errors: list[str] = []
+    contract = scenario.contract
+    if not contract.media:
+        errors.append(f"{scenario.scenario_id}: empty contract media")
+    if not contract.start:
+        errors.append(f"{scenario.scenario_id}: empty contract start")
+    tuple_fields = (
+        ("ordered_events", contract.ordered_events, True),
+        ("event_counts", contract.event_counts, False),
+        ("forbidden_events", contract.forbidden_events, False),
+        ("screen_assertions", contract.screen_assertions, False),
+        ("final_proof", contract.final_proof, False),
+    )
+    for field_name, values, allow_repeats in tuple_fields:
+        if not values:
+            errors.append(f"{scenario.scenario_id}: empty contract {field_name}")
+        if not allow_repeats and len(set(values)) != len(values):
+            errors.append(f"{scenario.scenario_id}: duplicate contract {field_name}")
+    for event_count in contract.event_counts:
+        if not re.fullmatch(r"[a-z0-9_]+=\d+", event_count):
+            errors.append(f"{scenario.scenario_id}: invalid event count {event_count}")
+    return errors
+
+
+def validate_matrix(
+    root: Path,
+    scenarios: tuple[Scenario, ...],
+    require_strict_contracts: bool,
+    fail_on_adapter_modes: tuple[str, ...],
+) -> list[str]:
+    errors: list[str] = []
+    blocked_modes = set(fail_on_adapter_modes)
+    missing_adapters = sorted(set(PLATFORMS) - set(PLATFORM_ADAPTERS))
+    extra_adapters = sorted(set(PLATFORM_ADAPTERS) - set(PLATFORMS))
+    for platform in missing_adapters:
+        errors.append(f"missing platform runner adapter for {platform}")
+    for platform in extra_adapters:
+        errors.append(f"unknown platform runner adapter {platform}")
+    declared_filters: dict[str, tuple[str, ...]] = {}
+    for platform in PLATFORMS:
+        if platform in PLATFORM_ADAPTERS:
+            declared_filters[platform] = declared_filter_names(root, platform)
     seen: set[str] = set()
     for scenario in scenarios:
         if not SCENARIO_ID_RE.fullmatch(scenario.scenario_id):
@@ -408,6 +157,7 @@ def validate_matrix(scenarios: tuple[Scenario, ...], require_strict_contracts: b
             errors.append(f"{scenario.scenario_id}: strict adapter requires a scenario contract")
         if require_strict_contracts and not scenario.contract:
             errors.append(f"{scenario.scenario_id}: missing strict scenario contract")
+        errors.extend(validate_contract(scenario))
         for platform in PLATFORMS:
             coverage = scenario.platform_coverage(platform)
             if not coverage:
@@ -415,10 +165,19 @@ def validate_matrix(scenarios: tuple[Scenario, ...], require_strict_contracts: b
                 continue
             if not coverage.tests:
                 errors.append(f"{scenario.scenario_id}: empty {platform} test filter")
+            if coverage.mode not in ADAPTER_MODES:
+                errors.append(f"{scenario.scenario_id}: invalid {platform} adapter mode {coverage.mode}")
+            if coverage.mode in blocked_modes:
+                errors.append(f"{scenario.scenario_id}: {platform} adapter mode {coverage.mode} is blocked")
+            for test_filter in coverage.filter_names(scenario.scenario_id):
+                if test_filter not in declared_filters.get(platform, ()):
+                    errors.append(f"{scenario.scenario_id}: {platform} filter {test_filter} is not declared by the harness")
             if len(set(coverage.tests)) != len(coverage.tests):
                 errors.append(f"{scenario.scenario_id}: duplicate {platform} adapter filter")
             if scenario.contract and not coverage.strict:
                 errors.append(f"{scenario.scenario_id}: {platform} adapter is legacy, not strict")
+            if scenario.contract and coverage.mode in ("real", "proxy"):
+                errors.append(f"{scenario.scenario_id}: {platform} adapter mode {coverage.mode} is not valid for a contract scenario")
     return errors
 
 
@@ -435,35 +194,85 @@ def filters_by_platform(scenarios: tuple[Scenario, ...]) -> dict[str, str]:
     return result
 
 
-def platform_suite_count(platform: str, output: str) -> int | None:
-    if platform == "plus4":
-        match = PLUS4_RESULT_RE.search(output)
-    else:
-        match = RESULT_RE.search(output)
+def platform_suite_count(adapter: PlatformAdapter, output: str) -> int | None:
+    match = adapter.summary_re.search(output)
     if not match:
         return None
     return int(match.group(1))
+
+
+def build_platform_env(adapter: PlatformAdapter, test_filter: str, args: argparse.Namespace) -> dict[str, str]:
+    env = os.environ.copy()
+    env[adapter.filter_var] = test_filter
+    env["KICKASS"] = str(args.kickass)
+    env.setdefault("C1541", args.c1541)
+    env[adapter.vice_env] = getattr(args, adapter.vice_arg)
+    return env
 
 
 def scenario_status(scenario: Scenario) -> str:
     return "strict" if scenario.contract else "legacy"
 
 
+def adapter_mode_counts(scenarios: tuple[Scenario, ...]) -> dict[str, int]:
+    return {
+        mode: sum(1 for scenario in scenarios for coverage in scenario.coverage.values() if coverage.mode == mode)
+        for mode in ADAPTER_MODES
+    }
+
+
+def scenario_ids_with_mode(scenarios: tuple[Scenario, ...], mode: str) -> tuple[str, ...]:
+    return tuple(
+        scenario.scenario_id
+        for scenario in scenarios
+        if any(coverage.mode == mode for coverage in scenario.coverage.values())
+    )
+
+
 def print_summary(scenarios: tuple[Scenario, ...]) -> None:
     strict_count = sum(1 for scenario in scenarios if scenario.contract)
     legacy = tuple(scenario for scenario in scenarios if not scenario.contract)
+    mode_counts = adapter_mode_counts(scenarios)
+    real_ids = scenario_ids_with_mode(scenarios, "real")
+    proxy_ids = scenario_ids_with_mode(scenarios, "proxy")
     print("=== Matrix summary ===")
     print(f"  scenarios: {len(scenarios)}")
     print(f"  strict contracts: {strict_count}")
-    print(f"  legacy adapters: {len(legacy)}")
+    print(f"  legacy scenarios: {len(legacy)}")
+    print("  adapter modes: " + ", ".join(f"{mode}={mode_counts[mode]}" for mode in ADAPTER_MODES))
+    if real_ids:
+        print(f"  real adapter ids: {', '.join(real_ids)}")
+    if proxy_ids:
+        print(f"  proxy adapter ids: {', '.join(proxy_ids)}")
     if legacy:
         print(f"  legacy ids: {', '.join(scenario.scenario_id for scenario in legacy)}")
     print("")
 
 
-def print_list(scenarios: tuple[Scenario, ...]) -> None:
+def print_list(scenarios: tuple[Scenario, ...], include_platform_modes: bool = False) -> None:
     for scenario in scenarios:
+        if include_platform_modes:
+            modes = "\t".join(f"{platform}={scenario.coverage[platform].mode}" for platform in PLATFORMS)
+            print(f"{scenario.scenario_id}\t{scenario_status(scenario)}\t{modes}")
+        else:
+            print(f"{scenario.scenario_id}\t{scenario_status(scenario)}")
+
+
+def scenario_has_debt(scenario: Scenario) -> bool:
+    return scenario.contract is None or any(not coverage.strict for coverage in scenario.coverage.values())
+
+
+def print_debt(scenarios: tuple[Scenario, ...]) -> None:
+    debt = tuple(scenario for scenario in scenarios if scenario_has_debt(scenario))
+    if not debt:
+        print("No disk matrix debt in selected scenarios")
+        return
+    for scenario in debt:
         print(f"{scenario.scenario_id}\t{scenario_status(scenario)}")
+        for platform in PLATFORMS:
+            coverage = scenario.coverage[platform]
+            note = f"\t{coverage.note}" if coverage.note else ""
+            print(f"  {platform}\t{coverage.mode}\t{', '.join(coverage.tests)}{note}")
 
 
 def print_plan(scenarios: tuple[Scenario, ...], filters: dict[str, str]) -> None:
@@ -482,10 +291,9 @@ def print_plan(scenarios: tuple[Scenario, ...], filters: dict[str, str]) -> None
             print(f"    proof: {', '.join(scenario.contract.final_proof)}")
         for platform in PLATFORMS:
             coverage = scenario.coverage[platform]
-            strict_label = "strict" if coverage.strict else "legacy"
             filters_label = ", ".join(coverage.filter_names(scenario.scenario_id))
             note = f" ({coverage.note})" if coverage.note else ""
-            print(f"    {platform}: {strict_label}: {filters_label}; adapter: {', '.join(coverage.tests)}{note}")
+            print(f"    {platform}: {coverage.mode}: {filters_label}; adapter: {', '.join(coverage.tests)}{note}")
     print("")
     print("=== Platform filters ===")
     for platform in PLATFORMS:
@@ -494,25 +302,16 @@ def print_plan(scenarios: tuple[Scenario, ...], filters: dict[str, str]) -> None
 
 
 def run_platform(root: Path, platform: str, test_filter: str, args: argparse.Namespace) -> int:
-    workdir_name, script_name, filter_var = PLATFORM_COMMANDS[platform]
-    env = os.environ.copy()
-    env[filter_var] = test_filter
-    env["KICKASS"] = str(args.kickass)
-    env.setdefault("C1541", args.c1541)
-    if platform == "c64":
-        env["VICE"] = args.vice64
-    elif platform == "c128":
-        env["VICE"] = args.vice128
-    else:
-        env["VICEPLUS4"] = args.viceplus4
+    adapter = PLATFORM_ADAPTERS[platform]
+    env = build_platform_env(adapter, test_filter, args)
 
-    command = [script_name]
-    print(f"=== {platform}: {filter_var}={test_filter} ===", flush=True)
+    command = [adapter.script]
+    print(f"=== {platform}: {adapter.filter_var}={test_filter} ===", flush=True)
     if args.dry_run:
         return 0
     process = subprocess.Popen(
         command,
-        cwd=root / workdir_name,
+        cwd=root / adapter.workdir,
         env=env,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
@@ -527,14 +326,18 @@ def run_platform(root: Path, platform: str, test_filter: str, args: argparse.Nam
     if rc != 0:
         return rc
     output = "".join(output_parts)
-    suite_count = platform_suite_count(platform, output)
+    suite_count = platform_suite_count(adapter, output)
     if suite_count is None:
         print(f"FAIL: {platform} did not print a suite summary")
         return 1
     if suite_count == 0:
-        print(f"FAIL: {platform} ran zero suites for {filter_var}={test_filter}")
+        print(f"FAIL: {platform} ran zero suites for {adapter.filter_var}={test_filter}")
         return 1
     return 0
+
+
+def selected_platforms(args: argparse.Namespace) -> tuple[str, ...]:
+    return tuple(args.platform) if args.platform else PLATFORMS
 
 
 def main() -> int:
@@ -542,18 +345,33 @@ def main() -> int:
     parser.add_argument("--platform", action="append", choices=PLATFORMS)
     parser.add_argument("--scenario", help="comma-separated scenario IDs to run")
     parser.add_argument("--strict-only", action="store_true", help="select only strict contract scenarios")
-    parser.add_argument("--legacy-only", action="store_true", help="select only legacy adapter scenarios")
+    parser.add_argument("--legacy-only", action="store_true", help="select only scenarios without strict contracts")
+    parser.add_argument(
+        "--adapter-mode",
+        action="append",
+        choices=ADAPTER_MODES,
+        help="select scenarios with at least one platform adapter in this mode",
+    )
+    parser.add_argument(
+        "--fail-on-adapter-mode",
+        action="append",
+        choices=ADAPTER_MODES,
+        help="fail if any selected platform adapter uses this mode",
+    )
     parser.add_argument("--list-scenarios", action="store_true", help="list selected scenario IDs and exit")
+    parser.add_argument("--list-platform-modes", action="store_true", help="include per-platform adapter modes when listing")
+    parser.add_argument("--list-debt", action="store_true", help="list selected scenarios that are not fully strict contracts")
     parser.add_argument("--kickass", default="tools/kickass/KickAss.jar", type=Path)
     parser.add_argument("--c1541", default="c1541")
     parser.add_argument("--vice64", default="x64sc")
     parser.add_argument("--vice128", default="x128")
     parser.add_argument("--viceplus4", default="xplus4")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--check-only", action="store_true", help="validate selected scenarios and exit without printing the run plan")
     parser.add_argument(
         "--require-strict-contracts",
         action="store_true",
-        help="fail if a selected contract scenario still uses any legacy platform adapter",
+        help="fail unless every selected scenario has a strict contract and strict platform adapters",
     )
     args = parser.parse_args()
 
@@ -566,7 +384,7 @@ def main() -> int:
         print("FAIL: --strict-only and --legacy-only are mutually exclusive")
         return 2
 
-    scenarios = selected_scenarios(args.scenario, args.strict_only, args.legacy_only)
+    scenarios = selected_scenarios(args.scenario, args.strict_only, args.legacy_only, tuple(args.adapter_mode or ()))
     unknown = unknown_scenarios(args.scenario)
     if unknown:
         print(f"FAIL: unknown disk scenario(s): {', '.join(unknown)}")
@@ -575,22 +393,27 @@ def main() -> int:
         print("FAIL: no disk scenarios selected")
         return 2
 
-    errors = validate_matrix(scenarios, args.require_strict_contracts)
+    errors = validate_matrix(root, scenarios, args.require_strict_contracts, tuple(args.fail_on_adapter_mode or ()))
     if errors:
         for error in errors:
             print(f"FAIL: {error}")
         return 2
+    if args.check_only:
+        print("PASS: disk matrix validation")
+        return 0
 
     if args.list_scenarios:
-        print_list(scenarios)
+        print_list(scenarios, args.list_platform_modes)
+        return 0
+    if args.list_debt:
+        print_debt(scenarios)
         return 0
 
     filters = filters_by_platform(scenarios)
     print_plan(scenarios, filters)
 
-    platforms = tuple(args.platform) if args.platform else PLATFORMS
     failed: list[str] = []
-    for platform in platforms:
+    for platform in selected_platforms(args):
         rc = run_platform(root, platform, filters[platform], args)
         if rc != 0:
             failed.append(platform)
