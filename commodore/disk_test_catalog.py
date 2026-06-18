@@ -411,10 +411,19 @@ SCENARIOS: tuple[Scenario, ...] = (
     Scenario(
         "alternate_drive_prompt_no_repeat",
         {
-            "c64": legacy("disk_swap", "single_drive_load_return_product_smoke", note="legacy alternate-device plus no-repeat coverage; not yet one alternate-device prompt-order contract"),
-            "c128": legacy("disk_swap128", note="legacy alternate-device coverage; not yet one alternate-device prompt-order contract"),
-            "plus4": legacy("single_drive_load_return_plus4", note="legacy no-repeat coverage; not yet one alternate-device prompt-order contract"),
+            "c64": strict("change_save_drive_product_smoke"),
+            "c128": strict("boot_title_change_save_drive_smoke"),
+            "plus4": strict("change_save_drive_plus4"),
         },
+        ScenarioContract(
+            media="drive 8 keeps program media mounted while alternate save device 10 contains initialized save media",
+            start="post-setup gameplay save path writes to alternate save device 10",
+            ordered_events=("alternate_save_device_10_selected", "save_success", "gameplay_resume_after_save"),
+            event_counts=("save_success=1", "program_disk_prompt_after_save=0"),
+            forbidden_events=("duplicate_program_disk_prompt", "program_disk_prompt_after_save", "program_media_error_after_save"),
+            screen_assertions=("Saving game", "Game Saved"),
+            final_proof=("save completes on alternate device 10 without a second program-media prompt",),
+        ),
     ),
     Scenario(
         "corrupt_save_file",
