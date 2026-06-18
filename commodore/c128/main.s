@@ -1720,7 +1720,6 @@ tramp_ui_exit:
     lda #$3e                    // MMU_ALL_RAM
     sta $ff00
     jsr c128_restore_runtime_guards
-    jsr c128_restore_runtime_vectors
     cli
     rts
 
@@ -2825,6 +2824,7 @@ c128_program_media_error_prompt:
     lda #C128_MEDIA_UNKNOWN
     sta c128_media_state
 c128_program_media_error_shown:
+    jsr c128_restore_runtime_guards
     jmp disk_prompt_game
 
 #if C128_TEST_SCRIPTED_SAVE_WRITE_PRODUCT

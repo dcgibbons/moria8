@@ -35,6 +35,11 @@ disk_ui_action:    .byte 0
 disk_ui_value:     .byte 0
 disk_temp:         .byte 0
 disk_status:       .byte 0
+#elif C128
+disk_temp:         .byte 0
+.label disk_ui_value = disk_temp
+disk_status:       .byte 0
+.label disk_ui_result = disk_status    // 0=success, 1=cancel/failure
 #else
 disk_temp:         .byte 0
 .label disk_ui_action = disk_temp
@@ -43,6 +48,9 @@ disk_status:       .byte 0
 .label disk_ui_result = disk_status    // 0=success, 1=cancel/failure
 #endif
 disk_prompt_device:.byte 8
+#if C128
+.label disk_ui_action = disk_prompt_device
+#endif
 #if C64_TEST_SCRIPTED_SINGLE_DRIVE_SAVE_WRONG_MEDIA_PRODUCT || C64_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_WRONG_MEDIA_PRODUCT || PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_SAVE_WRONG_MEDIA_PRODUCT || PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_WRONG_MEDIA_PRODUCT || C128_TEST_SCRIPTED_SINGLE_DRIVE_SAVE_WRONG_MEDIA_PRODUCT || C128_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_WRONG_MEDIA_PRODUCT
 disk_test_program_warning_seen: .byte 0
 #endif
