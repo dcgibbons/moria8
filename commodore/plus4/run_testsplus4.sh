@@ -84,8 +84,9 @@ run_test() {
 
 run_disk_media_probe() {
     local name="$1"
+    shift
 
-    if ! suite_selected "$name"; then
+    if ! suite_selected "$name" "$@"; then
         return
     fi
 
@@ -112,10 +113,10 @@ run_media_drive9_attach_read_write() {
 }
 
 run_media_drive10_11_device_probe() {
-    if ! suite_selected "media_drive10_11_device_probe"; then
+    if ! suite_selected "media_drive10_11_device_probe" "alternate_drive10_11_save_load_smoke"; then
         return
     fi
-    run_disk_media_probe "media_drive10_11_device_probe"
+    run_disk_media_probe "media_drive10_11_device_probe" "alternate_drive10_11_save_load_smoke"
 }
 
 run_plus4_static_contracts() {

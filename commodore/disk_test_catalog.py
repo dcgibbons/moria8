@@ -368,10 +368,19 @@ SCENARIOS: tuple[Scenario, ...] = (
     Scenario(
         "alternate_drive10_11_save_load_smoke",
         {
-            "c64": legacy("disk_swap", note="legacy alternate-device coverage; not yet a named save/load smoke on drives 10 and 11"),
-            "c128": legacy("disk_swap128", note="legacy alternate-device coverage; not yet a named save/load smoke on drives 10 and 11"),
-            "plus4": legacy("disk_setup_product_plus4", note="legacy alternate-device coverage; not yet a named save/load smoke on drives 10 and 11"),
+            "c64": strict("media_drive10_11_device_probe", note="quick alternate-device smoke: selected device images are written/read through c1541; product save/load on 10/11 remains separate debt"),
+            "c128": strict("media_drive10_11_device_probe", note="quick alternate-device smoke: selected device images are written/read through c1541; product save/load on 10/11 remains separate debt"),
+            "plus4": strict("media_drive10_11_device_probe", note="quick alternate-device smoke: selected device images are written/read through c1541; product save/load on 10/11 remains separate debt"),
         },
+        ScenarioContract(
+            media="fresh D64 fixtures representing alternate selected save devices 10 and 11",
+            start="shared c1541 media probe creates distinct drive-10 and drive-11 images",
+            ordered_events=("format_drive10_image", "write_drive10_marker", "read_drive10_marker", "format_drive11_image", "write_drive11_marker", "read_drive11_marker"),
+            event_counts=("write_drive10_marker=1", "read_drive10_marker=1", "write_drive11_marker=1", "read_drive11_marker=1"),
+            forbidden_events=("device10_11_marker_cross_read", "readback_mismatch", "missing_directory_entry"),
+            screen_assertions=("c1541 directory contains probe10", "c1541 directory contains probe11"),
+            final_proof=("readback marker bytes exactly match distinct drive-10 and drive-11 write payloads",),
+        ),
     ),
     Scenario(
         "alternate_drive_change_smoke",

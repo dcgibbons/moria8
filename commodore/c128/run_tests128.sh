@@ -7369,7 +7369,7 @@ run_selected_suites() {
 
     run_named_suite media_drive8_attach_read_write run_media_drive8_attach_read_write || return 1
     run_named_suite media_drive9_attach_read_write run_media_drive9_attach_read_write || return 1
-    run_named_suite media_drive10_11_device_probe run_media_drive10_11_device_probe || return 1
+    run_named_suite media_drive10_11_device_probe --alias alternate_drive10_11_save_load_smoke run_media_drive10_11_device_probe || return 1
 
     run_named_suite boot_d64_smoke run_boot_d64_smoke || return 1
 
