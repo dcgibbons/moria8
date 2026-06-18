@@ -67,6 +67,22 @@ def build_vice_command(args: argparse.Namespace) -> list[str]:
             "-drive9type",
             "0",
         ])
+    if args.save10_d64:
+        command.extend([
+            "-drive10truedrive",
+            "-drive10type",
+            str(args.drive10_type),
+            "-busdevice10",
+            "-attach10rw",
+            "-10",
+            str(args.save10_d64),
+        ])
+    else:
+        command.extend([
+            "+busdevice10",
+            "-drive10type",
+            "0",
+        ])
     command.extend([
         "-autostart",
         str(args.boot_d64),
@@ -247,6 +263,12 @@ def run_until_pass(connector: VICEConnector, pass_addr: str, timeout: float) -> 
     return MonitorTestResult(False, "stopped without reaching pass breakpoint", status)
 
 
+def continue_from(connector: VICEConnector, addr: str | None) -> None:
+    if addr:
+        connector.set_register("pc", addr)
+    connector.go()
+
+
 def run_vice(args: argparse.Namespace, pass_addr: str, fail_addr: str | None, dump_ranges: list[tuple[str, str]]) -> tuple[MonitorTestResult, list[str]]:
     process: subprocess.Popen[bytes] | None = None
     connector = VICEConnector(host=args.host, port=args.port, timeout=args.socket_timeout)
@@ -320,7 +342,7 @@ def run_vice(args: argparse.Namespace, pass_addr: str, fail_addr: str | None, du
                 swap_hits = 0
                 resume_addr = args.resume_addr
                 while True:
-                    connector.go(resume_addr)
+                    continue_from(connector, resume_addr)
                     resume_addr = None
                     result = connector.wait_for_stop(
                         pass_addr=args.swap_addr,
@@ -386,7 +408,7 @@ def run_vice(args: argparse.Namespace, pass_addr: str, fail_addr: str | None, du
                     connector.break_at(fail_addr)
                 if args.require_hit_addr:
                     connector.break_at(args.require_hit_addr)
-                    connector.go(args.resume_addr)
+                    continue_from(connector, args.resume_addr)
                     required_result = connector.wait_for_stop(
                         pass_addr=args.require_hit_addr,
                         fail_addr=fail_addr,
@@ -417,7 +439,7 @@ def run_vice(args: argparse.Namespace, pass_addr: str, fail_addr: str | None, du
                     if args.until_pass:
                         result = run_until_pass(connector, pass_addr, args.timeout)
                     else:
-                        connector.go(args.resume_addr)
+                        continue_from(connector, args.resume_addr)
                         result = connector.wait_for_stop(
                             pass_addr=pass_addr,
                             fail_addr=fail_addr,
@@ -489,6 +511,7 @@ def main() -> int:
     parser.add_argument("--vice", required=True)
     parser.add_argument("--boot-d64", required=True, type=Path)
     parser.add_argument("--save-d64", type=Path)
+    parser.add_argument("--save10-d64", type=Path)
     parser.add_argument("--main-vs", required=True, type=Path)
     parser.add_argument("--pass-symbol", required=True)
     parser.add_argument("--fail-symbol")
@@ -499,6 +522,7 @@ def main() -> int:
     parser.add_argument("--drive8-type", default="1541")
     parser.add_argument("--autostart-only-drive8", action="store_true")
     parser.add_argument("--drive9-type", default="1541")
+    parser.add_argument("--drive10-type", default="1541")
     parser.add_argument("--enable-drive9-bus", action="store_true")
     parser.add_argument("--attach8-at-start-d64", type=Path)
     parser.add_argument("--attach-delay", type=float, default=0.5)

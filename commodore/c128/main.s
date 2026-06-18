@@ -2281,6 +2281,39 @@ c128_test_single_drive_fresh_save_no_init_return:
 c128_test_single_drive_fresh_save_unexpected_return:
     jmp c128_test_single_drive_fresh_save_unexpected_return
 #endif
+#if C128_TEST_SCRIPTED_CHANGE_SAVE_DRIVE_PRODUCT && !C128_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
+    lda #8
+    sta program_device
+    lda #9
+    sta save_device
+    lda #2
+    sta disk_mode
+    lda #1
+    sta disk_setup_done
+    lda #C128_MEDIA_PROGRAM
+    sta c128_media_state
+    lda #10
+    sta c128_runtime_load_stage
+    jsr c128_load_resident_persist_prg
+    bcc !c128_change_save_drive_persist_loaded+
+    jmp runtime_load_failed
+!c128_change_save_drive_persist_loaded:
+    lda #2                  // C128_MODAL_PERSIST; const is declared later.
+    sta c128_modal_slot_state
+c128_test_change_save_drive_wait_for_harness:
+    jmp c128_test_change_save_drive_wait_for_harness
+c128_test_change_save_drive_before_save:
+    lda #10
+    sta save_device
+    lda #C128_MEDIA_SAVE
+    sta c128_media_state
+    jsr c128_modal_save_game
+    bcc c128_test_change_save_drive_unexpected_return
+c128_test_change_save_drive_pass:
+    jmp c128_test_change_save_drive_pass
+c128_test_change_save_drive_unexpected_return:
+    jmp c128_test_change_save_drive_unexpected_return
+#endif
     lda #C128_MEDIA_PROGRAM
     sta c128_media_state
     jsr screen_clear_for_font_restore

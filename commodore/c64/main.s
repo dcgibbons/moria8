@@ -640,6 +640,30 @@ c64_test_save_media_fail_before_save:
 c64_test_save_media_fail_unexpected_return:
     brk
 #endif
+#if C64_TEST_SCRIPTED_CHANGE_SAVE_DRIVE_PRODUCT
+    lda #8
+    sta program_device
+    lda #9
+    sta save_device
+    lda #2
+    sta disk_mode
+    lda #1
+    sta disk_setup_done
+    lda #OVL_HELP
+    jsr overlay_load
+    bcs c64_test_change_save_drive_unexpected_return
+c64_test_change_save_drive_wait_for_harness:
+    jmp c64_test_change_save_drive_wait_for_harness
+c64_test_change_save_drive_before_save:
+    lda #10
+    sta save_device
+    jsr save_game
+    bcc c64_test_change_save_drive_unexpected_return
+c64_test_change_save_drive_pass:
+    jmp c64_test_change_save_drive_pass
+c64_test_change_save_drive_unexpected_return:
+    brk
+#endif
 #if C64_TEST_SCRIPTED_SINGLE_DRIVE_SAVE_WRONG_MEDIA_PRODUCT
     lda #8
     sta program_device

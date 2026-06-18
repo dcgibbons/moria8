@@ -4730,6 +4730,118 @@ run_boot_title_save_media_fail_product_smoke() {
     TOTAL=$((TOTAL + 1))
 }
 
+run_boot_title_change_save_drive_smoke() {
+    local name="boot_title_change_save_drive_smoke"
+    echo -n "  $name: "
+
+    build_boot_assets || return
+
+    local build_log
+    build_log="$(test128_tmp_file test128_change_save_drive_build.log)"
+    local c1541_bin="${C1541:-c1541}"
+    local boot_d64="out/moria128_change_save_drive.d64"
+    local save10_d64="out/moria128_change_save_drive_save10.d64"
+    local marker_blob="out/MORIA8.ID"
+    local dir_type_offset0=$(((357 + 1) * 256 + 2))
+
+    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 \
+            -define C128 -define C128_TEST_SCRIPTED_CHANGE_SAVE_DRIVE_PRODUCT \
+            -o out/moria128.prg >"$build_log" 2>&1; then
+        echo "FAIL (change-save-drive product main assembly failed)"
+        tail -20 "$build_log" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    rm -f "$boot_d64"
+    if ! "$c1541_bin" -format "moria128,m8" d64 "$boot_d64" \
+            -attach "$boot_d64" \
+            -write out/boot128.prg "moria8.128" \
+            -write out/moria128.prg "moria128" \
+            -write out/title "title" \
+            -write out/monster.db.1 "monster.db.1" \
+            -write out/monster.db.2 "monster.db.2" \
+            -write out/monster.db.3 "monster.db.3" \
+            -write out/monster.db.4 "monster.db.4" \
+            -write out/ovl.town "ovl.town" \
+            -write out/ovl.start "ovl.start" \
+            -write out/ovl.death "ovl.death" \
+            -write out/ovl.gen "ovl.gen" \
+            -write out/ovl.help "128.help" \
+            -write out/128.runtime.prg "128.runtime" \
+            -write out/128.input.prg "128.input" \
+            -write out/128.proj.prg "128.proj" \
+            -write out/128.fdisk.prg "128.fdisk" \
+            -write out/128.diskio.prg "128.diskio" \
+            -write out/128.world.prg "128.world" \
+            -write out/128.item.prg "128.item" \
+            -write out/128.names.prg "128.names" \
+            -write out/128.select.prg "128.select" \
+            -write out/128.persist.prg "128.persist" \
+            -write out/128.play.prg "128.play" \
+            -write out/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
+        echo "FAIL (change-save-drive product disk build failed)"
+        tail -20 "$build_log" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    if ! printf 'M8SAVE' > "$marker_blob"; then
+        echo "FAIL (marker generation failed)"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+    rm -f "$save10_d64"
+    if ! "$c1541_bin" -format "moria128 save,m8" d64 "$save10_d64" \
+            -attach "$save10_d64" \
+            -write "$marker_blob" "MORIA8.ID" >>"$build_log" 2>&1; then
+        echo "FAIL (drive-10 save disk build failed)"
+        tail -20 "$build_log" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+    if ! printf '\201' | dd of="$save10_d64" bs=1 seek="$dir_type_offset0" conv=notrunc status=none 2>>"$build_log"; then
+        echo "FAIL (drive-10 marker directory patch failed)"
+        tail -20 "$build_log" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    if python3 -u ../plus4/tests/product_scripted_smoke.py \
+            --name "$name" \
+            --vice "$VICE" \
+            --boot-d64 "$boot_d64" \
+            --save10-d64 "$save10_d64" \
+            --main-vs out/main.vs \
+            --start-symbol ".c128_test_change_save_drive_wait_for_harness" \
+            --resume-symbol ".c128_test_change_save_drive_before_save" \
+            --pass-symbol ".c128_test_change_save_drive_pass" \
+            --fail-symbol ".c128_test_change_save_drive_unexpected_return" \
+            --screen-base 0x0400; then
+        local dir_list
+        if ! dir_list=$("$c1541_bin" -attach "$save10_d64" -list 2>&1); then
+            echo "FAIL (drive-10 save disk listing failed)"
+            echo "$dir_list" | tail -20 | sed 's/^/    /'
+            FAIL=$((FAIL + 1))
+        elif echo "$dir_list" | grep -qi '"THE.GAME".*SEQ'; then
+            echo "PASS"
+            PASS=$((PASS + 1))
+        else
+            echo "FAIL (drive-10 save disk missing THE.GAME)"
+            echo "$dir_list" | tail -20 | sed 's/^/    /'
+            FAIL=$((FAIL + 1))
+        fi
+    else
+        FAIL=$((FAIL + 1))
+    fi
+    TOTAL=$((TOTAL + 1))
+}
+
 run_boot_title_single_drive_save_wrong_media_smoke() {
     local name="boot_title_single_drive_save_wrong_media_smoke"
     echo -n "  $name: "
@@ -7379,6 +7491,7 @@ run_selected_suites() {
     run_named_suite boot_title_load_missing_savefile_smoke --alias missing_device_or_no_disk run_boot_title_load_missing_savefile_smoke || return 1
     run_named_suite boot_title_load_mounted_save_smoke run_boot_title_load_mounted_save_smoke || return 1
     run_named_suite dual_drive_load_then_save_no_program_prompt --alias save_existing_overwrite --alias boot_title_save_write_product_smoke run_boot_title_save_write_product_smoke || return 1
+    run_named_suite change_save_drive_after_save --alias boot_title_change_save_drive_smoke run_boot_title_change_save_drive_smoke || return 1
     run_named_suite boot_title_save_media_fail_product_smoke --alias wrong_media_detection_selected_devices --alias write_protected_or_forced_write_error run_boot_title_save_media_fail_product_smoke || return 1
     run_named_suite single_drive_save_program_disk_rejected --alias boot_title_single_drive_save_wrong_media_smoke --alias wrong_media_recovery run_boot_title_single_drive_save_wrong_media_smoke || return 1
     run_named_suite single_drive_load_program_disk_rejected --alias boot_title_single_drive_load_wrong_media_smoke --alias wrong_media_recovery --alias wrong_media_detection_selected_devices run_boot_title_single_drive_load_wrong_media_smoke || return 1

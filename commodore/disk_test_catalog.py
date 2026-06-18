@@ -309,10 +309,19 @@ SCENARIOS: tuple[Scenario, ...] = (
     Scenario(
         "change_save_drive_after_save",
         {
-            "c64": legacy("disk_swap", "save_write_product_smoke", note="legacy drive-change/save coverage; does not yet prove old save device is unused after migration"),
-            "c128": legacy("disk_swap128", "boot_title_save_write_product_smoke", note="legacy drive-change/save coverage; does not yet prove old save device is unused after migration"),
-            "plus4": legacy("single_drive_save_return_plus4", "save_write_product_plus4", note="legacy drive-change/save coverage; does not yet prove old save device is unused after migration"),
+            "c64": strict("change_save_drive_product_smoke"),
+            "c128": strict("boot_title_change_save_drive_smoke"),
+            "plus4": strict("change_save_drive_plus4"),
         },
+        ScenarioContract(
+            media="drive 8 contains program media; prior save device 9 is absent; new selected save device 10 contains a valid save marker",
+            start="post-setup gameplay save path after save_device changes from 9 to 10",
+            ordered_events=("initial_save_device_9", "save_device_changed_to_10", "save_success"),
+            event_counts=("save_success=1", "old_save_device_9_uses=0"),
+            forbidden_events=("save_to_old_device_9", "save_failure_from_missing_old_device", "program_disk_prompt_after_save"),
+            screen_assertions=("Saving game", "Game Saved"),
+            final_proof=("drive-10 save disk contains THE.GAME after save while drive 9 is unavailable",),
+        ),
     ),
     Scenario(
         "wrong_media_recovery",
