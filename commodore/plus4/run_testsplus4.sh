@@ -1096,7 +1096,7 @@ run_change_save_drive_product_smoke() {
     local boot_d64="$smoke_out/moria8-plus4.d64"
     local build_log="$out_dir/$name.build.log"
 
-    if ! suite_selected "$name" "change_save_drive_after_save"; then
+    if ! suite_selected "$name" "change_save_drive_after_save" "alternate_drive_change_smoke"; then
         return
     fi
 

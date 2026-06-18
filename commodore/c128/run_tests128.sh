@@ -7491,7 +7491,7 @@ run_selected_suites() {
     run_named_suite boot_title_load_missing_savefile_smoke --alias missing_device_or_no_disk run_boot_title_load_missing_savefile_smoke || return 1
     run_named_suite boot_title_load_mounted_save_smoke run_boot_title_load_mounted_save_smoke || return 1
     run_named_suite dual_drive_load_then_save_no_program_prompt --alias save_existing_overwrite --alias boot_title_save_write_product_smoke run_boot_title_save_write_product_smoke || return 1
-    run_named_suite change_save_drive_after_save --alias boot_title_change_save_drive_smoke run_boot_title_change_save_drive_smoke || return 1
+    run_named_suite change_save_drive_after_save --alias boot_title_change_save_drive_smoke --alias alternate_drive_change_smoke run_boot_title_change_save_drive_smoke || return 1
     run_named_suite boot_title_save_media_fail_product_smoke --alias wrong_media_detection_selected_devices --alias write_protected_or_forced_write_error run_boot_title_save_media_fail_product_smoke || return 1
     run_named_suite single_drive_save_program_disk_rejected --alias boot_title_single_drive_save_wrong_media_smoke --alias wrong_media_recovery run_boot_title_single_drive_save_wrong_media_smoke || return 1
     run_named_suite single_drive_load_program_disk_rejected --alias boot_title_single_drive_load_wrong_media_smoke --alias wrong_media_recovery --alias wrong_media_detection_selected_devices run_boot_title_single_drive_load_wrong_media_smoke || return 1
