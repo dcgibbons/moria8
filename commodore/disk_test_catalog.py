@@ -274,20 +274,19 @@ SCENARIOS: tuple[Scenario, ...] = (
     Scenario(
         "load_then_save_new_empty_disk",
         {
-            "c64": real(
-                "load_then_save_new_empty_product_smoke",
-                note="real single-drive load-save, fresh-save, program-restore flow; cross-platform strict promotion intentionally deferred",
-            ),
-            "c128": deferred(
-                "boot_title_single_drive_load_return_smoke",
-                "boot_title_save_write_product_smoke",
-                note="deferred: proxy only, load-return plus independent save-write, not one continuous load-then-fresh-save flow",
-            ),
-            "plus4": deferred(
-                "single_drive_load_return_plus4",
-                note="deferred: proxy only, load-return, not one continuous load-then-fresh-save flow",
-            ),
+            "c64": strict("load_then_save_new_empty_product_smoke"),
+            "c128": strict("boot_title_load_then_save_new_empty_smoke"),
+            "plus4": strict("load_then_save_new_empty_plus4"),
         },
+        ScenarioContract(
+            media="single drive 8 loads from an existing save disk, then the same selected save device is swapped to a new empty save disk",
+            start="title load path reaches gameplay state, then immediately saves to newly inserted empty save media before normal program-media recovery",
+            ordered_events=("save_disk_prompt_for_load", "load_success", "save_disk_prompt_for_save", "initialize_prompt", "save_success", "program_disk_prompt"),
+            event_counts=("load_success=1", "initialize_prompt=1", "save_success=1", "program_disk_prompt=1"),
+            forbidden_events=("extra_program_disk_prompt_between_load_and_save", "overwrite_prompt", "save_to_original_load_disk", "garbled_title_return"),
+            screen_assertions=("initialize prompt", "Saving game", "Game Saved", "Insert program disk"),
+            final_proof=("new empty save disk contains MORIA8.ID and THE.GAME", "original load disk is not used as the save target",),
+        ),
     ),
     Scenario(
         "dual_drive_load_then_save_no_program_prompt",

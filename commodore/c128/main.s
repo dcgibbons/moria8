@@ -2468,6 +2468,71 @@ c128_test_single_drive_load_return_before_load:
 c128_test_single_drive_load_return_load_fail:
     jmp c128_test_single_drive_load_return_load_fail
 #endif
+#if C128_TEST_SCRIPTED_LOAD_THEN_SAVE_NEW_EMPTY_PRODUCT
+c128_test_load_then_save_new_empty_save:
+    ldx #$ff
+    txs
+    lda #8
+    sta program_device
+    sta save_device
+    lda #1
+    sta disk_mode
+    sta disk_setup_done
+    lda #1
+    sta c128_test_load_then_save_new_empty_stage
+    jsr c128_modal_require_play
+c128_test_load_then_save_new_empty_save_media_ready:
+    jsr disk_marker_init
+    bcs c128_test_load_then_save_new_empty_fail
+    jsr disk_init_drive
+    bcs c128_test_load_then_save_new_empty_fail
+    lda #C128_MEDIA_SAVE
+    sta c128_media_state
+    jsr save_game
+    bcc c128_test_load_then_save_new_empty_fail
+    jsr c128_test_load_then_save_new_empty_write_proof
+    bcc c128_test_load_then_save_new_empty_fail
+    lda #2
+    sta c128_test_load_then_save_new_empty_stage
+c128_test_load_then_save_new_empty_after_save_wait:
+    jmp c128_test_load_then_save_new_empty_after_save_wait
+c128_test_load_then_save_new_empty_restore_program:
+    lda #3
+    sta c128_test_load_then_save_new_empty_stage
+c128_test_load_then_save_new_empty_done:
+    jmp c128_test_load_then_save_new_empty_done
+c128_test_load_then_save_new_empty_fail:
+    jmp c128_test_load_then_save_new_empty_fail
+
+c128_test_load_then_save_new_empty_write_proof:
+    jsr disk_kernal_enter
+    lda #hal_storage_save_write_name_len
+    ldx #<hal_storage_save_write_name
+    ldy #>hal_storage_save_write_name
+    jsr $ffbd
+    lda #2
+    ldx save_device
+    ldy #2
+    jsr $ffba
+    jsr $ffc0
+    bcs !proof_fail+
+    ldx #2
+    jsr $ffc9
+    bcs !proof_close_fail+
+    lda #$4d
+    jsr $ffd2
+!proof_close_fail:
+    jsr $ffcc
+    lda #2
+    jsr $ffc3
+    jsr disk_kernal_exit
+    sec
+    rts
+!proof_fail:
+    jsr disk_kernal_exit
+    clc
+    rts
+#endif
     cli
 !title_menu_loop:
     jsr input_get_key
@@ -2518,7 +2583,9 @@ c128_test_single_drive_load_return_loaded:
     jsr c128_modal_require_play
     jmp load_resume_game
 !title_load_fail:
-#if C128_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_RETURN_PRODUCT
+#if C128_TEST_SCRIPTED_LOAD_THEN_SAVE_NEW_EMPTY_PRODUCT
+    jmp c128_test_load_then_save_new_empty_fail
+#elif C128_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_RETURN_PRODUCT
     jmp c128_test_single_drive_load_return_load_fail
 #endif
     jsr c128_restore_runtime_vectors
@@ -3086,6 +3153,9 @@ c128_media_state: .byte C128_MEDIA_UNKNOWN
 #if C128_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
 c128_test_after_save_media_check_active: .byte 0
 c128_test_post_save_prompt_diag: .fill 4, 0
+#endif
+#if C128_TEST_SCRIPTED_LOAD_THEN_SAVE_NEW_EMPTY_PRODUCT
+c128_test_load_then_save_new_empty_stage: .byte 0
 #endif
 #if C128_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT
 c128_test_single_drive_fresh_save_armed: .byte 0

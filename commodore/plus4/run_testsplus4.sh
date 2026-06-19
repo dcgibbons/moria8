@@ -2103,6 +2103,127 @@ run_single_drive_load_return_product_smoke() {
     fi
 }
 
+run_load_then_save_new_empty_product_smoke() {
+    local name="load_then_save_new_empty_plus4"
+    local out_dir="$PLUS4_DIR/out"
+    local smoke_out
+    smoke_out="$(make_product_out "$name")"
+    local smoke_out_rel="$smoke_out"
+    local smoke_plus4="$smoke_out/plus4"
+    local load_save_d64="$out_dir/test-load-then-save-new-empty-plus4-load.d64"
+    local new_save_d64="$out_dir/test-load-then-save-new-empty-plus4-save.d64"
+    local swap_program_d64="$out_dir/test-load-then-save-new-empty-plus4-program.d64"
+    local save_blob="$out_dir/THE.GAME"
+    local marker_blob="$out_dir/MORIA8.ID"
+    local main_vs="$smoke_out/plus4/main.vs"
+    local boot_d64="$smoke_out/moria8-plus4.d64"
+    local build_log="$out_dir/$name.build.log"
+
+    if ! suite_selected "$name" "load_then_save_new_empty_disk"; then
+        return
+    fi
+
+    TOTAL=$((TOTAL + 1))
+    mkdir -p "$out_dir"
+
+    if ! make -s -B -C "$REPO_ROOT/commodore" \
+        KICKASS="$KICKASS" \
+        OUT="$smoke_out_rel" \
+        KA_FLAGSPLUS4="-showmem -vicesymbols -libdir c64 -define PLUS4 -define PLUS4_TEST_SCRIPTED_LOAD_THEN_SAVE_NEW_EMPTY_PRODUCT" \
+        "$smoke_out_rel/plus4/moria4.prg" \
+        "$smoke_out_rel/plus4/title" \
+        "$smoke_out_rel/plus4/monster.db.1" \
+        "$smoke_out_rel/plus4/monster.db.2" \
+        "$smoke_out_rel/plus4/monster.db.3" \
+        "$smoke_out_rel/plus4/monster.db.4" >"$build_log" 2>&1; then
+        echo "FAIL: $name (product disk build)"
+        tail -80 "$build_log"
+        FAIL=$((FAIL + 1))
+        return
+    fi
+
+    rm -f "$boot_d64"
+    if ! "$C1541" -format "moria8 plus4,m8" d64 "$boot_d64" \
+        -attach "$boot_d64" \
+        -write "$smoke_plus4/moria4.prg" "moria8" \
+        -write "$smoke_plus4/moria4.prg" "moria4" \
+        -write "$smoke_plus4/title" "t64" \
+        -write "$smoke_plus4/monster.db.1" "monster.db.1" \
+        -write "$smoke_plus4/monster.db.2" "monster.db.2" \
+        -write "$smoke_plus4/monster.db.3" "monster.db.3" \
+        -write "$smoke_plus4/monster.db.4" "monster.db.4" \
+        -write "$smoke_plus4/ovl.start" "4.start" \
+        -write "$smoke_plus4/ovl.town" "4.town" \
+        -write "$smoke_plus4/ovl.death" "4.death" \
+        -write "$smoke_plus4/ovl.gen" "4.gen" \
+        -write "$smoke_plus4/ovl.help" "4.help" \
+        -write "$smoke_plus4/ovl.ui" "4.ui" \
+        -write "$smoke_plus4/ovl.items" "4.items" \
+        -write "$smoke_plus4/ovl.spell" "4.spell" \
+        -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
+        echo "FAIL: $name (product disk image)"
+        FAIL=$((FAIL + 1))
+        return
+    fi
+
+    if ! python3 tests/make_load_resume_save_plus4.py "$save_blob" "$marker_blob" >"$build_log" 2>&1; then
+        echo "FAIL: $name (load save generation)"
+        tail -20 "$build_log"
+        FAIL=$((FAIL + 1))
+        return
+    fi
+
+    rm -f "$load_save_d64" "$new_save_d64" "$swap_program_d64"
+    if ! "$C1541" -format "moria8 load,m8" d64 "$load_save_d64" \
+        -attach "$load_save_d64" \
+        -write "$save_blob" "the.game,seq" \
+        -write "$marker_blob" "moria8.id,seq" >/dev/null; then
+        echo "FAIL: $name (load save disk fixture)"
+        FAIL=$((FAIL + 1))
+        return
+    fi
+    if ! "$C1541" -format "moria8 save,m8" d64 "$new_save_d64" >"$build_log" 2>&1; then
+        echo "FAIL: $name (new save disk fixture)"
+        tail -20 "$build_log"
+        FAIL=$((FAIL + 1))
+        return
+    fi
+    cp "$boot_d64" "$swap_program_d64"
+
+    if python3 -u tests/product_scripted_smoke.py \
+        --name "$name" \
+        --start-symbol ".plus4_test_load_then_save_new_empty_wait_for_harness" \
+        --resume-symbol ".plus4_test_load_then_save_new_empty_before_load" \
+        --attach8-at-start-d64 "$load_save_d64" \
+        --swap-symbol ".uds_show_insert_prompt" \
+        --swap-attach8-d64 "$new_save_d64" \
+        --swap2-symbol ".disk_prompt_game_required_error_shown" \
+        --swap2-attach8-d64 "$swap_program_d64" \
+        --pass-symbol ".plus4_test_load_then_save_new_empty_done" \
+        --fail-symbol ".plus4_test_load_then_save_new_empty_fail" \
+        --main-vs "$main_vs" \
+        --boot-d64 "$boot_d64" \
+        --attach-delay 5.0 \
+        --startup-delay 2.0 \
+        --vice "$VICE"; then
+        local dir_list
+        if ! dir_list=$("$C1541" -attach "$new_save_d64" -list 2>&1); then
+            echo "FAIL: $name (new save disk listing)"
+            echo "$dir_list" | tail -20
+            FAIL=$((FAIL + 1))
+        elif echo "$dir_list" | grep -qi '"MORIA8.ID".*SEQ' && \
+                echo "$dir_list" | grep -qi '"THE.GAME".*SEQ'; then
+            PASS=$((PASS + 1))
+        else
+            echo "FAIL: $name (new save disk missing marker or save file)"
+            echo "$dir_list" | tail -20
+            FAIL=$((FAIL + 1))
+        fi
+    else
+        FAIL=$((FAIL + 1))
+    fi
+}
+
 run_single_drive_load_corrupt_product_smoke() {
     local name="single_drive_load_corrupt_plus4"
     local out_dir="$PLUS4_DIR/out"
@@ -2320,6 +2441,7 @@ run_disk_setup_single_drive_return_product_smoke
 run_death_hiscore_single_drive_product_smoke
 run_load_resume_product_smoke
 run_single_drive_load_return_product_smoke
+run_load_then_save_new_empty_product_smoke
 run_single_drive_load_corrupt_product_smoke
 run_load_missing_savefile_product_smoke
 

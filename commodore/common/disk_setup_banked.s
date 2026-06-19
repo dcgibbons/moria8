@@ -195,7 +195,7 @@ disk_marker_init:
     jsr disk_kernal_exit
     lda disk_status
     bne !dmi_fail+
-#if C128_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT
+#if C128_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT || C128_TEST_SCRIPTED_LOAD_THEN_SAVE_NEW_EMPTY_PRODUCT
     clc
     rts
 #endif
@@ -270,7 +270,7 @@ disk_setup_capture_init_status:
     lda disk_status
     bne !dmi_fail+
 #endif
-#if C128_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT
+#if C128_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT || C128_TEST_SCRIPTED_LOAD_THEN_SAVE_NEW_EMPTY_PRODUCT
     clc
     rts
 #endif
@@ -321,6 +321,9 @@ disk_setup_commit_initialized:
 
 disk_setup_prepare_selected:
 !retry:
+#if C128_TEST_SCRIPTED_LOAD_THEN_SAVE_NEW_EMPTY_PRODUCT
+c128_test_load_then_save_new_empty_prepare_insert_prompt:
+#endif
     lda #DISK_UI_ACT_INSERT_DISK
     jsr disk_setup_call_ui
     jsr disk_init_drive
@@ -339,6 +342,11 @@ disk_setup_prepare_selected:
 #if C128_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT
     jmp !prompt_init+
 #endif
+#if C128_TEST_SCRIPTED_LOAD_THEN_SAVE_NEW_EMPTY_PRODUCT
+    lda c128_test_load_then_save_new_empty_stage
+    cmp #1
+    beq !prompt_init+
+#endif
     jsr disk_marker_present
     bcc disk_setup_commit_ready
 #if HAL_STORAGE_DISK_SETUP_ACCEPT_SAVE_FILE
@@ -352,6 +360,9 @@ disk_setup_prepare_selected:
     bcs !show_marker_probe_fail+
 #endif
 !prompt_init:
+#if C128_TEST_SCRIPTED_LOAD_THEN_SAVE_NEW_EMPTY_PRODUCT
+c128_test_load_then_save_new_empty_prepare_init_prompt:
+#endif
     lda #DISK_UI_ACT_INIT_PROMPT
     jsr disk_setup_call_ui
     lda disk_ui_result

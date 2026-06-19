@@ -5235,6 +5235,126 @@ run_boot_title_single_drive_load_return_smoke() {
     TOTAL=$((TOTAL + 1))
 }
 
+run_boot_title_load_then_save_new_empty_smoke() {
+    local name="boot_title_load_then_save_new_empty_smoke"
+    echo -n "  $name: "
+
+    build_boot_assets || return
+
+    local build_log
+    build_log="$(test128_tmp_file test128_load_then_save_new_empty_build.log)"
+    local c1541_bin="${C1541:-c1541}"
+    local boot_d64="out/moria128_load_then_save_new_empty.d71"
+    local load_save_d64="out/moria128_load_then_save_new_empty_load.d64"
+    local new_save_d64="out/moria128_load_then_save_new_empty_save.d64"
+    local swap_program_d64="out/moria128_load_then_save_new_empty_program.d71"
+    local marker_blob="out/MORIA8.ID"
+    local save_blob="out/THE.GAME"
+
+    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 \
+            -define C128 -define C128_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_RETURN_PRODUCT -define C128_TEST_SCRIPTED_LOAD_THEN_SAVE_NEW_EMPTY_PRODUCT \
+            -o out/moria128.prg >"$build_log" 2>&1; then
+        echo "FAIL (load-then-save-new-empty product main assembly failed)"
+        tail -20 "$build_log" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    rm -f "$boot_d64"
+    cp out/moria128.d71 "$boot_d64"
+    if ! "$c1541_bin" -attach "$boot_d64" \
+            -delete "moria128" \
+            -delete "128.runtime" \
+            -delete "128.input" \
+            -delete "128.proj" \
+            -delete "128.fdisk" \
+            -delete "128.diskio" \
+            -delete "128.world" \
+            -delete "128.item" \
+            -delete "128.names" \
+            -delete "128.select" \
+            -delete "128.persist" \
+            -delete "128.play" \
+            -delete "128.bank" \
+            -write out/moria128.prg "moria128" \
+            -write out/128.runtime.prg "128.runtime" \
+            -write out/128.input.prg "128.input" \
+            -write out/128.proj.prg "128.proj" \
+            -write out/128.fdisk.prg "128.fdisk" \
+            -write out/128.diskio.prg "128.diskio" \
+            -write out/128.world.prg "128.world" \
+            -write out/128.item.prg "128.item" \
+            -write out/128.names.prg "128.names" \
+            -write out/128.select.prg "128.select" \
+            -write out/128.persist.prg "128.persist" \
+            -write out/128.play.prg "128.play" \
+            -write out/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
+        echo "FAIL (load-then-save-new-empty product disk patch failed)"
+        tail -20 "$build_log" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    if ! python3 tests/make_load_resume_save.py "$save_blob" >"$build_log" 2>&1; then
+        echo "FAIL (load save generation failed)"
+        tail -20 "$build_log" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+    printf 'M8SAVE' > "$marker_blob"
+
+    rm -f "$load_save_d64" "$new_save_d64" "$swap_program_d64"
+    if ! "$c1541_bin" -format "moria8 save,m8" d64 "$load_save_d64" \
+            -attach "$load_save_d64" \
+            -write "$marker_blob" "MORIA8.ID,s" \
+            -write "$save_blob" "THE.GAME,s" >>"$build_log" 2>&1; then
+        echo "FAIL (load save disk build failed)"
+        tail -20 "$build_log" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+    if ! "$c1541_bin" -format "moria128 save,m8" d64 "$new_save_d64" >"$build_log" 2>&1; then
+        echo "FAIL (new empty save disk build failed)"
+        tail -20 "$build_log" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+    cp "$boot_d64" "$swap_program_d64"
+
+    if python3 -u tests/load_then_save_new_empty_smoke.py \
+            --vice "$VICE" \
+            --boot-d64 "$boot_d64" \
+            --main-vs out/main.vs \
+            --load-save-d64 "$load_save_d64" \
+            --new-save-d64 "$new_save_d64" \
+            --program-d64 "$swap_program_d64" \
+            --attach-delay 5.0 \
+            --screen-base 0x0400; then
+        local dir_list
+        if ! dir_list=$("$c1541_bin" -attach "$new_save_d64" -list 2>&1); then
+            echo "FAIL (new save disk listing failed)"
+            echo "$dir_list" | tail -20 | sed 's/^/    /'
+            FAIL=$((FAIL + 1))
+        elif echo "$dir_list" | grep -qi '"MORIA8.ID".*SEQ' && \
+                echo "$dir_list" | grep -qi '"THE.GAME".*SEQ'; then
+            echo "PASS"
+            PASS=$((PASS + 1))
+        else
+            echo "FAIL (new save disk missing marker or save file)"
+            echo "$dir_list" | tail -20 | sed 's/^/    /'
+            FAIL=$((FAIL + 1))
+        fi
+    else
+        FAIL=$((FAIL + 1))
+    fi
+    TOTAL=$((TOTAL + 1))
+}
+
 run_boot_title_disk_setup_single_drive_return_smoke() {
     local name="boot_title_disk_setup_single_drive_return_smoke"
     echo -n "  $name: "
@@ -7497,6 +7617,7 @@ run_selected_suites() {
     run_named_suite single_drive_load_program_disk_rejected --alias boot_title_single_drive_load_wrong_media_smoke --alias wrong_media_recovery --alias wrong_media_detection_selected_devices run_boot_title_single_drive_load_wrong_media_smoke || return 1
     run_named_suite single_drive_corrupt_save_recovery_requires_program_disk --alias boot_title_single_drive_load_corrupt_smoke --alias corrupt_save_file run_boot_title_single_drive_load_corrupt_smoke || return 1
     run_named_suite prompt_sequence_no_repeat --alias boot_title_single_drive_load_return_smoke run_boot_title_single_drive_load_return_smoke || return 1
+    run_named_suite load_then_save_new_empty_disk --alias boot_title_load_then_save_new_empty_smoke run_boot_title_load_then_save_new_empty_smoke || return 1
     run_named_suite title_disk_setup_single_drive_returns_program_prompt --alias boot_title_disk_setup_single_drive_return_smoke run_boot_title_disk_setup_single_drive_return_smoke || return 1
     run_named_suite new_save_empty_init_writes --alias boot_title_single_drive_fresh_save_smoke run_boot_title_single_drive_fresh_save_smoke || return 1
     run_named_suite new_save_empty_no_init_returns_setup --alias cancel_supported_prompts --alias boot_title_single_drive_fresh_save_no_init_smoke run_boot_title_single_drive_fresh_save_no_init_smoke || return 1

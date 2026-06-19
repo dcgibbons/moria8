@@ -667,17 +667,27 @@ plus4_test_change_save_drive_pass:
 plus4_test_change_save_drive_unexpected_return:
     brk
 #endif
-#if PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_RETURN_PRODUCT
+#if PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_RETURN_PRODUCT || PLUS4_TEST_SCRIPTED_LOAD_THEN_SAVE_NEW_EMPTY_PRODUCT
     lda #8
     sta program_device
     sta save_device
     lda #1
     sta disk_mode
     sta disk_setup_done
+#if PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_RETURN_PRODUCT
 plus4_test_single_drive_load_return_wait_for_harness:
     jmp plus4_test_single_drive_load_return_wait_for_harness
 plus4_test_single_drive_load_return_before_load:
     jmp title_load_game
+#endif
+#if PLUS4_TEST_SCRIPTED_LOAD_THEN_SAVE_NEW_EMPTY_PRODUCT
+plus4_test_load_then_save_new_empty_wait_for_harness:
+    jmp plus4_test_load_then_save_new_empty_wait_for_harness
+plus4_test_load_then_save_new_empty_before_load:
+    jmp title_load_game
+plus4_test_load_then_save_new_empty_fail:
+    jmp plus4_test_load_then_save_new_empty_fail
+#endif
 #endif
 #if PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_CORRUPT_PRODUCT
     lda #8
@@ -959,6 +969,21 @@ title_load_game:
     jsr load_game
     // Fail closed on the explicit load carry result before resuming gameplay.
     bcc !title_load_fail+
+#if PLUS4_TEST_SCRIPTED_LOAD_THEN_SAVE_NEW_EMPTY_PRODUCT
+plus4_test_load_then_save_new_empty_loaded:
+plus4_test_load_then_save_new_empty_before_save:
+    jsr disk_prompt_save
+    bcc !plus4_load_then_save_prompt_ok+
+    jmp plus4_test_load_then_save_new_empty_fail
+!plus4_load_then_save_prompt_ok:
+    jsr save_game
+    bcs !plus4_load_then_save_saved+
+    jmp plus4_test_load_then_save_new_empty_fail
+!plus4_load_then_save_saved:
+    jsr disk_prompt_game_required
+plus4_test_load_then_save_new_empty_done:
+    jmp plus4_test_load_then_save_new_empty_done
+#endif
 #if PLUS4
     jsr disk_prompt_game
 #endif
