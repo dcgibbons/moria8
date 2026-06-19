@@ -15,11 +15,11 @@ REQUIRED_CONSTANTS = (
 )
 
 PLATFORM_FILES = {
-    "c64": ROOT / "commodore/c64/hal/memory_bank_consts.s",
-    "c128": ROOT / "commodore/c128/hal/memory_bank_consts.s",
+    "c64": ROOT / "platforms/commodore/c64/hal/memory_bank_consts.s",
+    "c128": ROOT / "platforms/commodore/c128/hal/memory_bank_consts.s",
 }
 
-COMMON_SAVE = ROOT / "commodore/common/save.s"
+COMMON_SAVE = ROOT / "platforms/commodore/common/save.s"
 FORBIDDEN_COMMON_TOKENS = ("$dd00",)
 
 

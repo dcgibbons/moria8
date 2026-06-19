@@ -53,15 +53,15 @@ interactive terminal after preparing or unlocking the signing key. Use
 
 Expected disk artifacts:
 
-- `commodore/out/moria8-c64.d64`
-- `commodore/out/moria8-c64.zip`
-- `commodore/out/moria8-c128.d64`
-- `commodore/out/moria8-c128.d71`
-- `commodore/out/moria8-c128.d81`
-- `commodore/out/moria8-plus4.d64`
-- `commodore/out/SHA256SUMS`
-- `commodore/out/*.asc`
-- `commodore/out/c64-dist/` staging directory for the C64 Ultimate loose-file distribution
+- `build/moria8-c64.d64`
+- `build/moria8-c64.zip`
+- `build/moria8-c128.d64`
+- `build/moria8-c128.d71`
+- `build/moria8-c128.d81`
+- `build/moria8-plus4.d64`
+- `build/SHA256SUMS`
+- `build/*.asc`
+- `build/c64-dist/` staging directory for the C64 Ultimate loose-file distribution
 
 ## Automated Gates
 
@@ -92,7 +92,7 @@ make test128-fast-smoke
 ## Artifact Review
 
 - Verify disk image names and version metadata.
-- Verify `commodore/out/SHA256SUMS` covers all uploaded artifacts.
+- Verify `build/SHA256SUMS` covers all uploaded artifacts.
 - Verify detached GPG signatures for uploaded artifacts and `SHA256SUMS`.
 - Confirm generated outputs are not staged as source.
 - Confirm no monitor logs, local paths, private planning notes, or agent process

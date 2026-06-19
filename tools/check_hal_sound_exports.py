@@ -18,16 +18,16 @@ REQUIRED_SERVICES = (
 )
 
 SID_PLATFORM_FILES = {
-    "c64": ROOT / "commodore/c64/hal/sound_consts.s",
-    "c128": ROOT / "commodore/c128/hal/sound_consts.s",
+    "c64": ROOT / "platforms/commodore/c64/hal/sound_consts.s",
+    "c128": ROOT / "platforms/commodore/c128/hal/sound_consts.s",
 }
 SOUND_IMPL_FILES = {
-    "sid": ROOT / "commodore/common/sound.s",
-    "plus4": ROOT / "commodore/plus4/sound.s",
+    "sid": ROOT / "core/sound.s",
+    "plus4": ROOT / "platforms/commodore/plus4/sound.s",
 }
 
-COMMON_SOUND = ROOT / "commodore/common/sound.s"
-COMMON_SOURCE_ROOT = ROOT / "commodore/common"
+COMMON_SOUND = ROOT / "core/sound.s"
+COMMON_SOURCE_ROOT = ROOT / "core"
 FORBIDDEN_COMMON_TOKENS = ("$d400",)
 FORBIDDEN_COMMON_CALLS = (
     "jsr sound_init",

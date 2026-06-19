@@ -4,18 +4,21 @@
 
 | Path | Purpose |
 | --- | --- |
-| `Makefile` | Thin root wrapper around `commodore/Makefile` |
-| `commodore/Makefile` | Main build, disk, run, and test orchestration |
-| `commodore/c64/` | C64 entry, platform code, tests, and harness scripts |
-| `commodore/c128/` | C128 boot, VDC/MMU code, tests, and harness scripts |
-| `commodore/plus4/` | Plus/4 entry, TED platform code, tests, and harness scripts |
-| `commodore/common/` | Shared gameplay, UI, data, and utility modules |
+| `Makefile` | Thin root wrapper around `platforms/commodore/Makefile` |
+| `core/` | Platform-agnostic 6502 gameplay, UI, data, and utility modules |
+| `platforms/commodore/Makefile` | Commodore build, disk, run, and test orchestration |
+| `platforms/commodore/c64/` | C64 entry, platform code, tests, and harness scripts |
+| `platforms/commodore/c128/` | C128 boot, VDC/MMU code, tests, and harness scripts |
+| `platforms/commodore/plus4/` | Plus/4 entry, TED platform code, tests, and harness scripts |
+| `platforms/commodore/common/` | Shared Commodore KERNAL, disk, overlay, and compatibility modules |
+| `build/` | Generated payloads, disk images, checksums, and test scratch output |
 | `data/` | Source data used by generators |
 | `tools/` | Build-time conversion, generation, lint, and disk helpers |
 | `artwork/` | Source artwork and public art credits |
 
-Primary entry points are `commodore/c64/main.s`, `commodore/c128/main.s`,
-and `commodore/plus4/main.s`.
+Primary entry points are `platforms/commodore/c64/main.s`,
+`platforms/commodore/c128/main.s`, and
+`platforms/commodore/plus4/main.s`.
 
 ## Shared Runtime Modules
 
@@ -252,8 +255,8 @@ Current product payloads:
 | `ovl.disarm` | `$E000-$E2CB` | 716 bytes |
 
 The source of truth for C128 ownership constants and overlap assertions is
-`commodore/c128/memory128.s`; the product segment definitions and Bank 0
-payload asserts live in `commodore/c128/main.s`.
+`platforms/commodore/c128/memory128.s`; the product segment definitions and
+Bank 0 payload asserts live in `platforms/commodore/c128/main.s`.
 
 ## C128 MMU Rules
 

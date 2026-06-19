@@ -10,7 +10,7 @@ A true multi-platform project requires strict separation between game rules and
 hardware execution. The various 8-bit versions exist as parallel tracks to
 ensure native performance and idiomatic hardware utilization.
 
-**Proposed Structure:**
+**Current and Proposed Structure:**
 
 ```text
 /
@@ -86,11 +86,11 @@ Moria8 uses architectural tiers based on available address space and memory spee
 
 ## 5. Plus/4 Release Track
 
-The Plus/4 port is being implemented pragmatically in the current Commodore
-tree rather than waiting for the future `core/`/`platforms/` migration.
+The Plus/4 port was implemented pragmatically during the Commodore HAL work and
+now lives in the current `core/`/`platforms/` layout.
 
-* Source lives under `commodore/plus4/` and reuses `commodore/common/` plus the
-  C64 40-column gameplay layout.
+* Source lives under `platforms/commodore/plus4/` and reuses `core/` plus
+  `platforms/commodore/common/` and the C64 40-column gameplay layout.
 * The release target is stock 64K Plus/4 using standard Commodore DOS disk I/O
   with a 1541-compatible 35-track D64 artifact. The port must not require a
   1551-specific path.
@@ -105,7 +105,7 @@ Moria8 is currently well-positioned because the 8-bit logic is increasingly plat
 
 **Strategic Phasing:**
 
-1. **Decoupling:** Move 8-bit logic to the top-level `core/` directory.
+1. **Decoupling:** Keep shared 8-bit logic in the top-level `core/` directory.
 2. **Parallel Cores:** Establish `core_z80/` to begin the native Z80 rewrite.
 3. **Active Parallel Development:** Implement basic renderers (HAL) for both
    6502 and Z80 targets to validate hardware paradigms side-by-side.

@@ -8,12 +8,12 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-COMMON_DIR = ROOT / "commodore/common"
+COMMON_DIR = ROOT / "core"
 
 PLATFORM_FILES = {
-    "c64": ROOT / "commodore/c64/screen.s",
-    "c128": ROOT / "commodore/c128/screen_vdc.s",
-    "plus4": ROOT / "commodore/plus4/screen.s",
+    "c64": ROOT / "platforms/commodore/c64/screen.s",
+    "c128": ROOT / "platforms/commodore/c128/screen_vdc.s",
+    "plus4": ROOT / "platforms/commodore/plus4/screen.s",
 }
 
 REQUIRED_LABELS = (
@@ -103,16 +103,16 @@ def common_policy_violations() -> list[str]:
             f"{COMMON_HELP_CLEAR_FILE.relative_to(ROOT)} does not consume hal_screen_full_clear_uses_bulk"
         )
     if "hal_screen_box_vertical_char" not in help_text:
-        errors.append("commodore/common/ui_help.s does not consume hal_screen_box_vertical_char")
+        errors.append("core/ui_help.s does not consume hal_screen_box_vertical_char")
     if "HAL_SCREEN_HELP_LINE_USES_API" not in help_text:
-        errors.append("commodore/common/ui_help.s does not consume HAL_SCREEN_HELP_LINE_USES_API")
+        errors.append("core/ui_help.s does not consume HAL_SCREEN_HELP_LINE_USES_API")
     if "HAL_SCREEN_HELP_LINE_USES_COLOR_MAP" not in help_text:
         errors.append(
-            "commodore/common/ui_help.s does not consume HAL_SCREEN_HELP_LINE_USES_COLOR_MAP"
+            "core/ui_help.s does not consume HAL_SCREEN_HELP_LINE_USES_COLOR_MAP"
         )
     if "hal_screen_spell_bolt_flash_sets_color" not in spell_effects_text:
         errors.append(
-            "commodore/common/spell_effects.s does not consume hal_screen_spell_bolt_flash_sets_color"
+            "core/spell_effects.s does not consume hal_screen_spell_bolt_flash_sets_color"
         )
     flash_policy = re.compile(
         r"(?s)#if\s+hal_screen_spell_bolt_flash_sets_color.*?"
@@ -123,7 +123,7 @@ def common_policy_violations() -> list[str]:
     )
     if not flash_policy.search(spell_effects_text):
         errors.append(
-            "commodore/common/spell_effects.s does not gate bolt flash color with "
+            "core/spell_effects.s does not gate bolt flash color with "
             "hal_screen_spell_bolt_flash_sets_color"
         )
     c128_flash_policy = re.compile(

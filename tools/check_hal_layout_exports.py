@@ -23,20 +23,20 @@ REQUIRED_CONSTANTS = {
 
 PLATFORMS = {
     "c64": {
-        "layout": ROOT / "commodore/c64/hal/layout.s",
-        "screen": ROOT / "commodore/c64/screen.s",
+        "layout": ROOT / "platforms/commodore/c64/hal/layout.s",
+        "screen": ROOT / "platforms/commodore/c64/screen.s",
         "map_cols": "MAP40_COLS",
         "map_rows": "MAP40_ROWS",
     },
     "c128": {
-        "layout": ROOT / "commodore/c128/hal/layout.s",
-        "screen": ROOT / "commodore/c128/screen_vdc.s",
+        "layout": ROOT / "platforms/commodore/c128/hal/layout.s",
+        "screen": ROOT / "platforms/commodore/c128/screen_vdc.s",
         "map_cols": "C128_MAP_COLS",
         "map_rows": "C128_MAP_ROWS",
     },
     "plus4": {
-        "layout": ROOT / "commodore/plus4/hal/layout.s",
-        "screen": ROOT / "commodore/plus4/screen.s",
+        "layout": ROOT / "platforms/commodore/plus4/hal/layout.s",
+        "screen": ROOT / "platforms/commodore/plus4/screen.s",
         "map_cols": "MAP40_COLS",
         "map_rows": "MAP40_ROWS",
     },
@@ -133,7 +133,7 @@ def resolve_const(constants: dict[str, str], name: str) -> int | None:
 
 def main() -> int:
     errors: list[str] = []
-    dungeon_consts = parse_consts(ROOT / "commodore/common/dungeon_data.s")
+    dungeon_consts = parse_consts(ROOT / "core/dungeon_data.s")
     for platform, paths in PLATFORMS.items():
         layout_path = paths["layout"]
         screen_path = paths["screen"]
@@ -168,7 +168,7 @@ def main() -> int:
                 errors.append(f"{platform}: missing {hal_name} in {layout_path.relative_to(ROOT)}")
                 continue
             if map_name not in dungeon_consts:
-                errors.append(f"{platform}: missing {map_name} in commodore/common/dungeon_data.s")
+                errors.append(f"{platform}: missing {map_name} in core/dungeon_data.s")
                 continue
             hal_value = resolve_const(layout_consts, hal_name)
             map_value = resolve_const(dungeon_consts, map_name)
@@ -176,7 +176,7 @@ def main() -> int:
                 errors.append(f"{platform}: cannot resolve {hal_name} in {layout_path.relative_to(ROOT)}")
                 continue
             if map_value is None:
-                errors.append(f"{platform}: cannot resolve {map_name} in commodore/common/dungeon_data.s")
+                errors.append(f"{platform}: cannot resolve {map_name} in core/dungeon_data.s")
                 continue
             if hal_value != map_value:
                 errors.append(

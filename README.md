@@ -66,13 +66,13 @@ make diskplus4
 `make disk64`, `make disk128`, and `make diskplus4` build the individual disk
 images.
 
-Disk images are emitted under `commodore/out/`:
+Disk images are emitted under `build/`:
 
-- `commodore/out/moria8-c64.d64`
-- `commodore/out/moria8-c128.d64`
-- `commodore/out/moria8-c128.d71`
-- `commodore/out/moria8-c128.d81`
-- `commodore/out/moria8-plus4.d64`
+- `build/moria8-c64.d64`
+- `build/moria8-c128.d64`
+- `build/moria8-c128.d71`
+- `build/moria8-c128.d81`
+- `build/moria8-plus4.d64`
 
 ### Run
 

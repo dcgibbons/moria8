@@ -10,7 +10,7 @@ import re
 ROOT = Path(__file__).resolve().parents[1]
 CHECKS = (
     (
-        ROOT / "commodore" / "plus4" / "main.s",
+        ROOT / "platforms" / "commodore" / "plus4" / "main.s",
         (
             "c64_irq_hidden_rom",
             "c64_install_ram_irq_vectors",
@@ -22,27 +22,27 @@ CHECKS = (
         ),
     ),
     (
-        ROOT / "commodore" / "common" / "dungeon_data.s",
+        ROOT / "core" / "dungeon_data.s",
         (
             "C64_MAP_COLS",
             "C64_MAP_ROWS",
         ),
     ),
     (
-        ROOT / "commodore" / "plus4" / "memory.s",
+        ROOT / "platforms" / "commodore" / "plus4" / "memory.s",
         (
             "C64_TIER_NAME_POOL_BASE",
             "C64_TIER_NAME_POOL_END",
         ),
     ),
     (
-        ROOT / "commodore" / "plus4" / "harnessplus4.py",
+        ROOT / "platforms" / "commodore" / "plus4" / "harnessplus4.py",
         (
             ".c64_install_ram_irq_vectors",
         ),
     ),
     (
-        ROOT / "commodore" / "common" / "player_items.s",
+        ROOT / "core" / "player_items.s",
         (
             "c64_install_ram_irq_vectors",
             "C64_PRODUCT_OVERLAY_RUNTIME",
@@ -50,7 +50,7 @@ CHECKS = (
         ),
     ),
     (
-        ROOT / "commodore" / "plus4" / "main.s",
+        ROOT / "platforms" / "commodore" / "plus4" / "main.s",
         (
             "C64_PRODUCT_OVERLAY_RUNTIME",
             "C64_PRODUCT_IRQ_VECTOR_RUNTIME",

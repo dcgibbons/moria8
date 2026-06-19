@@ -11,13 +11,13 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_SCAN_DIRS = (
-    ROOT / "commodore" / "common",
-    ROOT / "commodore" / "c64",
-    ROOT / "commodore" / "c128",
+    ROOT / "core",
+    ROOT / "platforms" / "commodore" / "c64",
+    ROOT / "platforms" / "commodore" / "c128",
 )
 SKIP_PATH_PARTS = {"out", "tests"}
 SKIP_FILES = {
-    Path("commodore/c128/vdc_demo.s"),
+    Path("platforms/commodore/c128/vdc_demo.s"),
 }
 
 LABEL_RE = re.compile(r"^\s*([A-Za-z_@.+!?][\w@.+!?-]*:)\s*")
@@ -165,7 +165,7 @@ def scan_paths(scan_roots: list[Path]) -> tuple[list[Finding], list[Finding], in
 
 
 def run_self_test() -> int:
-    sample_path = ROOT / "commodore" / "common" / "demo_sample.s"
+    sample_path = ROOT / "core" / "demo_sample.s"
     sample_lines = [
         "lda some_value",
         "cmp #0",
@@ -221,7 +221,7 @@ def main() -> int:
         "paths",
         nargs="*",
         type=Path,
-        help="Optional roots or files to scan. Defaults to commodore/common, commodore/c64, commodore/c128.",
+        help="Optional roots or files to scan. Defaults to core, platforms/commodore/c64, platforms/commodore/c128.",
     )
     parser.add_argument("--self-test", action="store_true", help="Run internal parser self-checks and exit.")
     parser.add_argument(

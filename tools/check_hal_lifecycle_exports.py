@@ -8,17 +8,18 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-PLATFORM_SERVICES = ROOT / "commodore/common/platform_services_api.s"
-COMMON_DIR = ROOT / "commodore/common"
+PLATFORM_SERVICES = ROOT / "core/platform_services_api.s"
+COMMON_DIR = ROOT / "core"
+OVERLAY_COMMON = ROOT / "platforms/commodore/common/overlay.s"
 PLATFORMS = {
-    "c64": ROOT / "commodore/c64/hal/lifecycle_policy.s",
-    "c128": ROOT / "commodore/c128/hal/lifecycle_policy.s",
-    "plus4": ROOT / "commodore/plus4/hal/lifecycle_policy.s",
+    "c64": ROOT / "platforms/commodore/c64/hal/lifecycle_policy.s",
+    "c128": ROOT / "platforms/commodore/c128/hal/lifecycle_policy.s",
+    "plus4": ROOT / "platforms/commodore/plus4/hal/lifecycle_policy.s",
 }
 PLATFORM_MAINS = {
-    "c64": ROOT / "commodore/c64/main.s",
-    "c128": ROOT / "commodore/c128/main.s",
-    "plus4": ROOT / "commodore/plus4/main.s",
+    "c64": ROOT / "platforms/commodore/c64/main.s",
+    "c128": ROOT / "platforms/commodore/c128/main.s",
+    "plus4": ROOT / "platforms/commodore/plus4/main.s",
 }
 
 REQUIRED_EXPORTS = (
@@ -76,10 +77,6 @@ REQUIRED_POLICY_CONSTANTS = (
     "hal_platform_overlay_reu_stash_enabled",
     "hal_platform_overlay_prompt_program_media",
     "hal_platform_overlay_cpu_port_dma_bank",
-    "hal_platform_item_prompt_overlay_runtime",
-    "hal_platform_item_prompt_reload_installs_irq",
-    "hal_platform_item_prompt_reload_resync",
-    "hal_platform_equip_prepare_key_before_display",
     "hal_platform_monster_bank1_tier_names",
     "hal_platform_monster_hidden_name_pool",
     "hal_platform_monster_cpu_port_bank",
@@ -200,39 +197,35 @@ def main() -> int:
             COMMON_DIR / "game_loop.s",
             "HAL_PLATFORM_GAME_LOOP_ITEM_ACTIONS_TRAMPOLINED",
         ),
-        "hal_platform_overlay_count": (COMMON_DIR / "overlay.s",),
+        "hal_platform_overlay_count": (OVERLAY_COMMON,),
         "hal_platform_overlay_state_external": (
-            COMMON_DIR / "overlay.s",
+            OVERLAY_COMMON,
             "HAL_PLATFORM_OVERLAY_STATE_LOCAL",
         ),
         "hal_platform_overlay_force_reload": (
-            COMMON_DIR / "overlay.s",
+            OVERLAY_COMMON,
             "HAL_PLATFORM_OVERLAY_FORCE_RELOAD",
         ),
         "hal_platform_overlay_tier_cache_guard": (
-            COMMON_DIR / "overlay.s",
+            OVERLAY_COMMON,
             "HAL_PLATFORM_OVERLAY_TIER_CACHE_GUARD",
         ),
         "hal_platform_overlay_cache_enabled": (
-            COMMON_DIR / "overlay.s",
+            OVERLAY_COMMON,
             "HAL_PLATFORM_OVERLAY_CACHE_ENABLED",
         ),
         "hal_platform_overlay_reu_stash_enabled": (
-            COMMON_DIR / "overlay.s",
+            OVERLAY_COMMON,
             "HAL_PLATFORM_OVERLAY_REU_STASH_ENABLED",
         ),
         "hal_platform_overlay_prompt_program_media": (
-            COMMON_DIR / "overlay.s",
+            OVERLAY_COMMON,
             "HAL_PLATFORM_OVERLAY_PROMPT_PROGRAM_MEDIA",
         ),
         "hal_platform_overlay_cpu_port_dma_bank": (
-            COMMON_DIR / "overlay.s",
+            OVERLAY_COMMON,
             "HAL_PLATFORM_OVERLAY_CPU_PORT_DMA_BANK",
         ),
-        "hal_platform_item_prompt_overlay_runtime": (COMMON_DIR / "player_items.s",),
-        "hal_platform_item_prompt_reload_installs_irq": (COMMON_DIR / "player_items.s",),
-        "hal_platform_item_prompt_reload_resync": (COMMON_DIR / "player_items.s",),
-        "hal_platform_equip_prepare_key_before_display": (COMMON_DIR / "player_items.s",),
         "hal_platform_monster_bank1_tier_names": (
             COMMON_DIR / "monster.s",
             "HAL_PLATFORM_MONSTER_BANK1_TIER_NAMES",
@@ -271,7 +264,7 @@ def main() -> int:
     )
     for name in wizard_policy_consumers:
         if name not in wizard_text:
-            policy_missing.append(f"commodore/common/wizard.s does not consume {name}")
+            policy_missing.append(f"core/wizard.s does not consume {name}")
 
     ego_policy_consumers = (
         "HAL_PLATFORM_EGO_HOLY_AVENGER_STRING_EXTERNAL",
@@ -282,14 +275,14 @@ def main() -> int:
     )
     for name in ego_policy_consumers:
         if name not in ego_text:
-            policy_missing.append(f"commodore/common/ego_items.s does not consume {name}")
+            policy_missing.append(f"core/ego_items.s does not consume {name}")
 
     spell_effects_text = (COMMON_DIR / "spell_effects.s").read_text(
         encoding="utf-8", errors="replace"
     )
     if "HAL_PLATFORM_CURE_POISON_MSG_EXTERNAL" not in spell_effects_text:
         policy_missing.append(
-            "commodore/common/spell_effects.s does not consume "
+            "core/spell_effects.s does not consume "
             "HAL_PLATFORM_CURE_POISON_MSG_EXTERNAL"
         )
 
@@ -298,12 +291,12 @@ def main() -> int:
     )
     if "hal_platform_character_sheet_begin" not in character_text:
         policy_missing.append(
-            "commodore/common/ui_character.s does not consume "
+            "core/ui_character.s does not consume "
             "hal_platform_character_sheet_begin"
         )
 
     if re.search(r"(?m)^\s*#if[^\n]*\bC128\b", ego_text):
-        policy_missing.append("commodore/common/ego_items.s still branches directly on C128")
+        policy_missing.append("core/ego_items.s still branches directly on C128")
 
     player_create_text = (COMMON_DIR / "player_create.s").read_text(
         encoding="utf-8", errors="replace"
@@ -314,15 +307,15 @@ def main() -> int:
         player_create_text,
     ):
         policy_missing.append(
-            "commodore/common/player_create.s still gates chargen runtime resync on C128"
+            "core/player_create.s still gates chargen runtime resync on C128"
         )
     if "C128_CHARGEN_CUTPOINT" in player_create_text:
         policy_missing.append(
-            "commodore/common/player_create.s still owns the C128 chargen cutpoint name"
+            "core/player_create.s still owns the C128 chargen cutpoint name"
         )
 
     if re.search(r"(?m)^\s*#if[^\n]*\bC128\b", spell_effects_text):
-        policy_missing.append("commodore/common/spell_effects.s still branches directly on C128")
+        policy_missing.append("core/spell_effects.s still branches directly on C128")
 
     if missing or violations or policy_missing or direct_missing:
         if missing:

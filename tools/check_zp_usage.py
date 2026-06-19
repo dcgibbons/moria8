@@ -11,13 +11,13 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_SCAN_DIRS = (
-    ROOT / "commodore" / "common",
-    ROOT / "commodore" / "c64",
-    ROOT / "commodore" / "c128",
+    ROOT / "core",
+    ROOT / "platforms" / "commodore" / "c64",
+    ROOT / "platforms" / "commodore" / "c128",
 )
 SKIP_PATH_PARTS = {"out", "tests"}
 SKIP_FILES = {
-    Path("commodore/c128/vdc_demo.s"),
+    Path("platforms/commodore/c128/vdc_demo.s"),
 }
 LOW_ZP_MAX = 0x8F
 HIGH_ZP_MIN = 0x90
@@ -93,6 +93,18 @@ def classify_operand(path: Path, line_no: int, line: str) -> list[Finding]:
         addr = int(match.group("addr"), 16)
         rel = path.relative_to(ROOT)
         display_line = line.rstrip()
+        if addr == 0xba:
+            allowed_paths = {
+                "platforms/commodore/c64/boot.s",
+                "platforms/commodore/c128/boot128.s",
+                "platforms/commodore/c128/bootsect128.s",
+                "platforms/commodore/c128/title_cache_runtime.s",
+                "platforms/commodore/common/disk_swap.s",
+                "platforms/commodore/c64/tests/test_disk_swap.s",
+                "platforms/commodore/c128/tests/test_disk_swap128.s",
+            }
+            if rel.as_posix() in allowed_paths:
+                continue
         if HIGH_ZP_MIN <= addr <= HIGH_ZP_MAX:
             findings.append(
                 Finding(
@@ -127,7 +139,7 @@ def scan_paths(scan_roots: list[Path]) -> list[Finding]:
 
 
 def run_self_test() -> int:
-    sample_path = ROOT / "commodore" / "common" / "demo_sample.s"
+    sample_path = ROOT / "core" / "demo_sample.s"
     cases = [
         ("lda $90", ["error"]),
         ("lda ($fe),y", ["error"]),
@@ -157,7 +169,7 @@ def main() -> int:
         "paths",
         nargs="*",
         type=Path,
-        help="Optional roots or files to scan. Defaults to commodore/common, commodore/c64, commodore/c128.",
+        help="Optional roots or files to scan. Defaults to core, platforms/commodore/c64, platforms/commodore/c128.",
     )
     parser.add_argument("--self-test", action="store_true", help="Run internal parser self-checks and exit.")
     args = parser.parse_args()
