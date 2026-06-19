@@ -412,3 +412,39 @@ Acceptance target:
 - Full or substantially expanded Umoria creature roster can appear at the
   appropriate dungeon depths without breaking C64/C128 memory, loading, save,
   recall, or monster behavior contracts.
+
+## Testing Infrastructure
+
+### Collapse disk matrix execution into one shared runner
+
+The disk test catalog now defines strict C64, C128, and Plus/4 coverage for the
+named disk scenarios, but the execution layer is still platform-specific. The
+matrix blocks on the same scenario IDs across all three platforms, while the
+underlying shell functions, monitor labels, scripted input, and media-swap
+adapters remain separate enough to drift.
+
+This is architecture debt, not currently missing release-gate coverage.
+
+Required work:
+
+- Replace the three product-disk shell/harness paths with one Python scenario
+  executor.
+- Keep platform differences behind small adapters: emulator command/options,
+  product image path, symbol names, scripted input encoding, and drive attach
+  behavior.
+- Move prompt/event recording into one common contract so event order, exact
+  counts, no-repeat assertions, screen text, and disk-image proof are checked
+  uniformly.
+- Remove scenario-name translation where practical so the catalog scenario ID
+  is the runnable test identity instead of mapping to three differently named
+  platform smokes.
+- Reduce C128-specific test-only hooks once the common executor can drive the
+  same product flow deterministically.
+- Keep `make test-disk` behavior and scenario coverage unchanged during the
+  refactor; this should be a harness cleanup, not a product-behavior change.
+
+Acceptance target:
+
+- `make test-disk` runs the same scenario executor for C64, C128, and Plus/4,
+  with only adapter data varying by platform, and no platform can silently
+  satisfy a scenario through a materially different test flow.
