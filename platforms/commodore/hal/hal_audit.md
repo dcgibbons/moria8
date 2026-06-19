@@ -1,7 +1,8 @@
 # Commodore HAL Audit
 
 This directory is contract-only. Platform-owned code must live under
-`commodore/c64/hal`, `commodore/c128/hal`, or `commodore/plus4/hal`.
+`platforms/commodore/c64/hal`, `platforms/commodore/c128/hal`, or
+`platforms/commodore/plus4/hal`.
 
 Static boundary checks are intentionally baseline-aware while the migration is
 in progress. Existing leaks are listed in `docs/hal_boundary_allowlist.txt`.
