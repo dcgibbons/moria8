@@ -8,12 +8,12 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-COMMON_DIR = ROOT / "commodore/common"
+COMMON_DIR = ROOT / "core"
 
 PLATFORM_FILES = {
-    "c64": ROOT / "commodore/c64/input.s",
-    "c128": ROOT / "commodore/c128/input128.s",
-    "plus4": ROOT / "commodore/plus4/input.s",
+    "c64": ROOT / "platforms/commodore/c64/input.s",
+    "c128": ROOT / "platforms/commodore/c128/input128.s",
+    "plus4": ROOT / "platforms/commodore/plus4/input.s",
 }
 
 REQUIRED_LABELS = (
@@ -106,7 +106,7 @@ def helper_policy_violations() -> list[str]:
     help_text = (COMMON_DIR / "ui_help.s").read_text(encoding="utf-8", errors="replace")
     if "hal_input_help_footer_uses_esc_stop" not in help_text:
         errors.append(
-            "commodore/common/ui_help.s does not consume hal_input_help_footer_uses_esc_stop"
+            "core/ui_help.s does not consume hal_input_help_footer_uses_esc_stop"
         )
     return errors
 

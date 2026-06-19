@@ -13,20 +13,20 @@ REQUIRED_CONSTANTS = ("hal_memory_cpu_port",)
 RAW_CPU_PORT_RE = re.compile(r"\b(?:inc|dec|lda|sta)\s+\$0*01\b", re.IGNORECASE)
 
 PLATFORM_FILES = {
-    "c64": ROOT / "commodore/c64/hal/memory_bank_consts.s",
-    "c128": ROOT / "commodore/c128/hal/memory_bank_consts.s",
+    "c64": ROOT / "platforms/commodore/c64/hal/memory_bank_consts.s",
+    "c128": ROOT / "platforms/commodore/c128/hal/memory_bank_consts.s",
 }
 
 COMMON_CPU_PORT_USERS = {
-    "disk_swap.s": ROOT / "commodore/common/disk_swap.s",
-    "disk_setup_banked.s": ROOT / "commodore/common/disk_setup_banked.s",
-    "item_actions_overlay.s": ROOT / "commodore/common/item_actions_overlay.s",
-    "monster.s": ROOT / "commodore/common/monster.s",
-    "overlay.s": ROOT / "commodore/common/overlay.s",
-    "player_items.s": ROOT / "commodore/common/player_items.s",
-    "reu.s": ROOT / "commodore/common/reu.s",
-    "save.s": ROOT / "commodore/common/save.s",
-    "tier_manager.s": ROOT / "commodore/common/tier_manager.s",
+    "disk_swap.s": ROOT / "platforms/commodore/common/disk_swap.s",
+    "disk_setup_banked.s": ROOT / "platforms/commodore/common/disk_setup_banked.s",
+    "item_actions_overlay.s": ROOT / "core/item_actions_overlay.s",
+    "monster.s": ROOT / "core/monster.s",
+    "overlay.s": ROOT / "platforms/commodore/common/overlay.s",
+    "player_items.s": ROOT / "core/player_items.s",
+    "reu.s": ROOT / "platforms/commodore/common/reu.s",
+    "save.s": ROOT / "platforms/commodore/common/save.s",
+    "tier_manager.s": ROOT / "core/tier_manager.s",
 }
 
 

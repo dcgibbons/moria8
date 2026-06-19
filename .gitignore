@@ -1,6 +1,5 @@
 # Build output
-out/
-commodore/*/out/
+build/
 
 # Assembly artifacts (outside build dir)
 *.prg

@@ -37,9 +37,9 @@ EXPECTED = {
         "banking": "$01",
         "map_base": "$c000",
         "requires_drives": {"1541"},
-        "layout_file": "commodore/c64/hal/layout.s",
-        "memory_file": "commodore/c64/memory.s",
-        "screen_file": "commodore/c64/screen.s",
+        "layout_file": "platforms/commodore/c64/hal/layout.s",
+        "memory_file": "platforms/commodore/c64/memory.s",
+        "screen_file": "platforms/commodore/c64/screen.s",
         "direct_display_consts": True,
     },
     "c128": {
@@ -50,9 +50,9 @@ EXPECTED = {
         "banking": "$ff00+$01",
         "map_base": "$4000",
         "requires_drives": {"1541", "1571"},
-        "layout_file": "commodore/c128/hal/layout.s",
-        "memory_file": "commodore/c128/memory128.s",
-        "screen_file": "commodore/c128/screen_vdc.s",
+        "layout_file": "platforms/commodore/c128/hal/layout.s",
+        "memory_file": "platforms/commodore/c128/memory128.s",
+        "screen_file": "platforms/commodore/c128/screen_vdc.s",
         "direct_display_consts": False,
     },
     "plus4": {
@@ -63,9 +63,9 @@ EXPECTED = {
         "banking": "$ff3e/$ff3f",
         "map_base": "$c800",
         "requires_drives": {"1541", "1551"},
-        "layout_file": "commodore/plus4/hal/layout.s",
-        "memory_file": "commodore/plus4/memory.s",
-        "screen_file": "commodore/plus4/screen.s",
+        "layout_file": "platforms/commodore/plus4/hal/layout.s",
+        "memory_file": "platforms/commodore/plus4/memory.s",
+        "screen_file": "platforms/commodore/plus4/screen.s",
         "direct_display_consts": True,
     },
 }
@@ -228,7 +228,7 @@ def validate_manifest(platform: str, data: dict) -> list[str]:
 def main() -> int:
     errors: list[str] = []
     for platform in PLATFORMS:
-        path = ROOT / "commodore" / platform / "hal" / "manifest.json"
+        path = ROOT / "platforms" / "commodore" / platform / "hal" / "manifest.json"
         if not path.exists():
             errors.append(f"{platform}: missing {path.relative_to(ROOT)}")
             continue

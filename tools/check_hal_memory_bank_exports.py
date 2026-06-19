@@ -33,13 +33,13 @@ COMMON_ALIAS_CONSTANTS = tuple(
 )
 
 PLATFORM_FILES = {
-    "c64": ROOT / "commodore/c64/hal/memory_bank_consts.s",
-    "c128": ROOT / "commodore/c128/hal/memory_bank_consts.s",
-    "plus4": ROOT / "commodore/plus4/hal/memory_bank_consts.s",
+    "c64": ROOT / "platforms/commodore/c64/hal/memory_bank_consts.s",
+    "c128": ROOT / "platforms/commodore/c128/hal/memory_bank_consts.s",
+    "plus4": ROOT / "platforms/commodore/plus4/hal/memory_bank_consts.s",
 }
 
-COMMON_ALIAS_FILE = ROOT / "commodore/common/bank_port_consts.s"
-COMMON_HUFFMAN_FILE = ROOT / "commodore/common/huffman.s"
+COMMON_ALIAS_FILE = ROOT / "platforms/commodore/common/bank_port_consts.s"
+COMMON_HUFFMAN_FILE = ROOT / "core/huffman.s"
 FORBIDDEN_COMMON_TOKENS = (
     "#if",
     "$30",
@@ -85,7 +85,7 @@ def main() -> int:
     if "hal_huffman_print_uses_cached_msg" not in huffman_text:
         errors.append("huffman.s: common decoder does not consume hal_huffman_print_uses_cached_msg")
 
-    dungeon_los_text = (ROOT / "commodore/common/dungeon_los.s").read_text(
+    dungeon_los_text = (ROOT / "core/dungeon_los.s").read_text(
         encoding="utf-8", errors="replace"
     )
     if re.search(r"(?m)^\s*#if[^\n]*\bC128\b", dungeon_los_text):

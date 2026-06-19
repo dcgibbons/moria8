@@ -59,7 +59,7 @@ def required_constants(text: str) -> list[str]:
 def main() -> int:
     errors: list[str] = []
     for contract in CONTRACTS:
-        path = ROOT / "commodore" / "hal" / contract
+        path = ROOT / "platforms" / "commodore" / "hal" / contract
         text = path.read_text(encoding="utf-8", errors="replace")
         if contract in CONSTANT_CONTRACTS:
             constants = required_constants(text)
@@ -84,12 +84,12 @@ def main() -> int:
         return 1
 
     total = sum(
-        len(required_exports((ROOT / "commodore" / "hal" / contract).read_text()))
+        len(required_exports((ROOT / "platforms" / "commodore" / "hal" / contract).read_text()))
         for contract in CONTRACTS
         if contract not in CONSTANT_CONTRACTS
     )
     total_constants = sum(
-        len(required_constants((ROOT / "commodore" / "hal" / contract).read_text()))
+        len(required_constants((ROOT / "platforms" / "commodore" / "hal" / contract).read_text()))
         for contract in CONSTANT_CONTRACTS
     )
     print(

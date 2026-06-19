@@ -88,7 +88,7 @@ def write_baseline(path: Path, findings: set[Finding]) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--root", default="commodore/common", type=Path)
+    parser.add_argument("--root", default="core", type=Path)
     parser.add_argument("--baseline", default="docs/hal_boundary_allowlist.txt", type=Path)
     parser.add_argument("--write-baseline", action="store_true")
     args = parser.parse_args()

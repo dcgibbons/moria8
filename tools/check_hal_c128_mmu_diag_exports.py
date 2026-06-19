@@ -14,10 +14,10 @@ REQUIRED_CONSTANTS = (
     "hal_memory_mmu_preconfig_a",
 )
 
-C128_MEMORY_CONSTS = ROOT / "commodore/c128/hal/memory_bank_consts.s"
-COMMON_REU = ROOT / "commodore/common/reu.s"
-COMMON_ITEM_ACTIONS = ROOT / "commodore/common/item_actions_overlay.s"
-COMMON_PLAYER_ITEMS = ROOT / "commodore/common/player_items.s"
+C128_MEMORY_CONSTS = ROOT / "platforms/commodore/c128/hal/memory_bank_consts.s"
+COMMON_REU = ROOT / "platforms/commodore/common/reu.s"
+COMMON_ITEM_ACTIONS = ROOT / "core/item_actions_overlay.s"
+COMMON_PLAYER_ITEMS = ROOT / "core/player_items.s"
 FORBIDDEN_COMMON_TOKENS = ("$ff00", "$d501")
 
 

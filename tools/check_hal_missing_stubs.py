@@ -13,7 +13,7 @@ CONTRACTS = [
     "hal_input.s",
     "hal_sound.s",
 ]
-STUB_FILE = ROOT / "commodore" / "common" / "hal_missing_service_stubs.s"
+STUB_FILE = ROOT / "core" / "hal_missing_service_stubs.s"
 
 
 def required_exports(path):
@@ -40,7 +40,7 @@ def stub_labels(text):
 def main():
     expected = []
     for contract in CONTRACTS:
-        expected.extend(required_exports(ROOT / "commodore" / "hal" / contract))
+        expected.extend(required_exports(ROOT / "platforms" / "commodore" / "hal" / contract))
 
     labels = stub_labels(STUB_FILE.read_text())
     missing = [name for name in expected if name not in labels]

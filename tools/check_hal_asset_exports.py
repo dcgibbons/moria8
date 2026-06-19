@@ -17,62 +17,62 @@ REQUIRED_LABELS = (
 )
 
 PLATFORM_FILES = {
-    "c64": ROOT / "commodore/c64/config.s",
-    "c128": ROOT / "commodore/c128/config128.s",
-    "plus4": ROOT / "commodore/plus4/config.s",
+    "c64": ROOT / "platforms/commodore/c64/config.s",
+    "c128": ROOT / "platforms/commodore/c128/config128.s",
+    "plus4": ROOT / "platforms/commodore/plus4/config.s",
 }
 
 TRANSACTION_BODIES = {
     "c64": (
-        ROOT / "commodore/c64/config.s",
+        ROOT / "platforms/commodore/c64/config.s",
         "hal_asset_load_prg_header",
         ("$ffbd", "$ffba", "hal_asset_load", "$ffc3", "$ffcc"),
     ),
     "c128": (
-        ROOT / "commodore/common/reu.s",
+        ROOT / "platforms/commodore/common/reu.s",
         "c128_preload_asset_load",
         ("w_setnam", "w_setlfs", "w_load", "w_close", "w_clrchn", "safe_setbnk"),
     ),
     "plus4": (
-        ROOT / "commodore/plus4/config.s",
+        ROOT / "platforms/commodore/plus4/config.s",
         "hal_asset_load_prg_header",
-        ("$ffbd", "$ffba", "hal_asset_load", "$ffc3", "$ffcc"),
+        ("plus4_kernal_setnam", "plus4_kernal_setlfs", "plus4_kernal_load", "plus4_kernal_close", "plus4_kernal_clrchn"),
     ),
 }
 TITLE_TRANSACTION_BODIES = {
     "c64": (
-        ROOT / "commodore/c64/config.s",
+        ROOT / "platforms/commodore/c64/config.s",
         "hal_asset_load_title",
-        ("hal_storage_title_name", "$ffbd", "$ffba", "kernal_load_safe", "$ffc3", "$ffcc", "$dd00"),
+        ("hal_storage_title_name", "$ffbd", "$ffba", "kernal_load_safe", "$ffc3", "$ffcc"),
     ),
     "c128": (
-        ROOT / "commodore/c128/title_cache_runtime.s",
+        ROOT / "platforms/commodore/c128/title_cache_runtime.s",
         "c128_title_asset_load",
         ("safe_setbnk", "hal_storage_title_name", "hal_storage_setnam", "hal_storage_setlfs", "kernal_load", "w_close"),
     ),
     "plus4": (
-        ROOT / "commodore/plus4/config.s",
+        ROOT / "platforms/commodore/plus4/config.s",
         "hal_asset_load_title",
-        ("hal_storage_title_name", "$ffbd", "$ffba", "hal_asset_load", "$ffc3", "$ffcc"),
+        ("hal_storage_title_name", "plus4_kernal_setnam", "plus4_kernal_setlfs", "plus4_kernal_load", "plus4_kernal_close", "plus4_kernal_clrchn"),
     ),
 }
 CLOSE_TRANSACTION_BODIES = {
     "c64": (
-        ROOT / "commodore/c64/config.s",
+        ROOT / "platforms/commodore/c64/config.s",
         "hal_asset_close_channel",
         ("$ffc3", "$ffcc"),
     ),
     "plus4": (
-        ROOT / "commodore/plus4/config.s",
+        ROOT / "platforms/commodore/plus4/config.s",
         "hal_asset_close_channel",
         ("$ffc3", "$ffcc", ":EnterKernal()", ":ExitKernal()"),
     ),
 }
-OVERLAY_COMMON = ROOT / "commodore/common/overlay.s"
-STRING_BANK_COMMON = ROOT / "commodore/common/string_bank.s"
-TITLE_SCREEN_COMMON = ROOT / "commodore/common/title_screen.s"
-C128_TITLE_CACHE = ROOT / "commodore/c128/title_cache_runtime.s"
-TIER_MANAGER_COMMON = ROOT / "commodore/common/tier_manager.s"
+OVERLAY_COMMON = ROOT / "platforms/commodore/common/overlay.s"
+STRING_BANK_COMMON = ROOT / "core/string_bank.s"
+TITLE_SCREEN_COMMON = ROOT / "platforms/commodore/common/title_screen.s"
+C128_TITLE_CACHE = ROOT / "platforms/commodore/c128/title_cache_runtime.s"
+TIER_MANAGER_COMMON = ROOT / "core/tier_manager.s"
 OVERLAY_FORBIDDEN_TOKENS = (
     "$ffbd",
     "$ffba",
@@ -116,11 +116,11 @@ TIER_INIT_FORBIDDEN_TOKENS = (
     "$ffcc",
 )
 ASSEMBLY_ROOTS = (
-    ROOT / "commodore/common",
-    ROOT / "commodore/c64",
-    ROOT / "commodore/c128",
-    ROOT / "commodore/plus4",
-    ROOT / "commodore/hal",
+    ROOT / "core",
+    ROOT / "platforms/commodore/c64",
+    ROOT / "platforms/commodore/c128",
+    ROOT / "platforms/commodore/plus4",
+    ROOT / "platforms/commodore/hal",
 )
 ASSET_NAME_NAMESPACE_RE = re.compile(r"\bhal_asset_[A-Za-z0-9_]*name[A-Za-z0-9_]*\b")
 

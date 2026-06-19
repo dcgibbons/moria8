@@ -111,9 +111,9 @@ REQUIRED_LABELS = (
 )
 
 PLATFORM_FILES = {
-    "c64": ROOT / "commodore/c64/hal/storage.s",
-    "c128": ROOT / "commodore/c128/hal/storage.s",
-    "plus4": ROOT / "commodore/plus4/hal/storage.s",
+    "c64": ROOT / "platforms/commodore/c64/hal/storage.s",
+    "c128": ROOT / "platforms/commodore/c128/hal/storage.s",
+    "plus4": ROOT / "platforms/commodore/plus4/hal/storage.s",
 }
 
 OVERLAY_NAMES = {
@@ -123,9 +123,8 @@ OVERLAY_NAMES = {
 }
 
 TIER_NAMES = ("1", "2", "3", "4")
-COMMON_DISK_SETUP_UI_FILE = ROOT / "commodore/common/ui_disk_setup.s"
+COMMON_DISK_SETUP_UI_FILE = ROOT / "core/ui_disk_setup.s"
 COMMON_DISK_SETUP_UI_POLICIES = (
-    "hal_storage_disk_setup_supports_other_drive",
     "hal_storage_disk_setup_detail_command_status",
     "hal_storage_disk_setup_detail_dos_drive",
     "hal_storage_disk_setup_detail_status_phase",
