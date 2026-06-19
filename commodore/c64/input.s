@@ -64,7 +64,7 @@ input_lock_charset_switch:
 // Output: A = nonzero if any key held, 0 if no key
 // Preserves: X, Y
 input_run_key_held:
-#if C64_TEST_SCRIPTED_SPELL || C64_TEST_SCRIPTED_DISK_SETUP_PRODUCT || C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || C64_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT || C64_TEST_SCRIPTED_LOAD_RESUME_PRODUCT || C64_TEST_SCRIPTED_LOAD_MISSING_SAVE_PRODUCT || C64_TEST_SCRIPTED_DUNGEON_ASCENT_PRODUCT
+#if C64_TEST_SCRIPTED_SPELL || C64_TEST_SCRIPTED_DISK_SETUP_PRODUCT || C64_TEST_SCRIPTED_DISK_SETUP_SINGLE_DRIVE_RETURN_PRODUCT || C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || C64_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT || C64_TEST_SCRIPTED_CHANGE_SAVE_DRIVE_PRODUCT || C64_TEST_SCRIPTED_LOAD_RESUME_PRODUCT || C64_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_RETURN_PRODUCT || C64_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_WRONG_MEDIA_PRODUCT || C64_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_CORRUPT_PRODUCT || C64_TEST_SCRIPTED_SINGLE_DRIVE_SAVE_WRONG_MEDIA_PRODUCT || C64_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT || C64_TEST_SCRIPTED_LOAD_THEN_SAVE_NEW_EMPTY_PRODUCT || C64_TEST_SCRIPTED_LOAD_MISSING_SAVE_PRODUCT || C64_TEST_SCRIPTED_DUNGEON_ASCENT_PRODUCT
     lda #0
     rts
 #else
@@ -166,12 +166,19 @@ input_noop:
     rts
 
 input_get_key:
-#if C64_TEST_SCRIPTED_SPELL || C64_TEST_SCRIPTED_DISK_SETUP_PRODUCT || C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || C64_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT || C64_TEST_SCRIPTED_LOAD_RESUME_PRODUCT || C64_TEST_SCRIPTED_LOAD_MISSING_SAVE_PRODUCT || C64_TEST_SCRIPTED_DUNGEON_ASCENT_PRODUCT
+#if C64_TEST_SCRIPTED_SPELL || C64_TEST_SCRIPTED_DISK_SETUP_PRODUCT || C64_TEST_SCRIPTED_DISK_SETUP_SINGLE_DRIVE_RETURN_PRODUCT || C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || C64_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT || C64_TEST_SCRIPTED_CHANGE_SAVE_DRIVE_PRODUCT || C64_TEST_SCRIPTED_LOAD_RESUME_PRODUCT || C64_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_RETURN_PRODUCT || C64_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_WRONG_MEDIA_PRODUCT || C64_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_CORRUPT_PRODUCT || C64_TEST_SCRIPTED_SINGLE_DRIVE_SAVE_WRONG_MEDIA_PRODUCT || C64_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT || C64_TEST_SCRIPTED_LOAD_THEN_SAVE_NEW_EMPTY_PRODUCT || C64_TEST_SCRIPTED_LOAD_MISSING_SAVE_PRODUCT || C64_TEST_SCRIPTED_DUNGEON_ASCENT_PRODUCT
     ldx c64_test_input_idx
     lda c64_test_input_script,x
     bne !igk_script_ok+
 #if C64_TEST_SCRIPTED_DISK_SETUP_PRODUCT
+    lda disk_setup_done
+    bne !igk_disk_setup_done+
     jmp c64_test_disk_setup_fail_input_sym
+!igk_disk_setup_done:
+    jmp c64_test_after_disk_setup_product
+#else
+#if C64_TEST_SCRIPTED_DISK_SETUP_SINGLE_DRIVE_RETURN_PRODUCT
+    brk
 #else
 #if C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
     jmp c64_test_save_write_fail_input_sym
@@ -179,7 +186,31 @@ input_get_key:
 #if C64_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT
     jmp c64_test_save_write_fail_input_sym
 #else
+#if C64_TEST_SCRIPTED_CHANGE_SAVE_DRIVE_PRODUCT
+    jmp c64_test_change_save_drive_unexpected_return
+#else
 #if C64_TEST_SCRIPTED_LOAD_RESUME_PRODUCT
+    jmp c64_test_load_resume_fail_input_sym
+#else
+#if C64_TEST_SCRIPTED_SINGLE_DRIVE_SAVE_WRONG_MEDIA_PRODUCT
+!igk_exhaust_wait:
+    jmp !igk_exhaust_wait-
+#else
+#if C64_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_WRONG_MEDIA_PRODUCT
+!igk_exhaust_wait:
+    jmp !igk_exhaust_wait-
+#else
+#if C64_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_CORRUPT_PRODUCT
+!igk_exhaust_wait:
+    jmp !igk_exhaust_wait-
+#else
+#if C64_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT
+    jmp c64_test_single_drive_fresh_save_unexpected_return
+#else
+#if C64_TEST_SCRIPTED_LOAD_THEN_SAVE_NEW_EMPTY_PRODUCT
+    jmp c64_test_load_then_save_new_empty_fail
+#else
+#if C64_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_RETURN_PRODUCT
     jmp c64_test_load_resume_fail_input_sym
 #else
 #if C64_TEST_SCRIPTED_LOAD_MISSING_SAVE_PRODUCT
@@ -189,6 +220,14 @@ input_get_key:
     jmp c64_test_dungeon_ascent_fail_input_sym
 #else
     jmp c64_test_spell_fail_input_sym
+#endif
+#endif
+#endif
+#endif
+#endif
+#endif
+#endif
+#endif
 #endif
 #endif
 #endif
@@ -289,7 +328,7 @@ igk_key: .byte 0
 // not auto-dismiss the next screen.
 // Preserves: X, Y
 input_wait_release:
-#if C64_TEST_SCRIPTED_SPELL || C64_TEST_SCRIPTED_DISK_SETUP_PRODUCT || C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || C64_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT || C64_TEST_SCRIPTED_LOAD_RESUME_PRODUCT || C64_TEST_SCRIPTED_LOAD_MISSING_SAVE_PRODUCT || C64_TEST_SCRIPTED_DUNGEON_ASCENT_PRODUCT
+#if C64_TEST_SCRIPTED_SPELL || C64_TEST_SCRIPTED_DISK_SETUP_PRODUCT || C64_TEST_SCRIPTED_DISK_SETUP_SINGLE_DRIVE_RETURN_PRODUCT || C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || C64_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT || C64_TEST_SCRIPTED_CHANGE_SAVE_DRIVE_PRODUCT || C64_TEST_SCRIPTED_LOAD_RESUME_PRODUCT || C64_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_RETURN_PRODUCT || C64_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_WRONG_MEDIA_PRODUCT || C64_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_CORRUPT_PRODUCT || C64_TEST_SCRIPTED_SINGLE_DRIVE_SAVE_WRONG_MEDIA_PRODUCT || C64_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT || C64_TEST_SCRIPTED_LOAD_THEN_SAVE_NEW_EMPTY_PRODUCT || C64_TEST_SCRIPTED_LOAD_MISSING_SAVE_PRODUCT || C64_TEST_SCRIPTED_DUNGEON_ASCENT_PRODUCT
     rts
 #else
 #if C64_TEST_SCRIPTED_BOOK_OVERLAY || C64_TEST_SCRIPTED_SCROLL_SELECTOR
@@ -363,7 +402,7 @@ input_sound_update:
 // Output: A = 1 when both CTRL and R are down, 0 otherwise
 // Preserves: X, Y
 input_ctrl_r_held:
-#if C64_TEST_SCRIPTED_SPELL || C64_TEST_SCRIPTED_DISK_SETUP_PRODUCT || C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || C64_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT || C64_TEST_SCRIPTED_LOAD_RESUME_PRODUCT || C64_TEST_SCRIPTED_LOAD_MISSING_SAVE_PRODUCT || C64_TEST_SCRIPTED_DUNGEON_ASCENT_PRODUCT
+#if C64_TEST_SCRIPTED_SPELL || C64_TEST_SCRIPTED_DISK_SETUP_PRODUCT || C64_TEST_SCRIPTED_DISK_SETUP_SINGLE_DRIVE_RETURN_PRODUCT || C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || C64_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT || C64_TEST_SCRIPTED_CHANGE_SAVE_DRIVE_PRODUCT || C64_TEST_SCRIPTED_LOAD_RESUME_PRODUCT || C64_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_RETURN_PRODUCT || C64_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_WRONG_MEDIA_PRODUCT || C64_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_CORRUPT_PRODUCT || C64_TEST_SCRIPTED_SINGLE_DRIVE_SAVE_WRONG_MEDIA_PRODUCT || C64_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT || C64_TEST_SCRIPTED_LOAD_THEN_SAVE_NEW_EMPTY_PRODUCT || C64_TEST_SCRIPTED_LOAD_MISSING_SAVE_PRODUCT || C64_TEST_SCRIPTED_DUNGEON_ASCENT_PRODUCT
     lda #0
     rts
 #else
@@ -429,7 +468,7 @@ input_ctrl_r_held:
 
 icr_result: .byte 0
 
-#if C64_TEST_SCRIPTED_SPELL || C64_TEST_SCRIPTED_DISK_SETUP_PRODUCT || C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || C64_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT || C64_TEST_SCRIPTED_LOAD_RESUME_PRODUCT || C64_TEST_SCRIPTED_LOAD_MISSING_SAVE_PRODUCT || C64_TEST_SCRIPTED_DUNGEON_ASCENT_PRODUCT
+#if C64_TEST_SCRIPTED_SPELL || C64_TEST_SCRIPTED_DISK_SETUP_PRODUCT || C64_TEST_SCRIPTED_DISK_SETUP_SINGLE_DRIVE_RETURN_PRODUCT || C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || C64_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT || C64_TEST_SCRIPTED_CHANGE_SAVE_DRIVE_PRODUCT || C64_TEST_SCRIPTED_LOAD_RESUME_PRODUCT || C64_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_RETURN_PRODUCT || C64_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_WRONG_MEDIA_PRODUCT || C64_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_CORRUPT_PRODUCT || C64_TEST_SCRIPTED_SINGLE_DRIVE_SAVE_WRONG_MEDIA_PRODUCT || C64_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT || C64_TEST_SCRIPTED_LOAD_THEN_SAVE_NEW_EMPTY_PRODUCT || C64_TEST_SCRIPTED_LOAD_MISSING_SAVE_PRODUCT || C64_TEST_SCRIPTED_DUNGEON_ASCENT_PRODUCT
 c64_test_input_idx: .byte 0
 c64_test_input_script:
 #if C64_TEST_SCRIPTED_DISK_SETUP_PRODUCT
@@ -440,6 +479,14 @@ c64_test_input_script:
     .byte $33              // 3 = done
     .byte $20              // SPACE = inserted save disk prompt
     .byte $59              // Y = initialize missing marker
+    .byte $00
+#else
+#if C64_TEST_SCRIPTED_DISK_SETUP_SINGLE_DRIVE_RETURN_PRODUCT
+    .byte $44              // D = Disk Setup from title
+    .byte $33              // 3 = done; keep default save drive 8
+    .byte $20              // SPACE = inserted save disk prompt
+    .byte $59              // Y = initialize missing marker
+    .byte $20              // SPACE = acknowledge insert-program-disk prompt
     .byte $00
 #else
 #if C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
@@ -469,12 +516,58 @@ c64_test_input_script:
     .byte $20              // SPACE = dismiss disk error
     .byte $00
 #else
+#if C64_TEST_SCRIPTED_CHANGE_SAVE_DRIVE_PRODUCT
+    .byte $20              // SPACE = dismiss saved message if shown
+    .byte $00
+#else
 #if C64_TEST_SCRIPTED_LOAD_RESUME_PRODUCT
     .byte $4c              // L = load from title
     .byte $32              // 2 = save drive if Disk Setup prompts
     .byte $39              // 9
     .byte $0d              // RETURN
     .byte $33              // 3 = done
+    .byte $00
+#else
+#if C64_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_RETURN_PRODUCT
+    .byte $20              // SPACE = acknowledge save-disk prompt before loading
+    .byte $20              // SPACE = dismiss program-disk prompt after harness swap
+    .byte $20              // SPACE = spare modal dismiss if KERNAL prints status text
+    .byte $20              // SPACE = fail-safe extra prompt budget
+    .byte $00
+#else
+#if C64_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_WRONG_MEDIA_PRODUCT
+    .byte $20              // SPACE = acknowledge title save-disk prompt
+    .byte $20              // SPACE = leave program disk in at setup insert prompt
+    .byte $00
+#else
+#if C64_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_CORRUPT_PRODUCT
+    .byte $20              // SPACE = acknowledge save-disk prompt
+    .byte $20              // SPACE = dismiss corrupt-save prompt
+    .byte $20              // SPACE = acknowledge insert-program-disk prompt
+    .byte $00
+#else
+#if C64_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT
+    .byte $20              // SPACE = acknowledge insert-save-disk prompt
+#if C64_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_NO_INIT
+    .byte $4e              // N = do not initialize fresh save disk
+#else
+    .byte $59              // Y = initialize fresh save disk
+    .byte $20              // SPACE = acknowledge insert-program-disk prompt
+#endif
+    .byte $00
+#else
+#if C64_TEST_SCRIPTED_LOAD_THEN_SAVE_NEW_EMPTY_PRODUCT
+    .byte $20              // SPACE = acknowledge load save-disk prompt
+    .byte $20              // SPACE = acknowledge save save-disk prompt
+    .byte $59              // Y = initialize fresh save disk
+    .byte $59              // Y = tolerate repeated initialize prompt after media settle
+    .byte $20              // SPACE = acknowledge insert-program-disk prompt
+    .byte $00
+#else
+#if C64_TEST_SCRIPTED_SINGLE_DRIVE_SAVE_WRONG_MEDIA_PRODUCT
+    .byte $20              // SPACE = acknowledge first save-disk prompt
+    .byte $20              // SPACE = leave program disk in at setup insert prompt
+    .byte $20              // SPACE = dismiss program-disk warning
     .byte $00
 #else
 #if C64_TEST_SCRIPTED_LOAD_MISSING_SAVE_PRODUCT
@@ -530,6 +623,14 @@ c64_test_input_script:
     .byte $4d, $41, $41, $4c, $20
 #endif
     .byte $00
+#endif
+#endif
+#endif
+#endif
+#endif
+#endif
+#endif
+#endif
 #endif
 #endif
 #endif

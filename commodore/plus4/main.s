@@ -440,7 +440,7 @@ plus4_disk_read_command_status:
     ldy #0
     jsr plus4_kernal_setnam
     lda #hal_storage_cmd_channel
-    ldx save_device
+    ldx disk_prompt_device
     ldy #hal_storage_cmd_channel
     jsr plus4_kernal_setlfs
     jsr plus4_kernal_open
@@ -472,17 +472,28 @@ plus4_disk_status_to_disk_status:
     cmp #$30                    // "0"
     bne !done+
     lda #0
+    sta disk_status
+    lda #0
     sta disk_error_dos0
     sta disk_error_dos1
     rts
 !check_26:
     lda disk_error_dos0
     cmp #$32                    // "2"
-    bne !check_72+
+    bne !check_62+
     lda disk_error_dos1
     cmp #$36                    // "6"
     bne !done+
     lda #26
+    sta disk_status
+    rts
+!check_62:
+    cmp #$36                    // "6"
+    bne !check_72+
+    lda disk_error_dos1
+    cmp #$32                    // "2"
+    bne !done+
+    lda #62
     sta disk_status
     rts
 !check_72:
@@ -540,6 +551,15 @@ restart_entry:
     jsr rng_seed
 
 title_enter_menu:
+#if PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT
+    lda plus4_test_single_drive_fresh_save_armed
+    beq !plus4_test_single_drive_fresh_save_not_restart+
+plus4_test_single_drive_fresh_save_after_restart:
+    lda #0
+    sta plus4_test_single_drive_fresh_save_armed
+!plus4_test_single_drive_fresh_save_not_restart:
+#endif
+
     // Set default text color
     lda #COL_LGREY
     sta zp_text_color
@@ -563,6 +583,32 @@ title_enter_menu:
 
     jsr title_draw_menu
 
+#if PLUS4_TEST_SCRIPTED_DISK_SETUP_SINGLE_DRIVE_RETURN_PRODUCT
+    lda plus4_test_disk_setup_single_drive_return_armed
+    beq !plus4_disk_setup_return_test_not_armed+
+    lda #0
+    sta plus4_test_disk_setup_single_drive_return_armed
+plus4_test_after_disk_setup_single_drive_return:
+    jmp plus4_test_after_disk_setup_single_drive_return
+!plus4_disk_setup_return_test_not_armed:
+#endif
+#if PLUS4_TEST_SCRIPTED_DISK_SETUP_SINGLE_DRIVE_RETURN_PRODUCT
+    lda #8
+    sta program_device
+    sta save_device
+    lda #1
+    sta disk_mode
+    lda #0
+    sta disk_setup_done
+plus4_test_disk_setup_single_drive_return_wait_for_harness:
+    jmp plus4_test_disk_setup_single_drive_return_wait_for_harness
+plus4_test_disk_setup_single_drive_return_before_disk_setup:
+#endif
+
+#if PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT
+!plus4_test_single_drive_fresh_save_start:
+#endif
+
 #if PLUS4_TEST_SCRIPTED_OVERLAY_LOAD_PRODUCT
     jsr plus4_test_overlay_load_all
 #endif
@@ -571,7 +617,7 @@ title_enter_menu:
     jsr plus4_test_wand_selector_overlay_return
 #endif
 
-#if PLUS4_TEST_SCRIPTED_LOAD_RESUME_PRODUCT || PLUS4_TEST_SCRIPTED_LOAD_MISSING_SAVE_PRODUCT || PLUS4_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || PLUS4_TEST_SCRIPTED_LOAD_WRONG_MEDIA_PRODUCT || PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_RETURN_PRODUCT
+#if PLUS4_TEST_SCRIPTED_LOAD_RESUME_PRODUCT || PLUS4_TEST_SCRIPTED_LOAD_MISSING_SAVE_PRODUCT || PLUS4_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || PLUS4_TEST_SCRIPTED_LOAD_WRONG_MEDIA_PRODUCT
     ldx #9
     jsr hal_storage_probe_media
     lda #9
@@ -581,11 +627,161 @@ title_enter_menu:
     lda #1
     sta disk_setup_done
 #endif
+#if PLUS4_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT
+    lda #8
+    sta program_device
+    lda #9
+    sta save_device
+    lda #2
+    sta disk_mode
+    lda #1
+    sta disk_setup_done
+plus4_test_save_media_fail_wait_for_harness:
+    jmp plus4_test_save_media_fail_wait_for_harness
+plus4_test_save_media_fail_before_save:
+    jsr save_game
+plus4_test_save_media_fail_unexpected_return:
+    brk
+#endif
+#if PLUS4_TEST_SCRIPTED_CHANGE_SAVE_DRIVE_PRODUCT
+    lda #8
+    sta program_device
+    lda #9
+    sta save_device
+    lda #2
+    sta disk_mode
+    lda #1
+    sta disk_setup_done
+    lda #OVL_HELP
+    jsr overlay_load
+    bcs plus4_test_change_save_drive_unexpected_return
+plus4_test_change_save_drive_wait_for_harness:
+    jmp plus4_test_change_save_drive_wait_for_harness
+plus4_test_change_save_drive_before_save:
+    lda #10
+    sta save_device
+    jsr save_game
+    bcc plus4_test_change_save_drive_unexpected_return
+plus4_test_change_save_drive_pass:
+    jmp plus4_test_change_save_drive_pass
+plus4_test_change_save_drive_unexpected_return:
+    brk
+#endif
+#if PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_RETURN_PRODUCT || PLUS4_TEST_SCRIPTED_LOAD_THEN_SAVE_NEW_EMPTY_PRODUCT
+    lda #8
+    sta program_device
+    sta save_device
+    lda #1
+    sta disk_mode
+    sta disk_setup_done
 #if PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_RETURN_PRODUCT
 plus4_test_single_drive_load_return_wait_for_harness:
     jmp plus4_test_single_drive_load_return_wait_for_harness
 plus4_test_single_drive_load_return_before_load:
     jmp title_load_game
+#endif
+#if PLUS4_TEST_SCRIPTED_LOAD_THEN_SAVE_NEW_EMPTY_PRODUCT
+plus4_test_load_then_save_new_empty_wait_for_harness:
+    jmp plus4_test_load_then_save_new_empty_wait_for_harness
+plus4_test_load_then_save_new_empty_before_load:
+    jmp title_load_game
+plus4_test_load_then_save_new_empty_fail:
+    jmp plus4_test_load_then_save_new_empty_fail
+#endif
+#endif
+#if PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_CORRUPT_PRODUCT
+    lda #8
+    sta program_device
+    sta save_device
+    lda #1
+    sta disk_mode
+    lda #1
+    sta disk_setup_done
+plus4_test_single_drive_load_corrupt_wait_for_harness:
+    jmp plus4_test_single_drive_load_corrupt_wait_for_harness
+plus4_test_single_drive_load_corrupt_before_load:
+    jmp title_load_game
+#endif
+#if PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_WRONG_MEDIA_PRODUCT
+    lda #8
+    sta program_device
+    sta save_device
+    lda #1
+    sta disk_mode
+    sta disk_setup_done
+plus4_test_single_drive_load_wrong_media_wait_for_harness:
+    jmp plus4_test_single_drive_load_wrong_media_wait_for_harness
+plus4_test_single_drive_load_wrong_media_before_load:
+    jmp title_load_game
+#endif
+#if PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_SAVE_WRONG_MEDIA_PRODUCT
+    lda #8
+    sta program_device
+    sta save_device
+    lda #1
+    sta disk_mode
+    sta disk_setup_done
+plus4_test_single_drive_save_wrong_media_wait_for_harness:
+    jmp plus4_test_single_drive_save_wrong_media_wait_for_harness
+plus4_test_single_drive_save_wrong_media_before_save:
+    jsr disk_prompt_save
+    jsr save_game
+plus4_test_single_drive_save_wrong_media_unexpected_return:
+    brk
+#endif
+#if PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT
+    lda #8
+    sta program_device
+    sta save_device
+    lda #1
+    sta disk_mode
+    lda #2
+    sta disk_setup_done
+    lda #OVL_HELP
+    jsr overlay_load
+    bcs plus4_test_single_drive_fresh_save_unexpected_return
+plus4_test_single_drive_fresh_save_wait_for_harness:
+    jmp plus4_test_single_drive_fresh_save_wait_for_harness
+plus4_test_single_drive_fresh_save_before_save:
+    jsr disk_prompt_save
+#if PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_NO_INIT
+    bcs plus4_test_single_drive_fresh_save_unexpected_return
+    jsr save_game
+    bcs plus4_test_single_drive_fresh_save_unexpected_return
+plus4_test_single_drive_fresh_save_no_init_return:
+    jmp plus4_test_single_drive_fresh_save_no_init_return
+#else
+    bcs plus4_test_single_drive_fresh_save_unexpected_return
+    jsr save_game
+    bcc plus4_test_single_drive_fresh_save_unexpected_return
+    lda #1
+    sta plus4_test_single_drive_fresh_save_armed
+    jsr disk_prompt_game_required
+    jmp game_over_prompt
+#endif
+plus4_test_single_drive_fresh_save_unexpected_return:
+    brk
+#endif
+#if PLUS4_TEST_SCRIPTED_DEATH_RETURN_PRODUCT
+    lda #8
+    sta program_device
+    sta save_device
+    lda #1
+    sta disk_mode
+    lda #2
+    sta disk_setup_done
+    lda #DEATH_TRAP_PIT
+    sta death_source_saved
+    sta zp_death_source
+plus4_test_death_return_wait_for_harness:
+    jmp plus4_test_death_return_wait_for_harness
+plus4_test_death_return_before_prepare:
+    jsr tramp_game_over_prepare
+plus4_test_death_return_after_prepare:
+    jsr disk_prompt_save
+    jsr tramp_game_over_run
+plus4_test_death_return_after_score:
+    jmp plus4_test_death_return_after_score
 #endif
 #if PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_SAVE_RETURN_PRODUCT
     lda plus4_test_single_drive_save_return_ran
@@ -645,6 +841,12 @@ title_menu_loop:
     cmp #$44                // 'D' — disk setup
     bne title_menu_loop
     jsr tramp_disk_setup
+    bcs plus4_title_redraw_cached
+    jsr disk_prompt_game_required
+#if PLUS4_TEST_SCRIPTED_DISK_SETUP_SINGLE_DRIVE_RETURN_PRODUCT
+    lda #1
+    sta plus4_test_disk_setup_single_drive_return_armed
+#endif
     jmp plus4_title_redraw_cached
 
 plus4_title_redraw_cached:
@@ -660,6 +862,14 @@ plus4_title_redraw_cached:
     jsr msg_init
     jsr title_show_sysinfo
     jsr title_draw_menu
+#if PLUS4_TEST_SCRIPTED_DISK_SETUP_SINGLE_DRIVE_RETURN_PRODUCT
+    lda plus4_test_disk_setup_single_drive_return_armed
+    beq !plus4_disk_setup_return_cached_not_armed+
+    lda #0
+    sta plus4_test_disk_setup_single_drive_return_armed
+    jmp plus4_test_after_disk_setup_single_drive_return
+!plus4_disk_setup_return_cached_not_armed:
+#endif
     jmp title_menu_loop
 
 title_draw_menu:
@@ -684,6 +894,12 @@ plus4_test_single_drive_save_return_ran: .byte 0
 plus4_test_single_drive_stage: .byte 0
 plus4_test_single_drive_save_return_fail:
     jmp plus4_test_single_drive_save_return_fail
+#endif
+#if PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT
+plus4_test_single_drive_fresh_save_armed: .byte 0
+#endif
+#if PLUS4_TEST_SCRIPTED_DISK_SETUP_SINGLE_DRIVE_RETURN_PRODUCT
+plus4_test_disk_setup_single_drive_return_armed: .byte 0
 #endif
 
 #if PLUS4_TEST_SCRIPTED_OVERLAY_LOAD_PRODUCT
@@ -753,6 +969,21 @@ title_load_game:
     jsr load_game
     // Fail closed on the explicit load carry result before resuming gameplay.
     bcc !title_load_fail+
+#if PLUS4_TEST_SCRIPTED_LOAD_THEN_SAVE_NEW_EMPTY_PRODUCT
+plus4_test_load_then_save_new_empty_loaded:
+plus4_test_load_then_save_new_empty_before_save:
+    jsr disk_prompt_save
+    bcc !plus4_load_then_save_prompt_ok+
+    jmp plus4_test_load_then_save_new_empty_fail
+!plus4_load_then_save_prompt_ok:
+    jsr save_game
+    bcs !plus4_load_then_save_saved+
+    jmp plus4_test_load_then_save_new_empty_fail
+!plus4_load_then_save_saved:
+    jsr disk_prompt_game_required
+plus4_test_load_then_save_new_empty_done:
+    jmp plus4_test_load_then_save_new_empty_done
+#endif
 #if PLUS4
     jsr disk_prompt_game
 #endif
@@ -760,7 +991,7 @@ title_load_game:
     jmp load_resume_game
 !title_load_fail:
     jsr input_get_modal_dismiss_key
-    jsr disk_prompt_game        // Swap back after the load failure is acknowledged
+    jsr disk_prompt_game_required // Verify program media before returning to title
     jmp title_enter_menu
 
 // ============================================================
@@ -1431,7 +1662,20 @@ tramp_player_create:
 // ============================================================
 // Interleaves overlay calls ($E000, $01=$34) with KERNAL I/O ($01=$36).
 // Pre-resolves creature name before overlay overwrites tier data.
-tramp_game_over:
+tramp_game_over_disk_setup:
+    jsr tramp_game_over_prepare // Disk Setup loads OVL_HELP into $E000.
+    jsr tramp_game_over_stash
+    jsr tramp_disk_setup
+    bcs !done+
+    jsr tramp_game_over_restore_stash
+    clc
+!done:
+    rts
+
+tramp_game_over_disk_setup_failed:
+    jmp disk_prompt_game
+
+tramp_game_over_prepare:
     lda death_source_saved
     sta zp_death_source
 
@@ -1451,7 +1695,11 @@ tramp_game_over:
     // 2. Load death overlay (replaces tier data at $E000)
     lda #OVL_DEATH
     jsr overlay_load
+    rts
 
+tramp_game_over:
+    jsr tramp_game_over_prepare
+tramp_game_over_run:
     // 3. Calculate score (overlay code, no KERNAL needed)
     sei
     jsr plus4_bank_ram
@@ -1536,7 +1784,7 @@ winner_apply_retirement_bonus:
 // Shown at all exit points (save+quit, voluntary quit, death).
 // ============================================================
 game_over_prompt:
-    jmp game_restart
+    jmp restart_entry
 
 // ============================================================
 // game_restart — reset game state, return to title screen
@@ -1638,26 +1886,72 @@ plus4_banked_fname:
     #import "../common/item_desc_banked.s"
     #import "../common/disk_setup_banked.s"
 
+tramp_game_over_stash:
+    lda #<$e000
+    sta zp_ptr0
+    lda #>$e000
+    sta zp_ptr0_hi
+    lda #<MAP_BASE
+    sta zp_ptr1
+    lda #>MAP_BASE
+    sta zp_ptr1_hi
+    jmp plus4_copy_overlay_window
+
+tramp_game_over_restore_stash:
+    lda #<MAP_BASE
+    sta zp_ptr0
+    lda #>MAP_BASE
+    sta zp_ptr0_hi
+    lda #<$e000
+    sta zp_ptr1
+    lda #>$e000
+    sta zp_ptr1_hi
+    lda #OVL_DEATH
+    sta current_overlay
+    jmp plus4_copy_overlay_window
+
+plus4_copy_overlay_window:
+    lda #$10
+    sta zp_temp0
+!copy_page:
+    ldy #0
+!copy_byte:
+    lda (zp_ptr0),y
+    sta (zp_ptr1),y
+    iny
+    bne !copy_byte-
+    inc zp_ptr0_hi
+    inc zp_ptr1_hi
+    dec zp_temp0
+    bne !copy_page-
+    rts
+
 // Verify that the selected program disk is actually present.
 // Output: carry clear = program media present, carry set = absent/wrong media.
 plus4_require_program_media:
-    lda #$5a
-    sta $e000
-    lda #$a5
-    sta $e001
+    jsr plus4_kernal_clrchn
+    lda #hal_storage_program_file_num
+    jsr plus4_kernal_close
     lda #hal_storage_overlay_help_name_len
     ldx #<hal_storage_overlay_help_name
     ldy #>hal_storage_overlay_help_name
-    jsr hal_asset_load_prg_header
+    jsr plus4_kernal_setnam
+    lda #hal_storage_program_file_num
+    ldx program_device
+    ldy #0
+    jsr plus4_kernal_setlfs
+    jsr plus4_kernal_open
+    php
+    lda #hal_storage_program_file_num
+    jsr plus4_kernal_close
+    jsr plus4_kernal_clrchn
+    plp
     bcs !fail+
-    lda $e000
-    cmp #$43
+    lda program_device
+    sta disk_prompt_device
+    jsr plus4_disk_read_command_status
+    lda disk_status
     bne !fail+
-    lda $e001
-    cmp #$0f
-    bne !fail+
-    lda #OVL_HELP
-    sta current_overlay
     clc
     rts
 !fail:

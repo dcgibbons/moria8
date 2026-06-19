@@ -195,6 +195,10 @@ disk_marker_init:
     jsr disk_kernal_exit
     lda disk_status
     bne !dmi_fail+
+#if C128_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT || C128_TEST_SCRIPTED_LOAD_THEN_SAVE_NEW_EMPTY_PRODUCT
+    clc
+    rts
+#endif
     jsr disk_marker_present
     bcc !dmi_ok+
 !dmi_fail:
@@ -243,6 +247,7 @@ disk_setup_capture_init_status:
     sta disk_status
     lda #0
     sta disk_ui_value
+#if !HAL_STORAGE_MARKER_INIT_SKIP_SCRATCH
     lda #hal_storage_marker_scratch_name_len
     ldx #<hal_storage_marker_scratch_name
     ldy #>hal_storage_marker_scratch_name
@@ -256,6 +261,7 @@ disk_setup_capture_init_status:
     lda #hal_storage_cmd_channel
     jsr FEAT_CLOSE
     jsr FEAT_CLRCHN
+#endif
 !dmi_create:
     jsr hal_storage_marker_write_resident
 !dmi_done:
@@ -263,6 +269,10 @@ disk_setup_capture_init_status:
 #if HAL_STORAGE_DISK_SETUP_MARKER_WRITE_STATUS_REQUIRED
     lda disk_status
     bne !dmi_fail+
+#endif
+#if C128_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT || C128_TEST_SCRIPTED_LOAD_THEN_SAVE_NEW_EMPTY_PRODUCT
+    clc
+    rts
 #endif
     jsr disk_marker_present
     bcs !dmi_fail+
@@ -311,6 +321,9 @@ disk_setup_commit_initialized:
 
 disk_setup_prepare_selected:
 !retry:
+#if C128_TEST_SCRIPTED_LOAD_THEN_SAVE_NEW_EMPTY_PRODUCT
+c128_test_load_then_save_new_empty_prepare_insert_prompt:
+#endif
     lda #DISK_UI_ACT_INSERT_DISK
     jsr disk_setup_call_ui
     jsr disk_init_drive
@@ -326,6 +339,14 @@ disk_setup_prepare_selected:
     jsr disk_setup_call_ui
     jmp !retry-
 !not_program_media:
+#if C128_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT
+    jmp !prompt_init+
+#endif
+#if C128_TEST_SCRIPTED_LOAD_THEN_SAVE_NEW_EMPTY_PRODUCT
+    lda c128_test_load_then_save_new_empty_stage
+    cmp #1
+    beq !prompt_init+
+#endif
     jsr disk_marker_present
     bcc disk_setup_commit_ready
 #if HAL_STORAGE_DISK_SETUP_ACCEPT_SAVE_FILE
@@ -337,6 +358,10 @@ disk_setup_prepare_selected:
 #if HAL_STORAGE_DISK_SETUP_MARKER_PROBE_DOS
     jsr disk_setup_plus4_marker_missing
     bcs !show_marker_probe_fail+
+#endif
+!prompt_init:
+#if C128_TEST_SCRIPTED_LOAD_THEN_SAVE_NEW_EMPTY_PRODUCT
+c128_test_load_then_save_new_empty_prepare_init_prompt:
 #endif
     lda #DISK_UI_ACT_INIT_PROMPT
     jsr disk_setup_call_ui

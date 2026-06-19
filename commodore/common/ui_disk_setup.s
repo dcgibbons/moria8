@@ -173,6 +173,7 @@ uds_show_insert_prompt:
     jsr hal_screen_put_char
 !prep_wait:
     :UDSPrint(6, UDS_PROMPT_COL, press_key_str)
+uds_insert_prompt_wait_key:
     jsr input_get_modal_dismiss_key
     lda #DISK_UI_RES_OK
     sta disk_ui_result
@@ -328,6 +329,10 @@ uds_show_no_device:
     rts
 
 uds_show_program_disk:
+#if C64_TEST_SCRIPTED_SINGLE_DRIVE_SAVE_WRONG_MEDIA_PRODUCT || C64_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_WRONG_MEDIA_PRODUCT || PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_SAVE_WRONG_MEDIA_PRODUCT || PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_WRONG_MEDIA_PRODUCT || C128_TEST_SCRIPTED_SINGLE_DRIVE_SAVE_WRONG_MEDIA_PRODUCT || C128_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_WRONG_MEDIA_PRODUCT
+    lda #1
+    sta disk_test_program_warning_seen
+#endif
     jsr ui_clear_full_screen_safe
     :UDSPrint(0, UDS_TITLE_COL, uds_title_str)
     :UDSPrint(3, UDS_LINE_COL, uds_program_disk_str)

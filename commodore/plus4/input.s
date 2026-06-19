@@ -50,26 +50,47 @@ input_noop:
     rts
 
 input_get_key:
-#if PLUS4_TEST_SCRIPTED_DISK_SETUP_PRODUCT || PLUS4_TEST_SCRIPTED_LOAD_RESUME_PRODUCT || PLUS4_TEST_SCRIPTED_LOAD_MISSING_SAVE_PRODUCT || PLUS4_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_SAVE_RETURN_PRODUCT || PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_RETURN_PRODUCT || PLUS4_TEST_SCRIPTED_LOAD_WRONG_MEDIA_PRODUCT || PLUS4_TEST_SCRIPTED_NEW_GAME_PRODUCT || PLUS4_TEST_SCRIPTED_DUNGEON_ENTRY_PRODUCT || PLUS4_TEST_SCRIPTED_DUNGEON_ASCENT_PRODUCT || PLUS4_TEST_SCRIPTED_WAND_SELECTOR_PRODUCT
+#if PLUS4_TEST_SCRIPTED_DISK_SETUP_PRODUCT || PLUS4_TEST_SCRIPTED_DISK_SETUP_SINGLE_DRIVE_RETURN_PRODUCT || PLUS4_TEST_SCRIPTED_LOAD_RESUME_PRODUCT || PLUS4_TEST_SCRIPTED_LOAD_MISSING_SAVE_PRODUCT || PLUS4_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || PLUS4_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT || PLUS4_TEST_SCRIPTED_CHANGE_SAVE_DRIVE_PRODUCT || PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_SAVE_RETURN_PRODUCT || PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_SAVE_WRONG_MEDIA_PRODUCT || PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_WRONG_MEDIA_PRODUCT || PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT || PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_RETURN_PRODUCT || PLUS4_TEST_SCRIPTED_LOAD_THEN_SAVE_NEW_EMPTY_PRODUCT || PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_CORRUPT_PRODUCT || PLUS4_TEST_SCRIPTED_LOAD_WRONG_MEDIA_PRODUCT || PLUS4_TEST_SCRIPTED_NEW_GAME_PRODUCT || PLUS4_TEST_SCRIPTED_DUNGEON_ENTRY_PRODUCT || PLUS4_TEST_SCRIPTED_DUNGEON_ASCENT_PRODUCT || PLUS4_TEST_SCRIPTED_WAND_SELECTOR_PRODUCT
     ldx plus4_test_key_index
     lda plus4_test_key_script,x
     beq !wait+
     inc plus4_test_key_index
     rts
 !wait:
-    jmp !wait-
+plus4_test_script_exhausted_wait:
+    jmp plus4_test_script_exhausted_wait
 plus4_test_key_index: .byte 0
 plus4_test_key_script:
 #if PLUS4_TEST_SCRIPTED_LOAD_RESUME_PRODUCT
     .byte $4c, 0                                 // L
+#elif PLUS4_TEST_SCRIPTED_DISK_SETUP_SINGLE_DRIVE_RETURN_PRODUCT
+    .byte $44, $33, $20, $20, 0                  // D, Done, save prompt, program prompt
 #elif PLUS4_TEST_SCRIPTED_LOAD_MISSING_SAVE_PRODUCT
     .byte $4c, $20, $20, 0                       // L, dismiss missing-save, dismiss program prompt
 #elif PLUS4_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
     .byte $4c, $d3, $59, $20, 0                  // L, SHIFT+S, Y overwrite, dismiss saved message
+#elif PLUS4_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT
+    .byte $20, 0                                  // Dismiss forced save-media failure
+#elif PLUS4_TEST_SCRIPTED_CHANGE_SAVE_DRIVE_PRODUCT
+    .byte $20, 0                                  // Dismiss saved message if shown
 #elif PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_SAVE_RETURN_PRODUCT
     .byte $59, $20, $20, $20, 0                   // Y overwrite, failed prompt, error, retry
+#elif PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_SAVE_WRONG_MEDIA_PRODUCT
+    .byte $20, $20, $20, 0                        // Save prompt, setup insert prompt, program-disk warning
+#elif PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_WRONG_MEDIA_PRODUCT
+    .byte $20, $20, 0                              // Save prompt, setup insert prompt
+#elif PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT
+#if PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_NO_INIT
+    .byte $20, $4e, 0                              // Setup insert, do not initialize
+#else
+    .byte $20, $59, $20, 0                         // Setup insert, initialize, program prompt
+#endif
 #elif PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_RETURN_PRODUCT
     .byte $20, 0                                  // Dismiss insert-program prompt
+#elif PLUS4_TEST_SCRIPTED_LOAD_THEN_SAVE_NEW_EMPTY_PRODUCT
+    .byte $20, $20, $59, $20, $20, $20, 0         // Load save prompt, save prompt, initialize, saved, program prompt
+#elif PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_CORRUPT_PRODUCT
+    .byte $20, $20, $20, 0                        // Save prompt, corrupt prompt, program prompt
 #elif PLUS4_TEST_SCRIPTED_LOAD_WRONG_MEDIA_PRODUCT
     .byte $4c, 0                                 // L
 #elif PLUS4_TEST_SCRIPTED_NEW_GAME_PRODUCT

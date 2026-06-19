@@ -10,7 +10,7 @@
 
 .label hal_storage_enter_os = disk_kernal_enter
 .label hal_storage_exit_os = disk_kernal_exit
-.label hal_storage_require_program_media = disk_prompt_game
+.label hal_storage_require_program_media = c64_require_program_media
 .label hal_storage_require_save_media = disk_require_save_media
 .label hal_storage_marker_present = c64_disk_marker_present
 .label hal_storage_marker_init = disk_marker_init
@@ -23,9 +23,9 @@
 .label hal_storage_setlfs = c64_disk_setlfs
 .label hal_storage_open = c64_disk_open
 .label hal_storage_close = c64_disk_close
-.label hal_storage_chkin = KERNAL_CHKIN
+.label hal_storage_chkin = c64_disk_chkin
 .label hal_storage_chkout = KERNAL_CHKOUT
-.label hal_storage_chrin = KERNAL_CHRIN
+.label hal_storage_chrin = c64_disk_chrin
 .label hal_storage_chrout = KERNAL_CHROUT
 .label hal_storage_clrchn = c64_disk_clrchn
 .label hal_storage_readst = KERNAL_READST
@@ -93,26 +93,18 @@ hal_storage_init_selected_drive:
     cmp #2
     rts
 
-// Platform-owned save-disk marker filenames and marker bytes. PETSCII bytes
-// for KERNAL SETNAM / sequential marker contents.
+// Platform-owned save-disk marker filenames and marker bytes. C64 product
+// marker I/O uses the low resident copies in main.s so these HAL names stay as
+// zero-byte aliases instead of duplicating the data in default RAM.
 hal_storage_init_command:
     .byte $49, $30                              // "I0"
 
-hal_storage_marker_magic:
-    .byte $4d, $38, $53, $41, $56, $45          // "M8SAVE"
-.label hal_storage_marker_magic_len = * - hal_storage_marker_magic
-
-hal_storage_marker_read_name:
-    .byte $30, $3a                              // "0:"
-    .byte $4d, $4f, $52, $49, $41, $38, $2e, $49, $44 // "MORIA8.ID"
-    .byte $2c, $53, $2c, $52                    // ",S,R"
-.label hal_storage_marker_read_name_len = * - hal_storage_marker_read_name
-
-hal_storage_marker_write_name:
-    .byte $40, $30, $3a                         // "@0:"
-    .byte $4d, $4f, $52, $49, $41, $38, $2e, $49, $44 // "MORIA8.ID"
-    .byte $2c, $53, $2c, $57                    // ",S,W"
-.label hal_storage_marker_write_name_len = * - hal_storage_marker_write_name
+.label hal_storage_marker_magic = c64_marker_magic_low
+.label hal_storage_marker_magic_len = 6
+.label hal_storage_marker_read_name = c64_marker_name_low + 1
+.label hal_storage_marker_read_name_len = c64_marker_name_low_len - 1
+.label hal_storage_marker_write_name = c64_marker_name_low
+.label hal_storage_marker_write_name_len = c64_marker_name_low_len
 
 .segment RuntimeBanked
 hal_storage_marker_scratch_name:

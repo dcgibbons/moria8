@@ -17,7 +17,7 @@ bootstrap:
     jmp test_start
 
 test_finish:
-    ldx #38
+    ldx #39
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -45,7 +45,32 @@ game_over_prompt:
 tramp_level_generate:
     rts
 
+tramp_game_over_disk_setup:
+    inc test_game_over_disk_setup_calls
+    jsr tramp_disk_setup
+    bcs !done+
+    jsr disk_prompt_game
+    lda #1
+    sta disk_setup_done
+    jsr tramp_game_over_prepare
+    clc
+!done:
+    rts
+
+tramp_game_over_disk_setup_failed:
+    inc test_game_over_setup_failed_calls
+    jmp disk_prompt_game
+
+tramp_game_over_prepare:
+    inc test_tramp_game_over_prepare_calls
+    rts
+
+tramp_game_over_run:
+    inc test_tramp_game_over_run_calls
+    rts
+
 tramp_game_over:
+    inc test_tramp_game_over_calls
     rts
 
 tramp_winner_royal:
@@ -94,9 +119,6 @@ disk_prompt_game:
 
 ds_game_str:
     .text "INSERT PROGRAM DISK" ; .byte 0
-
-ds_game_error_str:
-    .text "PROGRAM DISK NOT FOUND" ; .byte 0
 
 tramp_disk_setup:
     inc test_tramp_disk_setup_calls
@@ -258,7 +280,7 @@ random_floor_in_room:
 save_welcome_str:
     .text "WELCOME BACK" ; .byte 0
 
-tc_results: .fill 39, $ff
+tc_results: .fill 40, $ff
 
 test_cmd_idx: .byte 0
 test_cmd_len: .byte 0
@@ -296,6 +318,11 @@ test_save_game_calls: .byte 0
 test_disk_prompt_save_calls: .byte 0
 test_disk_prompt_game_calls: .byte 0
 test_tramp_disk_setup_calls: .byte 0
+test_game_over_disk_setup_calls: .byte 0
+test_game_over_setup_failed_calls: .byte 0
+test_tramp_game_over_prepare_calls: .byte 0
+test_tramp_game_over_run_calls: .byte 0
+test_tramp_game_over_calls: .byte 0
 test_delete_savefile_calls: .byte 0
 test_game_over_prompt_calls: .byte 0
 test_busy_begin_calls: .byte 0
@@ -444,6 +471,11 @@ reset_state:
     sta test_disk_prompt_save_calls
     sta test_disk_prompt_game_calls
     sta test_tramp_disk_setup_calls
+    sta test_game_over_disk_setup_calls
+    sta test_game_over_setup_failed_calls
+    sta test_tramp_game_over_prepare_calls
+    sta test_tramp_game_over_run_calls
+    sta test_tramp_game_over_calls
     sta test_delete_savefile_calls
     sta test_game_over_prompt_calls
     sta test_busy_begin_calls
@@ -856,7 +888,7 @@ test_start:
     ldx #$ff
     txs
 
-    ldx #38
+    ldx #39
     lda #$ff
 !clr:
     sta tc_results,x
@@ -2247,8 +2279,46 @@ test_start:
     bne !t39_fail+
     lda #$01
     sta tc_results + 38
-    jmp test_finish
+    jmp !t40+
 !t39_fail:
     lda #$00
     sta tc_results + 38
+    jmp !t40+
+
+    // Test 40: first death after fresh Disk Setup prepares game-over before
+    // save-media I/O, then runs the high-score/death phase exactly once.
+!t40:
+    jsr reset_state
+    lda #1
+    sta test_disk_setup_success
+    lda #DEATH_TRAP_PIT
+    sta zp_death_source
+    jsr player_died
+    lda test_game_over_disk_setup_calls
+    cmp #1
+    bne !t40_fail+
+    lda test_tramp_disk_setup_calls
+    cmp #1
+    bne !t40_fail+
+    lda test_tramp_game_over_prepare_calls
+    cmp #1
+    bne !t40_fail+
+    lda test_disk_prompt_save_calls
+    cmp #1
+    bne !t40_fail+
+    lda test_tramp_game_over_run_calls
+    cmp #1
+    bne !t40_fail+
+    lda test_disk_prompt_game_calls
+    cmp #2
+    bne !t40_fail+
+    lda test_game_over_prompt_calls
+    cmp #1
+    bne !t40_fail+
+    lda #$01
+    sta tc_results + 39
+    jmp test_finish
+!t40_fail:
+    lda #$00
+    sta tc_results + 39
     jmp test_finish

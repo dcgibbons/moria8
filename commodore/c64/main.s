@@ -74,6 +74,72 @@ exit_trampoline:
     jsr $ffd2               // KERNAL CHROUT
     jmp ($a002)             // BASIC warm-start (works for both SYS and chain-load)
 
+#import "hal/storage_title_name.s"
+
+c64_marker_magic_low:
+    .byte $4d, $38, $53, $41, $56, $45
+c64_marker_name_low:
+    .byte $40
+    .byte $30, $3a
+    .byte $4d, $4f, $52, $49, $41, $38, $2e, $49, $44
+    .byte $2c, $53, $2c
+c64_marker_name_mode_low:
+    .byte $57
+.label c64_marker_name_low_len = * - c64_marker_name_low
+
+// Resident helper for C64 save-disk marker creation. This must stay below
+// $A000: it runs while KERNAL and BASIC ROM are banked in.
+c64_disk_marker_write_resident:
+    lda #2
+    sta disk_status
+    lda #$57
+    sta c64_marker_name_mode_low
+    lda #$36
+    sta $01
+    cli
+    lda #c64_marker_name_low_len
+    ldx #<c64_marker_name_low
+    ldy #>c64_marker_name_low
+    jsr $ffbd
+    lda #hal_storage_marker_file_num
+    ldx save_device
+    ldy #hal_storage_marker_sec_write
+    jsr $ffba
+    jsr $ffc0
+    bcc !cdmw_open_ok+
+    bcs !cdmw_close+
+!cdmw_open_ok:
+    ldx #hal_storage_marker_file_num
+    jsr $ffc9
+    bcs !cdmw_close+
+    ldx #0
+!cdmw_write:
+    txa
+    pha
+    lda c64_marker_magic_low,x
+    jsr $ffd2
+    pla
+    tax
+    inx
+    cpx #hal_storage_marker_magic_len
+    bcc !cdmw_write-
+    clc
+    bcc !cdmw_close+
+!cdmw_close:
+    php
+    jsr $ffcc
+    lda #hal_storage_marker_file_num
+    jsr $ffc3
+    lda #$34
+    sta $01
+    jsr c64_restore_vic_bank0_after_serial
+    plp
+    bcs !cdmw_done+
+    lda #0
+    sta disk_status
+!cdmw_done:
+    rts
+
 #import "../common/zeropage.s"
 
 c64_disk_call_saved_bank: .byte 0
@@ -91,8 +157,25 @@ c64u_turbo_prev: .byte 0
 #if C64_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT
 c64_test_save_media_fail_armed: .byte 0
 #endif
-#if C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
+#if C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || C64_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT
 c64_test_restart_after_save_armed: .byte 0
+#endif
+#if C64_TEST_SCRIPTED_DISK_SETUP_SINGLE_DRIVE_RETURN_PRODUCT
+c64_test_disk_setup_single_drive_return_armed: .byte 0
+#endif
+#if C64_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_RETURN_PRODUCT
+c64_test_single_drive_load_return_resume_low:
+    lda #$36                // Monitor attach/resume may expose BASIC ROM.
+    sta $01
+    jmp title_load_game
+c64_test_single_drive_load_return_loaded_low:
+    jmp c64_test_single_drive_load_return_loaded_low
+#endif
+#if C64_TEST_SCRIPTED_LOAD_THEN_SAVE_NEW_EMPTY_PRODUCT
+c64_test_load_then_save_new_empty_resume_low:
+    lda #$36                // Monitor attach/resume may expose BASIC ROM.
+    sta $01
+    jmp title_load_game
 #endif
 
 c64_disk_call:
@@ -104,12 +187,11 @@ c64_disk_call:
     tsx
     lda $0104,x
     sta zp_vol_2
-    lda $0105,x
-    sta zp_vol_3
     clc
-    lda $0104,x
     adc #2
     sta $0104,x
+    lda $0105,x
+    sta zp_vol_3
     bcc !cdc_target+
     inc $0105,x
 !cdc_target:
@@ -131,14 +213,15 @@ c64_disk_call:
     pla
 !cdc_jsr:
     jsr $ffff
+    php
     pha
     sei
-    lda $dd00
-    ora #%00000011
-    sta $dd00
+    jsr c64_restore_vic_bank0_after_serial
     lda c64_disk_call_saved_bank
     sta $01
     pla
+    plp
+    sei
     rts
 
 c64_disk_setnam:
@@ -161,6 +244,16 @@ c64_disk_close:
     .word $ffc3
     rts
 
+c64_disk_chkin:
+    jsr c64_disk_call
+    .word $ffc6
+    rts
+
+c64_disk_chrin:
+    jsr c64_disk_call
+    .word $ffcf
+    rts
+
 c64_disk_clrchn:
     jsr c64_disk_call
     .word $ffcc
@@ -169,12 +262,8 @@ c64_disk_clrchn:
 c64_disk_marker_present:
     lda #1
     sta disk_status
-    php
     lda $01
     pha
-    lda #$36
-    sta $01
-    cli
 #if C64_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT
     lda c64_test_save_media_fail_armed
     beq !cdmp_test_normal+
@@ -183,19 +272,31 @@ c64_disk_marker_present:
     jmp !cdmp_done+
 !cdmp_test_normal:
 #endif
-    lda #hal_storage_marker_read_name_len
-    ldx #<hal_storage_marker_read_name
-    ldy #>hal_storage_marker_read_name
+    lda #$52
+    sta c64_marker_name_mode_low
+    lda #$36
+    sta $01
+    cli
+    jsr $ffcc
+    lda #hal_storage_check_file_num
+    jsr $ffc3
+    lda #c64_marker_name_low_len - 1
+    ldx #<(c64_marker_name_low + 1)
+    ldy #>(c64_marker_name_low + 1)
     jsr $ffbd
-    lda #hal_storage_marker_file_num
+    lda #hal_storage_check_file_num
     ldx save_device
     ldy #hal_storage_marker_sec_read
     jsr $ffba
     jsr $ffc0
+    bcc !cdmp_open_ok+
     bcs !cdmp_open_fail+
-    ldx #hal_storage_marker_file_num
+!cdmp_open_ok:
+    ldx #hal_storage_check_file_num
     jsr $ffc6
+    bcc !cdmp_chkin_ok+
     bcs !cdmp_read_fail+
+!cdmp_chkin_ok:
     jsr $ffcf
     cmp #$4d
     bne !cdmp_marker_fail+
@@ -205,33 +306,20 @@ c64_disk_marker_present:
     dec disk_status
 !cdmp_close:
     jsr $ffcc
-    lda #hal_storage_marker_file_num
+    lda #hal_storage_check_file_num
     jsr $ffc3
     jmp !cdmp_done+
 !cdmp_read_fail:
-    jsr $ffcc
-    lda #hal_storage_marker_file_num
-    jsr $ffc3
-    jsr c64_storage_read_command_status
-    jmp !cdmp_status_done+
+    jmp !cdmp_close-
 !cdmp_marker_fail:
-    jsr $ffcc
-    lda #hal_storage_marker_file_num
-    jsr $ffc3
-    jsr c64_storage_read_command_status
-    jmp !cdmp_status_done+
+    jmp !cdmp_close-
 !cdmp_open_fail:
-    jsr $ffcc
-    jsr c64_storage_read_command_status
-!cdmp_status_done:
+    jmp !cdmp_close-
 !cdmp_done:
-    sei
-    lda $dd00
-    ora #%00000011
-    sta $dd00
+    jsr c64_restore_vic_bank0_after_serial
     pla
     sta $01
-    plp
+    sei
     lda disk_status
     cmp #1
     rts
@@ -323,75 +411,25 @@ ol_target:        .byte 0
 #undef DISARM_COMMAND_EXTERNAL
 #import "hal/storage.s"
 
-// Resident helper for C64 save-disk marker creation. It must execute from
-// visible RAM while KERNAL is banked in; the $F000 runtime is hidden then.
-c64_disk_marker_write_resident:
-    lda #2
-    sta disk_status
-    lda #$36
-    sta $01
-    lda #hal_storage_marker_write_name_len - 1
-    ldx #<(hal_storage_marker_write_name + 1)
-    ldy #>(hal_storage_marker_write_name + 1)
-    jsr KERNAL_SETNAM
-    lda #hal_storage_marker_file_num
-    ldx save_device
-    ldy #hal_storage_marker_sec_write
-    jsr KERNAL_SETLFS
-    jsr KERNAL_OPEN
-    bcs !cdmw_close+
-    ldx #hal_storage_marker_file_num
-    jsr KERNAL_CHKOUT
-    bcs !cdmw_close+
-    ldx #0
-!cdmw_write:
-    lda hal_storage_marker_magic,x
-    jsr KERNAL_CHROUT
-    inx
-    cpx #hal_storage_marker_magic_len
-    bcc !cdmw_write-
-    lda #0
-    sta disk_status
-!cdmw_close:
-    jsr KERNAL_CLRCHN
-    lda #hal_storage_marker_file_num
-    jsr KERNAL_CLOSE
-    lda #$34
-    sta $01
-    lda $dd00
-    ora #%00000011
-    sta $dd00
-    lda disk_status
-    bne !cdmw_fail+
-    clc
-    rts
-!cdmw_fail:
-    sec
-    rts
 c64_storage_read_command_status:
     lda #2
     sta disk_status
-    lda $01
-    pha
-    lda #$36
-    sta $01
-    cli
     lda #0
     tax
     tay
-    jsr KERNAL_SETNAM
+    jsr c64_disk_setnam
     lda #15
-    ldx save_device
+    ldx disk_prompt_device
     tay
-    jsr KERNAL_SETLFS
-    jsr KERNAL_OPEN
+    jsr c64_disk_setlfs
+    jsr c64_disk_open
     bcs !cdrs_close+
     ldx #15
-    jsr KERNAL_CHKIN
+    jsr c64_disk_chkin
     bcs !cdrs_close+
-    jsr KERNAL_CHRIN
+    jsr c64_disk_chrin
     cmp #$30
-    beq !cdrs_wrong_media+
+    beq !cdrs_check_0x+
     cmp #$32
     beq !cdrs_check_26+
     cmp #$36
@@ -399,20 +437,27 @@ c64_storage_read_command_status:
     cmp #$37
     beq !cdrs_check_7x+
     jmp !cdrs_close+
+!cdrs_check_0x:
+    jsr c64_disk_chrin
+    cmp #$32
+    beq !cdrs_wrong_media+
+    lda #0
+    sta disk_status
+    beq !cdrs_close+
 !cdrs_check_26:
-    jsr KERNAL_CHRIN
+    jsr c64_disk_chrin
     cmp #$36
     bne !cdrs_close+
     lda #26
     sta disk_status
-    jmp !cdrs_close+
+    bne !cdrs_close+
 !cdrs_check_62:
-    jsr KERNAL_CHRIN
+    jsr c64_disk_chrin
     cmp #$32
     bne !cdrs_close+
     jmp !cdrs_wrong_media+
 !cdrs_check_7x:
-    jsr KERNAL_CHRIN
+    jsr c64_disk_chrin
     cmp #$32
     beq !cdrs_disk_full+
     cmp #$33
@@ -430,15 +475,9 @@ c64_storage_read_command_status:
     lda #1
     sta disk_status
 !cdrs_close:
-    jsr KERNAL_CLRCHN
+    jsr c64_disk_clrchn
     lda #15
-    jsr KERNAL_CLOSE
-    sei
-    lda $dd00
-    ora #%00000011
-    sta $dd00
-    pla
-    sta $01
+    jsr c64_disk_close
     rts
 // ============================================================
 // Entry point
@@ -493,7 +532,7 @@ restart_entry:
     jsr rng_seed
 
 title_enter_menu:
-#if C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
+#if C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || C64_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT
     lda c64_test_restart_after_save_armed
     beq !restart_test_done+
 c64_test_after_save_restart_start:
@@ -524,6 +563,168 @@ c64_test_after_save_restart_start:
 
     jsr title_draw_menu
 
+#if C64_TEST_SCRIPTED_DISK_SETUP_SINGLE_DRIVE_RETURN_PRODUCT
+    lda c64_test_disk_setup_single_drive_return_armed
+    beq !disk_setup_return_test_not_armed+
+    lda #0
+    sta c64_test_disk_setup_single_drive_return_armed
+c64_test_after_disk_setup_single_drive_return:
+    jmp c64_test_after_disk_setup_single_drive_return
+!disk_setup_return_test_not_armed:
+#endif
+
+#if C64_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_RETURN_PRODUCT
+    lda #8
+    sta program_device
+    sta save_device
+    lda #1
+    sta disk_mode
+    lda #1
+    sta disk_setup_done
+c64_test_single_drive_load_return_wait_for_harness:
+    jmp c64_test_single_drive_load_return_wait_for_harness
+c64_test_single_drive_load_return_before_load:
+    jmp title_load_game
+#endif
+#if C64_TEST_SCRIPTED_LOAD_THEN_SAVE_NEW_EMPTY_PRODUCT
+    lda #8
+    sta program_device
+    sta save_device
+    lda #1
+    sta disk_mode
+    lda #1
+    sta disk_setup_done
+c64_test_load_then_save_new_empty_wait_for_harness:
+    jmp c64_test_load_then_save_new_empty_wait_for_harness
+c64_test_load_then_save_new_empty_before_load:
+    jmp title_load_game
+#endif
+#if C64_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_WRONG_MEDIA_PRODUCT
+    lda #8
+    sta program_device
+    sta save_device
+    lda #1
+    sta disk_mode
+    sta disk_setup_done
+c64_test_single_drive_load_wrong_media_wait_for_harness:
+    jmp c64_test_single_drive_load_wrong_media_wait_for_harness
+c64_test_single_drive_load_wrong_media_before_load:
+    jmp title_load_game
+#endif
+#if C64_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_CORRUPT_PRODUCT
+    lda #8
+    sta program_device
+    sta save_device
+    lda #1
+    sta disk_mode
+    sta disk_setup_done
+c64_test_single_drive_load_corrupt_wait_for_harness:
+    jmp c64_test_single_drive_load_corrupt_wait_for_harness
+c64_test_single_drive_load_corrupt_before_load:
+    jmp title_load_game
+#endif
+#if C64_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT
+    lda #8
+    sta program_device
+    lda #9
+    sta save_device
+    lda #2
+    sta disk_mode
+    lda #1
+    sta disk_setup_done
+    sta c64_test_save_media_fail_armed
+c64_test_save_media_fail_wait_for_harness:
+    jmp c64_test_save_media_fail_wait_for_harness
+c64_test_save_media_fail_before_save:
+    jsr save_game
+c64_test_save_media_fail_unexpected_return:
+    brk
+#endif
+#if C64_TEST_SCRIPTED_CHANGE_SAVE_DRIVE_PRODUCT
+    lda #8
+    sta program_device
+    lda #9
+    sta save_device
+    lda #2
+    sta disk_mode
+    lda #1
+    sta disk_setup_done
+    lda #OVL_HELP
+    jsr overlay_load
+    bcs c64_test_change_save_drive_unexpected_return
+c64_test_change_save_drive_wait_for_harness:
+    jmp c64_test_change_save_drive_wait_for_harness
+c64_test_change_save_drive_before_save:
+    lda #10
+    sta save_device
+    jsr save_game
+    bcc c64_test_change_save_drive_unexpected_return
+c64_test_change_save_drive_pass:
+    jmp c64_test_change_save_drive_pass
+c64_test_change_save_drive_unexpected_return:
+    brk
+#endif
+#if C64_TEST_SCRIPTED_SINGLE_DRIVE_SAVE_WRONG_MEDIA_PRODUCT
+    lda #8
+    sta program_device
+    sta save_device
+    lda #1
+    sta disk_mode
+    sta disk_setup_done
+c64_test_single_drive_save_wrong_media_wait_for_harness:
+    jmp c64_test_single_drive_save_wrong_media_wait_for_harness
+c64_test_single_drive_save_wrong_media_before_save:
+    jsr disk_prompt_save
+    jsr save_game
+c64_test_single_drive_save_wrong_media_unexpected_return:
+    brk
+#endif
+#if C64_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT
+    lda #8
+    sta program_device
+    sta save_device
+    lda #1
+    sta disk_mode
+    lda #2
+    sta disk_setup_done
+    lda #OVL_HELP
+    jsr overlay_load
+    bcs c64_test_single_drive_fresh_save_unexpected_return
+c64_test_single_drive_fresh_save_wait_for_harness:
+    jmp c64_test_single_drive_fresh_save_wait_for_harness
+c64_test_single_drive_fresh_save_before_save:
+    jsr disk_prompt_save
+#if C64_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_NO_INIT
+    bcs c64_test_single_drive_fresh_save_unexpected_return
+    jsr save_game
+    bcs c64_test_single_drive_fresh_save_unexpected_return
+c64_test_single_drive_fresh_save_no_init_return:
+    jmp c64_test_single_drive_fresh_save_no_init_return
+#else
+    bcs c64_test_single_drive_fresh_save_unexpected_return
+    jsr save_game
+    bcc c64_test_single_drive_fresh_save_unexpected_return
+    lda #1
+    sta c64_test_restart_after_save_armed
+    jsr disk_prompt_game_required
+    jmp game_over_prompt
+#endif
+c64_test_single_drive_fresh_save_unexpected_return:
+    brk
+#endif
+#if C64_TEST_SCRIPTED_DISK_SETUP_SINGLE_DRIVE_RETURN_PRODUCT
+    lda #8
+    sta program_device
+    sta save_device
+    lda #1
+    sta disk_mode
+    lda #0
+    sta disk_setup_done
+c64_test_disk_setup_single_drive_return_wait_for_harness:
+    jmp c64_test_disk_setup_single_drive_return_wait_for_harness
+c64_test_disk_setup_single_drive_return_before_disk_setup:
+#endif
+
 title_menu_loop:
     jsr input_get_key
     cmp #$4e                // 'N' — new game
@@ -542,6 +743,15 @@ title_menu_loop:
     cmp #$44                // 'D' — disk setup
     bne title_menu_loop
     jsr tramp_disk_setup
+    bcs title_enter_menu
+    jsr disk_prompt_game_required
+#if C64_TEST_SCRIPTED_DISK_SETUP_SINGLE_DRIVE_RETURN_PRODUCT
+    lda #1
+    sta c64_test_disk_setup_single_drive_return_armed
+#endif
+#if C64_TEST_SCRIPTED_DISK_SETUP_PRODUCT
+c64_test_after_disk_setup_product:
+#endif
     jmp title_enter_menu
 
 title_draw_menu:
@@ -569,11 +779,39 @@ title_load_game:
     jsr load_game
     // Fail closed on the explicit load carry result before resuming gameplay.
     bcc !title_load_fail+
+#if C64_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_RETURN_PRODUCT
+c64_test_single_drive_load_return_before_program_prompt:
+    jmp c64_test_single_drive_load_return_loaded_low
+#endif
+#if C64_TEST_SCRIPTED_LOAD_THEN_SAVE_NEW_EMPTY_PRODUCT
+c64_test_load_then_save_new_empty_loaded:
+c64_test_load_then_save_new_empty_before_save:
+    jsr disk_prompt_save
+    bcs c64_test_load_then_save_new_empty_fail
+    jsr save_game
+    bcc c64_test_load_then_save_new_empty_fail
+    jsr disk_prompt_game_required
+c64_test_load_then_save_new_empty_done:
+    jmp c64_test_load_then_save_new_empty_done
+c64_test_load_then_save_new_empty_fail:
+    brk
+#endif
     jsr disk_prompt_game        // Swap back for tier loading
+    jsr disk_prompt_game_required // Verify program media before resume loads tiers
+#if C64_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_RETURN_PRODUCT
+c64_test_single_drive_load_return_media_ready:
+#endif
     jmp load_resume_game
 !title_load_fail:
+#if C64_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_RETURN_PRODUCT
+c64_test_single_drive_load_return_load_fail:
+    brk
+#endif
+#if C64_TEST_SCRIPTED_LOAD_THEN_SAVE_NEW_EMPTY_PRODUCT
+    jmp c64_test_load_then_save_new_empty_fail
+#endif
     jsr input_get_modal_dismiss_key
-    jsr disk_prompt_game        // Swap back after the load failure is acknowledged
+    jsr disk_prompt_game_required // Verify program media before returning to title
 #if C64_TEST_SCRIPTED_LOAD_MISSING_SAVE_PRODUCT
 c64_test_after_load_missing_save_return:
 #endif
@@ -1382,7 +1620,7 @@ c64_test_save_write_fail_input_sym:
     brk
 #endif
 
-#if C64_TEST_SCRIPTED_LOAD_RESUME_PRODUCT
+#if C64_TEST_SCRIPTED_LOAD_RESUME_PRODUCT || C64_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_RETURN_PRODUCT
 c64_test_load_resume_fail_input_sym:
     brk
 #endif
@@ -1404,12 +1642,54 @@ tramp_player_create:
     jsr player_create
     jmp tramp_sr_epilogue
 
+// Verify that the selected program disk is actually present.
+// Output: carry clear = program media present, carry set = absent/wrong media.
+c64_require_program_media:
+    lda #hal_storage_title_name_len
+    ldx #<hal_storage_title_name
+    ldy #>hal_storage_title_name
+    jsr c64_disk_setnam
+    lda #hal_storage_program_file_num
+    ldx disk_prompt_device
+    ldy #0
+    jsr c64_disk_setlfs
+    jsr c64_disk_open
+    php
+    lda #hal_storage_program_file_num
+    jsr c64_disk_close
+    jsr c64_disk_clrchn
+    plp
+    bcs !crpm_fail+
+    jsr c64_storage_read_command_status
+    lda disk_status
+    beq !crpm_ok+
+!crpm_fail:
+    sec
+    rts
+!crpm_ok:
+    clc
+    rts
+
 // ============================================================
 // Death overlay trampoline — orchestrates the full game-over sequence
 // ============================================================
 // Interleaves overlay calls ($E000, $01=$34) with KERNAL I/O ($01=$36).
 // Pre-resolves creature name before overlay overwrites tier data.
-tramp_game_over:
+tramp_game_over_disk_setup:
+    jsr tramp_disk_setup
+    bcs !done+
+    jsr disk_prompt_game        // Disk Setup used the overlay window; reload from program media
+    lda #1
+    sta disk_setup_done         // Save disk is no longer mounted in one-drive mode
+    jsr tramp_game_over_prepare
+    clc
+!done:
+    rts
+
+tramp_game_over_disk_setup_failed:
+    jmp disk_prompt_game
+
+tramp_game_over_prepare:
     lda death_source_saved
     sta zp_death_source
 
@@ -1429,7 +1709,11 @@ tramp_game_over:
     // 2. Load death overlay (replaces tier data at $E000)
     lda #OVL_DEATH
     jsr overlay_load
+    rts
 
+tramp_game_over:
+    jsr tramp_game_over_prepare
+tramp_game_over_run:
     // 3. Calculate score (overlay code, no KERNAL needed)
     sei
     lda #BANK_NO_ROMS
@@ -1533,9 +1817,11 @@ winner_apply_retirement_bonus:
 game_over_prompt:
     lda #OVL_DEATH
     jsr overlay_load
+    bcc !overlay_ok+
+    jmp title_enter_menu
+!overlay_ok:
     sei
-    lda #BANK_NO_KERNAL
-    sta $01
+    dec $01
     jmp game_restart_overlay
 
 // Safety: ensure runtime code doesn't overlap runtime data areas

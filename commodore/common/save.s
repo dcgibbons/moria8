@@ -414,15 +414,40 @@ save_select_output_name_c64:
 #endif
 
 save_game:
+#if C128
+    lda c128_media_state
+    cmp #C128_MEDIA_SAVE
+    beq !save_media_ok+
+#endif
     jsr disk_require_save_media
     bcc !save_media_ok+
     ldx #HSTR_SAVE_NEED_SAVE
     lda disk_setup_done
     beq !save_media_fail+
 !save_wrong_media:
+#if C128
+    lda c128_media_state
+    cmp #C128_MEDIA_SAVE
+    beq !save_media_ok+
+    lda c128_media_state
+    cmp #C128_MEDIA_PROGRAM
+    beq !save_bad_media+
+    jsr disk_program_media_present
+    bcc !save_bad_media+
+#endif
     jsr hal_storage_save_media_status
     cmp #HAL_STORAGE_STATUS_WRONG_MEDIA
+    beq !save_bad_media+
+#if C64
+    lda save_device
+    cmp program_device
     bne !save_not_bad_media+
+    lda disk_status
+    cmp #3
+    beq !save_bad_media+
+#endif
+    jmp !save_not_bad_media+
+!save_bad_media:
     jsr tramp_disk_prepare_selected
     bcc !save_media_ok+
     jmp save_return_fail
@@ -449,11 +474,14 @@ save_game:
 !save_media_no_detail:
 #endif
 !save_media_after_print:
-    jsr input_get_modal_dismiss_key
-save_return_fail:
 #if C64_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT
 c64_test_after_save_media_fail:
 #endif
+#if PLUS4_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT
+plus4_test_after_save_media_fail:
+#endif
+    jsr input_get_modal_dismiss_key
+save_return_fail:
 #if HAL_STORAGE_CPU_PORT_RESTORE_AFTER_IO
     clc
 save_return_c64_with_carry:
@@ -669,6 +697,15 @@ load_game:
     lda disk_setup_done
     beq !load_media_fail+
 !load_wrong_media:
+#if !C128 && !PLUS4
+    lda save_device
+    cmp program_device
+    beq !load_program_media+
+!load_not_shared_program_device:
+#else
+    jsr disk_program_media_present
+    bcc !load_program_media+
+#endif
 #if HAL_STORAGE_LOAD_ALLOW_UNMARKED_SAVE
     jsr disk_kernal_enter
     jsr save_file_exists
@@ -685,6 +722,10 @@ load_game:
     ldx #HSTR_SAVE_IOERR
 #endif
     jmp !load_media_fail+
+!load_program_media:
+    jsr tramp_disk_prepare_selected
+    bcc !load_media_ok+
+    jmp !load_media_after_print+
 !load_bad_media:
     ldx #HSTR_SAVE_BAD_SAVE
 !load_media_fail:
@@ -896,6 +937,9 @@ plus4_test_after_load_magic:
 #if PLUS4_TEST_SCRIPTED_LOAD_RESUME_PRODUCT || PLUS4_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
 plus4_test_load_success:
 #endif
+#if C128_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_CORRUPT_PRODUCT
+c128_test_load_corrupt_unexpected_success:
+#endif
     // Close file after successful read
     jsr load_close_file_restore
 
@@ -920,6 +964,9 @@ plus4_test_load_success:
 !load_corrupt_nocl:
 #if PLUS4_TEST_SCRIPTED_LOAD_RESUME_PRODUCT || PLUS4_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
 plus4_test_load_corrupt:
+#endif
+#if C128_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_CORRUPT_PRODUCT
+c128_test_load_corrupt_detected:
 #endif
     lda #LOAD_RESULT_CORRUPT
     sta load_result
@@ -959,7 +1006,7 @@ plus4_test_load_unsupported:
     // File was opened but returned no data — close before showing message
     jsr load_close_file_restore
 !load_notfound:
-#if PLUS4_TEST_SCRIPTED_LOAD_RESUME_PRODUCT || PLUS4_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
+#if PLUS4_TEST_SCRIPTED_LOAD_RESUME_PRODUCT || PLUS4_TEST_SCRIPTED_LOAD_MISSING_SAVE_PRODUCT || PLUS4_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
 plus4_test_load_notfound:
 #endif
     // OPEN-fail path also jumps here (file was never opened, no close needed)
@@ -1436,6 +1483,8 @@ load_read_block:
     beq !lrb_c128_done+
     jsr save_prepare_chunk_len_c128
     jsr c128_load_stream_chunk
+    lda save_io_error
+    bne !lrb_c128_done+
     jsr load_unstage_to_ptr0_c128
     jmp !lrb_c128_loop-
 !lrb_c128_done:

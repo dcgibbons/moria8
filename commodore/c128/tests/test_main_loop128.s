@@ -22,6 +22,7 @@ test_start:
 .const IF_SENSED = $08
 .const SFX_PICKUP = 0
 .const DEATH_ALIVE = $00
+.const DEATH_TRAP_PIT = $F9
 
 .macro MapRead_ptr0_y() {
     jsr mmu_safe_map_read_ptr0
@@ -119,9 +120,25 @@ generation_busy_tick:
 generation_busy_end:
     rts
 
-tramp_game_over:
+tramp_game_over_disk_setup:
+    inc test_game_over_disk_setup_calls
+    jmp tramp_disk_setup
+
+tramp_game_over_disk_setup_failed:
+    inc test_game_over_setup_failed_calls
+    rts
+
+tramp_game_over_prepare:
+    inc test_tramp_game_over_prepare_calls
+    rts
+
+tramp_game_over_run:
     inc test_tramp_game_over_calls
     rts
+
+tramp_game_over:
+    jsr tramp_game_over_prepare
+    jmp tramp_game_over_run
 
 tramp_winner_royal:
     rts
@@ -748,6 +765,9 @@ test_load_game_calls: .byte 0
 test_disk_prompt_save_calls: .byte 0
 test_disk_prompt_game_calls: .byte 0
 test_tramp_disk_setup_calls: .byte 0
+test_game_over_disk_setup_calls: .byte 0
+test_game_over_setup_failed_calls: .byte 0
+test_tramp_game_over_prepare_calls: .byte 0
 test_tramp_game_over_calls: .byte 0
 test_death_screen_dismissed: .byte 0
 test_disk_prompt_before_death_dismiss: .byte 0
@@ -847,6 +867,9 @@ reset_state:
     sta test_disk_prompt_save_calls
     sta test_disk_prompt_game_calls
     sta test_tramp_disk_setup_calls
+    sta test_game_over_disk_setup_calls
+    sta test_game_over_setup_failed_calls
+    sta test_tramp_game_over_prepare_calls
     sta test_tramp_game_over_calls
     sta test_death_screen_dismissed
     sta test_disk_prompt_before_death_dismiss
@@ -2147,6 +2170,47 @@ test_entry:
     jmp test_fail
     lda inv_item_id + EQUIP_BODY
     cmp #7
+    beq *+5
+    jmp test_fail
+
+    // Test 31: first death after fresh Disk Setup prepares game-over before
+    // save-media I/O, then returns to program media after dismissal.
+    lda #31
+    sta test_case_id
+    jsr reset_state
+    lda #1
+    sta test_disk_setup_success
+    sta disk_mode
+    lda #DEATH_TRAP_PIT
+    sta zp_death_source
+    jsr player_died
+    lda test_game_over_disk_setup_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda test_tramp_disk_setup_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda test_tramp_game_over_prepare_calls
+    beq *+5
+    jmp test_fail
+    lda test_disk_prompt_save_calls
+    beq *+5
+    jmp test_fail
+    lda test_tramp_game_over_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda test_death_screen_dismissed
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda test_disk_prompt_before_death_dismiss
+    beq *+5
+    jmp test_fail
+    lda test_disk_prompt_game_calls
+    cmp #1
     beq *+5
     jmp test_fail
     jmp test_pass
