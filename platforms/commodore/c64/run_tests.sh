@@ -18,7 +18,11 @@ java() {
 RUN_TESTS64_DIR="${RUN_TESTS64_DIR:-$REPO_ROOT/platforms/commodore/c64}"
 cd "$RUN_TESTS64_DIR"
 C64_TEST_OUT="${C64_TEST_OUT:-../../../build/test/c64}"
+C64_BUILD_OUT="${C64_BUILD_OUT:-../../../build/c64}"
 mkdir -p "$C64_TEST_OUT"
+if [ -d "$C64_BUILD_OUT" ]; then
+    cp -p "$C64_BUILD_OUT"/* "$C64_TEST_OUT"/ 2>/dev/null || true
+fi
 rm -rf out
 ln -sf "$C64_TEST_OUT" out
 cleanup() {

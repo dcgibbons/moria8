@@ -17,7 +17,11 @@ java() {
 RUN_TESTS128_DIR="${RUN_TESTS128_DIR:-$REPO_ROOT/platforms/commodore/c128}"
 cd "$RUN_TESTS128_DIR"
 C128_TEST_OUT="${C128_TEST_OUT:-../../../build/test/c128}"
+C128_BUILD_OUT="${C128_BUILD_OUT:-../../../build/c128}"
 mkdir -p "$C128_TEST_OUT"
+if [ -d "$C128_BUILD_OUT" ]; then
+    cp -p "$C128_BUILD_OUT"/* "$C128_TEST_OUT"/ 2>/dev/null || true
+fi
 rm -rf out
 ln -sf "$C128_TEST_OUT" out
 COMMODORE_MAKE=(make -s -C "$REPO_ROOT/platforms/commodore")
@@ -112,6 +116,8 @@ fi
 
 cleanup_test128_tmp() {
     [ -L out ] && rm -f out || rm -rf out
+    rm -f ./*.prg ./*.sym ./*.vs tests/*.prg tests/*.sym tests/*.vs
+    rm -f "$REPO_ROOT"/core/*.sym "$REPO_ROOT"/core/*.vs
     if [ "${TEST128_KEEP_TMP:-0}" = "1" ]; then
         return
     fi
@@ -1100,8 +1106,8 @@ for label in (
         print(f"{label}: stale per-entry init_copy_banked reload reintroduced")
         raise SystemExit(1)
 
-if "tramp_ui_exit:\n    lda #$36                    // BANK_NO_BASIC\n    sta $01\n    lda #$3e                    // MMU_ALL_RAM\n    sta $ff00\n    jsr c128_restore_runtime_guards\n    jsr c128_restore_runtime_vectors" not in main_text:
-    print("tramp_ui_exit: expected runtime guard/vector restore before CLI")
+if "tramp_ui_exit:\n    lda #$36                    // BANK_NO_BASIC\n    sta $01\n    lda #$3e                    // MMU_ALL_RAM\n    sta $ff00\n    jsr c128_restore_runtime_guards\n    cli" not in main_text:
+    print("tramp_ui_exit: expected runtime guard restore before CLI")
     raise SystemExit(1)
 
 if "ldx #21\n    jsr vdc_write_reg\n    lda #8\n    dex                         // 20\n    jsr vdc_write_reg" not in main_text:
@@ -1212,15 +1218,16 @@ run_80col_layout_guard_check() {
 from pathlib import Path
 
 root = Path("..").resolve()
+core = root.parent.parent / "core"
 screen = (root / "c128" / "screen_vdc.s").read_text()
 render = (root / "c128" / "dungeon_render_vdc.s").read_text()
 main128 = (root / "c128" / "main.s").read_text()
-msgs = (root / "common" / "ui_messages.s").read_text()
-status = (root / "common" / "ui_status.s").read_text()
-help_s = (root / "common" / "ui_help.s").read_text()
+msgs = (core / "ui_messages.s").read_text()
+status = (core / "ui_status.s").read_text()
+help_s = (core / "ui_help.s").read_text()
 swap = (root / "common" / "disk_swap.s").read_text()
-char_s = (root / "common" / "ui_character.s").read_text()
-sysinfo = (root / "common" / "title_sysinfo_banked.s").read_text()
+char_s = (core / "ui_character.s").read_text()
+sysinfo = (core / "title_sysinfo_banked.s").read_text()
 
 def must_contain(text: str, snippet: str, err: str):
     if snippet not in text:
@@ -1285,21 +1292,22 @@ from pathlib import Path
 import re
 
 root = Path("..").resolve()
+core = root.parent.parent / "core"
 screen = (root / "c128" / "screen_vdc.s").read_text().splitlines()
 main_text = (root / "c128" / "main.s").read_text()
-items = (root / "common" / "player_items.s").read_text().splitlines()
-item_mod = (root / "common" / "item.s").read_text().splitlines()
-item_cmd_mod = (root / "common" / "player_item_commands.s").read_text().splitlines()
-item_actions_mod = (root / "common" / "item_actions_overlay.s").read_text().splitlines()
-throw_mod = (root / "common" / "throw.s").read_text().splitlines()
-loop_mod = (root / "common" / "game_loop.s").read_text().splitlines()
-dfeat = (root / "common" / "dungeon_features.s").read_text().splitlines()
-help_mod = (root / "common" / "ui_help.s").read_text().splitlines()
-store_mod = (root / "common" / "ui_store.s").read_text().splitlines()
-loop_helpers = (root / "common" / "game_loop_helpers.s").read_text().splitlines()
-player_magic_mod = (root / "common" / "player_magic.s").read_text().splitlines()
-spell_effects_mod = (root / "common" / "spell_effects.s").read_text().splitlines()
-ui_wizard_mod = (root / "common" / "ui_wizard.s").read_text().splitlines()
+items = (core / "player_items.s").read_text().splitlines()
+item_mod = (core / "item.s").read_text().splitlines()
+item_cmd_mod = (core / "player_item_commands.s").read_text().splitlines()
+item_actions_mod = (core / "item_actions_overlay.s").read_text().splitlines()
+throw_mod = (core / "throw.s").read_text().splitlines()
+loop_mod = (core / "game_loop.s").read_text().splitlines()
+dfeat = (core / "dungeon_features.s").read_text().splitlines()
+help_mod = (core / "ui_help.s").read_text().splitlines()
+store_mod = (core / "ui_store.s").read_text().splitlines()
+loop_helpers = (core / "game_loop_helpers.s").read_text().splitlines()
+player_magic_mod = (core / "player_magic.s").read_text().splitlines()
+spell_effects_mod = (core / "spell_effects.s").read_text().splitlines()
+ui_wizard_mod = (core / "ui_wizard.s").read_text().splitlines()
 
 def first_instructions_after(label: str, lines: list[str], count: int) -> list[str]:
     in_block = False
@@ -1429,7 +1437,7 @@ required_chains = [
         "ldx #HSTR_PIW_USE_PROMPT",
         "jsr item_action_select_filtered_inv",
     ]),
-    ("item_gain_spell", (root / "common" / "player_gain_spell_impl.s").read_text().splitlines(), [
+    ("item_gain_spell", (core / "player_gain_spell_impl.s").read_text().splitlines(), [
         "!igs_have_choices:",
         "jsr input_prepare_modal_dismiss_key",
         "jsr spell_list_display",
@@ -1525,7 +1533,7 @@ required_chains = [
         "jsr input_prepare_followup_key",
         "jsr hal_input_get_key",
     ]),
-    ("inventory_overlay_select", (root / "common" / "player_items.s").read_text().splitlines(), [
+    ("inventory_overlay_select", (core / "player_items.s").read_text().splitlines(), [
         "show_inv_and_select:",
         "jsr input_prepare_selectable_overlay_key",
         "jsr tramp_ui_inv_select_display",
@@ -1537,7 +1545,7 @@ required_chains = [
         "jsr tramp_spell_list_display",
         "jsr input_get_followup_key",
     ]),
-    ("study_list_overlay_select", (root / "common" / "player_gain_spell_impl.s").read_text().splitlines(), [
+    ("study_list_overlay_select", (core / "player_gain_spell_impl.s").read_text().splitlines(), [
         "!igs_have_choices:",
         "jsr input_prepare_modal_dismiss_key",
         "jsr spell_list_display",
@@ -1617,7 +1625,8 @@ run_item_overlay_key_guard_check() {
 from pathlib import Path
 
 root = Path("..").resolve()
-items = (root / "common" / "item_actions_overlay.s").read_text().splitlines()
+core = root.parent.parent / "core"
+items = (core / "item_actions_overlay.s").read_text().splitlines()
 
 def has_ordered_chain(lines: list[str], tokens: list[str], window: int = 28) -> bool:
     for i, ln in enumerate(lines):
@@ -1678,7 +1687,7 @@ if not has_ordered_chain(items, [
     print("C128 item overlay must mark ?-opened inventory selectors as returning to OVL_ITEMS")
     raise SystemExit(1)
 
-magic_execute = (root / "common" / "player_magic_execute_overlay.s").read_text().splitlines()
+magic_execute = (core / "player_magic_execute_overlay.s").read_text().splitlines()
 if not has_ordered_chain(magic_execute, [
     "pmx_pick_recharge_item:",
     "jsr hal_input_get_key",
@@ -1787,7 +1796,7 @@ from pathlib import Path
 import re
 
 root = Path("..").resolve()
-common = root / "common"
+common = root.parent.parent / "core"
 helper = common / "input_ui_helpers.s"
 
 runtime_exclusions = {}

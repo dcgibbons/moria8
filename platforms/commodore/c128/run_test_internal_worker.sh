@@ -1,6 +1,7 @@
 #!/bin/bash
 set -u
 
+REPO_ROOT="${REPO_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
 RESULT_FILE="$1"
 NAME="$2"
 SRC="$3"
@@ -28,7 +29,7 @@ c128_target_is_stale() {
     if find . -maxdepth 1 -type f \( -name '*.s' -o -name 'Makefile' \) -newer "$target" -print -quit | grep -q .; then
         return 0
     fi
-    if find tests ../common ../c64 -type f -name '*.s' -newer "$target" -print -quit | grep -q .; then
+    if find tests "$REPO_ROOT/core" ../common ../c64 -type f -name '*.s' -newer "$target" -print -quit | grep -q .; then
         return 0
     fi
 
@@ -54,7 +55,11 @@ abs_prg="$(cd "$(dirname "$prg_file")" && pwd)/$(basename "$prg_file")"
 vs_file="${SRC%.s}.vs"
 
 if c128_target_is_stale "$prg_file" || c128_target_is_stale "$vs_file"; then
-    asm_output=$(java -jar "$KICKASS" "$SRC" -o "$prg_file" -libdir ../c64 -define C128 -vicesymbols :OVL_OUT=out 2>&1)
+    asm_output=$(java -jar "$KICKASS" "$SRC" -o "$prg_file" \
+        -libdir "$REPO_ROOT/core" \
+        -libdir "$REPO_ROOT/platforms/commodore/common" \
+        -libdir "$REPO_ROOT/platforms/commodore" \
+        -afo -libdir ../c64 -define C128 -vicesymbols :OVL_OUT=out 2>&1)
     if [ $? -ne 0 ]; then
         printf 'FAIL\t%s\t%s\t%s\n' "$NAME" "$(( $(test128_now_ms) - start_ms ))" "assembly error" >> "$RESULT_FILE"
         exit 0
