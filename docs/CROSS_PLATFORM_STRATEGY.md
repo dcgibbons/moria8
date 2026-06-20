@@ -118,6 +118,10 @@ Current assumptions:
   town/map constants and store-position tables, backed by fixed RAM at
   `MAP_BASE` with the shared 198-byte row stride. This is still a bootstrap
   renderer, not the full shared game loop.
+* CX16 bootstrap movement uses the shared player-position and tile-walkability
+  contracts through `core/player_move_basic.s`. Full `player_try_move` remains
+  outside the normal CX16 PRG because it still pulls in combat, monsters, traps,
+  sound, search, and broader runtime state.
 * Save/load and CMDR-DOS/FAT32 storage are deferred until after boot-to-title.
 * `x16emu` is expected on `PATH` by default; `X16EMU=/path/to/x16emu` and
   `X16_ROM=/path/to/rom.bin` may override local tool and ROM locations.

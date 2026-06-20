@@ -46,7 +46,7 @@
 #import "memory.s"
 #import "../../core/dungeon_data.s"
 #import "../../core/player_state.s"
-#import "../../core/tile_walkability.s"
+#import "../../core/player_move_basic.s"
 #import "screen_vera.s"
 #import "input.s"
 #import "services.s"
@@ -177,26 +177,13 @@ cx16_try_move_command:
     sec
     sbc #CMD_MOVE_N
     tax
-    lda cx16_player_x
-    clc
-    adc dir_dx,x
-    cmp #TOWN_MAP_COLS
-    bcs !done+
-    sta cx16_next_player_x
-    lda cx16_player_y
-    clc
-    adc dir_dy,x
-    cmp #TOWN_MAP_ROWS
-    bcs !done+
-    sta cx16_next_player_y
-    jsr cx16_next_tile_walkable
+    jsr player_move_compute_town_target
+    bcc !done+
+    jsr player_move_target_walkable
     bcc !done+
     jsr cx16_save_old_player
-    lda cx16_next_player_x
-    sta cx16_player_x
-    lda cx16_next_player_y
-    sta cx16_player_y
-    jsr cx16_sync_shared_player_position
+    jsr player_move_commit_target
+    jsr cx16_sync_local_player_position
     jmp cx16_player_redraw
 !done:
     rts
@@ -218,6 +205,13 @@ cx16_sync_shared_player_position:
     lda cx16_player_y
     sta player_data + PL_MAP_Y
     sta zp_player_y
+    rts
+
+cx16_sync_local_player_position:
+    lda zp_player_x
+    sta cx16_player_x
+    lda zp_player_y
+    sta cx16_player_y
     rts
 
 cx16_new_game_draw:
@@ -326,22 +320,6 @@ cx16_draw_map_cell:
     jsr screen_put_char_at
     lda #CX16_TEXT_COLOR
     jmp screen_set_color
-
-cx16_next_tile_walkable:
-    lda cx16_next_player_y
-    tay
-    lda map_row_lo,y
-    sta zp_ptr0
-    lda map_row_hi,y
-    sta zp_ptr0_hi
-    ldy cx16_next_player_x
-    lda (zp_ptr0),y
-    and #$f0
-    lsr
-    lsr
-    lsr
-    lsr
-    jmp tile_is_walkable
 
 cx16_read_draw_tile:
     ldy cx16_draw_y
@@ -666,8 +644,6 @@ cx16_player_x: .byte 0
 cx16_player_y: .byte 0
 cx16_old_player_x: .byte 0
 cx16_old_player_y: .byte 0
-cx16_next_player_x: .byte 0
-cx16_next_player_y: .byte 0
 cx16_draw_x: .byte 0
 cx16_draw_y: .byte 0
 cx16_draw_char: .byte 0
