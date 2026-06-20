@@ -37,6 +37,9 @@
 .label zp_screen_hi = $29
 .label zp_tmp0 = $2a
 .label zp_tmp1 = $2b
+.label zp_ptr1 = $2c
+.label zp_ptr1_hi = $2d
+.label zp_kernal_status = $90
 
 .label hal_screen_init = screen_init
 .label hal_screen_clear = screen_clear
@@ -78,6 +81,8 @@ screen_clear:
     bcc !row-
     rts
 
+// screen_clear_row — Clear a single VERA text row to spaces
+// Input: A = row number
 screen_clear_row:
     sta zp_tmp0
     lda #0
@@ -95,11 +100,31 @@ screen_clear_row:
     bne !loop-
     rts
 
+// screen_put_char_at — Write one char at specific (row, col) without moving cursor
+// Input:  A = screen code
+//         X = column
+//         Y = row
+//         zp_text_color = color
 screen_put_char_at:
+    sta spca_char
+    lda zp_cursor_row
     pha
+    lda zp_cursor_col
+    pha
+    sty zp_cursor_row
+    stx zp_cursor_col
     jsr screen_set_cursor
+    jsr vera_set_addr_inc1
+    lda spca_char
+    sta VERA_DATA0
+    lda zp_text_color
+    sta VERA_DATA0
     pla
-    jmp screen_put_char
+    sta zp_cursor_col
+    pla
+    sta zp_cursor_row
+    rts
+spca_char: .byte 0
 
 screen_put_char:
     pha

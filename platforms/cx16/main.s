@@ -18,8 +18,13 @@
 .const CX16_PLAYFIELD_ROW = 7
 .const CX16_PLAYFIELD_COL = 30
 .const CX16_TEXT_COLOR = $61
+.const CX16_TITLE_ACCENT_COLOR = $67
+.const MAP_BASE = $4000
+.const COL_WHITE = CX16_TEXT_COLOR
 .const SC_AT = $00
 .const SC_DOT = $2e
+.const C128 = false
+.const PLUS4 = false
 
 #import "screen_vera.s"
 
@@ -40,17 +45,14 @@ cx16_idle:
 cx16_title_print:
     lda #CX16_STATE_TITLE
     sta cx16_state
-    jsr screen_clear
-    :Cx16PrintAt(2, 21, cx16_title_border_text)
-    :Cx16PrintAt(3, 21, cx16_title_name_text)
-    :Cx16PrintAt(4, 21, cx16_title_subtitle_text)
-    :Cx16PrintAt(5, 21, cx16_title_border_text)
-    :Cx16PrintAt(8, 21, cx16_title_platform_text)
-    :Cx16PrintAt(11, 21, cx16_title_slice_text)
+    lda #CX16_TEXT_COLOR
+    jsr screen_set_color
+    jsr title_load_and_draw
+    lda #CX16_TEXT_COLOR
+    jsr screen_set_color
     :Cx16PrintAt(14, 21, cx16_title_new_text)
     :Cx16PrintAt(15, 21, cx16_title_load_text)
     :Cx16PrintAt(16, 21, cx16_title_quit_text)
-    :Cx16PrintAt(17, 21, cx16_title_border_text)
     rts
 
 cx16_poll_input:
@@ -81,9 +83,13 @@ cx16_poll_menu:
 !new_game:
     jmp cx16_new_game_start
 !load_game:
+    lda #CX16_TEXT_COLOR
+    jsr screen_set_color
     :Cx16PrintAt(20, 21, cx16_load_game_text)
     rts
 !quit:
+    lda #CX16_TEXT_COLOR
+    jsr screen_set_color
     :Cx16PrintAt(20, 21, cx16_quit_text)
     rts
 
@@ -167,6 +173,8 @@ cx16_poll_game:
     jmp cx16_player_redraw
 
 cx16_new_game_draw:
+    lda #CX16_TEXT_COLOR
+    jsr screen_set_color
     jsr screen_clear
     :Cx16PrintAt(2, 31, cx16_new_game_text)
     :Cx16PrintAt(4, 30, cx16_town_stub_text)
@@ -216,23 +224,23 @@ cx16_player_redraw:
     clc
     lda cx16_old_player_y
     adc #CX16_PLAYFIELD_ROW
-    sta zp_cursor_row
+    tay
     clc
     lda cx16_old_player_x
     adc #CX16_PLAYFIELD_COL
-    sta zp_cursor_col
+    tax
     lda #SC_DOT
-    jsr screen_put_char
+    jsr screen_put_char_at
     clc
     lda cx16_player_y
     adc #CX16_PLAYFIELD_ROW
-    sta zp_cursor_row
+    tay
     clc
     lda cx16_player_x
     adc #CX16_PLAYFIELD_COL
-    sta zp_cursor_col
+    tax
     lda #SC_AT
-    jmp screen_put_char
+    jmp screen_put_char_at
 
 .macro Cx16PrintAt(row, col, text) {
     lda #row
@@ -257,25 +265,58 @@ cx16_player_redraw:
 }
 }
 
-cx16_title_border_text:
+// CX16 title asset shim. The shared title renderer consumes a MAP_BASE segment
+// stream, while real CX16 disk/storage loading is a later port slice.
+hal_asset_load_title:
+    lda #<cx16_title_art_stream
+    sta zp_ptr0
+    lda #>cx16_title_art_stream
+    sta zp_ptr0_hi
+    lda #<MAP_BASE
+    sta zp_ptr1
+    lda #>MAP_BASE
+    sta zp_ptr1_hi
+    ldy #0
+!copy:
+    lda (zp_ptr0),y
+    sta (zp_ptr1),y
+    cmp #$ff
+    beq !done+
+    iny
+    bne !copy-
+    inc zp_ptr0_hi
+    inc zp_ptr1_hi
+    jmp !copy-
+!done:
+    clc
+    rts
+
+#import "../commodore/common/title_screen.s"
+
+title_str:
+    :ScreenText("MORIA8")
+    .byte 0
+
+cx16_title_art_stream:
+    .byte 2, 0, CX16_TEXT_COLOR
     :ScreenText("+------------------------------------+")
     .byte 0
-
-cx16_title_name_text:
+    .byte 3, 0, CX16_TITLE_ACCENT_COLOR
     :ScreenText("               MORIA8                ")
     .byte 0
-
-cx16_title_subtitle_text:
+    .byte 4, 0, CX16_TITLE_ACCENT_COLOR
     :ScreenText("        THE DUNGEONS OF MORIA        ")
     .byte 0
-
-cx16_title_platform_text:
+    .byte 5, 0, CX16_TEXT_COLOR
+    :ScreenText("+------------------------------------+")
+    .byte 0
+    .byte 8, 0, CX16_TEXT_COLOR
     :ScreenText("        COMMANDER X16 EDITION        ")
     .byte 0
-
-cx16_title_slice_text:
-    :ScreenText("        BOOT-TO-TITLE PORT SLICE     ")
+    .byte 11, 0, CX16_TEXT_COLOR
+    :ScreenText("       SHARED TITLE RENDERER         ")
     .byte 0
+    .byte $ff
 
 cx16_title_new_text:
     :ScreenText("        N)EW GAME                    ")
