@@ -123,52 +123,49 @@ cx16_poll_game:
     jsr input_get_command
     cmp #CMD_QUIT
     beq !return_title+
-    cmp #CMD_MOVE_N
-    beq !move_up+
     cmp #CMD_RUN_N
-    beq !move_up+
-    cmp #CMD_MOVE_S
-    beq !move_down+
-    cmp #CMD_RUN_S
-    beq !move_down+
-    cmp #CMD_MOVE_W
-    beq !move_left+
-    cmp #CMD_RUN_W
-    beq !move_left+
-    cmp #CMD_MOVE_E
-    beq !move_right+
-    cmp #CMD_RUN_E
-    beq !move_right+
+    bcc !not_run+
+    cmp #CMD_RUN_SE + 1
+    bcs !not_run+
+    sec
+    sbc #(CMD_RUN_N - CMD_MOVE_N)
+    jmp !try_move+
+!not_run:
+    cmp #CMD_MOVE_N
+    bcc !done+
+    cmp #CMD_MOVE_SE + 1
+    bcs !done+
+!try_move:
+    jmp cx16_try_move_command
 !done:
     rts
 !return_title:
     jmp cx16_title_enter_menu
-!move_up:
-    lda cx16_player_y
-    beq !done-
-    jsr cx16_save_old_player
-    dec cx16_player_y
-    jmp cx16_player_redraw
-!move_down:
-    lda cx16_player_y
-    cmp #CX16_PLAYFIELD_H - 1
-    beq !done-
-    jsr cx16_save_old_player
-    inc cx16_player_y
-    jmp cx16_player_redraw
-!move_left:
+
+cx16_try_move_command:
+    sec
+    sbc #CMD_MOVE_N
+    tax
     lda cx16_player_x
-    beq !done-
+    clc
+    adc dir_dx,x
+    cmp #CX16_PLAYFIELD_W
+    bcs !done+
+    sta cx16_next_player_x
+    lda cx16_player_y
+    clc
+    adc dir_dy,x
+    cmp #CX16_PLAYFIELD_H
+    bcs !done+
+    sta cx16_next_player_y
     jsr cx16_save_old_player
-    dec cx16_player_x
+    lda cx16_next_player_x
+    sta cx16_player_x
+    lda cx16_next_player_y
+    sta cx16_player_y
     jmp cx16_player_redraw
-!move_right:
-    lda cx16_player_x
-    cmp #CX16_PLAYFIELD_W - 1
-    beq !done-
-    jsr cx16_save_old_player
-    inc cx16_player_x
-    jmp cx16_player_redraw
+!done:
+    rts
 
 cx16_new_game_draw:
     lda #CX16_TEXT_COLOR
@@ -327,5 +324,7 @@ cx16_player_x: .byte 0
 cx16_player_y: .byte 0
 cx16_old_player_x: .byte 0
 cx16_old_player_y: .byte 0
+cx16_next_player_x: .byte 0
+cx16_next_player_y: .byte 0
 cx16_draw_x: .byte 0
 cx16_draw_y: .byte 0
