@@ -264,7 +264,7 @@ def assemble_if_stale(
         "-define",
         "C128",
         "-define",
-        'OVL_OUT="out"',
+        'OVL_OUT="../../../build/test/c128"',
         "-vicesymbols",
         "-o",
         str(prg_path),

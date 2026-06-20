@@ -107,9 +107,9 @@ C64_TIER_DIR       = c64/creature_data
 PLUS4_MAIN_SRC     = plus4/main.s
 PLUS4_BOOT_SRC     = plus4/boot.s
 
-C64_SOURCES        := $(shell find c64 common ../../core -path '*/out' -prune -o -type f -name '*.s' -print)
-C128_SOURCES       := $(shell find c128 common c64 ../../core -path '*/out' -prune -o -type f -name '*.s' -print)
-PLUS4_SOURCES      := $(shell find plus4 common ../../core -path '*/out' -prune -o -type f -name '*.s' -print)
+C64_SOURCES        := $(shell find c64 common ../../core -type f -name '*.s' -print)
+C128_SOURCES       := $(shell find c128 common c64 ../../core -type f -name '*.s' -print)
+PLUS4_SOURCES      := $(shell find plus4 common ../../core -type f -name '*.s' -print)
 
 # ── C64 artifacts ─────────────────────────────────────────
 C64_MAIN_PRG       = $(OUT64)/moria8.prg
@@ -678,7 +678,6 @@ cleanup-source-symbols:
 
 clean:
 	rm -rf "$(BUILD)" ../build
-	rm -rf out c64/out c128/out plus4/out
 	rm -f c64/*.prg c64/*.sym c64/*.vs c64/creature_data/*.sym c64/creature_data/*.vs c64/tests/*.prg c64/tests/*.vs c64/tests/*.sym
 	rm -f c128/*.prg c128/*.sym c128/*.vs c128/tests/*.prg c128/tests/*.vs c128/tests/*.sym
 	rm -f plus4/*.prg plus4/*.sym plus4/*.vs plus4/tests/*.prg plus4/tests/*.vs plus4/tests/*.sym

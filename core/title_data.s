@@ -1,7 +1,7 @@
 #importonce
 // title_data.s — Title screen art data (standalone PRG)
 //
-// Assembles to out/title, loaded into MAP_BASE at startup.
+// Assembles to the configured build title PRG, loaded into MAP_BASE at startup.
 // Format: segments of [row, col, color, screen_codes..., $00]
 // Terminated by $FF end-of-data marker.
 //

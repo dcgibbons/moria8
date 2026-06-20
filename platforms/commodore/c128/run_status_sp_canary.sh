@@ -8,8 +8,8 @@ VICE="${VICE128:-/Applications/VICE/bin/x128}"
 C1541_BIN="${C1541:-c1541}"
 
 build_log="/tmp/status_sp_canary_build.log"
-diag_main="out/moria128.statussp.prg"
-diag_d64="out/moria128_statussp.d64"
+diag_main="../../../build/test/c128/moria128.statussp.prg"
+diag_d64="../../../build/test/c128/moria128_statussp.d64"
 
 if ! "${COMMODORE_MAKE[@]}" build128 disk128 >"$build_log" 2>&1 || grep -q "FAILED!" "$build_log"; then
     echo "status_sp_canary build128/disk128 failed"
@@ -18,7 +18,7 @@ if ! "${COMMODORE_MAKE[@]}" build128 disk128 >"$build_log" 2>&1 || grep -q "FAIL
 fi
 
 if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 \
-        -define C128 :OVL_OUT=out -define C128_TEST_STATUS_SP_CANARY \
+        -define C128 :OVL_OUT=../../../build/test/c128 -define C128_TEST_STATUS_SP_CANARY \
         -o "$diag_main" >>"$build_log" 2>&1; then
     echo "status_sp_canary assembly failed"
     tail -20 "$build_log"
@@ -27,28 +27,28 @@ fi
 
 if ! "$C1541_BIN" -format "moria128,m8" d64 "$diag_d64" \
         -attach "$diag_d64" \
-        -write out/boot128.prg "moria8.128" \
+        -write ../../../build/test/c128/boot128.prg "moria8.128" \
         -write "$diag_main" "moria128" \
-        -write out/title "title" \
-        -write out/monster.db.1 "monster.db.1" \
-        -write out/monster.db.2 "monster.db.2" \
-        -write out/monster.db.3 "monster.db.3" \
-        -write out/monster.db.4 "monster.db.4" \
-        -write out/ovl.town "ovl.town" \
-        -write out/ovl.start "ovl.start" \
-        -write out/ovl.death "ovl.death" \
-        -write out/ovl.gen "ovl.gen" \
-        -write out/128.runtime.prg "128.runtime" \
-        -write out/128.input.prg "128.input" \
-        -write out/128.fdisk.prg "128.fdisk" \
-        -write out/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
+        -write ../../../build/test/c128/title "title" \
+        -write ../../../build/test/c128/monster.db.1 "monster.db.1" \
+        -write ../../../build/test/c128/monster.db.2 "monster.db.2" \
+        -write ../../../build/test/c128/monster.db.3 "monster.db.3" \
+        -write ../../../build/test/c128/monster.db.4 "monster.db.4" \
+        -write ../../../build/test/c128/ovl.town "ovl.town" \
+        -write ../../../build/test/c128/ovl.start "ovl.start" \
+        -write ../../../build/test/c128/ovl.death "ovl.death" \
+        -write ../../../build/test/c128/ovl.gen "ovl.gen" \
+        -write ../../../build/test/c128/128.runtime.prg "128.runtime" \
+        -write ../../../build/test/c128/128.input.prg "128.input" \
+        -write ../../../build/test/c128/128.fdisk.prg "128.fdisk" \
+        -write ../../../build/test/c128/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
     echo "status_sp_canary disk build failed"
     tail -20 "$build_log"
     exit 1
 fi
 
-abs_d64="$(cd out && pwd)/moria128_statussp.d64"
-trap_addr="$(awk '/\.c128_status_ret_corrupt$/ { split($2,a,":"); print toupper(a[2]); exit }' out/main.vs)"
+abs_d64="$(cd ../../../build/test/c128 && pwd)/moria128_statussp.d64"
+trap_addr="$(awk '/\.c128_status_ret_corrupt$/ { split($2,a,":"); print toupper(a[2]); exit }' ../../../build/test/c128/main.vs)"
 if [ -z "${trap_addr:-}" ]; then
     echo "status_sp_canary missing c128_status_ret_corrupt symbol"
     exit 1

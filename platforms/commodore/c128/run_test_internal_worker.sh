@@ -59,7 +59,7 @@ if c128_target_is_stale "$prg_file" || c128_target_is_stale "$vs_file"; then
         -libdir "$REPO_ROOT/core" \
         -libdir "$REPO_ROOT/platforms/commodore/common" \
         -libdir "$REPO_ROOT/platforms/commodore" \
-        -afo -libdir ../c64 -define C128 -vicesymbols :OVL_OUT=out 2>&1)
+        -afo -libdir ../c64 -define C128 -vicesymbols :OVL_OUT=../../../build/test/c128 2>&1)
     if [ $? -ne 0 ]; then
         printf 'FAIL\t%s\t%s\t%s\n' "$NAME" "$(( $(test128_now_ms) - start_ms ))" "assembly error" >> "$RESULT_FILE"
         exit 0

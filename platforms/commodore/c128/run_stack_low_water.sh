@@ -33,7 +33,7 @@ if [[ -f "$normal_vs" ]]; then
 fi
 
 if ! "$JAVA_BIN" -jar "$KICKASS_JAR" main.s -showmem -vicesymbols -libdir ../c64 \
-        -define C128 -define OVL_OUT='"out"' -define C128_TEST_STACK_LOW_WATER \
+        -define C128 -define OVL_OUT='"../../../build/test/c128"' -define C128_TEST_STACK_LOW_WATER \
         -define C128_TEST_OVERLAY_LOAD_FAIL_TRAP -define C128_TEST_OVERLAY_FN_GUARD \
         -o "$diag_main" >/tmp/moria128_stacklow_kickass.log 2>&1; then
     echo "stack_low_water KickAssembler build failed"

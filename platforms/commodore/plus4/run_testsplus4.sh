@@ -18,11 +18,10 @@ PLUS4_DIR="${PLUS4_DIR:-$REPO_ROOT/platforms/commodore/plus4}"
 cd "$PLUS4_DIR"
 PLUS4_TEST_OUT="${PLUS4_TEST_OUT:-../../../build/test/plus4}"
 mkdir -p "$PLUS4_TEST_OUT"
-rm -rf out
-ln -sf "$PLUS4_TEST_OUT" out
 cleanup() {
-    [ -L out ] && rm -f out || rm -rf out
     rm -f ./*.prg ./*.sym ./*.vs tests/*.prg tests/*.sym tests/*.vs
+    rm -f "$REPO_ROOT"/platforms/commodore/c64/creature_data/*.sym "$REPO_ROOT"/platforms/commodore/c64/creature_data/*.vs
+    rm -f "$REPO_ROOT"/core/*.sym "$REPO_ROOT"/core/*.vs
 }
 trap cleanup EXIT
 
@@ -204,7 +203,7 @@ PY
 
 run_boot_title_smoke() {
     local name="boot_title_plus4"
-    local out_dir="$PLUS4_DIR/out"
+    local out_dir="$PLUS4_TEST_OUT"
     local smoke_out
     smoke_out="$(make_product_out "$name")"
     local smoke_out_rel="$smoke_out"
@@ -285,7 +284,7 @@ run_boot_title_smoke() {
 
 run_new_game_to_town_smoke() {
     local name="new_game_to_town_plus4"
-    local out_dir="$PLUS4_DIR/out"
+    local out_dir="$PLUS4_TEST_OUT"
     local smoke_out
     smoke_out="$(make_product_out "$name")"
     local smoke_out_rel="$smoke_out"
@@ -365,7 +364,7 @@ run_new_game_to_town_smoke() {
 
 run_dungeon_entry_smoke() {
     local name="dungeon_entry_plus4"
-    local out_dir="$PLUS4_DIR/out"
+    local out_dir="$PLUS4_TEST_OUT"
     local smoke_out
     smoke_out="$(make_product_out "$name")"
     local smoke_out_rel="$smoke_out"
@@ -445,7 +444,7 @@ run_dungeon_entry_smoke() {
 
 run_dungeon_ascent_smoke() {
     local name="dungeon_ascent_plus4"
-    local out_dir="$PLUS4_DIR/out"
+    local out_dir="$PLUS4_TEST_OUT"
     local smoke_out
     smoke_out="$(make_product_out "$name")"
     local smoke_out_rel="$smoke_out"
@@ -525,7 +524,7 @@ run_dungeon_ascent_smoke() {
 
 run_overlay_load_smoke() {
     local name="overlay_load_plus4"
-    local out_dir="$PLUS4_DIR/out"
+    local out_dir="$PLUS4_TEST_OUT"
     local smoke_out
     smoke_out="$(make_product_out "$name")"
     local smoke_out_rel="$smoke_out"
@@ -606,7 +605,7 @@ run_overlay_load_smoke() {
 
 run_wand_selector_product_smoke() {
     local name="wand_selector_product_plus4"
-    local out_dir="$PLUS4_DIR/out"
+    local out_dir="$PLUS4_TEST_OUT"
     local smoke_out
     smoke_out="$(make_product_out "$name")"
     local smoke_out_rel="$smoke_out"
@@ -679,7 +678,7 @@ run_wand_selector_product_smoke() {
 
 run_marker_init_smoke() {
     local name="marker_init_plus4"
-    local out_dir="$PLUS4_DIR/out"
+    local out_dir="$PLUS4_TEST_OUT"
     local save_d64="$out_dir/test-marker-init-save.d64"
     local main_vs="$REPO_ROOT/build/plus4/main.vs"
     local boot_d64="$REPO_ROOT/build/moria8-plus4.d64"
@@ -731,7 +730,7 @@ run_marker_init_smoke() {
 
 run_disk_setup_product_smoke() {
     local name="disk_setup_product_plus4"
-    local out_dir="$PLUS4_DIR/out"
+    local out_dir="$PLUS4_TEST_OUT"
     local smoke_out
     smoke_out="$(make_product_out "$name")"
     local smoke_out_rel="$smoke_out"
@@ -820,7 +819,7 @@ run_disk_setup_product_smoke() {
 
 run_disk_setup_missing_save_smoke() {
     local name="disk_setup_missing_save_plus4"
-    local out_dir="$PLUS4_DIR/out"
+    local out_dir="$PLUS4_TEST_OUT"
     local smoke_out
     smoke_out="$(make_product_out "$name")"
     local smoke_out_rel="$smoke_out"
@@ -889,7 +888,7 @@ run_disk_setup_missing_save_smoke() {
 
 run_save_write_product_smoke() {
     local name="save_write_product_plus4"
-    local out_dir="$PLUS4_DIR/out"
+    local out_dir="$PLUS4_TEST_OUT"
     local smoke_out
     smoke_out="$(make_product_out "$name")"
     local smoke_out_rel="$smoke_out"
@@ -989,7 +988,7 @@ run_save_write_product_smoke() {
 
 run_save_media_fail_product_smoke() {
     local name="save_media_fail_plus4"
-    local out_dir="$PLUS4_DIR/out"
+    local out_dir="$PLUS4_TEST_OUT"
     local smoke_out
     smoke_out="$(make_product_out "$name")"
     local smoke_out_rel="$smoke_out"
@@ -1104,7 +1103,7 @@ run_save_media_fail_product_smoke() {
 
 run_change_save_drive_product_smoke() {
     local name="change_save_drive_plus4"
-    local out_dir="$PLUS4_DIR/out"
+    local out_dir="$PLUS4_TEST_OUT"
     local smoke_out
     smoke_out="$(make_product_out "$name")"
     local smoke_out_rel="$smoke_out"
@@ -1206,7 +1205,7 @@ run_change_save_drive_product_smoke() {
 
 run_single_drive_save_return_product_smoke() {
     local name="single_drive_save_return_plus4"
-    local out_dir="$PLUS4_DIR/out"
+    local out_dir="$PLUS4_TEST_OUT"
     local smoke_out
     smoke_out="$(make_product_out "$name")"
     local smoke_out_rel="$smoke_out"
@@ -1298,7 +1297,7 @@ run_single_drive_save_return_product_smoke() {
 
 run_single_drive_fresh_save_product_smoke() {
     local name="single_drive_fresh_save_plus4"
-    local out_dir="$PLUS4_DIR/out"
+    local out_dir="$PLUS4_TEST_OUT"
     local smoke_out
     smoke_out="$(make_product_out "$name")"
     local smoke_out_rel="$smoke_out"
@@ -1402,7 +1401,7 @@ run_single_drive_fresh_save_product_smoke() {
 
 run_single_drive_fresh_save_no_init_product_smoke() {
     local name="single_drive_fresh_save_no_init_plus4"
-    local out_dir="$PLUS4_DIR/out"
+    local out_dir="$PLUS4_TEST_OUT"
     local smoke_out
     smoke_out="$(make_product_out "$name")"
     local smoke_out_rel="$smoke_out"
@@ -1502,7 +1501,7 @@ run_single_drive_fresh_save_no_init_product_smoke() {
 
 run_single_drive_save_wrong_media_product_smoke() {
     local name="single_drive_save_wrong_media_plus4"
-    local out_dir="$PLUS4_DIR/out"
+    local out_dir="$PLUS4_TEST_OUT"
     local smoke_out
     smoke_out="$(make_product_out "$name")"
     local smoke_out_rel="$smoke_out"
@@ -1579,7 +1578,7 @@ run_single_drive_save_wrong_media_product_smoke() {
 
 run_single_drive_load_wrong_media_product_smoke() {
     local name="single_drive_load_wrong_media_plus4"
-    local out_dir="$PLUS4_DIR/out"
+    local out_dir="$PLUS4_TEST_OUT"
     local smoke_out
     smoke_out="$(make_product_out "$name")"
     local smoke_out_rel="$smoke_out"
@@ -1655,7 +1654,7 @@ run_single_drive_load_wrong_media_product_smoke() {
 
 run_disk_setup_single_drive_return_product_smoke() {
     local name="disk_setup_single_drive_return_plus4"
-    local out_dir="$PLUS4_DIR/out"
+    local out_dir="$PLUS4_TEST_OUT"
     local smoke_out
     smoke_out="$(make_product_out "$name")"
     local smoke_out_rel="$smoke_out"
@@ -1747,7 +1746,7 @@ run_disk_setup_single_drive_return_product_smoke() {
 
 run_load_wrong_media_product_smoke() {
     local name="load_wrong_media_product_plus4"
-    local out_dir="$PLUS4_DIR/out"
+    local out_dir="$PLUS4_TEST_OUT"
     local smoke_out
     smoke_out="$(make_product_out "$name")"
     local smoke_out_rel="$smoke_out"
@@ -1838,7 +1837,7 @@ run_load_wrong_media_product_smoke() {
 
 run_load_resume_product_smoke() {
     local name="load_resume_product_plus4"
-    local out_dir="$PLUS4_DIR/out"
+    local out_dir="$PLUS4_TEST_OUT"
     local smoke_out
     smoke_out="$(make_product_out "$name")"
     local smoke_out_rel="$smoke_out"
@@ -1931,7 +1930,7 @@ run_load_resume_product_smoke() {
 
 run_death_hiscore_single_drive_product_smoke() {
     local name="death_hiscore_single_drive_plus4"
-    local out_dir="$PLUS4_DIR/out"
+    local out_dir="$PLUS4_TEST_OUT"
     local smoke_out
     smoke_out="$(make_product_out "$name")"
     local smoke_out_rel="$smoke_out"
@@ -2023,7 +2022,7 @@ run_death_hiscore_single_drive_product_smoke() {
 
 run_single_drive_load_return_product_smoke() {
     local name="single_drive_load_return_plus4"
-    local out_dir="$PLUS4_DIR/out"
+    local out_dir="$PLUS4_TEST_OUT"
     local smoke_out
     smoke_out="$(make_product_out "$name")"
     local smoke_out_rel="$smoke_out"
@@ -2124,7 +2123,7 @@ run_single_drive_load_return_product_smoke() {
 
 run_load_then_save_new_empty_product_smoke() {
     local name="load_then_save_new_empty_plus4"
-    local out_dir="$PLUS4_DIR/out"
+    local out_dir="$PLUS4_TEST_OUT"
     local smoke_out
     smoke_out="$(make_product_out "$name")"
     local smoke_out_rel="$smoke_out"
@@ -2249,7 +2248,7 @@ run_load_then_save_new_empty_product_smoke() {
 
 run_single_drive_load_corrupt_product_smoke() {
     local name="single_drive_load_corrupt_plus4"
-    local out_dir="$PLUS4_DIR/out"
+    local out_dir="$PLUS4_TEST_OUT"
     local smoke_out
     smoke_out="$(make_product_out "$name")"
     local smoke_out_rel="$smoke_out"
@@ -2349,7 +2348,7 @@ run_single_drive_load_corrupt_product_smoke() {
 
 run_load_missing_savefile_product_smoke() {
     local name="load_missing_savefile_product_plus4"
-    local out_dir="$PLUS4_DIR/out"
+    local out_dir="$PLUS4_TEST_OUT"
     local smoke_out
     smoke_out="$(make_product_out "$name")"
     local smoke_out_rel="$smoke_out"
