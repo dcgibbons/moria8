@@ -122,6 +122,9 @@ Current assumptions:
 * CX16 bootstrap town rendering uses the shared tile byte to screen-code/color
   mapping in `core/tile_display.s`; the VERA text backend remains
   platform-owned.
+* CX16 bootstrap town interactions use the dependency-light store-door and
+  stairs probes in `core/town_interactions_basic.s`; full store UI and dungeon
+  transitions remain deferred until the CX16 runtime memory plan is explicit.
 * CX16 bootstrap movement uses the shared player-position and tile-walkability
   contracts through `core/player_move_basic.s`. Full `player_try_move` remains
   outside the normal CX16 PRG because it still pulls in combat, monsters, traps,

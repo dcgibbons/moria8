@@ -37,6 +37,7 @@
 #import "../../core/player_move_basic.s"
 #import "../../core/town_map_basic.s"
 #import "../../core/tile_display.s"
+#import "../../core/town_interactions_basic.s"
 #import "screen_vera.s"
 #import "input.s"
 #import "services.s"
@@ -144,6 +145,10 @@ cx16_poll_game:
     jsr input_get_command
     cmp #CMD_QUIT
     beq !return_title+
+    cmp #CMD_STAIRS_DN
+    beq !stairs_dn+
+    cmp #CMD_STAIRS_UP
+    beq !stairs_up+
     cmp #CMD_RUN_N
     bcc !not_run+
     cmp #CMD_RUN_SE + 1
@@ -162,6 +167,10 @@ cx16_poll_game:
     rts
 !return_title:
     jmp cx16_title_enter_menu
+!stairs_dn:
+    jmp cx16_try_stairs_down
+!stairs_up:
+    jmp cx16_try_stairs_up
 
 cx16_try_move_command:
     sec
@@ -174,9 +183,34 @@ cx16_try_move_command:
     jsr cx16_save_old_player
     jsr player_move_commit_target
     jsr cx16_sync_local_player_position
-    jmp cx16_player_redraw
+    jsr cx16_player_redraw
+    jmp cx16_check_town_entry
 !done:
     rts
+
+cx16_check_town_entry:
+    jsr town_basic_check_store_door
+    bcc !done+
+    sta cx16_store_idx
+    jmp cx16_show_store_stub
+!done:
+    rts
+
+cx16_try_stairs_down:
+    jsr town_basic_check_stairs_at_player
+    cmp #9
+    beq !descend+
+    jmp cx16_show_no_stairs
+!descend:
+    jmp cx16_show_descend_stub
+
+cx16_try_stairs_up:
+    jsr town_basic_check_stairs_at_player
+    cmp #10
+    beq !ascend+
+    jmp cx16_show_no_stairs
+!ascend:
+    jmp cx16_show_ascend_stub
 
 cx16_seed_shared_town_player:
     lda #0
@@ -212,6 +246,37 @@ cx16_new_game_draw:
     jsr cx16_render_town
     :Cx16PrintAt(26, 14, cx16_game_help_text)
     rts
+
+cx16_show_store_stub:
+    jsr cx16_clear_message_row
+    :Cx16PrintAt(26, 29, cx16_store_door_text)
+    lda cx16_store_idx
+    clc
+    adc #$31
+    ldx #40
+    ldy #26
+    jmp screen_put_char_at
+
+cx16_show_descend_stub:
+    jsr cx16_clear_message_row
+    :Cx16PrintAt(26, 22, cx16_descend_stub_text)
+    rts
+
+cx16_show_ascend_stub:
+    jsr cx16_clear_message_row
+    :Cx16PrintAt(26, 22, cx16_ascend_stub_text)
+    rts
+
+cx16_show_no_stairs:
+    jsr cx16_clear_message_row
+    :Cx16PrintAt(26, 28, cx16_no_stairs_text)
+    rts
+
+cx16_clear_message_row:
+    lda #26
+    jsr screen_clear_row
+    lda #CX16_TEXT_COLOR
+    jmp screen_set_color
 
 cx16_render_town:
     lda #0
@@ -399,6 +464,22 @@ cx16_game_help_text:
     :ScreenText("HJKL/YUBN OR NUMBERS MOVE. SHIFT-Q RETURNS TO TITLE.")
     .byte 0
 
+cx16_store_door_text:
+    :ScreenText("STORE DOOR ")
+    .byte 0
+
+cx16_descend_stub_text:
+    :ScreenText("DUNGEON ENTRY NOT WIRED YET.")
+    .byte 0
+
+cx16_ascend_stub_text:
+    :ScreenText("YOU ARE ALREADY IN TOWN.")
+    .byte 0
+
+cx16_no_stairs_text:
+    :ScreenText("YOU SEE NO STAIRS HERE.")
+    .byte 0
+
 cx16_memory_fail_text:
     :ScreenText("CX16 RAM BANK TEST FAILED")
     .byte 0
@@ -412,6 +493,7 @@ cx16_draw_x: .byte 0
 cx16_draw_y: .byte 0
 cx16_draw_char: .byte 0
 cx16_draw_color: .byte 0
+cx16_store_idx: .byte 0
 
 program_end:
 #if !CX16_IMPORT_SHARED_GAME_LOOP
