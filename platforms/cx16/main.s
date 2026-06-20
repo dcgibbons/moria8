@@ -33,6 +33,7 @@
 
 #import "screen_vera.s"
 #import "input.s"
+#import "services.s"
 #import "../../core/input_ui_helpers.s"
 
 cx16_entry:
@@ -41,6 +42,7 @@ cx16_entry:
     sta $01                 // Select KERNAL ROM bank before X16 KERNAL calls.
     jsr KERNAL_CINT
     jsr screen_init
+    jsr cx16_services_install
     lda #CX16_TEXT_COLOR
     jsr screen_set_color
     jsr cx16_title_enter_menu
@@ -316,7 +318,7 @@ cx16_quit_text:
     .byte 0
 
 cx16_game_help_text:
-    :ScreenText("WASD OR HJKL MOVES. Q RETURNS TO TITLE.")
+    :ScreenText("HJKL/YUBN OR NUMBERS MOVE. SHIFT-Q RETURNS TO TITLE.")
     .byte 0
 
 cx16_state: .byte CX16_STATE_TITLE
