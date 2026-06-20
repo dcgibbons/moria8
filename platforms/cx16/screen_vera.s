@@ -25,7 +25,9 @@
 .const VERA_TEXT_ROW_STRIDE = 256
 .const X16_MODE_80X30 = 1
 .const VERA_INC_1 = $10
+.const VERA_BG_BLACK = $00
 .const SC_SPACE = $20
+.const SC_REVERSE_SPACE = $a0
 
 .label zp_cursor_row = $22
 .label zp_cursor_col = $23
@@ -66,6 +68,7 @@ screen_init:
     rts
 
 screen_set_color:
+    and #$0f
     sta zp_text_color
     rts
 
@@ -94,7 +97,7 @@ screen_clear_row:
 !loop:
     lda #SC_SPACE
     sta VERA_DATA0
-    lda zp_text_color
+    jsr vera_normal_attr
     sta VERA_DATA0
     dex
     bne !loop-
@@ -116,9 +119,7 @@ screen_put_char_at:
     jsr screen_set_cursor
     jsr vera_set_addr_inc1
     lda spca_char
-    sta VERA_DATA0
-    lda zp_text_color
-    sta VERA_DATA0
+    jsr vera_put_char_with_attr
     pla
     sta zp_cursor_col
     pla
@@ -131,9 +132,7 @@ screen_put_char:
     jsr screen_set_cursor
     jsr vera_set_addr_inc1
     pla
-    sta VERA_DATA0
-    lda zp_text_color
-    sta VERA_DATA0
+    jsr vera_put_char_with_attr
     inc zp_cursor_col
     rts
 
@@ -145,9 +144,7 @@ screen_put_string:
 !loop:
     lda (zp_ptr0),y
     beq !done+
-    sta VERA_DATA0
-    lda zp_text_color
-    sta VERA_DATA0
+    jsr vera_put_char_with_attr
     iny
     inx
     cpx #SCREEN_COLS
@@ -157,6 +154,37 @@ screen_put_string:
     clc
     adc zp_cursor_col
     sta zp_cursor_col
+    rts
+
+vera_put_char_with_attr:
+    cmp #SC_REVERSE_SPACE
+    beq !block+
+    jsr vera_translate_screen_code
+    sta VERA_DATA0
+    jsr vera_normal_attr
+    sta VERA_DATA0
+    rts
+!block:
+    lda #SC_REVERSE_SPACE
+    sta VERA_DATA0
+    jsr vera_normal_attr
+    sta VERA_DATA0
+    rts
+
+vera_translate_screen_code:
+    cmp #$41
+    bcc !done+
+    cmp #$5b
+    bcs !done+
+    sec
+    sbc #$40
+!done:
+    rts
+
+vera_normal_attr:
+    lda zp_text_color
+    and #$0f
+    ora #VERA_BG_BLACK
     rts
 
 screen_set_cursor:

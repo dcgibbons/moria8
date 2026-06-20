@@ -10,6 +10,11 @@
 .pc = $0810 "CX16 Boot"
 
 .const KERNAL_CINT = $ff81
+.const KERNAL_SETNAM = $ffbd
+.const KERNAL_SETLFS = $ffba
+.const KERNAL_LOAD = $ffd5
+.const KERNAL_CLOSE = $ffc3
+.const KERNAL_CLRCHN = $ffcc
 .const KERNAL_GETIN = $ffe4
 .const CX16_STATE_TITLE = 0
 .const CX16_STATE_NEW_GAME = 1
@@ -17,8 +22,8 @@
 .const CX16_PLAYFIELD_H = 10
 .const CX16_PLAYFIELD_ROW = 7
 .const CX16_PLAYFIELD_COL = 30
-.const CX16_TEXT_COLOR = $61
-.const CX16_TITLE_ACCENT_COLOR = $67
+.const CX16_TITLE_MENU_COL = 27
+.const CX16_TEXT_COLOR = $01
 .const MAP_BASE = $4000
 .const COL_WHITE = CX16_TEXT_COLOR
 .const SC_AT = $00
@@ -48,11 +53,10 @@ cx16_title_print:
     lda #CX16_TEXT_COLOR
     jsr screen_set_color
     jsr title_load_and_draw
+    jsr title_clear_below_menu
     lda #CX16_TEXT_COLOR
     jsr screen_set_color
-    :Cx16PrintAt(14, 21, cx16_title_new_text)
-    :Cx16PrintAt(15, 21, cx16_title_load_text)
-    :Cx16PrintAt(16, 21, cx16_title_quit_text)
+    :Cx16PrintAt(18, CX16_TITLE_MENU_COL, cx16_title_menu_text)
     rts
 
 cx16_poll_input:
@@ -265,30 +269,29 @@ cx16_player_redraw:
 }
 }
 
-// CX16 title asset shim. The shared title renderer consumes a MAP_BASE segment
-// stream, while real CX16 disk/storage loading is a later port slice.
+// CX16 title asset loader. The Makefile builds TITLE from core/title_data.s
+// beside moria16.prg, and runcx16 launches from that directory.
 hal_asset_load_title:
-    lda #<cx16_title_art_stream
-    sta zp_ptr0
-    lda #>cx16_title_art_stream
-    sta zp_ptr0_hi
-    lda #<MAP_BASE
-    sta zp_ptr1
-    lda #>MAP_BASE
-    sta zp_ptr1_hi
+    lda #cx16_title_name_len
+    ldx #<cx16_title_name
+    ldy #>cx16_title_name
+    jsr KERNAL_SETNAM
+    lda #2
+    ldx #8
     ldy #0
-!copy:
-    lda (zp_ptr0),y
-    sta (zp_ptr1),y
-    cmp #$ff
-    beq !done+
-    iny
-    bne !copy-
-    inc zp_ptr0_hi
-    inc zp_ptr1_hi
-    jmp !copy-
-!done:
-    clc
+    jsr KERNAL_SETLFS
+    lda #0
+    lda #<MAP_BASE
+    tax
+    lda #>MAP_BASE
+    tay
+    lda #0
+    jsr KERNAL_LOAD
+    php
+    lda #2
+    jsr KERNAL_CLOSE
+    jsr KERNAL_CLRCHN
+    plp
     rts
 
 #import "../commodore/common/title_screen.s"
@@ -297,37 +300,12 @@ title_str:
     :ScreenText("MORIA8")
     .byte 0
 
-cx16_title_art_stream:
-    .byte 2, 0, CX16_TEXT_COLOR
-    :ScreenText("+------------------------------------+")
-    .byte 0
-    .byte 3, 0, CX16_TITLE_ACCENT_COLOR
-    :ScreenText("               MORIA8                ")
-    .byte 0
-    .byte 4, 0, CX16_TITLE_ACCENT_COLOR
-    :ScreenText("        THE DUNGEONS OF MORIA        ")
-    .byte 0
-    .byte 5, 0, CX16_TEXT_COLOR
-    :ScreenText("+------------------------------------+")
-    .byte 0
-    .byte 8, 0, CX16_TEXT_COLOR
-    :ScreenText("        COMMANDER X16 EDITION        ")
-    .byte 0
-    .byte 11, 0, CX16_TEXT_COLOR
-    :ScreenText("       SHARED TITLE RENDERER         ")
-    .byte 0
-    .byte $ff
+cx16_title_name:
+    .byte $54, $49, $54, $4c, $45 // "TITLE"
+.label cx16_title_name_len = * - cx16_title_name
 
-cx16_title_new_text:
-    :ScreenText("        N)EW GAME                    ")
-    .byte 0
-
-cx16_title_load_text:
-    :ScreenText("        L)OAD GAME                   ")
-    .byte 0
-
-cx16_title_quit_text:
-    :ScreenText("        Q)UIT                        ")
+cx16_title_menu_text:
+    :ScreenText("N)EW  L)OAD  Q)UIT")
     .byte 0
 
 cx16_new_game_text:
