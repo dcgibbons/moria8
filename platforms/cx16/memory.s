@@ -53,3 +53,25 @@
 .macro MachineRestoreAllRam() {}
 .macro EnterKernal() { php }
 .macro ExitKernal() { plp }
+
+// CX16 bank-window helpers. These operate only on the RAM bank visible at
+// $A000-$BFFF; callers own the selected bank number and pointer validity.
+cx16_saved_ram_bank: .byte 0
+
+cx16_save_ram_bank:
+    lda CX16_RAM_BANK_REG
+    sta cx16_saved_ram_bank
+    rts
+
+cx16_select_ram_bank_a:
+    sta CX16_RAM_BANK_REG
+    rts
+
+cx16_restore_ram_bank:
+    lda cx16_saved_ram_bank
+    sta CX16_RAM_BANK_REG
+    rts
+
+read_banked_byte_a000:
+    lda (zp_ptr0),y
+    rts
