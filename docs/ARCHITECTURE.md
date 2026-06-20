@@ -134,13 +134,13 @@ Current product payloads:
 
 ## Commander X16 Bring-Up Model
 
-The CX16 port currently targets a boot-to-title PRG, not full gameplay. It uses
-Kick Assembler, emits `build/cx16/moria16.prg`, and runs with `x16emu` when the
-emulator is available on `PATH` or supplied through `X16EMU=/path/to/x16emu`.
-The ROM is not vendored; set `X16_ROM=/path/to/rom.bin` when a local emulator
-install requires an explicit ROM path. The supported run forms are `make
-runcx16`, `make run-cx16`, and `make run cx16`; the last form is a root make
-selector for the CX16 run target.
+The CX16 port currently targets a boot-to-title-plus-town-bootstrap PRG, not
+full gameplay. It uses Kick Assembler, emits `build/cx16/moria16.prg`, and runs
+with `x16emu` when the emulator is available on `PATH` or supplied through
+`X16EMU=/path/to/x16emu`. The ROM is not vendored; set
+`X16_ROM=/path/to/rom.bin` when a local emulator install requires an explicit
+ROM path. The supported run forms are `make runcx16`, `make run-cx16`, and
+`make run cx16`; the last form is a root make selector for the CX16 run target.
 
 Current runtime assumptions:
 
@@ -152,6 +152,9 @@ Current runtime assumptions:
   KERNAL text buffer at VERA VRAM `$1B000`.
 - Display contract is 80 columns x 30 rows, with the first title composition
   centered from the existing 40-column layout.
+- New game currently renders a deterministic 66x22 town bootstrap from shared
+  town/map constants and shared store-position tables. The backing map lives at
+  `MAP_BASE=$4000` with the shared 198-byte row stride.
 - CMDR-DOS save/load, asset loading, sound, and gameplay dispatch are deferred.
 
 ## C128 Runtime Model

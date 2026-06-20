@@ -104,8 +104,8 @@ now lives in the current `core/`/`platforms/` layout.
 The Commander X16 port is a first-class 65C02 platform under `platforms/cx16/`,
 not a Commodore subtarget. The initial milestone is deliberately narrow:
 boot a PRG under `x16emu`, initialize text output, render the Moria8
-title/menu, enter a CX16-owned new-game stub, and acknowledge basic movement
-input there.
+title/menu, enter a CX16-owned fixed-memory town bootstrap, and acknowledge
+basic movement input there.
 
 Current assumptions:
 
@@ -114,6 +114,10 @@ Current assumptions:
   banked-RAM window for later resident overlay/cache work.
 * Display target is VERA 80x30 text. The first title screen centers the
   existing 40-column title composition inside the wider display.
+* The current new-game path renders a deterministic 66x22 town from the shared
+  town/map constants and store-position tables, backed by fixed RAM at
+  `MAP_BASE` with the shared 198-byte row stride. This is still a bootstrap
+  renderer, not the full shared game loop.
 * Save/load and CMDR-DOS/FAT32 storage are deferred until after boot-to-title.
 * `x16emu` is expected on `PATH` by default; `X16EMU=/path/to/x16emu` and
   `X16_ROM=/path/to/rom.bin` may override local tool and ROM locations.
