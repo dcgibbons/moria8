@@ -34,6 +34,7 @@
 #import "../../core/zeropage.s"
 #import "palette_consts.s"
 #import "config.s"
+#import "memory.s"
 #import "screen_vera.s"
 #import "input.s"
 #import "services.s"

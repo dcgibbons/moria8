@@ -47,9 +47,7 @@
 .const hal_platform_item_prompt_reload_resync = 0
 .const hal_platform_equip_prepare_key_before_display = 0
 .const hal_platform_monster_bank1_tier_names = 0
-.const hal_platform_monster_hidden_name_pool = 1
+.const hal_platform_monster_hidden_name_pool = 0
 .const hal_platform_monster_cpu_port_bank = 0
 .const hal_platform_monster_overlay_stale_name = 0
 .const hal_platform_monster_stale_tier_reload = 0
-
-#define HAL_PLATFORM_MONSTER_HIDDEN_NAME_POOL

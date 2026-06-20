@@ -1226,14 +1226,26 @@ creature_get_name:
 #endif
     jmp !cgn_copy+
 
-#if HAL_PLATFORM_MONSTER_HIDDEN_NAME_POOL
+#if !HAL_PLATFORM_MONSTER_BANK1_TIER_NAMES
 !cgn_tier_c64:
+#if HAL_PLATFORM_MONSTER_HIDDEN_NAME_POOL
     // C64 active tier names are copied to hidden RAM under I/O during tier
     // activation. Use the resident cr_name pointer; do not depend on the
     // transient $E000 tier staging image.
     lda cr_name_hi,x
     bne !cgn_setup_normal+
     jmp !cgn_stale+
+#else
+    // Non-hidden-pool platforms keep the resident cr_name pointer for the
+    // active tier. If it still targets $E000, the platform bank macro decides
+    // whether that range needs special handling.
+    lda cr_name_hi,x
+    bne !+
+    jmp !cgn_stale+
+!:  sta zp_ptr1_hi
+    lda cr_name_lo,x
+    sta zp_ptr1
+    jmp !cgn_do_bank_c64+
 #endif
 
 !cgn_do_bank_c64:
@@ -1247,6 +1259,9 @@ creature_get_name:
 #endif
     :BankOutKernal()
     jmp !cgn_copy+
+#else
+    jmp !cgn_copy+
+#endif
 #endif
 
 !cgn_no_tier:

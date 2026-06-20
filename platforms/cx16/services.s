@@ -28,6 +28,8 @@
 
 .label hal_storage_require_program_media = cx16_service_ok
 .label hal_storage_init_selected_drive = cx16_service_ok
+.label hal_asset_close_channel = cx16_service_ok
+.label hal_asset_load_prg_header = cx16_service_unsupported
 .label hal_storage_require_save_media = cx16_service_unsupported
 .label hal_storage_save_record = cx16_service_unsupported
 .label hal_storage_load_record = cx16_service_unsupported
