@@ -2,14 +2,19 @@
 // trampolines.s - CX16 resident-call adapters for shared gameplay.
 
 tramp_spawn_special_room_monsters:
-    rts
+    jmp spawn_special_room_monsters
 
 tramp_spawn_nest_gold:
-    rts
+    jmp spawn_nest_gold
 
 tramp_find_special_room:
-    clc
-    rts
+    jmp find_special_room
+
+tramp_assign_special_room:
+    jmp assign_special_room
+
+tramp_vault_seal_entrance:
+    jmp vault_seal_entrance
 
 tramp_roll_ego_type:
     jmp roll_ego_type
@@ -83,7 +88,7 @@ tramp_player_create:
     jmp player_create
 
 tramp_level_generate:
-    rts
+    jmp level_generate
 
 overlay_load:
     clc

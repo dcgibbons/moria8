@@ -28,6 +28,7 @@
 #undef DISARM_HELPERS_EXTERNAL
 #undef DISARM_COMMAND_EXTERNAL
 #import "trampolines.s"
+#import "../../core/special_rooms.s"
 #import "../../core/monster.s"
 #import "../../core/tier_manager.s"
 #import "../../core/dungeon_los.s"
@@ -55,6 +56,7 @@
 #import "../../core/turn.s"
 #import "../../core/background_data.s"
 #import "../../core/player_create.s"
+#import "../../core/dungeon_gen.s"
 #import "../../core/store_data.s"
 #import "../../core/runtime_ui_strings.s"
 #import "../../core/wizard.s"
