@@ -119,6 +119,9 @@ Current assumptions:
   store-position tables, backed by fixed RAM at `MAP_BASE` with the shared
   198-byte row stride. This is still a bootstrap renderer, not the full shared
   game loop.
+* CX16 bootstrap town rendering uses the shared tile byte to screen-code/color
+  mapping in `core/tile_display.s`; the VERA text backend remains
+  platform-owned.
 * CX16 bootstrap movement uses the shared player-position and tile-walkability
   contracts through `core/player_move_basic.s`. Full `player_try_move` remains
   outside the normal CX16 PRG because it still pulls in combat, monsters, traps,

@@ -48,6 +48,7 @@ tile_screen_codes:
     .byte $25           // 13: Quartz '%'
     .byte $1e           // 14: Trap '^' (up arrow)
     .byte $23           // 15: Secret door (same as wall '#')
+tile_screen_codes_end:
 
 // ============================================================
 // Special entity screen codes and colors
@@ -79,3 +80,4 @@ tile_screen_codes:
 // Compile-time validation
 // ============================================================
 .assert "Tile color table = 16 entries", tile_colors_end - tile_colors, 16
+.assert "Tile screen-code table = 16 entries", tile_screen_codes_end - tile_screen_codes, 16

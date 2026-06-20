@@ -24,17 +24,7 @@
 .const CX16_TOWN_SCREEN_COL = 7
 .const CX16_TITLE_MENU_COL = 27
 .const CX16_TEXT_COLOR = $01
-.const CX16_TOWN_FLOOR_COLOR = COL_DGREY
-.const CX16_TOWN_WALL_COLOR = COL_LGREY
-.const CX16_TOWN_DOOR_COLOR = COL_BROWN
-.const CX16_TOWN_STAIRS_COLOR = COL_WHITE
-.const CX16_TOWN_PLAYER_COLOR = COL_WHITE
 .const MAP_BASE = $4000
-.const SC_AT = $00
-.const SC_DOT = $2e
-.const SC_WALL = $23
-.const SC_DOOR = $27
-.const SC_STAIRS_DN = $3e
 .const C128 = false
 .const PLUS4 = false
 .const CX16_IMPORT_SHARED_GAME_LOOP = cmdLineVars.containsKey("CX16_IMPORT_SHARED_GAME_LOOP")
@@ -46,6 +36,7 @@
 #import "../../core/player_state.s"
 #import "../../core/player_move_basic.s"
 #import "../../core/town_map_basic.s"
+#import "../../core/tile_display.s"
 #import "screen_vera.s"
 #import "input.s"
 #import "services.s"
@@ -235,12 +226,12 @@ cx16_render_town:
     lda cx16_draw_y
     cmp cx16_player_y
     bne !floor+
-    lda #SC_AT
-    ldx #CX16_TOWN_PLAYER_COLOR
+    lda #SC_PLAYER
+    ldx #COL_PLAYER
     bne !put+
 !floor:
     jsr cx16_read_draw_tile
-    jsr cx16_town_tile_to_char_color
+    jsr tile_map_byte_to_char_color
 !put:
     sta cx16_draw_char
     stx cx16_draw_color
@@ -291,16 +282,16 @@ cx16_player_redraw:
     lda cx16_player_x
     adc #CX16_TOWN_SCREEN_COL
     tax
-    lda #CX16_TOWN_PLAYER_COLOR
+    lda #COL_PLAYER
     jsr screen_set_color
-    lda #SC_AT
+    lda #SC_PLAYER
     jsr screen_put_char_at
     lda #CX16_TEXT_COLOR
     jmp screen_set_color
 
 cx16_draw_map_cell:
     jsr cx16_read_draw_tile
-    jsr cx16_town_tile_to_char_color
+    jsr tile_map_byte_to_char_color
     sta cx16_draw_char
     stx cx16_draw_color
     txa
@@ -328,30 +319,6 @@ cx16_read_draw_tile:
     sta zp_ptr0_hi
     ldy cx16_draw_x
     lda (zp_ptr0),y
-    rts
-
-cx16_town_tile_to_char_color:
-    and #$f0
-    cmp #TILE_FLOOR
-    beq !floor+
-    cmp #TILE_DOOR_OPEN
-    beq !door+
-    cmp #TILE_STAIRS_DN
-    beq !stairs+
-    lda #SC_WALL
-    ldx #CX16_TOWN_WALL_COLOR
-    rts
-!floor:
-    lda #SC_DOT
-    ldx #CX16_TOWN_FLOOR_COLOR
-    rts
-!door:
-    lda #SC_DOOR
-    ldx #CX16_TOWN_DOOR_COLOR
-    rts
-!stairs:
-    lda #SC_STAIRS_DN
-    ldx #CX16_TOWN_STAIRS_COLOR
     rts
 
 .macro Cx16PrintAt(row, col, text) {
