@@ -1,5 +1,5 @@
 #importonce
-#import "vic_palette_consts.s"
+#import "palette_consts.s"
 // color.s — Color palette definitions and color RAM management
 //
 // Defines the game's color scheme for map tiles, UI elements,

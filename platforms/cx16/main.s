@@ -25,7 +25,6 @@
 .const CX16_TITLE_MENU_COL = 27
 .const CX16_TEXT_COLOR = $01
 .const MAP_BASE = $4000
-.const COL_WHITE = CX16_TEXT_COLOR
 .const SC_AT = $00
 .const SC_DOT = $2e
 .const C128 = false
@@ -33,12 +32,14 @@
 .const CX16_IMPORT_SHARED_GAME_LOOP = cmdLineVars.containsKey("CX16_IMPORT_SHARED_GAME_LOOP")
 
 #import "../../core/zeropage.s"
+#import "palette_consts.s"
+#import "config.s"
 #import "screen_vera.s"
 #import "input.s"
 #import "services.s"
 #import "../../core/input_ui_helpers.s"
 #if CX16_IMPORT_SHARED_GAME_LOOP
-#import "../../core/game_loop.s"
+#import "shared_imports.s"
 #endif
 
 cx16_entry:

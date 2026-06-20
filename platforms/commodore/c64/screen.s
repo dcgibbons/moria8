@@ -13,7 +13,7 @@
 //   Row  24:     Input prompt line / spare
 //   Cols 0, 39:  Border columns (unused/clear)
 
-#import "../common/vic_palette_consts.s"
+#import "../common/palette_consts.s"
 #import "hal/layout.s"
 
 // ============================================================

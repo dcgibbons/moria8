@@ -1,10 +1,25 @@
 // services.s - Commander X16 platform service contracts
 
 #import "hal/lifecycle_policy.s"
+#import "hal/entropy_consts.s"
 #import "../../core/platform_services_api.s"
 
 .const CX16_HAL_STATUS_OK = 0
 .const CX16_HAL_STATUS_ERR_UNSUPPORTED = 7
+
+// Shared semantic sound IDs. CX16 sound is silent for now, but shared gameplay
+// still references the effect constants.
+.const SFX_NONE = $ff
+.const SFX_BUMP = $00
+.const SFX_HIT = $01
+.const SFX_MISS = $02
+.const SFX_PICKUP = $03
+.const SFX_DEATH = $04
+.const SFX_LEVELUP = $05
+.const SFX_SPELL = $06
+.const SFX_SPELL_FAIL = $07
+.const SFX_HUNGER_WARN = $08
+.const SFX_HUNGER_FAINT = $09
 
 .label hal_sound_init = cx16_service_ok
 .label hal_sound_stop = cx16_service_ok
