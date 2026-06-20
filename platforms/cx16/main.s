@@ -9,6 +9,8 @@
 
 .pc = $0810 "CX16 Boot"
 
+#import "palette_consts.s"
+
 .const KERNAL_CINT = $ff81
 .const KERNAL_SETNAM = $ffbd
 .const KERNAL_SETLFS = $ffba
@@ -18,21 +20,45 @@
 .const KERNAL_GETIN = $ffe4
 .const CX16_STATE_TITLE = 0
 .const CX16_STATE_NEW_GAME = 1
-.const CX16_PLAYFIELD_W = 20
-.const CX16_PLAYFIELD_H = 10
-.const CX16_PLAYFIELD_ROW = 7
-.const CX16_PLAYFIELD_COL = 30
+.const CX16_TOWN_MAP_COLS = 66
+.const CX16_TOWN_MAP_ROWS = 22
+.const CX16_TOWN_ROW_STRIDE = 198
+.const CX16_TOWN_SCREEN_ROW = 2
+.const CX16_TOWN_SCREEN_COL = 7
+.const CX16_TOWN_STAIRS_X = 32
+.const CX16_TOWN_STAIRS_Y = 18
+.const CX16_TOWN_START_X = 31
+.const CX16_TOWN_START_Y = 18
+.const CX16_STORE_W = 10
+.const CX16_STORE_H = 5
 .const CX16_TITLE_MENU_COL = 27
 .const CX16_TEXT_COLOR = $01
+.const CX16_TOWN_FLOOR_COLOR = COL_DGREY
+.const CX16_TOWN_WALL_COLOR = COL_LGREY
+.const CX16_TOWN_DOOR_COLOR = COL_BROWN
+.const CX16_TOWN_STAIRS_COLOR = COL_WHITE
+.const CX16_TOWN_PLAYER_COLOR = COL_WHITE
 .const MAP_BASE = $4000
 .const SC_AT = $00
 .const SC_DOT = $2e
+.const SC_WALL = $23
+.const SC_DOOR = $27
+.const SC_STAIRS_DN = $3e
+.const CX16_TILE_FLOOR = $00
+.const CX16_TILE_WALL_H = $10
+.const CX16_TILE_WALL_V = $20
+.const CX16_TILE_CORNER_TL = $30
+.const CX16_TILE_CORNER_TR = $40
+.const CX16_TILE_CORNER_BL = $50
+.const CX16_TILE_CORNER_BR = $60
+.const CX16_TILE_DOOR_OPEN = $70
+.const CX16_TILE_STAIRS_DN = $90
+.const CX16_TOWN_FLAGS = $0c
 .const C128 = false
 .const PLUS4 = false
 .const CX16_IMPORT_SHARED_GAME_LOOP = cmdLineVars.containsKey("CX16_IMPORT_SHARED_GAME_LOOP")
 
 #import "../../core/zeropage.s"
-#import "palette_consts.s"
 #import "config.s"
 #import "memory.s"
 #import "screen_vera.s"
@@ -130,10 +156,11 @@ cx16_poll_menu:
 cx16_new_game_start:
     lda #CX16_STATE_NEW_GAME
     sta cx16_state
-    lda #CX16_PLAYFIELD_W / 2
+    lda #CX16_TOWN_START_X
     sta cx16_player_x
-    lda #CX16_PLAYFIELD_H / 2
+    lda #CX16_TOWN_START_Y
     sta cx16_player_y
+    jsr cx16_generate_town
     jmp cx16_new_game_draw
 
 cx16_poll_game:
@@ -166,15 +193,17 @@ cx16_try_move_command:
     lda cx16_player_x
     clc
     adc dir_dx,x
-    cmp #CX16_PLAYFIELD_W
+    cmp #CX16_TOWN_MAP_COLS
     bcs !done+
     sta cx16_next_player_x
     lda cx16_player_y
     clc
     adc dir_dy,x
-    cmp #CX16_PLAYFIELD_H
+    cmp #CX16_TOWN_MAP_ROWS
     bcs !done+
     sta cx16_next_player_y
+    jsr cx16_next_tile_walkable
+    bcc !done+
     jsr cx16_save_old_player
     lda cx16_next_player_x
     sta cx16_player_x
@@ -188,17 +217,15 @@ cx16_new_game_draw:
     lda #CX16_TEXT_COLOR
     jsr screen_set_color
     jsr screen_clear
-    :Cx16PrintAt(2, 31, cx16_new_game_text)
-    :Cx16PrintAt(4, 30, cx16_town_stub_text)
+    :Cx16PrintAt(0, 33, cx16_town_title_text)
+    jsr cx16_render_town
+    :Cx16PrintAt(26, 14, cx16_game_help_text)
+    rts
+
+cx16_render_town:
     lda #0
     sta cx16_draw_y
 !row:
-    clc
-    lda cx16_draw_y
-    adc #CX16_PLAYFIELD_ROW
-    sta zp_cursor_row
-    lda #CX16_PLAYFIELD_COL
-    sta zp_cursor_col
     lda #0
     sta cx16_draw_x
 !col:
@@ -209,20 +236,38 @@ cx16_new_game_draw:
     cmp cx16_player_y
     bne !floor+
     lda #SC_AT
+    ldx #CX16_TOWN_PLAYER_COLOR
     bne !put+
 !floor:
-    lda #SC_DOT
+    jsr cx16_read_draw_tile
+    jsr cx16_town_tile_to_char_color
 !put:
-    jsr screen_put_char
+    sta cx16_draw_char
+    stx cx16_draw_color
+    txa
+    jsr screen_set_color
+    clc
+    ldy cx16_draw_y
+    tya
+    adc #CX16_TOWN_SCREEN_ROW
+    tay
+    clc
+    ldx cx16_draw_x
+    txa
+    adc #CX16_TOWN_SCREEN_COL
+    tax
+    lda cx16_draw_char
+    jsr screen_put_char_at
     inc cx16_draw_x
     lda cx16_draw_x
-    cmp #CX16_PLAYFIELD_W
+    cmp #CX16_TOWN_MAP_COLS
     bcc !col-
     inc cx16_draw_y
     lda cx16_draw_y
-    cmp #CX16_PLAYFIELD_H
+    cmp #CX16_TOWN_MAP_ROWS
     bcc !row-
-    :Cx16PrintAt(19, 15, cx16_game_help_text)
+    lda #CX16_TEXT_COLOR
+    jsr screen_set_color
     rts
 
 cx16_save_old_player:
@@ -233,26 +278,305 @@ cx16_save_old_player:
     rts
 
 cx16_player_redraw:
-    clc
-    lda cx16_old_player_y
-    adc #CX16_PLAYFIELD_ROW
-    tay
-    clc
     lda cx16_old_player_x
-    adc #CX16_PLAYFIELD_COL
-    tax
-    lda #SC_DOT
-    jsr screen_put_char_at
+    sta cx16_draw_x
+    lda cx16_old_player_y
+    sta cx16_draw_y
+    jsr cx16_draw_map_cell
     clc
     lda cx16_player_y
-    adc #CX16_PLAYFIELD_ROW
+    adc #CX16_TOWN_SCREEN_ROW
     tay
     clc
     lda cx16_player_x
-    adc #CX16_PLAYFIELD_COL
+    adc #CX16_TOWN_SCREEN_COL
     tax
+    lda #CX16_TOWN_PLAYER_COLOR
+    jsr screen_set_color
     lda #SC_AT
-    jmp screen_put_char_at
+    jsr screen_put_char_at
+    lda #CX16_TEXT_COLOR
+    jmp screen_set_color
+
+cx16_draw_map_cell:
+    jsr cx16_read_draw_tile
+    jsr cx16_town_tile_to_char_color
+    sta cx16_draw_char
+    stx cx16_draw_color
+    txa
+    jsr screen_set_color
+    clc
+    ldy cx16_draw_y
+    tya
+    adc #CX16_TOWN_SCREEN_ROW
+    tay
+    clc
+    ldx cx16_draw_x
+    txa
+    adc #CX16_TOWN_SCREEN_COL
+    tax
+    lda cx16_draw_char
+    jsr screen_put_char_at
+    lda #CX16_TEXT_COLOR
+    jmp screen_set_color
+
+cx16_next_tile_walkable:
+    lda cx16_next_player_y
+    tay
+    lda cx16_town_row_lo,y
+    sta zp_ptr0
+    lda cx16_town_row_hi,y
+    sta zp_ptr0_hi
+    ldy cx16_next_player_x
+    lda (zp_ptr0),y
+    and #$f0
+    cmp #CX16_TILE_FLOOR
+    beq !yes+
+    cmp #CX16_TILE_DOOR_OPEN
+    beq !yes+
+    cmp #CX16_TILE_STAIRS_DN
+    beq !yes+
+    clc
+    rts
+!yes:
+    sec
+    rts
+
+cx16_read_draw_tile:
+    ldy cx16_draw_y
+    lda cx16_town_row_lo,y
+    sta zp_ptr0
+    lda cx16_town_row_hi,y
+    sta zp_ptr0_hi
+    ldy cx16_draw_x
+    lda (zp_ptr0),y
+    rts
+
+cx16_town_tile_to_char_color:
+    and #$f0
+    cmp #CX16_TILE_FLOOR
+    beq !floor+
+    cmp #CX16_TILE_DOOR_OPEN
+    beq !door+
+    cmp #CX16_TILE_STAIRS_DN
+    beq !stairs+
+    lda #SC_WALL
+    ldx #CX16_TOWN_WALL_COLOR
+    rts
+!floor:
+    lda #SC_DOT
+    ldx #CX16_TOWN_FLOOR_COLOR
+    rts
+!door:
+    lda #SC_DOOR
+    ldx #CX16_TOWN_DOOR_COLOR
+    rts
+!stairs:
+    lda #SC_STAIRS_DN
+    ldx #CX16_TOWN_STAIRS_COLOR
+    rts
+
+cx16_generate_town:
+    lda #0
+    sta cx16_draw_y
+!floor_row:
+    ldy cx16_draw_y
+    lda cx16_town_row_lo,y
+    sta zp_ptr0
+    lda cx16_town_row_hi,y
+    sta zp_ptr0_hi
+    ldy #0
+    lda #CX16_TILE_FLOOR | CX16_TOWN_FLAGS
+!floor_col:
+    sta (zp_ptr0),y
+    iny
+    cpy #CX16_TOWN_MAP_COLS
+    bne !floor_col-
+    inc cx16_draw_y
+    lda cx16_draw_y
+    cmp #CX16_TOWN_MAP_ROWS
+    bcc !floor_row-
+
+    ldx #0
+    ldy #0
+    lda #CX16_TILE_CORNER_TL | CX16_TOWN_FLAGS
+    jsr cx16_write_town_tile
+    ldx #CX16_TOWN_MAP_COLS - 1
+    ldy #0
+    lda #CX16_TILE_CORNER_TR | CX16_TOWN_FLAGS
+    jsr cx16_write_town_tile
+    ldx #0
+    ldy #CX16_TOWN_MAP_ROWS - 1
+    lda #CX16_TILE_CORNER_BL | CX16_TOWN_FLAGS
+    jsr cx16_write_town_tile
+    ldx #CX16_TOWN_MAP_COLS - 1
+    ldy #CX16_TOWN_MAP_ROWS - 1
+    lda #CX16_TILE_CORNER_BR | CX16_TOWN_FLAGS
+    jsr cx16_write_town_tile
+
+    ldx #1
+!top_bottom:
+    txa
+    pha
+    ldy #0
+    lda #CX16_TILE_WALL_H | CX16_TOWN_FLAGS
+    jsr cx16_write_town_tile
+    pla
+    tax
+    txa
+    pha
+    ldy #CX16_TOWN_MAP_ROWS - 1
+    lda #CX16_TILE_WALL_H | CX16_TOWN_FLAGS
+    jsr cx16_write_town_tile
+    pla
+    tax
+    inx
+    cpx #CX16_TOWN_MAP_COLS - 1
+    bne !top_bottom-
+
+    ldy #1
+!left_right:
+    tya
+    pha
+    ldx #0
+    lda #CX16_TILE_WALL_V | CX16_TOWN_FLAGS
+    jsr cx16_write_town_tile
+    pla
+    tay
+    tya
+    pha
+    ldx #CX16_TOWN_MAP_COLS - 1
+    lda #CX16_TILE_WALL_V | CX16_TOWN_FLAGS
+    jsr cx16_write_town_tile
+    pla
+    tay
+    iny
+    cpy #CX16_TOWN_MAP_ROWS - 1
+    bne !left_right-
+
+    ldx #0
+!store:
+    stx cx16_store_idx
+    jsr cx16_draw_store
+    ldx cx16_store_idx
+    inx
+    cpx #8
+    bne !store-
+
+    ldx #CX16_TOWN_STAIRS_X
+    ldy #CX16_TOWN_STAIRS_Y
+    lda #CX16_TILE_STAIRS_DN | CX16_TOWN_FLAGS
+    jmp cx16_write_town_tile
+
+cx16_draw_store:
+    ldx cx16_store_idx
+    lda cx16_store_pos_x,x
+    sta cx16_store_left
+    clc
+    adc #CX16_STORE_W - 1
+    sta cx16_store_right
+    lda cx16_store_pos_y,x
+    sta cx16_store_top
+    clc
+    adc #CX16_STORE_H - 1
+    sta cx16_store_bottom
+
+    ldx cx16_store_left
+    ldy cx16_store_top
+    lda #CX16_TILE_CORNER_TL | CX16_TOWN_FLAGS
+    jsr cx16_write_town_tile
+    ldx cx16_store_right
+    ldy cx16_store_top
+    lda #CX16_TILE_CORNER_TR | CX16_TOWN_FLAGS
+    jsr cx16_write_town_tile
+    ldx cx16_store_left
+    ldy cx16_store_bottom
+    lda #CX16_TILE_CORNER_BL | CX16_TOWN_FLAGS
+    jsr cx16_write_town_tile
+    ldx cx16_store_right
+    ldy cx16_store_bottom
+    lda #CX16_TILE_CORNER_BR | CX16_TOWN_FLAGS
+    jsr cx16_write_town_tile
+
+    lda cx16_store_left
+    clc
+    adc #1
+    sta cx16_draw_x
+!store_h:
+    ldx cx16_draw_x
+    ldy cx16_store_top
+    lda #CX16_TILE_WALL_H | CX16_TOWN_FLAGS
+    jsr cx16_write_town_tile
+    ldx cx16_draw_x
+    ldy cx16_store_bottom
+    lda #CX16_TILE_WALL_H | CX16_TOWN_FLAGS
+    jsr cx16_write_town_tile
+    inc cx16_draw_x
+    lda cx16_draw_x
+    cmp cx16_store_right
+    bne !store_h-
+
+    lda cx16_store_top
+    clc
+    adc #1
+    sta cx16_draw_y
+!store_v:
+    ldx cx16_store_left
+    ldy cx16_draw_y
+    lda #CX16_TILE_WALL_V | CX16_TOWN_FLAGS
+    jsr cx16_write_town_tile
+    ldx cx16_store_right
+    ldy cx16_draw_y
+    lda #CX16_TILE_WALL_V | CX16_TOWN_FLAGS
+    jsr cx16_write_town_tile
+    inc cx16_draw_y
+    lda cx16_draw_y
+    cmp cx16_store_bottom
+    bne !store_v-
+
+    lda cx16_store_top
+    clc
+    adc #1
+    sta cx16_draw_y
+!store_fill_y:
+    lda cx16_store_left
+    clc
+    adc #1
+    sta cx16_draw_x
+!store_fill_x:
+    ldx cx16_draw_x
+    ldy cx16_draw_y
+    lda #CX16_TILE_WALL_H
+    jsr cx16_write_town_tile
+    inc cx16_draw_x
+    lda cx16_draw_x
+    cmp cx16_store_right
+    bne !store_fill_x-
+    inc cx16_draw_y
+    lda cx16_draw_y
+    cmp cx16_store_bottom
+    bne !store_fill_y-
+
+    ldx cx16_store_idx
+    lda cx16_store_door_x,x
+    tax
+    ldy cx16_store_idx
+    lda cx16_store_door_y,y
+    tay
+    lda #CX16_TILE_DOOR_OPEN | CX16_TOWN_FLAGS
+    jmp cx16_write_town_tile
+
+cx16_write_town_tile:
+    sta cx16_tile_value
+    lda cx16_town_row_lo,y
+    sta zp_ptr0
+    lda cx16_town_row_hi,y
+    sta zp_ptr0_hi
+    txa
+    tay
+    lda cx16_tile_value
+    sta (zp_ptr0),y
+    rts
 
 .macro Cx16PrintAt(row, col, text) {
     lda #row
@@ -316,12 +640,8 @@ cx16_title_menu_text:
     :ScreenText("N)EW  L)OAD  Q)UIT")
     .byte 0
 
-cx16_new_game_text:
-    :ScreenText("NEW GAME STUB")
-    .byte 0
-
-cx16_town_stub_text:
-    :ScreenText("TOWN PLACEHOLDER")
+cx16_town_title_text:
+    :ScreenText("TOWN")
     .byte 0
 
 cx16_load_game_text:
@@ -349,8 +669,33 @@ cx16_next_player_x: .byte 0
 cx16_next_player_y: .byte 0
 cx16_draw_x: .byte 0
 cx16_draw_y: .byte 0
+cx16_draw_char: .byte 0
+cx16_draw_color: .byte 0
+cx16_tile_value: .byte 0
+cx16_store_idx: .byte 0
+cx16_store_left: .byte 0
+cx16_store_right: .byte 0
+cx16_store_top: .byte 0
+cx16_store_bottom: .byte 0
+
+cx16_town_row_lo:
+    .fill CX16_TOWN_MAP_ROWS, <(MAP_BASE + i * CX16_TOWN_ROW_STRIDE)
+cx16_town_row_hi:
+    .fill CX16_TOWN_MAP_ROWS, >(MAP_BASE + i * CX16_TOWN_ROW_STRIDE)
+
+cx16_store_pos_x:
+    .byte 10, 22, 34, 46, 10, 22, 34, 46
+cx16_store_pos_y:
+    .byte  2,  2,  2,  2, 12, 12, 12, 12
+cx16_store_door_x:
+    .byte 15, 27, 39, 51, 15, 27, 39, 51
+cx16_store_door_y:
+    .byte  6,  6,  6,  6, 16, 16, 16, 16
 
 program_end:
 #if !CX16_IMPORT_SHARED_GAME_LOOP
 .assert "CX16 resident boot code stays below MAP_BASE", program_end <= MAP_BASE, true
 #endif
+.assert "CX16 town uses shared town width", CX16_TOWN_MAP_COLS, 66
+.assert "CX16 town uses shared town height", CX16_TOWN_MAP_ROWS, 22
+.assert "CX16 town row stride matches fixed live map", CX16_TOWN_ROW_STRIDE, 198
