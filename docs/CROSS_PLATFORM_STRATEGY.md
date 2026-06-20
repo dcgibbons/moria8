@@ -125,6 +125,7 @@ Current assumptions:
 * CX16 bootstrap town interactions use the dependency-light store-door and
   stairs probes in `core/town_interactions_basic.s`; full store UI and dungeon
   transitions remain deferred until the CX16 runtime memory plan is explicit.
+  Store doors render as numbered entrances from the shared store-door metadata.
 * CX16 bootstrap movement uses the shared player-position and tile-walkability
   contracts through `core/player_move_basic.s`. Full `player_try_move` remains
   outside the normal CX16 PRG because it still pulls in combat, monsters, traps,
@@ -142,7 +143,8 @@ Current shared-gameplay status:
   trampolines still satisfy the shared code's assembly-time contracts.
 * `make testcx16-runtime` runs an x16emu `-testbench` smoke check against the
   normal CX16 PRG. It verifies RAM-visible bootstrap contracts: town generation,
-  player position, store-door detection, and stairs detection.
+  player position, store-door detection, stairs detection, title asset loading,
+  VERA text output, and command feedback messages.
 * The probe is not a runtime-safe memory placement. The linked image currently
   crosses the fixed-RAM map/scratch plan and the CX16 `$A000-$BFFF` banked-RAM
   window.

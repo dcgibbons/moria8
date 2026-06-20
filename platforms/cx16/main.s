@@ -297,6 +297,7 @@ cx16_render_town:
 !floor:
     jsr cx16_read_draw_tile
     jsr tile_map_byte_to_char_color
+    jsr cx16_apply_store_door_display
 !put:
     sta cx16_draw_char
     stx cx16_draw_color
@@ -357,6 +358,7 @@ cx16_player_redraw:
 cx16_draw_map_cell:
     jsr cx16_read_draw_tile
     jsr tile_map_byte_to_char_color
+    jsr cx16_apply_store_door_display
     sta cx16_draw_char
     stx cx16_draw_color
     txa
@@ -375,6 +377,24 @@ cx16_draw_map_cell:
     jsr screen_put_char_at
     lda #CX16_TEXT_COLOR
     jmp screen_set_color
+
+cx16_apply_store_door_display:
+    stx cx16_draw_color
+    sta cx16_draw_char
+    lda cx16_draw_x
+    sta zp_temp3
+    lda cx16_draw_y
+    sta zp_temp4
+    jsr town_basic_check_xy_store_door
+    bcc !not_store+
+    clc
+    adc #SC_STORE_1
+    ldx #COL_STORE
+    rts
+!not_store:
+    lda cx16_draw_char
+    ldx cx16_draw_color
+    rts
 
 cx16_read_draw_tile:
     ldy cx16_draw_y

@@ -7,6 +7,7 @@ bootstrap, and map/player/town-interaction state is the stable contract.
 """
 
 import argparse
+import os
 import select
 import subprocess
 import sys
@@ -17,11 +18,25 @@ STATUS_CARRY = 0x01
 TOWN_FLAGS = 0x0C
 TILE_STAIRS_DN = 0x90
 CMD_MOVE_W = 0x03
+CMD_MOVE_S = 0x02
 CMD_MOVE_E = 0x04
+SC_PLAYER = 0x00
+SC_REVERSE_SPACE = 0xA0
+TEXT_COLOR = 0x01
+STORE_COLOR = 0x07
+TITLE_BORDER_COLOR = 0x0F
+VERA_ADDR_L = 0x9F20
+VERA_ADDR_M = 0x9F21
+VERA_ADDR_H = 0x9F22
+VERA_DATA0 = 0x9F23
+VERA_CTRL = 0x9F25
+VERA_INC_1 = 0x10
+VERA_TEXT_BASE = 0x1B000
+VERA_TEXT_ROW_STRIDE = 256
 
 
 class X16Bench:
-    def __init__(self, x16emu, rom, prg):
+    def __init__(self, x16emu, rom, prg, cwd):
         cmd = [x16emu, "-testbench", "-warp"]
         if rom:
             cmd.extend(["-rom", rom])
@@ -33,6 +48,7 @@ class X16Bench:
             stderr=subprocess.STDOUT,
             text=True,
             bufsize=1,
+            cwd=cwd,
         )
         self.wait_ready()
 
@@ -129,9 +145,51 @@ def map_tile_at(bench, labels, x, y):
     return bench.get_memory(row_addr + x)
 
 
+def screen_code(ch):
+    value = ord(ch)
+    if 65 <= value <= 90:
+        return value - 64
+    if ch == "@":
+        return SC_PLAYER
+    return value
+
+
+def vera_set_addr(bench, address):
+    bench.set_memory(VERA_CTRL, 0)
+    bench.set_memory(VERA_ADDR_L, address & 0xFF)
+    bench.set_memory(VERA_ADDR_M, (address >> 8) & 0xFF)
+    bench.set_memory(VERA_ADDR_H, VERA_INC_1 | ((address >> 16) & 0x01))
+
+
+def screen_cell_addr(row, col):
+    return VERA_TEXT_BASE + (row * VERA_TEXT_ROW_STRIDE) + (col * 2)
+
+
+def screen_char_at(bench, row, col):
+    vera_set_addr(bench, screen_cell_addr(row, col))
+    return bench.get_memory(VERA_DATA0)
+
+
+def screen_attr_at(bench, row, col):
+    vera_set_addr(bench, screen_cell_addr(row, col) + 1)
+    return bench.get_memory(VERA_DATA0)
+
+
 def assert_eq(actual, expected, label):
     if actual != expected:
         raise AssertionError(f"{label}: expected ${expected:02X}, got ${actual:02X}")
+
+
+def assert_screen_text(bench, row, col, text, label):
+    for offset, ch in enumerate(text):
+        actual = screen_char_at(bench, row, col + offset)
+        expected = screen_code(ch)
+        assert_eq(actual, expected, f"{label} char {offset}")
+
+
+def assert_screen_cell(bench, row, col, char_code, attr, label):
+    assert_eq(screen_char_at(bench, row, col), char_code, f"{label} char")
+    assert_eq(screen_attr_at(bench, row, col), attr, f"{label} attr")
 
 
 def set_player_position(bench, labels, x, y):
@@ -154,26 +212,47 @@ def main():
     parser.add_argument("--rom", default="")
     parser.add_argument("--prg", required=True)
     parser.add_argument("--symbols", required=True)
+    parser.add_argument("--cwd", default="")
     args = parser.parse_args()
 
     labels = load_symbols(args.symbols)
-    bench = X16Bench(args.x16emu, args.rom, args.prg)
+    cwd = args.cwd if args.cwd else None
+    prg = args.prg
+    if cwd:
+        prg = os.path.basename(prg)
+    bench = X16Bench(args.x16emu, args.rom, prg, cwd)
     try:
         bench.run(require(labels, "cx16_memory_init"))
         if bench.get_status() & STATUS_CARRY:
             raise AssertionError("cx16_memory_init reported failure")
 
         bench.run(require(labels, "screen_init"))
+        bench.run(require(labels, "cx16_title_enter_menu"), timeout=8)
+        assert_eq(bench.get_memory(require(labels, "cx16_state")), 0, "CX16 title state")
+        assert_screen_cell(bench, 1, 22, screen_code("+"), TITLE_BORDER_COLOR, "title border")
+        assert_screen_cell(bench, 3, 25, SC_REVERSE_SPACE, TEXT_COLOR, "title logo block")
+        assert_screen_text(bench, 18, 27, "N)EW  L)OAD  Q)UIT", "title menu")
+
         bench.run(require(labels, "cx16_new_game_start"), timeout=8)
 
         assert_eq(bench.get_memory(require(labels, "cx16_state")), 1, "CX16 state")
         assert_player_position(bench, labels, 31, 18, "new game")
         assert_eq(bench.get_memory(require(labels, "zp_player_dlvl")), 0, "town depth")
         assert_eq(map_tile_at(bench, labels, 32, 18), TILE_STAIRS_DN | TOWN_FLAGS, "town stairs tile")
+        assert_screen_text(bench, 0, 33, "TOWN", "town title")
+        assert_screen_text(
+            bench,
+            26,
+            14,
+            "HJKL/YUBN OR NUMBERS MOVE. SHIFT-Q RETURNS TO TITLE.",
+            "town help",
+        )
+        assert_screen_cell(bench, 20, 38, SC_PLAYER, TEXT_COLOR, "initial player")
 
         bench.set_a(CMD_MOVE_E)
         bench.run(require(labels, "cx16_try_move_command"))
         assert_player_position(bench, labels, 32, 18, "move east onto stairs")
+        assert_screen_cell(bench, 20, 39, SC_PLAYER, TEXT_COLOR, "moved player")
 
         set_player_position(bench, labels, 0, 1)
         bench.set_a(CMD_MOVE_W)
@@ -182,6 +261,16 @@ def main():
 
         store_x = bench.get_memory(require(labels, "store_door_x"))
         store_y = bench.get_memory(require(labels, "store_door_y"))
+        store_screen_row = store_y + 2
+        store_screen_col = store_x + 7
+        assert_screen_cell(
+            bench,
+            store_screen_row,
+            store_screen_col,
+            screen_code("1"),
+            STORE_COLOR,
+            "store door number",
+        )
         bench.set_memory(require(labels, "zp_player_x"), store_x)
         bench.set_memory(require(labels, "zp_player_y"), store_y)
         bench.run(require(labels, "town_basic_check_store_door"))
@@ -195,6 +284,27 @@ def main():
         bench.run(require(labels, "cx16_try_move_command"))
         assert_player_position(bench, labels, store_x, store_y, "move onto store door")
         assert_eq(bench.get_memory(require(labels, "cx16_store_idx")), 0, "store entry command index")
+        assert_screen_cell(
+            bench,
+            store_screen_row,
+            store_screen_col,
+            SC_PLAYER,
+            TEXT_COLOR,
+            "player on store door",
+        )
+        assert_screen_text(bench, 26, 29, "STORE DOOR 1", "store door message")
+
+        bench.set_a(CMD_MOVE_S)
+        bench.run(require(labels, "cx16_try_move_command"))
+        assert_player_position(bench, labels, store_x, store_y + 1, "leave store door")
+        assert_screen_cell(
+            bench,
+            store_screen_row,
+            store_screen_col,
+            screen_code("1"),
+            STORE_COLOR,
+            "restored store door number",
+        )
 
         bench.set_memory(require(labels, "zp_player_x"), 31)
         bench.set_memory(require(labels, "zp_player_y"), 18)
@@ -207,12 +317,20 @@ def main():
         bench.run(require(labels, "town_basic_check_stairs_at_player"))
         assert_eq(bench.get_a(), 9, "stairs-down probe")
         bench.run(require(labels, "cx16_try_stairs_down"))
+        assert_screen_text(
+            bench,
+            26,
+            22,
+            "DUNGEON ENTRY NOT WIRED YET.",
+            "stairs down message",
+        )
 
         bench.set_memory(require(labels, "zp_player_x"), 31)
         bench.set_memory(require(labels, "zp_player_y"), 18)
         bench.run(require(labels, "town_basic_check_stairs_at_player"))
         assert_eq(bench.get_a(), 0, "non-stairs probe")
         bench.run(require(labels, "cx16_try_stairs_up"))
+        assert_screen_text(bench, 26, 28, "YOU SEE NO STAIRS HERE.", "no stairs message")
 
         print("CX16 runtime smoke passed")
     finally:

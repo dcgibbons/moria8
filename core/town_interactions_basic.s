@@ -30,6 +30,29 @@ town_basic_check_store_door:
     clc
     rts
 
+// town_basic_check_xy_store_door - Check arbitrary town coordinates.
+// Input:  zp_temp3 = x, zp_temp4 = y
+// Output: carry set + A = store index (0-7) if on a door
+//         carry clear if not on any store door
+// Clobbers: A, X
+town_basic_check_xy_store_door:
+    ldx #STORE_COUNT - 1
+!loop:
+    lda zp_temp3
+    cmp store_door_x,x
+    bne !next+
+    lda zp_temp4
+    cmp store_door_y,x
+    bne !next+
+    txa
+    sec
+    rts
+!next:
+    dex
+    bpl !loop-
+    clc
+    rts
+
 // town_basic_check_stairs_at_player - Return stairs type at player position.
 // Input:  zp_player_x/zp_player_y
 // Output: A = TILE_STAIRS_DN >> 4, TILE_STAIRS_UP >> 4, or 0

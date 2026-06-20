@@ -58,7 +58,7 @@ testcx16-smoke: $(CX16_MAIN_PRG) $(CX16_TITLE_PRG)
 
 testcx16-runtime: $(CX16_MAIN_PRG) $(CX16_TITLE_PRG)
 	@command -v "$(X16EMU)" >/dev/null 2>&1 || { echo "ERROR: x16emu not found. Set X16EMU=/path/to/x16emu."; exit 1; }
-	python3 harness_smoke.py --x16emu "$(X16EMU)" $(if $(strip $(X16_ROM)),--rom "$(X16_ROM)",) --prg "$(CX16_MAIN_PRG)" --symbols "$(OUT)/main.sym"
+	python3 harness_smoke.py --x16emu "$(X16EMU)" $(if $(strip $(X16_ROM)),--rom "$(X16_ROM)",) --prg "$(CX16_MAIN_PRG)" --symbols "$(OUT)/main.sym" --cwd "$(OUT)"
 
 testcx16-shared-link: $(CX16_SHARED_PROBE_PRG)
 	@echo "CX16 shared-gameplay link probe passed: $(CX16_SHARED_PROBE_PRG)"

@@ -109,7 +109,8 @@ C128 unit batch, `make test128-fast-smoke` covers high-value C128 runtime boot
 and town paths, and `make test128` is the broader C128 shell harness.
 `make testcx16` runs the current Commander X16 checks: build/setup smoke,
 x16emu testbench runtime coverage, and the guarded shared-gameplay link probe.
-Set `X16EMU` and `X16_ROM` when needed.
+The runtime check validates bootstrap state plus VERA text output for the town
+screen and command messages. Set `X16EMU` and `X16_ROM` when needed.
 
 ## Documentation
 
