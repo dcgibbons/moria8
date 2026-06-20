@@ -14,9 +14,6 @@
 .const hal_input_help_footer_uses_esc_stop = false
 .const hal_input_inventory_letter_normalize_shifted = false
 
-.label zp_input_cmd = $48
-.label zp_input_count = $49
-
 .label hal_input_get_key = input_get_key
 .label hal_input_get_text_char = input_get_key
 .label hal_input_get_command = input_get_command

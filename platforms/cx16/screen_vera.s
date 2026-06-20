@@ -45,19 +45,7 @@
 .const SC_SPACE = $20
 .const SC_REVERSE_SPACE = $a0
 
-.label zp_cursor_row = $22
-.label zp_cursor_col = $23
-.label zp_text_color = $24
-.label zp_ptr0 = $25
-.label zp_ptr0_hi = $26
-.label zp_screen_lo = $27
-.label zp_screen_mid = $28
-.label zp_screen_hi = $29
-.label zp_tmp0 = $2a
-.label zp_tmp1 = $2b
-.label zp_ptr1 = $2c
-.label zp_ptr1_hi = $2d
-.label zp_kernal_status = $90
+.label zp_screen_mid = zp_vol_6
 
 .label hal_screen_init = screen_init
 .label hal_screen_clear = screen_clear
@@ -103,10 +91,10 @@ screen_clear:
 // screen_clear_row — Clear a single VERA text row to spaces
 // Input: A = row number
 screen_clear_row:
-    sta zp_tmp0
+    sta zp_temp0
     lda #0
-    sta zp_tmp1
-    lda zp_tmp0
+    sta zp_temp1
+    lda zp_temp0
     jsr screen_row_addr
     jsr vera_set_addr_inc1
     ldx #SCREEN_COLS
@@ -220,7 +208,7 @@ screen_set_cursor:
 
 // Input: A = row. Output: zp_screen_hi:mid:lo = VERA text row address.
 screen_row_addr:
-    sta zp_tmp0
+    sta zp_temp0
     lda #VERA_TEXT_BASE_LO
     sta zp_screen_lo
     lda #VERA_TEXT_BASE_MID
@@ -228,7 +216,7 @@ screen_row_addr:
     lda #VERA_TEXT_BASE_HIGH
     sta zp_screen_hi
 
-    lda zp_tmp0
+    lda zp_temp0
     beq !done+
 !add:
     clc
@@ -241,7 +229,7 @@ screen_row_addr:
     bcc !next+
     inc zp_screen_hi
 !next:
-    dec zp_tmp0
+    dec zp_temp0
     bne !add-
 !done:
     rts

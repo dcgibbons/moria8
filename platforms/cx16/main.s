@@ -30,11 +30,16 @@
 .const SC_DOT = $2e
 .const C128 = false
 .const PLUS4 = false
+.const CX16_IMPORT_SHARED_GAME_LOOP = cmdLineVars.containsKey("CX16_IMPORT_SHARED_GAME_LOOP")
 
+#import "../../core/zeropage.s"
 #import "screen_vera.s"
 #import "input.s"
 #import "services.s"
 #import "../../core/input_ui_helpers.s"
+#if CX16_IMPORT_SHARED_GAME_LOOP
+#import "../../core/game_loop.s"
+#endif
 
 cx16_entry:
     sei
