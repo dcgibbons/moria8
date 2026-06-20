@@ -1,15 +1,27 @@
 #importonce
 // memory.s - Commander X16 memory and bank macro contract.
 //
-// CX16 does not have C64-style hidden RAM under KERNAL ROM. These macros are
-// currently no-ops so shared code can assemble while CX16 tier storage is still
-// being wired to the machine's RAM-bank model.
+// CX16 does not have C64-style hidden RAM under KERNAL ROM. Banked RAM is
+// selected through the zero-page RAM-bank register and appears at $A000-$BFFF.
+// The C64/C128-style bank macros remain no-ops until shared runtime code is
+// split into explicit CX16 fixed-RAM and bank-window segments.
 
 #import "hal/layout.s"
 
-.const BANKED_DATA_BASE = $e000
-.const BANKED_DATA_END  = $ffff
-.const BANK1_DB_BASE    = $e000
+.const CX16_RAM_BANK_REG = $00
+.const CX16_ROM_BANK_REG = $01
+.const CX16_FIXED_RAM_BASE = $0000
+.const CX16_FIXED_RAM_END  = $9eff
+.const CX16_IO_BASE        = $9f00
+.const CX16_IO_END         = $9fff
+.const CX16_BANKED_RAM_BASE = $a000
+.const CX16_BANKED_RAM_END  = $bfff
+.const CX16_BANKED_RAM_SIZE = CX16_BANKED_RAM_END - CX16_BANKED_RAM_BASE + 1
+.const BANKED_DATA_BASE = CX16_BANKED_RAM_BASE
+.const BANKED_DATA_END  = CX16_BANKED_RAM_END
+// C128-named compatibility aliases used by shared tier/item metadata.
+.const BANK1_DB_BASE    = CX16_BANKED_RAM_BASE
+.const BANK1_DB_END     = CX16_BANKED_RAM_END
 .const MAP_END          = MAP_BASE + (hal_layout_map_cols * hal_layout_map_rows) - 1
 .const FLOOR_ITEM_BASE  = $7400
 .const FLOOR_ITEM_END   = $74ff
@@ -24,6 +36,11 @@
 .assert "CX16 floor items fit", FLOOR_ITEM_END - FLOOR_ITEM_BASE + 1, 256
 .assert "CX16 creature scratch stays after floor items", FLOOR_ITEM_END < CREATURE_BASE, true
 .assert "CX16 dungeon-gen BFS queue remains page-aligned", <DUNGEON_GEN_BFS_QUEUE_BASE, 0
+.assert "CX16 banked RAM window is 8 KiB", CX16_BANKED_RAM_SIZE, $2000
+.assert "CX16 fixed live map stays below VERA I/O hole", MAP_END < CX16_IO_BASE, true
+.assert "CX16 floor items stay below VERA I/O hole", FLOOR_ITEM_END < CX16_IO_BASE, true
+.assert "CX16 creature scratch stays below VERA I/O hole", CREATURE_END < CX16_IO_BASE, true
+.assert "CX16 shared banked-data alias matches bank window", BANKED_DATA_BASE, CX16_BANKED_RAM_BASE
 
 .macro BankOutBasic() {}
 .macro BankInBasic() {}
