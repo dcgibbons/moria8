@@ -118,6 +118,20 @@ Current assumptions:
 * `x16emu` is expected on `PATH` by default; `X16EMU=/path/to/x16emu` and
   `X16_ROM=/path/to/rom.bin` may override local tool and ROM locations.
 
+Current shared-gameplay status:
+
+* `make testcx16-shared-link` is a link-only probe for the guarded shared
+  gameplay import path. It verifies that CX16 imports, constants, and
+  trampolines still satisfy the shared code's assembly-time contracts.
+* The probe is not a runtime-safe memory placement. The linked image currently
+  crosses the fixed-RAM map/scratch plan and the CX16 `$A000-$BFFF` banked-RAM
+  window.
+* The 80-column shared map is `198x66` bytes, so it is larger than one 8 KiB
+  CX16 banked-RAM window. Runtime enablement must either keep the live map in
+  fixed RAM with resident code below it, or add explicit split-window map
+  accessors. Do not enable the guarded shared loop in the normal CX16 PRG until
+  this placement is made explicit and verified.
+
 ## 7. Current Codebase Assessment & Next Steps
 
 Moria8 is currently well-positioned because the 8-bit logic is increasingly platform-agnostic.

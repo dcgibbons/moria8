@@ -337,3 +337,8 @@ cx16_next_player_x: .byte 0
 cx16_next_player_y: .byte 0
 cx16_draw_x: .byte 0
 cx16_draw_y: .byte 0
+
+program_end:
+#if !CX16_IMPORT_SHARED_GAME_LOOP
+.assert "CX16 resident boot code stays below MAP_BASE", program_end <= MAP_BASE, true
+#endif
