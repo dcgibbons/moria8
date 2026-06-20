@@ -120,42 +120,24 @@ cx16_new_game_start:
     jmp cx16_new_game_draw
 
 cx16_poll_game:
-    jsr input_get_key
-    cmp #$51                // Q
+    jsr input_get_command
+    cmp #CMD_QUIT
     beq !return_title+
-    cmp #$71                // q
-    beq !return_title+
-    cmp #$57                // W
+    cmp #CMD_MOVE_N
     beq !move_up+
-    cmp #$77                // w
+    cmp #CMD_RUN_N
     beq !move_up+
-    cmp #$4b                // K
-    beq !move_up+
-    cmp #$6b                // k
-    beq !move_up+
-    cmp #$53                // S
+    cmp #CMD_MOVE_S
     beq !move_down+
-    cmp #$73                // s
+    cmp #CMD_RUN_S
     beq !move_down+
-    cmp #$4a                // J
-    beq !move_down+
-    cmp #$6a                // j
-    beq !move_down+
-    cmp #$41                // A
+    cmp #CMD_MOVE_W
     beq !move_left+
-    cmp #$61                // a
+    cmp #CMD_RUN_W
     beq !move_left+
-    cmp #$48                // H
-    beq !move_left+
-    cmp #$68                // h
-    beq !move_left+
-    cmp #$44                // D
+    cmp #CMD_MOVE_E
     beq !move_right+
-    cmp #$64                // d
-    beq !move_right+
-    cmp #$4c                // L
-    beq !move_right+
-    cmp #$6c                // l
+    cmp #CMD_RUN_E
     beq !move_right+
 !done:
     rts
