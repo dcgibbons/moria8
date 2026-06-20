@@ -67,11 +67,11 @@ testcx16-shared-link: $(CX16_SHARED_PROBE_PRG)
 $(VERSION_INC): $(VERSION_FILE) $(VERSION_INC_TOOL) | $(BUILD)
 	python3 "$(VERSION_INC_TOOL)" "$(VERSION_FILE)" "$(VERSION_INC)"
 
-$(CX16_MAIN_PRG): $(CX16_SOURCES) | ensure-kickass $(OUT)
+$(CX16_MAIN_PRG): $(CX16_SOURCES) $(VERSION_INC) | ensure-kickass $(OUT)
 	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(CX16_MAIN_SRC)" -define CX16 -showmem -vicesymbols -o "$(CX16_MAIN_PRG)"
 	@if [ -f main.sym ]; then mv -f main.sym "$(OUT)/main.sym"; fi
 
-$(CX16_SHARED_PROBE_PRG): $(CX16_SOURCES) | ensure-kickass $(OUT)
+$(CX16_SHARED_PROBE_PRG): $(CX16_SOURCES) $(VERSION_INC) | ensure-kickass $(OUT)
 	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(CX16_MAIN_SRC)" -define CX16 -define CX16_IMPORT_SHARED_GAME_LOOP -showmem -vicesymbols -o "$(CX16_SHARED_PROBE_PRG)"
 	@if [ -f "$(OUT)/main.vs" ]; then mv -f "$(OUT)/main.vs" "$(OUT)/shared_probe.vs"; fi
 	@if [ -f main.sym ]; then mv -f main.sym "$(OUT)/shared_probe.sym"; fi

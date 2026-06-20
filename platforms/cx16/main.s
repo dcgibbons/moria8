@@ -10,6 +10,7 @@
 .pc = $0810 "CX16 Boot"
 
 #import "palette_consts.s"
+#import "../../build/version_strings.inc"
 
 .const KERNAL_CINT = $ff81
 .const KERNAL_SETNAM = $ffbd
@@ -143,12 +144,21 @@ cx16_new_game_start:
 
 cx16_poll_game:
     jsr input_get_command
+    jmp cx16_dispatch_game_command
+
+cx16_dispatch_game_command:
     cmp #CMD_QUIT
-    beq !return_title+
+    bne !not_quit+
+    jmp cx16_title_enter_menu
+!not_quit:
     cmp #CMD_STAIRS_DN
-    beq !stairs_dn+
+    bne !not_stairs_dn+
+    jmp cx16_try_stairs_down
+!not_stairs_dn:
     cmp #CMD_STAIRS_UP
-    beq !stairs_up+
+    bne !not_stairs_up+
+    jmp cx16_try_stairs_up
+!not_stairs_up:
     cmp #CMD_RUN_N
     bcc !not_run+
     cmp #CMD_RUN_SE + 1
@@ -160,17 +170,71 @@ cx16_poll_game:
     cmp #CMD_MOVE_N
     bcc !done+
     cmp #CMD_MOVE_SE + 1
-    bcs !done+
+    bcs !not_command+
 !try_move:
     jmp cx16_try_move_command
+!not_command:
+    cmp #CMD_REST
+    beq !activity+
+    cmp #CMD_SEARCH
+    beq !activity+
+    cmp #CMD_LOOK
+    beq !activity+
+    cmp #CMD_SEARCH_MODE
+    beq !activity+
+    cmp #CMD_AUTOREST
+    beq !activity+
+    cmp #CMD_SAVE
+    beq !storage+
+    cmp #CMD_CAST
+    beq !magic+
+    cmp #CMD_PRAY
+    beq !magic+
+    cmp #CMD_RECALL
+    beq !magic+
+    cmp #CMD_GAIN
+    beq !magic+
+    cmp #CMD_CHAR_INFO
+    beq !char_info+
+    cmp #CMD_MAP
+    beq !info+
+    cmp #CMD_HELP
+    beq !help+
+    cmp #CMD_VERSION
+    beq !version+
+    cmp #CMD_WIZARD
+    beq !wizard+
+    cmp #CMD_OPEN
+    bcc !done+
+    cmp #CMD_USE + 1
+    bcc !item+
+    cmp #CMD_FIRE
+    bcc !done+
+    cmp #CMD_TUNNEL + 1
+    bcc !item+
+    cmp #CMD_DISARM
+    beq !item+
+    jmp !done+
+!activity:
+    jmp cx16_show_activity_stub
+!storage:
+    jmp cx16_show_storage_stub
+!magic:
+    jmp cx16_show_magic_stub
+!info:
+    jmp cx16_show_info_stub
+!help:
+    jmp cx16_show_help
+!version:
+    jmp cx16_show_version
+!char_info:
+    jmp cx16_show_character_info
+!wizard:
+    jmp cx16_show_wizard_stub
+!item:
+    jmp cx16_show_item_stub
 !done:
     rts
-!return_title:
-    jmp cx16_title_enter_menu
-!stairs_dn:
-    jmp cx16_try_stairs_down
-!stairs_up:
-    jmp cx16_try_stairs_up
 
 cx16_try_move_command:
     sec
@@ -270,6 +334,51 @@ cx16_show_ascend_stub:
 cx16_show_no_stairs:
     jsr cx16_clear_message_row
     :Cx16PrintAt(26, 28, cx16_no_stairs_text)
+    rts
+
+cx16_show_help:
+    jsr cx16_clear_message_row
+    :Cx16PrintAt(26, 8, cx16_command_help_text)
+    rts
+
+cx16_show_version:
+    jsr cx16_clear_message_row
+    :Cx16PrintAt(26, 24, cx16_version_text)
+    rts
+
+cx16_show_character_info:
+    jsr cx16_clear_message_row
+    :Cx16PrintAt(26, 19, cx16_character_info_text)
+    rts
+
+cx16_show_activity_stub:
+    jsr cx16_clear_message_row
+    :Cx16PrintAt(26, 23, cx16_activity_stub_text)
+    rts
+
+cx16_show_item_stub:
+    jsr cx16_clear_message_row
+    :Cx16PrintAt(26, 23, cx16_item_stub_text)
+    rts
+
+cx16_show_magic_stub:
+    jsr cx16_clear_message_row
+    :Cx16PrintAt(26, 25, cx16_magic_stub_text)
+    rts
+
+cx16_show_storage_stub:
+    jsr cx16_clear_message_row
+    :Cx16PrintAt(26, 24, cx16_storage_stub_text)
+    rts
+
+cx16_show_info_stub:
+    jsr cx16_clear_message_row
+    :Cx16PrintAt(26, 24, cx16_info_stub_text)
+    rts
+
+cx16_show_wizard_stub:
+    jsr cx16_clear_message_row
+    :Cx16PrintAt(26, 26, cx16_wizard_stub_text)
     rts
 
 cx16_clear_message_row:
@@ -498,6 +607,43 @@ cx16_ascend_stub_text:
 
 cx16_no_stairs_text:
     :ScreenText("YOU SEE NO STAIRS HERE.")
+    .byte 0
+
+cx16_command_help_text:
+    :ScreenText("MOVE HJKL/YUBN/12346789. > STAIRS. SHIFT-Q TITLE.")
+    .byte 0
+
+cx16_version_text:
+    :ScreenText("MORIA8 CX16 BOOTSTRAP ")
+    :EmitTitleVersionScreen()
+    .byte 0
+
+cx16_character_info_text:
+    :ScreenText("CHARACTER INFO: TOWN BOOTSTRAP, DEPTH 0.")
+    .byte 0
+
+cx16_activity_stub_text:
+    :ScreenText("SEARCH/REST/LOOK NOT WIRED YET.")
+    .byte 0
+
+cx16_item_stub_text:
+    :ScreenText("ITEM/FEATURE COMMAND NOT WIRED YET.")
+    .byte 0
+
+cx16_magic_stub_text:
+    :ScreenText("MAGIC/RECALL NOT WIRED YET.")
+    .byte 0
+
+cx16_storage_stub_text:
+    :ScreenText("SAVE/LOAD NOT WIRED YET.")
+    .byte 0
+
+cx16_info_stub_text:
+    :ScreenText("INFO/HELP NOT WIRED YET.")
+    .byte 0
+
+cx16_wizard_stub_text:
+    :ScreenText("WIZARD MODE NOT ENABLED.")
     .byte 0
 
 cx16_memory_fail_text:

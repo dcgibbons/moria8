@@ -24,22 +24,44 @@ def load_versions(path: Path) -> tuple[str, str, str]:
     return values[0], values[1], values[2]
 
 
+def screen_bytes(text: str) -> str:
+    values: list[str] = []
+    for ch in text.upper():
+        code = ord(ch)
+        if 65 <= code <= 90:
+            code -= 64
+        values.append(str(code))
+    return ", ".join(values)
+
+
 def emit_include(dst: Path, c64_version: str, c128_version: str, plus4_version: str) -> None:
     text = f"""// Auto-generated from version.json. Do not edit by hand.
 #if C128
 .const TITLE_VERSION_LEN = {len(c128_version)}
+.const TITLE_VERSION_SCREEN_LEN = {len(c128_version)}
 .macro EmitTitleVersion() {{
     .text "{c128_version}"
 }}
+.macro EmitTitleVersionScreen() {{
+    .byte {screen_bytes(c128_version)}
+}}
 #elif PLUS4
 .const TITLE_VERSION_LEN = {len(plus4_version)}
+.const TITLE_VERSION_SCREEN_LEN = {len(plus4_version)}
 .macro EmitTitleVersion() {{
     .text "{plus4_version}"
 }}
+.macro EmitTitleVersionScreen() {{
+    .byte {screen_bytes(plus4_version)}
+}}
 #else
 .const TITLE_VERSION_LEN = {len(c64_version)}
+.const TITLE_VERSION_SCREEN_LEN = {len(c64_version)}
 .macro EmitTitleVersion() {{
     .text "{c64_version}"
+}}
+.macro EmitTitleVersionScreen() {{
+    .byte {screen_bytes(c64_version)}
 }}
 #endif
 """

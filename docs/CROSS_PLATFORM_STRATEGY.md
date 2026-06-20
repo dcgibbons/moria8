@@ -126,6 +126,10 @@ Current assumptions:
   stairs probes in `core/town_interactions_basic.s`; full store UI and dungeon
   transitions remain deferred until the CX16 runtime memory plan is explicit.
   Store doors render as numbered entrances from the shared store-door metadata.
+  Help, version, and character-info commands render CX16 bootstrap status text.
+  Other mapped but not-yet-implemented town commands acknowledge by category
+  (activity, item/feature, magic/recall, storage, info/map, wizard) instead of
+  being silently ignored.
 * CX16 bootstrap movement uses the shared player-position and tile-walkability
   contracts through `core/player_move_basic.s`. Full `player_try_move` remains
   outside the normal CX16 PRG because it still pulls in combat, monsters, traps,

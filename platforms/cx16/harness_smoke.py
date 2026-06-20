@@ -20,6 +20,27 @@ TILE_STAIRS_DN = 0x90
 CMD_MOVE_W = 0x03
 CMD_MOVE_S = 0x02
 CMD_MOVE_E = 0x04
+CMD_REST = 0x0B
+CMD_SEARCH = 0x0C
+CMD_OPEN = 0x0D
+CMD_DROP = 0x10
+CMD_INVENTORY = 0x11
+CMD_CAST = 0x1A
+CMD_CHAR_INFO = 0x1C
+CMD_MAP = 0x1D
+CMD_RECALL = 0x1E
+CMD_LOOK = 0x1F
+CMD_SAVE = 0x21
+CMD_HELP = 0x23
+CMD_VERSION = 0x24
+CMD_GAIN = 0x2D
+CMD_FIRE = 0x2E
+CMD_BASH = 0x31
+CMD_TUNNEL = 0x32
+CMD_WIZARD = 0x33
+CMD_SEARCH_MODE = 0x34
+CMD_DISARM = 0x35
+CMD_AUTOREST = 0x36
 SC_PLAYER = 0x00
 SC_REVERSE_SPACE = 0xA0
 TEXT_COLOR = 0x01
@@ -331,6 +352,33 @@ def main():
         assert_eq(bench.get_a(), 0, "non-stairs probe")
         bench.run(require(labels, "cx16_try_stairs_up"))
         assert_screen_text(bench, 26, 28, "YOU SEE NO STAIRS HERE.", "no stairs message")
+
+        for command, col, text, label in (
+            (CMD_REST, 23, "SEARCH/REST/LOOK NOT WIRED YET.", "rest command"),
+            (CMD_SEARCH, 23, "SEARCH/REST/LOOK NOT WIRED YET.", "search command"),
+            (CMD_LOOK, 23, "SEARCH/REST/LOOK NOT WIRED YET.", "look command"),
+            (CMD_SEARCH_MODE, 23, "SEARCH/REST/LOOK NOT WIRED YET.", "search mode command"),
+            (CMD_AUTOREST, 23, "SEARCH/REST/LOOK NOT WIRED YET.", "autorest command"),
+            (CMD_OPEN, 23, "ITEM/FEATURE COMMAND NOT WIRED YET.", "open command"),
+            (CMD_DROP, 23, "ITEM/FEATURE COMMAND NOT WIRED YET.", "drop command"),
+            (CMD_INVENTORY, 23, "ITEM/FEATURE COMMAND NOT WIRED YET.", "inventory command"),
+            (CMD_FIRE, 23, "ITEM/FEATURE COMMAND NOT WIRED YET.", "fire command"),
+            (CMD_BASH, 23, "ITEM/FEATURE COMMAND NOT WIRED YET.", "bash command"),
+            (CMD_TUNNEL, 23, "ITEM/FEATURE COMMAND NOT WIRED YET.", "tunnel command"),
+            (CMD_DISARM, 23, "ITEM/FEATURE COMMAND NOT WIRED YET.", "disarm command"),
+            (CMD_CAST, 25, "MAGIC/RECALL NOT WIRED YET.", "cast command"),
+            (CMD_RECALL, 25, "MAGIC/RECALL NOT WIRED YET.", "recall command"),
+            (CMD_GAIN, 25, "MAGIC/RECALL NOT WIRED YET.", "gain command"),
+            (CMD_SAVE, 24, "SAVE/LOAD NOT WIRED YET.", "save command"),
+            (CMD_HELP, 8, "MOVE HJKL/YUBN/12346789. > STAIRS. SHIFT-Q TITLE.", "help command"),
+            (CMD_CHAR_INFO, 19, "CHARACTER INFO: TOWN BOOTSTRAP, DEPTH 0.", "character info command"),
+            (CMD_VERSION, 24, "MORIA8 CX16 BOOTSTRAP V1.3.1", "version command"),
+            (CMD_MAP, 24, "INFO/HELP NOT WIRED YET.", "map command"),
+            (CMD_WIZARD, 26, "WIZARD MODE NOT ENABLED.", "wizard command"),
+        ):
+            bench.set_a(command)
+            bench.run(require(labels, "cx16_dispatch_game_command"))
+            assert_screen_text(bench, 26, col, text, label)
 
         print("CX16 runtime smoke passed")
     finally:
