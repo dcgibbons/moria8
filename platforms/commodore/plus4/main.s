@@ -2006,7 +2006,7 @@ banked_code_end:
 // ============================================================
 // Town overlay — store code at $E000, output to separate PRG
 // ============================================================
-// This segment produces out/ovl_town (loaded from disk as OVL.TOWN).
+// This segment produces the configured OVL.TOWN PRG (loaded from disk as OVL.TOWN).
 // Labels resolve to $E000+ but bytes go to the overlay PRG file,
 // not the main moria.prg. All main RAM symbols are accessible.
 .segment TownOverlay
@@ -2020,7 +2020,7 @@ ovl_town_end:
 // ============================================================
 // Startup overlay — character creation at $E000, output to separate PRG
 // ============================================================
-// This segment produces out/ovl_start (loaded from disk as OVL.START).
+// This segment produces the configured OVL.START PRG (loaded from disk as OVL.START).
 // Used once during new game, then replaced by town/death overlays.
 .segment StartupOverlay
     #import "../../../core/background_data.s"
@@ -2032,7 +2032,7 @@ ovl_start_end:
 // ============================================================
 // Death overlay — score + high score display at $E000
 // ============================================================
-// This segment produces out/ovl_death (loaded from disk as OVL.DEATH).
+// This segment produces the configured OVL.DEATH PRG (loaded from disk as OVL.DEATH).
 // Used once at game over. Contains scoring math, death screen display,
 // and high score insertion/display. KERNAL I/O stays in score_io.s.
 .segment DeathOverlay
@@ -2110,7 +2110,7 @@ ovl_items_end:
 // ============================================================
 // Dungeon generation overlay — town + dungeon generation at $E000
 // ============================================================
-// This segment produces out/ovl.gen (loaded from disk as OVL.GEN).
+// This segment produces the configured OVL.GEN PRG (loaded from disk as OVL.GEN).
 // Loaded on demand whenever stairs are used or a new game starts.
 // Shared constants and data tables stay in dungeon_data.s (main segment).
 .segment DungeonGenOverlay

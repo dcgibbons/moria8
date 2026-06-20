@@ -212,6 +212,6 @@ or `Neutralize Poison` feedback:
 
 ## Source References
 
-- Wizard command dispatch: `commodore/common/wizard.s`
-- Wizard UI menu: `commodore/common/ui_wizard.s`
-- Item IDs: `commodore/common/item_tables.s`
+- Wizard command dispatch: `core/wizard.s`
+- Wizard UI menu: `core/ui_wizard.s`
+- Item IDs: `core/item_tables.s`

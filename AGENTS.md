@@ -41,24 +41,38 @@ Assembler and tested with VICE headless harnesses.
 
 Primary entry points:
 
-- `commodore/c64/main.s`
-- `commodore/c128/main.s`
+- `platforms/commodore/c64/main.s`
+- `platforms/commodore/c128/main.s`
+- `platforms/commodore/plus4/main.s`
 
-Shared code lives under `commodore/common/`. Platform-specific code lives under
-`commodore/c64/` and `commodore/c128/`. Prefer small, local changes that
-preserve nearby assembly style, labels, memory ownership, and test patterns.
+Prefer small, local changes that preserve nearby assembly style, labels, memory
+ownership, and test patterns.
+
+## Current Source Layout
+
+- `core/`: platform-agnostic gameplay, UI, data, and shared logic.
+- `platforms/commodore/hal/`: shared Commodore HAL interfaces.
+- `platforms/commodore/common/`: shared Commodore implementation code.
+- `platforms/commodore/c64/`: C64 platform code, tests, and harness scripts.
+- `platforms/commodore/c128/`: C128 platform code, tests, and harness scripts.
+- `platforms/commodore/plus4/`: Plus/4 platform code, tests, and harness
+  scripts.
+- `build/`: generated binaries, disk images, symbols, snapshots, and test
+  scratch output. Source directories should not accumulate generated `.prg`,
+  `.sym`, `.vs`, or `out/` artifacts.
 
 ## Build And Test
 Run commands from the repository root.
 
-- `make` or `make build`: build C64 and C128 payloads
+- `make` or `make build`: build C64, C128, and Plus/4 payloads
 - `make test`: default regression mix
 - `make test64`: C64 tests
+- `make testplus4`: Plus/4 tests
 - `make test128-fast`: stable C128 unit batch
 - `make test128-fast-smoke`: high-value C128 runtime smoke subset
 - `make test128`: authoritative full C128 suite
-- `make disk`: build shipping C64 `.d64` and C128 `.d71`
-- `make run`, `make run64`, `make run128`: launch under VICE
+- `make disk`: build shipping C64, C128, and Plus/4 disk images
+- `make run`, `make run64`, `make run128`, `make runplus4`: launch under VICE
 - `make clean`: remove build artifacts
 
 Kick Assembler downloads into `tools/kickass/` unless `KICKASS` is provided.

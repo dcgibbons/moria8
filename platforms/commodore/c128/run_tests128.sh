@@ -22,8 +22,6 @@ mkdir -p "$C128_TEST_OUT"
 if [ -d "$C128_BUILD_OUT" ]; then
     cp -p "$C128_BUILD_OUT"/* "$C128_TEST_OUT"/ 2>/dev/null || true
 fi
-rm -rf out
-ln -sf "$C128_TEST_OUT" out
 COMMODORE_MAKE=(make -s -C "$REPO_ROOT/platforms/commodore")
 
 KICKASS_WAS_SET="${KICKASS+x}"
@@ -84,10 +82,10 @@ TEST128_TMP_DIR="${TEST128_TMP_DIR:-$(mktemp -d "${TEST128_TMP_PARENT%/}/test128
 TEST128_TIMINGS_FILE="${TEST128_TMP_DIR}/timings.tsv"
 TEST128_RESULTS_FILE="${TEST128_TMP_DIR}/results.tsv"
 TEST128_RERUN_FILE="${TEST128_TMP_DIR}/rerun_suites.txt"
-TEST128_LAST_SUMMARY_MARKER="out/.test128_last_summary_path"
+TEST128_LAST_SUMMARY_MARKER="../../../build/test/c128/.test128_last_summary_path"
 TEST128_ITERATION=1
 TEST128_RERUN_COUNT=0
-C128_ACTIVE_VARIANT_FILE="out/.test128_active_variant"
+C128_ACTIVE_VARIANT_FILE="../../../build/test/c128/.test128_active_variant"
 BOOT_ASSETS_BUILT=0
 PARTIAL_BOOT_ASSETS_BUILT=0
 OVERLAY_PARTIAL_BOOT_ASSETS_BUILT=0
@@ -109,14 +107,14 @@ TITLE_LOAD_MISSING_SAVE_ASSETS_BUILT=0
 TITLE_LOAD_MOUNTED_SAVE_ASSETS_BUILT=0
 OVERLAY_TRANSITION_DIAG_ASSETS_BUILT=0
 
-KA_DEFINES=(-define C128 :OVL_OUT=out)
+KA_DEFINES=(-define C128 :OVL_OUT=../../../build/test/c128)
 if [ "$PERF_P1_MODE" = "1" ]; then
     KA_DEFINES+=(-define PERF_P1)
 fi
 
 cleanup_test128_tmp() {
-    [ -L out ] && rm -f out || rm -rf out
     rm -f ./*.prg ./*.sym ./*.vs tests/*.prg tests/*.sym tests/*.vs
+    rm -f "$REPO_ROOT"/platforms/commodore/c64/creature_data/*.sym "$REPO_ROOT"/platforms/commodore/c64/creature_data/*.vs
     rm -f "$REPO_ROOT"/core/*.sym "$REPO_ROOT"/core/*.vs
     if [ "${TEST128_KEEP_TMP:-0}" = "1" ]; then
         return
@@ -185,7 +183,7 @@ emit_test_summary() {
 
     local summary_file="$TEST_SUMMARY_FILE"
     if [ -z "$summary_file" ]; then
-        summary_file="out/.test128_last_summary.${TEST_SUMMARY}"
+        summary_file="../../../build/test/c128/.test128_last_summary.${TEST_SUMMARY}"
     fi
 
     case "$TEST_SUMMARY" in
@@ -548,6 +546,13 @@ c128_set_active_variant() {
     printf '%s\n' "$variant" > "$C128_ACTIVE_VARIANT_FILE"
 }
 
+c128_sync_build_out() {
+    mkdir -p "$C128_TEST_OUT"
+    if [ -d "$C128_BUILD_OUT" ]; then
+        cp -p "$C128_BUILD_OUT"/* "$C128_TEST_OUT"/ 2>/dev/null || true
+    fi
+}
+
 describe_phase_token() {
     local phase="$1"
     case "$phase" in
@@ -809,6 +814,7 @@ run_main_assembly_check() {
         return
     fi
 
+    c128_sync_build_out
     local assert_line
     assert_line=$(grep "Made .*asserts" "$build_log" | tail -1)
     if [ -n "${assert_line:-}" ]; then
@@ -830,8 +836,8 @@ from pathlib import Path
 import re
 import sys
 
-prg = Path("out/moria128.prg")
-vs = Path("out/main.vs")
+prg = Path("../../../build/test/c128/moria128.prg")
+vs = Path("../../../build/test/c128/main.vs")
 if not prg.exists() or not vs.exists():
     print("missing build outputs")
     raise SystemExit(1)
@@ -907,7 +913,7 @@ PY
 run_symbol_placement_check() {
     echo -n "  main128_layout: "
 
-    local sym_file="out/main.vs"
+    local sym_file="../../../build/test/c128/main.vs"
     if [ ! -f "$sym_file" ]; then
         echo "FAIL (missing $sym_file)"
         FAIL=$((FAIL + 1))
@@ -919,7 +925,7 @@ run_symbol_placement_check() {
     check_out=$(python3 - <<'PY'
 from pathlib import Path
 import re
-sym = Path("out/main.vs").read_text().splitlines()
+sym = Path("../../../build/test/c128/main.vs").read_text().splitlines()
 main_text = Path("main.s").read_text()
 contract_source = Path("io_contracts.s").read_text().splitlines()
 labels = {}
@@ -1026,9 +1032,9 @@ for runtime_name, expected_load in (
     ("128.play.prg", 0xAF00),
     ("128.bank.prg", 0xF000),
 ):
-    runtime_prg = Path("out") / runtime_name
+    runtime_prg = Path("../../../build/test/c128") / runtime_name
     if not runtime_prg.exists():
-        missing.append(f"out/{runtime_name}")
+        missing.append(f"../../../build/test/c128/{runtime_name}")
         continue
     data = runtime_prg.read_bytes()
     if len(data) < 2:
@@ -1973,9 +1979,9 @@ build_boot_assets() {
     fi
 
     if [ "$PERF_P1_MODE" != "1" ] && c128_active_variant_is "base" && ! c128_outputs_need_refresh \
-            out/boot128.prg out/boot128.chain.prg out/bootsect128.prg out/bootart128.prg out/moria128.prg out/moria128.d71 out/title out/monster.db.1 out/monster.db.2 \
-            out/monster.db.3 out/monster.db.4 out/ovl.town out/ovl.start out/ovl.death \
-            out/ovl.gen out/128.runtime.prg out/128.input.prg out/128.proj.prg out/128.fdisk.prg out/128.world.prg out/128.item.prg out/128.names.prg out/128.select.prg out/128.persist.prg out/128.play.prg out/128.bank.prg out/main.vs -- \
+            ../../../build/test/c128/boot128.prg ../../../build/test/c128/boot128.chain.prg ../../../build/test/c128/bootsect128.prg ../../../build/test/c128/bootart128.prg ../../../build/test/c128/moria128.prg ../../../build/test/c128/moria128.d71 ../../../build/test/c128/title ../../../build/test/c128/monster.db.1 ../../../build/test/c128/monster.db.2 \
+            ../../../build/test/c128/monster.db.3 ../../../build/test/c128/monster.db.4 ../../../build/test/c128/ovl.town ../../../build/test/c128/ovl.start ../../../build/test/c128/ovl.death \
+            ../../../build/test/c128/ovl.gen ../../../build/test/c128/128.runtime.prg ../../../build/test/c128/128.input.prg ../../../build/test/c128/128.proj.prg ../../../build/test/c128/128.fdisk.prg ../../../build/test/c128/128.world.prg ../../../build/test/c128/128.item.prg ../../../build/test/c128/128.names.prg ../../../build/test/c128/128.select.prg ../../../build/test/c128/128.persist.prg ../../../build/test/c128/128.play.prg ../../../build/test/c128/128.bank.prg ../../../build/test/c128/main.vs -- \
             main.s boot128.s bootart128.s bootsect128.s Makefile ../version.json \
             ../artwork/moria8_C128loadingart_tile_native.png \
             ../tools/png_to_ppm.py ../tools/make_version_include.py ../tools/ppm_to_c128_bootart.py \
@@ -2002,8 +2008,10 @@ build_boot_assets() {
         return 1
     fi
 
+    c128_sync_build_out
+
     local diag_asm
-    diag_asm=$(java -jar "$KICKASS" boot128.s -define BOOT_DIAG=1 :OVL_OUT=out -o out/boot128.diag.prg 2>&1)
+    diag_asm=$(java -jar "$KICKASS" boot128.s -define BOOT_DIAG=1 :OVL_OUT=../../../build/test/c128 -o ../../../build/test/c128/boot128.diag.prg 2>&1)
     if [ $? -ne 0 ]; then
         echo "FAIL (boot128 diag assembly error)"
         echo "$diag_asm" | grep -i error | head -3 | sed 's/^/    /'
@@ -2024,15 +2032,15 @@ run_vic40_clean_boot_smoke() {
     local build_log
     build_log="$(test128_tmp_file "test128_${name}_build.log")"
     local c1541_bin="${C1541:-c1541}"
-    local probe_main="out/moria128.vic40probe.prg"
-    local probe_d64="out/moria128_vic40probe.d64"
+    local probe_main="../../../build/test/c128/moria128.vic40probe.prg"
+    local probe_d64="../../../build/test/c128/moria128_vic40probe.d64"
 
     BOOT_ASSETS_BUILT=0
     c128_set_active_variant "force_base"
     build_boot_assets || return
 
     if ! java -jar "$KICKASS" main_vic40probe.s -showmem -vicesymbols -libdir ../c64 \
-            -define C128 :OVL_OUT=out \
+            -define C128 :OVL_OUT=../../../build/test/c128 \
             -o "$probe_main" >"$build_log" 2>&1; then
         echo "FAIL (vic40 probe main assembly failed)"
         tail -20 "$build_log" | sed 's/^/    /'
@@ -2043,29 +2051,29 @@ run_vic40_clean_boot_smoke() {
 
     if ! "$c1541_bin" -format "moria128,m8" d64 "$probe_d64" \
             -attach "$probe_d64" \
-            -write out/boot128.prg "moria8.128" \
+            -write ../../../build/test/c128/boot128.prg "moria8.128" \
             -write "$probe_main" "moria128" \
-            -write out/title "title" \
-            -write out/monster.db.1 "monster.db.1" \
-            -write out/monster.db.2 "monster.db.2" \
-            -write out/monster.db.3 "monster.db.3" \
-            -write out/monster.db.4 "monster.db.4" \
-            -write out/ovl.town "ovl.town" \
-            -write out/ovl.start "ovl.start" \
-            -write out/ovl.death "ovl.death" \
-            -write out/ovl.gen "ovl.gen" \
-            -write out/128.runtime.prg "128.runtime" \
-            -write out/128.input.prg "128.input" \
-			-write out/128.proj.prg "128.proj" \
-            -write out/128.fdisk.prg "128.fdisk" \
-            -write out/128.diskio.prg "128.diskio" \
-            -write out/128.world.prg "128.world" \
-            -write out/128.item.prg "128.item" \
-            -write out/128.names.prg "128.names" \
-            -write out/128.select.prg "128.select" \
-            -write out/128.persist.prg "128.persist" \
-            -write out/128.play.prg "128.play" \
-            -write out/128.bank.prg "128.bank" >"$(test128_tmp_file "test128_${name}_c1541.log")" 2>&1; then
+            -write ../../../build/test/c128/title "title" \
+            -write ../../../build/test/c128/monster.db.1 "monster.db.1" \
+            -write ../../../build/test/c128/monster.db.2 "monster.db.2" \
+            -write ../../../build/test/c128/monster.db.3 "monster.db.3" \
+            -write ../../../build/test/c128/monster.db.4 "monster.db.4" \
+            -write ../../../build/test/c128/ovl.town "ovl.town" \
+            -write ../../../build/test/c128/ovl.start "ovl.start" \
+            -write ../../../build/test/c128/ovl.death "ovl.death" \
+            -write ../../../build/test/c128/ovl.gen "ovl.gen" \
+            -write ../../../build/test/c128/128.runtime.prg "128.runtime" \
+            -write ../../../build/test/c128/128.input.prg "128.input" \
+			-write ../../../build/test/c128/128.proj.prg "128.proj" \
+            -write ../../../build/test/c128/128.fdisk.prg "128.fdisk" \
+            -write ../../../build/test/c128/128.diskio.prg "128.diskio" \
+            -write ../../../build/test/c128/128.world.prg "128.world" \
+            -write ../../../build/test/c128/128.item.prg "128.item" \
+            -write ../../../build/test/c128/128.names.prg "128.names" \
+            -write ../../../build/test/c128/128.select.prg "128.select" \
+            -write ../../../build/test/c128/128.persist.prg "128.persist" \
+            -write ../../../build/test/c128/128.play.prg "128.play" \
+            -write ../../../build/test/c128/128.bank.prg "128.bank" >"$(test128_tmp_file "test128_${name}_c1541.log")" 2>&1; then
         echo "FAIL (vic40 probe d64 creation failed)"
         tail -20 "$(test128_tmp_file "test128_${name}_c1541.log")" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -2073,19 +2081,19 @@ run_vic40_clean_boot_smoke() {
         return
     fi
 
-    local probe_vs="out/main_vic40probe.vs"
+    local probe_vs="../../../build/test/c128/main_vic40probe.vs"
     local pass_addr fail_addr
     pass_addr=$(awk '/\.c128_vic40_boot_probe_pass_sym$/ { split($2,a,":"); print toupper(a[2]); exit }' "$probe_vs")
     fail_addr=$(awk '/\.c128_vic40_boot_probe_fail_sym$/ { split($2,a,":"); print toupper(a[2]); exit }' "$probe_vs")
     if [ -z "${pass_addr:-}" ] || [ -z "${fail_addr:-}" ]; then
-        echo "FAIL (missing vic40 probe symbols in out/main_vic40probe.vs)"
+        echo "FAIL (missing vic40 probe symbols in ../../../build/test/c128/main_vic40probe.vs)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
     fi
 
     local abs_d64
-    abs_d64="$(cd out && pwd)/moria128_vic40probe.d64"
+    abs_d64="$(cd ../../../build/test/c128 && pwd)/moria128_vic40probe.d64"
     local mon_file
     mon_file="$(test128_tmp_file "test128_${name}.mon")"
     local log_file
@@ -2140,10 +2148,10 @@ build_real_boot_diag_assets() {
     build_boot_assets || return 1
 
     if c128_active_variant_is "real_boot_diag" && ! c128_outputs_need_refresh \
-            out/moria128.realdiag.prg out/moria128_realdiag.d64 out/main.vs -- \
-            main.s out/boot128.prg out/title out/monster.db.1 out/monster.db.2 \
-            out/monster.db.3 out/monster.db.4 out/ovl.town out/ovl.start out/ovl.death \
-            out/ovl.gen out/128.runtime.prg out/128.input.prg out/128.proj.prg out/128.fdisk.prg out/128.world.prg out/128.item.prg out/128.names.prg out/128.select.prg out/128.persist.prg out/128.play.prg out/128.bank.prg; then
+            ../../../build/test/c128/moria128.realdiag.prg ../../../build/test/c128/moria128_realdiag.d64 ../../../build/test/c128/main.vs -- \
+            main.s ../../../build/test/c128/boot128.prg ../../../build/test/c128/title ../../../build/test/c128/monster.db.1 ../../../build/test/c128/monster.db.2 \
+            ../../../build/test/c128/monster.db.3 ../../../build/test/c128/monster.db.4 ../../../build/test/c128/ovl.town ../../../build/test/c128/ovl.start ../../../build/test/c128/ovl.death \
+            ../../../build/test/c128/ovl.gen ../../../build/test/c128/128.runtime.prg ../../../build/test/c128/128.input.prg ../../../build/test/c128/128.proj.prg ../../../build/test/c128/128.fdisk.prg ../../../build/test/c128/128.world.prg ../../../build/test/c128/128.item.prg ../../../build/test/c128/128.names.prg ../../../build/test/c128/128.select.prg ../../../build/test/c128/128.persist.prg ../../../build/test/c128/128.play.prg ../../../build/test/c128/128.bank.prg; then
         REAL_BOOT_DIAG_ASSETS_BUILT=1
         return 0
     fi
@@ -2151,11 +2159,11 @@ build_real_boot_diag_assets() {
     local build_log
     build_log="$(test128_tmp_file test128_real_boot_diag_build.log)"
     local c1541_bin="${C1541:-c1541}"
-    local diag_main="out/moria128.realdiag.prg"
-    local diag_d64="out/moria128_realdiag.d64"
+    local diag_main="../../../build/test/c128/moria128.realdiag.prg"
+    local diag_d64="../../../build/test/c128/moria128_realdiag.d64"
 
-    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 \
-            -define C128 :OVL_OUT=out -define C128_TEST_REAL_BOOT_DIAG -define C128_TEST_FORCE_DUNGEON_MELEE \
+    if ! java -jar "$KICKASS" main.s :OVL_OUT=../../../build/test/c128 -showmem -vicesymbols -libdir ../c64 \
+            -define C128 :OVL_OUT=../../../build/test/c128 -define C128_TEST_REAL_BOOT_DIAG -define C128_TEST_FORCE_DUNGEON_MELEE \
             -o "$diag_main" >"$build_log" 2>&1; then
         echo "FAIL (real-boot diag main assembly failed)"
         tail -20 "$build_log" | sed 's/^/    /'
@@ -2166,29 +2174,29 @@ build_real_boot_diag_assets() {
 
     if ! "$c1541_bin" -format "moria128,m8" d64 "$diag_d64" \
             -attach "$diag_d64" \
-            -write out/boot128.prg "moria8.128" \
+            -write ../../../build/test/c128/boot128.prg "moria8.128" \
             -write "$diag_main" "moria128" \
-            -write out/title "title" \
-            -write out/monster.db.1 "monster.db.1" \
-            -write out/monster.db.2 "monster.db.2" \
-            -write out/monster.db.3 "monster.db.3" \
-            -write out/monster.db.4 "monster.db.4" \
-            -write out/ovl.town "ovl.town" \
-            -write out/ovl.start "ovl.start" \
-            -write out/ovl.death "ovl.death" \
-            -write out/ovl.gen "ovl.gen" \
-            -write out/128.runtime.prg "128.runtime" \
-            -write out/128.input.prg "128.input" \
-			-write out/128.proj.prg "128.proj" \
-            -write out/128.fdisk.prg "128.fdisk" \
-            -write out/128.diskio.prg "128.diskio" \
-            -write out/128.world.prg "128.world" \
-            -write out/128.item.prg "128.item" \
-            -write out/128.names.prg "128.names" \
-            -write out/128.select.prg "128.select" \
-            -write out/128.persist.prg "128.persist" \
-            -write out/128.play.prg "128.play" \
-            -write out/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c128/title "title" \
+            -write ../../../build/test/c128/monster.db.1 "monster.db.1" \
+            -write ../../../build/test/c128/monster.db.2 "monster.db.2" \
+            -write ../../../build/test/c128/monster.db.3 "monster.db.3" \
+            -write ../../../build/test/c128/monster.db.4 "monster.db.4" \
+            -write ../../../build/test/c128/ovl.town "ovl.town" \
+            -write ../../../build/test/c128/ovl.start "ovl.start" \
+            -write ../../../build/test/c128/ovl.death "ovl.death" \
+            -write ../../../build/test/c128/ovl.gen "ovl.gen" \
+            -write ../../../build/test/c128/128.runtime.prg "128.runtime" \
+            -write ../../../build/test/c128/128.input.prg "128.input" \
+			-write ../../../build/test/c128/128.proj.prg "128.proj" \
+            -write ../../../build/test/c128/128.fdisk.prg "128.fdisk" \
+            -write ../../../build/test/c128/128.diskio.prg "128.diskio" \
+            -write ../../../build/test/c128/128.world.prg "128.world" \
+            -write ../../../build/test/c128/128.item.prg "128.item" \
+            -write ../../../build/test/c128/128.names.prg "128.names" \
+            -write ../../../build/test/c128/128.select.prg "128.select" \
+            -write ../../../build/test/c128/128.persist.prg "128.persist" \
+            -write ../../../build/test/c128/128.play.prg "128.play" \
+            -write ../../../build/test/c128/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
         echo "FAIL (real-boot diag disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -2209,10 +2217,10 @@ build_overlay_transition_diag_assets() {
     build_boot_assets || return 1
 
     if c128_active_variant_is "overlay_transition_diag" && ! c128_outputs_need_refresh \
-            out/moria128.overlaydiag.prg out/moria128_overlaydiag.d64 out/main.vs -- \
-            main.s out/boot128.prg out/title out/monster.db.1 out/monster.db.2 \
-            out/monster.db.3 out/monster.db.4 out/ovl.town out/ovl.start out/ovl.death \
-            out/ovl.gen out/128.runtime.prg out/128.input.prg out/128.proj.prg out/128.fdisk.prg out/128.world.prg out/128.item.prg out/128.names.prg out/128.select.prg out/128.persist.prg out/128.play.prg out/128.bank.prg; then
+            ../../../build/test/c128/moria128.overlaydiag.prg ../../../build/test/c128/moria128_overlaydiag.d64 ../../../build/test/c128/main.vs -- \
+            main.s ../../../build/test/c128/boot128.prg ../../../build/test/c128/title ../../../build/test/c128/monster.db.1 ../../../build/test/c128/monster.db.2 \
+            ../../../build/test/c128/monster.db.3 ../../../build/test/c128/monster.db.4 ../../../build/test/c128/ovl.town ../../../build/test/c128/ovl.start ../../../build/test/c128/ovl.death \
+            ../../../build/test/c128/ovl.gen ../../../build/test/c128/128.runtime.prg ../../../build/test/c128/128.input.prg ../../../build/test/c128/128.proj.prg ../../../build/test/c128/128.fdisk.prg ../../../build/test/c128/128.world.prg ../../../build/test/c128/128.item.prg ../../../build/test/c128/128.names.prg ../../../build/test/c128/128.select.prg ../../../build/test/c128/128.persist.prg ../../../build/test/c128/128.play.prg ../../../build/test/c128/128.bank.prg; then
         OVERLAY_TRANSITION_DIAG_ASSETS_BUILT=1
         return 0
     fi
@@ -2220,11 +2228,11 @@ build_overlay_transition_diag_assets() {
     local build_log
     build_log="$(test128_tmp_file test128_overlay_transition_diag_build.log)"
     local c1541_bin="${C1541:-c1541}"
-    local diag_main="out/moria128.overlaydiag.prg"
-    local diag_d64="out/moria128_overlaydiag.d64"
+    local diag_main="../../../build/test/c128/moria128.overlaydiag.prg"
+    local diag_d64="../../../build/test/c128/moria128_overlaydiag.d64"
 
-    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 \
-            -define C128 :OVL_OUT=out -define C128_TEST_OVERLAY_TRANSITION_DIAG \
+    if ! java -jar "$KICKASS" main.s :OVL_OUT=../../../build/test/c128 -showmem -vicesymbols -libdir ../c64 \
+            -define C128 :OVL_OUT=../../../build/test/c128 -define C128_TEST_OVERLAY_TRANSITION_DIAG \
             -o "$diag_main" >"$build_log" 2>&1; then
         echo "FAIL (overlay-transition diag main assembly failed)"
         tail -20 "$build_log" | sed 's/^/    /'
@@ -2235,29 +2243,29 @@ build_overlay_transition_diag_assets() {
 
     if ! "$c1541_bin" -format "moria128,m8" d64 "$diag_d64" \
             -attach "$diag_d64" \
-            -write out/boot128.prg "moria8.128" \
+            -write ../../../build/test/c128/boot128.prg "moria8.128" \
             -write "$diag_main" "moria128" \
-            -write out/title "title" \
-            -write out/monster.db.1 "monster.db.1" \
-            -write out/monster.db.2 "monster.db.2" \
-            -write out/monster.db.3 "monster.db.3" \
-            -write out/monster.db.4 "monster.db.4" \
-            -write out/ovl.town "ovl.town" \
-            -write out/ovl.start "ovl.start" \
-            -write out/ovl.death "ovl.death" \
-            -write out/ovl.gen "ovl.gen" \
-            -write out/128.runtime.prg "128.runtime" \
-            -write out/128.input.prg "128.input" \
-			-write out/128.proj.prg "128.proj" \
-            -write out/128.fdisk.prg "128.fdisk" \
-            -write out/128.diskio.prg "128.diskio" \
-            -write out/128.world.prg "128.world" \
-            -write out/128.item.prg "128.item" \
-            -write out/128.names.prg "128.names" \
-            -write out/128.select.prg "128.select" \
-            -write out/128.persist.prg "128.persist" \
-            -write out/128.play.prg "128.play" \
-            -write out/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c128/title "title" \
+            -write ../../../build/test/c128/monster.db.1 "monster.db.1" \
+            -write ../../../build/test/c128/monster.db.2 "monster.db.2" \
+            -write ../../../build/test/c128/monster.db.3 "monster.db.3" \
+            -write ../../../build/test/c128/monster.db.4 "monster.db.4" \
+            -write ../../../build/test/c128/ovl.town "ovl.town" \
+            -write ../../../build/test/c128/ovl.start "ovl.start" \
+            -write ../../../build/test/c128/ovl.death "ovl.death" \
+            -write ../../../build/test/c128/ovl.gen "ovl.gen" \
+            -write ../../../build/test/c128/128.runtime.prg "128.runtime" \
+            -write ../../../build/test/c128/128.input.prg "128.input" \
+			-write ../../../build/test/c128/128.proj.prg "128.proj" \
+            -write ../../../build/test/c128/128.fdisk.prg "128.fdisk" \
+            -write ../../../build/test/c128/128.diskio.prg "128.diskio" \
+            -write ../../../build/test/c128/128.world.prg "128.world" \
+            -write ../../../build/test/c128/128.item.prg "128.item" \
+            -write ../../../build/test/c128/128.names.prg "128.names" \
+            -write ../../../build/test/c128/128.select.prg "128.select" \
+            -write ../../../build/test/c128/128.persist.prg "128.persist" \
+            -write ../../../build/test/c128/128.play.prg "128.play" \
+            -write ../../../build/test/c128/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
         echo "FAIL (overlay-transition diag disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -2278,10 +2286,10 @@ build_title_art_boot_assets() {
     build_boot_assets || return 1
 
     if c128_active_variant_is "title_art" && ! c128_outputs_need_refresh \
-            out/moria128.titleart.prg out/moria128_titleart.d64 out/main.vs -- \
-            main.s out/boot128.prg out/title out/monster.db.1 out/monster.db.2 \
-            out/monster.db.3 out/monster.db.4 out/ovl.town out/ovl.start out/ovl.death \
-            out/ovl.gen out/128.runtime.prg out/128.input.prg out/128.proj.prg out/128.fdisk.prg out/128.world.prg out/128.item.prg out/128.names.prg out/128.select.prg out/128.persist.prg out/128.play.prg out/128.bank.prg ../common/*.s ../c64/*.s; then
+            ../../../build/test/c128/moria128.titleart.prg ../../../build/test/c128/moria128_titleart.d64 ../../../build/test/c128/main.vs -- \
+            main.s ../../../build/test/c128/boot128.prg ../../../build/test/c128/title ../../../build/test/c128/monster.db.1 ../../../build/test/c128/monster.db.2 \
+            ../../../build/test/c128/monster.db.3 ../../../build/test/c128/monster.db.4 ../../../build/test/c128/ovl.town ../../../build/test/c128/ovl.start ../../../build/test/c128/ovl.death \
+            ../../../build/test/c128/ovl.gen ../../../build/test/c128/128.runtime.prg ../../../build/test/c128/128.input.prg ../../../build/test/c128/128.proj.prg ../../../build/test/c128/128.fdisk.prg ../../../build/test/c128/128.world.prg ../../../build/test/c128/128.item.prg ../../../build/test/c128/128.names.prg ../../../build/test/c128/128.select.prg ../../../build/test/c128/128.persist.prg ../../../build/test/c128/128.play.prg ../../../build/test/c128/128.bank.prg ../common/*.s ../c64/*.s; then
         TITLE_ART_BOOT_ASSETS_BUILT=1
         return 0
     fi
@@ -2289,11 +2297,11 @@ build_title_art_boot_assets() {
     local build_log
     build_log="$(test128_tmp_file test128_title_art_build.log)"
     local c1541_bin="${C1541:-c1541}"
-    local title_main="out/moria128.titleart.prg"
-    local title_d64="out/moria128_titleart.d64"
+    local title_main="../../../build/test/c128/moria128.titleart.prg"
+    local title_d64="../../../build/test/c128/moria128_titleart.d64"
 
-    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 \
-            -define C128 :OVL_OUT=out -define C128_TEST_TITLE_ART_CONTENT \
+    if ! java -jar "$KICKASS" main.s :OVL_OUT=../../../build/test/c128 -showmem -vicesymbols -libdir ../c64 \
+            -define C128 :OVL_OUT=../../../build/test/c128 -define C128_TEST_TITLE_ART_CONTENT \
             -o "$title_main" >"$build_log" 2>&1; then
         echo "FAIL (title-art main assembly failed)"
         tail -20 "$build_log" | sed 's/^/    /'
@@ -2304,29 +2312,29 @@ build_title_art_boot_assets() {
 
     if ! "$c1541_bin" -format "moria128,m8" d64 "$title_d64" \
             -attach "$title_d64" \
-            -write out/boot128.prg "moria8.128" \
+            -write ../../../build/test/c128/boot128.prg "moria8.128" \
             -write "$title_main" "moria128" \
-            -write out/title "title" \
-            -write out/monster.db.1 "monster.db.1" \
-            -write out/monster.db.2 "monster.db.2" \
-            -write out/monster.db.3 "monster.db.3" \
-            -write out/monster.db.4 "monster.db.4" \
-            -write out/ovl.town "ovl.town" \
-            -write out/ovl.start "ovl.start" \
-            -write out/ovl.death "ovl.death" \
-            -write out/ovl.gen "ovl.gen" \
-            -write out/128.runtime.prg "128.runtime" \
-            -write out/128.input.prg "128.input" \
-			-write out/128.proj.prg "128.proj" \
-            -write out/128.fdisk.prg "128.fdisk" \
-            -write out/128.diskio.prg "128.diskio" \
-            -write out/128.world.prg "128.world" \
-            -write out/128.item.prg "128.item" \
-            -write out/128.names.prg "128.names" \
-            -write out/128.select.prg "128.select" \
-            -write out/128.persist.prg "128.persist" \
-            -write out/128.play.prg "128.play" \
-            -write out/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c128/title "title" \
+            -write ../../../build/test/c128/monster.db.1 "monster.db.1" \
+            -write ../../../build/test/c128/monster.db.2 "monster.db.2" \
+            -write ../../../build/test/c128/monster.db.3 "monster.db.3" \
+            -write ../../../build/test/c128/monster.db.4 "monster.db.4" \
+            -write ../../../build/test/c128/ovl.town "ovl.town" \
+            -write ../../../build/test/c128/ovl.start "ovl.start" \
+            -write ../../../build/test/c128/ovl.death "ovl.death" \
+            -write ../../../build/test/c128/ovl.gen "ovl.gen" \
+            -write ../../../build/test/c128/128.runtime.prg "128.runtime" \
+            -write ../../../build/test/c128/128.input.prg "128.input" \
+			-write ../../../build/test/c128/128.proj.prg "128.proj" \
+            -write ../../../build/test/c128/128.fdisk.prg "128.fdisk" \
+            -write ../../../build/test/c128/128.diskio.prg "128.diskio" \
+            -write ../../../build/test/c128/128.world.prg "128.world" \
+            -write ../../../build/test/c128/128.item.prg "128.item" \
+            -write ../../../build/test/c128/128.names.prg "128.names" \
+            -write ../../../build/test/c128/128.select.prg "128.select" \
+            -write ../../../build/test/c128/128.persist.prg "128.persist" \
+            -write ../../../build/test/c128/128.play.prg "128.play" \
+            -write ../../../build/test/c128/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
         echo "FAIL (title-art disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -2340,7 +2348,7 @@ build_title_art_boot_assets() {
 }
 
 build_title_load_missing_save_assets() {
-    if [ "$TITLE_LOAD_MISSING_SAVE_ASSETS_BUILT" -eq 1 ] && [ -f out/moria128_missing_save.d64 ]; then
+    if [ "$TITLE_LOAD_MISSING_SAVE_ASSETS_BUILT" -eq 1 ] && [ -f ../../../build/test/c128/moria128_missing_save.d64 ]; then
         return 0
     fi
 
@@ -2349,8 +2357,8 @@ build_title_load_missing_save_assets() {
     local build_log
     build_log="$(test128_tmp_file test128_title_missing_save_build.log)"
     local c1541_bin="${C1541:-c1541}"
-    local missing_save_d64="out/moria128_missing_save.d64"
-    local marker_blob="out/MORIA8.ID"
+    local missing_save_d64="../../../build/test/c128/moria128_missing_save.d64"
+    local marker_blob="../../../build/test/c128/MORIA8.ID"
     local dir_type_offset=$(((357 + 1) * 256 + 2))
 
     if ! printf 'M8SAVE' > "$marker_blob"; then
@@ -2408,7 +2416,7 @@ build_title_load_missing_save_assets() {
 }
 
 build_title_load_mounted_save_assets() {
-    if [ "$TITLE_LOAD_MOUNTED_SAVE_ASSETS_BUILT" -eq 1 ] && [ -f out/moria128_mounted_save.d64 ]; then
+    if [ "$TITLE_LOAD_MOUNTED_SAVE_ASSETS_BUILT" -eq 1 ] && [ -f ../../../build/test/c128/moria128_mounted_save.d64 ]; then
         return 0
     fi
 
@@ -2417,9 +2425,9 @@ build_title_load_mounted_save_assets() {
     local build_log
     build_log="$(test128_tmp_file test128_title_mounted_save_build.log)"
     local c1541_bin="${C1541:-c1541}"
-    local mounted_save_d64="out/moria128_mounted_save.d64"
-    local marker_blob="out/MORIA8.ID"
-    local save_blob="out/THE.GAME"
+    local mounted_save_d64="../../../build/test/c128/moria128_mounted_save.d64"
+    local marker_blob="../../../build/test/c128/MORIA8.ID"
+    local save_blob="../../../build/test/c128/THE.GAME"
     local dir_type_offset0=$(((357 + 1) * 256 + 2))
     local dir_type_offset1=$((dir_type_offset0 + 32))
 
@@ -2504,16 +2512,16 @@ build_save_write_product_assets() {
     local build_log
     build_log="$(test128_tmp_file test128_save_write_product_build.log)"
     local c1541_bin="${C1541:-c1541}"
-    local save_write_d64="out/moria128_savewrite_product.d64"
-    local save_d64="out/moria128_savewrite_product_save.d64"
-    local marker_blob="out/MORIA8.ID"
-    local save_blob="out/THE.GAME"
+    local save_write_d64="../../../build/test/c128/moria128_savewrite_product.d64"
+    local save_d64="../../../build/test/c128/moria128_savewrite_product_save.d64"
+    local marker_blob="../../../build/test/c128/MORIA8.ID"
+    local save_blob="../../../build/test/c128/THE.GAME"
     local dir_type_offset0=$(((357 + 1) * 256 + 2))
     local dir_type_offset1=$((dir_type_offset0 + 32))
 
-    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 \
+    if ! java -jar "$KICKASS" main.s :OVL_OUT=../../../build/test/c128 -showmem -vicesymbols -libdir ../c64 \
             -define C128 -define C128_TEST_SCRIPTED_SAVE_WRITE_PRODUCT \
-            -o out/moria128.prg >"$build_log" 2>&1; then
+            -o ../../../build/test/c128/moria128.prg >"$build_log" 2>&1; then
         echo "FAIL (save-write product main assembly failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -2523,34 +2531,34 @@ build_save_write_product_assets() {
 
     if ! "$c1541_bin" -format "moria128,m8" d64 "$save_write_d64" \
             -attach "$save_write_d64" \
-            -write out/boot128.prg "boot128" \
-            -write out/moria128.prg "moria128" \
-            -write out/title "t128" \
-            -write out/monster.db.1 "monster.db.1" \
-            -write out/monster.db.2 "monster.db.2" \
-            -write out/monster.db.3 "monster.db.3" \
-            -write out/monster.db.4 "monster.db.4" \
-            -write out/ovl.town "128.town" \
-            -write out/ovl.start "128.start" \
-            -write out/ovl.death "128.death" \
-            -write out/ovl.royal "128.royal" \
-            -write out/ovl.gen "128.gen" \
-            -write out/ovl.help "128.help" \
-            -write out/ovl.ui "128.ui" \
-            -write out/ovl.items "128.items" \
-            -write out/ovl.disarm "128.disarm" \
-            -write out/128.runtime.prg "128.runtime" \
-            -write out/128.input.prg "128.input" \
-            -write out/128.proj.prg "128.proj" \
-            -write out/128.fdisk.prg "128.fdisk" \
-            -write out/128.diskio.prg "128.diskio" \
-            -write out/128.world.prg "128.world" \
-            -write out/128.item.prg "128.item" \
-            -write out/128.names.prg "128.names" \
-            -write out/128.select.prg "128.select" \
-            -write out/128.persist.prg "128.persist" \
-            -write out/128.play.prg "128.play" \
-            -write out/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c128/boot128.prg "boot128" \
+            -write ../../../build/test/c128/moria128.prg "moria128" \
+            -write ../../../build/test/c128/title "t128" \
+            -write ../../../build/test/c128/monster.db.1 "monster.db.1" \
+            -write ../../../build/test/c128/monster.db.2 "monster.db.2" \
+            -write ../../../build/test/c128/monster.db.3 "monster.db.3" \
+            -write ../../../build/test/c128/monster.db.4 "monster.db.4" \
+            -write ../../../build/test/c128/ovl.town "128.town" \
+            -write ../../../build/test/c128/ovl.start "128.start" \
+            -write ../../../build/test/c128/ovl.death "128.death" \
+            -write ../../../build/test/c128/ovl.royal "128.royal" \
+            -write ../../../build/test/c128/ovl.gen "128.gen" \
+            -write ../../../build/test/c128/ovl.help "128.help" \
+            -write ../../../build/test/c128/ovl.ui "128.ui" \
+            -write ../../../build/test/c128/ovl.items "128.items" \
+            -write ../../../build/test/c128/ovl.disarm "128.disarm" \
+            -write ../../../build/test/c128/128.runtime.prg "128.runtime" \
+            -write ../../../build/test/c128/128.input.prg "128.input" \
+            -write ../../../build/test/c128/128.proj.prg "128.proj" \
+            -write ../../../build/test/c128/128.fdisk.prg "128.fdisk" \
+            -write ../../../build/test/c128/128.diskio.prg "128.diskio" \
+            -write ../../../build/test/c128/128.world.prg "128.world" \
+            -write ../../../build/test/c128/128.item.prg "128.item" \
+            -write ../../../build/test/c128/128.names.prg "128.names" \
+            -write ../../../build/test/c128/128.select.prg "128.select" \
+            -write ../../../build/test/c128/128.persist.prg "128.persist" \
+            -write ../../../build/test/c128/128.play.prg "128.play" \
+            -write ../../../build/test/c128/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
         echo "FAIL (save-write product disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -2616,16 +2624,16 @@ build_save_media_fail_product_assets() {
     local build_log
     build_log="$(test128_tmp_file test128_save_media_fail_product_build.log)"
     local c1541_bin="${C1541:-c1541}"
-    local fail_d64="out/moria128_savemediafail_product.d64"
-    local save_d64="out/moria128_savemediafail_product_save.d64"
-    local marker_blob="out/MORIA8.ID"
-    local save_blob="out/THE.GAME"
+    local fail_d64="../../../build/test/c128/moria128_savemediafail_product.d64"
+    local save_d64="../../../build/test/c128/moria128_savemediafail_product_save.d64"
+    local marker_blob="../../../build/test/c128/MORIA8.ID"
+    local save_blob="../../../build/test/c128/THE.GAME"
     local dir_type_offset0=$(((357 + 1) * 256 + 2))
     local dir_type_offset1=$((dir_type_offset0 + 32))
 
     if ! java -jar "$KICKASS" main_save_media_fail.s -showmem -vicesymbols -libdir ../c64 \
             -define C128 \
-            -o out/moria128.prg >"$build_log" 2>&1; then
+            -o ../../../build/test/c128/moria128.prg >"$build_log" 2>&1; then
         echo "FAIL (save-media-fail product main assembly failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -2635,29 +2643,29 @@ build_save_media_fail_product_assets() {
 
     if ! "$c1541_bin" -format "moria128,m8" d64 "$fail_d64" \
             -attach "$fail_d64" \
-            -write out/boot128.prg "moria8.128" \
-            -write out/moria128.prg "moria128" \
-            -write out/title "title" \
-            -write out/monster.db.1 "monster.db.1" \
-            -write out/monster.db.2 "monster.db.2" \
-            -write out/monster.db.3 "monster.db.3" \
-            -write out/monster.db.4 "monster.db.4" \
-            -write out/ovl.town "ovl.town" \
-            -write out/ovl.start "ovl.start" \
-            -write out/ovl.death "ovl.death" \
-            -write out/ovl.gen "ovl.gen" \
-            -write out/128.runtime.prg "128.runtime" \
-            -write out/128.input.prg "128.input" \
-            -write out/128.proj.prg "128.proj" \
-            -write out/128.fdisk.prg "128.fdisk" \
-            -write out/128.diskio.prg "128.diskio" \
-            -write out/128.world.prg "128.world" \
-            -write out/128.item.prg "128.item" \
-            -write out/128.names.prg "128.names" \
-            -write out/128.select.prg "128.select" \
-            -write out/128.persist.prg "128.persist" \
-            -write out/128.play.prg "128.play" \
-            -write out/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c128/boot128.prg "moria8.128" \
+            -write ../../../build/test/c128/moria128.prg "moria128" \
+            -write ../../../build/test/c128/title "title" \
+            -write ../../../build/test/c128/monster.db.1 "monster.db.1" \
+            -write ../../../build/test/c128/monster.db.2 "monster.db.2" \
+            -write ../../../build/test/c128/monster.db.3 "monster.db.3" \
+            -write ../../../build/test/c128/monster.db.4 "monster.db.4" \
+            -write ../../../build/test/c128/ovl.town "ovl.town" \
+            -write ../../../build/test/c128/ovl.start "ovl.start" \
+            -write ../../../build/test/c128/ovl.death "ovl.death" \
+            -write ../../../build/test/c128/ovl.gen "ovl.gen" \
+            -write ../../../build/test/c128/128.runtime.prg "128.runtime" \
+            -write ../../../build/test/c128/128.input.prg "128.input" \
+            -write ../../../build/test/c128/128.proj.prg "128.proj" \
+            -write ../../../build/test/c128/128.fdisk.prg "128.fdisk" \
+            -write ../../../build/test/c128/128.diskio.prg "128.diskio" \
+            -write ../../../build/test/c128/128.world.prg "128.world" \
+            -write ../../../build/test/c128/128.item.prg "128.item" \
+            -write ../../../build/test/c128/128.names.prg "128.names" \
+            -write ../../../build/test/c128/128.select.prg "128.select" \
+            -write ../../../build/test/c128/128.persist.prg "128.persist" \
+            -write ../../../build/test/c128/128.play.prg "128.play" \
+            -write ../../../build/test/c128/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
         echo "FAIL (save-media-fail product disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -2721,10 +2729,10 @@ build_partial_failure_boot_assets() {
     build_boot_assets || return 1
 
     if c128_active_variant_is "partial_failure" && ! c128_outputs_need_refresh \
-            out/moria128.skip1.prg out/moria128_skip1.d64 out/main.vs -- \
-            main.s out/boot128.prg out/title out/monster.db.1 out/monster.db.2 \
-            out/monster.db.3 out/monster.db.4 out/ovl.town out/ovl.start out/ovl.death \
-            out/ovl.gen out/128.runtime.prg out/128.input.prg out/128.proj.prg out/128.fdisk.prg out/128.world.prg out/128.item.prg out/128.names.prg out/128.select.prg out/128.persist.prg out/128.play.prg out/128.bank.prg; then
+            ../../../build/test/c128/moria128.skip1.prg ../../../build/test/c128/moria128_skip1.d64 ../../../build/test/c128/main.vs -- \
+            main.s ../../../build/test/c128/boot128.prg ../../../build/test/c128/title ../../../build/test/c128/monster.db.1 ../../../build/test/c128/monster.db.2 \
+            ../../../build/test/c128/monster.db.3 ../../../build/test/c128/monster.db.4 ../../../build/test/c128/ovl.town ../../../build/test/c128/ovl.start ../../../build/test/c128/ovl.death \
+            ../../../build/test/c128/ovl.gen ../../../build/test/c128/128.runtime.prg ../../../build/test/c128/128.input.prg ../../../build/test/c128/128.proj.prg ../../../build/test/c128/128.fdisk.prg ../../../build/test/c128/128.world.prg ../../../build/test/c128/128.item.prg ../../../build/test/c128/128.names.prg ../../../build/test/c128/128.select.prg ../../../build/test/c128/128.persist.prg ../../../build/test/c128/128.play.prg ../../../build/test/c128/128.bank.prg; then
         PARTIAL_BOOT_ASSETS_BUILT=1
         return 0
     fi
@@ -2732,10 +2740,10 @@ build_partial_failure_boot_assets() {
     local build_log
     build_log="$(test128_tmp_file test128_boot_partial_build.log)"
     local c1541_bin="${C1541:-c1541}"
-    local partial_main="out/moria128.skip1.prg"
-    local partial_d64="out/moria128_skip1.d64"
+    local partial_main="../../../build/test/c128/moria128.skip1.prg"
+    local partial_d64="../../../build/test/c128/moria128_skip1.d64"
 
-    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 -define C128 :OVL_OUT=out -define C128_CACHE_TEST_SKIP_TIER -o "$partial_main" >"$build_log" 2>&1; then
+    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 -define C128 :OVL_OUT=../../../build/test/c128 -define C128_CACHE_TEST_SKIP_TIER -o "$partial_main" >"$build_log" 2>&1; then
         echo "FAIL (partial-failure main assembly failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -2745,29 +2753,29 @@ build_partial_failure_boot_assets() {
 
     if ! "$c1541_bin" -format "moria128,m8" d64 "$partial_d64" \
             -attach "$partial_d64" \
-            -write out/boot128.prg "moria8.128" \
+            -write ../../../build/test/c128/boot128.prg "moria8.128" \
             -write "$partial_main" "moria128" \
-            -write out/title "title" \
-            -write out/monster.db.1 "monster.db.1" \
-            -write out/monster.db.2 "monster.db.2" \
-            -write out/monster.db.3 "monster.db.3" \
-            -write out/monster.db.4 "monster.db.4" \
-            -write out/ovl.town "ovl.town" \
-            -write out/ovl.start "ovl.start" \
-            -write out/ovl.death "ovl.death" \
-            -write out/ovl.gen "ovl.gen" \
-            -write out/128.runtime.prg "128.runtime" \
-            -write out/128.input.prg "128.input" \
-			-write out/128.proj.prg "128.proj" \
-            -write out/128.fdisk.prg "128.fdisk" \
-            -write out/128.diskio.prg "128.diskio" \
-            -write out/128.world.prg "128.world" \
-            -write out/128.item.prg "128.item" \
-            -write out/128.names.prg "128.names" \
-            -write out/128.select.prg "128.select" \
-            -write out/128.persist.prg "128.persist" \
-            -write out/128.play.prg "128.play" \
-            -write out/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c128/title "title" \
+            -write ../../../build/test/c128/monster.db.1 "monster.db.1" \
+            -write ../../../build/test/c128/monster.db.2 "monster.db.2" \
+            -write ../../../build/test/c128/monster.db.3 "monster.db.3" \
+            -write ../../../build/test/c128/monster.db.4 "monster.db.4" \
+            -write ../../../build/test/c128/ovl.town "ovl.town" \
+            -write ../../../build/test/c128/ovl.start "ovl.start" \
+            -write ../../../build/test/c128/ovl.death "ovl.death" \
+            -write ../../../build/test/c128/ovl.gen "ovl.gen" \
+            -write ../../../build/test/c128/128.runtime.prg "128.runtime" \
+            -write ../../../build/test/c128/128.input.prg "128.input" \
+			-write ../../../build/test/c128/128.proj.prg "128.proj" \
+            -write ../../../build/test/c128/128.fdisk.prg "128.fdisk" \
+            -write ../../../build/test/c128/128.diskio.prg "128.diskio" \
+            -write ../../../build/test/c128/128.world.prg "128.world" \
+            -write ../../../build/test/c128/128.item.prg "128.item" \
+            -write ../../../build/test/c128/128.names.prg "128.names" \
+            -write ../../../build/test/c128/128.select.prg "128.select" \
+            -write ../../../build/test/c128/128.persist.prg "128.persist" \
+            -write ../../../build/test/c128/128.play.prg "128.play" \
+            -write ../../../build/test/c128/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
         echo "FAIL (partial-failure disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -2788,10 +2796,10 @@ build_overlay_partial_failure_boot_assets() {
     build_boot_assets || return 1
 
     if c128_active_variant_is "overlay_partial_failure" && ! c128_outputs_need_refresh \
-            out/moria128.skipovl2.prg out/moria128_skipovl2.d64 out/main.vs -- \
-            main.s out/boot128.prg out/title out/monster.db.1 out/monster.db.2 \
-            out/monster.db.3 out/monster.db.4 out/ovl.town out/ovl.start out/ovl.death \
-            out/ovl.gen out/128.runtime.prg out/128.input.prg out/128.proj.prg out/128.fdisk.prg out/128.world.prg out/128.item.prg out/128.names.prg out/128.select.prg out/128.persist.prg out/128.play.prg out/128.bank.prg; then
+            ../../../build/test/c128/moria128.skipovl2.prg ../../../build/test/c128/moria128_skipovl2.d64 ../../../build/test/c128/main.vs -- \
+            main.s ../../../build/test/c128/boot128.prg ../../../build/test/c128/title ../../../build/test/c128/monster.db.1 ../../../build/test/c128/monster.db.2 \
+            ../../../build/test/c128/monster.db.3 ../../../build/test/c128/monster.db.4 ../../../build/test/c128/ovl.town ../../../build/test/c128/ovl.start ../../../build/test/c128/ovl.death \
+            ../../../build/test/c128/ovl.gen ../../../build/test/c128/128.runtime.prg ../../../build/test/c128/128.input.prg ../../../build/test/c128/128.proj.prg ../../../build/test/c128/128.fdisk.prg ../../../build/test/c128/128.world.prg ../../../build/test/c128/128.item.prg ../../../build/test/c128/128.names.prg ../../../build/test/c128/128.select.prg ../../../build/test/c128/128.persist.prg ../../../build/test/c128/128.play.prg ../../../build/test/c128/128.bank.prg; then
         OVERLAY_PARTIAL_BOOT_ASSETS_BUILT=1
         return 0
     fi
@@ -2799,10 +2807,10 @@ build_overlay_partial_failure_boot_assets() {
     local build_log
     build_log="$(test128_tmp_file test128_boot_overlay_partial_build.log)"
     local c1541_bin="${C1541:-c1541}"
-    local partial_main="out/moria128.skipovl2.prg"
-    local partial_d64="out/moria128_skipovl2.d64"
+    local partial_main="../../../build/test/c128/moria128.skipovl2.prg"
+    local partial_d64="../../../build/test/c128/moria128_skipovl2.d64"
 
-    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 -define C128 :OVL_OUT=out -define C128_CACHE_TEST_SKIP_OVERLAY -o "$partial_main" >"$build_log" 2>&1; then
+    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 -define C128 :OVL_OUT=../../../build/test/c128 -define C128_CACHE_TEST_SKIP_OVERLAY -o "$partial_main" >"$build_log" 2>&1; then
         echo "FAIL (overlay-partial main assembly failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -2812,29 +2820,29 @@ build_overlay_partial_failure_boot_assets() {
 
     if ! "$c1541_bin" -format "moria128,m8" d64 "$partial_d64" \
             -attach "$partial_d64" \
-            -write out/boot128.prg "moria8.128" \
+            -write ../../../build/test/c128/boot128.prg "moria8.128" \
             -write "$partial_main" "moria128" \
-            -write out/title "title" \
-            -write out/monster.db.1 "monster.db.1" \
-            -write out/monster.db.2 "monster.db.2" \
-            -write out/monster.db.3 "monster.db.3" \
-            -write out/monster.db.4 "monster.db.4" \
-            -write out/ovl.town "ovl.town" \
-            -write out/ovl.start "ovl.start" \
-            -write out/ovl.death "ovl.death" \
-            -write out/ovl.gen "ovl.gen" \
-            -write out/128.runtime.prg "128.runtime" \
-            -write out/128.input.prg "128.input" \
-			-write out/128.proj.prg "128.proj" \
-            -write out/128.fdisk.prg "128.fdisk" \
-            -write out/128.diskio.prg "128.diskio" \
-            -write out/128.world.prg "128.world" \
-            -write out/128.item.prg "128.item" \
-            -write out/128.names.prg "128.names" \
-            -write out/128.select.prg "128.select" \
-            -write out/128.persist.prg "128.persist" \
-            -write out/128.play.prg "128.play" \
-            -write out/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c128/title "title" \
+            -write ../../../build/test/c128/monster.db.1 "monster.db.1" \
+            -write ../../../build/test/c128/monster.db.2 "monster.db.2" \
+            -write ../../../build/test/c128/monster.db.3 "monster.db.3" \
+            -write ../../../build/test/c128/monster.db.4 "monster.db.4" \
+            -write ../../../build/test/c128/ovl.town "ovl.town" \
+            -write ../../../build/test/c128/ovl.start "ovl.start" \
+            -write ../../../build/test/c128/ovl.death "ovl.death" \
+            -write ../../../build/test/c128/ovl.gen "ovl.gen" \
+            -write ../../../build/test/c128/128.runtime.prg "128.runtime" \
+            -write ../../../build/test/c128/128.input.prg "128.input" \
+			-write ../../../build/test/c128/128.proj.prg "128.proj" \
+            -write ../../../build/test/c128/128.fdisk.prg "128.fdisk" \
+            -write ../../../build/test/c128/128.diskio.prg "128.diskio" \
+            -write ../../../build/test/c128/128.world.prg "128.world" \
+            -write ../../../build/test/c128/128.item.prg "128.item" \
+            -write ../../../build/test/c128/128.names.prg "128.names" \
+            -write ../../../build/test/c128/128.select.prg "128.select" \
+            -write ../../../build/test/c128/128.persist.prg "128.persist" \
+            -write ../../../build/test/c128/128.play.prg "128.play" \
+            -write ../../../build/test/c128/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
         echo "FAIL (overlay-partial disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -2855,10 +2863,10 @@ build_death_overlay_boot_assets() {
     build_boot_assets || return 1
 
     if c128_active_variant_is "death_overlay" && ! c128_outputs_need_refresh \
-            out/moria128.death.prg out/moria128_death.d64 out/main.vs -- \
-            main.s out/boot128.prg out/title out/monster.db.1 out/monster.db.2 \
-            out/monster.db.3 out/monster.db.4 out/ovl.town out/ovl.start out/ovl.death \
-            out/ovl.gen out/128.runtime.prg out/128.input.prg out/128.proj.prg out/128.fdisk.prg out/128.world.prg out/128.item.prg out/128.names.prg out/128.select.prg out/128.persist.prg out/128.play.prg out/128.bank.prg; then
+            ../../../build/test/c128/moria128.death.prg ../../../build/test/c128/moria128_death.d64 ../../../build/test/c128/main.vs -- \
+            main.s ../../../build/test/c128/boot128.prg ../../../build/test/c128/title ../../../build/test/c128/monster.db.1 ../../../build/test/c128/monster.db.2 \
+            ../../../build/test/c128/monster.db.3 ../../../build/test/c128/monster.db.4 ../../../build/test/c128/ovl.town ../../../build/test/c128/ovl.start ../../../build/test/c128/ovl.death \
+            ../../../build/test/c128/ovl.gen ../../../build/test/c128/128.runtime.prg ../../../build/test/c128/128.input.prg ../../../build/test/c128/128.proj.prg ../../../build/test/c128/128.fdisk.prg ../../../build/test/c128/128.world.prg ../../../build/test/c128/128.item.prg ../../../build/test/c128/128.names.prg ../../../build/test/c128/128.select.prg ../../../build/test/c128/128.persist.prg ../../../build/test/c128/128.play.prg ../../../build/test/c128/128.bank.prg; then
         DEATH_BOOT_ASSETS_BUILT=1
         return 0
     fi
@@ -2866,10 +2874,10 @@ build_death_overlay_boot_assets() {
     local build_log
     build_log="$(test128_tmp_file test128_boot_death_build.log)"
     local c1541_bin="${C1541:-c1541}"
-    local death_main="out/moria128.death.prg"
-    local death_d64="out/moria128_death.d64"
+    local death_main="../../../build/test/c128/moria128.death.prg"
+    local death_d64="../../../build/test/c128/moria128_death.d64"
 
-    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 -define C128 :OVL_OUT=out -define C128_TEST_FORCE_DEATH=1 -o "$death_main" >"$build_log" 2>&1; then
+    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 -define C128 :OVL_OUT=../../../build/test/c128 -define C128_TEST_FORCE_DEATH=1 -o "$death_main" >"$build_log" 2>&1; then
         echo "FAIL (death-overlay main assembly failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -2879,29 +2887,29 @@ build_death_overlay_boot_assets() {
 
     if ! "$c1541_bin" -format "moria128,m8" d64 "$death_d64" \
             -attach "$death_d64" \
-            -write out/boot128.prg "moria8.128" \
+            -write ../../../build/test/c128/boot128.prg "moria8.128" \
             -write "$death_main" "moria128" \
-            -write out/title "title" \
-            -write out/monster.db.1 "monster.db.1" \
-            -write out/monster.db.2 "monster.db.2" \
-            -write out/monster.db.3 "monster.db.3" \
-            -write out/monster.db.4 "monster.db.4" \
-            -write out/ovl.town "ovl.town" \
-            -write out/ovl.start "ovl.start" \
-            -write out/ovl.death "ovl.death" \
-            -write out/ovl.gen "ovl.gen" \
-            -write out/128.runtime.prg "128.runtime" \
-            -write out/128.input.prg "128.input" \
-			-write out/128.proj.prg "128.proj" \
-            -write out/128.fdisk.prg "128.fdisk" \
-            -write out/128.diskio.prg "128.diskio" \
-            -write out/128.world.prg "128.world" \
-            -write out/128.item.prg "128.item" \
-            -write out/128.names.prg "128.names" \
-            -write out/128.select.prg "128.select" \
-            -write out/128.persist.prg "128.persist" \
-            -write out/128.play.prg "128.play" \
-            -write out/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c128/title "title" \
+            -write ../../../build/test/c128/monster.db.1 "monster.db.1" \
+            -write ../../../build/test/c128/monster.db.2 "monster.db.2" \
+            -write ../../../build/test/c128/monster.db.3 "monster.db.3" \
+            -write ../../../build/test/c128/monster.db.4 "monster.db.4" \
+            -write ../../../build/test/c128/ovl.town "ovl.town" \
+            -write ../../../build/test/c128/ovl.start "ovl.start" \
+            -write ../../../build/test/c128/ovl.death "ovl.death" \
+            -write ../../../build/test/c128/ovl.gen "ovl.gen" \
+            -write ../../../build/test/c128/128.runtime.prg "128.runtime" \
+            -write ../../../build/test/c128/128.input.prg "128.input" \
+			-write ../../../build/test/c128/128.proj.prg "128.proj" \
+            -write ../../../build/test/c128/128.fdisk.prg "128.fdisk" \
+            -write ../../../build/test/c128/128.diskio.prg "128.diskio" \
+            -write ../../../build/test/c128/128.world.prg "128.world" \
+            -write ../../../build/test/c128/128.item.prg "128.item" \
+            -write ../../../build/test/c128/128.names.prg "128.names" \
+            -write ../../../build/test/c128/128.select.prg "128.select" \
+            -write ../../../build/test/c128/128.persist.prg "128.persist" \
+            -write ../../../build/test/c128/128.play.prg "128.play" \
+            -write ../../../build/test/c128/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
         echo "FAIL (death-overlay disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -2922,10 +2930,10 @@ build_overlay_state_boot_assets() {
     build_boot_assets || return 1
 
     if c128_active_variant_is "overlay_state" && ! c128_outputs_need_refresh \
-            out/moria128.overlaystate.prg out/moria128_overlaystate.d64 out/main.vs -- \
-            main.s out/boot128.prg out/title out/monster.db.1 out/monster.db.2 \
-            out/monster.db.3 out/monster.db.4 out/ovl.town out/ovl.start out/ovl.death \
-            out/ovl.gen out/128.runtime.prg out/128.input.prg out/128.proj.prg out/128.fdisk.prg out/128.world.prg out/128.item.prg out/128.names.prg out/128.select.prg out/128.persist.prg out/128.play.prg out/128.bank.prg; then
+            ../../../build/test/c128/moria128.overlaystate.prg ../../../build/test/c128/moria128_overlaystate.d64 ../../../build/test/c128/main.vs -- \
+            main.s ../../../build/test/c128/boot128.prg ../../../build/test/c128/title ../../../build/test/c128/monster.db.1 ../../../build/test/c128/monster.db.2 \
+            ../../../build/test/c128/monster.db.3 ../../../build/test/c128/monster.db.4 ../../../build/test/c128/ovl.town ../../../build/test/c128/ovl.start ../../../build/test/c128/ovl.death \
+            ../../../build/test/c128/ovl.gen ../../../build/test/c128/128.runtime.prg ../../../build/test/c128/128.input.prg ../../../build/test/c128/128.proj.prg ../../../build/test/c128/128.fdisk.prg ../../../build/test/c128/128.world.prg ../../../build/test/c128/128.item.prg ../../../build/test/c128/128.names.prg ../../../build/test/c128/128.select.prg ../../../build/test/c128/128.persist.prg ../../../build/test/c128/128.play.prg ../../../build/test/c128/128.bank.prg; then
         OVERLAY_STATE_BOOT_ASSETS_BUILT=1
         return 0
     fi
@@ -2933,10 +2941,10 @@ build_overlay_state_boot_assets() {
     local build_log
     build_log="$(test128_tmp_file test128_boot_overlay_state_build.log)"
     local c1541_bin="${C1541:-c1541}"
-    local state_main="out/moria128.overlaystate.prg"
-    local state_d64="out/moria128_overlaystate.d64"
+    local state_main="../../../build/test/c128/moria128.overlaystate.prg"
+    local state_d64="../../../build/test/c128/moria128_overlaystate.d64"
 
-    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 -define C128 :OVL_OUT=out -define C128_TEST_OVERLAY_STATE_CORRUPT=1 -o "$state_main" >"$build_log" 2>&1; then
+    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 -define C128 :OVL_OUT=../../../build/test/c128 -define C128_TEST_OVERLAY_STATE_CORRUPT=1 -o "$state_main" >"$build_log" 2>&1; then
         echo "FAIL (overlay-state main assembly failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -2946,29 +2954,29 @@ build_overlay_state_boot_assets() {
 
     if ! "$c1541_bin" -format "moria128,m8" d64 "$state_d64" \
             -attach "$state_d64" \
-            -write out/boot128.prg "moria8.128" \
+            -write ../../../build/test/c128/boot128.prg "moria8.128" \
             -write "$state_main" "moria128" \
-            -write out/title "title" \
-            -write out/monster.db.1 "monster.db.1" \
-            -write out/monster.db.2 "monster.db.2" \
-            -write out/monster.db.3 "monster.db.3" \
-            -write out/monster.db.4 "monster.db.4" \
-            -write out/ovl.town "ovl.town" \
-            -write out/ovl.start "ovl.start" \
-            -write out/ovl.death "ovl.death" \
-            -write out/ovl.gen "ovl.gen" \
-            -write out/128.runtime.prg "128.runtime" \
-            -write out/128.input.prg "128.input" \
-			-write out/128.proj.prg "128.proj" \
-            -write out/128.fdisk.prg "128.fdisk" \
-            -write out/128.diskio.prg "128.diskio" \
-            -write out/128.world.prg "128.world" \
-            -write out/128.item.prg "128.item" \
-            -write out/128.names.prg "128.names" \
-            -write out/128.select.prg "128.select" \
-            -write out/128.persist.prg "128.persist" \
-            -write out/128.play.prg "128.play" \
-            -write out/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c128/title "title" \
+            -write ../../../build/test/c128/monster.db.1 "monster.db.1" \
+            -write ../../../build/test/c128/monster.db.2 "monster.db.2" \
+            -write ../../../build/test/c128/monster.db.3 "monster.db.3" \
+            -write ../../../build/test/c128/monster.db.4 "monster.db.4" \
+            -write ../../../build/test/c128/ovl.town "ovl.town" \
+            -write ../../../build/test/c128/ovl.start "ovl.start" \
+            -write ../../../build/test/c128/ovl.death "ovl.death" \
+            -write ../../../build/test/c128/ovl.gen "ovl.gen" \
+            -write ../../../build/test/c128/128.runtime.prg "128.runtime" \
+            -write ../../../build/test/c128/128.input.prg "128.input" \
+			-write ../../../build/test/c128/128.proj.prg "128.proj" \
+            -write ../../../build/test/c128/128.fdisk.prg "128.fdisk" \
+            -write ../../../build/test/c128/128.diskio.prg "128.diskio" \
+            -write ../../../build/test/c128/128.world.prg "128.world" \
+            -write ../../../build/test/c128/128.item.prg "128.item" \
+            -write ../../../build/test/c128/128.names.prg "128.names" \
+            -write ../../../build/test/c128/128.select.prg "128.select" \
+            -write ../../../build/test/c128/128.persist.prg "128.persist" \
+            -write ../../../build/test/c128/128.play.prg "128.play" \
+            -write ../../../build/test/c128/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
         echo "FAIL (overlay-state disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -2989,10 +2997,10 @@ build_scripted_input_boot_assets() {
     build_boot_assets || return 1
 
     if [ "$PERF_P1_MODE" != "1" ] && c128_active_variant_is "scripted_input" && ! c128_outputs_need_refresh \
-            out/moria128.prg out/moria128_scriptedinput.d64 out/main.vs -- \
-            main.s out/boot128.prg out/title out/monster.db.1 out/monster.db.2 \
-            out/monster.db.3 out/monster.db.4 out/ovl.town out/ovl.start out/ovl.death \
-            out/ovl.gen out/128.runtime.prg out/128.input.prg out/128.proj.prg out/128.fdisk.prg out/128.world.prg out/128.item.prg out/128.names.prg out/128.select.prg out/128.persist.prg out/128.play.prg out/128.bank.prg; then
+            ../../../build/test/c128/moria128.prg ../../../build/test/c128/moria128_scriptedinput.d64 ../../../build/test/c128/main.vs -- \
+            main.s ../../../build/test/c128/boot128.prg ../../../build/test/c128/title ../../../build/test/c128/monster.db.1 ../../../build/test/c128/monster.db.2 \
+            ../../../build/test/c128/monster.db.3 ../../../build/test/c128/monster.db.4 ../../../build/test/c128/ovl.town ../../../build/test/c128/ovl.start ../../../build/test/c128/ovl.death \
+            ../../../build/test/c128/ovl.gen ../../../build/test/c128/128.runtime.prg ../../../build/test/c128/128.input.prg ../../../build/test/c128/128.proj.prg ../../../build/test/c128/128.fdisk.prg ../../../build/test/c128/128.world.prg ../../../build/test/c128/128.item.prg ../../../build/test/c128/128.names.prg ../../../build/test/c128/128.select.prg ../../../build/test/c128/128.persist.prg ../../../build/test/c128/128.play.prg ../../../build/test/c128/128.bank.prg; then
         SCRIPTED_INPUT_BOOT_ASSETS_BUILT=1
         return 0
     fi
@@ -3000,15 +3008,15 @@ build_scripted_input_boot_assets() {
     local build_log
     build_log="$(test128_tmp_file test128_boot_scripted_input_build.log)"
     local c1541_bin="${C1541:-c1541}"
-    local scripted_d64="out/moria128_scriptedinput.d64"
+    local scripted_d64="../../../build/test/c128/moria128_scriptedinput.d64"
     local perf_define=()
     if [ "$PERF_P1_MODE" = "1" ]; then
         perf_define=(-define PERF_P1)
     fi
 
-    # Compile to the standard out/moria128.prg target so KickAssembler also
-    # refreshes the companion out/ovl.* overlay PRGs for this special build.
-    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 -define C128 ${perf_define[@]+"${perf_define[@]}"} -define C128_TEST_SCRIPTED_INPUT -o out/moria128.prg >"$build_log" 2>&1; then
+    # Compile to the standard ../../../build/test/c128/moria128.prg target so KickAssembler also
+    # refreshes the companion ../../../build/test/c128/ovl.* overlay PRGs for this special build.
+    if ! java -jar "$KICKASS" main.s :OVL_OUT=../../../build/test/c128 -showmem -vicesymbols -libdir ../c64 -define C128 ${perf_define[@]+"${perf_define[@]}"} -define C128_TEST_SCRIPTED_INPUT -o ../../../build/test/c128/moria128.prg >"$build_log" 2>&1; then
         echo "FAIL (scripted-input main assembly failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -3018,29 +3026,29 @@ build_scripted_input_boot_assets() {
 
     if ! "$c1541_bin" -format "moria128,m8" d64 "$scripted_d64" \
             -attach "$scripted_d64" \
-            -write out/boot128.prg "moria8.128" \
-            -write out/moria128.prg "moria128" \
-            -write out/title "title" \
-            -write out/monster.db.1 "monster.db.1" \
-            -write out/monster.db.2 "monster.db.2" \
-            -write out/monster.db.3 "monster.db.3" \
-            -write out/monster.db.4 "monster.db.4" \
-            -write out/ovl.town "ovl.town" \
-            -write out/ovl.start "ovl.start" \
-            -write out/ovl.death "ovl.death" \
-            -write out/ovl.gen "ovl.gen" \
-            -write out/128.runtime.prg "128.runtime" \
-            -write out/128.input.prg "128.input" \
-			-write out/128.proj.prg "128.proj" \
-            -write out/128.fdisk.prg "128.fdisk" \
-            -write out/128.diskio.prg "128.diskio" \
-            -write out/128.world.prg "128.world" \
-            -write out/128.item.prg "128.item" \
-            -write out/128.names.prg "128.names" \
-            -write out/128.select.prg "128.select" \
-            -write out/128.persist.prg "128.persist" \
-            -write out/128.play.prg "128.play" \
-            -write out/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c128/boot128.prg "moria8.128" \
+            -write ../../../build/test/c128/moria128.prg "moria128" \
+            -write ../../../build/test/c128/title "title" \
+            -write ../../../build/test/c128/monster.db.1 "monster.db.1" \
+            -write ../../../build/test/c128/monster.db.2 "monster.db.2" \
+            -write ../../../build/test/c128/monster.db.3 "monster.db.3" \
+            -write ../../../build/test/c128/monster.db.4 "monster.db.4" \
+            -write ../../../build/test/c128/ovl.town "ovl.town" \
+            -write ../../../build/test/c128/ovl.start "ovl.start" \
+            -write ../../../build/test/c128/ovl.death "ovl.death" \
+            -write ../../../build/test/c128/ovl.gen "ovl.gen" \
+            -write ../../../build/test/c128/128.runtime.prg "128.runtime" \
+            -write ../../../build/test/c128/128.input.prg "128.input" \
+			-write ../../../build/test/c128/128.proj.prg "128.proj" \
+            -write ../../../build/test/c128/128.fdisk.prg "128.fdisk" \
+            -write ../../../build/test/c128/128.diskio.prg "128.diskio" \
+            -write ../../../build/test/c128/128.world.prg "128.world" \
+            -write ../../../build/test/c128/128.item.prg "128.item" \
+            -write ../../../build/test/c128/128.names.prg "128.names" \
+            -write ../../../build/test/c128/128.select.prg "128.select" \
+            -write ../../../build/test/c128/128.persist.prg "128.persist" \
+            -write ../../../build/test/c128/128.play.prg "128.play" \
+            -write ../../../build/test/c128/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
         echo "FAIL (scripted-input disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -3060,7 +3068,7 @@ validate_perf_p1_trace_variant() {
     local suffix="$1"
     local build_log="$2"
     local expected_kind="$3"
-    if ! python3 - "$suffix" "$expected_kind" out/main.vs out/128.play.prg out/moria128.prg >>"$build_log" 2>&1 <<'PY'
+    if ! python3 - "$suffix" "$expected_kind" ../../../build/test/c128/main.vs ../../../build/test/c128/128.play.prg ../../../build/test/c128/moria128.prg >>"$build_log" 2>&1 <<'PY'
 from pathlib import Path
 import sys
 
@@ -3163,7 +3171,7 @@ build_perf_p1_trace_boot_assets() {
     shift || true
     local variant="perf_p1_trace_${suffix}"
     if [ "$PERF_P1_TRACE_BOOT_ASSETS_BUILT" -eq 1 ] && c128_active_variant_is "$variant"; then
-        PERF_P1_TRACE_D64="out/moria128_${variant}.d64"
+        PERF_P1_TRACE_D64="../../../build/test/c128/moria128_${variant}.d64"
         return
     fi
 
@@ -3172,14 +3180,14 @@ build_perf_p1_trace_boot_assets() {
     local build_log
     build_log="$(test128_tmp_file test128_perf_p1_trace_build.log)"
     local c1541_bin="${C1541:-c1541}"
-    local trace_d64="out/moria128_${variant}.d64"
+    local trace_d64="../../../build/test/c128/moria128_${variant}.d64"
     local -a extra_defines=()
     local define_name
     for define_name in "$@"; do
         extra_defines+=(-define "$define_name")
     done
 
-    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 -define C128 -define PERF_P1 -define C128_TEST_SCRIPTED_INPUT -define C128_TEST_PERF_P1_TRACE ${extra_defines[@]+"${extra_defines[@]}"} -o out/moria128.prg >"$build_log" 2>&1; then
+    if ! java -jar "$KICKASS" main.s :OVL_OUT=../../../build/test/c128 -showmem -vicesymbols -libdir ../c64 -define C128 -define PERF_P1 -define C128_TEST_SCRIPTED_INPUT -define C128_TEST_PERF_P1_TRACE ${extra_defines[@]+"${extra_defines[@]}"} -o ../../../build/test/c128/moria128.prg >"$build_log" 2>&1; then
         echo "FAIL (PERF P1 trace main assembly failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -3189,29 +3197,29 @@ build_perf_p1_trace_boot_assets() {
     if [ "$suffix" = "assert" ] || [ "$suffix" = "modal_assert" ] || [ "$suffix" = "command_assert" ] || [ "$suffix" = "transition_assert" ]; then
         if ! "$c1541_bin" -format "moria128,m8" d64 "$trace_d64" \
                 -attach "$trace_d64" \
-                -write out/boot128.prg "moria8.128" \
-                -write out/moria128.prg "moria128" \
-                -write out/title "title" \
-                -write out/monster.db.1 "monster.db.1" \
-                -write out/monster.db.2 "monster.db.2" \
-                -write out/monster.db.3 "monster.db.3" \
-                -write out/monster.db.4 "monster.db.4" \
-                -write out/ovl.town "ovl.town" \
-                -write out/ovl.start "ovl.start" \
-                -write out/ovl.death "ovl.death" \
-                -write out/ovl.gen "ovl.gen" \
-                -write out/128.runtime.prg "128.runtime" \
-                -write out/128.input.prg "128.input" \
-                -write out/128.proj.prg "128.proj" \
-                -write out/128.fdisk.prg "128.fdisk" \
-            -write out/128.diskio.prg "128.diskio" \
-                -write out/128.world.prg "128.world" \
-                -write out/128.item.prg "128.item" \
-            -write out/128.names.prg "128.names" \
-                -write out/128.select.prg "128.select" \
-                -write out/128.persist.prg "128.persist" \
-                -write out/128.play.prg "128.play" \
-                -write out/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
+                -write ../../../build/test/c128/boot128.prg "moria8.128" \
+                -write ../../../build/test/c128/moria128.prg "moria128" \
+                -write ../../../build/test/c128/title "title" \
+                -write ../../../build/test/c128/monster.db.1 "monster.db.1" \
+                -write ../../../build/test/c128/monster.db.2 "monster.db.2" \
+                -write ../../../build/test/c128/monster.db.3 "monster.db.3" \
+                -write ../../../build/test/c128/monster.db.4 "monster.db.4" \
+                -write ../../../build/test/c128/ovl.town "ovl.town" \
+                -write ../../../build/test/c128/ovl.start "ovl.start" \
+                -write ../../../build/test/c128/ovl.death "ovl.death" \
+                -write ../../../build/test/c128/ovl.gen "ovl.gen" \
+                -write ../../../build/test/c128/128.runtime.prg "128.runtime" \
+                -write ../../../build/test/c128/128.input.prg "128.input" \
+                -write ../../../build/test/c128/128.proj.prg "128.proj" \
+                -write ../../../build/test/c128/128.fdisk.prg "128.fdisk" \
+            -write ../../../build/test/c128/128.diskio.prg "128.diskio" \
+                -write ../../../build/test/c128/128.world.prg "128.world" \
+                -write ../../../build/test/c128/128.item.prg "128.item" \
+            -write ../../../build/test/c128/128.names.prg "128.names" \
+                -write ../../../build/test/c128/128.select.prg "128.select" \
+                -write ../../../build/test/c128/128.persist.prg "128.persist" \
+                -write ../../../build/test/c128/128.play.prg "128.play" \
+                -write ../../../build/test/c128/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
             echo "FAIL (PERF P1 trace assert disk build failed)"
             tail -20 "$build_log" | sed 's/^/    /'
             FAIL=$((FAIL + 1))
@@ -3242,10 +3250,10 @@ build_scripted_spell_boot_assets() {
     build_boot_assets || return 1
 
     if c128_active_variant_is "scripted_spell" && ! c128_outputs_need_refresh \
-            out/moria128.prg out/moria128_scriptedspell.d64 out/main.vs -- \
-            main.s out/boot128.prg out/title out/monster.db.1 out/monster.db.2 \
-            out/monster.db.3 out/monster.db.4 out/ovl.town out/ovl.start out/ovl.death \
-            out/ovl.gen out/128.runtime.prg out/128.input.prg out/128.proj.prg out/128.fdisk.prg out/128.world.prg out/128.item.prg out/128.names.prg out/128.select.prg out/128.persist.prg out/128.play.prg out/128.bank.prg; then
+            ../../../build/test/c128/moria128.prg ../../../build/test/c128/moria128_scriptedspell.d64 ../../../build/test/c128/main.vs -- \
+            main.s ../../../build/test/c128/boot128.prg ../../../build/test/c128/title ../../../build/test/c128/monster.db.1 ../../../build/test/c128/monster.db.2 \
+            ../../../build/test/c128/monster.db.3 ../../../build/test/c128/monster.db.4 ../../../build/test/c128/ovl.town ../../../build/test/c128/ovl.start ../../../build/test/c128/ovl.death \
+            ../../../build/test/c128/ovl.gen ../../../build/test/c128/128.runtime.prg ../../../build/test/c128/128.input.prg ../../../build/test/c128/128.proj.prg ../../../build/test/c128/128.fdisk.prg ../../../build/test/c128/128.world.prg ../../../build/test/c128/128.item.prg ../../../build/test/c128/128.names.prg ../../../build/test/c128/128.select.prg ../../../build/test/c128/128.persist.prg ../../../build/test/c128/128.play.prg ../../../build/test/c128/128.bank.prg; then
         SCRIPTED_SPELL_BOOT_ASSETS_BUILT=1
         return 0
     fi
@@ -3253,9 +3261,9 @@ build_scripted_spell_boot_assets() {
     local build_log
     build_log="$(test128_tmp_file test128_boot_scripted_spell_build.log)"
     local c1541_bin="${C1541:-c1541}"
-    local scripted_d64="out/moria128_scriptedspell.d64"
+    local scripted_d64="../../../build/test/c128/moria128_scriptedspell.d64"
 
-    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 -define C128 :OVL_OUT=out -define C128_TEST_SCRIPTED_SPELL -o out/moria128.prg >"$build_log" 2>&1; then
+    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 -define C128 :OVL_OUT=../../../build/test/c128 -define C128_TEST_SCRIPTED_SPELL -o ../../../build/test/c128/moria128.prg >"$build_log" 2>&1; then
         echo "FAIL (scripted-spell main assembly failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -3265,29 +3273,29 @@ build_scripted_spell_boot_assets() {
 
     if ! "$c1541_bin" -format "moria128,m8" d64 "$scripted_d64" \
             -attach "$scripted_d64" \
-            -write out/boot128.prg "moria8.128" \
-            -write out/moria128.prg "moria128" \
-            -write out/title "title" \
-            -write out/monster.db.1 "monster.db.1" \
-            -write out/monster.db.2 "monster.db.2" \
-            -write out/monster.db.3 "monster.db.3" \
-            -write out/monster.db.4 "monster.db.4" \
-            -write out/ovl.town "ovl.town" \
-            -write out/ovl.start "ovl.start" \
-            -write out/ovl.death "ovl.death" \
-            -write out/ovl.gen "ovl.gen" \
-            -write out/128.runtime.prg "128.runtime" \
-            -write out/128.input.prg "128.input" \
-			-write out/128.proj.prg "128.proj" \
-            -write out/128.fdisk.prg "128.fdisk" \
-            -write out/128.diskio.prg "128.diskio" \
-            -write out/128.world.prg "128.world" \
-            -write out/128.item.prg "128.item" \
-            -write out/128.names.prg "128.names" \
-            -write out/128.select.prg "128.select" \
-            -write out/128.persist.prg "128.persist" \
-            -write out/128.play.prg "128.play" \
-            -write out/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c128/boot128.prg "moria8.128" \
+            -write ../../../build/test/c128/moria128.prg "moria128" \
+            -write ../../../build/test/c128/title "title" \
+            -write ../../../build/test/c128/monster.db.1 "monster.db.1" \
+            -write ../../../build/test/c128/monster.db.2 "monster.db.2" \
+            -write ../../../build/test/c128/monster.db.3 "monster.db.3" \
+            -write ../../../build/test/c128/monster.db.4 "monster.db.4" \
+            -write ../../../build/test/c128/ovl.town "ovl.town" \
+            -write ../../../build/test/c128/ovl.start "ovl.start" \
+            -write ../../../build/test/c128/ovl.death "ovl.death" \
+            -write ../../../build/test/c128/ovl.gen "ovl.gen" \
+            -write ../../../build/test/c128/128.runtime.prg "128.runtime" \
+            -write ../../../build/test/c128/128.input.prg "128.input" \
+			-write ../../../build/test/c128/128.proj.prg "128.proj" \
+            -write ../../../build/test/c128/128.fdisk.prg "128.fdisk" \
+            -write ../../../build/test/c128/128.diskio.prg "128.diskio" \
+            -write ../../../build/test/c128/128.world.prg "128.world" \
+            -write ../../../build/test/c128/128.item.prg "128.item" \
+            -write ../../../build/test/c128/128.names.prg "128.names" \
+            -write ../../../build/test/c128/128.select.prg "128.select" \
+            -write ../../../build/test/c128/128.persist.prg "128.persist" \
+            -write ../../../build/test/c128/128.play.prg "128.play" \
+            -write ../../../build/test/c128/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
         echo "FAIL (scripted-spell disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -3309,10 +3317,10 @@ build_scripted_spell_cancel_boot_assets() {
     build_boot_assets || return 1
 
     if c128_active_variant_is "scripted_spell_cancel" && ! c128_outputs_need_refresh \
-            out/moria128.prg out/moria128_scriptedspellcancel.d64 out/main.vs -- \
-            main.s out/boot128.prg out/title out/monster.db.1 out/monster.db.2 \
-            out/monster.db.3 out/monster.db.4 out/ovl.town out/ovl.start out/ovl.death \
-            out/ovl.gen out/128.runtime.prg out/128.input.prg out/128.proj.prg out/128.fdisk.prg out/128.world.prg out/128.item.prg out/128.names.prg out/128.select.prg out/128.persist.prg out/128.play.prg out/128.bank.prg; then
+            ../../../build/test/c128/moria128.prg ../../../build/test/c128/moria128_scriptedspellcancel.d64 ../../../build/test/c128/main.vs -- \
+            main.s ../../../build/test/c128/boot128.prg ../../../build/test/c128/title ../../../build/test/c128/monster.db.1 ../../../build/test/c128/monster.db.2 \
+            ../../../build/test/c128/monster.db.3 ../../../build/test/c128/monster.db.4 ../../../build/test/c128/ovl.town ../../../build/test/c128/ovl.start ../../../build/test/c128/ovl.death \
+            ../../../build/test/c128/ovl.gen ../../../build/test/c128/128.runtime.prg ../../../build/test/c128/128.input.prg ../../../build/test/c128/128.proj.prg ../../../build/test/c128/128.fdisk.prg ../../../build/test/c128/128.world.prg ../../../build/test/c128/128.item.prg ../../../build/test/c128/128.names.prg ../../../build/test/c128/128.select.prg ../../../build/test/c128/128.persist.prg ../../../build/test/c128/128.play.prg ../../../build/test/c128/128.bank.prg; then
         SCRIPTED_SPELL_CANCEL_BOOT_ASSETS_BUILT=1
         return 0
     fi
@@ -3320,9 +3328,9 @@ build_scripted_spell_cancel_boot_assets() {
     local build_log
     build_log="$(test128_tmp_file test128_boot_scripted_spell_cancel_build.log)"
     local c1541_bin="${C1541:-c1541}"
-    local scripted_d64="out/moria128_scriptedspellcancel.d64"
+    local scripted_d64="../../../build/test/c128/moria128_scriptedspellcancel.d64"
 
-    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 -define C128 :OVL_OUT=out -define C128_TEST_SCRIPTED_SPELL_CANCEL -o out/moria128.prg >"$build_log" 2>&1; then
+    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 -define C128 :OVL_OUT=../../../build/test/c128 -define C128_TEST_SCRIPTED_SPELL_CANCEL -o ../../../build/test/c128/moria128.prg >"$build_log" 2>&1; then
         echo "FAIL (scripted-spell-cancel main assembly failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -3332,29 +3340,29 @@ build_scripted_spell_cancel_boot_assets() {
 
     if ! "$c1541_bin" -format "moria128,m8" d64 "$scripted_d64" \
             -attach "$scripted_d64" \
-            -write out/boot128.prg "moria8.128" \
-            -write out/moria128.prg "moria128" \
-            -write out/title "title" \
-            -write out/monster.db.1 "monster.db.1" \
-            -write out/monster.db.2 "monster.db.2" \
-            -write out/monster.db.3 "monster.db.3" \
-            -write out/monster.db.4 "monster.db.4" \
-            -write out/ovl.town "ovl.town" \
-            -write out/ovl.start "ovl.start" \
-            -write out/ovl.death "ovl.death" \
-            -write out/ovl.gen "ovl.gen" \
-            -write out/128.runtime.prg "128.runtime" \
-            -write out/128.input.prg "128.input" \
-			-write out/128.proj.prg "128.proj" \
-            -write out/128.fdisk.prg "128.fdisk" \
-            -write out/128.diskio.prg "128.diskio" \
-            -write out/128.world.prg "128.world" \
-            -write out/128.item.prg "128.item" \
-            -write out/128.names.prg "128.names" \
-            -write out/128.select.prg "128.select" \
-            -write out/128.persist.prg "128.persist" \
-            -write out/128.play.prg "128.play" \
-            -write out/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c128/boot128.prg "moria8.128" \
+            -write ../../../build/test/c128/moria128.prg "moria128" \
+            -write ../../../build/test/c128/title "title" \
+            -write ../../../build/test/c128/monster.db.1 "monster.db.1" \
+            -write ../../../build/test/c128/monster.db.2 "monster.db.2" \
+            -write ../../../build/test/c128/monster.db.3 "monster.db.3" \
+            -write ../../../build/test/c128/monster.db.4 "monster.db.4" \
+            -write ../../../build/test/c128/ovl.town "ovl.town" \
+            -write ../../../build/test/c128/ovl.start "ovl.start" \
+            -write ../../../build/test/c128/ovl.death "ovl.death" \
+            -write ../../../build/test/c128/ovl.gen "ovl.gen" \
+            -write ../../../build/test/c128/128.runtime.prg "128.runtime" \
+            -write ../../../build/test/c128/128.input.prg "128.input" \
+			-write ../../../build/test/c128/128.proj.prg "128.proj" \
+            -write ../../../build/test/c128/128.fdisk.prg "128.fdisk" \
+            -write ../../../build/test/c128/128.diskio.prg "128.diskio" \
+            -write ../../../build/test/c128/128.world.prg "128.world" \
+            -write ../../../build/test/c128/128.item.prg "128.item" \
+            -write ../../../build/test/c128/128.names.prg "128.names" \
+            -write ../../../build/test/c128/128.select.prg "128.select" \
+            -write ../../../build/test/c128/128.persist.prg "128.persist" \
+            -write ../../../build/test/c128/128.play.prg "128.play" \
+            -write ../../../build/test/c128/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
         echo "FAIL (scripted-spell-cancel disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -3376,10 +3384,10 @@ build_scripted_book_overlay_boot_assets() {
     build_boot_assets || return 1
 
     if c128_active_variant_is "scripted_book_overlay" && ! c128_outputs_need_refresh \
-            out/moria128.prg out/moria128_scriptedbookoverlay.d64 out/main.vs -- \
-            main.s out/boot128.prg out/title out/monster.db.1 out/monster.db.2 \
-            out/monster.db.3 out/monster.db.4 out/ovl.town out/ovl.start out/ovl.death \
-            out/ovl.gen out/128.runtime.prg out/128.input.prg out/128.proj.prg out/128.fdisk.prg out/128.world.prg out/128.item.prg out/128.names.prg out/128.select.prg out/128.persist.prg out/128.play.prg out/128.bank.prg; then
+            ../../../build/test/c128/moria128.prg ../../../build/test/c128/moria128_scriptedbookoverlay.d64 ../../../build/test/c128/main.vs -- \
+            main.s ../../../build/test/c128/boot128.prg ../../../build/test/c128/title ../../../build/test/c128/monster.db.1 ../../../build/test/c128/monster.db.2 \
+            ../../../build/test/c128/monster.db.3 ../../../build/test/c128/monster.db.4 ../../../build/test/c128/ovl.town ../../../build/test/c128/ovl.start ../../../build/test/c128/ovl.death \
+            ../../../build/test/c128/ovl.gen ../../../build/test/c128/128.runtime.prg ../../../build/test/c128/128.input.prg ../../../build/test/c128/128.proj.prg ../../../build/test/c128/128.fdisk.prg ../../../build/test/c128/128.world.prg ../../../build/test/c128/128.item.prg ../../../build/test/c128/128.names.prg ../../../build/test/c128/128.select.prg ../../../build/test/c128/128.persist.prg ../../../build/test/c128/128.play.prg ../../../build/test/c128/128.bank.prg; then
         SCRIPTED_BOOK_OVERLAY_BOOT_ASSETS_BUILT=1
         return 0
     fi
@@ -3387,9 +3395,9 @@ build_scripted_book_overlay_boot_assets() {
     local build_log
     build_log="$(test128_tmp_file test128_boot_scripted_book_overlay_build.log)"
     local c1541_bin="${C1541:-c1541}"
-    local scripted_d64="out/moria128_scriptedbookoverlay.d64"
+    local scripted_d64="../../../build/test/c128/moria128_scriptedbookoverlay.d64"
 
-    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 -define C128 :OVL_OUT=out -define C128_TEST_SCRIPTED_BOOK_OVERLAY -o out/moria128.prg >"$build_log" 2>&1; then
+    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 -define C128 :OVL_OUT=../../../build/test/c128 -define C128_TEST_SCRIPTED_BOOK_OVERLAY -o ../../../build/test/c128/moria128.prg >"$build_log" 2>&1; then
         echo "FAIL (scripted-book-overlay main assembly failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -3399,29 +3407,29 @@ build_scripted_book_overlay_boot_assets() {
 
     if ! "$c1541_bin" -format "moria128,m8" d64 "$scripted_d64" \
             -attach "$scripted_d64" \
-            -write out/boot128.prg "moria8.128" \
-            -write out/moria128.prg "moria128" \
-            -write out/title "title" \
-            -write out/monster.db.1 "monster.db.1" \
-            -write out/monster.db.2 "monster.db.2" \
-            -write out/monster.db.3 "monster.db.3" \
-            -write out/monster.db.4 "monster.db.4" \
-            -write out/ovl.town "ovl.town" \
-            -write out/ovl.start "ovl.start" \
-            -write out/ovl.death "ovl.death" \
-            -write out/ovl.gen "ovl.gen" \
-            -write out/128.runtime.prg "128.runtime" \
-            -write out/128.input.prg "128.input" \
-			-write out/128.proj.prg "128.proj" \
-            -write out/128.fdisk.prg "128.fdisk" \
-            -write out/128.diskio.prg "128.diskio" \
-            -write out/128.world.prg "128.world" \
-            -write out/128.item.prg "128.item" \
-            -write out/128.names.prg "128.names" \
-            -write out/128.select.prg "128.select" \
-            -write out/128.persist.prg "128.persist" \
-            -write out/128.play.prg "128.play" \
-            -write out/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c128/boot128.prg "moria8.128" \
+            -write ../../../build/test/c128/moria128.prg "moria128" \
+            -write ../../../build/test/c128/title "title" \
+            -write ../../../build/test/c128/monster.db.1 "monster.db.1" \
+            -write ../../../build/test/c128/monster.db.2 "monster.db.2" \
+            -write ../../../build/test/c128/monster.db.3 "monster.db.3" \
+            -write ../../../build/test/c128/monster.db.4 "monster.db.4" \
+            -write ../../../build/test/c128/ovl.town "ovl.town" \
+            -write ../../../build/test/c128/ovl.start "ovl.start" \
+            -write ../../../build/test/c128/ovl.death "ovl.death" \
+            -write ../../../build/test/c128/ovl.gen "ovl.gen" \
+            -write ../../../build/test/c128/128.runtime.prg "128.runtime" \
+            -write ../../../build/test/c128/128.input.prg "128.input" \
+			-write ../../../build/test/c128/128.proj.prg "128.proj" \
+            -write ../../../build/test/c128/128.fdisk.prg "128.fdisk" \
+            -write ../../../build/test/c128/128.diskio.prg "128.diskio" \
+            -write ../../../build/test/c128/128.world.prg "128.world" \
+            -write ../../../build/test/c128/128.item.prg "128.item" \
+            -write ../../../build/test/c128/128.names.prg "128.names" \
+            -write ../../../build/test/c128/128.select.prg "128.select" \
+            -write ../../../build/test/c128/128.persist.prg "128.persist" \
+            -write ../../../build/test/c128/128.play.prg "128.play" \
+            -write ../../../build/test/c128/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
         echo "FAIL (scripted-book-overlay disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -3443,10 +3451,10 @@ build_scripted_spell_list_overlay_boot_assets() {
     build_boot_assets || return 1
 
     if c128_active_variant_is "scripted_spell_list_overlay" && ! c128_outputs_need_refresh \
-            out/moria128.prg out/moria128_scriptedspelllistoverlay.d64 out/main.vs -- \
-            main.s out/boot128.prg out/title out/monster.db.1 out/monster.db.2 \
-            out/monster.db.3 out/monster.db.4 out/ovl.town out/ovl.start out/ovl.death \
-            out/ovl.gen out/128.runtime.prg out/128.input.prg out/128.proj.prg out/128.fdisk.prg out/128.world.prg out/128.item.prg out/128.names.prg out/128.select.prg out/128.persist.prg out/128.play.prg out/128.bank.prg; then
+            ../../../build/test/c128/moria128.prg ../../../build/test/c128/moria128_scriptedspelllistoverlay.d64 ../../../build/test/c128/main.vs -- \
+            main.s ../../../build/test/c128/boot128.prg ../../../build/test/c128/title ../../../build/test/c128/monster.db.1 ../../../build/test/c128/monster.db.2 \
+            ../../../build/test/c128/monster.db.3 ../../../build/test/c128/monster.db.4 ../../../build/test/c128/ovl.town ../../../build/test/c128/ovl.start ../../../build/test/c128/ovl.death \
+            ../../../build/test/c128/ovl.gen ../../../build/test/c128/128.runtime.prg ../../../build/test/c128/128.input.prg ../../../build/test/c128/128.proj.prg ../../../build/test/c128/128.fdisk.prg ../../../build/test/c128/128.world.prg ../../../build/test/c128/128.item.prg ../../../build/test/c128/128.names.prg ../../../build/test/c128/128.select.prg ../../../build/test/c128/128.persist.prg ../../../build/test/c128/128.play.prg ../../../build/test/c128/128.bank.prg; then
         SCRIPTED_SPELL_LIST_OVERLAY_BOOT_ASSETS_BUILT=1
         return 0
     fi
@@ -3454,9 +3462,9 @@ build_scripted_spell_list_overlay_boot_assets() {
     local build_log
     build_log="$(test128_tmp_file test128_boot_scripted_spell_list_overlay_build.log)"
     local c1541_bin="${C1541:-c1541}"
-    local scripted_d64="out/moria128_scriptedspelllistoverlay.d64"
+    local scripted_d64="../../../build/test/c128/moria128_scriptedspelllistoverlay.d64"
 
-    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 -define C128 :OVL_OUT=out -define C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY -o out/moria128.prg >"$build_log" 2>&1; then
+    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 -define C128 :OVL_OUT=../../../build/test/c128 -define C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY -o ../../../build/test/c128/moria128.prg >"$build_log" 2>&1; then
         echo "FAIL (scripted-spell-list-overlay main assembly failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -3466,29 +3474,29 @@ build_scripted_spell_list_overlay_boot_assets() {
 
     if ! "$c1541_bin" -format "moria128,m8" d64 "$scripted_d64" \
             -attach "$scripted_d64" \
-            -write out/boot128.prg "moria8.128" \
-            -write out/moria128.prg "moria128" \
-            -write out/title "title" \
-            -write out/monster.db.1 "monster.db.1" \
-            -write out/monster.db.2 "monster.db.2" \
-            -write out/monster.db.3 "monster.db.3" \
-            -write out/monster.db.4 "monster.db.4" \
-            -write out/ovl.town "ovl.town" \
-            -write out/ovl.start "ovl.start" \
-            -write out/ovl.death "ovl.death" \
-            -write out/ovl.gen "ovl.gen" \
-            -write out/128.runtime.prg "128.runtime" \
-            -write out/128.input.prg "128.input" \
-			-write out/128.proj.prg "128.proj" \
-            -write out/128.fdisk.prg "128.fdisk" \
-            -write out/128.diskio.prg "128.diskio" \
-            -write out/128.world.prg "128.world" \
-            -write out/128.item.prg "128.item" \
-            -write out/128.names.prg "128.names" \
-            -write out/128.select.prg "128.select" \
-            -write out/128.persist.prg "128.persist" \
-            -write out/128.play.prg "128.play" \
-            -write out/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c128/boot128.prg "moria8.128" \
+            -write ../../../build/test/c128/moria128.prg "moria128" \
+            -write ../../../build/test/c128/title "title" \
+            -write ../../../build/test/c128/monster.db.1 "monster.db.1" \
+            -write ../../../build/test/c128/monster.db.2 "monster.db.2" \
+            -write ../../../build/test/c128/monster.db.3 "monster.db.3" \
+            -write ../../../build/test/c128/monster.db.4 "monster.db.4" \
+            -write ../../../build/test/c128/ovl.town "ovl.town" \
+            -write ../../../build/test/c128/ovl.start "ovl.start" \
+            -write ../../../build/test/c128/ovl.death "ovl.death" \
+            -write ../../../build/test/c128/ovl.gen "ovl.gen" \
+            -write ../../../build/test/c128/128.runtime.prg "128.runtime" \
+            -write ../../../build/test/c128/128.input.prg "128.input" \
+			-write ../../../build/test/c128/128.proj.prg "128.proj" \
+            -write ../../../build/test/c128/128.fdisk.prg "128.fdisk" \
+            -write ../../../build/test/c128/128.diskio.prg "128.diskio" \
+            -write ../../../build/test/c128/128.world.prg "128.world" \
+            -write ../../../build/test/c128/128.item.prg "128.item" \
+            -write ../../../build/test/c128/128.names.prg "128.names" \
+            -write ../../../build/test/c128/128.select.prg "128.select" \
+            -write ../../../build/test/c128/128.persist.prg "128.persist" \
+            -write ../../../build/test/c128/128.play.prg "128.play" \
+            -write ../../../build/test/c128/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
         echo "FAIL (scripted-spell-list-overlay disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -3510,10 +3518,10 @@ build_scripted_prayer_boot_assets() {
     build_boot_assets || return 1
 
     if c128_active_variant_is "scripted_prayer" && ! c128_outputs_need_refresh \
-            out/moria128.prg out/moria128_scriptedprayer.d64 out/main.vs -- \
-            main.s out/boot128.prg out/title out/monster.db.1 out/monster.db.2 \
-            out/monster.db.3 out/monster.db.4 out/ovl.town out/ovl.start out/ovl.death \
-            out/ovl.gen out/128.runtime.prg out/128.input.prg out/128.proj.prg out/128.fdisk.prg out/128.world.prg out/128.item.prg out/128.names.prg out/128.select.prg out/128.persist.prg out/128.play.prg out/128.bank.prg; then
+            ../../../build/test/c128/moria128.prg ../../../build/test/c128/moria128_scriptedprayer.d64 ../../../build/test/c128/main.vs -- \
+            main.s ../../../build/test/c128/boot128.prg ../../../build/test/c128/title ../../../build/test/c128/monster.db.1 ../../../build/test/c128/monster.db.2 \
+            ../../../build/test/c128/monster.db.3 ../../../build/test/c128/monster.db.4 ../../../build/test/c128/ovl.town ../../../build/test/c128/ovl.start ../../../build/test/c128/ovl.death \
+            ../../../build/test/c128/ovl.gen ../../../build/test/c128/128.runtime.prg ../../../build/test/c128/128.input.prg ../../../build/test/c128/128.proj.prg ../../../build/test/c128/128.fdisk.prg ../../../build/test/c128/128.world.prg ../../../build/test/c128/128.item.prg ../../../build/test/c128/128.names.prg ../../../build/test/c128/128.select.prg ../../../build/test/c128/128.persist.prg ../../../build/test/c128/128.play.prg ../../../build/test/c128/128.bank.prg; then
         SCRIPTED_PRAYER_BOOT_ASSETS_BUILT=1
         return 0
     fi
@@ -3521,9 +3529,9 @@ build_scripted_prayer_boot_assets() {
     local build_log
     build_log="$(test128_tmp_file test128_boot_scripted_prayer_build.log)"
     local c1541_bin="${C1541:-c1541}"
-    local scripted_d64="out/moria128_scriptedprayer.d64"
+    local scripted_d64="../../../build/test/c128/moria128_scriptedprayer.d64"
 
-    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 -define C128 :OVL_OUT=out -define C128_TEST_SCRIPTED_PRAYER -o out/moria128.prg >"$build_log" 2>&1; then
+    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 -define C128 :OVL_OUT=../../../build/test/c128 -define C128_TEST_SCRIPTED_PRAYER -o ../../../build/test/c128/moria128.prg >"$build_log" 2>&1; then
         echo "FAIL (scripted-prayer main assembly failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -3533,29 +3541,29 @@ build_scripted_prayer_boot_assets() {
 
     if ! "$c1541_bin" -format "moria128,m8" d64 "$scripted_d64" \
             -attach "$scripted_d64" \
-            -write out/boot128.prg "moria8.128" \
-            -write out/moria128.prg "moria128" \
-            -write out/title "title" \
-            -write out/monster.db.1 "monster.db.1" \
-            -write out/monster.db.2 "monster.db.2" \
-            -write out/monster.db.3 "monster.db.3" \
-            -write out/monster.db.4 "monster.db.4" \
-            -write out/ovl.town "ovl.town" \
-            -write out/ovl.start "ovl.start" \
-            -write out/ovl.death "ovl.death" \
-            -write out/ovl.gen "ovl.gen" \
-            -write out/128.runtime.prg "128.runtime" \
-            -write out/128.input.prg "128.input" \
-			-write out/128.proj.prg "128.proj" \
-            -write out/128.fdisk.prg "128.fdisk" \
-            -write out/128.diskio.prg "128.diskio" \
-            -write out/128.world.prg "128.world" \
-            -write out/128.item.prg "128.item" \
-            -write out/128.names.prg "128.names" \
-            -write out/128.select.prg "128.select" \
-            -write out/128.persist.prg "128.persist" \
-            -write out/128.play.prg "128.play" \
-            -write out/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c128/boot128.prg "moria8.128" \
+            -write ../../../build/test/c128/moria128.prg "moria128" \
+            -write ../../../build/test/c128/title "title" \
+            -write ../../../build/test/c128/monster.db.1 "monster.db.1" \
+            -write ../../../build/test/c128/monster.db.2 "monster.db.2" \
+            -write ../../../build/test/c128/monster.db.3 "monster.db.3" \
+            -write ../../../build/test/c128/monster.db.4 "monster.db.4" \
+            -write ../../../build/test/c128/ovl.town "ovl.town" \
+            -write ../../../build/test/c128/ovl.start "ovl.start" \
+            -write ../../../build/test/c128/ovl.death "ovl.death" \
+            -write ../../../build/test/c128/ovl.gen "ovl.gen" \
+            -write ../../../build/test/c128/128.runtime.prg "128.runtime" \
+            -write ../../../build/test/c128/128.input.prg "128.input" \
+			-write ../../../build/test/c128/128.proj.prg "128.proj" \
+            -write ../../../build/test/c128/128.fdisk.prg "128.fdisk" \
+            -write ../../../build/test/c128/128.diskio.prg "128.diskio" \
+            -write ../../../build/test/c128/128.world.prg "128.world" \
+            -write ../../../build/test/c128/128.item.prg "128.item" \
+            -write ../../../build/test/c128/128.names.prg "128.names" \
+            -write ../../../build/test/c128/128.select.prg "128.select" \
+            -write ../../../build/test/c128/128.persist.prg "128.persist" \
+            -write ../../../build/test/c128/128.play.prg "128.play" \
+            -write ../../../build/test/c128/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
         echo "FAIL (scripted-prayer disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -3570,29 +3578,29 @@ build_scripted_prayer_boot_assets() {
 }
 
 build_cache_survival_boot_assets() {
-    local target_out="${1:-out}"
-    if [ "$target_out" = "out" ] && [ "$CACHE_SURVIVAL_BOOT_ASSETS_BUILT" -eq 1 ] && c128_active_variant_is "cache_survival"; then
+    local target_dir="${1:-../../../build/test/c128}"
+    if [ "$target_dir" = "../../../build/test/c128" ] && [ "$CACHE_SURVIVAL_BOOT_ASSETS_BUILT" -eq 1 ] && c128_active_variant_is "cache_survival"; then
         return
     fi
 
-    build_boot_assets "$target_out" || return 1
+    build_boot_assets "$target_dir" || return 1
 
-    if [ "$target_out" = "out" ] && c128_active_variant_is "cache_survival" && ! c128_outputs_need_refresh \
-            out/moria128.prg out/moria128_cache_survival.d64 out/main.vs -- \
-            main.s out/boot128.prg out/title out/monster.db.1 out/monster.db.2 \
-            out/monster.db.3 out/monster.db.4 out/ovl.town out/ovl.start out/ovl.death \
-            out/ovl.gen out/128.runtime.prg out/128.input.prg out/128.proj.prg out/128.fdisk.prg out/128.world.prg out/128.item.prg out/128.names.prg out/128.select.prg out/128.persist.prg out/128.play.prg out/128.bank.prg; then
+    if [ "$target_dir" = "../../../build/test/c128" ] && c128_active_variant_is "cache_survival" && ! c128_outputs_need_refresh \
+            ../../../build/test/c128/moria128.prg ../../../build/test/c128/moria128_cache_survival.d64 ../../../build/test/c128/main.vs -- \
+            main.s ../../../build/test/c128/boot128.prg ../../../build/test/c128/title ../../../build/test/c128/monster.db.1 ../../../build/test/c128/monster.db.2 \
+            ../../../build/test/c128/monster.db.3 ../../../build/test/c128/monster.db.4 ../../../build/test/c128/ovl.town ../../../build/test/c128/ovl.start ../../../build/test/c128/ovl.death \
+            ../../../build/test/c128/ovl.gen ../../../build/test/c128/128.runtime.prg ../../../build/test/c128/128.input.prg ../../../build/test/c128/128.proj.prg ../../../build/test/c128/128.fdisk.prg ../../../build/test/c128/128.world.prg ../../../build/test/c128/128.item.prg ../../../build/test/c128/128.names.prg ../../../build/test/c128/128.select.prg ../../../build/test/c128/128.persist.prg ../../../build/test/c128/128.play.prg ../../../build/test/c128/128.bank.prg; then
         CACHE_SURVIVAL_BOOT_ASSETS_BUILT=1
         return 0
     fi
 
     local build_log
-    build_log="$(test128_tmp_file "test128_boot_cache_survival_build_$(basename "$target_out").log")"
-    local cache_main="$target_out/moria128.prg"
-    local cache_d64="$target_out/moria128_cache_survival.d64"
+    build_log="$(test128_tmp_file "test128_boot_cache_survival_build_$(basename "$target_dir").log")"
+    local cache_main="$target_dir/moria128.prg"
+    local cache_d64="$target_dir/moria128_cache_survival.d64"
 
-    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 -define C128 -define C128_TEST_SCRIPTED_INPUT -define C128_TEST_CACHE_SURVIVAL ":OVL_OUT=$target_out" -o "$cache_main" >"$build_log" 2>&1; then
-        echo "FAIL (cache-survival main assembly failed for $target_out)"
+    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 -define C128 -define C128_TEST_SCRIPTED_INPUT -define C128_TEST_CACHE_SURVIVAL ":OVL_OUT=$target_dir" -o "$cache_main" >"$build_log" 2>&1; then
+        echo "FAIL (cache-survival main assembly failed for $target_dir)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
@@ -3601,36 +3609,36 @@ build_cache_survival_boot_assets() {
 
     if ! "$C1541" -format "moria128,m8" d64 "$cache_d64" \
             -attach "$cache_d64" \
-            -write "$target_out/boot128.prg" "moria8.128" \
+            -write "$target_dir/boot128.prg" "moria8.128" \
             -write "$cache_main" "moria128" \
-            -write "$target_out/title" "title" \
-            -write "$target_out/monster.db.1" "monster.db.1" \
-            -write "$target_out/monster.db.2" "monster.db.2" \
-            -write "$target_out/monster.db.3" "monster.db.3" \
-            -write "$target_out/monster.db.4" "monster.db.4" \
-            -write "$target_out/ovl.town" "ovl.town" \
-            -write "$target_out/ovl.start" "ovl.start" \
-            -write "$target_out/ovl.death" "ovl.death" \
-            -write "$target_out/ovl.gen" "ovl.gen" \
-            -write "$target_out/128.runtime.prg" "128.runtime" \
-            -write "$target_out/128.input.prg" "128.input" \
-			-write "$target_out/128.proj.prg" "128.proj" \
-            -write "$target_out/128.fdisk.prg" "128.fdisk" \
-            -write "$target_out/128.world.prg" "128.world" \
-            -write "$target_out/128.item.prg" "128.item" \
-            -write "$target_out/128.names.prg" "128.names" \
-            -write "$target_out/128.select.prg" "128.select" \
-            -write "$target_out/128.persist.prg" "128.persist" \
-            -write "$target_out/128.play.prg" "128.play" \
-            -write "$target_out/128.bank.prg" "128.bank" >>"$build_log" 2>&1; then
-        echo "FAIL (cache-survival disk build failed for $target_out)"
+            -write "$target_dir/title" "title" \
+            -write "$target_dir/monster.db.1" "monster.db.1" \
+            -write "$target_dir/monster.db.2" "monster.db.2" \
+            -write "$target_dir/monster.db.3" "monster.db.3" \
+            -write "$target_dir/monster.db.4" "monster.db.4" \
+            -write "$target_dir/ovl.town" "ovl.town" \
+            -write "$target_dir/ovl.start" "ovl.start" \
+            -write "$target_dir/ovl.death" "ovl.death" \
+            -write "$target_dir/ovl.gen" "ovl.gen" \
+            -write "$target_dir/128.runtime.prg" "128.runtime" \
+            -write "$target_dir/128.input.prg" "128.input" \
+			-write "$target_dir/128.proj.prg" "128.proj" \
+            -write "$target_dir/128.fdisk.prg" "128.fdisk" \
+            -write "$target_dir/128.world.prg" "128.world" \
+            -write "$target_dir/128.item.prg" "128.item" \
+            -write "$target_dir/128.names.prg" "128.names" \
+            -write "$target_dir/128.select.prg" "128.select" \
+            -write "$target_dir/128.persist.prg" "128.persist" \
+            -write "$target_dir/128.play.prg" "128.play" \
+            -write "$target_dir/128.bank.prg" "128.bank" >>"$build_log" 2>&1; then
+        echo "FAIL (cache-survival disk build failed for $target_dir)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return 1
     fi
 
-    if [ "$target_out" = "out" ]; then
+    if [ "$target_dir" = "../../../build/test/c128" ]; then
         BOOT_ASSETS_BUILT=0 # Force refresh
         CACHE_SURVIVAL_BOOT_ASSETS_BUILT=1
         c128_set_active_variant "cache_survival"
@@ -3646,11 +3654,11 @@ build_load_resume_boot_assets() {
     build_boot_assets || return 1
 
     if ! c128_outputs_need_refresh \
-            out/THE.GAME out/moria128_loadresume.d64 -- \
-            tests/make_load_resume_save.py out/boot128.prg out/moria128.prg out/title \
-            out/monster.db.1 out/monster.db.2 out/monster.db.3 out/monster.db.4 \
-            out/ovl.town out/ovl.start out/ovl.death out/ovl.gen \
-            out/128.runtime.prg out/128.input.prg out/128.proj.prg out/128.fdisk.prg out/128.world.prg out/128.item.prg out/128.names.prg out/128.select.prg out/128.persist.prg out/128.play.prg out/128.bank.prg; then
+            ../../../build/test/c128/THE.GAME ../../../build/test/c128/moria128_loadresume.d64 -- \
+            tests/make_load_resume_save.py ../../../build/test/c128/boot128.prg ../../../build/test/c128/moria128.prg ../../../build/test/c128/title \
+            ../../../build/test/c128/monster.db.1 ../../../build/test/c128/monster.db.2 ../../../build/test/c128/monster.db.3 ../../../build/test/c128/monster.db.4 \
+            ../../../build/test/c128/ovl.town ../../../build/test/c128/ovl.start ../../../build/test/c128/ovl.death ../../../build/test/c128/ovl.gen \
+            ../../../build/test/c128/128.runtime.prg ../../../build/test/c128/128.input.prg ../../../build/test/c128/128.proj.prg ../../../build/test/c128/128.fdisk.prg ../../../build/test/c128/128.world.prg ../../../build/test/c128/128.item.prg ../../../build/test/c128/128.names.prg ../../../build/test/c128/128.select.prg ../../../build/test/c128/128.persist.prg ../../../build/test/c128/128.play.prg ../../../build/test/c128/128.bank.prg; then
         LOAD_RESUME_BOOT_ASSETS_BUILT=1
         return 0
     fi
@@ -3658,8 +3666,8 @@ build_load_resume_boot_assets() {
     local build_log
     build_log="$(test128_tmp_file test128_boot_load_resume_build.log)"
     local c1541_bin="${C1541:-c1541}"
-    local loadresume_d64="out/moria128_loadresume.d64"
-    local save_blob="out/THE.GAME"
+    local loadresume_d64="../../../build/test/c128/moria128_loadresume.d64"
+    local save_blob="../../../build/test/c128/THE.GAME"
 
     if ! python3 tests/make_load_resume_save.py "$save_blob" >"$build_log" 2>&1; then
         echo "FAIL (load-resume save generation failed)"
@@ -3671,29 +3679,29 @@ build_load_resume_boot_assets() {
 
     if ! "$c1541_bin" -format "moria128,m8" d64 "$loadresume_d64" \
             -attach "$loadresume_d64" \
-            -write out/boot128.prg "moria8.128" \
-            -write out/moria128.prg "moria128" \
-            -write out/title "title" \
-            -write out/monster.db.1 "monster.db.1" \
-            -write out/monster.db.2 "monster.db.2" \
-            -write out/monster.db.3 "monster.db.3" \
-            -write out/monster.db.4 "monster.db.4" \
-            -write out/ovl.town "ovl.town" \
-            -write out/ovl.start "ovl.start" \
-            -write out/ovl.death "ovl.death" \
-            -write out/ovl.gen "ovl.gen" \
-            -write out/128.runtime.prg "128.runtime" \
-            -write out/128.input.prg "128.input" \
-			-write out/128.proj.prg "128.proj" \
-            -write out/128.fdisk.prg "128.fdisk" \
-            -write out/128.diskio.prg "128.diskio" \
-            -write out/128.world.prg "128.world" \
-            -write out/128.item.prg "128.item" \
-            -write out/128.names.prg "128.names" \
-            -write out/128.select.prg "128.select" \
-            -write out/128.persist.prg "128.persist" \
-            -write out/128.play.prg "128.play" \
-            -write out/128.bank.prg "128.bank" \
+            -write ../../../build/test/c128/boot128.prg "moria8.128" \
+            -write ../../../build/test/c128/moria128.prg "moria128" \
+            -write ../../../build/test/c128/title "title" \
+            -write ../../../build/test/c128/monster.db.1 "monster.db.1" \
+            -write ../../../build/test/c128/monster.db.2 "monster.db.2" \
+            -write ../../../build/test/c128/monster.db.3 "monster.db.3" \
+            -write ../../../build/test/c128/monster.db.4 "monster.db.4" \
+            -write ../../../build/test/c128/ovl.town "ovl.town" \
+            -write ../../../build/test/c128/ovl.start "ovl.start" \
+            -write ../../../build/test/c128/ovl.death "ovl.death" \
+            -write ../../../build/test/c128/ovl.gen "ovl.gen" \
+            -write ../../../build/test/c128/128.runtime.prg "128.runtime" \
+            -write ../../../build/test/c128/128.input.prg "128.input" \
+			-write ../../../build/test/c128/128.proj.prg "128.proj" \
+            -write ../../../build/test/c128/128.fdisk.prg "128.fdisk" \
+            -write ../../../build/test/c128/128.diskio.prg "128.diskio" \
+            -write ../../../build/test/c128/128.world.prg "128.world" \
+            -write ../../../build/test/c128/128.item.prg "128.item" \
+            -write ../../../build/test/c128/128.names.prg "128.names" \
+            -write ../../../build/test/c128/128.select.prg "128.select" \
+            -write ../../../build/test/c128/128.persist.prg "128.persist" \
+            -write ../../../build/test/c128/128.play.prg "128.play" \
+            -write ../../../build/test/c128/128.bank.prg "128.bank" \
             -write "$save_blob" "THE.GAME" >>"$build_log" 2>&1; then
         echo "FAIL (load-resume disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
@@ -3738,7 +3746,7 @@ run_test_internal() {
 
     if c128_target_is_stale "$prg_file" || c128_target_is_stale "$vs_file"; then
         local asm_output
-        asm_output=$(java -jar "$KICKASS" "$src" -o "$prg_file" -libdir ../c64 -define C128 -vicesymbols :OVL_OUT=out 2>&1)
+        asm_output=$(java -jar "$KICKASS" "$src" -o "$prg_file" -libdir ../c64 -define C128 -vicesymbols :OVL_OUT=../../../build/test/c128 2>&1)
         if [ $? -ne 0 ]; then
             printf 'FAIL\t%s\t%s\t%s\n' "$name" "$(( $(test128_now_ms) - start_ms ))" "assembly error" >> "$result_file"
             return
@@ -3899,7 +3907,7 @@ run_parallel_unit_tests() {
     result_file="$(test128_tmp_file test128_results_unit.txt)"
     : > "$result_file"
     
-    mkdir -p out
+    mkdir -p "$C128_TEST_OUT"
     if [ "$TEST_FAIL_FAST" != "0" ]; then
         echo "  running unit tests serially (fail-fast)..."
         local test_entry
@@ -4240,35 +4248,35 @@ run_boot_d64_smoke() {
     build_boot_assets || return
 
     local c1541_bin="${C1541:-c1541}"
-    local scripted_d64="out/moria128_detectmonsters.d64"
+    local scripted_d64="../../../build/test/c128/moria128_detectmonsters.d64"
     local build_log
     build_log="$(test128_tmp_file "test128_${name}_disk.log")"
     : > "$build_log"
     if ! "$c1541_bin" -format "moria128,m8" d64 "$scripted_d64" \
             -attach "$scripted_d64" \
-            -write out/boot128.prg "moria8.128" \
-            -write out/moria128.prg "moria128" \
-            -write out/title "title" \
-            -write out/monster.db.1 "monster.db.1" \
-            -write out/monster.db.2 "monster.db.2" \
-            -write out/monster.db.3 "monster.db.3" \
-            -write out/monster.db.4 "monster.db.4" \
-            -write out/ovl.town "ovl.town" \
-            -write out/ovl.start "ovl.start" \
-            -write out/ovl.death "ovl.death" \
-            -write out/ovl.gen "ovl.gen" \
-            -write out/128.runtime.prg "128.runtime" \
-            -write out/128.input.prg "128.input" \
-			-write out/128.proj.prg "128.proj" \
-            -write out/128.fdisk.prg "128.fdisk" \
-            -write out/128.diskio.prg "128.diskio" \
-            -write out/128.world.prg "128.world" \
-            -write out/128.item.prg "128.item" \
-            -write out/128.names.prg "128.names" \
-            -write out/128.select.prg "128.select" \
-            -write out/128.persist.prg "128.persist" \
-            -write out/128.play.prg "128.play" \
-            -write out/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c128/boot128.prg "moria8.128" \
+            -write ../../../build/test/c128/moria128.prg "moria128" \
+            -write ../../../build/test/c128/title "title" \
+            -write ../../../build/test/c128/monster.db.1 "monster.db.1" \
+            -write ../../../build/test/c128/monster.db.2 "monster.db.2" \
+            -write ../../../build/test/c128/monster.db.3 "monster.db.3" \
+            -write ../../../build/test/c128/monster.db.4 "monster.db.4" \
+            -write ../../../build/test/c128/ovl.town "ovl.town" \
+            -write ../../../build/test/c128/ovl.start "ovl.start" \
+            -write ../../../build/test/c128/ovl.death "ovl.death" \
+            -write ../../../build/test/c128/ovl.gen "ovl.gen" \
+            -write ../../../build/test/c128/128.runtime.prg "128.runtime" \
+            -write ../../../build/test/c128/128.input.prg "128.input" \
+			-write ../../../build/test/c128/128.proj.prg "128.proj" \
+            -write ../../../build/test/c128/128.fdisk.prg "128.fdisk" \
+            -write ../../../build/test/c128/128.diskio.prg "128.diskio" \
+            -write ../../../build/test/c128/128.world.prg "128.world" \
+            -write ../../../build/test/c128/128.item.prg "128.item" \
+            -write ../../../build/test/c128/128.names.prg "128.names" \
+            -write ../../../build/test/c128/128.select.prg "128.select" \
+            -write ../../../build/test/c128/128.persist.prg "128.persist" \
+            -write ../../../build/test/c128/128.play.prg "128.play" \
+            -write ../../../build/test/c128/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -4276,18 +4284,18 @@ run_boot_d64_smoke() {
         return
     fi
 
-    local main_vs="out/main.vs"
+    local main_vs="../../../build/test/c128/main.vs"
     local entry_main
     entry_main=$(awk '/\.entry_main$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     if [ -z "${entry_main:-}" ]; then
-        echo "FAIL (missing entry_main in out/main.vs)"
+        echo "FAIL (missing entry_main in ../../../build/test/c128/main.vs)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
     fi
 
     local abs_d64
-    abs_d64="$(cd out && pwd)/moria128.d71"
+    abs_d64="$(cd ../../../build/test/c128 && pwd)/moria128.d71"
     local mon_file
     mon_file="$(test128_tmp_file "test128_${name}.mon")"
     local log_file
@@ -4321,18 +4329,18 @@ run_boot_title_newgame_smoke() {
 
     build_boot_assets || return
 
-    local main_vs="out/main.vs"
+    local main_vs="../../../build/test/c128/main.vs"
     local loop_top
     loop_top=$(awk '/\.c128_town_move_diag_loop_top$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     if [ -z "${loop_top:-}" ]; then
-        echo "FAIL (missing c128_town_move_diag_loop_top in out/main.vs)"
+        echo "FAIL (missing c128_town_move_diag_loop_top in ../../../build/test/c128/main.vs)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
     fi
 
     local abs_d64
-    abs_d64="$(cd out && pwd)/moria128.d71"
+    abs_d64="$(cd ../../../build/test/c128 && pwd)/moria128.d71"
     local mon_file
     mon_file="$(test128_tmp_file "test128_${name}.mon")"
     local log_file
@@ -4378,18 +4386,18 @@ run_new_key_stability_smoke() {
 
     build_boot_assets || return
 
-    local main_vs="out/main.vs"
+    local main_vs="../../../build/test/c128/main.vs"
     local game_new_start
     game_new_start=$(awk '/\.game_new_start$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     if [ -z "${game_new_start:-}" ]; then
-        echo "FAIL (missing game_new_start in out/main.vs)"
+        echo "FAIL (missing game_new_start in ../../../build/test/c128/main.vs)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
     fi
 
     local abs_d64
-    abs_d64="$(cd out && pwd)/moria128.d71"
+    abs_d64="$(cd ../../../build/test/c128 && pwd)/moria128.d71"
     local mon_file
     mon_file="$(test128_tmp_file "test128_${name}.mon")"
     local log_file
@@ -4435,19 +4443,19 @@ run_title_art_smoke() {
 
     build_title_art_boot_assets || return
 
-    local main_vs="out/main.vs"
+    local main_vs="../../../build/test/c128/main.vs"
     local title_art_pass title_art_fail
     title_art_pass=$(awk '/\.c128_test_title_art_pass_sym$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     title_art_fail=$(awk '/\.c128_test_title_art_fail_sym$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     if [ -z "${title_art_pass:-}" ] || [ -z "${title_art_fail:-}" ]; then
-        echo "FAIL (missing title art probe symbols in out/main.vs)"
+        echo "FAIL (missing title art probe symbols in ../../../build/test/c128/main.vs)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
     fi
 
     local abs_d64
-    abs_d64="$(cd out && pwd)/moria128_titleart.d64"
+    abs_d64="$(cd ../../../build/test/c128 && pwd)/moria128_titleart.d64"
     local mon_file
     mon_file="$(test128_tmp_file "test128_${name}.mon")"
     local log_file
@@ -4501,22 +4509,22 @@ run_boot_title_load_missing_savefile_smoke() {
 
     build_title_load_missing_save_assets || return
 
-    local main_vs="out/main.vs"
+    local main_vs="../../../build/test/c128/main.vs"
     local title_menu_ready
     title_menu_ready=$(awk '/\.title_menu_ready$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     if [ -z "${title_menu_ready:-}" ]; then
-        echo "FAIL (missing title_menu_ready in out/main.vs)"
+        echo "FAIL (missing title_menu_ready in ../../../build/test/c128/main.vs)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
     fi
 
     local abs_boot_d64 abs_save_d64 abs_main_vs
-    abs_boot_d64="$(cd out && pwd)/moria128.d71"
-    abs_save_d64="$(cd out && pwd)/moria128_missing_save.d64"
+    abs_boot_d64="$(cd ../../../build/test/c128 && pwd)/moria128.d71"
+    abs_save_d64="$(cd ../../../build/test/c128 && pwd)/moria128_missing_save.d64"
     local log_file
     log_file="$(test128_tmp_file "test128_${name}.log")"
-    abs_main_vs="$(cd out && pwd)/main.vs"
+    abs_main_vs="$(cd ../../../build/test/c128 && pwd)/main.vs"
 
     if ! python3 -u tests/title_load_missing_save_smoke.py \
             --vice "$VICE" \
@@ -4541,29 +4549,29 @@ run_boot_title_load_mounted_save_smoke() {
 
     build_title_load_mounted_save_assets || return
 
-    local main_vs="out/main.vs"
+    local main_vs="../../../build/test/c128/main.vs"
     local title_menu_ready load_resume_game uds_show_insert_prompt disk_prompt_game
     title_menu_ready=$(awk '/\.title_menu_ready$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     load_resume_game=$(awk '/\.load_resume_game$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     uds_show_insert_prompt=$(awk '/\.uds_show_insert_prompt$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     disk_prompt_game=$(awk '/\.disk_prompt_game$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     if [ -z "${title_menu_ready:-}" ] || [ -z "${load_resume_game:-}" ] || [ -z "${uds_show_insert_prompt:-}" ] || [ -z "${disk_prompt_game:-}" ]; then
-        echo "FAIL (missing mounted-save smoke symbols in out/main.vs)"
+        echo "FAIL (missing mounted-save smoke symbols in ../../../build/test/c128/main.vs)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
     fi
 
     local abs_boot_d64 abs_save_d64
-    abs_boot_d64="$(cd out && pwd)/moria128.d71"
-    abs_save_d64="$(cd out && pwd)/moria128_mounted_save.d64"
+    abs_boot_d64="$(cd ../../../build/test/c128 && pwd)/moria128.d71"
+    abs_save_d64="$(cd ../../../build/test/c128 && pwd)/moria128_mounted_save.d64"
     local log_file
     log_file="$(test128_tmp_file "test128_${name}.log")"
     if ! python3 -u tests/title_load_mounted_save_smoke.py \
             --vice "$VICE" \
             --boot-d64 "$abs_boot_d64" \
             --save-d64 "$abs_save_d64" \
-            --main-vs "$(cd out && pwd)/main.vs" >"$log_file" 2>&1; then
+            --main-vs "$(cd ../../../build/test/c128 && pwd)/main.vs" >"$log_file" 2>&1; then
         echo "FAIL"
         tail -20 "$log_file" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -4582,21 +4590,21 @@ run_boot_title_save_write_product_smoke() {
 
     build_save_write_product_assets || return
 
-    local main_vs="out/main.vs"
+    local main_vs="../../../build/test/c128/main.vs"
     local pass_addr fail_addr diag_addr
     pass_addr=$(awk '/\.c128_test_after_save_game$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     fail_addr=$(awk '/\.c128_test_unexpected_post_save_program_prompt$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     diag_addr=$(awk '/\.c128_test_post_save_prompt_diag$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     if [ -z "${pass_addr:-}" ] || [ -z "${fail_addr:-}" ] || [ -z "${diag_addr:-}" ]; then
-        echo "FAIL (missing save-write smoke symbols in out/main.vs)"
+        echo "FAIL (missing save-write smoke symbols in ../../../build/test/c128/main.vs)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
     fi
 
     local abs_boot_d64 abs_save_d64
-    abs_boot_d64="$(cd out && pwd)/moria128_savewrite_product.d64"
-    abs_save_d64="$(cd out && pwd)/moria128_savewrite_product_save.d64"
+    abs_boot_d64="$(cd ../../../build/test/c128 && pwd)/moria128_savewrite_product.d64"
+    abs_save_d64="$(cd ../../../build/test/c128 && pwd)/moria128_savewrite_product_save.d64"
     local mon_file log_file
     mon_file="$(test128_tmp_file "test128_${name}.mon")"
     log_file="$(test128_tmp_file "test128_${name}.log")"
@@ -4660,11 +4668,11 @@ run_marker_init_d64_smoke() {
     local build_log
     build_log="$(test128_tmp_file "test128_${name}_build.log")"
     local prg_file="tests/test_marker_init_d64_128.prg"
-    local save_d64="out/moria128_marker_init_d64_save.d64"
+    local save_d64="../../../build/test/c128/moria128_marker_init_d64_save.d64"
 
     if ! java -jar "$KICKASS" tests/test_marker_init_d64_128.s \
             -o "$prg_file" -libdir ../c64 -define C128 -vicesymbols \
-            :OVL_OUT=out >"$build_log" 2>&1; then
+            :OVL_OUT=../../../build/test/c128 >"$build_log" 2>&1; then
         echo "FAIL (marker-init D64 payload assembly failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -4675,8 +4683,8 @@ run_marker_init_d64_smoke() {
     local abs_prg abs_vs abs_save_d64 log_file
     abs_prg="$(cd "$(dirname "$prg_file")" && pwd)/$(basename "$prg_file")"
     abs_vs="$(cd "$(dirname "$prg_file")" && pwd)/test_marker_init_d64_128.vs"
-    mkdir -p out
-    abs_save_d64="$(cd out && pwd)/$(basename "$save_d64")"
+    mkdir -p "$C128_TEST_OUT"
+    abs_save_d64="$(cd ../../../build/test/c128 && pwd)/$(basename "$save_d64")"
     log_file="$(test128_tmp_file "test128_${name}.log")"
 
     if ! python3 -u tests/marker_init_d64_smoke.py \
@@ -4703,19 +4711,19 @@ run_boot_title_save_media_fail_product_smoke() {
 
     build_save_media_fail_product_assets || return
 
-    local main_vs="out/main_save_media_fail.vs"
+    local main_vs="../../../build/test/c128/main_save_media_fail.vs"
     local fail_addr
     fail_addr=$(awk '/\.save_return_fail$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     if [ -z "${fail_addr:-}" ]; then
-        echo "FAIL (missing save-media-fail smoke symbols in out/main_save_media_fail.vs)"
+        echo "FAIL (missing save-media-fail smoke symbols in ../../../build/test/c128/main_save_media_fail.vs)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
     fi
 
     local abs_boot_d64 abs_save_d64
-    abs_boot_d64="$(cd out && pwd)/moria128_savemediafail_product.d64"
-    abs_save_d64="$(cd out && pwd)/moria128_savemediafail_product_save.d64"
+    abs_boot_d64="$(cd ../../../build/test/c128 && pwd)/moria128_savemediafail_product.d64"
+    abs_save_d64="$(cd ../../../build/test/c128 && pwd)/moria128_savemediafail_product_save.d64"
     local mon_file log_file
     mon_file="$(test128_tmp_file "test128_${name}.mon")"
     log_file="$(test128_tmp_file "test128_${name}.log")"
@@ -4763,14 +4771,14 @@ run_boot_title_change_save_drive_smoke() {
     local build_log
     build_log="$(test128_tmp_file test128_change_save_drive_build.log)"
     local c1541_bin="${C1541:-c1541}"
-    local boot_d64="out/moria128_change_save_drive.d64"
-    local save10_d64="out/moria128_change_save_drive_save10.d64"
-    local marker_blob="out/MORIA8.ID"
+    local boot_d64="../../../build/test/c128/moria128_change_save_drive.d64"
+    local save10_d64="../../../build/test/c128/moria128_change_save_drive_save10.d64"
+    local marker_blob="../../../build/test/c128/MORIA8.ID"
     local dir_type_offset0=$(((357 + 1) * 256 + 2))
 
-    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 \
+    if ! java -jar "$KICKASS" main.s :OVL_OUT=../../../build/test/c128 -showmem -vicesymbols -libdir ../c64 \
             -define C128 -define C128_TEST_SCRIPTED_CHANGE_SAVE_DRIVE_PRODUCT \
-            -o out/moria128.prg >"$build_log" 2>&1; then
+            -o ../../../build/test/c128/moria128.prg >"$build_log" 2>&1; then
         echo "FAIL (change-save-drive product main assembly failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -4781,30 +4789,30 @@ run_boot_title_change_save_drive_smoke() {
     rm -f "$boot_d64"
     if ! "$c1541_bin" -format "moria128,m8" d64 "$boot_d64" \
             -attach "$boot_d64" \
-            -write out/boot128.prg "moria8.128" \
-            -write out/moria128.prg "moria128" \
-            -write out/title "title" \
-            -write out/monster.db.1 "monster.db.1" \
-            -write out/monster.db.2 "monster.db.2" \
-            -write out/monster.db.3 "monster.db.3" \
-            -write out/monster.db.4 "monster.db.4" \
-            -write out/ovl.town "ovl.town" \
-            -write out/ovl.start "ovl.start" \
-            -write out/ovl.death "ovl.death" \
-            -write out/ovl.gen "ovl.gen" \
-            -write out/ovl.help "128.help" \
-            -write out/128.runtime.prg "128.runtime" \
-            -write out/128.input.prg "128.input" \
-            -write out/128.proj.prg "128.proj" \
-            -write out/128.fdisk.prg "128.fdisk" \
-            -write out/128.diskio.prg "128.diskio" \
-            -write out/128.world.prg "128.world" \
-            -write out/128.item.prg "128.item" \
-            -write out/128.names.prg "128.names" \
-            -write out/128.select.prg "128.select" \
-            -write out/128.persist.prg "128.persist" \
-            -write out/128.play.prg "128.play" \
-            -write out/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c128/boot128.prg "moria8.128" \
+            -write ../../../build/test/c128/moria128.prg "moria128" \
+            -write ../../../build/test/c128/title "title" \
+            -write ../../../build/test/c128/monster.db.1 "monster.db.1" \
+            -write ../../../build/test/c128/monster.db.2 "monster.db.2" \
+            -write ../../../build/test/c128/monster.db.3 "monster.db.3" \
+            -write ../../../build/test/c128/monster.db.4 "monster.db.4" \
+            -write ../../../build/test/c128/ovl.town "ovl.town" \
+            -write ../../../build/test/c128/ovl.start "ovl.start" \
+            -write ../../../build/test/c128/ovl.death "ovl.death" \
+            -write ../../../build/test/c128/ovl.gen "ovl.gen" \
+            -write ../../../build/test/c128/ovl.help "128.help" \
+            -write ../../../build/test/c128/128.runtime.prg "128.runtime" \
+            -write ../../../build/test/c128/128.input.prg "128.input" \
+            -write ../../../build/test/c128/128.proj.prg "128.proj" \
+            -write ../../../build/test/c128/128.fdisk.prg "128.fdisk" \
+            -write ../../../build/test/c128/128.diskio.prg "128.diskio" \
+            -write ../../../build/test/c128/128.world.prg "128.world" \
+            -write ../../../build/test/c128/128.item.prg "128.item" \
+            -write ../../../build/test/c128/128.names.prg "128.names" \
+            -write ../../../build/test/c128/128.select.prg "128.select" \
+            -write ../../../build/test/c128/128.persist.prg "128.persist" \
+            -write ../../../build/test/c128/128.play.prg "128.play" \
+            -write ../../../build/test/c128/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
         echo "FAIL (change-save-drive product disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -4841,7 +4849,7 @@ run_boot_title_change_save_drive_smoke() {
             --vice "$VICE" \
             --boot-d64 "$boot_d64" \
             --save10-d64 "$save10_d64" \
-            --main-vs out/main.vs \
+            --main-vs ../../../build/test/c128/main.vs \
             --start-symbol ".c128_test_change_save_drive_wait_for_harness" \
             --resume-symbol ".c128_test_change_save_drive_before_save" \
             --pass-symbol ".c128_test_change_save_drive_pass" \
@@ -4875,11 +4883,11 @@ run_boot_title_single_drive_save_wrong_media_smoke() {
     local build_log
     build_log="$(test128_tmp_file test128_single_drive_save_wrong_media_build.log)"
     local c1541_bin="${C1541:-c1541}"
-    local wrong_media_d64="out/moria128_single_drive_save_wrong_media.d64"
+    local wrong_media_d64="../../../build/test/c128/moria128_single_drive_save_wrong_media.d64"
 
-    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 \
+    if ! java -jar "$KICKASS" main.s :OVL_OUT=../../../build/test/c128 -showmem -vicesymbols -libdir ../c64 \
             -define C128 -define C128_TEST_SCRIPTED_SINGLE_DRIVE_SAVE_WRONG_MEDIA_PRODUCT \
-            -o out/moria128.prg >"$build_log" 2>&1; then
+            -o ../../../build/test/c128/moria128.prg >"$build_log" 2>&1; then
         echo "FAIL (single-drive save wrong-media product main assembly failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -4890,29 +4898,29 @@ run_boot_title_single_drive_save_wrong_media_smoke() {
     rm -f "$wrong_media_d64"
     if ! "$c1541_bin" -format "moria128,m8" d64 "$wrong_media_d64" \
             -attach "$wrong_media_d64" \
-            -write out/boot128.prg "moria8.128" \
-            -write out/moria128.prg "moria128" \
-            -write out/title "title" \
-            -write out/monster.db.1 "monster.db.1" \
-            -write out/monster.db.2 "monster.db.2" \
-            -write out/monster.db.3 "monster.db.3" \
-            -write out/monster.db.4 "monster.db.4" \
-            -write out/ovl.town "ovl.town" \
-            -write out/ovl.start "ovl.start" \
-            -write out/ovl.death "ovl.death" \
-            -write out/ovl.gen "ovl.gen" \
-            -write out/128.runtime.prg "128.runtime" \
-            -write out/128.input.prg "128.input" \
-            -write out/128.proj.prg "128.proj" \
-            -write out/128.fdisk.prg "128.fdisk" \
-            -write out/128.diskio.prg "128.diskio" \
-            -write out/128.world.prg "128.world" \
-            -write out/128.item.prg "128.item" \
-            -write out/128.names.prg "128.names" \
-            -write out/128.select.prg "128.select" \
-            -write out/128.persist.prg "128.persist" \
-            -write out/128.play.prg "128.play" \
-            -write out/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c128/boot128.prg "moria8.128" \
+            -write ../../../build/test/c128/moria128.prg "moria128" \
+            -write ../../../build/test/c128/title "title" \
+            -write ../../../build/test/c128/monster.db.1 "monster.db.1" \
+            -write ../../../build/test/c128/monster.db.2 "monster.db.2" \
+            -write ../../../build/test/c128/monster.db.3 "monster.db.3" \
+            -write ../../../build/test/c128/monster.db.4 "monster.db.4" \
+            -write ../../../build/test/c128/ovl.town "ovl.town" \
+            -write ../../../build/test/c128/ovl.start "ovl.start" \
+            -write ../../../build/test/c128/ovl.death "ovl.death" \
+            -write ../../../build/test/c128/ovl.gen "ovl.gen" \
+            -write ../../../build/test/c128/128.runtime.prg "128.runtime" \
+            -write ../../../build/test/c128/128.input.prg "128.input" \
+            -write ../../../build/test/c128/128.proj.prg "128.proj" \
+            -write ../../../build/test/c128/128.fdisk.prg "128.fdisk" \
+            -write ../../../build/test/c128/128.diskio.prg "128.diskio" \
+            -write ../../../build/test/c128/128.world.prg "128.world" \
+            -write ../../../build/test/c128/128.item.prg "128.item" \
+            -write ../../../build/test/c128/128.names.prg "128.names" \
+            -write ../../../build/test/c128/128.select.prg "128.select" \
+            -write ../../../build/test/c128/128.persist.prg "128.persist" \
+            -write ../../../build/test/c128/128.play.prg "128.play" \
+            -write ../../../build/test/c128/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
         echo "FAIL (single-drive save wrong-media product disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -4921,7 +4929,7 @@ run_boot_title_single_drive_save_wrong_media_smoke() {
     fi
 
     local pass_addr
-    pass_addr=$(awk '/\.c128_test_single_drive_save_wrong_media_script_exhausted$/ { split($2,a,":"); print toupper(a[2]); exit }' out/main.vs)
+    pass_addr=$(awk '/\.c128_test_single_drive_save_wrong_media_script_exhausted$/ { split($2,a,":"); print toupper(a[2]); exit }' ../../../build/test/c128/main.vs)
     if [ -z "${pass_addr:-}" ]; then
         echo "FAIL (missing single-drive save wrong-media smoke symbols)"
         FAIL=$((FAIL + 1))
@@ -4965,11 +4973,11 @@ run_boot_title_single_drive_load_wrong_media_smoke() {
     local build_log
     build_log="$(test128_tmp_file test128_single_drive_load_wrong_media_build.log)"
     local c1541_bin="${C1541:-c1541}"
-    local wrong_media_d64="out/moria128_single_drive_load_wrong_media.d64"
+    local wrong_media_d64="../../../build/test/c128/moria128_single_drive_load_wrong_media.d64"
 
-    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 \
+    if ! java -jar "$KICKASS" main.s :OVL_OUT=../../../build/test/c128 -showmem -vicesymbols -libdir ../c64 \
             -define C128 -define C128_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_WRONG_MEDIA_PRODUCT \
-            -o out/moria128.prg >"$build_log" 2>&1; then
+            -o ../../../build/test/c128/moria128.prg >"$build_log" 2>&1; then
         echo "FAIL (single-drive load wrong-media product main assembly failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -4980,29 +4988,29 @@ run_boot_title_single_drive_load_wrong_media_smoke() {
     rm -f "$wrong_media_d64"
     if ! "$c1541_bin" -format "moria128,m8" d64 "$wrong_media_d64" \
             -attach "$wrong_media_d64" \
-            -write out/boot128.prg "moria8.128" \
-            -write out/moria128.prg "moria128" \
-            -write out/title "title" \
-            -write out/monster.db.1 "monster.db.1" \
-            -write out/monster.db.2 "monster.db.2" \
-            -write out/monster.db.3 "monster.db.3" \
-            -write out/monster.db.4 "monster.db.4" \
-            -write out/ovl.town "ovl.town" \
-            -write out/ovl.start "ovl.start" \
-            -write out/ovl.death "ovl.death" \
-            -write out/ovl.gen "ovl.gen" \
-            -write out/128.runtime.prg "128.runtime" \
-            -write out/128.input.prg "128.input" \
-            -write out/128.proj.prg "128.proj" \
-            -write out/128.fdisk.prg "128.fdisk" \
-            -write out/128.diskio.prg "128.diskio" \
-            -write out/128.world.prg "128.world" \
-            -write out/128.item.prg "128.item" \
-            -write out/128.names.prg "128.names" \
-            -write out/128.select.prg "128.select" \
-            -write out/128.persist.prg "128.persist" \
-            -write out/128.play.prg "128.play" \
-            -write out/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c128/boot128.prg "moria8.128" \
+            -write ../../../build/test/c128/moria128.prg "moria128" \
+            -write ../../../build/test/c128/title "title" \
+            -write ../../../build/test/c128/monster.db.1 "monster.db.1" \
+            -write ../../../build/test/c128/monster.db.2 "monster.db.2" \
+            -write ../../../build/test/c128/monster.db.3 "monster.db.3" \
+            -write ../../../build/test/c128/monster.db.4 "monster.db.4" \
+            -write ../../../build/test/c128/ovl.town "ovl.town" \
+            -write ../../../build/test/c128/ovl.start "ovl.start" \
+            -write ../../../build/test/c128/ovl.death "ovl.death" \
+            -write ../../../build/test/c128/ovl.gen "ovl.gen" \
+            -write ../../../build/test/c128/128.runtime.prg "128.runtime" \
+            -write ../../../build/test/c128/128.input.prg "128.input" \
+            -write ../../../build/test/c128/128.proj.prg "128.proj" \
+            -write ../../../build/test/c128/128.fdisk.prg "128.fdisk" \
+            -write ../../../build/test/c128/128.diskio.prg "128.diskio" \
+            -write ../../../build/test/c128/128.world.prg "128.world" \
+            -write ../../../build/test/c128/128.item.prg "128.item" \
+            -write ../../../build/test/c128/128.names.prg "128.names" \
+            -write ../../../build/test/c128/128.select.prg "128.select" \
+            -write ../../../build/test/c128/128.persist.prg "128.persist" \
+            -write ../../../build/test/c128/128.play.prg "128.play" \
+            -write ../../../build/test/c128/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
         echo "FAIL (single-drive load wrong-media product disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -5011,7 +5019,7 @@ run_boot_title_single_drive_load_wrong_media_smoke() {
     fi
 
     local pass_addr
-    pass_addr=$(awk '/\.c128_test_single_drive_load_wrong_media_script_exhausted$/ { split($2,a,":"); print toupper(a[2]); exit }' out/main.vs)
+    pass_addr=$(awk '/\.c128_test_single_drive_load_wrong_media_script_exhausted$/ { split($2,a,":"); print toupper(a[2]); exit }' ../../../build/test/c128/main.vs)
     if [ -z "${pass_addr:-}" ]; then
         echo "FAIL (missing single-drive load wrong-media smoke symbols)"
         FAIL=$((FAIL + 1))
@@ -5055,15 +5063,15 @@ run_boot_title_single_drive_load_corrupt_smoke() {
     local build_log
     build_log="$(test128_tmp_file test128_single_drive_load_corrupt_build.log)"
     local c1541_bin="${C1541:-c1541}"
-    local boot_d64="out/moria128_single_drive_load_corrupt.d71"
-    local save_d64="out/moria128_single_drive_load_corrupt_save.d64"
-    local program_d64="out/moria128_single_drive_load_corrupt_program.d64"
-    local save_blob="out/THE.GAME"
-    local marker_blob="out/MORIA8.ID"
+    local boot_d64="../../../build/test/c128/moria128_single_drive_load_corrupt.d71"
+    local save_d64="../../../build/test/c128/moria128_single_drive_load_corrupt_save.d64"
+    local program_d64="../../../build/test/c128/moria128_single_drive_load_corrupt_program.d64"
+    local save_blob="../../../build/test/c128/THE.GAME"
+    local marker_blob="../../../build/test/c128/MORIA8.ID"
 
-    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 \
+    if ! java -jar "$KICKASS" main.s :OVL_OUT=../../../build/test/c128 -showmem -vicesymbols -libdir ../c64 \
             -define C128 -define C128_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_CORRUPT_PRODUCT \
-            -o out/moria128.prg >"$build_log" 2>&1; then
+            -o ../../../build/test/c128/moria128.prg >"$build_log" 2>&1; then
         echo "FAIL (single-drive load corrupt product main assembly failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -5072,7 +5080,7 @@ run_boot_title_single_drive_load_corrupt_smoke() {
     fi
 
     rm -f "$boot_d64"
-    cp out/moria128.d71 "$boot_d64"
+    cp ../../../build/test/c128/moria128.d71 "$boot_d64"
     if ! "$c1541_bin" -attach "$boot_d64" \
             -delete "moria128" \
             -delete "128.runtime" \
@@ -5087,19 +5095,19 @@ run_boot_title_single_drive_load_corrupt_smoke() {
             -delete "128.persist" \
             -delete "128.play" \
             -delete "128.bank" \
-            -write out/moria128.prg "moria128" \
-            -write out/128.runtime.prg "128.runtime" \
-            -write out/128.input.prg "128.input" \
-            -write out/128.proj.prg "128.proj" \
-            -write out/128.fdisk.prg "128.fdisk" \
-            -write out/128.diskio.prg "128.diskio" \
-            -write out/128.world.prg "128.world" \
-            -write out/128.item.prg "128.item" \
-            -write out/128.names.prg "128.names" \
-            -write out/128.select.prg "128.select" \
-            -write out/128.persist.prg "128.persist" \
-            -write out/128.play.prg "128.play" \
-            -write out/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c128/moria128.prg "moria128" \
+            -write ../../../build/test/c128/128.runtime.prg "128.runtime" \
+            -write ../../../build/test/c128/128.input.prg "128.input" \
+            -write ../../../build/test/c128/128.proj.prg "128.proj" \
+            -write ../../../build/test/c128/128.fdisk.prg "128.fdisk" \
+            -write ../../../build/test/c128/128.diskio.prg "128.diskio" \
+            -write ../../../build/test/c128/128.world.prg "128.world" \
+            -write ../../../build/test/c128/128.item.prg "128.item" \
+            -write ../../../build/test/c128/128.names.prg "128.names" \
+            -write ../../../build/test/c128/128.select.prg "128.select" \
+            -write ../../../build/test/c128/128.persist.prg "128.persist" \
+            -write ../../../build/test/c128/128.play.prg "128.play" \
+            -write ../../../build/test/c128/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
         echo "FAIL (single-drive load corrupt product disk patch failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -5140,7 +5148,7 @@ run_boot_title_single_drive_load_corrupt_smoke() {
             --name "$name" \
             --vice "$VICE" \
             --boot-d64 "$boot_d64" \
-            --main-vs out/main.vs \
+            --main-vs ../../../build/test/c128/main.vs \
             --start-symbol ".c128_test_single_drive_load_corrupt_wait_for_harness" \
             --resume-symbol ".c128_test_single_drive_load_corrupt_before_load" \
             --pass-symbol ".c128_test_single_drive_load_corrupt_program_ready" \
@@ -5167,14 +5175,14 @@ run_boot_title_single_drive_load_return_smoke() {
     local build_log
     build_log="$(test128_tmp_file test128_single_drive_load_return_build.log)"
     local c1541_bin="${C1541:-c1541}"
-    local boot_d64="out/moria128_single_drive_load_return.d71"
-    local save_d64="out/moria128_single_drive_load_return_save.d64"
-    local marker_blob="out/MORIA8.ID"
-    local save_blob="out/THE.GAME"
+    local boot_d64="../../../build/test/c128/moria128_single_drive_load_return.d71"
+    local save_d64="../../../build/test/c128/moria128_single_drive_load_return_save.d64"
+    local marker_blob="../../../build/test/c128/MORIA8.ID"
+    local save_blob="../../../build/test/c128/THE.GAME"
 
-    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 \
+    if ! java -jar "$KICKASS" main.s :OVL_OUT=../../../build/test/c128 -showmem -vicesymbols -libdir ../c64 \
             -define C128 -define C128_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_RETURN_PRODUCT \
-            -o out/moria128.prg >"$build_log" 2>&1; then
+            -o ../../../build/test/c128/moria128.prg >"$build_log" 2>&1; then
         echo "FAIL (single-drive load return product main assembly failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -5183,7 +5191,7 @@ run_boot_title_single_drive_load_return_smoke() {
     fi
 
     rm -f "$boot_d64"
-    cp out/moria128.d71 "$boot_d64"
+    cp ../../../build/test/c128/moria128.d71 "$boot_d64"
     if ! "$c1541_bin" -attach "$boot_d64" \
             -delete "moria128" \
             -delete "128.runtime" \
@@ -5198,19 +5206,19 @@ run_boot_title_single_drive_load_return_smoke() {
             -delete "128.persist" \
             -delete "128.play" \
             -delete "128.bank" \
-            -write out/moria128.prg "moria128" \
-            -write out/128.runtime.prg "128.runtime" \
-            -write out/128.input.prg "128.input" \
-            -write out/128.proj.prg "128.proj" \
-            -write out/128.fdisk.prg "128.fdisk" \
-            -write out/128.diskio.prg "128.diskio" \
-            -write out/128.world.prg "128.world" \
-            -write out/128.item.prg "128.item" \
-            -write out/128.names.prg "128.names" \
-            -write out/128.select.prg "128.select" \
-            -write out/128.persist.prg "128.persist" \
-            -write out/128.play.prg "128.play" \
-            -write out/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c128/moria128.prg "moria128" \
+            -write ../../../build/test/c128/128.runtime.prg "128.runtime" \
+            -write ../../../build/test/c128/128.input.prg "128.input" \
+            -write ../../../build/test/c128/128.proj.prg "128.proj" \
+            -write ../../../build/test/c128/128.fdisk.prg "128.fdisk" \
+            -write ../../../build/test/c128/128.diskio.prg "128.diskio" \
+            -write ../../../build/test/c128/128.world.prg "128.world" \
+            -write ../../../build/test/c128/128.item.prg "128.item" \
+            -write ../../../build/test/c128/128.names.prg "128.names" \
+            -write ../../../build/test/c128/128.select.prg "128.select" \
+            -write ../../../build/test/c128/128.persist.prg "128.persist" \
+            -write ../../../build/test/c128/128.play.prg "128.play" \
+            -write ../../../build/test/c128/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
         echo "FAIL (single-drive load return product disk patch failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -5243,7 +5251,7 @@ run_boot_title_single_drive_load_return_smoke() {
             --name "$name" \
             --vice "$VICE" \
             --boot-d64 "$boot_d64" \
-            --main-vs out/main.vs \
+            --main-vs ../../../build/test/c128/main.vs \
             --start-symbol ".c128_test_single_drive_load_return_wait_for_harness" \
             --resume-symbol ".c128_test_single_drive_load_return_before_load" \
             --pass-symbol ".c128_program_media_error_prompt" \
@@ -5268,16 +5276,16 @@ run_boot_title_load_then_save_new_empty_smoke() {
     local build_log
     build_log="$(test128_tmp_file test128_load_then_save_new_empty_build.log)"
     local c1541_bin="${C1541:-c1541}"
-    local boot_d64="out/moria128_load_then_save_new_empty.d71"
-    local load_save_d64="out/moria128_load_then_save_new_empty_load.d64"
-    local new_save_d64="out/moria128_load_then_save_new_empty_save.d64"
-    local swap_program_d64="out/moria128_load_then_save_new_empty_program.d71"
-    local marker_blob="out/MORIA8.ID"
-    local save_blob="out/THE.GAME"
+    local boot_d64="../../../build/test/c128/moria128_load_then_save_new_empty.d71"
+    local load_save_d64="../../../build/test/c128/moria128_load_then_save_new_empty_load.d64"
+    local new_save_d64="../../../build/test/c128/moria128_load_then_save_new_empty_save.d64"
+    local swap_program_d64="../../../build/test/c128/moria128_load_then_save_new_empty_program.d71"
+    local marker_blob="../../../build/test/c128/MORIA8.ID"
+    local save_blob="../../../build/test/c128/THE.GAME"
 
-    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 \
+    if ! java -jar "$KICKASS" main.s :OVL_OUT=../../../build/test/c128 -showmem -vicesymbols -libdir ../c64 \
             -define C128 -define C128_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_RETURN_PRODUCT -define C128_TEST_SCRIPTED_LOAD_THEN_SAVE_NEW_EMPTY_PRODUCT \
-            -o out/moria128.prg >"$build_log" 2>&1; then
+            -o ../../../build/test/c128/moria128.prg >"$build_log" 2>&1; then
         echo "FAIL (load-then-save-new-empty product main assembly failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -5286,7 +5294,7 @@ run_boot_title_load_then_save_new_empty_smoke() {
     fi
 
     rm -f "$boot_d64"
-    cp out/moria128.d71 "$boot_d64"
+    cp ../../../build/test/c128/moria128.d71 "$boot_d64"
     if ! "$c1541_bin" -attach "$boot_d64" \
             -delete "moria128" \
             -delete "128.runtime" \
@@ -5301,19 +5309,19 @@ run_boot_title_load_then_save_new_empty_smoke() {
             -delete "128.persist" \
             -delete "128.play" \
             -delete "128.bank" \
-            -write out/moria128.prg "moria128" \
-            -write out/128.runtime.prg "128.runtime" \
-            -write out/128.input.prg "128.input" \
-            -write out/128.proj.prg "128.proj" \
-            -write out/128.fdisk.prg "128.fdisk" \
-            -write out/128.diskio.prg "128.diskio" \
-            -write out/128.world.prg "128.world" \
-            -write out/128.item.prg "128.item" \
-            -write out/128.names.prg "128.names" \
-            -write out/128.select.prg "128.select" \
-            -write out/128.persist.prg "128.persist" \
-            -write out/128.play.prg "128.play" \
-            -write out/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c128/moria128.prg "moria128" \
+            -write ../../../build/test/c128/128.runtime.prg "128.runtime" \
+            -write ../../../build/test/c128/128.input.prg "128.input" \
+            -write ../../../build/test/c128/128.proj.prg "128.proj" \
+            -write ../../../build/test/c128/128.fdisk.prg "128.fdisk" \
+            -write ../../../build/test/c128/128.diskio.prg "128.diskio" \
+            -write ../../../build/test/c128/128.world.prg "128.world" \
+            -write ../../../build/test/c128/128.item.prg "128.item" \
+            -write ../../../build/test/c128/128.names.prg "128.names" \
+            -write ../../../build/test/c128/128.select.prg "128.select" \
+            -write ../../../build/test/c128/128.persist.prg "128.persist" \
+            -write ../../../build/test/c128/128.play.prg "128.play" \
+            -write ../../../build/test/c128/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
         echo "FAIL (load-then-save-new-empty product disk patch failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -5353,7 +5361,7 @@ run_boot_title_load_then_save_new_empty_smoke() {
     if python3 -u tests/load_then_save_new_empty_smoke.py \
             --vice "$VICE" \
             --boot-d64 "$boot_d64" \
-            --main-vs out/main.vs \
+            --main-vs ../../../build/test/c128/main.vs \
             --load-save-d64 "$load_save_d64" \
             --new-save-d64 "$new_save_d64" \
             --program-d64 "$swap_program_d64" \
@@ -5388,14 +5396,14 @@ run_boot_title_disk_setup_single_drive_return_smoke() {
     local build_log
     build_log="$(test128_tmp_file test128_disk_setup_single_drive_return_build.log)"
     local c1541_bin="${C1541:-c1541}"
-    local boot_d64="out/moria128_disk_setup_single_drive_return.d71"
-    local save_d64="out/moria128_disk_setup_single_drive_return_save.d64"
-    local program_d64="out/moria128_disk_setup_single_drive_return_program.d71"
-    local marker_blob="out/MORIA8.ID"
+    local boot_d64="../../../build/test/c128/moria128_disk_setup_single_drive_return.d71"
+    local save_d64="../../../build/test/c128/moria128_disk_setup_single_drive_return_save.d64"
+    local program_d64="../../../build/test/c128/moria128_disk_setup_single_drive_return_program.d71"
+    local marker_blob="../../../build/test/c128/MORIA8.ID"
 
-    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 \
+    if ! java -jar "$KICKASS" main.s :OVL_OUT=../../../build/test/c128 -showmem -vicesymbols -libdir ../c64 \
             -define C128 -define C128_TEST_SCRIPTED_DISK_SETUP_SINGLE_DRIVE_RETURN_PRODUCT \
-            -o out/moria128.prg >"$build_log" 2>&1; then
+            -o ../../../build/test/c128/moria128.prg >"$build_log" 2>&1; then
         echo "FAIL (disk-setup single-drive return product main assembly failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -5404,7 +5412,7 @@ run_boot_title_disk_setup_single_drive_return_smoke() {
     fi
 
     rm -f "$boot_d64"
-    cp out/moria128.d71 "$boot_d64"
+    cp ../../../build/test/c128/moria128.d71 "$boot_d64"
     if ! "$c1541_bin" -attach "$boot_d64" \
             -delete "moria128" \
             -delete "128.runtime" \
@@ -5419,19 +5427,19 @@ run_boot_title_disk_setup_single_drive_return_smoke() {
             -delete "128.persist" \
             -delete "128.play" \
             -delete "128.bank" \
-            -write out/moria128.prg "moria128" \
-            -write out/128.runtime.prg "128.runtime" \
-            -write out/128.input.prg "128.input" \
-            -write out/128.proj.prg "128.proj" \
-            -write out/128.fdisk.prg "128.fdisk" \
-            -write out/128.diskio.prg "128.diskio" \
-            -write out/128.world.prg "128.world" \
-            -write out/128.item.prg "128.item" \
-            -write out/128.names.prg "128.names" \
-            -write out/128.select.prg "128.select" \
-            -write out/128.persist.prg "128.persist" \
-            -write out/128.play.prg "128.play" \
-            -write out/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c128/moria128.prg "moria128" \
+            -write ../../../build/test/c128/128.runtime.prg "128.runtime" \
+            -write ../../../build/test/c128/128.input.prg "128.input" \
+            -write ../../../build/test/c128/128.proj.prg "128.proj" \
+            -write ../../../build/test/c128/128.fdisk.prg "128.fdisk" \
+            -write ../../../build/test/c128/128.diskio.prg "128.diskio" \
+            -write ../../../build/test/c128/128.world.prg "128.world" \
+            -write ../../../build/test/c128/128.item.prg "128.item" \
+            -write ../../../build/test/c128/128.names.prg "128.names" \
+            -write ../../../build/test/c128/128.select.prg "128.select" \
+            -write ../../../build/test/c128/128.persist.prg "128.persist" \
+            -write ../../../build/test/c128/128.play.prg "128.play" \
+            -write ../../../build/test/c128/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
         echo "FAIL (disk-setup single-drive return product disk patch failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -5461,7 +5469,7 @@ run_boot_title_disk_setup_single_drive_return_smoke() {
             --name "$name" \
             --vice "$VICE" \
             --boot-d64 "$boot_d64" \
-            --main-vs out/main.vs \
+            --main-vs ../../../build/test/c128/main.vs \
             --start-symbol ".c128_test_disk_setup_single_drive_return_wait_for_harness" \
             --resume-symbol ".c128_test_disk_setup_single_drive_return_before_disk_setup" \
             --pass-symbol ".c128_test_after_disk_setup_single_drive_return" \
@@ -5485,13 +5493,13 @@ run_boot_title_single_drive_fresh_save_smoke() {
     local build_log
     build_log="$(test128_tmp_file test128_single_drive_fresh_save_build.log)"
     local c1541_bin="${C1541:-c1541}"
-    local fresh_d64="out/moria128_single_drive_fresh_save.d64"
-    local save_d64="out/moria128_single_drive_fresh_save_save.d64"
-    local swap_program_d64="out/moria128_single_drive_fresh_save_program.d64"
+    local fresh_d64="../../../build/test/c128/moria128_single_drive_fresh_save.d64"
+    local save_d64="../../../build/test/c128/moria128_single_drive_fresh_save_save.d64"
+    local swap_program_d64="../../../build/test/c128/moria128_single_drive_fresh_save_program.d64"
 
-    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 \
+    if ! java -jar "$KICKASS" main.s :OVL_OUT=../../../build/test/c128 -showmem -vicesymbols -libdir ../c64 \
             -define C128 -define C128_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT \
-            -o out/moria128.prg >"$build_log" 2>&1; then
+            -o ../../../build/test/c128/moria128.prg >"$build_log" 2>&1; then
         echo "FAIL (single-drive fresh-save product main assembly failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -5502,30 +5510,30 @@ run_boot_title_single_drive_fresh_save_smoke() {
     rm -f "$fresh_d64"
     if ! "$c1541_bin" -format "moria128,m8" d64 "$fresh_d64" \
             -attach "$fresh_d64" \
-            -write out/boot128.prg "moria8.128" \
-            -write out/moria128.prg "moria128" \
-            -write out/title "title" \
-            -write out/monster.db.1 "monster.db.1" \
-            -write out/monster.db.2 "monster.db.2" \
-            -write out/monster.db.3 "monster.db.3" \
-            -write out/monster.db.4 "monster.db.4" \
-            -write out/ovl.town "ovl.town" \
-            -write out/ovl.start "ovl.start" \
-            -write out/ovl.death "ovl.death" \
-            -write out/ovl.gen "ovl.gen" \
-            -write out/ovl.help "128.help" \
-            -write out/128.runtime.prg "128.runtime" \
-            -write out/128.input.prg "128.input" \
-            -write out/128.proj.prg "128.proj" \
-            -write out/128.fdisk.prg "128.fdisk" \
-            -write out/128.diskio.prg "128.diskio" \
-            -write out/128.world.prg "128.world" \
-            -write out/128.item.prg "128.item" \
-            -write out/128.names.prg "128.names" \
-            -write out/128.select.prg "128.select" \
-            -write out/128.persist.prg "128.persist" \
-            -write out/128.play.prg "128.play" \
-            -write out/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c128/boot128.prg "moria8.128" \
+            -write ../../../build/test/c128/moria128.prg "moria128" \
+            -write ../../../build/test/c128/title "title" \
+            -write ../../../build/test/c128/monster.db.1 "monster.db.1" \
+            -write ../../../build/test/c128/monster.db.2 "monster.db.2" \
+            -write ../../../build/test/c128/monster.db.3 "monster.db.3" \
+            -write ../../../build/test/c128/monster.db.4 "monster.db.4" \
+            -write ../../../build/test/c128/ovl.town "ovl.town" \
+            -write ../../../build/test/c128/ovl.start "ovl.start" \
+            -write ../../../build/test/c128/ovl.death "ovl.death" \
+            -write ../../../build/test/c128/ovl.gen "ovl.gen" \
+            -write ../../../build/test/c128/ovl.help "128.help" \
+            -write ../../../build/test/c128/128.runtime.prg "128.runtime" \
+            -write ../../../build/test/c128/128.input.prg "128.input" \
+            -write ../../../build/test/c128/128.proj.prg "128.proj" \
+            -write ../../../build/test/c128/128.fdisk.prg "128.fdisk" \
+            -write ../../../build/test/c128/128.diskio.prg "128.diskio" \
+            -write ../../../build/test/c128/128.world.prg "128.world" \
+            -write ../../../build/test/c128/128.item.prg "128.item" \
+            -write ../../../build/test/c128/128.names.prg "128.names" \
+            -write ../../../build/test/c128/128.select.prg "128.select" \
+            -write ../../../build/test/c128/128.persist.prg "128.persist" \
+            -write ../../../build/test/c128/128.play.prg "128.play" \
+            -write ../../../build/test/c128/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
         echo "FAIL (single-drive fresh-save product disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -5547,7 +5555,7 @@ run_boot_title_single_drive_fresh_save_smoke() {
             --name "$name" \
             --vice "$VICE" \
             --boot-d64 "$fresh_d64" \
-            --main-vs out/main.vs \
+            --main-vs ../../../build/test/c128/main.vs \
             --start-symbol ".c128_test_single_drive_fresh_save_wait_for_harness" \
             --resume-symbol ".c128_test_single_drive_fresh_save_before_save" \
             --attach-delay 5.0 \
@@ -5593,13 +5601,13 @@ run_boot_title_single_drive_fresh_save_no_init_smoke() {
     local build_log
     build_log="$(test128_tmp_file test128_single_drive_fresh_save_no_init_build.log)"
     local c1541_bin="${C1541:-c1541}"
-    local fresh_d64="out/moria128_single_drive_fresh_save_no_init.d64"
-    local save_d64="out/moria128_single_drive_fresh_save_no_init_save.d64"
+    local fresh_d64="../../../build/test/c128/moria128_single_drive_fresh_save_no_init.d64"
+    local save_d64="../../../build/test/c128/moria128_single_drive_fresh_save_no_init_save.d64"
 
-    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 \
+    if ! java -jar "$KICKASS" main.s :OVL_OUT=../../../build/test/c128 -showmem -vicesymbols -libdir ../c64 \
             -define C128 -define C128_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT \
             -define C128_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_NO_INIT \
-            -o out/moria128.prg >"$build_log" 2>&1; then
+            -o ../../../build/test/c128/moria128.prg >"$build_log" 2>&1; then
         echo "FAIL (single-drive fresh-save no-init product main assembly failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -5610,30 +5618,30 @@ run_boot_title_single_drive_fresh_save_no_init_smoke() {
     rm -f "$fresh_d64"
     if ! "$c1541_bin" -format "moria128,m8" d64 "$fresh_d64" \
             -attach "$fresh_d64" \
-            -write out/boot128.prg "moria8.128" \
-            -write out/moria128.prg "moria128" \
-            -write out/title "title" \
-            -write out/monster.db.1 "monster.db.1" \
-            -write out/monster.db.2 "monster.db.2" \
-            -write out/monster.db.3 "monster.db.3" \
-            -write out/monster.db.4 "monster.db.4" \
-            -write out/ovl.town "ovl.town" \
-            -write out/ovl.start "ovl.start" \
-            -write out/ovl.death "ovl.death" \
-            -write out/ovl.gen "ovl.gen" \
-            -write out/ovl.help "128.help" \
-            -write out/128.runtime.prg "128.runtime" \
-            -write out/128.input.prg "128.input" \
-            -write out/128.proj.prg "128.proj" \
-            -write out/128.fdisk.prg "128.fdisk" \
-            -write out/128.diskio.prg "128.diskio" \
-            -write out/128.world.prg "128.world" \
-            -write out/128.item.prg "128.item" \
-            -write out/128.names.prg "128.names" \
-            -write out/128.select.prg "128.select" \
-            -write out/128.persist.prg "128.persist" \
-            -write out/128.play.prg "128.play" \
-            -write out/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c128/boot128.prg "moria8.128" \
+            -write ../../../build/test/c128/moria128.prg "moria128" \
+            -write ../../../build/test/c128/title "title" \
+            -write ../../../build/test/c128/monster.db.1 "monster.db.1" \
+            -write ../../../build/test/c128/monster.db.2 "monster.db.2" \
+            -write ../../../build/test/c128/monster.db.3 "monster.db.3" \
+            -write ../../../build/test/c128/monster.db.4 "monster.db.4" \
+            -write ../../../build/test/c128/ovl.town "ovl.town" \
+            -write ../../../build/test/c128/ovl.start "ovl.start" \
+            -write ../../../build/test/c128/ovl.death "ovl.death" \
+            -write ../../../build/test/c128/ovl.gen "ovl.gen" \
+            -write ../../../build/test/c128/ovl.help "128.help" \
+            -write ../../../build/test/c128/128.runtime.prg "128.runtime" \
+            -write ../../../build/test/c128/128.input.prg "128.input" \
+            -write ../../../build/test/c128/128.proj.prg "128.proj" \
+            -write ../../../build/test/c128/128.fdisk.prg "128.fdisk" \
+            -write ../../../build/test/c128/128.diskio.prg "128.diskio" \
+            -write ../../../build/test/c128/128.world.prg "128.world" \
+            -write ../../../build/test/c128/128.item.prg "128.item" \
+            -write ../../../build/test/c128/128.names.prg "128.names" \
+            -write ../../../build/test/c128/128.select.prg "128.select" \
+            -write ../../../build/test/c128/128.persist.prg "128.persist" \
+            -write ../../../build/test/c128/128.play.prg "128.play" \
+            -write ../../../build/test/c128/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
         echo "FAIL (single-drive fresh-save no-init product disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -5654,7 +5662,7 @@ run_boot_title_single_drive_fresh_save_no_init_smoke() {
             --name "$name" \
             --vice "$VICE" \
             --boot-d64 "$fresh_d64" \
-            --main-vs out/main.vs \
+            --main-vs ../../../build/test/c128/main.vs \
             --start-symbol ".c128_test_single_drive_fresh_save_wait_for_harness" \
             --resume-symbol ".c128_test_single_drive_fresh_save_before_save" \
             --attach-delay 5.0 \
@@ -5694,17 +5702,17 @@ run_boot_title_load_resume_smoke() {
 
     build_load_resume_boot_assets || return
 
-    local main_vs="out/main.vs"
+    local main_vs="../../../build/test/c128/main.vs"
     local load_resume_game
     load_resume_game=$(awk '/\.load_resume_game$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     if [ -z "${load_resume_game:-}" ]; then
-        echo "FAIL (missing load_resume_game in out/main.vs)"
+        echo "FAIL (missing load_resume_game in ../../../build/test/c128/main.vs)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
     fi
     local abs_d64
-    abs_d64="$(cd out && pwd)/moria128_loadresume.d64"
+    abs_d64="$(cd ../../../build/test/c128 && pwd)/moria128_loadresume.d64"
     local mon_file
     mon_file="$(test128_tmp_file "test128_${name}.mon")"
     local log_file
@@ -5748,20 +5756,20 @@ run_boot_title_idle_smoke() {
 
     build_boot_assets || return
 
-    local main_vs="out/main.vs"
+    local main_vs="../../../build/test/c128/main.vs"
     local title_show_sysinfo title_menu_ready game_over_prompt
     title_show_sysinfo=$(awk '/\.title_show_sysinfo$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     title_menu_ready=$(awk '/\.title_menu_ready$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     game_over_prompt=$(awk '/\.game_over_prompt$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     if [ -z "${title_show_sysinfo:-}" ] || [ -z "${title_menu_ready:-}" ] || [ -z "${game_over_prompt:-}" ]; then
-        echo "FAIL (missing title boot probe symbols in out/main.vs)"
+        echo "FAIL (missing title boot probe symbols in ../../../build/test/c128/main.vs)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
     fi
 
     local abs_d64
-    abs_d64="$(cd out && pwd)/moria128.d71"
+    abs_d64="$(cd ../../../build/test/c128 && pwd)/moria128.d71"
     local mon_file
     mon_file="$(test128_tmp_file "test128_${name}.mon")"
     local log_file
@@ -5854,18 +5862,18 @@ run_boot_tier_transition_smoke() {
 
     build_boot_assets || return
 
-    local main_vs="out/main.vs"
+    local main_vs="../../../build/test/c128/main.vs"
     local dungeon_generate
     dungeon_generate=$(awk '/\.dungeon_generate$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     if [ -z "${dungeon_generate:-}" ]; then
-        echo "FAIL (missing dungeon_generate in out/main.vs)"
+        echo "FAIL (missing dungeon_generate in ../../../build/test/c128/main.vs)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
     fi
 
     local abs_d64
-    abs_d64="$(cd out && pwd)/moria128.d71"
+    abs_d64="$(cd ../../../build/test/c128 && pwd)/moria128.d71"
     local mon_file
     mon_file="$(test128_tmp_file "test128_${name}.mon")"
     local log_file
@@ -5909,18 +5917,18 @@ run_town_overlay_smoke() {
 
     build_boot_assets || return
 
-    local main_vs="out/main.vs"
+    local main_vs="../../../build/test/c128/main.vs"
     local store_enter
     store_enter=$(awk '/\.store_enter$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     if [ -z "${store_enter:-}" ]; then
-        echo "FAIL (missing store_enter in out/main.vs)"
+        echo "FAIL (missing store_enter in ../../../build/test/c128/main.vs)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
     fi
 
     local abs_d64
-    abs_d64="$(cd out && pwd)/moria128.d71"
+    abs_d64="$(cd ../../../build/test/c128 && pwd)/moria128.d71"
     local mon_file
     mon_file="$(test128_tmp_file "test128_${name}.mon")"
     local log_file
@@ -5963,18 +5971,18 @@ run_town_overlay_female_smoke() {
 
     build_boot_assets || return
 
-    local main_vs="out/main.vs"
+    local main_vs="../../../build/test/c128/main.vs"
     local store_enter
     store_enter=$(awk '/\.store_enter$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     if [ -z "${store_enter:-}" ]; then
-        echo "FAIL (missing store_enter in out/main.vs)"
+        echo "FAIL (missing store_enter in ../../../build/test/c128/main.vs)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
     fi
 
     local abs_d64
-    abs_d64="$(cd out && pwd)/moria128.d71"
+    abs_d64="$(cd ../../../build/test/c128 && pwd)/moria128.d71"
     local mon_file
     mon_file="$(test128_tmp_file "test128_${name}.mon")"
     local log_file
@@ -6025,7 +6033,7 @@ run_town_overlay_state_smoke() {
 
     build_overlay_state_boot_assets || return
 
-    local main_vs="out/main.vs"
+    local main_vs="../../../build/test/c128/main.vs"
     local store_enter
     store_enter=$(awk '/\.store_enter$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     if [ -z "${store_enter:-}" ]; then
@@ -6036,7 +6044,7 @@ run_town_overlay_state_smoke() {
     fi
 
     local abs_d64
-    abs_d64="$(cd out && pwd)/moria128_overlaystate.d64"
+    abs_d64="$(cd ../../../build/test/c128 && pwd)/moria128_overlaystate.d64"
     local mon_file
     mon_file="$(test128_tmp_file "test128_${name}.mon")"
     local log_file
@@ -6087,19 +6095,19 @@ run_scripted_summary_to_town_smoke() {
 
     build_scripted_input_boot_assets || return
 
-    local main_vs="out/main.vs"
+    local main_vs="../../../build/test/c128/main.vs"
     local c128_test_town_pass c128_test_town_fail
     c128_test_town_pass=$(awk '/\.c128_test_town_pass_sym$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     c128_test_town_fail=$(awk '/\.c128_test_town_fail_sym$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     if [ -z "${c128_test_town_pass:-}" ] || [ -z "${c128_test_town_fail:-}" ]; then
-        echo "FAIL (missing scripted summary/town pass/fail symbols in out/main.vs)"
+        echo "FAIL (missing scripted summary/town pass/fail symbols in ../../../build/test/c128/main.vs)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
     fi
 
     local abs_d64
-    abs_d64="$(cd out && pwd)/moria128_scriptedinput.d64"
+    abs_d64="$(cd ../../../build/test/c128 && pwd)/moria128_scriptedinput.d64"
     local mon_file
     mon_file="$(test128_tmp_file "test128_${name}.mon")"
     local log_file
@@ -6163,11 +6171,11 @@ perf_p1_trace_collect_variant() {
 perf_p1_trace_run_product_assert() {
     perf_p1_trace_collect_variant "assert" C128_TEST_PERF_P1_TRACE_ASSERT || return 2
 
-    local main_vs="out/main.vs"
+    local main_vs="../../../build/test/c128/main.vs"
     local pass_addr
     pass_addr=$(awk '/\.c128_test_perf_p1_trace_pass_sym$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     if [ -z "${pass_addr:-}" ]; then
-        PERF_P1_TRACE_FAIL_REASON="missing PERF trace product assert pass symbol in out/main.vs"
+        PERF_P1_TRACE_FAIL_REASON="missing PERF trace product assert pass symbol in ../../../build/test/c128/main.vs"
         return 1
     fi
 
@@ -6209,11 +6217,11 @@ perf_p1_trace_run_product_assert() {
 perf_p1_trace_run_modal_assert() {
     perf_p1_trace_collect_variant "modal_assert" C128_TEST_PERF_P1_TRACE_MODAL C128_TEST_PERF_P1_TRACE_MODAL_ASSERT || return 2
 
-    local main_vs="out/main.vs"
+    local main_vs="../../../build/test/c128/main.vs"
     local pass_addr
     pass_addr=$(awk '/\.c128_test_perf_p1_trace_pass_sym$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     if [ -z "${pass_addr:-}" ]; then
-        PERF_P1_TRACE_FAIL_REASON="missing PERF trace modal assert pass symbol in out/main.vs"
+        PERF_P1_TRACE_FAIL_REASON="missing PERF trace modal assert pass symbol in ../../../build/test/c128/main.vs"
         return 1
     fi
 
@@ -6255,11 +6263,11 @@ perf_p1_trace_run_modal_assert() {
 perf_p1_trace_run_command_assert() {
     perf_p1_trace_collect_variant "command_assert" C128_TEST_PERF_P1_TRACE_COMMAND C128_TEST_PERF_P1_TRACE_COMMAND_ASSERT || return 2
 
-    local main_vs="out/main.vs"
+    local main_vs="../../../build/test/c128/main.vs"
     local pass_addr
     pass_addr=$(awk '/\.c128_test_perf_p1_trace_pass_sym$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     if [ -z "${pass_addr:-}" ]; then
-        PERF_P1_TRACE_FAIL_REASON="missing PERF trace command assert pass symbol in out/main.vs"
+        PERF_P1_TRACE_FAIL_REASON="missing PERF trace command assert pass symbol in ../../../build/test/c128/main.vs"
         return 1
     fi
 
@@ -6301,11 +6309,11 @@ perf_p1_trace_run_command_assert() {
 perf_p1_trace_run_transition_assert() {
     perf_p1_trace_collect_variant "transition_assert" C128_TEST_PERF_P1_TRACE_TRANSITION C128_TEST_PERF_P1_TRACE_TRANSITION_ASSERT || return 2
 
-    local main_vs="out/main.vs"
+    local main_vs="../../../build/test/c128/main.vs"
     local pass_addr
     pass_addr=$(awk '/\.c128_test_perf_p1_trace_pass_sym$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     if [ -z "${pass_addr:-}" ]; then
-        PERF_P1_TRACE_FAIL_REASON="missing PERF trace transition assert pass symbol in out/main.vs"
+        PERF_P1_TRACE_FAIL_REASON="missing PERF trace transition assert pass symbol in ../../../build/test/c128/main.vs"
         return 1
     fi
 
@@ -6408,7 +6416,7 @@ run_scripted_spell_cast_smoke() {
 
     build_scripted_spell_boot_assets || return
 
-    local main_vs="out/main.vs"
+    local main_vs="../../../build/test/c128/main.vs"
     local c128_test_spell_pass
     local -a spell_fail_labels=(
         "c128_test_spell_fail_no_cast_sym"
@@ -6424,7 +6432,7 @@ run_scripted_spell_cast_smoke() {
     for label in "${spell_fail_labels[@]}"; do
         addr=$(awk -v label="$label" '$3 == "." label { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
         if [ -z "${addr:-}" ]; then
-            echo "FAIL (missing ${label} in out/main.vs)"
+            echo "FAIL (missing ${label} in ../../../build/test/c128/main.vs)"
             FAIL=$((FAIL + 1))
             TOTAL=$((TOTAL + 1))
             return
@@ -6432,14 +6440,14 @@ run_scripted_spell_cast_smoke() {
         spell_fail_addrs+=("$addr")
     done
     if [ -z "${c128_test_spell_pass:-}" ]; then
-        echo "FAIL (missing scripted spell pass symbol in out/main.vs)"
+        echo "FAIL (missing scripted spell pass symbol in ../../../build/test/c128/main.vs)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
     fi
 
     local abs_d64
-    abs_d64="$(cd out && pwd)/moria128_scriptedspell.d64"
+    abs_d64="$(cd ../../../build/test/c128 && pwd)/moria128_scriptedspell.d64"
     local mon_file
     mon_file="$(test128_tmp_file "test128_${name}.mon")"
     local log_file
@@ -6510,7 +6518,7 @@ run_scripted_book_overlay_smoke() {
 
     build_scripted_book_overlay_boot_assets || return
 
-    local main_vs="out/main.vs"
+    local main_vs="../../../build/test/c128/main.vs"
     local pass_addr
     local -a fail_labels=(
         "c128_test_book_overlay_fail_sym"
@@ -6521,7 +6529,7 @@ run_scripted_book_overlay_smoke() {
     for label in "${fail_labels[@]}"; do
         addr=$(awk -v label="$label" '$3 == "." label { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
         if [ -z "${addr:-}" ]; then
-            echo "FAIL (missing ${label} in out/main.vs)"
+            echo "FAIL (missing ${label} in ../../../build/test/c128/main.vs)"
             FAIL=$((FAIL + 1))
             TOTAL=$((TOTAL + 1))
             return
@@ -6529,14 +6537,14 @@ run_scripted_book_overlay_smoke() {
         fail_addrs+=("$addr")
     done
     if [ -z "${pass_addr:-}" ]; then
-        echo "FAIL (missing scripted book overlay pass symbol in out/main.vs)"
+        echo "FAIL (missing scripted book overlay pass symbol in ../../../build/test/c128/main.vs)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
     fi
 
     local abs_d64
-    abs_d64="$(cd out && pwd)/moria128_scriptedbookoverlay.d64"
+    abs_d64="$(cd ../../../build/test/c128 && pwd)/moria128_scriptedbookoverlay.d64"
     local mon_file
     mon_file="$(test128_tmp_file "test128_${name}.mon")"
     local log_file
@@ -6606,7 +6614,7 @@ run_scripted_spell_list_overlay_smoke() {
 
     build_scripted_spell_list_overlay_boot_assets || return
 
-    local main_vs="out/main.vs"
+    local main_vs="../../../build/test/c128/main.vs"
     local pass_addr
     local -a fail_labels=(
         "c128_test_spell_list_overlay_fail_sym"
@@ -6617,7 +6625,7 @@ run_scripted_spell_list_overlay_smoke() {
     for label in "${fail_labels[@]}"; do
         addr=$(awk -v label="$label" '$3 == "." label { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
         if [ -z "${addr:-}" ]; then
-            echo "FAIL (missing ${label} in out/main.vs)"
+            echo "FAIL (missing ${label} in ../../../build/test/c128/main.vs)"
             FAIL=$((FAIL + 1))
             TOTAL=$((TOTAL + 1))
             return
@@ -6625,14 +6633,14 @@ run_scripted_spell_list_overlay_smoke() {
         fail_addrs+=("$addr")
     done
     if [ -z "${pass_addr:-}" ]; then
-        echo "FAIL (missing scripted spell list overlay pass symbol in out/main.vs)"
+        echo "FAIL (missing scripted spell list overlay pass symbol in ../../../build/test/c128/main.vs)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
     fi
 
     local abs_d64
-    abs_d64="$(cd out && pwd)/moria128_scriptedspelllistoverlay.d64"
+    abs_d64="$(cd ../../../build/test/c128 && pwd)/moria128_scriptedspelllistoverlay.d64"
     local mon_file
     mon_file="$(test128_tmp_file "test128_${name}.mon")"
     local log_file
@@ -6702,7 +6710,7 @@ run_scripted_spell_list_cancel_smoke() {
 
     build_scripted_spell_cancel_boot_assets || return
 
-    local main_vs="out/main.vs"
+    local main_vs="../../../build/test/c128/main.vs"
     local c128_test_spell_pass
     local -a spell_fail_labels=(
         "c128_test_spell_fail_no_cast_sym"
@@ -6718,7 +6726,7 @@ run_scripted_spell_list_cancel_smoke() {
     for label in "${spell_fail_labels[@]}"; do
         addr=$(awk -v label="$label" '$3 == "." label { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
         if [ -z "${addr:-}" ]; then
-            echo "FAIL (missing ${label} in out/main.vs)"
+            echo "FAIL (missing ${label} in ../../../build/test/c128/main.vs)"
             FAIL=$((FAIL + 1))
             TOTAL=$((TOTAL + 1))
             return
@@ -6726,14 +6734,14 @@ run_scripted_spell_list_cancel_smoke() {
         spell_fail_addrs+=("$addr")
     done
     if [ -z "${c128_test_spell_pass:-}" ]; then
-        echo "FAIL (missing scripted spell cancel pass symbol in out/main.vs)"
+        echo "FAIL (missing scripted spell cancel pass symbol in ../../../build/test/c128/main.vs)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
     fi
 
     local abs_d64
-    abs_d64="$(cd out && pwd)/moria128_scriptedspellcancel.d64"
+    abs_d64="$(cd ../../../build/test/c128 && pwd)/moria128_scriptedspellcancel.d64"
     local mon_file
     mon_file="$(test128_tmp_file "test128_${name}.mon")"
     local log_file
@@ -6804,7 +6812,7 @@ run_scripted_prayer_cast_smoke() {
 
     build_scripted_prayer_boot_assets || return
 
-    local main_vs="out/main.vs"
+    local main_vs="../../../build/test/c128/main.vs"
     local c128_test_spell_pass
     local -a spell_fail_labels=(
         "c128_test_spell_fail_no_cast_sym"
@@ -6820,7 +6828,7 @@ run_scripted_prayer_cast_smoke() {
     for label in "${spell_fail_labels[@]}"; do
         addr=$(awk -v label="$label" '$3 == "." label { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
         if [ -z "${addr:-}" ]; then
-            echo "FAIL (missing ${label} in out/main.vs)"
+            echo "FAIL (missing ${label} in ../../../build/test/c128/main.vs)"
             FAIL=$((FAIL + 1))
             TOTAL=$((TOTAL + 1))
             return
@@ -6828,14 +6836,14 @@ run_scripted_prayer_cast_smoke() {
         spell_fail_addrs+=("$addr")
     done
     if [ -z "${c128_test_spell_pass:-}" ]; then
-        echo "FAIL (missing scripted prayer pass symbol in out/main.vs)"
+        echo "FAIL (missing scripted prayer pass symbol in ../../../build/test/c128/main.vs)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
     fi
 
     local abs_d64
-    abs_d64="$(cd out && pwd)/moria128_scriptedprayer.d64"
+    abs_d64="$(cd ../../../build/test/c128 && pwd)/moria128_scriptedprayer.d64"
     local mon_file
     mon_file="$(test128_tmp_file "test128_${name}.mon")"
     local log_file
@@ -6906,7 +6914,7 @@ run_real_input_town_move_diag() {
 
     build_boot_assets || return
 
-    local main_vs="out/main.vs"
+    local main_vs="../../../build/test/c128/main.vs"
     local -a stage_names=(
         "loop_top"
         "after_input_get_command"
@@ -6947,7 +6955,7 @@ run_real_input_town_move_diag() {
         local addr
         addr=$(awk "/\\.${stage_labels[$idx]}\$/ { split(\$2,a,\":\"); print toupper(a[2]); exit }" "$main_vs")
         if [ -z "${addr:-}" ]; then
-            echo "FAIL (missing ${stage_labels[$idx]} in out/main.vs)"
+            echo "FAIL (missing ${stage_labels[$idx]} in ../../../build/test/c128/main.vs)"
             FAIL=$((FAIL + 1))
             TOTAL=$((TOTAL + 1))
             return
@@ -6956,7 +6964,7 @@ run_real_input_town_move_diag() {
     done
 
     local abs_d64
-    abs_d64="$(cd out && pwd)/moria128.d71"
+    abs_d64="$(cd ../../../build/test/c128 && pwd)/moria128.d71"
     local mon_file
     mon_file="$(test128_tmp_file "test128_${name}.mon")"
     local log_file
@@ -7010,11 +7018,11 @@ run_real_boot_crash_harness() {
 
     build_real_boot_diag_assets || return
 
-    local main_vs="out/main.vs"
+    local main_vs="../../../build/test/c128/main.vs"
     local c128_diag_fail
     c128_diag_fail=$(awk '/\.c128_diag_fail_sym$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     if [ -z "${c128_diag_fail:-}" ]; then
-        echo "FAIL (missing c128_diag_fail_sym in out/main.vs)"
+        echo "FAIL (missing c128_diag_fail_sym in ../../../build/test/c128/main.vs)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
@@ -7024,14 +7032,14 @@ run_real_boot_crash_harness() {
         [ -n "$addr" ] && diag_stage_breaks+=("$addr")
     done < <(awk '/\.c128_diag_fail_stage_[0-9a-f][0-9a-f]$|\.c128_diag_fail_default$/ { split($2,a,":"); print toupper(a[2]); }' "$main_vs")
     if [ "${#diag_stage_breaks[@]}" -eq 0 ]; then
-        echo "FAIL (missing overlay diag stage traps in out/main.vs)"
+        echo "FAIL (missing overlay diag stage traps in ../../../build/test/c128/main.vs)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
     fi
 
     local abs_d64
-    abs_d64="$(cd out && pwd)/moria128_realdiag.d64"
+    abs_d64="$(cd ../../../build/test/c128 && pwd)/moria128_realdiag.d64"
     local mon_file
     mon_file="$(test128_tmp_file "test128_${name}.mon")"
     local log_file
@@ -7084,11 +7092,11 @@ run_overlay_data_transition_smoke() {
 
     build_overlay_transition_diag_assets || return
 
-    local main_vs="out/main.vs"
+    local main_vs="../../../build/test/c128/main.vs"
     local pass_addr
     pass_addr=$(awk '/\.c128_overlay_transition_pass_sym$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     if [ -z "${pass_addr:-}" ]; then
-        echo "FAIL (missing c128_overlay_transition_pass_sym in out/main.vs)"
+        echo "FAIL (missing c128_overlay_transition_pass_sym in ../../../build/test/c128/main.vs)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
@@ -7100,7 +7108,7 @@ run_overlay_data_transition_smoke() {
     done < <(awk '/\.c128_diag_fail_stage_[0-9a-f][0-9a-f]$|\.c128_diag_fail_default$/ { split($2,a,":"); print toupper(a[2]); }' "$main_vs")
 
     local abs_d64
-    abs_d64="$(cd out && pwd)/moria128_overlaydiag.d64"
+    abs_d64="$(cd ../../../build/test/c128 && pwd)/moria128_overlaydiag.d64"
     local mon_file
     mon_file="$(test128_tmp_file "test128_${name}.mon")"
     local log_file
@@ -7160,19 +7168,19 @@ run_cache_survival_smoke() {
 
     build_cache_survival_boot_assets || return
 
-    local main_vs="out/main.vs"
+    local main_vs="../../../build/test/c128/main.vs"
     local c128_test_cache_survival_pass c128_test_cache_survival_fail
     c128_test_cache_survival_pass=$(awk '/\.c128_test_cache_survival_pass_sym$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     c128_test_cache_survival_fail=$(awk '/\.c128_test_cache_survival_fail_sym$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     if [ -z "${c128_test_cache_survival_pass:-}" ] || [ -z "${c128_test_cache_survival_fail:-}" ]; then
-        echo "FAIL (missing cache-survival pass/fail symbols in out/main.vs)"
+        echo "FAIL (missing cache-survival pass/fail symbols in ../../../build/test/c128/main.vs)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
     fi
 
     local abs_d64
-    abs_d64="$(cd out && pwd)/moria128_cache_survival.d64"
+    abs_d64="$(cd ../../../build/test/c128 && pwd)/moria128_cache_survival.d64"
     local mon_file
     mon_file="$(test128_tmp_file "test128_${name}.mon")"
     local log_file
@@ -7223,19 +7231,19 @@ run_dungeon_attack_stability_smoke() {
 
     build_real_boot_diag_assets || return
 
-    local main_vs="out/main.vs"
+    local main_vs="../../../build/test/c128/main.vs"
     local player_attack monster_attack
     player_attack=$(awk '/\.player_attack_monster$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     monster_attack=$(awk '/\.monster_attack_player$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     if [ -z "${player_attack:-}" ] || [ -z "${monster_attack:-}" ]; then
-        echo "FAIL (missing combat symbols in out/main.vs)"
+        echo "FAIL (missing combat symbols in ../../../build/test/c128/main.vs)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
     fi
 
     local abs_d64
-    abs_d64="$(cd out && pwd)/moria128_realdiag.d64"
+    abs_d64="$(cd ../../../build/test/c128 && pwd)/moria128_realdiag.d64"
     local mon_file
     mon_file="$(test128_tmp_file "test128_${name}.mon")"
     local log_file
@@ -7281,18 +7289,18 @@ run_death_overlay_smoke() {
 
     build_death_overlay_boot_assets || return
 
-    local main_vs="out/main.vs"
+    local main_vs="../../../build/test/c128/main.vs"
     local score_death_screen
     score_death_screen=$(awk '/\.score_death_screen$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     if [ -z "${score_death_screen:-}" ]; then
-        echo "FAIL (missing death-flow symbols in out/main.vs)"
+        echo "FAIL (missing death-flow symbols in ../../../build/test/c128/main.vs)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
     fi
 
     local abs_d64
-    abs_d64="$(cd out && pwd)/moria128_death.d64"
+    abs_d64="$(cd ../../../build/test/c128 && pwd)/moria128_death.d64"
     local mon_file
     mon_file="$(test128_tmp_file "test128_${name}.mon")"
     local log_file
@@ -7336,18 +7344,18 @@ run_restart_to_title_smoke() {
 
     build_death_overlay_boot_assets || return
 
-    local main_vs="out/main.vs"
+    local main_vs="../../../build/test/c128/main.vs"
     local title_show_sysinfo
     title_show_sysinfo=$(awk '/\.title_show_sysinfo$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     if [ -z "${title_show_sysinfo:-}" ]; then
-        echo "FAIL (missing title_show_sysinfo in out/main.vs)"
+        echo "FAIL (missing title_show_sysinfo in ../../../build/test/c128/main.vs)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
     fi
 
     local abs_d64
-    abs_d64="$(cd out && pwd)/moria128_death.d64"
+    abs_d64="$(cd ../../../build/test/c128 && pwd)/moria128_death.d64"
     local mon_file
     mon_file="$(test128_tmp_file "test128_${name}.mon")"
     local log_file
@@ -7391,20 +7399,20 @@ run_preload_partial_failure_smoke() {
 
     build_partial_failure_boot_assets || return
 
-    local main_vs="out/main.vs"
+    local main_vs="../../../build/test/c128/main.vs"
     local dungeon_generate tier_load_disk c128_test_partial_cache_fail
     dungeon_generate=$(awk '/\.dungeon_generate$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     tier_load_disk=$(awk '/\.tier_load_disk$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     c128_test_partial_cache_fail=$(awk '/\.c128_test_partial_cache_fail_sym$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     if [ -z "${dungeon_generate:-}" ] || [ -z "${tier_load_disk:-}" ] || [ -z "${c128_test_partial_cache_fail:-}" ]; then
-        echo "FAIL (missing required symbols in out/main.vs)"
+        echo "FAIL (missing required symbols in ../../../build/test/c128/main.vs)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
     fi
 
     local abs_d64
-    abs_d64="$(cd out && pwd)/moria128_skip1.d64"
+    abs_d64="$(cd ../../../build/test/c128 && pwd)/moria128_skip1.d64"
     local mon_file
     mon_file="$(test128_tmp_file "test128_${name}.mon")"
     local log_file
@@ -7478,20 +7486,20 @@ run_overlay_partial_failure_smoke() {
 
     build_overlay_partial_failure_boot_assets || return
 
-    local main_vs="out/main.vs"
+    local main_vs="../../../build/test/c128/main.vs"
     local store_enter overlay_load_disk c128_test_overlay_cache_fail
     store_enter=$(awk '/\.store_enter$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     overlay_load_disk=$(awk '/\.overlay_load_disk$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     c128_test_overlay_cache_fail=$(awk '/\.c128_test_overlay_cache_fail_sym$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     if [ -z "${store_enter:-}" ] || [ -z "${overlay_load_disk:-}" ] || [ -z "${c128_test_overlay_cache_fail:-}" ]; then
-        echo "FAIL (missing required symbols in out/main.vs)"
+        echo "FAIL (missing required symbols in ../../../build/test/c128/main.vs)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
     fi
 
     local abs_d64
-    abs_d64="$(cd out && pwd)/moria128_skipovl2.d64"
+    abs_d64="$(cd ../../../build/test/c128 && pwd)/moria128_skipovl2.d64"
     local mon_file
     mon_file="$(test128_tmp_file "test128_${name}.mon")"
     local log_file
@@ -7565,19 +7573,19 @@ run_boot_diag_copy() {
 
     build_boot_assets || return
 
-    local main_vs="out/main.vs"
+    local main_vs="../../../build/test/c128/main.vs"
     local entry_main
     entry_main=$(awk '/\.entry_main$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     if [ -z "${entry_main:-}" ]; then
-        echo "FAIL (missing entry_main in out/main.vs)"
+        echo "FAIL (missing entry_main in ../../../build/test/c128/main.vs)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
     fi
 
     local abs_d64 abs_diag_boot
-    abs_d64="$(cd out && pwd)/moria128.d64"
-    abs_diag_boot="$(cd out && pwd)/boot128.diag.prg"
+    abs_d64="$(cd ../../../build/test/c128 && pwd)/moria128.d64"
+    abs_diag_boot="$(cd ../../../build/test/c128 && pwd)/boot128.diag.prg"
     local mon_file
     mon_file="$(test128_tmp_file "test128_${name}.mon")"
     local log_file

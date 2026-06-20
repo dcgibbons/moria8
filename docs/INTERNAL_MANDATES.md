@@ -56,8 +56,9 @@ the layout when they fail.
 - Keep `$D506` common RAM configuration at the documented 4 KB bottom/top common
   model unless the architecture and all assertions are redesigned together.
 - Hardware vectors must point to common RAM or a validated vector bridge.
-- Bank 1 ownership must follow `commodore/c128/memory128.s`; unassigned RAM is
-  not free until an ownership entry and overlap assertions are added.
+- Bank 1 ownership must follow `platforms/commodore/c128/memory128.s`;
+  unassigned RAM is not free until an ownership entry and overlap assertions are
+  added.
 - `$1000-$3FFF` is bank-private in the shipping C128 runtime.
 - `$D000-$DFFF` is not high RAM to borrow while I/O is visible.
 
@@ -79,8 +80,9 @@ Re-check the full contract before patching local logic near the newest crash.
 - Shared entity data should remain struct-of-arrays.
 - Use the existing math library for 16-bit arithmetic.
 - Use the project RNG rather than ad hoc hardware reads.
-- Shared `commodore/common/` changes that affect platform-conditional code must
-  be verified on both C64 and C128.
+- Shared `platforms/commodore/common/` changes that affect
+  platform-conditional code must be verified on C64, C128, and Plus/4 where the
+  code is included.
 
 ## Verification
 

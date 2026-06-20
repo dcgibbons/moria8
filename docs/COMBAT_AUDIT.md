@@ -47,10 +47,10 @@ Repair status for this branch:
 
 | Area | Umoria behavior | Moria8 behavior | Verdict | Evidence | Follow-up |
 | --- | --- | --- | --- | --- | --- |
-| Race combat properties | `character_races[]` stores base BTH, bow BTH, save, hit die, and class mask. Gnome is BTH -8, bow +12, save +12, HD 7. | `race_properties` mirrors compact HD, infra, XP, disarm, search, stealth, fos, BTH, BOW, SAVE. Gnome row is HD 7, BTH -8, BOW +12, SAVE +12. | Matches | Umoria `data_player.cpp`; Moria8 `commodore/common/tables.s` | Add a static table guard if race data is edited again. |
-| Class combat properties | `classes[]` stores HP die, BTH, BOW, save, disarm; Rogue is HD 6, BTH 60, BOW 66, save 30, disarm 45. | `class_properties` mirrors these fields in compact order. Rogue row is HD 6, BTH 60, BOW 66, save 30, disarm 45. | Matches | Umoria `data_player.cpp`; Moria8 `commodore/common/tables.s` | Add a static table guard if class data is edited again. |
-| Class per-level progression | `class_level_adj[class][bth,bthb,device,disarm,save]`; Rogue is `3,4,3,4,3`. | `class_level_adj` has the same rows and order. | Matches | Umoria `data_player.cpp`; Moria8 `commodore/common/tables.s` | None. |
-| Blow-count table | Umoria C++ uses `blows_table[7][6]`, DEX thresholds `<10,<19,<68,<108,<118,else`, STR/weight thresholds `<2,<3,<4,<5,<7,<9,else`. | Runtime `combat_calc_blows` uses the same thresholds and table. | Matches | Umoria `data_tables.cpp`, `player_stats.cpp`; Moria8 `commodore/common/tables.s`, `commodore/common/combat.s`; tests `test_combat.s` 31-33 | Keep tests for gnome rogue, max exceptional DEX, too-heavy, and ammo-as-melee. |
+| Race combat properties | `character_races[]` stores base BTH, bow BTH, save, hit die, and class mask. Gnome is BTH -8, bow +12, save +12, HD 7. | `race_properties` mirrors compact HD, infra, XP, disarm, search, stealth, fos, BTH, BOW, SAVE. Gnome row is HD 7, BTH -8, BOW +12, SAVE +12. | Matches | Umoria `data_player.cpp`; Moria8 `core/tables.s` | Add a static table guard if race data is edited again. |
+| Class combat properties | `classes[]` stores HP die, BTH, BOW, save, disarm; Rogue is HD 6, BTH 60, BOW 66, save 30, disarm 45. | `class_properties` mirrors these fields in compact order. Rogue row is HD 6, BTH 60, BOW 66, save 30, disarm 45. | Matches | Umoria `data_player.cpp`; Moria8 `core/tables.s` | Add a static table guard if class data is edited again. |
+| Class per-level progression | `class_level_adj[class][bth,bthb,device,disarm,save]`; Rogue is `3,4,3,4,3`. | `class_level_adj` has the same rows and order. | Matches | Umoria `data_player.cpp`; Moria8 `core/tables.s` | None. |
+| Blow-count table | Umoria C++ uses `blows_table[7][6]`, DEX thresholds `<10,<19,<68,<108,<118,else`, STR/weight thresholds `<2,<3,<4,<5,<7,<9,else`. | Runtime `combat_calc_blows` uses the same thresholds and table. | Matches | Umoria `data_tables.cpp`, `player_stats.cpp`; Moria8 `core/tables.s`, `core/combat.s`; tests `test_combat.s` 31-33 | Keep tests for gnome rogue, max exceptional DEX, too-heavy, and ammo-as-melee. |
 | Too-heavy weapon | If `STR * 15 < weight`, Umoria forces 1 blow and returns a negative weight-to-hit penalty. | Moria8 now forces 1 blow and applies the signed weight-to-hit penalty in melee total-to-hit. | Matches | Umoria `player_stats.cpp::playerAttackBlows`; Moria8 `combat_calc_blows`, `combat_calc_melee_total_tohit_bonus`; test `test_combat.s` 38 | Keep regression coverage. |
 | Unarmed handling | Bare hands get 2 blows and total-to-hit penalty -3. Damage is 1d1 in Umoria's current C++ path. | Moria8 gives 2 blows and subtracts 9 from final hit chance, equivalent to -3 at `BTH_PER_PLUS_TO_HIT_ADJUST=3`; damage is 1d2. | Acceptable approximation | Umoria `player.cpp::playerCalculateToHitBlows`; Moria8 `combat_calc_tohit`, `combat_calc_blows`, `combat_roll_damage` | Decide whether 1d2 unarmed damage is intentional; add one explicit test if retained. |
 | Missile or launcher as melee | Umoria forces sling ammo through spike categories to 1 blow; missile launchers used as melee are effectively not normal melee weapons. | Moria8 forces missile ID range to 1 blow and treats ranged launchers as unarmed damage. | Matches for blow count; approximation for damage | Umoria `player.cpp::playerCalculateToHitBlows`; Moria8 `combat_calc_blows`, `combat_roll_damage`; tests `test_combat.s`, `test_ranged.s` | Add a launcher-as-melee damage test that documents the approximation. |
@@ -111,12 +111,12 @@ Repair status for this branch:
 
 | Area | Existing coverage | Verdict | Evidence | Follow-up |
 | --- | --- | --- | --- | --- |
-| Core melee math | C64 `combat` tests cover to-hit arithmetic, blow buckets, damage range, apply damage, XP, level-up, critical chance, gnome rogue case, exceptional stats, unlit target BTH, status BTH, too-heavy to-hit, ranged BOW table selection, and signed damage bonus floor. | Good but not complete | `commodore/c64/tests/test_combat.s`; `commodore/c64/run_tests.sh` | Add slay+critical+to-damage integration tests and direct CON HP/disarm exceptional-stat tests. |
-| Direct disarm | C64 `dungeon` tests cover effective disarm ability, trap threshold, and bad-fail behavior. | Good for direct floor trap formula | `commodore/c64/tests/test_dungeon.s`; `commodore/common/disarm_helpers.s` | Add command-path coverage for success/failure messages if UI parity matters. |
-| Monster attack | C64 `monster_attack` tests cover to-hit, AC reduction, special effect plumbing, bless AC, hero fear blocking, hero expiration, and invulnerability damage prevention. | Good for implemented types | `commodore/c64/tests/test_monster_attack.s` | Add unsupported attack type backlog tests only when implementing those attacks. |
-| Ranged/thrown | C64 `ranged` and `throw` tests exist. | Partial | `commodore/c64/tests/test_ranged.s`, `test_throw.s` | Add Umoria launcher/ammo matrix and exceptional STR damage cases. |
-| Status effects | Bless, remove fear, protection from evil, confusion tests exist on C64 and many C128 spell/prayer tests exist. | Timer-heavy, combat-light | `commodore/c64/run_tests.sh`; `commodore/c128/run_tests128.sh` | Add tests proving BTH/BOW/AC/HP/fear effects, not just timers/messages. |
-| C128 combat runtime | C128 fast suite does not list direct `combat128` or `monster_attack128` unit tests, though smokes include dungeon attack stability. | Missing | `commodore/c128/run_tests128.sh` | Port high-value combat math tests to C128 or add static cross-platform guards. |
+| Core melee math | C64 `combat` tests cover to-hit arithmetic, blow buckets, damage range, apply damage, XP, level-up, critical chance, gnome rogue case, exceptional stats, unlit target BTH, status BTH, too-heavy to-hit, ranged BOW table selection, and signed damage bonus floor. | Good but not complete | `platforms/commodore/c64/tests/test_combat.s`; `platforms/commodore/c64/run_tests.sh` | Add slay+critical+to-damage integration tests and direct CON HP/disarm exceptional-stat tests. |
+| Direct disarm | C64 `dungeon` tests cover effective disarm ability, trap threshold, and bad-fail behavior. | Good for direct floor trap formula | `platforms/commodore/c64/tests/test_dungeon.s`; `core/disarm_helpers.s` | Add command-path coverage for success/failure messages if UI parity matters. |
+| Monster attack | C64 `monster_attack` tests cover to-hit, AC reduction, special effect plumbing, bless AC, hero fear blocking, hero expiration, and invulnerability damage prevention. | Good for implemented types | `platforms/commodore/c64/tests/test_monster_attack.s` | Add unsupported attack type backlog tests only when implementing those attacks. |
+| Ranged/thrown | C64 `ranged` and `throw` tests exist. | Partial | `platforms/commodore/c64/tests/test_ranged.s`, `test_throw.s` | Add Umoria launcher/ammo matrix and exceptional STR damage cases. |
+| Status effects | Bless, remove fear, protection from evil, confusion tests exist on C64 and many C128 spell/prayer tests exist. | Timer-heavy, combat-light | `platforms/commodore/c64/run_tests.sh`; `platforms/commodore/c128/run_tests128.sh` | Add tests proving BTH/BOW/AC/HP/fear effects, not just timers/messages. |
+| C128 combat runtime | C128 fast suite does not list direct `combat128` or `monster_attack128` unit tests, though smokes include dungeon attack stability. | Missing | `platforms/commodore/c128/run_tests128.sh` | Port high-value combat math tests to C128 or add static cross-platform guards. |
 
 ## Worked Example: Reported Gnome Rogue
 
@@ -133,7 +133,7 @@ Source calculation:
 - `blows_table[6][2] = 3`.
 
 Result: current Moria8 runtime blow count is 3, not 4. This is now covered by
-`commodore/c64/tests/test_combat.s` test 31. The visible combat message can
+`platforms/commodore/c64/tests/test_combat.s` test 31. The visible combat message can
 still make a three-blow round look like a single hit, because Moria8 aggregates
 the attack result into one message.
 
@@ -176,8 +176,8 @@ Commands/paths inspected:
 
 - `rg` and `sed` over a local Umoria source checkout.
 - `rg` and `sed` over a local VMS Moria source checkout.
-- `rg` and `sed` over `commodore/common`, `commodore/c64/tests`, and
-  `commodore/c128/tests`.
+- `rg` and `sed` over `core`, `platforms/commodore/c64/tests`, and
+  `platforms/commodore/c128/tests`.
 
 - `make build`
 - `make test64`: 149 passed, 0 failed.

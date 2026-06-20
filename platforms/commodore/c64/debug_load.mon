@@ -1,5 +1,5 @@
 // VICE monitor commands for debugging save/load
-// Usage: x64sc -moncommands debug_load.mon out/moria.prg
+// Usage: x64sc -moncommands debug_load.mon ../../../build/test/c64/moria.prg
 //
 // === Diagnostic markers written to $D02F ===
 //

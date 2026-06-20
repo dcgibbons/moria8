@@ -30,9 +30,9 @@ Acceptance target:
 ### Implement Plus/4 TED sound effects
 
 The Plus/4 has TED sound hardware, but Moria8's Plus/4 backend currently
-silences every sound request. `commodore/plus4/sound.s` initializes and clears
-TED sound registers, and `sound_play` immediately clears them again instead of
-using the existing frequency/control tables.
+silences every sound request. `platforms/commodore/plus4/sound.s` initializes
+and clears TED sound registers, and `sound_play` immediately clears them again
+instead of using the existing frequency/control tables.
 
 Required work:
 
