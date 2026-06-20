@@ -11,6 +11,22 @@
 .const MSG_ROW     = hal_layout_msg_row
 .const STATUS_ROW  = hal_layout_status_row
 .const INPUT_ROW   = hal_layout_input_row
+.const hal_screen_full_clear_uses_bulk = false
+.const hal_screen_box_vertical_char = $21
+.const hal_screen_help_line_uses_api = true
+.const hal_screen_help_line_uses_color_map = false
+.const hal_screen_spell_bolt_flash_sets_color = true
+#define HAL_SCREEN_HELP_LINE_USES_API
+
+.assert "HAL layout screen cols", SCREEN_COLS, hal_layout_screen_cols
+.assert "HAL layout screen rows", SCREEN_ROWS, hal_layout_screen_rows
+.assert "HAL layout viewport x", VIEWPORT_X, hal_layout_viewport_x
+.assert "HAL layout viewport y", VIEWPORT_Y, hal_layout_viewport_y
+.assert "HAL layout viewport width", VIEWPORT_W, hal_layout_viewport_w
+.assert "HAL layout viewport height", VIEWPORT_H, hal_layout_viewport_h
+.assert "HAL layout message row", MSG_ROW, hal_layout_msg_row
+.assert "HAL layout status row", STATUS_ROW, hal_layout_status_row
+.assert "HAL layout input row", INPUT_ROW, hal_layout_input_row
 
 .const VERA_ADDR_L = $9f20
 .const VERA_ADDR_M = $9f21

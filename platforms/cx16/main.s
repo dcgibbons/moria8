@@ -32,6 +32,8 @@
 .const PLUS4 = false
 
 #import "screen_vera.s"
+#import "input.s"
+#import "../../core/input_ui_helpers.s"
 
 cx16_entry:
     sei
@@ -78,8 +80,7 @@ cx16_poll_input:
     jmp cx16_poll_game
 
 cx16_poll_menu:
-    jsr KERNAL_GETIN
-    beq !done+
+    jsr input_get_key
     cmp #$4e                // N
     beq !new_game+
     cmp #$6e                // n
@@ -100,12 +101,14 @@ cx16_poll_menu:
     lda #CX16_TEXT_COLOR
     jsr screen_set_color
     :Cx16PrintAt(20, 21, cx16_load_game_text)
-    rts
+    jsr input_get_modal_dismiss_key
+    jmp cx16_title_enter_menu
 !quit:
     lda #CX16_TEXT_COLOR
     jsr screen_set_color
     :Cx16PrintAt(20, 21, cx16_quit_text)
-    rts
+    jsr input_get_modal_dismiss_key
+    jmp cx16_title_enter_menu
 
 cx16_new_game_start:
     lda #CX16_STATE_NEW_GAME
@@ -117,8 +120,7 @@ cx16_new_game_start:
     jmp cx16_new_game_draw
 
 cx16_poll_game:
-    jsr KERNAL_GETIN
-    beq !done+
+    jsr input_get_key
     cmp #$51                // Q
     beq !return_title+
     cmp #$71                // q
