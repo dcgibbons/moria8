@@ -41,23 +41,33 @@ cx16_entry:
     jsr screen_init
     lda #CX16_TEXT_COLOR
     jsr screen_set_color
-    jsr cx16_title_print
+    jsr cx16_title_enter_menu
     cli
 cx16_idle:
     jsr cx16_poll_input
     jmp cx16_idle
 
-cx16_title_print:
+cx16_title_enter_menu:
     lda #CX16_STATE_TITLE
     sta cx16_state
     lda #CX16_TEXT_COLOR
     jsr screen_set_color
     jsr title_load_and_draw
     jsr title_clear_below_menu
+    jmp cx16_title_draw_menu
+
+cx16_title_draw_menu:
     lda #CX16_TEXT_COLOR
     jsr screen_set_color
-    :Cx16PrintAt(18, CX16_TITLE_MENU_COL, cx16_title_menu_text)
-    rts
+    lda #18
+    sta zp_cursor_row
+    lda #CX16_TITLE_MENU_COL
+    sta zp_cursor_col
+    lda #<cx16_title_menu_text
+    sta zp_ptr0
+    lda #>cx16_title_menu_text
+    sta zp_ptr0_hi
+    jmp screen_put_string
 
 cx16_poll_input:
     lda cx16_state
@@ -148,7 +158,7 @@ cx16_poll_game:
 !done:
     rts
 !return_title:
-    jmp cx16_title_print
+    jmp cx16_title_enter_menu
 !move_up:
     lda cx16_player_y
     beq !done-
