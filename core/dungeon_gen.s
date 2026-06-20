@@ -12,10 +12,6 @@
 // Private generation constants (not shared with other modules)
 // ============================================================
 
-// Store sizes (all 10 wide x 5 tall)
-.const STORE_W = 10
-.const STORE_H = 5
-
 dg_progress_tick:
 #if DUNGEON_GEN_BUSY
     jmp generation_busy_tick

@@ -114,10 +114,11 @@ Current assumptions:
   banked-RAM window for later resident overlay/cache work.
 * Display target is VERA 80x30 text. The first title screen centers the
   existing 40-column title composition inside the wider display.
-* The current new-game path renders a deterministic 66x22 town from the shared
-  town/map constants and store-position tables, backed by fixed RAM at
-  `MAP_BASE` with the shared 198-byte row stride. This is still a bootstrap
-  renderer, not the full shared game loop.
+* The current new-game path renders a deterministic 66x22 town through
+  `core/town_map_basic.s`, using the shared town/map constants and
+  store-position tables, backed by fixed RAM at `MAP_BASE` with the shared
+  198-byte row stride. This is still a bootstrap renderer, not the full shared
+  game loop.
 * CX16 bootstrap movement uses the shared player-position and tile-walkability
   contracts through `core/player_move_basic.s`. Full `player_try_move` remains
   outside the normal CX16 PRG because it still pulls in combat, monsters, traps,

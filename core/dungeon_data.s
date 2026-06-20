@@ -22,6 +22,8 @@
 .const TOWN_STAIRS_Y = 18
 .const TOWN_START_X = 31
 .const TOWN_START_Y = 18
+.const STORE_W = 10
+.const STORE_H = 5
 
 .const MAP_COLS     = hal_layout_map_cols
 .const MAP_ROWS     = hal_layout_map_rows
@@ -159,6 +161,8 @@ level_entry_dir: .byte 0  // 0=descended (place at stairs_up), 1=ascended (place
 .assert "Store count", STORE_COUNT, 8
 .assert "Town map width", TOWN_MAP_COLS, 66
 .assert "Town map height", TOWN_MAP_ROWS, 22
+.assert "Town store width", STORE_W, 10
+.assert "Town store height", STORE_H, 5
 .assert "Town stairs inside town width", TOWN_STAIRS_X < TOWN_MAP_COLS, true
 .assert "Town stairs inside town height", TOWN_STAIRS_Y < TOWN_MAP_ROWS, true
 

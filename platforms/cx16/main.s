@@ -22,8 +22,6 @@
 .const CX16_STATE_NEW_GAME = 1
 .const CX16_TOWN_SCREEN_ROW = 2
 .const CX16_TOWN_SCREEN_COL = 7
-.const CX16_STORE_W = 10
-.const CX16_STORE_H = 5
 .const CX16_TITLE_MENU_COL = 27
 .const CX16_TEXT_COLOR = $01
 .const CX16_TOWN_FLOOR_COLOR = COL_DGREY
@@ -47,6 +45,7 @@
 #import "../../core/dungeon_data.s"
 #import "../../core/player_state.s"
 #import "../../core/player_move_basic.s"
+#import "../../core/town_map_basic.s"
 #import "screen_vera.s"
 #import "input.s"
 #import "services.s"
@@ -147,7 +146,7 @@ cx16_new_game_start:
     lda #TOWN_START_Y
     sta cx16_player_y
     jsr cx16_seed_shared_town_player
-    jsr cx16_generate_town
+    jsr town_map_basic_generate
     jmp cx16_new_game_draw
 
 cx16_poll_game:
@@ -355,208 +354,6 @@ cx16_town_tile_to_char_color:
     ldx #CX16_TOWN_STAIRS_COLOR
     rts
 
-cx16_generate_town:
-    lda #0
-    sta cx16_draw_y
-!floor_row:
-    ldy cx16_draw_y
-    lda map_row_lo,y
-    sta zp_ptr0
-    lda map_row_hi,y
-    sta zp_ptr0_hi
-    ldy #0
-    lda #TILE_FLOOR | TOWN_FLAGS
-!floor_col:
-    sta (zp_ptr0),y
-    iny
-    cpy #TOWN_MAP_COLS
-    bne !floor_col-
-    inc cx16_draw_y
-    lda cx16_draw_y
-    cmp #TOWN_MAP_ROWS
-    bcc !floor_row-
-
-    ldx #0
-    ldy #0
-    lda #TILE_CORNER_TL | TOWN_FLAGS
-    jsr cx16_write_town_tile
-    ldx #TOWN_MAP_COLS - 1
-    ldy #0
-    lda #TILE_CORNER_TR | TOWN_FLAGS
-    jsr cx16_write_town_tile
-    ldx #0
-    ldy #TOWN_MAP_ROWS - 1
-    lda #TILE_CORNER_BL | TOWN_FLAGS
-    jsr cx16_write_town_tile
-    ldx #TOWN_MAP_COLS - 1
-    ldy #TOWN_MAP_ROWS - 1
-    lda #TILE_CORNER_BR | TOWN_FLAGS
-    jsr cx16_write_town_tile
-
-    ldx #1
-!top_bottom:
-    txa
-    pha
-    ldy #0
-    lda #TILE_WALL_H | TOWN_FLAGS
-    jsr cx16_write_town_tile
-    pla
-    tax
-    txa
-    pha
-    ldy #TOWN_MAP_ROWS - 1
-    lda #TILE_WALL_H | TOWN_FLAGS
-    jsr cx16_write_town_tile
-    pla
-    tax
-    inx
-    cpx #TOWN_MAP_COLS - 1
-    bne !top_bottom-
-
-    ldy #1
-!left_right:
-    tya
-    pha
-    ldx #0
-    lda #TILE_WALL_V | TOWN_FLAGS
-    jsr cx16_write_town_tile
-    pla
-    tay
-    tya
-    pha
-    ldx #TOWN_MAP_COLS - 1
-    lda #TILE_WALL_V | TOWN_FLAGS
-    jsr cx16_write_town_tile
-    pla
-    tay
-    iny
-    cpy #TOWN_MAP_ROWS - 1
-    bne !left_right-
-
-    ldx #0
-!store:
-    stx cx16_store_idx
-    jsr cx16_draw_store
-    ldx cx16_store_idx
-    inx
-    cpx #8
-    bne !store-
-
-    ldx #TOWN_STAIRS_X
-    ldy #TOWN_STAIRS_Y
-    lda #TILE_STAIRS_DN | TOWN_FLAGS
-    jmp cx16_write_town_tile
-
-cx16_draw_store:
-    ldx cx16_store_idx
-    lda store_pos_x,x
-    sta cx16_store_left
-    clc
-    adc #CX16_STORE_W - 1
-    sta cx16_store_right
-    lda store_pos_y,x
-    sta cx16_store_top
-    clc
-    adc #CX16_STORE_H - 1
-    sta cx16_store_bottom
-
-    ldx cx16_store_left
-    ldy cx16_store_top
-    lda #TILE_CORNER_TL | TOWN_FLAGS
-    jsr cx16_write_town_tile
-    ldx cx16_store_right
-    ldy cx16_store_top
-    lda #TILE_CORNER_TR | TOWN_FLAGS
-    jsr cx16_write_town_tile
-    ldx cx16_store_left
-    ldy cx16_store_bottom
-    lda #TILE_CORNER_BL | TOWN_FLAGS
-    jsr cx16_write_town_tile
-    ldx cx16_store_right
-    ldy cx16_store_bottom
-    lda #TILE_CORNER_BR | TOWN_FLAGS
-    jsr cx16_write_town_tile
-
-    lda cx16_store_left
-    clc
-    adc #1
-    sta cx16_draw_x
-!store_h:
-    ldx cx16_draw_x
-    ldy cx16_store_top
-    lda #TILE_WALL_H | TOWN_FLAGS
-    jsr cx16_write_town_tile
-    ldx cx16_draw_x
-    ldy cx16_store_bottom
-    lda #TILE_WALL_H | TOWN_FLAGS
-    jsr cx16_write_town_tile
-    inc cx16_draw_x
-    lda cx16_draw_x
-    cmp cx16_store_right
-    bne !store_h-
-
-    lda cx16_store_top
-    clc
-    adc #1
-    sta cx16_draw_y
-!store_v:
-    ldx cx16_store_left
-    ldy cx16_draw_y
-    lda #TILE_WALL_V | TOWN_FLAGS
-    jsr cx16_write_town_tile
-    ldx cx16_store_right
-    ldy cx16_draw_y
-    lda #TILE_WALL_V | TOWN_FLAGS
-    jsr cx16_write_town_tile
-    inc cx16_draw_y
-    lda cx16_draw_y
-    cmp cx16_store_bottom
-    bne !store_v-
-
-    lda cx16_store_top
-    clc
-    adc #1
-    sta cx16_draw_y
-!store_fill_y:
-    lda cx16_store_left
-    clc
-    adc #1
-    sta cx16_draw_x
-!store_fill_x:
-    ldx cx16_draw_x
-    ldy cx16_draw_y
-    lda #TILE_WALL_H
-    jsr cx16_write_town_tile
-    inc cx16_draw_x
-    lda cx16_draw_x
-    cmp cx16_store_right
-    bne !store_fill_x-
-    inc cx16_draw_y
-    lda cx16_draw_y
-    cmp cx16_store_bottom
-    bne !store_fill_y-
-
-    ldx cx16_store_idx
-    lda store_door_x,x
-    tax
-    ldy cx16_store_idx
-    lda store_door_y,y
-    tay
-    lda #TILE_DOOR_OPEN | TOWN_FLAGS
-    jmp cx16_write_town_tile
-
-cx16_write_town_tile:
-    sta cx16_tile_value
-    lda map_row_lo,y
-    sta zp_ptr0
-    lda map_row_hi,y
-    sta zp_ptr0_hi
-    txa
-    tay
-    lda cx16_tile_value
-    sta (zp_ptr0),y
-    rts
-
 .macro Cx16PrintAt(row, col, text) {
     lda #row
     sta zp_cursor_row
@@ -648,12 +445,6 @@ cx16_draw_x: .byte 0
 cx16_draw_y: .byte 0
 cx16_draw_char: .byte 0
 cx16_draw_color: .byte 0
-cx16_tile_value: .byte 0
-cx16_store_idx: .byte 0
-cx16_store_left: .byte 0
-cx16_store_right: .byte 0
-cx16_store_top: .byte 0
-cx16_store_bottom: .byte 0
 
 program_end:
 #if !CX16_IMPORT_SHARED_GAME_LOOP
