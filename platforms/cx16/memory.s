@@ -10,6 +10,7 @@
 
 .const CX16_RAM_BANK_REG = $00
 .const CX16_ROM_BANK_REG = $01
+.const CX16_ROM_BANK_KERNAL = 0
 .const CX16_FIXED_RAM_BASE = $0000
 .const CX16_FIXED_RAM_END  = $9eff
 .const CX16_IO_BASE        = $9f00

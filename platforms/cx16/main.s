@@ -45,8 +45,8 @@
 
 cx16_entry:
     sei
-    lda #0
-    sta $01                 // Select KERNAL ROM bank before X16 KERNAL calls.
+    lda #CX16_ROM_BANK_KERNAL
+    sta CX16_ROM_BANK_REG   // Select KERNAL ROM bank before X16 KERNAL calls.
     jsr KERNAL_CINT
     jsr screen_init
     jsr cx16_services_install
