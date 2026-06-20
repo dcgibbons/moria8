@@ -99,7 +99,25 @@ now lives in the current `core/`/`platforms/` layout.
 * Plus/4 uses disk-loaded overlays like C64, but its low memory screen/attribute
   ownership moves the main-map window upward for this target.
 
-## 6. Current Codebase Assessment & Next Steps
+## 6. Commander X16 Bring-Up Track
+
+The Commander X16 port is a first-class 65C02 platform under `platforms/cx16/`,
+not a Commodore subtarget. The initial milestone is deliberately narrow:
+boot a PRG under `x16emu`, initialize VERA text output, and render the
+Moria8 title/menu.
+
+Current assumptions:
+
+* Build remains Kick Assembler for the first slice.
+* Baseline RAM is 512 KB, using fixed RAM below `$9F00` plus the `$A000-$BFFF`
+  banked-RAM window for later resident overlay/cache work.
+* Display target is VERA 80x30 text. The first title screen centers the
+  existing 40-column title composition inside the wider display.
+* Save/load and CMDR-DOS/FAT32 storage are deferred until after boot-to-title.
+* `x16emu` is expected on `PATH` by default; `X16EMU=/path/to/x16emu` and
+  `X16_ROM=/path/to/rom.bin` may override local tool and ROM locations.
+
+## 7. Current Codebase Assessment & Next Steps
 
 Moria8 is currently well-positioned because the 8-bit logic is increasingly platform-agnostic.
 

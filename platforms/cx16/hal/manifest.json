@@ -1,0 +1,44 @@
+{
+  "platform": "cx16",
+  "machine": {
+    "cpu": "65C02",
+    "ram_kb": 512
+  },
+  "display": {
+    "hardware": "vera",
+    "columns": 80,
+    "rows": 30,
+    "viewport": {
+      "x": 1,
+      "y": 2,
+      "width": 78,
+      "height": 22
+    },
+    "text_vram": "vera:$1b000",
+    "io_base": "$9f20"
+  },
+  "storage": {
+    "bus": "cmdr_dos",
+    "program_media": "prg",
+    "save_media": "deferred",
+    "default_program_device": null,
+    "default_save_device": null,
+    "compatible_modes": ["x16emu-prg"]
+  },
+  "memory": {
+    "banking": "$0000/$0001",
+    "fixed_ram_base": "$0000",
+    "fixed_ram_end": "$9eff",
+    "io_hole_base": "$9f00",
+    "io_hole_end": "$9fff",
+    "banked_ram_base": "$a000",
+    "banked_ram_end": "$bfff"
+  },
+  "capabilities": {
+    "resident_overlay_cache": true,
+    "vera_text": true,
+    "vera_psg": true,
+    "ym2151": true,
+    "cmdr_dos_storage": false
+  }
+}

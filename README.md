@@ -15,7 +15,7 @@ written in platform-specific assembly. Current releases target the Commodore
 | Commodore 128 (C128) | Released ([notes](docs/release_notes/release_notes-v1.3.0.md)) | [moria8-c128.d64](https://github.com/dcgibbons/moria8/releases/download/v1.3.0/moria8-c128.d64) |
 | Commodore PET | Maybe | |
 | Commodore VIC-20 | Maybe | |
-| Commander X16 | Planned | |
+| Commander X16 | In progress: boot-to-title PRG slice | |
 | Acorn BBC Master | Planned | |
 | Apple II | Planned | |
 | Apple IIgs | Planned | |
@@ -60,11 +60,13 @@ make build
 make disk64
 make disk128
 make diskplus4
+make buildcx16
 ```
 
 `make` and `make build` will build the entire project for all platforms.
 `make disk64`, `make disk128`, and `make diskplus4` build the individual disk
-images.
+images. `make buildcx16` builds the current Commander X16 boot-to-title PRG
+slice.
 
 Disk images are emitted under `build/`:
 
@@ -81,11 +83,15 @@ make run
 make run64
 make run128
 make runplus4
+make run cx16
 ```
 
 `make run` and `make run64` launch the C64 disk. `make run128` launches the
 C128 disk. `make runplus4` launches the Plus/4 disk in `xplus4` with a 1541
 drive configuration. The Plus/4 artifact is a standard Commodore D64 image.
+`make run cx16` launches the in-progress Commander X16 PRG under `x16emu`.
+Set `X16EMU=/path/to/x16emu` and `X16_ROM=/path/to/rom.bin` when those are not
+available through the default local environment.
 
 ### Test
 

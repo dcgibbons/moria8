@@ -11,6 +11,7 @@
 | `platforms/commodore/c128/` | C128 boot, VDC/MMU code, tests, and harness scripts |
 | `platforms/commodore/plus4/` | Plus/4 entry, TED platform code, tests, and harness scripts |
 | `platforms/commodore/common/` | Shared Commodore KERNAL, disk, overlay, and compatibility modules |
+| `platforms/cx16/` | Commander X16 entry, VERA text code, and CX16 build/run targets |
 | `build/` | Generated payloads, disk images, checksums, and test scratch output |
 | `data/` | Source data used by generators |
 | `tools/` | Build-time conversion, generation, lint, and disk helpers |
@@ -18,7 +19,8 @@
 
 Primary entry points are `platforms/commodore/c64/main.s`,
 `platforms/commodore/c128/main.s`, and
-`platforms/commodore/plus4/main.s`.
+`platforms/commodore/plus4/main.s`. The first Commander X16 entry point is
+`platforms/cx16/main.s`.
 
 ## Shared Runtime Modules
 
@@ -129,6 +131,28 @@ Current product payloads:
 | `ovl.items` | `$E000-$EC47` | 3,144 bytes |
 | `ovl.spell` | `$E000-$E9BD` | 2,494 bytes |
 | `ovl.gen` | `$E000-$EDF7` | 3,576 bytes |
+
+## Commander X16 Bring-Up Model
+
+The CX16 port currently targets a boot-to-title PRG, not full gameplay. It uses
+Kick Assembler, emits `build/cx16/moria16.prg`, and runs with `x16emu` when the
+emulator is available on `PATH` or supplied through `X16EMU=/path/to/x16emu`.
+The ROM is not vendored; set `X16_ROM=/path/to/rom.bin` when a local emulator
+install requires an explicit ROM path. The supported run forms are `make
+runcx16`, `make run-cx16`, and `make run cx16`; the last form is a root make
+selector for the CX16 run target.
+
+Current runtime assumptions:
+
+- 65C02 CPU and 512 KB RAM baseline.
+- Fixed RAM is `$0000-$9EFF`; `$9F00-$9FFF` is the I/O area.
+- Banked RAM appears at `$A000-$BFFF` and is reserved for later resident
+  overlay/cache work.
+- VERA registers live at `$9F20-$9F3F`; the first screen backend writes the
+  KERNAL text buffer at VERA VRAM `$1B000`.
+- Display contract is 80 columns x 30 rows, with the first title composition
+  centered from the existing 40-column layout.
+- CMDR-DOS save/load, asset loading, sound, and gameplay dispatch are deferred.
 
 ## C128 Runtime Model
 
