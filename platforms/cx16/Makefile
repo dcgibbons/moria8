@@ -4,8 +4,11 @@
 #   make buildcx16       Build the boot-to-title PRG
 #   make runcx16         Launch the PRG under x16emu
 #   make testcx16-smoke  Verify the PRG builds and x16emu is discoverable
+#   make testcx16-runtime
+#                         Run x16emu testbench smoke checks
 #   make testcx16-shared-link
 #                         Link-only probe for guarded shared-gameplay imports
+#   make testcx16        Run all current CX16 checks
 
 KICKASS_DIR ?= ../../tools/kickass
 KICKASS     ?= $(KICKASS_DIR)/KickAss.jar
@@ -38,9 +41,11 @@ CX16_TITLE_PRG = $(OUT)/TITLE
 CX16_SOURCES  := $(shell find . -type f -name '*.s' -print)
 X16EMU_ROM_ARGS = $(if $(strip $(X16_ROM)),-rom "$(X16_ROM)",)
 
-.PHONY: buildcx16 runcx16 testcx16-smoke testcx16-shared-link ensure-kickass clean
+.PHONY: buildcx16 runcx16 testcx16 testcx16-smoke testcx16-runtime testcx16-shared-link ensure-kickass clean
 
 buildcx16: $(CX16_MAIN_PRG) $(CX16_TITLE_PRG)
+
+testcx16: testcx16-smoke testcx16-runtime testcx16-shared-link
 
 runcx16: $(CX16_MAIN_PRG) $(CX16_TITLE_PRG)
 	@command -v "$(X16EMU)" >/dev/null 2>&1 || { echo "ERROR: x16emu not found. Set X16EMU=/path/to/x16emu."; exit 1; }
@@ -50,6 +55,10 @@ testcx16-smoke: $(CX16_MAIN_PRG) $(CX16_TITLE_PRG)
 	@command -v "$(X16EMU)" >/dev/null 2>&1 || { echo "ERROR: x16emu not found. Set X16EMU=/path/to/x16emu."; exit 1; }
 	@echo "CX16 smoke setup passed: $(CX16_MAIN_PRG) and $(CX16_TITLE_PRG) build; $(X16EMU) is available."
 	@echo "Run make runcx16 X16EMU=$(X16EMU) X16_ROM=/path/to/rom.bin to launch manually when needed."
+
+testcx16-runtime: $(CX16_MAIN_PRG) $(CX16_TITLE_PRG)
+	@command -v "$(X16EMU)" >/dev/null 2>&1 || { echo "ERROR: x16emu not found. Set X16EMU=/path/to/x16emu."; exit 1; }
+	python3 harness_smoke.py --x16emu "$(X16EMU)" $(if $(strip $(X16_ROM)),--rom "$(X16_ROM)",) --prg "$(CX16_MAIN_PRG)" --symbols "$(OUT)/main.sym"
 
 testcx16-shared-link: $(CX16_SHARED_PROBE_PRG)
 	@echo "CX16 shared-gameplay link probe passed: $(CX16_SHARED_PROBE_PRG)"

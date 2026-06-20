@@ -101,11 +101,15 @@ make test128-fast
 make test128-fast-smoke
 make test128
 make testplus4
+make testcx16
 ```
 
 `make test` runs the default regression mix. `make test128-fast` is the fast
 C128 unit batch, `make test128-fast-smoke` covers high-value C128 runtime boot
 and town paths, and `make test128` is the broader C128 shell harness.
+`make testcx16` runs the current Commander X16 checks: build/setup smoke,
+x16emu testbench runtime coverage, and the guarded shared-gameplay link probe.
+Set `X16EMU` and `X16_ROM` when needed.
 
 ## Documentation
 

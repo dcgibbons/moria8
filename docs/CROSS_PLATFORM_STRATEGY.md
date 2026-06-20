@@ -135,9 +135,14 @@ Current assumptions:
 
 Current shared-gameplay status:
 
+* `make testcx16` is the current CX16 gate. It runs setup smoke, x16emu
+  runtime smoke, and the guarded shared-gameplay link probe.
 * `make testcx16-shared-link` is a link-only probe for the guarded shared
   gameplay import path. It verifies that CX16 imports, constants, and
   trampolines still satisfy the shared code's assembly-time contracts.
+* `make testcx16-runtime` runs an x16emu `-testbench` smoke check against the
+  normal CX16 PRG. It verifies RAM-visible bootstrap contracts: town generation,
+  player position, store-door detection, and stairs detection.
 * The probe is not a runtime-safe memory placement. The linked image currently
   crosses the fixed-RAM map/scratch plan and the CX16 `$A000-$BFFF` banked-RAM
   window.
