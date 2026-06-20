@@ -103,8 +103,8 @@ now lives in the current `core/`/`platforms/` layout.
 
 The Commander X16 port is a first-class 65C02 platform under `platforms/cx16/`,
 not a Commodore subtarget. The initial milestone is deliberately narrow:
-boot a PRG under `x16emu`, initialize VERA text output, and render the
-Moria8 title/menu.
+boot a PRG under `x16emu`, initialize text output, render the Moria8
+title/menu, and acknowledge title-menu keyboard input.
 
 Current assumptions:
 
