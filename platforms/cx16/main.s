@@ -45,6 +45,8 @@
 #import "config.s"
 #import "memory.s"
 #import "../../core/dungeon_data.s"
+#import "../../core/player_state.s"
+#import "../../core/tile_walkability.s"
 #import "screen_vera.s"
 #import "input.s"
 #import "services.s"
@@ -144,6 +146,7 @@ cx16_new_game_start:
     sta cx16_player_x
     lda #TOWN_START_Y
     sta cx16_player_y
+    jsr cx16_seed_shared_town_player
     jsr cx16_generate_town
     jmp cx16_new_game_draw
 
@@ -193,8 +196,28 @@ cx16_try_move_command:
     sta cx16_player_x
     lda cx16_next_player_y
     sta cx16_player_y
+    jsr cx16_sync_shared_player_position
     jmp cx16_player_redraw
 !done:
+    rts
+
+cx16_seed_shared_town_player:
+    lda #0
+    sta player_data + PL_DLEVEL
+    sta zp_player_dlvl
+    lda #TOWN_START_X
+    sta cx16_player_x
+    lda #TOWN_START_Y
+    sta cx16_player_y
+    jmp cx16_sync_shared_player_position
+
+cx16_sync_shared_player_position:
+    lda cx16_player_x
+    sta player_data + PL_MAP_X
+    sta zp_player_x
+    lda cx16_player_y
+    sta player_data + PL_MAP_Y
+    sta zp_player_y
     rts
 
 cx16_new_game_draw:
@@ -314,17 +337,11 @@ cx16_next_tile_walkable:
     ldy cx16_next_player_x
     lda (zp_ptr0),y
     and #$f0
-    cmp #TILE_FLOOR
-    beq !yes+
-    cmp #TILE_DOOR_OPEN
-    beq !yes+
-    cmp #TILE_STAIRS_DN
-    beq !yes+
-    clc
-    rts
-!yes:
-    sec
-    rts
+    lsr
+    lsr
+    lsr
+    lsr
+    jmp tile_is_walkable
 
 cx16_read_draw_tile:
     ldy cx16_draw_y
@@ -669,3 +686,5 @@ program_end:
 .assert "CX16 town uses shared town width", TOWN_MAP_COLS, 66
 .assert "CX16 town uses shared town height", TOWN_MAP_ROWS, 22
 .assert "CX16 town row stride matches fixed live map", MAP_COLS, 198
+.assert "CX16 shared town start x", TOWN_START_X, 31
+.assert "CX16 shared town start y", TOWN_START_Y, 18
