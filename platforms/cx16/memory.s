@@ -10,7 +10,12 @@
 
 .const CX16_RAM_BANK_REG = $00
 .const CX16_ROM_BANK_REG = $01
+.const CX16_RAM_BANK_DEFAULT = 0
 .const CX16_ROM_BANK_KERNAL = 0
+.const CX16_RAM_BANK_PROBE0 = 0
+.const CX16_RAM_BANK_PROBE1 = 1
+.const CX16_RAM_BANK_PROBE0_SENTINEL = $a5
+.const CX16_RAM_BANK_PROBE1_SENTINEL = $5a
 .const CX16_FIXED_RAM_BASE = $0000
 .const CX16_FIXED_RAM_END  = $9eff
 .const CX16_IO_BASE        = $9f00
@@ -54,9 +59,18 @@
 .macro EnterKernal() { php }
 .macro ExitKernal() { plp }
 
+cx16_memory_init:
+    lda #CX16_ROM_BANK_KERNAL
+    sta CX16_ROM_BANK_REG
+    lda #CX16_RAM_BANK_DEFAULT
+    sta CX16_RAM_BANK_REG
+    jmp cx16_probe_ram_banks
+
 // CX16 bank-window helpers. These operate only on the RAM bank visible at
 // $A000-$BFFF; callers own the selected bank number and pointer validity.
 cx16_saved_ram_bank: .byte 0
+cx16_probe_bank0_save: .byte 0
+cx16_probe_bank1_save: .byte 0
 
 cx16_save_ram_bank:
     lda CX16_RAM_BANK_REG
@@ -74,4 +88,58 @@ cx16_restore_ram_bank:
 
 read_banked_byte_a000:
     lda (zp_ptr0),y
+    rts
+
+write_banked_byte_a000:
+    sta (zp_ptr0),y
+    rts
+
+cx16_probe_ram_banks:
+    jsr cx16_save_ram_bank
+
+    lda #CX16_RAM_BANK_PROBE0
+    jsr cx16_select_ram_bank_a
+    lda CX16_BANKED_RAM_BASE
+    sta cx16_probe_bank0_save
+    lda #CX16_RAM_BANK_PROBE0_SENTINEL
+    sta CX16_BANKED_RAM_BASE
+
+    lda #CX16_RAM_BANK_PROBE1
+    jsr cx16_select_ram_bank_a
+    lda CX16_BANKED_RAM_BASE
+    sta cx16_probe_bank1_save
+    lda #CX16_RAM_BANK_PROBE1_SENTINEL
+    sta CX16_BANKED_RAM_BASE
+
+    lda #CX16_RAM_BANK_PROBE0
+    jsr cx16_select_ram_bank_a
+    lda CX16_BANKED_RAM_BASE
+    cmp #CX16_RAM_BANK_PROBE0_SENTINEL
+    bne !fail+
+    lda cx16_probe_bank0_save
+    sta CX16_BANKED_RAM_BASE
+
+    lda #CX16_RAM_BANK_PROBE1
+    jsr cx16_select_ram_bank_a
+    lda CX16_BANKED_RAM_BASE
+    cmp #CX16_RAM_BANK_PROBE1_SENTINEL
+    bne !fail+
+    lda cx16_probe_bank1_save
+    sta CX16_BANKED_RAM_BASE
+
+    jsr cx16_restore_ram_bank
+    clc
+    rts
+
+!fail:
+    lda #CX16_RAM_BANK_PROBE0
+    jsr cx16_select_ram_bank_a
+    lda cx16_probe_bank0_save
+    sta CX16_BANKED_RAM_BASE
+    lda #CX16_RAM_BANK_PROBE1
+    jsr cx16_select_ram_bank_a
+    lda cx16_probe_bank1_save
+    sta CX16_BANKED_RAM_BASE
+    jsr cx16_restore_ram_bank
+    sec
     rts

@@ -45,8 +45,16 @@
 
 cx16_entry:
     sei
-    lda #CX16_ROM_BANK_KERNAL
-    sta CX16_ROM_BANK_REG   // Select KERNAL ROM bank before X16 KERNAL calls.
+    jsr cx16_memory_init    // Select KERNAL ROM and default RAM bank.
+    bcc !memory_ok+
+    jsr KERNAL_CINT
+    jsr screen_init
+    lda #CX16_TEXT_COLOR
+    jsr screen_set_color
+    :Cx16PrintAt(14, 30, cx16_memory_fail_text)
+!halt:
+    jmp !halt-
+!memory_ok:
     jsr KERNAL_CINT
     jsr screen_init
     jsr cx16_services_install
@@ -326,6 +334,10 @@ cx16_quit_text:
 
 cx16_game_help_text:
     :ScreenText("HJKL/YUBN OR NUMBERS MOVE. SHIFT-Q RETURNS TO TITLE.")
+    .byte 0
+
+cx16_memory_fail_text:
+    :ScreenText("CX16 RAM BANK TEST FAILED")
     .byte 0
 
 cx16_state: .byte CX16_STATE_TITLE
