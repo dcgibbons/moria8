@@ -13,6 +13,16 @@
 .const PLATFORM_HD_DECODE_BUF_BASE = $7000
 .const PLATFORM_HD_DECODE_BUF_LIMIT = $7400
 
+.const OVL_NONE        = 0
+.const OVL_STARTUP     = 1
+.const OVL_TOWN        = 2
+.const OVL_DEATH       = 3
+.const OVL_DUNGEON_GEN = 4
+.const OVL_HELP        = 5
+.const OVL_UI          = 6
+.const OVL_ITEMS       = 7
+.const OVL_SPELL       = 8
+
 .const hal_huffman_lock_irq_during_decode = 0
 .const hal_huffman_print_uses_cached_msg = 0
 

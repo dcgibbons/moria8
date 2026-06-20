@@ -18,7 +18,7 @@
 .const hal_platform_ego_ac_bonus_external = 0
 .const hal_platform_chargen_runtime_resync = 0
 .const hal_platform_chargen_cutpoint = -1
-.const hal_platform_wizard_entry_uses_overlay = 0
+.const hal_platform_wizard_entry_uses_overlay = 1
 .const hal_platform_wizard_40col_resident_enabled = 0
 .const hal_platform_wizard_reveal_uses_trampoline = 0
 .const hal_platform_levelup_magic_uses_trampoline = 0
@@ -51,3 +51,6 @@
 .const hal_platform_monster_cpu_port_bank = 0
 .const hal_platform_monster_overlay_stale_name = 0
 .const hal_platform_monster_stale_tier_reload = 0
+
+#define HAL_PLATFORM_EGO_AC_BONUS_LOCAL
+#define HAL_PLATFORM_WIZARD_ENTRY_OVERLAY

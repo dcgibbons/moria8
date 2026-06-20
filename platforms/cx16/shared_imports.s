@@ -39,6 +39,7 @@
 #define ITEM_ACTIONS_OVERLAY_EXTERNAL
 #import "../../core/player_items.s"
 #import "../../core/spell_data.s"
+#import "../../core/spell_names.s"
 #define SPELL_EFFECTS_INCLUDE_IDENTIFY
 #import "../../core/spell_effects.s"
 #undef SPELL_EFFECTS_INCLUDE_IDENTIFY
@@ -52,6 +53,8 @@
 #import "../../core/projectile.s"
 #import "../../core/monster_attack.s"
 #import "../../core/turn.s"
+#import "../../core/background_data.s"
+#import "../../core/player_create.s"
 #import "../../core/store_data.s"
 #import "../../core/runtime_ui_strings.s"
 #import "../../core/wizard.s"
