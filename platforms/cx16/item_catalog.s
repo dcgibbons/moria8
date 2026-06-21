@@ -203,3 +203,81 @@ item_load_min_level_x:
     ldx cx16_item_catalog_index
     lda cx16_item_catalog_value
     rts
+
+item_load_name_lo_x:
+    stx cx16_item_catalog_index
+    jsr cx16_save_ram_bank
+    lda #CX16_ITEM_CATALOG_PRIMARY_BANK
+    jsr cx16_select_ram_bank_a
+    ldx cx16_item_catalog_index
+    lda CX16_ITEM_CATALOG_LOAD_BASE + CX16_ITEM_CATALOG_NAME_LO_OFFSET,x
+    sta cx16_item_catalog_value
+    jsr cx16_restore_ram_bank
+    ldx cx16_item_catalog_index
+    lda cx16_item_catalog_value
+    rts
+
+item_load_name_hi_x:
+    stx cx16_item_catalog_index
+    jsr cx16_save_ram_bank
+    lda #CX16_ITEM_CATALOG_PRIMARY_BANK
+    jsr cx16_select_ram_bank_a
+    ldx cx16_item_catalog_index
+    lda CX16_ITEM_CATALOG_LOAD_BASE + CX16_ITEM_CATALOG_NAME_HI_OFFSET,x
+    sta cx16_item_catalog_value
+    jsr cx16_restore_ram_bank
+    ldx cx16_item_catalog_index
+    lda cx16_item_catalog_value
+    rts
+
+item_load_token_lo_x:
+    stx cx16_item_catalog_index
+    jsr cx16_save_ram_bank
+    lda #CX16_ITEM_CATALOG_PRIMARY_BANK
+    jsr cx16_select_ram_bank_a
+    ldx cx16_item_catalog_index
+    lda CX16_ITEM_CATALOG_LOAD_BASE + CX16_ITEM_CATALOG_TOKEN_LO_OFFSET,x
+    sta cx16_item_catalog_value
+    jsr cx16_restore_ram_bank
+    ldx cx16_item_catalog_index
+    lda cx16_item_catalog_value
+    rts
+
+item_load_token_hi_x:
+    stx cx16_item_catalog_index
+    jsr cx16_save_ram_bank
+    lda #CX16_ITEM_CATALOG_PRIMARY_BANK
+    jsr cx16_select_ram_bank_a
+    ldx cx16_item_catalog_index
+    lda CX16_ITEM_CATALOG_LOAD_BASE + CX16_ITEM_CATALOG_TOKEN_HI_OFFSET,x
+    sta cx16_item_catalog_value
+    jsr cx16_restore_ram_bank
+    ldx cx16_item_catalog_index
+    lda cx16_item_catalog_value
+    rts
+
+item_load_catalog_byte_ptr0_y:
+    sty cx16_item_catalog_y_index
+    jsr cx16_save_ram_bank
+    lda #CX16_ITEM_CATALOG_PRIMARY_BANK
+    jsr cx16_select_ram_bank_a
+    ldy cx16_item_catalog_y_index
+    lda (zp_ptr0),y
+    sta cx16_item_catalog_value
+    jsr cx16_restore_ram_bank
+    ldy cx16_item_catalog_y_index
+    lda cx16_item_catalog_value
+    rts
+
+item_load_catalog_byte_ptr1_y:
+    sty cx16_item_catalog_y_index
+    jsr cx16_save_ram_bank
+    lda #CX16_ITEM_CATALOG_PRIMARY_BANK
+    jsr cx16_select_ram_bank_a
+    ldy cx16_item_catalog_y_index
+    lda (zp_ptr1),y
+    sta cx16_item_catalog_value
+    jsr cx16_restore_ram_bank
+    ldy cx16_item_catalog_y_index
+    lda cx16_item_catalog_value
+    rts

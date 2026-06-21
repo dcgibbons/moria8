@@ -88,6 +88,9 @@ def base_labels(program_end):
         "disarm_command": contract.CX16_BANKED_RAM_BASE,
         "get_direction_target": contract.CX16_RESIDENT_CODE_BASE,
         "item_load_category_x": contract.CX16_RESIDENT_CODE_BASE,
+        "item_load_name_lo_x": contract.CX16_RESIDENT_CODE_BASE,
+        "item_load_name_hi_x": contract.CX16_RESIDENT_CODE_BASE,
+        "item_decode_name_ptr_cx16_catalog": contract.CX16_RESIDENT_CODE_BASE,
     }
 
 
@@ -122,6 +125,10 @@ def test_product_symbol_contract():
 
     over_policy = base_labels(contract.CX16_RESIDENT_PRODUCT_LIMIT + 1)
     assert_raises(lambda: contract.check_product_symbols(over_policy), "resident product policy")
+
+    resident_item_names = base_labels(0x1754)
+    resident_item_names["it_name_lo"] = contract.CX16_RESIDENT_CODE_BASE
+    assert_raises(lambda: contract.check_product_symbols(resident_item_names), "known item names")
 
 
 def test_shared_probe_symbol_contract():

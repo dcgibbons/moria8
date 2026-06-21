@@ -121,6 +121,11 @@ def expect_true(condition, label):
         raise ContractError(label)
 
 
+def expect_absent(labels, name, label):
+    if name in labels:
+        raise ContractError(f"{label}: unexpected resident symbol {name} at {fmt_addr(labels[name])}")
+
+
 def fmt_addr(value):
     return f"${value:04X}"
 
@@ -474,12 +479,20 @@ def check_product_symbols(labels):
             CX16_BANKED_RAM_BASE <= value <= CX16_BANKED_RAM_END,
             f"{name} must live in a CX16 bank-window overlay",
         )
-    for name in ("get_direction_target", "item_load_category_x"):
+    for name in (
+        "get_direction_target",
+        "item_load_category_x",
+        "item_load_name_lo_x",
+        "item_load_name_hi_x",
+        "item_decode_name_ptr_cx16_catalog",
+    ):
         value = require(labels, name)
         expect_true(
             CX16_RESIDENT_CODE_BASE <= value < CX16_RESIDENT_PRODUCT_LIMIT,
             f"{name} must remain in fixed resident code",
         )
+    for name in ("it_name_lo", "it_name_hi", "itn_0", "item_name_streams_start"):
+        expect_absent(labels, name, "CX16 known item names must live in ITEMCAT.1, not resident RAM")
 
 
 def check_shared_probe_symbols(labels):

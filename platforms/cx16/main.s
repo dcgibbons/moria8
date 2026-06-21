@@ -117,7 +117,9 @@
 #endif
 #import "../../core/ui_help_clear.s"
 #define ITEM_TABLES_RESIDENT_NAMES_ONLY
+#define ITEM_TABLES_RESIDENT_NO_KNOWN_NAMES
 #import "../../core/item.s"
+#undef ITEM_TABLES_RESIDENT_NO_KNOWN_NAMES
 #undef ITEM_TABLES_RESIDENT_NAMES_ONLY
 #import "../../core/ego_items.s"
 #import "trampolines.s"

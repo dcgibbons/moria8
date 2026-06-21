@@ -413,6 +413,7 @@ it_missile:
     .byte $82           // 53: Bolt — IS bolt ammo
     .byte $83           // 54: Rock — IS rock ammo
 
+#if !ITEM_TABLES_CATALOG_DATA_ONLY
 // item_get_missile — Get missile type for an item
 // Input: X = item type ID
 // Output: A = missile value (0 if not ranged)
@@ -427,7 +428,9 @@ item_get_missile:
 !igm_zero:
     lda #0
     rts
+#endif
 
+#if !ITEM_TABLES_RESIDENT_NO_KNOWN_NAMES
 // Name pointer tables
 it_name_lo:
     .byte <itn_0,  <itn_1,  <itn_2,  <itn_3,  <itn_4
@@ -482,6 +485,7 @@ it_name_hi:
 it_name_hi_end:
 #else
 it_name_hi_end:
+#endif
 #endif
 
 // Tokenized item-name string pool.
@@ -567,6 +571,8 @@ itok_shield_suffix:   .text " Shield" ; .byte 0
 .segment C128ResidentItemNames
 c128_item_name_streams_start:
 #endif
+#if !ITEM_TABLES_RESIDENT_NO_KNOWN_NAMES
+item_name_streams_start:
 itn_0:  .byte ITOK_GOLD ; .text " (small)" ; .byte 0
 itn_1:  .byte ITOK_GOLD ; .text " (large)" ; .byte 0
 itn_2:  .text "Dagger" ; .byte 0
@@ -663,6 +669,8 @@ itn_92: .text "Flail" ; .byte 0
 itn_93: .text "Lucerne Hammer" ; .byte 0
 itn_94: .text "Broad Axe" ; .byte 0
 itn_95: .text "Awl-Pike" ; .byte 0
+item_name_streams_end:
+#endif
 #if C128_PRODUCT_OVERLAY_RUNTIME
 c128_item_name_streams_end:
 .assert "C128 item name streams live in Bank 1 DB region", c128_item_name_streams_start >= BANK1_DB_BASE && c128_item_name_streams_end <= BANK1_DB_END + 1, true

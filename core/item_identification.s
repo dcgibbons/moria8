@@ -370,7 +370,7 @@ item_get_name_ptr:
     cmp #ICAT_BOOK
     beq !ignp_book_prefix+
 !ignp_raw_known:
-#if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME
+#if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME || CX16_ITEM_NAMES_BANKED
     jsr item_load_known_name_ptr
 #else
     lda it_name_lo,x
@@ -378,7 +378,9 @@ item_get_name_ptr:
     lda it_name_hi,x
     sta zp_ptr0_hi
 #endif
-#if C128_PRODUCT_OVERLAY_RUNTIME
+#if CX16_ITEM_NAMES_BANKED
+    jmp item_decode_name_ptr_cx16_catalog
+#elif C128_PRODUCT_OVERLAY_RUNTIME
     jmp item_decode_name_ptr_bank1
 #else
     jmp item_decode_name_ptr
@@ -394,7 +396,7 @@ item_get_name_ptr:
 !ignp_prefix_done:
     sty item_name_dst_idx
     ldx item_display_id
-#if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME
+#if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME || CX16_ITEM_NAMES_BANKED
     jsr item_load_known_name_ptr
 #else
     lda it_name_lo,x
@@ -402,7 +404,9 @@ item_get_name_ptr:
     lda it_name_hi,x
     sta zp_ptr0_hi
 #endif
-#if C128_PRODUCT_OVERLAY_RUNTIME
+#if CX16_ITEM_NAMES_BANKED
+    jmp item_decode_name_ptr_cx16_catalog_at_dst
+#elif C128_PRODUCT_OVERLAY_RUNTIME
     jmp item_decode_name_ptr_bank1_at_dst
 #else
     jmp item_decode_name_ptr_at_dst
@@ -444,7 +448,22 @@ idgp_mage_book_prefix:   .text "Spellbook " ; .byte 0
 idgp_priest_book_prefix: .text "Holy Book of Prayers " ; .byte 0
 item_display_id: .byte 0
 
-#if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME
+#if CX16_ITEM_NAMES_BANKED
+// item_load_known_name_ptr — Resolve a known-name stream pointer in the CX16
+// item catalog bank. CX16 keeps the full pointer table in ITEMCAT.1, so both
+// bytes are read through the platform catalog accessor.
+// Input: X = item type ID
+// Output: zp_ptr0/zp_ptr0_hi = tokenized known-name stream in ITEMCAT.1
+// Clobbers: A, Y
+item_load_known_name_ptr:
+    stx item_display_id
+    jsr item_load_name_lo_x
+    sta zp_ptr0
+    ldx item_display_id
+    jsr item_load_name_hi_x
+    sta zp_ptr0_hi
+    rts
+#elif C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME
 // item_load_known_name_ptr — Resolve a known-name stream pointer without the
 // resident high-byte table. Name streams are emitted in item-ID order, so a
 // low-byte wrap between adjacent entries means the stream crossed a page.
@@ -561,6 +580,64 @@ item_decode_name_ptr_bank1_at_dst:
     ldy #0
 !idnp_copy_token:
     lda (zp_ptr1),y
+    beq !idnp_token_done+
+    ldx item_name_dst_idx
+    sta item_name_decode_buf,x
+    inc item_name_dst_idx
+    iny
+    bne !idnp_copy_token-
+!idnp_token_done:
+    inc item_name_src_idx
+    bne !idnp_loop-
+!idnp_done:
+    ldx item_name_dst_idx
+    lda #0
+    sta item_name_decode_buf,x
+    lda item_name_save_ptr1
+    sta zp_ptr1
+    lda item_name_save_ptr1_hi
+    sta zp_ptr1_hi
+    lda #<item_name_decode_buf
+    sta zp_ptr0
+    lda #>item_name_decode_buf
+    sta zp_ptr0_hi
+    rts
+#endif
+
+#if CX16_ITEM_NAMES_BANKED
+// Decode an item-name token stream from the CX16 item catalog bank. Known-name
+// streams and token text are both immutable ITEMCAT.1 data; the decoded output
+// remains in the resident shared buffer.
+item_decode_name_ptr_cx16_catalog:
+    lda #0
+    sta item_name_dst_idx
+item_decode_name_ptr_cx16_catalog_at_dst:
+    lda zp_ptr1
+    sta item_name_save_ptr1
+    lda zp_ptr1_hi
+    sta item_name_save_ptr1_hi
+    lda #0
+    sta item_name_src_idx
+!idnp_loop:
+    ldy item_name_src_idx
+    jsr item_load_catalog_byte_ptr0_y
+    beq !idnp_done+
+    bmi !idnp_token+
+    ldx item_name_dst_idx
+    sta item_name_decode_buf,x
+    inc item_name_dst_idx
+    inc item_name_src_idx
+    bne !idnp_loop-
+!idnp_token:
+    and #$7f
+    tax
+    jsr item_load_token_lo_x
+    sta zp_ptr1
+    jsr item_load_token_hi_x
+    sta zp_ptr1_hi
+    ldy #0
+!idnp_copy_token:
+    jsr item_load_catalog_byte_ptr1_y
     beq !idnp_token_done+
     ldx item_name_dst_idx
     sta item_name_decode_buf,x
