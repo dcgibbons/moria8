@@ -59,6 +59,8 @@ CX16_TRANSFER_TEST_OFFSET = 0x00F0
 CX16_TRANSFER_TEST_COUNT = 0x0104
 CX16_TIER1_BANK = 4
 CX16_TIER_GUARD_BANK = 5
+CX16_DUNGEON_MODULE_BANK = 8
+CX16_DUNGEON_MODULE_GUARD_BANK = 9
 VERA_ADDR_L = 0x9F20
 VERA_ADDR_M = 0x9F21
 VERA_ADDR_H = 0x9F22
@@ -383,6 +385,46 @@ def assert_tier_prg_load_to_bank(bench, labels, cwd):
     bench.set_memory(CX16_RAM_BANK_REG, saved_bank)
 
 
+def assert_dungeon_module_load_execute(bench, labels, cwd):
+    path = os.path.join(cwd, "DUNGEON.GEN")
+    load, payload = read_prg(path)
+    expected_load = require(labels, "cx16_contract_dungeon_module_load_base")
+    assert_eq(load & 0xFF, expected_load & 0xFF, "dungeon module PRG load low")
+    assert_eq(load >> 8, expected_load >> 8, "dungeon module PRG load high")
+
+    saved_bank = bench.get_memory(CX16_RAM_BANK_REG)
+
+    bench.set_memory(CX16_RAM_BANK_REG, CX16_DUNGEON_MODULE_BANK)
+    for offset in range(len(payload)):
+        bench.set_memory(load + offset, 0)
+
+    bench.set_memory(CX16_RAM_BANK_REG, CX16_DUNGEON_MODULE_GUARD_BANK)
+    guard_offsets = list(range(0, min(16, len(payload))))
+    guard_offsets.extend(range(max(0, len(payload) - 16), len(payload)))
+    for offset in guard_offsets:
+        bench.set_memory(load + offset, 0xC9)
+
+    bench.set_memory(CX16_RAM_BANK_REG, 1)
+    bench.run(require(labels, "cx16_probe_dungeon_module"), timeout=8)
+    if bench.get_status() & STATUS_CARRY:
+        raise AssertionError("cx16_probe_dungeon_module reported failure")
+    assert_eq(bench.get_memory(CX16_RAM_BANK_REG), 1, "dungeon module probe restored caller bank")
+    assert_eq(bench.get_memory(require(labels, "cx16_dungeon_module_status")), 1, "dungeon module status")
+    assert_eq(bench.get_memory(require(labels, "cx16_dungeon_module_ret_a")), 0xD6, "dungeon module magic A")
+    assert_eq(bench.get_memory(require(labels, "cx16_dungeon_module_ret_x")), 0x16, "dungeon module magic X")
+    assert_eq(bench.get_memory(require(labels, "cx16_dungeon_module_ret_y")), 0x01, "dungeon module version")
+
+    bench.set_memory(CX16_RAM_BANK_REG, CX16_DUNGEON_MODULE_BANK)
+    for offset, expected in enumerate(payload):
+        assert_eq(bench.get_memory(load + offset), expected, f"dungeon module bank payload byte {offset}")
+
+    bench.set_memory(CX16_RAM_BANK_REG, CX16_DUNGEON_MODULE_GUARD_BANK)
+    for offset in guard_offsets:
+        assert_eq(bench.get_memory(load + offset), 0xC9, f"dungeon module guard bank byte {offset}")
+
+    bench.set_memory(CX16_RAM_BANK_REG, saved_bank)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--x16emu", required=True)
@@ -407,6 +449,7 @@ def main():
         assert_banked_ram_isolation(bench)
         assert_banked_transfer_helpers(bench, labels)
         assert_tier_prg_load_to_bank(bench, labels, args.cwd)
+        assert_dungeon_module_load_execute(bench, labels, args.cwd)
 
         bench.run(require(labels, "screen_init"))
         bench.run(require(labels, "cx16_title_enter_menu"), timeout=8)
@@ -502,6 +545,7 @@ def main():
         assert_eq(bench.get_memory(require(labels, "cx16_state")), 2, "CX16 dungeon bootstrap state")
         assert_eq(bench.get_memory(require(labels, "cx16_loaded_tier")), 1, "loaded tier")
         assert_eq(bench.get_memory(require(labels, "cx16_loaded_tier_bank")), 4, "loaded tier bank")
+        assert_eq(bench.get_memory(require(labels, "cx16_dungeon_module_status")), 1, "dungeon module status after stairs")
         assert_eq(bench.get_memory(require(labels, "cx16_dungeon_depth")), 1, "dungeon bootstrap depth")
         assert_eq(bench.get_memory(require(labels, "zp_player_dlvl")), 1, "shared dungeon depth")
         assert_player_position(bench, labels, 24, 13, "dungeon entry player position")

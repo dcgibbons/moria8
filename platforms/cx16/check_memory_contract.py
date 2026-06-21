@@ -33,6 +33,10 @@ CX16_TIER_BANK_BASE = 4
 CX16_TIER_BANK_END = 7
 CX16_TIER_LOAD_BASE = CX16_BANKED_RAM_BASE
 CX16_TIER_LOAD_END = 0xA80D
+CX16_DUNGEON_MODULE_BANK = 8
+CX16_DUNGEON_MODULE_LOAD_BASE = CX16_BANKED_RAM_BASE
+CX16_DUNGEON_MODULE_LOAD_END = CX16_BANKED_RAM_END
+CX16_DUNGEON_MODULE_ENTRY = CX16_DUNGEON_MODULE_LOAD_BASE
 
 
 class ContractError(Exception):
@@ -102,7 +106,7 @@ def overlap_span(start, end_exclusive, region_start, region_end_inclusive):
     return overlap_start, overlap_end
 
 
-def emit_report(product, shared_probe, tiers):
+def emit_report(product, shared_probe, tiers, modules):
     product_load, product_end, product_program_end = product
     probe_load, probe_end, probe_program_end = shared_probe
     live_map_size = CX16_FIXED_LIVE_MAP_END - CX16_FIXED_LIVE_MAP_BASE + 1
@@ -130,6 +134,9 @@ def emit_report(product, shared_probe, tiers):
     print(f"  tier banks: {CX16_TIER_BANK_BASE}-{CX16_TIER_BANK_END}")
     for index, (tier_load, tier_end) in enumerate(tiers, start=1):
         print(f"  tier {index} PRG: {fmt_span(tier_load, tier_end)} ({span_size(tier_load, tier_end)} bytes)")
+    print(f"  dungeon module bank: {CX16_DUNGEON_MODULE_BANK}")
+    for module_load, module_end in modules:
+        print(f"  dungeon module PRG: {fmt_span(module_load, module_end)} ({span_size(module_load, module_end)} bytes)")
     print(f"  shared probe image: {fmt_span(probe_load, probe_end)} ({span_size(probe_load, probe_end)} bytes)")
     print(f"  shared probe program_end: {fmt_addr(probe_program_end)}")
     print(f"  shared probe over fixed-code limit: {probe_over_fixed_limit} bytes")
@@ -164,6 +171,10 @@ def check_contract_symbols(labels):
         "cx16_contract_tier_bank_end": CX16_TIER_BANK_END,
         "cx16_contract_tier_load_base": CX16_TIER_LOAD_BASE,
         "cx16_contract_tier_load_end": CX16_TIER_LOAD_END,
+        "cx16_contract_dungeon_module_bank": CX16_DUNGEON_MODULE_BANK,
+        "cx16_contract_dungeon_module_load_base": CX16_DUNGEON_MODULE_LOAD_BASE,
+        "cx16_contract_dungeon_module_load_end": CX16_DUNGEON_MODULE_LOAD_END,
+        "cx16_contract_dungeon_module_entry": CX16_DUNGEON_MODULE_ENTRY,
     }
     for name, value in expected.items():
         expect_addr(require(labels, name), value, name)
@@ -198,6 +209,18 @@ def check_contract_symbols(labels):
     expect_true(
         require(labels, "cx16_contract_tier_load_base") == require(labels, "cx16_contract_banked_ram_base"),
         "tier load base must match banked RAM base",
+    )
+    expect_true(
+        require(labels, "cx16_contract_dungeon_module_bank") > require(labels, "cx16_contract_tier_bank_end"),
+        "dungeon module bank must not overlap tier banks",
+    )
+    expect_true(
+        require(labels, "cx16_contract_dungeon_module_load_base") == require(labels, "cx16_contract_banked_ram_base"),
+        "dungeon module load base must match banked RAM base",
+    )
+    expect_true(
+        require(labels, "cx16_contract_dungeon_module_load_end") == require(labels, "cx16_contract_banked_ram_end"),
+        "dungeon module load end must match banked RAM end",
     )
 
 
@@ -247,6 +270,16 @@ def check_tier_prg(prg_path):
     return load, end_exclusive
 
 
+def check_module_prg(prg_path):
+    load, end_exclusive = read_prg_span(prg_path)
+    expect_addr(load, CX16_DUNGEON_MODULE_LOAD_BASE, f"{os.path.basename(prg_path)} load address")
+    expect_true(
+        end_exclusive <= CX16_DUNGEON_MODULE_LOAD_END + 1,
+        f"{os.path.basename(prg_path)} exceeds banked RAM window",
+    )
+    return load, end_exclusive
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--main-prg", required=True)
@@ -254,12 +287,18 @@ def main():
     parser.add_argument("--shared-prg", required=True)
     parser.add_argument("--shared-symbols", required=True)
     parser.add_argument("--tier-prg", action="append", default=[])
+    parser.add_argument("--module-prg", action="append", default=[])
     args = parser.parse_args()
 
     product = check_product(args.main_prg, args.main_symbols)
     shared_probe = check_shared_probe(args.shared_prg, args.shared_symbols)
     tiers = [check_tier_prg(path) for path in args.tier_prg]
-    emit_report(product, shared_probe, tiers)
+    modules = [check_module_prg(path) for path in args.module_prg]
+    if len(tiers) != 4:
+        raise ContractError(f"expected 4 tier PRGs, got {len(tiers)}")
+    if len(modules) != 1:
+        raise ContractError(f"expected 1 module PRG, got {len(modules)}")
+    emit_report(product, shared_probe, tiers, modules)
 
 
 if __name__ == "__main__":

@@ -131,10 +131,12 @@ Current assumptions:
 * CX16 bootstrap town interactions use the dependency-light store-door and
   stairs probes in `core/town_interactions_basic.s`; full store UI remains
   deferred. Stairs-down now enters a visible dungeon bootstrap milestone: it
-  loads `MONSTER.DB.1` into CX16 RAM bank 4, records depth/tier state, generates
-  a small shared-format dungeon map in fixed RAM, and renders a 78x22 VERA text
-  viewport from the shared tile byte to screen-code/color mapping. This is still
-  a bootstrap dungeon map, not the full shared `dungeon_gen.s` overlay.
+  loads `MONSTER.DB.1` into CX16 RAM bank 4, loads and probes the executable
+  `DUNGEON.GEN` module in CX16 RAM bank 8 at `$A000`, records depth/tier state,
+  generates a small shared-format dungeon map in fixed RAM, and renders a 78x22
+  VERA text viewport from the shared tile byte to screen-code/color mapping.
+  This is still a bootstrap dungeon map, not the full shared `dungeon_gen.s`
+  overlay.
   Store doors render as numbered entrances from the shared store-door metadata.
   Help, version, and character-info commands render CX16 bootstrap status text.
   Other mapped but not-yet-implemented town commands acknowledge by category
@@ -164,7 +166,8 @@ Current shared-gameplay status:
   shared-probe overrun across the live-map, VERA I/O, and bank-window regions.
   The same gate validates the generated CX16 `MONSTER.DB.1` through
   `MONSTER.DB.4` tier payloads as `$A000` bank-window PRGs that fit inside one
-  8 KiB RAM bank.
+  8 KiB RAM bank. It also validates the generated `DUNGEON.GEN` module as a
+  `$A000` bank-window PRG that fits inside one 8 KiB RAM bank.
   `make testcx16-memory-contract-selftest` covers the checker's positive and
   negative contract cases, including stale PRG/symbol mismatches.
 * `make testcx16-runtime` runs an x16emu `-testbench` smoke check against the
@@ -175,7 +178,10 @@ Current shared-gameplay status:
   helpers used to move fixed-RAM data into and back out of selected CX16 RAM
   banks without leaving the caller on the wrong bank. It also loads
   `MONSTER.DB.1` through the product tier loader into RAM bank 4, verifies the
-  resulting banked payload byte-for-byte against the generated PRG, and checks
+  resulting banked payload byte-for-byte against the generated PRG, loads
+  `DUNGEON.GEN` through the product dungeon-module loader into RAM bank 8,
+  verifies the module payload byte-for-byte against the generated PRG, checks
+  the `$A000` entry ABI tuple, confirms bank 9 remains untouched, and checks
   the visible stairs-down dungeon bootstrap map, viewport rendering, movement,
   blocked-wall behavior, and upstairs return to town.
 * The probe is not a runtime-safe memory placement. The linked image currently
@@ -185,7 +191,11 @@ Current shared-gameplay status:
   below it. Banked resident databases or cached payloads should use the CX16
   bank-window helpers rather than direct, unscoped writes to `$00`/`$A000`.
   Creature tiers currently reserve RAM banks 4-7, with each `MONSTER.DB.N`
-  payload loaded at `$A000` in its selected bank.
+  payload loaded at `$A000` in its selected bank. The executable dungeon module
+  currently reserves RAM bank 8 as `DUNGEON.GEN`, loaded at `$A000` and entered
+  at `$A000`; the current body is an ABI probe, and future real generator code
+  must preserve that load address, entry point, caller-bank restoration, and
+  one-bank fit.
   Do not enable the guarded shared loop in the normal CX16 PRG until the code,
   map, floor-item table, creature scratch, generation queue, and bank-window
   database ownership are all asserted in one runtime-safe placement.

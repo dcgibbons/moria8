@@ -45,6 +45,7 @@
 #import "input.s"
 #import "services.s"
 #import "tier_storage.s"
+#import "dungeon_module.s"
 #import "../../core/input_ui_helpers.s"
 #if CX16_IMPORT_SHARED_GAME_LOOP
 #import "shared_imports.s"
@@ -71,6 +72,10 @@
 .label cx16_contract_tier_bank_end = CX16_TIER_BANK_END
 .label cx16_contract_tier_load_base = CX16_TIER_LOAD_BASE
 .label cx16_contract_tier_load_end = CX16_TIER_LOAD_END
+.label cx16_contract_dungeon_module_bank = CX16_DUNGEON_MODULE_BANK
+.label cx16_contract_dungeon_module_load_base = CX16_DUNGEON_MODULE_LOAD_BASE
+.label cx16_contract_dungeon_module_load_end = CX16_DUNGEON_MODULE_LOAD_END
+.label cx16_contract_dungeon_module_entry = CX16_DUNGEON_MODULE_ENTRY
 
 cx16_entry:
     sei
@@ -412,6 +417,12 @@ cx16_enter_dungeon_bootstrap:
     :Cx16PrintAt(26, 22, cx16_tier_load_failed_text)
     rts
 !loaded:
+    jsr cx16_probe_dungeon_module
+    bcc !module_ok+
+    jsr cx16_clear_message_row
+    :Cx16PrintAt(26, 21, cx16_dungeon_module_failed_text)
+    rts
+!module_ok:
     lda #CX16_STATE_DUNGEON_BOOTSTRAP
     sta cx16_state
     lda #1
@@ -1075,6 +1086,10 @@ cx16_loading_tier_text:
 
 cx16_tier_load_failed_text:
     :ScreenText("TIER LOAD FAILED.")
+    .byte 0
+
+cx16_dungeon_module_failed_text:
+    :ScreenText("DUNGEON MODULE LOAD FAILED.")
     .byte 0
 
 cx16_dungeon_title_text:
