@@ -13,6 +13,12 @@ import subprocess
 import sys
 import time
 
+from check_memory_contract import (
+    CX16_BANKED_RAM_BASE,
+    CX16_RAM_BANK_REG,
+    check_product_symbols,
+)
+
 
 STATUS_CARRY = 0x01
 TOWN_FLAGS = 0x0C
@@ -227,6 +233,28 @@ def assert_player_position(bench, labels, x, y, label):
     assert_eq(bench.get_memory(require(labels, "zp_player_y")), y, f"{label} shared y")
 
 
+def assert_banked_ram_isolation(bench):
+    saved_bank = bench.get_memory(CX16_RAM_BANK_REG)
+
+    bench.set_memory(CX16_RAM_BANK_REG, 0)
+    bank0_saved = bench.get_memory(CX16_BANKED_RAM_BASE)
+    bench.set_memory(CX16_BANKED_RAM_BASE, 0xA6)
+
+    bench.set_memory(CX16_RAM_BANK_REG, 1)
+    bank1_saved = bench.get_memory(CX16_BANKED_RAM_BASE)
+    bench.set_memory(CX16_BANKED_RAM_BASE, 0x5B)
+
+    bench.set_memory(CX16_RAM_BANK_REG, 0)
+    assert_eq(bench.get_memory(CX16_BANKED_RAM_BASE), 0xA6, "bank 0 visible byte")
+    bench.set_memory(CX16_BANKED_RAM_BASE, bank0_saved)
+
+    bench.set_memory(CX16_RAM_BANK_REG, 1)
+    assert_eq(bench.get_memory(CX16_BANKED_RAM_BASE), 0x5B, "bank 1 visible byte")
+    bench.set_memory(CX16_BANKED_RAM_BASE, bank1_saved)
+
+    bench.set_memory(CX16_RAM_BANK_REG, saved_bank)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--x16emu", required=True)
@@ -237,6 +265,7 @@ def main():
     args = parser.parse_args()
 
     labels = load_symbols(args.symbols)
+    check_product_symbols(labels)
     cwd = args.cwd if args.cwd else None
     prg = args.prg
     if cwd:
@@ -246,6 +275,8 @@ def main():
         bench.run(require(labels, "cx16_memory_init"))
         if bench.get_status() & STATUS_CARRY:
             raise AssertionError("cx16_memory_init reported failure")
+        assert_eq(bench.get_memory(CX16_RAM_BANK_REG), 0, "default RAM bank after memory init")
+        assert_banked_ram_isolation(bench)
 
         bench.run(require(labels, "screen_init"))
         bench.run(require(labels, "cx16_title_enter_menu"), timeout=8)

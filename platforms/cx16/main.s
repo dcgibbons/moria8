@@ -47,6 +47,22 @@
 #import "shared_imports.s"
 #endif
 
+.label cx16_contract_prg_load_base = CX16_PRG_LOAD_BASE
+.label cx16_contract_resident_code_base = CX16_RESIDENT_CODE_BASE
+.label cx16_contract_resident_code_limit = CX16_RESIDENT_CODE_LIMIT
+.label cx16_contract_fixed_live_map_base = CX16_FIXED_LIVE_MAP_BASE
+.label cx16_contract_fixed_live_map_end = CX16_FIXED_LIVE_MAP_END
+.label cx16_contract_floor_item_base = FLOOR_ITEM_BASE
+.label cx16_contract_floor_item_end = FLOOR_ITEM_END
+.label cx16_contract_creature_base = CREATURE_BASE
+.label cx16_contract_creature_end = CREATURE_END
+.label cx16_contract_bfs_queue_base = DUNGEON_GEN_BFS_QUEUE_BASE
+.label cx16_contract_bfs_queue_end = DUNGEON_GEN_BFS_QUEUE_END
+.label cx16_contract_banked_ram_base = CX16_BANKED_RAM_BASE
+.label cx16_contract_banked_ram_end = CX16_BANKED_RAM_END
+.label cx16_contract_banked_data_base = BANKED_DATA_BASE
+.label cx16_contract_banked_data_end = BANKED_DATA_END
+
 cx16_entry:
     sei
     jsr cx16_memory_init    // Select KERNAL ROM and default RAM bank.
@@ -663,7 +679,10 @@ cx16_store_idx: .byte 0
 
 program_end:
 #if !CX16_IMPORT_SHARED_GAME_LOOP
-.assert "CX16 resident boot code stays below MAP_BASE", program_end <= MAP_BASE, true
+.assert "CX16 product image stays below fixed live-map base", program_end <= CX16_RESIDENT_CODE_LIMIT, true
+#else
+.assert "CX16 shared-gameplay probe crosses fixed live-map base; keep link-only", program_end > CX16_FIXED_LIVE_MAP_BASE, true
+.assert "CX16 shared-gameplay probe crosses VERA I/O hole; keep link-only", program_end > CX16_IO_BASE, true
 #endif
 .assert "CX16 town uses shared town width", TOWN_MAP_COLS, 66
 .assert "CX16 town uses shared town height", TOWN_MAP_ROWS, 22

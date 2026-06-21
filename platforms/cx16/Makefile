@@ -21,6 +21,7 @@ OUT         ?= $(BUILD)/cx16
 VERSION_FILE ?= ../../version.json
 VERSION_INC_TOOL ?= ../../tools/make_version_include.py
 VERSION_INC = $(BUILD)/version_strings.inc
+CX16_MEMORY_CONTRACT_TOOL = check_memory_contract.py
 
 ifeq ($(filter /%,$(KICKASS)),)
 KICKASS_RESOLVED = $(CURDIR)/$(KICKASS)
@@ -60,7 +61,8 @@ testcx16-runtime: $(CX16_MAIN_PRG) $(CX16_TITLE_PRG)
 	@command -v "$(X16EMU)" >/dev/null 2>&1 || { echo "ERROR: x16emu not found. Set X16EMU=/path/to/x16emu."; exit 1; }
 	python3 harness_smoke.py --x16emu "$(X16EMU)" $(if $(strip $(X16_ROM)),--rom "$(X16_ROM)",) --prg "$(CX16_MAIN_PRG)" --symbols "$(OUT)/main.sym" --cwd "$(OUT)"
 
-testcx16-shared-link: $(CX16_SHARED_PROBE_PRG)
+testcx16-shared-link: $(CX16_MAIN_PRG) $(CX16_SHARED_PROBE_PRG)
+	python3 "$(CX16_MEMORY_CONTRACT_TOOL)" --main-prg "$(CX16_MAIN_PRG)" --main-symbols "$(OUT)/main.sym" --shared-prg "$(CX16_SHARED_PROBE_PRG)" --shared-symbols "$(OUT)/shared_probe.sym"
 	@echo "CX16 shared-gameplay link probe passed: $(CX16_SHARED_PROBE_PRG)"
 	@echo "NOTE: this is link-only; it is not a runtime-safe CX16 memory placement yet."
 

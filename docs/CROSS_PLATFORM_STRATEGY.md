@@ -112,6 +112,9 @@ Current assumptions:
 * Build remains Kick Assembler for the first slice.
 * Baseline RAM is 512 KB, using fixed RAM below `$9F00` plus the `$A000-$BFFF`
   banked-RAM window for later resident overlay/cache work.
+* The normal product PRG loads at `$0801`; machine code starts at `$0810` and
+  must end before the fixed live-map base at `$4000`. The assembler enforces
+  this for the normal CX16 image.
 * Display target is VERA 80x30 text. The first title screen centers the
   existing 40-column title composition inside the wider display.
 * The current new-game path renders a deterministic 66x22 town through
@@ -119,6 +122,9 @@ Current assumptions:
   store-position tables, backed by fixed RAM at `MAP_BASE` with the shared
   198-byte row stride. This is still a bootstrap renderer, not the full shared
   game loop.
+* The live shared map is deliberately fixed RAM, not banked RAM. The 198x66
+  map is 13,068 bytes, larger than one 8 KiB CX16 banked-RAM window, so moving
+  it behind `$A000-$BFFF` would require explicit split-window map accessors.
 * CX16 bootstrap town rendering uses the shared tile byte to screen-code/color
   mapping in `core/tile_display.s`; the VERA text backend remains
   platform-owned.
@@ -145,18 +151,24 @@ Current shared-gameplay status:
 * `make testcx16-shared-link` is a link-only probe for the guarded shared
   gameplay import path. It verifies that CX16 imports, constants, and
   trampolines still satisfy the shared code's assembly-time contracts.
+  The probe is intentionally asserted as non-runtime-safe while its linked
+  image crosses the fixed live-map base and VERA I/O hole.
+  `platforms/cx16/check_memory_contract.py` also checks the generated product
+  and shared-probe PRG load spans against their symbol files so this distinction
+  is mechanically enforced by the target.
 * `make testcx16-runtime` runs an x16emu `-testbench` smoke check against the
   normal CX16 PRG. It verifies RAM-visible bootstrap contracts: town generation,
   player position, store-door detection, stairs detection, title asset loading,
-  VERA text output, and command feedback messages.
+  VERA text output, command feedback messages, exported memory-contract
+  symbols, and `$A000-$BFFF` RAM-bank isolation.
 * The probe is not a runtime-safe memory placement. The linked image currently
   crosses the fixed-RAM map/scratch plan and the CX16 `$A000-$BFFF` banked-RAM
   window.
-* The 80-column shared map is `198x66` bytes, so it is larger than one 8 KiB
-  CX16 banked-RAM window. Runtime enablement must either keep the live map in
-  fixed RAM with resident code below it, or add explicit split-window map
-  accessors. Do not enable the guarded shared loop in the normal CX16 PRG until
-  this placement is made explicit and verified.
+* Runtime enablement must keep the live map in fixed RAM with resident code
+  below it, or deliberately introduce explicit split-window map accessors.
+  Do not enable the guarded shared loop in the normal CX16 PRG until the code,
+  map, floor-item table, creature scratch, generation queue, and bank-window
+  database ownership are all asserted in one runtime-safe placement.
 
 ## 7. Current Codebase Assessment & Next Steps
 
