@@ -31,11 +31,18 @@ TILE_STAIRS_UP = 0xA0
 TILE_RUBBLE = 0xB0
 TILE_QUARTZ = 0xD0
 TILE_TRAP = 0xE0
+TILE_TYPE_MASK = 0xF0
 DUNGEON_FLAGS = 0x0C
+MAP_COLS = 198
+MAP_ROWS = 66
+CMD_MOVE_N = 0x01
 CMD_MOVE_W = 0x03
 CMD_MOVE_S = 0x02
 CMD_MOVE_E = 0x04
 CMD_MOVE_NW = 0x05
+CMD_MOVE_NE = 0x06
+CMD_MOVE_SW = 0x07
+CMD_MOVE_SE = 0x08
 CMD_REST = 0x0B
 CMD_SEARCH = 0x0C
 CMD_OPEN = 0x0D
@@ -243,6 +250,14 @@ def assert_screen_cell(bench, row, col, char_code, attr, label):
     assert_eq(screen_attr_at(bench, row, col), attr, f"{label} attr")
 
 
+def assert_screen_contains_cell(bench, char_code, attr, label):
+    for row in range(30):
+        for col in range(80):
+            if screen_char_at(bench, row, col) == char_code and screen_attr_at(bench, row, col) == attr:
+                return row, col
+    raise AssertionError(f"{label}: screen cell not found")
+
+
 def set_player_position(bench, labels, x, y):
     bench.set_memory(require(labels, "cx16_player_x"), x)
     bench.set_memory(require(labels, "cx16_player_y"), y)
@@ -259,6 +274,41 @@ def assert_player_position(bench, labels, x, y, label):
 
 def assert_map_tile(bench, labels, x, y, expected, label):
     assert_eq(map_tile_at(bench, labels, x, y), expected, label)
+
+
+def assert_map_tile_type(bench, labels, x, y, expected_type, label):
+    assert_eq(tile_type(map_tile_at(bench, labels, x, y)), expected_type, label)
+
+
+def tile_type(tile):
+    return tile & TILE_TYPE_MASK
+
+
+def find_map_tile_type(bench, labels, wanted_type, label):
+    for y in range(MAP_ROWS):
+        for x in range(MAP_COLS):
+            if tile_type(map_tile_at(bench, labels, x, y)) == wanted_type:
+                return x, y
+    raise AssertionError(f"{label}: tile type ${wanted_type:02X} not found")
+
+
+def find_adjacent_floor_move(bench, labels, x, y):
+    for command, dx, dy in (
+        (CMD_MOVE_E, 1, 0),
+        (CMD_MOVE_W, -1, 0),
+        (CMD_MOVE_S, 0, 1),
+        (CMD_MOVE_N, 0, -1),
+        (CMD_MOVE_SE, 1, 1),
+        (CMD_MOVE_SW, -1, 1),
+        (CMD_MOVE_NE, 1, -1),
+        (CMD_MOVE_NW, -1, -1),
+    ):
+        nx = x + dx
+        ny = y + dy
+        if 0 <= nx < MAP_COLS and 0 <= ny < MAP_ROWS:
+            if tile_type(map_tile_at(bench, labels, nx, ny)) == TILE_FLOOR:
+                return command, nx, ny
+    raise AssertionError("generated dungeon entry has no adjacent floor move")
 
 
 def assert_banked_ram_isolation(bench):
@@ -418,6 +468,16 @@ def assert_dungeon_module_load_execute(bench, labels, cwd):
         bench.set_memory(load + offset, 0xC9)
 
     bench.set_memory(CX16_RAM_BANK_REG, 1)
+    bench.run(require(labels, "cx16_load_dungeon_module"), timeout=8)
+    if bench.get_status() & STATUS_CARRY:
+        raise AssertionError("cx16_load_dungeon_module reported failure")
+    assert_eq(bench.get_memory(CX16_RAM_BANK_REG), 1, "dungeon module load restored caller bank")
+
+    bench.set_memory(CX16_RAM_BANK_REG, CX16_DUNGEON_MODULE_BANK)
+    for offset, expected in enumerate(payload):
+        assert_eq(bench.get_memory(load + offset), expected, f"dungeon module bank payload byte {offset}")
+
+    bench.set_memory(CX16_RAM_BANK_REG, 1)
     bench.run(require(labels, "cx16_probe_dungeon_module"), timeout=8)
     if bench.get_status() & STATUS_CARRY:
         raise AssertionError("cx16_probe_dungeon_module reported failure")
@@ -426,10 +486,6 @@ def assert_dungeon_module_load_execute(bench, labels, cwd):
     assert_eq(bench.get_memory(require(labels, "cx16_dungeon_module_ret_a")), 0xD6, "dungeon module magic A")
     assert_eq(bench.get_memory(require(labels, "cx16_dungeon_module_ret_x")), 0x16, "dungeon module magic X")
     assert_eq(bench.get_memory(require(labels, "cx16_dungeon_module_ret_y")), 0x01, "dungeon module version")
-
-    bench.set_memory(CX16_RAM_BANK_REG, CX16_DUNGEON_MODULE_BANK)
-    for offset, expected in enumerate(payload):
-        assert_eq(bench.get_memory(load + offset), expected, f"dungeon module bank payload byte {offset}")
 
     bench.set_memory(CX16_RAM_BANK_REG, CX16_DUNGEON_MODULE_GUARD_BANK)
     for offset in guard_offsets:
@@ -561,29 +617,19 @@ def main():
         assert_eq(bench.get_memory(require(labels, "cx16_dungeon_module_status")), 1, "dungeon module status after stairs")
         assert_eq(bench.get_memory(require(labels, "cx16_dungeon_depth")), 1, "dungeon bootstrap depth")
         assert_eq(bench.get_memory(require(labels, "zp_player_dlvl")), 1, "shared dungeon depth")
-        assert_player_position(bench, labels, 24, 13, "dungeon entry player position")
-        assert_map_tile(bench, labels, 24, 13, TILE_STAIRS_UP | DUNGEON_FLAGS, "module stairs up tile")
-        assert_map_tile(bench, labels, 77, 18, TILE_STAIRS_DN | DUNGEON_FLAGS, "module stairs down tile")
-        assert_map_tile(bench, labels, 24, 7, TILE_WALL_H | DUNGEON_FLAGS, "module first room north wall")
-        assert_map_tile(bench, labels, 11, 13, TILE_WALL_H | DUNGEON_FLAGS, "module first room west wall")
-        assert_map_tile(bench, labels, 70, 24, TILE_WALL_H | DUNGEON_FLAGS, "module second room south wall")
-        assert_map_tile(bench, labels, 40, 13, TILE_DOOR_OPEN | DUNGEON_FLAGS, "module east room connector")
-        assert_map_tile(bench, labels, 51, 13, TILE_DOOR_OPEN | DUNGEON_FLAGS, "module west room connector")
-        assert_map_tile(bench, labels, 32, 18, TILE_DOOR_OPEN | DUNGEON_FLAGS, "module south connector")
-        assert_map_tile(bench, labels, 86, 23, TILE_DOOR_OPEN | DUNGEON_FLAGS, "module far connector")
-        assert_map_tile(bench, labels, 22, 31, TILE_DOOR_CLOSED | DUNGEON_FLAGS, "module closed door")
-        assert_map_tile(bench, labels, 36, 34, TILE_RUBBLE | DUNGEON_FLAGS, "module rubble")
-        assert_map_tile(bench, labels, 58, 23, TILE_QUARTZ | DUNGEON_FLAGS, "module quartz")
-        assert_map_tile(bench, labels, 72, 16, TILE_TRAP | DUNGEON_FLAGS, "module trap")
-        assert_map_tile(bench, labels, 110, 25, TILE_FLOOR | DUNGEON_FLAGS, "module far room floor")
+        entry_x = bench.get_memory(require(labels, "zp_player_x"))
+        entry_y = bench.get_memory(require(labels, "zp_player_y"))
+        assert_player_position(bench, labels, entry_x, entry_y, "dungeon entry player position")
+        assert_map_tile_type(bench, labels, entry_x, entry_y, TILE_STAIRS_UP, "module stairs up tile")
+        down_x, down_y = find_map_tile_type(bench, labels, TILE_STAIRS_DN, "module stairs down")
+        floor_x, floor_y = find_map_tile_type(bench, labels, TILE_FLOOR, "module floor")
+        wall_x, wall_y = find_map_tile_type(bench, labels, TILE_WALL_H, "module wall")
+        assert_map_tile_type(bench, labels, down_x, down_y, TILE_STAIRS_DN, "module stairs down tile")
+        assert_map_tile_type(bench, labels, floor_x, floor_y, TILE_FLOOR, "module floor tile")
+        assert_map_tile_type(bench, labels, wall_x, wall_y, TILE_WALL_H, "module wall tile")
         assert_screen_text(bench, 0, 31, "DUNGEON LEVEL 1", "dungeon title")
-        assert_screen_cell(bench, 13, 25, SC_PLAYER, TEXT_COLOR, "dungeon entry player")
-        assert_screen_cell(bench, 7, 25, screen_code("#"), 15, "dungeon visible north wall")
-        assert_screen_cell(bench, 13, 12, screen_code("#"), 15, "dungeon visible west wall")
-        assert_screen_cell(bench, 13, 24, screen_code("."), 11, "dungeon room floor")
-        assert_screen_cell(bench, 13, 26, screen_code("."), 11, "dungeon adjacent floor")
+        assert_screen_contains_cell(bench, SC_PLAYER, TEXT_COLOR, "dungeon entry player")
         assert_screen_cell(bench, 2, 1, screen_code(" "), 0, "unvisited dungeon rock")
-        assert_screen_cell(bench, 18, 78, screen_code(">"), TEXT_COLOR, "dungeon down stairs")
         assert_screen_text(bench, 25, 24, "MONSTER.DB.1 LOADED", "dungeon tier loaded")
         assert_screen_text(
             bench,
@@ -593,31 +639,33 @@ def main():
             "dungeon help",
         )
 
+        move_command, move_x, move_y = find_adjacent_floor_move(bench, labels, entry_x, entry_y)
+        assert_screen_contains_cell(bench, screen_code("."), 11, "visible dungeon floor")
         screen_put_cell_raw(bench, 1, 0, screen_code("*"), 2)
-        bench.set_a(CMD_MOVE_E)
+        bench.set_a(move_command)
         bench.run(require(labels, "cx16_try_move_command"))
-        assert_player_position(bench, labels, 25, 13, "dungeon east move")
-        assert_screen_cell(bench, 13, 26, SC_PLAYER, TEXT_COLOR, "dungeon moved player")
+        assert_player_position(bench, labels, move_x, move_y, "dungeon adjacent move")
+        assert_screen_contains_cell(bench, SC_PLAYER, TEXT_COLOR, "dungeon moved player")
         assert_screen_cell(bench, 1, 0, screen_code("*"), 2, "dungeon movement does not full-clear")
 
-        set_player_position(bench, labels, 39, 13)
+        set_player_position(bench, labels, entry_x, entry_y)
         bench.run(require(labels, "cx16_draw_dungeon_bootstrap"))
         screen_put_cell_raw(bench, 1, 0, screen_code("*"), 2)
-        bench.set_a(CMD_MOVE_E)
+        bench.set_a(move_command)
         bench.run(require(labels, "cx16_dispatch_game_command"))
-        assert_player_position(bench, labels, 40, 13, "dungeon scrolling move through dispatcher")
+        assert_player_position(bench, labels, move_x, move_y, "dungeon move through dispatcher")
         assert_screen_cell(bench, 1, 0, screen_code("*"), 2, "dungeon scrolling movement does not full-clear")
 
-        set_player_position(bench, labels, 12, 8)
+        set_player_position(bench, labels, wall_x + 1, wall_y + 1)
         bench.set_a(CMD_MOVE_NW)
         bench.run(require(labels, "cx16_try_move_command"))
-        assert_player_position(bench, labels, 12, 8, "dungeon blocked wall move")
+        assert_player_position(bench, labels, wall_x + 1, wall_y + 1, "dungeon blocked wall move")
 
-        set_player_position(bench, labels, 31, 18)
+        set_player_position(bench, labels, floor_x, floor_y)
         bench.run(require(labels, "cx16_try_stairs_up"))
         assert_screen_text(bench, 26, 28, "YOU SEE NO STAIRS HERE.", "no stairs message")
 
-        set_player_position(bench, labels, 24, 13)
+        set_player_position(bench, labels, entry_x, entry_y)
         bench.run(require(labels, "cx16_try_stairs_up"))
         assert_eq(bench.get_memory(require(labels, "cx16_state")), 1, "returned to town state")
         assert_eq(bench.get_memory(require(labels, "zp_player_dlvl")), 0, "returned to town depth")

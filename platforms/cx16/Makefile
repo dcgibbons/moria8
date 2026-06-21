@@ -41,11 +41,14 @@ endif
 CX16_MAIN_SRC = main.s
 CX16_TITLE_SRC = ../../core/title_data.s
 CX16_TIER_DIR = creature_data
+ROOT_DIR = ../..
 CX16_MAIN_PRG = $(OUT)/moria16.prg
 CX16_SHARED_PROBE_PRG = $(OUT)/moria16-shared-probe.prg
 CX16_TITLE_PRG = $(OUT)/TITLE
 CX16_TIER_PRGS = $(OUT)/MONSTER.DB.1 $(OUT)/MONSTER.DB.2 $(OUT)/MONSTER.DB.3 $(OUT)/MONSTER.DB.4
 CX16_MODULE_PRGS = $(OUT)/DUNGEON.GEN
+CX16_DUNGEON_CONSTS_SRC = ../../core/dungeon_consts.s
+CX16_DUNGEON_MODULE_CONTRACT_SRC = dungeon_module_contract.s
 CX16_SOURCES  := $(shell find . -type f -name '*.s' -print)
 X16EMU_ROM_ARGS = $(if $(strip $(X16_ROM)),-rom "$(X16_ROM)",)
 
@@ -82,11 +85,12 @@ $(VERSION_INC): $(VERSION_FILE) $(VERSION_INC_TOOL) | $(BUILD)
 	python3 "$(VERSION_INC_TOOL)" "$(VERSION_FILE)" "$(VERSION_INC)"
 
 $(CX16_MAIN_PRG): $(CX16_SOURCES) $(VERSION_INC) | ensure-kickass $(OUT)
-	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(CX16_MAIN_SRC)" -define CX16 -showmem -vicesymbols -o "$(CX16_MAIN_PRG)"
+	$(JAVA) -jar "$(KICKASS_RESOLVED)" ":CX16_OUT=$(abspath $(OUT))" "$(CX16_MAIN_SRC)" -define CX16 -afo -showmem -vicesymbols -o "$(CX16_MAIN_PRG)"
 	@if [ -f main.sym ]; then mv -f main.sym "$(OUT)/main.sym"; fi
 
 $(CX16_SHARED_PROBE_PRG): $(CX16_SOURCES) $(VERSION_INC) | ensure-kickass $(OUT)
-	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(CX16_MAIN_SRC)" -define CX16 -define CX16_IMPORT_SHARED_GAME_LOOP -showmem -vicesymbols -o "$(CX16_SHARED_PROBE_PRG)"
+	@mkdir -p "$(OUT)/shared-probe"
+	$(JAVA) -jar "$(KICKASS_RESOLVED)" ":CX16_OUT=$(abspath $(OUT))/shared-probe" "$(CX16_MAIN_SRC)" -define CX16 -define CX16_IMPORT_SHARED_GAME_LOOP -afo -showmem -vicesymbols -o "$(CX16_SHARED_PROBE_PRG)"
 	@if [ -f "$(OUT)/main.vs" ]; then mv -f "$(OUT)/main.vs" "$(OUT)/shared_probe.vs"; fi
 	@if [ -f main.sym ]; then mv -f main.sym "$(OUT)/shared_probe.sym"; fi
 
@@ -110,9 +114,8 @@ $(OUT)/MONSTER.DB.4: $(CX16_TIER_DIR)/tier4_prg.s ../../platforms/commodore/c64/
 	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(CX16_TIER_DIR)/tier4_prg.s" -o "$@"
 	@rm -f "$(CX16_TIER_DIR)/tier4_prg.sym"
 
-$(OUT)/DUNGEON.GEN: dungeon_gen_module.s | ensure-kickass $(OUT)
-	$(JAVA) -jar "$(KICKASS_RESOLVED)" "dungeon_gen_module.s" -o "$@"
-	@rm -f dungeon_gen_module.sym
+$(OUT)/DUNGEON.GEN: $(CX16_MAIN_PRG)
+	@test -f "$@" || { echo "ERROR: DUNGEON.GEN was not emitted by $(CX16_MAIN_SRC)"; exit 1; }
 
 ensure-kickass: | $(OUT)
 ifeq ($(origin KICKASS),file)

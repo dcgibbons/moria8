@@ -166,6 +166,36 @@ Acceptance target:
   80-column equipment screens, with no text spilling into adjacent rows or off
   the visible display.
 
+### Tune dungeon generation for larger maps
+
+The shared dungeon generator uses the same 4-8 room count and L-shaped
+room-center connector strategy across compact C64/Plus4 maps and larger
+C128/CX16 maps. On large maps, this can spread too few rooms across too much
+space, producing very long straight hallways and a dungeon feel that differs
+materially from the denser C64 experience.
+
+Required work:
+
+- Add a generation diagnostics pass or test harness that records room count,
+  room centers, accepted-room retries, corridor segment lengths, maximum
+  corridor segment length, and total carved corridor length for each platform
+  map size.
+- Compare C64, C128, Plus/4, and CX16 outputs under deterministic seeds before
+  changing generator behavior.
+- Decide whether large maps should scale room count, constrain room-placement
+  regions, add intermediate connector points, or use another shared strategy.
+- Keep the fix in `core/dungeon_gen.s` or shared generation constants, not in a
+  CX16-only generator fork.
+- Preserve C64/Plus4 map feel and all current map memory contracts.
+- Add focused coverage that prevents large-map generations from degenerating
+  into a few rooms connected by extreme straight corridors.
+
+Acceptance target:
+
+- C128/CX16 large-map dungeons have room density and corridor-length
+  distributions close enough to the compact-map feel that they no longer read
+  as sparse maps with huge straight hallways, without regressing C64/Plus4.
+
 ### Expand unsupported monster special attacks
 
 Moria8 maps several Umoria monster attack effects into compact substitutes.

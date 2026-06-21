@@ -1,13 +1,7 @@
 #importonce
 // dungeon_module.s - CX16 loadable dungeon-generation module contract.
 
-.const CX16_DUNGEON_MODULE_BANK = 8
-.const CX16_DUNGEON_MODULE_LOAD_BASE = CX16_BANKED_RAM_BASE
-.const CX16_DUNGEON_MODULE_LOAD_END = CX16_BANKED_RAM_END
-.const CX16_DUNGEON_MODULE_ENTRY = CX16_DUNGEON_MODULE_LOAD_BASE
-.const CX16_DUNGEON_MODULE_MAGIC_A = $d6
-.const CX16_DUNGEON_MODULE_MAGIC_X = $16
-.const CX16_DUNGEON_MODULE_VERSION = $01
+#import "dungeon_module_contract.s"
 
 .assert "CX16 dungeon module load base is bank-window base", CX16_DUNGEON_MODULE_LOAD_BASE, CX16_BANKED_RAM_BASE
 .assert "CX16 dungeon module load end is bank-window end", CX16_DUNGEON_MODULE_LOAD_END, CX16_BANKED_RAM_END
@@ -17,6 +11,7 @@ cx16_dungeon_module_status: .byte 0
 cx16_dungeon_module_ret_a: .byte 0
 cx16_dungeon_module_ret_x: .byte 0
 cx16_dungeon_module_ret_y: .byte 0
+cx16_dungeon_module_request_depth: .byte 0
 
 // Output: carry clear = module loaded into bank 8.
 //         carry set = KERNAL load error.
@@ -38,15 +33,18 @@ cx16_load_dungeon_module:
     plp
     rts
 
-// Output: carry clear = loaded module entry returned the expected ABI tuple.
-//         carry set = load failed or ABI tuple mismatch.
+// Input:  A = dungeon depth to generate.
+// Output: carry clear = loaded module generated the map and returned the
+//         expected ABI tuple; carry set = load, status, or ABI mismatch.
 // Restores the caller's selected RAM bank before returning.
-cx16_probe_dungeon_module:
+cx16_generate_dungeon_level:
+    sta cx16_dungeon_module_request_depth
     jsr cx16_load_dungeon_module
     bcs !fail+
     jsr cx16_save_ram_bank
     lda #CX16_DUNGEON_MODULE_BANK
     jsr cx16_select_ram_bank_a
+    lda cx16_dungeon_module_request_depth
     jsr CX16_DUNGEON_MODULE_ENTRY
     sta cx16_dungeon_module_ret_a
     stx cx16_dungeon_module_ret_x
@@ -64,6 +62,7 @@ cx16_probe_dungeon_module:
     lda cx16_dungeon_module_ret_y
     cmp #CX16_DUNGEON_MODULE_VERSION
     bne !fail+
+    jsr cx16_sync_generated_dungeon_state
     lda #1
     sta cx16_dungeon_module_status
     clc
@@ -72,6 +71,21 @@ cx16_probe_dungeon_module:
     lda #0
     sta cx16_dungeon_module_status
     sec
+    rts
+
+// Compatibility label for existing probes; generation now uses the full output
+// ABI and copies generator-owned placement state back to resident variables.
+cx16_probe_dungeon_module:
+    lda #1
+    jmp cx16_generate_dungeon_level
+
+cx16_sync_generated_dungeon_state:
+    lda cx16_dungeon_module_request_depth
+    sta cx16_dungeon_depth
+    lda zp_player_x
+    sta cx16_player_x
+    lda zp_player_y
+    sta cx16_player_y
     rts
 
 cx16_dungeon_module_file:

@@ -6,8 +6,6 @@
 
 .encoding "screencode_mixed"
 
-.const DUNGEON_GEN_BUSY = 1
-
 #import "../../core/color.s"
 #import "../../core/rng.s"
 #import "../../core/math.s"

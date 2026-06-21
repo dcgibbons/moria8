@@ -12,79 +12,11 @@
 // ============================================================
 // Map constants
 // ============================================================
-.const MAP40_COLS = 80
-.const MAP40_ROWS = 48
-.const C128_MAP_COLS = 198
-.const C128_MAP_ROWS = 66
-.const TOWN_MAP_COLS = 66
-.const TOWN_MAP_ROWS = 22
-.const TOWN_STAIRS_X = 32
-.const TOWN_STAIRS_Y = 18
-.const TOWN_START_X = 31
-.const TOWN_START_Y = 18
-.const STORE_W = 10
-.const STORE_H = 5
+#import "dungeon_consts.s"
 
 .const MAP_COLS     = hal_layout_map_cols
 .const MAP_ROWS     = hal_layout_map_rows
 .const MAP_SIZE     = MAP_COLS * MAP_ROWS
-
-// Tile type values (upper nibble)
-.const TILE_FLOOR   = $00
-.const TILE_WALL_H  = $10
-.const TILE_WALL_V  = $20
-.const TILE_CORNER_TL = $30
-.const TILE_CORNER_TR = $40
-.const TILE_CORNER_BL = $50
-.const TILE_CORNER_BR = $60
-.const TILE_DOOR_OPEN = $70
-.const TILE_DOOR_CLOSED = $80
-.const TILE_STAIRS_DN = $90
-.const TILE_STAIRS_UP = $A0
-.const TILE_RUBBLE  = $B0
-.const TILE_MAGMA   = $C0
-.const TILE_QUARTZ  = $D0
-.const TILE_TRAP    = $E0
-.const TILE_SECRET  = $F0
-
-// Flag bits (lower nibble)
-.const FLAG_OCCUPIED = $01  // Bit 0: creature present
-.const FLAG_HAS_ITEM = $02  // Bit 1: treasure/item present
-.const FLAG_VISITED  = $04  // Bit 2: player has seen this tile
-.const FLAG_LIT      = $08  // Bit 3: tile is illuminated
-
-// Town flags: all tiles are lit and visited
-.const TOWN_FLAGS    = FLAG_LIT | FLAG_VISITED  // $0C
-
-// Number of stores in the town
-.const STORE_COUNT   = 8
-
-// Tile type mask (for extracting type from map byte)
-.const TILE_TYPE_MASK = $F0
-.const TILE_FLAG_MASK = $0F
-
-// ============================================================
-// Dungeon room/generation constants (shared with other modules)
-// ============================================================
-.const MAX_ROOMS     = 8
-.const DUNGEON_FLAGS = FLAG_LIT                  // $08 (rooms are lit)
-
-// Special room type constants
-.const RT_NORMAL = 0
-.const RT_PIT    = 1
-.const RT_VAULT  = 2
-.const RT_NEST   = 3
-
-// Trap table/type constants are shared by generation, save/load, search, and
-// trap gameplay. Trap storage itself lives in dungeon_features.s.
-.const MAX_TRAPS = 16
-.const TRAP_OPEN_PIT    = 0   // 1d4 damage
-.const TRAP_ARROW       = 1   // 1d8 damage
-.const TRAP_POISON_GAS  = 2   // Set poison timer
-.const TRAP_TELEPORT    = 3   // Random teleport
-.const TRAP_POISON_DART = 4   // 1d4 damage + 50% CON loss
-.const TRAP_ROCKFALL    = 5   // 2d8 damage
-.const TRAP_TYPE_COUNT  = 6
 
 // ============================================================
 // Pre-computed row address table
