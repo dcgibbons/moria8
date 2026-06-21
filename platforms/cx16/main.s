@@ -53,6 +53,7 @@
 .const CX16_DUNGEON_ROOM_FLAGS = FLAG_LIT | FLAG_VISITED
 #import "../../core/player_state.s"
 #import "../../core/dungeon_feature_gen.s"
+#import "../../core/rng.s"
 #import "../../core/player_move_basic.s"
 #import "../../core/town_map_basic.s"
 #import "../../core/tile_display.s"
@@ -112,6 +113,7 @@ cx16_entry:
     jsr KERNAL_CINT
     jsr screen_init
     jsr cx16_services_install
+    jsr rng_seed
     lda #CX16_TEXT_COLOR
     jsr screen_set_color
     jsr cx16_title_enter_menu
@@ -183,6 +185,7 @@ cx16_poll_menu:
     jmp cx16_title_enter_menu
 
 cx16_new_game_start:
+    jsr rng_seed
     lda #CX16_STATE_NEW_GAME
     sta cx16_state
     lda #TOWN_START_X
@@ -725,7 +728,6 @@ cx16_dungeon_module_entry:
     sta player_data + PL_DLEVEL
     lda #0
     sta level_entry_dir
-    jsr rng_seed
     jsr dungeon_generate
     clc
     lda #CX16_DUNGEON_MODULE_MAGIC_A
@@ -733,7 +735,6 @@ cx16_dungeon_module_entry:
     ldy #CX16_DUNGEON_MODULE_VERSION
     rts
 
-#import "../../core/rng.s"
 #if !CX16_IMPORT_SHARED_GAME_LOOP
 tramp_assign_special_room:
     jmp assign_special_room

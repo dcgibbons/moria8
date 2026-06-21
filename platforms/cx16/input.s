@@ -34,12 +34,14 @@ input_modal_prepare:
 
 input_get_key:
 !poll:
+    inc zp_entropy
     jsr KERNAL_GETIN
     beq !poll-
     rts
 
 input_wait_release:
 !drain:
+    inc zp_entropy
     lda #0
     sta hal_input_kbdbuf_count
     jsr KERNAL_GETIN
