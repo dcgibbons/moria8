@@ -538,7 +538,7 @@ cx16_try_dungeon_step_dir:
     lda cx16_view_y
     cmp cx16_old_view_y
     bne !full+
-    jsr cx16_render_dungeon_viewport
+    jsr cx16_render_dungeon_local_area
     sec
     rts
 !full:
@@ -684,15 +684,18 @@ cx16_cmd_inventory:
 
 cx16_after_item_turn:
     jsr cx16_sync_local_player_position
+    jsr cx16_save_old_player
     jsr update_visibility
     jsr cx16_update_dungeon_view
-    jmp cx16_render_dungeon_viewport
+    jmp cx16_render_dungeon_local_area
 
 cx16_after_feature_turn:
     jsr cx16_sync_shared_player_position
+    jsr cx16_sync_local_player_position
+    jsr cx16_save_old_player
     jsr update_visibility
     jsr cx16_update_dungeon_view
-    jmp cx16_render_dungeon_viewport
+    jmp cx16_render_dungeon_local_area
 
 cx16_check_town_entry:
     jsr town_basic_check_store_door

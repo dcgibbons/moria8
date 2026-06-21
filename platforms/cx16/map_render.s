@@ -299,6 +299,138 @@ cx16_dungeon_player_redraw:
     lda #CX16_TEXT_COLOR
     jmp screen_set_color
 
+cx16_render_dungeon_local_area:
+    lda cx16_old_player_x
+    cmp cx16_player_x
+    bcc !min_x_old+
+    lda cx16_player_x
+!min_x_old:
+    sec
+    sbc zp_light_radius
+    bcs !min_x_pad+
+    lda #0
+    jmp !min_x_view+
+!min_x_pad:
+    sec
+    sbc #1
+    bcs !min_x_view+
+    lda #0
+!min_x_view:
+    cmp cx16_view_x
+    bcs !store_min_x+
+    lda cx16_view_x
+!store_min_x:
+    sta cx16_vis_min_x
+
+    lda cx16_old_player_x
+    cmp cx16_player_x
+    bcs !max_x_old+
+    lda cx16_player_x
+!max_x_old:
+    clc
+    adc zp_light_radius
+    clc
+    adc #1
+    sta cx16_vis_max_x
+    lda cx16_view_x
+    clc
+    adc #VIEWPORT_W - 1
+    cmp cx16_vis_max_x
+    bcs !max_x_map+
+    sta cx16_vis_max_x
+!max_x_map:
+    lda cx16_vis_max_x
+    cmp #MAP_COLS
+    bcc !store_max_x+
+    lda #MAP_COLS - 1
+!store_max_x:
+    sta cx16_vis_max_x
+
+    lda cx16_old_player_y
+    cmp cx16_player_y
+    bcc !min_y_old+
+    lda cx16_player_y
+!min_y_old:
+    sec
+    sbc zp_light_radius
+    bcs !min_y_pad+
+    lda #0
+    jmp !min_y_view+
+!min_y_pad:
+    sec
+    sbc #1
+    bcs !min_y_view+
+    lda #0
+!min_y_view:
+    cmp cx16_view_y
+    bcs !store_min_y+
+    lda cx16_view_y
+!store_min_y:
+    sta cx16_vis_min_y
+
+    lda cx16_old_player_y
+    cmp cx16_player_y
+    bcs !max_y_old+
+    lda cx16_player_y
+!max_y_old:
+    clc
+    adc zp_light_radius
+    clc
+    adc #1
+    sta cx16_vis_max_y
+    lda cx16_view_y
+    clc
+    adc #VIEWPORT_H - 1
+    cmp cx16_vis_max_y
+    bcs !max_y_map+
+    sta cx16_vis_max_y
+!max_y_map:
+    lda cx16_vis_max_y
+    cmp #MAP_ROWS
+    bcc !store_max_y+
+    lda #MAP_ROWS - 1
+!store_max_y:
+    sta cx16_vis_max_y
+
+    lda cx16_vis_min_y
+    sta cx16_draw_y
+!row:
+    lda cx16_vis_min_x
+    sta cx16_draw_x
+!col:
+    jsr cx16_draw_dungeon_map_cell
+    inc cx16_draw_x
+    lda cx16_draw_x
+    cmp cx16_vis_max_x
+    bcc !col-
+    beq !col-
+    inc cx16_draw_y
+    lda cx16_draw_y
+    cmp cx16_vis_max_y
+    bcc !row-
+    beq !row-
+    jmp cx16_draw_dungeon_player_only
+
+cx16_draw_dungeon_player_only:
+    lda cx16_player_y
+    sec
+    sbc cx16_view_y
+    clc
+    adc #VIEWPORT_Y
+    tay
+    lda cx16_player_x
+    sec
+    sbc cx16_view_x
+    clc
+    adc #VIEWPORT_X
+    tax
+    lda #COL_PLAYER
+    jsr screen_set_color
+    lda #SC_PLAYER
+    jsr screen_put_char_at
+    lda #CX16_TEXT_COLOR
+    jmp screen_set_color
+
 cx16_draw_dungeon_map_cell:
     ldx cx16_draw_y
     lda map_row_lo,x

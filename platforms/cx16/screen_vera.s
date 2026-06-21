@@ -212,26 +212,11 @@ screen_row_addr:
     lda #VERA_TEXT_BASE_LO
     sta zp_screen_lo
     lda #VERA_TEXT_BASE_MID
+    clc
+    adc zp_temp0
     sta zp_screen_mid
     lda #VERA_TEXT_BASE_HIGH
     sta zp_screen_hi
-
-    lda zp_temp0
-    beq !done+
-!add:
-    clc
-    lda zp_screen_lo
-    adc #<VERA_TEXT_ROW_STRIDE
-    sta zp_screen_lo
-    lda zp_screen_mid
-    adc #>VERA_TEXT_ROW_STRIDE
-    sta zp_screen_mid
-    bcc !next+
-    inc zp_screen_hi
-!next:
-    dec zp_temp0
-    bne !add-
-!done:
     rts
 
 vera_set_addr_inc1:
