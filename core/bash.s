@@ -227,7 +227,11 @@ bash_monster:
     cmp #FI_EMPTY
     beq !bash_no_shield+
     tax                         // X = shield item type
+#if HAL_PLATFORM_ITEM_CATALOG_BANKED
+    jsr item_load_weight_x
+#else
     lda it_weight,x
+#endif
     lsr                         // weight / 2
     clc
     adc zp_combat_tohit

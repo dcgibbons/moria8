@@ -35,7 +35,11 @@
 roll_ego_type:
     // Check category — weapons get weapon ego, digging tools get tool ego
     tax
+#if HAL_PLATFORM_ITEM_CATALOG_BANKED
+    jsr item_load_category_x
+#else
     lda it_category,x
+#endif
     cmp #ICAT_WEAPON
     beq !ret_weapon_ego+
     jmp roll_tool_ego_check     // Main RAM: handles ICAT_DIGGING check, returns 0 for others

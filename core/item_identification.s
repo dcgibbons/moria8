@@ -356,7 +356,11 @@ item_get_name_ptr:
     // Fallback (shouldn't happen): return real name
 !ignp_known:
     stx item_display_id
+#if HAL_PLATFORM_ITEM_CATALOG_BANKED
+    jsr item_load_category_x
+#else
     lda it_category,x
+#endif
     cmp #ICAT_POTION
     beq !ignp_potion_prefix+
     cmp #ICAT_SCROLL
@@ -627,7 +631,11 @@ item_get_floor_color:
     rts
 
 !igfc_known:
+#if HAL_PLATFORM_ITEM_CATALOG_BANKED
+    jsr item_load_color_x
+#else
     lda it_color,x
+#endif
     rts
 
 !igfc_potion:

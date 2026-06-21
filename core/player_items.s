@@ -187,7 +187,11 @@ piw_inv_slot_matches_filter:
     cpy #$fd
     beq !piw_inv_match+
     tax
+#if HAL_PLATFORM_ITEM_CATALOG_BANKED
+    jsr item_load_category_x
+#else
     lda it_category,x
+#endif
     cpy #PIW_FILTER_RECHARGE
     beq !piw_inv_recharge+
     cpy #$fe

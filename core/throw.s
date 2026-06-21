@@ -78,7 +78,11 @@ throw_item:
 
     // Load weight
     ldx tw_item_id
+#if HAL_PLATFORM_ITEM_CATALOG_BANKED
+    jsr item_load_weight_x
+#else
     lda it_weight,x
+#endif
     beq !tw_max_range+          // Weight 0 → max range
     tax                         // X = divisor (weight)
     jsr math_div_16x8           // zp_math_a = quotient lo
@@ -150,7 +154,11 @@ throw_item:
 
     // 6. Hit! Roll damage using item's dice
     ldx tw_item_id
+#if HAL_PLATFORM_ITEM_CATALOG_BANKED
+    jsr item_load_dmg_dice_x
+#else
     lda it_dmg_dice,x
+#endif
     bne !tw_has_dice+
     // No dice (0d0) — use 1d1 minimum
     lda #1
@@ -158,7 +166,11 @@ throw_item:
     jmp !tw_roll_dice+
 !tw_has_dice:
     pha
+#if HAL_PLATFORM_ITEM_CATALOG_BANKED
+    jsr item_load_dmg_sides_x
+#else
     lda it_dmg_sides,x
+#endif
     tax                         // X = sides
     pla                         // A = dice count
 !tw_roll_dice:
@@ -234,7 +246,11 @@ tw_miss_darkness:
 
     // Check if potion → shatter message
     ldx tw_item_id
+#if HAL_PLATFORM_ITEM_CATALOG_BANKED
+    jsr item_load_category_x
+#else
     lda it_category,x
+#endif
     cmp #ICAT_POTION
     bne !tw_flies+
     ldx #HSTR_TW_SHATTERS
@@ -263,7 +279,11 @@ tw_consume_item:
 
     // Place on floor? Potions always shatter (no floor item)
     ldx tw_item_id
+#if HAL_PLATFORM_ITEM_CATALOG_BANKED
+    jsr item_load_category_x
+#else
     lda it_category,x
+#endif
     cmp #ICAT_POTION
     beq !tw_done+
 

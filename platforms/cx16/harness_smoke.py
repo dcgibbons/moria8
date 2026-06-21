@@ -38,6 +38,7 @@ MAP_ROWS = 66
 EQUIP_WEAPON = 22
 ITEM_PICK = 63
 BOOTSTRAP_PICK_DIG_ABILITY = 24
+ICAT_WEAPON = 2
 CMD_MOVE_N = 0x01
 CMD_MOVE_W = 0x03
 CMD_MOVE_S = 0x02
@@ -89,6 +90,8 @@ CX16_TIER1_BANK = 4
 CX16_TIER_GUARD_BANK = 5
 CX16_DUNGEON_MODULE_BANK = 8
 CX16_DUNGEON_MODULE_GUARD_BANK = 11
+CX16_ITEM_CATALOG_BANK = 9
+CX16_ITEM_CATALOG_GUARD_BANK = 10
 VERA_ADDR_L = 0x9F20
 VERA_ADDR_M = 0x9F21
 VERA_ADDR_H = 0x9F22
@@ -546,6 +549,43 @@ def assert_dungeon_module_load_execute(bench, labels, cwd):
     bench.set_memory(CX16_RAM_BANK_REG, saved_bank)
 
 
+def assert_item_catalog_load_to_bank(bench, labels, cwd):
+    path = os.path.join(cwd, "ITEMCAT.1")
+    load, payload = read_prg(path)
+    expected_load = require(labels, "cx16_contract_item_catalog_load_base")
+    assert_eq(load & 0xFF, expected_load & 0xFF, "item catalog PRG load low")
+    assert_eq(load >> 8, expected_load >> 8, "item catalog PRG load high")
+
+    saved_bank = bench.get_memory(CX16_RAM_BANK_REG)
+
+    bench.set_memory(CX16_RAM_BANK_REG, CX16_ITEM_CATALOG_BANK)
+    for offset in range(len(payload)):
+        bench.set_memory(load + offset, 0)
+
+    bench.set_memory(CX16_RAM_BANK_REG, CX16_ITEM_CATALOG_GUARD_BANK)
+    guard_offsets = list(range(0, min(16, len(payload))))
+    guard_offsets.extend(range(max(0, len(payload) - 16), len(payload)))
+    for offset in guard_offsets:
+        bench.set_memory(load + offset, 0xA9)
+
+    bench.set_memory(CX16_RAM_BANK_REG, 1)
+    bench.run(require(labels, "cx16_load_item_catalog"), timeout=8)
+    if bench.get_status() & STATUS_CARRY:
+        raise AssertionError("cx16_load_item_catalog reported failure")
+    assert_eq(bench.get_memory(CX16_RAM_BANK_REG), 1, "item catalog load restored caller bank")
+    assert_eq(bench.get_memory(require(labels, "cx16_item_catalog_status")), 1, "item catalog status")
+
+    bench.set_memory(CX16_RAM_BANK_REG, CX16_ITEM_CATALOG_BANK)
+    for offset, expected in enumerate(payload):
+        assert_eq(bench.get_memory(load + offset), expected, f"item catalog bank payload byte {offset}")
+
+    bench.set_memory(CX16_RAM_BANK_REG, CX16_ITEM_CATALOG_GUARD_BANK)
+    for offset in guard_offsets:
+        assert_eq(bench.get_memory(load + offset), 0xA9, f"item catalog guard bank byte {offset}")
+
+    bench.set_memory(CX16_RAM_BANK_REG, saved_bank)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--x16emu", required=True)
@@ -571,6 +611,7 @@ def main():
         assert_banked_transfer_helpers(bench, labels)
         assert_tier_prg_load_to_bank(bench, labels, args.cwd)
         assert_dungeon_module_load_execute(bench, labels, args.cwd)
+        assert_item_catalog_load_to_bank(bench, labels, args.cwd)
 
         bench.run(require(labels, "screen_init"))
         bench.run(require(labels, "cx16_title_enter_menu"), timeout=8)
@@ -586,12 +627,16 @@ def main():
         assert_eq(bench.get_memory(require(labels, "zp_player_dlvl")), 0, "town depth")
         assert_eq(bench.get_memory(require(labels, "inv_item_id") + EQUIP_WEAPON), ITEM_PICK, "bootstrap weapon")
         assert_eq(bench.get_memory(require(labels, "zp_player_str")), 18, "bootstrap strength")
+        resident_pick_category = require(labels, "it_category") + ITEM_PICK
+        saved_pick_category = bench.get_memory(resident_pick_category)
+        bench.set_memory(resident_pick_category, ICAT_WEAPON)
         bench.run(require(labels, "tramp_dig_ability"))
         assert_eq(
             bench.get_memory(require(labels, "tun_dig_ability")),
             BOOTSTRAP_PICK_DIG_ABILITY,
-            "bootstrap pick dig ability",
+            "bootstrap pick dig ability from banked item catalog",
         )
+        bench.set_memory(resident_pick_category, saved_pick_category)
         assert_eq(map_tile_at(bench, labels, 32, 18), TILE_STAIRS_DN | TOWN_FLAGS, "town stairs tile")
         assert_screen_text(bench, 0, 33, "TOWN", "town title")
         assert_screen_text(

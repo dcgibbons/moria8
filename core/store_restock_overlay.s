@@ -102,7 +102,11 @@ store_restock_one:
     sta si_qty,y
     lda si_item_id,y
     tax
+#if HAL_PLATFORM_ITEM_CATALOG_BANKED
+    jsr item_load_category_x
+#else
     lda it_category,x
+#endif
     jsr sro_set_p1
 
 !sro_cnt_inc:
@@ -169,7 +173,11 @@ sro_set_p1:
     sta si_to_ac,y
     lda si_item_id,y
     tax
+#if HAL_PLATFORM_ITEM_CATALOG_BANKED
+    jsr item_load_category_x
+#else
     lda it_category,x
+#endif
     cmp #ICAT_WEAPON
     bne !sro_enchant_armor+
     lda srr_tmp0
@@ -247,7 +255,11 @@ store_pick_item:
 
     pha
     tax
+#if HAL_PLATFORM_ITEM_CATALOG_BANKED
+    jsr item_load_category_x
+#else
     lda it_category,x
+#endif
     jsr check_store_category
     bcc !spi_reject+
 

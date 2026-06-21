@@ -70,6 +70,7 @@
 #import "services.s"
 #import "tier_storage.s"
 #import "dungeon_module.s"
+#import "item_catalog.s"
 #import "map_render.s"
 #if !CX16_IMPORT_SHARED_GAME_LOOP
 #import "../../core/dungeon_los.s"
@@ -112,6 +113,9 @@
 .label cx16_contract_dungeon_module_entry = CX16_DUNGEON_MODULE_ENTRY
 .label cx16_contract_item_catalog_bank_base = CX16_ITEM_CATALOG_BANK_BASE
 .label cx16_contract_item_catalog_bank_end = CX16_ITEM_CATALOG_BANK_END
+.label cx16_contract_item_catalog_primary_bank = CX16_ITEM_CATALOG_PRIMARY_BANK
+.label cx16_contract_item_catalog_load_base = CX16_ITEM_CATALOG_LOAD_BASE
+.label cx16_contract_item_catalog_load_end = CX16_ITEM_CATALOG_LOAD_END
 
 cx16_entry:
     sei
@@ -128,6 +132,13 @@ cx16_entry:
     jsr KERNAL_CINT
     jsr screen_init
     jsr cx16_services_install
+    jsr cx16_load_item_catalog
+    bcc !item_catalog_ok+
+    lda #CX16_TEXT_COLOR
+    jsr screen_set_color
+    :Cx16PrintAt(14, 28, cx16_item_catalog_failed_text)
+    jmp !halt-
+!item_catalog_ok:
     jsr rng_seed
     lda #CX16_TEXT_COLOR
     jsr screen_set_color
@@ -919,6 +930,10 @@ cx16_wizard_stub_text:
 
 cx16_memory_fail_text:
     :ScreenText("CX16 RAM BANK TEST FAILED")
+    .byte 0
+
+cx16_item_catalog_failed_text:
+    :ScreenText("ITEMCAT.1 LOAD FAILED")
     .byte 0
 
 cx16_state: .byte CX16_STATE_TITLE

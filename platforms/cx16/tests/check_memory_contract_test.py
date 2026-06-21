@@ -44,6 +44,9 @@ def base_labels(program_end):
         "cx16_contract_dungeon_module_entry": contract.CX16_DUNGEON_MODULE_ENTRY,
         "cx16_contract_item_catalog_bank_base": contract.CX16_ITEM_CATALOG_BANK_BASE,
         "cx16_contract_item_catalog_bank_end": contract.CX16_ITEM_CATALOG_BANK_END,
+        "cx16_contract_item_catalog_primary_bank": contract.CX16_ITEM_CATALOG_PRIMARY_BANK,
+        "cx16_contract_item_catalog_load_base": contract.CX16_ITEM_CATALOG_LOAD_BASE,
+        "cx16_contract_item_catalog_load_end": contract.CX16_ITEM_CATALOG_LOAD_END,
     }
 
 
@@ -179,6 +182,25 @@ def test_module_prg_contract():
         assert_raises(lambda: contract.check_module_prg(too_large), "exceeds banked RAM window")
 
 
+def test_item_prg_contract():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        item_path = os.path.join(tmpdir, "ITEMCAT.1")
+        write_prg(item_path, contract.CX16_ITEM_CATALOG_LOAD_BASE, 0x0200)
+        contract.check_item_prg(item_path)
+
+        wrong_load = os.path.join(tmpdir, "ITEMCAT.BADLOAD")
+        write_prg(wrong_load, contract.CX16_ITEM_CATALOG_LOAD_BASE + 1, 0x0200)
+        assert_raises(lambda: contract.check_item_prg(wrong_load), "load address")
+
+        too_large = os.path.join(tmpdir, "ITEMCAT.BIG")
+        write_prg(
+            too_large,
+            contract.CX16_ITEM_CATALOG_LOAD_BASE,
+            contract.CX16_ITEM_CATALOG_LOAD_END - contract.CX16_ITEM_CATALOG_LOAD_BASE + 2,
+        )
+        assert_raises(lambda: contract.check_item_prg(too_large), "exceeds banked RAM window")
+
+
 def test_overlap_span_edges():
     assert contract.overlap_span(0x0801, 0x1000, 0x9F00, 0x9FFF) is None
     assert contract.overlap_span(0x0801, 0x9F00, 0x9F00, 0x9FFF) is None
@@ -191,9 +213,10 @@ def test_report_contains_actionable_memory_lines():
     shared = (contract.CX16_PRG_LOAD_BASE, contract.CX16_BANKED_RAM_END + 0x0100, contract.CX16_BANKED_RAM_END + 0x0100)
     tiers = [(contract.CX16_TIER_LOAD_BASE, contract.CX16_TIER_LOAD_BASE + 0x0200)]
     modules = [(contract.CX16_DUNGEON_MODULE_LOAD_BASE, contract.CX16_DUNGEON_MODULE_LOAD_BASE + 0x0200)]
+    items = [(contract.CX16_ITEM_CATALOG_LOAD_BASE, contract.CX16_ITEM_CATALOG_LOAD_BASE + 0x0200)]
     output = StringIO()
     with redirect_stdout(output):
-        contract.emit_report(product, shared, tiers, modules)
+        contract.emit_report(product, shared, tiers, modules, items)
 
     report = output.getvalue()
     for expected in (
@@ -205,6 +228,8 @@ def test_report_contains_actionable_memory_lines():
         "dungeon module bank",
         "dungeon module PRG",
         "item catalog banks",
+        "item catalog primary bank",
+        "item catalog PRG",
         "shared probe over fixed-code limit",
         "shared probe overlaps VERA I/O",
         "shared probe overlaps bank window",
@@ -224,6 +249,7 @@ def main():
     test_shared_probe_prg_symbol_span_match()
     test_tier_prg_contract()
     test_module_prg_contract()
+    test_item_prg_contract()
     test_overlap_span_edges()
     test_report_contains_actionable_memory_lines()
     print("CX16 memory contract self-test passed")

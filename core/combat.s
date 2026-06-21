@@ -270,7 +270,11 @@ combat_calc_melee_total_tohit_bonus:
     bcc !ccmt_done+
 !ccmt_weapon:
     tay
+#if HAL_PLATFORM_ITEM_CATALOG_BANKED
+    jsr item_load_weight_y
+#else
     lda it_weight,y
+#endif
     beq !ccmt_unarmed+
     sta ccb_wt_save
     lda player_data + PL_STR_CUR
@@ -483,7 +487,11 @@ combat_calc_blows:
 !ccb_get_weight:
     // Get weapon weight
     tay                         // Y = weapon type
+#if HAL_PLATFORM_ITEM_CATALOG_BANKED
+    jsr item_load_weight_y
+#else
     lda it_weight,y             // A = weapon weight (1/10 lbs)
+#endif
     beq !ccb_unarmed+          // Zero weight → treat as unarmed
     sta ccb_wt_save             // Save weapon weight
 
@@ -598,9 +606,17 @@ combat_roll_damage:
 !crd_has_melee:
 
     // Weapon equipped — use weapon dice
+#if HAL_PLATFORM_ITEM_CATALOG_BANKED
+    jsr item_load_dmg_dice_x
+#else
     lda it_dmg_dice,x           // Dice count
+#endif
     pha                         // Save dice count
+#if HAL_PLATFORM_ITEM_CATALOG_BANKED
+    jsr item_load_dmg_sides_x
+#else
     lda it_dmg_sides,x          // Dice sides
+#endif
     tax                         // X = sides
     pla                         // A = dice count
     ldy #0                      // No bonus on dice roll itself
@@ -677,7 +693,11 @@ combat_critical_blow:
 !ccb_has_weapon:
 
     // Save weapon weight (8-bit, will zero-extend to 16 later)
+#if HAL_PLATFORM_ITEM_CATALOG_BANKED
+    jsr item_load_weight_x
+#else
     lda it_weight,x
+#endif
     sta ccb_weight
 
     // --- Compute 16-bit chance ---

@@ -576,7 +576,11 @@ player_calc_combat:
     beq !ac_next_slot+
     // Add base AC for this item type
     tay                         // Y = item type ID
+#if HAL_PLATFORM_ITEM_CATALOG_BANKED
+    jsr item_load_base_ac_y
+#else
     lda it_base_ac,y
+#endif
     clc
     adc pcc_ac_accum
     sta pcc_ac_accum

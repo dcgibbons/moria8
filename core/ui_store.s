@@ -510,7 +510,11 @@ store_sell:
     ldx sd_save_x
     lda inv_item_id,x
     tax
+#if HAL_PLATFORM_ITEM_CATALOG_BANKED
+    jsr item_load_category_x
+#else
     lda it_category,x
+#endif
     jsr check_store_category
     bcs !ssl_buyable+
 
@@ -583,7 +587,11 @@ store_sell:
 
     // Check if store buys this category
     tax
+#if HAL_PLATFORM_ITEM_CATALOG_BANKED
+    jsr item_load_category_x
+#else
     lda it_category,x
+#endif
     jsr check_store_category
     bcs !ssell_cat_ok+
 

@@ -15,7 +15,11 @@ calc_dig_ability:
     rts
 
 !cda_has_weapon:
+#if HAL_PLATFORM_ITEM_CATALOG_BANKED
+    jsr item_load_category_x
+#else
     lda it_category,x
+#endif
     cmp #ICAT_DIGGING
     beq !cda_dig_tool+
 

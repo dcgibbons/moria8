@@ -39,6 +39,9 @@ CX16_DUNGEON_MODULE_LOAD_END = CX16_BANKED_RAM_END
 CX16_DUNGEON_MODULE_ENTRY = CX16_DUNGEON_MODULE_LOAD_BASE
 CX16_ITEM_CATALOG_BANK_BASE = 9
 CX16_ITEM_CATALOG_BANK_END = 10
+CX16_ITEM_CATALOG_PRIMARY_BANK = CX16_ITEM_CATALOG_BANK_BASE
+CX16_ITEM_CATALOG_LOAD_BASE = CX16_BANKED_RAM_BASE
+CX16_ITEM_CATALOG_LOAD_END = CX16_BANKED_RAM_END
 
 
 class ContractError(Exception):
@@ -108,7 +111,7 @@ def overlap_span(start, end_exclusive, region_start, region_end_inclusive):
     return overlap_start, overlap_end
 
 
-def emit_report(product, shared_probe, tiers, modules):
+def emit_report(product, shared_probe, tiers, modules, items):
     product_load, product_end, product_program_end = product
     probe_load, probe_end, probe_program_end = shared_probe
     live_map_size = CX16_FIXED_LIVE_MAP_END - CX16_FIXED_LIVE_MAP_BASE + 1
@@ -140,6 +143,9 @@ def emit_report(product, shared_probe, tiers, modules):
     for module_load, module_end in modules:
         print(f"  dungeon module PRG: {fmt_span(module_load, module_end)} ({span_size(module_load, module_end)} bytes)")
     print(f"  item catalog banks: {CX16_ITEM_CATALOG_BANK_BASE}-{CX16_ITEM_CATALOG_BANK_END}")
+    print(f"  item catalog primary bank: {CX16_ITEM_CATALOG_PRIMARY_BANK}")
+    for item_load, item_end in items:
+        print(f"  item catalog PRG: {fmt_span(item_load, item_end)} ({span_size(item_load, item_end)} bytes)")
     print(f"  shared probe image: {fmt_span(probe_load, probe_end)} ({span_size(probe_load, probe_end)} bytes)")
     print(f"  shared probe program_end: {fmt_addr(probe_program_end)}")
     print(f"  shared probe over fixed-code limit: {probe_over_fixed_limit} bytes")
@@ -180,6 +186,9 @@ def check_contract_symbols(labels):
         "cx16_contract_dungeon_module_entry": CX16_DUNGEON_MODULE_ENTRY,
         "cx16_contract_item_catalog_bank_base": CX16_ITEM_CATALOG_BANK_BASE,
         "cx16_contract_item_catalog_bank_end": CX16_ITEM_CATALOG_BANK_END,
+        "cx16_contract_item_catalog_primary_bank": CX16_ITEM_CATALOG_PRIMARY_BANK,
+        "cx16_contract_item_catalog_load_base": CX16_ITEM_CATALOG_LOAD_BASE,
+        "cx16_contract_item_catalog_load_end": CX16_ITEM_CATALOG_LOAD_END,
     }
     for name, value in expected.items():
         expect_addr(require(labels, name), value, name)
@@ -234,6 +243,18 @@ def check_contract_symbols(labels):
     expect_true(
         require(labels, "cx16_contract_item_catalog_bank_end") >= require(labels, "cx16_contract_item_catalog_bank_base"),
         "item catalog bank range must be non-empty",
+    )
+    expect_true(
+        require(labels, "cx16_contract_item_catalog_primary_bank") == require(labels, "cx16_contract_item_catalog_bank_base"),
+        "item catalog primary bank must be the first item catalog bank",
+    )
+    expect_true(
+        require(labels, "cx16_contract_item_catalog_load_base") == require(labels, "cx16_contract_banked_ram_base"),
+        "item catalog load base must match banked RAM base",
+    )
+    expect_true(
+        require(labels, "cx16_contract_item_catalog_load_end") == require(labels, "cx16_contract_banked_ram_end"),
+        "item catalog load end must match banked RAM end",
     )
 
 
@@ -293,6 +314,16 @@ def check_module_prg(prg_path):
     return load, end_exclusive
 
 
+def check_item_prg(prg_path):
+    load, end_exclusive = read_prg_span(prg_path)
+    expect_addr(load, CX16_ITEM_CATALOG_LOAD_BASE, f"{os.path.basename(prg_path)} load address")
+    expect_true(
+        end_exclusive <= CX16_ITEM_CATALOG_LOAD_END + 1,
+        f"{os.path.basename(prg_path)} exceeds banked RAM window",
+    )
+    return load, end_exclusive
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--main-prg", required=True)
@@ -301,17 +332,21 @@ def main():
     parser.add_argument("--shared-symbols", required=True)
     parser.add_argument("--tier-prg", action="append", default=[])
     parser.add_argument("--module-prg", action="append", default=[])
+    parser.add_argument("--item-prg", action="append", default=[])
     args = parser.parse_args()
 
     product = check_product(args.main_prg, args.main_symbols)
     shared_probe = check_shared_probe(args.shared_prg, args.shared_symbols)
     tiers = [check_tier_prg(path) for path in args.tier_prg]
     modules = [check_module_prg(path) for path in args.module_prg]
+    items = [check_item_prg(path) for path in args.item_prg]
     if len(tiers) != 4:
         raise ContractError(f"expected 4 tier PRGs, got {len(tiers)}")
     if len(modules) != 1:
         raise ContractError(f"expected 1 module PRG, got {len(modules)}")
-    emit_report(product, shared_probe, tiers, modules)
+    if len(items) != 1:
+        raise ContractError(f"expected 1 item catalog PRG, got {len(items)}")
+    emit_report(product, shared_probe, tiers, modules, items)
 
 
 if __name__ == "__main__":

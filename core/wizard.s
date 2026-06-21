@@ -72,7 +72,11 @@ wizard_wall_walk_active:
 wizard_generate_item_execute:
     lda fi_add_id
     tax
+#if HAL_PLATFORM_ITEM_CATALOG_BANKED
+    jsr item_load_category_x
+#else
     lda it_category,x
+#endif
     cmp #ICAT_GOLD
     beq !wiz_make_gold+
 

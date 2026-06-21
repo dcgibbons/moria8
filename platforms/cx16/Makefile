@@ -47,6 +47,7 @@ CX16_SHARED_PROBE_PRG = $(OUT)/moria16-shared-probe.prg
 CX16_TITLE_PRG = $(OUT)/TITLE
 CX16_TIER_PRGS = $(OUT)/MONSTER.DB.1 $(OUT)/MONSTER.DB.2 $(OUT)/MONSTER.DB.3 $(OUT)/MONSTER.DB.4
 CX16_MODULE_PRGS = $(OUT)/DUNGEON.GEN
+CX16_ITEM_PRGS = $(OUT)/ITEMCAT.1
 CX16_DUNGEON_CONSTS_SRC = ../../core/dungeon_consts.s
 CX16_DUNGEON_MODULE_CONTRACT_SRC = dungeon_module_contract.s
 CX16_SOURCES  := $(shell find . -type f -name '*.s' -print)
@@ -54,28 +55,28 @@ X16EMU_ROM_ARGS = $(if $(strip $(X16_ROM)),-rom "$(X16_ROM)",)
 
 .PHONY: buildcx16 runcx16 testcx16 testcx16-smoke testcx16-runtime testcx16-shared-link testcx16-memory-contract testcx16-memory-contract-selftest ensure-kickass clean
 
-buildcx16: $(CX16_MAIN_PRG) $(CX16_TITLE_PRG) $(CX16_TIER_PRGS) $(CX16_MODULE_PRGS)
+buildcx16: $(CX16_MAIN_PRG) $(CX16_TITLE_PRG) $(CX16_TIER_PRGS) $(CX16_MODULE_PRGS) $(CX16_ITEM_PRGS)
 
 testcx16: testcx16-smoke testcx16-runtime testcx16-shared-link
 
-runcx16: $(CX16_MAIN_PRG) $(CX16_TITLE_PRG) $(CX16_TIER_PRGS) $(CX16_MODULE_PRGS)
+runcx16: $(CX16_MAIN_PRG) $(CX16_TITLE_PRG) $(CX16_TIER_PRGS) $(CX16_MODULE_PRGS) $(CX16_ITEM_PRGS)
 	@command -v "$(X16EMU)" >/dev/null 2>&1 || { echo "ERROR: x16emu not found. Set X16EMU=/path/to/x16emu."; exit 1; }
 	cd "$(OUT)" && "$(X16EMU)" $(X16EMU_ROM_ARGS) -prg "moria16.prg" -run
 
-testcx16-smoke: $(CX16_MAIN_PRG) $(CX16_TITLE_PRG) $(CX16_TIER_PRGS) $(CX16_MODULE_PRGS)
+testcx16-smoke: $(CX16_MAIN_PRG) $(CX16_TITLE_PRG) $(CX16_TIER_PRGS) $(CX16_MODULE_PRGS) $(CX16_ITEM_PRGS)
 	@command -v "$(X16EMU)" >/dev/null 2>&1 || { echo "ERROR: x16emu not found. Set X16EMU=/path/to/x16emu."; exit 1; }
 	@echo "CX16 smoke setup passed: $(CX16_MAIN_PRG) and $(CX16_TITLE_PRG) build; $(X16EMU) is available."
 	@echo "Run make runcx16 X16EMU=$(X16EMU) X16_ROM=/path/to/rom.bin to launch manually when needed."
 
-testcx16-runtime: $(CX16_MAIN_PRG) $(CX16_TITLE_PRG) $(CX16_TIER_PRGS) $(CX16_MODULE_PRGS)
+testcx16-runtime: $(CX16_MAIN_PRG) $(CX16_TITLE_PRG) $(CX16_TIER_PRGS) $(CX16_MODULE_PRGS) $(CX16_ITEM_PRGS)
 	@command -v "$(X16EMU)" >/dev/null 2>&1 || { echo "ERROR: x16emu not found. Set X16EMU=/path/to/x16emu."; exit 1; }
 	python3 harness_smoke.py --x16emu "$(X16EMU)" $(if $(strip $(X16_ROM)),--rom "$(X16_ROM)",) --prg "$(CX16_MAIN_PRG)" --symbols "$(OUT)/main.sym" --cwd "$(OUT)"
 
 testcx16-memory-contract-selftest:
 	python3 tests/check_memory_contract_test.py
 
-testcx16-memory-contract: testcx16-memory-contract-selftest $(CX16_MAIN_PRG) $(CX16_SHARED_PROBE_PRG) $(CX16_TIER_PRGS) $(CX16_MODULE_PRGS)
-	python3 "$(CX16_MEMORY_CONTRACT_TOOL)" --main-prg "$(CX16_MAIN_PRG)" --main-symbols "$(OUT)/main.sym" --shared-prg "$(CX16_SHARED_PROBE_PRG)" --shared-symbols "$(OUT)/shared_probe.sym" $(foreach prg,$(CX16_TIER_PRGS),--tier-prg "$(prg)") $(foreach prg,$(CX16_MODULE_PRGS),--module-prg "$(prg)")
+testcx16-memory-contract: testcx16-memory-contract-selftest $(CX16_MAIN_PRG) $(CX16_SHARED_PROBE_PRG) $(CX16_TIER_PRGS) $(CX16_MODULE_PRGS) $(CX16_ITEM_PRGS)
+	python3 "$(CX16_MEMORY_CONTRACT_TOOL)" --main-prg "$(CX16_MAIN_PRG)" --main-symbols "$(OUT)/main.sym" --shared-prg "$(CX16_SHARED_PROBE_PRG)" --shared-symbols "$(OUT)/shared_probe.sym" $(foreach prg,$(CX16_TIER_PRGS),--tier-prg "$(prg)") $(foreach prg,$(CX16_MODULE_PRGS),--module-prg "$(prg)") $(foreach prg,$(CX16_ITEM_PRGS),--item-prg "$(prg)")
 
 testcx16-shared-link: testcx16-memory-contract
 	@echo "CX16 shared-gameplay link probe passed: $(CX16_SHARED_PROBE_PRG)"
@@ -116,6 +117,10 @@ $(OUT)/MONSTER.DB.4: $(CX16_TIER_DIR)/tier4_prg.s ../../platforms/commodore/c64/
 
 $(OUT)/DUNGEON.GEN: $(CX16_MAIN_PRG)
 	@test -f "$@" || { echo "ERROR: DUNGEON.GEN was not emitted by $(CX16_MAIN_SRC)"; exit 1; }
+
+$(OUT)/ITEMCAT.1: item_catalog_prg.s ../../core/item_tables.s ../../core/item_categories.s ../../core/item_defs.s palette_consts.s | ensure-kickass $(OUT)
+	$(JAVA) -jar "$(KICKASS_RESOLVED)" "item_catalog_prg.s" -o "$@"
+	@rm -f item_catalog_prg.sym
 
 ensure-kickass: | $(OUT)
 ifeq ($(origin KICKASS),file)

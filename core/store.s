@@ -59,7 +59,11 @@ hg_digit_cnt:  .byte 0     // Digit count for number input
 load_item_base_cost:
     sta sb_item_type
     tax
+#if HAL_PLATFORM_ITEM_CATALOG_BANKED
+    jsr item_load_cost_lo_x
+#else
     lda it_cost_lo,x
+#endif
     sta zp_temp0
 #if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME
     lda #0
@@ -77,7 +81,11 @@ load_item_base_cost:
     sta zp_temp1
     rts
 #else
+#if HAL_PLATFORM_ITEM_CATALOG_BANKED
+    jsr item_load_cost_hi_x
+#else
     lda it_cost_hi,x
+#endif
     sta zp_temp1
     rts
 #endif
@@ -91,7 +99,11 @@ apply_tool_ego_multiplier:
     lda sb_item_ego
     beq !atem_done+             // ego=0, no change
     ldx sb_item_type
+#if HAL_PLATFORM_ITEM_CATALOG_BANKED
+    jsr item_load_category_x
+#else
     lda it_category,x
+#endif
     cmp #ICAT_DIGGING
     bne !atem_done+             // Not a digging tool
     // Multiply base cost by factor
@@ -275,7 +287,11 @@ calc_buy_min_price:
 price_add_p1_bonus:
     // Look up category
     ldx sb_item_type
+#if HAL_PLATFORM_ITEM_CATALOG_BANKED
+    jsr item_load_category_x
+#else
     lda it_category,x
+#endif
 
     // Equipment range: WEAPON(2) through BOOTS(7)
     cmp #ICAT_WEAPON

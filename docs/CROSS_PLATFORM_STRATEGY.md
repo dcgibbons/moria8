@@ -210,8 +210,9 @@ Current shared-gameplay status:
   Creature tiers currently reserve RAM banks 4-7, with each `MONSTER.DB.N`
   payload loaded at `$A000` in its selected bank. The executable dungeon module
   currently reserves RAM bank 8 as `DUNGEON.GEN`, loaded at `$A000` and entered
-  at `$A000`. Item catalog/data work reserves RAM banks 9-10 for immutable
-  item tables and item text payloads. The CX16 wrapper calls the common
+  at `$A000`. Item catalog/data work loads immutable item catalog data from
+  `ITEMCAT.1` into RAM bank 9 and reserves RAM bank 10 for the next item
+  text/extra payload split. The CX16 wrapper calls the common
   `core/dungeon_gen.s` generator after seeding the shared RNG. Future dungeon
   work must preserve that load address, entry point, caller-bank restoration,
   fixed-RAM map ownership, and one-bank fit instead of adding CX16-specific map

@@ -123,9 +123,17 @@ ranged_fire:
 
     // 6. Hit! Roll damage using ammo dice
     ldx rf_ammo_id
+#if HAL_PLATFORM_ITEM_CATALOG_BANKED
+    jsr item_load_dmg_dice_x
+#else
     lda it_dmg_dice,x
+#endif
     pha
+#if HAL_PLATFORM_ITEM_CATALOG_BANKED
+    jsr item_load_dmg_sides_x
+#else
     lda it_dmg_sides,x
+#endif
     tax                         // X = sides
     pla                         // A = dice count
     ldy #0                      // No bonus on dice

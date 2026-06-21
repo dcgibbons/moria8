@@ -37,7 +37,11 @@ item_wear:
 
     // The filtered picker already excludes non-equippable categories and oil.
     ldx piw_item_id
+#if HAL_PLATFORM_ITEM_CATALOG_BANKED
+    jsr item_load_category_x
+#else
     lda it_category,x
+#endif
     tax
     lda equip_slot_for_cat,x
     sta piw_equip
@@ -308,7 +312,11 @@ item_eat:
     // Check category: look up it_category[item_type]
     sta piw_item_id             // Save item type
     tax
+#if HAL_PLATFORM_ITEM_CATALOG_BANKED
+    jsr item_load_category_x
+#else
     lda it_category,x
+#endif
     cmp #ICAT_FOOD
     beq !ie_found+
 

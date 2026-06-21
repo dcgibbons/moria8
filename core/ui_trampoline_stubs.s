@@ -187,7 +187,11 @@ put_inv_name_with_ego:
     sta pinwe_id
     stx pinwe_sl
     tax
+#if HAL_PLATFORM_ITEM_CATALOG_BANKED
+    jsr item_load_category_x
+#else
     lda it_category,x
+#endif
     cmp #ICAT_DIGGING
     bne !pinwe_not_tool+
     ldx pinwe_sl

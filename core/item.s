@@ -842,7 +842,11 @@ item_pickup:
     // Check if it's gold
     lda fi_item_id,x
     tax
+#if HAL_PLATFORM_ITEM_CATALOG_BANKED
+    jsr item_load_category_x
+#else
     lda it_category,x
+#endif
     cmp #ICAT_GOLD
     bne !ipu_not_gold+
 
@@ -1096,7 +1100,11 @@ item_append_desc:
     rts
 !iad_identified:
     ldx fi_add_id
+#if HAL_PLATFORM_ITEM_CATALOG_BANKED
+    jsr item_load_category_x
+#else
     lda it_category,x
+#endif
     cmp #ICAT_WEAPON
     beq !iad_weapon+
     cmp #ICAT_ARMOR
@@ -1143,7 +1151,11 @@ item_append_desc:
     lda #$1b                    // '[' screen code
     jsr combat_append_char
     ldx fi_add_id
+#if HAL_PLATFORM_ITEM_CATALOG_BANKED
+    jsr item_load_base_ac_x
+#else
     lda it_base_ac,x
+#endif
     jsr combat_append_decimal
     lda #$2c
     jsr combat_append_char
@@ -1392,7 +1404,11 @@ pick_item_type:
     ldx zp_temp1
     lda pit_sorted,x             // A = item_id
     tax
+#if HAL_PLATFORM_ITEM_CATALOG_BANKED
+    jsr item_load_min_level_x
+#else
     lda it_min_level,x           // A = found_level
+#endif
     beq !pit_reroll_l0+          // Level 0: special case (no lower bound)
 
     // Re-roll uniformly within found_level's tier
@@ -1492,7 +1508,11 @@ roll_enchantment:
 
     // Check category — only equipment gets enchantment
     ldx zp_temp0
+#if HAL_PLATFORM_ITEM_CATALOG_BANKED
+    jsr item_load_category_x
+#else
     lda it_category,x
+#endif
 
     // Special case: lights get charges, not enchantment
     cmp #ICAT_LIGHT
@@ -1640,7 +1660,11 @@ roll_enchantment:
 
 !re_not_cursed:
     ldx zp_temp0
+#if HAL_PLATFORM_ITEM_CATALOG_BANKED
+    jsr item_load_category_x
+#else
     lda it_category,x
+#endif
     cmp #ICAT_WEAPON
     beq !re_weapon+
     cmp #ICAT_RING

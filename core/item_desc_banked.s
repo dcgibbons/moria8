@@ -57,7 +57,11 @@ itemdesc_put_staged:
     jsr itemdesc_put_qty_prefix
     lda itemdesc_item_id
     tax
+#if HAL_PLATFORM_ITEM_CATALOG_BANKED
+    jsr item_load_category_x
+#else
     lda it_category,x
+#endif
     cmp #ICAT_DIGGING
     bne !idps_not_tool+
     lda itemdesc_ego
@@ -122,7 +126,11 @@ itemdesc_put_stats:
     rts
 !idps_identified:
     ldx itemdesc_item_id
+#if HAL_PLATFORM_ITEM_CATALOG_BANKED
+    jsr item_load_category_x
+#else
     lda it_category,x
+#endif
     cmp #ICAT_WEAPON
     beq !idps_weapon+
     cmp #ICAT_ARMOR
@@ -174,7 +182,11 @@ itemdesc_put_stats:
     lda #$1b                    // '[' screen code
     jsr hal_screen_put_char
     ldx itemdesc_item_id
+#if HAL_PLATFORM_ITEM_CATALOG_BANKED
+    jsr item_load_base_ac_x
+#else
     lda it_base_ac,x
+#endif
     jsr screen_put_decimal
     lda #$2c
     jsr hal_screen_put_char
