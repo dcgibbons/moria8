@@ -133,10 +133,10 @@ Current assumptions:
   deferred. Stairs-down now enters a visible dungeon bootstrap milestone: it
   loads `MONSTER.DB.1` into CX16 RAM bank 4, loads and probes the executable
   `DUNGEON.GEN` module in CX16 RAM bank 8 at `$A000`, records depth/tier state,
-  generates a small shared-format dungeon map in fixed RAM, and renders a 78x22
+  runs the shared basic dungeon generator into fixed RAM, and renders a 78x22
   VERA text viewport from the shared tile byte to screen-code/color mapping.
-  This is still a bootstrap dungeon map, not the full shared `dungeon_gen.s`
-  overlay.
+  This uses `core/dungeon_gen_basic.s` as a stepping stone; it is not the full
+  shared `dungeon_gen.s` overlay.
   Store doors render as numbered entrances from the shared store-door metadata.
   Help, version, and character-info commands render CX16 bootstrap status text.
   Other mapped but not-yet-implemented town commands acknowledge by category
@@ -181,9 +181,11 @@ Current shared-gameplay status:
   resulting banked payload byte-for-byte against the generated PRG, loads
   `DUNGEON.GEN` through the product dungeon-module loader into RAM bank 8,
   verifies the module payload byte-for-byte against the generated PRG, checks
-  the `$A000` entry ABI tuple, confirms bank 9 remains untouched, and checks
-  the visible stairs-down dungeon bootstrap map, viewport rendering, movement,
-  blocked-wall behavior, and upstairs return to town.
+  the `$A000` entry ABI tuple, confirms bank 9 remains untouched, validates the
+  generated shared-map tile bytes for rooms, connectors, doors, rubble, quartz,
+  trap, and stairs, and checks the visible stairs-down dungeon bootstrap map,
+  viewport rendering, movement, blocked-wall behavior, and upstairs return to
+  town.
 * The probe is not a runtime-safe memory placement. The linked image currently
   crosses the fixed-RAM map/scratch plan and the CX16 `$A000-$BFFF` banked-RAM
   window.
@@ -193,9 +195,12 @@ Current shared-gameplay status:
   Creature tiers currently reserve RAM banks 4-7, with each `MONSTER.DB.N`
   payload loaded at `$A000` in its selected bank. The executable dungeon module
   currently reserves RAM bank 8 as `DUNGEON.GEN`, loaded at `$A000` and entered
-  at `$A000`; the current body is an ABI probe, and future real generator code
-  must preserve that load address, entry point, caller-bank restoration, and
-  one-bank fit.
+  at `$A000`; the CX16 wrapper calls `core/dungeon_gen_basic.s` for
+  dependency-light shared room/corridor/feature generation. Future full
+  generator work must preserve that load address, entry point, caller-bank
+  restoration, fixed-RAM map ownership, and one-bank fit while migrating toward
+  the common `core/dungeon_gen.s` semantics instead of adding CX16-specific map
+  rules.
   Do not enable the guarded shared loop in the normal CX16 PRG until the code,
   map, floor-item table, creature scratch, generation queue, and bank-window
   database ownership are all asserted in one runtime-safe placement.

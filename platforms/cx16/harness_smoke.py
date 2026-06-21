@@ -22,7 +22,16 @@ from check_memory_contract import (
 
 STATUS_CARRY = 0x01
 TOWN_FLAGS = 0x0C
+TILE_FLOOR = 0x00
+TILE_WALL_H = 0x10
+TILE_DOOR_OPEN = 0x70
+TILE_DOOR_CLOSED = 0x80
 TILE_STAIRS_DN = 0x90
+TILE_STAIRS_UP = 0xA0
+TILE_RUBBLE = 0xB0
+TILE_QUARTZ = 0xD0
+TILE_TRAP = 0xE0
+DUNGEON_FLAGS = 0x0C
 CMD_MOVE_W = 0x03
 CMD_MOVE_S = 0x02
 CMD_MOVE_E = 0x04
@@ -246,6 +255,10 @@ def assert_player_position(bench, labels, x, y, label):
     assert_eq(bench.get_memory(require(labels, "cx16_player_y")), y, f"{label} local y")
     assert_eq(bench.get_memory(require(labels, "zp_player_x")), x, f"{label} shared x")
     assert_eq(bench.get_memory(require(labels, "zp_player_y")), y, f"{label} shared y")
+
+
+def assert_map_tile(bench, labels, x, y, expected, label):
+    assert_eq(map_tile_at(bench, labels, x, y), expected, label)
 
 
 def assert_banked_ram_isolation(bench):
@@ -549,8 +562,24 @@ def main():
         assert_eq(bench.get_memory(require(labels, "cx16_dungeon_depth")), 1, "dungeon bootstrap depth")
         assert_eq(bench.get_memory(require(labels, "zp_player_dlvl")), 1, "shared dungeon depth")
         assert_player_position(bench, labels, 24, 13, "dungeon entry player position")
+        assert_map_tile(bench, labels, 24, 13, TILE_STAIRS_UP | DUNGEON_FLAGS, "module stairs up tile")
+        assert_map_tile(bench, labels, 77, 18, TILE_STAIRS_DN | DUNGEON_FLAGS, "module stairs down tile")
+        assert_map_tile(bench, labels, 24, 7, TILE_WALL_H | DUNGEON_FLAGS, "module first room north wall")
+        assert_map_tile(bench, labels, 11, 13, TILE_WALL_H | DUNGEON_FLAGS, "module first room west wall")
+        assert_map_tile(bench, labels, 70, 24, TILE_WALL_H | DUNGEON_FLAGS, "module second room south wall")
+        assert_map_tile(bench, labels, 40, 13, TILE_DOOR_OPEN | DUNGEON_FLAGS, "module east room connector")
+        assert_map_tile(bench, labels, 51, 13, TILE_DOOR_OPEN | DUNGEON_FLAGS, "module west room connector")
+        assert_map_tile(bench, labels, 32, 18, TILE_DOOR_OPEN | DUNGEON_FLAGS, "module south connector")
+        assert_map_tile(bench, labels, 86, 23, TILE_DOOR_OPEN | DUNGEON_FLAGS, "module far connector")
+        assert_map_tile(bench, labels, 22, 31, TILE_DOOR_CLOSED | DUNGEON_FLAGS, "module closed door")
+        assert_map_tile(bench, labels, 36, 34, TILE_RUBBLE | DUNGEON_FLAGS, "module rubble")
+        assert_map_tile(bench, labels, 58, 23, TILE_QUARTZ | DUNGEON_FLAGS, "module quartz")
+        assert_map_tile(bench, labels, 72, 16, TILE_TRAP | DUNGEON_FLAGS, "module trap")
+        assert_map_tile(bench, labels, 110, 25, TILE_FLOOR | DUNGEON_FLAGS, "module far room floor")
         assert_screen_text(bench, 0, 31, "DUNGEON LEVEL 1", "dungeon title")
         assert_screen_cell(bench, 13, 25, SC_PLAYER, TEXT_COLOR, "dungeon entry player")
+        assert_screen_cell(bench, 7, 25, screen_code("#"), 15, "dungeon visible north wall")
+        assert_screen_cell(bench, 13, 12, screen_code("#"), 15, "dungeon visible west wall")
         assert_screen_cell(bench, 13, 24, screen_code("."), 11, "dungeon room floor")
         assert_screen_cell(bench, 13, 26, screen_code("."), 11, "dungeon adjacent floor")
         assert_screen_cell(bench, 2, 1, screen_code(" "), 0, "unvisited dungeon rock")

@@ -432,7 +432,7 @@ cx16_enter_dungeon_bootstrap:
     sta zp_player_dlvl
     lda #CX16_TIER_BANK_BASE
     sta cx16_loaded_tier_bank
-    jsr cx16_generate_dungeon_bootstrap
+    jsr cx16_seed_dungeon_bootstrap_state
     jmp cx16_draw_dungeon_bootstrap
 
 cx16_draw_dungeon_bootstrap:
@@ -674,65 +674,7 @@ cx16_current_tile_type:
     lsr
     rts
 
-cx16_generate_dungeon_bootstrap:
-    lda #TILE_WALL_H
-    sta cx16_draw_char
-    lda #0
-    sta cx16_draw_y
-!fill_row:
-    ldx cx16_draw_y
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
-    ldy #0
-!fill_col:
-    lda cx16_draw_char
-    sta (zp_ptr0),y
-    iny
-    cpy #MAP_COLS
-    bne !fill_col-
-    inc cx16_draw_y
-    lda cx16_draw_y
-    cmp #MAP_ROWS
-    bcc !fill_row-
-
-    lda #12
-    sta cx16_rect_x
-    lda #8
-    sta cx16_rect_y
-    lda #28
-    sta cx16_rect_w
-    lda #10
-    sta cx16_rect_h
-    jsr cx16_carve_room
-
-    lda #52
-    sta cx16_rect_x
-    lda #12
-    sta cx16_rect_y
-    lda #34
-    sta cx16_rect_w
-    lda #12
-    sta cx16_rect_h
-    jsr cx16_carve_room
-
-    lda #25
-    sta cx16_line_start
-    lda #69
-    sta cx16_line_end
-    lda #13
-    sta cx16_draw_y
-    jsr cx16_carve_hline
-
-    lda #69
-    sta cx16_draw_x
-    lda #13
-    sta cx16_line_start
-    lda #18
-    sta cx16_line_end
-    jsr cx16_carve_vline
-
+cx16_seed_dungeon_bootstrap_state:
     lda #24
     sta cx16_player_x
     sta player_data + PL_MAP_X
@@ -759,79 +701,6 @@ cx16_generate_dungeon_bootstrap:
     sta stairs_dn1_x
     lda #18
     sta stairs_dn1_y
-    ldx #18
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
-    lda #TILE_STAIRS_DN | CX16_DUNGEON_ROOM_FLAGS
-    ldy #77
-    sta (zp_ptr0),y
-    rts
-
-cx16_carve_room:
-    lda #0
-    sta cx16_rect_row
-!row:
-    lda cx16_rect_y
-    clc
-    adc cx16_rect_row
-    tax
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
-    lda #0
-    sta cx16_rect_col
-!col:
-    lda cx16_rect_x
-    clc
-    adc cx16_rect_col
-    tay
-    lda #TILE_FLOOR | CX16_DUNGEON_ROOM_FLAGS
-    sta (zp_ptr0),y
-    inc cx16_rect_col
-    lda cx16_rect_col
-    cmp cx16_rect_w
-    bcc !col-
-    inc cx16_rect_row
-    lda cx16_rect_row
-    cmp cx16_rect_h
-    bcc !row-
-    rts
-
-cx16_carve_hline:
-    ldx cx16_draw_y
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
-    ldy cx16_line_start
-!loop:
-    lda #TILE_FLOOR | CX16_DUNGEON_ROOM_FLAGS
-    sta (zp_ptr0),y
-    cpy cx16_line_end
-    beq !done+
-    iny
-    jmp !loop-
-!done:
-    rts
-
-cx16_carve_vline:
-    ldx cx16_line_start
-!loop:
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
-    ldy cx16_draw_x
-    lda #TILE_FLOOR | CX16_DUNGEON_ROOM_FLAGS
-    sta (zp_ptr0),y
-    cpx cx16_line_end
-    beq !done+
-    inx
-    jmp !loop-
-!done:
     rts
 
 cx16_update_dungeon_view:
@@ -1175,14 +1044,6 @@ cx16_view_x: .byte 0
 cx16_view_y: .byte 0
 cx16_old_view_x: .byte 0
 cx16_old_view_y: .byte 0
-cx16_rect_x: .byte 0
-cx16_rect_y: .byte 0
-cx16_rect_w: .byte 0
-cx16_rect_h: .byte 0
-cx16_rect_row: .byte 0
-cx16_rect_col: .byte 0
-cx16_line_start: .byte 0
-cx16_line_end: .byte 0
 
 program_end:
 #if !CX16_IMPORT_SHARED_GAME_LOOP
