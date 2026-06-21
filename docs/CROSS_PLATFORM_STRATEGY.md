@@ -129,8 +129,11 @@ Current assumptions:
   mapping in `core/tile_display.s`; the VERA text backend remains
   platform-owned.
 * CX16 bootstrap town interactions use the dependency-light store-door and
-  stairs probes in `core/town_interactions_basic.s`; full store UI and dungeon
-  transitions remain deferred until the CX16 runtime memory plan is explicit.
+  stairs probes in `core/town_interactions_basic.s`; full store UI remains
+  deferred. Stairs-down now enters a visible dungeon bootstrap milestone: it
+  loads `MONSTER.DB.1` into CX16 RAM bank 4, records depth/tier state, and draws
+  a dungeon status screen while full dungeon generation and rendering remain
+  deferred.
   Store doors render as numbered entrances from the shared store-door metadata.
   Help, version, and character-info commands render CX16 bootstrap status text.
   Other mapped but not-yet-implemented town commands acknowledge by category
@@ -155,17 +158,32 @@ Current shared-gameplay status:
   image crosses the fixed live-map base and VERA I/O hole.
   `platforms/cx16/check_memory_contract.py` also checks the generated product
   and shared-probe PRG load spans against their symbol files so this distinction
-  is mechanically enforced by the target.
+  is mechanically enforced by `make testcx16-memory-contract` and reported as
+  concrete product/probe memory spans, product fixed-code headroom, and
+  shared-probe overrun across the live-map, VERA I/O, and bank-window regions.
+  The same gate validates the generated CX16 `MONSTER.DB.1` through
+  `MONSTER.DB.4` tier payloads as `$A000` bank-window PRGs that fit inside one
+  8 KiB RAM bank.
+  `make testcx16-memory-contract-selftest` covers the checker's positive and
+  negative contract cases, including stale PRG/symbol mismatches.
 * `make testcx16-runtime` runs an x16emu `-testbench` smoke check against the
   normal CX16 PRG. It verifies RAM-visible bootstrap contracts: town generation,
   player position, store-door detection, stairs detection, title asset loading,
   VERA text output, command feedback messages, exported memory-contract
-  symbols, and `$A000-$BFFF` RAM-bank isolation.
+  symbols, `$A000-$BFFF` RAM-bank isolation, and the scoped bank-window copy
+  helpers used to move fixed-RAM data into and back out of selected CX16 RAM
+  banks without leaving the caller on the wrong bank. It also loads
+  `MONSTER.DB.1` through the product tier loader into RAM bank 4, verifies the
+  resulting banked payload byte-for-byte against the generated PRG, and checks
+  the visible stairs-down dungeon bootstrap state/screen.
 * The probe is not a runtime-safe memory placement. The linked image currently
   crosses the fixed-RAM map/scratch plan and the CX16 `$A000-$BFFF` banked-RAM
   window.
 * Runtime enablement must keep the live map in fixed RAM with resident code
-  below it, or deliberately introduce explicit split-window map accessors.
+  below it. Banked resident databases or cached payloads should use the CX16
+  bank-window helpers rather than direct, unscoped writes to `$00`/`$A000`.
+  Creature tiers currently reserve RAM banks 4-7, with each `MONSTER.DB.N`
+  payload loaded at `$A000` in its selected bank.
   Do not enable the guarded shared loop in the normal CX16 PRG until the code,
   map, floor-item table, creature scratch, generation queue, and bank-window
   database ownership are all asserted in one runtime-safe placement.

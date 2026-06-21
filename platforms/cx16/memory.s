@@ -8,8 +8,9 @@
 // - Normal product code loads at $0801 and must end before MAP_BASE.
 // - The live shared map stays in fixed RAM at MAP_BASE because the 198x66
 //   map is larger than one 8 KiB banked-RAM window.
-// - The $A000-$BFFF banked window is reserved for later resident databases or
-//   cached payloads. Normal gameplay must not treat it as hidden linear RAM.
+// - The $A000-$BFFF banked window is page-mapped RAM. Resident databases or
+//   cached payloads must move through the helpers below so bank selection is
+//   scoped and restored; normal gameplay must not treat it as hidden linear RAM.
 // - C64/C128-style bank macros remain no-ops until shared runtime code is
 //   split into explicit CX16 fixed-RAM and bank-window segments.
 
@@ -91,6 +92,7 @@ cx16_memory_init:
 // CX16 bank-window helpers. These operate only on the RAM bank visible at
 // $A000-$BFFF; callers own the selected bank number and pointer validity.
 cx16_saved_ram_bank: .byte 0
+cx16_transfer_bank: .byte 0
 cx16_probe_bank0_save: .byte 0
 cx16_probe_bank1_save: .byte 0
 
@@ -115,6 +117,92 @@ read_banked_byte_a000:
 write_banked_byte_a000:
     sta (zp_ptr0),y
     rts
+
+// Copy zp_temp1 full pages plus zp_temp0 trailing bytes from fixed RAM
+// (zp_ptr0) to the currently selected bank window (zp_ptr1).
+// Clobbers A/X/Y and advances high bytes in zp_ptr0/zp_ptr1 for full pages.
+cx16_copy_fixed_to_banked_selected:
+    lda zp_temp0
+    ora zp_temp1
+    beq !done+
+    ldx zp_temp1
+    beq !tail+
+!page:
+    ldy #0
+!page_loop:
+    lda (zp_ptr0),y
+    sta (zp_ptr1),y
+    iny
+    bne !page_loop-
+    inc zp_ptr0_hi
+    inc zp_ptr1_hi
+    dex
+    bne !page-
+!tail:
+    ldx zp_temp0
+    beq !done+
+    ldy #0
+!tail_loop:
+    lda (zp_ptr0),y
+    sta (zp_ptr1),y
+    iny
+    dex
+    bne !tail_loop-
+!done:
+    rts
+
+// Copy zp_temp1 full pages plus zp_temp0 trailing bytes from the currently
+// selected bank window (zp_ptr1) to fixed RAM (zp_ptr0).
+// Clobbers A/X/Y and advances high bytes in zp_ptr0/zp_ptr1 for full pages.
+cx16_copy_banked_to_fixed_selected:
+    lda zp_temp0
+    ora zp_temp1
+    beq !done+
+    ldx zp_temp1
+    beq !tail+
+!page:
+    ldy #0
+!page_loop:
+    lda (zp_ptr1),y
+    sta (zp_ptr0),y
+    iny
+    bne !page_loop-
+    inc zp_ptr0_hi
+    inc zp_ptr1_hi
+    dex
+    bne !page-
+!tail:
+    ldx zp_temp0
+    beq !done+
+    ldy #0
+!tail_loop:
+    lda (zp_ptr1),y
+    sta (zp_ptr0),y
+    iny
+    dex
+    bne !tail_loop-
+!done:
+    rts
+
+// Input: A = RAM bank, zp_ptr0 = fixed RAM address, zp_ptr1 = bank-window
+// address, zp_temp1:zp_temp0 = byte count. Restores the previous RAM bank.
+cx16_copy_fixed_to_banked:
+    sta cx16_transfer_bank
+    jsr cx16_save_ram_bank
+    lda cx16_transfer_bank
+    jsr cx16_select_ram_bank_a
+    jsr cx16_copy_fixed_to_banked_selected
+    jmp cx16_restore_ram_bank
+
+// Input: A = RAM bank, zp_ptr0 = fixed RAM address, zp_ptr1 = bank-window
+// address, zp_temp1:zp_temp0 = byte count. Restores the previous RAM bank.
+cx16_copy_banked_to_fixed:
+    sta cx16_transfer_bank
+    jsr cx16_save_ram_bank
+    lda cx16_transfer_bank
+    jsr cx16_select_ram_bank_a
+    jsr cx16_copy_banked_to_fixed_selected
+    jmp cx16_restore_ram_bank
 
 cx16_probe_ram_banks:
     jsr cx16_save_ram_bank

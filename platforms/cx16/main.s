@@ -21,6 +21,7 @@
 .const KERNAL_GETIN = $ffe4
 .const CX16_STATE_TITLE = 0
 .const CX16_STATE_NEW_GAME = 1
+.const CX16_STATE_DUNGEON_BOOTSTRAP = 2
 .const CX16_TOWN_SCREEN_ROW = 2
 .const CX16_TOWN_SCREEN_COL = 7
 .const CX16_TITLE_MENU_COL = 27
@@ -42,12 +43,15 @@
 #import "screen_vera.s"
 #import "input.s"
 #import "services.s"
+#import "tier_storage.s"
 #import "../../core/input_ui_helpers.s"
 #if CX16_IMPORT_SHARED_GAME_LOOP
 #import "shared_imports.s"
 #endif
 
 .label cx16_contract_prg_load_base = CX16_PRG_LOAD_BASE
+.label cx16_contract_ram_bank_reg = CX16_RAM_BANK_REG
+.label cx16_contract_ram_bank_default = CX16_RAM_BANK_DEFAULT
 .label cx16_contract_resident_code_base = CX16_RESIDENT_CODE_BASE
 .label cx16_contract_resident_code_limit = CX16_RESIDENT_CODE_LIMIT
 .label cx16_contract_fixed_live_map_base = CX16_FIXED_LIVE_MAP_BASE
@@ -62,6 +66,10 @@
 .label cx16_contract_banked_ram_end = CX16_BANKED_RAM_END
 .label cx16_contract_banked_data_base = BANKED_DATA_BASE
 .label cx16_contract_banked_data_end = BANKED_DATA_END
+.label cx16_contract_tier_bank_base = CX16_TIER_BANK_BASE
+.label cx16_contract_tier_bank_end = CX16_TIER_BANK_END
+.label cx16_contract_tier_load_base = CX16_TIER_LOAD_BASE
+.label cx16_contract_tier_load_end = CX16_TIER_LOAD_END
 
 cx16_entry:
     sei
@@ -110,11 +118,12 @@ cx16_title_draw_menu:
 
 cx16_poll_input:
     lda cx16_state
-    cmp #CX16_STATE_NEW_GAME
-    beq !game+
-    jmp cx16_poll_menu
+    cmp #CX16_STATE_TITLE
+    beq !menu+
 !game:
     jmp cx16_poll_game
+!menu:
+    jmp cx16_poll_menu
 
 cx16_poll_menu:
     jsr input_get_key
@@ -282,7 +291,7 @@ cx16_try_stairs_down:
     beq !descend+
     jmp cx16_show_no_stairs
 !descend:
-    jmp cx16_show_descend_stub
+    jmp cx16_enter_dungeon_bootstrap
 
 cx16_try_stairs_up:
     jsr town_basic_check_stairs_at_player
@@ -340,6 +349,38 @@ cx16_show_store_stub:
 cx16_show_descend_stub:
     jsr cx16_clear_message_row
     :Cx16PrintAt(26, 22, cx16_descend_stub_text)
+    rts
+
+cx16_enter_dungeon_bootstrap:
+    jsr cx16_clear_message_row
+    :Cx16PrintAt(26, 27, cx16_loading_tier_text)
+    lda #1
+    jsr cx16_load_tier_to_bank
+    bcc !loaded+
+    jsr cx16_clear_message_row
+    :Cx16PrintAt(26, 22, cx16_tier_load_failed_text)
+    rts
+!loaded:
+    lda #CX16_STATE_DUNGEON_BOOTSTRAP
+    sta cx16_state
+    lda #1
+    sta cx16_loaded_tier
+    sta cx16_dungeon_depth
+    sta player_data + PL_DLEVEL
+    sta zp_player_dlvl
+    lda #CX16_TIER_BANK_BASE
+    sta cx16_loaded_tier_bank
+    jmp cx16_draw_dungeon_bootstrap
+
+cx16_draw_dungeon_bootstrap:
+    lda #CX16_TEXT_COLOR
+    jsr screen_set_color
+    jsr screen_clear
+    :Cx16PrintAt(0, 31, cx16_dungeon_title_text)
+    :Cx16PrintAt(4, 24, cx16_dungeon_loaded_text)
+    :Cx16PrintAt(6, 24, cx16_dungeon_tier_bank_text)
+    :Cx16PrintAt(8, 17, cx16_dungeon_runtime_text)
+    :Cx16PrintAt(26, 13, cx16_dungeon_help_text)
     rts
 
 cx16_show_ascend_stub:
@@ -557,27 +598,14 @@ cx16_read_draw_tile:
 // CX16 title asset loader. The Makefile builds TITLE from core/title_data.s
 // beside moria16.prg, and runcx16 launches from that directory.
 hal_asset_load_title:
+    lda #<MAP_BASE
+    sta cx16_asset_load_addr_lo
+    lda #>MAP_BASE
+    sta cx16_asset_load_addr_hi
     lda #cx16_title_name_len
     ldx #<cx16_title_name
     ldy #>cx16_title_name
-    jsr KERNAL_SETNAM
-    lda #2
-    ldx #8
-    ldy #0
-    jsr KERNAL_SETLFS
-    lda #0
-    lda #<MAP_BASE
-    tax
-    lda #>MAP_BASE
-    tay
-    lda #0
-    jsr KERNAL_LOAD
-    php
-    lda #2
-    jsr KERNAL_CLOSE
-    jsr KERNAL_CLRCHN
-    plp
-    rts
+    jmp hal_asset_load_prg_header
 
 #import "../commodore/common/title_screen.s"
 
@@ -615,6 +643,34 @@ cx16_store_door_text:
 
 cx16_descend_stub_text:
     :ScreenText("DUNGEON ENTRY NOT WIRED YET.")
+    .byte 0
+
+cx16_loading_tier_text:
+    :ScreenText("LOADING TIER 1...")
+    .byte 0
+
+cx16_tier_load_failed_text:
+    :ScreenText("TIER LOAD FAILED.")
+    .byte 0
+
+cx16_dungeon_title_text:
+    :ScreenText("DUNGEON LEVEL 1")
+    .byte 0
+
+cx16_dungeon_loaded_text:
+    :ScreenText("MONSTER.DB.1 LOADED")
+    .byte 0
+
+cx16_dungeon_tier_bank_text:
+    :ScreenText("TIER 1 RESIDENT IN RAM BANK 4")
+    .byte 0
+
+cx16_dungeon_runtime_text:
+    :ScreenText("DUNGEON GENERATION AND RENDERING ARE NEXT.")
+    .byte 0
+
+cx16_dungeon_help_text:
+    :ScreenText("SHIFT-Q RETURNS TO TITLE. FULL DUNGEON LOOP NOT WIRED YET.")
     .byte 0
 
 cx16_ascend_stub_text:
@@ -676,6 +732,9 @@ cx16_draw_y: .byte 0
 cx16_draw_char: .byte 0
 cx16_draw_color: .byte 0
 cx16_store_idx: .byte 0
+cx16_loaded_tier: .byte 0
+cx16_loaded_tier_bank: .byte 0
+cx16_dungeon_depth: .byte 0
 
 program_end:
 #if !CX16_IMPORT_SHARED_GAME_LOOP

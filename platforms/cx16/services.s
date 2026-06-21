@@ -28,11 +28,14 @@
 
 .label hal_storage_require_program_media = cx16_service_ok
 .label hal_storage_init_selected_drive = cx16_service_ok
-.label hal_asset_close_channel = cx16_service_ok
-.label hal_asset_load_prg_header = cx16_service_unsupported
+.label hal_asset_close_channel = cx16_asset_close_channel
+.label hal_asset_load_prg_header = cx16_asset_load_prg_header
 .label hal_storage_require_save_media = cx16_service_unsupported
 .label hal_storage_save_record = cx16_service_unsupported
 .label hal_storage_load_record = cx16_service_unsupported
+
+cx16_asset_load_addr_lo: .byte 0
+cx16_asset_load_addr_hi: .byte 0
 
 cx16_services_install:
     lda #$4c
@@ -60,3 +63,26 @@ cx16_service_unsupported:
     ldx #0
     ldy #0
     rts
+
+// Input: A = filename length, X/Y = filename pointer. Uses the PRG header load
+// address expected by the caller in cx16_asset_load_addr_lo/hi. Carry mirrors
+// KERNAL LOAD status.
+cx16_asset_load_prg_header:
+    jsr KERNAL_SETNAM
+    lda #2
+    ldx #8
+    ldy #0
+    jsr KERNAL_SETLFS
+    ldx cx16_asset_load_addr_lo
+    ldy cx16_asset_load_addr_hi
+    lda #0
+    jsr KERNAL_LOAD
+    php
+    jsr cx16_asset_close_channel
+    plp
+    rts
+
+cx16_asset_close_channel:
+    lda #2
+    jsr KERNAL_CLOSE
+    jmp KERNAL_CLRCHN

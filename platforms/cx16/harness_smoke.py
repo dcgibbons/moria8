@@ -52,6 +52,12 @@ SC_REVERSE_SPACE = 0xA0
 TEXT_COLOR = 0x01
 STORE_COLOR = 0x07
 TITLE_BORDER_COLOR = 0x0F
+CX16_TRANSFER_TEST_BANK = 2
+CX16_TRANSFER_GUARD_BANK = 3
+CX16_TRANSFER_TEST_OFFSET = 0x00F0
+CX16_TRANSFER_TEST_COUNT = 0x0104
+CX16_TIER1_BANK = 4
+CX16_TIER_GUARD_BANK = 5
 VERA_ADDR_L = 0x9F20
 VERA_ADDR_M = 0x9F21
 VERA_ADDR_H = 0x9F22
@@ -255,6 +261,121 @@ def assert_banked_ram_isolation(bench):
     bench.set_memory(CX16_RAM_BANK_REG, saved_bank)
 
 
+def set_zp_pointer(bench, labels, name, address):
+    bench.set_memory(require(labels, name), address & 0xFF)
+    bench.set_memory(require(labels, f"{name}_hi"), (address >> 8) & 0xFF)
+
+
+def set_transfer_count(bench, labels, count):
+    bench.set_memory(require(labels, "zp_temp0"), count & 0xFF)
+    bench.set_memory(require(labels, "zp_temp1"), (count >> 8) & 0xFF)
+
+
+def transfer_pattern(index):
+    return (0x31 + (index * 0x25)) & 0xFF
+
+
+def read_prg(path):
+    with open(path, "rb") as fh:
+        data = fh.read()
+    if len(data) < 2:
+        raise AssertionError(f"{path}: PRG is too short")
+    load = data[0] | (data[1] << 8)
+    return load, data[2:]
+
+
+def assert_banked_transfer_helpers(bench, labels):
+    saved_bank = bench.get_memory(CX16_RAM_BANK_REG)
+    source = require(labels, "cx16_contract_floor_item_base")
+    banked_addr = CX16_BANKED_RAM_BASE + CX16_TRANSFER_TEST_OFFSET
+
+    for offset in range(CX16_TRANSFER_TEST_COUNT):
+        bench.set_memory(source + offset, transfer_pattern(offset))
+
+    bench.set_memory(CX16_RAM_BANK_REG, CX16_TRANSFER_TEST_BANK)
+    for offset in range(CX16_TRANSFER_TEST_COUNT):
+        bench.set_memory(banked_addr + offset, 0)
+
+    bench.set_memory(CX16_RAM_BANK_REG, CX16_TRANSFER_GUARD_BANK)
+    for offset in range(CX16_TRANSFER_TEST_COUNT):
+        bench.set_memory(banked_addr + offset, 0xE7)
+
+    bench.set_memory(CX16_RAM_BANK_REG, 1)
+    set_zp_pointer(bench, labels, "zp_ptr0", source)
+    set_zp_pointer(bench, labels, "zp_ptr1", banked_addr)
+    set_transfer_count(bench, labels, CX16_TRANSFER_TEST_COUNT)
+    bench.set_a(CX16_TRANSFER_TEST_BANK)
+    bench.run(require(labels, "cx16_copy_fixed_to_banked"))
+    assert_eq(bench.get_memory(CX16_RAM_BANK_REG), 1, "copy fixed-to-banked restored caller bank")
+
+    bench.set_memory(CX16_RAM_BANK_REG, CX16_TRANSFER_TEST_BANK)
+    for offset in range(CX16_TRANSFER_TEST_COUNT):
+        assert_eq(
+            bench.get_memory(banked_addr + offset),
+            transfer_pattern(offset),
+            f"banked copy byte {offset}",
+        )
+
+    bench.set_memory(CX16_RAM_BANK_REG, CX16_TRANSFER_GUARD_BANK)
+    for offset in range(CX16_TRANSFER_TEST_COUNT):
+        assert_eq(bench.get_memory(banked_addr + offset), 0xE7, f"guard bank byte {offset}")
+        bench.set_memory(source + offset, 0)
+
+    bench.set_memory(CX16_RAM_BANK_REG, 1)
+    set_zp_pointer(bench, labels, "zp_ptr0", source)
+    set_zp_pointer(bench, labels, "zp_ptr1", banked_addr)
+    set_transfer_count(bench, labels, CX16_TRANSFER_TEST_COUNT)
+    bench.set_a(CX16_TRANSFER_TEST_BANK)
+    bench.run(require(labels, "cx16_copy_banked_to_fixed"))
+    assert_eq(bench.get_memory(CX16_RAM_BANK_REG), 1, "copy banked-to-fixed restored caller bank")
+
+    for offset in range(CX16_TRANSFER_TEST_COUNT):
+        assert_eq(
+            bench.get_memory(source + offset),
+            transfer_pattern(offset),
+            f"fixed copy-back byte {offset}",
+        )
+
+    bench.set_memory(CX16_RAM_BANK_REG, saved_bank)
+
+
+def assert_tier_prg_load_to_bank(bench, labels, cwd):
+    path = os.path.join(cwd, "MONSTER.DB.1")
+    load, payload = read_prg(path)
+    expected_load = require(labels, "cx16_contract_tier_load_base")
+    assert_eq(load & 0xFF, expected_load & 0xFF, "tier PRG load low")
+    assert_eq(load >> 8, expected_load >> 8, "tier PRG load high")
+
+    saved_bank = bench.get_memory(CX16_RAM_BANK_REG)
+
+    bench.set_memory(CX16_RAM_BANK_REG, CX16_TIER1_BANK)
+    for offset in range(len(payload)):
+        bench.set_memory(load + offset, 0)
+
+    bench.set_memory(CX16_RAM_BANK_REG, CX16_TIER_GUARD_BANK)
+    guard_offsets = list(range(0, min(16, len(payload))))
+    guard_offsets.extend(range(max(0, len(payload) - 16), len(payload)))
+    for offset in guard_offsets:
+        bench.set_memory(load + offset, 0xE7)
+
+    bench.set_memory(CX16_RAM_BANK_REG, 1)
+    bench.set_a(1)
+    bench.run(require(labels, "cx16_load_tier_to_bank"), timeout=8)
+    if bench.get_status() & STATUS_CARRY:
+        raise AssertionError("cx16_load_tier_to_bank reported failure")
+    assert_eq(bench.get_memory(CX16_RAM_BANK_REG), 1, "tier load restored caller bank")
+
+    bench.set_memory(CX16_RAM_BANK_REG, CX16_TIER1_BANK)
+    for offset, expected in enumerate(payload):
+        assert_eq(bench.get_memory(load + offset), expected, f"tier 1 bank payload byte {offset}")
+
+    bench.set_memory(CX16_RAM_BANK_REG, CX16_TIER_GUARD_BANK)
+    for offset in guard_offsets:
+        assert_eq(bench.get_memory(load + offset), 0xE7, f"tier guard bank byte {offset}")
+
+    bench.set_memory(CX16_RAM_BANK_REG, saved_bank)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--x16emu", required=True)
@@ -277,6 +398,8 @@ def main():
             raise AssertionError("cx16_memory_init reported failure")
         assert_eq(bench.get_memory(CX16_RAM_BANK_REG), 0, "default RAM bank after memory init")
         assert_banked_ram_isolation(bench)
+        assert_banked_transfer_helpers(bench, labels)
+        assert_tier_prg_load_to_bank(bench, labels, args.cwd)
 
         bench.run(require(labels, "screen_init"))
         bench.run(require(labels, "cx16_title_enter_menu"), timeout=8)
@@ -369,12 +492,27 @@ def main():
         bench.run(require(labels, "town_basic_check_stairs_at_player"))
         assert_eq(bench.get_a(), 9, "stairs-down probe")
         bench.run(require(labels, "cx16_try_stairs_down"))
+        assert_eq(bench.get_memory(require(labels, "cx16_state")), 2, "CX16 dungeon bootstrap state")
+        assert_eq(bench.get_memory(require(labels, "cx16_loaded_tier")), 1, "loaded tier")
+        assert_eq(bench.get_memory(require(labels, "cx16_loaded_tier_bank")), 4, "loaded tier bank")
+        assert_eq(bench.get_memory(require(labels, "cx16_dungeon_depth")), 1, "dungeon bootstrap depth")
+        assert_eq(bench.get_memory(require(labels, "zp_player_dlvl")), 1, "shared dungeon depth")
+        assert_screen_text(bench, 0, 31, "DUNGEON LEVEL 1", "dungeon title")
+        assert_screen_text(bench, 4, 24, "MONSTER.DB.1 LOADED", "dungeon tier loaded")
+        assert_screen_text(bench, 6, 24, "TIER 1 RESIDENT IN RAM BANK 4", "dungeon tier bank")
+        assert_screen_text(
+            bench,
+            8,
+            17,
+            "DUNGEON GENERATION AND RENDERING ARE NEXT.",
+            "dungeon runtime message",
+        )
         assert_screen_text(
             bench,
             26,
-            22,
-            "DUNGEON ENTRY NOT WIRED YET.",
-            "stairs down message",
+            13,
+            "SHIFT-Q RETURNS TO TITLE. FULL DUNGEON LOOP NOT WIRED YET.",
+            "dungeon help",
         )
 
         bench.set_memory(require(labels, "zp_player_x"), 31)
