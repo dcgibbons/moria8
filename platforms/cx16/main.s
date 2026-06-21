@@ -53,6 +53,9 @@
 #import "../../core/dungeon_data.s"
 .const CX16_DUNGEON_ROOM_FLAGS = FLAG_LIT | FLAG_VISITED
 #import "../../core/player_state.s"
+#import "../../core/item_defs.s"
+#import "../../core/item_categories.s"
+#import "../../core/item_state.s"
 #import "../../core/dungeon_feature_gen.s"
 #import "../../core/math.s"
 #import "../../core/tables.s"
@@ -76,6 +79,7 @@
 #import "../../core/huffman.s"
 #import "../../core/dungeon_feature_actions.s"
 #import "../../core/tunnel.s"
+#import "../../core/player_dig_ability.s"
 #import "../../core/bash.s"
 #if CX16_IMPORT_SHARED_GAME_LOOP
 #import "shared_imports.s"
@@ -202,6 +206,7 @@ cx16_new_game_start:
     sta cx16_player_x
     lda #TOWN_START_Y
     sta cx16_player_y
+    jsr cx16_seed_bootstrap_player_state
     jsr cx16_seed_shared_town_player
     jsr town_map_basic_generate
     jmp cx16_new_game_draw
@@ -543,6 +548,67 @@ cx16_sync_local_player_position:
     sta cx16_player_y
     rts
 
+cx16_seed_bootstrap_player_state:
+    lda #0
+    ldx #PL_STRUCT_SIZE - 1
+!clear_player:
+    sta player_data,x
+    dex
+    bpl !clear_player-
+
+    lda #FI_EMPTY
+    ldx #TOTAL_INV_SLOTS - 1
+!clear_inv_ids:
+    sta inv_item_id,x
+    dex
+    bpl !clear_inv_ids-
+
+    lda #0
+    ldx #TOTAL_INV_SLOTS - 1
+!clear_inv_meta:
+    sta inv_qty,x
+    sta inv_p1,x
+    sta inv_to_hit,x
+    sta inv_to_dam,x
+    sta inv_to_ac,x
+    sta inv_flags,x
+    sta inv_ego,x
+    dex
+    bpl !clear_inv_meta-
+
+    lda #1
+    sta player_data + PL_LEVEL
+    sta zp_player_lvl
+    lda #18
+    sta player_data + PL_STR_CUR
+    sta zp_player_str
+    lda #12
+    sta player_data + PL_INT_CUR
+    sta zp_player_int
+    sta player_data + PL_WIS_CUR
+    sta zp_player_wis
+    lda #16
+    sta player_data + PL_DEX_CUR
+    sta zp_player_dex
+    lda #12
+    sta player_data + PL_CON_CUR
+    sta zp_player_con
+    sta player_data + PL_CHR_CUR
+    sta zp_player_chr
+
+    lda #63
+    sta inv_item_id + EQUIP_WEAPON
+    lda #1
+    sta inv_qty + EQUIP_WEAPON
+    lda #0
+    sta inv_p1 + EQUIP_WEAPON
+    sta inv_to_hit + EQUIP_WEAPON
+    sta inv_to_dam + EQUIP_WEAPON
+    sta inv_to_ac + EQUIP_WEAPON
+    sta inv_flags + EQUIP_WEAPON
+    sta inv_ego + EQUIP_WEAPON
+    rts
+
 cx16_new_game_draw:
     lda #CX16_TEXT_COLOR
     jsr screen_set_color
@@ -698,9 +764,7 @@ generation_busy_tick:
 #endif
 
 tramp_dig_ability:
-    lda #0
-    sta tun_dig_ability
-    rts
+    jmp calc_dig_ability
 
 c128_town_dump_mark:
     rts

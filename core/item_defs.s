@@ -42,8 +42,23 @@
 .const TOTAL_INV_SLOTS = 31
 .const LEGACY_TOTAL_INV_SLOTS = 30
 
-// Item Category for Digging Tools
+// Item Categories
 .const ICAT_DIGGING = 0
+.const ICAT_GOLD    = 1
+.const ICAT_WEAPON  = 2
+.const ICAT_ARMOR   = 3
+.const ICAT_SHIELD  = 4
+.const ICAT_HELM    = 5
+.const ICAT_GLOVES  = 6
+.const ICAT_BOOTS   = 7
+.const ICAT_LIGHT   = 8
+.const ICAT_FOOD    = 9
+.const ICAT_POTION  = 10
+.const ICAT_SCROLL  = 11
+.const ICAT_RING    = 12
+.const ICAT_BOOK    = 13
+.const ICAT_WAND    = 14
+.const ICAT_STAFF   = 15
 
 // Master Item Type Count
 // Save Format V1 serializes 64 known-item bytes. Do not renumber IDs 0-63.

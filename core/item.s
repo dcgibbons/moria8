@@ -7,30 +7,11 @@
 
 #import "input_ui_helpers.s"
 
-// ============================================================
-// Item Category Constants
-// ============================================================
-.const ICAT_NONE     = 0
-.const ICAT_GOLD     = 1
-.const ICAT_WEAPON   = 2
-.const ICAT_ARMOR    = 3
-.const ICAT_SHIELD   = 4
-.const ICAT_HELM     = 5
-.const ICAT_GLOVES   = 6
-.const ICAT_BOOTS    = 7
-.const ICAT_LIGHT    = 8
-.const ICAT_FOOD     = 9
-.const ICAT_POTION   = 10
-.const ICAT_SCROLL   = 11
-.const ICAT_RING     = 12
-.const ICAT_BOOK     = 13
-.const ICAT_WAND     = 14
-.const ICAT_STAFF    = 15
-
 // Item system constants (IF_*, FI_*, EQUIP_*, inventory sizes)
 // are defined in item_defs.s (imported early in build order)
 
 #import "item_tables.s"
+#import "item_state.s"
 
 // ============================================================
 // Floor Item Table — 42 slots packed into $CF00-$CFFB (252 bytes)
@@ -53,18 +34,6 @@
 .const FI_META_EGO_MASK    = $07
 .const FI_META_FLAGS_SHIFT = 3
 .const FI_META_FLAGS_MASK  = $78
-
-// ============================================================
-// Inventory Table — 30 slots (22 carried + 8 equipped)
-// ============================================================
-inv_item_id: .fill TOTAL_INV_SLOTS, FI_EMPTY
-inv_qty:     .fill TOTAL_INV_SLOTS, 0
-inv_p1:      .fill TOTAL_INV_SLOTS, 0
-inv_to_hit:  .fill TOTAL_INV_SLOTS, 0
-inv_to_dam:  .fill TOTAL_INV_SLOTS, 0
-inv_to_ac:   .fill TOTAL_INV_SLOTS, 0
-inv_flags:   .fill TOTAL_INV_SLOTS, 0
-inv_ego:     .fill TOTAL_INV_SLOTS, 0
 
 // Split stat sidecars for floor slots. The packed floor table intentionally
 // stays inside its fixed 256-byte page.
@@ -1749,7 +1718,7 @@ re_negate_a:
 // Compile-time validation
 // ============================================================
 .assert "Item type count", ITEM_TYPE_COUNT, 96
-.assert "it_category size", it_display - it_category, ITEM_TYPE_COUNT
+.assert "it_category size", it_category_end - it_category, ITEM_TYPE_COUNT
 .assert "it_display size", it_color - it_display, ITEM_TYPE_COUNT
 .assert "it_color size", it_weight - it_color, ITEM_TYPE_COUNT
 .assert "it_weight size", it_dmg_dice - it_weight, ITEM_TYPE_COUNT

@@ -35,6 +35,9 @@ TILE_TYPE_MASK = 0xF0
 DUNGEON_FLAGS = 0x0C
 MAP_COLS = 198
 MAP_ROWS = 66
+EQUIP_WEAPON = 22
+ITEM_PICK = 63
+BOOTSTRAP_PICK_DIG_ABILITY = 24
 CMD_MOVE_N = 0x01
 CMD_MOVE_W = 0x03
 CMD_MOVE_S = 0x02
@@ -581,6 +584,14 @@ def main():
         assert_eq(bench.get_memory(require(labels, "cx16_state")), 1, "CX16 state")
         assert_player_position(bench, labels, 31, 18, "new game")
         assert_eq(bench.get_memory(require(labels, "zp_player_dlvl")), 0, "town depth")
+        assert_eq(bench.get_memory(require(labels, "inv_item_id") + EQUIP_WEAPON), ITEM_PICK, "bootstrap weapon")
+        assert_eq(bench.get_memory(require(labels, "zp_player_str")), 18, "bootstrap strength")
+        bench.run(require(labels, "tramp_dig_ability"))
+        assert_eq(
+            bench.get_memory(require(labels, "tun_dig_ability")),
+            BOOTSTRAP_PICK_DIG_ABILITY,
+            "bootstrap pick dig ability",
+        )
         assert_eq(map_tile_at(bench, labels, 32, 18), TILE_STAIRS_DN | TOWN_FLAGS, "town stairs tile")
         assert_screen_text(bench, 0, 33, "TOWN", "town title")
         assert_screen_text(
@@ -755,11 +766,13 @@ def main():
         set_map_tile(bench, labels, door_x, door_y, TILE_RUBBLE | DUNGEON_FLAGS)
         bench.set_memory(require(labels, "df_target_x"), door_x)
         bench.set_memory(require(labels, "df_target_y"), door_y)
+        bench.set_memory(require(labels, "zp_player_str"), 255)
         bench.run(require(labels, "msg_clear"))
         bench.run(require(labels, "player_tunnel_resolved_target"))
         if not (bench.get_status() & STATUS_CARRY):
-            raise AssertionError("tunnel command did not consume a no-tool rubble turn")
-        assert_map_tile_type(bench, labels, door_x, door_y, TILE_RUBBLE, "no-tool tunnel leaves rubble intact")
+            raise AssertionError("tunnel command did not consume a rubble turn")
+        assert_map_tile_type(bench, labels, door_x, door_y, TILE_FLOOR, "tunnel with pick removes rubble")
+        bench.set_memory(require(labels, "zp_player_str"), 18)
 
         set_player_position(bench, labels, entry_x, entry_y)
         bench.run(require(labels, "cx16_draw_dungeon_bootstrap"))
