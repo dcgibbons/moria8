@@ -1,7 +1,8 @@
 #importonce
 // title_data.s — Title screen art data (standalone PRG)
 //
-// Assembles to the configured build title PRG, loaded into MAP_BASE at startup.
+// Assembles to the configured build title PRG, loaded into the platform
+// title-art buffer at startup.
 // Format: segments of [row, col, color, screen_codes..., $00]
 // Terminated by $FF end-of-data marker.
 //
@@ -10,7 +11,9 @@
 //   $2D = '-', $21 = '!', $2B = '+'
 //   Box borders: + for corners, - for horizontal, ! for vertical
 
-#if TITLE_PLATFORM_128 || TITLE_PLATFORM_CX16
+#if TITLE_PLATFORM_CX16
+.pc = $6000 "Title Art"
+#elif TITLE_PLATFORM_128
 .pc = $4000 "Title Art"
 #else
 .pc = $C000 "Title Art"

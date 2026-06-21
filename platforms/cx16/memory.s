@@ -42,10 +42,10 @@
 .const BANK1_DB_BASE    = CX16_BANKED_RAM_BASE
 .const BANK1_DB_END     = CX16_BANKED_RAM_END
 .const MAP_END          = CX16_FIXED_LIVE_MAP_END
-.const FLOOR_ITEM_BASE  = $7400
-.const FLOOR_ITEM_END   = $74ff
-.const CREATURE_BASE    = $7500
-.const CREATURE_END     = $75ff
+.const FLOOR_ITEM_BASE  = (CX16_FIXED_LIVE_MAP_END + $0100) & $ff00
+.const FLOOR_ITEM_END   = FLOOR_ITEM_BASE + $00ff
+.const CREATURE_BASE    = FLOOR_ITEM_BASE + $0100
+.const CREATURE_END     = CREATURE_BASE + $00ff
 .const CX16_FIXED_WORLD_BASE = CX16_FIXED_LIVE_MAP_BASE
 .const CX16_FIXED_WORLD_END  = CREATURE_END
 .const DUNGEON_GEN_BFS_QUEUE_BASE = $0400
@@ -58,8 +58,12 @@
 .assert "CX16 live map span matches HAL layout", MAP_END - MAP_BASE + 1, hal_layout_map_cols * hal_layout_map_rows
 .assert "CX16 live map is larger than one banked-RAM window", MAP_END - MAP_BASE + 1 > CX16_BANKED_RAM_SIZE, true
 .assert "CX16 floor items stay after live map", MAP_END < FLOOR_ITEM_BASE, true
+.assert "CX16 floor item table is page-aligned", <FLOOR_ITEM_BASE, 0
 .assert "CX16 floor items fit", FLOOR_ITEM_END - FLOOR_ITEM_BASE + 1, 256
 .assert "CX16 creature scratch stays after floor items", FLOOR_ITEM_END < CREATURE_BASE, true
+.assert "CX16 creature scratch is page-aligned", <CREATURE_BASE, 0
+.assert "CX16 Huffman decode buffer stays after fixed world", CX16_FIXED_WORLD_END < PLATFORM_HD_DECODE_BUF_BASE, true
+.assert "CX16 Huffman decode buffer stays below VERA I/O hole", PLATFORM_HD_DECODE_BUF_LIMIT <= CX16_IO_BASE, true
 .assert "CX16 dungeon-gen BFS queue remains page-aligned", <DUNGEON_GEN_BFS_QUEUE_BASE, 0
 .assert "CX16 dungeon-gen BFS queue stays below PRG load base", DUNGEON_GEN_BFS_QUEUE_END < CX16_PRG_LOAD_BASE, true
 .assert "CX16 banked RAM window is 8 KiB", CX16_BANKED_RAM_SIZE, $2000

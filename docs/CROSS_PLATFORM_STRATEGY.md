@@ -113,13 +113,15 @@ Current assumptions:
 * Baseline RAM is 512 KB, using fixed RAM below `$9F00` plus the `$A000-$BFFF`
   banked-RAM window for later resident overlay/cache work.
 * The normal product PRG loads at `$0801`; machine code starts at `$0810` and
-  must end before the fixed live-map base at `$4000`. The assembler enforces
-  this for the normal CX16 image.
+  must end before the fixed live-map base at `$6000`. Title art also loads at
+  `$6000` and is treated as scratch before town/dungeon generation reuses the
+  same fixed-RAM region as the gameplay map. The assembler enforces the `$6000`
+  resident-code limit for the normal CX16 image.
 * Display target is VERA 80x30 text. The first title screen centers the
   existing 40-column title composition inside the wider display.
 * The current new-game path renders a deterministic 66x22 town through
   `core/town_map_basic.s`, using the shared town/map constants and
-  store-position tables, backed by fixed RAM at `MAP_BASE` with the shared
+  store-position tables, backed by fixed RAM at `MAP_BASE` (`$6000`) with the shared
   198-byte row stride. This is still a bootstrap renderer, not the full shared
   game loop.
 * The live shared map is deliberately fixed RAM, not banked RAM. The 198x66
