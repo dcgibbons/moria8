@@ -66,6 +66,8 @@ ITEM_PICK = 63
 BOOTSTRAP_PICK_DIG_ABILITY = 24
 ICAT_WEAPON = 2
 FI_EMPTY = 0xFF
+CLEAR_SENTINEL_ROW = 24
+CLEAR_SENTINEL_COL = 0
 CMD_MOVE_N = 0x01
 CMD_MOVE_W = 0x03
 CMD_MOVE_S = 0x02
@@ -761,10 +763,12 @@ def main():
             "bootstrap pick dig ability from banked item catalog",
         )
         assert_eq(map_tile_at(bench, labels, 32, 18), TILE_STAIRS_DN | TOWN_FLAGS, "town stairs tile")
-        assert_screen_text(bench, 0, 33, "TOWN", "town title")
+        assert_screen_text(bench, 25, 1, "CX16", "town status name")
+        assert_screen_text(bench, 25, 58, "LV:1", "town status level")
+        assert_screen_text(bench, 25, 66, "DL:0", "town status depth")
         assert_screen_text(
             bench,
-            26,
+            29,
             14,
             "HJKL/YUBN OR NUMBERS MOVE. SHIFT-Q RETURNS TO TITLE.",
             "town help",
@@ -814,7 +818,7 @@ def main():
             TEXT_COLOR,
             "player on store door",
         )
-        assert_screen_text(bench, 26, 29, "STORE DOOR 1", "store door message")
+        assert_screen_text(bench, 0, 0, "STORE DOOR 1", "store door message")
 
         bench.set_a(CMD_MOVE_S)
         bench.run(require(labels, "cx16_try_move_command"))
@@ -856,13 +860,17 @@ def main():
         assert_map_tile_type(bench, labels, down_x, down_y, TILE_STAIRS_DN, "module stairs down tile")
         assert_map_tile_type(bench, labels, floor_x, floor_y, TILE_FLOOR, "module floor tile")
         assert_map_tile_type(bench, labels, wall_x, wall_y, TILE_WALL_H, "module wall tile")
-        assert_screen_text(bench, 0, 31, "DUNGEON LEVEL 1", "dungeon title")
+        assert_screen_text(bench, 25, 1, "CX16", "dungeon status name")
+        assert_screen_text(bench, 25, 58, "LV:1", "dungeon status level")
+        assert_screen_text(bench, 25, 66, "DL:1", "dungeon status depth")
+        assert_screen_text(bench, 26, 1, "ST:18", "dungeon status stats")
+        assert_screen_text(bench, 27, 1, "HP:12/12", "dungeon status hp")
         assert_screen_contains_cell(bench, SC_PLAYER, TEXT_COLOR, "dungeon entry player")
         assert_screen_cell(bench, 2, 1, screen_code(" "), 0, "unvisited dungeon rock")
-        assert_screen_text(bench, 25, 24, "MONSTER TIER 1 READY", "dungeon tier ready")
+        assert_screen_text(bench, 0, 0, "MONSTER TIER 1 READY", "dungeon tier ready")
         assert_screen_text(
             bench,
-            26,
+            29,
             10,
             "HJKL/YUBN OR NUMBERS MOVE. < RETURNS TO TOWN. SHIFT-Q TITLE.",
             "dungeon help",
@@ -870,27 +878,30 @@ def main():
 
         move_command, move_x, move_y = find_adjacent_floor_move(bench, labels, entry_x, entry_y)
         assert_screen_contains_cell(bench, screen_code("."), 11, "visible dungeon floor")
-        screen_put_cell_raw(bench, 1, 0, screen_code("*"), 2)
+        screen_put_cell_raw(bench, CLEAR_SENTINEL_ROW, CLEAR_SENTINEL_COL, screen_code("*"), 2)
         bench.set_a(move_command)
         bench.run(require(labels, "cx16_try_move_command"))
         assert_player_position(bench, labels, move_x, move_y, "dungeon adjacent move")
         assert_screen_contains_cell(bench, SC_PLAYER, TEXT_COLOR, "dungeon moved player")
-        assert_screen_cell(bench, 1, 0, screen_code("*"), 2, "dungeon movement does not full-clear")
+        assert_screen_cell(bench, CLEAR_SENTINEL_ROW, CLEAR_SENTINEL_COL, screen_code("*"), 2, "dungeon movement does not full-clear")
 
         set_player_position(bench, labels, entry_x, entry_y)
         bench.run(require(labels, "cx16_draw_dungeon_bootstrap"))
-        screen_put_cell_raw(bench, 1, 0, screen_code("*"), 2)
+        screen_put_cell_raw(bench, CLEAR_SENTINEL_ROW, CLEAR_SENTINEL_COL, screen_code("*"), 2)
         bench.set_a(move_command)
         bench.run(require(labels, "cx16_dispatch_game_command"))
         assert_player_position(bench, labels, move_x, move_y, "dungeon move through dispatcher")
-        assert_screen_cell(bench, 1, 0, screen_code("*"), 2, "dungeon scrolling movement does not full-clear")
+        assert_screen_cell(bench, CLEAR_SENTINEL_ROW, CLEAR_SENTINEL_COL, screen_code("*"), 2, "dungeon scrolling movement does not full-clear")
 
         set_player_position(bench, labels, entry_x, entry_y)
         bench.set_memory(require(labels, "player_data") + PL_FLAGS, PLF_SEARCHING)
+        bench.run(require(labels, "cx16_draw_dungeon_ui"))
+        assert_screen_text(bench, 27, 70, "Search*", "search status before movement")
         bench.set_a(move_command)
         bench.run(require(labels, "cx16_dispatch_game_command"))
-        if bench.get_memory(require(labels, "player_data") + PL_FLAGS) & PLF_SEARCHING:
-            raise AssertionError("dungeon movement did not clear search mode")
+        if not (bench.get_memory(require(labels, "player_data") + PL_FLAGS) & PLF_SEARCHING):
+            raise AssertionError("dungeon movement cleared search mode")
+        assert_screen_text(bench, 27, 70, "Search*", "search status after movement")
 
         set_player_position(bench, labels, wall_x + 1, wall_y + 1)
         bench.set_a(CMD_MOVE_NW)
@@ -902,67 +913,69 @@ def main():
         )
         set_player_position(bench, labels, door_px, door_py)
         bench.set_memory(require(labels, "zp_player_str"), 18)
-        screen_put_cell_raw(bench, 1, 0, screen_code("*"), 2)
+        screen_put_cell_raw(bench, CLEAR_SENTINEL_ROW, CLEAR_SENTINEL_COL, screen_code("*"), 2)
         stuff_direction_to_target(bench, door_px, door_py, door_x, door_y)
         bench.set_a(CMD_OPEN)
         bench.run(require(labels, "cx16_dispatch_game_command"))
         assert_map_tile_type(bench, labels, door_x, door_y, TILE_DOOR_OPEN, "opened dungeon door")
         assert_player_position(bench, labels, door_px, door_py, "open command keeps player position")
         assert_screen_contains_cell(bench, SC_PLAYER, TEXT_COLOR, "open command keeps player glyph")
-        assert_screen_cell(bench, 1, 0, screen_code("*"), 2, "open command does not full-clear")
+        assert_screen_cell(bench, CLEAR_SENTINEL_ROW, CLEAR_SENTINEL_COL, screen_code("*"), 2, "open command does not full-clear")
 
         stuff_direction_to_target(bench, door_px, door_py, door_x, door_y)
         bench.set_a(CMD_CLOSE)
         bench.run(require(labels, "cx16_dispatch_game_command"))
         assert_map_tile_type(bench, labels, door_x, door_y, TILE_DOOR_CLOSED, "closed dungeon door")
         assert_screen_contains_cell(bench, SC_PLAYER, TEXT_COLOR, "close command keeps player glyph")
-        assert_screen_cell(bench, 1, 0, screen_code("*"), 2, "close command does not full-clear")
+        assert_screen_cell(bench, CLEAR_SENTINEL_ROW, CLEAR_SENTINEL_COL, screen_code("*"), 2, "close command does not full-clear")
 
         set_player_position(bench, labels, door_px, door_py)
-        screen_put_cell_raw(bench, 1, 0, screen_code("*"), 2)
+        screen_put_cell_raw(bench, CLEAR_SENTINEL_ROW, CLEAR_SENTINEL_COL, screen_code("*"), 2)
         bench.set_a(CMD_SEARCH)
         bench.run(require(labels, "cx16_dispatch_game_command"))
         if assert_screen_text_matches(bench, 26, 23, "SEARCH/REST/LOOK NOT WIRED YET."):
             raise AssertionError("search command still rendered the activity stub")
         assert_screen_contains_cell(bench, SC_PLAYER, TEXT_COLOR, "search command keeps player glyph")
-        assert_screen_cell(bench, 1, 0, screen_code("*"), 2, "search command does not full-clear")
+        assert_screen_cell(bench, CLEAR_SENTINEL_ROW, CLEAR_SENTINEL_COL, screen_code("*"), 2, "search command does not full-clear")
 
-        screen_put_cell_raw(bench, 1, 0, screen_code("*"), 2)
+        screen_put_cell_raw(bench, CLEAR_SENTINEL_ROW, CLEAR_SENTINEL_COL, screen_code("*"), 2)
         bench.set_a(CMD_REST)
         bench.run(require(labels, "cx16_dispatch_game_command"))
         if assert_screen_text_matches(bench, 26, 23, "SEARCH/REST/LOOK NOT WIRED YET."):
             raise AssertionError("rest command still rendered the activity stub")
         assert_player_position(bench, labels, door_px, door_py, "rest command keeps player position")
         assert_screen_contains_cell(bench, SC_PLAYER, TEXT_COLOR, "rest command keeps player glyph")
-        assert_screen_cell(bench, 1, 0, screen_code("*"), 2, "rest command does not full-clear")
+        assert_screen_cell(bench, CLEAR_SENTINEL_ROW, CLEAR_SENTINEL_COL, screen_code("*"), 2, "rest command does not full-clear")
 
         bench.set_memory(require(labels, "player_data") + PL_FLAGS, 0)
         bench.set_a(CMD_SEARCH_MODE)
         bench.run(require(labels, "cx16_dispatch_game_command"))
         if not (bench.get_memory(require(labels, "player_data") + PL_FLAGS) & PLF_SEARCHING):
             raise AssertionError("search mode command did not set the searching flag")
-        assert_screen_text(bench, 25, 0, "Search mode on.", "search mode on message")
+        assert_screen_text(bench, 0, 0, "Search mode on.", "search mode on message")
+        assert_screen_text(bench, 27, 70, "Search*", "search mode status on")
         bench.set_a(CMD_SEARCH_MODE)
         bench.run(require(labels, "cx16_dispatch_game_command"))
         if bench.get_memory(require(labels, "player_data") + PL_FLAGS) & PLF_SEARCHING:
             raise AssertionError("search mode command did not clear the searching flag")
-        assert_screen_text(bench, 25, 0, "Search mode off.", "search mode off message")
+        assert_screen_text(bench, 0, 0, "Search mode off.", "search mode off message")
+        assert_eq(screen_char_at(bench, 27, 70), screen_code(" "), "search mode status off")
 
         set_player_position(bench, labels, door_px, door_py)
         set_map_tile(bench, labels, door_x, door_y, TILE_FLOOR | DUNGEON_FLAGS)
         bench.set_memory(require(labels, "zp_player_str"), 18)
-        screen_put_cell_raw(bench, 1, 0, screen_code("*"), 2)
+        screen_put_cell_raw(bench, CLEAR_SENTINEL_ROW, CLEAR_SENTINEL_COL, screen_code("*"), 2)
         stuff_direction_to_target(bench, door_px, door_py, door_x, door_y)
         bench.set_a(CMD_BASH)
         bench.run(require(labels, "cx16_dispatch_game_command"))
         assert_player_position(bench, labels, door_px, door_py, "bash command keeps player position")
         assert_screen_contains_cell(bench, SC_PLAYER, TEXT_COLOR, "bash command keeps player glyph")
-        assert_screen_cell(bench, 1, 0, screen_code("*"), 2, "bash command does not full-clear")
+        assert_screen_cell(bench, CLEAR_SENTINEL_ROW, CLEAR_SENTINEL_COL, screen_code("*"), 2, "bash command does not full-clear")
 
         set_player_position(bench, labels, door_px, door_py)
         set_map_tile(bench, labels, door_x, door_y, TILE_RUBBLE | DUNGEON_FLAGS)
         bench.set_memory(require(labels, "zp_player_str"), 255)
-        screen_put_cell_raw(bench, 1, 0, screen_code("*"), 2)
+        screen_put_cell_raw(bench, CLEAR_SENTINEL_ROW, CLEAR_SENTINEL_COL, screen_code("*"), 2)
         for _ in range(8):
             if tile_type(map_tile_at(bench, labels, door_x, door_y)) == TILE_FLOOR:
                 break
@@ -972,7 +985,7 @@ def main():
         assert_map_tile_type(bench, labels, door_x, door_y, TILE_FLOOR, "tunnel with pick removes rubble")
         assert_player_position(bench, labels, door_px, door_py, "tunnel command keeps player position")
         assert_screen_contains_cell(bench, SC_PLAYER, TEXT_COLOR, "tunnel command keeps player glyph")
-        assert_screen_cell(bench, 1, 0, screen_code("*"), 2, "tunnel command does not full-clear")
+        assert_screen_cell(bench, CLEAR_SENTINEL_ROW, CLEAR_SENTINEL_COL, screen_code("*"), 2, "tunnel command does not full-clear")
         bench.set_memory(require(labels, "zp_player_str"), 18)
 
         set_player_position(bench, labels, door_px, door_py)
@@ -987,7 +1000,7 @@ def main():
         bench.set_memory(require(labels, "player_data") + PL_DEX_CUR, 118)
         bench.set_memory(require(labels, "player_data") + PL_INT_CUR, 118)
         bench.set_memory(require(labels, "zp_player_lvl"), 40)
-        screen_put_cell_raw(bench, 1, 0, screen_code("*"), 2)
+        screen_put_cell_raw(bench, CLEAR_SENTINEL_ROW, CLEAR_SENTINEL_COL, screen_code("*"), 2)
         stuff_direction_to_target(bench, door_px, door_py, door_x, door_y)
         bench.set_a(CMD_DISARM)
         bench.run(require(labels, "cx16_dispatch_game_command"))
@@ -995,12 +1008,12 @@ def main():
         assert_map_tile_type(bench, labels, door_x, door_y, TILE_FLOOR, "disarm command restores floor")
         assert_player_position(bench, labels, door_x, door_y, "disarm command moves onto trap")
         assert_screen_contains_cell(bench, SC_PLAYER, TEXT_COLOR, "disarm command keeps player glyph")
-        assert_screen_cell(bench, 1, 0, screen_code("*"), 2, "disarm command does not full-clear")
+        assert_screen_cell(bench, CLEAR_SENTINEL_ROW, CLEAR_SENTINEL_COL, screen_code("*"), 2, "disarm command does not full-clear")
 
         set_player_position(bench, labels, floor_x, floor_y)
         item_count_before_pickup = bench.get_memory(require(labels, "zp_item_count"))
         add_floor_item(bench, labels, floor_x, floor_y, ITEM_PICK)
-        screen_put_cell_raw(bench, 1, 0, screen_code("*"), 2)
+        screen_put_cell_raw(bench, CLEAR_SENTINEL_ROW, CLEAR_SENTINEL_COL, screen_code("*"), 2)
         bench.set_a(CMD_PICKUP)
         bench.run(require(labels, "cx16_dispatch_game_command"))
         assert_eq(
@@ -1010,9 +1023,9 @@ def main():
         )
         assert_eq(bench.get_memory(require(labels, "inv_item_id")), ITEM_PICK, "pickup command fills inventory slot")
         assert_screen_contains_cell(bench, SC_PLAYER, TEXT_COLOR, "pickup command keeps player glyph")
-        assert_screen_cell(bench, 1, 0, screen_code("*"), 2, "pickup command does not full-clear")
+        assert_screen_cell(bench, CLEAR_SENTINEL_ROW, CLEAR_SENTINEL_COL, screen_code("*"), 2, "pickup command does not full-clear")
 
-        screen_put_cell_raw(bench, 1, 0, screen_code("*"), 2)
+        screen_put_cell_raw(bench, CLEAR_SENTINEL_ROW, CLEAR_SENTINEL_COL, screen_code("*"), 2)
         stuff_key(bench, ord("A"))
         bench.set_a(CMD_DROP)
         bench.run(require(labels, "cx16_dispatch_game_command"))
@@ -1025,7 +1038,7 @@ def main():
         if not (map_tile_at(bench, labels, floor_x, floor_y) & FLAG_HAS_ITEM):
             raise AssertionError("drop command did not mark the floor item tile")
         assert_screen_contains_cell(bench, SC_PLAYER, TEXT_COLOR, "drop command keeps player glyph")
-        assert_screen_cell(bench, 1, 0, screen_code("*"), 2, "drop command does not full-clear")
+        assert_screen_cell(bench, CLEAR_SENTINEL_ROW, CLEAR_SENTINEL_COL, screen_code("*"), 2, "drop command does not full-clear")
 
         inv_base = require(labels, "inv_item_id")
         bench.set_memory(inv_base, ITEM_PICK)
@@ -1075,7 +1088,7 @@ def main():
         bench.set_memory(require(labels, "player_data") + PL_HP_HI, 0)
         bench.set_memory(require(labels, "player_data") + PL_MHP_LO, 50)
         bench.set_memory(require(labels, "player_data") + PL_MHP_HI, 0)
-        screen_put_cell_raw(bench, 1, 0, screen_code("*"), 2)
+        screen_put_cell_raw(bench, CLEAR_SENTINEL_ROW, CLEAR_SENTINEL_COL, screen_code("*"), 2)
         stuff_key(bench, ord("A"))
         bench.set_a(CMD_QUAFF)
         bench.run(require(labels, "cx16_dispatch_game_command"))
@@ -1083,7 +1096,7 @@ def main():
         if bench.get_memory(require(labels, "zp_player_hp_lo")) <= 10:
             raise AssertionError("quaff command did not heal the player")
         assert_screen_contains_cell(bench, SC_PLAYER, TEXT_COLOR, "quaff command keeps player glyph")
-        assert_screen_cell(bench, 1, 0, screen_code("*"), 2, "quaff command does not full-clear")
+        assert_screen_cell(bench, CLEAR_SENTINEL_ROW, CLEAR_SENTINEL_COL, screen_code("*"), 2, "quaff command does not full-clear")
 
         bench.set_memory(inv_base, ITEM_FLASK_OIL)
         bench.set_memory(require(labels, "inv_qty"), 1)
@@ -1091,28 +1104,28 @@ def main():
         bench.set_memory(inv_base + EQUIP_LIGHT, ITEM_LANTERN)
         bench.set_memory(require(labels, "inv_qty") + EQUIP_LIGHT, 1)
         bench.set_memory(require(labels, "inv_p1") + EQUIP_LIGHT, 10)
-        screen_put_cell_raw(bench, 1, 0, screen_code("*"), 2)
+        screen_put_cell_raw(bench, CLEAR_SENTINEL_ROW, CLEAR_SENTINEL_COL, screen_code("*"), 2)
         bench.set_a(CMD_REFUEL)
         bench.run(require(labels, "cx16_dispatch_game_command"))
         assert_eq(bench.get_memory(inv_base), FI_EMPTY, "refuel command consumes oil flask")
         assert_eq(bench.get_memory(require(labels, "inv_p1") + EQUIP_LIGHT), 30, "refuel command adds oil")
         assert_screen_contains_cell(bench, SC_PLAYER, TEXT_COLOR, "refuel command keeps player glyph")
-        assert_screen_cell(bench, 1, 0, screen_code("*"), 2, "refuel command does not full-clear")
+        assert_screen_cell(bench, CLEAR_SENTINEL_ROW, CLEAR_SENTINEL_COL, screen_code("*"), 2, "refuel command does not full-clear")
 
         set_inventory_slot0(bench, labels, ITEM_SCROLL_LIGHT)
         bench.set_memory(require(labels, "id_known") + ITEM_SCROLL_LIGHT, 0)
-        screen_put_cell_raw(bench, 1, 0, screen_code("*"), 2)
+        screen_put_cell_raw(bench, CLEAR_SENTINEL_ROW, CLEAR_SENTINEL_COL, screen_code("*"), 2)
         stuff_key(bench, ord("A"))
         bench.set_a(CMD_READ)
         bench.run(require(labels, "cx16_dispatch_game_command"))
         assert_eq(bench.get_memory(inv_base), FI_EMPTY, "read command consumes scroll")
         assert_eq(bench.get_memory(require(labels, "id_known") + ITEM_SCROLL_LIGHT), 1, "read command marks scroll known")
         assert_screen_contains_cell(bench, SC_PLAYER, TEXT_COLOR, "read command keeps player glyph")
-        assert_screen_cell(bench, 1, 0, screen_code("*"), 2, "read command does not full-clear")
+        assert_screen_cell(bench, CLEAR_SENTINEL_ROW, CLEAR_SENTINEL_COL, screen_code("*"), 2, "read command does not full-clear")
 
         set_inventory_slot0(bench, labels, ITEM_WAND_LIGHT, p1=2)
         bench.set_memory(require(labels, "id_known") + ITEM_WAND_LIGHT, 0)
-        screen_put_cell_raw(bench, 1, 0, screen_code("*"), 2)
+        screen_put_cell_raw(bench, CLEAR_SENTINEL_ROW, CLEAR_SENTINEL_COL, screen_code("*"), 2)
         stuff_key(bench, ord("A"))
         bench.set_a(CMD_AIM)
         bench.run(require(labels, "cx16_dispatch_game_command"))
@@ -1120,12 +1133,12 @@ def main():
         assert_eq(bench.get_memory(require(labels, "inv_p1")), 1, "aim command consumes one wand charge")
         assert_eq(bench.get_memory(require(labels, "id_known") + ITEM_WAND_LIGHT), 1, "aim command marks wand known")
         assert_screen_contains_cell(bench, SC_PLAYER, TEXT_COLOR, "aim command keeps player glyph")
-        assert_screen_cell(bench, 1, 0, screen_code("*"), 2, "aim command does not full-clear")
+        assert_screen_cell(bench, CLEAR_SENTINEL_ROW, CLEAR_SENTINEL_COL, screen_code("*"), 2, "aim command does not full-clear")
 
         set_inventory_slot0(bench, labels, ITEM_STAFF_DETECT, p1=2)
         bench.set_memory(require(labels, "id_known") + ITEM_STAFF_DETECT, 0)
         bench.set_memory(require(labels, "eff_detect_timer"), 0)
-        screen_put_cell_raw(bench, 1, 0, screen_code("*"), 2)
+        screen_put_cell_raw(bench, CLEAR_SENTINEL_ROW, CLEAR_SENTINEL_COL, screen_code("*"), 2)
         stuff_key(bench, ord("A"))
         bench.set_a(CMD_USE)
         bench.run(require(labels, "cx16_dispatch_game_command"))
@@ -1134,17 +1147,17 @@ def main():
         assert_eq(bench.get_memory(require(labels, "id_known") + ITEM_STAFF_DETECT), 1, "use command marks staff known")
         assert_eq(bench.get_memory(require(labels, "eff_detect_timer")), 20, "use command activates detect monsters")
         assert_screen_contains_cell(bench, SC_PLAYER, TEXT_COLOR, "use command keeps player glyph")
-        assert_screen_cell(bench, 1, 0, screen_code("*"), 2, "use command does not full-clear")
+        assert_screen_cell(bench, CLEAR_SENTINEL_ROW, CLEAR_SENTINEL_COL, screen_code("*"), 2, "use command does not full-clear")
 
         set_player_position(bench, labels, entry_x, entry_y)
         set_map_tile(bench, labels, move_x, move_y, TILE_TRAP | DUNGEON_FLAGS)
         bench.run(require(labels, "cx16_draw_dungeon_bootstrap"))
-        screen_put_cell_raw(bench, 1, 0, screen_code("*"), 2)
+        screen_put_cell_raw(bench, CLEAR_SENTINEL_ROW, CLEAR_SENTINEL_COL, screen_code("*"), 2)
         bench.set_a(run_command_for_move(move_command))
         bench.run(require(labels, "cx16_dispatch_game_command"))
         assert_player_position(bench, labels, entry_x, entry_y, "run command stops before visible trap")
         assert_screen_contains_cell(bench, SC_PLAYER, TEXT_COLOR, "run trap stop keeps player glyph")
-        assert_screen_cell(bench, 1, 0, screen_code("*"), 2, "run trap stop does not full-clear")
+        assert_screen_cell(bench, CLEAR_SENTINEL_ROW, CLEAR_SENTINEL_COL, screen_code("*"), 2, "run trap stop does not full-clear")
         set_map_tile(bench, labels, move_x, move_y, TILE_FLOOR | DUNGEON_FLAGS)
 
         set_player_position(bench, labels, entry_x, entry_y)
@@ -1157,7 +1170,7 @@ def main():
         bench.set_memory(require(labels, "zp_player_hp_hi"), 0)
         bench.set_memory(require(labels, "player_data") + PL_HP_LO, 100)
         bench.set_memory(require(labels, "player_data") + PL_HP_HI, 0)
-        screen_put_cell_raw(bench, 1, 0, screen_code("*"), 2)
+        screen_put_cell_raw(bench, CLEAR_SENTINEL_ROW, CLEAR_SENTINEL_COL, screen_code("*"), 2)
         saved_bank = bench.get_memory(CX16_RAM_BANK_REG)
         bench.set_a(move_command)
         bench.run(require(labels, "cx16_dispatch_game_command"))
@@ -1166,7 +1179,7 @@ def main():
         assert_eq(bench.get_memory(CX16_RAM_BANK_REG), saved_bank, "trap trigger restored caller RAM bank")
         assert_player_position(bench, labels, move_x, move_y, "movement trap moves player onto trap")
         assert_screen_contains_cell(bench, SC_PLAYER, TEXT_COLOR, "movement trap keeps player glyph")
-        assert_screen_cell(bench, 1, 0, screen_code("*"), 2, "movement trap does not full-clear")
+        assert_screen_cell(bench, CLEAR_SENTINEL_ROW, CLEAR_SENTINEL_COL, screen_code("*"), 2, "movement trap does not full-clear")
         bench.set_memory(require(labels, "trap_count"), 0)
         set_map_tile(bench, labels, move_x, move_y, TILE_FLOOR | DUNGEON_FLAGS)
         bench.set_memory(require(labels, "zp_player_hp_lo"), 100)
@@ -1174,74 +1187,83 @@ def main():
 
         set_player_position(bench, labels, entry_x, entry_y)
         bench.run(require(labels, "cx16_draw_dungeon_bootstrap"))
-        screen_put_cell_raw(bench, 1, 0, screen_code("*"), 2)
+        screen_put_cell_raw(bench, CLEAR_SENTINEL_ROW, CLEAR_SENTINEL_COL, screen_code("*"), 2)
         bench.set_a(run_command_for_move(move_command))
         bench.run(require(labels, "cx16_dispatch_game_command"))
         run_x = bench.get_memory(require(labels, "zp_player_x"))
         run_y = bench.get_memory(require(labels, "zp_player_y"))
         if (run_x, run_y) == (entry_x, entry_y):
             raise AssertionError("run command did not move the player")
-        assert_screen_cell(bench, 1, 0, screen_code("*"), 2, "dungeon running does not full-clear")
+        assert_screen_cell(bench, CLEAR_SENTINEL_ROW, CLEAR_SENTINEL_COL, screen_code("*"), 2, "dungeon running does not full-clear")
 
         build_horizontal_run_corridor(bench, labels)
         add_floor_item(bench, labels, 22, 12, ITEM_PICK)
         set_player_position(bench, labels, 20, 12)
-        screen_put_cell_raw(bench, 1, 0, screen_code("*"), 2)
+        screen_put_cell_raw(bench, CLEAR_SENTINEL_ROW, CLEAR_SENTINEL_COL, screen_code("*"), 2)
         bench.set_a(CMD_RUN_E)
         bench.run(require(labels, "cx16_dispatch_game_command"))
         assert_player_position(bench, labels, 22, 12, "run command stops on floor item")
         assert_screen_contains_cell(bench, SC_PLAYER, TEXT_COLOR, "run item stop keeps player glyph")
-        assert_screen_cell(bench, 1, 0, screen_code("*"), 2, "dungeon run item stop does not full-clear")
+        assert_screen_cell(bench, CLEAR_SENTINEL_ROW, CLEAR_SENTINEL_COL, screen_code("*"), 2, "dungeon run item stop does not full-clear")
 
         build_horizontal_run_corridor(bench, labels)
         set_player_position(bench, labels, 20, 12)
         bench.run(require(labels, "input_run_cancel_reset"))
         set_key_held(bench, True)
-        screen_put_cell_raw(bench, 1, 0, screen_code("*"), 2)
+        screen_put_cell_raw(bench, CLEAR_SENTINEL_ROW, CLEAR_SENTINEL_COL, screen_code("*"), 2)
         bench.set_a(CMD_RUN_E)
         bench.run(require(labels, "cx16_dispatch_game_command"))
         cancel_x = bench.get_memory(require(labels, "zp_player_x"))
         if cancel_x > 22:
             raise AssertionError(f"run cancel ignored held key; player reached x={cancel_x}")
         set_key_held(bench, False)
-        assert_screen_cell(bench, 1, 0, screen_code("*"), 2, "dungeon run cancel does not full-clear")
+        assert_screen_cell(bench, CLEAR_SENTINEL_ROW, CLEAR_SENTINEL_COL, screen_code("*"), 2, "dungeon run cancel does not full-clear")
 
         set_player_position(bench, labels, floor_x, floor_y)
         bench.run(require(labels, "cx16_try_stairs_up"))
-        assert_screen_text(bench, 26, 28, "YOU SEE NO STAIRS HERE.", "no stairs message")
+        assert_screen_text(bench, 0, 0, "YOU SEE NO STAIRS HERE.", "no stairs message")
 
         set_player_position(bench, labels, entry_x, entry_y)
         bench.run(require(labels, "cx16_try_stairs_up"))
         assert_eq(bench.get_memory(require(labels, "cx16_state")), 1, "returned to town state")
         assert_eq(bench.get_memory(require(labels, "zp_player_dlvl")), 0, "returned to town depth")
-        assert_screen_text(bench, 0, 33, "TOWN", "town title after upstairs")
+        assert_screen_text(bench, 25, 66, "DL:0", "town status depth after upstairs")
 
-        for command, col, text, label in (
-            (CMD_REST, 23, "SEARCH/REST/LOOK NOT WIRED YET.", "rest command"),
-            (CMD_SEARCH, 23, "SEARCH/REST/LOOK NOT WIRED YET.", "search command"),
-            (CMD_LOOK, 23, "SEARCH/REST/LOOK NOT WIRED YET.", "look command"),
-            (CMD_SEARCH_MODE, 23, "SEARCH/REST/LOOK NOT WIRED YET.", "search mode command"),
-            (CMD_AUTOREST, 23, "SEARCH/REST/LOOK NOT WIRED YET.", "autorest command"),
-            (CMD_OPEN, 23, "ITEM/FEATURE COMMAND NOT WIRED YET.", "open command"),
-            (CMD_DROP, 23, "ITEM/FEATURE COMMAND NOT WIRED YET.", "drop command"),
-            (CMD_INVENTORY, 23, "ITEM/FEATURE COMMAND NOT WIRED YET.", "inventory command"),
-            (CMD_FIRE, 23, "ITEM/FEATURE COMMAND NOT WIRED YET.", "fire command"),
-            (CMD_BASH, 23, "ITEM/FEATURE COMMAND NOT WIRED YET.", "bash command"),
-            (CMD_TUNNEL, 23, "ITEM/FEATURE COMMAND NOT WIRED YET.", "tunnel command"),
-            (CMD_DISARM, 23, "ITEM/FEATURE COMMAND NOT WIRED YET.", "disarm command"),
-            (CMD_CAST, 25, "MAGIC/RECALL NOT WIRED YET.", "cast command"),
-            (CMD_RECALL, 25, "MAGIC/RECALL NOT WIRED YET.", "recall command"),
-            (CMD_GAIN, 25, "MAGIC/RECALL NOT WIRED YET.", "gain command"),
-            (CMD_SAVE, 24, "SAVE/LOAD NOT WIRED YET.", "save command"),
-            (CMD_HELP, 8, "MOVE HJKL/YUBN/12346789. > STAIRS. SHIFT-Q TITLE.", "help command"),
-            (CMD_CHAR_INFO, 19, "CHARACTER INFO: TOWN BOOTSTRAP, DEPTH 0.", "character info command"),
-            (CMD_VERSION, 24, "MORIA8 CX16 BOOTSTRAP V1.3.1", "version command"),
-            (CMD_MAP, 24, "INFO/HELP NOT WIRED YET.", "map command"),
-            (CMD_WIZARD, 26, "WIZARD MODE NOT ENABLED.", "wizard command"),
+        bench.run(require(labels, "cx16_draw_help_view"))
+        assert_screen_text(bench, 3, 35, "COMMANDS", "help view title")
+        assert_screen_text(bench, 7, 14, "MOVE: HJKL/YUBN OR 12346789", "help view movement")
+        bench.run(require(labels, "cx16_draw_version_view"))
+        assert_screen_text(bench, 10, 24, "MORIA8 CX16 BOOTSTRAP V1.3.1", "version view")
+        bench.run(require(labels, "cx16_draw_character_view"))
+        assert_screen_text(bench, 3, 33, "CHARACTER", "character view title")
+        assert_screen_text(bench, 6, 20, "NAME: CX16", "character view name")
+        assert_screen_text(bench, 12, 20, "HP: ", "character view hp")
+        bench.run(require(labels, "cx16_new_game_draw"))
+
+        for command, text, label in (
+            (CMD_REST, "SEARCH/REST/LOOK NOT WIRED YET.", "rest command"),
+            (CMD_SEARCH, "SEARCH/REST/LOOK NOT WIRED YET.", "search command"),
+            (CMD_LOOK, "SEARCH/REST/LOOK NOT WIRED YET.", "look command"),
+            (CMD_SEARCH_MODE, "SEARCH/REST/LOOK NOT WIRED YET.", "search mode command"),
+            (CMD_AUTOREST, "SEARCH/REST/LOOK NOT WIRED YET.", "autorest command"),
+            (CMD_OPEN, "ITEM/FEATURE COMMAND NOT WIRED YET.", "open command"),
+            (CMD_DROP, "ITEM/FEATURE COMMAND NOT WIRED YET.", "drop command"),
+            (CMD_INVENTORY, "ITEM/FEATURE COMMAND NOT WIRED YET.", "inventory command"),
+            (CMD_FIRE, "ITEM/FEATURE COMMAND NOT WIRED YET.", "fire command"),
+            (CMD_BASH, "ITEM/FEATURE COMMAND NOT WIRED YET.", "bash command"),
+            (CMD_TUNNEL, "ITEM/FEATURE COMMAND NOT WIRED YET.", "tunnel command"),
+            (CMD_DISARM, "ITEM/FEATURE COMMAND NOT WIRED YET.", "disarm command"),
+            (CMD_CAST, "MAGIC/RECALL NOT WIRED YET.", "cast command"),
+            (CMD_RECALL, "MAGIC/RECALL NOT WIRED YET.", "recall command"),
+            (CMD_GAIN, "MAGIC/RECALL NOT WIRED YET.", "gain command"),
+            (CMD_SAVE, "SAVE/LOAD NOT WIRED YET.", "save command"),
+            (CMD_MAP, "INFO/HELP NOT WIRED YET.", "map command"),
+            (CMD_WIZARD, "WIZARD MODE NOT ENABLED.", "wizard command"),
         ):
+            bench.run(require(labels, "msg_init"))
             bench.set_a(command)
             bench.run(require(labels, "cx16_dispatch_game_command"))
-            assert_screen_text(bench, 26, col, text, label)
+            assert_screen_text(bench, 0, 0, text, label)
 
         print("CX16 runtime smoke passed")
     finally:

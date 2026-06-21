@@ -77,6 +77,9 @@ screen_set_color:
     rts
 
 screen_clear:
+    lda zp_ui_dirty
+    ora #%10000000
+    sta zp_ui_dirty
     lda #0
     sta zp_cursor_row
 !row:

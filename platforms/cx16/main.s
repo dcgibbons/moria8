@@ -111,6 +111,7 @@
 #endif
 #import "../../core/input_ui_helpers.s"
 #import "../../core/ui_messages.s"
+#import "../../core/ui_status.s"
 #import "../../core/huffman.s"
 #import "../../core/effect_detect_monsters.s"
 #if !CX16_IMPORT_SHARED_GAME_LOOP
@@ -662,7 +663,6 @@ cx16_try_dungeon_step_dir:
     beq !not_running+
     jsr cx16_save_run_lit_state
 !not_running:
-    jsr player_search_mode_off
     jsr cx16_save_old_player
     lda cx16_view_x
     sta cx16_old_view_x
@@ -683,6 +683,7 @@ cx16_try_dungeon_step_dir:
     cmp cx16_old_view_y
     bne !full+
     jsr cx16_render_dungeon_local_area
+    jsr cx16_draw_dungeon_ui
     jmp !return+
 !full:
     jsr cx16_refresh_dungeon_view
@@ -883,7 +884,8 @@ cx16_after_item_turn:
     jsr cx16_save_old_player
     jsr update_visibility
     jsr cx16_update_dungeon_view
-    jmp cx16_render_dungeon_local_area
+    jsr cx16_render_dungeon_local_area
+    jmp cx16_draw_dungeon_ui
 
 cx16_after_feature_turn:
     jsr cx16_sync_shared_player_position
@@ -891,7 +893,8 @@ cx16_after_feature_turn:
     jsr cx16_save_old_player
     jsr update_visibility
     jsr cx16_update_dungeon_view
-    jmp cx16_render_dungeon_local_area
+    jsr cx16_render_dungeon_local_area
+    jmp cx16_draw_dungeon_ui
 
 cx16_after_shared_move_turn:
     jsr cx16_save_old_player
@@ -908,7 +911,8 @@ cx16_after_shared_move_turn:
     lda cx16_view_y
     cmp cx16_old_view_y
     bne !full+
-    jmp cx16_render_dungeon_local_area
+    jsr cx16_render_dungeon_local_area
+    jmp cx16_draw_dungeon_ui
 !full:
     jmp cx16_refresh_dungeon_view
 
@@ -1013,6 +1017,13 @@ cx16_seed_bootstrap_player_state:
     lda #1
     sta player_data + PL_LEVEL
     sta zp_player_lvl
+    sta player_data + PL_LIGHT_RAD
+    sta zp_light_radius
+    lda #0
+    sta player_data + PL_MHP_HI
+    sta player_data + PL_HP_HI
+    sta zp_player_mhp_hi
+    sta zp_player_hp_hi
     lda #18
     sta player_data + PL_STR_CUR
     sta zp_player_str
@@ -1029,6 +1040,47 @@ cx16_seed_bootstrap_player_state:
     sta zp_player_con
     sta player_data + PL_CHR_CUR
     sta zp_player_chr
+    lda #0
+    sta player_data + PL_RACE
+    sta player_data + PL_CLASS
+    sta player_data + PL_DLEVEL
+    sta player_data + PL_MANA
+    sta player_data + PL_MAX_MANA
+    sta player_data + PL_AC
+    sta player_data + PL_GOLD_2
+    sta player_data + PL_HUNGER
+    sta zp_player_race
+    sta zp_player_class
+    sta zp_player_dlvl
+    sta zp_player_mp
+    sta zp_player_mmp
+    sta zp_player_ac
+    sta zp_hunger_state
+    lda #12
+    sta player_data + PL_MHP_LO
+    sta player_data + PL_HP_LO
+    sta zp_player_mhp_lo
+    sta zp_player_hp_lo
+    lda #200
+    sta player_data + PL_GOLD_0
+    lda #0
+    sta player_data + PL_GOLD_1
+    lda #<2000
+    sta player_data + PL_FOOD_LO
+    sta zp_player_food
+    lda #>2000
+    sta player_data + PL_FOOD_HI
+    sta zp_player_food_hi
+    lda #$03
+    sta player_data + PL_NAME
+    lda #$18
+    sta player_data + PL_NAME + 1
+    lda #$31
+    sta player_data + PL_NAME + 2
+    lda #$36
+    sta player_data + PL_NAME + 3
+    lda #0
+    sta player_data + PL_NAME + 4
 
     lda #63
     sta inv_item_id + EQUIP_WEAPON
@@ -1047,34 +1099,37 @@ cx16_new_game_draw:
     lda #CX16_TEXT_COLOR
     jsr screen_set_color
     jsr screen_clear
-    :Cx16PrintAt(0, 33, cx16_town_title_text)
     jsr cx16_render_town
-    :Cx16PrintAt(26, 14, cx16_game_help_text)
-    rts
+    jmp cx16_draw_town_ui
 
 cx16_show_store_stub:
-    jsr cx16_clear_message_row
-    :Cx16PrintAt(26, 29, cx16_store_door_text)
+    lda #<cx16_store_door_text
+    sta zp_ptr0
+    lda #>cx16_store_door_text
+    sta zp_ptr0_hi
+    jsr msg_print
     lda cx16_store_idx
     clc
     adc #$31
-    ldx #40
-    ldy #26
-    jmp screen_put_char_at
+    jmp msg_print_char
 
 cx16_show_descend_stub:
-    jsr cx16_clear_message_row
-    :Cx16PrintAt(26, 22, cx16_descend_stub_text)
-    rts
+    lda #<cx16_descend_stub_text
+    sta zp_ptr0
+    lda #>cx16_descend_stub_text
+    sta zp_ptr0_hi
+    jmp msg_print
 
 cx16_enter_dungeon_bootstrap:
-    jsr cx16_clear_message_row
+    jsr msg_clear
     lda #1
     jsr cx16_generate_dungeon_level
     bcc !module_ok+
-    jsr cx16_clear_message_row
-    :Cx16PrintAt(26, 21, cx16_dungeon_module_failed_text)
-    rts
+    lda #<cx16_dungeon_module_failed_text
+    sta zp_ptr0
+    lda #>cx16_dungeon_module_failed_text
+    sta zp_ptr0_hi
+    jmp msg_print
 !module_ok:
     lda #1
     sta zp_player_dlvl
@@ -1090,7 +1145,12 @@ cx16_enter_dungeon_bootstrap:
     sta cx16_loaded_tier
     lda #CX16_TIER_BANK_BASE
     sta cx16_loaded_tier_bank
-    jmp cx16_draw_dungeon_bootstrap
+    jsr cx16_draw_dungeon_bootstrap
+    lda #<cx16_dungeon_loaded_text
+    sta zp_ptr0
+    lda #>cx16_dungeon_loaded_text
+    sta zp_ptr0_hi
+    jmp msg_print
 
 cx16_draw_dungeon_bootstrap:
     lda #CX16_TEXT_COLOR
@@ -1103,10 +1163,7 @@ cx16_refresh_dungeon_view:
     jsr screen_set_color
     jsr cx16_update_dungeon_view
     jsr cx16_render_dungeon_viewport
-    :Cx16PrintAt(0, 31, cx16_dungeon_title_text)
-    :Cx16PrintAt(25, 24, cx16_dungeon_loaded_text)
-    :Cx16PrintAt(26, 10, cx16_dungeon_help_text)
-    rts
+    jmp cx16_draw_dungeon_ui
 
 cx16_return_to_town:
     lda #CX16_STATE_NEW_GAME
@@ -1123,70 +1180,202 @@ cx16_return_to_town:
     jmp cx16_new_game_draw
 
 cx16_show_deeper_stub:
-    jsr cx16_clear_message_row
-    :Cx16PrintAt(26, 24, cx16_deeper_stub_text)
-    rts
+    lda #<cx16_deeper_stub_text
+    sta zp_ptr0
+    lda #>cx16_deeper_stub_text
+    sta zp_ptr0_hi
+    jmp msg_print
 
 cx16_show_ascend_stub:
-    jsr cx16_clear_message_row
-    :Cx16PrintAt(26, 22, cx16_ascend_stub_text)
-    rts
+    lda #<cx16_ascend_stub_text
+    sta zp_ptr0
+    lda #>cx16_ascend_stub_text
+    sta zp_ptr0_hi
+    jmp msg_print
 
 cx16_show_no_stairs:
-    jsr cx16_clear_message_row
-    :Cx16PrintAt(26, 28, cx16_no_stairs_text)
-    rts
+    lda #<cx16_no_stairs_text
+    sta zp_ptr0
+    lda #>cx16_no_stairs_text
+    sta zp_ptr0_hi
+    jmp msg_print
 
 cx16_show_help:
-    jsr cx16_clear_message_row
-    :Cx16PrintAt(26, 8, cx16_command_help_text)
+    jsr cx16_draw_help_view
+    jsr input_get_modal_dismiss_key
+    jmp cx16_restore_current_view
+
+cx16_draw_help_view:
+    lda #CX16_TEXT_COLOR
+    jsr screen_set_color
+    jsr screen_clear
+    :Cx16PrintAt(3, 35, cx16_help_title_text)
+    :Cx16PrintAt(7, 14, cx16_help_move_text)
+    :Cx16PrintAt(9, 14, cx16_help_run_text)
+    :Cx16PrintAt(11, 14, cx16_help_feature_text)
+    :Cx16PrintAt(13, 14, cx16_help_item_text)
+    :Cx16PrintAt(15, 14, cx16_help_views_text)
+    :Cx16PrintAt(20, 33, cx16_press_key_text)
     rts
 
 cx16_show_version:
-    jsr cx16_clear_message_row
-    :Cx16PrintAt(26, 24, cx16_version_text)
+    jsr cx16_draw_version_view
+    jsr input_get_modal_dismiss_key
+    jmp cx16_restore_current_view
+
+cx16_draw_version_view:
+    lda #CX16_TEXT_COLOR
+    jsr screen_set_color
+    jsr screen_clear
+    :Cx16PrintAt(7, 33, cx16_version_title_text)
+    :Cx16PrintAt(10, 24, cx16_version_text)
+    :Cx16PrintAt(13, 24, cx16_version_policy_text)
+    :Cx16PrintAt(20, 33, cx16_press_key_text)
     rts
 
 cx16_show_character_info:
-    jsr cx16_clear_message_row
-    :Cx16PrintAt(26, 19, cx16_character_info_text)
+    jsr cx16_draw_character_view
+    jsr input_get_modal_dismiss_key
+    jmp cx16_restore_current_view
+
+cx16_draw_character_view:
+    lda #CX16_TEXT_COLOR
+    jsr screen_set_color
+    jsr screen_clear
+    :Cx16PrintAt(3, 33, cx16_character_title_text)
+    :Cx16PrintAt(6, 20, cx16_character_name_label)
+    lda #6
+    sta zp_cursor_row
+    lda #26
+    sta zp_cursor_col
+    lda #<(player_data + PL_NAME)
+    sta zp_ptr0
+    lda #>(player_data + PL_NAME)
+    sta zp_ptr0_hi
+    jsr screen_put_string
+    :Cx16PrintAt(8, 20, cx16_character_race_label)
+    lda #8
+    sta zp_cursor_row
+    lda #26
+    sta zp_cursor_col
+    ldx zp_player_race
+    lda race_name_ptrs_lo,x
+    sta zp_ptr0
+    lda race_name_ptrs_hi,x
+    sta zp_ptr0_hi
+    jsr screen_put_string
+    :Cx16PrintAt(8, 42, cx16_character_class_label)
+    lda #8
+    sta zp_cursor_row
+    lda #49
+    sta zp_cursor_col
+    ldx zp_player_class
+    lda class_name_ptrs_lo,x
+    sta zp_ptr0
+    lda class_name_ptrs_hi,x
+    sta zp_ptr0_hi
+    jsr screen_put_string
+    :Cx16PrintAt(10, 20, cx16_character_level_label)
+    lda zp_player_lvl
+    jsr screen_put_decimal
+    :Cx16PrintAt(10, 42, cx16_character_depth_label)
+    lda zp_player_dlvl
+    jsr screen_put_decimal
+    :Cx16PrintAt(12, 20, cx16_character_hp_label)
+    lda zp_player_hp_lo
+    sta zp_temp0
+    lda zp_player_hp_hi
+    sta zp_temp1
+    jsr screen_put_decimal_16
+    lda #$2f
+    jsr screen_put_char
+    lda zp_player_mhp_lo
+    sta zp_temp0
+    lda zp_player_mhp_hi
+    sta zp_temp1
+    jsr screen_put_decimal_16
+    :Cx16PrintAt(12, 42, cx16_character_ac_label)
+    lda zp_player_ac
+    jsr screen_put_decimal
+    :Cx16PrintAt(14, 20, cx16_character_gold_label)
+    lda player_data + PL_GOLD_0
+    sta zp_temp0
+    lda player_data + PL_GOLD_1
+    sta zp_temp1
+    jsr screen_put_decimal_16
+    :Cx16PrintAt(20, 33, cx16_press_key_text)
     rts
 
 cx16_show_activity_stub:
-    jsr cx16_clear_message_row
-    :Cx16PrintAt(26, 23, cx16_activity_stub_text)
-    rts
+    lda #<cx16_activity_stub_text
+    sta zp_ptr0
+    lda #>cx16_activity_stub_text
+    sta zp_ptr0_hi
+    jmp msg_print
 
 cx16_show_item_stub:
-    jsr cx16_clear_message_row
-    :Cx16PrintAt(26, 23, cx16_item_stub_text)
-    rts
+    lda #<cx16_item_stub_text
+    sta zp_ptr0
+    lda #>cx16_item_stub_text
+    sta zp_ptr0_hi
+    jmp msg_print
 
 cx16_show_magic_stub:
-    jsr cx16_clear_message_row
-    :Cx16PrintAt(26, 25, cx16_magic_stub_text)
-    rts
+    lda #<cx16_magic_stub_text
+    sta zp_ptr0
+    lda #>cx16_magic_stub_text
+    sta zp_ptr0_hi
+    jmp msg_print
 
 cx16_show_storage_stub:
-    jsr cx16_clear_message_row
-    :Cx16PrintAt(26, 24, cx16_storage_stub_text)
-    rts
+    lda #<cx16_storage_stub_text
+    sta zp_ptr0
+    lda #>cx16_storage_stub_text
+    sta zp_ptr0_hi
+    jmp msg_print
 
 cx16_show_info_stub:
-    jsr cx16_clear_message_row
-    :Cx16PrintAt(26, 24, cx16_info_stub_text)
-    rts
+    lda #<cx16_info_stub_text
+    sta zp_ptr0
+    lda #>cx16_info_stub_text
+    sta zp_ptr0_hi
+    jmp msg_print
 
 cx16_show_wizard_stub:
-    jsr cx16_clear_message_row
-    :Cx16PrintAt(26, 26, cx16_wizard_stub_text)
+    lda #<cx16_wizard_stub_text
+    sta zp_ptr0
+    lda #>cx16_wizard_stub_text
+    sta zp_ptr0_hi
+    jmp msg_print
+
+cx16_draw_town_ui:
+    jsr status_draw
+    lda #CX16_TEXT_COLOR
+    jsr screen_set_color
+    :Cx16PrintAt(29, 14, cx16_game_help_text)
     rts
 
-cx16_clear_message_row:
-    lda #26
-    jsr screen_clear_row
+cx16_draw_dungeon_ui:
+    jsr status_draw
     lda #CX16_TEXT_COLOR
-    jmp screen_set_color
+    jsr screen_set_color
+    :Cx16PrintAt(29, 10, cx16_dungeon_help_text)
+    rts
+
+msg_print_char:
+    jmp screen_put_char
+
+cx16_restore_current_view:
+    lda cx16_state
+    cmp #CX16_STATE_DUNGEON_BOOTSTRAP
+    beq !dungeon+
+    cmp #CX16_STATE_NEW_GAME
+    beq !town+
+    jmp cx16_title_enter_menu
+!dungeon:
+    jmp cx16_draw_dungeon_bootstrap
+!town:
+    jmp cx16_new_game_draw
 
 #if !CX16_IMPORT_SHARED_GAME_LOOP
 generation_busy_tick:
@@ -1403,6 +1592,78 @@ cx16_dungeon_loaded_text:
 
 cx16_dungeon_help_text:
     :ScreenText("HJKL/YUBN OR NUMBERS MOVE. < RETURNS TO TOWN. SHIFT-Q TITLE.")
+    .byte 0
+
+cx16_press_key_text:
+    :ScreenText("PRESS ANY KEY")
+    .byte 0
+
+cx16_help_title_text:
+    :ScreenText("COMMANDS")
+    .byte 0
+
+cx16_help_move_text:
+    :ScreenText("MOVE: HJKL/YUBN OR 12346789")
+    .byte 0
+
+cx16_help_run_text:
+    :ScreenText("RUN: SHIFTED DIRECTION KEYS")
+    .byte 0
+
+cx16_help_feature_text:
+    :ScreenText("FEATURES: O)PEN C)LOSE S)EARCH R)EST")
+    .byte 0
+
+cx16_help_item_text:
+    :ScreenText("ITEMS: G)ET D)ROP I)NVENTORY E)QUIPMENT")
+    .byte 0
+
+cx16_help_views_text:
+    :ScreenText("VIEWS: ?)HELP C)HARACTER V)ERSION")
+    .byte 0
+
+cx16_version_title_text:
+    :ScreenText("MORIA8")
+    .byte 0
+
+cx16_version_policy_text:
+    :ScreenText("CX16 PORT IN PROGRESS")
+    .byte 0
+
+cx16_character_title_text:
+    :ScreenText("CHARACTER")
+    .byte 0
+
+cx16_character_name_label:
+    :ScreenText("NAME: ")
+    .byte 0
+
+cx16_character_race_label:
+    :ScreenText("RACE: ")
+    .byte 0
+
+cx16_character_class_label:
+    :ScreenText("CLASS: ")
+    .byte 0
+
+cx16_character_level_label:
+    :ScreenText("LEVEL: ")
+    .byte 0
+
+cx16_character_depth_label:
+    :ScreenText("DEPTH: ")
+    .byte 0
+
+cx16_character_hp_label:
+    :ScreenText("HP: ")
+    .byte 0
+
+cx16_character_ac_label:
+    :ScreenText("AC: ")
+    .byte 0
+
+cx16_character_gold_label:
+    :ScreenText("GOLD: ")
     .byte 0
 
 cx16_ascend_stub_text:
@@ -1915,7 +2176,8 @@ cx16_overlay_feature_command_entry:
     lda #>search_mode_on_str
     sta zp_ptr0_hi
 !print:
-    jmp msg_print
+    jsr msg_print
+    jmp cx16_after_feature_turn
 
 !bash:
     lda cx16_state
