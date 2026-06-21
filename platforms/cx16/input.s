@@ -4,7 +4,7 @@
 #import "../../core/input_tables.s"
 #import "../../core/input_run_cancel.s"
 
-.const hal_input_kbdbuf_count = $c6
+.const hal_input_kbdbuf_count = $a80a
 .const hal_input_modal_dismiss_uses_fast_key = false
 .const hal_input_followup_uses_fast_key = false
 .const hal_input_selectable_overlay_prepare_followup = false
@@ -49,7 +49,7 @@ input_wait_release:
     rts
 
 input_any_key_held:
-    lda #0
+    lda hal_input_kbdbuf_count
     rts
 
 input_run_cancel_check:

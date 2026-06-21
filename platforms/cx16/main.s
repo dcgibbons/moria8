@@ -93,6 +93,7 @@
 #import "../../core/rng.s"
 #import "../../core/numeric_format.s"
 #import "../../core/player_move_basic.s"
+#import "../../core/player_run_stop.s"
 #import "../../core/player_search.s"
 #import "../../core/town_map_basic.s"
 #import "../../core/tile_display.s"
@@ -656,6 +657,11 @@ cx16_try_dungeon_step_dir:
     bcs !done+
     jsr player_move_target_walkable
     bcc !done+
+    lda zp_run_dir
+    cmp #$ff
+    beq !not_running+
+    jsr cx16_save_run_lit_state
+!not_running:
     jsr player_search_mode_off
     jsr cx16_save_old_player
     lda cx16_view_x
@@ -692,6 +698,18 @@ cx16_try_dungeon_step_dir:
     clc
     rts
 
+cx16_save_run_lit_state:
+    ldx zp_player_y
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy zp_player_x
+    :MapRead_ptr0_y()
+    and #FLAG_LIT
+    sta run_was_lit
+    rts
+
 cx16_running_target_is_trap:
     lda zp_run_dir
     cmp #$ff
@@ -721,8 +739,10 @@ cx16_run_command:
     ldx zp_run_dir
     jsr cx16_try_dungeon_step_dir
     bcc !stop+
-    jsr input_run_cancel_check
+    jsr run_check_stop
     bcs !stop+
+    jsr input_run_cancel_check
+    bne !stop+
     jmp !loop-
 !single_step:
     txa

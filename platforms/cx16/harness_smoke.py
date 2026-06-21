@@ -297,6 +297,10 @@ def stuff_key(bench, petscii):
     bench.set_memory(KEYBUF_COUNT, 1)
 
 
+def set_key_held(bench, held):
+    bench.set_memory(KEYBUF_COUNT, 1 if held else 0)
+
+
 def set_inventory_slot0(bench, labels, item_id, qty=1, p1=0):
     bench.set_memory(require(labels, "inv_item_id"), item_id)
     bench.set_memory(require(labels, "inv_qty"), qty)
@@ -306,6 +310,22 @@ def set_inventory_slot0(bench, labels, item_id, qty=1, p1=0):
     bench.set_memory(require(labels, "inv_to_ac"), 0)
     bench.set_memory(require(labels, "inv_flags"), 0)
     bench.set_memory(require(labels, "inv_ego"), 0)
+
+
+def add_floor_item(bench, labels, x, y, item_id):
+    bench.set_memory(require(labels, "fi_add_x"), x)
+    bench.set_memory(require(labels, "fi_add_y"), y)
+    bench.set_memory(require(labels, "fi_add_id"), item_id)
+    bench.set_memory(require(labels, "fi_add_qty"), 1)
+    bench.set_memory(require(labels, "fi_add_p1"), 0)
+    bench.set_memory(require(labels, "fi_add_to_hit"), 0)
+    bench.set_memory(require(labels, "fi_add_to_dam"), 0)
+    bench.set_memory(require(labels, "fi_add_to_ac"), 0)
+    bench.set_memory(require(labels, "fi_add_flags"), 0)
+    bench.set_memory(require(labels, "fi_add_ego"), 0)
+    bench.run(require(labels, "floor_item_add"))
+    if not (bench.get_status() & STATUS_CARRY):
+        raise AssertionError("floor_item_add failed")
 
 
 def assert_eq(actual, expected, label):
@@ -458,6 +478,15 @@ def key_for_delta(dx, dy):
 
 def stuff_direction_to_target(bench, player_x, player_y, target_x, target_y):
     stuff_key(bench, key_for_delta(target_x - player_x, target_y - player_y))
+
+
+def build_horizontal_run_corridor(bench, labels, x0=20, y=12, length=12):
+    for x in range(x0 - 1, x0 + length + 1):
+        set_map_tile(bench, labels, x, y - 1, TILE_WALL_H | DUNGEON_FLAGS)
+        set_map_tile(bench, labels, x, y, TILE_WALL_H | DUNGEON_FLAGS)
+        set_map_tile(bench, labels, x, y + 1, TILE_WALL_H | DUNGEON_FLAGS)
+    for x in range(x0, x0 + length):
+        set_map_tile(bench, labels, x, y, TILE_FLOOR | DUNGEON_FLAGS)
 
 
 def assert_banked_ram_isolation(bench):
@@ -969,20 +998,8 @@ def main():
         assert_screen_cell(bench, 1, 0, screen_code("*"), 2, "disarm command does not full-clear")
 
         set_player_position(bench, labels, floor_x, floor_y)
-        bench.set_memory(require(labels, "fi_add_x"), floor_x)
-        bench.set_memory(require(labels, "fi_add_y"), floor_y)
-        bench.set_memory(require(labels, "fi_add_id"), ITEM_PICK)
-        bench.set_memory(require(labels, "fi_add_qty"), 1)
-        bench.set_memory(require(labels, "fi_add_p1"), 0)
-        bench.set_memory(require(labels, "fi_add_to_hit"), 0)
-        bench.set_memory(require(labels, "fi_add_to_dam"), 0)
-        bench.set_memory(require(labels, "fi_add_to_ac"), 0)
-        bench.set_memory(require(labels, "fi_add_flags"), 0)
-        bench.set_memory(require(labels, "fi_add_ego"), 0)
         item_count_before_pickup = bench.get_memory(require(labels, "zp_item_count"))
-        bench.run(require(labels, "floor_item_add"))
-        if not (bench.get_status() & STATUS_CARRY):
-            raise AssertionError("floor_item_add failed for pickup dispatch test")
+        add_floor_item(bench, labels, floor_x, floor_y, ITEM_PICK)
         screen_put_cell_raw(bench, 1, 0, screen_code("*"), 2)
         bench.set_a(CMD_PICKUP)
         bench.run(require(labels, "cx16_dispatch_game_command"))
@@ -1165,6 +1182,29 @@ def main():
         if (run_x, run_y) == (entry_x, entry_y):
             raise AssertionError("run command did not move the player")
         assert_screen_cell(bench, 1, 0, screen_code("*"), 2, "dungeon running does not full-clear")
+
+        build_horizontal_run_corridor(bench, labels)
+        add_floor_item(bench, labels, 22, 12, ITEM_PICK)
+        set_player_position(bench, labels, 20, 12)
+        screen_put_cell_raw(bench, 1, 0, screen_code("*"), 2)
+        bench.set_a(CMD_RUN_E)
+        bench.run(require(labels, "cx16_dispatch_game_command"))
+        assert_player_position(bench, labels, 22, 12, "run command stops on floor item")
+        assert_screen_contains_cell(bench, SC_PLAYER, TEXT_COLOR, "run item stop keeps player glyph")
+        assert_screen_cell(bench, 1, 0, screen_code("*"), 2, "dungeon run item stop does not full-clear")
+
+        build_horizontal_run_corridor(bench, labels)
+        set_player_position(bench, labels, 20, 12)
+        bench.run(require(labels, "input_run_cancel_reset"))
+        set_key_held(bench, True)
+        screen_put_cell_raw(bench, 1, 0, screen_code("*"), 2)
+        bench.set_a(CMD_RUN_E)
+        bench.run(require(labels, "cx16_dispatch_game_command"))
+        cancel_x = bench.get_memory(require(labels, "zp_player_x"))
+        if cancel_x > 22:
+            raise AssertionError(f"run cancel ignored held key; player reached x={cancel_x}")
+        set_key_held(bench, False)
+        assert_screen_cell(bench, 1, 0, screen_code("*"), 2, "dungeon run cancel does not full-clear")
 
         set_player_position(bench, labels, floor_x, floor_y)
         bench.run(require(labels, "cx16_try_stairs_up"))
