@@ -36,6 +36,8 @@
 .const MAP_BASE = $4000
 .const C128 = false
 .const PLUS4 = false
+.const C128_REAL_BOOT_DIAG = 0
+.const hal_memory_map_row_helper_enabled = 0
 .const CX16_IMPORT_SHARED_GAME_LOOP = cmdLineVars.containsKey("CX16_IMPORT_SHARED_GAME_LOOP")
 #if CX16_IMPORT_SHARED_GAME_LOOP
 .const DUNGEON_GEN_BUSY = 1
@@ -61,6 +63,9 @@
 #import "tier_storage.s"
 #import "dungeon_module.s"
 #import "map_render.s"
+#if !CX16_IMPORT_SHARED_GAME_LOOP
+#import "../../core/dungeon_los.s"
+#endif
 #import "../../core/input_ui_helpers.s"
 #if CX16_IMPORT_SHARED_GAME_LOOP
 #import "shared_imports.s"
@@ -314,7 +319,7 @@ cx16_try_dungeon_move:
     sta cx16_old_view_y
     jsr player_move_commit_target
     jsr cx16_sync_local_player_position
-    jsr cx16_update_visibility
+    jsr update_visibility
     jsr cx16_update_dungeon_view
     lda cx16_view_x
     cmp cx16_old_view_x
@@ -443,7 +448,7 @@ cx16_enter_dungeon_bootstrap:
     lda #CX16_BOOTSTRAP_LIGHT_RADIUS
     sta zp_light_radius
     sta player_data + PL_LIGHT_RAD
-    jsr cx16_update_visibility
+    jsr update_visibility
     lda #CX16_STATE_DUNGEON_BOOTSTRAP
     sta cx16_state
     lda #1
@@ -550,8 +555,6 @@ cx16_clear_message_row:
 
 #if !CX16_IMPORT_SHARED_GAME_LOOP
 generation_busy_tick:
-tramp_assign_special_room:
-tramp_vault_seal_entrance:
     rts
 #endif
 
@@ -731,6 +734,15 @@ cx16_dungeon_module_entry:
     rts
 
 #import "../../core/rng.s"
+#if !CX16_IMPORT_SHARED_GAME_LOOP
+tramp_assign_special_room:
+    jmp assign_special_room
+
+tramp_vault_seal_entrance:
+    jmp vault_seal_entrance
+
+#endif
+#import "../../core/special_room_gen.s"
 #import "../../core/dungeon_gen.s"
 
 cx16_dungeon_module_end:
