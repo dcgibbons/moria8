@@ -22,6 +22,7 @@ bash_dir_idx:   .byte 0     // Direction index 0-7
 // Clobbers: everything
 // ============================================================
 bash_command:
+#if !HAL_PLATFORM_NO_FEAR_EFFECTS
     // Fear check
     lda eff_fear_timer
     beq !bash_not_afraid+
@@ -30,6 +31,7 @@ bash_command:
     clc
     rts
 !bash_not_afraid:
+#endif
 
     // Get direction
     jsr get_direction_target
@@ -97,12 +99,14 @@ bash_command:
     :MapRead_ptr0_y()
     sta bash_save_tile
 
+#if !HAL_PLATFORM_NO_MONSTER_TARGETS
     // Check for monster at target
     lda df_target_x
     ldy df_target_y
     jsr monster_find_at
     bcc !bash_no_monster+
     jmp bash_monster
+#endif
 !bash_no_monster:
 
     // Check tile type
@@ -191,6 +195,7 @@ bash_door:
     sec                         // Turn consumed
     rts
 
+#if !HAL_PLATFORM_NO_MONSTER_TARGETS
 // ============================================================
 // bash_monster — Bash a monster with shield
 // Input: X = monster slot from monster_find_at
@@ -443,6 +448,7 @@ bash_stun_check:
     jsr huff_append_combat
     jsr cmb_term_and_print
     rts
+#endif
 
 // ============================================================
 // bash_off_balance — Check if player loses balance after bash

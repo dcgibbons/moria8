@@ -111,6 +111,7 @@ class X16Bench:
             bufsize=1,
             cwd=cwd,
         )
+        self.last_command = "startup"
         self.wait_ready()
 
     def close(self):
@@ -135,7 +136,7 @@ class X16Bench:
             if self.proc.poll() is not None:
                 raise RuntimeError(f"x16emu exited with status {self.proc.returncode}")
             time.sleep(0.01)
-        raise TimeoutError("timed out waiting for x16emu output")
+        raise TimeoutError(f"timed out waiting for x16emu output after {self.last_command}")
 
     def wait_ready(self, timeout=5):
         deadline = time.monotonic() + timeout
@@ -148,6 +149,7 @@ class X16Bench:
         raise TimeoutError("timed out waiting for RDY")
 
     def command(self, text, wait=True):
+        self.last_command = text
         self.proc.stdin.write(text + "\n")
         self.proc.stdin.flush()
         if wait:
@@ -200,10 +202,13 @@ def require(labels, name):
 
 
 def map_tile_at(bench, labels, x, y):
+    return bench.get_memory(map_row_addr(bench, labels, y) + x)
+
+
+def map_row_addr(bench, labels, y):
     row_lo = require(labels, "map_row_lo")
     row_hi = require(labels, "map_row_hi")
-    row_addr = bench.get_memory(row_lo + y) | (bench.get_memory(row_hi + y) << 8)
-    return bench.get_memory(row_addr + x)
+    return bench.get_memory(row_lo + y) | (bench.get_memory(row_hi + y) << 8)
 
 
 def screen_code(ch):
@@ -290,6 +295,10 @@ def assert_player_position(bench, labels, x, y, label):
 
 def assert_map_tile(bench, labels, x, y, expected, label):
     assert_eq(map_tile_at(bench, labels, x, y), expected, label)
+
+
+def set_map_tile(bench, labels, x, y, value):
+    bench.set_memory(map_row_addr(bench, labels, y) + x, value)
 
 
 def assert_map_tile_type(bench, labels, x, y, expected_type, label):
@@ -729,6 +738,28 @@ def main():
         bench.run(require(labels, "cx16_dispatch_game_command"))
         if assert_screen_text_matches(bench, 26, 23, "SEARCH/REST/LOOK NOT WIRED YET."):
             raise AssertionError("search command still rendered the activity stub")
+
+        set_player_position(bench, labels, door_px, door_py)
+        bench.set_memory(require(labels, "df_target_x"), door_x)
+        bench.set_memory(require(labels, "df_target_y"), door_y)
+        set_zp_pointer(bench, labels, "zp_ptr0", map_row_addr(bench, labels, door_y))
+        bench.set_memory(require(labels, "bash_save_tile"), TILE_DOOR_CLOSED | DUNGEON_FLAGS)
+        bench.set_memory(require(labels, "zp_player_str"), 18)
+        bench.set_memory(require(labels, "zp_player_dex"), 255)
+        bench.run(require(labels, "msg_clear"))
+        bench.run(require(labels, "bash_door"))
+        if not (bench.get_status() & STATUS_CARRY):
+            raise AssertionError("bash_door did not consume a turn")
+
+        set_player_position(bench, labels, door_px, door_py)
+        set_map_tile(bench, labels, door_x, door_y, TILE_RUBBLE | DUNGEON_FLAGS)
+        bench.set_memory(require(labels, "df_target_x"), door_x)
+        bench.set_memory(require(labels, "df_target_y"), door_y)
+        bench.run(require(labels, "msg_clear"))
+        bench.run(require(labels, "player_tunnel_resolved_target"))
+        if not (bench.get_status() & STATUS_CARRY):
+            raise AssertionError("tunnel command did not consume a no-tool rubble turn")
+        assert_map_tile_type(bench, labels, door_x, door_y, TILE_RUBBLE, "no-tool tunnel leaves rubble intact")
 
         set_player_position(bench, labels, entry_x, entry_y)
         bench.run(require(labels, "cx16_draw_dungeon_bootstrap"))

@@ -164,4 +164,3 @@ old_view_y: .byte 0
 old_player_x: .byte 0
 old_player_y: .byte 0
 disk_setup_done: .byte 0
-tun_dig_ability: .byte 0

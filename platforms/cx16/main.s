@@ -75,6 +75,8 @@
 #import "../../core/ui_messages.s"
 #import "../../core/huffman.s"
 #import "../../core/dungeon_feature_actions.s"
+#import "../../core/tunnel.s"
+#import "../../core/bash.s"
 #if CX16_IMPORT_SHARED_GAME_LOOP
 #import "shared_imports.s"
 #endif
@@ -242,6 +244,10 @@ cx16_dispatch_game_command:
     beq !open+
     cmp #CMD_CLOSE
     beq !close+
+    cmp #CMD_BASH
+    beq !bash+
+    cmp #CMD_TUNNEL
+    beq !tunnel+
     cmp #CMD_REST
     beq !activity+
     cmp #CMD_LOOK
@@ -289,6 +295,10 @@ cx16_dispatch_game_command:
     jmp cx16_cmd_open
 !close:
     jmp cx16_cmd_close
+!bash:
+    jmp cx16_cmd_bash
+!tunnel:
+    jmp cx16_cmd_tunnel
 !storage:
     jmp cx16_show_storage_stub
 !magic:
@@ -430,6 +440,32 @@ cx16_cmd_search:
     jsr msg_clear
     jsr do_search
     jmp cx16_after_feature_turn
+
+cx16_cmd_bash:
+    lda cx16_state
+    cmp #CX16_STATE_DUNGEON_BOOTSTRAP
+    beq !dungeon+
+    jmp cx16_show_item_stub
+!dungeon:
+    jsr msg_clear
+    jsr bash_command
+    bcc !done+
+    jmp cx16_after_feature_turn
+!done:
+    rts
+
+cx16_cmd_tunnel:
+    lda cx16_state
+    cmp #CX16_STATE_DUNGEON_BOOTSTRAP
+    beq !dungeon+
+    jmp cx16_show_item_stub
+!dungeon:
+    jsr msg_clear
+    jsr player_tunnel
+    bcc !done+
+    jmp cx16_after_feature_turn
+!done:
+    rts
 
 cx16_after_feature_turn:
     jsr cx16_sync_shared_player_position
@@ -660,6 +696,11 @@ cx16_clear_message_row:
 generation_busy_tick:
     rts
 #endif
+
+tramp_dig_ability:
+    lda #0
+    sta tun_dig_ability
+    rts
 
 c128_town_dump_mark:
     rts

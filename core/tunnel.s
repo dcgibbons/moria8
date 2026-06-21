@@ -19,6 +19,7 @@ tun_dig_ability: .byte 0    // Calculated digging ability
 // Clobbers: everything
 // ============================================================
 player_tunnel:
+#if !HAL_PLATFORM_NO_FEAR_EFFECTS
     // Fear check
     lda eff_fear_timer
     beq !tun_not_afraid+
@@ -27,6 +28,7 @@ player_tunnel:
     clc
     rts
 !tun_not_afraid:
+#endif
 
     // Get direction
     jsr get_direction_target
@@ -108,6 +110,7 @@ player_tunnel_resolved_target:
     :MapRead_ptr0_y()
     sta tun_save_tile
 
+#if !HAL_PLATFORM_NO_MONSTER_TARGETS
     // Check for monster at target → attack instead
     lda df_target_x
     ldy df_target_y
@@ -125,6 +128,7 @@ player_tunnel_resolved_target:
     sta zp_ptr0
     lda map_row_hi,x
     sta zp_ptr0_hi
+#endif
 
     // Boundary check: edge tiles are permanent rock
     lda df_target_x
@@ -312,6 +316,7 @@ player_tunnel_resolved_target:
     and #FLAG_HAS_ITEM
     beq !tun_no_treasure+
 
+#if !HAL_PLATFORM_NO_TUNNEL_GOLD
     // Spawn gold from treasure vein
     jsr tunnel_spawn_gold
 
@@ -320,6 +325,7 @@ player_tunnel_resolved_target:
     lda #SFX_PICKUP
     jsr hal_sound_play
     jmp !tun_success_done+
+#endif
 
 !tun_no_treasure:
     ldx #HSTR_TUN_FINISHED
