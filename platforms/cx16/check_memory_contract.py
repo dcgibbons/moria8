@@ -37,6 +37,8 @@ CX16_DUNGEON_MODULE_BANK = 8
 CX16_DUNGEON_MODULE_LOAD_BASE = CX16_BANKED_RAM_BASE
 CX16_DUNGEON_MODULE_LOAD_END = CX16_BANKED_RAM_END
 CX16_DUNGEON_MODULE_ENTRY = CX16_DUNGEON_MODULE_LOAD_BASE
+CX16_ITEM_CATALOG_BANK_BASE = 9
+CX16_ITEM_CATALOG_BANK_END = 10
 
 
 class ContractError(Exception):
@@ -137,6 +139,7 @@ def emit_report(product, shared_probe, tiers, modules):
     print(f"  dungeon module bank: {CX16_DUNGEON_MODULE_BANK}")
     for module_load, module_end in modules:
         print(f"  dungeon module PRG: {fmt_span(module_load, module_end)} ({span_size(module_load, module_end)} bytes)")
+    print(f"  item catalog banks: {CX16_ITEM_CATALOG_BANK_BASE}-{CX16_ITEM_CATALOG_BANK_END}")
     print(f"  shared probe image: {fmt_span(probe_load, probe_end)} ({span_size(probe_load, probe_end)} bytes)")
     print(f"  shared probe program_end: {fmt_addr(probe_program_end)}")
     print(f"  shared probe over fixed-code limit: {probe_over_fixed_limit} bytes")
@@ -175,6 +178,8 @@ def check_contract_symbols(labels):
         "cx16_contract_dungeon_module_load_base": CX16_DUNGEON_MODULE_LOAD_BASE,
         "cx16_contract_dungeon_module_load_end": CX16_DUNGEON_MODULE_LOAD_END,
         "cx16_contract_dungeon_module_entry": CX16_DUNGEON_MODULE_ENTRY,
+        "cx16_contract_item_catalog_bank_base": CX16_ITEM_CATALOG_BANK_BASE,
+        "cx16_contract_item_catalog_bank_end": CX16_ITEM_CATALOG_BANK_END,
     }
     for name, value in expected.items():
         expect_addr(require(labels, name), value, name)
@@ -221,6 +226,14 @@ def check_contract_symbols(labels):
     expect_true(
         require(labels, "cx16_contract_dungeon_module_load_end") == require(labels, "cx16_contract_banked_ram_end"),
         "dungeon module load end must match banked RAM end",
+    )
+    expect_true(
+        require(labels, "cx16_contract_item_catalog_bank_base") > require(labels, "cx16_contract_dungeon_module_bank"),
+        "item catalog banks must follow dungeon module bank",
+    )
+    expect_true(
+        require(labels, "cx16_contract_item_catalog_bank_end") >= require(labels, "cx16_contract_item_catalog_bank_base"),
+        "item catalog bank range must be non-empty",
     )
 
 

@@ -34,6 +34,11 @@
 .const CX16_BANKED_RAM_BASE = $a000
 .const CX16_BANKED_RAM_END  = $bfff
 .const CX16_BANKED_RAM_SIZE = CX16_BANKED_RAM_END - CX16_BANKED_RAM_BASE + 1
+.const CX16_TIER_BANK_BASE = 4
+.const CX16_TIER_BANK_END = CX16_TIER_BANK_BASE + 3
+.const CX16_DUNGEON_MODULE_BANK = CX16_TIER_BANK_END + 1
+.const CX16_ITEM_CATALOG_BANK_BASE = CX16_DUNGEON_MODULE_BANK + 1
+.const CX16_ITEM_CATALOG_BANK_END = CX16_ITEM_CATALOG_BANK_BASE + 1
 .const CX16_FIXED_LIVE_MAP_BASE = MAP_BASE
 .const CX16_FIXED_LIVE_MAP_END  = MAP_BASE + (hal_layout_map_cols * hal_layout_map_rows) - 1
 .const BANKED_DATA_BASE = CX16_BANKED_RAM_BASE
@@ -74,6 +79,11 @@
 .assert "CX16 bank window starts after fixed world", CX16_BANKED_RAM_BASE > CX16_FIXED_WORLD_END, true
 .assert "CX16 shared banked-data alias matches bank window", BANKED_DATA_BASE, CX16_BANKED_RAM_BASE
 .assert "CX16 C128 DB alias maps to bank window", BANK1_DB_BASE, CX16_BANKED_RAM_BASE
+.assert "CX16 tier banks do not use default bank", CX16_TIER_BANK_BASE > CX16_RAM_BANK_DEFAULT, true
+.assert "CX16 tier bank span is four banks", CX16_TIER_BANK_END - CX16_TIER_BANK_BASE + 1, 4
+.assert "CX16 dungeon module bank follows tier banks", CX16_DUNGEON_MODULE_BANK > CX16_TIER_BANK_END, true
+.assert "CX16 item catalog banks follow dungeon module", CX16_ITEM_CATALOG_BANK_BASE > CX16_DUNGEON_MODULE_BANK, true
+.assert "CX16 item catalog bank span is two banks", CX16_ITEM_CATALOG_BANK_END - CX16_ITEM_CATALOG_BANK_BASE + 1, 2
 
 .macro BankOutBasic() {}
 .macro BankInBasic() {}

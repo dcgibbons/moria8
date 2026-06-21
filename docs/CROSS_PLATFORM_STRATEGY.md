@@ -196,7 +196,7 @@ Current shared-gameplay status:
   resulting banked payload byte-for-byte against the generated PRG, loads
   `DUNGEON.GEN` through the product dungeon-module loader into RAM bank 8,
   verifies the module payload byte-for-byte against the generated PRG, checks
-  the `$A000` entry ABI tuple, confirms bank 9 remains untouched, validates the
+  the `$A000` entry ABI tuple, confirms an unowned guard bank remains untouched, validates the
   generated shared-map tile bytes for rooms, connectors, doors, rubble, quartz,
   trap, and stairs, and checks the visible stairs-down dungeon bootstrap map,
   viewport rendering, movement, blocked-wall behavior, and upstairs return to
@@ -210,10 +210,12 @@ Current shared-gameplay status:
   Creature tiers currently reserve RAM banks 4-7, with each `MONSTER.DB.N`
   payload loaded at `$A000` in its selected bank. The executable dungeon module
   currently reserves RAM bank 8 as `DUNGEON.GEN`, loaded at `$A000` and entered
-  at `$A000`; the CX16 wrapper calls the common `core/dungeon_gen.s` generator
-  after seeding the shared RNG. Future dungeon work must preserve that load
-  address, entry point, caller-bank restoration, fixed-RAM map ownership, and
-  one-bank fit instead of adding CX16-specific map rules.
+  at `$A000`. Item catalog/data work reserves RAM banks 9-10 for immutable
+  item tables and item text payloads. The CX16 wrapper calls the common
+  `core/dungeon_gen.s` generator after seeding the shared RNG. Future dungeon
+  work must preserve that load address, entry point, caller-bank restoration,
+  fixed-RAM map ownership, and one-bank fit instead of adding CX16-specific map
+  rules.
   Do not enable the guarded shared loop in the normal CX16 PRG until the code,
   map, floor-item table, creature scratch, generation queue, and bank-window
   database ownership are all asserted in one runtime-safe placement.

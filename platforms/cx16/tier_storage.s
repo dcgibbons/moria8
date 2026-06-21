@@ -3,8 +3,6 @@
 
 #import "creature_data/creature_tiers.s"
 
-.const CX16_TIER_BANK_BASE = 4
-.const CX16_TIER_BANK_END = CX16_TIER_BANK_BASE + 3
 .const CX16_TIER_LOAD_BASE = CX16_BANKED_RAM_BASE
 .const CX16_TIER_LOAD_END = CX16_TIER_LOAD_BASE + TIER4_SIZE - 1
 

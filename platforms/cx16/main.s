@@ -110,6 +110,8 @@
 .label cx16_contract_dungeon_module_load_base = CX16_DUNGEON_MODULE_LOAD_BASE
 .label cx16_contract_dungeon_module_load_end = CX16_DUNGEON_MODULE_LOAD_END
 .label cx16_contract_dungeon_module_entry = CX16_DUNGEON_MODULE_ENTRY
+.label cx16_contract_item_catalog_bank_base = CX16_ITEM_CATALOG_BANK_BASE
+.label cx16_contract_item_catalog_bank_end = CX16_ITEM_CATALOG_BANK_END
 
 cx16_entry:
     sei

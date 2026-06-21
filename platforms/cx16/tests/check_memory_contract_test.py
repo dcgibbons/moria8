@@ -42,6 +42,8 @@ def base_labels(program_end):
         "cx16_contract_dungeon_module_load_base": contract.CX16_DUNGEON_MODULE_LOAD_BASE,
         "cx16_contract_dungeon_module_load_end": contract.CX16_DUNGEON_MODULE_LOAD_END,
         "cx16_contract_dungeon_module_entry": contract.CX16_DUNGEON_MODULE_ENTRY,
+        "cx16_contract_item_catalog_bank_base": contract.CX16_ITEM_CATALOG_BANK_BASE,
+        "cx16_contract_item_catalog_bank_end": contract.CX16_ITEM_CATALOG_BANK_END,
     }
 
 
@@ -202,6 +204,7 @@ def test_report_contains_actionable_memory_lines():
         "tier 1 PRG",
         "dungeon module bank",
         "dungeon module PRG",
+        "item catalog banks",
         "shared probe over fixed-code limit",
         "shared probe overlaps VERA I/O",
         "shared probe overlaps bank window",
