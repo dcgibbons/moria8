@@ -26,6 +26,7 @@ TILE_STAIRS_DN = 0x90
 CMD_MOVE_W = 0x03
 CMD_MOVE_S = 0x02
 CMD_MOVE_E = 0x04
+CMD_MOVE_NW = 0x05
 CMD_REST = 0x0B
 CMD_SEARCH = 0x0C
 CMD_OPEN = 0x0D
@@ -206,6 +207,12 @@ def screen_char_at(bench, row, col):
 def screen_attr_at(bench, row, col):
     vera_set_addr(bench, screen_cell_addr(row, col) + 1)
     return bench.get_memory(VERA_DATA0)
+
+
+def screen_put_cell_raw(bench, row, col, char_code, attr):
+    vera_set_addr(bench, screen_cell_addr(row, col))
+    bench.set_memory(VERA_DATA0, char_code)
+    bench.set_memory(VERA_DATA0, attr)
 
 
 def assert_eq(actual, expected, label):
@@ -497,30 +504,51 @@ def main():
         assert_eq(bench.get_memory(require(labels, "cx16_loaded_tier_bank")), 4, "loaded tier bank")
         assert_eq(bench.get_memory(require(labels, "cx16_dungeon_depth")), 1, "dungeon bootstrap depth")
         assert_eq(bench.get_memory(require(labels, "zp_player_dlvl")), 1, "shared dungeon depth")
+        assert_player_position(bench, labels, 24, 13, "dungeon entry player position")
         assert_screen_text(bench, 0, 31, "DUNGEON LEVEL 1", "dungeon title")
-        assert_screen_text(bench, 4, 24, "MONSTER.DB.1 LOADED", "dungeon tier loaded")
-        assert_screen_text(bench, 6, 24, "TIER 1 RESIDENT IN RAM BANK 4", "dungeon tier bank")
-        assert_screen_text(
-            bench,
-            8,
-            17,
-            "DUNGEON GENERATION AND RENDERING ARE NEXT.",
-            "dungeon runtime message",
-        )
+        assert_screen_cell(bench, 13, 25, SC_PLAYER, TEXT_COLOR, "dungeon entry player")
+        assert_screen_cell(bench, 13, 24, screen_code("."), 11, "dungeon room floor")
+        assert_screen_cell(bench, 13, 26, screen_code("."), 11, "dungeon adjacent floor")
+        assert_screen_cell(bench, 2, 1, screen_code(" "), 0, "unvisited dungeon rock")
+        assert_screen_cell(bench, 18, 78, screen_code(">"), TEXT_COLOR, "dungeon down stairs")
+        assert_screen_text(bench, 25, 24, "MONSTER.DB.1 LOADED", "dungeon tier loaded")
         assert_screen_text(
             bench,
             26,
-            13,
-            "SHIFT-Q RETURNS TO TITLE. FULL DUNGEON LOOP NOT WIRED YET.",
+            10,
+            "HJKL/YUBN OR NUMBERS MOVE. < RETURNS TO TOWN. SHIFT-Q TITLE.",
             "dungeon help",
         )
 
-        bench.set_memory(require(labels, "zp_player_x"), 31)
-        bench.set_memory(require(labels, "zp_player_y"), 18)
-        bench.run(require(labels, "town_basic_check_stairs_at_player"))
-        assert_eq(bench.get_a(), 0, "non-stairs probe")
+        screen_put_cell_raw(bench, 1, 0, screen_code("*"), 2)
+        bench.set_a(CMD_MOVE_E)
+        bench.run(require(labels, "cx16_try_move_command"))
+        assert_player_position(bench, labels, 25, 13, "dungeon east move")
+        assert_screen_cell(bench, 13, 26, SC_PLAYER, TEXT_COLOR, "dungeon moved player")
+        assert_screen_cell(bench, 1, 0, screen_code("*"), 2, "dungeon movement does not full-clear")
+
+        set_player_position(bench, labels, 39, 13)
+        bench.run(require(labels, "cx16_draw_dungeon_bootstrap"))
+        screen_put_cell_raw(bench, 1, 0, screen_code("*"), 2)
+        bench.set_a(CMD_MOVE_E)
+        bench.run(require(labels, "cx16_dispatch_game_command"))
+        assert_player_position(bench, labels, 40, 13, "dungeon scrolling move through dispatcher")
+        assert_screen_cell(bench, 1, 0, screen_code("*"), 2, "dungeon scrolling movement does not full-clear")
+
+        set_player_position(bench, labels, 12, 8)
+        bench.set_a(CMD_MOVE_NW)
+        bench.run(require(labels, "cx16_try_move_command"))
+        assert_player_position(bench, labels, 12, 8, "dungeon blocked wall move")
+
+        set_player_position(bench, labels, 31, 18)
         bench.run(require(labels, "cx16_try_stairs_up"))
         assert_screen_text(bench, 26, 28, "YOU SEE NO STAIRS HERE.", "no stairs message")
+
+        set_player_position(bench, labels, 24, 13)
+        bench.run(require(labels, "cx16_try_stairs_up"))
+        assert_eq(bench.get_memory(require(labels, "cx16_state")), 1, "returned to town state")
+        assert_eq(bench.get_memory(require(labels, "zp_player_dlvl")), 0, "returned to town depth")
+        assert_screen_text(bench, 0, 33, "TOWN", "town title after upstairs")
 
         for command, col, text, label in (
             (CMD_REST, 23, "SEARCH/REST/LOOK NOT WIRED YET.", "rest command"),

@@ -131,9 +131,10 @@ Current assumptions:
 * CX16 bootstrap town interactions use the dependency-light store-door and
   stairs probes in `core/town_interactions_basic.s`; full store UI remains
   deferred. Stairs-down now enters a visible dungeon bootstrap milestone: it
-  loads `MONSTER.DB.1` into CX16 RAM bank 4, records depth/tier state, and draws
-  a dungeon status screen while full dungeon generation and rendering remain
-  deferred.
+  loads `MONSTER.DB.1` into CX16 RAM bank 4, records depth/tier state, generates
+  a small shared-format dungeon map in fixed RAM, and renders a 78x22 VERA text
+  viewport from the shared tile byte to screen-code/color mapping. This is still
+  a bootstrap dungeon map, not the full shared `dungeon_gen.s` overlay.
   Store doors render as numbered entrances from the shared store-door metadata.
   Help, version, and character-info commands render CX16 bootstrap status text.
   Other mapped but not-yet-implemented town commands acknowledge by category
@@ -175,7 +176,8 @@ Current shared-gameplay status:
   banks without leaving the caller on the wrong bank. It also loads
   `MONSTER.DB.1` through the product tier loader into RAM bank 4, verifies the
   resulting banked payload byte-for-byte against the generated PRG, and checks
-  the visible stairs-down dungeon bootstrap state/screen.
+  the visible stairs-down dungeon bootstrap map, viewport rendering, movement,
+  blocked-wall behavior, and upstairs return to town.
 * The probe is not a runtime-safe memory placement. The linked image currently
   crosses the fixed-RAM map/scratch plan and the CX16 `$A000-$BFFF` banked-RAM
   window.

@@ -35,6 +35,7 @@
 #import "config.s"
 #import "memory.s"
 #import "../../core/dungeon_data.s"
+.const CX16_DUNGEON_ROOM_FLAGS = FLAG_LIT | FLAG_VISITED
 #import "../../core/player_state.s"
 #import "../../core/player_move_basic.s"
 #import "../../core/town_map_basic.s"
@@ -265,6 +266,10 @@ cx16_try_move_command:
     sec
     sbc #CMD_MOVE_N
     tax
+    lda cx16_state
+    cmp #CX16_STATE_DUNGEON_BOOTSTRAP
+    beq cx16_try_dungeon_move
+    txa
     jsr player_move_compute_town_target
     bcc !done+
     jsr player_move_target_walkable
@@ -277,6 +282,32 @@ cx16_try_move_command:
 !done:
     rts
 
+cx16_try_dungeon_move:
+    jsr player_move_compute_target
+    bcc !done+
+    jsr player_move_target_walkable
+    bcc !done+
+    jsr cx16_save_old_player
+    lda cx16_view_x
+    sta cx16_old_view_x
+    lda cx16_view_y
+    sta cx16_old_view_y
+    jsr player_move_commit_target
+    jsr cx16_sync_local_player_position
+    jsr cx16_update_dungeon_view
+    lda cx16_view_x
+    cmp cx16_old_view_x
+    bne !full+
+    lda cx16_view_y
+    cmp cx16_old_view_y
+    bne !full+
+    jsr cx16_dungeon_player_redraw
+    jmp !done+
+!full:
+    jsr cx16_refresh_dungeon_view
+!done:
+    rts
+
 cx16_check_town_entry:
     jsr town_basic_check_store_door
     bcc !done+
@@ -286,20 +317,40 @@ cx16_check_town_entry:
     rts
 
 cx16_try_stairs_down:
+    lda cx16_state
+    cmp #CX16_STATE_DUNGEON_BOOTSTRAP
+    beq !dungeon+
     jsr town_basic_check_stairs_at_player
     cmp #9
     beq !descend+
     jmp cx16_show_no_stairs
 !descend:
     jmp cx16_enter_dungeon_bootstrap
+!dungeon:
+    jsr cx16_current_tile_type
+    cmp #9
+    beq !deeper+
+    jmp cx16_show_no_stairs
+!deeper:
+    jmp cx16_show_deeper_stub
 
 cx16_try_stairs_up:
+    lda cx16_state
+    cmp #CX16_STATE_DUNGEON_BOOTSTRAP
+    beq !dungeon+
     jsr town_basic_check_stairs_at_player
     cmp #10
     beq !ascend+
     jmp cx16_show_no_stairs
 !ascend:
     jmp cx16_show_ascend_stub
+!dungeon:
+    jsr cx16_current_tile_type
+    cmp #10
+    beq !ascend_town+
+    jmp cx16_show_no_stairs
+!ascend_town:
+    jmp cx16_return_to_town
 
 cx16_seed_shared_town_player:
     lda #0
@@ -370,17 +421,42 @@ cx16_enter_dungeon_bootstrap:
     sta zp_player_dlvl
     lda #CX16_TIER_BANK_BASE
     sta cx16_loaded_tier_bank
+    jsr cx16_generate_dungeon_bootstrap
     jmp cx16_draw_dungeon_bootstrap
 
 cx16_draw_dungeon_bootstrap:
     lda #CX16_TEXT_COLOR
     jsr screen_set_color
     jsr screen_clear
+    jmp cx16_refresh_dungeon_view
+
+cx16_refresh_dungeon_view:
+    lda #CX16_TEXT_COLOR
+    jsr screen_set_color
+    jsr cx16_update_dungeon_view
+    jsr cx16_render_dungeon_viewport
     :Cx16PrintAt(0, 31, cx16_dungeon_title_text)
-    :Cx16PrintAt(4, 24, cx16_dungeon_loaded_text)
-    :Cx16PrintAt(6, 24, cx16_dungeon_tier_bank_text)
-    :Cx16PrintAt(8, 17, cx16_dungeon_runtime_text)
-    :Cx16PrintAt(26, 13, cx16_dungeon_help_text)
+    :Cx16PrintAt(25, 24, cx16_dungeon_loaded_text)
+    :Cx16PrintAt(26, 10, cx16_dungeon_help_text)
+    rts
+
+cx16_return_to_town:
+    lda #CX16_STATE_NEW_GAME
+    sta cx16_state
+    lda #0
+    sta player_data + PL_DLEVEL
+    sta zp_player_dlvl
+    lda #TOWN_START_X
+    sta cx16_player_x
+    lda #TOWN_START_Y
+    sta cx16_player_y
+    jsr cx16_sync_shared_player_position
+    jsr town_map_basic_generate
+    jmp cx16_new_game_draw
+
+cx16_show_deeper_stub:
+    jsr cx16_clear_message_row
+    :Cx16PrintAt(26, 24, cx16_deeper_stub_text)
     rts
 
 cx16_show_ascend_stub:
@@ -572,6 +648,354 @@ cx16_read_draw_tile:
     lda (zp_ptr0),y
     rts
 
+cx16_current_tile_type:
+    ldy cx16_player_y
+    lda map_row_lo,y
+    sta zp_ptr0
+    lda map_row_hi,y
+    sta zp_ptr0_hi
+    ldy cx16_player_x
+    lda (zp_ptr0),y
+    and #TILE_TYPE_MASK
+    lsr
+    lsr
+    lsr
+    lsr
+    rts
+
+cx16_generate_dungeon_bootstrap:
+    lda #TILE_WALL_H
+    sta cx16_draw_char
+    lda #0
+    sta cx16_draw_y
+!fill_row:
+    ldx cx16_draw_y
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #0
+!fill_col:
+    lda cx16_draw_char
+    sta (zp_ptr0),y
+    iny
+    cpy #MAP_COLS
+    bne !fill_col-
+    inc cx16_draw_y
+    lda cx16_draw_y
+    cmp #MAP_ROWS
+    bcc !fill_row-
+
+    lda #12
+    sta cx16_rect_x
+    lda #8
+    sta cx16_rect_y
+    lda #28
+    sta cx16_rect_w
+    lda #10
+    sta cx16_rect_h
+    jsr cx16_carve_room
+
+    lda #52
+    sta cx16_rect_x
+    lda #12
+    sta cx16_rect_y
+    lda #34
+    sta cx16_rect_w
+    lda #12
+    sta cx16_rect_h
+    jsr cx16_carve_room
+
+    lda #25
+    sta cx16_line_start
+    lda #69
+    sta cx16_line_end
+    lda #13
+    sta cx16_draw_y
+    jsr cx16_carve_hline
+
+    lda #69
+    sta cx16_draw_x
+    lda #13
+    sta cx16_line_start
+    lda #18
+    sta cx16_line_end
+    jsr cx16_carve_vline
+
+    lda #24
+    sta cx16_player_x
+    sta player_data + PL_MAP_X
+    sta zp_player_x
+    lda #13
+    sta cx16_player_y
+    sta player_data + PL_MAP_Y
+    sta zp_player_y
+
+    lda #24
+    sta stairs_up_x
+    lda #13
+    sta stairs_up_y
+    ldx #13
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    lda #TILE_STAIRS_UP | CX16_DUNGEON_ROOM_FLAGS
+    ldy #24
+    sta (zp_ptr0),y
+
+    lda #77
+    sta stairs_dn1_x
+    lda #18
+    sta stairs_dn1_y
+    ldx #18
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    lda #TILE_STAIRS_DN | CX16_DUNGEON_ROOM_FLAGS
+    ldy #77
+    sta (zp_ptr0),y
+    rts
+
+cx16_carve_room:
+    lda #0
+    sta cx16_rect_row
+!row:
+    lda cx16_rect_y
+    clc
+    adc cx16_rect_row
+    tax
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    lda #0
+    sta cx16_rect_col
+!col:
+    lda cx16_rect_x
+    clc
+    adc cx16_rect_col
+    tay
+    lda #TILE_FLOOR | CX16_DUNGEON_ROOM_FLAGS
+    sta (zp_ptr0),y
+    inc cx16_rect_col
+    lda cx16_rect_col
+    cmp cx16_rect_w
+    bcc !col-
+    inc cx16_rect_row
+    lda cx16_rect_row
+    cmp cx16_rect_h
+    bcc !row-
+    rts
+
+cx16_carve_hline:
+    ldx cx16_draw_y
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy cx16_line_start
+!loop:
+    lda #TILE_FLOOR | CX16_DUNGEON_ROOM_FLAGS
+    sta (zp_ptr0),y
+    cpy cx16_line_end
+    beq !done+
+    iny
+    jmp !loop-
+!done:
+    rts
+
+cx16_carve_vline:
+    ldx cx16_line_start
+!loop:
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy cx16_draw_x
+    lda #TILE_FLOOR | CX16_DUNGEON_ROOM_FLAGS
+    sta (zp_ptr0),y
+    cpx cx16_line_end
+    beq !done+
+    inx
+    jmp !loop-
+!done:
+    rts
+
+cx16_update_dungeon_view:
+    lda cx16_player_x
+    sec
+    sbc #VIEWPORT_W / 2
+    bcs !x_ok+
+    lda #0
+    jmp !store_x+
+!x_ok:
+    cmp #MAP_COLS - VIEWPORT_W
+    bcc !store_x+
+    lda #MAP_COLS - VIEWPORT_W
+!store_x:
+    sta cx16_view_x
+    lda cx16_player_y
+    sec
+    sbc #VIEWPORT_H / 2
+    bcs !y_ok+
+    lda #0
+    jmp !store_y+
+!y_ok:
+    cmp #MAP_ROWS - VIEWPORT_H
+    bcc !store_y+
+    lda #MAP_ROWS - VIEWPORT_H
+!store_y:
+    sta cx16_view_y
+    rts
+
+cx16_render_dungeon_viewport:
+    lda #0
+    sta cx16_draw_y
+!row:
+    lda cx16_view_y
+    clc
+    adc cx16_draw_y
+    tax
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    lda #0
+    sta cx16_draw_x
+!col:
+    lda cx16_view_x
+    clc
+    adc cx16_draw_x
+    tay
+    lda (zp_ptr0),y
+    sta cx16_draw_tile
+    and #FLAG_VISITED
+    bne !visible+
+    lda #SC_SPACE
+    sta cx16_draw_char
+    lda #COL_BLACK
+    sta cx16_draw_color
+    jmp !check_player+
+!visible:
+    lda cx16_draw_tile
+    jsr tile_map_byte_to_char_color
+    sta cx16_draw_char
+    stx cx16_draw_color
+!check_player:
+    lda cx16_view_x
+    clc
+    adc cx16_draw_x
+    cmp cx16_player_x
+    bne !not_player+
+    lda cx16_view_y
+    clc
+    adc cx16_draw_y
+    cmp cx16_player_y
+    bne !not_player+
+    lda #SC_PLAYER
+    sta cx16_draw_char
+    lda #COL_PLAYER
+    sta cx16_draw_color
+!not_player:
+    lda cx16_draw_color
+    jsr screen_set_color
+    clc
+    ldy cx16_draw_y
+    tya
+    adc #VIEWPORT_Y
+    tay
+    clc
+    ldx cx16_draw_x
+    txa
+    adc #VIEWPORT_X
+    tax
+    lda cx16_draw_char
+    jsr screen_put_char_at
+    inc cx16_draw_x
+    lda cx16_draw_x
+    cmp #VIEWPORT_W
+    bcc !col-
+    inc cx16_draw_y
+    lda cx16_draw_y
+    cmp #VIEWPORT_H
+    bcs !done+
+    jmp !row-
+!done:
+    lda #CX16_TEXT_COLOR
+    jmp screen_set_color
+
+cx16_dungeon_player_redraw:
+    lda cx16_old_player_x
+    sta cx16_draw_x
+    lda cx16_old_player_y
+    sta cx16_draw_y
+    jsr cx16_draw_dungeon_map_cell
+    lda cx16_player_x
+    sta cx16_draw_x
+    lda cx16_player_y
+    sta cx16_draw_y
+    lda #COL_PLAYER
+    jsr screen_set_color
+    lda cx16_draw_y
+    sec
+    sbc cx16_view_y
+    clc
+    adc #VIEWPORT_Y
+    tay
+    lda cx16_draw_x
+    sec
+    sbc cx16_view_x
+    clc
+    adc #VIEWPORT_X
+    tax
+    lda #SC_PLAYER
+    jsr screen_put_char_at
+    lda #CX16_TEXT_COLOR
+    jmp screen_set_color
+
+cx16_draw_dungeon_map_cell:
+    ldx cx16_draw_y
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy cx16_draw_x
+    lda (zp_ptr0),y
+    sta cx16_draw_tile
+    and #FLAG_VISITED
+    bne !visible+
+    lda #SC_SPACE
+    sta cx16_draw_char
+    lda #COL_BLACK
+    sta cx16_draw_color
+    jmp !put+
+!visible:
+    lda cx16_draw_tile
+    jsr tile_map_byte_to_char_color
+    sta cx16_draw_char
+    stx cx16_draw_color
+!put:
+    lda cx16_draw_color
+    jsr screen_set_color
+    lda cx16_draw_y
+    sec
+    sbc cx16_view_y
+    clc
+    adc #VIEWPORT_Y
+    tay
+    lda cx16_draw_x
+    sec
+    sbc cx16_view_x
+    clc
+    adc #VIEWPORT_X
+    tax
+    lda cx16_draw_char
+    jsr screen_put_char_at
+    lda #CX16_TEXT_COLOR
+    jmp screen_set_color
+
 .macro Cx16PrintAt(row, col, text) {
     lda #row
     sta zp_cursor_row
@@ -661,20 +1085,16 @@ cx16_dungeon_loaded_text:
     :ScreenText("MONSTER.DB.1 LOADED")
     .byte 0
 
-cx16_dungeon_tier_bank_text:
-    :ScreenText("TIER 1 RESIDENT IN RAM BANK 4")
-    .byte 0
-
-cx16_dungeon_runtime_text:
-    :ScreenText("DUNGEON GENERATION AND RENDERING ARE NEXT.")
-    .byte 0
-
 cx16_dungeon_help_text:
-    :ScreenText("SHIFT-Q RETURNS TO TITLE. FULL DUNGEON LOOP NOT WIRED YET.")
+    :ScreenText("HJKL/YUBN OR NUMBERS MOVE. < RETURNS TO TOWN. SHIFT-Q TITLE.")
     .byte 0
 
 cx16_ascend_stub_text:
     :ScreenText("YOU ARE ALREADY IN TOWN.")
+    .byte 0
+
+cx16_deeper_stub_text:
+    :ScreenText("DEEPER DUNGEON LEVELS NOT WIRED YET.")
     .byte 0
 
 cx16_no_stairs_text:
@@ -731,10 +1151,23 @@ cx16_draw_x: .byte 0
 cx16_draw_y: .byte 0
 cx16_draw_char: .byte 0
 cx16_draw_color: .byte 0
+cx16_draw_tile: .byte 0
 cx16_store_idx: .byte 0
 cx16_loaded_tier: .byte 0
 cx16_loaded_tier_bank: .byte 0
 cx16_dungeon_depth: .byte 0
+cx16_view_x: .byte 0
+cx16_view_y: .byte 0
+cx16_old_view_x: .byte 0
+cx16_old_view_y: .byte 0
+cx16_rect_x: .byte 0
+cx16_rect_y: .byte 0
+cx16_rect_w: .byte 0
+cx16_rect_h: .byte 0
+cx16_rect_row: .byte 0
+cx16_rect_col: .byte 0
+cx16_line_start: .byte 0
+cx16_line_end: .byte 0
 
 program_end:
 #if !CX16_IMPORT_SHARED_GAME_LOOP
