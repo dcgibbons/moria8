@@ -63,6 +63,7 @@ CX16_OVERLAY_SPELL_BANK = CX16_OVERLAY_ITEMS_BANK + 1
 CX16_OVERLAY_DISARM_BANK = CX16_OVERLAY_SPELL_BANK + 1
 CX16_OVERLAY_SLOT_BANK_BASE = CX16_OVERLAY_STARTUP_BANK
 CX16_OVERLAY_SLOT_BANK_END = CX16_OVERLAY_DISARM_BANK
+CX16_OVERLAY_PRELOAD_COUNT = CX16_OVERLAY_SLOT_BANK_END - CX16_OVERLAY_SLOT_BANK_BASE + 1
 CX16_OVERLAY_FREE_BANK_BASE = CX16_OVERLAY_SLOT_BANK_END + 1
 CX16_OVERLAY_FREE_BANK_END = CX16_OVERLAY_CACHE_BANK_END
 CX16_DATA_CACHE_BANK_BASE = 32
@@ -138,7 +139,7 @@ def overlap_span(start, end_exclusive, region_start, region_end_inclusive):
     return overlap_start, overlap_end
 
 
-def emit_report(product, shared_probe, title, tiers, modules, items):
+def emit_report(product, shared_probe, title, tiers, modules, items, overlays):
     product_load, product_end, product_program_end = product
     probe_load, probe_end, probe_program_end = shared_probe
     title_load, title_end = title
@@ -193,6 +194,8 @@ def emit_report(product, shared_probe, title, tiers, modules, items):
         f"DISARM={CX16_OVERLAY_DISARM_BANK}"
     )
     print(f"  overlay slot banks: {CX16_OVERLAY_SLOT_BANK_BASE}-{CX16_OVERLAY_SLOT_BANK_END}")
+    for index, (overlay_load, overlay_end) in enumerate(overlays, start=1):
+        print(f"  overlay slot {index} PRG: {fmt_span(overlay_load, overlay_end)} ({span_size(overlay_load, overlay_end)} bytes)")
     print(f"  overlay expansion banks: {CX16_OVERLAY_FREE_BANK_BASE}-{CX16_OVERLAY_FREE_BANK_END}")
     print(f"  unallocated data-cache banks: {CX16_DATA_CACHE_BANK_BASE}-{CX16_DATA_CACHE_BANK_END}")
     print(f"  unallocated work banks: {CX16_WORK_BANK_BASE}-{CX16_WORK_BANK_END}")
@@ -504,6 +507,16 @@ def check_title_prg(prg_path):
     return load, end_exclusive
 
 
+def check_overlay_prg(prg_path):
+    load, end_exclusive = read_prg_span(prg_path)
+    expect_addr(load, CX16_BANKED_RAM_BASE, f"{os.path.basename(prg_path)} load address")
+    expect_true(
+        end_exclusive <= CX16_BANKED_RAM_END + 1,
+        f"{os.path.basename(prg_path)} exceeds banked RAM window",
+    )
+    return load, end_exclusive
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--main-prg", required=True)
@@ -514,6 +527,7 @@ def main():
     parser.add_argument("--tier-prg", action="append", default=[])
     parser.add_argument("--module-prg", action="append", default=[])
     parser.add_argument("--item-prg", action="append", default=[])
+    parser.add_argument("--overlay-prg", action="append", default=[])
     args = parser.parse_args()
 
     product = check_product(args.main_prg, args.main_symbols)
@@ -522,13 +536,16 @@ def main():
     tiers = [check_tier_prg(path) for path in args.tier_prg]
     modules = [check_module_prg(path) for path in args.module_prg]
     items = [check_item_prg(path) for path in args.item_prg]
+    overlays = [check_overlay_prg(path) for path in args.overlay_prg]
     if len(tiers) != 4:
         raise ContractError(f"expected 4 tier PRGs, got {len(tiers)}")
     if len(modules) != 1:
         raise ContractError(f"expected 1 module PRG, got {len(modules)}")
     if len(items) != 1:
         raise ContractError(f"expected 1 item catalog PRG, got {len(items)}")
-    emit_report(product, shared_probe, title, tiers, modules, items)
+    if len(overlays) != CX16_OVERLAY_PRELOAD_COUNT:
+        raise ContractError(f"expected {CX16_OVERLAY_PRELOAD_COUNT} overlay PRGs, got {len(overlays)}")
+    emit_report(product, shared_probe, title, tiers, modules, items, overlays)
 
 
 if __name__ == "__main__":

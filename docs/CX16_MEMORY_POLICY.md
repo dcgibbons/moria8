@@ -36,16 +36,16 @@ The baseline target is 512 KiB banked RAM, exposed as 64 banks of 8 KiB at
 | 8 | Executable module cache | `DUNGEON.GEN` | Preloaded before title; persistent |
 | 9-10 | Item catalog family | `ITEMCAT.1` in bank 9; bank 10 reserved for item text/extra split | Preloaded before title; persistent |
 | 11 | Title-art source | `TITLE` | Loaded by title renderer; reloadable staging/source |
-| 12 | Code-overlay slot | `STARTUP` reserved | Future `128.START` equivalent; payload not built yet |
-| 13 | Code-overlay slot | `TOWN` reserved | Future `128.TOWN` equivalent; payload not built yet |
-| 14 | Code-overlay slot | `DEATH` reserved | Future `128.DEATH` equivalent; payload not built yet |
-| 15 | Code-overlay slot | `ROYAL` reserved | Future royal/display overlay; payload not built yet |
-| 16 | Code-overlay slot | `GEN` reserved | Future common generation overlay; current `DUNGEON.GEN` remains bank 8 |
-| 17 | Code-overlay slot | `HELP` reserved | Future `128.HELP` equivalent; payload not built yet |
-| 18 | Code-overlay slot | `UI` reserved | Future `128.UI` equivalent; payload not built yet |
-| 19 | Code-overlay slot | `ITEMS` reserved | Future `128.ITEMS` equivalent; payload not built yet |
-| 20 | Code-overlay slot | `SPELL` reserved | Future spell/action overlay; payload not built yet |
-| 21 | Code-overlay slot | `DISARM` reserved | Future `128.DISARM` equivalent; payload not built yet |
+| 12 | Code-overlay slot | `X16.START` marker sidecar | Preloaded before title; payload migration pending |
+| 13 | Code-overlay slot | `X16.TOWN` marker sidecar | Preloaded before title; payload migration pending |
+| 14 | Code-overlay slot | `X16.DEATH` marker sidecar | Preloaded before title; payload migration pending |
+| 15 | Code-overlay slot | `X16.ROYAL` marker sidecar | Preloaded before title; payload migration pending |
+| 16 | Code-overlay slot | `X16.GEN` marker sidecar | Preloaded before title; current `DUNGEON.GEN` remains bank 8 |
+| 17 | Code-overlay slot | `X16.HELP` marker sidecar | Preloaded before title; payload migration pending |
+| 18 | Code-overlay slot | `X16.UI` marker sidecar | Preloaded before title; payload migration pending |
+| 19 | Code-overlay slot | `X16.ITEMS` marker sidecar | Preloaded before title; payload migration pending |
+| 20 | Code-overlay slot | `X16.SPELL` marker sidecar | Preloaded before title; payload migration pending |
+| 21 | Code-overlay slot | `X16.DISARM` marker sidecar | Preloaded before title; payload migration pending |
 | 22-31 | Code-overlay expansion class | unallocated | Reserved for future resident overlays/modules |
 | 32-47 | Immutable-data/string cache class | unallocated | Reserved for future data and string banks |
 | 48-63 | Work/cache class | unallocated | Reserved for save/load, generation, and temporary work |
@@ -68,15 +68,16 @@ The baseline target is 512 KiB banked RAM, exposed as 64 banks of 8 KiB at
 8. The title-art load address is `$A000` for CX16. It must not return to a
    fixed-RAM staging address such as `$6000`, because that would pin resident
    code below the staging address again.
-9. Named overlay banks are reservations until corresponding CX16 overlay PRGs
-   and loader entries exist. Do not set `hal_platform_overlay_count` or route
-   shared code through these banks until the payload/build contract exists.
+9. Named overlay banks have emitted CX16 sidecar PRGs and loader entries. The
+   current sidecars are marker payloads that prove build/load/cache ownership;
+   migrate real shared overlay code into them deliberately, one ownership
+   boundary at a time.
 
 ## Verification
 
 `make testcx16-memory-contract` is the static policy gate. It validates the
-assembled product symbols, PRG spans, title/tier/module/item bank-window
-payload spans, and the bank class layout above.
+assembled product symbols, PRG spans, title/tier/module/item/overlay
+bank-window payload spans, and the bank class layout above.
 
 `make testcx16` is the runtime gate. It additionally boots the product in
 `x16emu`, verifies the bank-window loaders, and checks that the title, tier,

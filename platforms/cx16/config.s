@@ -32,8 +32,8 @@
 .const OVL_UI          = 6
 .const OVL_ITEMS       = 7
 .const OVL_SPELL       = 8
-.const OVL_ROYAL       = 9
-.const OVL_DISARM      = 10
+.const CX16_OVERLAY_SLOT_ROYAL  = 4
+.const CX16_OVERLAY_SLOT_DISARM = 10
 
 .const hal_huffman_lock_irq_during_decode = 0
 .const hal_huffman_print_uses_cached_msg = 0

@@ -1,8 +1,10 @@
 #importonce
 // Commander X16 lifecycle policy.
 //
-// CX16 bring-up currently keeps all runtime code resident in fixed RAM and has
-// no IRQ, overlay, or bank-resync machinery wired into shared gameplay.
+// CX16 bring-up currently keeps gameplay code resident in fixed RAM, while
+// overlay sidecar PRGs are preloaded into CX16 bank-window slots. The C128
+// overlay-cache flag remains off because it assembles C128 Bank 1 cache code,
+// not CX16 $A000-$BFFF bank-window cache code.
 
 .const hal_platform_reassert_before_message_render = 0
 .const hal_platform_restore_tier_after_overlay = 0
@@ -34,8 +36,8 @@
 .const hal_platform_game_loop_run_stop_reset_input = 0
 .const hal_platform_game_loop_scroll_delta_render = 0
 .const hal_platform_game_loop_item_actions_trampolined = 0
-.const hal_platform_overlay_count = 0
-.const hal_platform_overlay_state_external = 0
+.const hal_platform_overlay_count = 8
+.const hal_platform_overlay_state_external = 1
 .const hal_platform_overlay_force_reload = 0
 .const hal_platform_overlay_tier_cache_guard = 0
 .const hal_platform_overlay_cache_enabled = 0

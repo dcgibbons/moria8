@@ -9,6 +9,16 @@
     .eval CX16_OUT = cmdLineVars.get("CX16_OUT")
 }
 .segmentdef Cx16DungeonGenModule [outPrg=CX16_OUT + "/DUNGEON.GEN", start=$a000, min=$a000, max=$bfff]
+.segmentdef Cx16StartupOverlay   [outPrg=CX16_OUT + "/X16.START",  start=$a000, min=$a000, max=$bfff]
+.segmentdef Cx16TownOverlay      [outPrg=CX16_OUT + "/X16.TOWN",   start=$a000, min=$a000, max=$bfff]
+.segmentdef Cx16DeathOverlay     [outPrg=CX16_OUT + "/X16.DEATH",  start=$a000, min=$a000, max=$bfff]
+.segmentdef Cx16RoyalOverlay     [outPrg=CX16_OUT + "/X16.ROYAL",  start=$a000, min=$a000, max=$bfff]
+.segmentdef Cx16GenOverlay       [outPrg=CX16_OUT + "/X16.GEN",    start=$a000, min=$a000, max=$bfff]
+.segmentdef Cx16HelpOverlay      [outPrg=CX16_OUT + "/X16.HELP",   start=$a000, min=$a000, max=$bfff]
+.segmentdef Cx16UiOverlay        [outPrg=CX16_OUT + "/X16.UI",     start=$a000, min=$a000, max=$bfff]
+.segmentdef Cx16ItemsOverlay     [outPrg=CX16_OUT + "/X16.ITEMS",  start=$a000, min=$a000, max=$bfff]
+.segmentdef Cx16SpellOverlay     [outPrg=CX16_OUT + "/X16.SPELL",  start=$a000, min=$a000, max=$bfff]
+.segmentdef Cx16DisarmOverlay    [outPrg=CX16_OUT + "/X16.DISARM", start=$a000, min=$a000, max=$bfff]
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(cx16_entry)
@@ -72,6 +82,7 @@
 #import "tier_storage.s"
 #import "dungeon_module.s"
 #import "item_catalog.s"
+#import "overlay_storage.s"
 #import "map_render.s"
 #if !CX16_IMPORT_SHARED_GAME_LOOP
 #import "../../core/dungeon_los.s"
@@ -190,7 +201,7 @@ cx16_idle:
 
 // cx16_preload_static_assets — Load immutable gameplay payloads before title.
 // Output: carry clear = all cached; carry set = failure, cx16_preload_status:
-//         1 item catalog, 2 monster tier, 3 dungeon module.
+//         1 item catalog, 2 monster tier, 3 dungeon module, 4 overlay.
 cx16_preload_static_assets:
     lda #0
     sta cx16_preload_status
@@ -226,6 +237,8 @@ cx16_preload_static_assets:
     jsr cx16_loader_show_file
     jsr cx16_load_dungeon_module
     bcs !module_fail+
+    jsr cx16_preload_all_overlays
+    bcs !overlay_fail+
     clc
     rts
 !item_fail:
@@ -240,6 +253,11 @@ cx16_preload_static_assets:
     rts
 !module_fail:
     lda #3
+    sta cx16_preload_status
+    sec
+    rts
+!overlay_fail:
+    lda #4
     sta cx16_preload_status
     sec
     rts
@@ -1172,6 +1190,86 @@ cx16_dungeon_module_entry:
 cx16_dungeon_module_end:
 .print "CX16 dungeon module: " + (cx16_dungeon_module_end - CX16_DUNGEON_MODULE_LOAD_BASE) + " bytes at $A000-$" + toHexString(cx16_dungeon_module_end)
 .assert "CX16 dungeon module fits one banked-RAM window", cx16_dungeon_module_end <= CX16_DUNGEON_MODULE_LOAD_END + 1, true
+
+.segment Cx16StartupOverlay
+cx16_overlay_startup_entry:
+    rts
+    :Cx16OverlayMarker(1)
+cx16_overlay_startup_end:
+.print "CX16 STARTUP overlay: " + (cx16_overlay_startup_end - $a000) + " bytes at $A000-$" + toHexString(cx16_overlay_startup_end)
+.assert "CX16 STARTUP overlay fits banked window", cx16_overlay_startup_end <= CX16_BANKED_RAM_END + 1, true
+
+.segment Cx16TownOverlay
+cx16_overlay_town_entry:
+    rts
+    :Cx16OverlayMarker(2)
+cx16_overlay_town_end:
+.print "CX16 TOWN overlay: " + (cx16_overlay_town_end - $a000) + " bytes at $A000-$" + toHexString(cx16_overlay_town_end)
+.assert "CX16 TOWN overlay fits banked window", cx16_overlay_town_end <= CX16_BANKED_RAM_END + 1, true
+
+.segment Cx16DeathOverlay
+cx16_overlay_death_entry:
+    rts
+    :Cx16OverlayMarker(3)
+cx16_overlay_death_end:
+.print "CX16 DEATH overlay: " + (cx16_overlay_death_end - $a000) + " bytes at $A000-$" + toHexString(cx16_overlay_death_end)
+.assert "CX16 DEATH overlay fits banked window", cx16_overlay_death_end <= CX16_BANKED_RAM_END + 1, true
+
+.segment Cx16RoyalOverlay
+cx16_overlay_royal_entry:
+    rts
+    :Cx16OverlayMarker(CX16_OVERLAY_SLOT_ROYAL)
+cx16_overlay_royal_end:
+.print "CX16 ROYAL overlay: " + (cx16_overlay_royal_end - $a000) + " bytes at $A000-$" + toHexString(cx16_overlay_royal_end)
+.assert "CX16 ROYAL overlay fits banked window", cx16_overlay_royal_end <= CX16_BANKED_RAM_END + 1, true
+
+.segment Cx16GenOverlay
+cx16_overlay_gen_entry:
+    rts
+    :Cx16OverlayMarker(5)
+cx16_overlay_gen_end:
+.print "CX16 GEN overlay: " + (cx16_overlay_gen_end - $a000) + " bytes at $A000-$" + toHexString(cx16_overlay_gen_end)
+.assert "CX16 GEN overlay fits banked window", cx16_overlay_gen_end <= CX16_BANKED_RAM_END + 1, true
+
+.segment Cx16HelpOverlay
+cx16_overlay_help_entry:
+    rts
+    :Cx16OverlayMarker(6)
+cx16_overlay_help_end:
+.print "CX16 HELP overlay: " + (cx16_overlay_help_end - $a000) + " bytes at $A000-$" + toHexString(cx16_overlay_help_end)
+.assert "CX16 HELP overlay fits banked window", cx16_overlay_help_end <= CX16_BANKED_RAM_END + 1, true
+
+.segment Cx16UiOverlay
+cx16_overlay_ui_entry:
+    rts
+    :Cx16OverlayMarker(7)
+cx16_overlay_ui_end:
+.print "CX16 UI overlay: " + (cx16_overlay_ui_end - $a000) + " bytes at $A000-$" + toHexString(cx16_overlay_ui_end)
+.assert "CX16 UI overlay fits banked window", cx16_overlay_ui_end <= CX16_BANKED_RAM_END + 1, true
+
+.segment Cx16ItemsOverlay
+cx16_overlay_items_entry:
+    rts
+    :Cx16OverlayMarker(8)
+cx16_overlay_items_end:
+.print "CX16 ITEMS overlay: " + (cx16_overlay_items_end - $a000) + " bytes at $A000-$" + toHexString(cx16_overlay_items_end)
+.assert "CX16 ITEMS overlay fits banked window", cx16_overlay_items_end <= CX16_BANKED_RAM_END + 1, true
+
+.segment Cx16SpellOverlay
+cx16_overlay_spell_entry:
+    rts
+    :Cx16OverlayMarker(9)
+cx16_overlay_spell_end:
+.print "CX16 SPELL overlay: " + (cx16_overlay_spell_end - $a000) + " bytes at $A000-$" + toHexString(cx16_overlay_spell_end)
+.assert "CX16 SPELL overlay fits banked window", cx16_overlay_spell_end <= CX16_BANKED_RAM_END + 1, true
+
+.segment Cx16DisarmOverlay
+cx16_overlay_disarm_entry:
+    rts
+    :Cx16OverlayMarker(CX16_OVERLAY_SLOT_DISARM)
+cx16_overlay_disarm_end:
+.print "CX16 DISARM overlay: " + (cx16_overlay_disarm_end - $a000) + " bytes at $A000-$" + toHexString(cx16_overlay_disarm_end)
+.assert "CX16 DISARM overlay fits banked window", cx16_overlay_disarm_end <= CX16_BANKED_RAM_END + 1, true
 
 .segment Default
 program_end:

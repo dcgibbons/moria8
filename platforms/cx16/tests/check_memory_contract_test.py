@@ -247,6 +247,25 @@ def test_title_prg_contract():
         assert_raises(lambda: contract.check_title_prg(too_large), "exceeds banked RAM window")
 
 
+def test_overlay_prg_contract():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        overlay_path = os.path.join(tmpdir, "X16.START")
+        write_prg(overlay_path, contract.CX16_BANKED_RAM_BASE, 0x0200)
+        contract.check_overlay_prg(overlay_path)
+
+        wrong_load = os.path.join(tmpdir, "X16.BADLOAD")
+        write_prg(wrong_load, contract.CX16_BANKED_RAM_BASE + 1, 0x0200)
+        assert_raises(lambda: contract.check_overlay_prg(wrong_load), "load address")
+
+        too_large = os.path.join(tmpdir, "X16.BIG")
+        write_prg(
+            too_large,
+            contract.CX16_BANKED_RAM_BASE,
+            contract.CX16_BANKED_RAM_END - contract.CX16_BANKED_RAM_BASE + 2,
+        )
+        assert_raises(lambda: contract.check_overlay_prg(too_large), "exceeds banked RAM window")
+
+
 def test_overlap_span_edges():
     assert contract.overlap_span(0x0801, 0x1000, 0x9F00, 0x9FFF) is None
     assert contract.overlap_span(0x0801, 0x9F00, 0x9F00, 0x9FFF) is None
@@ -261,9 +280,10 @@ def test_report_contains_actionable_memory_lines():
     tiers = [(contract.CX16_TIER_LOAD_BASE, contract.CX16_TIER_LOAD_BASE + 0x0200)]
     modules = [(contract.CX16_DUNGEON_MODULE_LOAD_BASE, contract.CX16_DUNGEON_MODULE_LOAD_BASE + 0x0200)]
     items = [(contract.CX16_ITEM_CATALOG_LOAD_BASE, contract.CX16_ITEM_CATALOG_LOAD_BASE + 0x0200)]
+    overlays = [(contract.CX16_BANKED_RAM_BASE, contract.CX16_BANKED_RAM_BASE + 0x0020)]
     output = StringIO()
     with redirect_stdout(output):
-        contract.emit_report(product, shared, title, tiers, modules, items)
+        contract.emit_report(product, shared, title, tiers, modules, items, overlays)
 
     report = output.getvalue()
     for expected in (
@@ -283,6 +303,7 @@ def test_report_contains_actionable_memory_lines():
         "title PRG",
         "overlay slots",
         "overlay slot banks",
+        "overlay slot 1 PRG",
         "overlay expansion banks",
         "unallocated data-cache banks",
         "unallocated work banks",
@@ -307,6 +328,7 @@ def main():
     test_module_prg_contract()
     test_item_prg_contract()
     test_title_prg_contract()
+    test_overlay_prg_contract()
     test_overlap_span_edges()
     test_report_contains_actionable_memory_lines()
     print("CX16 memory contract self-test passed")

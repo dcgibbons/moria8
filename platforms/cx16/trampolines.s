@@ -101,7 +101,32 @@ tramp_level_generate:
     jmp level_generate
 
 overlay_load:
+    cmp #OVL_NONE
+    beq !none+
+    cmp #(CX16_OVERLAY_PRELOAD_COUNT + 1)
+    bcs !invalid+
+    sta cx16_overlay_requested
+    tax
+    lda cx16_overlay_common_to_slot,x
+    beq !invalid+
+    sta cx16_overlay_target
+    tax
+    lda cx16_overlay_ready,x
+    bne !ready+
+    lda cx16_overlay_target
+    jsr cx16_load_overlay_to_bank
+    bcs !fail+
+!ready:
+    lda cx16_overlay_requested
+    sta current_overlay
+!none:
     clc
+    rts
+!fail:
+!invalid:
+    lda #OVL_NONE
+    sta current_overlay
+    sec
     rts
 
 disk_prompt_game:
@@ -120,6 +145,8 @@ entry_main:
     rts
 
 overlay_invalidate:
+    lda #OVL_NONE
+    sta current_overlay
     rts
 
 platform_copy_tier_names_to_pool:

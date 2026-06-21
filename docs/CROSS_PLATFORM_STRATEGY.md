@@ -211,11 +211,12 @@ Current shared-gameplay status:
   Bank 0 is the default/system bank; banks 1-3 are transient scratch; banks
   4-7 hold `MONSTER.DB.1` through `MONSTER.DB.4`; bank 8 holds
   `DUNGEON.GEN`; banks 9-10 are the item-catalog family; bank 11 is the
-  title-art source bank; banks 12-21 reserve the Commodore-style overlay slots
-  `STARTUP`, `TOWN`, `DEATH`, `ROYAL`, `GEN`, `HELP`, `UI`, `ITEMS`, `SPELL`,
-  and `DISARM`; banks 22-31, 32-47, and 48-63 are defined unallocated classes
-  for overlay expansion, immutable data/string caches, and transient work
-  respectively. The CX16 wrapper calls the common
+  title-art source bank; banks 12-21 hold preloaded CX16 overlay sidecar PRGs
+  `X16.START`, `X16.TOWN`, `X16.DEATH`, `X16.ROYAL`, `X16.GEN`, `X16.HELP`,
+  `X16.UI`, `X16.ITEMS`, `X16.SPELL`, and `X16.DISARM` as marker payloads
+  until the real shared overlay code is migrated; banks 22-31, 32-47, and
+  48-63 are defined unallocated classes for overlay expansion, immutable
+  data/string caches, and transient work respectively. The CX16 wrapper calls the common
   `core/dungeon_gen.s` generator after seeding the shared RNG. Future dungeon
   work must preserve that load address, entry point, caller-bank restoration,
   fixed-RAM map ownership, and one-bank fit instead of adding CX16-specific map
