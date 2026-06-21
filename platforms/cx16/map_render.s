@@ -204,6 +204,27 @@ cx16_render_dungeon_viewport:
     jsr tile_map_byte_to_char_color
     sta cx16_draw_char
     stx cx16_draw_color
+    lda cx16_draw_tile
+    and #FLAG_HAS_ITEM
+    beq !check_player+
+    lda cx16_view_x
+    clc
+    adc cx16_draw_x
+    pha
+    lda cx16_view_y
+    clc
+    adc cx16_draw_y
+    tay
+    pla
+    jsr floor_item_find_at
+    bcc !check_player+
+    lda fi_item_id,x
+    tax
+    jsr item_load_display_x
+    sta cx16_draw_char
+    txa
+    jsr item_get_floor_color
+    sta cx16_draw_color
 !check_player:
     lda cx16_view_x
     clc
@@ -237,7 +258,9 @@ cx16_render_dungeon_viewport:
     inc cx16_draw_x
     lda cx16_draw_x
     cmp #VIEWPORT_W
-    bcc !col-
+    bcs !row_done+
+    jmp !col-
+!row_done:
     inc cx16_draw_y
     lda cx16_draw_y
     cmp #VIEWPORT_H
@@ -297,6 +320,20 @@ cx16_draw_dungeon_map_cell:
     jsr tile_map_byte_to_char_color
     sta cx16_draw_char
     stx cx16_draw_color
+    lda cx16_draw_tile
+    and #FLAG_HAS_ITEM
+    beq !put+
+    lda cx16_draw_x
+    ldy cx16_draw_y
+    jsr floor_item_find_at
+    bcc !put+
+    lda fi_item_id,x
+    tax
+    jsr item_load_display_x
+    sta cx16_draw_char
+    txa
+    jsr item_get_floor_color
+    sta cx16_draw_color
 !put:
     lda cx16_draw_color
     jsr screen_set_color

@@ -4,7 +4,9 @@
 // C64 hosts this in the stable $F000 runtime payload. It is callable from
 // $E000 overlays as long as callers have KERNAL banked out.
 
+#if !HAL_PLATFORM_NO_STORE_ITEMDESC
 #import "store_meta_macros.s"
+#endif
 
 // itemdesc_put_inv_slot — Print inventory/equipment item description.
 // Input: X = inventory/equipment slot index.
@@ -32,6 +34,7 @@ itemdesc_put_inv_slot:
 // itemdesc_put_store_slot — Print store/home item description.
 // Input: X = absolute store/home slot index.
 // Clobbers: A, X, Y, zp_ptr0
+#if !HAL_PLATFORM_NO_STORE_ITEMDESC
 itemdesc_put_store_slot:
     lda si_item_id,x
     sta itemdesc_item_id
@@ -50,6 +53,7 @@ itemdesc_put_store_slot:
     :LoadStoreEgoX()
     sta itemdesc_ego
     jmp itemdesc_put_staged
+#endif
 
 // itemdesc_put_staged — Print staged item name, ego, sensed marker, and stats.
 // Uses itemdesc_* fields. Callable from $F000 banked code and $E000 overlays.

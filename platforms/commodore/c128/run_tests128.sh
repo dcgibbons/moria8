@@ -1301,13 +1301,14 @@ root = Path("..").resolve()
 core = root.parent.parent / "core"
 screen = (root / "c128" / "screen_vdc.s").read_text().splitlines()
 main_text = (root / "c128" / "main.s").read_text()
-items = (core / "player_items.s").read_text().splitlines()
+item_prompt_mod = (core / "player_item_prompt.s").read_text().splitlines()
 item_mod = (core / "item.s").read_text().splitlines()
 item_cmd_mod = (core / "player_item_commands.s").read_text().splitlines()
 item_actions_mod = (core / "item_actions_overlay.s").read_text().splitlines()
 throw_mod = (core / "throw.s").read_text().splitlines()
 loop_mod = (core / "game_loop.s").read_text().splitlines()
 dfeat = (core / "dungeon_features.s").read_text().splitlines()
+dfeat_actions = (core / "dungeon_feature_actions.s").read_text().splitlines()
 help_mod = (core / "ui_help.s").read_text().splitlines()
 store_mod = (core / "ui_store.s").read_text().splitlines()
 loop_helpers = (core / "game_loop_helpers.s").read_text().splitlines()
@@ -1388,12 +1389,12 @@ if not (
     print("item_takeoff prompt is not using Huffman-backed prompt path")
     raise SystemExit(1)
 
-if not has_ordered_chain(items, [
+if not has_ordered_chain(item_prompt_mod, [
     "piw_print_prompt_with_count:",
     "php",
     "sei",
     "jsr huff_decode_string",
-], window=8) or not has_ordered_chain(items, [
+], window=8) or not has_ordered_chain(item_prompt_mod, [
     "!piw_prompt_print:",
     "plp",
     "jmp msg_print_current_ptr",
@@ -1459,7 +1460,7 @@ required_chains = [
         "ldx #HSTR_TW_PROMPT",
         "jsr piw_select_filtered_inv",
     ]),
-    ("get_direction_target", dfeat, [
+    ("get_direction_target", dfeat_actions, [
         "ldx #HSTR_DF_DIRECTION",
         "jsr huff_print_msg",
         "jsr input_prepare_followup_key",
@@ -1539,7 +1540,7 @@ required_chains = [
         "jsr input_prepare_followup_key",
         "jsr hal_input_get_key",
     ]),
-    ("inventory_overlay_select", (core / "player_items.s").read_text().splitlines(), [
+    ("inventory_overlay_select", item_prompt_mod, [
         "show_inv_and_select:",
         "jsr input_prepare_selectable_overlay_key",
         "jsr tramp_ui_inv_select_display",

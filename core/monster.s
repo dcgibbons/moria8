@@ -7,6 +7,8 @@
 // Active monster table: 32 slots x 12 bytes each.
 // Spawn, find, remove subroutines for the monster system.
 
+#import "monster_flags.s"
+
 // ============================================================
 // Constants
 // ============================================================
@@ -113,16 +115,6 @@ cr_speed:
     .fill MAX_DUNGEON_CREATURES, 0                           // 0-56: loaded from tier data
 #endif
     .byte 1, 1, 1, 1, 1, 1, 1, 1                             // 57-64: town
-
-// Movement/classification flags
-.const CF_ATTACK_ONLY = $01
-.const CF_UNDEAD      = $02
-.const CF_EVIL        = $04
-.const CF_ANIMAL      = $08
-.const CF_DRAGON      = $10
-.const CF_GROUP       = $20   // Pack creature: spawns extras, wakes neighbors
-.const CF_BREEDER     = $40   // Multiplying creature: chance to clone each turn
-.const CF_INFRA       = $80   // Warm creature: visible to player infravision
 
 cr_mflags:
 #if COMPILE_EMBEDDED_DUNGEON_TEST_ROSTER

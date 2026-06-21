@@ -3205,9 +3205,9 @@ check_static_contract "c64_charset_switch_locked_before_irq_release_contract" "i
     "input_wait_release:|||lda #BANK_NO_BASIC|||sta \$01|||jsr c64_install_ram_irq_vectors|||jsr input_lock_charset_switch|||cli|||!iwr_drain:"
 check_static_contract "c64_input_restores_bank_before_irq_contract" "input.s" \
     "input_get_key:|||jsr KERNAL_GETIN|||sta igk_key|||sei|||pla|||sta \$01|||jsr c64_install_ram_irq_vectors|||plp|||lda igk_key"
-check_static_contract "inventory_overlay_fresh_key_contract" "../../../core/player_items.s" \
+check_static_contract "inventory_overlay_fresh_key_contract" "../../../core/player_item_prompt.s" \
     "show_inv_and_select:|||jsr input_prepare_selectable_overlay_key|||jsr tramp_ui_inv_select_display|||jsr input_get_followup_key"
-check_static_contract "inventory_overlay_items_reload_contract" "../../../core/player_items.s" \
+check_static_contract "inventory_overlay_items_reload_contract" "../../../core/player_item_prompt.s" \
     "show_inv_and_select:|||lda piw_return_overlay|||bne !sias_have_return_overlay+|||tsx|||lda \$0102,x|||cmp #\$e0|||!sias_check_outer_return:|||lda \$0104,x|||cmp #\$e0|||!sias_return_overlay:|||lda current_overlay|||cmp #OVL_ITEMS|||!sias_store_return_overlay:|||sta piw_return_overlay|||jsr ui_view_restore_modal_overlay|||lda #OVL_NONE|||sta piw_return_overlay|||txa|||beq !sias_no_overlay_reload+|||jsr overlay_load|||brk|||sei|||jsr hal_irq_install_runtime|||lda #BANK_NO_KERNAL|||sta hal_memory_cpu_port"
 check_static_contract "item_action_inventory_overlay_hint_contract" "../../../core/item_actions_overlay.s" \
     "item_action_select_filtered_inv:|||jsr item_action_get_key|||cmp #\$3f|||lda #OVL_ITEMS|||sta piw_return_overlay|||jmp piw_select_filtered_inv_key"
@@ -3225,7 +3225,7 @@ check_static_contract "equip_action_messages_stat_desc_contract" "../../../core/
     "Build message: \"YOU ARE WIELDING A <name>.\"|||lda piw_item_id|||jsr item_append_desc|||Build message: \"YOU TAKE OFF THE <name>.\"|||lda piw_item_id|||jsr item_append_desc"
 check_static_contract "throw_action_messages_stat_desc_contract" "../../../core/throw.s" \
     "tw_msg_item_prefix:|||jsr tw_stage_saved_item_fields|||lda tw_item_id|||jsr item_append_desc|||tw_stage_saved_item_fields:|||lda tw_save_to_hit|||sta fi_add_to_hit|||lda tw_save_to_dam|||sta fi_add_to_dam|||lda tw_save_flags|||sta fi_add_flags"
-check_static_contract "equip_overlay_fresh_key_contract" "../../../core/player_items.s" \
+check_static_contract "equip_overlay_fresh_key_contract" "../../../core/player_item_prompt.s" \
     "show_equip_and_select:|||jsr input_prepare_selectable_overlay_key|||jsr tramp_ui_equip_select_display|||jsr input_get_followup_key"
 check_static_contract "spell_list_overlay_fresh_key_contract" "../../../core/player_magic.s" \
     "!pm_psc_show_list:|||jsr input_prepare_selectable_overlay_key|||jsr tramp_spell_list_display|||jsr input_get_followup_key"

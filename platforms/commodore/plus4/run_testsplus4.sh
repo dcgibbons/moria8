@@ -149,7 +149,7 @@ run_plus4_static_contracts() {
 from pathlib import Path
 
 root = Path("../../..").resolve()
-player_items = (root / "core" / "player_items.s").read_text().splitlines()
+player_item_prompt = (root / "core" / "player_item_prompt.s").read_text().splitlines()
 item_actions_overlay = (root / "core" / "item_actions_overlay.s").read_text().splitlines()
 
 def has_ordered_chain(lines: list[str], tokens: list[str], window: int = 40) -> bool:
@@ -168,7 +168,7 @@ def has_ordered_chain(lines: list[str], tokens: list[str], window: int = 40) -> 
             return True
     return False
 
-if not has_ordered_chain(player_items, [
+if not has_ordered_chain(player_item_prompt, [
     "show_inv_and_select:",
     "$0102,x",
     "$0104,x",

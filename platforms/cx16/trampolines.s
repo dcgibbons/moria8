@@ -2,13 +2,14 @@
 // trampolines.s - CX16 resident-call adapters for shared gameplay.
 
 tramp_spawn_special_room_monsters:
-    jmp spawn_special_room_monsters
+    rts
 
 tramp_spawn_nest_gold:
-    jmp spawn_nest_gold
+    rts
 
 tramp_find_special_room:
-    jmp find_special_room
+    clc
+    rts
 
 tramp_assign_special_room:
     jmp assign_special_room
@@ -43,10 +44,14 @@ tramp_ego_get_ac_bonus:
     jmp ego_get_ac_bonus
 
 tramp_ego_apply_damage:
+#if HAL_PLATFORM_NO_EGO_DAMAGE
+    rts
+#else
     jmp ego_apply_damage
+#endif
 
 tramp_ui_inv_select_display:
-    rts
+    jmp ui_inv_select_display
 
 tramp_ui_equip_select_display:
     rts
@@ -58,7 +63,11 @@ tramp_ui_char_display:
     rts
 
 tramp_ui_help_display:
+    rts
+
 tramp_ui_inv_display:
+    jmp ui_inv_display
+
 tramp_ui_equip_display:
 tramp_ui_recall:
     rts
@@ -85,7 +94,8 @@ tramp_disk_setup:
     rts
 
 tramp_player_create:
-    jmp player_create
+    sec
+    rts
 
 tramp_level_generate:
     jmp level_generate

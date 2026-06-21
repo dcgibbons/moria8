@@ -136,6 +136,7 @@ ego_ac_bonus:
 // Input: A = ego type (1-7, already validated nonzero by caller)
 // Clobbers: A, X, Y, zp_math_a/b, zp_temp3, zp_temp4
 // ============================================================
+#if !HAL_PLATFORM_NO_EGO_DAMAGE
 ego_apply_damage:
     sta ead_ego_type
 
@@ -209,6 +210,7 @@ ego_apply_damage:
     rts
 
 ead_ego_type: .byte 0
+#endif
 
 // ============================================================
 // ego_get_ac_bonus — Get AC bonus for an ego type

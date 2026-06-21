@@ -51,15 +51,16 @@
 #import "memory.s"
 #import "../../core/color.s"
 #import "../../core/dungeon_data.s"
+#import "../../core/monster_flags.s"
 .const CX16_DUNGEON_ROOM_FLAGS = FLAG_LIT | FLAG_VISITED
 #import "../../core/player_state.s"
 #import "../../core/item_defs.s"
 #import "../../core/item_categories.s"
-#import "../../core/item_state.s"
 #import "../../core/dungeon_feature_gen.s"
 #import "../../core/math.s"
 #import "../../core/tables.s"
 #import "../../core/rng.s"
+#import "../../core/numeric_format.s"
 #import "../../core/player_move_basic.s"
 #import "../../core/player_search.s"
 #import "../../core/town_map_basic.s"
@@ -78,6 +79,16 @@
 #import "../../core/input_ui_helpers.s"
 #import "../../core/ui_messages.s"
 #import "../../core/huffman.s"
+#if !CX16_IMPORT_SHARED_GAME_LOOP
+#import "item_message.s"
+#endif
+#import "../../core/ui_help_clear.s"
+#import "../../core/item.s"
+#import "../../core/ego_items.s"
+#import "trampolines.s"
+#import "../../core/item_desc_banked.s"
+#import "../../core/player_item_prompt.s"
+#import "../../core/ui_inventory.s"
 #import "../../core/dungeon_feature_actions.s"
 #import "../../core/tunnel.s"
 #import "../../core/player_dig_ability.s"
@@ -294,6 +305,12 @@ cx16_dispatch_game_command:
     beq !version+
     cmp #CMD_WIZARD
     beq !wizard+
+    cmp #CMD_PICKUP
+    beq !pickup+
+    cmp #CMD_DROP
+    beq !drop+
+    cmp #CMD_INVENTORY
+    beq !inventory+
     cmp #CMD_OPEN
     bcc !done+
     cmp #CMD_USE + 1
@@ -331,6 +348,12 @@ cx16_dispatch_game_command:
     jmp cx16_show_character_info
 !wizard:
     jmp cx16_show_wizard_stub
+!pickup:
+    jmp cx16_cmd_pickup
+!drop:
+    jmp cx16_cmd_drop
+!inventory:
+    jmp cx16_cmd_inventory
 !item:
     jmp cx16_show_item_stub
 !done:
@@ -484,6 +507,51 @@ cx16_cmd_tunnel:
     jmp cx16_after_feature_turn
 !done:
     rts
+
+cx16_cmd_pickup:
+    lda cx16_state
+    cmp #CX16_STATE_DUNGEON_BOOTSTRAP
+    beq !dungeon+
+    jmp cx16_show_item_stub
+!dungeon:
+    jsr msg_clear
+    jsr item_pickup
+    bcc !done+
+    jmp cx16_after_item_turn
+!done:
+    rts
+
+cx16_cmd_drop:
+    lda cx16_state
+    cmp #CX16_STATE_DUNGEON_BOOTSTRAP
+    beq !dungeon+
+    jmp cx16_show_item_stub
+!dungeon:
+    jsr msg_clear
+    jsr item_drop
+    bcc !done+
+    jmp cx16_after_item_turn
+!done:
+    rts
+
+cx16_cmd_inventory:
+    lda cx16_state
+    cmp #CX16_STATE_DUNGEON_BOOTSTRAP
+    beq !dungeon+
+    jmp cx16_show_item_stub
+!dungeon:
+    lda #$ff
+    sta piw_filter
+    jsr input_prepare_modal_dismiss_key
+    jsr ui_inv_display
+    jsr input_get_modal_dismiss_key
+    jmp cx16_refresh_dungeon_view
+
+cx16_after_item_turn:
+    jsr cx16_sync_local_player_position
+    jsr update_visibility
+    jsr cx16_update_dungeon_view
+    jmp cx16_render_dungeon_viewport
 
 cx16_after_feature_turn:
     jsr cx16_sync_shared_player_position
@@ -663,6 +731,10 @@ cx16_enter_dungeon_bootstrap:
     :Cx16PrintAt(26, 21, cx16_dungeon_module_failed_text)
     rts
 !module_ok:
+    lda #1
+    sta zp_player_dlvl
+    sta player_data + PL_DLEVEL
+    jsr item_spawn_level
     lda #CX16_BOOTSTRAP_LIGHT_RADIUS
     sta zp_light_radius
     sta player_data + PL_LIGHT_RAD
@@ -936,6 +1008,12 @@ cx16_item_catalog_failed_text:
     :ScreenText("ITEMCAT.1 LOAD FAILED")
     .byte 0
 
+#if !CX16_IMPORT_SHARED_GAME_LOOP
+press_key_str:
+    :ScreenText("Press any key")
+    .byte 0
+#endif
+
 cx16_state: .byte CX16_STATE_TITLE
 cx16_player_x: .byte 0
 cx16_player_y: .byte 0
@@ -957,14 +1035,6 @@ cx16_dungeon_module_entry:
     ldy #CX16_DUNGEON_MODULE_VERSION
     rts
 
-#if !CX16_IMPORT_SHARED_GAME_LOOP
-tramp_assign_special_room:
-    jmp assign_special_room
-
-tramp_vault_seal_entrance:
-    jmp vault_seal_entrance
-
-#endif
 #import "../../core/special_room_gen.s"
 #import "../../core/dungeon_gen.s"
 

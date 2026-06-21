@@ -33,8 +33,10 @@ TILE_QUARTZ = 0xD0
 TILE_TRAP = 0xE0
 TILE_TYPE_MASK = 0xF0
 DUNGEON_FLAGS = 0x0C
+FLAG_HAS_ITEM = 0x02
 MAP_COLS = 198
 MAP_ROWS = 66
+MAX_FLOOR_ITEMS = 42
 EQUIP_WEAPON = 22
 ITEM_PICK = 63
 BOOTSTRAP_PICK_DIG_ABILITY = 24
@@ -313,6 +315,28 @@ def assert_map_tile_type(bench, labels, x, y, expected_type, label):
 
 def tile_type(tile):
     return tile & TILE_TYPE_MASK
+
+
+def assert_floor_items_spawned(bench, labels):
+    item_count = bench.get_memory(require(labels, "zp_item_count"))
+    if item_count == 0:
+        raise AssertionError("dungeon entry did not spawn floor items")
+
+    item_base = require(labels, "fi_item_id")
+    item_x_base = require(labels, "fi_x")
+    item_y_base = require(labels, "fi_y")
+    for slot in range(MAX_FLOOR_ITEMS):
+        item_id = bench.get_memory(item_base + slot)
+        if item_id == 0xFF:
+            continue
+        x = bench.get_memory(item_x_base + slot)
+        y = bench.get_memory(item_y_base + slot)
+        tile = map_tile_at(bench, labels, x, y)
+        if not (tile & FLAG_HAS_ITEM):
+            raise AssertionError(f"floor item slot {slot} at ({x},{y}) missing FLAG_HAS_ITEM")
+        return
+
+    raise AssertionError("zp_item_count is nonzero but no occupied floor item slot was found")
 
 
 def find_map_tile_type(bench, labels, wanted_type, label):
@@ -725,6 +749,7 @@ def main():
         entry_x = bench.get_memory(require(labels, "zp_player_x"))
         entry_y = bench.get_memory(require(labels, "zp_player_y"))
         assert_player_position(bench, labels, entry_x, entry_y, "dungeon entry player position")
+        assert_floor_items_spawned(bench, labels)
         assert_map_tile_type(bench, labels, entry_x, entry_y, TILE_STAIRS_UP, "module stairs up tile")
         down_x, down_y = find_map_tile_type(bench, labels, TILE_STAIRS_DN, "module stairs down")
         floor_x, floor_y = find_map_tile_type(bench, labels, TILE_FLOOR, "module floor")
