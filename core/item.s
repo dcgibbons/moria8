@@ -1742,6 +1742,7 @@ re_negate_a:
 // Compile-time validation
 // ============================================================
 .assert "Item type count", ITEM_TYPE_COUNT, 96
+#if !ITEM_TABLES_RESIDENT_NAMES_ONLY
 .assert "it_category size", it_category_end - it_category, ITEM_TYPE_COUNT
 .assert "it_display size", it_color - it_display, ITEM_TYPE_COUNT
 .assert "it_color size", it_weight - it_color, ITEM_TYPE_COUNT
@@ -1754,6 +1755,7 @@ re_negate_a:
 .assert "it_cost_hi size", it_cost_hi_end - it_cost_hi, ITEM_TYPE_COUNT
 #endif
 .assert "it_min_level size", it_min_level_end - it_min_level, ITEM_TYPE_COUNT
+#endif
 .assert "it_name_lo size", it_name_lo_end - it_name_lo, ITEM_TYPE_COUNT
 #if !(C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME)
 .assert "it_name_hi size", it_name_hi_end - it_name_hi, ITEM_TYPE_COUNT

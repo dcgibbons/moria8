@@ -27,6 +27,7 @@ def base_labels(program_end):
         "cx16_contract_transient_bank_end": contract.CX16_TRANSIENT_BANK_END,
         "cx16_contract_resident_code_base": contract.CX16_RESIDENT_CODE_BASE,
         "cx16_contract_resident_code_limit": contract.CX16_RESIDENT_CODE_LIMIT,
+        "cx16_contract_resident_product_limit": contract.CX16_RESIDENT_PRODUCT_LIMIT,
         "cx16_contract_fixed_live_map_base": contract.CX16_FIXED_LIVE_MAP_BASE,
         "cx16_contract_fixed_live_map_end": contract.CX16_FIXED_LIVE_MAP_END,
         "cx16_contract_floor_item_base": contract.CX16_FLOOR_ITEM_BASE,
@@ -75,6 +76,18 @@ def base_labels(program_end):
         "cx16_contract_data_cache_bank_end": contract.CX16_DATA_CACHE_BANK_END,
         "cx16_contract_work_bank_base": contract.CX16_WORK_BANK_BASE,
         "cx16_contract_work_bank_end": contract.CX16_WORK_BANK_END,
+        "title_load_and_draw": contract.CX16_BANKED_RAM_BASE,
+        "ui_inv_display": contract.CX16_BANKED_RAM_BASE,
+        "itemdesc_put_inv_slot": contract.CX16_BANKED_RAM_BASE,
+        "piw_prompt_filtered_inv": contract.CX16_BANKED_RAM_BASE,
+        "door_try_open": contract.CX16_BANKED_RAM_BASE,
+        "door_try_close": contract.CX16_BANKED_RAM_BASE,
+        "do_search": contract.CX16_BANKED_RAM_BASE,
+        "bash_command": contract.CX16_BANKED_RAM_BASE,
+        "player_tunnel": contract.CX16_BANKED_RAM_BASE,
+        "disarm_command": contract.CX16_BANKED_RAM_BASE,
+        "get_direction_target": contract.CX16_RESIDENT_CODE_BASE,
+        "item_load_category_x": contract.CX16_RESIDENT_CODE_BASE,
     }
 
 
@@ -106,6 +119,9 @@ def test_product_symbol_contract():
 
     bad = base_labels(contract.CX16_RESIDENT_CODE_LIMIT + 1)
     assert_raises(lambda: contract.check_product_symbols(bad), "overlaps fixed live-map")
+
+    over_policy = base_labels(contract.CX16_RESIDENT_PRODUCT_LIMIT + 1)
+    assert_raises(lambda: contract.check_product_symbols(over_policy), "resident product policy")
 
 
 def test_shared_probe_symbol_contract():

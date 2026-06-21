@@ -9,7 +9,8 @@
 // Fixed RAM:
 //   - zero page / KERNAL workspace:  $0000-$03FF
 //   - dungeon-gen BFS queue:         $0400-$07FF
-//   - resident product image:        $0801-(MAP_BASE-1)
+//   - resident product image:        $0801-(CX16_RESIDENT_PRODUCT_LIMIT-1)
+//   - fixed-code growth reserve:     CX16_RESIDENT_PRODUCT_LIMIT-(MAP_BASE-1)
 //   - live map, 198x66:              MAP_BASE-MAP_END
 //   - floor item table:              FLOOR_ITEM_BASE-FLOOR_ITEM_END
 //   - active monster arena:          CREATURE_BASE-CREATURE_END
@@ -54,6 +55,7 @@
 .const CX16_PRG_LOAD_BASE = $0801
 .const CX16_RESIDENT_CODE_BASE = $0810
 .const CX16_RESIDENT_CODE_LIMIT = MAP_BASE
+.const CX16_RESIDENT_PRODUCT_LIMIT = $6000
 .const CX16_RAM_BANK_PROBE0 = 0
 .const CX16_RAM_BANK_PROBE1 = 1
 .const CX16_RAM_BANK_PROBE0_SENTINEL = $a5
@@ -116,6 +118,8 @@
 
 .assert "CX16 PRG load base matches BASIC stub", CX16_PRG_LOAD_BASE, $0801
 .assert "CX16 resident machine-code base", CX16_RESIDENT_CODE_BASE, $0810
+.assert "CX16 resident product limit stays below live-map base", CX16_RESIDENT_PRODUCT_LIMIT < CX16_RESIDENT_CODE_LIMIT, true
+.assert "CX16 resident product keeps at least 2KB fixed-code reserve", CX16_RESIDENT_CODE_LIMIT - CX16_RESIDENT_PRODUCT_LIMIT >= $0800, true
 .assert "CX16 RAM bank count covers 512KB banked RAM", CX16_RAM_BANK_COUNT * CX16_BANKED_RAM_SIZE, 512 * 1024
 .assert "CX16 default bank is bank 0", CX16_RAM_BANK_DEFAULT, 0
 .assert "CX16 transient bank class starts after default bank", CX16_TRANSIENT_BANK_BASE, CX16_RAM_BANK_DEFAULT + 1

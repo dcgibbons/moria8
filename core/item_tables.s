@@ -9,6 +9,7 @@
 // Master Item Type Table — Struct-of-Arrays
 // ============================================================
 
+#if !ITEM_TABLES_RESIDENT_NAMES_ONLY
 #import "item_categories.s"
 
 // Display character (screen codes)
@@ -394,6 +395,7 @@ it_min_level_end:
 
 #if C64_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME
 .segment Default
+#endif
 #endif
 
 // Missile type table — encodes ranged weapon/ammo relationships

@@ -87,7 +87,6 @@
 .const CX16_DUNGEON_ROOM_FLAGS = FLAG_LIT | FLAG_VISITED
 #import "../../core/player_state.s"
 #import "../../core/item_defs.s"
-#import "../../core/item_categories.s"
 #import "../../core/dungeon_feature_gen.s"
 #import "../../core/math.s"
 #import "../../core/tables.s"
@@ -117,20 +116,15 @@
 #import "item_message.s"
 #endif
 #import "../../core/ui_help_clear.s"
+#define ITEM_TABLES_RESIDENT_NAMES_ONLY
 #import "../../core/item.s"
+#undef ITEM_TABLES_RESIDENT_NAMES_ONLY
 #import "../../core/ego_items.s"
 #import "trampolines.s"
-#import "../../core/item_desc_banked.s"
-#import "../../core/player_item_prompt.s"
-#import "../../core/ui_inventory.s"
-#import "../../core/dungeon_feature_actions.s"
+#import "../../core/dungeon_direction.s"
 #import "../../core/trap_table.s"
 #import "../../core/trap_detection.s"
-#import "../../core/disarm_helpers.s"
-#import "../../core/disarm.s"
-#import "../../core/tunnel.s"
 #import "../../core/player_dig_ability.s"
-#import "../../core/bash.s"
 #if CX16_IMPORT_SHARED_GAME_LOOP
 #import "shared_imports.s"
 #endif
@@ -144,6 +138,7 @@
 .label cx16_contract_transient_bank_end = CX16_TRANSIENT_BANK_END
 .label cx16_contract_resident_code_base = CX16_RESIDENT_CODE_BASE
 .label cx16_contract_resident_code_limit = CX16_RESIDENT_CODE_LIMIT
+.label cx16_contract_resident_product_limit = CX16_RESIDENT_PRODUCT_LIMIT
 .label cx16_contract_fixed_live_map_base = CX16_FIXED_LIVE_MAP_BASE
 .label cx16_contract_fixed_live_map_end = CX16_FIXED_LIVE_MAP_END
 .label cx16_contract_floor_item_base = FLOOR_ITEM_BASE
@@ -327,8 +322,7 @@ cx16_title_enter_menu:
     sta cx16_state
     lda #CX16_TEXT_COLOR
     jsr screen_set_color
-    jsr title_load_and_draw
-    jsr title_clear_below_menu
+    jsr cx16_call_startup_overlay_entry
     jmp cx16_title_draw_menu
 
 cx16_title_draw_menu:
@@ -850,6 +844,16 @@ cx16_call_items_overlay_command:
     pla
     rts
 
+cx16_call_startup_overlay_entry:
+    lda CX16_RAM_BANK_REG
+    pha
+    lda #CX16_OVERLAY_STARTUP_BANK
+    sta CX16_RAM_BANK_REG
+    jsr cx16_overlay_startup_entry
+    pla
+    sta CX16_RAM_BANK_REG
+    rts
+
 cx16_overlay_saved_bank: .byte 0
 
 cx16_after_item_turn:
@@ -1327,8 +1331,6 @@ hal_title_art_read_ptr1:
 
 cx16_title_read_saved_bank: .byte 0
 
-#import "../commodore/common/title_screen.s"
-
 title_str:
     :ScreenText("MORIA8")
     .byte 0
@@ -1442,20 +1444,6 @@ cx16_loading_header_text:
     :ScreenText("LOADING:")
     .byte 0
 
-#if !CX16_IMPORT_SHARED_GAME_LOOP
-search_mode_on_str:
-    .text "Search mode on." ; .byte 0
-
-search_mode_off_str:
-    .text "Search mode off." ; .byte 0
-#endif
-
-#if !CX16_IMPORT_SHARED_GAME_LOOP
-press_key_str:
-    :ScreenText("Press any key")
-    .byte 0
-#endif
-
 cx16_state: .byte CX16_STATE_TITLE
 cx16_player_x: .byte 0
 cx16_player_y: .byte 0
@@ -1490,7 +1478,13 @@ cx16_dungeon_module_end:
 
 .segment Cx16StartupOverlay
 cx16_overlay_startup_entry:
+#if !CX16_IMPORT_SHARED_GAME_LOOP
+    jsr title_load_and_draw
+    jmp title_clear_below_menu
+#else
     rts
+#endif
+    #import "../commodore/common/title_screen.s"
     :Cx16OverlayMarker(1)
 cx16_overlay_startup_end:
 .print "CX16 STARTUP overlay: " + (cx16_overlay_startup_end - $a000) + " bytes at $A000-$" + toHexString(cx16_overlay_startup_end)
@@ -1754,11 +1748,19 @@ cx16_overlay_items_command_entry:
 #else
     rts
 #endif
+#if !CX16_IMPORT_SHARED_GAME_LOOP
+    press_key_str:
+        :ScreenText("Press any key")
+        .byte 0
+#endif
     #import "../../core/player_food_consts.s"
     #import "../../core/hunger_state.s"
     #import "../../core/fear_state.s"
     #import "../../core/player_combat_calc.s"
     #import "../../core/player_recalc_equipment.s"
+    #import "../../core/item_desc_banked.s"
+    #import "../../core/player_item_prompt.s"
+    #import "../../core/ui_inventory.s"
     #import "../../core/player_item_select.s"
     #define SPELL_EFFECTS_INCLUDE_IDENTIFY
     #import "../../core/spell_effects.s"
@@ -1935,6 +1937,20 @@ cx16_overlay_feature_command_entry:
     rts
 #endif
 
+#if !CX16_IMPORT_SHARED_GAME_LOOP
+    search_mode_on_str:
+        .text "Search mode on." ; .byte 0
+
+    search_mode_off_str:
+        .text "Search mode off." ; .byte 0
+#endif
+
+    #import "../../core/dungeon_feature_actions.s"
+    #import "../../core/disarm_helpers.s"
+    #import "../../core/disarm.s"
+    #import "../../core/tunnel.s"
+    #import "../../core/bash.s"
+
 cx16_overlay_trap_trigger:
 #if !CX16_IMPORT_SHARED_GAME_LOOP
     #import "../../core/trap_effects_body.s"
@@ -1950,6 +1966,7 @@ cx16_overlay_disarm_end:
 program_end:
 #if !CX16_IMPORT_SHARED_GAME_LOOP
 .assert "CX16 product image stays below fixed live-map base", program_end <= CX16_RESIDENT_CODE_LIMIT, true
+.assert "CX16 product image keeps resident growth reserve", program_end <= CX16_RESIDENT_PRODUCT_LIMIT, true
 #else
 .assert "CX16 shared-gameplay probe crosses fixed live-map base; keep link-only", program_end > CX16_FIXED_LIVE_MAP_BASE, true
 .assert "CX16 shared-gameplay probe crosses VERA I/O hole; keep link-only", program_end > CX16_IO_BASE, true

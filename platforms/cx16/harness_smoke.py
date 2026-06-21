@@ -725,16 +725,12 @@ def main():
         assert_eq(bench.get_memory(require(labels, "zp_player_dlvl")), 0, "town depth")
         assert_eq(bench.get_memory(require(labels, "inv_item_id") + EQUIP_WEAPON), ITEM_PICK, "bootstrap weapon")
         assert_eq(bench.get_memory(require(labels, "zp_player_str")), 18, "bootstrap strength")
-        resident_pick_category = require(labels, "it_category") + ITEM_PICK
-        saved_pick_category = bench.get_memory(resident_pick_category)
-        bench.set_memory(resident_pick_category, ICAT_WEAPON)
         bench.run(require(labels, "tramp_dig_ability"))
         assert_eq(
             bench.get_memory(require(labels, "tun_dig_ability")),
             BOOTSTRAP_PICK_DIG_ABILITY,
             "bootstrap pick dig ability from banked item catalog",
         )
-        bench.set_memory(resident_pick_category, saved_pick_category)
         assert_eq(map_tile_at(bench, labels, 32, 18), TILE_STAIRS_DN | TOWN_FLAGS, "town stairs tile")
         assert_screen_text(bench, 0, 33, "TOWN", "town title")
         assert_screen_text(

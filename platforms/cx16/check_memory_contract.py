@@ -21,6 +21,7 @@ CX16_TRANSIENT_BANK_BASE = 1
 CX16_TRANSIENT_BANK_END = 3
 CX16_RESIDENT_CODE_BASE = 0x0810
 CX16_RESIDENT_CODE_LIMIT = 0x6800
+CX16_RESIDENT_PRODUCT_LIMIT = 0x6000
 CX16_FIXED_LIVE_MAP_BASE = 0x6800
 CX16_FIXED_LIVE_MAP_END = 0x9B0B
 CX16_FLOOR_ITEM_BASE = 0x9C00
@@ -147,6 +148,7 @@ def emit_report(product, shared_probe, title, tiers, modules, items, overlays):
     live_map_size = CX16_FIXED_LIVE_MAP_END - CX16_FIXED_LIVE_MAP_BASE + 1
     bank_window_size = CX16_BANKED_RAM_END - CX16_BANKED_RAM_BASE + 1
     product_headroom = CX16_RESIDENT_CODE_LIMIT - product_program_end
+    product_policy_headroom = CX16_RESIDENT_PRODUCT_LIMIT - product_program_end
     probe_over_fixed_limit = probe_program_end - CX16_RESIDENT_CODE_LIMIT
     probe_io_overlap = overlap_span(probe_load, probe_end, CX16_IO_BASE, CX16_IO_END)
     probe_bank_overlap = overlap_span(probe_load, probe_end, CX16_BANKED_RAM_BASE, CX16_BANKED_RAM_END)
@@ -155,6 +157,7 @@ def emit_report(product, shared_probe, title, tiers, modules, items, overlays):
     print("CX16 memory contract check passed")
     print(f"  product image: {fmt_span(product_load, product_end)} ({span_size(product_load, product_end)} bytes)")
     print(f"  product program_end: {fmt_addr(product_program_end)}")
+    print(f"  product policy headroom: {product_policy_headroom} bytes before {fmt_addr(CX16_RESIDENT_PRODUCT_LIMIT)}")
     print(f"  product fixed-code headroom: {product_headroom} bytes before {fmt_addr(CX16_RESIDENT_CODE_LIMIT)}")
     print(
         "  fixed live map: "
@@ -222,6 +225,7 @@ def check_contract_symbols(labels):
         "cx16_contract_transient_bank_end": CX16_TRANSIENT_BANK_END,
         "cx16_contract_resident_code_base": CX16_RESIDENT_CODE_BASE,
         "cx16_contract_resident_code_limit": CX16_RESIDENT_CODE_LIMIT,
+        "cx16_contract_resident_product_limit": CX16_RESIDENT_PRODUCT_LIMIT,
         "cx16_contract_fixed_live_map_base": CX16_FIXED_LIVE_MAP_BASE,
         "cx16_contract_fixed_live_map_end": CX16_FIXED_LIVE_MAP_END,
         "cx16_contract_floor_item_base": CX16_FLOOR_ITEM_BASE,
@@ -280,6 +284,16 @@ def check_contract_symbols(labels):
         + 1
         > CX16_BANKED_RAM_END - CX16_BANKED_RAM_BASE + 1,
         "fixed live map must remain larger than one banked-RAM window",
+    )
+    expect_true(
+        require(labels, "cx16_contract_resident_product_limit") < require(labels, "cx16_contract_resident_code_limit"),
+        "resident product limit must stay below fixed-code limit",
+    )
+    expect_true(
+        require(labels, "cx16_contract_resident_code_limit")
+        - require(labels, "cx16_contract_resident_product_limit")
+        >= 0x0800,
+        "resident product policy must keep at least 2KB fixed-code reserve",
     )
     expect_true(
         require(labels, "cx16_contract_bfs_queue_end") < require(labels, "cx16_contract_prg_load_base"),
@@ -442,6 +456,30 @@ def check_product_symbols(labels):
     program_end = require(labels, "program_end")
     expect_true(program_end >= CX16_RESIDENT_CODE_BASE, "product image ends before resident code starts")
     expect_true(program_end <= CX16_RESIDENT_CODE_LIMIT, "product image overlaps fixed live-map region")
+    expect_true(program_end <= CX16_RESIDENT_PRODUCT_LIMIT, "product image exceeds resident product policy limit")
+    for name in (
+        "title_load_and_draw",
+        "ui_inv_display",
+        "itemdesc_put_inv_slot",
+        "piw_prompt_filtered_inv",
+        "door_try_open",
+        "door_try_close",
+        "do_search",
+        "bash_command",
+        "player_tunnel",
+        "disarm_command",
+    ):
+        value = require(labels, name)
+        expect_true(
+            CX16_BANKED_RAM_BASE <= value <= CX16_BANKED_RAM_END,
+            f"{name} must live in a CX16 bank-window overlay",
+        )
+    for name in ("get_direction_target", "item_load_category_x"):
+        value = require(labels, name)
+        expect_true(
+            CX16_RESIDENT_CODE_BASE <= value < CX16_RESIDENT_PRODUCT_LIMIT,
+            f"{name} must remain in fixed resident code",
+        )
 
 
 def check_shared_probe_symbols(labels):
