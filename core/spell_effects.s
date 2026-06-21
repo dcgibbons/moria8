@@ -23,41 +23,7 @@
 
 eff_target_slot: .byte 0           // Target slot for identify
 
-// ============================================================
-// eff_heal — Heal player HP
-// Input: A = heal amount (8-bit, pre-rolled)
-// Output: HP updated in ZP and player_data, capped at max
-// Clobbers: A
-// ============================================================
-eff_heal:
-    clc
-    adc zp_player_hp_lo
-    sta zp_player_hp_lo
-    lda zp_player_hp_hi
-    adc #0
-    sta zp_player_hp_hi
-
-    // Cap at max HP (16-bit compare)
-    lda zp_player_hp_hi
-    cmp zp_player_mhp_hi
-    bcc !eh_ok+
-    bne !eh_clamp+
-    lda zp_player_hp_lo
-    cmp zp_player_mhp_lo
-    bcc !eh_ok+
-    beq !eh_ok+
-!eh_clamp:
-    lda zp_player_mhp_lo
-    sta zp_player_hp_lo
-    lda zp_player_mhp_hi
-    sta zp_player_hp_hi
-!eh_ok:
-    // Sync to player_data
-    lda zp_player_hp_lo
-    sta player_data + PL_HP_LO
-    lda zp_player_hp_hi
-    sta player_data + PL_HP_HI
-    rts
+#import "effect_heal.s"
 
 // ============================================================
 // eff_light_room — Light the room the player is in
@@ -288,29 +254,14 @@ pmx_cure_poison_msg:
     rts
 #endif
 
-// ============================================================
-// eff_detect_monsters — Activate detect monsters effect (timer)
-// While timer > 0, renderer shows detected monsters regardless
-// of tile visibility. No permanent FLAG_VISITED side-effect.
-// Input: none
-// Output: eff_detect_timer set, vis_room_revealed = 1
-// Clobbers: A
-// ============================================================
-.const DETECT_TIMER_TURNS = 20
-.const EDEO_MX_X = 0
-.const EDEO_MX_Y = 1
-.const EDEO_CF_EVIL = $04
-
-eff_detect_timer: .byte 0
-
-eff_detect_monsters:
-    lda #DETECT_TIMER_TURNS
-    sta eff_detect_timer
-    lda #1
-    sta vis_room_revealed
-    rts
+#import "effect_detect_monsters.s"
 
 eff_detect_evil_only:
+#if HAL_PLATFORM_NO_MONSTER_TARGETS
+    lda #0
+    sta vis_room_revealed
+    rts
+#else
     lda #0
     sta eff_detect_timer
     tax
@@ -367,6 +318,7 @@ eff_detect_evil_only:
 !edeo_done:
     lda vis_room_revealed
     rts
+#endif
 
 // ============================================================
 // eff_remove_curse — Clear IF_CURSED on all equipped items
@@ -561,6 +513,9 @@ for_each_adjacent:
 // Clobbers: A, X, Y, zp_ptr0, zp_temp0-1
 // ============================================================
 eff_sleep_adjacent:
+#if HAL_PLATFORM_NO_MONSTER_TARGETS
+    rts
+#else
     lda #<!esa_cb+
     sta adj_callback
     lda #>!esa_cb+
@@ -575,6 +530,7 @@ eff_sleep_adjacent:
     jsr monster_apply_sleep
 !esa_skip:
     rts
+#endif
 
 // ============================================================
 // eff_bolt — Fire a bolt in a direction, damaging first monster hit
@@ -598,6 +554,9 @@ eff_bolt:
     bcs !eb_has_dir+
     rts                             // Cancelled
 !eb_has_dir:
+#if HAL_PLATFORM_NO_MONSTER_TARGETS
+    rts
+#else
     jsr calc_direction_index
     bcs !eb_dir_ok+
     rts                             // No valid direction
@@ -698,6 +657,7 @@ eff_bolt:
     lda #SFX_HIT
     jsr hal_sound_play
     rts
+#endif
 
 // ============================================================
 // eff_damage_adjacent — Damage all adjacent monsters (area effect)
@@ -708,6 +668,9 @@ eff_da_dice:  .byte 0
 eff_da_sides: .byte 0
 
 eff_damage_adjacent:
+#if HAL_PLATFORM_NO_MONSTER_TARGETS
+    rts
+#else
     sta eff_da_dice
     stx eff_da_sides
     lda #0
@@ -752,6 +715,7 @@ eff_damage_adjacent:
     jsr combat_print_winner_message
 !eda_skip:
     rts
+#endif
 
 // ============================================================
 // eff_directional_monster — Get direction, trace until the first monster hit
@@ -762,6 +726,11 @@ eff_damage_adjacent:
 eff_directional_monster:
     jsr get_direction_target
     bcc !edm_fail+
+#if HAL_PLATFORM_NO_MONSTER_TARGETS
+    clc
+!edm_fail:
+    rts
+#else
     jsr calc_direction_index
     bcc !edm_fail+
     lda zp_player_x
@@ -783,6 +752,7 @@ eff_directional_monster:
 !edm_fail:
 !edm_done:
     rts
+#endif
 
 // ============================================================
 // eff_destroy_traps_doors — Destroy traps and jam doors open in radius
@@ -982,6 +952,9 @@ ewtm_save_tile: .byte 0
 // Clobbers: A, X, Y, zp_ptr0, zp_ptr1, zp_temp0-4, zp_math_a/b
 // ============================================================
 eff_kill_monster:
+#if HAL_PLATFORM_NO_MONSTER_TARGETS
+    rts
+#else
     // Get monster type for XP award
     jsr monster_get_ptr
     ldy #MX_TYPE
@@ -998,12 +971,16 @@ eff_kill_monster:
     jsr combat_note_kill
 
     rts
+#endif
 
 // ============================================================
 // eff_aggravate — Wake all monsters (clear sleep timer)
 // Clobbers: A, X, Y, zp_ptr0
 // ============================================================
 eff_aggravate:
+#if HAL_PLATFORM_NO_MONSTER_TARGETS
+    rts
+#else
     ldx #0
 !eag_loop:
     cpx #MAX_MONSTERS
@@ -1021,3 +998,4 @@ eff_aggravate:
     jmp !eag_loop-
 !eag_done:
     rts
+#endif

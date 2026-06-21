@@ -425,6 +425,7 @@ item_eat:
 // ============================================================
 // String data (screen codes via inherited encoding)
 // ============================================================
+#if !PLAYER_ITEM_BASIC_COMMANDS_ONLY
 // ============================================================
 // item_quaff — Quaff a potion from inventory
 // Prompts "QUAFF WHICH POTION (A-V)?", waits for keypress.
@@ -700,3 +701,4 @@ iq_effect_generic:
     jsr huff_print_msg
     sec
     rts
+#endif

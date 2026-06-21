@@ -54,6 +54,15 @@
 .const CX16_ITEM_CMD_PICKUP = 0
 .const CX16_ITEM_CMD_DROP = 1
 .const CX16_ITEM_CMD_INVENTORY = 2
+.const CX16_ITEM_CMD_EQUIPMENT = 3
+.const CX16_ITEM_CMD_WEAR = 4
+.const CX16_ITEM_CMD_TAKEOFF = 5
+.const CX16_ITEM_CMD_EAT = 6
+.const CX16_ITEM_CMD_QUAFF = 7
+.const CX16_ITEM_CMD_REFUEL = 8
+.const CX16_ITEM_CMD_READ = 9
+.const CX16_ITEM_CMD_AIM = 10
+.const CX16_ITEM_CMD_USE = 11
 .const MAP_BASE = $6800
 .const C128 = false
 .const PLUS4 = false
@@ -70,6 +79,8 @@
 #import "../../core/zeropage.s"
 #import "config.s"
 #import "memory.s"
+#define PLATFORM_ACTIVE_MONSTER_TABLE_ABSOLUTE
+.const PLATFORM_ACTIVE_MONSTER_TABLE_BASE = CREATURE_BASE
 #import "../../core/color.s"
 #import "../../core/dungeon_data.s"
 #import "../../core/monster_flags.s"
@@ -101,6 +112,7 @@
 #import "../../core/input_ui_helpers.s"
 #import "../../core/ui_messages.s"
 #import "../../core/huffman.s"
+#import "../../core/effect_detect_monsters.s"
 #if !CX16_IMPORT_SHARED_GAME_LOOP
 #import "item_message.s"
 #endif
@@ -420,51 +432,133 @@ cx16_dispatch_game_command:
     jmp cx16_try_move_command
 !not_command:
     cmp #CMD_SEARCH
-    beq !search+
+    bne !not_search+
+    jmp !search+
+!not_search:
     cmp #CMD_OPEN
-    beq !open+
+    bne !not_open+
+    jmp !open+
+!not_open:
     cmp #CMD_CLOSE
-    beq !close+
+    bne !not_close+
+    jmp !close+
+!not_close:
     cmp #CMD_BASH
-    beq !bash+
+    bne !not_bash+
+    jmp !bash+
+!not_bash:
     cmp #CMD_TUNNEL
-    beq !tunnel+
+    bne !not_tunnel+
+    jmp !tunnel+
+!not_tunnel:
     cmp #CMD_DISARM
-    beq !disarm+
+    bne !not_disarm+
+    jmp !disarm+
+!not_disarm:
     cmp #CMD_REST
-    beq !rest+
+    bne !not_rest+
+    jmp !rest+
+!not_rest:
     cmp #CMD_LOOK
-    beq !activity+
+    bne !not_look+
+    jmp !activity+
+!not_look:
     cmp #CMD_SEARCH_MODE
-    beq !search_mode+
+    bne !not_search_mode+
+    jmp !search_mode+
+!not_search_mode:
     cmp #CMD_AUTOREST
-    beq !activity+
+    bne !not_autorest+
+    jmp !activity+
+!not_autorest:
     cmp #CMD_SAVE
-    beq !storage+
+    bne !not_save+
+    jmp !storage+
+!not_save:
     cmp #CMD_CAST
-    beq !magic+
+    bne !not_cast+
+    jmp !magic+
+!not_cast:
     cmp #CMD_PRAY
-    beq !magic+
+    bne !not_pray+
+    jmp !magic+
+!not_pray:
     cmp #CMD_RECALL
-    beq !magic+
+    bne !not_recall+
+    jmp !magic+
+!not_recall:
     cmp #CMD_GAIN
-    beq !magic+
+    bne !not_gain+
+    jmp !magic+
+!not_gain:
     cmp #CMD_CHAR_INFO
-    beq !char_info+
+    bne !not_char_info+
+    jmp !char_info+
+!not_char_info:
     cmp #CMD_MAP
-    beq !info+
+    bne !not_map+
+    jmp !info+
+!not_map:
     cmp #CMD_HELP
-    beq !help+
+    bne !not_help+
+    jmp !help+
+!not_help:
     cmp #CMD_VERSION
-    beq !version+
+    bne !not_version+
+    jmp !version+
+!not_version:
     cmp #CMD_WIZARD
-    beq !wizard+
+    bne !not_wizard+
+    jmp !wizard+
+!not_wizard:
     cmp #CMD_PICKUP
-    beq !pickup+
+    bne !not_pickup+
+    jmp !pickup+
+!not_pickup:
     cmp #CMD_DROP
-    beq !drop+
+    bne !not_drop+
+    jmp !drop+
+!not_drop:
     cmp #CMD_INVENTORY
-    beq !inventory+
+    bne !not_inventory+
+    jmp !inventory+
+!not_inventory:
+    cmp #CMD_EQUIPMENT
+    bne !not_equipment+
+    jmp !equipment+
+!not_equipment:
+    cmp #CMD_WEAR
+    bne !not_wear+
+    jmp !wear+
+!not_wear:
+    cmp #CMD_TAKEOFF
+    bne !not_takeoff+
+    jmp !takeoff+
+!not_takeoff:
+    cmp #CMD_EAT
+    bne !not_eat+
+    jmp !eat+
+!not_eat:
+    cmp #CMD_QUAFF
+    bne !not_quaff+
+    jmp !quaff+
+!not_quaff:
+    cmp #CMD_REFUEL
+    bne !not_refuel+
+    jmp !refuel+
+!not_refuel:
+    cmp #CMD_READ
+    bne !not_read+
+    jmp !read+
+!not_read:
+    cmp #CMD_AIM
+    bne !not_aim+
+    jmp !aim+
+!not_aim:
+    cmp #CMD_USE
+    bne !not_use+
+    jmp !use+
+!not_use:
     cmp #CMD_OPEN
     bcc !done+
     cmp #CMD_USE + 1
@@ -512,6 +606,24 @@ cx16_dispatch_game_command:
     jmp cx16_cmd_drop
 !inventory:
     jmp cx16_cmd_inventory
+!equipment:
+    jmp cx16_cmd_equipment
+!wear:
+    jmp cx16_cmd_wear
+!takeoff:
+    jmp cx16_cmd_takeoff
+!eat:
+    jmp cx16_cmd_eat
+!quaff:
+    jmp cx16_cmd_quaff
+!refuel:
+    jmp cx16_cmd_refuel
+!read:
+    jmp cx16_cmd_read
+!aim:
+    jmp cx16_cmd_aim
+!use:
+    jmp cx16_cmd_use
 !item:
     jmp cx16_show_item_stub
 !done:
@@ -668,6 +780,42 @@ cx16_cmd_drop:
 
 cx16_cmd_inventory:
     lda #CX16_ITEM_CMD_INVENTORY
+    jmp cx16_call_items_overlay_command
+
+cx16_cmd_equipment:
+    lda #CX16_ITEM_CMD_EQUIPMENT
+    jmp cx16_call_items_overlay_command
+
+cx16_cmd_wear:
+    lda #CX16_ITEM_CMD_WEAR
+    jmp cx16_call_items_overlay_command
+
+cx16_cmd_takeoff:
+    lda #CX16_ITEM_CMD_TAKEOFF
+    jmp cx16_call_items_overlay_command
+
+cx16_cmd_eat:
+    lda #CX16_ITEM_CMD_EAT
+    jmp cx16_call_items_overlay_command
+
+cx16_cmd_quaff:
+    lda #CX16_ITEM_CMD_QUAFF
+    jmp cx16_call_items_overlay_command
+
+cx16_cmd_refuel:
+    lda #CX16_ITEM_CMD_REFUEL
+    jmp cx16_call_items_overlay_command
+
+cx16_cmd_read:
+    lda #CX16_ITEM_CMD_READ
+    jmp cx16_call_items_overlay_command
+
+cx16_cmd_aim:
+    lda #CX16_ITEM_CMD_AIM
+    jmp cx16_call_items_overlay_command
+
+cx16_cmd_use:
+    lda #CX16_ITEM_CMD_USE
     jmp cx16_call_items_overlay_command
 
 cx16_call_feature_overlay_command:
@@ -1401,11 +1549,53 @@ cx16_overlay_items_entry:
 cx16_overlay_items_command_entry:
 #if !CX16_IMPORT_SHARED_GAME_LOOP
     cmp #CX16_ITEM_CMD_PICKUP
-    beq !pickup+
+    bne !not_pickup+
+    jmp !pickup+
+!not_pickup:
     cmp #CX16_ITEM_CMD_DROP
-    beq !drop+
+    bne !not_drop+
+    jmp !drop+
+!not_drop:
     cmp #CX16_ITEM_CMD_INVENTORY
-    beq !inventory+
+    bne !not_inventory+
+    jmp !inventory+
+!not_inventory:
+    cmp #CX16_ITEM_CMD_EQUIPMENT
+    bne !not_equipment+
+    jmp !equipment+
+!not_equipment:
+    cmp #CX16_ITEM_CMD_WEAR
+    bne !not_wear+
+    jmp !wear+
+!not_wear:
+    cmp #CX16_ITEM_CMD_TAKEOFF
+    bne !not_takeoff+
+    jmp !takeoff+
+!not_takeoff:
+    cmp #CX16_ITEM_CMD_EAT
+    bne !not_eat+
+    jmp !eat+
+!not_eat:
+    cmp #CX16_ITEM_CMD_QUAFF
+    bne !not_quaff+
+    jmp !quaff+
+!not_quaff:
+    cmp #CX16_ITEM_CMD_REFUEL
+    bne !not_refuel+
+    jmp !refuel+
+!not_refuel:
+    cmp #CX16_ITEM_CMD_READ
+    bne !not_read+
+    jmp !read+
+!not_read:
+    cmp #CX16_ITEM_CMD_AIM
+    bne !not_aim+
+    jmp !aim+
+!not_aim:
+    cmp #CX16_ITEM_CMD_USE
+    bne !not_use+
+    jmp !use+
+!not_use:
     rts
 
 !pickup:
@@ -1446,9 +1636,138 @@ cx16_overlay_items_command_entry:
     jsr ui_inv_display
     jsr input_get_modal_dismiss_key
     jmp cx16_refresh_dungeon_view
+
+!equipment:
+    lda cx16_state
+    cmp #CX16_STATE_DUNGEON_BOOTSTRAP
+    beq !equipment_dungeon+
+    jmp cx16_show_item_stub
+!equipment_dungeon:
+    jsr input_prepare_modal_dismiss_key
+    jsr ui_equip_display
+    jsr input_get_modal_dismiss_key
+    jmp cx16_refresh_dungeon_view
+
+!wear:
+    lda cx16_state
+    cmp #CX16_STATE_DUNGEON_BOOTSTRAP
+    beq !wear_dungeon+
+    jmp cx16_show_item_stub
+!wear_dungeon:
+    jsr msg_clear
+    jsr item_wear
+    bcc !wear_done+
+    jmp cx16_after_item_turn
+!wear_done:
+    rts
+
+!takeoff:
+    lda cx16_state
+    cmp #CX16_STATE_DUNGEON_BOOTSTRAP
+    beq !takeoff_dungeon+
+    jmp cx16_show_item_stub
+!takeoff_dungeon:
+    jsr msg_clear
+    jsr item_takeoff
+    bcc !takeoff_done+
+    jmp cx16_after_item_turn
+!takeoff_done:
+    rts
+
+!eat:
+    lda cx16_state
+    cmp #CX16_STATE_DUNGEON_BOOTSTRAP
+    beq !eat_dungeon+
+    jmp cx16_show_item_stub
+!eat_dungeon:
+    jsr msg_clear
+    jsr item_eat
+    bcc !eat_done+
+    jmp cx16_after_item_turn
+!eat_done:
+    rts
+
+!quaff:
+    lda cx16_state
+    cmp #CX16_STATE_DUNGEON_BOOTSTRAP
+    beq !quaff_dungeon+
+    jmp cx16_show_item_stub
+!quaff_dungeon:
+    jsr msg_clear
+    jsr item_quaff
+    bcc !quaff_done+
+    jmp cx16_after_item_turn
+!quaff_done:
+    rts
+
+!refuel:
+    lda cx16_state
+    cmp #CX16_STATE_DUNGEON_BOOTSTRAP
+    beq !refuel_dungeon+
+    jmp cx16_show_item_stub
+!refuel_dungeon:
+    jsr msg_clear
+    jsr item_refuel
+    bcc !refuel_done+
+    jmp cx16_after_item_turn
+!refuel_done:
+    rts
+
+!read:
+    lda cx16_state
+    cmp #CX16_STATE_DUNGEON_BOOTSTRAP
+    beq !read_dungeon+
+    jmp cx16_show_item_stub
+!read_dungeon:
+    jsr msg_clear
+    jsr item_read_scroll
+    bcc !read_done+
+    jmp cx16_after_item_turn
+!read_done:
+    rts
+
+!aim:
+    lda cx16_state
+    cmp #CX16_STATE_DUNGEON_BOOTSTRAP
+    beq !aim_dungeon+
+    jmp cx16_show_item_stub
+!aim_dungeon:
+    jsr msg_clear
+    jsr item_aim_wand
+    bcc !aim_done+
+    jmp cx16_after_item_turn
+!aim_done:
+    rts
+
+!use:
+    lda cx16_state
+    cmp #CX16_STATE_DUNGEON_BOOTSTRAP
+    beq !use_dungeon+
+    jmp cx16_show_item_stub
+!use_dungeon:
+    jsr msg_clear
+    jsr item_use_staff
+    bcc !use_done+
+    jmp cx16_after_item_turn
+!use_done:
+    rts
 #else
     rts
 #endif
+    #import "../../core/player_food_consts.s"
+    #import "../../core/hunger_state.s"
+    #import "../../core/fear_state.s"
+    #import "../../core/player_combat_calc.s"
+    #import "../../core/player_recalc_equipment.s"
+    #import "../../core/player_item_select.s"
+    #define SPELL_EFFECTS_INCLUDE_IDENTIFY
+    #import "../../core/spell_effects.s"
+    #undef SPELL_EFFECTS_INCLUDE_IDENTIFY
+    #import "../../core/effect_heal.s"
+    #import "../../core/player_heal_feedback.s"
+    #import "../../core/player_item_commands.s"
+    #import "../../core/item_actions_overlay.s"
+    #import "../../core/ui_equipment.s"
     :Cx16OverlayMarker(8)
 cx16_overlay_items_end:
 .print "CX16 ITEMS overlay: " + (cx16_overlay_items_end - $a000) + " bytes at $A000-$" + toHexString(cx16_overlay_items_end)

@@ -42,6 +42,10 @@ PL_DEX_CUR = 30
 PL_CON_CUR = 31
 PL_HP_LO = 33
 PL_HP_HI = 34
+PL_MHP_LO = 35
+PL_MHP_HI = 36
+PL_FOOD_LO = 51
+PL_FOOD_HI = 52
 PL_FLAGS = 54
 PLF_SEARCHING = 0x10
 KEYBUF = 0xA800
@@ -49,7 +53,15 @@ KEYBUF_COUNT = 0xA80A
 MAP_COLS = 198
 MAP_ROWS = 66
 MAX_FLOOR_ITEMS = 42
+EQUIP_LIGHT = 28
 EQUIP_WEAPON = 22
+ITEM_LANTERN = 14
+ITEM_RATION = 15
+ITEM_POTION_CURE = 17
+ITEM_SCROLL_LIGHT = 20
+ITEM_WAND_LIGHT = 39
+ITEM_STAFF_DETECT = 44
+ITEM_FLASK_OIL = 61
 ITEM_PICK = 63
 BOOTSTRAP_PICK_DIG_ABILITY = 24
 ICAT_WEAPON = 2
@@ -69,6 +81,14 @@ CMD_CLOSE = 0x0E
 CMD_PICKUP = 0x0F
 CMD_DROP = 0x10
 CMD_INVENTORY = 0x11
+CMD_EQUIPMENT = 0x12
+CMD_WEAR = 0x13
+CMD_TAKEOFF = 0x14
+CMD_EAT = 0x15
+CMD_QUAFF = 0x16
+CMD_READ = 0x17
+CMD_AIM = 0x18
+CMD_USE = 0x19
 CMD_CAST = 0x1A
 CMD_CHAR_INFO = 0x1C
 CMD_MAP = 0x1D
@@ -87,6 +107,7 @@ CMD_RUN_SW = 0x2B
 CMD_RUN_SE = 0x2C
 CMD_GAIN = 0x2D
 CMD_FIRE = 0x2E
+CMD_REFUEL = 0x30
 CMD_BASH = 0x31
 CMD_TUNNEL = 0x32
 CMD_WIZARD = 0x33
@@ -274,6 +295,17 @@ def screen_put_cell_raw(bench, row, col, char_code, attr):
 def stuff_key(bench, petscii):
     bench.set_memory(KEYBUF, petscii)
     bench.set_memory(KEYBUF_COUNT, 1)
+
+
+def set_inventory_slot0(bench, labels, item_id, qty=1, p1=0):
+    bench.set_memory(require(labels, "inv_item_id"), item_id)
+    bench.set_memory(require(labels, "inv_qty"), qty)
+    bench.set_memory(require(labels, "inv_p1"), p1)
+    bench.set_memory(require(labels, "inv_to_hit"), 0)
+    bench.set_memory(require(labels, "inv_to_dam"), 0)
+    bench.set_memory(require(labels, "inv_to_ac"), 0)
+    bench.set_memory(require(labels, "inv_flags"), 0)
+    bench.set_memory(require(labels, "inv_ego"), 0)
 
 
 def assert_eq(actual, expected, label):
@@ -981,6 +1013,115 @@ def main():
             raise AssertionError("drop command did not mark the floor item tile")
         assert_screen_contains_cell(bench, SC_PLAYER, TEXT_COLOR, "drop command keeps player glyph")
         assert_screen_cell(bench, 1, 0, screen_code("*"), 2, "drop command does not full-clear")
+
+        inv_base = require(labels, "inv_item_id")
+        bench.set_memory(inv_base, ITEM_PICK)
+        bench.set_memory(require(labels, "inv_qty"), 1)
+        bench.set_memory(require(labels, "inv_p1"), BOOTSTRAP_PICK_DIG_ABILITY)
+        bench.set_memory(require(labels, "inv_to_hit"), 0)
+        bench.set_memory(require(labels, "inv_to_dam"), 0)
+        bench.set_memory(require(labels, "inv_to_ac"), 0)
+        bench.set_memory(require(labels, "inv_flags"), 0)
+        bench.set_memory(require(labels, "inv_ego"), 0)
+        bench.set_memory(inv_base + EQUIP_WEAPON, FI_EMPTY)
+        stuff_key(bench, ord("A"))
+        bench.set_a(CMD_WEAR)
+        bench.run(require(labels, "cx16_dispatch_game_command"))
+        assert_eq(bench.get_memory(inv_base), FI_EMPTY, "wear command removes carried item")
+        assert_eq(bench.get_memory(inv_base + EQUIP_WEAPON), ITEM_PICK, "wear command equips weapon")
+        assert_screen_contains_cell(bench, SC_PLAYER, TEXT_COLOR, "wear command keeps player glyph")
+
+        stuff_key(bench, ord("A"))
+        bench.set_a(CMD_TAKEOFF)
+        bench.run(require(labels, "cx16_dispatch_game_command"))
+        assert_eq(bench.get_memory(inv_base), ITEM_PICK, "takeoff command restores carried item")
+        assert_eq(bench.get_memory(inv_base + EQUIP_WEAPON), FI_EMPTY, "takeoff command clears weapon slot")
+        assert_screen_contains_cell(bench, SC_PLAYER, TEXT_COLOR, "takeoff command keeps player glyph")
+
+        bench.set_memory(inv_base, ITEM_RATION)
+        bench.set_memory(require(labels, "inv_qty"), 1)
+        bench.set_memory(require(labels, "zp_player_food"), 0)
+        bench.set_memory(require(labels, "zp_player_food_hi"), 0)
+        bench.set_memory(require(labels, "player_data") + PL_FOOD_LO, 0)
+        bench.set_memory(require(labels, "player_data") + PL_FOOD_HI, 0)
+        bench.set_a(CMD_EAT)
+        bench.run(require(labels, "cx16_dispatch_game_command"))
+        assert_eq(bench.get_memory(inv_base), FI_EMPTY, "eat command consumes food")
+        if bench.get_memory(require(labels, "zp_player_food_hi")) == 0:
+            raise AssertionError("eat command did not increase food counter")
+        assert_screen_contains_cell(bench, SC_PLAYER, TEXT_COLOR, "eat command keeps player glyph")
+
+        bench.set_memory(inv_base, ITEM_POTION_CURE)
+        bench.set_memory(require(labels, "inv_qty"), 1)
+        bench.set_memory(require(labels, "inv_p1"), 0)
+        bench.set_memory(require(labels, "zp_player_hp_lo"), 10)
+        bench.set_memory(require(labels, "zp_player_hp_hi"), 0)
+        bench.set_memory(require(labels, "zp_player_mhp_lo"), 50)
+        bench.set_memory(require(labels, "zp_player_mhp_hi"), 0)
+        bench.set_memory(require(labels, "player_data") + PL_HP_LO, 10)
+        bench.set_memory(require(labels, "player_data") + PL_HP_HI, 0)
+        bench.set_memory(require(labels, "player_data") + PL_MHP_LO, 50)
+        bench.set_memory(require(labels, "player_data") + PL_MHP_HI, 0)
+        screen_put_cell_raw(bench, 1, 0, screen_code("*"), 2)
+        stuff_key(bench, ord("A"))
+        bench.set_a(CMD_QUAFF)
+        bench.run(require(labels, "cx16_dispatch_game_command"))
+        assert_eq(bench.get_memory(inv_base), FI_EMPTY, "quaff command consumes potion")
+        if bench.get_memory(require(labels, "zp_player_hp_lo")) <= 10:
+            raise AssertionError("quaff command did not heal the player")
+        assert_screen_contains_cell(bench, SC_PLAYER, TEXT_COLOR, "quaff command keeps player glyph")
+        assert_screen_cell(bench, 1, 0, screen_code("*"), 2, "quaff command does not full-clear")
+
+        bench.set_memory(inv_base, ITEM_FLASK_OIL)
+        bench.set_memory(require(labels, "inv_qty"), 1)
+        bench.set_memory(require(labels, "inv_p1"), 20)
+        bench.set_memory(inv_base + EQUIP_LIGHT, ITEM_LANTERN)
+        bench.set_memory(require(labels, "inv_qty") + EQUIP_LIGHT, 1)
+        bench.set_memory(require(labels, "inv_p1") + EQUIP_LIGHT, 10)
+        screen_put_cell_raw(bench, 1, 0, screen_code("*"), 2)
+        bench.set_a(CMD_REFUEL)
+        bench.run(require(labels, "cx16_dispatch_game_command"))
+        assert_eq(bench.get_memory(inv_base), FI_EMPTY, "refuel command consumes oil flask")
+        assert_eq(bench.get_memory(require(labels, "inv_p1") + EQUIP_LIGHT), 30, "refuel command adds oil")
+        assert_screen_contains_cell(bench, SC_PLAYER, TEXT_COLOR, "refuel command keeps player glyph")
+        assert_screen_cell(bench, 1, 0, screen_code("*"), 2, "refuel command does not full-clear")
+
+        set_inventory_slot0(bench, labels, ITEM_SCROLL_LIGHT)
+        bench.set_memory(require(labels, "id_known") + ITEM_SCROLL_LIGHT, 0)
+        screen_put_cell_raw(bench, 1, 0, screen_code("*"), 2)
+        stuff_key(bench, ord("A"))
+        bench.set_a(CMD_READ)
+        bench.run(require(labels, "cx16_dispatch_game_command"))
+        assert_eq(bench.get_memory(inv_base), FI_EMPTY, "read command consumes scroll")
+        assert_eq(bench.get_memory(require(labels, "id_known") + ITEM_SCROLL_LIGHT), 1, "read command marks scroll known")
+        assert_screen_contains_cell(bench, SC_PLAYER, TEXT_COLOR, "read command keeps player glyph")
+        assert_screen_cell(bench, 1, 0, screen_code("*"), 2, "read command does not full-clear")
+
+        set_inventory_slot0(bench, labels, ITEM_WAND_LIGHT, p1=2)
+        bench.set_memory(require(labels, "id_known") + ITEM_WAND_LIGHT, 0)
+        screen_put_cell_raw(bench, 1, 0, screen_code("*"), 2)
+        stuff_key(bench, ord("A"))
+        bench.set_a(CMD_AIM)
+        bench.run(require(labels, "cx16_dispatch_game_command"))
+        assert_eq(bench.get_memory(inv_base), ITEM_WAND_LIGHT, "aim command keeps wand")
+        assert_eq(bench.get_memory(require(labels, "inv_p1")), 1, "aim command consumes one wand charge")
+        assert_eq(bench.get_memory(require(labels, "id_known") + ITEM_WAND_LIGHT), 1, "aim command marks wand known")
+        assert_screen_contains_cell(bench, SC_PLAYER, TEXT_COLOR, "aim command keeps player glyph")
+        assert_screen_cell(bench, 1, 0, screen_code("*"), 2, "aim command does not full-clear")
+
+        set_inventory_slot0(bench, labels, ITEM_STAFF_DETECT, p1=2)
+        bench.set_memory(require(labels, "id_known") + ITEM_STAFF_DETECT, 0)
+        bench.set_memory(require(labels, "eff_detect_timer"), 0)
+        screen_put_cell_raw(bench, 1, 0, screen_code("*"), 2)
+        stuff_key(bench, ord("A"))
+        bench.set_a(CMD_USE)
+        bench.run(require(labels, "cx16_dispatch_game_command"))
+        assert_eq(bench.get_memory(inv_base), ITEM_STAFF_DETECT, "use command keeps staff")
+        assert_eq(bench.get_memory(require(labels, "inv_p1")), 1, "use command consumes one staff charge")
+        assert_eq(bench.get_memory(require(labels, "id_known") + ITEM_STAFF_DETECT), 1, "use command marks staff known")
+        assert_eq(bench.get_memory(require(labels, "eff_detect_timer")), 20, "use command activates detect monsters")
+        assert_screen_contains_cell(bench, SC_PLAYER, TEXT_COLOR, "use command keeps player glyph")
+        assert_screen_cell(bench, 1, 0, screen_code("*"), 2, "use command does not full-clear")
 
         set_player_position(bench, labels, entry_x, entry_y)
         set_map_tile(bench, labels, move_x, move_y, TILE_TRAP | DUNGEON_FLAGS)

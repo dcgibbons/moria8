@@ -9,41 +9,7 @@
 
 #import "turn_render_state.s"
 
-// Hunger thresholds
-.const FOOD_HUNGRY_AT   = 150   // Food counter below this = hungry
-.const FOOD_WEAK_AT     = 50    // Below this = weak
-.const FOOD_FAINT_AT    = 10    // Below this = faint
-
-// player_update_hunger_state — classify hunger from the current food counter
-// Output: zp_hunger_state updated to FULL / HUNGRY / WEAK / FAINT
-// Preserves: nothing
-player_update_hunger_state:
-    lda zp_player_food_hi
-    bne !full+              // Hi byte > 0 means plenty of food
-
-    lda zp_player_food
-    cmp #FOOD_FAINT_AT
-    bcc !faint+
-    cmp #FOOD_WEAK_AT
-    bcc !weak+
-    cmp #FOOD_HUNGRY_AT
-    bcc !hungry+
-!full:
-    lda #HUNGER_FULL
-    sta zp_hunger_state
-    rts
-!hungry:
-    lda #HUNGER_HUNGRY
-    sta zp_hunger_state
-    rts
-!weak:
-    lda #HUNGER_WEAK
-    sta zp_hunger_state
-    rts
-!faint:
-    lda #HUNGER_FAINT
-    sta zp_hunger_state
-    rts
+#import "hunger_state.s"
 
 // turn_maybe_play_hunger_alert — Alert only when hunger gets worse.
 // Input: A = previous hunger state, zp_hunger_state = current state
@@ -547,7 +513,7 @@ turn_tick_light:
 
 // Strings migrated to Huffman compression (HSTR_EFF_*, HSTR_TTL_*, HSTR_RECALL_* in huffman_data.s)
 light_tick_counter: .byte 0
-eff_fear_timer:   .byte 0
+#import "fear_state.s"
 
 // ============================================================
 // Pseudo-identification system

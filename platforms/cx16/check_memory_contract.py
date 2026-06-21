@@ -26,7 +26,8 @@ CX16_FIXED_LIVE_MAP_END = 0x9B0B
 CX16_FLOOR_ITEM_BASE = 0x9C00
 CX16_FLOOR_ITEM_END = 0x9CFF
 CX16_CREATURE_BASE = 0x9D00
-CX16_CREATURE_END = 0x9DFF
+CX16_CREATURE_END = 0x9E7F
+CX16_ACTIVE_MONSTER_TABLE_BYTES = 32 * 12
 CX16_BFS_QUEUE_BASE = 0x0400
 CX16_BFS_QUEUE_END = 0x07FF
 CX16_IO_BASE = 0x9F00
@@ -161,7 +162,7 @@ def emit_report(product, shared_probe, title, tiers, modules, items, overlays):
         f"({live_map_size} bytes)"
     )
     print(f"  floor items: {fmt_span(CX16_FLOOR_ITEM_BASE, CX16_FLOOR_ITEM_END + 1)}")
-    print(f"  creature scratch: {fmt_span(CX16_CREATURE_BASE, CX16_CREATURE_END + 1)}")
+    print(f"  active monster arena: {fmt_span(CX16_CREATURE_BASE, CX16_CREATURE_END + 1)}")
     print(f"  BFS queue: {fmt_span(CX16_BFS_QUEUE_BASE, CX16_BFS_QUEUE_END + 1)}")
     print(f"  RAM bank register/default: {fmt_addr(CX16_RAM_BANK_REG)} / {CX16_RAM_BANK_DEFAULT}")
     print(f"  banked RAM window: {fmt_span(CX16_BANKED_RAM_BASE, CX16_BANKED_RAM_END + 1)} ({bank_window_size} bytes)")
@@ -308,6 +309,11 @@ def check_contract_symbols(labels):
         "floor-item table must stay after fixed live map",
     )
     expect_true(
+        require(labels, "cx16_contract_creature_end") - require(labels, "cx16_contract_creature_base") + 1
+        >= CX16_ACTIVE_MONSTER_TABLE_BYTES,
+        "active monster arena must fit the shared active monster table",
+    )
+    expect_true(
         require(labels, "cx16_contract_creature_end") < CX16_IO_BASE,
         "fixed world must stay below the VERA I/O hole",
     )
@@ -443,6 +449,7 @@ def check_shared_probe_symbols(labels):
     program_end = require(labels, "program_end")
     expect_true(program_end > CX16_FIXED_LIVE_MAP_BASE, "shared probe no longer crosses live-map base")
     expect_true(program_end > CX16_IO_BASE, "shared probe no longer crosses VERA I/O hole")
+    expect_addr(require(labels, "monster_table"), CX16_CREATURE_BASE, "shared probe monster_table")
 
 
 def check_product(prg_path, sym_path):

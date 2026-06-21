@@ -17,6 +17,7 @@ import check_memory_contract as contract
 def base_labels(program_end):
     return {
         "program_end": program_end,
+        "monster_table": contract.CX16_CREATURE_BASE,
         "cx16_contract_prg_load_base": contract.CX16_PRG_LOAD_BASE,
         "cx16_contract_ram_bank_count": contract.CX16_RAM_BANK_COUNT,
         "cx16_contract_ram_bank_reg": contract.CX16_RAM_BANK_REG,
@@ -115,6 +116,10 @@ def test_shared_probe_symbol_contract():
 
     no_io_cross = base_labels(contract.CX16_IO_BASE)
     assert_raises(lambda: contract.check_shared_probe_symbols(no_io_cross), "VERA I/O")
+
+    wrong_monster_table = base_labels(0xCD1D)
+    wrong_monster_table["monster_table"] = contract.CX16_CREATURE_BASE - 1
+    assert_raises(lambda: contract.check_shared_probe_symbols(wrong_monster_table), "shared probe monster_table")
 
 
 def test_region_symbol_contracts():

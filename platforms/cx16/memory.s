@@ -12,7 +12,7 @@
 //   - resident product image:        $0801-(MAP_BASE-1)
 //   - live map, 198x66:              MAP_BASE-MAP_END
 //   - floor item table:              FLOOR_ITEM_BASE-FLOOR_ITEM_END
-//   - creature scratch:              CREATURE_BASE-CREATURE_END
+//   - active monster arena:          CREATURE_BASE-CREATURE_END
 //   - Huffman decode scratch:        PLATFORM_HD_DECODE_BUF_BASE-PLATFORM_HD_DECODE_BUF_LIMIT-1
 //   - VERA/I/O hole:                 $9F00-$9FFF
 //
@@ -106,7 +106,8 @@
 .const FLOOR_ITEM_BASE  = (CX16_FIXED_LIVE_MAP_END + $0100) & $ff00
 .const FLOOR_ITEM_END   = FLOOR_ITEM_BASE + $00ff
 .const CREATURE_BASE    = FLOOR_ITEM_BASE + $0100
-.const CREATURE_END     = CREATURE_BASE + $00ff
+.const CX16_ACTIVE_MONSTER_TABLE_BYTES = 32 * 12
+.const CREATURE_END     = CREATURE_BASE + CX16_ACTIVE_MONSTER_TABLE_BYTES - 1
 .const CX16_FIXED_WORLD_BASE = CX16_FIXED_LIVE_MAP_BASE
 .const CX16_FIXED_WORLD_END  = CREATURE_END
 .const DUNGEON_GEN_BFS_QUEUE_BASE = $0400
@@ -125,8 +126,10 @@
 .assert "CX16 floor items stay after live map", MAP_END < FLOOR_ITEM_BASE, true
 .assert "CX16 floor item table is page-aligned", <FLOOR_ITEM_BASE, 0
 .assert "CX16 floor items fit", FLOOR_ITEM_END - FLOOR_ITEM_BASE + 1, 256
-.assert "CX16 creature scratch stays after floor items", FLOOR_ITEM_END < CREATURE_BASE, true
-.assert "CX16 creature scratch is page-aligned", <CREATURE_BASE, 0
+.assert "CX16 active monster arena stays after floor items", FLOOR_ITEM_END < CREATURE_BASE, true
+.assert "CX16 active monster arena is page-aligned", <CREATURE_BASE, 0
+.assert "CX16 active monster arena is 384 bytes", CREATURE_END - CREATURE_BASE + 1, CX16_ACTIVE_MONSTER_TABLE_BYTES
+.assert "CX16 active monster arena fits shared active table", CREATURE_END - CREATURE_BASE + 1 >= CX16_ACTIVE_MONSTER_TABLE_BYTES, true
 .assert "CX16 Huffman decode buffer stays after fixed world", CX16_FIXED_WORLD_END < PLATFORM_HD_DECODE_BUF_BASE, true
 .assert "CX16 Huffman decode buffer stays below VERA I/O hole", PLATFORM_HD_DECODE_BUF_LIMIT <= CX16_IO_BASE, true
 .assert "CX16 dungeon-gen BFS queue remains page-aligned", <DUNGEON_GEN_BFS_QUEUE_BASE, 0
@@ -134,7 +137,7 @@
 .assert "CX16 banked RAM window is 8 KiB", CX16_BANKED_RAM_SIZE, $2000
 .assert "CX16 fixed live map stays below VERA I/O hole", MAP_END < CX16_IO_BASE, true
 .assert "CX16 floor items stay below VERA I/O hole", FLOOR_ITEM_END < CX16_IO_BASE, true
-.assert "CX16 creature scratch stays below VERA I/O hole", CREATURE_END < CX16_IO_BASE, true
+.assert "CX16 active monster arena stays below VERA I/O hole", CREATURE_END < CX16_IO_BASE, true
 .assert "CX16 fixed world stays below VERA I/O hole", CX16_FIXED_WORLD_END < CX16_IO_BASE, true
 .assert "CX16 bank window starts after fixed world", CX16_BANKED_RAM_BASE > CX16_FIXED_WORLD_END, true
 .assert "CX16 shared banked-data alias matches bank window", BANKED_DATA_BASE, CX16_BANKED_RAM_BASE
