@@ -34,6 +34,18 @@ TILE_TRAP = 0xE0
 TILE_TYPE_MASK = 0xF0
 DUNGEON_FLAGS = 0x0C
 FLAG_HAS_ITEM = 0x02
+PL_RACE = 17
+PL_CLASS = 18
+PL_LEVEL = 19
+PL_INT_CUR = 28
+PL_DEX_CUR = 30
+PL_CON_CUR = 31
+PL_HP_LO = 33
+PL_HP_HI = 34
+PL_FLAGS = 54
+PLF_SEARCHING = 0x10
+KEYBUF = 0xA800
+KEYBUF_COUNT = 0xA80A
 MAP_COLS = 198
 MAP_ROWS = 66
 MAX_FLOOR_ITEMS = 42
@@ -41,6 +53,7 @@ EQUIP_WEAPON = 22
 ITEM_PICK = 63
 BOOTSTRAP_PICK_DIG_ABILITY = 24
 ICAT_WEAPON = 2
+FI_EMPTY = 0xFF
 CMD_MOVE_N = 0x01
 CMD_MOVE_W = 0x03
 CMD_MOVE_S = 0x02
@@ -53,6 +66,7 @@ CMD_REST = 0x0B
 CMD_SEARCH = 0x0C
 CMD_OPEN = 0x0D
 CMD_CLOSE = 0x0E
+CMD_PICKUP = 0x0F
 CMD_DROP = 0x10
 CMD_INVENTORY = 0x11
 CMD_CAST = 0x1A
@@ -223,6 +237,8 @@ def screen_code(ch):
     value = ord(ch)
     if 65 <= value <= 90:
         return value - 64
+    if 97 <= value <= 122:
+        return value - 96
     if ch == "@":
         return SC_PLAYER
     return value
@@ -253,6 +269,11 @@ def screen_put_cell_raw(bench, row, col, char_code, attr):
     vera_set_addr(bench, screen_cell_addr(row, col))
     bench.set_memory(VERA_DATA0, char_code)
     bench.set_memory(VERA_DATA0, attr)
+
+
+def stuff_key(bench, petscii):
+    bench.set_memory(KEYBUF, petscii)
+    bench.set_memory(KEYBUF_COUNT, 1)
 
 
 def assert_eq(actual, expected, label):
@@ -388,6 +409,23 @@ def run_command_for_move(move_command):
         CMD_MOVE_SW: CMD_RUN_SW,
         CMD_MOVE_SE: CMD_RUN_SE,
     }[move_command]
+
+
+def key_for_delta(dx, dy):
+    return {
+        (0, -1): ord("K"),
+        (0, 1): ord("J"),
+        (-1, 0): ord("H"),
+        (1, 0): ord("L"),
+        (-1, -1): ord("Y"),
+        (1, -1): ord("U"),
+        (-1, 1): ord("B"),
+        (1, 1): ord("N"),
+    }[(dx, dy)]
+
+
+def stuff_direction_to_target(bench, player_x, player_y, target_x, target_y):
+    stuff_key(bench, key_for_delta(target_x - player_x, target_y - player_y))
 
 
 def assert_banked_ram_isolation(bench):
@@ -790,6 +828,13 @@ def main():
         assert_player_position(bench, labels, move_x, move_y, "dungeon move through dispatcher")
         assert_screen_cell(bench, 1, 0, screen_code("*"), 2, "dungeon scrolling movement does not full-clear")
 
+        set_player_position(bench, labels, entry_x, entry_y)
+        bench.set_memory(require(labels, "player_data") + PL_FLAGS, PLF_SEARCHING)
+        bench.set_a(move_command)
+        bench.run(require(labels, "cx16_dispatch_game_command"))
+        if bench.get_memory(require(labels, "player_data") + PL_FLAGS) & PLF_SEARCHING:
+            raise AssertionError("dungeon movement did not clear search mode")
+
         set_player_position(bench, labels, wall_x + 1, wall_y + 1)
         bench.set_a(CMD_MOVE_NW)
         bench.run(require(labels, "cx16_try_move_command"))
@@ -799,54 +844,179 @@ def main():
             bench, labels, TILE_DOOR_CLOSED, "closed dungeon door"
         )
         set_player_position(bench, labels, door_px, door_py)
-        bench.run(require(labels, "cx16_update_dungeon_view"))
-        bench.set_memory(require(labels, "df_target_x"), door_x)
-        bench.set_memory(require(labels, "df_target_y"), door_y)
         bench.set_memory(require(labels, "zp_player_str"), 18)
-        bench.run(require(labels, "door_try_open"))
-        if not (bench.get_status() & STATUS_CARRY):
-            raise AssertionError("door_try_open did not consume a turn")
+        screen_put_cell_raw(bench, 1, 0, screen_code("*"), 2)
+        stuff_direction_to_target(bench, door_px, door_py, door_x, door_y)
+        bench.set_a(CMD_OPEN)
+        bench.run(require(labels, "cx16_dispatch_game_command"))
         assert_map_tile_type(bench, labels, door_x, door_y, TILE_DOOR_OPEN, "opened dungeon door")
-        bench.set_memory(require(labels, "zp_player_x"), 1)
-        bench.set_memory(require(labels, "zp_player_y"), 1)
-        bench.run(require(labels, "cx16_after_feature_turn"))
-        assert_player_position(bench, labels, door_px, door_py, "post-feature resync after door")
-        bench.set_memory(require(labels, "df_target_x"), door_x)
-        bench.set_memory(require(labels, "df_target_y"), door_y)
-        bench.run(require(labels, "door_try_close"))
-        if not (bench.get_status() & STATUS_CARRY):
-            raise AssertionError("door_try_close did not consume a turn")
+        assert_player_position(bench, labels, door_px, door_py, "open command keeps player position")
+        assert_screen_contains_cell(bench, SC_PLAYER, TEXT_COLOR, "open command keeps player glyph")
+        assert_screen_cell(bench, 1, 0, screen_code("*"), 2, "open command does not full-clear")
+
+        stuff_direction_to_target(bench, door_px, door_py, door_x, door_y)
+        bench.set_a(CMD_CLOSE)
+        bench.run(require(labels, "cx16_dispatch_game_command"))
         assert_map_tile_type(bench, labels, door_x, door_y, TILE_DOOR_CLOSED, "closed dungeon door")
+        assert_screen_contains_cell(bench, SC_PLAYER, TEXT_COLOR, "close command keeps player glyph")
+        assert_screen_cell(bench, 1, 0, screen_code("*"), 2, "close command does not full-clear")
 
         set_player_position(bench, labels, door_px, door_py)
+        screen_put_cell_raw(bench, 1, 0, screen_code("*"), 2)
         bench.set_a(CMD_SEARCH)
         bench.run(require(labels, "cx16_dispatch_game_command"))
         if assert_screen_text_matches(bench, 26, 23, "SEARCH/REST/LOOK NOT WIRED YET."):
             raise AssertionError("search command still rendered the activity stub")
+        assert_screen_contains_cell(bench, SC_PLAYER, TEXT_COLOR, "search command keeps player glyph")
+        assert_screen_cell(bench, 1, 0, screen_code("*"), 2, "search command does not full-clear")
+
+        screen_put_cell_raw(bench, 1, 0, screen_code("*"), 2)
+        bench.set_a(CMD_REST)
+        bench.run(require(labels, "cx16_dispatch_game_command"))
+        if assert_screen_text_matches(bench, 26, 23, "SEARCH/REST/LOOK NOT WIRED YET."):
+            raise AssertionError("rest command still rendered the activity stub")
+        assert_player_position(bench, labels, door_px, door_py, "rest command keeps player position")
+        assert_screen_contains_cell(bench, SC_PLAYER, TEXT_COLOR, "rest command keeps player glyph")
+        assert_screen_cell(bench, 1, 0, screen_code("*"), 2, "rest command does not full-clear")
+
+        bench.set_memory(require(labels, "player_data") + PL_FLAGS, 0)
+        bench.set_a(CMD_SEARCH_MODE)
+        bench.run(require(labels, "cx16_dispatch_game_command"))
+        if not (bench.get_memory(require(labels, "player_data") + PL_FLAGS) & PLF_SEARCHING):
+            raise AssertionError("search mode command did not set the searching flag")
+        assert_screen_text(bench, 25, 0, "Search mode on.", "search mode on message")
+        bench.set_a(CMD_SEARCH_MODE)
+        bench.run(require(labels, "cx16_dispatch_game_command"))
+        if bench.get_memory(require(labels, "player_data") + PL_FLAGS) & PLF_SEARCHING:
+            raise AssertionError("search mode command did not clear the searching flag")
+        assert_screen_text(bench, 25, 0, "Search mode off.", "search mode off message")
 
         set_player_position(bench, labels, door_px, door_py)
-        bench.set_memory(require(labels, "df_target_x"), door_x)
-        bench.set_memory(require(labels, "df_target_y"), door_y)
-        set_zp_pointer(bench, labels, "zp_ptr0", map_row_addr(bench, labels, door_y))
-        bench.set_memory(require(labels, "bash_save_tile"), TILE_DOOR_CLOSED | DUNGEON_FLAGS)
+        set_map_tile(bench, labels, door_x, door_y, TILE_FLOOR | DUNGEON_FLAGS)
         bench.set_memory(require(labels, "zp_player_str"), 18)
-        bench.set_memory(require(labels, "zp_player_dex"), 255)
-        bench.run(require(labels, "msg_clear"))
-        bench.run(require(labels, "bash_door"))
-        if not (bench.get_status() & STATUS_CARRY):
-            raise AssertionError("bash_door did not consume a turn")
+        screen_put_cell_raw(bench, 1, 0, screen_code("*"), 2)
+        stuff_direction_to_target(bench, door_px, door_py, door_x, door_y)
+        bench.set_a(CMD_BASH)
+        bench.run(require(labels, "cx16_dispatch_game_command"))
+        assert_player_position(bench, labels, door_px, door_py, "bash command keeps player position")
+        assert_screen_contains_cell(bench, SC_PLAYER, TEXT_COLOR, "bash command keeps player glyph")
+        assert_screen_cell(bench, 1, 0, screen_code("*"), 2, "bash command does not full-clear")
 
         set_player_position(bench, labels, door_px, door_py)
         set_map_tile(bench, labels, door_x, door_y, TILE_RUBBLE | DUNGEON_FLAGS)
-        bench.set_memory(require(labels, "df_target_x"), door_x)
-        bench.set_memory(require(labels, "df_target_y"), door_y)
         bench.set_memory(require(labels, "zp_player_str"), 255)
-        bench.run(require(labels, "msg_clear"))
-        bench.run(require(labels, "player_tunnel_resolved_target"))
-        if not (bench.get_status() & STATUS_CARRY):
-            raise AssertionError("tunnel command did not consume a rubble turn")
+        screen_put_cell_raw(bench, 1, 0, screen_code("*"), 2)
+        for _ in range(8):
+            if tile_type(map_tile_at(bench, labels, door_x, door_y)) == TILE_FLOOR:
+                break
+            stuff_direction_to_target(bench, door_px, door_py, door_x, door_y)
+            bench.set_a(CMD_TUNNEL)
+            bench.run(require(labels, "cx16_dispatch_game_command"))
         assert_map_tile_type(bench, labels, door_x, door_y, TILE_FLOOR, "tunnel with pick removes rubble")
+        assert_player_position(bench, labels, door_px, door_py, "tunnel command keeps player position")
+        assert_screen_contains_cell(bench, SC_PLAYER, TEXT_COLOR, "tunnel command keeps player glyph")
+        assert_screen_cell(bench, 1, 0, screen_code("*"), 2, "tunnel command does not full-clear")
         bench.set_memory(require(labels, "zp_player_str"), 18)
+
+        set_player_position(bench, labels, door_px, door_py)
+        set_map_tile(bench, labels, door_x, door_y, TILE_TRAP | DUNGEON_FLAGS)
+        bench.set_memory(require(labels, "trap_count"), 1)
+        bench.set_memory(require(labels, "trap_x"), door_x)
+        bench.set_memory(require(labels, "trap_y"), door_y)
+        bench.set_memory(require(labels, "trap_type"), 0)
+        bench.set_memory(require(labels, "player_data") + PL_RACE, 3)
+        bench.set_memory(require(labels, "player_data") + PL_CLASS, 3)
+        bench.set_memory(require(labels, "player_data") + PL_LEVEL, 40)
+        bench.set_memory(require(labels, "player_data") + PL_DEX_CUR, 118)
+        bench.set_memory(require(labels, "player_data") + PL_INT_CUR, 118)
+        bench.set_memory(require(labels, "zp_player_lvl"), 40)
+        screen_put_cell_raw(bench, 1, 0, screen_code("*"), 2)
+        stuff_direction_to_target(bench, door_px, door_py, door_x, door_y)
+        bench.set_a(CMD_DISARM)
+        bench.run(require(labels, "cx16_dispatch_game_command"))
+        assert_eq(bench.get_memory(require(labels, "trap_count")), 0, "disarm command removes trap")
+        assert_map_tile_type(bench, labels, door_x, door_y, TILE_FLOOR, "disarm command restores floor")
+        assert_player_position(bench, labels, door_x, door_y, "disarm command moves onto trap")
+        assert_screen_contains_cell(bench, SC_PLAYER, TEXT_COLOR, "disarm command keeps player glyph")
+        assert_screen_cell(bench, 1, 0, screen_code("*"), 2, "disarm command does not full-clear")
+
+        set_player_position(bench, labels, floor_x, floor_y)
+        bench.set_memory(require(labels, "fi_add_x"), floor_x)
+        bench.set_memory(require(labels, "fi_add_y"), floor_y)
+        bench.set_memory(require(labels, "fi_add_id"), ITEM_PICK)
+        bench.set_memory(require(labels, "fi_add_qty"), 1)
+        bench.set_memory(require(labels, "fi_add_p1"), 0)
+        bench.set_memory(require(labels, "fi_add_to_hit"), 0)
+        bench.set_memory(require(labels, "fi_add_to_dam"), 0)
+        bench.set_memory(require(labels, "fi_add_to_ac"), 0)
+        bench.set_memory(require(labels, "fi_add_flags"), 0)
+        bench.set_memory(require(labels, "fi_add_ego"), 0)
+        item_count_before_pickup = bench.get_memory(require(labels, "zp_item_count"))
+        bench.run(require(labels, "floor_item_add"))
+        if not (bench.get_status() & STATUS_CARRY):
+            raise AssertionError("floor_item_add failed for pickup dispatch test")
+        screen_put_cell_raw(bench, 1, 0, screen_code("*"), 2)
+        bench.set_a(CMD_PICKUP)
+        bench.run(require(labels, "cx16_dispatch_game_command"))
+        assert_eq(
+            bench.get_memory(require(labels, "zp_item_count")),
+            item_count_before_pickup,
+            "pickup command removes floor item",
+        )
+        assert_eq(bench.get_memory(require(labels, "inv_item_id")), ITEM_PICK, "pickup command fills inventory slot")
+        assert_screen_contains_cell(bench, SC_PLAYER, TEXT_COLOR, "pickup command keeps player glyph")
+        assert_screen_cell(bench, 1, 0, screen_code("*"), 2, "pickup command does not full-clear")
+
+        screen_put_cell_raw(bench, 1, 0, screen_code("*"), 2)
+        stuff_key(bench, ord("A"))
+        bench.set_a(CMD_DROP)
+        bench.run(require(labels, "cx16_dispatch_game_command"))
+        assert_eq(bench.get_memory(require(labels, "inv_item_id")), FI_EMPTY, "drop command clears inventory slot")
+        assert_eq(
+            bench.get_memory(require(labels, "zp_item_count")),
+            item_count_before_pickup + 1,
+            "drop command creates floor item",
+        )
+        if not (map_tile_at(bench, labels, floor_x, floor_y) & FLAG_HAS_ITEM):
+            raise AssertionError("drop command did not mark the floor item tile")
+        assert_screen_contains_cell(bench, SC_PLAYER, TEXT_COLOR, "drop command keeps player glyph")
+        assert_screen_cell(bench, 1, 0, screen_code("*"), 2, "drop command does not full-clear")
+
+        set_player_position(bench, labels, entry_x, entry_y)
+        set_map_tile(bench, labels, move_x, move_y, TILE_TRAP | DUNGEON_FLAGS)
+        bench.run(require(labels, "cx16_draw_dungeon_bootstrap"))
+        screen_put_cell_raw(bench, 1, 0, screen_code("*"), 2)
+        bench.set_a(run_command_for_move(move_command))
+        bench.run(require(labels, "cx16_dispatch_game_command"))
+        assert_player_position(bench, labels, entry_x, entry_y, "run command stops before visible trap")
+        assert_screen_contains_cell(bench, SC_PLAYER, TEXT_COLOR, "run trap stop keeps player glyph")
+        assert_screen_cell(bench, 1, 0, screen_code("*"), 2, "run trap stop does not full-clear")
+        set_map_tile(bench, labels, move_x, move_y, TILE_FLOOR | DUNGEON_FLAGS)
+
+        set_player_position(bench, labels, entry_x, entry_y)
+        set_map_tile(bench, labels, move_x, move_y, TILE_FLOOR | DUNGEON_FLAGS)
+        bench.set_memory(require(labels, "trap_count"), 1)
+        bench.set_memory(require(labels, "trap_x"), move_x)
+        bench.set_memory(require(labels, "trap_y"), move_y)
+        bench.set_memory(require(labels, "trap_type"), 0)
+        bench.set_memory(require(labels, "zp_player_hp_lo"), 100)
+        bench.set_memory(require(labels, "zp_player_hp_hi"), 0)
+        bench.set_memory(require(labels, "player_data") + PL_HP_LO, 100)
+        bench.set_memory(require(labels, "player_data") + PL_HP_HI, 0)
+        screen_put_cell_raw(bench, 1, 0, screen_code("*"), 2)
+        saved_bank = bench.get_memory(CX16_RAM_BANK_REG)
+        bench.set_a(move_command)
+        bench.run(require(labels, "cx16_dispatch_game_command"))
+        if bench.get_memory(require(labels, "zp_player_hp_lo")) >= 100:
+            raise AssertionError("movement onto trap did not apply trap damage")
+        assert_eq(bench.get_memory(CX16_RAM_BANK_REG), saved_bank, "trap trigger restored caller RAM bank")
+        assert_player_position(bench, labels, move_x, move_y, "movement trap moves player onto trap")
+        assert_screen_contains_cell(bench, SC_PLAYER, TEXT_COLOR, "movement trap keeps player glyph")
+        assert_screen_cell(bench, 1, 0, screen_code("*"), 2, "movement trap does not full-clear")
+        bench.set_memory(require(labels, "trap_count"), 0)
+        set_map_tile(bench, labels, move_x, move_y, TILE_FLOOR | DUNGEON_FLAGS)
+        bench.set_memory(require(labels, "zp_player_hp_lo"), 100)
+        bench.set_memory(require(labels, "player_data") + PL_HP_LO, 100)
 
         set_player_position(bench, labels, entry_x, entry_y)
         bench.run(require(labels, "cx16_draw_dungeon_bootstrap"))

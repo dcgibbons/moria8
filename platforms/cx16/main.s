@@ -43,6 +43,17 @@
 .const CX16_TITLE_MENU_COL = 27
 .const CX16_TEXT_COLOR = $01
 .const CX16_BOOTSTRAP_LIGHT_RADIUS = 1
+.const CX16_FEATURE_CMD_OPEN = 0
+.const CX16_FEATURE_CMD_CLOSE = 1
+.const CX16_FEATURE_CMD_SEARCH = 2
+.const CX16_FEATURE_CMD_REST = 3
+.const CX16_FEATURE_CMD_SEARCH_MODE = 4
+.const CX16_FEATURE_CMD_BASH = 5
+.const CX16_FEATURE_CMD_TUNNEL = 6
+.const CX16_FEATURE_CMD_DISARM = 7
+.const CX16_ITEM_CMD_PICKUP = 0
+.const CX16_ITEM_CMD_DROP = 1
+.const CX16_ITEM_CMD_INVENTORY = 2
 .const MAP_BASE = $6800
 .const C128 = false
 .const PLUS4 = false
@@ -101,6 +112,10 @@
 #import "../../core/player_item_prompt.s"
 #import "../../core/ui_inventory.s"
 #import "../../core/dungeon_feature_actions.s"
+#import "../../core/trap_table.s"
+#import "../../core/trap_detection.s"
+#import "../../core/disarm_helpers.s"
+#import "../../core/disarm.s"
 #import "../../core/tunnel.s"
 #import "../../core/player_dig_ability.s"
 #import "../../core/bash.s"
@@ -359,6 +374,8 @@ cx16_poll_menu:
 
 cx16_new_game_start:
     jsr rng_seed
+    lda #$ff
+    sta zp_run_dir
     lda #CX16_STATE_NEW_GAME
     sta cx16_state
     lda #TOWN_START_X
@@ -412,12 +429,14 @@ cx16_dispatch_game_command:
     beq !bash+
     cmp #CMD_TUNNEL
     beq !tunnel+
+    cmp #CMD_DISARM
+    beq !disarm+
     cmp #CMD_REST
-    beq !activity+
+    beq !rest+
     cmp #CMD_LOOK
     beq !activity+
     cmp #CMD_SEARCH_MODE
-    beq !activity+
+    beq !search_mode+
     cmp #CMD_AUTOREST
     beq !activity+
     cmp #CMD_SAVE
@@ -454,11 +473,13 @@ cx16_dispatch_game_command:
     bcc !done+
     cmp #CMD_TUNNEL + 1
     bcc !item+
-    cmp #CMD_DISARM
-    beq !item+
     jmp !done+
 !activity:
     jmp cx16_show_activity_stub
+!rest:
+    jmp cx16_cmd_rest
+!search_mode:
+    jmp cx16_cmd_search_mode
 !search:
     jmp cx16_cmd_search
 !open:
@@ -469,6 +490,8 @@ cx16_dispatch_game_command:
     jmp cx16_cmd_bash
 !tunnel:
     jmp cx16_cmd_tunnel
+!disarm:
+    jmp cx16_cmd_disarm
 !storage:
     jmp cx16_show_storage_stub
 !magic:
@@ -521,14 +544,21 @@ cx16_try_dungeon_move:
 cx16_try_dungeon_step_dir:
     jsr player_move_compute_target
     bcc !done+
+    jsr cx16_running_target_is_trap
+    bcs !done+
     jsr player_move_target_walkable
     bcc !done+
+    jsr player_search_mode_off
     jsr cx16_save_old_player
     lda cx16_view_x
     sta cx16_old_view_x
     lda cx16_view_y
     sta cx16_old_view_y
     jsr player_move_commit_target
+    jsr trap_check_at_player
+    lda #0
+    rol
+    pha
     jsr cx16_sync_local_player_position
     jsr update_visibility
     jsr cx16_update_dungeon_view
@@ -539,13 +569,32 @@ cx16_try_dungeon_step_dir:
     cmp cx16_old_view_y
     bne !full+
     jsr cx16_render_dungeon_local_area
-    sec
-    rts
+    jmp !return+
 !full:
     jsr cx16_refresh_dungeon_view
+!return:
+    pla
+    beq !moved+
+    clc
+    rts
+!moved:
     sec
     rts
 !done:
+    clc
+    rts
+
+cx16_running_target_is_trap:
+    lda zp_run_dir
+    cmp #$ff
+    beq !clear+
+    lda zp_temp0
+    and #TILE_TYPE_MASK
+    cmp #TILE_TRAP
+    bne !clear+
+    sec
+    rts
+!clear:
     clc
     rts
 
@@ -578,109 +627,82 @@ cx16_run_command:
     rts
 
 cx16_cmd_open:
-    lda cx16_state
-    cmp #CX16_STATE_DUNGEON_BOOTSTRAP
-    beq !dungeon+
-    jmp cx16_show_item_stub
-!dungeon:
-    jsr msg_clear
-    jsr get_direction_target
-    bcc !done+
-    jsr door_try_open
-    bcc !done+
-    jmp cx16_after_feature_turn
-!done:
-    rts
+    lda #CX16_FEATURE_CMD_OPEN
+    jmp cx16_call_feature_overlay_command
 
 cx16_cmd_close:
-    lda cx16_state
-    cmp #CX16_STATE_DUNGEON_BOOTSTRAP
-    beq !dungeon+
-    jmp cx16_show_item_stub
-!dungeon:
-    jsr msg_clear
-    jsr get_direction_target
-    bcc !done+
-    jsr door_try_close
-    bcc !done+
-    jmp cx16_after_feature_turn
-!done:
-    rts
+    lda #CX16_FEATURE_CMD_CLOSE
+    jmp cx16_call_feature_overlay_command
 
 cx16_cmd_search:
-    lda cx16_state
-    cmp #CX16_STATE_DUNGEON_BOOTSTRAP
-    beq !dungeon+
-    jmp cx16_show_activity_stub
-!dungeon:
-    jsr msg_clear
-    jsr do_search
-    jmp cx16_after_feature_turn
+    lda #CX16_FEATURE_CMD_SEARCH
+    jmp cx16_call_feature_overlay_command
+
+cx16_cmd_rest:
+    lda #CX16_FEATURE_CMD_REST
+    jmp cx16_call_feature_overlay_command
+
+cx16_cmd_search_mode:
+    lda #CX16_FEATURE_CMD_SEARCH_MODE
+    jmp cx16_call_feature_overlay_command
 
 cx16_cmd_bash:
-    lda cx16_state
-    cmp #CX16_STATE_DUNGEON_BOOTSTRAP
-    beq !dungeon+
-    jmp cx16_show_item_stub
-!dungeon:
-    jsr msg_clear
-    jsr bash_command
-    bcc !done+
-    jmp cx16_after_feature_turn
-!done:
-    rts
+    lda #CX16_FEATURE_CMD_BASH
+    jmp cx16_call_feature_overlay_command
 
 cx16_cmd_tunnel:
-    lda cx16_state
-    cmp #CX16_STATE_DUNGEON_BOOTSTRAP
-    beq !dungeon+
-    jmp cx16_show_item_stub
-!dungeon:
-    jsr msg_clear
-    jsr player_tunnel
-    bcc !done+
-    jmp cx16_after_feature_turn
-!done:
-    rts
+    lda #CX16_FEATURE_CMD_TUNNEL
+    jmp cx16_call_feature_overlay_command
+
+cx16_cmd_disarm:
+    lda #CX16_FEATURE_CMD_DISARM
+    jmp cx16_call_feature_overlay_command
 
 cx16_cmd_pickup:
-    lda cx16_state
-    cmp #CX16_STATE_DUNGEON_BOOTSTRAP
-    beq !dungeon+
-    jmp cx16_show_item_stub
-!dungeon:
-    jsr msg_clear
-    jsr item_pickup
-    bcc !done+
-    jmp cx16_after_item_turn
-!done:
-    rts
+    lda #CX16_ITEM_CMD_PICKUP
+    jmp cx16_call_items_overlay_command
 
 cx16_cmd_drop:
-    lda cx16_state
-    cmp #CX16_STATE_DUNGEON_BOOTSTRAP
-    beq !dungeon+
-    jmp cx16_show_item_stub
-!dungeon:
-    jsr msg_clear
-    jsr item_drop
-    bcc !done+
-    jmp cx16_after_item_turn
-!done:
-    rts
+    lda #CX16_ITEM_CMD_DROP
+    jmp cx16_call_items_overlay_command
 
 cx16_cmd_inventory:
-    lda cx16_state
-    cmp #CX16_STATE_DUNGEON_BOOTSTRAP
-    beq !dungeon+
-    jmp cx16_show_item_stub
-!dungeon:
-    lda #$ff
-    sta piw_filter
-    jsr input_prepare_modal_dismiss_key
-    jsr ui_inv_display
-    jsr input_get_modal_dismiss_key
-    jmp cx16_refresh_dungeon_view
+    lda #CX16_ITEM_CMD_INVENTORY
+    jmp cx16_call_items_overlay_command
+
+cx16_call_feature_overlay_command:
+    pha
+    lda CX16_RAM_BANK_REG
+    pha
+    lda #CX16_OVERLAY_DISARM_BANK
+    sta CX16_RAM_BANK_REG
+    pla
+    sta cx16_overlay_saved_bank
+    pla
+    jsr cx16_overlay_feature_command_entry
+    pha
+    lda cx16_overlay_saved_bank
+    sta CX16_RAM_BANK_REG
+    pla
+    rts
+
+cx16_call_items_overlay_command:
+    pha
+    lda CX16_RAM_BANK_REG
+    pha
+    lda #CX16_OVERLAY_ITEMS_BANK
+    sta CX16_RAM_BANK_REG
+    pla
+    sta cx16_overlay_saved_bank
+    pla
+    jsr cx16_overlay_items_command_entry
+    pha
+    lda cx16_overlay_saved_bank
+    sta CX16_RAM_BANK_REG
+    pla
+    rts
+
+cx16_overlay_saved_bank: .byte 0
 
 cx16_after_item_turn:
     jsr cx16_sync_local_player_position
@@ -696,6 +718,25 @@ cx16_after_feature_turn:
     jsr update_visibility
     jsr cx16_update_dungeon_view
     jmp cx16_render_dungeon_local_area
+
+cx16_after_shared_move_turn:
+    jsr cx16_save_old_player
+    lda cx16_view_x
+    sta cx16_old_view_x
+    lda cx16_view_y
+    sta cx16_old_view_y
+    jsr cx16_sync_local_player_position
+    jsr update_visibility
+    jsr cx16_update_dungeon_view
+    lda cx16_view_x
+    cmp cx16_old_view_x
+    bne !full+
+    lda cx16_view_y
+    cmp cx16_old_view_y
+    bne !full+
+    jmp cx16_render_dungeon_local_area
+!full:
+    jmp cx16_refresh_dungeon_view
 
 cx16_check_town_entry:
     jsr town_basic_check_store_door
@@ -984,6 +1025,103 @@ tramp_dig_ability:
 c128_town_dump_mark:
     rts
 
+#if !CX16_IMPORT_SHARED_GAME_LOOP
+player_search_mode_on:
+    lda player_data + PL_FLAGS
+    ora #PLF_SEARCHING
+    cmp player_data + PL_FLAGS
+    beq !done+
+    sta player_data + PL_FLAGS
+    lda zp_ui_dirty
+    ora #$01
+    sta zp_ui_dirty
+!done:
+    rts
+
+player_search_mode_off:
+    lda player_data + PL_FLAGS
+    and #($ff - PLF_SEARCHING)
+    cmp player_data + PL_FLAGS
+    beq !done+
+    sta player_data + PL_FLAGS
+    lda zp_ui_dirty
+    ora #$01
+    sta zp_ui_dirty
+!done:
+    rts
+
+trap_trigger:
+    lda CX16_RAM_BANK_REG
+    pha
+    txa
+    pha
+    lda #CX16_OVERLAY_DISARM_BANK
+    sta CX16_RAM_BANK_REG
+    pla
+    tax
+    jsr cx16_overlay_trap_trigger
+    pla
+    sta CX16_RAM_BANK_REG
+    rts
+
+player_death_check:
+    lda zp_player_hp_hi
+    bmi !dead+
+    ora zp_player_hp_lo
+    beq !dead+
+    rts
+!dead:
+    lda zp_game_flags
+    ora #$01
+    sta zp_game_flags
+    lda #SFX_DEATH
+    jmp hal_sound_play
+
+decrement_stat:
+    cmp #109
+    bcs !above_108+
+    cmp #88
+    bcs !range_88_108+
+    cmp #19
+    bcs !range_19_87+
+    cmp #4
+    bcc !dec_done+
+    sec
+    sbc #1
+    rts
+!above_108:
+    sec
+    sbc #1
+    rts
+!range_88_108:
+    pha
+    lda #1
+    ldx #6
+    ldy #2
+    jsr math_dice
+    pla
+    sec
+    sbc zp_math_a
+    rts
+!range_19_87:
+    pha
+    lda #1
+    ldx #15
+    ldy #5
+    jsr math_dice
+    pla
+    sec
+    sbc zp_math_a
+    cmp #19
+    bcs !dec_done+
+    lda #18
+!dec_done:
+    rts
+
+creature_name_buf:
+    .fill 32, 0
+#endif
+
 .macro Cx16PrintAt(row, col, text) {
     lda #row
     sta zp_cursor_row
@@ -1157,6 +1295,14 @@ cx16_loading_header_text:
     .byte 0
 
 #if !CX16_IMPORT_SHARED_GAME_LOOP
+search_mode_on_str:
+    .text "Search mode on." ; .byte 0
+
+search_mode_off_str:
+    .text "Search mode off." ; .byte 0
+#endif
+
+#if !CX16_IMPORT_SHARED_GAME_LOOP
 press_key_str:
     :ScreenText("Press any key")
     .byte 0
@@ -1252,7 +1398,57 @@ cx16_overlay_ui_end:
 
 .segment Cx16ItemsOverlay
 cx16_overlay_items_entry:
+cx16_overlay_items_command_entry:
+#if !CX16_IMPORT_SHARED_GAME_LOOP
+    cmp #CX16_ITEM_CMD_PICKUP
+    beq !pickup+
+    cmp #CX16_ITEM_CMD_DROP
+    beq !drop+
+    cmp #CX16_ITEM_CMD_INVENTORY
+    beq !inventory+
     rts
+
+!pickup:
+    lda cx16_state
+    cmp #CX16_STATE_DUNGEON_BOOTSTRAP
+    beq !pickup_dungeon+
+    jmp cx16_show_item_stub
+!pickup_dungeon:
+    jsr msg_clear
+    jsr item_pickup
+    bcc !pickup_done+
+    jmp cx16_after_item_turn
+!pickup_done:
+    rts
+
+!drop:
+    lda cx16_state
+    cmp #CX16_STATE_DUNGEON_BOOTSTRAP
+    beq !drop_dungeon+
+    jmp cx16_show_item_stub
+!drop_dungeon:
+    jsr msg_clear
+    jsr item_drop
+    bcc !drop_done+
+    jmp cx16_after_item_turn
+!drop_done:
+    rts
+
+!inventory:
+    lda cx16_state
+    cmp #CX16_STATE_DUNGEON_BOOTSTRAP
+    beq !inventory_dungeon+
+    jmp cx16_show_item_stub
+!inventory_dungeon:
+    lda #$ff
+    sta piw_filter
+    jsr input_prepare_modal_dismiss_key
+    jsr ui_inv_display
+    jsr input_get_modal_dismiss_key
+    jmp cx16_refresh_dungeon_view
+#else
+    rts
+#endif
     :Cx16OverlayMarker(8)
 cx16_overlay_items_end:
 .print "CX16 ITEMS overlay: " + (cx16_overlay_items_end - $a000) + " bytes at $A000-$" + toHexString(cx16_overlay_items_end)
@@ -1268,7 +1464,164 @@ cx16_overlay_spell_end:
 
 .segment Cx16DisarmOverlay
 cx16_overlay_disarm_entry:
+cx16_overlay_feature_command_entry:
+#if !CX16_IMPORT_SHARED_GAME_LOOP
+    cmp #CX16_FEATURE_CMD_OPEN
+    bne !not_open+
+    jmp !open+
+!not_open:
+    cmp #CX16_FEATURE_CMD_CLOSE
+    bne !not_close+
+    jmp !close+
+!not_close:
+    cmp #CX16_FEATURE_CMD_SEARCH
+    bne !not_search+
+    jmp !search+
+!not_search:
+    cmp #CX16_FEATURE_CMD_REST
+    bne !not_rest+
+    jmp !rest+
+!not_rest:
+    cmp #CX16_FEATURE_CMD_SEARCH_MODE
+    bne !not_search_mode+
+    jmp !search_mode+
+!not_search_mode:
+    cmp #CX16_FEATURE_CMD_BASH
+    bne !not_bash+
+    jmp !bash+
+!not_bash:
+    cmp #CX16_FEATURE_CMD_TUNNEL
+    bne !not_tunnel+
+    jmp !tunnel+
+!not_tunnel:
+    cmp #CX16_FEATURE_CMD_DISARM
+    bne !not_disarm+
+    jmp !disarm+
+!not_disarm:
     rts
+
+!open:
+    lda cx16_state
+    cmp #CX16_STATE_DUNGEON_BOOTSTRAP
+    beq !open_dungeon+
+    jmp cx16_show_item_stub
+!open_dungeon:
+    jsr msg_clear
+    jsr get_direction_target
+    bcc !open_done+
+    jsr door_try_open
+    bcc !open_done+
+    jmp cx16_after_feature_turn
+!open_done:
+    rts
+
+!close:
+    lda cx16_state
+    cmp #CX16_STATE_DUNGEON_BOOTSTRAP
+    beq !close_dungeon+
+    jmp cx16_show_item_stub
+!close_dungeon:
+    jsr msg_clear
+    jsr get_direction_target
+    bcc !close_done+
+    jsr door_try_close
+    bcc !close_done+
+    jmp cx16_after_feature_turn
+!close_done:
+    rts
+
+!search:
+    lda cx16_state
+    cmp #CX16_STATE_DUNGEON_BOOTSTRAP
+    beq !search_dungeon+
+    jmp cx16_show_activity_stub
+!search_dungeon:
+    jsr msg_clear
+    jsr do_search
+    jmp cx16_after_feature_turn
+
+!rest:
+    lda cx16_state
+    cmp #CX16_STATE_DUNGEON_BOOTSTRAP
+    beq !rest_dungeon+
+    jmp cx16_show_activity_stub
+!rest_dungeon:
+    jsr msg_clear
+    jmp cx16_after_feature_turn
+
+!search_mode:
+    lda cx16_state
+    cmp #CX16_STATE_DUNGEON_BOOTSTRAP
+    beq !search_mode_dungeon+
+    jmp cx16_show_activity_stub
+!search_mode_dungeon:
+    jsr msg_clear
+    lda player_data + PL_FLAGS
+    and #PLF_SEARCHING
+    beq !toggle_on+
+    jsr player_search_mode_off
+    lda #<search_mode_off_str
+    sta zp_ptr0
+    lda #>search_mode_off_str
+    sta zp_ptr0_hi
+    jmp !print+
+!toggle_on:
+    jsr player_search_mode_on
+    lda #<search_mode_on_str
+    sta zp_ptr0
+    lda #>search_mode_on_str
+    sta zp_ptr0_hi
+!print:
+    jmp msg_print
+
+!bash:
+    lda cx16_state
+    cmp #CX16_STATE_DUNGEON_BOOTSTRAP
+    beq !bash_dungeon+
+    jmp cx16_show_item_stub
+!bash_dungeon:
+    jsr msg_clear
+    jsr bash_command
+    bcc !bash_done+
+    jmp cx16_after_feature_turn
+!bash_done:
+    rts
+
+!tunnel:
+    lda cx16_state
+    cmp #CX16_STATE_DUNGEON_BOOTSTRAP
+    beq !tunnel_dungeon+
+    jmp cx16_show_item_stub
+!tunnel_dungeon:
+    jsr msg_clear
+    jsr player_tunnel
+    bcc !tunnel_done+
+    jmp cx16_after_feature_turn
+!tunnel_done:
+    rts
+
+!disarm:
+    lda cx16_state
+    cmp #CX16_STATE_DUNGEON_BOOTSTRAP
+    beq !disarm_dungeon+
+    jmp cx16_show_item_stub
+!disarm_dungeon:
+    jsr msg_clear
+    jsr disarm_command
+    bcc !disarm_done+
+    jmp cx16_after_shared_move_turn
+!disarm_done:
+    rts
+#else
+    rts
+#endif
+
+cx16_overlay_trap_trigger:
+#if !CX16_IMPORT_SHARED_GAME_LOOP
+    #import "../../core/trap_effects_body.s"
+#else
+    rts
+#endif
     :Cx16OverlayMarker(CX16_OVERLAY_SLOT_DISARM)
 cx16_overlay_disarm_end:
 .print "CX16 DISARM overlay: " + (cx16_overlay_disarm_end - $a000) + " bytes at $A000-$" + toHexString(cx16_overlay_disarm_end)
