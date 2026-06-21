@@ -33,7 +33,7 @@
 .const CX16_TITLE_MENU_COL = 27
 .const CX16_TEXT_COLOR = $01
 .const CX16_BOOTSTRAP_LIGHT_RADIUS = 1
-.const MAP_BASE = $6000
+.const MAP_BASE = $6800
 .const C128 = false
 .const PLUS4 = false
 .const C128_REAL_BOOT_DIAG = 0
@@ -98,8 +98,12 @@
 #endif
 
 .label cx16_contract_prg_load_base = CX16_PRG_LOAD_BASE
+.label cx16_contract_ram_bank_count = CX16_RAM_BANK_COUNT
 .label cx16_contract_ram_bank_reg = CX16_RAM_BANK_REG
 .label cx16_contract_ram_bank_default = CX16_RAM_BANK_DEFAULT
+.label cx16_contract_ram_bank_last = CX16_RAM_BANK_LAST
+.label cx16_contract_transient_bank_base = CX16_TRANSIENT_BANK_BASE
+.label cx16_contract_transient_bank_end = CX16_TRANSIENT_BANK_END
 .label cx16_contract_resident_code_base = CX16_RESIDENT_CODE_BASE
 .label cx16_contract_resident_code_limit = CX16_RESIDENT_CODE_LIMIT
 .label cx16_contract_fixed_live_map_base = CX16_FIXED_LIVE_MAP_BASE
@@ -127,6 +131,29 @@
 .label cx16_contract_item_catalog_primary_bank = CX16_ITEM_CATALOG_PRIMARY_BANK
 .label cx16_contract_item_catalog_load_base = CX16_ITEM_CATALOG_LOAD_BASE
 .label cx16_contract_item_catalog_load_end = CX16_ITEM_CATALOG_LOAD_END
+.label cx16_contract_title_source_bank = CX16_TITLE_SOURCE_BANK
+.label cx16_contract_title_source_load_base = CX16_TITLE_SOURCE_LOAD_BASE
+.label cx16_contract_title_source_load_end = CX16_TITLE_SOURCE_LOAD_END
+.label cx16_contract_overlay_cache_bank_base = CX16_OVERLAY_CACHE_BANK_BASE
+.label cx16_contract_overlay_cache_bank_end = CX16_OVERLAY_CACHE_BANK_END
+.label cx16_contract_overlay_startup_bank = CX16_OVERLAY_STARTUP_BANK
+.label cx16_contract_overlay_town_bank = CX16_OVERLAY_TOWN_BANK
+.label cx16_contract_overlay_death_bank = CX16_OVERLAY_DEATH_BANK
+.label cx16_contract_overlay_royal_bank = CX16_OVERLAY_ROYAL_BANK
+.label cx16_contract_overlay_gen_bank = CX16_OVERLAY_GEN_BANK
+.label cx16_contract_overlay_help_bank = CX16_OVERLAY_HELP_BANK
+.label cx16_contract_overlay_ui_bank = CX16_OVERLAY_UI_BANK
+.label cx16_contract_overlay_items_bank = CX16_OVERLAY_ITEMS_BANK
+.label cx16_contract_overlay_spell_bank = CX16_OVERLAY_SPELL_BANK
+.label cx16_contract_overlay_disarm_bank = CX16_OVERLAY_DISARM_BANK
+.label cx16_contract_overlay_slot_bank_base = CX16_OVERLAY_SLOT_BANK_BASE
+.label cx16_contract_overlay_slot_bank_end = CX16_OVERLAY_SLOT_BANK_END
+.label cx16_contract_overlay_free_bank_base = CX16_OVERLAY_FREE_BANK_BASE
+.label cx16_contract_overlay_free_bank_end = CX16_OVERLAY_FREE_BANK_END
+.label cx16_contract_data_cache_bank_base = CX16_DATA_CACHE_BANK_BASE
+.label cx16_contract_data_cache_bank_end = CX16_DATA_CACHE_BANK_END
+.label cx16_contract_work_bank_base = CX16_WORK_BANK_BASE
+.label cx16_contract_work_bank_end = CX16_WORK_BANK_END
 
 cx16_entry:
     sei
@@ -143,13 +170,14 @@ cx16_entry:
     jsr KERNAL_CINT
     jsr screen_init
     jsr cx16_services_install
-    jsr cx16_load_item_catalog
-    bcc !item_catalog_ok+
+    jsr cx16_loader_screen_begin
+    jsr cx16_preload_static_assets
+    bcc !assets_ok+
     lda #CX16_TEXT_COLOR
     jsr screen_set_color
-    :Cx16PrintAt(14, 28, cx16_item_catalog_failed_text)
+    :Cx16PrintAt(14, 30, cx16_asset_load_failed_text)
     jmp !halt-
-!item_catalog_ok:
+!assets_ok:
     jsr rng_seed
     lda #CX16_TEXT_COLOR
     jsr screen_set_color
@@ -159,6 +187,95 @@ cx16_entry:
 cx16_idle:
     jsr cx16_poll_input
     jmp cx16_idle
+
+// cx16_preload_static_assets — Load immutable gameplay payloads before title.
+// Output: carry clear = all cached; carry set = failure, cx16_preload_status:
+//         1 item catalog, 2 monster tier, 3 dungeon module.
+cx16_preload_static_assets:
+    lda #0
+    sta cx16_preload_status
+    lda #cx16_item_catalog_file_len
+    ldx #<cx16_item_catalog_file
+    ldy #>cx16_item_catalog_file
+    jsr cx16_loader_show_file
+    jsr cx16_load_item_catalog
+    bcs !item_fail+
+    lda #1
+    sta cx16_preload_tier
+!tier_loop:
+    ldx cx16_preload_tier
+    dex
+    lda cx16_tier_file_lo,x
+    sta zp_ptr0
+    lda cx16_tier_file_hi,x
+    sta zp_ptr0_hi
+    lda cx16_tier_file_len,x
+    ldx zp_ptr0
+    ldy zp_ptr0_hi
+    jsr cx16_loader_show_file
+    lda cx16_preload_tier
+    jsr cx16_load_tier_to_bank
+    bcs !tier_fail+
+    inc cx16_preload_tier
+    lda cx16_preload_tier
+    cmp #5
+    bcc !tier_loop-
+    lda #cx16_dungeon_module_file_len
+    ldx #<cx16_dungeon_module_file
+    ldy #>cx16_dungeon_module_file
+    jsr cx16_loader_show_file
+    jsr cx16_load_dungeon_module
+    bcs !module_fail+
+    clc
+    rts
+!item_fail:
+    lda #1
+    sta cx16_preload_status
+    sec
+    rts
+!tier_fail:
+    lda #2
+    sta cx16_preload_status
+    sec
+    rts
+!module_fail:
+    lda #3
+    sta cx16_preload_status
+    sec
+    rts
+
+cx16_loader_screen_begin:
+    lda #CX16_TEXT_COLOR
+    jsr screen_set_color
+    jsr screen_clear
+    :Cx16PrintAt(2, 4, cx16_loading_header_text)
+    lda #5
+    sta cx16_loader_row
+    rts
+
+// Print the next boot-preload filename, C128-style.
+// Input: A = filename length, X/Y = filename pointer.
+cx16_loader_show_file:
+    sta cx16_loader_name_len
+    stx zp_ptr0
+    sty zp_ptr0_hi
+    lda cx16_loader_row
+    sta zp_cursor_row
+    lda #8
+    sta zp_cursor_col
+    jsr screen_set_cursor
+    jsr vera_set_addr_inc1
+    ldy #0
+!loop:
+    cpy cx16_loader_name_len
+    bcs !done+
+    lda (zp_ptr0),y
+    jsr vera_put_char_with_attr
+    iny
+    jmp !loop-
+!done:
+    inc cx16_loader_row
+    rts
 
 cx16_title_enter_menu:
     lda #CX16_STATE_TITLE
@@ -716,14 +833,6 @@ cx16_show_descend_stub:
 
 cx16_enter_dungeon_bootstrap:
     jsr cx16_clear_message_row
-    :Cx16PrintAt(26, 27, cx16_loading_tier_text)
-    lda #1
-    jsr cx16_load_tier_to_bank
-    bcc !loaded+
-    jsr cx16_clear_message_row
-    :Cx16PrintAt(26, 22, cx16_tier_load_failed_text)
-    rts
-!loaded:
     lda #1
     jsr cx16_generate_dungeon_level
     bcc !module_ok+
@@ -878,16 +987,38 @@ c128_town_dump_mark:
 }
 
 // CX16 title asset loader. The Makefile builds TITLE from core/title_data.s
-// beside moria16.prg, and runcx16 launches from that directory.
+// beside moria16.prg. Keep it in banked RAM so title art does not pin the
+// resident image below the old $6000 staging address.
 hal_asset_load_title:
-    lda #<MAP_BASE
+    jsr cx16_save_ram_bank
+    lda #CX16_TITLE_SOURCE_BANK
+    jsr cx16_select_ram_bank_a
+    lda #<CX16_TITLE_SOURCE_LOAD_BASE
     sta cx16_asset_load_addr_lo
-    lda #>MAP_BASE
+    lda #>CX16_TITLE_SOURCE_LOAD_BASE
     sta cx16_asset_load_addr_hi
     lda #cx16_title_name_len
     ldx #<cx16_title_name
     ldy #>cx16_title_name
-    jmp hal_asset_load_prg_header
+    jsr hal_asset_load_prg_header
+    php
+    jsr cx16_restore_ram_bank
+    plp
+    rts
+
+hal_title_art_read_ptr1:
+    lda CX16_RAM_BANK_REG
+    sta cx16_title_read_saved_bank
+    lda #CX16_TITLE_SOURCE_BANK
+    sta CX16_RAM_BANK_REG
+    lda (zp_ptr1),y
+    pha
+    lda cx16_title_read_saved_bank
+    sta CX16_RAM_BANK_REG
+    pla
+    rts
+
+cx16_title_read_saved_bank: .byte 0
 
 #import "../commodore/common/title_screen.s"
 
@@ -927,14 +1058,6 @@ cx16_descend_stub_text:
     :ScreenText("DUNGEON ENTRY NOT WIRED YET.")
     .byte 0
 
-cx16_loading_tier_text:
-    :ScreenText("LOADING TIER 1...")
-    .byte 0
-
-cx16_tier_load_failed_text:
-    :ScreenText("TIER LOAD FAILED.")
-    .byte 0
-
 cx16_dungeon_module_failed_text:
     :ScreenText("DUNGEON MODULE LOAD FAILED.")
     .byte 0
@@ -944,7 +1067,7 @@ cx16_dungeon_title_text:
     .byte 0
 
 cx16_dungeon_loaded_text:
-    :ScreenText("MONSTER.DB.1 LOADED")
+    :ScreenText("MONSTER TIER 1 READY")
     .byte 0
 
 cx16_dungeon_help_text:
@@ -1004,8 +1127,12 @@ cx16_memory_fail_text:
     :ScreenText("CX16 RAM BANK TEST FAILED")
     .byte 0
 
-cx16_item_catalog_failed_text:
-    :ScreenText("ITEMCAT.1 LOAD FAILED")
+cx16_asset_load_failed_text:
+    :ScreenText("ASSET LOAD FAILED")
+    .byte 0
+
+cx16_loading_header_text:
+    :ScreenText("LOADING:")
     .byte 0
 
 #if !CX16_IMPORT_SHARED_GAME_LOOP
@@ -1021,6 +1148,10 @@ cx16_store_idx: .byte 0
 cx16_loaded_tier: .byte 0
 cx16_loaded_tier_bank: .byte 0
 cx16_dungeon_depth: .byte 0
+cx16_preload_status: .byte 0
+cx16_preload_tier: .byte 0
+cx16_loader_row: .byte 0
+cx16_loader_name_len: .byte 0
 
 .segment Cx16DungeonGenModule
 cx16_dungeon_module_entry:

@@ -89,11 +89,11 @@ CX16_TRANSFER_GUARD_BANK = 3
 CX16_TRANSFER_TEST_OFFSET = 0x00F0
 CX16_TRANSFER_TEST_COUNT = 0x0104
 CX16_TIER1_BANK = 4
-CX16_TIER_GUARD_BANK = 5
+CX16_TIER_GUARD_BANK = 3
 CX16_DUNGEON_MODULE_BANK = 8
-CX16_DUNGEON_MODULE_GUARD_BANK = 11
+CX16_DUNGEON_MODULE_GUARD_BANK = 3
 CX16_ITEM_CATALOG_BANK = 9
-CX16_ITEM_CATALOG_GUARD_BANK = 10
+CX16_ITEM_CATALOG_GUARD_BANK = 3
 VERA_ADDR_L = 0x9F20
 VERA_ADDR_M = 0x9F21
 VERA_ADDR_H = 0x9F22
@@ -633,6 +633,10 @@ def main():
         assert_eq(bench.get_memory(CX16_RAM_BANK_REG), 0, "default RAM bank after memory init")
         assert_banked_ram_isolation(bench)
         assert_banked_transfer_helpers(bench, labels)
+        bench.run(require(labels, "cx16_preload_static_assets"), timeout=12)
+        if bench.get_status() & STATUS_CARRY:
+            raise AssertionError("cx16_preload_static_assets reported failure")
+        assert_eq(bench.get_memory(require(labels, "cx16_preload_status")), 0, "preload status")
         assert_tier_prg_load_to_bank(bench, labels, args.cwd)
         assert_dungeon_module_load_execute(bench, labels, args.cwd)
         assert_item_catalog_load_to_bank(bench, labels, args.cwd)
@@ -760,7 +764,7 @@ def main():
         assert_screen_text(bench, 0, 31, "DUNGEON LEVEL 1", "dungeon title")
         assert_screen_contains_cell(bench, SC_PLAYER, TEXT_COLOR, "dungeon entry player")
         assert_screen_cell(bench, 2, 1, screen_code(" "), 0, "unvisited dungeon rock")
-        assert_screen_text(bench, 25, 24, "MONSTER.DB.1 LOADED", "dungeon tier loaded")
+        assert_screen_text(bench, 25, 24, "MONSTER TIER 1 READY", "dungeon tier ready")
         assert_screen_text(
             bench,
             26,

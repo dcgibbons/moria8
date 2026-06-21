@@ -19,8 +19,8 @@
 .const PLATFORM_COMBAT_MSG_BUF_SIZE = 54
 #define HAL_HUFFMAN_COMBAT_APPEND
 .const PLATFORM_RESIDENT_PLAY = "Default"
-.const PLATFORM_HD_DECODE_BUF_BASE = $9600
-.const PLATFORM_HD_DECODE_BUF_LIMIT = $9700
+.const PLATFORM_HD_DECODE_BUF_BASE = $9e00
+.const PLATFORM_HD_DECODE_BUF_LIMIT = $9f00
 #define HAL_PLATFORM_ITEM_CATALOG_BANKED
 
 .const OVL_NONE        = 0
@@ -32,6 +32,8 @@
 .const OVL_UI          = 6
 .const OVL_ITEMS       = 7
 .const OVL_SPELL       = 8
+.const OVL_ROYAL       = 9
+.const OVL_DISARM      = 10
 
 .const hal_huffman_lock_irq_during_decode = 0
 .const hal_huffman_print_uses_cached_msg = 0

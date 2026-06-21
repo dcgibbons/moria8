@@ -75,8 +75,8 @@ testcx16-runtime: $(CX16_MAIN_PRG) $(CX16_TITLE_PRG) $(CX16_TIER_PRGS) $(CX16_MO
 testcx16-memory-contract-selftest:
 	python3 tests/check_memory_contract_test.py
 
-testcx16-memory-contract: testcx16-memory-contract-selftest $(CX16_MAIN_PRG) $(CX16_SHARED_PROBE_PRG) $(CX16_TIER_PRGS) $(CX16_MODULE_PRGS) $(CX16_ITEM_PRGS)
-	python3 "$(CX16_MEMORY_CONTRACT_TOOL)" --main-prg "$(CX16_MAIN_PRG)" --main-symbols "$(OUT)/main.sym" --shared-prg "$(CX16_SHARED_PROBE_PRG)" --shared-symbols "$(OUT)/shared_probe.sym" $(foreach prg,$(CX16_TIER_PRGS),--tier-prg "$(prg)") $(foreach prg,$(CX16_MODULE_PRGS),--module-prg "$(prg)") $(foreach prg,$(CX16_ITEM_PRGS),--item-prg "$(prg)")
+testcx16-memory-contract: testcx16-memory-contract-selftest $(CX16_MAIN_PRG) $(CX16_SHARED_PROBE_PRG) $(CX16_TITLE_PRG) $(CX16_TIER_PRGS) $(CX16_MODULE_PRGS) $(CX16_ITEM_PRGS)
+	python3 "$(CX16_MEMORY_CONTRACT_TOOL)" --main-prg "$(CX16_MAIN_PRG)" --main-symbols "$(OUT)/main.sym" --title-prg "$(CX16_TITLE_PRG)" --shared-prg "$(CX16_SHARED_PROBE_PRG)" --shared-symbols "$(OUT)/shared_probe.sym" $(foreach prg,$(CX16_TIER_PRGS),--tier-prg "$(prg)") $(foreach prg,$(CX16_MODULE_PRGS),--module-prg "$(prg)") $(foreach prg,$(CX16_ITEM_PRGS),--item-prg "$(prg)")
 
 testcx16-shared-link: testcx16-memory-contract
 	@echo "CX16 shared-gameplay link probe passed: $(CX16_SHARED_PROBE_PRG)"

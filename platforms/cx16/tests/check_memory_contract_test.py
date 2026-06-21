@@ -18,8 +18,12 @@ def base_labels(program_end):
     return {
         "program_end": program_end,
         "cx16_contract_prg_load_base": contract.CX16_PRG_LOAD_BASE,
+        "cx16_contract_ram_bank_count": contract.CX16_RAM_BANK_COUNT,
         "cx16_contract_ram_bank_reg": contract.CX16_RAM_BANK_REG,
         "cx16_contract_ram_bank_default": contract.CX16_RAM_BANK_DEFAULT,
+        "cx16_contract_ram_bank_last": contract.CX16_RAM_BANK_LAST,
+        "cx16_contract_transient_bank_base": contract.CX16_TRANSIENT_BANK_BASE,
+        "cx16_contract_transient_bank_end": contract.CX16_TRANSIENT_BANK_END,
         "cx16_contract_resident_code_base": contract.CX16_RESIDENT_CODE_BASE,
         "cx16_contract_resident_code_limit": contract.CX16_RESIDENT_CODE_LIMIT,
         "cx16_contract_fixed_live_map_base": contract.CX16_FIXED_LIVE_MAP_BASE,
@@ -47,6 +51,29 @@ def base_labels(program_end):
         "cx16_contract_item_catalog_primary_bank": contract.CX16_ITEM_CATALOG_PRIMARY_BANK,
         "cx16_contract_item_catalog_load_base": contract.CX16_ITEM_CATALOG_LOAD_BASE,
         "cx16_contract_item_catalog_load_end": contract.CX16_ITEM_CATALOG_LOAD_END,
+        "cx16_contract_title_source_bank": contract.CX16_TITLE_SOURCE_BANK,
+        "cx16_contract_title_source_load_base": contract.CX16_TITLE_SOURCE_LOAD_BASE,
+        "cx16_contract_title_source_load_end": contract.CX16_TITLE_SOURCE_LOAD_END,
+        "cx16_contract_overlay_cache_bank_base": contract.CX16_OVERLAY_CACHE_BANK_BASE,
+        "cx16_contract_overlay_cache_bank_end": contract.CX16_OVERLAY_CACHE_BANK_END,
+        "cx16_contract_overlay_startup_bank": contract.CX16_OVERLAY_STARTUP_BANK,
+        "cx16_contract_overlay_town_bank": contract.CX16_OVERLAY_TOWN_BANK,
+        "cx16_contract_overlay_death_bank": contract.CX16_OVERLAY_DEATH_BANK,
+        "cx16_contract_overlay_royal_bank": contract.CX16_OVERLAY_ROYAL_BANK,
+        "cx16_contract_overlay_gen_bank": contract.CX16_OVERLAY_GEN_BANK,
+        "cx16_contract_overlay_help_bank": contract.CX16_OVERLAY_HELP_BANK,
+        "cx16_contract_overlay_ui_bank": contract.CX16_OVERLAY_UI_BANK,
+        "cx16_contract_overlay_items_bank": contract.CX16_OVERLAY_ITEMS_BANK,
+        "cx16_contract_overlay_spell_bank": contract.CX16_OVERLAY_SPELL_BANK,
+        "cx16_contract_overlay_disarm_bank": contract.CX16_OVERLAY_DISARM_BANK,
+        "cx16_contract_overlay_slot_bank_base": contract.CX16_OVERLAY_SLOT_BANK_BASE,
+        "cx16_contract_overlay_slot_bank_end": contract.CX16_OVERLAY_SLOT_BANK_END,
+        "cx16_contract_overlay_free_bank_base": contract.CX16_OVERLAY_FREE_BANK_BASE,
+        "cx16_contract_overlay_free_bank_end": contract.CX16_OVERLAY_FREE_BANK_END,
+        "cx16_contract_data_cache_bank_base": contract.CX16_DATA_CACHE_BANK_BASE,
+        "cx16_contract_data_cache_bank_end": contract.CX16_DATA_CACHE_BANK_END,
+        "cx16_contract_work_bank_base": contract.CX16_WORK_BANK_BASE,
+        "cx16_contract_work_bank_end": contract.CX16_WORK_BANK_END,
     }
 
 
@@ -201,6 +228,25 @@ def test_item_prg_contract():
         assert_raises(lambda: contract.check_item_prg(too_large), "exceeds banked RAM window")
 
 
+def test_title_prg_contract():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        title_path = os.path.join(tmpdir, "TITLE")
+        write_prg(title_path, contract.CX16_TITLE_SOURCE_LOAD_BASE, 0x0200)
+        contract.check_title_prg(title_path)
+
+        wrong_load = os.path.join(tmpdir, "TITLE.BADLOAD")
+        write_prg(wrong_load, contract.CX16_TITLE_SOURCE_LOAD_BASE + 1, 0x0200)
+        assert_raises(lambda: contract.check_title_prg(wrong_load), "load address")
+
+        too_large = os.path.join(tmpdir, "TITLE.BIG")
+        write_prg(
+            too_large,
+            contract.CX16_TITLE_SOURCE_LOAD_BASE,
+            contract.CX16_TITLE_SOURCE_LOAD_END - contract.CX16_TITLE_SOURCE_LOAD_BASE + 2,
+        )
+        assert_raises(lambda: contract.check_title_prg(too_large), "exceeds banked RAM window")
+
+
 def test_overlap_span_edges():
     assert contract.overlap_span(0x0801, 0x1000, 0x9F00, 0x9FFF) is None
     assert contract.overlap_span(0x0801, 0x9F00, 0x9F00, 0x9FFF) is None
@@ -211,18 +257,21 @@ def test_overlap_span_edges():
 def test_report_contains_actionable_memory_lines():
     product = (contract.CX16_PRG_LOAD_BASE, 0x1754, 0x1754)
     shared = (contract.CX16_PRG_LOAD_BASE, contract.CX16_BANKED_RAM_END + 0x0100, contract.CX16_BANKED_RAM_END + 0x0100)
+    title = (contract.CX16_TITLE_SOURCE_LOAD_BASE, contract.CX16_TITLE_SOURCE_LOAD_BASE + 0x0200)
     tiers = [(contract.CX16_TIER_LOAD_BASE, contract.CX16_TIER_LOAD_BASE + 0x0200)]
     modules = [(contract.CX16_DUNGEON_MODULE_LOAD_BASE, contract.CX16_DUNGEON_MODULE_LOAD_BASE + 0x0200)]
     items = [(contract.CX16_ITEM_CATALOG_LOAD_BASE, contract.CX16_ITEM_CATALOG_LOAD_BASE + 0x0200)]
     output = StringIO()
     with redirect_stdout(output):
-        contract.emit_report(product, shared, tiers, modules, items)
+        contract.emit_report(product, shared, title, tiers, modules, items)
 
     report = output.getvalue()
     for expected in (
         "product fixed-code headroom",
         "fixed live map",
         "RAM bank register/default",
+        "RAM banks",
+        "transient scratch banks",
         "tier banks",
         "tier 1 PRG",
         "dungeon module bank",
@@ -230,6 +279,13 @@ def test_report_contains_actionable_memory_lines():
         "item catalog banks",
         "item catalog primary bank",
         "item catalog PRG",
+        "title source bank",
+        "title PRG",
+        "overlay slots",
+        "overlay slot banks",
+        "overlay expansion banks",
+        "unallocated data-cache banks",
+        "unallocated work banks",
         "shared probe over fixed-code limit",
         "shared probe overlaps VERA I/O",
         "shared probe overlaps bank window",
@@ -250,6 +306,7 @@ def main():
     test_tier_prg_contract()
     test_module_prg_contract()
     test_item_prg_contract()
+    test_title_prg_contract()
     test_overlap_span_edges()
     test_report_contains_actionable_memory_lines()
     print("CX16 memory contract self-test passed")

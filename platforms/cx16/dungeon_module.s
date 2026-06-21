@@ -34,13 +34,11 @@ cx16_load_dungeon_module:
     rts
 
 // Input:  A = dungeon depth to generate.
-// Output: carry clear = loaded module generated the map and returned the
-//         expected ABI tuple; carry set = load, status, or ABI mismatch.
+// Output: carry clear = cached module generated the map and returned the
+//         expected ABI tuple; carry set = status or ABI mismatch.
 // Restores the caller's selected RAM bank before returning.
 cx16_generate_dungeon_level:
     sta cx16_dungeon_module_request_depth
-    jsr cx16_load_dungeon_module
-    bcs !fail+
     jsr cx16_save_ram_bank
     lda #CX16_DUNGEON_MODULE_BANK
     jsr cx16_select_ram_bank_a

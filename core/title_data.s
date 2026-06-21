@@ -12,7 +12,7 @@
 //   Box borders: + for corners, - for horizontal, ! for vertical
 
 #if TITLE_PLATFORM_CX16
-.pc = $6000 "Title Art"
+.pc = $A000 "Title Art"
 #elif TITLE_PLATFORM_128
 .pc = $4000 "Title Art"
 #else

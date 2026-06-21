@@ -110,18 +110,19 @@ basic movement input there.
 Current assumptions:
 
 * Build remains Kick Assembler for the first slice.
-* Baseline RAM is 512 KB, using fixed RAM below `$9F00` plus the `$A000-$BFFF`
-  banked-RAM window for later resident overlay/cache work.
+* Baseline RAM is 512 KB, using fixed RAM below `$9F00` plus 64 banks exposed
+  through the `$A000-$BFFF` banked-RAM window. The enforced policy lives in
+  `docs/CX16_MEMORY_POLICY.md`, `platforms/cx16/memory.s`, and
+  `platforms/cx16/check_memory_contract.py`.
 * The normal product PRG loads at `$0801`; machine code starts at `$0810` and
-  must end before the fixed live-map base at `$6000`. Title art also loads at
-  `$6000` and is treated as scratch before town/dungeon generation reuses the
-  same fixed-RAM region as the gameplay map. The assembler enforces the `$6000`
-  resident-code limit for the normal CX16 image.
+  must end before the fixed live-map base at `$6800`. Title art loads as a
+  bank-window PRG at `$A000` into RAM bank 11 as a title-art source bank, so it
+  does not pin resident code below an old fixed-RAM staging address.
 * Display target is VERA 80x30 text. The first title screen centers the
   existing 40-column title composition inside the wider display.
 * The current new-game path renders a deterministic 66x22 town through
   `core/town_map_basic.s`, using the shared town/map constants and
-  store-position tables, backed by fixed RAM at `MAP_BASE` (`$6000`) with the shared
+  store-position tables, backed by fixed RAM at `MAP_BASE` (`$6800`) with the shared
   198-byte row stride. This is still a bootstrap renderer, not the full shared
   game loop.
 * The live shared map is deliberately fixed RAM, not banked RAM. The 198x66
@@ -205,14 +206,16 @@ Current shared-gameplay status:
   crosses the fixed-RAM map/scratch plan and the CX16 `$A000-$BFFF` banked-RAM
   window.
 * Runtime enablement must keep the live map in fixed RAM with resident code
-  below it. Banked resident databases or cached payloads should use the CX16
+  below it. Banked resident databases or cached payloads must use the CX16
   bank-window helpers rather than direct, unscoped writes to `$00`/`$A000`.
-  Creature tiers currently reserve RAM banks 4-7, with each `MONSTER.DB.N`
-  payload loaded at `$A000` in its selected bank. The executable dungeon module
-  currently reserves RAM bank 8 as `DUNGEON.GEN`, loaded at `$A000` and entered
-  at `$A000`. Item catalog/data work loads immutable item catalog data from
-  `ITEMCAT.1` into RAM bank 9 and reserves RAM bank 10 for the next item
-  text/extra payload split. The CX16 wrapper calls the common
+  Bank 0 is the default/system bank; banks 1-3 are transient scratch; banks
+  4-7 hold `MONSTER.DB.1` through `MONSTER.DB.4`; bank 8 holds
+  `DUNGEON.GEN`; banks 9-10 are the item-catalog family; bank 11 is the
+  title-art source bank; banks 12-21 reserve the Commodore-style overlay slots
+  `STARTUP`, `TOWN`, `DEATH`, `ROYAL`, `GEN`, `HELP`, `UI`, `ITEMS`, `SPELL`,
+  and `DISARM`; banks 22-31, 32-47, and 48-63 are defined unallocated classes
+  for overlay expansion, immutable data/string caches, and transient work
+  respectively. The CX16 wrapper calls the common
   `core/dungeon_gen.s` generator after seeding the shared RNG. Future dungeon
   work must preserve that load address, entry point, caller-bank restoration,
   fixed-RAM map ownership, and one-bank fit instead of adding CX16-specific map

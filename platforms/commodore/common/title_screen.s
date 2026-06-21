@@ -1,7 +1,7 @@
 #importonce
 // title_screen.s — Title screen loader and renderer
 //
-// Loads title art from disk into MAP_BASE,
+// Loads title art from disk into the platform-owned title-art source,
 // renders to screen RAM, then returns. MAP_BASE region is naturally
 // recycled when dungeon_generate is called.
 //
@@ -14,6 +14,11 @@
 .const TITLE_CLEAR_FIRST_ROW = TITLE_MENU_ROW + 2
 .const TITLE_CLEAR_LAST_ROW = SCREEN_ROWS - 3
 .const TITLE_CLEAR_AFTER_LAST_ROW = TITLE_CLEAR_LAST_ROW + 1
+#if HAL_LAYOUT_TITLE_ART_BANKED_SOURCE
+.const TITLE_ART_SOURCE_BASE = CX16_TITLE_SOURCE_LOAD_BASE
+#else
+.const TITLE_ART_SOURCE_BASE = MAP_BASE
+#endif
 
 // ============================================================
 // Title-screen clear ownership
@@ -103,9 +108,9 @@ title_fallback_render:
 // Clobbers: A, X, Y, zp_ptr0, zp_ptr1, zp_cursor_row/col, zp_text_color
 // ============================================================
 title_render_data:
-    lda #<MAP_BASE
+    lda #<TITLE_ART_SOURCE_BASE
     sta zp_ptr1
-    lda #>MAP_BASE
+    lda #>TITLE_ART_SOURCE_BASE
     sta zp_ptr1_hi
 
 !trd_loop:
@@ -113,6 +118,8 @@ title_render_data:
     ldy #0
 #if HAL_LAYOUT_TITLE_ART_BANK1_SOURCE
     jsr mmu_safe_map_read_ptr1
+#elif HAL_LAYOUT_TITLE_ART_BANKED_SOURCE
+    jsr hal_title_art_read_ptr1
 #else
     lda (zp_ptr1),y
 #endif
@@ -124,6 +131,8 @@ title_render_data:
     iny
 #if HAL_LAYOUT_TITLE_ART_BANK1_SOURCE
     jsr mmu_safe_map_read_ptr1
+#elif HAL_LAYOUT_TITLE_ART_BANKED_SOURCE
+    jsr hal_title_art_read_ptr1
 #else
     lda (zp_ptr1),y
 #endif
@@ -135,6 +144,8 @@ title_render_data:
     iny
 #if HAL_LAYOUT_TITLE_ART_BANK1_SOURCE
     jsr mmu_safe_map_read_ptr1
+#elif HAL_LAYOUT_TITLE_ART_BANKED_SOURCE
+    jsr hal_title_art_read_ptr1
 #else
     lda (zp_ptr1),y
 #endif
@@ -149,18 +160,24 @@ title_render_data:
     adc #0
     sta zp_ptr1_hi
 
-#if HAL_LAYOUT_TITLE_ART_BANK1_SOURCE
-    // C128: segment text lives in Bank 1 MAP_BASE; render directly using
-    // mmu-safe reads so we never pass Bank 1 pointers into Bank 0 string code.
+#if HAL_LAYOUT_TITLE_ART_BANK1_SOURCE || HAL_LAYOUT_TITLE_ART_BANKED_SOURCE
+    // Banked title sources render directly so we never pass inactive-bank
+    // pointers into the normal string renderer.
 !trd_draw_bank1:
     ldy #0
+#if HAL_LAYOUT_TITLE_ART_BANK1_SOURCE
     jsr mmu_safe_map_read_ptr1
+#else
+    jsr hal_title_art_read_ptr1
+#endif
     beq !trd_found+
+#if HAL_LAYOUT_TITLE_REVERSE_SPACE_ATTR
     cmp #$a0
     bne !trd_put_normal+
     jsr title_put_block_char
     jmp !trd_advance+
 !trd_put_normal:
+#endif
     jsr hal_screen_put_char
 !trd_advance:
     inc zp_ptr1
