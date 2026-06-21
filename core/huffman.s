@@ -150,17 +150,14 @@ huff_decode_to_ptr2:
     sta zp_ptr2_hi
     rts
 
-// ============================================================
-// huff_append_combat — Decode and append to combat_msg_buf
-// Input: X = string ID
-// Output: string appended to combat_msg_buf at cmb_buf_idx
-// Clobbers: A, X, Y, zp_ptr0/hi, zp_ptr1/hi
-// ============================================================
+#if HAL_HUFFMAN_COMBAT_APPEND
+// huff_append_combat — Decode and append to combat_msg_buf.
 huff_append_combat:
     jsr huff_decode_string
     lda #<hd_decode_buf
     ldy #>hd_decode_buf
     jmp combat_append_str
+#endif
 
 // ============================================================
 // huff_print_msg — Decode Huffman string and print to message area

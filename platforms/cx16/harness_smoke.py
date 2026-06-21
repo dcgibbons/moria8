@@ -46,6 +46,7 @@ CMD_MOVE_SE = 0x08
 CMD_REST = 0x0B
 CMD_SEARCH = 0x0C
 CMD_OPEN = 0x0D
+CMD_CLOSE = 0x0E
 CMD_DROP = 0x10
 CMD_INVENTORY = 0x11
 CMD_CAST = 0x1A
@@ -56,6 +57,14 @@ CMD_LOOK = 0x1F
 CMD_SAVE = 0x21
 CMD_HELP = 0x23
 CMD_VERSION = 0x24
+CMD_RUN_N = 0x25
+CMD_RUN_S = 0x26
+CMD_RUN_W = 0x27
+CMD_RUN_E = 0x28
+CMD_RUN_NW = 0x29
+CMD_RUN_NE = 0x2A
+CMD_RUN_SW = 0x2B
+CMD_RUN_SE = 0x2C
 CMD_GAIN = 0x2D
 CMD_FIRE = 0x2E
 CMD_BASH = 0x31
@@ -245,6 +254,13 @@ def assert_screen_text(bench, row, col, text, label):
         assert_eq(actual, expected, f"{label} char {offset}")
 
 
+def assert_screen_text_matches(bench, row, col, text):
+    for offset, ch in enumerate(text):
+        if screen_char_at(bench, row, col + offset) != screen_code(ch):
+            return False
+    return True
+
+
 def assert_screen_cell(bench, row, col, char_code, attr, label):
     assert_eq(screen_char_at(bench, row, col), char_code, f"{label} char")
     assert_eq(screen_attr_at(bench, row, col), attr, f"{label} attr")
@@ -292,6 +308,17 @@ def find_map_tile_type(bench, labels, wanted_type, label):
     raise AssertionError(f"{label}: tile type ${wanted_type:02X} not found")
 
 
+def find_adjacent_tile_type(bench, labels, wanted_type, label):
+    for y in range(1, MAP_ROWS - 1):
+        for x in range(1, MAP_COLS - 1):
+            if tile_type(map_tile_at(bench, labels, x, y)) != wanted_type:
+                continue
+            for px, py in ((x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)):
+                if tile_type(map_tile_at(bench, labels, px, py)) == TILE_FLOOR:
+                    return x, y, px, py
+    raise AssertionError(f"{label}: adjacent tile type ${wanted_type:02X} not found")
+
+
 def find_adjacent_floor_move(bench, labels, x, y):
     for command, dx, dy in (
         (CMD_MOVE_E, 1, 0),
@@ -309,6 +336,19 @@ def find_adjacent_floor_move(bench, labels, x, y):
             if tile_type(map_tile_at(bench, labels, nx, ny)) == TILE_FLOOR:
                 return command, nx, ny
     raise AssertionError("generated dungeon entry has no adjacent floor move")
+
+
+def run_command_for_move(move_command):
+    return {
+        CMD_MOVE_N: CMD_RUN_N,
+        CMD_MOVE_S: CMD_RUN_S,
+        CMD_MOVE_W: CMD_RUN_W,
+        CMD_MOVE_E: CMD_RUN_E,
+        CMD_MOVE_NW: CMD_RUN_NW,
+        CMD_MOVE_NE: CMD_RUN_NE,
+        CMD_MOVE_SW: CMD_RUN_SW,
+        CMD_MOVE_SE: CMD_RUN_SE,
+    }[move_command]
 
 
 def assert_banked_ram_isolation(bench):
@@ -660,6 +700,46 @@ def main():
         bench.set_a(CMD_MOVE_NW)
         bench.run(require(labels, "cx16_try_move_command"))
         assert_player_position(bench, labels, wall_x + 1, wall_y + 1, "dungeon blocked wall move")
+
+        door_x, door_y, door_px, door_py = find_adjacent_tile_type(
+            bench, labels, TILE_DOOR_CLOSED, "closed dungeon door"
+        )
+        set_player_position(bench, labels, door_px, door_py)
+        bench.run(require(labels, "cx16_update_dungeon_view"))
+        bench.set_memory(require(labels, "df_target_x"), door_x)
+        bench.set_memory(require(labels, "df_target_y"), door_y)
+        bench.set_memory(require(labels, "zp_player_str"), 18)
+        bench.run(require(labels, "door_try_open"))
+        if not (bench.get_status() & STATUS_CARRY):
+            raise AssertionError("door_try_open did not consume a turn")
+        assert_map_tile_type(bench, labels, door_x, door_y, TILE_DOOR_OPEN, "opened dungeon door")
+        bench.set_memory(require(labels, "zp_player_x"), 1)
+        bench.set_memory(require(labels, "zp_player_y"), 1)
+        bench.run(require(labels, "cx16_after_feature_turn"))
+        assert_player_position(bench, labels, door_px, door_py, "post-feature resync after door")
+        bench.set_memory(require(labels, "df_target_x"), door_x)
+        bench.set_memory(require(labels, "df_target_y"), door_y)
+        bench.run(require(labels, "door_try_close"))
+        if not (bench.get_status() & STATUS_CARRY):
+            raise AssertionError("door_try_close did not consume a turn")
+        assert_map_tile_type(bench, labels, door_x, door_y, TILE_DOOR_CLOSED, "closed dungeon door")
+
+        set_player_position(bench, labels, door_px, door_py)
+        bench.set_a(CMD_SEARCH)
+        bench.run(require(labels, "cx16_dispatch_game_command"))
+        if assert_screen_text_matches(bench, 26, 23, "SEARCH/REST/LOOK NOT WIRED YET."):
+            raise AssertionError("search command still rendered the activity stub")
+
+        set_player_position(bench, labels, entry_x, entry_y)
+        bench.run(require(labels, "cx16_draw_dungeon_bootstrap"))
+        screen_put_cell_raw(bench, 1, 0, screen_code("*"), 2)
+        bench.set_a(run_command_for_move(move_command))
+        bench.run(require(labels, "cx16_dispatch_game_command"))
+        run_x = bench.get_memory(require(labels, "zp_player_x"))
+        run_y = bench.get_memory(require(labels, "zp_player_y"))
+        if (run_x, run_y) == (entry_x, entry_y):
+            raise AssertionError("run command did not move the player")
+        assert_screen_cell(bench, 1, 0, screen_code("*"), 2, "dungeon running does not full-clear")
 
         set_player_position(bench, labels, floor_x, floor_y)
         bench.run(require(labels, "cx16_try_stairs_up"))

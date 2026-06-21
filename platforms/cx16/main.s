@@ -49,12 +49,16 @@
 #import "../../core/zeropage.s"
 #import "config.s"
 #import "memory.s"
+#import "../../core/color.s"
 #import "../../core/dungeon_data.s"
 .const CX16_DUNGEON_ROOM_FLAGS = FLAG_LIT | FLAG_VISITED
 #import "../../core/player_state.s"
 #import "../../core/dungeon_feature_gen.s"
+#import "../../core/math.s"
+#import "../../core/tables.s"
 #import "../../core/rng.s"
 #import "../../core/player_move_basic.s"
+#import "../../core/player_search.s"
 #import "../../core/town_map_basic.s"
 #import "../../core/tile_display.s"
 #import "../../core/town_interactions_basic.s"
@@ -68,6 +72,9 @@
 #import "../../core/dungeon_los.s"
 #endif
 #import "../../core/input_ui_helpers.s"
+#import "../../core/ui_messages.s"
+#import "../../core/huffman.s"
+#import "../../core/dungeon_feature_actions.s"
 #if CX16_IMPORT_SHARED_GAME_LOOP
 #import "shared_imports.s"
 #endif
@@ -116,6 +123,7 @@ cx16_entry:
     jsr rng_seed
     lda #CX16_TEXT_COLOR
     jsr screen_set_color
+    jsr msg_init
     jsr cx16_title_enter_menu
     cli
 cx16_idle:
@@ -217,20 +225,24 @@ cx16_dispatch_game_command:
     bcc !not_run+
     cmp #CMD_RUN_SE + 1
     bcs !not_run+
-    sec
-    sbc #(CMD_RUN_N - CMD_MOVE_N)
-    jmp !try_move+
+    jmp cx16_run_command
 !not_run:
     cmp #CMD_MOVE_N
-    bcc !done+
+    bcs !move_low_ok+
+    jmp !done+
+!move_low_ok:
     cmp #CMD_MOVE_SE + 1
     bcs !not_command+
 !try_move:
     jmp cx16_try_move_command
 !not_command:
-    cmp #CMD_REST
-    beq !activity+
     cmp #CMD_SEARCH
+    beq !search+
+    cmp #CMD_OPEN
+    beq !open+
+    cmp #CMD_CLOSE
+    beq !close+
+    cmp #CMD_REST
     beq !activity+
     cmp #CMD_LOOK
     beq !activity+
@@ -271,6 +283,12 @@ cx16_dispatch_game_command:
     jmp !done+
 !activity:
     jmp cx16_show_activity_stub
+!search:
+    jmp cx16_cmd_search
+!open:
+    jmp cx16_cmd_open
+!close:
+    jmp cx16_cmd_close
 !storage:
     jmp cx16_show_storage_stub
 !magic:
@@ -311,6 +329,10 @@ cx16_try_move_command:
     rts
 
 cx16_try_dungeon_move:
+    jsr cx16_try_dungeon_step_dir
+    rts
+
+cx16_try_dungeon_step_dir:
     jsr player_move_compute_target
     bcc !done+
     jsr player_move_target_walkable
@@ -331,11 +353,89 @@ cx16_try_dungeon_move:
     cmp cx16_old_view_y
     bne !full+
     jsr cx16_render_dungeon_viewport
-    jmp !done+
+    sec
+    rts
 !full:
     jsr cx16_refresh_dungeon_view
+    sec
+    rts
+!done:
+    clc
+    rts
+
+cx16_run_command:
+    pha
+    jsr msg_clear
+    pla
+    sec
+    sbc #CMD_RUN_N
+    sta zp_run_dir
+    tax
+    lda cx16_state
+    cmp #CX16_STATE_DUNGEON_BOOTSTRAP
+    bne !single_step+
+!loop:
+    ldx zp_run_dir
+    jsr cx16_try_dungeon_step_dir
+    bcc !stop+
+    jsr input_run_cancel_check
+    bcs !stop+
+    jmp !loop-
+!single_step:
+    txa
+    clc
+    adc #CMD_MOVE_N
+    jmp cx16_try_move_command
+!stop:
+    lda #$ff
+    sta zp_run_dir
+    rts
+
+cx16_cmd_open:
+    lda cx16_state
+    cmp #CX16_STATE_DUNGEON_BOOTSTRAP
+    beq !dungeon+
+    jmp cx16_show_item_stub
+!dungeon:
+    jsr msg_clear
+    jsr get_direction_target
+    bcc !done+
+    jsr door_try_open
+    bcc !done+
+    jmp cx16_after_feature_turn
 !done:
     rts
+
+cx16_cmd_close:
+    lda cx16_state
+    cmp #CX16_STATE_DUNGEON_BOOTSTRAP
+    beq !dungeon+
+    jmp cx16_show_item_stub
+!dungeon:
+    jsr msg_clear
+    jsr get_direction_target
+    bcc !done+
+    jsr door_try_close
+    bcc !done+
+    jmp cx16_after_feature_turn
+!done:
+    rts
+
+cx16_cmd_search:
+    lda cx16_state
+    cmp #CX16_STATE_DUNGEON_BOOTSTRAP
+    beq !dungeon+
+    jmp cx16_show_activity_stub
+!dungeon:
+    jsr msg_clear
+    jsr do_search
+    jmp cx16_after_feature_turn
+
+cx16_after_feature_turn:
+    jsr cx16_sync_shared_player_position
+    jsr update_visibility
+    jsr cx16_update_dungeon_view
+    jmp cx16_render_dungeon_viewport
 
 cx16_check_town_entry:
     jsr town_basic_check_store_door

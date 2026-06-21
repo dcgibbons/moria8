@@ -17,6 +17,7 @@
 #import "hal/storage_title_name.s"
 
 .const PLATFORM_COMBAT_MSG_BUF_SIZE = 54
+#define HAL_HUFFMAN_COMBAT_APPEND
 .const PLATFORM_RESIDENT_PLAY = "C128ResidentPlay"
 #define PLATFORM_RUN_PREFIX_PARSER
 #define PLATFORM_GAME_OVER_DISK_SETUP_JUMP
