@@ -7,7 +7,7 @@ cmb_buf_idx: .byte 0
 combat_msg_buf: .fill COMBAT_MSG_BUF_SIZE, 0
 combat_msg_buf_end:
 
-cmb_period: .text "." ; .byte 0
+#import "../../core/combat_action_strings.s"
 
 cmb_term_and_print:
     jsr combat_clamp_msg_idx

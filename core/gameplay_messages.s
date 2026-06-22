@@ -45,23 +45,3 @@ dungeon_ready_suffix_str:
 town_recovery_str:
     .text "Rested and resupplied." ; .byte 0
 #endif
-
-#if !GAMEPLAY_MONSTER_COMBAT_STRINGS_EXTERNAL
-monster_hit_prefix_str:
-    .text "You hit the " ; .byte 0
-
-monster_player_miss_prefix_str:
-    .text "You miss the " ; .byte 0
-
-monster_kill_prefix_str:
-    .text "You have slain the " ; .byte 0
-
-monster_attack_prefix_str:
-    .text "The " ; .byte 0
-
-monster_attack_suffix_str:
-    .text " hits you." ; .byte 0
-
-monster_miss_suffix_str:
-    .text " misses you." ; .byte 0
-#endif

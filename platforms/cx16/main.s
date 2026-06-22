@@ -2720,8 +2720,14 @@ cx16_overlay_reduce_damage_by_ac:
 cx16_overlay_print_monster_hit:
     lda #0
     sta cmb_buf_idx
-    lda #<monster_hit_prefix_str
-    ldy #>monster_hit_prefix_str
+    lda #<cmb_you_str
+    ldy #>cmb_you_str
+    jsr combat_append_str
+    lda #<cmb_hit_str
+    ldy #>cmb_hit_str
+    jsr combat_append_str
+    lda #<cmb_the_str
+    ldy #>cmb_the_str
     jsr combat_append_str
     jsr cx16_overlay_append_monster_name
     lda #<cmb_period
@@ -2732,8 +2738,14 @@ cx16_overlay_print_monster_hit:
 cx16_overlay_print_player_miss:
     lda #0
     sta cmb_buf_idx
-    lda #<monster_player_miss_prefix_str
-    ldy #>monster_player_miss_prefix_str
+    lda #<cmb_you_str
+    ldy #>cmb_you_str
+    jsr combat_append_str
+    lda #<cmb_miss_str
+    ldy #>cmb_miss_str
+    jsr combat_append_str
+    lda #<cmb_the_str
+    ldy #>cmb_the_str
     jsr combat_append_str
     jsr cx16_overlay_append_monster_name
     lda #<cmb_period
@@ -2744,8 +2756,14 @@ cx16_overlay_print_player_miss:
 cx16_overlay_print_monster_kill:
     lda #0
     sta cmb_buf_idx
-    lda #<monster_kill_prefix_str
-    ldy #>monster_kill_prefix_str
+    lda #<cmb_you_str
+    ldy #>cmb_you_str
+    jsr combat_append_str
+    lda #<cmb_kill_str
+    ldy #>cmb_kill_str
+    jsr combat_append_str
+    lda #<cmb_the_str
+    ldy #>cmb_the_str
     jsr combat_append_str
     jsr cx16_overlay_append_monster_name
     lda #<cmb_period
@@ -2756,24 +2774,24 @@ cx16_overlay_print_monster_kill:
 cx16_overlay_print_monster_attack:
     lda #0
     sta cmb_buf_idx
-    lda #<monster_attack_prefix_str
-    ldy #>monster_attack_prefix_str
+    lda #<cmb_the_cap_str
+    ldy #>cmb_the_cap_str
     jsr combat_append_str
     jsr cx16_overlay_append_monster_name
-    lda #<monster_attack_suffix_str
-    ldy #>monster_attack_suffix_str
+    lda #<cmb_hits_you_str
+    ldy #>cmb_hits_you_str
     jsr combat_append_str
     jmp cmb_term_and_print
 
 cx16_overlay_print_monster_miss:
     lda #0
     sta cmb_buf_idx
-    lda #<monster_attack_prefix_str
-    ldy #>monster_attack_prefix_str
+    lda #<cmb_the_cap_str
+    ldy #>cmb_the_cap_str
     jsr combat_append_str
     jsr cx16_overlay_append_monster_name
-    lda #<monster_miss_suffix_str
-    ldy #>monster_miss_suffix_str
+    lda #<cmb_misses_you_str
+    ldy #>cmb_misses_you_str
     jsr combat_append_str
     jmp cmb_term_and_print
 

@@ -1235,6 +1235,13 @@ def main():
             COL_WHITE,
             "visible white worm mass glyph",
         )
+        bench.set_memory(require(labels, "zp_turn_lo"), 23)
+        stuff_direction_to_target(bench, attack_px, attack_py, monster_x, monster_y)
+        bench.set_a(CMD_LOOK)
+        bench.run(require(labels, "cx16_dispatch_game_command"))
+        assert_screen_text(bench, 0, 0, "Direction?", "look command prompts for white worm direction")
+        assert_screen_text(bench, 1, 0, "You see a White Worm mass.", "look command describes white worm mass")
+        assert_eq(bench.get_memory(require(labels, "zp_turn_lo")), 23, "white worm look is free")
         bench.set_memory(monster_base + MX_TYPE, 0)
         bench.run(require(labels, "cx16_draw_dungeon"))
         assert_screen_cell(

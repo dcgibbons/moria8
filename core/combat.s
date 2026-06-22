@@ -34,13 +34,7 @@ combat_msg_buf_end:
 // Combat strings (screen codes via inherited encoding)
 // ============================================================
 #if !COMBAT_STRINGS_EXTERNAL
-cmb_you_str:     .text "You " ; .byte 0
-cmb_the_str:     .text " the " ; .byte 0
-cmb_hit_str:     .text "hit" ; .byte 0
-cmb_miss_str:    .text "miss" ; .byte 0
-cmb_kill_str:    .text "have slain" ; .byte 0
-// cmb_lvlup_str migrated to Huffman (HSTR_CMB_LVLUP)
-cmb_period:      .byte $2e, 0   // "."
+#import "combat_action_strings.s"
 #endif
 
 // ============================================================
@@ -1433,8 +1427,6 @@ combat_msg_monster_suffix:
     jmp cmb_term_and_print
 
 #if !COMBAT_STRINGS_EXTERNAL
-cmb_the_cap_str:
-    .text "The " ; .byte 0
 cmb_shudders_str:
     .text " shudders." ; .byte 0
 cmb_dissolves_str:
