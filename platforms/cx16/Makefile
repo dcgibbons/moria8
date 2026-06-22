@@ -55,7 +55,7 @@ CX16_DUNGEON_MODULE_CONTRACT_SRC = dungeon_module_contract.s
 CX16_SOURCES  := $(shell find . -type f -name '*.s' -print)
 X16EMU_ROM_ARGS = $(if $(strip $(X16_ROM)),-rom "$(X16_ROM)",)
 
-.PHONY: buildcx16 runcx16 testcx16 testcx16-smoke testcx16-runtime testcx16-shared-link testcx16-memory-contract testcx16-memory-contract-selftest ensure-kickass clean
+.PHONY: buildcx16 runcx16 testcx16 testcx16-smoke testcx16-runtime testcx16-shared-link testcx16-message-boundary testcx16-memory-contract testcx16-memory-contract-selftest ensure-kickass clean
 
 buildcx16: $(CX16_MAIN_PRG) $(CX16_TITLE_PRG) $(CX16_TIER_PRGS) $(CX16_MODULE_PRGS) $(CX16_ITEM_PRGS) $(CX16_OVERLAY_PRGS)
 
@@ -65,10 +65,13 @@ runcx16: $(CX16_MAIN_PRG) $(CX16_TITLE_PRG) $(CX16_TIER_PRGS) $(CX16_MODULE_PRGS
 	@command -v "$(X16EMU)" >/dev/null 2>&1 || { echo "ERROR: x16emu not found. Set X16EMU=/path/to/x16emu."; exit 1; }
 	cd "$(OUT)" && "$(X16EMU)" $(X16EMU_ROM_ARGS) -prg "moria16.prg" -run
 
-testcx16-smoke: $(CX16_MAIN_PRG) $(CX16_TITLE_PRG) $(CX16_TIER_PRGS) $(CX16_MODULE_PRGS) $(CX16_ITEM_PRGS) $(CX16_OVERLAY_PRGS)
+testcx16-smoke: testcx16-message-boundary $(CX16_MAIN_PRG) $(CX16_TITLE_PRG) $(CX16_TIER_PRGS) $(CX16_MODULE_PRGS) $(CX16_ITEM_PRGS) $(CX16_OVERLAY_PRGS)
 	@command -v "$(X16EMU)" >/dev/null 2>&1 || { echo "ERROR: x16emu not found. Set X16EMU=/path/to/x16emu."; exit 1; }
 	@echo "CX16 smoke setup passed: $(CX16_MAIN_PRG) and $(CX16_TITLE_PRG) build; $(X16EMU) is available."
 	@echo "Run make runcx16 X16EMU=$(X16EMU) X16_ROM=/path/to/rom.bin to launch manually when needed."
+
+testcx16-message-boundary:
+	python3 tests/check_message_boundary.py
 
 testcx16-runtime: $(CX16_MAIN_PRG) $(CX16_TITLE_PRG) $(CX16_TIER_PRGS) $(CX16_MODULE_PRGS) $(CX16_ITEM_PRGS) $(CX16_OVERLAY_PRGS)
 	@command -v "$(X16EMU)" >/dev/null 2>&1 || { echo "ERROR: x16emu not found. Set X16EMU=/path/to/x16emu."; exit 1; }

@@ -100,13 +100,98 @@ petscii_to_command:
     rts
 
 key_map_petscii:
-    :EmitBasePetsciiKeyMap()
+    :EmitCx16PetsciiKeyMap()
     .byte $56   // V — version view
 
 key_map_cmd:
-    :EmitBaseCommandKeyMap()
+    :EmitCx16CommandKeyMap()
     .byte CMD_VERSION
 
 key_map_end:
 .label key_map_count = key_map_cmd - key_map_petscii
 .assert "Key map tables same size", key_map_count, key_map_end - key_map_cmd
+
+.macro EmitCx16PetsciiKeyMap() {
+    // Vi-keys (movement)
+    .byte $4b   // K — north
+    .byte $4a   // J — south
+    .byte $48   // H — west
+    .byte $4c   // L — east
+    .byte $59   // Y — northwest
+    .byte $55   // U — northeast
+    .byte $42   // B — southwest
+    .byte $4e   // N — southeast
+    // Cursor keys
+    .byte $91   // Cursor up — north
+    .byte $11   // Cursor down — south
+    .byte $9d   // Cursor left — west
+    .byte $1d   // Cursor right — east
+    // Top-row number keys (numeric movement fallback)
+    .byte $38   // 8 — north
+    .byte $32   // 2 — south
+    .byte $34   // 4 — west
+    .byte $36   // 6 — east
+    .byte $37   // 7 — northwest
+    .byte $39   // 9 — northeast
+    .byte $31   // 1 — southwest
+    .byte $33   // 3 — southeast
+    .byte $35   // 5 — rest
+    // Playable CX16 commands
+    .byte $3e   // > — stairs down
+    .byte $3c   // < — stairs up
+    .byte $2e   // . — run prefix
+    .byte $53   // S — search
+    .byte $4f   // O — open
+    .byte $43   // C — close
+    .byte $47   // G — pick up
+    .byte $2c   // , — pick up (alt)
+    .byte $44   // D — drop
+    .byte $49   // I — inventory
+    .byte $45   // E — equipment
+    .byte $57   // W — wear/wield
+    .byte $54   // T — take off
+    .byte $51   // Q — quaff
+    .byte $52   // R — read scroll
+    .byte $41   // A — aim wand
+    .byte $5a   // Z — use staff
+    .byte $3f   // ? — help
+    .byte $58   // X — look / examine
+    // Shifted and control keys
+    .byte $c3   // SHIFT+C — character info
+    .byte $d1   // SHIFT+Q — quit to title
+    .byte $c5   // SHIFT+E — eat
+    .byte $d2   // SHIFT+R — refuel lamp
+    .byte $c4   // SHIFT+D — disarm trap
+    .byte $02   // CTRL+B — bash
+    .byte $12   // CTRL+R — rest until recovered
+    .byte $23   // # — toggle search mode
+    .byte $2b   // + — tunnel
+    // Shifted vi-keys (running)
+    .byte $cb   // SHIFT+K — run north
+    .byte $ca   // SHIFT+J — run south
+    .byte $c8   // SHIFT+H — run west
+    .byte $cc   // SHIFT+L — run east
+    .byte $d9   // SHIFT+Y — run northwest
+    .byte $d5   // SHIFT+U — run northeast
+    .byte $c2   // SHIFT+B — run southwest
+    .byte $ce   // SHIFT+N — run southeast
+}
+
+.macro EmitCx16CommandKeyMap() {
+    .byte CMD_MOVE_N, CMD_MOVE_S, CMD_MOVE_W, CMD_MOVE_E
+    .byte CMD_MOVE_NW, CMD_MOVE_NE, CMD_MOVE_SW, CMD_MOVE_SE
+    .byte CMD_MOVE_N, CMD_MOVE_S, CMD_MOVE_W, CMD_MOVE_E
+    .byte CMD_MOVE_N, CMD_MOVE_S, CMD_MOVE_W, CMD_MOVE_E
+    .byte CMD_MOVE_NW, CMD_MOVE_NE, CMD_MOVE_SW, CMD_MOVE_SE
+    .byte CMD_REST
+    .byte CMD_STAIRS_DN, CMD_STAIRS_UP, CMD_RUN, CMD_SEARCH
+    .byte CMD_OPEN, CMD_CLOSE, CMD_PICKUP, CMD_PICKUP
+    .byte CMD_DROP, CMD_INVENTORY, CMD_EQUIPMENT, CMD_WEAR
+    .byte CMD_TAKEOFF, CMD_QUAFF, CMD_READ, CMD_AIM
+    .byte CMD_USE, CMD_HELP, CMD_LOOK
+    .byte CMD_CHAR_INFO, CMD_QUIT, CMD_EAT, CMD_REFUEL
+    .byte CMD_DISARM, CMD_BASH, CMD_AUTOREST, CMD_SEARCH_MODE
+    .byte CMD_TUNNEL
+    .byte CMD_RUN_N, CMD_RUN_S, CMD_RUN_W, CMD_RUN_E
+    .byte CMD_RUN_NW, CMD_RUN_NE, CMD_RUN_SW, CMD_RUN_SE
+}

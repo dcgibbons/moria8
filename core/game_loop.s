@@ -2509,27 +2509,7 @@ winner_save_blocked_str:
     .text "Winner: Shift+Q to claim victory." ; .byte 0
 #endif
 
-#if !GAME_LOOP_NAV_STRINGS_EXTERNAL
-search_mode_on_str:
-    .text "Search mode on." ; .byte 0
-
-search_mode_off_str:
-    .text "Search mode off." ; .byte 0
-
-descend_str:
-    .text "You descend the staircase." ; .byte 0
-
-ascend_str:
-    .text "You ascend the staircase." ; .byte 0
-
-at_surface_str:
-    .text "You are already at the surface." ; .byte 0
-#endif
-
-#if !GAME_LOOP_NO_STAIRS_STR_EXTERNAL
-no_stairs_str:
-    .text "You see no stairs here." ; .byte 0
-#endif
+#import "gameplay_messages.s"
 
 #if !GAME_LOOP_LOW_DATA_EXTERNAL
 slain_str:

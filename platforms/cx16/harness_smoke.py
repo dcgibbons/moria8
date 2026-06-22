@@ -34,6 +34,9 @@ TILE_TRAP = 0xE0
 TILE_TYPE_MASK = 0xF0
 DUNGEON_FLAGS = 0x0C
 FLAG_HAS_ITEM = 0x02
+FLAG_OCCUPIED = 0x01
+VIEWPORT_X = 1
+VIEWPORT_Y = 2
 PL_RACE = 17
 PL_CLASS = 18
 PL_LEVEL = 19
@@ -44,10 +47,20 @@ PL_HP_LO = 33
 PL_HP_HI = 34
 PL_MHP_LO = 35
 PL_MHP_HI = 36
+PL_AC = 39
+PL_TOHIT = 40
+PL_TODMG = 41
+PL_GOLD_0 = 43
+PL_XP_0 = 46
+PL_XP_1 = 47
+PL_XP_2 = 48
+PL_XP_FRAC_LO = 109
+PL_XP_FRAC_HI = 110
 PL_FOOD_LO = 51
 PL_FOOD_HI = 52
 PL_FLAGS = 54
 PL_MAX_DLVL = 56
+PL_EXPFACT = 106
 PLF_MALE = 0x01
 PLF_SEARCHING = 0x10
 KEYBUF = 0xA800
@@ -55,6 +68,15 @@ KEYBUF_COUNT = 0xA80A
 MAP_COLS = 198
 MAP_ROWS = 66
 MAX_FLOOR_ITEMS = 42
+MAX_MONSTERS = 32
+MONSTER_ENTRY_SIZE = 12
+MX_X = 0
+MX_Y = 1
+MX_TYPE = 2
+MX_HP_LO = 3
+MX_HP_HI = 4
+MX_FLAGS = 5
+EMPTY_SLOT = 0xFF
 EQUIP_LIGHT = 28
 EQUIP_WEAPON = 22
 ITEM_LANTERN = 14
@@ -70,6 +92,7 @@ ICAT_WEAPON = 2
 FI_EMPTY = 0xFF
 CLEAR_SENTINEL_ROW = 24
 CLEAR_SENTINEL_COL = 0
+CMD_NONE = 0x00
 CMD_MOVE_N = 0x01
 CMD_MOVE_W = 0x03
 CMD_MOVE_S = 0x02
@@ -122,9 +145,15 @@ CMD_WIZARD = 0x33
 CMD_SEARCH_MODE = 0x34
 CMD_DISARM = 0x35
 CMD_AUTOREST = 0x36
+CX16_STATE_DEAD = 3
+GAME_FLAG_WINNER = 0x04
+CREATURE_BALROG = 56
+CREATURE_BALROG_TIER = 4
 SC_PLAYER = 0x00
 SC_REVERSE_SPACE = 0xA0
 TEXT_COLOR = 0x01
+COL_WHITE = 0x01
+COL_GREEN = 0x05
 STORE_COLOR = 0x07
 TITLE_BORDER_COLOR = 0x0F
 CX16_TRANSFER_TEST_BANK = 2
@@ -137,6 +166,7 @@ CX16_DUNGEON_MODULE_BANK = 8
 CX16_DUNGEON_MODULE_GUARD_BANK = 3
 CX16_ITEM_CATALOG_BANK = 9
 CX16_ITEM_CATALOG_GUARD_BANK = 3
+CX16_OVERLAY_DEATH_BANK = 14
 VERA_ADDR_L = 0x9F20
 VERA_ADDR_M = 0x9F21
 VERA_ADDR_H = 0x9F22
@@ -163,6 +193,7 @@ class X16Bench:
             cwd=cwd,
         )
         self.last_command = "startup"
+        self.last_a = None
         self.wait_ready()
 
     def close(self):
@@ -207,13 +238,17 @@ class X16Bench:
             self.wait_ready()
 
     def run(self, address, timeout=5):
-        self.command(f"RUN {address:04X}", wait=False)
+        suffix = "" if self.last_a is None else f" A={self.last_a:02X}"
+        self.last_command = f"RUN {address:04X}{suffix}"
+        self.proc.stdin.write(f"RUN {address:04X}\n")
+        self.proc.stdin.flush()
         self.wait_ready(timeout=timeout)
 
     def set_memory(self, address, value):
         self.command(f"STM {address:04X} {value:02X}")
 
     def set_a(self, value):
+        self.last_a = value
         self.command(f"STA {value:02X}")
 
     def get_memory(self, address):
@@ -299,12 +334,20 @@ def screen_put_cell_raw(bench, row, col, char_code, attr):
 
 
 def stuff_key(bench, petscii):
-    bench.set_memory(KEYBUF, petscii)
+    saved_bank = bench.get_memory(CX16_RAM_BANK_REG)
+    bench.set_memory(CX16_RAM_BANK_REG, 0)
+    bench.set_memory(KEYBUF_COUNT, 0)
+    for offset in range(10):
+        bench.set_memory(KEYBUF + offset, petscii)
     bench.set_memory(KEYBUF_COUNT, 1)
+    bench.set_memory(CX16_RAM_BANK_REG, saved_bank)
 
 
 def set_key_held(bench, held):
+    saved_bank = bench.get_memory(CX16_RAM_BANK_REG)
+    bench.set_memory(CX16_RAM_BANK_REG, 0)
     bench.set_memory(KEYBUF_COUNT, 1 if held else 0)
+    bench.set_memory(CX16_RAM_BANK_REG, saved_bank)
 
 
 def set_inventory_slot0(bench, labels, item_id, qty=1, p1=0):
@@ -464,6 +507,69 @@ def find_adjacent_floor_move(bench, labels, x, y):
             if tile_type(map_tile_at(bench, labels, nx, ny)) == TILE_FLOOR:
                 return command, nx, ny
     raise AssertionError("generated dungeon entry has no adjacent floor move")
+
+
+def find_player_pos_to_attack(bench, labels, monster_x, monster_y):
+    for command, dx, dy in (
+        (CMD_MOVE_E, 1, 0),
+        (CMD_MOVE_W, -1, 0),
+        (CMD_MOVE_S, 0, 1),
+        (CMD_MOVE_N, 0, -1),
+        (CMD_MOVE_SE, 1, 1),
+        (CMD_MOVE_SW, -1, 1),
+        (CMD_MOVE_NE, 1, -1),
+        (CMD_MOVE_NW, -1, -1),
+    ):
+        px = monster_x - dx
+        py = monster_y - dy
+        if 0 <= px < MAP_COLS and 0 <= py < MAP_ROWS:
+            tile = map_tile_at(bench, labels, px, py)
+            if tile_type(tile) == TILE_FLOOR and not (tile & FLAG_OCCUPIED):
+                return command, px, py
+    raise AssertionError("spawned monster has no adjacent floor for player attack")
+
+
+def first_live_monster(bench, labels):
+    base = require(labels, "monster_table")
+    for slot in range(MAX_MONSTERS):
+        entry = base + (slot * MONSTER_ENTRY_SIZE)
+        mon_type = bench.get_memory(entry + MX_TYPE)
+        if mon_type != EMPTY_SLOT:
+            return (
+                slot,
+                bench.get_memory(entry + MX_X),
+                bench.get_memory(entry + MX_Y),
+                bench.get_memory(entry + MX_HP_LO),
+                bench.get_memory(entry + MX_HP_HI),
+            )
+    raise AssertionError("no live monster found")
+
+
+def clear_live_monsters(bench, labels):
+    base = require(labels, "monster_table")
+    for slot in range(MAX_MONSTERS):
+        entry = base + (slot * MONSTER_ENTRY_SIZE)
+        if bench.get_memory(entry + MX_TYPE) == EMPTY_SLOT:
+            continue
+        x = bench.get_memory(entry + MX_X)
+        y = bench.get_memory(entry + MX_Y)
+        set_map_tile(bench, labels, x, y, map_tile_at(bench, labels, x, y) & ~FLAG_OCCUPIED)
+        for offset in range(MONSTER_ENTRY_SIZE):
+            bench.set_memory(entry + offset, EMPTY_SLOT)
+    bench.set_memory(require(labels, "zp_mon_count"), 0)
+
+
+def place_monster(bench, labels, slot, x, y, monster_type, hp_lo=1, hp_hi=0):
+    entry = require(labels, "monster_table") + (slot * MONSTER_ENTRY_SIZE)
+    for offset in range(MONSTER_ENTRY_SIZE):
+        bench.set_memory(entry + offset, 0)
+    bench.set_memory(entry + MX_X, x)
+    bench.set_memory(entry + MX_Y, y)
+    bench.set_memory(entry + MX_TYPE, monster_type)
+    bench.set_memory(entry + MX_HP_LO, hp_lo)
+    bench.set_memory(entry + MX_HP_HI, hp_hi)
+    set_map_tile(bench, labels, x, y, map_tile_at(bench, labels, x, y) | FLAG_OCCUPIED)
+    bench.set_memory(require(labels, "zp_mon_count"), bench.get_memory(require(labels, "zp_mon_count")) + 1)
 
 
 def run_command_for_move(move_command):
@@ -761,7 +867,7 @@ def main():
         assert_eq(bench.get_memory(require(labels, "cx16_state")), 0, "CX16 title state")
         assert_screen_cell(bench, 1, 22, screen_code("+"), TITLE_BORDER_COLOR, "title border")
         assert_screen_cell(bench, 3, 25, SC_REVERSE_SPACE, TEXT_COLOR, "title logo block")
-        assert_screen_text(bench, 18, 27, "N)EW  L)OAD  Q)UIT", "title menu")
+        assert_screen_text(bench, 18, 27, "N)EW", "title menu")
 
         bench.run(require(labels, "cx16_new_game_start"), timeout=8)
 
@@ -785,7 +891,7 @@ def main():
             bench,
             29,
             14,
-            "HJKL/YUBN OR NUMBERS MOVE. SHIFT-Q RETURNS TO TITLE.",
+            "Move: HJKL/YUBN or numbers. Shift-Q title.",
             "town help",
         )
         assert_screen_cell(bench, 20, 38, SC_PLAYER, TEXT_COLOR, "initial player")
@@ -803,7 +909,7 @@ def main():
                 bench,
                 29,
                 14,
-                "HJKL/YUBN OR NUMBERS MOVE. SHIFT-Q RETURNS TO TITLE.",
+                "Move: HJKL/YUBN or numbers. Shift-Q title.",
                 f"{label} restores town help",
             )
 
@@ -837,6 +943,12 @@ def main():
         assert_eq(bench.get_a(), 0, "store-door index")
 
         set_player_position(bench, labels, store_x - 1, store_y)
+        bench.set_memory(require(labels, "zp_player_hp_lo"), 5)
+        bench.set_memory(require(labels, "player_data") + PL_HP_LO, 5)
+        bench.set_memory(require(labels, "zp_player_food"), 0)
+        bench.set_memory(require(labels, "zp_player_food_hi"), 0)
+        bench.set_memory(require(labels, "player_data") + PL_FOOD_LO, 0)
+        bench.set_memory(require(labels, "player_data") + PL_FOOD_HI, 0)
         bench.set_memory(require(labels, "cx16_store_idx"), 0xFF)
         bench.set_a(CMD_MOVE_E)
         bench.run(require(labels, "cx16_try_move_command"))
@@ -850,7 +962,13 @@ def main():
             TEXT_COLOR,
             "player on store door",
         )
-        assert_screen_text(bench, 0, 0, "STORE DOOR 1", "store door message")
+        assert_screen_text(bench, 0, 0, "Rested and resupplied.", "town recovery message")
+        assert_eq(bench.get_memory(require(labels, "zp_player_hp_lo")), 12, "town recovery restores hp")
+        assert_eq(bench.get_memory(require(labels, "zp_player_food")), 0xD0, "town recovery food low")
+        assert_eq(bench.get_memory(require(labels, "zp_player_food_hi")), 0x07, "town recovery food high")
+        assert_eq(bench.get_memory(require(labels, "player_data") + PL_GOLD_0), 190, "town recovery charges gold")
+        assert_eq(bench.get_memory(require(labels, "inv_item_id")), ITEM_RATION, "town recovery adds ration")
+        assert_eq(bench.get_memory(require(labels, "inv_item_id") + 1), ITEM_POTION_CURE, "town recovery adds cure potion")
 
         bench.set_a(CMD_MOVE_S)
         bench.run(require(labels, "cx16_try_move_command"))
@@ -899,15 +1017,156 @@ def main():
         assert_screen_text(bench, 27, 1, "HP:12/12", "dungeon status hp")
         assert_screen_contains_cell(bench, SC_PLAYER, TEXT_COLOR, "dungeon entry player")
         assert_screen_cell(bench, 2, 1, screen_code(" "), 0, "unvisited dungeon rock")
-        assert_screen_text(bench, 0, 0, "DUNGEON LEVEL 1 READY", "dungeon level ready")
+        assert_screen_text(bench, 0, 0, "Dungeon level 1 ready.", "dungeon level ready")
         assert_screen_text(
             bench,
             29,
             10,
-            "HJKL/YUBN OR NUMBERS MOVE. < RETURNS TO TOWN. SHIFT-Q TITLE.",
+            "Move: HJKL/YUBN or numbers. <: town. Shift-Q title.",
             "dungeon help",
         )
 
+        assert_eq(bench.get_memory(require(labels, "zp_mon_count")), 3, "dungeon monster count")
+        monster_slot, monster_x, monster_y, monster_hp, monster_hp_hi = first_live_monster(bench, labels)
+        monster_base = require(labels, "monster_table") + (monster_slot * MONSTER_ENTRY_SIZE)
+        assert_eq(bench.get_memory(monster_base + MX_TYPE), 0, "first spawned monster type")
+        assert_eq(monster_hp, 10, "spawned monster hp low from tier hit dice")
+        assert_eq(monster_hp_hi, 0, "spawned monster hp high")
+        if not (map_tile_at(bench, labels, monster_x, monster_y) & FLAG_OCCUPIED):
+            raise AssertionError("spawned monster tile missing FLAG_OCCUPIED")
+        attack_command, attack_px, attack_py = find_player_pos_to_attack(bench, labels, monster_x, monster_y)
+        set_player_position(bench, labels, attack_px, attack_py)
+        bench.run(require(labels, "update_visibility"))
+        bench.set_memory(monster_base + MX_TYPE, 1)
+        bench.run(require(labels, "cx16_draw_dungeon"))
+        mon_screen_row = monster_y - bench.get_memory(require(labels, "cx16_view_y")) + VIEWPORT_Y
+        mon_screen_col = monster_x - bench.get_memory(require(labels, "cx16_view_x")) + VIEWPORT_X
+        assert_screen_cell(
+            bench,
+            mon_screen_row,
+            mon_screen_col,
+            0x17,
+            COL_WHITE,
+            "visible white worm mass glyph",
+        )
+        bench.set_memory(monster_base + MX_TYPE, 0)
+        bench.run(require(labels, "cx16_draw_dungeon"))
+        assert_screen_cell(
+            bench,
+            mon_screen_row,
+            mon_screen_col,
+            screen_code("k"),
+            TEXT_COLOR,
+            "visible kobold glyph",
+        )
+
+        bench.set_memory(require(labels, "zp_turn_lo"), 23)
+        stuff_direction_to_target(bench, attack_px, attack_py, monster_x, monster_y)
+        bench.set_a(CMD_LOOK)
+        bench.run(require(labels, "cx16_dispatch_game_command"))
+        assert_screen_text(bench, 0, 0, "Direction?", "look command prompts for monster direction")
+        assert_screen_text(bench, 1, 0, "You see a Kobold.", "look command describes kobold")
+        assert_eq(bench.get_memory(require(labels, "zp_turn_lo")), 23, "monster look is free")
+        bench.run(require(labels, "msg_init"))
+        bench.set_memory(require(labels, "player_data") + PL_LEVEL, 2)
+        bench.set_memory(require(labels, "zp_player_lvl"), 2)
+        bench.set_memory(require(labels, "player_data") + PL_EXPFACT, 100)
+        bench.set_memory(require(labels, "player_data") + PL_XP_0, 23)
+        bench.set_memory(require(labels, "player_data") + PL_XP_1, 0)
+        bench.set_memory(require(labels, "player_data") + PL_XP_2, 0)
+        bench.set_memory(require(labels, "player_data") + PL_XP_FRAC_LO, 0)
+        bench.set_memory(require(labels, "player_data") + PL_XP_FRAC_HI, 0)
+        xp_before_combat = bench.get_memory(require(labels, "player_data") + PL_XP_0)
+        bench.set_memory(monster_base + MX_HP_LO, 20)
+        bench.set_memory(monster_base + MX_HP_HI, 0)
+        bench.set_memory(require(labels, "inv_to_dam") + EQUIP_WEAPON, 8)
+        bench.set_memory(require(labels, "player_data") + PL_TOHIT, 120)
+        bench.set_memory(require(labels, "player_data") + PL_TODMG, 10)
+        reset_turn(bench, labels)
+        first_hit_hp = 20
+        for _ in range(20):
+            set_player_position(bench, labels, attack_px, attack_py)
+            bench.set_a(attack_command)
+            bench.run(require(labels, "cx16_dispatch_game_command"))
+            first_hit_hp = bench.get_memory(monster_base + MX_HP_LO)
+            if first_hit_hp < 20:
+                break
+        if first_hit_hp == 20:
+            raise AssertionError("melee hit did not damage monster")
+        if first_hit_hp > 9:
+            raise AssertionError("melee hit ignored PL_TODMG/equipment damage bonus")
+        if bench.get_memory(require(labels, "zp_turn_lo")) == 0:
+            raise AssertionError("melee attack did not consume a turn")
+        assert_screen_text(bench, 0, 0, "You hit the Kobold.", "melee hit message")
+        for _ in range(20):
+            set_player_position(bench, labels, attack_px, attack_py)
+            bench.set_a(attack_command)
+            bench.run(require(labels, "cx16_dispatch_game_command"))
+            if bench.get_memory(monster_base + MX_TYPE) == EMPTY_SLOT:
+                break
+        assert_eq(bench.get_memory(monster_base + MX_TYPE), EMPTY_SLOT, "tier-backed melee removes monster")
+        assert_eq(bench.get_memory(require(labels, "zp_mon_count")), 2, "monster kill decrements count")
+        assert_screen_text(bench, 0, 0, "You have slain the Kobold.", "monster kill message")
+        assert_eq(
+            bench.get_memory(require(labels, "player_data") + PL_XP_0),
+            (xp_before_combat + 2) & 0xFF,
+            "monster kill awards scaled tier xp",
+        )
+        assert_eq(
+            bench.get_memory(require(labels, "player_data") + PL_XP_FRAC_HI),
+            0x40,
+            "level-up halves fractional excess xp",
+        )
+        assert_eq(bench.get_memory(require(labels, "player_data") + PL_LEVEL), 3, "monster xp advances player level")
+        assert_eq(bench.get_memory(require(labels, "zp_player_lvl")), 3, "level-up syncs zero-page level")
+        assert_eq(
+            bench.get_memory(require(labels, "player_data") + PL_HP_LO),
+            bench.get_memory(require(labels, "player_data") + PL_MHP_LO),
+            "level-up heals current HP to max HP",
+        )
+        if map_tile_at(bench, labels, monster_x, monster_y) & FLAG_OCCUPIED:
+            raise AssertionError("monster kill did not clear FLAG_OCCUPIED")
+
+        place_monster(bench, labels, monster_slot, monster_x, monster_y, 1, 1, 0)
+        bench.run(require(labels, "cx16_draw_dungeon"))
+        assert_screen_cell(
+            bench,
+            mon_screen_row,
+            mon_screen_col,
+            0x17,
+            COL_WHITE,
+            "replacement white worm mass glyph",
+        )
+        for _ in range(20):
+            set_player_position(bench, labels, attack_px, attack_py)
+            bench.set_a(attack_command)
+            bench.run(require(labels, "cx16_dispatch_game_command"))
+            if bench.get_memory(monster_base + MX_TYPE) == EMPTY_SLOT:
+                break
+        assert_eq(bench.get_memory(monster_base + MX_TYPE), EMPTY_SLOT, "white worm mass kill removes monster")
+        assert_eq(bench.get_memory(require(labels, "zp_mon_count")), 2, "white worm mass kill decrements count")
+        assert_screen_text(bench, 0, 0, "You have slain the White Worm mass.", "white worm mass kill message")
+        if map_tile_at(bench, labels, monster_x, monster_y) & FLAG_OCCUPIED:
+            raise AssertionError("white worm mass kill did not clear FLAG_OCCUPIED")
+
+        saved_tier = bench.get_memory(require(labels, "cx16_loaded_tier"))
+        saved_flags = bench.get_memory(require(labels, "zp_game_flags"))
+        saved_bank = bench.get_memory(CX16_RAM_BANK_REG)
+        bench.set_memory(CX16_RAM_BANK_REG, CX16_OVERLAY_DEATH_BANK)
+        saved_mon_type = bench.get_memory(require(labels, "cx16_mon_type"))
+        bench.set_memory(require(labels, "cx16_loaded_tier"), CREATURE_BALROG_TIER)
+        bench.set_memory(require(labels, "cx16_mon_type"), CREATURE_BALROG)
+        bench.set_memory(require(labels, "zp_game_flags"), saved_flags & ~GAME_FLAG_WINNER)
+        bench.run(require(labels, "cx16_overlay_note_kill"))
+        if not (bench.get_memory(require(labels, "zp_game_flags")) & GAME_FLAG_WINNER):
+            raise AssertionError("Balrog kill helper did not set winner flag")
+        bench.set_memory(require(labels, "cx16_mon_type"), saved_mon_type)
+        bench.set_memory(CX16_RAM_BANK_REG, saved_bank)
+        bench.set_memory(require(labels, "cx16_loaded_tier"), saved_tier)
+        bench.set_memory(require(labels, "zp_game_flags"), saved_flags)
+        clear_live_monsters(bench, labels)
+
+        set_player_position(bench, labels, entry_x, entry_y)
         move_command, move_x, move_y = find_adjacent_floor_move(bench, labels, entry_x, entry_y)
         assert_screen_contains_cell(bench, screen_code("."), 11, "visible dungeon floor")
         screen_put_cell_raw(bench, CLEAR_SENTINEL_ROW, CLEAR_SENTINEL_COL, screen_code("*"), 2)
@@ -953,6 +1212,7 @@ def main():
         bench.set_memory(require(labels, "zp_player_str"), 18)
         screen_put_cell_raw(bench, CLEAR_SENTINEL_ROW, CLEAR_SENTINEL_COL, screen_code("*"), 2)
         reset_turn(bench, labels)
+        bench.run(require(labels, "msg_clear"))
         stuff_direction_to_target(bench, door_px, door_py, door_x, door_y)
         bench.set_a(CMD_OPEN)
         bench.run(require(labels, "cx16_dispatch_game_command"))
@@ -963,6 +1223,7 @@ def main():
         assert_screen_cell(bench, CLEAR_SENTINEL_ROW, CLEAR_SENTINEL_COL, screen_code("*"), 2, "open command does not full-clear")
 
         reset_turn(bench, labels)
+        bench.run(require(labels, "msg_clear"))
         stuff_direction_to_target(bench, door_px, door_py, door_x, door_y)
         bench.set_a(CMD_CLOSE)
         bench.run(require(labels, "cx16_dispatch_game_command"))
@@ -986,8 +1247,8 @@ def main():
         reset_turn(bench, labels)
         bench.set_a(CMD_SEARCH)
         bench.run(require(labels, "cx16_dispatch_game_command"))
-        if assert_screen_text_matches(bench, 26, 23, "SEARCH/REST/LOOK NOT WIRED YET."):
-            raise AssertionError("search command still rendered the activity stub")
+        if assert_screen_text_matches(bench, 0, 0, "That is only useful in the dungeon."):
+            raise AssertionError("search command rendered the dungeon-only message")
         assert_turns(bench, labels, 1, "search command consumes one turn")
         assert_screen_contains_cell(bench, SC_PLAYER, TEXT_COLOR, "search command keeps player glyph")
         assert_screen_cell(bench, CLEAR_SENTINEL_ROW, CLEAR_SENTINEL_COL, screen_code("*"), 2, "search command does not full-clear")
@@ -1010,8 +1271,8 @@ def main():
         reset_turn(bench, labels)
         bench.set_a(CMD_REST)
         bench.run(require(labels, "cx16_dispatch_game_command"))
-        if assert_screen_text_matches(bench, 26, 23, "SEARCH/REST/LOOK NOT WIRED YET."):
-            raise AssertionError("rest command still rendered the activity stub")
+        if assert_screen_text_matches(bench, 0, 0, "That is only useful in the dungeon."):
+            raise AssertionError("rest command rendered the dungeon-only message")
         assert_turns(bench, labels, 1, "rest command consumes one turn")
         assert_eq(bench.get_memory(require(labels, "zp_player_food")), 9, "rest command ticks hunger")
         assert_eq(bench.get_memory(require(labels, "zp_player_hp_lo")), 11, "rest command runs shared HP regen")
@@ -1117,6 +1378,8 @@ def main():
         assert_screen_cell(bench, CLEAR_SENTINEL_ROW, CLEAR_SENTINEL_COL, screen_code("*"), 2, "disarm command does not full-clear")
 
         set_player_position(bench, labels, floor_x, floor_y)
+        bench.set_memory(require(labels, "inv_item_id"), FI_EMPTY)
+        bench.set_memory(require(labels, "inv_item_id") + 1, FI_EMPTY)
         item_count_before_pickup = bench.get_memory(require(labels, "zp_item_count"))
         add_floor_item(bench, labels, floor_x, floor_y, ITEM_PICK)
         screen_put_cell_raw(bench, CLEAR_SENTINEL_ROW, CLEAR_SENTINEL_COL, screen_code("*"), 2)
@@ -1347,7 +1610,7 @@ def main():
 
         set_player_position(bench, labels, floor_x, floor_y)
         bench.run(require(labels, "cx16_try_stairs_up"))
-        assert_screen_text(bench, 0, 0, "YOU SEE NO STAIRS HERE.", "no stairs message")
+        assert_screen_text(bench, 0, 0, "You see no stairs here.", "no stairs message")
 
         down_x, down_y = find_map_tile_type(bench, labels, TILE_STAIRS_DN, "stairs down before deeper level")
         set_player_position(bench, labels, down_x, down_y)
@@ -1362,7 +1625,7 @@ def main():
         entry2_y = bench.get_memory(require(labels, "zp_player_y"))
         assert_map_tile_type(bench, labels, entry2_x, entry2_y, TILE_STAIRS_UP, "deeper entry stairs up")
         assert_floor_items_spawned(bench, labels)
-        assert_screen_text(bench, 0, 0, "DUNGEON LEVEL 2 READY", "deeper level ready message")
+        assert_screen_text(bench, 0, 0, "Dungeon level 2 ready.", "deeper level ready message")
         assert_screen_text(bench, 25, 66, "DL:2", "deeper status depth")
 
         bench.run(require(labels, "cx16_try_stairs_up"))
@@ -1372,7 +1635,7 @@ def main():
         return_x = bench.get_memory(require(labels, "zp_player_x"))
         return_y = bench.get_memory(require(labels, "zp_player_y"))
         assert_map_tile_type(bench, labels, return_x, return_y, TILE_STAIRS_DN, "ascended return stairs down")
-        assert_screen_text(bench, 0, 0, "DUNGEON LEVEL 1 READY", "shallower level ready message")
+        assert_screen_text(bench, 0, 0, "Dungeon level 1 ready.", "shallower level ready message")
         assert_screen_text(bench, 25, 66, "DL:1", "shallower status depth")
 
         up_x, up_y = find_map_tile_type(bench, labels, TILE_STAIRS_UP, "stairs up before town return")
@@ -1392,7 +1655,7 @@ def main():
         assert_screen_text(bench, 17, 14, "Use: W)ear T)akeoff Shift-E eat Q)uaff R)ead", "help view use")
         assert_screen_text(bench, 19, 14, "Tools: A)im Z)use Shift-R refuel", "help view tools")
         assert_screen_text(bench, 21, 14, "Views: ?)help Shift-C character V)version", "help view views")
-        assert_screen_text(bench, 23, 14, "System: Shift-S save Shift-Q title M/P/F magic", "help view system")
+        assert_screen_text(bench, 23, 14, "System: Shift-Q title", "help view system")
         for key, command, label in (
             (ord("O"), CMD_OPEN, "O maps to open"),
             (ord("C"), CMD_CLOSE, "C maps to close"),
@@ -1420,18 +1683,25 @@ def main():
             (ord("?"), CMD_HELP, "? maps to help"),
             (0xC3, CMD_CHAR_INFO, "Shift-C maps to character info"),
             (ord("V"), CMD_VERSION, "V maps to version command"),
-            (0xD3, CMD_SAVE, "Shift-S maps to save"),
             (0xD1, CMD_QUIT, "Shift-Q maps to quit"),
-            (ord("M"), CMD_CAST, "M maps to cast"),
-            (ord("P"), CMD_PRAY, "P maps to pray"),
-            (ord("F"), CMD_GAIN, "F maps to gain"),
-            (ord("f"), CMD_GAIN, "f maps to gain"),
-            (0xC6, CMD_FIRE, "Shift-F maps to fire"),
-            (0xD4, CMD_THROW, "Shift-T maps to throw"),
         ):
             bench.set_a(key)
             bench.run(require(labels, "petscii_to_command"))
             assert_eq(bench.get_a(), command, label)
+        for key, label in (
+            (0xD3, "Shift-S unmapped until save/load exists"),
+            (ord("M"), "M unmapped until magic exists"),
+            (ord("P"), "P unmapped until prayer exists"),
+            (ord("F"), "F unmapped until gain spell exists"),
+            (ord("f"), "f unmapped until gain spell exists"),
+            (0xC6, "Shift-F unmapped until ranged fire exists"),
+            (0xD4, "Shift-T unmapped until throw exists"),
+            (ord("/"), "/ unmapped until recall/identify exists"),
+            (0x17, "Ctrl-W unmapped until wizard mode exists"),
+        ):
+            bench.set_a(key)
+            bench.run(require(labels, "petscii_to_command"))
+            assert_eq(bench.get_a(), CMD_NONE, label)
         bench.run(require(labels, "cx16_draw_version_view"))
         assert_screen_text(bench, 10, 24, "Moria8 CX16 Port V1.3.1", "version view")
         bench.run(require(labels, "cx16_seed_starting_player_state"))
@@ -1448,28 +1718,78 @@ def main():
         bench.run(require(labels, "cx16_new_game_draw"))
 
         for command, text, label in (
-            (CMD_REST, "SEARCH/REST/LOOK NOT WIRED YET.", "rest command"),
-            (CMD_SEARCH, "SEARCH/REST/LOOK NOT WIRED YET.", "search command"),
-            (CMD_LOOK, "SEARCH/REST/LOOK NOT WIRED YET.", "look command"),
-            (CMD_SEARCH_MODE, "SEARCH/REST/LOOK NOT WIRED YET.", "search mode command"),
-            (CMD_AUTOREST, "SEARCH/REST/LOOK NOT WIRED YET.", "autorest command"),
-            (CMD_OPEN, "ITEM/FEATURE COMMAND NOT WIRED YET.", "open command"),
-            (CMD_DROP, "ITEM/FEATURE COMMAND NOT WIRED YET.", "drop command"),
-            (CMD_FIRE, "ITEM/FEATURE COMMAND NOT WIRED YET.", "fire command"),
-            (CMD_BASH, "ITEM/FEATURE COMMAND NOT WIRED YET.", "bash command"),
-            (CMD_TUNNEL, "ITEM/FEATURE COMMAND NOT WIRED YET.", "tunnel command"),
-            (CMD_DISARM, "ITEM/FEATURE COMMAND NOT WIRED YET.", "disarm command"),
-            (CMD_CAST, "MAGIC AND RECALL NOT WIRED YET.", "cast command"),
-            (CMD_RECALL, "MAGIC AND RECALL NOT WIRED YET.", "recall command"),
-            (CMD_GAIN, "MAGIC AND RECALL NOT WIRED YET.", "gain command"),
-            (CMD_SAVE, "SAVE NOT WIRED YET.", "save command"),
-            (CMD_MAP, "MAP VIEW NOT WIRED YET.", "map command"),
-            (CMD_WIZARD, "WIZARD MODE NOT ENABLED.", "wizard command"),
+            (CMD_REST, "That is only useful in the dungeon.", "rest command"),
+            (CMD_SEARCH, "That is only useful in the dungeon.", "search command"),
+            (CMD_LOOK, "That is only useful in the dungeon.", "look command"),
+            (CMD_SEARCH_MODE, "That is only useful in the dungeon.", "search mode command"),
+            (CMD_AUTOREST, "That is only useful in the dungeon.", "autorest command"),
+            (CMD_OPEN, "That is only useful in the dungeon.", "open command"),
+            (CMD_DROP, "That is only useful in the dungeon.", "drop command"),
+            (CMD_FIRE, "That is only useful in the dungeon.", "fire command"),
+            (CMD_BASH, "That is only useful in the dungeon.", "bash command"),
+            (CMD_TUNNEL, "That is only useful in the dungeon.", "tunnel command"),
+            (CMD_DISARM, "That is only useful in the dungeon.", "disarm command"),
         ):
             bench.run(require(labels, "msg_init"))
             bench.set_a(command)
             bench.run(require(labels, "cx16_dispatch_game_command"))
             assert_screen_text(bench, 0, 0, text, label)
+
+        bench.set_a(1)
+        bench.run(require(labels, "cx16_enter_dungeon_level"), timeout=8)
+        death_slot, death_mon_x, death_mon_y, _, _ = first_live_monster(bench, labels)
+        for slot in range(MAX_MONSTERS):
+            mon_base = require(labels, "monster_table") + (slot * MONSTER_ENTRY_SIZE)
+            if bench.get_memory(mon_base + MX_TYPE) != EMPTY_SLOT:
+                bench.set_memory(mon_base + MX_TYPE, 0)
+        bench.set_memory(require(labels, "monster_table") + (death_slot * MONSTER_ENTRY_SIZE) + MX_TYPE, 1)
+        bench.set_memory(require(labels, "player_data") + PL_AC, 0)
+        bench.set_memory(require(labels, "cx16_mon_slot"), death_slot)
+        bench.set_memory(CX16_RAM_BANK_REG, CX16_OVERLAY_DEATH_BANK)
+        tier_damage_seen = False
+        for _ in range(20):
+            bench.run(require(labels, "cx16_overlay_monster_attack_damage"))
+            if bench.get_memory(require(labels, "cx16_mon_damage")) != 0:
+                tier_damage_seen = True
+                break
+        if not tier_damage_seen:
+            raise AssertionError("tier-backed monster attack damage rolled zero")
+        bench.set_memory(CX16_RAM_BANK_REG, 0)
+        death_command, death_px, death_py = find_player_pos_to_attack(bench, labels, death_mon_x, death_mon_y)
+        set_player_position(bench, labels, death_px, death_py)
+        bench.set_memory(require(labels, "zp_player_hp_lo"), 12)
+        bench.set_memory(require(labels, "zp_player_hp_hi"), 0)
+        bench.set_memory(require(labels, "player_data") + PL_HP_LO, 12)
+        bench.set_memory(require(labels, "player_data") + PL_HP_HI, 0)
+        hp_after_attack = 12
+        bench.set_memory(require(labels, "monster_table") + (death_slot * MONSTER_ENTRY_SIZE) + MX_TYPE, 0)
+        for _ in range(20):
+            bench.set_a(CMD_REST)
+            bench.run(require(labels, "cx16_dispatch_game_command"))
+            hp_after_attack = bench.get_memory(require(labels, "zp_player_hp_lo"))
+            if hp_after_attack < 12:
+                break
+        if hp_after_attack >= 12:
+            raise AssertionError("monster attack did not damage player")
+        if hp_after_attack == 0:
+            raise AssertionError("monster attack killed player before death-flow check")
+        assert_screen_text(bench, 0, 0, "The Kobold hits you.", "monster attack message")
+        bench.set_memory(require(labels, "monster_table") + (death_slot * MONSTER_ENTRY_SIZE) + MX_TYPE, 1)
+        bench.set_memory(require(labels, "zp_player_hp_lo"), 1)
+        bench.set_memory(require(labels, "zp_player_hp_hi"), 0)
+        bench.set_memory(require(labels, "player_data") + PL_HP_LO, 1)
+        bench.set_memory(require(labels, "player_data") + PL_HP_HI, 0)
+        for _ in range(20):
+            bench.set_a(CMD_REST)
+            bench.run(require(labels, "cx16_dispatch_game_command"))
+            if bench.get_memory(require(labels, "cx16_state")) == CX16_STATE_DEAD:
+                break
+        assert_eq(bench.get_memory(require(labels, "cx16_state")), CX16_STATE_DEAD, "monster attack enters death state")
+        assert_eq(bench.get_memory(require(labels, "zp_death_source")), 1, "monster death source records tier creature")
+        assert_screen_text(bench, 0, 0, "* You have died *", "death flow message")
+        stuff_key(bench, 0xD1)
+        bench.run(require(labels, "cx16_poll_dead"))
+        assert_eq(bench.get_memory(require(labels, "cx16_state")), 0, "death flow quit returns to title")
 
         print("CX16 runtime smoke passed")
     finally:

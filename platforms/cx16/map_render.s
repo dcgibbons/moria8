@@ -205,6 +205,25 @@ cx16_render_dungeon_viewport:
     sta cx16_draw_char
     stx cx16_draw_color
     lda cx16_draw_tile
+    and #FLAG_OCCUPIED
+    beq !not_monster+
+    lda cx16_view_x
+    clc
+    adc cx16_draw_x
+    pha
+    lda cx16_view_y
+    clc
+    adc cx16_draw_y
+    tay
+    pla
+    jsr cx16_load_monster_draw_at
+    bcc !not_monster+
+    sta cx16_draw_char
+    txa
+    sta cx16_draw_color
+    jmp !check_player+
+!not_monster:
+    lda cx16_draw_tile
     and #FLAG_HAS_ITEM
     beq !check_player+
     lda cx16_view_x
@@ -453,6 +472,18 @@ cx16_draw_dungeon_map_cell:
     sta cx16_draw_char
     stx cx16_draw_color
     lda cx16_draw_tile
+    and #FLAG_OCCUPIED
+    beq !not_monster+
+    lda cx16_draw_x
+    ldy cx16_draw_y
+    jsr cx16_load_monster_draw_at
+    bcc !not_monster+
+    sta cx16_draw_char
+    txa
+    sta cx16_draw_color
+    jmp !put+
+!not_monster:
+    lda cx16_draw_tile
     and #FLAG_HAS_ITEM
     beq !put+
     lda cx16_draw_x
@@ -486,6 +517,130 @@ cx16_draw_dungeon_map_cell:
     lda #CX16_TEXT_COLOR
     jmp screen_set_color
 
+cx16_load_monster_draw_at:
+    sta cx16_mon_draw_x
+    sty cx16_mon_draw_y
+    lda zp_ptr0
+    sta cx16_mon_draw_saved_ptr
+    lda zp_ptr0_hi
+    sta cx16_mon_draw_saved_ptr_hi
+    lda cx16_mon_draw_x
+    ldy cx16_mon_draw_y
+    jsr cx16_find_monster_draw_at
+    bcc !miss+
+    ldy #CX16_ACTIVE_MONSTER_TYPE_OFFSET
+    lda (zp_ptr0),y
+    sta cx16_mon_draw_type
+    lda #CX16_TIER_FIELD_DISPLAY
+    jsr cx16_read_monster_draw_tier_field
+    sta cx16_mon_draw_char
+    lda #CX16_TIER_FIELD_COLOR
+    jsr cx16_read_monster_draw_tier_field
+    tax
+    lda cx16_mon_draw_saved_ptr
+    sta zp_ptr0
+    lda cx16_mon_draw_saved_ptr_hi
+    sta zp_ptr0_hi
+    lda cx16_mon_draw_char
+    sec
+    rts
+!miss:
+    lda cx16_mon_draw_saved_ptr
+    sta zp_ptr0
+    lda cx16_mon_draw_saved_ptr_hi
+    sta zp_ptr0_hi
+    clc
+    rts
+
+cx16_find_monster_draw_at:
+    lda #<CREATURE_BASE
+    sta zp_ptr0
+    lda #>CREATURE_BASE
+    sta zp_ptr0_hi
+    ldx #0
+!loop:
+    cpx #CX16_ACTIVE_MONSTER_COUNT
+    bcs !miss+
+    ldy #CX16_ACTIVE_MONSTER_TYPE_OFFSET
+    lda (zp_ptr0),y
+    cmp #CX16_ACTIVE_MONSTER_EMPTY_SLOT
+    beq !next+
+    ldy #CX16_ACTIVE_MONSTER_X_OFFSET
+    lda (zp_ptr0),y
+    cmp cx16_mon_draw_x
+    bne !next+
+    ldy #CX16_ACTIVE_MONSTER_Y_OFFSET
+    lda (zp_ptr0),y
+    cmp cx16_mon_draw_y
+    bne !next+
+    sec
+    rts
+!next:
+    clc
+    lda zp_ptr0
+    adc #CX16_ACTIVE_MONSTER_ENTRY_SIZE
+    sta zp_ptr0
+    lda zp_ptr0_hi
+    adc #0
+    sta zp_ptr0_hi
+    inx
+    jmp !loop-
+!miss:
+    clc
+    rts
+
+cx16_read_monster_draw_tier_field:
+    sta cx16_mon_draw_field_idx
+    jsr cx16_monster_draw_current_tier_count
+    sta cx16_mon_draw_tier_count
+    lda #<CX16_TIER_LOAD_BASE
+    sta zp_ptr0
+    lda #>CX16_TIER_LOAD_BASE
+    sta zp_ptr0_hi
+    lda cx16_mon_draw_field_idx
+    beq !add_type+
+!field_loop:
+    clc
+    lda zp_ptr0
+    adc cx16_mon_draw_tier_count
+    sta zp_ptr0
+    lda zp_ptr0_hi
+    adc #0
+    sta zp_ptr0_hi
+    dec cx16_mon_draw_field_idx
+    bne !field_loop-
+!add_type:
+    clc
+    lda zp_ptr0
+    adc cx16_mon_draw_type
+    sta zp_ptr0
+    lda zp_ptr0_hi
+    adc #0
+    sta zp_ptr0_hi
+    ldy #0
+    lda cx16_loaded_tier_bank
+    jmp cx16_read_byte_from_bank_a000
+
+cx16_monster_draw_current_tier_count:
+    lda cx16_loaded_tier
+    cmp #2
+    bne !not_tier2+
+    lda #TIER2_COUNT
+    rts
+!not_tier2:
+    cmp #3
+    bne !not_tier3+
+    lda #TIER3_COUNT
+    rts
+!not_tier3:
+    cmp #4
+    bne !tier1+
+    lda #TIER4_COUNT
+    rts
+!tier1:
+    lda #TIER1_COUNT
+    rts
+
 cx16_old_player_x: .byte 0
 cx16_old_player_y: .byte 0
 cx16_draw_x: .byte 0
@@ -500,4 +655,12 @@ cx16_old_view_y: .byte 0
 cx16_vis_min_x: .byte 0
 cx16_vis_max_x: .byte 0
 cx16_vis_min_y: .byte 0
+cx16_mon_draw_x: .byte 0
+cx16_mon_draw_y: .byte 0
+cx16_mon_draw_type: .byte 0
+cx16_mon_draw_char: .byte 0
+cx16_mon_draw_field_idx: .byte 0
+cx16_mon_draw_tier_count: .byte 0
+cx16_mon_draw_saved_ptr: .byte 0
+cx16_mon_draw_saved_ptr_hi: .byte 0
 cx16_vis_max_y: .byte 0

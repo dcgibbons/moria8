@@ -219,6 +219,22 @@ read_banked_byte_a000:
     lda (zp_ptr0),y
     rts
 
+// Input: A = RAM bank, zp_ptr0/hi = bank-window pointer, Y = offset.
+// Output: A = byte read. Restores the caller's selected RAM bank.
+// Clobbers: X
+cx16_read_byte_from_bank_a000:
+    tax
+    lda CX16_RAM_BANK_REG
+    pha
+    txa
+    sta CX16_RAM_BANK_REG
+    lda (zp_ptr0),y
+    tax
+    pla
+    sta CX16_RAM_BANK_REG
+    txa
+    rts
+
 write_banked_byte_a000:
     sta (zp_ptr0),y
     rts

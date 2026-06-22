@@ -38,6 +38,7 @@
 .const CX16_STATE_TITLE = 0
 .const CX16_STATE_NEW_GAME = 1
 .const CX16_STATE_DUNGEON = 2
+.const CX16_STATE_DEAD = 3
 .const CX16_TOWN_SCREEN_ROW = 2
 .const CX16_TOWN_SCREEN_COL = 7
 .const CX16_TITLE_MENU_COL = 27
@@ -68,6 +69,30 @@
 .const CX16_ITEM_CMD_READ = 9
 .const CX16_ITEM_CMD_AIM = 10
 .const CX16_ITEM_CMD_USE = 11
+.const CX16_ACTIVE_MONSTER_COUNT = 32
+.const CX16_ACTIVE_MONSTER_ENTRY_SIZE = 12
+.const CX16_ACTIVE_MONSTER_X_OFFSET = 0
+.const CX16_ACTIVE_MONSTER_Y_OFFSET = 1
+.const CX16_ACTIVE_MONSTER_TYPE_OFFSET = 2
+.const CX16_ACTIVE_MONSTER_EMPTY_SLOT = $ff
+.const CX16_MON_CMD_SPAWN_LEVEL = 0
+.const CX16_MON_CMD_PLAYER_ATTACK = 1
+.const CX16_MON_CMD_ADJACENT_ATTACK = 2
+.const CX16_TIER_FIELD_DISPLAY = 0
+.const CX16_TIER_FIELD_COLOR = 1
+.const CX16_TIER_FIELD_LEVEL = 4
+.const CX16_TIER_FIELD_HD_NUM = 5
+.const CX16_TIER_FIELD_HD_SIDES = 6
+.const CX16_TIER_FIELD_AC = 7
+.const CX16_TIER_FIELD_XP_LO = 10
+.const CX16_TIER_FIELD_XP_HI = 11
+.const CX16_TIER_FIELD_ATK0_TYPE = 12
+.const CX16_TIER_FIELD_ATK0_DICE = 13
+.const CX16_TIER_FIELD_ATK0_SIDES = 14
+.const CX16_TIER_FIELD_NAME_LO = 20
+.const CX16_TIER_FIELD_NAME_HI = 21
+.const CX16_ATK_NORMAL = 1
+.const CX16_MON_ATTACK_BASE_TOHIT_COUNT = 21
 .const MAP_BASE = $6800
 .const C128 = false
 .const PLUS4 = false
@@ -353,10 +378,14 @@ cx16_poll_input:
     lda cx16_state
     cmp #CX16_STATE_TITLE
     beq !menu+
+    cmp #CX16_STATE_DEAD
+    beq !dead+
 !game:
     jmp cx16_poll_game
 !menu:
     jmp cx16_poll_menu
+!dead:
+    jmp cx16_poll_dead
 
 cx16_poll_menu:
     jsr input_get_key
@@ -364,29 +393,17 @@ cx16_poll_menu:
     beq !new_game+
     cmp #$6e                // n
     beq !new_game+
-    cmp #$4c                // L
-    beq !load_game+
-    cmp #$6c                // l
-    beq !load_game+
-    cmp #$51                // Q
-    beq !quit+
-    cmp #$71                // q
-    beq !quit+
 !done:
     rts
 !new_game:
     jmp cx16_new_game_start
-!load_game:
-    lda #CX16_TEXT_COLOR
-    jsr screen_set_color
-    :Cx16PrintAt(20, 21, cx16_load_game_text)
-    jsr input_get_modal_dismiss_key
-    jmp cx16_title_enter_menu
-!quit:
-    lda #CX16_TEXT_COLOR
-    jsr screen_set_color
-    :Cx16PrintAt(20, 21, cx16_quit_text)
-    jsr input_get_modal_dismiss_key
+
+cx16_poll_dead:
+    jsr input_get_command
+    cmp #CMD_QUIT
+    beq !title+
+    rts
+!title:
     jmp cx16_title_enter_menu
 
 cx16_new_game_start:
@@ -476,34 +493,10 @@ cx16_dispatch_game_command:
     bne !not_autorest+
     jmp !autorest+
 !not_autorest:
-    cmp #CMD_SAVE
-    bne !not_save+
-    jmp !storage+
-!not_save:
-    cmp #CMD_CAST
-    bne !not_cast+
-    jmp !magic+
-!not_cast:
-    cmp #CMD_PRAY
-    bne !not_pray+
-    jmp !magic+
-!not_pray:
-    cmp #CMD_RECALL
-    bne !not_recall+
-    jmp !magic+
-!not_recall:
-    cmp #CMD_GAIN
-    bne !not_gain+
-    jmp !magic+
-!not_gain:
     cmp #CMD_CHAR_INFO
     bne !not_char_info+
     jmp !char_info+
 !not_char_info:
-    cmp #CMD_MAP
-    bne !not_map+
-    jmp !info+
-!not_map:
     cmp #CMD_HELP
     bne !not_help+
     jmp !help+
@@ -512,10 +505,6 @@ cx16_dispatch_game_command:
     bne !not_version+
     jmp !version+
 !not_version:
-    cmp #CMD_WIZARD
-    bne !not_wizard+
-    jmp !wizard+
-!not_wizard:
     cmp #CMD_PICKUP
     bne !not_pickup+
     jmp !pickup+
@@ -574,7 +563,7 @@ cx16_dispatch_game_command:
     bcc !item+
     jmp !done+
 !activity:
-    jmp cx16_show_activity_stub
+    jmp cx16_show_dungeon_only_message
 !rest:
     jmp cx16_cmd_rest
 !look:
@@ -595,20 +584,12 @@ cx16_dispatch_game_command:
     jmp cx16_cmd_tunnel
 !disarm:
     jmp cx16_cmd_disarm
-!storage:
-    jmp cx16_show_storage_stub
-!magic:
-    jmp cx16_show_magic_stub
-!info:
-    jmp cx16_show_info_stub
 !help:
     jmp cx16_show_help
 !version:
     jmp cx16_show_version
 !char_info:
     jmp cx16_show_character_info
-!wizard:
-    jmp cx16_show_wizard_stub
 !pickup:
     jmp cx16_cmd_pickup
 !drop:
@@ -634,11 +615,14 @@ cx16_dispatch_game_command:
 !use:
     jmp cx16_cmd_use
 !item:
-    jmp cx16_show_item_stub
+    jmp cx16_show_dungeon_only_message
 !done:
     rts
 
 cx16_try_move_command:
+    pha
+    jsr msg_clear
+    pla
     sec
     sbc #CMD_MOVE_N
     tax
@@ -667,6 +651,16 @@ cx16_try_dungeon_step_dir:
     bcc !done+
     jsr cx16_running_target_is_trap
     bcs !done+
+    lda zp_temp0
+    and #FLAG_OCCUPIED
+    beq !not_occupied+
+    lda zp_run_dir
+    cmp #$ff
+    bne !done+
+    jsr cx16_player_attack_target
+    bcc !done+
+    jmp cx16_after_feature_turn
+!not_occupied:
     jsr player_move_target_walkable
     bcc !done+
     lda zp_run_dir
@@ -913,6 +907,22 @@ cx16_call_ui_overlay_command:
     pla
     rts
 
+cx16_call_monster_overlay_command:
+    pha
+    lda CX16_RAM_BANK_REG
+    pha
+    lda #CX16_OVERLAY_DEATH_BANK
+    sta CX16_RAM_BANK_REG
+    pla
+    sta cx16_overlay_saved_bank
+    pla
+    jsr cx16_overlay_monster_command_entry
+    php
+    lda cx16_overlay_saved_bank
+    sta CX16_RAM_BANK_REG
+    plp
+    rts
+
 cx16_call_startup_overlay_entry:
     lda CX16_RAM_BANK_REG
     pha
@@ -939,7 +949,21 @@ cx16_consume_turn_searchable:
     rts
 
 cx16_consume_turn:
-    jmp turn_post_action
+    jsr turn_post_action
+    lda cx16_state
+    cmp #CX16_STATE_DUNGEON
+    bne !death_check+
+    lda zp_game_flags
+    and #$01
+    bne !death_check+
+    jsr cx16_monster_adjacent_attack
+!death_check:
+    lda zp_game_flags
+    and #$01
+    beq !done+
+    jmp cx16_enter_death_flow
+!done:
+    rts
 
 cx16_auto_rest_check_recovered:
     lda zp_player_hp_hi
@@ -1011,7 +1035,7 @@ cx16_check_town_entry:
     jsr town_basic_check_store_door
     bcc !done+
     sta cx16_store_idx
-    jmp cx16_show_store_stub
+    jmp cx16_enter_town_recovery
 !done:
     rts
 
@@ -1246,16 +1270,75 @@ cx16_new_game_draw:
     jsr cx16_render_town
     jmp cx16_draw_town_ui
 
-cx16_show_store_stub:
-    lda #<cx16_store_door_text
+cx16_enter_town_recovery:
+    jsr cx16_town_recover_and_resupply
+    lda #<town_recovery_str
     sta zp_ptr0
-    lda #>cx16_store_door_text
+    lda #>town_recovery_str
     sta zp_ptr0_hi
-    jsr msg_print
-    lda cx16_store_idx
-    clc
-    adc #$31
-    jmp msg_print_char
+    jmp msg_print
+
+cx16_town_recover_and_resupply:
+    lda player_data + PL_MHP_LO
+    sta player_data + PL_HP_LO
+    sta zp_player_hp_lo
+    lda player_data + PL_MHP_HI
+    sta player_data + PL_HP_HI
+    sta zp_player_hp_hi
+    lda player_data + PL_MAX_MANA
+    sta player_data + PL_MANA
+    sta zp_player_mp
+    lda #<2000
+    sta player_data + PL_FOOD_LO
+    sta zp_player_food
+    lda #>2000
+    sta player_data + PL_FOOD_HI
+    sta zp_player_food_hi
+    jsr cx16_town_charge_recovery
+    jsr cx16_town_add_ration
+    jmp cx16_town_add_cure_potion
+
+cx16_town_charge_recovery:
+    lda player_data + PL_GOLD_1
+    ora player_data + PL_GOLD_2
+    bne !charge+
+    lda player_data + PL_GOLD_0
+    cmp #10
+    bcc !done+
+!charge:
+    lda player_data + PL_GOLD_0
+    sec
+    sbc #10
+    sta player_data + PL_GOLD_0
+    lda player_data + PL_GOLD_1
+    sbc #0
+    sta player_data + PL_GOLD_1
+    lda player_data + PL_GOLD_2
+    sbc #0
+    sta player_data + PL_GOLD_2
+!done:
+    rts
+
+cx16_town_add_ration:
+    lda #15
+    jmp cx16_town_add_basic_item
+
+cx16_town_add_cure_potion:
+    lda #17
+
+cx16_town_add_basic_item:
+    sta fi_add_id
+    lda #1
+    sta fi_add_qty
+    lda #0
+    sta fi_add_p1
+    sta fi_add_to_hit
+    sta fi_add_to_dam
+    sta fi_add_to_ac
+    sta fi_add_flags
+    sta fi_add_ego
+    jsr inv_add_item
+    rts
 
 cx16_enter_dungeon:
     lda #0
@@ -1279,33 +1362,34 @@ cx16_enter_dungeon_level:
     pla
     sta zp_player_dlvl
     sta player_data + PL_DLEVEL
-    jsr item_spawn_level
-    lda #CX16_DUNGEON_LIGHT_RADIUS
-    sta zp_light_radius
-    sta player_data + PL_LIGHT_RAD
-    jsr update_visibility
-    lda #CX16_STATE_DUNGEON
-    sta cx16_state
     lda zp_player_dlvl
     jsr cx16_depth_to_tier
     sta cx16_loaded_tier
     clc
     adc #(CX16_TIER_BANK_BASE - 1)
     sta cx16_loaded_tier_bank
+    jsr item_spawn_level
+    jsr cx16_spawn_level_monsters
+    lda #CX16_DUNGEON_LIGHT_RADIUS
+    sta zp_light_radius
+    sta player_data + PL_LIGHT_RAD
+    jsr update_visibility
+    lda #CX16_STATE_DUNGEON
+    sta cx16_state
     jsr cx16_draw_dungeon
     jmp cx16_print_dungeon_ready_message
 
 cx16_print_dungeon_ready_message:
-    lda #<cx16_dungeon_ready_prefix_text
+    lda #<dungeon_ready_prefix_str
     sta zp_ptr0
-    lda #>cx16_dungeon_ready_prefix_text
+    lda #>dungeon_ready_prefix_str
     sta zp_ptr0_hi
     jsr msg_print
     lda zp_player_dlvl
     jsr screen_put_decimal
-    lda #<cx16_dungeon_ready_suffix_text
+    lda #<dungeon_ready_suffix_str
     sta zp_ptr0
-    lda #>cx16_dungeon_ready_suffix_text
+    lda #>dungeon_ready_suffix_str
     sta zp_ptr0_hi
     jmp screen_put_string
 
@@ -1336,10 +1420,35 @@ cx16_return_to_town:
     jsr town_map_basic_generate
     jmp cx16_new_game_draw
 
-cx16_show_no_stairs:
-    lda #<cx16_no_stairs_text
+cx16_enter_death_flow:
+    lda #CX16_STATE_DEAD
+    sta cx16_state
+    lda #CX16_TEXT_COLOR
+    jsr screen_set_color
+    jsr msg_clear
+    lda #<death_terminal_str
     sta zp_ptr0
-    lda #>cx16_no_stairs_text
+    lda #>death_terminal_str
+    sta zp_ptr0_hi
+    jsr msg_print
+    jmp cx16_draw_dungeon_ui
+
+cx16_spawn_level_monsters:
+    lda #CX16_MON_CMD_SPAWN_LEVEL
+    jmp cx16_call_monster_overlay_command
+
+cx16_player_attack_target:
+    lda #CX16_MON_CMD_PLAYER_ATTACK
+    jmp cx16_call_monster_overlay_command
+
+cx16_monster_adjacent_attack:
+    lda #CX16_MON_CMD_ADJACENT_ATTACK
+    jmp cx16_call_monster_overlay_command
+
+cx16_show_no_stairs:
+    lda #<no_stairs_str
+    sta zp_ptr0
+    lda #>no_stairs_str
     sta zp_ptr0_hi
     jmp msg_print
 
@@ -1370,45 +1479,10 @@ cx16_draw_character_view:
     lda #CX16_UI_CMD_CHARACTER
     jmp cx16_call_ui_overlay_command
 
-cx16_show_activity_stub:
-    lda #<cx16_activity_stub_text
+cx16_show_dungeon_only_message:
+    lda #<dungeon_only_str
     sta zp_ptr0
-    lda #>cx16_activity_stub_text
-    sta zp_ptr0_hi
-    jmp msg_print
-
-cx16_show_item_stub:
-    lda #<cx16_item_stub_text
-    sta zp_ptr0
-    lda #>cx16_item_stub_text
-    sta zp_ptr0_hi
-    jmp msg_print
-
-cx16_show_magic_stub:
-    lda #<cx16_magic_stub_text
-    sta zp_ptr0
-    lda #>cx16_magic_stub_text
-    sta zp_ptr0_hi
-    jmp msg_print
-
-cx16_show_storage_stub:
-    lda #<cx16_storage_stub_text
-    sta zp_ptr0
-    lda #>cx16_storage_stub_text
-    sta zp_ptr0_hi
-    jmp msg_print
-
-cx16_show_info_stub:
-    lda #<cx16_info_stub_text
-    sta zp_ptr0
-    lda #>cx16_info_stub_text
-    sta zp_ptr0_hi
-    jmp msg_print
-
-cx16_show_wizard_stub:
-    lda #<cx16_wizard_stub_text
-    sta zp_ptr0
-    lda #>cx16_wizard_stub_text
+    lda #>dungeon_only_str
     sta zp_ptr0_hi
     jmp msg_print
 
@@ -1615,79 +1689,37 @@ cx16_title_name:
 .label cx16_title_name_len = * - cx16_title_name
 
 cx16_title_menu_text:
-    :ScreenText("N)EW  L)OAD  Q)UIT")
+    :ScreenText("N)EW")
     .byte 0
 
 cx16_town_title_text:
-    :ScreenText("TOWN")
-    .byte 0
-
-cx16_load_game_text:
-    :ScreenText("LOAD GAME INPUT RECOGNIZED")
-    .byte 0
-
-cx16_quit_text:
-    :ScreenText("QUIT INPUT RECOGNIZED")
+    :ScreenText("Town")
     .byte 0
 
 cx16_game_help_text:
-    :ScreenText("HJKL/YUBN OR NUMBERS MOVE. SHIFT-Q RETURNS TO TITLE.")
-    .byte 0
-
-cx16_store_door_text:
-    :ScreenText("STORE DOOR ")
+    :ScreenText("Move: HJKL/YUBN or numbers. Shift-Q title.")
     .byte 0
 
 cx16_dungeon_module_failed_text:
-    :ScreenText("DUNGEON MODULE LOAD FAILED.")
-    .byte 0
-
-cx16_dungeon_ready_prefix_text:
-    :ScreenText("DUNGEON LEVEL ")
-    .byte 0
-
-cx16_dungeon_ready_suffix_text:
-    :ScreenText(" READY")
+    :ScreenText("Dungeon module load failed.")
     .byte 0
 
 cx16_dungeon_help_text:
-    :ScreenText("HJKL/YUBN OR NUMBERS MOVE. < RETURNS TO TOWN. SHIFT-Q TITLE.")
+    :ScreenText("Move: HJKL/YUBN or numbers. <: town. Shift-Q title.")
     .byte 0
 
-cx16_no_stairs_text:
-    :ScreenText("YOU SEE NO STAIRS HERE.")
-    .byte 0
-
-cx16_activity_stub_text:
-    :ScreenText("SEARCH/REST/LOOK NOT WIRED YET.")
-    .byte 0
-
-cx16_item_stub_text:
-    :ScreenText("ITEM/FEATURE COMMAND NOT WIRED YET.")
-    .byte 0
-
-cx16_magic_stub_text:
-    :ScreenText("MAGIC AND RECALL NOT WIRED YET.")
-    .byte 0
-
-cx16_storage_stub_text:
-    :ScreenText("SAVE NOT WIRED YET.")
-    .byte 0
-
-cx16_info_stub_text:
-    :ScreenText("MAP VIEW NOT WIRED YET.")
-    .byte 0
-
-cx16_wizard_stub_text:
-    :ScreenText("WIZARD MODE NOT ENABLED.")
-    .byte 0
+#if !CX16_IMPORT_SHARED_GAME_LOOP
+#define GAME_LOOP_STAIR_MOVE_STRINGS_EXTERNAL
+#import "../../core/gameplay_messages.s"
+#undef GAME_LOOP_STAIR_MOVE_STRINGS_EXTERNAL
+#endif
 
 cx16_memory_fail_text:
-    :ScreenText("CX16 RAM BANK TEST FAILED")
+    :ScreenText("CX16 RAM bank test failed")
     .byte 0
 
 cx16_asset_load_failed_text:
-    :ScreenText("ASSET LOAD FAILED")
+    :ScreenText("Asset load failed")
     .byte 0
 
 #if !CX16_IMPORT_SHARED_GAME_LOOP
@@ -1697,7 +1729,7 @@ press_key_str:
 #endif
 
 cx16_loading_header_text:
-    :ScreenText("LOADING:")
+    :ScreenText("Loading:")
     .byte 0
 
 cx16_state: .byte CX16_STATE_TITLE
@@ -1711,6 +1743,16 @@ cx16_preload_status: .byte 0
 cx16_preload_tier: .byte 0
 cx16_loader_row: .byte 0
 cx16_loader_name_len: .byte 0
+cx16_spawn_count: .byte 0
+cx16_mon_scan_x: .byte 0
+cx16_mon_scan_y: .byte 0
+cx16_mon_scan_cols: .byte 0
+cx16_mon_scan_rows: .byte 0
+cx16_mon_spawn_x: .byte 0
+cx16_mon_spawn_y: .byte 0
+cx16_mon_slot: .byte 0
+cx16_mon_attack_x: .byte 0
+cx16_mon_attack_y: .byte 0
 
 .segment Cx16DungeonGenModule
 cx16_dungeon_module_entry:
@@ -1753,8 +1795,1010 @@ cx16_overlay_town_end:
 .assert "CX16 TOWN overlay fits banked window", cx16_overlay_town_end <= CX16_BANKED_RAM_END + 1, true
 
 .segment Cx16DeathOverlay
+#import "../../core/monster_active.s"
+
 cx16_overlay_death_entry:
+cx16_overlay_monster_command_entry:
+    cmp #CX16_MON_CMD_SPAWN_LEVEL
+    bne !not_spawn+
+    jmp cx16_overlay_spawn_level_monsters
+!not_spawn:
+    cmp #CX16_MON_CMD_PLAYER_ATTACK
+    bne !not_attack+
+    jmp cx16_overlay_player_attack_target
+!not_attack:
+    cmp #CX16_MON_CMD_ADJACENT_ATTACK
+    bne !done+
+    jmp cx16_overlay_monster_adjacent_attack
+!done:
     rts
+
+cx16_overlay_spawn_level_monsters:
+    jsr monster_init_table
+    lda #3
+    sta cx16_spawn_count
+!loop:
+    jsr cx16_overlay_find_monster_floor
+    bcc !done+
+    jsr cx16_overlay_spawn_basic_monster
+    dec cx16_spawn_count
+    bne !loop-
+!done:
+    rts
+
+cx16_overlay_find_monster_floor:
+    lda zp_player_y
+    clc
+    adc #4
+    cmp #MAP_ROWS - 1
+    bcc !y_ok+
+    lda #1
+!y_ok:
+    sta cx16_mon_scan_y
+    lda zp_player_x
+    clc
+    adc #8
+    cmp #MAP_COLS - 1
+    bcc !x_ok+
+    lda #1
+!x_ok:
+    sta cx16_mon_scan_x
+    lda #MAP_ROWS - 2
+    sta cx16_mon_scan_rows
+!row:
+    lda #MAP_COLS - 2
+    sta cx16_mon_scan_cols
+!col:
+    ldx cx16_mon_scan_y
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy cx16_mon_scan_x
+    :MapRead_ptr0_y()
+    and #TILE_TYPE_MASK | FLAG_OCCUPIED
+    bne !next_col+
+    lda cx16_mon_scan_x
+    cmp zp_player_x
+    bne !found+
+    lda cx16_mon_scan_y
+    cmp zp_player_y
+    bne !found+
+    jmp !next_col+
+!found:
+    lda cx16_mon_scan_x
+    sta cx16_mon_spawn_x
+    lda cx16_mon_scan_y
+    sta cx16_mon_spawn_y
+    sec
+    rts
+!next_col:
+    inc cx16_mon_scan_x
+    lda cx16_mon_scan_x
+    cmp #MAP_COLS - 1
+    bcc !col_next_ok+
+    lda #1
+    sta cx16_mon_scan_x
+!col_next_ok:
+    dec cx16_mon_scan_cols
+    bne !col-
+    inc cx16_mon_scan_y
+    lda cx16_mon_scan_y
+    cmp #MAP_ROWS - 1
+    bcc !row_next_ok+
+    lda #1
+    sta cx16_mon_scan_y
+!row_next_ok:
+    dec cx16_mon_scan_rows
+    bne !row-
+    clc
+    rts
+
+cx16_overlay_spawn_basic_monster:
+    jsr monster_find_free_slot
+    bcc !done+
+    stx cx16_mon_slot
+    jsr cx16_overlay_pick_monster_type
+    ldy #MX_X
+    lda cx16_mon_spawn_x
+    sta (zp_ptr0),y
+    ldy #MX_Y
+    lda cx16_mon_spawn_y
+    sta (zp_ptr0),y
+    ldy #MX_TYPE
+    lda cx16_mon_type
+    sta (zp_ptr0),y
+    ldy #MX_HP_LO
+    jsr cx16_overlay_monster_start_hp
+    pha
+    ldx cx16_mon_slot
+    jsr monster_get_ptr
+    ldy #MX_HP_LO
+    pla
+    sta (zp_ptr0),y
+    ldy #MX_HP_HI
+    lda #0
+    sta (zp_ptr0),y
+    ldy #MX_FLAGS
+    lda #MF_AWAKE
+    sta (zp_ptr0),y
+    ldy #MX_SPEED_CNT
+    lda #0
+!clear_tail:
+    sta (zp_ptr0),y
+    iny
+    cpy #MONSTER_ENTRY_SIZE
+    bne !clear_tail-
+    ldx cx16_mon_spawn_y
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy cx16_mon_spawn_x
+    :MapRead_ptr0_y()
+    ora #FLAG_OCCUPIED
+    :MapWrite_ptr0_y()
+    inc zp_mon_count
+!done:
+    rts
+
+cx16_overlay_player_attack_target:
+    lda zp_temp3
+    ldy zp_temp4
+    jsr monster_find_at
+    bcc !miss+
+    stx cx16_mon_slot
+    jsr cx16_overlay_player_attack_hits
+    bcc !miss_msg+
+    jsr cx16_overlay_player_melee_damage
+    ldx cx16_mon_slot
+    jsr cx16_overlay_apply_player_damage_to_monster
+    bcs !dead+
+!hit:
+    jsr cx16_overlay_print_monster_hit
+    sec
+    rts
+!dead:
+    jsr cx16_overlay_finish_monster_kill
+    sec
+    rts
+!miss_msg:
+    jsr cx16_overlay_print_player_miss
+    sec
+    rts
+!miss:
+    clc
+    rts
+
+cx16_overlay_player_attack_hits:
+    jsr cx16_overlay_load_monster_type
+    lda #20
+    jsr rng_range
+    clc
+    adc #1
+    cmp #1
+    beq !miss+
+    cmp #20
+    beq !hit+
+    lda player_data + PL_TOHIT
+    bmi !zero_tohit+
+    clc
+    adc #60
+    bcc !store_tohit+
+    lda #255
+    bne !store_tohit+
+!zero_tohit:
+    lda #0
+!store_tohit:
+    sta cx16_player_tohit
+    cmp #2
+    bcc !miss+
+    jsr rng_range
+    sta cx16_player_roll
+    lda #CX16_TIER_FIELD_AC
+    jsr cx16_overlay_read_tier_field
+    sta cx16_mon_ac
+    lda cx16_player_roll
+    cmp cx16_mon_ac
+    bcs !hit+
+!miss:
+    clc
+    rts
+!hit:
+    sec
+    rts
+
+cx16_overlay_apply_player_damage_to_monster:
+    jsr monster_get_ptr
+    ldy #MX_HP_LO
+    lda (zp_ptr0),y
+    sec
+    sbc cx16_mon_damage
+    sta (zp_ptr0),y
+    ldy #MX_HP_HI
+    lda (zp_ptr0),y
+    sbc #0
+    sta (zp_ptr0),y
+    bmi !dead+
+    bne !alive+
+    ldy #MX_HP_LO
+    lda (zp_ptr0),y
+    beq !dead+
+!alive:
+    clc
+    rts
+!dead:
+    sec
+    rts
+
+cx16_overlay_player_melee_damage:
+    ldx #EQUIP_WEAPON
+    lda inv_item_id,x
+    cmp #FI_EMPTY
+    beq !unarmed+
+    tax
+    jsr item_load_dmg_dice_x
+    beq !unarmed+
+    pha
+    jsr item_load_dmg_sides_x
+    tax
+    pla
+    cpx #0
+    beq !unarmed+
+    ldy #0
+    jsr math_dice
+    jmp !add_bonus+
+!unarmed:
+    lda #1
+    ldx #2
+    ldy #0
+    jsr math_dice
+!add_bonus:
+    lda player_data + PL_TODMG
+    bmi !negative_bonus+
+    clc
+    adc zp_math_a
+    bcc !store+
+    lda #255
+    bne !store+
+!negative_bonus:
+    clc
+    adc zp_math_a
+    bpl !store+
+    lda #0
+!store:
+    sta cx16_mon_damage
+    rts
+
+cx16_overlay_finish_monster_kill:
+    ldx cx16_mon_slot
+    jsr cx16_overlay_load_monster_type
+    jsr cx16_overlay_award_monster_xp
+    jsr cx16_overlay_note_kill
+    jsr cx16_overlay_print_monster_kill
+    ldx cx16_mon_slot
+    jsr monster_remove
+    inc zp_dirty_count
+    rts
+
+cx16_overlay_note_kill:
+    lda cx16_loaded_tier
+    cmp #CREATURE_BALROG_TIER
+    bne !done+
+    lda cx16_mon_type
+    cmp #CREATURE_BALROG
+    bne !done+
+    lda zp_game_flags
+    ora #GAME_FLAG_WINNER
+    sta zp_game_flags
+!done:
+    rts
+
+cx16_overlay_award_monster_xp:
+    jsr cx16_overlay_read_monster_xp_lo
+    sta zp_temp0
+    jsr cx16_overlay_read_monster_xp_hi
+    sta zp_temp1
+    lda #CX16_TIER_FIELD_LEVEL
+    jsr cx16_overlay_read_tier_field
+    tax
+    jsr math_mul_16x8
+    lda mul_result_0
+    sta cx16_levelup_adj_0
+    lda mul_result_1
+    sta cx16_levelup_adj_1
+    lda mul_result_2
+    sta cx16_levelup_adj_2
+    lda zp_player_lvl
+    bne !have_level+
+    lda #1
+!have_level:
+    sta cx16_levelup_divisor
+    jsr cx16_overlay_div_levelup_adj_24x8
+    lda zp_temp0
+    sta cx16_levelup_remainder
+
+    lda player_data + PL_XP_0
+    clc
+    adc cx16_levelup_adj_0
+    sta player_data + PL_XP_0
+    lda player_data + PL_XP_1
+    adc cx16_levelup_adj_1
+    sta player_data + PL_XP_1
+    lda player_data + PL_XP_2
+    adc cx16_levelup_adj_2
+    sta player_data + PL_XP_2
+
+    lda cx16_levelup_remainder
+    beq !check_level+
+    lda #0
+    sta cx16_levelup_adj_0
+    sta cx16_levelup_adj_1
+    lda cx16_levelup_remainder
+    sta cx16_levelup_adj_2
+    jsr cx16_overlay_div_levelup_adj_24x8
+    lda player_data + PL_XP_FRAC_LO
+    clc
+    adc cx16_levelup_adj_0
+    sta player_data + PL_XP_FRAC_LO
+    lda player_data + PL_XP_FRAC_HI
+    adc cx16_levelup_adj_1
+    sta player_data + PL_XP_FRAC_HI
+    bcc !check_level+
+    inc player_data + PL_XP_0
+    bne !check_level+
+    inc player_data + PL_XP_1
+    bne !check_level+
+    inc player_data + PL_XP_2
+!check_level:
+    jsr cx16_overlay_check_basic_levelup
+    rts
+
+cx16_overlay_check_basic_levelup:
+!loop:
+    lda player_data + PL_LEVEL
+    cmp #1
+    bcs !level_ok+
+    rts
+!level_ok:
+    cmp #40
+    bcc !can_gain+
+    rts
+!can_gain:
+    cmp #29
+    bcc !early_level+
+    sec
+    sbc #29
+    tax
+    lda xp_level_late_div100_lo,x
+    sta zp_temp0
+    lda xp_level_late_div100_hi,x
+    sta zp_temp1
+    ldx player_data + PL_EXPFACT
+    jsr math_mul_16x8
+    lda mul_result_0
+    sta cx16_levelup_adj_0
+    lda mul_result_1
+    sta cx16_levelup_adj_1
+    lda mul_result_2
+    sta cx16_levelup_adj_2
+    jmp !compare+
+!early_level:
+    sec
+    sbc #1
+    tax
+    lda xp_level_lo,x
+    sta zp_temp0
+    lda xp_level_hi,x
+    sta zp_temp1
+    ldx player_data + PL_EXPFACT
+    jsr math_mul_16x8
+    lda mul_result_0
+    sta cx16_levelup_adj_0
+    lda mul_result_1
+    sta cx16_levelup_adj_1
+    lda mul_result_2
+    sta cx16_levelup_adj_2
+    lda #100
+    sta cx16_levelup_divisor
+    jsr cx16_overlay_div_levelup_adj_24x8
+
+!compare:
+    lda player_data + PL_XP_2
+    cmp cx16_levelup_adj_2
+    bcc !done+
+    bne !gain+
+    lda player_data + PL_XP_1
+    cmp cx16_levelup_adj_1
+    bcc !done+
+    bne !gain+
+    lda player_data + PL_XP_0
+    cmp cx16_levelup_adj_0
+    bcc !done+
+!gain:
+    inc player_data + PL_LEVEL
+    lda player_data + PL_LEVEL
+    sta zp_player_lvl
+    jsr cx16_overlay_halve_levelup_excess
+    jsr cx16_overlay_recalc_level_hp
+    lda zp_ui_dirty
+    ora #$01
+    sta zp_ui_dirty
+    jmp !loop-
+!done:
+    rts
+
+cx16_overlay_halve_levelup_excess:
+    lda player_data + PL_XP_0
+    sec
+    sbc cx16_levelup_adj_0
+    sta zp_temp0
+    lda player_data + PL_XP_1
+    sbc cx16_levelup_adj_1
+    sta zp_temp1
+    lda player_data + PL_XP_2
+    sbc cx16_levelup_adj_2
+    sta zp_temp2
+    lda player_data + PL_XP_FRAC_LO
+    sta zp_temp3
+    lda player_data + PL_XP_FRAC_HI
+    sta zp_temp4
+
+    lda zp_temp2
+    lsr
+    sta zp_temp2
+    lda zp_temp1
+    ror
+    sta zp_temp1
+    lda zp_temp0
+    ror
+    sta zp_temp0
+    lda zp_temp4
+    ror
+    sta zp_temp4
+    lda zp_temp3
+    ror
+    sta zp_temp3
+
+    lda zp_temp0
+    clc
+    adc cx16_levelup_adj_0
+    sta player_data + PL_XP_0
+    lda zp_temp1
+    adc cx16_levelup_adj_1
+    sta player_data + PL_XP_1
+    lda zp_temp2
+    adc cx16_levelup_adj_2
+    sta player_data + PL_XP_2
+    lda zp_temp3
+    sta player_data + PL_XP_FRAC_LO
+    lda zp_temp4
+    sta player_data + PL_XP_FRAC_HI
+    rts
+
+cx16_overlay_recalc_level_hp:
+    lda player_data + PL_CLASS
+    tax
+    lda #CLASS_PROP_SIZE
+    jsr cx16_overlay_mul_x_by_a
+    tax
+    lda class_properties,x
+    sta zp_temp0
+
+    lda player_data + PL_RACE
+    tax
+    lda #RACE_PROP_SIZE
+    jsr cx16_overlay_mul_x_by_a
+    tax
+    lda race_properties,x
+    clc
+    adc zp_temp0
+    sta zp_temp0
+
+    lda player_data + PL_CON_CUR
+    jsr cx16_overlay_con_hp_adj
+    sta zp_temp1
+
+    lda zp_temp0
+    lsr
+    clc
+    adc zp_temp1
+    bpl !min_check+
+    lda #1
+!min_check:
+    cmp #1
+    bcs !hp_per_level_ok+
+    lda #1
+!hp_per_level_ok:
+    sta zp_temp1
+
+    lda player_data + PL_LEVEL
+    sec
+    sbc #1
+    tax
+    lda zp_temp1
+    jsr math_multiply
+    lda zp_math_a
+    clc
+    adc zp_temp0
+    sta player_data + PL_MHP_LO
+    sta player_data + PL_HP_LO
+    sta zp_player_mhp_lo
+    sta zp_player_hp_lo
+    lda zp_math_b
+    adc #0
+    sta player_data + PL_MHP_HI
+    sta player_data + PL_HP_HI
+    sta zp_player_mhp_hi
+    sta zp_player_hp_hi
+    rts
+
+cx16_overlay_mul_x_by_a:
+    sta zp_temp3
+    txa
+    ldx zp_temp3
+    jsr math_multiply
+    lda zp_math_a
+    rts
+
+cx16_overlay_con_hp_adj:
+    cmp #7
+    bcs !check17+
+    sec
+    sbc #7
+    rts
+!check17:
+    cmp #17
+    bcc !zero+
+    cmp #18
+    bcc !one+
+    cmp #94
+    bcc !two+
+    cmp #117
+    bcc !three+
+    lda #4
+    rts
+!zero:
+    lda #0
+    rts
+!one:
+    lda #1
+    rts
+!two:
+    lda #2
+    rts
+!three:
+    lda #3
+    rts
+
+cx16_overlay_div_levelup_adj_24x8:
+    lda #0
+    sta zp_temp0
+    ldx #24
+!loop:
+    asl cx16_levelup_adj_0
+    rol cx16_levelup_adj_1
+    rol cx16_levelup_adj_2
+    rol zp_temp0
+    lda zp_temp0
+    cmp cx16_levelup_divisor
+    bcc !no_sub+
+    sbc cx16_levelup_divisor
+    sta zp_temp0
+    inc cx16_levelup_adj_0
+!no_sub:
+    dex
+    bne !loop-
+    rts
+
+cx16_levelup_adj_0: .byte 0
+cx16_levelup_adj_1: .byte 0
+cx16_levelup_adj_2: .byte 0
+cx16_levelup_divisor: .byte 0
+cx16_levelup_remainder: .byte 0
+
+cx16_overlay_pick_monster_type:
+    jsr cx16_overlay_current_tier_count
+    sta cx16_mon_tier_count
+    lda cx16_mon_slot
+!wrap:
+    cmp cx16_mon_tier_count
+    bcc !picked+
+    sec
+    sbc cx16_mon_tier_count
+    jmp !wrap-
+!picked:
+    sta cx16_mon_type
+    rts
+
+cx16_overlay_current_tier_count:
+    lda cx16_loaded_tier
+    cmp #2
+    bne !not_tier2+
+    lda #TIER2_COUNT
+    rts
+!not_tier2:
+    cmp #3
+    bne !not_tier3+
+    lda #TIER3_COUNT
+    rts
+!not_tier3:
+    cmp #4
+    bne !tier1+
+    lda #TIER4_COUNT
+    rts
+!tier1:
+    lda #TIER1_COUNT
+    rts
+
+cx16_overlay_monster_start_hp:
+    lda #CX16_TIER_FIELD_HD_NUM
+    jsr cx16_overlay_read_tier_field
+    sta cx16_mon_hp_tmp
+    lda #CX16_TIER_FIELD_HD_SIDES
+    jsr cx16_overlay_read_tier_field
+    clc
+    adc cx16_mon_hp_tmp
+    bne !done+
+    lda #1
+!done:
+    rts
+
+cx16_overlay_read_monster_xp_lo:
+    ldx cx16_mon_slot
+    jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda (zp_ptr0),y
+    sta cx16_mon_type
+    lda #CX16_TIER_FIELD_XP_LO
+    jmp cx16_overlay_read_tier_field
+
+cx16_overlay_read_monster_xp_hi:
+    lda #CX16_TIER_FIELD_XP_HI
+    jmp cx16_overlay_read_tier_field
+
+cx16_overlay_read_tier_field:
+    sta cx16_mon_field_idx
+    jsr cx16_overlay_current_tier_count
+    sta cx16_mon_tier_count
+    lda #<CX16_TIER_LOAD_BASE
+    sta zp_ptr0
+    lda #>CX16_TIER_LOAD_BASE
+    sta zp_ptr0_hi
+    lda cx16_mon_field_idx
+    beq !add_type+
+!field_loop:
+    clc
+    lda zp_ptr0
+    adc cx16_mon_tier_count
+    sta zp_ptr0
+    lda zp_ptr0_hi
+    adc #0
+    sta zp_ptr0_hi
+    dec cx16_mon_field_idx
+    bne !field_loop-
+!add_type:
+    clc
+    lda zp_ptr0
+    adc cx16_mon_type
+    sta zp_ptr0
+    lda zp_ptr0_hi
+    adc #0
+    sta zp_ptr0_hi
+    ldy #0
+    lda cx16_loaded_tier_bank
+    jmp cx16_read_byte_from_bank_a000
+
+cx16_overlay_monster_adjacent_attack:
+    ldx #0
+!loop:
+    cpx #MAX_MONSTERS
+    bcs !done+
+    stx cx16_mon_slot
+    jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda (zp_ptr0),y
+    cmp #EMPTY_SLOT
+    beq !next+
+    ldy #MX_X
+    lda (zp_ptr0),y
+    sta cx16_mon_attack_x
+    ldy #MX_Y
+    lda (zp_ptr0),y
+    sta cx16_mon_attack_y
+    jsr cx16_overlay_monster_is_adjacent
+    bcc !next+
+    jsr cx16_overlay_monster_damage_player
+    sec
+    rts
+!next:
+    ldx cx16_mon_slot
+    inx
+    jmp !loop-
+!done:
+    clc
+    rts
+
+cx16_overlay_monster_is_adjacent:
+    lda cx16_mon_attack_x
+    sec
+    sbc zp_player_x
+    bcs !dx_pos+
+    eor #$ff
+    clc
+    adc #1
+!dx_pos:
+    cmp #2
+    bcs !far+
+    lda cx16_mon_attack_y
+    sec
+    sbc zp_player_y
+    bcs !dy_pos+
+    eor #$ff
+    clc
+    adc #1
+!dy_pos:
+    cmp #2
+    bcs !far+
+    sec
+    rts
+!far:
+    clc
+    rts
+
+cx16_overlay_monster_damage_player:
+    jsr cx16_overlay_monster_attack_damage
+    lda cx16_mon_damage
+    beq !miss+
+    lda zp_player_hp_lo
+    sec
+    sbc cx16_mon_damage
+    sta zp_player_hp_lo
+    sta player_data + PL_HP_LO
+    lda zp_player_hp_hi
+    sbc #0
+    sta zp_player_hp_hi
+    sta player_data + PL_HP_HI
+    jsr cx16_overlay_print_monster_attack
+    lda zp_player_hp_hi
+    bmi !dead+
+    ora zp_player_hp_lo
+    bne !alive+
+!dead:
+    jsr cx16_overlay_mark_player_killed_by_monster
+!alive:
+    rts
+!miss:
+    jmp cx16_overlay_print_monster_miss
+
+cx16_overlay_mark_player_killed_by_monster:
+    lda cx16_mon_type
+    sta zp_death_source
+    jmp player_death_check
+
+cx16_overlay_monster_attack_damage:
+    jsr cx16_overlay_load_monster_type
+    lda #CX16_TIER_FIELD_ATK0_TYPE
+    jsr cx16_overlay_read_tier_field
+    sta cx16_mon_attack_type
+    jsr cx16_overlay_monster_attack_hits
+    bcc !no_damage+
+    lda #CX16_TIER_FIELD_ATK0_DICE
+    jsr cx16_overlay_read_tier_field
+    beq !no_damage+
+    sta cx16_mon_hp_tmp
+    lda #CX16_TIER_FIELD_ATK0_SIDES
+    jsr cx16_overlay_read_tier_field
+    tax
+    beq !no_damage+
+    lda cx16_mon_hp_tmp
+    ldy #0
+    jsr math_dice
+    lda zp_math_a
+    sta cx16_mon_damage
+    lda cx16_mon_attack_type
+    cmp #CX16_ATK_NORMAL
+    bne !done+
+    jsr cx16_overlay_reduce_damage_by_ac
+!done:
+    rts
+!no_damage:
+    lda #0
+    sta cx16_mon_damage
+    rts
+
+cx16_overlay_monster_attack_hits:
+    ldx cx16_mon_attack_type
+    cpx #CX16_MON_ATTACK_BASE_TOHIT_COUNT
+    bcs !miss+
+    lda cx16_mon_base_tohit,x
+    sta cx16_mon_tohit
+    lda #CX16_TIER_FIELD_LEVEL
+    jsr cx16_overlay_read_tier_field
+    sta cx16_mon_level
+    asl
+    clc
+    adc cx16_mon_level
+    clc
+    adc cx16_mon_tohit
+    bcc !tohit_ok+
+    lda #255
+!tohit_ok:
+    sta cx16_mon_tohit
+    lda #20
+    jsr rng_range
+    clc
+    adc #1
+    cmp #1
+    beq !miss+
+    cmp #20
+    beq !hit+
+    lda cx16_mon_tohit
+    cmp #2
+    bcc !miss+
+    jsr rng_range
+    pha
+    jsr cx16_overlay_monster_effective_ac
+    sta cx16_mon_roll
+    pla
+    cmp cx16_mon_roll
+    bcs !hit+
+!miss:
+    clc
+    rts
+!hit:
+    sec
+    rts
+
+cx16_overlay_monster_effective_ac:
+    lda player_data + PL_AC
+    ldx zp_eff_bless
+    beq !done+
+    clc
+    adc #2
+    bcc !done+
+    lda #255
+!done:
+    rts
+
+cx16_overlay_reduce_damage_by_ac:
+    jsr cx16_overlay_monster_effective_ac
+    beq !done+
+    ldx cx16_mon_damage
+    beq !done+
+    jsr math_multiply
+    ldx #200
+    jsr math_div_16x8
+    lda cx16_mon_damage
+    sec
+    sbc zp_math_a
+    bcs !store+
+    lda #0
+!store:
+    sta cx16_mon_damage
+!done:
+    rts
+
+cx16_overlay_print_monster_hit:
+    lda #0
+    sta cmb_buf_idx
+    lda #<monster_hit_prefix_str
+    ldy #>monster_hit_prefix_str
+    jsr combat_append_str
+    jsr cx16_overlay_append_monster_name
+    lda #<cmb_period
+    ldy #>cmb_period
+    jsr combat_append_str
+    jmp cmb_term_and_print
+
+cx16_overlay_print_player_miss:
+    lda #0
+    sta cmb_buf_idx
+    lda #<monster_player_miss_prefix_str
+    ldy #>monster_player_miss_prefix_str
+    jsr combat_append_str
+    jsr cx16_overlay_append_monster_name
+    lda #<cmb_period
+    ldy #>cmb_period
+    jsr combat_append_str
+    jmp cmb_term_and_print
+
+cx16_overlay_print_monster_kill:
+    lda #0
+    sta cmb_buf_idx
+    lda #<monster_kill_prefix_str
+    ldy #>monster_kill_prefix_str
+    jsr combat_append_str
+    jsr cx16_overlay_append_monster_name
+    lda #<cmb_period
+    ldy #>cmb_period
+    jsr combat_append_str
+    jmp cmb_term_and_print
+
+cx16_overlay_print_monster_attack:
+    lda #0
+    sta cmb_buf_idx
+    lda #<monster_attack_prefix_str
+    ldy #>monster_attack_prefix_str
+    jsr combat_append_str
+    jsr cx16_overlay_append_monster_name
+    lda #<monster_attack_suffix_str
+    ldy #>monster_attack_suffix_str
+    jsr combat_append_str
+    jmp cmb_term_and_print
+
+cx16_overlay_print_monster_miss:
+    lda #0
+    sta cmb_buf_idx
+    lda #<monster_attack_prefix_str
+    ldy #>monster_attack_prefix_str
+    jsr combat_append_str
+    jsr cx16_overlay_append_monster_name
+    lda #<monster_miss_suffix_str
+    ldy #>monster_miss_suffix_str
+    jsr combat_append_str
+    jmp cmb_term_and_print
+
+cx16_overlay_append_monster_name:
+    jsr cx16_overlay_load_monster_type
+    lda #CX16_TIER_FIELD_NAME_LO
+    jsr cx16_overlay_read_tier_field
+    sta cx16_mon_name_lo
+    lda #CX16_TIER_FIELD_NAME_HI
+    jsr cx16_overlay_read_tier_field
+    sta cx16_mon_name_hi
+    lda #31
+    sta cx16_mon_name_count
+!loop:
+    lda cx16_mon_name_lo
+    sta zp_ptr0
+    lda cx16_mon_name_hi
+    sta zp_ptr0_hi
+    ldy #0
+    lda cx16_loaded_tier_bank
+    jsr cx16_read_byte_from_bank_a000
+    beq !done+
+    jsr combat_append_char
+    inc cx16_mon_name_lo
+    bne !ptr_ok+
+    inc cx16_mon_name_hi
+!ptr_ok:
+    dec cx16_mon_name_count
+    bne !loop-
+!done:
+    rts
+
+cx16_overlay_load_monster_type:
+    ldx cx16_mon_slot
+    jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda (zp_ptr0),y
+    sta cx16_mon_type
+    rts
+
+
+cx16_mon_type: .byte 0
+cx16_mon_tier_count: .byte 0
+cx16_mon_field_idx: .byte 0
+cx16_mon_hp_tmp: .byte 0
+cx16_mon_xp_lo: .byte 0
+cx16_mon_xp_hi: .byte 0
+cx16_mon_damage: .byte 0
+cx16_mon_attack_type: .byte 0
+cx16_mon_level: .byte 0
+cx16_mon_tohit: .byte 0
+cx16_mon_roll: .byte 0
+cx16_mon_ac: .byte 0
+cx16_player_tohit: .byte 0
+cx16_player_roll: .byte 0
+cx16_mon_name_lo: .byte 0
+cx16_mon_name_hi: .byte 0
+cx16_mon_name_count: .byte 0
+
+cx16_mon_base_tohit:
+    .byte 0, 60, 0, 10, 10, 0, 0, 0, 0, 0, 0
+    .byte 2, 0, 0, 5, 0, 0, 0, 0, 0, 0
+
     :Cx16OverlayMarker(3)
 cx16_overlay_death_end:
 .print "CX16 DEATH overlay: " + (cx16_overlay_death_end - $a000) + " bytes at $A000-$" + toHexString(cx16_overlay_death_end)
@@ -1871,7 +2915,7 @@ cx16_help_views_text:
     .byte 0
 
 cx16_help_system_text:
-    :ScreenText("System: Shift-S save Shift-Q title M/P/F magic")
+    :ScreenText("System: Shift-Q title")
     .byte 0
 
 cx16_version_title_text:
@@ -2012,7 +3056,7 @@ cx16_overlay_items_command_entry:
     lda cx16_state
     cmp #CX16_STATE_DUNGEON
     beq !pickup_dungeon+
-    jmp cx16_show_item_stub
+    jmp cx16_show_dungeon_only_message
 !pickup_dungeon:
     jsr msg_clear
     jsr item_pickup
@@ -2025,7 +3069,7 @@ cx16_overlay_items_command_entry:
     lda cx16_state
     cmp #CX16_STATE_DUNGEON
     beq !drop_dungeon+
-    jmp cx16_show_item_stub
+    jmp cx16_show_dungeon_only_message
 !drop_dungeon:
     jsr msg_clear
     jsr item_drop
@@ -2046,7 +3090,7 @@ cx16_overlay_items_command_entry:
     lda cx16_state
     cmp #CX16_STATE_DUNGEON
     beq !wear_dungeon+
-    jmp cx16_show_item_stub
+    jmp cx16_show_dungeon_only_message
 !wear_dungeon:
     jsr msg_clear
     jsr item_wear
@@ -2059,7 +3103,7 @@ cx16_overlay_items_command_entry:
     lda cx16_state
     cmp #CX16_STATE_DUNGEON
     beq !takeoff_dungeon+
-    jmp cx16_show_item_stub
+    jmp cx16_show_dungeon_only_message
 !takeoff_dungeon:
     jsr msg_clear
     jsr item_takeoff
@@ -2072,7 +3116,7 @@ cx16_overlay_items_command_entry:
     lda cx16_state
     cmp #CX16_STATE_DUNGEON
     beq !eat_dungeon+
-    jmp cx16_show_item_stub
+    jmp cx16_show_dungeon_only_message
 !eat_dungeon:
     jsr msg_clear
     jsr item_eat
@@ -2085,7 +3129,7 @@ cx16_overlay_items_command_entry:
     lda cx16_state
     cmp #CX16_STATE_DUNGEON
     beq !quaff_dungeon+
-    jmp cx16_show_item_stub
+    jmp cx16_show_dungeon_only_message
 !quaff_dungeon:
     jsr msg_clear
     jsr item_quaff
@@ -2098,7 +3142,7 @@ cx16_overlay_items_command_entry:
     lda cx16_state
     cmp #CX16_STATE_DUNGEON
     beq !refuel_dungeon+
-    jmp cx16_show_item_stub
+    jmp cx16_show_dungeon_only_message
 !refuel_dungeon:
     jsr msg_clear
     jsr item_refuel
@@ -2111,7 +3155,7 @@ cx16_overlay_items_command_entry:
     lda cx16_state
     cmp #CX16_STATE_DUNGEON
     beq !read_dungeon+
-    jmp cx16_show_item_stub
+    jmp cx16_show_dungeon_only_message
 !read_dungeon:
     jsr msg_clear
     jsr item_read_scroll
@@ -2124,7 +3168,7 @@ cx16_overlay_items_command_entry:
     lda cx16_state
     cmp #CX16_STATE_DUNGEON
     beq !aim_dungeon+
-    jmp cx16_show_item_stub
+    jmp cx16_show_dungeon_only_message
 !aim_dungeon:
     jsr msg_clear
     jsr item_aim_wand
@@ -2137,7 +3181,7 @@ cx16_overlay_items_command_entry:
     lda cx16_state
     cmp #CX16_STATE_DUNGEON
     beq !use_dungeon+
-    jmp cx16_show_item_stub
+    jmp cx16_show_dungeon_only_message
 !use_dungeon:
     jsr msg_clear
     jsr item_use_staff
@@ -2228,7 +3272,7 @@ cx16_overlay_feature_command_entry:
     lda cx16_state
     cmp #CX16_STATE_DUNGEON
     beq !open_dungeon+
-    jmp cx16_show_item_stub
+    jmp cx16_show_dungeon_only_message
 !open_dungeon:
     jsr msg_clear
     jsr get_direction_target
@@ -2243,7 +3287,7 @@ cx16_overlay_feature_command_entry:
     lda cx16_state
     cmp #CX16_STATE_DUNGEON
     beq !close_dungeon+
-    jmp cx16_show_item_stub
+    jmp cx16_show_dungeon_only_message
 !close_dungeon:
     jsr msg_clear
     jsr get_direction_target
@@ -2258,7 +3302,7 @@ cx16_overlay_feature_command_entry:
     lda cx16_state
     cmp #CX16_STATE_DUNGEON
     beq !search_dungeon+
-    jmp cx16_show_activity_stub
+    jmp cx16_show_dungeon_only_message
 !search_dungeon:
     jsr msg_clear
     jsr do_search
@@ -2268,7 +3312,7 @@ cx16_overlay_feature_command_entry:
     lda cx16_state
     cmp #CX16_STATE_DUNGEON
     beq !rest_dungeon+
-    jmp cx16_show_activity_stub
+    jmp cx16_show_dungeon_only_message
 !rest_dungeon:
     jsr msg_clear
     jmp cx16_after_feature_turn
@@ -2277,7 +3321,7 @@ cx16_overlay_feature_command_entry:
     lda cx16_state
     cmp #CX16_STATE_DUNGEON
     beq !look_dungeon+
-    jmp cx16_show_activity_stub
+    jmp cx16_show_dungeon_only_message
 !look_dungeon:
     jsr msg_clear
     jsr cx16_do_look
@@ -2288,7 +3332,7 @@ cx16_overlay_feature_command_entry:
     lda cx16_state
     cmp #CX16_STATE_DUNGEON
     beq !search_mode_dungeon+
-    jmp cx16_show_activity_stub
+    jmp cx16_show_dungeon_only_message
 !search_mode_dungeon:
     jsr msg_clear
     lda player_data + PL_FLAGS
@@ -2315,7 +3359,7 @@ cx16_overlay_feature_command_entry:
     lda cx16_state
     cmp #CX16_STATE_DUNGEON
     beq !autorest_dungeon+
-    jmp cx16_show_activity_stub
+    jmp cx16_show_dungeon_only_message
 !autorest_dungeon:
     jsr msg_clear
     jsr player_search_mode_off
@@ -2333,7 +3377,7 @@ cx16_overlay_feature_command_entry:
     lda cx16_state
     cmp #CX16_STATE_DUNGEON
     beq !bash_dungeon+
-    jmp cx16_show_item_stub
+    jmp cx16_show_dungeon_only_message
 !bash_dungeon:
     jsr msg_clear
     jsr bash_command
@@ -2346,7 +3390,7 @@ cx16_overlay_feature_command_entry:
     lda cx16_state
     cmp #CX16_STATE_DUNGEON
     beq !tunnel_dungeon+
-    jmp cx16_show_item_stub
+    jmp cx16_show_dungeon_only_message
 !tunnel_dungeon:
     jsr msg_clear
     jsr player_tunnel
@@ -2359,7 +3403,7 @@ cx16_overlay_feature_command_entry:
     lda cx16_state
     cmp #CX16_STATE_DUNGEON
     beq !disarm_dungeon+
-    jmp cx16_show_item_stub
+    jmp cx16_show_dungeon_only_message
 !disarm_dungeon:
     jsr msg_clear
     jsr disarm_command
@@ -2371,16 +3415,16 @@ cx16_overlay_feature_command_entry:
     rts
 #endif
 
-#if !CX16_IMPORT_SHARED_GAME_LOOP
-    search_mode_on_str:
-        .text "Search mode on." ; .byte 0
-
-    search_mode_off_str:
-        .text "Search mode off." ; .byte 0
-#endif
-
 cx16_overlay_search_scan_entry:
     jmp search_scan_effective_silent
+
+#if !CX16_IMPORT_SHARED_GAME_LOOP
+search_mode_on_str:
+    .text "Search mode on." ; .byte 0
+
+search_mode_off_str:
+    .text "Search mode off." ; .byte 0
+#endif
 
 cx16_do_look:
     jsr get_direction_target
@@ -2426,11 +3470,16 @@ cx16_do_look:
     lda cx16_look_tile
     and #FLAG_OCCUPIED
     beq !not_monster+
-    lda #<cx16_look_monster_text
-    sta zp_ptr0
-    lda #>cx16_look_monster_text
-    sta zp_ptr0_hi
-    jmp msg_print
+    lda df_target_x
+    ldy df_target_y
+    jsr cx16_look_find_monster_at
+    bcs !monster_found+
+    jmp !nothing+
+!monster_found:
+    stx cx16_look_mon_slot
+    jsr cx16_look_print_monster
+    clc
+    rts
 
 !not_monster:
     lda cx16_look_tile
@@ -2519,14 +3568,174 @@ cx16_look_print_item:
     jsr combat_append_str
     jmp cmb_term_and_print
 
-cx16_look_monster_text:
-    :ScreenText("You see a monster.")
-    .byte 0
+cx16_look_print_monster:
+    lda #0
+    sta cmb_buf_idx
+    ldx #HSTR_DL_YOU_SEE
+    jsr huff_append_combat
+    jsr cx16_look_append_monster_name
+    lda #<cmb_period
+    ldy #>cmb_period
+    jsr combat_append_str
+    jmp cmb_term_and_print
+
+cx16_look_find_monster_at:
+    sta cx16_look_find_x
+    sty cx16_look_find_y
+    lda #<CREATURE_BASE
+    sta zp_ptr0
+    lda #>CREATURE_BASE
+    sta zp_ptr0_hi
+    ldx #0
+!loop:
+    cpx #MAX_MONSTERS
+    bcs !miss+
+    ldy #MX_TYPE
+    lda (zp_ptr0),y
+    cmp #EMPTY_SLOT
+    beq !next+
+    ldy #MX_X
+    lda (zp_ptr0),y
+    cmp cx16_look_find_x
+    bne !next+
+    ldy #MX_Y
+    lda (zp_ptr0),y
+    cmp cx16_look_find_y
+    bne !next+
+    sec
+    rts
+!next:
+    clc
+    lda zp_ptr0
+    adc #MONSTER_ENTRY_SIZE
+    sta zp_ptr0
+    lda zp_ptr0_hi
+    adc #0
+    sta zp_ptr0_hi
+    inx
+    jmp !loop-
+!miss:
+    clc
+    rts
+
+cx16_look_append_monster_name:
+    jsr cx16_look_load_monster_type
+    lda #CX16_TIER_FIELD_NAME_LO
+    jsr cx16_look_read_tier_field
+    sta cx16_look_name_lo
+    lda #CX16_TIER_FIELD_NAME_HI
+    jsr cx16_look_read_tier_field
+    sta cx16_look_name_hi
+    lda #31
+    sta cx16_look_name_count
+!loop:
+    lda cx16_look_name_lo
+    sta zp_ptr0
+    lda cx16_look_name_hi
+    sta zp_ptr0_hi
+    ldy #0
+    lda cx16_loaded_tier_bank
+    jsr cx16_read_byte_from_bank_a000
+    beq !done+
+    jsr combat_append_char
+    inc cx16_look_name_lo
+    bne !ptr_ok+
+    inc cx16_look_name_hi
+!ptr_ok:
+    dec cx16_look_name_count
+    bne !loop-
+!done:
+    rts
+
+cx16_look_load_monster_type:
+    lda #<CREATURE_BASE
+    sta zp_ptr0
+    lda #>CREATURE_BASE
+    sta zp_ptr0_hi
+    ldx cx16_look_mon_slot
+!slot_loop:
+    beq !slot_done+
+    clc
+    lda zp_ptr0
+    adc #MONSTER_ENTRY_SIZE
+    sta zp_ptr0
+    lda zp_ptr0_hi
+    adc #0
+    sta zp_ptr0_hi
+    dex
+    jmp !slot_loop-
+!slot_done:
+    ldy #MX_TYPE
+    lda (zp_ptr0),y
+    sta cx16_look_mon_type
+    rts
+
+cx16_look_read_tier_field:
+    sta cx16_look_field_idx
+    jsr cx16_look_current_tier_count
+    sta cx16_look_tier_count
+    lda #<CX16_TIER_LOAD_BASE
+    sta zp_ptr0
+    lda #>CX16_TIER_LOAD_BASE
+    sta zp_ptr0_hi
+    lda cx16_look_field_idx
+    beq !add_type+
+!field_loop:
+    clc
+    lda zp_ptr0
+    adc cx16_look_tier_count
+    sta zp_ptr0
+    lda zp_ptr0_hi
+    adc #0
+    sta zp_ptr0_hi
+    dec cx16_look_field_idx
+    bne !field_loop-
+!add_type:
+    clc
+    lda zp_ptr0
+    adc cx16_look_mon_type
+    sta zp_ptr0
+    lda zp_ptr0_hi
+    adc #0
+    sta zp_ptr0_hi
+    ldy #0
+    lda cx16_loaded_tier_bank
+    jmp cx16_read_byte_from_bank_a000
+
+cx16_look_current_tier_count:
+    lda cx16_loaded_tier
+    cmp #2
+    bne !not_tier2+
+    lda #TIER2_COUNT
+    rts
+!not_tier2:
+    cmp #3
+    bne !not_tier3+
+    lda #TIER3_COUNT
+    rts
+!not_tier3:
+    cmp #4
+    bne !tier1+
+    lda #TIER4_COUNT
+    rts
+!tier1:
+    lda #TIER1_COUNT
+    rts
 
 cx16_look_tile: .byte 0
 cx16_look_dx: .byte 0
 cx16_look_dy: .byte 0
 cx16_look_item_id: .byte 0
+cx16_look_find_x: .byte 0
+cx16_look_find_y: .byte 0
+cx16_look_mon_slot: .byte 0
+cx16_look_mon_type: .byte 0
+cx16_look_tier_count: .byte 0
+cx16_look_field_idx: .byte 0
+cx16_look_name_lo: .byte 0
+cx16_look_name_hi: .byte 0
+cx16_look_name_count: .byte 0
+
 
     #import "../../core/dungeon_feature_actions.s"
     #import "../../core/disarm_helpers.s"
