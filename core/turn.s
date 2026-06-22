@@ -177,6 +177,7 @@ turn_tick_effects:
     sta player_data + PL_HP_HI
 !no_hero:
 
+#if hal_platform_turn_word_recall
     // Word of recall
     lda zp_eff_word_recall
     beq !no_recall+
@@ -218,6 +219,7 @@ turn_tick_effects:
     ldx #HSTR_RECALL_ARRIVE
     jsr huff_print_msg
 !no_recall:
+#endif
 
     lda eff_invuln_timer
     beq !no_invuln+
@@ -406,7 +408,12 @@ turn_post_action:
     jsr turn_tick_regen
     jsr turn_tick_light
     jsr turn_tick_pseudo_id
+#if hal_platform_turn_monster_ai
     jsr monster_ai_tick
+#else
+    clc
+    lda #0
+#endif
     ora zp_dirty_count              // pending non-local redraw request
     sta turn_scene_dirty
     bcc !tpa_no_room_promote+

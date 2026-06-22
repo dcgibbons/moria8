@@ -53,6 +53,10 @@
 //   product runtime diagnostic labels for platform smoke tests.
 // - hal_platform_describe_look_masks_irq: boolean; true when the look/describe
 //   message path must mask IRQs while printing the inline object description.
+// - hal_platform_turn_monster_ai: boolean; true when shared turn processing
+//   should run monster AI after player-action effects.
+// - hal_platform_turn_word_recall: boolean; true when shared turn processing
+//   owns word-of-recall level transitions.
 // - hal_platform_item_prompt_overlay_runtime: boolean; true when filtered
 //   item prompts can be invoked from reloadable product overlay code.
 // - hal_platform_item_prompt_reload_installs_irq: boolean; true when reloading

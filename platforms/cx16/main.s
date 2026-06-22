@@ -48,9 +48,14 @@
 .const CX16_FEATURE_CMD_SEARCH = 2
 .const CX16_FEATURE_CMD_REST = 3
 .const CX16_FEATURE_CMD_SEARCH_MODE = 4
-.const CX16_FEATURE_CMD_BASH = 5
-.const CX16_FEATURE_CMD_TUNNEL = 6
-.const CX16_FEATURE_CMD_DISARM = 7
+.const CX16_FEATURE_CMD_LOOK = 5
+.const CX16_FEATURE_CMD_AUTOREST = 6
+.const CX16_FEATURE_CMD_BASH = 7
+.const CX16_FEATURE_CMD_TUNNEL = 8
+.const CX16_FEATURE_CMD_DISARM = 9
+.const CX16_UI_CMD_HELP = 0
+.const CX16_UI_CMD_VERSION = 1
+.const CX16_UI_CMD_CHARACTER = 2
 .const CX16_ITEM_CMD_PICKUP = 0
 .const CX16_ITEM_CMD_DROP = 1
 .const CX16_ITEM_CMD_INVENTORY = 2
@@ -124,6 +129,7 @@
 #undef ITEM_TABLES_RESIDENT_NO_KNOWN_NAMES
 #undef ITEM_TABLES_RESIDENT_NAMES_ONLY
 #import "../../core/ego_items.s"
+#import "../../core/turn.s"
 #import "trampolines.s"
 #import "../../core/dungeon_direction.s"
 #import "../../core/trap_table.s"
@@ -459,7 +465,7 @@ cx16_dispatch_game_command:
 !not_rest:
     cmp #CMD_LOOK
     bne !not_look+
-    jmp !activity+
+    jmp !look+
 !not_look:
     cmp #CMD_SEARCH_MODE
     bne !not_search_mode+
@@ -467,7 +473,7 @@ cx16_dispatch_game_command:
 !not_search_mode:
     cmp #CMD_AUTOREST
     bne !not_autorest+
-    jmp !activity+
+    jmp !autorest+
 !not_autorest:
     cmp #CMD_SAVE
     bne !not_save+
@@ -570,8 +576,12 @@ cx16_dispatch_game_command:
     jmp cx16_show_activity_stub
 !rest:
     jmp cx16_cmd_rest
+!look:
+    jmp cx16_cmd_look
 !search_mode:
     jmp cx16_cmd_search_mode
+!autorest:
+    jmp cx16_cmd_autorest
 !search:
     jmp cx16_cmd_search
 !open:
@@ -673,6 +683,7 @@ cx16_try_dungeon_step_dir:
     lda #0
     rol
     pha
+    jsr cx16_consume_turn_searchable
     jsr cx16_sync_local_player_position
     jsr update_visibility
     jsr cx16_update_dungeon_view
@@ -771,8 +782,16 @@ cx16_cmd_rest:
     lda #CX16_FEATURE_CMD_REST
     jmp cx16_call_feature_overlay_command
 
+cx16_cmd_look:
+    lda #CX16_FEATURE_CMD_LOOK
+    jmp cx16_call_feature_overlay_command
+
 cx16_cmd_search_mode:
     lda #CX16_FEATURE_CMD_SEARCH_MODE
+    jmp cx16_call_feature_overlay_command
+
+cx16_cmd_autorest:
+    lda #CX16_FEATURE_CMD_AUTOREST
     jmp cx16_call_feature_overlay_command
 
 cx16_cmd_bash:
@@ -867,6 +886,22 @@ cx16_call_items_overlay_command:
     pla
     rts
 
+cx16_call_ui_overlay_command:
+    pha
+    lda CX16_RAM_BANK_REG
+    pha
+    lda #CX16_OVERLAY_UI_BANK
+    sta CX16_RAM_BANK_REG
+    pla
+    sta cx16_overlay_saved_bank
+    pla
+    jsr cx16_overlay_ui_entry
+    pha
+    lda cx16_overlay_saved_bank
+    sta CX16_RAM_BANK_REG
+    pla
+    rts
+
 cx16_call_startup_overlay_entry:
     lda CX16_RAM_BANK_REG
     pha
@@ -879,7 +914,50 @@ cx16_call_startup_overlay_entry:
 
 cx16_overlay_saved_bank: .byte 0
 
+cx16_consume_turn_searchable:
+    jsr cx16_consume_turn
+    lda zp_game_flags
+    and #$01
+    bne !done+
+    lda player_data + PL_FLAGS
+    and #PLF_SEARCHING
+    beq !done+
+    jsr cx16_call_search_scan_overlay_entry
+    jsr cx16_consume_turn
+!done:
+    rts
+
+cx16_consume_turn:
+    jmp turn_post_action
+
+cx16_auto_rest_check_recovered:
+    lda zp_player_hp_hi
+    cmp zp_player_mhp_hi
+    bne !not_recovered+
+    lda zp_player_hp_lo
+    cmp zp_player_mhp_lo
+    bne !not_recovered+
+    lda zp_player_mp
+    cmp zp_player_mmp
+    bne !not_recovered+
+    sec
+    rts
+!not_recovered:
+    clc
+    rts
+
+cx16_call_search_scan_overlay_entry:
+    lda CX16_RAM_BANK_REG
+    pha
+    lda #CX16_OVERLAY_DISARM_BANK
+    sta CX16_RAM_BANK_REG
+    jsr cx16_overlay_search_scan_entry
+    pla
+    sta CX16_RAM_BANK_REG
+    rts
+
 cx16_after_item_turn:
+    jsr cx16_consume_turn_searchable
     jsr cx16_sync_local_player_position
     jsr cx16_save_old_player
     jsr update_visibility
@@ -888,6 +966,7 @@ cx16_after_item_turn:
     jmp cx16_draw_dungeon_ui
 
 cx16_after_feature_turn:
+    jsr cx16_consume_turn_searchable
     jsr cx16_sync_shared_player_position
     jsr cx16_sync_local_player_position
     jsr cx16_save_old_player
@@ -897,6 +976,7 @@ cx16_after_feature_turn:
     jmp cx16_draw_dungeon_ui
 
 cx16_after_shared_move_turn:
+    jsr cx16_consume_turn_searchable
     jsr cx16_save_old_player
     lda cx16_view_x
     sta cx16_old_view_x
@@ -933,14 +1013,33 @@ cx16_try_stairs_down:
     beq !descend+
     jmp cx16_show_no_stairs
 !descend:
-    jmp cx16_enter_dungeon_bootstrap
+    lda #0
+    sta level_entry_dir
+    lda #1
+    jmp cx16_enter_dungeon_level
 !dungeon:
     jsr cx16_current_tile_type
     cmp #9
     beq !deeper+
     jmp cx16_show_no_stairs
 !deeper:
-    jmp cx16_show_deeper_stub
+    lda zp_player_dlvl
+    cmp #$ff
+    beq !at_bottom+
+    clc
+    adc #1
+    cmp player_data + PL_MAX_DLVL
+    bcc !depth_known+
+    beq !depth_known+
+    sta player_data + PL_MAX_DLVL
+!depth_known:
+    pha
+    lda #0
+    sta level_entry_dir
+    pla
+    jmp cx16_enter_dungeon_level
+!at_bottom:
+    jmp cx16_show_no_stairs
 
 cx16_try_stairs_up:
     lda cx16_state
@@ -951,13 +1050,24 @@ cx16_try_stairs_up:
     beq !ascend+
     jmp cx16_show_no_stairs
 !ascend:
-    jmp cx16_show_ascend_stub
+    jmp cx16_show_no_stairs
 !dungeon:
     jsr cx16_current_tile_type
     cmp #10
     beq !ascend_town+
     jmp cx16_show_no_stairs
 !ascend_town:
+    lda zp_player_dlvl
+    cmp #1
+    beq !town+
+    sec
+    sbc #1
+    pha
+    lda #1
+    sta level_entry_dir
+    pla
+    jmp cx16_enter_dungeon_level
+!town:
     jmp cx16_return_to_town
 
 cx16_seed_shared_town_player:
@@ -984,6 +1094,25 @@ cx16_sync_local_player_position:
     sta cx16_player_x
     lda zp_player_y
     sta cx16_player_y
+    rts
+
+cx16_depth_to_tier:
+    cmp #TIER1_MAX_DLVL + 1
+    bcc !tier1+
+    cmp #TIER2_MAX_DLVL + 1
+    bcc !tier2+
+    cmp #TIER3_MAX_DLVL + 1
+    bcc !tier3+
+    lda #4
+    rts
+!tier3:
+    lda #3
+    rts
+!tier2:
+    lda #2
+    rts
+!tier1:
+    lda #1
     rts
 
 cx16_seed_bootstrap_player_state:
@@ -1121,17 +1250,25 @@ cx16_show_descend_stub:
     jmp msg_print
 
 cx16_enter_dungeon_bootstrap:
-    jsr msg_clear
+    lda #0
+    sta level_entry_dir
     lda #1
+
+cx16_enter_dungeon_level:
+    pha
+    jsr msg_clear
+    pla
+    pha
     jsr cx16_generate_dungeon_level
     bcc !module_ok+
+    pla
     lda #<cx16_dungeon_module_failed_text
     sta zp_ptr0
     lda #>cx16_dungeon_module_failed_text
     sta zp_ptr0_hi
     jmp msg_print
 !module_ok:
-    lda #1
+    pla
     sta zp_player_dlvl
     sta player_data + PL_DLEVEL
     jsr item_spawn_level
@@ -1141,9 +1278,11 @@ cx16_enter_dungeon_bootstrap:
     jsr update_visibility
     lda #CX16_STATE_DUNGEON_BOOTSTRAP
     sta cx16_state
-    lda #1
+    lda zp_player_dlvl
+    jsr cx16_depth_to_tier
     sta cx16_loaded_tier
-    lda #CX16_TIER_BANK_BASE
+    clc
+    adc #(CX16_TIER_BANK_BASE - 1)
     sta cx16_loaded_tier_bank
     jsr cx16_draw_dungeon_bootstrap
     lda #<cx16_dungeon_loaded_text
@@ -1179,20 +1318,6 @@ cx16_return_to_town:
     jsr town_map_basic_generate
     jmp cx16_new_game_draw
 
-cx16_show_deeper_stub:
-    lda #<cx16_deeper_stub_text
-    sta zp_ptr0
-    lda #>cx16_deeper_stub_text
-    sta zp_ptr0_hi
-    jmp msg_print
-
-cx16_show_ascend_stub:
-    lda #<cx16_ascend_stub_text
-    sta zp_ptr0
-    lda #>cx16_ascend_stub_text
-    sta zp_ptr0_hi
-    jmp msg_print
-
 cx16_show_no_stairs:
     lda #<cx16_no_stairs_text
     sta zp_ptr0
@@ -1206,17 +1331,8 @@ cx16_show_help:
     jmp cx16_restore_current_view
 
 cx16_draw_help_view:
-    lda #CX16_TEXT_COLOR
-    jsr screen_set_color
-    jsr screen_clear
-    :Cx16PrintAt(3, 35, cx16_help_title_text)
-    :Cx16PrintAt(7, 14, cx16_help_move_text)
-    :Cx16PrintAt(9, 14, cx16_help_run_text)
-    :Cx16PrintAt(11, 14, cx16_help_feature_text)
-    :Cx16PrintAt(13, 14, cx16_help_item_text)
-    :Cx16PrintAt(15, 14, cx16_help_views_text)
-    :Cx16PrintAt(20, 33, cx16_press_key_text)
-    rts
+    lda #CX16_UI_CMD_HELP
+    jmp cx16_call_ui_overlay_command
 
 cx16_show_version:
     jsr cx16_draw_version_view
@@ -1224,14 +1340,8 @@ cx16_show_version:
     jmp cx16_restore_current_view
 
 cx16_draw_version_view:
-    lda #CX16_TEXT_COLOR
-    jsr screen_set_color
-    jsr screen_clear
-    :Cx16PrintAt(7, 33, cx16_version_title_text)
-    :Cx16PrintAt(10, 24, cx16_version_text)
-    :Cx16PrintAt(13, 24, cx16_version_policy_text)
-    :Cx16PrintAt(20, 33, cx16_press_key_text)
-    rts
+    lda #CX16_UI_CMD_VERSION
+    jmp cx16_call_ui_overlay_command
 
 cx16_show_character_info:
     jsr cx16_draw_character_view
@@ -1239,72 +1349,8 @@ cx16_show_character_info:
     jmp cx16_restore_current_view
 
 cx16_draw_character_view:
-    lda #CX16_TEXT_COLOR
-    jsr screen_set_color
-    jsr screen_clear
-    :Cx16PrintAt(3, 33, cx16_character_title_text)
-    :Cx16PrintAt(6, 20, cx16_character_name_label)
-    lda #6
-    sta zp_cursor_row
-    lda #26
-    sta zp_cursor_col
-    lda #<(player_data + PL_NAME)
-    sta zp_ptr0
-    lda #>(player_data + PL_NAME)
-    sta zp_ptr0_hi
-    jsr screen_put_string
-    :Cx16PrintAt(8, 20, cx16_character_race_label)
-    lda #8
-    sta zp_cursor_row
-    lda #26
-    sta zp_cursor_col
-    ldx zp_player_race
-    lda race_name_ptrs_lo,x
-    sta zp_ptr0
-    lda race_name_ptrs_hi,x
-    sta zp_ptr0_hi
-    jsr screen_put_string
-    :Cx16PrintAt(8, 42, cx16_character_class_label)
-    lda #8
-    sta zp_cursor_row
-    lda #49
-    sta zp_cursor_col
-    ldx zp_player_class
-    lda class_name_ptrs_lo,x
-    sta zp_ptr0
-    lda class_name_ptrs_hi,x
-    sta zp_ptr0_hi
-    jsr screen_put_string
-    :Cx16PrintAt(10, 20, cx16_character_level_label)
-    lda zp_player_lvl
-    jsr screen_put_decimal
-    :Cx16PrintAt(10, 42, cx16_character_depth_label)
-    lda zp_player_dlvl
-    jsr screen_put_decimal
-    :Cx16PrintAt(12, 20, cx16_character_hp_label)
-    lda zp_player_hp_lo
-    sta zp_temp0
-    lda zp_player_hp_hi
-    sta zp_temp1
-    jsr screen_put_decimal_16
-    lda #$2f
-    jsr screen_put_char
-    lda zp_player_mhp_lo
-    sta zp_temp0
-    lda zp_player_mhp_hi
-    sta zp_temp1
-    jsr screen_put_decimal_16
-    :Cx16PrintAt(12, 42, cx16_character_ac_label)
-    lda zp_player_ac
-    jsr screen_put_decimal
-    :Cx16PrintAt(14, 20, cx16_character_gold_label)
-    lda player_data + PL_GOLD_0
-    sta zp_temp0
-    lda player_data + PL_GOLD_1
-    sta zp_temp1
-    jsr screen_put_decimal_16
-    :Cx16PrintAt(20, 33, cx16_press_key_text)
-    rts
+    lda #CX16_UI_CMD_CHARACTER
+    jmp cx16_call_ui_overlay_command
 
 cx16_show_activity_stub:
     lda #<cx16_activity_stub_text
@@ -1594,101 +1640,8 @@ cx16_dungeon_help_text:
     :ScreenText("HJKL/YUBN OR NUMBERS MOVE. < RETURNS TO TOWN. SHIFT-Q TITLE.")
     .byte 0
 
-cx16_press_key_text:
-    :ScreenText("PRESS ANY KEY")
-    .byte 0
-
-cx16_help_title_text:
-    :ScreenText("COMMANDS")
-    .byte 0
-
-cx16_help_move_text:
-    :ScreenText("MOVE: HJKL/YUBN OR 12346789")
-    .byte 0
-
-cx16_help_run_text:
-    :ScreenText("RUN: SHIFTED DIRECTION KEYS")
-    .byte 0
-
-cx16_help_feature_text:
-    :ScreenText("FEATURES: O)PEN C)LOSE S)EARCH R)EST")
-    .byte 0
-
-cx16_help_item_text:
-    :ScreenText("ITEMS: G)ET D)ROP I)NVENTORY E)QUIPMENT")
-    .byte 0
-
-cx16_help_views_text:
-    :ScreenText("VIEWS: ?)HELP C)HARACTER V)ERSION")
-    .byte 0
-
-cx16_version_title_text:
-    :ScreenText("MORIA8")
-    .byte 0
-
-cx16_version_policy_text:
-    :ScreenText("CX16 PORT IN PROGRESS")
-    .byte 0
-
-cx16_character_title_text:
-    :ScreenText("CHARACTER")
-    .byte 0
-
-cx16_character_name_label:
-    :ScreenText("NAME: ")
-    .byte 0
-
-cx16_character_race_label:
-    :ScreenText("RACE: ")
-    .byte 0
-
-cx16_character_class_label:
-    :ScreenText("CLASS: ")
-    .byte 0
-
-cx16_character_level_label:
-    :ScreenText("LEVEL: ")
-    .byte 0
-
-cx16_character_depth_label:
-    :ScreenText("DEPTH: ")
-    .byte 0
-
-cx16_character_hp_label:
-    :ScreenText("HP: ")
-    .byte 0
-
-cx16_character_ac_label:
-    :ScreenText("AC: ")
-    .byte 0
-
-cx16_character_gold_label:
-    :ScreenText("GOLD: ")
-    .byte 0
-
-cx16_ascend_stub_text:
-    :ScreenText("YOU ARE ALREADY IN TOWN.")
-    .byte 0
-
-cx16_deeper_stub_text:
-    :ScreenText("DEEPER DUNGEON LEVELS NOT WIRED YET.")
-    .byte 0
-
 cx16_no_stairs_text:
     :ScreenText("YOU SEE NO STAIRS HERE.")
-    .byte 0
-
-cx16_command_help_text:
-    :ScreenText("MOVE HJKL/YUBN/12346789. > STAIRS. SHIFT-Q TITLE.")
-    .byte 0
-
-cx16_version_text:
-    :ScreenText("MORIA8 CX16 BOOTSTRAP ")
-    :EmitTitleVersionScreen()
-    .byte 0
-
-cx16_character_info_text:
-    :ScreenText("CHARACTER INFO: TOWN BOOTSTRAP, DEPTH 0.")
     .byte 0
 
 cx16_activity_stub_text:
@@ -1743,8 +1696,6 @@ cx16_loader_name_len: .byte 0
 cx16_dungeon_module_entry:
     sta zp_player_dlvl
     sta player_data + PL_DLEVEL
-    lda #0
-    sta level_entry_dir
     jsr dungeon_generate
     clc
     lda #CX16_DUNGEON_MODULE_MAGIC_A
@@ -1815,7 +1766,188 @@ cx16_overlay_help_end:
 
 .segment Cx16UiOverlay
 cx16_overlay_ui_entry:
+    cmp #CX16_UI_CMD_HELP
+    bne !not_help+
+    jmp cx16_overlay_draw_help_view
+!not_help:
+    cmp #CX16_UI_CMD_VERSION
+    bne !not_version+
+    jmp cx16_overlay_draw_version_view
+!not_version:
+    cmp #CX16_UI_CMD_CHARACTER
+    bne !done+
+    jmp cx16_overlay_draw_character_view
+!done:
     rts
+
+cx16_overlay_draw_help_view:
+    lda #CX16_TEXT_COLOR
+    jsr screen_set_color
+    jsr screen_clear
+    :Cx16PrintAt(3, 35, cx16_help_title_text)
+    :Cx16PrintAt(7, 14, cx16_help_move_text)
+    :Cx16PrintAt(9, 14, cx16_help_run_text)
+    :Cx16PrintAt(11, 14, cx16_help_feature_text)
+    :Cx16PrintAt(13, 14, cx16_help_item_text)
+    :Cx16PrintAt(15, 14, cx16_help_views_text)
+    :Cx16PrintAt(20, 33, cx16_press_key_text)
+    rts
+
+cx16_overlay_draw_version_view:
+    lda #CX16_TEXT_COLOR
+    jsr screen_set_color
+    jsr screen_clear
+    :Cx16PrintAt(7, 33, cx16_version_title_text)
+    :Cx16PrintAt(10, 24, cx16_version_text)
+    :Cx16PrintAt(13, 24, cx16_version_policy_text)
+    :Cx16PrintAt(20, 33, cx16_press_key_text)
+    rts
+
+cx16_overlay_draw_character_view:
+    lda #CX16_TEXT_COLOR
+    jsr screen_set_color
+    jsr screen_clear
+    :Cx16PrintAt(3, 33, cx16_character_title_text)
+    :Cx16PrintAt(6, 20, cx16_character_name_label)
+    lda #6
+    sta zp_cursor_row
+    lda #26
+    sta zp_cursor_col
+    lda #<(player_data + PL_NAME)
+    sta zp_ptr0
+    lda #>(player_data + PL_NAME)
+    sta zp_ptr0_hi
+    jsr screen_put_string
+    :Cx16PrintAt(8, 20, cx16_character_race_label)
+    lda #8
+    sta zp_cursor_row
+    lda #26
+    sta zp_cursor_col
+    ldx zp_player_race
+    lda race_name_ptrs_lo,x
+    sta zp_ptr0
+    lda race_name_ptrs_hi,x
+    sta zp_ptr0_hi
+    jsr screen_put_string
+    :Cx16PrintAt(8, 42, cx16_character_class_label)
+    lda #8
+    sta zp_cursor_row
+    lda #49
+    sta zp_cursor_col
+    ldx zp_player_class
+    lda class_name_ptrs_lo,x
+    sta zp_ptr0
+    lda class_name_ptrs_hi,x
+    sta zp_ptr0_hi
+    jsr screen_put_string
+    :Cx16PrintAt(10, 20, cx16_character_level_label)
+    lda zp_player_lvl
+    jsr screen_put_decimal
+    :Cx16PrintAt(10, 42, cx16_character_depth_label)
+    lda zp_player_dlvl
+    jsr screen_put_decimal
+    :Cx16PrintAt(12, 20, cx16_character_hp_label)
+    lda zp_player_hp_lo
+    sta zp_temp0
+    lda zp_player_hp_hi
+    sta zp_temp1
+    jsr screen_put_decimal_16
+    lda #$2f
+    jsr screen_put_char
+    lda zp_player_mhp_lo
+    sta zp_temp0
+    lda zp_player_mhp_hi
+    sta zp_temp1
+    jsr screen_put_decimal_16
+    :Cx16PrintAt(12, 42, cx16_character_ac_label)
+    lda zp_player_ac
+    jsr screen_put_decimal
+    :Cx16PrintAt(14, 20, cx16_character_gold_label)
+    lda player_data + PL_GOLD_0
+    sta zp_temp0
+    lda player_data + PL_GOLD_1
+    sta zp_temp1
+    jsr screen_put_decimal_16
+    :Cx16PrintAt(20, 33, cx16_press_key_text)
+    rts
+
+cx16_press_key_text:
+    :ScreenText("PRESS ANY KEY")
+    .byte 0
+
+cx16_help_title_text:
+    :ScreenText("COMMANDS")
+    .byte 0
+
+cx16_help_move_text:
+    :ScreenText("MOVE: HJKL/YUBN OR 12346789")
+    .byte 0
+
+cx16_help_run_text:
+    :ScreenText("RUN: SHIFTED DIRECTION KEYS")
+    .byte 0
+
+cx16_help_feature_text:
+    :ScreenText("FEATURES: O)PEN C)LOSE S)EARCH R)EST")
+    .byte 0
+
+cx16_help_item_text:
+    :ScreenText("ITEMS: G)ET D)ROP I)NVENTORY E)QUIPMENT")
+    .byte 0
+
+cx16_help_views_text:
+    :ScreenText("VIEWS: ?)HELP C)HARACTER V)ERSION")
+    .byte 0
+
+cx16_version_title_text:
+    :ScreenText("MORIA8")
+    .byte 0
+
+cx16_version_text:
+    :ScreenText("MORIA8 CX16 BOOTSTRAP ")
+    :EmitTitleVersionScreen()
+    .byte 0
+
+cx16_version_policy_text:
+    :ScreenText("CX16 PORT IN PROGRESS")
+    .byte 0
+
+cx16_character_title_text:
+    :ScreenText("CHARACTER")
+    .byte 0
+
+cx16_character_name_label:
+    :ScreenText("NAME: ")
+    .byte 0
+
+cx16_character_race_label:
+    :ScreenText("RACE: ")
+    .byte 0
+
+cx16_character_class_label:
+    :ScreenText("CLASS: ")
+    .byte 0
+
+cx16_character_level_label:
+    :ScreenText("LEVEL: ")
+    .byte 0
+
+cx16_character_depth_label:
+    :ScreenText("DEPTH: ")
+    .byte 0
+
+cx16_character_hp_label:
+    :ScreenText("HP: ")
+    .byte 0
+
+cx16_character_ac_label:
+    :ScreenText("AC: ")
+    .byte 0
+
+cx16_character_gold_label:
+    :ScreenText("GOLD: ")
+    .byte 0
+
     :Cx16OverlayMarker(7)
 cx16_overlay_ui_end:
 .print "CX16 UI overlay: " + (cx16_overlay_ui_end - $a000) + " bytes at $A000-$" + toHexString(cx16_overlay_ui_end)
@@ -2086,10 +2218,18 @@ cx16_overlay_feature_command_entry:
     bne !not_rest+
     jmp !rest+
 !not_rest:
+    cmp #CX16_FEATURE_CMD_LOOK
+    bne !not_look+
+    jmp !look+
+!not_look:
     cmp #CX16_FEATURE_CMD_SEARCH_MODE
     bne !not_search_mode+
     jmp !search_mode+
 !not_search_mode:
+    cmp #CX16_FEATURE_CMD_AUTOREST
+    bne !not_autorest+
+    jmp !autorest+
+!not_autorest:
     cmp #CX16_FEATURE_CMD_BASH
     bne !not_bash+
     jmp !bash+
@@ -2153,6 +2293,17 @@ cx16_overlay_feature_command_entry:
     jsr msg_clear
     jmp cx16_after_feature_turn
 
+!look:
+    lda cx16_state
+    cmp #CX16_STATE_DUNGEON_BOOTSTRAP
+    beq !look_dungeon+
+    jmp cx16_show_activity_stub
+!look_dungeon:
+    jsr msg_clear
+    jsr cx16_do_look
+    jsr cx16_render_dungeon_local_area
+    jmp cx16_draw_dungeon_ui
+
 !search_mode:
     lda cx16_state
     cmp #CX16_STATE_DUNGEON_BOOTSTRAP
@@ -2177,6 +2328,25 @@ cx16_overlay_feature_command_entry:
     sta zp_ptr0_hi
 !print:
     jsr msg_print
+    jsr cx16_render_dungeon_local_area
+    jmp cx16_draw_dungeon_ui
+
+!autorest:
+    lda cx16_state
+    cmp #CX16_STATE_DUNGEON_BOOTSTRAP
+    beq !autorest_dungeon+
+    jmp cx16_show_activity_stub
+!autorest_dungeon:
+    jsr msg_clear
+    jsr player_search_mode_off
+    lda #$ff
+    sta zp_run_dir
+    jsr input_run_cancel_reset
+    jsr cx16_auto_rest_check_recovered
+    bcc !autorest_turn+
+    jsr cx16_render_dungeon_local_area
+    jmp cx16_draw_dungeon_ui
+!autorest_turn:
     jmp cx16_after_feature_turn
 
 !bash:
@@ -2228,6 +2398,155 @@ cx16_overlay_feature_command_entry:
     search_mode_off_str:
         .text "Search mode off." ; .byte 0
 #endif
+
+cx16_overlay_search_scan_entry:
+    jmp search_scan_effective_silent
+
+cx16_do_look:
+    jsr get_direction_target
+    bcs !valid+
+    clc
+    rts
+!valid:
+    lda df_target_x
+    sec
+    sbc zp_player_x
+    sta cx16_look_dx
+    lda df_target_y
+    sec
+    sbc zp_player_y
+    sta cx16_look_dy
+
+!scan:
+    lda df_target_x
+    cmp #MAP_COLS
+    bcc !x_ok+
+    jmp !nothing+
+!x_ok:
+    lda df_target_y
+    cmp #MAP_ROWS
+    bcc !y_ok+
+    jmp !nothing+
+!y_ok:
+    ldx df_target_y
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy df_target_x
+    :MapRead_ptr0_y()
+    sta cx16_look_tile
+
+    ldx df_target_x
+    ldy df_target_y
+    jsr los_is_visible
+    bcs !visible+
+    jmp !nothing+
+!visible:
+    lda cx16_look_tile
+    and #FLAG_OCCUPIED
+    beq !not_monster+
+    lda #<cx16_look_monster_text
+    sta zp_ptr0
+    lda #>cx16_look_monster_text
+    sta zp_ptr0_hi
+    jmp msg_print
+
+!not_monster:
+    lda cx16_look_tile
+    and #TILE_TYPE_MASK
+    cmp #TILE_DOOR_OPEN
+    bne !not_open+
+    ldx #HSTR_DL_OPEN_DOOR
+    jmp !print_tile+
+!not_open:
+    cmp #TILE_DOOR_CLOSED
+    bne !not_closed+
+    ldx #HSTR_DL_CLOSED_DOOR
+    jmp !print_tile+
+!not_closed:
+    cmp #TILE_STAIRS_DN
+    bne !not_sdn+
+    ldx #HSTR_DL_STAIRS_DN
+    jmp !print_tile+
+!not_sdn:
+    cmp #TILE_STAIRS_UP
+    bne !not_sup+
+    ldx #HSTR_DL_STAIRS_UP
+    jmp !print_tile+
+!not_sup:
+    cmp #TILE_TRAP
+    bne !not_trap+
+    ldx #HSTR_DL_TRAP
+    jmp !print_tile+
+!not_trap:
+    cmp #TILE_RUBBLE
+    bne !not_rubble+
+    ldx #HSTR_DL_RUBBLE
+    jmp !print_tile+
+!not_rubble:
+    cmp #TILE_FLOOR
+    beq !floor+
+    ldx #HSTR_DL_WALL
+    jmp !print_tile+
+
+!floor:
+    lda df_target_x
+    ldy df_target_y
+    jsr floor_item_find_at
+    bcs !item+
+    jsr glyph_find_at_stashed
+    bcc !step+
+    ldx #HSTR_PMU_GLYPH_OK
+    jmp !print_tile+
+!item:
+    lda fi_item_id,x
+    jsr cx16_look_print_item
+    clc
+    rts
+
+!step:
+    lda df_target_x
+    clc
+    adc cx16_look_dx
+    sta df_target_x
+    lda df_target_y
+    clc
+    adc cx16_look_dy
+    sta df_target_y
+    jmp !scan-
+
+!nothing:
+    ldx #HSTR_DL_NOTHING
+!print_tile:
+    jsr huff_print_msg
+    clc
+    rts
+
+cx16_look_print_item:
+    sta cx16_look_item_id
+    lda #0
+    sta cmb_buf_idx
+    ldx #HSTR_DL_YOU_SEE
+    jsr huff_append_combat
+    lda cx16_look_item_id
+    jsr item_get_name_ptr
+    lda zp_ptr0
+    ldy zp_ptr0_hi
+    jsr combat_append_str
+    lda #<cmb_period
+    ldy #>cmb_period
+    jsr combat_append_str
+    jmp cmb_term_and_print
+
+cx16_look_monster_text:
+    :ScreenText("You see a monster.")
+    .byte 0
+
+cx16_look_tile: .byte 0
+cx16_look_dx: .byte 0
+cx16_look_dy: .byte 0
+cx16_look_item_id: .byte 0
 
     #import "../../core/dungeon_feature_actions.s"
     #import "../../core/disarm_helpers.s"
