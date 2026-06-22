@@ -31,9 +31,15 @@
 .const KERNAL_CINT = $ff81
 .const KERNAL_SETNAM = $ffbd
 .const KERNAL_SETLFS = $ffba
+.const KERNAL_OPEN = $ffc0
 .const KERNAL_LOAD = $ffd5
 .const KERNAL_CLOSE = $ffc3
+.const KERNAL_CHKIN = $ffc6
+.const KERNAL_CHKOUT = $ffc9
 .const KERNAL_CLRCHN = $ffcc
+.const KERNAL_CHRIN = $ffcf
+.const KERNAL_CHROUT = $ffd2
+.const KERNAL_READST = $ffb7
 .const KERNAL_GETIN = $ffe4
 .const CX16_STATE_TITLE = 0
 .const CX16_STATE_NEW_GAME = 1
@@ -70,6 +76,8 @@
 .const CX16_ITEM_CMD_AIM = 10
 .const CX16_ITEM_CMD_USE = 11
 .const CX16_ITEM_CMD_SEED_SURVIVAL_LOOT = 12
+.const CX16_SAVE_CMD_SAVE = 0
+.const CX16_SAVE_CMD_LOAD = 1
 .const CX16_ACTIVE_MONSTER_COUNT = 32
 .const CX16_ACTIVE_MONSTER_ENTRY_SIZE = 12
 .const CX16_ACTIVE_MONSTER_X_OFFSET = 0
@@ -394,10 +402,16 @@ cx16_poll_menu:
     beq !new_game+
     cmp #$6e                // n
     beq !new_game+
+    cmp #$4c                // L
+    beq !load_game+
+    cmp #$6c                // l
+    beq !load_game+
 !done:
     rts
 !new_game:
     jmp cx16_new_game_start
+!load_game:
+    jmp cx16_load_game_record
 
 cx16_poll_dead:
     jsr input_get_command
@@ -409,6 +423,16 @@ cx16_poll_dead:
 
 cx16_new_game_start:
     jsr rng_seed
+    jsr msg_init
+    lda #0
+    sta zp_game_flags
+    sta zp_death_source
+    tax
+!clear_effects:
+    sta zp_eff_poison,x
+    inx
+    cpx #16
+    bne !clear_effects-
     lda #$ff
     sta zp_run_dir
     lda #CX16_STATE_NEW_GAME
@@ -506,6 +530,10 @@ cx16_dispatch_game_command:
     bne !not_version+
     jmp !version+
 !not_version:
+    cmp #CMD_SAVE
+    bne !not_save+
+    jmp cx16_save_game_record
+!not_save:
     cmp #CMD_PICKUP
     bne !not_pickup+
     jmp !pickup+
@@ -918,6 +946,22 @@ cx16_call_monster_overlay_command:
     sta cx16_overlay_saved_bank
     pla
     jsr cx16_overlay_monster_command_entry
+    php
+    lda cx16_overlay_saved_bank
+    sta CX16_RAM_BANK_REG
+    plp
+    rts
+
+cx16_call_save_overlay_command:
+    pha
+    lda CX16_RAM_BANK_REG
+    pha
+    lda #CX16_OVERLAY_SPELL_BANK
+    sta CX16_RAM_BANK_REG
+    pla
+    sta cx16_overlay_saved_bank
+    pla
+    jsr cx16_overlay_save_entry
     php
     lda cx16_overlay_saved_bank
     sta CX16_RAM_BANK_REG
@@ -1399,6 +1443,57 @@ cx16_monster_adjacent_attack:
     lda #CX16_MON_CMD_ADJACENT_ATTACK
     jmp cx16_call_monster_overlay_command
 
+cx16_save_game_record:
+    lda #CX16_SAVE_CMD_SAVE
+    jsr cx16_call_save_overlay_command
+    bcs !fail+
+    lda #<cx16_save_ok_text
+    sta zp_ptr0
+    lda #>cx16_save_ok_text
+    sta zp_ptr0_hi
+    jmp cx16_print_system_message
+!fail:
+    lda #<cx16_save_failed_text
+    sta zp_ptr0
+    lda #>cx16_save_failed_text
+    sta zp_ptr0_hi
+    jmp cx16_print_system_message
+
+cx16_load_game_record:
+    lda #CX16_SAVE_CMD_LOAD
+    jsr cx16_call_save_overlay_command
+    bcs !fail+
+    lda zp_player_dlvl
+    beq !town+
+    lda #CX16_STATE_DUNGEON
+    sta cx16_state
+    jsr cx16_sync_local_player_position
+    jsr update_visibility
+    jsr cx16_draw_dungeon
+    jmp !print_ok+
+!town:
+    lda #CX16_STATE_NEW_GAME
+    sta cx16_state
+    jsr cx16_sync_local_player_position
+    jsr cx16_new_game_draw
+!print_ok:
+    lda #<cx16_load_ok_text
+    sta zp_ptr0
+    lda #>cx16_load_ok_text
+    sta zp_ptr0_hi
+    jmp cx16_print_system_message
+!fail:
+    lda #<cx16_load_failed_text
+    sta zp_ptr0
+    lda #>cx16_load_failed_text
+    sta zp_ptr0_hi
+    jmp cx16_print_system_message
+
+cx16_print_system_message:
+    jsr msg_clear
+    jsr msg_print
+    rts
+
 cx16_show_no_stairs:
     lda #<no_stairs_str
     sta zp_ptr0
@@ -1643,7 +1738,7 @@ cx16_title_name:
 .label cx16_title_name_len = * - cx16_title_name
 
 cx16_title_menu_text:
-    :ScreenText("N)EW")
+    :ScreenText("N)EW  L)OAD")
     .byte 0
 
 cx16_town_title_text:
@@ -1659,7 +1754,23 @@ cx16_dungeon_module_failed_text:
     .byte 0
 
 cx16_dungeon_help_text:
-    :ScreenText("Move: HJKL/YUBN or numbers. <: town. Shift-Q title.")
+    :ScreenText("Move: HJKL/YUBN/numbers. S save. s search. Shift-Q title.")
+    .byte 0
+
+cx16_save_ok_text:
+    :ScreenText("Game saved.")
+    .byte 0
+
+cx16_save_failed_text:
+    :ScreenText("Save failed.")
+    .byte 0
+
+cx16_load_ok_text:
+    :ScreenText("Game loaded.")
+    .byte 0
+
+cx16_load_failed_text:
+    :ScreenText("Load failed.")
     .byte 0
 
 #if !CX16_IMPORT_SHARED_GAME_LOOP
@@ -1686,6 +1797,7 @@ cx16_loading_header_text:
     :ScreenText("Loading:")
     .byte 0
 
+cx16_runtime_state_start:
 cx16_state: .byte CX16_STATE_TITLE
 cx16_player_x: .byte 0
 cx16_player_y: .byte 0
@@ -1707,6 +1819,7 @@ cx16_mon_spawn_y: .byte 0
 cx16_mon_slot: .byte 0
 cx16_mon_attack_x: .byte 0
 cx16_mon_attack_y: .byte 0
+cx16_runtime_state_end:
 
 .segment Cx16DungeonGenModule
 cx16_dungeon_module_entry:
@@ -2947,7 +3060,7 @@ cx16_help_run_text:
     .byte 0
 
 cx16_help_feature_text:
-    :ScreenText("Features: O)pen C)lose S)earch X)look R)est")
+    :ScreenText("Features: O)pen C)lose s)earch X)look R)est")
     .byte 0
 
 cx16_help_more_text:
@@ -2971,7 +3084,7 @@ cx16_help_views_text:
     .byte 0
 
 cx16_help_system_text:
-    :ScreenText("System: Shift-Q title")
+    :ScreenText("System: S save, Shift-Q title")
     .byte 0
 
 cx16_version_title_text:
@@ -3317,6 +3430,7 @@ cx16_overlay_items_end:
 .segment Cx16SpellOverlay
 cx16_overlay_spell_entry:
     rts
+#import "save_record.s"
     :Cx16OverlayMarker(9)
 cx16_overlay_spell_end:
 .print "CX16 SPELL overlay: " + (cx16_overlay_spell_end - $a000) + " bytes at $A000-$" + toHexString(cx16_overlay_spell_end)

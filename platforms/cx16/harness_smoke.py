@@ -150,6 +150,9 @@ CMD_WIZARD = 0x33
 CMD_SEARCH_MODE = 0x34
 CMD_DISARM = 0x35
 CMD_AUTOREST = 0x36
+CX16_STATE_TITLE = 0
+CX16_STATE_NEW_GAME = 1
+CX16_STATE_DUNGEON = 2
 CX16_STATE_DEAD = 3
 GAME_FLAG_WINNER = 0x04
 CREATURE_BALROG = 56
@@ -921,6 +924,11 @@ def main():
     labels = load_symbols(args.symbols)
     check_product_symbols(labels)
     cwd = args.cwd if args.cwd else None
+    if cwd:
+        try:
+            os.unlink(os.path.join(cwd, "THE.GAME"))
+        except FileNotFoundError:
+            pass
     prg = args.prg
     if cwd:
         prg = os.path.basename(prg)
@@ -1133,7 +1141,7 @@ def main():
             bench,
             29,
             10,
-            "Move: HJKL/YUBN or numbers. <: town. Shift-Q title.",
+            "Move: HJKL/YUBN/numbers. S save. s search. Shift-Q title.",
             "dungeon help",
         )
 
@@ -1919,6 +1927,61 @@ def main():
         assert_screen_text(bench, 0, 0, "Dungeon level 1 ready.", "re-entry level ready message")
         assert_screen_text(bench, 25, 66, "DL:1", "re-entry status depth")
         assert_screen_contains_cell(bench, SC_PLAYER, TEXT_COLOR, "re-entry player glyph")
+
+        saved_mon_slot, saved_mon_x, saved_mon_y, _, _ = first_live_monster(bench, labels)
+        saved_mon_base = require(labels, "monster_table") + (saved_mon_slot * MONSTER_ENTRY_SIZE)
+        saved_mon_type = bench.get_memory(saved_mon_base + MX_TYPE)
+        saved_item_slot, saved_item_x, saved_item_y = find_top_floor_item_by_id(bench, labels, ITEM_FLASK_OIL)
+        saved_tile = map_tile_at(bench, labels, reentry_x, reentry_y)
+        bench.set_memory(require(labels, "zp_msg_flags"), 0)
+        stuff_key(bench, ord("S"))
+        bench.run(require(labels, "cx16_poll_game"), timeout=12)
+        assert_screen_text(bench, 0, 0, "Game saved.", "save key command message")
+        if cwd and not os.path.exists(os.path.join(cwd, "THE.GAME")):
+            raise AssertionError("CX16 save command did not create THE.GAME")
+
+        bench.set_memory(require(labels, "cx16_state"), CX16_STATE_NEW_GAME)
+        bench.set_memory(require(labels, "cx16_player_x"), 1)
+        bench.set_memory(require(labels, "cx16_player_y"), 1)
+        bench.set_memory(require(labels, "cx16_dungeon_depth"), 9)
+        bench.set_memory(require(labels, "zp_player_x"), 1)
+        bench.set_memory(require(labels, "zp_player_y"), 1)
+        bench.set_memory(require(labels, "zp_player_dlvl"), 0)
+        bench.set_memory(require(labels, "zp_player_hp_lo"), 1)
+        bench.set_memory(require(labels, "zp_player_mp"), 1)
+        bench.set_memory(require(labels, "player_data") + PL_GOLD_0, 1)
+        bench.set_memory(inv_base + EQUIP_WEAPON, FI_EMPTY)
+        bench.set_memory(inv_base + EQUIP_BODY, FI_EMPTY)
+        bench.set_memory(inv_base + EQUIP_LIGHT, FI_EMPTY)
+        bench.set_memory(require(labels, "fi_item_id") + saved_item_slot, FI_EMPTY)
+        bench.set_memory(saved_mon_base + MX_TYPE, EMPTY_SLOT)
+        set_map_tile(bench, labels, reentry_x, reentry_y, TILE_FLOOR | DUNGEON_FLAGS)
+
+        bench.run(require(labels, "cx16_load_game_record"), timeout=12)
+        assert_screen_text(bench, 0, 0, "Game loaded.", "load command message")
+        assert_eq(bench.get_memory(require(labels, "cx16_state")), 2, "load restores dungeon state")
+        assert_eq(bench.get_memory(require(labels, "cx16_player_x")), reentry_x, "load restores local x")
+        assert_eq(bench.get_memory(require(labels, "cx16_player_y")), reentry_y, "load restores local y")
+        assert_eq(bench.get_memory(require(labels, "zp_player_x")), reentry_x, "load restores shared x")
+        assert_eq(bench.get_memory(require(labels, "zp_player_y")), reentry_y, "load restores shared y")
+        assert_eq(bench.get_memory(require(labels, "zp_player_dlvl")), 1, "load restores depth")
+        assert_eq(bench.get_memory(require(labels, "cx16_dungeon_depth")), 1, "load restores module depth")
+        assert_eq(bench.get_memory(require(labels, "zp_player_hp_lo")), 50, "load restores hp")
+        assert_eq(bench.get_memory(require(labels, "zp_player_mp")), 9, "load restores mana")
+        assert_eq(bench.get_memory(require(labels, "player_data") + PL_GOLD_0), 80, "load restores gold")
+        assert_eq(bench.get_memory(inv_base + EQUIP_WEAPON), ITEM_PICK, "load restores weapon")
+        assert_eq(bench.get_memory(inv_base + EQUIP_BODY), ITEM_LEATHER_ARMOR, "load restores armor")
+        assert_eq(bench.get_memory(inv_base + EQUIP_LIGHT), ITEM_LANTERN, "load restores light")
+        assert_eq(bench.get_memory(require(labels, "fi_item_id") + saved_item_slot), ITEM_FLASK_OIL, "load restores floor item id")
+        assert_eq(bench.get_memory(require(labels, "fi_x") + saved_item_slot), saved_item_x, "load restores floor item x")
+        assert_eq(bench.get_memory(require(labels, "fi_y") + saved_item_slot), saved_item_y, "load restores floor item y")
+        assert_eq(bench.get_memory(saved_mon_base + MX_TYPE), saved_mon_type, "load restores monster type")
+        assert_eq(bench.get_memory(saved_mon_base + MX_X), saved_mon_x, "load restores monster x")
+        assert_eq(bench.get_memory(saved_mon_base + MX_Y), saved_mon_y, "load restores monster y")
+        assert_eq(map_tile_at(bench, labels, reentry_x, reentry_y), saved_tile, "load restores map tile")
+        assert_screen_text(bench, 25, 66, "DL:1", "load redraws status depth")
+        assert_screen_contains_cell(bench, SC_PLAYER, TEXT_COLOR, "load redraws player glyph")
+
         bench.run(require(labels, "cx16_return_to_town"))
         assert_eq(bench.get_memory(require(labels, "cx16_state")), 1, "post-re-entry reset returns to town state")
         assert_eq(bench.get_memory(require(labels, "zp_player_dlvl")), 0, "post-re-entry reset returns to town depth")
@@ -1927,17 +1990,18 @@ def main():
         assert_screen_text(bench, 3, 35, "Commands", "help view title")
         assert_screen_text(bench, 7, 14, "Move: HJKL/YUBN or 12346789", "help view movement")
         assert_screen_text(bench, 9, 14, "Run: shifted direction keys or . direction", "help view run")
-        assert_screen_text(bench, 11, 14, "Features: O)pen C)lose S)earch X)look R)est", "help view features")
+        assert_screen_text(bench, 11, 14, "Features: O)pen C)lose s)earch X)look R)est", "help view features")
         assert_screen_text(bench, 13, 14, "More: Ctrl-B bash +)tunnel Shift-D disarm #)search", "help view more")
         assert_screen_text(bench, 15, 14, "Items: G)et D)rop I)nventory E)quipment", "help view items")
         assert_screen_text(bench, 17, 14, "Use: W)ear T)akeoff Shift-E eat Q)uaff R)ead", "help view use")
         assert_screen_text(bench, 19, 14, "Tools: A)im Z)use Shift-R refuel", "help view tools")
         assert_screen_text(bench, 21, 14, "Views: ?)help Shift-C character V)version", "help view views")
-        assert_screen_text(bench, 23, 14, "System: Shift-Q title", "help view system")
+        assert_screen_text(bench, 23, 14, "System: S save, Shift-Q title", "help view system")
         for key, command, label in (
             (ord("O"), CMD_OPEN, "O maps to open"),
             (ord("C"), CMD_CLOSE, "C maps to close"),
-            (ord("S"), CMD_SEARCH, "S maps to search"),
+            (ord("S"), CMD_SAVE, "S maps to save"),
+            (ord("s"), CMD_SEARCH, "s maps to search"),
             (ord("X"), CMD_LOOK, "X maps to look"),
             (ord("5"), CMD_REST, "5 maps to rest"),
             (0x02, CMD_BASH, "Ctrl-B maps to bash"),
@@ -1962,12 +2026,12 @@ def main():
             (0xC3, CMD_CHAR_INFO, "Shift-C maps to character info"),
             (ord("V"), CMD_VERSION, "V maps to version command"),
             (0xD1, CMD_QUIT, "Shift-Q maps to quit"),
+            (0xD3, CMD_SAVE, "Shift-S maps to save"),
         ):
             bench.set_a(key)
             bench.run(require(labels, "petscii_to_command"))
             assert_eq(bench.get_a(), command, label)
         for key, label in (
-            (0xD3, "Shift-S unmapped until save/load exists"),
             (ord("M"), "M unmapped until magic exists"),
             (ord("P"), "P unmapped until prayer exists"),
             (ord("F"), "F unmapped until gain spell exists"),
@@ -2068,6 +2132,22 @@ def main():
         stuff_key(bench, 0xD1)
         bench.run(require(labels, "cx16_poll_dead"))
         assert_eq(bench.get_memory(require(labels, "cx16_state")), 0, "death flow quit returns to title")
+        assert_eq(bench.get_memory(require(labels, "zp_game_flags")) & 0x01, 0x01, "death flag remains set on title")
+        stuff_key(bench, ord("N"))
+        bench.run(require(labels, "cx16_poll_menu"), timeout=8)
+        assert_eq(bench.get_memory(require(labels, "cx16_state")), CX16_STATE_NEW_GAME, "new game after death reaches town")
+        assert_eq(bench.get_memory(require(labels, "zp_game_flags")) & 0x01, 0, "new game after death clears death flag")
+        assert_eq(bench.get_memory(require(labels, "zp_death_source")), 0, "new game after death clears death source")
+        bench.set_a(1)
+        bench.run(require(labels, "cx16_enter_dungeon_level"), timeout=8)
+        assert_eq(bench.get_memory(require(labels, "cx16_state")), CX16_STATE_DUNGEON, "new game after death enters dungeon")
+        bench.set_a(CMD_REST)
+        bench.run(require(labels, "cx16_dispatch_game_command"), timeout=8)
+        assert_eq(
+            bench.get_memory(require(labels, "cx16_state")),
+            CX16_STATE_DUNGEON,
+            "new game after death survives first dungeon turn",
+        )
 
         print("CX16 runtime smoke passed")
     finally:
