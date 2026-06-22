@@ -48,6 +48,7 @@ PL_FOOD_LO = 51
 PL_FOOD_HI = 52
 PL_FLAGS = 54
 PL_MAX_DLVL = 56
+PLF_MALE = 0x01
 PLF_SEARCHING = 0x10
 KEYBUF = 0xA800
 KEYBUF_COUNT = 0xA80A
@@ -767,6 +768,7 @@ def main():
         assert_eq(bench.get_memory(require(labels, "zp_player_dlvl")), 0, "town depth")
         assert_eq(bench.get_memory(require(labels, "inv_item_id") + EQUIP_WEAPON), ITEM_PICK, "starting weapon")
         assert_eq(bench.get_memory(require(labels, "zp_player_str")), 18, "starting strength")
+        assert_eq(bench.get_memory(require(labels, "player_data") + PL_FLAGS), PLF_MALE, "starting sex flag")
         bench.run(require(labels, "tramp_dig_ability"))
         assert_eq(
             bench.get_memory(require(labels, "tun_dig_ability")),
@@ -1364,12 +1366,22 @@ def main():
         bench.run(require(labels, "cx16_draw_help_view"))
         assert_screen_text(bench, 3, 35, "COMMANDS", "help view title")
         assert_screen_text(bench, 7, 14, "MOVE: HJKL/YUBN OR 12346789", "help view movement")
+        bench.set_a(ord("V"))
+        bench.run(require(labels, "petscii_to_command"))
+        assert_eq(bench.get_a(), CMD_VERSION, "V maps to version command")
         bench.run(require(labels, "cx16_draw_version_view"))
         assert_screen_text(bench, 10, 24, "MORIA8 CX16 PORT V1.3.1", "version view")
+        bench.run(require(labels, "cx16_seed_starting_player_state"))
         bench.run(require(labels, "cx16_draw_character_view"))
-        assert_screen_text(bench, 3, 33, "CHARACTER", "character view title")
-        assert_screen_text(bench, 6, 20, "NAME: CX16", "character view name")
-        assert_screen_text(bench, 12, 20, "HP: ", "character view hp")
+        assert_screen_text(bench, 0, 33, "Character Info", "character view title")
+        assert_screen_text(bench, 2, 22, "Name: CX16", "character view name")
+        assert_screen_text(bench, 3, 22, "Race: Human", "character view race")
+        assert_screen_text(bench, 3, 43, "Class: Warrior", "character view class")
+        assert_screen_text(bench, 9, 22, "HP:12/12", "character view hp")
+        assert_screen_text(bench, 9, 39, "Mana: 0/0", "character view mana")
+        assert_screen_text(bench, 10, 22, "Gold: 200", "character view gold")
+        assert_screen_text(bench, 12, 22, "Sex: Male  SC: 50", "character view sex social class")
+        assert_screen_text(bench, 18, 33, "Press any key", "character view footer")
         bench.run(require(labels, "cx16_new_game_draw"))
 
         for command, text, label in (

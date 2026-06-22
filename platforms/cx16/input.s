@@ -101,9 +101,11 @@ petscii_to_command:
 
 key_map_petscii:
     :EmitBasePetsciiKeyMap()
+    .byte $56   // V — version view
 
 key_map_cmd:
     :EmitBaseCommandKeyMap()
+    .byte CMD_VERSION
 
 key_map_end:
 .label key_map_count = key_map_cmd - key_map_petscii

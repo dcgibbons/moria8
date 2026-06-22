@@ -97,6 +97,7 @@
 #import "../../core/tables.s"
 #import "../../core/rng.s"
 #import "../../core/numeric_format.s"
+#import "../../core/stat_display.s"
 #import "../../core/player_move_basic.s"
 #import "../../core/player_run_stop.s"
 #import "../../core/player_search.s"
@@ -1210,6 +1211,10 @@ cx16_seed_starting_player_state:
     sta player_data + PL_NAME + 3
     lda #0
     sta player_data + PL_NAME + 4
+    lda #PLF_MALE
+    sta player_data + PL_FLAGS
+    lda #50
+    sta player_data + PL_SOCIAL_CLASS
 
     lda #63
     sta inv_item_id + EQUIP_WEAPON
@@ -1675,6 +1680,12 @@ cx16_asset_load_failed_text:
     :ScreenText("ASSET LOAD FAILED")
     .byte 0
 
+#if !CX16_IMPORT_SHARED_GAME_LOOP
+press_key_str:
+    :ScreenText("Press any key")
+    .byte 0
+#endif
+
 cx16_loading_header_text:
     :ScreenText("LOADING:")
     .byte 0
@@ -1803,72 +1814,7 @@ cx16_overlay_draw_version_view:
     rts
 
 cx16_overlay_draw_character_view:
-    lda #CX16_TEXT_COLOR
-    jsr screen_set_color
-    jsr screen_clear
-    :Cx16PrintAt(3, 33, cx16_character_title_text)
-    :Cx16PrintAt(6, 20, cx16_character_name_label)
-    lda #6
-    sta zp_cursor_row
-    lda #26
-    sta zp_cursor_col
-    lda #<(player_data + PL_NAME)
-    sta zp_ptr0
-    lda #>(player_data + PL_NAME)
-    sta zp_ptr0_hi
-    jsr screen_put_string
-    :Cx16PrintAt(8, 20, cx16_character_race_label)
-    lda #8
-    sta zp_cursor_row
-    lda #26
-    sta zp_cursor_col
-    ldx zp_player_race
-    lda race_name_ptrs_lo,x
-    sta zp_ptr0
-    lda race_name_ptrs_hi,x
-    sta zp_ptr0_hi
-    jsr screen_put_string
-    :Cx16PrintAt(8, 42, cx16_character_class_label)
-    lda #8
-    sta zp_cursor_row
-    lda #49
-    sta zp_cursor_col
-    ldx zp_player_class
-    lda class_name_ptrs_lo,x
-    sta zp_ptr0
-    lda class_name_ptrs_hi,x
-    sta zp_ptr0_hi
-    jsr screen_put_string
-    :Cx16PrintAt(10, 20, cx16_character_level_label)
-    lda zp_player_lvl
-    jsr screen_put_decimal
-    :Cx16PrintAt(10, 42, cx16_character_depth_label)
-    lda zp_player_dlvl
-    jsr screen_put_decimal
-    :Cx16PrintAt(12, 20, cx16_character_hp_label)
-    lda zp_player_hp_lo
-    sta zp_temp0
-    lda zp_player_hp_hi
-    sta zp_temp1
-    jsr screen_put_decimal_16
-    lda #$2f
-    jsr screen_put_char
-    lda zp_player_mhp_lo
-    sta zp_temp0
-    lda zp_player_mhp_hi
-    sta zp_temp1
-    jsr screen_put_decimal_16
-    :Cx16PrintAt(12, 42, cx16_character_ac_label)
-    lda zp_player_ac
-    jsr screen_put_decimal
-    :Cx16PrintAt(14, 20, cx16_character_gold_label)
-    lda player_data + PL_GOLD_0
-    sta zp_temp0
-    lda player_data + PL_GOLD_1
-    sta zp_temp1
-    jsr screen_put_decimal_16
-    :Cx16PrintAt(20, 33, cx16_press_key_text)
-    rts
+    jmp ui_char_display
 
 cx16_press_key_text:
     :ScreenText("PRESS ANY KEY")
@@ -1911,42 +1857,68 @@ cx16_version_policy_text:
     :ScreenText("CX16 PORT IN PROGRESS")
     .byte 0
 
-cx16_character_title_text:
-    :ScreenText("CHARACTER")
+#if !CX16_IMPORT_SHARED_GAME_LOOP
+cx16_char_sex_label:
+    :ScreenText("Sex: ")
     .byte 0
 
-cx16_character_name_label:
-    :ScreenText("NAME: ")
+cx16_char_sex_male:
+    :ScreenText("Male")
     .byte 0
 
-cx16_character_race_label:
-    :ScreenText("RACE: ")
+cx16_char_sex_female:
+    :ScreenText("Female")
     .byte 0
 
-cx16_character_class_label:
-    :ScreenText("CLASS: ")
+cx16_char_sc_label:
+    :ScreenText("  SC: ")
     .byte 0
 
-cx16_character_level_label:
-    :ScreenText("LEVEL: ")
-    .byte 0
+ui_char_draw_background:
+    lda #12
+    sta zp_cursor_row
+    lda #hal_layout_character_background_col
+    sta zp_cursor_col
+    lda #COL_LGREY
+    sta zp_text_color
+    lda #<cx16_char_sex_label
+    sta zp_ptr0
+    lda #>cx16_char_sex_label
+    sta zp_ptr0_hi
+    jsr hal_screen_put_string
 
-cx16_character_depth_label:
-    :ScreenText("DEPTH: ")
-    .byte 0
+    lda #COL_WHITE
+    sta zp_text_color
+    lda player_data + PL_FLAGS
+    and #PLF_MALE
+    beq !female+
+    lda #<cx16_char_sex_male
+    sta zp_ptr0
+    lda #>cx16_char_sex_male
+    sta zp_ptr0_hi
+    jmp !print_sex+
+!female:
+    lda #<cx16_char_sex_female
+    sta zp_ptr0
+    lda #>cx16_char_sex_female
+    sta zp_ptr0_hi
+!print_sex:
+    jsr hal_screen_put_string
+    lda #COL_LGREY
+    sta zp_text_color
+    lda #<cx16_char_sc_label
+    sta zp_ptr0
+    lda #>cx16_char_sc_label
+    sta zp_ptr0_hi
+    jsr hal_screen_put_string
+    lda #COL_WHITE
+    sta zp_text_color
+    lda player_data + PL_SOCIAL_CLASS
+    jmp screen_put_decimal
+#endif
 
-cx16_character_hp_label:
-    :ScreenText("HP: ")
-    .byte 0
-
-cx16_character_ac_label:
-    :ScreenText("AC: ")
-    .byte 0
-
-cx16_character_gold_label:
-    :ScreenText("GOLD: ")
-    .byte 0
-
+    #import "../../core/spell_data.s"
+    #import "../../core/ui_character.s"
     :Cx16OverlayMarker(7)
 cx16_overlay_ui_end:
 .print "CX16 UI overlay: " + (cx16_overlay_ui_end - $a000) + " bytes at $A000-$" + toHexString(cx16_overlay_ui_end)
@@ -2161,11 +2133,6 @@ cx16_overlay_items_command_entry:
     rts
 #else
     rts
-#endif
-#if !CX16_IMPORT_SHARED_GAME_LOOP
-    press_key_str:
-        :ScreenText("Press any key")
-        .byte 0
 #endif
     #import "../../core/player_food_consts.s"
     #import "../../core/hunger_state.s"

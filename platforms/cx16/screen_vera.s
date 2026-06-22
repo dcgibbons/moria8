@@ -180,11 +180,19 @@ vera_put_char_with_attr:
 
 vera_translate_screen_code:
     cmp #$41
-    bcc !done+
+    bcc !check_lower+
     cmp #$5b
-    bcs !done+
+    bcs !check_lower+
     sec
     sbc #$40
+    rts
+!check_lower:
+    cmp #$61
+    bcc !done+
+    cmp #$7b
+    bcs !done+
+    sec
+    sbc #$60
 !done:
     rts
 
