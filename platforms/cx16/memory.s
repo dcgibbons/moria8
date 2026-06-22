@@ -26,10 +26,10 @@
 //   - banks 9-10: persistent item catalog family, ITEMCAT.1 plus reserved
 //                 item text/extra split bank
 //   - bank 11:  title-art source/staging bank, TITLE
-//   - banks 12-21: reserved Commodore-style overlay slots:
-//                  STARTUP, TOWN, DEATH, ROYAL, GEN, HELP, UI, ITEMS,
-//                  SPELL, DISARM
-//   - banks 22-31: unallocated persistent code-overlay expansion class
+//   - banks 12-20: reserved Commodore-style overlay slots:
+//                  STARTUP, TOWN, DEATH, GEN, HELP, UI, ITEMS,
+//                  SAVE, DISARM
+//   - banks 21-31: unallocated persistent code-overlay expansion class
 //   - banks 32-47: unallocated persistent immutable-data/string cache class
 //   - banks 48-63: unallocated transient save/generation/work cache class
 //
@@ -82,13 +82,12 @@
 .const CX16_OVERLAY_STARTUP_BANK = CX16_OVERLAY_CACHE_BANK_BASE
 .const CX16_OVERLAY_TOWN_BANK = CX16_OVERLAY_STARTUP_BANK + 1
 .const CX16_OVERLAY_DEATH_BANK = CX16_OVERLAY_TOWN_BANK + 1
-.const CX16_OVERLAY_ROYAL_BANK = CX16_OVERLAY_DEATH_BANK + 1
-.const CX16_OVERLAY_GEN_BANK = CX16_OVERLAY_ROYAL_BANK + 1
+.const CX16_OVERLAY_GEN_BANK = CX16_OVERLAY_DEATH_BANK + 1
 .const CX16_OVERLAY_HELP_BANK = CX16_OVERLAY_GEN_BANK + 1
 .const CX16_OVERLAY_UI_BANK = CX16_OVERLAY_HELP_BANK + 1
 .const CX16_OVERLAY_ITEMS_BANK = CX16_OVERLAY_UI_BANK + 1
-.const CX16_OVERLAY_SPELL_BANK = CX16_OVERLAY_ITEMS_BANK + 1
-.const CX16_OVERLAY_DISARM_BANK = CX16_OVERLAY_SPELL_BANK + 1
+.const CX16_OVERLAY_STORAGE_BANK = CX16_OVERLAY_ITEMS_BANK + 1
+.const CX16_OVERLAY_DISARM_BANK = CX16_OVERLAY_STORAGE_BANK + 1
 .const CX16_OVERLAY_SLOT_BANK_BASE = CX16_OVERLAY_STARTUP_BANK
 .const CX16_OVERLAY_SLOT_BANK_END = CX16_OVERLAY_DISARM_BANK
 .const CX16_OVERLAY_FREE_BANK_BASE = CX16_OVERLAY_SLOT_BANK_END + 1
@@ -160,13 +159,12 @@
 .assert "CX16 overlay startup slot is first overlay slot", CX16_OVERLAY_STARTUP_BANK, CX16_OVERLAY_SLOT_BANK_BASE
 .assert "CX16 overlay town slot follows startup", CX16_OVERLAY_TOWN_BANK, CX16_OVERLAY_STARTUP_BANK + 1
 .assert "CX16 overlay death slot follows town", CX16_OVERLAY_DEATH_BANK, CX16_OVERLAY_TOWN_BANK + 1
-.assert "CX16 overlay royal slot follows death", CX16_OVERLAY_ROYAL_BANK, CX16_OVERLAY_DEATH_BANK + 1
-.assert "CX16 overlay gen slot follows royal", CX16_OVERLAY_GEN_BANK, CX16_OVERLAY_ROYAL_BANK + 1
+.assert "CX16 overlay gen slot follows death", CX16_OVERLAY_GEN_BANK, CX16_OVERLAY_DEATH_BANK + 1
 .assert "CX16 overlay help slot follows gen", CX16_OVERLAY_HELP_BANK, CX16_OVERLAY_GEN_BANK + 1
 .assert "CX16 overlay ui slot follows help", CX16_OVERLAY_UI_BANK, CX16_OVERLAY_HELP_BANK + 1
 .assert "CX16 overlay items slot follows ui", CX16_OVERLAY_ITEMS_BANK, CX16_OVERLAY_UI_BANK + 1
-.assert "CX16 overlay spell slot follows items", CX16_OVERLAY_SPELL_BANK, CX16_OVERLAY_ITEMS_BANK + 1
-.assert "CX16 overlay disarm slot follows spell", CX16_OVERLAY_DISARM_BANK, CX16_OVERLAY_SPELL_BANK + 1
+.assert "CX16 overlay storage slot follows items", CX16_OVERLAY_STORAGE_BANK, CX16_OVERLAY_ITEMS_BANK + 1
+.assert "CX16 overlay disarm slot follows storage", CX16_OVERLAY_DISARM_BANK, CX16_OVERLAY_STORAGE_BANK + 1
 .assert "CX16 overlay slot end is disarm slot", CX16_OVERLAY_SLOT_BANK_END, CX16_OVERLAY_DISARM_BANK
 .assert "CX16 overlay free class follows named slots", CX16_OVERLAY_FREE_BANK_BASE, CX16_OVERLAY_SLOT_BANK_END + 1
 .assert "CX16 overlay free class ends at overlay cache end", CX16_OVERLAY_FREE_BANK_END, CX16_OVERLAY_CACHE_BANK_END

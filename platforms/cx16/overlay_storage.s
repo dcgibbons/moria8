@@ -3,7 +3,7 @@
 
 .const CX16_OVERLAY_LOAD_BASE = CX16_BANKED_RAM_BASE
 .const CX16_OVERLAY_LOAD_END = CX16_BANKED_RAM_END
-.const CX16_OVERLAY_PRELOAD_COUNT = 10
+.const CX16_OVERLAY_PRELOAD_COUNT = 9
 
 .assert "CX16 overlay load base is bank-window base", CX16_OVERLAY_LOAD_BASE, CX16_BANKED_RAM_BASE
 .assert "CX16 overlay load end is bank-window end", CX16_OVERLAY_LOAD_END, CX16_BANKED_RAM_END
@@ -17,7 +17,7 @@ cx16_overlay_load_bank: .byte 0
 cx16_overlay_ready:
     .fill CX16_OVERLAY_PRELOAD_COUNT + 1, 0
 
-// Output: carry clear = all overlay sidecars loaded into reserved banks.
+// Output: carry clear = all overlay payloads loaded into reserved banks.
 //         carry set = first load failure, cx16_overlay_target holds the ID.
 cx16_preload_all_overlays:
     lda #0
@@ -117,38 +117,36 @@ cx16_overlay_bank:
     .byte CX16_OVERLAY_STARTUP_BANK
     .byte CX16_OVERLAY_TOWN_BANK
     .byte CX16_OVERLAY_DEATH_BANK
-    .byte CX16_OVERLAY_ROYAL_BANK
     .byte CX16_OVERLAY_GEN_BANK
     .byte CX16_OVERLAY_HELP_BANK
     .byte CX16_OVERLAY_UI_BANK
     .byte CX16_OVERLAY_ITEMS_BANK
-    .byte CX16_OVERLAY_SPELL_BANK
+    .byte CX16_OVERLAY_STORAGE_BANK
     .byte CX16_OVERLAY_DISARM_BANK
 
-// Map shared overlay IDs to the CX16 physical slot order. Royal is a reserved
-// CX16 slot but not part of the shared OVL_* ID sequence.
+// Map shared overlay IDs to the CX16 physical slot order.
 cx16_overlay_common_to_slot:
     .byte 0
     .byte 1  // OVL_STARTUP
     .byte 2  // OVL_TOWN
     .byte 3  // OVL_DEATH
-    .byte 5  // OVL_DUNGEON_GEN
-    .byte 6  // OVL_HELP
-    .byte 7  // OVL_UI
-    .byte 8  // OVL_ITEMS
-    .byte 9  // OVL_SPELL
+    .byte 4  // OVL_DUNGEON_GEN
+    .byte 5  // OVL_HELP
+    .byte 6  // OVL_UI
+    .byte 7  // OVL_ITEMS
+    .byte 8  // OVL_STORAGE; shared-probe OVL_SPELL aliases here in config.s.
     .byte 0
-    .byte 10 // CX16 disarm slot
+    .byte 9  // CX16 disarm slot
 
 cx16_overlay_file_lo:
-    .byte <cx16_overlay_start_file, <cx16_overlay_town_file, <cx16_overlay_death_file, <cx16_overlay_royal_file, <cx16_overlay_gen_file
-    .byte <cx16_overlay_help_file, <cx16_overlay_ui_file, <cx16_overlay_items_file, <cx16_overlay_spell_file, <cx16_overlay_disarm_file
+    .byte <cx16_overlay_start_file, <cx16_overlay_town_file, <cx16_overlay_death_file, <cx16_overlay_gen_file
+    .byte <cx16_overlay_help_file, <cx16_overlay_ui_file, <cx16_overlay_items_file, <cx16_overlay_storage_file, <cx16_overlay_disarm_file
 cx16_overlay_file_hi:
-    .byte >cx16_overlay_start_file, >cx16_overlay_town_file, >cx16_overlay_death_file, >cx16_overlay_royal_file, >cx16_overlay_gen_file
-    .byte >cx16_overlay_help_file, >cx16_overlay_ui_file, >cx16_overlay_items_file, >cx16_overlay_spell_file, >cx16_overlay_disarm_file
+    .byte >cx16_overlay_start_file, >cx16_overlay_town_file, >cx16_overlay_death_file, >cx16_overlay_gen_file
+    .byte >cx16_overlay_help_file, >cx16_overlay_ui_file, >cx16_overlay_items_file, >cx16_overlay_storage_file, >cx16_overlay_disarm_file
 cx16_overlay_file_len:
-    .byte cx16_overlay_start_file_len, cx16_overlay_town_file_len, cx16_overlay_death_file_len, cx16_overlay_royal_file_len, cx16_overlay_gen_file_len
-    .byte cx16_overlay_help_file_len, cx16_overlay_ui_file_len, cx16_overlay_items_file_len, cx16_overlay_spell_file_len, cx16_overlay_disarm_file_len
+    .byte cx16_overlay_start_file_len, cx16_overlay_town_file_len, cx16_overlay_death_file_len, cx16_overlay_gen_file_len
+    .byte cx16_overlay_help_file_len, cx16_overlay_ui_file_len, cx16_overlay_items_file_len, cx16_overlay_storage_file_len, cx16_overlay_disarm_file_len
 
 cx16_overlay_start_file:
     .byte $58, $31, $36, $2e, $53, $54, $41, $52, $54 // "X16.START"
@@ -159,9 +157,6 @@ cx16_overlay_town_file:
 cx16_overlay_death_file:
     .byte $58, $31, $36, $2e, $44, $45, $41, $54, $48 // "X16.DEATH"
 .label cx16_overlay_death_file_len = * - cx16_overlay_death_file
-cx16_overlay_royal_file:
-    .byte $58, $31, $36, $2e, $52, $4f, $59, $41, $4c // "X16.ROYAL"
-.label cx16_overlay_royal_file_len = * - cx16_overlay_royal_file
 cx16_overlay_gen_file:
     .byte $58, $31, $36, $2e, $47, $45, $4e // "X16.GEN"
 .label cx16_overlay_gen_file_len = * - cx16_overlay_gen_file
@@ -174,13 +169,9 @@ cx16_overlay_ui_file:
 cx16_overlay_items_file:
     .byte $58, $31, $36, $2e, $49, $54, $45, $4d, $53 // "X16.ITEMS"
 .label cx16_overlay_items_file_len = * - cx16_overlay_items_file
-cx16_overlay_spell_file:
-    .byte $58, $31, $36, $2e, $53, $50, $45, $4c, $4c // "X16.SPELL"
-.label cx16_overlay_spell_file_len = * - cx16_overlay_spell_file
+cx16_overlay_storage_file:
+    .byte $58, $31, $36, $2e, $53, $41, $56, $45 // "X16.SAVE"
+.label cx16_overlay_storage_file_len = * - cx16_overlay_storage_file
 cx16_overlay_disarm_file:
     .byte $58, $31, $36, $2e, $44, $49, $53, $41, $52, $4d // "X16.DISARM"
 .label cx16_overlay_disarm_file_len = * - cx16_overlay_disarm_file
-
-.macro Cx16OverlayMarker(id) {
-    .byte $43, $58, $31, $36, $4f, $56, $4c, id // "CX16OVL", id
-}

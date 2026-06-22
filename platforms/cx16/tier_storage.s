@@ -63,18 +63,30 @@ cx16_tier_file_hi:
 cx16_tier_file_len:
     .byte cx16_tier_file_1_len, cx16_tier_file_2_len, cx16_tier_file_3_len, cx16_tier_file_4_len
 
+.label hal_storage_tier_name_lo = cx16_tier_file_lo
+.label hal_storage_tier_name_hi = cx16_tier_file_hi
+.label hal_storage_tier_name_len = cx16_tier_file_len
+
 cx16_tier_file_1:
     .byte $4d, $4f, $4e, $53, $54, $45, $52, $2e, $44, $42, $2e, $31 // "MONSTER.DB.1"
 .label cx16_tier_file_1_len = * - cx16_tier_file_1
+.label hal_storage_tier_1_name = cx16_tier_file_1
+.label hal_storage_tier_1_name_len = cx16_tier_file_1_len
 
 cx16_tier_file_2:
     .byte $4d, $4f, $4e, $53, $54, $45, $52, $2e, $44, $42, $2e, $32 // "MONSTER.DB.2"
 .label cx16_tier_file_2_len = * - cx16_tier_file_2
+.label hal_storage_tier_2_name = cx16_tier_file_2
+.label hal_storage_tier_2_name_len = cx16_tier_file_2_len
 
 cx16_tier_file_3:
     .byte $4d, $4f, $4e, $53, $54, $45, $52, $2e, $44, $42, $2e, $33 // "MONSTER.DB.3"
 .label cx16_tier_file_3_len = * - cx16_tier_file_3
+.label hal_storage_tier_3_name = cx16_tier_file_3
+.label hal_storage_tier_3_name_len = cx16_tier_file_3_len
 
 cx16_tier_file_4:
     .byte $4d, $4f, $4e, $53, $54, $45, $52, $2e, $44, $42, $2e, $34 // "MONSTER.DB.4"
 .label cx16_tier_file_4_len = * - cx16_tier_file_4
+.label hal_storage_tier_4_name = cx16_tier_file_4
+.label hal_storage_tier_4_name_len = cx16_tier_file_4_len

@@ -56,13 +56,12 @@ CX16_OVERLAY_CACHE_BANK_END = 31
 CX16_OVERLAY_STARTUP_BANK = CX16_OVERLAY_CACHE_BANK_BASE
 CX16_OVERLAY_TOWN_BANK = CX16_OVERLAY_STARTUP_BANK + 1
 CX16_OVERLAY_DEATH_BANK = CX16_OVERLAY_TOWN_BANK + 1
-CX16_OVERLAY_ROYAL_BANK = CX16_OVERLAY_DEATH_BANK + 1
-CX16_OVERLAY_GEN_BANK = CX16_OVERLAY_ROYAL_BANK + 1
+CX16_OVERLAY_GEN_BANK = CX16_OVERLAY_DEATH_BANK + 1
 CX16_OVERLAY_HELP_BANK = CX16_OVERLAY_GEN_BANK + 1
 CX16_OVERLAY_UI_BANK = CX16_OVERLAY_HELP_BANK + 1
 CX16_OVERLAY_ITEMS_BANK = CX16_OVERLAY_UI_BANK + 1
-CX16_OVERLAY_SPELL_BANK = CX16_OVERLAY_ITEMS_BANK + 1
-CX16_OVERLAY_DISARM_BANK = CX16_OVERLAY_SPELL_BANK + 1
+CX16_OVERLAY_STORAGE_BANK = CX16_OVERLAY_ITEMS_BANK + 1
+CX16_OVERLAY_DISARM_BANK = CX16_OVERLAY_STORAGE_BANK + 1
 CX16_OVERLAY_SLOT_BANK_BASE = CX16_OVERLAY_STARTUP_BANK
 CX16_OVERLAY_SLOT_BANK_END = CX16_OVERLAY_DISARM_BANK
 CX16_OVERLAY_PRELOAD_COUNT = CX16_OVERLAY_SLOT_BANK_END - CX16_OVERLAY_SLOT_BANK_BASE + 1
@@ -194,12 +193,11 @@ def emit_report(product, shared_probe, title, tiers, modules, items, overlays):
         f"STARTUP={CX16_OVERLAY_STARTUP_BANK}, "
         f"TOWN={CX16_OVERLAY_TOWN_BANK}, "
         f"DEATH={CX16_OVERLAY_DEATH_BANK}, "
-        f"ROYAL={CX16_OVERLAY_ROYAL_BANK}, "
         f"GEN={CX16_OVERLAY_GEN_BANK}, "
         f"HELP={CX16_OVERLAY_HELP_BANK}, "
         f"UI={CX16_OVERLAY_UI_BANK}, "
         f"ITEMS={CX16_OVERLAY_ITEMS_BANK}, "
-        f"SPELL={CX16_OVERLAY_SPELL_BANK}, "
+        f"SAVE={CX16_OVERLAY_STORAGE_BANK}, "
         f"DISARM={CX16_OVERLAY_DISARM_BANK}"
     )
     print(f"  overlay slot banks: {CX16_OVERLAY_SLOT_BANK_BASE}-{CX16_OVERLAY_SLOT_BANK_END}")
@@ -264,12 +262,11 @@ def check_contract_symbols(labels):
         "cx16_contract_overlay_startup_bank": CX16_OVERLAY_STARTUP_BANK,
         "cx16_contract_overlay_town_bank": CX16_OVERLAY_TOWN_BANK,
         "cx16_contract_overlay_death_bank": CX16_OVERLAY_DEATH_BANK,
-        "cx16_contract_overlay_royal_bank": CX16_OVERLAY_ROYAL_BANK,
         "cx16_contract_overlay_gen_bank": CX16_OVERLAY_GEN_BANK,
         "cx16_contract_overlay_help_bank": CX16_OVERLAY_HELP_BANK,
         "cx16_contract_overlay_ui_bank": CX16_OVERLAY_UI_BANK,
         "cx16_contract_overlay_items_bank": CX16_OVERLAY_ITEMS_BANK,
-        "cx16_contract_overlay_spell_bank": CX16_OVERLAY_SPELL_BANK,
+        "cx16_contract_overlay_storage_bank": CX16_OVERLAY_STORAGE_BANK,
         "cx16_contract_overlay_disarm_bank": CX16_OVERLAY_DISARM_BANK,
         "cx16_contract_overlay_slot_bank_base": CX16_OVERLAY_SLOT_BANK_BASE,
         "cx16_contract_overlay_slot_bank_end": CX16_OVERLAY_SLOT_BANK_END,
@@ -405,12 +402,11 @@ def check_contract_symbols(labels):
         "startup",
         "town",
         "death",
-        "royal",
         "gen",
         "help",
         "ui",
         "items",
-        "spell",
+        "storage",
         "disarm",
     )
     previous_name = None

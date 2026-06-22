@@ -12,12 +12,11 @@
 .segmentdef Cx16StartupOverlay   [outPrg=CX16_OUT + "/X16.START",  start=$a000, min=$a000, max=$bfff]
 .segmentdef Cx16TownOverlay      [outPrg=CX16_OUT + "/X16.TOWN",   start=$a000, min=$a000, max=$bfff]
 .segmentdef Cx16DeathOverlay     [outPrg=CX16_OUT + "/X16.DEATH",  start=$a000, min=$a000, max=$bfff]
-.segmentdef Cx16RoyalOverlay     [outPrg=CX16_OUT + "/X16.ROYAL",  start=$a000, min=$a000, max=$bfff]
 .segmentdef Cx16GenOverlay       [outPrg=CX16_OUT + "/X16.GEN",    start=$a000, min=$a000, max=$bfff]
 .segmentdef Cx16HelpOverlay      [outPrg=CX16_OUT + "/X16.HELP",   start=$a000, min=$a000, max=$bfff]
 .segmentdef Cx16UiOverlay        [outPrg=CX16_OUT + "/X16.UI",     start=$a000, min=$a000, max=$bfff]
 .segmentdef Cx16ItemsOverlay     [outPrg=CX16_OUT + "/X16.ITEMS",  start=$a000, min=$a000, max=$bfff]
-.segmentdef Cx16SpellOverlay     [outPrg=CX16_OUT + "/X16.SPELL",  start=$a000, min=$a000, max=$bfff]
+.segmentdef Cx16StorageOverlay   [outPrg=CX16_OUT + "/X16.SAVE",   start=$a000, min=$a000, max=$bfff]
 .segmentdef Cx16DisarmOverlay    [outPrg=CX16_OUT + "/X16.DISARM", start=$a000, min=$a000, max=$bfff]
 
 .pc = $0801 "BASIC Stub"
@@ -50,37 +49,16 @@
 .const CX16_TITLE_MENU_COL = 27
 .const CX16_TEXT_COLOR = $01
 .const CX16_DUNGEON_LIGHT_RADIUS = 1
-.const CX16_FEATURE_CMD_OPEN = 0
-.const CX16_FEATURE_CMD_CLOSE = 1
-.const CX16_FEATURE_CMD_SEARCH = 2
-.const CX16_FEATURE_CMD_REST = 3
-.const CX16_FEATURE_CMD_SEARCH_MODE = 4
-.const CX16_FEATURE_CMD_LOOK = 5
-.const CX16_FEATURE_CMD_AUTOREST = 6
-.const CX16_FEATURE_CMD_BASH = 7
-.const CX16_FEATURE_CMD_TUNNEL = 8
-.const CX16_FEATURE_CMD_DISARM = 9
 .const CX16_UI_CMD_VERSION = 1
 .const CX16_UI_CMD_CHARACTER = 2
 .const CX16_UI_CMD_MESSAGE = 3
 .const CX16_UI_CMD_TOWN_FOOTER = 4
 .const CX16_UI_CMD_DUNGEON_FOOTER = 5
+.const CX16_UI_CMD_IDENTIFY_SYMBOL = 6
 .const CX16_UI_MSG_NO_STAIRS = 0
 .const CX16_UI_MSG_DUNGEON_ONLY = 1
 .const CX16_UI_MSG_DUNGEON_READY = 2
-.const CX16_ITEM_CMD_PICKUP = 0
-.const CX16_ITEM_CMD_DROP = 1
-.const CX16_ITEM_CMD_INVENTORY = 2
-.const CX16_ITEM_CMD_EQUIPMENT = 3
-.const CX16_ITEM_CMD_WEAR = 4
-.const CX16_ITEM_CMD_TAKEOFF = 5
-.const CX16_ITEM_CMD_EAT = 6
-.const CX16_ITEM_CMD_QUAFF = 7
-.const CX16_ITEM_CMD_REFUEL = 8
-.const CX16_ITEM_CMD_READ = 9
-.const CX16_ITEM_CMD_AIM = 10
-.const CX16_ITEM_CMD_USE = 11
-.const CX16_ITEM_CMD_SEED_SURVIVAL_LOOT = 12
+.const CX16_ITEM_CMD_SEED_SURVIVAL_LOOT = $80
 .const CX16_SAVE_CMD_SAVE = 0
 .const CX16_SAVE_CMD_LOAD = 1
 .const CX16_SAVE_CMD_MESSAGE = 2
@@ -229,12 +207,11 @@
 .label cx16_contract_overlay_startup_bank = CX16_OVERLAY_STARTUP_BANK
 .label cx16_contract_overlay_town_bank = CX16_OVERLAY_TOWN_BANK
 .label cx16_contract_overlay_death_bank = CX16_OVERLAY_DEATH_BANK
-.label cx16_contract_overlay_royal_bank = CX16_OVERLAY_ROYAL_BANK
 .label cx16_contract_overlay_gen_bank = CX16_OVERLAY_GEN_BANK
 .label cx16_contract_overlay_help_bank = CX16_OVERLAY_HELP_BANK
 .label cx16_contract_overlay_ui_bank = CX16_OVERLAY_UI_BANK
 .label cx16_contract_overlay_items_bank = CX16_OVERLAY_ITEMS_BANK
-.label cx16_contract_overlay_spell_bank = CX16_OVERLAY_SPELL_BANK
+.label cx16_contract_overlay_storage_bank = CX16_OVERLAY_STORAGE_BANK
 .label cx16_contract_overlay_disarm_bank = CX16_OVERLAY_DISARM_BANK
 .label cx16_contract_overlay_slot_bank_base = CX16_OVERLAY_SLOT_BANK_BASE
 .label cx16_contract_overlay_slot_bank_end = CX16_OVERLAY_SLOT_BANK_END
@@ -268,6 +245,7 @@ cx16_entry:
     :Cx16PrintAt(14, 30, cx16_asset_load_failed_text)
     jmp !halt-
 !assets_ok:
+    jsr cx16_debug_pause_after_load
     jsr rng_seed
     lda #CX16_TEXT_COLOR
     jsr screen_set_color
@@ -374,6 +352,13 @@ cx16_loader_show_file:
     inc cx16_loader_row
     rts
 
+// TEMP DEBUG: remove after loader-screen diagnosis.
+cx16_debug_pause_after_load:
+    :Cx16PrintAt(27, 28, cx16_debug_load_pause_text)
+    cli
+    jsr input_get_key
+    jmp input_wait_release
+
 cx16_title_enter_menu:
     lda #CX16_STATE_TITLE
     sta cx16_state
@@ -426,12 +411,12 @@ cx16_poll_menu:
     jmp cx16_load_game_record
 
 cx16_poll_dead:
-    jsr input_get_command
-    cmp #CMD_QUIT
-    beq !title+
-    rts
-!title:
+    jsr input_get_key
+    beq !done+
+    jsr input_wait_release
     jmp cx16_title_enter_menu
+!done:
+    rts
 
 cx16_new_game_start:
     jsr rng_seed
@@ -490,107 +475,105 @@ cx16_dispatch_done:
     rts
 
 cx16_command_dispatch_lo:
-    .byte <cx16_try_stairs_down      // CMD_STAIRS_DN
-    .byte <cx16_try_stairs_up        // CMD_STAIRS_UP
-    .byte <cx16_cmd_rest             // CMD_REST
-    .byte <cx16_cmd_search           // CMD_SEARCH
-    .byte <cx16_cmd_open             // CMD_OPEN
-    .byte <cx16_cmd_close            // CMD_CLOSE
-    .byte <cx16_cmd_pickup           // CMD_PICKUP
-    .byte <cx16_cmd_drop             // CMD_DROP
-    .byte <cx16_cmd_inventory        // CMD_INVENTORY
-    .byte <cx16_cmd_equipment        // CMD_EQUIPMENT
-    .byte <cx16_cmd_wear             // CMD_WEAR
-    .byte <cx16_cmd_takeoff          // CMD_TAKEOFF
-    .byte <cx16_cmd_eat              // CMD_EAT
-    .byte <cx16_cmd_quaff            // CMD_QUAFF
-    .byte <cx16_cmd_read             // CMD_READ
-    .byte <cx16_cmd_aim              // CMD_AIM
-    .byte <cx16_cmd_use              // CMD_USE
-    .byte <cx16_dispatch_done        // CMD_CAST
-    .byte <cx16_dispatch_done        // CMD_PRAY
-    .byte <cx16_show_character_info  // CMD_CHAR_INFO
-    .byte <cx16_dispatch_done        // CMD_MAP
-    .byte <cx16_dispatch_done        // CMD_RECALL
-    .byte <cx16_cmd_look             // CMD_LOOK
-    .byte <cx16_dispatch_done        // CMD_RUN
-    .byte <cx16_save_game_record     // CMD_SAVE
-    .byte <cx16_title_enter_menu     // CMD_QUIT
-    .byte <cx16_show_help            // CMD_HELP
-    .byte <cx16_show_version         // CMD_VERSION
-    .byte <cx16_run_command          // CMD_RUN_N
-    .byte <cx16_run_command          // CMD_RUN_S
-    .byte <cx16_run_command          // CMD_RUN_W
-    .byte <cx16_run_command          // CMD_RUN_E
-    .byte <cx16_run_command          // CMD_RUN_NW
-    .byte <cx16_run_command          // CMD_RUN_NE
-    .byte <cx16_run_command          // CMD_RUN_SW
-    .byte <cx16_run_command          // CMD_RUN_SE
-    .byte <cx16_dispatch_done        // CMD_GAIN
-    .byte <cx16_show_dungeon_only_message // CMD_FIRE
-    .byte <cx16_show_dungeon_only_message // CMD_THROW
-    .byte <cx16_cmd_refuel           // CMD_REFUEL
-    .byte <cx16_cmd_bash             // CMD_BASH
-    .byte <cx16_cmd_tunnel           // CMD_TUNNEL
-    .byte <cx16_dispatch_done        // CMD_WIZARD
-    .byte <cx16_cmd_search_mode      // CMD_SEARCH_MODE
-    .byte <cx16_cmd_disarm           // CMD_DISARM
-    .byte <cx16_cmd_autorest         // CMD_AUTOREST
+cx16_command_dispatch_lo_stairs_dn: .byte <cx16_try_stairs_down
+cx16_command_dispatch_lo_stairs_up: .byte <cx16_try_stairs_up
+cx16_command_dispatch_lo_rest: .byte <cx16_call_feature_overlay_command
+cx16_command_dispatch_lo_search: .byte <cx16_call_feature_overlay_command
+cx16_command_dispatch_lo_open: .byte <cx16_call_feature_overlay_command
+cx16_command_dispatch_lo_close: .byte <cx16_call_feature_overlay_command
+cx16_command_dispatch_lo_pickup: .byte <cx16_call_items_overlay_command
+cx16_command_dispatch_lo_drop: .byte <cx16_call_items_overlay_command
+cx16_command_dispatch_lo_inventory: .byte <cx16_cmd_inventory
+cx16_command_dispatch_lo_equipment: .byte <cx16_cmd_equipment
+cx16_command_dispatch_lo_wear: .byte <cx16_call_items_overlay_command
+cx16_command_dispatch_lo_takeoff: .byte <cx16_call_items_overlay_command
+cx16_command_dispatch_lo_eat: .byte <cx16_call_items_overlay_command
+cx16_command_dispatch_lo_quaff: .byte <cx16_call_items_overlay_command
+cx16_command_dispatch_lo_read: .byte <cx16_call_items_overlay_command
+cx16_command_dispatch_lo_aim: .byte <cx16_call_items_overlay_command
+cx16_command_dispatch_lo_use: .byte <cx16_call_items_overlay_command
+cx16_command_dispatch_lo_cast: .byte <cx16_dispatch_done
+cx16_command_dispatch_lo_pray: .byte <cx16_dispatch_done
+cx16_command_dispatch_lo_char_info: .byte <cx16_show_character_info
+cx16_command_dispatch_lo_map: .byte <cx16_dispatch_done
+cx16_command_dispatch_lo_recall: .byte <cx16_cmd_identify_symbol
+cx16_command_dispatch_lo_look: .byte <cx16_call_feature_overlay_command
+cx16_command_dispatch_lo_run: .byte <cx16_run_prefix_command
+cx16_command_dispatch_lo_save: .byte <cx16_save_game_record
+cx16_command_dispatch_lo_quit: .byte <cx16_title_enter_menu
+cx16_command_dispatch_lo_help: .byte <cx16_show_help
+cx16_command_dispatch_lo_version: .byte <cx16_show_version
+cx16_command_dispatch_lo_run_n: .byte <cx16_run_command
+cx16_command_dispatch_lo_run_s: .byte <cx16_run_command
+cx16_command_dispatch_lo_run_w: .byte <cx16_run_command
+cx16_command_dispatch_lo_run_e: .byte <cx16_run_command
+cx16_command_dispatch_lo_run_nw: .byte <cx16_run_command
+cx16_command_dispatch_lo_run_ne: .byte <cx16_run_command
+cx16_command_dispatch_lo_run_sw: .byte <cx16_run_command
+cx16_command_dispatch_lo_run_se: .byte <cx16_run_command
+cx16_command_dispatch_lo_gain: .byte <cx16_dispatch_done
+cx16_command_dispatch_lo_fire: .byte <cx16_dispatch_done
+cx16_command_dispatch_lo_throw: .byte <cx16_dispatch_done
+cx16_command_dispatch_lo_refuel: .byte <cx16_call_items_overlay_command
+cx16_command_dispatch_lo_bash: .byte <cx16_call_feature_overlay_command
+cx16_command_dispatch_lo_tunnel: .byte <cx16_call_feature_overlay_command
+cx16_command_dispatch_lo_wizard: .byte <cx16_dispatch_done
+cx16_command_dispatch_lo_search_mode: .byte <cx16_call_feature_overlay_command
+cx16_command_dispatch_lo_disarm: .byte <cx16_call_feature_overlay_command
+cx16_command_dispatch_lo_autorest: .byte <cx16_call_feature_overlay_command
 cx16_command_dispatch_lo_end:
 
 cx16_command_dispatch_hi:
-    .byte >cx16_try_stairs_down
-    .byte >cx16_try_stairs_up
-    .byte >cx16_cmd_rest
-    .byte >cx16_cmd_search
-    .byte >cx16_cmd_open
-    .byte >cx16_cmd_close
-    .byte >cx16_cmd_pickup
-    .byte >cx16_cmd_drop
-    .byte >cx16_cmd_inventory
-    .byte >cx16_cmd_equipment
-    .byte >cx16_cmd_wear
-    .byte >cx16_cmd_takeoff
-    .byte >cx16_cmd_eat
-    .byte >cx16_cmd_quaff
-    .byte >cx16_cmd_read
-    .byte >cx16_cmd_aim
-    .byte >cx16_cmd_use
-    .byte >cx16_dispatch_done
-    .byte >cx16_dispatch_done
-    .byte >cx16_show_character_info
-    .byte >cx16_dispatch_done
-    .byte >cx16_dispatch_done
-    .byte >cx16_cmd_look
-    .byte >cx16_dispatch_done
-    .byte >cx16_save_game_record
-    .byte >cx16_title_enter_menu
-    .byte >cx16_show_help
-    .byte >cx16_show_version
-    .byte >cx16_run_command
-    .byte >cx16_run_command
-    .byte >cx16_run_command
-    .byte >cx16_run_command
-    .byte >cx16_run_command
-    .byte >cx16_run_command
-    .byte >cx16_run_command
-    .byte >cx16_run_command
-    .byte >cx16_dispatch_done
-    .byte >cx16_show_dungeon_only_message
-    .byte >cx16_show_dungeon_only_message
-    .byte >cx16_cmd_refuel
-    .byte >cx16_cmd_bash
-    .byte >cx16_cmd_tunnel
-    .byte >cx16_dispatch_done
-    .byte >cx16_cmd_search_mode
-    .byte >cx16_cmd_disarm
-    .byte >cx16_cmd_autorest
+cx16_command_dispatch_hi_stairs_dn: .byte >cx16_try_stairs_down
+cx16_command_dispatch_hi_stairs_up: .byte >cx16_try_stairs_up
+cx16_command_dispatch_hi_rest: .byte >cx16_call_feature_overlay_command
+cx16_command_dispatch_hi_search: .byte >cx16_call_feature_overlay_command
+cx16_command_dispatch_hi_open: .byte >cx16_call_feature_overlay_command
+cx16_command_dispatch_hi_close: .byte >cx16_call_feature_overlay_command
+cx16_command_dispatch_hi_pickup: .byte >cx16_call_items_overlay_command
+cx16_command_dispatch_hi_drop: .byte >cx16_call_items_overlay_command
+cx16_command_dispatch_hi_inventory: .byte >cx16_cmd_inventory
+cx16_command_dispatch_hi_equipment: .byte >cx16_cmd_equipment
+cx16_command_dispatch_hi_wear: .byte >cx16_call_items_overlay_command
+cx16_command_dispatch_hi_takeoff: .byte >cx16_call_items_overlay_command
+cx16_command_dispatch_hi_eat: .byte >cx16_call_items_overlay_command
+cx16_command_dispatch_hi_quaff: .byte >cx16_call_items_overlay_command
+cx16_command_dispatch_hi_read: .byte >cx16_call_items_overlay_command
+cx16_command_dispatch_hi_aim: .byte >cx16_call_items_overlay_command
+cx16_command_dispatch_hi_use: .byte >cx16_call_items_overlay_command
+cx16_command_dispatch_hi_cast: .byte >cx16_dispatch_done
+cx16_command_dispatch_hi_pray: .byte >cx16_dispatch_done
+cx16_command_dispatch_hi_char_info: .byte >cx16_show_character_info
+cx16_command_dispatch_hi_map: .byte >cx16_dispatch_done
+cx16_command_dispatch_hi_recall: .byte >cx16_cmd_identify_symbol
+cx16_command_dispatch_hi_look: .byte >cx16_call_feature_overlay_command
+cx16_command_dispatch_hi_run: .byte >cx16_run_prefix_command
+cx16_command_dispatch_hi_save: .byte >cx16_save_game_record
+cx16_command_dispatch_hi_quit: .byte >cx16_title_enter_menu
+cx16_command_dispatch_hi_help: .byte >cx16_show_help
+cx16_command_dispatch_hi_version: .byte >cx16_show_version
+cx16_command_dispatch_hi_run_n: .byte >cx16_run_command
+cx16_command_dispatch_hi_run_s: .byte >cx16_run_command
+cx16_command_dispatch_hi_run_w: .byte >cx16_run_command
+cx16_command_dispatch_hi_run_e: .byte >cx16_run_command
+cx16_command_dispatch_hi_run_nw: .byte >cx16_run_command
+cx16_command_dispatch_hi_run_ne: .byte >cx16_run_command
+cx16_command_dispatch_hi_run_sw: .byte >cx16_run_command
+cx16_command_dispatch_hi_run_se: .byte >cx16_run_command
+cx16_command_dispatch_hi_gain: .byte >cx16_dispatch_done
+cx16_command_dispatch_hi_fire: .byte >cx16_dispatch_done
+cx16_command_dispatch_hi_throw: .byte >cx16_dispatch_done
+cx16_command_dispatch_hi_refuel: .byte >cx16_call_items_overlay_command
+cx16_command_dispatch_hi_bash: .byte >cx16_call_feature_overlay_command
+cx16_command_dispatch_hi_tunnel: .byte >cx16_call_feature_overlay_command
+cx16_command_dispatch_hi_wizard: .byte >cx16_dispatch_done
+cx16_command_dispatch_hi_search_mode: .byte >cx16_call_feature_overlay_command
+cx16_command_dispatch_hi_disarm: .byte >cx16_call_feature_overlay_command
+cx16_command_dispatch_hi_autorest: .byte >cx16_call_feature_overlay_command
 cx16_command_dispatch_hi_end:
 
 .assert "CX16 command dispatch lo count", cx16_command_dispatch_lo_end - cx16_command_dispatch_lo, CMD_AUTOREST - CMD_STAIRS_DN + 1
 .assert "CX16 command dispatch hi count", cx16_command_dispatch_hi_end - cx16_command_dispatch_hi, CMD_AUTOREST - CMD_STAIRS_DN + 1
-.assert "CX16 command dispatch search mode index", cx16_command_dispatch_lo_end - cx16_command_dispatch_lo - 3, CMD_SEARCH_MODE - CMD_STAIRS_DN
-.assert "CX16 command dispatch autorest index", cx16_command_dispatch_lo_end - cx16_command_dispatch_lo - 1, CMD_AUTOREST - CMD_STAIRS_DN
 
 cx16_try_move_command:
     pha
@@ -704,6 +687,20 @@ cx16_running_target_is_trap:
     clc
     rts
 
+cx16_run_prefix_command:
+    jsr input_wait_release
+    jsr input_get_key
+    jsr petscii_to_command
+    cmp #CMD_MOVE_N
+    bcc !done+
+    cmp #CMD_MOVE_SE + 1
+    bcs !done+
+    clc
+    adc #(CMD_RUN_N - CMD_MOVE_N)
+    jmp cx16_run_command
+!done:
+    rts
+
 cx16_run_command:
     pha
     jsr msg_clear
@@ -734,61 +731,13 @@ cx16_run_command:
     sta zp_run_dir
     rts
 
-cx16_cmd_open:
-    lda #CX16_FEATURE_CMD_OPEN
-    jmp cx16_call_feature_overlay_command
-
-cx16_cmd_close:
-    lda #CX16_FEATURE_CMD_CLOSE
-    jmp cx16_call_feature_overlay_command
-
-cx16_cmd_search:
-    lda #CX16_FEATURE_CMD_SEARCH
-    jmp cx16_call_feature_overlay_command
-
-cx16_cmd_rest:
-    lda #CX16_FEATURE_CMD_REST
-    jmp cx16_call_feature_overlay_command
-
-cx16_cmd_look:
-    lda #CX16_FEATURE_CMD_LOOK
-    jmp cx16_call_feature_overlay_command
-
-cx16_cmd_search_mode:
-    lda #CX16_FEATURE_CMD_SEARCH_MODE
-    jmp cx16_call_feature_overlay_command
-
-cx16_cmd_autorest:
-    lda #CX16_FEATURE_CMD_AUTOREST
-    jmp cx16_call_feature_overlay_command
-
-cx16_cmd_bash:
-    lda #CX16_FEATURE_CMD_BASH
-    jmp cx16_call_feature_overlay_command
-
-cx16_cmd_tunnel:
-    lda #CX16_FEATURE_CMD_TUNNEL
-    jmp cx16_call_feature_overlay_command
-
-cx16_cmd_disarm:
-    lda #CX16_FEATURE_CMD_DISARM
-    jmp cx16_call_feature_overlay_command
-
-cx16_cmd_pickup:
-    lda #CX16_ITEM_CMD_PICKUP
-    jmp cx16_call_items_overlay_command
-
-cx16_cmd_drop:
-    lda #CX16_ITEM_CMD_DROP
-    jmp cx16_call_items_overlay_command
-
 cx16_cmd_inventory:
     jsr cx16_draw_inventory_view
     jsr input_get_modal_dismiss_key
     jmp cx16_restore_current_view
 
 cx16_draw_inventory_view:
-    lda #CX16_ITEM_CMD_INVENTORY
+    lda #CMD_INVENTORY
     jmp cx16_call_items_overlay_command
 
 cx16_cmd_equipment:
@@ -797,39 +746,7 @@ cx16_cmd_equipment:
     jmp cx16_restore_current_view
 
 cx16_draw_equipment_view:
-    lda #CX16_ITEM_CMD_EQUIPMENT
-    jmp cx16_call_items_overlay_command
-
-cx16_cmd_wear:
-    lda #CX16_ITEM_CMD_WEAR
-    jmp cx16_call_items_overlay_command
-
-cx16_cmd_takeoff:
-    lda #CX16_ITEM_CMD_TAKEOFF
-    jmp cx16_call_items_overlay_command
-
-cx16_cmd_eat:
-    lda #CX16_ITEM_CMD_EAT
-    jmp cx16_call_items_overlay_command
-
-cx16_cmd_quaff:
-    lda #CX16_ITEM_CMD_QUAFF
-    jmp cx16_call_items_overlay_command
-
-cx16_cmd_refuel:
-    lda #CX16_ITEM_CMD_REFUEL
-    jmp cx16_call_items_overlay_command
-
-cx16_cmd_read:
-    lda #CX16_ITEM_CMD_READ
-    jmp cx16_call_items_overlay_command
-
-cx16_cmd_aim:
-    lda #CX16_ITEM_CMD_AIM
-    jmp cx16_call_items_overlay_command
-
-cx16_cmd_use:
-    lda #CX16_ITEM_CMD_USE
+    lda #CMD_EQUIPMENT
     jmp cx16_call_items_overlay_command
 
 cx16_call_feature_overlay_command:
@@ -910,7 +827,7 @@ cx16_call_save_overlay_command:
     pha
     lda CX16_RAM_BANK_REG
     pha
-    lda #CX16_OVERLAY_SPELL_BANK
+    lda #CX16_OVERLAY_STORAGE_BANK
     sta CX16_RAM_BANK_REG
     pla
     sta cx16_overlay_saved_bank
@@ -1008,6 +925,44 @@ cx16_after_item_turn:
     jsr cx16_update_dungeon_view
     jsr cx16_render_dungeon_local_area
     jmp cx16_draw_dungeon_ui
+
+cx16_after_carried_status_turn:
+    jsr cx16_consume_turn_searchable
+    lda cx16_state
+    cmp #CX16_STATE_DUNGEON
+    beq !dungeon+
+    lda zp_game_flags
+    and #$01
+    bne !dead+
+    jmp cx16_draw_town_ui
+!dungeon:
+    jsr cx16_sync_local_player_position
+    jsr cx16_save_old_player
+    jsr update_visibility
+    jsr cx16_update_dungeon_view
+    jsr cx16_render_dungeon_local_area
+    jmp cx16_draw_dungeon_ui
+!dead:
+    rts
+
+cx16_after_carried_view_turn:
+    jsr cx16_consume_turn_searchable
+    lda cx16_state
+    cmp #CX16_STATE_DUNGEON
+    beq !dungeon+
+    lda zp_game_flags
+    and #$01
+    bne !dead+
+    jsr cx16_sync_local_player_position
+    jsr cx16_render_town
+    jmp cx16_draw_town_ui
+!dungeon:
+    jsr cx16_sync_local_player_position
+    jsr cx16_save_old_player
+    jsr update_visibility
+    jmp cx16_refresh_dungeon_view
+!dead:
+    rts
 
 cx16_after_feature_turn:
     jsr cx16_consume_turn_searchable
@@ -1337,6 +1292,14 @@ cx16_monster_adjacent_attack:
     lda #CX16_MON_CMD_ADJACENT_ATTACK
     jmp cx16_call_monster_overlay_command
 
+cx16_hal_storage_save_record:
+    lda #CX16_SAVE_CMD_SAVE
+    jmp cx16_call_save_overlay_command
+
+cx16_hal_storage_load_record:
+    lda #CX16_SAVE_CMD_LOAD
+    jmp cx16_call_save_overlay_command
+
 cx16_save_game_record:
     lda #CX16_SAVE_CMD_SAVE
     jsr cx16_call_save_overlay_command
@@ -1404,6 +1367,35 @@ cx16_draw_character_view:
     lda #CX16_UI_CMD_CHARACTER
     jmp cx16_call_ui_overlay_command
 
+cx16_cmd_identify_symbol:
+    jsr msg_clear
+    lda #<cx16_identify_symbol_prompt_str
+    sta zp_ptr0
+    lda #>cx16_identify_symbol_prompt_str
+    sta zp_ptr0_hi
+    jsr msg_print
+    jsr input_get_key
+    jsr cx16_identify_key_to_symbol
+    sta recall_query_sc
+    lda #CX16_UI_CMD_IDENTIFY_SYMBOL
+    jmp cx16_call_ui_overlay_command
+
+cx16_identify_key_to_symbol:
+    cmp #$61
+    bcc !try_shifted+
+    cmp #$7b
+    bcs !try_shifted+
+    and #$1f
+    rts
+!try_shifted:
+    cmp #$c1
+    bcc !done+
+    cmp #$db
+    bcs !done+
+    and #$7f
+!done:
+    rts
+
 cx16_show_dungeon_only_message:
     ldx #CX16_UI_MSG_DUNGEON_ONLY
     jmp cx16_show_ui_message
@@ -1438,6 +1430,9 @@ cx16_restore_current_view:
     jmp cx16_new_game_draw
 
 #if !CX16_IMPORT_SHARED_GAME_LOOP
+ui_view_restore_modal_overlay:
+    jmp cx16_restore_current_view
+
 generation_busy_tick:
     rts
 #endif
@@ -1588,7 +1583,9 @@ cx16_dungeon_module_failed_text:
 #define GAMEPLAY_DUNGEON_ONLY_STR_EXTERNAL
 #define GAMEPLAY_DUNGEON_READY_STRINGS_EXTERNAL
 #define GAMEPLAY_TOWN_RECOVERY_STR_EXTERNAL
+#define GAMEPLAY_SAVE_LOAD_STRINGS_EXTERNAL
 #import "../../core/gameplay_messages.s"
+#undef GAMEPLAY_SAVE_LOAD_STRINGS_EXTERNAL
 #undef GAMEPLAY_TOWN_RECOVERY_STR_EXTERNAL
 #undef GAMEPLAY_DUNGEON_READY_STRINGS_EXTERNAL
 #undef GAMEPLAY_DUNGEON_ONLY_STR_EXTERNAL
@@ -1611,8 +1608,16 @@ press_key_str:
     .byte 0
 #endif
 
+cx16_identify_symbol_prompt_str:
+    :ScreenText("Identify symbol: ")
+    .byte 0
+
 cx16_loading_header_text:
     :ScreenText("Loading:")
+    .byte 0
+
+cx16_debug_load_pause_text:
+    :ScreenText("Load complete. Press any key.")
     .byte 0
 
 cx16_runtime_state_start:
@@ -1628,6 +1633,9 @@ cx16_preload_tier: .byte 0
 cx16_loader_row: .byte 0
 cx16_loader_name_len: .byte 0
 cx16_spawn_count: .byte 0
+#if !CX16_IMPORT_SHARED_GAME_LOOP
+recall_query_sc: .byte 0
+#endif
 cx16_mon_scan_x: .byte 0
 cx16_mon_scan_y: .byte 0
 cx16_mon_scan_cols: .byte 0
@@ -1666,7 +1674,6 @@ cx16_overlay_startup_entry:
     rts
 #endif
     #import "../commodore/common/title_screen.s"
-    :Cx16OverlayMarker(1)
 cx16_overlay_startup_end:
 .print "CX16 STARTUP overlay: " + (cx16_overlay_startup_end - $a000) + " bytes at $A000-$" + toHexString(cx16_overlay_startup_end)
 .assert "CX16 STARTUP overlay fits banked window", cx16_overlay_startup_end <= CX16_BANKED_RAM_END + 1, true
@@ -1766,7 +1773,6 @@ cx16_town_item_count: .byte 0
 
 cx16_overlay_town_recovery_str:
     :GameplayTownRecoveryString()
-    :Cx16OverlayMarker(2)
 cx16_overlay_town_end:
 .print "CX16 TOWN overlay: " + (cx16_overlay_town_end - $a000) + " bytes at $A000-$" + toHexString(cx16_overlay_town_end)
 .assert "CX16 TOWN overlay fits banked window", cx16_overlay_town_end <= CX16_BANKED_RAM_END + 1, true
@@ -2764,18 +2770,9 @@ cx16_mon_base_tohit:
 cx16_overlay_death_terminal_str:
     :GameplayDeathTerminalString()
 
-    :Cx16OverlayMarker(3)
 cx16_overlay_death_end:
 .print "CX16 DEATH overlay: " + (cx16_overlay_death_end - $a000) + " bytes at $A000-$" + toHexString(cx16_overlay_death_end)
 .assert "CX16 DEATH overlay fits banked window", cx16_overlay_death_end <= CX16_BANKED_RAM_END + 1, true
-
-.segment Cx16RoyalOverlay
-cx16_overlay_royal_entry:
-    rts
-    :Cx16OverlayMarker(CX16_OVERLAY_SLOT_ROYAL)
-cx16_overlay_royal_end:
-.print "CX16 ROYAL overlay: " + (cx16_overlay_royal_end - $a000) + " bytes at $A000-$" + toHexString(cx16_overlay_royal_end)
-.assert "CX16 ROYAL overlay fits banked window", cx16_overlay_royal_end <= CX16_BANKED_RAM_END + 1, true
 
 .segment Cx16GenOverlay
 cx16_overlay_gen_entry:
@@ -2888,11 +2885,11 @@ cx16_help_tools_text:
     .byte 0
 
 cx16_help_views_text:
-    :ScreenText("Views: ?)help Shift-C character V)version")
+    :ScreenText("Views: ?)help /)identify Shift-C character V)version")
     .byte 0
 
 cx16_help_system_text:
-    :ScreenText("System: S save, Shift-Q title")
+    :ScreenText("System: Shift-S save, Shift-Q title")
     .byte 0
 cx16_overlay_help_end:
 .print "CX16 HELP overlay: " + (cx16_overlay_help_end - $a000) + " bytes at $A000-$" + toHexString(cx16_overlay_help_end)
@@ -2917,8 +2914,12 @@ cx16_overlay_ui_entry:
     jmp cx16_overlay_draw_town_footer
 !not_town_footer:
     cmp #CX16_UI_CMD_DUNGEON_FOOTER
-    bne !done+
+    bne !not_dungeon_footer+
     jmp cx16_overlay_draw_dungeon_footer
+!not_dungeon_footer:
+    cmp #CX16_UI_CMD_IDENTIFY_SYMBOL
+    bne !done+
+    jmp ui_identify_print
 !done:
     rts
 
@@ -3002,7 +3003,7 @@ cx16_town_footer_text:
     .byte 0
 
 cx16_dungeon_footer_text:
-    :ScreenText("Move: HJKL/YUBN/numbers. S save. s search. Shift-Q title.")
+    :ScreenText("Move: HJKL/YUBN/numbers. s search. Shift-S save.")
     .byte 0
 
 cx16_version_title_text:
@@ -3015,8 +3016,7 @@ cx16_version_text:
     .byte 0
 
 cx16_version_policy_text:
-    :ScreenText("CX16 port in progress")
-    .byte 0
+    :GameplayVersionPlatformString()
 
 #if !CX16_IMPORT_SHARED_GAME_LOOP
 cx16_char_sex_label:
@@ -3080,7 +3080,7 @@ ui_char_draw_background:
 
     #import "../../core/spell_data.s"
     #import "../../core/ui_character.s"
-    :Cx16OverlayMarker(7)
+    #import "../../core/ui_identify.s"
 cx16_overlay_ui_end:
 .print "CX16 UI overlay: " + (cx16_overlay_ui_end - $a000) + " bytes at $A000-$" + toHexString(cx16_overlay_ui_end)
 .assert "CX16 UI overlay fits banked window", cx16_overlay_ui_end <= CX16_BANKED_RAM_END + 1, true
@@ -3089,51 +3089,55 @@ cx16_overlay_ui_end:
 cx16_overlay_items_entry:
 cx16_overlay_items_command_entry:
 #if !CX16_IMPORT_SHARED_GAME_LOOP
-    cmp #CX16_ITEM_CMD_PICKUP
+    jsr cx16_overlay_items_normalize_command
+    bcs !dispatch+
+    rts
+!dispatch:
+    cmp #CMD_PICKUP
     bne !not_pickup+
     jmp !pickup+
 !not_pickup:
-    cmp #CX16_ITEM_CMD_DROP
+    cmp #CMD_DROP
     bne !not_drop+
     jmp !drop+
 !not_drop:
-    cmp #CX16_ITEM_CMD_INVENTORY
+    cmp #CMD_INVENTORY
     bne !not_inventory+
     jmp !inventory+
 !not_inventory:
-    cmp #CX16_ITEM_CMD_EQUIPMENT
+    cmp #CMD_EQUIPMENT
     bne !not_equipment+
     jmp !equipment+
 !not_equipment:
-    cmp #CX16_ITEM_CMD_WEAR
+    cmp #CMD_WEAR
     bne !not_wear+
     jmp !wear+
 !not_wear:
-    cmp #CX16_ITEM_CMD_TAKEOFF
+    cmp #CMD_TAKEOFF
     bne !not_takeoff+
     jmp !takeoff+
 !not_takeoff:
-    cmp #CX16_ITEM_CMD_EAT
+    cmp #CMD_EAT
     bne !not_eat+
     jmp !eat+
 !not_eat:
-    cmp #CX16_ITEM_CMD_QUAFF
+    cmp #CMD_QUAFF
     bne !not_quaff+
     jmp !quaff+
 !not_quaff:
-    cmp #CX16_ITEM_CMD_REFUEL
+    cmp #CMD_REFUEL
     bne !not_refuel+
     jmp !refuel+
 !not_refuel:
-    cmp #CX16_ITEM_CMD_READ
+    cmp #CMD_READ
     bne !not_read+
     jmp !read+
 !not_read:
-    cmp #CX16_ITEM_CMD_AIM
+    cmp #CMD_AIM
     bne !not_aim+
     jmp !aim+
 !not_aim:
-    cmp #CX16_ITEM_CMD_USE
+    cmp #CMD_USE
     bne !not_use+
     jmp !use+
 !not_use:
@@ -3143,12 +3147,29 @@ cx16_overlay_items_command_entry:
 !not_seed_survival_loot:
     rts
 
+cx16_overlay_items_normalize_command:
+    cmp #CMD_PICKUP
+    bcc !private+
+    cmp #CMD_USE + 1
+    bcc !known+
+!check_refuel:
+    cmp #CMD_REFUEL
+    bne !private+
+!known:
+    sec
+    rts
+!private:
+    cmp #CX16_ITEM_CMD_SEED_SURVIVAL_LOOT
+    beq !private_known+
+    clc
+    rts
+!private_known:
+    sec
+    rts
+
 !pickup:
-    lda cx16_state
-    cmp #CX16_STATE_DUNGEON
-    beq !pickup_dungeon+
-    jmp cx16_show_dungeon_only_message
-!pickup_dungeon:
+    jsr cx16_overlay_items_require_dungeon
+    bcc !pickup_done+
     jsr msg_clear
     jsr item_pickup
     bcc !pickup_done+
@@ -3157,16 +3178,24 @@ cx16_overlay_items_command_entry:
     rts
 
 !drop:
-    lda cx16_state
-    cmp #CX16_STATE_DUNGEON
-    beq !drop_dungeon+
-    jmp cx16_show_dungeon_only_message
-!drop_dungeon:
+    jsr cx16_overlay_items_require_dungeon
+    bcc !drop_done+
     jsr msg_clear
     jsr item_drop
     bcc !drop_done+
     jmp cx16_after_item_turn
 !drop_done:
+    rts
+
+cx16_overlay_items_require_dungeon:
+    lda cx16_state
+    cmp #CX16_STATE_DUNGEON
+    beq !ok+
+    jsr cx16_show_dungeon_only_message
+    clc
+    rts
+!ok:
+    sec
     rts
 
 !inventory:
@@ -3178,106 +3207,66 @@ cx16_overlay_items_command_entry:
     jmp ui_equip_display
 
 !wear:
-    lda cx16_state
-    cmp #CX16_STATE_DUNGEON
-    beq !wear_dungeon+
-    jmp cx16_show_dungeon_only_message
-!wear_dungeon:
     jsr msg_clear
     jsr item_wear
     bcc !wear_done+
-    jmp cx16_after_item_turn
+    jmp cx16_after_carried_status_turn
 !wear_done:
     rts
 
 !takeoff:
-    lda cx16_state
-    cmp #CX16_STATE_DUNGEON
-    beq !takeoff_dungeon+
-    jmp cx16_show_dungeon_only_message
-!takeoff_dungeon:
     jsr msg_clear
     jsr item_takeoff
     bcc !takeoff_done+
-    jmp cx16_after_item_turn
+    jmp cx16_after_carried_status_turn
 !takeoff_done:
     rts
 
 !eat:
-    lda cx16_state
-    cmp #CX16_STATE_DUNGEON
-    beq !eat_dungeon+
-    jmp cx16_show_dungeon_only_message
-!eat_dungeon:
     jsr msg_clear
     jsr item_eat
     bcc !eat_done+
-    jmp cx16_after_item_turn
+    jmp cx16_after_carried_status_turn
 !eat_done:
     rts
 
 !quaff:
-    lda cx16_state
-    cmp #CX16_STATE_DUNGEON
-    beq !quaff_dungeon+
-    jmp cx16_show_dungeon_only_message
-!quaff_dungeon:
     jsr msg_clear
     jsr item_quaff
     bcc !quaff_done+
-    jmp cx16_after_item_turn
+    jmp cx16_after_carried_status_turn
 !quaff_done:
     rts
 
 !refuel:
-    lda cx16_state
-    cmp #CX16_STATE_DUNGEON
-    beq !refuel_dungeon+
-    jmp cx16_show_dungeon_only_message
-!refuel_dungeon:
     jsr msg_clear
     jsr item_refuel
     bcc !refuel_done+
-    jmp cx16_after_item_turn
+    jmp cx16_after_carried_status_turn
 !refuel_done:
     rts
 
 !read:
-    lda cx16_state
-    cmp #CX16_STATE_DUNGEON
-    beq !read_dungeon+
-    jmp cx16_show_dungeon_only_message
-!read_dungeon:
     jsr msg_clear
     jsr item_read_scroll
     bcc !read_done+
-    jmp cx16_after_item_turn
+    jmp cx16_after_carried_view_turn
 !read_done:
     rts
 
 !aim:
-    lda cx16_state
-    cmp #CX16_STATE_DUNGEON
-    beq !aim_dungeon+
-    jmp cx16_show_dungeon_only_message
-!aim_dungeon:
     jsr msg_clear
     jsr item_aim_wand
     bcc !aim_done+
-    jmp cx16_after_item_turn
+    jmp cx16_after_carried_view_turn
 !aim_done:
     rts
 
 !use:
-    lda cx16_state
-    cmp #CX16_STATE_DUNGEON
-    beq !use_dungeon+
-    jmp cx16_show_dungeon_only_message
-!use_dungeon:
     jsr msg_clear
     jsr item_use_staff
     bcc !use_done+
-    jmp cx16_after_item_turn
+    jmp cx16_after_carried_view_turn
 !use_done:
     rts
 
@@ -3338,72 +3327,78 @@ cx16_overlay_add_random_floor_item:
     #import "../../core/player_item_commands.s"
     #import "../../core/item_actions_overlay.s"
     #import "../../core/ui_equipment.s"
-    :Cx16OverlayMarker(8)
 cx16_overlay_items_end:
 .print "CX16 ITEMS overlay: " + (cx16_overlay_items_end - $a000) + " bytes at $A000-$" + toHexString(cx16_overlay_items_end)
 .assert "CX16 ITEMS overlay fits banked window", cx16_overlay_items_end <= CX16_BANKED_RAM_END + 1, true
 
-.segment Cx16SpellOverlay
-cx16_overlay_spell_entry:
+.segment Cx16StorageOverlay
+cx16_overlay_storage_entry:
     rts
 #import "save_record.s"
-    :Cx16OverlayMarker(9)
-cx16_overlay_spell_end:
-.print "CX16 SPELL overlay: " + (cx16_overlay_spell_end - $a000) + " bytes at $A000-$" + toHexString(cx16_overlay_spell_end)
-.assert "CX16 SPELL overlay fits banked window", cx16_overlay_spell_end <= CX16_BANKED_RAM_END + 1, true
+cx16_overlay_storage_end:
+.print "CX16 SAVE overlay: " + (cx16_overlay_storage_end - $a000) + " bytes at $A000-$" + toHexString(cx16_overlay_storage_end)
+.assert "CX16 SAVE overlay fits banked window", cx16_overlay_storage_end <= CX16_BANKED_RAM_END + 1, true
 
 .segment Cx16DisarmOverlay
 cx16_overlay_disarm_entry:
 cx16_overlay_feature_command_entry:
 #if !CX16_IMPORT_SHARED_GAME_LOOP
-    cmp #CX16_FEATURE_CMD_OPEN
+    cmp #CMD_OPEN
     bne !not_open+
     jmp !open+
 !not_open:
-    cmp #CX16_FEATURE_CMD_CLOSE
+    cmp #CMD_CLOSE
     bne !not_close+
     jmp !close+
 !not_close:
-    cmp #CX16_FEATURE_CMD_SEARCH
+    cmp #CMD_SEARCH
     bne !not_search+
     jmp !search+
 !not_search:
-    cmp #CX16_FEATURE_CMD_REST
+    cmp #CMD_REST
     bne !not_rest+
     jmp !rest+
 !not_rest:
-    cmp #CX16_FEATURE_CMD_LOOK
+    cmp #CMD_LOOK
     bne !not_look+
     jmp !look+
 !not_look:
-    cmp #CX16_FEATURE_CMD_SEARCH_MODE
+    cmp #CMD_SEARCH_MODE
     bne !not_search_mode+
     jmp !search_mode+
 !not_search_mode:
-    cmp #CX16_FEATURE_CMD_AUTOREST
+    cmp #CMD_AUTOREST
     bne !not_autorest+
     jmp !autorest+
 !not_autorest:
-    cmp #CX16_FEATURE_CMD_BASH
+    cmp #CMD_BASH
     bne !not_bash+
     jmp !bash+
 !not_bash:
-    cmp #CX16_FEATURE_CMD_TUNNEL
+    cmp #CMD_TUNNEL
     bne !not_tunnel+
     jmp !tunnel+
 !not_tunnel:
-    cmp #CX16_FEATURE_CMD_DISARM
+    cmp #CMD_DISARM
     bne !not_disarm+
     jmp !disarm+
 !not_disarm:
     rts
 
-!open:
+cx16_overlay_require_dungeon:
     lda cx16_state
     cmp #CX16_STATE_DUNGEON
-    beq !open_dungeon+
-    jmp cx16_show_dungeon_only_message
-!open_dungeon:
+    beq !ok+
+    jsr cx16_show_dungeon_only_message
+    clc
+    rts
+!ok:
+    sec
+    rts
+
+!open:
+    jsr cx16_overlay_require_dungeon
+    bcc !open_done+
     jsr msg_clear
     jsr get_direction_target
     bcc !open_done+
@@ -3414,11 +3409,8 @@ cx16_overlay_feature_command_entry:
     rts
 
 !close:
-    lda cx16_state
-    cmp #CX16_STATE_DUNGEON
-    beq !close_dungeon+
-    jmp cx16_show_dungeon_only_message
-!close_dungeon:
+    jsr cx16_overlay_require_dungeon
+    bcc !close_done+
     jsr msg_clear
     jsr get_direction_target
     bcc !close_done+
@@ -3429,41 +3421,35 @@ cx16_overlay_feature_command_entry:
     rts
 
 !search:
-    lda cx16_state
-    cmp #CX16_STATE_DUNGEON
-    beq !search_dungeon+
-    jmp cx16_show_dungeon_only_message
-!search_dungeon:
+    jsr cx16_overlay_require_dungeon
+    bcc !search_done+
     jsr msg_clear
     jsr do_search
     jmp cx16_after_feature_turn
+!search_done:
+    rts
 
 !rest:
-    lda cx16_state
-    cmp #CX16_STATE_DUNGEON
-    beq !rest_dungeon+
-    jmp cx16_show_dungeon_only_message
-!rest_dungeon:
+    jsr cx16_overlay_require_dungeon
+    bcc !rest_done+
     jsr msg_clear
     jmp cx16_after_feature_turn
+!rest_done:
+    rts
 
 !look:
-    lda cx16_state
-    cmp #CX16_STATE_DUNGEON
-    beq !look_dungeon+
-    jmp cx16_show_dungeon_only_message
-!look_dungeon:
+    jsr cx16_overlay_require_dungeon
+    bcc !look_done+
     jsr msg_clear
     jsr cx16_do_look
     jsr cx16_render_dungeon_local_area
     jmp cx16_draw_dungeon_ui
+!look_done:
+    rts
 
 !search_mode:
-    lda cx16_state
-    cmp #CX16_STATE_DUNGEON
-    beq !search_mode_dungeon+
-    jmp cx16_show_dungeon_only_message
-!search_mode_dungeon:
+    jsr cx16_overlay_require_dungeon
+    bcc !search_mode_done+
     jsr msg_clear
     lda player_data + PL_FLAGS
     and #PLF_SEARCHING
@@ -3484,13 +3470,12 @@ cx16_overlay_feature_command_entry:
     jsr msg_print
     jsr cx16_render_dungeon_local_area
     jmp cx16_draw_dungeon_ui
+!search_mode_done:
+    rts
 
 !autorest:
-    lda cx16_state
-    cmp #CX16_STATE_DUNGEON
-    beq !autorest_dungeon+
-    jmp cx16_show_dungeon_only_message
-!autorest_dungeon:
+    jsr cx16_overlay_require_dungeon
+    bcc !autorest_done+
     jsr msg_clear
     jsr player_search_mode_off
     lda #$ff
@@ -3502,13 +3487,12 @@ cx16_overlay_feature_command_entry:
     jmp cx16_draw_dungeon_ui
 !autorest_turn:
     jmp cx16_after_feature_turn
+!autorest_done:
+    rts
 
 !bash:
-    lda cx16_state
-    cmp #CX16_STATE_DUNGEON
-    beq !bash_dungeon+
-    jmp cx16_show_dungeon_only_message
-!bash_dungeon:
+    jsr cx16_overlay_require_dungeon
+    bcc !bash_done+
     jsr msg_clear
     jsr bash_command
     bcc !bash_done+
@@ -3517,11 +3501,8 @@ cx16_overlay_feature_command_entry:
     rts
 
 !tunnel:
-    lda cx16_state
-    cmp #CX16_STATE_DUNGEON
-    beq !tunnel_dungeon+
-    jmp cx16_show_dungeon_only_message
-!tunnel_dungeon:
+    jsr cx16_overlay_require_dungeon
+    bcc !tunnel_done+
     jsr msg_clear
     jsr player_tunnel
     bcc !tunnel_done+
@@ -3530,11 +3511,8 @@ cx16_overlay_feature_command_entry:
     rts
 
 !disarm:
-    lda cx16_state
-    cmp #CX16_STATE_DUNGEON
-    beq !disarm_dungeon+
-    jmp cx16_show_dungeon_only_message
-!disarm_dungeon:
+    jsr cx16_overlay_require_dungeon
+    bcc !disarm_done+
     jsr msg_clear
     jsr disarm_command
     bcc !disarm_done+
@@ -3829,7 +3807,6 @@ cx16_overlay_trap_trigger:
 #else
     rts
 #endif
-    :Cx16OverlayMarker(CX16_OVERLAY_SLOT_DISARM)
 cx16_overlay_disarm_end:
 .print "CX16 DISARM overlay: " + (cx16_overlay_disarm_end - $a000) + " bytes at $A000-$" + toHexString(cx16_overlay_disarm_end)
 .assert "CX16 DISARM overlay fits banked window", cx16_overlay_disarm_end <= CX16_BANKED_RAM_END + 1, true

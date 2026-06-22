@@ -102,10 +102,10 @@ now lives in the current `core/`/`platforms/` layout.
 ## 6. Commander X16 Bring-Up Track
 
 The Commander X16 port is a first-class 65C02 platform under `platforms/cx16/`,
-not a Commodore subtarget. The initial milestone is deliberately narrow:
-boot a PRG under `x16emu`, initialize text output, render the Moria8
-title/menu, enter a CX16-owned fixed-memory town bootstrap, and acknowledge
-basic movement input there.
+not a Commodore subtarget. The current milestone is a playable vertical slice:
+boot a PRG under `x16emu`, render the Moria8 title/menu, generate a character,
+enter town, descend into a generated dungeon, fight monsters, use loot and
+equipment, recover in town, and round-trip native CX16 save/load state.
 
 Current assumptions:
 
@@ -123,22 +123,22 @@ Current assumptions:
 * The current new-game path renders a deterministic 66x22 town through
   `core/town_map_basic.s`, using the shared town/map constants and
   store-position tables, backed by fixed RAM at `MAP_BASE` (`$6800`) with the shared
-  198-byte row stride. This is still a bootstrap renderer, not the full shared
-  game loop.
+  198-byte row stride. This remains a CX16 renderer over shared town data, not
+  the full shared game loop.
 * The live shared map is deliberately fixed RAM, not banked RAM. The 198x66
   map is 13,068 bytes, larger than one 8 KiB CX16 banked-RAM window, so moving
   it behind `$A000-$BFFF` would require explicit split-window map accessors.
-* CX16 bootstrap town rendering uses the shared tile byte to screen-code/color
+* CX16 town rendering uses the shared tile byte to screen-code/color
   mapping in `core/tile_display.s`; the VERA text backend remains
   platform-owned.
-* CX16 bootstrap town interactions use the dependency-light store-door and
+* CX16 town interactions use the dependency-light store-door and
   stairs probes in `core/town_interactions_basic.s`; full store UI remains
-  deferred. Stairs-down now enters a visible dungeon bootstrap milestone: it
-  loads `MONSTER.DB.1` into CX16 RAM bank 4, loads and probes the executable
-  `DUNGEON.GEN` module in CX16 RAM bank 8 at `$A000`, records depth/tier state,
-  runs the shared `core/dungeon_gen.s` generator into fixed RAM, and renders a
-  78x22 VERA text viewport from the shared tile byte to screen-code/color
-  mapping. Shared dungeon tile, flag, room, trap, generation-helper, and
+  deferred. Stairs-down enters the playable dungeon slice: it loads tier data
+  into CX16 RAM banks 4-7, runs `DUNGEON.GEN` from bank 8 at `$A000`, records
+  depth/tier state, generates the shared dungeon into fixed RAM, renders a
+  78x22 VERA text viewport, and runs shared-backed movement, feature, monster,
+  item/equipment, death, town recovery, and native save/load paths through
+  banked CX16 payloads. Shared dungeon tile, flag, room, trap, generation-helper, and
   town constants live in `core/dungeon_consts.s` so CX16 wrappers and core
   generator probes do not duplicate game-domain byte values. The
   `check-dungeon-const-ownership` guard fails if CX16 or the core generator
@@ -151,15 +151,17 @@ Current assumptions:
   generation scratch instead of copying state through a CX16-specific output
   block.
   Store doors render as numbered entrances from the shared store-door metadata.
-  Help, version, and character-info commands render CX16 bootstrap status text.
-  Other mapped but not-yet-implemented town commands acknowledge by category
-  (activity, item/feature, magic/recall, storage, info/map, wizard) instead of
-  being silently ignored.
-* CX16 bootstrap movement uses the shared player-position and tile-walkability
+  Help, version, character-info, save/load, item, feature, combat, and town
+  recovery paths now route through banked CX16 payloads where resident pressure
+  would otherwise grow.
+* CX16 movement uses the shared player-position and tile-walkability
   contracts through `core/player_move_basic.s`. Full `player_try_move` remains
   outside the normal CX16 PRG because it still pulls in combat, monsters, traps,
   sound, search, and broader runtime state.
-* Save/load and CMDR-DOS/FAT32 storage are deferred until after boot-to-title.
+* CX16 has a native save/load record in the `X16.SAVE` overlay for the current
+  vertical-slice state. The shared storage HAL save/load entrypoints now route
+  through that overlay-backed record; full disk setup, marker media, and
+  score-file flows remain outside the current vertical slice.
 * `x16emu` is expected on `PATH` by default; `X16EMU=/path/to/x16emu` and
   `X16_ROM=/path/to/rom.bin` may override local tool and ROM locations.
 
@@ -187,7 +189,7 @@ Current shared-gameplay status:
   `make testcx16-memory-contract-selftest` covers the checker's positive and
   negative contract cases, including stale PRG/symbol mismatches.
 * `make testcx16-runtime` runs an x16emu `-testbench` smoke check against the
-  normal CX16 PRG. It verifies RAM-visible bootstrap contracts: town generation,
+  normal CX16 PRG. It verifies RAM-visible runtime contracts: town generation,
   player position, store-door detection, stairs detection, title asset loading,
   VERA text output, command feedback messages, exported memory-contract
   symbols, `$A000-$BFFF` RAM-bank isolation, and the scoped bank-window copy
@@ -199,9 +201,9 @@ Current shared-gameplay status:
   verifies the module payload byte-for-byte against the generated PRG, checks
   the `$A000` entry ABI tuple, confirms an unowned guard bank remains untouched, validates the
   generated shared-map tile bytes for rooms, connectors, doors, rubble, quartz,
-  trap, and stairs, and checks the visible stairs-down dungeon bootstrap map,
-  viewport rendering, movement, blocked-wall behavior, and upstairs return to
-  town.
+  trap, and stairs, and checks the visible stairs-down dungeon map, viewport
+  rendering, movement, blocked-wall behavior, combat, loot/equipment, native
+  save/load round-trip, and upstairs return to town.
 * The probe is not a runtime-safe memory placement. The linked image currently
   crosses the fixed-RAM map/scratch plan and the CX16 `$A000-$BFFF` banked-RAM
   window.
@@ -211,10 +213,9 @@ Current shared-gameplay status:
   Bank 0 is the default/system bank; banks 1-3 are transient scratch; banks
   4-7 hold `MONSTER.DB.1` through `MONSTER.DB.4`; bank 8 holds
   `DUNGEON.GEN`; banks 9-10 are the item-catalog family; bank 11 is the
-  title-art source bank; banks 12-21 hold preloaded CX16 overlay sidecar PRGs
-  `X16.START`, `X16.TOWN`, `X16.DEATH`, `X16.ROYAL`, `X16.GEN`, `X16.HELP`,
-  `X16.UI`, `X16.ITEMS`, `X16.SPELL`, and `X16.DISARM` as marker payloads
-  until the real shared overlay code is migrated; banks 22-31, 32-47, and
+  title-art source bank; banks 12-20 hold preloaded CX16 overlay PRGs
+  `X16.START`, `X16.TOWN`, `X16.DEATH`, `X16.GEN`, `X16.HELP`, `X16.UI`,
+  `X16.ITEMS`, `X16.SAVE`, and `X16.DISARM`; banks 21-31, 32-47, and
   48-63 are defined unallocated classes for overlay expansion, immutable
   data/string caches, and transient work respectively. The CX16 wrapper calls the common
   `core/dungeon_gen.s` generator after seeding the shared RNG. Future dungeon

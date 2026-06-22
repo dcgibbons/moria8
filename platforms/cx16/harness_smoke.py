@@ -720,7 +720,15 @@ def find_carried_item_slot(bench, labels, item_id):
     for slot in range(MAX_INV_SLOTS):
         if bench.get_memory(inv_base + slot) == item_id:
             return slot
-    raise AssertionError(f"carried item id {item_id} not found")
+    carried = [bench.get_memory(inv_base + slot) for slot in range(MAX_INV_SLOTS)]
+    equipment = {
+        "weapon": bench.get_memory(inv_base + EQUIP_WEAPON),
+        "body": bench.get_memory(inv_base + EQUIP_BODY),
+        "light": bench.get_memory(inv_base + EQUIP_LIGHT),
+    }
+    raise AssertionError(
+        f"carried item id {item_id} not found; carried={carried} equipment={equipment}"
+    )
 
 
 def place_monster(bench, labels, slot, x, y, monster_type, hp_lo=1, hp_hi=0):
@@ -1226,7 +1234,7 @@ def main():
             bench,
             29,
             10,
-            "Move: HJKL/YUBN/numbers. S save. s search. Shift-Q title.",
+            "Move: HJKL/YUBN/numbers. s search. Shift-S save.",
             "dungeon help",
         )
 
@@ -2027,7 +2035,7 @@ def main():
         saved_item_slot, saved_item_x, saved_item_y = find_top_floor_item_by_id(bench, labels, ITEM_FLASK_OIL)
         saved_tile = map_tile_at(bench, labels, reentry_x, reentry_y)
         bench.set_memory(require(labels, "zp_msg_flags"), 0)
-        stuff_key(bench, ord("S"))
+        stuff_key(bench, 0xD3)
         bench.run(require(labels, "cx16_poll_game"), timeout=12)
         assert_screen_text(bench, 0, 0, "Game saved.", "save key command message")
         if cwd and not os.path.exists(os.path.join(cwd, "THE.GAME")):
@@ -2088,12 +2096,12 @@ def main():
         assert_screen_text(bench, 15, 14, "Items: G)et D)rop I)nventory E)quipment", "help view items")
         assert_screen_text(bench, 17, 14, "Use: W)ear T)akeoff Shift-E eat Q)uaff R)ead", "help view use")
         assert_screen_text(bench, 19, 14, "Tools: A)im Z)use Shift-R refuel", "help view tools")
-        assert_screen_text(bench, 21, 14, "Views: ?)help Shift-C character V)version", "help view views")
-        assert_screen_text(bench, 23, 14, "System: S save, Shift-Q title", "help view system")
+        assert_screen_text(bench, 21, 14, "Views: ?)help /)identify Shift-C character V)version", "help view views")
+        assert_screen_text(bench, 23, 14, "System: Shift-S save, Shift-Q title", "help view system")
         for key, command, label in (
             (ord("O"), CMD_OPEN, "O maps to open"),
             (ord("C"), CMD_CLOSE, "C maps to close"),
-            (ord("S"), CMD_SAVE, "S maps to save"),
+            (ord("S"), CMD_SEARCH, "S maps to search"),
             (ord("s"), CMD_SEARCH, "s maps to search"),
             (ord("X"), CMD_LOOK, "X maps to look"),
             (ord("5"), CMD_REST, "5 maps to rest"),
@@ -2116,6 +2124,7 @@ def main():
             (ord("Z"), CMD_USE, "Z maps to use"),
             (0xD2, CMD_REFUEL, "Shift-R maps to refuel"),
             (ord("?"), CMD_HELP, "? maps to help"),
+            (ord("/"), CMD_RECALL, "/ maps to identify symbol"),
             (0xC3, CMD_CHAR_INFO, "Shift-C maps to character info"),
             (ord("V"), CMD_VERSION, "V maps to version command"),
             (0xD1, CMD_QUIT, "Shift-Q maps to quit"),
@@ -2131,12 +2140,14 @@ def main():
             (ord("f"), "f unmapped until gain spell exists"),
             (0xC6, "Shift-F unmapped until ranged fire exists"),
             (0xD4, "Shift-T unmapped until throw exists"),
-            (ord("/"), "/ unmapped until recall/identify exists"),
             (0x17, "Ctrl-W unmapped until wizard mode exists"),
         ):
             bench.set_a(key)
             bench.run(require(labels, "petscii_to_command"))
             assert_eq(bench.get_a(), CMD_NONE, label)
+        stuff_keys(bench, [ord("/"), ord("k")])
+        bench.run(require(labels, "cx16_poll_game"), timeout=12)
+        assert_screen_text(bench, 0, 0, "k - Kobold.", "symbol identify command")
         bench.run(require(labels, "cx16_draw_version_view"))
         assert_screen_text(bench, 10, 24, "Moria8 CX16 Port V1.3.1", "version view")
         stuff_keys(bench, CHARGEN_KEYS)
@@ -2163,7 +2174,6 @@ def main():
             (CMD_AUTOREST, "That is only useful in the dungeon.", "autorest command"),
             (CMD_OPEN, "That is only useful in the dungeon.", "open command"),
             (CMD_DROP, "That is only useful in the dungeon.", "drop command"),
-            (CMD_FIRE, "That is only useful in the dungeon.", "fire command"),
             (CMD_BASH, "That is only useful in the dungeon.", "bash command"),
             (CMD_TUNNEL, "That is only useful in the dungeon.", "tunnel command"),
             (CMD_DISARM, "That is only useful in the dungeon.", "disarm command"),
@@ -2225,9 +2235,9 @@ def main():
         assert_eq(bench.get_memory(require(labels, "cx16_state")), CX16_STATE_DEAD, "monster attack enters death state")
         assert_eq(bench.get_memory(require(labels, "zp_death_source")), 1, "monster death source records tier creature")
         assert_screen_text(bench, 0, 0, "* You have died *", "death flow message")
-        stuff_key(bench, 0xD1)
+        stuff_key(bench, ord(" "))
         bench.run(require(labels, "cx16_poll_dead"))
-        assert_eq(bench.get_memory(require(labels, "cx16_state")), 0, "death flow quit returns to title")
+        assert_eq(bench.get_memory(require(labels, "cx16_state")), 0, "death flow key returns to title")
         assert_eq(bench.get_memory(require(labels, "zp_game_flags")) & 0x01, 0x01, "death flag remains set on title")
         stuff_keys(bench, [ord("N")] + CHARGEN_KEYS)
         bench.run(require(labels, "cx16_poll_menu"), timeout=12)

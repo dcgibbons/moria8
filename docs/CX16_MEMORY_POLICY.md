@@ -36,17 +36,16 @@ The baseline target is 512 KiB banked RAM, exposed as 64 banks of 8 KiB at
 | 8 | Executable module cache | `DUNGEON.GEN` | Preloaded before title; persistent |
 | 9-10 | Item catalog family | `ITEMCAT.1` in bank 9; bank 10 reserved for item text/extra split | Preloaded before title; persistent |
 | 11 | Title-art source | `TITLE` | Loaded by title renderer; reloadable staging/source |
-| 12 | Code-overlay slot | `X16.START` marker sidecar | Preloaded before title; payload migration pending |
-| 13 | Code-overlay slot | `X16.TOWN` marker sidecar | Preloaded before title; payload migration pending |
-| 14 | Code-overlay slot | `X16.DEATH` marker sidecar | Preloaded before title; payload migration pending |
-| 15 | Code-overlay slot | `X16.ROYAL` marker sidecar | Preloaded before title; payload migration pending |
-| 16 | Code-overlay slot | `X16.GEN` marker sidecar | Preloaded before title; current `DUNGEON.GEN` remains bank 8 |
-| 17 | Code-overlay slot | `X16.HELP` marker sidecar | Preloaded before title; payload migration pending |
-| 18 | Code-overlay slot | `X16.UI` marker sidecar | Preloaded before title; payload migration pending |
-| 19 | Code-overlay slot | `X16.ITEMS` marker sidecar | Preloaded before title; payload migration pending |
-| 20 | Code-overlay slot | `X16.SPELL` marker sidecar | Preloaded before title; payload migration pending |
-| 21 | Code-overlay slot | `X16.DISARM` marker sidecar | Preloaded before title; payload migration pending |
-| 22-31 | Code-overlay expansion class | unallocated | Reserved for future resident overlays/modules |
+| 12 | Code-overlay slot | `X16.START` | Title rendering payload |
+| 13 | Code-overlay slot | `X16.TOWN` | Town recovery/resupply payload |
+| 14 | Code-overlay slot | `X16.DEATH` | Monster turns/combat and death terminal flow |
+| 15 | Code-overlay slot | `X16.GEN` | Shared character generation and starting inventory |
+| 16 | Code-overlay slot | `X16.HELP` | Help modal payload |
+| 17 | Code-overlay slot | `X16.UI` | Version, character, footer, and shared message payloads |
+| 18 | Code-overlay slot | `X16.ITEMS` | Inventory/equipment/use/drop/pickup and item-action payloads |
+| 19 | Code-overlay slot | `X16.SAVE` | Save/load storage payload |
+| 20 | Code-overlay slot | `X16.DISARM` | Shared feature commands, look, bash/tunnel/disarm, trap effects |
+| 21-31 | Code-overlay expansion class | unallocated | Reserved for future resident overlays/modules |
 | 32-47 | Immutable-data/string cache class | unallocated | Reserved for future data and string banks |
 | 48-63 | Work/cache class | unallocated | Reserved for save/load, generation, and temporary work |
 
@@ -68,9 +67,8 @@ The baseline target is 512 KiB banked RAM, exposed as 64 banks of 8 KiB at
 8. The title-art load address is `$A000` for CX16. It must not return to a
    fixed-RAM staging address such as `$6000`, because that would pin resident
    code below the staging address again.
-9. Named overlay banks have emitted CX16 sidecar PRGs and loader entries. The
-   current sidecars are marker payloads that prove build/load/cache ownership;
-   migrate real shared overlay code into them deliberately, one ownership
+9. Named overlay banks have emitted CX16 payload PRGs and loader entries.
+   Migrate additional shared overlay code into them deliberately, one ownership
    boundary at a time.
 
 ## Verification

@@ -5,7 +5,6 @@
 #import "../../core/platform_services_api.s"
 
 .const CX16_HAL_STATUS_OK = 0
-.const CX16_HAL_STATUS_ERR_UNSUPPORTED = 7
 
 // Shared semantic sound IDs. CX16 sound is silent for now, but shared gameplay
 // still references the effect constants.
@@ -30,9 +29,9 @@
 .label hal_storage_init_selected_drive = cx16_service_ok
 .label hal_asset_close_channel = cx16_asset_close_channel
 .label hal_asset_load_prg_header = cx16_asset_load_prg_header
-.label hal_storage_require_save_media = cx16_service_unsupported
-.label hal_storage_save_record = cx16_service_unsupported
-.label hal_storage_load_record = cx16_service_unsupported
+.label hal_storage_require_save_media = cx16_service_ok
+.label hal_storage_save_record = cx16_hal_storage_save_record
+.label hal_storage_load_record = cx16_hal_storage_load_record
 
 cx16_asset_load_addr_lo: .byte 0
 cx16_asset_load_addr_hi: .byte 0
@@ -55,13 +54,6 @@ cx16_services_install:
 cx16_service_ok:
     clc
     lda #CX16_HAL_STATUS_OK
-    rts
-
-cx16_service_unsupported:
-    sec
-    lda #CX16_HAL_STATUS_ERR_UNSUPPORTED
-    ldx #0
-    ldy #0
     rts
 
 // Input: A = filename length, X/Y = filename pointer. Uses the PRG header load

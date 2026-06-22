@@ -161,7 +161,7 @@ key_map_end:
     .byte $3e   // > — stairs down
     .byte $3c   // < — stairs up
     .byte $2e   // . — run prefix
-    .byte $53   // S — save game
+    .byte $53   // S — search
     .byte $73   // s — search
     .byte $4f   // O — open
     .byte $43   // C — close
@@ -189,6 +189,7 @@ key_map_end:
     .byte $12   // CTRL+R — rest until recovered
     .byte $23   // # — toggle search mode
     .byte $2b   // + — tunnel
+    .byte $2f   // / — identify a symbol
     // Shifted vi-keys (running)
     .byte $cb   // SHIFT+K — run north
     .byte $ca   // SHIFT+J — run south
@@ -207,14 +208,14 @@ key_map_end:
     .byte CMD_MOVE_N, CMD_MOVE_S, CMD_MOVE_W, CMD_MOVE_E
     .byte CMD_MOVE_NW, CMD_MOVE_NE, CMD_MOVE_SW, CMD_MOVE_SE
     .byte CMD_REST
-    .byte CMD_STAIRS_DN, CMD_STAIRS_UP, CMD_RUN, CMD_SAVE, CMD_SEARCH
+    .byte CMD_STAIRS_DN, CMD_STAIRS_UP, CMD_RUN, CMD_SEARCH, CMD_SEARCH
     .byte CMD_OPEN, CMD_CLOSE, CMD_PICKUP, CMD_PICKUP
     .byte CMD_DROP, CMD_INVENTORY, CMD_EQUIPMENT, CMD_WEAR
     .byte CMD_TAKEOFF, CMD_QUAFF, CMD_READ, CMD_AIM
     .byte CMD_USE, CMD_HELP, CMD_LOOK
     .byte CMD_CHAR_INFO, CMD_QUIT, CMD_EAT, CMD_REFUEL
     .byte CMD_DISARM, CMD_SAVE, CMD_BASH, CMD_AUTOREST, CMD_SEARCH_MODE
-    .byte CMD_TUNNEL
+    .byte CMD_TUNNEL, CMD_RECALL
     .byte CMD_RUN_N, CMD_RUN_S, CMD_RUN_W, CMD_RUN_E
     .byte CMD_RUN_NW, CMD_RUN_NE, CMD_RUN_SW, CMD_RUN_SE
 }

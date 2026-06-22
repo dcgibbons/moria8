@@ -1,6 +1,8 @@
 #importonce
 #import "generation_busy_api.s"
+#if !HAL_STORAGE_TIER_NAMES_EXTERNAL
 #import "compat/hal_storage_tier_test_stub.s"
+#endif
 // tier_manager.s — Creature tier loading and transition management
 //
 // Manages the active creature tier. Detects tier boundaries on stair

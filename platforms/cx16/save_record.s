@@ -288,20 +288,16 @@ cx16_save_read_name:
 .label cx16_save_read_name_len = * - cx16_save_read_name
 
 cx16_save_ok_text:
-    :ScreenText("Game saved.")
-    .byte 0
+    :GameplaySaveOkString()
 
 cx16_save_failed_text:
-    :ScreenText("Save failed.")
-    .byte 0
+    :GameplaySaveFailedString()
 
 cx16_load_ok_text:
-    :ScreenText("Game loaded.")
-    .byte 0
+    :GameplayLoadOkString()
 
 cx16_load_failed_text:
-    :ScreenText("Load failed.")
-    .byte 0
+    :GameplayLoadFailedString()
 
 cx16_save_count_lo: .byte 0
 cx16_save_count_hi: .byte 0

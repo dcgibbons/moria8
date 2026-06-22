@@ -9,16 +9,11 @@ ROOT = Path(__file__).resolve().parents[1]
 MAIN = ROOT / "main.s"
 
 FORBIDDEN_MAIN_PHRASES = {
-    "Load game is deferred.",
     "Rested and resupplied.",
     "Dungeon level ",
     " ready.",
     "You die. Shift-Q returns to title.",
     "That is only useful in the dungeon.",
-    "Magic and recall are deferred.",
-    "Save is deferred.",
-    "Map view is deferred.",
-    "Wizard mode is not enabled.",
     "You hit the kobold.",
     "You have slain the kobold.",
     "The kobold hits you.",

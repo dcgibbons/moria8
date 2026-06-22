@@ -20,9 +20,9 @@
   "storage": {
     "bus": "cmdr_dos",
     "program_media": "prg",
-    "save_media": "deferred",
+    "save_media": "native-overlay-record",
     "default_program_device": null,
-    "default_save_device": null,
+    "default_save_device": 8,
     "compatible_modes": ["x16emu-prg"]
   },
   "memory": {
@@ -49,17 +49,16 @@
       "8": "persistent DUNGEON.GEN executable module",
       "9-10": "persistent item catalog family",
       "11": "title-art source/staging bank",
-      "12": "preloaded overlay sidecar: X16.START",
-      "13": "preloaded overlay sidecar: X16.TOWN",
-      "14": "preloaded overlay sidecar: X16.DEATH",
-      "15": "preloaded overlay sidecar: X16.ROYAL",
-      "16": "preloaded overlay sidecar: X16.GEN",
-      "17": "preloaded overlay sidecar: X16.HELP",
-      "18": "preloaded overlay sidecar: X16.UI",
-      "19": "preloaded overlay sidecar: X16.ITEMS",
-      "20": "preloaded overlay sidecar: X16.SPELL",
-      "21": "preloaded overlay sidecar: X16.DISARM",
-      "22-31": "unallocated persistent code-overlay expansion cache",
+      "12": "preloaded overlay payload: X16.START",
+      "13": "preloaded overlay payload: X16.TOWN",
+      "14": "preloaded overlay payload: X16.DEATH",
+      "15": "preloaded overlay payload: X16.GEN",
+      "16": "preloaded overlay payload: X16.HELP",
+      "17": "preloaded overlay payload: X16.UI",
+      "18": "preloaded overlay payload: X16.ITEMS",
+      "19": "preloaded overlay payload: X16.SAVE",
+      "20": "preloaded overlay payload: X16.DISARM",
+      "21-31": "unallocated persistent code-overlay expansion cache",
       "32-47": "unallocated persistent immutable-data/string cache",
       "48-63": "unallocated transient save/generation/work cache"
     }
@@ -69,6 +68,7 @@
     "vera_text": true,
     "vera_psg": true,
     "ym2151": true,
-    "cmdr_dos_storage": false
+    "cmdr_dos_storage": true,
+    "shared_storage_hal": true
   }
 }

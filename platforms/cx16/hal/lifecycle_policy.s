@@ -1,10 +1,10 @@
 #importonce
 // Commander X16 lifecycle policy.
 //
-// CX16 bring-up currently keeps gameplay code resident in fixed RAM, while
-// overlay sidecar PRGs are preloaded into CX16 bank-window slots. The C128
-// overlay-cache flag remains off because it assembles C128 Bank 1 cache code,
-// not CX16 $A000-$BFFF bank-window cache code.
+// CX16 keeps resident code below the fixed live-map base and preloads larger
+// gameplay payloads into CX16 bank-window overlay slots. The C128 overlay-cache
+// flag remains off because it assembles C128 Bank 1 cache code, not CX16
+// $A000-$BFFF bank-window cache code.
 
 .const hal_platform_reassert_before_message_render = 0
 .const hal_platform_restore_tier_after_overlay = 0

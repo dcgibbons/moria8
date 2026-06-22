@@ -14,7 +14,6 @@
 #define HAL_PLATFORM_NO_FEAR_EFFECTS
 #define HAL_PLATFORM_NO_EGO_DAMAGE
 #define HAL_PLATFORM_NO_STORE_ITEMDESC
-#define HAL_PLATFORM_NO_MODAL_RESTORE
 
 .const PLATFORM_COMBAT_MSG_BUF_SIZE = 54
 #define HAL_HUFFMAN_COMBAT_APPEND
@@ -32,9 +31,11 @@
 .const OVL_HELP        = 5
 .const OVL_UI          = 6
 .const OVL_ITEMS       = 7
-.const OVL_SPELL       = 8
-.const CX16_OVERLAY_SLOT_ROYAL  = 4
-.const CX16_OVERLAY_SLOT_DISARM = 10
+.const OVL_STORAGE     = 8
+#if CX16_IMPORT_SHARED_GAME_LOOP
+.const OVL_SPELL       = OVL_STORAGE
+#endif
+.const CX16_OVERLAY_SLOT_DISARM = 9
 
 .const hal_huffman_lock_irq_during_decode = 0
 .const hal_huffman_print_uses_cached_msg = 0

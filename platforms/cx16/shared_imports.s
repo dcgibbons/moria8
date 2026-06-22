@@ -18,7 +18,6 @@
 #import "../../core/stat_display.s"
 #import "../../core/huffman.s"
 #import "../../core/dungeon_data.s"
-#import "compat/hal_storage_tier_test_stub.s"
 #import "reu_stub.s"
 #define DISARM_COMMAND_EXTERNAL
 #define DISARM_HELPERS_EXTERNAL
@@ -28,7 +27,9 @@
 #import "trampolines.s"
 #import "../../core/special_rooms.s"
 #import "../../core/monster.s"
+#define HAL_STORAGE_TIER_NAMES_EXTERNAL
 #import "../../core/tier_manager.s"
+#undef HAL_STORAGE_TIER_NAMES_EXTERNAL
 #import "../../core/dungeon_los.s"
 #import "../../core/monster_ai.s"
 #import "../../core/recall.s"

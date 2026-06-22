@@ -25,6 +25,26 @@
     .text "Rested and resupplied." ; .byte 0
 }
 
+.macro GameplaySaveOkString() {
+    .text "Game saved." ; .byte 0
+}
+
+.macro GameplaySaveFailedString() {
+    .text "Save failed." ; .byte 0
+}
+
+.macro GameplayLoadOkString() {
+    .text "Game loaded." ; .byte 0
+}
+
+.macro GameplayLoadFailedString() {
+    .text "Load failed." ; .byte 0
+}
+
+.macro GameplayVersionPlatformString() {
+    .text "Commander X16 vertical slice" ; .byte 0
+}
+
 #if !GAME_LOOP_NAV_STRINGS_EXTERNAL && !GAME_LOOP_STAIR_MOVE_STRINGS_EXTERNAL
 search_mode_on_str:
     .text "Search mode on." ; .byte 0
@@ -68,4 +88,18 @@ dungeon_ready_suffix_str:
 #if !GAMEPLAY_TOWN_RECOVERY_STR_EXTERNAL
 town_recovery_str:
     :GameplayTownRecoveryString()
+#endif
+
+#if !GAMEPLAY_SAVE_LOAD_STRINGS_EXTERNAL
+save_ok_str:
+    :GameplaySaveOkString()
+
+save_failed_str:
+    :GameplaySaveFailedString()
+
+load_ok_str:
+    :GameplayLoadOkString()
+
+load_failed_str:
+    :GameplayLoadFailedString()
 #endif

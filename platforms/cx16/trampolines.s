@@ -54,8 +54,9 @@ tramp_ui_inv_select_display:
     jmp ui_inv_select_display
 
 tramp_ui_equip_select_display:
-    rts
+    jmp ui_equip_select_display
 
+#if CX16_IMPORT_SHARED_GAME_LOOP
 tramp_ui_wizard_display:
     rts
 
@@ -96,6 +97,7 @@ tramp_disk_setup:
 tramp_player_create:
     sec
     rts
+#endif
 
 tramp_level_generate:
     jmp level_generate
@@ -129,6 +131,7 @@ overlay_load:
     sec
     rts
 
+#if CX16_IMPORT_SHARED_GAME_LOOP
 disk_prompt_game:
     clc
     rts
@@ -143,6 +146,7 @@ save_game:
 
 entry_main:
     rts
+#endif
 
 overlay_invalidate:
     lda #OVL_NONE
@@ -152,6 +156,7 @@ overlay_invalidate:
 platform_copy_tier_names_to_pool:
     rts
 
+#if CX16_IMPORT_SHARED_GAME_LOOP
 viewport_update:
     rts
 
@@ -201,3 +206,4 @@ old_view_y: .byte 0
 old_player_x: .byte 0
 old_player_y: .byte 0
 disk_setup_done: .byte 0
+#endif
