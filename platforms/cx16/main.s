@@ -1201,9 +1201,9 @@ cx16_seed_starting_player_state:
     lda #>2000
     sta player_data + PL_FOOD_HI
     sta zp_player_food_hi
-    lda #$03
+    lda #'C'
     sta player_data + PL_NAME
-    lda #$18
+    lda #'X'
     sta player_data + PL_NAME + 1
     lda #$31
     sta player_data + PL_NAME + 2
@@ -1554,8 +1554,8 @@ creature_name_buf:
 .macro ScreenText(text) {
 .for (var i = 0; i < text.size(); i++) {
     .var c = text.charAt(i)
-    .if (c >= 65 && c <= 90) {
-        .byte c - 64
+    .if (c >= 97 && c <= 122) {
+        .byte c - 96
     } else {
         .byte c
     }
@@ -1817,44 +1817,44 @@ cx16_overlay_draw_character_view:
     jmp ui_char_display
 
 cx16_press_key_text:
-    :ScreenText("PRESS ANY KEY")
+    :ScreenText("Press any key")
     .byte 0
 
 cx16_help_title_text:
-    :ScreenText("COMMANDS")
+    :ScreenText("Commands")
     .byte 0
 
 cx16_help_move_text:
-    :ScreenText("MOVE: HJKL/YUBN OR 12346789")
+    :ScreenText("Move: HJKL/YUBN or 12346789")
     .byte 0
 
 cx16_help_run_text:
-    :ScreenText("RUN: SHIFTED DIRECTION KEYS")
+    :ScreenText("Run: shifted direction keys")
     .byte 0
 
 cx16_help_feature_text:
-    :ScreenText("FEATURES: O)PEN C)LOSE S)EARCH R)EST")
+    :ScreenText("Features: O)pen C)lose S)earch R)est")
     .byte 0
 
 cx16_help_item_text:
-    :ScreenText("ITEMS: G)ET D)ROP I)NVENTORY E)QUIPMENT")
+    :ScreenText("Items: G)et D)rop I)nventory E)quipment")
     .byte 0
 
 cx16_help_views_text:
-    :ScreenText("VIEWS: ?)HELP C)HARACTER V)ERSION")
+    :ScreenText("Views: ?)help C)haracter V)ersion")
     .byte 0
 
 cx16_version_title_text:
-    :ScreenText("MORIA8")
+    :ScreenText("Moria8")
     .byte 0
 
 cx16_version_text:
-    :ScreenText("MORIA8 CX16 PORT ")
+    :ScreenText("Moria8 CX16 Port ")
     :EmitTitleVersionScreen()
     .byte 0
 
 cx16_version_policy_text:
-    :ScreenText("CX16 PORT IN PROGRESS")
+    :ScreenText("CX16 port in progress")
     .byte 0
 
 #if !CX16_IMPORT_SHARED_GAME_LOOP

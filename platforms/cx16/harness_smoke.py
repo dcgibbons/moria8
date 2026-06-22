@@ -260,8 +260,6 @@ def map_row_addr(bench, labels, y):
 
 def screen_code(ch):
     value = ord(ch)
-    if 65 <= value <= 90:
-        return value - 64
     if 97 <= value <= 122:
         return value - 96
     if ch == "@":
@@ -1364,13 +1362,13 @@ def main():
         assert_screen_text(bench, 25, 66, "DL:0", "town status depth after upstairs")
 
         bench.run(require(labels, "cx16_draw_help_view"))
-        assert_screen_text(bench, 3, 35, "COMMANDS", "help view title")
-        assert_screen_text(bench, 7, 14, "MOVE: HJKL/YUBN OR 12346789", "help view movement")
+        assert_screen_text(bench, 3, 35, "Commands", "help view title")
+        assert_screen_text(bench, 7, 14, "Move: HJKL/YUBN or 12346789", "help view movement")
         bench.set_a(ord("V"))
         bench.run(require(labels, "petscii_to_command"))
         assert_eq(bench.get_a(), CMD_VERSION, "V maps to version command")
         bench.run(require(labels, "cx16_draw_version_view"))
-        assert_screen_text(bench, 10, 24, "MORIA8 CX16 PORT V1.3.1", "version view")
+        assert_screen_text(bench, 10, 24, "Moria8 CX16 Port V1.3.1", "version view")
         bench.run(require(labels, "cx16_seed_starting_player_state"))
         bench.run(require(labels, "cx16_draw_character_view"))
         assert_screen_text(bench, 0, 33, "Character Info", "character view title")

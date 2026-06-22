@@ -34,9 +34,29 @@ def screen_bytes(text: str) -> str:
     return ", ".join(values)
 
 
+def cx16_screen_bytes(text: str) -> str:
+    values: list[str] = []
+    for ch in text:
+        code = ord(ch)
+        if 97 <= code <= 122:
+            code -= 96
+        values.append(str(code))
+    return ", ".join(values)
+
+
 def emit_include(dst: Path, c64_version: str, c128_version: str, plus4_version: str) -> None:
+    cx16_version = c128_version.upper()
     text = f"""// Auto-generated from version.json. Do not edit by hand.
-#if C128
+#if CX16
+.const TITLE_VERSION_LEN = {len(cx16_version)}
+.const TITLE_VERSION_SCREEN_LEN = {len(cx16_version)}
+.macro EmitTitleVersion() {{
+    .text "{cx16_version}"
+}}
+.macro EmitTitleVersionScreen() {{
+    .byte {cx16_screen_bytes(cx16_version)}
+}}
+#elif C128
 .const TITLE_VERSION_LEN = {len(c128_version)}
 .const TITLE_VERSION_SCREEN_LEN = {len(c128_version)}
 .macro EmitTitleVersion() {{

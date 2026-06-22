@@ -34,12 +34,14 @@
 .const VERA_DATA0  = $9f23
 .const VERA_CTRL   = $9f25
 .const X16_SCREEN_MODE = $ff5f
+.const X16_SCREEN_SET_CHARSET = $ff62
 
 .const VERA_TEXT_BASE_LO = $00
 .const VERA_TEXT_BASE_MID = $b0
 .const VERA_TEXT_BASE_HIGH = $01
 .const VERA_TEXT_ROW_STRIDE = 256
 .const X16_MODE_80X30 = 1
+.const X16_CHARSET_PET_UPPER_LOWER = 3
 .const VERA_INC_1 = $10
 .const VERA_BG_BLACK = $00
 .const SC_SPACE = $20
@@ -69,6 +71,8 @@ screen_init:
     lda #X16_MODE_80X30
     clc
     jsr X16_SCREEN_MODE     // Force 80x30 instead of inheriting NVRAM/default mode.
+    lda #X16_CHARSET_PET_UPPER_LOWER
+    jsr X16_SCREEN_SET_CHARSET
     rts
 
 screen_set_color:
@@ -180,19 +184,14 @@ vera_put_char_with_attr:
 
 vera_translate_screen_code:
     cmp #$41
-    bcc !check_lower+
+    bcc !done+
     cmp #$5b
-    bcs !check_lower+
-    sec
-    sbc #$40
-    rts
-!check_lower:
+    bcc !done+
     cmp #$61
     bcc !done+
     cmp #$7b
     bcs !done+
-    sec
-    sbc #$60
+    and #$1f
 !done:
     rts
 
