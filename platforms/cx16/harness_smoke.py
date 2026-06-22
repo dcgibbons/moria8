@@ -94,11 +94,14 @@ CMD_READ = 0x17
 CMD_AIM = 0x18
 CMD_USE = 0x19
 CMD_CAST = 0x1A
+CMD_PRAY = 0x1B
 CMD_CHAR_INFO = 0x1C
 CMD_MAP = 0x1D
 CMD_RECALL = 0x1E
 CMD_LOOK = 0x1F
+CMD_RUN = 0x20
 CMD_SAVE = 0x21
+CMD_QUIT = 0x22
 CMD_HELP = 0x23
 CMD_VERSION = 0x24
 CMD_RUN_N = 0x25
@@ -111,6 +114,7 @@ CMD_RUN_SW = 0x2B
 CMD_RUN_SE = 0x2C
 CMD_GAIN = 0x2D
 CMD_FIRE = 0x2E
+CMD_THROW = 0x2F
 CMD_REFUEL = 0x30
 CMD_BASH = 0x31
 CMD_TUNNEL = 0x32
@@ -786,6 +790,23 @@ def main():
         )
         assert_screen_cell(bench, 20, 38, SC_PLAYER, TEXT_COLOR, "initial player")
 
+        for routine, title, label in (
+            ("cx16_draw_inventory_view", "Inventory", "town inventory"),
+            ("cx16_draw_equipment_view", "Equipment", "town equipment"),
+        ):
+            bench.run(require(labels, routine))
+            assert_screen_text(bench, 0, 35, title, f"{label} modal title")
+            bench.run(require(labels, "cx16_restore_current_view"))
+            assert_eq(bench.get_memory(require(labels, "cx16_state")), 1, f"{label} restores town state")
+            assert_screen_text(bench, 25, 66, "DL:0", f"{label} restores town status")
+            assert_screen_text(
+                bench,
+                29,
+                14,
+                "HJKL/YUBN OR NUMBERS MOVE. SHIFT-Q RETURNS TO TITLE.",
+                f"{label} restores town help",
+            )
+
         bench.set_a(CMD_MOVE_E)
         bench.run(require(labels, "cx16_try_move_command"))
         assert_player_position(bench, labels, 32, 18, "move east onto stairs")
@@ -1364,9 +1385,53 @@ def main():
         bench.run(require(labels, "cx16_draw_help_view"))
         assert_screen_text(bench, 3, 35, "Commands", "help view title")
         assert_screen_text(bench, 7, 14, "Move: HJKL/YUBN or 12346789", "help view movement")
-        bench.set_a(ord("V"))
-        bench.run(require(labels, "petscii_to_command"))
-        assert_eq(bench.get_a(), CMD_VERSION, "V maps to version command")
+        assert_screen_text(bench, 9, 14, "Run: shifted direction keys or . direction", "help view run")
+        assert_screen_text(bench, 11, 14, "Features: O)pen C)lose S)earch X)look R)est", "help view features")
+        assert_screen_text(bench, 13, 14, "More: Ctrl-B bash +)tunnel Shift-D disarm #)search", "help view more")
+        assert_screen_text(bench, 15, 14, "Items: G)et D)rop I)nventory E)quipment", "help view items")
+        assert_screen_text(bench, 17, 14, "Use: W)ear T)akeoff Shift-E eat Q)uaff R)ead", "help view use")
+        assert_screen_text(bench, 19, 14, "Tools: A)im Z)use Shift-R refuel", "help view tools")
+        assert_screen_text(bench, 21, 14, "Views: ?)help Shift-C character V)version", "help view views")
+        assert_screen_text(bench, 23, 14, "System: Shift-S save Shift-Q title M/P/F magic", "help view system")
+        for key, command, label in (
+            (ord("O"), CMD_OPEN, "O maps to open"),
+            (ord("C"), CMD_CLOSE, "C maps to close"),
+            (ord("S"), CMD_SEARCH, "S maps to search"),
+            (ord("X"), CMD_LOOK, "X maps to look"),
+            (ord("5"), CMD_REST, "5 maps to rest"),
+            (0x02, CMD_BASH, "Ctrl-B maps to bash"),
+            (ord("+"), CMD_TUNNEL, "+ maps to tunnel"),
+            (0xC4, CMD_DISARM, "Shift-D maps to disarm"),
+            (ord("#"), CMD_SEARCH_MODE, "# maps to search mode"),
+            (0x12, CMD_AUTOREST, "Ctrl-R maps to autorest"),
+            (ord("G"), CMD_PICKUP, "G maps to pickup"),
+            (ord(","), CMD_PICKUP, ", maps to pickup"),
+            (ord("D"), CMD_DROP, "D maps to drop"),
+            (ord("I"), CMD_INVENTORY, "I maps to inventory"),
+            (ord("E"), CMD_EQUIPMENT, "E maps to equipment"),
+            (ord("W"), CMD_WEAR, "W maps to wear"),
+            (ord("T"), CMD_TAKEOFF, "T maps to take off"),
+            (0xC5, CMD_EAT, "Shift-E maps to eat"),
+            (ord("Q"), CMD_QUAFF, "Q maps to quaff"),
+            (ord("R"), CMD_READ, "R maps to read"),
+            (ord("A"), CMD_AIM, "A maps to aim"),
+            (ord("Z"), CMD_USE, "Z maps to use"),
+            (0xD2, CMD_REFUEL, "Shift-R maps to refuel"),
+            (ord("?"), CMD_HELP, "? maps to help"),
+            (0xC3, CMD_CHAR_INFO, "Shift-C maps to character info"),
+            (ord("V"), CMD_VERSION, "V maps to version command"),
+            (0xD3, CMD_SAVE, "Shift-S maps to save"),
+            (0xD1, CMD_QUIT, "Shift-Q maps to quit"),
+            (ord("M"), CMD_CAST, "M maps to cast"),
+            (ord("P"), CMD_PRAY, "P maps to pray"),
+            (ord("F"), CMD_GAIN, "F maps to gain"),
+            (ord("f"), CMD_GAIN, "f maps to gain"),
+            (0xC6, CMD_FIRE, "Shift-F maps to fire"),
+            (0xD4, CMD_THROW, "Shift-T maps to throw"),
+        ):
+            bench.set_a(key)
+            bench.run(require(labels, "petscii_to_command"))
+            assert_eq(bench.get_a(), command, label)
         bench.run(require(labels, "cx16_draw_version_view"))
         assert_screen_text(bench, 10, 24, "Moria8 CX16 Port V1.3.1", "version view")
         bench.run(require(labels, "cx16_seed_starting_player_state"))
@@ -1390,7 +1455,6 @@ def main():
             (CMD_AUTOREST, "SEARCH/REST/LOOK NOT WIRED YET.", "autorest command"),
             (CMD_OPEN, "ITEM/FEATURE COMMAND NOT WIRED YET.", "open command"),
             (CMD_DROP, "ITEM/FEATURE COMMAND NOT WIRED YET.", "drop command"),
-            (CMD_INVENTORY, "ITEM/FEATURE COMMAND NOT WIRED YET.", "inventory command"),
             (CMD_FIRE, "ITEM/FEATURE COMMAND NOT WIRED YET.", "fire command"),
             (CMD_BASH, "ITEM/FEATURE COMMAND NOT WIRED YET.", "bash command"),
             (CMD_TUNNEL, "ITEM/FEATURE COMMAND NOT WIRED YET.", "tunnel command"),

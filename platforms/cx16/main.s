@@ -816,10 +816,20 @@ cx16_cmd_drop:
     jmp cx16_call_items_overlay_command
 
 cx16_cmd_inventory:
+    jsr cx16_draw_inventory_view
+    jsr input_get_modal_dismiss_key
+    jmp cx16_restore_current_view
+
+cx16_draw_inventory_view:
     lda #CX16_ITEM_CMD_INVENTORY
     jmp cx16_call_items_overlay_command
 
 cx16_cmd_equipment:
+    jsr cx16_draw_equipment_view
+    jsr input_get_modal_dismiss_key
+    jmp cx16_restore_current_view
+
+cx16_draw_equipment_view:
     lda #CX16_ITEM_CMD_EQUIPMENT
     jmp cx16_call_items_overlay_command
 
@@ -1798,9 +1808,13 @@ cx16_overlay_draw_help_view:
     :Cx16PrintAt(7, 14, cx16_help_move_text)
     :Cx16PrintAt(9, 14, cx16_help_run_text)
     :Cx16PrintAt(11, 14, cx16_help_feature_text)
-    :Cx16PrintAt(13, 14, cx16_help_item_text)
-    :Cx16PrintAt(15, 14, cx16_help_views_text)
-    :Cx16PrintAt(20, 33, cx16_press_key_text)
+    :Cx16PrintAt(13, 14, cx16_help_more_text)
+    :Cx16PrintAt(15, 14, cx16_help_item_text)
+    :Cx16PrintAt(17, 14, cx16_help_use_text)
+    :Cx16PrintAt(19, 14, cx16_help_tools_text)
+    :Cx16PrintAt(21, 14, cx16_help_views_text)
+    :Cx16PrintAt(23, 14, cx16_help_system_text)
+    :Cx16PrintAt(26, 33, cx16_press_key_text)
     rts
 
 cx16_overlay_draw_version_view:
@@ -1829,19 +1843,35 @@ cx16_help_move_text:
     .byte 0
 
 cx16_help_run_text:
-    :ScreenText("Run: shifted direction keys")
+    :ScreenText("Run: shifted direction keys or . direction")
     .byte 0
 
 cx16_help_feature_text:
-    :ScreenText("Features: O)pen C)lose S)earch R)est")
+    :ScreenText("Features: O)pen C)lose S)earch X)look R)est")
+    .byte 0
+
+cx16_help_more_text:
+    :ScreenText("More: Ctrl-B bash +)tunnel Shift-D disarm #)search")
     .byte 0
 
 cx16_help_item_text:
     :ScreenText("Items: G)et D)rop I)nventory E)quipment")
     .byte 0
 
+cx16_help_use_text:
+    :ScreenText("Use: W)ear T)akeoff Shift-E eat Q)uaff R)ead")
+    .byte 0
+
+cx16_help_tools_text:
+    :ScreenText("Tools: A)im Z)use Shift-R refuel")
+    .byte 0
+
 cx16_help_views_text:
-    :ScreenText("Views: ?)help C)haracter V)ersion")
+    :ScreenText("Views: ?)help Shift-C character V)version")
+    .byte 0
+
+cx16_help_system_text:
+    :ScreenText("System: Shift-S save Shift-Q title M/P/F magic")
     .byte 0
 
 cx16_version_title_text:
@@ -2005,28 +2035,12 @@ cx16_overlay_items_command_entry:
     rts
 
 !inventory:
-    lda cx16_state
-    cmp #CX16_STATE_DUNGEON
-    beq !inventory_dungeon+
-    jmp cx16_show_item_stub
-!inventory_dungeon:
     lda #$ff
     sta piw_filter
-    jsr input_prepare_modal_dismiss_key
-    jsr ui_inv_display
-    jsr input_get_modal_dismiss_key
-    jmp cx16_refresh_dungeon_view
+    jmp ui_inv_display
 
 !equipment:
-    lda cx16_state
-    cmp #CX16_STATE_DUNGEON
-    beq !equipment_dungeon+
-    jmp cx16_show_item_stub
-!equipment_dungeon:
-    jsr input_prepare_modal_dismiss_key
-    jsr ui_equip_display
-    jsr input_get_modal_dismiss_key
-    jmp cx16_refresh_dungeon_view
+    jmp ui_equip_display
 
 !wear:
     lda cx16_state
