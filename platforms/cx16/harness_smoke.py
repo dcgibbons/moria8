@@ -40,9 +40,12 @@ VIEWPORT_Y = 2
 PL_RACE = 17
 PL_CLASS = 18
 PL_LEVEL = 19
+PL_STR_CUR = 27
 PL_INT_CUR = 28
+PL_WIS_CUR = 29
 PL_DEX_CUR = 30
 PL_CON_CUR = 31
+PL_CHR_CUR = 32
 PL_HP_LO = 33
 PL_HP_HI = 34
 PL_MHP_LO = 35
@@ -63,10 +66,22 @@ PL_FOOD_HI = 52
 PL_FLAGS = 54
 PL_MAX_DLVL = 56
 PL_EXPFACT = 106
+PL_SOCIAL_CLASS = 108
 PLF_MALE = 0x01
 PLF_SEARCHING = 0x10
 KEYBUF = 0xA800
 KEYBUF_COUNT = 0xA80A
+CHARGEN_KEYS = [
+    ord("A"),  # race: Human
+    0x0D,      # stats: accept roll
+    ord("A"),  # class: Warrior
+    0xC3,      # shifted C -> uppercase screen code in name storage
+    0xD8,      # shifted X -> uppercase screen code in name storage
+    ord("1"),
+    ord("6"),
+    0x0D,      # accept name
+    ord("A"),  # gender: Male
+]
 MAP_COLS = 198
 MAP_ROWS = 66
 MAX_FLOOR_ITEMS = 42
@@ -341,14 +356,21 @@ def screen_put_cell_raw(bench, row, col, char_code, attr):
     bench.set_memory(VERA_DATA0, attr)
 
 
-def stuff_key(bench, petscii):
+def stuff_keys(bench, keys):
+    if len(keys) > 10:
+        raise AssertionError("CX16 KERNAL key buffer only holds 10 bytes")
     saved_bank = bench.get_memory(CX16_RAM_BANK_REG)
     bench.set_memory(CX16_RAM_BANK_REG, 0)
     bench.set_memory(KEYBUF_COUNT, 0)
     for offset in range(10):
-        bench.set_memory(KEYBUF + offset, petscii)
-    bench.set_memory(KEYBUF_COUNT, 1)
+        value = keys[offset] if offset < len(keys) else 0
+        bench.set_memory(KEYBUF + offset, value)
+    bench.set_memory(KEYBUF_COUNT, len(keys))
     bench.set_memory(CX16_RAM_BANK_REG, saved_bank)
+
+
+def stuff_key(bench, petscii):
+    stuff_keys(bench, [petscii])
 
 
 def set_key_held(bench, held):
@@ -371,6 +393,67 @@ def set_inventory_slot(bench, labels, slot, item_id, qty=1, p1=0, to_hit=0, to_d
 
 def set_inventory_slot0(bench, labels, item_id, qty=1, p1=0):
     set_inventory_slot(bench, labels, 0, item_id, qty=qty, p1=p1)
+
+
+def assert_chargen_player(bench, labels):
+    player = require(labels, "player_data")
+    expected_name = [screen_code("C"), screen_code("X"), screen_code("1"), screen_code("6"), 0]
+    for offset, expected in enumerate(expected_name):
+        assert_eq(bench.get_memory(player + offset), expected, f"shared chargen name byte {offset}")
+    assert_eq(bench.get_memory(player + PL_RACE), 0, "shared chargen race")
+    assert_eq(bench.get_memory(player + PL_CLASS), 0, "shared chargen class")
+    assert_eq(bench.get_memory(player + PL_LEVEL), 1, "shared chargen level")
+    assert_eq(bench.get_memory(player + PL_FLAGS), PLF_MALE, "shared chargen sex flag")
+    assert_eq(bench.get_memory(player + PL_FOOD_LO), 0xD0, "shared chargen food low")
+    assert_eq(bench.get_memory(player + PL_FOOD_HI), 0x07, "shared chargen food high")
+    mhp = bench.get_memory(player + PL_MHP_LO) | (bench.get_memory(player + PL_MHP_HI) << 8)
+    hp = bench.get_memory(player + PL_HP_LO) | (bench.get_memory(player + PL_HP_HI) << 8)
+    if mhp == 0:
+        raise AssertionError("shared chargen produced zero max HP")
+    assert_eq(hp, mhp, "shared chargen starts at full HP")
+    gold = (
+        bench.get_memory(player + PL_GOLD_0)
+        | (bench.get_memory(player + PL_GOLD_0 + 1) << 8)
+        | (bench.get_memory(player + PL_GOLD_0 + 2) << 16)
+    )
+    if gold < 80:
+        raise AssertionError(f"shared chargen gold below minimum: {gold}")
+
+
+def normalize_smoke_player_numbers(bench, labels):
+    player = require(labels, "player_data")
+    for label, value in (
+        ("zp_player_str", 18),
+        ("zp_player_int", 12),
+        ("zp_player_wis", 12),
+        ("zp_player_dex", 12),
+        ("zp_player_con", 18),
+        ("zp_player_chr", 12),
+        ("zp_player_hp_lo", 12),
+        ("zp_player_hp_hi", 0),
+        ("zp_player_mhp_lo", 12),
+        ("zp_player_mhp_hi", 0),
+    ):
+        bench.set_memory(require(labels, label), value)
+    for offset, value in (
+        (PL_STR_CUR, 18),
+        (PL_INT_CUR, 12),
+        (PL_WIS_CUR, 12),
+        (PL_DEX_CUR, 12),
+        (PL_CON_CUR, 18),
+        (PL_CHR_CUR, 12),
+        (PL_HP_LO, 12),
+        (PL_HP_HI, 0),
+        (PL_MHP_LO, 12),
+        (PL_MHP_HI, 0),
+        (PL_MANA, 0),
+        (PL_MAX_MANA, 0),
+        (PL_GOLD_0, 200),
+        (PL_GOLD_0 + 1, 0),
+        (PL_GOLD_0 + 2, 0),
+        (PL_SOCIAL_CLASS, 50),
+    ):
+        bench.set_memory(player + offset, value)
 
 
 def add_floor_item(bench, labels, x, y, item_id):
@@ -955,14 +1038,16 @@ def main():
         assert_screen_cell(bench, 3, 25, SC_REVERSE_SPACE, TEXT_COLOR, "title logo block")
         assert_screen_text(bench, 18, 27, "N)EW", "title menu")
 
-        bench.run(require(labels, "cx16_new_game_start"), timeout=8)
+        stuff_keys(bench, CHARGEN_KEYS)
+        bench.run(require(labels, "cx16_new_game_start"), timeout=12)
 
         assert_eq(bench.get_memory(require(labels, "cx16_state")), 1, "CX16 state")
         assert_player_position(bench, labels, 31, 18, "new game")
         assert_eq(bench.get_memory(require(labels, "zp_player_dlvl")), 0, "town depth")
         assert_eq(bench.get_memory(require(labels, "inv_item_id") + EQUIP_WEAPON), ITEM_PICK, "starting weapon")
-        assert_eq(bench.get_memory(require(labels, "zp_player_str")), 18, "starting strength")
-        assert_eq(bench.get_memory(require(labels, "player_data") + PL_FLAGS), PLF_MALE, "starting sex flag")
+        assert_chargen_player(bench, labels)
+        normalize_smoke_player_numbers(bench, labels)
+        bench.run(require(labels, "cx16_new_game_draw"))
         bench.run(require(labels, "tramp_dig_ability"))
         assert_eq(
             bench.get_memory(require(labels, "tun_dig_ability")),
@@ -1146,6 +1231,8 @@ def main():
         )
 
         inv_base = require(labels, "inv_item_id")
+        set_inventory_slot(bench, labels, EQUIP_BODY, FI_EMPTY, qty=0)
+        bench.run(require(labels, "player_calc_combat"))
         old_ac = bench.get_memory(require(labels, "player_data") + PL_AC)
         set_player_position(bench, labels, seeded_armor_x, seeded_armor_y)
         screen_put_cell_raw(bench, CLEAR_SENTINEL_ROW, CLEAR_SENTINEL_COL, screen_code("*"), 2)
@@ -1158,9 +1245,10 @@ def main():
         assert_screen_cell(bench, CLEAR_SENTINEL_ROW, CLEAR_SENTINEL_COL, screen_code("*"), 2, "generated armor pickup does not full-clear")
 
         reset_turn(bench, labels)
-        stuff_key(bench, ord("A"))
+        stuff_keys(bench, [ord("A"), ord(" ")])
         bench.set_a(CMD_WEAR)
-        bench.run(require(labels, "cx16_dispatch_game_command"))
+        bench.run(require(labels, "cx16_dispatch_game_command"), timeout=12)
+        set_key_held(bench, False)
         assert_eq(bench.get_memory(inv_base + EQUIP_BODY), ITEM_LEATHER_ARMOR, "generated leather armor equips body slot")
         armor_ac = bench.get_memory(require(labels, "player_data") + PL_AC)
         if armor_ac <= old_ac:
@@ -1183,9 +1271,10 @@ def main():
         bench.set_memory(require(labels, "player_data") + PL_MHP_LO, 50)
         bench.set_memory(require(labels, "player_data") + PL_MHP_HI, 0)
         reset_turn(bench, labels)
-        stuff_key(bench, ord("C"))
+        stuff_keys(bench, [ord("C"), ord(" ")])
         bench.set_a(CMD_QUAFF)
-        bench.run(require(labels, "cx16_dispatch_game_command"))
+        bench.run(require(labels, "cx16_dispatch_game_command"), timeout=12)
+        set_key_held(bench, False)
         if bench.get_memory(require(labels, "zp_player_hp_lo")) <= 5:
             raise AssertionError("generated cure potion did not heal the player")
         assert_eq(count_carried_item(bench, labels, ITEM_POTION_CURE), 2, "generated cure potion is consumed")
@@ -1193,9 +1282,10 @@ def main():
         assert_screen_contains_cell(bench, SC_PLAYER, TEXT_COLOR, "generated potion quaff keeps player glyph")
 
         reset_turn(bench, labels)
-        stuff_key(bench, ord("B"))
+        stuff_keys(bench, [ord("B"), ord(" ")])
         bench.set_a(CMD_TAKEOFF)
-        bench.run(require(labels, "cx16_dispatch_game_command"))
+        bench.run(require(labels, "cx16_dispatch_game_command"), timeout=12)
+        set_key_held(bench, False)
         find_carried_item_slot(bench, labels, ITEM_LEATHER_ARMOR)
         assert_eq(bench.get_memory(inv_base + EQUIP_BODY), FI_EMPTY, "generated leather armor takeoff clears body slot")
         if bench.get_memory(require(labels, "player_data") + PL_AC) >= armor_ac:
@@ -1214,7 +1304,7 @@ def main():
         bench.set_memory(require(labels, "inv_p1") + EQUIP_LIGHT, 10)
         reset_turn(bench, labels)
         bench.set_a(CMD_REFUEL)
-        bench.run(require(labels, "cx16_dispatch_game_command"))
+        bench.run(require(labels, "cx16_dispatch_game_command"), timeout=12)
         assert_eq(bench.get_memory(require(labels, "inv_p1") + EQUIP_LIGHT), 30, "generated oil refuels equipped lantern")
         assert_eq(count_carried_item(bench, labels, ITEM_FLASK_OIL), 0, "generated oil is consumed")
         assert_turns(bench, labels, 1, "generated oil refuel consumes one turn")
@@ -1623,18 +1713,20 @@ def main():
         bench.set_memory(require(labels, "inv_ego"), 0)
         bench.set_memory(inv_base + EQUIP_WEAPON, FI_EMPTY)
         reset_turn(bench, labels)
-        stuff_key(bench, ord("A"))
+        stuff_keys(bench, [ord("A"), ord(" ")])
         bench.set_a(CMD_WEAR)
-        bench.run(require(labels, "cx16_dispatch_game_command"))
+        bench.run(require(labels, "cx16_dispatch_game_command"), timeout=12)
+        set_key_held(bench, False)
         assert_eq(bench.get_memory(inv_base), FI_EMPTY, "wear command removes carried item")
         assert_eq(bench.get_memory(inv_base + EQUIP_WEAPON), ITEM_PICK, "wear command equips weapon")
         assert_turns(bench, labels, 1, "wear command consumes one turn")
         assert_screen_contains_cell(bench, SC_PLAYER, TEXT_COLOR, "wear command keeps player glyph")
 
         reset_turn(bench, labels)
-        stuff_key(bench, ord("A"))
+        stuff_keys(bench, [ord("A"), ord(" ")])
         bench.set_a(CMD_TAKEOFF)
-        bench.run(require(labels, "cx16_dispatch_game_command"))
+        bench.run(require(labels, "cx16_dispatch_game_command"), timeout=12)
+        set_key_held(bench, False)
         assert_eq(bench.get_memory(inv_base), ITEM_PICK, "takeoff command restores carried item")
         assert_eq(bench.get_memory(inv_base + EQUIP_WEAPON), FI_EMPTY, "takeoff command clears weapon slot")
         assert_turns(bench, labels, 1, "takeoff command consumes one turn")
@@ -1668,9 +1760,10 @@ def main():
         bench.set_memory(require(labels, "player_data") + PL_MHP_HI, 0)
         screen_put_cell_raw(bench, CLEAR_SENTINEL_ROW, CLEAR_SENTINEL_COL, screen_code("*"), 2)
         reset_turn(bench, labels)
-        stuff_key(bench, ord("A"))
+        stuff_keys(bench, [ord("A"), ord(" ")])
         bench.set_a(CMD_QUAFF)
-        bench.run(require(labels, "cx16_dispatch_game_command"))
+        bench.run(require(labels, "cx16_dispatch_game_command"), timeout=12)
+        set_key_held(bench, False)
         assert_eq(bench.get_memory(inv_base), FI_EMPTY, "quaff command consumes potion")
         if bench.get_memory(require(labels, "zp_player_hp_lo")) <= 10:
             raise AssertionError("quaff command did not heal the player")
@@ -2046,7 +2139,10 @@ def main():
             assert_eq(bench.get_a(), CMD_NONE, label)
         bench.run(require(labels, "cx16_draw_version_view"))
         assert_screen_text(bench, 10, 24, "Moria8 CX16 Port V1.3.1", "version view")
-        bench.run(require(labels, "cx16_seed_starting_player_state"))
+        stuff_keys(bench, CHARGEN_KEYS)
+        bench.run(require(labels, "cx16_seed_starting_player_state"), timeout=12)
+        assert_chargen_player(bench, labels)
+        normalize_smoke_player_numbers(bench, labels)
         bench.run(require(labels, "cx16_draw_character_view"))
         assert_screen_text(bench, 0, 33, "Character Info", "character view title")
         assert_screen_text(bench, 2, 22, "Name: CX16", "character view name")
@@ -2133,11 +2229,13 @@ def main():
         bench.run(require(labels, "cx16_poll_dead"))
         assert_eq(bench.get_memory(require(labels, "cx16_state")), 0, "death flow quit returns to title")
         assert_eq(bench.get_memory(require(labels, "zp_game_flags")) & 0x01, 0x01, "death flag remains set on title")
-        stuff_key(bench, ord("N"))
-        bench.run(require(labels, "cx16_poll_menu"), timeout=8)
+        stuff_keys(bench, [ord("N")] + CHARGEN_KEYS)
+        bench.run(require(labels, "cx16_poll_menu"), timeout=12)
         assert_eq(bench.get_memory(require(labels, "cx16_state")), CX16_STATE_NEW_GAME, "new game after death reaches town")
         assert_eq(bench.get_memory(require(labels, "zp_game_flags")) & 0x01, 0, "new game after death clears death flag")
         assert_eq(bench.get_memory(require(labels, "zp_death_source")), 0, "new game after death clears death source")
+        assert_chargen_player(bench, labels)
+        normalize_smoke_player_numbers(bench, labels)
         bench.set_a(1)
         bench.run(require(labels, "cx16_enter_dungeon_level"), timeout=8)
         assert_eq(bench.get_memory(require(labels, "cx16_state")), CX16_STATE_DUNGEON, "new game after death enters dungeon")

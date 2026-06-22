@@ -590,56 +590,8 @@ cx16_find_monster_draw_at:
     rts
 
 cx16_read_monster_draw_tier_field:
-    sta cx16_mon_draw_field_idx
-    jsr cx16_monster_draw_current_tier_count
-    sta cx16_mon_draw_tier_count
-    lda #<CX16_TIER_LOAD_BASE
-    sta zp_ptr0
-    lda #>CX16_TIER_LOAD_BASE
-    sta zp_ptr0_hi
-    lda cx16_mon_draw_field_idx
-    beq !add_type+
-!field_loop:
-    clc
-    lda zp_ptr0
-    adc cx16_mon_draw_tier_count
-    sta zp_ptr0
-    lda zp_ptr0_hi
-    adc #0
-    sta zp_ptr0_hi
-    dec cx16_mon_draw_field_idx
-    bne !field_loop-
-!add_type:
-    clc
-    lda zp_ptr0
-    adc cx16_mon_draw_type
-    sta zp_ptr0
-    lda zp_ptr0_hi
-    adc #0
-    sta zp_ptr0_hi
-    ldy #0
-    lda cx16_loaded_tier_bank
-    jmp cx16_read_byte_from_bank_a000
-
-cx16_monster_draw_current_tier_count:
-    lda cx16_loaded_tier
-    cmp #2
-    bne !not_tier2+
-    lda #TIER2_COUNT
-    rts
-!not_tier2:
-    cmp #3
-    bne !not_tier3+
-    lda #TIER3_COUNT
-    rts
-!not_tier3:
-    cmp #4
-    bne !tier1+
-    lda #TIER4_COUNT
-    rts
-!tier1:
-    lda #TIER1_COUNT
-    rts
+    ldx cx16_mon_draw_type
+    jmp cx16_tier_field_read
 
 cx16_old_player_x: .byte 0
 cx16_old_player_y: .byte 0
@@ -659,8 +611,6 @@ cx16_mon_draw_x: .byte 0
 cx16_mon_draw_y: .byte 0
 cx16_mon_draw_type: .byte 0
 cx16_mon_draw_char: .byte 0
-cx16_mon_draw_field_idx: .byte 0
-cx16_mon_draw_tier_count: .byte 0
 cx16_mon_draw_saved_ptr: .byte 0
 cx16_mon_draw_saved_ptr_hi: .byte 0
 cx16_vis_max_y: .byte 0

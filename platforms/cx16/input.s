@@ -28,28 +28,49 @@ input_noop:
     rts
 
 input_modal_prepare:
-    lda #0
-    sta hal_input_kbdbuf_count
     jmp input_wait_release
 
 input_get_key:
 !poll:
     inc zp_entropy
+    lda CX16_RAM_BANK_REG
+    pha
+    lda #0
+    sta CX16_RAM_BANK_REG
     jsr KERNAL_GETIN
+    tax
+    pla
+    sta CX16_RAM_BANK_REG
+    txa
     beq !poll-
     rts
 
 input_wait_release:
 !drain:
     inc zp_entropy
+    lda CX16_RAM_BANK_REG
+    pha
     lda #0
+    sta CX16_RAM_BANK_REG
     sta hal_input_kbdbuf_count
     jsr KERNAL_GETIN
+    tax
+    pla
+    sta CX16_RAM_BANK_REG
+    txa
     bne !drain-
     rts
 
 input_any_key_held:
+    lda CX16_RAM_BANK_REG
+    pha
+    lda #0
+    sta CX16_RAM_BANK_REG
     lda hal_input_kbdbuf_count
+    tax
+    pla
+    sta CX16_RAM_BANK_REG
+    txa
     rts
 
 input_run_cancel_check:

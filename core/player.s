@@ -8,10 +8,13 @@
 
 #import "player_state.s"
 #import "platform_services_api.s"
+#if !PLAYER_SEARCH_HELPERS_EXTERNAL
 #import "player_search.s"
+#endif
 //
 // Total struct size: ~128 bytes
 
+#if !PLAYER_CHARACTER_BACKGROUND_EXTERNAL
 // Character sheet strings (main RAM — referenced by $F000 banked code)
 char_sex_label:
     .text "Sex: " ; .byte 0
@@ -21,6 +24,7 @@ char_sex_female:
     .text "Female" ; .byte 0
 char_sc_label:
     .text "  SC: " ; .byte 0
+#endif
 
 // ============================================================
 // Subroutines
@@ -468,6 +472,7 @@ player_get_stat_bonus:
 // Search mode and derived search/perception helpers
 // ============================================================
 
+#if !PLAYER_SEARCH_HELPERS_EXTERNAL
 // player_search_mode_on — Enable persistent search mode
 // Preserves: nothing
 player_search_mode_on:
@@ -502,6 +507,7 @@ player_search_clear_transient_state:
     lda #0
     sta zp_search_count
     rts
+#endif
 
 // ============================================================
 // ui_char_draw_background — Draw sex, social class, background on char sheet
@@ -512,6 +518,7 @@ player_search_clear_transient_state:
 // ============================================================
 .const UDBG_COL = hal_layout_character_background_col
 
+#if !PLAYER_CHARACTER_BACKGROUND_EXTERNAL
 ui_char_draw_background:
 #if hal_platform_character_background_resync
     jsr hal_platform_runtime_resync
@@ -593,6 +600,7 @@ udb_line_lo:
 udb_line_hi:
     .byte >player_background, >(player_background + 40)
     .byte >(player_background + 80), >(player_background + 120)
+#endif
 
 // ============================================================
 // Compile-time validation

@@ -18,6 +18,10 @@
 .const CX16_SAVE_BLOCK_COUNT = 11
 
 cx16_overlay_save_entry:
+    cmp #CX16_SAVE_CMD_MESSAGE
+    bne !not_message+
+    jmp cx16_save_print_message
+!not_message:
     cmp #CX16_SAVE_CMD_LOAD
     beq cx16_save_load_record
     cmp #CX16_SAVE_CMD_SAVE
@@ -195,6 +199,46 @@ cx16_save_validate_magic:
     sec
     rts
 
+cx16_save_print_message:
+    cpx #CX16_SAVE_MSG_SAVE_OK
+    bne !not_save_ok+
+    lda #<cx16_save_ok_text
+    sta zp_ptr0
+    lda #>cx16_save_ok_text
+    sta zp_ptr0_hi
+    jmp cx16_save_print_system_message
+!not_save_ok:
+    cpx #CX16_SAVE_MSG_SAVE_FAILED
+    bne !not_save_failed+
+    lda #<cx16_save_failed_text
+    sta zp_ptr0
+    lda #>cx16_save_failed_text
+    sta zp_ptr0_hi
+    jmp cx16_save_print_system_message
+!not_save_failed:
+    cpx #CX16_SAVE_MSG_LOAD_OK
+    bne !not_load_ok+
+    lda #<cx16_load_ok_text
+    sta zp_ptr0
+    lda #>cx16_load_ok_text
+    sta zp_ptr0_hi
+    jmp cx16_save_print_system_message
+!not_load_ok:
+    cpx #CX16_SAVE_MSG_LOAD_FAILED
+    bne !done+
+    lda #<cx16_load_failed_text
+    sta zp_ptr0
+    lda #>cx16_load_failed_text
+    sta zp_ptr0_hi
+    jmp cx16_save_print_system_message
+!done:
+    rts
+
+cx16_save_print_system_message:
+    jsr msg_clear
+    jsr msg_print
+    rts
+
 .macro Cx16SaveBlock(addr, size) {
     .byte <addr, >addr, <size, >size
 }
@@ -242,6 +286,22 @@ cx16_save_write_name:
 cx16_save_read_name:
     .byte $30, $3a, $54, $48, $45, $2e, $47, $41, $4d, $45, $2c, $53, $2c, $52 // "0:THE.GAME,S,R"
 .label cx16_save_read_name_len = * - cx16_save_read_name
+
+cx16_save_ok_text:
+    :ScreenText("Game saved.")
+    .byte 0
+
+cx16_save_failed_text:
+    :ScreenText("Save failed.")
+    .byte 0
+
+cx16_load_ok_text:
+    :ScreenText("Game loaded.")
+    .byte 0
+
+cx16_load_failed_text:
+    :ScreenText("Load failed.")
+    .byte 0
 
 cx16_save_count_lo: .byte 0
 cx16_save_count_hi: .byte 0
