@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Runtime smoke checks for the Commander X16 bootstrap.
+"""Runtime smoke checks for the Commander X16 runtime.
 
 This speaks x16emu's documented -testbench protocol directly. It intentionally
 tests RAM-visible contracts instead of screenshots: the CX16 port is still a
-bootstrap, and map/player/town-interaction state is the stable contract.
+runtime, and map/player/town-interaction state is the stable contract.
 """
 
 import argparse
@@ -64,7 +64,7 @@ ITEM_WAND_LIGHT = 39
 ITEM_STAFF_DETECT = 44
 ITEM_FLASK_OIL = 61
 ITEM_PICK = 63
-BOOTSTRAP_PICK_DIG_ABILITY = 24
+STARTING_PICK_DIG_ABILITY = 24
 ICAT_WEAPON = 2
 FI_EMPTY = 0xFF
 CLEAR_SENTINEL_ROW = 24
@@ -765,13 +765,13 @@ def main():
         assert_eq(bench.get_memory(require(labels, "cx16_state")), 1, "CX16 state")
         assert_player_position(bench, labels, 31, 18, "new game")
         assert_eq(bench.get_memory(require(labels, "zp_player_dlvl")), 0, "town depth")
-        assert_eq(bench.get_memory(require(labels, "inv_item_id") + EQUIP_WEAPON), ITEM_PICK, "bootstrap weapon")
-        assert_eq(bench.get_memory(require(labels, "zp_player_str")), 18, "bootstrap strength")
+        assert_eq(bench.get_memory(require(labels, "inv_item_id") + EQUIP_WEAPON), ITEM_PICK, "starting weapon")
+        assert_eq(bench.get_memory(require(labels, "zp_player_str")), 18, "starting strength")
         bench.run(require(labels, "tramp_dig_ability"))
         assert_eq(
             bench.get_memory(require(labels, "tun_dig_ability")),
-            BOOTSTRAP_PICK_DIG_ABILITY,
-            "bootstrap pick dig ability from banked item catalog",
+            STARTING_PICK_DIG_ABILITY,
+            "starting pick dig ability from banked item catalog",
         )
         assert_eq(map_tile_at(bench, labels, 32, 18), TILE_STAIRS_DN | TOWN_FLAGS, "town stairs tile")
         assert_screen_text(bench, 25, 1, "CX16", "town status name")
@@ -854,11 +854,11 @@ def main():
         bench.run(require(labels, "town_basic_check_stairs_at_player"))
         assert_eq(bench.get_a(), 9, "stairs-down probe")
         bench.run(require(labels, "cx16_try_stairs_down"))
-        assert_eq(bench.get_memory(require(labels, "cx16_state")), 2, "CX16 dungeon bootstrap state")
+        assert_eq(bench.get_memory(require(labels, "cx16_state")), 2, "CX16 dungeon state")
         assert_eq(bench.get_memory(require(labels, "cx16_loaded_tier")), 1, "loaded tier")
         assert_eq(bench.get_memory(require(labels, "cx16_loaded_tier_bank")), 4, "loaded tier bank")
         assert_eq(bench.get_memory(require(labels, "cx16_dungeon_module_status")), 1, "dungeon module status after stairs")
-        assert_eq(bench.get_memory(require(labels, "cx16_dungeon_depth")), 1, "dungeon bootstrap depth")
+        assert_eq(bench.get_memory(require(labels, "cx16_dungeon_depth")), 1, "dungeon depth")
         assert_eq(bench.get_memory(require(labels, "zp_player_dlvl")), 1, "shared dungeon depth")
         entry_x = bench.get_memory(require(labels, "zp_player_x"))
         entry_y = bench.get_memory(require(labels, "zp_player_y"))
@@ -878,7 +878,7 @@ def main():
         assert_screen_text(bench, 27, 1, "HP:12/12", "dungeon status hp")
         assert_screen_contains_cell(bench, SC_PLAYER, TEXT_COLOR, "dungeon entry player")
         assert_screen_cell(bench, 2, 1, screen_code(" "), 0, "unvisited dungeon rock")
-        assert_screen_text(bench, 0, 0, "MONSTER TIER 1 READY", "dungeon tier ready")
+        assert_screen_text(bench, 0, 0, "DUNGEON LEVEL 1 READY", "dungeon level ready")
         assert_screen_text(
             bench,
             29,
@@ -897,7 +897,7 @@ def main():
         assert_screen_cell(bench, CLEAR_SENTINEL_ROW, CLEAR_SENTINEL_COL, screen_code("*"), 2, "dungeon movement does not full-clear")
 
         set_player_position(bench, labels, entry_x, entry_y)
-        bench.run(require(labels, "cx16_draw_dungeon_bootstrap"))
+        bench.run(require(labels, "cx16_draw_dungeon"))
         screen_put_cell_raw(bench, CLEAR_SENTINEL_ROW, CLEAR_SENTINEL_COL, screen_code("*"), 2)
         reset_turn(bench, labels)
         bench.set_a(move_command)
@@ -1132,7 +1132,7 @@ def main():
         inv_base = require(labels, "inv_item_id")
         bench.set_memory(inv_base, ITEM_PICK)
         bench.set_memory(require(labels, "inv_qty"), 1)
-        bench.set_memory(require(labels, "inv_p1"), BOOTSTRAP_PICK_DIG_ABILITY)
+        bench.set_memory(require(labels, "inv_p1"), STARTING_PICK_DIG_ABILITY)
         bench.set_memory(require(labels, "inv_to_hit"), 0)
         bench.set_memory(require(labels, "inv_to_dam"), 0)
         bench.set_memory(require(labels, "inv_to_ac"), 0)
@@ -1256,7 +1256,7 @@ def main():
 
         set_player_position(bench, labels, entry_x, entry_y)
         set_map_tile(bench, labels, move_x, move_y, TILE_TRAP | DUNGEON_FLAGS)
-        bench.run(require(labels, "cx16_draw_dungeon_bootstrap"))
+        bench.run(require(labels, "cx16_draw_dungeon"))
         screen_put_cell_raw(bench, CLEAR_SENTINEL_ROW, CLEAR_SENTINEL_COL, screen_code("*"), 2)
         bench.set_a(run_command_for_move(move_command))
         bench.run(require(labels, "cx16_dispatch_game_command"))
@@ -1291,7 +1291,7 @@ def main():
         bench.set_memory(require(labels, "player_data") + PL_HP_LO, 100)
 
         set_player_position(bench, labels, entry_x, entry_y)
-        bench.run(require(labels, "cx16_draw_dungeon_bootstrap"))
+        bench.run(require(labels, "cx16_draw_dungeon"))
         screen_put_cell_raw(bench, CLEAR_SENTINEL_ROW, CLEAR_SENTINEL_COL, screen_code("*"), 2)
         bench.set_a(run_command_for_move(move_command))
         bench.run(require(labels, "cx16_dispatch_game_command"))
@@ -1341,6 +1341,7 @@ def main():
         entry2_y = bench.get_memory(require(labels, "zp_player_y"))
         assert_map_tile_type(bench, labels, entry2_x, entry2_y, TILE_STAIRS_UP, "deeper entry stairs up")
         assert_floor_items_spawned(bench, labels)
+        assert_screen_text(bench, 0, 0, "DUNGEON LEVEL 2 READY", "deeper level ready message")
         assert_screen_text(bench, 25, 66, "DL:2", "deeper status depth")
 
         bench.run(require(labels, "cx16_try_stairs_up"))
@@ -1350,6 +1351,7 @@ def main():
         return_x = bench.get_memory(require(labels, "zp_player_x"))
         return_y = bench.get_memory(require(labels, "zp_player_y"))
         assert_map_tile_type(bench, labels, return_x, return_y, TILE_STAIRS_DN, "ascended return stairs down")
+        assert_screen_text(bench, 0, 0, "DUNGEON LEVEL 1 READY", "shallower level ready message")
         assert_screen_text(bench, 25, 66, "DL:1", "shallower status depth")
 
         up_x, up_y = find_map_tile_type(bench, labels, TILE_STAIRS_UP, "stairs up before town return")
@@ -1363,7 +1365,7 @@ def main():
         assert_screen_text(bench, 3, 35, "COMMANDS", "help view title")
         assert_screen_text(bench, 7, 14, "MOVE: HJKL/YUBN OR 12346789", "help view movement")
         bench.run(require(labels, "cx16_draw_version_view"))
-        assert_screen_text(bench, 10, 24, "MORIA8 CX16 BOOTSTRAP V1.3.1", "version view")
+        assert_screen_text(bench, 10, 24, "MORIA8 CX16 PORT V1.3.1", "version view")
         bench.run(require(labels, "cx16_draw_character_view"))
         assert_screen_text(bench, 3, 33, "CHARACTER", "character view title")
         assert_screen_text(bench, 6, 20, "NAME: CX16", "character view name")
@@ -1383,11 +1385,11 @@ def main():
             (CMD_BASH, "ITEM/FEATURE COMMAND NOT WIRED YET.", "bash command"),
             (CMD_TUNNEL, "ITEM/FEATURE COMMAND NOT WIRED YET.", "tunnel command"),
             (CMD_DISARM, "ITEM/FEATURE COMMAND NOT WIRED YET.", "disarm command"),
-            (CMD_CAST, "MAGIC/RECALL NOT WIRED YET.", "cast command"),
-            (CMD_RECALL, "MAGIC/RECALL NOT WIRED YET.", "recall command"),
-            (CMD_GAIN, "MAGIC/RECALL NOT WIRED YET.", "gain command"),
-            (CMD_SAVE, "SAVE/LOAD NOT WIRED YET.", "save command"),
-            (CMD_MAP, "INFO/HELP NOT WIRED YET.", "map command"),
+            (CMD_CAST, "MAGIC AND RECALL NOT WIRED YET.", "cast command"),
+            (CMD_RECALL, "MAGIC AND RECALL NOT WIRED YET.", "recall command"),
+            (CMD_GAIN, "MAGIC AND RECALL NOT WIRED YET.", "gain command"),
+            (CMD_SAVE, "SAVE NOT WIRED YET.", "save command"),
+            (CMD_MAP, "MAP VIEW NOT WIRED YET.", "map command"),
             (CMD_WIZARD, "WIZARD MODE NOT ENABLED.", "wizard command"),
         ):
             bench.run(require(labels, "msg_init"))

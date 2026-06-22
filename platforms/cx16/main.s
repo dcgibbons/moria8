@@ -37,12 +37,12 @@
 .const KERNAL_GETIN = $ffe4
 .const CX16_STATE_TITLE = 0
 .const CX16_STATE_NEW_GAME = 1
-.const CX16_STATE_DUNGEON_BOOTSTRAP = 2
+.const CX16_STATE_DUNGEON = 2
 .const CX16_TOWN_SCREEN_ROW = 2
 .const CX16_TOWN_SCREEN_COL = 7
 .const CX16_TITLE_MENU_COL = 27
 .const CX16_TEXT_COLOR = $01
-.const CX16_BOOTSTRAP_LIGHT_RADIUS = 1
+.const CX16_DUNGEON_LIGHT_RADIUS = 1
 .const CX16_FEATURE_CMD_OPEN = 0
 .const CX16_FEATURE_CMD_CLOSE = 1
 .const CX16_FEATURE_CMD_SEARCH = 2
@@ -398,7 +398,7 @@ cx16_new_game_start:
     sta cx16_player_x
     lda #TOWN_START_Y
     sta cx16_player_y
-    jsr cx16_seed_bootstrap_player_state
+    jsr cx16_seed_starting_player_state
     jsr cx16_seed_shared_town_player
     jsr town_map_basic_generate
     jmp cx16_new_game_draw
@@ -642,7 +642,7 @@ cx16_try_move_command:
     sbc #CMD_MOVE_N
     tax
     lda cx16_state
-    cmp #CX16_STATE_DUNGEON_BOOTSTRAP
+    cmp #CX16_STATE_DUNGEON
     beq cx16_try_dungeon_move
     txa
     jsr player_move_compute_town_target
@@ -745,7 +745,7 @@ cx16_run_command:
     sta zp_run_dir
     tax
     lda cx16_state
-    cmp #CX16_STATE_DUNGEON_BOOTSTRAP
+    cmp #CX16_STATE_DUNGEON
     bne !single_step+
 !loop:
     ldx zp_run_dir
@@ -1006,7 +1006,7 @@ cx16_check_town_entry:
 
 cx16_try_stairs_down:
     lda cx16_state
-    cmp #CX16_STATE_DUNGEON_BOOTSTRAP
+    cmp #CX16_STATE_DUNGEON
     beq !dungeon+
     jsr town_basic_check_stairs_at_player
     cmp #9
@@ -1043,7 +1043,7 @@ cx16_try_stairs_down:
 
 cx16_try_stairs_up:
     lda cx16_state
-    cmp #CX16_STATE_DUNGEON_BOOTSTRAP
+    cmp #CX16_STATE_DUNGEON
     beq !dungeon+
     jsr town_basic_check_stairs_at_player
     cmp #10
@@ -1115,7 +1115,7 @@ cx16_depth_to_tier:
     lda #1
     rts
 
-cx16_seed_bootstrap_player_state:
+cx16_seed_starting_player_state:
     lda #0
     ldx #PL_STRUCT_SIZE - 1
 !clear_player:
@@ -1242,14 +1242,7 @@ cx16_show_store_stub:
     adc #$31
     jmp msg_print_char
 
-cx16_show_descend_stub:
-    lda #<cx16_descend_stub_text
-    sta zp_ptr0
-    lda #>cx16_descend_stub_text
-    sta zp_ptr0_hi
-    jmp msg_print
-
-cx16_enter_dungeon_bootstrap:
+cx16_enter_dungeon:
     lda #0
     sta level_entry_dir
     lda #1
@@ -1272,11 +1265,11 @@ cx16_enter_dungeon_level:
     sta zp_player_dlvl
     sta player_data + PL_DLEVEL
     jsr item_spawn_level
-    lda #CX16_BOOTSTRAP_LIGHT_RADIUS
+    lda #CX16_DUNGEON_LIGHT_RADIUS
     sta zp_light_radius
     sta player_data + PL_LIGHT_RAD
     jsr update_visibility
-    lda #CX16_STATE_DUNGEON_BOOTSTRAP
+    lda #CX16_STATE_DUNGEON
     sta cx16_state
     lda zp_player_dlvl
     jsr cx16_depth_to_tier
@@ -1284,14 +1277,24 @@ cx16_enter_dungeon_level:
     clc
     adc #(CX16_TIER_BANK_BASE - 1)
     sta cx16_loaded_tier_bank
-    jsr cx16_draw_dungeon_bootstrap
-    lda #<cx16_dungeon_loaded_text
-    sta zp_ptr0
-    lda #>cx16_dungeon_loaded_text
-    sta zp_ptr0_hi
-    jmp msg_print
+    jsr cx16_draw_dungeon
+    jmp cx16_print_dungeon_ready_message
 
-cx16_draw_dungeon_bootstrap:
+cx16_print_dungeon_ready_message:
+    lda #<cx16_dungeon_ready_prefix_text
+    sta zp_ptr0
+    lda #>cx16_dungeon_ready_prefix_text
+    sta zp_ptr0_hi
+    jsr msg_print
+    lda zp_player_dlvl
+    jsr screen_put_decimal
+    lda #<cx16_dungeon_ready_suffix_text
+    sta zp_ptr0
+    lda #>cx16_dungeon_ready_suffix_text
+    sta zp_ptr0_hi
+    jmp screen_put_string
+
+cx16_draw_dungeon:
     lda #CX16_TEXT_COLOR
     jsr screen_set_color
     jsr screen_clear
@@ -1413,13 +1416,13 @@ msg_print_char:
 
 cx16_restore_current_view:
     lda cx16_state
-    cmp #CX16_STATE_DUNGEON_BOOTSTRAP
+    cmp #CX16_STATE_DUNGEON
     beq !dungeon+
     cmp #CX16_STATE_NEW_GAME
     beq !town+
     jmp cx16_title_enter_menu
 !dungeon:
-    jmp cx16_draw_dungeon_bootstrap
+    jmp cx16_draw_dungeon
 !town:
     jmp cx16_new_game_draw
 
@@ -1620,20 +1623,16 @@ cx16_store_door_text:
     :ScreenText("STORE DOOR ")
     .byte 0
 
-cx16_descend_stub_text:
-    :ScreenText("DUNGEON ENTRY NOT WIRED YET.")
-    .byte 0
-
 cx16_dungeon_module_failed_text:
     :ScreenText("DUNGEON MODULE LOAD FAILED.")
     .byte 0
 
-cx16_dungeon_title_text:
-    :ScreenText("DUNGEON LEVEL 1")
+cx16_dungeon_ready_prefix_text:
+    :ScreenText("DUNGEON LEVEL ")
     .byte 0
 
-cx16_dungeon_loaded_text:
-    :ScreenText("MONSTER TIER 1 READY")
+cx16_dungeon_ready_suffix_text:
+    :ScreenText(" READY")
     .byte 0
 
 cx16_dungeon_help_text:
@@ -1653,15 +1652,15 @@ cx16_item_stub_text:
     .byte 0
 
 cx16_magic_stub_text:
-    :ScreenText("MAGIC/RECALL NOT WIRED YET.")
+    :ScreenText("MAGIC AND RECALL NOT WIRED YET.")
     .byte 0
 
 cx16_storage_stub_text:
-    :ScreenText("SAVE/LOAD NOT WIRED YET.")
+    :ScreenText("SAVE NOT WIRED YET.")
     .byte 0
 
 cx16_info_stub_text:
-    :ScreenText("INFO/HELP NOT WIRED YET.")
+    :ScreenText("MAP VIEW NOT WIRED YET.")
     .byte 0
 
 cx16_wizard_stub_text:
@@ -1904,7 +1903,7 @@ cx16_version_title_text:
     .byte 0
 
 cx16_version_text:
-    :ScreenText("MORIA8 CX16 BOOTSTRAP ")
+    :ScreenText("MORIA8 CX16 PORT ")
     :EmitTitleVersionScreen()
     .byte 0
 
@@ -2009,7 +2008,7 @@ cx16_overlay_items_command_entry:
 
 !pickup:
     lda cx16_state
-    cmp #CX16_STATE_DUNGEON_BOOTSTRAP
+    cmp #CX16_STATE_DUNGEON
     beq !pickup_dungeon+
     jmp cx16_show_item_stub
 !pickup_dungeon:
@@ -2022,7 +2021,7 @@ cx16_overlay_items_command_entry:
 
 !drop:
     lda cx16_state
-    cmp #CX16_STATE_DUNGEON_BOOTSTRAP
+    cmp #CX16_STATE_DUNGEON
     beq !drop_dungeon+
     jmp cx16_show_item_stub
 !drop_dungeon:
@@ -2035,7 +2034,7 @@ cx16_overlay_items_command_entry:
 
 !inventory:
     lda cx16_state
-    cmp #CX16_STATE_DUNGEON_BOOTSTRAP
+    cmp #CX16_STATE_DUNGEON
     beq !inventory_dungeon+
     jmp cx16_show_item_stub
 !inventory_dungeon:
@@ -2048,7 +2047,7 @@ cx16_overlay_items_command_entry:
 
 !equipment:
     lda cx16_state
-    cmp #CX16_STATE_DUNGEON_BOOTSTRAP
+    cmp #CX16_STATE_DUNGEON
     beq !equipment_dungeon+
     jmp cx16_show_item_stub
 !equipment_dungeon:
@@ -2059,7 +2058,7 @@ cx16_overlay_items_command_entry:
 
 !wear:
     lda cx16_state
-    cmp #CX16_STATE_DUNGEON_BOOTSTRAP
+    cmp #CX16_STATE_DUNGEON
     beq !wear_dungeon+
     jmp cx16_show_item_stub
 !wear_dungeon:
@@ -2072,7 +2071,7 @@ cx16_overlay_items_command_entry:
 
 !takeoff:
     lda cx16_state
-    cmp #CX16_STATE_DUNGEON_BOOTSTRAP
+    cmp #CX16_STATE_DUNGEON
     beq !takeoff_dungeon+
     jmp cx16_show_item_stub
 !takeoff_dungeon:
@@ -2085,7 +2084,7 @@ cx16_overlay_items_command_entry:
 
 !eat:
     lda cx16_state
-    cmp #CX16_STATE_DUNGEON_BOOTSTRAP
+    cmp #CX16_STATE_DUNGEON
     beq !eat_dungeon+
     jmp cx16_show_item_stub
 !eat_dungeon:
@@ -2098,7 +2097,7 @@ cx16_overlay_items_command_entry:
 
 !quaff:
     lda cx16_state
-    cmp #CX16_STATE_DUNGEON_BOOTSTRAP
+    cmp #CX16_STATE_DUNGEON
     beq !quaff_dungeon+
     jmp cx16_show_item_stub
 !quaff_dungeon:
@@ -2111,7 +2110,7 @@ cx16_overlay_items_command_entry:
 
 !refuel:
     lda cx16_state
-    cmp #CX16_STATE_DUNGEON_BOOTSTRAP
+    cmp #CX16_STATE_DUNGEON
     beq !refuel_dungeon+
     jmp cx16_show_item_stub
 !refuel_dungeon:
@@ -2124,7 +2123,7 @@ cx16_overlay_items_command_entry:
 
 !read:
     lda cx16_state
-    cmp #CX16_STATE_DUNGEON_BOOTSTRAP
+    cmp #CX16_STATE_DUNGEON
     beq !read_dungeon+
     jmp cx16_show_item_stub
 !read_dungeon:
@@ -2137,7 +2136,7 @@ cx16_overlay_items_command_entry:
 
 !aim:
     lda cx16_state
-    cmp #CX16_STATE_DUNGEON_BOOTSTRAP
+    cmp #CX16_STATE_DUNGEON
     beq !aim_dungeon+
     jmp cx16_show_item_stub
 !aim_dungeon:
@@ -2150,7 +2149,7 @@ cx16_overlay_items_command_entry:
 
 !use:
     lda cx16_state
-    cmp #CX16_STATE_DUNGEON_BOOTSTRAP
+    cmp #CX16_STATE_DUNGEON
     beq !use_dungeon+
     jmp cx16_show_item_stub
 !use_dungeon:
@@ -2246,7 +2245,7 @@ cx16_overlay_feature_command_entry:
 
 !open:
     lda cx16_state
-    cmp #CX16_STATE_DUNGEON_BOOTSTRAP
+    cmp #CX16_STATE_DUNGEON
     beq !open_dungeon+
     jmp cx16_show_item_stub
 !open_dungeon:
@@ -2261,7 +2260,7 @@ cx16_overlay_feature_command_entry:
 
 !close:
     lda cx16_state
-    cmp #CX16_STATE_DUNGEON_BOOTSTRAP
+    cmp #CX16_STATE_DUNGEON
     beq !close_dungeon+
     jmp cx16_show_item_stub
 !close_dungeon:
@@ -2276,7 +2275,7 @@ cx16_overlay_feature_command_entry:
 
 !search:
     lda cx16_state
-    cmp #CX16_STATE_DUNGEON_BOOTSTRAP
+    cmp #CX16_STATE_DUNGEON
     beq !search_dungeon+
     jmp cx16_show_activity_stub
 !search_dungeon:
@@ -2286,7 +2285,7 @@ cx16_overlay_feature_command_entry:
 
 !rest:
     lda cx16_state
-    cmp #CX16_STATE_DUNGEON_BOOTSTRAP
+    cmp #CX16_STATE_DUNGEON
     beq !rest_dungeon+
     jmp cx16_show_activity_stub
 !rest_dungeon:
@@ -2295,7 +2294,7 @@ cx16_overlay_feature_command_entry:
 
 !look:
     lda cx16_state
-    cmp #CX16_STATE_DUNGEON_BOOTSTRAP
+    cmp #CX16_STATE_DUNGEON
     beq !look_dungeon+
     jmp cx16_show_activity_stub
 !look_dungeon:
@@ -2306,7 +2305,7 @@ cx16_overlay_feature_command_entry:
 
 !search_mode:
     lda cx16_state
-    cmp #CX16_STATE_DUNGEON_BOOTSTRAP
+    cmp #CX16_STATE_DUNGEON
     beq !search_mode_dungeon+
     jmp cx16_show_activity_stub
 !search_mode_dungeon:
@@ -2333,7 +2332,7 @@ cx16_overlay_feature_command_entry:
 
 !autorest:
     lda cx16_state
-    cmp #CX16_STATE_DUNGEON_BOOTSTRAP
+    cmp #CX16_STATE_DUNGEON
     beq !autorest_dungeon+
     jmp cx16_show_activity_stub
 !autorest_dungeon:
@@ -2351,7 +2350,7 @@ cx16_overlay_feature_command_entry:
 
 !bash:
     lda cx16_state
-    cmp #CX16_STATE_DUNGEON_BOOTSTRAP
+    cmp #CX16_STATE_DUNGEON
     beq !bash_dungeon+
     jmp cx16_show_item_stub
 !bash_dungeon:
@@ -2364,7 +2363,7 @@ cx16_overlay_feature_command_entry:
 
 !tunnel:
     lda cx16_state
-    cmp #CX16_STATE_DUNGEON_BOOTSTRAP
+    cmp #CX16_STATE_DUNGEON
     beq !tunnel_dungeon+
     jmp cx16_show_item_stub
 !tunnel_dungeon:
@@ -2377,7 +2376,7 @@ cx16_overlay_feature_command_entry:
 
 !disarm:
     lda cx16_state
-    cmp #CX16_STATE_DUNGEON_BOOTSTRAP
+    cmp #CX16_STATE_DUNGEON
     beq !disarm_dungeon+
     jmp cx16_show_item_stub
 !disarm_dungeon:
