@@ -48,15 +48,6 @@ c64_test_spell_return_count: .byte 0
 #endif
 #endif
 
-pm_book_prompt_huff_id:
-    ldx #HSTR_IGS_PROMPT
-    lda pm_mode
-    bne !pm_prompt_done+
-    ldx #HSTR_PM_YOU_PRAY
-    lda pm_spell_type
-    cmp #SPELL_MAGE
-    bne !pm_prompt_done+
-    ldx #HSTR_PM_YOU_CAST
-!pm_prompt_done:
-    rts
-pm_book_prompt_huff_id_end:
+#if !PM_BOOK_PROMPT_HUFF_ID_EXTERNAL
+#import "player_magic_prompt_helpers.s"
+#endif

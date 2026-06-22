@@ -559,7 +559,7 @@ item_spawn_level:
     cmp isl_target
     bcs !isl_gold_done+
 
-    // Find a random floor tile
+    // Find a random empty floor tile
     jsr find_random_floor
     bcc !isl_gold_done+
 
@@ -644,7 +644,7 @@ item_spawn_level:
     cmp isl_ngold_target
     bcs !isl_ngold_done+
 
-    // Find a random floor tile
+    // Find a random empty floor tile
     jsr find_random_floor
     bcc !isl_ngold_done+
     lda df_target_x
@@ -777,7 +777,7 @@ item_spawn_level:
     sta zp_ptr0_hi
     ldy fi_add_x
     :MapRead_ptr0_y()
-    and #$f0                    // TILE_TYPE_MASK
+    and #(TILE_TYPE_MASK | FLAG_HAS_ITEM | FLAG_OCCUPIED)
     cmp #TILE_FLOOR
     bne !isl_treasure_skip+
 

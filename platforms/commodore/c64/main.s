@@ -1109,13 +1109,9 @@ tsi_krev_cached: .byte 0
 // Patched into reu_show_status at startup by init code.
 tramp_reu_show_status:
     sei
-    lda $01
-    pha
-    lda #BANK_NO_KERNAL         // $35 — I/O visible for screen writes
-    sta $01
+    dec $01                     // $36 -> $35: RAM at $E000, I/O visible
     jsr reu_show_status_banked
-    pla
-    sta $01
+    inc $01
     cli
     rts
 
@@ -1179,58 +1175,75 @@ overlay_load_no_kernal:
 !done:
     rts
 
+tramp_call_help_overlay:
+    sta tramp_call_help_target + 1
+    sty tramp_call_help_target + 2
+    lda #OVL_HELP
+    jsr overlay_load_no_kernal
+    bcs !done+
+tramp_call_help_target:
+    jsr $ffff
+!done:
+    jmp tramp_sr_epilogue
+
+tramp_call_items_overlay:
+    sta tramp_call_items_target + 1
+    sty tramp_call_items_target + 2
+    lda #OVL_ITEMS
+    jsr overlay_load_no_kernal
+    bcs !done+
+tramp_call_items_target:
+    jsr $ffff
+!done:
+    jmp tramp_sr_epilogue
+
+tramp_call_ui_overlay:
+    sta tramp_call_ui_target + 1
+    sty tramp_call_ui_target + 2
+    lda #OVL_UI
+    jsr overlay_load_no_kernal
+    bcs !done+
+tramp_call_ui_target:
+    jsr $ffff
+!done:
+    jmp tramp_sr_epilogue
+
 tramp_ui_help_display:
     lda #OVL_HELP
     jsr overlay_load_no_kernal
-    bcc !loaded+
-    jmp tramp_sr_epilogue
-!loaded:
+    bcs !done+
     lda #<help_pages
     sta help_pages_src_lo
     lda #>help_pages
     sta help_pages_src_hi
     jsr ui_help_display
+!done:
     jmp tramp_sr_epilogue
 
 tramp_ui_char_display:
-    lda #OVL_UI
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr ui_char_display
-!done:
-    jmp tramp_sr_epilogue
+    lda #<ui_char_display
+    ldy #>ui_char_display
+    jmp tramp_call_ui_overlay
 
 tramp_ui_inv_display:
-    lda #OVL_HELP
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr ui_inv_display
-!done:
-    jmp tramp_sr_epilogue
+    lda #<ui_inv_display
+    ldy #>ui_inv_display
+    jmp tramp_call_help_overlay
 
 tramp_ui_inv_select_display:
-    lda #OVL_HELP
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr ui_inv_select_display
-!done:
-    jmp tramp_sr_epilogue
+    lda #<ui_inv_select_display
+    ldy #>ui_inv_select_display
+    jmp tramp_call_help_overlay
 
 tramp_ui_equip_display:
-    lda #OVL_HELP
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr ui_equip_display
-!done:
-    jmp tramp_sr_epilogue
+    lda #<ui_equip_display
+    ldy #>ui_equip_display
+    jmp tramp_call_help_overlay
 
 tramp_ui_equip_select_display:
-    lda #OVL_HELP
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr ui_equip_select_display
-!done:
-    jmp tramp_sr_epilogue
+    lda #<ui_equip_select_display
+    ldy #>ui_equip_select_display
+    jmp tramp_call_help_overlay
 
 tramp_ui_recall:
     sei
@@ -1240,101 +1253,67 @@ tramp_ui_recall:
     jmp tramp_sr_epilogue
 
 tramp_item_gain_spell:
-    lda #OVL_UI
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr item_gain_spell
-!done:
-    jmp tramp_sr_epilogue
+    lda #<item_gain_spell
+    ldy #>item_gain_spell
+    jmp tramp_call_ui_overlay
 
 tramp_item_read_scroll:
-    lda #OVL_ITEMS
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr item_read_scroll
-!done:
-    jmp tramp_sr_epilogue
+    lda #<item_read_scroll
+    ldy #>item_read_scroll
+    jmp tramp_call_items_overlay
 
 tramp_item_aim_wand:
-    lda #OVL_ITEMS
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr item_aim_wand
-!done:
-    jmp tramp_sr_epilogue
+    lda #<item_aim_wand
+    ldy #>item_aim_wand
+    jmp tramp_call_items_overlay
 
 tramp_item_use_staff:
-    lda #OVL_ITEMS
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr item_use_staff
-!done:
-    jmp tramp_sr_epilogue
+    lda #<item_use_staff
+    ldy #>item_use_staff
+    jmp tramp_call_items_overlay
 
 tramp_eff_earthquake:
     sei
-    lda #BANK_NO_KERNAL
-    sta $01
+    dec $01                     // $36 -> $35: RAM at $E000, I/O visible
     jsr c64u_turbo_fast
     jsr eff_earthquake_banked
     jsr c64u_turbo_normal
     rts
 
 tramp_item_refuel:
-    lda #OVL_ITEMS
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr item_refuel
-!done:
-    jmp tramp_sr_epilogue
+    lda #<item_refuel
+    ldy #>item_refuel
+    jmp tramp_call_items_overlay
 
 tramp_ranged_fire:
-    lda #OVL_ITEMS
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr ranged_fire
-!done:
-    jmp tramp_sr_epilogue
+    lda #<ranged_fire
+    ldy #>ranged_fire
+    jmp tramp_call_items_overlay
 
 tramp_throw_item:
-    lda #OVL_ITEMS
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr throw_item
-!done:
-    jmp tramp_sr_epilogue
+    lda #<throw_item
+    ldy #>throw_item
+    jmp tramp_call_items_overlay
 
 tramp_bash_command:
-    lda #OVL_ITEMS
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr bash_command
-!done:
-    jmp tramp_sr_epilogue
+    lda #<bash_command
+    ldy #>bash_command
+    jmp tramp_call_items_overlay
 
 tramp_disarm_command:
-    lda #OVL_ITEMS
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr disarm_command
-!done:
-    jmp tramp_sr_epilogue
+    lda #<disarm_command
+    ldy #>disarm_command
+    jmp tramp_call_items_overlay
 
 tramp_player_tunnel:
-    lda #OVL_ITEMS
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr player_tunnel
-!done:
-    jmp tramp_sr_epilogue
+    lda #<player_tunnel
+    ldy #>player_tunnel
+    jmp tramp_call_items_overlay
 
 tramp_spell_list_display:
-    lda #OVL_UI
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr spell_list_display
-!done:
-    jmp tramp_sr_epilogue
+    lda #<spell_list_display
+    ldy #>spell_list_display
+    jmp tramp_call_ui_overlay
 
 tramp_spell_execute_selected:
     lda #OVL_SPELL
@@ -1357,8 +1336,7 @@ tramp_ui_identify:
     jsr overlay_load_no_kernal
     bcs !done+
     jsr ui_identify_print
-    lda #BANK_NO_BASIC
-    sta $01
+    inc $01                     // $35 -> $36: KERNAL visible for tier load
     cli
     jsr tier_restore_after_overlay
 !done:
@@ -1372,8 +1350,8 @@ tramp_disk_setup:
     jsr overlay_load
     bcs !tds_done+
     sei
-    lda #BANK_NO_ROMS
-    sta $01
+    dec $01                     // $36 -> $34: all RAM
+    dec $01
     jsr disk_setup_run
     jmp tramp_sr_epilogue
 
@@ -1385,8 +1363,8 @@ tramp_disk_prepare_selected:
     jsr overlay_load
     bcs !tdps_done+
     sei
-    lda #BANK_NO_ROMS
-    sta $01
+    dec $01                     // $36 -> $34: all RAM
+    dec $01
     jsr disk_setup_prepare_selected
     php
     jsr platform_runtime_resync_c64
@@ -1399,32 +1377,21 @@ tramp_disk_prepare_selected:
 // Store overlay trampolines — load overlay, bank out KERNAL, call $E000+
 // ============================================================
 // Shared preamble: ensure town overlay is loaded, then bank out KERNAL
-store_overlay_preamble:
+tramp_store_init_all:
+    lda #<store_init_all
+    ldy #>store_init_all
+    jmp tramp_call_items_overlay
+
+tramp_store_restock_all:
+    lda #<store_restock_all
+    ldy #>store_restock_all
+    jmp tramp_call_items_overlay
+
+tramp_store_enter:
     lda #OVL_TOWN
     jsr overlay_load
     sei
-    lda #BANK_NO_KERNAL         // $35 — $E000 = RAM + I/O for color RAM
-    sta $01
-    rts
-
-tramp_store_init_all:
-    lda #OVL_ITEMS
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr store_init_all
-!done:
-    jmp tramp_sr_epilogue
-
-tramp_store_restock_all:
-    lda #OVL_ITEMS
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr store_restock_all
-!done:
-    jmp tramp_sr_epilogue
-
-tramp_store_enter:
-    jsr store_overlay_preamble
+    dec $01                     // $36 -> $35: RAM at $E000, I/O visible
     jsr store_enter
     jmp tramp_sr_epilogue
 
@@ -1641,8 +1608,7 @@ tramp_player_create:
     lda #OVL_STARTUP
     jsr overlay_load
     sei
-    lda #BANK_NO_KERNAL         // $35 — $E000 = RAM + I/O for color RAM
-    sta $01
+    dec $01                     // $36 -> $35: RAM at $E000, I/O visible
     jsr player_create
     jmp tramp_sr_epilogue
 
@@ -1663,15 +1629,6 @@ c64_require_program_media:
     jsr c64_disk_close
     jsr c64_disk_clrchn
     plp
-    bcs !crpm_fail+
-    jsr c64_storage_read_command_status
-    lda disk_status
-    beq !crpm_ok+
-!crpm_fail:
-    sec
-    rts
-!crpm_ok:
-    clc
     rts
 
 // ============================================================
@@ -1712,8 +1669,7 @@ tramp_game_over_prepare:
 !tgo_load_overlay:
     // 2. Load death overlay (replaces tier data at $E000)
     lda #OVL_DEATH
-    jsr overlay_load
-    rts
+    jmp overlay_load
 
 tramp_game_over:
     jsr tramp_game_over_prepare
@@ -1723,8 +1679,8 @@ tramp_game_over_run:
     lda #BANK_NO_ROMS
     sta $01
     jsr score_calculate
-    lda #BANK_NO_BASIC
-    sta $01
+    inc $01                     // $34 -> $36: restore KERNAL-visible bank
+    inc $01
     cli
 
     // 4. Load high scores from disk (main RAM, needs KERNAL)
@@ -1738,8 +1694,8 @@ tramp_game_over_run:
     lda #BANK_NO_ROMS
     sta $01
     jsr hiscore_insert
-    lda #BANK_NO_BASIC
-    sta $01
+    inc $01                     // $34 -> $36: restore KERNAL-visible bank
+    inc $01
     cli
 
     // 6. Save high scores to disk (main RAM, needs KERNAL)
@@ -1763,9 +1719,6 @@ tramp_game_over_run:
 
 tramp_winner_royal:
     jsr disk_prompt_game
-    lda #BANK_NO_BASIC
-    sta $01
-    cli
     lda #hal_storage_royal_name_len
     ldx #<hal_storage_royal_name
     ldy #>hal_storage_royal_name
@@ -1774,8 +1727,7 @@ tramp_winner_royal:
     lda #0
     sta current_overlay
     sei
-    lda #BANK_NO_KERNAL
-    sta $01
+    dec $01                     // $36 -> $35: RAM at $E000, I/O visible
     jsr royal_screen
     inc $01
     cli

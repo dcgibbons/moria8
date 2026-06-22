@@ -10,23 +10,6 @@
 .const HD_DECODE_BUF_SIZE = 64
 hd_decode_buf: .fill HD_DECODE_BUF_SIZE, 0
 
-.const ICAT_NONE     = 0
-.const ICAT_GOLD     = 1
-.const ICAT_WEAPON   = 2
-.const ICAT_ARMOR    = 3
-.const ICAT_SHIELD   = 4
-.const ICAT_HELM     = 5
-.const ICAT_GLOVES   = 6
-.const ICAT_BOOTS    = 7
-.const ICAT_LIGHT    = 8
-.const ICAT_FOOD     = 9
-.const ICAT_POTION   = 10
-.const ICAT_SCROLL   = 11
-.const ICAT_RING     = 12
-.const ICAT_BOOK     = 13
-.const ICAT_WAND     = 14
-.const ICAT_STAFF    = 15
-
 #import "../../../../core/item_tables.s"
 #import "../../../../core/item_identification.s"
 

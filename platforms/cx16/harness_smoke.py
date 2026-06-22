@@ -47,6 +47,8 @@ PL_HP_LO = 33
 PL_HP_HI = 34
 PL_MHP_LO = 35
 PL_MHP_HI = 36
+PL_MANA = 37
+PL_MAX_MANA = 38
 PL_AC = 39
 PL_TOHIT = 40
 PL_TODMG = 41
@@ -68,6 +70,7 @@ KEYBUF_COUNT = 0xA80A
 MAP_COLS = 198
 MAP_ROWS = 66
 MAX_FLOOR_ITEMS = 42
+MAX_INV_SLOTS = 22
 MAX_MONSTERS = 32
 MONSTER_ENTRY_SIZE = 12
 MX_X = 0
@@ -79,6 +82,8 @@ MX_FLAGS = 5
 EMPTY_SLOT = 0xFF
 EQUIP_LIGHT = 28
 EQUIP_WEAPON = 22
+EQUIP_BODY = 23
+ITEM_LEATHER_ARMOR = 7
 ITEM_LANTERN = 14
 ITEM_RATION = 15
 ITEM_POTION_CURE = 17
@@ -350,15 +355,19 @@ def set_key_held(bench, held):
     bench.set_memory(CX16_RAM_BANK_REG, saved_bank)
 
 
+def set_inventory_slot(bench, labels, slot, item_id, qty=1, p1=0, to_hit=0, to_dam=0, to_ac=0):
+    bench.set_memory(require(labels, "inv_item_id") + slot, item_id)
+    bench.set_memory(require(labels, "inv_qty") + slot, qty)
+    bench.set_memory(require(labels, "inv_p1") + slot, p1)
+    bench.set_memory(require(labels, "inv_to_hit") + slot, to_hit)
+    bench.set_memory(require(labels, "inv_to_dam") + slot, to_dam)
+    bench.set_memory(require(labels, "inv_to_ac") + slot, to_ac)
+    bench.set_memory(require(labels, "inv_flags") + slot, 0)
+    bench.set_memory(require(labels, "inv_ego") + slot, 0)
+
+
 def set_inventory_slot0(bench, labels, item_id, qty=1, p1=0):
-    bench.set_memory(require(labels, "inv_item_id"), item_id)
-    bench.set_memory(require(labels, "inv_qty"), qty)
-    bench.set_memory(require(labels, "inv_p1"), p1)
-    bench.set_memory(require(labels, "inv_to_hit"), 0)
-    bench.set_memory(require(labels, "inv_to_dam"), 0)
-    bench.set_memory(require(labels, "inv_to_ac"), 0)
-    bench.set_memory(require(labels, "inv_flags"), 0)
-    bench.set_memory(require(labels, "inv_ego"), 0)
+    set_inventory_slot(bench, labels, 0, item_id, qty=qty, p1=p1)
 
 
 def add_floor_item(bench, labels, x, y, item_id):
@@ -457,18 +466,57 @@ def assert_floor_items_spawned(bench, labels):
     item_base = require(labels, "fi_item_id")
     item_x_base = require(labels, "fi_x")
     item_y_base = require(labels, "fi_y")
+    seen = set()
+    occupied_slots = 0
     for slot in range(MAX_FLOOR_ITEMS):
         item_id = bench.get_memory(item_base + slot)
         if item_id == 0xFF:
             continue
+        occupied_slots += 1
         x = bench.get_memory(item_x_base + slot)
         y = bench.get_memory(item_y_base + slot)
+        if (x, y) in seen:
+            raise AssertionError(f"generated floor items stacked at ({x},{y})")
+        seen.add((x, y))
         tile = map_tile_at(bench, labels, x, y)
         if not (tile & FLAG_HAS_ITEM):
             raise AssertionError(f"floor item slot {slot} at ({x},{y}) missing FLAG_HAS_ITEM")
-        return
+        if tile & FLAG_OCCUPIED:
+            raise AssertionError(f"floor item slot {slot} at ({x},{y}) is under a monster")
 
-    raise AssertionError("zp_item_count is nonzero but no occupied floor item slot was found")
+    if occupied_slots == 0:
+        raise AssertionError("zp_item_count is nonzero but no occupied floor item slot was found")
+
+
+def top_floor_item_slot_at(bench, labels, x, y):
+    item_base = require(labels, "fi_item_id")
+    item_x_base = require(labels, "fi_x")
+    item_y_base = require(labels, "fi_y")
+    for slot in range(MAX_FLOOR_ITEMS - 1, -1, -1):
+        if bench.get_memory(item_base + slot) == FI_EMPTY:
+            continue
+        if bench.get_memory(item_x_base + slot) == x and bench.get_memory(item_y_base + slot) == y:
+            return slot
+    raise AssertionError(f"no floor item at ({x},{y})")
+
+
+def find_top_floor_item_by_id(bench, labels, wanted_item_id):
+    item_base = require(labels, "fi_item_id")
+    item_x_base = require(labels, "fi_x")
+    item_y_base = require(labels, "fi_y")
+    for slot in range(MAX_FLOOR_ITEMS - 1, -1, -1):
+        if bench.get_memory(item_base + slot) != wanted_item_id:
+            continue
+        x = bench.get_memory(item_x_base + slot)
+        y = bench.get_memory(item_y_base + slot)
+        if top_floor_item_slot_at(bench, labels, x, y) == slot:
+            tile = map_tile_at(bench, labels, x, y)
+            if not (tile & FLAG_HAS_ITEM):
+                raise AssertionError(f"floor item {wanted_item_id} at ({x},{y}) missing FLAG_HAS_ITEM")
+            if tile & FLAG_OCCUPIED:
+                raise AssertionError(f"floor item {wanted_item_id} at ({x},{y}) is under a monster")
+            return slot, x, y
+    raise AssertionError(f"top floor item id {wanted_item_id} not found")
 
 
 def find_map_tile_type(bench, labels, wanted_type, label):
@@ -557,6 +605,36 @@ def clear_live_monsters(bench, labels):
         for offset in range(MONSTER_ENTRY_SIZE):
             bench.set_memory(entry + offset, EMPTY_SLOT)
     bench.set_memory(require(labels, "zp_mon_count"), 0)
+
+
+def clear_carried_inventory(bench, labels):
+    inv_base = require(labels, "inv_item_id")
+    for slot in range(MAX_INV_SLOTS):
+        bench.set_memory(inv_base + slot, FI_EMPTY)
+        bench.set_memory(require(labels, "inv_qty") + slot, 0)
+        bench.set_memory(require(labels, "inv_p1") + slot, 0)
+        bench.set_memory(require(labels, "inv_to_hit") + slot, 0)
+        bench.set_memory(require(labels, "inv_to_dam") + slot, 0)
+        bench.set_memory(require(labels, "inv_to_ac") + slot, 0)
+        bench.set_memory(require(labels, "inv_flags") + slot, 0)
+        bench.set_memory(require(labels, "inv_ego") + slot, 0)
+
+
+def count_carried_item(bench, labels, item_id):
+    inv_base = require(labels, "inv_item_id")
+    total = 0
+    for slot in range(MAX_INV_SLOTS):
+        if bench.get_memory(inv_base + slot) == item_id:
+            total += 1
+    return total
+
+
+def find_carried_item_slot(bench, labels, item_id):
+    inv_base = require(labels, "inv_item_id")
+    for slot in range(MAX_INV_SLOTS):
+        if bench.get_memory(inv_base + slot) == item_id:
+            return slot
+    raise AssertionError(f"carried item id {item_id} not found")
 
 
 def place_monster(bench, labels, slot, x, y, monster_type, hp_lo=1, hp_hi=0):
@@ -969,6 +1047,8 @@ def main():
         assert_eq(bench.get_memory(require(labels, "player_data") + PL_GOLD_0), 190, "town recovery charges gold")
         assert_eq(bench.get_memory(require(labels, "inv_item_id")), ITEM_RATION, "town recovery adds ration")
         assert_eq(bench.get_memory(require(labels, "inv_item_id") + 1), ITEM_POTION_CURE, "town recovery adds cure potion")
+        assert_eq(count_carried_item(bench, labels, ITEM_RATION), 1, "town recovery ration count")
+        assert_eq(count_carried_item(bench, labels, ITEM_POTION_CURE), 1, "town recovery cure potion count")
 
         bench.set_a(CMD_MOVE_S)
         bench.run(require(labels, "cx16_try_move_command"))
@@ -981,6 +1061,33 @@ def main():
             STORE_COLOR,
             "restored store door number",
         )
+
+        bench.set_memory(require(labels, "zp_player_hp_lo"), 4)
+        bench.set_memory(require(labels, "player_data") + PL_HP_LO, 4)
+        bench.set_memory(require(labels, "zp_player_food"), 0)
+        bench.set_memory(require(labels, "zp_player_food_hi"), 0)
+        bench.set_a(CMD_MOVE_N)
+        bench.run(require(labels, "cx16_try_move_command"))
+        assert_player_position(bench, labels, store_x, store_y, "second store recovery entry")
+        assert_eq(bench.get_memory(require(labels, "zp_player_hp_lo")), 12, "second town recovery restores hp")
+        assert_eq(bench.get_memory(require(labels, "player_data") + PL_GOLD_0), 180, "second town recovery charges gold")
+        assert_eq(count_carried_item(bench, labels, ITEM_RATION), 2, "second town recovery tops up rations")
+        assert_eq(count_carried_item(bench, labels, ITEM_POTION_CURE), 2, "second town recovery tops up cure potions")
+
+        bench.set_a(CMD_MOVE_S)
+        bench.run(require(labels, "cx16_try_move_command"))
+        bench.set_memory(require(labels, "zp_player_hp_lo"), 3)
+        bench.set_memory(require(labels, "player_data") + PL_HP_LO, 3)
+        bench.set_a(CMD_MOVE_N)
+        bench.run(require(labels, "cx16_try_move_command"))
+        assert_player_position(bench, labels, store_x, store_y, "third store recovery entry")
+        assert_eq(bench.get_memory(require(labels, "zp_player_hp_lo")), 12, "third town recovery restores hp")
+        assert_eq(bench.get_memory(require(labels, "player_data") + PL_GOLD_0), 170, "third town recovery charges gold")
+        assert_eq(count_carried_item(bench, labels, ITEM_RATION), 2, "third town recovery caps rations")
+        assert_eq(count_carried_item(bench, labels, ITEM_POTION_CURE), 2, "third town recovery caps cure potions")
+
+        bench.set_a(CMD_MOVE_S)
+        bench.run(require(labels, "cx16_try_move_command"))
 
         bench.set_memory(require(labels, "zp_player_x"), 31)
         bench.set_memory(require(labels, "zp_player_y"), 18)
@@ -1003,6 +1110,10 @@ def main():
         entry_y = bench.get_memory(require(labels, "zp_player_y"))
         assert_player_position(bench, labels, entry_x, entry_y, "dungeon entry player position")
         assert_floor_items_spawned(bench, labels)
+        find_top_floor_item_by_id(bench, labels, ITEM_RATION)
+        _, seeded_potion_x, seeded_potion_y = find_top_floor_item_by_id(bench, labels, ITEM_POTION_CURE)
+        _, seeded_armor_x, seeded_armor_y = find_top_floor_item_by_id(bench, labels, ITEM_LEATHER_ARMOR)
+        _, seeded_oil_x, seeded_oil_y = find_top_floor_item_by_id(bench, labels, ITEM_FLASK_OIL)
         assert_map_tile_type(bench, labels, entry_x, entry_y, TILE_STAIRS_UP, "module stairs up tile")
         down_x, down_y = find_map_tile_type(bench, labels, TILE_STAIRS_DN, "module stairs down")
         floor_x, floor_y = find_map_tile_type(bench, labels, TILE_FLOOR, "module floor")
@@ -1025,6 +1136,81 @@ def main():
             "Move: HJKL/YUBN or numbers. <: town. Shift-Q title.",
             "dungeon help",
         )
+
+        inv_base = require(labels, "inv_item_id")
+        old_ac = bench.get_memory(require(labels, "player_data") + PL_AC)
+        set_player_position(bench, labels, seeded_armor_x, seeded_armor_y)
+        screen_put_cell_raw(bench, CLEAR_SENTINEL_ROW, CLEAR_SENTINEL_COL, screen_code("*"), 2)
+        reset_turn(bench, labels)
+        bench.set_a(CMD_PICKUP)
+        bench.run(require(labels, "cx16_dispatch_game_command"))
+        find_carried_item_slot(bench, labels, ITEM_LEATHER_ARMOR)
+        assert_turns(bench, labels, 1, "generated armor pickup consumes one turn")
+        assert_screen_contains_cell(bench, SC_PLAYER, TEXT_COLOR, "generated armor pickup keeps player glyph")
+        assert_screen_cell(bench, CLEAR_SENTINEL_ROW, CLEAR_SENTINEL_COL, screen_code("*"), 2, "generated armor pickup does not full-clear")
+
+        reset_turn(bench, labels)
+        stuff_key(bench, ord("A"))
+        bench.set_a(CMD_WEAR)
+        bench.run(require(labels, "cx16_dispatch_game_command"))
+        assert_eq(bench.get_memory(inv_base + EQUIP_BODY), ITEM_LEATHER_ARMOR, "generated leather armor equips body slot")
+        armor_ac = bench.get_memory(require(labels, "player_data") + PL_AC)
+        if armor_ac <= old_ac:
+            raise AssertionError("generated leather armor did not improve AC")
+        assert_turns(bench, labels, 1, "generated armor wear consumes one turn")
+        assert_screen_contains_cell(bench, SC_PLAYER, TEXT_COLOR, "generated armor wear keeps player glyph")
+
+        set_player_position(bench, labels, seeded_potion_x, seeded_potion_y)
+        reset_turn(bench, labels)
+        bench.set_a(CMD_PICKUP)
+        bench.run(require(labels, "cx16_dispatch_game_command"))
+        assert_eq(count_carried_item(bench, labels, ITEM_POTION_CURE), 3, "generated cure potion pickup adds to carried potions")
+        assert_turns(bench, labels, 1, "generated potion pickup consumes one turn")
+        bench.set_memory(require(labels, "zp_player_hp_lo"), 5)
+        bench.set_memory(require(labels, "zp_player_hp_hi"), 0)
+        bench.set_memory(require(labels, "zp_player_mhp_lo"), 50)
+        bench.set_memory(require(labels, "zp_player_mhp_hi"), 0)
+        bench.set_memory(require(labels, "player_data") + PL_HP_LO, 5)
+        bench.set_memory(require(labels, "player_data") + PL_HP_HI, 0)
+        bench.set_memory(require(labels, "player_data") + PL_MHP_LO, 50)
+        bench.set_memory(require(labels, "player_data") + PL_MHP_HI, 0)
+        reset_turn(bench, labels)
+        stuff_key(bench, ord("C"))
+        bench.set_a(CMD_QUAFF)
+        bench.run(require(labels, "cx16_dispatch_game_command"))
+        if bench.get_memory(require(labels, "zp_player_hp_lo")) <= 5:
+            raise AssertionError("generated cure potion did not heal the player")
+        assert_eq(count_carried_item(bench, labels, ITEM_POTION_CURE), 2, "generated cure potion is consumed")
+        assert_turns(bench, labels, 1, "generated potion quaff consumes one turn")
+        assert_screen_contains_cell(bench, SC_PLAYER, TEXT_COLOR, "generated potion quaff keeps player glyph")
+
+        reset_turn(bench, labels)
+        stuff_key(bench, ord("B"))
+        bench.set_a(CMD_TAKEOFF)
+        bench.run(require(labels, "cx16_dispatch_game_command"))
+        find_carried_item_slot(bench, labels, ITEM_LEATHER_ARMOR)
+        assert_eq(bench.get_memory(inv_base + EQUIP_BODY), FI_EMPTY, "generated leather armor takeoff clears body slot")
+        if bench.get_memory(require(labels, "player_data") + PL_AC) >= armor_ac:
+            raise AssertionError("generated leather armor takeoff did not reduce AC")
+        assert_turns(bench, labels, 1, "generated armor takeoff consumes one turn")
+        assert_screen_contains_cell(bench, SC_PLAYER, TEXT_COLOR, "generated armor takeoff keeps player glyph")
+
+        set_player_position(bench, labels, seeded_oil_x, seeded_oil_y)
+        reset_turn(bench, labels)
+        bench.set_a(CMD_PICKUP)
+        bench.run(require(labels, "cx16_dispatch_game_command"))
+        oil_slot = find_carried_item_slot(bench, labels, ITEM_FLASK_OIL)
+        assert_eq(bench.get_memory(require(labels, "inv_p1") + oil_slot), 20, "generated oil has refuel value")
+        bench.set_memory(inv_base + EQUIP_LIGHT, ITEM_LANTERN)
+        bench.set_memory(require(labels, "inv_qty") + EQUIP_LIGHT, 1)
+        bench.set_memory(require(labels, "inv_p1") + EQUIP_LIGHT, 10)
+        reset_turn(bench, labels)
+        bench.set_a(CMD_REFUEL)
+        bench.run(require(labels, "cx16_dispatch_game_command"))
+        assert_eq(bench.get_memory(require(labels, "inv_p1") + EQUIP_LIGHT), 30, "generated oil refuels equipped lantern")
+        assert_eq(count_carried_item(bench, labels, ITEM_FLASK_OIL), 0, "generated oil is consumed")
+        assert_turns(bench, labels, 1, "generated oil refuel consumes one turn")
+        assert_screen_contains_cell(bench, SC_PLAYER, TEXT_COLOR, "generated oil refuel keeps player glyph")
 
         assert_eq(bench.get_memory(require(labels, "zp_mon_count")), 3, "dungeon monster count")
         monster_slot, monster_x, monster_y, monster_hp, monster_hp_hi = first_live_monster(bench, labels)
@@ -1378,8 +1564,7 @@ def main():
         assert_screen_cell(bench, CLEAR_SENTINEL_ROW, CLEAR_SENTINEL_COL, screen_code("*"), 2, "disarm command does not full-clear")
 
         set_player_position(bench, labels, floor_x, floor_y)
-        bench.set_memory(require(labels, "inv_item_id"), FI_EMPTY)
-        bench.set_memory(require(labels, "inv_item_id") + 1, FI_EMPTY)
+        clear_carried_inventory(bench, labels)
         item_count_before_pickup = bench.get_memory(require(labels, "zp_item_count"))
         add_floor_item(bench, labels, floor_x, floor_y, ITEM_PICK)
         screen_put_cell_raw(bench, CLEAR_SENTINEL_ROW, CLEAR_SENTINEL_COL, screen_code("*"), 2)
@@ -1413,7 +1598,6 @@ def main():
         assert_screen_contains_cell(bench, SC_PLAYER, TEXT_COLOR, "drop command keeps player glyph")
         assert_screen_cell(bench, CLEAR_SENTINEL_ROW, CLEAR_SENTINEL_COL, screen_code("*"), 2, "drop command does not full-clear")
 
-        inv_base = require(labels, "inv_item_id")
         bench.set_memory(inv_base, ITEM_PICK)
         bench.set_memory(require(labels, "inv_qty"), 1)
         bench.set_memory(require(labels, "inv_p1"), STARTING_PICK_DIG_ABILITY)
@@ -1638,12 +1822,99 @@ def main():
         assert_screen_text(bench, 0, 0, "Dungeon level 1 ready.", "shallower level ready message")
         assert_screen_text(bench, 25, 66, "DL:1", "shallower status depth")
 
+        clear_carried_inventory(bench, labels)
+        set_inventory_slot(bench, labels, 0, ITEM_RATION)
+        set_inventory_slot(bench, labels, 1, ITEM_POTION_CURE)
+        set_inventory_slot(bench, labels, 2, ITEM_STAFF_DETECT, p1=1)
+        set_inventory_slot(bench, labels, EQUIP_WEAPON, ITEM_PICK, p1=STARTING_PICK_DIG_ABILITY, to_hit=1, to_dam=2)
+        set_inventory_slot(bench, labels, EQUIP_BODY, ITEM_LEATHER_ARMOR, to_ac=4)
+        set_inventory_slot(bench, labels, EQUIP_LIGHT, ITEM_LANTERN, p1=24)
+        bench.set_memory(require(labels, "player_data") + PL_LEVEL, 5)
+        bench.set_memory(require(labels, "zp_player_lvl"), 5)
+        bench.set_memory(require(labels, "player_data") + PL_MHP_LO, 50)
+        bench.set_memory(require(labels, "player_data") + PL_MHP_HI, 0)
+        bench.set_memory(require(labels, "zp_player_mhp_lo"), 50)
+        bench.set_memory(require(labels, "zp_player_mhp_hi"), 0)
+        bench.set_memory(require(labels, "player_data") + PL_HP_LO, 7)
+        bench.set_memory(require(labels, "player_data") + PL_HP_HI, 0)
+        bench.set_memory(require(labels, "zp_player_hp_lo"), 7)
+        bench.set_memory(require(labels, "zp_player_hp_hi"), 0)
+        bench.set_memory(require(labels, "player_data") + PL_MAX_MANA, 9)
+        bench.set_memory(require(labels, "player_data") + PL_MANA, 2)
+        bench.set_memory(require(labels, "zp_player_mmp"), 9)
+        bench.set_memory(require(labels, "zp_player_mp"), 2)
+        bench.set_memory(require(labels, "player_data") + PL_FOOD_LO, 0)
+        bench.set_memory(require(labels, "player_data") + PL_FOOD_HI, 0)
+        bench.set_memory(require(labels, "zp_player_food"), 0)
+        bench.set_memory(require(labels, "zp_player_food_hi"), 0)
+        bench.set_memory(require(labels, "player_data") + PL_GOLD_0, 90)
+        bench.set_memory(require(labels, "player_data") + PL_AC, 12)
+        bench.set_memory(require(labels, "zp_player_ac"), 12)
+
         up_x, up_y = find_map_tile_type(bench, labels, TILE_STAIRS_UP, "stairs up before town return")
         set_player_position(bench, labels, up_x, up_y)
         bench.run(require(labels, "cx16_try_stairs_up"))
         assert_eq(bench.get_memory(require(labels, "cx16_state")), 1, "returned to town state")
         assert_eq(bench.get_memory(require(labels, "zp_player_dlvl")), 0, "returned to town depth")
         assert_screen_text(bench, 25, 66, "DL:0", "town status depth after upstairs")
+        assert_player_position(bench, labels, 31, 18, "returned to town start")
+        assert_eq(bench.get_memory(require(labels, "zp_player_hp_lo")), 7, "stairs up does not recover hp")
+        assert_eq(bench.get_memory(require(labels, "zp_player_mp")), 2, "stairs up does not recover mana")
+        assert_eq(bench.get_memory(require(labels, "player_data") + PL_GOLD_0), 90, "stairs up does not charge gold")
+        assert_eq(count_carried_item(bench, labels, ITEM_RATION), 1, "stairs up preserves carried ration")
+        assert_eq(count_carried_item(bench, labels, ITEM_POTION_CURE), 1, "stairs up preserves carried cure potion")
+        assert_eq(bench.get_memory(inv_base + EQUIP_WEAPON), ITEM_PICK, "stairs up preserves equipped weapon")
+        assert_eq(bench.get_memory(inv_base + EQUIP_BODY), ITEM_LEATHER_ARMOR, "stairs up preserves equipped armor")
+        assert_eq(bench.get_memory(inv_base + EQUIP_LIGHT), ITEM_LANTERN, "stairs up preserves equipped light")
+        assert_eq(bench.get_memory(require(labels, "inv_p1") + EQUIP_LIGHT), 24, "stairs up preserves lantern fuel")
+
+        set_player_position(bench, labels, store_x, store_y + 1)
+        bench.set_a(CMD_MOVE_N)
+        bench.run(require(labels, "cx16_try_move_command"))
+        assert_player_position(bench, labels, store_x, store_y, "returned dungeon survivor enters town recovery")
+        assert_screen_text(bench, 0, 0, "Rested and resupplied.", "post-dungeon town recovery message")
+        assert_eq(bench.get_memory(require(labels, "zp_player_hp_lo")), 50, "post-dungeon town recovery restores hp")
+        assert_eq(bench.get_memory(require(labels, "zp_player_mp")), 9, "post-dungeon town recovery restores mana")
+        assert_eq(bench.get_memory(require(labels, "zp_player_food")), 0xD0, "post-dungeon town recovery food low")
+        assert_eq(bench.get_memory(require(labels, "zp_player_food_hi")), 0x07, "post-dungeon town recovery food high")
+        assert_eq(bench.get_memory(require(labels, "player_data") + PL_GOLD_0), 80, "post-dungeon town recovery charges gold")
+        assert_eq(count_carried_item(bench, labels, ITEM_RATION), 2, "post-dungeon town recovery tops up rations")
+        assert_eq(count_carried_item(bench, labels, ITEM_POTION_CURE), 2, "post-dungeon town recovery tops up cure potions")
+        assert_eq(bench.get_memory(inv_base + 2), ITEM_STAFF_DETECT, "post-dungeon town recovery preserves carried tool")
+        assert_eq(bench.get_memory(require(labels, "inv_p1") + 2), 1, "post-dungeon town recovery preserves tool charges")
+        assert_eq(bench.get_memory(inv_base + EQUIP_WEAPON), ITEM_PICK, "post-dungeon town recovery preserves weapon")
+        assert_eq(bench.get_memory(inv_base + EQUIP_BODY), ITEM_LEATHER_ARMOR, "post-dungeon town recovery preserves armor")
+        assert_eq(bench.get_memory(inv_base + EQUIP_LIGHT), ITEM_LANTERN, "post-dungeon town recovery preserves light")
+        assert_eq(bench.get_memory(require(labels, "inv_p1") + EQUIP_LIGHT), 24, "post-dungeon town recovery preserves lantern fuel")
+
+        set_player_position(bench, labels, 32, 18)
+        bench.run(require(labels, "cx16_try_stairs_down"))
+        assert_eq(bench.get_memory(require(labels, "cx16_state")), 2, "re-entered dungeon state")
+        assert_eq(bench.get_memory(require(labels, "cx16_dungeon_depth")), 1, "re-entered dungeon module depth")
+        assert_eq(bench.get_memory(require(labels, "zp_player_dlvl")), 1, "re-entered shared dungeon depth")
+        reentry_x = bench.get_memory(require(labels, "zp_player_x"))
+        reentry_y = bench.get_memory(require(labels, "zp_player_y"))
+        assert_map_tile_type(bench, labels, reentry_x, reentry_y, TILE_STAIRS_UP, "re-entry starts on stairs up")
+        assert_floor_items_spawned(bench, labels)
+        find_top_floor_item_by_id(bench, labels, ITEM_RATION)
+        find_top_floor_item_by_id(bench, labels, ITEM_POTION_CURE)
+        find_top_floor_item_by_id(bench, labels, ITEM_LEATHER_ARMOR)
+        find_top_floor_item_by_id(bench, labels, ITEM_FLASK_OIL)
+        assert_eq(bench.get_memory(require(labels, "zp_mon_count")), 3, "re-entry spawns monsters")
+        assert_eq(bench.get_memory(require(labels, "zp_player_hp_lo")), 50, "re-entry preserves recovered hp")
+        assert_eq(bench.get_memory(require(labels, "zp_player_mp")), 9, "re-entry preserves recovered mana")
+        assert_eq(bench.get_memory(require(labels, "player_data") + PL_GOLD_0), 80, "re-entry preserves spent gold")
+        assert_eq(count_carried_item(bench, labels, ITEM_RATION), 2, "re-entry preserves carried rations")
+        assert_eq(count_carried_item(bench, labels, ITEM_POTION_CURE), 2, "re-entry preserves carried cure potions")
+        assert_eq(bench.get_memory(inv_base + EQUIP_WEAPON), ITEM_PICK, "re-entry preserves weapon")
+        assert_eq(bench.get_memory(inv_base + EQUIP_BODY), ITEM_LEATHER_ARMOR, "re-entry preserves armor")
+        assert_eq(bench.get_memory(inv_base + EQUIP_LIGHT), ITEM_LANTERN, "re-entry preserves light")
+        assert_screen_text(bench, 0, 0, "Dungeon level 1 ready.", "re-entry level ready message")
+        assert_screen_text(bench, 25, 66, "DL:1", "re-entry status depth")
+        assert_screen_contains_cell(bench, SC_PLAYER, TEXT_COLOR, "re-entry player glyph")
+        bench.run(require(labels, "cx16_return_to_town"))
+        assert_eq(bench.get_memory(require(labels, "cx16_state")), 1, "post-re-entry reset returns to town state")
+        assert_eq(bench.get_memory(require(labels, "zp_player_dlvl")), 0, "post-re-entry reset returns to town depth")
 
         bench.run(require(labels, "cx16_draw_help_view"))
         assert_screen_text(bench, 3, 35, "Commands", "help view title")

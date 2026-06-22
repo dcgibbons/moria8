@@ -21,7 +21,7 @@ df_disarm_trap_idx: .byte 0
 df_disarm_total: .byte 0
 df_disarm_base: .byte 0
 
-// find_random_floor — Find a random walkable floor tile on the map.
+// find_random_floor — Find a random empty walkable floor tile on the map.
 // Output: carry set = found (df_target_x/y valid)
 //         carry clear = failed after 200 tries
 frf_attempts: .byte 0
@@ -55,7 +55,7 @@ find_random_floor:
     cmp #TILE_FLOOR
     bne !frf_next+
     lda zp_temp0
-    and #FLAG_OCCUPIED
+    and #(FLAG_OCCUPIED | FLAG_HAS_ITEM)
     bne !frf_next+
     sec
     rts
@@ -65,7 +65,6 @@ find_random_floor:
 
     clc
     rts
-
 // Generation-only door scan scratch. This must not alias visible screen RAM:
 // the generation busy screen stays visible while secrets are placed.
 .const MAX_DOOR_SCAN = 32

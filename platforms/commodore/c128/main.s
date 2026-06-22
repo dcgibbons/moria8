@@ -2244,13 +2244,6 @@ restart_entry:
     jsr c128_restore_vdc_rom_font
 #endif
 #if C128_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT
-    lda c128_test_single_drive_fresh_save_armed
-    beq !c128_test_single_drive_fresh_save_start+
-c128_test_single_drive_fresh_save_after_restart:
-    lda #0
-    sta c128_test_single_drive_fresh_save_armed
-    jmp c128_test_single_drive_fresh_save_after_restart
-!c128_test_single_drive_fresh_save_start:
     lda #8
     sta program_device
     sta save_device
@@ -2329,6 +2322,15 @@ c128_test_change_save_drive_unexpected_return:
     jsr c128_restore_runtime_vectors
     cli
 title_enter_menu:
+#if C128_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT
+    lda c128_test_single_drive_fresh_save_armed
+    beq !c128_test_single_drive_fresh_save_not_restart+
+c128_test_single_drive_fresh_save_after_restart:
+    lda #0
+    sta c128_test_single_drive_fresh_save_armed
+    jmp c128_test_single_drive_fresh_save_after_restart
+!c128_test_single_drive_fresh_save_not_restart:
+#endif
 #if C128_REAL_BOOT_DIAG
     ldx #$27
     jsr c128_stack_guard_begin
@@ -3799,6 +3801,8 @@ recall_last_sc:    .byte 0
 recall_last_idx:   .byte 0
 run_input_armed:   .byte 0
 auto_rest_active:  .byte 0
+at_surface_str:
+    .text "You are already at the surface." ; .byte 0
 ptep_temp: .byte 0
 tool_ego_prefix_hi:
     .byte >ego_tool_prefix_gnomish, >ego_tool_prefix_dwarven
@@ -3984,11 +3988,11 @@ c128_resident_persist_end:
 #define GAME_LOOP_NAV_STRINGS_EXTERNAL
 #define GAME_LOOP_NO_STAIRS_STR_EXTERNAL
 #define GAME_LOOP_LOW_DATA_EXTERNAL
+#define BANKED_EGO_DESC_HELPERS_EXTERNAL
+#define PM_BOOK_PROMPT_HUFF_ID_EXTERNAL
 .segment C128ResidentPlay
 c128_resident_play_start:
 c128_resident_play_sig: .byte $c8
-at_surface_str:
-    .text "You are already at the surface." ; .byte 0
 #if PERF_P1
 #import "../common/perf_p1_data.s"
 #endif
@@ -4801,9 +4805,11 @@ tool_ego_prefix_lo:
     .byte <ego_tool_prefix_orcish,  <ego_tool_prefix_dwarven
 first_banked_function:
     #import "../../../core/ui_home.s"
+    #import "../../../core/item_desc_ego_helpers.s"
     #import "../../../core/item_desc_banked.s"
     #import "../../../core/player_magic_display.s"
     #import "../../../core/player_magic_state_ops.s"
+    #import "../../../core/player_magic_prompt_helpers.s"
     #import "../../../core/player_magic.s"
     #import "../../../core/player_magic_levelup.s"
     #import "../../../core/player_magic_learn_op.s"

@@ -1243,58 +1243,75 @@ overlay_load_no_kernal:
 !done:
     rts
 
+tramp_call_help_overlay:
+    sta tramp_call_help_target + 1
+    sty tramp_call_help_target + 2
+    lda #OVL_HELP
+    jsr overlay_load_no_kernal
+    bcs !done+
+tramp_call_help_target:
+    jsr $ffff
+!done:
+    jmp tramp_sr_epilogue
+
+tramp_call_items_overlay:
+    sta tramp_call_items_target + 1
+    sty tramp_call_items_target + 2
+    lda #OVL_ITEMS
+    jsr overlay_load_no_kernal
+    bcs !done+
+tramp_call_items_target:
+    jsr $ffff
+!done:
+    jmp tramp_sr_epilogue
+
+tramp_call_ui_overlay:
+    sta tramp_call_ui_target + 1
+    sty tramp_call_ui_target + 2
+    lda #OVL_UI
+    jsr overlay_load_no_kernal
+    bcs !done+
+tramp_call_ui_target:
+    jsr $ffff
+!done:
+    jmp tramp_sr_epilogue
+
 tramp_ui_help_display:
     lda #OVL_HELP
     jsr overlay_load_no_kernal
-    bcc !loaded+
-    jmp tramp_sr_epilogue
-!loaded:
+    bcs !done+
     lda #<help_pages
     sta help_pages_src_lo
     lda #>help_pages
     sta help_pages_src_hi
     jsr ui_help_display
+!done:
     jmp tramp_sr_epilogue
 
 tramp_ui_char_display:
-    lda #OVL_UI
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr ui_char_display
-!done:
-    jmp tramp_sr_epilogue
+    lda #<ui_char_display
+    ldy #>ui_char_display
+    jmp tramp_call_ui_overlay
 
 tramp_ui_inv_display:
-    lda #OVL_HELP
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr ui_inv_display
-!done:
-    jmp tramp_sr_epilogue
+    lda #<ui_inv_display
+    ldy #>ui_inv_display
+    jmp tramp_call_help_overlay
 
 tramp_ui_inv_select_display:
-    lda #OVL_HELP
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr ui_inv_select_display
-!done:
-    jmp tramp_sr_epilogue
+    lda #<ui_inv_select_display
+    ldy #>ui_inv_select_display
+    jmp tramp_call_help_overlay
 
 tramp_ui_equip_display:
-    lda #OVL_HELP
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr ui_equip_display
-!done:
-    jmp tramp_sr_epilogue
+    lda #<ui_equip_display
+    ldy #>ui_equip_display
+    jmp tramp_call_help_overlay
 
 tramp_ui_equip_select_display:
-    lda #OVL_HELP
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr ui_equip_select_display
-!done:
-    jmp tramp_sr_epilogue
+    lda #<ui_equip_select_display
+    ldy #>ui_equip_select_display
+    jmp tramp_call_help_overlay
 
 tramp_ui_recall:
     lda #OVL_DEATH
@@ -1307,36 +1324,24 @@ tramp_ui_recall:
     jmp tramp_sr_epilogue
 
 tramp_item_gain_spell:
-    lda #OVL_UI
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr item_gain_spell
-!done:
-    jmp tramp_sr_epilogue
+    lda #<item_gain_spell
+    ldy #>item_gain_spell
+    jmp tramp_call_ui_overlay
 
 tramp_item_read_scroll:
-    lda #OVL_ITEMS
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr item_read_scroll
-!done:
-    jmp tramp_sr_epilogue
+    lda #<item_read_scroll
+    ldy #>item_read_scroll
+    jmp tramp_call_items_overlay
 
 tramp_item_aim_wand:
-    lda #OVL_ITEMS
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr item_aim_wand
-!done:
-    jmp tramp_sr_epilogue
+    lda #<item_aim_wand
+    ldy #>item_aim_wand
+    jmp tramp_call_items_overlay
 
 tramp_item_use_staff:
-    lda #OVL_ITEMS
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr item_use_staff
-!done:
-    jmp tramp_sr_epilogue
+    lda #<item_use_staff
+    ldy #>item_use_staff
+    jmp tramp_call_items_overlay
 
 tramp_eff_earthquake:
     sei
@@ -1345,52 +1350,34 @@ tramp_eff_earthquake:
     rts
 
 tramp_item_refuel:
-    lda #OVL_ITEMS
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr item_refuel
-!done:
-    jmp tramp_sr_epilogue
+    lda #<item_refuel
+    ldy #>item_refuel
+    jmp tramp_call_items_overlay
 
 tramp_ranged_fire:
-    lda #OVL_ITEMS
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr ranged_fire
-!done:
-    jmp tramp_sr_epilogue
+    lda #<ranged_fire
+    ldy #>ranged_fire
+    jmp tramp_call_items_overlay
 
 tramp_throw_item:
-    lda #OVL_ITEMS
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr throw_item
-!done:
-    jmp tramp_sr_epilogue
+    lda #<throw_item
+    ldy #>throw_item
+    jmp tramp_call_items_overlay
 
 tramp_bash_command:
-    lda #OVL_ITEMS
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr bash_command
-!done:
-    jmp tramp_sr_epilogue
+    lda #<bash_command
+    ldy #>bash_command
+    jmp tramp_call_items_overlay
 
 tramp_player_tunnel:
-    lda #OVL_ITEMS
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr player_tunnel
-!done:
-    jmp tramp_sr_epilogue
+    lda #<player_tunnel
+    ldy #>player_tunnel
+    jmp tramp_call_items_overlay
 
 tramp_spell_list_display:
-    lda #OVL_UI
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr spell_list_display
-!done:
-    jmp tramp_sr_epilogue
+    lda #<spell_list_display
+    ldy #>spell_list_display
+    jmp tramp_call_ui_overlay
 
 tramp_spell_execute_selected:
     lda #OVL_SPELL
@@ -1450,31 +1437,21 @@ tramp_disk_prepare_selected:
 // Store overlay trampolines — load overlay, bank out KERNAL, call $E000+
 // ============================================================
 // Shared preamble: ensure town overlay is loaded, then bank out KERNAL
-store_overlay_preamble:
+tramp_store_init_all:
+    lda #<store_init_all
+    ldy #>store_init_all
+    jmp tramp_call_items_overlay
+
+tramp_store_restock_all:
+    lda #<store_restock_all
+    ldy #>store_restock_all
+    jmp tramp_call_items_overlay
+
+tramp_store_enter:
     lda #OVL_TOWN
     jsr overlay_load
     sei
     jsr plus4_bank_ram
-    rts
-
-tramp_store_init_all:
-    lda #OVL_ITEMS
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr store_init_all
-!done:
-    jmp tramp_sr_epilogue
-
-tramp_store_restock_all:
-    lda #OVL_ITEMS
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr store_restock_all
-!done:
-    jmp tramp_sr_epilogue
-
-tramp_store_enter:
-    jsr store_overlay_preamble
     jsr store_enter
     jmp tramp_sr_epilogue
 
@@ -1698,8 +1675,7 @@ tramp_game_over_prepare:
 !tgo_load_overlay:
     // 2. Load death overlay (replaces tier data at $E000)
     lda #OVL_DEATH
-    jsr overlay_load
-    rts
+    jmp overlay_load
 
 tramp_game_over:
     jsr tramp_game_over_prepare
@@ -1788,54 +1764,6 @@ winner_apply_retirement_bonus:
 // Shown at all exit points (save+quit, voluntary quit, death).
 // ============================================================
 game_over_prompt:
-    jmp restart_entry
-
-// ============================================================
-// game_restart — reset game state, return to title screen
-// Clears mutable state (ZP vars, inventory, tier), then jumps
-// to restart_entry (skipping one-time init_copy_banked etc.).
-// ============================================================
-game_restart:
-    // Clear ZP game variables $2B–$8F (player stats, turn counter,
-    // effect timers, monster counts, etc.)
-    lda #0
-    ldx #0
-!clr_zp:
-    sta zp_player_x,x
-    inx
-    cpx #(zp_entropy - zp_player_x + 1) // 101 bytes
-    bne !clr_zp-
-
-    // Clear static game-state variables in data segments
-    lda #0
-    sta eff_fear_timer
-    ldx #3
-!clr_recall:
-    sta recall_query_sc,x
-    dex
-    bpl !clr_recall-
-
-    // Clear inventory: inv_item_id[] = FI_EMPTY ($FF), qty/p1/flags = $00
-    lda #$ff
-    ldx #TOTAL_INV_SLOTS - 1
-!clr_inv_id:
-    sta inv_item_id,x
-    dex
-    bpl !clr_inv_id-
-
-    lda #0
-    ldx #TOTAL_INV_SLOTS - 1
-!clr_inv_rest:
-    sta inv_qty,x
-    sta inv_p1,x
-    sta inv_flags,x
-    dex
-    bpl !clr_inv_rest-
-
-    // Reset tier state (zp_current_tier already zeroed above)
-    sta current_tier
-    sta tier_loaded
-
     jmp restart_entry
 
 // Safety: ensure runtime code doesn't overlap runtime data areas

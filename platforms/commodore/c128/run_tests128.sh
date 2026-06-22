@@ -1301,6 +1301,7 @@ root = Path("..").resolve()
 core = root.parent.parent / "core"
 screen = (root / "c128" / "screen_vdc.s").read_text().splitlines()
 main_text = (root / "c128" / "main.s").read_text()
+input128_text = (root / "c128" / "input128.s").read_text()
 item_prompt_mod = (core / "player_item_prompt.s").read_text().splitlines()
 item_mod = (core / "item.s").read_text().splitlines()
 item_cmd_mod = (core / "player_item_commands.s").read_text().splitlines()
@@ -1309,6 +1310,7 @@ throw_mod = (core / "throw.s").read_text().splitlines()
 loop_mod = (core / "game_loop.s").read_text().splitlines()
 dfeat = (core / "dungeon_features.s").read_text().splitlines()
 dfeat_actions = (core / "dungeon_feature_actions.s").read_text().splitlines()
+dungeon_direction = (core / "dungeon_direction.s").read_text().splitlines()
 help_mod = (core / "ui_help.s").read_text().splitlines()
 store_mod = (core / "ui_store.s").read_text().splitlines()
 loop_helpers = (core / "game_loop_helpers.s").read_text().splitlines()
@@ -1380,6 +1382,10 @@ def section_after(label: str, lines: list[str]) -> list[str]:
 first2 = first_instructions_after("screen_put_string:", screen, 2)
 if len(first2) < 2 or (not first2[0].lower().startswith("php")) or (not first2[1].lower().startswith("sei")):
     print(f"screen_put_string must start with php; sei, found: {first2!r}")
+    raise SystemExit(1)
+
+if ".label hal_input_followup_prepare = input_wait_release" not in input128_text:
+    print("C128 follow-up prompts must map hal_input_followup_prepare to input_wait_release")
     raise SystemExit(1)
 
 if not (
@@ -1460,7 +1466,7 @@ required_chains = [
         "ldx #HSTR_TW_PROMPT",
         "jsr piw_select_filtered_inv",
     ]),
-    ("get_direction_target", dfeat_actions, [
+    ("get_direction_target", dungeon_direction, [
         "ldx #HSTR_DF_DIRECTION",
         "jsr huff_print_msg",
         "jsr input_prepare_followup_key",

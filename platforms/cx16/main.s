@@ -69,6 +69,7 @@
 .const CX16_ITEM_CMD_READ = 9
 .const CX16_ITEM_CMD_AIM = 10
 .const CX16_ITEM_CMD_USE = 11
+.const CX16_ITEM_CMD_SEED_SURVIVAL_LOOT = 12
 .const CX16_ACTIVE_MONSTER_COUNT = 32
 .const CX16_ACTIVE_MONSTER_ENTRY_SIZE = 12
 .const CX16_ACTIVE_MONSTER_X_OFFSET = 0
@@ -933,6 +934,16 @@ cx16_call_startup_overlay_entry:
     sta CX16_RAM_BANK_REG
     rts
 
+cx16_call_town_overlay_entry:
+    lda CX16_RAM_BANK_REG
+    pha
+    lda #CX16_OVERLAY_TOWN_BANK
+    sta CX16_RAM_BANK_REG
+    jsr cx16_overlay_town_entry
+    pla
+    sta CX16_RAM_BANK_REG
+    rts
+
 cx16_overlay_saved_bank: .byte 0
 
 cx16_consume_turn_searchable:
@@ -1271,74 +1282,16 @@ cx16_new_game_draw:
     jmp cx16_draw_town_ui
 
 cx16_enter_town_recovery:
-    jsr cx16_town_recover_and_resupply
+    jsr cx16_call_town_overlay_entry
     lda #<town_recovery_str
     sta zp_ptr0
     lda #>town_recovery_str
     sta zp_ptr0_hi
     jmp msg_print
 
-cx16_town_recover_and_resupply:
-    lda player_data + PL_MHP_LO
-    sta player_data + PL_HP_LO
-    sta zp_player_hp_lo
-    lda player_data + PL_MHP_HI
-    sta player_data + PL_HP_HI
-    sta zp_player_hp_hi
-    lda player_data + PL_MAX_MANA
-    sta player_data + PL_MANA
-    sta zp_player_mp
-    lda #<2000
-    sta player_data + PL_FOOD_LO
-    sta zp_player_food
-    lda #>2000
-    sta player_data + PL_FOOD_HI
-    sta zp_player_food_hi
-    jsr cx16_town_charge_recovery
-    jsr cx16_town_add_ration
-    jmp cx16_town_add_cure_potion
-
-cx16_town_charge_recovery:
-    lda player_data + PL_GOLD_1
-    ora player_data + PL_GOLD_2
-    bne !charge+
-    lda player_data + PL_GOLD_0
-    cmp #10
-    bcc !done+
-!charge:
-    lda player_data + PL_GOLD_0
-    sec
-    sbc #10
-    sta player_data + PL_GOLD_0
-    lda player_data + PL_GOLD_1
-    sbc #0
-    sta player_data + PL_GOLD_1
-    lda player_data + PL_GOLD_2
-    sbc #0
-    sta player_data + PL_GOLD_2
-!done:
-    rts
-
-cx16_town_add_ration:
-    lda #15
-    jmp cx16_town_add_basic_item
-
-cx16_town_add_cure_potion:
-    lda #17
-
-cx16_town_add_basic_item:
-    sta fi_add_id
-    lda #1
-    sta fi_add_qty
-    lda #0
-    sta fi_add_p1
-    sta fi_add_to_hit
-    sta fi_add_to_dam
-    sta fi_add_to_ac
-    sta fi_add_flags
-    sta fi_add_ego
-    jsr inv_add_item
-    rts
+cx16_seed_survival_loot:
+    lda #CX16_ITEM_CMD_SEED_SURVIVAL_LOOT
+    jmp cx16_call_items_overlay_command
 
 cx16_enter_dungeon:
     lda #0
@@ -1368,8 +1321,9 @@ cx16_enter_dungeon_level:
     clc
     adc #(CX16_TIER_BANK_BASE - 1)
     sta cx16_loaded_tier_bank
-    jsr item_spawn_level
     jsr cx16_spawn_level_monsters
+    jsr item_spawn_level
+    jsr cx16_seed_survival_loot
     lda #CX16_DUNGEON_LIGHT_RADIUS
     sta zp_light_radius
     sta player_data + PL_LIGHT_RAD
@@ -1788,7 +1742,91 @@ cx16_overlay_startup_end:
 
 .segment Cx16TownOverlay
 cx16_overlay_town_entry:
+    jsr cx16_overlay_town_recover
+    jsr cx16_overlay_town_charge_recovery
+    lda #15
+    jsr cx16_overlay_town_add_capped_item
+    lda #17
+    jmp cx16_overlay_town_add_capped_item
+
+cx16_overlay_town_recover:
+    lda player_data + PL_MHP_LO
+    sta player_data + PL_HP_LO
+    sta zp_player_hp_lo
+    lda player_data + PL_MHP_HI
+    sta player_data + PL_HP_HI
+    sta zp_player_hp_hi
+    lda player_data + PL_MAX_MANA
+    sta player_data + PL_MANA
+    sta zp_player_mp
+    lda #<2000
+    sta player_data + PL_FOOD_LO
+    sta zp_player_food
+    lda #>2000
+    sta player_data + PL_FOOD_HI
+    sta zp_player_food_hi
     rts
+
+cx16_overlay_town_charge_recovery:
+    lda player_data + PL_GOLD_1
+    ora player_data + PL_GOLD_2
+    bne !charge+
+    lda player_data + PL_GOLD_0
+    cmp #10
+    bcc !done+
+!charge:
+    lda player_data + PL_GOLD_0
+    sec
+    sbc #10
+    sta player_data + PL_GOLD_0
+    lda player_data + PL_GOLD_1
+    sbc #0
+    sta player_data + PL_GOLD_1
+    lda player_data + PL_GOLD_2
+    sbc #0
+    sta player_data + PL_GOLD_2
+!done:
+    rts
+
+cx16_overlay_town_add_capped_item:
+    sta cx16_town_item_id
+    jsr cx16_overlay_town_count_carried_item
+    cmp #2
+    bcc !add+
+    rts
+!add:
+    lda cx16_town_item_id
+    sta fi_add_id
+    lda #1
+    sta fi_add_qty
+    lda #0
+    sta fi_add_p1
+    sta fi_add_to_hit
+    sta fi_add_to_dam
+    sta fi_add_to_ac
+    sta fi_add_flags
+    sta fi_add_ego
+    jsr inv_add_item
+    rts
+
+cx16_overlay_town_count_carried_item:
+    lda #0
+    sta cx16_town_item_count
+    ldx #0
+!loop:
+    lda inv_item_id,x
+    cmp cx16_town_item_id
+    bne !next+
+    inc cx16_town_item_count
+!next:
+    inx
+    cpx #MAX_INV_SLOTS
+    bcc !loop-
+    lda cx16_town_item_count
+    rts
+
+cx16_town_item_id: .byte 0
+cx16_town_item_count: .byte 0
     :Cx16OverlayMarker(2)
 cx16_overlay_town_end:
 .print "CX16 TOWN overlay: " + (cx16_overlay_town_end - $a000) + " bytes at $A000-$" + toHexString(cx16_overlay_town_end)
@@ -3050,6 +3088,10 @@ cx16_overlay_items_command_entry:
     bne !not_use+
     jmp !use+
 !not_use:
+    cmp #CX16_ITEM_CMD_SEED_SURVIVAL_LOOT
+    bne !not_seed_survival_loot+
+    jmp !seed_survival_loot+
+!not_seed_survival_loot:
     rts
 
 !pickup:
@@ -3188,6 +3230,46 @@ cx16_overlay_items_command_entry:
     bcc !use_done+
     jmp cx16_after_item_turn
 !use_done:
+    rts
+
+!seed_survival_loot:
+    lda #15
+    jsr cx16_overlay_add_random_floor_item
+    lda #17
+    jsr cx16_overlay_add_random_floor_item
+    lda #7
+    jsr cx16_overlay_add_random_floor_item
+    lda #61
+
+cx16_overlay_add_random_floor_item:
+    pha
+    jsr find_random_floor
+    bcs !floor+
+    pla
+    rts
+!floor:
+    lda df_target_x
+    sta fi_add_x
+    lda df_target_y
+    sta fi_add_y
+    pla
+    sta fi_add_id
+    lda #1
+    sta fi_add_qty
+    lda #0
+    sta fi_add_p1
+    sta fi_add_to_hit
+    sta fi_add_to_dam
+    sta fi_add_to_ac
+    sta fi_add_flags
+    sta fi_add_ego
+    lda fi_add_id
+    cmp #ITEM_FLASK_OIL
+    bne !plain+
+    lda #20
+    sta fi_add_p1
+!plain:
+    jsr floor_item_add
     rts
 #else
     rts
