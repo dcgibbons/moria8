@@ -29,6 +29,10 @@
 // build uses hal_platform_chargen_cutpoint=-1, so none of these early returns fire.
 
 player_create:
+#if !C64_UNIT_TEST
+    lda #$ff
+    sta save_slot_index
+#endif
 #if C128_TEST_TOWN_SELF_DUMP
     lda #$72
     jsr c128_town_dump_mark

@@ -2485,7 +2485,7 @@ c128_test_load_then_save_new_empty_save:
     sta disk_setup_done
     lda #1
     sta c128_test_load_then_save_new_empty_stage
-    jsr c128_modal_require_play
+    jsr c128_modal_require_persist
 c128_test_load_then_save_new_empty_save_media_ready:
     jsr disk_marker_init
     bcs c128_test_load_then_save_new_empty_fail
@@ -2551,9 +2551,7 @@ c128_test_load_then_save_new_empty_write_proof:
     jmp game_new_start
 !not_n:
     cmp #$4c                // 'L' — load game
-    bne !not_l+
-    jmp title_load_game
-!not_l:
+    beq title_load_game
     cmp #$44                // 'D' — disk setup
     bne !title_menu_loop-
     jsr c128_modal_require_persist
@@ -2577,10 +2575,7 @@ title_load_game:
 #if C128_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_RETURN_PRODUCT
 c128_test_single_drive_load_return_before_save_media:
 #endif
-    jsr c128_require_save_media
-    bcs !title_load_fail+
-    jsr ui_prepare_fullscreen_transition
-    jsr load_game
+    jsr c128_modal_load_game
     bcc !title_load_fail+
 #if C128_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_RETURN_PRODUCT
 c128_test_single_drive_load_return_loaded:
@@ -2990,6 +2985,9 @@ c128_modal_save_game:
     jsr c128_modal_require_persist
     jsr c128_require_save_media
     bcs !save_fail+
+#if !BYPASS_SLOT_PROMPT
+    jsr save_select_slot_prompt
+#endif
     jsr ui_prepare_fullscreen_transition
     jsr save_game
     bcc !save_done+
@@ -3009,8 +3007,16 @@ c128_test_after_save_before_play_media:
 c128_modal_load_game:
     jsr c128_modal_require_persist
     jsr c128_require_save_media
+    bcs !load_fail+
+#if !BYPASS_SLOT_PROMPT
+    jsr save_select_slot_prompt
+#endif
     jsr ui_prepare_fullscreen_transition
     jsr load_game
+!load_done:
+    rts
+!load_fail:
+    clc
     rts
 
 c128_modal_require_play:
@@ -3977,6 +3983,10 @@ c128_resident_select_end:
 .segment C128ResidentPersist
 c128_resident_persist_start:
 #import "../common/save.s"
+save_prepare_slot_prompt:
+    clc
+    rts
+#import "../common/save_slot_menu.s"
 c128_resident_persist_end:
 
 #define PRESS_KEY_STR_EXTERNAL

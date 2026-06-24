@@ -777,9 +777,16 @@ title_load_game:
     jsr rng_seed
     lda #SFX_PICKUP
     jsr hal_sound_play
+#if !BYPASS_SLOT_PROMPT
+    jsr save_prepare_slot_prompt
+    bcs !title_load_fail+
+#endif
     jsr disk_prompt_save        // Swap to save disk if dual
     jsr ui_clear_full_screen_safe
     jsr ui_reset_message_state
+#if !BYPASS_SLOT_PROMPT
+    jsr save_select_slot_prompt
+#endif
     jsr load_game
     // Fail closed on the explicit load carry result before resuming gameplay.
     bcc !title_load_fail+
@@ -1178,6 +1185,19 @@ overlay_load_no_kernal:
     sta $01
 !done:
     rts
+
+#if !BYPASS_SLOT_PROMPT
+save_prepare_slot_prompt:
+    lda #OVL_ROYAL
+    jmp overlay_load_no_kernal
+
+save_select_slot_prompt:
+    sei
+    lda #BANK_NO_KERNAL
+    sta $01
+    jsr save_select_slot_prompt_impl
+    jmp platform_runtime_resync_c64
+#endif
 
 tramp_ui_help_display:
     lda #OVL_HELP
@@ -2167,6 +2187,7 @@ ovl_death_end:
 // ============================================================
 .segment RoyalOverlay
     #import "../../../core/royal.s"
+    #import "../common/save_slot_menu.s"
 ovl_royal_end:
 .print "Royal overlay: " + (ovl_royal_end - $e000) + " bytes at $E000-$" + toHexString(ovl_royal_end)
 .assert "Royal overlay fits in $E000-$EFFF", ovl_royal_end <= $F000, true

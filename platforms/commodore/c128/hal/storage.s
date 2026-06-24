@@ -110,6 +110,7 @@ hal_storage_save_write_name:
     .byte $54, $48, $45, $2e, $47, $41, $4d, $45 // "THE.GAME"
     .byte $2c, $53, $2c, $57                    // ",S,W"
 .label hal_storage_save_write_name_len = * - hal_storage_save_write_name
+    .byte $57                                   // spare suffix byte for "THE.GAME2"
 .label hal_storage_save_probe_name = hal_storage_save_write_name + 1
 .label hal_storage_save_probe_name_len = hal_storage_save_write_name_len - 1
 
@@ -118,6 +119,7 @@ hal_storage_save_read_name:
     .byte $54, $48, $45, $2e, $47, $41, $4d, $45 // "THE.GAME"
     .byte $2c, $53, $2c, $52                    // ",S,R"
 .label hal_storage_save_read_name_len = * - hal_storage_save_read_name
+    .byte $52                                   // spare suffix byte for "THE.GAME2"
 
 // Platform-owned high-score filenames. PETSCII bytes for KERNAL SETNAM.
 hal_storage_score_read_name:

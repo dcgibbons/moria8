@@ -1082,10 +1082,17 @@ c128_town_move_diag_after_input_get_command:
 c128_test_after_save_game:
 #endif
 #else
+#if !BYPASS_SLOT_PROMPT && !C64_UNIT_TEST
+    jsr save_prepare_slot_prompt
+    bcs !save_return_view+
+#endif
     jsr disk_prompt_save        // Swap to save disk if dual
 #if HAL_PLATFORM_GAME_LOOP_SAVE_CLEARS_SCREEN
     jsr ui_clear_full_screen_safe
     jsr ui_reset_message_state
+#endif
+#if !BYPASS_SLOT_PROMPT && !C64_UNIT_TEST
+    jsr save_select_slot_prompt
 #endif
     jsr save_game
 #if C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || C64_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT

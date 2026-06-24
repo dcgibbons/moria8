@@ -15,6 +15,7 @@
 //   OVL_UI          = 6  Inventory/equipment/character/wizard modal UI
 //   OVL_ITEMS       = 7  Low-frequency item actions (read/aim/use/refuel)
 //   OVL_SPELL       = 8  Spell/prayer effect execution
+//   OVL_ROYAL       = 9  Winner retirement / save-slot selector
 //
 // Disk filenames are platform-owned by the storage HAL:
 // `hal_storage_overlay_name_{lo,hi,len}`.
@@ -32,6 +33,7 @@
 .const OVL_UI          = 6
 .const OVL_ITEMS       = 7
 .const OVL_SPELL       = 8
+.const OVL_ROYAL       = 9
 .const OVL_COUNT       = hal_platform_overlay_count
 
 #import "compat/hal_storage_overlay_test_stub.s"
