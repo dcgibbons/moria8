@@ -32,6 +32,7 @@
 #define C128_PRODUCT_MODAL_PERSIST
 #define HAL_STORAGE_PROGRAM_MEDIA_PRESENT_EXTERNAL
 #define STORAGE_STATUS_HELPER
+#import "../common/save_slot_policy.s"
 .const C128_MEDIA_UNKNOWN = 0
 .const C128_MEDIA_PROGRAM = 1
 .const C128_MEDIA_SAVE    = 2
@@ -2323,8 +2324,6 @@ c128_test_change_save_drive_unexpected_return:
     jsr c128_restore_runtime_vectors
     cli
 title_enter_menu:
-    lda #$ff
-    sta save_slot_index
 #if C128_REAL_BOOT_DIAG
     ldx #$27
     jsr c128_stack_guard_begin
@@ -2568,6 +2567,8 @@ title_load_game:
     bcc !title_setup_ready+
     jmp c128_title_require_program_media
 !title_setup_ready:
+    lda #$ff
+    sta save_slot_index
 #if C128_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_RETURN_PRODUCT
 c128_test_single_drive_load_return_before_save_media:
 #endif

@@ -30,6 +30,7 @@
 .segmentdef RuntimeBanked     [outPrg=OVL_OUT + "/64.bank",   start=$f000, min=$f000, max=$fffa]
 
 #import "hal/storage_policy.s"
+#import "../common/save_slot_policy.s"
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(entry)

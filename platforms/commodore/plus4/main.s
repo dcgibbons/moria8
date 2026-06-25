@@ -28,6 +28,8 @@
 .segmentdef DungeonGenOverlay [outPrg=OVL_OUT + "/ovl.gen",   start=$e000, min=$e000, max=$efff]
 .segmentdef RuntimeBanked     [outPrg=OVL_OUT + "/4.bank",    start=$f000, min=$f000, max=$ff00]
 
+#import "../common/save_slot_policy.s"
+
 .const TED_BG      = $ff15
 .const TED_BORDER  = $ff19
 .const TED_SOUND_CTRL = $ff11
