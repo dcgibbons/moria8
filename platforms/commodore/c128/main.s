@@ -3751,8 +3751,6 @@ current_overlay: .byte 0
 #import "hal/storage_overlay_names.s"
 ovl_reu_start_lo: .byte 0, 0, 0, 0, 0, 0, 0, 0
 ovl_reu_start_hi: .byte 0, 0, 0, 0, 0, 0, 0, 0
-ovl_reu_size_lo:  .byte 0, 0, 0, 0, 0, 0, 0, 0
-ovl_reu_size_hi:  .byte 0, 0, 0, 0, 0, 0, 0, 0
 ol_target:        .byte 0
 #if C128_TEST_OVERLAY_LOAD_FAIL_TRAP
 c128_overlay_load_disk_index:  .byte 0

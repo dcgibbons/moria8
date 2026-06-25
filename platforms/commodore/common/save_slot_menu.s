@@ -194,8 +194,14 @@ save_slot_read_name_len:
 !magic_ok:
     inc save_slot_name_idx
     lda save_slot_name_idx
-    cmp #SAVE_MAGIC_SIZE
+    cmp #SAVE_MAGIC_SIZE - 1
     bcc !magic_loop-
+    jsr SAVE_CHRIN
+    jsr save_version_supported
+    bcs !version_ok+
+    clc
+    bcc !cleanup+
+!version_ok:
     jsr SAVE_READST
 #if HAL_STORAGE_MASK_CHRIN_WRITE_TIMEOUT_STATUS
     and #$fe

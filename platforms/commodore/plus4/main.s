@@ -330,8 +330,6 @@ tramp_dig_ability:
 current_overlay: .byte 0
 ovl_reu_start_lo: .byte 0, 0, 0, 0, 0, 0, 0, 0, 0
 ovl_reu_start_hi: .byte 0, 0, 0, 0, 0, 0, 0, 0, 0
-ovl_reu_size_lo:  .byte 0, 0, 0, 0, 0, 0, 0, 0, 0
-ovl_reu_size_hi:  .byte 0, 0, 0, 0, 0, 0, 0, 0, 0
 ol_target:        .byte 0
 
 #define OVERLAY_LOAD_PROMPT_GAME

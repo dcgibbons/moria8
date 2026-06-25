@@ -380,10 +380,8 @@ tramp_dig_ability:
 // Overlay state is platform-owned so product/test variant layout changes
 // cannot place these bytes inside later resident code.
 current_overlay: .byte 0
-ovl_reu_start_lo: .byte 0, 0, 0, 0, 0, 0, 0, 0, 0
-ovl_reu_start_hi: .byte 0, 0, 0, 0, 0, 0, 0, 0, 0
-ovl_reu_size_lo:  .byte 0, 0, 0, 0, 0, 0, 0, 0, 0
-ovl_reu_size_hi:  .byte 0, 0, 0, 0, 0, 0, 0, 0, 0
+ovl_reu_start_lo: .fill hal_platform_overlay_count + 1, 0
+ovl_reu_start_hi: .fill hal_platform_overlay_count + 1, 0
 ol_target:        .byte 0
 
 #define OVERLAY_LOAD_PROMPT_GAME
@@ -1686,7 +1684,7 @@ c64_test_save_write_fail_input_sym:
     brk
 #endif
 
-#if C64_TEST_SCRIPTED_LOAD_RESUME_PRODUCT || C64_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_RETURN_PRODUCT
+#if C64_TEST_SCRIPTED_LOAD_RESUME_PRODUCT || C64_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_RETURN_PRODUCT || C64_TEST_SCRIPTED_SLOT2_LOAD_PRODUCT
 c64_test_load_resume_fail_input_sym:
     brk
 #endif

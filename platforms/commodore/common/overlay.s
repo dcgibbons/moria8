@@ -342,9 +342,9 @@ overlay_fetch_reu:
     lda #0
     sta REU_BANK
 
-    lda ovl_reu_size_lo,x
+    lda #0
     sta REU_LENLO
-    lda ovl_reu_size_hi,x
+    lda #$10
     sta REU_LENHI
     lda #0
     sta REU_CONTROL
@@ -364,11 +364,9 @@ overlay_fetch_reu:
 // ============================================================
 // REU overlay offset tables (populated by reu_stash_overlays)
 // ============================================================
-// Index 0 unused; indices 1-8 = overlay IDs
-ovl_reu_start_lo: .byte 0, 0, 0, 0, 0, 0, 0, 0, 0
-ovl_reu_start_hi: .byte 0, 0, 0, 0, 0, 0, 0, 0, 0
-ovl_reu_size_lo:  .byte 0, 0, 0, 0, 0, 0, 0, 0, 0
-ovl_reu_size_hi:  .byte 0, 0, 0, 0, 0, 0, 0, 0, 0
+// Index 0 unused; indices 1-OVL_COUNT = overlay IDs
+ovl_reu_start_lo: .fill OVL_COUNT + 1, 0
+ovl_reu_start_hi: .fill OVL_COUNT + 1, 0
 ol_target:        .byte 0
 #if C128_TEST_OVERLAY_LOAD_FAIL_TRAP
 c128_overlay_load_disk_index:  .byte 0

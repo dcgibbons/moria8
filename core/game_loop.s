@@ -813,7 +813,7 @@ c64_test_single_drive_load_return_resume_entry:
     sta c64_test_save_media_fail_armed
 #endif
 
-#if C64_TEST_SCRIPTED_LOAD_RESUME_PRODUCT || C64_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_RETURN_PRODUCT
+#if C64_TEST_SCRIPTED_LOAD_RESUME_PRODUCT || C64_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_RETURN_PRODUCT || C64_TEST_SCRIPTED_SLOT2_LOAD_PRODUCT
 c64_test_after_load_resume_game:
 #endif
 main_loop:

@@ -2190,7 +2190,7 @@ run_load_resume_product_smoke() {
     fi
 
     if ! java -jar "$KICKASS" "${KICKASS_TRACE_DEFINE[@]}" main.s :OVL_OUT=../../../build/test/c64 -showmem -vicesymbols \
-            -define C64_TEST_SCRIPTED_LOAD_RESUME_PRODUCT \
+            -define C64_TEST_SCRIPTED_SLOT2_LOAD_PRODUCT \
             -o ../../../build/test/c64/moria_load_resume_smoke.prg >"$build_log" 2>&1; then
         echo "FAIL (assembly error)"
         grep -i error "$build_log" | head -5
@@ -2244,7 +2244,7 @@ run_load_resume_product_smoke() {
     if ! "$C1541" -format "moria8 save,m8" d64 "$save_d64" \
             -attach "$save_d64" \
             -write "$marker_blob" "moria8.id,s" \
-            -write "$save_blob" "the.game,s" >"$build_log" 2>&1; then
+            -write "$save_blob" "the.game2,s" >"$build_log" 2>&1; then
         echo "FAIL (save disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
