@@ -2032,30 +2032,24 @@ tsi_krev_cached: .byte 0
 .const TITLE_CLEAR_AFTER_LAST_ROW_C128 = TITLE_CLEAR_LAST_ROW_C128 + 1
 
 title_clear_full_screen:
-    lda #0
-    sta title_clear_row
+    ldx #0
 !tcf_loop:
-    lda title_clear_row
+    txa
     jsr screen_clear_row
-    inc title_clear_row
-    lda title_clear_row
-    cmp #SCREEN_ROWS
+    inx
+    cpx #SCREEN_ROWS
     bcc !tcf_loop-
     rts
 
 title_clear_below_menu:
-    lda #TITLE_CLEAR_FIRST_ROW_C128
-    sta title_clear_row
+    ldx #TITLE_CLEAR_FIRST_ROW_C128
 !tcb_loop:
-    lda title_clear_row
+    txa
     jsr screen_clear_row
-    inc title_clear_row
-    lda title_clear_row
-    cmp #TITLE_CLEAR_AFTER_LAST_ROW_C128
+    inx
+    cpx #TITLE_CLEAR_AFTER_LAST_ROW_C128
     bcc !tcb_loop-
     rts
-
-title_clear_row: .byte 0
 
 // tramp_reu_show_status — banked status display hook.
 // Pinned low to avoid drifting into $D000 I/O space.
@@ -2329,6 +2323,8 @@ c128_test_change_save_drive_unexpected_return:
     jsr c128_restore_runtime_vectors
     cli
 title_enter_menu:
+    lda #$ff
+    sta save_slot_index
 #if C128_REAL_BOOT_DIAG
     ldx #$27
     jsr c128_stack_guard_begin

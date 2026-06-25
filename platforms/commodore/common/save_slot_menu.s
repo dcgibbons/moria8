@@ -1,6 +1,7 @@
 // save_slot_menu.s — transient save-slot selector UI
 
 save_slot_scan_idx: .byte 0
+save_slot_default_idx: .byte 0
 save_slot_name_idx: .byte 0
 save_slot_name_buf: .fill SAVE_SLOT_NAME_LEN, 0
 
@@ -29,6 +30,8 @@ save_select_slot_prompt_impl:
     ldy #>save_slots_title_str
     jsr save_slot_put_str
 
+    lda save_slot_index
+    sta save_slot_default_idx
     lda #0
     sta save_slot_scan_idx
 !slot_loop:
@@ -45,6 +48,15 @@ save_select_slot_prompt_impl:
     lda #$29
     jsr hal_screen_put_char
     lda #$20
+    jsr hal_screen_put_char
+    lda save_slot_scan_idx
+    cmp save_slot_default_idx
+    bne !not_loaded+
+    lda #$2a
+    bne !put_marker+
+!not_loaded:
+    lda #$20
+!put_marker:
     jsr hal_screen_put_char
     lda save_slot_scan_idx
     sta save_slot_index

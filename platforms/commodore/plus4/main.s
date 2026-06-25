@@ -555,6 +555,8 @@ restart_entry:
     jsr rng_seed
 
 title_enter_menu:
+    lda #$ff
+    sta save_slot_index
 #if PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT
     lda plus4_test_single_drive_fresh_save_armed
     beq !plus4_test_single_drive_fresh_save_not_restart+

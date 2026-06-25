@@ -544,6 +544,8 @@ restart_entry:
     jsr rng_seed
 
 title_enter_menu:
+    lda #$ff
+    sta save_slot_index
 #if C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || C64_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT
     lda c64_test_restart_after_save_armed
     beq !restart_test_done+
