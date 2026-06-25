@@ -42,7 +42,7 @@
 .segmentdef StartupOverlay    [outPrg=OVL_OUT + "/ovl.start", start=$e000, min=$e000, max=$efff]
 .segmentdef TownOverlay       [outPrg=OVL_OUT + "/ovl.town",  start=$e000, min=$e000, max=$efff]
 .segmentdef DeathOverlay      [outPrg=OVL_OUT + "/ovl.death", start=$e000, min=$e000, max=$efff]
-.segmentdef RoyalOverlay      [outPrg=OVL_OUT + "/ovl.royal", start=$e000, min=$e000, max=$efff]
+.segmentdef ModalMiscOverlay      [outPrg=OVL_OUT + "/ovl.modal", start=$e000, min=$e000, max=$efff]
 .segmentdef DungeonGenOverlay [outPrg=OVL_OUT + "/ovl.gen",   start=$e000, min=$e000, max=$efff]
 .segmentdef HelpOverlay       [outPrg=OVL_OUT + "/ovl.help",  start=$e000, min=$e000, max=$efff]
 .segmentdef UiOverlay         [outPrg=OVL_OUT + "/ovl.ui",    start=$e000, min=$e000, max=$efff]
@@ -938,9 +938,9 @@ tramp_game_over_run:
 
 tramp_winner_royal:
     jsr disk_prompt_game
-    lda #hal_storage_royal_name_len
-    ldx #<hal_storage_royal_name
-    ldy #>hal_storage_royal_name
+    lda #hal_storage_modal_misc_name_len
+    ldx #<hal_storage_modal_misc_name
+    ldy #>hal_storage_modal_misc_name
     jsr hal_asset_load_prg_header
     bcs !done+
     lda #0
@@ -4982,13 +4982,13 @@ ovl_death_end:
 .assert "Death overlay fits in $E000-$EFFF", ovl_death_end <= $f000, true
 
 // ============================================================
-// Royal overlay — winner retirement art at $E000
+// Modal-misc overlay — winner retirement art at $E000
 // ============================================================
-.segment RoyalOverlay
+.segment ModalMiscOverlay
     #import "../../../core/royal.s"
-ovl_royal_end:
-.print "Royal overlay: " + (ovl_royal_end - $e000) + " bytes at $E000-$" + toHexString(ovl_royal_end)
-.assert "Royal overlay fits in $E000-$EFFF", ovl_royal_end <= $f000, true
+ovl_modal_misc_end:
+.print "Modal-misc overlay: " + (ovl_modal_misc_end - $e000) + " bytes at $E000-$" + toHexString(ovl_modal_misc_end)
+.assert "Modal-misc overlay fits in $E000-$EFFF", ovl_modal_misc_end <= $f000, true
 
 // ============================================================
 // Help overlay — dedicated help screen at $E000

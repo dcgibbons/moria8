@@ -28,7 +28,7 @@
 .label hal_storage_chrin = c64_disk_chrin
 .label hal_storage_chrout = KERNAL_CHROUT
 .label hal_storage_clrchn = c64_disk_clrchn
-.label hal_storage_readst = KERNAL_READST
+.label hal_storage_readst = c64_disk_readst
 .label hal_storage_load = KERNAL_LOAD
 .label hal_storage_read_command_status = c64_storage_read_command_status
 .label hal_storage_command_status = disk_save_media_status
@@ -96,8 +96,7 @@ hal_storage_init_selected_drive:
 // Platform-owned save-disk marker filenames and marker bytes. C64 product
 // marker I/O uses the low resident copies in main.s so these HAL names stay as
 // zero-byte aliases instead of duplicating the data in default RAM.
-hal_storage_init_command:
-    .byte $49, $30                              // "I0"
+.label hal_storage_init_command = c64_init_command_low
 
 .label hal_storage_marker_magic = c64_marker_magic_low
 .label hal_storage_marker_magic_len = 6
@@ -208,14 +207,14 @@ hal_storage_overlay_spell_name:
     .byte $36,$34,$2e,$53,$50,$45,$4c,$4c       // "64.SPELL"
 .label hal_storage_overlay_spell_name_len = * - hal_storage_overlay_spell_name
     .byte 0
-hal_storage_royal_name:
-    .byte $36,$34,$2e,$52,$4f,$59,$41,$4c       // "64.ROYAL"
-.label hal_storage_royal_name_len = * - hal_storage_royal_name
+hal_storage_modal_misc_name:
+    .byte $36,$34,$2e,$4d,$4f,$44,$41,$4c       // "64.MODAL"
+.label hal_storage_modal_misc_name_len = * - hal_storage_modal_misc_name
     .byte 0
 
 hal_storage_overlay_name_lo:
-    .byte <hal_storage_overlay_start_name, <hal_storage_overlay_town_name, <hal_storage_overlay_death_name, <hal_storage_overlay_gen_name, <hal_storage_overlay_help_name, <hal_storage_overlay_ui_name, <hal_storage_overlay_items_name, <hal_storage_overlay_spell_name, <hal_storage_royal_name
+    .byte <hal_storage_overlay_start_name, <hal_storage_overlay_town_name, <hal_storage_overlay_death_name, <hal_storage_overlay_gen_name, <hal_storage_overlay_help_name, <hal_storage_overlay_ui_name, <hal_storage_overlay_items_name, <hal_storage_overlay_spell_name, <hal_storage_modal_misc_name
 hal_storage_overlay_name_hi:
-    .byte >hal_storage_overlay_start_name, >hal_storage_overlay_town_name, >hal_storage_overlay_death_name, >hal_storage_overlay_gen_name, >hal_storage_overlay_help_name, >hal_storage_overlay_ui_name, >hal_storage_overlay_items_name, >hal_storage_overlay_spell_name, >hal_storage_royal_name
+    .byte >hal_storage_overlay_start_name, >hal_storage_overlay_town_name, >hal_storage_overlay_death_name, >hal_storage_overlay_gen_name, >hal_storage_overlay_help_name, >hal_storage_overlay_ui_name, >hal_storage_overlay_items_name, >hal_storage_overlay_spell_name, >hal_storage_modal_misc_name
 hal_storage_overlay_name_len:
-    .byte hal_storage_overlay_start_name_len, hal_storage_overlay_town_name_len, hal_storage_overlay_death_name_len, hal_storage_overlay_gen_name_len, hal_storage_overlay_help_name_len, hal_storage_overlay_ui_name_len, hal_storage_overlay_items_name_len, hal_storage_overlay_spell_name_len, hal_storage_royal_name_len
+    .byte hal_storage_overlay_start_name_len, hal_storage_overlay_town_name_len, hal_storage_overlay_death_name_len, hal_storage_overlay_gen_name_len, hal_storage_overlay_help_name_len, hal_storage_overlay_ui_name_len, hal_storage_overlay_items_name_len, hal_storage_overlay_spell_name_len, hal_storage_modal_misc_name_len

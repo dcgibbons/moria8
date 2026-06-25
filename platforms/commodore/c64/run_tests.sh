@@ -431,6 +431,7 @@ run_scripted_spell_cast_smoke() {
             -write ../../../build/test/c64/ovl.start "64.start" \
             -write ../../../build/test/c64/ovl.town "64.town" \
             -write ../../../build/test/c64/ovl.death "64.death" \
+            -write ../../../build/test/c64/ovl.modal "64.modal" \
             -write ../../../build/test/c64/ovl.gen "64.gen" \
             -write ../../../build/test/c64/ovl.help "64.help" \
             -write ../../../build/test/c64/ovl.ui "64.ui" \
@@ -590,6 +591,7 @@ run_scripted_book_overlay_smoke() {
             -write ../../../build/test/c64/ovl.start "64.start" \
             -write ../../../build/test/c64/ovl.town "64.town" \
             -write ../../../build/test/c64/ovl.death "64.death" \
+            -write ../../../build/test/c64/ovl.modal "64.modal" \
             -write ../../../build/test/c64/ovl.gen "64.gen" \
             -write ../../../build/test/c64/ovl.help "64.help" \
             -write ../../../build/test/c64/ovl.ui "64.ui" \
@@ -744,6 +746,7 @@ run_scripted_scroll_selector_smoke() {
             -write ../../../build/test/c64/ovl.start "64.start" \
             -write ../../../build/test/c64/ovl.town "64.town" \
             -write ../../../build/test/c64/ovl.death "64.death" \
+            -write ../../../build/test/c64/ovl.modal "64.modal" \
             -write ../../../build/test/c64/ovl.gen "64.gen" \
             -write ../../../build/test/c64/ovl.help "64.help" \
             -write ../../../build/test/c64/ovl.ui "64.ui" \
@@ -897,6 +900,7 @@ run_scripted_spell_list_overlay_smoke() {
             -write ../../../build/test/c64/ovl.start "64.start" \
             -write ../../../build/test/c64/ovl.town "64.town" \
             -write ../../../build/test/c64/ovl.death "64.death" \
+            -write ../../../build/test/c64/ovl.modal "64.modal" \
             -write ../../../build/test/c64/ovl.gen "64.gen" \
             -write ../../../build/test/c64/ovl.help "64.help" \
             -write ../../../build/test/c64/ovl.ui "64.ui" \
@@ -1051,6 +1055,7 @@ run_scripted_dungeon_target_spell_smoke() {
             -write ../../../build/test/c64/ovl.start "64.start" \
             -write ../../../build/test/c64/ovl.town "64.town" \
             -write ../../../build/test/c64/ovl.death "64.death" \
+            -write ../../../build/test/c64/ovl.modal "64.modal" \
             -write ../../../build/test/c64/ovl.gen "64.gen" \
             -write ../../../build/test/c64/ovl.help "64.help" \
             -write ../../../build/test/c64/ovl.ui "64.ui" \
@@ -1210,6 +1215,7 @@ run_scripted_detect_evil_smoke() {
             -write ../../../build/test/c64/ovl.start "64.start" \
             -write ../../../build/test/c64/ovl.town "64.town" \
             -write ../../../build/test/c64/ovl.death "64.death" \
+            -write ../../../build/test/c64/ovl.modal "64.modal" \
             -write ../../../build/test/c64/ovl.gen "64.gen" \
             -write ../../../build/test/c64/ovl.help "64.help" \
             -write ../../../build/test/c64/ovl.ui "64.ui" \
@@ -1368,6 +1374,7 @@ run_dungeon_ascent_product_smoke() {
             -write ../../../build/test/c64/ovl.start "64.start" \
             -write ../../../build/test/c64/ovl.town "64.town" \
             -write ../../../build/test/c64/ovl.death "64.death" \
+            -write ../../../build/test/c64/ovl.modal "64.modal" \
             -write ../../../build/test/c64/ovl.gen "64.gen" \
             -write ../../../build/test/c64/ovl.help "64.help" \
             -write ../../../build/test/c64/ovl.ui "64.ui" \
@@ -1496,6 +1503,7 @@ run_disk_setup_product_smoke() {
             -write ../../../build/test/c64/ovl.start "64.start" \
             -write ../../../build/test/c64/ovl.town "64.town" \
             -write ../../../build/test/c64/ovl.death "64.death" \
+            -write ../../../build/test/c64/ovl.modal "64.modal" \
             -write ../../../build/test/c64/ovl.gen "64.gen" \
             -write ../../../build/test/c64/ovl.help "64.help" \
             -write ../../../build/test/c64/ovl.ui "64.ui" \
@@ -1510,7 +1518,9 @@ run_disk_setup_product_smoke() {
 
     local save_d64="../../../build/test/c64/moria_disk_setup_save.d64"
     rm -f "$save_d64"
-    if ! "$C1541" -format "moria8 save,m8" d64 "$save_d64" >"$build_log" 2>&1; then
+    if ! "$C1541" -format "moria8 save,m8" d64 "$save_d64" \
+            -attach "$save_d64" \
+            -write "$marker_blob" "moria8.id,s" >"$build_log" 2>&1; then
         echo "FAIL (save disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -1562,6 +1572,72 @@ run_disk_setup_product_smoke() {
     TOTAL=$((TOTAL + 1))
 }
 
+run_retirement_royal_product_smoke() {
+    local name="retirement_royal_product_smoke"
+    echo -n "  $name: "
+
+    local smoke_out build_log smoke_c64 boot_d64 main_vs
+    smoke_out=$(mktemp -d "${TMPDIR:-/tmp}/moria8-c64-retirement.XXXXXX")
+    smoke_c64="$smoke_out/c64"
+    boot_d64="$smoke_out/moria8-c64.d64"
+    main_vs="$smoke_c64/main.vs"
+    build_log=$(mktemp -t "build_${name}_log")
+
+    if ! make -s -B -C "$REPO_ROOT/platforms/commodore" \
+            KICKASS="$KICKASS" \
+            OUT="$smoke_out" \
+            KA_FLAGS64="-showmem -vicesymbols -libdir ../../core -libdir common -afo -libdir c64 -define DEBUG_FEAT_DISK_TRACE=0 -define C64_TEST_SCRIPTED_RETIREMENT_PRODUCT" \
+            build64 >"$build_log" 2>&1; then
+        echo "FAIL (product build)"
+        tail -80 "$build_log"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    if ! "$C1541" -format "moria8 c64,m8" d64 "$boot_d64" \
+            -attach "$boot_d64" \
+            -write "$smoke_c64/boot.prg" "moria8" \
+            -write "$smoke_c64/boot.prg" "boot64" \
+            -write "$smoke_c64/bootart64.prg" "bootart64" \
+            -write "$smoke_c64/moria8.prg" "moria64" \
+            -write "$smoke_c64/64.bank" "64.bank" \
+            -write "$smoke_c64/title" "t64" \
+            -write "$smoke_c64/monster.db.1" "monster.db.1" \
+            -write "$smoke_c64/monster.db.2" "monster.db.2" \
+            -write "$smoke_c64/monster.db.3" "monster.db.3" \
+            -write "$smoke_c64/monster.db.4" "monster.db.4" \
+            -write "$smoke_c64/ovl.start" "64.start" \
+            -write "$smoke_c64/ovl.town" "64.town" \
+            -write "$smoke_c64/ovl.death" "64.death" \
+            -write "$smoke_c64/ovl.modal" "64.modal" \
+            -write "$smoke_c64/ovl.gen" "64.gen" \
+            -write "$smoke_c64/ovl.help" "64.help" \
+            -write "$smoke_c64/ovl.ui" "64.ui" \
+            -write "$smoke_c64/ovl.items" "64.items" \
+            -write "$smoke_c64/ovl.spell" "64.spell" >"$build_log" 2>&1; then
+        echo "FAIL (product disk image)"
+        tail -20 "$build_log"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    if python3 -u ../plus4/tests/product_scripted_smoke.py \
+            --name "$name" \
+            --pass-symbol ".c64_test_retirement_pass_sym" \
+            --fail-symbol ".c64_test_retirement_fail_sym" \
+            --main-vs "$main_vs" \
+            --boot-d64 "$boot_d64" \
+            --vice "$VICE" \
+            --screen-base 0x0400; then
+        PASS=$((PASS + 1))
+    else
+        FAIL=$((FAIL + 1))
+    fi
+    TOTAL=$((TOTAL + 1))
+}
+
 run_save_write_product_smoke() {
     local name="save_write_product_smoke"
     echo -n "  $name: "
@@ -1607,6 +1683,7 @@ run_save_write_product_smoke() {
             -write ../../../build/test/c64/ovl.start "64.start" \
             -write ../../../build/test/c64/ovl.town "64.town" \
             -write ../../../build/test/c64/ovl.death "64.death" \
+            -write ../../../build/test/c64/ovl.modal "64.modal" \
             -write ../../../build/test/c64/ovl.gen "64.gen" \
             -write ../../../build/test/c64/ovl.help "64.help" \
             -write ../../../build/test/c64/ovl.ui "64.ui" \
@@ -1791,6 +1868,7 @@ run_save_media_fail_product_smoke() {
             -write ../../../build/test/c64/ovl.start "64.start" \
             -write ../../../build/test/c64/ovl.town "64.town" \
             -write ../../../build/test/c64/ovl.death "64.death" \
+            -write ../../../build/test/c64/ovl.modal "64.modal" \
             -write ../../../build/test/c64/ovl.gen "64.gen" \
             -write ../../../build/test/c64/ovl.help "64.help" \
             -write ../../../build/test/c64/ovl.ui "64.ui" \
@@ -1918,6 +1996,7 @@ run_change_save_drive_product_smoke() {
             -write ../../../build/test/c64/ovl.start "64.start" \
             -write ../../../build/test/c64/ovl.town "64.town" \
             -write ../../../build/test/c64/ovl.death "64.death" \
+            -write ../../../build/test/c64/ovl.modal "64.modal" \
             -write ../../../build/test/c64/ovl.gen "64.gen" \
             -write ../../../build/test/c64/ovl.help "64.help" \
             -write ../../../build/test/c64/ovl.ui "64.ui" \
@@ -2024,6 +2103,7 @@ run_disk_setup_single_drive_return_product_smoke() {
             -write ../../../build/test/c64/ovl.start "64.start" \
             -write ../../../build/test/c64/ovl.town "64.town" \
             -write ../../../build/test/c64/ovl.death "64.death" \
+            -write ../../../build/test/c64/ovl.modal "64.modal" \
             -write ../../../build/test/c64/ovl.gen "64.gen" \
             -write ../../../build/test/c64/ovl.help "64.help" \
             -write ../../../build/test/c64/ovl.ui "64.ui" \
@@ -2046,9 +2126,7 @@ run_disk_setup_single_drive_return_product_smoke() {
         TOTAL=$((TOTAL + 1))
         return
     fi
-    if ! "$C1541" -format "moria8 save,m8" d64 "$save_d64" \
-            -attach "$save_d64" \
-            -write "$marker_blob" "moria8.id,s" >"$build_log" 2>&1; then
+    if ! "$C1541" -format "moria8 save,m8" d64 "$save_d64" >"$build_log" 2>&1; then
         echo "FAIL (save disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -2138,6 +2216,7 @@ run_load_resume_product_smoke() {
             -write ../../../build/test/c64/ovl.start "64.start" \
             -write ../../../build/test/c64/ovl.town "64.town" \
             -write ../../../build/test/c64/ovl.death "64.death" \
+            -write ../../../build/test/c64/ovl.modal "64.modal" \
             -write ../../../build/test/c64/ovl.gen "64.gen" \
             -write ../../../build/test/c64/ovl.help "64.help" \
             -write ../../../build/test/c64/ovl.ui "64.ui" \
@@ -2316,6 +2395,7 @@ run_single_drive_load_return_product_smoke() {
             -write ../../../build/test/c64/ovl.start "64.start" \
             -write ../../../build/test/c64/ovl.town "64.town" \
             -write ../../../build/test/c64/ovl.death "64.death" \
+            -write ../../../build/test/c64/ovl.modal "64.modal" \
             -write ../../../build/test/c64/ovl.gen "64.gen" \
             -write ../../../build/test/c64/ovl.help "64.help" \
             -write ../../../build/test/c64/ovl.ui "64.ui" \
@@ -2423,6 +2503,7 @@ run_load_then_save_new_empty_product_smoke() {
             -write ../../../build/test/c64/ovl.start "64.start" \
             -write ../../../build/test/c64/ovl.town "64.town" \
             -write ../../../build/test/c64/ovl.death "64.death" \
+            -write ../../../build/test/c64/ovl.modal "64.modal" \
             -write ../../../build/test/c64/ovl.gen "64.gen" \
             -write ../../../build/test/c64/ovl.help "64.help" \
             -write ../../../build/test/c64/ovl.ui "64.ui" \
@@ -2486,6 +2567,10 @@ run_load_then_save_new_empty_product_smoke() {
             --swap-attach8-d64 "$new_save_d64" \
             --swap2-symbol ".disk_prompt_game_required_error_shown" \
             --swap2-attach8-d64 "$swap_program_d64" \
+            --swap3-symbol ".uds_show_insert_prompt" \
+            --swap3-attach8-d64 "$new_save_d64" \
+            --swap4-symbol ".c64_test_load_then_save_new_empty_before_program_prompt" \
+            --swap4-attach8-d64 "$swap_program_d64" \
             --pass-symbol ".c64_test_load_then_save_new_empty_done" \
             --fail-symbol ".c64_test_load_then_save_new_empty_fail" \
             --limitcycles 900000000 \
@@ -2558,6 +2643,7 @@ run_single_drive_save_wrong_media_product_smoke() {
             -write ../../../build/test/c64/ovl.start "64.start" \
             -write ../../../build/test/c64/ovl.town "64.town" \
             -write ../../../build/test/c64/ovl.death "64.death" \
+            -write ../../../build/test/c64/ovl.modal "64.modal" \
             -write ../../../build/test/c64/ovl.gen "64.gen" \
             -write ../../../build/test/c64/ovl.help "64.help" \
             -write ../../../build/test/c64/ovl.ui "64.ui" \
@@ -2636,6 +2722,7 @@ run_single_drive_load_wrong_media_product_smoke() {
             -write ../../../build/test/c64/ovl.start "64.start" \
             -write ../../../build/test/c64/ovl.town "64.town" \
             -write ../../../build/test/c64/ovl.death "64.death" \
+            -write ../../../build/test/c64/ovl.modal "64.modal" \
             -write ../../../build/test/c64/ovl.gen "64.gen" \
             -write ../../../build/test/c64/ovl.help "64.help" \
             -write ../../../build/test/c64/ovl.ui "64.ui" \
@@ -2713,6 +2800,7 @@ run_single_drive_load_corrupt_product_smoke() {
             -write ../../../build/test/c64/ovl.start "64.start" \
             -write ../../../build/test/c64/ovl.town "64.town" \
             -write ../../../build/test/c64/ovl.death "64.death" \
+            -write ../../../build/test/c64/ovl.modal "64.modal" \
             -write ../../../build/test/c64/ovl.gen "64.gen" \
             -write ../../../build/test/c64/ovl.help "64.help" \
             -write ../../../build/test/c64/ovl.ui "64.ui" \
@@ -2818,6 +2906,7 @@ run_single_drive_fresh_save_product_smoke() {
             -write ../../../build/test/c64/ovl.start "64.start" \
             -write ../../../build/test/c64/ovl.town "64.town" \
             -write ../../../build/test/c64/ovl.death "64.death" \
+            -write ../../../build/test/c64/ovl.modal "64.modal" \
             -write ../../../build/test/c64/ovl.gen "64.gen" \
             -write ../../../build/test/c64/ovl.help "64.help" \
             -write ../../../build/test/c64/ovl.ui "64.ui" \
@@ -2945,6 +3034,7 @@ run_single_drive_fresh_save_no_init_product_smoke() {
             -write ../../../build/test/c64/ovl.start "64.start" \
             -write ../../../build/test/c64/ovl.town "64.town" \
             -write ../../../build/test/c64/ovl.death "64.death" \
+            -write ../../../build/test/c64/ovl.modal "64.modal" \
             -write ../../../build/test/c64/ovl.gen "64.gen" \
             -write ../../../build/test/c64/ovl.help "64.help" \
             -write ../../../build/test/c64/ovl.ui "64.ui" \
@@ -3046,6 +3136,7 @@ run_load_missing_savefile_product_smoke() {
             -write ../../../build/test/c64/ovl.start "64.start" \
             -write ../../../build/test/c64/ovl.town "64.town" \
             -write ../../../build/test/c64/ovl.death "64.death" \
+            -write ../../../build/test/c64/ovl.modal "64.modal" \
             -write ../../../build/test/c64/ovl.gen "64.gen" \
             -write ../../../build/test/c64/ovl.help "64.help" \
             -write ../../../build/test/c64/ovl.ui "64.ui" \
@@ -3379,6 +3470,7 @@ run_suite_function "scripted_scroll_selector_smoke" run_scripted_scroll_selector
 run_suite_function "scripted_spell_list_overlay_smoke" run_scripted_spell_list_overlay_smoke
 run_suite_function "scripted_dungeon_target_spell_smoke" run_scripted_dungeon_target_spell_smoke
 run_suite_function "dungeon_ascent_product_smoke" run_dungeon_ascent_product_smoke
+run_suite_function "retirement_royal_product_smoke" run_retirement_royal_product_smoke "retirement_flow_product_smoke"
 run_suite_function "disk_setup_product_smoke" run_disk_setup_product_smoke
 run_suite_function "title_disk_setup_single_drive_returns_program_prompt" run_disk_setup_single_drive_return_product_smoke "disk_setup_single_drive_return_product_smoke"
 run_suite_function "load_initialized_save" run_load_resume_product_smoke "load_resume_product_smoke"

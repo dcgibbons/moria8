@@ -558,9 +558,11 @@ c64_test_input_script:
 #else
 #if C64_TEST_SCRIPTED_LOAD_THEN_SAVE_NEW_EMPTY_PRODUCT
     .byte $20              // SPACE = acknowledge load save-disk prompt
+    .byte $31              // 1 = load from save slot 1
     .byte $20              // SPACE = acknowledge save save-disk prompt
+    .byte $20              // SPACE = acknowledge program-disk prompt for setup UI
+    .byte $20              // SPACE = acknowledge fresh save-disk insert prompt
     .byte $59              // Y = initialize fresh save disk
-    .byte $59              // Y = tolerate repeated initialize prompt after media settle
     .byte $20              // SPACE = acknowledge insert-program-disk prompt
     .byte $00
 #else

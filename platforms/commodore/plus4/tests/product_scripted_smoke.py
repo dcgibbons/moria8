@@ -730,6 +730,7 @@ def main() -> int:
         ".plus4_test_key_script",
         ".c64_test_input_idx",
         ".c64_test_input_script",
+        ".c64_test_disk_setup_single_drive_return_armed",
         ".c128_test_input_idx",
         ".c128_test_input_script",
         ".plus4_test_single_drive_stage",

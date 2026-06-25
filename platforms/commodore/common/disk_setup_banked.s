@@ -11,6 +11,8 @@
 .const FEAT_CLOSE  = hal_storage_close
 .const FEAT_CLRCHN = hal_storage_clrchn
 .const FEAT_READST = hal_storage_readst
+.const FEAT_CHKIN  = hal_storage_chkin
+.const FEAT_CHRIN  = hal_storage_chrin
 .const FEAT_CHKOUT = hal_storage_chkout
 .const FEAT_CHROUT = hal_storage_chrout
 
@@ -32,7 +34,6 @@ disk_diag_scratch_status1:.byte 0
 disk_diag_write_status0:.byte 0
 disk_diag_write_status1:.byte 0
 #endif
-
 disk_marker_init:
 #if HAL_STORAGE_COMMAND_STATUS_FROM_DISK_DIAG
     lda #$90
@@ -404,6 +405,21 @@ disk_program_media_present:
     sec
     rts
 !dpmp_open_ok:
+#if HAL_STORAGE_PROGRAM_MEDIA_READ_PROBE
+    ldx #hal_storage_program_file_num
+    jsr FEAT_CHKIN
+    bcs !dpmp_fail+
+    jsr FEAT_CHRIN
+    jsr FEAT_READST
+    and #$bf
+    bne !dpmp_fail+
+    clc
+    bcc !dpmp_close+
+!dpmp_fail:
+    sec
+!dpmp_close:
+    php
+#else
     jsr hal_storage_read_command_status
 #if HAL_STORAGE_COMMAND_STATUS_FROM_DISK_DIAG || HAL_STORAGE_COMMAND_STATUS_FROM_ERROR_DIAG
     jsr hal_storage_command_status
@@ -411,12 +427,17 @@ disk_program_media_present:
     lda disk_status
 #endif
     pha
+#endif
     lda #hal_storage_program_file_num
     jsr FEAT_CLOSE
     jsr FEAT_CLRCHN
     jsr disk_kernal_exit
+#if HAL_STORAGE_PROGRAM_MEDIA_READ_PROBE
+    plp
+#else
     pla
     cmp #1
+#endif
     rts
 #endif
 

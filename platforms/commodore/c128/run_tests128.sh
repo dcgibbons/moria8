@@ -2541,7 +2541,7 @@ build_save_write_product_assets() {
             -write ../../../build/test/c128/ovl.town "128.town" \
             -write ../../../build/test/c128/ovl.start "128.start" \
             -write ../../../build/test/c128/ovl.death "128.death" \
-            -write ../../../build/test/c128/ovl.royal "128.royal" \
+            -write ../../../build/test/c128/ovl.modal "128.modal" \
             -write ../../../build/test/c128/ovl.gen "128.gen" \
             -write ../../../build/test/c128/ovl.help "128.help" \
             -write ../../../build/test/c128/ovl.ui "128.ui" \
@@ -4658,6 +4658,82 @@ run_boot_title_save_write_product_smoke() {
 
     echo "PASS"
     PASS=$((PASS + 1))
+    TOTAL=$((TOTAL + 1))
+}
+
+run_retirement_royal_smoke() {
+    local name="retirement_royal_c128_smoke"
+    echo -n "  $name: "
+
+    local smoke_out smoke_c128 boot_d64 main_vs build_log
+    smoke_out=$(mktemp -d "${TMPDIR:-/tmp}/moria8-c128-retirement.XXXXXX")
+    smoke_c128="$smoke_out/c128"
+    boot_d64="$smoke_out/moria8-c128.d64"
+    main_vs="$smoke_c128/main.vs"
+    build_log="$(test128_tmp_file test128_retirement_royal_build.log)"
+
+    if ! "${COMMODORE_MAKE[@]}" -B \
+            KICKASS="$KICKASS" \
+            OUT="$smoke_out" \
+            KA_FLAGS128="-showmem -vicesymbols -libdir ../../core -libdir common -afo -libdir c64 -define C128" \
+            build128 >"$build_log" 2>&1 || grep -q "FAILED!" "$build_log"; then
+        echo "FAIL (retirement product build failed)"
+        tail -40 "$build_log" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    if ! "$C1541" -format "moria128,m8" d64 "$boot_d64" \
+            -attach "$boot_d64" \
+            -write "$smoke_c128/boot128.prg" "boot128" \
+            -write "$smoke_c128/moria128.prg" "moria128" \
+            -write "$smoke_c128/title" "t128" \
+            -write "$smoke_c128/monster.db.1" "monster.db.1" \
+            -write "$smoke_c128/monster.db.2" "monster.db.2" \
+            -write "$smoke_c128/monster.db.3" "monster.db.3" \
+            -write "$smoke_c128/monster.db.4" "monster.db.4" \
+            -write "$smoke_c128/ovl.town" "128.town" \
+            -write "$smoke_c128/ovl.start" "128.start" \
+            -write "$smoke_c128/ovl.death" "128.death" \
+            -write "$smoke_c128/ovl.modal" "128.modal" \
+            -write "$smoke_c128/ovl.gen" "128.gen" \
+            -write "$smoke_c128/ovl.help" "128.help" \
+            -write "$smoke_c128/ovl.ui" "128.ui" \
+            -write "$smoke_c128/ovl.items" "128.items" \
+            -write "$smoke_c128/ovl.disarm" "128.disarm" \
+            -write "$smoke_c128/128.runtime.prg" "128.runtime" \
+            -write "$smoke_c128/128.input.prg" "128.input" \
+            -write "$smoke_c128/128.proj.prg" "128.proj" \
+            -write "$smoke_c128/128.fdisk.prg" "128.fdisk" \
+            -write "$smoke_c128/128.diskio.prg" "128.diskio" \
+            -write "$smoke_c128/128.world.prg" "128.world" \
+            -write "$smoke_c128/128.item.prg" "128.item" \
+            -write "$smoke_c128/128.names.prg" "128.names" \
+            -write "$smoke_c128/128.select.prg" "128.select" \
+            -write "$smoke_c128/128.persist.prg" "128.persist" \
+            -write "$smoke_c128/128.play.prg" "128.play" \
+            -write "$smoke_c128/128.bank.prg" "128.bank" >"$build_log" 2>&1; then
+        echo "FAIL (retirement product disk build failed)"
+        tail -20 "$build_log" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    if python3 -u ../plus4/tests/product_scripted_smoke.py \
+            --name "$name" \
+            --vice "$VICE" \
+            --boot-d64 "$boot_d64" \
+            --main-vs "$main_vs" \
+            --start-symbol ".title_menu_ready" \
+            --resume-symbol ".tramp_winner_royal" \
+            --pass-symbol ".royal_screen" \
+            --screen-base 0x0400; then
+        PASS=$((PASS + 1))
+    else
+        FAIL=$((FAIL + 1))
+    fi
     TOTAL=$((TOTAL + 1))
 }
 
@@ -7643,6 +7719,7 @@ run_selected_suites() {
     run_named_suite boot_title_load_missing_savefile_smoke --alias missing_device_or_no_disk run_boot_title_load_missing_savefile_smoke || return 1
     run_named_suite boot_title_load_mounted_save_smoke run_boot_title_load_mounted_save_smoke || return 1
     run_named_suite dual_drive_load_then_save_no_program_prompt --alias save_existing_overwrite --alias boot_title_save_write_product_smoke run_boot_title_save_write_product_smoke || return 1
+    run_named_suite retirement_royal_c128_smoke --alias retirement_flow_c128 run_retirement_royal_smoke || return 1
     run_named_suite change_save_drive_after_save --alias boot_title_change_save_drive_smoke --alias alternate_drive_change_smoke --alias alternate_drive_prompt_no_repeat run_boot_title_change_save_drive_smoke || return 1
     run_named_suite boot_title_save_media_fail_product_smoke --alias wrong_media_detection_selected_devices --alias write_protected_or_forced_write_error run_boot_title_save_media_fail_product_smoke || return 1
     run_named_suite single_drive_save_program_disk_rejected --alias boot_title_single_drive_save_wrong_media_smoke --alias wrong_media_recovery run_boot_title_single_drive_save_wrong_media_smoke || return 1
