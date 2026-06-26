@@ -741,6 +741,9 @@ disk_prompt_game_required_error_shown:
     jmp !prompt-
 #endif
 !ready:
+#if HAL_STORAGE_SWAP_PROMPT_LEGACY_SETUP_SKIP
+    jsr disk_note_program_media_current
+#endif
     rts
 #endif
 

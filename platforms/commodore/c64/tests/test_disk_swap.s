@@ -16,6 +16,7 @@
 // 12. FEAT KERNAL wrappers keep caller-safe ZP intact while using KERNAL-volatiles
 // 13. disk_prompt_save consumes the fresh C64 one-drive setup state once
 // 14. disk_prompt clears the full modal immediately after key dismiss
+// 15. disk_prompt_game invalidates the fresh save-disk skip state
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_start)
@@ -78,6 +79,7 @@ post_key_pre_init_clear_calls: .byte 0
 screen_clear_row_calls:  .byte 0
 input_get_key_calls:     .byte 0
 save_prompt_count:       .byte 0
+game_prompt_count:       .byte 0
 press_prompt_count:      .byte 0
 kernal_setnam_calls:     .byte 0
 kernal_setnam_len:       .byte 0
@@ -176,7 +178,7 @@ c64_disk_marker_present:
 #import "../../../../core/runtime_ui_strings.s"
 #import "../../common/disk_swap.s"
 
-tc_results: .fill 14, $ff
+tc_results: .fill 15, $ff
 
 zp_save_ptr0:       .byte 0
 zp_save_ptr0_hi:    .byte 0
@@ -241,6 +243,15 @@ screen_put_string:
     inc save_prompt_count
     rts
 !check_press:
+    lda zp_ptr0
+    cmp #<ds_game_str
+    bne !check_press_text+
+    lda zp_ptr0_hi
+    cmp #>ds_game_str
+    bne !check_press_text+
+    inc game_prompt_count
+    rts
+!check_press_text:
     lda zp_ptr0
     cmp #<press_key_str
     bne !done+
@@ -810,8 +821,43 @@ test_start:
 !t14_store:
     sta tc_results + 13
 
+    // Test 15: once program media is prompted current, the fresh save-disk
+    // skip is no longer valid; the next save prompt must show UI again.
+    jsr reset_harness_state
+    lda #1
+    sta disk_mode
+    lda #2
+    sta disk_setup_done
+    lda #2
+    sta input_len
+    lda #$20
+    sta input_stream
+    sta input_stream + 1
+    jsr disk_prompt_game
+    bcs !t15_fail+
+    lda disk_setup_done
+    cmp #1
+    bne !t15_fail+
+    jsr disk_prompt_save
+    bcs !t15_fail+
+    lda game_prompt_count
+    cmp #1
+    bne !t15_fail+
+    lda save_prompt_count
+    cmp #1
+    bne !t15_fail+
+    lda input_get_key_calls
+    cmp #2
+    bne !t15_fail+
+    lda #1
+    bne !t15_store+
+!t15_fail:
+    lda #0
+!t15_store:
+    sta tc_results + 14
+
 test_finish:
-    ldx #13
+    ldx #14
 !copy:
     lda tc_results,x
     sta $0400,x

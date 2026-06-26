@@ -171,6 +171,9 @@ c64_test_restart_after_save_armed: .byte 0
 #if C64_TEST_SCRIPTED_DISK_SETUP_SINGLE_DRIVE_RETURN_PRODUCT
 c64_test_disk_setup_single_drive_return_armed: .byte 0
 #endif
+#if C64_TEST_SCRIPTED_DISK_SETUP_THEN_LOAD_PRODUCT
+c64_test_disk_setup_then_load_started: .byte 0
+#endif
 #if C64_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_RETURN_PRODUCT
 c64_test_single_drive_load_return_resume_low:
     lda #$36                // Monitor attach/resume may expose BASIC ROM.
@@ -745,7 +748,13 @@ c64_test_single_drive_fresh_save_no_init_return:
 c64_test_single_drive_fresh_save_unexpected_return:
     brk
 #endif
-#if C64_TEST_SCRIPTED_DISK_SETUP_SINGLE_DRIVE_RETURN_PRODUCT
+#if C64_TEST_SCRIPTED_DISK_SETUP_SINGLE_DRIVE_RETURN_PRODUCT || C64_TEST_SCRIPTED_DISK_SETUP_THEN_LOAD_PRODUCT
+#if C64_TEST_SCRIPTED_DISK_SETUP_THEN_LOAD_PRODUCT
+    lda c64_test_disk_setup_then_load_started
+    bne !disk_setup_then_load_continue+
+    lda #1
+    sta c64_test_disk_setup_then_load_started
+#endif
     lda #8
     sta program_device
     sta save_device
@@ -759,6 +768,9 @@ c64_test_single_drive_fresh_save_unexpected_return:
 c64_test_disk_setup_single_drive_return_wait_for_harness:
     jmp c64_test_disk_setup_single_drive_return_wait_for_harness
 c64_test_disk_setup_single_drive_return_before_disk_setup:
+#if C64_TEST_SCRIPTED_DISK_SETUP_THEN_LOAD_PRODUCT
+!disk_setup_then_load_continue:
+#endif
 #endif
 
 title_menu_loop:
@@ -789,7 +801,7 @@ title_menu_loop:
 c64_test_after_disk_setup_product:
 #endif
     jmp title_enter_menu
-#if C64_TEST_SCRIPTED_DISK_SETUP_SINGLE_DRIVE_RETURN_PRODUCT
+#if C64_TEST_SCRIPTED_DISK_SETUP_SINGLE_DRIVE_RETURN_PRODUCT || C64_TEST_SCRIPTED_DISK_SETUP_THEN_LOAD_PRODUCT
 c64_test_disk_setup_single_drive_return_unexpected_return:
     brk
 #endif
