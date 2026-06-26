@@ -20,13 +20,15 @@
 .segmentdef StartupOverlay    [outPrg=OVL_OUT + "/ovl.start", start=$e000, min=$e000, max=$efff]
 .segmentdef TownOverlay       [outPrg=OVL_OUT + "/ovl.town",  start=$e000, min=$e000, max=$efff]
 .segmentdef DeathOverlay      [outPrg=OVL_OUT + "/ovl.death", start=$e000, min=$e000, max=$efff]
-.segmentdef RoyalOverlay      [outPrg=OVL_OUT + "/ovl.royal", start=$e000, min=$e000, max=$efff]
+.segmentdef ModalMiscOverlay      [outPrg=OVL_OUT + "/ovl.modal", start=$e000, min=$e000, max=$efff]
 .segmentdef HelpOverlay       [outPrg=OVL_OUT + "/ovl.help",  start=$e000, min=$e000, max=$efff]
 .segmentdef UiOverlay         [outPrg=OVL_OUT + "/ovl.ui",    start=$e000, min=$e000, max=$efff]
 .segmentdef ItemActionsOverlay [outPrg=OVL_OUT + "/ovl.items", start=$e000, min=$e000, max=$efff]
 .segmentdef SpellOverlay      [outPrg=OVL_OUT + "/ovl.spell", start=$e000, min=$e000, max=$efff]
 .segmentdef DungeonGenOverlay [outPrg=OVL_OUT + "/ovl.gen",   start=$e000, min=$e000, max=$efff]
 .segmentdef RuntimeBanked     [outPrg=OVL_OUT + "/4.bank",    start=$f000, min=$f000, max=$ff00]
+
+#import "../common/save_slot_policy.s"
 
 .const TED_BG      = $ff15
 .const TED_BORDER  = $ff19
@@ -328,8 +330,6 @@ tramp_dig_ability:
 current_overlay: .byte 0
 ovl_reu_start_lo: .byte 0, 0, 0, 0, 0, 0, 0, 0, 0
 ovl_reu_start_hi: .byte 0, 0, 0, 0, 0, 0, 0, 0, 0
-ovl_reu_size_lo:  .byte 0, 0, 0, 0, 0, 0, 0, 0, 0
-ovl_reu_size_hi:  .byte 0, 0, 0, 0, 0, 0, 0, 0, 0
 ol_target:        .byte 0
 
 #define OVERLAY_LOAD_PROMPT_GAME
@@ -555,6 +555,8 @@ restart_entry:
     jsr rng_seed
 
 title_enter_menu:
+    lda #$ff
+    sta save_slot_index
 #if PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT
     lda plus4_test_single_drive_fresh_save_armed
     beq !plus4_test_single_drive_fresh_save_not_restart+
@@ -619,6 +621,24 @@ plus4_test_disk_setup_single_drive_return_before_disk_setup:
 
 #if PLUS4_TEST_SCRIPTED_WAND_SELECTOR_PRODUCT
     jsr plus4_test_wand_selector_overlay_return
+#endif
+
+#if PLUS4_TEST_SCRIPTED_RETIREMENT_PRODUCT
+    lda #8
+    sta program_device
+    lda #9
+    sta save_device
+    lda #2
+    sta disk_mode
+    lda #1
+    sta disk_setup_done
+    jsr tramp_winner_royal
+plus4_test_retirement_unexpected_return:
+    jmp plus4_test_retirement_unexpected_return
+plus4_test_retirement_pass_sym:
+    jmp plus4_test_retirement_pass_sym
+plus4_test_retirement_fail_sym:
+    jmp plus4_test_retirement_fail_sym
 #endif
 
 #if PLUS4_TEST_SCRIPTED_LOAD_RESUME_PRODUCT || PLUS4_TEST_SCRIPTED_LOAD_MISSING_SAVE_PRODUCT || PLUS4_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || PLUS4_TEST_SCRIPTED_LOAD_WRONG_MEDIA_PRODUCT
@@ -967,9 +987,16 @@ title_load_game:
     jsr rng_seed
     lda #SFX_PICKUP
     jsr hal_sound_play
+#if !BYPASS_SLOT_PROMPT
+    jsr save_prepare_slot_prompt
+    bcs !title_load_fail+
+#endif
     jsr disk_prompt_save        // Swap to save disk if dual
     jsr ui_clear_full_screen_safe
     jsr ui_reset_message_state
+#if !BYPASS_SLOT_PROMPT
+    jsr save_select_slot_prompt
+#endif
     jsr load_game
     // Fail closed on the explicit load carry result before resuming gameplay.
     bcc !title_load_fail+
@@ -1233,8 +1260,6 @@ plus4_platform_services_install:
 // UI screen trampolines — help and modal UI load from $E000 overlays
 // ============================================================
 overlay_load_no_kernal:
-    pha
-    pla
     jsr overlay_load
     bcs !done+
     sei
@@ -1242,6 +1267,18 @@ overlay_load_no_kernal:
     jsr plus4_bank_ram
 !done:
     rts
+
+#if !BYPASS_SLOT_PROMPT
+save_prepare_slot_prompt:
+    lda #OVL_MODAL_MISC
+    jmp overlay_load_no_kernal
+
+save_select_slot_prompt:
+    sei
+    jsr plus4_bank_ram
+    jsr save_select_slot_prompt_impl
+    jmp plus4_platform_runtime_resync
+#endif
 
 tramp_ui_help_display:
     lda #OVL_HELP
@@ -1737,16 +1774,25 @@ tramp_game_over_run:
 
 tramp_winner_royal:
     jsr disk_prompt_game
-    lda #hal_storage_royal_name_len
-    ldx #<hal_storage_royal_name
-    ldy #>hal_storage_royal_name
+    lda #hal_storage_modal_misc_name_len
+    ldx #<hal_storage_modal_misc_name
+    ldy #>hal_storage_modal_misc_name
     jsr hal_asset_load_prg_header
+#if PLUS4_TEST_SCRIPTED_RETIREMENT_PRODUCT
+    bcc !retirement_loaded+
+    jmp plus4_test_retirement_fail_sym
+!retirement_loaded:
+#else
     bcs !done+
+#endif
     lda #0
     sta current_overlay
     sei
     jsr plus4_bank_ram
     jsr royal_screen
+#if PLUS4_TEST_SCRIPTED_RETIREMENT_PRODUCT
+    jmp plus4_test_retirement_pass_sym
+#endif
     jsr plus4_bank_ram
 !done:
     rts
@@ -2043,13 +2089,14 @@ ovl_death_end:
 .assert "Death overlay fits in $E000-$EFFF", ovl_death_end <= $F000, true
 
 // ============================================================
-// Royal overlay — winner retirement art at $E000
+// Modal-misc overlay — winner retirement art at $E000
 // ============================================================
-.segment RoyalOverlay
+.segment ModalMiscOverlay
     #import "../../../core/royal.s"
-ovl_royal_end:
-.print "Royal overlay: " + (ovl_royal_end - $e000) + " bytes at $E000-$" + toHexString(ovl_royal_end)
-.assert "Royal overlay fits in $E000-$EFFF", ovl_royal_end <= $F000, true
+    #import "../common/save_slot_menu.s"
+ovl_modal_misc_end:
+.print "Modal-misc overlay: " + (ovl_modal_misc_end - $e000) + " bytes at $E000-$" + toHexString(ovl_modal_misc_end)
+.assert "Modal-misc overlay fits in $E000-$EFFF", ovl_modal_misc_end <= $F000, true
 
 // ============================================================
 // Spell overlay — spell/prayer execution at $E000

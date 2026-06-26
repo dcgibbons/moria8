@@ -726,17 +726,6 @@ reu_stash_overlays:
     cpx #(REU_OVERLAY_COUNT + 1)
     bne !rso_loop-
 
-    // Set overlay sizes (all 4KB = $1000) and activate REU path
-    ldx #1
-!rso_sizes:
-    lda #$00
-    sta ovl_reu_size_lo,x
-    lda #$10
-    sta ovl_reu_size_hi,x
-    inx
-    cpx #(REU_OVERLAY_COUNT + 1)
-    bne !rso_sizes-
-
     lda #1
     sta reu_overlays_stashed
     rts

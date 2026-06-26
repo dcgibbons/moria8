@@ -32,6 +32,7 @@
 #define C128_PRODUCT_MODAL_PERSIST
 #define HAL_STORAGE_PROGRAM_MEDIA_PRESENT_EXTERNAL
 #define STORAGE_STATUS_HELPER
+#import "../common/save_slot_policy.s"
 .const C128_MEDIA_UNKNOWN = 0
 .const C128_MEDIA_PROGRAM = 1
 .const C128_MEDIA_SAVE    = 2
@@ -42,7 +43,7 @@
 .segmentdef StartupOverlay    [outPrg=OVL_OUT + "/ovl.start", start=$e000, min=$e000, max=$efff]
 .segmentdef TownOverlay       [outPrg=OVL_OUT + "/ovl.town",  start=$e000, min=$e000, max=$efff]
 .segmentdef DeathOverlay      [outPrg=OVL_OUT + "/ovl.death", start=$e000, min=$e000, max=$efff]
-.segmentdef RoyalOverlay      [outPrg=OVL_OUT + "/ovl.royal", start=$e000, min=$e000, max=$efff]
+.segmentdef ModalMiscOverlay      [outPrg=OVL_OUT + "/ovl.modal", start=$e000, min=$e000, max=$efff]
 .segmentdef DungeonGenOverlay [outPrg=OVL_OUT + "/ovl.gen",   start=$e000, min=$e000, max=$efff]
 .segmentdef HelpOverlay       [outPrg=OVL_OUT + "/ovl.help",  start=$e000, min=$e000, max=$efff]
 .segmentdef UiOverlay         [outPrg=OVL_OUT + "/ovl.ui",    start=$e000, min=$e000, max=$efff]
@@ -938,9 +939,9 @@ tramp_game_over_run:
 
 tramp_winner_royal:
     jsr disk_prompt_game
-    lda #hal_storage_royal_name_len
-    ldx #<hal_storage_royal_name
-    ldy #>hal_storage_royal_name
+    lda #hal_storage_modal_misc_name_len
+    ldx #<hal_storage_modal_misc_name
+    ldy #>hal_storage_modal_misc_name
     jsr hal_asset_load_prg_header
     bcs !done+
     lda #0
@@ -2032,30 +2033,24 @@ tsi_krev_cached: .byte 0
 .const TITLE_CLEAR_AFTER_LAST_ROW_C128 = TITLE_CLEAR_LAST_ROW_C128 + 1
 
 title_clear_full_screen:
-    lda #0
-    sta title_clear_row
+    ldx #0
 !tcf_loop:
-    lda title_clear_row
+    txa
     jsr screen_clear_row
-    inc title_clear_row
-    lda title_clear_row
-    cmp #SCREEN_ROWS
+    inx
+    cpx #SCREEN_ROWS
     bcc !tcf_loop-
     rts
 
 title_clear_below_menu:
-    lda #TITLE_CLEAR_FIRST_ROW_C128
-    sta title_clear_row
+    ldx #TITLE_CLEAR_FIRST_ROW_C128
 !tcb_loop:
-    lda title_clear_row
+    txa
     jsr screen_clear_row
-    inc title_clear_row
-    lda title_clear_row
-    cmp #TITLE_CLEAR_AFTER_LAST_ROW_C128
+    inx
+    cpx #TITLE_CLEAR_AFTER_LAST_ROW_C128
     bcc !tcb_loop-
     rts
-
-title_clear_row: .byte 0
 
 // tramp_reu_show_status — banked status display hook.
 // Pinned low to avoid drifting into $D000 I/O space.
@@ -2485,7 +2480,7 @@ c128_test_load_then_save_new_empty_save:
     sta disk_setup_done
     lda #1
     sta c128_test_load_then_save_new_empty_stage
-    jsr c128_modal_require_play
+    jsr c128_modal_require_persist
 c128_test_load_then_save_new_empty_save_media_ready:
     jsr disk_marker_init
     bcs c128_test_load_then_save_new_empty_fail
@@ -2551,9 +2546,7 @@ c128_test_load_then_save_new_empty_write_proof:
     jmp game_new_start
 !not_n:
     cmp #$4c                // 'L' — load game
-    bne !not_l+
-    jmp title_load_game
-!not_l:
+    beq title_load_game
     cmp #$44                // 'D' — disk setup
     bne !title_menu_loop-
     jsr c128_modal_require_persist
@@ -2574,13 +2567,12 @@ title_load_game:
     bcc !title_setup_ready+
     jmp c128_title_require_program_media
 !title_setup_ready:
+    lda #$ff
+    sta save_slot_index
 #if C128_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_RETURN_PRODUCT
 c128_test_single_drive_load_return_before_save_media:
 #endif
-    jsr c128_require_save_media
-    bcs !title_load_fail+
-    jsr ui_prepare_fullscreen_transition
-    jsr load_game
+    jsr c128_modal_load_game
     bcc !title_load_fail+
 #if C128_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_RETURN_PRODUCT
 c128_test_single_drive_load_return_loaded:
@@ -2990,6 +2982,9 @@ c128_modal_save_game:
     jsr c128_modal_require_persist
     jsr c128_require_save_media
     bcs !save_fail+
+#if !BYPASS_SLOT_PROMPT
+    jsr save_select_slot_prompt
+#endif
     jsr ui_prepare_fullscreen_transition
     jsr save_game
     bcc !save_done+
@@ -3009,8 +3004,16 @@ c128_test_after_save_before_play_media:
 c128_modal_load_game:
     jsr c128_modal_require_persist
     jsr c128_require_save_media
+    bcs !load_fail+
+#if !BYPASS_SLOT_PROMPT
+    jsr save_select_slot_prompt
+#endif
     jsr ui_prepare_fullscreen_transition
     jsr load_game
+!load_done:
+    rts
+!load_fail:
+    clc
     rts
 
 c128_modal_require_play:
@@ -3748,8 +3751,6 @@ current_overlay: .byte 0
 #import "hal/storage_overlay_names.s"
 ovl_reu_start_lo: .byte 0, 0, 0, 0, 0, 0, 0, 0
 ovl_reu_start_hi: .byte 0, 0, 0, 0, 0, 0, 0, 0
-ovl_reu_size_lo:  .byte 0, 0, 0, 0, 0, 0, 0, 0
-ovl_reu_size_hi:  .byte 0, 0, 0, 0, 0, 0, 0, 0
 ol_target:        .byte 0
 #if C128_TEST_OVERLAY_LOAD_FAIL_TRAP
 c128_overlay_load_disk_index:  .byte 0
@@ -3977,6 +3978,10 @@ c128_resident_select_end:
 .segment C128ResidentPersist
 c128_resident_persist_start:
 #import "../common/save.s"
+save_prepare_slot_prompt:
+    clc
+    rts
+#import "../common/save_slot_menu.s"
 c128_resident_persist_end:
 
 #define PRESS_KEY_STR_EXTERNAL
@@ -4972,13 +4977,13 @@ ovl_death_end:
 .assert "Death overlay fits in $E000-$EFFF", ovl_death_end <= $f000, true
 
 // ============================================================
-// Royal overlay — winner retirement art at $E000
+// Modal-misc overlay — winner retirement art at $E000
 // ============================================================
-.segment RoyalOverlay
+.segment ModalMiscOverlay
     #import "../../../core/royal.s"
-ovl_royal_end:
-.print "Royal overlay: " + (ovl_royal_end - $e000) + " bytes at $E000-$" + toHexString(ovl_royal_end)
-.assert "Royal overlay fits in $E000-$EFFF", ovl_royal_end <= $f000, true
+ovl_modal_misc_end:
+.print "Modal-misc overlay: " + (ovl_modal_misc_end - $e000) + " bytes at $E000-$" + toHexString(ovl_modal_misc_end)
+.assert "Modal-misc overlay fits in $E000-$EFFF", ovl_modal_misc_end <= $f000, true
 
 // ============================================================
 // Help overlay — dedicated help screen at $E000

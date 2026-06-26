@@ -60,6 +60,51 @@
 .const SAVE_IO_CHUNK_SIZE = 128
 #endif
 
+#import "save_slot_policy.s"
+
+.const SAVE_SLOT_COUNT = 4
+#if C128
+.const SAVE_SLOT_CHAR_A = $41
+.const SAVE_SLOT_CHAR_C = $43
+.const SAVE_SLOT_CHAR_D = $44
+.const SAVE_SLOT_CHAR_S = $53
+.const SAVE_SLOT_CHAR_E = $45
+.const SAVE_SLOT_CHAR_L = $4c
+.const SAVE_SLOT_CHAR_M = $4d
+.const SAVE_SLOT_CHAR_O = $4f
+.const SAVE_SLOT_CHAR_P = $50
+.const SAVE_SLOT_CHAR_T = $54
+.const SAVE_SLOT_CHAR_V = $56
+.const SAVE_SLOT_CHAR_Y = $59
+.const SAVE_SLOT_TITLE_ROW = 9
+.const SAVE_SLOT_FIRST_ROW = 11
+.const SAVE_SLOT_SELECT_ROW = 16
+.const SAVE_SLOT_TITLE_COL = (SCREEN_COLS - 11) / 2
+.const SAVE_SLOT_LINE_COL = (SCREEN_COLS - 20) / 2
+.const SAVE_SLOT_PROMPT_COL = (SCREEN_COLS - 15) / 2
+.const SAVE_SLOT_NAME_LEN = 16
+#else
+.const SAVE_SLOT_CHAR_A = $01
+.const SAVE_SLOT_CHAR_C = $03
+.const SAVE_SLOT_CHAR_D = $04
+.const SAVE_SLOT_CHAR_S = $13
+.const SAVE_SLOT_CHAR_E = $05
+.const SAVE_SLOT_CHAR_L = $0c
+.const SAVE_SLOT_CHAR_M = $0d
+.const SAVE_SLOT_CHAR_O = $0f
+.const SAVE_SLOT_CHAR_P = $10
+.const SAVE_SLOT_CHAR_T = $14
+.const SAVE_SLOT_CHAR_V = $16
+.const SAVE_SLOT_CHAR_Y = $19
+.const SAVE_SLOT_TITLE_ROW = 9
+.const SAVE_SLOT_FIRST_ROW = 11
+.const SAVE_SLOT_SELECT_ROW = 16
+.const SAVE_SLOT_TITLE_COL = (SCREEN_COLS - 11) / 2
+.const SAVE_SLOT_LINE_COL = (SCREEN_COLS - 20) / 2
+.const SAVE_SLOT_PROMPT_COL = (SCREEN_COLS - 15) / 2
+.const SAVE_SLOT_NAME_LEN = 16
+#endif
+
 // ============================================================
 // Scratch variables (before code so BRK is last in tests)
 // ============================================================
@@ -81,6 +126,7 @@ save_io_error:  .byte 0         // I/O error flag
 load_result:    .byte LOAD_RESULT_IOERR
 load_save_version: .byte 0
 load_floor_item_count: .byte 0
+save_slot_index: .byte $ff       // $ff until a slot is selected; then 0-3
 #if PLUS4_TEST_SCRIPTED_LOAD_RESUME_PRODUCT || PLUS4_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
 plus4_test_file_cksum_lo: .byte 0
 plus4_test_file_cksum_hi: .byte 0
@@ -295,19 +341,10 @@ save_block_table_post_known:
     :save_block_desc(si_to_dam, STORE_TOTAL_SLOTS)
     :save_block_desc(si_to_ac, STORE_TOTAL_SLOTS)
     :save_block_desc(si_meta, STORE_TOTAL_SLOTS)
-    :save_block_desc(stairs_up_x, 6)
-    :save_block_desc(level_entry_dir, 1)
+    :save_block_desc(stairs_up_x, 7)
     :save_block_desc(room_count, 1)
-    :save_block_desc(room_x, MAX_ROOMS)
-    :save_block_desc(room_y, MAX_ROOMS)
-    :save_block_desc(room_w, MAX_ROOMS)
-    :save_block_desc(room_h, MAX_ROOMS)
-    :save_block_desc(room_lit, MAX_ROOMS)
-    :save_block_desc(room_type, MAX_ROOMS)
-    :save_block_desc(trap_count, 1)
-    :save_block_desc(trap_x, MAX_TRAPS)
-    :save_block_desc(trap_y, MAX_TRAPS)
-    :save_block_desc(trap_type, MAX_TRAPS)
+    :save_block_desc(room_x, MAX_ROOMS * 6)
+    :save_block_desc(trap_count, 1 + (MAX_TRAPS * 3))
     :save_block_desc(monster_table, MAX_MONSTERS * MONSTER_ENTRY_SIZE)
 save_block_table_post_known_end:
 
@@ -343,6 +380,9 @@ save_block_table_floor_items_direct_end:
 .assert "Post-known save block table entries are 4 bytes", SAVE_BLOCK_POST_KNOWN_COUNT * SAVE_BLOCK_DESC_SIZE, save_block_table_post_known_end - save_block_table_post_known
 .assert "Post-floor save block table entries are 4 bytes", SAVE_BLOCK_POST_FLOOR_COUNT * SAVE_BLOCK_DESC_SIZE, save_block_table_post_floor_end - save_block_table_post_floor
 .assert "Floor-item direct save block table entries are 4 bytes", SAVE_BLOCK_FLOOR_ITEMS_DIRECT_COUNT * SAVE_BLOCK_DESC_SIZE, save_block_table_floor_items_direct_end - save_block_table_floor_items_direct
+.assert "Stair coordinates and entry direction stay contiguous", level_entry_dir - stairs_up_x + 1, 7
+.assert "Room save arrays stay contiguous", room_type - room_x + MAX_ROOMS, MAX_ROOMS * 6
+.assert "Trap save arrays stay contiguous", trap_type - trap_count + MAX_TRAPS, 1 + (MAX_TRAPS * 3)
 .assert "Floor-item direct save block table count is stable", SAVE_BLOCK_FLOOR_ITEMS_DIRECT_COUNT, SAVE_BLOCK_FLOOR_ITEMS_HEAD_COUNT + SAVE_BLOCK_FLOOR_ITEMS_STAT_COUNT
 .assert "Pre-inventory save block table count fits in one page", SAVE_BLOCK_PRE_INVENTORY_COUNT < 64, true
 .assert "Current inventory save block table count fits in one page", SAVE_BLOCK_INVENTORY_CURRENT_COUNT < 64, true
@@ -357,6 +397,7 @@ save_block_table_floor_items_direct_end:
 // ============================================================
 #if HAL_STORAGE_SAVE_CONFIRM_OVERWRITE_PROBE
 save_confirm_overwrite:
+save_confirm_probe_len:
     lda #hal_storage_save_probe_name_len
     sta save_count_lo
     lda #<hal_storage_save_probe_name
@@ -381,6 +422,7 @@ plus4_test_save_overwrite_prompt:
     beq !save_confirm_no+
     bne !save_confirm_loop-
 !save_confirm_yes:
+save_confirm_write_len:
     lda #hal_storage_save_write_name_len
     sta save_count_lo
     lda #<hal_storage_save_write_name
@@ -498,6 +540,12 @@ save_return_c64_with_carry:
     lda #BANK_NO_BASIC
     sta hal_memory_cpu_port
 #endif
+#if !BYPASS_SLOT_PROMPT
+    lda save_slot_index
+    bpl !save_slot_ready+
+    jsr save_select_slot_prompt
+!save_slot_ready:
+#endif
 #if HAL_STORAGE_SAVE_CONFIRM_OVERWRITE_PROBE
     jsr save_confirm_overwrite
     bcc save_return_fail
@@ -535,6 +583,7 @@ save_return_c64_with_carry:
     ldx save_block_lo
     ldy save_block_hi
 #else
+save_open_write_len:
     lda #hal_storage_save_write_name_len
     ldx #<hal_storage_save_write_name
     ldy #>hal_storage_save_write_name
@@ -759,6 +808,7 @@ plus4_test_load_media_fail:
 #endif
 
     // Open save file for sequential read via CHKIN/CHRIN
+load_open_read_len:
     lda #hal_storage_save_read_name_len
     ldx #<hal_storage_save_read_name
     ldy #>hal_storage_save_read_name
@@ -1893,6 +1943,7 @@ load_unstage_map_c128:
 // Clobbers: A, X, Y
 // ============================================================
 save_file_exists:
+save_file_exists_read_len:
     lda #hal_storage_save_read_name_len
     ldx #<hal_storage_save_read_name
     ldy #>hal_storage_save_read_name
@@ -1924,12 +1975,11 @@ save_file_exists:
 !sfe_chkin_ok:
     jsr SAVE_CHRIN
     jsr SAVE_READST
-    cmp #$42                // LOAD-missing status on 1541 path
-    beq !sfe_missing+
-    sec
-    bcs !sfe_close+
-!sfe_missing:
+    beq !sfe_exists+
     clc
+    bcc !sfe_close+
+!sfe_exists:
+    sec
 !sfe_close:
 !sfe_cleanup:
     php

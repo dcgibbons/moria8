@@ -572,6 +572,7 @@ run_overlay_load_smoke() {
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
+        -write "$smoke_plus4/ovl.modal" "4.modal" \
         -write "$smoke_plus4/ovl.gen" "4.gen" \
         -write "$smoke_plus4/ovl.help" "4.help" \
         -write "$smoke_plus4/ovl.ui" "4.ui" \
@@ -594,6 +595,72 @@ run_overlay_load_smoke() {
         --name "$name" \
         --pass-symbol ".plus4_test_overlay_load_pass_sym" \
         --fail-symbol ".plus4_test_overlay_load_fail_sym" \
+        --main-vs "$main_vs" \
+        --boot-d64 "$boot_d64" \
+        --vice "$VICE"; then
+        PASS=$((PASS + 1))
+    else
+        FAIL=$((FAIL + 1))
+    fi
+}
+
+run_retirement_royal_smoke() {
+    local name="retirement_royal_plus4"
+    local smoke_out
+    smoke_out="$(make_product_out "$name")"
+    local smoke_plus4="$smoke_out/plus4"
+    local main_vs="$smoke_plus4/main.vs"
+    local boot_d64="$smoke_out/moria8-plus4.d64"
+    local build_log="$PLUS4_TEST_OUT/$name.build.log"
+
+    if ! suite_selected "$name" "retirement_flow_plus4"; then
+        return
+    fi
+
+    TOTAL=$((TOTAL + 1))
+    mkdir -p "$PLUS4_TEST_OUT"
+
+    if ! make -s -B -C "$REPO_ROOT/platforms/commodore" \
+        KICKASS="$KICKASS" \
+        OUT="$smoke_out" \
+        KA_FLAGSPLUS4="-showmem -vicesymbols -libdir c64 -define PLUS4 -define PLUS4_TEST_SCRIPTED_RETIREMENT_PRODUCT" \
+        buildplus4 >"$build_log" 2>&1; then
+        echo "FAIL: $name (product build)"
+        tail -80 "$build_log"
+        FAIL=$((FAIL + 1))
+        return
+    fi
+
+    rm -f "$boot_d64"
+    if ! "$C1541" -format "moria8 plus4,m8" d64 "$boot_d64" \
+        -attach "$boot_d64" \
+        -write "$smoke_plus4/boot4.prg" "moria8" \
+        -write "$smoke_plus4/boot4.prg" "boot4" \
+        -write "$smoke_plus4/moria4.prg" "moria4" \
+        -write "$smoke_plus4/title" "t64" \
+        -write "$smoke_plus4/monster.db.1" "monster.db.1" \
+        -write "$smoke_plus4/monster.db.2" "monster.db.2" \
+        -write "$smoke_plus4/monster.db.3" "monster.db.3" \
+        -write "$smoke_plus4/monster.db.4" "monster.db.4" \
+        -write "$smoke_plus4/ovl.start" "4.start" \
+        -write "$smoke_plus4/ovl.town" "4.town" \
+        -write "$smoke_plus4/ovl.death" "4.death" \
+        -write "$smoke_plus4/ovl.modal" "4.modal" \
+        -write "$smoke_plus4/ovl.gen" "4.gen" \
+        -write "$smoke_plus4/ovl.help" "4.help" \
+        -write "$smoke_plus4/ovl.ui" "4.ui" \
+        -write "$smoke_plus4/ovl.items" "4.items" \
+        -write "$smoke_plus4/ovl.spell" "4.spell" \
+        -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
+        echo "FAIL: $name (product disk image)"
+        FAIL=$((FAIL + 1))
+        return
+    fi
+
+    if python3 -u tests/product_scripted_smoke.py \
+        --name "$name" \
+        --pass-symbol ".plus4_test_retirement_pass_sym" \
+        --fail-symbol ".plus4_test_retirement_fail_sym" \
         --main-vs "$main_vs" \
         --boot-d64 "$boot_d64" \
         --vice "$VICE"; then
@@ -2447,6 +2514,7 @@ run_new_game_to_town_smoke
 run_dungeon_entry_smoke
 run_dungeon_ascent_smoke
 run_overlay_load_smoke
+run_retirement_royal_smoke
 run_wand_selector_product_smoke
 run_disk_setup_product_smoke
 run_disk_setup_missing_save_smoke

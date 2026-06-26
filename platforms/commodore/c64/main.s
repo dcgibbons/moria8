@@ -21,7 +21,7 @@
 .segmentdef StartupOverlay    [outPrg=OVL_OUT + "/ovl.start", start=$e000, min=$e000, max=$efff]
 .segmentdef TownOverlay       [outPrg=OVL_OUT + "/ovl.town",  start=$e000, min=$e000, max=$efff]
 .segmentdef DeathOverlay      [outPrg=OVL_OUT + "/ovl.death", start=$e000, min=$e000, max=$efff]
-.segmentdef RoyalOverlay      [outPrg=OVL_OUT + "/ovl.royal", start=$e000, min=$e000, max=$efff]
+.segmentdef ModalMiscOverlay      [outPrg=OVL_OUT + "/ovl.modal", start=$e000, min=$e000, max=$efff]
 .segmentdef HelpOverlay       [outPrg=OVL_OUT + "/ovl.help",  start=$e000, min=$e000, max=$efff]
 .segmentdef UiOverlay         [outPrg=OVL_OUT + "/ovl.ui",    start=$e000, min=$e000, max=$efff]
 .segmentdef ItemActionsOverlay [outPrg=OVL_OUT + "/ovl.items", start=$e000, min=$e000, max=$efff]
@@ -30,6 +30,7 @@
 .segmentdef RuntimeBanked     [outPrg=OVL_OUT + "/64.bank",   start=$f000, min=$f000, max=$fffa]
 
 #import "hal/storage_policy.s"
+#import "../common/save_slot_policy.s"
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(entry)
@@ -82,6 +83,8 @@ exit_trampoline:
 
 c64_marker_magic_low:
     .byte $4d, $38, $53, $41, $56, $45
+c64_init_command_low:
+    .byte $49, $30
 c64_marker_name_low:
     .byte $40
     .byte $30, $3a
@@ -101,6 +104,8 @@ c64_disk_marker_write_resident:
     lda #$36
     sta $01
     cli
+    lda #hal_storage_marker_file_num
+    jsr $ffc3
     lda #c64_marker_name_low_len
     ldx #<c64_marker_name_low
     ldy #>c64_marker_name_low
@@ -128,7 +133,6 @@ c64_disk_marker_write_resident:
     cpx #hal_storage_marker_magic_len
     bcc !cdmw_write-
     clc
-    bcc !cdmw_close+
 !cdmw_close:
     php
     jsr $ffcc
@@ -161,11 +165,14 @@ c64u_turbo_prev: .byte 0
 #if C64_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT
 c64_test_save_media_fail_armed: .byte 0
 #endif
-#if C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || C64_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT
+#if C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || C64_TEST_SCRIPTED_SLOT2_SAVE_PRODUCT || C64_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT
 c64_test_restart_after_save_armed: .byte 0
 #endif
 #if C64_TEST_SCRIPTED_DISK_SETUP_SINGLE_DRIVE_RETURN_PRODUCT
 c64_test_disk_setup_single_drive_return_armed: .byte 0
+#endif
+#if C64_TEST_SCRIPTED_DISK_SETUP_THEN_LOAD_PRODUCT
+c64_test_disk_setup_then_load_started: .byte 0
 #endif
 #if C64_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_RETURN_PRODUCT
 c64_test_single_drive_load_return_resume_low:
@@ -256,6 +263,11 @@ c64_disk_chkin:
 c64_disk_chrin:
     jsr c64_disk_call
     .word $ffcf
+    rts
+
+c64_disk_readst:
+    jsr c64_disk_call
+    .word $ffb7
     rts
 
 c64_disk_clrchn:
@@ -371,10 +383,8 @@ tramp_dig_ability:
 // Overlay state is platform-owned so product/test variant layout changes
 // cannot place these bytes inside later resident code.
 current_overlay: .byte 0
-ovl_reu_start_lo: .byte 0, 0, 0, 0, 0, 0, 0, 0, 0
-ovl_reu_start_hi: .byte 0, 0, 0, 0, 0, 0, 0, 0, 0
-ovl_reu_size_lo:  .byte 0, 0, 0, 0, 0, 0, 0, 0, 0
-ovl_reu_size_hi:  .byte 0, 0, 0, 0, 0, 0, 0, 0, 0
+ovl_reu_start_lo: .fill hal_platform_overlay_count + 1, 0
+ovl_reu_start_hi: .fill hal_platform_overlay_count + 1, 0
 ol_target:        .byte 0
 
 #define OVERLAY_LOAD_PROMPT_GAME
@@ -536,7 +546,9 @@ restart_entry:
     jsr rng_seed
 
 title_enter_menu:
-#if C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || C64_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT
+    lda #$ff
+    sta save_slot_index
+#if C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || C64_TEST_SCRIPTED_SLOT2_SAVE_PRODUCT || C64_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT
     lda c64_test_restart_after_save_armed
     beq !restart_test_done+
 c64_test_after_save_restart_start:
@@ -566,6 +578,24 @@ c64_test_after_save_restart_start:
     jsr title_show_sysinfo
 
     jsr title_draw_menu
+
+#if C64_TEST_SCRIPTED_RETIREMENT_PRODUCT
+    lda #8
+    sta program_device
+    lda #9
+    sta save_device
+    lda #2
+    sta disk_mode
+    lda #1
+    sta disk_setup_done
+    jsr tramp_winner_royal
+c64_test_retirement_unexpected_return:
+    jmp c64_test_retirement_unexpected_return
+c64_test_retirement_pass_sym:
+    jmp c64_test_retirement_pass_sym
+c64_test_retirement_fail_sym:
+    jmp c64_test_retirement_fail_sym
+#endif
 
 #if C64_TEST_SCRIPTED_DISK_SETUP_SINGLE_DRIVE_RETURN_PRODUCT
     lda c64_test_disk_setup_single_drive_return_armed
@@ -691,6 +721,8 @@ c64_test_single_drive_save_wrong_media_unexpected_return:
     sta disk_mode
     lda #2
     sta disk_setup_done
+    lda #0
+    sta save_slot_index
     lda #OVL_HELP
     jsr overlay_load
     bcs c64_test_single_drive_fresh_save_unexpected_return
@@ -716,7 +748,13 @@ c64_test_single_drive_fresh_save_no_init_return:
 c64_test_single_drive_fresh_save_unexpected_return:
     brk
 #endif
-#if C64_TEST_SCRIPTED_DISK_SETUP_SINGLE_DRIVE_RETURN_PRODUCT
+#if C64_TEST_SCRIPTED_DISK_SETUP_SINGLE_DRIVE_RETURN_PRODUCT || C64_TEST_SCRIPTED_DISK_SETUP_THEN_LOAD_PRODUCT
+#if C64_TEST_SCRIPTED_DISK_SETUP_THEN_LOAD_PRODUCT
+    lda c64_test_disk_setup_then_load_started
+    bne !disk_setup_then_load_continue+
+    lda #1
+    sta c64_test_disk_setup_then_load_started
+#endif
     lda #8
     sta program_device
     sta save_device
@@ -724,9 +762,15 @@ c64_test_single_drive_fresh_save_unexpected_return:
     sta disk_mode
     lda #0
     sta disk_setup_done
+    lda #OVL_HELP
+    jsr overlay_load
+    bcs c64_test_disk_setup_single_drive_return_unexpected_return
 c64_test_disk_setup_single_drive_return_wait_for_harness:
     jmp c64_test_disk_setup_single_drive_return_wait_for_harness
 c64_test_disk_setup_single_drive_return_before_disk_setup:
+#if C64_TEST_SCRIPTED_DISK_SETUP_THEN_LOAD_PRODUCT
+!disk_setup_then_load_continue:
+#endif
 #endif
 
 title_menu_loop:
@@ -757,6 +801,10 @@ title_menu_loop:
 c64_test_after_disk_setup_product:
 #endif
     jmp title_enter_menu
+#if C64_TEST_SCRIPTED_DISK_SETUP_SINGLE_DRIVE_RETURN_PRODUCT || C64_TEST_SCRIPTED_DISK_SETUP_THEN_LOAD_PRODUCT
+c64_test_disk_setup_single_drive_return_unexpected_return:
+    brk
+#endif
 
 title_draw_menu:
     // --- Show title menu: N)EW  L)OAD  D)ISK SETUP ---
@@ -777,9 +825,16 @@ title_load_game:
     jsr rng_seed
     lda #SFX_PICKUP
     jsr hal_sound_play
+#if !BYPASS_SLOT_PROMPT
+    jsr save_prepare_slot_prompt
+    bcs !title_load_fail+
+#endif
     jsr disk_prompt_save        // Swap to save disk if dual
     jsr ui_clear_full_screen_safe
     jsr ui_reset_message_state
+#if !BYPASS_SLOT_PROMPT
+    jsr save_select_slot_prompt
+#endif
     jsr load_game
     // Fail closed on the explicit load carry result before resuming gameplay.
     bcc !title_load_fail+
@@ -794,6 +849,7 @@ c64_test_load_then_save_new_empty_before_save:
     bcs c64_test_load_then_save_new_empty_fail
     jsr save_game
     bcc c64_test_load_then_save_new_empty_fail
+c64_test_load_then_save_new_empty_before_program_prompt:
     jsr disk_prompt_game_required
 c64_test_load_then_save_new_empty_done:
     jmp c64_test_load_then_save_new_empty_done
@@ -999,7 +1055,10 @@ tramp_find_special_room:
     jmp tramp_sr_epilogue
 
 tramp_sr_epilogue:
-    jmp platform_runtime_resync_c64
+    php
+    jsr platform_runtime_resync_c64
+    plp
+    rts
 
 // ============================================================
 // Ego item trampolines — SEI + bank out KERNAL, call $F000+
@@ -1178,6 +1237,19 @@ overlay_load_no_kernal:
     sta $01
 !done:
     rts
+
+#if !BYPASS_SLOT_PROMPT
+save_prepare_slot_prompt:
+    lda #OVL_MODAL_MISC
+    jmp overlay_load_no_kernal
+
+save_select_slot_prompt:
+    sei
+    lda #BANK_NO_KERNAL
+    sta $01
+    jsr save_select_slot_prompt_impl
+    jmp platform_runtime_resync_c64
+#endif
 
 tramp_ui_help_display:
     lda #OVL_HELP
@@ -1619,12 +1691,12 @@ c64_test_disk_setup_fail_input_sym:
     brk
 #endif
 
-#if C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || C64_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT
+#if C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || C64_TEST_SCRIPTED_SLOT2_SAVE_PRODUCT || C64_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT
 c64_test_save_write_fail_input_sym:
     brk
 #endif
 
-#if C64_TEST_SCRIPTED_LOAD_RESUME_PRODUCT || C64_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_RETURN_PRODUCT
+#if C64_TEST_SCRIPTED_LOAD_RESUME_PRODUCT || C64_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_RETURN_PRODUCT || C64_TEST_SCRIPTED_SLOT2_LOAD_PRODUCT
 c64_test_load_resume_fail_input_sym:
     brk
 #endif
@@ -1649,25 +1721,24 @@ tramp_player_create:
 // Verify that the selected program disk is actually present.
 // Output: carry clear = program media present, carry set = absent/wrong media.
 c64_require_program_media:
-    lda #hal_storage_title_name_len
-    ldx #<hal_storage_title_name
-    ldy #>hal_storage_title_name
-    jsr c64_disk_setnam
-    lda #hal_storage_program_file_num
-    ldx disk_prompt_device
-    ldy #0
-    jsr c64_disk_setlfs
-    jsr c64_disk_open
-    php
-    lda #hal_storage_program_file_num
-    jsr c64_disk_close
-    jsr c64_disk_clrchn
-    plp
-    bcs !crpm_fail+
-    jsr c64_storage_read_command_status
-    lda disk_status
+    lda save_device
+    pha
+    lda disk_prompt_device
+    sta save_device
+    sei
+    lda #BANK_NO_ROMS
+    sta $01
+    jsr disk_program_media_present
+    lda #0
+    adc #0
+    pha
+    jsr platform_runtime_resync_c64
+    pla
+    tax
+    pla
+    sta save_device
+    txa
     beq !crpm_ok+
-!crpm_fail:
     sec
     rts
 !crpm_ok:
@@ -1766,11 +1837,17 @@ tramp_winner_royal:
     lda #BANK_NO_BASIC
     sta $01
     cli
-    lda #hal_storage_royal_name_len
-    ldx #<hal_storage_royal_name
-    ldy #>hal_storage_royal_name
+    lda #hal_storage_modal_misc_name_len
+    ldx #<hal_storage_modal_misc_name
+    ldy #>hal_storage_modal_misc_name
     jsr hal_asset_load_prg_header
+#if C64_TEST_SCRIPTED_RETIREMENT_PRODUCT
+    bcc !retirement_loaded+
+    jmp c64_test_retirement_fail_sym
+!retirement_loaded:
+#else
     bcs !done+
+#endif
     lda #0
     sta current_overlay
     sei
@@ -1779,6 +1856,9 @@ tramp_winner_royal:
     jsr royal_screen
     inc $01
     cli
+#if C64_TEST_SCRIPTED_RETIREMENT_PRODUCT
+    jmp c64_test_retirement_pass_sym
+#endif
 !done:
     rts
 
@@ -2147,7 +2227,7 @@ game_restart_overlay:
 
     sta current_tier
     sta tier_loaded
-#if C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
+#if C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || C64_TEST_SCRIPTED_SLOT2_SAVE_PRODUCT
     lda #1
     sta c64_test_restart_after_save_armed
 #endif
@@ -2163,13 +2243,14 @@ ovl_death_end:
 .assert "Death overlay fits in $E000-$EFFF", ovl_death_end <= $F000, true
 
 // ============================================================
-// Royal overlay — winner retirement art at $E000
+// Modal-misc overlay — winner retirement art at $E000
 // ============================================================
-.segment RoyalOverlay
+.segment ModalMiscOverlay
     #import "../../../core/royal.s"
-ovl_royal_end:
-.print "Royal overlay: " + (ovl_royal_end - $e000) + " bytes at $E000-$" + toHexString(ovl_royal_end)
-.assert "Royal overlay fits in $E000-$EFFF", ovl_royal_end <= $F000, true
+    #import "../common/save_slot_menu.s"
+ovl_modal_misc_end:
+.print "Modal-misc overlay: " + (ovl_modal_misc_end - $e000) + " bytes at $E000-$" + toHexString(ovl_modal_misc_end)
+.assert "Modal-misc overlay fits in $E000-$EFFF", ovl_modal_misc_end <= $F000, true
 
 // ============================================================
 // Spell overlay — spell/prayer execution at $E000

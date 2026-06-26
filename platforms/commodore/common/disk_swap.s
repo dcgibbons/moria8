@@ -442,6 +442,14 @@ disk_prompt_save:
 #if HAL_STORAGE_SWAP_PROMPT_FULLSCREEN || HAL_STORAGE_MEDIA_STATE_TRACKING
 !dps_prompt:
 #endif
+#if C64_TEST_SCRIPTED_DISK_SETUP_THEN_LOAD_PRODUCT
+    lda disk_setup_done
+    cmp #1
+    bne !not_c64_disk_setup_then_load+
+c64_test_disk_setup_then_load_save_prompt_seen:
+    jmp c64_test_disk_setup_then_load_save_prompt_seen
+!not_c64_disk_setup_then_load:
+#endif
     lda #<ds_save_str
     ldx #>ds_save_str
     jsr disk_prompt
@@ -479,6 +487,17 @@ disk_prompt_game:
 #if HAL_STORAGE_MEDIA_STATE_TRACKING
     lda #C128_MEDIA_PROGRAM
     sta c128_media_state
+    clc
+#elif HAL_STORAGE_SWAP_PROMPT_LEGACY_SETUP_SKIP
+disk_note_program_media_current:
+    lda disk_mode
+    cmp #1
+    bne !dpg_done_ok+
+    lda disk_setup_done
+    cmp #2
+    bne !dpg_done_ok+
+    dec disk_setup_done
+!dpg_done_ok:
     clc
 #endif
 !dpg_done:

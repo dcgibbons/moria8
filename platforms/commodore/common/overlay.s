@@ -15,6 +15,7 @@
 //   OVL_UI          = 6  Inventory/equipment/character/wizard modal UI
 //   OVL_ITEMS       = 7  Low-frequency item actions (read/aim/use/refuel)
 //   OVL_SPELL       = 8  Spell/prayer effect execution
+//   OVL_MODAL_MISC  = 9  Modal misc: winner retirement / save-slot selector
 //
 // Disk filenames are platform-owned by the storage HAL:
 // `hal_storage_overlay_name_{lo,hi,len}`.
@@ -32,6 +33,7 @@
 .const OVL_UI          = 6
 .const OVL_ITEMS       = 7
 .const OVL_SPELL       = 8
+.const OVL_MODAL_MISC  = 9
 .const OVL_COUNT       = hal_platform_overlay_count
 
 #import "compat/hal_storage_overlay_test_stub.s"
@@ -340,9 +342,9 @@ overlay_fetch_reu:
     lda #0
     sta REU_BANK
 
-    lda ovl_reu_size_lo,x
+    lda #0
     sta REU_LENLO
-    lda ovl_reu_size_hi,x
+    lda #$10
     sta REU_LENHI
     lda #0
     sta REU_CONTROL
@@ -362,11 +364,9 @@ overlay_fetch_reu:
 // ============================================================
 // REU overlay offset tables (populated by reu_stash_overlays)
 // ============================================================
-// Index 0 unused; indices 1-8 = overlay IDs
-ovl_reu_start_lo: .byte 0, 0, 0, 0, 0, 0, 0, 0, 0
-ovl_reu_start_hi: .byte 0, 0, 0, 0, 0, 0, 0, 0, 0
-ovl_reu_size_lo:  .byte 0, 0, 0, 0, 0, 0, 0, 0, 0
-ovl_reu_size_hi:  .byte 0, 0, 0, 0, 0, 0, 0, 0, 0
+// Index 0 unused; indices 1-OVL_COUNT = overlay IDs
+ovl_reu_start_lo: .fill OVL_COUNT + 1, 0
+ovl_reu_start_hi: .fill OVL_COUNT + 1, 0
 ol_target:        .byte 0
 #if C128_TEST_OVERLAY_LOAD_FAIL_TRAP
 c128_overlay_load_disk_index:  .byte 0

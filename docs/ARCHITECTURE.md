@@ -94,7 +94,7 @@ Current product payloads:
 | `ovl.start` | `$E000-$EFDF` | 4,064 bytes |
 | `ovl.town` | `$E000-$EFE3` | 4,068 bytes |
 | `ovl.death` | `$E000-$E644` | 1,605 bytes |
-| `ovl.royal` | `$E000-$E233` | 564 bytes |
+| `ovl.modal` | `$E000-$E409` | 1,034 bytes |
 | `ovl.help` | `$E000-$EEAC` | 3,757 bytes |
 | `ovl.ui` | `$E000-$EFA1` | 4,002 bytes |
 | `ovl.items` | `$E000-$EF13` | 3,860 bytes |
@@ -123,7 +123,7 @@ Current product payloads:
 | `ovl.start` | `$E000-$EFDF` | 4,064 bytes |
 | `ovl.town` | `$E000-$EFE3` | 4,068 bytes |
 | `ovl.death` | `$E000-$E85A` | 2,139 bytes |
-| `ovl.royal` | `$E000-$E233` | 564 bytes |
+| `ovl.modal` | `$E000-$E413` | 1,044 bytes |
 | `ovl.help` | `$E000-$EE9D` | 3,742 bytes |
 | `ovl.ui` | `$E000-$EFA1` | 4,002 bytes |
 | `ovl.items` | `$E000-$EC47` | 3,144 bytes |
@@ -247,7 +247,7 @@ Current product payloads:
 | `ovl.start` | `$E000-$EFDF` | 4,064 bytes |
 | `ovl.town` | `$E000-$EF6F` | 3,952 bytes |
 | `ovl.death` | `$E000-$EFF7` | 4,088 bytes |
-| `ovl.royal` | `$E000-$E233` | 564 bytes |
+| `ovl.modal` | `$E000-$E233` | 564 bytes |
 | `ovl.gen` | `$E000-$EFE7` | 4,072 bytes |
 | `ovl.help` | `$E000-$EEA6` | 3,751 bytes |
 | `ovl.ui` | `$E000-$EFF4` | 4,085 bytes |
