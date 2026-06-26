@@ -1782,7 +1782,6 @@ tramp_winner_royal:
     bcc !retirement_loaded+
     jmp plus4_test_retirement_fail_sym
 !retirement_loaded:
-    jmp plus4_test_retirement_pass_sym
 #else
     bcs !done+
 #endif
@@ -1791,6 +1790,9 @@ tramp_winner_royal:
     sei
     jsr plus4_bank_ram
     jsr royal_screen
+#if PLUS4_TEST_SCRIPTED_RETIREMENT_PRODUCT
+    jmp plus4_test_retirement_pass_sym
+#endif
     jsr plus4_bank_ram
 !done:
     rts

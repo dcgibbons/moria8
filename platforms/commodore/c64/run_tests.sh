@@ -1639,7 +1639,24 @@ run_retirement_royal_product_smoke() {
 }
 
 run_save_write_product_smoke() {
-    local name="save_write_product_smoke"
+    run_save_write_product_smoke_impl "save_write_product_smoke" \
+        "C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT" \
+        "the.game,s" \
+        '"THE.GAME".*SEQ'
+}
+
+run_slot2_save_product_smoke() {
+    run_save_write_product_smoke_impl "slot2_save_product_smoke" \
+        "C64_TEST_SCRIPTED_SLOT2_SAVE_PRODUCT" \
+        "the.game2,s" \
+        '"THE.GAME2".*SEQ'
+}
+
+run_save_write_product_smoke_impl() {
+    local name="$1"
+    local test_define="$2"
+    local save_filename="$3"
+    local expected_save_re="$4"
     echo -n "  $name: "
 
     local build_log
@@ -1657,8 +1674,8 @@ run_save_write_product_smoke() {
     fi
 
     if ! java -jar "$KICKASS" "${KICKASS_TRACE_DEFINE[@]}" main.s :OVL_OUT=../../../build/test/c64 -showmem -vicesymbols \
-            -define C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT \
-            -o ../../../build/test/c64/moria_save_write_smoke.prg >"$build_log" 2>&1; then
+            -define "$test_define" \
+            -o "../../../build/test/c64/${name}.prg" >"$build_log" 2>&1; then
         echo "FAIL (assembly error)"
         grep -i error "$build_log" | head -5
         FAIL=$((FAIL + 1))
@@ -1666,14 +1683,14 @@ run_save_write_product_smoke() {
         return
     fi
 
-    local scripted_d64="../../../build/test/c64/moria_save_write_smoke.d64"
+    local scripted_d64="../../../build/test/c64/${name}.d64"
     rm -f "$scripted_d64"
     if ! "$C1541" -format "moria8 c64,m8" d64 "$scripted_d64" \
             -attach "$scripted_d64" \
             -write ../../../build/test/c64/boot.prg "moria8" \
             -write ../../../build/test/c64/boot.prg "boot64" \
             -write ../../../build/test/c64/bootart64.prg "bootart64" \
-            -write ../../../build/test/c64/moria_save_write_smoke.prg "moria64" \
+            -write "../../../build/test/c64/${name}.prg" "moria64" \
             -write ../../../build/test/c64/64.bank "64.bank" \
             -write ../../../build/test/c64/title "t64" \
             -write ../../../build/test/c64/monster.db.1 "monster.db.1" \
@@ -1698,7 +1715,7 @@ run_save_write_product_smoke() {
 
     local save_blob="../../../build/test/c64/THE.GAME"
     local marker_blob="../../../build/test/c64/MORIA8.ID"
-    local save_d64="../../../build/test/c64/moria_save_write_save.d64"
+    local save_d64="../../../build/test/c64/${name}_save.d64"
     if ! python3 tests/make_load_resume_save64.py "$save_blob" "$marker_blob" >"$build_log" 2>&1; then
         echo "FAIL (save generation error)"
         tail -20 "$build_log"
@@ -1711,7 +1728,7 @@ run_save_write_product_smoke() {
     if ! "$C1541" -format "moria8 save,m8" d64 "$save_d64" \
             -attach "$save_d64" \
             -write "$marker_blob" "moria8.id,s" \
-            -write "$save_blob" "the.game,s" >"$build_log" 2>&1; then
+            -write "$save_blob" "$save_filename" >"$build_log" 2>&1; then
         echo "FAIL (save disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -1773,7 +1790,7 @@ run_save_write_product_smoke() {
             TOTAL=$((TOTAL + 1))
             return
         fi
-        if echo "$dir_list" | grep -qi '"THE.GAME".*SEQ'; then
+        if echo "$dir_list" | grep -qi "$expected_save_re"; then
             echo "PASS"
             PASS=$((PASS + 1))
         else
@@ -3485,6 +3502,7 @@ run_suite_function "new_save_empty_no_init_returns_setup" run_single_drive_fresh
 run_suite_function "load_missing_savefile_product_smoke" run_load_missing_savefile_product_smoke "missing_device_or_no_disk"
 run_suite_function "save_media_fail_product_smoke" run_save_media_fail_product_smoke "wrong_media_detection_selected_devices" "write_protected_or_forced_write_error"
 run_suite_function "dual_drive_load_then_save_no_program_prompt" run_save_write_product_smoke "save_existing_overwrite" "save_write_product_smoke"
+run_suite_function "slot2_save_product_smoke" run_slot2_save_product_smoke
 echo ""
 echo "=== Results: $PASS passed, $FAIL failed (of $TOTAL suites) ==="
 if [ $FAIL -gt 0 ]; then

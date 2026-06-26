@@ -1094,8 +1094,15 @@ c128_test_after_save_game:
 #if !BYPASS_SLOT_PROMPT && !C64_UNIT_TEST
     jsr save_select_slot_prompt
 #endif
+#if C64_TEST_SCRIPTED_SLOT2_SAVE_PRODUCT
+    lda save_slot_index
+    cmp #1
+    beq !slot2_save_selected+
+    jmp c64_test_save_write_fail_input_sym
+!slot2_save_selected:
+#endif
     jsr save_game
-#if C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || C64_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT
+#if C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || C64_TEST_SCRIPTED_SLOT2_SAVE_PRODUCT || C64_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT
 c64_test_after_save_game:
 #endif
 #if PLUS4_TEST_SCRIPTED_SAVE_WRITE_PRODUCT

@@ -165,7 +165,7 @@ c64u_turbo_prev: .byte 0
 #if C64_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT
 c64_test_save_media_fail_armed: .byte 0
 #endif
-#if C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || C64_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT
+#if C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || C64_TEST_SCRIPTED_SLOT2_SAVE_PRODUCT || C64_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT
 c64_test_restart_after_save_armed: .byte 0
 #endif
 #if C64_TEST_SCRIPTED_DISK_SETUP_SINGLE_DRIVE_RETURN_PRODUCT
@@ -545,7 +545,7 @@ restart_entry:
 title_enter_menu:
     lda #$ff
     sta save_slot_index
-#if C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || C64_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT
+#if C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || C64_TEST_SCRIPTED_SLOT2_SAVE_PRODUCT || C64_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT
     lda c64_test_restart_after_save_armed
     beq !restart_test_done+
 c64_test_after_save_restart_start:
@@ -1679,7 +1679,7 @@ c64_test_disk_setup_fail_input_sym:
     brk
 #endif
 
-#if C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || C64_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT
+#if C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || C64_TEST_SCRIPTED_SLOT2_SAVE_PRODUCT || C64_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT
 c64_test_save_write_fail_input_sym:
     brk
 #endif
@@ -1833,7 +1833,6 @@ tramp_winner_royal:
     bcc !retirement_loaded+
     jmp c64_test_retirement_fail_sym
 !retirement_loaded:
-    jmp c64_test_retirement_pass_sym
 #else
     bcs !done+
 #endif
@@ -1845,6 +1844,9 @@ tramp_winner_royal:
     jsr royal_screen
     inc $01
     cli
+#if C64_TEST_SCRIPTED_RETIREMENT_PRODUCT
+    jmp c64_test_retirement_pass_sym
+#endif
 !done:
     rts
 
@@ -2213,7 +2215,7 @@ game_restart_overlay:
 
     sta current_tier
     sta tier_loaded
-#if C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
+#if C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || C64_TEST_SCRIPTED_SLOT2_SAVE_PRODUCT
     lda #1
     sta c64_test_restart_after_save_armed
 #endif
