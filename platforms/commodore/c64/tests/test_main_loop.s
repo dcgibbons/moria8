@@ -1000,26 +1000,21 @@ test_start:
     sta tc_results + 3
 !t4_done:
 
-    // Test 5: OPEN success consumes a turn and reaches redraw tail.
+    // Test 5: forced full-redraw tail in search mode consumes the normal turn
+    // plus the extra search turn, then reaches full redraw.
     jsr reset_state
     lda #4
     sta test_case_idx
-    lda #1
-    sta test_dir_ok
-    sta test_open_ok
-    sta test_scene_dirty
-    lda #CMD_OPEN
-    sta test_cmd_script
-    lda #1
-    sta test_cmd_len
-    jsr run_case
-    lda test_get_dir_calls
-    cmp #1
-    bne !t5_fail+
-    lda test_door_open_calls
-    cmp #1
-    bne !t5_fail+
+    lda #PLF_SEARCHING
+    sta player_data + PL_FLAGS
+    lda #6
+    sta test_cmd_budget
+    sec
+    jsr command_result_main_or_redraw_full
     lda test_turn_calls
+    cmp #2
+    bne !t5_fail+
+    lda test_search_scan_calls
     cmp #1
     bne !t5_fail+
     lda test_update_visibility_calls

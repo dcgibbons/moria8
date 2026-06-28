@@ -310,11 +310,17 @@ eff_detect_monsters:
     sta vis_room_revealed
     rts
 
+#if C128
+.segment C128ResidentItems
+#endif
+
 eff_detect_evil_only:
-    lda #0
+    lda #1
+    sta muv_clear_detected
+    lsr
     sta eff_detect_timer
+    sta vis_room_revealed
     tax
-    stx vis_room_revealed
 !edeo_loop:
     cpx #MAX_MONSTERS
     bcs !edeo_done+
@@ -357,10 +363,6 @@ eff_detect_evil_only:
     :MapRead_ptr1_y()
     ora #(FLAG_VISITED | FLAG_LIT)
     :MapWrite_ptr1_y()
-    ldy #MX_FLAGS
-    lda (zp_ptr0),y
-    ora #MF_DETECTED
-    sta (zp_ptr0),y
     lda #1
     sta vis_room_revealed
     pla
@@ -371,6 +373,10 @@ eff_detect_evil_only:
 !edeo_done:
     lda vis_room_revealed
     rts
+
+#if C128
+.segment C128ResidentWorld
+#endif
 
 // ============================================================
 // eff_remove_curse — Clear IF_CURSED on all equipped items

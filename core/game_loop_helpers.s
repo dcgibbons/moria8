@@ -170,9 +170,13 @@ command_result_main_or_redraw_full:
 #if hal_platform_perf_p1_command_instrumentation && PERF_P1
     jsr perf_p1_set_reason_command_forced
 #endif
-	    lda #1
-	    sta turn_scene_dirty
-	    jmp post_turn_update_visibility_or_die
+    jsr turn_post_action_searchable_or_die
+    bcc !alive+
+    jmp player_died
+!alive:
+    lda #1
+    sta turn_scene_dirty
+    jmp post_turn_update_visibility_after_action
 !crrf_no_turn:
     jmp main_loop
 
@@ -230,11 +234,6 @@ turn_post_action_searchable_or_die:
     sec
     rts
 
-post_turn_redraw_full_or_die:
-    lda #1
-    sta turn_scene_dirty
-    jmp post_turn_update_visibility_or_die
-
 post_turn_status_only_or_die:
     jmp post_turn_update_visibility_or_die
 
@@ -243,6 +242,7 @@ post_turn_update_visibility_or_die:
     bcc !ptuvs_alive+
     jmp player_died
 !ptuvs_alive:
+post_turn_update_visibility_after_action:
     lda vis_room_revealed
     pha
     jsr update_visibility

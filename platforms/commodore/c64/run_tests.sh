@@ -3477,11 +3477,11 @@ run_test "turn" "tests/test_turn.s" "0400 0416" 23 500000000
 run_test "player" "tests/test_player.s" "0400 0409" 10
 run_test "dungeon" "tests/test_dungeon.s" "0400 042a" 43 500000000
 run_test "monster" "tests/test_monster.s" "0400 040c" 13 500000000
-run_test "monster_ai" "tests/test_monster_ai.s" "0400 0419" 26 500000000
+run_test "monster_ai" "tests/test_monster_ai.s" "0400 041a" 27 500000000
 run_test "combat" "tests/test_combat.s" "0400 0427" 40 500000000
 run_test "msg_long" "tests/test_msg_long.s" "0400 0400" 1 20000000
 run_test "monster_attack" "tests/test_monster_attack.s" "0400 040f" 16 500000000
-run_test "effects" "tests/test_effects.s" "0400 0431" 30 1000000000
+run_test "effects" "tests/test_effects.s" "0400 0431" 31 1000000000
 run_test "effects_magic" "tests/test_effects_magic.s" "0400 0433" 24 1000000000
 run_test "cure_light_wounds" "tests/test_cure_light_wounds.s" "0400 0402" 3 500000000
 run_test "confusion" "tests/test_confusion.s" "0400 0402" 3 500000000
@@ -3516,7 +3516,7 @@ run_test "directional_effects" "tests/test_directional_effects.s" "0400 0403" 4 
 run_test "overcast_ordering" "tests/test_overcast_ordering.s" "0400 0400" 1 500000000
 run_test "ball_effects" "tests/test_ball_effects.s" "0400 0401" 2 500000000
 run_test "utility_effects" "tests/test_utility_effects.s" "0400 0409" 10 500000000
-run_test "detect_evil" "tests/test_detect_evil.s" "0400 0402" 3 500000000
+run_test "detect_evil" "tests/test_detect_evil.s" "0400 0403" 4 500000000
 run_test "cure_light_wounds_prayer" "tests/test_cure_light_wounds_prayer.s" "0400 0402" 3 500000000
 run_test "bless_prayer" "tests/test_bless_prayer.s" "0400 0402" 3 500000000
 run_test "remove_fear_prayer" "tests/test_remove_fear_prayer.s" "0400 0402" 3 500000000
@@ -3562,7 +3562,7 @@ run_test "wands_staves" "tests/test_wands_staves.s" "0400 0406" 7 100000000
 run_test "monster_magic" "tests/test_monster_magic.s" "0400 040d" 14 500000000
 run_test "tier" "tests/test_tier.s" "0400 040d" 14 500000000
 run_test "disk_swap" "tests/test_disk_swap.s" "0400 040e" 15 500000000
-run_test "render" "tests/test_render.s" "0400 0413" 20 500000000
+run_test "render" "tests/test_render.s" "0400 0414" 21 500000000
 run_test "ranged" "tests/test_ranged.s" "0400 0409" 10 500000000
 run_test "ego" "tests/test_ego.s" "0400 0409" 10 500000000
 run_test "throw" "tests/test_throw.s" "0400 040a" 11 500000000

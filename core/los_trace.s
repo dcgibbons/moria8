@@ -120,7 +120,7 @@ mm_los_clear_to_target:
     cmp mlos_oldy
     beq !mlos_check_tile+
 
-    // Diagonal edge crossing: both orthogonal side cells must be open.
+    // Diagonal edge crossing: at least one orthogonal side cell must be open.
     ldx mlos_oldy
     lda map_row_lo,x
     sta zp_ptr0
@@ -129,7 +129,7 @@ mm_los_clear_to_target:
     ldy mm_los_cx
     :MapRead_ptr0_y()
     jsr mlos_tile_open
-    bcc !mlos_blocked+
+    bcs !mlos_check_tile+
     ldx mm_los_cy
     lda map_row_lo,x
     sta zp_ptr0

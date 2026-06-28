@@ -46,6 +46,9 @@ update_visibility:
     jsr c128_stack_guard_snapshot_banking
 #endif
 
+    lda #0
+    sta vis_room_revealed
+
     // Blindness — skip all visibility updates
     lda zp_eff_blind
     beq !uv_not_blind+
@@ -61,9 +64,6 @@ update_visibility:
     jmp !uv_done+               // Town terrain is pre-lit; monster flags still update.
 
 !uv_dungeon:
-    lda #0
-    sta vis_room_revealed
-
     // === Phase A: Torch radius ===
     // Mark all tiles within Chebyshev distance of zp_light_radius as VISITED.
     // Compute bounding box clamped to map edges.

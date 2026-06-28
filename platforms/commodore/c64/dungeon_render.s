@@ -150,7 +150,7 @@ render_viewport:
     sta zp_temp0
     lda #0
     sta zp_temp1
-    jmp !rv_no_item+
+    jmp !rv_live_monster+
 !rv_detect_blank:
     jmp !draw_blank+
 !rv_visited:
@@ -313,6 +313,7 @@ render_viewport:
     sta zp_temp1
 !rv_no_glyph:
 
+!rv_live_monster:
     // Monster check (visible tiles only — overrides items)
     lda zp_tile_tmp
     and #FLAG_OCCUPIED

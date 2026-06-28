@@ -218,6 +218,7 @@ test_start:
     jsr test_render_single_tile_detect_evil_hides_non_evil
     jsr test_render_viewport_infra_warm_unvisited
     jsr test_render_viewport_glyph_overlay
+    jsr test_render_viewport_dimmed_glyph_hidden
     jsr test_h_scroll_left_fast_path
     jsr test_left_scroll_falls_back
     jsr test_v_scroll_up_first_op_uses_copy_mode
@@ -343,9 +344,9 @@ test_render_single_tile_infra_warm_unvisited:
     sta test_row_rel
     lda #14
     sta test_col_rel
-    lda cr_display + 1
+    lda #SC_SPACE
     sta test_expected_char
-    lda vic_to_vdc_color + COL_RED
+    lda #VDC_BLACK
     sta test_expected_attr
     jsr assert_vdc_cell
     rts
@@ -455,9 +456,9 @@ test_render_single_tile_infra_warm_dimmed:
     sta test_row_rel
     lda #14
     sta test_col_rel
-    lda #SC_SPACE
+    lda cr_display + 1
     sta test_expected_char
-    lda #VDC_BLACK
+    lda vic_to_vdc_color + COL_RED
     sta test_expected_attr
     jsr assert_vdc_cell
     rts
@@ -638,9 +639,9 @@ test_render_viewport_infra_warm_unvisited:
     sta test_row_rel
     lda #14
     sta test_col_rel
-    lda cr_display + 1
+    lda #SC_SPACE
     sta test_expected_char
-    lda vic_to_vdc_color + COL_RED
+    lda #VDC_BLACK
     sta test_expected_attr
     jsr assert_vdc_cell
     rts
@@ -663,6 +664,30 @@ test_render_viewport_glyph_overlay:
     lda #14
     sta test_col_rel
     lda #SC_GLYPH
+    sta test_expected_char
+    lda #VDC_DGREY
+    sta test_expected_attr
+    jsr assert_vdc_cell
+    rts
+
+test_render_viewport_dimmed_glyph_hidden:
+    jsr setup_single_tile_scene
+    lda #1
+    sta test_glyph_active
+    lda #24
+    sta test_glyph_x
+    lda #20
+    sta test_glyph_y
+    ldx #24
+    ldy #20
+    lda #((TILE_FLOOR << 4) | FLAG_VISITED)
+    jsr map_set_tile
+    jsr render_viewport
+    lda #10
+    sta test_row_rel
+    lda #14
+    sta test_col_rel
+    lda tile_screen_codes + TILE_FLOOR
     sta test_expected_char
     lda #VDC_DGREY
     sta test_expected_attr

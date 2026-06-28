@@ -285,7 +285,6 @@ monster_process_one:
 // ============================================================
 // mat_mark_move_dirty — mark old/new monster tiles dirty only when the
 // normal local redraw does not already cover them.
-// Uses zp_mon_type for detect-evil filtering.
 // ============================================================
 mat_mark_move_dirty:
     lda mat_old_x
@@ -887,10 +886,6 @@ monster_try_step:
     sta zp_mon_x
     lda mat_target_y
     sta zp_mon_y
-    lda zp_mon_flags
-    and #~(MF_VISIBLE | MF_DETECTED) & $ff
-    sta zp_mon_flags
-
     // Clear FLAG_OCCUPIED on old tile
     ldx mat_old_y
     lda map_row_lo,x

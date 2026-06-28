@@ -3645,6 +3645,9 @@ player_get_infra_range:
 #import "../../../core/monster_magic.s"
 #import "../../../core/spell_data.s"
 #define SPELL_EFFECTS_INCLUDE_IDENTIFY
+.segment C128ResidentItems
+c128_resident_items_start:
+.segment C128ResidentWorld
 #import "../../../core/spell_effects.s"
 #undef SPELL_EFFECTS_INCLUDE_IDENTIFY
 cmb_you_str:     .text "You " ; .byte 0
@@ -3726,7 +3729,6 @@ c128_cache_state_end:
 c128_resident_world_end:
 
 .segment C128ResidentItems
-c128_resident_items_start:
 slain_str:
     .text "You have been slain." ; .byte 0
 death_source_saved:

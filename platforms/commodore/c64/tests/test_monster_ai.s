@@ -25,7 +25,7 @@ bootstrap:
 
 // test_finish — Copy results to $0400 and halt.
 test_finish:
-    ldx #25
+    ldx #26
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -147,7 +147,7 @@ tai_count:  .byte 0
 tai_attack_calls: .byte 0
 tai_rng_values:   .fill 4, 0
 tai_rng_idx:      .byte 0
-tc_results: .fill 26, $ff      // Result buffer (copied to $0400 at end)
+tc_results: .fill 27, $ff      // Result buffer (copied to $0400 at end)
 
 .macro PatchJump(target, replacement) {
     lda #$4c
@@ -2104,10 +2104,68 @@ test_start:
 !t26_attack_ok:
     lda #$01
     sta tc_results + 25
-    jmp !tests_done+
+    jmp !t27+
 !t26_fail:
     lda #$00
     sta tc_results + 25
+
+    // ==========================================
+    // Test 27: moved visible monsters keep old
+    // renderability long enough to dirty old tile.
+    // ==========================================
+!t27:
+    jsr glyph_clear_all
+    lda #0
+    sta mat_scene_dirty
+    sta mat_action_dirty
+    sta mat_fleeing
+    sta eff_detect_timer
+    lda #20
+    sta zp_player_x
+    lda #15
+    sta zp_player_y
+    lda #0
+    sta zp_view_x
+    sta zp_view_y
+    lda #1
+    sta zp_light_radius
+
+    ldx #15
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #28
+    lda #TILE_FLOOR | FLAG_VISITED | FLAG_LIT | FLAG_OCCUPIED
+    sta (zp_ptr0),y
+    iny
+    lda #TILE_FLOOR | FLAG_VISITED | FLAG_LIT
+    sta (zp_ptr0),y
+
+    lda #4
+    sta zp_mon_type
+    lda #28
+    sta zp_mon_x
+    lda #15
+    sta zp_mon_y
+    lda #(MF_AWAKE | MF_VISIBLE)
+    sta zp_mon_flags
+    lda #29
+    sta mat_target_x
+    lda #15
+    sta mat_target_y
+    jsr monster_try_step
+    bcc !t27_fail+
+    jsr mat_mark_move_dirty
+    lda mat_scene_dirty
+    cmp #1
+    bne !t27_fail+
+    lda #$01
+    sta tc_results + 26
+    jmp !tests_done+
+!t27_fail:
+    lda #$00
+    sta tc_results + 26
 
 !tests_done:
     jmp test_finish

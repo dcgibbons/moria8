@@ -21,6 +21,7 @@
 // 18. Blindness hides lit floor monsters in single-tile redraw
 // 19. Blindness hides doorway monsters in full viewport redraw
 // 20. Stale cached-room index does not reveal lit-room monsters from outside
+// 21. Detect Monsters on unvisited tiles does not render glyph overlays
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_bootstrap)
@@ -32,7 +33,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #19
+    ldx #20
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -131,7 +132,7 @@ test_glyph_x:       .byte 0
 test_glyph_y:       .byte 0
 test_expect_char:   .byte 0
 test_expect_color:  .byte 0
-tc_results:         .fill 20, $ff
+tc_results:         .fill 21, $ff
 test_infra_x:       .byte 0
 test_infra_y:       .byte 0
 vis_cached_room_idx:.byte 0
@@ -308,6 +309,7 @@ test_start:
     jsr test_blind_lit_monster_hidden
     jsr test_blind_doorway_monster_hidden
     jsr test_stale_cached_room_monster_hidden
+    jsr test_detect_monsters_unvisited_skips_glyph
     jmp test_exit_trampoline
 
 setup_scene:
@@ -1148,6 +1150,46 @@ test_stale_cached_room_monster_hidden:
 !fail:
     lda #$00
     sta tc_results + 19
+    rts
+
+test_detect_monsters_unvisited_skips_glyph:
+    jsr setup_scene
+    lda #DETECT_TIMER_TURNS
+    sta eff_detect_timer
+    lda #1
+    sta test_glyph_active
+    sta test_mon_active
+    lda #24
+    sta test_glyph_x
+    sta test_mon_x
+    lda #20
+    sta test_glyph_y
+    sta test_mon_y
+    lda #1
+    sta test_mon_type
+    lda #MF_DETECTED
+    sta test_mon_flags
+    ldx #24
+    ldy #20
+    lda #((TILE_FLOOR << 4) | FLAG_OCCUPIED)
+    jsr map_set_tile
+    jsr render_viewport
+    lda #24
+    sta zp_temp0
+    lda #20
+    sta zp_temp1
+    lda cr_display + 1
+    sta test_expect_char
+    lda cr_color + 1
+    sta test_expect_color
+    jsr assert_rendered_tile
+    bcs !fail+
+    lda #$01
+    sta tc_results + 20
+    rts
+!fail:
+    lda #$00
+    sta tc_results + 20
     rts
 
 assert_rendered_tile:

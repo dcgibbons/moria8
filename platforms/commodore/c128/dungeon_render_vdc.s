@@ -304,7 +304,7 @@ render_viewport:
     // |dy| > light_radius: entire tile guaranteed outside torch range
     lda #VDC_DGREY              // Pre-translated VDC dark grey (Opt 2)
     sta zp_temp1
-    jmp !rv_no_item+
+    jmp !rv_dimmed+
 
 !rv_check_dx:
     // |dy| <= light_radius: check |dx| = abs(map_x - player_x)
@@ -330,6 +330,10 @@ render_viewport:
     // Outside light radius → dimmed (remembered tile)
     lda #VDC_DGREY              // Pre-translated VDC dark grey (Opt 2)
     sta zp_temp1
+!rv_dimmed:
+    lda zp_tile_tmp
+    ora #FLAG_OCCUPIED          // Reuse existing no-glyph gate after monster overlay.
+    sta zp_tile_tmp
     jmp !rv_no_item+
 
 !rv_live_radius:

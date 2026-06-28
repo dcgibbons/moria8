@@ -1749,10 +1749,78 @@ test_start:
     bne !t35_fail+
     lda #$01
     sta tc_results + 34
-    jmp !tests_done+
+    jmp !t36+
 !t35_fail:
     lda #$00
     sta tc_results + 34
+
+    // ==========================================
+    // Test 36: Final diagonal open doorway target remains visible
+    // The corner blocker test above has both orthogonal side cells closed;
+    // an open doorway edge with one open side must not be over-blocked.
+    // ==========================================
+!t36:
+    jsr fill_map_rock
+    jsr monster_init_table
+    lda #0
+    sta eff_detect_timer
+    sta zp_eff_blind
+    sta zp_eff_infra
+    sta zp_player_race
+    lda #1
+    sta zp_player_dlvl
+    lda #5
+    sta zp_light_radius
+    sta player_data + PL_LIGHT_RAD
+    lda #20
+    sta zp_player_x
+    sta player_data + PL_MAP_X
+    lda #12
+    sta zp_player_y
+    sta player_data + PL_MAP_Y
+
+    ldx #12
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #20
+    lda #TILE_FLOOR | FLAG_VISITED | FLAG_LIT
+    sta (zp_ptr0),y
+    ldy #21
+    lda #TILE_FLOOR | FLAG_VISITED | FLAG_LIT
+    sta (zp_ptr0),y
+
+    ldx #11
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #20
+    lda #TILE_WALL_H | FLAG_VISITED | FLAG_LIT
+    sta (zp_ptr0),y
+    ldy #21
+    lda #TILE_DOOR_OPEN | FLAG_VISITED | FLAG_LIT
+    sta (zp_ptr0),y
+
+    lda #21
+    sta ms_spawn_x
+    lda #11
+    sta ms_spawn_y
+
+    lda #1
+    jsr monster_spawn_one
+    bcc !t36_fail+
+    jsr update_visibility
+    lda monster_table + MX_FLAGS
+    and #MF_VISIBLE
+    beq !t36_fail+
+    lda #$01
+    sta tc_results + 35
+    jmp !tests_done+
+!t36_fail:
+    lda #$00
+    sta tc_results + 35
 !tests_done:
     jmp test_finish
 
