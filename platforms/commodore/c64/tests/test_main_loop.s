@@ -1007,6 +1007,7 @@ test_start:
     lda #1
     sta test_dir_ok
     sta test_open_ok
+    sta test_scene_dirty
     lda #CMD_OPEN
     sta test_cmd_script
     lda #1
@@ -1019,6 +1020,9 @@ test_start:
     cmp #1
     bne !t5_fail+
     lda test_turn_calls
+    cmp #1
+    bne !t5_fail+
+    lda test_update_visibility_calls
     cmp #1
     bne !t5_fail+
     lda test_viewport_calls
@@ -1176,8 +1180,8 @@ test_start:
     sta tc_results + 8
     jmp !t10+
 
-    // Test 10: PICKUP success consumes a turn and stays on the status-only tail
-    // when the scene is otherwise clean.
+    // Test 10: PICKUP success consumes a turn, recomputes visibility, and uses
+    // the local redraw path when the scene is otherwise clean.
 !t10:
     jsr reset_state
     lda #9
@@ -1195,9 +1199,16 @@ test_start:
     lda test_turn_calls
     cmp #1
     bne !t10_fail+
+    lda test_update_visibility_calls
+    cmp #1
+    bne !t10_fail+
     lda test_render_full_calls
     bne !t10_fail+
     lda test_viewport_calls
+    cmp #1
+    bne !t10_fail+
+    lda test_render_local_calls
+    cmp #1
     bne !t10_fail+
     lda test_status_calls
     cmp #1

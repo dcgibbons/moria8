@@ -3641,69 +3641,6 @@ player_get_infra_range:
 !pgir_done:
     rts
 
-monster_is_infra_visible_at:
-    sta zp_temp2
-    sty zp_temp3
-
-    lda zp_eff_blind
-    bne !miiva_no+
-
-    lda zp_temp2
-    ldy zp_temp3
-    jsr monster_find_at
-    bcc !miiva_no+
-
-    jsr monster_get_ptr
-    ldy #MX_TYPE
-    lda (zp_ptr0),y
-    tax
-    lda cr_mflags,x
-    and #CF_INFRA
-    beq !miiva_no+
-
-    txa
-    pha
-    jsr player_get_infra_range
-    sta zp_temp4
-    pla
-    tax
-
-    lda zp_temp4
-    beq !miiva_no+
-
-    lda zp_temp2
-    sec
-    sbc zp_player_x
-    bcs !miiva_dx_pos+
-    eor #$ff
-    clc
-    adc #1
-!miiva_dx_pos:
-    sta zp_temp0
-
-    lda zp_temp3
-    sec
-    sbc zp_player_y
-    bcs !miiva_dy_pos+
-    eor #$ff
-    clc
-    adc #1
-!miiva_dy_pos:
-    cmp zp_temp0
-    bcs !miiva_have_dist+
-    lda zp_temp0
-!miiva_have_dist:
-    cmp zp_temp4
-    beq !miiva_range_ok+
-    bcs !miiva_no+
-!miiva_range_ok:
-    sec
-    rts
-
-!miiva_no:
-    clc
-    rts
-
 #import "../../../core/recall.s"
 #import "../../../core/monster_magic.s"
 #import "../../../core/spell_data.s"
@@ -3997,7 +3934,9 @@ at_surface_str:
 #if PERF_P1
 #import "../common/perf_p1_data.s"
 #endif
+#define C128_PRODUCT_PLAY_SEGMENT
 #import "../../../core/dungeon_los.s"
+#undef C128_PRODUCT_PLAY_SEGMENT
 #import "../../../core/monster_attack.s"
 #define PMU_TURN_FEEDBACK_EXTERNAL
 #define C128_COMBAT_COMMON_HELPERS_EXTERNAL

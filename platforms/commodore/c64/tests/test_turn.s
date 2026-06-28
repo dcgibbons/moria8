@@ -32,6 +32,7 @@ bootstrap:
 .const PL_RESERVED         = 64
 .const PL_SPELL_TYPE       = 60
 eff_detect_timer:    .byte 0
+muv_clear_detected:  .byte 0
 
 .macro MapRead_ptr0_y() {
     lda (zp_ptr0),y
@@ -190,6 +191,11 @@ item_spawn_level:
 
 update_visibility:
     inc test_update_visibility_calls
+    rts
+
+monster_update_visibility_all:
+    lda #0
+    sta muv_clear_detected
     rts
 
 screen_clear:

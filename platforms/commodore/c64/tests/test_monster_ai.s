@@ -2015,6 +2015,8 @@ test_start:
 
     lda #4
     sta zp_mon_type
+    lda #MF_VISIBLE
+    sta zp_mon_flags
     lda #28
     ldy #15
     jsr mat_mark_tile_dirty_if_nonlocal

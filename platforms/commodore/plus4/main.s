@@ -26,7 +26,7 @@
 .segmentdef ItemActionsOverlay [outPrg=OVL_OUT + "/ovl.items", start=$e000, min=$e000, max=$efff]
 .segmentdef SpellOverlay      [outPrg=OVL_OUT + "/ovl.spell", start=$e000, min=$e000, max=$efff]
 .segmentdef DungeonGenOverlay [outPrg=OVL_OUT + "/ovl.gen",   start=$e000, min=$e000, max=$efff]
-.segmentdef RuntimeBanked     [outPrg=OVL_OUT + "/4.bank",    start=$f000, min=$f000, max=$ff00]
+.segmentdef RuntimeBanked     [outPrg=OVL_OUT + "/4.bank",    start=$f000, min=$f000, max=$fbff]
 
 #import "../common/save_slot_policy.s"
 
@@ -73,6 +73,10 @@ entry:
     sei
     jsr plus4_bank_ram
     jmp entry_main
+
+plus4_banked_fname:
+    .byte $34,$2e,$42,$41,$4e,$4b  // "4.BANK"
+.label plus4_banked_fname_len = * - plus4_banked_fname
 
 // Exit trampoline — MUST live below $A000 because it banks Plus/4
 // ROM back in. If this ran from $A000+ the CPU would start executing
@@ -1375,12 +1379,6 @@ tramp_item_use_staff:
 !done:
     jmp tramp_sr_epilogue
 
-tramp_eff_earthquake:
-    sei
-    jsr plus4_bank_ram
-    jsr eff_earthquake_banked
-    rts
-
 tramp_item_refuel:
     lda #OVL_ITEMS
     jsr overlay_load_no_kernal
@@ -1922,10 +1920,6 @@ init_load_banked:
     sta TED_BORDER
     jmp !load_failed-
 
-plus4_banked_fname:
-    .byte $34,$2e,$42,$41,$4e,$4b  // "4.BANK"
-.label plus4_banked_fname_len = * - plus4_banked_fname
-
 // ============================================================
 // Banked runtime payload — loadable PRG at $F000.
 // ============================================================
@@ -2037,17 +2031,11 @@ save_append_disk_detail_plus4:
     jmp screen_put_hex
 
     #import "../../../core/player_magic_learn_op.s"
-    #import "../../../core/player_magic_map.s"
-    #import "../../../core/player_magic_turn_banked.s"
-    #import "../../../core/player_magic_slow_runtime.s"
-    #define PM_EQ_BANKED
-    #import "../../../core/player_magic_earthquake.s"
-    #undef PM_EQ_BANKED
 
 banked_code_end:
 
 .print "Banked runtime: " + (banked_code_end - $f000) + " bytes at $F000-$" + toHexString(banked_code_end)
-.assert "Banked code fits below TED ROM helper page", banked_code_end <= $FF00, true
+.assert "Banked code stays below Plus/4 helper/I/O page", banked_code_end <= $FC00, true
 
 // ============================================================
 // Town overlay — store code at $E000, output to separate PRG
@@ -2102,13 +2090,11 @@ ovl_modal_misc_end:
 // Spell overlay — spell/prayer execution at $E000
 // ============================================================
 .segment SpellOverlay
-    #define PMX_EARTHQUAKE_EXTERNAL
-    #define PMX_MAP_AREA_EXTERNAL
-    #define PMU_VISIBLE_FLAGGED_EXTERNAL
+    #import "../../../core/player_magic_slow_runtime.s"
+    #define PMU_TURN_FEEDBACK_ONLY
+    #import "../../../core/player_magic_turn_banked.s"
+    #undef PMU_TURN_FEEDBACK_ONLY
     #import "../../../core/player_magic_execute_overlay.s"
-    #undef PMU_VISIBLE_FLAGGED_EXTERNAL
-    #undef PMX_MAP_AREA_EXTERNAL
-    #undef PMX_EARTHQUAKE_EXTERNAL
 ovl_spell_end:
 .print "Spell overlay: " + (ovl_spell_end - $e000) + " bytes at $E000-$" + toHexString(ovl_spell_end)
 .assert "Spell overlay fits in $E000-$EFFF", ovl_spell_end <= $F000, true

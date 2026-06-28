@@ -357,6 +357,10 @@ eff_detect_evil_only:
     :MapRead_ptr1_y()
     ora #(FLAG_VISITED | FLAG_LIT)
     :MapWrite_ptr1_y()
+    ldy #MX_FLAGS
+    lda (zp_ptr0),y
+    ora #MF_DETECTED
+    sta (zp_ptr0),y
     lda #1
     sta vis_room_revealed
     pla

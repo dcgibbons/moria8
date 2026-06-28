@@ -202,9 +202,8 @@ monster_process_one:
     bne !mpo_not_town+
     jsr monster_move_random
     bcc !mpo_town_no_move+
-    lda #1
+    lda #$81
     sta mat_action_dirty
-    jsr mat_mark_move_dirty
 !mpo_town_no_move:
     jmp !mpo_writeback+
 !mpo_not_town:
@@ -216,31 +215,32 @@ monster_process_one:
     // Normal movement: move toward player
     jsr monster_move_toward
     bcc !mpo_toward_no_move+
-    lda #1
+    lda #$81
     sta mat_action_dirty
-    jsr mat_mark_move_dirty
 !mpo_toward_no_move:
     jmp !mpo_writeback+
 
 !mpo_flee:
     jsr monster_move_away
     bcc !mpo_flee_no_move+
-    lda #1
+    lda #$81
     sta mat_action_dirty
-    jsr mat_mark_move_dirty
 !mpo_flee_no_move:
     jmp !mpo_writeback+
 
 !mpo_confused:
     jsr monster_move_random
     bcc !mpo_conf_no_move+
-    lda #1
+    lda #$81
     sta mat_action_dirty
-    jsr mat_mark_move_dirty
 !mpo_conf_no_move:
 
 !mpo_writeback:
     jsr monster_write_back
+    lda mat_action_dirty
+    bpl !mpo_no_move_dirty+
+    jsr mat_mark_move_dirty
+!mpo_no_move_dirty:
     // Breeder check: clone if CF_BREEDER, room, and lucky roll
     ldx zp_mon_type
     lda cr_mflags,x
@@ -332,35 +332,8 @@ mat_mark_tile_dirty_if_nonlocal:
     jsr mat_tile_within_local_radius
     bcs !mtd_done+
 
-    // Inspect the tile's current render state.
-    ldx zp_temp1
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
-    ldy zp_temp0
-    :MapRead_ptr0_y()
-    sta zp_mon_scratch1
-
-    // Visited + lit tiles are visible remotely and need a redraw.
-    lda zp_mon_scratch1
-    and #(FLAG_VISITED | FLAG_LIT)
-    cmp #(FLAG_VISITED | FLAG_LIT)
-    beq !mtd_mark+
-
-#if !C64_UNIT_TEST
-    lda zp_mon_scratch1
-    and #FLAG_OCCUPIED
-    beq !mtd_unvisited+
-    lda zp_temp0
-    ldy zp_temp1
-    jsr monster_is_infra_visible_at
-    bcs !mtd_mark+
-#endif
-
-!mtd_unvisited:
-    // Unvisited tiles only matter while a detect effect is drawing monsters.
-    lda eff_detect_timer
+    lda zp_mon_flags
+    and #(MF_VISIBLE | MF_DETECTED)
     beq !mtd_done+
 
 !mtd_mark:
@@ -914,6 +887,9 @@ monster_try_step:
     sta zp_mon_x
     lda mat_target_y
     sta zp_mon_y
+    lda zp_mon_flags
+    and #~(MF_VISIBLE | MF_DETECTED) & $ff
+    sta zp_mon_flags
 
     // Clear FLAG_OCCUPIED on old tile
     ldx mat_old_y

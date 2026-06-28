@@ -1892,7 +1892,7 @@ cmd_open:
     jsr door_try_open
     bcc !open_no_turn+          // No door there, no turn consumed
     // Door opened or stuck — consume turn and re-render
-    jmp post_turn_redraw_full_or_die
+    jmp post_turn_update_visibility_or_die
 !open_no_turn:
     jmp main_loop
 
@@ -1903,7 +1903,7 @@ cmd_close:
     jsr door_try_close
     bcc !close_no_turn+
     // Door closed — consume turn and re-render
-    jmp post_turn_redraw_full_or_die
+    jmp post_turn_update_visibility_or_die
 !close_no_turn:
     jmp main_loop
 
@@ -1911,7 +1911,7 @@ cmd_search:
     jsr msg_clear
     jsr do_search
     // Always consumes a turn
-    jmp post_turn_redraw_full_or_die
+    jmp post_turn_update_visibility_or_die
 
 cmd_search_mode:
     jsr msg_clear
@@ -2452,7 +2452,9 @@ player_died:
     jmp game_over_prompt    // Platform hook returns to title/menu.
 
 player_retired:
+#if !C64_PRODUCT_OVERLAY_RUNTIME
     jsr winner_apply_retirement_bonus
+#endif
     jsr tramp_winner_royal
     lda #DEATH_ALIVE
     sta death_source_saved

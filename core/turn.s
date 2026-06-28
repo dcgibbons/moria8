@@ -263,7 +263,11 @@ turn_tick_effects:
     beq !no_detect+
     dec eff_detect_timer
     bne !no_detect+
-    // Expired — trigger redraw to hide detected monsters
+    // Expired — clear detected monster render flags before any redraw path.
+    lda #1
+    sta muv_clear_detected
+    jsr monster_update_visibility_all
+    beq !no_detect+
     lda #1
     sta vis_room_revealed
 !no_detect:

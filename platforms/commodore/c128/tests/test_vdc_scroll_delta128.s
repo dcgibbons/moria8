@@ -15,6 +15,9 @@
 .const MX_X = 0
 .const MX_Y = 1
 .const MX_TYPE = 2
+.const MX_FLAGS = 5
+.const MF_VISIBLE = $08
+.const MF_DETECTED = $10
 .const MAX_MONSTERS = 32
 .const DETECT_TIMER_EVIL_ONLY = $80 | 20
 .const CF_INFRA = $80
@@ -48,6 +51,7 @@ c128_restore_runtime_state:
 
 // Minimal renderer dependencies for paths we intentionally do not exercise.
 eff_detect_timer: .byte 0
+vis_cached_room_idx:.byte 0
 test_item_active:    .byte 0
 test_item_x:         .byte 0
 test_item_y:         .byte 0
@@ -57,6 +61,7 @@ test_mon_active:     .byte 0
 test_mon_x:          .byte 0
 test_mon_y:          .byte 0
 test_mon_type:       .byte 0
+test_mon_flags:      .byte 0
 test_mon_color_vic:  .byte COL_WHITE
 test_infra_enabled:  .byte 0
 test_glyph_active:   .byte 0
@@ -105,6 +110,8 @@ monster_find_at:
     bne !miss+
     lda test_mon_type
     sta monster_stub_entry + MX_TYPE
+    lda test_mon_flags
+    sta monster_stub_entry + MX_FLAGS
     ldx #0
     sec
     rts
@@ -239,9 +246,11 @@ reset_render_overrides:
     lda #0
     sta test_item_active
     sta test_mon_active
+    sta test_mon_flags
     sta test_infra_enabled
     sta zp_eff_blind
     sta test_glyph_active
+    sta vis_cached_room_idx
     rts
 
 setup_single_tile_scene:
@@ -352,6 +361,8 @@ test_render_single_tile_infra_cold_hidden:
     sta test_mon_y
     lda #1
     sta test_mon_type
+    lda #0
+    sta test_mon_flags
     lda #COL_RED
     sta test_mon_color_vic
     lda #0
@@ -388,6 +399,8 @@ test_render_single_tile_infra_blind_hidden:
     sta test_mon_y
     lda #1
     sta test_mon_type
+    lda #MF_VISIBLE
+    sta test_mon_flags
     lda #COL_RED
     sta test_mon_color_vic
     lda #CF_INFRA
@@ -423,6 +436,8 @@ test_render_single_tile_infra_warm_dimmed:
     sta test_mon_y
     lda #1
     sta test_mon_type
+    lda #MF_VISIBLE
+    sta test_mon_flags
     lda #COL_RED
     sta test_mon_color_vic
     lda #CF_INFRA
@@ -440,9 +455,9 @@ test_render_single_tile_infra_warm_dimmed:
     sta test_row_rel
     lda #14
     sta test_col_rel
-    lda cr_display + 1
+    lda #SC_SPACE
     sta test_expected_char
-    lda vic_to_vdc_color + COL_RED
+    lda #VDC_BLACK
     sta test_expected_attr
     jsr assert_vdc_cell
     rts
@@ -503,7 +518,7 @@ test_render_single_tile_monster_override:
     sta test_mon_color_vic
     ldx #21
     ldy #20
-    lda #((TILE_FLOOR << 4) | FLAG_VISITED | FLAG_LIT | FLAG_HAS_ITEM | FLAG_OCCUPIED)
+    lda #((TILE_FLOOR << 4) | FLAG_VISITED | FLAG_LIT | FLAG_HAS_ITEM)
     jsr map_set_tile
     lda #21
     sta zp_temp0
@@ -514,9 +529,9 @@ test_render_single_tile_monster_override:
     sta test_row_rel
     lda #11
     sta test_col_rel
-    lda cr_display + 1
+    lda #SC_SPACE
     sta test_expected_char
-    lda vic_to_vdc_color + COL_RED
+    lda #VDC_BLACK
     sta test_expected_attr
     jsr assert_vdc_cell
     rts

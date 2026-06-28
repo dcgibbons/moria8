@@ -651,13 +651,6 @@ do_look:
     :MapRead_ptr0_y()
     sta dl_tile
 
-    // Must be currently visible, not just remembered.
-    ldx df_target_x
-    ldy df_target_y
-    jsr los_is_visible
-    bcs !dl_visible+
-    jmp !dl_nothing+
-!dl_visible:
     // Only trust monster table coordinates when the live map tile still
     // carries FLAG_OCCUPIED. This matches renderer ownership and avoids
     // stale level-transition/cached-table lookups on empty tiles.
@@ -670,8 +663,12 @@ do_look:
     jsr monster_find_at
     bcc !dl_no_monster+
 
+    ldy #MX_FLAGS
+    lda (zp_ptr0),y
+    and #(MF_VISIBLE | MF_DETECTED)
+    beq !dl_no_monster+
+
     // Found a monster — "YOU SEE A <name>."
-    jsr monster_get_ptr
     ldy #MX_TYPE
     lda (zp_ptr0),y
     tax
@@ -683,6 +680,14 @@ do_look:
     rts
 
 !dl_no_monster:
+    // Must be currently visible, not just remembered. Monster perception is
+    // handled above so infravision/detection targets can still be described.
+    ldx df_target_x
+    ldy df_target_y
+    jsr los_is_visible
+    bcs !dl_visible+
+    jmp !dl_step+
+!dl_visible:
     // Check tile type — non-floor terrain is authoritative for look.
     lda dl_tile
     and #TILE_TYPE_MASK

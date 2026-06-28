@@ -13,6 +13,9 @@
 .const MX_TYPE = 2
 .const CF_INFRA = $80
 
+walkable_table:
+    .byte 1,0,0,0,0,0,0,1,0,1,1,1,0,0,1,0
+
 #import "../../../../core/dungeon_los.s"
 
 .pc = $0801 "BASIC Stub"
@@ -21,6 +24,10 @@
 .pc = $3000 "Test Code"
 
 c128_restore_runtime_state:
+    rts
+
+monster_update_visibility_all:
+    lda #0
     rts
 
 math_multiply:
