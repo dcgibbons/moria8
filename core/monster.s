@@ -965,9 +965,9 @@ monster_find_at:
     clc
     rts
 
-#if C128
+#if C128 && !C128_UNIT_TEST
 .segment RuntimeLowData
-#elif !C64_UNIT_TEST
+#elif !C64_UNIT_TEST && !C128_UNIT_TEST
 monster_update_visibility_all:
     sei
 #if PLUS4
@@ -1046,6 +1046,8 @@ monster_update_visibility_one:
     // Timed Detect Monsters owns MF_DETECTED while active.
     lda eff_detect_timer
     beq !muvo_detect_done+
+    lda eff_detect_evil_mode
+    bne !muvo_detect_done+
     lda muv_new_flags
     ora #MF_DETECTED
     sta muv_new_flags
@@ -1174,7 +1176,7 @@ muv_new_flags: .byte 0
 muv_changed:   .byte 0
 muv_clear_detected: .byte 0
 
-#if C128
+#if C128 && !C128_UNIT_TEST
 .segment C128ResidentWorld
 #elif !C64_UNIT_TEST
 .segment Default

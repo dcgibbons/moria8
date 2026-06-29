@@ -12,6 +12,7 @@
 #import "../../../../core/dungeon_data.s"
 
 #define COMPILE_EMBEDDED_DUNGEON_TEST_ROSTER
+#define C128_UNIT_TEST
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_start)
@@ -35,6 +36,17 @@ c128_restore_runtime_state:
     rts
 
 tier_check_transition:
+    rts
+
+eff_detect_timer: .byte 0
+eff_detect_evil_mode: .byte 0
+
+player_get_infra_range:
+    lda #0
+    rts
+
+mm_los_clear_to_target:
+    clc
     rts
 
 #import "../../../../core/monster.s"
@@ -243,7 +255,7 @@ test_expected_name2:
     .byte 4, 18, 1, 7, 15, 14, 0
 
 // Dummy stubs needed by monster.s that aren't imported
-.pc = $4000 "Stubs"
+.pc = $5000 "Stubs"
 rng_range: rts
 rng_range_word: rts
 math_dice: rts

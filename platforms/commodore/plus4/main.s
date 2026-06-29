@@ -2090,11 +2090,13 @@ ovl_modal_misc_end:
 // Spell overlay — spell/prayer execution at $E000
 // ============================================================
 .segment SpellOverlay
+    #define PMX_DETECT_EFFECTS_EXTERNAL
     #import "../../../core/player_magic_slow_runtime.s"
     #define PMU_TURN_FEEDBACK_ONLY
     #import "../../../core/player_magic_turn_banked.s"
     #undef PMU_TURN_FEEDBACK_ONLY
     #import "../../../core/player_magic_execute_overlay.s"
+    #undef PMX_DETECT_EFFECTS_EXTERNAL
 ovl_spell_end:
 .print "Spell overlay: " + (ovl_spell_end - $e000) + " bytes at $E000-$" + toHexString(ovl_spell_end)
 .assert "Spell overlay fits in $E000-$EFFF", ovl_spell_end <= $F000, true

@@ -266,10 +266,8 @@ turn_tick_effects:
     // Expired — clear detected monster render flags before any redraw path.
     lda #1
     sta muv_clear_detected
-    jsr monster_update_visibility_all
-    beq !no_detect+
-    lda #1
     sta vis_room_revealed
+    jsr monster_update_visibility_all
 !no_detect:
 
     // Mana regen: spell-casting classes recover 1 MP per 2 turns

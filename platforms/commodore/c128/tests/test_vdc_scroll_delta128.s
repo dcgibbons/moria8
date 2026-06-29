@@ -19,7 +19,7 @@
 .const MF_VISIBLE = $08
 .const MF_DETECTED = $10
 .const MAX_MONSTERS = 32
-.const DETECT_TIMER_EVIL_ONLY = $80 | 20
+.const DETECT_TIMER_EVIL_ONLY = 2
 .const CF_INFRA = $80
 
 #import "../../../../core/dungeon_data.s"
@@ -51,6 +51,7 @@ c128_restore_runtime_state:
 
 // Minimal renderer dependencies for paths we intentionally do not exercise.
 eff_detect_timer: .byte 0
+eff_detect_evil_mode: .byte 0
 vis_cached_room_idx:.byte 0
 test_item_active:    .byte 0
 test_item_x:         .byte 0
@@ -216,6 +217,7 @@ test_start:
     jsr test_render_single_tile_monster_override
     jsr test_render_single_tile_player_override
     jsr test_render_single_tile_detect_evil_hides_non_evil
+    jsr test_render_viewport_player_override_unvisited
     jsr test_render_viewport_infra_warm_unvisited
     jsr test_render_viewport_glyph_overlay
     jsr test_render_viewport_dimmed_glyph_hidden
@@ -611,6 +613,24 @@ test_render_single_tile_detect_evil_hides_non_evil:
     lda #SC_SPACE
     sta test_expected_char
     lda #VDC_BLACK
+    sta test_expected_attr
+    jsr assert_vdc_cell
+    rts
+
+test_render_viewport_player_override_unvisited:
+    jsr setup_single_tile_scene
+    ldx #20
+    ldy #20
+    lda #((TILE_FLOOR << 4))
+    jsr map_set_tile
+    jsr render_viewport
+    lda #10
+    sta test_row_rel
+    lda #10
+    sta test_col_rel
+    lda #SC_PLAYER
+    sta test_expected_char
+    lda #VDC_WHITE
     sta test_expected_attr
     jsr assert_vdc_cell
     rts

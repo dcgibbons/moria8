@@ -138,7 +138,7 @@ render_viewport:
     and #FLAG_VISITED
     bne !rv_visited+
 
-    // Not visited — check if detect monsters reveals an occupant
+    // Not visited — check if detect reveals an occupant
     lda eff_detect_timer
     beq !rv_detect_blank+
     lda zp_tile_tmp

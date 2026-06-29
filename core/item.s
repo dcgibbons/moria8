@@ -48,7 +48,7 @@
 .label fi_qty     = fi_y + MAX_FLOOR_ITEMS
 .label fi_p1      = fi_qty + MAX_FLOOR_ITEMS
 .label fi_meta    = fi_p1 + MAX_FLOOR_ITEMS
-.assert "Floor item table fits in $CF00-$CFFF", fi_meta + MAX_FLOOR_ITEMS <= FLOOR_ITEM_BASE + 256, true
+.assert "Floor item table fits in platform floor-item page", fi_meta + MAX_FLOOR_ITEMS <= FLOOR_ITEM_BASE + 256, true
 
 .const FI_META_EGO_MASK    = $07
 .const FI_META_FLAGS_SHIFT = 3

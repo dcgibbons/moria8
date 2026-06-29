@@ -107,7 +107,9 @@ monster_get_ptr:
     sta zp_ptr0_hi
     rts
 
+#define PMX_DETECT_EFFECTS_EXTERNAL
 #import "../../../../core/player_magic_detect.s"
+#undef PMX_DETECT_EFFECTS_EXTERNAL
 
 test_clear_monsters:
     ldx #MAX_MONSTERS * MONSTER_ENTRY_SIZE - 1

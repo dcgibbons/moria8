@@ -73,7 +73,9 @@ test_finish:
 #import "../../../../core/player_magic_state.s"
 #import "../../../../core/player_magic_state_ops.s"
 #import "../../../../core/player_magic.s"
+#define PMX_DETECT_EFFECTS_EXTERNAL
 #import "../../../../core/player_magic_detect.s"
+#undef PMX_DETECT_EFFECTS_EXTERNAL
 #import "../dungeon_render.s"
 #import "../../../../core/dungeon_los.s"
 #import "../../../../core/player_move.s"
@@ -310,8 +312,8 @@ test_start:
     sta tc_results + 0
 
     // Test 2: Detect Evil with an evil monster in the current panel reports
-    // presence of evil, marks that tile visible/lit, and does not create a
-    // monster-render overlay.
+    // presence of evil and marks that monster for the one-shot reveal without
+    // permanently revealing the terrain.
 !t2:
     :PatchJump(calc_spell_failure, test_calc_spell_failure_success)
     jsr test_clear_monsters
@@ -344,10 +346,11 @@ test_start:
     lda tde_last_msg_hi
     cmp #>pmx_msg_evil_on
     bne !t2_fail+
-    lda eff_detect_timer
-    bne !t2_fail+
     lda test_mon_table + MX_FLAGS
     and #MF_DETECTED
+    beq !t2_fail+
+    lda eff_detect_timer
+    cmp #DETECT_TIMER_EVIL_ONLY
     bne !t2_fail+
     lda vis_room_revealed
     cmp #1
@@ -360,7 +363,6 @@ test_start:
     ldy #20
     :MapRead_ptr1_y()
     and #(FLAG_VISITED | FLAG_LIT)
-    cmp #(FLAG_VISITED | FLAG_LIT)
     bne !t2_fail+
     lda zp_player_mp
     cmp #19
@@ -378,8 +380,8 @@ test_start:
     lda #$00
     sta tc_results + 1
 
-    // Test 3: Detect Evil clears stale all-monster detection before cancelling
-    // the Detect Monsters timer.
+    // Test 3: Detect Evil clears stale all-monster detection, cancels the
+    // Detect Monsters timer, and leaves only evil in-panel monsters revealed.
 !t3:
     :PatchJump(calc_spell_failure, test_calc_spell_failure_success)
     jsr test_clear_monsters
@@ -407,15 +409,15 @@ test_start:
     sta zp_view_y
     jsr player_pray
     bcc tde_t3_fail
-    jsr monster_update_visibility_all
     lda eff_detect_timer
+    cmp #DETECT_TIMER_EVIL_ONLY
     bne tde_t3_fail
     lda test_mon_table + MX_FLAGS
     and #MF_DETECTED
     bne tde_t3_fail
     lda test_mon_table + MONSTER_ENTRY_SIZE + MX_FLAGS
     and #MF_DETECTED
-    bne tde_t3_fail
+    beq tde_t3_fail
     lda #$01
     sta tc_results + 2
     jmp !t4+

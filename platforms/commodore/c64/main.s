@@ -2252,11 +2252,13 @@ ovl_modal_misc_end:
 .segment SpellOverlay
     #define PMX_EARTHQUAKE_EXTERNAL
     #define PMX_MAP_AREA_EXTERNAL
+    #define PMX_DETECT_EFFECTS_EXTERNAL
     #import "../../../core/player_magic_slow_runtime.s"
     #define PMU_TURN_FEEDBACK_ONLY
     #import "../../../core/player_magic_turn_banked.s"
     #undef PMU_TURN_FEEDBACK_ONLY
     #import "../../../core/player_magic_execute_overlay.s"
+    #undef PMX_DETECT_EFFECTS_EXTERNAL
     #undef PMX_MAP_AREA_EXTERNAL
     #undef PMX_EARTHQUAKE_EXTERNAL
 ovl_spell_end:

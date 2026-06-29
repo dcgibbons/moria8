@@ -3028,7 +3028,7 @@ c128_modal_require_play:
     jsr c128_load_resident_play_prg
     bcs !play_load_failed+
     lda c128_resident_play_sig
-    cmp #$c8
+    cmp #$59
     beq !play_loaded+
 !play_load_failed:
     jsr c128_program_media_error_prompt
@@ -3645,10 +3645,12 @@ player_get_infra_range:
 #import "../../../core/monster_magic.s"
 #import "../../../core/spell_data.s"
 #define SPELL_EFFECTS_INCLUDE_IDENTIFY
+#define C128_FULL_DETECT_EVIL_EFFECT
 .segment C128ResidentItems
 c128_resident_items_start:
 .segment C128ResidentWorld
 #import "../../../core/spell_effects.s"
+#undef C128_FULL_DETECT_EVIL_EFFECT
 #undef SPELL_EFFECTS_INCLUDE_IDENTIFY
 cmb_you_str:     .text "You " ; .byte 0
 cmb_the_str:     .text " the " ; .byte 0
@@ -3930,7 +3932,7 @@ c128_resident_persist_end:
 #define GAME_LOOP_LOW_DATA_EXTERNAL
 .segment C128ResidentPlay
 c128_resident_play_start:
-c128_resident_play_sig: .byte $c8
+c128_resident_play_sig:
 at_surface_str:
     .text "You are already at the surface." ; .byte 0
 #if PERF_P1
@@ -4702,9 +4704,8 @@ runtime_input_data_end:
 .segment Default
 
 // RuntimeLowData segment — low-RAM resident code loaded into Bank 0 before title.
+.label runtime_low_data_start = $1000
 .segment RuntimeLowData
-.pseudopc $1000 {
-runtime_low_data_start:
     #import "monster_threat_vdc.s"
     #import "dungeon_render_vdc.s"
     #import "../../../core/ego_items.s"
@@ -4724,7 +4725,6 @@ pmx_cure_poison_msg:
 !pcpm_done:
     rts
 runtime_low_data_end:
-}
 .segment Default
 
 // ============================================================
@@ -4910,7 +4910,9 @@ ovl_start_end:
     #import "../../../core/score.s"
     #define PMX_EARTHQUAKE_EXTERNAL
     #define PMX_MAP_AREA_EXTERNAL
+    #define PMX_DETECT_EFFECTS_EXTERNAL
     #import "../../../core/player_magic_execute_overlay.s"
+    #undef PMX_DETECT_EFFECTS_EXTERNAL
     #undef PMX_MAP_AREA_EXTERNAL
     #undef PMX_EARTHQUAKE_EXTERNAL
 ovl_death_end:

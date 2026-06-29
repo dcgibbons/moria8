@@ -11,8 +11,10 @@
 .const MX_X = 0
 .const MX_Y = 1
 .const MX_TYPE = 2
+.const MX_FLAGS = 5
+.const MF_DETECTED = $10
 .const DETECT_TIMER_TURNS = 20
-.const DETECT_TIMER_EVIL_ONLY = $80
+.const DETECT_TIMER_EVIL_ONLY = 2
 .const PIW_FILTER_PRAYER_BOOK = $fb
 .const PIW_FILTER_MAGE_BOOK = $fc
 
@@ -60,7 +62,9 @@ itok_detect_monsters:
 #import "../../../../core/player_magic_state.s"
 #import "../../../../core/player_magic_state_ops.s"
 #import "../../../../core/player_magic.s"
+#define PMX_DETECT_EFFECTS_EXTERNAL
 #import "../../../../core/player_magic_detect.s"
+#undef PMX_DETECT_EFFECTS_EXTERNAL
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_start)
@@ -85,7 +89,9 @@ trap_y: .fill 16, 0
 trap_type: .fill 16, 0
 cr_mflags: .fill 65, 0
 eff_detect_timer: .byte 0
+eff_detect_evil_mode: .byte 0
 vis_room_revealed: .byte 0
+muv_clear_detected: .byte 0
 
 test_spell_exec_calls: .byte 0
 test_huff_calls: .byte 0
@@ -155,6 +161,11 @@ piw_print_prompt_with_count:
     clc
     rts
 
+monster_update_visibility_all:
+    lda #0
+    sta muv_clear_detected
+    rts
+
 calc_spell_failure:
     clc
     rts
@@ -181,6 +192,12 @@ eff_detect_evil_only:
     lda (zp_ptr0),y
     cmp #EMPTY_SLOT
     beq !edeo_next+
+    ldy #MX_FLAGS
+    lda (zp_ptr0),y
+    and #~MF_DETECTED & $ff
+    sta (zp_ptr0),y
+    ldy #MX_TYPE
+    lda (zp_ptr0),y
     tay
     lda cr_mflags,y
     and #CF_EVIL
@@ -189,6 +206,12 @@ eff_detect_evil_only:
     inx
     jmp !edeo_loop-
 !edeo_found:
+    ldy #MX_FLAGS
+    lda (zp_ptr0),y
+    ora #MF_DETECTED
+    sta (zp_ptr0),y
+    lda #DETECT_TIMER_EVIL_ONLY
+    sta eff_detect_timer
     lda #1
     sta vis_room_revealed
     rts
@@ -414,6 +437,7 @@ test_after_none:
     lda test_huff_calls
     bne !t2_fail+
     lda eff_detect_timer
+    cmp #DETECT_TIMER_EVIL_ONLY
     bne !t2_fail+
     lda vis_room_revealed
     cmp #1

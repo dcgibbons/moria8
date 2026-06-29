@@ -202,7 +202,7 @@ render_viewport:
     and #FLAG_VISITED
     bne !rv_visited+
 
-    // Not visited — check if detect monsters reveals an occupant
+    // Not visited — check if detect reveals an occupant
     lda eff_detect_timer
     bne !rv_detect_chk+
     jmp !draw_blank+
@@ -437,6 +437,7 @@ rv_draw_blank:
     // Trick: both bpl (VDC busy → repoll) and bne (next byte) branch to the same !stream: label
     // (the bit instruction). This eliminates jsr vdc_wait overhead (~9 cycles) per byte,
     // saving ~13K cycles/refresh, while keeping code size compact (18 bytes per pass).
+    php
     sei
 
     // Char row: set VDC address, select reg 31 once, then blast 38 bytes
@@ -451,13 +452,13 @@ rv_draw_blank:
     jsr vdc_select_reg      // Wait + select reg 31 + wait (once per row)
     ldy #0
 !char_stream:
-    bit VDC_ADDR_REG        // Poll VDC ready (bit 7 → N flag)
-    bpl !char_stream-       // N=0 (busy) → repoll; N=1 (ready) → fall through
+    bit VDC_ADDR_REG        // Poll VDC ready (bit 7 -> N flag)
+    bpl !char_stream-       // N=0 (busy) -> repoll; N=1 (ready) -> fall through
     lda row_char_buf,y
     sta VDC_DATA_REG
     iny
     cpy #VIEWPORT_W
-    bne !char_stream-       // Loop back to bit — also acts as wait for next byte
+    bne !char_stream-       // Loop back to bit - also acts as wait for next byte
 
     // Attr row: same pattern
     lda zp_color_lo
@@ -479,7 +480,7 @@ rv_draw_blank:
     cpy #VIEWPORT_W
     bne !attr_stream-
 
-    cli
+    plp
 
     // Next row
     inc zp_render_y
@@ -812,10 +813,11 @@ rv_mon_done:
 //   rvsd_src_col, rvsd_dst_col = absolute screen cols
 //   rvsd_copy_len              = byte count (1..78)
 rvsd_copy_segment:
+    php
     sei
     jsr rvsd_block_copy_chars
     jsr rvsd_block_copy_attrs
-    cli
+    plp
     rts
 
 rvsd_block_copy_chars:
@@ -1157,6 +1159,7 @@ rst_apply_player_override_vdc:
     bne !rst_monster-
 
 !rst_write:
+    php
     sei                         // IRQ off: protect char + attr VDC writes as atomic pair
 
     // Set VDC address to screen position and write char
@@ -1180,7 +1183,7 @@ rst_apply_player_override_vdc:
     jsr vdc_set_update_addr
     lda zp_temp4                // Already VDC RGBI (Opt 2: translation moved to each color path)
     jsr vdc_write_data
-    cli                         // IRQ on: char + attr written consistently
+    plp                         // Restore caller IRQ state.
     rts
 
 rst_col_tmp: .byte 0

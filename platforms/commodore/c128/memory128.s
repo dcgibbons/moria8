@@ -164,10 +164,10 @@
 .const OVERLAY_CACHE_DISARM_BASE = BANK1_OVERLAY_DISARM_BASE
 .const OVERLAY_CACHE_DISARM_END  = BANK1_OVERLAY_DISARM_END
 .const C128_OVERLAY_DISARM_CACHE_PAGES = 3
-.const FLOOR_ITEM_BASE  = $1a00 // Floor item table (Bank 0)
-.const FLOOR_ITEM_END   = $1aff
-.const CREATURE_BASE    = $1b00 // Runtime scratch area (Bank 0)
-.const CREATURE_END     = $1bff
+.const FLOOR_ITEM_BASE  = $1b00 // Floor item table (Bank 0)
+.const FLOOR_ITEM_END   = $1bff
+.const CREATURE_BASE    = $1a00 // Runtime scratch area (Bank 0)
+.const CREATURE_END     = $1aff
 .const BANKED_DATA_BASE = $e000 // Item tiers, recall, spells (under KERNAL ROM)
 .const BANKED_DATA_END  = $ffff
 .const SCREEN_RAM       = $0400 // VIC-II screen RAM (used as scratch buffer on C128)

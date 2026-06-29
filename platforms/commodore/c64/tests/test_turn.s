@@ -32,6 +32,7 @@ bootstrap:
 .const PL_RESERVED         = 64
 .const PL_SPELL_TYPE       = 60
 eff_detect_timer:    .byte 0
+eff_detect_evil_mode:.byte 0
 muv_clear_detected:  .byte 0
 
 .macro MapRead_ptr0_y() {
