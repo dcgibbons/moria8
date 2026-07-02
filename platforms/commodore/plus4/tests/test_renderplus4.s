@@ -50,8 +50,13 @@ map_set_tile:
 .const MF_VISIBLE = $08
 .const MF_DETECTED = $10
 .const DETECT_TIMER_TURNS = 20
+.const CF_EVIL = $04
+.const MAX_MONSTERS = 1
 
 eff_detect_timer: .byte 0
+eff_detect_evil_mode: .byte 0
+vis_room_revealed: .byte 0
+muv_clear_detected: .byte 0
 test_mon_active:    .byte 0
 test_mon_x:         .byte 0
 test_mon_y:         .byte 0
@@ -65,6 +70,7 @@ fi_item_id: .fill MAX_FLOOR_ITEMS, FI_EMPTY
 it_display: .fill 2, 0
 cr_display: .fill 2, 0
 cr_color:   .fill 2, 0
+cr_mflags:  .fill 2, 0
 monster_stub_entry: .fill 12, EMPTY_SLOT
 
 item_get_floor_color:
@@ -101,6 +107,9 @@ monster_get_ptr:
     sta zp_ptr0_hi
     rts
 
+monster_update_visibility_all:
+    rts
+
 glyph_find_at:
     ldx test_glyph_active
     beq !miss+
@@ -117,6 +126,7 @@ glyph_find_at:
     rts
 
 #import "../dungeon_render.s"
+#import "../../../../core/player_magic_detect_evil_effect.s"
 
 test_start:
     sei
@@ -124,6 +134,9 @@ test_start:
     ldx #$ff
     txs
     jsr test_detect_monsters_unvisited_skips_glyph
+    jsr test_detect_evil_unvisited_shows_monster
+    jsr test_visible_unvisited_shows_monster
+    jsr test_detect_evil_effect_is_one_shot
     jmp test_pass
 
 test_detect_monsters_unvisited_skips_glyph:
@@ -131,6 +144,7 @@ test_detect_monsters_unvisited_skips_glyph:
     sta test_mon_active
     sta test_glyph_active
     sta eff_detect_timer
+    sta eff_detect_evil_mode
     lda #COL_WHITE
     sta zp_text_color
     jsr screen_clear
@@ -177,7 +191,162 @@ test_detect_monsters_unvisited_skips_glyph:
     ldy #VIEWPORT_X + 14
     lda (zp_screen_lo),y
     cmp cr_display + 1
-    bne test_fail
+    beq !ok+
+    jmp test_fail
+!ok:
+    rts
+
+test_detect_evil_unvisited_shows_monster:
+    lda #0
+    sta test_mon_active
+    sta test_glyph_active
+    sta eff_detect_timer
+    lda #COL_WHITE
+    sta zp_text_color
+    jsr screen_clear
+    lda #10
+    sta zp_view_x
+    sta zp_view_y
+    lda #20
+    sta zp_player_x
+    sta zp_player_y
+    lda #1
+    sta zp_light_radius
+    sta zp_player_dlvl
+    lda #$4d
+    sta cr_display + 1
+    lda #COL_RED
+    sta cr_color + 1
+
+    lda #1
+    sta eff_detect_evil_mode
+    sta test_mon_active
+    lda #24
+    sta test_mon_x
+    lda #20
+    sta test_mon_y
+    lda #1
+    sta test_mon_type
+    lda #MF_DETECTED
+    sta test_mon_flags
+    ldx #24
+    ldy #20
+    lda #((TILE_FLOOR << 4) | FLAG_OCCUPIED)
+    jsr map_set_tile
+    jsr render_viewport
+
+    ldx #VIEWPORT_Y + 10
+    lda screen_row_lo,x
+    sta zp_screen_lo
+    lda screen_row_hi,x
+    sta zp_screen_hi
+    ldy #VIEWPORT_X + 14
+    lda (zp_screen_lo),y
+    cmp cr_display + 1
+    beq !ok+
+    jmp test_fail
+!ok:
+    rts
+
+test_visible_unvisited_shows_monster:
+    lda #0
+    sta test_mon_active
+    sta test_glyph_active
+    sta eff_detect_timer
+    sta eff_detect_evil_mode
+    lda #COL_WHITE
+    sta zp_text_color
+    jsr screen_clear
+    lda #10
+    sta zp_view_x
+    sta zp_view_y
+    lda #20
+    sta zp_player_x
+    sta zp_player_y
+    lda #$4d
+    sta cr_display + 1
+    lda #COL_RED
+    sta cr_color + 1
+
+    lda #1
+    sta test_mon_active
+    lda #24
+    sta test_mon_x
+    lda #20
+    sta test_mon_y
+    lda #1
+    sta test_mon_type
+    lda #MF_VISIBLE
+    sta test_mon_flags
+    ldx #24
+    ldy #20
+    lda #((TILE_FLOOR << 4) | FLAG_OCCUPIED)
+    jsr map_set_tile
+    jsr render_viewport
+
+    ldx #VIEWPORT_Y + 10
+    lda screen_row_lo,x
+    sta zp_screen_lo
+    lda screen_row_hi,x
+    sta zp_screen_hi
+    ldy #VIEWPORT_X + 14
+    lda (zp_screen_lo),y
+    cmp cr_display + 1
+    beq !ok+
+    jmp test_fail
+!ok:
+    rts
+
+test_detect_evil_effect_is_one_shot:
+    lda #0
+    sta test_mon_active
+    sta eff_detect_timer
+    sta eff_detect_evil_mode
+    sta vis_room_revealed
+    sta muv_clear_detected
+    sta test_mon_flags
+    sta cr_mflags
+    lda #CF_EVIL
+    sta cr_mflags + 1
+    lda #1
+    sta test_mon_active
+    sta test_mon_type
+    sta monster_stub_entry + MX_TYPE
+    lda #24
+    sta test_mon_x
+    sta monster_stub_entry + MX_X
+    lda #20
+    sta test_mon_y
+    sta monster_stub_entry + MX_Y
+    lda #10
+    sta zp_view_x
+    sta zp_view_y
+
+    jsr eff_detect_evil_only
+    bne !detected+
+    jmp test_fail
+!detected:
+    lda eff_detect_evil_mode
+    cmp #1
+    beq !mode_ok+
+    jmp test_fail
+!mode_ok:
+    lda monster_stub_entry + MX_FLAGS
+    and #MF_DETECTED
+    bne !flag_ok+
+    jmp test_fail
+!flag_ok:
+
+    jsr detect_evil_clear_reveal
+    lda eff_detect_evil_mode
+    beq !cleared+
+    jmp test_fail
+!cleared:
+    lda muv_clear_detected
+    cmp #1
+    beq !clear_flag_ok+
+    jmp test_fail
+!clear_flag_ok:
     rts
 
 test_fail:

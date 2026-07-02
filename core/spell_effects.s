@@ -297,7 +297,6 @@ pmx_cure_poison_msg:
 // Clobbers: A
 // ============================================================
 .const DETECT_TIMER_TURNS = 20
-.const DETECT_TIMER_EVIL_ONLY = 2
 
 eff_detect_timer: .byte 0
 eff_detect_evil_mode: .byte 0
@@ -315,64 +314,7 @@ eff_detect_monsters:
 .segment C128ResidentItems
 #endif
 #if !C128 || C128_FULL_DETECT_EVIL_EFFECT
-eff_detect_evil_only:
-    lda #0
-    sta muv_clear_detected
-    sta eff_detect_timer
-    sta vis_room_revealed
-    ldx #0
-!edeo_loop:
-    cpx #MAX_MONSTERS
-    bcs !edeo_done+
-    jsr monster_get_ptr
-    ldy #MX_TYPE
-    lda (zp_ptr0),y
-    cmp #EMPTY_SLOT
-    beq !edeo_next+
-    ldy #MX_FLAGS
-    lda (zp_ptr0),y
-    and #~MF_DETECTED & $ff
-    sta (zp_ptr0),y
-    ldy #MX_TYPE
-    lda (zp_ptr0),y
-    tay
-    lda cr_mflags,y
-    and #$04
-    beq !edeo_next+
-
-    ldy #MX_Y
-    lda (zp_ptr0),y
-    sta zp_temp1
-    sec
-    sbc zp_view_y
-    bcc !edeo_next+
-    cmp #VIEWPORT_H
-    bcs !edeo_next+
-
-    ldy #MX_X
-    lda (zp_ptr0),y
-    sec
-    sbc zp_view_x
-    bcc !edeo_next+
-    cmp #VIEWPORT_W
-    bcs !edeo_next+
-
-    ldy #MX_FLAGS
-    lda (zp_ptr0),y
-    ora #MF_DETECTED
-    sta (zp_ptr0),y
-    lda #1
-    sta eff_detect_evil_mode
-    lda #DETECT_TIMER_EVIL_ONLY
-    sta eff_detect_timer
-    lda #1
-    sta vis_room_revealed
-!edeo_next:
-    inx
-    jmp !edeo_loop-
-!edeo_done:
-    lda vis_room_revealed
-    rts
+#import "player_magic_detect_evil_effect.s"
 #endif
 #if C128 && C128_FULL_DETECT_EVIL_EFFECT
 .segment C128ResidentWorld

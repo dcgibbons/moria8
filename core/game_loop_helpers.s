@@ -293,6 +293,7 @@ post_turn_update_visibility_after_action:
     jsr perf_p1_mark_full_reason_update_visibility
 #endif
 	    jsr render_viewport
+	    jsr detect_evil_clear_reveal
 	    jsr status_draw
     jmp main_loop
 
@@ -313,6 +314,9 @@ vp_render_status_loop:
     jsr perf_p1_mark_full_default_transition
 #endif
 	    jsr render_viewport
+#if C128
+	    jsr detect_evil_clear_reveal
+#endif
 	    jsr status_draw
 #if C128_TEST_PERF_P1_TRACE_COMMAND
     jmp c128_test_perf_p1_trace_capture_sym

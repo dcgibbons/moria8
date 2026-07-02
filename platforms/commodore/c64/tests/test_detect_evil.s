@@ -224,6 +224,7 @@ test_reset_detect_evil_prayer_state:
     sta tde_last_msg_lo
     sta tde_last_msg_hi
     sta eff_detect_timer
+    sta eff_detect_evil_mode
     sta vis_room_revealed
     lda #$ff
     sta tde_last_spell_idx
@@ -330,31 +331,47 @@ test_start:
     sta zp_view_x
     sta zp_view_y
     jsr player_pray
-    bcc !t2_fail+
+    bcs !t2_cast_ok+
+    jmp !t2_fail+
+!t2_cast_ok:
+    jmp !t2_checks+
+!t2_fail_jmp:
+    jmp !t2_fail+
+!t2_checks:
     lda tde_spell_exec_calls
     cmp #1
-    bne !t2_fail+
+    bne !t2_fail_jmp-
     lda tde_last_spell_idx
     cmp #0
-    bne !t2_fail+
+    bne !t2_fail_jmp-
     lda tde_msg_calls
     cmp #1
-    bne !t2_fail+
+    bne !t2_fail_jmp-
     lda tde_last_msg_lo
     cmp #<pmx_msg_evil_on
-    bne !t2_fail+
+    bne !t2_fail_jmp-
     lda tde_last_msg_hi
     cmp #>pmx_msg_evil_on
+    bne !t2_fail_jmp-
+    lda test_mon_table + MX_FLAGS
+    and #MF_DETECTED
+    beq !t2_fail_jmp-
+    lda eff_detect_timer
+    bne !t2_fail_jmp-
+    lda eff_detect_evil_mode
+    cmp #1
+    bne !t2_fail_jmp-
+    jsr detect_evil_clear_reveal
+    lda eff_detect_evil_mode
     bne !t2_fail+
     lda test_mon_table + MX_FLAGS
     and #MF_DETECTED
-    beq !t2_fail+
-    lda eff_detect_timer
-    cmp #DETECT_TIMER_EVIL_ONLY
     bne !t2_fail+
     lda vis_room_revealed
     cmp #1
-    bne !t2_fail+
+    beq !t2_reveal_ok+
+    jmp !t2_fail+
+!t2_reveal_ok:
     ldx #12
     lda map_row_lo,x
     sta zp_ptr1
@@ -380,8 +397,8 @@ test_start:
     lda #$00
     sta tc_results + 1
 
-    // Test 3: Detect Evil clears stale all-monster detection, cancels the
-    // Detect Monsters timer, and leaves only evil in-panel monsters revealed.
+    // Test 3: Detect Evil preserves active Detect Monsters. Its one-shot
+    // reveal clears after redraw, then timed detect owns MF_DETECTED again.
 !t3:
     :PatchJump(calc_spell_failure, test_calc_spell_failure_success)
     jsr test_clear_monsters
@@ -410,11 +427,20 @@ test_start:
     jsr player_pray
     bcc tde_t3_fail
     lda eff_detect_timer
-    cmp #DETECT_TIMER_EVIL_ONLY
+    cmp #DETECT_TIMER_TURNS
+    bne tde_t3_fail
+    lda eff_detect_evil_mode
+    cmp #1
+    bne tde_t3_fail
+    jsr detect_evil_clear_reveal
+    lda eff_detect_timer
+    cmp #DETECT_TIMER_TURNS
+    bne tde_t3_fail
+    lda eff_detect_evil_mode
     bne tde_t3_fail
     lda test_mon_table + MX_FLAGS
     and #MF_DETECTED
-    bne tde_t3_fail
+    beq tde_t3_fail
     lda test_mon_table + MONSTER_ENTRY_SIZE + MX_FLAGS
     and #MF_DETECTED
     beq tde_t3_fail
@@ -448,6 +474,8 @@ tde_t3_fail:
     lda tde_msg_calls
     bne !t4_fail+
     lda eff_detect_timer
+    bne !t4_fail+
+    lda eff_detect_evil_mode
     bne !t4_fail+
     lda vis_room_revealed
     bne !t4_fail+

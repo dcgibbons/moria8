@@ -35,12 +35,10 @@ walkable_table:
 // tile_is_walkable — Check if a tile type is walkable
 // Input: A = tile type index (0-15)
 // Output: carry set = walkable, carry clear = blocked
-// Preserves: X, Y
+// Preserves: Y
 tile_is_walkable:
-    stx zp_temp2            // Save X
     tax
     lda walkable_table,x
-    ldx zp_temp2            // Restore X
     lsr                     // Bit 0 into carry
     rts
 
@@ -686,7 +684,21 @@ do_look:
     ldy df_target_y
     jsr los_is_visible
     bcs !dl_visible+
-    jmp !dl_step+
+    lda dl_tile
+    and #TILE_TYPE_MASK
+    beq !dl_step+
+    jmp !dl_nothing+
+!dl_step:
+    // Step to next tile along scan direction
+    lda df_target_x
+    clc
+    adc dl_dx
+    sta df_target_x
+    lda df_target_y
+    clc
+    adc dl_dy
+    sta df_target_y
+    jmp !dl_scan-
 !dl_visible:
     // Check tile type — non-floor terrain is authoritative for look.
     lda dl_tile
@@ -807,7 +819,9 @@ dl_print_tile_no_flash:
     jsr floor_item_find_at
     bcs !dl_item+
     jsr glyph_find_at_stashed
-    bcc !dl_step+               // Empty floor — keep scanning
+    bcs !dl_glyph+
+    jmp !dl_step-               // Empty floor — keep scanning
+!dl_glyph:
     ldx #HSTR_PMU_GLYPH_OK
     bne dl_print_tile
 
@@ -817,18 +831,6 @@ dl_print_tile_no_flash:
     jsr dl_print_item_you_see
     clc
     rts
-
-!dl_step:
-    // Step to next tile along scan direction
-    lda df_target_x
-    clc
-    adc dl_dx
-    sta df_target_x
-    lda df_target_y
-    clc
-    adc dl_dy
-    sta df_target_y
-    jmp !dl_scan-
 
 !dl_nothing:
     ldx #HSTR_DL_NOTHING

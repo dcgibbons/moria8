@@ -52,6 +52,9 @@ hal_sound_play:
 huff_print_msg:
     rts
 
+detect_evil_clear_reveal:
+    rts
+
 msg_init:
     rts
 
@@ -331,6 +334,15 @@ player_try_move:
 
 update_visibility:
     jmp test_update_visibility
+
+game_loop_update_visibility_preserve_reveal:
+    jsr update_visibility
+    lda vis_force_redraw_pending
+    beq !done+
+    lsr vis_force_redraw_pending
+    sta vis_room_revealed
+!done:
+    rts
 
 trap_check_at_player:
     jmp test_trap_check
@@ -742,6 +754,7 @@ test_move_ok: .byte 0
 test_dir_ok: .byte 0
 test_open_ok: .byte 0
 vis_room_revealed: .byte 0
+vis_force_redraw_pending: .byte 0
 test_wait_release_calls: .byte 0
 test_get_key_calls: .byte 0
 test_help_calls: .byte 0
@@ -907,6 +920,7 @@ reset_state:
     sta zp_eff_confuse
     sta zp_eff_paralyze
     sta vis_room_revealed
+    sta vis_force_redraw_pending
     lda #$ff
     sta zp_run_dir
     sta test_store_door_idx
@@ -1459,6 +1473,40 @@ test_entry:
     lda #1
     sta test_move_ok
     sta test_scene_dirty
+    lda #CMD_MOVE_E
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    jsr run_case
+    lda test_turn_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda test_viewport_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda test_render_full_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda test_render_local_calls
+    beq *+5
+    jmp test_fail
+    lda test_status_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+
+    // Test 32: movement consumes a pending transient-overlay redraw without
+    // preserving stale vis_room_revealed forever.
+    lda #32
+    sta test_case_id
+    jsr reset_state
+    lda #1
+    sta test_move_ok
+    sta vis_force_redraw_pending
+    sta test_update_clears_reveal
     lda #CMD_MOVE_E
     sta test_cmd_script
     lda #1

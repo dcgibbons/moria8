@@ -138,14 +138,10 @@ render_viewport:
     and #FLAG_VISITED
     bne !rv_visited+
 
-    // Not visited — check if detect reveals an occupant
-    lda eff_detect_timer
-    beq !rv_detect_blank+
+    // Not visited — only a live visible/detected monster may render.
     lda zp_tile_tmp
     and #FLAG_OCCUPIED
     beq !rv_detect_blank+
-!rv_detect_render:
-    // Detect active: blank unknown terrain, then let live monster overlay decide.
     lda #$20
     sta zp_temp0
     lda #0
@@ -198,18 +194,18 @@ render_viewport:
     lda zp_view_x
     clc
     adc zp_render_x
-    sta rsd_col
+    sta rst_col_tmp
     lda zp_view_y
     clc
     adc zp_render_y
-    sta rsd_save_x
+    sta rst_dim_tmp
     ldx #0
 !rv_store_chk:
     lda store_door_x,x
-    cmp rsd_col
+    cmp rst_col_tmp
     bne !rv_store_nxt+
     lda store_door_y,x
-    cmp rsd_save_x
+    cmp rst_dim_tmp
     bne !rv_store_nxt+
     txa
     clc
@@ -268,7 +264,7 @@ render_viewport:
     // Outside light radius → dimmed (remembered tile)
     lda #COL_DGREY
     sta zp_temp1                // Override color to dark grey
-    jmp !rv_no_glyph+           // Terrain dimmed; shared monster flags may overlay.
+    bne !rv_no_glyph+           // Terrain dimmed; shared monster flags may overlay.
 
 !rv_vis_ok:
     // Item check (visible tiles only)
@@ -321,12 +317,12 @@ render_viewport:
     lda zp_view_x
     clc
     adc zp_render_x
-    sta rv_mon_x
+    sta rst_col_tmp
     lda zp_view_y
     clc
     adc zp_render_y
     tay                         // Y = map_y
-    lda rv_mon_x                // A = map_x
+    lda rst_col_tmp             // A = map_x
     jsr monster_find_at
     bcc !rv_no_monster+         // Not found (stale flag?)
     // X = slot index — get creature type
@@ -401,11 +397,9 @@ rv_apply_player_override:
     beq !done+
     jmp !row_loop-
 !done:
+    lda #0
+    sta vis_room_revealed
     rts
-
-// Scratch bytes for store door check in render_viewport
-rsd_col:    .byte 0
-rsd_save_x: .byte 0
 
 // render_single_tile — Render one tile at map coordinates
 // Used by dirty rendering to update only changed tiles.
@@ -606,15 +600,13 @@ rst_apply_player_override:
     sta zp_temp3
     lda #COL_PLAYER
     sta zp_temp4
-    jmp !rst_write+
+    bne !rst_write+
 
 !rst_blank:
     lda #SC_SPACE
     sta zp_temp3
     lda #COL_BLACK
     sta zp_temp4
-    lda eff_detect_timer
-    beq rst_apply_player_override
     lda zp_tile_tmp
     and #FLAG_OCCUPIED
     beq rst_apply_player_override
@@ -629,8 +621,7 @@ rst_apply_player_override:
     rts
 
 rst_col_tmp: .byte 0
-rst_dim_tmp: .byte 0          // Scratch for dimming distance calc
-rv_mon_x:    .byte 0          // Monster check scratch
+rst_dim_tmp: .byte 0          // Shared renderer scratch; render_viewport never calls render_single_tile.
 
 // Saved positions for dirty render detection
 old_view_x:    .byte 0

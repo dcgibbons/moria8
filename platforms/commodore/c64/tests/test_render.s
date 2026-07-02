@@ -22,6 +22,7 @@
 // 19. Blindness hides doorway monsters in full viewport redraw
 // 20. Stale cached-room index does not reveal lit-room monsters from outside
 // 21. Detect Monsters on unvisited tiles does not render glyph overlays
+// 22. Detect Evil one-shot renders detected evil monsters on unvisited tiles
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_bootstrap)
@@ -33,7 +34,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #20
+    ldx #21
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -117,6 +118,8 @@ uv_player_in_room_x:
 .const CF_INFRA = $80
 
 eff_detect_timer: .byte 0
+eff_detect_evil_mode: .byte 0
+vis_room_revealed: .byte 0
 test_item_active:   .byte 0
 test_item_x:        .byte 0
 test_item_y:        .byte 0
@@ -132,7 +135,7 @@ test_glyph_x:       .byte 0
 test_glyph_y:       .byte 0
 test_expect_char:   .byte 0
 test_expect_color:  .byte 0
-tc_results:         .fill 21, $ff
+tc_results:         .fill 22, $ff
 test_infra_x:       .byte 0
 test_infra_y:       .byte 0
 vis_cached_room_idx:.byte 0
@@ -282,7 +285,7 @@ test_start:
     ldx #$ff
     txs
 
-    ldx #19
+    ldx #21
     lda #$ff
 !clr:
     sta tc_results,x
@@ -301,7 +304,7 @@ test_start:
     jsr test_infra_cold_hidden
     jsr test_infra_timed_human_adjacent
     jsr test_infra_blind_hidden
-    jsr test_infra_unknown_warm_hidden
+    jsr test_infra_unknown_warm_visible
     jsr test_remembered_lit_monster_hidden
     jsr test_current_lit_room_monster_visible
     jsr test_lit_doorway_monster_visible
@@ -310,6 +313,7 @@ test_start:
     jsr test_blind_doorway_monster_hidden
     jsr test_stale_cached_room_monster_hidden
     jsr test_detect_monsters_unvisited_skips_glyph
+    jsr test_detect_evil_unvisited_shows_monster
     jmp test_exit_trampoline
 
 setup_scene:
@@ -318,6 +322,7 @@ setup_scene:
     sta test_mon_active
     sta test_glyph_active
     sta eff_detect_timer
+    sta eff_detect_evil_mode
     lda #COL_WHITE
     sta zp_text_color
     jsr screen_clear
@@ -810,7 +815,7 @@ test_infra_blind_hidden:
     sta tc_results + 11
     rts
 
-test_infra_unknown_warm_hidden:
+test_infra_unknown_warm_visible:
     jsr setup_scene
     lda #0
     sta zp_light_radius
@@ -825,6 +830,8 @@ test_infra_unknown_warm_hidden:
     sta test_mon_y
     lda #1
     sta test_mon_type
+    lda #MF_VISIBLE
+    sta test_mon_flags
     lda #CF_INFRA
     sta cr_mflags + 1
     ldx #21
@@ -836,9 +843,9 @@ test_infra_unknown_warm_hidden:
     lda #20
     sta zp_temp1
     jsr render_single_tile
-    lda #SC_SPACE
+    lda cr_display + 1
     sta test_expect_char
-    lda #COL_BLACK
+    lda cr_color + 1
     sta test_expect_color
     jsr assert_rendered_tile
     bcs !fail+
@@ -1190,6 +1197,57 @@ test_detect_monsters_unvisited_skips_glyph:
 !fail:
     lda #$00
     sta tc_results + 20
+    rts
+
+test_detect_evil_unvisited_shows_monster:
+    jsr setup_scene
+    lda #1
+    sta eff_detect_evil_mode
+    sta test_mon_active
+    lda #24
+    sta test_mon_x
+    lda #20
+    sta test_mon_y
+    lda #1
+    sta test_mon_type
+    lda #MF_DETECTED
+    sta test_mon_flags
+    ldx #24
+    ldy #20
+    lda #((TILE_FLOOR << 4) | FLAG_OCCUPIED)
+    jsr map_set_tile
+    lda #24
+    sta zp_temp0
+    lda #20
+    sta zp_temp1
+    jsr render_single_tile
+    lda #24
+    sta zp_temp0
+    lda #20
+    sta zp_temp1
+    lda cr_display + 1
+    sta test_expect_char
+    lda cr_color + 1
+    sta test_expect_color
+    jsr assert_rendered_tile
+    bcs !fail+
+    jsr render_viewport
+    lda #24
+    sta zp_temp0
+    lda #20
+    sta zp_temp1
+    lda cr_display + 1
+    sta test_expect_char
+    lda cr_color + 1
+    sta test_expect_color
+    jsr assert_rendered_tile
+    bcs !fail+
+    lda #$01
+    sta tc_results + 21
+    rts
+!fail:
+    lda #$00
+    sta tc_results + 21
     rts
 
 assert_rendered_tile:

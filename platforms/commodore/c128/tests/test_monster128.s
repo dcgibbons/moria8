@@ -42,10 +42,16 @@ eff_detect_timer: .byte 0
 eff_detect_evil_mode: .byte 0
 
 player_get_infra_range:
-    lda #0
+    lda test_infra_range
     rts
 
 mm_los_clear_to_target:
+    inc test_los_calls
+    lda test_los_clear
+    beq !blocked+
+    sec
+    rts
+!blocked:
     clc
     rts
 
@@ -220,15 +226,21 @@ test_start:
     ldx #0
     jsr creature_get_name
     cmp #<creature_name_buf
-    bne test_fail
+    beq !name2_lo_ok+
+    jmp test_fail
+!name2_lo_ok:
     cpy #>creature_name_buf
-    bne test_fail
+    beq !name2_hi_ok+
+    jmp test_fail
+!name2_hi_ok:
 
     ldx #0
 !name2_cmp:
     lda creature_name_buf,x
     cmp test_expected_name2,x
-    bne test_fail
+    beq !name2_char_ok+
+    jmp test_fail
+!name2_char_ok:
     cmp #0
     beq !name2_ok+
     inx
@@ -236,7 +248,159 @@ test_start:
     bne !name2_cmp-
 !name2_ok:
 
+    jsr test_visibility_paths
+    bcc !visibility_ok+
+    jmp test_fail
+!visibility_ok:
+
     jmp test_pass
+
+test_visibility_paths:
+    jsr test_visibility_reset
+    lda #CF_INFRA
+    sta cr_mflags + 1
+    lda #5
+    sta test_infra_range
+    lda #1
+    sta test_los_clear
+    jsr monster_update_visibility_all
+    lda monster_table + MX_FLAGS
+    and #MF_VISIBLE
+    bne !warm_visible_ok+
+    sec
+    rts
+!warm_visible_ok:
+
+    jsr test_visibility_reset
+    lda #CF_INFRA
+    sta cr_mflags + 1
+    lda #5
+    sta test_infra_range
+    lda #0
+    sta test_los_clear
+    jsr monster_update_visibility_all
+    lda monster_table + MX_FLAGS
+    and #MF_VISIBLE
+    beq !closed_door_ok+
+    sec
+    rts
+!closed_door_ok:
+
+    jsr test_visibility_reset
+    lda #0
+    sta cr_mflags + 1
+    lda #1
+    sta test_los_clear
+    jsr monster_update_visibility_all
+    lda monster_table + MX_FLAGS
+    and #MF_VISIBLE
+    beq !cold_dark_ok+
+    sec
+    rts
+!cold_dark_ok:
+
+    jsr test_visibility_reset
+    lda #0
+    sta cr_mflags + 1
+    lda #4
+    sta zp_light_radius
+    lda #1
+    sta test_los_clear
+    jsr monster_update_visibility_all
+    lda monster_table + MX_FLAGS
+    and #MF_VISIBLE
+    bne !light_visible_ok+
+    sec
+    rts
+!light_visible_ok:
+
+    jsr test_visibility_reset
+    lda #0
+    sta cr_mflags + 1
+    lda #4
+    sta zp_light_radius
+    lda #1
+    sta zp_eff_blind
+    sta test_los_clear
+    jsr monster_update_visibility_all
+    lda monster_table + MX_FLAGS
+    and #MF_VISIBLE
+    beq !blind_hidden_ok+
+    sec
+    rts
+!blind_hidden_ok:
+
+    jsr test_visibility_reset
+    lda #1
+    sta eff_detect_timer
+    lda #4
+    sta zp_light_radius
+    lda #1
+    sta test_los_clear
+    lda #0
+    sta eff_detect_evil_mode
+    sta test_los_calls
+    jsr monster_update_visibility_all
+    lda monster_table + MX_FLAGS
+    and #MF_DETECTED
+    bne !detect_ok+
+    sec
+    rts
+!detect_ok:
+    lda test_los_calls
+    beq !detect_los_skipped+
+    sec
+    rts
+!detect_los_skipped:
+    lda monster_table + MX_FLAGS
+    and #MF_VISIBLE
+    beq !detect_visible_clear+
+    sec
+    rts
+!detect_visible_clear:
+    clc
+    rts
+
+test_visibility_reset:
+    jsr monster_init_table
+    lda #0
+    sta eff_detect_timer
+    sta eff_detect_evil_mode
+    sta muv_clear_detected
+    sta zp_eff_blind
+    sta zp_light_radius
+    sta cr_mflags + 1
+    sta test_infra_range
+    sta test_los_clear
+    lda #1
+    sta zp_player_dlvl
+    lda #10
+    sta zp_player_x
+    sta zp_player_y
+
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda #1
+    sta (zp_ptr0),y
+    ldy #MX_X
+    lda #14
+    sta (zp_ptr0),y
+    ldy #MX_Y
+    lda #10
+    sta (zp_ptr0),y
+    ldy #MX_FLAGS
+    lda #0
+    sta (zp_ptr0),y
+
+    lda map_row_lo + 10
+    sta zp_ptr0
+    lda map_row_hi + 10
+    sta zp_ptr0_hi
+    ldy #14
+    lda #((TILE_FLOOR << 4) | FLAG_OCCUPIED)
+    :MapWrite_ptr0_y()
+    rts
 
 test_fail:
     lda #$00
@@ -274,6 +438,9 @@ cmb_print_buf: rts
 // Required variables
 current_tier: .byte 0
 tier_silent_restore: .byte 0
+test_infra_range: .byte 0
+test_los_clear: .byte 0
+test_los_calls: .byte 0
 tier_count_table: .fill 5, 0
 c128_tier_cache_slot_lo:
     .byte 0, <BANK1_TIER_CACHE_BASE, <TEST_TIER2_BASE, 0, 0

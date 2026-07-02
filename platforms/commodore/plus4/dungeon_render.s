@@ -138,14 +138,10 @@ render_viewport:
     and #FLAG_VISITED
     bne !rv_visited+
 
-    // Not visited — check if detect reveals an occupant
-    lda eff_detect_timer
-    beq !rv_detect_blank+
+    // Not visited — only a live visible/detected monster may render.
     lda zp_tile_tmp
     and #FLAG_OCCUPIED
     beq !rv_detect_blank+
-!rv_detect_render:
-    // Detect active: blank unknown terrain, then let live monster overlay decide.
     lda #$20
     sta zp_temp0
     lda #0
@@ -404,6 +400,8 @@ rv_apply_player_override:
     beq !done+
     jmp !row_loop-
 !done:
+    lda #0
+    sta vis_room_revealed
     rts
 
 // Scratch bytes for store door check in render_viewport
@@ -452,7 +450,16 @@ render_single_tile:
     // Check visited flag
     and #FLAG_VISITED
     bne !rst_visited+
+    lda zp_tile_tmp
+    and #FLAG_OCCUPIED
+    bne !rst_detect_occ+
     jmp !rst_blank+
+!rst_detect_occ:
+    lda #SC_SPACE
+    sta zp_temp3
+    lda #0
+    sta zp_temp4
+    jmp !rst_unvisited_detected+
 !rst_visited:
 
     // Extract tile type (bits 7-4)
@@ -575,6 +582,7 @@ render_single_tile:
 !rst_no_glyph:
 
     // Monster check (visible tiles only — overrides items)
+!rst_unvisited_detected:
     lda zp_tile_tmp
     and #FLAG_OCCUPIED
     beq !rst_no_monster+
@@ -616,8 +624,6 @@ rst_apply_player_override:
     sta zp_temp3
     lda #COL_BLACK
     sta zp_temp4
-    lda eff_detect_timer
-    beq rst_apply_player_override
     lda zp_tile_tmp
     and #FLAG_OCCUPIED
     beq rst_apply_player_override

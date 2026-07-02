@@ -299,6 +299,62 @@ test_start:
     jsr los_is_visible
     bcc test_fail
 
+    // Test 7: real LOS tracing on C128 must honor live Bank 1 doors.
+    // A closed door between player and target blocks; an open door clears.
+    jsr mmu_select_bank1
+    ldx #10
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #10
+    lda #TILE_FLOOR
+    sta (zp_ptr0),y
+    ldy #11
+    sta (zp_ptr0),y
+    ldy #12
+    lda #TILE_DOOR_CLOSED
+    sta (zp_ptr0),y
+    ldy #13
+    lda #TILE_FLOOR
+    sta (zp_ptr0),y
+    ldy #14
+    sta (zp_ptr0),y
+    jsr mmu_select_bank0
+
+    lda #10
+    sta zp_player_x
+    sta zp_player_y
+    sta zp_temp0
+    sta zp_temp1
+    lda #14
+    sta zp_los_dx
+    lda #10
+    sta zp_los_dy
+    jsr mm_los_clear_to_target
+    bcs test_fail
+
+    jsr mmu_select_bank1
+    ldx #10
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #12
+    lda #TILE_DOOR_OPEN
+    sta (zp_ptr0),y
+    jsr mmu_select_bank0
+
+    lda #10
+    sta zp_temp0
+    sta zp_temp1
+    lda #14
+    sta zp_los_dx
+    lda #10
+    sta zp_los_dy
+    jsr mm_los_clear_to_target
+    bcc test_fail
+
     jmp test_pass
 
 test_fail:

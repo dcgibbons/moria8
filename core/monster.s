@@ -1046,11 +1046,10 @@ monster_update_visibility_one:
     // Timed Detect Monsters owns MF_DETECTED while active.
     lda eff_detect_timer
     beq !muvo_detect_done+
-    lda eff_detect_evil_mode
-    bne !muvo_detect_done+
     lda muv_new_flags
     ora #MF_DETECTED
     sta muv_new_flags
+    jmp !muvo_store+
 !muvo_detect_done:
 
     lda zp_eff_blind

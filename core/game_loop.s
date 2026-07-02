@@ -1275,7 +1275,7 @@ c128_town_move_diag_after_turn_post_action:
 #if C128_TEST_PERF_P1_TRACE
     jsr perf_p1_trace_reset_move_start
 #endif
-    jsr update_visibility
+    jsr game_loop_update_visibility_preserve_reveal
     jsr viewport_update
 
     // Did viewport scroll?
@@ -2200,7 +2200,7 @@ run_step:
     bcc !not_dead+
     jmp !player_died+
 !not_dead:
-    jsr update_visibility
+    jsr game_loop_update_visibility_preserve_reveal
     jsr viewport_update
 
     // Check for viewport scroll or room reveal
@@ -2307,7 +2307,7 @@ run_step:
     bcc !not_dead+
     jmp !player_died+
 !not_dead:
-    jsr update_visibility
+    jsr game_loop_update_visibility_preserve_reveal
     jsr viewport_update
 
     // Check for viewport scroll or room reveal
@@ -2407,6 +2407,10 @@ try_store_entry:
     jmp render_viewport
 !no_store:
     rts
+
+#if !C128
+.label game_loop_update_visibility_preserve_reveal = update_visibility
+#endif
 
 player_died:
 !player_died:

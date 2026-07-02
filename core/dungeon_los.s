@@ -16,6 +16,9 @@
 // Data
 // ============================================================
 vis_room_revealed: .byte 0    // Set to 1 if a room was batch-revealed this turn
+#if C128
+vis_force_redraw_pending: .byte 0 // Transient overlay clear awaiting visibility pass
+#endif
 vis_cached_room_idx: .byte $ff // Current lit-room cache; $ff = no cached room
 
 // Scratch for update_visibility
@@ -46,8 +49,10 @@ update_visibility:
     jsr c128_stack_guard_snapshot_banking
 #endif
 
+#if C128
     lda #0
     sta vis_room_revealed
+#endif
 
     // Blindness — skip all visibility updates
     lda zp_eff_blind

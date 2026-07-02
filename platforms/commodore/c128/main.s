@@ -2000,8 +2000,8 @@ tramp_dig_ability:
     rts
 }
 
-// tramp_ego_get_ac_bonus — Get ego AC bonus from the low-RAM table.
-// Keep this inline on C128 so low runtime does not carry a separate helper.
+// tramp_ego_get_ac_bonus — Get ego AC bonus from resident Bank 0 table.
+// Keep this inline on C128 so resident items does not carry a separate helper.
 tramp_ego_apply_damage:
     :C128BankedPreserveATrampoline(ego_apply_damage)
 
@@ -2839,9 +2839,9 @@ c128_load_resident_items_prg:
     sta zp_ptr0
     lda #>resident_items_filename
     sta zp_ptr0_hi
-    lda #$80
+    lda #<c128_resident_items_start
     sta zp_ptr1
-    lda #$8c
+    lda #>c128_resident_items_start
     sta zp_ptr1_hi
     jmp c128_load_runtime_prg
 
@@ -2901,6 +2901,9 @@ c128_load_resident_play_prg:
 .const C128_MODAL_UNKNOWN = 0
 .const C128_MODAL_PLAY    = 1
 .const C128_MODAL_PERSIST = 2
+.const C128_RESIDENT_PLAY_SIG0 = $4d
+.const C128_RESIDENT_PLAY_SIG1 = $38
+.const C128_RESIDENT_PLAY_SIG2 = $50
 
 c128_require_program_media:
     jsr disk_prompt_game
@@ -3027,8 +3030,14 @@ c128_modal_require_play:
     sta c128_runtime_load_stage
     jsr c128_load_resident_play_prg
     bcs !play_load_failed+
-    lda c128_resident_play_sig
-    cmp #$59
+    lda c128_resident_play_sig0
+    cmp #C128_RESIDENT_PLAY_SIG0
+    bne !play_load_failed+
+    lda c128_resident_play_sig1
+    cmp #C128_RESIDENT_PLAY_SIG1
+    bne !play_load_failed+
+    lda c128_resident_play_sig2
+    cmp #C128_RESIDENT_PLAY_SIG2
     beq !play_loaded+
 !play_load_failed:
     jsr c128_program_media_error_prompt
@@ -3115,7 +3124,7 @@ tramp_sr_epilogue:
     rts
 
 // ============================================================
-// Ego item trampolines — SEI + bank out KERNAL, call $F000+
+// Ego item trampolines — SEI + bank out KERNAL, call resident Bank 0 code.
 // ============================================================
 tramp_roll_ego_type:
     :C128BankedPreserveAReturnTrampoline(roll_ego_type)
@@ -3745,8 +3754,9 @@ ptep_temp: .byte 0
 tool_ego_prefix_hi:
     .byte >ego_tool_prefix_gnomish, >ego_tool_prefix_dwarven
     .byte >ego_tool_prefix_orcish,  >ego_tool_prefix_dwarven
-#import "../../../core/item.s"
-#import "../../../core/store_data.s"
+    #import "../../../core/item.s"
+    #import "../../../core/ego_items.s"
+    #import "../../../core/store_data.s"
 ego_str_holy_avenger_common:
     .text " (Holy Avenger)" ; .byte 0
 
@@ -3932,9 +3942,13 @@ c128_resident_persist_end:
 #define GAME_LOOP_LOW_DATA_EXTERNAL
 .segment C128ResidentPlay
 c128_resident_play_start:
-c128_resident_play_sig:
-at_surface_str:
-    .text "You are already at the surface." ; .byte 0
+c128_resident_play_sig0:
+    .byte C128_RESIDENT_PLAY_SIG0
+c128_resident_play_sig1:
+    .byte C128_RESIDENT_PLAY_SIG1
+c128_resident_play_sig2:
+    .byte C128_RESIDENT_PLAY_SIG2
+c128_resident_play_body:
 #if PERF_P1
 #import "../common/perf_p1_data.s"
 #endif
@@ -4708,9 +4722,10 @@ runtime_input_data_end:
 .segment RuntimeLowData
     #import "monster_threat_vdc.s"
     #import "dungeon_render_vdc.s"
-    #import "../../../core/ego_items.s"
 winner_save_blocked_str:
     .text "Winner: Shift+Q to claim victory." ; .byte 0
+at_surface_str:
+    .text "You are already at the surface." ; .byte 0
 no_stairs_str:
     .text "You see no stairs here." ; .byte 0
 recall_prompt_str:
@@ -4803,9 +4818,20 @@ program_end:
 .assert "C128 disk marker logical file avoids runtime loader files", hal_storage_marker_file_num > RUNTIME_BANKED_FILE_NUM && hal_storage_marker_file_num != RESIDENT_ITEM_NAMES_FILE_NUM && hal_storage_marker_file_num < hal_storage_cmd_channel, true
 .assert "C128 item-name logical file avoids marker and command channel", RESIDENT_ITEM_NAMES_FILE_NUM != hal_storage_marker_file_num && RESIDENT_ITEM_NAMES_FILE_NUM < hal_storage_cmd_channel, true
 .assert "Low runtime code stays below floor-item table", runtime_low_data_end <= FLOOR_ITEM_BASE, true
-.assert "Ego roll routine stays in low runtime RAM", roll_ego_type < FLOOR_ITEM_BASE, true
-.assert "Ego damage routine stays in low runtime RAM", ego_apply_damage < FLOOR_ITEM_BASE, true
-.assert "Ego AC table stays in low runtime RAM", ego_ac_bonus < FLOOR_ITEM_BASE, true
+.assert "Low runtime code stays below C128 scratch page", runtime_low_data_end <= CREATURE_BASE, true
+.assert "C128 resident items loader matches segment start", c128_resident_items_start == $8c70, true
+.assert "C128 resident items load address matches segment start", c128_resident_items_start == $8c70, true
+.assert "C128 play signature starts payload", c128_resident_play_sig0 == c128_resident_play_start, true
+.assert "C128 play signature is three bytes", c128_resident_play_body - c128_resident_play_sig0, 3
+.assert "C128 play body follows signature", c128_resident_play_body == c128_resident_play_start + 3, true
+.assert "Ego roll routine stays in resident item payload", roll_ego_type >= c128_resident_items_start && roll_ego_type < c128_resident_items_end, true
+.assert "Ego suffix pointer routine stays in resident item payload", ego_get_suffix_ptr >= c128_resident_items_start && ego_get_suffix_ptr < c128_resident_items_end, true
+.assert "Ego suffix lo table stays in resident item payload", ego_suffix_lo >= c128_resident_items_start && ego_suffix_lo < c128_resident_items_end, true
+.assert "Ego suffix hi table stays in resident item payload", ego_suffix_hi >= c128_resident_items_start && ego_suffix_hi < c128_resident_items_end, true
+.assert "Ego damage routine stays in resident item payload", ego_apply_damage >= c128_resident_items_start && ego_apply_damage < c128_resident_items_end, true
+.assert "Ego AC table stays in resident item payload", ego_ac_bonus >= c128_resident_items_start && ego_ac_bonus < c128_resident_items_end, true
+.assert "Digging-tool ego tail stays in resident PLAY payload", roll_tool_ego_check >= c128_resident_play_body && roll_tool_ego_check < c128_resident_play_end, true
+.assert "Tool ego prefix printer stays in resident PLAY payload", put_tool_ego_prefix >= c128_resident_play_body && put_tool_ego_prefix < c128_resident_play_end, true
 .assert "Cache state block stays in Bank0 program RAM", c128_cache_state_start >= $1c01, true
 .assert "Cache state block ends before overlay window", c128_cache_state_end < $e000, true
 .assert "Overlay state block starts in resident Bank0 RAM", overlay_state_block_start >= c128_cache_state_start && overlay_state_block_start < $e000, true

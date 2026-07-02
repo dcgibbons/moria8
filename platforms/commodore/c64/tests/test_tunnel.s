@@ -31,67 +31,77 @@ test_exit_trampoline:
 
 #import "../../../../core/zeropage.s"
 #import "../memory.s"
-#import "../../common/reu.s"
-#import "../screen.s"
-#import "../../../../core/color.s"
-#import "../config.s"
-#import "../input.s"
 #import "../../../../core/rng.s"
 #import "../../../../core/math.s"
-#import "../../../../core/tables.s"
+#import "../../../../core/color.s"
 #import "../../../../core/item_defs.s"
-#import "../../../../core/player.s"
-#import "../../../../core/ui_messages.s"
-#import "../../../../core/ui_status.s"
-#import "../../../../core/ui_help_clear.s"
-#import "../../../../core/ui_character.s"
-#import "../../../../core/stat_display.s"
-.segmentdef TestCreateOverlay [start=$D000]
-.segment TestCreateOverlay
-#import "../../../../core/background_data.s"
-#import "../../../../core/player_create.s"
-.segment Default
-#import "../../../../core/sound.s"
-#import "../../../../core/dungeon_data.s"
-#import "../../../../core/dungeon_gen.s"
-#import "../../../../core/huffman.s"
-#import "../../../../core/dungeon_features.s"
-#import "../../../../core/monster.s"
-#import "../../../../core/tier_manager.s"
-#import "../../common/overlay.s"
-#import "../../../../core/monster_ai.s"
-#import "../../../../core/recall.s"
-#import "../../../../core/monster_magic.s"
-#import "../../../../core/item.s"
-#import "../../../../core/special_rooms.s"
-#import "../../../../core/ego_items.s"
-#import "../../../../core/special_rooms_stubs.s"
-#import "../../../../core/player_items.s"
-#import "../../../../core/spell_data.s"
-#import "../../../../core/projectile.s"
-#import "../../../../core/spell_effects.s"
-#import "../../../../core/player_magic_state.s"
-#import "../../../../core/player_magic_state_ops.s"
-#import "../../../../core/player_magic.s"
-#import "../../../../core/ui_inventory.s"
-#import "../../../../core/ui_equipment.s"
-#import "../dungeon_render.s"
-#import "../../../../core/dungeon_los.s"
-#import "../../../../core/player_move.s"
-#import "../../../../core/combat.s"
-#import "../../../../core/monster_attack.s"
-#import "../../../../core/turn.s"
-#import "../../../../core/store_data.s"
-#import "../../../../core/store.s"
-#import "../../../../core/ui_store.s"
-#import "../../../../core/ui_help.s"
-#define C64_TEST_FULL_ITEMDESC_STUB
-#import "../../../../core/ui_trampoline_stubs.s"
-#import "../../../../core/tunnel.s"
+
+.const CF_UNDEAD = $02
+.const CF_EVIL   = $04
+.const CF_ANIMAL = $08
+.const ICAT_NONE   = 0
+.const ICAT_GOLD   = 1
+.const ICAT_WEAPON = 2
+.const ICAT_ARMOR  = 3
+.const ICAT_SHIELD = 4
+.const ICAT_HELM   = 5
+.const ICAT_GLOVES = 6
+.const ICAT_BOOTS  = 7
+.const ICAT_LIGHT  = 8
+.const ICAT_FOOD   = 9
+.const ICAT_POTION = 10
+.const ICAT_SCROLL = 11
+.const ICAT_RING   = 12
+.const ICAT_BOOK   = 13
+.const ICAT_WAND   = 14
+.const ICAT_STAFF  = 15
+.const PL_TODMG    = 41
+.const PL_RESERVED = 107
+
+#import "../../../../core/item_tables.s"
 
 // Strings referenced by imported modules but defined in main.s
 press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
+
+msg_init:
+hal_sound_init:
+    rts
+
+tun_dig_ability: .byte 0
+inv_item_id: .fill TOTAL_INV_SLOTS, FI_EMPTY
+inv_ego:     .fill TOTAL_INV_SLOTS, 0
+player_data: .fill PL_RESERVED, 0
+cmb_damage:  .byte 0
+cmb_type:    .byte 0
+cr_mflags:   .fill 1, 0
+
+roll_tool_ego_check:
+    cmp #ICAT_DIGGING
+    bne !rtc_zero+
+    lda zp_player_dlvl
+    cmp #10
+    bcc !rtc_zero+
+    lda #100
+    jsr rng_range
+    cmp #10
+    bcc !rtc_ego2+
+    cmp #35
+    bcc !rtc_ego1+
+!rtc_zero:
+    lda #0
+    rts
+!rtc_ego2:
+    lda zp_player_dlvl
+    cmp #20
+    bcc !rtc_ego1+
+    lda #2
+    rts
+!rtc_ego1:
+    lda #1
+    rts
+
+#import "../../../../core/ego_items.s"
 
 // ============================================================
 // tramp_dig_ability — stub for test context

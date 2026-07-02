@@ -84,12 +84,6 @@ test_finish:
 #import "../../../../core/player_magic_state.s"
 #import "../../../../core/player_magic_state_ops.s"
 #import "../../../../core/player_magic.s"
-#import "../dungeon_render.s"
-#import "../../../../core/dungeon_los.s"
-#import "../../../../core/player_move.s"
-#import "../../../../core/combat.s"
-#import "../../../../core/monster_attack.s"
-#import "../../../../core/turn.s"
 #define C64_TEST_FULL_ITEMDESC_STUB
 #import "../../../../core/ui_trampoline_stubs.s"
 
@@ -100,12 +94,53 @@ test_finish:
 #import "../../../../core/ui_store.s"
 .segment Default
 
+.segmentdef TestPromptData [start=$bd00, min=$bd00, max=$bfff]
+
 press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
 test_key_idx: .byte 0
 test_key_script: .fill 8, 0
 captured_prompt_row0: .fill 40, 0
+cmb_buf_idx: .byte 0
+cmb_damage: .byte 0
+cmb_type: .byte 0
+cmb_slot: .byte 0
+combat_msg_buf: .fill 42, 0
+walkable_table: .fill 16, 0
+eff_fear_timer: .byte 0
+light_room_x: .byte 0
+vis_room_revealed: .byte 0
+projectile_msg_suffix: .byte 0
+cmb_the_str: .text "the " ; .byte 0
+cmb_period: .text "." ; .byte 0
+
+combat_append_str:
+combat_append_char:
+combat_append_decimal:
+combat_append_decimal_16:
+cmb_term_and_print:
+player_death_check:
+monster_attack_player:
+mon_atk_apply_damage:
+viewport_update:
+render_viewport:
+player_update_hunger_state:
+combat_apply_damage_16:
+combat_kill_message:
+combat_print_winner_message:
+combat_award_xp:
+combat_check_levelup:
+combat_note_kill:
+    rts
+
+player_get_infra_range:
+    lda #0
+    rts
+
+tile_is_walkable:
+    sec
+    rts
 
 .macro PatchJump(target, replacement) {
     lda #$4c
@@ -1053,6 +1088,7 @@ test_start:
 !tests_done:
     jmp test_finish
 
+.segment TestPromptData
 expected_drop_prompt_av:
     .text "Drop which item (a-v)?" ; .byte 0
 expected_wear_prompt_ac:
@@ -1070,6 +1106,7 @@ expected_cast_prompt_ac:
 expected_pray_prompt_ac:
     .text "Pray which? (a-c" ; .byte 0
 
+.segment Default
 item_ui_test_body_end:
 
 .assert "Item UI test stays below MAP_BASE", item_ui_test_body_end <= MAP_BASE, true

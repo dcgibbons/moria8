@@ -19,7 +19,7 @@
 .const MF_VISIBLE = $08
 .const MF_DETECTED = $10
 .const MAX_MONSTERS = 32
-.const DETECT_TIMER_EVIL_ONLY = 2
+.const TEST_DETECT_TIMER_ACTIVE = 2
 .const CF_INFRA = $80
 
 #import "../../../../core/dungeon_data.s"
@@ -49,9 +49,14 @@ map_set_tile:
 c128_restore_runtime_state:
     rts
 
+update_visibility:
+    rts
+
 // Minimal renderer dependencies for paths we intentionally do not exercise.
 eff_detect_timer: .byte 0
 eff_detect_evil_mode: .byte 0
+vis_room_revealed: .byte 0
+vis_force_redraw_pending: .byte 0
 vis_cached_room_idx:.byte 0
 test_item_active:    .byte 0
 test_item_x:         .byte 0
@@ -216,11 +221,13 @@ test_start:
     jsr test_render_single_tile_item_override
     jsr test_render_single_tile_monster_override
     jsr test_render_single_tile_player_override
-    jsr test_render_single_tile_detect_evil_hides_non_evil
+    jsr test_render_single_tile_detect_timer_hides_unmarked_monster
     jsr test_render_viewport_player_override_unvisited
     jsr test_render_viewport_infra_warm_unvisited
+    jsr test_render_viewport_detect_evil_unvisited
     jsr test_render_viewport_glyph_overlay
     jsr test_render_viewport_dimmed_glyph_hidden
+    jsr test_scroll_delta_skips_pending_full_redraw
     jsr test_h_scroll_left_fast_path
     jsr test_left_scroll_falls_back
     jsr test_v_scroll_up_first_op_uses_copy_mode
@@ -254,6 +261,7 @@ reset_render_overrides:
     sta zp_eff_blind
     sta test_glyph_active
     sta vis_cached_room_idx
+    sta eff_detect_evil_mode
     rts
 
 setup_single_tile_scene:
@@ -581,9 +589,9 @@ test_render_single_tile_player_override:
     jsr assert_vdc_cell
     rts
 
-test_render_single_tile_detect_evil_hides_non_evil:
+test_render_single_tile_detect_timer_hides_unmarked_monster:
     jsr setup_single_tile_scene
-    lda #DETECT_TIMER_EVIL_ONLY
+    lda #TEST_DETECT_TIMER_ACTIVE
     sta eff_detect_timer
     lda #1
     sta test_mon_active
@@ -666,6 +674,37 @@ test_render_viewport_infra_warm_unvisited:
     jsr assert_vdc_cell
     rts
 
+test_render_viewport_detect_evil_unvisited:
+    jsr setup_single_tile_scene
+    lda #1
+    sta eff_detect_evil_mode
+    sta test_mon_active
+    lda #24
+    sta test_mon_x
+    lda #20
+    sta test_mon_y
+    lda #1
+    sta test_mon_type
+    lda #MF_DETECTED
+    sta test_mon_flags
+    lda #COL_RED
+    sta test_mon_color_vic
+    ldx #24
+    ldy #20
+    lda #((TILE_FLOOR << 4) | FLAG_OCCUPIED)
+    jsr map_set_tile
+    jsr render_viewport
+    lda #10
+    sta test_row_rel
+    lda #14
+    sta test_col_rel
+    lda cr_display + 1
+    sta test_expected_char
+    lda #VDC_RED
+    sta test_expected_attr
+    jsr assert_vdc_cell
+    rts
+
 test_render_viewport_glyph_overlay:
     jsr setup_single_tile_scene
     lda #1
@@ -711,6 +750,31 @@ test_render_viewport_dimmed_glyph_hidden:
     sta test_expected_char
     lda #VDC_DGREY
     sta test_expected_attr
+    jsr assert_vdc_cell
+    rts
+
+test_scroll_delta_skips_pending_full_redraw:
+    jsr prepare_pattern_screen
+    lda #1
+    sta vis_room_revealed
+    lda #10
+    sta old_view_x
+    sta zp_view_y
+    sta old_view_y
+    lda #11
+    sta zp_view_x
+    jsr seed_right_strip_tiles
+    jsr render_viewport_scroll_delta
+    bcc !ok+
+    jmp test_fail
+!ok:
+    lda #0
+    sta vis_room_revealed
+    sta test_row_rel
+    sta test_col_rel
+    ldx #0
+    ldy #0
+    jsr expect_seed_cell
     jsr assert_vdc_cell
     rts
 

@@ -102,6 +102,15 @@ viewport_update:
 !vy_done:
     rts
 
+game_loop_update_visibility_preserve_reveal:
+    jsr update_visibility
+    lda vis_force_redraw_pending
+    beq !done+
+    lsr vis_force_redraw_pending
+    sta vis_room_revealed
+!done:
+    rts
+
 // render_viewport — Draw the 78x19 viewport to VDC screen
 // For each row: stream screen codes via VDC auto-increment,
 // buffer translated colors, then stream attributes.
@@ -202,11 +211,7 @@ render_viewport:
     and #FLAG_VISITED
     bne !rv_visited+
 
-    // Not visited — check if detect reveals an occupant
-    lda eff_detect_timer
-    bne !rv_detect_chk+
-    jmp !draw_blank+
-!rv_detect_chk:
+    // Not visited — only a live visible/detected monster may render.
     ldy zp_render_x
     lda rv_row_occ,y
     beq !rv_detect_blank+
@@ -502,6 +507,8 @@ rv_draw_blank:
 // Preserves: nothing
 render_viewport_scroll_delta:
     jsr c128_vdc_reassert_mode
+    lda vis_room_revealed
+    bne !rvsd_no_fast_h+
 
     // Horizontal scroll candidate: dy == 0, dx == +/-1
     lda zp_view_y
@@ -986,7 +993,17 @@ render_single_tile:
     // Check visited flag
     and #FLAG_VISITED
     bne !rst_visited+
+    // Not visited — only a live visible/detected monster may render.
+    lda zp_tile_tmp
+    and #FLAG_OCCUPIED
+    bne !rst_detect_occ+
     jmp !rst_blank+
+!rst_detect_occ:
+    lda #SC_SPACE
+    sta zp_temp3
+    lda #VDC_BLACK
+    sta zp_temp4
+    jmp !rst_unvisited_detected+
 !rst_visited:
 
     // Extract tile type (bits 7-4)
@@ -1108,6 +1125,7 @@ render_single_tile:
     lda #SC_GLYPH
     sta zp_temp3
 !rst_monster:
+!rst_unvisited_detected:
     lda zp_tile_tmp
     and #FLAG_OCCUPIED
     beq !rst_no_monster+
