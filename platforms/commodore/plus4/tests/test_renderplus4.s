@@ -30,6 +30,11 @@ mmu_safe_map_write_ptr1:
 
 #import "../../../../core/dungeon_data.s"
 
+walkable_table:
+    .byte 1,0,0,0,0,0,0,1,0,1,1,1,0,0,1,0
+
+#import "../../../../core/los_trace.s"
+
 map_set_tile:
     pha
     lda map_row_lo,y
@@ -146,6 +151,7 @@ glyph_find_at:
 test_start:
     sei
     cld
+    sta PLUS4_RAM_ENABLE
     ldx #$ff
     txs
     jsr test_detect_monsters_unvisited_skips_glyph
@@ -154,6 +160,7 @@ test_start:
     jsr test_detect_evil_effect_is_one_shot
     jsr test_hidden_blank
     jsr test_detect_timer_hides_unmarked_monster
+    jsr test_real_los_diagonal_corner_block
     jsr test_horizontal_move_repairs_stale_monster
     jsr test_vertical_move_repairs_stale_monster
     jmp test_pass
@@ -172,9 +179,13 @@ setup_scene:
     lda #10
     sta zp_view_x
     sta zp_view_y
+    sta old_view_x
+    sta old_view_y
     lda #20
     sta zp_player_x
     sta zp_player_y
+    sta old_player_x
+    sta old_player_y
     lda #1
     sta zp_light_radius
     sta zp_player_dlvl
@@ -237,6 +248,56 @@ test_detect_timer_hides_unmarked_monster:
     beq !ok+
     jmp test_fail
 !ok:
+    rts
+
+test_real_los_diagonal_corner_block:
+    jsr setup_scene
+    ldx #20
+    ldy #20
+    lda #(TILE_FLOOR | FLAG_VISITED | FLAG_LIT)
+    jsr map_set_tile
+    ldx #21
+    ldy #20
+    lda #(TILE_WALL_H | FLAG_VISITED | FLAG_LIT)
+    jsr map_set_tile
+    ldx #20
+    ldy #19
+    lda #(TILE_WALL_H | FLAG_VISITED | FLAG_LIT)
+    jsr map_set_tile
+    ldx #21
+    ldy #19
+    lda #(TILE_FLOOR | FLAG_VISITED | FLAG_LIT)
+    jsr map_set_tile
+
+    lda #20
+    sta zp_player_x
+    sta zp_player_y
+    sta zp_temp0
+    sta zp_temp1
+    lda #21
+    sta zp_los_dx
+    lda #19
+    sta zp_los_dy
+    jsr mm_los_clear_to_target
+    bcc !blocked+
+    jmp test_fail
+!blocked:
+    ldx #21
+    ldy #20
+    lda #(TILE_FLOOR | FLAG_VISITED | FLAG_LIT)
+    jsr map_set_tile
+
+    lda #20
+    sta zp_temp0
+    sta zp_temp1
+    lda #21
+    sta zp_los_dx
+    lda #19
+    sta zp_los_dy
+    jsr mm_los_clear_to_target
+    bcs !open+
+    jmp test_fail
+!open:
     rts
 
 test_detect_monsters_unvisited_skips_glyph:
@@ -428,7 +489,7 @@ test_horizontal_move_repairs_stale_monster:
     sta zp_player_x
     lda #0
     sta test_mon_flags
-    jsr render_viewport
+    jsr render_local_area
     lda #24
     sta zp_temp0
     lda #20
@@ -466,7 +527,7 @@ test_vertical_move_repairs_stale_monster:
     sta zp_player_y
     lda #0
     sta test_mon_flags
-    jsr render_viewport
+    jsr render_local_area
     lda #20
     sta zp_temp0
     lda #24

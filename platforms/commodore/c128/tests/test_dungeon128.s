@@ -297,7 +297,9 @@ test_start:
     ldx #12
     ldy #10
     jsr los_is_visible
-    bcc test_fail
+    bcs !bank_los_ok+
+    jmp test_fail
+!bank_los_ok:
 
     // Test 7: real LOS tracing on C128 must honor live Bank 1 doors.
     // A closed door between player and target blocks; an open door clears.
@@ -332,7 +334,9 @@ test_start:
     lda #10
     sta zp_los_dy
     jsr mm_los_clear_to_target
-    bcs test_fail
+    bcc !closed_door_blocks+
+    jmp test_fail
+!closed_door_blocks:
 
     jsr mmu_select_bank1
     ldx #10
@@ -353,7 +357,71 @@ test_start:
     lda #10
     sta zp_los_dy
     jsr mm_los_clear_to_target
-    bcc test_fail
+    bcs !open_door_clears+
+    jmp test_fail
+!open_door_clears:
+
+    // Test 8: diagonal LOS on C128 must honor live Bank 1 corner blockers.
+    // A diagonal target is blocked when both orthogonal side cells are closed.
+    jsr mmu_select_bank1
+    ldx #20
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #20
+    lda #TILE_FLOOR
+    sta (zp_ptr0),y
+    ldy #21
+    lda #TILE_WALL_H
+    sta (zp_ptr0),y
+    ldx #19
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #20
+    lda #TILE_WALL_H
+    sta (zp_ptr0),y
+    ldy #21
+    lda #TILE_FLOOR
+    sta (zp_ptr0),y
+    jsr mmu_select_bank0
+
+    lda #20
+    sta zp_temp0
+    sta zp_temp1
+    lda #21
+    sta zp_los_dx
+    lda #19
+    sta zp_los_dy
+    jsr mm_los_clear_to_target
+    bcc !corner_blocks+
+    jmp test_fail
+!corner_blocks:
+
+    jsr mmu_select_bank1
+    ldx #20
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #21
+    lda #TILE_FLOOR
+    sta (zp_ptr0),y
+    jsr mmu_select_bank0
+
+    lda #20
+    sta zp_temp0
+    sta zp_temp1
+    lda #21
+    sta zp_los_dx
+    lda #19
+    sta zp_los_dy
+    jsr mm_los_clear_to_target
+    bcs !corner_open_clears+
+    jmp test_fail
+!corner_open_clears:
 
     jmp test_pass
 

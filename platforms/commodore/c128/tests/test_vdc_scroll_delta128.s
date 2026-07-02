@@ -20,7 +20,6 @@
 .const MF_DETECTED = $10
 .const MAX_MONSTERS = 32
 .const TEST_DETECT_TIMER_ACTIVE = 2
-.const CF_INFRA = $80
 
 #import "../../../../core/dungeon_data.s"
 
@@ -69,7 +68,6 @@ test_mon_y:          .byte 0
 test_mon_type:       .byte 0
 test_mon_flags:      .byte 0
 test_mon_color_vic:  .byte COL_WHITE
-test_infra_enabled:  .byte 0
 test_glyph_active:   .byte 0
 test_glyph_x:        .byte 0
 test_glyph_y:        .byte 0
@@ -81,7 +79,6 @@ it_display: .fill 2, 0
 
 cr_display: .fill 2, 0
 cr_color:   .fill 2, 0
-cr_mflags:  .fill 2, 0
 monster_stub_entry:
     .fill 12, EMPTY_SLOT
 
@@ -151,26 +148,6 @@ monster_get_threat_color:
     lda test_mon_color_vic
     rts
 
-monster_is_infra_visible_at:
-    ldx zp_eff_blind
-    bne !miss+
-    ldx test_infra_enabled
-    beq !miss+
-    jsr monster_find_at
-    bcc !miss+
-    jsr monster_get_ptr
-    ldy #MX_TYPE
-    lda (zp_ptr0),y
-    tax
-    lda cr_mflags,x
-    and #CF_INFRA
-    beq !miss+
-    sec
-    rts
-!miss:
-    clc
-    rts
-
 test_row_seed:
     .byte $11, $18, $1f, $26, $2d, $34, $3b, $42, $49, $50
     .byte $57, $5e, $65, $6c, $73, $7a, $81, $88, $8f
@@ -214,18 +191,16 @@ test_start:
 
     jsr init_floor_items
     jsr test_render_single_tile_hidden_blank
-    jsr test_render_single_tile_infra_warm_unvisited
+    jsr test_render_single_tile_unmarked_occupied_unvisited
     jsr test_render_single_tile_visible_unvisited
     jsr test_render_single_tile_detected_unvisited_without_timer
-    jsr test_render_single_tile_infra_cold_hidden
-    jsr test_render_single_tile_infra_blind_hidden
-    jsr test_render_single_tile_infra_warm_dimmed
+    jsr test_render_single_tile_visible_dimmed
     jsr test_render_single_tile_item_override
     jsr test_render_single_tile_monster_override
     jsr test_render_single_tile_player_override
     jsr test_render_single_tile_detect_timer_hides_unmarked_monster
     jsr test_render_viewport_player_override_unvisited
-    jsr test_render_viewport_infra_warm_unvisited
+    jsr test_render_viewport_unmarked_occupied_unvisited
     jsr test_render_viewport_detect_evil_unvisited
     jsr test_render_viewport_glyph_overlay
     jsr test_render_viewport_dimmed_glyph_hidden
@@ -252,8 +227,6 @@ init_floor_items:
     sta it_display + 1
     lda #$4d
     sta cr_display + 1
-    lda #0
-    sta cr_mflags + 1
     rts
 
 reset_render_overrides:
@@ -261,7 +234,6 @@ reset_render_overrides:
     sta test_item_active
     sta test_mon_active
     sta test_mon_flags
-    sta test_infra_enabled
     sta zp_eff_blind
     sta test_glyph_active
     sta vis_cached_room_idx
@@ -330,10 +302,9 @@ test_render_single_tile_hidden_blank:
     jsr assert_vdc_cell
     rts
 
-test_render_single_tile_infra_warm_unvisited:
+test_render_single_tile_unmarked_occupied_unvisited:
     jsr setup_single_tile_scene
     lda #1
-    sta test_infra_enabled
     sta test_mon_active
     lda #24
     sta test_mon_x
@@ -343,8 +314,6 @@ test_render_single_tile_infra_warm_unvisited:
     sta test_mon_type
     lda #COL_RED
     sta test_mon_color_vic
-    lda #CF_INFRA
-    sta cr_mflags + 1
     ldx #24
     ldy #20
     lda #((TILE_FLOOR << 4) | FLAG_OCCUPIED)
@@ -435,85 +404,9 @@ test_render_single_tile_detected_unvisited_without_timer:
     jsr assert_vdc_cell
     rts
 
-test_render_single_tile_infra_cold_hidden:
+test_render_single_tile_visible_dimmed:
     jsr setup_single_tile_scene
     lda #1
-    sta test_infra_enabled
-    sta test_mon_active
-    lda #24
-    sta test_mon_x
-    lda #20
-    sta test_mon_y
-    lda #1
-    sta test_mon_type
-    lda #0
-    sta test_mon_flags
-    lda #COL_RED
-    sta test_mon_color_vic
-    lda #0
-    sta cr_mflags + 1
-    ldx #24
-    ldy #20
-    lda #((TILE_FLOOR << 4) | FLAG_OCCUPIED)
-    jsr map_set_tile
-    lda #24
-    sta zp_temp0
-    lda #20
-    sta zp_temp1
-    jsr render_single_tile
-    lda #10
-    sta test_row_rel
-    lda #14
-    sta test_col_rel
-    lda #SC_SPACE
-    sta test_expected_char
-    lda #VDC_BLACK
-    sta test_expected_attr
-    jsr assert_vdc_cell
-    rts
-
-test_render_single_tile_infra_blind_hidden:
-    jsr setup_single_tile_scene
-    lda #1
-    sta test_infra_enabled
-    sta test_mon_active
-    sta zp_eff_blind
-    lda #24
-    sta test_mon_x
-    lda #20
-    sta test_mon_y
-    lda #1
-    sta test_mon_type
-    lda #(MF_VISIBLE | MF_DETECTED)
-    sta test_mon_flags
-    lda #COL_RED
-    sta test_mon_color_vic
-    lda #CF_INFRA
-    sta cr_mflags + 1
-    ldx #24
-    ldy #20
-    lda #((TILE_FLOOR << 4) | FLAG_OCCUPIED)
-    jsr map_set_tile
-    lda #24
-    sta zp_temp0
-    lda #20
-    sta zp_temp1
-    jsr render_single_tile
-    lda #10
-    sta test_row_rel
-    lda #14
-    sta test_col_rel
-    lda #SC_SPACE
-    sta test_expected_char
-    lda #VDC_BLACK
-    sta test_expected_attr
-    jsr assert_vdc_cell
-    rts
-
-test_render_single_tile_infra_warm_dimmed:
-    jsr setup_single_tile_scene
-    lda #1
-    sta test_infra_enabled
     sta test_mon_active
     lda #24
     sta test_mon_x
@@ -525,8 +418,6 @@ test_render_single_tile_infra_warm_dimmed:
     sta test_mon_flags
     lda #COL_RED
     sta test_mon_color_vic
-    lda #CF_INFRA
-    sta cr_mflags + 1
     ldx #24
     ldy #20
     lda #((TILE_FLOOR << 4) | FLAG_VISITED | FLAG_OCCUPIED)
@@ -677,8 +568,6 @@ test_render_single_tile_detect_timer_hides_unmarked_monster:
     sta test_mon_type
     lda #COL_RED
     sta test_mon_color_vic
-    lda #0
-    sta cr_mflags + 1
     ldx #24
     ldy #20
     lda #((TILE_FLOOR << 4) | FLAG_OCCUPIED)
@@ -717,10 +606,9 @@ test_render_viewport_player_override_unvisited:
     jsr assert_vdc_cell
     rts
 
-test_render_viewport_infra_warm_unvisited:
+test_render_viewport_unmarked_occupied_unvisited:
     jsr setup_single_tile_scene
     lda #1
-    sta test_infra_enabled
     sta test_mon_active
     lda #24
     sta test_mon_x
@@ -730,8 +618,6 @@ test_render_viewport_infra_warm_unvisited:
     sta test_mon_type
     lda #COL_RED
     sta test_mon_color_vic
-    lda #CF_INFRA
-    sta cr_mflags + 1
     ldx #24
     ldy #20
     lda #((TILE_FLOOR << 4) | FLAG_OCCUPIED)
