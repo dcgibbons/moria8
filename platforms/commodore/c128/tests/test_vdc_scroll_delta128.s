@@ -215,6 +215,8 @@ test_start:
     jsr init_floor_items
     jsr test_render_single_tile_hidden_blank
     jsr test_render_single_tile_infra_warm_unvisited
+    jsr test_render_single_tile_visible_unvisited
+    jsr test_render_single_tile_detected_unvisited_without_timer
     jsr test_render_single_tile_infra_cold_hidden
     jsr test_render_single_tile_infra_blind_hidden
     jsr test_render_single_tile_infra_warm_dimmed
@@ -359,6 +361,76 @@ test_render_single_tile_infra_warm_unvisited:
     lda #SC_SPACE
     sta test_expected_char
     lda #VDC_BLACK
+    sta test_expected_attr
+    jsr assert_vdc_cell
+    rts
+
+test_render_single_tile_visible_unvisited:
+    jsr setup_single_tile_scene
+    lda #1
+    sta test_mon_active
+    lda #24
+    sta test_mon_x
+    lda #20
+    sta test_mon_y
+    lda #1
+    sta test_mon_type
+    lda #MF_VISIBLE
+    sta test_mon_flags
+    lda #COL_RED
+    sta test_mon_color_vic
+    ldx #24
+    ldy #20
+    lda #((TILE_FLOOR << 4) | FLAG_OCCUPIED)
+    jsr map_set_tile
+    lda #24
+    sta zp_temp0
+    lda #20
+    sta zp_temp1
+    jsr render_single_tile
+    lda #10
+    sta test_row_rel
+    lda #14
+    sta test_col_rel
+    lda cr_display + 1
+    sta test_expected_char
+    lda #VDC_RED
+    sta test_expected_attr
+    jsr assert_vdc_cell
+    rts
+
+test_render_single_tile_detected_unvisited_without_timer:
+    jsr setup_single_tile_scene
+    lda #0
+    sta eff_detect_timer
+    lda #1
+    sta test_mon_active
+    lda #24
+    sta test_mon_x
+    lda #20
+    sta test_mon_y
+    lda #1
+    sta test_mon_type
+    lda #MF_DETECTED
+    sta test_mon_flags
+    lda #COL_RED
+    sta test_mon_color_vic
+    ldx #24
+    ldy #20
+    lda #((TILE_FLOOR << 4) | FLAG_OCCUPIED)
+    jsr map_set_tile
+    lda #24
+    sta zp_temp0
+    lda #20
+    sta zp_temp1
+    jsr render_single_tile
+    lda #10
+    sta test_row_rel
+    lda #14
+    sta test_col_rel
+    lda cr_display + 1
+    sta test_expected_char
+    lda #VDC_RED
     sta test_expected_attr
     jsr assert_vdc_cell
     rts

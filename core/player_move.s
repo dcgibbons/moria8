@@ -631,12 +631,12 @@ do_look:
     lda df_target_x
     cmp #MAP_COLS
     bcc !dl_x_ok+
-    jmp !dl_nothing+
+    bcs !dl_nothing+
 !dl_x_ok:
     lda df_target_y
     cmp #MAP_ROWS
     bcc !dl_y_ok+
-    jmp !dl_nothing+
+    bcs !dl_nothing+
 !dl_y_ok:
 
     // Read map tile at (df_target_x, df_target_y)
@@ -687,7 +687,10 @@ do_look:
     lda dl_tile
     and #TILE_TYPE_MASK
     beq !dl_step+
-    jmp !dl_nothing+
+    bne !dl_nothing+
+!dl_nothing:
+    ldx #HSTR_DL_NOTHING
+    jmp dl_print_tile_no_flash
 !dl_step:
     // Step to next tile along scan direction
     lda df_target_x
@@ -700,6 +703,17 @@ do_look:
     sta df_target_y
     jmp !dl_scan-
 !dl_visible:
+    // Visibility predicates can qualify lit terrain by room light; look still
+    // must not describe terrain through blocking walls or closed doors.
+    stx zp_los_dx
+    sty zp_los_dy
+    lda zp_player_x
+    sta mm_los_cx
+    lda zp_player_y
+    sta mm_los_cy
+    jsr mm_los_clear_to_target
+    bcc !dl_nothing-
+!dl_los_clear:
     // Check tile type — non-floor terrain is authoritative for look.
     lda dl_tile
     and #TILE_TYPE_MASK
@@ -739,7 +753,7 @@ do_look:
 
     // Wall/secret/mineral seam (any other non-floor tile) — report it.
     ldx #HSTR_DL_WALL
-    jmp dl_print_tile
+    bne dl_print_tile
 
 // dl_print_you_see — Print "YOU SEE A <name>."
 // Input: dl_name_lo/hi = name string pointer
@@ -831,10 +845,6 @@ dl_print_tile_no_flash:
     jsr dl_print_item_you_see
     clc
     rts
-
-!dl_nothing:
-    ldx #HSTR_DL_NOTHING
-    jmp dl_print_tile_no_flash
 
 // Look command scratch
 dl_tile:     .byte 0

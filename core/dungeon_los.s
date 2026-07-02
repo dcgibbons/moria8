@@ -483,8 +483,10 @@ los_is_visible:
     rts
 
 !lov_yes:
-    pla                         // Discard saved x
-    pla                         // Discard saved y
+    pla                         // Restore saved x
+    tax
+    pla                         // Restore saved y
+    tay
     sec
     rts
 

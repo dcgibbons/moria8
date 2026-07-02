@@ -3481,7 +3481,7 @@ run_test "monster_ai" "tests/test_monster_ai.s" "0400 041a" 27 500000000
 run_test "combat" "tests/test_combat.s" "0400 0427" 40 500000000
 run_test "msg_long" "tests/test_msg_long.s" "0400 0400" 1 20000000
 run_test "monster_attack" "tests/test_monster_attack.s" "0400 040d" 14 500000000
-run_test "effects" "tests/test_effects.s" "0400 0431" 31 1000000000
+run_test "effects" "tests/test_effects.s" "0400 041e" 31 1000000000
 run_test "effects_magic" "tests/test_effects_magic.s" "0400 0433" 24 1000000000
 run_test "cure_light_wounds" "tests/test_cure_light_wounds.s" "0400 0402" 3 500000000
 run_test "confusion" "tests/test_confusion.s" "0400 0402" 3 500000000

@@ -1169,8 +1169,6 @@ rst_apply_player_override_vdc:
     sta zp_temp3
     lda #VDC_BLACK              // Pre-translated VDC black (Opt 2)
     sta zp_temp4
-    lda eff_detect_timer
-    beq rst_apply_player_override_vdc
     lda zp_tile_tmp
     and #FLAG_OCCUPIED
     beq rst_apply_player_override_vdc
