@@ -229,9 +229,11 @@ test_start:
     jsr test_render_viewport_dimmed_glyph_hidden
     jsr test_scroll_delta_skips_pending_full_redraw
     jsr test_h_scroll_left_fast_path
+    jsr test_h_scroll_left_local_area_repairs_stale_monster
     jsr test_left_scroll_falls_back
     jsr test_v_scroll_up_first_op_uses_copy_mode
     jsr test_v_scroll_up_fast_path
+    jsr test_v_scroll_up_local_area_repairs_stale_monster
     jsr test_v_scroll_down_fast_path
 
     jmp test_pass
@@ -410,7 +412,7 @@ test_render_single_tile_infra_blind_hidden:
     sta test_mon_y
     lda #1
     sta test_mon_type
-    lda #MF_VISIBLE
+    lda #(MF_VISIBLE | MF_DETECTED)
     sta test_mon_flags
     lda #COL_RED
     sta test_mon_color_vic
@@ -447,7 +449,7 @@ test_render_single_tile_infra_warm_dimmed:
     sta test_mon_y
     lda #1
     sta test_mon_type
-    lda #MF_VISIBLE
+    lda #(MF_VISIBLE | MF_DETECTED)
     sta test_mon_flags
     lda #COL_RED
     sta test_mon_color_vic
@@ -886,6 +888,72 @@ test_left_scroll_falls_back:
     jsr assert_vdc_cell
     rts
 
+test_h_scroll_left_local_area_repairs_stale_monster:
+    jsr setup_single_tile_scene
+    lda #10
+    sta old_view_x
+    sta zp_view_y
+    sta old_view_y
+    lda #11
+    sta zp_view_x
+    lda #20
+    sta old_player_x
+    lda #21
+    sta zp_player_x
+    lda #20
+    sta old_player_y
+    sta zp_player_y
+    lda #1
+    sta zp_light_radius
+
+    lda #1
+    sta test_mon_active
+    sta test_mon_type
+    lda #21
+    sta test_mon_x
+    lda #20
+    sta test_mon_y
+    lda #MF_VISIBLE
+    sta test_mon_flags
+    lda #COL_RED
+    sta test_mon_color_vic
+    ldx #21
+    ldy #20
+    lda #((TILE_FLOOR << 4) | FLAG_VISITED | FLAG_LIT | FLAG_OCCUPIED)
+    jsr map_set_tile
+
+    lda #10
+    sta zp_view_x
+    jsr render_viewport
+    lda #11
+    sta zp_view_x
+    lda #0
+    sta test_mon_flags
+    jsr seed_right_strip_tiles
+    jsr render_viewport_scroll_delta
+    bcs !scrolled+
+    jmp test_fail
+!scrolled:
+    lda #10
+    sta test_row_rel
+    sta test_col_rel
+    lda cr_display + 1
+    sta test_expected_char
+    lda #VDC_RED
+    sta test_expected_attr
+    jsr assert_vdc_cell
+
+    jsr render_local_area
+    lda #10
+    sta test_row_rel
+    sta test_col_rel
+    lda tile_screen_codes + TILE_FLOOR
+    sta test_expected_char
+    lda tile_vdc_colors + TILE_FLOOR
+    sta test_expected_attr
+    jsr assert_vdc_cell
+    rts
+
 test_v_scroll_up_fast_path:
     jsr prepare_pattern_screen
     lda #10
@@ -949,6 +1017,71 @@ test_v_scroll_up_fast_path:
     sta test_col_rel
     ldx #VIEWPORT_W - 1
     jsr expect_tile_index
+    jsr assert_vdc_cell
+    rts
+
+test_v_scroll_up_local_area_repairs_stale_monster:
+    jsr setup_single_tile_scene
+    lda #10
+    sta zp_view_x
+    sta old_view_x
+    sta old_view_y
+    lda #11
+    sta zp_view_y
+    lda #20
+    sta old_player_x
+    sta zp_player_x
+    sta old_player_y
+    lda #21
+    sta zp_player_y
+    lda #1
+    sta zp_light_radius
+
+    lda #1
+    sta test_mon_active
+    sta test_mon_type
+    lda #20
+    sta test_mon_x
+    lda #21
+    sta test_mon_y
+    lda #MF_VISIBLE
+    sta test_mon_flags
+    lda #COL_RED
+    sta test_mon_color_vic
+    ldx #20
+    ldy #21
+    lda #((TILE_FLOOR << 4) | FLAG_VISITED | FLAG_LIT | FLAG_OCCUPIED)
+    jsr map_set_tile
+
+    lda #10
+    sta zp_view_y
+    jsr render_viewport
+    lda #11
+    sta zp_view_y
+    lda #0
+    sta test_mon_flags
+    jsr seed_bottom_strip_tiles
+    jsr render_viewport_scroll_delta
+    bcs !scrolled+
+    jmp test_fail
+!scrolled:
+    lda #10
+    sta test_row_rel
+    sta test_col_rel
+    lda cr_display + 1
+    sta test_expected_char
+    lda #VDC_RED
+    sta test_expected_attr
+    jsr assert_vdc_cell
+
+    jsr render_local_area
+    lda #10
+    sta test_row_rel
+    sta test_col_rel
+    lda tile_screen_codes + TILE_FLOOR
+    sta test_expected_char
+    lda tile_vdc_colors + TILE_FLOOR
+    sta test_expected_attr
     jsr assert_vdc_cell
     rts
 

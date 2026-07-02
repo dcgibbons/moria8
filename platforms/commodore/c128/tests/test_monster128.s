@@ -315,6 +315,40 @@ test_visibility_paths:
 !light_visible_ok:
 
     jsr test_visibility_reset
+    lda #MF_VISIBLE
+    sta monster_table + MX_FLAGS
+    lda #4
+    sta zp_light_radius
+    lda #1
+    sta test_los_clear
+    lda #19
+    sta zp_player_x
+    jsr monster_update_visibility_all
+    lda monster_table + MX_FLAGS
+    and #MF_VISIBLE
+    beq !horizontal_clear_ok+
+    sec
+    rts
+!horizontal_clear_ok:
+
+    jsr test_visibility_reset
+    lda #MF_VISIBLE
+    sta monster_table + MX_FLAGS
+    lda #4
+    sta zp_light_radius
+    lda #1
+    sta test_los_clear
+    lda #15
+    sta zp_player_y
+    jsr monster_update_visibility_all
+    lda monster_table + MX_FLAGS
+    and #MF_VISIBLE
+    beq !vertical_clear_ok+
+    sec
+    rts
+!vertical_clear_ok:
+
+    jsr test_visibility_reset
     lda #0
     sta cr_mflags + 1
     lda #4
