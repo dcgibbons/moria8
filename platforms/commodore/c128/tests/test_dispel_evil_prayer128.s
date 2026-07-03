@@ -16,10 +16,13 @@
 .const MX_TYPE = 2
 .const MX_HP_LO = 3
 .const MX_HP_HI = 4
+.const MX_FLAGS = 5
 .const MX_CONFUSE = 9
 .const MX_SLEEP_CUR = 7
 .const MAX_MONSTERS = 32
 .const EMPTY_SLOT = $ff
+.const MF_VISIBLE = $08
+.const MF_DETECTED = $10
 .const CF_UNDEAD = $02
 .const CF_EVIL = $04
 .const PIW_FILTER_PRAYER_BOOK = $fb
@@ -480,10 +483,14 @@ test_start:
     sta test_mon_table + (0 * MONSTER_ENTRY_SIZE) + MX_TYPE
     lda #1
     sta test_mon_table + (0 * MONSTER_ENTRY_SIZE) + MX_HP_LO
+    lda #MF_VISIBLE
+    sta test_mon_table + (0 * MONSTER_ENTRY_SIZE) + MX_FLAGS
     lda #2
     sta test_mon_table + (1 * MONSTER_ENTRY_SIZE) + MX_TYPE
     lda #5
     sta test_mon_table + (1 * MONSTER_ENTRY_SIZE) + MX_HP_LO
+    lda #MF_VISIBLE
+    sta test_mon_table + (1 * MONSTER_ENTRY_SIZE) + MX_FLAGS
     lda #1
     sta test_rng_value
     jsr player_pray
@@ -566,34 +573,44 @@ test_after_success:
 !t2_fail:
     jmp test_fail
 
-    // Test 3: cast failure spends mana, prints HSTR_PM_FAIL, does not execute
-    // the dispel path, and leaves the prayer unworked.
+    // Test 3: detected-only evil renders through renderer authority
+    // (MF_VISIBLE | MF_DETECTED) but is not a visible spell target.
 test_after_none:
-    :PatchJump(calc_spell_failure, test_calc_spell_failure_fail)
+    :PatchJump(calc_spell_failure, test_calc_spell_failure_success)
     jsr test_reset_dispel_evil_prayer_state
     lda #CF_EVIL
     sta cr_mflags + 1
     lda #1
     sta test_mon_table + (0 * MONSTER_ENTRY_SIZE) + MX_TYPE
-    lda #1
+    lda #5
     sta test_mon_table + (0 * MONSTER_ENTRY_SIZE) + MX_HP_LO
+    lda #MF_DETECTED
+    sta test_mon_table + (0 * MONSTER_ENTRY_SIZE) + MX_FLAGS
+    and #(MF_VISIBLE | MF_DETECTED)
+    beq !t3_fail+
+    lda test_mon_table + (0 * MONSTER_ENTRY_SIZE) + MX_FLAGS
+    and #MF_VISIBLE
+    bne !t3_fail+
+    lda #0
+    sta test_rng_value
     jsr player_pray
     bcc !t3_fail+
     lda test_spell_exec_calls
+    cmp #1
+    bne !t3_fail+
+    lda test_last_spell_idx
+    cmp #28
     bne !t3_fail+
     lda test_kill_calls
     bne !t3_fail+
-    lda test_mon_table + (0 * MONSTER_ENTRY_SIZE) + MX_TYPE
-    cmp #1
-    bne !t3_fail+
     lda test_mon_table + (0 * MONSTER_ENTRY_SIZE) + MX_HP_LO
-    cmp #1
+    cmp #5
     bne !t3_fail+
     lda test_huff_calls
     cmp #1
     bne !t3_fail+
     lda test_last_huff
-    cmp #HSTR_PM_FAIL
+    cmp #HSTR_PIQ_NOTHING
     bne !t3_fail+
     lda zp_player_mp
     cmp #8
@@ -603,11 +620,55 @@ test_after_none:
     bne !t3_fail+
     lda player_data + PL_SPELLS_WORKED_3
     and #$10
-    bne !t3_fail+
+    beq !t3_fail+
     lda #3
     sta test_progress
-    jmp test_pass
+    jmp test_after_detected_only
 !t3_fail:
+    jmp test_fail
+
+    // Test 4: cast failure spends mana, prints HSTR_PM_FAIL, does not execute
+    // the dispel path, and leaves the prayer unworked.
+test_after_detected_only:
+    :PatchJump(calc_spell_failure, test_calc_spell_failure_fail)
+    jsr test_reset_dispel_evil_prayer_state
+    lda #CF_EVIL
+    sta cr_mflags + 1
+    lda #1
+    sta test_mon_table + (0 * MONSTER_ENTRY_SIZE) + MX_TYPE
+    lda #1
+    sta test_mon_table + (0 * MONSTER_ENTRY_SIZE) + MX_HP_LO
+    jsr player_pray
+    bcc !t4_fail+
+    lda test_spell_exec_calls
+    bne !t4_fail+
+    lda test_kill_calls
+    bne !t4_fail+
+    lda test_mon_table + (0 * MONSTER_ENTRY_SIZE) + MX_TYPE
+    cmp #1
+    bne !t4_fail+
+    lda test_mon_table + (0 * MONSTER_ENTRY_SIZE) + MX_HP_LO
+    cmp #1
+    bne !t4_fail+
+    lda test_huff_calls
+    cmp #1
+    bne !t4_fail+
+    lda test_last_huff
+    cmp #HSTR_PM_FAIL
+    bne !t4_fail+
+    lda zp_player_mp
+    cmp #8
+    bne !t4_fail+
+    lda player_data + PL_MANA
+    cmp #8
+    bne !t4_fail+
+    lda player_data + PL_SPELLS_WORKED_3
+    and #$10
+    bne !t4_fail+
+    lda #4
+    sta test_progress
+    jmp test_pass
+!t4_fail:
     jmp test_fail
 
 test_fail_loop:

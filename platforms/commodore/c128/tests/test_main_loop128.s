@@ -2159,9 +2159,73 @@ test_entry:
     beq *+5
     jmp test_fail
 
-    // Test 30: new game clears inventory/equipment left by a loaded game before
-    // adding starter gear.
+    // Test 30: a scene-dirty continued run step redraws fully and stops.
     lda #30
+    sta test_case_id
+    jsr install_jump_patch
+    jsr reset_state
+    lda #1
+    sta test_move_ok
+    sta test_scene_dirty
+    sta test_scroll_delta_success
+    sta test_force_view_scroll_y
+    lda #CMD_RUN_N
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    jsr run_case
+    lda zp_run_dir
+    cmp #$ff
+    beq *+5
+    jmp test_fail
+    lda test_turn_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda test_render_local_calls
+    beq *+5
+    jmp test_fail
+    lda test_render_scroll_delta_calls
+    beq *+5
+    jmp test_fail
+    lda test_render_full_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+    jsr reset_state
+    lda #1
+    sta test_move_ok
+    sta test_scene_dirty
+    sta test_scroll_delta_success
+    sta test_force_view_scroll_y
+    sta test_run_should_stop
+    lda #CMD_RUN_N
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    jsr run_case
+    lda zp_run_dir
+    cmp #$ff
+    beq *+5
+    jmp test_fail
+    lda test_turn_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda test_render_local_calls
+    beq *+5
+    jmp test_fail
+    lda test_render_scroll_delta_calls
+    beq *+5
+    jmp test_fail
+    lda test_render_full_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+
+    // Test 31: new game clears inventory/equipment left by a loaded game before
+    // adding starter gear.
+    lda #31
     sta test_case_id
     jsr reset_state
     lda #66
@@ -2221,9 +2285,9 @@ test_entry:
     beq *+5
     jmp test_fail
 
-    // Test 31: first death after fresh Disk Setup prepares game-over before
+    // Test 32: first death after fresh Disk Setup prepares game-over before
     // save-media I/O, then returns to program media after dismissal.
-    lda #31
+    lda #32
     sta test_case_id
     jsr reset_state
     lda #1

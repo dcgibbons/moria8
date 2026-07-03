@@ -938,8 +938,7 @@ c128_town_move_diag_loop_top:
     // Confusion cancels running
     lda zp_eff_confuse
     beq !not_conf_run+
-    lda #$ff
-    sta zp_run_dir
+    jsr run_stop_running
     jmp !not_running+
 !not_conf_run:
     // Running cancel is edge-like: ignore the initiating held key(s) until
@@ -961,11 +960,9 @@ c128_town_move_diag_loop_top:
 
 !run_cancel:
     jsr input_flush_run_cancel_buffer
-    lda #$ff
-    sta zp_run_dir
+    jsr run_stop_running
     lda #0
     sta run_input_armed
-    jsr input_run_cancel_reset
 !not_running:
     // --- Auto-rest continuation ---
     lda auto_rest_active
@@ -1942,9 +1939,7 @@ cmd_rest:
 cmd_autorest:
     jsr msg_clear
     jsr player_search_mode_off
-    lda #$ff
-    sta zp_run_dir
-    jsr input_run_cancel_reset
+    jsr run_stop_running
 
     jsr auto_rest_check_recovered
     bcc !start+
@@ -2130,10 +2125,10 @@ cmd_run:
     jsr input_run_cancel_reset
     jmp run_step                // Take first step
 
-#if HAL_PLATFORM_GAME_LOOP_RUN_STOP_RESET_INPUT
-run_stop_reset_input_state:
+run_stop_running:
+    lda #$ff
+    sta zp_run_dir
     jmp input_run_cancel_reset
-#endif
 
 // ============================================================
 // run_step — Execute one step of corridor running
@@ -2166,9 +2161,9 @@ run_step:
     sta run_was_lit
 
     // Convert running direction to movement command
-    lda zp_run_dir
-    clc
-    adc #CMD_MOVE_N
+    ldx zp_run_dir
+    inx
+    txa
 
 	    // Try to move
 	    jsr player_try_move
@@ -2225,6 +2220,7 @@ run_step:
 	    jmp !run_full_redraw+
 !run_chk_reveal:
 	    lda vis_room_revealed
+    ora turn_scene_dirty
     beq !run_local+
 #if HAL_PLATFORM_GAME_LOOP_PERF_P1_INSTRUMENTATION
 #if PERF_P1
@@ -2245,6 +2241,8 @@ run_step:
 
 !run_full_redraw:
 #if HAL_PLATFORM_GAME_LOOP_SCROLL_DELTA_RENDER
+	    lda turn_scene_dirty
+    bne !run_full_fallback+
 	    jsr render_viewport_scroll_delta
 	    bcc !run_full_fallback+
 	    jsr render_local_area
@@ -2266,29 +2264,18 @@ run_step:
 !run_post:
     jsr status_draw
     lda zp_msg_flags
+    ora turn_scene_dirty
     beq !run_keep_running+
-    lda #$ff
-    sta zp_run_dir
-#if HAL_PLATFORM_GAME_LOOP_RUN_STOP_RESET_INPUT
-    jsr run_stop_reset_input_state
-#endif
+    jsr run_stop_running
 !run_keep_running:
     jmp main_loop
 
 !run_blocked:
-    lda #$ff
-    sta zp_run_dir
-#if HAL_PLATFORM_GAME_LOOP_RUN_STOP_RESET_INPUT
-    jsr run_stop_reset_input_state
-#endif
+    jsr run_stop_running
     jmp main_loop
 
 !run_trap_stop:
-    lda #$ff
-    sta zp_run_dir
-#if HAL_PLATFORM_GAME_LOOP_RUN_STOP_RESET_INPUT
-    jsr run_stop_reset_input_state
-#endif
+    jsr run_stop_running
     jsr turn_post_action_searchable_or_die
     bcc !not_dead+
     jmp !player_died+
@@ -2297,11 +2284,7 @@ run_step:
     jmp vp_render_status_loop
 
 !run_stop_move:
-    lda #$ff
-    sta zp_run_dir
-#if HAL_PLATFORM_GAME_LOOP_RUN_STOP_RESET_INPUT
-    jsr run_stop_reset_input_state
-#endif
+    jsr run_stop_running
     jsr player_move_maybe_passive_search
     jsr turn_post_action_searchable_or_die
     bcc !not_dead+
@@ -2369,6 +2352,8 @@ run_step:
 	    jmp !rsm_post+
 !rsm_full:
 #if HAL_PLATFORM_GAME_LOOP_SCROLL_DELTA_RENDER
+	    lda turn_scene_dirty
+    bne !rsm_full_fallback+
 	    jsr render_viewport_scroll_delta
 	    bcc !rsm_full_fallback+
 	    jsr render_local_area

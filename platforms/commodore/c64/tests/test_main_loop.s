@@ -1878,6 +1878,28 @@ test_start:
     lda zp_msg_flags
     cmp #MSG_PENDING
     bne !t27_fail+
+    jsr reset_state
+    lda #26
+    sta test_case_idx
+    lda #1
+    sta test_move_ok
+    sta test_scene_dirty
+    lda #CMD_RUN_N
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    jsr run_case
+    lda zp_run_dir
+    cmp #$ff
+    bne !t27_fail+
+    lda test_turn_calls
+    cmp #1
+    bne !t27_fail+
+    lda test_render_local_calls
+    bne !t27_fail+
+    lda test_render_full_calls
+    cmp #1
+    bne !t27_fail+
     lda #$01
     sta tc_results + 26
     jmp !t28+

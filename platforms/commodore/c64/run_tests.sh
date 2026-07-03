@@ -3476,7 +3476,7 @@ run_test "main_loop" "tests/test_main_loop.s" "0400 0427" 40 500000000
 run_test "turn" "tests/test_turn.s" "0400 0418" 25 500000000
 run_test "player" "tests/test_player.s" "0400 0409" 10
 run_test "dungeon" "tests/test_dungeon.s" "0400 042a" 43 500000000
-run_test "monster" "tests/test_monster.s" "0400 040e" 15 500000000
+run_test "monster" "tests/test_monster.s" "0400 040f" 16 500000000
 run_test "monster_ai" "tests/test_monster_ai.s" "0400 041a" 27 500000000
 run_test "combat" "tests/test_combat.s" "0400 0427" 40 500000000
 run_test "msg_long" "tests/test_msg_long.s" "0400 0400" 1 20000000
@@ -3536,7 +3536,7 @@ run_test "cure_critical_wounds_prayer" "tests/test_cure_critical_wounds_prayer.s
 run_test "turn_undead_prayer" "tests/test_turn_undead_prayer.s" "0400 0402" 3 500000000
 run_test "prayer_prayer" "tests/test_prayer_prayer.s" "0400 0402" 3 500000000
 run_test "dispel_undead_prayer" "tests/test_dispel_undead_prayer.s" "0400 0402" 3 500000000
-run_test "dispel_evil_prayer" "tests/test_dispel_evil_prayer.s" "0400 0402" 3 500000000
+run_test "dispel_evil_prayer" "tests/test_dispel_evil_prayer.s" "0400 0404" 5 500000000
 run_test "glyph_of_warding_prayer" "tests/test_glyph_of_warding_prayer.s" "0400 0402" 3 500000000
 run_test "holy_word_prayer" "tests/test_holy_word_prayer.s" "0400 0401" 2 500000000
 run_test "heal_prayer" "tests/test_heal_prayer.s" "0400 0402" 3 500000000

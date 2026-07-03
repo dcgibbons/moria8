@@ -16,10 +16,12 @@
 .const MX_TYPE = 2
 .const MX_HP_LO = 3
 .const MX_HP_HI = 4
+.const MX_FLAGS = 5
 .const MX_CONFUSE = 9
 .const MX_SLEEP_CUR = 7
 .const MAX_MONSTERS = 32
 .const EMPTY_SLOT = $ff
+.const MF_VISIBLE = $08
 .const CF_UNDEAD = $02
 .const CF_EVIL = $04
 .const PIW_FILTER_PRAYER_BOOK = $fb
@@ -479,10 +481,14 @@ test_start:
     sta test_mon_table + (0 * MONSTER_ENTRY_SIZE) + MX_TYPE
     lda #1
     sta test_mon_table + (0 * MONSTER_ENTRY_SIZE) + MX_HP_LO
+    lda #MF_VISIBLE
+    sta test_mon_table + (0 * MONSTER_ENTRY_SIZE) + MX_FLAGS
     lda #2
     sta test_mon_table + (1 * MONSTER_ENTRY_SIZE) + MX_TYPE
     lda #5
     sta test_mon_table + (1 * MONSTER_ENTRY_SIZE) + MX_HP_LO
+    lda #MF_VISIBLE
+    sta test_mon_table + (1 * MONSTER_ENTRY_SIZE) + MX_FLAGS
     lda #1
     sta test_rng_value
     jsr player_pray

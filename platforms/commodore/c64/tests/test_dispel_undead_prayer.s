@@ -296,10 +296,14 @@ test_start:
     :MapWrite_ptr1_y()
     lda #1
     sta test_mon_table + (0 * MONSTER_ENTRY_SIZE) + MX_HP_LO
+    lda #MF_VISIBLE
+    sta test_mon_table + (0 * MONSTER_ENTRY_SIZE) + MX_FLAGS
     lda #2
     sta test_mon_table + (1 * MONSTER_ENTRY_SIZE) + MX_TYPE
     lda #5
     sta test_mon_table + (1 * MONSTER_ENTRY_SIZE) + MX_HP_LO
+    lda #MF_VISIBLE
+    sta test_mon_table + (1 * MONSTER_ENTRY_SIZE) + MX_FLAGS
     lda #1
     sta tdup_rng_value
     lda #$02

@@ -989,7 +989,9 @@ monster_update_visibility_all:
     rts
 #endif
 
+#if !PLUS4_INLINE_RUNTIME_BANKED_TEST
 .segment RuntimeBanked
+#endif
 #endif
 
 // monster_update_visibility_all_impl — Recompute renderable monster flags.
@@ -1049,7 +1051,6 @@ monster_update_visibility_one:
     lda muv_new_flags
     ora #MF_DETECTED
     sta muv_new_flags
-    jmp !muvo_store+
 !muvo_detect_done:
 
     lda zp_eff_blind

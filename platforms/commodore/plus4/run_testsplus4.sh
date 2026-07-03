@@ -2507,6 +2507,7 @@ run_load_missing_savefile_product_smoke() {
 run_plus4_static_contracts
 run_test "minimalplus4" "tests/test_minimalplus4.s"
 run_test "renderplus4" "tests/test_renderplus4.s"
+run_test "visibility_renderplus4" "tests/test_visibility_renderplus4.s"
 run_media_drive8_attach_read_write
 run_media_drive9_attach_read_write
 run_media_drive10_11_device_probe

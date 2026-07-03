@@ -16,10 +16,12 @@
 .const MX_TYPE = 2
 .const MX_HP_LO = 3
 .const MX_HP_HI = 4
+.const MX_FLAGS = 5
 .const MX_SLEEP_CUR = 7
 .const MX_CONFUSE = 9
 .const MAX_MONSTERS = 32
 .const EMPTY_SLOT = $ff
+.const MF_VISIBLE = $08
 .const CF_UNDEAD = $02
 .const CF_EVIL = $04
 .const PIW_FILTER_PRAYER_BOOK = $fb
@@ -479,6 +481,9 @@ test_seed_evil_monster:
     iny
     lda #0
     sta (zp_ptr0),y
+    ldy #MX_FLAGS
+    lda #MF_VISIBLE
+    sta (zp_ptr0),y
     lda #CF_EVIL
     sta cr_mflags + 1
     rts
@@ -506,6 +511,9 @@ test_seed_undead_monster:
     sta (zp_ptr0),y
     ldy #MX_CONFUSE
     lda #0
+    sta (zp_ptr0),y
+    ldy #MX_FLAGS
+    lda #MF_VISIBLE
     sta (zp_ptr0),y
     lda #CF_UNDEAD
     sta cr_mflags + 2

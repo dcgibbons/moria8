@@ -437,16 +437,10 @@ eff_sleep_all:
     lda (zp_ptr0),y
     cmp #EMPTY_SLOT
     beq !esa_all_next+
-    ldy #MX_X
+    ldy #MX_FLAGS
     lda (zp_ptr0),y
-    sta pmx_work_x
-    ldy #MX_Y
-    lda (zp_ptr0),y
-    sta pmx_work_y
-    ldx pmx_work_x
-    ldy pmx_work_y
-    jsr los_is_visible
-    bcc !esa_all_next+
+    and #MF_VISIBLE
+    beq !esa_all_next+
     ldx pmx_work_idx
     lda #25
     jsr monster_apply_sleep

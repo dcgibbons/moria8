@@ -382,16 +382,16 @@ test_visibility_paths:
     rts
 !detect_ok:
     lda test_los_calls
-    beq !detect_los_skipped+
+    bne !detect_los_recomputed+
     sec
     rts
-!detect_los_skipped:
+!detect_los_recomputed:
     lda monster_table + MX_FLAGS
     and #MF_VISIBLE
-    beq !detect_visible_clear+
+    bne !detect_visible_preserved+
     sec
     rts
-!detect_visible_clear:
+!detect_visible_preserved:
     clc
     rts
 
