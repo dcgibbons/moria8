@@ -136,6 +136,10 @@ def main() -> int:
 
     command = [
         args.vice,
+        "-config",
+        "/dev/null",
+        "-default",
+        "+saveres",
         "-console",
         "-warp",
         "+sound",

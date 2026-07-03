@@ -141,6 +141,63 @@ PY
     TOTAL=$((TOTAL + 1))
 }
 
+run_vice_resource_contract() {
+    local name="vice_resource_contract"
+
+    if ! suite_selected "$name"; then
+        return
+    fi
+
+    echo -n "  $name: "
+    if python3 - "$REPO_ROOT/platforms/commodore/c64/tests" "$REPO_ROOT/platforms/commodore/c64/run_tests.sh" <<'PY'
+from pathlib import Path
+import ast
+import sys
+
+root = Path(sys.argv[1])
+runner = Path(sys.argv[2])
+bad = []
+for path in sorted(root.glob("*.py")):
+    tree = ast.parse(path.read_text(), filename=str(path))
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.List):
+            continue
+        values = []
+        for elt in node.elts:
+            if isinstance(elt, ast.Constant) and isinstance(elt.value, str):
+                values.append(elt.value)
+            elif isinstance(elt, ast.Attribute) and elt.attr == "vice":
+                values.append("args.vice")
+        if "args.vice" not in values:
+            continue
+        if "-remotemonitor" not in values and "-nativemonitor" not in values:
+            continue
+        missing = [flag for flag in ("-config", "-default", "+saveres") if flag not in values]
+        if missing:
+            bad.append(f"{path.name}: missing {', '.join(missing)}")
+
+for lineno, line in enumerate(runner.read_text().splitlines(), start=1):
+    if '"$VICE"' not in line:
+        continue
+    if "-config /dev/null -default" not in line:
+        continue
+    if "+saveres" not in line:
+        bad.append(f"{runner.name}:{lineno}: missing +saveres")
+
+if bad:
+    print("; ".join(bad))
+    raise SystemExit(1)
+PY
+    then
+        echo "PASS"
+        PASS=$((PASS + 1))
+    else
+        echo "FAIL"
+        FAIL=$((FAIL + 1))
+    fi
+    TOTAL=$((TOTAL + 1))
+}
+
 run_test() {
     local name="$1"
     local src="$2"
@@ -233,7 +290,7 @@ run_test() {
     run_vice_once() {
         local log_path="$1"
         script -q "$log_path" \
-            "$VICE" -warp -config /dev/null -default -console -nativemonitor -autostartprgmode 1 \
+            "$VICE" -warp -config /dev/null -default +saveres -console -nativemonitor -autostartprgmode 1 \
             -autostart "$prg_file" -moncommands "$mon_file" \
             -limitcycles "$cycles" +sound -sounddev dummy \
             +remotemonitor +binarymonitor > /dev/null 2>&1
@@ -320,7 +377,7 @@ run_sound_monitor_test() {
     }
 
     script -q "$log_file" \
-        "$VICE" -warp -config /dev/null -default -console -nativemonitor -autostartprgmode 1 \
+        "$VICE" -warp -config /dev/null -default +saveres -console -nativemonitor -autostartprgmode 1 \
         -autostart "${src%.s}.prg" -moncommands "$mon_file" \
         -limitcycles "$cycles" +sound -sounddev dummy \
         +remotemonitor +binarymonitor > /dev/null 2>&1
@@ -494,7 +551,7 @@ run_scripted_spell_cast_smoke() {
     } > "$mon_file"
 
     script -q "$tty_log" \
-        "$VICE" -warp -config /dev/null -default -console -nativemonitor -autostartprgmode 1 \
+        "$VICE" -warp -config /dev/null -default +saveres -console -nativemonitor -autostartprgmode 1 \
         -autostart "$scripted_d64" -moncommands "$mon_file" \
         -limitcycles 700000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor > /dev/null 2>&1
@@ -649,7 +706,7 @@ run_scripted_book_overlay_smoke() {
     } > "$mon_file"
 
     script -q "$tty_log" \
-        "$VICE" -warp -config /dev/null -default -console -nativemonitor -autostartprgmode 1 \
+        "$VICE" -warp -config /dev/null -default +saveres -console -nativemonitor -autostartprgmode 1 \
         -autostart "$scripted_d64" -moncommands "$mon_file" \
         -limitcycles 700000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor > /dev/null 2>&1
@@ -804,7 +861,7 @@ run_scripted_scroll_selector_smoke() {
     } > "$mon_file"
 
     script -q "$tty_log" \
-        "$VICE" -warp -config /dev/null -default -console -nativemonitor -autostartprgmode 1 \
+        "$VICE" -warp -config /dev/null -default +saveres -console -nativemonitor -autostartprgmode 1 \
         -autostart "$scripted_d64" -moncommands "$mon_file" \
         -limitcycles 700000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor > /dev/null 2>&1
@@ -958,7 +1015,7 @@ run_scripted_spell_list_overlay_smoke() {
     } > "$mon_file"
 
     script -q "$tty_log" \
-        "$VICE" -warp -config /dev/null -default -console -nativemonitor -autostartprgmode 1 \
+        "$VICE" -warp -config /dev/null -default +saveres -console -nativemonitor -autostartprgmode 1 \
         -autostart "$scripted_d64" -moncommands "$mon_file" \
         -limitcycles 700000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor > /dev/null 2>&1
@@ -1118,7 +1175,7 @@ run_scripted_dungeon_target_spell_smoke() {
     } > "$mon_file"
 
     script -q "$tty_log" \
-        "$VICE" -warp -config /dev/null -default -console -nativemonitor -autostartprgmode 1 \
+        "$VICE" -warp -config /dev/null -default +saveres -console -nativemonitor -autostartprgmode 1 \
         -reu -reusize 512 \
         -autostart "$scripted_d64" -moncommands "$mon_file" \
         -limitcycles 700000000 +sound -sounddev dummy \
@@ -1278,7 +1335,7 @@ run_scripted_detect_evil_smoke() {
     } > "$mon_file"
 
     script -q "$tty_log" \
-        "$VICE" -warp -config /dev/null -default -console -nativemonitor -autostartprgmode 1 \
+        "$VICE" -warp -config /dev/null -default +saveres -console -nativemonitor -autostartprgmode 1 \
         -autostart "$scripted_d64" -moncommands "$mon_file" \
         -limitcycles 700000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor > /dev/null 2>&1
@@ -1415,7 +1472,7 @@ run_dungeon_ascent_product_smoke() {
     } > "$mon_file"
 
     script -q "$tty_log" \
-        "$VICE" -warp -config /dev/null -default -console -nativemonitor -autostartprgmode 1 \
+        "$VICE" -warp -config /dev/null -default +saveres -console -nativemonitor -autostartprgmode 1 \
         -8 "$scripted_d64" -autostart "$scripted_d64" \
         -moncommands "$mon_file" \
         -limitcycles 900000000 +sound -sounddev dummy \
@@ -1775,7 +1832,7 @@ run_save_write_product_smoke_impl() {
     } > "$mon_file"
 
     script -q "$tty_log" \
-        "$VICE" -warp -config /dev/null -default -console -nativemonitor -autostartprgmode 1 \
+        "$VICE" -warp -config /dev/null -default +saveres -console -nativemonitor -autostartprgmode 1 \
         -drive9type 1541 -8 "$scripted_d64" -attach9rw -9 "$save_d64" -autostart "$scripted_d64" \
         -moncommands "$mon_file" \
         -limitcycles 900000000 +sound -sounddev dummy \
@@ -2407,7 +2464,7 @@ run_load_resume_product_smoke() {
     } > "$mon_file"
 
     script -q "$tty_log" \
-        "$VICE" -warp -config /dev/null -default -console -nativemonitor -autostartprgmode 1 \
+        "$VICE" -warp -config /dev/null -default +saveres -console -nativemonitor -autostartprgmode 1 \
         -drive9type 1541 -8 "$scripted_d64" -attach9rw -9 "$save_d64" -autostart "$scripted_d64" \
         -moncommands "$mon_file" \
         -limitcycles 900000000 +sound -sounddev dummy \
@@ -3313,7 +3370,7 @@ run_load_missing_savefile_product_smoke() {
     } > "$mon_file"
 
     script -q "$tty_log" \
-        "$VICE" -warp -config /dev/null -default -console -nativemonitor -autostartprgmode 1 \
+        "$VICE" -warp -config /dev/null -default +saveres -console -nativemonitor -autostartprgmode 1 \
         -drive9type 1541 -8 "$scripted_d64" -attach9rw -9 "$save_d64" -autostart "$scripted_d64" \
         -moncommands "$mon_file" \
         -limitcycles 900000000 +sound -sounddev dummy \
@@ -3464,6 +3521,7 @@ check_static_contract "c64_save_stream_banks_kernal_contract" "../common/save.s"
     "!save_media_ok:|||lda #BANK_NO_BASIC|||sta hal_memory_cpu_port|||jsr save_select_output_name_c64"
 check_static_contract "c64_load_stream_banks_kernal_contract" "../common/save.s" \
     "!load_media_ok:|||lda #BANK_NO_BASIC|||sta hal_memory_cpu_port|||ldx #HSTR_SAVE_LOADING"
+run_vice_resource_contract
 
 # Runtime tests
 # Args: name, source, result memory range, expected pass count
