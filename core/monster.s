@@ -1113,9 +1113,9 @@ monster_update_visibility_one:
     sta zp_ptr1_hi
     ldy zp_los_dx
     :MapRead_ptr1_y()
-    and #FLAG_LIT
-    beq !muvo_check_radius+
-    jmp !muvo_check_los+
+    and #(FLAG_LIT | FLAG_VISITED)
+    cmp #(FLAG_LIT | FLAG_VISITED)
+    beq !muvo_check_los+
 
 !muvo_check_radius:
     lda zp_light_radius

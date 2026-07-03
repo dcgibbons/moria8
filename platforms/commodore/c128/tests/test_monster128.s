@@ -302,6 +302,48 @@ test_visibility_paths:
     jsr test_visibility_reset
     lda #0
     sta cr_mflags + 1
+    sta zp_light_radius
+    lda #1
+    sta test_los_clear
+    lda map_row_lo + 10
+    sta zp_ptr0
+    lda map_row_hi + 10
+    sta zp_ptr0_hi
+    ldy #14
+    lda #TILE_FLOOR | FLAG_LIT | FLAG_OCCUPIED
+    :MapWrite_ptr0_y()
+    jsr monster_update_visibility_all
+    lda monster_table + MX_FLAGS
+    and #MF_VISIBLE
+    beq !lit_unvisited_hidden_ok+
+    sec
+    rts
+!lit_unvisited_hidden_ok:
+
+    jsr test_visibility_reset
+    lda #0
+    sta cr_mflags + 1
+    sta zp_light_radius
+    lda #1
+    sta test_los_clear
+    lda map_row_lo + 10
+    sta zp_ptr0
+    lda map_row_hi + 10
+    sta zp_ptr0_hi
+    ldy #14
+    lda #TILE_FLOOR | FLAG_LIT | FLAG_VISITED | FLAG_OCCUPIED
+    :MapWrite_ptr0_y()
+    jsr monster_update_visibility_all
+    lda monster_table + MX_FLAGS
+    and #MF_VISIBLE
+    bne !lit_visited_visible_ok+
+    sec
+    rts
+!lit_visited_visible_ok:
+
+    jsr test_visibility_reset
+    lda #0
+    sta cr_mflags + 1
     lda #4
     sta zp_light_radius
     lda #1

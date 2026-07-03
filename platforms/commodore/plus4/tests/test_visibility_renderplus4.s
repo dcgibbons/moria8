@@ -133,6 +133,7 @@ test_start:
     ldx #$ff
     txs
     jsr test_production_visibility_renders_monster
+    jsr test_lit_unvisited_production_hides_monster
     jsr test_horizontal_move_production_visibility_clears_monster
     jsr test_vertical_move_production_visibility_clears_monster
     jmp test_pass
@@ -194,6 +195,13 @@ place_floor_at_temp:
     ldx zp_temp0
     ldy zp_temp1
     lda #TILE_FLOOR
+    jsr map_set_tile
+    rts
+
+place_lit_floor_at_temp:
+    ldx zp_temp0
+    ldy zp_temp1
+    lda #TILE_FLOOR | FLAG_LIT
     jsr map_set_tile
     rts
 
@@ -278,6 +286,37 @@ test_production_visibility_renders_monster:
     lda cr_display + 1
     sta test_expect_char
     jmp assert_rendered_tile
+
+test_lit_unvisited_production_hides_monster:
+    jsr setup_scene
+    lda #0
+    sta zp_light_radius
+    lda #20
+    sta zp_temp0
+    lda #20
+    sta zp_temp1
+    jsr place_lit_floor_at_temp
+    lda #21
+    sta zp_temp0
+    lda #20
+    sta zp_temp1
+    jsr place_lit_floor_at_temp
+    lda #22
+    sta zp_temp0
+    lda #20
+    sta zp_temp1
+    jsr place_lit_floor_at_temp
+    lda #23
+    sta zp_temp0
+    lda #20
+    sta zp_temp1
+    jsr place_monster_at_temp
+    ldx #23
+    ldy #20
+    lda #TILE_FLOOR | FLAG_LIT | FLAG_OCCUPIED
+    jsr map_set_tile
+    jsr monster_update_visibility_all
+    jmp assert_monster_visible_flag_clear
 
 test_horizontal_move_production_visibility_clears_monster:
     jsr setup_scene

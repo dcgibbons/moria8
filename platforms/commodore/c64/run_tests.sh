@@ -3476,7 +3476,7 @@ run_test "main_loop" "tests/test_main_loop.s" "0400 0427" 40 500000000
 run_test "turn" "tests/test_turn.s" "0400 0418" 25 500000000
 run_test "player" "tests/test_player.s" "0400 0409" 10
 run_test "dungeon" "tests/test_dungeon.s" "0400 042a" 43 500000000
-run_test "monster" "tests/test_monster.s" "0400 040f" 16 500000000
+run_test "monster" "tests/test_monster.s" "0400 0411" 18 500000000
 run_test "monster_ai" "tests/test_monster_ai.s" "0400 041a" 27 500000000
 run_test "combat" "tests/test_combat.s" "0400 0427" 40 500000000
 run_test "msg_long" "tests/test_msg_long.s" "0400 0400" 1 20000000

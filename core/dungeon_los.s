@@ -416,14 +416,13 @@ reveal_room:
 // los_is_visible — Check if a map position is currently visible to the player
 // Input: X = map x, Y = map y
 // Output: carry set = visible, carry clear = not visible
-// Checks: FLAG_LIT on tile OR within light_radius Chebyshev distance
+// Checks: revealed FLAG_LIT tile OR within light_radius Chebyshev distance.
+// Raw lit-room metadata is not current terrain visibility until visited.
 // Preserves: X, Y
 los_is_visible:
     // Read tile
     tya
     pha                         // Save map y
-    txa
-    pha                         // Save map x
 
     // Get map pointer for row Y
     lda map_row_lo,y
@@ -436,13 +435,12 @@ los_is_visible:
     tay
     :MapRead_ptr1_y()
 
-    // Check FLAG_LIT
-    and #FLAG_LIT
-    bne !lov_yes+               // Lit tiles always visible
+    // Check revealed permanent light.
+    and #(FLAG_LIT | FLAG_VISITED)
+    cmp #(FLAG_LIT | FLAG_VISITED)
+    beq !lov_yes+
 
     // Check Chebyshev distance: max(|dx|, |dy|) <= light_radius
-    pla                         // Restore map x
-    tax
     pla                         // Restore map y
     tay
 
@@ -483,8 +481,6 @@ los_is_visible:
     rts
 
 !lov_yes:
-    pla                         // Restore saved x
-    tax
     pla                         // Restore saved y
     tay
     sec
