@@ -18,10 +18,13 @@ from vice_connector import VICEConnector, extract_test_symbols, parse_vs_symbols
 def build_vice_command(args: argparse.Namespace) -> list[str]:
     command = [
         args.vice,
+        "-config",
+        "/dev/null",
+        "-default",
+        "+saveres",
         "-console",
         "-nativemonitor",
         "-warp",
-        "+saveres",
         "+sound",
         "-sounddev",
         "dummy",

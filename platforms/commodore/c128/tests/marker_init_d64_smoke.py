@@ -57,6 +57,10 @@ def run_vice(args: argparse.Namespace) -> int:
     symbols = extract_test_symbols(args.vs)
     command = [
         args.vice,
+        "-config",
+        "/dev/null",
+        "-default",
+        "+saveres",
         "-console",
         "-nativemonitor",
         "-warp",

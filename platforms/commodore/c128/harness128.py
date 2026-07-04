@@ -19,6 +19,10 @@ from vice_connector import VICEConnector, extract_test_symbols, run_test_case
 def build_vice_command(args: argparse.Namespace) -> list[str]:
     command = [
         args.vice,
+        "-config",
+        "/dev/null",
+        "-default",
+        "+saveres",
         "-console",
         "-nativemonitor",
         "-warp",
@@ -84,6 +88,10 @@ def run_test_via_moncommands(
 
         command = [
             args.vice,
+            "-config",
+            "/dev/null",
+            "-default",
+            "+saveres",
             "-console",
             "-nativemonitor",
             "-warp",

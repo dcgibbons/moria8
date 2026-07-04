@@ -16,10 +16,13 @@ BYTE_DUMP_RE = re.compile(r"C:([0-9A-Fa-f]{4})\s+([0-9A-Fa-f]{2})")
 def build_vice_command(args: argparse.Namespace) -> list[str]:
     return [
         args.vice,
+        "-config",
+        "/dev/null",
+        "-default",
+        "+saveres",
         "-console",
         "-nativemonitor",
         "-warp",
-        "+saveres",
         "+sound",
         "-sounddev",
         "dummy",

@@ -161,6 +161,8 @@ piw_print_prompt_with_count:
     clc
     rts
 
+// Dispatcher-only visibility stub. The real C128 production clear/recompute
+// path is covered in test_monster128.s with core/monster.s imported.
 monster_update_visibility_all:
     ldx #0
 !muva_loop:

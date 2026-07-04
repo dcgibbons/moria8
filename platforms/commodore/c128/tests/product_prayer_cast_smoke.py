@@ -315,6 +315,10 @@ def build_vice_command(
 ) -> list[str]:
     command = [
         vice,
+        "-config",
+        "/dev/null",
+        "-default",
+        "+saveres",
         "-console",
         "-nativemonitor",
         "-warp",

@@ -14,6 +14,9 @@
 #define COMPILE_EMBEDDED_DUNGEON_TEST_ROSTER
 #define C128_UNIT_TEST
 
+.const VIEWPORT_W = 78
+.const VIEWPORT_H = 19
+
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_start)
 
@@ -40,6 +43,8 @@ tier_check_transition:
 
 eff_detect_timer: .byte 0
 eff_detect_evil_mode: .byte 0
+vis_room_revealed: .byte 0
+vis_force_redraw_pending: .byte 0
 
 player_get_infra_range:
     lda test_infra_range
@@ -56,6 +61,7 @@ mm_los_clear_to_target:
     rts
 
 #import "../../../../core/monster.s"
+#import "../../../../core/player_magic_detect_evil_effect.s"
 test_start:
     sei
     cld
@@ -434,6 +440,72 @@ test_visibility_paths:
     sec
     rts
 !detect_visible_preserved:
+
+    jsr test_visibility_reset
+    lda #CF_EVIL
+    sta cr_mflags + 1
+    lda #0
+    sta zp_view_x
+    sta zp_view_y
+    sta test_los_clear
+    jsr eff_detect_evil_only
+    lda monster_table + MX_FLAGS
+    and #MF_DETECTED
+    bne !detect_evil_marked_ok+
+    sec
+    rts
+!detect_evil_marked_ok:
+    lda eff_detect_evil_mode
+    cmp #1
+    beq !detect_evil_mode_ok+
+    sec
+    rts
+!detect_evil_mode_ok:
+    lda vis_room_revealed
+    cmp #1
+    beq !detect_evil_reveal_ok+
+    sec
+    rts
+!detect_evil_reveal_ok:
+    jsr detect_evil_clear_reveal
+    lda eff_detect_evil_mode
+    beq !detect_evil_mode_clear_ok+
+    sec
+    rts
+!detect_evil_mode_clear_ok:
+    lda muv_clear_detected
+    beq !detect_evil_latch_clear_ok+
+    sec
+    rts
+!detect_evil_latch_clear_ok:
+    lda monster_table + MX_FLAGS
+    and #MF_DETECTED
+    beq !detect_evil_cleared_ok+
+    sec
+    rts
+!detect_evil_cleared_ok:
+    lda vis_force_redraw_pending
+    cmp #1
+    beq !detect_evil_redraw_ok+
+    sec
+    rts
+!detect_evil_redraw_ok:
+
+    jsr test_visibility_reset
+    lda #MF_DETECTED
+    sta monster_table + MX_FLAGS
+    lda #1
+    sta eff_detect_timer
+    sta eff_detect_evil_mode
+    lda #0
+    sta test_los_clear
+    jsr detect_evil_clear_reveal
+    lda monster_table + MX_FLAGS
+    and #MF_DETECTED
+    bne !detect_evil_preserves_timed_ok+
+    sec
+    rts
+!detect_evil_preserves_timed_ok:
     clc
     rts
 
@@ -442,6 +514,8 @@ test_visibility_reset:
     lda #0
     sta eff_detect_timer
     sta eff_detect_evil_mode
+    sta vis_room_revealed
+    sta vis_force_redraw_pending
     sta muv_clear_detected
     sta zp_eff_blind
     sta zp_light_radius

@@ -173,16 +173,20 @@ for path in sorted(root.glob("*.py")):
         if "-remotemonitor" not in values and "-nativemonitor" not in values:
             continue
         missing = [flag for flag in ("-config", "-default", "+saveres") if flag not in values]
+        if "-config" in values:
+            config_index = values.index("-config")
+            if config_index + 1 >= len(values) or values[config_index + 1] != "/dev/null":
+                missing.append("-config /dev/null")
         if missing:
             bad.append(f"{path.name}: missing {', '.join(missing)}")
 
 for lineno, line in enumerate(runner.read_text().splitlines(), start=1):
-    if '"$VICE"' not in line:
+    stripped = line.strip()
+    if not stripped.startswith('"$VICE" '):
         continue
-    if "-config /dev/null -default" not in line:
-        continue
-    if "+saveres" not in line:
-        bad.append(f"{runner.name}:{lineno}: missing +saveres")
+    missing = [flag for flag in ("-config /dev/null", "-default", "+saveres") if flag not in line]
+    if missing:
+        bad.append(f"{runner.name}:{lineno}: missing {', '.join(missing)}")
 
 if bad:
     print("; ".join(bad))
@@ -3104,7 +3108,7 @@ run_single_drive_fresh_save_product_smoke() {
     local main_vs="../../../build/test/c64/main.vs"
     local start_addr resume_addr swap_addr pass_addr fail_addr
     start_addr=$(awk '/\.c64_test_single_drive_fresh_save_wait_for_harness$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
-    resume_addr=$(awk '/\.c64_test_single_drive_fresh_save_before_save$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    resume_addr=$(awk '/\.c64_test_single_drive_fresh_save_resume_low$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     swap_addr=$(awk '/\.disk_prompt_game_required_error_shown$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     pass_addr=$(awk '/\.c64_test_after_save_restart_start$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     fail_addr=$(awk '/\.c64_test_single_drive_fresh_save_unexpected_return$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
@@ -3122,10 +3126,11 @@ run_single_drive_fresh_save_product_smoke() {
             --boot-d64 "$scripted_d64" \
             --main-vs "$main_vs" \
             --start-symbol ".c64_test_single_drive_fresh_save_wait_for_harness" \
-            --resume-symbol ".c64_test_single_drive_fresh_save_before_save" \
-            --attach8-at-start-d64 "$save_d64" \
-            --swap-symbol ".disk_prompt_game_required_error_shown" \
-            --swap-attach8-d64 "$swap_program_d64" \
+            --resume-symbol ".c64_test_single_drive_fresh_save_resume_low" \
+            --swap-symbol ".c64_test_single_drive_fresh_save_before_save" \
+            --swap-attach8-d64 "$save_d64" \
+            --swap2-symbol ".disk_prompt_game_required_error_shown" \
+            --swap2-attach8-d64 "$swap_program_d64" \
             --pass-symbol ".c64_test_after_save_restart_start" \
             --fail-symbol ".c64_test_single_drive_fresh_save_unexpected_return" \
             --limitcycles 900000000 \
@@ -3228,8 +3233,9 @@ run_single_drive_fresh_save_no_init_product_smoke() {
             --boot-d64 "$scripted_d64" \
             --main-vs ../../../build/test/c64/main.vs \
             --start-symbol ".c64_test_single_drive_fresh_save_wait_for_harness" \
-            --resume-symbol ".c64_test_single_drive_fresh_save_before_save" \
-            --attach8-at-start-d64 "$save_d64" \
+            --resume-symbol ".c64_test_single_drive_fresh_save_resume_low" \
+            --swap-symbol ".c64_test_single_drive_fresh_save_before_save" \
+            --swap-attach8-d64 "$save_d64" \
             --pass-symbol ".c64_test_single_drive_fresh_save_no_init_return" \
             --fail-symbol ".c64_test_single_drive_fresh_save_unexpected_return" \
             --limitcycles 900000000 \
@@ -3635,6 +3641,7 @@ run_suite_function "scripted_book_overlay_smoke" run_scripted_book_overlay_smoke
 run_suite_function "scripted_scroll_selector_smoke" run_scripted_scroll_selector_smoke
 run_suite_function "scripted_spell_list_overlay_smoke" run_scripted_spell_list_overlay_smoke
 run_suite_function "scripted_dungeon_target_spell_smoke" run_scripted_dungeon_target_spell_smoke
+run_suite_function "scripted_detect_evil_smoke" run_scripted_detect_evil_smoke
 run_suite_function "dungeon_ascent_product_smoke" run_dungeon_ascent_product_smoke
 run_suite_function "retirement_royal_product_smoke" run_retirement_royal_product_smoke "retirement_flow_product_smoke"
 run_suite_function "disk_setup_product_smoke" run_disk_setup_product_smoke

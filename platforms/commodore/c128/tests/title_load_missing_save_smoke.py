@@ -14,6 +14,10 @@ from vice_connector import normalize_addr, parse_vs_symbols
 def run_vice(args: argparse.Namespace, moncommands: Path, monlog: Path) -> int:
     command = [
         args.vice,
+        "-config",
+        "/dev/null",
+        "-default",
+        "+saveres",
         "-console",
         "-nativemonitor",
         "-warp",

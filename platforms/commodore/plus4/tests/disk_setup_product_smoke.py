@@ -22,10 +22,13 @@ MEM_DUMP_RE = re.compile(r">\S+:\S+\s+([0-9a-fA-F]{2})")
 def build_vice_command(args: argparse.Namespace) -> list[str]:
     command = [
         args.vice,
+        "-config",
+        "/dev/null",
+        "-default",
+        "+saveres",
         "-console",
         "-nativemonitor",
         "-warp",
-        "+saveres",
         "+sound",
         "-sounddev",
         "dummy",

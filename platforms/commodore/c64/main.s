@@ -188,6 +188,12 @@ c64_test_load_then_save_new_empty_resume_low:
     sta $01
     jmp title_load_game
 #endif
+#if C64_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT
+c64_test_single_drive_fresh_save_resume_low:
+    lda #$36                // Monitor attach/resume may expose BASIC ROM.
+    sta $01
+    jmp c64_test_single_drive_fresh_save_before_save
+#endif
 
 c64_disk_call:
     pha
@@ -719,7 +725,6 @@ c64_test_single_drive_save_wrong_media_unexpected_return:
     sta save_device
     lda #1
     sta disk_mode
-    lda #2
     sta disk_setup_done
     lda #0
     sta save_slot_index

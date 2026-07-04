@@ -328,6 +328,7 @@ c64_test_seed_scripted_spell_state:
     sta c64_test_spell_success_count
     sta c64_test_spell_return_pending
     sta c64_test_spell_return_count
+    sta c64_test_detect_evil_seen
     rts
 
 c64_test_force_detect_evil_monster:
@@ -368,9 +369,58 @@ c64_test_force_detect_evil_monster:
 !ctdem_done:
     rts
 
+c64_test_detect_evil_record_detected:
+    jsr c64_test_detect_evil_any_detected
+    bcs !ctderd_seen+
+    jmp c64_test_spell_fail_validate_sym
+!ctderd_seen:
+    lda #1
+    sta c64_test_detect_evil_seen
+    rts
+
+c64_test_detect_evil_assert_cleared:
+    lda c64_test_detect_evil_seen
+    bne !ctdeac_seen_ok+
+    jmp c64_test_spell_fail_validate_sym
+!ctdeac_seen_ok:
+    jsr c64_test_detect_evil_any_detected
+    bcc !ctdeac_clear_ok+
+    jmp c64_test_spell_fail_validate_sym
+!ctdeac_clear_ok:
+    rts
+
+c64_test_detect_evil_any_detected:
+    ldx #0
+!ctdead_loop:
+    cpx #MAX_MONSTERS
+    bcs !ctdead_none+
+    jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda (zp_ptr0),y
+    cmp #EMPTY_SLOT
+    beq !ctdead_next+
+    tay
+    lda cr_mflags,y
+    and #CF_EVIL
+    beq !ctdead_next+
+    ldy #MX_FLAGS
+    lda (zp_ptr0),y
+    and #MF_DETECTED
+    bne !ctdead_found+
+!ctdead_next:
+    inx
+    jmp !ctdead_loop-
+!ctdead_found:
+    sec
+    rts
+!ctdead_none:
+    clc
+    rts
+
 c64_test_detect_row: .byte 0
 c64_test_detect_col: .byte 0
 c64_test_detect_offset: .byte 0
+c64_test_detect_evil_seen: .byte 0
 c64_test_detect_offsets:
     .byte 6, 8, 10, 12, 14
 c64_test_detect_types:
@@ -922,6 +972,7 @@ c128_town_move_diag_loop_top:
     lda c64_test_spell_return_count
     cmp #20
     bcc !c64_test_detect_return_done+
+    jsr c64_test_detect_evil_assert_cleared
     jmp c64_test_spell_pass_sym
 !c64_test_detect_return_done:
 #endif

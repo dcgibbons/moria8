@@ -72,6 +72,60 @@ suite_selected() {
     return 1
 }
 
+run_vice_resource_contract_plus4() {
+    local name="vice_resource_contract_plus4"
+    if ! suite_selected "$name"; then
+        return
+    fi
+
+    TOTAL=$((TOTAL + 1))
+    if python3 - "$REPO_ROOT/platforms/commodore/plus4" <<'PY'
+from pathlib import Path
+import ast
+import sys
+
+root = Path(sys.argv[1])
+bad = []
+
+def check_tokens(label: str, values: list[str]) -> None:
+    missing = [flag for flag in ("-config", "-default", "+saveres") if flag not in values]
+    if "-config" in values:
+        config_index = values.index("-config")
+        if config_index + 1 >= len(values) or values[config_index + 1] != "/dev/null":
+            missing.append("-config /dev/null")
+    if missing:
+        bad.append(f"{label}: missing {', '.join(missing)}")
+
+for path in sorted((root / "tests").glob("*.py")) + [root / "harnessplus4.py"]:
+    tree = ast.parse(path.read_text(), filename=str(path))
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.List):
+            continue
+        values = []
+        for elt in node.elts:
+            if isinstance(elt, ast.Constant) and isinstance(elt.value, str):
+                values.append(elt.value)
+            elif isinstance(elt, ast.Attribute) and elt.attr == "vice":
+                values.append("args.vice")
+        if "args.vice" not in values:
+            continue
+        if "-remotemonitor" not in values and "-nativemonitor" not in values:
+            continue
+        check_tokens(path.name, values)
+
+if bad:
+    print("; ".join(bad))
+    raise SystemExit(1)
+PY
+    then
+        echo "PASS: $name"
+        PASS=$((PASS + 1))
+    else
+        echo "FAIL: $name"
+        FAIL=$((FAIL + 1))
+    fi
+}
+
 make_product_out() {
     mktemp -d "${TMPDIR:-/tmp}/moria8-plus4-$1.XXXXXX"
 }
@@ -194,6 +248,47 @@ if not has_ordered_chain(item_actions_overlay, [
     raise SystemExit(1)
 PY
     then
+        PASS=$((PASS + 1))
+    else
+        echo "FAIL: $name"
+        FAIL=$((FAIL + 1))
+    fi
+}
+
+run_plus4_visibility_layout_contract() {
+    local name="plus4_visibility_layout_contract"
+
+    if ! suite_selected "$name"; then
+        return
+    fi
+
+    TOTAL=$((TOTAL + 1))
+    if make -s -C "$REPO_ROOT/platforms/commodore" KICKASS="$KICKASS" ../../build/plus4/moria4.prg >/dev/null && \
+        python3 - "$REPO_ROOT/build/plus4/main.vs" <<'PY'
+from pathlib import Path
+import sys
+
+symbols = {}
+for raw in Path(sys.argv[1]).read_text().splitlines():
+    parts = raw.split()
+    if len(parts) >= 3 and parts[0] == "al":
+        addr = parts[1].split(":")[-1]
+        symbols[parts[2]] = int(addr, 16)
+
+impl = symbols.get(".monster_update_visibility_all_impl")
+wrapper = symbols.get(".monster_update_visibility_all")
+if impl is None or wrapper is None:
+    print("missing Plus/4 monster visibility symbols")
+    raise SystemExit(1)
+if not (0xF000 <= impl < 0xFFFA):
+    print(f"monster_update_visibility_all_impl must live in RuntimeBanked, got ${impl:04x}")
+    raise SystemExit(1)
+if 0xF000 <= wrapper < 0xFFFA:
+    print(f"monster_update_visibility_all wrapper must remain resident, got ${wrapper:04x}")
+    raise SystemExit(1)
+PY
+    then
+        echo "PASS: $name"
         PASS=$((PASS + 1))
     else
         echo "FAIL: $name"
@@ -2505,6 +2600,8 @@ run_load_missing_savefile_product_smoke() {
 }
 
 run_plus4_static_contracts
+run_plus4_visibility_layout_contract
+run_vice_resource_contract_plus4
 run_test "minimalplus4" "tests/test_minimalplus4.s"
 run_test "renderplus4" "tests/test_renderplus4.s"
 run_test "visibility_renderplus4" "tests/test_visibility_renderplus4.s"
