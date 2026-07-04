@@ -824,6 +824,85 @@ PY
     TOTAL=$((TOTAL + 1))
 }
 
+run_c128_save_slot_overlay_guard_check() {
+    local name="c128_save_slot_overlay_guard"
+    echo -n "  $name: "
+
+    local check_out
+    check_out=$(python3 - <<'PY'
+from pathlib import Path
+
+text = Path("main.s").read_text()
+
+def require_order(label: str, tokens: list[str]) -> None:
+    pos = 0
+    for token in tokens:
+        idx = text.find(token, pos)
+        if idx < 0:
+            raise SystemExit(f"{label}: missing ordered token {token!r}")
+        pos = idx + len(token)
+
+required = {
+    "resident active slot byte": [
+        "c128_active_save_slot: .byte $ff",
+    ],
+    "title entry clears active slot": [
+        "title_enter_menu:",
+        "lda #$ff",
+        "sta c128_active_save_slot",
+    ],
+    "new game starts with title-cleared active slot": [
+        "cmp #$4e                // 'N' — new game",
+        "jsr c128_modal_require_play",
+        "jmp game_new_start",
+    ],
+    "title load clears stale active slot before load prompt": [
+        "title_load_game:",
+        "lda #$ff",
+        "sta save_slot_index",
+        "jsr c128_modal_load_game",
+    ],
+    "modal save restores and updates active slot": [
+        "c128_modal_save_game:",
+        "jsr c128_modal_require_persist",
+        "jsr c128_require_save_media",
+        "lda c128_active_save_slot",
+        "sta save_slot_index",
+        "jsr save_select_slot_prompt",
+        "jsr save_game",
+        "bcc !save_done+",
+        "lda save_slot_index",
+        "sta c128_active_save_slot",
+    ],
+    "modal load restores and updates active slot": [
+        "c128_modal_load_game:",
+        "jsr c128_modal_require_persist",
+        "jsr c128_require_save_media",
+        "lda c128_active_save_slot",
+        "sta save_slot_index",
+        "jsr save_select_slot_prompt",
+        "jsr load_game",
+        "bcc !load_done+",
+        "lda save_slot_index",
+        "sta c128_active_save_slot",
+    ],
+}
+
+for label, tokens in required.items():
+    require_order(label, tokens)
+PY
+)
+    if [ "$?" -ne 0 ]; then
+        echo "FAIL"
+        echo "$check_out" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+    else
+        echo "PASS"
+        PASS=$((PASS + 1))
+    fi
+    TOTAL=$((TOTAL + 1))
+}
+
 run_disk_media_probe() {
     local name="$1"
 
@@ -7757,6 +7836,7 @@ run_boot_diag_copy() {
 
 run_selected_suites() {
     run_named_suite vice_resource_contract128 run_vice_resource_contract128 || return 1
+    run_named_suite c128_save_slot_overlay_guard run_c128_save_slot_overlay_guard_check || return 1
     run_named_suite main128_asm run_main_assembly_check || return 1
     run_named_suite c128_artifact_budget run_artifact_budget_check || return 1
     run_named_suite c128_symbol_placement run_symbol_placement_check || return 1

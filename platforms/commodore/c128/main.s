@@ -2324,6 +2324,8 @@ c128_test_change_save_drive_unexpected_return:
     jsr c128_restore_runtime_vectors
     cli
 title_enter_menu:
+    lda #$ff
+    sta c128_active_save_slot
 #if C128_REAL_BOOT_DIAG
     ldx #$27
     jsr c128_stack_guard_begin
@@ -2986,11 +2988,15 @@ c128_modal_save_game:
     jsr c128_require_save_media
     bcs !save_fail+
 #if !BYPASS_SLOT_PROMPT
+    lda c128_active_save_slot
+    sta save_slot_index
     jsr save_select_slot_prompt
 #endif
     jsr ui_prepare_fullscreen_transition
     jsr save_game
     bcc !save_done+
+    lda save_slot_index
+    sta c128_active_save_slot
 #if C128_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
 c128_test_after_save_before_play_media:
     lda #1
@@ -3009,10 +3015,15 @@ c128_modal_load_game:
     jsr c128_require_save_media
     bcs !load_fail+
 #if !BYPASS_SLOT_PROMPT
+    lda c128_active_save_slot
+    sta save_slot_index
     jsr save_select_slot_prompt
 #endif
     jsr ui_prepare_fullscreen_transition
     jsr load_game
+    bcc !load_done+
+    lda save_slot_index
+    sta c128_active_save_slot
 !load_done:
     rts
 !load_fail:
@@ -3167,6 +3178,7 @@ c128_runtime_load_result_a: .byte 0
 c128_runtime_load_readst: .byte 0
 c128_modal_slot_state: .byte C128_MODAL_UNKNOWN
 c128_media_state: .byte C128_MEDIA_UNKNOWN
+c128_active_save_slot: .byte $ff
 #if C128_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
 c128_test_after_save_media_check_active: .byte 0
 c128_test_post_save_prompt_diag: .fill 4, 0
