@@ -102,6 +102,15 @@ viewport_update:
 !vy_done:
     rts
 
+game_loop_update_visibility_preserve_reveal:
+    jsr update_visibility
+    lda vis_force_redraw_pending
+    beq !done+
+    lsr vis_force_redraw_pending
+    sta vis_room_revealed
+!done:
+    rts
+
 // render_viewport — Draw the 78x19 viewport to VDC screen
 // For each row: stream screen codes via VDC auto-increment,
 // buffer translated colors, then stream attributes.
@@ -152,10 +161,8 @@ render_viewport:
     // Copy the map row via the MMU helper so we stay in Bank 0 code space
     jsr mmu_copy_map_row
 
-    // Most rows have no item/monster flags. Accumulate both bits across the
-    // staged row so we only run the monster population pass when actually
-    // needed for this row. Item population always runs because it owns the
-    // row cache reset for both item and monster overlays.
+    // Item population owns the row cache reset; the map occupied bit is the
+    // cheap row-level gate while shared monster flags remain render authority.
     jsr rv_populate_row_items
     lda #0
     ldx #0
@@ -204,11 +211,7 @@ render_viewport:
     and #FLAG_VISITED
     bne !rv_visited+
 
-    // Not visited — check if detect monsters reveals an occupant
-    lda eff_detect_timer
-    bne !rv_detect_chk+
-    jmp rv_check_infra_unvisited
-!rv_detect_chk:
+    // Not visited — only a live visible/detected monster may render.
     ldy zp_render_x
     lda rv_row_occ,y
     beq !rv_detect_blank+
@@ -221,7 +224,7 @@ render_viewport:
     sta zp_temp0
     lda #VDC_BLACK
     sta zp_temp1
-    jmp !rv_no_item+
+    jmp !rv_live_monster+
 !rv_visited:
 
     // Extract tile type (bits 7-4 → index 0-15)
@@ -291,10 +294,12 @@ render_viewport:
 !rv_no_store:
 
     // --- Dimming check: remembered but not currently visible → dark grey ---
-    // Town tiles always have FLAG_LIT, so this is effectively a no-op on town.
+    // Lit dungeon room tiles remain bright as remembered terrain; the monster
+    // overlay gate below decides whether they are current sight.
     lda zp_tile_tmp
     and #FLAG_LIT
-    bne !rv_vis_ok+             // FLAG_LIT → permanently visible → full color
+    bne !rv_vis_ok+
+!rv_not_lit:
 
     // Not lit — use pre-computed rv_row_dy for row-level early exit (Opt 4)
     lda rv_row_dy
@@ -304,7 +309,7 @@ render_viewport:
     // |dy| > light_radius: entire tile guaranteed outside torch range
     lda #VDC_DGREY              // Pre-translated VDC dark grey (Opt 2)
     sta zp_temp1
-    jmp rv_check_infra_dimmed
+    jmp !rv_dimmed+
 
 !rv_check_dx:
     // |dy| <= light_radius: check |dx| = abs(map_x - player_x)
@@ -324,14 +329,19 @@ render_viewport:
     lda rv_row_dy               // |dy| > |dx|: use pre-computed |dy|
 !rv_use_dx:
     cmp zp_light_radius
-    beq !rv_vis_ok+             // Exactly at radius → visible
-    bcc !rv_vis_ok+             // Within radius → visible
+    beq !rv_live_radius+        // Exactly at radius → visible
+    bcc !rv_live_radius+        // Within radius → visible
 
     // Outside light radius → dimmed (remembered tile)
     lda #VDC_DGREY              // Pre-translated VDC dark grey (Opt 2)
     sta zp_temp1
-    jmp rv_check_infra_dimmed
+!rv_dimmed:
+    lda zp_tile_tmp
+    ora #FLAG_OCCUPIED          // Reuse existing no-glyph gate after monster overlay.
+    sta zp_tile_tmp
+    jmp !rv_no_item+
 
+!rv_live_radius:
 !rv_vis_ok:
     // Item check (visible tiles only)
     lda zp_tile_tmp
@@ -355,10 +365,8 @@ render_viewport:
     sta zp_temp1
 !rv_no_item:
 
-    // Monster check (visible tiles only — overrides items)
-    lda zp_tile_tmp
-    and #FLAG_OCCUPIED
-    beq !rv_no_monster+
+!rv_live_monster:
+    // Monster check: row cache contains only shared visible/detected monsters.
     ldy zp_render_x
     lda rv_row_occ,y
     beq !rv_no_monster+
@@ -434,6 +442,7 @@ rv_draw_blank:
     // Trick: both bpl (VDC busy → repoll) and bne (next byte) branch to the same !stream: label
     // (the bit instruction). This eliminates jsr vdc_wait overhead (~9 cycles) per byte,
     // saving ~13K cycles/refresh, while keeping code size compact (18 bytes per pass).
+    php
     sei
 
     // Char row: set VDC address, select reg 31 once, then blast 38 bytes
@@ -448,13 +457,13 @@ rv_draw_blank:
     jsr vdc_select_reg      // Wait + select reg 31 + wait (once per row)
     ldy #0
 !char_stream:
-    bit VDC_ADDR_REG        // Poll VDC ready (bit 7 → N flag)
-    bpl !char_stream-       // N=0 (busy) → repoll; N=1 (ready) → fall through
+    bit VDC_ADDR_REG        // Poll VDC ready (bit 7 -> N flag)
+    bpl !char_stream-       // N=0 (busy) -> repoll; N=1 (ready) -> fall through
     lda row_char_buf,y
     sta VDC_DATA_REG
     iny
     cpy #VIEWPORT_W
-    bne !char_stream-       // Loop back to bit — also acts as wait for next byte
+    bne !char_stream-       // Loop back to bit - also acts as wait for next byte
 
     // Attr row: same pattern
     lda zp_color_lo
@@ -476,7 +485,7 @@ rv_draw_blank:
     cpy #VIEWPORT_W
     bne !attr_stream-
 
-    cli
+    plp
 
     // Next row
     inc zp_render_y
@@ -485,53 +494,6 @@ rv_draw_blank:
     beq !done+
     jmp !row_loop-
 !done:
-    rts
-
-rv_check_infra_unvisited:
-    lda zp_tile_tmp
-    and #FLAG_OCCUPIED
-    bne !has_occ+
-    jmp rv_draw_blank
-!has_occ:
-    jsr rv_try_infra_current_tile
-    bcs !visible+
-    jmp rv_draw_blank
-!visible:
-    jmp rv_apply_player_override_vdc
-
-rv_check_infra_dimmed:
-    lda zp_tile_tmp
-    and #FLAG_OCCUPIED
-    bne !has_occ+
-    jmp rv_no_monster
-!has_occ:
-    jsr rv_try_infra_current_tile
-    bcs !visible+
-    jmp rv_no_monster
-!visible:
-    jmp rv_apply_player_override_vdc
-
-rv_try_infra_current_tile:
-    lda zp_view_x
-    clc
-    adc zp_render_x
-    ldy rv_row_map_y
-    jsr monster_is_infra_visible_at
-    bcc !no+
-    jsr rv_set_monster_type_vdc
-    sec
-    rts
-!no:
-    clc
-    rts
-
-rv_set_monster_type_vdc:
-    lda cr_display,x
-    sta zp_temp0
-    jsr monster_get_threat_color
-    tax
-    lda vic_to_vdc_color,x
-    sta zp_temp1
     rts
 
 // render_viewport_scroll_delta — Fast path for 1-tile viewport scroll
@@ -545,6 +507,8 @@ rv_set_monster_type_vdc:
 // Preserves: nothing
 render_viewport_scroll_delta:
     jsr c128_vdc_reassert_mode
+    lda vis_room_revealed
+    bne !rvsd_no_fast_h+
 
     // Horizontal scroll candidate: dy == 0, dx == +/-1
     lda zp_view_y
@@ -823,6 +787,10 @@ rv_mon_scan:
     lda (zp_ptr0),y
     cmp #EMPTY_SLOT
     beq rv_mon_next
+    ldy #MX_FLAGS
+    lda (zp_ptr0),y
+    and #(MF_VISIBLE | MF_DETECTED)
+    beq rv_mon_next
     ldy #MX_Y
     lda (zp_ptr0),y
     cmp rv_row_map_y
@@ -852,10 +820,11 @@ rv_mon_done:
 //   rvsd_src_col, rvsd_dst_col = absolute screen cols
 //   rvsd_copy_len              = byte count (1..78)
 rvsd_copy_segment:
+    php
     sei
     jsr rvsd_block_copy_chars
     jsr rvsd_block_copy_attrs
-    cli
+    plp
     rts
 
 rvsd_block_copy_chars:
@@ -1024,14 +993,17 @@ render_single_tile:
     // Check visited flag
     and #FLAG_VISITED
     bne !rst_visited+
+    // Not visited — only a live visible/detected monster may render.
     lda zp_tile_tmp
     and #FLAG_OCCUPIED
-    beq !rst_not_infra_unvisited+
-    jsr rst_try_infra_current_tile
-    bcc !rst_not_infra_unvisited+
-    jmp rst_apply_player_override_vdc
-!rst_not_infra_unvisited:
+    bne !rst_detect_occ+
     jmp !rst_blank+
+!rst_detect_occ:
+    lda #SC_SPACE
+    sta zp_temp3
+    lda #VDC_BLACK
+    sta zp_temp4
+    jmp !rst_unvisited_detected+
 !rst_visited:
 
     // Extract tile type (bits 7-4)
@@ -1092,6 +1064,7 @@ render_single_tile:
     lda zp_tile_tmp
     and #FLAG_LIT
     bne !rst_vis_ok+
+!rst_not_lit:
 
     // Chebyshev distance: max(|map_x - player_x|, |map_y - player_y|)
     lda zp_temp0                // map_x
@@ -1117,19 +1090,15 @@ render_single_tile:
     lda rst_dim_tmp
 !rst_use_dy:
     cmp zp_light_radius
-    beq !rst_vis_ok+
-    bcc !rst_vis_ok+
+    beq !rst_live_radius+
+    bcc !rst_live_radius+
 
     // Dimmed
     lda #VDC_DGREY              // Pre-translated VDC dark grey (Opt 2)
     sta zp_temp4
-    lda zp_tile_tmp
-    and #FLAG_OCCUPIED
-    beq !rst_no_monster+
-    jsr rst_try_infra_current_tile
-    bcc !rst_no_monster+
-    jmp rst_apply_player_override_vdc
+    jmp !rst_monster+
 
+!rst_live_radius:
 !rst_vis_ok:
     ldy zp_temp1                // Y = map_y for both item and glyph lookups
     // Item check (visible tiles only)
@@ -1150,21 +1119,26 @@ render_single_tile:
     lda vic_to_vdc_color,x          // Translate to VDC RGBI (Opt 2: inline)
     sta zp_temp4
 !rst_no_item:
-    lda zp_tile_tmp
-    and #FLAG_OCCUPIED
-    bne !rst_monster+
     lda zp_temp0                // A = map_x
     jsr glyph_find_at           // Y already holds map_y from item lookup
-    bcc !rst_no_monster+
+    bcc !rst_monster+
     lda #SC_GLYPH
     sta zp_temp3
-    bne !rst_no_monster+
 !rst_monster:
+!rst_unvisited_detected:
+    lda zp_tile_tmp
+    and #FLAG_OCCUPIED
+    beq !rst_no_monster+
     lda zp_temp0                // A = map_x
+    ldy zp_temp1                // Y = map_y
     jsr monster_find_at
     bcc !rst_no_monster+        // Not found
     // X = slot index
     jsr monster_get_ptr
+    ldy #MX_FLAGS
+    lda (zp_ptr0),y
+    and #(MF_VISIBLE | MF_DETECTED)
+    beq !rst_no_monster+
     ldy #MX_TYPE
     lda (zp_ptr0),y
     tax
@@ -1195,9 +1169,13 @@ rst_apply_player_override_vdc:
     sta zp_temp3
     lda #VDC_BLACK              // Pre-translated VDC black (Opt 2)
     sta zp_temp4
-    bne rst_apply_player_override_vdc
+    lda zp_tile_tmp
+    and #FLAG_OCCUPIED
+    beq rst_apply_player_override_vdc
+    bne !rst_monster-
 
 !rst_write:
+    php
     sei                         // IRQ off: protect char + attr VDC writes as atomic pair
 
     // Set VDC address to screen position and write char
@@ -1221,52 +1199,15 @@ rst_apply_player_override_vdc:
     jsr vdc_set_update_addr
     lda zp_temp4                // Already VDC RGBI (Opt 2: translation moved to each color path)
     jsr vdc_write_data
-    cli                         // IRQ on: char + attr written consistently
-    rts
-
-rst_try_infra_current_tile:
-    lda zp_temp0
-    sta rst_saved_map_x
-    lda zp_temp1
-    sta rst_saved_map_y
-    lda rst_saved_map_x
-    ldy rst_saved_map_y
-    jsr monster_is_infra_visible_at
-    bcc !no+
-    stx rst_infra_type
-    lda rst_saved_map_x
-    sta zp_temp0
-    lda rst_saved_map_y
-    sta zp_temp1
-    ldx rst_infra_type
-    jsr rst_set_monster_type_vdc
-    sec
-    rts
-!no:
-    lda rst_saved_map_x
-    sta zp_temp0
-    lda rst_saved_map_y
-    sta zp_temp1
-    clc
-    rts
-
-rst_set_monster_type_vdc:
-    lda cr_display,x
-    sta zp_temp3
-    jsr monster_get_threat_color
-    tax
-    lda vic_to_vdc_color,x
-    sta zp_temp4
+    plp                         // Restore caller IRQ state.
     rts
 
 rst_col_tmp: .byte 0
 rst_row_tmp: .byte 0
 rst_dim_tmp: .byte 0          // Scratch for dimming distance calc
-rst_saved_map_x: .byte 0
-rst_saved_map_y: .byte 0
-rst_infra_type:  .byte 0
 rv_mon_x:    .byte 0          // Cached player viewport X / monster scratch
 rv_row_dy:   .byte 0          // Pre-computed |dy| for current row (Opt 4)
+
 // Saved positions for dirty render detection
 old_view_x:    .byte 0
 old_view_y:    .byte 0

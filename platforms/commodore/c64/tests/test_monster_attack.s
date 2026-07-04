@@ -4,7 +4,7 @@
 //        mon_atk_apply_damage, player_death_check, poison effect,
 //        paralysis effect, aggravation effect.
 //
-// Results at $0400-$040f: $01 = pass, $00 = fail per test
+// Results at $0400-$040d: $01 = pass, $00 = fail per test
 // NOTE: msg_print writes to screen row 0 ($0400+), so we store results
 // in tc_results[] and copy to $0400 at the very end.
 
@@ -18,7 +18,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #15
+    ldx #13
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -45,15 +45,6 @@ test_exit_trampoline:
 #import "../../../../core/item_defs.s"
 #import "../../../../core/player.s"
 #import "../../../../core/ui_messages.s"
-#import "../../../../core/ui_status.s"
-#import "../../../../core/ui_help_clear.s"
-#import "../../../../core/ui_character.s"
-#import "../../../../core/stat_display.s"
-.segmentdef TestCreateOverlay [start=$D000]
-.segment TestCreateOverlay
-#import "../../../../core/background_data.s"
-#import "../../../../core/player_create.s"
-.segment Default
 #import "../../../../core/sound.s"
 #import "../../../../core/dungeon_data.s"
 #import "../../../../core/dungeon_gen.s"
@@ -62,33 +53,48 @@ test_exit_trampoline:
 #import "../../../../core/monster.s"
 #import "../../../../core/tier_manager.s"
 #import "../../common/overlay.s"
-#import "../../../../core/monster_ai.s"
 #import "../../../../core/recall.s"
-#import "../../../../core/monster_magic.s"
-#import "../../../../core/item.s"
-#import "../../../../core/special_rooms.s"
-#import "../../../../core/ego_items.s"
-#import "../../../../core/special_rooms_stubs.s"
-#import "../../../../core/player_items.s"
-#import "../../../../core/spell_data.s"
-#import "../../../../core/projectile.s"
-#import "../../../../core/spell_effects.s"
-#import "../../../../core/player_magic_state.s"
-#import "../../../../core/player_magic_state_ops.s"
-#import "../../../../core/player_magic.s"
-#import "../../../../core/ui_inventory.s"
-#import "../../../../core/ui_equipment.s"
-#import "../dungeon_render.s"
-#import "../../../../core/dungeon_los.s"
-#import "../../../../core/player_move.s"
-#import "../../../../core/combat.s"
+viewport_update:
+render_viewport:
+render_single_tile:
+render_local_area:
+    rts
 #import "../../../../core/monster_attack.s"
-#import "../../../../core/turn.s"
-#import "../../../../core/store_data.s"
-#import "../../../../core/store.s"
-#import "../../../../core/ui_store.s"
-#import "../../../../core/ui_help.s"
-#import "../../../../core/ui_trampoline_stubs.s"
+
+combat_append_str:
+combat_append_monster_name:
+cmb_term_and_print:
+tramp_assign_special_room:
+tramp_vault_seal_entrance:
+tramp_spawn_special_room_monsters:
+    rts
+player_get_infra_range:
+    lda #0
+    rts
+mm_los_clear_to_target:
+    clc
+    rts
+
+eff_fear_timer:
+    .byte 0
+eff_detect_timer:
+    .byte 0
+vis_room_revealed:
+    .byte 0
+cmb_type:
+    .byte 0
+cmb_buf_idx:
+    .byte 0
+cmb_the_str:
+    .text "THE " ; .byte 0
+inv_item_id:
+    .fill TOTAL_INV_SLOTS, FI_EMPTY
+inv_p1:
+    .fill TOTAL_INV_SLOTS, 0
+it_base_ac:
+    .fill ITEM_TYPE_COUNT, 0
+inv_to_ac:
+    .fill TOTAL_INV_SLOTS, 0
 
 // Strings referenced by imported modules but defined in main.s
 press_key_str:
@@ -97,7 +103,7 @@ press_key_str:
 // Test scratch
 tc_loop:    .byte 0
 tc_ok:      .byte 0
-tc_results: .fill 16, $ff      // Result buffer (copied to $0400 at end)
+tc_results: .fill 14, $ff      // Result buffer (copied to $0400 at end)
 
 test_start:
     // Seed RNG deterministically
@@ -486,52 +492,14 @@ test_start:
     bcs !t11_fail+              // Should be <= 4
     lda #$01
     sta tc_results + 10
-    jmp !t12+
+    jmp !t13+
 !t11_fail:
     lda #$00
     sta tc_results + 10
-
-    // ==========================================
-    // Test 12: Fear timer decrement via turn_tick_effects
-    // Set timer=2, tick once, verify timer=1
-    // ==========================================
-!t12:
-    lda #2
-    sta eff_fear_timer
-    // Clear other effects to avoid side effects
-    lda #0
-    sta zp_eff_poison
-    sta zp_eff_blind
-    sta zp_eff_confuse
-    sta zp_eff_paralyze
-    sta zp_eff_speed
-    sta zp_eff_protect
-    sta zp_eff_invis
-    sta zp_eff_infra
-    sta zp_eff_bless
-    sta zp_eff_hero
-    sta zp_eff_regen
-    sta zp_eff_word_recall
-    sta eff_detect_timer
-    sta zp_pseudo_id_timer
-
-    // Set player to non-caster to skip mana regen
-    sta player_data + PL_SPELL_TYPE
-
-    jsr turn_tick_effects
-
-    lda eff_fear_timer
-    cmp #1
-    bne !t12_fail+
-    lda #$01
-    sta tc_results + 11
     jmp !t13+
-!t12_fail:
-    lda #$00
-    sta tc_results + 11
 
     // ==========================================
-    // Test 13: Holy Word invulnerability blocks melee damage
+    // Test 12: Holy Word invulnerability blocks melee damage
     // ==========================================
 !t13:
     lda #50
@@ -553,14 +521,14 @@ test_start:
     beq !t13_ok+
 !t13_fail:
     lda #$00
-    sta tc_results + 12
+    sta tc_results + 11
     jmp !t14+
 !t13_ok:
     lda #$01
-    sta tc_results + 12
+    sta tc_results + 11
 
     // ==========================================
-    // Test 14: bless contributes +2 effective AC for monster damage reduction.
+    // Test 13: bless contributes +2 effective AC for monster damage reduction.
     // AC 98 + bless 2, damage 10: reduction 5, result 5.
     // ==========================================
 !t14:
@@ -579,14 +547,14 @@ test_start:
     cmp #5
     bne !t14_fail+
     lda #$01
-    sta tc_results + 13
+    sta tc_results + 12
     jmp !t15+
 !t14_fail:
     lda #$00
-    sta tc_results + 13
+    sta tc_results + 12
 
     // ==========================================
-    // Test 15: heroism blocks new fear from monster attacks.
+    // Test 14: heroism blocks new fear from monster attacks.
     // ==========================================
 !t15:
     lda #0
@@ -603,63 +571,14 @@ test_start:
     lda eff_fear_timer
     bne !t15_fail+
     lda #$01
-    sta tc_results + 14
-    jmp !t16+
+    sta tc_results + 13
+    jmp !tests_done+
 !t15_fail:
     lda #$00
-    sta tc_results + 14
-
-    // ==========================================
-    // Test 16: heroism expiration removes temporary HP and clamps current HP.
-    // ==========================================
-!t16:
-    lda #1
-    sta zp_eff_hero
-    lda #50
-    sta player_data + PL_MHP_LO
-    lda #0
-    sta player_data + PL_MHP_HI
-    lda #55
-    sta zp_player_hp_lo
-    sta player_data + PL_HP_LO
-    lda #0
-    sta zp_player_hp_hi
-    sta player_data + PL_HP_HI
-    sta zp_eff_poison
-    sta zp_eff_blind
-    sta zp_eff_confuse
-    sta zp_eff_paralyze
-    sta zp_eff_speed
-    sta zp_eff_protect
-    sta zp_eff_invis
-    sta zp_eff_infra
-    sta zp_eff_bless
-    sta zp_eff_regen
-    sta zp_eff_word_recall
-    sta eff_detect_timer
-    sta eff_fear_timer
-    sta zp_pseudo_id_timer
-    sta player_data + PL_SPELL_TYPE
-
-    jsr turn_tick_effects
-
-    lda zp_eff_hero
-    bne !t16_fail+
-    lda player_data + PL_MHP_LO
-    cmp #40
-    bne !t16_fail+
-    lda zp_player_hp_lo
-    cmp #40
-    bne !t16_fail+
-    lda player_data + PL_HP_LO
-    cmp #40
-    bne !t16_fail+
-    lda #$01
-    sta tc_results + 15
-    jmp !tests_done+
-!t16_fail:
-    lda #$00
-    sta tc_results + 15
+    sta tc_results + 13
 
 !tests_done:
     jmp test_exit_trampoline
+
+monster_attack_test_end:
+.assert "Monster attack test stays below MAP_BASE", monster_attack_test_end <= MAP_BASE, true

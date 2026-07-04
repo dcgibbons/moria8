@@ -4,7 +4,7 @@
 :BasicUpstart2(test_bootstrap)
 
 .pc = $E000 "Result Buffer"
-tc_results: .fill 3, $ff
+tc_results: .fill 4, $ff
 
 .pc = $080E "Test Code"
 
@@ -18,7 +18,7 @@ test_finish:
     sei
     :BankOutBasic()
     :BankOutKernal()
-    ldx #2
+    ldx #3
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -73,7 +73,9 @@ test_finish:
 #import "../../../../core/player_magic_state.s"
 #import "../../../../core/player_magic_state_ops.s"
 #import "../../../../core/player_magic.s"
+#define PMX_DETECT_EFFECTS_EXTERNAL
 #import "../../../../core/player_magic_detect.s"
+#undef PMX_DETECT_EFFECTS_EXTERNAL
 #import "../dungeon_render.s"
 #import "../../../../core/dungeon_los.s"
 #import "../../../../core/player_move.s"
@@ -222,6 +224,7 @@ test_reset_detect_evil_prayer_state:
     sta tde_last_msg_lo
     sta tde_last_msg_hi
     sta eff_detect_timer
+    sta eff_detect_evil_mode
     sta vis_room_revealed
     lda #$ff
     sta tde_last_spell_idx
@@ -310,7 +313,8 @@ test_start:
     sta tc_results + 0
 
     // Test 2: Detect Evil with an evil monster in the current panel reports
-    // presence of evil and marks that tile visible/lit without a timer.
+    // presence of evil and marks that monster for the one-shot reveal without
+    // permanently revealing the terrain.
 !t2:
     :PatchJump(calc_spell_failure, test_calc_spell_failure_success)
     jsr test_clear_monsters
@@ -327,27 +331,47 @@ test_start:
     sta zp_view_x
     sta zp_view_y
     jsr player_pray
-    bcc !t2_fail+
+    bcs !t2_cast_ok+
+    jmp !t2_fail+
+!t2_cast_ok:
+    jmp !t2_checks+
+!t2_fail_jmp:
+    jmp !t2_fail+
+!t2_checks:
     lda tde_spell_exec_calls
     cmp #1
-    bne !t2_fail+
+    bne !t2_fail_jmp-
     lda tde_last_spell_idx
     cmp #0
-    bne !t2_fail+
+    bne !t2_fail_jmp-
     lda tde_msg_calls
     cmp #1
-    bne !t2_fail+
+    bne !t2_fail_jmp-
     lda tde_last_msg_lo
     cmp #<pmx_msg_evil_on
-    bne !t2_fail+
+    bne !t2_fail_jmp-
     lda tde_last_msg_hi
     cmp #>pmx_msg_evil_on
-    bne !t2_fail+
+    bne !t2_fail_jmp-
+    lda test_mon_table + MX_FLAGS
+    and #MF_DETECTED
+    beq !t2_fail_jmp-
     lda eff_detect_timer
+    bne !t2_fail_jmp-
+    lda eff_detect_evil_mode
+    cmp #1
+    bne !t2_fail_jmp-
+    jsr detect_evil_clear_reveal
+    lda eff_detect_evil_mode
+    bne !t2_fail+
+    lda test_mon_table + MX_FLAGS
+    and #MF_DETECTED
     bne !t2_fail+
     lda vis_room_revealed
     cmp #1
-    bne !t2_fail+
+    beq !t2_reveal_ok+
+    jmp !t2_fail+
+!t2_reveal_ok:
     ldx #12
     lda map_row_lo,x
     sta zp_ptr1
@@ -356,7 +380,6 @@ test_start:
     ldy #20
     :MapRead_ptr1_y()
     and #(FLAG_VISITED | FLAG_LIT)
-    cmp #(FLAG_VISITED | FLAG_LIT)
     bne !t2_fail+
     lda zp_player_mp
     cmp #19
@@ -374,9 +397,63 @@ test_start:
     lda #$00
     sta tc_results + 1
 
-    // Test 3: cast failure spends mana, prints HSTR_PM_FAIL, does not execute,
-    // and leaves Detect Evil unworked.
+    // Test 3: Detect Evil preserves active Detect Monsters. Its one-shot
+    // reveal clears after redraw, then timed detect owns MF_DETECTED again.
 !t3:
+    :PatchJump(calc_spell_failure, test_calc_spell_failure_success)
+    jsr test_clear_monsters
+    jsr test_reset_detect_evil_prayer_state
+    lda #1
+    sta test_mon_table + MX_TYPE
+    lda #10
+    sta test_mon_table + MX_X
+    sta test_mon_table + MX_Y
+    lda #MF_DETECTED
+    sta test_mon_table + MX_FLAGS
+    lda #2
+    sta test_mon_table + MONSTER_ENTRY_SIZE + MX_TYPE
+    lda #11
+    sta test_mon_table + MONSTER_ENTRY_SIZE + MX_X
+    sta test_mon_table + MONSTER_ENTRY_SIZE + MX_Y
+    lda #MF_DETECTED
+    sta test_mon_table + MONSTER_ENTRY_SIZE + MX_FLAGS
+    lda #CF_EVIL
+    sta cr_mflags + 2
+    lda #DETECT_TIMER_TURNS
+    sta eff_detect_timer
+    lda #0
+    sta zp_view_x
+    sta zp_view_y
+    jsr player_pray
+    bcc tde_t3_fail
+    lda eff_detect_timer
+    cmp #DETECT_TIMER_TURNS
+    bne tde_t3_fail
+    lda eff_detect_evil_mode
+    cmp #1
+    bne tde_t3_fail
+    jsr detect_evil_clear_reveal
+    lda eff_detect_timer
+    cmp #DETECT_TIMER_TURNS
+    bne tde_t3_fail
+    lda eff_detect_evil_mode
+    bne tde_t3_fail
+    lda test_mon_table + MX_FLAGS
+    and #MF_DETECTED
+    beq tde_t3_fail
+    lda test_mon_table + MONSTER_ENTRY_SIZE + MX_FLAGS
+    and #MF_DETECTED
+    beq tde_t3_fail
+    lda #$01
+    sta tc_results + 2
+    jmp !t4+
+tde_t3_fail:
+    lda #$00
+    sta tc_results + 2
+
+    // Test 4: cast failure spends mana, prints HSTR_PM_FAIL, does not execute,
+    // and leaves Detect Evil unworked.
+!t4:
     :PatchJump(calc_spell_failure, test_calc_spell_failure_fail)
     jsr test_clear_monsters
     jsr test_reset_detect_evil_prayer_state
@@ -385,34 +462,36 @@ test_start:
     lda #CF_EVIL
     sta cr_mflags + 1
     jsr player_pray
-    bcc !t3_fail+
+    bcc !t4_fail+
     lda tde_huff_calls
     cmp #1
-    bne !t3_fail+
+    bne !t4_fail+
     lda tde_last_huff_id
     cmp #HSTR_PM_FAIL
-    bne !t3_fail+
+    bne !t4_fail+
     lda tde_spell_exec_calls
-    bne !t3_fail+
+    bne !t4_fail+
     lda tde_msg_calls
-    bne !t3_fail+
+    bne !t4_fail+
     lda eff_detect_timer
-    bne !t3_fail+
+    bne !t4_fail+
+    lda eff_detect_evil_mode
+    bne !t4_fail+
     lda vis_room_revealed
-    bne !t3_fail+
+    bne !t4_fail+
     lda zp_player_mp
     cmp #19
-    bne !t3_fail+
+    bne !t4_fail+
     lda player_data + PL_MANA
     cmp #19
-    bne !t3_fail+
+    bne !t4_fail+
     lda player_data + PL_SPELLS_WORKED_0
     and #$01
-    bne !t3_fail+
+    bne !t4_fail+
     lda #$01
-    sta tc_results + 2
+    sta tc_results + 3
     jmp test_finish
-!t3_fail:
+!t4_fail:
     lda #$00
-    sta tc_results + 2
+    sta tc_results + 3
     jmp test_finish

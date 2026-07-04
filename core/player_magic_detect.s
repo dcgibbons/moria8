@@ -57,3 +57,7 @@ pmx_msg_no_evil:
     .text "You sense no evil nearby." ; .byte 0
 pmx_msg_no_creatures:
     .text "You sense no creatures nearby." ; .byte 0
+
+#if !PMX_DETECT_EFFECTS_EXTERNAL
+#import "player_magic_detect_evil_effect.s"
+#endif

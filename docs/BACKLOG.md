@@ -5,28 +5,6 @@ unreleased for release notes.
 
 ## Commodore Ports
 
-### Add exact line-of-sight blocking for infravision
-
-The current infravision implementation is deliberately compact: it uses
-Umoria-style range and warm-monster flags, but it does not yet perform full
-wall-blocking line-of-sight for infra-only monsters. This restores the missing
-racial dark-vision gameplay on C64, C128, and Plus/4 without revealing terrain,
-items, traps, doors, or cold creatures.
-
-Required work:
-
-- Add a compact shared LOS trace that can test player-to-monster visibility
-  without marking tiles visited.
-- Block infravision through walls, closed doors, secret doors, magma, quartz,
-  and other opaque/non-walkable intermediate terrain.
-- Keep the target monster tile eligible even though it is occupied.
-- Prove the helper is safe on C64, Plus/4, and C128 memory layouts.
-
-Acceptance target:
-
-- Infravision matches Umoria's monster visibility rule closely enough that
-  walls and closed opaque terrain block infra-only monster display.
-
 ### Implement Plus/4 TED sound effects
 
 The Plus/4 has TED sound hardware, but Moria8's Plus/4 backend currently

@@ -107,10 +107,12 @@
 :C128AuditRuntimeLow("render_viewport", render_viewport)
 :C128AuditRuntimeLow("render_viewport_scroll_delta", render_viewport_scroll_delta)
 :C128AuditRuntimeLow("render_local_area", render_local_area)
-:C128AuditRuntimeLow("roll_ego_type", roll_ego_type)
-:C128AuditRuntimeLow("ego_get_suffix_ptr", ego_get_suffix_ptr)
-:C128AuditRuntimeLow("ego_apply_damage", ego_apply_damage)
-:C128AuditRuntimeLow("ego_ac_bonus", ego_ac_bonus)
+:C128AuditBelowIo("roll_ego_type", roll_ego_type)
+:C128AuditBelowIo("roll_tool_ego_check", roll_tool_ego_check)
+:C128AuditBelowIo("ego_get_suffix_ptr", ego_get_suffix_ptr)
+:C128AuditBelowIo("ego_apply_damage", ego_apply_damage)
+:C128AuditBelowIo("ego_ac_bonus", ego_ac_bonus)
+:C128AuditBelowIo("put_tool_ego_prefix", put_tool_ego_prefix)
 
 // Disk Setup lives in the dedicated disk-I/O runtime below ROM-shadowed regions
 // so title-time save-disk setup is callable regardless of C128 banking state.

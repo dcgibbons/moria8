@@ -359,7 +359,7 @@ ui_wizard_cmd_gain_level:
 
 ui_wizard_cmd_teleport:
     jsr eff_teleport_self
-    jmp ui_wizard_done_visibility_message
+    jmp ui_wizard_restore_gameplay_with_visibility_message
 
 ui_wizard_cmd_wall_walk:
     lda wizard_wall_walk_enabled
@@ -393,7 +393,7 @@ ui_wizard_cmd_summon:
     bcs !wiz_summon_ok+
     jmp ui_wizard_fail_message
 !wiz_summon_ok:
-    jmp ui_wizard_done_visibility_message
+    jmp ui_wizard_restore_gameplay_with_visibility_message
 
 ui_wizard_cmd_generate_item:
     lda #<wiz_item_prompt_str
@@ -417,7 +417,7 @@ ui_wizard_cmd_generate_item:
     bcs !wiz_item_ok+
     jmp ui_wizard_fail_message
 !wiz_item_ok:
-    jmp ui_wizard_done_visibility_message
+    jmp ui_wizard_restore_gameplay_with_visibility_message
 
 ui_wizard_cmd_level_jump:
     lda #<wiz_jump_prompt_str
@@ -536,7 +536,6 @@ ui_wizard_parse_two_digit:
 
 ui_wizard_restore_gameplay_with_visibility_message:
     jsr update_visibility
-ui_wizard_done_visibility_message:
     lda #<wiz_done_str
     sta zp_ptr0
     lda #>wiz_done_str

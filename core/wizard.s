@@ -357,7 +357,7 @@ wizard_cmd_gain_level:
 
 wizard_cmd_teleport:
     jsr eff_teleport_self
-    jmp wizard_done_visibility_message
+    jmp wizard_restore_gameplay_with_visibility_message
 
 wizard_cmd_wall_walk:
     lda wizard_wall_walk_enabled
@@ -391,7 +391,7 @@ wizard_cmd_summon:
     bcs !wiz_summon_ok+
     jmp wizard_fail_message
 !wiz_summon_ok:
-    jmp wizard_done_visibility_message
+    jmp wizard_restore_gameplay_with_visibility_message
 
 wizard_cmd_generate_item:
     lda #<wiz_item_prompt_str
@@ -414,7 +414,7 @@ wizard_cmd_generate_item:
     bcs !wiz_item_ok+
     jmp wizard_fail_message
 !wiz_item_ok:
-    jmp wizard_done_visibility_message
+    jmp wizard_restore_gameplay_with_visibility_message
 
 wizard_cmd_level_jump:
     lda #<wiz_jump_prompt_str
@@ -529,7 +529,6 @@ wizard_parse_two_digit:
 
 wizard_restore_gameplay_with_visibility_message:
     jsr update_visibility
-wizard_done_visibility_message:
     lda #<wiz_done_str
     sta zp_ptr0
     lda #>wiz_done_str

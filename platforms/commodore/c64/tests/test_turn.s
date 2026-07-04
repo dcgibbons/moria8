@@ -32,6 +32,8 @@ bootstrap:
 .const PL_RESERVED         = 64
 .const PL_SPELL_TYPE       = 60
 eff_detect_timer:    .byte 0
+eff_detect_evil_mode:.byte 0
+muv_clear_detected:  .byte 0
 
 .macro MapRead_ptr0_y() {
     lda (zp_ptr0),y
@@ -71,7 +73,7 @@ test_map_row:        .fill 80, FLAG_OCCUPIED
 map_row_lo:          .fill 48, <test_map_row
 map_row_hi:          .fill 48, >test_map_row
 
-tc_results: .fill 23, $ff
+tc_results: .fill 25, $ff
 
 test_seq_next: .byte 0
 test_seq_effects: .byte 0
@@ -190,6 +192,11 @@ item_spawn_level:
 
 update_visibility:
     inc test_update_visibility_calls
+    rts
+
+monster_update_visibility_all:
+    lda #0
+    sta muv_clear_detected
     rts
 
 screen_clear:
@@ -389,7 +396,7 @@ test_start:
     ldx #$ff
     txs
 
-    ldx #22
+    ldx #24
     lda #$ff
 !init_results:
     sta tc_results,x
@@ -1125,14 +1132,71 @@ t21_test:
     bne !t15_fail+
     lda #$01
     sta tc_results + 14
-    jmp !t1_seq-
+    jmp !t24+
 !t15_fail:
     lda #$00
     sta tc_results + 14
+    jmp !t24+
+
+!t24:
+    // Test 24: production heroism expiry removes temporary HP and clamps current HP.
+    jsr reset_state
+    lda #1
+    sta zp_eff_hero
+    lda #50
+    sta player_data + PL_MHP_LO
+    sta zp_player_mhp_lo
+    lda #0
+    sta player_data + PL_MHP_HI
+    sta zp_player_mhp_hi
+    lda #55
+    sta zp_player_hp_lo
+    sta player_data + PL_HP_LO
+    lda #0
+    sta zp_player_hp_hi
+    sta player_data + PL_HP_HI
+    jsr turn_tick_effects
+    lda zp_eff_hero
+    bne !t24_fail+
+    lda player_data + PL_MHP_LO
+    cmp #40
+    bne !t24_fail+
+    lda zp_player_mhp_lo
+    cmp #40
+    bne !t24_fail+
+    lda zp_player_hp_lo
+    cmp #40
+    bne !t24_fail+
+    lda player_data + PL_HP_LO
+    cmp #40
+    bne !t24_fail+
+    lda #$01
+    sta tc_results + 23
+    jmp !t25+
+!t24_fail:
+    lda #$00
+    sta tc_results + 23
+    jmp !t25+
+
+!t25:
+    // Test 25: production fear timer decrements in turn_tick_effects.
+    jsr reset_state
+    lda #2
+    sta eff_fear_timer
+    jsr turn_tick_effects
+    lda eff_fear_timer
+    cmp #1
+    bne !t25_fail+
+    lda #$01
+    sta tc_results + 24
+    jmp !t1_seq-
+!t25_fail:
+    lda #$00
+    sta tc_results + 24
     jmp !t1_seq-
 
 test_finish:
-    ldx #22
+    ldx #24
 !copy:
     lda tc_results,x
     sta $0400,x

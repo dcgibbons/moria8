@@ -299,6 +299,8 @@ test_start:
     sta test_mon_table + (0 * MONSTER_ENTRY_SIZE) + MX_Y
     lda #7
     sta test_mon_table + (0 * MONSTER_ENTRY_SIZE) + MX_SLEEP_CUR
+    lda #MF_VISIBLE
+    sta test_mon_table + (0 * MONSTER_ENTRY_SIZE) + MX_FLAGS
     lda #2
     sta test_mon_table + (1 * MONSTER_ENTRY_SIZE) + MX_TYPE
     lda #9
@@ -313,6 +315,8 @@ test_start:
     sta test_mon_table + (2 * MONSTER_ENTRY_SIZE) + MX_SLEEP_CUR
     lda #4
     sta test_mon_table + (2 * MONSTER_ENTRY_SIZE) + MX_CONFUSE
+    lda #MF_VISIBLE
+    sta test_mon_table + (2 * MONSTER_ENTRY_SIZE) + MX_FLAGS
     lda #3
     sta test_mon_table + (3 * MONSTER_ENTRY_SIZE) + MX_TYPE
     lda #25

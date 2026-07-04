@@ -27,10 +27,13 @@ REGISTER_PC_RE = re.compile(r"(?:\.;|\.C:)([0-9A-Fa-f]{4})")
 def build_vice_command(args: argparse.Namespace) -> list[str]:
     command = [
         args.vice,
+        "-config",
+        "/dev/null",
+        "-default",
+        "+saveres",
         "-console",
         "-nativemonitor",
         "-warp",
-        "+saveres",
         "+sound",
         "-sounddev",
         "dummy",
@@ -269,6 +272,19 @@ def continue_from(connector: VICEConnector, addr: str | None) -> None:
     connector.go()
 
 
+def reset_for(args: argparse.Namespace, option_name: str) -> bool:
+    return args.reset8_after_attach or bool(getattr(args, option_name))
+
+
+def retryable_harness_failure(result: MonitorTestResult) -> bool:
+    if result.reason.startswith("timeout"):
+        return True
+    return result.reason in (
+        "monitor connection closed",
+        "monitor connection reset",
+    ) or result.reason.startswith("unable to connect to VICE monitor")
+
+
 def run_vice(args: argparse.Namespace, pass_addr: str, fail_addr: str | None, dump_ranges: list[tuple[str, str]]) -> tuple[MonitorTestResult, list[str]]:
     process: subprocess.Popen[bytes] | None = None
     connector = VICEConnector(host=args.host, port=args.port, timeout=args.socket_timeout)
@@ -300,7 +316,7 @@ def run_vice(args: argparse.Namespace, pass_addr: str, fail_addr: str | None, du
                     retry_delay=args.connect_retry_delay,
                 )
                 if args.attach8_at_start_d64:
-                    attach_drive8(connector, args.attach8_at_start_d64, args.attach_delay, args.reset8_after_attach)
+                    attach_drive8(connector, args.attach8_at_start_d64, args.attach_delay, reset_for(args, "attach8_at_start_reset8_after_attach"))
             else:
                 connector.connect(
                     retries=max(1, int(args.connect_timeout / args.connect_retry_delay)),
@@ -332,7 +348,7 @@ def run_vice(args: argparse.Namespace, pass_addr: str, fail_addr: str | None, du
                             dumps.append(f"{start}: {exc}")
                     return start_result, dumps
                 if args.attach8_at_start_d64:
-                    attach_drive8(connector, args.attach8_at_start_d64, args.attach_delay, args.reset8_after_attach)
+                    attach_drive8(connector, args.attach8_at_start_d64, args.attach_delay, reset_for(args, "attach8_at_start_reset8_after_attach"))
             connector.clear_breakpoints()
             if args.swap_addr:
                 connector.break_at(args.swap_addr)
@@ -352,7 +368,7 @@ def run_vice(args: argparse.Namespace, pass_addr: str, fail_addr: str | None, du
                     if result.passed:
                         swap_hits += 1
                         if swap_hits >= args.swap_attach_after_hits:
-                            attach_drive8(connector, args.swap_attach8_d64, args.attach_delay, args.reset8_after_attach)
+                            attach_drive8(connector, args.swap_attach8_d64, args.attach_delay, reset_for(args, "swap_reset8_after_attach"))
                             if args.swap2_addr:
                                 connector.clear_breakpoints()
                                 connector.break_at(args.swap2_addr)
@@ -369,7 +385,8 @@ def run_vice(args: argparse.Namespace, pass_addr: str, fail_addr: str | None, du
                                         dumps.append(connector.send_command("bt"))
                                     except Exception as exc:
                                         dumps.append(f"bt: {exc}")
-                                attach_drive8(connector, args.swap2_attach8_d64, args.attach_delay, args.reset8_after_attach)
+                                    return result, dumps
+                                attach_drive8(connector, args.swap2_attach8_d64, args.attach_delay, reset_for(args, "swap2_reset8_after_attach"))
                                 if args.swap3_addr:
                                     connector.clear_breakpoints()
                                     connector.break_at(args.swap3_addr)
@@ -386,7 +403,8 @@ def run_vice(args: argparse.Namespace, pass_addr: str, fail_addr: str | None, du
                                             dumps.append(connector.send_command("bt"))
                                         except Exception as exc:
                                             dumps.append(f"bt: {exc}")
-                                    attach_drive8(connector, args.swap3_attach8_d64, args.attach_delay, args.reset8_after_attach)
+                                        return result, dumps
+                                    attach_drive8(connector, args.swap3_attach8_d64, args.attach_delay, reset_for(args, "swap3_reset8_after_attach"))
                                     if args.swap4_addr:
                                         connector.clear_breakpoints()
                                         connector.break_at(args.swap4_addr)
@@ -403,7 +421,8 @@ def run_vice(args: argparse.Namespace, pass_addr: str, fail_addr: str | None, du
                                                 dumps.append(connector.send_command("bt"))
                                             except Exception as exc:
                                                 dumps.append(f"bt: {exc}")
-                                        attach_drive8(connector, args.swap4_attach8_d64, args.attach_delay, args.reset8_after_attach)
+                                            return result, dumps
+                                        attach_drive8(connector, args.swap4_attach8_d64, args.attach_delay, reset_for(args, "swap4_reset8_after_attach"))
                             connector.clear_breakpoints()
                             connector.break_at(pass_addr)
                             if fail_addr:
@@ -561,15 +580,20 @@ def main() -> int:
     parser.add_argument("--attach8-at-start-d64", type=Path)
     parser.add_argument("--attach-delay", type=float, default=0.5)
     parser.add_argument("--reset8-after-attach", action="store_true")
+    parser.add_argument("--attach8-at-start-reset8-after-attach", action="store_true")
     parser.add_argument("--swap-symbol")
     parser.add_argument("--swap-attach8-d64", type=Path)
+    parser.add_argument("--swap-reset8-after-attach", action="store_true")
     parser.add_argument("--swap-attach-after-hits", type=int, default=1)
     parser.add_argument("--swap2-symbol")
     parser.add_argument("--swap2-attach8-d64", type=Path)
+    parser.add_argument("--swap2-reset8-after-attach", action="store_true")
     parser.add_argument("--swap3-symbol")
     parser.add_argument("--swap3-attach8-d64", type=Path)
+    parser.add_argument("--swap3-reset8-after-attach", action="store_true")
     parser.add_argument("--swap4-symbol")
     parser.add_argument("--swap4-attach8-d64", type=Path)
+    parser.add_argument("--swap4-reset8-after-attach", action="store_true")
     parser.add_argument("--fail-on-extra-swap", action="store_true")
     parser.add_argument("--require-hit-symbol")
     parser.add_argument("--until-pass", action="store_true")
@@ -758,7 +782,7 @@ def main() -> int:
     ):
         result = MonitorTestResult(True, "target PC reached", result.last_status)
     retries_left = args.retry_timeouts
-    while retries_left > 0 and not result.passed and result.reason.startswith("timeout"):
+    while retries_left > 0 and not result.passed and retryable_harness_failure(result):
         result, dumps = run_vice(args, normalize_addr(pass_addr), normalize_addr(fail_addr) if fail_addr else None, dump_ranges)
         if not result.passed and (
             monitor_text_has_pc(result.last_status, pass_addr)

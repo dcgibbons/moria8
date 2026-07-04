@@ -140,6 +140,10 @@ def main() -> int:
     vice = subprocess.Popen(
         [
             args.vice,
+            "-config",
+            "/dev/null",
+            "-default",
+            "+saveres",
             "-console",
             "-nativemonitor",
             "-warp",

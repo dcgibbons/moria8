@@ -35,12 +35,10 @@ walkable_table:
 // tile_is_walkable — Check if a tile type is walkable
 // Input: A = tile type index (0-15)
 // Output: carry set = walkable, carry clear = blocked
-// Preserves: X, Y
+// Preserves: Y
 tile_is_walkable:
-    stx zp_temp2            // Save X
     tax
     lda walkable_table,x
-    ldx zp_temp2            // Restore X
     lsr                     // Bit 0 into carry
     rts
 
@@ -633,12 +631,12 @@ do_look:
     lda df_target_x
     cmp #MAP_COLS
     bcc !dl_x_ok+
-    jmp !dl_nothing+
+    bcs !dl_nothing+
 !dl_x_ok:
     lda df_target_y
     cmp #MAP_ROWS
     bcc !dl_y_ok+
-    jmp !dl_nothing+
+    bcs !dl_nothing+
 !dl_y_ok:
 
     // Read map tile at (df_target_x, df_target_y)
@@ -651,13 +649,6 @@ do_look:
     :MapRead_ptr0_y()
     sta dl_tile
 
-    // Must be currently visible, not just remembered.
-    ldx df_target_x
-    ldy df_target_y
-    jsr los_is_visible
-    bcs !dl_visible+
-    jmp !dl_nothing+
-!dl_visible:
     // Only trust monster table coordinates when the live map tile still
     // carries FLAG_OCCUPIED. This matches renderer ownership and avoids
     // stale level-transition/cached-table lookups on empty tiles.
@@ -670,8 +661,12 @@ do_look:
     jsr monster_find_at
     bcc !dl_no_monster+
 
+    ldy #MX_FLAGS
+    lda (zp_ptr0),y
+    and #(MF_VISIBLE | MF_DETECTED)
+    beq !dl_no_monster+
+
     // Found a monster — "YOU SEE A <name>."
-    jsr monster_get_ptr
     ldy #MX_TYPE
     lda (zp_ptr0),y
     tax
@@ -683,6 +678,42 @@ do_look:
     rts
 
 !dl_no_monster:
+    // Must be currently visible, not just remembered. Monster perception is
+    // handled above so infravision/detection targets can still be described.
+    ldx df_target_x
+    ldy df_target_y
+    jsr los_is_visible
+    bcs !dl_visible+
+    lda dl_tile
+    and #TILE_TYPE_MASK
+    beq !dl_step+
+    bne !dl_nothing+
+!dl_nothing:
+    ldx #HSTR_DL_NOTHING
+    jmp dl_print_tile_no_flash
+!dl_step:
+    // Step to next tile along scan direction
+    lda df_target_x
+    clc
+    adc dl_dx
+    sta df_target_x
+    lda df_target_y
+    clc
+    adc dl_dy
+    sta df_target_y
+    jmp !dl_scan-
+!dl_visible:
+    // Visibility predicates can qualify lit terrain by room light; look still
+    // must not describe terrain through blocking walls or closed doors.
+    stx zp_los_dx
+    sty zp_los_dy
+    lda zp_player_x
+    sta mm_los_cx
+    lda zp_player_y
+    sta mm_los_cy
+    jsr mm_los_clear_to_target
+    bcc !dl_nothing-
+!dl_los_clear:
     // Check tile type — non-floor terrain is authoritative for look.
     lda dl_tile
     and #TILE_TYPE_MASK
@@ -722,7 +753,7 @@ do_look:
 
     // Wall/secret/mineral seam (any other non-floor tile) — report it.
     ldx #HSTR_DL_WALL
-    jmp dl_print_tile
+    bne dl_print_tile
 
 // dl_print_you_see — Print "YOU SEE A <name>."
 // Input: dl_name_lo/hi = name string pointer
@@ -802,7 +833,9 @@ dl_print_tile_no_flash:
     jsr floor_item_find_at
     bcs !dl_item+
     jsr glyph_find_at_stashed
-    bcc !dl_step+               // Empty floor — keep scanning
+    bcs !dl_glyph+
+    jmp !dl_step-               // Empty floor — keep scanning
+!dl_glyph:
     ldx #HSTR_PMU_GLYPH_OK
     bne dl_print_tile
 
@@ -812,22 +845,6 @@ dl_print_tile_no_flash:
     jsr dl_print_item_you_see
     clc
     rts
-
-!dl_step:
-    // Step to next tile along scan direction
-    lda df_target_x
-    clc
-    adc dl_dx
-    sta df_target_x
-    lda df_target_y
-    clc
-    adc dl_dy
-    sta df_target_y
-    jmp !dl_scan-
-
-!dl_nothing:
-    ldx #HSTR_DL_NOTHING
-    jmp dl_print_tile_no_flash
 
 // Look command scratch
 dl_tile:     .byte 0

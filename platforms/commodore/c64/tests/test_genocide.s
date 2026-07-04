@@ -79,7 +79,11 @@ test_finish:
 #import "../../../../core/player_magic_feedback.s"
 #import "../../../../core/player_magic_slow_runtime.s"
 #import "../../../../core/player_magic_execute_overlay.s"
-#import "../dungeon_render.s"
+viewport_update:
+render_viewport:
+render_single_tile:
+render_local_area:
+    rts
 #import "../../../../core/dungeon_los.s"
 #import "../../../../core/player_move.s"
 #import "../../../../core/combat.s"
@@ -471,3 +475,6 @@ test_start:
     lda #$00
     sta tg_results + 1
     jmp test_finish
+
+genocide_test_end:
+.assert "Genocide test stays below MAP_BASE", genocide_test_end <= MAP_BASE, true

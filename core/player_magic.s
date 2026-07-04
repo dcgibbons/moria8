@@ -228,6 +228,9 @@ player_pray:
     rts
 !pp_success:
     jsr tramp_spell_execute_selected
+#if C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
+    jsr c64_test_detect_evil_record_detected
+#endif
     jsr pm_finish_success_common
 #if C128_TEST_SCRIPTED_PRAYER
     inc c128_test_spell_success_count

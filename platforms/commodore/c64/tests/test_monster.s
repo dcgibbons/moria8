@@ -3,7 +3,7 @@
 // Tests: monster_init_table, monster_spawn_one, monster_find_at,
 //        monster_remove, pick_creature_type, monster_spawn_level.
 //
-// Results at $0400-$040b: $01 = pass, $00 = fail per test
+// Results at $0400-$0411: $01 = pass, $00 = fail per test
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_bootstrap)
@@ -15,7 +15,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #12
+    ldx #17
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -106,7 +106,7 @@ t7_count:  .byte 0
 t7_ok:     .byte 0
 t9_count:  .byte 0
 t9_mask:   .byte 0
-tc_results: .fill 13, $ff       // Test results buffer (copied to $0400 by trampoline)
+tc_results: .fill 18, $ff       // Test results buffer (copied to $0400 by trampoline)
 test_force_deep_tier_spawn: .byte 0
 
 .macro PatchJump(target, replacement) {
@@ -136,7 +136,7 @@ test_tier_check_transition:
 
 test_start:
     // Initialize result area to $ff (untested)
-    ldx #12
+    ldx #15
     lda #$ff
 !clr:
     sta tc_results,x
@@ -673,10 +673,205 @@ test_start:
 
     lda #$01
     sta tc_results+12
-    jmp !tests_done+
+    jmp !t13+
 !t12_fail:
     lda #$00
     sta tc_results+12
 
+    // ==========================================
+    // Test 14: E/W movement out of range clears MF_VISIBLE.
+    // ==========================================
+!t13:
+    jsr setup_visibility_axis_test
+    lda #19
+    sta zp_player_x
+    jsr monster_update_visibility_all
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_FLAGS
+    lda (zp_ptr0),y
+    and #MF_VISIBLE
+    beq !t13_pass+
+    lda #$00
+    sta tc_results+13
+    jmp !t14+
+!t13_pass:
+    lda #$01
+    sta tc_results+13
+
+    // ==========================================
+    // Test 15: N/S movement out of range clears MF_VISIBLE.
+    // ==========================================
+!t14:
+    jsr setup_visibility_axis_test
+    lda #15
+    sta zp_player_y
+    jsr monster_update_visibility_all
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_FLAGS
+    lda (zp_ptr0),y
+    and #MF_VISIBLE
+    beq !t14_pass+
+    lda #$00
+    sta tc_results+14
+    jmp !t15+
+!t14_pass:
+    lda #$01
+    sta tc_results+14
+
+    // ==========================================
+    // Test 16: Unrevealed lit-room metadata alone does not grant MF_VISIBLE.
+    // ==========================================
+!t15:
+    jsr setup_visibility_axis_test
+    lda #0
+    sta zp_light_radius
+    ldx #10
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #10
+    lda #TILE_FLOOR | FLAG_LIT | FLAG_VISITED
+    sta (zp_ptr0),y
+    ldy #11
+    lda #TILE_FLOOR | FLAG_LIT
+    sta (zp_ptr0),y
+    ldy #12
+    sta (zp_ptr0),y
+    ldy #13
+    sta (zp_ptr0),y
+    ldy #14
+    lda #TILE_FLOOR | FLAG_LIT | FLAG_OCCUPIED
+    sta (zp_ptr0),y
+    jsr monster_update_visibility_all
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_FLAGS
+    lda (zp_ptr0),y
+    and #MF_VISIBLE
+    beq !t15_pass+
+    lda #$00
+    sta tc_results+15
+    jmp !t16+
+!t15_pass:
+    lda #$01
+    sta tc_results+15
+
+    // ==========================================
+    // Test 17: Revealed lit-room terrain grants normal MF_VISIBLE through LOS.
+    // ==========================================
+!t16:
+    jsr setup_visibility_axis_test
+    lda #0
+    sta zp_light_radius
+    ldx #10
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #10
+    lda #TILE_FLOOR | FLAG_LIT | FLAG_VISITED
+    sta (zp_ptr0),y
+    ldy #11
+    sta (zp_ptr0),y
+    ldy #12
+    sta (zp_ptr0),y
+    ldy #13
+    sta (zp_ptr0),y
+    ldy #14
+    lda #TILE_FLOOR | FLAG_LIT | FLAG_VISITED | FLAG_OCCUPIED
+    sta (zp_ptr0),y
+    jsr monster_update_visibility_all
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_FLAGS
+    lda (zp_ptr0),y
+    and #MF_VISIBLE
+    bne !t16_pass+
+    lda #$00
+    sta tc_results+16
+    jmp !t17+
+!t16_pass:
+    lda #$01
+    sta tc_results+16
+
+    // ==========================================
+    // Test 18: Detect Monsters preserves real MF_VISIBLE while adding MF_DETECTED.
+    // ==========================================
+!t17:
+    jsr setup_visibility_axis_test
+    lda #0
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_FLAGS
+    sta (zp_ptr0),y
+    lda #1
+    sta eff_detect_timer
+    jsr monster_update_visibility_all
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_FLAGS
+    lda (zp_ptr0),y
+    and #(MF_VISIBLE | MF_DETECTED)
+    cmp #(MF_VISIBLE | MF_DETECTED)
+    beq !t17_pass+
+    lda #$00
+    sta tc_results+17
+    jmp !tests_done+
+!t17_pass:
+    lda #$01
+    sta tc_results+17
+
 !tests_done:
     jmp test_exit_trampoline
+
+setup_visibility_axis_test:
+    jsr monster_init_table
+    lda #0
+    sta eff_detect_timer
+    sta muv_clear_detected
+    sta zp_eff_blind
+    sta cr_mflags + 1
+    lda #1
+    sta zp_player_dlvl
+    lda #10
+    sta zp_player_x
+    sta zp_player_y
+    lda #4
+    sta zp_light_radius
+
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda #1
+    sta (zp_ptr0),y
+    ldy #MX_X
+    lda #14
+    sta (zp_ptr0),y
+    ldy #MX_Y
+    lda #10
+    sta (zp_ptr0),y
+    ldy #MX_FLAGS
+    lda #MF_VISIBLE
+    sta (zp_ptr0),y
+
+    ldx #10
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #10
+    lda #TILE_FLOOR
+    sta (zp_ptr0),y
+    ldy #11
+    sta (zp_ptr0),y
+    ldy #12
+    sta (zp_ptr0),y
+    ldy #13
+    sta (zp_ptr0),y
+    ldy #14
+    lda #((TILE_FLOOR << 4) | FLAG_OCCUPIED)
+    sta (zp_ptr0),y
+    rts

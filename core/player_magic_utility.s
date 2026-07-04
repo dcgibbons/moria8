@@ -27,14 +27,10 @@ pmu_find_visible_flagged:
     lda cr_mflags,x
     and pmx_work_flag
     beq !pfvf_next+
-    ldy #MX_X
+    ldy #MX_FLAGS
     lda (zp_ptr0),y
-    tax
-    ldy #MX_Y
-    lda (zp_ptr0),y
-    tay
-    jsr los_is_visible
-    bcc !pfvf_next+
+    and #MF_VISIBLE
+    beq !pfvf_next+
     sec
     rts
 !pfvf_next:

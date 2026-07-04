@@ -49,6 +49,8 @@
 .const MF_AWAKE     = $01
 .const MF_CONFUSED  = $02
 .const MF_PROVOKED  = $04   // Player attacked this monster; town creatures need this to fight back
+.const MF_VISIBLE   = $08   // Current real sight; renderer authority
+.const MF_DETECTED  = $10   // Timed Detect Monsters overlay; renderer authority
 
 // Spell flag constants (needed by cr_spell_flags data below)
 .const MSF_BOLT       = $01    // Bit 0: bolt (2d8 + level)
@@ -962,6 +964,223 @@ monster_find_at:
 !mfa_miss:
     clc
     rts
+
+#if C128 && !C128_UNIT_TEST
+.segment RuntimeLowData
+#elif !C64_UNIT_TEST && !C128_UNIT_TEST
+monster_update_visibility_all:
+    sei
+#if PLUS4
+    jsr plus4_bank_ram
+    jsr monster_update_visibility_all_impl
+    pha
+    cli
+    pla
+    rts
+#else
+    lda #BANK_NO_ROMS
+    sta $01
+    jsr monster_update_visibility_all_impl
+    pha
+    lda #BANK_NO_BASIC
+    sta $01
+    cli
+    pla
+    rts
+#endif
+
+#if !PLUS4_INLINE_RUNTIME_BANKED_TEST
+.segment RuntimeBanked
+#endif
+#endif
+
+// monster_update_visibility_all_impl — Recompute renderable monster flags.
+// Returns: A = 1 if any monster renderability changed, A = 0 otherwise.
+// Clobbers: A, X, Y, zp_ptr0/hi, zp_ptr1/hi, zp_temp0-4, zp_los_*
+#if C128 || C64_UNIT_TEST
+monster_update_visibility_all:
+#else
+monster_update_visibility_all_impl:
+#endif
+    lda #0
+    sta muv_changed
+    ldx #MAX_MONSTERS - 1
+!muva_loop:
+    jsr monster_update_visibility_one
+    bcc !muva_next+
+    lda #1
+    sta muv_changed
+!muva_next:
+    dex
+    bpl !muva_loop-
+    lda #0
+    sta muv_clear_detected
+    lda muv_changed
+    rts
+
+// monster_update_visibility_one — Recompute MF_VISIBLE/MF_DETECTED for slot X.
+// Returns: carry set if renderability bits changed.
+monster_update_visibility_one:
+    stx muv_slot
+    jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda (zp_ptr0),y
+    cmp #EMPTY_SLOT
+    bne !muvo_active+
+    ldx muv_slot
+    clc
+    rts
+!muvo_active:
+    sta muv_type
+
+    ldy #MX_FLAGS
+    lda (zp_ptr0),y
+    sta muv_old_flags
+    and #~MF_VISIBLE & $ff
+    sta muv_new_flags
+    lda muv_clear_detected
+    beq !muvo_detect_clear_done+
+    lda muv_new_flags
+    and #~MF_DETECTED & $ff
+    sta muv_new_flags
+!muvo_detect_clear_done:
+
+    // Timed Detect Monsters owns MF_DETECTED while active.
+    lda eff_detect_timer
+    beq !muvo_detect_done+
+    lda muv_new_flags
+    ora #MF_DETECTED
+    sta muv_new_flags
+!muvo_detect_done:
+
+    lda zp_eff_blind
+    beq !muvo_not_blind+
+    jmp !muvo_store+
+!muvo_not_blind:
+
+    ldx muv_slot
+    jsr monster_get_ptr
+    ldy #MX_X
+    lda (zp_ptr0),y
+    sta zp_los_dx
+    ldy #MX_Y
+    lda (zp_ptr0),y
+    sta zp_los_dy
+
+    // Town is an open, fully-lit panel.
+    lda zp_player_dlvl
+    bne !muvo_dungeon+
+    jmp !muvo_visible+
+!muvo_dungeon:
+
+    // Chebyshev distance to monster.
+    lda zp_los_dx
+    sec
+    sbc zp_player_x
+    bcs !muvo_dx_pos+
+    eor #$ff
+    clc
+    adc #1
+!muvo_dx_pos:
+    sta zp_temp4
+
+    lda zp_los_dy
+    sec
+    sbc zp_player_y
+    bcs !muvo_dy_pos+
+    eor #$ff
+    clc
+    adc #1
+!muvo_dy_pos:
+    cmp zp_temp4
+    bcs !muvo_dist+
+    lda zp_temp4
+!muvo_dist:
+    sta muv_dist
+    tax
+    sta zp_los_step
+    bne !+
+    jmp !muvo_visible+
+!:
+    cmp #21                     // Moria max_sight is 20
+    bcs !muvo_store_far2+
+
+    // Cheap candidate tests first; LOS is the expensive final gate.
+    ldx zp_los_dy
+    lda map_row_lo,x
+    sta zp_ptr1
+    lda map_row_hi,x
+    sta zp_ptr1_hi
+    ldy zp_los_dx
+    :MapRead_ptr1_y()
+    and #(FLAG_LIT | FLAG_VISITED)
+    cmp #(FLAG_LIT | FLAG_VISITED)
+    beq !muvo_check_los+
+
+!muvo_check_radius:
+    lda zp_light_radius
+    cmp muv_dist
+    bcs !muvo_check_los+
+
+    ldx muv_type
+    lda cr_mflags,x
+    and #CF_INFRA
+    beq !muvo_store+
+!muvo_check_infra_range:
+    jsr player_get_infra_range
+    cmp muv_dist
+    bcc !muvo_store+
+
+!muvo_check_los:
+    // Closed doors/walls block normal sight and infravision.
+    lda zp_player_x
+    sta zp_temp0                // mm_los_cx
+    lda zp_player_y
+    sta zp_temp1                // mm_los_cy
+    jsr mm_los_clear_to_target
+    bcc !muvo_store+
+    jmp !muvo_visible+
+
+!muvo_store_far2:
+    jmp !muvo_store+
+
+!muvo_visible:
+    lda muv_new_flags
+    ora #MF_VISIBLE
+    sta muv_new_flags
+
+!muvo_store:
+    ldx muv_slot
+    jsr monster_get_ptr
+    ldy #MX_FLAGS
+    lda muv_new_flags
+    sta (zp_ptr0),y
+    lda muv_old_flags
+    and #(MF_VISIBLE | MF_DETECTED)
+    sta zp_temp4
+    lda muv_new_flags
+    and #(MF_VISIBLE | MF_DETECTED)
+    cmp zp_temp4
+    bne !muvo_changed+
+    clc
+    rts
+!muvo_changed:
+    sec
+    rts
+
+muv_slot:      .byte 0
+muv_type:      .byte 0
+muv_dist:      .byte 0
+muv_old_flags: .byte 0
+muv_new_flags: .byte 0
+muv_changed:   .byte 0
+muv_clear_detected: .byte 0
+
+#if C128 && !C128_UNIT_TEST
+.segment C128ResidentWorld
+#elif !C64_UNIT_TEST
+.segment Default
+#endif
 
 // monster_remove — Remove monster at slot X
 // Clears FLAG_OCCUPIED on map, marks slot empty, decrements count.

@@ -15,7 +15,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #10
+    ldx #13
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -104,7 +104,7 @@ press_key_str:
 // Test scratch
 tc_loop:    .byte 0
 tc_ok:      .byte 0
-tc_results: .fill 11, $ff      // Result buffer (copied to $0400 at end)
+tc_results: .fill 14, $ff      // Result buffer (copied to $0400 at end)
 
 test_start:
     // Seed RNG deterministically
@@ -769,10 +769,181 @@ test_start:
 !t11_fail:
     lda #$00
     sta tc_results + 10
-    jmp !tests_done+
+    jmp !t12+
 !t11_ok:
     lda #$01
     sta tc_results + 10
+
+    // Test 12: diagonal room-wall geometry blocks monster_can_cast.
+    // Regresses snapshot case: Magic User at (45,10), player at (49,6),
+    // with wall tiles at (46,9) and (47,8).
+!t12:
+    lda #0
+    sta zp_msg_flags
+    sta zp_eff_blind
+
+    lda #49
+    sta zp_player_x
+    lda #6
+    sta zp_player_y
+
+    lda #22                     // Novice Mage; embedded caster with spells
+    sta zp_mon_type
+    lda #45
+    sta zp_mon_x
+    lda #10
+    sta zp_mon_y
+
+    ldx #22
+    lda cr_spell_chance,x
+    pha
+    lda #100
+    sta cr_spell_chance,x
+
+    ldx #6
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #49
+    lda #TILE_FLOOR
+    sta (zp_ptr0),y
+
+    ldx #10
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #45
+    lda #TILE_FLOOR
+    sta (zp_ptr0),y
+
+    ldx #9
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #46
+    lda #TILE_WALL_H
+    sta (zp_ptr0),y
+
+    ldx #8
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #47
+    lda #TILE_WALL_H | FLAG_VISITED | FLAG_LIT
+    sta (zp_ptr0),y
+
+    lda #49
+    sta zp_los_dx
+    lda #6
+    sta zp_los_dy
+    lda #45
+    sta mm_los_cx
+    lda #10
+    sta mm_los_cy
+    jsr mm_los_clear_to_target
+    bcs !t12_fail+
+    lda #$01
+    sta tc_results + 11
+    jmp !t13+
+!t12_fail:
+    lda #$00
+    sta tc_results + 11
+
+    // Test 13: blocked diagonal room-wall geometry blocks monster_can_cast.
+!t13:
+    jsr monster_can_cast
+    bcs !t13_fail+
+    lda #$01
+    sta tc_results + 12
+    jmp !t13_restore+
+!t13_fail:
+    lda #$00
+    sta tc_results + 12
+!t13_restore:
+    pla
+    sta cr_spell_chance + 22
+
+    // Test 14: full AI cannot blind through the same blocked geometry.
+!t14:
+    lda #0
+    sta zp_msg_flags
+    sta zp_eff_blind
+    sta zp_game_flags
+
+    jsr monster_init_table
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_X
+    lda #45
+    sta (zp_ptr0),y
+    ldy #MX_Y
+    lda #10
+    sta (zp_ptr0),y
+    ldy #MX_TYPE
+    lda #22
+    sta (zp_ptr0),y
+    ldy #MX_HP_LO
+    lda #10
+    sta (zp_ptr0),y
+    ldy #MX_HP_HI
+    lda #0
+    sta (zp_ptr0),y
+    ldy #MX_FLAGS
+    lda #MF_AWAKE
+    sta (zp_ptr0),y
+    ldy #MX_SPEED_CNT
+    lda #0
+    sta (zp_ptr0),y
+    ldy #MX_SLEEP_CUR
+    sta (zp_ptr0),y
+    ldy #MX_STUN
+    sta (zp_ptr0),y
+    ldy #MX_CONFUSE
+    sta (zp_ptr0),y
+    ldy #MX_FLEE_LO
+    sta (zp_ptr0),y
+    ldy #MX_FLEE_HI
+    sta (zp_ptr0),y
+
+    lda #0
+    sta zp_mon_idx
+    lda #22
+    sta zp_mon_type
+    lda #45
+    sta zp_mon_x
+    lda #10
+    sta zp_mon_y
+    lda #MF_AWAKE
+    sta zp_mon_flags
+
+    lda cr_spell_chance + 22
+    pha
+    lda cr_spell_flags + 22
+    pha
+    lda #100
+    sta cr_spell_chance + 22
+    lda #MSF_BLIND
+    sta cr_spell_flags + 22
+
+    jsr monster_process_one
+
+    lda zp_eff_blind
+    bne !t14_fail+
+    lda #$01
+    sta tc_results + 13
+    jmp !t14_restore+
+!t14_fail:
+    lda #$00
+    sta tc_results + 13
+!t14_restore:
+    pla
+    sta cr_spell_flags + 22
+    pla
+    sta cr_spell_chance + 22
 
 !tests_done:
     jmp test_exit_trampoline

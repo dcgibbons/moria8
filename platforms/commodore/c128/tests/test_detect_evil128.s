@@ -11,8 +11,11 @@
 .const MX_X = 0
 .const MX_Y = 1
 .const MX_TYPE = 2
+.const MX_FLAGS = 5
+.const MF_DETECTED = $10
 .const DETECT_TIMER_TURNS = 20
-.const DETECT_TIMER_EVIL_ONLY = $80
+.const VIEWPORT_W = 78
+.const VIEWPORT_H = 19
 .const PIW_FILTER_PRAYER_BOOK = $fb
 .const PIW_FILTER_MAGE_BOOK = $fc
 
@@ -85,7 +88,10 @@ trap_y: .fill 16, 0
 trap_type: .fill 16, 0
 cr_mflags: .fill 65, 0
 eff_detect_timer: .byte 0
+eff_detect_evil_mode: .byte 0
 vis_room_revealed: .byte 0
+vis_force_redraw_pending: .byte 0
+muv_clear_detected: .byte 0
 
 test_spell_exec_calls: .byte 0
 test_huff_calls: .byte 0
@@ -155,11 +161,36 @@ piw_print_prompt_with_count:
     clc
     rts
 
-calc_spell_failure:
-    clc
-    rts
-
-tramp_spell_execute_selected:
+// Dispatcher-only visibility stub. The real C128 production clear/recompute
+// path is covered in test_monster128.s with core/monster.s imported.
+monster_update_visibility_all:
+    ldx #0
+!muva_loop:
+    cpx #MAX_MONSTERS
+    bcs !muva_done+
+    jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda (zp_ptr0),y
+    cmp #EMPTY_SLOT
+    beq !muva_next+
+    ldy #MX_FLAGS
+    lda (zp_ptr0),y
+    ldy muv_clear_detected
+    beq !muva_clear_done+
+    and #~MF_DETECTED & $ff
+!muva_clear_done:
+    ldy eff_detect_timer
+    beq !muva_detect_done+
+    ora #MF_DETECTED
+!muva_detect_done:
+    ldy #MX_FLAGS
+    sta (zp_ptr0),y
+!muva_next:
+    inx
+    jmp !muva_loop-
+!muva_done:
+    lda #0
+    sta muv_clear_detected
     rts
 
 eff_detect_monsters:
@@ -169,32 +200,11 @@ eff_detect_monsters:
     sta vis_room_revealed
     rts
 
-eff_detect_evil_only:
-    lda #0
-    sta eff_detect_timer
-    ldx #0
-!edeo_loop:
-    cpx #MAX_MONSTERS
-    bcs !edeo_none+
-    jsr monster_get_ptr
-    ldy #MX_TYPE
-    lda (zp_ptr0),y
-    cmp #EMPTY_SLOT
-    beq !edeo_next+
-    tay
-    lda cr_mflags,y
-    and #CF_EVIL
-    bne !edeo_found+
-!edeo_next:
-    inx
-    jmp !edeo_loop-
-!edeo_found:
-    lda #1
-    sta vis_room_revealed
+calc_spell_failure:
+    clc
     rts
-!edeo_none:
-    lda #0
-    sta vis_room_revealed
+
+tramp_spell_execute_selected:
     rts
 
 huff_print_msg:
@@ -286,7 +296,11 @@ test_reset_detect_state:
     sta test_last_msg_lo
     sta test_last_msg_hi
     sta eff_detect_timer
+    sta eff_detect_evil_mode
     sta vis_room_revealed
+    sta vis_force_redraw_pending
+    sta zp_view_x
+    sta zp_view_y
     lda #$ff
     sta test_last_spell_idx
 
@@ -368,6 +382,8 @@ test_start:
     bne !t1_fail+
     lda eff_detect_timer
     bne !t1_fail+
+    lda eff_detect_evil_mode
+    bne !t1_fail+
     lda vis_room_revealed
     bne !t1_fail+
     lda zp_player_mp
@@ -392,6 +408,9 @@ test_after_none:
     jsr test_reset_detect_state
     lda #1
     sta test_mon_table + MX_TYPE
+    lda #5
+    sta test_mon_table + MX_X
+    sta test_mon_table + MX_Y
     lda #CF_EVIL
     sta cr_mflags + 1
     jsr player_pray
@@ -415,7 +434,19 @@ test_after_none:
     bne !t2_fail+
     lda eff_detect_timer
     bne !t2_fail+
+    lda eff_detect_evil_mode
+    cmp #1
+    bne !t2_fail+
+    jsr detect_evil_clear_reveal
+    lda eff_detect_evil_mode
+    bne !t2_fail+
+    lda test_mon_table + MX_FLAGS
+    and #MF_DETECTED
+    bne !t2_fail+
     lda vis_room_revealed
+    cmp #1
+    bne !t2_fail+
+    lda vis_force_redraw_pending
     cmp #1
     bne !t2_fail+
     lda zp_player_mp
@@ -429,11 +460,98 @@ test_after_none:
     beq !t2_fail+
     lda #2
     sta test_progress
-    jmp test_after_present
+    jmp test_after_inside_viewport
 !t2_fail:
     jmp test_fail
 
-    // Test 3: cast failure spends mana, prints HSTR_PM_FAIL, does not
+    // Test 3: evil outside the current viewport is not detected.
+test_after_inside_viewport:
+    jsr test_clear_monsters
+    jsr test_reset_detect_state
+    lda #1
+    sta test_mon_table + MX_TYPE
+    lda #VIEWPORT_W
+    sta test_mon_table + MX_X
+    lda #5
+    sta test_mon_table + MX_Y
+    lda #CF_EVIL
+    sta cr_mflags + 1
+    jsr player_pray
+    bcc !t3_fail+
+    lda test_msg_calls
+    cmp #1
+    bne !t3_fail+
+    lda test_last_msg_lo
+    cmp #<pmx_msg_no_evil
+    bne !t3_fail+
+    lda test_last_msg_hi
+    cmp #>pmx_msg_no_evil
+    bne !t3_fail+
+    lda eff_detect_timer
+    bne !t3_fail+
+    lda eff_detect_evil_mode
+    bne !t3_fail+
+    lda vis_room_revealed
+    bne !t3_fail+
+    lda #3
+    sta test_progress
+    jmp test_after_outside_viewport
+!t3_fail:
+    jmp test_fail
+
+    // Test 4: Detect Evil preserves active Detect Monsters. Its one-shot
+    // reveal clears after redraw, then timed detect owns MF_DETECTED again.
+test_after_outside_viewport:
+    jsr test_clear_monsters
+    jsr test_reset_detect_state
+    lda #1
+    sta test_mon_table + MX_TYPE
+    lda #10
+    sta test_mon_table + MX_X
+    sta test_mon_table + MX_Y
+    lda #MF_DETECTED
+    sta test_mon_table + MX_FLAGS
+    lda #2
+    sta test_mon_table + MONSTER_ENTRY_SIZE + MX_TYPE
+    lda #11
+    sta test_mon_table + MONSTER_ENTRY_SIZE + MX_X
+    sta test_mon_table + MONSTER_ENTRY_SIZE + MX_Y
+    lda #MF_DETECTED
+    sta test_mon_table + MONSTER_ENTRY_SIZE + MX_FLAGS
+    lda #CF_EVIL
+    sta cr_mflags + 2
+    lda #DETECT_TIMER_TURNS
+    sta eff_detect_timer
+    jsr player_pray
+    bcc !t4_fail+
+    lda eff_detect_timer
+    cmp #DETECT_TIMER_TURNS
+    bne !t4_fail+
+    lda eff_detect_evil_mode
+    cmp #1
+    bne !t4_fail+
+    jsr detect_evil_clear_reveal
+    lda eff_detect_timer
+    cmp #DETECT_TIMER_TURNS
+    bne !t4_fail+
+    lda eff_detect_evil_mode
+    bne !t4_fail+
+    lda vis_force_redraw_pending
+    cmp #1
+    bne !t4_fail+
+    lda test_mon_table + MX_FLAGS
+    and #MF_DETECTED
+    beq !t4_fail+
+    lda test_mon_table + MONSTER_ENTRY_SIZE + MX_FLAGS
+    and #MF_DETECTED
+    beq !t4_fail+
+    lda #4
+    sta test_progress
+    jmp test_after_present
+!t4_fail:
+    jmp test_fail
+
+    // Test 5: cast failure spends mana, prints HSTR_PM_FAIL, does not
     // execute, and leaves Detect Evil unworked.
 test_after_present:
     :PatchJump(calc_spell_failure, test_calc_spell_failure_fail)
@@ -441,6 +559,9 @@ test_after_present:
     jsr test_reset_detect_state
     lda #1
     sta test_mon_table + MX_TYPE
+    lda #5
+    sta test_mon_table + MX_X
+    sta test_mon_table + MX_Y
     lda #CF_EVIL
     sta cr_mflags + 1
     jsr player_pray
@@ -457,6 +578,8 @@ test_after_present:
     bne !t3_fail+
     lda eff_detect_timer
     bne !t3_fail+
+    lda eff_detect_evil_mode
+    bne !t3_fail+
     lda vis_room_revealed
     bne !t3_fail+
     lda zp_player_mp
@@ -468,7 +591,7 @@ test_after_present:
     lda player_data + PL_SPELLS_WORKED_0
     and #$01
     bne !t3_fail+
-    lda #3
+    lda #5
     sta test_progress
     jmp test_pass
 !t3_fail:

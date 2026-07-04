@@ -14,29 +14,26 @@
 .const MAX_CAST_RANGE = 8
 .const MM_SPELL_COUNT = 7      // Total spell types
 
+#import "los_trace.s"
+
 // ============================================================
 // Scratch variables
 // ============================================================
 mm_flags:      .byte 0         // Available spell flags for current monster
 mm_bit_count:  .byte 0         // Number of set bits (available spells)
 mm_chosen:     .byte 0         // Randomly chosen spell index
-mm_los_cx:     .byte 0         // LOS trace current X
-mm_los_cy:     .byte 0         // LOS trace current Y
-mm_los_sdx:    .byte 0         // LOS step direction X (-1/0/+1)
-mm_los_sdy:    .byte 0         // LOS step direction Y (-1/0/+1)
 
 // ============================================================
 // monster_can_cast — Check if monster wants to cast a spell
 // Input:  zp_mon_type = creature type, zp_mon_x/y = position
 // Output: carry set = cast, carry clear = no cast
-// Clobbers: A, X, Y, zp_ptr0, zp_temp3, zp_temp4
+// Clobbers: A, X, Y, zp_ptr0, zp_ptr0_hi, zp_temp0-3
 // ============================================================
 monster_can_cast:
     // Check spell chance — if 0, never casts
     ldx zp_mon_type
     lda cr_spell_chance,x
-    bne !mcc_has_chance+
-    jmp !mcc_no+
+    beq !mcc_no+
 !mcc_has_chance:
 
     // Save spell chance for later roll
@@ -67,92 +64,23 @@ monster_can_cast:
     lda zp_mon_scratch0
 !mcc_have_dist:
     // A = Chebyshev distance
+    sta zp_los_step
     cmp #MAX_CAST_RANGE + 1
-    bcc !mcc_in_range+
-    jmp !mcc_no+              // Too far
+    bcs !mcc_no+              // Too far
 !mcc_in_range:
 
-    // LOS check: step from monster toward player
-    // Compute sign(dx) and sign(dy)
+    // LOS check: step from monster toward player.
     lda zp_player_x
-    cmp zp_mon_x
-    beq !mcc_sdx_zero+
-    bcs !mcc_sdx_pos+
-    lda #$ff
-    sta mm_los_sdx
-    jmp !mcc_sdy+
-!mcc_sdx_pos:
-    lda #$01
-    sta mm_los_sdx
-    jmp !mcc_sdy+
-!mcc_sdx_zero:
-    lda #$00
-    sta mm_los_sdx
-
-!mcc_sdy:
+    sta zp_los_dx
     lda zp_player_y
-    cmp zp_mon_y
-    beq !mcc_sdy_zero+
-    bcs !mcc_sdy_pos+
-    lda #$ff
-    sta mm_los_sdy
-    jmp !mcc_los_trace+
-!mcc_sdy_pos:
-    lda #$01
-    sta mm_los_sdy
-    jmp !mcc_los_trace+
-!mcc_sdy_zero:
-    lda #$00
-    sta mm_los_sdy
-
-!mcc_los_trace:
-    // Start from monster position
+    sta zp_los_dy
     lda zp_mon_x
     sta mm_los_cx
     lda zp_mon_y
     sta mm_los_cy
+    jsr mm_los_clear_to_target
+    bcc !mcc_no+
 
-!mcc_los_step:
-    // Step toward player
-    lda mm_los_cx
-    clc
-    adc mm_los_sdx
-    sta mm_los_cx
-    lda mm_los_cy
-    clc
-    adc mm_los_sdy
-    sta mm_los_cy
-
-    // Check if we reached player position
-    lda mm_los_cx
-    cmp zp_player_x
-    bne !mcc_los_check_tile+
-    lda mm_los_cy
-    cmp zp_player_y
-    beq !mcc_los_clear+       // Reached player — LOS clear
-
-!mcc_los_check_tile:
-    // Read map tile and check walkability
-    ldx mm_los_cy
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
-    ldy mm_los_cx
-    :MapRead_ptr0_y()
-    and #TILE_TYPE_MASK
-    lsr
-    lsr
-    lsr
-    lsr                       // Tile type index 0-15
-    tax
-    lda walkable_table,x
-    bne !mcc_los_cont+
-    jmp !mcc_no+              // Blocked — no LOS
-!mcc_los_cont:
-    jmp !mcc_los_step-
-
-!mcc_los_clear:
     // LOS is clear — roll to decide if monster casts
     lda #100
     jsr rng_range             // [0, 99]

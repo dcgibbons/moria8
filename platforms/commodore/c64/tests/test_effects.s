@@ -11,7 +11,7 @@
 :BasicUpstart2(test_bootstrap)
 
 .pc = $E000 "Result Buffer"
-tc_results: .fill 50, $ff      // Result buffer (copied to $0400 at the end)
+tc_results: .fill 31, $ff      // Result buffer (copied to $0400 at the end)
 
 .pc = $080E "Test Code"
 
@@ -28,7 +28,7 @@ test_finish:
     sei
     :BankOutBasic()
     :BankOutKernal()
-    ldx #49
+    ldx #30
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -144,6 +144,28 @@ test_get_direction_target_east:
     adc #1
     sta df_target_x
     lda zp_player_y
+    sta df_target_y
+    sec
+    rts
+
+test_get_direction_target_north:
+    lda zp_player_x
+    sta df_target_x
+    lda zp_player_y
+    sec
+    sbc #1
+    sta df_target_y
+    sec
+    rts
+
+test_get_direction_target_ne:
+    lda zp_player_x
+    clc
+    adc #1
+    sta df_target_x
+    lda zp_player_y
+    sec
+    sbc #1
     sta df_target_y
     sec
     rts
@@ -907,11 +929,11 @@ test_start:
     cmp #6
     bne !t20_fail+
     lda #$01
-    sta tc_results + 19
+    sta tc_results + 14
     jmp !t21+
 !t20_fail:
     lda #$00
-    sta tc_results + 19
+    sta tc_results + 14
 
     // ==========================================
     // Test 21: Word of Recall fizzle (town, never visited dungeon)
@@ -981,11 +1003,11 @@ test_start:
     lda zp_player_dlvl
     bne !t21_fail+
     lda #$01
-    sta tc_results + 20
+    sta tc_results + 15
     jmp !t22+
 !t21_fail:
     lda #$00
-    sta tc_results + 20
+    sta tc_results + 15
 
     // ==========================================
     // Test 22: Visibility room cache sets in lit room and clears in corridor
@@ -1008,7 +1030,7 @@ test_start:
     lda #3
     sta room_h
     sta dg_room_h
-    lda #1
+    lda #0
     sta room_lit
     lda #0
     sta zp_eff_blind
@@ -1017,10 +1039,12 @@ test_start:
     lda #$ff
     sta vis_cached_room_idx
     jsr draw_dungeon_room
+    ldx #0
+    jsr light_room_x
 
-    lda #20
+    lda #21
     sta zp_player_x
-    lda #10
+    lda #11
     sta zp_player_y
     jsr update_visibility
     lda vis_cached_room_idx
@@ -1045,14 +1069,14 @@ test_start:
     bne !t22_fail+
 
     lda #$01
-    sta tc_results + 21
+    sta tc_results + 16
     jmp !t23+
 !t22_fail:
     lda #$00
-    sta tc_results + 21
+    sta tc_results + 16
 
     // ==========================================
-    // Test 23: Room bounds include perimeter walls only
+    // Test 23: Room membership is interior-only
     // ==========================================
 !t23:
     lda #20
@@ -1064,17 +1088,25 @@ test_start:
     lda #3
     sta room_h
 
-    lda #19                     // Left perimeter wall: inside
+    lda #19                     // Left perimeter wall: outside
     sta zp_player_x
     lda #10
     sta zp_player_y
     ldx #0
     jsr uv_player_in_room_x
-    bcc !t23_fail+
+    bcs !t23_fail+
 
-    lda #20                     // Top perimeter wall: inside
+    lda #20                     // Top perimeter wall: outside
     sta zp_player_x
     lda #9
+    sta zp_player_y
+    ldx #0
+    jsr uv_player_in_room_x
+    bcs !t23_fail+
+
+    lda #20                     // Interior floor: inside
+    sta zp_player_x
+    lda #10
     sta zp_player_y
     ldx #0
     jsr uv_player_in_room_x
@@ -1097,11 +1129,11 @@ test_start:
     bcs !t23_fail+
 
     lda #$01
-    sta tc_results + 22
+    sta tc_results + 17
     jmp !t24+
 !t23_fail:
     lda #$00
-    sta tc_results + 22
+    sta tc_results + 17
 
     // ==========================================
     // Test 24: Dark-room pickup redraw must not change unrelated viewport tiles
@@ -1183,11 +1215,11 @@ test_start:
     bne !t24_fail+
 
     lda #$01
-    sta tc_results + 23
+    sta tc_results + 18
     jmp !t25+
 !t24_fail:
     lda #$00
-    sta tc_results + 23
+    sta tc_results + 18
 
     // ==========================================
     // Test 25: eff_light_room must synchronize room_lit and tile FLAG_LIT
@@ -1220,11 +1252,11 @@ test_start:
     beq !t25_fail+
 
     lda #$01
-    sta tc_results + 24
+    sta tc_results + 19
     jmp !t26+
 !t25_fail:
     lda #$00
-    sta tc_results + 24
+    sta tc_results + 19
 
     // ==========================================
     // Test 26: look should flash the found visible target cell once
@@ -1268,11 +1300,11 @@ test_start:
     bne !t26_fail+
 
     lda #$01
-    sta tc_results + 25
+    sta tc_results + 20
     jmp !t27+
 !t26_fail:
     lda #$00
-    sta tc_results + 25
+    sta tc_results + 20
 
     // ==========================================
     // Test 27: look must not reveal monsters on remembered dark tiles
@@ -1312,11 +1344,11 @@ test_start:
     bne !t27_fail+
 
     lda #$01
-    sta tc_results + 26
+    sta tc_results + 21
     jmp !t28+
 !t27_fail:
     lda #$00
-    sta tc_results + 26
+    sta tc_results + 21
     jmp !t28+
 
     // ==========================================
@@ -1343,12 +1375,49 @@ test_start:
     cmp #'c'
     bne !t28_fail+
 
+    :PatchJump(get_direction_target, test_get_direction_target_ne)
+    lda #0
+    sta tlk_flash_calls
+
+    ldx #11
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #22
+    lda #TILE_WALL_H | FLAG_VISITED | FLAG_LIT
+    :MapWrite_ptr0_y()
+    ldy #23
+    lda #TILE_WALL_H | FLAG_VISITED | FLAG_LIT
+    :MapWrite_ptr0_y()
+
+    ldx #12
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #23
+    lda #TILE_WALL_H | FLAG_VISITED | FLAG_LIT
+    :MapWrite_ptr0_y()
+
+    jsr msg_clear
+    jsr do_look
+
+    lda $0408                   // "You see n..." instead of blocked lit wall
+    cmp #'n'
+    bne !t28_fail+
+    lda tlk_flash_calls
+    bne !t28_fail+
+
+    :PatchJump(get_direction_target, test_get_direction_target_east)
+
     lda #$01
-    sta tc_results + 27
+    sta tc_results + 22
     jmp !t29+
 !t28_fail:
+    :PatchJump(get_direction_target, test_get_direction_target_east)
     lda #$00
-    sta tc_results + 27
+    sta tc_results + 22
 
     // ==========================================
     // Test 29: look should preserve trap terrain messaging across flash
@@ -1375,11 +1444,11 @@ test_start:
     bne !t29_fail+
 
     lda #$01
-    sta tc_results + 28
+    sta tc_results + 23
     jmp !t30+
 !t29_fail:
     lda #$00
-    sta tc_results + 28
+    sta tc_results + 23
 
     // ==========================================
     // Test 30: look should prefer wall terrain over stale wall occupants/items
@@ -1430,11 +1499,11 @@ test_start:
     bne !t30_fail+
 
     lda #$01
-    sta tc_results + 29
+    sta tc_results + 24
     jmp !t31+
 !t30_fail:
     lda #$00
-    sta tc_results + 29
+    sta tc_results + 24
 
     // ==========================================
     // Test 31: look should still report floor gold as an item
@@ -1468,11 +1537,11 @@ test_start:
     bne !t31_fail+
 
     lda #$01
-    sta tc_results + 30
+    sta tc_results + 25
     jmp !t32+
 !t31_fail:
     lda #$00
-    sta tc_results + 30
+    sta tc_results + 25
 
     // ==========================================
     // Test 32: Non-confused movement obeys the command direction
@@ -1520,11 +1589,287 @@ test_start:
     cmp #1
     bne !t32_fail+
     lda #$01
-    sta tc_results + 31
-    jmp !tests_done+
+    sta tc_results + 26
+    jmp !t33+
 !t32_fail:
     lda #$00
-    sta tc_results + 31
+    sta tc_results + 26
+
+    // ==========================================
+    // Test 33: Closed doorway blocks lit-room monster sight
+    // Regresses diagonal LOS leaking around a closed door near the player.
+    // ==========================================
+!t33:
+    jsr fill_map_rock
+    jsr monster_init_table
+    lda #0
+    sta eff_detect_timer
+    sta zp_eff_blind
+    sta zp_eff_infra
+    sta zp_player_race
+    lda #1
+    sta zp_player_dlvl
+    lda #5
+    sta zp_light_radius
+    sta player_data + PL_LIGHT_RAD
+    lda #20
+    sta zp_player_x
+    sta player_data + PL_MAP_X
+    lda #12
+    sta zp_player_y
+    sta player_data + PL_MAP_Y
+
+    ldx #11
+!t33_rows:
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #11
+!t33_cols:
+    lda #TILE_FLOOR | FLAG_VISITED | FLAG_LIT
+    sta (zp_ptr0),y
+    iny
+    cpy #18
+    bcc !t33_cols-
+    inx
+    cpx #15
+    bcc !t33_rows-
+
+    ldx #12
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #18
+    lda #TILE_DOOR_CLOSED | FLAG_VISITED | FLAG_LIT
+    sta (zp_ptr0),y
+    ldy #19
+    lda #TILE_FLOOR | FLAG_VISITED | FLAG_LIT
+    sta (zp_ptr0),y
+    ldy #20
+    sta (zp_ptr0),y
+
+    ldx #13
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #17
+    lda #TILE_FLOOR | FLAG_VISITED | FLAG_LIT | FLAG_OCCUPIED
+    sta (zp_ptr0),y
+
+    lda #17
+    sta monster_table + MX_X
+    lda #13
+    sta monster_table + MX_Y
+    lda #1
+    sta monster_table + MX_TYPE
+    lda #MF_AWAKE
+    sta monster_table + MX_FLAGS
+    lda #CF_INFRA
+    sta cr_mflags + 1
+
+    jsr update_visibility
+    lda monster_table + MX_FLAGS
+    and #MF_VISIBLE
+    bne !t33_fail+
+    lda #$01
+    sta tc_results + 27
+    jmp !t34+
+!t33_fail:
+    lda #$00
+    sta tc_results + 27
+
+    // ==========================================
+    // Test 34: Look reports an infravision-visible monster past dark floor
+    // Regresses look stopping before MF_VISIBLE monsters on non-lit tiles.
+    // ==========================================
+!t34:
+    jsr tv_setup_dark_room
+    :PatchJump(get_direction_target, test_get_direction_target_north)
+    :PatchJump(screen_flash_at, test_screen_flash_at)
+
+    lda #0
+    sta tlk_flash_calls
+
+    lda #22
+    sta zp_player_x
+    sta player_data + PL_MAP_X
+    lda #14
+    sta zp_player_y
+    sta player_data + PL_MAP_Y
+
+    lda #22
+    sta ms_spawn_x
+    lda #10
+    sta ms_spawn_y
+    lda #24                     // Ogre
+    jsr monster_spawn_one
+    bcc !t34_fail+
+
+    lda monster_table + MX_FLAGS
+    ora #MF_VISIBLE
+    sta monster_table + MX_FLAGS
+
+    jsr msg_clear
+    jsr do_look
+
+    lda $0408                   // "You see n..." vs "You see a..."
+    cmp #'n'
+    beq !t34_fail+
+    lda tlk_flash_calls
+    cmp #1
+    bne !t34_fail+
+    lda tlk_flash_row
+    cmp #9
+    bne !t34_fail+
+    lda tlk_flash_col
+    cmp #20
+    bne !t34_fail+
+
+    lda #$01
+    sta tc_results + 28
+    jmp !t35+
+!t34_fail:
+    lda #$00
+    sta tc_results + 28
+
+    // ==========================================
+    // Test 35: Final diagonal target cannot bypass corner blockers
+    // Regresses a monster becoming visible around a wall corner because
+    // the target tile exemption ran before diagonal side-cell checks.
+    // ==========================================
+!t35:
+    jsr fill_map_rock
+    jsr monster_init_table
+    lda #0
+    sta eff_detect_timer
+    sta zp_eff_blind
+    sta zp_eff_infra
+    sta zp_player_race
+    lda #1
+    sta zp_player_dlvl
+    lda #5
+    sta zp_light_radius
+    sta player_data + PL_LIGHT_RAD
+    lda #20
+    sta zp_player_x
+    sta player_data + PL_MAP_X
+    lda #12
+    sta zp_player_y
+    sta player_data + PL_MAP_Y
+
+    ldx #12
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #20
+    lda #TILE_FLOOR | FLAG_VISITED | FLAG_LIT
+    sta (zp_ptr0),y
+    ldy #21
+    lda #TILE_WALL_H | FLAG_VISITED | FLAG_LIT
+    sta (zp_ptr0),y
+
+    ldx #11
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #20
+    lda #TILE_WALL_H | FLAG_VISITED | FLAG_LIT
+    sta (zp_ptr0),y
+    ldy #21
+    lda #TILE_FLOOR | FLAG_VISITED | FLAG_LIT
+    sta (zp_ptr0),y
+
+    lda #21
+    sta ms_spawn_x
+    lda #11
+    sta ms_spawn_y
+
+    lda #1
+    jsr monster_spawn_one
+    bcc !t35_fail+
+    jsr update_visibility
+    lda monster_table + MX_FLAGS
+    and #MF_VISIBLE
+    bne !t35_fail+
+    lda #$01
+    sta tc_results + 29
+    jmp !t36+
+!t35_fail:
+    lda #$00
+    sta tc_results + 29
+
+    // ==========================================
+    // Test 36: Final diagonal open doorway target remains visible
+    // The corner blocker test above has both orthogonal side cells closed;
+    // an open doorway edge with one open side must not be over-blocked.
+    // ==========================================
+!t36:
+    jsr fill_map_rock
+    jsr monster_init_table
+    lda #0
+    sta eff_detect_timer
+    sta zp_eff_blind
+    sta zp_eff_infra
+    sta zp_player_race
+    lda #1
+    sta zp_player_dlvl
+    lda #5
+    sta zp_light_radius
+    sta player_data + PL_LIGHT_RAD
+    lda #20
+    sta zp_player_x
+    sta player_data + PL_MAP_X
+    lda #12
+    sta zp_player_y
+    sta player_data + PL_MAP_Y
+
+    ldx #12
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #20
+    lda #TILE_FLOOR | FLAG_VISITED | FLAG_LIT
+    sta (zp_ptr0),y
+    ldy #21
+    lda #TILE_FLOOR | FLAG_VISITED | FLAG_LIT
+    sta (zp_ptr0),y
+
+    ldx #11
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #20
+    lda #TILE_WALL_H | FLAG_VISITED | FLAG_LIT
+    sta (zp_ptr0),y
+    ldy #21
+    lda #TILE_DOOR_OPEN | FLAG_VISITED | FLAG_LIT
+    sta (zp_ptr0),y
+
+    lda #21
+    sta ms_spawn_x
+    lda #11
+    sta ms_spawn_y
+
+    lda #1
+    jsr monster_spawn_one
+    bcc !t36_fail+
+    jsr update_visibility
+    lda monster_table + MX_FLAGS
+    and #MF_VISIBLE
+    beq !t36_fail+
+    lda #$01
+    sta tc_results + 30
+    jmp !tests_done+
+!t36_fail:
+    lda #$00
+    sta tc_results + 30
 !tests_done:
     jmp test_finish
 
@@ -1582,4 +1927,4 @@ tv_setup_dark_room:
 effects_test_body_end:
 
 .assert "Effects test stays below MAP_BASE", effects_test_body_end <= MAP_BASE, true
-.assert "Effects result buffer stays under KERNAL ROM", tc_results + 50 <= $10000, true
+.assert "Effects result buffer stays under KERNAL ROM", tc_results + 31 <= $10000, true

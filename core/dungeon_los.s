@@ -10,10 +10,15 @@
 //   Phase A: Torch radius — mark nearby tiles FLAG_VISITED
 //   Phase B: Room reveal — if player is in a lit room, reveal entire room
 
+#import "los_trace.s"
+
 // ============================================================
 // Data
 // ============================================================
 vis_room_revealed: .byte 0    // Set to 1 if a room was batch-revealed this turn
+#if C128
+vis_force_redraw_pending: .byte 0 // Transient overlay clear awaiting visibility pass
+#endif
 vis_cached_room_idx: .byte $ff // Current lit-room cache; $ff = no cached room
 
 // Scratch for update_visibility
@@ -43,6 +48,12 @@ update_visibility:
     jsr c128_stack_guard_begin
     jsr c128_stack_guard_snapshot_banking
 #endif
+
+#if C128
+    lda #0
+    sta vis_room_revealed
+#endif
+
     // Blindness — skip all visibility updates
     lda zp_eff_blind
     beq !uv_not_blind+
@@ -55,12 +66,9 @@ update_visibility:
     bne !uv_dungeon+
     lda #$ff
     sta vis_cached_room_idx
-    rts                         // Town: everything pre-lit
+    jmp !uv_done+               // Town terrain is pre-lit; monster flags still update.
 
 !uv_dungeon:
-    lda #0
-    sta vis_room_revealed
-
     // === Phase A: Torch radius ===
     // Mark all tiles within Chebyshev distance of zp_light_radius as VISITED.
     // Compute bounding box clamped to map edges.
@@ -187,6 +195,11 @@ update_visibility:
 
 !uv_blind_skip:
 !uv_done:
+    jsr monster_update_visibility_all
+    beq !uv_mon_done+
+    lda #1
+    sta vis_room_revealed
+!uv_mon_done:
 #if C128_REAL_BOOT_DIAG
     ldx #$62
     jsr c128_stack_guard_check
@@ -218,11 +231,9 @@ uv_find_current_room:
 
 // uv_player_in_room_x — Check whether player is within room X bounds
 // Input: X = room index
-// Output: carry set = inside expanded room bounds, carry clear = outside
+// Output: carry set = inside room interior, carry clear = outside
 uv_player_in_room_x:
     lda zp_player_x
-    clc
-    adc #1
     cmp room_x,x
     bcc !uv_room_miss+
 
@@ -231,10 +242,9 @@ uv_player_in_room_x:
     adc room_w,x
     cmp zp_player_x
     bcc !uv_room_miss+
+    beq !uv_room_miss+
 
     lda zp_player_y
-    clc
-    adc #1
     cmp room_y,x
     bcc !uv_room_miss+
 
@@ -243,6 +253,7 @@ uv_player_in_room_x:
     adc room_h,x
     cmp zp_player_y
     bcc !uv_room_miss+
+    beq !uv_room_miss+
     sec
     rts
 !uv_room_miss:
@@ -405,14 +416,13 @@ reveal_room:
 // los_is_visible — Check if a map position is currently visible to the player
 // Input: X = map x, Y = map y
 // Output: carry set = visible, carry clear = not visible
-// Checks: FLAG_LIT on tile OR within light_radius Chebyshev distance
+// Checks: revealed FLAG_LIT tile OR within light_radius Chebyshev distance.
+// Raw lit-room metadata is not current terrain visibility until visited.
 // Preserves: X, Y
 los_is_visible:
     // Read tile
     tya
     pha                         // Save map y
-    txa
-    pha                         // Save map x
 
     // Get map pointer for row Y
     lda map_row_lo,y
@@ -425,13 +435,12 @@ los_is_visible:
     tay
     :MapRead_ptr1_y()
 
-    // Check FLAG_LIT
-    and #FLAG_LIT
-    bne !lov_yes+               // Lit tiles always visible
+    // Check revealed permanent light.
+    and #(FLAG_LIT | FLAG_VISITED)
+    cmp #(FLAG_LIT | FLAG_VISITED)
+    beq !lov_yes+
 
     // Check Chebyshev distance: max(|dx|, |dy|) <= light_radius
-    pla                         // Restore map x
-    tax
     pla                         // Restore map y
     tay
 
@@ -472,8 +481,8 @@ los_is_visible:
     rts
 
 !lov_yes:
-    pla                         // Discard saved x
-    pla                         // Discard saved y
+    pla                         // Restore saved y
+    tay
     sec
     rts
 
@@ -494,71 +503,4 @@ player_get_infra_range:
 !pgir_done:
     rts
 
-// monster_is_infra_visible_at — Check player infravision for a monster tile
-// Input: A = map x, Y = map y
-// Output: carry set = infra-visible and X = creature type; carry clear = hidden
-// Clobbers: A, X, Y, zp_ptr0, zp_ptr0_hi, zp_temp0-4, zp_los_*
-monster_is_infra_visible_at:
-    sta zp_los_dx
-    sty zp_los_dy
-
-    lda zp_eff_blind
-    bne !miiva_no+
-
-    lda zp_los_dx
-    ldy zp_los_dy
-    jsr monster_find_at
-    bcc !miiva_no+
-
-    jsr monster_get_ptr
-    ldy #MX_TYPE
-    lda (zp_ptr0),y
-    tax
-    lda cr_mflags,x
-    and #CF_INFRA
-    beq !miiva_no+
-
-    txa
-    pha
-    jsr player_get_infra_range
-    sta zp_los_step
-    pla
-    tax
-
-    lda zp_los_step
-    beq !miiva_no+
-
-    // Chebyshev range check.
-    lda zp_los_dx
-    sec
-    sbc zp_player_x
-    bcs !miiva_dx_pos+
-    eor #$ff
-    clc
-    adc #1
-!miiva_dx_pos:
-    sta zp_temp0
-
-    lda zp_los_dy
-    sec
-    sbc zp_player_y
-    bcs !miiva_dy_pos+
-    eor #$ff
-    clc
-    adc #1
-!miiva_dy_pos:
-    cmp zp_temp0
-    bcs !miiva_have_dist+
-    lda zp_temp0
-!miiva_have_dist:
-    cmp zp_los_step
-    beq !miiva_range_ok+
-    bcs !miiva_no+
-!miiva_range_ok:
-    sec
-    rts
-
-!miiva_no:
-    clc
-    rts
 #endif

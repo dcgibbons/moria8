@@ -188,6 +188,12 @@ c64_test_load_then_save_new_empty_resume_low:
     sta $01
     jmp title_load_game
 #endif
+#if C64_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT
+c64_test_single_drive_fresh_save_resume_low:
+    lda #$36                // Monitor attach/resume may expose BASIC ROM.
+    sta $01
+    jmp c64_test_single_drive_fresh_save_before_save
+#endif
 
 c64_disk_call:
     pha
@@ -719,7 +725,6 @@ c64_test_single_drive_save_wrong_media_unexpected_return:
     sta save_device
     lda #1
     sta disk_mode
-    lda #2
     sta disk_setup_done
     lda #0
     sta save_slot_index
@@ -1156,13 +1161,10 @@ title_str:
 title_show_sysinfo:
     lda KERNAL_REV              // Read from ROM while KERNAL banked in
     sta tsi_krev_cached
-    sei
-    dec $01                     // $36 -> $35 — I/O visible for color RAM
-    jsr title_show_sysinfo_banked
-    inc $01
-    cli
-    rts
+    jmp title_show_sysinfo_banked
 tsi_krev_cached: .byte 0
+
+#import "../../../core/title_sysinfo_banked.s"
 
 // tramp_reu_show_status — Bank out KERNAL to call banked status display
 // Patched into reu_show_status at startup by init code.
@@ -1853,44 +1855,13 @@ tramp_winner_royal:
     sei
     lda #BANK_NO_KERNAL
     sta $01
+    jsr winner_apply_retirement_bonus_overlay
     jsr royal_screen
     inc $01
     cli
 #if C64_TEST_SCRIPTED_RETIREMENT_PRODUCT
     jmp c64_test_retirement_pass_sym
 #endif
-!done:
-    rts
-
-winner_apply_retirement_bonus:
-    lda player_data + PL_LEVEL
-    cmp #41
-    bcs !gold+
-    clc
-    adc #40
-    sta player_data + PL_LEVEL
-    sta zp_player_lvl
-!gold:
-    lda player_data + PL_GOLD_0
-    clc
-    adc #$90
-    sta player_data + PL_GOLD_0
-    lda player_data + PL_GOLD_1
-    adc #$d0
-    sta player_data + PL_GOLD_1
-    lda player_data + PL_GOLD_2
-    adc #$03
-    sta player_data + PL_GOLD_2
-    lda player_data + PL_XP_0
-    clc
-    adc #$40
-    sta player_data + PL_XP_0
-    lda player_data + PL_XP_1
-    adc #$4b
-    sta player_data + PL_XP_1
-    lda player_data + PL_XP_2
-    adc #$4c
-    sta player_data + PL_XP_2
 !done:
     rts
 
@@ -2137,7 +2108,6 @@ c64_banked_fname:
 .segment RuntimeBanked
     #import "../../../core/special_rooms.s"
     #import "../../../core/ego_items.s"
-    #import "../../../core/title_sysinfo_banked.s"
     #import "../common/reu_loading_banked.s"
     #import "../../../core/ui_home.s"
     #import "../../../core/ui_recall.s"
@@ -2147,8 +2117,6 @@ c64_banked_fname:
     #define PM_MAP_BANKED
     #import "../../../core/player_magic_map.s"
     #undef PM_MAP_BANKED
-    #import "../../../core/player_magic_turn_banked.s"
-    #import "../../../core/player_magic_slow_runtime.s"
     #define PM_EQ_BANKED
     #import "../../../core/player_magic_earthquake.s"
     #undef PM_EQ_BANKED
@@ -2246,6 +2214,37 @@ ovl_death_end:
 // Modal-misc overlay — winner retirement art at $E000
 // ============================================================
 .segment ModalMiscOverlay
+winner_apply_retirement_bonus_overlay:
+    lda player_data + PL_LEVEL
+    cmp #41
+    bcs !gold+
+    clc
+    adc #40
+    sta player_data + PL_LEVEL
+    sta zp_player_lvl
+!gold:
+    lda player_data + PL_GOLD_0
+    clc
+    adc #$90
+    sta player_data + PL_GOLD_0
+    lda player_data + PL_GOLD_1
+    adc #$d0
+    sta player_data + PL_GOLD_1
+    lda player_data + PL_GOLD_2
+    adc #$03
+    sta player_data + PL_GOLD_2
+    lda player_data + PL_XP_0
+    clc
+    adc #$40
+    sta player_data + PL_XP_0
+    lda player_data + PL_XP_1
+    adc #$4b
+    sta player_data + PL_XP_1
+    lda player_data + PL_XP_2
+    adc #$4c
+    sta player_data + PL_XP_2
+    rts
+
     #import "../../../core/royal.s"
     #import "../common/save_slot_menu.s"
 ovl_modal_misc_end:
@@ -2258,9 +2257,13 @@ ovl_modal_misc_end:
 .segment SpellOverlay
     #define PMX_EARTHQUAKE_EXTERNAL
     #define PMX_MAP_AREA_EXTERNAL
-    #define PMU_VISIBLE_FLAGGED_EXTERNAL
+    #define PMX_DETECT_EFFECTS_EXTERNAL
+    #import "../../../core/player_magic_slow_runtime.s"
+    #define PMU_TURN_FEEDBACK_ONLY
+    #import "../../../core/player_magic_turn_banked.s"
+    #undef PMU_TURN_FEEDBACK_ONLY
     #import "../../../core/player_magic_execute_overlay.s"
-    #undef PMU_VISIBLE_FLAGGED_EXTERNAL
+    #undef PMX_DETECT_EFFECTS_EXTERNAL
     #undef PMX_MAP_AREA_EXTERNAL
     #undef PMX_EARTHQUAKE_EXTERNAL
 ovl_spell_end:

@@ -129,6 +129,8 @@ eff_kill_monster:
 
 eff_detect_timer:
     .byte 0
+eff_detect_evil_mode:
+    .byte 0
 
 #import "../../../../core/ui_trampoline_stubs.s"
 

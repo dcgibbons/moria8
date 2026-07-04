@@ -14,10 +14,12 @@
 .const MX_X = 0
 .const MX_Y = 1
 .const MX_TYPE = 2
+.const MX_FLAGS = 5
 .const MX_SLEEP_CUR = 7
 .const MX_CONFUSE = 9
 .const MAX_MONSTERS = 32
 .const EMPTY_SLOT = $ff
+.const MF_VISIBLE = $08
 .const CF_UNDEAD = $02
 .const CF_EVIL = $04
 .const PIW_FILTER_PRAYER_BOOK = $fb
@@ -401,6 +403,8 @@ test_start:
     sta test_mon_table + (0 * MONSTER_ENTRY_SIZE) + MX_Y
     lda #7
     sta test_mon_table + (0 * MONSTER_ENTRY_SIZE) + MX_SLEEP_CUR
+    lda #MF_VISIBLE
+    sta test_mon_table + (0 * MONSTER_ENTRY_SIZE) + MX_FLAGS
     lda #2
     sta test_mon_table + (1 * MONSTER_ENTRY_SIZE) + MX_TYPE
     lda #9
@@ -415,6 +419,8 @@ test_start:
     sta test_mon_table + (2 * MONSTER_ENTRY_SIZE) + MX_SLEEP_CUR
     lda #4
     sta test_mon_table + (2 * MONSTER_ENTRY_SIZE) + MX_CONFUSE
+    lda #MF_VISIBLE
+    sta test_mon_table + (2 * MONSTER_ENTRY_SIZE) + MX_FLAGS
     lda #3
     sta test_mon_table + (3 * MONSTER_ENTRY_SIZE) + MX_TYPE
     lda #25

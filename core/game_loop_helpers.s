@@ -170,7 +170,13 @@ command_result_main_or_redraw_full:
 #if hal_platform_perf_p1_command_instrumentation && PERF_P1
     jsr perf_p1_set_reason_command_forced
 #endif
-	    jmp post_turn_redraw_full_or_die
+    jsr turn_post_action_searchable_or_die
+    bcc !alive+
+    jmp player_died
+!alive:
+    lda #1
+    sta turn_scene_dirty
+    jmp post_turn_update_visibility_after_action
 !crrf_no_turn:
     jmp main_loop
 
@@ -228,36 +234,15 @@ turn_post_action_searchable_or_die:
     sec
     rts
 
-post_turn_redraw_full_or_die:
-	    jsr turn_post_action_searchable_or_die
-	    bcc !ptfds_alive+
-	    jmp player_died
-!ptfds_alive:
-#if hal_platform_perf_p1_command_instrumentation && PERF_P1
-    jsr perf_p1_set_reason_command_forced_if_none
-#endif
-	    jmp vp_render_status_loop
-
 post_turn_status_only_or_die:
-    jsr turn_post_action_searchable_or_die
-    bcc !ptsos_alive+
-    jmp player_died
-!ptsos_alive:
-	    lda turn_scene_dirty
-	    beq !ptsos_status_only+
-#if hal_platform_perf_p1_command_instrumentation && PERF_P1
-    jsr perf_p1_set_reason_scene_dirty
-#endif
-	    jmp vp_render_status_loop
-!ptsos_status_only:
-    jsr status_draw
-    jmp main_loop
+    jmp post_turn_update_visibility_or_die
 
 post_turn_update_visibility_or_die:
     jsr turn_post_action_searchable_or_die
     bcc !ptuvs_alive+
     jmp player_died
 !ptuvs_alive:
+post_turn_update_visibility_after_action:
     lda vis_room_revealed
     pha
     jsr update_visibility
@@ -308,6 +293,7 @@ post_turn_update_visibility_or_die:
     jsr perf_p1_mark_full_reason_update_visibility
 #endif
 	    jsr render_viewport
+	    jsr detect_evil_clear_reveal
 	    jsr status_draw
     jmp main_loop
 
@@ -328,6 +314,9 @@ vp_render_status_loop:
     jsr perf_p1_mark_full_default_transition
 #endif
 	    jsr render_viewport
+#if C128
+	    jsr detect_evil_clear_reveal
+#endif
 	    jsr status_draw
 #if C128_TEST_PERF_P1_TRACE_COMMAND
     jmp c128_test_perf_p1_trace_capture_sym

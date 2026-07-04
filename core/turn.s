@@ -263,9 +263,14 @@ turn_tick_effects:
     beq !no_detect+
     dec eff_detect_timer
     bne !no_detect+
-    // Expired — trigger redraw to hide detected monsters
+    // Expired — clear detected monster render flags before any redraw path.
     lda #1
+    sta muv_clear_detected
     sta vis_room_revealed
+#if C128
+    sta vis_force_redraw_pending
+#endif
+    jsr monster_update_visibility_all
 !no_detect:
 
     // Mana regen: spell-casting classes recover 1 MP per 2 turns

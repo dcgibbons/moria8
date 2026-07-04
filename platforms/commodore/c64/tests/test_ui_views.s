@@ -41,6 +41,7 @@ df_target_y: .byte 0
 cmb_type:   .byte 0
 cmb_damage: .byte 0
 eff_fear_timer: .byte 0
+eff_detect_timer: .byte 0
 
 reu_show_status:
 reu_load_all_tiers:
@@ -64,6 +65,13 @@ eff_remove_curse:
 eff_aggravate:
 eff_bolt:
 eff_directional_monster:
+    rts
+
+player_get_infra_range:
+    lda #0
+    rts
+mm_los_clear_to_target:
+    clc
     rts
 
 current_overlay: .byte 0

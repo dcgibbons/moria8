@@ -629,6 +629,54 @@ test_start:
     lda #3
     sta player_data + PL_STR_CUR
     sta zp_player_str
+    lda #0
+    sta zp_eff_blind
+    jsr monster_update_visibility_all
+    lda #8
+    sta zp_eff_blind
+    ldx test_mon_slot
+    jsr monster_get_ptr
+    ldy #MX_X
+    lda (zp_ptr0),y
+    cmp #23
+    beq !t5_evil_x_ok+
+    lda #$22
+    sta tc_results + 4
+    jmp test_finish
+!t5_evil_x_ok:
+    ldy #MX_Y
+    lda (zp_ptr0),y
+    cmp #12
+    beq !t5_evil_y_ok+
+    lda #$23
+    sta tc_results + 4
+    jmp test_finish
+!t5_evil_y_ok:
+    lda zp_light_radius
+    cmp #1
+    beq !t5_light_ok+
+    lda #$24
+    sta tc_results + 4
+    jmp test_finish
+!t5_light_ok:
+    ldy #MX_FLAGS
+    lda (zp_ptr0),y
+    and #MF_VISIBLE
+    bne !t5_evil_visible_ok+
+    lda #$20
+    sta tc_results + 4
+    jmp test_finish
+!t5_evil_visible_ok:
+    ldx test_undead_slot
+    jsr monster_get_ptr
+    ldy #MX_FLAGS
+    lda (zp_ptr0),y
+    and #MF_VISIBLE
+    bne !t5_undead_visible_ok+
+    lda #$21
+    sta tc_results + 4
+    jmp test_finish
+!t5_undead_visible_ok:
     jsr eff_holy_word
     lda zp_player_hp_lo
     cmp #$2c
@@ -685,8 +733,6 @@ test_start:
     cmp #1
     bne !t5_huff_fail+
     lda tpm_msg_calls
-    cmp #1
-    beq !t5_huff_count_ok+
     cmp #2
     beq !t5_huff_count_ok+
     lda #$15

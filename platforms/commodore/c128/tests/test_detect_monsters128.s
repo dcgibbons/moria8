@@ -53,7 +53,9 @@ itok_detect_monsters:
 #import "../../../../core/spell_names.s"
 #import "../../../../core/player_magic_state.s"
 #import "../../../../core/player_magic_state_ops.s"
+#define PMX_DETECT_EFFECTS_EXTERNAL
 #import "../../../../core/player_magic_detect.s"
+#undef PMX_DETECT_EFFECTS_EXTERNAL
 #import "../../../../core/player_magic.s"
 
 .pc = $0801 "BASIC Stub"

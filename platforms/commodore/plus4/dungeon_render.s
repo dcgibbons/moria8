@@ -21,7 +21,7 @@ viewport_update:
     sbc #VIEWPORT_W / 2     // 19
     bcs !tvx_not_neg+
     lda #0
-    jmp !tvx_store+
+    beq !tvx_store+
 !tvx_not_neg:
     cmp #TOWN_MAP_COLS - VIEWPORT_W
     bcc !tvx_store+
@@ -34,7 +34,7 @@ viewport_update:
     sbc #VIEWPORT_H / 2     // 10
     bcs !tvy_not_neg+
     lda #0
-    jmp !tvy_store+
+    beq !tvy_store+
 !tvy_not_neg:
     cmp #TOWN_MAP_ROWS - VIEWPORT_H
     bcc !tvy_store+
@@ -50,7 +50,7 @@ viewport_update:
     sbc #VIEWPORT_W / 2     // 19
     bcs !vx_not_neg+
     lda #0                  // Underflow, clamp to 0
-    jmp !vx_store+
+    beq !vx_store+
 !vx_not_neg:
     cmp #MAP_COLS - VIEWPORT_W  // 42
     bcc !vx_store+
@@ -64,7 +64,7 @@ viewport_update:
     sbc #VIEWPORT_H / 2     // 10
     bcs !vy_not_neg+
     lda #0
-    jmp !vy_store+
+    beq !vy_store+
 !vy_not_neg:
     cmp #MAP_ROWS - VIEWPORT_H  // 28
     bcc !vy_store+
@@ -138,42 +138,17 @@ render_viewport:
     and #FLAG_VISITED
     bne !rv_visited+
 
-    // Not visited — check if detect monsters reveals an occupant
-    lda eff_detect_timer
+    // Not visited — only a live visible/detected monster may render.
+    lda zp_tile_tmp
+    and #FLAG_OCCUPIED
     beq !rv_detect_blank+
-!rv_detect_chk:
-    lda zp_tile_tmp
-    and #FLAG_OCCUPIED
-    bne !rv_detect_render+
-!rv_detect_blank:
-    lda zp_tile_tmp
-    and #FLAG_OCCUPIED
-    beq !rv_detect_no_infra+
-    lda zp_view_x
-    clc
-    adc zp_render_x
-    pha
-    lda zp_view_y
-    clc
-    adc zp_render_y
-    tay
-    pla
-    jsr monster_is_infra_visible_at
-    bcc !rv_detect_no_infra+
-    lda cr_display,x
-    sta zp_temp0
-    lda cr_color,x
-    sta zp_temp1
-    jmp rv_apply_player_override
-!rv_detect_no_infra:
-    jmp !draw_blank+
-!rv_detect_render:
-    // Detected monster on unvisited tile — blank background, then normal item/monster overlay.
     lda #$20
     sta zp_temp0
     lda #0
     sta zp_temp1
-    jmp !rv_no_item+
+    jmp !rv_live_monster+
+!rv_detect_blank:
+    jmp !draw_blank+
 !rv_visited:
 
     // Extract tile type (bits 7-4 → index 0-15)
@@ -198,7 +173,7 @@ render_viewport:
     sta zp_temp0
     lda #COL_LGREY
     sta zp_temp1
-    jmp !rv_tile_set+
+    bne !rv_tile_set+
 !rv_normal:
     // Look up screen code and color
     lda tile_screen_codes,x
@@ -238,7 +213,7 @@ render_viewport:
     sta zp_temp0
     lda #COL_STORE
     sta zp_temp1
-    jmp !rv_no_store+
+    bne !rv_no_store+
 !rv_store_nxt:
     inx
     cpx #STORE_COUNT
@@ -249,7 +224,7 @@ render_viewport:
     // Town tiles always have FLAG_LIT, so this is effectively a no-op on town.
     lda zp_tile_tmp
     and #FLAG_LIT
-    bne !rv_vis_ok+             // FLAG_LIT → permanently visible → full color
+    bne !rv_vis_ok+
 
     // Not lit — check if within torch radius (Chebyshev distance)
     // dx = abs(map_x - player_x)
@@ -286,33 +261,10 @@ render_viewport:
     beq !rv_vis_ok+             // Exactly at radius → visible
     bcc !rv_vis_ok+             // Within radius → visible
 
-    // Outside light radius — infravision can show warm monsters without
-    // revealing terrain/items/glyphs.
-    lda zp_tile_tmp
-    and #FLAG_OCCUPIED
-    beq !rv_dim_tile+
-    lda zp_view_x
-    clc
-    adc zp_render_x
-    pha
-    lda zp_view_y
-    clc
-    adc zp_render_y
-    tay
-    pla
-    jsr monster_is_infra_visible_at
-    bcc !rv_dim_tile+
-    lda cr_display,x
-    sta zp_temp0
-    lda cr_color,x
-    sta zp_temp1
-    jmp !rv_no_monster+
-
-!rv_dim_tile:
     // Outside light radius → dimmed (remembered tile)
     lda #COL_DGREY
     sta zp_temp1                // Override color to dark grey
-    jmp !rv_no_monster+         // Dimmed tiles never show monsters
+    jmp !rv_no_glyph+           // Terrain dimmed; shared monster flags may overlay.
 
 !rv_vis_ok:
     // Item check (visible tiles only)
@@ -357,11 +309,11 @@ render_viewport:
     sta zp_temp1
 !rv_no_glyph:
 
+!rv_live_monster:
     // Monster check (visible tiles only — overrides items)
     lda zp_tile_tmp
     and #FLAG_OCCUPIED
     beq !rv_no_monster+
-    // Compute map x,y
     lda zp_view_x
     clc
     adc zp_render_x
@@ -375,6 +327,10 @@ render_viewport:
     bcc !rv_no_monster+         // Not found (stale flag?)
     // X = slot index — get creature type
     jsr monster_get_ptr
+    ldy #MX_FLAGS
+    lda (zp_ptr0),y
+    and #(MF_VISIBLE | MF_DETECTED)
+    beq !rv_no_monster+
     ldy #MX_TYPE
     lda (zp_ptr0),y
     tax                         // X = creature type
@@ -402,10 +358,10 @@ rv_apply_player_override:
     sta zp_temp0
     lda #COL_PLAYER
     sta zp_temp1
-    jmp !write_tile+
+    bne !write_tile+
 
 !not_player:
-    jmp !write_tile+
+    bne !write_tile+
 
 !draw_blank:
     lda #SC_SPACE
@@ -444,6 +400,8 @@ rv_apply_player_override:
     beq !done+
     jmp !row_loop-
 !done:
+    lda #0
+    sta vis_room_revealed
     rts
 
 // Scratch bytes for store door check in render_viewport
@@ -494,18 +452,14 @@ render_single_tile:
     bne !rst_visited+
     lda zp_tile_tmp
     and #FLAG_OCCUPIED
-    beq !rst_no_infra_blank+
-    ldy zp_temp1                // Y = map_y
-    lda zp_temp0                // A = map_x
-    jsr monster_is_infra_visible_at
-    bcc !rst_no_infra_blank+
-    lda cr_display,x
-    sta zp_temp3
-    lda cr_color,x
-    sta zp_temp4
-    jmp rst_apply_player_override
-!rst_no_infra_blank:
+    bne !rst_detect_occ+
     jmp !rst_blank+
+!rst_detect_occ:
+    lda #SC_SPACE
+    sta zp_temp3
+    lda #0
+    sta zp_temp4
+    jmp !rst_unvisited_detected+
 !rst_visited:
 
     // Extract tile type (bits 7-4)
@@ -528,7 +482,7 @@ render_single_tile:
     sta zp_temp3
     lda #COL_LGREY
     sta zp_temp4
-    jmp !rst_tile_set+
+    bne !rst_tile_set+
 !rst_normal:
     lda tile_screen_codes,x
     sta zp_temp3
@@ -555,7 +509,7 @@ render_single_tile:
     sta zp_temp3
     lda #COL_STORE
     sta zp_temp4
-    jmp !rst_no_store+
+    bne !rst_no_store+
 !rst_store_nxt:
     inx
     cpx #STORE_COUNT
@@ -594,26 +548,10 @@ render_single_tile:
     beq !rst_vis_ok+
     bcc !rst_vis_ok+
 
-    // Infravision can show warm monsters on remembered dark tiles without
-    // revealing terrain/items/glyphs.
-    lda zp_tile_tmp
-    and #FLAG_OCCUPIED
-    beq !rst_dim_tile+
-    ldy zp_temp1                // Y = map_y
-    lda zp_temp0                // A = map_x
-    jsr monster_is_infra_visible_at
-    bcc !rst_dim_tile+
-    lda cr_display,x
-    sta zp_temp3
-    lda cr_color,x
-    sta zp_temp4
-    jmp !rst_no_monster+
-
-!rst_dim_tile:
     // Dimmed
     lda #COL_DGREY
     sta zp_temp4
-    jmp !rst_no_monster+        // Dimmed tiles never show monsters
+    bne !rst_no_glyph+          // Terrain dimmed; shared monster flags may overlay.
 
 !rst_vis_ok:
     // Item check (visible tiles only)
@@ -644,16 +582,20 @@ render_single_tile:
 !rst_no_glyph:
 
     // Monster check (visible tiles only — overrides items)
+!rst_unvisited_detected:
     lda zp_tile_tmp
     and #FLAG_OCCUPIED
     beq !rst_no_monster+
-    // zp_temp0 = map_x, zp_temp1 = map_y
     ldy zp_temp1                // Y = map_y
     lda zp_temp0                // A = map_x
     jsr monster_find_at
     bcc !rst_no_monster+        // Not found
     // X = slot index
     jsr monster_get_ptr
+    ldy #MX_FLAGS
+    lda (zp_ptr0),y
+    and #(MF_VISIBLE | MF_DETECTED)
+    beq !rst_no_monster+
     ldy #MX_TYPE
     lda (zp_ptr0),y
     tax
@@ -675,14 +617,17 @@ rst_apply_player_override:
     sta zp_temp3
     lda #COL_PLAYER
     sta zp_temp4
-    jmp !rst_write+
+    bne !rst_write+
 
 !rst_blank:
     lda #SC_SPACE
     sta zp_temp3
     lda #COL_BLACK
     sta zp_temp4
-    jmp rst_apply_player_override
+    lda zp_tile_tmp
+    and #FLAG_OCCUPIED
+    beq rst_apply_player_override
+    bne !rst_no_glyph-
 
 !rst_write:
     ldy rst_col_tmp
@@ -721,7 +666,7 @@ render_local_area:
     sbc zp_light_radius
     bcs !rla_mx1+
     lda #0
-    jmp !rla_mx2+
+    beq !rla_mx2+
 !rla_mx1:
     sec
     sbc #1
@@ -772,7 +717,7 @@ render_local_area:
     sbc zp_light_radius
     bcs !rla_my1+
     lda #0
-    jmp !rla_my2+
+    beq !rla_my2+
 !rla_my1:
     sec
     sbc #1
@@ -827,14 +772,14 @@ render_local_area:
     cmp rla_max_x
     beq !rla_col_done+
     inc rla_cur_x
-    jmp !rla_col-
+    bne !rla_col-
 !rla_col_done:
 
     lda rla_cur_y
     cmp rla_max_y
     beq !rla_done+
     inc rla_cur_y
-    jmp !rla_row-
+    bne !rla_row-
 !rla_done:
     rts
 

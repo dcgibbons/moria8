@@ -297,76 +297,28 @@ pmx_cure_poison_msg:
 // Clobbers: A
 // ============================================================
 .const DETECT_TIMER_TURNS = 20
-.const EDEO_MX_X = 0
-.const EDEO_MX_Y = 1
-.const EDEO_CF_EVIL = $04
 
 eff_detect_timer: .byte 0
+eff_detect_evil_mode: .byte 0
 
 eff_detect_monsters:
+    lda #0
+    sta eff_detect_evil_mode
     lda #DETECT_TIMER_TURNS
     sta eff_detect_timer
     lda #1
     sta vis_room_revealed
     rts
 
-eff_detect_evil_only:
-    lda #0
-    sta eff_detect_timer
-    tax
-    stx vis_room_revealed
-!edeo_loop:
-    cpx #MAX_MONSTERS
-    bcs !edeo_done+
-    jsr monster_get_ptr
-    ldy #MX_TYPE
-    lda (zp_ptr0),y
-    cmp #EMPTY_SLOT
-    beq !edeo_next+
-    tay
-    lda cr_mflags,y
-    and #EDEO_CF_EVIL
-    beq !edeo_next+
-
-    ldy #EDEO_MX_Y
-    lda (zp_ptr0),y
-    sta zp_temp1
-    sec
-    sbc zp_view_y
-    bcc !edeo_next+
-    cmp #VIEWPORT_H
-    bcs !edeo_next+
-
-    ldy #EDEO_MX_X
-    lda (zp_ptr0),y
-    sta zp_temp0
-    sec
-    sbc zp_view_x
-    bcc !edeo_next+
-    cmp #VIEWPORT_W
-    bcs !edeo_next+
-
-    txa
-    pha
-    ldx zp_temp1
-    lda map_row_lo,x
-    sta zp_ptr1
-    lda map_row_hi,x
-    sta zp_ptr1_hi
-    ldy zp_temp0
-    :MapRead_ptr1_y()
-    ora #(FLAG_VISITED | FLAG_LIT)
-    :MapWrite_ptr1_y()
-    lda #1
-    sta vis_room_revealed
-    pla
-    tax
-!edeo_next:
-    inx
-    jmp !edeo_loop-
-!edeo_done:
-    lda vis_room_revealed
-    rts
+#if C128 && C128_FULL_DETECT_EVIL_EFFECT
+.segment C128ResidentItems
+#endif
+#if !C128 || C128_FULL_DETECT_EVIL_EFFECT
+#import "player_magic_detect_evil_effect.s"
+#endif
+#if C128 && C128_FULL_DETECT_EVIL_EFFECT
+.segment C128ResidentWorld
+#endif
 
 // ============================================================
 // eff_remove_curse — Clear IF_CURSED on all equipped items

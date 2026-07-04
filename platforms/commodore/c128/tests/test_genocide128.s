@@ -19,11 +19,13 @@
 .const MX_TYPE = 2
 .const MX_HP_LO = 3
 .const MX_HP_HI = 4
+.const MX_FLAGS = 5
 .const MX_SPEED_CNT = 6
 .const MX_SLEEP_CUR = 7
 .const MX_CONFUSE = 9
 .const MAX_MONSTERS = 32
 .const EMPTY_SLOT = $ff
+.const MF_VISIBLE = $08
 .const CF_UNDEAD = $02
 .const CF_EVIL = $04
 .const CF_ATTACK_ONLY = $80
@@ -85,7 +87,9 @@ itok_detect_monsters:
 #import "../../../../core/spell_effects.s"
 #import "../../../../core/player_magic.s"
 #import "../../../../core/player_magic_slow_runtime.s"
+#define PMX_DETECT_EFFECTS_EXTERNAL
 #import "../../../../core/player_magic_execute_overlay.s"
+#undef PMX_DETECT_EFFECTS_EXTERNAL
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_start)
@@ -145,6 +149,10 @@ test_mon_ptr_lo:
     .fill MAX_MONSTERS, <(test_mon_table + i * MONSTER_ENTRY_SIZE)
 test_mon_ptr_hi:
     .fill MAX_MONSTERS, >(test_mon_table + i * MONSTER_ENTRY_SIZE)
+
+eff_detect_evil_only:
+    lda #0
+    rts
 
 walkable_table:
     .byte 1, 0, 0, 0, 0, 0, 0, 1

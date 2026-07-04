@@ -141,6 +141,67 @@ PY
     TOTAL=$((TOTAL + 1))
 }
 
+run_vice_resource_contract() {
+    local name="vice_resource_contract"
+
+    if ! suite_selected "$name"; then
+        return
+    fi
+
+    echo -n "  $name: "
+    if python3 - "$REPO_ROOT/platforms/commodore/c64/tests" "$REPO_ROOT/platforms/commodore/c64/run_tests.sh" <<'PY'
+from pathlib import Path
+import ast
+import sys
+
+root = Path(sys.argv[1])
+runner = Path(sys.argv[2])
+bad = []
+for path in sorted(root.glob("*.py")):
+    tree = ast.parse(path.read_text(), filename=str(path))
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.List):
+            continue
+        values = []
+        for elt in node.elts:
+            if isinstance(elt, ast.Constant) and isinstance(elt.value, str):
+                values.append(elt.value)
+            elif isinstance(elt, ast.Attribute) and elt.attr == "vice":
+                values.append("args.vice")
+        if "args.vice" not in values:
+            continue
+        if "-remotemonitor" not in values and "-nativemonitor" not in values:
+            continue
+        missing = [flag for flag in ("-config", "-default", "+saveres") if flag not in values]
+        if "-config" in values:
+            config_index = values.index("-config")
+            if config_index + 1 >= len(values) or values[config_index + 1] != "/dev/null":
+                missing.append("-config /dev/null")
+        if missing:
+            bad.append(f"{path.name}: missing {', '.join(missing)}")
+
+for lineno, line in enumerate(runner.read_text().splitlines(), start=1):
+    stripped = line.strip()
+    if not stripped.startswith('"$VICE" '):
+        continue
+    missing = [flag for flag in ("-config /dev/null", "-default", "+saveres") if flag not in line]
+    if missing:
+        bad.append(f"{runner.name}:{lineno}: missing {', '.join(missing)}")
+
+if bad:
+    print("; ".join(bad))
+    raise SystemExit(1)
+PY
+    then
+        echo "PASS"
+        PASS=$((PASS + 1))
+    else
+        echo "FAIL"
+        FAIL=$((FAIL + 1))
+    fi
+    TOTAL=$((TOTAL + 1))
+}
+
 run_test() {
     local name="$1"
     local src="$2"
@@ -233,7 +294,7 @@ run_test() {
     run_vice_once() {
         local log_path="$1"
         script -q "$log_path" \
-            "$VICE" -warp -config /dev/null -default -console -nativemonitor -autostartprgmode 1 \
+            "$VICE" -warp -config /dev/null -default +saveres -console -nativemonitor -autostartprgmode 1 \
             -autostart "$prg_file" -moncommands "$mon_file" \
             -limitcycles "$cycles" +sound -sounddev dummy \
             +remotemonitor +binarymonitor > /dev/null 2>&1
@@ -320,7 +381,7 @@ run_sound_monitor_test() {
     }
 
     script -q "$log_file" \
-        "$VICE" -warp -config /dev/null -default -console -nativemonitor -autostartprgmode 1 \
+        "$VICE" -warp -config /dev/null -default +saveres -console -nativemonitor -autostartprgmode 1 \
         -autostart "${src%.s}.prg" -moncommands "$mon_file" \
         -limitcycles "$cycles" +sound -sounddev dummy \
         +remotemonitor +binarymonitor > /dev/null 2>&1
@@ -494,7 +555,7 @@ run_scripted_spell_cast_smoke() {
     } > "$mon_file"
 
     script -q "$tty_log" \
-        "$VICE" -warp -config /dev/null -default -console -nativemonitor -autostartprgmode 1 \
+        "$VICE" -warp -config /dev/null -default +saveres -console -nativemonitor -autostartprgmode 1 \
         -autostart "$scripted_d64" -moncommands "$mon_file" \
         -limitcycles 700000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor > /dev/null 2>&1
@@ -649,7 +710,7 @@ run_scripted_book_overlay_smoke() {
     } > "$mon_file"
 
     script -q "$tty_log" \
-        "$VICE" -warp -config /dev/null -default -console -nativemonitor -autostartprgmode 1 \
+        "$VICE" -warp -config /dev/null -default +saveres -console -nativemonitor -autostartprgmode 1 \
         -autostart "$scripted_d64" -moncommands "$mon_file" \
         -limitcycles 700000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor > /dev/null 2>&1
@@ -804,7 +865,7 @@ run_scripted_scroll_selector_smoke() {
     } > "$mon_file"
 
     script -q "$tty_log" \
-        "$VICE" -warp -config /dev/null -default -console -nativemonitor -autostartprgmode 1 \
+        "$VICE" -warp -config /dev/null -default +saveres -console -nativemonitor -autostartprgmode 1 \
         -autostart "$scripted_d64" -moncommands "$mon_file" \
         -limitcycles 700000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor > /dev/null 2>&1
@@ -958,7 +1019,7 @@ run_scripted_spell_list_overlay_smoke() {
     } > "$mon_file"
 
     script -q "$tty_log" \
-        "$VICE" -warp -config /dev/null -default -console -nativemonitor -autostartprgmode 1 \
+        "$VICE" -warp -config /dev/null -default +saveres -console -nativemonitor -autostartprgmode 1 \
         -autostart "$scripted_d64" -moncommands "$mon_file" \
         -limitcycles 700000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor > /dev/null 2>&1
@@ -1118,7 +1179,7 @@ run_scripted_dungeon_target_spell_smoke() {
     } > "$mon_file"
 
     script -q "$tty_log" \
-        "$VICE" -warp -config /dev/null -default -console -nativemonitor -autostartprgmode 1 \
+        "$VICE" -warp -config /dev/null -default +saveres -console -nativemonitor -autostartprgmode 1 \
         -reu -reusize 512 \
         -autostart "$scripted_d64" -moncommands "$mon_file" \
         -limitcycles 700000000 +sound -sounddev dummy \
@@ -1278,7 +1339,7 @@ run_scripted_detect_evil_smoke() {
     } > "$mon_file"
 
     script -q "$tty_log" \
-        "$VICE" -warp -config /dev/null -default -console -nativemonitor -autostartprgmode 1 \
+        "$VICE" -warp -config /dev/null -default +saveres -console -nativemonitor -autostartprgmode 1 \
         -autostart "$scripted_d64" -moncommands "$mon_file" \
         -limitcycles 700000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor > /dev/null 2>&1
@@ -1415,7 +1476,7 @@ run_dungeon_ascent_product_smoke() {
     } > "$mon_file"
 
     script -q "$tty_log" \
-        "$VICE" -warp -config /dev/null -default -console -nativemonitor -autostartprgmode 1 \
+        "$VICE" -warp -config /dev/null -default +saveres -console -nativemonitor -autostartprgmode 1 \
         -8 "$scripted_d64" -autostart "$scripted_d64" \
         -moncommands "$mon_file" \
         -limitcycles 900000000 +sound -sounddev dummy \
@@ -1775,7 +1836,7 @@ run_save_write_product_smoke_impl() {
     } > "$mon_file"
 
     script -q "$tty_log" \
-        "$VICE" -warp -config /dev/null -default -console -nativemonitor -autostartprgmode 1 \
+        "$VICE" -warp -config /dev/null -default +saveres -console -nativemonitor -autostartprgmode 1 \
         -drive9type 1541 -8 "$scripted_d64" -attach9rw -9 "$save_d64" -autostart "$scripted_d64" \
         -moncommands "$mon_file" \
         -limitcycles 900000000 +sound -sounddev dummy \
@@ -2407,7 +2468,7 @@ run_load_resume_product_smoke() {
     } > "$mon_file"
 
     script -q "$tty_log" \
-        "$VICE" -warp -config /dev/null -default -console -nativemonitor -autostartprgmode 1 \
+        "$VICE" -warp -config /dev/null -default +saveres -console -nativemonitor -autostartprgmode 1 \
         -drive9type 1541 -8 "$scripted_d64" -attach9rw -9 "$save_d64" -autostart "$scripted_d64" \
         -moncommands "$mon_file" \
         -limitcycles 900000000 +sound -sounddev dummy \
@@ -3047,7 +3108,7 @@ run_single_drive_fresh_save_product_smoke() {
     local main_vs="../../../build/test/c64/main.vs"
     local start_addr resume_addr swap_addr pass_addr fail_addr
     start_addr=$(awk '/\.c64_test_single_drive_fresh_save_wait_for_harness$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
-    resume_addr=$(awk '/\.c64_test_single_drive_fresh_save_before_save$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    resume_addr=$(awk '/\.c64_test_single_drive_fresh_save_resume_low$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     swap_addr=$(awk '/\.disk_prompt_game_required_error_shown$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     pass_addr=$(awk '/\.c64_test_after_save_restart_start$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     fail_addr=$(awk '/\.c64_test_single_drive_fresh_save_unexpected_return$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
@@ -3065,10 +3126,11 @@ run_single_drive_fresh_save_product_smoke() {
             --boot-d64 "$scripted_d64" \
             --main-vs "$main_vs" \
             --start-symbol ".c64_test_single_drive_fresh_save_wait_for_harness" \
-            --resume-symbol ".c64_test_single_drive_fresh_save_before_save" \
-            --attach8-at-start-d64 "$save_d64" \
-            --swap-symbol ".disk_prompt_game_required_error_shown" \
-            --swap-attach8-d64 "$swap_program_d64" \
+            --resume-symbol ".c64_test_single_drive_fresh_save_resume_low" \
+            --swap-symbol ".c64_test_single_drive_fresh_save_before_save" \
+            --swap-attach8-d64 "$save_d64" \
+            --swap2-symbol ".disk_prompt_game_required_error_shown" \
+            --swap2-attach8-d64 "$swap_program_d64" \
             --pass-symbol ".c64_test_after_save_restart_start" \
             --fail-symbol ".c64_test_single_drive_fresh_save_unexpected_return" \
             --limitcycles 900000000 \
@@ -3171,8 +3233,9 @@ run_single_drive_fresh_save_no_init_product_smoke() {
             --boot-d64 "$scripted_d64" \
             --main-vs ../../../build/test/c64/main.vs \
             --start-symbol ".c64_test_single_drive_fresh_save_wait_for_harness" \
-            --resume-symbol ".c64_test_single_drive_fresh_save_before_save" \
-            --attach8-at-start-d64 "$save_d64" \
+            --resume-symbol ".c64_test_single_drive_fresh_save_resume_low" \
+            --swap-symbol ".c64_test_single_drive_fresh_save_before_save" \
+            --swap-attach8-d64 "$save_d64" \
             --pass-symbol ".c64_test_single_drive_fresh_save_no_init_return" \
             --fail-symbol ".c64_test_single_drive_fresh_save_unexpected_return" \
             --limitcycles 900000000 \
@@ -3313,7 +3376,7 @@ run_load_missing_savefile_product_smoke() {
     } > "$mon_file"
 
     script -q "$tty_log" \
-        "$VICE" -warp -config /dev/null -default -console -nativemonitor -autostartprgmode 1 \
+        "$VICE" -warp -config /dev/null -default +saveres -console -nativemonitor -autostartprgmode 1 \
         -drive9type 1541 -8 "$scripted_d64" -attach9rw -9 "$save_d64" -autostart "$scripted_d64" \
         -moncommands "$mon_file" \
         -limitcycles 900000000 +sound -sounddev dummy \
@@ -3464,6 +3527,7 @@ check_static_contract "c64_save_stream_banks_kernal_contract" "../common/save.s"
     "!save_media_ok:|||lda #BANK_NO_BASIC|||sta hal_memory_cpu_port|||jsr save_select_output_name_c64"
 check_static_contract "c64_load_stream_banks_kernal_contract" "../common/save.s" \
     "!load_media_ok:|||lda #BANK_NO_BASIC|||sta hal_memory_cpu_port|||ldx #HSTR_SAVE_LOADING"
+run_vice_resource_contract
 
 # Runtime tests
 # Args: name, source, result memory range, expected pass count
@@ -3473,15 +3537,15 @@ run_test "memory" "tests/test_memory.s" "0400 0402" 3
 run_test "config" "tests/test_config.s" "0400 0400" 1
 run_test "input"  "tests/test_input.s"  "0400 040d" 14
 run_test "main_loop" "tests/test_main_loop.s" "0400 0427" 40 500000000
-run_test "turn" "tests/test_turn.s" "0400 0416" 23 500000000
+run_test "turn" "tests/test_turn.s" "0400 0418" 25 500000000
 run_test "player" "tests/test_player.s" "0400 0409" 10
 run_test "dungeon" "tests/test_dungeon.s" "0400 042a" 43 500000000
-run_test "monster" "tests/test_monster.s" "0400 040c" 13 500000000
-run_test "monster_ai" "tests/test_monster_ai.s" "0400 0419" 26 500000000
+run_test "monster" "tests/test_monster.s" "0400 0411" 18 500000000
+run_test "monster_ai" "tests/test_monster_ai.s" "0400 041a" 27 500000000
 run_test "combat" "tests/test_combat.s" "0400 0427" 40 500000000
 run_test "msg_long" "tests/test_msg_long.s" "0400 0400" 1 20000000
-run_test "monster_attack" "tests/test_monster_attack.s" "0400 040f" 16 500000000
-run_test "effects" "tests/test_effects.s" "0400 0431" 27 1000000000
+run_test "monster_attack" "tests/test_monster_attack.s" "0400 040d" 14 500000000
+run_test "effects" "tests/test_effects.s" "0400 041e" 31 1000000000
 run_test "effects_magic" "tests/test_effects_magic.s" "0400 0433" 24 1000000000
 run_test "cure_light_wounds" "tests/test_cure_light_wounds.s" "0400 0402" 3 500000000
 run_test "confusion" "tests/test_confusion.s" "0400 0402" 3 500000000
@@ -3516,7 +3580,7 @@ run_test "directional_effects" "tests/test_directional_effects.s" "0400 0403" 4 
 run_test "overcast_ordering" "tests/test_overcast_ordering.s" "0400 0400" 1 500000000
 run_test "ball_effects" "tests/test_ball_effects.s" "0400 0401" 2 500000000
 run_test "utility_effects" "tests/test_utility_effects.s" "0400 0409" 10 500000000
-run_test "detect_evil" "tests/test_detect_evil.s" "0400 0402" 3 500000000
+run_test "detect_evil" "tests/test_detect_evil.s" "0400 0403" 4 500000000
 run_test "cure_light_wounds_prayer" "tests/test_cure_light_wounds_prayer.s" "0400 0402" 3 500000000
 run_test "bless_prayer" "tests/test_bless_prayer.s" "0400 0402" 3 500000000
 run_test "remove_fear_prayer" "tests/test_remove_fear_prayer.s" "0400 0402" 3 500000000
@@ -3536,7 +3600,7 @@ run_test "cure_critical_wounds_prayer" "tests/test_cure_critical_wounds_prayer.s
 run_test "turn_undead_prayer" "tests/test_turn_undead_prayer.s" "0400 0402" 3 500000000
 run_test "prayer_prayer" "tests/test_prayer_prayer.s" "0400 0402" 3 500000000
 run_test "dispel_undead_prayer" "tests/test_dispel_undead_prayer.s" "0400 0402" 3 500000000
-run_test "dispel_evil_prayer" "tests/test_dispel_evil_prayer.s" "0400 0402" 3 500000000
+run_test "dispel_evil_prayer" "tests/test_dispel_evil_prayer.s" "0400 0404" 5 500000000
 run_test "glyph_of_warding_prayer" "tests/test_glyph_of_warding_prayer.s" "0400 0402" 3 500000000
 run_test "holy_word_prayer" "tests/test_holy_word_prayer.s" "0400 0401" 2 500000000
 run_test "heal_prayer" "tests/test_heal_prayer.s" "0400 0402" 3 500000000
@@ -3559,10 +3623,10 @@ run_sound_monitor_test
 run_test "save"  "tests/test_save.s"  "0400 0418" 25 1000000000
 run_test "score" "tests/test_score.s" "0400 040b" 12 500000000
 run_test "wands_staves" "tests/test_wands_staves.s" "0400 0406" 7 100000000
-run_test "monster_magic" "tests/test_monster_magic.s" "0400 040a" 11 500000000
+run_test "monster_magic" "tests/test_monster_magic.s" "0400 040d" 14 500000000
 run_test "tier" "tests/test_tier.s" "0400 040d" 14 500000000
 run_test "disk_swap" "tests/test_disk_swap.s" "0400 040e" 15 500000000
-run_test "render" "tests/test_render.s" "0400 040b" 12 500000000
+run_test "render" "tests/test_render.s" "0400 0417" 24 500000000
 run_test "ranged" "tests/test_ranged.s" "0400 0409" 10 500000000
 run_test "ego" "tests/test_ego.s" "0400 0409" 10 500000000
 run_test "throw" "tests/test_throw.s" "0400 040a" 11 500000000
@@ -3577,6 +3641,7 @@ run_suite_function "scripted_book_overlay_smoke" run_scripted_book_overlay_smoke
 run_suite_function "scripted_scroll_selector_smoke" run_scripted_scroll_selector_smoke
 run_suite_function "scripted_spell_list_overlay_smoke" run_scripted_spell_list_overlay_smoke
 run_suite_function "scripted_dungeon_target_spell_smoke" run_scripted_dungeon_target_spell_smoke
+run_suite_function "scripted_detect_evil_smoke" run_scripted_detect_evil_smoke
 run_suite_function "dungeon_ascent_product_smoke" run_dungeon_ascent_product_smoke
 run_suite_function "retirement_royal_product_smoke" run_retirement_royal_product_smoke "retirement_flow_product_smoke"
 run_suite_function "disk_setup_product_smoke" run_disk_setup_product_smoke

@@ -13,6 +13,9 @@
 .const MX_TYPE = 2
 .const CF_INFRA = $80
 
+walkable_table:
+    .byte 1,0,0,0,0,0,0,1,0,1,1,1,0,0,1,0
+
 #import "../../../../core/dungeon_los.s"
 
 .pc = $0801 "BASIC Stub"
@@ -21,6 +24,10 @@
 .pc = $3000 "Test Code"
 
 c128_restore_runtime_state:
+    rts
+
+monster_update_visibility_all:
+    lda #0
     rts
 
 math_multiply:
@@ -290,7 +297,131 @@ test_start:
     ldx #12
     ldy #10
     jsr los_is_visible
-    bcc test_fail
+    bcs !bank_los_ok+
+    jmp test_fail
+!bank_los_ok:
+
+    // Test 7: real LOS tracing on C128 must honor live Bank 1 doors.
+    // A closed door between player and target blocks; an open door clears.
+    jsr mmu_select_bank1
+    ldx #10
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #10
+    lda #TILE_FLOOR
+    sta (zp_ptr0),y
+    ldy #11
+    sta (zp_ptr0),y
+    ldy #12
+    lda #TILE_DOOR_CLOSED
+    sta (zp_ptr0),y
+    ldy #13
+    lda #TILE_FLOOR
+    sta (zp_ptr0),y
+    ldy #14
+    sta (zp_ptr0),y
+    jsr mmu_select_bank0
+
+    lda #10
+    sta zp_player_x
+    sta zp_player_y
+    sta zp_temp0
+    sta zp_temp1
+    lda #14
+    sta zp_los_dx
+    lda #10
+    sta zp_los_dy
+    jsr mm_los_clear_to_target
+    bcc !closed_door_blocks+
+    jmp test_fail
+!closed_door_blocks:
+
+    jsr mmu_select_bank1
+    ldx #10
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #12
+    lda #TILE_DOOR_OPEN
+    sta (zp_ptr0),y
+    jsr mmu_select_bank0
+
+    lda #10
+    sta zp_temp0
+    sta zp_temp1
+    lda #14
+    sta zp_los_dx
+    lda #10
+    sta zp_los_dy
+    jsr mm_los_clear_to_target
+    bcs !open_door_clears+
+    jmp test_fail
+!open_door_clears:
+
+    // Test 8: diagonal LOS on C128 must honor live Bank 1 corner blockers.
+    // A diagonal target is blocked when both orthogonal side cells are closed.
+    jsr mmu_select_bank1
+    ldx #20
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #20
+    lda #TILE_FLOOR
+    sta (zp_ptr0),y
+    ldy #21
+    lda #TILE_WALL_H
+    sta (zp_ptr0),y
+    ldx #19
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #20
+    lda #TILE_WALL_H
+    sta (zp_ptr0),y
+    ldy #21
+    lda #TILE_FLOOR
+    sta (zp_ptr0),y
+    jsr mmu_select_bank0
+
+    lda #20
+    sta zp_temp0
+    sta zp_temp1
+    lda #21
+    sta zp_los_dx
+    lda #19
+    sta zp_los_dy
+    jsr mm_los_clear_to_target
+    bcc !corner_blocks+
+    jmp test_fail
+!corner_blocks:
+
+    jsr mmu_select_bank1
+    ldx #20
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #21
+    lda #TILE_FLOOR
+    sta (zp_ptr0),y
+    jsr mmu_select_bank0
+
+    lda #20
+    sta zp_temp0
+    sta zp_temp1
+    lda #21
+    sta zp_los_dx
+    lda #19
+    sta zp_los_dy
+    jsr mm_los_clear_to_target
+    bcs !corner_open_clears+
+    jmp test_fail
+!corner_open_clears:
 
     jmp test_pass
 

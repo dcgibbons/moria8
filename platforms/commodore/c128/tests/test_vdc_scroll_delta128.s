@@ -15,9 +15,11 @@
 .const MX_X = 0
 .const MX_Y = 1
 .const MX_TYPE = 2
+.const MX_FLAGS = 5
+.const MF_VISIBLE = $08
+.const MF_DETECTED = $10
 .const MAX_MONSTERS = 32
-.const DETECT_TIMER_EVIL_ONLY = $80 | 20
-.const CF_INFRA = $80
+.const TEST_DETECT_TIMER_ACTIVE = 2
 
 #import "../../../../core/dungeon_data.s"
 
@@ -46,8 +48,15 @@ map_set_tile:
 c128_restore_runtime_state:
     rts
 
+update_visibility:
+    rts
+
 // Minimal renderer dependencies for paths we intentionally do not exercise.
 eff_detect_timer: .byte 0
+eff_detect_evil_mode: .byte 0
+vis_room_revealed: .byte 0
+vis_force_redraw_pending: .byte 0
+vis_cached_room_idx:.byte 0
 test_item_active:    .byte 0
 test_item_x:         .byte 0
 test_item_y:         .byte 0
@@ -57,8 +66,8 @@ test_mon_active:     .byte 0
 test_mon_x:          .byte 0
 test_mon_y:          .byte 0
 test_mon_type:       .byte 0
+test_mon_flags:      .byte 0
 test_mon_color_vic:  .byte COL_WHITE
-test_infra_enabled:  .byte 0
 test_glyph_active:   .byte 0
 test_glyph_x:        .byte 0
 test_glyph_y:        .byte 0
@@ -70,7 +79,6 @@ it_display: .fill 2, 0
 
 cr_display: .fill 2, 0
 cr_color:   .fill 2, 0
-cr_mflags:  .fill 2, 0
 monster_stub_entry:
     .fill 12, EMPTY_SLOT
 
@@ -105,6 +113,8 @@ monster_find_at:
     bne !miss+
     lda test_mon_type
     sta monster_stub_entry + MX_TYPE
+    lda test_mon_flags
+    sta monster_stub_entry + MX_FLAGS
     ldx #0
     sec
     rts
@@ -136,26 +146,6 @@ glyph_find_at:
 
 monster_get_threat_color:
     lda test_mon_color_vic
-    rts
-
-monster_is_infra_visible_at:
-    ldx zp_eff_blind
-    bne !miss+
-    ldx test_infra_enabled
-    beq !miss+
-    jsr monster_find_at
-    bcc !miss+
-    jsr monster_get_ptr
-    ldy #MX_TYPE
-    lda (zp_ptr0),y
-    tax
-    lda cr_mflags,x
-    and #CF_INFRA
-    beq !miss+
-    sec
-    rts
-!miss:
-    clc
     rts
 
 test_row_seed:
@@ -201,20 +191,26 @@ test_start:
 
     jsr init_floor_items
     jsr test_render_single_tile_hidden_blank
-    jsr test_render_single_tile_infra_warm_unvisited
-    jsr test_render_single_tile_infra_cold_hidden
-    jsr test_render_single_tile_infra_blind_hidden
-    jsr test_render_single_tile_infra_warm_dimmed
+    jsr test_render_single_tile_unmarked_occupied_unvisited
+    jsr test_render_single_tile_visible_unvisited
+    jsr test_render_single_tile_detected_unvisited_without_timer
+    jsr test_render_single_tile_visible_dimmed
     jsr test_render_single_tile_item_override
     jsr test_render_single_tile_monster_override
     jsr test_render_single_tile_player_override
-    jsr test_render_single_tile_detect_evil_hides_non_evil
-    jsr test_render_viewport_infra_warm_unvisited
+    jsr test_render_single_tile_detect_timer_hides_unmarked_monster
+    jsr test_render_viewport_player_override_unvisited
+    jsr test_render_viewport_unmarked_occupied_unvisited
+    jsr test_render_viewport_detect_evil_unvisited
     jsr test_render_viewport_glyph_overlay
+    jsr test_render_viewport_dimmed_glyph_hidden
+    jsr test_scroll_delta_skips_pending_full_redraw
     jsr test_h_scroll_left_fast_path
+    jsr test_h_scroll_left_local_area_repairs_stale_monster
     jsr test_left_scroll_falls_back
     jsr test_v_scroll_up_first_op_uses_copy_mode
     jsr test_v_scroll_up_fast_path
+    jsr test_v_scroll_up_local_area_repairs_stale_monster
     jsr test_v_scroll_down_fast_path
 
     jmp test_pass
@@ -231,17 +227,17 @@ init_floor_items:
     sta it_display + 1
     lda #$4d
     sta cr_display + 1
-    lda #0
-    sta cr_mflags + 1
     rts
 
 reset_render_overrides:
     lda #0
     sta test_item_active
     sta test_mon_active
-    sta test_infra_enabled
+    sta test_mon_flags
     sta zp_eff_blind
     sta test_glyph_active
+    sta vis_cached_room_idx
+    sta eff_detect_evil_mode
     rts
 
 setup_single_tile_scene:
@@ -306,10 +302,9 @@ test_render_single_tile_hidden_blank:
     jsr assert_vdc_cell
     rts
 
-test_render_single_tile_infra_warm_unvisited:
+test_render_single_tile_unmarked_occupied_unvisited:
     jsr setup_single_tile_scene
     lda #1
-    sta test_infra_enabled
     sta test_mon_active
     lda #24
     sta test_mon_x
@@ -319,8 +314,40 @@ test_render_single_tile_infra_warm_unvisited:
     sta test_mon_type
     lda #COL_RED
     sta test_mon_color_vic
-    lda #CF_INFRA
-    sta cr_mflags + 1
+    ldx #24
+    ldy #20
+    lda #((TILE_FLOOR << 4) | FLAG_OCCUPIED)
+    jsr map_set_tile
+    lda #24
+    sta zp_temp0
+    lda #20
+    sta zp_temp1
+    jsr render_single_tile
+    lda #10
+    sta test_row_rel
+    lda #14
+    sta test_col_rel
+    lda #SC_SPACE
+    sta test_expected_char
+    lda #VDC_BLACK
+    sta test_expected_attr
+    jsr assert_vdc_cell
+    rts
+
+test_render_single_tile_visible_unvisited:
+    jsr setup_single_tile_scene
+    lda #1
+    sta test_mon_active
+    lda #24
+    sta test_mon_x
+    lda #20
+    sta test_mon_y
+    lda #1
+    sta test_mon_type
+    lda #MF_VISIBLE
+    sta test_mon_flags
+    lda #COL_RED
+    sta test_mon_color_vic
     ldx #24
     ldy #20
     lda #((TILE_FLOOR << 4) | FLAG_OCCUPIED)
@@ -336,26 +363,27 @@ test_render_single_tile_infra_warm_unvisited:
     sta test_col_rel
     lda cr_display + 1
     sta test_expected_char
-    lda vic_to_vdc_color + COL_RED
+    lda #VDC_RED
     sta test_expected_attr
     jsr assert_vdc_cell
     rts
 
-test_render_single_tile_infra_cold_hidden:
+test_render_single_tile_detected_unvisited_without_timer:
     jsr setup_single_tile_scene
-    lda #1
-    sta test_infra_enabled
-    sta test_mon_active
-    lda #24
-    sta test_mon_x
-    lda #20
-    sta test_mon_y
-    lda #1
-    sta test_mon_type
-    lda #COL_RED
-    sta test_mon_color_vic
     lda #0
-    sta cr_mflags + 1
+    sta eff_detect_timer
+    lda #1
+    sta test_mon_active
+    lda #24
+    sta test_mon_x
+    lda #20
+    sta test_mon_y
+    lda #1
+    sta test_mon_type
+    lda #MF_DETECTED
+    sta test_mon_flags
+    lda #COL_RED
+    sta test_mon_color_vic
     ldx #24
     ldy #20
     lda #((TILE_FLOOR << 4) | FLAG_OCCUPIED)
@@ -369,53 +397,16 @@ test_render_single_tile_infra_cold_hidden:
     sta test_row_rel
     lda #14
     sta test_col_rel
-    lda #SC_SPACE
+    lda cr_display + 1
     sta test_expected_char
-    lda #VDC_BLACK
+    lda #VDC_RED
     sta test_expected_attr
     jsr assert_vdc_cell
     rts
 
-test_render_single_tile_infra_blind_hidden:
+test_render_single_tile_visible_dimmed:
     jsr setup_single_tile_scene
     lda #1
-    sta test_infra_enabled
-    sta test_mon_active
-    sta zp_eff_blind
-    lda #24
-    sta test_mon_x
-    lda #20
-    sta test_mon_y
-    lda #1
-    sta test_mon_type
-    lda #COL_RED
-    sta test_mon_color_vic
-    lda #CF_INFRA
-    sta cr_mflags + 1
-    ldx #24
-    ldy #20
-    lda #((TILE_FLOOR << 4) | FLAG_OCCUPIED)
-    jsr map_set_tile
-    lda #24
-    sta zp_temp0
-    lda #20
-    sta zp_temp1
-    jsr render_single_tile
-    lda #10
-    sta test_row_rel
-    lda #14
-    sta test_col_rel
-    lda #SC_SPACE
-    sta test_expected_char
-    lda #VDC_BLACK
-    sta test_expected_attr
-    jsr assert_vdc_cell
-    rts
-
-test_render_single_tile_infra_warm_dimmed:
-    jsr setup_single_tile_scene
-    lda #1
-    sta test_infra_enabled
     sta test_mon_active
     lda #24
     sta test_mon_x
@@ -423,10 +414,10 @@ test_render_single_tile_infra_warm_dimmed:
     sta test_mon_y
     lda #1
     sta test_mon_type
+    lda #(MF_VISIBLE | MF_DETECTED)
+    sta test_mon_flags
     lda #COL_RED
     sta test_mon_color_vic
-    lda #CF_INFRA
-    sta cr_mflags + 1
     ldx #24
     ldy #20
     lda #((TILE_FLOOR << 4) | FLAG_VISITED | FLAG_OCCUPIED)
@@ -503,7 +494,7 @@ test_render_single_tile_monster_override:
     sta test_mon_color_vic
     ldx #21
     ldy #20
-    lda #((TILE_FLOOR << 4) | FLAG_VISITED | FLAG_LIT | FLAG_HAS_ITEM | FLAG_OCCUPIED)
+    lda #((TILE_FLOOR << 4) | FLAG_VISITED | FLAG_LIT | FLAG_HAS_ITEM)
     jsr map_set_tile
     lda #21
     sta zp_temp0
@@ -514,9 +505,9 @@ test_render_single_tile_monster_override:
     sta test_row_rel
     lda #11
     sta test_col_rel
-    lda cr_display + 1
+    lda #SC_SPACE
     sta test_expected_char
-    lda vic_to_vdc_color + COL_RED
+    lda #VDC_BLACK
     sta test_expected_attr
     jsr assert_vdc_cell
     rts
@@ -563,9 +554,9 @@ test_render_single_tile_player_override:
     jsr assert_vdc_cell
     rts
 
-test_render_single_tile_detect_evil_hides_non_evil:
+test_render_single_tile_detect_timer_hides_unmarked_monster:
     jsr setup_single_tile_scene
-    lda #DETECT_TIMER_EVIL_ONLY
+    lda #TEST_DETECT_TIMER_ACTIVE
     sta eff_detect_timer
     lda #1
     sta test_mon_active
@@ -577,8 +568,6 @@ test_render_single_tile_detect_evil_hides_non_evil:
     sta test_mon_type
     lda #COL_RED
     sta test_mon_color_vic
-    lda #0
-    sta cr_mflags + 1
     ldx #24
     ldy #20
     lda #((TILE_FLOOR << 4) | FLAG_OCCUPIED)
@@ -599,10 +588,27 @@ test_render_single_tile_detect_evil_hides_non_evil:
     jsr assert_vdc_cell
     rts
 
-test_render_viewport_infra_warm_unvisited:
+test_render_viewport_player_override_unvisited:
+    jsr setup_single_tile_scene
+    ldx #20
+    ldy #20
+    lda #((TILE_FLOOR << 4))
+    jsr map_set_tile
+    jsr render_viewport
+    lda #10
+    sta test_row_rel
+    lda #10
+    sta test_col_rel
+    lda #SC_PLAYER
+    sta test_expected_char
+    lda #VDC_WHITE
+    sta test_expected_attr
+    jsr assert_vdc_cell
+    rts
+
+test_render_viewport_unmarked_occupied_unvisited:
     jsr setup_single_tile_scene
     lda #1
-    sta test_infra_enabled
     sta test_mon_active
     lda #24
     sta test_mon_x
@@ -612,8 +618,37 @@ test_render_viewport_infra_warm_unvisited:
     sta test_mon_type
     lda #COL_RED
     sta test_mon_color_vic
-    lda #CF_INFRA
-    sta cr_mflags + 1
+    ldx #24
+    ldy #20
+    lda #((TILE_FLOOR << 4) | FLAG_OCCUPIED)
+    jsr map_set_tile
+    jsr render_viewport
+    lda #10
+    sta test_row_rel
+    lda #14
+    sta test_col_rel
+    lda #SC_SPACE
+    sta test_expected_char
+    lda #VDC_BLACK
+    sta test_expected_attr
+    jsr assert_vdc_cell
+    rts
+
+test_render_viewport_detect_evil_unvisited:
+    jsr setup_single_tile_scene
+    lda #1
+    sta eff_detect_evil_mode
+    sta test_mon_active
+    lda #24
+    sta test_mon_x
+    lda #20
+    sta test_mon_y
+    lda #1
+    sta test_mon_type
+    lda #MF_DETECTED
+    sta test_mon_flags
+    lda #COL_RED
+    sta test_mon_color_vic
     ldx #24
     ldy #20
     lda #((TILE_FLOOR << 4) | FLAG_OCCUPIED)
@@ -625,7 +660,7 @@ test_render_viewport_infra_warm_unvisited:
     sta test_col_rel
     lda cr_display + 1
     sta test_expected_char
-    lda vic_to_vdc_color + COL_RED
+    lda #VDC_RED
     sta test_expected_attr
     jsr assert_vdc_cell
     rts
@@ -651,6 +686,55 @@ test_render_viewport_glyph_overlay:
     sta test_expected_char
     lda #VDC_DGREY
     sta test_expected_attr
+    jsr assert_vdc_cell
+    rts
+
+test_render_viewport_dimmed_glyph_hidden:
+    jsr setup_single_tile_scene
+    lda #1
+    sta test_glyph_active
+    lda #24
+    sta test_glyph_x
+    lda #20
+    sta test_glyph_y
+    ldx #24
+    ldy #20
+    lda #((TILE_FLOOR << 4) | FLAG_VISITED)
+    jsr map_set_tile
+    jsr render_viewport
+    lda #10
+    sta test_row_rel
+    lda #14
+    sta test_col_rel
+    lda tile_screen_codes + TILE_FLOOR
+    sta test_expected_char
+    lda #VDC_DGREY
+    sta test_expected_attr
+    jsr assert_vdc_cell
+    rts
+
+test_scroll_delta_skips_pending_full_redraw:
+    jsr prepare_pattern_screen
+    lda #1
+    sta vis_room_revealed
+    lda #10
+    sta old_view_x
+    sta zp_view_y
+    sta old_view_y
+    lda #11
+    sta zp_view_x
+    jsr seed_right_strip_tiles
+    jsr render_viewport_scroll_delta
+    bcc !ok+
+    jmp test_fail
+!ok:
+    lda #0
+    sta vis_room_revealed
+    sta test_row_rel
+    sta test_col_rel
+    ldx #0
+    ldy #0
+    jsr expect_seed_cell
     jsr assert_vdc_cell
     rts
 
@@ -762,6 +846,72 @@ test_left_scroll_falls_back:
     jsr assert_vdc_cell
     rts
 
+test_h_scroll_left_local_area_repairs_stale_monster:
+    jsr setup_single_tile_scene
+    lda #10
+    sta old_view_x
+    sta zp_view_y
+    sta old_view_y
+    lda #11
+    sta zp_view_x
+    lda #20
+    sta old_player_x
+    lda #21
+    sta zp_player_x
+    lda #20
+    sta old_player_y
+    sta zp_player_y
+    lda #1
+    sta zp_light_radius
+
+    lda #1
+    sta test_mon_active
+    sta test_mon_type
+    lda #21
+    sta test_mon_x
+    lda #20
+    sta test_mon_y
+    lda #MF_VISIBLE
+    sta test_mon_flags
+    lda #COL_RED
+    sta test_mon_color_vic
+    ldx #21
+    ldy #20
+    lda #((TILE_FLOOR << 4) | FLAG_VISITED | FLAG_LIT | FLAG_OCCUPIED)
+    jsr map_set_tile
+
+    lda #10
+    sta zp_view_x
+    jsr render_viewport
+    lda #11
+    sta zp_view_x
+    lda #0
+    sta test_mon_flags
+    jsr seed_right_strip_tiles
+    jsr render_viewport_scroll_delta
+    bcs !scrolled+
+    jmp test_fail
+!scrolled:
+    lda #10
+    sta test_row_rel
+    sta test_col_rel
+    lda cr_display + 1
+    sta test_expected_char
+    lda #VDC_RED
+    sta test_expected_attr
+    jsr assert_vdc_cell
+
+    jsr render_local_area
+    lda #10
+    sta test_row_rel
+    sta test_col_rel
+    lda tile_screen_codes + TILE_FLOOR
+    sta test_expected_char
+    lda tile_vdc_colors + TILE_FLOOR
+    sta test_expected_attr
+    jsr assert_vdc_cell
+    rts
+
 test_v_scroll_up_fast_path:
     jsr prepare_pattern_screen
     lda #10
@@ -825,6 +975,71 @@ test_v_scroll_up_fast_path:
     sta test_col_rel
     ldx #VIEWPORT_W - 1
     jsr expect_tile_index
+    jsr assert_vdc_cell
+    rts
+
+test_v_scroll_up_local_area_repairs_stale_monster:
+    jsr setup_single_tile_scene
+    lda #10
+    sta zp_view_x
+    sta old_view_x
+    sta old_view_y
+    lda #11
+    sta zp_view_y
+    lda #20
+    sta old_player_x
+    sta zp_player_x
+    sta old_player_y
+    lda #21
+    sta zp_player_y
+    lda #1
+    sta zp_light_radius
+
+    lda #1
+    sta test_mon_active
+    sta test_mon_type
+    lda #20
+    sta test_mon_x
+    lda #21
+    sta test_mon_y
+    lda #MF_VISIBLE
+    sta test_mon_flags
+    lda #COL_RED
+    sta test_mon_color_vic
+    ldx #20
+    ldy #21
+    lda #((TILE_FLOOR << 4) | FLAG_VISITED | FLAG_LIT | FLAG_OCCUPIED)
+    jsr map_set_tile
+
+    lda #10
+    sta zp_view_y
+    jsr render_viewport
+    lda #11
+    sta zp_view_y
+    lda #0
+    sta test_mon_flags
+    jsr seed_bottom_strip_tiles
+    jsr render_viewport_scroll_delta
+    bcs !scrolled+
+    jmp test_fail
+!scrolled:
+    lda #10
+    sta test_row_rel
+    sta test_col_rel
+    lda cr_display + 1
+    sta test_expected_char
+    lda #VDC_RED
+    sta test_expected_attr
+    jsr assert_vdc_cell
+
+    jsr render_local_area
+    lda #10
+    sta test_row_rel
+    sta test_col_rel
+    lda tile_screen_codes + TILE_FLOOR
+    sta test_expected_char
+    lda tile_vdc_colors + TILE_FLOOR
+    sta test_expected_attr
     jsr assert_vdc_cell
     rts
 

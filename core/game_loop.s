@@ -328,6 +328,7 @@ c64_test_seed_scripted_spell_state:
     sta c64_test_spell_success_count
     sta c64_test_spell_return_pending
     sta c64_test_spell_return_count
+    sta c64_test_detect_evil_seen
     rts
 
 c64_test_force_detect_evil_monster:
@@ -368,9 +369,58 @@ c64_test_force_detect_evil_monster:
 !ctdem_done:
     rts
 
+c64_test_detect_evil_record_detected:
+    jsr c64_test_detect_evil_any_detected
+    bcs !ctderd_seen+
+    jmp c64_test_spell_fail_validate_sym
+!ctderd_seen:
+    lda #1
+    sta c64_test_detect_evil_seen
+    rts
+
+c64_test_detect_evil_assert_cleared:
+    lda c64_test_detect_evil_seen
+    bne !ctdeac_seen_ok+
+    jmp c64_test_spell_fail_validate_sym
+!ctdeac_seen_ok:
+    jsr c64_test_detect_evil_any_detected
+    bcc !ctdeac_clear_ok+
+    jmp c64_test_spell_fail_validate_sym
+!ctdeac_clear_ok:
+    rts
+
+c64_test_detect_evil_any_detected:
+    ldx #0
+!ctdead_loop:
+    cpx #MAX_MONSTERS
+    bcs !ctdead_none+
+    jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda (zp_ptr0),y
+    cmp #EMPTY_SLOT
+    beq !ctdead_next+
+    tay
+    lda cr_mflags,y
+    and #CF_EVIL
+    beq !ctdead_next+
+    ldy #MX_FLAGS
+    lda (zp_ptr0),y
+    and #MF_DETECTED
+    bne !ctdead_found+
+!ctdead_next:
+    inx
+    jmp !ctdead_loop-
+!ctdead_found:
+    sec
+    rts
+!ctdead_none:
+    clc
+    rts
+
 c64_test_detect_row: .byte 0
 c64_test_detect_col: .byte 0
 c64_test_detect_offset: .byte 0
+c64_test_detect_evil_seen: .byte 0
 c64_test_detect_offsets:
     .byte 6, 8, 10, 12, 14
 c64_test_detect_types:
@@ -922,6 +972,7 @@ c128_town_move_diag_loop_top:
     lda c64_test_spell_return_count
     cmp #20
     bcc !c64_test_detect_return_done+
+    jsr c64_test_detect_evil_assert_cleared
     jmp c64_test_spell_pass_sym
 !c64_test_detect_return_done:
 #endif
@@ -938,8 +989,7 @@ c128_town_move_diag_loop_top:
     // Confusion cancels running
     lda zp_eff_confuse
     beq !not_conf_run+
-    lda #$ff
-    sta zp_run_dir
+    jsr run_stop_running
     jmp !not_running+
 !not_conf_run:
     // Running cancel is edge-like: ignore the initiating held key(s) until
@@ -961,11 +1011,9 @@ c128_town_move_diag_loop_top:
 
 !run_cancel:
     jsr input_flush_run_cancel_buffer
-    lda #$ff
-    sta zp_run_dir
+    jsr run_stop_running
     lda #0
     sta run_input_armed
-    jsr input_run_cancel_reset
 !not_running:
     // --- Auto-rest continuation ---
     lda auto_rest_active
@@ -1275,7 +1323,7 @@ c128_town_move_diag_after_turn_post_action:
 #if C128_TEST_PERF_P1_TRACE
     jsr perf_p1_trace_reset_move_start
 #endif
-    jsr update_visibility
+    jsr game_loop_update_visibility_preserve_reveal
     jsr viewport_update
 
     // Did viewport scroll?
@@ -1892,7 +1940,7 @@ cmd_open:
     jsr door_try_open
     bcc !open_no_turn+          // No door there, no turn consumed
     // Door opened or stuck — consume turn and re-render
-    jmp post_turn_redraw_full_or_die
+    jmp post_turn_update_visibility_or_die
 !open_no_turn:
     jmp main_loop
 
@@ -1903,7 +1951,7 @@ cmd_close:
     jsr door_try_close
     bcc !close_no_turn+
     // Door closed — consume turn and re-render
-    jmp post_turn_redraw_full_or_die
+    jmp post_turn_update_visibility_or_die
 !close_no_turn:
     jmp main_loop
 
@@ -1911,7 +1959,7 @@ cmd_search:
     jsr msg_clear
     jsr do_search
     // Always consumes a turn
-    jmp post_turn_redraw_full_or_die
+    jmp post_turn_update_visibility_or_die
 
 cmd_search_mode:
     jsr msg_clear
@@ -1942,9 +1990,7 @@ cmd_rest:
 cmd_autorest:
     jsr msg_clear
     jsr player_search_mode_off
-    lda #$ff
-    sta zp_run_dir
-    jsr input_run_cancel_reset
+    jsr run_stop_running
 
     jsr auto_rest_check_recovered
     bcc !start+
@@ -2130,10 +2176,10 @@ cmd_run:
     jsr input_run_cancel_reset
     jmp run_step                // Take first step
 
-#if HAL_PLATFORM_GAME_LOOP_RUN_STOP_RESET_INPUT
-run_stop_reset_input_state:
+run_stop_running:
+    lda #$ff
+    sta zp_run_dir
     jmp input_run_cancel_reset
-#endif
 
 // ============================================================
 // run_step — Execute one step of corridor running
@@ -2166,9 +2212,9 @@ run_step:
     sta run_was_lit
 
     // Convert running direction to movement command
-    lda zp_run_dir
-    clc
-    adc #CMD_MOVE_N
+    ldx zp_run_dir
+    inx
+    txa
 
 	    // Try to move
 	    jsr player_try_move
@@ -2200,7 +2246,7 @@ run_step:
     bcc !not_dead+
     jmp !player_died+
 !not_dead:
-    jsr update_visibility
+    jsr game_loop_update_visibility_preserve_reveal
     jsr viewport_update
 
     // Check for viewport scroll or room reveal
@@ -2225,6 +2271,7 @@ run_step:
 	    jmp !run_full_redraw+
 !run_chk_reveal:
 	    lda vis_room_revealed
+    ora turn_scene_dirty
     beq !run_local+
 #if HAL_PLATFORM_GAME_LOOP_PERF_P1_INSTRUMENTATION
 #if PERF_P1
@@ -2245,6 +2292,8 @@ run_step:
 
 !run_full_redraw:
 #if HAL_PLATFORM_GAME_LOOP_SCROLL_DELTA_RENDER
+	    lda turn_scene_dirty
+    bne !run_full_fallback+
 	    jsr render_viewport_scroll_delta
 	    bcc !run_full_fallback+
 	    jsr render_local_area
@@ -2266,29 +2315,18 @@ run_step:
 !run_post:
     jsr status_draw
     lda zp_msg_flags
+    ora turn_scene_dirty
     beq !run_keep_running+
-    lda #$ff
-    sta zp_run_dir
-#if HAL_PLATFORM_GAME_LOOP_RUN_STOP_RESET_INPUT
-    jsr run_stop_reset_input_state
-#endif
+    jsr run_stop_running
 !run_keep_running:
     jmp main_loop
 
 !run_blocked:
-    lda #$ff
-    sta zp_run_dir
-#if HAL_PLATFORM_GAME_LOOP_RUN_STOP_RESET_INPUT
-    jsr run_stop_reset_input_state
-#endif
+    jsr run_stop_running
     jmp main_loop
 
 !run_trap_stop:
-    lda #$ff
-    sta zp_run_dir
-#if HAL_PLATFORM_GAME_LOOP_RUN_STOP_RESET_INPUT
-    jsr run_stop_reset_input_state
-#endif
+    jsr run_stop_running
     jsr turn_post_action_searchable_or_die
     bcc !not_dead+
     jmp !player_died+
@@ -2297,17 +2335,13 @@ run_step:
     jmp vp_render_status_loop
 
 !run_stop_move:
-    lda #$ff
-    sta zp_run_dir
-#if HAL_PLATFORM_GAME_LOOP_RUN_STOP_RESET_INPUT
-    jsr run_stop_reset_input_state
-#endif
+    jsr run_stop_running
     jsr player_move_maybe_passive_search
     jsr turn_post_action_searchable_or_die
     bcc !not_dead+
     jmp !player_died+
 !not_dead:
-    jsr update_visibility
+    jsr game_loop_update_visibility_preserve_reveal
     jsr viewport_update
 
     // Check for viewport scroll or room reveal
@@ -2369,6 +2403,8 @@ run_step:
 	    jmp !rsm_post+
 !rsm_full:
 #if HAL_PLATFORM_GAME_LOOP_SCROLL_DELTA_RENDER
+	    lda turn_scene_dirty
+    bne !rsm_full_fallback+
 	    jsr render_viewport_scroll_delta
 	    bcc !rsm_full_fallback+
 	    jsr render_local_area
@@ -2407,6 +2443,10 @@ try_store_entry:
     jmp render_viewport
 !no_store:
     rts
+
+#if !C128
+.label game_loop_update_visibility_preserve_reveal = update_visibility
+#endif
 
 player_died:
 !player_died:
@@ -2452,7 +2492,9 @@ player_died:
     jmp game_over_prompt    // Platform hook returns to title/menu.
 
 player_retired:
+#if !C64_PRODUCT_OVERLAY_RUNTIME
     jsr winner_apply_retirement_bonus
+#endif
     jsr tramp_winner_royal
     lda #DEATH_ALIVE
     sta death_source_saved

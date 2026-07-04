@@ -4,7 +4,7 @@
 :BasicUpstart2(test_bootstrap)
 
 .pc = $E000 "Result Buffer"
-tc_results: .fill 3, $ff
+tc_results: .fill 5, $ff
 
 .pc = $080E "Test Code"
 
@@ -18,7 +18,7 @@ test_finish:
     sei
     :BankOutBasic()
     :BankOutKernal()
-    ldx #2
+    ldx #4
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -280,8 +280,9 @@ test_start:
     sta cr_mflags + 1
     lda #1
     sta test_mon_table + (0 * MONSTER_ENTRY_SIZE) + MX_TYPE
-    lda #20
+    lda #21
     sta test_mon_table + (0 * MONSTER_ENTRY_SIZE) + MX_X
+    lda #20
     sta zp_player_x
     lda #12
     sta test_mon_table + (0 * MONSTER_ENTRY_SIZE) + MX_Y
@@ -294,12 +295,29 @@ test_start:
     ldy #20
     lda #TILE_FLOOR | FLAG_LIT | FLAG_VISITED | FLAG_OCCUPIED
     :MapWrite_ptr1_y()
+    ldy #21
+    lda #TILE_FLOOR | FLAG_LIT | FLAG_VISITED | FLAG_OCCUPIED
+    :MapWrite_ptr1_y()
+    ldy #19
+    lda #TILE_FLOOR | FLAG_LIT | FLAG_VISITED | FLAG_OCCUPIED
+    :MapWrite_ptr1_y()
     lda #1
     sta test_mon_table + (0 * MONSTER_ENTRY_SIZE) + MX_HP_LO
     lda #2
     sta test_mon_table + (1 * MONSTER_ENTRY_SIZE) + MX_TYPE
+    lda #19
+    sta test_mon_table + (1 * MONSTER_ENTRY_SIZE) + MX_X
+    lda #12
+    sta test_mon_table + (1 * MONSTER_ENTRY_SIZE) + MX_Y
     lda #5
     sta test_mon_table + (1 * MONSTER_ENTRY_SIZE) + MX_HP_LO
+    jsr monster_update_visibility_all
+    lda test_mon_table + (0 * MONSTER_ENTRY_SIZE) + MX_FLAGS
+    and #MF_VISIBLE
+    beq !t1_fail+
+    lda test_mon_table + (1 * MONSTER_ENTRY_SIZE) + MX_FLAGS
+    and #MF_VISIBLE
+    beq !t1_fail+
     lda #1
     sta tdep_rng_value
     lda #$02
@@ -349,9 +367,63 @@ test_start:
     sta tc_results + 0
     jmp !t2+
 !t1_fail:
-    // Test 2: no evil prints HSTR_PIQ_NOTHING, spends mana, and still marks
-    // the prayer worked.
+    // Test 2: production visibility marks an evil monster visible before
+    // Dispel Evil targets it.
 !t2:
+    :PatchJump(calc_spell_failure, test_calc_spell_failure_success)
+    jsr test_reset_dispel_evil_prayer_state
+    lda #CF_EVIL
+    sta cr_mflags + 1
+    lda #1
+    sta test_mon_table + (0 * MONSTER_ENTRY_SIZE) + MX_TYPE
+    lda #21
+    sta test_mon_table + (0 * MONSTER_ENTRY_SIZE) + MX_X
+    lda #12
+    sta test_mon_table + (0 * MONSTER_ENTRY_SIZE) + MX_Y
+    lda #1
+    sta test_mon_table + (0 * MONSTER_ENTRY_SIZE) + MX_HP_LO
+    lda #20
+    sta zp_player_x
+    lda #12
+    sta zp_player_y
+    lda #1
+    sta zp_player_dlvl
+    sta zp_light_radius
+    ldx #12
+    lda map_row_lo,x
+    sta zp_ptr1
+    lda map_row_hi,x
+    sta zp_ptr1_hi
+    ldy #20
+    lda #TILE_FLOOR | FLAG_LIT | FLAG_VISITED
+    :MapWrite_ptr1_y()
+    ldy #21
+    lda #TILE_FLOOR | FLAG_LIT | FLAG_VISITED | FLAG_OCCUPIED
+    :MapWrite_ptr1_y()
+    jsr monster_update_visibility_all
+    lda test_mon_table + (0 * MONSTER_ENTRY_SIZE) + MX_FLAGS
+    and #MF_VISIBLE
+    beq !t2_fail+
+    lda #1
+    sta tdep_rng_value
+    jsr player_pray
+    bcc !t2_fail+
+    lda tdep_spell_exec_calls
+    cmp #1
+    bne !t2_fail+
+    lda test_mon_table + (0 * MONSTER_ENTRY_SIZE) + MX_TYPE
+    cmp #EMPTY_SLOT
+    bne !t2_fail+
+    lda #$01
+    sta tc_results + 1
+    jmp !t3+
+!t2_fail:
+    lda #$00
+    sta tc_results + 1
+
+    // Test 3: no evil prints HSTR_PIQ_NOTHING, spends mana, and still marks
+    // the prayer worked.
+!t3:
     :PatchJump(calc_spell_failure, test_calc_spell_failure_success)
     jsr test_reset_dispel_evil_prayer_state
     lda #2
@@ -361,40 +433,40 @@ test_start:
     lda #0
     sta tdep_rng_value
     jsr player_pray
-    bcc !t2_fail+
+    bcc !t3_fail+
     lda tdep_spell_exec_calls
     cmp #1
-    bne !t2_fail+
+    bne !t3_fail+
     lda tdep_last_spell_idx
     cmp #28
-    bne !t2_fail+
+    bne !t3_fail+
     lda tdep_kill_calls
-    bne !t2_fail+
+    bne !t3_fail+
     lda tdep_huff_calls
     cmp #1
-    bne !t2_fail+
+    bne !t3_fail+
     lda tdep_last_huff_id
     cmp #HSTR_PIQ_NOTHING
-    bne !t2_fail+
+    bne !t3_fail+
     lda zp_player_mp
     cmp #8
-    bne !t2_fail+
+    bne !t3_fail+
     lda player_data + PL_MANA
     cmp #8
-    bne !t2_fail+
+    bne !t3_fail+
     lda player_data + PL_SPELLS_WORKED_3
     and #$10
-    beq !t2_fail+
+    beq !t3_fail+
     lda #$01
-    sta tc_results + 1
-    jmp !t3+
-!t2_fail:
+    sta tc_results + 2
+    jmp !t4+
+!t3_fail:
     lda #$00
-    sta tc_results + 1
+    sta tc_results + 2
 
-    // Test 3: cast failure spends mana, prints HSTR_PM_FAIL, does not execute
+    // Test 4: cast failure spends mana, prints HSTR_PM_FAIL, does not execute
     // the dispel path, and leaves the prayer unworked.
-!t3:
+!t4:
     :PatchJump(calc_spell_failure, test_calc_spell_failure_fail)
     jsr test_reset_dispel_evil_prayer_state
     lda #CF_EVIL
@@ -404,36 +476,91 @@ test_start:
     lda #1
     sta test_mon_table + (0 * MONSTER_ENTRY_SIZE) + MX_HP_LO
     jsr player_pray
-    bcc !t3_fail+
+    bcc !t4_fail+
     lda tdep_spell_exec_calls
-    bne !t3_fail+
+    bne !t4_fail+
     lda tdep_kill_calls
-    bne !t3_fail+
+    bne !t4_fail+
     lda test_mon_table + (0 * MONSTER_ENTRY_SIZE) + MX_TYPE
     cmp #1
-    bne !t3_fail+
+    bne !t4_fail+
     lda test_mon_table + (0 * MONSTER_ENTRY_SIZE) + MX_HP_LO
     cmp #1
-    bne !t3_fail+
+    bne !t4_fail+
     lda tdep_huff_calls
     cmp #1
-    bne !t3_fail+
+    bne !t4_fail+
     lda tdep_last_huff_id
     cmp #HSTR_PM_FAIL
-    bne !t3_fail+
+    bne !t4_fail+
     lda zp_player_mp
     cmp #8
-    bne !t3_fail+
+    bne !t4_fail+
     lda player_data + PL_MANA
     cmp #8
-    bne !t3_fail+
+    bne !t4_fail+
     lda player_data + PL_SPELLS_WORKED_3
     and #$10
-    bne !t3_fail+
+    bne !t4_fail+
     lda #$01
-    sta tc_results + 2
-    jmp test_finish
-!t3_fail:
+    sta tc_results + 3
+    jmp !t5+
+!t4_fail:
     lda #$00
-    sta tc_results + 2
+    sta tc_results + 3
+
+    // Test 5: detected-only evil renders through renderer authority
+    // (MF_VISIBLE | MF_DETECTED) but is not a visible spell target.
+!t5:
+    :PatchJump(calc_spell_failure, test_calc_spell_failure_success)
+    jsr test_reset_dispel_evil_prayer_state
+    lda #CF_EVIL
+    sta cr_mflags + 1
+    lda #1
+    sta test_mon_table + (0 * MONSTER_ENTRY_SIZE) + MX_TYPE
+    lda #5
+    sta test_mon_table + (0 * MONSTER_ENTRY_SIZE) + MX_HP_LO
+    lda #MF_DETECTED
+    sta test_mon_table + (0 * MONSTER_ENTRY_SIZE) + MX_FLAGS
+    and #(MF_VISIBLE | MF_DETECTED)
+    beq !t5_fail+
+    lda test_mon_table + (0 * MONSTER_ENTRY_SIZE) + MX_FLAGS
+    and #MF_VISIBLE
+    bne !t5_fail+
+    lda #0
+    sta tdep_rng_value
+    jsr player_pray
+    bcc !t5_fail+
+    lda tdep_spell_exec_calls
+    cmp #1
+    bne !t5_fail+
+    lda tdep_last_spell_idx
+    cmp #28
+    bne !t5_fail+
+    lda tdep_kill_calls
+    bne !t5_fail+
+    lda test_mon_table + (0 * MONSTER_ENTRY_SIZE) + MX_HP_LO
+    cmp #5
+    bne !t5_fail+
+    lda tdep_huff_calls
+    cmp #1
+    bne !t5_fail+
+    lda tdep_last_huff_id
+    cmp #HSTR_PIQ_NOTHING
+    bne !t5_fail+
+    lda zp_player_mp
+    cmp #8
+    bne !t5_fail+
+    lda player_data + PL_MANA
+    cmp #8
+    bne !t5_fail+
+    lda player_data + PL_SPELLS_WORKED_3
+    and #$10
+    beq !t5_fail+
+    lda #$01
+    sta tc_results + 4
+    jmp test_finish
+!t5_fail:
+    lda #$00
+    sta tc_results + 4
     jmp test_finish
