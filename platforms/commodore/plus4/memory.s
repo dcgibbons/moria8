@@ -25,9 +25,9 @@
 .const BANK1_DB_BASE    = $e000
 .const SCREEN_RAM       = $0c00
 .const COLOR_RAM        = $0800
-.const DUNGEON_GEN_BFS_QUEUE_BASE = $0400
-.const DUNGEON_GEN_BFS_QUEUE_MAX  = 512
-.const DUNGEON_GEN_BFS_QUEUE_END  = DUNGEON_GEN_BFS_QUEUE_BASE + (DUNGEON_GEN_BFS_QUEUE_MAX * 2) - 1
+.const DUNGEON_GEN_SCAN_SCRATCH_BASE = $0400
+.const DUNGEON_GEN_SCAN_SCRATCH_SIZE = 1024
+.const DUNGEON_GEN_SCAN_SCRATCH_END  = DUNGEON_GEN_SCAN_SCRATCH_BASE + DUNGEON_GEN_SCAN_SCRATCH_SIZE - 1
 .const DUNGEON_GEN_DOOR_SCAN_BASE = $033c
 .const DUNGEON_GEN_DOOR_SCAN_LIMIT = $0400
 
@@ -177,8 +177,8 @@ mmu_select_bank0:
 
 .assert "Map fits in $C000 region", MAP_END - MAP_BASE + 1, 3840
 .assert "Floor items fit", FLOOR_ITEM_END - FLOOR_ITEM_BASE + 1, 256
-.assert "Dungeon-gen BFS queue remains page-aligned", <DUNGEON_GEN_BFS_QUEUE_BASE, 0
-.assert "Dungeon-gen BFS queue stays in low scratch window", DUNGEON_GEN_BFS_QUEUE_END <= $07ff, true
+.assert "Dungeon-gen scan scratch remains page-aligned", <DUNGEON_GEN_SCAN_SCRATCH_BASE, 0
+.assert "Dungeon-gen scan scratch stays in low scratch window", DUNGEON_GEN_SCAN_SCRATCH_END <= $07ff, true
 .assert "Dungeon-gen door scan stays in cassette buffer", DUNGEON_GEN_DOOR_SCAN_BASE >= $033c && DUNGEON_GEN_DOOR_SCAN_BASE + 65 <= $0400, true
 .assert "ZP save buffer doesn't overlap CREATURE_BASE", zp_save_buf + ZP_SAVE_SIZE <= CREATURE_BASE, true
 .assert "ZP save buffer size", ZP_SAVE_SIZE, 142

@@ -448,21 +448,6 @@ turn_post_action:
     jsr monster_ai_tick
     ora zp_dirty_count              // pending non-local redraw request
     sta turn_scene_dirty
-    bcc !tpa_no_room_promote+
-    bne !tpa_no_room_promote+
-
-    // Lit rooms expose monster movement beyond the player's local
-    // light-radius redraw box. If monster AI moved anything this turn while
-    // the player stands on a visible lit tile, promote to the full redraw path.
-    ldx zp_player_x
-    ldy zp_player_y
-    jsr map_get_tile
-    and #(FLAG_VISITED | FLAG_LIT)
-    cmp #(FLAG_VISITED | FLAG_LIT)
-    bne !tpa_no_room_promote+
-    lda #1
-    sta turn_scene_dirty
-!tpa_no_room_promote:
     lda #0
     sta zp_dirty_count
 

@@ -973,7 +973,9 @@ t21_test:
     jmp !t22+
 
 !t22:
-    // Test 22: carry-only monster movement still promotes redraw in lit rooms.
+    // Test 22: carry-only monster movement does not dirty lit rooms.
+    // monster_ai_tick reports explicit dirty in A when a visible/detected tile
+    // needs redraw. Carry alone only means some monster acted somewhere.
     jsr reset_state
     lda #10
     sta zp_player_x
@@ -987,7 +989,6 @@ t21_test:
     sta test_monster_ai_return_a
     jsr turn_post_action
     lda turn_scene_dirty
-    cmp #1
     bne !t22_fail+
     lda #$01
     sta tc_results + 21

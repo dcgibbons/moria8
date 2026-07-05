@@ -95,6 +95,11 @@ iter_count: .byte 0
 irq_before: .byte 0
 tmp_x: .byte 0
 tmp_y: .byte 0
+audit_door_x: .byte 0
+audit_door_y: .byte 0
+audit_check_x: .byte 0
+audit_check_y: .byte 0
+audit_pair_count: .byte 0
 
 seed_table:
     .byte $42, $13, $7a, $f1
@@ -254,6 +259,11 @@ test_start:
     beq !ok_dn2tile+
     jmp test_fail
 !ok_dn2tile:
+    jsr audit_final_door_chokepoints128
+    bcc !ok_doors+
+    jmp test_fail
+!ok_doors:
+
     // Town generation sanity pass (dlvl=0) to catch bank/map regressions.
     lda #0
     sta zp_player_dlvl
@@ -365,3 +375,102 @@ test_fail:
 
 test_pass:
     jmp test_pass
+
+audit_coord_passable128:
+    ldx audit_check_x
+    ldy audit_check_y
+    jsr map_get_tile
+    jmp vc_tile_is_passable
+
+audit_final_door_chokepoints128:
+    lda #1
+    sta audit_door_y
+!afd128_row:
+    lda #1
+    sta audit_door_x
+!afd128_col:
+    ldx audit_door_x
+    ldy audit_door_y
+    jsr map_get_tile
+    and #TILE_TYPE_MASK
+    cmp #TILE_DOOR_OPEN
+    beq !afd128_check+
+    cmp #TILE_DOOR_CLOSED
+    beq !afd128_check+
+    cmp #TILE_SECRET
+    bne !afd128_next+
+!afd128_check:
+    jsr audit_one_door_chokepoint128
+    bcs !afd128_fail+
+!afd128_next:
+    inc audit_door_x
+    lda audit_door_x
+    cmp #MAP_COLS - 1
+    bne !afd128_col-
+    inc audit_door_y
+    lda audit_door_y
+    cmp #MAP_ROWS - 1
+    bne !afd128_row-
+    clc
+    rts
+!afd128_fail:
+    sec
+    rts
+
+audit_one_door_chokepoint128:
+    lda audit_door_x
+    sta dg_cx1
+    lda audit_door_y
+    sta dg_cy1
+    lda #0
+    sta audit_pair_count
+
+    lda audit_door_x
+    sec
+    sbc #1
+    sta audit_check_x
+    lda audit_door_y
+    sta audit_check_y
+    jsr audit_coord_passable128
+    bcc !aod128_try_vertical+
+    lda audit_door_x
+    clc
+    adc #1
+    sta audit_check_x
+    lda audit_door_y
+    sta audit_check_y
+    jsr audit_coord_passable128
+    bcc !aod128_try_vertical+
+    inc audit_pair_count
+
+!aod128_try_vertical:
+    lda audit_door_x
+    sta audit_check_x
+    lda audit_door_y
+    sec
+    sbc #1
+    sta audit_check_y
+    jsr audit_coord_passable128
+    bcc !aod128_finish+
+    lda audit_door_x
+    sta audit_check_x
+    lda audit_door_y
+    clc
+    adc #1
+    sta audit_check_y
+    jsr audit_coord_passable128
+    bcc !aod128_finish+
+    inc audit_pair_count
+    lda audit_pair_count
+    cmp #2
+    bcs !aod128_fail+
+
+!aod128_finish:
+    lda audit_pair_count
+    cmp #1
+    bne !aod128_fail+
+    clc
+    rts
+!aod128_fail:
+    sec
+    rts
