@@ -387,7 +387,9 @@ mat_tile_within_local_radius:
 // ============================================================
 // monster_wake_check — Check if monster should wake up
 // Chebyshev distance to player <= cr_aaf[type], then tick the live sleep
-// counter toward zero and wake once it expires.
+// counter toward zero and wake once it expires.  Upstream VMS Moria reduces
+// csleep by distance-scaled pressure, so nearby monsters wake sharply faster
+// than distant ones.
 // Sets MF_AWAKE in zp_mon_flags if waking up.
 // Clobbers: A, X, Y, zp_temp3, zp_temp4
 // ============================================================
@@ -419,6 +421,7 @@ monster_wake_check:
     lda zp_mon_scratch0         // abs_dx > abs_dy → dist = abs_dx
 !mwc_have_dist:
     // A = Chebyshev distance
+    sta zp_mon_scratch0
 
     // Compare distance to awareness factor
     ldx zp_mon_type
@@ -432,10 +435,21 @@ monster_wake_check:
     ldy #MX_SLEEP_CUR
     lda (zp_ptr0),y
     beq !mwc_wake+              // sleep=0 → wake immediately
+    pha
+    lda #8                      // Approximate upstream 75/d without division.
+    ldx zp_mon_scratch0
+    cpx #8
+    bcs !mwc_have_wake_step+
+    asl                         // distance 0..7: 16
+!mwc_have_wake_step:
+    sta zp_mon_scratch0
+    pla
     sec
-    sbc #1
+    sbc zp_mon_scratch0
+    bcc !mwc_wake+
     sta (zp_ptr0),y
     bne !mwc_too_far+           // Still asleep this turn
+    beq !mwc_wake+
 
 !mwc_wake:
     lda zp_mon_flags

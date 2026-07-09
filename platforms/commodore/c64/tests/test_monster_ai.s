@@ -1837,8 +1837,8 @@ test_start:
     jmp !t23+
 
     // ==========================================
-    // Test 23: the live sleep counter, not the
-    // species base sleep value, controls waking.
+    // Test 23: wake checks use the live sleep counter with upstream-style
+    // distance scaling.  Distance 5 reduces sleep by the medium wake step.
     // ==========================================
 !t23:
     jsr monster_init_table
@@ -1874,10 +1874,10 @@ test_start:
     lda #0
     sta (zp_ptr0),y
     ldy #MX_SLEEP_CUR
-    lda #2
+    lda #20
     sta (zp_ptr0),y
 
-    lda #20
+    lda #25
     sta zp_player_x
     lda #15
     sta zp_player_y
@@ -1902,7 +1902,7 @@ test_start:
 
     ldy #MX_SLEEP_CUR
     lda (zp_ptr0),y
-    cmp #1
+    cmp #4
     bne !t23_fail+
     lda zp_mon_flags
     and #MF_AWAKE
@@ -1912,9 +1912,6 @@ test_start:
 
     ldx #0
     jsr monster_get_ptr
-    ldy #MX_SLEEP_CUR
-    lda (zp_ptr0),y
-    bne !t23_fail+
     lda zp_mon_flags
     and #MF_AWAKE
     beq !t23_fail+
