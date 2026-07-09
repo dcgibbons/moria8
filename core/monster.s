@@ -676,13 +676,21 @@ monster_spawn_one:
     sta (zp_ptr0),y
 
     // Set initial sleep from creature sleep value. Upstream randomizes
-    // starting sleep; keep that property without a resident-size div helper.
+    // starting sleep; approximate VMS sleep/5 + randint(sleep) as
+    // randint(sleep) + sleep/4 without a resident-size div helper.
     ldx ms_type
     lda cr_sleep,x
     beq !mso_store_sleep+
+    sta zp_temp0
     jsr rng_range
     clc
     adc #1
+    sta zp_temp1
+    lda zp_temp0
+    lsr
+    lsr
+    clc
+    adc zp_temp1
 !mso_store_sleep:
     ldy #MX_SLEEP_CUR
     sta (zp_ptr0),y

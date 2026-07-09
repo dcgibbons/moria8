@@ -560,7 +560,10 @@ mon_atk_effect_aggravate:
     cmp #EMPTY_SLOT
     beq !mea_next+
 
-    // Set MF_AWAKE
+    // Clear sleep and set MF_AWAKE.
+    ldy #MX_SLEEP_CUR
+    lda #0
+    sta (zp_ptr0),y
     ldy #MX_FLAGS
     lda (zp_ptr0),y
     ora #MF_AWAKE

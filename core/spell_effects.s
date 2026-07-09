@@ -523,7 +523,7 @@ eff_sleep_adjacent:
     ldy df_target_y
     jsr monster_find_at
     bcc !esa_skip+
-    lda #20                         // Sleep for 20 turns
+    lda #$ff                        // Saturated Moria-style sleep duration
     jsr monster_apply_sleep
 !esa_skip:
     rts
@@ -949,27 +949,4 @@ eff_kill_monster:
     jsr combat_check_levelup
     jsr combat_note_kill
 
-    rts
-
-// ============================================================
-// eff_aggravate — Wake all monsters (clear sleep timer)
-// Clobbers: A, X, Y, zp_ptr0
-// ============================================================
-eff_aggravate:
-    ldx #0
-!eag_loop:
-    cpx #MAX_MONSTERS
-    bcs !eag_done+
-    jsr monster_get_ptr
-    ldy #MX_TYPE
-    lda (zp_ptr0),y
-    cmp #EMPTY_SLOT
-    beq !eag_next+
-    ldy #MX_SLEEP_CUR
-    lda #0
-    sta (zp_ptr0),y                // Clear sleep
-!eag_next:
-    inx
-    jmp !eag_loop-
-!eag_done:
     rts

@@ -141,7 +141,7 @@ pmx_try_sleep_monster:
     cmp cr_level,x
     bcc !ptsm_resist+
     ldx pmx_feedback_mon_slot
-    lda #20
+    lda #$ff
     jsr monster_apply_sleep
     sec
     rts

@@ -297,7 +297,7 @@ test_start:
     cmp #>pmx_sleep_success_msg
     bne !t1_fail+
     lda test_mon_data + MX_SLEEP_CUR
-    cmp #20
+    cmp #$ff
     bne !t1_fail+
     lda test_mon_data + MX_FLAGS
     and #MF_AWAKE

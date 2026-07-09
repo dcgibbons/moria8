@@ -1837,8 +1837,9 @@ test_start:
     jmp !t23+
 
     // ==========================================
-    // Test 23: wake checks use the live sleep counter with upstream-style
-    // distance scaling.  Distance 5 reduces sleep by the medium wake step.
+    // Test 23: wake checks use the live sleep counter with coarse
+    // distance-scaled pressure. Distance 5 uses the near step; distance 8
+    // uses the far step. Expiration clears the live counter before waking.
     // ==========================================
 !t23:
     jsr monster_init_table
@@ -1908,10 +1909,35 @@ test_start:
     and #MF_AWAKE
     bne !t23_fail+
 
+    ldy #MX_SLEEP_CUR
+    lda #20
+    sta (zp_ptr0),y
+    ldy #MX_FLAGS
+    lda #0
+    sta (zp_ptr0),y
+    sta zp_mon_flags
+    lda #28
+    sta zp_player_x
+
+    jsr monster_wake_check
+
+    ldy #MX_SLEEP_CUR
+    lda (zp_ptr0),y
+    cmp #12
+    bne !t23_fail+
+    lda zp_mon_flags
+    and #MF_AWAKE
+    bne !t23_fail+
+
+    lda #25
+    sta zp_player_x
     jsr monster_wake_check
 
     ldx #0
     jsr monster_get_ptr
+    ldy #MX_SLEEP_CUR
+    lda (zp_ptr0),y
+    bne !t23_fail+
     lda zp_mon_flags
     and #MF_AWAKE
     beq !t23_fail+

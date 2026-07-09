@@ -146,7 +146,7 @@ test_tramp_sleep_i_execute:
     sta tsi_last_spell_idx
     jsr eff_directional_monster
     bcc !done+
-    lda #20
+    lda #$ff
     jsr monster_apply_sleep
 !done:
     rts
@@ -251,7 +251,7 @@ test_start:
     lda tsi_huff_calls
     bne !t1_fail+
     lda tsi_mon_data + MX_SLEEP_CUR
-    cmp #20
+    cmp #$ff
     bne !t1_fail+
     lda tsi_mon_data + MX_FLAGS
     and #MF_AWAKE

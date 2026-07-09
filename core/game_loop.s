@@ -2109,6 +2109,7 @@ auto_rest_should_stop:
     bcs !stop+
 
     lda zp_msg_flags
+    ora turn_scene_dirty
     bne !stop+
 
     clc

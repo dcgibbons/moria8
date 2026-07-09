@@ -332,7 +332,7 @@ pmx_light_room_msg:
 eff_sleep_monster_dir:
     jsr eff_directional_monster
     bcc !esmd_done+
-    lda #20
+    lda #$ff
     jsr monster_apply_sleep
 !esmd_done:
     rts
@@ -442,7 +442,7 @@ eff_sleep_all:
     and #MF_VISIBLE
     beq !esa_all_next+
     ldx pmx_work_idx
-    lda #25
+    lda #$ff
     jsr monster_apply_sleep
     inc pmx_work_flag
 !esa_all_next:

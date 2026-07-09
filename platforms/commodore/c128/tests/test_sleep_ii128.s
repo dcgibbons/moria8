@@ -282,7 +282,7 @@ test_pmx_try_sleep_monster:
     cmp cr_level,x
     bcc !resist+
     ldx test_mon_slot
-    lda #20
+    lda #$ff
     jsr monster_apply_sleep
     sec
     rts
@@ -453,7 +453,7 @@ test_start:
     cmp #>test_pmx_sleep_success_msg
     bne !t1_fail+
     lda test_mon_data + MX_SLEEP_CUR
-    cmp #20
+    cmp #$ff
     bne !t1_fail+
     lda test_mon_data + MX_FLAGS
     and #MF_AWAKE

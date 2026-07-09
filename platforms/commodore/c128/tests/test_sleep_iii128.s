@@ -294,7 +294,7 @@ test_eff_sleep_all:
     jsr los_is_visible
     bcc !next+
     ldx test_sleep_idx
-    lda #25
+    lda #$ff
     jsr monster_apply_sleep
     inc test_sleep_hits
 !next:
@@ -453,7 +453,7 @@ test_start:
     cmp #>test_pmx_sleep_success_msg
     bne !t1_fail+
     lda test_mon0_data + MX_SLEEP_CUR
-    cmp #25
+    cmp #$ff
     bne !t1_fail+
     lda test_mon0_data + MX_FLAGS
     and #MF_AWAKE
