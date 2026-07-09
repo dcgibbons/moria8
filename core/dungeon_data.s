@@ -64,7 +64,11 @@
 // ============================================================
 // Dungeon room/generation constants (shared with other modules)
 // ============================================================
+#if C128
+.const MAX_ROOMS     = 21     // Largest C128 room table that fits current resident layout
+#else
 .const MAX_ROOMS     = 8
+#endif
 .const DUNGEON_FLAGS = FLAG_LIT                  // $08 (rooms are lit)
 
 // Special room type constants

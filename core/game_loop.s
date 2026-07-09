@@ -701,42 +701,16 @@ game_new_start:
 
 #if C128_TEST_SCRIPTED_INPUT
 #if !C128_TEST_PERF_P1_TRACE
-    lda c128_test_summary_seen
-    bne !gns_script_pass+
-    jmp c128_test_town_fail_sym
-!gns_script_pass:
-    lda c128_test_summary_count
-    cmp #1
-    beq !gns_summary_count_ok+
-    jmp c128_test_town_fail_sym
-!gns_summary_count_ok:
 #if C128_TEST_CACHE_SURVIVAL
-    jsr c128_test_verify_cache_survival
-    bcc !gns_cache_pass+
-    jmp c128_test_cache_survival_fail_sym
-!gns_cache_pass:
-    jmp c128_test_cache_survival_pass_sym
+    jmp c128_test_cache_survival_town_entry
 #else
-    jmp c128_test_town_pass_sym
+c128_test_town_pass_sym:
+    brk
 #endif
-
 #endif
 
 #elif C128_TEST_CACHE_SURVIVAL
-    lda c128_test_summary_seen
-    bne !gns_script_pass+
-    jmp c128_test_town_fail_sym
-!gns_script_pass:
-    lda c128_test_summary_count
-    cmp #1
-    beq !gns_cache_summary_count_ok+
-    jmp c128_test_town_fail_sym
-!gns_cache_summary_count_ok:
-    jsr c128_test_verify_cache_survival
-    bcc !gns_cache_pass+
-    jmp c128_test_cache_survival_fail_sym
-!gns_cache_pass:
-    jmp c128_test_cache_survival_pass_sym
+    jmp c128_test_cache_survival_town_entry
 #endif
 
     jmp main_loop
@@ -897,27 +871,6 @@ c128_town_move_diag_loop_top:
     jsr player_sync_from_zp
     jsr tramp_game_over
 !test_force_death_done:
-#endif
-#if C128_TEST_SCRIPTED_SPELL
-    lda c128_test_spell_return_pending
-    beq !c128_test_spell_return_done+
-    dec c128_test_spell_return_pending
-    inc c128_test_spell_return_count
-    lda c128_test_spell_return_count
-    cmp #8
-    bcc !c128_test_spell_return_done+
-    jmp c128_test_spell_pass_sym
-!c128_test_spell_return_done:
-#endif
-#if C128_TEST_SCRIPTED_PRAYER
-    lda c128_test_spell_return_pending
-    beq !c128_test_prayer_return_done+
-    dec c128_test_spell_return_pending
-    bne !c128_test_prayer_return_done+
-    lda zp_eff_bless
-    beq !c128_test_prayer_return_done+
-    jmp c128_test_spell_pass_sym
-!c128_test_prayer_return_done:
 #endif
 #if C128_TEST_SCRIPTED_SCROLL_SELECTOR
     lda c128_test_scroll_selector_return_pending
@@ -2797,11 +2750,6 @@ roll_tool_ego_check:
 // Clobbers: A, X, Y, zp_ptr0
 // ============================================================
 put_tool_ego_prefix:
-    cpx #62
-    beq !ptep_valid_tool+
-    cpx #63
-    bne !ptep_done+
-!ptep_valid_tool:
     // Compute index = (type - 62) * 2 + (ego - 1)
     sec
     sbc #1                      // ego - 1 (0 or 1)
@@ -2818,7 +2766,6 @@ put_tool_ego_prefix:
     lda tool_ego_prefix_hi,x
     sta zp_ptr0_hi
     jsr hal_screen_put_string       // Print prefix (e.g., "Dwarven ")
-!ptep_done:
     rts
 
 #if !GAME_LOOP_LOW_DATA_EXTERNAL

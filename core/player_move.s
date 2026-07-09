@@ -342,15 +342,25 @@ run_check_stop:
     beq !rcs_stop+          // Left a lit room → stop
 !rcs_not_exit:
 
-    // 6. Adjacent door check (6 neighbors, skip forward/backward)
+#if C128
+    // 6. Doorless room mouth: unlit corridor tile facing lit room floor.
+    lda zp_temp0
+    and #FLAG_LIT
+    bne !rcs_not_mouth+
+    jsr run_check_forward_lit_floor
+    bcs !rcs_stop+
+!rcs_not_mouth:
+#endif
+
+    // Adjacent door check (6 neighbors, skip forward/backward)
     jsr run_check_adjacent_doors
     bcs !rcs_stop+
 
-    // 7. Adjacent monster check (6 neighbors, skip forward/backward)
+    // Adjacent monster check (6 neighbors, skip forward/backward)
     jsr run_check_adjacent_monsters
     bcs !rcs_stop+
 
-    // 8. Intersection check (corridors only — unlit area)
+    // Intersection check (corridors only — unlit area)
     lda zp_temp0
     and #FLAG_LIT
     bne !rcs_continue+      // In lit room → no intersection check
@@ -363,6 +373,38 @@ run_check_stop:
 !rcs_stop:
     sec
     rts
+
+#if C128
+// run_check_forward_lit_floor — Stop before entering a lit room through a
+// plain opening with no door tile.
+// Output: carry set = lit floor ahead, carry clear = none
+// Clobbers: A, X, Y, zp_ptr0/hi
+run_check_forward_lit_floor:
+    ldx zp_run_dir
+    lda zp_player_y
+    clc
+    adc dir_dy,x
+    tax
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldx zp_run_dir
+    lda zp_player_x
+    clc
+    adc dir_dx,x
+    tay
+    :MapRead_ptr0_y()
+    and #(FLAG_LIT | TILE_TYPE_MASK)
+    cmp #FLAG_LIT
+    beq !rcfl_yes+
+!rcfl_no:
+    clc
+    rts
+!rcfl_yes:
+    sec
+    rts
+#endif
 
 // run_check_adjacent_doors — Check 6 neighbors (skip forward/backward) for doors
 // Input: zp_run_dir, zp_player_x/y

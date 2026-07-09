@@ -55,7 +55,7 @@
 .segmentdef RuntimeLowData    [outPrg=OVL_OUT + "/128.runtime.prg", start=$1000, min=$1000, max=$3fff]
 .segmentdef C128ResidentItemNames [outPrg=OVL_OUT + "/128.names.prg", start=$7400, min=$7400, max=$7fff]
 .segmentdef C128ResidentWorld [outPrg=OVL_OUT + "/128.world.prg", start=$6000, min=$6000, max=$8cff]
-.segmentdef C128ResidentItems [outPrg=OVL_OUT + "/128.item.prg", start=$8c70, min=$8c70, max=$a7ff]
+.segmentdef C128ResidentItems [outPrg=OVL_OUT + "/128.item.prg", start=$8ca0, min=$8ca0, max=$a7ff]
 .segmentdef C128ResidentSelect [outPrg=OVL_OUT + "/128.select.prg", start=$a800, min=$a800, max=$aaff]
 .segmentdef C128ResidentDiskIo [outPrg=OVL_OUT + "/128.diskio.prg", start=$ab00, min=$ab00, max=$aeff]
 .segmentdef C128ResidentPersist [outPrg=OVL_OUT + "/128.persist.prg", start=$af00, min=$af00, max=$cfff]
@@ -1133,8 +1133,10 @@ test_assert_spell_list_overlay:
 #if C128_TEST_SCRIPTED_INPUT
 c128_test_town_fail_sym:
     brk
+#if C128_TEST_CACHE_SURVIVAL
 c128_test_town_pass_sym:
     brk
+#endif
 #elif C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_PRAYER || C128_TEST_SCRIPTED_SPELL_CANCEL || C128_TEST_SCRIPTED_BOOK_OVERLAY || C128_TEST_SCRIPTED_STUDY_BOOK_OVERLAY || C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY || C128_TEST_SCRIPTED_SCROLL_SELECTOR
 c128_test_spell_fail_no_cast_sym:
     brk
@@ -1148,8 +1150,10 @@ c128_test_spell_fail_roll_sym:
     brk
 c128_test_spell_fail_cancel_sym:
     brk
+#if !C128_TEST_SCRIPTED_SPELL && !C128_TEST_SCRIPTED_PRAYER
 c128_test_spell_pass_sym:
     brk
+#endif
 #if C128_TEST_SCRIPTED_SPELL_CANCEL
 c128_test_spell_cancel_pass_sym:
     brk
@@ -4356,6 +4360,22 @@ c128_vic40_boot_probe_fail_sym:
 #endif
 
 #if C128_TEST_CACHE_SURVIVAL
+c128_test_cache_survival_town_entry:
+    lda c128_test_summary_seen
+    bne !ctcste_seen+
+    jmp c128_test_town_fail_sym
+!ctcste_seen:
+    lda c128_test_summary_count
+    cmp #1
+    beq !ctcste_count_ok+
+    jmp c128_test_town_fail_sym
+!ctcste_count_ok:
+    jsr c128_test_verify_cache_survival
+    bcc !ctcste_pass+
+    jmp c128_test_cache_survival_fail_sym
+!ctcste_pass:
+    jmp c128_test_cache_survival_pass_sym
+
 c128_test_verify_cache_survival:
     lda c128_cache_tiers_ready
     cmp #1
@@ -4801,7 +4821,7 @@ program_end:
 .assert "C128 main image stays below resident world payload", program_end <= c128_resident_world_start, true
 .assert "C128 resident world starts at $6000", c128_resident_world_start == $6000, true
 .assert "C128 resident world fits below items payload", c128_resident_world_end <= c128_resident_items_start, true
-.assert "C128 resident items starts at $8C70", c128_resident_items_start == $8C70, true
+.assert "C128 resident items starts at $8CA0", c128_resident_items_start == $8CA0, true
 .assert "C128 resident items fits below selector payload", c128_resident_items_end <= $A800, true
 .assert "C128 resident selector starts at $A800", c128_resident_select_start == $A800, true
 .assert "C128 resident selector fits below disk-I/O payload", c128_resident_select_end <= $AB00, true
@@ -4831,8 +4851,8 @@ program_end:
 .assert "C128 item-name logical file avoids marker and command channel", RESIDENT_ITEM_NAMES_FILE_NUM != hal_storage_marker_file_num && RESIDENT_ITEM_NAMES_FILE_NUM < hal_storage_cmd_channel, true
 .assert "Low runtime code stays below floor-item table", runtime_low_data_end <= FLOOR_ITEM_BASE, true
 .assert "Low runtime code stays below C128 scratch page", runtime_low_data_end <= CREATURE_BASE, true
-.assert "C128 resident items loader matches segment start", c128_resident_items_start == $8c70, true
-.assert "C128 resident items load address matches segment start", c128_resident_items_start == $8c70, true
+.assert "C128 resident items loader matches segment start", c128_resident_items_start == $8ca0, true
+.assert "C128 resident items load address matches segment start", c128_resident_items_start == $8ca0, true
 .assert "C128 play signature starts payload", c128_resident_play_sig0 == c128_resident_play_start, true
 .assert "C128 play signature is three bytes", c128_resident_play_body - c128_resident_play_sig0, 3
 .assert "C128 play body follows signature", c128_resident_play_body == c128_resident_play_start + 3, true

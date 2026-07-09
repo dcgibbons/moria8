@@ -5,6 +5,33 @@ unreleased for release notes.
 
 ## Commodore Ports
 
+### Avoid C128 disk load on new game
+
+The C128 title `N` path currently calls `c128_modal_require_play` before
+`game_new_start`. On a fresh boot `c128_modal_slot_state` is still
+`C128_MODAL_UNKNOWN`, so this path requires program media and disk-loads
+`128.play` into the shared resident slot at `$AF00`.
+
+This is inconsistent with the intended C128 cached startup model. The overlay
+cache is populated at boot and `OVL.STARTUP` is left resident for the title to
+new-game path, but the resident `PLAY` payload is not preloaded or cached.
+
+Required work:
+
+- Preload `128.play` during C128 boot after core residents are loaded.
+- Validate the `C128_RESIDENT_PLAY_SIG*` signature after preload.
+- Set `c128_modal_slot_state = C128_MODAL_PLAY` when the preload succeeds.
+- Keep save/load behavior intact: `128.persist` may still be demand-loaded for
+  save/load, and returning to gameplay after persist work must restore `PLAY`.
+- Add a C128 runtime smoke proving title `N` reaches new-game/start gameplay
+  without invoking `c128_load_resident_play_prg` after the title screen is
+  shown.
+
+Acceptance target:
+
+- Starting a new C128 character after normal boot does not perform a disk load
+  for `128.play`; gameplay entry uses the already resident/cached play payload.
+
 ### Implement Plus/4 TED sound effects
 
 The Plus/4 has TED sound hardware, but Moria8's Plus/4 backend currently

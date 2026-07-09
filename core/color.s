@@ -44,7 +44,7 @@ tile_screen_codes:
     .byte $3e           // 9: Stairs down '>'
     .byte $3c           // 10: Stairs up '<'
     .byte $3a           // 11: Rubble ':'
-    .byte $23           // 12: Magma '#'
+    .byte $25           // 12: Magma '%'
     .byte $25           // 13: Quartz '%'
     .byte $1e           // 14: Trap '^' (up arrow)
     .byte $23           // 15: Secret door (same as wall '#')

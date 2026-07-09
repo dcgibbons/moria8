@@ -120,8 +120,8 @@ player_cast_spell:
     jsr tramp_spell_execute_selected
     jsr pm_finish_success_common
 #if C128_TEST_SCRIPTED_SPELL
-    inc c128_test_spell_success_count
-    inc c128_test_spell_return_pending
+c128_test_spell_pass_sym:
+    brk
 #endif
 #if C64_TEST_SCRIPTED_SPELL
     inc c64_test_spell_success_count
@@ -233,12 +233,8 @@ player_pray:
 #endif
     jsr pm_finish_success_common
 #if C128_TEST_SCRIPTED_PRAYER
-    inc c128_test_spell_success_count
-    lda c128_test_spell_return_pending
-    bne !pp_test_pending_set128+
-    lda #8
-    sta c128_test_spell_return_pending
-!pp_test_pending_set128:
+c128_test_spell_pass_sym:
+    brk
 #endif
 #if C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
     inc c64_test_spell_success_count

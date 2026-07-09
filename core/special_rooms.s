@@ -127,7 +127,7 @@ find_special_room:
     rts
 
 // ============================================================
-// vault_seal_entrance — Convert first door on vault perimeter to secret door
+// vault_seal_entrance — Convert first door/mouth on vault perimeter to secret door
 // Called after corridor carving / door placement in dungeon_generate.
 // Clobbers: A, X, Y, zp_ptr0
 // ============================================================
@@ -203,24 +203,24 @@ vault_seal_entrance:
 // Returns carry set if found and sealed
 vse_scan_hwall:
 !vsh_loop:
-    :MapRead_ptr0_y()
-    and #TILE_TYPE_MASK
-    cmp #TILE_DOOR_OPEN
-    beq !vsh_seal+
-    cmp #TILE_DOOR_CLOSED
+	    :MapRead_ptr0_y()
+	    and #TILE_TYPE_MASK
+	    cmp #TILE_FLOOR
+	    beq !vsh_seal+
+	    cmp #TILE_DOOR_OPEN
+	    beq !vsh_seal+
+	    cmp #TILE_DOOR_CLOSED
     beq !vsh_seal+
     iny
     dex
     bne !vsh_loop-
-    clc
-    rts
+	    clc
+	    rts
 !vsh_seal:
-    :MapRead_ptr0_y()
-    and #TILE_FLAG_MASK
-    ora #TILE_SECRET
-    :MapWrite_ptr0_y()
-    sec
-    rts
+	    lda #TILE_SECRET | DUNGEON_FLAGS
+	    :MapWrite_ptr0_y()
+	    sec
+	    rts
 
 // Scan vertical wall for door — vse_x = column, vse_y_iter = start row, X = count
 // Returns carry set if found and sealed
@@ -232,24 +232,26 @@ vse_scan_vwall:
     lda map_row_hi,y
     sta zp_ptr0_hi
     ldy vse_x
-    :MapRead_ptr0_y()
-    and #TILE_TYPE_MASK
-    cmp #TILE_DOOR_OPEN
-    beq !vsv_seal+
-    cmp #TILE_DOOR_CLOSED
+	    :MapRead_ptr0_y()
+	    and #TILE_TYPE_MASK
+	    cmp #TILE_FLOOR
+	    beq !vsv_seal+
+	    cmp #TILE_DOOR_OPEN
+	    beq !vsv_seal+
+	    cmp #TILE_DOOR_CLOSED
     beq !vsv_seal+
     inc vse_y_iter
     dex
     bne !vsv_loop-
-    clc
-    rts
+	    clc
+	    rts
 !vsv_seal:
-    :MapRead_ptr0_y()
-    and #TILE_FLAG_MASK
-    ora #TILE_SECRET
-    :MapWrite_ptr0_y()
-    sec
-    rts
+	    lda #TILE_SECRET | DUNGEON_FLAGS
+	    :MapWrite_ptr0_y()
+	    sec
+	    rts
+
+#if !SPECIAL_ROOMS_GENERATION_ONLY
 
 // ============================================================
 // spawn_special_room_monsters — Spawn monsters for pit or nest
@@ -421,3 +423,4 @@ spawn_nest_gold:
 
 !sng_done:
     rts
+#endif

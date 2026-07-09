@@ -1166,7 +1166,7 @@ for runtime_name, expected_load in (
     ("128.proj.prg", 0x0A80),
     ("128.fdisk.prg", 0x0D60),
     ("128.world.prg", 0x6000),
-    ("128.item.prg", 0x8C70),
+    ("128.item.prg", 0x8CA0),
     ("128.names.prg", 0x7400),
     ("128.select.prg", 0xA800),
     ("128.persist.prg", 0xAF00),
@@ -6080,10 +6080,11 @@ run_boot_tier_transition_smoke() {
     build_boot_assets || return
 
     local main_vs="../../../build/test/c128/main.vs"
-    local dungeon_generate
+    local dungeon_generate position_player_dungeon
     dungeon_generate=$(awk '/\.dungeon_generate$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
-    if [ -z "${dungeon_generate:-}" ]; then
-        echo "FAIL (missing dungeon_generate in ../../../build/test/c128/main.vs)"
+    position_player_dungeon=$(awk '/\.position_player_dungeon$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    if [ -z "${dungeon_generate:-}" ] || [ -z "${position_player_dungeon:-}" ]; then
+        echo "FAIL (missing dungeon-generation symbols in ../../../build/test/c128/main.vs)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
@@ -6098,7 +6099,7 @@ run_boot_tier_transition_smoke() {
     : > "$log_file"
 
     {
-        echo "until \$${dungeon_generate}"
+        echo "until \$${position_player_dungeon}"
         echo "g"
     } > "$mon_file"
 
@@ -6109,8 +6110,8 @@ run_boot_tier_transition_smoke() {
         +remotemonitor +binarymonitor >/dev/null 2>&1
     local vice_rc=$?
 
-    if ! grep -qi "^UNTIL: .*C:\$${dungeon_generate}" "$log_file"; then
-        boot_log_report_failure "did not reach dungeon_generate via stairs flow" "$log_file" "dungeon_generate" "$dungeon_generate" "$vice_rc"
+    if ! boot_log_has_stop_at "$log_file" "$position_player_dungeon"; then
+        boot_log_report_failure "real dungeon overlay did not complete generation path" "$log_file" "position_player_dungeon" "$position_player_dungeon" "$vice_rc"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return

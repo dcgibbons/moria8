@@ -675,10 +675,16 @@ monster_spawn_one:
     lda #0
     sta (zp_ptr0),y
 
-    // Set sleep counter from creature sleep value
-    ldy #MX_SLEEP_CUR
+    // Set initial sleep from creature sleep value. Upstream randomizes
+    // starting sleep; keep that property without a resident-size div helper.
     ldx ms_type
     lda cr_sleep,x
+    beq !mso_store_sleep+
+    jsr rng_range
+    clc
+    adc #1
+!mso_store_sleep:
+    ldy #MX_SLEEP_CUR
     sta (zp_ptr0),y
 
     // Set stun/confuse to 0

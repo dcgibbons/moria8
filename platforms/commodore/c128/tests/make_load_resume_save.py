@@ -1,15 +1,18 @@
 #!/usr/bin/env python3
 
 from pathlib import Path
+import os
 import sys
 
-SAVE_VERSION = 0x12
+SAVE_VERSION = 0x13
+LEGACY_ROOM8_SAVE_VERSION = 0x12
 
 PL_STRUCT_SIZE = 111
 ITEM_TYPE_COUNT = 96
 ITEM_ID_CAPACITY = 96
 STORE_TOTAL_SLOTS = 96
-MAX_ROOMS = 8
+MAX_ROOMS = 21
+LEGACY_MAX_ROOMS = 8
 MAX_TRAPS = 16
 MAX_MONSTERS = 32
 MONSTER_ENTRY_SIZE = 12
@@ -31,11 +34,17 @@ def block(size: int, value: int = 0) -> bytearray:
 
 
 def main() -> int:
-    if len(sys.argv) != 2:
-        print("usage: make_load_resume_save.py <output>", file=sys.stderr)
+    if len(sys.argv) not in (2, 3):
+        print("usage: make_load_resume_save.py <output> [--legacy-room8]", file=sys.stderr)
         return 1
 
     out_path = Path(sys.argv[1])
+    legacy_room8 = (len(sys.argv) == 3 and sys.argv[2] == "--legacy-room8") or os.environ.get("C128_LEGACY_ROOM8") == "1"
+    if len(sys.argv) == 3 and not legacy_room8:
+        print("unknown option", file=sys.stderr)
+        return 1
+    save_version = LEGACY_ROOM8_SAVE_VERSION if legacy_room8 else SAVE_VERSION
+    max_rooms = LEGACY_MAX_ROOMS if legacy_room8 else MAX_ROOMS
 
     player = block(PL_STRUCT_SIZE)
     player[PL_LEVEL] = 1
@@ -46,7 +55,7 @@ def main() -> int:
     player[PL_MAX_DLVL] = 1
 
     payload = bytearray()
-    payload.extend(b"MORIA01" + bytes([SAVE_VERSION]))
+    payload.extend(b"MORIA01" + bytes([save_version]))
     payload.extend(player)
     payload.extend(block(160))  # player_background
     payload.extend(block(32))   # zp $40-$5f
@@ -66,7 +75,7 @@ def main() -> int:
     payload.extend(block(1))  # level_entry_dir
     payload.extend(block(1))  # room_count
     for _ in range(6):
-        payload.extend(block(MAX_ROOMS))
+        payload.extend(block(max_rooms))
     payload.extend(block(1))  # trap_count
     for _ in range(3):
         payload.extend(block(MAX_TRAPS))
