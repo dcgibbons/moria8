@@ -4,40 +4,21 @@ This file provides project-wide instructions for coding agents working in this
 repository.
 
 ## Most Important Rules
-1. state assumptions, never guess silently 
-2. minimum code, nothing speculative 
-3. surgical changes, don't refactor adjacent code 
+1. state assumptions, never guess silently
+2. minimum code, nothing speculative
+3. surgical changes, don't refactor adjacent code
 4. define success, loop until verified
 
-## Personality - stolen from Marc Andreessen!
-You are a world class expert in all domains. Your intellectual firepower, scope
-of knowledge, incisive thought process, and level of erudition are on par with
-the smartest people in the world. Answer with complete, detailed, specific
-answers. Process information and explain your answers step by step. Verify your
-own work. Double check all facts, figures, citations, names, dates, and
-examples. Never hallucinate or make anything up. If you don't know something,
-just say so. Your tone of voice is precise, but not strident or pedantic. You do
-not need to worry about offending me, and your answers can and should be
-provocative, aggressive, argumentative, and pointed. Negative conclusions and
-bad news are fine. Your answers do not need to be politically correct. Do not
-provide disclaimers to your answers. Do not inform me about morals and ethics
-unless I specifically ask. You do not need to tell me it is important to
-consider anything. Do not be sensitive to anyone's feelings or to propriety.
-Make your answers as long and detailed as you possibly can.
+## Working Style
 
-Never praise my questions or validate my premises before answering. If I'm
-wrong, say so immediately. Lead with the strongest counterargument to any
-position I appear to hold before supporting it. Do not use phrases like "great
-question," "you're absolutely right," "fascinating perspective," or any variant.
-If I push back on your answer, do not capitulate unless I provide new evidence
-or a superior argument — restate your position if your reasoning holds. Do not
-anchor on numbers or estimates I provide; generate your own independently first.
-Use explicit confidence levels (high/moderate/low/unknown). Never apologize for
-disagreeing. Accuracy is your success metric, not my approval.
+Be direct and evidence-driven. State assumptions, uncertainty, and confidence.
+Distinguish evidence from inference. Do not accept unsupported premises, and
+change position when the evidence changes. Prefer concise findings with exact
+source references over performative certainty or exhaustive narration.
 
 ## Repository Contract
-This is a Commodore 64 / Commodore 128 6502 assembly project built with Kick
-Assembler and tested with VICE headless harnesses.
+This is a Commodore 64 / Commodore 128 / Plus/4 6502 assembly project built
+with Kick Assembler and tested with VICE headless harnesses.
 
 Primary entry points:
 
@@ -47,6 +28,39 @@ Primary entry points:
 
 Prefer small, local changes that preserve nearby assembly style, labels, memory
 ownership, and test patterns.
+
+## Behavioral Change Protocol
+
+For gameplay, lifecycle, generation, rendering, or C128 memory changes, first
+load `docs/BEHAVIOR_CHANGE_PROTOCOL.md`, then every matching domain contract:
+
+| Change touches | Load |
+| --- | --- |
+| Monster records, AI, sleep, awareness, attacks, monster-mutating spells, detection or targeting | `docs/MONSTER_STATE_CONTRACT.md` |
+| Generation stages, topology, placement, generation RNG or performance | `docs/DUNGEON_GENERATION_CONTRACT.md` |
+| Turn consumption, visibility lifecycle, dirty flags, redraw, repeat commands | `docs/TURN_RENDER_CONTRACT.md` |
+| C128 addresses, banks, overlays, copied/runtime code, physical VDC access | `docs/C128_MEMORY_CONTRACT.md` |
+
+For cross-domain changes, load each matching contract but apply only the
+relevant sections. Do not load all contracts by default.
+
+Visibility routing:
+
+- monster visibility production, detection lifecycle, inspection semantics, or
+  targeting: load monster and turn/render
+- pure renderer or inspection presentation that only consumes authoritative
+  flags: load turn/render only
+- AI use of visibility without redraw changes: load monster only
+- physical C128 VDC access or layout: also load C128 memory
+
+For behavioral and architectural work, complete the protocol change record and
+the applicable verification rows in every matching contract; descriptive
+inventories and ledgers are reference material unless the change modifies a
+settled decision. Mark safety-critical irrelevant record fields `N/A` with
+evidence. Routine work needs only the record required by its tier. Unknowns
+that could change semantics, representation, ownership, memory safety, or
+verification block implementation. Passing tests do not replace final contract
+review.
 
 ## Current Source Layout
 
@@ -115,9 +129,12 @@ or VICE timeouts.
 
 Hard boundaries:
 
-- Main/default segment must end below `$C000`; `MAP_BASE` lives at `$C000`
-- `$D000-$DFFF` is the I/O hole
-- Banked payload at `.pseudopc $E80E` must fit below `$FFFA`
+- C64 main/default must end below `$C000`; its `MAP_BASE` lives at `$C000`
+- C128 ownership and `$D000-$DFFF` I/O rules come from
+  `docs/C128_MEMORY_CONTRACT.md` and `platforms/commodore/c128/memory128.s`
+- Plus/4 follows its target assertions; do not apply C64 `$D000` assumptions
+- C64 banked runtime starts at `$F000` and must end at or below `$FFFA`
+- C128 banked runtime starts at `$F000` and must end at or below `$FF00`
 - Each overlay segment must fit within `$E000-$EFFF`
 - Test startup code must be reachable below `$A000` unless it uses a bootstrap
   stub

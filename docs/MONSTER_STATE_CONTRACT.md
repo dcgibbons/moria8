@@ -1,0 +1,107 @@
+# Monster State Contract
+
+Load this document for monster records, AI, sleep/wake behavior, awareness,
+visibility/detection, monster targeting, attacks, or spell effects on monsters.
+Do not load it for renderer or inspection work that only consumes
+already-authoritative monster flags; use `TURN_RENDER_CONTRACT.md` instead.
+
+## Authority
+
+- Moria8 state layout and production entry points: `core/monster.s`
+- AI transitions: `core/monster_ai.s`
+- Attack transitions: `core/monster_attack.s`, `core/monster_magic.s`
+- Default upstream oracle: pinned VMS Moria
+  `source/include/{misc,creature,spells}.inc`
+- Secondary oracle: pinned Umoria `src/{monster,spells}.cpp`
+
+## Live Record Inventory
+
+Each live slot is a 12-byte record. `MX_TYPE == EMPTY_SLOT` is the sole empty
+slot test and must precede mutation through table scans.
+
+| State | Meaning | Authoritative consumer |
+| --- | --- | --- |
+| `MX_X`, `MX_Y` | Current map position | movement, combat, visibility |
+| `MX_TYPE` | Active creature-table index or `EMPTY_SLOT` | every live-slot scan |
+| `MX_HP_LO`, `MX_HP_HI` | Current 16-bit HP | combat, monster magic, flee logic |
+| `MX_FLAGS.MF_AWAKE` | Monster may proceed into active AI | `monster_process_one` |
+| `MX_SLEEP_CUR` | Remaining compact sleep counter | `monster_wake_check` |
+| `MX_SPEED_CNT` | Movement scheduling state | monster AI tick |
+| `MX_STUN` | Turns unable to act | `monster_process_one` |
+| `MX_CONFUSE` | Live confusion timer used by AI | combat and `monster_process_one` |
+| `MX_FLEE_LO`, `MX_FLEE_HI` | 16-bit flee HP threshold | movement/flee logic |
+| `MF_PROVOKED` | Player hostility; permits town-creature retaliation | combat, bash, AI |
+| `MF_VISIBLE` | Current ordinary sight and renderer authority | visibility, targeting |
+| `MF_DETECTED` | Magical detection knowledge: timed Detect Monsters or immediate Detect Evil pending its post-redraw clear | renderer, free-look, and dirty tracking; not ordinary targeting |
+| `MF_CONFUSED` | Defined flag with no production consumer found | not authoritative; use `MX_CONFUSE` |
+
+`MF_VISIBLE` and `MF_DETECTED` are knowledge/render states. Detection may be
+timer-owned or an immediate reveal latch; it does not grant ordinary LOS or
+spell targeting. Current production also makes
+`MF_VISIBLE` monsters wake-eligible outside `cr_aaf`; that behavior is disputed
+and recorded below rather than silently treated as settled policy.
+
+## Settled Transitions
+
+| Event | Required transition | Production entry point | Existing coverage |
+| --- | --- | --- | --- |
+| Apply explicit sleep | Clear `MF_AWAKE`; store duration in `MX_SLEEP_CUR` | `monster_apply_sleep` | C64/C128 sleep and sanctuary suites |
+| Ordinary active AI | Only `MF_AWAKE` monsters proceed past wake check | `monster_process_one` | C64 `test_monster_ai.s` |
+| Empty-slot scan | Skip before writing any other field | all table scans | monster/attack tests |
+| Detect Monsters | May set and expose `MF_DETECTED`; must not imply `MF_VISIBLE` | visibility producer, inspection, dirty tracking, renderers | platform detect/render tests |
+| Explicit aggravation | Applies to every live slot; transition details beyond wake state remain in decision ledger | attack/item aggravation paths | C64 monster-attack coverage is partial |
+
+Numeric counters are unsigned bytes unless a field says otherwise. Arithmetic
+must not wrap accidentally. For each changed formula, record every input and
+intermediate width, carry state, mathematical range, and saturation/truncation
+point. Exhaustive tests are preferred when the input domain is one byte.
+
+## Decision Ledger
+
+Accepted rows dated 2026-07-09 record explicit maintainer decisions from the
+work16 behavior review; this ledger is their durable approval provenance.
+
+| ID | Status | Owner/date | Scope and selected rule | Evidence/enforcement | Supersedes |
+| --- | --- | --- | --- | --- | --- |
+| MON-001 | Accepted | Project maintainer, 2026-07-09 | Detected-only monsters are renderable/inspectable knowledge but are not ordinary spell targets | maintainer decision; targeting and renderer tests; inspection test `NOT IMPLEMENTED` | none |
+| MON-002 | Accepted | Project maintainer, 2026-07-09 | Explicit sleep clears `MF_AWAKE` and stores the compact duration | `monster_apply_sleep`; sleep/sanctuary tests | none |
+| MON-003 | Disputed current behavior | Project maintainer, 2026-07-09 | Production lets `MF_VISIBLE` bypass `cr_aaf` for wake eligibility; no preservation decision recorded | `monster_ai.s::monster_wake_check`; no independent policy test | none |
+| MON-004 | Open | Project maintainer, 2026-07-09 | Exact one-byte initial sleep mapping and overflow policy | no accepted rule/enforcement | none |
+| MON-005 | Open | Project maintainer, 2026-07-09 | Rest, paralysis and stealth effect on wake pressure | no accepted rule/enforcement | none |
+| MON-006 | Open | Project maintainer, 2026-07-09 | Group/explicit wake counter normalization; sleep resistance/immunity; aggravation speed/radius | partial tests only | none |
+
+## Conditional Verification Matrix
+
+Select rows for the transitions changed and document omitted relevant rows.
+
+| Change | Required cases |
+| --- | --- |
+| Spawn/sleep arithmetic | zero, ordinary, maximum source value; overflow and monotonicity |
+| Wake eligibility | inside, at, and outside awareness boundary; visible/not visible; rest state if relevant |
+| Wake transition | counter remains positive, reaches zero, underflows; group and explicit paths if affected |
+| Spell/attack state | success, resistance/immunity if represented, empty slot, last slot |
+| Visibility/detection | visible-only, detected-only, neither, LOS blocked, production targeting |
+| Shared implementation | affected C64, C128, and Plus/4 production paths or explicit exemption |
+
+Test-local copies prove harness behavior only. At least one regression test must
+execute the changed production routine through its real dispatch/overlay path.
+
+## Executable Enforcement
+
+| Invariant | Current gate | Command/status |
+| --- | --- | --- |
+| Basic AI wake transitions | `platforms/commodore/c64/tests/test_monster_ai.s` | `TEST_FILTER='monster_ai' make test64` |
+| C64 Detect Evil behavior | `platforms/commodore/c64/tests/test_detect_evil.s` | `TEST_FILTER='detect_evil' make test64`; does not prove timed Detect Monsters lifecycle |
+| C128 detection dispatch/effect pieces | `platforms/commodore/c128/tests/test_detect_monsters128.s`, `test_detect_evil128.s` use test-local stubs/helpers | `TEST_FILTER='detect_monsters128|detect_evil128' make test128`; complete producer path `NOT IMPLEMENTED` |
+| C64 detected-only targeting exclusion | `platforms/commodore/c64/tests/test_dispel_evil_prayer.s` | `TEST_FILTER='dispel_evil_prayer' make test64` |
+| C128 detected-only targeting exclusion | `platforms/commodore/c128/tests/test_dispel_evil_prayer128.s` | `TEST_FILTER='dispel_evil_prayer128' make test128` |
+| C64 renderer consumption | `platforms/commodore/c64/tests/test_render.s` | `TEST_FILTER='render' make test64`; seeded flags do not prove the producer |
+| Plus/4 renderer consumption | `platforms/commodore/plus4/tests/test_renderplus4.s` | `TEST_FILTER='renderplus4' make testplus4` |
+| Plus/4 production visibility-wrapper integration | `platforms/commodore/plus4/tests/test_visibility_renderplus4.s` | `TEST_FILTER='visibility_renderplus4' make testplus4` |
+| C128 renderer consumption | `platforms/commodore/c128/tests/test_vdc_scroll_delta128.s` | `TEST_FILTER='vdc_scroll_delta128' make test128`; seeded cases do not prove the producer |
+| C64 spell sleep dispatch | C64 sleep/sanctuary test files | `TEST_FILTER='sleep|sanctuary' make test64`; some paths use test-local helpers |
+| C128 spell sleep behavior | C128 sleep/sanctuary test files | `TEST_FILTER='sleep|sanctuary' make test128`; production-overlay coverage incomplete |
+| Plus/4 monster sleep/wake parity | none | `NOT IMPLEMENTED` |
+| One-byte sleep arithmetic exhaustive boundary gate | none | `NOT IMPLEMENTED` |
+| Detected-only production free-look inspection | none | `NOT IMPLEMENTED` |
+| Complete cross-platform timed Detect Monsters producer lifecycle | none | `NOT IMPLEMENTED` |
