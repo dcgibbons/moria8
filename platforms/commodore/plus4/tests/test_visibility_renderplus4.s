@@ -136,6 +136,7 @@ test_start:
     jsr test_lit_unvisited_production_hides_monster
     jsr test_horizontal_move_production_visibility_clears_monster
     jsr test_vertical_move_production_visibility_clears_monster
+    jsr test_shared_sleep_wake_aggravate
     jmp test_pass
 
 setup_scene:
@@ -371,6 +372,43 @@ test_vertical_move_production_visibility_clears_monster:
     lda #SC_SPACE
     sta test_expect_char
     jmp assert_rendered_tile
+
+test_shared_sleep_wake_aggravate:
+    jsr setup_scene
+    lda #23
+    sta zp_temp0
+    lda #20
+    sta zp_temp1
+    jsr place_monster_at_temp
+    ldx #0
+    lda #25
+    jsr monster_apply_sleep
+    jsr monster_wake
+    ldy #MX_SLEEP_CUR
+    lda (zp_ptr0),y
+    bne !sleep_fail+
+    ldy #MX_FLAGS
+    lda (zp_ptr0),y
+    and #MF_AWAKE
+    beq !sleep_fail+
+    ldx #0
+    lda #25
+    jsr monster_apply_sleep
+    lda #20
+    jsr monster_aggravate_all
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_SLEEP_CUR
+    lda (zp_ptr0),y
+    bne !sleep_fail+
+    ldy #MX_FLAGS
+    lda (zp_ptr0),y
+    and #MF_AWAKE
+    beq !sleep_fail+
+    rts
+!sleep_fail:
+    lda #$61
+    jmp test_fail
 
 assert_rendered_tile:
     lda zp_temp1

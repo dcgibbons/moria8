@@ -41,6 +41,11 @@ spell targeting. Current production also makes
 `MF_VISIBLE` monsters wake-eligible outside `cr_aaf`; that behavior is disputed
 and recorded below rather than silently treated as settled policy.
 
+Ordinary wake pressure currently uses Chebyshev distance, while both upstream
+oracles use `max(dx,dy) + floor(min(dx,dy)/2)`. The shared distance helper also
+owns monster spell range, so convergence is tracked as a separate backlog item
+with diagonal boundary tests rather than being changed incidentally here.
+
 ## Settled Transitions
 
 | Event | Required transition | Production entry point | Existing coverage |
@@ -49,7 +54,7 @@ and recorded below rather than silently treated as settled policy.
 | Ordinary active AI | Only `MF_AWAKE` monsters proceed past wake check | `monster_process_one` | C64 `test_monster_ai.s` |
 | Empty-slot scan | Skip before writing any other field | all table scans | monster/attack tests |
 | Detect Monsters | May set and expose `MF_DETECTED`; must not imply `MF_VISIBLE` | visibility producer, inspection, dirty tracking, renderers | platform detect/render tests |
-| Explicit aggravation | Applies to every live slot; transition details beyond wake state remain in decision ledger | attack/item aggravation paths | C64 monster-attack coverage is partial |
+| Explicit aggravation | Clear sleep and wake every live slot; upstream nearby haste remains unresolved | `monster_aggravate_all` | C64 attack and Plus/4 shared-producer coverage |
 
 Numeric counters are unsigned bytes unless a field says otherwise. Arithmetic
 must not wrap accidentally. For each changed formula, record every input and
@@ -65,10 +70,11 @@ work16 behavior review; this ledger is their durable approval provenance.
 | --- | --- | --- | --- | --- | --- |
 | MON-001 | Accepted | Project maintainer, 2026-07-09 | Detected-only monsters are renderable/inspectable knowledge but are not ordinary spell targets | maintainer decision; targeting and renderer tests; inspection test `NOT IMPLEMENTED` | none |
 | MON-002 | Accepted | Project maintainer, 2026-07-09 | Explicit sleep clears `MF_AWAKE` and stores the compact duration | `monster_apply_sleep`; sleep/sanctuary tests | none |
-| MON-003 | Disputed current behavior | Project maintainer, 2026-07-09 | Production lets `MF_VISIBLE` bypass `cr_aaf` for wake eligibility; no preservation decision recorded | `monster_ai.s::monster_wake_check`; no independent policy test | none |
-| MON-004 | Open | Project maintainer, 2026-07-09 | Exact one-byte initial sleep mapping and overflow policy | no accepted rule/enforcement | none |
-| MON-005 | Open | Project maintainer, 2026-07-09 | Rest, paralysis and stealth effect on wake pressure | no accepted rule/enforcement | none |
-| MON-006 | Open | Project maintainer, 2026-07-09 | Group/explicit wake counter normalization; sleep resistance/immunity; aggravation speed/radius | partial tests only | none |
+| MON-003 | Disputed current behavior | Project maintainer, 2026-07-09 | Production lets `MF_VISIBLE` bypass `cr_aaf` for wake eligibility; eligible wake pressure is gated by race/class stealth as in VMS Moria | `monster_ai.s::monster_wake_check`; C64 stealth-gate regressions | none |
+| MON-004 | Accepted | Project maintainer, 2026-07-09 | Initial sleep uses the compact randomized mapping and saturates at `$ff`; arithmetic must not wrap | `monster_initial_sleep`; C64 maximum-input regression | none |
+| MON-005 | Accepted | Project maintainer, 2026-07-09 | Auto-rest suppresses ordinary deterministic wake pressure, matching VMS Moria | `monster_wake_check`; C64 AI rest regression | none |
+| MON-006 | Accepted in part | Project maintainer, 2026-07-09 | Explicit/group wakes clear `MX_SLEEP_CUR`; Sleep I/II/III use monster-level resistance; aggravation wakes globally | shared helpers and C64/C128/Plus4 focused gates; no-sleep immunity and upstream nearby aggravation haste remain open | none |
+| MON-007 | Accepted | Project maintainer, 2026-07-10 | Compact ordinary wake pressure uses distance steps `{8,8,4,3,2,2,1...}` scaled from VMS Moria's `floor(75/d)`; an eligible zero sleep counter wakes before rest/stealth gates | explicit maintainer direction to address staff review; C64 deterministic wake regressions | none |
 
 ## Conditional Verification Matrix
 
@@ -91,6 +97,7 @@ execute the changed production routine through its real dispatch/overlay path.
 | Invariant | Current gate | Command/status |
 | --- | --- | --- |
 | Basic AI wake transitions | `platforms/commodore/c64/tests/test_monster_ai.s` | `TEST_FILTER='monster_ai' make test64` |
+| Compact wake-pressure buckets and spawn-to-AI flow | `platforms/commodore/c64/tests/test_monster_ai.s` | deterministic distances 0-8/20 and production spawn cases at 1/6/8; C128/Plus4 have no dedicated ordinary-wake harness and rely on identical shared source plus product layout gates |
 | C64 Detect Evil behavior | `platforms/commodore/c64/tests/test_detect_evil.s` | `TEST_FILTER='detect_evil' make test64`; does not prove timed Detect Monsters lifecycle |
 | C128 detection dispatch/effect pieces | `platforms/commodore/c128/tests/test_detect_monsters128.s`, `test_detect_evil128.s` use test-local stubs/helpers | `TEST_FILTER='detect_monsters128|detect_evil128' make test128`; complete producer path `NOT IMPLEMENTED` |
 | C64 detected-only targeting exclusion | `platforms/commodore/c64/tests/test_dispel_evil_prayer.s` | `TEST_FILTER='dispel_evil_prayer' make test64` |
@@ -101,7 +108,7 @@ execute the changed production routine through its real dispatch/overlay path.
 | C128 renderer consumption | `platforms/commodore/c128/tests/test_vdc_scroll_delta128.s` | `TEST_FILTER='vdc_scroll_delta128' make test128`; seeded cases do not prove the producer |
 | C64 spell sleep dispatch | C64 sleep/sanctuary test files | `TEST_FILTER='sleep|sanctuary' make test64`; some paths use test-local helpers |
 | C128 spell sleep behavior | C128 sleep/sanctuary test files | `TEST_FILTER='sleep|sanctuary' make test128`; production-overlay coverage incomplete |
-| Plus/4 monster sleep/wake parity | none | `NOT IMPLEMENTED` |
-| One-byte sleep arithmetic exhaustive boundary gate | none | `NOT IMPLEMENTED` |
+| Plus/4 shared sleep/wake/aggravation producer | `platforms/commodore/plus4/tests/test_visibility_renderplus4.s` | `TEST_FILTER='visibility_renderplus4' make testplus4` |
+| One-byte sleep arithmetic maximum boundary | `platforms/commodore/c64/tests/test_monster.s` | `TEST_FILTER='monster' make test64`; exhaustive byte-domain gate remains `NOT IMPLEMENTED` |
 | Detected-only production free-look inspection | none | `NOT IMPLEMENTED` |
 | Complete cross-platform timed Detect Monsters producer lifecycle | none | `NOT IMPLEMENTED` |

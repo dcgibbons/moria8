@@ -204,9 +204,8 @@ audit_one_door_chokepoint:
     lda bfs_cur_y
     sta audit_door_y
     sta dg_cy1
-    lda #0
-    sta audit_pair_count
-
+    // A valid door has exactly one straight passable axis and wall jambs on
+    // the perpendicular axis. One-sided and T-shaped doors are bypassable.
     lda audit_door_x
     sec
     sbc #1
@@ -223,7 +222,13 @@ audit_one_door_chokepoint:
     sta audit_check_y
         jsr audit_coord_passable
         bcc !aod_try_vertical+
-        inc audit_pair_count
+    lda audit_door_x
+    sta dg_room_x
+    lda audit_door_y
+    sta dg_room_y
+    jsr jdg_opposing_vertical
+    bcs !aod_pass+
+    jmp !aod_fail+
 
     !aod_try_vertical:
     lda audit_door_x
@@ -233,7 +238,7 @@ audit_one_door_chokepoint:
     sbc #1
     sta audit_check_y
     jsr audit_coord_passable
-    bcc !aod_finish+
+    bcc !aod_fail+
     lda audit_door_x
     sta audit_check_x
     lda audit_door_y
@@ -241,21 +246,12 @@ audit_one_door_chokepoint:
     adc #1
     sta audit_check_y
         jsr audit_coord_passable
-        bcc !aod_finish+
-        inc audit_pair_count
-        lda audit_pair_count
-        cmp #2
-    bcs !aod_fail+
-
-	    !aod_finish:
-	        lda audit_pair_count
-	        cmp #1
-	        beq !aod_pass+
+        bcc !aod_fail+
         lda audit_door_x
         sta dg_room_x
         lda audit_door_y
         sta dg_room_y
-        jsr junction_door_geometry_ok
+        jsr jdg_opposing_horizontal
         bcc !aod_fail+
 !aod_pass:
 	        ldx audit_door_y
@@ -795,8 +791,29 @@ test_start:
 
     lda zp_temp3
     cmp t9_sig_before
-    beq !t9_pass+
+    beq !t9_signature_ok+
     jmp !t9_fail+
+!t9_signature_ok:
+
+    // Slot metadata must remain attached after shuffle, and connectors must
+    // use the upstream slot center rather than the rectangle midpoint.
+    ldx #0
+!t9_find_slot3:
+    lda room_type,x
+    cmp #3
+    beq !t9_slot3_found+
+    inx
+    cpx #4
+    bcc !t9_find_slot3-
+    jmp !t9_fail+
+!t9_slot3_found:
+    jsr conn_room_center_to_start
+    lda dg_cx1
+    cmp room_slot_center_x + 3
+    bne !t9_fail+
+    lda dg_cy1
+    cmp room_slot_center_y + 3
+    bne !t9_fail+
 
 !t9_pass:
     lda #$01
@@ -945,6 +962,37 @@ test_start:
     bcc !t12_connected+
     jmp !t12_fail+
 !t12_connected:
+    // Upstream independent extents permit every width 3..23 and height 3..8,
+    // including even sizes. The fixed production seed must exercise at least
+    // one even dimension so mirrored odd-only generation cannot regress.
+    lda #0
+    sta zp_temp0
+    ldx #0
+!t12_extent_loop:
+    lda room_w,x
+    cmp #3
+    bcc !t12_fail+
+    cmp #24
+    bcs !t12_fail+
+    and #1
+    bne !t12_width_checked+
+    inc zp_temp0
+!t12_width_checked:
+    lda room_h,x
+    cmp #3
+    bcc !t12_fail+
+    cmp #9
+    bcs !t12_fail+
+    and #1
+    bne !t12_height_checked+
+    inc zp_temp0
+!t12_height_checked:
+    inx
+    cpx room_count
+    bcc !t12_extent_loop-
+    lda zp_temp0
+    beq !t12_fail+
+
     lda #$01
     sta tc_results+11
     jmp !t12_done+
@@ -1445,6 +1493,145 @@ test_start:
 	    jmp !t17_fail+
 
 !t17_pass5:
+    // A one-sided door is not a chokepoint. This is the generated corner
+    // regression: three cardinal walls plus one open side previously passed
+    // the audit and left a door the player could walk around.
+    jsr fill_map_rock
+    lda #20
+    ldy #20
+    jsr write_tile_at_xy
+    lda #TILE_DOOR_CLOSED | DUNGEON_FLAGS
+    sta (zp_ptr0),y
+    lda #21
+    ldy #20
+    jsr write_tile_at_xy
+    lda #TILE_FLOOR
+    sta (zp_ptr0),y
+    jsr audit_final_door_chokepoints
+    bcs !t17_one_sided_rejected+
+    jmp !t17_fail+
+!t17_one_sided_rejected:
+
+    // A valid straight junction must materialize one of the supported door
+    // types. The production writer previously lost A while rebuilding ptr0
+    // and stored the map-row high byte as terrain instead.
+    jsr fill_map_rock
+    lda #19
+    ldy #20
+    jsr write_tile_at_xy
+    lda #TILE_FLOOR
+    sta (zp_ptr0),y
+    lda #20
+    ldy #20
+    jsr write_tile_at_xy
+    lda #TILE_FLOOR
+    sta (zp_ptr0),y
+    lda #21
+    ldy #20
+    jsr write_tile_at_xy
+    lda #TILE_FLOOR
+    sta (zp_ptr0),y
+    lda #20
+    sta dg_room_x
+    sta dg_room_y
+    lda #0
+    sta dg_door_flag
+    lda #16
+    sta t16_counter
+!t17_junction_try:
+    jsr try_junction_door
+    lda #20
+    ldy #20
+    jsr write_tile_at_xy
+    lda (zp_ptr0),y
+    and #TILE_TYPE_MASK
+    cmp #TILE_FLOOR
+    bne !t17_junction_written+
+    dec t16_counter
+    bne !t17_junction_try-
+    jmp !t17_fail+
+!t17_junction_written:
+    cmp #TILE_DOOR_OPEN
+    beq !t17_junction_ok+
+    cmp #TILE_DOOR_CLOSED
+    beq !t17_junction_ok+
+    cmp #TILE_SECRET
+    beq !t17_junction_ok+
+    jmp !t17_fail+
+!t17_junction_ok:
+
+    // Room-wall guards must survive per-tunnel materialization, reject a
+    // later adjacent penetration, then be consumed by fill_cave_granite.
+    jsr fill_map_rock
+    lda #19
+    ldy #20
+    jsr write_tile_at_xy
+    lda #TILE_WALL_H | FLAG_LIT
+    sta (zp_ptr0),y
+    lda #20
+    ldy #20
+    jsr write_tile_at_xy
+    lda #TILE_WALL_H | FLAG_LIT
+    sta (zp_ptr0),y
+    lda #21
+    ldy #20
+    jsr write_tile_at_xy
+    lda #TILE_WALL_H | FLAG_LIT
+    sta (zp_ptr0),y
+    lda #20
+    sta dg_cx1
+    sta dg_cy1
+    lda #20
+    sta dg_room_x
+    lda #19
+    sta dg_room_y
+    jsr tunnel_stage_current
+    jsr materialize_staged_tunnel
+
+    lda #21
+    ldy #20
+    jsr write_tile_at_xy
+    lda (zp_ptr0),y
+    and #FLAG_OCCUPIED
+    bne !t17_guard_preserved+
+    jmp !t17_fail+
+!t17_guard_preserved:
+
+    lda #21
+    sta dg_cx1
+    sta dg_room_x
+    lda #20
+    sta dg_cy1
+    lda #19
+    sta dg_room_y
+    jsr tunnel_stage_current
+    lda dg_cx1
+    cmp #21
+    beq !t17_guard_x_ok+
+    jmp !t17_fail+
+!t17_guard_x_ok:
+    lda dg_cy1
+    cmp #19
+    beq !t17_guard_y_ok+
+    jmp !t17_fail+
+!t17_guard_y_ok:
+
+    jsr fill_cave_granite
+    lda #21
+    ldy #20
+    jsr write_tile_at_xy
+    lda (zp_ptr0),y
+    and #FLAG_OCCUPIED
+    beq !t17_guard_cleared+
+    jmp !t17_fail+
+!t17_guard_cleared:
+    lda (zp_ptr0),y
+    and #TILE_TYPE_MASK
+    cmp #TILE_WALL_H
+    beq !t17_guard_tile_ok+
+    jmp !t17_fail+
+!t17_guard_tile_ok:
+
     lda #$01
     sta tc_results+16
     jmp !t17_done+

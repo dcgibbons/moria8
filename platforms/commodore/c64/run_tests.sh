@@ -220,7 +220,7 @@ run_test() {
 
     # Assemble and capture output
     local asm_output
-    asm_output=$(java -jar "$KICKASS" "${KICKASS_TRACE_DEFINE[@]}" -define C64_UNIT_TEST "$src" -showmem -o "$prg_file" 2>&1)
+    asm_output=$(java -jar "$KICKASS" "${KICKASS_TRACE_DEFINE[@]}" -define C64_UNIT_TEST "$src" -showmem -vicesymbols -o "$prg_file" 2>&1)
 
     if ! echo "$asm_output" | grep -q "0 failed"; then
         echo "FAIL (assembly error)"
@@ -277,10 +277,41 @@ run_test() {
         return
     fi
 
-    # Create monitor script: set breakpoint, continue, dump results, exit.
+    local sym_file
+    local bootstrap_addr
+    sym_file="$(dirname "$prg_file")/$(basename "${src%.s}").vs"
+    if [ ! -f "$sym_file" ]; then
+        echo "FAIL (missing VICE symbol file)"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+    bootstrap_addr=$(awk '$3 == ".test_bootstrap" { split($2,a,":"); print toupper(a[2]); exit }' "$sym_file")
+    if [ -z "$bootstrap_addr" ]; then
+        bootstrap_addr=$(awk '$3 == ".bootstrap" { split($2,a,":"); print toupper(a[2]); exit }' "$sym_file")
+    fi
+    if [ -z "$bootstrap_addr" ]; then
+        bootstrap_addr=$(awk '$3 == ".test_start" { split($2,a,":"); print toupper(a[2]); exit }' "$sym_file")
+    fi
+    rm -f "$sym_file"
+    if [[ "$bootstrap_addr" =~ ^[0-9A-Fa-f]{1,4}$ ]]; then
+        bootstrap_addr=$(printf '%04X' "$((16#$bootstrap_addr))")
+    fi
+    if ! [[ "$bootstrap_addr" =~ ^[0-9A-Fa-f]{4}$ ]] || [ $((16#$bootstrap_addr)) -ge $((16#A000)) ]; then
+        echo "FAIL (missing low test bootstrap below \$A000)"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    # Arm the completion breakpoint only after autostart reaches low RAM.
+    # Otherwise BASIC ROM can execute a high stop address before PRG injection.
     local mon_file
     mon_file=$(mktemp -t "test_${name}_mon")
     {
+        echo "break exec \$${bootstrap_addr}"
+        echo "g"
+        echo "delete 1"
         echo "break exec \$${end_addr}"
         echo "g"
         echo "m ${result_range}"
@@ -3540,8 +3571,8 @@ run_test "main_loop" "tests/test_main_loop.s" "0400 0427" 40 500000000
 run_test "turn" "tests/test_turn.s" "0400 0418" 25 500000000
 run_test "player" "tests/test_player.s" "0400 0409" 10
 run_test "dungeon" "tests/test_dungeon.s" "0400 042b" 44 500000000
-run_test "monster" "tests/test_monster.s" "0400 0411" 18 500000000
-run_test "monster_ai" "tests/test_monster_ai.s" "0400 041a" 27 500000000
+run_test "monster" "tests/test_monster.s" "0400 0412" 19 500000000
+run_test "monster_ai" "tests/test_monster_ai.s" "0400 0422" 35 500000000
 run_test "combat" "tests/test_combat.s" "0400 0427" 40 500000000
 run_test "msg_long" "tests/test_msg_long.s" "0400 0400" 1 20000000
 run_test "monster_attack" "tests/test_monster_attack.s" "0400 040d" 14 500000000

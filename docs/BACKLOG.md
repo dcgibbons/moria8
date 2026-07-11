@@ -228,6 +228,73 @@ Acceptance target:
   spiking doors is tactically useful but not an absolute wall against
   humanoid/intelligent or large monsters, within Moria8 memory limits.
 
+### Add upstream monster sleep immunity
+
+VMS Moria and Umoria represent magical sleep immunity independently from a
+creature's ordinary starting sleep value. Their `CD_NO_SLEEP` defense prevents
+Sleep I, Sleep II, Sleep III, Sanctuary, and other monster-sleep effects from
+changing the monster's sleep state. Moria8 now implements shared level
+resistance for its sleep spell family, but its one-byte `cr_mflags` table has no
+remaining bit for `CD_NO_SLEEP`. Treating `cr_sleep = 0` as immunity would be
+incorrect because natural alertness and magical sleep immunity are separate
+upstream properties.
+
+Required work:
+
+- Add a compact independent sleep-immunity representation without overloading
+  `cr_sleep` or changing existing `cr_mflags` meanings.
+- Update `tools/parse_creatures.py` and every generated creature tier payload
+  to preserve upstream `cdefense & $1000` / `CD_NO_SLEEP` data.
+- Update tier loading, embedded test rosters, table-size assertions, C128 cache
+  ownership, and disk payload accounting for the selected representation.
+- Route every monster-sleep producer through one shared resistance check that
+  handles both monster level and categorical sleep immunity.
+- Leave immune monsters' `MF_AWAKE` and `MX_SLEEP_CUR` unchanged and report the
+  effect as ineffective through the existing sleep feedback path.
+- Decide whether and how observing immunity updates Moria8 monster recall;
+  Umoria records observed `CD_NO_SLEEP` for visible monsters.
+- Add production-path C64, C128, and Plus/4 tests for susceptible, level-
+  resistant, and immune monsters across directional, adjacent, and visible-all
+  sleep effects, including an immune monster with a nonzero natural sleep
+  value.
+- Preserve all resident, overlay, tier-cache, and banked-payload memory
+  assertions.
+
+Acceptance target:
+
+- Every shipped creature carrying upstream `CD_NO_SLEEP` is immune to magical
+  sleep on all three platforms, ordinary sleep values retain their original
+  meaning, and susceptible creatures continue to use the shared level-
+  resistance behavior.
+
+### Align shared monster distance with upstream
+
+Moria8's shared `monster_distance_to_player` currently returns Chebyshev
+distance. VMS Moria and Umoria use `max(dx,dy) + floor(min(dx,dy)/2)`. The
+shared helper currently controls both ordinary monster wake eligibility and
+monster spell range, so changing it as part of a wake-pressure repair would
+silently alter casting behavior without dedicated diagonal-range coverage.
+
+Required work:
+
+- Replace the shared distance helper with the upstream metric, including a
+  defined saturation policy for C128's larger map dimensions.
+- Audit every caller, especially `monster_wake_check` and
+  `monster_can_cast`, before changing the helper.
+- Add deterministic horizontal, vertical, and diagonal fixtures at every
+  awareness and casting boundary.
+- Decide separately whether visibility, infravision, projectile range, and
+  group-wake radius should retain their current Chebyshev metrics or converge
+  on the same upstream distance function.
+- Preserve the C64/C128 resident layout boundaries; both currently have only a
+  five-byte margin at their primary resident boundary.
+
+Acceptance target:
+
+- Monster wake eligibility and spell range use the upstream distance metric
+  with explicit tests for diagonal boundaries and no regressions in visibility,
+  targeting, or platform memory layout.
+
 ### Add classic Moria chests
 
 Moria8 currently has floor objects, traps, doors, searching, opening, bashing,

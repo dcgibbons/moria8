@@ -39,31 +39,7 @@ monster_can_cast:
     // Save spell chance for later roll
     sta mm_flags              // Reuse as temp for chance
 
-    // Compute Chebyshev distance to player
-    lda zp_player_x
-    sec
-    sbc zp_mon_x
-    bcs !mcc_dx_pos+
-    eor #$ff
-    clc
-    adc #1
-!mcc_dx_pos:
-    sta zp_mon_scratch0       // abs_dx
-
-    lda zp_player_y
-    sec
-    sbc zp_mon_y
-    bcs !mcc_dy_pos+
-    eor #$ff
-    clc
-    adc #1
-!mcc_dy_pos:
-    // A = abs_dy, compare with abs_dx for max
-    cmp zp_mon_scratch0
-    bcs !mcc_have_dist+
-    lda zp_mon_scratch0
-!mcc_have_dist:
-    // A = Chebyshev distance
+    jsr monster_distance_to_player
     sta zp_los_step
     cmp #MAX_CAST_RANGE + 1
     bcs !mcc_no+              // Too far

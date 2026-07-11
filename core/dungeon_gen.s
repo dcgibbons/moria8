@@ -561,10 +561,11 @@ blank_cave:
     lda #TILE_FLOOR             // Generation null/open cave.
     jmp map_bulk_fill_all
 
-// Convert generation scratch after tunnel materialization:
+// Convert generation scratch after all tunnels have been materialized:
 //   $00 blank cave       -> granite
 //   floor|OCCUPIED      -> corridor floor
 //   floor|OCC|HAS_ITEM  -> junction candidate for place_junction_doors
+//   wall|OCCUPIED       -> protected room wall; clear the temporary guard
 fill_cave_granite:
     ldx #0
 !fcg_row:
@@ -575,11 +576,19 @@ fill_cave_granite:
     ldy #0
 !fcg_col:
     :MapRead_ptr0_y()
+    sta vc_tile
     beq !fcg_rock+
     cmp #DGEN_CORR
     beq !fcg_floor+
     cmp #DGEN_JUNCTION
     beq !fcg_keep_junction+
+    lda vc_tile
+    and #(FLAG_OCCUPIED | FLAG_HAS_ITEM)
+    cmp #FLAG_OCCUPIED
+    bne !fcg_next+
+    lda vc_tile
+    and #~FLAG_OCCUPIED & $ff
+    :MapWrite_ptr0_y()
     jmp !fcg_next+
 !fcg_rock:
     lda #TILE_WALL_H
@@ -647,50 +656,7 @@ place_rooms:
     lda room_slot_center_y,x
     sta dg_cy1
 
-    // Keep the stored rectangle center on the upstream slot center.  The
-    // connector derives tunnel endpoints from room_x/y/w/h; if asymmetric
-    // extents drift that center by a row/column, same-band C128 rooms create
-    // adjacent parallel corridors.
-    lda #11
-    jsr rng_range
-    sta dg_room_w               // left extent
-    inc dg_room_w
-    lda dg_cx1
-    sec
-    sbc dg_room_w
-    sta dg_room_x
-
-    lda dg_room_w
-    asl
-    adc #1
-    sta dg_room_w
-
-    lda #3
-    jsr rng_range
-    sta dg_room_h               // top extent
-    inc dg_room_h
-    lda dg_cy1
-    sec
-    sbc dg_room_h
-    sta dg_room_y
-
-    lda dg_room_h
-    asl
-    adc #1
-    sta dg_room_h
-
-    ldx room_count
-    lda dg_room_x
-    sta room_x,x
-    lda dg_room_y
-    sta room_y,x
-    lda dg_room_w
-    sta room_w,x
-    lda dg_room_h
-    sta room_h,x
-
-    jsr draw_dungeon_room
-
+    // Match upstream build_room draw order and independent extents.
     lda #25
     jsr rng_range
     clc
@@ -702,6 +668,54 @@ place_rooms:
     lda #1
 !room_dark:
     sta room_lit,x
+
+    lda #4
+    jsr rng_range
+    clc
+    adc #1
+    sta dg_room_h               // top extent, 1..4
+    lda dg_cy1
+    sec
+    sbc dg_room_h
+    sta dg_room_y
+
+    lda #3
+    jsr rng_range
+    clc
+    adc #2                      // bottom extent + inclusive center
+    adc dg_room_h
+    sta dg_room_h               // interior height, 3..8
+
+    lda #11
+    jsr rng_range
+    clc
+    adc #1
+    sta dg_room_w               // left extent, 1..11
+    lda dg_cx1
+    sec
+    sbc dg_room_w
+    sta dg_room_x
+
+    lda #11
+    jsr rng_range
+    clc
+    adc #2                      // right extent + inclusive center
+    adc dg_room_w
+    sta dg_room_w               // interior width, 3..23
+
+    ldx room_count
+    lda dg_room_x
+    sta room_x,x
+    lda dg_room_y
+    sta room_y,x
+    lda dg_room_w
+    sta room_w,x
+    lda dg_room_h
+    sta room_h,x
+    lda dg_slot_scan
+    sta room_type,x             // Temporary slot id; assign_special_room clears it.
+
+    jsr draw_dungeon_room
 
     inc room_count
 !skip_slot:
@@ -1077,30 +1091,20 @@ connect_rooms:
 	    rts
 
 conn_room_center_to_start:
-    lda room_w,x
-    lsr
-    clc
-    adc room_x,x
+    lda room_type,x
+    tay
+    lda room_slot_center_x,y
     sta dg_cx1
-
-    lda room_h,x
-    lsr
-    clc
-    adc room_y,x
+    lda room_slot_center_y,y
     sta dg_cy1
     rts
 
 conn_room_center_to_target:
-    lda room_w,x
-    lsr
-    clc
-    adc room_x,x
+    lda room_type,x
+    tay
+    lda room_slot_center_x,y
     sta dg_cx2
-
-    lda room_h,x
-    lsr
-    clc
-    adc room_y,x
+    lda room_slot_center_y,y
     sta dg_cy2
     rts
 
@@ -1122,6 +1126,10 @@ carve_staged_tunnel:
     cmp dg_cy2
     beq !cst_done+
 	!cst_not_done:
+	    lda dg_cx1
+	    sta dg_room_x
+	    lda dg_cy1
+	    sta dg_room_y
 	    jsr tunnel_step_toward
 	    inc dg_tun_steps
 	    jsr tunnel_stage_current
@@ -1251,6 +1259,10 @@ tunnel_stage_current:
     cmp #DGEN_JUNCTION
     beq !tsc_corr+
     lda dg_retries
+    and #(FLAG_OCCUPIED | FLAG_HAS_ITEM)
+    cmp #FLAG_OCCUPIED
+    beq !tsc_guarded_wall+
+    lda dg_retries
     and #TILE_TYPE_MASK
     beq !tsc_done+              // Room floor or other floor flags.
     cmp #TILE_DOOR_OPEN
@@ -1289,6 +1301,14 @@ tunnel_stage_current:
 	    rts
 !tsc_done:
 	    rts
+!tsc_guarded_wall:
+    // Upstream temporary wall value 9 does not advance the tunnel cursor.
+    // Preserve that behavior for neighboring room-wall guards.
+    lda dg_room_x
+    sta dg_cx1
+    lda dg_room_y
+    sta dg_cy1
+    rts
 
 mark_staged_wall:
     lda dg_retries
@@ -1367,9 +1387,6 @@ materialize_staged_tunnel:
     lda vc_tile
     and #FLAG_HAS_ITEM
     bne !mst_candidate+
-    lda vc_tile
-    and #FLAG_OCCUPIED
-    bne !mst_clear_temp+
     jmp !mst_next+
 !mst_tunnel:
     lda #DGEN_CORR
@@ -1406,10 +1423,6 @@ materialize_staged_tunnel:
     lda #DGEN_CORR
     :MapWrite_ptr0_y()
     jmp !mst_next+
-!mst_clear_temp:
-    lda vc_tile
-    and #~FLAG_OCCUPIED & $ff
-    :MapWrite_ptr0_y()
 	!mst_next:
 	    iny
 	    cpy #MAP_COLS
@@ -1739,20 +1752,17 @@ try_junction_door:
     sta zp_ptr0_hi
     ldy dg_room_x
     :MapRead_ptr0_y()
-    and #TILE_TYPE_MASK
+	// Upstream junction doors are placed only on corridor floor, never room
+	// floor (which still carries FLAG_LIT at this stage).
+    cmp #TILE_FLOOR
     bne !tjd_no+
 	    lda #100
 	    jsr rng_range
 	    cmp #DUN_TUNNEL_DOORS
 	    bcc !tjd_no+
-	    jsr junction_door_geometry_ok
+    jsr junction_door_geometry_ok
     bcc !tjd_no+
     jsr random_door_type
-    ldx dg_room_y
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
     ldy dg_room_x
     :MapWrite_ptr0_y()
     inc dg_door_flag
@@ -1760,19 +1770,16 @@ try_junction_door:
     rts
 
 junction_door_geometry_ok:
-    lda #0
-    sta dg_retries
-    jsr jdg_count_up
-    jsr jdg_count_down
-    jsr jdg_count_left
-    jsr jdg_count_right
-    lda dg_retries
-    bmi !jdg_no+
-    cmp #3
-    bcc !jdg_no+
+    // Straight east-west corridor through north/south wall jambs.
     jsr jdg_opposing_vertical
+    bcc !jdg_try_vertical+
+    jsr jdg_corridor_left_right
     bcs !jdg_yes+
+!jdg_try_vertical:
+    // Straight north-south corridor through west/east wall jambs.
     jsr jdg_opposing_horizontal
+    bcc !jdg_no+
+    jsr jdg_corridor_up_down
     bcs !jdg_yes+
 !jdg_no:
     clc
@@ -1781,45 +1788,52 @@ junction_door_geometry_ok:
     sec
     rts
 
-jdg_count_up:
-    ldx dg_room_y
-    dex
-    ldy dg_room_x
-    jmp jdg_count_cell
-jdg_count_down:
-    ldx dg_room_y
-    inx
-    ldy dg_room_x
-    jmp jdg_count_cell
-jdg_count_left:
+jdg_corridor_left_right:
     ldx dg_room_y
     ldy dg_room_x
     dey
-    jmp jdg_count_cell
-jdg_count_right:
+    jsr jdg_cell_is_corridor
+    bcc !jclr_no+
     ldx dg_room_y
     ldy dg_room_x
     iny
-jdg_count_cell:
+    jsr jdg_cell_is_corridor
+    bcc !jclr_no+
+    sec
+    rts
+!jclr_no:
+    clc
+    rts
+
+jdg_corridor_up_down:
+    ldx dg_room_y
+    dex
+    ldy dg_room_x
+    jsr jdg_cell_is_corridor
+    bcc !jcud_no+
+    ldx dg_room_y
+    inx
+    ldy dg_room_x
+    jsr jdg_cell_is_corridor
+    bcc !jcud_no+
+    sec
+    rts
+!jcud_no:
+    clc
+    rts
+
+jdg_cell_is_corridor:
     lda map_row_lo,x
     sta zp_ptr1
     lda map_row_hi,x
     sta zp_ptr1_hi
     :MapRead_ptr1_y()
-    sta vc_tile
-    and #TILE_TYPE_MASK
-    cmp #TILE_DOOR_OPEN
-    bcc !jcc_wall_check+
-    lda dg_retries
-    ora #$80
-    sta dg_retries
+    cmp #TILE_FLOOR
+    beq !jcic_yes+
+    clc
     rts
-!jcc_wall_check:
-    lda vc_tile
-    jsr jdg_is_wall
-    bcc !jcc_no+
-    inc dg_retries
-!jcc_no:
+!jcic_yes:
+    sec
     rts
 
 jdg_opposing_vertical:

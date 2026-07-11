@@ -101,7 +101,7 @@ work16 behavior review; this ledger is their durable approval provenance.
 | --- | --- | --- | --- | --- | --- |
 | TRN-001 | Accepted | Project maintainer, 2026-07-09 | Renderers and inspection consume detected-only knowledge; targeting policy is owned solely by MON-001 | maintainer decision; renderer tests; free-look implementation evidence; inspection test `NOT IMPLEMENTED` | none |
 | TRN-002 | Accepted | Project maintainer, 2026-07-09 | Searching consumes two turns and aggregates scene dirtiness from both | `core/game_loop_helpers.s::turn_post_action_searchable_or_die`; implementation review and partial main-loop tests | none |
-| TRN-003 | Open | Project maintainer, 2026-07-09 | Exact scene changes that stop auto-rest | no settled policy; lifecycle tests incomplete | none |
+| TRN-003 | Accepted | Project maintainer, 2026-07-09 | Auto-rest discards stale entry dirtiness, consumes at least one rest turn, and stops only for recovery, input, messages, or scene dirtiness produced during its own turns | `cmd_autorest`, `auto_rest_should_stop`; C64/C128 main-loop coverage | none |
 
 ## Executable Enforcement
 
@@ -112,6 +112,6 @@ work16 behavior review; this ledger is their durable approval provenance.
 | C128 command/search/run redraw lifecycle | `platforms/commodore/c128/tests/test_main_loop128.s` | `TEST_FILTER='main_loop128' make test128`; search tests do not prove asymmetric dirty-first/clean-second aggregation |
 | C128 physical scroll-delta rendering | `platforms/commodore/c128/tests/test_vdc_scroll_delta128.s` | `TEST_FILTER='vdc_scroll_delta128' make test128` |
 | Plus/4 production visibility/render path | `platforms/commodore/plus4/tests/test_visibility_renderplus4.s` | `TEST_FILTER='visibility_renderplus4' make testplus4` |
-| Auto-rest stale-entry/current-turn stop policy | partial C64 main-loop coverage | complete contract test `NOT IMPLEMENTED` |
+| Auto-rest stale-entry/current-turn stop policy | C64 `test_main_loop.s`, C128 `test_main_loop128.s` | focused main-loop gates; C64 explicitly seeds stale entry dirtiness |
 | Search two-turn dirty aggregation with dirty/clean and clean/dirty orderings | none | `NOT IMPLEMENTED` |
 | Detected-only production free-look inspection | none | `NOT IMPLEMENTED` |

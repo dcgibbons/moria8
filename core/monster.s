@@ -435,11 +435,14 @@ monster_get_ptr:
     sta zp_ptr0_hi
     rts
 
-// monster_wake — Set MF_AWAKE flag on a monster
+// monster_wake — Clear sleep and set MF_AWAKE on a monster
 // Input: X = monster slot index
 // Clobbers: A, Y, zp_ptr0/hi
 monster_wake:
     jsr monster_get_ptr
+    ldy #MX_SLEEP_CUR
+    lda #0
+    sta (zp_ptr0),y
     ldy #MX_FLAGS
     lda (zp_ptr0),y
     ora #MF_AWAKE
@@ -459,6 +462,77 @@ monster_apply_sleep:
     ldy #MX_SLEEP_CUR
     pla
     sta (zp_ptr0),y
+    rts
+
+#if C128 && !C128_UNIT_TEST
+.segment RuntimeLowData
+#endif
+
+// monster_distance_to_player — Chebyshev distance from zp_mon_x/y to player.
+// Output: A = distance. Clobbers zp_mon_scratch0.
+monster_distance_to_player:
+    lda zp_player_x
+    sec
+    sbc zp_mon_x
+    bcs !mdtp_dx+
+    eor #$ff
+    adc #1
+!mdtp_dx:
+    sta zp_mon_scratch0
+    lda zp_player_y
+    sec
+    sbc zp_mon_y
+    bcs !mdtp_dy+
+    eor #$ff
+    adc #1
+!mdtp_dy:
+    cmp zp_mon_scratch0
+    bcs !mdtp_done+
+    lda zp_mon_scratch0
+!mdtp_done:
+    rts
+
+// monster_initial_sleep — Compact one-byte initial sleep with saturation.
+// Input: A = creature sleep value. Output: A = randomized live counter.
+monster_initial_sleep:
+    beq !mis_done+
+    sta zp_temp0
+    jsr rng_range
+    clc
+    adc #1
+    sta zp_temp1
+    lda zp_temp0
+    lsr
+    lsr
+    clc
+    adc zp_temp1
+    bcc !mis_done+
+    lda #$ff
+!mis_done:
+    rts
+
+#if C128 && !C128_UNIT_TEST
+.segment C128ResidentWorld
+#endif
+
+// Monster-attack aggravation shares the explicit wake transition.
+mon_atk_effect_aggravate:
+// monster_aggravate_all — Wake every live monster.
+monster_aggravate_all:
+    ldx #0
+!maa_loop:
+    cpx #MAX_MONSTERS
+    bcs !maa_done+
+    jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda (zp_ptr0),y
+    cmp #EMPTY_SLOT
+    beq !maa_next+
+    jsr monster_wake
+!maa_next:
+    inx
+    jmp !maa_loop-
+!maa_done:
     rts
 
 // monster_init_table — Mark all 32 slots empty, reset count
@@ -680,17 +754,7 @@ monster_spawn_one:
     // randint(sleep) + sleep/4 without a resident-size div helper.
     ldx ms_type
     lda cr_sleep,x
-    beq !mso_store_sleep+
-    sta zp_temp0
-    jsr rng_range
-    clc
-    adc #1
-    sta zp_temp1
-    lda zp_temp0
-    lsr
-    lsr
-    clc
-    adc zp_temp1
+    jsr monster_initial_sleep
 !mso_store_sleep:
     ldy #MX_SLEEP_CUR
     sta (zp_ptr0),y

@@ -1950,6 +1950,7 @@ cmd_autorest:
     jmp main_loop
 !start:
     jsr hal_input_wait_release
+    lsr turn_scene_dirty        // Boolean event: discard preceding command's scene change.
     lda #1
     sta auto_rest_active
     jmp main_loop

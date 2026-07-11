@@ -40,7 +40,7 @@ must be consumed before the stage that repurposes them.
 ## Observed Production Snapshot
 
 This table is a descriptive snapshot of `core/dungeon_gen.s`, checked
-2026-07-09. It is implementation evidence, not semantic authority. Determine
+2026-07-10. It is implementation evidence, not semantic authority. Determine
 intended behavior from accepted ledger decisions and the pinned upstream oracle
 before preserving or changing an observed formula. A deliberate change to a
 settled Moria8 rule or resolution of an open choice requires a ledger update.
@@ -48,13 +48,13 @@ settled Moria8 rule or resolution of an open choice requires a ledger update.
 | Property | Observed production behavior |
 | --- | --- |
 | Room selection | Always perform 32 random slot rolls; each slot is accepted at most once and no more are accepted after platform `MAX_ROOMS`, preserving all 32 RNG draws |
-| Room size | Odd interior width `3..23` from `2*(rng(11)+1)+1`; odd height `3,5,7` from `2*(rng(3)+1)+1` |
+| Room size | Upstream independent extents: width `3..23` from `rng(11)+1 + rng(11)+1 + 1`; height `3..8` from `rng(4)+1 + rng(3)+1 + 1` |
 | Room spacing | Derived slot centers; `ROOM_GAP` and `ROOM_EDGE_PAD` are not used by `place_rooms` |
 | Room retries | No per-room retry loop; `MAX_ROOM_RETRIES=20` is currently dead |
 | Room capacity | C128 `MAX_ROOMS=21`; C64/Plus4 `MAX_ROOMS=8` |
 | Panel model | Shared 66x22 upstream-style panels and derived half-panel slots |
 | Tunnel tuning | A current valid direction is retained for rolls `<70`; on the remaining rolls, only `4` of `36` outcomes choose a random cardinal direction and the rest choose a direction toward the target |
-| Doors | Room-wall penetration candidates are resolved during tunnel materialization; later junction candidates are resolved by `place_junction_doors`; both require meaningful opposing passage geometry |
+| Doors | Room-wall penetration candidates are resolved during tunnel materialization; their adjacent temporary wall guards persist until `fill_cave_granite`; later junction candidates are resolved by `place_junction_doors`; both require a straight two-sided passage through opposing wall jambs |
 | Stairs | Exactly one tracked up and two tracked down coordinates; thresholds 3..0 each get 20 attempts (80 total), then an unvalidated random floor fallback; `STAIR_PLACE_TRIES=96` is dead |
 | Streamers | Placed after granite and before doors; density constant `5` |
 
@@ -117,7 +117,8 @@ work16 dungeon-generation design review; this ledger is their durable record.
 | DGN-005 | Open | Project maintainer, 2026-07-09 | Platform generation-time budgets | `NOT IMPLEMENTED` | none |
 | DGN-006 | Open | Project maintainer, 2026-07-09 | Stair fallback validity/uniqueness policy | current fallback is unchecked; no policy gate | none |
 | DGN-007 | Open | Project maintainer, 2026-07-09 | Whether `verify_connectivity` belongs in production | helper is C64-unit-test-only; design/RNG/performance analysis required | none |
-| DGN-008 | Accepted | Project maintainer, 2026-07-09 | Generated room interiors remain connected through cardinal one-tile tunnels; doors occupy meaningful room-wall penetrations or junctions and cannot be bypassed by a parallel opening | maintainer decision; pinned VMS Moria `generate.inc`; focused C64 topology fixtures | earlier ad hoc post-generation door repair rules |
+| DGN-008 | Accepted | Project maintainer, 2026-07-09 | Generated room interiors remain connected through cardinal one-tile tunnels; temporary neighboring room-wall guards persist across tunnel construction; doors occupy straight, two-sided room-wall penetrations or junctions and cannot be bypassed by a parallel opening | maintainer decision; pinned VMS Moria `generate.inc`; focused C64 topology and guard-lifecycle fixtures | earlier ad hoc post-generation door repair rules |
+| DGN-009 | Accepted | Project maintainer, 2026-07-10 | Normal rooms use upstream independent left/right/top/bottom extents; tunnel endpoints remain on the original panel-slot center rather than a derived rectangle midpoint | maintainer decision; pinned VMS Moria `build_room`; C64 extent-range and shuffled-slot-center fixtures | symmetric odd-only room approximation |
 
 ## Current Conditional Verification Matrix
 

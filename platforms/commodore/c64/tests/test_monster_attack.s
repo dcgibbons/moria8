@@ -434,6 +434,15 @@ test_start:
     lda #30
     sta (zp_ptr0),y
 
+    ldx #2
+!t10_seed_sleep:
+    jsr monster_get_ptr
+    ldy #MX_SLEEP_CUR
+    lda #9
+    sta (zp_ptr0),y
+    dex
+    bpl !t10_seed_sleep-
+
     jsr mon_atk_effect_aggravate
 
     // Check all 3 have MF_AWAKE
@@ -449,6 +458,9 @@ test_start:
     lda #0
     sta tc_ok
 !t10_c1:
+    ldy #MX_SLEEP_CUR
+    lda (zp_ptr0),y
+    bne !t10_bad+
     ldx #1
     jsr monster_get_ptr
     ldy #MX_FLAGS
@@ -458,6 +470,9 @@ test_start:
     lda #0
     sta tc_ok
 !t10_c2:
+    ldy #MX_SLEEP_CUR
+    lda (zp_ptr0),y
+    bne !t10_bad+
     ldx #2
     jsr monster_get_ptr
     ldy #MX_FLAGS
@@ -467,6 +482,14 @@ test_start:
     lda #0
     sta tc_ok
 !t10_c3:
+    ldy #MX_SLEEP_CUR
+    lda (zp_ptr0),y
+    bne !t10_bad+
+    jmp !t10_store+
+!t10_bad:
+    lda #0
+    sta tc_ok
+!t10_store:
     lda tc_ok
     sta tc_results + 9
 

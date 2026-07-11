@@ -132,6 +132,7 @@ pmx_sleep_adjacent_msg:
     jmp pmx_print_inline
 
 pmx_try_sleep_monster:
+    stx pmx_feedback_mon_slot
     jsr monster_get_ptr
     ldy #MX_TYPE
     lda (zp_ptr0),y

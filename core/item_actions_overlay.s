@@ -276,35 +276,10 @@ irs_effect_mon_confuse:
     rts
 
 irs_effect_aggravate:
-    jsr irs_wake_all_monsters
+    jsr monster_aggravate_all
     ldx #HSTR_PIQ_HUMMING
     jsr huff_print_msg
     sec
-    rts
-
-// Wake all monsters from an aggravation staff effect.
-// Clobbers: A, X, Y, zp_ptr0
-irs_wake_all_monsters:
-    ldx #0
-!iwam_loop:
-    cpx #MAX_MONSTERS
-    bcs !iwam_done+
-    jsr monster_get_ptr
-    ldy #MX_TYPE
-    lda (zp_ptr0),y
-    cmp #EMPTY_SLOT
-    beq !iwam_next+
-    ldy #MX_SLEEP_CUR
-    lda #0
-    sta (zp_ptr0),y
-    ldy #MX_FLAGS
-    lda (zp_ptr0),y
-    ora #MF_AWAKE
-    sta (zp_ptr0),y
-!iwam_next:
-    inx
-    jmp !iwam_loop-
-!iwam_done:
     rts
 
 irs_effect_protect:
