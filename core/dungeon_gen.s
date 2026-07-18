@@ -349,9 +349,7 @@ draw_store:
 .const ROOM_MIN_H       = 3
 .const ROOM_MAX_H       = 7     // 3 + rng(5)
 .const ROOM_GAP         = 2     // Min gap between rooms
-.const MAX_ROOM_RETRIES = 20    // Retries per room attempt
 .const ROOM_EDGE_PAD    = 4     // Keep overlap math away from map edges
-.const STAIR_PLACE_TRIES = 96   // Global attempts per stair before fallback
 .const DUN_PANEL_W      = 66    // Upstream screen-width panel
 .const DUN_PANEL_H      = 22    // Upstream screen-height panel
 .const ROOM_SLOT_X_STEP = DUN_PANEL_W / 2
@@ -367,7 +365,7 @@ draw_store:
 .const DUN_TUNNELING    = 15    // VMS dun_tun_con
 .const DUN_DIR_CHANGE   = 70    // VMS dun_tun_chg
 .const DUN_RANDOM_DIR   = 36    // VMS dun_tun_rnd
-.const DUN_ROOM_DOORS   = 25    // VMS dun_tun_pen
+.const DUN_ROOM_DOORS   = 24    // VMS randint(100) < 25 has 24 successful values.
 .const DUN_TUNNEL_DOORS = 15    // VMS dun_tun_jct
 .const DGEN_CORR        = FLAG_OCCUPIED
 .const DGEN_TUNNEL      = FLAG_VISITED
@@ -614,17 +612,17 @@ fill_cave_granite:
 #else
     :MapRead_ptr0_y()
 #endif
-    sta vc_tile
+    sta dg_tile_scratch
     beq !fcg_rock+
     cmp #DGEN_CORR
     beq !fcg_floor+
     cmp #DGEN_JUNCTION
     beq !fcg_keep_junction+
-    lda vc_tile
+    lda dg_tile_scratch
     and #(FLAG_OCCUPIED | FLAG_HAS_ITEM)
     cmp #FLAG_OCCUPIED
     bne !fcg_next+
-    lda vc_tile
+    lda dg_tile_scratch
     and #~FLAG_OCCUPIED & $ff
 #if C128_PRODUCT_OVERLAY_RUNTIME
     sta SCREEN_RAM,y
@@ -811,7 +809,7 @@ room_slot_center_y:
 // check_room_overlap — Check if dg_room_* overlaps any placed room
 // Output: carry set = overlap, carry clear = no overlap
 // ============================================================
-#if HAL_LAYOUT_DUNGEON_OVERLAP_LOCAL || C64_UNIT_TEST || C128_TEST_DUNGEON_OVERLAP
+#if DUNGEON_TEST_OVERLAP_HELPERS
 check_room_overlap:
     ldx #0
     cpx dg_idx
@@ -1434,15 +1432,15 @@ mark_neighbor_walls_temp:
     rts
 
 mnw_mark_if_lit_wall:
-    sta vc_tile
+    sta dg_tile_scratch
     and #TILE_TYPE_MASK
     beq !mnw_no+
     cmp #TILE_DOOR_OPEN
     bcs !mnw_no+
-    lda vc_tile
+    lda dg_tile_scratch
     and #FLAG_LIT
     beq !mnw_no+
-    lda vc_tile
+    lda dg_tile_scratch
     ora #FLAG_OCCUPIED
     :MapWrite_ptr1_y()
 !mnw_no:
@@ -1467,15 +1465,15 @@ materialize_staged_tunnel:
 #else
     :MapRead_ptr0_y()
 #endif
-    sta vc_tile
+    sta dg_tile_scratch
     cmp #DGEN_TUNNEL
     beq !mst_tunnel+
-    lda vc_tile
+    lda dg_tile_scratch
     and #TILE_TYPE_MASK
     beq !mst_next+
     cmp #TILE_DOOR_OPEN
     bcs !mst_next+
-    lda vc_tile
+    lda dg_tile_scratch
     and #FLAG_HAS_ITEM
     bne !mst_candidate+
     jmp !mst_next+
@@ -1491,7 +1489,7 @@ materialize_staged_tunnel:
     ldx dg_room_y
     cmp #DUN_ROOM_DOORS
     bcs !mst_candidate_floor+
-    lda vc_tile
+    lda dg_tile_scratch
     and #TILE_TYPE_MASK
     cmp #TILE_WALL_H
     beq !mst_check_hwall+
@@ -1768,10 +1766,10 @@ place_junction_doors:
 #else
     :MapRead_ptr0_y()
 #endif
-    sta vc_tile
+    sta dg_tile_scratch
     and #TILE_TYPE_MASK
     bne !pjd_next+
-    lda vc_tile
+    lda dg_tile_scratch
     and #FLAG_HAS_ITEM
     beq !pjd_next+
     tya
@@ -2373,7 +2371,7 @@ cs_dx_table:
 cs_dy_table:
     .byte $ff, $ff, $ff, $00, $00, $01, $01, $01
 
-#if C64_UNIT_TEST
+#if DUNGEON_TEST_OVERLAP_HELPERS
 // ============================================================
 // verify_connectivity — Flood-fill to ensure all rooms reachable
 // Starts from stairs_up position, propagates visited marks through passable
@@ -2417,16 +2415,16 @@ verify_connectivity:
 !vc_col:
     ldy bfs_cur_x
     :MapRead_ptr0_y()
-    sta vc_tile
+    sta dg_tile_scratch
     and #FLAG_OCCUPIED
     bne !vc_next_col+
-    lda vc_tile
+    lda dg_tile_scratch
     jsr vc_tile_is_passable
     bcc !vc_next_col+
     jsr vc_has_visited_neighbor
     bcc !vc_next_col+
     ldy bfs_cur_x
-    lda vc_tile
+    lda dg_tile_scratch
     ora #FLAG_OCCUPIED
     :MapWrite_ptr0_y()
     lda #1
@@ -2479,7 +2477,7 @@ verify_connectivity:
     rts
 #endif
 
-#if HAL_LAYOUT_DUNGEON_OVERLAP_LOCAL || C64_UNIT_TEST || C128_TEST_DUNGEON_OVERLAP
+#if DUNGEON_TEST_OVERLAP_HELPERS
 // vc_cleanup — Clear FLAG_OCCUPIED from entire map
 vc_cleanup:
     lda #~FLAG_OCCUPIED & $ff
@@ -2564,11 +2562,14 @@ vc_has_visited_neighbor:
     rts
 #endif
 
-// Connectivity scratch variables
+#if DUNGEON_TEST_OVERLAP_HELPERS
+// Test-only connectivity scratch variables.
 bfs_cur_x:   .byte 0
 bfs_cur_y:   .byte 0
 vc_changed:  .byte 0
-vc_tile:     .byte 0
+#endif
+// Shared production tile scratch; not owned by the connectivity helpers.
+dg_tile_scratch: .byte 0
 
 // ============================================================
 // position_player_dungeon — Place player at appropriate stairs

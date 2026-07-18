@@ -46,78 +46,22 @@ dir_dx: .byte  0,  0, -1, 1, -1, 1, -1, 1
 dir_dy: .byte -1,  1,  0, 0, -1,-1,  1, 1
 
 mmu_safe_map_read_ptr0:
-    jsr mmu_select_bank1
-    lda (zp_ptr0),y
-    pha
-    jsr mmu_select_bank0
-    pla
-    rts
+    jmp mmu_common_map_read_ptr0
 
 mmu_safe_map_write_ptr0:
-    pha
-    jsr mmu_select_bank1
-    pla
-    sta (zp_ptr0),y
-    pha
-    jsr mmu_select_bank0
-    pla
-    rts
+    jmp mmu_common_map_write_ptr0
 
 mmu_safe_map_read_ptr1:
-    jsr mmu_select_bank1
-    lda (zp_ptr1),y
-    pha
-    jsr mmu_select_bank0
-    pla
-    rts
+    jmp mmu_common_map_read_ptr1
 
 mmu_safe_map_write_ptr1:
-    pha
-    jsr mmu_select_bank1
-    pla
-    sta (zp_ptr1),y
-    pha
-    jsr mmu_select_bank0
-    pla
-    rts
+    jmp mmu_common_map_write_ptr1
 
 mmu_safe_db_read_ptr1:
-    jmp mmu_safe_map_read_ptr1
+    jmp mmu_common_db_read_ptr1
 
 mmu_safe_mark_visited_row_ptr0:
-    sta test_mark_visited_row_end
-    lda #0
-    sta test_mark_visited_seen_new
-    jsr mmu_select_bank1
-!mark:
-    lda (zp_ptr0),y
-    sta test_mark_visited_tile_tmp
-    lda mmu_common_row_detect_new
-    beq !write+
-    lda test_mark_visited_tile_tmp
-    and #FLAG_VISITED
-    bne !write+
-    lda #1
-    sta test_mark_visited_seen_new
-!write:
-    lda test_mark_visited_tile_tmp
-    ora mmu_common_row_mask
-    sta (zp_ptr0),y
-    cpy test_mark_visited_row_end
-    beq !done+
-    iny
-    jmp !mark-
-!done:
-    jsr mmu_select_bank0
-    lda test_mark_visited_seen_new
-    rts
-
-test_mark_visited_row_end:
-    .byte 0
-test_mark_visited_seen_new:
-    .byte 0
-test_mark_visited_tile_tmp:
-    .byte 0
+    jmp mmu_common_mark_visited_row_ptr0
 
 // Production player_run.s shares the dungeon-feature command scratch block.
 df_target_x:        .byte 0
@@ -436,6 +380,7 @@ test_start:
 
     lda #MMU_ALL_RAM
     sta $ff00
+    jsr init_common_mmu_helpers
 
     // Test 1: map base/end are writable/readable
     lda #$a5
@@ -602,11 +547,10 @@ test_start:
     lda #TILE_FLOOR
     sta (zp_ptr0),y
 
-    jsr mmu_select_bank1
-    ldy #12
+    ldx #12
+    ldy #10
     lda #TILE_WALL_H | FLAG_LIT | FLAG_VISITED
-    sta (zp_ptr0),y
-    jsr mmu_select_bank0
+    jsr test_set_map_tile
 
     ldx #12
     ldy #10
@@ -617,26 +561,18 @@ test_start:
 
     // Test 7: real LOS tracing on C128 must honor live Bank 1 doors.
     // A closed door between player and target blocks; an open door clears.
-    jsr mmu_select_bank1
     ldx #10
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
+!door_row:
     ldy #10
     lda #TILE_FLOOR
-    sta (zp_ptr0),y
-    ldy #11
-    sta (zp_ptr0),y
-    ldy #12
+    jsr test_set_map_tile
+    inx
+    cpx #15
+    bne !door_row-
+    ldx #12
+    ldy #10
     lda #TILE_DOOR_CLOSED
-    sta (zp_ptr0),y
-    ldy #13
-    lda #TILE_FLOOR
-    sta (zp_ptr0),y
-    ldy #14
-    sta (zp_ptr0),y
-    jsr mmu_select_bank0
+    jsr test_set_map_tile
 
     lda #10
     sta zp_player_x
@@ -652,16 +588,10 @@ test_start:
     jmp test_fail
 !closed_door_blocks:
 
-    jsr mmu_select_bank1
-    ldx #10
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
-    ldy #12
+    ldx #12
+    ldy #10
     lda #TILE_DOOR_OPEN
-    sta (zp_ptr0),y
-    jsr mmu_select_bank0
+    jsr test_set_map_tile
 
     lda #10
     sta zp_temp0
@@ -677,30 +607,22 @@ test_start:
 
     // Test 8: diagonal LOS on C128 must honor live Bank 1 corner blockers.
     // A diagonal target is blocked when both orthogonal side cells are closed.
-    jsr mmu_select_bank1
     ldx #20
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
     ldy #20
     lda #TILE_FLOOR
-    sta (zp_ptr0),y
-    ldy #21
-    lda #TILE_WALL_H
-    sta (zp_ptr0),y
-    ldx #19
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
+    jsr test_set_map_tile
+    ldx #21
     ldy #20
     lda #TILE_WALL_H
-    sta (zp_ptr0),y
-    ldy #21
+    jsr test_set_map_tile
+    ldx #20
+    ldy #19
+    lda #TILE_WALL_H
+    jsr test_set_map_tile
+    ldx #21
+    ldy #19
     lda #TILE_FLOOR
-    sta (zp_ptr0),y
-    jsr mmu_select_bank0
+    jsr test_set_map_tile
 
     lda #20
     sta zp_temp0
@@ -714,16 +636,10 @@ test_start:
     jmp test_fail
 !corner_blocks:
 
-    jsr mmu_select_bank1
-    ldx #20
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
-    ldy #21
+    ldx #21
+    ldy #20
     lda #TILE_FLOOR
-    sta (zp_ptr0),y
-    jsr mmu_select_bank0
+    jsr test_set_map_tile
 
     lda #20
     sta zp_temp0

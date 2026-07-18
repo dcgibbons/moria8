@@ -2244,7 +2244,8 @@ test_start:
     lda #1
     sta test_turn_heal_hp
     sta test_turn_heal_mp
-    sta turn_scene_dirty        // Dirtiness from the preceding command is stale.
+    lda #2
+    sta turn_scene_dirty        // Dirty count from the preceding command is stale.
     lda #CMD_AUTOREST
     sta test_cmd_script
     lda #1

@@ -279,6 +279,8 @@ test_pmx_try_sleep_monster:
     tax
     lda #40
     jsr test_rng_range
+    clc
+    adc #1
     cmp cr_level,x
     bcc !resist+
     ldx test_mon_slot

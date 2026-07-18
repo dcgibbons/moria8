@@ -427,6 +427,7 @@ ol_target:        .byte 0
 }
 #define RUN_MONSTER_VISIBILITY_EXTERNAL
 #define PLAYER_RUN_INITIALIZE_EXTERNAL
+// player_run uses pm_live_occ_x/y defined by the preceding player_move import.
 #import "../../../core/player_run.s"
 #undef PLAYER_RUN_INITIALIZE_EXTERNAL
 #undef RUN_MONSTER_VISIBILITY_EXTERNAL

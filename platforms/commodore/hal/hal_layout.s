@@ -48,5 +48,5 @@
 // These constants describe common layout intent. They are not hardware
 // addresses and must match the platform's screen implementation. Platform code
 // may still expose legacy SCREEN_* and VIEWPORT_* names during migration.
-// HAL_LAYOUT_DUNGEON_OVERLAP_LOCAL and HAL_LAYOUT_VISIBILITY_FORCE_REDRAW are
-// defined when their corresponding boolean constants are true.
+// HAL_LAYOUT_VISIBILITY_FORCE_REDRAW is defined when its corresponding boolean
+// constant is true.

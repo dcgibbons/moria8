@@ -94,7 +94,8 @@ test_assert_cleanup:
     cmp #$3e
     bne test_fail
     lda $01
-    cmp #$36
+    and #$07
+    cmp #$06
     bne test_fail
     php
     pla
@@ -106,6 +107,10 @@ test_start:
     sei
     ldx #$ff
     txs
+    lda #$2f
+    sta $00
+    lda #$36
+    sta $01
     jsr test_reset
     lda #0
     sta test_loader_fail

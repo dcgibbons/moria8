@@ -15,6 +15,7 @@
 .encoding "screencode_mixed"
 
 #define COMPILE_EMBEDDED_DUNGEON_TEST_ROSTER
+#define MONSTER_AI_PRODUCTION_REST_STATE
 
 // Bootstrap — must be before imports so it's in RAM below $A000.
 bootstrap:
@@ -148,6 +149,7 @@ tai_attack_calls: .byte 0
 tai_rng_values:   .fill 4, 0
 tai_rng_idx:      .byte 0
 tai_distance:     .byte 0
+auto_rest_active: .byte 0
 tc_results: .fill 35, $ff      // Result buffer (copied to $0400 at end)
 
 .macro PatchJump(target, replacement) {
@@ -191,7 +193,7 @@ test_spawn_wake_case:
     jsr monster_init_table
     lda #0
     sta zp_game_flags
-    sta monster_resting
+    sta auto_rest_active
     sta player_data + PL_RACE       // Human warrior: stealth 1
     sta player_data + PL_CLASS
     sta tai_rng_idx
@@ -1966,16 +1968,18 @@ test_start:
     sta zp_mon_flags
 
     :PatchJump(rng_range, test_rng_range_nine)
+    jsr player_get_stealth
+    sta mat_player_stealth
 
     lda #1
-    sta monster_resting
+    sta auto_rest_active
     jsr monster_wake_check
     ldy #MX_SLEEP_CUR
     lda (zp_ptr0),y
     cmp #20
     bne !t23_fail+
     lda #0
-    sta monster_resting
+    sta auto_rest_active
 
     jsr monster_wake_check
 
@@ -2324,6 +2328,8 @@ test_start:
     sta player_data + PL_RACE
     lda #3                      // Rogue (+5 stealth)
     sta player_data + PL_CLASS
+    jsr player_get_stealth
+    sta mat_player_stealth
     jsr player_search_get_base_chance
     cmp #44                     // Rogue 32 + Halfling 12
     bne !t29_fail+
@@ -2349,7 +2355,7 @@ test_start:
     lda #0
     sta zp_mon_type
     sta zp_mon_flags
-    sta monster_resting
+    sta auto_rest_active
     jsr monster_wake_check
     ldx #0
     jsr monster_get_ptr
@@ -2376,6 +2382,8 @@ test_start:
     lda #0                      // Human (0) + warrior (1)
     sta player_data + PL_RACE
     sta player_data + PL_CLASS
+    jsr player_get_stealth
+    sta mat_player_stealth
     ldx #0
     jsr monster_get_ptr
     ldy #MX_SLEEP_CUR
@@ -2406,7 +2414,9 @@ test_start:
     sta player_data + PL_RACE
     lda #0
     sta player_data + PL_CLASS
-    sta monster_resting
+    sta auto_rest_active
+    jsr player_get_stealth
+    sta mat_player_stealth
     lda #20
     sta zp_mon_x
     lda #15
@@ -2465,7 +2475,7 @@ test_start:
     lda #0
     sta tai_rng_idx
     lda #1
-    sta monster_resting
+    sta auto_rest_active
     ldx #0
     jsr monster_get_ptr
     ldy #MX_SLEEP_CUR
@@ -2485,13 +2495,13 @@ test_start:
     lda tai_rng_idx
     bne !t32_fail+
     lda #0
-    sta monster_resting
+    sta auto_rest_active
     lda #$01
     sta tc_results + 31
     jmp !t33+
 !t32_fail:
     lda #0
-    sta monster_resting
+    sta auto_rest_active
     sta tc_results + 31
 
     // Tests 33-35: production spawn-to-AI flow at distance 1, 6, and 8.

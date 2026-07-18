@@ -6,6 +6,8 @@
 //
 // Results at $0400: $01 = pass, $00 = fail per test
 
+#define DUNGEON_TEST_OVERLAP_HELPERS
+
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_bootstrap)
 

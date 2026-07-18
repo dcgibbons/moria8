@@ -22,6 +22,7 @@ mat_fleeing:  .byte 0       // 1 = fleeing (suppress attack in try_step)
 mat_any_moved: .byte 0       // 1 if any monster moved/spawned this tick
 mat_scene_dirty: .byte 0     // 1 if any monster changed a non-local visible tile
 mat_action_dirty: .byte 0    // 1 if current monster changed gameplay state
+mat_player_stealth: .byte 0  // Race/class threshold cached once per AI tick
 
 // ============================================================
 // monster_ai_tick — Main AI loop
@@ -34,6 +35,8 @@ monster_ai_tick:
     sta zp_mon_idx
     sta mat_any_moved
     sta mat_scene_dirty
+    jsr player_get_stealth
+    sta mat_player_stealth
 
 !mat_loop:
     lda zp_mon_idx
@@ -103,8 +106,7 @@ monster_ai_tick:
     // Process once
     jsr monster_process_one
     bcc !mat_no_move1+
-    lda #1
-    sta mat_any_moved
+    rol mat_any_moved          // Carry is set; only zero/nonzero is observed.
 !mat_no_move1:
 
     // Check if player died
@@ -118,8 +120,7 @@ monster_ai_tick:
     bne !mat_next+
     jsr monster_process_one
     bcc !mat_no_move2+
-    lda #1
-    sta mat_any_moved
+    rol mat_any_moved          // Preserve the nonzero moved invariant.
 !mat_no_move2:
 
     // Check if player died on second move
@@ -414,7 +415,11 @@ monster_wake_check:
     beq !mwc_wake+              // Naturally alert monsters do not roll stealth.
 
 #if C64_UNIT_TEST || C128_UNIT_TEST
+#if MONSTER_AI_PRODUCTION_REST_STATE
+    lda auto_rest_active
+#else
     lda monster_resting
+#endif
 #else
     lda auto_rest_active
 #endif
@@ -423,7 +428,7 @@ monster_wake_check:
     // VMS Moria only applies wake pressure when randint(10) exceeds the
     // player's stealth. rng_range(10) returns 0..9, so >= stealth is the
     // equivalent comparison.
-    jsr player_get_stealth
+    lda mat_player_stealth
     sta zp_temp2
     lda #10
     jsr rng_range
@@ -528,7 +533,9 @@ wake_group_nearby:
     rts
 wgn_dist: .byte 0
 #if C64_UNIT_TEST || C128_UNIT_TEST
+#if !MONSTER_AI_PRODUCTION_REST_STATE
 monster_resting: .byte 0
+#endif
 #endif
 
 // ============================================================

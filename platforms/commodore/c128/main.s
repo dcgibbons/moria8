@@ -4002,6 +4002,7 @@ c128_resident_play_body:
 #define PLAYER_LOOK_SCRATCH_RESIDENT
 #import "../../../core/player_move.s"
 #undef PLAYER_LOOK_SCRATCH_RESIDENT
+// player_run uses pm_live_occ_x/y defined by the preceding player_move import.
 #import "../../../core/player_run.s"
 #import "../../../core/ui_help_clear.s"
 #import "../../../core/wizard.s"

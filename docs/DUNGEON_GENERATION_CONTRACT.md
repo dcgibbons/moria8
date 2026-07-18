@@ -40,7 +40,7 @@ must be consumed before the stage that repurposes them.
 ## Observed Production Snapshot
 
 This table is a descriptive snapshot of `core/dungeon_gen.s`, checked
-2026-07-10. It is implementation evidence, not semantic authority. Determine
+2026-07-18. It is implementation evidence, not semantic authority. Determine
 intended behavior from accepted ledger decisions and the pinned upstream oracle
 before preserving or changing an observed formula. A deliberate change to a
 settled Moria8 rule or resolution of an open choice requires a ledger update.
@@ -50,12 +50,12 @@ settled Moria8 rule or resolution of an open choice requires a ledger update.
 | Room selection | Always perform 32 random slot rolls; each slot is accepted at most once and no more are accepted after platform `MAX_ROOMS`, preserving all 32 RNG draws |
 | Room size | Upstream independent extents: width `3..23` from `rng(11)+1 + rng(11)+1 + 1`; height `3..8` from `rng(4)+1 + rng(3)+1 + 1` |
 | Room spacing | Derived slot centers; `ROOM_GAP` and `ROOM_EDGE_PAD` are not used by `place_rooms` |
-| Room retries | No per-room retry loop; `MAX_ROOM_RETRIES=20` is currently dead |
+| Room retries | No per-room retry loop or retry-policy constant |
 | Room capacity | C128 `MAX_ROOMS=21`; C64/Plus4 `MAX_ROOMS=8` |
 | Panel model | Shared 66x22 upstream-style panels and derived half-panel slots |
-| Tunnel tuning | A current valid direction is retained for rolls `<70`; on the remaining rolls, only `4` of `36` outcomes choose a random cardinal direction and the rest choose a direction toward the target |
-| Doors | Room-wall penetration candidates are resolved during tunnel materialization; their adjacent temporary wall guards persist until `fill_cave_granite`; later junction candidates are resolved by `place_junction_doors`; both require a straight two-sided passage through opposing wall jambs |
-| Stairs | Exactly one tracked up and two tracked down coordinates; thresholds 3..0 each get 20 attempts (80 total), then an unvalidated random floor fallback; `STAIR_PLACE_TRIES=96` is dead |
+| Tunnel tuning | A current valid direction is retained for rolls `<70`; on the remaining rolls, only `4` of `36` outcomes choose a random cardinal direction and the rest choose a direction toward the target. Unlike both pinned upstreams, the first tunnel step selects a correct direction without first consuming the per-step `rng(100)` draw. |
+| Doors | Room-wall penetration candidates are resolved during tunnel materialization; their adjacent temporary wall guards persist until `fill_cave_granite`; later junction candidates are resolved by `place_junction_doors`; both require a straight two-sided passage through opposing wall jambs. Room-wall doors use the exact VMS `randint(100) < 25` probability (`24` successful values). |
+| Stairs | Exactly one tracked up and two tracked down coordinates; thresholds 3..0 each get 20 attempts (80 total), then an unvalidated random floor fallback |
 | Streamers | Placed after granite and before doors; density constant `5` |
 
 Settled topology invariants:
@@ -121,7 +121,8 @@ work16 dungeon-generation design review; this ledger is their durable record.
 | DGN-009 | Accepted | Project maintainer, 2026-07-10 | Normal rooms use upstream independent left/right/top/bottom extents; tunnel endpoints remain on the original panel-slot center rather than a derived rectangle midpoint | maintainer decision; pinned VMS Moria `build_room`; C64 extent-range and shuffled-slot-center fixtures | symmetric odd-only room approximation |
 | DGN-010 | Accepted | Project maintainer, 2026-07-17 | Tunnel construction retains VMS Moria's 2,000-step termination guard; hitting the guard ends the current tunnel without changing the shared generation stage order | current branch review approval; `dungeon_tunnel_guard.s`; adversarial tunnel fixture | unbounded tunnel retries |
 | DGN-011 | Accepted | Project maintainer, 2026-07-17 | C128 generation may batch map rows through the owned Bank 0 `$0400-$07ff` scratch window when tile order, RNG order, and resulting map bytes remain unchanged | current branch performance-review approval; C128 memory assertions; `test_soak128.s` row-operation gates | per-tile C128 MMU switching for full-row scans |
-| DGN-012 | Accepted | Project maintainer, 2026-07-17 | Room-overlap implementation is selected by the named HAL capability; C64 and Plus/4 use the local overlap gate while C128 relies on panel-slot separation, with shared test builds permitted to compile the checker explicitly | current branch review approval; platform layout constants; C64/C128 generation tests | platform-name conditionals in shared generation code |
+| DGN-012 | Accepted | Project maintainer, 2026-07-18 | Production room placement relies on non-overlapping panel slots on every platform; the bounding-box overlap checker and connectivity helpers are test-only and compile only under `DUNGEON_TEST_OVERLAP_HELPERS` | current branch review approval; production call-graph audit; C64/C128/Plus4 generation tests | production `HAL_LAYOUT_DUNGEON_OVERLAP_LOCAL` capability |
+| DGN-013 | Open | Project maintainer, 2026-07-18 | Exact tunnel-state parity remains unresolved: production omits the first per-step `rng(100)` draw, clears the corridor-entry door latch after a staged room wall as well as after blank rock, and guards only represented lit room-wall tile types rather than an upstream `wall_set` abstraction | pinned VMS `generate.inc`; pinned Umoria `dungeon_generate.cpp`; no equivalence proof or canonical seed corpus | none |
 
 ## Current Conditional Verification Matrix
 

@@ -61,6 +61,9 @@ must not wrap accidentally. For each changed formula, record every input and
 intermediate width, carry state, mathematical range, and saturation/truncation
 point. Exhaustive tests are preferred when the input domain is one byte.
 
+Sleep spell resistance translates `rng_range(40)` from `0..39` to VMS Moria's
+`randint(40)` range `1..40` before comparing against monster level.
+
 ## Decision Ledger
 
 Accepted rows dated 2026-07-09 record explicit maintainer decisions from the
@@ -106,7 +109,7 @@ execute the changed production routine through its real dispatch/overlay path.
 | Plus/4 renderer consumption | `platforms/commodore/plus4/tests/test_renderplus4.s` | `TEST_FILTER='renderplus4' make testplus4` |
 | Plus/4 production visibility-wrapper integration | `platforms/commodore/plus4/tests/test_visibility_renderplus4.s` | `TEST_FILTER='visibility_renderplus4' make testplus4` |
 | C128 renderer consumption | `platforms/commodore/c128/tests/test_vdc_scroll_delta128.s` | `TEST_FILTER='vdc_scroll_delta128' make test128`; seeded cases do not prove the producer |
-| C64 spell sleep dispatch | C64 sleep/sanctuary test files | `TEST_FILTER='sleep|sanctuary' make test64`; some paths use test-local helpers |
+| C64 spell sleep dispatch | C64 sleep/sanctuary test files | `TEST_FILTER='sleep|sanctuary' make test64`; Sleep II exercises production feedback/resistance and pins the level-40 boundary; some other paths use test-local helpers |
 | C128 spell sleep behavior | C128 sleep/sanctuary test files | `TEST_FILTER='sleep|sanctuary' make test128`; production-overlay coverage incomplete |
 | Plus/4 shared sleep/wake/aggravation producer | `platforms/commodore/plus4/tests/test_visibility_renderplus4.s` | `TEST_FILTER='visibility_renderplus4' make testplus4` |
 | One-byte sleep arithmetic maximum boundary | `platforms/commodore/c64/tests/test_monster.s` | `TEST_FILTER='monster' make test64`; exhaustive byte-domain gate remains `NOT IMPLEMENTED` |

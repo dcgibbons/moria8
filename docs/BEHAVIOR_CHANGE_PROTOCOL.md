@@ -45,7 +45,7 @@ Pinned upstream revisions used by this repository:
 - VMS Moria: `https://github.com/dungeons-of-moria/vms-moria`, revision
   `adce6c8898ea280181f1277b47f104e2b1f387a8`
 - Umoria: `https://github.com/dcgibbons/umoria`, revision
-  `74ee584f3b37a424315d03032bb1384edb1eabfd`
+  `2a2a6b791f084cac97db85f5b78739e913dd3572`
 
 When upstream consultation is required and no checkout at the verified revision
 is available, acquire one outside this repository so it cannot pollute source
@@ -58,8 +58,8 @@ git clone https://github.com/dungeons-of-moria/vms-moria.git "$UPSTREAM_ROOT/vms
 git -C "$UPSTREAM_ROOT/vms-moria" checkout adce6c8898ea280181f1277b47f104e2b1f387a8
 git -C "$UPSTREAM_ROOT/vms-moria" cat-file -e adce6c8898ea280181f1277b47f104e2b1f387a8^{commit}
 git clone https://github.com/dcgibbons/umoria.git "$UPSTREAM_ROOT/umoria"
-git -C "$UPSTREAM_ROOT/umoria" checkout 74ee584f3b37a424315d03032bb1384edb1eabfd
-git -C "$UPSTREAM_ROOT/umoria" cat-file -e 74ee584f3b37a424315d03032bb1384edb1eabfd^{commit}
+git -C "$UPSTREAM_ROOT/umoria" checkout 2a2a6b791f084cac97db85f5b78739e913dd3572
+git -C "$UPSTREAM_ROOT/umoria" cat-file -e 2a2a6b791f084cac97db85f5b78739e913dd3572^{commit}
 ```
 
 Domain ledgers are authoritative for deliberate Moria8 deviations and for

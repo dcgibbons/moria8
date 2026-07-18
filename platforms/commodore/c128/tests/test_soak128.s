@@ -9,6 +9,7 @@
 // - Loss of the row-batched C128 tunnel materialization path
 
 #define C128_TEST_DUNGEON_OVERLAP
+#define DUNGEON_TEST_OVERLAP_HELPERS
 #define C128_TEST_COUNT_MAP_ROW_COPIES
 #define C128_TEST_COUNT_MAP_ROW_STORES
 #define DUNGEON_FEATURES_GENERATION_ONLY
@@ -102,6 +103,7 @@ audit_mineral_hi: .byte 0
 audit_magma_count: .byte 0
 audit_quartz_count: .byte 0
 audit_parallel_run: .byte 0
+audit_connect_tile: .byte 0
 c128_test_row_copy_count_lo: .byte 0
 c128_test_row_copy_count_hi: .byte 0
 c128_test_row_copy_expect_lo: .byte 0
@@ -646,16 +648,16 @@ audit_connectivity128:
 !ac128_col:
     ldy bfs_cur_x
     :MapRead_ptr0_y()
-    sta vc_tile
+    sta audit_connect_tile
     and #FLAG_OCCUPIED
     bne !ac128_next_col+
-    lda vc_tile
+    lda audit_connect_tile
     jsr vc_tile_is_passable
     bcc !ac128_next_col+
     jsr vc_has_visited_neighbor
     bcc !ac128_next_col+
     ldy bfs_cur_x
-    lda vc_tile
+    lda audit_connect_tile
     ora #FLAG_OCCUPIED
     :MapWrite_ptr0_y()
     lda #1

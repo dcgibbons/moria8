@@ -3591,7 +3591,7 @@ run_test "recharge_item_i" "tests/test_recharge_item_i.s" "0400 0403" 4 50000000
 run_test "recharge_item_ii" "tests/test_recharge_item_ii.s" "0400 0403" 4 500000000
 run_test "trap_door_destruction" "tests/test_trap_door_destruction.s" "0400 0402" 3 500000000
 run_test "sleep_i" "tests/test_sleep_i.s" "0400 0402" 3 500000000
-run_test "sleep_ii" "tests/test_sleep_ii.s" "0400 0403" 4 500000000
+run_test "sleep_ii" "tests/test_sleep_ii.s" "0400 0404" 5 500000000
 run_test "sleep_iii" "tests/test_sleep_iii.s" "0400 0402" 3 500000000
 run_test "cure_poison" "tests/test_cure_poison.s" "0400 0402" 3 500000000
 run_test "fire_bolt" "tests/test_fire_bolt.s" "0400 0402" 3 500000000

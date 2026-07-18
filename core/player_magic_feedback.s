@@ -139,6 +139,8 @@ pmx_try_sleep_monster:
     tax
     lda #40
     jsr rng_range
+    clc
+    adc #1                     // VMS randint(40) is 1..40; rng_range is 0..39.
     cmp cr_level,x
     bcc !ptsm_resist+
     ldx pmx_feedback_mon_slot
