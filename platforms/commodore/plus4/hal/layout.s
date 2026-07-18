@@ -12,6 +12,9 @@
 .const hal_layout_input_row = 24
 .const hal_layout_map_cols = 80
 .const hal_layout_map_rows = 48
+.const hal_layout_dungeon_max_rooms = 8
+.const hal_layout_dungeon_overlap_local = 1
+.const hal_layout_visibility_force_redraw = 0
 .const hal_layout_dungeon_door_scan_base = $033c
 .const hal_layout_dungeon_door_scan_limit = $0400
 .const hal_layout_store_price_col = 31
@@ -59,3 +62,4 @@
 .const hal_layout_title_load_uses_cache = 0
 .const hal_layout_title_art_bank1_source = 0
 .const hal_layout_title_reverse_space_attr = 0
+#define HAL_LAYOUT_DUNGEON_OVERLAP_LOCAL

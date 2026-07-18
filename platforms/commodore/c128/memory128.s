@@ -175,7 +175,9 @@
 .const DUNGEON_GEN_SCAN_SCRATCH_BASE = SCREEN_RAM
 .const DUNGEON_GEN_SCAN_SCRATCH_SIZE = 1024
 .const DUNGEON_GEN_SCAN_SCRATCH_END  = DUNGEON_GEN_SCAN_SCRATCH_BASE + DUNGEON_GEN_SCAN_SCRATCH_SIZE - 1
-.const DUNGEON_GEN_DOOR_SCAN_BASE = $0400
+.const DUNGEON_GEN_DOOR_SCAN_BASE = $0500
+.const DUNGEON_GEN_DOOR_SCAN_SIZE = 65
+.const DUNGEON_GEN_DOOR_SCAN_END  = DUNGEON_GEN_DOOR_SCAN_BASE + DUNGEON_GEN_DOOR_SCAN_SIZE - 1
 .const DUNGEON_GEN_DOOR_SCAN_LIMIT = $0800
 
 // ZP save buffer — stores $02–$8F during game, restored on exit.
@@ -488,13 +490,6 @@ mmu_select_bank0:
     plp
     rts
 
-// mmu_copy_map_row — Fast copy from Bank 1 MAP to MMU_LINE_BUF ($0400)
-// Input: zp_ptr0/hi = source address in Bank 1
-// Output: 38 bytes copied to $0400 in Bank 0
-// Preserves: X
-mmu_copy_map_row:
-    jmp mmu_common_copy_map_row
-
 // save_kernal_zp — Copy $02–$8F to kernal_zp_save_buf
 save_kernal_zp:
     ldx #0
@@ -757,7 +752,21 @@ mmu_common_db_write_ptr1:
     pla
     rts
 
+#if C128_TEST_COUNT_MAP_ROW_STORES || C128_TEST_MAP_ROW_STORE_HELPER
+#import "map_row_store_common.s"
+#endif
+
+// Copy A bytes from the Bank 1 row at zp_ptr0 into Bank 0 SCREEN_RAM.
+// Input: A = byte count (1-255), zp_ptr0 = Bank 1 source row.
+// Preserves: X. Clobbers: A, Y and caller flags.
 mmu_common_copy_map_row:
+#if C128_TEST_COUNT_MAP_ROW_COPIES
+    inc c128_test_row_copy_count_lo
+    bne !counted+
+    inc c128_test_row_copy_count_hi
+!counted:
+#endif
+    sta mmu_common_row_end
     php
     sei
     lda #MMU_RAM_BANK1
@@ -767,7 +776,7 @@ mmu_common_copy_map_row:
     lda (zp_ptr0),y
     sta SCREEN_RAM,y
     iny
-    cpy #MMU_COPY_MAP_ROW_LEN
+    cpy mmu_common_row_end
     bne !copy-
     lda #MMU_ALL_RAM
     sta MMU_CR
@@ -875,6 +884,9 @@ copy_to_e000:
 .assert "Floor items fit", FLOOR_ITEM_END - FLOOR_ITEM_BASE + 1, 256
 .assert "Dungeon-gen scan scratch remains page-aligned", <DUNGEON_GEN_SCAN_SCRATCH_BASE, 0
 .assert "Dungeon-gen scan scratch stays in VIC scratch window", DUNGEON_GEN_SCAN_SCRATCH_END <= $07ff, true
+.assert "Full map row fits in dungeon-gen scan scratch", SCREEN_RAM + C128_FUTURE_MAP_COLS <= DUNGEON_GEN_SCAN_SCRATCH_END + 1, true
+.assert "Door scan scratch follows the copied map row", DUNGEON_GEN_DOOR_SCAN_BASE >= SCREEN_RAM + C128_FUTURE_MAP_COLS, true
+.assert "Door scan scratch stays in VIC scratch window", DUNGEON_GEN_DOOR_SCAN_END < DUNGEON_GEN_DOOR_SCAN_LIMIT, true
 .assert "ZP save buffer size", ZP_SAVE_SIZE, 142
 .assert "mmu_common_irq begins with CLD", mmu_common_irq_after_cld == mmu_common_irq + 1, true
 .assert "mmu_common_nmi begins with CLD", mmu_common_nmi_after_cld == mmu_common_nmi + 1, true

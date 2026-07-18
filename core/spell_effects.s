@@ -310,13 +310,13 @@ eff_detect_monsters:
     sta vis_room_revealed
     rts
 
-#if C128 && C128_FULL_DETECT_EVIL_EFFECT
+#if HAL_PLATFORM_DETECT_EVIL_RESIDENT_ITEMS && C128_FULL_DETECT_EVIL_EFFECT
 .segment C128ResidentItems
 #endif
-#if !C128 || C128_FULL_DETECT_EVIL_EFFECT
+#if !HAL_PLATFORM_DETECT_EVIL_RESIDENT_ITEMS || C128_FULL_DETECT_EVIL_EFFECT
 #import "player_magic_detect_evil_effect.s"
 #endif
-#if C128 && C128_FULL_DETECT_EVIL_EFFECT
+#if HAL_PLATFORM_DETECT_EVIL_RESIDENT_ITEMS && C128_FULL_DETECT_EVIL_EFFECT
 .segment C128ResidentWorld
 #endif
 

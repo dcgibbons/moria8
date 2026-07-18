@@ -1,6 +1,7 @@
 #importonce
 // player_magic_earthquake.s — shared umoria-style Earthquake terrain effect
 
+#if !PM_EQ_SCRATCH_EXTERNAL
 eq_cur_x: .byte 0
 eq_cur_y: .byte 0
 eq_rows_left: .byte 0
@@ -10,6 +11,7 @@ eq_mon_slot: .byte 0
 eq_mon_alive: .byte 0
 eq_saved_tile: .byte 0
 eq_saved_flags: .byte 0
+#endif
 
 #if PM_EQ_BANKED
 eff_earthquake_banked:

@@ -150,11 +150,17 @@ ui_equip_display_common:
 // ============================================================
 // Scratch
 // ============================================================
+#if UI_EQUIPMENT_SCRATCH_RESIDENT
+    :UiEquipmentScratchSegment()
+#endif
 ueq_slot:      .byte 0
 ueq_equip_idx: .byte 0
 ueq_visible:   .byte 0
 ueq_footer_lo: .byte 0
 ueq_footer_hi: .byte 0
+#if UI_EQUIPMENT_SCRATCH_RESIDENT
+    :UiEquipmentCodeSegment()
+#endif
 
 // ============================================================
 // String data (screen codes via inherited encoding)

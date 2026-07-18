@@ -1,10 +1,12 @@
 #importonce
 // player_magic_map.s — umoria-style Sense Surroundings area mapping
 
+#if !PM_MAP_SCRATCH_EXTERNAL
 pm_map_min_x: .byte 0
 pm_map_max_x: .byte 0
 pm_map_min_y: .byte 0
 pm_map_max_y: .byte 0
+#endif
 
 eff_map_area:
 #if C64_PRODUCT_OVERLAY_RUNTIME && !PM_MAP_BANKED

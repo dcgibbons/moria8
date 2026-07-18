@@ -2,6 +2,7 @@
 // test_main_loop128.s — Focused dispatch tests for common/game_loop.s on C128
 
 #define C128_PRODUCT_MODAL_PERSIST
+#define HAL_PLATFORM_GAME_LOOP_VISIBILITY_PRESERVE_REVEAL_EXTERNAL
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_start)
@@ -420,7 +421,17 @@ player_tunnel:
 do_look:
     jmp test_do_look
 
-run_check_stop:
+run_count: .byte 0
+
+run_initialize:
+    sec
+    rts
+
+run_continue:
+    clc
+    rts
+
+run_area_affect:
     lda test_run_should_stop
     beq !continue+
     sec
@@ -697,7 +708,6 @@ old_player_x: .byte 0
 old_player_y: .byte 0
 old_view_x: .byte 0
 old_view_y: .byte 0
-run_was_lit: .byte 0
 cr_display: .fill MAX_CREATURES, 0
 recall_kills: .fill MAX_CREATURES, 0
 recall_deaths: .fill MAX_CREATURES, 0

@@ -36,10 +36,10 @@
 .const C128_MEDIA_UNKNOWN = 0
 .const C128_MEDIA_PROGRAM = 1
 .const C128_MEDIA_SAVE    = 2
-.eval var OVL_OUT = "out"
-.if (cmdLineVars.containsKey("OVL_OUT")) {
-    .eval OVL_OUT = cmdLineVars.get("OVL_OUT")
+.if (!cmdLineVars.containsKey("OVL_OUT")) {
+    .error "OVL_OUT is required; generated files belong under build/"
 }
+.eval var OVL_OUT = cmdLineVars.get("OVL_OUT")
 .segmentdef StartupOverlay    [outPrg=OVL_OUT + "/ovl.start", start=$e000, min=$e000, max=$efff]
 .segmentdef TownOverlay       [outPrg=OVL_OUT + "/ovl.town",  start=$e000, min=$e000, max=$efff]
 .segmentdef DeathOverlay      [outPrg=OVL_OUT + "/ovl.death", start=$e000, min=$e000, max=$efff]
@@ -663,6 +663,11 @@ chrin_keyboard_stub:
 // Use this on long-lived runtime paths that do not need the full helper reinstall.
 c128_restore_runtime_state_core:
     :MachineRestoreAllRam()
+    // KERNAL-visible paths may leave the CPU in 1 MHz mode. Gameplay and
+    // generation use the VDC and are safe at the C128's 2 MHz rate.
+    lda $d030
+    ora #$01
+    sta $d030
     lda #<mmu_common_irq
     sta $fffe
     lda #>mmu_common_irq
@@ -3651,6 +3656,8 @@ c128_resident_world_start:
 #import "../common/overlay.s"
 #import "../../../core/monster_ai.s"
 
+#import "look_trampoline.s"
+
 // C128 keeps infravision helpers in the resident world payload so VDC rendering
 // can call them without increasing the byte-tight 128.play segment.
 player_get_infra_range:
@@ -3753,6 +3760,7 @@ ovl_cache_pages:   .byte 0
 ovl_ready_mask:
     .byte 0, %00000001, %00000010, %00000100, %00001000, %00010000, %00100000, %01000000, %10000000
 c128_cache_state_end:
+#import "../../../core/dungeon_room_center_helpers.s"
 c128_resident_world_end:
 
 .segment C128ResidentItems
@@ -3933,6 +3941,10 @@ descend_str:
     .text "You descend the staircase." ; .byte 0
 ascend_str:
     .text "You ascend the staircase." ; .byte 0
+uinv_title_str:
+    .text "Inventory" ; .byte 0
+uinv_sep_str:
+    .text "---------" ; .byte 0
 
 #define ITEM_ACTIONS_OVERLAY_EXTERNAL
 #define PLAYER_RECALC_EQUIPMENT_EXTERNAL
@@ -3980,7 +3992,17 @@ c128_resident_play_body:
 #undef C128_COMBAT_COMMON_HELPERS_EXTERNAL
 #undef PMU_TURN_FEEDBACK_EXTERNAL
 #import "../../../core/look_flash_target.s"
+.macro PlayerMoveRestoreResidentSegment() {
+    .segment C128ResidentPlay
+}
+.macro PlayerMoveLookSegment() {
+    .segment HelpOverlay
+}
+#define PLAYER_LOOK_EXTERNAL
+#define PLAYER_LOOK_SCRATCH_RESIDENT
 #import "../../../core/player_move.s"
+#undef PLAYER_LOOK_SCRATCH_RESIDENT
+#import "../../../core/player_run.s"
 #import "../../../core/ui_help_clear.s"
 #import "../../../core/wizard.s"
 #define C128_SCRIPTED_SPELL_SEED_EXTERNAL
@@ -3990,6 +4012,7 @@ c128_resident_play_body:
 #undef C128_SCRIPTED_SPELL_SEED_EXTERNAL
 #import "../../../core/turn.s"
 #import "../../../core/player_magic_state.s"
+#import "../../../core/dungeon_tunnel_guard.s"
 #if C128_TEST_PERF_P1_TRACE
 perf_p1_decision:
     .byte PERF_P1_DECISION_NONE
@@ -4786,6 +4809,7 @@ runtime_low_data_end:
 // ============================================================
 .segment RuntimeBankedCode
 banked_payload:
+#import "map_row_store_common.s"
 ego_tool_prefix_gnomish: .text "Gnomish " ; .byte 0
 ego_tool_prefix_orcish:  .text "Orcish " ; .byte 0
 ego_tool_prefix_dwarven: .text "Dwarven " ; .byte 0
@@ -4810,6 +4834,8 @@ banked_payload_end:
 
 .print "Banked payload: " + (banked_payload_end - banked_payload) + " bytes at $" + toHexString(banked_payload) + "-$" + toHexString(banked_payload_end)
 .assert "Banked code fits below MMU register page", banked_code_end <= $FF00, true
+.assert "C128 map row store helper lives in top common RAM", mmu_common_store_map_row >= $F000 && mmu_common_store_map_row < $FF00, true
+.assert "C128 map span helper lives in top common RAM", mmu_common_and_map_span >= $F000 && mmu_common_and_map_span < $FF00, true
 .assert "Banked payload starts above overlay window", first_banked_function >= $F000, true
 .assert "Banked payload is emitted as external runtime PRG", banked_payload == $F000, true
 
@@ -4836,6 +4862,7 @@ program_end:
 .assert "C128 modal persist stays below the I/O hole", c128_resident_persist_end <= $D000, true
 .assert "C128 resident play starts at $AF00", c128_resident_play_start == $AF00, true
 .assert "C128 resident play stays below the I/O hole", c128_resident_play_end <= $D000, true
+.assert "C128 tunnel guard stays in resident PLAY payload", dungeon_tunnel_guard_reset >= c128_resident_play_start && dungeon_tunnel_guard_step < c128_resident_play_end, true
 .assert "Staged Bank1 source span matches boot scrub ceiling", BANK1_STAGE_SOURCE_END == BANK1_RESERVED_TOP_END, true
 .assert "Tier cache window remains large enough for tier preload", BANK1_TIER_CACHE_SIZE >= TIER_PRELOAD_REQUIRED, true
 .assert "MMU helper page stays inside common RAM ownership", MMU_COMMON_HELPERS_BASE >= BANK1_COMMON_BASE, true
@@ -4993,11 +5020,25 @@ ovl_modal_misc_end:
     #import "ui_help_data_80.s"
     #import "../../../core/ui_help.s"
     #import "../../../core/ui_disk_setup.s"
+    .macro UiInventoryScratchSegment() { .segment RuntimeLowData }
+    .macro UiInventoryCodeSegment() { .segment HelpOverlay }
+    .macro UiEquipmentScratchSegment() { .segment RuntimeLowData }
+    .macro UiEquipmentCodeSegment() { .segment HelpOverlay }
+    #define UI_INVENTORY_SCRATCH_RESIDENT
+    #define UI_INVENTORY_HEADER_STRINGS_EXTERNAL
+    #define UI_EQUIPMENT_SCRATCH_RESIDENT
     #import "../../../core/ui_inventory.s"
     #import "../../../core/ui_equipment.s"
+    #undef UI_EQUIPMENT_SCRATCH_RESIDENT
+    #undef UI_INVENTORY_HEADER_STRINGS_EXTERNAL
+    #undef UI_INVENTORY_SCRATCH_RESIDENT
+    .segment RuntimeLowData
+c128_ui_scratch_end:
+    .segment HelpOverlay
 ovl_help_end:
 .print "Help overlay: " + (ovl_help_end - $e000) + " bytes at $E000-$" + toHexString(ovl_help_end)
 .assert "Help overlay fits in $E000-$EFFF", ovl_help_end <= $f000, true
+.assert "C128 resident UI scratch stays below floor-item storage", c128_ui_scratch_end <= FLOOR_ITEM_BASE, true
 
 // Title brand text is read by the UI-overlay title renderer, but it does not
 // need overlay ownership. Keeping it resident preserves UI overlay headroom for
@@ -5021,6 +5062,9 @@ ovl_ui_end:
 .assert "UI overlay fits in $E000-$EFFF", ovl_ui_end <= $f000, true
 .assert "Help title text stays inside help overlay", help_title_str >= $E000 && help_title_str < ovl_help_end, true
 .assert "Help content table stays inside help overlay", help_lines >= $E000 && help_lines < ovl_help_end, true
+.assert "LOOK command stays inside cached help overlay", do_look >= $E000 && do_look < ovl_help_end, true
+.assert "LOOK cache ID is present in the generic overlay table", C128_HELP_OVERLAY_ID >= 1 && C128_HELP_OVERLAY_ID <= hal_platform_overlay_count, true
+.assert "Inventory header strings stay in resident selector payload", uinv_title_str >= c128_resident_select_start && uinv_sep_str < c128_resident_select_end, true
 
 // ============================================================
 // Item actions overlay — low-frequency read/aim/use/refuel commands
@@ -5057,7 +5101,9 @@ ovl_disarm_end:
 // ============================================================
 .segment DungeonGenOverlay
     #import "../../../core/special_rooms.s"
+    #define DUNGEON_TUNNEL_HELPERS_EXTERNAL
     #import "../../../core/dungeon_gen.s"
+    #undef DUNGEON_TUNNEL_HELPERS_EXTERNAL
 ovl_gen_end:
 .print "DungeonGen overlay: " + (ovl_gen_end - $e000) + " bytes at $E000-$" + toHexString(ovl_gen_end)
 .assert "DungeonGen overlay fits in $E000-$EFFF", ovl_gen_end <= $f000, true

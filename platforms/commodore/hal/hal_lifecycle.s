@@ -61,3 +61,13 @@
 //   item prompt caller overlay must resync platform runtime state.
 // - hal_platform_equip_prepare_key_before_display: boolean; true when the
 //   equipment modal must prepare the dismiss key before drawing the view.
+//
+// Capability defines:
+// - HAL_PLATFORM_GAME_LOOP_VISIBILITY_PRESERVE_REVEAL_EXTERNAL: the platform
+//   provides game_loop_update_visibility_preserve_reveal.
+// - HAL_PLATFORM_MONSTER_SPLIT_RESIDENT_SEGMENTS: monster helpers are split
+//   between platform-owned low-data and resident-world segments.
+// - HAL_PLATFORM_MONSTER_VISIBILITY_DIRECT: the resident visibility routine
+//   is called directly instead of through a runtime-banked wrapper.
+// - HAL_PLATFORM_DETECT_EVIL_RESIDENT_ITEMS: the full detect-evil effect is
+//   emitted in the platform's resident-items segment.

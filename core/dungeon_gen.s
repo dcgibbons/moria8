@@ -17,21 +17,33 @@
 .const STORE_H = 5
 
 // ============================================================
-// Bulk map helpers (overlay-local, centralized high-volume operations)
+// Full-map helpers (overlay-local, centralized high-volume operations)
 // ============================================================
-// These are the approved bulk bypass paths for single-tile wrappers.
-// They perform one bank enter/exit around the full map walk.
+// These centralize logical full-map operations. C128 fill callers use a
+// bank-batched row store; generic callers use the platform single-tile wrapper.
 
 // Input: A = fill byte
 // Clobbers: A, X, Y, zp_ptr0/zp_ptr0_hi
 map_bulk_fill_all:
     sta map_bulk_fill_val
+#if C128_PRODUCT_OVERLAY_RUNTIME
+    ldy #0
+!mbf_cache:
+    sta SCREEN_RAM,y
+    iny
+    cpy #MAP_COLS
+    bne !mbf_cache-
+#endif
     ldx #0
 !mbf_row:
     lda map_row_lo,x
     sta zp_ptr0
     lda map_row_hi,x
     sta zp_ptr0_hi
+#if C128_PRODUCT_OVERLAY_RUNTIME
+    lda #MAP_COLS
+    jsr mmu_common_store_map_row
+#else
     ldy #0
 !mbf_col:
     lda map_bulk_fill_val
@@ -39,6 +51,7 @@ map_bulk_fill_all:
     iny
     cpy #MAP_COLS
     bne !mbf_col-
+#endif
     inx
     cpx #MAP_ROWS
     bne !mbf_row-
@@ -46,6 +59,7 @@ map_bulk_fill_all:
 
 // Input: A = AND mask applied to every map byte
 // Clobbers: A, X, Y, zp_ptr0/zp_ptr0_hi
+#if !C128_PRODUCT_OVERLAY_RUNTIME || C128_TEST_DUNGEON_OVERLAP
 map_bulk_and_all:
     sta map_bulk_and_mask
     ldx #0
@@ -66,6 +80,7 @@ map_bulk_and_all:
     cpx #MAP_ROWS
     bne !mba_row-
     rts
+#endif
 
 map_bulk_fill_val: .byte 0
 map_bulk_and_mask: .byte 0
@@ -376,6 +391,9 @@ dg_stop_flag:      .byte 0
 dg_door_flag:      .byte 0
 dg_slot_count:     .byte 0
 dg_tun_steps:      .byte 0
+#if DUNGEON_TEST_TUNNEL_HOOK
+dg_test_tunnel_oscillate: .byte 0
+#endif
 
 // ============================================================
 // level_generate — Dispatch to town or dungeon generation
@@ -482,6 +500,10 @@ place_traps:
 // including walls (room_x-1 to room_x+room_w, room_y-1 to room_y+room_h).
 // ============================================================
 darken_rooms:
+#if C128_PRODUCT_OVERLAY_RUNTIME
+    lda #~FLAG_LIT & $ff
+    sta mmu_common_row_mask
+#endif
     lda #0
     sta dr_idx
 !dr_loop:
@@ -497,11 +519,11 @@ darken_rooms:
     lda room_y,x
     sec
     sbc #1
-    sta dr_row                  // Start row (top wall)
+    sta dg_scan_row_start       // Start row (top wall)
     lda room_y,x
     clc
     adc room_h,x
-    sta dr_end_row              // End row (bottom wall, inclusive)
+    sta dg_scan_row_end         // End row (bottom wall, inclusive)
     lda room_x,x
     sec
     sbc #1
@@ -512,12 +534,17 @@ darken_rooms:
     sta dr_end_col              // End col (right wall, inclusive)
 
 !dr_row_loop:
-    ldx dr_row
+    ldx dg_scan_row_start
     lda map_row_lo,x
     sta zp_ptr0
     lda map_row_hi,x
     sta zp_ptr0_hi
 
+#if C128_PRODUCT_OVERLAY_RUNTIME
+    ldy dr_start_col
+    lda dr_end_col
+    jsr mmu_common_and_map_span
+#else
     ldy dr_start_col
 !dr_col_loop:
     :MapRead_ptr0_y()
@@ -527,10 +554,11 @@ darken_rooms:
     beq !dr_row_done+
     iny
     jmp !dr_col_loop-
+#endif
 !dr_row_done:
-    inc dr_row
-    lda dr_row
-    cmp dr_end_row
+    inc dg_scan_row_start
+    lda dg_scan_row_start
+    cmp dg_scan_row_end
     beq !dr_row_loop-           // Process end row too
     bcc !dr_row_loop-
 
@@ -540,11 +568,13 @@ darken_rooms:
 !dr_done:
     rts
 
-dr_idx:       .byte 0
-dr_row:       .byte 0
-dr_end_row:   .byte 0
-dr_start_col: .byte 0
-dr_end_col:   .byte 0
+dr_idx:            .byte 0
+// Phase-disjoint row bounds: darken_rooms current/end row, then staged-tunnel
+// minimum/maximum row. No caller may retain these values across either phase.
+dg_scan_row_start: .byte 0
+dg_scan_row_end:   .byte 0
+dr_start_col:      .byte 0
+dr_end_col:        .byte 0
 
 // ============================================================
 // fill_map_rock — Fill entire map with solid rock (TILE_WALL_H, no flags)
@@ -573,9 +603,17 @@ fill_cave_granite:
     sta zp_ptr0
     lda map_row_hi,x
     sta zp_ptr0_hi
+#if C128_PRODUCT_OVERLAY_RUNTIME
+    lda #MAP_COLS
+    jsr mmu_common_copy_map_row
+#endif
     ldy #0
 !fcg_col:
+#if C128_PRODUCT_OVERLAY_RUNTIME
+    lda SCREEN_RAM,y
+#else
     :MapRead_ptr0_y()
+#endif
     sta vc_tile
     beq !fcg_rock+
     cmp #DGEN_CORR
@@ -588,23 +626,43 @@ fill_cave_granite:
     bne !fcg_next+
     lda vc_tile
     and #~FLAG_OCCUPIED & $ff
+#if C128_PRODUCT_OVERLAY_RUNTIME
+    sta SCREEN_RAM,y
+#else
     :MapWrite_ptr0_y()
+#endif
     jmp !fcg_next+
 !fcg_rock:
     lda #TILE_WALL_H
+#if C128_PRODUCT_OVERLAY_RUNTIME
+    sta SCREEN_RAM,y
+#else
     :MapWrite_ptr0_y()
+#endif
     jmp !fcg_next+
 !fcg_floor:
     lda #TILE_FLOOR
+#if C128_PRODUCT_OVERLAY_RUNTIME
+    sta SCREEN_RAM,y
+#else
     :MapWrite_ptr0_y()
+#endif
     jmp !fcg_next+
 !fcg_keep_junction:
     lda #FLAG_HAS_ITEM
+#if C128_PRODUCT_OVERLAY_RUNTIME
+    sta SCREEN_RAM,y
+#else
     :MapWrite_ptr0_y()
+#endif
 !fcg_next:
     iny
     cpy #MAP_COLS
     bne !fcg_col-
+#if C128_PRODUCT_OVERLAY_RUNTIME
+    lda #MAP_COLS
+    jsr mmu_common_store_map_row
+#endif
     inx
     cpx #MAP_ROWS
     bne !fcg_row-
@@ -753,7 +811,7 @@ room_slot_center_y:
 // check_room_overlap — Check if dg_room_* overlaps any placed room
 // Output: carry set = overlap, carry clear = no overlap
 // ============================================================
-#if !C128 || C128_TEST_DUNGEON_OVERLAP
+#if HAL_LAYOUT_DUNGEON_OVERLAP_LOCAL || C64_UNIT_TEST || C128_TEST_DUNGEON_OVERLAP
 check_room_overlap:
     ldx #0
     cpx dg_idx
@@ -1090,23 +1148,10 @@ connect_rooms:
 	    jsr materialize_staged_tunnel
 	    rts
 
-conn_room_center_to_start:
-    lda room_type,x
-    tay
-    lda room_slot_center_x,y
-    sta dg_cx1
-    lda room_slot_center_y,y
-    sta dg_cy1
-    rts
-
-conn_room_center_to_target:
-    lda room_type,x
-    tay
-    lda room_slot_center_x,y
-    sta dg_cx2
-    lda room_slot_center_y,y
-    sta dg_cy2
-    rts
+#if !DUNGEON_TUNNEL_HELPERS_EXTERNAL
+#import "dungeon_room_center_helpers.s"
+#import "dungeon_tunnel_guard.s"
+#endif
 
 // ============================================================
 // carve_staged_tunnel — Walk one upstream-style tunnel, leaving temp markers.
@@ -1118,6 +1163,10 @@ carve_staged_tunnel:
 	    sta dg_stop_flag
 	    sta dg_door_flag
 	    sta dg_tun_steps
+	    jsr dungeon_tunnel_guard_reset
+	    lda dg_cy1
+	    sta dg_scan_row_start
+	    sta dg_scan_row_end
 !cst_loop:
     lda dg_cx1
     cmp dg_cx2
@@ -1126,22 +1175,55 @@ carve_staged_tunnel:
     cmp dg_cy2
     beq !cst_done+
 	!cst_not_done:
+	    jsr dungeon_tunnel_guard_step
+	    bcs !cst_done+
 	    lda dg_cx1
 	    sta dg_room_x
 	    lda dg_cy1
 	    sta dg_room_y
 	    jsr tunnel_step_toward
+	    lda dg_cy1
+	    cmp dg_scan_row_start
+	    bcs !cst_min_row_ok+
+	    sta dg_scan_row_start
+!cst_min_row_ok:
+	    cmp dg_scan_row_end
+	    bcc !cst_bounds_done+
+	    sta dg_scan_row_end
+!cst_bounds_done:
+	    lda dg_tun_steps
+	    cmp #$ff
+	    beq !cst_stage+
 	    inc dg_tun_steps
+!cst_stage:
 	    jsr tunnel_stage_current
     lda dg_stop_flag
     bne !cst_done+
     jmp !cst_loop-
 !cst_done:
+	    // Staged room-wall candidates extend one row beyond the tunnel path.
+	    dec dg_scan_row_start
+	    inc dg_scan_row_end
     rts
 
 // tunnel_step_toward — Advance dg_cx1/dg_cy1 one upstream-style cardinal step.
 // Output: dg_tun_dir = 1 horizontal, 2 vertical.
 tunnel_step_toward:
+#if DUNGEON_TEST_TUNNEL_HOOK
+    lda dg_test_tunnel_oscillate
+    beq !tst_production+
+    lda #1
+    sta dg_tun_dir
+    lda dg_tun_count_lo
+    and #1
+    beq !tst_test_left+
+    inc dg_cx1
+    rts
+!tst_test_left:
+    dec dg_cx1
+    rts
+!tst_production:
+#endif
     lda dg_tun_dir
     beq tst_pick_correct
     lda #100
@@ -1367,15 +1449,24 @@ mnw_mark_if_lit_wall:
     rts
 
 materialize_staged_tunnel:
-    ldx #0
+    ldx dg_scan_row_start
 !mst_row:
     lda map_row_lo,x
     sta zp_ptr0
     lda map_row_hi,x
     sta zp_ptr0_hi
+#if C128_PRODUCT_OVERLAY_RUNTIME
+    // Copy Bank 1 once per staged row; preserve row-major scan and RNG order.
+    lda #MAP_COLS
+    jsr mmu_common_copy_map_row
+#endif
     ldy #0
 !mst_col:
+#if C128_PRODUCT_OVERLAY_RUNTIME
+    lda SCREEN_RAM,y
+#else
     :MapRead_ptr0_y()
+#endif
     sta vc_tile
     cmp #DGEN_TUNNEL
     beq !mst_tunnel+
@@ -1396,23 +1487,23 @@ materialize_staged_tunnel:
     stx dg_room_y
     sty dg_room_x
     lda #100
-	    jsr rng_range
-	    ldx dg_room_y
-	    cmp #DUN_ROOM_DOORS
-	    bcs !mst_candidate_floor+
-	    lda vc_tile
-	    and #TILE_TYPE_MASK
-	    cmp #TILE_WALL_H
-	    beq !mst_check_hwall+
-	    cmp #TILE_WALL_V
-	    bne !mst_candidate_floor+
-	    jsr jdg_opposing_vertical
-	    jmp !mst_checked_wall+
+    jsr rng_range
+    ldx dg_room_y
+    cmp #DUN_ROOM_DOORS
+    bcs !mst_candidate_floor+
+    lda vc_tile
+    and #TILE_TYPE_MASK
+    cmp #TILE_WALL_H
+    beq !mst_check_hwall+
+    cmp #TILE_WALL_V
+    bne !mst_candidate_floor+
+    jsr jdg_opposing_vertical
+    jmp !mst_checked_wall+
 !mst_check_hwall:
-	    jsr jdg_opposing_horizontal
+    jsr jdg_opposing_horizontal
 !mst_checked_wall:
-	    bcc !mst_candidate_floor+
-	    jsr random_door_type
+    bcc !mst_candidate_floor+
+    jsr random_door_type
     ldx dg_room_y
     ldy dg_room_x
     :MapWrite_ptr0_y()
@@ -1423,25 +1514,25 @@ materialize_staged_tunnel:
     lda #DGEN_CORR
     :MapWrite_ptr0_y()
     jmp !mst_next+
-	!mst_next:
-	    iny
-	    cpy #MAP_COLS
-	    beq !mst_row_next+
-	    jmp !mst_col-
+!mst_next:
+    iny
+    cpy #MAP_COLS
+    beq !mst_row_next+
+    jmp !mst_col-
 !mst_row_next:
-	    inx
-	    cpx #MAP_ROWS
-	    beq !mst_done+
-	    jmp !mst_row-
+    cpx dg_scan_row_end
+    beq !mst_done+
+    inx
+    jmp !mst_row-
 !mst_done:
-	    rts
+    rts
 
 // ============================================================
 // carve_h_corridor — Carve horizontal corridor from cx1 to cx2 at row cy1
 // Input: dg_cx1 = start x, dg_cx2 = end x, dg_cy1 = row y
 // Always carves from smaller x to larger x using Y register.
 // ============================================================
-#if !C128 && C64_UNIT_TEST
+#if C64_UNIT_TEST
 carve_h_corridor:
     ldx dg_cy1
     lda map_row_lo,x
@@ -1654,7 +1745,7 @@ rdt_table:
 // new room-entry doors just because a corridor floor happens to run alongside
 // a room wall; that behavior created aggressive side-entry doors.
 // ============================================================
-#if !C128 && C64_UNIT_TEST
+#if C64_UNIT_TEST
 add_corridor_doors:
     rts
 #endif
@@ -1666,9 +1757,17 @@ place_junction_doors:
     sta zp_ptr0
     lda map_row_hi,x
     sta zp_ptr0_hi
+#if C128_PRODUCT_OVERLAY_RUNTIME
+    lda #MAP_COLS
+    jsr mmu_common_copy_map_row
+#endif
     ldy #0
 !pjd_col:
+#if C128_PRODUCT_OVERLAY_RUNTIME
+    lda SCREEN_RAM,y
+#else
     :MapRead_ptr0_y()
+#endif
     sta vc_tile
     and #TILE_TYPE_MASK
     bne !pjd_next+
@@ -1680,6 +1779,9 @@ place_junction_doors:
     stx dg_cy1
     lda #TILE_FLOOR
     :MapWrite_ptr0_y()
+#if C128_PRODUCT_OVERLAY_RUNTIME
+    sta SCREEN_RAM,y
+#endif
     lda #0
     sta dg_door_flag
 
@@ -1724,7 +1826,9 @@ place_junction_doors:
 !pjd_next:
     iny
     cpy #MAP_COLS
-    bne !pjd_col-
+    beq !pjd_row_next+
+    jmp !pjd_col-
+!pjd_row_next:
     inx
     cpx #MAP_ROWS
     beq !pjd_done+
@@ -1736,8 +1840,7 @@ try_junction_door:
     lda dg_door_flag
     bne !tjd_no+
     lda dg_room_x
-    cmp #1
-    bcc !tjd_no+
+    beq !tjd_no+
     cmp #MAP_COLS - 1
     bcs !tjd_no+
     lda dg_room_y
@@ -2270,7 +2373,7 @@ cs_dx_table:
 cs_dy_table:
     .byte $ff, $ff, $ff, $00, $00, $01, $01, $01
 
-#if !C128 && C64_UNIT_TEST
+#if C64_UNIT_TEST
 // ============================================================
 // verify_connectivity — Flood-fill to ensure all rooms reachable
 // Starts from stairs_up position, propagates visited marks through passable
@@ -2376,7 +2479,7 @@ verify_connectivity:
     rts
 #endif
 
-#if !C128 || C128_TEST_DUNGEON_OVERLAP
+#if HAL_LAYOUT_DUNGEON_OVERLAP_LOCAL || C64_UNIT_TEST || C128_TEST_DUNGEON_OVERLAP
 // vc_cleanup — Clear FLAG_OCCUPIED from entire map
 vc_cleanup:
     lda #~FLAG_OCCUPIED & $ff
@@ -2496,10 +2599,6 @@ position_player_dungeon:
 // ============================================================
 // Compile-time validation (dungeon)
 // ============================================================
-#if C128
-.assert "MAX_ROOMS", MAX_ROOMS, 21
-#else
-.assert "MAX_ROOMS", MAX_ROOMS, 8
-#endif
+.assert "MAX_ROOMS", MAX_ROOMS, hal_layout_dungeon_max_rooms
 .assert "TILE_WALL_H = $10", TILE_WALL_H, $10
 .assert "DUNGEON_FLAGS = $08", DUNGEON_FLAGS, $08

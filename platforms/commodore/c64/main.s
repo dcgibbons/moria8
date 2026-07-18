@@ -14,10 +14,10 @@
 #define PLATFORM_PRODUCT_OVERLAY_RUNTIME
 #define C64_PRODUCT_IRQ_VECTOR_RUNTIME
 #define PLATFORM_PRODUCT_IRQ_VECTOR_RUNTIME
-.eval var OVL_OUT = "out"
-.if (cmdLineVars.containsKey("OVL_OUT")) {
-    .eval OVL_OUT = cmdLineVars.get("OVL_OUT")
+.if (!cmdLineVars.containsKey("OVL_OUT")) {
+    .error "OVL_OUT is required; generated files belong under build/"
 }
+.eval var OVL_OUT = cmdLineVars.get("OVL_OUT")
 .segmentdef StartupOverlay    [outPrg=OVL_OUT + "/ovl.start", start=$e000, min=$e000, max=$efff]
 .segmentdef TownOverlay       [outPrg=OVL_OUT + "/ovl.town",  start=$e000, min=$e000, max=$efff]
 .segmentdef DeathOverlay      [outPrg=OVL_OUT + "/ovl.death", start=$e000, min=$e000, max=$efff]
@@ -411,7 +411,25 @@ ol_target:        .byte 0
 #import "../../../core/player_magic.s"
 #import "dungeon_render.s"
 #import "../../../core/dungeon_los.s"
+.macro PlayerMoveRestoreResidentSegment() {
+    .segment Default
+}
+.macro PlayerMoveLookSegment() {
+    .segment ModalMiscOverlay
+}
+#define PLAYER_LOOK_EXTERNAL
 #import "../../../core/player_move.s"
+.macro PlayerRunInitializeSegment() {
+    .segment RuntimeBanked
+}
+.macro PlayerRunRestoreResidentSegment() {
+    .segment Default
+}
+#define RUN_MONSTER_VISIBILITY_EXTERNAL
+#define PLAYER_RUN_INITIALIZE_EXTERNAL
+#import "../../../core/player_run.s"
+#undef PLAYER_RUN_INITIALIZE_EXTERNAL
+#undef RUN_MONSTER_VISIBILITY_EXTERNAL
 #define PMU_TURN_FEEDBACK_EXTERNAL
 #import "../../../core/combat.s"
 #undef PMU_TURN_FEEDBACK_EXTERNAL
@@ -1253,6 +1271,25 @@ save_select_slot_prompt:
     jmp platform_runtime_resync_c64
 #endif
 
+#import "look_trampoline.s"
+
+#import "run_visibility_trampoline.s"
+
+// Run initialization executes once when SHIFT+direction begins. Its larger
+// CJS setup routine lives in the banked payload; per-step running stays local.
+run_initialize:
+    php
+    sei
+    lda $01
+    pha
+    lda #BANK_NO_KERNAL
+    sta $01
+    jsr run_initialize_impl
+    pla
+    sta $01
+    plp
+    rts
+
 tramp_ui_help_display:
     lda #OVL_HELP
     jsr overlay_load_no_kernal
@@ -1880,14 +1917,32 @@ game_over_prompt:
     jmp game_restart_overlay
 
 // Safety: ensure runtime code doesn't overlap runtime data areas
+pm_map_min_x: .byte 0
+pm_map_max_x: .byte 0
+pm_map_min_y: .byte 0
+pm_map_max_y: .byte 0
+eq_cur_x: .byte 0
+eq_cur_y: .byte 0
+eq_rows_left: .byte 0
+eq_cols_left: .byte 0
+eq_changed: .byte 0
+eq_mon_slot: .byte 0
+eq_mon_alive: .byte 0
+eq_saved_tile: .byte 0
+eq_saved_flags: .byte 0
 program_end:
 .assert "Program fits below MAP_BASE", program_end <= MAP_BASE, true
+.assert "Map and earthquake scratch stay resident below MAP_BASE", pm_map_min_x < program_end && eq_saved_flags < program_end, true
 
 // ============================================================
 // Init-only code below — lives past CREATURE_BASE, safe because
 // it runs once at startup before dungeon map or RLE workspace
 // are used. Overwritten during normal gameplay.
 // ============================================================
+
+// REU preload status is startup-only and is dead before MAP_BASE takes over
+// this init tail. Keeping it here leaves runtime-bank space for run setup.
+#import "../common/reu_loading_banked.s"
 
 // ultimate_detect — One-shot C64 Ultimate / Ultimate-family title marker.
 // Full UCI model queries do not fit the current resident/banked layout. This
@@ -2108,23 +2163,29 @@ c64_banked_fname:
 .segment RuntimeBanked
     #import "../../../core/special_rooms.s"
     #import "../../../core/ego_items.s"
-    #import "../common/reu_loading_banked.s"
     #import "../../../core/ui_home.s"
     #import "../../../core/ui_recall.s"
     #import "../../../core/item_desc_banked.s"
     #import "../common/disk_setup_banked.s"
-    #import "../../../core/player_magic_learn_op.s"
     #define PM_MAP_BANKED
+    #define PM_MAP_SCRATCH_EXTERNAL
     #import "../../../core/player_magic_map.s"
+    #undef PM_MAP_SCRATCH_EXTERNAL
     #undef PM_MAP_BANKED
     #define PM_EQ_BANKED
+    #define PM_EQ_SCRATCH_EXTERNAL
     #import "../../../core/player_magic_earthquake.s"
+    #undef PM_EQ_SCRATCH_EXTERNAL
     #undef PM_EQ_BANKED
 
 banked_code_end:
 
 .print "Banked runtime: " + (banked_code_end - $f000) + " bytes at $F000-$" + toHexString(banked_code_end)
 .assert "Banked code fits below CPU vectors", banked_code_end <= $FFFA, true
+.assert "Runner visibility implementation stays under KERNAL ROM", monster_update_visibility_one >= $F000 && monster_update_visibility_one < banked_code_end, true
+.assert "Runner visibility trampoline stays resident", run_monster_update_visibility_one < MAP_BASE, true
+.assert "Runner initialization implementation stays banked", run_initialize_impl >= $F000 && run_initialize_impl < banked_code_end, true
+.assert "Runner initialization trampoline stays resident", run_initialize < MAP_BASE, true
 
 // ============================================================
 // Town overlay — store code at $E000, output to separate PRG
@@ -2244,7 +2305,6 @@ winner_apply_retirement_bonus_overlay:
     adc #$4c
     sta player_data + PL_XP_2
     rts
-
     #import "../../../core/royal.s"
     #import "../common/save_slot_menu.s"
 ovl_modal_misc_end:
@@ -2293,6 +2353,7 @@ ovl_help_end:
     #import "../../../core/spell_names.s"
     #import "../../../core/player_magic_select_overlay.s"
     #import "../../../core/player_gain_spell_impl.s"
+    #import "../../../core/player_magic_learn_op.s"
 ovl_ui_end:
 .print "UI overlay: " + (ovl_ui_end - $e000) + " bytes at $E000-$" + toHexString(ovl_ui_end)
 .assert "UI overlay fits in $E000-$EFFF", ovl_ui_end <= $F000, true

@@ -95,25 +95,12 @@ store_owner_hi:
 // Input: zp_player_x/y
 // Output: carry set + A = store index (0-7) if on door
 //         carry clear if not on any door
-// Clobbers: A, X
+// Clobbers: A, X, zp_ptr1, zp_ptr1_hi
 check_player_on_store_door:
-    ldx #7
-!cpsd_loop:
     lda zp_player_x
-    cmp store_door_x,x
-    bne !cpsd_next+
-    lda zp_player_y
-    cmp store_door_y,x
-    bne !cpsd_next+
-    // Match
-    txa
-    sec
-    rts
-!cpsd_next:
-    dex
-    bpl !cpsd_loop-
-    clc
-    rts
+    ldy zp_player_y
+
+#import "store_door_lookup.s"
 
 // check_store_category — Test if item category matches store
 // Input: A = ICAT value (0-15), zp_store_idx = store index

@@ -159,7 +159,8 @@ render_viewport:
     sta zp_ptr0_hi
 
     // Copy the map row via the MMU helper so we stay in Bank 0 code space
-    jsr mmu_copy_map_row
+    lda #MMU_COPY_MAP_ROW_LEN
+    jsr mmu_common_copy_map_row
 
     // Item population owns the row cache reset; the map occupied bit is the
     // cheap row-level gate while shared monster flags remain render authority.

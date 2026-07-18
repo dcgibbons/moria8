@@ -17,7 +17,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #43
+    ldx #44
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -53,7 +53,10 @@ test_exit_trampoline:
 .segment Default
 #import "../../../../core/sound.s"
 #import "../../../../core/dungeon_data.s"
+#import "../../../../core/store_door_lookup.s"
+#define DUNGEON_TEST_TUNNEL_HOOK
 #import "../../../../core/dungeon_gen.s"
+#undef DUNGEON_TEST_TUNNEL_HOOK
 #import "../../../../core/huffman.s"
 #import "../../../../core/dungeon_features.s"
 #import "../../../../core/monster.s"
@@ -83,6 +86,7 @@ recall_clear: rts
 #import "../dungeon_render.s"
 #import "../../../../core/dungeon_los.s"
 #import "../../../../core/player_move.s"
+#import "../../../../core/player_run.s"
 #import "../../../../core/combat.s"
 eff_fear_timer: .byte 0
 monster_attack_player:
@@ -296,12 +300,27 @@ audit_door_y:  .byte 0
 audit_check_x: .byte 0
 audit_check_y: .byte 0
 audit_pair_count: .byte 0
-tc_results: .fill 44, $ff              // Test results buffer (copied to $0400 before brk)
+tc_results: .fill 45, $ff              // Test results buffer (copied to $0400 before brk)
 t38_rockfall_name: .text "falling rock." ; .byte 0
+run_cycle_expected:
+    .byte 7,3,5,0,4,2,6,1,7,3,5,0
+run_home_expected:
+    .byte 3,7,5,9,4,2,6,8
+
+test_set_materialize_row_bounds:
+    lda dg_cy1
+    sec
+    sbc #1
+    sta dg_scan_row_start
+    lda dg_cy1
+    clc
+    adc #1
+    sta dg_scan_row_end
+    rts
 
 test_start:
     // Initialize result area to $ff (untested)
-    ldx #43
+    ldx #44
     lda #$ff
 !clr:
     sta tc_results,x
@@ -1234,6 +1253,7 @@ test_start:
 	    lda #1
 	    sta dg_tun_dir
 	    jsr tunnel_stage_current
+	    jsr test_set_materialize_row_bounds
 	    jsr materialize_staged_tunnel
 
     // Check tile at (19, 11) is floor or a supported door.
@@ -1307,6 +1327,7 @@ test_start:
     lda #2
     sta dg_tun_dir
     jsr tunnel_stage_current
+    jsr test_set_materialize_row_bounds
     jsr materialize_staged_tunnel
 
     lda #20
@@ -1359,6 +1380,7 @@ test_start:
     lda #2
     sta dg_tun_dir
     jsr tunnel_stage_current
+    jsr test_set_materialize_row_bounds
     jsr materialize_staged_tunnel
 
     lda #20
@@ -1407,6 +1429,7 @@ test_start:
     lda #2
     sta dg_tun_dir
     jsr tunnel_stage_current
+    jsr test_set_materialize_row_bounds
     jsr materialize_staged_tunnel
 
     lda #20
@@ -1444,6 +1467,7 @@ test_start:
     lda #2
     sta dg_tun_dir
     jsr tunnel_stage_current
+    jsr test_set_materialize_row_bounds
     jsr materialize_staged_tunnel
 
     lda #20
@@ -1481,6 +1505,7 @@ test_start:
     lda #1
     sta dg_tun_dir
     jsr tunnel_stage_current
+    jsr test_set_materialize_row_bounds
     jsr materialize_staged_tunnel
 
     lda #20
@@ -1586,6 +1611,7 @@ test_start:
     lda #19
     sta dg_room_y
     jsr tunnel_stage_current
+    jsr test_set_materialize_row_bounds
     jsr materialize_staged_tunnel
 
     lda #21
@@ -1686,6 +1712,7 @@ test_start:
 
 	    // Materialize the production-staged mouth; it must resolve to floor or
 	    // a supported door, not remain a wall.
+	    jsr test_set_materialize_row_bounds
 	    jsr materialize_staged_tunnel
 
     // Mouth at (20, 20) must be floor or a supported door.
@@ -1726,8 +1753,8 @@ test_start:
     lda #0
     sta level_entry_dir
     jsr dungeon_generate
-    jsr audit_final_door_chokepoints
-    bcs !t19_fail+
+	jsr audit_final_door_chokepoints
+	bcs !t19_fail+
 
     // Find a corridor floor tile: scan for TILE_FLOOR without FLAG_LIT
     // (Room floors have FLAG_LIT; corridor floors do not)
@@ -2220,8 +2247,7 @@ test_start:
 !t26_done:
 
     // ==========================================
-    // Test 27: run_check_stop stops at stairs
-    // Place player on stairs tile, verify carry set.
+    // Test 27: UMoria leading-edge scan stops before stairs.
     // ==========================================
     jsr fill_map_rock
 
@@ -2231,25 +2257,35 @@ test_start:
     lda #20
     sta zp_player_y
 
-    // Place stairs tile at player position
+    // Place floor under the player and stairs two steps east. After the
+    // simulated first move, the stairs enter the newly-adjacent scan edge.
     ldx #20
     lda map_row_lo,x
     sta zp_ptr0
     lda map_row_hi,x
     sta zp_ptr0_hi
     ldy #20
-    lda #TILE_STAIRS_DN
+    lda #TILE_FLOOR
+    sta (zp_ptr0),y
+    iny
+    lda #TILE_FLOOR
+    sta (zp_ptr0),y
+    iny
+    lda #TILE_STAIRS_DN | FLAG_VISITED
     sta (zp_ptr0),y
 
     // Set up running direction (east)
     lda #3                      // DIR_E
     sta zp_run_dir
-
-    // Set run_was_lit to 0 (corridor)
+    lda #5
+    sta zp_light_radius
     lda #0
-    sta run_was_lit
+    sta zp_eff_blind
 
-    jsr run_check_stop
+    jsr run_initialize
+    bcc !t27_fail+
+    inc zp_player_x
+    jsr run_area_affect
     bcs !t27_pass+
     jmp !t27_fail+
 
@@ -2263,9 +2299,7 @@ test_start:
 !t27_done:
 
     // ==========================================
-    // Test 28: run_check_stop continues on straight corridor
-    // Place player on floor tile in a straight corridor with no
-    // intersections, doors, or special tiles → carry clear.
+    // Test 28: UMoria runner continues on a straight corridor.
     // ==========================================
     jsr fill_map_rock
 
@@ -2280,7 +2314,7 @@ test_start:
     lda #TILE_FLOOR             // No flags (corridor)
     sta (zp_ptr0),y
     iny
-    cpy #23
+    cpy #24
     bne !t28_carve-
 
     // Player at (20, 20), running east
@@ -2289,10 +2323,14 @@ test_start:
     sta zp_player_y
     lda #3                      // DIR_E
     sta zp_run_dir
+    lda #5
+    sta zp_light_radius
     lda #0
-    sta run_was_lit             // Corridor (unlit)
-
-    jsr run_check_stop
+    sta zp_eff_blind
+    jsr run_initialize
+    bcc !t28_fail+
+    inc zp_player_x
+    jsr run_area_affect
     bcc !t28_pass+
     jmp !t28_fail+
 
@@ -2755,7 +2793,7 @@ test_start:
 !t35_done:
 
     // ============================================================
-    // Test 36: run_check_stop stops on floor items
+    // Test 36: UMoria leading-edge scan stops before floor items.
     // ============================================================
     jsr fill_map_rock
 
@@ -2770,15 +2808,21 @@ test_start:
     lda map_row_hi,x
     sta zp_ptr0_hi
     ldy #20
-    lda #TILE_FLOOR | FLAG_HAS_ITEM
+    lda #TILE_FLOOR
+    sta (zp_ptr0),y
+    iny
+    lda #TILE_FLOOR
+    sta (zp_ptr0),y
+    iny
+    lda #TILE_FLOOR | FLAG_HAS_ITEM | FLAG_VISITED
     sta (zp_ptr0),y
 
     lda #3                      // DIR_E
     sta zp_run_dir
-    lda #0
-    sta run_was_lit
-
-    jsr run_check_stop
+    jsr run_initialize
+    bcc !t36_fail+
+    inc zp_player_x
+    jsr run_area_affect
     bcs !t36_pass+
     jmp !t36_fail+
 !t36_pass:
@@ -2791,49 +2835,483 @@ test_start:
 !t36_done:
 
     // ============================================================
-    // Test 37: lit room mouth on the side does not stop one tile early
-    // Corridor remains unlit; north side tile is lit floor.
-    // Running should continue here and stop on actual room entry instead.
+    // Test 37: production runner matches UMoria's default CJS behavior.
     // ============================================================
-    jsr fill_map_rock
+    // Edge queries must return a boundary wall instead of wrapping coordinates.
+    lda #0
+    sta df_target_x
+    sta df_target_y
+    ldx #2                      // DIR_W
+    jsr run_get_tile
+    cmp #TILE_WALL_H | FLAG_VISITED
+    beq !t37_edge_x_ok+
+    jmp !t37_fail+
+!t37_edge_x_ok:
+    ldx #0                      // DIR_N
+    jsr run_get_tile
+    cmp #TILE_WALL_H | FLAG_VISITED
+    beq !t37_edges_ok+
+    jmp !t37_fail+
+!t37_edges_ok:
 
-    // Straight east-west corridor at y=20, x=19..21
+    // Pin the translated cycle/chome tables used by every directional scan.
+    ldx #11
+!t37_cycle_table:
+    lda run_cycle,x
+    cmp run_cycle_expected,x
+    beq !t37_cycle_next+
+    jmp !t37_fail+
+!t37_cycle_next:
+    dex
+    bpl !t37_cycle_table-
+    ldx #7
+!t37_home_table:
+    lda run_home,x
+    cmp run_home_expected,x
+    beq !t37_home_next+
+    jmp !t37_fail+
+!t37_home_next:
+    dex
+    bpl !t37_home_table-
+
+    // Straight east-west corridor. A doorless opening is ordinary floor in
+    // UMoria and does not stop merely because it enters the leading edge.
+    jsr fill_map_rock
+    lda #0
+    sta room_count
+    sta zp_eff_blind
+    lda #5
+    sta zp_light_radius
+    lda #20
+    sta zp_player_x
+    sta zp_player_y
+    lda #3                      // DIR_E
+    sta zp_run_dir
     ldx #20
     lda map_row_lo,x
     sta zp_ptr0
     lda map_row_hi,x
     sta zp_ptr0_hi
-    ldy #19
+    ldy #18
 !t37_corridor:
     lda #TILE_FLOOR
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
     iny
-    cpy #22
+    cpy #25
     bne !t37_corridor-
+    ldy #22
+    lda #TILE_FLOOR
+    :MapWrite_ptr0_y()
+    jsr run_initialize
+    bcs !t37_initialized+
+    jmp !t37_fail+
+!t37_initialized:
+    inc zp_player_x
+    jsr run_area_affect
+    bcc !t37_doorway_open+
+    jmp !t37_fail+
+!t37_doorway_open:
 
-    // Lit room mouth immediately north of the current corridor tile.
+    // Town entrances are production coordinate metadata over floor, but still
+    // stop as visible leading-edge objects.
+    lda #0
+    sta zp_player_dlvl
+    lda #14
+    sta df_target_x
+    lda #6
+    sta df_target_y
+    ldx #6
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #15
+    lda #TILE_FLOOR | FLAG_VISITED
+    :MapWrite_ptr0_y()
+    ldx #3
+    jsr run_classify
+    bcs !t37_store_seen+
+    jmp !t37_fail+
+!t37_store_seen:
+    lda #1
+    sta zp_player_dlvl
+
+    // Visible open-door objects stop with UMoria's run_ignore_doors=false.
+    lda #20
+    sta zp_player_x
+    ldx #20
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #22
+    lda #TILE_DOOR_OPEN | FLAG_VISITED
+    :MapWrite_ptr0_y()
+    lda #3
+    sta zp_run_dir
+    jsr run_initialize
+    bcs !t37_door_initialized+
+    jmp !t37_fail+
+!t37_door_initialized:
+    inc zp_player_x
+    jsr run_area_affect
+    bcs !t37_open_door_seen+
+    jmp !t37_fail+
+!t37_open_door_seen:
+
+    // A live but invisible monster on displayed terrain does not stop the
+    // leading-edge scan. Visibility must come from the production producer.
+    jsr monster_init_table
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda #1
+    sta (zp_ptr0),y
+    ldy #MX_X
+    lda #31
+    sta (zp_ptr0),y
+    ldy #MX_Y
+    lda #30
+    sta (zp_ptr0),y
+    ldy #MX_FLAGS
+    lda #0
+    sta (zp_ptr0),y
+    ldx #30
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #31
+    lda #TILE_FLOOR | FLAG_VISITED | FLAG_OCCUPIED
+    :MapWrite_ptr0_y()
+    lda #10
+    sta zp_player_x
+    sta zp_player_y
+    lda #30
+    sta df_target_x
+    sta df_target_y
+    ldx #3
+    jsr run_classify
+    bcc !t37_invisible_open+
+    jmp !t37_fail+
+!t37_invisible_open:
+    cmp #1
+    beq !t37_invisible_ok+
+    jmp !t37_fail+
+!t37_invisible_ok:
+
+    // A newly visible live monster stops the run through the production
+    // visibility refresh without corrupting the directional scan state.
+    jsr monster_init_table
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda #1
+    sta (zp_ptr0),y
+    ldy #MX_X
+    lda #22
+    sta (zp_ptr0),y
+    ldy #MX_Y
+    lda #20
+    sta (zp_ptr0),y
+    ldy #MX_FLAGS
+    lda #0
+    sta (zp_ptr0),y
+    ldx #20
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #22
+    lda #TILE_FLOOR | FLAG_VISITED | FLAG_OCCUPIED
+    :MapWrite_ptr0_y()
+    lda #20
+    sta zp_player_x
+    sta zp_player_y
+    lda #1
+    sta zp_player_dlvl
+    lda #3
+    sta zp_run_dir
+    jsr run_initialize
+    bcs !t37_monster_initialized+
+    jmp !t37_fail+
+!t37_monster_initialized:
+    inc zp_player_x
+    jsr run_area_affect
+    bcs !t37_monster_seen+
+    jmp !t37_fail+
+!t37_monster_seen:
+
+    // A visible monster blocks a running collision without consuming a turn.
+    lda #21
+    sta zp_player_x
+    lda #3
+    sta zp_run_dir
+    lda #CMD_MOVE_E
+    jsr player_try_move
+    bcc !t37_visible_collision_ok+
+    jmp !t37_fail+
+!t37_visible_collision_ok:
+    lda zp_player_x
+    cmp #21
+    beq !t37_visible_position_ok+
+    jmp !t37_fail+
+!t37_visible_position_ok:
+
+    // The same collision while unseen ends running and consumes the action.
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_FLAGS
+    lda (zp_ptr0),y
+    and #~MF_VISIBLE & $ff
+    sta (zp_ptr0),y
+    lda #1
+    sta eff_fear_timer          // Avoid combat RNG; fear still consumes a turn.
+    lda #3
+    sta zp_run_dir
+    lda #CMD_MOVE_E
+    jsr player_try_move
+    bcs !t37_unseen_consumed+
+    jmp !t37_fail+
+!t37_unseen_consumed:
+    lda player_move_relocated
+    beq !t37_unseen_not_relocated+
+    jmp !t37_fail+
+!t37_unseen_not_relocated:
+    lda zp_run_dir
+    cmp #$ff
+    beq !t37_unseen_run_stopped+
+    jmp !t37_fail+
+!t37_unseen_run_stopped:
+    lda zp_player_x
+    cmp #21
+    beq !t37_unseen_position_ok+
+    jmp !t37_fail+
+!t37_unseen_position_ok:
+    lda #0
+    sta eff_fear_timer
+
+    // Blind running skips the area-affect scan, including visible objects.
+    lda #1
+    sta zp_eff_blind
+    jsr run_area_affect
+    bcc !t37_blind_ignored+
+    jmp !t37_fail+
+!t37_blind_ignored:
+    lda #0
+    sta zp_eff_blind
+
+    // An open-area run continues while its wall/open topology is unchanged.
+    jsr fill_map_rock
+    lda #1
+    sta room_count
+    lda #18
+    sta room_x
+    sta room_y
+    sta dg_room_x
+    sta dg_room_y
+    lda #5
+    sta room_w
+    sta room_h
+    sta dg_room_w
+    sta dg_room_h
+    jsr draw_dungeon_room
+    lda #20
+    sta zp_player_x
+    sta zp_player_y
+    lda #3
+    sta zp_run_dir
+    jsr run_initialize
+    bcs !t37_room_initialized+
+    jmp !t37_fail+
+!t37_room_initialized:
+    inc zp_player_x
+    jsr run_area_affect
+    bcc !t37_room_ok+
+    jmp !t37_fail+
+!t37_room_ok:
+
+    // In open-area mode, a newly-open square on a previously closed side is
+    // the doorway boundary and stops the run.
+    lda #(RUNF_OPEN | RUNF_BREAK_LEFT)
+    sta run_flags
+    lda #3
+    sta run_prev_dir
+    lda #21
+    sta zp_player_x
+    lda #20
+    sta zp_player_y
+    ldx #19
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #22
+    lda #TILE_FLOOR
+    :MapWrite_ptr0_y()
+    jsr run_area_affect
+    bcs !t37_open_break_stops+
+    jmp !t37_fail+
+!t37_open_break_stops:
+
+    // End-to-end doorway regression: running east along a room's north wall
+    // continues beside solid wall, then stops when its doorless opening first
+    // enters the newly-adjacent left-side scan.
+    jsr fill_map_rock
+    lda #0
+    sta room_count
+    sta zp_eff_blind
+    lda #5
+    sta zp_light_radius
+    ldx #11
+!t37_mouth_row:
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #9
+!t37_mouth_col:
+    lda #TILE_FLOOR
+    :MapWrite_ptr0_y()
+    iny
+    cpy #20
+    bne !t37_mouth_col-
+    inx
+    cpx #14
+    bne !t37_mouth_row-
+    ldx #10
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #14
+    lda #TILE_FLOOR
+    :MapWrite_ptr0_y()
+    lda #10
+    sta zp_player_x
+    lda #11
+    sta zp_player_y
+    lda #3
+    sta zp_run_dir
+    jsr run_initialize
+    bcs !t37_mouth_initialized+
+    jmp !t37_fail+
+!t37_mouth_initialized:
+    inc zp_player_x
+    jsr run_area_affect
+    bcc !t37_mouth_step2+
+    jmp !t37_fail+
+!t37_mouth_step2:
+    inc zp_player_x
+    jsr run_area_affect
+    bcc !t37_mouth_step3+
+    jmp !t37_fail+
+!t37_mouth_step3:
+    inc zp_player_x
+    jsr run_area_affect
+    bcs !t37_mouth_stopped+
+    jmp !t37_fail+
+!t37_mouth_stopped:
+    lda zp_player_x
+    cmp #13
+    beq !t37_mouth_ok+
+    jmp !t37_fail+
+!t37_mouth_ok:
+
+    // Direction zero is a valid corridor choice, not the old zero sentinel.
+    jsr fill_map_rock
+    lda #5
+    sta zp_light_radius
+    lda #0
+    sta run_flags
+    sta zp_eff_blind
+    sta run_prev_dir             // Previous direction north.
+    lda #20
+    sta zp_player_x
+    sta zp_player_y
     ldx #19
     lda map_row_lo,x
     sta zp_ptr0
     lda map_row_hi,x
     sta zp_ptr0_hi
     ldy #20
-    lda #TILE_FLOOR | FLAG_LIT
-    sta (zp_ptr0),y
+    lda #TILE_FLOOR
+    :MapWrite_ptr0_y()
+    jsr run_area_affect
+    bcc !t37_north_found+
+    jmp !t37_fail+
+!t37_north_found:
+    lda zp_run_dir
+    beq !t37_north_ok+           // Must turn DIR_N.
+    jmp !t37_fail+
+!t37_north_ok:
 
+    // UMoria default run_cut_corners=true: two adjacent choices whose two
+    // far squares are known walls take the diagonal choice.
+    jsr fill_map_rock
+    lda #5
+    sta zp_light_radius
+    lda #0
+    sta run_flags
+    lda #3
+    sta run_prev_dir
     lda #20
     sta zp_player_x
-    lda #20
     sta zp_player_y
-    lda #3                      // DIR_E
-    sta zp_run_dir
-    lda #0
-    sta run_was_lit
-
-    jsr run_check_stop
-    bcc !t37_side_ok+
+    ldx #20
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #21
+    lda #TILE_FLOOR
+    :MapWrite_ptr0_y()
+    ldx #19
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #21
+    lda #TILE_FLOOR
+    :MapWrite_ptr0_y()
+    jsr run_area_affect
+    bcc !t37_known_corner_continues+
     jmp !t37_fail+
-!t37_side_ok:
+!t37_known_corner_continues:
+    lda zp_run_dir
+    cmp #5                      // DIR_NE
+    beq !t37_known_corner_dir+
+    jmp !t37_fail+
+!t37_known_corner_dir:
+    lda run_prev_dir
+    cmp #5
+    beq !t37_known_corner_ok+
+    jmp !t37_fail+
+!t37_known_corner_ok:
+
+    // UMoria default run_examine_corners=true: when the two far squares are
+    // unseen, enter the straight option and retain the diagonal previous dir.
+    lda #1
+    sta zp_light_radius
+    lda #0
+    sta run_flags
+    lda #3
+    sta run_prev_dir
+    jsr run_area_affect
+    bcc !t37_potential_continues+
+    jmp !t37_fail+
+!t37_potential_continues:
+    lda zp_run_dir
+    cmp #3                      // DIR_E
+    beq !t37_potential_dir+
+    jmp !t37_fail+
+!t37_potential_dir:
+    lda run_prev_dir
+    cmp #5                      // Pretend the diagonal was taken.
+    beq !t37_potential_ok+
+    jmp !t37_fail+
+!t37_potential_ok:
+
     lda #$01
     sta tc_results + 36
     jmp !t37_done+
@@ -2938,7 +3416,7 @@ test_start:
 !t39_done:
 
     // ============================================================
-    // Test 40: running south stops before a known trap
+    // Test 40: the initial running step enters a known trap tile
     // ============================================================
     jsr fill_map_rock
 
@@ -2975,14 +3453,12 @@ test_start:
 
     lda #CMD_MOVE_S
     jsr player_try_move
-    bcc !t40_blocked+
-    jmp !t40_fail+
-!t40_blocked:
+    bcc !t40_fail+
     lda zp_player_x
     cmp #27
     bne !t40_fail+
     lda zp_player_y
-    cmp #30
+    cmp #31
     bne !t40_fail+
 !t40_pass:
     lda #$01
@@ -3131,6 +3607,53 @@ test_start:
     lda #$00
     sta tc_results + 43
 !t44_done:
+
+    // ==========================================
+    // Test 45: adversarial east/west tunnel steps terminate at UMoria's
+    // 2,000-iteration guard instead of wrapping forever.
+    // ==========================================
+    ldx #20
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #20
+    lda #DGEN_TUNNEL
+    sta (zp_ptr0),y
+    iny
+    sta (zp_ptr0),y
+    lda #20
+    sta dg_cx1
+    sta dg_cy1
+    lda #30
+    sta dg_cx2
+    lda #20
+    sta dg_cy2
+    lda #1
+    sta dg_test_tunnel_oscillate
+    jsr carve_staged_tunnel
+    lda #0
+    sta dg_test_tunnel_oscillate
+    lda dg_tun_count_hi
+    cmp #>(DUN_TUNNEL_MAX_STEPS + 1)
+    bne !t45_fail+
+    lda dg_tun_count_lo
+    cmp #<(DUN_TUNNEL_MAX_STEPS + 1)
+    bne !t45_fail+
+    lda dg_scan_row_start
+    cmp #19
+    bne !t45_fail+
+    lda dg_scan_row_end
+    cmp #21
+    bne !t45_fail+
+
+    lda #$01
+    sta tc_results + 44
+    jmp !t45_done+
+!t45_fail:
+    lda #$00
+    sta tc_results + 44
+!t45_done:
 
     // Done — jump to exit trampoline (copies tc_results to $0400, then brk)
     jmp test_exit_trampoline

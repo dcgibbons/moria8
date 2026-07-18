@@ -247,6 +247,7 @@ tun_dig_ability: .byte 0
 .segment Default
 #import "../../../../core/sound.s"
 #import "../../../../core/dungeon_data.s"
+#import "../../../../core/store_door_lookup.s"
 dg_idx: .byte 0
 #import "../../../../core/huffman.s"
 #import "../../../../core/dungeon_features.s"
@@ -271,6 +272,7 @@ random_floor_in_room:
 #import "../dungeon_render.s"
 #import "../../../../core/dungeon_los.s"
 #import "../../../../core/player_move.s"
+#import "../../../../core/player_run.s"
 #import "../../../../core/combat.s"
 #import "../../../../core/monster_attack.s"
 #import "../../../../core/turn.s"
@@ -359,6 +361,8 @@ test_pickup_ok: .byte 0
 test_move_relocated: .byte 0
 test_move_disturbs_search: .byte 0
 test_scene_dirty: .byte 0
+test_trap_fires: .byte 0
+test_trap_trigger_calls: .byte 0
 test_turn_sets_message: .byte 0
 test_turn_heal_hp: .byte 0
 test_turn_heal_mp: .byte 0
@@ -398,9 +402,13 @@ install_jump_patch:
     :PatchJump(item_read_scroll, test_item_read_scroll)
     :PatchJump(player_cast_spell, test_player_cast_spell)
     :PatchJump(trap_check_at_player, test_trap_check)
+    :PatchJump(trap_trigger, test_trap_trigger)
     :PatchJump(search_scan_effective_silent, test_search_scan_effective_silent)
     :PatchJump(check_player_on_store_door, test_check_store_door)
     :PatchJump(check_stairs_at_player, test_check_stairs_at_player)
+    :PatchJump(run_initialize, test_run_initialize)
+    :PatchJump(run_continue, test_run_continue)
+    :PatchJump(run_area_affect, test_run_area_affect)
     :PatchJump(do_look, test_do_look)
     :PatchJump(get_direction_target, test_get_direction_target)
     :PatchJump(door_try_open, test_door_try_open)
@@ -434,6 +442,15 @@ restore_real_player_try_move:
     sta player_try_move + 1
     lda #$8e                    // stx player_move_relocated
     sta player_try_move + 2
+    rts
+
+restore_real_trap_check:
+    lda #$ad                    // lda trap_count
+    sta trap_check_at_player
+    lda #<trap_count
+    sta trap_check_at_player + 1
+    lda #>trap_count
+    sta trap_check_at_player + 2
     rts
 
 reset_state:
@@ -509,6 +526,8 @@ reset_state:
     sta test_move_relocated
     sta test_move_disturbs_search
     sta test_scene_dirty
+    sta test_trap_fires
+    sta test_trap_trigger_calls
     sta test_turn_sets_message
     sta test_turn_heal_hp
     sta test_turn_heal_mp
@@ -696,7 +715,22 @@ test_search_scan_effective_silent:
     rts
 
 test_trap_check:
+    lda test_trap_fires
+    beq !none+
+    lda zp_player_x
+    cmp trap_x
+    bne !none+
+    lda zp_player_y
+    cmp trap_y
+    bne !none+
+    sec
+    rts
+!none:
     clc
+    rts
+
+test_trap_trigger:
+    inc test_trap_trigger_calls
     rts
 
 test_check_store_door:
@@ -715,6 +749,23 @@ test_check_stairs_at_player:
     lsr
     lsr
     lsr
+    rts
+
+test_run_initialize:
+    sec
+    rts
+
+test_run_continue:
+    clc
+    rts
+
+test_run_area_affect:
+    lda test_stairs_tile
+    beq !continue+
+    sec
+    rts
+!continue:
+    clc
     rts
 
 test_do_look:
@@ -1860,6 +1911,7 @@ test_start:
     sta test_case_idx
     lda #1
     sta test_move_ok
+    sta test_move_relocated
     sta test_turn_sets_message
     lda #CMD_RUN_N
     sta test_cmd_script
@@ -1883,6 +1935,7 @@ test_start:
     sta test_case_idx
     lda #1
     sta test_move_ok
+    sta test_move_relocated
     sta test_scene_dirty
     lda #CMD_RUN_N
     sta test_cmd_script
@@ -2050,9 +2103,10 @@ test_start:
     sta tc_results + 31
     jmp !t33+
 
-    // Test 33: SHIFT+J run south stops before a revealed trap.
+    // Test 33: SHIFT+J enters a revealed trap and stops after it fires.
 !t33:
     jsr restore_real_player_try_move
+    jsr restore_real_trap_check
     jsr reset_state
     lda #32
     sta test_case_idx
@@ -2092,7 +2146,7 @@ test_start:
     lda #TILE_WALL_H | FLAG_VISITED
     :MapWrite_ptr0_y()
     ldy #27
-    lda #TILE_TRAP | FLAG_VISITED
+    lda #TILE_FLOOR | FLAG_VISITED
     :MapWrite_ptr0_y()
     ldy #28
     lda #TILE_WALL_H | FLAG_VISITED
@@ -2106,6 +2160,8 @@ test_start:
     sta trap_y
     lda #0
     sta trap_type
+    lda #1
+    sta test_trap_fires
 
     lda #$ca                    // SHIFT+J
     sta test_key_script + 0
@@ -2119,13 +2175,26 @@ test_start:
     cmp #27
     bne !t33_fail+
     lda zp_player_y
-    cmp #30
+    cmp #31
     bne !t33_fail+
     lda zp_run_dir
     cmp #$ff
     bne !t33_fail+
     lda test_turn_calls
-    cmp #2
+    cmp #3
+    bne !t33_fail+
+    lda test_trap_trigger_calls
+    cmp #1
+    bne !t33_fail+
+    ldx #31
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #27
+    :MapRead_ptr0_y()
+    and #TILE_TYPE_MASK
+    cmp #TILE_TRAP
     bne !t33_fail+
     lda #$01
     sta tc_results + 32

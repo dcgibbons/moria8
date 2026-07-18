@@ -12,7 +12,7 @@ C1541_BIN="${C1541:-c1541}"
 JAVA_BIN="${JAVA:-java}"
 KICKASS_JAR="${KICKASS:-../../tools/kickass/KickAss.jar}"
 
-out_dir="out"
+out_dir="../../../build/test/c128"
 diag_main="$out_dir/moria128.stacklow.prg"
 diag_d64="$out_dir/moria128_stacklow.d64"
 normal_vs="$out_dir/main.vs"
@@ -33,7 +33,7 @@ if [[ -f "$normal_vs" ]]; then
 fi
 
 if ! "$JAVA_BIN" -jar "$KICKASS_JAR" main.s -showmem -vicesymbols -libdir ../c64 \
-        -define C128 -define OVL_OUT='"../../../build/test/c128"' -define C128_TEST_STACK_LOW_WATER \
+        -define C128 ":OVL_OUT=$out_dir" -define C128_TEST_STACK_LOW_WATER \
         -define C128_TEST_OVERLAY_LOAD_FAIL_TRAP -define C128_TEST_OVERLAY_FN_GUARD \
         -o "$diag_main" >/tmp/moria128_stacklow_kickass.log 2>&1; then
     echo "stack_low_water KickAssembler build failed"

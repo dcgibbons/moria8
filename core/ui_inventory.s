@@ -163,6 +163,9 @@ ui_inv_display_common:
 // ============================================================
 // Scratch
 // ============================================================
+#if UI_INVENTORY_SCRATCH_RESIDENT
+    :UiInventoryScratchSegment()
+#endif
 uinv_slot:    .byte 0
 uinv_row:     .byte 0
 uinv_any:     .byte 0
@@ -170,12 +173,17 @@ uinv_visible: .byte 0
 uinv_footer_col: .byte 0
 uinv_footer_lo:  .byte 0
 uinv_footer_hi:  .byte 0
+#if UI_INVENTORY_SCRATCH_RESIDENT
+    :UiInventoryCodeSegment()
+#endif
 
 // ============================================================
 // String data (screen codes via inherited encoding)
 // ============================================================
+#if !UI_INVENTORY_HEADER_STRINGS_EXTERNAL
 uinv_title_str:   .text "Inventory" ; .byte 0
 uinv_sep_str:     .text "---------" ; .byte 0
+#endif
 uinv_nothing_str: .text "Nothing." ; .byte 0
 uinv_select_str:  .text "Select item" ; .byte 0
 uinv_identify_footer_str:  .text "Identify which item (a-"

@@ -513,6 +513,12 @@ test_start:
     bcc !t15_fail+
     cmp #0                      // Should be store index 0
     bne !t15_fail+
+    lda store_door_x + 0
+    ldy store_door_y + 0
+    jsr check_store_door_at
+    bcc !t15_fail+
+    cmp #0
+    bne !t15_fail+
     lda #$01
     jmp !t15_store+
 !t15_fail:
@@ -528,7 +534,12 @@ test_start:
     lda #40
     sta zp_player_y
     jsr check_player_on_store_door
+    bcs !t16_fail+
+    lda #40
+    ldy #40
+    jsr check_store_door_at
     bcc !t16_pass+
+!t16_fail:
     lda #$00
     jmp !t16_store+
 !t16_pass:

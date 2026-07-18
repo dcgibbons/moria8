@@ -20,7 +20,7 @@ if ! "${COMMODORE_MAKE[@]}" build128 disk128 >"$build_log" 2>&1 || grep -q "FAIL
 fi
 
 if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 \
-        -define C128 -define OVL_OUT='"../../../build/test/c128"' -define C128_TEST_STACK_BOTTOM_DIAG \
+        -define C128 :OVL_OUT=../../../build/test/c128 -define C128_TEST_STACK_BOTTOM_DIAG \
         -o "$diag_main" >>"$build_log" 2>&1; then
     echo "stack_bottom_diag assembly failed"
     tail -40 "$build_log"

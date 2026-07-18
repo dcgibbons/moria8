@@ -464,7 +464,7 @@ monster_apply_sleep:
     sta (zp_ptr0),y
     rts
 
-#if C128 && !C128_UNIT_TEST
+#if HAL_PLATFORM_MONSTER_SPLIT_RESIDENT_SEGMENTS && !C128_UNIT_TEST
 .segment RuntimeLowData
 #endif
 
@@ -511,7 +511,7 @@ monster_initial_sleep:
 !mis_done:
     rts
 
-#if C128 && !C128_UNIT_TEST
+#if HAL_PLATFORM_MONSTER_SPLIT_RESIDENT_SEGMENTS && !C128_UNIT_TEST
 .segment C128ResidentWorld
 #endif
 
@@ -1043,25 +1043,25 @@ monster_find_at:
     clc
     rts
 
-#if C128 && !C128_UNIT_TEST
+#if HAL_PLATFORM_MONSTER_SPLIT_RESIDENT_SEGMENTS && !C128_UNIT_TEST
 .segment RuntimeLowData
 #elif !C64_UNIT_TEST && !C128_UNIT_TEST
 monster_update_visibility_all:
     sei
-#if PLUS4
-    jsr plus4_bank_ram
+#if HAL_PLATFORM_MONSTER_CPU_PORT_BANK
+    lda #BANK_NO_ROMS
+    sta hal_memory_cpu_port
     jsr monster_update_visibility_all_impl
     pha
+    lda #BANK_NO_BASIC
+    sta hal_memory_cpu_port
     cli
     pla
     rts
 #else
-    lda #BANK_NO_ROMS
-    sta $01
+    jsr plus4_bank_ram
     jsr monster_update_visibility_all_impl
     pha
-    lda #BANK_NO_BASIC
-    sta $01
     cli
     pla
     rts
@@ -1075,7 +1075,7 @@ monster_update_visibility_all:
 // monster_update_visibility_all_impl — Recompute renderable monster flags.
 // Returns: A = 1 if any monster renderability changed, A = 0 otherwise.
 // Clobbers: A, X, Y, zp_ptr0/hi, zp_ptr1/hi, zp_temp0-4, zp_los_*
-#if C128 || C64_UNIT_TEST
+#if HAL_PLATFORM_MONSTER_VISIBILITY_DIRECT || C64_UNIT_TEST || C128_UNIT_TEST
 monster_update_visibility_all:
 #else
 monster_update_visibility_all_impl:
@@ -1246,6 +1246,9 @@ monster_update_visibility_one:
     sec
     rts
 
+#if HAL_PLATFORM_MONSTER_VISIBILITY_SCRATCH_RESIDENT && !C64_UNIT_TEST && !C128_UNIT_TEST
+.segment Default
+#endif
 muv_slot:      .byte 0
 muv_type:      .byte 0
 muv_dist:      .byte 0
@@ -1254,7 +1257,7 @@ muv_new_flags: .byte 0
 muv_changed:   .byte 0
 muv_clear_detected: .byte 0
 
-#if C128 && !C128_UNIT_TEST
+#if HAL_PLATFORM_MONSTER_SPLIT_RESIDENT_SEGMENTS && !C128_UNIT_TEST
 .segment C128ResidentWorld
 #elif !C64_UNIT_TEST
 .segment Default

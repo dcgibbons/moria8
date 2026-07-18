@@ -6,10 +6,14 @@
 // - IRQ-state drift across dungeon_generate
 // - Bank 0 map-address leakage at $4000/$4EFF
 // - Invalid room/stairs invariants
+// - Loss of the row-batched C128 tunnel materialization path
 
 #define C128_TEST_DUNGEON_OVERLAP
+#define C128_TEST_COUNT_MAP_ROW_COPIES
+#define C128_TEST_COUNT_MAP_ROW_STORES
 #define DUNGEON_FEATURES_GENERATION_ONLY
 #define SPECIAL_ROOMS_GENERATION_ONLY
+#define C128_PRODUCT_OVERLAY_RUNTIME
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_start)
@@ -70,14 +74,6 @@ mmu_safe_map_write_ptr1:
     pla
     rts
 
-map_bulk_enter:
-    jsr mmu_select_bank1
-    rts
-
-map_bulk_exit:
-    jsr mmu_select_bank0
-    rts
-
 // Real generation hooks, trimmed to generation-only sections so the soak tests
 // production topology without pulling in monster/item/trap gameplay.
 #import "../../../../core/dungeon_features.s"
@@ -89,6 +85,7 @@ tramp_vault_seal_entrance:
     jmp vault_seal_entrance
 
 #import "../../../../core/dungeon_gen.s"
+#undef C128_PRODUCT_OVERLAY_RUNTIME
 
 seed_idx: .byte 0
 iter_count: .byte 0
@@ -105,6 +102,12 @@ audit_mineral_hi: .byte 0
 audit_magma_count: .byte 0
 audit_quartz_count: .byte 0
 audit_parallel_run: .byte 0
+c128_test_row_copy_count_lo: .byte 0
+c128_test_row_copy_count_hi: .byte 0
+c128_test_row_copy_expect_lo: .byte 0
+c128_test_row_copy_expect_hi: .byte 0
+c128_test_row_store_count_lo: .byte 0
+c128_test_row_store_count_hi: .byte 0
 
 .const C128_STREAMER_MAX_TILES = 180
 
@@ -122,6 +125,7 @@ test_start:
 
     lda #MMU_ALL_RAM
     sta $ff00
+    jsr init_common_mmu_helpers
 
     lda #0
     sta seed_idx
@@ -145,6 +149,60 @@ test_start:
     bcc !ok_tunnel_clears_streamer+
     jmp test_fail
 !ok_tunnel_clears_streamer:
+
+    // A straight east/west door with an open north side is bypassable.
+    lda #TILE_WALL_H
+    jsr map_bulk_fill_all
+    ldx #20
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #19
+    lda #TILE_FLOOR
+    :MapWrite_ptr0_y()
+    iny
+    lda #TILE_DOOR_CLOSED
+    :MapWrite_ptr0_y()
+    iny
+    lda #TILE_FLOOR
+    :MapWrite_ptr0_y()
+    ldx #19
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #20
+    lda #TILE_FLOOR
+    :MapWrite_ptr0_y()
+    jsr audit_final_door_chokepoints128
+    bcs !ok_t_door_rejected+
+    jmp test_fail
+!ok_t_door_rejected:
+
+    // The C128 row cache and generation door list must remain disjoint. A door
+    // on an early row catches later row copies overwriting its coordinates.
+    lda #TILE_WALL_H
+    jsr map_bulk_fill_all
+    lda #1
+    sta zp_player_dlvl
+    ldx #10
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #20
+    lda #TILE_DOOR_CLOSED
+    :MapWrite_ptr0_y()
+    jsr place_secrets
+    ldx #20
+    ldy #10
+    jsr map_get_tile
+    and #TILE_TYPE_MASK
+    cmp #TILE_SECRET
+    beq !secret_door_ok+
+    jmp test_fail
+!secret_door_ok:
 
 !seed_loop:
     lda #50
@@ -192,7 +250,61 @@ test_start:
     and #$04
     sta irq_before
 
+    lda #0
+    sta c128_test_row_copy_count_lo
+    sta c128_test_row_copy_count_hi
+    sta c128_test_row_store_count_lo
+    sta c128_test_row_store_count_hi
     jsr dungeon_generate
+
+    // The two finishing passes copy every row, and place_secrets copies every
+    // interior row. Tunnel materialization must stay strictly below the old
+    // room_count full-map scans.
+    lda #0
+    sta c128_test_row_copy_expect_lo
+    sta c128_test_row_copy_expect_hi
+    ldx room_count
+    inx
+    inx
+!row_copy_expect_loop:
+    clc
+    lda c128_test_row_copy_expect_lo
+    adc #MAP_ROWS
+    sta c128_test_row_copy_expect_lo
+    lda c128_test_row_copy_expect_hi
+    adc #0
+    sta c128_test_row_copy_expect_hi
+    dex
+    bne !row_copy_expect_loop-
+    lda c128_test_row_copy_count_hi
+    cmp c128_test_row_copy_expect_hi
+    bcc !row_copy_below_old+
+    bne !row_copy_fail+
+    lda c128_test_row_copy_count_lo
+    cmp c128_test_row_copy_expect_lo
+    bcc !row_copy_below_old+
+!row_copy_fail:
+    jmp test_fail
+!row_copy_below_old:
+    lda c128_test_row_copy_count_lo
+    sec
+    sbc #<(MAP_ROWS * 3 - 2)
+    lda c128_test_row_copy_count_hi
+    sbc #>(MAP_ROWS * 3 - 2)
+    bcs !row_copy_count_ok+
+    jmp test_fail
+!row_copy_count_ok:
+    // blank_cave and fill_cave_granite each store every map row once.
+    lda c128_test_row_store_count_lo
+    cmp #<(MAP_ROWS * 2)
+    beq !row_store_lo_ok+
+    jmp test_fail
+!row_store_lo_ok:
+    lda c128_test_row_store_count_hi
+    cmp #>(MAP_ROWS * 2)
+    beq !row_store_count_ok+
+    jmp test_fail
+!row_store_count_ok:
 
     php
     pla
@@ -965,28 +1077,31 @@ audit_one_door_chokepoint128:
     sta dg_cx1
     lda audit_door_y
     sta dg_cy1
-    lda #0
-    sta audit_pair_count
-
     lda audit_door_x
     sec
     sbc #1
     sta audit_check_x
     lda audit_door_y
     sta audit_check_y
-        jsr audit_coord_passable128
-        bcc !aod128_try_vertical+
-        lda audit_door_x
-        clc
-        adc #1
+    jsr audit_coord_passable128
+    bcc !aod128_try_vertical+
+    lda audit_door_x
+    clc
+    adc #1
     sta audit_check_x
     lda audit_door_y
     sta audit_check_y
-        jsr audit_coord_passable128
-        bcc !aod128_try_vertical+
-        inc audit_pair_count
+    jsr audit_coord_passable128
+    bcc !aod128_try_vertical+
+    lda audit_door_x
+    sta dg_room_x
+    lda audit_door_y
+    sta dg_room_y
+    jsr jdg_opposing_vertical
+    bcs !aod128_pass+
+    jmp !aod128_fail+
 
-    !aod128_try_vertical:
+!aod128_try_vertical:
     lda audit_door_x
     sta audit_check_x
     lda audit_door_y
@@ -994,33 +1109,24 @@ audit_one_door_chokepoint128:
     sbc #1
     sta audit_check_y
     jsr audit_coord_passable128
-    bcc !aod128_finish+
+    bcc !aod128_fail+
     lda audit_door_x
     sta audit_check_x
     lda audit_door_y
     clc
     adc #1
     sta audit_check_y
-        jsr audit_coord_passable128
-        bcc !aod128_finish+
-        inc audit_pair_count
-        lda audit_pair_count
-        cmp #2
-    bcs !aod128_fail+
-
-	    !aod128_finish:
-	        lda audit_pair_count
-	        cmp #1
-	        beq !aod128_pass+
-        lda audit_door_x
-        sta dg_room_x
-        lda audit_door_y
-        sta dg_room_y
-        jsr junction_door_geometry_ok
-        bcc !aod128_fail+
+    jsr audit_coord_passable128
+    bcc !aod128_fail+
+    lda audit_door_x
+    sta dg_room_x
+    lda audit_door_y
+    sta dg_room_y
+    jsr jdg_opposing_horizontal
+    bcc !aod128_fail+
 !aod128_pass:
-	        clc
-	        rts
+    clc
+    rts
 !aod128_fail:
     sec
     rts
