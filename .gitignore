@@ -1,5 +1,6 @@
 # Build output
 build/
+/platforms/commodore/c128/out/
 
 # Assembly artifacts (outside build dir)
 *.prg

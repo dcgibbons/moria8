@@ -2816,7 +2816,7 @@ build_save_media_fail_product_assets() {
     local dir_type_offset1=$((dir_type_offset0 + 32))
 
     if ! java -jar "$KICKASS" main_save_media_fail.s -showmem -vicesymbols -libdir ../c64 \
-            -define C128 \
+            -define C128 :OVL_OUT=../../../build/test/c128 \
             -o ../../../build/test/c128/moria128.prg >"$build_log" 2>&1; then
         echo "FAIL (save-media-fail product main assembly failed)"
         tail -20 "$build_log" | sed 's/^/    /'
