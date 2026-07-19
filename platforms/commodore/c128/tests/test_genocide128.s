@@ -25,6 +25,7 @@
 .const MX_CONFUSE = 9
 .const MAX_MONSTERS = 32
 .const EMPTY_SLOT = $ff
+.const MF_AWAKE = $01
 .const MF_VISIBLE = $08
 .const CF_UNDEAD = $02
 .const CF_EVIL = $04
@@ -141,6 +142,8 @@ test_last_huff: .byte 0
 test_spell_exec_calls: .byte 0
 test_last_spell_idx: .byte $ff
 test_progress: .byte 0
+test_rng_result: .byte 0
+test_rng_calls: .byte 0
 
 test_mon_table:
     .fill MAX_MONSTERS * MONSTER_ENTRY_SIZE, 0
@@ -182,7 +185,6 @@ input_get_key_fast:
 show_inv_and_select:
 tramp_spell_list_display:
 monster_wake:
-monster_apply_sleep:
 projectile_msg_suffix:
 player_calc_hp:
 light_room_x:
@@ -275,6 +277,23 @@ monster_get_ptr:
     sta zp_ptr0
     lda test_mon_ptr_hi,x
     sta zp_ptr0_hi
+    rts
+
+monster_apply_sleep:
+    pha
+    jsr monster_get_ptr
+    ldy #MX_FLAGS
+    lda (zp_ptr0),y
+    and #<~MF_AWAKE
+    sta (zp_ptr0),y
+    ldy #MX_SLEEP_CUR
+    pla
+    sta (zp_ptr0),y
+    rts
+
+test_rng_range:
+    inc test_rng_calls
+    lda test_rng_result
     rts
 
 monster_find_at:
@@ -539,6 +558,36 @@ test_place_genocide_targets:
     sta (zp_ptr0),y
     rts
 
+test_place_sleep_target:
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_X
+    lda #23
+    sta (zp_ptr0),y
+    iny
+    lda #12
+    sta (zp_ptr0),y
+    iny
+    lda #1
+    sta (zp_ptr0),y
+    ldy #MX_FLAGS
+    lda #MF_AWAKE
+    sta (zp_ptr0),y
+    ldy #MX_SLEEP_CUR
+    lda #0
+    sta (zp_ptr0),y
+    rts
+
+test_reset_sleep_overlay_state:
+    jsr test_setup_dark_room
+    lda #0
+    sta test_rng_result
+    sta test_rng_calls
+    sta cr_level + 1
+    lda #SPELL_MAGE
+    sta pm_spell_type
+    jmp test_place_sleep_target
+
 test_reset_genocide_state:
     lda #0
     sta test_huff_calls
@@ -611,6 +660,7 @@ test_start:
     :PatchJump(pm_prompt_visible_spell_choice, test_pm_prompt_visible_spell_choice)
     :PatchJump(pm_validate_selected_spell, test_pm_validate_selected_spell)
     :PatchJump(tramp_spell_execute_selected, test_tramp_spell_execute_selected)
+    :PatchJump(rng_range, test_rng_range)
 
     // Test 1: successful cast reaches spell slot 30, prompts for a glyph,
     // removes all matching monsters, leaves nonmatches alive, spends 25 mana,
@@ -715,6 +765,121 @@ test_after_success:
     lda player_data + PL_SPELLS_WORKED_3
     and #$40
     bne !t2_fail+
-    jmp test_pass
+    jmp test_sleep_i_success
 !t2_fail:
+    jmp test_fail
+
+    // Test 3: real mage dispatch reaches Sleep I. The lowest upstream roll is
+    // one, so a level-1 monster must not resist it.
+test_sleep_i_success:
+    jsr test_reset_sleep_overlay_state
+    lda #1
+    sta cr_level + 1
+    lda #10
+    sta pm_spell_idx
+    jsr spell_execute_selected
+    lda test_rng_calls
+    cmp #1
+    bne !t3_fail+
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_SLEEP_CUR
+    lda (zp_ptr0),y
+    cmp #$ff
+    bne !t3_fail+
+    ldy #MX_FLAGS
+    lda (zp_ptr0),y
+    and #MF_AWAKE
+    bne !t3_fail+
+    lda #3
+    sta test_progress
+    jmp test_sleep_ii_resist
+!t3_fail:
+    jmp test_fail
+
+    // Test 4: real mage dispatch reaches Sleep II. Roll 39 versus level 40
+    // resists under VMS Moria's 1..40 comparison.
+test_sleep_ii_resist:
+    jsr test_reset_sleep_overlay_state
+    lda #38                    // rng_range 38 becomes upstream roll 39.
+    sta test_rng_result
+    lda #40
+    sta cr_level + 1
+    lda #18
+    sta pm_spell_idx
+    jsr spell_execute_selected
+    lda test_rng_calls
+    cmp #1
+    bne !t4_fail+
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_SLEEP_CUR
+    lda (zp_ptr0),y
+    bne !t4_fail+
+    ldy #MX_FLAGS
+    lda (zp_ptr0),y
+    and #MF_AWAKE
+    beq !t4_fail+
+    lda #4
+    sta test_progress
+    jmp test_sleep_ii_level40_success
+!t4_fail:
+    jmp test_fail
+
+    // Test 5: the maximum upstream roll of 40 still sleeps a level-40 monster.
+test_sleep_ii_level40_success:
+    jsr test_reset_sleep_overlay_state
+    lda #39                    // rng_range 39 becomes upstream roll 40.
+    sta test_rng_result
+    lda #40
+    sta cr_level + 1
+    lda #18
+    sta pm_spell_idx
+    jsr spell_execute_selected
+    lda test_rng_calls
+    cmp #1
+    bne !t5_fail+
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_SLEEP_CUR
+    lda (zp_ptr0),y
+    cmp #$ff
+    bne !t5_fail+
+    ldy #MX_FLAGS
+    lda (zp_ptr0),y
+    and #MF_AWAKE
+    bne !t5_fail+
+    lda #5
+    sta test_progress
+    jmp test_sleep_iii_hidden
+!t5_fail:
+    jmp test_fail
+
+    // Test 6: real mage dispatch reaches Sleep III and ignores a monster that
+    // is not currently visible, without consuming a resistance roll.
+test_sleep_iii_hidden:
+    jsr test_reset_sleep_overlay_state
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_FLAGS
+    lda #MF_AWAKE
+    sta (zp_ptr0),y
+    lda #21
+    sta pm_spell_idx
+    jsr spell_execute_selected
+    lda test_rng_calls
+    bne !t6_fail+
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_SLEEP_CUR
+    lda (zp_ptr0),y
+    bne !t6_fail+
+    ldy #MX_FLAGS
+    lda (zp_ptr0),y
+    and #MF_AWAKE
+    beq !t6_fail+
+    lda #6
+    sta test_progress
+    jmp test_pass
+!t6_fail:
     jmp test_fail

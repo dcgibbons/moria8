@@ -22,6 +22,7 @@ mat_fleeing:  .byte 0       // 1 = fleeing (suppress attack in try_step)
 mat_any_moved: .byte 0       // 1 if any monster moved/spawned this tick
 mat_scene_dirty: .byte 0     // 1 if any monster changed a non-local visible tile
 mat_action_dirty: .byte 0    // 1 if current monster changed gameplay state
+mat_player_stealth: .byte 0  // Race/class threshold cached once per AI tick
 
 // ============================================================
 // monster_ai_tick — Main AI loop
@@ -34,11 +35,15 @@ monster_ai_tick:
     sta zp_mon_idx
     sta mat_any_moved
     sta mat_scene_dirty
+    jsr player_get_stealth
+    sta mat_player_stealth
 
 !mat_loop:
     lda zp_mon_idx
     cmp #MAX_MONSTERS
-    bcs !mat_done+
+    bcc !mat_have_slot+
+    jmp !mat_done+
+!mat_have_slot:
 
     // Load monster entry into ZP scratch
     tax
@@ -47,7 +52,9 @@ monster_ai_tick:
     ldy #MX_TYPE
     lda (zp_ptr0),y
     cmp #EMPTY_SLOT
-    beq !mat_next+              // Skip empty slot
+    bne !mat_active_slot+
+    jmp !mat_next+              // Skip empty slot
+!mat_active_slot:
     sta zp_mon_type
 
     // Load position
@@ -99,8 +106,7 @@ monster_ai_tick:
     // Process once
     jsr monster_process_one
     bcc !mat_no_move1+
-    lda #1
-    sta mat_any_moved
+    rol mat_any_moved          // Carry is set; only zero/nonzero is observed.
 !mat_no_move1:
 
     // Check if player died
@@ -114,8 +120,7 @@ monster_ai_tick:
     bne !mat_next+
     jsr monster_process_one
     bcc !mat_no_move2+
-    lda #1
-    sta mat_any_moved
+    rol mat_any_moved          // Preserve the nonzero moved invariant.
 !mat_no_move2:
 
     // Check if player died on second move
@@ -386,54 +391,67 @@ mat_tile_within_local_radius:
 
 // ============================================================
 // monster_wake_check — Check if monster should wake up
-// Chebyshev distance to player <= cr_aaf[type], then tick the live sleep
-// counter toward zero and wake once it expires.
+// Chebyshev distance to player <= cr_aaf[type], then tick the compact live
+// sleep counter toward zero using a scaled approximation of VMS Moria's 75/d
+// wake pressure. Wake immediately when the live counter is already zero.
 // Sets MF_AWAKE in zp_mon_flags if waking up.
-// Clobbers: A, X, Y, zp_temp3, zp_temp4
+// Clobbers: A, X, Y, zp_temp0-4, zp_math_a/b/tmp0/tmp1
 // ============================================================
 monster_wake_check:
-    // Compute |player_x - mon_x|
-    lda zp_player_x
-    sec
-    sbc zp_mon_x
-    bcs !mwc_dx_pos+
-    // Negative — negate
-    eor #$ff
-    clc
-    adc #1
-!mwc_dx_pos:
-    sta zp_mon_scratch0         // abs_dx
-
-    // Compute |player_y - mon_y|
-    lda zp_player_y
-    sec
-    sbc zp_mon_y
-    bcs !mwc_dy_pos+
-    eor #$ff
-    clc
-    adc #1
-!mwc_dy_pos:
-    // A = abs_dy, compare with abs_dx for max (Chebyshev distance)
-    cmp zp_mon_scratch0
-    bcs !mwc_have_dist+         // abs_dy >= abs_dx → dist = abs_dy
-    lda zp_mon_scratch0         // abs_dx > abs_dy → dist = abs_dx
-!mwc_have_dist:
-    // A = Chebyshev distance
+    jsr monster_distance_to_player
+    sta zp_mon_scratch0
 
     // Compare distance to awareness factor
     ldx zp_mon_type
     cmp cr_aaf,x
     beq !mwc_in_range+          // Equal = in range
-    bcs !mwc_too_far+           // Greater = too far
+    bcc !mwc_in_range+          // Less = in range
+    lda zp_mon_flags            // Visible monsters are wake-eligible too.
+    and #MF_VISIBLE
+    beq !mwc_too_far+
 !mwc_in_range:
+    ldy #MX_SLEEP_CUR
+    lda (zp_ptr0),y
+    beq !mwc_wake+              // Naturally alert monsters do not roll stealth.
+
+#if C64_UNIT_TEST || C128_UNIT_TEST
+#if MONSTER_AI_PRODUCTION_REST_STATE
+    lda auto_rest_active
+#else
+    lda monster_resting
+#endif
+#else
+    lda auto_rest_active
+#endif
+    bne !mwc_too_far+          // VMS Moria applies no ordinary wake pressure while resting.
+
+    // VMS Moria only applies wake pressure when randint(10) exceeds the
+    // player's stealth. rng_range(10) returns 0..9, so >= stealth is the
+    // equivalent comparison.
+    lda mat_player_stealth
+    sta zp_temp2
+    lda #10
+    jsr rng_range
+    cmp zp_temp2
+    bcc !mwc_too_far+
+
     // In range — tick the live sleep counter down toward wake-up.
     // Contract: monster_process_one enters here with zp_ptr0 already
     // pointing at the current monster entry.
+    ldx zp_mon_scratch0
+    cpx #6
+    bcc !mwc_have_wake_step+
+    ldx #6
+!mwc_have_wake_step:
+    lda mwc_wake_step,x
+    sta zp_mon_scratch0
     ldy #MX_SLEEP_CUR
     lda (zp_ptr0),y
-    beq !mwc_wake+              // sleep=0 → wake immediately
     sec
-    sbc #1
+    sbc zp_mon_scratch0
+    bcs !mwc_store_sleep+
+    lda #0
+!mwc_store_sleep:
     sta (zp_ptr0),y
     bne !mwc_too_far+           // Still asleep this turn
 
@@ -450,6 +468,14 @@ monster_wake_check:
 
 !mwc_too_far:
     rts
+
+// Compact scale for VMS Moria's floor(75/d) pressure after compressing the
+// upstream sleep counter to one byte. Index 0 is defensive; monsters cannot
+// ordinarily occupy the player's tile.
+mwc_wake_step:
+    .byte 8, 8, 4, 3, 2, 2, 1   // distance 0, 1, 2, 3, 4, 5, 6+
+mwc_wake_step_end:
+.assert "Wake-pressure table size", mwc_wake_step_end - mwc_wake_step, 7
 
 // wake_group_nearby — Wake same-type monsters within Chebyshev distance 5
 // Input: zp_mon_type, zp_mon_x, zp_mon_y
@@ -499,17 +525,18 @@ wake_group_nearby:
     lda wgn_dist
     cmp #6
     bcs !wgn_next+
-    // Wake it
-    ldy #MX_FLAGS
-    lda (zp_ptr0),y
-    ora #MF_AWAKE
-    sta (zp_ptr0),y
+    jsr monster_wake
 !wgn_next:
     inx
     jmp !wgn_loop-
 !wgn_done:
     rts
 wgn_dist: .byte 0
+#if C64_UNIT_TEST || C128_UNIT_TEST
+#if !MONSTER_AI_PRODUCTION_REST_STATE
+monster_resting: .byte 0
+#endif
+#endif
 
 // ============================================================
 // monster_move_toward — Movement toward player with unstick heuristic

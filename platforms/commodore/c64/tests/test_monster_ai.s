@@ -3,7 +3,7 @@
 // Tests: monster_ai_tick, wake check, movement, speed, FLAG_OCCUPIED,
 //        confused movement.
 //
-// Results at $0400-$0409: $01 = pass, $00 = fail per test
+// Results at $0400-$0422: $01 = pass, $00 = fail per test
 // NOTE: msg_print writes to screen row 0 ($0400+), so we store results
 // in tc_results[] and copy to $0400 at the very end.
 
@@ -15,6 +15,7 @@
 .encoding "screencode_mixed"
 
 #define COMPILE_EMBEDDED_DUNGEON_TEST_ROSTER
+#define MONSTER_AI_PRODUCTION_REST_STATE
 
 // Bootstrap — must be before imports so it's in RAM below $A000.
 bootstrap:
@@ -25,7 +26,7 @@ bootstrap:
 
 // test_finish — Copy results to $0400 and halt.
 test_finish:
-    ldx #26
+    ldx #34
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -59,7 +60,7 @@ test_finish:
 .segment Default
 #import "../../../../core/sound.s"
 #import "../../../../core/dungeon_data.s"
-#import "../../../../core/dungeon_gen.s"
+#import "dungeon_gen_stubs.s"
 #import "../../../../core/huffman.s"
 #import "../../../../core/dungeon_features.s"
 #import "../../../../core/monster.s"
@@ -147,7 +148,9 @@ tai_count:  .byte 0
 tai_attack_calls: .byte 0
 tai_rng_values:   .fill 4, 0
 tai_rng_idx:      .byte 0
-tc_results: .fill 27, $ff      // Result buffer (copied to $0400 at end)
+tai_distance:     .byte 0
+auto_rest_active: .byte 0
+tc_results: .fill 35, $ff      // Result buffer (copied to $0400 at end)
 
 .macro PatchJump(target, replacement) {
     lda #$4c
@@ -169,6 +172,10 @@ test_rng_range:
     ora #0
     rts
 
+test_rng_range_nine:
+    lda #9
+    rts
+
 test_rng_range_word:
     ldx tai_rng_idx
     lda tai_rng_values,x
@@ -179,6 +186,68 @@ test_rng_range_word:
     inx
     stx tai_rng_idx
     rts
+
+// Spawn type 0 with live sleep 10, then process one normal-speed AI turn.
+// Input: tai_distance. Output: carry set and zp_ptr0 -> slot 0 on success.
+test_spawn_wake_case:
+    jsr monster_init_table
+    lda #0
+    sta zp_game_flags
+    sta auto_rest_active
+    sta player_data + PL_RACE       // Human warrior: stealth 1
+    sta player_data + PL_CLASS
+    sta tai_rng_idx
+    sta tai_rng_values              // HP die 1
+    sta tai_rng_values + 1          // HP die 2
+    lda #7
+    sta tai_rng_values + 2          // sleep = 10/4 + 7 + 1 = 10
+    lda #9
+    sta tai_rng_values + 3          // qualifying stealth roll
+
+    ldx #15
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #20
+    lda #TILE_FLOOR | FLAG_LIT
+    sta (zp_ptr0),y
+
+    lda #20
+    sta ms_spawn_x
+    lda #15
+    sta ms_spawn_y
+    lda #0
+    jsr monster_spawn_one
+    bcc !tswc_fail+
+
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_SLEEP_CUR
+    lda (zp_ptr0),y
+    cmp #10
+    bne !tswc_fail+
+
+    lda #20
+    clc
+    adc tai_distance
+    sta zp_player_x
+    lda #15
+    sta zp_player_y
+    jsr monster_ai_tick
+
+    ldx #0
+    jsr monster_get_ptr
+    sec
+    rts
+!tswc_fail:
+    clc
+    rts
+
+tai_wake_distances:
+    .byte 0, 1, 2, 3, 4, 5, 6, 8, 20
+tai_wake_remaining:
+    .byte 92, 92, 96, 97, 98, 98, 99, 99, 99
 
 test_start:
 
@@ -1837,8 +1906,8 @@ test_start:
     jmp !t23+
 
     // ==========================================
-    // Test 23: the live sleep counter, not the
-    // species base sleep value, controls waking.
+    // Test 23: rest suppresses ordinary pressure; distances 5 and 8 use
+    // compact VMS-scaled steps 2 and 1; expiration clears sleep before wake.
     // ==========================================
 !t23:
     jsr monster_init_table
@@ -1874,10 +1943,10 @@ test_start:
     lda #0
     sta (zp_ptr0),y
     ldy #MX_SLEEP_CUR
-    lda #2
+    lda #20
     sta (zp_ptr0),y
 
-    lda #20
+    lda #25
     sta zp_player_x
     lda #15
     sta zp_player_y
@@ -1898,16 +1967,54 @@ test_start:
     lda (zp_ptr0),y
     sta zp_mon_flags
 
+    :PatchJump(rng_range, test_rng_range_nine)
+    jsr player_get_stealth
+    sta mat_player_stealth
+
+    lda #1
+    sta auto_rest_active
+    jsr monster_wake_check
+    ldy #MX_SLEEP_CUR
+    lda (zp_ptr0),y
+    cmp #20
+    bne !t23_fail+
+    lda #0
+    sta auto_rest_active
+
     jsr monster_wake_check
 
     ldy #MX_SLEEP_CUR
     lda (zp_ptr0),y
-    cmp #1
+    cmp #18
     bne !t23_fail+
     lda zp_mon_flags
     and #MF_AWAKE
     bne !t23_fail+
 
+    ldy #MX_SLEEP_CUR
+    lda #20
+    sta (zp_ptr0),y
+    ldy #MX_FLAGS
+    lda #0
+    sta (zp_ptr0),y
+    sta zp_mon_flags
+    lda #28
+    sta zp_player_x
+
+    jsr monster_wake_check
+
+    ldy #MX_SLEEP_CUR
+    lda (zp_ptr0),y
+    cmp #19
+    bne !t23_fail+
+    lda zp_mon_flags
+    and #MF_AWAKE
+    bne !t23_fail+
+
+    lda #2
+    sta (zp_ptr0),y
+    lda #25
+    sta zp_player_x
     jsr monster_wake_check
 
     ldx #0
@@ -2162,10 +2269,311 @@ test_start:
     bne !t27_fail+
     lda #$01
     sta tc_results + 26
-    jmp !tests_done+
+    jmp !t28+
 !t27_fail:
     lda #$00
     sta tc_results + 26
+
+    // Test 28: group wake normalizes the live sleep counter.
+!t28:
+    jsr monster_init_table
+    lda #10
+    sta zp_mon_x
+    sta zp_mon_y
+    lda #4
+    sta zp_mon_type
+    lda #0
+    sta zp_mon_idx
+    ldx #1
+    jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda #4
+    sta (zp_ptr0),y
+    ldy #MX_X
+    lda #11
+    sta (zp_ptr0),y
+    ldy #MX_Y
+    lda #10
+    sta (zp_ptr0),y
+    ldy #MX_FLAGS
+    lda #0
+    sta (zp_ptr0),y
+    ldy #MX_SLEEP_CUR
+    lda #25
+    sta (zp_ptr0),y
+    jsr wake_group_nearby
+    ldx #1
+    jsr monster_get_ptr
+    ldy #MX_FLAGS
+    lda (zp_ptr0),y
+    and #MF_AWAKE
+    beq !t28_fail+
+    ldy #MX_SLEEP_CUR
+    lda (zp_ptr0),y
+    bne !t28_fail+
+    lda #$01
+    sta tc_results + 27
+    jmp !t29+
+!t28_fail:
+    lda #$00
+    sta tc_results + 27
+
+    // Test 29: high stealth can suppress in-range wake pressure.
+!t29:
+    :PatchJump(rng_range, test_rng_range)
+    lda #0
+    sta tai_rng_idx
+    sta tai_rng_values
+    lda #3                      // Halfling (+4 stealth)
+    sta player_data + PL_RACE
+    lda #3                      // Rogue (+5 stealth)
+    sta player_data + PL_CLASS
+    jsr player_get_stealth
+    sta mat_player_stealth
+    jsr player_search_get_base_chance
+    cmp #44                     // Rogue 32 + Halfling 12
+    bne !t29_fail+
+    jsr player_search_get_fos
+    cmp #11                     // Rogue 16 + Halfling -5
+    bne !t29_fail+
+    jsr monster_init_table
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda #0
+    sta (zp_ptr0),y
+    ldy #MX_SLEEP_CUR
+    lda #50
+    sta (zp_ptr0),y
+    lda #10
+    sta zp_mon_x
+    sta zp_mon_y
+    lda #9
+    sta zp_player_x
+    lda #10
+    sta zp_player_y
+    lda #0
+    sta zp_mon_type
+    sta zp_mon_flags
+    sta auto_rest_active
+    jsr monster_wake_check
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_SLEEP_CUR
+    lda (zp_ptr0),y
+    cmp #50
+    bne !t29_fail+
+    lda zp_mon_flags
+    and #MF_AWAKE
+    bne !t29_fail+
+    lda #$01
+    sta tc_results + 28
+    jmp !t30+
+!t29_fail:
+    lda #$00
+    sta tc_results + 28
+
+    // Test 30: a wake roll meeting stealth applies ordinary pressure.
+!t30:
+    lda #0
+    sta tai_rng_idx
+    lda #9
+    sta tai_rng_values
+    lda #0                      // Human (0) + warrior (1)
+    sta player_data + PL_RACE
+    sta player_data + PL_CLASS
+    jsr player_get_stealth
+    sta mat_player_stealth
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_SLEEP_CUR
+    lda #50
+    sta (zp_ptr0),y
+    lda #0
+    sta zp_mon_flags
+    jsr monster_wake_check
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_SLEEP_CUR
+    lda (zp_ptr0),y
+    cmp #42
+    bne !t30_fail+
+    lda #$01
+    sta tc_results + 29
+    jmp !t31+
+!t30_fail:
+    lda #$00
+    sta tc_results + 29
+
+    // Test 31: every reachable pressure bucket uses the reviewed compact
+    // VMS scale. MF_VISIBLE keeps the distance-20 case wake-eligible.
+!t31:
+    :PatchJump(rng_range, test_rng_range_nine)
+    jsr monster_init_table
+    lda #5                      // Dwarf + warrior => stealth 0
+    sta player_data + PL_RACE
+    lda #0
+    sta player_data + PL_CLASS
+    sta auto_rest_active
+    jsr player_get_stealth
+    sta mat_player_stealth
+    lda #20
+    sta zp_mon_x
+    lda #15
+    sta zp_mon_y
+    lda #0
+    sta zp_mon_type
+    lda #MF_VISIBLE
+    sta zp_mon_flags
+    sta tai_count
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda #0
+    sta (zp_ptr0),y
+    ldy #MX_FLAGS
+    lda #MF_VISIBLE
+    sta (zp_ptr0),y
+    lda #0
+    sta tai_count
+!t31_loop:
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_SLEEP_CUR
+    lda #100
+    sta (zp_ptr0),y
+    ldx tai_count
+    lda tai_wake_distances,x
+    clc
+    adc #20
+    sta zp_player_x
+    lda #15
+    sta zp_player_y
+    jsr monster_wake_check
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_SLEEP_CUR
+    lda (zp_ptr0),y
+    ldx tai_count
+    cmp tai_wake_remaining,x
+    bne !t31_fail+
+    inc tai_count
+    lda tai_count
+    cmp #9
+    bne !t31_loop-
+    lda #$01
+    sta tc_results + 30
+    jmp !t32+
+!t31_fail:
+    lda #$00
+    sta tc_results + 30
+
+    // Test 32: an eligible zero-sleep monster wakes during auto-rest without
+    // consuming the stealth RNG roll.
+!t32:
+    :PatchJump(rng_range, test_rng_range)
+    lda #0
+    sta tai_rng_idx
+    lda #1
+    sta auto_rest_active
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_SLEEP_CUR
+    lda #0
+    sta (zp_ptr0),y
+    ldy #MX_FLAGS
+    sta (zp_ptr0),y
+    sta zp_mon_flags
+    lda #21
+    sta zp_player_x
+    lda #15
+    sta zp_player_y
+    jsr monster_wake_check
+    lda zp_mon_flags
+    and #MF_AWAKE
+    beq !t32_fail+
+    lda tai_rng_idx
+    bne !t32_fail+
+    lda #0
+    sta auto_rest_active
+    lda #$01
+    sta tc_results + 31
+    jmp !t33+
+!t32_fail:
+    lda #0
+    sta auto_rest_active
+    sta tc_results + 31
+
+    // Tests 33-35: production spawn-to-AI flow at distance 1, 6, and 8.
+!t33:
+    :PatchJump(rng_range, test_rng_range)
+    lda #1
+    sta tai_distance
+    jsr test_spawn_wake_case
+    bcc !t33_fail+
+    ldy #MX_SLEEP_CUR
+    lda (zp_ptr0),y
+    cmp #2
+    bne !t33_fail+
+    ldy #MX_FLAGS
+    lda (zp_ptr0),y
+    and #MF_AWAKE
+    bne !t33_fail+
+    lda tai_rng_idx
+    cmp #4
+    bne !t33_fail+
+    lda #$01
+    sta tc_results + 32
+    jmp !t34+
+!t33_fail:
+    lda #$00
+    sta tc_results + 32
+
+!t34:
+    lda #6
+    sta tai_distance
+    jsr test_spawn_wake_case
+    bcc !t34_fail+
+    ldy #MX_SLEEP_CUR
+    lda (zp_ptr0),y
+    cmp #9
+    bne !t34_fail+
+    ldy #MX_FLAGS
+    lda (zp_ptr0),y
+    and #MF_AWAKE
+    bne !t34_fail+
+    lda tai_rng_idx
+    cmp #4
+    bne !t34_fail+
+    lda #$01
+    sta tc_results + 33
+    jmp !t35+
+!t34_fail:
+    lda #$00
+    sta tc_results + 33
+
+!t35:
+    lda #8
+    sta tai_distance
+    jsr test_spawn_wake_case
+    bcc !t35_fail+
+    ldy #MX_SLEEP_CUR
+    lda (zp_ptr0),y
+    cmp #9
+    bne !t35_fail+
+    ldy #MX_FLAGS
+    lda (zp_ptr0),y
+    and #MF_AWAKE
+    bne !t35_fail+
+    lda tai_rng_idx
+    cmp #4
+    bne !t35_fail+
+    lda #$01
+    sta tc_results + 34
+    jmp !tests_done+
+!t35_fail:
+    lda #$00
+    sta tc_results + 34
 
 !tests_done:
     jmp test_finish

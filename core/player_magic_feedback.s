@@ -132,16 +132,19 @@ pmx_sleep_adjacent_msg:
     jmp pmx_print_inline
 
 pmx_try_sleep_monster:
+    stx pmx_feedback_mon_slot
     jsr monster_get_ptr
     ldy #MX_TYPE
     lda (zp_ptr0),y
     tax
     lda #40
     jsr rng_range
+    clc
+    adc #1                     // VMS randint(40) is 1..40; rng_range is 0..39.
     cmp cr_level,x
     bcc !ptsm_resist+
     ldx pmx_feedback_mon_slot
-    lda #20
+    lda #$ff
     jsr monster_apply_sleep
     sec
     rts

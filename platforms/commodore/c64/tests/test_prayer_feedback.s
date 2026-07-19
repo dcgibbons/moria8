@@ -216,7 +216,7 @@ test_start:
     sta test_mon_data + MX_SLEEP_CUR
     jsr pmx_sleep_adjacent_msg
     lda test_mon_data + MX_SLEEP_CUR
-    cmp #20
+    cmp #$ff
     bne !t4_fail+
     lda test_msg_calls
     cmp #1

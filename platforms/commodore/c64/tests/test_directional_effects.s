@@ -224,7 +224,7 @@ test_start:
     bne !t2_fail+
     ldy #MX_SLEEP_CUR
     lda (zp_ptr0),y
-    cmp #20
+    cmp #$ff
     bne !t2_fail+
     lda #$01
     sta tc_results + 1

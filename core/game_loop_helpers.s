@@ -314,7 +314,7 @@ vp_render_status_loop:
     jsr perf_p1_mark_full_default_transition
 #endif
 	    jsr render_viewport
-#if C128
+#if HAL_LAYOUT_VISIBILITY_FORCE_REDRAW
 	    jsr detect_evil_clear_reveal
 #endif
 	    jsr status_draw

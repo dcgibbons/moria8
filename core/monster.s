@@ -435,11 +435,14 @@ monster_get_ptr:
     sta zp_ptr0_hi
     rts
 
-// monster_wake — Set MF_AWAKE flag on a monster
+// monster_wake — Clear sleep and set MF_AWAKE on a monster
 // Input: X = monster slot index
 // Clobbers: A, Y, zp_ptr0/hi
 monster_wake:
     jsr monster_get_ptr
+    ldy #MX_SLEEP_CUR
+    lda #0
+    sta (zp_ptr0),y
     ldy #MX_FLAGS
     lda (zp_ptr0),y
     ora #MF_AWAKE
@@ -459,6 +462,77 @@ monster_apply_sleep:
     ldy #MX_SLEEP_CUR
     pla
     sta (zp_ptr0),y
+    rts
+
+#if HAL_PLATFORM_MONSTER_SPLIT_RESIDENT_SEGMENTS && !C128_UNIT_TEST
+.segment RuntimeLowData
+#endif
+
+// monster_distance_to_player — Chebyshev distance from zp_mon_x/y to player.
+// Output: A = distance. Clobbers zp_mon_scratch0.
+monster_distance_to_player:
+    lda zp_player_x
+    sec
+    sbc zp_mon_x
+    bcs !mdtp_dx+
+    eor #$ff
+    adc #1
+!mdtp_dx:
+    sta zp_mon_scratch0
+    lda zp_player_y
+    sec
+    sbc zp_mon_y
+    bcs !mdtp_dy+
+    eor #$ff
+    adc #1
+!mdtp_dy:
+    cmp zp_mon_scratch0
+    bcs !mdtp_done+
+    lda zp_mon_scratch0
+!mdtp_done:
+    rts
+
+// monster_initial_sleep — Compact one-byte initial sleep with saturation.
+// Input: A = creature sleep value. Output: A = randomized live counter.
+monster_initial_sleep:
+    beq !mis_done+
+    sta zp_temp0
+    jsr rng_range
+    clc
+    adc #1
+    sta zp_temp1
+    lda zp_temp0
+    lsr
+    lsr
+    clc
+    adc zp_temp1
+    bcc !mis_done+
+    lda #$ff
+!mis_done:
+    rts
+
+#if HAL_PLATFORM_MONSTER_SPLIT_RESIDENT_SEGMENTS && !C128_UNIT_TEST
+.segment C128ResidentWorld
+#endif
+
+// Monster-attack aggravation shares the explicit wake transition.
+mon_atk_effect_aggravate:
+// monster_aggravate_all — Wake every live monster.
+monster_aggravate_all:
+    ldx #0
+!maa_loop:
+    cpx #MAX_MONSTERS
+    bcs !maa_done+
+    jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda (zp_ptr0),y
+    cmp #EMPTY_SLOT
+    beq !maa_next+
+    jsr monster_wake
+!maa_next:
+    inx
+    jmp !maa_loop-
+!maa_done:
     rts
 
 // monster_init_table — Mark all 32 slots empty, reset count
@@ -675,10 +749,14 @@ monster_spawn_one:
     lda #0
     sta (zp_ptr0),y
 
-    // Set sleep counter from creature sleep value
-    ldy #MX_SLEEP_CUR
+    // Set initial sleep from creature sleep value. Upstream randomizes
+    // starting sleep; approximate VMS sleep/5 + randint(sleep) as
+    // randint(sleep) + sleep/4 without a resident-size div helper.
     ldx ms_type
     lda cr_sleep,x
+    jsr monster_initial_sleep
+!mso_store_sleep:
+    ldy #MX_SLEEP_CUR
     sta (zp_ptr0),y
 
     // Set stun/confuse to 0
@@ -965,25 +1043,25 @@ monster_find_at:
     clc
     rts
 
-#if C128 && !C128_UNIT_TEST
+#if HAL_PLATFORM_MONSTER_SPLIT_RESIDENT_SEGMENTS && !C128_UNIT_TEST
 .segment RuntimeLowData
 #elif !C64_UNIT_TEST && !C128_UNIT_TEST
 monster_update_visibility_all:
     sei
-#if PLUS4
-    jsr plus4_bank_ram
+#if HAL_PLATFORM_MONSTER_CPU_PORT_BANK
+    lda #BANK_NO_ROMS
+    sta hal_memory_cpu_port
     jsr monster_update_visibility_all_impl
     pha
+    lda #BANK_NO_BASIC
+    sta hal_memory_cpu_port
     cli
     pla
     rts
 #else
-    lda #BANK_NO_ROMS
-    sta $01
+    jsr plus4_bank_ram
     jsr monster_update_visibility_all_impl
     pha
-    lda #BANK_NO_BASIC
-    sta $01
     cli
     pla
     rts
@@ -997,7 +1075,7 @@ monster_update_visibility_all:
 // monster_update_visibility_all_impl — Recompute renderable monster flags.
 // Returns: A = 1 if any monster renderability changed, A = 0 otherwise.
 // Clobbers: A, X, Y, zp_ptr0/hi, zp_ptr1/hi, zp_temp0-4, zp_los_*
-#if C128 || C64_UNIT_TEST
+#if HAL_PLATFORM_MONSTER_VISIBILITY_DIRECT || C64_UNIT_TEST || C128_UNIT_TEST
 monster_update_visibility_all:
 #else
 monster_update_visibility_all_impl:
@@ -1168,6 +1246,9 @@ monster_update_visibility_one:
     sec
     rts
 
+#if HAL_PLATFORM_MONSTER_VISIBILITY_SCRATCH_RESIDENT && !C64_UNIT_TEST && !C128_UNIT_TEST
+.segment Default
+#endif
 muv_slot:      .byte 0
 muv_type:      .byte 0
 muv_dist:      .byte 0
@@ -1176,7 +1257,7 @@ muv_new_flags: .byte 0
 muv_changed:   .byte 0
 muv_clear_detected: .byte 0
 
-#if C128 && !C128_UNIT_TEST
+#if HAL_PLATFORM_MONSTER_SPLIT_RESIDENT_SEGMENTS && !C128_UNIT_TEST
 .segment C128ResidentWorld
 #elif !C64_UNIT_TEST
 .segment Default

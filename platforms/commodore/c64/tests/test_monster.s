@@ -15,7 +15,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #17
+    ldx #18
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -106,7 +106,7 @@ t7_count:  .byte 0
 t7_ok:     .byte 0
 t9_count:  .byte 0
 t9_mask:   .byte 0
-tc_results: .fill 18, $ff       // Test results buffer (copied to $0400 by trampoline)
+tc_results: .fill 19, $ff       // Test results buffer (copied to $0400 by trampoline)
 test_force_deep_tier_spawn: .byte 0
 
 .macro PatchJump(target, replacement) {
@@ -824,8 +824,30 @@ test_start:
     lda #$01
     sta tc_results+17
 
+    // Test 19: maximum creature sleep saturates instead of wrapping.
+    lda #$4c
+    sta rng_range
+    lda #<test_rng_max_sleep
+    sta rng_range + 1
+    lda #>test_rng_max_sleep
+    sta rng_range + 2
+    lda #250
+    jsr monster_initial_sleep
+    cmp #$ff
+    bne !t18_fail+
+    lda #$01
+    sta tc_results+18
+    jmp !tests_done+
+!t18_fail:
+    lda #$00
+    sta tc_results+18
+
 !tests_done:
     jmp test_exit_trampoline
+
+test_rng_max_sleep:
+    lda #249
+    rts
 
 setup_visibility_axis_test:
     jsr monster_init_table

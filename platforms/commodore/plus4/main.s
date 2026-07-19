@@ -13,10 +13,10 @@
 #define PLUS4_PRODUCT_OVERLAY_RUNTIME
 #define PLATFORM_PRODUCT_OVERLAY_RUNTIME
 #define STORAGE_STATUS_HELPER
-.eval var OVL_OUT = "out"
-.if (cmdLineVars.containsKey("OVL_OUT")) {
-    .eval OVL_OUT = cmdLineVars.get("OVL_OUT")
+.if (!cmdLineVars.containsKey("OVL_OUT")) {
+    .error "OVL_OUT is required; generated files belong under build/"
 }
+.eval var OVL_OUT = cmdLineVars.get("OVL_OUT")
 .segmentdef StartupOverlay    [outPrg=OVL_OUT + "/ovl.start", start=$e000, min=$e000, max=$efff]
 .segmentdef TownOverlay       [outPrg=OVL_OUT + "/ovl.town",  start=$e000, min=$e000, max=$efff]
 .segmentdef DeathOverlay      [outPrg=OVL_OUT + "/ovl.death", start=$e000, min=$e000, max=$efff]
@@ -354,7 +354,31 @@ ol_target:        .byte 0
 #import "../../../core/player_magic.s"
 #import "dungeon_render.s"
 #import "../../../core/dungeon_los.s"
+.macro PlayerMoveRestoreResidentSegment() {
+    .segment Default
+}
+.macro PlayerMoveLookSegment() {
+    .segment ModalMiscOverlay
+}
+#define PLAYER_LOOK_EXTERNAL
 #import "../../../core/player_move.s"
+.macro PlayerRunInitializeSegment() {
+    .segment RuntimeBanked
+}
+.macro PlayerRunRestoreResidentSegment() {
+    .segment Default
+}
+#define PLAYER_RUN_INITIALIZE_EXTERNAL
+// player_run uses pm_live_occ_x/y defined by the preceding player_move import.
+#import "../../../core/player_run.s"
+#undef PLAYER_RUN_INITIALIZE_EXTERNAL
+
+// Initialization runs once when running begins. Runtime RAM remains visible
+// during gameplay, so the resident entry can jump directly to the banked body.
+run_initialize:
+    jmp run_initialize_impl
+.assert "Plus/4 runner initialization implementation stays banked", run_initialize_impl >= $F000 && run_initialize_impl < $FC00, true
+.assert "Plus/4 runner initialization entry stays resident", run_initialize < MAP_BASE, true
 #define PMU_TURN_FEEDBACK_EXTERNAL
 #import "../../../core/combat.s"
 #undef PMU_TURN_FEEDBACK_EXTERNAL
@@ -1283,6 +1307,8 @@ save_select_slot_prompt:
     jsr save_select_slot_prompt_impl
     jmp plus4_platform_runtime_resync
 #endif
+
+#import "look_trampoline.s"
 
 tramp_ui_help_display:
     lda #OVL_HELP

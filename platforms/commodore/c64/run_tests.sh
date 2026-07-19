@@ -220,7 +220,7 @@ run_test() {
 
     # Assemble and capture output
     local asm_output
-    asm_output=$(java -jar "$KICKASS" "${KICKASS_TRACE_DEFINE[@]}" -define C64_UNIT_TEST "$src" -showmem -o "$prg_file" 2>&1)
+    asm_output=$(java -jar "$KICKASS" "${KICKASS_TRACE_DEFINE[@]}" -define C64_UNIT_TEST "$src" -showmem -vicesymbols -o "$prg_file" 2>&1)
 
     if ! echo "$asm_output" | grep -q "0 failed"; then
         echo "FAIL (assembly error)"
@@ -277,10 +277,41 @@ run_test() {
         return
     fi
 
-    # Create monitor script: set breakpoint, continue, dump results, exit.
+    local sym_file
+    local bootstrap_addr
+    sym_file="$(dirname "$prg_file")/$(basename "${src%.s}").vs"
+    if [ ! -f "$sym_file" ]; then
+        echo "FAIL (missing VICE symbol file)"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+    bootstrap_addr=$(awk '$3 == ".test_bootstrap" { split($2,a,":"); print toupper(a[2]); exit }' "$sym_file")
+    if [ -z "$bootstrap_addr" ]; then
+        bootstrap_addr=$(awk '$3 == ".bootstrap" { split($2,a,":"); print toupper(a[2]); exit }' "$sym_file")
+    fi
+    if [ -z "$bootstrap_addr" ]; then
+        bootstrap_addr=$(awk '$3 == ".test_start" { split($2,a,":"); print toupper(a[2]); exit }' "$sym_file")
+    fi
+    rm -f "$sym_file"
+    if [[ "$bootstrap_addr" =~ ^[0-9A-Fa-f]{1,4}$ ]]; then
+        bootstrap_addr=$(printf '%04X' "$((16#$bootstrap_addr))")
+    fi
+    if ! [[ "$bootstrap_addr" =~ ^[0-9A-Fa-f]{4}$ ]] || [ $((16#$bootstrap_addr)) -ge $((16#A000)) ]; then
+        echo "FAIL (missing low test bootstrap below \$A000)"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    # Arm the completion breakpoint only after autostart reaches low RAM.
+    # Otherwise BASIC ROM can execute a high stop address before PRG injection.
     local mon_file
     mon_file=$(mktemp -t "test_${name}_mon")
     {
+        echo "break exec \$${bootstrap_addr}"
+        echo "g"
+        echo "delete 1"
         echo "break exec \$${end_addr}"
         echo "g"
         echo "m ${result_range}"
@@ -3511,6 +3542,8 @@ check_static_contract "c64_title_reentry_uses_owned_clear_contract" "main.s" \
     "title_enter_menu:|||jsr title_clear_full_screen|||jsr title_load_and_draw|||jsr title_clear_below_menu|||jsr msg_init|||jsr title_show_sysinfo|||jsr title_draw_menu"
 check_static_contract "modal_restore_uses_safe_full_clear_contract" "../../../core/ui_restore.s" \
     "ui_view_redraw_gameplay_view:|||jsr ui_reset_message_state|||jsr ui_clear_full_screen_safe|||jsr viewport_update|||jsr render_viewport|||jsr status_draw"
+check_static_contract "c64_look_overlay_cleanup_contract" "look_trampoline.s" \
+    "tramp_do_look:|||lda #OVL_MODAL_MISC|||jsr overlay_load_no_kernal|||bcs !done+|||jsr do_look|||!done:|||jmp tramp_sr_epilogue"
 check_static_contract "c64_hidden_kernal_irq_vector_contract" "main.s" \
     "c64_irq_hidden_rom:|||lda \$dc0d|||lda \$dd0d|||lda \$d019|||sta \$d019|||rti|||c64_install_ram_irq_vectors:|||lda #BANK_NO_KERNAL|||sta \$01|||sta \$fffa|||sta \$fffe|||sta \$fffb|||sta \$ffff|||overlay_load_no_kernal:|||pha|||lda #BANK_NO_BASIC|||sta \$01|||cli|||pla|||jsr overlay_load|||sei|||jsr c64_install_ram_irq_vectors|||lda #BANK_NO_KERNAL"
 check_static_contract "c64_disk_call_preserves_args_contract" "main.s" \
@@ -3537,11 +3570,12 @@ run_test "memory" "tests/test_memory.s" "0400 0402" 3
 run_test "config" "tests/test_config.s" "0400 0400" 1
 run_test "input"  "tests/test_input.s"  "0400 040d" 14
 run_test "main_loop" "tests/test_main_loop.s" "0400 0427" 40 500000000
+run_test "run_visibility_bank" "tests/test_run_visibility_bank.s" "0400 0400" 1 500000000
 run_test "turn" "tests/test_turn.s" "0400 0418" 25 500000000
 run_test "player" "tests/test_player.s" "0400 0409" 10
-run_test "dungeon" "tests/test_dungeon.s" "0400 042a" 43 500000000
-run_test "monster" "tests/test_monster.s" "0400 0411" 18 500000000
-run_test "monster_ai" "tests/test_monster_ai.s" "0400 041a" 27 500000000
+run_test "dungeon" "tests/test_dungeon.s" "0400 042c" 45 500000000
+run_test "monster" "tests/test_monster.s" "0400 0412" 19 500000000
+run_test "monster_ai" "tests/test_monster_ai.s" "0400 0422" 35 500000000
 run_test "combat" "tests/test_combat.s" "0400 0427" 40 500000000
 run_test "msg_long" "tests/test_msg_long.s" "0400 0400" 1 20000000
 run_test "monster_attack" "tests/test_monster_attack.s" "0400 040d" 14 500000000
@@ -3557,7 +3591,7 @@ run_test "recharge_item_i" "tests/test_recharge_item_i.s" "0400 0403" 4 50000000
 run_test "recharge_item_ii" "tests/test_recharge_item_ii.s" "0400 0403" 4 500000000
 run_test "trap_door_destruction" "tests/test_trap_door_destruction.s" "0400 0402" 3 500000000
 run_test "sleep_i" "tests/test_sleep_i.s" "0400 0402" 3 500000000
-run_test "sleep_ii" "tests/test_sleep_ii.s" "0400 0403" 4 500000000
+run_test "sleep_ii" "tests/test_sleep_ii.s" "0400 0404" 5 500000000
 run_test "sleep_iii" "tests/test_sleep_iii.s" "0400 0402" 3 500000000
 run_test "cure_poison" "tests/test_cure_poison.s" "0400 0402" 3 500000000
 run_test "fire_bolt" "tests/test_fire_bolt.s" "0400 0402" 3 500000000
@@ -3633,6 +3667,7 @@ run_test "throw" "tests/test_throw.s" "0400 040a" 11 500000000
 run_test "bash" "tests/test_bash.s" "0400 0407" 8 500000000
 run_test "tunnel" "tests/test_tunnel.s" "0400 0407" 8 500000000
 run_test "background" "tests/test_background.s" "0400 0407" 8
+run_test "look_trampoline" "tests/test_look_trampoline.s" "0400 0401" 2
 run_suite_function "media_drive8_attach_read_write" run_media_drive8_attach_read_write
 run_suite_function "media_drive9_attach_read_write" run_media_drive9_attach_read_write
 run_suite_function "media_drive10_11_device_probe" run_media_drive10_11_device_probe "alternate_drive10_11_save_load_smoke"

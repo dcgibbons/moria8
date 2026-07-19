@@ -93,15 +93,6 @@ mmu_safe_map_write_ptr1:
 mmu_safe_mark_visited_row_ptr0:
     jmp mmu_common_mark_visited_row_ptr0
 
-// Bulk map helpers enter/exit (single bank transition around hot loops)
-map_bulk_enter:
-    jsr mmu_select_bank1
-    rts
-
-map_bulk_exit:
-    jsr mmu_select_bank0
-    rts
-
 // ============================================================
 // C128 banked-database access helpers (Phase 10.2.1)
 // ============================================================

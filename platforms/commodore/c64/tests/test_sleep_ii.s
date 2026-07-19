@@ -4,7 +4,7 @@
 :BasicUpstart2(test_bootstrap)
 
 .pc = $E000 "Result Buffer"
-tc_results: .fill 4, $ff
+tc_results: .fill 5, $ff
 
 .pc = $080E "Test Code"
 
@@ -18,7 +18,7 @@ test_finish:
     sei
     :BankOutBasic()
     :BankOutKernal()
-    ldx #3
+    ldx #4
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -297,7 +297,7 @@ test_start:
     cmp #>pmx_sleep_success_msg
     bne !t1_fail+
     lda test_mon_data + MX_SLEEP_CUR
-    cmp #20
+    cmp #$ff
     bne !t1_fail+
     lda test_mon_data + MX_FLAGS
     and #MF_AWAKE
@@ -447,8 +447,34 @@ test_start:
     bne !t4_fail+
     lda #$01
     sta tc_results + 3
-    jmp test_finish
+    jmp !t5+
 !t4_fail:
     lda #$00
     sta tc_results + 3
+
+    // Test 5: production resistance uses VMS randint(40), including 40.
+    // rng_range returns 39 here; the required +1 makes a level-40 target sleep.
+!t5:
+    :PatchJump(calc_spell_failure, test_calc_spell_failure_success)
+    jsr test_reset_sleep_ii_state
+    lda #1
+    sta test_mon_present
+    lda #39
+    sta test_rng_result
+    lda #40
+    sta cr_level
+    jsr player_cast_spell
+    bcc !t5_fail+
+    lda test_mon_data + MX_SLEEP_CUR
+    cmp #$ff
+    bne !t5_fail+
+    lda test_mon_data + MX_FLAGS
+    and #MF_AWAKE
+    bne !t5_fail+
+    lda #$01
+    sta tc_results + 4
+    jmp test_finish
+!t5_fail:
+    lda #$00
+    sta tc_results + 4
     jmp test_finish

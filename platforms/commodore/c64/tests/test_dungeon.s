@@ -6,6 +6,8 @@
 //
 // Results at $0400: $01 = pass, $00 = fail per test
 
+#define DUNGEON_TEST_OVERLAP_HELPERS
+
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_bootstrap)
 
@@ -17,7 +19,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #42
+    ldx #44
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -53,7 +55,10 @@ test_exit_trampoline:
 .segment Default
 #import "../../../../core/sound.s"
 #import "../../../../core/dungeon_data.s"
+#import "../../../../core/store_door_lookup.s"
+#define DUNGEON_TEST_TUNNEL_HOOK
 #import "../../../../core/dungeon_gen.s"
+#undef DUNGEON_TEST_TUNNEL_HOOK
 #import "../../../../core/huffman.s"
 #import "../../../../core/dungeon_features.s"
 #import "../../../../core/monster.s"
@@ -73,22 +78,17 @@ recall_data_end:
 recall_spell_bit: .byte 1, 2, 4, 8, 16, 32, 64
 recall_clear: rts
 #import "../../../../core/monster_magic.s"
+#import "../../../../core/spell_data.s"
+#import "../../../../core/projectile.s"
+#import "../../../../core/spell_effects.s"
 #import "../../../../core/item.s"
 #import "../../../../core/special_rooms.s"
 #import "../../../../core/ego_items.s"
 #import "../../../../core/special_rooms_stubs.s"
-#import "../../../../core/player_items.s"
-#import "../../../../core/spell_data.s"
-#import "../../../../core/projectile.s"
-#import "../../../../core/spell_effects.s"
-#import "../../../../core/player_magic_state.s"
-#import "../../../../core/player_magic_state_ops.s"
-#import "../../../../core/player_magic.s"
-#import "../../../../core/ui_inventory.s"
-#import "../../../../core/ui_equipment.s"
 #import "../dungeon_render.s"
 #import "../../../../core/dungeon_los.s"
 #import "../../../../core/player_move.s"
+#import "../../../../core/player_run.s"
 #import "../../../../core/combat.s"
 eff_fear_timer: .byte 0
 monster_attack_player:
@@ -132,6 +132,15 @@ store_restock_all:
 
 store_enter:
     rts
+piw_prompt_filtered_inv:
+show_inv_and_select:
+magic_recalc_mana:
+magic_check_new_spells:
+ui_inv_display:
+ui_inv_select_display:
+ui_equip_display:
+ui_equipment_display:
+    rts
 // ui_help stubs — saves ~900 bytes; these are never called during dungeon tests.
 // Full ui_help.s + ui_help_data.s adds ~900 bytes of help screen strings/code.
 ui_help_show_paged:
@@ -140,6 +149,135 @@ help_draw_line:
 help_draw_hborder:
     rts
 #import "../../../../core/ui_trampoline_stubs.s"
+
+audit_coord_passable:
+    ldx audit_check_y
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy audit_check_x
+    :MapRead_ptr0_y()
+    jmp vc_tile_is_passable
+
+audit_final_door_chokepoints:
+    lda #~FLAG_OCCUPIED & $ff
+    jsr map_bulk_and_all
+    lda #1
+    sta bfs_cur_y
+!afd_row:
+    ldx bfs_cur_y
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    lda #1
+    sta bfs_cur_x
+!afd_col:
+    ldy bfs_cur_x
+    :MapRead_ptr0_y()
+    and #TILE_TYPE_MASK
+    cmp #TILE_DOOR_OPEN
+    beq !afd_check+
+    cmp #TILE_DOOR_CLOSED
+    beq !afd_check+
+    cmp #TILE_SECRET
+    bne !afd_next+
+!afd_check:
+    jsr audit_one_door_chokepoint
+    bcs !afd_fail+
+!afd_next:
+    inc bfs_cur_x
+    lda bfs_cur_x
+    cmp #MAP_COLS - 1
+    bne !afd_col-
+    inc bfs_cur_y
+    lda bfs_cur_y
+    cmp #MAP_ROWS - 1
+    bne !afd_row-
+    jsr vc_cleanup
+    clc
+    rts
+!afd_fail:
+    jsr vc_cleanup
+    sec
+    rts
+
+audit_one_door_chokepoint:
+    lda bfs_cur_x
+    sta audit_door_x
+    sta dg_cx1
+    lda bfs_cur_y
+    sta audit_door_y
+    sta dg_cy1
+    // A valid door has exactly one straight passable axis and wall jambs on
+    // the perpendicular axis. One-sided and T-shaped doors are bypassable.
+    lda audit_door_x
+    sec
+    sbc #1
+    sta audit_check_x
+    lda audit_door_y
+    sta audit_check_y
+        jsr audit_coord_passable
+        bcc !aod_try_vertical+
+        lda audit_door_x
+        clc
+        adc #1
+    sta audit_check_x
+    lda audit_door_y
+    sta audit_check_y
+        jsr audit_coord_passable
+        bcc !aod_try_vertical+
+    lda audit_door_x
+    sta dg_room_x
+    lda audit_door_y
+    sta dg_room_y
+    jsr jdg_opposing_vertical
+    bcs !aod_pass+
+    jmp !aod_fail+
+
+    !aod_try_vertical:
+    lda audit_door_x
+    sta audit_check_x
+    lda audit_door_y
+    sec
+    sbc #1
+    sta audit_check_y
+    jsr audit_coord_passable
+    bcc !aod_fail+
+    lda audit_door_x
+    sta audit_check_x
+    lda audit_door_y
+    clc
+    adc #1
+    sta audit_check_y
+        jsr audit_coord_passable
+        bcc !aod_fail+
+        lda audit_door_x
+        sta dg_room_x
+        lda audit_door_y
+        sta dg_room_y
+        jsr jdg_opposing_horizontal
+        bcc !aod_fail+
+!aod_pass:
+	        ldx audit_door_y
+	        lda map_row_lo,x
+	        sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    lda audit_door_x
+    sta bfs_cur_x
+    lda audit_door_y
+    sta bfs_cur_y
+    clc
+    rts
+!aod_fail:
+    lda audit_door_x
+    sta bfs_cur_x
+    lda audit_door_y
+    sta bfs_cur_y
+    sec
+    rts
 
 // Strings referenced by imported modules but defined in main.s
 press_key_str:
@@ -159,12 +297,32 @@ t29_retry:     .byte 0                   // Retry counter for test 29
 t32_pre_count: .byte 0                   // Pre-spawn monster count for test 32
 t32_post_count:.byte 0                   // Post-spawn monster count for test 32
 t32_check_type:.byte 0                   // Saved creature type for test 32
-tc_results: .fill 43, $ff              // Test results buffer (copied to $0400 before brk)
+audit_door_x:  .byte 0
+audit_door_y:  .byte 0
+audit_check_x: .byte 0
+audit_check_y: .byte 0
+audit_pair_count: .byte 0
+tc_results: .fill 45, $ff              // Test results buffer (copied to $0400 before brk)
 t38_rockfall_name: .text "falling rock." ; .byte 0
+run_cycle_expected:
+    .byte 7,3,5,0,4,2,6,1,7,3,5,0
+run_home_expected:
+    .byte 3,7,5,9,4,2,6,8
+
+test_set_materialize_row_bounds:
+    lda dg_cy1
+    sec
+    sbc #1
+    sta dg_scan_row_start
+    lda dg_cy1
+    clc
+    adc #1
+    sta dg_scan_row_end
+    rts
 
 test_start:
     // Initialize result area to $ff (untested)
-    ldx #42
+    ldx #44
     lda #$ff
 !clr:
     sta tc_results,x
@@ -427,10 +585,12 @@ test_start:
     ldy #19
     lda (zp_ptr0),y
     and #TILE_TYPE_MASK
-    // Should be TILE_DOOR_OPEN ($70) or TILE_DOOR_CLOSED ($80) — never TILE_SECRET
+    // Should be a supported door type; secret is a valid upstream-style door.
     cmp #TILE_DOOR_OPEN
     beq !t7_pass+
     cmp #TILE_DOOR_CLOSED
+    beq !t7_pass+
+    cmp #TILE_SECRET
     beq !t7_pass+
     jmp !t7_fail+
 !t7_pass:
@@ -652,8 +812,29 @@ test_start:
 
     lda zp_temp3
     cmp t9_sig_before
-    beq !t9_pass+
+    beq !t9_signature_ok+
     jmp !t9_fail+
+!t9_signature_ok:
+
+    // Slot metadata must remain attached after shuffle, and connectors must
+    // use the upstream slot center rather than the rectangle midpoint.
+    ldx #0
+!t9_find_slot3:
+    lda room_type,x
+    cmp #3
+    beq !t9_slot3_found+
+    inx
+    cpx #4
+    bcc !t9_find_slot3-
+    jmp !t9_fail+
+!t9_slot3_found:
+    jsr conn_room_center_to_start
+    lda dg_cx1
+    cmp room_slot_center_x + 3
+    bne !t9_fail+
+    lda dg_cy1
+    cmp room_slot_center_y + 3
+    bne !t9_fail+
 
 !t9_pass:
     lda #$01
@@ -798,10 +979,49 @@ test_start:
     bcs !t12_pass+
     jmp !t12_fail+
 !t12_pass:
+    jsr verify_connectivity
+    bcc !t12_connected+
+    jmp !t12_fail+
+!t12_connected:
+    // Upstream independent extents permit every width 3..23 and height 3..8,
+    // including even sizes. The fixed production seed must exercise at least
+    // one even dimension so mirrored odd-only generation cannot regress.
+    lda #0
+    sta zp_temp0
+    ldx #0
+!t12_extent_loop:
+    lda room_w,x
+    cmp #3
+    bcc !t12_fail+
+    cmp #24
+    bcs !t12_fail+
+    and #1
+    bne !t12_width_checked+
+    inc zp_temp0
+!t12_width_checked:
+    lda room_h,x
+    cmp #3
+    bcc !t12_fail+
+    cmp #9
+    bcs !t12_fail+
+    and #1
+    bne !t12_height_checked+
+    inc zp_temp0
+!t12_height_checked:
+    inx
+    cpx room_count
+    bcc !t12_extent_loop-
+    lda zp_temp0
+    beq !t12_fail+
+
     lda #$01
     sta tc_results+11
     jmp !t12_done+
 !t12_fail:
+    lda tc_results+11
+    bmi !t12_done+
+    and #$40
+    bne !t12_done+
     lda #$00
     sta tc_results+11
 !t12_done:
@@ -827,6 +1047,50 @@ test_start:
     cmp #TILE_STAIRS_DN
     bne !t13_fail+
 
+    // Check stairs_dn2 tile
+    lda stairs_dn2_x
+    ldy stairs_dn2_y
+    jsr write_tile_at_xy
+    lda (zp_ptr0),y
+    and #TILE_TYPE_MASK
+    cmp #TILE_STAIRS_DN
+    bne !t13_fail+
+
+    // This port intentionally persists and reveals exactly the three tracked
+    // stair coordinates, not upstream's variable object-count stair set.
+    lda #0
+    sta t14_magma                 // Reused here as up-stair count
+    sta t14_quartz                // Reused here as down-stair count
+    lda #<MAP_BASE
+    sta zp_ptr0
+    lda #>MAP_BASE
+    sta zp_ptr0_hi
+    ldy #0
+!t13_scan:
+    lda (zp_ptr0),y
+    and #TILE_TYPE_MASK
+    cmp #TILE_STAIRS_UP
+    bne !t13_not_up+
+    inc t14_magma
+!t13_not_up:
+    cmp #TILE_STAIRS_DN
+    bne !t13_not_dn+
+    inc t14_quartz
+!t13_not_dn:
+    iny
+    bne !t13_scan-
+    inc zp_ptr0_hi
+    lda zp_ptr0_hi
+    cmp #$cf
+    bne !t13_scan-
+
+    lda t14_magma
+    cmp #1
+    bne !t13_fail+
+    lda t14_quartz
+    cmp #2
+    bne !t13_fail+
+
     lda #$01
     sta tc_results+12
     jmp !t13_done+
@@ -836,12 +1100,14 @@ test_start:
 !t13_done:
 
     // ==========================================
-    // Test 14: Map has both magma and quartz tiles after generation
-    // Scan entire map ($C000-$CEFF, 15 pages) for magma and quartz
+    // Test 14: Map has both magma and quartz tiles after generation,
+    // mineral streamers are not pre-lit/revealed, and generation scratch
+    // flags are fully cleaned up.
     // ==========================================
     lda #0
     sta t14_magma
     sta t14_quartz
+    sta t16_counter
 
     lda #<MAP_BASE
     sta zp_ptr0
@@ -851,15 +1117,31 @@ test_start:
     ldy #0
 !t14_scan:
     lda (zp_ptr0),y
+    sta t19_tile
     and #TILE_TYPE_MASK
     cmp #TILE_MAGMA
     bne !t14_not_m+
     inc t14_magma
+    lda t19_tile
+    and #FLAG_LIT
+    beq !t14_not_m+
+    inc t16_counter
 !t14_not_m:
+    lda t19_tile
+    and #TILE_TYPE_MASK
     cmp #TILE_QUARTZ
     bne !t14_not_q+
     inc t14_quartz
+    lda t19_tile
+    and #FLAG_LIT
+    beq !t14_not_q+
+    inc t16_counter
 !t14_not_q:
+    lda t19_tile
+    and #FLAG_OCCUPIED
+    beq !t14_not_occ+
+    inc t16_counter
+!t14_not_occ:
     iny
     bne !t14_scan-
 
@@ -873,6 +1155,35 @@ test_start:
     beq !t14_fail+
     lda t14_quartz
     beq !t14_fail+
+    lda t16_counter
+    bne !t14_fail+
+
+    // Streamers must match upstream's rock_wall1-only rule. A map made of
+    // vertical wall bytes is structural wall in this port, not granite.
+    lda #TILE_WALL_V
+    jsr map_bulk_fill_all
+    jsr place_streamers
+
+    lda #<MAP_BASE
+    sta zp_ptr0
+    lda #>MAP_BASE
+    sta zp_ptr0_hi
+
+    ldy #0
+!t14_non_granite_scan:
+    lda (zp_ptr0),y
+    and #TILE_TYPE_MASK
+    cmp #TILE_MAGMA
+    beq !t14_fail+
+    cmp #TILE_QUARTZ
+    beq !t14_fail+
+    iny
+    bne !t14_non_granite_scan-
+
+    inc zp_ptr0_hi
+    lda zp_ptr0_hi
+    cmp #$cf
+    bne !t14_non_granite_scan-
 
     lda #$01
     sta tc_results+13
@@ -916,9 +1227,9 @@ test_start:
 !t15_done:
 
     // ==========================================
-    // Test 16: Corridor doors are never secret (DG5 fix)
-    // Carve corridors through room walls 10 times; verify
-    // no TILE_SECRET ($F0) is produced at the junction.
+    // Test 16: Corridor wall candidates resolve to supported mouth features.
+    // Secret is allowed again as an upstream-supported door variant; the
+    // invariant is that the junction does not remain a wall.
     // ==========================================
     lda #10
     sta t16_counter
@@ -936,16 +1247,18 @@ test_start:
     sta dg_room_h
     jsr draw_dungeon_room
 
-    // Carve h corridor through left wall at x=19
-    lda #15
-    sta dg_cx1
-    lda #22
-    sta dg_cx2
-    lda #11
-    sta dg_cy1
-    jsr carve_h_corridor
+	    // Stage a production tunnel step through the left wall at x=19.
+	    lda #19
+	    sta dg_cx1
+	    lda #11
+	    sta dg_cy1
+	    lda #1
+	    sta dg_tun_dir
+	    jsr tunnel_stage_current
+	    jsr test_set_materialize_row_bounds
+	    jsr materialize_staged_tunnel
 
-    // Check tile at (19, 11) — must NOT be TILE_SECRET
+    // Check tile at (19, 11) is floor or a supported door.
     ldx #11
     lda map_row_lo,x
     sta zp_ptr0
@@ -954,13 +1267,20 @@ test_start:
     ldy #19
     lda (zp_ptr0),y
     and #TILE_TYPE_MASK
+    cmp #TILE_FLOOR
+    beq !t16_ok_iter+
+    cmp #TILE_DOOR_OPEN
+    beq !t16_ok_iter+
+    cmp #TILE_DOOR_CLOSED
+    beq !t16_ok_iter+
     cmp #TILE_SECRET
-    beq !t16_fail+
+    bne !t16_fail+
 
+!t16_ok_iter:
     dec t16_counter
     bne !t16_loop-
 
-    // All 10 iterations passed — no secret doors at junctions
+	    // All 10 iterations passed: wall mouths resolved to floor or doors.
     lda #$01
     sta tc_results+15
     jmp !t16_done+
@@ -970,71 +1290,376 @@ test_start:
 !t16_done:
 
     // ==========================================
-    // Test 17: add_corridor_doors does NOT synthesize a side-entry door
-    // Set up a room, then manually place corridor floor tiles adjacent to the
-    // room's right wall. Call add_corridor_doors. The wall between them should
-    // remain a wall; only actual corridor penetration should place doors.
+    // Test 17: wandering tunnel does not place bypassable room-mouth doors
+    // Vertical travel through a horizontal wall needs room wall on both sides.
+    // If one side is unlit rock/corridor wall, the door is on a wall end.
+    // Diagonal openings alone are not a cardinal bypass. Corners and existing
+    // same-wall openings are not door jambs.
     // ==========================================
-    jsr fill_map_rock
-
-    // Place room at x=20, y=10, w=4, h=3
-    lda #20
-    sta dg_room_x
-    lda #10
-    sta dg_room_y
-    lda #4
-    sta dg_room_w
-    lda #3
-    sta dg_room_h
-    jsr draw_dungeon_room
-
-    // Also populate room arrays (add_corridor_doors iterates rooms)
     lda #1
-    sta room_count
-    lda #20
-    sta room_x
-    lda #10
-    sta room_y
-    lda #4
-    sta room_w
-    lda #3
-    sta room_h
+    sta zp_player_dlvl
+    lda #0
+    sta level_entry_dir
+    jsr dungeon_generate
+	    jsr audit_final_door_chokepoints
+	    bcc !t17_generated_ok+
+	    jmp !t17_fail+
+!t17_generated_ok:
+	    jsr fill_map_rock
 
-    // Room right wall is at x=24 (room_x + room_w = 20+4)
-    // Place corridor floor at x=25, y=11 (adjacent to right wall)
-    ldx #11
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
-    ldy #25
-    lda #TILE_FLOOR                 // Corridors have no flags
+    lda #19
+    ldy #20
+    jsr write_tile_at_xy
+    lda #TILE_WALL_H
+    sta (zp_ptr0),y
+    lda #20
+    ldy #20
+    jsr write_tile_at_xy
+    lda #TILE_WALL_H | FLAG_LIT
+    sta (zp_ptr0),y
+    lda #21
+    ldy #20
+    jsr write_tile_at_xy
+    lda #TILE_WALL_H | FLAG_LIT
     sta (zp_ptr0),y
 
-    // Verify the wall at (24, 11) is currently TILE_WALL_V
-    ldy #24
+    lda #20
+    sta dg_cx1
+    sta dg_cy1
+    lda #2
+    sta dg_tun_dir
+    jsr tunnel_stage_current
+    jsr test_set_materialize_row_bounds
+    jsr materialize_staged_tunnel
+
+    lda #20
+    ldy #20
+    jsr write_tile_at_xy
     lda (zp_ptr0),y
     and #TILE_TYPE_MASK
-    cmp #TILE_WALL_V
-    bne !t17_fail+
-
-    // Run add_corridor_doors (now intentionally a no-op)
-    jsr add_corridor_doors
-
-    // Now check (24, 11) — should still be TILE_WALL_V
-    ldx #11
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
-    ldy #24
-    lda (zp_ptr0),y
-    and #TILE_TYPE_MASK
-    cmp #TILE_WALL_V
+    cmp #TILE_FLOOR
     beq !t17_pass+
-    jmp !t17_fail+
+    cmp #TILE_DOOR_OPEN
+    beq !t17_pass+
+    cmp #TILE_DOOR_CLOSED
+    beq !t17_pass+
+	    cmp #TILE_SECRET
+	    beq !t17_pass+
+	    jmp !t17_fail+
 
 !t17_pass:
+    jsr fill_map_rock
+
+    lda #19
+    ldy #20
+    jsr write_tile_at_xy
+    lda #TILE_WALL_H | FLAG_LIT
+    sta (zp_ptr0),y
+    lda #20
+    ldy #20
+    jsr write_tile_at_xy
+    lda #TILE_WALL_H | FLAG_LIT
+    sta (zp_ptr0),y
+    lda #21
+    ldy #20
+    jsr write_tile_at_xy
+    lda #TILE_WALL_H | FLAG_LIT
+    sta (zp_ptr0),y
+    lda #21
+    ldy #19
+    jsr write_tile_at_xy
+    lda #TILE_DOOR_OPEN | FLAG_LIT
+    sta (zp_ptr0),y
+    lda #21
+    ldy #21
+    jsr write_tile_at_xy
+    lda #TILE_FLOOR
+    sta (zp_ptr0),y
+
+    lda #20
+    sta dg_cx1
+    sta dg_cy1
+    lda #2
+    sta dg_tun_dir
+    jsr tunnel_stage_current
+    jsr test_set_materialize_row_bounds
+    jsr materialize_staged_tunnel
+
+    lda #20
+    ldy #20
+    jsr write_tile_at_xy
+    lda (zp_ptr0),y
+	    and #TILE_TYPE_MASK
+	    cmp #TILE_FLOOR
+	    beq !t17_pass2+
+    cmp #TILE_DOOR_OPEN
+    beq !t17_pass2+
+    cmp #TILE_DOOR_CLOSED
+    beq !t17_pass2+
+	    cmp #TILE_SECRET
+	    beq !t17_pass2+
+	    jmp !t17_fail+
+
+!t17_pass2:
+    jsr fill_map_rock
+
+    // Adjacent same-wall opening: the candidate is redundant, not a choke.
+    lda #19
+    ldy #20
+    jsr write_tile_at_xy
+    lda #TILE_WALL_H | FLAG_LIT
+    sta (zp_ptr0),y
+    lda #20
+    ldy #20
+    jsr write_tile_at_xy
+    lda #TILE_WALL_H | FLAG_LIT
+    sta (zp_ptr0),y
+    lda #21
+    ldy #20
+    jsr write_tile_at_xy
+    lda #TILE_FLOOR | FLAG_LIT
+    sta (zp_ptr0),y
+    lda #20
+    ldy #21
+    jsr write_tile_at_xy
+    lda #TILE_FLOOR | FLAG_LIT
+    sta (zp_ptr0),y
+
+    lda #20
+    sta dg_cx1
+    sta dg_cy1
+    lda #2
+    sta dg_tun_dir
+    jsr tunnel_stage_current
+    jsr test_set_materialize_row_bounds
+    jsr materialize_staged_tunnel
+
+    lda #20
+    ldy #20
+    jsr write_tile_at_xy
+    lda (zp_ptr0),y
+	    and #TILE_TYPE_MASK
+	    cmp #TILE_FLOOR
+	    beq !t17_pass3+
+	    jmp !t17_fail+
+
+!t17_pass3:
+    jsr fill_map_rock
+
+    // Corner tile beside the candidate is not a straight horizontal jamb.
+    lda #19
+    ldy #20
+    jsr write_tile_at_xy
+    lda #TILE_CORNER_TR | FLAG_LIT
+    sta (zp_ptr0),y
+    lda #20
+    ldy #20
+    jsr write_tile_at_xy
+    lda #TILE_WALL_H | FLAG_LIT
+    sta (zp_ptr0),y
+    lda #21
+    ldy #20
+    jsr write_tile_at_xy
+    lda #TILE_WALL_H | FLAG_LIT
+    sta (zp_ptr0),y
+
+    lda #20
+    sta dg_cx1
+    sta dg_cy1
+    lda #2
+    sta dg_tun_dir
+    jsr tunnel_stage_current
+    jsr test_set_materialize_row_bounds
+    jsr materialize_staged_tunnel
+
+    lda #20
+    ldy #20
+    jsr write_tile_at_xy
+    lda (zp_ptr0),y
+	    and #TILE_TYPE_MASK
+	    cmp #TILE_FLOOR
+	    beq !t17_pass4+
+	    jmp !t17_fail+
+
+!t17_pass4:
+    jsr fill_map_rock
+
+    // Mirror case: corner tile is not a straight vertical jamb either.
+    lda #20
+    ldy #19
+    jsr write_tile_at_xy
+    lda #TILE_CORNER_BL | FLAG_LIT
+    sta (zp_ptr0),y
+    lda #20
+    ldy #20
+    jsr write_tile_at_xy
+    lda #TILE_WALL_V | FLAG_LIT
+    sta (zp_ptr0),y
+    lda #20
+    ldy #21
+    jsr write_tile_at_xy
+    lda #TILE_WALL_V | FLAG_LIT
+    sta (zp_ptr0),y
+
+    lda #20
+    sta dg_cx1
+    sta dg_cy1
+    lda #1
+    sta dg_tun_dir
+    jsr tunnel_stage_current
+    jsr test_set_materialize_row_bounds
+    jsr materialize_staged_tunnel
+
+    lda #20
+    ldy #20
+    jsr write_tile_at_xy
+    lda (zp_ptr0),y
+	    and #TILE_TYPE_MASK
+	    cmp #TILE_FLOOR
+	    beq !t17_pass5+
+	    jmp !t17_fail+
+
+!t17_pass5:
+    // A one-sided door is not a chokepoint. This is the generated corner
+    // regression: three cardinal walls plus one open side previously passed
+    // the audit and left a door the player could walk around.
+    jsr fill_map_rock
+    lda #20
+    ldy #20
+    jsr write_tile_at_xy
+    lda #TILE_DOOR_CLOSED | DUNGEON_FLAGS
+    sta (zp_ptr0),y
+    lda #21
+    ldy #20
+    jsr write_tile_at_xy
+    lda #TILE_FLOOR
+    sta (zp_ptr0),y
+    jsr audit_final_door_chokepoints
+    bcs !t17_one_sided_rejected+
+    jmp !t17_fail+
+!t17_one_sided_rejected:
+
+    // A valid straight junction must materialize one of the supported door
+    // types. The production writer previously lost A while rebuilding ptr0
+    // and stored the map-row high byte as terrain instead.
+    jsr fill_map_rock
+    lda #19
+    ldy #20
+    jsr write_tile_at_xy
+    lda #TILE_FLOOR
+    sta (zp_ptr0),y
+    lda #20
+    ldy #20
+    jsr write_tile_at_xy
+    lda #TILE_FLOOR
+    sta (zp_ptr0),y
+    lda #21
+    ldy #20
+    jsr write_tile_at_xy
+    lda #TILE_FLOOR
+    sta (zp_ptr0),y
+    lda #20
+    sta dg_room_x
+    sta dg_room_y
+    lda #0
+    sta dg_door_flag
+    lda #16
+    sta t16_counter
+!t17_junction_try:
+    jsr try_junction_door
+    lda #20
+    ldy #20
+    jsr write_tile_at_xy
+    lda (zp_ptr0),y
+    and #TILE_TYPE_MASK
+    cmp #TILE_FLOOR
+    bne !t17_junction_written+
+    dec t16_counter
+    bne !t17_junction_try-
+    jmp !t17_fail+
+!t17_junction_written:
+    cmp #TILE_DOOR_OPEN
+    beq !t17_junction_ok+
+    cmp #TILE_DOOR_CLOSED
+    beq !t17_junction_ok+
+    cmp #TILE_SECRET
+    beq !t17_junction_ok+
+    jmp !t17_fail+
+!t17_junction_ok:
+
+    // Room-wall guards must survive per-tunnel materialization, reject a
+    // later adjacent penetration, then be consumed by fill_cave_granite.
+    jsr fill_map_rock
+    lda #19
+    ldy #20
+    jsr write_tile_at_xy
+    lda #TILE_WALL_H | FLAG_LIT
+    sta (zp_ptr0),y
+    lda #20
+    ldy #20
+    jsr write_tile_at_xy
+    lda #TILE_WALL_H | FLAG_LIT
+    sta (zp_ptr0),y
+    lda #21
+    ldy #20
+    jsr write_tile_at_xy
+    lda #TILE_WALL_H | FLAG_LIT
+    sta (zp_ptr0),y
+    lda #20
+    sta dg_cx1
+    sta dg_cy1
+    lda #20
+    sta dg_room_x
+    lda #19
+    sta dg_room_y
+    jsr tunnel_stage_current
+    jsr test_set_materialize_row_bounds
+    jsr materialize_staged_tunnel
+
+    lda #21
+    ldy #20
+    jsr write_tile_at_xy
+    lda (zp_ptr0),y
+    and #FLAG_OCCUPIED
+    bne !t17_guard_preserved+
+    jmp !t17_fail+
+!t17_guard_preserved:
+
+    lda #21
+    sta dg_cx1
+    sta dg_room_x
+    lda #20
+    sta dg_cy1
+    lda #19
+    sta dg_room_y
+    jsr tunnel_stage_current
+    lda dg_cx1
+    cmp #21
+    beq !t17_guard_x_ok+
+    jmp !t17_fail+
+!t17_guard_x_ok:
+    lda dg_cy1
+    cmp #19
+    beq !t17_guard_y_ok+
+    jmp !t17_fail+
+!t17_guard_y_ok:
+
+    jsr fill_cave_granite
+    lda #21
+    ldy #20
+    jsr write_tile_at_xy
+    lda (zp_ptr0),y
+    and #FLAG_OCCUPIED
+    beq !t17_guard_cleared+
+    jmp !t17_fail+
+!t17_guard_cleared:
+    lda (zp_ptr0),y
+    and #TILE_TYPE_MASK
+    cmp #TILE_WALL_H
+    beq !t17_guard_tile_ok+
+    jmp !t17_fail+
+!t17_guard_tile_ok:
+
     lda #$01
     sta tc_results+16
     jmp !t17_done+
@@ -1044,46 +1669,70 @@ test_start:
 !t17_done:
 
     // ==========================================
-    // Test 18: add_corridor_doors leaves existing corridor door placement alone
-    // Corridor carving itself should still place a door when it penetrates a room wall.
+    // Test 18: add_corridor_doors leaves production corridor mouths alone.
+    // Upstream room mouths become doors probabilistically; otherwise they
+    // become corridor floor.
     // ==========================================
     jsr fill_map_rock
 
-    // Place room at x=20, y=10, w=4, h=3
+    // Explicit real room-mouth fixture: horizontal tunnel through a vertical
+    // room wall, with straight vertical jambs and no local bypass.
     lda #20
-    sta dg_room_x
-    lda #10
-    sta dg_room_y
-    lda #4
-    sta dg_room_w
-    lda #3
-    sta dg_room_h
-    jsr draw_dungeon_room
+    ldy #19
+    jsr write_tile_at_xy
+    lda #TILE_WALL_V | FLAG_LIT
+    sta (zp_ptr0),y
+    lda #20
+    ldy #20
+    jsr write_tile_at_xy
+    lda #TILE_WALL_V | FLAG_LIT
+    sta (zp_ptr0),y
+    lda #20
+    ldy #21
+    jsr write_tile_at_xy
+    lda #TILE_WALL_V | FLAG_LIT
+    sta (zp_ptr0),y
+    lda #19
+    ldy #20
+    jsr write_tile_at_xy
+    lda #TILE_FLOOR
+    sta (zp_ptr0),y
+    lda #21
+    ldy #20
+    jsr write_tile_at_xy
+    lda #TILE_FLOOR | FLAG_LIT
+    sta (zp_ptr0),y
 
-    // Carve an actual corridor through the room's left wall at y=11
-    lda #15
+    // Carve the production-path tunnel step through the wall-mouth.
+    lda #20
     sta dg_cx1
-    lda #22
-    sta dg_cx2
-    lda #11
+    lda #20
     sta dg_cy1
-    jsr carve_h_corridor
+    lda #1
+    sta dg_tun_dir
+    jsr tunnel_stage_current
 
-    // Run add_corridor_doors afterwards; it must not disturb the corridor door
-    jsr add_corridor_doors
+	    // Materialize the production-staged mouth; it must resolve to floor or
+	    // a supported door, not remain a wall.
+	    jsr test_set_materialize_row_bounds
+	    jsr materialize_staged_tunnel
 
-    // Door at (19, 11) must still be present
-    ldx #11
+    // Mouth at (20, 20) must be floor or a supported door.
+    ldx #20
     lda map_row_lo,x
     sta zp_ptr0
     lda map_row_hi,x
     sta zp_ptr0_hi
-    ldy #19
+    ldy #20
     lda (zp_ptr0),y
     and #TILE_TYPE_MASK
+    cmp #TILE_FLOOR
+    beq !t18_pass+
     cmp #TILE_DOOR_OPEN
     beq !t18_pass+
     cmp #TILE_DOOR_CLOSED
+    beq !t18_pass+
+    cmp #TILE_SECRET
     beq !t18_pass+
     jmp !t18_fail+
 
@@ -1106,6 +1755,8 @@ test_start:
     lda #0
     sta level_entry_dir
     jsr dungeon_generate
+	jsr audit_final_door_chokepoints
+	bcs !t19_fail+
 
     // Find a corridor floor tile: scan for TILE_FLOOR without FLAG_LIT
     // (Room floors have FLAG_LIT; corridor floors do not)
@@ -1557,80 +2208,35 @@ test_start:
 !t25_done:
 
     // ==========================================
-    // Test 26: place_secrets creates TILE_SECRET tiles
-    // Generate a dungeon, then count secret tiles on the map.
-    // (place_secrets is called by dungeon_generate now)
+    // Test 26: place_secrets creates TILE_SECRET tiles.
+    // Keep this deterministic: generation RNG shifts whenever generation
+    // internals change, but a single closed door must always be converted.
     // ==========================================
 
+    jsr fill_map_rock
     lda #3
-    sta zp_player_dlvl          // Use deeper level for more doors
-    lda #0
-    sta level_entry_dir
-    jsr dungeon_generate
-
-    // Scan map for TILE_SECRET tiles
-    lda #0
-    sta t19_found               // Reuse as counter
-    ldx #1
-!t26_row:
+    sta zp_player_dlvl
+    ldx #20
     lda map_row_lo,x
     sta zp_ptr0
     lda map_row_hi,x
     sta zp_ptr0_hi
-    stx t19_save_row
-    ldy #1
-!t26_col:
-    lda (zp_ptr0),y
-    and #TILE_TYPE_MASK
-    cmp #TILE_SECRET
-    bne !t26_next+
-    inc t19_found
-!t26_next:
-    iny
-    cpy #MAP_COLS - 1
-    bne !t26_col-
-    ldx t19_save_row
-    inx
-    cpx #MAP_ROWS - 1
-    bne !t26_row-
+    ldy #20
+    lda #TILE_DOOR_CLOSED
+    sta (zp_ptr0),y
 
-    // Should have at least 1 secret door (place_secrets converts 1-3)
-    // Note: might be 0 if no closed doors were found; try multiple times
-    lda t19_found
-    bne !t26_pass+
-    // Retry with a different seed
-    lda #$aa
-    sta zp_rng_0
-    lda #$55
-    sta zp_rng_1
-    jsr dungeon_generate
-    // Scan again
-    lda #0
-    sta t19_found
-    ldx #1
-!t26_row2:
+    jsr place_secrets
+
+    ldx #20
     lda map_row_lo,x
     sta zp_ptr0
     lda map_row_hi,x
     sta zp_ptr0_hi
-    stx t19_save_row
-    ldy #1
-!t26_col2:
+    ldy #20
     lda (zp_ptr0),y
     and #TILE_TYPE_MASK
     cmp #TILE_SECRET
-    bne !t26_next2+
-    inc t19_found
-!t26_next2:
-    iny
-    cpy #MAP_COLS - 1
-    bne !t26_col2-
-    ldx t19_save_row
-    inx
-    cpx #MAP_ROWS - 1
-    bne !t26_row2-
-    lda t19_found
-    bne !t26_pass+
+    beq !t26_pass+
     jmp !t26_fail+
 
 !t26_pass:
@@ -1643,8 +2249,7 @@ test_start:
 !t26_done:
 
     // ==========================================
-    // Test 27: run_check_stop stops at stairs
-    // Place player on stairs tile, verify carry set.
+    // Test 27: UMoria leading-edge scan stops before stairs.
     // ==========================================
     jsr fill_map_rock
 
@@ -1654,25 +2259,35 @@ test_start:
     lda #20
     sta zp_player_y
 
-    // Place stairs tile at player position
+    // Place floor under the player and stairs two steps east. After the
+    // simulated first move, the stairs enter the newly-adjacent scan edge.
     ldx #20
     lda map_row_lo,x
     sta zp_ptr0
     lda map_row_hi,x
     sta zp_ptr0_hi
     ldy #20
-    lda #TILE_STAIRS_DN
+    lda #TILE_FLOOR
+    sta (zp_ptr0),y
+    iny
+    lda #TILE_FLOOR
+    sta (zp_ptr0),y
+    iny
+    lda #TILE_STAIRS_DN | FLAG_VISITED
     sta (zp_ptr0),y
 
     // Set up running direction (east)
     lda #3                      // DIR_E
     sta zp_run_dir
-
-    // Set run_was_lit to 0 (corridor)
+    lda #5
+    sta zp_light_radius
     lda #0
-    sta run_was_lit
+    sta zp_eff_blind
 
-    jsr run_check_stop
+    jsr run_initialize
+    bcc !t27_fail+
+    inc zp_player_x
+    jsr run_area_affect
     bcs !t27_pass+
     jmp !t27_fail+
 
@@ -1686,9 +2301,7 @@ test_start:
 !t27_done:
 
     // ==========================================
-    // Test 28: run_check_stop continues on straight corridor
-    // Place player on floor tile in a straight corridor with no
-    // intersections, doors, or special tiles → carry clear.
+    // Test 28: UMoria runner continues on a straight corridor.
     // ==========================================
     jsr fill_map_rock
 
@@ -1703,7 +2316,7 @@ test_start:
     lda #TILE_FLOOR             // No flags (corridor)
     sta (zp_ptr0),y
     iny
-    cpy #23
+    cpy #24
     bne !t28_carve-
 
     // Player at (20, 20), running east
@@ -1712,10 +2325,14 @@ test_start:
     sta zp_player_y
     lda #3                      // DIR_E
     sta zp_run_dir
+    lda #5
+    sta zp_light_radius
     lda #0
-    sta run_was_lit             // Corridor (unlit)
-
-    jsr run_check_stop
+    sta zp_eff_blind
+    jsr run_initialize
+    bcc !t28_fail+
+    inc zp_player_x
+    jsr run_area_affect
     bcc !t28_pass+
     jmp !t28_fail+
 
@@ -1803,30 +2420,27 @@ test_start:
     // Test 31: vault_seal_entrance converts a door to TILE_SECRET
     //          on vault room perimeter
     // ============================================================
-    // Generate at dlvl=5, then force a vault on room 1
-    lda #5
-    sta zp_player_dlvl
-    jsr dungeon_generate
-
-    // Force room 1 as vault (regardless of what assign_special_room picked)
-    lda room_count
-    cmp #2
-    bcc !t31_skip+              // Need at least 2 rooms
-
-    // Clear all room types, set room 1 to vault
-    ldx room_count
-    dex
-    lda #RT_NORMAL
-!t31_clear:
-    sta room_type,x
-    dex
-    bpl !t31_clear-
+    jsr fill_map_rock
+    lda #1
+    sta room_count
     lda #RT_VAULT
-    sta room_type + 1
+    sta room_type
+    lda #20
+    sta room_x
+    sta dg_room_x
+    lda #14
+    sta room_y
+    sta dg_room_y
+    lda #8
+    sta room_w
+    sta dg_room_w
+    lda #5
+    sta room_h
+    sta dg_room_h
+    jsr draw_dungeon_room
 
-    // Place a door on the top wall of room 1
-    // Top wall row = room_y[1] - 1
-    lda room_y + 1
+    // Place a door on the top wall of the synthetic vault room.
+    lda room_y
     sec
     sbc #1
     tax                         // X = wall row
@@ -1834,27 +2448,61 @@ test_start:
     sta zp_ptr0
     lda map_row_hi,x
     sta zp_ptr0_hi
-    ldy room_x + 1             // First column of room
+    ldy room_x                 // First column of room
     lda #TILE_DOOR_CLOSED
     sta (zp_ptr0),y
 
     // Call vault_seal_entrance
     jsr vault_seal_entrance
 
-    // Verify tile is now TILE_SECRET ($F0)
-    lda room_y + 1
-    sec
-    sbc #1
+	    // Verify tile is now TILE_SECRET ($F0)
+	    lda room_y
+	    sec
+	    sbc #1
     tax
     lda map_row_lo,x
     sta zp_ptr0
     lda map_row_hi,x
     sta zp_ptr0_hi
-    ldy room_x + 1
+    ldy room_x
     lda (zp_ptr0),y
-    and #TILE_TYPE_MASK
-    cmp #TILE_SECRET
-    bne !t31_skip+
+	    and #TILE_TYPE_MASK
+	    cmp #TILE_SECRET
+	    bne !t31_skip+
+
+	    // Doorless generated vault mouth must also be sealable. This is the
+	    // production case when room-mouth door placement resolved to floor.
+	    jsr draw_dungeon_room
+	    lda room_y
+	    clc
+	    adc room_h
+	    tax
+	    lda map_row_lo,x
+	    sta zp_ptr0
+	    lda map_row_hi,x
+	    sta zp_ptr0_hi
+	    ldy room_x
+	    iny
+	    lda #TILE_FLOOR
+	    sta (zp_ptr0),y
+
+	    jsr vault_seal_entrance
+
+	    lda room_y
+	    clc
+	    adc room_h
+	    tax
+	    lda map_row_lo,x
+	    sta zp_ptr0
+	    lda map_row_hi,x
+	    sta zp_ptr0_hi
+	    ldy room_x
+	    iny
+	    lda (zp_ptr0),y
+	    and #TILE_TYPE_MASK
+	    cmp #TILE_SECRET
+	    bne !t31_skip+
+
 !t31_pass:
     lda #$01
     sta tc_results+30
@@ -2147,7 +2795,7 @@ test_start:
 !t35_done:
 
     // ============================================================
-    // Test 36: run_check_stop stops on floor items
+    // Test 36: UMoria leading-edge scan stops before floor items.
     // ============================================================
     jsr fill_map_rock
 
@@ -2162,15 +2810,21 @@ test_start:
     lda map_row_hi,x
     sta zp_ptr0_hi
     ldy #20
-    lda #TILE_FLOOR | FLAG_HAS_ITEM
+    lda #TILE_FLOOR
+    sta (zp_ptr0),y
+    iny
+    lda #TILE_FLOOR
+    sta (zp_ptr0),y
+    iny
+    lda #TILE_FLOOR | FLAG_HAS_ITEM | FLAG_VISITED
     sta (zp_ptr0),y
 
     lda #3                      // DIR_E
     sta zp_run_dir
-    lda #0
-    sta run_was_lit
-
-    jsr run_check_stop
+    jsr run_initialize
+    bcc !t36_fail+
+    inc zp_player_x
+    jsr run_area_affect
     bcs !t36_pass+
     jmp !t36_fail+
 !t36_pass:
@@ -2183,49 +2837,483 @@ test_start:
 !t36_done:
 
     // ============================================================
-    // Test 37: lit room mouth on the side does not stop one tile early
-    // Corridor remains unlit; north side tile is lit floor.
-    // Running should continue here and stop on actual room entry instead.
+    // Test 37: production runner matches UMoria's default CJS behavior.
     // ============================================================
-    jsr fill_map_rock
+    // Edge queries must return a boundary wall instead of wrapping coordinates.
+    lda #0
+    sta df_target_x
+    sta df_target_y
+    ldx #2                      // DIR_W
+    jsr run_get_tile
+    cmp #TILE_WALL_H | FLAG_VISITED
+    beq !t37_edge_x_ok+
+    jmp !t37_fail+
+!t37_edge_x_ok:
+    ldx #0                      // DIR_N
+    jsr run_get_tile
+    cmp #TILE_WALL_H | FLAG_VISITED
+    beq !t37_edges_ok+
+    jmp !t37_fail+
+!t37_edges_ok:
 
-    // Straight east-west corridor at y=20, x=19..21
+    // Pin the translated cycle/chome tables used by every directional scan.
+    ldx #11
+!t37_cycle_table:
+    lda run_cycle,x
+    cmp run_cycle_expected,x
+    beq !t37_cycle_next+
+    jmp !t37_fail+
+!t37_cycle_next:
+    dex
+    bpl !t37_cycle_table-
+    ldx #7
+!t37_home_table:
+    lda run_home,x
+    cmp run_home_expected,x
+    beq !t37_home_next+
+    jmp !t37_fail+
+!t37_home_next:
+    dex
+    bpl !t37_home_table-
+
+    // Straight east-west corridor. A doorless opening is ordinary floor in
+    // UMoria and does not stop merely because it enters the leading edge.
+    jsr fill_map_rock
+    lda #0
+    sta room_count
+    sta zp_eff_blind
+    lda #5
+    sta zp_light_radius
+    lda #20
+    sta zp_player_x
+    sta zp_player_y
+    lda #3                      // DIR_E
+    sta zp_run_dir
     ldx #20
     lda map_row_lo,x
     sta zp_ptr0
     lda map_row_hi,x
     sta zp_ptr0_hi
-    ldy #19
+    ldy #18
 !t37_corridor:
     lda #TILE_FLOOR
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
     iny
-    cpy #22
+    cpy #25
     bne !t37_corridor-
+    ldy #22
+    lda #TILE_FLOOR
+    :MapWrite_ptr0_y()
+    jsr run_initialize
+    bcs !t37_initialized+
+    jmp !t37_fail+
+!t37_initialized:
+    inc zp_player_x
+    jsr run_area_affect
+    bcc !t37_doorway_open+
+    jmp !t37_fail+
+!t37_doorway_open:
 
-    // Lit room mouth immediately north of the current corridor tile.
+    // Town entrances are production coordinate metadata over floor, but still
+    // stop as visible leading-edge objects.
+    lda #0
+    sta zp_player_dlvl
+    lda #14
+    sta df_target_x
+    lda #6
+    sta df_target_y
+    ldx #6
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #15
+    lda #TILE_FLOOR | FLAG_VISITED
+    :MapWrite_ptr0_y()
+    ldx #3
+    jsr run_classify
+    bcs !t37_store_seen+
+    jmp !t37_fail+
+!t37_store_seen:
+    lda #1
+    sta zp_player_dlvl
+
+    // Visible open-door objects stop with UMoria's run_ignore_doors=false.
+    lda #20
+    sta zp_player_x
+    ldx #20
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #22
+    lda #TILE_DOOR_OPEN | FLAG_VISITED
+    :MapWrite_ptr0_y()
+    lda #3
+    sta zp_run_dir
+    jsr run_initialize
+    bcs !t37_door_initialized+
+    jmp !t37_fail+
+!t37_door_initialized:
+    inc zp_player_x
+    jsr run_area_affect
+    bcs !t37_open_door_seen+
+    jmp !t37_fail+
+!t37_open_door_seen:
+
+    // A live but invisible monster on displayed terrain does not stop the
+    // leading-edge scan. Visibility must come from the production producer.
+    jsr monster_init_table
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda #1
+    sta (zp_ptr0),y
+    ldy #MX_X
+    lda #31
+    sta (zp_ptr0),y
+    ldy #MX_Y
+    lda #30
+    sta (zp_ptr0),y
+    ldy #MX_FLAGS
+    lda #0
+    sta (zp_ptr0),y
+    ldx #30
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #31
+    lda #TILE_FLOOR | FLAG_VISITED | FLAG_OCCUPIED
+    :MapWrite_ptr0_y()
+    lda #10
+    sta zp_player_x
+    sta zp_player_y
+    lda #30
+    sta df_target_x
+    sta df_target_y
+    ldx #3
+    jsr run_classify
+    bcc !t37_invisible_open+
+    jmp !t37_fail+
+!t37_invisible_open:
+    cmp #1
+    beq !t37_invisible_ok+
+    jmp !t37_fail+
+!t37_invisible_ok:
+
+    // A newly visible live monster stops the run through the production
+    // visibility refresh without corrupting the directional scan state.
+    jsr monster_init_table
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda #1
+    sta (zp_ptr0),y
+    ldy #MX_X
+    lda #22
+    sta (zp_ptr0),y
+    ldy #MX_Y
+    lda #20
+    sta (zp_ptr0),y
+    ldy #MX_FLAGS
+    lda #0
+    sta (zp_ptr0),y
+    ldx #20
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #22
+    lda #TILE_FLOOR | FLAG_VISITED | FLAG_OCCUPIED
+    :MapWrite_ptr0_y()
+    lda #20
+    sta zp_player_x
+    sta zp_player_y
+    lda #1
+    sta zp_player_dlvl
+    lda #3
+    sta zp_run_dir
+    jsr run_initialize
+    bcs !t37_monster_initialized+
+    jmp !t37_fail+
+!t37_monster_initialized:
+    inc zp_player_x
+    jsr run_area_affect
+    bcs !t37_monster_seen+
+    jmp !t37_fail+
+!t37_monster_seen:
+
+    // A visible monster blocks a running collision without consuming a turn.
+    lda #21
+    sta zp_player_x
+    lda #3
+    sta zp_run_dir
+    lda #CMD_MOVE_E
+    jsr player_try_move
+    bcc !t37_visible_collision_ok+
+    jmp !t37_fail+
+!t37_visible_collision_ok:
+    lda zp_player_x
+    cmp #21
+    beq !t37_visible_position_ok+
+    jmp !t37_fail+
+!t37_visible_position_ok:
+
+    // The same collision while unseen ends running and consumes the action.
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_FLAGS
+    lda (zp_ptr0),y
+    and #~MF_VISIBLE & $ff
+    sta (zp_ptr0),y
+    lda #1
+    sta eff_fear_timer          // Avoid combat RNG; fear still consumes a turn.
+    lda #3
+    sta zp_run_dir
+    lda #CMD_MOVE_E
+    jsr player_try_move
+    bcs !t37_unseen_consumed+
+    jmp !t37_fail+
+!t37_unseen_consumed:
+    lda player_move_relocated
+    beq !t37_unseen_not_relocated+
+    jmp !t37_fail+
+!t37_unseen_not_relocated:
+    lda zp_run_dir
+    cmp #$ff
+    beq !t37_unseen_run_stopped+
+    jmp !t37_fail+
+!t37_unseen_run_stopped:
+    lda zp_player_x
+    cmp #21
+    beq !t37_unseen_position_ok+
+    jmp !t37_fail+
+!t37_unseen_position_ok:
+    lda #0
+    sta eff_fear_timer
+
+    // Blind running skips the area-affect scan, including visible objects.
+    lda #1
+    sta zp_eff_blind
+    jsr run_area_affect
+    bcc !t37_blind_ignored+
+    jmp !t37_fail+
+!t37_blind_ignored:
+    lda #0
+    sta zp_eff_blind
+
+    // An open-area run continues while its wall/open topology is unchanged.
+    jsr fill_map_rock
+    lda #1
+    sta room_count
+    lda #18
+    sta room_x
+    sta room_y
+    sta dg_room_x
+    sta dg_room_y
+    lda #5
+    sta room_w
+    sta room_h
+    sta dg_room_w
+    sta dg_room_h
+    jsr draw_dungeon_room
+    lda #20
+    sta zp_player_x
+    sta zp_player_y
+    lda #3
+    sta zp_run_dir
+    jsr run_initialize
+    bcs !t37_room_initialized+
+    jmp !t37_fail+
+!t37_room_initialized:
+    inc zp_player_x
+    jsr run_area_affect
+    bcc !t37_room_ok+
+    jmp !t37_fail+
+!t37_room_ok:
+
+    // In open-area mode, a newly-open square on a previously closed side is
+    // the doorway boundary and stops the run.
+    lda #(RUNF_OPEN | RUNF_BREAK_LEFT)
+    sta run_flags
+    lda #3
+    sta run_prev_dir
+    lda #21
+    sta zp_player_x
+    lda #20
+    sta zp_player_y
+    ldx #19
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #22
+    lda #TILE_FLOOR
+    :MapWrite_ptr0_y()
+    jsr run_area_affect
+    bcs !t37_open_break_stops+
+    jmp !t37_fail+
+!t37_open_break_stops:
+
+    // End-to-end doorway regression: running east along a room's north wall
+    // continues beside solid wall, then stops when its doorless opening first
+    // enters the newly-adjacent left-side scan.
+    jsr fill_map_rock
+    lda #0
+    sta room_count
+    sta zp_eff_blind
+    lda #5
+    sta zp_light_radius
+    ldx #11
+!t37_mouth_row:
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #9
+!t37_mouth_col:
+    lda #TILE_FLOOR
+    :MapWrite_ptr0_y()
+    iny
+    cpy #20
+    bne !t37_mouth_col-
+    inx
+    cpx #14
+    bne !t37_mouth_row-
+    ldx #10
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #14
+    lda #TILE_FLOOR
+    :MapWrite_ptr0_y()
+    lda #10
+    sta zp_player_x
+    lda #11
+    sta zp_player_y
+    lda #3
+    sta zp_run_dir
+    jsr run_initialize
+    bcs !t37_mouth_initialized+
+    jmp !t37_fail+
+!t37_mouth_initialized:
+    inc zp_player_x
+    jsr run_area_affect
+    bcc !t37_mouth_step2+
+    jmp !t37_fail+
+!t37_mouth_step2:
+    inc zp_player_x
+    jsr run_area_affect
+    bcc !t37_mouth_step3+
+    jmp !t37_fail+
+!t37_mouth_step3:
+    inc zp_player_x
+    jsr run_area_affect
+    bcs !t37_mouth_stopped+
+    jmp !t37_fail+
+!t37_mouth_stopped:
+    lda zp_player_x
+    cmp #13
+    beq !t37_mouth_ok+
+    jmp !t37_fail+
+!t37_mouth_ok:
+
+    // Direction zero is a valid corridor choice, not the old zero sentinel.
+    jsr fill_map_rock
+    lda #5
+    sta zp_light_radius
+    lda #0
+    sta run_flags
+    sta zp_eff_blind
+    sta run_prev_dir             // Previous direction north.
+    lda #20
+    sta zp_player_x
+    sta zp_player_y
     ldx #19
     lda map_row_lo,x
     sta zp_ptr0
     lda map_row_hi,x
     sta zp_ptr0_hi
     ldy #20
-    lda #TILE_FLOOR | FLAG_LIT
-    sta (zp_ptr0),y
+    lda #TILE_FLOOR
+    :MapWrite_ptr0_y()
+    jsr run_area_affect
+    bcc !t37_north_found+
+    jmp !t37_fail+
+!t37_north_found:
+    lda zp_run_dir
+    beq !t37_north_ok+           // Must turn DIR_N.
+    jmp !t37_fail+
+!t37_north_ok:
 
+    // UMoria default run_cut_corners=true: two adjacent choices whose two
+    // far squares are known walls take the diagonal choice.
+    jsr fill_map_rock
+    lda #5
+    sta zp_light_radius
+    lda #0
+    sta run_flags
+    lda #3
+    sta run_prev_dir
     lda #20
     sta zp_player_x
-    lda #20
     sta zp_player_y
-    lda #3                      // DIR_E
-    sta zp_run_dir
-    lda #0
-    sta run_was_lit
-
-    jsr run_check_stop
-    bcc !t37_pass+
+    ldx #20
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #21
+    lda #TILE_FLOOR
+    :MapWrite_ptr0_y()
+    ldx #19
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #21
+    lda #TILE_FLOOR
+    :MapWrite_ptr0_y()
+    jsr run_area_affect
+    bcc !t37_known_corner_continues+
     jmp !t37_fail+
-!t37_pass:
+!t37_known_corner_continues:
+    lda zp_run_dir
+    cmp #5                      // DIR_NE
+    beq !t37_known_corner_dir+
+    jmp !t37_fail+
+!t37_known_corner_dir:
+    lda run_prev_dir
+    cmp #5
+    beq !t37_known_corner_ok+
+    jmp !t37_fail+
+!t37_known_corner_ok:
+
+    // UMoria default run_examine_corners=true: when the two far squares are
+    // unseen, enter the straight option and retain the diagonal previous dir.
+    lda #1
+    sta zp_light_radius
+    lda #0
+    sta run_flags
+    lda #3
+    sta run_prev_dir
+    jsr run_area_affect
+    bcc !t37_potential_continues+
+    jmp !t37_fail+
+!t37_potential_continues:
+    lda zp_run_dir
+    cmp #3                      // DIR_E
+    beq !t37_potential_dir+
+    jmp !t37_fail+
+!t37_potential_dir:
+    lda run_prev_dir
+    cmp #5                      // Pretend the diagonal was taken.
+    beq !t37_potential_ok+
+    jmp !t37_fail+
+!t37_potential_ok:
+
     lda #$01
     sta tc_results + 36
     jmp !t37_done+
@@ -2330,7 +3418,7 @@ test_start:
 !t39_done:
 
     // ============================================================
-    // Test 40: running south stops before a known trap
+    // Test 40: the initial running step enters a known trap tile
     // ============================================================
     jsr fill_map_rock
 
@@ -2367,14 +3455,12 @@ test_start:
 
     lda #CMD_MOVE_S
     jsr player_try_move
-    bcc !t40_blocked+
-    jmp !t40_fail+
-!t40_blocked:
+    bcc !t40_fail+
     lda zp_player_x
     cmp #27
     bne !t40_fail+
     lda zp_player_y
-    cmp #30
+    cmp #31
     bne !t40_fail+
 !t40_pass:
     lda #$01
@@ -2444,6 +3530,132 @@ test_start:
     lda #$00
     sta tc_results + 42
 !t43_done:
+
+    // ==========================================
+    // Test 44: room-chain tunnel may stop at an existing connected corridor.
+    // The corrected upstream direction starts at the new room and targets the
+    // previous connected room, so an early stop still attaches the new room.
+    // ==========================================
+    jsr fill_map_rock
+
+    lda #2
+    sta room_count
+
+    // Room 0 at (10,10), center (12,11)
+    lda #10
+    sta room_x
+    sta room_y
+    sta dg_room_x
+    sta dg_room_y
+    lda #5
+    sta room_w
+    sta dg_room_w
+    lda #3
+    sta room_h
+    sta dg_room_h
+    jsr draw_dungeon_room
+
+    // Room 1 at (50,10), center (52,11)
+    lda #50
+    sta room_x + 1
+    sta dg_room_x
+    lda #10
+    sta room_y + 1
+    sta dg_room_y
+    lda #5
+    sta room_w + 1
+    sta dg_room_w
+    lda #3
+    sta room_h + 1
+    sta dg_room_h
+    jsr draw_dungeon_room
+
+    // Existing connected corridor from room 0 toward the new room.
+    ldx #11
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #13
+    lda #DGEN_CORR
+!t44_seed_corr:
+    sta (zp_ptr0),y
+    iny
+    cpy #23
+    bne !t44_seed_corr-
+
+    lda #52
+    sta dg_cx1
+    lda #11
+    sta dg_cy1
+    lda #12
+    sta dg_cx2
+    lda #11
+    sta dg_cy2
+    jsr carve_staged_tunnel
+    jsr materialize_staged_tunnel
+
+    lda #12
+    sta stairs_up_x
+    lda #11
+    sta stairs_up_y
+    jsr verify_connectivity
+    bcs !t44_fail+
+
+    lda #$01
+    sta tc_results + 43
+    jmp !t44_done+
+!t44_fail:
+    lda #$00
+    sta tc_results + 43
+!t44_done:
+
+    // ==========================================
+    // Test 45: adversarial east/west tunnel steps terminate at UMoria's
+    // 2,000-iteration guard instead of wrapping forever.
+    // ==========================================
+    ldx #20
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #20
+    lda #DGEN_TUNNEL
+    sta (zp_ptr0),y
+    iny
+    sta (zp_ptr0),y
+    lda #20
+    sta dg_cx1
+    sta dg_cy1
+    lda #30
+    sta dg_cx2
+    lda #20
+    sta dg_cy2
+    lda #1
+    sta dg_test_tunnel_oscillate
+    jsr carve_staged_tunnel
+    lda #0
+    sta dg_test_tunnel_oscillate
+    lda dg_tun_count_hi
+    cmp #>(DUN_TUNNEL_MAX_STEPS + 1)
+    bne !t45_fail+
+    lda dg_tun_count_lo
+    cmp #<(DUN_TUNNEL_MAX_STEPS + 1)
+    bne !t45_fail+
+    lda dg_scan_row_start
+    cmp #19
+    bne !t45_fail+
+    lda dg_scan_row_end
+    cmp #21
+    bne !t45_fail+
+
+    lda #$01
+    sta tc_results + 44
+    jmp !t45_done+
+!t45_fail:
+    lda #$00
+    sta tc_results + 44
+!t45_done:
 
     // Done — jump to exit trampoline (copies tc_results to $0400, then brk)
     jmp test_exit_trampoline

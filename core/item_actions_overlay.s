@@ -276,7 +276,7 @@ irs_effect_mon_confuse:
     rts
 
 irs_effect_aggravate:
-    jsr eff_aggravate
+    jsr monster_aggravate_all
     ldx #HSTR_PIQ_HUMMING
     jsr huff_print_msg
     sec

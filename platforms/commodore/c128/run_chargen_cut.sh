@@ -28,7 +28,7 @@ fi
 ka_args=(
     -showmem -vicesymbols -libdir ../c64
     -define C128
-    -define OVL_OUT='"../../../build/test/c128"'
+    :OVL_OUT=../../../build/test/c128
     -define C128_TEST_CHARGEN_CUTPOINT="$cutpoint"
 )
 

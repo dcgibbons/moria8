@@ -861,47 +861,51 @@ player_search_has_no_light:
 // player_search_get_base_chance — Race/class-derived active search chance
 // Output: A = base search chance
 player_search_get_base_chance:
-    // Class search is unsigned at offset 8.
-    lda player_data + PL_CLASS
-    ldx #CLASS_PROP_SIZE
-    jsr math_multiply
-    clc
-    adc #8
-    tax
-    lda class_properties,x
-    sta zp_temp0
-
-    // Race search adjustment is signed at offset 4; the shipped tables keep
-    // the combined total in the positive range, so 8-bit add is sufficient.
-    lda player_data + PL_RACE
-    ldx #RACE_PROP_SIZE
-    jsr math_multiply
-    clc
-    adc #4
-    tax
-    lda race_properties,x
-    clc
-    adc zp_temp0
-    rts
+    ldx #8                      // Class search offset
+    ldy #4                      // Race search offset
+    jmp player_get_race_class_property
 
 // player_search_get_fos — Race/class-derived passive auto-search frequency
 // Output: A = fos (<=1 means always search on movement)
 player_search_get_fos:
-    // Class fos is unsigned at offset 9.
+    ldx #9                      // Class fos offset
+    ldy #6                      // Race fos offset
+    jmp player_get_race_class_property
+
+// player_get_stealth — Race/class-derived stealth used by monster waking.
+// Output: A = stealth threshold in 0..9 for the shipped property tables.
+// Clobbers: X, Y, zp_temp0/1, zp_math_a/b/tmp0/tmp1.
+player_get_stealth:
+    ldx #7                      // Class stealth offset
+    ldy #5                      // Race stealth offset
+    jsr player_get_race_class_property
+    bmi !pgs_min+
+    rts
+!pgs_min:
+    lda #0
+    rts
+
+// Sum one class and race property without duplicating table-stride logic.
+// Input: X = class property offset, Y = race property offset.
+// Output: A = unsigned byte sum; callers interpret/clamp signed adjustments.
+// Clobbers: X, zp_temp0/1, zp_math_a/b/tmp0/tmp1. Preserves Y.
+player_get_race_class_property:
+    stx zp_temp1
     lda player_data + PL_CLASS
     ldx #CLASS_PROP_SIZE
     jsr math_multiply
     clc
-    adc #9
+    adc zp_temp1
     tax
     lda class_properties,x
     sta zp_temp0
 
+    sty zp_temp1
     lda player_data + PL_RACE
     ldx #RACE_PROP_SIZE
     jsr math_multiply
     clc
-    adc #6
+    adc zp_temp1
     tax
     lda race_properties,x
     clc

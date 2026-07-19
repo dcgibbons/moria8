@@ -4,7 +4,9 @@
 // Phase 4.2: Explicit open/close door commands, stuck door mechanics,
 // hidden trap placement and triggering, secret doors found by searching.
 
+#if !DUNGEON_FEATURES_GENERATION_ONLY
 #import "input_ui_helpers.s"
+#endif
 
 // ============================================================
 // Trap table — parallel arrays (SoA)
@@ -30,12 +32,14 @@ df_disarm_trap_idx: .byte 0
 df_disarm_total: .byte 0
 df_disarm_base: .byte 0
 
+#if !DUNGEON_FEATURES_GENERATION_ONLY
 // ============================================================
 // Trap name Huffman indices (indexed by trap type 0-5)
 // ============================================================
 trap_name_huff_idx:
     .byte HSTR_DF_TRAP_0, HSTR_DF_TRAP_1, HSTR_DF_TRAP_2
     .byte HSTR_DF_TRAP_3, HSTR_DF_TRAP_4, HSTR_DF_TRAP_5
+#endif
 
 #if PLATFORM_DISARM_COMMAND_INLINE || !DISARM_HELPERS_EXTERNAL
 trap_difficulty:
@@ -123,6 +127,10 @@ find_random_floor:
 .label door_scan_y = door_scan_x + MAX_DOOR_SCAN
 .label door_scan_count = door_scan_y + MAX_DOOR_SCAN
 .assert "Door scan scratch stays inside platform scratch window", door_scan_count < hal_layout_dungeon_door_scan_limit, true
+#if C128_PRODUCT_OVERLAY_RUNTIME
+.assert "C128 HAL door scan base matches memory ownership", door_scan_x == DUNGEON_GEN_DOOR_SCAN_BASE, true
+.assert "Door scan scratch does not overlap C128 copied map row", door_scan_x >= SCREEN_RAM + MAP_COLS, true
+#endif
 
 place_secrets:
     // Don't place secrets on town level
@@ -143,9 +151,20 @@ place_secrets:
     sta zp_ptr0_hi
     stx df_target_y         // Save row
 
+#if C128_PRODUCT_OVERLAY_RUNTIME
+    // The C128 map lives in Bank 1. Copy once per row instead of switching
+    // banks for every tile in this full-map generation scan.
+    lda #MAP_COLS
+    jsr mmu_common_copy_map_row
+#endif
+
     ldy #1                  // Start at col 1
 !ps_col:
+#if C128_PRODUCT_OVERLAY_RUNTIME
+    lda SCREEN_RAM,y
+#else
     :MapRead_ptr0_y()
+#endif
     and #TILE_TYPE_MASK
     cmp #TILE_DOOR_CLOSED
     bne !ps_next+
@@ -187,14 +206,10 @@ place_secrets:
     lda df_found
     cmp door_scan_count
     bcc !ps_convert+
-    beq !ps_convert+
     lda door_scan_count
     sta df_found
 
 !ps_convert:
-    lda df_found
-    beq !ps_done+
-
     // Pick a random door from the list
     lda door_scan_count
     jsr rng_range           // [0, count-1]
@@ -229,10 +244,12 @@ place_secrets:
     sta door_scan_y,x
 
     dec df_found
-    jmp !ps_convert-
+    bne !ps_convert-
 
 !ps_done:
     rts
+
+#if !DUNGEON_FEATURES_GENERATION_ONLY
 
 // ============================================================
 // trap_check_at_player — Check if player stepped on a trap
@@ -1081,3 +1098,4 @@ do_search:
 // ============================================================
 .assert "MAX_TRAPS", MAX_TRAPS, 16
 .assert "TRAP_TYPE_COUNT", TRAP_TYPE_COUNT, 6
+#endif

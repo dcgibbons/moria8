@@ -205,6 +205,8 @@ from pathlib import Path
 root = Path("../../..").resolve()
 player_items = (root / "core" / "player_items.s").read_text().splitlines()
 item_actions_overlay = (root / "core" / "item_actions_overlay.s").read_text().splitlines()
+main = (root / "platforms" / "commodore" / "plus4" / "main.s").read_text().splitlines()
+look_trampoline = (root / "platforms" / "commodore" / "plus4" / "look_trampoline.s").read_text().splitlines()
 
 def has_ordered_chain(lines: list[str], tokens: list[str], window: int = 40) -> bool:
     for i, line in enumerate(lines):
@@ -245,6 +247,18 @@ if not has_ordered_chain(item_actions_overlay, [
     "jmp piw_select_filtered_inv_key",
 ]):
     print("Plus/4 item overlay must mark ?-opened inventory selectors as returning to OVL_ITEMS")
+    raise SystemExit(1)
+
+if not has_ordered_chain(look_trampoline, [
+    "tramp_do_look:",
+    "lda #OVL_MODAL_MISC",
+    "jsr overlay_load_no_kernal",
+    "bcs !done+",
+    "jsr do_look",
+    "!done:",
+    "jmp tramp_sr_epilogue",
+]):
+    print("Plus/4 LOOK must clean up through tramp_sr_epilogue after both overlay success and failure")
     raise SystemExit(1)
 PY
     then
@@ -2605,6 +2619,8 @@ run_vice_resource_contract_plus4
 run_test "minimalplus4" "tests/test_minimalplus4.s"
 run_test "renderplus4" "tests/test_renderplus4.s"
 run_test "visibility_renderplus4" "tests/test_visibility_renderplus4.s"
+run_test "dungeon_soakplus4" "tests/test_dungeon_soakplus4.s"
+run_test "look_trampolineplus4" "tests/test_look_trampolineplus4.s"
 run_media_drive8_attach_read_write
 run_media_drive9_attach_read_write
 run_media_drive10_11_device_probe

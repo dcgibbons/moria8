@@ -19,7 +19,15 @@
 .const OLDEST_SAVE_VERSION = SAVE_V1_VERSION
 .const SAVE_FLOOR42_VERSION = SAVE_V1_VERSION
 .const SAVE_KNOWN96_VERSION = hal_storage_save_known96_version
+#if C128
+.const SAVE_INV31_VERSION = $12
+#else
 .const SAVE_INV31_VERSION = SAVE_VERSION
+#endif
+#if C128
+.const SAVE_ROOM21_VERSION = $13
+.const LEGACY_MAX_ROOMS = 8
+#endif
 .const LOAD_RESULT_OK        = 0
 .const LOAD_RESULT_NOTFOUND  = 1
 .const LOAD_RESULT_CORRUPT   = 2
@@ -348,6 +356,33 @@ save_block_table_post_known:
     :save_block_desc(monster_table, MAX_MONSTERS * MONSTER_ENTRY_SIZE)
 save_block_table_post_known_end:
 
+#if C128
+save_block_table_post_known_room8:
+    :save_block_desc(potion_shuffle, 12)
+    :save_block_desc(scroll_shuffle, 12)
+    :save_block_desc(ring_shuffle, 4)
+    :save_block_desc(wand_shuffle, 5)
+    :save_block_desc(staff_shuffle, 5)
+    :save_block_desc(si_item_id, STORE_TOTAL_SLOTS)
+    :save_block_desc(si_qty, STORE_TOTAL_SLOTS)
+    :save_block_desc(si_p1, STORE_TOTAL_SLOTS)
+    :save_block_desc(si_to_hit, STORE_TOTAL_SLOTS)
+    :save_block_desc(si_to_dam, STORE_TOTAL_SLOTS)
+    :save_block_desc(si_to_ac, STORE_TOTAL_SLOTS)
+    :save_block_desc(si_meta, STORE_TOTAL_SLOTS)
+    :save_block_desc(stairs_up_x, 7)
+    :save_block_desc(room_count, 1)
+    :save_block_desc(room_x, LEGACY_MAX_ROOMS)
+    :save_block_desc(room_y, LEGACY_MAX_ROOMS)
+    :save_block_desc(room_w, LEGACY_MAX_ROOMS)
+    :save_block_desc(room_h, LEGACY_MAX_ROOMS)
+    :save_block_desc(room_lit, LEGACY_MAX_ROOMS)
+    :save_block_desc(room_type, LEGACY_MAX_ROOMS)
+    :save_block_desc(trap_count, 1 + (MAX_TRAPS * 3))
+    :save_block_desc(monster_table, MAX_MONSTERS * MONSTER_ENTRY_SIZE)
+save_block_table_post_known_room8_end:
+#endif
+
 save_block_table_post_floor:
     :save_block_desc(recall_data_start, RECALL_DATA_SIZE)
 #if !HAL_STORAGE_MAP_BANKED
@@ -369,6 +404,9 @@ save_block_table_floor_items_direct_end:
 .const SAVE_BLOCK_INVENTORY_CURRENT_COUNT = (save_block_table_inventory_current_end - save_block_table_inventory_current) / SAVE_BLOCK_DESC_SIZE
 .const SAVE_BLOCK_INVENTORY_LEGACY_COUNT = (save_block_table_inventory_legacy_end - save_block_table_inventory_legacy) / SAVE_BLOCK_DESC_SIZE
 .const SAVE_BLOCK_POST_KNOWN_COUNT = (save_block_table_post_known_end - save_block_table_post_known) / SAVE_BLOCK_DESC_SIZE
+#if C128
+.const SAVE_BLOCK_POST_KNOWN_ROOM8_COUNT = (save_block_table_post_known_room8_end - save_block_table_post_known_room8) / SAVE_BLOCK_DESC_SIZE
+#endif
 .const SAVE_BLOCK_POST_FLOOR_COUNT = (save_block_table_post_floor_end - save_block_table_post_floor) / SAVE_BLOCK_DESC_SIZE
 .const SAVE_BLOCK_FLOOR_ITEMS_DIRECT_COUNT = (save_block_table_floor_items_direct_end - save_block_table_floor_items_direct) / SAVE_BLOCK_DESC_SIZE
 .const SAVE_BLOCK_FLOOR_ITEMS_HEAD_COUNT = 4
@@ -378,6 +416,9 @@ save_block_table_floor_items_direct_end:
 .assert "Current inventory save block table entries are 4 bytes", SAVE_BLOCK_INVENTORY_CURRENT_COUNT * SAVE_BLOCK_DESC_SIZE, save_block_table_inventory_current_end - save_block_table_inventory_current
 .assert "Legacy inventory save block table entries are 4 bytes", SAVE_BLOCK_INVENTORY_LEGACY_COUNT * SAVE_BLOCK_DESC_SIZE, save_block_table_inventory_legacy_end - save_block_table_inventory_legacy
 .assert "Post-known save block table entries are 4 bytes", SAVE_BLOCK_POST_KNOWN_COUNT * SAVE_BLOCK_DESC_SIZE, save_block_table_post_known_end - save_block_table_post_known
+#if C128
+.assert "C128 legacy room8 post-known save block table entries are 4 bytes", SAVE_BLOCK_POST_KNOWN_ROOM8_COUNT * SAVE_BLOCK_DESC_SIZE, save_block_table_post_known_room8_end - save_block_table_post_known_room8
+#endif
 .assert "Post-floor save block table entries are 4 bytes", SAVE_BLOCK_POST_FLOOR_COUNT * SAVE_BLOCK_DESC_SIZE, save_block_table_post_floor_end - save_block_table_post_floor
 .assert "Floor-item direct save block table entries are 4 bytes", SAVE_BLOCK_FLOOR_ITEMS_DIRECT_COUNT * SAVE_BLOCK_DESC_SIZE, save_block_table_floor_items_direct_end - save_block_table_floor_items_direct
 .assert "Stair coordinates and entry direction stay contiguous", level_entry_dir - stairs_up_x + 1, 7
@@ -640,12 +681,16 @@ save_open_write_len:
     jsr save_write_known_items
 
     // 4. Remaining resident state through monster table.
+#if C128
+    jsr save_write_post_known_state
+#else
     lda #<save_block_table_post_known
     sta zp_ptr1
     lda #>save_block_table_post_known
     sta zp_ptr1_hi
     lda #SAVE_BLOCK_POST_KNOWN_COUNT
     jsr save_write_block_table
+#endif
 
     // 16. Floor items (logical 8-field layout, serialized from packed RAM)
     jsr save_write_floor_items
@@ -898,12 +943,16 @@ plus4_test_after_load_magic:
     jsr load_read_known_items
 
     // 4. Remaining resident state through monster table.
+#if C128
+    jsr load_read_post_known_state
+#else
     lda #<save_block_table_post_known
     sta zp_ptr1
     lda #>save_block_table_post_known
     sta zp_ptr1_hi
     lda #SAVE_BLOCK_POST_KNOWN_COUNT
     jsr load_read_block_table
+#endif
 
     // 16. Floor items
     jsr load_read_floor_items
@@ -1453,6 +1502,58 @@ load_read_known_items:
     cpx #ITEM_ID_CAPACITY
     bcc !lrki_clear_future-
     rts
+
+// ============================================================
+// save_write_post_known_state / load_read_post_known_state
+//
+// C128 save V4 ($13) expands room metadata from 8 to 21 entries so the larger
+// dungeon can keep enough rooms to break up upstream-sized mineral streamers.
+// Older C128 saves still carry the 8-room block; read that exact shape so the
+// following trap/monster/map/checksum stream remains aligned.
+// ============================================================
+#if C128
+save_write_post_known_state:
+    lda #<save_block_table_post_known
+    sta zp_ptr1
+    lda #>save_block_table_post_known
+    sta zp_ptr1_hi
+    lda #SAVE_BLOCK_POST_KNOWN_COUNT
+    jmp save_write_block_table
+
+load_read_post_known_state:
+    lda load_save_version
+    cmp #SAVE_ROOM21_VERSION
+    bcs !lrpks_current+
+    jsr load_clear_room_metadata_tail
+    lda #<save_block_table_post_known_room8
+    sta zp_ptr1
+    lda #>save_block_table_post_known_room8
+    sta zp_ptr1_hi
+    lda #SAVE_BLOCK_POST_KNOWN_ROOM8_COUNT
+    jmp load_read_block_table
+!lrpks_current:
+    lda #<save_block_table_post_known
+    sta zp_ptr1
+    lda #>save_block_table_post_known
+    sta zp_ptr1_hi
+    lda #SAVE_BLOCK_POST_KNOWN_COUNT
+    jmp load_read_block_table
+
+load_clear_room_metadata_tail:
+    ldx #LEGACY_MAX_ROOMS
+    lda #0
+!lcrmt_loop:
+    sta room_x,x
+    sta room_y,x
+    sta room_w,x
+    sta room_h,x
+    sta room_lit,x
+    sta room_type,x
+    inx
+    cpx #MAX_ROOMS
+    bne !lcrmt_loop-
+    rts
+#endif
 
 // ============================================================
 // save_write_floor_items — Serialize packed floor-item RAM as the legacy

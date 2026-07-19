@@ -77,7 +77,9 @@ player_try_move:
     // Bounds check: target_x must be in [1, MAP_COLS-2]
     // (can't walk into boundary walls)
     lda zp_temp3
-    beq !blocked+           // x = 0
+    bne !target_x_nonzero+
+    jmp !blocked+           // x = 0
+!target_x_nonzero:
     cmp #MAP_COLS - 1
     bcs !blocked+           // x >= 79
 
@@ -102,17 +104,6 @@ c128_town_move_diag_after_map_ptr_setup:
 c128_town_move_diag_after_map_read:
 #endif
     sta zp_temp0
-
-    // Running should stop before stepping onto a known trap. Hidden traps stay
-    // normal: they are still floor until search/find/tripping reveals them.
-    lda zp_run_dir
-    cmp #$ff
-    beq !not_running_trap+
-    lda zp_temp0
-    and #TILE_TYPE_MASK
-    cmp #TILE_TRAP
-    beq !blocked+
-!not_running_trap:
 
     // Extract tile type (bits 7-4 → 0-15)
     lda zp_temp0
@@ -151,10 +142,19 @@ c128_town_move_diag_after_occupied_read:
     jsr player_move_check_live_occupant
     bcc !not_occupied+          // Stale occupied flag → clear and continue
 
-    // Monster present — attack if not running
+    // A visible monster stops running without consuming a turn. An unseen
+    // monster ends running and is attacked, matching UMoria's collision path.
     lda zp_run_dir
     cmp #$ff
-    bne !blocked+               // Running → just block, don't attack
+    beq !not_running_monster+
+    jsr monster_get_ptr
+    ldy #MX_FLAGS
+    lda (zp_ptr0),y
+    and #MF_VISIBLE
+    bne !blocked+
+    lda #$ff
+    sta zp_run_dir
+!not_running_monster:
 
     // Fear blocks melee attacks
     lda eff_fear_timer
@@ -202,38 +202,7 @@ c128_town_move_diag_move_blocked:
     clc                     // Carry clear = blocked
     rts
 
-pm_live_occ_x: .byte 0
-pm_live_occ_y: .byte 0
-
-// player_move_check_live_occupant — honor FLAG_OCCUPIED only when a live
-// monster table entry still exists at the tile. If the map flag is stale,
-// clear it so movement, running, and future renders stop treating the tile as
-// blocked by a phantom monster.
-// Input:  A = x, Y = y
-// Output: carry set = live monster present, X = slot index
-//         carry clear = no live monster; stale FLAG_OCCUPIED cleared
-// Clobbers: A, X, Y, zp_ptr0/hi
-player_move_check_live_occupant:
-    sta pm_live_occ_x
-    sty pm_live_occ_y
-    jsr monster_find_at
-    bcs !pm_live_found+
-
-    ldx pm_live_occ_y
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
-    ldy pm_live_occ_x
-    :MapRead_ptr0_y()
-    and #~FLAG_OCCUPIED & $ff
-    :MapWrite_ptr0_y()
-    clc
-    rts
-
-!pm_live_found:
-    sec
-    rts
+#import "player_move_live_occupant.s"
 
 // player_move_maybe_passive_search — Movement-owned passive auto-search.
 // Only runs after an ordinary successful relocation, never on melee-only turns.
@@ -263,13 +232,9 @@ player_move_relocated: .byte 0
 // Output: A = tile type if stairs (9 = down, 10 = up), or 0 if not stairs
 // Preserves: nothing
 check_stairs_at_player:
-    ldx zp_player_y
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
-    ldy zp_player_x
-    :MapRead_ptr0_y()
+    ldx zp_player_x
+    ldy zp_player_y
+    jsr map_get_tile
 
     // Extract tile type
     lsr
@@ -287,321 +252,9 @@ check_stairs_at_player:
 !is_stairs:
     rts
 
-// ============================================================
-// Running stop logic
-// ============================================================
-
-// Scratch variables for running
-run_was_lit:   .byte 0     // FLAG_LIT of tile before this step
-run_scratch:   .byte 0     // Loop index for adjacent/intersection checks
-run_exits:     .byte 0     // Exit count for intersection detection
-
-// run_check_stop — Master stop condition for corridor running
-// Input:  zp_run_dir = direction (0-7), zp_player_x/y = current pos
-//         run_was_lit = FLAG_LIT status of tile BEFORE this step
-// Output: carry set = STOP, carry clear = CONTINUE
-// Clobbers: A, X, Y, zp_ptr0/hi, zp_temp0-2
-run_check_stop:
-    // 1. Stairs at current tile → stop
-    ldx zp_player_y
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
-    ldy zp_player_x
-    :MapRead_ptr0_y()
-    sta zp_temp0            // Save full tile byte
-    and #TILE_TYPE_MASK
-    cmp #TILE_STAIRS_DN
-    beq !rcs_stop+
-    cmp #TILE_STAIRS_UP
-    beq !rcs_stop+
-
-    // 2. Visible trap at current tile → stop
-    cmp #TILE_TRAP
-    beq !rcs_stop+
-
-    // 3. Item at current tile → stop
-    lda zp_temp0
-    and #FLAG_HAS_ITEM
-    bne !rcs_stop+
-
-    // 4. Room entry: was in unlit area, now in lit area
-    lda run_was_lit
-    bne !rcs_not_entry+
-    lda zp_temp0
-    and #FLAG_LIT
-    bne !rcs_stop+          // Entered a lit room → stop
-!rcs_not_entry:
-
-    // 5. Room exit: was in lit area, now in unlit area
-    lda run_was_lit
-    beq !rcs_not_exit+
-    lda zp_temp0
-    and #FLAG_LIT
-    beq !rcs_stop+          // Left a lit room → stop
-!rcs_not_exit:
-
-    // 6. Adjacent door check (6 neighbors, skip forward/backward)
-    jsr run_check_adjacent_doors
-    bcs !rcs_stop+
-
-    // 7. Adjacent monster check (6 neighbors, skip forward/backward)
-    jsr run_check_adjacent_monsters
-    bcs !rcs_stop+
-
-    // 8. Intersection check (corridors only — unlit area)
-    lda zp_temp0
-    and #FLAG_LIT
-    bne !rcs_continue+      // In lit room → no intersection check
-    jsr run_check_intersection
-    bcs !rcs_stop+
-
-!rcs_continue:
-    clc
-    rts
-!rcs_stop:
-    sec
-    rts
-
-// run_check_adjacent_doors — Check 6 neighbors (skip forward/backward) for doors
-// Input: zp_run_dir, zp_player_x/y
-// Output: carry set = door found, carry clear = no doors
-// Clobbers: A, X, Y, zp_ptr0/hi, run_scratch, zp_temp1, zp_temp2
-run_check_adjacent_doors:
-    lda #0
-    sta run_scratch         // Direction loop index
-
-!rcad_loop:
-    lda run_scratch
-    cmp #8
-    bcs !rcad_no_door+      // Checked all 8 → no door found
-
-    // Skip forward direction
-    cmp zp_run_dir
-    beq !rcad_next+
-
-    // Skip backward direction
-    ldx zp_run_dir
-    cmp dir_opposite,x
-    beq !rcad_next+
-
-    // Compute adjacent tile position
-    tax
-    lda zp_player_x
-    clc
-    adc dir_dx,x
-    sta zp_temp1            // adj_x
-    lda zp_player_y
-    clc
-    adc dir_dy,x
-    sta zp_temp2            // adj_y
-
-    // Bounds check
-    lda zp_temp1
-    beq !rcad_next+
-    cmp #MAP_COLS - 1
-    bcs !rcad_next+
-    lda zp_temp2
-    beq !rcad_next+
-    cmp #MAP_ROWS - 1
-    bcs !rcad_next+
-
-    // Read map tile
-    ldx zp_temp2
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
-    ldy zp_temp1
-    :MapRead_ptr0_y()
-    and #TILE_TYPE_MASK
-
-    // Check for any door type
-    cmp #TILE_DOOR_OPEN
-    beq !rcad_found+
-    cmp #TILE_DOOR_CLOSED
-    beq !rcad_found+
-    cmp #TILE_SECRET
-    beq !rcad_found+
-
-!rcad_next:
-    inc run_scratch
-    jmp !rcad_loop-
-
-!rcad_found:
-    sec
-    rts
-!rcad_no_door:
-    clc
-    rts
-
-// run_check_adjacent_monsters — Check 6 neighbors for FLAG_OCCUPIED
-// Same pattern as run_check_adjacent_doors: skip forward/backward.
-// Input: zp_run_dir, zp_player_x/y
-// Output: carry set = monster adjacent, carry clear = no monsters
-// Clobbers: A, X, Y, zp_ptr0/hi, run_scratch, zp_temp1, zp_temp2
-run_check_adjacent_monsters:
-    lda #0
-    sta run_scratch
-
-!rcam_loop:
-    lda run_scratch
-    cmp #8
-    bcs !rcam_none+
-
-    // Skip forward direction
-    cmp zp_run_dir
-    beq !rcam_next+
-
-    // Skip backward direction
-    ldx zp_run_dir
-    cmp dir_opposite,x
-    beq !rcam_next+
-
-    // Compute adjacent position
-    tax
-    lda zp_player_x
-    clc
-    adc dir_dx,x
-    sta zp_temp1
-    lda zp_player_y
-    clc
-    adc dir_dy,x
-    sta zp_temp2
-
-    // Bounds check
-    lda zp_temp1
-    beq !rcam_next+
-    cmp #MAP_COLS - 1
-    bcs !rcam_next+
-    lda zp_temp2
-    beq !rcam_next+
-    cmp #MAP_ROWS - 1
-    bcs !rcam_next+
-
-    // Read map tile and check FLAG_OCCUPIED
-    ldx zp_temp2
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
-    ldy zp_temp1
-    :MapRead_ptr0_y()
-    and #FLAG_OCCUPIED
-    beq !rcam_next+
-
-    lda zp_temp1
-    ldy zp_temp2
-    jsr player_move_check_live_occupant
-    bcs !rcam_found+
-
-!rcam_next:
-    inc run_scratch
-    jmp !rcam_loop-
-
-!rcam_found:
-    sec
-    rts
-!rcam_none:
-    clc
-    rts
-
-// run_check_intersection — Check for corridor intersection
-// Checks 4 cardinal directions (N/S/W/E), skipping forward/backward.
-// If any unlit side exit found → intersection detected.
-// Lit plain-floor side openings are ignored here so running stops on
-// actual room entry instead of one tile early at the corridor mouth.
-// Only called when current tile is NOT lit (corridor).
-// Input: zp_run_dir, zp_player_x/y
-// Output: carry set = intersection, carry clear = no intersection
-// Clobbers: A, X, Y, zp_ptr0/hi, run_scratch, run_exits, zp_temp1, zp_temp2
-run_check_intersection:
-    lda #0
-    sta run_exits
-    sta run_scratch         // Cardinal direction index
-
-!rci_loop:
-    lda run_scratch
-    cmp #4                  // Only check N(0), S(1), W(2), E(3)
-    bcs !rci_check+
-
-    // Skip forward direction
-    cmp zp_run_dir
-    beq !rci_next+
-
-    // Skip backward direction
-    ldx zp_run_dir
-    cmp dir_opposite,x
-    beq !rci_next+
-
-    // Compute adjacent tile position
-    tax
-    lda zp_player_x
-    clc
-    adc dir_dx,x
-    sta zp_temp1
-    lda zp_player_y
-    clc
-    adc dir_dy,x
-    sta zp_temp2
-
-    // Bounds check
-    lda zp_temp1
-    beq !rci_next+
-    cmp #MAP_COLS - 1
-    bcs !rci_next+
-    lda zp_temp2
-    beq !rci_next+
-    cmp #MAP_ROWS - 1
-    bcs !rci_next+
-
-    // Read map tile
-    ldx zp_temp2
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
-    ldy zp_temp1
-    :MapRead_ptr0_y()
-    sta zp_temp0
-
-    // Ignore lit plain-floor side openings; room-entry logic handles those.
-    lda zp_temp0
-    and #TILE_TYPE_MASK
-    cmp #TILE_FLOOR
-    bne !rci_not_lit_floor+
-    lda zp_temp0
-    and #FLAG_LIT
-    bne !rci_next+
-!rci_not_lit_floor:
-
-    lda zp_temp0
-    and #TILE_TYPE_MASK
-    lsr
-    lsr
-    lsr
-    lsr                     // Tile type index 0-15
-
-    // Check walkability
-    jsr tile_is_walkable
-    bcc !rci_next+
-
-    // Found a passable exit
-    inc run_exits
-
-!rci_next:
-    inc run_scratch
-    jmp !rci_loop-
-
-!rci_check:
-    lda run_exits
-    beq !rci_no_intersection+
-    sec                     // Intersection found
-    rts
-!rci_no_intersection:
-    clc
-    rts
+#if PLAYER_LOOK_EXTERNAL
+    :PlayerMoveLookSegment()
+#endif
 
 // ============================================================
 // do_look — Scan along a direction and describe the first thing found
@@ -630,14 +283,10 @@ do_look:
     // Bounds check (unsigned: negative wraps to >128, > MAP size)
     lda df_target_x
     cmp #MAP_COLS
-    bcc !dl_x_ok+
     bcs !dl_nothing+
-!dl_x_ok:
     lda df_target_y
     cmp #MAP_ROWS
-    bcc !dl_y_ok+
     bcs !dl_nothing+
-!dl_y_ok:
 
     // Read map tile at (df_target_x, df_target_y)
     ldx df_target_y
@@ -721,7 +370,7 @@ do_look:
     cmp #TILE_DOOR_OPEN
     bne !dl_not_open+
     ldx #HSTR_DL_OPEN_DOOR
-    bne dl_print_tile
+    jmp dl_print_tile
 !dl_not_open:
     cmp #TILE_DOOR_CLOSED
     bne !dl_not_closed+
@@ -817,11 +466,9 @@ dl_print_item_you_see:
 // dl_print_tile — Print a tile description message
 // Input: X = Huffman string ID (HSTR_*)
 dl_print_tile:
-    txa
-    pha
+    stx dl_scratch
     jsr look_flash_target
-    pla
-    tax
+    ldx dl_scratch
 dl_print_tile_no_flash:
     jsr huff_print_msg
     clc
@@ -846,7 +493,14 @@ dl_print_tile_no_flash:
     clc
     rts
 
-// Look command scratch
+// Strings migrated to Huffman compression (HSTR_DL_*, HSTR_PTM_* in huffman_data.s)
+
+#if PLAYER_LOOK_EXTERNAL && PLAYER_LOOK_SCRATCH_RESIDENT
+    :PlayerMoveRestoreResidentSegment()
+#endif
+
+// Look command scratch remains resident; overlay code must not own persistent
+// state that disappears when another overlay replaces the window.
 dl_tile:     .byte 0
 dl_scratch:  .byte 0
 dl_name_lo:  .byte 0
@@ -854,7 +508,9 @@ dl_name_hi:  .byte 0
 dl_dx:       .byte 0
 dl_dy:       .byte 0
 
-// Strings migrated to Huffman compression (HSTR_DL_*, HSTR_PTM_* in huffman_data.s)
+#if PLAYER_LOOK_EXTERNAL && !PLAYER_LOOK_SCRATCH_RESIDENT
+    :PlayerMoveRestoreResidentSegment()
+#endif
 
 // ============================================================
 // Compile-time validation

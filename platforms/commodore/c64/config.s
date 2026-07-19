@@ -184,13 +184,6 @@ mmu_safe_map_write_ptr1:
     sta (zp_ptr1),y
     rts
 
-// Bulk map helpers enter/exit (no-op on C64)
-map_bulk_enter:
-    rts
-
-map_bulk_exit:
-    rts
-
 // ============================================================
 // C64 DB-safe pointer wrappers (no MMU; direct access)
 // ============================================================

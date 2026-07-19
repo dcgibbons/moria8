@@ -3,7 +3,9 @@
 
 #import "../../../../core/zeropage.s"
 #import "test_helpers128.s"
+#define C128_TEST_MAP_ROW_STORE_HELPER
 #import "../memory128.s"
+#undef C128_TEST_MAP_ROW_STORE_HELPER
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_start)
@@ -91,8 +93,12 @@ test_start:
     and #$04
     beq test_fail   // Still should be disabled
 
-    // Test 3: mmu_copy_map_row isolation and boundary checks
-    
+    // Test 3: mmu_common_copy_map_row isolation and boundary checks
+    jmp !test3_start+
+test_fail:
+    jmp test_fail
+!test3_start:
+
     // Setup dummy data in Bank 1 at $4000
     jsr mmu_select_bank1
     ldx #0
@@ -123,7 +129,8 @@ test_start:
     sta zp_ptr0
     lda #>$4000
     sta zp_ptr0_hi
-    jsr mmu_copy_map_row
+    lda #MMU_COPY_MAP_ROW_LEN
+    jsr mmu_common_copy_map_row
 
     // Verify boundaries to prove no clobbering
     lda $03ff
@@ -143,9 +150,79 @@ test_start:
     cpx #MMU_COPY_MAP_ROW_LEN
     bne !chk_dest-
 
-    jmp test_pass
+    // The generation path copies all 198 map columns with the same primitive.
+    jsr mmu_select_bank1
+    ldx #0
+!setup_full_src:
+    txa
+    eor #$a5
+    sta $4000,x
+    inx
+    cpx #C128_FUTURE_MAP_COLS
+    bne !setup_full_src-
+    jsr mmu_select_bank0
 
-test_fail:
+    lda #$ff
+    sta SCREEN_RAM + C128_FUTURE_MAP_COLS
+    lda #0
+    ldx #0
+!clr_full_dest:
+    sta SCREEN_RAM,x
+    inx
+    cpx #C128_FUTURE_MAP_COLS
+    bne !clr_full_dest-
+
+    lda #C128_FUTURE_MAP_COLS
+    jsr mmu_common_copy_map_row
+
+    lda SCREEN_RAM + C128_FUTURE_MAP_COLS
+    cmp #$ff
+    bne test_fail
+    ldx #0
+!chk_full_dest:
+    txa
+    eor #$a5
+    cmp SCREEN_RAM,x
+    beq !full_byte_ok+
+    jmp test_fail
+!full_byte_ok:
+    inx
+    cpx #C128_FUTURE_MAP_COLS
+    bne !chk_full_dest-
+
+    // Store the same full row back to Bank 1 and preserve the next byte.
+    jsr mmu_select_bank1
+    lda #0
+    ldx #0
+!clr_full_store:
+    sta $4000,x
+    inx
+    cpx #C128_FUTURE_MAP_COLS
+    bne !clr_full_store-
+    lda #$ff
+    sta $4000 + C128_FUTURE_MAP_COLS
+    jsr mmu_select_bank0
+
+    lda #C128_FUTURE_MAP_COLS
+    jsr mmu_common_store_map_row
+
+    jsr mmu_select_bank1
+    lda $4000 + C128_FUTURE_MAP_COLS
+    cmp #$ff
+    bne !store_fail+
+    ldx #0
+!chk_full_store:
+    txa
+    eor #$a5
+    cmp $4000,x
+    bne !store_fail+
+    inx
+    cpx #C128_FUTURE_MAP_COLS
+    bne !chk_full_store-
+    jsr mmu_select_bank0
+    jmp test_pass
+!store_fail:
+    jsr mmu_select_bank0
     jmp test_fail
 
 test_pass:

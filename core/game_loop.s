@@ -701,42 +701,16 @@ game_new_start:
 
 #if C128_TEST_SCRIPTED_INPUT
 #if !C128_TEST_PERF_P1_TRACE
-    lda c128_test_summary_seen
-    bne !gns_script_pass+
-    jmp c128_test_town_fail_sym
-!gns_script_pass:
-    lda c128_test_summary_count
-    cmp #1
-    beq !gns_summary_count_ok+
-    jmp c128_test_town_fail_sym
-!gns_summary_count_ok:
 #if C128_TEST_CACHE_SURVIVAL
-    jsr c128_test_verify_cache_survival
-    bcc !gns_cache_pass+
-    jmp c128_test_cache_survival_fail_sym
-!gns_cache_pass:
-    jmp c128_test_cache_survival_pass_sym
+    jmp c128_test_cache_survival_town_entry
 #else
-    jmp c128_test_town_pass_sym
+c128_test_town_pass_sym:
+    brk
 #endif
-
 #endif
 
 #elif C128_TEST_CACHE_SURVIVAL
-    lda c128_test_summary_seen
-    bne !gns_script_pass+
-    jmp c128_test_town_fail_sym
-!gns_script_pass:
-    lda c128_test_summary_count
-    cmp #1
-    beq !gns_cache_summary_count_ok+
-    jmp c128_test_town_fail_sym
-!gns_cache_summary_count_ok:
-    jsr c128_test_verify_cache_survival
-    bcc !gns_cache_pass+
-    jmp c128_test_cache_survival_fail_sym
-!gns_cache_pass:
-    jmp c128_test_cache_survival_pass_sym
+    jmp c128_test_cache_survival_town_entry
 #endif
 
     jmp main_loop
@@ -898,27 +872,6 @@ c128_town_move_diag_loop_top:
     jsr tramp_game_over
 !test_force_death_done:
 #endif
-#if C128_TEST_SCRIPTED_SPELL
-    lda c128_test_spell_return_pending
-    beq !c128_test_spell_return_done+
-    dec c128_test_spell_return_pending
-    inc c128_test_spell_return_count
-    lda c128_test_spell_return_count
-    cmp #8
-    bcc !c128_test_spell_return_done+
-    jmp c128_test_spell_pass_sym
-!c128_test_spell_return_done:
-#endif
-#if C128_TEST_SCRIPTED_PRAYER
-    lda c128_test_spell_return_pending
-    beq !c128_test_prayer_return_done+
-    dec c128_test_spell_return_pending
-    bne !c128_test_prayer_return_done+
-    lda zp_eff_bless
-    beq !c128_test_prayer_return_done+
-    jmp c128_test_spell_pass_sym
-!c128_test_prayer_return_done:
-#endif
 #if C128_TEST_SCRIPTED_SCROLL_SELECTOR
     lda c128_test_scroll_selector_return_pending
     beq !c128_test_scroll_selector_return_done+
@@ -998,16 +951,16 @@ c128_town_move_diag_loop_top:
     bne !run_cancel_check+
     jsr hal_input_any_key_held
     beq !run_arm_cancel+
-    jmp run_step                // Still holding initiating key: keep running
+    jmp run_continue_step       // Still holding initiating key: keep running
 !run_arm_cancel:
     lda #1
     sta run_input_armed
     jsr input_run_cancel_reset
-    jmp run_step
+    jmp run_continue_step
 !run_cancel_check:
     jsr hal_input_run_cancel_check  // Returns nonzero on a new cancel key edge
     bne !run_cancel+
-    jmp run_step
+    jmp run_continue_step
 
 !run_cancel:
     jsr input_flush_run_cancel_buffer
@@ -1772,8 +1725,7 @@ cmd_dispatch_ignore:
 cmd_stairs_dn:
     jsr check_stairs_at_player
     cmp #9                  // Stairs down type
-    beq !stairs_dn_ok+
-    jmp !no_stairs_dn+
+    bne !no_stairs_dn+
 !stairs_dn_ok:
     // Descend: increment dungeon level
     inc zp_player_dlvl
@@ -1806,8 +1758,7 @@ cmd_stairs_dn:
 cmd_stairs_up:
     jsr check_stairs_at_player
     cmp #10                 // Stairs up type
-    beq !stairs_up_ok+
-    jmp !no_stairs_up+
+    bne !no_stairs_up+
 !stairs_up_ok:
     // Ascend
     lda zp_player_dlvl
@@ -1997,6 +1948,8 @@ cmd_autorest:
     jmp main_loop
 !start:
     jsr hal_input_wait_release
+    lda #0
+    sta turn_scene_dirty        // Discard preceding command's scene change.
     lda #1
     sta auto_rest_active
     jmp main_loop
@@ -2130,7 +2083,11 @@ cmd_tunnel:
 
 cmd_look:
     jsr msg_clear
+#if PLAYER_LOOK_EXTERNAL
+    jsr tramp_do_look
+#else
     jsr do_look
+#endif
     jmp main_loop
 
 // auto_rest_check_recovered — Carry set if HP and mana are both full.
@@ -2156,6 +2113,7 @@ auto_rest_should_stop:
     bcs !stop+
 
     lda zp_msg_flags
+    ora turn_scene_dirty
     bne !stop+
 
     clc
@@ -2174,12 +2132,25 @@ cmd_run:
     lda #0
     sta run_input_armed
     jsr input_run_cancel_reset
+    jsr run_initialize
     jmp run_step                // Take first step
 
 run_stop_running:
+    lda #0
+    sta run_count
     lda #$ff
     sta zp_run_dir
+#if HAL_PLATFORM_GAME_LOOP_RUN_STOP_RESET_INPUT
     jmp input_run_cancel_reset
+#else
+    rts
+#endif
+
+run_continue_step:
+    jsr run_continue
+    bcc run_step
+    jsr run_stop_running
+    jmp main_loop
 
 // ============================================================
 // run_step — Execute one step of corridor running
@@ -2200,17 +2171,6 @@ run_step:
 #endif
 #endif
 
-	    // Save current tile's lit status for room entry/exit detection
-    ldx zp_player_y
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
-    ldy zp_player_x
-    :MapRead_ptr0_y()
-    and #FLAG_LIT
-    sta run_was_lit
-
     // Convert running direction to movement command
     ldx zp_run_dir
     inx
@@ -2221,6 +2181,10 @@ run_step:
 	    bcs !run_move_ok+
     jmp !run_blocked+           // Wall → stop, no turn consumed
 !run_move_ok:
+    lda player_move_relocated
+    bne !run_relocated+
+    jmp !run_stop_move+         // Unseen-monster attack consumed the turn.
+!run_relocated:
 
 	    // Check trap
 	    jsr msg_clear
@@ -2231,11 +2195,12 @@ run_step:
     lda zp_player_dlvl
     bne !run_not_store+
     jsr check_player_on_store_door
-    bcs !run_stop_move+
+    bcc !run_not_store+
+    jmp !run_stop_move+
 !run_not_store:
 
-	    // Check other stop conditions
-	    jsr run_check_stop
+	    // UMoria evaluates newly adjacent squares after each successful move.
+	    jsr run_area_affect
 	    bcc !run_keep_step+
     jmp !run_stop_move+         // Should stop → final move
 !run_keep_step:
@@ -2444,7 +2409,7 @@ try_store_entry:
 !no_store:
     rts
 
-#if !C128
+#if !HAL_PLATFORM_GAME_LOOP_VISIBILITY_PRESERVE_REVEAL_EXTERNAL
 .label game_loop_update_visibility_preserve_reveal = update_visibility
 #endif
 
@@ -2797,11 +2762,6 @@ roll_tool_ego_check:
 // Clobbers: A, X, Y, zp_ptr0
 // ============================================================
 put_tool_ego_prefix:
-    cpx #62
-    beq !ptep_valid_tool+
-    cpx #63
-    bne !ptep_done+
-!ptep_valid_tool:
     // Compute index = (type - 62) * 2 + (ego - 1)
     sec
     sbc #1                      // ego - 1 (0 or 1)
@@ -2818,7 +2778,6 @@ put_tool_ego_prefix:
     lda tool_ego_prefix_hi,x
     sta zp_ptr0_hi
     jsr hal_screen_put_string       // Print prefix (e.g., "Dwarven ")
-!ptep_done:
     rts
 
 #if !GAME_LOOP_LOW_DATA_EXTERNAL

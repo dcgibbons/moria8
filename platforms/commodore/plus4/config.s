@@ -122,12 +122,6 @@ mmu_safe_map_write_ptr1:
     sta (zp_ptr1),y
     rts
 
-map_bulk_enter:
-    rts
-
-map_bulk_exit:
-    rts
-
 mmu_safe_db_read_ptr0:
     lda (zp_ptr0),y
     rts

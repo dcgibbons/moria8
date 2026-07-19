@@ -58,7 +58,7 @@ detect_evil_clear_reveal:
     dec eff_detect_evil_mode
     sta muv_clear_detected
     sta vis_room_revealed
-#if C128
+#if HAL_LAYOUT_VISIBILITY_FORCE_REDRAW
     sta vis_force_redraw_pending
 #endif
     jsr monster_update_visibility_all

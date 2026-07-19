@@ -64,7 +64,7 @@
 // ============================================================
 // Dungeon room/generation constants (shared with other modules)
 // ============================================================
-.const MAX_ROOMS     = 8
+.const MAX_ROOMS     = hal_layout_dungeon_max_rooms
 .const DUNGEON_FLAGS = FLAG_LIT                  // $08 (rooms are lit)
 
 // Special room type constants
@@ -133,7 +133,7 @@ room_y:      .fill MAX_ROOMS, 0   // Interior top row
 room_w:      .fill MAX_ROOMS, 0   // Interior width
 room_h:      .fill MAX_ROOMS, 0   // Interior height
 room_lit:    .fill MAX_ROOMS, 0   // 0=dark, 1=lit (set by place_rooms)
-room_type:   .fill MAX_ROOMS, 0   // 0=normal, 1=pit, 2=vault, 3=nest
+room_type:   .fill MAX_ROOMS, 0   // Generation slot id; later 0=normal, 1=pit, 2=vault, 3=nest
 sr_room_idx: .byte 0              // Special room working room index
 sr_count:    .byte 0              // Special room working loop/count scratch
 sr_mode:     .byte 0              // 0=nest, 1=pit

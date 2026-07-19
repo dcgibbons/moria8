@@ -13,6 +13,9 @@
 //   hal_layout_input_row
 //   hal_layout_map_cols
 //   hal_layout_map_rows
+//   hal_layout_dungeon_max_rooms
+//   hal_layout_dungeon_overlap_local
+//   hal_layout_visibility_force_redraw
 //   hal_layout_store_price_col
 //   hal_layout_equipment_title_col
 //   hal_layout_equipment_footer_col
@@ -45,3 +48,5 @@
 // These constants describe common layout intent. They are not hardware
 // addresses and must match the platform's screen implementation. Platform code
 // may still expose legacy SCREEN_* and VIEWPORT_* names during migration.
+// HAL_LAYOUT_VISIBILITY_FORCE_REDRAW is defined when its corresponding boolean
+// constant is true.

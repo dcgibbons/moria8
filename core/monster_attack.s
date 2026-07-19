@@ -546,32 +546,6 @@ mon_atk_effect_fear:
 !mef_done:
     rts
 
-// mon_atk_effect_aggravate — Wake all sleeping monsters
-// Clobbers: A, X, Y, zp_ptr0
-mon_atk_effect_aggravate:
-    ldx #0
-!mea_loop:
-    cpx #MAX_MONSTERS
-    bcs !mea_done+
-
-    jsr monster_get_ptr
-    ldy #MX_TYPE
-    lda (zp_ptr0),y
-    cmp #EMPTY_SLOT
-    beq !mea_next+
-
-    // Set MF_AWAKE
-    ldy #MX_FLAGS
-    lda (zp_ptr0),y
-    ora #MF_AWAKE
-    sta (zp_ptr0),y
-
-!mea_next:
-    inx
-    jmp !mea_loop-
-!mea_done:
-    rts
-
 // player_death_check — Check if player is dead, set game flag
 // Sets zp_game_flags bit 0 if HP <= 0
 // Clobbers: A
