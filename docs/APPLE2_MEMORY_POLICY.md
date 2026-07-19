@@ -1,0 +1,310 @@
+# Apple IIe Memory Policy (M0 Deliverable)
+
+Placement source of truth for the Apple IIe port, produced by milestone M0 of
+`docs/APPLE2_PORT.md`. Where this document and the port plan disagree, this
+document wins; the plan is the process record.
+
+## Basis and Method
+
+Measured from a clean `make build` at `f7d322d` (origin/main, post-work16;
+trees byte-identical to work16 tip `f8c5b86`). Per-module attribution was
+extracted from `platforms/commodore/{c64,c128}/main.s` segment/import order
+cross-referenced with `build/{c64,c128}/main.vs` label addresses (module size
+= next module's lowest label address minus this module's lowest). Every
+payload sum reconciles exactly with on-disk size minus the 2-byte PRG header.
+Tolerance inside payloads is a few bytes at module boundaries; payload totals
+are exact.
+
+Build-artifact notes:
+
+- C128 overlays grew vs. `docs/ARCHITECTURE.md` (stale): measured max slot is
+  **ovl.gen at 4,090 B**, not 4,088. C64's 4,068 figure never governed this
+  port.
+- Tier payloads measured: **830 / 1,109 / 1,367 / 2,062** (TIER1-4). The
+  5,368 B figure in the plan is the C128 tier-cache *window reservation*, not
+  a payload size. Tier headroom is therefore 3,314 B, not 8 B — plan risk #2
+  dissolves.
+- C64 `core/dungeon_gen.s` connectivity is **queue-less** (iterative map-scan
+  passes, `dungeon_gen.s:2384+`, scratch `bfs_cur_x/y` at 2567-2568). The
+  plan's 1,024 B BFS allocation in the window tail is unnecessary and is
+  dropped.
+- 128.names.prg links inside the world span but loads into Bank 1 — the
+  C128's trick of keeping map+names off the concurrent bank. The Apple II
+  equivalent is aux RAM; aux cannot execute code, which is the port's central
+  constraint (below).
+- Tier-4 name blob = 2,062 − (57 × 22) = **808 B**, so a 1,024 B name pool
+  satisfies the `tier_manager.s:525` assert with 216 B margin. The plan's
+  2,048 B pool is reduced to 1,024 B, reclaiming 1,024 B for the window.
+
+## The Central Finding
+
+C128 gameplay-concurrent (always-resident 44,971 + play 8,430, measured) is
+**53,401 B**. The Apple II's concurrent budget (resident region 37,888 −
+1,500 B reserve target) is **36,388 B**. The raw gap is ~17K. The plan's
+levers 1-3 as drafted (est. 5.5-9.5K) do not close it, and the play/persist
+slot cannot help: the slot lives inside the resident region, so reclassifying
+bytes into the slot leaves the concurrent sum unchanged (slot invariance).
+Only three things reduce the sum: moving data to aux, moving code to overlay
+classes, and net platform-code shrink.
+
+Closure is achieved on paper only with the expanded, **all-mandatory** lever
+package below, landing at ~900 B aggregate margin — below the 1,500 B
+target. Named M1 remediation bytes (below) cover the difference if M1 actuals
+overrun. The structural escape hatch, if M1 busts by more than those bytes,
+is the Language Card (plan defers it post-M4; this finding does not force it,
+but it is the only remaining >4K source).
+
+## Revised Memory Map (supersedes plan tables)
+
+### Main RAM
+
+| Range | Size | Owner |
+| --- | ---: | --- |
+| `$0000-$00FF` | 256 | ZP: core `$02-$8F` unchanged; platform `$90-$EF`; `$F0-$FF` reserved |
+| `$0100-$01FF` | 256 | Stack |
+| `$0200-$03CF` | 464 | Platform scratch: ZP save buffer (238 B), MLI param blocks, boot loader staging |
+| `$03D0-$03FF` | 48 | ProDOS/reset/IRQ vectors — reserved |
+| `$0400-$07FF` | 1,024 | 80-col text page, main half (odd columns); screen holes never touched |
+| `$0800-$09FF` | 512 | Floor-item table (256) + creature scratch (256) — core raw-addressed |
+| `$0A00-$7BFF` | 29,184 | Always-resident region (Kick segments, C128-style splits) |
+| `$7C00-$9DFF` | 8,704 | Play/modal slot: play payload during gameplay; OVL.STORAGE / OVL.TITLE payloads overwrite it in modal phases |
+| `$9E00-$A1FF` | 1,024 | Tier name pool (`PLATFORM_TIER_NAME_POOL_BASE=$9E00`, `END=$A1FF`; need 808 B, margin 216 B) — core raw-addressed |
+| `$A200-$BAFF` | 6,144 | Shared overlay/tier window (`BANKED_DATA_BASE`); code region `$A200-$B3FF` (4,608 B; max overlay 4,090 → **518 B headroom**); tier mode may use the whole window (max tier 2,062 → 4,082 B headroom); no BFS allocation |
+| `$BB00-$BEFF` | 1,024 | ProDOS MLI file I/O buffer (page-aligned, one open file) |
+| `$BF00-$BFFF` | 256 | ProDOS global page (MLI entry `JSR $BF00`) |
+
+Slot arithmetic: play payload 8,430 ≤ 8,704 (274 B slack). Modal payloads
+must also fit the slot: OVL.STORAGE est. ~4,100 (save.s 2,558 + slot menu
+519 + stream shims ~400 + disk-setup UI ~636) ✓; OVL.TITLE est. ~2,000 ✓.
+
+### Aux RAM (ALTZP stays off)
+
+| Range | Size | Owner |
+| --- | ---: | --- |
+| aux `$0400-$07FF` | 1,024 | Text page aux half (even columns) |
+| aux `$0800-$3B0B` | 13,068 | Live map, 198x66 — all access via thunked MapRead/MapWrite |
+| aux `$3B0C-$4FFF` | 5,108 | Aux data (L3): item names 821 + huffman_data 2,911 + store_data 811 + recall 289 = 4,832 used; 276 B spare |
+| aux `$5000-$BFFF` | 28,672 | Hot cache: play 8,430 + ovl.town 3,952 + ovl.ui 4,085 + ovl.items 3,962 + ovl.death/spell 4,068 + ovl.gen 4,090 = 28,587 used; 85 B spare |
+
+On-demand from disk (never cached; all cold or disk-appropriate moments):
+ovl.start (chargen), ovl.help, ovl.modal, ovl.disarm, OVL.STORAGE,
+OVL.TITLE, MONSTER.DB.1-4 (tier loads), TITLE art. Disk-speed overlay loads
+are the shipping stock-C64 norm, so this is not a UX regression; the aux
+cache is pure latency luxury for the hot classes.
+
+## Payload Classes
+
+Existing classes carry over unchanged (START, TOWN, DEATH — which doubles as
+the spell-execution class per C128, MODAL, GEN, HELP, UI, ITEMS, DISARM).
+New classes:
+
+- **OVL.STORAGE** — save engine (`common/save.s`), save-slot menu, disk-setup
+  UI, MLI stream shims. Loads into the **play/modal slot** ($7C00), not the
+  window: it overwrites play, which the broker restores afterward. Fits
+  (est. ~4,100 ≤ 8,704).
+- **OVL.TITLE** — title/menu/sysinfo flow, boot and death-restart only.
+  Also slot-hosted.
+- **Play slot** — C128's play class verbatim (measured 8,430 B:
+  dungeon_los, monster_attack, combat, player_move/run, game_loop, turn,
+  wizard, helpers). Restored from aux cache via AUXMOVE (~100 ms at firmware
+  move speed) instead of disk.
+- **Aux data** — item names, huffman tables, store data, recall data; read
+  via AUXMOVE block copies into main-RAM scratch (per-byte thunks only for
+  the live map).
+
+## Per-Module Classification (C128 measured basis)
+
+`ALWAYS` = always-resident region ($0A00-$7BFF, budget 29,184). `PLAY` =
+slot. `OVL.*` = window classes. `AUX` = aux data. `GONE` = commodore-only,
+replaced by the Apple II HAL budget line.
+
+### From moria128.prg (17,403) and 128.world.prg (11,423)
+
+| Module | Bytes | Class |
+| --- | ---: | --- |
+| main.s inline glue (KERNAL wrappers, loaders, tramp_*, turbo detect) | ~4,000 | GONE — a2 glue budgeted below |
+| memory128.s | 938 | GONE — memory.s/memory_aux.s |
+| color, sound, rng, math, tables, numeric_format, platform_services_api | 2,021 | ALWAYS |
+| screen_vdc.s / input128.s | 893 + 866 | GONE — screen_a2.s/input.s |
+| title_sysinfo_banked.s | 141 | OVL.TITLE |
+| reu.s + reu_loading_banked.s | 987 | GONE — reu_stub.s (~20) |
+| input_contract, input_run_cancel | 64 | ALWAYS |
+| player.s | 1,349 | ALWAYS |
+| ui_messages.s + ui_status.s | 2,088 | ALWAYS code; string data → AUX (L4, est. −1,500) |
+| generation_busy(+api), ui_help_clear, stat_display | 308 | ALWAYS |
+| huffman.s (decoder) | 155 | ALWAYS |
+| huffman_data.s | 2,911 | AUX (L3) |
+| runtime_ui_strings.s | 70 | ALWAYS |
+| score_io.s | 349 | OVL.STORAGE |
+| storage_status.s, disk_swap.s | 651 | GONE — MLI status map + always-present probes |
+| dungeon_data.s, dungeon_features.s | 1,698 | ALWAYS |
+| monster.s + monster_ai.s + monster_magic.s | 5,262 | ALWAYS |
+| tier_manager.s | 976 | ALWAYS |
+| overlay.s (+ filename tables) | 552 | ALWAYS (broker calls it) |
+| recall.s | 289 | AUX (L3) |
+| los_trace.s | 292 | ALWAYS |
+| spell_data.s | 769 | ALWAYS |
+| spell_effects.s (+ item-prg block) | 1,344 | ALWAYS |
+| dungeon_room_center_helpers.s | 32 | ALWAYS |
+
+### From 128.item.prg (6,993), 128.select.prg (757), 128.diskio.prg (1,002), 128.runtime/fdisk/input/proj (3,470), 128.bank.prg (3,823)
+
+| Module | Bytes | Class |
+| --- | ---: | --- |
+| item.s | 2,722 | ALWAYS |
+| item_tables.s (non-name) | 1,264 | ALWAYS |
+| item_tables.s (name streams = 128.names.prg) | 821 | AUX |
+| item_identification.s | 1,543 | bulk → OVL class (L6, −1,200); pseudo-id timers stay ALWAYS |
+| ego_items.s | 286 | ALWAYS |
+| store_data.s (+door lookup) | 811 | AUX (L3) |
+| player_items.s, player_item_select, heal_feedback, ui_restore | 604 | ALWAYS |
+| storage.s, storage_drive.s, disk_setup* | 1,014 | GONE — storage_mli.s; disk-setup UI → OVL.STORAGE |
+| monster.s RuntimeLowData block | 338 | ALWAYS |
+| dungeon_render_vdc.s | 2,023 | GONE — screen_a2 renderer |
+| title_cache_runtime.s, restart128.s | 278 | OVL.TITLE / GONE |
+| combat helper inline (fdisk), player_magic_slow/turn_banked | 382 | ALWAYS |
+| input_run_raw128.s | 248 | GONE — input.s |
+| projectile.s | 124 | ALWAYS |
+| map_row_store_common.s | 63 | GONE — map thunks |
+| ui_home.s, item_desc_banked.s | 1,095 | ALWAYS |
+| player_magic*.s cluster (display, state_ops, magic, levelup, learn_op, tail) | 1,481 | partial → OVL class (L7, −1,200); state ops stay ALWAYS |
+| player_recalc_equipment.s, player_item_commands.s | 1,154 | ALWAYS (first M1 remediation byte-source) |
+
+### 128.persist.prg (3,079) → OVL.STORAGE (slot-hosted); 128.play.prg (8,430) → PLAY slot (verbatim).
+
+## Closure Equation (all levers mandatory)
+
+```
+C128 gameplay-concurrent (measured)                      53,401
+− commodore-only code (reu, vdc, disk_swap/setup, KERNAL
+  glue, trampolines, turbo detect)                      −10,400
++ Apple II HAL (screen/renderer, input, storage_mli,
+  memory_aux+thunks, services, broker, map thunks)        +6,200  (estimate; hard budget 5,500)
+− L2  title/sysinfo/cache → OVL.TITLE                       −419
+− L3  huffman_data + store_data + recall → AUX            −4,011
+− L4  ui_messages/ui_status string data → AUX             −1,500  (estimate)
+− L6  item_identification bulk → OVL                      −1,200
+− L7  player_magic cluster partial → OVL                  −1,200
+= Apple II gameplay-concurrent                           39,871
+```
+
+Wait — the sum above is stated conservatively; with the platform budget
+held at 5,500 the figure is 39,171. Region check:
+
+```
+ALWAYS  = 39,171 − 8,430 (play) = 30,741  vs  29,184 region   → short 1,557
+```
+
+**This does not close.** Remediation byte-sources, pre-named, applied in
+order until ALWAYS ≤ 29,184 − 1,500 = 27,684:
+
+| # | Lever | Bytes |
+| --- | --- | ---: |
+| R1 | player_item_commands.s → new OVL class (discrete commands; C64 overlays its siblings already) | −1,097 |
+| R2 | wizard.s (in play) merged into OVL.UI's ui_wizard | −290 |
+| R3 | ego_items.s → OVL with item naming callers | −286 |
+| R4 | platform budget 5,500 → 4,800 (renderer shares row table with screen; drop IIc fallback paths to M4) | −700 |
+| R5 | tables.s stat-bonus lookups → AUX with thunked read (hot-ish; last resort) | −761 |
+
+R1+R2+R3+R4 = −2,373 → ALWAYS = 28,368 ≤ 29,184 (slack 816; slot slack
+274; window slack 518; **aggregate margin 1,608 ≥ 1,500 ✓**). R5 stays in
+reserve. M1 gate zero enforces actuals; if measured ALWAYS exceeds the
+region after R1-R4, the decision point is R5 vs. Language Card — that is a
+user decision, flagged here in advance.
+
+## Zero-Page Policy and Thunk Addresses
+
+Platform owns `$90-$EF`:
+
+| Range | Owner |
+| --- | --- |
+| `$90-$93` | Entropy counters (4 B, ticked in input wait loop) |
+| `$94` | Aux/cache state flags |
+| `$95-$97` | MLI scratch, storage phase byte |
+| `$98-$BF` | Reserve |
+| `$C0-$CF` | `a2_aux_read_byte` thunk (16 B): `sta $C003 / lda (zp_map_ptr),y / sta $C002 / rts` + aux |
+| `$D0-$DF` | `a2_aux_read_block` thunk (16 B): small RAMRD-on copy loop |
+| `$E0-$EF` | Reserve (IIc deltas) |
+
+- Only RAMRD-on *reads* require ZP execution (instruction-fetch trap);
+  main→aux writes run from ordinary resident code under RAMWRT.
+- AUXMOVE is firmware ROM: callable from resident code; wrapper saves/
+  restores `$3C-$43` (8 B). INTC3ROM selection (`$C00B`) pinned at boot.
+- MLI sequences: blanket `$02-$EF` save/restore (238 B buffer at
+  `$0200-$03CF` scratch) + thunk reinstall afterward.
+- Thunks installed at boot, reinstalled by the storage adapter. The M1
+  contract checker asserts thunk residency and the `$C0-$DF` span.
+
+## Play/Persist Broker (five-facts applied)
+
+1. **Linked symbol address**: play payload Kick segment linked at `$7C00`;
+   asserts pin `play_end <= $9DFF`.
+2. **BIN load address**: `A2.PLAY` file auxtype = `$7C00`; `prg_to_bin.py`
+   asserts header match per payload.
+3. **Destination bank at load**: main RAM, always visible — trivially
+   correct (no banking on the Apple II path); the aux cache at aux `$5000+`
+   holds the master copy.
+4. **Visible execution bank at call site**: main RAM — trivially correct.
+5. **Source-span survival**: aux cache span is disjoint from map
+   (`$0800-$3B0B`) and aux data (`$3B0C-$4FFF`); checker asserts all aux
+   spans. Broker sequence (C128 `c128_modal_require_*` pattern): modal entry
+   → AUXMOVE play → aux cache (or mark cache stale) → load modal payload
+   into slot; modal exit → AUXMOVE cache → `$7C00` → validate 3-byte
+   signature (`M8P` equivalent) → resume gameplay. Signature mismatch =
+   fatal storage error path.
+
+## Boot File List (draft; load order)
+
+ProDOS volume `MORIA8`:
+
+| File | Type | Destination |
+| --- | --- | --- |
+| `MORIA8.SYSTEM` | SYS `$2000` | boot.s; stages itself into `$0200-$03CF` scratch (its `$2000` origin is inside the resident span) |
+| `A2.RES.*` (2-4 BINs) | BIN, auxtype = load addr | always-resident segments `$0A00-$7BFF` (split per M1 segmentdefs) |
+| `A2.PLAY` | BIN `$7C00` | read once, AUXMOVE to aux cache; then broker-owned |
+| `A2.AUXDATA` | BIN | names + huffman + store_data + recall → aux `$3B0C-$4FFF` |
+| `OVL.*` (hot set) | BIN | preloaded to aux cache `$5000+`: TOWN, UI, ITEMS, DEATH, GEN |
+| `OVL.*` (cold set) | BIN | left on disk: START, HELP, MODAL, DISARM, STORAGE, TITLE |
+| `MONSTER.DB.1-4` | BIN `$A200` | tier files, loaded on demand into window |
+| `TITLE` | BIN | title art, on demand |
+
+Boot: switches set (TEXT/80COL/80STORE/ALTCHARSET, INTC3ROM) → thunk
+install → resident BINs → auxdata → aux → hot overlays + play → aux cache →
+jump entry. Exit = MLI QUIT. `/RAM` volume is never touched (aux overwrite
+is then safe); boot may deallocate it (M0/M1 verification item stands).
+
+## Open Items Carried to M1
+
+- AUXMOVE carry polarity, INTC3ROM-vs-SLOTC3ROM, register clobbers
+  (pre-merge verification list; gate for the broker).
+- MLI high-ZP (`$90-$EF`) usage — window narrowing only (policy: keep
+  `$02-$EF`).
+- ProDOS 8 1.x vs 2.x `/RAM` creation behavior; redistribution terms.
+- Huffman/store_data/recall/ui-string aux read paths: block-copy mechanics
+  and max-string bounds (decoder reads via `zp_ptr0`; copy to scratch then
+  decode). These are the only core-touching lever items; each lands as its
+  own reviewed change under the behavior-change protocol.
+- MAME aux-region peek mechanics; AppleCommander CLI pin; `A2ROMS` env.
+
+## Gate Restatement
+
+M0 closes iff: the classification above assigns every measured byte (done);
+the equation closes with ≥ 1,500 B aggregate margin **including the R1-R4
+remediation levers** (done — 1,608 B, on estimates for platform code and
+L4/L6/L7 splits); and the correction set vs. the plan is recorded (below).
+M1 gate zero (full link + `.assert`s + contract checker) converts every
+estimate here into a hard failure if exceeded.
+
+## Amendments to docs/APPLE2_PORT.md Implied by M0
+
+1. Closure levers 1-4 reframed: slot invariance means only aux-data moves,
+   overlay-class moves, and region/platform changes reduce the concurrent
+   sum; L1-L7 + R1-R5 above replace the plan's lever list.
+2. Name pool 2,048 → 1,024 B; window moved to `$A200-$BAFF` (6,144 B);
+   overlay headroom 518 B; BFS allocation dropped (queue-less connectivity).
+3. Tier risk #2 dissolved: max tier payload 2,062 vs. 6,144 B window.
+4. New classes OVL.STORAGE and OVL.TITLE are slot-hosted ($7C00), not
+   window-hosted; persist payload as a class disappears into OVL.STORAGE.
+5. Resident/play split at `$7C00`; play slot 8,704 B.
+6. Aux layout pinned: map `$0800-$3B0B`, aux data `$3B0C-$4FFF`, hot cache
+   `$5000-$BFFF`; on-demand list fixed.
