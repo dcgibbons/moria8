@@ -3956,7 +3956,7 @@ c128_resident_select_end:
 
 .segment C128ResidentPersist
 c128_resident_persist_start:
-#import "../common/save.s"
+#import "../../shared/save.s"
 save_prepare_slot_prompt:
     clc
     rts

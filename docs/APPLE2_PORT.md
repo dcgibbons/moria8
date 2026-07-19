@@ -14,15 +14,22 @@ empty).** M0 measurement ran against that tree and produced
 `docs/APPLE2_MEMORY_POLICY.md`. (Branch `work15` merged earlier as PR
 #46.)
 
-Open hardware/tooling verification items (formerly the pre-merge list,
-still required by M0/M1):
+Open hardware/tooling verification items (formerly the pre-merge list):
 
 - AUXMOVE ($C311) carry polarity, parameter behavior, INTC3ROM-vs-
-  SLOTC3ROM selection ($C00B), and register clobbers
-- MAME `apple2ee` Lua memory-peek spike (main and aux RAM)
-- AppleCommander CLI flag verification and version pin
-- ProDOS 8 redistribution terms check
-- `tools/prg_to_bin.py`
+  SLOTC3ROM selection ($C00B), and register clobbers — OPEN: firmware,
+  not covered by the ProDOS TRM; the MAME spike verifies, and the M2
+  boot scenario proves it empirically regardless
+- MAME `apple2ee` Lua memory-peek spike (main and aux RAM) — OPEN
+- AppleCommander CLI — VERIFIED (ac 13.2 docs): `-pro140 <img> <vol>`
+  creates; `-p <img> <name> <type> [0xaddr]` puts stdin with auxtype =
+  load address (`sys`/`bin` types). Gotcha: replace requires delete
+  first, so `diskapple2` recreates the image per build
+- ProDOS redistribution — RESOLVED (policy): 2.4.3 is freely
+  distributed at prodos8.com (John Brooks) but carries no explicit
+  license text; ship without `PRODOS` and require a user-supplied file
+  (like the `KICKASS` override), source documented
+- `tools/prg_to_bin.py` — DONE
 
 ## Locked Decisions
 
@@ -55,7 +62,7 @@ Reference files to study:
 - `platforms/commodore/c128/hal/layout.s` — 80-column layout values
 - `platforms/commodore/c64/hal/*` — manifest/policy templates
 - `platforms/commodore/common/overlay.s` — `overlay_load` semantics
-- `platforms/commodore/common/save.s` — storage primitive surface
+- `platforms/shared/save.s` — storage primitive surface
 - Branch `cx16`, process shape only:
   `platforms/cx16/{check_memory_contract.py, harness_smoke.py, Makefile,
   memory.s}`
@@ -100,7 +107,7 @@ for per-module placement, the closure ledger, and the aux manifest.
 | --- | ---: | --- |
 | `$0000-$00FF` | 256 | ZP: core keeps `$02-$8F` unchanged; platform owns `$90-$EF` (state, 4 entropy counter bytes, two 16 B aux-read thunks at `$C0-$DF`); `$F0-$FF` reserved |
 | `$0100-$01FF` | 256 | Stack |
-| `$0200-$03CF` | 464 | Platform scratch: ZP save buffer (238 B), MLI parameter blocks, loader state |
+| `$0200-$03CF` | 464 | Platform scratch: ZP save buffer (142 B), MLI parameter blocks, loader state |
 | `$03D0-$03FF` | 48 | ProDOS/reset/IRQ vectors — reserved |
 | `$0400-$07FF` | 1,024 | 80-col text page, main half (odd columns); screen holes (`$x78-$x7F`) never touched |
 | `$0800-$09FF` | 512 | Floor-item table (256) + creature scratch (256) — core raw-addressed |
@@ -114,9 +121,11 @@ for per-module placement, the closure ledger, and the aux manifest.
 The C64 RuntimeBanked class (`$F000`, 4,080 B) disappears as a class:
 there is no ROM shadow on the Apple II, so its content is ordinary
 resident bytes already inside the 51,481 B figure. Language Card RAM is
-not used (ProDOS owns it; whether the `$D000` bank 2 area is partially
-free is LOW confidence — a post-M4 growth area only, after verification
-against the ProDOS 8 Technical Reference).
+not used — VERIFIED against the ProDOS 8 TRM (§3.3 Figure 3-1): the
+MLI itself resides in the main LC (`$D000-$FFFF`), and aux LC is
+partially used by ProDOS/BASIC.SYSTEM. The system bit map (§3.3.3)
+protects only pages 0, 1, 4-7, and BF; our `$BB00` I/O buffer is
+supplied per-OPEN and marked normally — no conflict by construction.
 
 ### Aux RAM (behind accessors only; ALTZP stays off)
 
@@ -216,16 +225,14 @@ the game uses no Applesoft, no Monitor, and runs SEI with no interrupt
 sources (which also neutralizes the firmware-IRQ-clobbers-`$45`
 hazard). Contention is handled by construction:
 
-1. ProDOS MLI calls (driver ZP usage is version-dependent and
-   deliberately not relied upon): the storage adapter saves/restores the
-   full working window `$02-$EF` (238 B, ~4 ms) around every MLI
-   sequence — core `$02-$8F` plus platform `$90-$EF` state, so no
-   ProDOS version's high-ZP behavior can corrupt entropy counters, aux
-   state, or thunk bytes — reusing the existing VOLATILE-zone
-   caller-save pattern. Final architecture; the cost is invisible next
-   to disk I/O. Narrowing back to `$02-$8F` is allowed only after
-   verified MLI ZP usage (M0/M1 item); the thunk reinstall after MLI
-   sequences stays regardless, as belt and braces.
+1. ProDOS MLI calls: the storage adapter saves/restores the core
+   window `$02-$8F` (142 B, ~2 ms) around every MLI sequence,
+   reusing the existing VOLATILE-zone caller-save pattern. Verified
+   against the ProDOS 8 TRM (§3.3.1): the MLI uses `$40-$4E` (restored
+   per call) and its disk driver uses `$3A-$3F` (not restored) — the
+   whole MLI ZP footprint is inside the core window, high ZP is never
+   touched. The thunk reinstall after MLI sequences stays as belt and
+   braces. Final architecture; the cost is invisible next to disk I/O.
 2. AUXMOVE clobbers `$3C-$43`: the wrapper saves/restores 8 bytes.
 3. Boot-time firmware init precedes core ZP init.
 
@@ -271,10 +278,10 @@ continues to gate core.
   segment-start drift).
 - AppleCommander (`ac.jar`) via `tools/applecommander/` auto-download
   mirroring the KickAss rule: `-pro140 moria8.po MORIA8` to create;
-  insert `MORIA8.SYSTEM` as SYS/`$FF` and payloads/overlays/tiers/title
-  as BIN/`$06` with auxtype = load address. HIGH confidence on
-  capability, MODERATE on exact current CLI flags — pin and verify
-  during M1 wiring. Fallback: cadius.
+  `-p moria8.po <NAME> sys 0x2000` / `bin 0x<addr>` to insert payloads
+  (auxtype = load address). VERIFIED against the ac 13.2 docs; pin the
+  version during M1 wiring. ac requires delete-before-replace, so
+  `diskapple2` recreates the image per build. Fallback: cadius.
 - Root Makefile: opt-in delegation exactly like cx16's verified pattern
   (`buildapple2 runapple2 diskapple2 testapple2 testapple2-smoke
   testapple2-runtime testapple2-memory-contract[-selftest]` delegate to
@@ -285,15 +292,18 @@ continues to gate core.
   stages itself into the `$0200-$03CF` scratch block (its `$2000`
   origin is inside the resident payload span), MLI-READs each resident
   BIN to its home, sets soft switches, preloads aux caches (main-to-aux
-  via RAMWRT, trivially safe), and jumps to entry. ProDOS 8 redistribution terms are MODERATE
-  confidence — if unclear, require a user-supplied `PRODOS` file like
-  the `KICKASS` override.
+  via RAMWRT, trivially safe), and jumps to entry. The `PRODOS` kernel
+  file is user-supplied (2.4.3 from prodos8.com; no explicit license
+  text, so it is not vendored — same pattern as the `KICKASS`
+  override).
 - Emulator-launching test targets run escalated on the first attempt
   (mirrors the VICE rule); static gates stay sandboxed.
 
 ## Storage/Save Decision (final)
 
-Reuse `platforms/commodore/common/save.s` over buffered MLI stream
+Reuse `platforms/shared/save.s` (promoted from
+`platforms/commodore/common/`; move verified byte-identical across all
+65 build artifacts) over buffered MLI stream
 primitives, as permanent architecture. Basis: `save.s` (2,280 lines of
 serialization/versioning/checksum/slot logic shared by three shipping
 platforms) consumes storage exclusively through `hal_storage_*`
@@ -311,9 +321,8 @@ slot-hosted at `$7C00` (overwrites play; broker restores it after).
 M0 outcome: est. ~4,100 B <= 8,704 B slot — fits as one class, no
 engine/UI split needed.
 
-User decision needed: promote `save.s` to `platforms/shared/`
-(recommended; mechanical, touches three platforms' imports) vs. a
-documented cross-tree import (works today).
+`save.s` now lives at `platforms/shared/save.s` (user-approved
+promotion; verified byte-identical). apple2 imports it from there.
 
 ## Test Harness (MAME apple2e)
 
@@ -437,8 +446,9 @@ Gate: full `testapple2` + `diskapple2` artifact + docs.
    AUXMOVE with signature validation), asserted in M1, exercised by
    every M3 save/modal scenario.
 5. **MLI/driver ZP or buffer interactions.** Retired by construction in
-   M1: blanket `$02-$EF` save/restore + thunk reinstall around every
-   MLI sequence.
+   M1: blanket `$02-$8F` save/restore + thunk reinstall around every
+   MLI sequence; MLI ZP footprint (`$3A-$4E`) verified against the
+   ProDOS 8 TRM §3.3.1.
 6. **AppleCommander flags / SYS conventions / ProDOS redistribution.**
    Can stall M1/M2, never forces placement redesign. Verified during M1
    wiring; `PRODOS`-file env override if terms are unclear.
@@ -458,8 +468,8 @@ Gate: full `testapple2` + `diskapple2` artifact + docs.
    fallback if a real conflict ever surfaces; don't pre-pay.
 3. `core/item_actions_overlay.s:340`: no change (false positive —
    item-ID compare).
-4. User decision: promote `platforms/commodore/common/save.s` to
-   `platforms/shared/` (recommended) vs. documented cross-tree import.
+4. Done: `save.s` promoted to `platforms/shared/` (user-approved;
+   byte-identical rebuild across c64/c128/plus4).
 5. Optional M4 hygiene (user's call): extend
    `tools/check_hal_manifests.py` (hardcodes c64/c128/plus4; cx16 did
    not extend it — apple2's `manifest.json` can stand as

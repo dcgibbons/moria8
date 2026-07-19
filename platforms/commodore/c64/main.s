@@ -440,7 +440,7 @@ ol_target:        .byte 0
 #import "../../../core/store_data.s"
 #import "../../../core/runtime_ui_strings.s"
 #import "../common/compat/io_kernal_consts.s"
-#import "../common/save.s"
+#import "../../shared/save.s"
 #import "../common/disk_swap.s"
 #import "../../../core/score_io.s"
 #import "../common/title_screen.s"

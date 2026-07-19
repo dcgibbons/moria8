@@ -226,7 +226,7 @@ hal_storage_save_read_name:
     .byte $2c, $53, $2c, $52
 .label hal_storage_save_read_name_len = * - hal_storage_save_read_name
     .byte $52
-#import "../../common/save.s"
+#import "../../../shared/save.s"
 #import "../../common/disk_swap.s"
 
 // Strings referenced by imported modules but defined in main.s

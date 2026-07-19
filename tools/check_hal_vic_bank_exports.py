@@ -19,7 +19,7 @@ PLATFORM_FILES = {
     "c128": ROOT / "platforms/commodore/c128/hal/memory_bank_consts.s",
 }
 
-COMMON_SAVE = ROOT / "platforms/commodore/common/save.s"
+COMMON_SAVE = ROOT / "platforms/shared/save.s"
 FORBIDDEN_COMMON_TOKENS = ("$dd00",)
 
 

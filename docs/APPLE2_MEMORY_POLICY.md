@@ -62,7 +62,7 @@ but it is the only remaining >4K source).
 | --- | ---: | --- |
 | `$0000-$00FF` | 256 | ZP: core `$02-$8F` unchanged; platform `$90-$EF`; `$F0-$FF` reserved |
 | `$0100-$01FF` | 256 | Stack |
-| `$0200-$03CF` | 464 | Platform scratch: ZP save buffer (238 B), MLI param blocks, boot loader staging |
+| `$0200-$03CF` | 464 | Platform scratch: ZP save buffer (142 B), MLI param blocks, boot loader staging |
 | `$03D0-$03FF` | 48 | ProDOS/reset/IRQ vectors — reserved |
 | `$0400-$07FF` | 1,024 | 80-col text page, main half (odd columns); screen holes never touched |
 | `$0800-$09FF` | 512 | Floor-item table (256) + creature scratch (256) — core raw-addressed |
@@ -98,7 +98,7 @@ Existing classes carry over unchanged (START, TOWN, DEATH — which doubles as
 the spell-execution class per C128, MODAL, GEN, HELP, UI, ITEMS, DISARM).
 New classes:
 
-- **OVL.STORAGE** — save engine (`common/save.s`), save-slot menu, disk-setup
+- **OVL.STORAGE** — save engine (`platforms/shared/save.s`), save-slot menu, disk-setup
   UI, MLI stream shims. Loads into the **play/modal slot** ($7C00), not the
   window: it overwrites play, which the broker restores afterward. Fits
   (est. ~4,100 ≤ 8,704).
@@ -230,8 +230,12 @@ Platform owns `$90-$EF`:
   main→aux writes run from ordinary resident code under RAMWRT.
 - AUXMOVE is firmware ROM: callable from resident code; wrapper saves/
   restores `$3C-$43` (8 B). INTC3ROM selection (`$C00B`) pinned at boot.
-- MLI sequences: blanket `$02-$EF` save/restore (238 B buffer at
-  `$0200-$03CF` scratch) + thunk reinstall afterward.
+- MLI sequences: blanket `$02-$8F` save/restore (142 B buffer at
+  `$0200-$03CF` scratch) + thunk reinstall afterward. Verified against
+  the ProDOS 8 TRM (prodos8.com/docs/techref/memory-use/, §3.3.1): the
+  MLI uses `$40-$4E` (restored before each call completes) and its
+  disk driver uses `$3A-$3F` (not restored) — the entire MLI ZP
+  footprint sits inside the core window; high ZP is never touched.
 - Thunks installed at boot, reinstalled by the storage adapter. The M1
   contract checker asserts thunk residency and the `$C0-$DF` span.
 
@@ -275,11 +279,24 @@ is then safe); boot may deallocate it (M0/M1 verification item stands).
 
 ## Open Items Carried to M1
 
-- AUXMOVE carry polarity, INTC3ROM-vs-SLOTC3ROM, register clobbers
-  (pre-merge verification list; gate for the broker).
-- MLI high-ZP (`$90-$EF`) usage — window narrowing only (policy: keep
-  `$02-$EF`).
-- ProDOS 8 1.x vs 2.x `/RAM` creation behavior; redistribution terms.
+- AUXMOVE carry polarity, INTC3ROM-vs-SLOTC3ROM, register clobbers —
+  firmware, not covered by the ProDOS TRM; the MAME spike (needs
+  `A2ROMS`) is the verifier, and the M2 boot scenario proves it
+  empirically regardless.
+- MLI ZP usage — RESOLVED (TRM §3.3.1): `$3A-$4E` only; save window set
+  to `$02-$8F` (142 B).
+- ProDOS 8 1.x vs 2.x `/RAM` creation behavior (TRM §3.2 confirms
+  `/RAM` first-search on 1.x; 2.x behavior to confirm in the MAME
+  spike). `PRODOS` file sourcing: 2.4.3 is freely distributed at
+  prodos8.com (John Brooks) but no explicit license text — policy:
+  user-supplied `PRODOS` file (like the `KICKASS` override) with the
+  source documented.
+- ProDOS MLI residency — RESOLVED (TRM §3.3 Figure 3-1): the MLI
+  itself lives in the main Language Card (`$D000-$FFFF`); aux LC is
+  partially used by ProDOS/BASIC.SYSTEM. LC-for-code stays out of
+  scope. System bit map (§3.3.3) protects pages 0, 1, 4-7, BF only;
+  our `$BB00` buffer is supplied per-OPEN — no conflict by
+  construction.
 - Huffman/store_data/recall/ui-string aux read paths: block-copy mechanics
   and max-string bounds (decoder reads via `zp_ptr0`; copy to scratch then
   decode). These are the only core-touching lever items; each lands as its
