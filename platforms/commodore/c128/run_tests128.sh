@@ -3173,6 +3173,52 @@ build_overlay_state_boot_assets() {
     return 0
 }
 
+c128_patch_scripted_boot_d71() {
+    local target_d71="$1"
+    local build_log="$2"
+    local c1541_bin="${C1541:-c1541}"
+
+    rm -f "$target_d71"
+    if ! cp ../../../build/test/c128/moria128.d71 "$target_d71"; then
+        return 1
+    fi
+    "$c1541_bin" -attach "$target_d71" \
+        -delete "moria128" \
+        -delete "ovl.town" \
+        -delete "ovl.start" \
+        -delete "ovl.death" \
+        -delete "ovl.gen" \
+        -delete "128.runtime" \
+        -delete "128.input" \
+        -delete "128.proj" \
+        -delete "128.fdisk" \
+        -delete "128.diskio" \
+        -delete "128.world" \
+        -delete "128.item" \
+        -delete "128.names" \
+        -delete "128.select" \
+        -delete "128.persist" \
+        -delete "128.play" \
+        -delete "128.bank" \
+        -write ../../../build/test/c128/moria128.prg "moria128" \
+        -write ../../../build/test/c128/ovl.town "ovl.town" \
+        -write ../../../build/test/c128/ovl.start "ovl.start" \
+        -write ../../../build/test/c128/ovl.death "ovl.death" \
+        -write ../../../build/test/c128/ovl.gen "ovl.gen" \
+        -write ../../../build/test/c128/128.runtime.prg "128.runtime" \
+        -write ../../../build/test/c128/128.input.prg "128.input" \
+        -write ../../../build/test/c128/128.proj.prg "128.proj" \
+        -write ../../../build/test/c128/128.fdisk.prg "128.fdisk" \
+        -write ../../../build/test/c128/128.diskio.prg "128.diskio" \
+        -write ../../../build/test/c128/128.world.prg "128.world" \
+        -write ../../../build/test/c128/128.item.prg "128.item" \
+        -write ../../../build/test/c128/128.names.prg "128.names" \
+        -write ../../../build/test/c128/128.select.prg "128.select" \
+        -write ../../../build/test/c128/128.persist.prg "128.persist" \
+        -write ../../../build/test/c128/128.play.prg "128.play" \
+        -write ../../../build/test/c128/128.bank.prg "128.bank" >>"$build_log" 2>&1
+}
+
 build_scripted_input_boot_assets() {
     if [ "$SCRIPTED_INPUT_BOOT_ASSETS_BUILT" -eq 1 ] && c128_active_variant_is "scripted_input"; then
         return
@@ -3181,7 +3227,7 @@ build_scripted_input_boot_assets() {
     build_boot_assets || return 1
 
     if [ "$PERF_P1_MODE" != "1" ] && c128_active_variant_is "scripted_input" && ! c128_outputs_need_refresh \
-            ../../../build/test/c128/moria128.prg ../../../build/test/c128/moria128_scriptedinput.d64 ../../../build/test/c128/main.vs -- \
+            ../../../build/test/c128/moria128.prg ../../../build/test/c128/moria128_scriptedinput.d71 ../../../build/test/c128/main.vs -- \
             main.s ../../../build/test/c128/boot128.prg ../../../build/test/c128/title ../../../build/test/c128/monster.db.1 ../../../build/test/c128/monster.db.2 \
             ../../../build/test/c128/monster.db.3 ../../../build/test/c128/monster.db.4 ../../../build/test/c128/ovl.town ../../../build/test/c128/ovl.start ../../../build/test/c128/ovl.death \
             ../../../build/test/c128/ovl.gen ../../../build/test/c128/128.runtime.prg ../../../build/test/c128/128.input.prg ../../../build/test/c128/128.proj.prg ../../../build/test/c128/128.fdisk.prg ../../../build/test/c128/128.world.prg ../../../build/test/c128/128.item.prg ../../../build/test/c128/128.names.prg ../../../build/test/c128/128.select.prg ../../../build/test/c128/128.persist.prg ../../../build/test/c128/128.play.prg ../../../build/test/c128/128.bank.prg; then
@@ -3191,8 +3237,7 @@ build_scripted_input_boot_assets() {
 
     local build_log
     build_log="$(test128_tmp_file test128_boot_scripted_input_build.log)"
-    local c1541_bin="${C1541:-c1541}"
-    local scripted_d64="../../../build/test/c128/moria128_scriptedinput.d64"
+    local scripted_d71="../../../build/test/c128/moria128_scriptedinput.d71"
     local perf_define=()
     if [ "$PERF_P1_MODE" = "1" ]; then
         perf_define=(-define PERF_P1)
@@ -3208,32 +3253,8 @@ build_scripted_input_boot_assets() {
         return 1
     fi
 
-    if ! "$c1541_bin" -format "moria128,m8" d64 "$scripted_d64" \
-            -attach "$scripted_d64" \
-            -write ../../../build/test/c128/boot128.prg "moria8.128" \
-            -write ../../../build/test/c128/moria128.prg "moria128" \
-            -write ../../../build/test/c128/title "title" \
-            -write ../../../build/test/c128/monster.db.1 "monster.db.1" \
-            -write ../../../build/test/c128/monster.db.2 "monster.db.2" \
-            -write ../../../build/test/c128/monster.db.3 "monster.db.3" \
-            -write ../../../build/test/c128/monster.db.4 "monster.db.4" \
-            -write ../../../build/test/c128/ovl.town "ovl.town" \
-            -write ../../../build/test/c128/ovl.start "ovl.start" \
-            -write ../../../build/test/c128/ovl.death "ovl.death" \
-            -write ../../../build/test/c128/ovl.gen "ovl.gen" \
-            -write ../../../build/test/c128/128.runtime.prg "128.runtime" \
-            -write ../../../build/test/c128/128.input.prg "128.input" \
-			-write ../../../build/test/c128/128.proj.prg "128.proj" \
-            -write ../../../build/test/c128/128.fdisk.prg "128.fdisk" \
-            -write ../../../build/test/c128/128.diskio.prg "128.diskio" \
-            -write ../../../build/test/c128/128.world.prg "128.world" \
-            -write ../../../build/test/c128/128.item.prg "128.item" \
-            -write ../../../build/test/c128/128.names.prg "128.names" \
-            -write ../../../build/test/c128/128.select.prg "128.select" \
-            -write ../../../build/test/c128/128.persist.prg "128.persist" \
-            -write ../../../build/test/c128/128.play.prg "128.play" \
-            -write ../../../build/test/c128/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
-        echo "FAIL (scripted-input disk build failed)"
+    if ! c128_patch_scripted_boot_d71 "$scripted_d71" "$build_log"; then
+        echo "FAIL (scripted-input D71 patch failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
@@ -3434,7 +3455,7 @@ build_scripted_spell_boot_assets() {
     build_boot_assets || return 1
 
     if c128_active_variant_is "scripted_spell" && ! c128_outputs_need_refresh \
-            ../../../build/test/c128/moria128.prg ../../../build/test/c128/moria128_scriptedspell.d64 ../../../build/test/c128/main.vs -- \
+            ../../../build/test/c128/moria128.prg ../../../build/test/c128/moria128_scriptedspell.d71 ../../../build/test/c128/main.vs -- \
             main.s ../../../build/test/c128/boot128.prg ../../../build/test/c128/title ../../../build/test/c128/monster.db.1 ../../../build/test/c128/monster.db.2 \
             ../../../build/test/c128/monster.db.3 ../../../build/test/c128/monster.db.4 ../../../build/test/c128/ovl.town ../../../build/test/c128/ovl.start ../../../build/test/c128/ovl.death \
             ../../../build/test/c128/ovl.gen ../../../build/test/c128/128.runtime.prg ../../../build/test/c128/128.input.prg ../../../build/test/c128/128.proj.prg ../../../build/test/c128/128.fdisk.prg ../../../build/test/c128/128.world.prg ../../../build/test/c128/128.item.prg ../../../build/test/c128/128.names.prg ../../../build/test/c128/128.select.prg ../../../build/test/c128/128.persist.prg ../../../build/test/c128/128.play.prg ../../../build/test/c128/128.bank.prg; then
@@ -3444,8 +3465,7 @@ build_scripted_spell_boot_assets() {
 
     local build_log
     build_log="$(test128_tmp_file test128_boot_scripted_spell_build.log)"
-    local c1541_bin="${C1541:-c1541}"
-    local scripted_d64="../../../build/test/c128/moria128_scriptedspell.d64"
+    local scripted_d71="../../../build/test/c128/moria128_scriptedspell.d71"
 
     if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 -define C128 :OVL_OUT=../../../build/test/c128 -define C128_TEST_SCRIPTED_SPELL -o ../../../build/test/c128/moria128.prg >"$build_log" 2>&1; then
         echo "FAIL (scripted-spell main assembly failed)"
@@ -3455,32 +3475,8 @@ build_scripted_spell_boot_assets() {
         return 1
     fi
 
-    if ! "$c1541_bin" -format "moria128,m8" d64 "$scripted_d64" \
-            -attach "$scripted_d64" \
-            -write ../../../build/test/c128/boot128.prg "moria8.128" \
-            -write ../../../build/test/c128/moria128.prg "moria128" \
-            -write ../../../build/test/c128/title "title" \
-            -write ../../../build/test/c128/monster.db.1 "monster.db.1" \
-            -write ../../../build/test/c128/monster.db.2 "monster.db.2" \
-            -write ../../../build/test/c128/monster.db.3 "monster.db.3" \
-            -write ../../../build/test/c128/monster.db.4 "monster.db.4" \
-            -write ../../../build/test/c128/ovl.town "ovl.town" \
-            -write ../../../build/test/c128/ovl.start "ovl.start" \
-            -write ../../../build/test/c128/ovl.death "ovl.death" \
-            -write ../../../build/test/c128/ovl.gen "ovl.gen" \
-            -write ../../../build/test/c128/128.runtime.prg "128.runtime" \
-            -write ../../../build/test/c128/128.input.prg "128.input" \
-			-write ../../../build/test/c128/128.proj.prg "128.proj" \
-            -write ../../../build/test/c128/128.fdisk.prg "128.fdisk" \
-            -write ../../../build/test/c128/128.diskio.prg "128.diskio" \
-            -write ../../../build/test/c128/128.world.prg "128.world" \
-            -write ../../../build/test/c128/128.item.prg "128.item" \
-            -write ../../../build/test/c128/128.names.prg "128.names" \
-            -write ../../../build/test/c128/128.select.prg "128.select" \
-            -write ../../../build/test/c128/128.persist.prg "128.persist" \
-            -write ../../../build/test/c128/128.play.prg "128.play" \
-            -write ../../../build/test/c128/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
-        echo "FAIL (scripted-spell disk build failed)"
+    if ! c128_patch_scripted_boot_d71 "$scripted_d71" "$build_log"; then
+        echo "FAIL (scripted-spell D71 patch failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
@@ -3501,7 +3497,7 @@ build_scripted_spell_cancel_boot_assets() {
     build_boot_assets || return 1
 
     if c128_active_variant_is "scripted_spell_cancel" && ! c128_outputs_need_refresh \
-            ../../../build/test/c128/moria128.prg ../../../build/test/c128/moria128_scriptedspellcancel.d64 ../../../build/test/c128/main.vs -- \
+            ../../../build/test/c128/moria128.prg ../../../build/test/c128/moria128_scriptedspellcancel.d71 ../../../build/test/c128/main.vs -- \
             main.s ../../../build/test/c128/boot128.prg ../../../build/test/c128/title ../../../build/test/c128/monster.db.1 ../../../build/test/c128/monster.db.2 \
             ../../../build/test/c128/monster.db.3 ../../../build/test/c128/monster.db.4 ../../../build/test/c128/ovl.town ../../../build/test/c128/ovl.start ../../../build/test/c128/ovl.death \
             ../../../build/test/c128/ovl.gen ../../../build/test/c128/128.runtime.prg ../../../build/test/c128/128.input.prg ../../../build/test/c128/128.proj.prg ../../../build/test/c128/128.fdisk.prg ../../../build/test/c128/128.world.prg ../../../build/test/c128/128.item.prg ../../../build/test/c128/128.names.prg ../../../build/test/c128/128.select.prg ../../../build/test/c128/128.persist.prg ../../../build/test/c128/128.play.prg ../../../build/test/c128/128.bank.prg; then
@@ -3511,8 +3507,7 @@ build_scripted_spell_cancel_boot_assets() {
 
     local build_log
     build_log="$(test128_tmp_file test128_boot_scripted_spell_cancel_build.log)"
-    local c1541_bin="${C1541:-c1541}"
-    local scripted_d64="../../../build/test/c128/moria128_scriptedspellcancel.d64"
+    local scripted_d71="../../../build/test/c128/moria128_scriptedspellcancel.d71"
 
     if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 -define C128 :OVL_OUT=../../../build/test/c128 -define C128_TEST_SCRIPTED_SPELL_CANCEL -o ../../../build/test/c128/moria128.prg >"$build_log" 2>&1; then
         echo "FAIL (scripted-spell-cancel main assembly failed)"
@@ -3522,32 +3517,8 @@ build_scripted_spell_cancel_boot_assets() {
         return 1
     fi
 
-    if ! "$c1541_bin" -format "moria128,m8" d64 "$scripted_d64" \
-            -attach "$scripted_d64" \
-            -write ../../../build/test/c128/boot128.prg "moria8.128" \
-            -write ../../../build/test/c128/moria128.prg "moria128" \
-            -write ../../../build/test/c128/title "title" \
-            -write ../../../build/test/c128/monster.db.1 "monster.db.1" \
-            -write ../../../build/test/c128/monster.db.2 "monster.db.2" \
-            -write ../../../build/test/c128/monster.db.3 "monster.db.3" \
-            -write ../../../build/test/c128/monster.db.4 "monster.db.4" \
-            -write ../../../build/test/c128/ovl.town "ovl.town" \
-            -write ../../../build/test/c128/ovl.start "ovl.start" \
-            -write ../../../build/test/c128/ovl.death "ovl.death" \
-            -write ../../../build/test/c128/ovl.gen "ovl.gen" \
-            -write ../../../build/test/c128/128.runtime.prg "128.runtime" \
-            -write ../../../build/test/c128/128.input.prg "128.input" \
-			-write ../../../build/test/c128/128.proj.prg "128.proj" \
-            -write ../../../build/test/c128/128.fdisk.prg "128.fdisk" \
-            -write ../../../build/test/c128/128.diskio.prg "128.diskio" \
-            -write ../../../build/test/c128/128.world.prg "128.world" \
-            -write ../../../build/test/c128/128.item.prg "128.item" \
-            -write ../../../build/test/c128/128.names.prg "128.names" \
-            -write ../../../build/test/c128/128.select.prg "128.select" \
-            -write ../../../build/test/c128/128.persist.prg "128.persist" \
-            -write ../../../build/test/c128/128.play.prg "128.play" \
-            -write ../../../build/test/c128/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
-        echo "FAIL (scripted-spell-cancel disk build failed)"
+    if ! c128_patch_scripted_boot_d71 "$scripted_d71" "$build_log"; then
+        echo "FAIL (scripted-spell-cancel D71 patch failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
@@ -3568,7 +3539,7 @@ build_scripted_book_overlay_boot_assets() {
     build_boot_assets || return 1
 
     if c128_active_variant_is "scripted_book_overlay" && ! c128_outputs_need_refresh \
-            ../../../build/test/c128/moria128.prg ../../../build/test/c128/moria128_scriptedbookoverlay.d64 ../../../build/test/c128/main.vs -- \
+            ../../../build/test/c128/moria128.prg ../../../build/test/c128/moria128_scriptedbookoverlay.d71 ../../../build/test/c128/main.vs -- \
             main.s ../../../build/test/c128/boot128.prg ../../../build/test/c128/title ../../../build/test/c128/monster.db.1 ../../../build/test/c128/monster.db.2 \
             ../../../build/test/c128/monster.db.3 ../../../build/test/c128/monster.db.4 ../../../build/test/c128/ovl.town ../../../build/test/c128/ovl.start ../../../build/test/c128/ovl.death \
             ../../../build/test/c128/ovl.gen ../../../build/test/c128/128.runtime.prg ../../../build/test/c128/128.input.prg ../../../build/test/c128/128.proj.prg ../../../build/test/c128/128.fdisk.prg ../../../build/test/c128/128.world.prg ../../../build/test/c128/128.item.prg ../../../build/test/c128/128.names.prg ../../../build/test/c128/128.select.prg ../../../build/test/c128/128.persist.prg ../../../build/test/c128/128.play.prg ../../../build/test/c128/128.bank.prg; then
@@ -3578,8 +3549,7 @@ build_scripted_book_overlay_boot_assets() {
 
     local build_log
     build_log="$(test128_tmp_file test128_boot_scripted_book_overlay_build.log)"
-    local c1541_bin="${C1541:-c1541}"
-    local scripted_d64="../../../build/test/c128/moria128_scriptedbookoverlay.d64"
+    local scripted_d71="../../../build/test/c128/moria128_scriptedbookoverlay.d71"
 
     if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 -define C128 :OVL_OUT=../../../build/test/c128 -define C128_TEST_SCRIPTED_BOOK_OVERLAY -o ../../../build/test/c128/moria128.prg >"$build_log" 2>&1; then
         echo "FAIL (scripted-book-overlay main assembly failed)"
@@ -3589,32 +3559,8 @@ build_scripted_book_overlay_boot_assets() {
         return 1
     fi
 
-    if ! "$c1541_bin" -format "moria128,m8" d64 "$scripted_d64" \
-            -attach "$scripted_d64" \
-            -write ../../../build/test/c128/boot128.prg "moria8.128" \
-            -write ../../../build/test/c128/moria128.prg "moria128" \
-            -write ../../../build/test/c128/title "title" \
-            -write ../../../build/test/c128/monster.db.1 "monster.db.1" \
-            -write ../../../build/test/c128/monster.db.2 "monster.db.2" \
-            -write ../../../build/test/c128/monster.db.3 "monster.db.3" \
-            -write ../../../build/test/c128/monster.db.4 "monster.db.4" \
-            -write ../../../build/test/c128/ovl.town "ovl.town" \
-            -write ../../../build/test/c128/ovl.start "ovl.start" \
-            -write ../../../build/test/c128/ovl.death "ovl.death" \
-            -write ../../../build/test/c128/ovl.gen "ovl.gen" \
-            -write ../../../build/test/c128/128.runtime.prg "128.runtime" \
-            -write ../../../build/test/c128/128.input.prg "128.input" \
-			-write ../../../build/test/c128/128.proj.prg "128.proj" \
-            -write ../../../build/test/c128/128.fdisk.prg "128.fdisk" \
-            -write ../../../build/test/c128/128.diskio.prg "128.diskio" \
-            -write ../../../build/test/c128/128.world.prg "128.world" \
-            -write ../../../build/test/c128/128.item.prg "128.item" \
-            -write ../../../build/test/c128/128.names.prg "128.names" \
-            -write ../../../build/test/c128/128.select.prg "128.select" \
-            -write ../../../build/test/c128/128.persist.prg "128.persist" \
-            -write ../../../build/test/c128/128.play.prg "128.play" \
-            -write ../../../build/test/c128/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
-        echo "FAIL (scripted-book-overlay disk build failed)"
+    if ! c128_patch_scripted_boot_d71 "$scripted_d71" "$build_log"; then
+        echo "FAIL (scripted-book-overlay D71 patch failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
@@ -3635,7 +3581,7 @@ build_scripted_spell_list_overlay_boot_assets() {
     build_boot_assets || return 1
 
     if c128_active_variant_is "scripted_spell_list_overlay" && ! c128_outputs_need_refresh \
-            ../../../build/test/c128/moria128.prg ../../../build/test/c128/moria128_scriptedspelllistoverlay.d64 ../../../build/test/c128/main.vs -- \
+            ../../../build/test/c128/moria128.prg ../../../build/test/c128/moria128_scriptedspelllistoverlay.d71 ../../../build/test/c128/main.vs -- \
             main.s ../../../build/test/c128/boot128.prg ../../../build/test/c128/title ../../../build/test/c128/monster.db.1 ../../../build/test/c128/monster.db.2 \
             ../../../build/test/c128/monster.db.3 ../../../build/test/c128/monster.db.4 ../../../build/test/c128/ovl.town ../../../build/test/c128/ovl.start ../../../build/test/c128/ovl.death \
             ../../../build/test/c128/ovl.gen ../../../build/test/c128/128.runtime.prg ../../../build/test/c128/128.input.prg ../../../build/test/c128/128.proj.prg ../../../build/test/c128/128.fdisk.prg ../../../build/test/c128/128.world.prg ../../../build/test/c128/128.item.prg ../../../build/test/c128/128.names.prg ../../../build/test/c128/128.select.prg ../../../build/test/c128/128.persist.prg ../../../build/test/c128/128.play.prg ../../../build/test/c128/128.bank.prg; then
@@ -3645,8 +3591,7 @@ build_scripted_spell_list_overlay_boot_assets() {
 
     local build_log
     build_log="$(test128_tmp_file test128_boot_scripted_spell_list_overlay_build.log)"
-    local c1541_bin="${C1541:-c1541}"
-    local scripted_d64="../../../build/test/c128/moria128_scriptedspelllistoverlay.d64"
+    local scripted_d71="../../../build/test/c128/moria128_scriptedspelllistoverlay.d71"
 
     if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 -define C128 :OVL_OUT=../../../build/test/c128 -define C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY -o ../../../build/test/c128/moria128.prg >"$build_log" 2>&1; then
         echo "FAIL (scripted-spell-list-overlay main assembly failed)"
@@ -3656,32 +3601,8 @@ build_scripted_spell_list_overlay_boot_assets() {
         return 1
     fi
 
-    if ! "$c1541_bin" -format "moria128,m8" d64 "$scripted_d64" \
-            -attach "$scripted_d64" \
-            -write ../../../build/test/c128/boot128.prg "moria8.128" \
-            -write ../../../build/test/c128/moria128.prg "moria128" \
-            -write ../../../build/test/c128/title "title" \
-            -write ../../../build/test/c128/monster.db.1 "monster.db.1" \
-            -write ../../../build/test/c128/monster.db.2 "monster.db.2" \
-            -write ../../../build/test/c128/monster.db.3 "monster.db.3" \
-            -write ../../../build/test/c128/monster.db.4 "monster.db.4" \
-            -write ../../../build/test/c128/ovl.town "ovl.town" \
-            -write ../../../build/test/c128/ovl.start "ovl.start" \
-            -write ../../../build/test/c128/ovl.death "ovl.death" \
-            -write ../../../build/test/c128/ovl.gen "ovl.gen" \
-            -write ../../../build/test/c128/128.runtime.prg "128.runtime" \
-            -write ../../../build/test/c128/128.input.prg "128.input" \
-			-write ../../../build/test/c128/128.proj.prg "128.proj" \
-            -write ../../../build/test/c128/128.fdisk.prg "128.fdisk" \
-            -write ../../../build/test/c128/128.diskio.prg "128.diskio" \
-            -write ../../../build/test/c128/128.world.prg "128.world" \
-            -write ../../../build/test/c128/128.item.prg "128.item" \
-            -write ../../../build/test/c128/128.names.prg "128.names" \
-            -write ../../../build/test/c128/128.select.prg "128.select" \
-            -write ../../../build/test/c128/128.persist.prg "128.persist" \
-            -write ../../../build/test/c128/128.play.prg "128.play" \
-            -write ../../../build/test/c128/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
-        echo "FAIL (scripted-spell-list-overlay disk build failed)"
+    if ! c128_patch_scripted_boot_d71 "$scripted_d71" "$build_log"; then
+        echo "FAIL (scripted-spell-list-overlay D71 patch failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
@@ -3702,7 +3623,7 @@ build_scripted_prayer_boot_assets() {
     build_boot_assets || return 1
 
     if c128_active_variant_is "scripted_prayer" && ! c128_outputs_need_refresh \
-            ../../../build/test/c128/moria128.prg ../../../build/test/c128/moria128_scriptedprayer.d64 ../../../build/test/c128/main.vs -- \
+            ../../../build/test/c128/moria128.prg ../../../build/test/c128/moria128_scriptedprayer.d71 ../../../build/test/c128/main.vs -- \
             main.s ../../../build/test/c128/boot128.prg ../../../build/test/c128/title ../../../build/test/c128/monster.db.1 ../../../build/test/c128/monster.db.2 \
             ../../../build/test/c128/monster.db.3 ../../../build/test/c128/monster.db.4 ../../../build/test/c128/ovl.town ../../../build/test/c128/ovl.start ../../../build/test/c128/ovl.death \
             ../../../build/test/c128/ovl.gen ../../../build/test/c128/128.runtime.prg ../../../build/test/c128/128.input.prg ../../../build/test/c128/128.proj.prg ../../../build/test/c128/128.fdisk.prg ../../../build/test/c128/128.world.prg ../../../build/test/c128/128.item.prg ../../../build/test/c128/128.names.prg ../../../build/test/c128/128.select.prg ../../../build/test/c128/128.persist.prg ../../../build/test/c128/128.play.prg ../../../build/test/c128/128.bank.prg; then
@@ -3712,8 +3633,7 @@ build_scripted_prayer_boot_assets() {
 
     local build_log
     build_log="$(test128_tmp_file test128_boot_scripted_prayer_build.log)"
-    local c1541_bin="${C1541:-c1541}"
-    local scripted_d64="../../../build/test/c128/moria128_scriptedprayer.d64"
+    local scripted_d71="../../../build/test/c128/moria128_scriptedprayer.d71"
 
     if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 -define C128 :OVL_OUT=../../../build/test/c128 -define C128_TEST_SCRIPTED_PRAYER -o ../../../build/test/c128/moria128.prg >"$build_log" 2>&1; then
         echo "FAIL (scripted-prayer main assembly failed)"
@@ -3723,32 +3643,8 @@ build_scripted_prayer_boot_assets() {
         return 1
     fi
 
-    if ! "$c1541_bin" -format "moria128,m8" d64 "$scripted_d64" \
-            -attach "$scripted_d64" \
-            -write ../../../build/test/c128/boot128.prg "moria8.128" \
-            -write ../../../build/test/c128/moria128.prg "moria128" \
-            -write ../../../build/test/c128/title "title" \
-            -write ../../../build/test/c128/monster.db.1 "monster.db.1" \
-            -write ../../../build/test/c128/monster.db.2 "monster.db.2" \
-            -write ../../../build/test/c128/monster.db.3 "monster.db.3" \
-            -write ../../../build/test/c128/monster.db.4 "monster.db.4" \
-            -write ../../../build/test/c128/ovl.town "ovl.town" \
-            -write ../../../build/test/c128/ovl.start "ovl.start" \
-            -write ../../../build/test/c128/ovl.death "ovl.death" \
-            -write ../../../build/test/c128/ovl.gen "ovl.gen" \
-            -write ../../../build/test/c128/128.runtime.prg "128.runtime" \
-            -write ../../../build/test/c128/128.input.prg "128.input" \
-			-write ../../../build/test/c128/128.proj.prg "128.proj" \
-            -write ../../../build/test/c128/128.fdisk.prg "128.fdisk" \
-            -write ../../../build/test/c128/128.diskio.prg "128.diskio" \
-            -write ../../../build/test/c128/128.world.prg "128.world" \
-            -write ../../../build/test/c128/128.item.prg "128.item" \
-            -write ../../../build/test/c128/128.names.prg "128.names" \
-            -write ../../../build/test/c128/128.select.prg "128.select" \
-            -write ../../../build/test/c128/128.persist.prg "128.persist" \
-            -write ../../../build/test/c128/128.play.prg "128.play" \
-            -write ../../../build/test/c128/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
-        echo "FAIL (scripted-prayer disk build failed)"
+    if ! c128_patch_scripted_boot_d71 "$scripted_d71" "$build_log"; then
+        echo "FAIL (scripted-prayer D71 patch failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
@@ -6369,40 +6265,36 @@ run_scripted_summary_to_town_smoke() {
     fi
 
     local abs_d64
-    abs_d64="$(cd ../../../build/test/c128 && pwd)/moria128_scriptedinput.d64"
+    abs_d64="$(cd ../../../build/test/c128 && pwd)/moria128_scriptedinput.d71"
     local mon_file
     mon_file="$(test128_tmp_file "test128_${name}.mon")"
     local log_file
     log_file="$(test128_tmp_file "test128_${name}.log")"
-    local pass_lc fail_lc
     : > "$log_file"
-    pass_lc=$(echo "$c128_test_town_pass" | tr '[:upper:]' '[:lower:]')
-    fail_lc=$(echo "$c128_test_town_fail" | tr '[:upper:]' '[:lower:]')
 
     {
         echo "break \$${c128_test_town_fail}"
-        echo "break \$${c128_test_town_pass}"
-        echo "g"
+        echo "until \$${c128_test_town_pass}"
+        echo "quit"
     } > "$mon_file"
 
     "$VICE" -config /dev/null -default +saveres -console -nativemonitor -warp -80col -8 "$abs_d64" -9 "$abs_d64" -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlog -monlogname "$log_file" \
-        -limitcycles 700000000 +sound -sounddev dummy \
+        -limitcycles 320000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
     local vice_rc=$?
 
-    if ! grep -qiE "Stop on  exec ${pass_lc}" "$log_file" && ! grep -qi "^BREAK: .*C:\$${c128_test_town_pass}" "$log_file"; then
-        boot_log_report_failure "did not reach scripted town pass trap" "$log_file" "c128_test_town_pass" "$c128_test_town_pass" "$vice_rc"
+    if boot_log_has_stop_at "$log_file" "$c128_test_town_fail"; then
+        boot_log_report_failure "scripted summary-to-town hit fail trap" "$log_file" "c128_test_town_fail" "$c128_test_town_fail" "$vice_rc"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
     fi
-
-    if grep -qiE "Stop on  exec ${fail_lc}" "$log_file" || grep -qi "^BREAK: .*C:\$${c128_test_town_fail}" "$log_file"; then
-        # In current test builds the fail/pass traps are adjacent BRKs, and VICE can
-        # report both breakpoints even when execution explicitly jumps to the pass trap.
-        # Once the pass trap is confirmed, treat the run as successful.
-        :
+    if ! boot_log_has_stop_at "$log_file" "$c128_test_town_pass"; then
+        boot_log_report_failure "did not reach scripted town pass trap" "$log_file" "c128_test_town_pass" "$c128_test_town_pass" "$vice_rc"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
     fi
 
     if grep -qi "JAM\\|Invalid opcode" "$log_file"; then
@@ -6709,32 +6601,30 @@ run_scripted_spell_cast_smoke() {
     fi
 
     local abs_d64
-    abs_d64="$(cd ../../../build/test/c128 && pwd)/moria128_scriptedspell.d64"
+    abs_d64="$(cd ../../../build/test/c128 && pwd)/moria128_scriptedspell.d71"
     local mon_file
     mon_file="$(test128_tmp_file "test128_${name}.mon")"
     local log_file
     log_file="$(test128_tmp_file "test128_${name}.log")"
-    local pass_lc
     local pass_hit
     : > "$log_file"
-    pass_lc=$(echo "$c128_test_spell_pass" | tr '[:upper:]' '[:lower:]')
 
     {
         for addr in "${spell_fail_addrs[@]}"; do
             echo "break \$${addr}"
         done
-        echo "break \$${c128_test_spell_pass}"
-        echo "g"
+        echo "until \$${c128_test_spell_pass}"
+        echo "quit"
     } > "$mon_file"
 
     "$VICE" -config /dev/null -default +saveres -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlog -monlogname "$log_file" \
-        -limitcycles 700000000 +sound -sounddev dummy \
+        -limitcycles 320000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
     local vice_rc=$?
 
     pass_hit=0
-    if grep -qiE "Stop on  exec ${pass_lc}" "$log_file" || grep -qi "^BREAK: .*C:\$${c128_test_spell_pass}" "$log_file"; then
+    if boot_log_has_stop_at "$log_file" "$c128_test_spell_pass"; then
         pass_hit=1
     fi
 
@@ -6753,7 +6643,7 @@ run_scripted_spell_cast_smoke() {
 
     for idx in "${!spell_fail_labels[@]}"; do
         addr="${spell_fail_addrs[$idx]}"
-        if grep -qi "^BREAK: .*C:\$${addr}" "$log_file"; then
+        if boot_log_has_stop_at "$log_file" "$addr"; then
             boot_log_report_failure "scripted spell cast hit fail trap" "$log_file" "${spell_fail_labels[$idx]}" "$addr" "$vice_rc"
             echo "    fail_label: ${spell_fail_labels[$idx]}"
             FAIL=$((FAIL + 1))
@@ -6806,32 +6696,30 @@ run_scripted_book_overlay_smoke() {
     fi
 
     local abs_d64
-    abs_d64="$(cd ../../../build/test/c128 && pwd)/moria128_scriptedbookoverlay.d64"
+    abs_d64="$(cd ../../../build/test/c128 && pwd)/moria128_scriptedbookoverlay.d71"
     local mon_file
     mon_file="$(test128_tmp_file "test128_${name}.mon")"
     local log_file
     log_file="$(test128_tmp_file "test128_${name}.log")"
-    local pass_lc
     local pass_hit
     : > "$log_file"
-    pass_lc=$(echo "$pass_addr" | tr '[:upper:]' '[:lower:]')
 
     {
         for addr in "${fail_addrs[@]}"; do
             echo "break \$${addr}"
         done
-        echo "break \$${pass_addr}"
-        echo "g"
+        echo "until \$${pass_addr}"
+        echo "quit"
     } > "$mon_file"
 
     "$VICE" -config /dev/null -default +saveres -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlog -monlogname "$log_file" \
-        -limitcycles 700000000 +sound -sounddev dummy \
+        -limitcycles 320000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
     local vice_rc=$?
 
     pass_hit=0
-    if grep -qiE "Stop on  exec ${pass_lc}" "$log_file" || grep -qi "^BREAK: .*C:\$${pass_addr}" "$log_file"; then
+    if boot_log_has_stop_at "$log_file" "$pass_addr"; then
         pass_hit=1
     fi
 
@@ -6850,7 +6738,7 @@ run_scripted_book_overlay_smoke() {
 
     for idx in "${!fail_labels[@]}"; do
         addr="${fail_addrs[$idx]}"
-        if grep -qi "^BREAK: .*C:\$${addr}" "$log_file"; then
+        if boot_log_has_stop_at "$log_file" "$addr"; then
             boot_log_report_failure "scripted book overlay hit fail trap" "$log_file" "${fail_labels[$idx]}" "$addr" "$vice_rc"
             FAIL=$((FAIL + 1))
             TOTAL=$((TOTAL + 1))
@@ -6902,32 +6790,30 @@ run_scripted_spell_list_overlay_smoke() {
     fi
 
     local abs_d64
-    abs_d64="$(cd ../../../build/test/c128 && pwd)/moria128_scriptedspelllistoverlay.d64"
+    abs_d64="$(cd ../../../build/test/c128 && pwd)/moria128_scriptedspelllistoverlay.d71"
     local mon_file
     mon_file="$(test128_tmp_file "test128_${name}.mon")"
     local log_file
     log_file="$(test128_tmp_file "test128_${name}.log")"
-    local pass_lc
     local pass_hit
     : > "$log_file"
-    pass_lc=$(echo "$pass_addr" | tr '[:upper:]' '[:lower:]')
 
     {
         for addr in "${fail_addrs[@]}"; do
             echo "break \$${addr}"
         done
-        echo "break \$${pass_addr}"
-        echo "g"
+        echo "until \$${pass_addr}"
+        echo "quit"
     } > "$mon_file"
 
     "$VICE" -config /dev/null -default +saveres -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlog -monlogname "$log_file" \
-        -limitcycles 700000000 +sound -sounddev dummy \
+        -limitcycles 320000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
     local vice_rc=$?
 
     pass_hit=0
-    if grep -qiE "Stop on  exec ${pass_lc}" "$log_file" || grep -qi "^BREAK: .*C:\$${pass_addr}" "$log_file"; then
+    if boot_log_has_stop_at "$log_file" "$pass_addr"; then
         pass_hit=1
     fi
 
@@ -6946,7 +6832,7 @@ run_scripted_spell_list_overlay_smoke() {
 
     for idx in "${!fail_labels[@]}"; do
         addr="${fail_addrs[$idx]}"
-        if grep -qi "^BREAK: .*C:\$${addr}" "$log_file"; then
+        if boot_log_has_stop_at "$log_file" "$addr"; then
             boot_log_report_failure "scripted spell list overlay hit fail trap" "$log_file" "${fail_labels[$idx]}" "$addr" "$vice_rc"
             FAIL=$((FAIL + 1))
             TOTAL=$((TOTAL + 1))
@@ -7003,32 +6889,30 @@ run_scripted_spell_list_cancel_smoke() {
     fi
 
     local abs_d64
-    abs_d64="$(cd ../../../build/test/c128 && pwd)/moria128_scriptedspellcancel.d64"
+    abs_d64="$(cd ../../../build/test/c128 && pwd)/moria128_scriptedspellcancel.d71"
     local mon_file
     mon_file="$(test128_tmp_file "test128_${name}.mon")"
     local log_file
     log_file="$(test128_tmp_file "test128_${name}.log")"
-    local pass_lc
     local pass_hit
     : > "$log_file"
-    pass_lc=$(echo "$c128_test_spell_pass" | tr '[:upper:]' '[:lower:]')
 
     {
         for addr in "${spell_fail_addrs[@]}"; do
             echo "break \$${addr}"
         done
-        echo "break \$${c128_test_spell_pass}"
-        echo "g"
+        echo "until \$${c128_test_spell_pass}"
+        echo "quit"
     } > "$mon_file"
 
     "$VICE" -config /dev/null -default +saveres -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlog -monlogname "$log_file" \
-        -limitcycles 700000000 +sound -sounddev dummy \
+        -limitcycles 320000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
     local vice_rc=$?
 
     pass_hit=0
-    if grep -qiE "Stop on  exec ${pass_lc}" "$log_file" || grep -qi "^BREAK: .*C:\$${c128_test_spell_pass}" "$log_file"; then
+    if boot_log_has_stop_at "$log_file" "$c128_test_spell_pass"; then
         pass_hit=1
     fi
 
@@ -7047,7 +6931,7 @@ run_scripted_spell_list_cancel_smoke() {
 
     for idx in "${!spell_fail_labels[@]}"; do
         addr="${spell_fail_addrs[$idx]}"
-        if grep -qi "^BREAK: .*C:\$${addr}" "$log_file"; then
+        if boot_log_has_stop_at "$log_file" "$addr"; then
             boot_log_report_failure "scripted spell list cancel hit fail trap" "$log_file" "${spell_fail_labels[$idx]}" "$addr" "$vice_rc"
             echo "    fail_label: ${spell_fail_labels[$idx]}"
             FAIL=$((FAIL + 1))
@@ -7105,32 +6989,30 @@ run_scripted_prayer_cast_smoke() {
     fi
 
     local abs_d64
-    abs_d64="$(cd ../../../build/test/c128 && pwd)/moria128_scriptedprayer.d64"
+    abs_d64="$(cd ../../../build/test/c128 && pwd)/moria128_scriptedprayer.d71"
     local mon_file
     mon_file="$(test128_tmp_file "test128_${name}.mon")"
     local log_file
     log_file="$(test128_tmp_file "test128_${name}.log")"
-    local pass_lc
     local pass_hit
     : > "$log_file"
-    pass_lc=$(echo "$c128_test_spell_pass" | tr '[:upper:]' '[:lower:]')
 
     {
         for addr in "${spell_fail_addrs[@]}"; do
             echo "break \$${addr}"
         done
-        echo "break \$${c128_test_spell_pass}"
-        echo "g"
+        echo "until \$${c128_test_spell_pass}"
+        echo "quit"
     } > "$mon_file"
 
     "$VICE" -config /dev/null -default +saveres -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlog -monlogname "$log_file" \
-        -limitcycles 700000000 +sound -sounddev dummy \
+        -limitcycles 320000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
     local vice_rc=$?
 
     pass_hit=0
-    if grep -qiE "Stop on  exec ${pass_lc}" "$log_file" || grep -qi "^BREAK: .*C:\$${c128_test_spell_pass}" "$log_file"; then
+    if boot_log_has_stop_at "$log_file" "$c128_test_spell_pass"; then
         pass_hit=1
     fi
 
@@ -7149,7 +7031,7 @@ run_scripted_prayer_cast_smoke() {
 
     for idx in "${!spell_fail_labels[@]}"; do
         addr="${spell_fail_addrs[$idx]}"
-        if grep -qi "^BREAK: .*C:\$${addr}" "$log_file"; then
+        if boot_log_has_stop_at "$log_file" "$addr"; then
             boot_log_report_failure "scripted prayer cast hit fail trap" "$log_file" "${spell_fail_labels[$idx]}" "$addr" "$vice_rc"
             echo "    fail_label: ${spell_fail_labels[$idx]}"
             FAIL=$((FAIL + 1))
