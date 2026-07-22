@@ -62,6 +62,9 @@ wizard_wall_walk_active:
     lda #0
     rts
 
+#if PLATFORM_PRODUCT_OVERLAY_RUNTIME
+:WizardGenExecSegment()
+#endif
 // wizard_generate_item_execute — Create a usable item for Wizard mode.
 // Non-gold items prefer inventory placement so the item is immediately usable.
 // Gold and inventory-overflow cases fall back to floor placement at the
@@ -123,6 +126,9 @@ wizard_generate_item_execute:
 !wiz_item_ok:
     sec
     rts
+#if PLATFORM_PRODUCT_OVERLAY_RUNTIME
+:WizardGenExecRestoreSegment()
+#endif
 
 // wizard_reveal_level — Reveal a floor-plan view of the current level without
 // marking every solid-rock tile as explored. Reveals lit room geometry plus
@@ -638,6 +644,9 @@ wiz_wall_off_str:
     .text "WALL OFF" ; .byte 0
 wiz_done_str:
     .text "OK" ; .byte 0
+#if PLATFORM_PRODUCT_OVERLAY_RUNTIME
+:WizardGenExecRestoreSegment()
+#endif
 wiz_fail_str:
     .text "FAIL" ; .byte 0
 wiz_item_prompt_str:

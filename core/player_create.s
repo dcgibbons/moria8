@@ -687,7 +687,7 @@ create_init_character:
     beq !no_mana+           // No spells = no mana
 
     ldx player_data + PL_CLASS
-    lda class_spell_min_level,x
+    :AuxReadX(class_spell_min_level)
     cmp player_data + PL_LEVEL
     beq !can_cast_start+
     bcc !can_cast_start+
@@ -855,7 +855,7 @@ create_reroll_str:
 create_name_prompt:
     .text "Name (16 chars max):" ; .byte $00
 create_gender_title:
-    .text "Choose your gender" ; .byte $00
+    .text "Choose your sex" ; .byte $00
 create_gender_m:
     .text "a) Male" ; .byte $00
 create_gender_f:

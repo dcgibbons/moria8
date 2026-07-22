@@ -33,17 +33,17 @@ itemdesc_put_inv_slot:
 // Input: X = absolute store/home slot index.
 // Clobbers: A, X, Y, zp_ptr0
 itemdesc_put_store_slot:
-    lda si_item_id,x
+    :AuxReadX(si_item_id)
     sta itemdesc_item_id
     lda #1
     sta itemdesc_qty
-    lda si_p1,x
+    :AuxReadX(si_p1)
     sta itemdesc_p1
-    lda si_to_hit,x
+    :AuxReadX(si_to_hit)
     sta itemdesc_to_hit
-    lda si_to_dam,x
+    :AuxReadX(si_to_dam)
     sta itemdesc_to_dam
-    lda si_to_ac,x
+    :AuxReadX(si_to_ac)
     sta itemdesc_to_ac
     :LoadStoreFlagsX()
     sta itemdesc_flags

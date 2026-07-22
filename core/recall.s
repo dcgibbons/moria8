@@ -16,20 +16,11 @@
 
 #importonce
 
-// ============================================================
-// Recall data arrays (260 bytes total, contiguous for save/load)
-// ============================================================
-.const RECALL_DATA_SIZE = MAX_CREATURES * 4
+#import "recall_defs.s"
 
-recall_data_start:
-recall_kills:     .fill MAX_CREATURES, 0   // Times player killed this type
-recall_deaths:    .fill MAX_CREATURES, 0   // Times this type killed player
-recall_attacks:   .fill MAX_CREATURES, 0   // Attack rounds observed
-recall_spells:    .fill MAX_CREATURES, 0   // Spell bitmask observed
-recall_data_end:
-
-// Compile-time validation
-.assert "recall_data_size", recall_data_end - recall_data_start, RECALL_DATA_SIZE
+#if !RECALL_ARRAY_DATA_EXTERNAL
+#import "recall_array_data.s"
+#endif
 
 // Spell bit lookup table (7 entries, indexed by spell position 0-6)
 recall_spell_bit:
@@ -46,10 +37,10 @@ recall_clear:
     lda #0
     ldx #0
 !rcl_loop:
-    sta recall_kills,x
-    sta recall_deaths,x
-    sta recall_attacks,x
-    sta recall_spells,x
+    :AuxWriteX(recall_kills)
+    :AuxWriteX(recall_deaths)
+    :AuxWriteX(recall_attacks)
+    :AuxWriteX(recall_spells)
     inx
     cpx #MAX_CREATURES
     bcc !rcl_loop-

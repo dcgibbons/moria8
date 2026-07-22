@@ -119,9 +119,9 @@ store_draw_screen:
     lda #1
     sta zp_cursor_col
     ldx zp_store_idx
-    lda store_name_lo,x
+    :AuxReadX(store_name_lo)
     sta zp_ptr0
-    lda store_name_hi,x
+    :AuxReadX(store_name_hi)
     sta zp_ptr0_hi
     jsr hal_screen_put_string
 
@@ -133,9 +133,9 @@ store_draw_screen:
     lda #2
     sta zp_cursor_col
     ldx zp_store_idx
-    lda store_owner_lo,x
+    :AuxReadX(store_owner_lo)
     sta zp_ptr0
-    lda store_owner_hi,x
+    :AuxReadX(store_owner_hi)
     sta zp_ptr0_hi
     jsr hal_screen_put_string
 
@@ -173,7 +173,7 @@ store_draw_screen:
 
     // Check if slot occupied
     ldy sb_abs_slot
-    lda si_item_id,y
+    :AuxReadY(si_item_id)
     cmp #FI_EMPTY
     bne !sds_has_item+
     jmp !sds_empty_slot+
@@ -327,7 +327,7 @@ store_buy:
 
     // Check if slot is occupied
     tax
-    lda si_item_id,x
+    :AuxReadX(si_item_id)
     cmp #FI_EMPTY
     bne !sb_occupied+
     rts                         // Empty slot
@@ -373,15 +373,15 @@ store_buy:
 store_load_price_fields_x:
     :LoadStoreEgoX()
     sta sb_item_ego             // Pass ego for pricing (R14)
-    lda si_p1,x
+    :AuxReadX(si_p1)
     sta sb_item_p1              // Pass charges/type-specific p1 for pricing
-    lda si_to_hit,x
+    :AuxReadX(si_to_hit)
     sta sb_item_to_hit
-    lda si_to_dam,x
+    :AuxReadX(si_to_dam)
     sta sb_item_to_dam
-    lda si_to_ac,x
+    :AuxReadX(si_to_ac)
     sta sb_item_to_ac
-    lda si_item_id,x
+    :AuxReadX(si_item_id)
     rts
 
 sbuy_execute:
@@ -404,17 +404,17 @@ sbuy_execute:
 
     // Copy item from store to inventory
     ldx sb_abs_slot
-    lda si_item_id,x
+    :AuxReadX(si_item_id)
     sta fi_add_id
-    lda si_qty,x
+    :AuxReadX(si_qty)
     sta fi_add_qty
-    lda si_p1,x
+    :AuxReadX(si_p1)
     sta fi_add_p1
-    lda si_to_hit,x
+    :AuxReadX(si_to_hit)
     sta fi_add_to_hit
-    lda si_to_dam,x
+    :AuxReadX(si_to_dam)
     sta fi_add_to_dam
-    lda si_to_ac,x
+    :AuxReadX(si_to_ac)
     sta fi_add_to_ac
     :LoadStoreFlagsX()
     sta fi_add_flags
@@ -425,14 +425,14 @@ sbuy_execute:
     // Remove from store
     ldx sb_abs_slot
     lda #FI_EMPTY
-    sta si_item_id,x
+    :AuxWriteX(si_item_id)
     lda #0
-    sta si_qty,x
-    sta si_p1,x
-    sta si_to_hit,x
-    sta si_to_dam,x
-    sta si_to_ac,x
-    sta si_meta,x
+    :AuxWriteX(si_qty)
+    :AuxWriteX(si_p1)
+    :AuxWriteX(si_to_hit)
+    :AuxWriteX(si_to_dam)
+    :AuxWriteX(si_to_ac)
+    :AuxWriteX(si_meta)
 
     // Success message
     ldx #MSG_BOUGHT
@@ -685,17 +685,17 @@ ssell_execute:
     ldx ss_inv_slot
     lda inv_item_id,x
     ldy sb_abs_slot
-    sta si_item_id,y
+    :AuxWriteY(si_item_id)
     lda inv_qty,x
-    sta si_qty,y
+    :AuxWriteY(si_qty)
     lda inv_p1,x
-    sta si_p1,y
+    :AuxWriteY(si_p1)
     lda inv_to_hit,x
-    sta si_to_hit,y
+    :AuxWriteY(si_to_hit)
     lda inv_to_dam,x
-    sta si_to_dam,y
+    :AuxWriteY(si_to_dam)
     lda inv_to_ac,x
-    sta si_to_ac,y
+    :AuxWriteY(si_to_ac)
     :StoreStoreMetaYFromInvX()
 
     // Remove from inventory
@@ -1082,15 +1082,15 @@ haggle_buy:
     sta hg_ask_hi
 
     ldx sb_abs_slot
-    lda si_p1,x
+    :AuxReadX(si_p1)
     sta sb_item_p1
-    lda si_to_hit,x
+    :AuxReadX(si_to_hit)
     sta sb_item_to_hit
-    lda si_to_dam,x
+    :AuxReadX(si_to_dam)
     sta sb_item_to_dam
-    lda si_to_ac,x
+    :AuxReadX(si_to_ac)
     sta sb_item_to_ac
-    lda si_item_id,x
+    :AuxReadX(si_item_id)
     jsr calc_buy_min_price
     lda sb_price_lo
     sta hg_min_lo

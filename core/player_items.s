@@ -8,9 +8,15 @@
 // player_recalc_equipment: recalculate AC/combat after equip changes
 
 #import "ui_restore.s"
+#if !A2_SMALL_PLAY_EXTERNAL
 #import "input_ui_helpers.s"
+#endif
+#if !A2_SMALL_PLAY_EXTERNAL
 #import "player_heal_feedback.s"
+#endif
+#if !PLAYER_ITEM_SELECT_EXTERNAL
 #import "player_item_select.s"
+#endif
 
 // ============================================================
 // Constants
@@ -96,15 +102,15 @@ show_inv_and_select:
     // selector's outer continuation is inside the overlay window.
     tsx
     lda $0102,x
-    cmp #$e0
+    cmp #hal_platform_overlay_window_hi_min
     bcc !sias_check_outer_return+
-    cmp #$f0
+    cmp #hal_platform_overlay_window_hi_max_exclusive
     bcc !sias_return_overlay+
 !sias_check_outer_return:
     lda $0104,x
-    cmp #$e0
+    cmp #hal_platform_overlay_window_hi_min
     bcc !sias_return_resident+
-    cmp #$f0
+    cmp #hal_platform_overlay_window_hi_max_exclusive
     bcs !sias_return_resident+
 !sias_return_overlay:
     lda current_overlay

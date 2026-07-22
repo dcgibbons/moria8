@@ -5,7 +5,9 @@
 // Intended for long-running dungeon generation on both C64 and C128.
 
 #import "generation_busy_api.s"
+#if !A2_SMALL_PLAY_EXTERNAL
 #import "ui_help_clear.s"
+#endif
 
 .encoding "screencode_mixed"
 

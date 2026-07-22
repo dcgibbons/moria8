@@ -40,14 +40,21 @@ uh_title_str: .text "Command Reference" ; .byte 0
 help_line_idx: .byte 0
 help_page_idx: .byte 0
 help_page_count: .byte 1
+#if APPLE2_PRODUCT_OVERLAY_RUNTIME
+// Apple II help is reachable only through tramp_ui_help_display, which loads
+// OVL.HELP and installs help_pages before calling ui_help_display.
+help_pages_src_lo: .byte 0
+help_pages_src_hi: .byte 0
+#else
 help_pages_src_lo: .byte <uh_help_pages_fallback
 help_pages_src_hi: .byte >uh_help_pages_fallback
 
 uh_help_lines_fallback:
-    .for (var i = 0; i < 23; i++) {
+    .for (var i = 0; i < SCREEN_ROWS - 2; i++) {
         .byte 2, $00
     }
 
 uh_help_pages_fallback:
     .byte 1
     .word uh_help_lines_fallback
+#endif

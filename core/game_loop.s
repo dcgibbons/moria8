@@ -473,8 +473,9 @@ game_new_start:
     cpx #16                 // $50–$5f = 16 bytes
     bne !clear_effects-
 
-    // Clear static RAM effect timers (not in ZP $50-$5f range)
+    // Clear effect timers outside the ZP $50-$5f range
     lda #0
+    sta eff_invuln_timer
     sta eff_fear_timer
 
     jsr tramp_player_create
@@ -574,10 +575,18 @@ game_new_start:
 !no_book:
 
     // Recalculate combat stats with equipped items
+#if APPLE2
+    jsr tramp_item_recalc
+#else
     jsr player_recalc_equipment
+#endif
 
     // Randomize item identification (shuffle potion/scroll/ring descriptors)
+#if APPLE2
+    jsr tramp_item_init_identification
+#else
     jsr item_init_identification
+#endif
 #if C128_TEST_OVERLAY_STATE_CORRUPT
     lda #OVL_TOWN
     sta current_overlay

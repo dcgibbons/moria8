@@ -394,7 +394,7 @@ it_base_ac:
     .byte 0, 0, 0, 0, 0, 0, 0, 0            // 88-95: weapons
 it_base_ac_end:
 
-#if C64_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME
+#if C64_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME
 .segment TownOverlay
 #endif
 
@@ -433,7 +433,7 @@ it_cost_hi_extra_value:
 it_cost_hi_extra_end:
 .const IT_COST_HI_EXTRA_COUNT = it_cost_hi_extra_value - it_cost_hi_extra_id
 
-#if C64_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME
+#if C64_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME
 .segment Default
 #endif
 #else
@@ -462,7 +462,7 @@ it_cost_hi:
 it_cost_hi_end:
 #endif
 
-#if C64_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME
+#if C64_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME
 .segment DungeonGenOverlay
 #endif
 
@@ -489,7 +489,7 @@ it_min_level:
     .byte 5, 6, 5, 4                        // 92-95: added hafted/pole weapons
 it_min_level_end:
 
-#if C64_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME
+#if C64_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME
 .segment Default
 #endif
 
@@ -658,9 +658,14 @@ itok_mail_suffix:     .text " Mail" ; .byte 0
 itok_shield_suffix:   .text " Shield" ; .byte 0
 
 // Name streams (screen codes plus item-name tokens, null-terminated)
-#if C128_PRODUCT_OVERLAY_RUNTIME
+#if C128_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME
+#if HAL_PLATFORM_ITEM_NAME_STREAMS_AUX
+.segment A2AuxData
+a2_item_name_streams_start:
+#else
 .segment C128ResidentItemNames
 c128_item_name_streams_start:
+#endif
 #endif
 itn_0:  .byte ITOK_GOLD ; .text " (small)" ; .byte 0
 itn_1:  .byte ITOK_GOLD ; .text " (large)" ; .byte 0
@@ -758,8 +763,13 @@ itn_92: .text "Flail" ; .byte 0
 itn_93: .text "Lucerne Hammer" ; .byte 0
 itn_94: .text "Broad Axe" ; .byte 0
 itn_95: .text "Awl-Pike" ; .byte 0
-#if C128_PRODUCT_OVERLAY_RUNTIME
+#if C128_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME
+#if HAL_PLATFORM_ITEM_NAME_STREAMS_AUX
+a2_item_name_streams_end:
+.segment Default
+#else
 c128_item_name_streams_end:
 .assert "C128 item name streams live in Bank 1 DB region", c128_item_name_streams_start >= BANK1_DB_BASE && c128_item_name_streams_end <= BANK1_DB_END + 1, true
 .segment C128ResidentItems
+#endif
 #endif

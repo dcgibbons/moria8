@@ -235,7 +235,7 @@ pinwe_id: .byte 0
 pinwe_sl: .byte 0
 
 itemdesc_put_store_slot:
-    lda si_item_id,x
+    :AuxReadX(si_item_id)
     jsr item_get_name_ptr
     jsr hal_screen_put_string
     :LoadStoreEgoX()

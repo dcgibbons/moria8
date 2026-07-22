@@ -281,7 +281,7 @@ ui_char_display:
     lda #$2f                     // '/'
     jsr hal_screen_put_char
     ldx player_data + PL_CLASS
-    lda class_spell_total,x
+    :AuxReadX(class_spell_total)
     jsr screen_put_decimal
 !ucd_no_spells:
 
@@ -402,4 +402,24 @@ count_spells_known:
     sta zp_ptr0
     lda #>player_data + PL_SPELLS_LEARNT_0
     sta zp_ptr0_hi
+#if APPLE2
+    lda #0
+    sta zp_temp0
+    ldy #SPELL_MASK_BYTES - 1
+!csk_byte:
+    lda (zp_ptr0),y
+    ldx #8
+!csk_bit:
+    lsr
+    bcc !csk_next+
+    inc zp_temp0
+!csk_next:
+    dex
+    bne !csk_bit-
+    dey
+    bpl !csk_byte-
+    lda zp_temp0
+    rts
+#else
     jmp spell_mask_count_ptr
+#endif

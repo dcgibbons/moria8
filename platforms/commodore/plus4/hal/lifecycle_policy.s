@@ -39,6 +39,8 @@
 .const hal_platform_overlay_reu_stash_enabled = 1
 .const hal_platform_overlay_prompt_program_media = 1
 .const hal_platform_overlay_cpu_port_dma_bank = 0
+.const hal_platform_overlay_window_hi_min = $e0
+.const hal_platform_overlay_window_hi_max_exclusive = $f0
 #if PLATFORM_PRODUCT_OVERLAY_RUNTIME
 .const hal_platform_item_prompt_overlay_runtime = 1
 #else

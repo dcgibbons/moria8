@@ -169,7 +169,7 @@ player_attack_monster:
 
     // Track kill in recall
     ldx cmb_type
-    inc recall_kills,x
+    :AuxIncX(recall_kills)
 
     ldx cmb_slot
     jsr monster_remove

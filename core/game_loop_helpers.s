@@ -135,10 +135,23 @@ recall_show_matching_entry:
     lda cr_display,x
     cmp recall_query_sc
     bne !recall_next+
+#if HAL_PLATFORM_AUX_PERSISTENT_DATA
+    :AuxReadX(recall_kills)
+    sta zp_temp0
+    :AuxReadX(recall_deaths)
+    ora zp_temp0
+    sta zp_temp0
+    :AuxReadX(recall_attacks)
+    ora zp_temp0
+    sta zp_temp0
+    :AuxReadX(recall_spells)
+    ora zp_temp0
+#else
     lda recall_kills,x
     ora recall_deaths,x
     ora recall_attacks,x
     ora recall_spells,x
+#endif
     bne !recall_found+
 !recall_next:
     inx

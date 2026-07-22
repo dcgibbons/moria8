@@ -78,14 +78,14 @@ review.
 ## Build And Test
 Run commands from the repository root.
 
-- `make` or `make build`: build C64, C128, and Plus/4 payloads
+- `make` or `make build`: build C64, C128, Plus/4, and Apple IIe payloads
 - `make test`: default regression mix
 - `make test64`: C64 tests
 - `make testplus4`: Plus/4 tests
 - `make test128-fast`: stable C128 unit batch
 - `make test128-fast-smoke`: high-value C128 runtime smoke subset
 - `make test128`: authoritative full C128 suite
-- `make disk`: build shipping C64, C128, and Plus/4 disk images
+- `make disk`: build shipping C64, C128, Plus/4, and Apple IIe disk images
 - `make run`, `make run64`, `make run128`, `make runplus4`: launch under VICE
 - `make clean`: remove build artifacts
 

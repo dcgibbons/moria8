@@ -30,6 +30,37 @@
 
 #import "../common/save_slot_policy.s"
 
+// Huffman data placement: resident on this platform.
+.macro HuffmanDataSegment() {
+    .segment Default
+}
+
+// Cast/pray cores stay resident on this platform.
+.macro PlayerCastSegment() {
+    .segment Default
+}
+.macro PlayerCastRestoreResidentSegment() {
+    .segment Default
+}
+.macro PmHelpersSegment() {
+    .segment Default
+}
+.macro PmHelpersRestoreSegment() {
+    .segment Default
+}
+.macro ItemInitIdentSegment() {
+    .segment Default
+}
+.macro WizardGenExecSegment() {
+    .segment Default
+}
+.macro WizardGenExecRestoreSegment() {
+    .segment Default
+}
+.macro ItemInitIdentRestoreSegment() {
+    .segment Default
+}
+
 .const TED_BG      = $ff15
 .const TED_BORDER  = $ff19
 .const TED_SOUND_CTRL = $ff11

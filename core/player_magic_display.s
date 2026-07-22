@@ -10,7 +10,7 @@ calc_spell_failure:
     lda pm_fail_tbl_hi
     sta zp_ptr0_hi
     ldy pm_spell_idx
-    lda (zp_ptr0),y
+    :HuffRead_ptr0_y()
     sta pm_fail_work
 
     lda pm_lvl_tbl_lo
@@ -18,7 +18,7 @@ calc_spell_failure:
     lda pm_lvl_tbl_hi
     sta zp_ptr0_hi
     ldy pm_spell_idx
-    lda (zp_ptr0),y
+    :HuffRead_ptr0_y()
     sta zp_temp0
 
     lda zp_player_lvl

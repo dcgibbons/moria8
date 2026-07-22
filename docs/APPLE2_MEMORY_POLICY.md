@@ -36,6 +36,38 @@ Build-artifact notes:
   satisfies the `tier_manager.s:525` assert with 216 B margin. The plan's
   2,048 B pool is reduced to 1,024 B, reclaiming 1,024 B for the window.
 
+## Implemented Layout Snapshot (2026-07-21)
+
+This snapshot supersedes the M0 estimates and the older slot-hosted overlay
+descriptions later in this document. The historical sections remain as the
+design record; current ownership is enforced by `platforms/apple2/memory.s`,
+`platforms/apple2/main.s`, and `platforms/apple2/cache_layout.s`.
+
+| Range | Current owner and measured use |
+| --- | --- |
+| main `$0A00-$7BFF` | Always-resident image; current link ends `$7BFD` |
+| main `$7C00-$9FFF` | Load-once `A2.PLAY`; current payload `$7C00-$9FE5` (9,190 B including signature) |
+| main `$A000-$A3FF` | Tier-name pool (1,024 B) |
+| main `$A400-$B9FF` | All 11 code overlays, mutually exclusive; largest is `OVL.ITEMS`, exactly 5,632 B |
+| main `$BA00-$BAFF` | Window tail reserved; tier data may use through `$BAFF` |
+| main `$BB00-$BEFF` | ProDOS MLI I/O/staging buffer |
+| main `$BF00-$BFFF` | ProDOS global page |
+| aux `$0800-$3B0B` | Live 198x66 map |
+| aux `$3B0C-$4FDA` | Current immutable/mutable aux data payload (5,327 B): Huffman data, item-name streams, store inventory, recall arrays, class-spell tables, and small lookup tables |
+| aux `$5700-$BFFF` | Six boot-cached overlays under cache manifest v7; page-rounded slots exactly fill the span |
+
+`A2.PLAY` is not a modal swap slot in the implementation: every overlay,
+including STORAGE and TITLE, fits the `$A400-$B9FF` code window. Play is
+loaded on demand and signature-checked, then remains resident for the session.
+
+Cache manifest v7 is shared by boot and runtime code rather than duplicated:
+TOWN `$5700`, UI `$6C00`, SPELL `$7A00`, MODAL `$8E00`, GEN `$9900`, ITEMS
+`$AA00`, end `$C000`. The six page-rounded payloads exactly fill the cache;
+ITEMS is last so the runtime's fixed `$1600`-byte AUXMOVE ends exactly at
+`$C000`. Link-time assertions compare every payload extent with its next slot
+boundary. This replaces v6 after a captured runtime failure proved the cold
+OVL.GEN reopen was unsafe immediately after the tier-file OPEN.
+
 ## The Central Finding
 
 C128 gameplay-concurrent (always-resident 44,971 + play 8,430, measured) is
@@ -64,7 +96,7 @@ but it is the only remaining >4K source).
 | `$0100-$01FF` | 256 | Stack |
 | `$0200-$03CF` | 464 | Platform scratch: ZP save buffer (142 B), MLI param blocks, boot loader staging |
 | `$03D0-$03FF` | 48 | ProDOS/reset/IRQ vectors — reserved |
-| `$0400-$07FF` | 1,024 | 80-col text page, main half (odd columns); screen holes never touched |
+| `$0400-$07FF` | 1,024 | 80x24 text page, main half (odd columns); screen holes never touched |
 | `$0800-$09FF` | 512 | Floor-item table (256) + creature scratch (256) — core raw-addressed |
 | `$0A00-$7BFF` | 29,184 | Always-resident region (Kick segments, C128-style splits) |
 | `$7C00-$9DFF` | 8,704 | Play/modal slot: play payload during gameplay; OVL.STORAGE / OVL.TITLE payloads overwrite it in modal phases |
@@ -257,25 +289,38 @@ Platform owns `$90-$EF`:
    signature (`M8P` equivalent) → resume gameplay. Signature mismatch =
    fatal storage error path.
 
-## Boot File List (draft; load order)
+## Boot File List (current, M2)
 
 ProDOS volume `MORIA8`:
 
 | File | Type | Destination |
 | --- | --- | --- |
-| `MORIA8.SYSTEM` | SYS `$2000` | boot.s; stages itself into `$0200-$03CF` scratch (its `$2000` origin is inside the resident span) |
-| `A2.RES.*` (2-4 BINs) | BIN, auxtype = load addr | always-resident segments `$0A00-$7BFF` (split per M1 segmentdefs) |
-| `A2.PLAY` | BIN `$7C00` | read once, AUXMOVE to aux cache; then broker-owned |
-| `A2.AUXDATA` | BIN | names + huffman + store_data + recall → aux `$3B0C-$4FFF` |
-| `OVL.*` (hot set) | BIN | preloaded to aux cache `$5000+`: TOWN, UI, ITEMS, DEATH, GEN |
-| `OVL.*` (cold set) | BIN | left on disk: START, HELP, MODAL, DISARM, STORAGE, TITLE |
-| `MONSTER.DB.1-4` | BIN `$A200` | tier files, loaded on demand into window |
-| `TITLE` | BIN | title art, on demand |
+| `MORIA8.SYSTEM` | SYS `$2000` | boot.s; relocates itself to `$0800-$09FF` scratch (its `$2000` origin is inside the resident span) |
+| `MORIA8.PAK` | BIN | boot container: 512-B header (count + 16-bit lengths) then RES, AUXDATA, OVL.TOWN, OVL.UI, OVL.ITEMS, OVL.SPELL, OVL.MODAL, OVL.GEN payloads in that order |
+| `A2.PLAY` | BIN `$7C00` | play payload; loaded on demand by `a2_require_play` (signature `M8P` validated) |
+| `OVL.*` (cold set) | BIN `$A400` | left on disk: START, DEATH, HELP, STORAGE, TITLE |
+| `MONSTER.DB.1-4` | BIN `$A400` | tier files, loaded on demand into the window |
+| `TITLE` | BIN `$4000` | title art, on demand |
 
-Boot: switches set (TEXT/80COL/80STORE/ALTCHARSET, INTC3ROM) → thunk
-install → resident BINs → auxdata → aux → hot overlays + play → aux cache →
-jump entry. Exit = MLI QUIT. `/RAM` volume is never touched (aux overwrite
-is then safe); boot may deallocate it (M0/M1 verification item stands).
+Boot: ProDOS kernel → MORIA8.SYSTEM (relocates to `$0800`) → one OPEN of
+MORIA8.PAK → header read to `$A400` → 8 sequential READs (RES →
+`$0A00-$7BFF` direct; the rest staged at `$7C00` and RAMWRT-copied to aux:
+AUXDATA → `$3B0C`, cache slots below) → CLOSE → jump `$0A00`.
+
+The single-open sequential container replaces an earlier per-file
+OPEN/GFI/READ/CLOSE boot design after that design reproduced a late-file
+hang under MAME 0.288 with ProDOS 2.4.3. The exact driver-level cause is not
+established; the PAK is retained because it removes the failing boot access
+pattern, not as proof that all runtime file opens are unsafe.
+
+Aux cache manifest v7 (shared by `cache_layout.s`; payloads are exact byte
+lengths and boot copies are page-rounded): TOWN `$5700`, UI `$6C00`, SPELL
+`$7A00`, MODAL `$8E00`, GEN `$9900`, ITEMS `$AA00-$BFFF`. DEATH, HELP, and
+STORAGE remain cold. Link-time assertions bind every payload extent to its
+next slot and the fixed runtime-copy bound.
+
+Exit = MLI QUIT. `/RAM` volume is disconnected at init (TRM 5.2.2.2);
+aux overwrite is then safe.
 
 ## Open Items Carried to M1
 

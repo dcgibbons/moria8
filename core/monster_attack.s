@@ -151,7 +151,7 @@ monster_attack_player:
 !map_done:
     // Track attack in recall
     ldx mat_type2
-    inc recall_attacks,x
+    :AuxIncX(recall_attacks)
 
     // Build and print summary message
     lda mat_any_hit
@@ -180,7 +180,7 @@ monster_attack_player:
 
 !map_player_dead:
     ldx mat_type2
-    inc recall_deaths,x
+    :AuxIncX(recall_deaths)
     stx zp_death_source
     jmp player_death_check
 

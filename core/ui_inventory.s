@@ -148,7 +148,7 @@ ui_inv_display_common:
     // Screen-code mixed lowercase letters are 1-based: 1 -> 'a', 7 -> 'g'.
     sta uinv_identify_footer_last
 !uinv_footer_ready:
-    lda #24
+    lda #(SCREEN_ROWS - 1)
     sta zp_cursor_row
     lda uinv_footer_col
     sta zp_cursor_col

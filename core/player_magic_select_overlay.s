@@ -149,7 +149,7 @@ spell_list_display:
 !sld_done:
     lda #COL_WHITE
     sta zp_text_color
-    lda #24
+    lda #(SCREEN_ROWS - 1)
     sta zp_cursor_row
     lda #5
     sta zp_cursor_col

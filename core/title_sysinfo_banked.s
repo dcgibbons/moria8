@@ -10,6 +10,68 @@ title_show_sysinfo_banked:
     sta zp_text_color
     lda #23
     sta zp_cursor_row
+#if APPLE2
+    // Apple II: detect machine from ROM ID bytes (Apple II Miscellaneous
+    // Technical Note #7), and ProDOS version from KVERSION ($BFFF).
+    ldx #28                     // center for ~24 chars
+    stx zp_cursor_col
+
+    lda $fbb3                   // family byte: $06 = IIe/IIc family
+    cmp #$06
+    bne !generic+
+    lda $fbc0
+    cmp #$ea                    // IIe
+    beq !iie+
+    cmp #$e0                    // IIe enhanced
+    beq !iie+
+    cmp #$00                    // IIc
+    beq !iic+
+!generic:
+    lda #<tsi_apple2_str
+    ldy #>tsi_apple2_str
+    jmp !tsi_print_machine+
+!iie:
+    lda #<tsi_apple_iie_str
+    ldy #>tsi_apple_iie_str
+    jmp !tsi_print_machine+
+!iic:
+    lda #<tsi_apple_iic_str
+    ldy #>tsi_apple_iic_str
+!tsi_print_machine:
+    jsr tsi_print
+
+    // ProDOS version: KVERSION ($BFFF); suppress if implausible.
+    lda $bfff
+    beq !done+
+    cmp #$80
+    bcs !done+
+    sta zp_temp0
+    lda #<tsi_prodos_str
+    ldy #>tsi_prodos_str
+    jsr tsi_print
+    lda zp_temp0
+    lsr
+    lsr
+    lsr
+    lsr
+    jsr tsi_digit
+    lda #$2e                    // '.'
+    jsr hal_screen_put_char
+    lda zp_temp0
+    and #$0f
+    jsr tsi_digit
+!done:
+    rts
+
+tsi_digit:
+    cmp #10
+    bcs !td_q+
+    ora #$30                    // screencode digit
+    jmp hal_screen_put_char
+!td_q:
+    lda #$3f                    // '?'
+    jmp hal_screen_put_char
+#else
     // Start column: compact 40-column centering.
 #if HAL_PLATFORM_TITLE_SYSINFO_80COL
     ldx #((SCREEN_COLS - 15) / 2)   // "C128  KERNAL R1"
@@ -92,6 +154,7 @@ title_show_sysinfo_banked:
 #endif
 !done:
     rts
+#endif
 
 tsi_print:
     sta zp_ptr0
@@ -105,6 +168,12 @@ tsi_mach_lo:
 tsi_mach_hi:
 #if HAL_PLATFORM_TITLE_SYSINFO_SX64_PROBE
     .byte >tsi_c64_str, >tsi_sx64_str, >tsi_c64u_str
+#endif
+#if APPLE2
+tsi_apple2_str:    .text "APPLE II" ; .byte 0
+tsi_apple_iie_str: .text "APPLE IIe" ; .byte 0
+tsi_apple_iic_str: .text "APPLE IIc" ; .byte 0
+tsi_prodos_str:    .text "  PRODOS " ; .byte 0
 #endif
 tsi_c64_str:    .text "C64" ; .byte 0
 tsi_c64u_str:   .text "C64U" ; .byte 0

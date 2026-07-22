@@ -122,10 +122,17 @@ monster_pick_spell:
 !mps_dispatch:
     // X = bit position (spell index 0-6)
     // Track spell in recall
+#if APPLE2
+    ldy zp_mon_type
+    :AuxReadY(recall_spells)
+    ora recall_spell_bit,x
+    :AuxWriteY(recall_spells)
+#else
     lda recall_spell_bit,x
     ldy zp_mon_type
     ora recall_spells,y
     sta recall_spells,y
+#endif
     // Dispatch
     cpx #0
     beq !mps_bolt+
@@ -260,7 +267,7 @@ mm_apply_spell_damage:
     jmp hal_sound_play
 !masd_dead:
     ldx zp_mon_type
-    inc recall_deaths,x
+    :AuxIncX(recall_deaths)
     stx zp_death_source
     jmp player_death_check
 

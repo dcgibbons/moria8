@@ -7,7 +7,8 @@
 // transitions and loads new tier data from disk or REU.
 //
 // Tier data is stored as standalone PRG files on the d64 disk.
-// Files load to $E000 (RAM under KERNAL ROM). After loading, the
+// Files load to BANKED_DATA_BASE (RAM under KERNAL ROM on Commodore, the
+// shared $A400 window on Apple II). After loading, the
 // SoA arrays are copied into the active creature buffer via
 // load_tier_to_buffer. C64 copies active tier names into hidden RAM under
 // I/O so gameplay no longer depends on the $E000 staging window; C128 keeps
@@ -295,10 +296,11 @@ tier_restore_after_overlay:
 // Input: current_tier = tier number (1-4)
 // Uses C128 tier cache, REU (DMA), or KERNAL LOAD from disk.
 // After loading, SoA arrays are copied to the active buffer.
-// Name strings remain at $E000+ (accessed via creature_get_name).
+// Name strings remain at BANKED_DATA_BASE+ until the platform remaps/copies
+// them for creature_get_name.
 // Clobbers: A, X, Y, zp_ptr0, zp_ptr1, zp_temp0, zp_temp1
 tier_load:
-    // Invalidate overlay — tier data will overwrite $E000
+    // Invalidate overlay — tier data will overwrite BANKED_DATA_BASE.
     jsr overlay_invalidate
 
     // Show loading message only when we are not already presenting the
@@ -331,7 +333,7 @@ tier_load:
     lda reu_present
     bne !tl_reu+
 
-    // --- Disk path: KERNAL LOAD tier file to $E000 ---
+    // --- Disk path: load tier file to BANKED_DATA_BASE ---
 #if C128_CACHE_TEST_SKIP_TIER
     lda current_tier
     cmp c128_cache_test_skip_tier
@@ -353,13 +355,13 @@ tier_load:
 #endif
 
 !tl_reu:
-    // --- REU path: DMA tier data from REU to $E000 ---
+    // --- REU path: DMA tier data from REU to BANKED_DATA_BASE ---
     jsr reu_fetch_tier
     // REU DMA always succeeds (data was loaded at startup)
 
 !tl_activate:
-    // Data is now in RAM at $E000 (under KERNAL ROM).
-    // Bank out KERNAL to read, copy SoA to active buffer.
+    // Data is now at the platform staging base. Bank out KERNAL where
+    // applicable, then copy the SoA arrays to the active buffer.
 #if !HAL_PLATFORM_OVERLAY_CACHE_ENABLED
     php
     sei
@@ -370,16 +372,16 @@ tier_load:
     :BankOutKernal()
 #endif
 
-    lda #<$e000
+    lda #<BANKED_DATA_BASE
     sta zp_ptr0
-    lda #>$e000
+    lda #>BANKED_DATA_BASE
     sta zp_ptr0_hi
     ldx current_tier
     lda tier_count_table,x      // A = creature count for this tier
     jsr load_tier_to_buffer
 
 #if HAL_PLATFORM_OVERLAY_CACHE_ENABLED
-    // Compute tier name table addresses in $E000 region.
+    // Compute tier name table addresses in the staging region.
     // After load_tier_to_buffer, zp_ptr0 is past all 22 arrays.
     // name_hi starts at zp_ptr0 - count, name_lo at zp_ptr0 - 2*count.
     sec
@@ -447,13 +449,13 @@ tier_load:
 !tl_failed:
     // Disk load failed — reset tier state so creature_get_name
     // uses embedded name pointers (main RAM) instead of the
-    // tier path which reads from $E000 (now invalid).
+    // tier path which reads from the staging region (now invalid).
     jsr tier_invalidate_state
     rts
 
 #if HAL_PLATFORM_MONSTER_HIDDEN_NAME_POOL
 // platform_copy_tier_names_to_pool — Copy the active tier name block
-// from the staged $E000 tier PRG into hidden RAM under I/O, then rewrite
+// from the platform staging window into the owned name pool, then rewrite
 // cr_name pointers. Called while interrupts are masked and $E000 RAM is visible.
 // Output: carry clear
 // Clobbers: A, X, Y, zp_ptr0, zp_ptr1, zp_ptr2
@@ -523,6 +525,7 @@ platform_copy_tier_names_to_pool:
     rts
 
 .assert "Platform tier name pool fits largest name blob", TIER4_SIZE - (TIER4_COUNT * 22) <= (PLATFORM_TIER_NAME_POOL_END - PLATFORM_TIER_NAME_POOL_BASE + 1), true
+.assert "Tier staging base is page aligned", <BANKED_DATA_BASE, 0
 #endif
 
 #if HAL_PLATFORM_OVERLAY_CACHE_ENABLED

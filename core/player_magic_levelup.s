@@ -25,7 +25,7 @@ magic_check_new_spells:
     jsr pm_setup_active_tables
 
     ldx player_data + PL_CLASS
-    lda class_spell_min_level,x
+    :AuxReadX(class_spell_min_level)
     cmp zp_player_lvl
     beq !mcns_level_ok+
     bcc !mcns_level_ok+
@@ -44,8 +44,17 @@ magic_check_new_spells:
     sta mcns_stat_adj
 
     lda zp_player_lvl
+#if APPLE2
+    sta zp_temp0
+    :AuxReadX(class_spell_min_level)
+    sta zp_temp1
+    lda zp_temp0
+    sec
+    sbc zp_temp1
+#else
     sec
     sbc class_spell_min_level,x
+#endif
     clc
     adc #1
     sta zp_temp0
@@ -85,9 +94,21 @@ magic_check_new_spells:
     rts
 !mcns_cap_total:
     sta mcns_allowed
+#if APPLE2
+    sta zp_temp0
+    :AuxReadX(class_spell_total)
+    sta zp_temp1
+    lda zp_temp0
+    cmp zp_temp1
+#else
     cmp class_spell_total,x
+#endif
     bcc !mcns_count_known+
-    lda class_spell_total,x
+#if APPLE2
+    lda zp_temp1
+#else
+    :AuxReadX(class_spell_total)
+#endif
     sta mcns_allowed
 
 !mcns_count_known:
@@ -110,7 +131,7 @@ magic_check_new_spells:
     sta zp_ptr0_hi
     txa
     tay
-    lda (zp_ptr0),y
+    :HuffRead_ptr0_y()
     cmp #99
     beq !mcns_next_spell+
     cmp zp_player_lvl

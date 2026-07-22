@@ -33,6 +33,37 @@
 #define HAL_STORAGE_PROGRAM_MEDIA_PRESENT_EXTERNAL
 #define STORAGE_STATUS_HELPER
 #import "../common/save_slot_policy.s"
+
+// Huffman data placement: resident on this platform.
+.macro HuffmanDataSegment() {
+    .segment Default
+}
+
+// Cast/pray cores stay in the $F000 runtime bank on this platform.
+.macro PlayerCastSegment() {
+    .segment RuntimeBankedCode
+}
+.macro PlayerCastRestoreResidentSegment() {
+    .segment RuntimeBankedCode
+}
+.macro PmHelpersSegment() {
+    .segment RuntimeBankedCode
+}
+.macro PmHelpersRestoreSegment() {
+    .segment RuntimeBankedCode
+}
+.macro ItemInitIdentSegment() {
+    .segment C128ResidentItems
+}
+.macro WizardGenExecSegment() {
+    .segment C128ResidentPlay
+}
+.macro WizardGenExecRestoreSegment() {
+    .segment C128ResidentPlay
+}
+.macro ItemInitIdentRestoreSegment() {
+    .segment C128ResidentItems
+}
 .const C128_MEDIA_UNKNOWN = 0
 .const C128_MEDIA_PROGRAM = 1
 .const C128_MEDIA_SAVE    = 2
