@@ -18,9 +18,9 @@
 //   sc $40-$5F -> (sc+$20)|$80   (a-z)
 //   sc $60-$FF -> $A0            (graphics/reverse -> space)
 //
-// Blank/unblank: hires page 1 is zeroed at boot; blank switches to full
-// graphics hires page 1 (black), unblank returns to text. Text buffers are
-// never modified.
+// Blank/unblank: keep the full-screen display in text mode while the caller
+// clears/repaints the text buffers. Hires page 1 is not initialized by the
+// boot path, so exposing it would show arbitrary bitmap data.
 
 #import "vic_palette_consts.s"
 #import "hal/layout.s"
@@ -39,9 +39,10 @@
 .const INPUT_ROW   = hal_layout_input_row
 .const hal_screen_full_clear_uses_bulk = false
 .const hal_screen_box_vertical_char = $21
-.const hal_screen_help_line_uses_api = false
+.const hal_screen_help_line_uses_api = true
 .const hal_screen_help_line_uses_color_map = false
 .const hal_screen_spell_bolt_flash_sets_color = false
+#define HAL_SCREEN_HELP_LINE_USES_API
 
 .assert "HAL layout screen cols", SCREEN_COLS, hal_layout_screen_cols
 .assert "HAL layout screen rows", SCREEN_ROWS, hal_layout_screen_rows
@@ -187,11 +188,11 @@ screen_clear:
     sta zp_ui_dirty
     rts
 
-// screen_blank — Switch to the (boot-zeroed) hires page 1. Preserves: nothing
+// screen_blank — Force full-screen text mode during a repaint. Preserves: nothing
 screen_blank:
-    sta A2_HIRES_ON
     sta A2_MIX_OFF
-    sta A2_TEXT_OFF
+    sta A2_HIRES_OFF
+    sta A2_TEXT_ON
     rts
 
 // screen_unblank — Return to 80-column text. Preserves: nothing
@@ -281,12 +282,12 @@ screen_put_char:
 
 // screen_put_string — Write null-terminated screen codes at cursor
 // Input:  zp_ptr0/zp_ptr0_hi = string; zp_cursor_row, zp_cursor_col
-// Clobbers: A, X, Y, zp_temp4
+// Clobbers: A, X, Y
 screen_put_string:
     jsr screen_set_cursor
     ldy #0
 !loop:
-    sty zp_temp4            // string index (a2_write_cell clobbers Y)
+    sty a2_zp_scratch       // string index (a2_write_cell clobbers Y)
     lda (zp_ptr0),y
     beq !done+
     tax                     // screen code
@@ -294,7 +295,7 @@ screen_put_string:
     ldx zp_cursor_col       // column
     jsr a2_write_cell       // preserves X
     inc zp_cursor_col
-    ldy zp_temp4
+    ldy a2_zp_scratch
     iny
     lda zp_cursor_col
     cmp #SCREEN_COLS        // stop at row edge (C64 behavior)
@@ -329,7 +330,7 @@ screen_clear_row:
 // screen_put_char_at — Write screen code A at (X = column, Y = row)
 // Preserves: cursor position
 screen_put_char_at:
-    sta zp_temp4
+    sta a2_zp_scratch
     lda zp_cursor_row
     pha
     lda zp_cursor_col
@@ -337,7 +338,7 @@ screen_put_char_at:
     sty zp_cursor_row
     stx zp_cursor_col
     jsr screen_set_cursor
-    ldx zp_temp4
+    ldx a2_zp_scratch
     jsr a2_map_char
     ldx zp_cursor_col
     jsr a2_write_cell

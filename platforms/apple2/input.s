@@ -59,7 +59,7 @@
 .label hal_input_wait_release = input_wait_release
 .label hal_input_any_key_held = input_run_key_held
 .label hal_input_run_cancel_check = input_run_cancel_check
-.label hal_input_followup_prepare = input_noop
+.label hal_input_followup_prepare = input_modal_prepare
 .label hal_input_modal_prepare = input_modal_prepare
 .label hal_input_modal_finish = input_noop
 

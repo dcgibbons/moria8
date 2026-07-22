@@ -1002,6 +1002,428 @@ Unresolved uncertainty and risk:
 Static ownership and extent checks close the overwrite by construction. The suffix wrapper reuses an already production-tested bounded appender, but the four Apple ego paths do not yet have automated runtime scenarios.
 ```
 
+### M3 bash level-up overlay-return repair record — 2026-07-22
+
+```text
+Problem and success criteria:
+Killing a monster with Bash at a level threshold printed executable bytes as combat text, repeatedly raised the player to level 40, inflated HP/XP, and exhausted the hardware stack. Success is that Bash may trigger exactly the normal finite level-up sequence, then resumes its ITEMS-overlay continuation with OVL.ITEMS physically resident and accepts subsequent commands without corrupting combat text or player state.
+
+State being changed:
+Apple overlay ownership at the Bash-to-resident-level-up return boundary only. Monster records, damage, XP awards, level thresholds, HP/mana formulas, spell learning, messages, turn consumption, and save representation are unchanged.
+
+Search scope and terms:
+The supplied 2026-07-22 001724 Virtual ][ snapshot; main/aux RAM and stack page; current_overlay; OVL.ITEMS and OVL.SPELL cache slots; bash_monster; combat_award_xp; combat_check_levelup; combat_apply_levelup; tramp_magic_recalc_mana; tramp_magic_check_new_spells; magic_check_new_spells; msg_build_action; combat_msg_buf; and all production combat_check_levelup callers.
+
+Relevant readers/writers found and known exclusions:
+The snapshot's aux cache at $AA00 matches the built ITEMS payload byte-for-byte and its SPELL cache at $7A00 matches the built SPELL payload byte-for-byte, excluding disk/cache corruption. Stack page $0140-$01F8 repeats return frames $B493 (Bash after combat_check_levelup), $8CBF (combat_check_levelup after combat_apply_levelup), $8D4C (combat_apply_levelup after the SPELL helper), and $B4B6 (Bash after bash_off_balance), proving recursive cross-overlay execution. combat_msg_buf contains bytes copied from live A2.PLAY code and the saved action pointer is $8601 rather than a legal combat verb, explaining the rendered garbage. Normal melee calls combat_check_levelup from resident A2.PLAY; spell-effect kills call it from OVL.SPELL; Bash is the only found caller whose continuation is in OVL.ITEMS while level-up helpers replace that window with OVL.SPELL.
+
+Initialization, reset and persistence points:
+N/A — no new persistent or initialized gameplay state. The repair reloads the immutable boot-cached ITEMS payload before returning to the existing Bash continuation; current_overlay is updated by the existing broker.
+
+Affected production sequence through the changed transition:
+Bash monster kill in OVL.ITEMS -> always-resident wrapper -> combat_check_levelup/combat_apply_levelup in A2.PLAY -> level-up magic helpers load and execute OVL.SPELL -> resident wrapper reloads OVL.ITEMS from aux cache -> return to bash_monster after its level check -> kill bookkeeping/off-balance -> normal turn completion.
+
+Contract decision or selected upstream oracle with source locations:
+docs/APPLE2_MEMORY_POLICY.md assigns $A400-$B9FF to one mutually exclusive overlay and $7C00-$9FFF to persistent A2.PLAY. platforms/apple2/main.s owns resident overlay trampolines; core/bash.s owns the Bash continuation. The snapshot stack is the production failure oracle. Existing combat_check_levelup behavior remains the semantic oracle because no gameplay rule changes.
+
+Intentional Moria8 deviations:
+N/A — this restores the existing Bash, XP, level-up, spell-learning, and off-balance sequence.
+
+Input/intermediate widths, signedness, carry, range and overflow policy:
+Overlay IDs remain unsigned bytes. The wrapper ignores combat_check_levelup's incidental register/flag results, requests OVL.ITEMS, and may return only after carry-clear load success; a failed reload cannot safely return into the overwritten window and therefore uses the existing fatal BRK convention for impossible cached-continuation failures. XP, HP, mana, level, damage, and RNG arithmetic are unchanged.
+
+RNG reduction and bias, if applicable:
+N/A — no RNG code, inputs, call count, or reduction changes.
+
+Affected platforms, overlays, banks and owners:
+Apple only: one 12-byte always-resident wrapper and the Apple conditional Bash call site. OVL.ITEMS and OVL.SPELL layouts and cache payloads are unchanged except for any address shift caused by the three-byte call-target substitution. C64, C128, and Plus/4 retain their direct combat_check_levelup call.
+
+Required production-path tests:
+Apple link and memory-contract checker; regenerated Apple disk; emitted-call inspection proving Bash targets the resident wrapper and that the wrapper reloads OVL.ITEMS before RTS; full cross-platform build because core/bash.s is shared. The active runtime gate is Virtual ][ cold boot -> dungeon -> Bash-kill a monster at the next XP threshold: one finite level-up, sane HP/XP, readable messages, off-balance at most once, and responsive subsequent input. Monster State conditional rows are N/A because no record, attack, visibility, sleep, or targeting transition changes. Turn/Render conditional rows are N/A because command consumption, redraw events, visibility, and rendering are unchanged.
+
+Known behavior explicitly out of scope:
+Combat balance, level thresholds, bash hit/damage/off-balance formulas, monster AI and attacks, message wording, generic nested-overlay refactoring, cold-file transport, and emulator behavior.
+
+Unresolved uncertainty and risk:
+The invalid overlay return and its downstream recursion are directly proven. Static ownership and emitted-call checks can prove the return boundary, but the repository has no automated Apple gameplay harness for a threshold Bash kill; the supplied Virtual ][ reproduction remains the production runtime confirmation.
+```
+
+### M3 chargen class-list renderer scratch repair record — 2026-07-22
+
+```text
+Problem and success criteria:
+The Apple class-selection page intermittently showed only overlapping entries such as `a) Warrior`, `f) Rogue`, and `i) Mage`, with a malformed `Choose (a-i)` range. Success is that every allowed class appears once on consecutive rows, letters are consecutive from `a`, the prompt ends at the actual allowed-class count, and each accepted letter maps to the displayed class.
+
+State being changed:
+Apple screen-service scratch ownership only. Character class restrictions, class ordering, selection mapping, player data, text, and input semantics are unchanged.
+
+Search scope and terms:
+create_select_class; zp_temp2/3/4; create_class_map; race_class_flags; hal_screen_put_string; screen_put_string; screen_put_char_at; a2_write_cell; a2_zp_scratch; every Apple writer of zp_temp4; and the supplied broken-page screenshot.
+
+Relevant readers/writers found and known exclusions:
+create_select_class owns zp_temp4 as both the consecutive display-row counter and valid-class count across each class-name print. Apple screen_put_string also stored its per-character index in zp_temp4, leaving the class name length there before the caller incremented it. `Warrior` therefore changed the next display position from 1 to 8; later names repeatedly changed the count and overwrote rows, exactly accounting for the screenshot. The shared HAL screen contract allows A/X/Y clobbers but does not grant screen services ownership of core zero-page scratch. Apple screen_put_char_at had the same unnecessary zp_temp4 use. Race filtering tables, class names, aux/main text interleave, keyboard input, and overlay bytes are excluded.
+
+Initialization, reset and persistence points:
+N/A — no gameplay state is initialized, reset, or persisted. The existing platform-owned a2_zp_scratch byte is transient and requires no initialization.
+
+Affected production sequence through the changed transition:
+Character creation -> race selection -> stat roll -> class selection -> for each allowed class, preserve the caller's core scratch while the Apple renderer indexes and writes the name -> increment the unchanged display count -> build the selection map and prompt -> accept one valid key.
+
+Contract decision or selected upstream oracle with source locations:
+platforms/commodore/hal/hal_screen.s defines screen services as clobbering A/X/Y, not shared core scratch; platforms/apple2/memory.s assigns a2_zp_scratch to the platform; core/player_create.s owns zp_temp4 for the class-list loop. The screenshot and the deterministic string-length progression are the failure oracle. Existing race_class_flags and class_name_ptrs define the intended list and mapping.
+
+Intentional Moria8 deviations:
+N/A — this restores the existing class-selection presentation and mapping.
+
+Input/intermediate widths, signedness, carry, range and overflow policy:
+The renderer index, class index, and valid-class count remain unsigned bytes. Class index is bounded by CLASS_COUNT=6, valid count by 1..6, and an 80-column row bounds the renderer index. Replacing core zp_temp4 with platform a2_zp_scratch changes no arithmetic, carry, truncation, or bounds.
+
+RNG reduction and bias, if applicable:
+N/A — stat generation and all RNG code/call order are unchanged.
+
+Affected platforms, overlays, banks and owners:
+Apple only. Two renderer scratch references in screen_put_string and two in screen_put_char_at move from core zp_temp4 ($0C) to platform a2_zp_scratch ($A8), byte-for-byte in instruction size. Resident, play, overlay, and aux payload extents are unchanged. Commodore renderers and emitted binaries are unchanged.
+
+Required production-path tests:
+Full cross-platform build; Apple memory-contract checker; regenerated Apple disk; emitted-byte inspection showing Apple screen_put_string and screen_put_char_at use $A8 and no longer reference $0C. The active runtime gate is Virtual ][ new character creation with at least Human (six entries `a`-`f`) and one restricted race: consecutive rows/letters, correct prompt bound, selectable first and last entries. Turn/Render gameplay matrix rows are N/A because this page runs before gameplay and changes no dirty event, visibility, repeat command, or gameplay renderer transition.
+
+Known behavior explicitly out of scope:
+Race/class balance and restrictions, stat rolling, character-creation ordering, player-visible wording, Apple font glyphs, generic scratch auditing outside the two screen services, and automated Apple chargen-harness expansion.
+
+Unresolved uncertainty and risk:
+The shared-byte collision and screenshot are exact. Static emitted-byte inspection closes the scratch alias; the current Apple harness has no chargen-page scenario, so Virtual ][ confirmation remains required.
+```
+
+### M3 help-line renderer ownership repair record — 2026-07-22
+
+```text
+Problem and success criteria:
+Online help renders corrupt text on Apple II. Success is that both help pages render readable text, inline emphasis changes do not alter characters, navigation works, and dismissal restores responsive gameplay.
+
+State being changed:
+Apple help-line presentation routing only. Help text, page structure, navigation, input, gameplay state, and modal lifecycle are unchanged.
+
+Search scope and terms:
+tramp_ui_help_display; ui_help_display; help_draw_line; HAL_SCREEN_HELP_LINE_USES_API; hal_screen_help_line_uses_api; zp_screen; zp_color; screen_put_char; Apple 80-column aux/main interleave; and every platform policy definition of the help-line route.
+
+Relevant readers/writers found and known exclusions:
+core/ui_help.s has two implementations: the HAL-character API path and a direct linear screen/color-RAM path. Apple selected the direct path even though each 80-column row is split between aux and main RAM, row addresses are non-linear, and there is no color RAM. That path writes sequential main RAM and a false color pointer, accounting for corrupt output and risking screen-hole writes. C128 already selects the HAL API for its non-linear VDC display. Help data and the surrounding modal flow are excluded.
+
+Initialization, reset and persistence points:
+N/A — no state is added or persisted. Existing cursor and logical-color setup remains authoritative.
+
+Affected production sequence through the changed transition:
+`?` command -> resident help trampoline -> OVL.HELP -> help page setup -> each decoded line routes every ordinary character through hal_screen_put_char -> Apple character mapping and aux/main cell write -> page navigation/dismissal -> gameplay restore.
+
+Contract decision or selected upstream oracle with source locations:
+platforms/apple2/screen_a2.s owns the Apple text layout and exposes hal_screen_put_char as the only character writer that maps logical columns to the correct aux/main half. core/ui_help.s explicitly provides HAL_SCREEN_HELP_LINE_USES_API for non-linear displays. Existing C128 policy is the structural oracle; existing help data and navigation are the semantic oracle.
+
+Intentional Moria8 deviations:
+N/A — this restores the shared help content on the Apple display.
+
+Input/intermediate widths, signedness, carry, range and overflow policy:
+Rows, columns, characters, and inline markers remain unsigned bytes. The help content remains bounded by the existing 80-column layout. No arithmetic, carry contract, truncation, or range changes.
+
+RNG reduction and bias, if applicable:
+N/A — no RNG use.
+
+Affected platforms, overlays, banks and owners:
+Apple only: define HAL_SCREEN_HELP_LINE_USES_API in the resident screen backend so OVL.HELP emits API calls instead of direct memory writes. Commodore policies and help data are unchanged. The overlay remains in $A400-$B9FF and must continue to satisfy its fit assert.
+
+Required production-path tests:
+Full build; Apple memory-contract checker and regenerated disk; emitted help_draw_line inspection proving ordinary characters call hal_screen_put_char and do not write through zp_color. Runtime gate: Virtual ][ town and dungeon `?`, both pages readable, navigation and ESC dismissal responsive, gameplay correctly restored. Turn/Render conditional rows are N/A because gameplay dirty events, visibility, and turn consumption are unchanged; this changes only modal presentation routing.
+
+Known behavior explicitly out of scope:
+Help wording, colors on monochrome Apple text, general modal redesign, keyboard mapping, and unrelated screen services.
+
+Unresolved uncertainty and risk:
+The invalid writer selection is proven statically. The current automated Apple harness has no help scenario, so exact rendered content and modal return still require Virtual ][ coverage.
+```
+
+### M3 spell-list overlay-return repair record — 2026-07-22
+
+```text
+Problem and success criteria:
+Magic/prayer selection cannot safely return after the player opens the `?` spell list, and mage study has the same invalid return after its local spell list. Success is that an eligible character can select a matching book, open the cast/pray/study list, select or cancel, restore the gameplay view, execute the existing result when selected, and accept subsequent commands without a hang or corruption.
+
+State being changed:
+Apple physical overlay ownership across spell-list modal dismissal only. Eligibility, books, learned masks, spell choice, mana, failure/effect behavior, messages, turn consumption, and gameplay redraw semantics are unchanged.
+
+Search scope and terms:
+player_cast_spell; player_pray; item_gain_spell; pm_prompt_visible_spell_choice; tramp_spell_list_display; spell_list_display; ui_view_restore_modal_overlay; tier_restore_after_overlay; current_overlay; OVL.SPELL; overlay window; every post-spell-list return path; and the existing Bash overlay-return repair.
+
+Relevant readers/writers found and known exclusions:
+pm_prompt_visible_spell_choice and item_gain_spell continuations execute in OVL.SPELL at $A400. The cast/pray `?` path and mage study list both call ui_view_restore_modal_overlay directly. Apple modal restore calls tier_restore_after_overlay, which repopulates the same $A400 window with monster tier data before RTS; the next instruction in either caller is therefore overwritten. Direct cast/pray spell-letter selection does not run this modal restore and is excluded. The earlier book selector explicitly restores OVL.SPELL and is also excluded.
+
+Initialization, reset and persistence points:
+N/A — no new state. The existing broker updates current_overlay and tier ownership.
+
+Affected production sequence through the changed transition:
+cast/pray in OVL.SPELL -> select book -> press `?` -> draw spell list -> capture selection key -> resident modal-restore wrapper -> reset message state, restore tier, redraw gameplay/status -> reload boot-cached OVL.SPELL -> return to the saved spell continuation -> select/cancel normally. Mage study follows the same wrapper after its local list for both selection and cancel.
+
+Contract decision or selected upstream oracle with source locations:
+docs/APPLE2_MEMORY_POLICY.md gives the tier and all code overlays mutually exclusive ownership of $A400-$BAFF. core/ui_restore.s intentionally restores the tier before redraw. platforms/apple2/main.s owns resident cross-overlay trampolines. The established Bash repair is the structural oracle; existing spell logic is the semantic oracle.
+
+Intentional Moria8 deviations:
+N/A — this restores existing spell-list behavior.
+
+Input/intermediate widths, signedness, carry, range and overflow policy:
+Overlay IDs and selection keys remain unsigned bytes. The wrapper preserves no result from ui_view_restore_modal_overlay because its contract preserves nothing; it reloads OVL.SPELL or executes the existing fatal BRK convention rather than return into overwritten code. Spell arithmetic and carry contracts are unchanged.
+
+RNG reduction and bias, if applicable:
+N/A — modal presentation and overlay restoration use no RNG.
+
+Affected platforms, overlays, banks and owners:
+Apple only: the shared player_magic call site conditionally targets a resident Apple wrapper. That wrapper and the Bash wrapper share one resident checked overlay-reload epilogue. OVL.SPELL remains cached and window-owned. Commodore call sites remain direct.
+
+Required production-path tests:
+Full cross-platform build; Apple memory-contract checker and regenerated disk; emitted-call inspection proving the Apple cast/pray and study list exits call the resident wrapper and reload OVL.SPELL after tier restore. Runtime gate: mage magic and priest prayer using `?`, mage study selection and cancel, correct gameplay/status redraw, and responsive next command. Turn/Render rows: the existing modal-dismiss dirty/visibility/status sequence is unchanged; only physical code ownership is repaired after it. Monster rows are N/A because tier bytes are restored through the existing authoritative path and no monster state or targeting semantics change.
+
+Known behavior explicitly out of scope:
+Direct spell-letter selection, spell effects/balance, learning rules and available-spell calculation, command-key case, help content, item wear, and generic overlay redesign.
+
+Unresolved uncertainty and risk:
+The return address and overwrite are proven from linked ownership and the unconditional tier restore. Runtime mage/priest coverage remains manual because the Apple harness has no spell scenario.
+```
+
+### M3 wear inventory-overlay return repair record — 2026-07-22
+
+```text
+Problem and success criteria:
+Wear cannot safely return when the player presses `?` at the wearable-item prompt. Success is that `W`, `?`, and a listed item equips exactly that item; ESC cancels; the gameplay view/status return correctly; and subsequent input remains responsive. Direct prompt-letter selection must remain unchanged.
+
+State being changed:
+Apple inference of the physical return overlay for the existing selectable inventory modal. Inventory/equipment data, wearable filtering, swaps, combat recalculation, messages, turn consumption, and item letters are unchanged.
+
+Search scope and terms:
+tramp_item_wear; item_wear; piw_select_filtered_inv; show_inv_and_select; tramp_ui_inv_select_display; piw_return_overlay; current_overlay; stack return-address checks; OVL.ITEMS; OVL.SPELL; OVL.HELP; and every caller that supplies an explicit return-overlay hint.
+
+Relevant readers/writers found and known exclusions:
+The wear continuation is in OVL.ITEMS. show_inv_and_select correctly detects from the hardware stack that a no-hint caller is inside the overlay window, but after tramp_ui_inv_select_display it reads current_overlay to decide which owner to restore. current_overlay is then OVL.HELP, so neither ITEMS nor SPELL is selected; modal restore loads the tier and RTS targets overwritten ITEMS bytes. Apple spell callers already set piw_return_overlay explicitly before entering the item selector. Therefore an Apple no-hint overlay caller at this point is ITEMS; direct resident callers and explicit SPELL callers are excluded.
+
+Initialization, reset and persistence points:
+No new state. piw_return_overlay continues to be cleared by the existing restore path before reload.
+
+Affected production sequence through the changed transition:
+W -> resident item trampoline -> OVL.ITEMS item_wear -> wearable prompt -> `?` -> OVL.HELP inventory list -> capture item key -> stack detects an overlay continuation -> Apple assigns the no-hint owner OVL.ITEMS -> modal restore/tier redraw -> reload boot-cached OVL.ITEMS -> validate chosen item -> equip/recalculate/message -> normal turn completion.
+
+Contract decision or selected upstream oracle with source locations:
+core/player_items.s documents piw_return_overlay as the product return owner and already treats explicit hints as authoritative. platforms/apple2/main.s routes all no-hint wear/takeoff command bodies through OVL.ITEMS and supplies explicit hints for SPELL item selection. docs/APPLE2_MEMORY_POLICY.md defines exclusive window ownership. Existing direct-letter wear semantics remain the oracle.
+
+Intentional Moria8 deviations:
+N/A — this restores the shared selectable-inventory behavior.
+
+Input/intermediate widths, signedness, carry, range and overflow policy:
+Overlay IDs, item IDs, slots, and item keys remain unsigned bytes with existing bounds. No equipment arithmetic, carry result, or filter range changes.
+
+RNG reduction and bias, if applicable:
+N/A — wear selection and equipment recalculation use no RNG.
+
+Affected platforms, overlays, banks and owners:
+Apple behavior only, expressed inside the shared product-overlay branch. The Apple no-hint owner becomes OVL.ITEMS; existing C64/C128/Plus4 inference remains unchanged. The change reduces Apple resident code and changes no overlay payload data.
+
+Required production-path tests:
+Full cross-platform build; Apple memory-contract checker and regenerated disk; emitted inspection showing the Apple no-hint stack path records OVL.ITEMS and reloads it after modal restore. Runtime gate: W direct-letter success, W `?` selection success, ESC cancel, swap with occupied equipment if available, status/equipment view update, and responsive next command. Turn/Render rows: successful wear still consumes one turn and requests the existing full redraw; cancellation still consumes none; the modal restore event and authoritative visibility/status redraw remain unchanged. Monster rows are N/A.
+
+Known behavior explicitly out of scope:
+Wearability rules, starting equipment, takeoff/eat/quaff, spell item selection beyond preserving its explicit hint, command-key case, item descriptions, and generic overlay refactoring.
+
+Unresolved uncertainty and risk:
+The stale current_overlay decision and overwritten return are proven statically. Direct-letter and `?` behavior still require Virtual ][ confirmation because the Apple harness has no item scenario.
+```
+
+### M3 takeoff equipment-overlay return repair record — 2026-07-22
+
+```text
+Problem and success criteria:
+Takeoff has the same invalid window return when `?` opens its equipment list. Success is that `T`, `?`, and a listed item return to OVL.ITEMS, remove the selected non-cursed item under the existing rules, update status/equipment, and remain responsive; ESC cancel and direct letters remain unchanged.
+
+State being changed:
+Apple physical overlay ownership after the takeoff equipment modal only. Equipment records, curse rules, pack capacity, recalculation, text, and turn behavior are unchanged.
+
+Search scope and terms:
+item_takeoff; show_equip_and_select; tramp_ui_equip_select_display; ui_view_restore_modal_overlay; tier_restore_after_overlay; OVL.HELP; OVL.ITEMS; all show_equip_and_select callers; and the wear inventory-overlay return repair.
+
+Relevant readers/writers found and known exclusions:
+item_takeoff is the sole show_equip_and_select caller and executes in OVL.ITEMS. show_equip_and_select is resident, but after it restores the tier it directly RTSes to the overwritten OVL.ITEMS continuation. Unlike show_inv_and_select it has no reload step. Direct-letter takeoff never opens OVL.HELP and is excluded.
+
+Initialization, reset and persistence points:
+N/A — no new state or persistence.
+
+Affected production sequence through the changed transition:
+T in OVL.ITEMS -> `?` -> OVL.HELP equipment list -> capture key -> resident checked ITEMS modal-restore wrapper -> restore tier and gameplay view -> reload boot-cached OVL.ITEMS -> return through resident show_equip_and_select to item_takeoff -> existing validation/removal.
+
+Contract decision or selected upstream oracle with source locations:
+The exclusive window ownership in docs/APPLE2_MEMORY_POLICY.md and the sole-caller result make OVL.ITEMS the required physical owner. Existing direct-letter takeoff is the semantic oracle. The wear and spell-list resident restore boundaries are the structural oracle.
+
+Intentional Moria8 deviations:
+N/A.
+
+Input/intermediate widths, signedness, carry, range and overflow policy:
+Selection keys and slots remain unsigned bytes with existing masks and bounds. The modal restore preserves nothing by contract; the captured key remains protected on the stack. No item arithmetic changes.
+
+RNG reduction and bias, if applicable:
+N/A — takeoff uses no RNG.
+
+Affected platforms, overlays, banks and owners:
+Apple only. show_equip_and_select conditionally calls a new entry in the shared resident reload epilogue; Commodore output remains on its existing direct restore path.
+
+Required production-path tests:
+Full build; Apple memory contract and disk; emitted inspection proving the Apple equipment-list path calls the resident wrapper, which reloads OVL.ITEMS. Runtime: direct and `?` takeoff, ESC, cursed refusal if available, equipment/status refresh, and next command. Turn/Render rows remain the existing success=one turn/full redraw and cancel=zero turn behavior; monster rows are N/A.
+
+Known behavior explicitly out of scope:
+Wear, takeoff rules/balance, curse generation, pack-full behavior changes, item descriptions, and generic modal refactoring.
+
+Unresolved uncertainty and risk:
+The overwritten return is proven statically; runtime selection remains manual until the Apple harness gains an item scenario.
+```
+
+### M3 ego item-description overlay-independence repair record — 2026-07-22
+
+```text
+Problem and success criteria:
+After shop activity, wear/inventory behavior varies between an ignored command, a screen with only the Inventory title, and a hang. The partial Inventory symptom must render every listed item and remain responsive regardless of whether the pack/store contains an ego item. Store and inventory descriptions must retain their full ego suffix text without loading or executing a different code overlay.
+
+State being changed:
+Apple presentation-time ego-suffix storage and lookup only. Ego IDs, generation, combat modifiers, equipment effects, item records, identification, suffix wording, turn behavior, and save representation are unchanged.
+
+Search scope and terms:
+The reported post-shop/Inventory sequence; ui_inv_select_display; store_draw_screen; itemdesc_put_inv_slot; itemdesc_put_store_slot; itemdesc_put_staged; banked_ego_put_suffix; ego_get_suffix_ptr; ego_suffix_lo/hi; ego strings; OVL.HELP; OVL.TOWN; OVL.ITEMS; current_overlay; all banked_ego_put_suffix callers; and the earlier ego-trampoline ownership record.
+
+Relevant readers/writers found and known exclusions:
+ui_inventory.s and ui_store.s execute from OVL.HELP and OVL.TOWN respectively. Both call the resident item-description formatter, which calls banked_ego_put_suffix in persistent A2.PLAY for every non-tool item. For a nonzero ego, that routine directly calls ego_get_suffix_ptr, but Apple emits ego_get_suffix_ptr and all suffix strings in OVL.ITEMS. Neither caller loads ITEMS, and doing so would overwrite its own HELP/TOWN continuation. Ego zero returns before the invalid call, so the failure depends on the generated/purchased item mix and can appear only after the Inventory title or some rows. The four persistent trampoline-placement guards do not cover this direct call. Keyboard command mapping and the separate fresh-key path are excluded from this ownership repair.
+
+Initialization, reset and persistence points:
+No mutable state is added. An immutable, page-aligned Apple copy of the eight suffix slots is emitted in A2AuxData and loaded by the existing boot payload. Slot zero and unused padding are zero-filled.
+
+Affected production sequence through the changed transition:
+Store or inventory/equipment renderer in its current overlay -> resident item-description formatter -> persistent banked_ego_put_suffix -> compute the fixed 16-byte aux slot from ego ID -> read characters through the existing aux-safe thunk -> render through hal_screen_put_char -> return to the unchanged HELP/TOWN continuation.
+
+Contract decision or selected upstream oracle with source locations:
+docs/APPLE2_MEMORY_POLICY.md makes the $A400-$B9FF overlays mutually exclusive; therefore persistent code cannot directly call an implementation/data pointer owned by a different overlay and then return to the overwritten caller. platforms/apple2/mmu_macros.s and memory_aux.s define the aux-safe read path. core/ego_items.s is the exact player-visible suffix-text oracle. Existing ego-zero and valid-range checks remain authoritative.
+
+Intentional Moria8 deviations:
+N/A — the Apple copy preserves every existing suffix byte and only changes physical ownership.
+
+Input/intermediate widths, signedness, carry, range and overflow policy:
+Ego IDs remain unsigned bytes 0-7. Valid nonzero IDs are multiplied by 16, producing aux-page offsets $10-$70 without overflow. Every slot is exactly 16 bytes including terminator/padding; the longest ` (Holy Avenger)` string plus terminator is exactly 16. The aux thunk and Apple screen writer preserve X, which is the bounded 0-15 character index. Carry has no caller-visible result.
+
+RNG reduction and bias, if applicable:
+N/A — ego generation and all RNG calls are unchanged.
+
+Affected platforms, overlays, banks and owners:
+Apple only. The new immutable suffix slots live in A2AuxData below its $5700 ceiling. The Apple banked_ego_put_suffix branch stays in A2.PLAY and must remain at or below $9FFF. OVL.ITEMS keeps its original ego strings for generation/combat consumers. C64/C128/Plus4 output retains the existing direct pointer implementation.
+
+Required production-path tests:
+Full cross-platform build; Apple memory contract/self-test and disk regeneration; emitted extents proving A2.PLAY <= $9FFF and A2AuxData <= $56FF; emitted inspection proving Apple banked_ego_put_suffix calls mmu_safe_map_read_ptr0 and no longer calls ego_get_suffix_ptr. Runtime gate: visit a shop, exercise a store containing ego stock if available, leave, open inventory/wear, render all rows and suffixes, select/cancel, and accept subsequent commands without partial title or hang. Turn/Render rows: pure presentation consumes authoritative item/ego state and changes no turn, visibility, dirty-event, repeat-command, modal-restore, or status semantics. Monster rows are N/A.
+
+Known behavior explicitly out of scope:
+Whether uppercase ASCII W is intentionally a shifted/unmapped command on Apple, host Caps Lock behavior, general input loss during redraw, ego balance/generation, non-ego item selection, and generic overlay architecture.
+
+Unresolved uncertainty and risk:
+The cross-overlay call is proven statically and precisely explains item-mix-dependent partial rendering/hangs. No new stopped snapshot yet proves that the current reported hang PC is this call, and the ignored-W observation may be an independent input/case issue. The requested Virtual ][ snapshots remain the runtime oracle.
+```
+
+### M3 follow-up/selectable initiating-key repair record — 2026-07-22
+
+```text
+Problem and success criteria:
+The Apple wear selection flashes and returns to gameplay without waiting for an item key. An initial repair rejected repeated `?` only after a full-screen list; the unchanged runtime result disproved that as the complete failure path. Success is that `W` leaves the wearable-item prompt waiting for a fresh item key, `?` leaves its displayed list active until a non-`?` selection or cancel key arrives, and the bounded Apple key-release fallback that prevents the earlier character-selection deadlock remains intact.
+
+State being changed:
+Apple follow-up-key preparation and selectable-overlay input classification only. No persistent state, item/spell data, modal contents, turn state, dirty flags, equipment effects, or spell effects change.
+
+Search scope and terms:
+input_prepare_followup_key; hal_input_followup_prepare; every preparation call site and its following key read; input_prepare_selectable_overlay_key; input_get_followup_key; input_wait_release; input_modal_prepare; show_inv_and_select; show_equip_and_select; pm_prompt_visible_spell_choice; piw_select_filtered_inv; item_wear; and all show_inv_and_select/show_equip_and_select callers.
+
+Relevant readers/writers found and known exclusions:
+The wear command enters piw_select_filtered_inv, prints the wearable-item prompt, calls input_prepare_followup_key, and immediately reads the item key. Apple mapped hal_input_followup_prepare to input_noop, so a held or host-repeated `W` can be accepted as the choice; `W` lies outside the visible A-V range and takes the existing cancel return, exactly matching the flash. Other follow-up call sites have the same stated fresh-key requirement. Read-only help dismissal already uses modal preparation and is excluded. The three selectable full-screen lists additionally enter with `?`; the existing Apple release record documents that the bounded AKD fallback can still allow a held initiating key into the later prompt, and `?` is never a valid list choice.
+
+Initialization, reset and persistence points:
+N/A — no new state is introduced. Follow-up preparation reuses the existing bounded modal-release routine, and `?` rejection remains local to each selectable-overlay key read.
+
+Affected production sequence through the changed transition:
+Gameplay command key -> follow-up prompt -> bounded Apple release preparation -> wait for the new answer key. For list selection: W/T/cast/pray prompt -> `?` -> bounded release preparation -> draw the appropriate selectable overlay -> read keys while rejecting `?` -> accept a letter, SPACE, ESC, or CTRL+C under the existing caller rules -> restore the tier/gameplay view and required physical overlay -> continue or cancel normally.
+
+Contract decision or selected upstream oracle with source locations:
+core/input_ui_helpers.s defines input_prepare_followup_key as ensuring that an initiating command does not leak into a secondary prompt. Mapping that contract to a no-op violates its stated semantics. platforms/apple2/input.s already supplies input_modal_prepare/input_wait_release as the bounded fresh-key implementation, including the demonstrated Virtual ][ deadlock fallback. core/player_item_select.s and core/player_magic.s define `?` as the command to open a list, not as a list choice. Existing direct-letter selector behavior remains the semantic oracle.
+
+Intentional Moria8 deviations:
+N/A — this prevents an initiating command key from being misclassified as a list choice.
+
+Input/intermediate widths, signedness, carry, range and overflow policy:
+Keys remain unsigned bytes. Follow-up preparation changes no returned key. Only byte `$3F` is retried on Apple after a selectable overlay has been drawn. Existing letter normalization, SPACE cancellation, ESC/CTRL+C handling, carry results, and selection bounds are unchanged.
+
+RNG reduction and bias, if applicable:
+N/A — input/modal handling uses no gameplay RNG.
+
+Affected platforms, overlays, banks and owners:
+Apple behavior only. The Apple follow-up HAL alias now targets the existing resident bounded modal-preparation routine. A resident Apple helper serves inventory, equipment, and spell-list reads. To stay within the resident window, the Apple inventory return-owner check is reduced to the immediate caller return address; the complete caller search proves every no-hint Apple caller is either immediately resident or immediately in OVL.ITEMS, while OVL.SPELL supplies an explicit hint. Commodore code generation and ownership inference remain unchanged.
+
+Required production-path tests:
+Full cross-platform build; Apple memory-contract checker and regenerated disk; emitted inspection proving the Apple follow-up alias targets bounded modal preparation, all three Apple selectable lists call the retry helper, and the no-hint inventory owner check still distinguishes resident from OVL.ITEMS. Exact runtime gate: press `W` and release it; the item prompt must remain without another key. Then `?` must remain on the list without another key, and a listed letter must equip and return responsive gameplay; ESC must cancel. Additional manual coverage: direct-letter wear, `T`/`?`, cast/pray `?`, and another secondary prompt. Turn/Render rows are unchanged: only an initiating key is drained before existing selection/cancel behavior; no turn, visibility, dirty, redraw, repeat-command, status, or monster-authority rule changes.
+
+Known behavior explicitly out of scope:
+General Apple keyboard typematic policy, item/spell availability and effects, help content, and generic modal refactoring.
+
+Unresolved uncertainty and risk:
+The unchanged result disproves repeated `?` as the complete diagnosis. The no-op follow-up path can produce the exact observed return, but the repeated `W` value is inferred because no stopped snapshot captured igk_key. The bounded fallback deliberately permits progress if AKD remains asserted and therefore cannot guarantee release under that exceptional emulator state; list-level `?` rejection covers the reported nested selector. Virtual ][ confirmation remains the authoritative runtime gate.
+```
+
+### M3 generation busy-screen blanking repair — 2026-07-22
+
+```text
+The Apple II blanking primitive previously switched to hires page 1 while the
+generation UI cleared text memory. That page is not initialized by the boot
+path, so Virtual ][ and MAME could display arbitrary bitmap bytes as a full
+screen of garbage. screen_blank now forces full-screen text mode; the existing
+text clear and generation repaint sequence is unchanged. This is Apple display
+ownership only: gameplay state, turn behavior, and text rendering semantics do
+not change. Verification: clean diskapple2 build (305 asserts) and Apple
+memory-contract check (21/21).
+```
+
+### M3 item-action dispatch-policy repair — 2026-07-22
+
+```text
+Problem and success criteria:
+The initial W command cleared the message rows and returned without a prompt or
+message. Success is that every item-action command enters OVL.ITEMS through its
+resident trampoline; W with no wearable pack item reports the existing
+"You have nothing there." message; and W with a wearable item waits, supports
+the ? inventory list, equips the selection, and returns to command input.
+
+Evidence and corrected root cause:
+Apple defined hal_platform_game_loop_item_actions_trampolined as an assembler
+constant, but core/game_loop.s selects the trampoline path with the uppercase
+HAL_PLATFORM_GAME_LOOP_ITEM_ACTIONS_TRAMPOLINED preprocessor symbol. The symbol
+was absent. The linked cmd_wear therefore called item_wear at $A9E8 directly
+while OVL.GEN still owned $A400-$B9FF in town. This record supersedes the
+initiating-key hypothesis as the explanation for the initial W failure; the
+separate modal-return repairs remain applicable to nested ? selection.
+
+Changed state and invariants:
+Apple lifecycle policy now defines the selector used by game_loop. No gameplay,
+inventory, input, turn-consumption, redraw, item-rule, or save state changes.
+The affected W/T/E/Q commands retain their existing semantics and byte lengths;
+only their JSR targets change to resident overlay-loading trampolines.
+
+Focused verification:
+A clean `make clean diskapple2` completed with 305 main-image and 6 boot-image
+assertions, all passing. The clean A2.PLAY links W/T/E/Q to $7A32/$7A3D/$7A48/
+$7A53. A production-path MAME run reached town and verified both branches:
+starting inventory W displayed "You have nothing there." and returned to input;
+a diagnostic wearable item produced the wear prompt, ? rendered the complete
+inventory, selection moved the item into its equipment slot, printed the wield
+message, and returned to input. Turn/Render and Monster contract rows are N/A:
+the existing item implementations and their state/turn/redraw behavior are
+unchanged; this repair only restores their physical overlay entry boundary.
+
+Known exclusions:
+General help content, magic/prayer behavior, item-selection rules, emulator ROM
+warnings, and generic overlay refactoring.
+```
+
 - Per-module size attribution: done at M0 (`docs/APPLE2_MEMORY_POLICY.md`,
   measured at `f7d322d`).
 - LOW/MODERATE-confidence hardware/OS claims, all scheduled for M0/M1

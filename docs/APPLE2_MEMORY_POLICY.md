@@ -45,8 +45,8 @@ design record; current ownership is enforced by `platforms/apple2/memory.s`,
 
 | Range | Current owner and measured use |
 | --- | --- |
-| main `$0A00-$7BFF` | Always-resident image; current link ends `$7BFD` |
-| main `$7C00-$9FFF` | Load-once `A2.PLAY`; current payload `$7C00-$9FE5` (9,190 B including signature) |
+| main `$0A00-$7BFF` | Always-resident image; current payload `$0A00-$7BFF` (29,184 B) |
+| main `$7C00-$9FFF` | Load-once `A2.PLAY`; current payload `$7C00-$9FFD` (9,214 B including signature) |
 | main `$A000-$A3FF` | Tier-name pool (1,024 B) |
 | main `$A400-$B9FF` | All 11 code overlays, mutually exclusive; largest is `OVL.ITEMS`, exactly 5,632 B |
 | main `$BA00-$BAFF` | Window tail reserved; tier data may use through `$BAFF` |

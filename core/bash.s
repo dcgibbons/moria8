@@ -298,7 +298,11 @@ bash_monster:
     jsr cmb_print_buf
 
     jsr combat_award_xp
+#if HAL_PLATFORM_BASH_LEVELUP_RESTORE_ITEMS
+    jsr tramp_combat_check_levelup_items
+#else
     jsr combat_check_levelup
+#endif
     jsr combat_note_kill
     jsr combat_print_winner_message
 

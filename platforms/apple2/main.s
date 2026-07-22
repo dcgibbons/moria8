@@ -971,6 +971,31 @@ tramp_do_look:
 #import "../../core/store_runtime_data.s"
 #undef STORE_HOT_DATA_EXTERNAL
 #import "../../core/spell_helper_tables.s"
+
+// Presentation-time ego suffixes must remain readable while HELP or TOWN owns
+// the code window. Fixed 16-byte slots make the aux pointer calculation fit in
+// the two remaining A2.PLAY bytes without loading OVL.ITEMS.
+.align $100
+a2_ego_suffix_slots:
+a2_ego_suffix_none: .byte 0
+    .fill 16 - (* - a2_ego_suffix_none), 0
+a2_ego_suffix_slay_animal: .text " (Slay Animal)" ; .byte 0
+    .fill 16 - (* - a2_ego_suffix_slay_animal), 0
+a2_ego_suffix_slay_evil: .text " (Slay Evil)" ; .byte 0
+    .fill 16 - (* - a2_ego_suffix_slay_evil), 0
+a2_ego_suffix_slay_undead: .text " (Slay Undead)" ; .byte 0
+    .fill 16 - (* - a2_ego_suffix_slay_undead), 0
+a2_ego_suffix_flame: .text " (Flame)" ; .byte 0
+    .fill 16 - (* - a2_ego_suffix_flame), 0
+a2_ego_suffix_frost: .text " (Frost)" ; .byte 0
+    .fill 16 - (* - a2_ego_suffix_frost), 0
+a2_ego_suffix_defender: .text " (Defender)" ; .byte 0
+    .fill 16 - (* - a2_ego_suffix_defender), 0
+a2_ego_suffix_holy_avenger: .text " (Holy Avenger)" ; .byte 0
+    .fill 16 - (* - a2_ego_suffix_holy_avenger), 0
+a2_ego_suffix_slots_end:
+.assert "Apple ego suffix slots are page aligned", <a2_ego_suffix_slots, 0
+.assert "Apple ego suffix slots are 8 x 16 bytes", a2_ego_suffix_slots_end - a2_ego_suffix_slots, EGO_TYPE_COUNT * 16
 .segment Default
 
 // ============================================================
@@ -1171,6 +1196,33 @@ tramp_ego_get_ac_bonus:
     jsr ego_get_ac_bonus
 !done:
     rts
+
+// Modal restore replaces the overlay window with the live tier. Reload
+// OVL.SPELL before returning to the spell-selection continuation.
+tramp_ui_view_restore_spell_overlay:
+    jsr ui_view_restore_modal_overlay
+    lda #OVL_SPELL
+    bne !restore_overlay+
+
+// The takeoff equipment selector's continuation is inside OVL.ITEMS.
+tramp_ui_view_restore_items_overlay:
+    jsr ui_view_restore_modal_overlay
+    jmp !restore_items+
+
+// combat_check_levelup may load OVL.SPELL for mana/spell learning. Bash's
+// continuation is inside OVL.ITEMS, so restore that owner before returning.
+tramp_combat_check_levelup_items:
+    jsr combat_check_levelup
+!restore_items:
+    lda #OVL_ITEMS
+!restore_overlay:
+    jsr overlay_load
+    bcc !restored+
+    brk                         // saved continuation is inside the window
+!restored:
+    rts
+
+.assert "Window-return trampolines stay resident", tramp_ui_view_restore_spell_overlay >= $0a00 && * <= $7c00, true
 
 // tramp_ego_append_suffix — Append ego suffix to combat_msg_buf
 // (C64 main.s:1108 semantics, overlay-backed).

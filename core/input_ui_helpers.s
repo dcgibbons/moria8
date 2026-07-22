@@ -31,6 +31,17 @@ input_get_followup_key:
     jmp hal_input_get_key
 #endif
 
+#if APPLE2
+// A selectable overlay is entered with '?'. The bounded Apple key-release
+// fallback can let that held initiating key relatch, but '?' is never a valid
+// choice inside these lists. Keep waiting for a selection or cancel key.
+input_get_selectable_overlay_key:
+    jsr input_get_followup_key
+    cmp #$3f
+    beq input_get_selectable_overlay_key
+    rts
+#endif
+
 // input_prepare_selectable_overlay_key — Prepare for a selectable overlay that
 // follows an initiating key. C128 keeps the follow-up policy; 40-column ports
 // keep the modal-dismiss policy they historically used for spell-list overlays.

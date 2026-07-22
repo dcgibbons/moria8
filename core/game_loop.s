@@ -2814,13 +2814,33 @@ tool_ego_prefix_hi:
 // ============================================================
 // banked_ego_put_suffix — Write ego suffix to screen
 // Input: A = ego type (0 = no ego)
-// Clobbers: A, Y, zp_ptr0
+// Clobbers: A, X, Y, zp_ptr0
 // ============================================================
 banked_ego_put_suffix:
     cmp #0
     beq !beps_done+
     cmp #EGO_TYPE_COUNT
     bcs !beps_done+
+#if APPLE2
+    // The caller may live in HELP or TOWN, so OVL.ITEMS suffix pointers are
+    // not executable/readable here. Each immutable aux slot is 16 bytes.
+    asl
+    asl
+    asl
+    asl
+    sta zp_ptr0
+    lda #>a2_ego_suffix_slots
+    sta zp_ptr0_hi
+    ldx #0
+!beps_loop:
+    txa
+    tay
+    jsr mmu_safe_map_read_ptr0
+    beq !beps_done+
+    jsr hal_screen_put_char
+    inx
+    bne !beps_loop-
+#else
     jsr ego_get_suffix_ptr
     ldy #0
 !beps_loop:
@@ -2831,6 +2851,9 @@ banked_ego_put_suffix:
     ldy beps_save_y
     iny
     jmp !beps_loop-
+#endif
 !beps_done:
     rts
+#if !APPLE2
 beps_save_y: .byte 0
+#endif

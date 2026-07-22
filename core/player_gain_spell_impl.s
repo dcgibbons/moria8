@@ -40,15 +40,18 @@ item_gain_spell:
     cmp #SPELL_PRIEST
     beq !igs_random_prayer+
 
-    // Study already runs inside the UI overlay on both C64 and C128, so
-    // render the list locally instead of re-entering the same overlay
-    // through a resident trampoline.
+    // Study already runs inside its platform-owned spell/UI payload, so draw
+    // the list locally instead of re-entering it through a display trampoline.
     jsr input_prepare_modal_dismiss_key
     jsr spell_list_display
     jsr hal_input_get_key
     jsr pm_pick_visible_spell
     bcc !igs_cancel_restore+
+#if APPLE2
+    jsr tramp_ui_view_restore_spell_overlay
+#else
     jsr ui_view_restore_modal_overlay
+#endif
     jsr pm_learn_selected_spell
 #if C128_TEST_SCRIPTED_STUDY_BOOK_OVERLAY
     jmp c128_test_book_overlay_pass_sym
@@ -72,7 +75,11 @@ item_gain_spell:
     rts
 
 !igs_cancel_restore:
+#if APPLE2
+    jsr tramp_ui_view_restore_spell_overlay
+#else
     jsr ui_view_restore_modal_overlay
+#endif
 !igs_cancel:
     clc
     rts

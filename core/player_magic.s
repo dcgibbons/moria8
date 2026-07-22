@@ -514,9 +514,17 @@ pm_prompt_visible_spell_choice:
 #if C64_TEST_SCRIPTED_SPELL_LIST_OVERLAY || C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY
     jmp test_assert_spell_list_overlay
 #endif
+#if APPLE2
+    jsr input_get_selectable_overlay_key
+#else
     jsr input_get_followup_key
+#endif
     pha
+#if APPLE2
+    jsr tramp_ui_view_restore_spell_overlay
+#else
     jsr ui_view_restore_modal_overlay
+#endif
     pla
     cmp #$20
     beq !pm_psc_cancel+
