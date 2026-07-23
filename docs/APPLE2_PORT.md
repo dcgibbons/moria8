@@ -347,6 +347,28 @@ ROMs are not redistributable — an `A2ROMS` env var is required,
 skip-with-error like `X16EMU` handling. Manual-play fallback:
 Virtual ][ (macOS) or real hardware.
 
+### MAME ROM set pitfalls (verified with MAME 0.288)
+
+Older Apple II romsets are missing two ROMs that this MAME version
+requires, and the failure modes are silent:
+
+- `341-0028-a.rom` — the Disk II controller P6 LSS state-machine PROM
+  (MAME `d2fdc`/`wozfdc` device). Missing or zeroed: the data latch never
+  fills, so the boot ROM spins forever at `$C65E` waiting for the
+  `D5 AA 96` prologue. This is the "corrupt ROMs" boot hang.
+- `341-0132-d.e12` — the AY3600 keyboard decode ROM. Missing or zeroed:
+  every keypress decodes to `$00`. The game boots but ignores all input.
+  The table maps matrix position to ASCII per caps/shift/ctrl and layout;
+  MAME's X1 matrix wires the row as Q,W,E,R,Y,T,U,I,O (T/Y order differs
+  from the keycap row), which a synthesized table must match. All keys
+  the game uses are verified against the synthesized table; a real dump
+  (CRC `c506efb9`) should replace it when available.
+- `sc01a.bin` — Votrax speech ROM for the default sl4 Mockingboard.
+  Inert for this game; any content works.
+- Input scenarios post keys through the `:X0`-`:X8` ioport matrix fields
+  (`field:set_value`), not `natkeyboard:post()`, and must hold keys for
+  ~30 ms emulated to avoid the IIe 15 Hz typematic repeat.
+
 ## Milestones (full parity, hardest-problem-first)
 
 ### M0 — Placement closed on paper. No product code. **COMPLETE.**
