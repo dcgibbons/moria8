@@ -4,6 +4,35 @@
 #import "../../../../core/zeropage.s"
 #import "../screen_vdc.s"
 #import "../../../../core/color.s"
+#import "mmu_macros.s"
+
+// config128.s is not imported by tests; the unit test links all data into one
+// RAM bank, so the map/db thunks are direct accesses here.
+mmu_safe_map_read_ptr0:
+    lda (zp_ptr0),y
+    rts
+mmu_safe_map_write_ptr0:
+    sta (zp_ptr0),y
+    rts
+mmu_safe_map_read_ptr1:
+    lda (zp_ptr1),y
+    rts
+mmu_safe_map_write_ptr1:
+    sta (zp_ptr1),y
+    rts
+mmu_safe_db_read_ptr0:
+    lda (zp_ptr0),y
+    rts
+mmu_safe_db_write_ptr0:
+    sta (zp_ptr0),y
+    rts
+mmu_safe_db_read_ptr1:
+    lda (zp_ptr1),y
+    rts
+mmu_safe_db_write_ptr1:
+    sta (zp_ptr1),y
+    rts
+
 #import "../../../../core/rng.s"
 #import "../../../../core/math.s"
 #import "../../../../core/item_defs.s"

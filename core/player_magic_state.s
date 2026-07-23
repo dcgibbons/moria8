@@ -11,6 +11,7 @@ pm_book_idx:       .byte 0
 pm_spell_count:    .byte 0
 pm_row_counter:    .byte 0
 pm_cost_tmp:       .byte 0
+pm_name_tmp:       .byte 0
 pm_fail_work:      .byte 0
 pm_book_mask_lo:   .byte 0
 pm_book_mask_hi:   .byte 0

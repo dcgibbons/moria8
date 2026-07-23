@@ -60,6 +60,16 @@ mmu_safe_map_write_ptr1:
 mmu_safe_db_read_ptr1:
     jmp mmu_common_db_read_ptr1
 
+// config128.s is not imported by tests; ptr0 db wrappers were missing here.
+mmu_safe_db_read_ptr0:
+    jmp mmu_common_db_read_ptr0
+
+mmu_safe_db_write_ptr0:
+    jmp mmu_common_db_write_ptr0
+
+mmu_safe_db_write_ptr1:
+    jmp mmu_common_db_write_ptr1
+
 mmu_safe_mark_visited_row_ptr0:
     jmp mmu_common_mark_visited_row_ptr0
 

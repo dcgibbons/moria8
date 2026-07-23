@@ -3501,7 +3501,7 @@ check_static_contract "c64_input_restores_bank_before_irq_contract" "input.s" \
 check_static_contract "inventory_overlay_fresh_key_contract" "../../../core/player_items.s" \
     "show_inv_and_select:|||jsr input_prepare_selectable_overlay_key|||jsr tramp_ui_inv_select_display|||jsr input_get_followup_key"
 check_static_contract "inventory_overlay_items_reload_contract" "../../../core/player_items.s" \
-    "show_inv_and_select:|||lda piw_return_overlay|||bne !sias_have_return_overlay+|||tsx|||lda \$0102,x|||cmp #\$e0|||!sias_check_outer_return:|||lda \$0104,x|||cmp #\$e0|||!sias_return_overlay:|||lda current_overlay|||cmp #OVL_ITEMS|||!sias_store_return_overlay:|||sta piw_return_overlay|||jsr ui_view_restore_modal_overlay|||lda #OVL_NONE|||sta piw_return_overlay|||txa|||beq !sias_no_overlay_reload+|||jsr overlay_load|||brk|||sei|||jsr hal_irq_install_runtime|||lda #BANK_NO_KERNAL|||sta hal_memory_cpu_port"
+    "show_inv_and_select:|||lda piw_return_overlay|||bne !sias_have_return_overlay+|||tsx|||lda \$0102,x|||cmp #hal_platform_overlay_window_hi_min|||!sias_check_outer_return:|||lda \$0104,x|||!sias_return_overlay:|||lda current_overlay|||cmp #OVL_ITEMS|||!sias_store_return_overlay:|||sta piw_return_overlay|||jsr ui_view_restore_modal_overlay|||lda #OVL_NONE|||sta piw_return_overlay|||txa|||beq !sias_no_overlay_reload+|||jsr overlay_load|||brk|||sei|||jsr hal_irq_install_runtime|||lda #BANK_NO_KERNAL|||sta hal_memory_cpu_port"
 check_static_contract "item_action_inventory_overlay_hint_contract" "../../../core/item_actions_overlay.s" \
     "item_action_select_filtered_inv:|||jsr item_action_get_key|||cmp #\$3f|||lda #OVL_ITEMS|||sta piw_return_overlay|||jmp piw_select_filtered_inv_key"
 check_static_contract "spell_recharge_inventory_overlay_hint_contract" "../../../core/player_magic_execute_overlay.s" \
@@ -3510,7 +3510,7 @@ check_static_contract "identify_scroll_resident_completion_contract" "../../../c
     "irs_effect_identify:|||jmp eff_identify_scroll_resident"
 check_static_contract "itemdesc_armor_brackets_screen_code_contract" "../../../core/item_desc_banked.s" \
     "!idps_armor:|||lda #\$1b                    // '[' screen code|||lda #\$1d                    // ']' screen code|||!idps_ring:|||lda #\$1b                    // '[' screen code|||lda #\$1d                    // ']' screen code"
-check_static_contract "save_split_item_stats_contract" "../common/save.s" \
+check_static_contract "save_split_item_stats_contract" "../../shared/save.s" \
     "save_block_table_inventory_current:|||:save_block_desc(inv_p1, TOTAL_INV_SLOTS)|||:save_block_desc(inv_to_hit, TOTAL_INV_SLOTS)|||:save_block_desc(inv_to_dam, TOTAL_INV_SLOTS)|||:save_block_desc(inv_to_ac, TOTAL_INV_SLOTS)|||save_block_table_inventory_legacy:|||:save_block_desc(inv_p1, LEGACY_TOTAL_INV_SLOTS)|||:save_block_desc(si_p1, STORE_TOTAL_SLOTS)|||:save_block_desc(si_to_hit, STORE_TOTAL_SLOTS)|||:save_block_desc(si_to_dam, STORE_TOTAL_SLOTS)|||:save_block_desc(si_to_ac, STORE_TOTAL_SLOTS)|||save_block_table_floor_items_direct:|||:save_block_desc(fi_qty, MAX_FLOOR_ITEMS)|||:save_block_desc(fi_to_hit, MAX_FLOOR_ITEMS)|||:save_block_desc(fi_to_dam, MAX_FLOOR_ITEMS)|||:save_block_desc(fi_to_ac, MAX_FLOOR_ITEMS)|||load_read_floor_block_table:|||lda load_floor_item_count|||jsr load_read_block|||save_write_floor_items:|||lda #<save_block_table_floor_items_direct|||jsr save_write_block_table|||lda #<SAVE_BLOCK_FLOOR_ITEMS_STAT_TABLE|||jsr save_write_block_table|||load_read_floor_items:|||lda #<save_block_table_floor_items_direct|||jsr load_read_floor_block_table|||lda #<SAVE_BLOCK_FLOOR_ITEMS_STAT_TABLE|||jsr load_read_floor_block_table"
 check_static_contract "item_action_messages_stat_desc_contract" "../../../core/item.s" \
     "Build message: \"You picked up a <name>.\"|||lda fi_add_id|||jsr item_append_desc|||Build message: \"You drop a <name>.\"|||lda fi_add_id|||jsr item_append_desc|||item_append_desc:|||jsr item_append_name|||and #IF_IDENTIFIED"
@@ -3550,15 +3550,15 @@ check_static_contract "c64_disk_call_preserves_args_contract" "main.s" \
     "c64_disk_call:|||lda \$01|||sta c64_disk_call_saved_bank|||lda #\$36|||sta \$01|||cli|||pla|||tay|||pla|||tax|||pla|||!cdc_jsr:|||jsr \$ffff"
 check_static_contract "c64_game_over_overlay_exit_contract" "main.s" \
     "game_restart_overlay:|||lda #>(title_enter_menu - 1)|||pha|||lda #<(title_enter_menu - 1)|||pha|||jmp platform_runtime_resync_c64"
-check_static_contract "c64_save_media_hal_contract" "../common/save.s" \
+check_static_contract "c64_save_media_hal_contract" "../../shared/save.s" \
     "!save_wrong_media:|||jsr hal_storage_save_media_status|||cmp #HAL_STORAGE_STATUS_WRONG_MEDIA|||jsr tramp_disk_prepare_selected|||bcc !save_media_ok+"
 check_static_contract "c64_storage_classifier_export_contract" "hal/storage.s" \
     ".label hal_storage_save_media_status = disk_save_media_status"
 check_static_contract "c64_storage_diag_export_contract" "hal/storage.s" \
     ".label hal_storage_diag_code = disk_status|||.label hal_storage_diag_device = save_device"
-check_static_contract "c64_save_stream_banks_kernal_contract" "../common/save.s" \
+check_static_contract "c64_save_stream_banks_kernal_contract" "../../shared/save.s" \
     "!save_media_ok:|||lda #BANK_NO_BASIC|||sta hal_memory_cpu_port|||jsr save_select_output_name_c64"
-check_static_contract "c64_load_stream_banks_kernal_contract" "../common/save.s" \
+check_static_contract "c64_load_stream_banks_kernal_contract" "../../shared/save.s" \
     "!load_media_ok:|||lda #BANK_NO_BASIC|||sta hal_memory_cpu_port|||ldx #HSTR_SAVE_LOADING"
 run_vice_resource_contract
 

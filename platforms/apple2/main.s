@@ -633,12 +633,29 @@ tramp_item_recalc:
     rts
 
 tramp_select_filtered_inv:
+    pha                         // Preserve filter (A) and prompt id (X):
+    txa                         // overlay_load clobbers both, and
+    pha                         // piw_select_filtered_inv takes them as input.
     lda #OVL_ITEMS
     jsr overlay_load
-    bcs !done+
+    bcs !load_failed+
     lda #OVL_ITEMS
     sta piw_return_overlay
+    pla
+    tax
+    pla
     jsr piw_select_filtered_inv
+    jmp tramp_restore_spell_overlay
+!load_failed:
+    pla
+    pla
+    clc
+    rts
+
+// Shared epilogue for the two item-selector trampolines: restore OVL.SPELL
+// and return A/flags from the selector. The brk is fatal because the saved
+// continuation is inside OVL.SPELL.
+tramp_restore_spell_overlay:
     php
     pha
     lda #OVL_NONE
@@ -650,7 +667,6 @@ tramp_select_filtered_inv:
 !restored:
     pla
     plp
-!done:
     rts
 
 // Spell-overlay recharge selection enters the item selector with an already
@@ -664,18 +680,7 @@ tramp_select_filtered_inv_key_spell:
     sta piw_return_overlay
     pla
     jsr piw_select_filtered_inv_key
-    php
-    pha
-    lda #OVL_NONE
-    sta piw_return_overlay
-    lda #OVL_SPELL
-    jsr overlay_load
-    bcc !key_restored+
-    brk                         // saved continuation is inside OVL.SPELL
-!key_restored:
-    pla
-    plp
-    rts
+    jmp tramp_restore_spell_overlay
 !load_failed:
     pla
     clc
@@ -971,6 +976,10 @@ tramp_do_look:
 #import "../../core/store_runtime_data.s"
 #undef STORE_HOT_DATA_EXTERNAL
 #import "../../core/spell_helper_tables.s"
+// Spell/prayer name pointer tables and strings. Consumed only by
+// spell_list_display (OVL.SPELL), so they cannot stay in OVL.UI; aux keeps
+// them readable through the map thunks regardless of the loaded overlay.
+#import "../../core/spell_names.s"
 
 // Presentation-time ego suffixes must remain readable while HELP or TOWN owns
 // the code window. Fixed 16-byte slots make the aux pointer calculation fit in
@@ -1089,7 +1098,6 @@ ovl_help_end:
 .segment UiOverlay
 #import "../../core/ui_character.s"
 #import "../../core/ui_identify.s"
-#import "../../core/spell_names.s"
 ovl_ui_end:
 .print "UI overlay: " + (ovl_ui_end - $a400) + " bytes"
 .assert "UI overlay fits", ovl_ui_end <= $ba00, true

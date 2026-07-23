@@ -102,10 +102,144 @@ co = coroutine.create(run)
 coroutine.resume(co)
 """
 
+LUA_PRIEST_PRAY = r"""
+local prog = manager.machine.devices[":maincpu"].spaces["program"]
+local aux = emu.item(manager.machine.devices[":aux:ext80"].items["0/m_ram"])
+local keymap = {}
+for tag, port in pairs(manager.machine.ioport.ports) do
+    for name, field in pairs(port.fields) do keymap[name] = field end
+end
+
+local function findkey(ch)
+    if ch == "\r" then return keymap["Return"] end
+    if ch == " " then return keymap["Space"] end
+    if ch == "?" then return keymap["/  ?"] end
+    if ch == "/" then return keymap["/  ?"] end
+    return keymap[string.lower(ch) .. "  " .. string.upper(ch)]
+end
+local function press(ch)
+    local f = findkey(ch)
+    if not f then print("NOKEY " .. string.format("%q", ch)) return end
+    f:set_value(1) emu.wait(0.03) f:set_value(0) emu.wait(0.12)
+end
+local function shift(ch)
+    local s = keymap["Left Shift"]
+    local f = findkey(ch)
+    if not f then print("NOKEY " .. string.format("%q", ch)) return end
+    s:set_value(1) emu.wait(0.02)
+    f:set_value(1) emu.wait(0.03) f:set_value(0) emu.wait(0.02)
+    s:set_value(0) emu.wait(0.12)
+end
+
+local function rowbase(r) return 0x400 + (r % 8) * 0x80 + math.floor(r / 8) * 0x28 end
+local function cell(r, c)
+    local base = rowbase(r)
+    if c % 2 == 0 then return aux:read(base + math.floor(c / 2)) end
+    return prog:read_u8(base + math.floor(c / 2))
+end
+local function asc(b)
+    if b >= 0x80 then b = b - 0x80 end
+    if b < 0x20 or b >= 0x7f then return "." end
+    return string.char(b)
+end
+local function rowtext(r)
+    local line = ""
+    for c = 0, 79 do line = line .. asc(cell(r, c)) end
+    return line
+end
+local function screen_has(txt)
+    for r = 0, 23 do
+        if string.find(rowtext(r), txt, 1, true) then return true end
+    end
+    return false
+end
+local function dump(tag)
+    print("SCREEN " .. tag)
+    for r = 0, 23 do print(string.format("ROW %02d %s", r, rowtext(r))) end
+end
+local function press_until(txt, ch, tries)
+    for i = 1, (tries or 12) do
+        press(ch)
+        emu.wait(0.4)
+        if screen_has(txt) then return true end
+    end
+    print("RETRY EXHAUSTED for: " .. txt)
+    return false
+end
+local function in_town()
+    for c = 0, 79 do
+        if cell(2, c) == 0xA3 and cell(3, c) == 0xA3 then return true end
+    end
+    return false
+end
+
+-- Title -> chargen -> priest -> town (each step retries its key until the
+-- next screen appears; transitions eat pending keys via strobe clear).
+for i = 1, 300 do
+    emu.wait(0.1)
+    if prog:read_u8(0x550 + 14) == 0xA9 then break end
+end
+press_until("Choose your race", "N")
+press_until("Roll Statistics", "A")
+press_until("Choose your class", "\r")
+press_until("Enter your name", "C")
+press("T") press("E") press("S") press("T")
+press_until("Choose your sex", "\r")
+for i = 1, 60 do
+    press("A")
+    emu.wait(0.3)
+    press(" ")
+    if in_town() then break end
+end
+if not in_town() then print("NO TOWN") end
+emu.wait(2)
+
+-- Precondition: the priest carries the Beginners Handbook.
+press("I")
+emu.wait(2)
+if screen_has("Beginners Handbook") then print("BOOK PRESENT") else print("BOOK MISSING") end
+dump("inventory")
+press(" ")
+emu.wait(1)
+
+-- Failing scenario: 'p' must offer the prayer-book prompt, not
+-- "You have nothing there."
+press("P")
+emu.wait(3)
+if screen_has("Prayer book") then print("PRAY PROMPT SHOWN") else print("PRAY PROMPT ABSENT") end
+if screen_has("You have nothing there.") then print("NOTHING THERE SHOWN") end
+
+-- Full activation: select the only book ('a'), open the list with '?',
+-- verify names/mana/level render (aux/overlay-safe), then pick prayer 'a'.
+press("A")
+emu.wait(3)
+if screen_has("Pray which?") then print("PRAY LIST SHOWN") else print("PRAY LIST ABSENT") end
+shift("/")
+emu.wait(3)
+if screen_has("Prayer Book") then print("LIST TITLE OK") else print("LIST TITLE MISSING") end
+if screen_has("Detect Evil") and screen_has("Bless") then
+    print("LIST NAMES OK")
+else
+    print("LIST NAMES GARBLED")
+end
+press("A")
+emu.wait(3)
+if not screen_has("Prayer Book") and not screen_has("Pray which?") then
+    print("PRAYER EXECUTED")
+else
+    print("PRAYER STUCK")
+end
+dump("after_p")
+print("SCENARIO DONE")
+"""
+
+SCENARIOS = ("boot_title", "priest_pray")
+
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("scenario", nargs="?", default="boot_title")
+    parser.add_argument("scenario", nargs="?", default="boot_title",
+                        choices=SCENARIOS)
     parser.add_argument("--rompath", default=os.environ.get("A2ROMS", ""))
     parser.add_argument("--seconds", type=float, default=20.0)
     parser.add_argument("--mame", default="mame")
@@ -121,14 +255,20 @@ def main() -> int:
               file=sys.stderr)
         return 1
 
-    table = "local MENU_EXPECTED = {%s}\n" % ",".join(
-        str(b) for b in MENU_EXPECTED)
-    lua = table + (
-        LUA_BOOT_TITLE
-        .replace("WAIT_TENTHS", str(int(args.seconds * 10)))
-        .replace("MENU_START_COL", str(MENU_START_COL))
-        .replace("ROW18_BASE", str(ROW18_BASE))
-    )
+    if args.scenario == "priest_pray" and args.seconds == 20.0:
+        args.seconds = 240.0
+
+    if args.scenario == "priest_pray":
+        lua = LUA_PRIEST_PRAY
+    else:
+        table = "local MENU_EXPECTED = {%s}\n" % ",".join(
+            str(b) for b in MENU_EXPECTED)
+        lua = table + (
+            LUA_BOOT_TITLE
+            .replace("WAIT_TENTHS", str(int(args.seconds * 10)))
+            .replace("MENU_START_COL", str(MENU_START_COL))
+            .replace("ROW18_BASE", str(ROW18_BASE))
+        )
 
     with tempfile.NamedTemporaryFile("w", suffix=".lua", delete=False) as f:
         f.write(lua)
@@ -155,8 +295,43 @@ def main() -> int:
         "-nothrottle",
         "-seconds_to_run", str(args.seconds + 5),
     ]
-    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+    proc = subprocess.run(cmd, capture_output=True, text=True,
+                          timeout=max(300, args.seconds + 60))
     out = proc.stdout + proc.stderr
+
+    if args.scenario == "priest_pray":
+        failures = 0
+        asserts = 0
+
+        def check(name, ok, detail=""):
+            nonlocal failures, asserts
+            asserts += 1
+            if not ok:
+                failures += 1
+            print(f"ASSERT {name} {'PASS' if ok else 'FAIL ' + detail}")
+
+        if "NOKEY" in out:
+            missing = [l for l in out.splitlines() if l.startswith("NOKEY")]
+            check("keys_mapped", False, "; ".join(missing[:3]))
+        else:
+            check("keys_mapped", True)
+        check("town_reached", "NO TOWN" not in out and "SCREEN" in out)
+        check("book_present", "BOOK PRESENT" in out,
+              "Beginners Handbook missing from starting inventory")
+        check("pray_prompt", "PRAY PROMPT SHOWN" in out,
+              "'p' did not show the prayer-book prompt")
+        check("no_nothing_there", "NOTHING THERE SHOWN" not in out,
+              "'p' printed \"You have nothing there.\" despite the book")
+        check("pray_list", "PRAY LIST SHOWN" in out,
+              "book selection did not reach the prayer list")
+        check("list_title", "LIST TITLE OK" in out,
+              "'?' list overlay did not render")
+        check("list_names", "LIST NAMES OK" in out,
+              "'?' list shows garbled prayer names/mana/level")
+        check("pray_executed", "PRAYER EXECUTED" in out,
+              "prayer selection did not consume the turn")
+        print(f"RESULT {asserts} asserts {failures} failures")
+        return 0 if failures == 0 else 1
 
     dumps = {}
     map_nonzero = -1

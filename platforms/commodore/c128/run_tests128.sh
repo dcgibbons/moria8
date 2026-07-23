@@ -2071,7 +2071,7 @@ run_save_load_guard_check() {
     check_out=$(python3 - <<'PY'
 from pathlib import Path
 
-save = Path("../common/save.s").read_text().splitlines()
+save = Path("../../shared/save.s").read_text().splitlines()
 
 try:
     start = next(i for i, line in enumerate(save) if line.strip() == "load_read_byte:")
