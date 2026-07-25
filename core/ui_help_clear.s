@@ -12,7 +12,7 @@
 // Input: zp_text_color must be set to desired clear color
 // Clobbers: A, X, Y, zp_screen_lo/hi, zp_color_lo/hi
 ui_clear_full_screen_safe:
-#if hal_screen_full_clear_uses_bulk
+#if HAL_SCREEN_FULL_CLEAR_USES_BULK
     jmp hal_screen_clear
 #else
     lda #0

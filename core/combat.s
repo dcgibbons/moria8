@@ -1161,12 +1161,12 @@ combat_apply_levelup:
     jsr player_calc_combat
 
     // Recalculate mana and learn new spells
-#if hal_platform_levelup_magic_uses_trampoline
+#if HAL_PLATFORM_LEVELUP_MAGIC_USES_TRAMPOLINE
     jsr tramp_magic_recalc_mana
 #else
     jsr magic_recalc_mana
 #endif
-#if hal_platform_levelup_magic_uses_trampoline
+#if HAL_PLATFORM_LEVELUP_MAGIC_USES_TRAMPOLINE
     jsr tramp_magic_check_new_spells
 #else
     jsr magic_check_new_spells

@@ -448,79 +448,52 @@ tramp_item_gain_spell:
     rts
 
 tramp_item_read_scroll:
-    lda #OVL_ITEMS
-    jsr overlay_load
-    bcs !done+
-    jsr item_read_scroll
-!done:
-    rts
+    lda #<item_read_scroll
+    ldy #>item_read_scroll
+    jmp tramp_items_dispatch
 
 tramp_item_aim_wand:
-    lda #OVL_ITEMS
-    jsr overlay_load
-    bcs !done+
-    jsr item_aim_wand
-!done:
-    rts
+    lda #<item_aim_wand
+    ldy #>item_aim_wand
+    jmp tramp_items_dispatch
 
 tramp_item_use_staff:
-    lda #OVL_ITEMS
-    jsr overlay_load
-    bcs !done+
-    jsr item_use_staff
-!done:
-    rts
+    lda #<item_use_staff
+    ldy #>item_use_staff
+    jmp tramp_items_dispatch
 
 tramp_eff_earthquake:
     jmp eff_earthquake
 
 tramp_item_refuel:
-    lda #OVL_ITEMS
-    jsr overlay_load
-    bcs !done+
-    jsr item_refuel
-!done:
-    rts
+    lda #<item_refuel
+    ldy #>item_refuel
+    jmp tramp_items_dispatch
 
 tramp_ranged_fire:
-    lda #OVL_ITEMS
-    jsr overlay_load
-    bcs !done+
-    jsr ranged_fire
-!done:
-    rts
+    lda #<ranged_fire
+    ldy #>ranged_fire
+    jmp tramp_items_dispatch
 
 tramp_throw_item:
-    lda #OVL_ITEMS
-    jsr overlay_load
-    bcs !done+
-    jsr throw_item
-!done:
-    rts
+    lda #<throw_item
+    ldy #>throw_item
+    jmp tramp_items_dispatch
 
 tramp_bash_command:
-    lda #OVL_ITEMS
-    jsr overlay_load
-    bcs !done+
-    jsr bash_command
-!done:
-    rts
+    lda #<bash_command
+    ldy #>bash_command
+    jmp tramp_items_dispatch
 
 tramp_disarm_command:
-    lda #OVL_ITEMS
-    jsr overlay_load
-    bcs !done+
-    jsr disarm_command
-!done:
-    rts
+    lda #<disarm_command
+    ldy #>disarm_command
+    jmp tramp_items_dispatch
 
 tramp_player_tunnel:
-    lda #OVL_ITEMS
-    jsr overlay_load
-    bcs !done+
-    jsr player_tunnel
-!done:
-    rts
+    lda #<player_tunnel
+    ldy #>player_tunnel
+    jmp tramp_items_dispatch
 
 tramp_spell_list_display:
     lda #OVL_SPELL
@@ -593,44 +566,29 @@ tramp_player_pray:
 // Wear/takeoff/eat/quaff bodies live in OVL.ITEMS (fit lever R1); the
 // trampolined-command policy flag routes game_loop's command dispatch here.
 tramp_item_wear:
-    lda #OVL_ITEMS
-    jsr overlay_load
-    bcs !done+
-    jsr item_wear
-!done:
-    rts
+    lda #<item_wear
+    ldy #>item_wear
+    jmp tramp_items_dispatch
 
 tramp_item_takeoff:
-    lda #OVL_ITEMS
-    jsr overlay_load
-    bcs !done+
-    jsr item_takeoff
-!done:
-    rts
+    lda #<item_takeoff
+    ldy #>item_takeoff
+    jmp tramp_items_dispatch
 
 tramp_item_eat:
-    lda #OVL_ITEMS
-    jsr overlay_load
-    bcs !done+
-    jsr item_eat
-!done:
-    rts
+    lda #<item_eat
+    ldy #>item_eat
+    jmp tramp_items_dispatch
 
 tramp_item_quaff:
-    lda #OVL_ITEMS
-    jsr overlay_load
-    bcs !done+
-    jsr item_quaff
-!done:
-    rts
+    lda #<item_quaff
+    ldy #>item_quaff
+    jmp tramp_items_dispatch
 
 tramp_item_recalc:
-    lda #OVL_ITEMS
-    jsr overlay_load
-    bcs !done+
-    jsr player_recalc_equipment
-!done:
-    rts
+    lda #<player_recalc_equipment
+    ldy #>player_recalc_equipment
+    jmp tramp_items_dispatch
 
 tramp_select_filtered_inv:
     pha                         // Preserve filter (A) and prompt id (X):
@@ -728,20 +686,14 @@ tramp_disk_prepare_selected:
     rts
 
 tramp_store_init_all:
-    lda #OVL_ITEMS
-    jsr overlay_load
-    bcs !done+
-    jsr store_init_all
-!done:
-    rts
+    lda #<store_init_all
+    ldy #>store_init_all
+    jmp tramp_items_dispatch
 
 tramp_store_restock_all:
-    lda #OVL_ITEMS
-    jsr overlay_load
-    bcs !done+
-    jsr store_restock_all
-!done:
-    rts
+    lda #<store_restock_all
+    ldy #>store_restock_all
+    jmp tramp_items_dispatch
 
 tramp_store_enter:
     lda #OVL_TOWN
@@ -1182,28 +1134,54 @@ ovl_title_end:
 // ============================================================
 .segment Default
 tramp_roll_ego_type:
+    lda #<roll_ego_type
+    ldy #>roll_ego_type
+    jmp tramp_items_dispatch
+
+// Wizard item generation calls the ego roll from OVL.MODAL; restore the
+// caller overlay before returning or the continuation executes OVL.ITEMS
+// contents at the same addresses.
+// Shared OVL.ITEMS dispatch for the compact trampolines: A/Y = target.
+tramp_items_dispatch:
+    sta tramp_items_target
+    sty tramp_items_target_hi
     lda #OVL_ITEMS
     jsr overlay_load
     bcs !done+
-    jsr roll_ego_type
+    jmp (tramp_items_target)
 !done:
+    rts
+tramp_items_target:     .byte 0
+tramp_items_target_hi:  .byte 0
+
+tramp_roll_ego_type_modal:
+    pha
+    lda #OVL_ITEMS
+    jsr overlay_load
+    bcs !load_failed+
+    pla
+    jsr roll_ego_type
+    pha
+    lda #OVL_MODAL_MISC
+    jsr overlay_load
+    bcc !restored+
+    brk                         // saved continuation is inside OVL.MODAL
+!restored:
+    pla
+    rts
+!load_failed:
+    pla
     rts
 
 tramp_ego_apply_damage:
-    lda #OVL_ITEMS
-    jsr overlay_load
-    bcs !done+
-    jsr ego_apply_damage
-!done:
-    rts
+    lda #<ego_apply_damage
+    ldy #>ego_apply_damage
+    jmp tramp_items_dispatch
 
 tramp_ego_get_ac_bonus:
-    lda #OVL_ITEMS
-    jsr overlay_load
-    bcs !done+
-    jsr ego_get_ac_bonus
-!done:
-    rts
+    lda #<ego_get_ac_bonus
+    ldy #>ego_get_ac_bonus
+    jmp tramp_items_dispatch
 
 // Modal restore replaces the overlay window with the live tier. Reload
 // OVL.SPELL before returning to the spell-selection continuation.
@@ -1227,6 +1205,18 @@ tramp_combat_check_levelup_items:
     jsr overlay_load
     bcc !restored+
     brk                         // saved continuation is inside the window
+!restored:
+    rts
+
+// Wizard gain-level runs with OVL.MODAL owning the window; apply_levelup
+// loads OVL.SPELL for mana/spell learning, so restore the caller overlay
+// before returning or the continuation executes OVL.SPELL contents.
+tramp_combat_apply_levelup_modal:
+    jsr combat_apply_levelup
+    lda #OVL_MODAL_MISC
+    jsr overlay_load
+    bcc !restored+
+    brk                         // saved continuation is inside OVL.MODAL
 !restored:
     rts
 

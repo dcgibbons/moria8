@@ -381,7 +381,7 @@ uds_show_init_detail:
     :UDSPrint(4, UDS_LINE_COL, uds_dos_not_ready_str)
     rts
 !fallback:
-#if hal_storage_disk_setup_detail_command_status
+#if HAL_STORAGE_DISK_SETUP_DETAIL_COMMAND_STATUS
     lda hal_storage_diag_dos0
     cmp #$ff
     beq !generic+
@@ -395,12 +395,12 @@ uds_show_init_detail:
     jmp uds_show_c128_status_error
 !generic:
 #endif
-#if hal_storage_disk_setup_detail_dos_drive
+#if HAL_STORAGE_DISK_SETUP_DETAIL_DOS_DRIVE
     lda hal_storage_diag_dos0
     beq !check_phase+
     jmp uds_show_plus4_disk_error
 !check_phase:
-#if hal_storage_disk_setup_detail_status_phase
+#if HAL_STORAGE_DISK_SETUP_DETAIL_STATUS_PHASE
     lda hal_storage_diag_phase
     ora hal_storage_diag_readst
     beq !generic+
@@ -416,7 +416,7 @@ uds_show_init_detail:
     rts
 #endif
 
-#if hal_storage_disk_setup_detail_command_status
+#if HAL_STORAGE_DISK_SETUP_DETAIL_COMMAND_STATUS
 uds_show_c128_status_error:
     lda #4
     sta zp_cursor_row
@@ -443,7 +443,7 @@ uds_show_c128_status_error:
     rts
 #endif
 
-#if hal_storage_disk_setup_detail_dos_drive
+#if HAL_STORAGE_DISK_SETUP_DETAIL_DOS_DRIVE
 uds_show_plus4_disk_error:
     lda #4
     sta zp_cursor_row
@@ -471,7 +471,7 @@ uds_show_plus4_disk_error:
 
 #endif
 
-#if hal_storage_disk_setup_detail_status_phase
+#if HAL_STORAGE_DISK_SETUP_DETAIL_STATUS_PHASE
 uds_show_plus4_status_error:
     lda #4
     sta zp_cursor_row
@@ -547,17 +547,17 @@ uds_dos_write_protect_str: .text "Disk is write-protected." ; .byte 0
 uds_dos_full_str:          .text "Disk is full." ; .byte 0
 uds_dos_not_ready_str:     .text "Drive is not ready." ; .byte 0
 uds_dos_generic_str:       .text "Check the disk and try again." ; .byte 0
-#if hal_storage_disk_setup_detail_dos_drive
+#if HAL_STORAGE_DISK_SETUP_DETAIL_DOS_DRIVE
 uds_disk_error_str:        .text "Disk error " ; .byte 0
 uds_on_drive_str:          .text " on drive " ; .byte 0
 #endif
-#if hal_storage_disk_setup_detail_command_status
+#if HAL_STORAGE_DISK_SETUP_DETAIL_COMMAND_STATUS
 uds_disk_code_str:         .text "Disk code " ; .byte 0
 #endif
-#if hal_storage_disk_setup_detail_status_phase
+#if HAL_STORAGE_DISK_SETUP_DETAIL_STATUS_PHASE
 uds_disk_status_str:       .text "Disk code $" ; .byte 0
 #endif
-#if hal_storage_disk_setup_detail_command_status || hal_storage_disk_setup_detail_status_phase
+#if HAL_STORAGE_DISK_SETUP_DETAIL_COMMAND_STATUS || HAL_STORAGE_DISK_SETUP_DETAIL_STATUS_PHASE
 uds_phase_str:             .text " phase $" ; .byte 0
 #endif
 uds_device_prompt_str:     .text "Save drive (8-11): " ; .byte 0

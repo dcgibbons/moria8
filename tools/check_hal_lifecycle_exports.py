@@ -131,7 +131,10 @@ def main() -> int:
             if name not in labels:
                 direct_missing.append(f"{platform}: missing {name} in {path.relative_to(ROOT)}")
     policy_consumers = {
-        "hal_platform_reassert_before_message_render": (COMMON_DIR / "ui_messages.s",),
+        "hal_platform_reassert_before_message_render": (
+            COMMON_DIR / "ui_messages.s",
+            "HAL_PLATFORM_REASSERT_BEFORE_MESSAGE_RENDER",
+        ),
         "hal_platform_restore_tier_after_overlay": (
             COMMON_DIR / "ui_restore.s",
             "HAL_PLATFORM_RESTORE_TIER_AFTER_OVERLAY",
@@ -140,17 +143,38 @@ def main() -> int:
             COMMON_DIR / "string_bank.s",
             "HAL_PLATFORM_STRING_BANK_LOAD_INVALIDATES_TIER",
         ),
-        "hal_platform_mark_modal_restore_perf": (COMMON_DIR / "ui_restore.s",),
-        "hal_platform_perf_p1_command_instrumentation": (COMMON_DIR / "game_loop_helpers.s",),
-        "hal_platform_render_ball_effect_direct_perf": (COMMON_DIR / "player_magic_ball.s",),
-        "hal_platform_levelup_magic_uses_trampoline": (COMMON_DIR / "combat.s",),
-        "hal_platform_character_background_resync": (COMMON_DIR / "player.s",),
+        "hal_platform_mark_modal_restore_perf": (
+            COMMON_DIR / "ui_restore.s",
+            "HAL_PLATFORM_MARK_MODAL_RESTORE_PERF",
+        ),
+        "hal_platform_perf_p1_command_instrumentation": (
+            COMMON_DIR / "game_loop_helpers.s",
+            "HAL_PLATFORM_GAME_LOOP_PERF_P1_INSTRUMENTATION",
+        ),
+        "hal_platform_render_ball_effect_direct_perf": (
+            COMMON_DIR / "player_magic_ball.s",
+            "HAL_PLATFORM_RENDER_BALL_EFFECT_DIRECT_PERF",
+        ),
+        "hal_platform_levelup_magic_uses_trampoline": (
+            COMMON_DIR / "combat.s",
+            "HAL_PLATFORM_LEVELUP_MAGIC_USES_TRAMPOLINE",
+        ),
+        "hal_platform_character_background_resync": (
+            COMMON_DIR / "player.s",
+            "HAL_PLATFORM_CHARACTER_BACKGROUND_RESYNC",
+        ),
         "hal_platform_player_magic_helpers_external": (
             COMMON_DIR / "player_magic.s",
             "HAL_PLATFORM_PLAYER_MAGIC_HELPERS_EXTERNAL",
         ),
-        "hal_platform_item_action_key_restores_bank": (COMMON_DIR / "item_actions_overlay.s",),
-        "hal_platform_chargen_runtime_resync": (COMMON_DIR / "player_create.s",),
+        "hal_platform_item_action_key_restores_bank": (
+            COMMON_DIR / "item_actions_overlay.s",
+            "HAL_PLATFORM_ITEM_ACTION_KEY_RESTORES_BANK",
+        ),
+        "hal_platform_chargen_runtime_resync": (
+            COMMON_DIR / "player_create.s",
+            "HAL_PLATFORM_CHARGEN_RUNTIME_RESYNC",
+        ),
         "hal_platform_chargen_cutpoint": (COMMON_DIR / "player_create.s",),
         "hal_platform_title_sysinfo_80col": (
             COMMON_DIR / "title_sysinfo_banked.s",
@@ -164,7 +188,10 @@ def main() -> int:
             COMMON_DIR / "player_move.s",
             "HAL_PLATFORM_GAME_LOOP_PLAYER_MOVE_DIAG_LABELS",
         ),
-        "hal_platform_describe_look_masks_irq": (COMMON_DIR / "player_move.s",),
+        "hal_platform_describe_look_masks_irq": (
+            COMMON_DIR / "player_move.s",
+            "HAL_PLATFORM_DESCRIBE_LOOK_MASKS_IRQ",
+        ),
         "hal_platform_game_loop_runtime_resync": (
             COMMON_DIR / "game_loop.s",
             "HAL_PLATFORM_GAME_LOOP_RUNTIME_RESYNC",

@@ -47,6 +47,7 @@
 .const hal_input_modal_escape_secondary = $03 // CTRL+C — STOP-key equivalent
 .const hal_input_flush_run_cancel_buffer = false
 .const hal_input_help_footer_uses_esc_stop = true
+#define HAL_INPUT_HELP_FOOTER_USES_ESC_STOP
 .const hal_input_inventory_letter_normalize_shifted = false
 
 // ============================================================

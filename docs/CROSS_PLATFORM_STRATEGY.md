@@ -42,9 +42,11 @@ ensure native performance and idiomatic hardware utilization.
 
 ## 2. The Assembler & ISA (Instruction Set Architecture)
 
-* **The 6502 Track:** Migration from KickAssembler to `ca65` supports
-  platform-specific configurations (`.cfg`) and segmenting. The `core/` game
-  logic targets the standard 6502/65C02.
+* **The 6502 Track:** All active 6502 ports (C64, C128, Plus/4, Apple IIe)
+  retain Kick Assembler per in-tree precedent; the earlier `ca65` migration
+  note is superseded. Platform-specific configurations and segmenting are
+  handled with Kick Assembler segment directives. The `core/` game logic
+  targets the standard 6502/65C02.
 * **The Z80 Track:** A native rewrite of the game logic specifically for the
   Zilog Z80. Using `z88dk` (`z80asm`) or `sjasmplus`, this track establishes a
   parallel `core_z80/` for native efficiency on CP/M, ZX Spectrum, and MSX.
@@ -81,8 +83,11 @@ Moria8 uses architectural tiers based on available address space and memory spee
 
 ### The "Resident Overlay" Advantage
 
-* **128K+ 8-bit (Apple IIe, IIgs, CX16, BBC Master 128):** All game overlays and
-  tier data are pre-loaded into extended/paged memory.
+* **128K+ 8-bit (Apple IIe, IIgs, CX16, BBC Master 128):** Overlays and tier
+  data use a partial cache in extended/paged memory with disk-on-demand loads
+  for cold classes; full preloading of all overlays is not required. The
+  Apple IIe port implements this as an aux-resident overlay cache with
+  disk-backed cold classes.
 
 ## 5. Plus/4 Release Track
 

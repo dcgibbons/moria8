@@ -1458,3 +1458,172 @@ warnings, and generic overlay refactoring.
 - Title-art pipeline details (`core/title_data.s` platform define +
   80-col art source): sized but not designed; lands in M0
   classification + M4 polish.
+
+### M4 record — 2026-07-23
+
+```text
+Scope:
+M4 polish, performance, and release verification: runtime scenario coverage
+(priest prayer, help, wizard, dungeon descent, death, save/load roundtrip),
+the repairs those scenarios exposed, sound/title-art verification, aux cache
+assessment, and strategy-document reconciliation.
+
+Repairs delivered under this record:
+
+1. Prayer/cast book selection (reported as "'p' not activating the prayer").
+   tramp_select_filtered_inv destroyed the filter (A) and prompt id (X)
+   through overlay_load before calling piw_select_filtered_inv, so every
+   book was rejected with "You have nothing there." The trampoline now
+   preserves both registers; a shared OVL.SPELL epilogue was deduplicated to
+   hold the $7C00 resident boundary. priests start with the Beginners
+   Handbook (game_loop.s starting-gear grant, verified in inventory).
+
+2. '?' spell/prayer list garbage (garbled names, wrong mana/level).
+   spell_list_display read name pointer tables owned by OVL.UI while
+   OVL.SPELL was loaded, and read aux mana/level tables with direct
+   main-RAM reads. spell_names.s moved to A2AuxData; all four table reads
+   now go through MapRead thunks; names print char-by-char through the aux
+   thunk on Apple II.
+
+3. Wizard item generation wild jump ("You feel heroic!" instead of "OK").
+   wizard_generate_item_execute lives in OVL.MODAL; tramp_roll_ego_type
+   loaded OVL.ITEMS and returned into evicted memory, so execution fell
+   into the quaff-effect dispatch. New tramp_roll_ego_type_modal restores
+   OVL.MODAL before returning; 19 identical OVL.ITEMS trampolines were
+   deduplicated into a shared indirect dispatch to hold the resident
+   boundary.
+
+Runtime scenarios (permanent regression coverage in
+platforms/apple2/harness_smoke.py, all green):
+boot_title (7), priest_pray (8), help_overlay (3), wizard_flow (4),
+dungeon_descend (4), death_flow (2), save_load (9). The save/load roundtrip
+writes THE.GAME, returns to title, lists the saved character in the slot
+UI, and reloads with stats restored. Notable verified-correct behaviors
+initially mistaken for defects: the player intentionally spawns left of
+the town stairs (classic Moria), and starting-inventory W shows "You have
+nothing there." because all wearables start equipped.
+
+Sound: synchronous speaker clicks at $C030 verified at runtime (new-game
+SFX_PICKUP produces 32 speaker toggles on the tapped line).
+
+Title art: aux art buffer verified populated and dense (577 nonzero bytes,
+rows 0-9), with clean row 0 in both text halves.
+
+Aux cache: manifest v7 assessed — hot classes fill aux $5000-$BFFF at
+28,587/28,672 B with cold classes on disk; overlay transitions in all
+scenarios resolve from cache. No tuning changes; further work needs
+hit-rate evidence, not speculation.
+
+Docs: CROSS_PLATFORM_STRATEGY.md ca65 migration note superseded (Kick
+Assembler retained per in-tree precedent); its "all overlays preloaded"
+claim corrected to the partial aux cache with disk-on-demand cold classes.
+ARCHITECTURE.md gained an Apple IIe Runtime Model section.
+
+Environment:
+MAME 0.288 apple2ee runs headless (-video none). The boot hang reported as
+"corrupt ROMs" was a missing 341-0028-a Disk II P6 LSS PROM plus the
+341-0132-d AY3600 keyboard decode ROM; a working set was assembled from
+local dumps, with the keyboard table synthesized from the AY3600 matrix
+encoding (QWERTY half verified, revised-Dvorak half per ANSI layout).
+
+Verification:
+make testapple2-memory-contract 21/21; make build all platforms; C64
+179/179; C128 full 135/135; Plus/4 36/36; C64/C128/Plus4 spell-prayer
+subsets green; all seven Apple II MAME scenarios green.
+```
+
+### M4 wizard gain-level overlay-routing repair record — 2026-07-24
+
+```text
+Problem and success criteria:
+Wizard gain level (X) printed garbage and could run wild on Apple II (user
+report: garbage message line, level applied). Success is the level-up message
+("Welcome to level N."), an advanced LV status field, an intact wizard/gameplay
+continuation, and permanent harness regression coverage.
+
+State being changed:
+Overlay-window routing of the combat_apply_levelup magic-helper calls, and
+ownership of the wizard gain-level continuation. Gameplay values, thresholds,
+and formulas are unchanged.
+
+Search scope and terms:
+ui_wizard gain-level flow, combat_apply_levelup,
+tramp_magic_recalc_mana/check_new_spells, overlay_load skip/cache policy,
+Kick Assembler #if/.const semantics, established modal-return trampolines
+(bash OVL.ITEMS restore, wizard-item OVL.MODAL restore), MAME CPU trace of the
+faulting run.
+
+Relevant readers/writers found and known exclusions:
+The user-visible garbage traced (MAME instruction trace) to combat_apply_levelup
+executing jsr $b485 / jsr $b276 DIRECTLY into the overlay window: the source
+guard `#if hal_platform_levelup_magic_uses_trampoline` never worked, because
+Kick Assembler's #if preprocessor cannot see assembler .const values (verified
+empirically with Kick 5.25: #if on a .const silently takes the #else arm; #if on
+a #define and .if on a .const both work). With OVL.MODAL loaded, those addresses
+hold modal bytes, so execution went wild into Applesoft ROM. C128 emitted the
+same direct calls unnoticed because its magic helpers live in the always-mapped
+$F000 runtime. The play-resident wizard.s duplicate is safe (continuation in
+play); excluded. Other `#if <lowercase .const>` sites exist in core (ui_restore,
+ui_messages, ui_character, player, player_move, player_magic_ball) and are a
+separate audit item, not changed here.
+
+Initialization, reset and persistence points:
+current_overlay becomes OVL.SPELL during the level-up helpers and is restored
+to OVL.MODAL before the wizard continuation runs; no persisted state changes.
+
+Affected production sequence through the changed transition:
+tramp_ui_wizard_display (loads OVL.MODAL) -> ui_wizard_display -> X ->
+ui_wizard_cmd_gain_level -> restore_gameplay_view -> combat_apply_levelup ->
+tramp_magic_recalc_mana / tramp_magic_check_new_spells (load OVL.SPELL, return)
+-> message/sound -> tramp_combat_apply_levelup_modal reloads OVL.MODAL ->
+status_draw -> rts into the restored modal overlay.
+
+Contract decision or selected upstream oracle with source locations:
+docs/APPLE2_MEMORY_POLICY.md exclusive $A400-$B9FF window ownership (one
+overlay or the tier at a time); the bash (tramp_combat_check_levelup_items) and
+wizard-item (tramp_roll_ego_type_modal) repair precedents for restoring the
+caller overlay before returning; COMMODORE_HAL_RESTRUCTURE.md slice 38, which
+documents the C128 bank-safe trampoline as the intended level-up path that this
+repair actually activates.
+
+Intentional Moria8 deviations:
+None.
+
+Input/intermediate widths, signedness, carry, range and overflow policy:
+N/A (code routing only; no values changed).
+
+RNG reduction and bias, if applicable:
+N/A.
+
+Affected platforms, overlays, banks and owners:
+All four platforms assemble combat.s. C64/Plus4 keep direct calls (policy
+const 0; emitted PRGs verified byte-identical by md5). C128 now routes through
+its documented bank-safe trampolines (restores pre-restructure behavior).
+Apple II routes through OVL.SPELL-loading trampolines plus the new resident
+tramp_combat_apply_levelup_modal restoring OVL.MODAL for the wizard
+continuation. check_hal_lifecycle_exports.py gained the const/#define pair
+entry for the new flag, following the existing tuple pattern.
+
+Required production-path tests:
+harness_smoke.py wizard_flow extended: after item generation, reopen the
+wizard menu, press X, assert "Welcome to level" renders and the status line
+advances to LV:2 (7 asserts). The scenario executes the real
+overlay/trampoline/renderer path on the shipping binary.
+
+Known behavior explicitly out of scope:
+The remaining `#if <lowercase .const>` sites listed above (separate audit).
+The synthesized AY3600 keyboard ROM in the local MAME romset emits lowercase
+ASCII for unshifted letters; input_translate normalizes it, so the harness
+must use press() (not shift()) for menu letters.
+
+Unresolved uncertainty and risk:
+None blocking. C128 gate evidence: make test128-fast 152 pass lines, no
+failures; make test128-fast-smoke 10/10; apple2 memory-contract 21/21; all
+eight MAME scenarios green (wizard_flow now 7 asserts); C64/Plus4 PRGs
+byte-identical; check_hal_lifecycle_exports/check_6502_lint/check_zp_usage
+green.
+
+Harness note (same change): the MAME smoke harness replaced the osascript
+window-hiding hack with SDL_VIDEODRIVER=dummy/SDL_AUDIODRIVER=dummy so
+headless runs never create a window or take focus.
+```

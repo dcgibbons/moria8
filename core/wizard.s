@@ -84,7 +84,11 @@ wizard_generate_item_execute:
     jsr roll_enchantment
     sta fi_add_p1
     lda fi_add_id
+#if APPLE2
+    jsr tramp_roll_ego_type_modal
+#else
     jsr tramp_roll_ego_type
+#endif
     sta fi_add_ego
 
     lda #1

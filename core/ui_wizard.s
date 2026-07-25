@@ -89,7 +89,7 @@ ui_wizard_draw_menu:
     lda #COL_WHITE
     sta zp_text_color
     jsr ui_help_clear_all
-#if hal_layout_wizard_40col_menu
+#if HAL_LAYOUT_WIZARD_40COL_MENU
     lda #0
     sta zp_cursor_row
     lda #UWIZ_TITLE_COL
@@ -353,7 +353,11 @@ ui_wizard_cmd_gain_level:
     sta player_data + PL_XP_FRAC_HI
 !wiz_do_level:
     jsr ui_wizard_restore_gameplay_view
+#if HAL_PLATFORM_WIZARD_LEVELUP_RESTORE_MODAL
+    jsr tramp_combat_apply_levelup_modal
+#else
     jsr combat_apply_levelup
+#endif
     jsr status_draw
     rts
 
@@ -572,7 +576,7 @@ ui_wizard_restore_gameplay_view:
     jsr ui_view_redraw_gameplay_view
     rts
 
-#if hal_layout_wizard_40col_menu
+#if HAL_LAYOUT_WIZARD_40COL_MENU
 wiz_title_str:
     .text "WIZARD MODE" ; .byte 0
 wiz_row1_str:

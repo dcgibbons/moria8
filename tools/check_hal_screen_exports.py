@@ -98,7 +98,8 @@ def common_policy_violations() -> list[str]:
         errors.append(
             f"{COMMON_HELP_FILE.relative_to(ROOT)}:{line} uses target conditional in screen helper"
         )
-    if "hal_screen_full_clear_uses_bulk" not in text:
+    if ("hal_screen_full_clear_uses_bulk" not in text
+            and "HAL_SCREEN_FULL_CLEAR_USES_BULK" not in text):
         errors.append(
             f"{COMMON_HELP_CLEAR_FILE.relative_to(ROOT)} does not consume hal_screen_full_clear_uses_bulk"
         )
@@ -110,15 +111,16 @@ def common_policy_violations() -> list[str]:
         errors.append(
             "core/ui_help.s does not consume HAL_SCREEN_HELP_LINE_USES_COLOR_MAP"
         )
-    if "hal_screen_spell_bolt_flash_sets_color" not in spell_effects_text:
+    if ("hal_screen_spell_bolt_flash_sets_color" not in spell_effects_text
+            and "HAL_SCREEN_SPELL_BOLT_FLASH_SETS_COLOR" not in spell_effects_text):
         errors.append(
             "core/spell_effects.s does not consume hal_screen_spell_bolt_flash_sets_color"
         )
     flash_policy = re.compile(
-        r"(?s)#if\s+hal_screen_spell_bolt_flash_sets_color.*?"
+        r"(?s)#if\s+HAL_SCREEN_SPELL_BOLT_FLASH_SETS_COLOR.*?"
         r"jsr\s+screen_flash_set_color.*?"
         r"jsr\s+screen_flash_at.*?"
-        r"#if\s+hal_screen_spell_bolt_flash_sets_color.*?"
+        r"#if\s+HAL_SCREEN_SPELL_BOLT_FLASH_SETS_COLOR.*?"
         r"jsr\s+screen_flash_reset_color"
     )
     if not flash_policy.search(spell_effects_text):

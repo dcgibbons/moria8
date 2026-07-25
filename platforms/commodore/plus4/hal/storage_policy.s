@@ -15,6 +15,8 @@
 .const hal_storage_disk_setup_detail_command_status = 0
 .const hal_storage_disk_setup_detail_dos_drive = 1
 .const hal_storage_disk_setup_detail_status_phase = 1
+#define HAL_STORAGE_DISK_SETUP_DETAIL_DOS_DRIVE
+#define HAL_STORAGE_DISK_SETUP_DETAIL_STATUS_PHASE
 .const hal_storage_disk_setup_marker_write_status_required = 1
 .const hal_storage_disk_setup_done_value = 2
 .const hal_storage_disk_setup_commit_sets_ui_ok = 0

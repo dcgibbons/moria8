@@ -51,7 +51,7 @@ player_create:
     .if (hal_platform_chargen_cutpoint == 4) { rts }
     jsr create_select_gender
     .if (hal_platform_chargen_cutpoint == 5) { rts }
-#if hal_platform_chargen_runtime_resync
+#if HAL_PLATFORM_CHARGEN_RUNTIME_RESYNC
     jsr hal_platform_runtime_resync
 #endif
     .if (hal_platform_chargen_cutpoint == 6) { rts }
@@ -59,7 +59,7 @@ player_create:
 #if C128_TEST_STACK_SLOT_DIAG
     :C128StackSlotGuardCheck($89)
 #endif
-#if hal_platform_chargen_runtime_resync
+#if HAL_PLATFORM_CHARGEN_RUNTIME_RESYNC
     jsr hal_platform_runtime_resync
 #endif
     .if (hal_platform_chargen_cutpoint == 7) { rts }
@@ -67,7 +67,7 @@ player_create:
 #if C128_TEST_STACK_SLOT_DIAG
     :C128StackSlotGuardCheck($8a)
 #endif
-#if hal_platform_chargen_runtime_resync
+#if HAL_PLATFORM_CHARGEN_RUNTIME_RESYNC
 #if C128_TEST_FINAL_RETURN_DIAG
     :C128FinalReturnCapture($92)
 #endif

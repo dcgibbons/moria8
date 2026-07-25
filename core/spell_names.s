@@ -23,7 +23,14 @@ priest_spell_name_hi:
     .byte >psn_24, >psn_25, >psn_26, >psn_27, >psn_28, >psn_29, >psn_30
 
 msn_0:  .text "Magic Missile" ; .byte 0
+#if APPLE2
+// Local copy, not the itok_detect_monsters alias: on Apple II this file is
+// aux-resident while item token strings stay in main RAM, and the spell-list
+// name print reads every string through the aux thunk.
+msn_1:  .text "Detect Monsters" ; .byte 0
+#else
 .label msn_1 = itok_detect_monsters
+#endif
 msn_2:  .text "Phase Door" ; .byte 0
 msn_3:  .text "Light Area" ; .byte 0
 .label msn_4 = spell_name_cure_light_wounds

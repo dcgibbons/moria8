@@ -130,6 +130,42 @@ Current product payloads:
 | `ovl.spell` | `$E000-$E9BD` | 2,494 bytes |
 | `ovl.gen` | `$E000-$EDF7` | 3,576 bytes |
 
+## Apple IIe Runtime Model
+
+The Apple IIe port is ProDOS-based, 80-column, and uses the 128K IIe
+main/aux memory split with disk-loaded overlays and an aux-resident cache
+for hot classes. Memory rules live in `docs/APPLE2_MEMORY_POLICY.md`.
+
+- `MORIA8.SYSTEM` (ProDOS SYS) loads at `$2000` and bootstraps the payload.
+- Resident code and data: `$0A00-$7BFF` in main RAM (hard boundary; the
+  memory-contract checker enforces it).
+- `A2.PLAY` (play payload, load-once + signature): `$7C00-$9FFF` in main RAM.
+- Overlay window: `$A400-$B9FF` in main RAM; one overlay class resident at a
+  time (start, town, death, modal, help, ui, items, spell, gen, storage,
+  title).
+- `A2.AUXDATA` (aux RAM at `$3B0C-$56FF`): read-only lookup tables, store
+  data, spell helper tables, spell names; all access through the
+  `AuxRead`/`AuxWrite` thunks.
+- Dungeon map: aux RAM at `$0800` (198x66 tile rows); row pointer tables in
+  main RAM, tile access through the `MapRead`/`MapWrite` thunks.
+- Hot overlay classes are cached in aux RAM; cold classes load from disk on
+  demand (`docs/CROSS_PLATFORM_STRATEGY.md` — partial cache, not full
+  preload).
+- Overlay-loaded code must return through the owning overlay's resident
+  trampoline; trampolines that switch overlays restore the caller's overlay
+  (see the spell/item/modal restore trampolines in
+  `platforms/apple2/main.s`).
+
+Current product payloads:
+
+| Payload | Linked range | Size |
+| --- | ---: | ---: |
+| `MORIA8.SYSTEM` | `$2000-$2133` | 308 bytes |
+| `MORIA8.PAK` | `$0A00-$7BFF` resident | ~62 KB |
+| `A2.PLAY` | `$7C00-$9FFF` | 9,216 bytes |
+| `OVL.*` (11 classes) | `$A400-$B9FF` window | 0.3-5.6 KB each |
+| `A2.AUXDATA` | aux `$3B0C-$56FF` | ~5.5 KB |
+
 ## C128 Runtime Model
 
 The C128 build keeps game execution in Bank 0 except for scoped Bank 1 data

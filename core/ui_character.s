@@ -36,7 +36,7 @@
 // ui_char_display — Show character sheet
 // Preserves: nothing
 ui_char_display:
-#if hal_platform_character_sheet_begin_enabled
+#if HAL_PLATFORM_CHARACTER_SHEET_BEGIN_ENABLED
     jsr hal_platform_character_sheet_begin
 #endif
     lda #COL_WHITE

@@ -26,7 +26,7 @@ eff_item_overlay_dispatch:
 
 item_action_get_key:
     jsr hal_input_get_key
-#if hal_platform_item_action_key_restores_bank
+#if HAL_PLATFORM_ITEM_ACTION_KEY_RESTORES_BANK
     sta iagk_key
     lda #MMU_ALL_RAM
     sta hal_memory_mmu_config_register
@@ -36,7 +36,7 @@ item_action_get_key:
 #endif
     rts
 
-#if hal_platform_item_action_key_restores_bank
+#if HAL_PLATFORM_ITEM_ACTION_KEY_RESTORES_BANK
 iagk_key: .byte 0
 #endif
 

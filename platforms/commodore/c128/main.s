@@ -94,7 +94,7 @@
 .segmentdef RuntimeBankedCode [outPrg=OVL_OUT + "/128.bank.prg", start=$f000, min=$f000, max=$fffa]
 
 #if C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG
-.const C128_REAL_BOOT_DIAG = 1
+#define C128_REAL_BOOT_DIAG
 #else
 .const C128_REAL_BOOT_DIAG = 0
 #endif

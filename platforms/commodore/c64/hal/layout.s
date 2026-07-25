@@ -38,6 +38,7 @@
 .const hal_layout_title_art_col_offset = 0
 .const hal_layout_wizard_compact_menu = 0
 .const hal_layout_wizard_40col_menu = 1
+#define HAL_LAYOUT_WIZARD_40COL_MENU
 .const hal_layout_wizard_title_col = 14
 .const hal_layout_wizard_menu_col = 4
 .const hal_layout_wizard_footer_col = 14

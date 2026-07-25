@@ -394,7 +394,7 @@ piw_pick_visible_equip_key:
 // Output: message printed via the message-line path
 piw_print_prompt_with_count:
     sta piw_p1
-#if hal_huffman_print_uses_cached_msg
+#if HAL_HUFFMAN_PRINT_USES_CACHED_MSG
     php
     sei
 #endif
@@ -425,7 +425,7 @@ piw_print_prompt_with_count:
     bcc !piw_prompt_patch_loop-
 
 !piw_prompt_print:
-#if hal_huffman_print_uses_cached_msg
+#if HAL_HUFFMAN_PRINT_USES_CACHED_MSG
     plp
 #endif
     jmp msg_print_current_ptr

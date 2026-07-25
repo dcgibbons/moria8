@@ -1420,3 +1420,82 @@ Fail the build if unapproved `commodore/common/` code contains:
 - [ ] Do not accept manual Plus/4 disk testing as a release gate once the
       harness exists.
 - [ ] Update this checklist as phases are completed or gates change.
+
+## Policy-Guard Mechanism Repair — 2026-07-24
+
+```text
+Problem and success criteria:
+The restructure's "Route X policy through HAL" slices converted working
+`#if C128` / `#if !C128` guards into `#if <lowercase .const>`. Kick
+Assembler's #if preprocessor cannot see assembler .const values (verified
+empirically with Kick 5.25: #if on a .const silently takes the #else arm;
+#if on a #define and .if on a .const both work), so every such guard has
+been silently always-false on every platform since its conversion. The
+platform-specific behaviors those guards selected (C128 IRQ-locked Huffman
+decode, C128 fast-key input paths, C64/Plus4 run-cancel buffer flush,
+C64/Plus4 40-column wizard menu, per-platform disk setup detail, and ~20
+more) have been absent since. Success is a working guard mechanism for
+every converted site, policy files that match emitted behavior, and all
+platform gates green.
+
+Root cause evidence:
+git archaeology on every converted flag shows a pre-conversion `#if C128` /
+`#if !C128` guard (C128 is a real -define symbol, so those worked). The
+combat.s level-up trampoline instance (fixed the same day, see
+docs/APPLE2_PORT.md wizard gain-level record) proved the class was live:
+C128 emitted direct calls where slice 38 documented the bank-safe
+trampoline.
+
+State being changed:
+Preprocessor guards at ~60 sites in 18 core files plus C128_REAL_BOOT_DIAG
+in c128/main.s now use #define twins of the policy consts. No gameplay
+values, layouts, or addresses change; C128 segment contents change only by
+restoring previously shipped code paths inside existing boundaries (all
+302+ C128 assertions unmodified and green).
+
+Activations (policy const already declared intent; define now realizes it):
+- C128: HAL_HUFFMAN_LOCK_IRQ_DURING_DECODE, HAL_MEMORY_MAP_ROW_HELPER_ENABLED,
+  HAL_INPUT_{MODAL_DISMISS,FOLLOWUP}_USES_FAST_KEY,
+  HAL_INPUT_SELECTABLE_OVERLAY_PREPARE_FOLLOWUP,
+  HAL_INPUT_HELP_FOOTER_USES_ESC_STOP,
+  HAL_PLATFORM_{CHARGEN_RUNTIME,CHARACTER_BACKGROUND}_RESYNC,
+  HAL_PLATFORM_CHARACTER_SHEET_BEGIN_ENABLED,
+  HAL_PLATFORM_DESCRIBE_LOOK_MASKS_IRQ,
+  HAL_PLATFORM_ITEM_ACTION_KEY_RESTORES_BANK,
+  HAL_PLATFORM_REASSERT_BEFORE_MESSAGE_RENDER,
+  HAL_PLATFORM_{MARK_MODAL_RESTORE,RENDER_BALL_EFFECT_DIRECT,GAME_LOOP_PERF_P1}_PERF
+  (PERF_P1=1 builds only), HAL_SCREEN_FULL_CLEAR_USES_BULK,
+  C128_REAL_BOOT_DIAG (test builds only, via #define under the existing
+  test-conditional).
+- C64/Plus4: HAL_INPUT_FLUSH_RUN_CANCEL_BUFFER, HAL_LAYOUT_WIZARD_40COL_MENU.
+- Plus4: HAL_STORAGE_DISK_SETUP_DETAIL_{DOS_DRIVE,STATUS_PHASE}.
+- Apple II: HAL_INPUT_HELP_FOOTER_USES_ESC_STOP.
+
+Deferrals (fit-blocked on C128; consts corrected to 0 so policy matches
+emitted behavior, comments name the define that re-enables each):
+- hal_huffman_print_uses_cached_msg: 26 bytes, main image (23 free).
+- hal_input_inventory_letter_normalize_shifted: 10 bytes, resident world (1 free).
+- hal_screen_spell_bolt_flash_sets_color: 8 bytes, resident world.
+- hal_storage_disk_setup_detail_command_status: 81 bytes, HELP overlay.
+
+Policy corrections:
+- plus4 hal_platform_reassert_before_message_render 1 -> 0: contradicted
+  slice 28 ("C64/Plus/4 preserving the previous no-op") and the
+  pre-restructure `#if C128` guard; never in effect anyway.
+
+Checker updates:
+check_hal_{lifecycle,input,screen,storage,memory_bank}_exports accept each
+const's #define twin at consumption sites (existing tuple pair pattern);
+the bolt-flash gating regex tracks the twin name.
+
+Verification:
+make clean build green (all assert sets 0 failed); C64 179/179; Plus/4
+36/36; C128 test128-fast no failures + scripted smoke 10/10; Apple II
+memory-contract 21/21 and all 8 MAME scenarios green; all 18 static
+checkers pass. Byte-identity is intentionally NOT preserved on C64/Plus4/
+C128: the activated arms restore pre-restructure shipped behavior.
+
+Known out of scope:
+The four C128 deferrals above need fit levers before their defines can be
+enabled; each deferral comment names the exact byte cost and region.
+```

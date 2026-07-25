@@ -594,12 +594,12 @@ eff_bolt:
     adc #VIEWPORT_X                 // Screen column
     tay                             // Y = absolute screen column
 
-#if hal_screen_spell_bolt_flash_sets_color
+#if HAL_SCREEN_SPELL_BOLT_FLASH_SETS_COLOR
     lda #COL_CYAN
     jsr screen_flash_set_color
 #endif
     jsr screen_flash_at             // Flash '*' white, restore after delay
-#if hal_screen_spell_bolt_flash_sets_color
+#if HAL_SCREEN_SPELL_BOLT_FLASH_SETS_COLOR
     jsr screen_flash_reset_color
 #endif
 

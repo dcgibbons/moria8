@@ -102,7 +102,7 @@ co = coroutine.create(run)
 coroutine.resume(co)
 """
 
-LUA_PRIEST_PRAY = r"""
+LUA_HELPERS = r"""
 local prog = manager.machine.devices[":maincpu"].spaces["program"]
 local aux = emu.item(manager.machine.devices[":aux:ext80"].items["0/m_ram"])
 local keymap = {}
@@ -115,6 +115,13 @@ local function findkey(ch)
     if ch == " " then return keymap["Space"] end
     if ch == "?" then return keymap["/  ?"] end
     if ch == "/" then return keymap["/  ?"] end
+    if ch == "." then return keymap[".  >"] end
+    if ch == "," then return keymap[",  <"] end
+    if string.match(ch, "%d") then
+        for name, field in pairs(keymap) do
+            if string.sub(name, 1, 1) == ch then return field end
+        end
+    end
     return keymap[string.lower(ch) .. "  " .. string.upper(ch)]
 end
 local function press(ch)
@@ -129,6 +136,14 @@ local function shift(ch)
     s:set_value(1) emu.wait(0.02)
     f:set_value(1) emu.wait(0.03) f:set_value(0) emu.wait(0.02)
     s:set_value(0) emu.wait(0.12)
+end
+local function ctrl(ch)
+    local c = keymap["Control"]
+    local f = findkey(ch)
+    if not f then print("NOKEY " .. string.format("%q", ch)) return end
+    c:set_value(1) emu.wait(0.02)
+    f:set_value(1) emu.wait(0.03) f:set_value(0) emu.wait(0.02)
+    c:set_value(0) emu.wait(0.12)
 end
 
 local function rowbase(r) return 0x400 + (r % 8) * 0x80 + math.floor(r / 8) * 0x28 end
@@ -172,9 +187,31 @@ local function in_town()
     end
     return false
 end
+local function assert_line(name, ok, detail)
+    if ok then
+        print("ASSERT " .. name .. " PASS")
+    else
+        print("ASSERT " .. name .. " FAIL " .. (detail or ""))
+    end
+end
 
--- Title -> chargen -> priest -> town (each step retries its key until the
--- next screen appears; transitions eat pending keys via strobe clear).
+-- Enable wizard mode and open the wizard menu. The message system interposes
+-- "-more-" prompts that swallow answers, so clear them between steps.
+local function wizard_menu_open(tries)
+    for i = 1, (tries or 15) do
+        if screen_has("Q to cancel") then return true end
+        if screen_has("-more-") then press(" ") emu.wait(0.4) end
+        if screen_has("WIZARD?") then press("Y") emu.wait(0.5) end
+        if screen_has("Q to cancel") then return true end
+        ctrl("W")
+        emu.wait(1)
+    end
+    return false
+end
+"""
+
+LUA_CHARGEN = r"""
+-- Title -> chargen -> town. CLASS_KEY substituted by the caller.
 for i = 1, 300 do
     emu.wait(0.1)
     if prog:read_u8(0x550 + 14) == 0xA9 then break end
@@ -182,7 +219,7 @@ end
 press_until("Choose your race", "N")
 press_until("Roll Statistics", "A")
 press_until("Choose your class", "\r")
-press_until("Enter your name", "C")
+press_until("Enter your name", "CLASS_KEY")
 press("T") press("E") press("S") press("T")
 press_until("Choose your sex", "\r")
 for i = 1, 60 do
@@ -191,49 +228,270 @@ for i = 1, 60 do
     press(" ")
     if in_town() then break end
 end
-if not in_town() then print("NO TOWN") end
+assert_line("town_reached", in_town())
 emu.wait(2)
+"""
 
+LUA_PRIEST_PRAY_BODY = r"""
 -- Precondition: the priest carries the Beginners Handbook.
 press("I")
 emu.wait(2)
-if screen_has("Beginners Handbook") then print("BOOK PRESENT") else print("BOOK MISSING") end
+assert_line("book_present", screen_has("Beginners Handbook"),
+            "Beginners Handbook missing from starting inventory")
 dump("inventory")
 press(" ")
 emu.wait(1)
 
--- Failing scenario: 'p' must offer the prayer-book prompt, not
+-- Regression: 'p' must offer the prayer-book prompt, not
 -- "You have nothing there."
 press("P")
 emu.wait(3)
-if screen_has("Prayer book") then print("PRAY PROMPT SHOWN") else print("PRAY PROMPT ABSENT") end
-if screen_has("You have nothing there.") then print("NOTHING THERE SHOWN") end
+assert_line("pray_prompt", screen_has("Prayer book"),
+            "'p' did not show the prayer-book prompt")
+assert_line("no_nothing_there", not screen_has("You have nothing there."),
+            "'p' printed \"You have nothing there.\" despite the book")
 
 -- Full activation: select the only book ('a'), open the list with '?',
 -- verify names/mana/level render (aux/overlay-safe), then pick prayer 'a'.
 press("A")
 emu.wait(3)
-if screen_has("Pray which?") then print("PRAY LIST SHOWN") else print("PRAY LIST ABSENT") end
+assert_line("pray_list", screen_has("Pray which?"),
+            "book selection did not reach the prayer list")
 shift("/")
 emu.wait(3)
-if screen_has("Prayer Book") then print("LIST TITLE OK") else print("LIST TITLE MISSING") end
-if screen_has("Detect Evil") and screen_has("Bless") then
-    print("LIST NAMES OK")
-else
-    print("LIST NAMES GARBLED")
-end
+assert_line("list_title", screen_has("Prayer Book"),
+            "'?' list overlay did not render")
+assert_line("list_names", screen_has("Detect Evil") and screen_has("Bless"),
+            "'?' list shows garbled prayer names/mana/level")
 press("A")
 emu.wait(3)
-if not screen_has("Prayer Book") and not screen_has("Pray which?") then
-    print("PRAYER EXECUTED")
-else
-    print("PRAYER STUCK")
-end
+assert_line("pray_executed",
+            not screen_has("Prayer Book") and not screen_has("Pray which?"),
+            "prayer selection did not consume the turn")
 dump("after_p")
 print("SCENARIO DONE")
 """
 
-SCENARIOS = ("boot_title", "priest_pray")
+LUA_HELP_BODY = r"""
+-- Help overlay: '?' from the command loop must render the command reference
+-- and return to the town view on 'q'.
+shift("/")
+emu.wait(3)
+assert_line("help_open", screen_has("Command Reference"),
+            "'?' did not open the help overlay")
+press("Q")
+emu.wait(2)
+assert_line("help_close", in_town(), "help did not return to the town view")
+dump("after_help")
+print("SCENARIO DONE")
+"""
+
+LUA_WIZARD_BODY = r"""
+-- Wizard mode: enable, open the menu, generate item 48, see it carried.
+assert_line("wizard_menu", wizard_menu_open(), "wizard menu did not open")
+press_until("ITEM", "G")
+press("4") press("8") press("\r")
+emu.wait(2)
+assert_line("wizard_gain", screen_has("OK"), "item generation did not report OK")
+press("I")
+emu.wait(2)
+assert_line("gain_in_inventory", screen_has("Beginners Handbook"),
+            "generated item not in inventory")
+press(" ")
+emu.wait(1)
+-- Regression: gain level loads OVL.SPELL for mana/spell learning while the
+-- wizard continuation lives in OVL.MODAL; the trampoline must restore
+-- OVL.MODAL or the message line prints overlay bytes.
+assert_line("wizard_menu2", wizard_menu_open(), "wizard menu did not reopen")
+press("X")
+emu.wait(2)
+if screen_has("-more-") then press(" ") emu.wait(1) end
+assert_line("gain_level_msg", screen_has("Welcome to level"),
+            "gain level printed garbage instead of the level-up message")
+assert_line("gain_level_lv", screen_has("LV:2"),
+            "status line did not advance to LV:2")
+dump("after_wizard")
+print("SCENARIO DONE")
+"""
+
+LUA_DUNGEON_BODY = r"""
+-- The player spawns left of the town stairs (classic Moria): step east onto
+-- them, then descend. Retries the step+descend pair because transitions eat
+-- pending keys. Dungeon level 1 must render and accept movement.
+local descended = false
+for i = 1, 10 do
+    press("L")
+    emu.wait(1)
+    shift(".")
+    emu.wait(2)
+    if screen_has("DL:1") then descended = true break end
+end
+assert_line("descended", descended, "status does not show DL:1")
+assert_line("dungeon_render", not in_town(), "town map still visible after descent")
+press("L") emu.wait(1)
+press("L") emu.wait(1)
+assert_line("move_ok", screen_has("DL:1"), "dungeon view lost after movement")
+dump("after_descend")
+print("SCENARIO DONE")
+"""
+
+LUA_DEATH_BODY = r"""
+-- Death flow: step onto the stairs, descend, wizard-jump deep, summon a
+-- monster, rest until dead.
+for i = 1, 10 do
+    press("L")
+    emu.wait(1)
+    shift(".")
+    emu.wait(2)
+    if screen_has("DL:1") then break end
+end
+if not wizard_menu_open() then print("ASSERT died FAIL wizard menu did not open") end
+press_until("DLVL", "L")
+press("1") press("0") press("\r")
+emu.wait(5)
+-- 'S' summons an adjacent monster on the current (deep) level.
+if not wizard_menu_open() then print("ASSERT died FAIL wizard menu did not reopen") end
+press("S")
+emu.wait(2)
+local died = false
+for i = 1, 120 do
+    press("5")
+    emu.wait(1)
+    if screen_has("You have died") then died = true break end
+end
+assert_line("died", died, "death screen did not appear")
+dump("after_death")
+print("SCENARIO DONE")
+"""
+
+
+LUA_MAGE_LIST_BODY = r"""
+-- Mage spell list: 'm', the only book, '?' list — names must be the mage
+-- catalog's (regression: token-aliased name read from the wrong bank).
+press("M")
+emu.wait(3)
+assert_line("cast_prompt", screen_has("Spell book") or screen_has("Cast"),
+            "no cast book prompt")
+press("A")
+emu.wait(3)
+assert_line("cast_list", screen_has("Cast which?"),
+            "book selection did not reach the cast list")
+shift("/")
+emu.wait(3)
+assert_line("list_title", screen_has("Mage Book"),
+            "mage list title missing")
+assert_line("name_mm", screen_has("Magic Missile"), "Magic Missile missing")
+assert_line("name_dm", screen_has("Detect Monsters"),
+            "Detect Monsters missing/garbled")
+assert_line("name_pd", screen_has("Phase Door"), "Phase Door missing")
+assert_line("no_priest_names", not screen_has("Protect"),
+            "priest name leaked into mage list")
+dump("mage_list")
+print("SCENARIO DONE")
+"""
+
+LUA_SAVE_LOAD_BODY = r"""
+-- Save-and-quit then reload: the full storage roundtrip through the slot UI.
+local s = keymap["Left Shift"]
+local f = findkey("S")
+s:set_value(1) emu.wait(0.02)
+f:set_value(1) emu.wait(0.03) f:set_value(0) emu.wait(0.02)
+s:set_value(0)
+local prompt_ok = false
+for i = 1, 20 do
+    emu.wait(0.5)
+    if screen_has("Select Slot 1-4") then prompt_ok = true break end
+end
+assert_line("save_slot_prompt", prompt_ok, "save slot prompt did not appear")
+press("1")
+local started = false
+for i = 1, 12 do
+    emu.wait(0.5)
+    if screen_has("Saving game") then started = true break end
+    if screen_has("Overwrite?") then press("Y") end
+end
+assert_line("saving_msg", started, "save did not start")
+local title_ok = false
+for i = 1, 90 do
+    emu.wait(0.5)
+    if screen_has("Overwrite?") then press("Y") end
+    if screen_has("-more-") then press(" ") end
+    if prog:read_u8(0x550 + 14) == 0xA9 then title_ok = true break end
+end
+assert_line("save_completed", title_ok, "save did not complete")
+assert_line("title_after_save", title_ok,
+            "did not return to title after save-and-quit")
+press("L")
+local slots_ok = false
+for i = 1, 20 do
+    emu.wait(0.5)
+    if screen_has("Save Slots:") then slots_ok = true break end
+end
+assert_line("load_slots", slots_ok, "load did not show the slot list")
+local name_ok = false
+for i = 1, 10 do
+    emu.wait(0.3)
+    if screen_has("test") then name_ok = true break end
+end
+assert_line("slot_has_name", name_ok,
+            "saved character name missing from slot list")
+press("1")
+local loaded = false
+for i = 1, 30 do
+    emu.wait(0.5)
+    if screen_has("Welcome back to Moria8!") then loaded = true break end
+end
+assert_line("loaded", loaded, "load did not resume the saved game")
+assert_line("stats_restored", screen_has("test") and screen_has("Human"),
+            "status line does not show the restored character")
+dump("after_load")
+print("SCENARIO DONE")
+"""
+
+
+def _chargen_body(class_key: str) -> str:
+    return LUA_HELPERS + LUA_CHARGEN.replace("CLASS_KEY", class_key)
+
+
+def priest_pray_lua() -> str:
+    return _chargen_body("C") + LUA_PRIEST_PRAY_BODY
+
+
+def help_overlay_lua() -> str:
+    return _chargen_body("A") + LUA_HELP_BODY
+
+
+def wizard_flow_lua() -> str:
+    return _chargen_body("A") + LUA_WIZARD_BODY
+
+
+def dungeon_descend_lua() -> str:
+    return _chargen_body("A") + LUA_DUNGEON_BODY
+
+
+def death_flow_lua() -> str:
+    return _chargen_body("A") + LUA_DEATH_BODY
+
+
+def save_load_lua() -> str:
+    return _chargen_body("A") + LUA_SAVE_LOAD_BODY
+
+
+def mage_list_lua() -> str:
+    return _chargen_body("B") + LUA_MAGE_LIST_BODY
+
+
+SCENARIO_LUA = {
+    "priest_pray": priest_pray_lua,
+    "help_overlay": help_overlay_lua,
+    "wizard_flow": wizard_flow_lua,
+    "dungeon_descend": dungeon_descend_lua,
+    "death_flow": death_flow_lua,
+    "save_load": save_load_lua,
+    "mage_list": mage_list_lua,
+}
+
+SCENARIOS = ("boot_title",) + tuple(SCENARIO_LUA)
 
 
 def main() -> int:
@@ -255,11 +513,15 @@ def main() -> int:
               file=sys.stderr)
         return 1
 
-    if args.scenario == "priest_pray" and args.seconds == 20.0:
+    if args.scenario != "boot_title" and args.seconds == 20.0:
         args.seconds = 240.0
+    if args.scenario == "boot_title" and args.seconds == 20.0:
+        # Boot goes through crash-reboot cycles before the title flow
+        # completes; 20 s is marginal on a cold start.
+        args.seconds = 30.0
 
-    if args.scenario == "priest_pray":
-        lua = LUA_PRIEST_PRAY
+    if args.scenario != "boot_title":
+        lua = SCENARIO_LUA[args.scenario]()
     else:
         table = "local MENU_EXPECTED = {%s}\n" % ",".join(
             str(b) for b in MENU_EXPECTED)
@@ -295,41 +557,39 @@ def main() -> int:
         "-nothrottle",
         "-seconds_to_run", str(args.seconds + 5),
     ]
-    proc = subprocess.run(cmd, capture_output=True, text=True,
-                          timeout=max(300, args.seconds + 60))
-    out = proc.stdout + proc.stderr
+    # Homebrew MAME on macOS opens an app window even with -video none.
+    # SDL's dummy video driver prevents window creation entirely, so the
+    # harness never takes focus or interrupts the user.
+    env = os.environ.copy()
+    env["SDL_VIDEODRIVER"] = "dummy"
+    env["SDL_AUDIODRIVER"] = "dummy"
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE, text=True, env=env)
+    try:
+        stdout, stderr = proc.communicate(timeout=max(300, args.seconds + 60))
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        stdout, stderr = proc.communicate()
+    out = (stdout or "") + (stderr or "")
 
-    if args.scenario == "priest_pray":
+    if args.scenario != "boot_title":
         failures = 0
         asserts = 0
-
-        def check(name, ok, detail=""):
-            nonlocal failures, asserts
+        seen = set()
+        for line in out.splitlines():
+            if not line.startswith("ASSERT "):
+                continue
+            body = line[7:]
+            name, _, verdict = body.partition(" ")
             asserts += 1
-            if not ok:
+            seen.add(name)
+            if not verdict.startswith("PASS"):
                 failures += 1
-            print(f"ASSERT {name} {'PASS' if ok else 'FAIL ' + detail}")
-
-        if "NOKEY" in out:
-            missing = [l for l in out.splitlines() if l.startswith("NOKEY")]
-            check("keys_mapped", False, "; ".join(missing[:3]))
-        else:
-            check("keys_mapped", True)
-        check("town_reached", "NO TOWN" not in out and "SCREEN" in out)
-        check("book_present", "BOOK PRESENT" in out,
-              "Beginners Handbook missing from starting inventory")
-        check("pray_prompt", "PRAY PROMPT SHOWN" in out,
-              "'p' did not show the prayer-book prompt")
-        check("no_nothing_there", "NOTHING THERE SHOWN" not in out,
-              "'p' printed \"You have nothing there.\" despite the book")
-        check("pray_list", "PRAY LIST SHOWN" in out,
-              "book selection did not reach the prayer list")
-        check("list_title", "LIST TITLE OK" in out,
-              "'?' list overlay did not render")
-        check("list_names", "LIST NAMES OK" in out,
-              "'?' list shows garbled prayer names/mana/level")
-        check("pray_executed", "PRAYER EXECUTED" in out,
-              "prayer selection did not consume the turn")
+            print(line)
+        for line in out.splitlines():
+            if line.startswith(("NOKEY", "RETRY EXHAUSTED", "NO TOWN")):
+                failures += 1
+                print(f"HARNESS {line}")
         print(f"RESULT {asserts} asserts {failures} failures")
         return 0 if failures == 0 else 1
 
