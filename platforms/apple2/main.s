@@ -72,15 +72,23 @@ entry_bootstrap:
     jmp entry_main
 
 // ============================================================
-// Platform media state bytes (shared save.s bookkeeping surface;
-// device numbers are meaningless on ProDOS but the labels are
-// referenced by shared code)
+// Platform media state bytes (shared save.s bookkeeping surface).
+// save_device/program_device hold ProDOS unit bytes (drive/slot nibbles)
+// resolved by ON_LINE; disk_mode uses the A2_DISK_MODE_* values
+// (1 = game disk, 2 = two-drive, 3 = one-drive swap).
 // ============================================================
 save_device:        .byte 0
 program_device:     .byte 0
 disk_mode:          .byte 0
 disk_setup_done:    .byte 0
 tsi_krev_cached:    .byte 0
+
+// save_slot_index lives in unbanked platform ZP: the shared save engine runs
+// in the OVL.STORAGE window (evicted on overlay swaps), and any address >=
+// $0200 is RAMRD/RAMWRT bank-switched on the IIe, so a resident non-ZP byte
+// can read back aux data when map code leaves RAMRD on. $aa is free in the
+// $90-$ef platform window (memory.s).
+.label save_slot_index = $aa
 
 // tramp_dig_ability — pinned jump for tunnel code (resident).
 tramp_dig_ability:
@@ -100,6 +108,9 @@ tramp_dig_ability:
 // Apple II-only overlay classes (slot-free; both window-hosted).
 .const OVL_STORAGE = 10
 .const OVL_TITLE   = 11
+// save_slot_index is declared in main.s (resident), not in the shared save
+// engine's overlay window, so the loaded/saved slot survives overlay swaps.
+#define SAVE_SLOT_INDEX_EXTERNAL
 #import "reu_stub.s"
 #import "screen_a2.s"
 #import "../../core/color.s"
@@ -243,6 +254,8 @@ a2_reset_session_state:
     sta disk_mode
     sta save_device
     sta program_device
+    sta a2_save_volume            // length 0 = no save volume selected
+    sta a2_program_volume         // rediscovered lazily by Disk Setup
     rts
 
 title_load_game:
@@ -253,6 +266,7 @@ title_load_game:
     jsr save_prepare_slot_prompt
     bcs !title_load_fail+
 #endif
+    jsr disk_prompt_save        // Swap to save disk in one-drive mode
     jsr ui_clear_full_screen_safe
     jsr ui_reset_message_state
 #if !BYPASS_SLOT_PROMPT
@@ -260,7 +274,13 @@ title_load_game:
 #endif
     jsr load_game
     bcc !title_load_fail+
+    // Media handling order matters here: disk_prompt_game_required lives in
+    // the play slot (game_loop.s), which a cold boot has not loaded yet.
+    // Probe/prompt game media with the resident prompt first, then load the
+    // play payload, then run the play-slot verifier.
+    jsr disk_prompt_game        // Resident: swap back to the game disk if dual
     jsr a2_require_play
+    jsr disk_prompt_game_required
     jmp load_resume_game
 !title_load_fail:
     jsr input_get_modal_dismiss_key
@@ -681,7 +701,7 @@ tramp_disk_prepare_selected:
     lda #OVL_STORAGE
     jsr overlay_load
     bcs !done+
-    jsr a2_disk_setup_run
+    jsr a2_disk_prepare_selected
 !done:
     rts
 
@@ -712,13 +732,63 @@ tramp_player_create:
     rts
 
 // ============================================================
-// Media prompts. The Apple II game volume is always present (plan:
-// "the two-drive swap UX degrades to always-present probes"), so the
-// Commodore swap prompts are genuine no-op successes.
+// Media prompts (Commodore parity). Resident like the Commodore originals:
+// callers run with arbitrary overlays live (death flow keeps OVL.DEATH),
+// so no overlay loads may happen here. Only one-drive swap mode prompts:
+// two-drive mode assumes the save disk stays mounted (failures route through
+// tramp_disk_prepare_selected), and game-disk mode needs no media handling.
+// Probes reuse the resident media probes: the marker probe answers "is the
+// save volume mounted" and the program probe answers "is the game volume
+// mounted" without an ON_LINE scan.
 // ============================================================
-disk_prompt_game:
 disk_prompt_save:
+    lda disk_mode
+    cmp #A2_DISK_MODE_SWAP
+    beq !dps_check+
     clc
+    rts
+!dps_check:
+    jsr hal_storage_marker_present
+    bcs !dps_prompt+
+    clc
+    rts
+!dps_prompt:
+    jsr ui_clear_full_screen_safe
+    jsr msg_init
+    lda #COL_WHITE
+    sta zp_text_color
+    lda #10
+    sta zp_cursor_row
+    lda #32                         // (80-16)/2 for ds_save_str
+    sta zp_cursor_col
+    lda #<ds_save_str
+    sta zp_ptr0
+    lda #>ds_save_str
+    sta zp_ptr0_hi
+    jsr hal_screen_put_string
+    lda #11
+    sta zp_cursor_row
+    lda #33                         // (80-13)/2 for press_key_str
+    sta zp_cursor_col
+    lda #<press_key_str
+    sta zp_ptr0
+    lda #>press_key_str
+    sta zp_ptr0_hi
+    jsr hal_screen_put_string
+    jsr input_get_modal_dismiss_key
+    jmp !dps_check-
+
+disk_prompt_game:
+    lda disk_mode
+    cmp #A2_DISK_MODE_SWAP
+    bne !dpg_ok+
+    jsr hal_storage_probe_media
+    bcs !dpg_off+
+!dpg_ok:
+    clc
+    rts
+!dpg_off:
+    sec
     rts
 
 // winner_apply_retirement_bonus — core calls the plain name on this
@@ -1116,6 +1186,7 @@ ovl_gen_end:
 .segment StorageOverlay
 #import "../../shared/save.s"
 #import "save_slot_menu.s"
+#import "disk_setup_a2.s"
 ovl_storage_end:
 .print "Storage overlay: " + (ovl_storage_end - $a400) + " bytes"
 .assert "Storage overlay fits", ovl_storage_end <= $ba00, true

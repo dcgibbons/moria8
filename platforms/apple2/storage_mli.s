@@ -24,7 +24,9 @@
 // - Pathnames are built at A2_MLI_PATHNAME ($0290, platform scratch):
 //   length byte, then ASCII, high bit clear, no trailing zero. All game
 //   filenames are already ProDOS-legal (A-Z 0-9 '.', <= 15 chars); the
-//   converter uppercases a-z defensively.
+//   converter uppercases a-z defensively. Save-side names ("0:"/"S0:"/"@0:")
+//   become absolute "/VOLUME/FILE" pathnames when Disk Setup has selected a
+//   separate save volume (disk_mode >= A2_DISK_MODE_TWO_DRIVE).
 // - Filename labels keep the Commodore PETSCII strings byte-identical
 //   ("@0:THE.GAME,S,W" etc.) so the shared save-slot menu's runtime digit
 //   mutation and its offset asserts hold unchanged; the converter strips the
@@ -43,6 +45,8 @@
 .const A2_MLI_CREATE      = $c0
 .const A2_MLI_DESTROY     = $c1
 .const A2_MLI_GET_INFO    = $c4
+.const A2_MLI_ON_LINE     = $c5
+.const A2_MLI_GET_PREFIX  = $c7
 .const A2_MLI_OPEN        = $c8
 .const A2_MLI_READ        = $ca
 .const A2_MLI_WRITE       = $cb
@@ -80,6 +84,7 @@ a2_media_status:          .byte 0     // last HAL_STORAGE_STATUS_* media verdict
 a2_name_write:            .byte 0     // 1 = ",S,W" suffix (open for write)
 a2_name_replace:          .byte 0     // 1 = '@' prefix (destroy before create)
 a2_name_scratch:          .byte 0     // 1 = "S0:" prefix (destroy command)
+a2_name_drive:            .byte 0     // 1 = "0:"/"S0:" save-volume prefix seen
 
 // ============================================================
 // Static MLI parameter blocks (resident main RAM; the MLI reads values and
@@ -134,6 +139,10 @@ a2_eof_params:
     .byte 2
 a2_eof_ref:     .byte 0
     .byte 0, 0, 0                   // 24-bit EOF position (truncate to 0)
+
+// ON_LINE/GET_PREFIX param blocks + primitives live in disk_setup_a2.s
+// (OVL.STORAGE): only the Disk Setup coordinator and media prompts enumerate
+// volumes, and resident space is byte-tight.
 
 // ============================================================
 // hal_storage_enter_os / hal_storage_exit_os
@@ -295,7 +304,10 @@ a2_map_error:
 // ============================================================
 // a2_map_media_error — media-probe verdict for a raw ProDOS error.
 // A missing marker/program file means uninitialized-or-wrong media, not a
-// generic failure, so NOT_FOUND classifies as WRONG_MEDIA here.
+// generic failure, so NOT_FOUND classifies as WRONG_MEDIA here. A missing
+// volume ($45) or a switched disk ($2e) likewise means the mounted media is
+// not the expected volume, which is exactly the wrong-media class the swap
+// recovery flow (tramp_disk_prepare_selected) handles.
 // Input: A = raw ProDOS error code.
 // Output: a2_media_status + a2_last_status + diag bytes; carry set.
 // ============================================================
@@ -307,6 +319,10 @@ a2_map_media_error:
     beq !wrong+
     cmp #A2ERR_PATH_NOT_FOUND
     beq !wrong+
+    cmp #A2ERR_VOL_NOT_FOUND
+    beq !wrong+
+    cmp #A2ERR_DISK_SWITCHED
+    beq !wrong+
     cmp #A2ERR_WRITE_PROT
     beq !wp+
     cmp #A2ERR_ACCESS
@@ -314,8 +330,6 @@ a2_map_media_error:
     cmp #A2ERR_DISK_FULL
     beq !full+
     cmp #A2ERR_NO_DEVICE
-    beq !nodev+
-    cmp #A2ERR_VOL_NOT_FOUND
     beq !nodev+
     lda #HAL_STORAGE_STATUS_UNKNOWN
     jmp !store+
@@ -363,6 +377,7 @@ a2_mli_set_pathname:
     sta a2_name_write
     sta a2_name_replace
     sta a2_name_scratch
+    sta a2_name_drive
     ldx #0                          // pathname out index
     ldy #0                          // source in index
     // Prefix passes: '@' (replace), "0:" (drive), "S0:" (scratch)
@@ -393,6 +408,7 @@ a2_mli_set_pathname:
     bne !not_s2+
     lda #1
     sta a2_name_scratch
+    sta a2_name_drive
     iny
     jmp !prefix_loop-
 !not_s2:
@@ -410,8 +426,39 @@ a2_mli_set_pathname:
     cmp #$3a                        // ':'
     bne !not_s2-
     iny
+    lda #1
+    sta a2_name_drive
     jmp !prefix_loop-
 !body:
+    // Save-side names ("0:"/"S0:"/"@0:") resolve on the selected save volume
+    // once Disk Setup has chosen a separate one; program assets (no drive
+    // prefix) always stay relative to the boot prefix.
+    lda a2_name_drive
+    beq !body_copy+
+    lda disk_mode
+    cmp #A2_DISK_MODE_TWO_DRIVE
+    bcc !body_copy+
+    lda a2_save_volume              // 0 = no volume selected: stay relative
+    beq !body_copy+
+    sty a2_nc_tmp                   // stash source index
+    lda #$2f                        // '/'
+    sta A2_MLI_PATHNAME + 1,x
+    inx
+    ldy #0
+!vol_copy:
+    cpy a2_save_volume
+    bcs !vol_done+
+    lda a2_save_volume + 1,y
+    sta A2_MLI_PATHNAME + 1,x
+    inx
+    iny
+    jmp !vol_copy-
+!vol_done:
+    lda #$2f                        // '/'
+    sta A2_MLI_PATHNAME + 1,x
+    inx
+    ldy a2_nc_tmp                   // restore source index
+!body_copy:
     cpy a2_nc_len
     bcs !done+
     lda (a2_nc_ptr),y
@@ -426,7 +473,7 @@ a2_mli_set_pathname:
     sta A2_MLI_PATHNAME + 1,x
     inx
     iny
-    jmp !body-
+    jmp !body_copy-
 !suffix:
     // Mode letter at y+3 in ",S,R" / ",S,W" decides write-vs-read intent.
     tya
@@ -446,10 +493,11 @@ a2_mli_set_pathname:
     rts
 
 // ============================================================
-// hal_storage_probe_media — check whether program media responds.
-// The boot volume is the only device; the probe is GET_FILE_INFO on A2.PLAY
-// (always present on the game volume). The device number in X is advisory on
-// Commodore and ignored here.
+// hal_storage_probe_media — check whether program media responds. The probe
+// is GET_FILE_INFO on A2.PLAY (always present on the game volume, addressed
+// relative to the boot prefix); in one-drive swap mode it fails while the
+// save disk is mounted, which is exactly what disk_prompt_game[_required]
+// needs. The device number in X is advisory on Commodore and ignored here.
 // Output: carry clear = present, carry set = absent/unusable.
 // ============================================================
 hal_storage_probe_media:
@@ -536,9 +584,10 @@ hal_storage_marker_present:
     jsr a2_map_media_error
     rts                             // carry set
 
-// Save media = game volume. Requiring save media is exactly the marker probe;
-// callers (save.s, score_io.s via the disk_require_save_media alias) get
-// carry clear = usable, carry set + a2_media_status = failure verdict.
+// Requiring save media is the marker probe on the selected save volume
+// (a2_mli_set_pathname routes "0:" names by disk_mode); callers (save.s,
+// score_io.s via the disk_require_save_media alias) get carry clear = usable,
+// carry set + a2_media_status = failure verdict.
 .label hal_storage_require_save_media = hal_storage_marker_present
 // save.s and score_io.s call the historical common symbol directly.
 .label disk_require_save_media = hal_storage_marker_present
@@ -645,7 +694,9 @@ hal_asset_load_prg_header:
     tya
     pha
     jsr a2_overlay_try_cache
-    bcc !cache_done+                // C=0: cache hit, window populated
+    bcs !no_cache+
+    jmp !cache_done+                // C=0: cache hit, window populated
+!no_cache:
     pla
     tay
     pla
@@ -862,7 +913,15 @@ hal_asset_load_title:
 
 a2_tc:            .byte 0
 a2_probe_buf:     .fill 8, 0        // marker magic read-back scratch
-a2_title_stage:   .fill 256, 0      // main-RAM staging for aux-bound title art
+// Title-art staging shares the save-stream buffer: title loads, ON_LINE
+// reports (disk_setup_a2.s), and save streams are never open concurrently.
+.label a2_title_stage = a2_ss_buf
+
+// Configured volumes (ProDOS len-prefixed: byte 0 = length, 1-15 = name).
+// a2_program_volume is discovered from GET_PREFIX by a2_init_program_volume;
+// a2_save_volume is chosen by Disk Setup. Both zero-length until then.
+a2_program_volume: .fill 16, 0
+a2_save_volume:    .fill 16, 0
 
 // ============================================================
 // hal_asset_close_channel — close any open file and restore default state.
@@ -1062,24 +1121,9 @@ hal_storage_overlay_name_len:
 .assert "Longest overlay basename fits a ProDOS name element", hal_storage_overlay_storage_name_len <= 15, true
 .assert "MLI io_buffer is page aligned", <A2_MLI_IO_BUFFER, 0
 .assert "MLI pathname buffer holds a max pathname", A2_MLI_PATHNAME + 1 + A2_MLI_PATHNAME_CAPACITY <= $0300, true
+.assert "Save volume pathname (slash + 15 + slash + 15) fits", 17 + 15 <= A2_MLI_PATHNAME_CAPACITY, true
 
 // ============================================================
-// a2_disk_setup_run — Apple II disk setup: the "two-drive swap UX" of the
-// Commodore ports degrades to an always-present probe (plan, Storage/Save
-// Decision). Probe the save-disk marker; create it when absent. No UI: on a
-// single game volume there is nothing to select. Output: C=0 ready
-// (disk_setup_done set), C=1 storage failure (diag bytes carry the cause).
+// a2_disk_setup_run moved to disk_setup_a2.s (OVL.STORAGE): the guided
+// Commodore-parity Disk Setup coordinator + UI.
 // ============================================================
-a2_disk_setup_run:
-    jsr hal_storage_marker_present
-    bcc !ready+
-    jsr hal_storage_marker_init
-    bcs !fail+
-!ready:
-    lda #hal_storage_disk_setup_done_value
-    sta disk_setup_done
-    clc
-    rts
-!fail:
-    sec
-    rts

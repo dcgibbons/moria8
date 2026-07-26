@@ -25,6 +25,15 @@
 .const hal_storage_save_known96_version = $10
 .const hal_storage_save_version = $11
 
+// Apple II disk_mode values (platform-owned; no shared code interprets the
+// value). 2 = separate save volume on another unit (two-drive), 3 = separate
+// save volume sharing the program unit (one-drive swap). Commodore mode 1
+// means one-drive swap; the Apple numbering deliberately differs and is
+// documented in APPLE2_PORT.md. Saves never live on the game disk
+// (maintainer decision 2026-07-25, strict cross-port parity).
+.const A2_DISK_MODE_TWO_DRIVE = 2
+.const A2_DISK_MODE_SWAP      = 3
+
 // ProDOS MLI error codes used by the status classifier (shared by
 // storage_mli.s and save_stream.s).
 .const A2ERR_IO           = $27

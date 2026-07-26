@@ -134,7 +134,9 @@ save_io_error:  .byte 0         // I/O error flag
 load_result:    .byte LOAD_RESULT_IOERR
 load_save_version: .byte 0
 load_floor_item_count: .byte 0
+#if !SAVE_SLOT_INDEX_EXTERNAL
 save_slot_index: .byte $ff       // $ff until a slot is selected; then 0-3
+#endif
 #if PLUS4_TEST_SCRIPTED_LOAD_RESUME_PRODUCT || PLUS4_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
 plus4_test_file_cksum_lo: .byte 0
 plus4_test_file_cksum_hi: .byte 0

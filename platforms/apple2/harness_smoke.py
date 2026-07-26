@@ -12,6 +12,9 @@ Requires:
 Scenarios:
   boot_title   ProDOS boot -> title screen: menu string bytes in both text
                halves at row 18, sysinfo row content, aux title-art presence.
+  disk_setup_two_drive / disk_setup_swap: guided Disk Setup over a blank
+               SAVE1 volume (created per run via AppleCommander); swap drives
+               the single floppy through Lua image loads.
 """
 
 from __future__ import annotations
@@ -129,6 +132,14 @@ local function press(ch)
     if not f then print("NOKEY " .. string.format("%q", ch)) return end
     f:set_value(1) emu.wait(0.03) f:set_value(0) emu.wait(0.12)
 end
+-- Longer hold/release for prompts reached right after disk activity: under
+-- -nothrottle a 0.03 s hold can vanish inside a single emulated frame while
+-- the drive spins, dropping the keypress entirely.
+local function press_slow(ch)
+    local f = findkey(ch)
+    if not f then print("NOKEY " .. string.format("%q", ch)) return end
+    f:set_value(1) emu.wait(0.2) f:set_value(0) emu.wait(0.2)
+end
 local function shift(ch)
     local s = keymap["Left Shift"]
     local f = findkey(ch)
@@ -179,6 +190,13 @@ local function press_until(txt, ch, tries)
         if screen_has(txt) then return true end
     end
     print("RETRY EXHAUSTED for: " .. txt)
+    return false
+end
+local function wait_screen(txt, tries)
+    for i = 1, (tries or 40) do
+        emu.wait(0.5)
+        if screen_has(txt) then return true end
+    end
     return false
 end
 local function in_town()
@@ -354,10 +372,30 @@ if not wizard_menu_open() then print("ASSERT died FAIL wizard menu did not reope
 press("S")
 emu.wait(2)
 local died = false
+-- disk_mode/disk_setup_done (main.vs) drive the state machine: the setup
+-- menu stays on screen during prepare's slow disk work, so pixels alone
+-- cannot distinguish "awaiting input" from "busy". The first death in a
+-- session passes through Disk Setup before the score IO: open the pick
+-- screen, choose /SAVE1 (drive 2), Done. Once setup commits, press space
+-- each pass: the post-setup score flow has message prompts whose -more-
+-- marker is not always visible, and the check-first ordering still catches
+-- the death screen before any key can dismiss it.
+local DISK_MODE = 0x0a05
+local DISK_DONE = 0x0a06
 for i = 1, 120 do
-    press("5")
-    emu.wait(1)
     if screen_has("You have died") then died = true break end
+    if screen_has("R) Rescan") then
+        press_slow("2")
+    elseif screen_has("Initialize this disk?") then
+        press_slow("Y")
+    elseif prog:read_u8(DISK_DONE) ~= 0 then
+        press(" ")
+    elseif screen_has("Pick save drive") and prog:read_u8(DISK_MODE) == 0 then
+        if screen_has("/SAVE1") then press_slow("3") else press_slow("2") end
+    elseif prog:read_u8(DISK_MODE) == 0 then
+        press("5")
+    end
+    emu.wait(1)
 end
 assert_line("died", died, "death screen did not appear")
 dump("after_death")
@@ -392,15 +430,30 @@ print("SCENARIO DONE")
 
 LUA_SAVE_LOAD_BODY = r"""
 -- Save-and-quit then reload: the full storage roundtrip through the slot UI.
+-- The first save in a session passes through Disk Setup (menu -> game disk ->
+-- possible marker init) before the slot prompt appears.
 local s = keymap["Left Shift"]
 local f = findkey("S")
 s:set_value(1) emu.wait(0.02)
 f:set_value(1) emu.wait(0.03) f:set_value(0) emu.wait(0.02)
 s:set_value(0)
 local prompt_ok = false
-for i = 1, 20 do
+-- Strict parity: saves go to a separate disk (SAVE1 in drive 2). Drive the
+-- setup once: open the pick screen, choose /SAVE1, Done, init the marker.
+-- disk_mode (main.vs $0a05) gates menu answers while prepare is busy.
+local DISK_MODE = 0x0a05
+for i = 1, 90 do
     emu.wait(0.5)
-    if screen_has("Select Slot 1-4") then prompt_ok = true break end
+    if screen_has("R) Rescan") then
+        press_slow("2")
+    elseif screen_has("Initialize this disk?") then
+        press_slow("Y")
+    elseif screen_has("Select Slot 1-4") then
+        prompt_ok = true
+        break
+    elseif screen_has("Pick save drive") and prog:read_u8(DISK_MODE) == 0 then
+        if screen_has("/SAVE1") then press_slow("3") else press_slow("2") end
+    end
 end
 assert_line("save_slot_prompt", prompt_ok, "save slot prompt did not appear")
 press("1")
@@ -447,6 +500,364 @@ assert_line("stats_restored", screen_has("test") and screen_has("Human"),
 dump("after_load")
 print("SCENARIO DONE")
 """
+LUA_DISK_SETUP_TWO_DRIVE_BODY = r"""
+-- Disk Setup, two drives: pick the blank SAVE1 volume from the ON_LINE pick
+-- list, initialize its marker, and return to title. Host-side check verifies
+-- MORIA8.ID landed on the second disk image.
+for i = 1, 300 do
+    emu.wait(0.1)
+    if prog:read_u8(0x550 + 14) == 0xA9 then break end
+end
+press("D")
+assert_line("ds_menu", wait_screen("Pick save drive"),
+            "disk setup menu did not appear")
+assert_line("ds_program_vol", screen_has("Program: /MORIA8"),
+            "program volume summary missing")
+assert_line("ds_save_default", screen_has("Save:     (S6,D1)"),
+            "default selection is not one-drive on the program unit")
+press("2")
+assert_line("ds_pick_list", wait_screen("/SAVE1"), "save volume not listed")
+assert_line("ds_pick_unit", screen_has("(S6,D2)"),
+            "save volume not shown on slot 6 drive 2")
+press("2")
+assert_line("ds_save_vol", wait_screen("Save:    /SAVE1"),
+            "save volume summary did not update")
+press("3")
+assert_line("ds_init_prompt", wait_screen("Initialize this disk?"),
+            "marker init prompt missing")
+press("Y")
+local back = false
+for i = 1, 40 do
+    emu.wait(0.5)
+    if prog:read_u8(0x550 + 14) == 0xA9 then back = true break end
+end
+assert_line("ds_done", back, "did not return to title after setup")
+dump("after_ds_two_drive")
+print("SCENARIO DONE")
+"""
+
+LUA_DISK_SETUP_SWAP_BODY = r"""
+-- Disk Setup, one-drive swap: no second drive, so the save disk is selected
+-- by physically swapping and rescanning. Exercises the pick-list rescan, the
+-- program-media rejection, the insert-save prompt, marker init, and the
+-- program-disk restore prompt. SAVE_IMAGE/GAME_IMAGE substituted by the host.
+local flop1 = nil
+for tag, img in pairs(manager.machine.images) do
+    if string.find(tag, "diskiing:0:525") then flop1 = img end
+end
+for i = 1, 300 do
+    emu.wait(0.1)
+    if prog:read_u8(0x550 + 14) == 0xA9 then break end
+end
+press("D")
+assert_line("sw_menu", wait_screen("Pick save drive"),
+            "disk setup menu did not appear")
+press("2")
+assert_line("sw_only_game", wait_screen("/MORIA8") and not screen_has("/SAVE1"),
+            "pick list should show only the game volume before the swap")
+flop1:load("SAVE_IMAGE")
+emu.wait(1)
+press("R")
+assert_line("sw_rescan", wait_screen("/SAVE1"),
+            "rescan did not find the swapped save disk")
+press("1")
+assert_line("sw_save_vol", wait_screen("Save:    /SAVE1"),
+            "save volume summary did not update")
+-- Done with the game disk re-inserted: program-media rejection must fire.
+flop1:load("GAME_IMAGE")
+emu.wait(1)
+press("3")
+assert_line("sw_prog_reject", wait_screen("Program disk cannot hold saves."),
+            "program-media rejection missing")
+press(" ")
+-- While the game disk stays mounted the rejection alternates with the
+-- insert prompt, which cancels back to the menu on Q.
+assert_line("sw_insert_alt", wait_screen("Insert save disk"),
+            "rejection did not alternate to the insert prompt")
+press("Q")
+assert_line("sw_menu_escape", wait_screen("Pick save drive"),
+            "Q did not return to the menu")
+-- Done again with the game disk still mounted: same rejection, then swap.
+press("3")
+assert_line("sw_reject_sticky", wait_screen("Program disk cannot hold saves."),
+            "rejection did not persist with the game disk mounted")
+press(" ")
+assert_line("sw_insert_save", wait_screen("Insert save disk"),
+            "insert-save prompt missing")
+flop1:load("SAVE_IMAGE")
+emu.wait(1)
+press(" ")
+assert_line("sw_init_prompt", wait_screen("Initialize this disk?"),
+            "marker init prompt missing")
+press("Y")
+assert_line("sw_restore", wait_screen("Insert program disk"),
+            "program-disk restore prompt missing")
+flop1:load("GAME_IMAGE")
+emu.wait(1)
+press(" ")
+local back = false
+for i = 1, 40 do
+    emu.wait(0.5)
+    if prog:read_u8(0x550 + 14) == 0xA9 then back = true break end
+end
+assert_line("sw_done", back, "did not return to title after swap setup")
+dump("after_ds_swap")
+print("SCENARIO DONE")
+"""
+LUA_DISK_SETUP_ADOPT_BODY = r"""
+-- Disk Setup, media changed after selection: the configured SAVE1 volume is
+-- replaced by a different formatted disk (SAVE2), then by unreadable media.
+-- Commodore semantics: the prepare flow adopts the inserted ProDOS volume
+-- and offers init; unreadable media gets the init offer whose init fails
+-- with the classified detail line. SAVE_IMAGE/SAVE2_IMAGE/BLANK_IMAGE and
+-- GAME_IMAGE substituted by the host.
+local flop2 = nil
+for tag, img in pairs(manager.machine.images) do
+    if string.find(tag, "diskiing:1:525") then flop2 = img end
+end
+for i = 1, 300 do
+    emu.wait(0.1)
+    if prog:read_u8(0x550 + 14) == 0xA9 then break end
+end
+press("D")
+assert_line("ad_menu", wait_screen("Pick save drive"),
+            "disk setup menu did not appear")
+press("2")
+assert_line("ad_pick", wait_screen("/SAVE1"), "SAVE1 not listed")
+press("2")
+assert_line("ad_save_vol", wait_screen("Save:    /SAVE1"),
+            "save volume summary did not update")
+-- Swap the selected disk for a different formatted one, then Done.
+flop2:load("SAVE2_IMAGE")
+emu.wait(1)
+press("3")
+assert_line("ad_init_offer", wait_screen("Initialize this disk?"),
+            "init not offered for the inserted volume")
+press("Y")
+local back = false
+for i = 1, 40 do
+    emu.wait(0.5)
+    if prog:read_u8(0x550 + 14) == 0xA9 then back = true break end
+end
+assert_line("ad_commit", back, "did not return to title after adopting SAVE2")
+-- Phase 2: unreadable media on the save unit. Setup runs again (D), Done
+-- with a zeroed disk in drive 2: init is offered, init fails, the
+-- classified failure screen shows, and the flow returns to the menu.
+press("D")
+assert_line("ad_menu2", wait_screen("Pick save drive"),
+            "menu did not reappear for phase 2")
+assert_line("ad_save_vol2", screen_has("Save:    /SAVE2"),
+            "adopted volume missing from the summary")
+flop2:load("BLANK_IMAGE")
+emu.wait(2)
+press("3")
+assert_line("ad_init_offer2", wait_screen("Initialize this disk?", 80),
+            "init not offered for unreadable media")
+press("Y")
+assert_line("ad_init_fail", wait_screen("Could not initialize disk.", 80),
+            "init failure screen missing for unreadable media")
+assert_line("ad_init_detail", screen_has("Check the disk and try again."),
+            "generic detail line missing")
+press(" ")
+assert_line("ad_back_to_menu", wait_screen("Pick save drive"),
+            "did not return to the menu after init failure")
+-- Phase 3: unreadable media must still be listed/selectable as a drive
+-- (Commodore parity); selecting it leads to the same honest init failure.
+press("2")
+assert_line("ad_np_listed", wait_screen("<not ProDOS>"),
+            "unreadable disk not listed in the pick screen")
+assert_line("ad_np_unit", screen_has("(S6,D2)"),
+            "unreadable disk shown without its unit")
+press("2")
+press("3")
+assert_line("ad_np_offer", wait_screen("Initialize this disk?", 80),
+            "init not offered for the selected unreadable drive")
+press("Y")
+assert_line("ad_np_fail", wait_screen("Could not initialize disk.", 80),
+            "init failure screen missing for selected unreadable drive")
+press(" ")
+assert_line("ad_np_menu", wait_screen("Pick save drive"),
+            "did not return to the menu after unreadable init failure")
+press("Q")
+local home = false
+for i = 1, 40 do
+    emu.wait(0.5)
+    if prog:read_u8(0x550 + 14) == 0xA9 then home = true break end
+end
+assert_line("ad_quit", home, "did not return to title after Q")
+dump("after_ds_adopt")
+print("SCENARIO DONE")
+"""
+LUA_REBOOT_SAVE_BODY = r"""
+-- Session A of save_reboot_load: chargen, then save slot 1 to the SAVE1
+-- volume in drive 2 (same setup flow as save_load).
+local s = keymap["Left Shift"]
+local f = findkey("S")
+s:set_value(1) emu.wait(0.02)
+f:set_value(1) emu.wait(0.03) f:set_value(0) emu.wait(0.02)
+s:set_value(0)
+local prompt_ok = false
+local DISK_MODE = 0x0a05
+for i = 1, 90 do
+    emu.wait(0.5)
+    if screen_has("R) Rescan") then
+        press_slow("2")
+    elseif screen_has("Initialize this disk?") then
+        press_slow("Y")
+    elseif screen_has("Select Slot 1-4") then prompt_ok = true break
+    elseif screen_has("Pick save drive") and prog:read_u8(DISK_MODE) == 0 then
+        if screen_has("/SAVE1") then press_slow("3") else press_slow("2") end
+    end
+end
+assert_line("save_slot_prompt", prompt_ok, "save slot prompt did not appear")
+press("1")
+local started = false
+for i = 1, 12 do
+    emu.wait(0.5)
+    if screen_has("Saving game") then started = true break end
+    if screen_has("Overwrite?") then press("Y") end
+end
+assert_line("saving_msg", started, "save did not start")
+local title_ok = false
+for i = 1, 90 do
+    emu.wait(0.5)
+    if screen_has("Overwrite?") then press("Y") end
+    if screen_has("-more-") then press(" ") end
+    if prog:read_u8(0x550 + 14) == 0xA9 then title_ok = true break end
+end
+assert_line("save_completed", title_ok, "save did not complete")
+print("SCENARIO DONE")
+"""
+
+LUA_REBOOT_LOAD_BODY = r"""
+-- Session B of save_reboot_load: cold boot, then load the session-A save.
+-- Regression: title_load_game must not call play-slot code before
+-- a2_require_play has loaded the play payload (cold-boot crash).
+for i = 1, 300 do
+    emu.wait(0.1)
+    if prog:read_u8(0x550 + 14) == 0xA9 then break end
+end
+press("L")
+local DISK_MODE = 0x0a05
+local slots_ok = false
+for i = 1, 90 do
+    emu.wait(0.5)
+    if screen_has("R) Rescan") then
+        press_slow("2")
+    elseif screen_has("Initialize this disk?") then
+        press_slow("Y")
+    elseif screen_has("Save Slots:") then slots_ok = true break
+    elseif screen_has("Pick save drive") and prog:read_u8(DISK_MODE) == 0 then
+        if screen_has("/SAVE1") then press_slow("3") else press_slow("2") end
+    end
+end
+assert_line("load_slots", slots_ok, "load did not show the slot list")
+local name_ok = false
+for i = 1, 10 do
+    emu.wait(0.3)
+    if screen_has("test") then name_ok = true break end
+end
+assert_line("slot_has_name", name_ok,
+            "saved character name missing from slot list")
+press("1")
+local loaded = false
+for i = 1, 40 do
+    emu.wait(0.5)
+    if screen_has("Welcome back to Moria8!") then loaded = true break end
+end
+assert_line("loaded", loaded, "reboot load did not resume the saved game")
+assert_line("stats_restored", screen_has("test") and screen_has("Human"),
+            "status line does not show the restored character")
+dump("after_load")
+print("SCENARIO DONE")
+"""
+LUA_SLOT_TRACKING_BODY = r"""
+-- Save-slot tracking: save slot 2, return to title, load slot 2, then save
+-- again — the in-game save slot menu must mark the loaded slot with '*'.
+-- Regression: save_slot_index must live outside the OVL.STORAGE window or
+-- the marker is forgotten across the overlay swap.
+local s = keymap["Left Shift"]
+local f = findkey("S")
+local function shift_s()
+    s:set_value(1) emu.wait(0.02)
+    f:set_value(1) emu.wait(0.03) f:set_value(0) emu.wait(0.02)
+    s:set_value(0) emu.wait(0.12)
+end
+local DISK_MODE = 0x0a05
+local function drive_setup_to_slots()
+    for i = 1, 90 do
+        emu.wait(0.5)
+        if screen_has("R) Rescan") then
+            press_slow("2")
+        elseif screen_has("Initialize this disk?") then
+            press_slow("Y")
+        elseif screen_has("Select Slot 1-4") then return true
+        elseif screen_has("Pick save drive") and prog:read_u8(DISK_MODE) == 0 then
+            if screen_has("/SAVE1") then press_slow("3") else press_slow("2") end
+        end
+    end
+    return false
+end
+shift_s()
+assert_line("st_slot_prompt", drive_setup_to_slots(),
+            "save slot prompt did not appear")
+press("2")
+local title_ok = false
+for i = 1, 90 do
+    emu.wait(0.5)
+    if screen_has("Overwrite?") then press("Y") end
+    if screen_has("-more-") then press(" ") end
+    if prog:read_u8(0x550 + 14) == 0xA9 then title_ok = true break end
+end
+assert_line("st_saved", title_ok, "save to slot 2 did not complete")
+press("L")
+local slots_ok = false
+for i = 1, 40 do
+    emu.wait(0.5)
+    if screen_has("Save Slots:") then slots_ok = true break end
+end
+assert_line("st_load_slots", slots_ok, "load did not show the slot list")
+press("2")
+local loaded = false
+for i = 1, 40 do
+    emu.wait(0.5)
+    if screen_has("Welcome back to Moria8!") then loaded = true break end
+end
+assert_line("st_loaded", loaded, "load from slot 2 did not resume")
+-- Descend to dungeon level 1: overlay and tier loads evict OVL.STORAGE from
+-- the window. The loaded-slot marker must still survive to the next save.
+local descended = false
+for i = 1, 10 do
+    press("L")
+    emu.wait(1)
+    shift(".")
+    emu.wait(2)
+    if screen_has("DL:1") then descended = true break end
+end
+assert_line("st_descended", descended, "did not descend after load")
+shift_s()
+local marked = false
+for i = 1, 40 do
+    emu.wait(0.5)
+    if screen_has("Select Slot 1-4") then
+        marked = screen_has("2) *")
+        break
+    end
+end
+assert_line("st_marker", marked,
+            "loaded slot not marked with '*' in the save menu")
+press("2")
+local saved2 = false
+for i = 1, 90 do
+    emu.wait(0.5)
+    if screen_has("Overwrite?") then press("Y") end
+    if screen_has("-more-") then press(" ") end
+    if prog:read_u8(0x550 + 14) == 0xA9 then saved2 = true break end
+end
+assert_line("st_resaved", saved2, "re-save to slot 2 did not complete")
+dump("after_slot_tracking")
+print("SCENARIO DONE")
+"""
 
 
 def _chargen_body(class_key: str) -> str:
@@ -481,6 +892,22 @@ def mage_list_lua() -> str:
     return _chargen_body("B") + LUA_MAGE_LIST_BODY
 
 
+def disk_setup_two_drive_lua() -> str:
+    return LUA_HELPERS + LUA_DISK_SETUP_TWO_DRIVE_BODY
+
+
+def disk_setup_swap_lua() -> str:
+    return (LUA_HELPERS + LUA_DISK_SETUP_SWAP_BODY)
+
+
+def disk_setup_adopt_lua() -> str:
+    return (LUA_HELPERS + LUA_DISK_SETUP_ADOPT_BODY)
+
+
+def save_slot_tracking_lua() -> str:
+    return _chargen_body("A") + LUA_SLOT_TRACKING_BODY
+
+
 SCENARIO_LUA = {
     "priest_pray": priest_pray_lua,
     "help_overlay": help_overlay_lua,
@@ -489,9 +916,81 @@ SCENARIO_LUA = {
     "death_flow": death_flow_lua,
     "save_load": save_load_lua,
     "mage_list": mage_list_lua,
+    "disk_setup_two_drive": disk_setup_two_drive_lua,
+    "disk_setup_swap": disk_setup_swap_lua,
+    "disk_setup_adopt": disk_setup_adopt_lua,
+    "save_slot_tracking": save_slot_tracking_lua,
 }
 
-SCENARIOS = ("boot_title",) + tuple(SCENARIO_LUA)
+# Scenarios that exercise a separate save disk (blank ProDOS image, volume
+# SAVE1, created fresh per run); two_drive/adopt/save_load/death_flow mount
+# it as -flop2, swap loads it into flop1 from Lua.
+SAVE_DISK_SCENARIOS = ("disk_setup_two_drive", "disk_setup_swap",
+                       "disk_setup_adopt", "save_load", "death_flow",
+                       "save_reboot_load", "save_slot_tracking")
+FLOP2_SCENARIOS = ("disk_setup_two_drive", "disk_setup_adopt",
+                   "save_load", "death_flow", "save_slot_tracking")
+SAVE_IMAGE = ROOT / "build" / "apple2" / "save1.po"
+SAVE2_IMAGE = ROOT / "build" / "apple2" / "save2.po"
+BLANK_IMAGE = ROOT / "build" / "apple2" / "blank.po"
+AC_BIN = ROOT / "tools" / "applecommander" / "ac"
+# Host-side proofs: scenario -> (image, required file).
+HOST_MARKER_IMAGES = {
+    "disk_setup_two_drive": (SAVE_IMAGE, "MORIA8.ID"),
+    "disk_setup_swap": (SAVE_IMAGE, "MORIA8.ID"),
+    "disk_setup_adopt": (SAVE2_IMAGE, "MORIA8.ID"),
+    "save_load": (SAVE_IMAGE, "THE.GAME"),
+    "save_reboot_load": (SAVE_IMAGE, "THE.GAME"),
+    "save_slot_tracking": (SAVE_IMAGE, "THE.GAME2"),
+}
+
+SCENARIOS = ("boot_title",) + tuple(SCENARIO_LUA) + ("save_reboot_load",)
+
+
+def _run_mame(args, lua, flop2):
+    with tempfile.NamedTemporaryFile("w", suffix=".lua", delete=False) as f:
+        f.write(lua)
+        lua_path = f.name
+
+    for output_dir in MAME_OUTPUT_DIRS.values():
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+    cmd = [
+        args.mame, "apple2ee",
+        "-rompath", args.rompath,
+        "-cfg_directory", str(MAME_OUTPUT_DIRS["cfg"]),
+        "-nvram_directory", str(MAME_OUTPUT_DIRS["nvram"]),
+        "-input_directory", str(MAME_OUTPUT_DIRS["input"]),
+        "-state_directory", str(MAME_OUTPUT_DIRS["state"]),
+        "-snapshot_directory", str(MAME_OUTPUT_DIRS["snapshot"]),
+        "-diff_directory", str(MAME_OUTPUT_DIRS["diff"]),
+        "-comment_directory", str(MAME_OUTPUT_DIRS["comment"]),
+        "-share_directory", str(MAME_OUTPUT_DIRS["share"]),
+        "-flop1", str(args.image),
+    ]
+    if flop2:
+        cmd += ["-flop2", str(SAVE_IMAGE)]
+    cmd += [
+        "-autoboot_script", lua_path,
+        "-video", "none",
+        "-sound", "none",
+        "-nothrottle",
+        "-seconds_to_run", str(args.seconds + 5),
+    ]
+    # Homebrew MAME on macOS opens an app window even with -video none.
+    # SDL's dummy video driver prevents window creation entirely, so the
+    # harness never takes focus or interrupts the user.
+    env = os.environ.copy()
+    env["SDL_VIDEODRIVER"] = "dummy"
+    env["SDL_AUDIODRIVER"] = "dummy"
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE, text=True, env=env)
+    try:
+        stdout, stderr = proc.communicate(timeout=max(300, args.seconds + 60))
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        stdout, stderr = proc.communicate()
+    return (stdout or "") + (stderr or "")
 
 
 def main() -> int:
@@ -520,8 +1019,14 @@ def main() -> int:
         # completes; 20 s is marginal on a cold start.
         args.seconds = 30.0
 
-    if args.scenario != "boot_title":
+    if args.scenario == "save_reboot_load":
+        lua = None
+    elif args.scenario != "boot_title":
         lua = SCENARIO_LUA[args.scenario]()
+        lua = lua.replace("SAVE2_IMAGE", str(SAVE2_IMAGE))
+        lua = lua.replace("BLANK_IMAGE", str(BLANK_IMAGE))
+        lua = lua.replace("SAVE_IMAGE", str(SAVE_IMAGE))
+        lua = lua.replace("GAME_IMAGE", str(args.image))
     else:
         table = "local MENU_EXPECTED = {%s}\n" % ",".join(
             str(b) for b in MENU_EXPECTED)
@@ -532,45 +1037,36 @@ def main() -> int:
             .replace("ROW18_BASE", str(ROW18_BASE))
         )
 
-    with tempfile.NamedTemporaryFile("w", suffix=".lua", delete=False) as f:
-        f.write(lua)
-        lua_path = f.name
+    if args.scenario in SAVE_DISK_SCENARIOS:
+        # Fresh blank SAVE1 volume every run for determinism.
+        SAVE_IMAGE.unlink(missing_ok=True)
+        mk = subprocess.run([str(AC_BIN), "-pro140", str(SAVE_IMAGE), "SAVE1"],
+                            capture_output=True, text=True)
+        if mk.returncode != 0:
+            print(f"error: could not create save image: {mk.stderr}",
+                  file=sys.stderr)
+            return 1
+    if args.scenario == "disk_setup_adopt":
+        # SAVE1 (initial selection), SAVE2 (adoption target), and a zeroed
+        # image that ProDOS cannot read at all.
+        for path, vol in ((SAVE_IMAGE, "SAVE1"), (SAVE2_IMAGE, "SAVE2")):
+            path.unlink(missing_ok=True)
+            mk = subprocess.run([str(AC_BIN), "-pro140", str(path), vol],
+                                capture_output=True, text=True)
+            if mk.returncode != 0:
+                print(f"error: could not create save image: {mk.stderr}",
+                      file=sys.stderr)
+                return 1
+        BLANK_IMAGE.write_bytes(bytes(143360))
 
-    for output_dir in MAME_OUTPUT_DIRS.values():
-        output_dir.mkdir(parents=True, exist_ok=True)
-
-    cmd = [
-        args.mame, "apple2ee",
-        "-rompath", args.rompath,
-        "-cfg_directory", str(MAME_OUTPUT_DIRS["cfg"]),
-        "-nvram_directory", str(MAME_OUTPUT_DIRS["nvram"]),
-        "-input_directory", str(MAME_OUTPUT_DIRS["input"]),
-        "-state_directory", str(MAME_OUTPUT_DIRS["state"]),
-        "-snapshot_directory", str(MAME_OUTPUT_DIRS["snapshot"]),
-        "-diff_directory", str(MAME_OUTPUT_DIRS["diff"]),
-        "-comment_directory", str(MAME_OUTPUT_DIRS["comment"]),
-        "-share_directory", str(MAME_OUTPUT_DIRS["share"]),
-        "-flop1", str(args.image),
-        "-autoboot_script", lua_path,
-        "-video", "none",
-        "-sound", "none",
-        "-nothrottle",
-        "-seconds_to_run", str(args.seconds + 5),
-    ]
-    # Homebrew MAME on macOS opens an app window even with -video none.
-    # SDL's dummy video driver prevents window creation entirely, so the
-    # harness never takes focus or interrupts the user.
-    env = os.environ.copy()
-    env["SDL_VIDEODRIVER"] = "dummy"
-    env["SDL_AUDIODRIVER"] = "dummy"
-    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
-                            stderr=subprocess.PIPE, text=True, env=env)
-    try:
-        stdout, stderr = proc.communicate(timeout=max(300, args.seconds + 60))
-    except subprocess.TimeoutExpired:
-        proc.kill()
-        stdout, stderr = proc.communicate()
-    out = (stdout or "") + (stderr or "")
+    if args.scenario == "save_reboot_load":
+        # Session A: save to SAVE1. Session B: cold boot, load it back.
+        lua_a = _chargen_body("A") + LUA_REBOOT_SAVE_BODY
+        lua_b = LUA_HELPERS + LUA_REBOOT_LOAD_BODY
+        out = _run_mame(args, lua_a, True)
+        out += _run_mame(args, lua_b, True)
+    else:
+        out = _run_mame(args, lua, args.scenario in FLOP2_SCENARIOS)
 
     if args.scenario != "boot_title":
         failures = 0
@@ -590,6 +1086,17 @@ def main() -> int:
             if line.startswith(("NOKEY", "RETRY EXHAUSTED", "NO TOWN")):
                 failures += 1
                 print(f"HARNESS {line}")
+        if args.scenario in HOST_MARKER_IMAGES:
+            # Host-side proof: the file landed on the save volume image
+            # (not the game disk).
+            image, want = HOST_MARKER_IMAGES[args.scenario]
+            ls = subprocess.run([str(AC_BIN), "-l", str(image)],
+                                capture_output=True, text=True)
+            ok = want in ls.stdout
+            asserts += 1
+            if not ok:
+                failures += 1
+            print(f"ASSERT host_marker {'PASS' if ok else 'FAIL'}")
         print(f"RESULT {asserts} asserts {failures} failures")
         return 0 if failures == 0 else 1
 

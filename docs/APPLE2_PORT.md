@@ -315,12 +315,13 @@ impedance mismatch since ProDOS files are byte-addressable. cx16's
 native rewrite was only natural on its restructured core; here it would
 duplicate 2,280 lines for no gain.
 
-Marker semantics: GET_FILE_INFO on `MORIA8.ID`; save volume = game
-volume (or a `SAVES/` prefix); the two-drive swap UX degrades to
-always-present probes — final behavior. Placement: OVL.STORAGE class,
-slot-hosted at `$7C00` (overwrites play; broker restores it after).
-M0 outcome: est. ~4,100 B <= 8,704 B slot — fits as one class, no
-engine/UI split needed.
+Marker semantics: GET_FILE_INFO on `MORIA8.ID`. Placement: OVL.STORAGE
+class, window-hosted at `$A400` (supersedes the M0 `$7C00` sketch).
+
+Superseded 2026-07-25 (maintainer direction, Disk Setup parity task):
+"save volume = game volume; the two-drive swap UX degrades to
+always-present probes — final behavior." The port now ships the full
+Commodore-parity guided Disk Setup; see the 2026-07-25 record below.
 
 `save.s` now lives at `platforms/shared/save.s` (user-approved
 promotion; verified byte-identical). apple2 imports it from there.
@@ -1627,3 +1628,220 @@ Harness note (same change): the MAME smoke harness replaced the osascript
 window-hiding hack with SDL_VIDEODRIVER=dummy/SDL_AUDIODRIVER=dummy so
 headless runs never create a window or take focus.
 ```
+
+## 2026-07-25 — Commodore-parity Disk Setup (multi-drive + swap)
+
+Problem and success criteria:
+Disk Setup was a degenerate no-UI probe (`a2_disk_setup_run`: marker probe
+plus silent auto-init) and every layer assumed the boot volume. Success:
+title `D` runs a guided Disk Setup matching the Commodore flow — menu with
+volume summary, pick a save volume from an ON_LINE enumeration, one-drive
+swap mode with insert-disk prompts, marker init prompt, program-media
+rejection, classified init-failure detail — and save/load/death flows honor
+the selected save volume. Maintainer decisions (this task): full parity,
+plus a "1) Game disk" menu option so saving on the game disk stays legal
+(Commodore has no such option).
+
+State being changed:
+`save_device`/`program_device` are now real ProDOS unit bytes (drive/slot
+nibbles) resolved by ON_LINE; new resident `a2_save_volume` /
+`a2_program_volume` (16-byte len-prefixed names); `disk_mode` gains
+platform-owned values `A2_DISK_MODE_GAME`=1 (save volume == program
+volume), `A2_DISK_MODE_TWO_DRIVE`=2, `A2_DISK_MODE_SWAP`=3 (separate
+volume sharing the program unit). Verified no shared code interprets
+`disk_mode` values (all value readers are Commodore-only files). New
+Apple-local `disk_ui_*` mailbox in `disk_setup_a2.s` with the same numeric
+action/result assignments as the Commodore `DISK_UI_*` consts.
+
+Storage routing rule:
+All save-side filenames already carry a `0:`/`S0:`/`@0:` prefix and every
+program asset name is prefix-free, so `a2_mli_set_pathname` treats a
+consumed drive prefix as the save-volume selector: when `disk_mode >= 2`
+it emits an absolute `/VOLUME/FILE` pathname (ProDOS resolves the volume
+on whichever unit holds it); otherwise names stay relative to the boot
+prefix exactly as before. `a2_map_media_error` now classifies `$45`
+(volume not found) and `$2E` (disk switched) as WRONG_MEDIA — the mounted
+media is not the expected volume — so `save_game`'s existing
+`tramp_disk_prepare_selected` recovery fires on swap errors.
+
+Architecture:
+Coordinator + UI live in OVL.STORAGE (`disk_setup_a2.s`, overlay slack was
+~3.1 KB) alongside save.s, mirroring `disk_setup_banked.s`; all ON_LINE /
+GET_PREFIX primitives, volume scan/list helpers, and the pick list live
+there too because resident space was byte-tight (24 B slack at HEAD). The
+runtime swap prompts (`disk_prompt_save`/`disk_prompt_game`) are resident
+in main.s like the Commodore originals — callers run with arbitrary
+overlays live (death flow keeps OVL.DEATH), so no overlay loads may happen
+there; they probe via the resident marker/program GET_FILE_INFO probes
+instead of ON_LINE. An earlier trampoline draft that loaded OVL.STORAGE
+from the prompts clobbered OVL.DEATH mid-death-flow and skipped the
+tombstone; caught by `death_flow` and corrected. `a2_title_stage` now
+aliases `a2_ss_buf` (title staging, ON_LINE reports, and save streams are
+never open concurrently), reclaiming 256 resident bytes; resident ends
+$7B9A (166 B slack). /RAM (unit $B0) is excluded from enumeration per the
+existing no-/RAM aux policy.
+
+Runtime flows:
+In-game save, title load, and death/hiscore paths use the shared
+`disk_prompt_save` / `disk_prompt_game_required` call sites unchanged
+(Commodore parity: title_load gained the same `disk_prompt_save` +
+`disk_prompt_game` + `disk_prompt_game_required` calls as c64 main.s).
+One-drive swap setup ends with an "Insert program disk" restore prompt so
+title/play payloads are always loadable afterward.
+
+Required production-path tests (all on the shipping binary):
+- `disk_setup_two_drive` (9 asserts): menu, volume summary, ON_LINE pick
+  list with slot/drive display, save-volume selection, marker init prompt;
+  host-side AppleCommander check proves `MORIA8.ID` landed on the SAVE1
+  image (blank `-flop2` created per run).
+- `disk_setup_swap` (10 asserts): single-drive pick-list rescan after a
+  Lua floppy swap, program-media rejection, insert-save prompt, marker
+  init, program-disk restore prompt; same host-side marker proof.
+- `save_load` and `death_flow` updated to drive the setup menu once via
+  `disk_mode`/`disk_setup_done` RAM state (pixels cannot distinguish
+  "menu awaiting input" from "prepare busy"), then go through the
+  unchanged slot/death flows. Long-hold `press_slow` added after MAME
+  dropped short key holds during drive activity.
+
+Known behavior explicitly out of scope:
+Write-protect/disk-full init-failure detail paths (classified strings
+exist; no harness coverage — MAME lacks a simple per-image write-protect
+toggle). `hal_storage_disk_setup_supports_other_drive` stays 0: the
+Commodore checker-facing policy predates this feature and the Apple UI is
+platform-native, not the shared `ui_disk_setup.s`.
+
+Unresolved uncertainty and risk:
+None blocking. Verification: clean `make build` (all platforms, 306 Apple
+asserts 0 failed); apple2 memory-contract 21/21; all ten MAME scenarios
+green (boot_title 7, priest_pray 8, help_overlay 3, wizard_flow 7,
+dungeon_descend 4, death_flow 2, save_load 9, disk_setup_two_drive 9,
+disk_setup_swap 10). No shared or Commodore files touched.
+
+### 2026-07-25 follow-up — insert-save loop learned to adopt media
+
+User report: with a blank or different disk on the save unit, prepare
+looped forever on "Insert save disk" and never offered "Initialize this
+disk?" — the save-volume check required an exact ON_LINE name match, so
+any other media was invisible. `a2_disk_prepare_selected` now examines
+whatever is mounted on the save unit (true Commodore semantics): the
+program disk is rejected ("Program disk cannot hold saves.", re-shown
+while it stays mounted), any other ProDOS volume is adopted as the save
+volume, and unreadable media (unformatted/non-ProDOS, including ON_LINE
+zero-length-name entries, which also guarded the pick list and the
+len-0 pathname fallback after a wrong-volume commit was observed) goes
+straight to the init offer, where init fails honestly with the classified
+detail line. New helper `a2_volume_on_unit` in disk_setup_a2.s. New
+`disk_setup_adopt` scenario (13 asserts): SAVE1 replaced by SAVE2 ->
+adopted + init offered + host marker proof on SAVE2; SAVE2 replaced by a
+zeroed image -> init offered -> "Could not initialize disk." + "Check the
+disk and try again." -> back to menu. `disk_setup_swap` updated for the
+stickier rejection. Full suite re-run green.
+
+### 2026-07-25 follow-up 2 — pick list shows unreadable drives again
+
+User report: the pick list no longer showed a disk present in drive 2. The
+zero-length/error-entry guards had made unreadable media (unformatted,
+non-ProDOS) vanish from the list entirely. Commodore lets the player pick
+a drive regardless of contents, so the pick list now shows such units as
+selectable "<not ProDOS> (Sx,Dy)" entries (len byte $ff in the list
+buffer). Selecting one stores a nameless save volume; prepare's init
+offer then fails honestly, and a new guard keeps marker_init from ever
+falling back to a relative pathname on the program volume for a nameless
+selection (wrong-volume write hazard). a2_scan_volume also rejects
+nameless targets outright. disk_setup_adopt phase 3 (18 asserts total)
+covers listing, selection, init offer, and classified failure for the
+unreadable drive.
+
+### 2026-07-25 follow-up 3 — strict parity: no saves on the game disk
+
+Maintainer decision: saves never live on the game disk, matching the
+Commodore ports exactly (upgrade safety; the game disk can stay
+write-protected). This supersedes the earlier "parity + game-disk option"
+choice in this task. Capacity also forces it: the game image has ~16 KB
+free and one save is ~15.7 KB, so a full slot set (~63 KB) cannot fit.
+
+Changes: the menu is now "1) One drive (swap) / 2) Pick save drive /
+3) Done / Q) Back"; A2_DISK_MODE_GAME and the game-disk prepare branch
+are gone; the default selection is one-drive on the program unit
+(nameless until the save disk is inserted; the summary shows the unit);
+a picked program volume is rejected at prepare ("Program disk cannot
+hold saves.") even when online. Mode is computed from units only
+(same unit = swap, different = two-drive). One-drive flow: insert prompt
+-> adopt whatever ProDOS volume is inserted / reject the game disk /
+init offer, ending with the program-disk restore prompt.
+
+Harness: save_load and death_flow now run with SAVE1 mounted as -flop2
+and drive the pick flow (rescan gate, /SAVE1 summary gate, disk_mode RAM
+gate); save_load adds host-side proof that THE.GAME landed on SAVE1.
+ds_save_default asserts the one-drive unit summary. Full suite re-run
+green (boot_title 7, priest_pray 8, help_overlay 3, wizard_flow 7,
+dungeon_descend 4, death_flow 2, save_load 10, disk_setup_two_drive 9,
+disk_setup_swap 10, disk_setup_adopt 18); memory contract 21/21; clean
+make build.
+
+### 2026-07-25 follow-up 4 — cold-boot load crash (play-slot ordering)
+
+User report: save+load worked in-session but failed after a reboot. Root
+cause: the strict-parity title_load flow called `disk_prompt_game` and
+`disk_prompt_game_required` before `a2_require_play` — and
+`disk_prompt_game_required` lives in game_loop.s, which is play-slot code
+on this platform. After a cold boot the play slot is not loaded, so the
+call executed garbage; in-session the slot was already resident, masking
+it (HEAD evidence: pre-feature single-drive reboot-load passes; current
+build failed deterministically). Fix: resident `disk_prompt_game` first,
+then `a2_require_play`, then the play-slot verifier. Regression coverage:
+new two-session `save_reboot_load` scenario (9 asserts: save in session
+A, cold-boot load in session B, plus host proof THE.GAME is on SAVE1).
+Diagnosis note: an early trace marker was itself clobbering A before the
+asset loader's filename push, producing a phantom 210-byte pathname; the
+trace evidence from those builds was discarded and the marker fixed.
+Full suite re-run green (11 scenarios + save_reboot_load); memory
+contract 21/21; clean make build.
+
+### 2026-07-25 follow-up 5 — save-slot tracking ownership
+
+Task: track which save slot was loaded from, matching the Commodore
+semantics (fe30f3d slot support + 3b2cd86 deliberate clear on title
+return). Two Apple-specific ownership defects found and fixed:
+
+1. save_slot_index was declared inside the shared save engine, which
+   lives in the OVL.STORAGE window on this platform — any overlay swap
+   (descend, cast, store) silently reset the loaded slot. On C64/Plus4
+   the engine sits in the $F000 banked region; on C128 it is resident.
+   Fix: SAVE_SLOT_INDEX_EXTERNAL guard in shared save.s; the byte is
+   platform-declared.
+2. The first resident placement ($0A07) still read back aux data after
+   dungeon code left RAMRD on: every address >= $0200 is RAMRD/RAMWRT
+   bank-switched on the IIe, so the slot menu's read hit the aux map byte
+   at the same address. Fix: the byte is now unbanked platform ZP ($aa).
+
+Regression coverage: save_slot_tracking scenario (9 asserts) — save slot
+2, title, load slot 2, descend to DL:1 (overlay + tier loads + map
+writes), then the in-game save menu must mark slot 2 with '*' and the
+re-save must land THE.GAME2 on SAVE1 (host proof). A/B-verified: with
+the byte in the overlay window the marker is forgotten after the
+descend; with the ZP byte it survives. Full suite + build + memory
+contract green.
+
+### 2026-07-25 follow-up 6 — program-media rejection escape
+
+User report: "Program disk cannot hold saves." looped forever with no way
+back to the menu. The prepare flow re-showed the rejection without the
+intervening insert prompt and had no cancel. Now the rejection alternates
+with the insert-save prompt (Commodore's INSERT_DISK / SHOW_PROGRAM
+rhythm), and the insert prompt cancels to the menu on Q or ESC (hint
+string shown). The setup-run fail path returns to the menu; the
+wrong-media recovery fail path fails the save with a status message.
+disk_setup_swap extended (13 asserts): alternation, Q escape to the menu,
+rejection persistence, and the normal swap flow. Full suite green.
+
+### 2026-07-25 follow-up 7 — press-key hint visibility
+
+User question: the program-media rejection showed no "Press any key"
+hint. The Commodore rejection screen shows the message and the hint on
+one screen, then alternates with the insert prompt — two screens, each
+with its own hint; the Apple flow now matches that exactly. The hint was
+missing because the a2ds screens printed the shared press_key_str, which
+lives in game_loop.s — play-slot code, not loaded when Disk Setup runs at
+title. The a2ds screens now use a local copy of the same text. Verified
+on screen: "Program disk cannot hold saves." + "Press any key".
