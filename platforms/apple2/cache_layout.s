@@ -4,8 +4,8 @@
 
 .const A2_AUX_CACHE_TOWN    = $5700
 .const A2_AUX_CACHE_UI      = $6c00
-.const A2_AUX_CACHE_SPELL   = $7a00
-.const A2_AUX_CACHE_MODAL   = $8e00
+.const A2_AUX_CACHE_SPELL   = $7900
+.const A2_AUX_CACHE_MODAL   = $8d00
 .const A2_AUX_CACHE_GEN     = $9900
 .const A2_AUX_CACHE_ITEMS   = $aa00
 .const A2_AUX_CACHE_END     = $c000       // first byte after items payload slot

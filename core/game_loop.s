@@ -11,6 +11,27 @@
 #import "platform_services_api.s"
 #import "input_ui_helpers.s"
 
+// MsgPrintStr — Print a NUL-terminated message string through zp_ptr0.
+// On Apple II the string may live in AUX (platform-externalized strings);
+// the staging printer copies it to main RAM first.
+#if APPLE2
+.macro MsgPrintStr(str) {
+    lda #<str
+    sta zp_ptr0
+    lda #>str
+    sta zp_ptr0_hi
+    jsr a2_msg_print_indirect_aux
+}
+#else
+.macro MsgPrintStr(str) {
+    lda #<str
+    sta zp_ptr0
+    lda #>str
+    sta zp_ptr0_hi
+    jsr msg_print
+}
+#endif
+
 #if C128_TEST_FORCE_DEATH
 c128_test_force_death_pending: .byte 1
 #endif
@@ -692,11 +713,7 @@ game_new_start:
     jsr msg_clear
 
     // Welcome message
-    lda #<welcome_str
-    sta zp_ptr0
-    lda #>welcome_str
-    sta zp_ptr0_hi
-    jsr msg_print
+    :MsgPrintStr(welcome_str)
 
 #if C64_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT
     lda #2
@@ -1750,18 +1767,10 @@ cmd_stairs_dn:
     sta level_entry_dir         // 0 = descended
     jsr level_change_generate_current
     jsr msg_clear
-    lda #<descend_str
-    sta zp_ptr0
-    lda #>descend_str
-    sta zp_ptr0_hi
-    jsr msg_print
+    :MsgPrintStr(descend_str)
     jmp main_loop
 !no_stairs_dn:
-    lda #<no_stairs_str
-    sta zp_ptr0
-    lda #>no_stairs_str
-    sta zp_ptr0_hi
-    jsr msg_print
+    :MsgPrintStr(no_stairs_str)
     jmp main_loop
 
 cmd_stairs_up:
@@ -1785,25 +1794,13 @@ cmd_stairs_up:
     sta level_entry_dir         // 1 = ascended
     jsr level_change_generate_current
     jsr msg_clear
-    lda #<ascend_str
-    sta zp_ptr0
-    lda #>ascend_str
-    sta zp_ptr0_hi
-    jsr msg_print
+    :MsgPrintStr(ascend_str)
     jmp main_loop
 !at_surface:
-    lda #<at_surface_str
-    sta zp_ptr0
-    lda #>at_surface_str
-    sta zp_ptr0_hi
-    jsr msg_print
+    :MsgPrintStr(at_surface_str)
     jmp main_loop
 !no_stairs_up:
-    lda #<no_stairs_str
-    sta zp_ptr0
-    lda #>no_stairs_str
-    sta zp_ptr0_hi
-    jsr msg_print
+    :MsgPrintStr(no_stairs_str)
     jmp main_loop
 
 // level_change_generate_current — Shared tail after caller has already updated
@@ -1927,19 +1924,12 @@ cmd_search_mode:
     and #PLF_SEARCHING
     beq !toggle_on+
     jsr player_search_mode_off
-    lda #<search_mode_off_str
-    sta zp_ptr0
-    lda #>search_mode_off_str
-    sta zp_ptr0_hi
-    jmp !toggle_print+
+    :MsgPrintStr(search_mode_off_str)
+    jmp !toggle_done+
 !toggle_on:
     jsr player_search_mode_on
-    lda #<search_mode_on_str
-    sta zp_ptr0
-    lda #>search_mode_on_str
-    sta zp_ptr0_hi
-!toggle_print:
-    jsr msg_print
+    :MsgPrintStr(search_mode_on_str)
+!toggle_done:
     jsr status_draw
     jmp main_loop
 

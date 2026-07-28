@@ -250,6 +250,88 @@ assert_line("town_reached", in_town())
 emu.wait(2)
 """
 
+LUA_SCROLL_DELTA_BODY = r"""
+-- Scroll-delta render path (dungeon_scroll_a2.s): after a 1-tile viewport
+-- scroll, every cell outside the local redraw footprint must equal the
+-- pre-scroll cell one column to its right (screen shifted left).
+local descended = false
+for i = 1, 10 do
+    press("l")
+    emu.wait(1)
+    shift(".")
+    emu.wait(2)
+    if screen_has("DL:1") then descended = true break end
+end
+assert_line("descended", descended, "status does not show DL:1")
+local function wizard_menu_open(tries)
+    for i = 1, (tries or 15) do
+        if screen_has("Q to cancel") then return true end
+        if screen_has("-more-") then press(" ") emu.wait(0.4) end
+        if screen_has("WIZARD?") then press("Y") emu.wait(0.5) end
+        ctrl("W")
+        emu.wait(1)
+    end
+    return false
+end
+wizard_menu_open()
+press("T")
+emu.wait(3)
+press("Q")
+emu.wait(2)
+local function view_row(r) return string.sub(rowtext(r), 2, 79) end
+local before = {}
+local vx0 = prog:read_u8(0x60)
+local dirs = {"l","l","l","u","l","n","l","l","b","l","l","j","l","y","l","k"}
+local scrolled = false
+for i = 1, 150 do
+    for r = 2, 19 do before[r] = view_row(r) end
+    press(dirs[(i % #dirs) + 1])
+    emu.wait(0.7)
+    if prog:read_u8(0x60) ~= vx0 then scrolled = true break end
+    if screen_has("-more-") then press(" ") end
+end
+assert_line("scrolled", scrolled, "no horizontal scroll after 150 steps")
+local pvx = prog:read_u8(0x2b) - prog:read_u8(0x60)
+local limit = math.max(1, pvx - 7)
+local bad, checked = 0, 0
+for r = 2, 19 do
+    local a = view_row(r)
+    for c = 1, limit do
+        checked = checked + 1
+        if string.sub(a, c, c) ~= string.sub(before[r], c+1, c+1) then
+            bad = bad + 1
+        end
+    end
+end
+assert_line("delta_shift", bad == 0,
+            bad .. " shifted cells mismatch of " .. checked)
+
+-- V-scroll regression: a row copy that exceeds the 40-byte half-row
+-- overflows into neighbouring (message/status) rows. After a vertical
+-- scroll, no status text may leak outside the status rows.
+local vy0 = prog:read_u8(0x61)
+local vscrolled = false
+local vdirs = {"k","j","k","k","j","k"}
+for i = 1, 60 do
+    press(vdirs[(i % #vdirs) + 1])
+    emu.wait(0.7)
+    if prog:read_u8(0x61) ~= vy0 then vscrolled = true break end
+    if screen_has("-more-") then press(" ") end
+end
+local vleak = false
+if vscrolled then
+    for r = 0, 20 do
+        local t = rowtext(r)
+        if string.find(t, "MP:", 1, true) or string.find(t, "AU:", 1, true) then
+            vleak = true
+        end
+    end
+end
+assert_line("v_no_status_leak", not vleak,
+            "status text leaked outside status rows after vertical scroll")
+print("SCENARIO DONE")
+"""
+
 LUA_PRIEST_PRAY_BODY = r"""
 -- Precondition: the priest carries the Beginners Handbook.
 press("I")
@@ -908,6 +990,10 @@ def save_slot_tracking_lua() -> str:
     return _chargen_body("A") + LUA_SLOT_TRACKING_BODY
 
 
+def scroll_delta_lua() -> str:
+    return _chargen_body("A") + LUA_SCROLL_DELTA_BODY
+
+
 SCENARIO_LUA = {
     "priest_pray": priest_pray_lua,
     "help_overlay": help_overlay_lua,
@@ -916,6 +1002,7 @@ SCENARIO_LUA = {
     "death_flow": death_flow_lua,
     "save_load": save_load_lua,
     "mage_list": mage_list_lua,
+    "scroll_delta": scroll_delta_lua,
     "disk_setup_two_drive": disk_setup_two_drive_lua,
     "disk_setup_swap": disk_setup_swap_lua,
     "disk_setup_adopt": disk_setup_adopt_lua,

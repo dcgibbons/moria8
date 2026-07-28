@@ -68,6 +68,19 @@ cmd_show_equipment_view:
     jmp ui_view_return_to_gameplay_view
 
 cmd_recall_view:
+#if RECALL_VIEW_OVERLAYED
+    // Body lives in an overlay on this platform; load and tail-call it.
+    lda #RECALL_VIEW_OVL
+    jsr overlay_load
+    bcs !rv_done+
+    jsr recall_view_body
+!rv_done:
+    rts
+#endif
+#if RECALL_VIEW_OVERLAYED
+:RecallViewBodySegment()
+#endif
+recall_view_body:
     jsr msg_clear
     lda #0
     sta zp_cursor_row
@@ -174,6 +187,9 @@ recall_show_matching_entry:
     jsr input_prepare_modal_dismiss_key
     jsr hal_input_get_key
     rts
+#if RECALL_VIEW_OVERLAYED
+:RecallViewBodyRestoreSegment()
+#endif
 
 // ============================================================
 // Shared command-result helpers

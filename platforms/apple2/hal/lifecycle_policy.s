@@ -35,6 +35,8 @@
 .const hal_platform_game_loop_save_return_view = 0
 .const hal_platform_game_loop_run_stop_reset_input = 0
 .const hal_platform_game_loop_scroll_delta_render = 0
+// Scroll-delta renderer provided by dungeon_scroll_a2.s (A2PlaySlot).
+#define HAL_PLATFORM_GAME_LOOP_SCROLL_DELTA_RENDER
 .const hal_platform_game_loop_item_actions_trampolined = 1
 // 9 shared classes + OVL.STORAGE + OVL.TITLE (slot-hosted).
 .const hal_platform_overlay_count = 11

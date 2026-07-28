@@ -898,6 +898,25 @@ game_over_prompt:
 !overlay_ok:
     jmp game_restart_overlay
 
+// a2_msg_print_indirect_aux — Print the NUL-terminated AUX string at
+// (zp_ptr0) via a main-RAM staging buffer. Used by MsgPrintStr for
+// platform-externalized strings (idle-lifetime alias of a2_ss_buf: save
+// streams, title staging, and these message prints never overlap).
+// Clobbers: A, Y, zp_ptr0.
+.label a2_aux_str_stage = a2_ss_buf
+a2_msg_print_indirect_aux:
+    ldy #$ff
+!loop:
+    iny
+    jsr mmu_safe_map_read_ptr0
+    sta a2_aux_str_stage,y
+    bne !loop-
+    lda #<a2_aux_str_stage
+    sta zp_ptr0
+    lda #>a2_aux_str_stage
+    sta zp_ptr0_hi
+    jmp msg_print
+
 // ============================================================
 // A2PlaySlot segment — play payload (C128 play-class composition).
 // Signature "M8P" validated by a2_require_play after every load.
@@ -947,6 +966,16 @@ a2_play_body:
 .macro WizardGenExecSegment() {
     .segment ModalMiscOverlay
 }
+// The recall-view (monster memory) command body lives in ModalMiscOverlay
+// on this platform; the play-slot stub loads the overlay and tail-calls.
+#define RECALL_VIEW_OVERLAYED
+.const RECALL_VIEW_OVL = OVL_MODAL_MISC
+.macro RecallViewBodySegment() {
+    .segment ModalMiscOverlay
+}
+.macro RecallViewBodyRestoreSegment() {
+    .segment A2PlaySlot
+}
 #define PLAYER_LOOK_EXTERNAL
 #import "../../core/player_move.s"
 #undef PLAYER_LOOK_EXTERNAL
@@ -965,9 +994,13 @@ a2_play_body:
 #import "../../core/wizard.s"
 #define PLAYER_LOOK_EXTERNAL
 #define DISARM_COMMAND_EXTERNAL
+#define WELCOME_STR_EXTERNAL
+#define GAME_LOOP_NAV_STRINGS_EXTERNAL
+#define GAME_LOOP_NO_STAIRS_STR_EXTERNAL
 #import "../../core/game_loop.s"
 #undef DISARM_COMMAND_EXTERNAL
 #undef PLAYER_LOOK_EXTERNAL
+#import "dungeon_scroll_a2.s"
 #import "../../core/turn.s"
 #import "../../core/dungeon_tunnel_guard.s"
 // Small play-resident modules (play is present in every gameplay phase).
@@ -1027,6 +1060,24 @@ a2_ego_suffix_holy_avenger: .text " (Holy Avenger)" ; .byte 0
 a2_ego_suffix_slots_end:
 .assert "Apple ego suffix slots are page aligned", <a2_ego_suffix_slots, 0
 .assert "Apple ego suffix slots are 8 x 16 bytes", a2_ego_suffix_slots_end - a2_ego_suffix_slots, EGO_TYPE_COUNT * 16
+
+// Platform-externalized game_loop message strings (welcome, search toggle,
+// stairs). Staged to main RAM by a2_msg_print_indirect_aux at print time;
+// frees ~160 bytes of play-slot space.
+welcome_str:
+    .text "Welcome to Moria! ?=help. Shift+Q=quit." ; .byte 0
+search_mode_on_str:
+    .text "Search mode on." ; .byte 0
+search_mode_off_str:
+    .text "Search mode off." ; .byte 0
+descend_str:
+    .text "You descend the staircase." ; .byte 0
+ascend_str:
+    .text "You ascend the staircase." ; .byte 0
+at_surface_str:
+    .text "You are already at the surface." ; .byte 0
+no_stairs_str:
+    .text "You see no stairs here." ; .byte 0
 .segment Default
 
 // ============================================================
