@@ -37,7 +37,7 @@ KICKASS_DIR_RESOLVED = $(CURDIR)/$(KICKASS_DIR)
 else
 KICKASS_DIR_RESOLVED = $(KICKASS_DIR)
 endif
-JAVA        ?= java
+JAVA        ?= ../../tools/kickass_java.sh
 C1541       ?= c1541
 GPG         ?= gpg
 GPG_SIGN_FLAGS ?= --armor --detach-sign

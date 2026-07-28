@@ -19,7 +19,7 @@ KICKASS_RESOLVED = $(CURDIR)/$(KICKASS)
 else
 KICKASS_RESOLVED = $(KICKASS)
 endif
-JAVA        ?= java
+JAVA        ?= ../../tools/kickass_java.sh
 
 AC_VERSION  ?= 13.2
 AC_DIR      ?= ../../tools/applecommander
@@ -168,7 +168,7 @@ $(OUTA2)/monster.db.4: $(A2_TIER_DIR)/tier4_prg.s | ensure-kickass $(OUTA2)
 $(A2_TITLE_PRG): $(TITLE_SRC) $(VERSION_INC) | ensure-kickass $(OUTA2)
 	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(TITLE_SRC)" -define TITLE_PLATFORM_A2 -o "$@"
 
-$(A2_BOOT_PRG): $(A2_BOOT_SRC) | ensure-kickass $(OUTA2)
+$(A2_BOOT_PRG): $(A2_BOOT_SRC) cache_layout.s | ensure-kickass $(OUTA2)
 	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(A2_BOOT_SRC)" -o "$@"
 
 # ── Disk image ────────────────────────────────────────────
