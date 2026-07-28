@@ -18,11 +18,11 @@
 // run the monster overlay).
 //
 // Performance design (80STORE interleave):
-//   - Map row pointer pre-slid by view_x once per row (C128 Opt 3); the
-//     per-cell read is ldy zp_render_x + jsr mmu_safe_map_read_ptr1.
-//   - zp_ptr1 (not zp_ptr0) holds the map pointer because monster_find_at /
-//     monster_get_ptr clobber zp_ptr0 mid-row; nothing in the cell path
-//     touches zp_ptr1.
+//   - The 78-byte map row slice is block-read from AUX into a main-RAM row
+//     buffer once per row (two soft-switch toggles per row instead of two
+//     per cell); the per-cell read is ldy zp_render_x + lda rv_row_map_buf,y.
+//   - Per-cell warding-glyph scan is gated by a per-row "any glyph active"
+//     check (glyph_find_at runs only when a glyph exists somewhere).
 //   - Per-row |dy| precomputed for the dimming early-exit (C128 Opt 4).
 //   - Per viewport row, display bytes are staged into two 40-byte main-RAM
 //     buffers (aux half = even screen columns 0/2/../78, main half = odd
@@ -54,6 +54,16 @@
 // viewport border columns and stay A2_SPACE forever.
 rv_aux_buf:  .fill A2_HALF_ROW, A2_SPACE
 rv_main_buf: .fill A2_HALF_ROW, A2_SPACE
+
+// Block-read copy of the current 78-byte map row slice (one AUX block
+// read per row replaces one per-cell thunked read). Shares the
+// save-stream buffer: save/load streams, title staging, and gameplay
+// viewport rendering are never live concurrently (same argument as
+// a2_title_stage, storage_mli.s), and the row slice is refilled from AUX
+// at the top of every row.
+.label rv_row_map_buf = a2_ss_buf
+// Nonzero when any warding glyph exists; gates the per-cell glyph scan.
+rv_row_has_glyph: .byte 0
 
 // ============================================================
 // viewport_update — Recenter viewport on player with scroll deadband
@@ -169,15 +179,31 @@ render_viewport:
 !rv_row_dy_pos:
     sta rv_row_dy
 
-    // Map row pointer, pre-slid by view_x, into zp_ptr1 (zp_ptr0 is
-    // clobbered by monster_find_at / monster_get_ptr in the cell path)
+    // Block-read the 78-byte map row slice from AUX into main RAM: two
+    // soft-switch toggles per row instead of two per cell. zp_ptr0/zp_ptr1
+    // are scratch after this; the cell path reads rv_row_map_buf only.
     lda map_row_lo,x
     clc
     adc zp_view_x
-    sta zp_ptr1
+    sta zp_ptr0
     lda map_row_hi,x
     adc #0
+    sta zp_ptr0_hi
+    lda #<rv_row_map_buf
+    sta zp_ptr1
+    lda #>rv_row_map_buf
     sta zp_ptr1_hi
+    ldy #0
+    ldx #VIEWPORT_W
+    jsr mmu_safe_map_read_block
+
+    // Cache whether any warding glyph exists (per row); the per-cell
+    // glyph_find_at scan is skipped entirely when none are placed.
+    lda glyph_active
+    ora glyph_active+1
+    ora glyph_active+2
+    ora glyph_active+3
+    sta rv_row_has_glyph
 
     // Screen row base (render_y + VIEWPORT_Y)
     lda zp_render_y
@@ -202,9 +228,9 @@ render_viewport:
     sta zp_render_x         // Viewport column counter (0-77)
 
 !col_loop:
-    // Read map byte from AUX (zp_ptr1 pre-slid; thunk preserves X, Y)
+    // Map byte for this cell (row slice block-read into main RAM per row)
     ldy zp_render_x
-    jsr mmu_safe_map_read_ptr1
+    lda rv_row_map_buf,y
     sta zp_tile_tmp
 
     // Check if visited (bit 2)
@@ -333,6 +359,8 @@ render_viewport:
     lda it_display,x
     sta zp_temp0
 !rv_no_item:
+    lda rv_row_has_glyph
+    beq !rv_no_glyph+
     lda zp_view_x
     clc
     adc zp_render_x

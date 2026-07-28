@@ -123,6 +123,14 @@ render_viewport:
     lda #0
     sta zp_render_x         // Screen column counter (0-37)
 
+    // Cache whether any warding glyph exists (per row); the per-cell
+    // glyph_find_at scan is skipped entirely when none are placed.
+    lda glyph_active
+    ora glyph_active+1
+    ora glyph_active+2
+    ora glyph_active+3
+    sta rv_row_has_glyph
+
 !col_loop:
     // Compute map column = view_x + render_x
     lda zp_view_x
@@ -292,6 +300,8 @@ render_viewport:
     jsr item_get_floor_color        // A = identification-aware color
     sta zp_temp1
 !rv_no_item:
+    lda rv_row_has_glyph
+    beq !rv_no_glyph+
     lda zp_view_x
     clc
     adc zp_render_x
@@ -789,6 +799,7 @@ rla_min_y: .byte 0
 rla_max_y: .byte 0
 rla_cur_x: .byte 0
 rla_cur_y: .byte 0
+rv_row_has_glyph: .byte 0   // Nonzero when any warding glyph exists; gates the per-cell glyph scan
 
 // ============================================================
 // Compile-time validation

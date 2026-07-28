@@ -149,6 +149,9 @@ test_mon_flags:     .byte 0
 test_glyph_active:  .byte 0
 test_glyph_x:       .byte 0
 test_glyph_y:       .byte 0
+// Renderer glyph early-out reads the core array; alias the test flag
+// (0 => stub always misses, so skipping the scan is output-equivalent).
+.label glyph_active = test_glyph_active
 test_expect_char:   .byte 0
 test_expect_color:  .byte 0
 tc_results:         .fill 24, $ff

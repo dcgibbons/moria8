@@ -84,6 +84,7 @@ test_mon_y:         .byte 0
 test_mon_type:      .byte 0
 test_mon_flags:     .byte 0
 test_glyph_active:  .byte 0
+.label glyph_active = test_glyph_active
 test_glyph_x:       .byte 0
 test_glyph_y:       .byte 0
 test_expect_char:   .byte 0

@@ -102,6 +102,11 @@ mmu_safe_map_read_ptr0:
 mmu_safe_map_read_ptr1:
     jmp A2_ZP_THUNK_READ_P1
 
+// mmu_safe_map_read_block — Copy X bytes from aux (zp_ptr0),y to main
+// (zp_ptr1),y. Y = starting offset, X = count (0 = 256). Clobbers A, X, Y.
+mmu_safe_map_read_block:
+    jmp A2_ZP_THUNK_READ_BLOCK
+
 // mmu_safe_map_write_ptr0 — Write A to aux at (zp_ptr0),y.
 // Writes-only switch: safe from resident code; sta leaves A intact, so no
 // stacking is needed. Preserves A, X, Y.

@@ -136,6 +136,10 @@ glyph_find_at:
     clc
     rts
 
+// Renderer glyph early-out reads the core array; all-zero => scan skipped,
+// matching the always-missing stub above.
+glyph_active: .fill MAX_GLYPHS, 0
+
 player_get_infra_range:
     lda #0
     rts
