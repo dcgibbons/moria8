@@ -69,6 +69,7 @@ test_mon_type:       .byte 0
 test_mon_flags:      .byte 0
 test_mon_color_vic:  .byte COL_WHITE
 test_glyph_active:   .byte 0
+.label glyph_active = test_glyph_active
 test_glyph_x:        .byte 0
 test_glyph_y:        .byte 0
 
@@ -207,7 +208,7 @@ test_start:
     jsr test_scroll_delta_skips_pending_full_redraw
     jsr test_h_scroll_left_fast_path
     jsr test_h_scroll_left_local_area_repairs_stale_monster
-    jsr test_left_scroll_falls_back
+    jsr test_h_scroll_right_fast_path
     jsr test_v_scroll_up_first_op_uses_copy_mode
     jsr test_v_scroll_up_fast_path
     jsr test_v_scroll_up_local_area_repairs_stale_monster
@@ -804,7 +805,7 @@ test_h_scroll_left_fast_path:
     jsr assert_vdc_cell
     rts
 
-test_left_scroll_falls_back:
+test_h_scroll_right_fast_path:
     jsr prepare_pattern_screen
     lda #11
     sta old_view_x
@@ -813,14 +814,17 @@ test_left_scroll_falls_back:
     lda #10
     sta zp_view_y
     sta old_view_y
+    jsr seed_left_strip_tiles
     jsr render_viewport_scroll_delta
-    bcc !ok+
+    bcs !ok+
     jmp test_fail
 !ok:
 
+    // Shifted interior: viewport (r, c) == previously seeded (r, c-1);
+    // distinct per-cell seeds expose any block-copy smear.
     lda #0
     sta test_row_rel
-    lda #0
+    lda #1
     sta test_col_rel
     ldx #0
     ldy #0
@@ -829,7 +833,7 @@ test_left_scroll_falls_back:
 
     lda #9
     sta test_row_rel
-    lda #17
+    lda #18
     sta test_col_rel
     ldx #9
     ldy #17
@@ -841,8 +845,33 @@ test_left_scroll_falls_back:
     lda #VIEWPORT_W - 1
     sta test_col_rel
     ldx #18
-    ldy #VIEWPORT_W - 1
+    ldy #VIEWPORT_W - 2
     jsr expect_seed_cell
+    jsr assert_vdc_cell
+
+    // Newly exposed leftmost column renders from the map.
+    lda #0
+    sta test_row_rel
+    lda #0
+    sta test_col_rel
+    ldx #0
+    jsr expect_tile_index
+    jsr assert_vdc_cell
+
+    lda #9
+    sta test_row_rel
+    lda #0
+    sta test_col_rel
+    ldx #9
+    jsr expect_tile_index
+    jsr assert_vdc_cell
+
+    lda #18
+    sta test_row_rel
+    lda #0
+    sta test_col_rel
+    ldx #18
+    jsr expect_tile_index
     jsr assert_vdc_cell
     rts
 
@@ -1224,6 +1253,35 @@ seed_right_strip_tiles:
     lda zp_view_x
     clc
     adc #VIEWPORT_W - 1
+    sta test_abs_col
+    lda #0
+    sta test_row_rel
+!loop:
+    ldx test_row_rel
+    txa
+    and #$0f
+    asl
+    asl
+    asl
+    asl
+    ora #FLAG_VISITED | FLAG_LIT
+    sta test_work
+    ldx test_abs_col
+    ldy test_row_rel
+    tya
+    clc
+    adc zp_view_y
+    tay
+    lda test_work
+    jsr map_set_tile
+    inc test_row_rel
+    lda test_row_rel
+    cmp #VIEWPORT_H
+    bne !loop-
+    rts
+
+seed_left_strip_tiles:
+    lda zp_view_x
     sta test_abs_col
     lda #0
     sta test_row_rel
