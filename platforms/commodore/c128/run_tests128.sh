@@ -1765,7 +1765,7 @@ for name, lines, chain in required_chains:
 if not has_ordered_chain(item_actions_mod, [
     "item_action_get_key:",
     "jsr hal_input_get_key",
-    "#if hal_platform_item_action_key_restores_bank",
+    "#if HAL_PLATFORM_ITEM_ACTION_KEY_RESTORES_BANK",
     "sta iagk_key",
     "lda #MMU_ALL_RAM",
     "sta hal_memory_mmu_config_register",
@@ -1855,7 +1855,7 @@ def section_after(label: str, lines: list[str]) -> list[str]:
 if not has_ordered_chain(items, [
     "item_action_get_key:",
     "jsr hal_input_get_key",
-    "#if hal_platform_item_action_key_restores_bank",
+    "#if HAL_PLATFORM_ITEM_ACTION_KEY_RESTORES_BANK",
     "sta iagk_key",
     "lda #MMU_ALL_RAM",
     "sta hal_memory_mmu_config_register",
@@ -2356,6 +2356,14 @@ build_real_boot_diag_assets() {
         return 1
     fi
 
+    if grep -q "ERROR IN ASSERTION" "$build_log"; then
+        echo "FAIL (diag main assembly has assertion failures)"
+        grep "ERROR IN ASSERTION" "$build_log" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return 1
+    fi
+
     if ! "$c1541_bin" -format "moria128,m8" d64 "$diag_d64" \
             -attach "$diag_d64" \
             -write ../../../build/test/c128/boot128.prg "moria8.128" \
@@ -2420,6 +2428,14 @@ build_overlay_transition_diag_assets() {
             -o "$diag_main" >"$build_log" 2>&1; then
         echo "FAIL (overlay-transition diag main assembly failed)"
         tail -20 "$build_log" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return 1
+    fi
+
+    if grep -q "ERROR IN ASSERTION" "$build_log"; then
+        echo "FAIL (diag main assembly has assertion failures)"
+        grep "ERROR IN ASSERTION" "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return 1
@@ -4312,14 +4328,19 @@ PY
 }
 
 boot_diag_dump_cmds() {
-    cat <<'EOF'
+    cat <<'DUMP_CMDS'
 r
 bt
 m 3400 340b
 m 0314 0315
 m fffa ffff
 m 0c00 0c10
-EOF
+DUMP_CMDS
+    # $1 = c128_stack_guard_stage address: dump expected/actual/stage/
+    # fail_code/substage so single-trap failures stay attributable.
+    if [ -n "${1:-}" ]; then
+        printf 'm %04x %04x\n' $(( 16#$1 - 2 )) $(( 16#$1 + 8 ))
+    fi
 }
 
 run_boot_d64_smoke() {
@@ -7174,9 +7195,9 @@ run_real_boot_crash_harness() {
     local -a diag_stage_breaks=()
     while IFS= read -r addr; do
         [ -n "$addr" ] && diag_stage_breaks+=("$addr")
-    done < <(awk '/\.c128_diag_fail_stage_[0-9a-f][0-9a-f]$|\.c128_diag_fail_default$/ { split($2,a,":"); print toupper(a[2]); }' "$main_vs")
+    done < <(awk '/\.c128_diag_fail_sym$|\.c128_diag_fail_default$/ { split($2,a,":"); print toupper(a[2]); }' "$main_vs" | sort -u)
     if [ "${#diag_stage_breaks[@]}" -eq 0 ]; then
-        echo "FAIL (missing overlay diag stage traps in ../../../build/test/c128/main.vs)"
+        echo "FAIL (missing diag fail trap symbol in ../../../build/test/c128/main.vs)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
@@ -7190,13 +7211,15 @@ run_real_boot_crash_harness() {
     log_file="$(test128_tmp_file "test128_${name}.log")"
     : > "$log_file"
 
+    local stage_addr
+    stage_addr=$(awk '/\.c128_stack_guard_stage$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     {
         local addr
         for addr in "${diag_stage_breaks[@]}"; do
             echo "break \$${addr}"
         done
         echo "g"
-        boot_diag_dump_cmds
+        boot_diag_dump_cmds "$stage_addr"
     } > "$mon_file"
 
     "$VICE" -config /dev/null -default +saveres -console -nativemonitor -warp -80col -autostart "$abs_d64" \
@@ -7249,7 +7272,7 @@ run_overlay_data_transition_smoke() {
     local -a diag_stage_breaks=()
     while IFS= read -r addr; do
         [ -n "$addr" ] && diag_stage_breaks+=("$addr")
-    done < <(awk '/\.c128_diag_fail_stage_[0-9a-f][0-9a-f]$|\.c128_diag_fail_default$/ { split($2,a,":"); print toupper(a[2]); }' "$main_vs")
+    done < <(awk '/\.c128_diag_fail_sym$|\.c128_diag_fail_default$/ { split($2,a,":"); print toupper(a[2]); }' "$main_vs" | sort -u)
 
     local abs_d64
     abs_d64="$(cd ../../../build/test/c128 && pwd)/moria128_overlaydiag.d64"
@@ -7259,6 +7282,8 @@ run_overlay_data_transition_smoke() {
     log_file="$(test128_tmp_file "test128_${name}.log")"
     : > "$log_file"
 
+    local stage_addr
+    stage_addr=$(awk '/\.c128_stack_guard_stage$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     {
         local addr
         for addr in "${diag_stage_breaks[@]}"; do
@@ -7266,7 +7291,7 @@ run_overlay_data_transition_smoke() {
         done
         echo "until \$${pass_addr}"
         echo "g"
-        boot_diag_dump_cmds
+        boot_diag_dump_cmds "$stage_addr"
     } > "$mon_file"
 
     "$VICE" -config /dev/null -default +saveres -console -nativemonitor -warp -80col -autostart "$abs_d64" \

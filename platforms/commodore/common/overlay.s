@@ -449,10 +449,9 @@ cpao_next:
     lda #$b3
     jsr c128_overlay_fn_guard_check
 #endif
-#if C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG
-    ldx #$1a
-    jsr c128_diag_validate_runtime_invariants
-#endif
+    // No end-of-operation validate here: each c128_preload_asset_load
+    // already validates internally, and the diag world payload is 4 bytes
+    // from the items-payload boundary.
     rts
 
 !cpao_fail:

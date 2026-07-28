@@ -650,26 +650,14 @@ create_init_character:
     sta player_data + PL_DLEVEL
 
     // Calculate stats with modifiers
-#if C128_REAL_BOOT_DIAG
-    ldx #$71
-    jsr c128_stack_guard_begin
-#endif
+    // (No stack-guard pair here: tramp_player_create's $33 begin/check
+    // brackets this entire creation call; these are plain jsr's to
+    // always-resident Default code, and the pair bytes pushed the diag
+    // STARTUP overlay past $EFFF.)
     jsr player_calc_stats
-#if C128_REAL_BOOT_DIAG
-    ldx #$72
-    jsr c128_stack_guard_check
-#endif
 
     // Calculate max HP
-#if C128_REAL_BOOT_DIAG
-    ldx #$73
-    jsr c128_stack_guard_begin
-#endif
     jsr player_calc_hp
-#if C128_REAL_BOOT_DIAG
-    ldx #$74
-    jsr c128_stack_guard_check
-#endif
     // Set current HP = max HP
     lda player_data + PL_MHP_LO
     sta player_data + PL_HP_LO
