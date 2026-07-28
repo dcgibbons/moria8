@@ -1845,3 +1845,185 @@ missing because the a2ds screens printed the shared press_key_str, which
 lives in game_loop.s — play-slot code, not loaded when Disk Setup runs at
 title. The a2ds screens now use a local copy of the same text. Verified
 on screen: "Program disk cannot hold saves." + "Press any key".
+
+### 2026-07-25 performance audit — scrolling & monster updates
+
+Read-only audit of the viewport-scroll and monster-update hot paths. Audit
+method: static call-chain tracing with hand-counted 6502 cycle estimates
+(~1.023 MHz), NOT harness profiles; relative ratios are robust, absolute
+numbers are estimates. C128 findings from the same audit live in
+docs/C128_PERFORMANCE.md. Nothing below has been implemented; items P1-P8
+are tracked candidates pending approval.
+
+#### A2 viewport scrolling — bottlenecks
+
+1. Full 78x18 = 1404-cell redraw (~0.3 s) is the ONLY scroll path; no
+   scroll-delta (HAL_PLATFORM_GAME_LOOP_SCROLL_DELTA_RENDER = 0,
+   platforms/apple2/hal/lifecycle_policy.s:37). turn_scene_dirty — any
+   visible monster move outside the light radius
+   (core/game_loop.s:1357-1363) — triggers the same full redraw, nearly
+   every combat turn.
+2. 28 cy per map byte: the map lives in AUX, every read toggles RAMRD
+   twice through a ZP thunk (platforms/apple2/memory_aux.s:47-52) — ~39k
+   cy/redraw vs C64's ~7k for the same reads.
+3. glyph_find_at runs for every lit cell even when zero glyphs exist
+   (~85 cy x ~1400 cells, up to ~120k cy/redraw,
+   platforms/apple2/dungeon_render_a2.s:336). Shared with C64, but A2
+   pays it on 1.9x more cells.
+4. a2_map_char is a ~27-cy branch chain
+   (platforms/apple2/screen_a2.s:100-145) instead of a table; plus a
+   php/plp parity shuffle per cell — ~80 cy/cell staging total.
+
+#### A2 monster updates — why slower than C64/C128
+
+Monster AI logic is shared core code; the slowdown is trigger frequency
+x redraw cost:
+
+- Any monster visibility-flag change sets vis_room_revealed=1
+  (core/dungeon_los.s:198-202) -> full redraw. Monsters entering/leaving
+  torchlight — routine in combat — fire this. C64 full-redraws every step
+  anyway (no deadband), so monster-driven redraws are free there but cost
+  A2 ~0.3 s each. The perceived "monsters are slow" is this asymmetry.
+- AUX-resident Huffman strings make every attack/spell message decode
+  ~10x more expensive (~40 cy/tree-step vs 4 on C64,
+  platforms/apple2/mmu_macros.s:70-84). Scales with monster count.
+- All map access in AI/LOS paths is thunked (~1.7x C64), including
+  per-LOS-step reads for up to 32 monsters every turn
+  (core/dungeon_los.s:198).
+
+#### Candidate improvements — tracked, not approved
+
+| # | Change | Platform | Size | Est. impact | Gate |
+|---|--------|----------|------|-------------|------|
+| P1 | ~~Glyph/item-scan early-out (active-count gate)~~ DONE 2026-07-25 | all | small | up to ~120k cy/A2 redraw | make test64 + A2 suite |
+| P2 | ~~Per-row AUX map block read (a2_thunk_read_block, memory_aux.s:55-64)~~ DONE 2026-07-25 | A2 | small | ~28k cy/redraw | A2 suite |
+| P4 | ~~A2 scroll-delta render (shift viewport in place + render exposed strip)~~ DONE 2026-07-27 | A2 | large | ~300k -> ~40k cy/scroll | TURN_RENDER contract + A2 suite |
+| P5 | Tile-level scene-dirty list in core (replace full redraw for mat_scene_dirty) | core/all | large | monster turns: ~2 cells instead of 1404 | TURN_RENDER contract + all suites |
+| P6 | a2_map_char -> 256-byte table | A2 | small | ~20 cy/cell; costs most resident slack (~$98 free at $7B9E) | memory contract |
+| P8 | X-split cell-write loops (drop per-cell parity shuffle) | A2 | small | ~15 cy/cell | A2 suite |
+
+(P3 and P7 are C128 items; see docs/C128_PERFORMANCE.md.)
+
+Suggested order: P1+P2 (low-risk wins), then P3, then P4, then P5.
+
+### 2026-07-25 P1+P2 implemented — render early-outs and AUX row block read
+
+Change record (Routine tier — implementation under the settled TURN_RENDER
+contract; no state, lifecycle, or representation change; rendered output is
+byte-identical by construction):
+
+- Problem: per-cell glyph_find_at scans ran even when no warding glyphs
+  exist (~85 cy x cells); the C128 rescanned all 42 floor-item slots per
+  row even when empty; the A2 paid a 28-cy AUX thunk per map byte.
+- Success criterion: identical pixels; fewer cycles; all existing gates
+  pass. Invariant: TURN_RENDER renderer-consumer convergence — every gate
+  skips only a provably empty scan. zp_item_count is already maintained by
+  floor item add/remove (core/item.s) and recount on load (save.s).
+- Changes:
+  - P1a glyph gate: render_viewport on A2/C64/Plus4 caches "any
+    glyph_active" once per row and skips the per-cell glyph_find_at when
+    zero; C128 inlines the same OR at its single glyph site (RuntimeLowData
+    had no room for a cache byte — the resident scratch region sits 3
+    bytes under FLOOR_ITEM_BASE, found via the boundary assert).
+  - P1b C128 item gate: rv_populate_row_items returns after zeroing the
+    occupancy row when zp_item_count = 0.
+  - P2 A2 row block read: render_viewport block-reads the 78-byte map row
+    slice from AUX once per row (new mmu_safe_map_read_block wrapper over
+    the previously unused A2_ZP_THUNK_READ_BLOCK) into a row buffer;
+    per-cell read becomes lda buf,y. The row buffer aliases a2_ss_buf
+    (same disjoint-lifetime argument as a2_title_stage: save streams,
+    title staging, and gameplay rendering never run concurrently; the
+    slice is refilled every row). Resident end: $7BC4 ($3C slack).
+  - Test scaffolding: render tests that stub glyph_find_at alias or
+    zero-fill glyph_active (0 => stub always misses, so the skip is
+    output-equivalent).
+- Verification: make build (all platforms, 0 assert failures); make
+  test64 179/179; make testplus4 36/36; TEST_FILTER=vdc_scroll_delta128
+  and main_loop128 make test128 PASS; make test128-fast PASS; A2 harness
+  all 13 scenarios green.
+
+Estimated savings (hand-counted, per full A2 redraw): glyph gate up to
+~120k cy, row block read ~28k cy. C128: ~4k cy/row item+scan overhead
+when empty, ~60 cy/cell glyph scan.
+
+### 2026-07-27 P4 implemented — A2 scroll-delta viewport rendering
+
+Change record (Routine tier — implementation under the settled
+TURN_RENDER contract; delta path must converge on full-redraw output):
+
+- Problem: every viewport scroll (deadband crossing) and every
+  non-local visible monster move forced a full 78x18 = 1404-cell
+  render_viewport (~0.3 s at ~1 MHz).
+- Change: render_viewport_scroll_delta (new
+  platforms/apple2/dungeon_scroll_a2.s, in the play slot) shifts the
+  displayed 80-column text page in place for clean 1-tile single-axis
+  scrolls and redraws only the exposed strip via render_single_tile;
+  HAL_PLATFORM_GAME_LOOP_SCROLL_DELTA_RENDER now defined for A2
+  (hal/lifecycle_policy.s). Anything else (scene dirty, room reveal,
+  multi-tile) still falls back to full redraw, matching the C128
+  contract.
+- Mechanics: 80STORE+PAGE2 selects main/aux text halves at $0400
+  without banking code fetch, so the shift loops run from the play
+  slot. Horizontal shifts stage both 40-byte halves of each row into
+  rv_row_map_buf (a2_ss_buf idle-lifetime alias) and rewrite from the
+  staging buffer — direct in-place shifting is impossible because the
+  even/odd interleave makes overlapping main->aux copies clobber
+  sources. Vertical shifts copy row-to-row per half-plane, no staging.
+  Border columns and the exposed-strip column are never copied.
+- Space: the play slot was full ($A000 exact). Freed by moving the
+  recall-view (monster memory) command body to ModalMiscOverlay
+  (RecallViewBodySegment macros; invocation guarded so other platforms
+  need no definitions) and by externalizing the welcome/search/stairs
+  message strings to A2AuxData read via a2_msg_print_indirect_aux
+  (MsgPrintStr macro in game_loop.s). Cache slots resized
+  (SPELL $7900, MODAL $8D00; all payloads fit with >=62B slack).
+  Play slot ends $9FFF (1 byte slack).
+- Bug found and fixed by poke test: the first H-shift implementation
+  indexed text-page halves by column (1..79) instead of half-index
+  (0..39), addressing screen holes; caught by a poke-pattern MAME test
+  (zero mismatches after the fix).
+- Harness: new scroll_delta scenario (descend, wizard teleport, walk
+  until horizontal scroll, assert every non-local cell equals the
+  pre-scroll cell one column right).
+- Related infrastructure fix: the A2 boot loader PRG depended only on
+  boot.s, not cache_layout.s, so the cache slot move left the boot-time
+  aux-cache population using stale addresses while overlay_load read
+  the new ones (SPELL/MODAL overlays loaded zeros). Makefile dependency
+  added; caught by priest_pray/mage_list/wizard_flow/death_flow
+  scenario failures.
+- Verification: poke-pattern shift test (0 mismatches), scroll_delta
+  scenario PASS, full A2 harness all 14 scenarios green; make build
+  clean; test64 179/179; testplus4 36/36; test128-fast PASS.
+
+Estimated cost per scroll: H ~40k cycles, V ~37k cycles (vs ~300k
+full redraw), plus exposed-strip redraw. The ~7.5x speedup comes from
+not recomputing cells: a full redraw pays ~210 cy/cell (AUX thunked
+map read ~28 cy, tile-flag decode, overlays, a2_map_char ~27 cy,
+parity shuffle) for all 1404 cells, while a scroll only relocates
+already-rendered bytes (~14 cy/byte-op) and recomputes the newly
+exposed edge. The full cost model is in dungeon_scroll_a2.s.
+
+### 2026-07-27 P4 follow-up — V-scroll half-row overflow fix
+
+User report: scrolling jumbled the dungeon and status screens (off-by-1/
+off-by-2). Root cause: the vertical row copy in a2sd_copy_plane used
+`cpy #VIEWPORT_W + 1` (79), copying 78 bytes per half-row — but a text
+half-row is only 40 bytes. Because the Apple II text page interleaves
+row groups (rows 0-7, 8-15, 16-23 at $80 strides with $28 group
+offsets), a 78-byte copy from row r overflows 38 bytes past the half-row
+into *other visible rows*: e.g. dst row 16 ($450) overflows into the
+message row 1 ($480 = $450+$30), and higher dst rows overflow into the
+status rows 20-23. Result: status fragments at wrong rows and status
+rows themselves overwritten by neighbouring viewport rows.
+
+Fix: a2sd_copy_plane now copies exactly the 40-byte half-row
+(`ldy #0 / cpy #A2_HALF_ROW`). Border columns are permanent spaces by
+renderer design, so copying the full half-row (including borders) is
+harmless and keeps the copy two toggles per row.
+
+Verification: the previously corrupt V-scroll frame (status shifted
+into rows 1/21-23) now renders clean; poke-pattern H-shift test still
+0 mismatches; scroll_delta scenario extended with a v_no_status_leak
+regression assert (no status text outside the status rows after a
+vertical scroll); full A2 harness all 14 scenarios green; make build
+clean.
