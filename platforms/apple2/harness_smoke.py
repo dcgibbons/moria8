@@ -59,13 +59,21 @@ function run()
     -- Poll for the menu to appear (the port may go through several
     -- crash-reboot cycles before the title flow completes).
     local ready = false
+    local bootprog = 0
     for i = 1, WAIT_TENTHS do
         emu.wait(0.1)
+        -- Boot progress line (boot.s): "MORIA8" at row 11 offset 4, count
+        -- digit at offset 21. Track the highest digit seen.
+        if prog:read_u8(0x05A8 + 4) == 0xCD and prog:read_u8(0x05A8 + 5) == 0xCF then
+            local d = prog:read_u8(0x05A8 + 21)
+            if d > bootprog then bootprog = d end
+        end
         if prog:read_u8(ROW18_BASE + 14) == 0xA9 then
             ready = true
             break
         end
     end
+    print(string.format("DUMP BOOTPROG %d", bootprog))
     if not ready then print("DUMP TIMEOUT") end
     local s = "DUMP MAIN "
     for a = ROW18_BASE, ROW18_BASE + 39 do
@@ -1230,6 +1238,7 @@ def main() -> int:
 
     dumps = {}
     map_nonzero = -1
+    bootprog = 0
     timed_out = False
     for line in out.splitlines():
         if line.startswith("DUMP MAINR0 "):
@@ -1244,6 +1253,8 @@ def main() -> int:
             dumps["aux"] = bytes.fromhex(line[9:])
         elif line.startswith("DUMP MAP "):
             map_nonzero = int(line[9:])
+        elif line.startswith("DUMP BOOTPROG "):
+            bootprog = int(line[14:])
         elif line.startswith("DUMP TIMEOUT"):
             timed_out = True
 
@@ -1263,6 +1274,10 @@ def main() -> int:
         return 1
 
     check("menu_reached", not timed_out, f"no menu after {args.seconds}s")
+
+    # Boot progress line must have ticked at least once (0xB1 = '1').
+    check("boot_progress", bootprog >= 0xB1,
+          f"max count digit={bootprog:#04x}")
 
     # Menu string "N)ew  L)oad  D)isk Setup" starts at column 28; each half
     # row holds 40 bytes at half-row offset col>>1.

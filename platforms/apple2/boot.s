@@ -19,6 +19,12 @@
 // Assembled standalone (no core imports); Kick emits a PRG with the $2000
 // header, tools/prg_to_bin.py strips it and AppleCommander inserts it as
 // type SYS auxtype $2000.
+//
+// Progress display: the text page ($0400-$07FF) is untouched by the whole
+// boot flow (RES lands at $0A00+, staging at $7C00/$A400/$BB00), so a
+// "MORIA8 LOADING n/8" line at row 11 persists from OPEN to the final
+// CLOSE. 40-col and 80-col (80STORE) displays are both supported; the
+// resident payload reinitializes the screen right after the handoff.
 
 .pc = $2000 "Boot"
 
@@ -36,6 +42,8 @@
                              // game runs); holds 512 B for the whole boot.
 .const LOADER_DEST  = $0800
 .const PAK_COUNT    = 8       // entries in MORIA8.PAK (see file_table)
+.const BOOT_ROW     = $05a8   // text row 11 half-row base (progress line)
+.const BOOT_LINE_DIGIT = 21   // offset of the count digit in boot_line
 #import "cache_layout.s"
 
 boot_start:
@@ -61,6 +69,16 @@ loader_src:
 .const ZP_DST = $fc
 
 loader:
+    // ---- Progress display: mode detect, clear, initial line ----
+    lda $c01f               // RD80COL: bit 7 = 80STORE on
+    and #$80
+    sta mode80
+    jsr boot_fill_half      // main half (RAMWRT off)
+    sta $c005               // RAMWRT on -> aux half
+    jsr boot_fill_half
+    sta $c004               // RAMWRT off
+    jsr boot_draw_line
+
     // ---- OPEN MORIA8.PAK ----
     jsr MLI
     .byte MLI_OPEN
@@ -171,6 +189,8 @@ loader:
     sta $c004                   // RAMWRT off
 
 !next_entry:
+    inc boot_line + BOOT_LINE_DIGIT
+    jsr boot_draw_line
     ldx file_idx
     inx
     cpx #PAK_COUNT
@@ -200,6 +220,80 @@ boot_error:
     jmp !halt-
 #endif
 
+// boot_fill_half — Fill one text half ($0400-$07FF) with spaces, 120
+// bytes per 128-byte block so the firmware holes at $x78-$x7F are never
+// touched. Clobbers A, X, Y, ZP_DST.
+boot_fill_half:
+    lda #<$0400
+    sta ZP_DST
+    lda #>$0400
+    sta ZP_DST + 1
+    ldx #8
+!blk:
+    lda #$a0
+    ldy #$77
+!l:
+    sta (ZP_DST),y
+    dey
+    bpl !l-
+    lda ZP_DST
+    clc
+    adc #$80
+    sta ZP_DST
+    bcc !n+
+    inc ZP_DST + 1
+!n:
+    dex
+    bne !blk-
+    rts
+
+// boot_draw_line — Draw boot_line at row 11. 80-col mode (80STORE on)
+// interleaves even chars to the aux half and odd chars to the main half
+// via PAGE2; 40-col writes the main half only. Clobbers A, X, Y.
+boot_draw_line:
+    lda mode80
+    bne !l80+
+    ldx #0
+!l40:
+    lda boot_line,x
+    ora #$80
+    sta BOOT_ROW,x
+    inx
+    cpx #40
+    bne !l40-
+    rts
+!l80:
+    sta $c055               // PAGE2 on -> aux half (80STORE on)
+    ldy #0
+    ldx #0
+!ev:
+    lda boot_line,x
+    ora #$80
+    sta BOOT_ROW,y
+    inx
+    inx
+    iny
+    cpy #20
+    bne !ev-
+    sta $c054               // PAGE2 off -> main half
+    ldy #0
+    ldx #1
+!od:
+    lda boot_line,x
+    ora #$80
+    sta BOOT_ROW,y
+    inx
+    inx
+    iny
+    cpy #20
+    bne !od-
+    rts
+
+boot_line:
+    .text "    MORIA8  LOADING  0/8  PLEASE WAIT   "
+boot_line_end:
+
+mode80:     .byte 0
 file_idx:   .byte 0
 copy_len:   .word 0
 
@@ -253,3 +347,5 @@ loader_end:
 .assert "Loader fits $0800-$09FF", loader_end - loader_src <= 512, true
 .assert "Loader tail copy is 8-bit", loader_end - (loader_src + $100) <= 255, true
 .assert "Boot image stays clear of ProDOS global page", * <= $bf00, true
+.assert "Boot line is 40 chars", boot_line_end - boot_line, 40
+.assert "Boot line digit in range", BOOT_LINE_DIGIT < 40, true

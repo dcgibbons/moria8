@@ -2155,3 +2155,17 @@ contract; rendered bytes are identical by construction, proven below):
   A2AuxData ends $55B5 <= $56FF); staged table in the running game
   matches the expected 128 bytes; make testapple2-memory-contract 21/21;
   A2 harness all 14 scenarios green (scroll_delta 3/3 stable).
+
+### 2026-07-29 boot progress display
+
+User-facing addition (maintainer request): the Commodore REU path shows
+"X/YYYKB" during preload; the Apple boot streamed the PAK silently. The
+loader now clears the text page and draws "MORIA8  LOADING  n/8  PLEASE
+WAIT" at row 11, ticking the count per PAK entry. Mode detect ($C01F)
+selects a 40-col main-half draw or an 80-col interleaved draw; the fill
+never touches the $x78-$x7F firmware holes. Safe-by-construction: no boot
+stage touches the text page (RES lands at $0A00+, staging at
+$7C00/$A400/$BB00), so the line persists until the game reinitializes the
+screen. boot_title gained a permanent boot_progress assert (watches the
+count digit from power-on). Full A2 harness 14/14 green; memory contract
+21/21.
