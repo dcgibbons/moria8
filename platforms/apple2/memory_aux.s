@@ -41,6 +41,7 @@ a2_thunk_read_p0_src:
     lda (zp_ptr0),y
     sta A2_RAMRD_OFF
     rts
+    .fill A2_ZP_THUNK_READ_P1 - A2_ZP_THUNK_READ_P0 - (* - a2_thunk_read_p0_src), 0
 a2_thunk_read_p0_end:
 .assert "read-p0 thunk fits 16-byte slot", a2_thunk_read_p0_end - a2_thunk_read_p0_src <= 16, true
 
@@ -49,6 +50,7 @@ a2_thunk_read_p1_src:
     lda (zp_ptr1),y
     sta A2_RAMRD_OFF
     rts
+    .fill A2_ZP_THUNK_READ_BLOCK - A2_ZP_THUNK_READ_P1 - (* - a2_thunk_read_p1_src), 0
 a2_thunk_read_p1_end:
 .assert "read-p1 thunk fits slot before block thunk", a2_thunk_read_p1_end - a2_thunk_read_p1_src <= A2_ZP_THUNK_READ_BLOCK - A2_ZP_THUNK_READ_P1, true
 
@@ -67,27 +69,17 @@ a2_thunk_read_block_end:
 
 // a2_install_zp_thunks — Install aux-read thunks into platform ZP.
 // Called at boot and re-called by the storage adapter after MLI sequences
-// (belt and braces; the TRM shows the MLI never touches high ZP).
+// (belt and braces; the TRM shows the MLI never touches high ZP). The
+// templates are padded to their 11-byte ZP slots so one contiguous copy
+// covers all three.
 // Preserves: nothing (uses A, X)
 a2_install_zp_thunks:
-    ldx #a2_thunk_read_p0_end - a2_thunk_read_p0_src - 1
-!p0:
+    ldx #a2_thunk_read_block_end - a2_thunk_read_p0_src - 1
+!copy:
     lda a2_thunk_read_p0_src,x
     sta A2_ZP_THUNK_READ_P0,x
     dex
-    bpl !p0-
-    ldx #a2_thunk_read_p1_end - a2_thunk_read_p1_src - 1
-!p1:
-    lda a2_thunk_read_p1_src,x
-    sta A2_ZP_THUNK_READ_P1,x
-    dex
-    bpl !p1-
-    ldx #a2_thunk_read_block_end - a2_thunk_read_block_src - 1
-!blk:
-    lda a2_thunk_read_block_src,x
-    sta A2_ZP_THUNK_READ_BLOCK,x
-    dex
-    bpl !blk-
+    bpl !copy-
     rts
 
 // ============================================================

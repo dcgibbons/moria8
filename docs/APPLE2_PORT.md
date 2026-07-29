@@ -2115,3 +2115,43 @@ contract; staged bytes are identical by construction):
     oscillated and never gained east ground. The scenario now retries
     the teleport (up to 10) until the landing allows >= 3 east steps
     out of 4.
+
+### 2026-07-29 P6 implemented — staged char-map table for render_viewport
+
+Change record (Routine tier — implementation under the settled TURN_RENDER
+contract; rendered bytes are identical by construction, proven below):
+
+- Problem: a2_map_char's ~27-cy branch chain ran per staged cell
+  (~1404x per full redraw). A main-RAM 256-byte table was the backlog
+  design, but resident slack was 2 bytes and the play slot 0; an
+  AUX-resident table loses to the chain (~55 cy/cell: the (zp),y thunk
+  forces a Y shuffle against the half-row index).
+- Design: 128-byte master table in A2AuxData (a2_char_map_aux; reproduces
+  the chain for $00-$7F exactly — verified byte-for-byte against a chain
+  simulation over all 128 entries, including the $5B-$5F -> $9B-$9F code
+  behavior). render_viewport block-reads it once per redraw into the
+  a2_ss_buf tail (rv_char_map = a2_ss_buf+80; the 78-byte row slice uses
+  offsets 0-77, and the buffer's aliasing contract keeps it unwritten
+  mid-render). Per-cell translation becomes jsr rv_map_char_staged
+  (cpx/guard + lda table,x = ~20 cy vs ~39); codes >= $80 tail into the
+  unchanged branch chain, which still serves all non-viewport callers
+  (render_single_tile included — its a2_ss_buf lifetime is not staged).
+- Resident budget: +31 B (staging prologue + helper) recovered by
+  merging the three ZP-thunk install loops into one contiguous copy
+  (templates padded to their 11-byte slots; pad bytes $C9-$CA/$D4-$D5
+  proven unreferenced) and by rewriting screen_clear over
+  screen_clear_row. Resident ends $7BF8 (7 B slack).
+- Harness fixes folded in: scroll_delta now pins zp_rng post-chargen
+  (new-game re-seeds from input-loop timing counters, so emulator speed
+  — including this change's faster rendering — otherwise reseeds the
+  dungeon and the strict delta asserts are dungeon-sensitive) and the
+  fixed direction-pattern walk is now a greedy east-seek (no west
+  component) that cannot oscillate forever in a nook.
+- Debugging record: delta_shift failures appeared only with the P6
+  binary until the seed was pinned; with the pin, both builds teleport
+  identically (48,5) and pass, proving game-state evolution and rendered
+  output are bit-identical across the change.
+- Verification: make buildapple2 clean (308 asserts, 0 failures;
+  A2AuxData ends $55B5 <= $56FF); staged table in the running game
+  matches the expected 128 bytes; make testapple2-memory-contract 21/21;
+  A2 harness all 14 scenarios green (scroll_delta 3/3 stable).

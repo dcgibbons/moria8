@@ -5,9 +5,9 @@
 // map. One map cell = one text cell. Semantics mirror the C64 oracle
 // (platforms/commodore/c64/dungeon_render.s); viewport scrolling uses the
 // C128 deadband policy (platforms/commodore/c128/dungeon_render_vdc.s),
-// which suits the 78-wide viewport. Scroll-delta redraw is not provided:
-// the Apple II HAL does not define HAL_PLATFORM_GAME_LOOP_SCROLL_DELTA_RENDER,
-// so game_loop always falls back to full redraw / render_local_area.
+// which suits the 78-wide viewport. 1-tile single-axis scrolls shift the
+// text page in place (dungeon_scroll_a2.s); everything else falls back to
+// full redraw / render_local_area.
 //
 // Colorless policy: tile_colors, item_get_floor_color, cr_color and the
 // dim-to-COL_DGREY override have no display effect and are dropped. The
@@ -33,7 +33,9 @@
 //     buffers (aux index 0, main index 39; cell writes never touch them),
 //     replacing the c64's per-row border clear. 40-byte half-row writes can
 //     never reach the firmware screen holes at $x78-$x7F.
-//   - C64 screen codes are translated through a2_char_map at stage time.
+//   - C64 screen codes are translated through a 128-byte table (staged
+//     from A2AuxData into the a2_ss_buf tail once per redraw, P6); codes
+//     >= $80 fall back to the a2_map_char branch chain.
 
 // ============================================================
 // Constants / staging
@@ -62,6 +64,11 @@ rv_main_buf: .fill A2_HALF_ROW, A2_SPACE
 // a2_title_stage, storage_mli.s), and the row slice is refilled from AUX
 // at the top of every row.
 .label rv_row_map_buf = a2_ss_buf
+// Staged copy of a2_char_map_aux (A2AuxData) for the current redraw (P6):
+// offsets 80-207 of a2_ss_buf, clear of the 78-byte row slice at offset 0.
+// The buffer's aliasing contract (save streams, title staging, and aux
+// string staging never run mid-render) keeps it intact between refills.
+.label rv_char_map = a2_ss_buf + 80
 // Nonzero when any warding glyph exists; gates the per-cell glyph scan.
 rv_row_has_glyph: .byte 0
 
@@ -144,6 +151,18 @@ viewport_update:
 !vy_done:
     rts
 
+// rv_map_char_staged — Screen code X → Apple display code A via the staged
+// char-map table (P6). Codes >= $80 (reverse video; never produced by
+// viewport glyph sources) tail into the a2_map_char branch chain, which
+// also serves all non-viewport callers. Preserves X, Y.
+rv_map_char_staged:
+    cpx #$80
+    beq !tbl+
+    jmp a2_map_char
+!tbl:
+    lda rv_char_map,x
+    rts
+
 // ============================================================
 // render_viewport — Draw the 78x18 viewport
 // Per row: stage both text half-rows, then burst-write aux + main with two
@@ -156,6 +175,20 @@ render_viewport:
     sec
     sbc zp_view_x
     sta rv_player_vx
+
+    // Stage the char-map table into main RAM for this redraw (P6): one
+    // 128-byte AUX block read replaces the per-cell branch chain.
+    lda #<a2_char_map_aux
+    sta zp_ptr0
+    lda #>a2_char_map_aux
+    sta zp_ptr0_hi
+    lda #<rv_char_map
+    sta zp_ptr1
+    lda #>rv_char_map
+    sta zp_ptr1_hi
+    ldy #0
+    ldx #$80
+    jsr mmu_safe_map_read_block
 
     lda #0
     sta zp_render_y         // Viewport row counter (0-18)
@@ -415,18 +448,18 @@ rv_apply_player_override:
     // Translate screen code → Apple display code and stage into the
     // correct half-row buffer. Cell i: even i → main (odd screen column),
     // odd i → aux (even screen column); half index = i>>1. The parity
-    // branch runs before the call: a2_map_char preserves X and Y, so the
-    // per-cell php/plp shuffle is unnecessary.
+    // branch runs before the call: rv_map_char_staged preserves X and Y,
+    // so no php/plp shuffle is needed.
     ldx zp_temp0
     lda zp_render_x
     lsr                         // A = half index, C = column parity
     tay
     bcs !stage_aux+
-    jsr a2_map_char
+    jsr rv_map_char_staged
     sta rv_main_buf,y           // even i → screen col 2*(i>>1)+1 (main)
     jmp !next_col+
 !stage_aux:
-    jsr a2_map_char
+    jsr rv_map_char_staged
     sta rv_aux_buf + 1,y        // odd i → screen col 2*((i>>1)+1) (aux)
 !next_col:
 
@@ -853,3 +886,4 @@ rla_cur_y:     .byte 0
 .assert "Viewport height", VIEWPORT_H, 18
 .assert "Half row is 40 bytes", A2_HALF_ROW, 40
 .assert "Staging buffers sized to half row", rv_main_buf - rv_aux_buf, A2_HALF_ROW
+.assert "Staged char map fits a2_ss_buf tail", rv_char_map + $80 <= a2_ss_buf + $100, true

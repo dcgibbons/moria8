@@ -258,6 +258,13 @@ LUA_SCROLL_DELTA_BODY = r"""
 -- Scroll-delta render path (dungeon_scroll_a2.s): after a 1-tile viewport
 -- scroll, every cell outside the local redraw footprint must equal the
 -- pre-scroll cell one column to its right (screen shifted left).
+-- RNG is pinned post-chargen (zp_rng_0-3): new-game re-seeds from
+-- input-loop timing counters, so the dungeon otherwise varies with
+-- emulator speed and any rendering-performance change, and the strict
+-- delta asserts are dungeon-sensitive. Level generation on is
+-- deterministic.
+prog:write_u8(0x1a, 0xDE) prog:write_u8(0x1b, 0xAD)
+prog:write_u8(0x1c, 0xBE) prog:write_u8(0x1d, 0xEF)
 local descended = false
 for i = 1, 10 do
     press("l")
@@ -302,16 +309,29 @@ end
 local function view_row(r) return string.sub(rowtext(r), 2, 79) end
 local before = {}
 local vx0 = prog:read_u8(0x60)
-local dirs = {"l","l","l","u","l","n","l","l","b","l","l","j","l","y","l","k"}
+-- Greedy east-seek walk: accept the first of E/NE/SE/N/S that moves (no
+-- west component, so east ground is never given up). A fixed direction
+-- pattern can oscillate forever in a nook; the seek scrolls any open path.
 local scrolled = false
-for i = 1, 150 do
-    for r = 2, 19 do before[r] = view_row(r) end
-    press(dirs[(i % #dirs) + 1])
-    emu.wait(0.7)
-    if prog:read_u8(0x60) ~= vx0 then scrolled = true break end
-    if screen_has("-more-") then press(" ") end
+local presses = 0
+while presses < 250 and not scrolled do
+    local p0 = prog:read_u8(0x2b) * 256 + prog:read_u8(0x2c)
+    local advanced = false
+    for _, d in ipairs({"l","u","n","k","j"}) do
+        for r = 2, 19 do before[r] = view_row(r) end
+        press(d)
+        emu.wait(0.7)
+        presses = presses + 1
+        if screen_has("-more-") then press(" ") emu.wait(0.3) end
+        if prog:read_u8(0x60) ~= vx0 then scrolled = true break end
+        if prog:read_u8(0x2b) * 256 + prog:read_u8(0x2c) ~= p0 then
+            advanced = true
+            break
+        end
+    end
+    if not advanced and not scrolled then break end
 end
-assert_line("scrolled", scrolled, "no horizontal scroll after 150 steps")
+assert_line("scrolled", scrolled, "no horizontal scroll after east-seek walk")
 local pvx = prog:read_u8(0x2b) - prog:read_u8(0x60)
 local limit = math.max(1, pvx - 7)
 local bad, checked = 0, 0

@@ -157,30 +157,16 @@ a2_row_hi:
 // ============================================================
 
 // screen_clear — Clear both text halves to spaces; force status repaint.
-// Preserves: nothing
+// Row loop delegates to screen_clear_row. Preserves: nothing
 screen_clear:
-    lda #A2_SPACE
-    ldx #0
+    lda #0
+    sta a2_zp_scratch
 !rows:
-    lda a2_row_lo,x
-    sta zp_screen_lo
-    lda a2_row_hi,x
-    sta zp_screen_hi
-    lda #A2_SPACE
-    sta A2_PAGE2_ON         // aux half (even columns)
-    ldy #A2_HALF_ROW - 1
-!aux:
-    sta (zp_screen_lo),y
-    dey
-    bpl !aux-
-    sta A2_PAGE2_OFF        // main half (odd columns)
-    ldy #A2_HALF_ROW - 1
-!main:
-    sta (zp_screen_lo),y
-    dey
-    bpl !main-
-    inx
-    cpx #SCREEN_ROWS
+    lda a2_zp_scratch
+    jsr screen_clear_row
+    inc a2_zp_scratch
+    lda a2_zp_scratch
+    cmp #SCREEN_ROWS
     bne !rows-
     // Full clear wipes status rows; force next status_draw to repaint.
     lda zp_ui_dirty

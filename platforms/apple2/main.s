@@ -1081,6 +1081,15 @@ at_surface_str:
     .text "You are already at the surface." ; .byte 0
 no_stairs_str:
     .text "You see no stairs here." ; .byte 0
+
+// Screen-code -> Apple display-code table for inputs $00-$7F (P6). Must
+// reproduce a2_map_char (screen_a2.s) exactly for that range: $00->$C0,
+// $01-$1A->$E1-$FA, $1B-$1F->$DB-$DF, $20-$5A->code|$80, $5B-$5F->$9B-$9F,
+// $60-$7F->$A0. High-half inputs stay on the branch chain. Block-read into
+// the tail of a2_ss_buf once per render_viewport (rv_char_map).
+a2_char_map_aux:
+    .fill $80, i == 0 ? $c0 : i < $1b ? (i + $60) | $80 : i < $20 ? (i + $40) | $80 : i < $5b ? i | $80 : i < $60 ? (i + $40) | $80 : $a0
+.assert "Char map table covers $00-$7F", * - a2_char_map_aux, $80
 .segment Default
 
 // ============================================================
