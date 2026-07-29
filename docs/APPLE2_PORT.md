@@ -2169,3 +2169,12 @@ $7C00/$A400/$BB00), so the line persists until the game reinitializes the
 screen. boot_title gained a permanent boot_progress assert (watches the
 count digit from power-on). Full A2 harness 14/14 green; memory contract
 21/21.
+
+### 2026-07-29 real-hardware pass — Apple IIe Card (Macintosh LC 475)
+
+Maintainer report: the shipping disk image boots and plays correctly on an
+Apple IIe Card in a Macintosh LC 475. The IIe Card is IIe silicon (ASIC),
+not emulation, so this retires the M4 real-hardware risk item; a IIgs pass
+was deemed unnecessary (its IIe emulation mode is the same architecture,
+and the port targets fixed IIe/80-col identity). MAME apple2ee remains the
+automated regression environment.

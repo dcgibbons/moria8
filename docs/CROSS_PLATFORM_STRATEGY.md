@@ -104,7 +104,45 @@ now lives in the current `core/`/`platforms/` layout.
 * Plus/4 uses disk-loaded overlays like C64, but its low memory screen/attribute
   ownership moves the main-map window upward for this target.
 
-## 6. Current Codebase Assessment & Next Steps
+## 6. Apple IIe Release Track
+
+The Apple IIe port lives in the current `core/`/`platforms/` layout and is
+the second 128K-class target after the C128.
+
+* Source lives under `platforms/apple2/` and reuses `core/` with the shared
+  Commodore HAL interfaces where they fit; platform code owns soft-switches,
+  80-column text, ProDOS MLI storage, and the aux-memory mechanics.
+* The release target is a stock 128K Apple IIe (extended 80-column card)
+  running ProDOS 8 from a 140 KB `.po` disk image. Fixed machine identity:
+  no IIc/IIgs variants, no RAM cards beyond the standard 64K aux bank.
+* Memory model (authority: `docs/APPLE2_MEMORY_POLICY.md`): the 198x66
+  dungeon map, the auxdata payload (Huffman data, item names, lookup
+  tables), and the hot overlay cache live in aux RAM; resident code and the
+  load-once play payload fill main RAM to `$9FFF`; 11 overlay classes share
+  one `$A400-$B9FF` window. Cold classes (start, death, help, storage,
+  title) stay on disk — the aux cache is a partial manifest, not a full
+  preload.
+* Boot is a ProDOS `.SYSTEM` file that streams a single-open container
+  (`MORIA8.PAK`: resident + auxdata + six hot overlays) with an on-screen
+  `n/8` progress line. The single sequential container replaces per-file
+  open/read/close cycles, which seek-thrashed the directory and could lose
+  the head under ProDOS 2.4.3 — the pattern to copy on any future target
+  with a fragile DOS driver.
+* The port's #1 correctness hazard is the RAMRD instruction-fetch trap:
+  with aux reads switched in, instruction fetches from `$0200-$BFFF` come
+  from aux, so all aux-read thunks execute from zero page. Any future
+  banked target needs its thunk site chosen with the same care.
+* The 80STORE main/aux text interleave drives renderer design: row staging
+  in main RAM, then burst writes with two soft-switch toggles per row —
+  never per-cell toggling.
+* Testing is headless MAME (apple2ee) with a Lua harness asserting RAM
+  contracts (never pixels) across 14 permanent scenarios. Two harness
+  lessons are portable: entropy-from-input-timing makes dungeons
+  timing-sensitive, so strict scenarios must pin the RNG; and
+  heuristic screen sniffing (e.g. "in town") must tolerate legitimate
+  dungeon features.
+
+## 7. Current Codebase Assessment & Next Steps
 
 Moria8 is currently well-positioned because the 8-bit logic is increasingly platform-agnostic.
 

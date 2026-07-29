@@ -11,14 +11,15 @@
 | `platforms/commodore/c128/` | C128 boot, VDC/MMU code, tests, and harness scripts |
 | `platforms/commodore/plus4/` | Plus/4 entry, TED platform code, tests, and harness scripts |
 | `platforms/commodore/common/` | Shared Commodore KERNAL, disk, overlay, and compatibility modules |
+| `platforms/apple2/` | Apple IIe entry, ProDOS/aux platform code, and MAME harness |
 | `build/` | Generated payloads, disk images, checksums, and test scratch output |
 | `data/` | Source data used by generators |
 | `tools/` | Build-time conversion, generation, lint, and disk helpers |
 | `artwork/` | Source artwork and public art credits |
 
 Primary entry points are `platforms/commodore/c64/main.s`,
-`platforms/commodore/c128/main.s`, and
-`platforms/commodore/plus4/main.s`.
+`platforms/commodore/c128/main.s`,
+`platforms/commodore/plus4/main.s`, and `platforms/apple2/main.s`.
 
 ## Shared Runtime Modules
 
@@ -136,7 +137,10 @@ The Apple IIe port is ProDOS-based, 80-column, and uses the 128K IIe
 main/aux memory split with disk-loaded overlays and an aux-resident cache
 for hot classes. Memory rules live in `docs/APPLE2_MEMORY_POLICY.md`.
 
-- `MORIA8.SYSTEM` (ProDOS SYS) loads at `$2000` and bootstraps the payload.
+- `MORIA8.SYSTEM` (ProDOS SYS) loads at `$2000`, then streams the
+  single-open `MORIA8.PAK` container (resident + auxdata + six hot
+  overlays) with an `n/8` progress line before jumping to the resident
+  entry.
 - Resident code and data: `$0A00-$7BFF` in main RAM (hard boundary; the
   memory-contract checker enforces it).
 - `A2.PLAY` (play payload, load-once + signature): `$7C00-$9FFF` in main RAM.
@@ -160,11 +164,11 @@ Current product payloads:
 
 | Payload | Linked range | Size |
 | --- | ---: | ---: |
-| `MORIA8.SYSTEM` | `$2000-$2133` | 308 bytes |
+| `MORIA8.SYSTEM` | `$2000-$21DD` | 478 bytes |
 | `MORIA8.PAK` | `$0A00-$7BFF` resident | ~62 KB |
 | `A2.PLAY` | `$7C00-$9FFF` | 9,216 bytes |
 | `OVL.*` (11 classes) | `$A400-$B9FF` window | 0.3-5.6 KB each |
-| `A2.AUXDATA` | aux `$3B0C-$56FF` | ~5.5 KB |
+| `A2.AUXDATA` | aux `$3B0C-$55B5` | ~6.7 KB |
 
 ## C128 Runtime Model
 
