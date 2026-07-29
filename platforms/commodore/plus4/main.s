@@ -371,6 +371,9 @@ ol_target:        .byte 0
 #import "../common/overlay.s"
 #undef OVERLAY_LOAD_PROMPT_GAME
 #import "../../../core/monster_ai.s"
+#import "../../../core/scene_dirty.s"
+#import "../../../core/scene_mat_tile.s"
+#import "../../../core/scene_force.s"
 #import "../../../core/recall.s"
 #import "../../../core/monster_magic.s"
 #import "../../../core/item.s"

@@ -2027,3 +2027,64 @@ into rows 1/21-23) now renders clean; poke-pattern H-shift test still
 regression assert (no status text outside the status rows after a
 vertical scroll); full A2 harness all 14 scenarios green; make build
 clean.
+
+### 2026-07-28 P5 implemented — tile-level scene-dirty rendering
+
+Change record (Routine tier — implementation under the settled
+TURN_RENDER contract; final screen state must be identical to the
+full-redraw behavior it replaces).
+
+- Problem: every visible/detected monster move outside the player's
+  local light footprint forced a full 1404-cell viewport redraw each
+  such turn (the "monsters feel slow" hot path, ~300k cycles on A2).
+- Design: mat_mark_tile_dirty_if_nonlocal (the single hot producer)
+  immediate-renders the changed tile at mark time via the new
+  scene_render_mat_tile helper (render_single_tile + set the
+  mat_scene_dirty aggregate). The scene-dirty render dispatch
+  (game_loop !scene_dirty_redraw) then uses the cheap path — only the
+  player's local box via render_local_area — iff the turn's dirt is
+  provably already rendered (mat_scene_dirty set). Everything else
+  (combat kills, spell tile effects, forced-full command tails via
+  scene_force_full_redraw, search aggregation, earthquake/reveal)
+  still takes the full fallback; scene_force_full_redraw vetoes the
+  cheap path by clearing mat_scene_dirty. turn_scene_dirty
+  semantics for repeat/stop logic are unchanged.
+- Auto-run regression (found by maintainer): the veto originally
+  incremented zp_dirty_count, but that latch is consumed by the NEXT
+  turn's turn_post_action into turn_scene_dirty, and run-step stop
+  logic reads turn_scene_dirty every step — the leak cancelled
+  auto-run after one step. The clear-mat veto leaves no latch, so
+  run-step turn_scene_dirty reflects only monster activity, exactly
+  as before P5. With the veto no longer touching zp_dirty_count,
+  that latch is provably always clear at dispatch (all its producers
+  run mid-turn and are consumed by turn_post_action), so the
+  dispatch's zp_dirty_count guard was removed as dead code.
+- Correctness edges: visibility-flag changes (monster entering/leaving
+  view) are covered by the existing reveal path (full redraw); scrolls
+  and reveals override the scene branch entirely; the cheap path only
+  fires when the ONLY dirt is mat's already-rendered tiles.
+- Critical bug found by harness: render_single_tile must save and
+  restore zp_ptr0/zp_ptr0_hi across its body. The render's internal
+  monster_find_at iterates all monsters through monster_get_ptr (and on
+  A2 the AUX map read uses zp_ptr0 as its pointer), clobbering the AI
+  loop's monster-record pointer and changing monster behavior (and the
+  downstream RNG stream) — empirically proven by the teleport landing
+  shifting until the save/restore was added. The dance lives inside
+  render_single_tile itself on all four platforms (cheaper than
+  preserving at every call site).
+- mat_scene_dirty is now a counter (inc per immediate tile render; one
+  monster move marks old+new tile = 2). Consumers only test nonzero.
+  test_monster_ai test 27 updated from cmp #1 to cmp #2 (stronger:
+  verifies both old and new tiles get marked).
+- Memory: razor-thin but fits. scene_dirty_check + scene_mat_tile +
+  scene_force in Default on C64/Plus4; on C128 scene_force lives in
+  C128ResidentItems, mat in Default, and the dirty check is inlined in
+  game_loop.s under #if C128 (using the unconditional scene_full_fallback
+  / scene_post_move aliases, since !full_draw_fallback only exists under
+  HAL_PLATFORM_GAME_LOOP_SCROLL_DELTA_RENDER). On A2, scene_render_mat_tile
+  is a fall-through label into render_single_tile in dungeon_render_a2.s
+  (saves jsr+rts; A2 Default was 3B over $7C00 with a standalone helper).
+- Verification: make build clean all platforms, test64 179/179 (incl.
+  search forced-full case 5), testplus4 36/36, test128-fast PASS,
+  test128 135/135 (authoritative; C128 layout changed), A2 harness all
+  14 scenarios green (dungeon_descend, scroll_delta included).

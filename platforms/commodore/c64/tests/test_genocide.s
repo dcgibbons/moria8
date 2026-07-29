@@ -87,6 +87,7 @@ render_local_area:
 #import "../../../../core/dungeon_los.s"
 #import "../../../../core/player_move.s"
 #import "../../../../core/combat.s"
+#import "../../../../core/scene_mat_tile.s"
 #import "../../../../core/turn_render_state.s"
 eff_fear_timer: .byte 0
 monster_attack_player:

@@ -138,6 +138,9 @@ tramp_dig_ability:
 #import "../../core/monster.s"
 #import "../../core/tier_manager.s"
 #import "../../core/monster_ai.s"
+#import "../../core/scene_dirty.s"
+// scene_mat_tile lives in dungeon_render_a2.s (falls into render_single_tile).
+#import "../../core/scene_force.s"
 #import "../../core/monster_magic.s"
 #import "../../core/item.s"
 #define ITEM_ACTIONS_OVERLAY_EXTERNAL

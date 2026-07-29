@@ -528,12 +528,9 @@ audit (hand-counted cycle estimates; full analysis in
 `docs/APPLE2_PORT.md` and `docs/C128_PERFORMANCE.md`). Status as of
 2026-07-28:
 
-- **P5** — Tile-level scene-dirty list in core (all platforms). Today a
-  single visible monster move outside the player's light footprint sets
-  `mat_scene_dirty` -> full 1404-cell viewport redraw every such turn.
-  Track dirty tiles/rects and redraw only those. Largest remaining lever
-  for "monsters feel slow"; core change, TURN_RENDER contract, all
-  platform suites.
+- **P5** — ~~Tile-level scene-dirty list in core (all platforms).~~ DONE
+  2026-07-28 (immediate tile render at mark time + cheap-path scene
+  dispatch; see APPLE2_PORT.md).
 - **P6** — `a2_map_char` branch-chain -> 256-byte lookup table (A2).
   ~20 cy/cell on every rendered cell. Costs 256 resident bytes; resident
   slack is ~$3C after P2/P4, so it needs a memory-budget decision first

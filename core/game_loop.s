@@ -1372,11 +1372,15 @@ c128_town_move_diag_after_turn_post_action:
     jmp !post_move+
 
 !scene_dirty_redraw:
-#if HAL_PLATFORM_GAME_LOOP_SCROLL_DELTA_RENDER
-	    jmp !full_draw_fallback+
+#if C128
+    // Cheap path iff the turn's dirt is provably already rendered
+    // (mat_scene_dirty set); else full fallback.
+    lda mat_scene_dirty
+    beq scene_full_fallback
+    jsr render_local_area
+    jmp scene_post_move
 #else
-	    jsr render_viewport
-    jmp !post_move+
+    jmp scene_dirty_check
 #endif
 
 !full_redraw:
@@ -1409,6 +1413,7 @@ c128_town_move_diag_after_turn_post_action:
     jmp !post_move+
 !full_draw_fallback:
 #endif
+scene_full_fallback:
 #if C128_TEST_TOWN_SELF_DUMP
     lda #$1d
     jsr c128_town_dump_log
@@ -1422,6 +1427,7 @@ c128_town_move_diag_after_turn_post_action:
 #endif
 
 !post_move:
+scene_post_move:
     jsr try_store_entry
 #if HAL_PLATFORM_GAME_LOOP_PLAYER_MOVE_DIAG_LABELS
 c128_town_move_diag_before_status_draw:

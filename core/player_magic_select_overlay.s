@@ -86,7 +86,7 @@ spell_list_display:
     lda pm_mana_tbl_hi
     sta zp_ptr0_hi
     ldy pm_spell_idx
-    :MapRead_ptr0_y()
+    :HuffRead_ptr0_y()
     sta pm_cost_tmp
     cmp zp_player_mp
     beq !sld_affordable+
@@ -113,14 +113,14 @@ spell_list_display:
     lda pm_name_lo_hi
     sta zp_ptr0_hi
     ldy pm_spell_idx
-    :MapRead_ptr0_y()
+    :HuffRead_ptr0_y()
     sta zp_ptr2
     lda pm_name_hi_lo
     sta zp_ptr0
     lda pm_name_hi_hi
     sta zp_ptr0_hi
     ldy pm_spell_idx
-    :MapRead_ptr0_y()
+    :HuffRead_ptr0_y()
     sta zp_ptr2_hi
     lda zp_ptr2
     sta zp_ptr0
@@ -156,7 +156,7 @@ spell_list_display:
     lda pm_lvl_tbl_hi
     sta zp_ptr0_hi
     ldy pm_spell_idx
-    :MapRead_ptr0_y()
+    :HuffRead_ptr0_y()
     jsr screen_put_decimal_rj2
 
     inc pm_row_counter

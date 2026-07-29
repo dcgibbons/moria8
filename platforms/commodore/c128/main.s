@@ -3262,6 +3262,9 @@ player_get_infra_range:
 #define C128_FULL_DETECT_EVIL_EFFECT
 .segment C128ResidentItems
 c128_resident_items_start:
+.segment Default
+#import "../../../core/scene_mat_tile.s"
+#import "../../../core/scene_force.s"
 .segment C128ResidentWorld
 #import "../../../core/spell_effects.s"
 #undef C128_FULL_DETECT_EVIL_EFFECT

@@ -73,7 +73,7 @@ test_map_row:        .fill 80, FLAG_OCCUPIED
 map_row_lo:          .fill 48, <test_map_row
 map_row_hi:          .fill 48, >test_map_row
 
-tc_results: .fill 25, $ff
+tc_results: .fill 26, $ff
 
 test_seq_next: .byte 0
 test_seq_effects: .byte 0
@@ -254,6 +254,11 @@ inv_remove_item:
     rts
 
 #import "../../../../core/turn.s"
+#import "../../../../core/scene_force.s"
+
+// monster_ai.s is not imported (monster_ai_tick is stubbed below), so the
+// test owns the aggregate scene_force_full_redraw clears.
+mat_scene_dirty: .byte 0
 
 install_turn_patches:
     :PatchJump(turn_tick_effects, test_turn_tick_effects)
@@ -396,7 +401,7 @@ test_start:
     ldx #$ff
     txs
 
-    ldx #24
+    ldx #25
     lda #$ff
 !init_results:
     sta tc_results,x
@@ -1016,10 +1021,38 @@ t21_test:
     bne !t23_fail+
     lda #$01
     sta tc_results + 22
-    jmp test_finish
+    jmp !t26+
 !t23_fail:
     lda #$00
     sta tc_results + 22
+    jmp !t26+
+
+!t26:
+    // Test 26: scene_force_full_redraw vetoes the cheap redraw path by
+    // clearing mat_scene_dirty, and leaves no zp_dirty_count latch to
+    // leak into the next turn_post_action's turn_scene_dirty (the
+    // auto-run stop-logic regression).
+    jsr reset_state
+    lda #1
+    sta mat_scene_dirty
+    lda #1
+    jsr scene_force_full_redraw
+    lda turn_scene_dirty
+    cmp #1
+    bne !t26_fail+
+    lda mat_scene_dirty
+    bne !t26_fail+
+    lda zp_dirty_count
+    bne !t26_fail+
+    jsr turn_post_action
+    lda turn_scene_dirty
+    bne !t26_fail+
+    lda #$01
+    sta tc_results + 25
+    jmp test_finish
+!t26_fail:
+    lda #$00
+    sta tc_results + 25
     jmp test_finish
 
 !t12:
@@ -1197,7 +1230,7 @@ t21_test:
     jmp !t1_seq-
 
 test_finish:
-    ldx #24
+    ldx #25
 !copy:
     lda tc_results,x
     sta $0400,x

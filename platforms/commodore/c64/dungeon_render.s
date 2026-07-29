@@ -416,6 +416,13 @@ rv_apply_player_override:
 // Input: zp_temp0 = map_x, zp_temp1 = map_y
 // Preserves: zp_temp0, zp_temp1
 render_single_tile:
+    // Preserve zp_ptr0 across the lookup calls below (monster_find_at and
+    // friends iterate through monster_get_ptr, clobbering it). Callers in
+    // the monster-AI loop depend on that pointer surviving.
+    lda zp_ptr0
+    pha
+    lda zp_ptr0_hi
+    pha
     // Compute screen row
     lda zp_temp1
     sec
@@ -628,6 +635,10 @@ rst_apply_player_override:
     sta (zp_screen_lo),y
     lda zp_temp4
     sta (zp_color_lo),y
+    pla
+    sta zp_ptr0_hi
+    pla
+    sta zp_ptr0
     rts
 
 rst_col_tmp: .byte 0

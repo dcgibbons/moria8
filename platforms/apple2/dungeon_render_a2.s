@@ -464,6 +464,11 @@ rv_apply_player_override:
     sta vis_room_revealed       // c64 contract: full render consumes reveal
     rts
 
+// scene_render_mat_tile — mat's immediate tile render (P5). Falls through
+// into render_single_tile; render_single_tile preserves zp_ptr0 for its
+// callers in the monster-AI loop.
+scene_render_mat_tile:
+    inc mat_scene_dirty
 // ============================================================
 // render_single_tile — Render one tile at map coordinates
 // Used by dirty rendering to update only changed tiles.
@@ -471,6 +476,13 @@ rv_apply_player_override:
 // Preserves: zp_temp0, zp_temp1
 // ============================================================
 render_single_tile:
+    // Preserve zp_ptr0 across the lookup calls below (monster_find_at and
+    // friends iterate through monster_get_ptr, clobbering it). Callers in
+    // the monster-AI loop depend on that pointer surviving.
+    lda zp_ptr0
+    pha
+    lda zp_ptr0_hi
+    pha
     // Screen row base
     lda zp_temp1
     sec
@@ -668,6 +680,10 @@ rst_apply_player_override:
     jsr a2_map_char
     ldx rst_col_tmp
     jsr a2_write_cell
+    pla
+    sta zp_ptr0_hi
+    pla
+    sta zp_ptr0
     rts
 
 // ============================================================

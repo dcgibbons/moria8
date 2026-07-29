@@ -85,6 +85,7 @@ test_finish:
 #import "../dungeon_render.s"
 #import "../../../../core/dungeon_los.s"
 #import "../../../../core/combat.s"
+#import "../../../../core/scene_mat_tile.s"
 #import "../../../../core/monster_attack.s"
 magic_recalc_mana:
     rts

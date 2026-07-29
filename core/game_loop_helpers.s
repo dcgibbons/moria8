@@ -204,7 +204,7 @@ command_result_main_or_redraw_full:
     jmp player_died
 !alive:
     lda #1
-    sta turn_scene_dirty
+    jsr scene_force_full_redraw
     jmp post_turn_update_visibility_after_action
 !crrf_no_turn:
     jmp main_loop
@@ -255,7 +255,7 @@ turn_post_action_searchable_or_die:
 
     lda turn_scene_dirty
     ora ghl_saved_scene_dirty
-    sta turn_scene_dirty
+    jsr scene_force_full_redraw
 !alive:
     clc
     rts

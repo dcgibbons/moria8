@@ -720,6 +720,9 @@ recall_spells: .fill MAX_CREATURES, 0
 #import "../memory128.s"
 #import "../input128.s"
 #import "../../../../core/game_loop.s"
+#import "../../../../core/scene_dirty.s"
+#import "../../../../core/scene_force.s"
+mat_scene_dirty: .byte 0
 
 item_init_inventory:
     ldx #TOTAL_INV_SLOTS - 1
