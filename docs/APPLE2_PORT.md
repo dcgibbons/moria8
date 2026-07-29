@@ -2088,3 +2088,30 @@ full-redraw behavior it replaces).
   search forced-full case 5), testplus4 36/36, test128-fast PASS,
   test128 135/135 (authoritative; C128 layout changed), A2 harness all
   14 scenarios green (dungeon_descend, scroll_delta included).
+
+### 2026-07-29 P8 implemented — parity-split cell staging (drop php/plp)
+
+Change record (Routine tier — implementation under the settled TURN_RENDER
+contract; staged bytes are identical by construction):
+
+- Problem: render_viewport's per-cell staging saved column parity across
+  a2_map_char with php/plp (7 cy/cell, ~10k cy per full redraw).
+- Change: the parity branch (bcs on the half-index lsr) now runs BEFORE
+  the call, with one jsr a2_map_char per arm. a2_map_char preserves X
+  (screen code) and Y (half index), so no flag shuffle is needed
+  (platforms/apple2/dungeon_render_a2.s !write_tile). Byte-neutral
+  (23 -> 23 bytes); ~7 cy/cell saved, ~10k cy per 1404-cell redraw.
+- Verification: make buildapple2 clean (306 asserts, 0 failures; resident
+  and play-slot boundaries unchanged); make testapple2-memory-contract
+  21/21; A2 harness all 14 scenarios green.
+- Harness defects found and fixed (pre-existing: both reproduced on the
+  unmodified baseline; the A2 RNG is deterministic, so the failures were
+  stable, not flaky):
+  - dungeon_descend: in_town() false-positived when a dungeon room's
+    corner column put '#' at both rows 2 and 3. Town yields 10 such
+    columns, a room corner at most 2; in_town now requires >= 5.
+  - scroll_delta: the deterministic wizard teleport always landed in a
+    sealed pocket/corridor trap (map 103,7) where the fixed walk pattern
+    oscillated and never gained east ground. The scenario now retries
+    the teleport (up to 10) until the landing allows >= 3 east steps
+    out of 4.

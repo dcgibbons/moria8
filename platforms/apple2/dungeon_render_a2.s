@@ -414,19 +414,19 @@ rv_apply_player_override:
 !write_tile:
     // Translate screen code → Apple display code and stage into the
     // correct half-row buffer. Cell i: even i → main (odd screen column),
-    // odd i → aux (even screen column); half index = i>>1.
+    // odd i → aux (even screen column); half index = i>>1. The parity
+    // branch runs before the call: a2_map_char preserves X and Y, so the
+    // per-cell php/plp shuffle is unnecessary.
     ldx zp_temp0
-    ldy zp_render_x
-    tya
+    lda zp_render_x
     lsr                         // A = half index, C = column parity
     tay
-    php                         // a2_map_char clobbers flags; keep parity
-    jsr a2_map_char
-    plp
     bcs !stage_aux+
+    jsr a2_map_char
     sta rv_main_buf,y           // even i → screen col 2*(i>>1)+1 (main)
     jmp !next_col+
 !stage_aux:
+    jsr a2_map_char
     sta rv_aux_buf + 1,y        // odd i → screen col 2*((i>>1)+1) (aux)
 !next_col:
 

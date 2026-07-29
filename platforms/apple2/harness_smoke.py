@@ -200,10 +200,14 @@ local function wait_screen(txt, tries)
     return false
 end
 local function in_town()
+    -- Town buildings give ~10 columns walled at both rows 2 and 3, while a
+    -- dungeon room corner yields at most 2; require a clear majority so a
+    -- room corner at the viewport top cannot false-positive as town.
+    local n = 0
     for c = 0, 79 do
-        if cell(2, c) == 0xA3 and cell(3, c) == 0xA3 then return true end
+        if cell(2, c) == 0xA3 and cell(3, c) == 0xA3 then n = n + 1 end
     end
-    return false
+    return n >= 5
 end
 local function assert_line(name, ok, detail)
     if ok then
@@ -273,11 +277,28 @@ local function wizard_menu_open(tries)
     end
     return false
 end
-wizard_menu_open()
-press("T")
-emu.wait(3)
-press("Q")
-emu.wait(2)
+-- Wizard teleport can strand the player in a sealed pocket or a corridor
+-- trap where the fixed walk pattern never gains east ground; retry the
+-- teleport until the landing allows at least 3 east steps out of 4.
+local function east_mobile()
+    local ok = 0
+    for i = 1, 4 do
+        local px = prog:read_u8(0x2b)
+        press("l")
+        emu.wait(0.7)
+        if prog:read_u8(0x2b) > px then ok = ok + 1 end
+        if screen_has("-more-") then press(" ") end
+    end
+    return ok >= 3
+end
+for t = 1, 10 do
+    wizard_menu_open()
+    press("T")
+    emu.wait(3)
+    press("Q")
+    emu.wait(2)
+    if east_mobile() then break end
+end
 local function view_row(r) return string.sub(rowtext(r), 2, 79) end
 local before = {}
 local vx0 = prog:read_u8(0x60)

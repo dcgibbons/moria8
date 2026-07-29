@@ -538,8 +538,10 @@ audit (hand-counted cycle estimates; full analysis in
 - **P7** — VDC block-fill for `screen_clear` / `screen_clear_row` (C128).
   **BACKLOGGED** (maintainer, 2026-07-28). Revisit the reverted "Opt 5";
   requires root-causing the past character-creation crash first.
-- **P8** — X-split cell-write loops on A2 (drop the per-cell `php/plp`
-  parity shuffle in render_viewport staging). ~15 cy/cell; small.
+- **P8** — ~~X-split cell-write loops on A2 (drop the per-cell `php/plp`
+  parity shuffle in render_viewport staging).~~ DONE 2026-07-29
+  (parity branch moved before `a2_map_char`; ~7 cy/cell, byte-neutral;
+  see APPLE2_PORT.md).
 - **P9** — Burst variant of `render_single_tile` for C128 local-area
   updates (batch consecutive cells under one VDC address setup).
   **BACKLOGGED** (maintainer, 2026-07-28). ~400 -> ~45 cy/cell on the
