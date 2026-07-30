@@ -7,7 +7,7 @@ redraw performance across all platforms.
 It runs on supported original hardware, the
 [FPGA-based C64 Ultimate](https://commodore.net/computer/), and emulators
 such as [VICE](https://vice-emu.sourceforge.io/) (Commodore) and Apple II
-emulators such as [MAME](https://www.mamedev.org) and 
+emulators such as [MAME](https://www.mamedev.org) and
 [Virtual \]\[](https://www.virtualii.com).
 
 ## What's New in v1.5.0
@@ -74,7 +74,7 @@ If you want the game on an actual 5.25" floppy:
 
 - For the Apple II: transfer the `.po` image with your preferred disk image
   tool (for example ADTPro) to a 140 KB 5.25" disk.
-- Alternatively, write a floppy image on another system using a 
+- Alternatively, write a floppy image on another system using a
   [Greaseweazel](https://github.com/keirf/greaseweazle).
 
 #### Interested in Buying a Floppy Distribution?
