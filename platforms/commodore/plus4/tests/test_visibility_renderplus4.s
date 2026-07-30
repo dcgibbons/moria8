@@ -24,6 +24,22 @@ mmu_safe_map_write_ptr0:
     sta (zp_ptr0),y
     rts
 
+mmu_safe_db_read_ptr0:
+    lda (zp_ptr0),y
+    rts
+
+mmu_safe_db_write_ptr0:
+    sta (zp_ptr0),y
+    rts
+
+mmu_safe_db_read_ptr1:
+    lda (zp_ptr1),y
+    rts
+
+mmu_safe_db_write_ptr1:
+    sta (zp_ptr1),y
+    rts
+
 mmu_safe_map_read_ptr1:
     lda (zp_ptr1),y
     rts
@@ -119,6 +135,10 @@ floor_item_find_at:
 glyph_find_at:
     clc
     rts
+
+// Renderer glyph early-out reads the core array; all-zero => scan skipped,
+// matching the always-missing stub above.
+glyph_active: .fill MAX_GLYPHS, 0
 
 player_get_infra_range:
     lda #0

@@ -25,6 +25,12 @@
 .label rv_row_occ   = row_attr_buf + VIEWPORT_W
 .label rv_row_scratch_end = rv_row_occ + VIEWPORT_W
 
+// VDC-internal scratch lines for the overlap-safe right-shift block copy.
+// VDC RAM: chars $0000-$07CF, attrs $0800-$0FCF; $1000+ is unused.
+.const RVSD_SCRATCH_CHAR = $1000
+.const RVSD_SCRATCH_ATTR = $1080
+.assert "VDC scratch lines clear of attribute RAM", RVSD_SCRATCH_CHAR >= VDC_ATTRIB_BASE + SCREEN_COLS * SCREEN_ROWS, true
+
 // viewport_update — Center viewport on player, clamp to map edges
 // Updates zp_view_x, zp_view_y
 // Preserves: nothing
@@ -120,17 +126,36 @@ render_viewport:
     // external ROM paths touched VDC mode registers.
     jsr c128_vdc_reassert_mode
 
-    // Player is guaranteed to be inside the current viewport. Cache the
-    // viewport-relative X once so the hot per-tile path only compares columns.
-    lda zp_player_x
-    sec
-    sbc zp_view_x
-    sta rv_mon_x
+    jsr rv_cache_player_vx
 
     lda #0
     sta zp_render_y         // Screen row counter (0-18)
 
 !row_loop:
+    jsr rv_render_row
+    // Next row
+    inc zp_render_y
+    lda zp_render_y
+    cmp #VIEWPORT_H
+    bne !row_loop-
+    rts
+
+// rv_cache_player_vx — Cache viewport-relative player X. The player is
+// guaranteed inside the viewport, so the hot per-tile path only compares
+// columns. Clobbers: A.
+rv_cache_player_vx:
+    lda zp_player_x
+    sec
+    sbc zp_view_x
+    sta rv_mon_x
+    rts
+
+// rv_render_row — Render viewport row zp_render_y (map row zp_view_y +
+// zp_render_y) into the row buffers and burst it to the VDC.
+// Shared by render_viewport and the scroll-delta exposed-strip redraw so
+// both paths converge on identical output by construction.
+// Preserves: nothing
+rv_render_row:
     // Compute map row = view_y + render_y
     lda zp_view_y
     clc
@@ -392,6 +417,13 @@ rv_no_monster:
     lda zp_tile_tmp
     and #FLAG_OCCUPIED
     bne rv_apply_player_override_vdc
+    // Skip the glyph_find_at scan when no warding glyphs exist (inline:
+    // RuntimeLowData has no room for a per-row cache byte).
+    lda glyph_active
+    ora glyph_active+1
+    ora glyph_active+2
+    ora glyph_active+3
+    beq rv_apply_player_override_vdc
     lda zp_render_x
     clc
     adc zp_view_x
@@ -487,14 +519,6 @@ rv_draw_blank:
     bne !attr_stream-
 
     plp
-
-    // Next row
-    inc zp_render_y
-    lda zp_render_y
-    cmp #VIEWPORT_H
-    beq !done+
-    jmp !row_loop-
-!done:
     rts
 
 // render_viewport_scroll_delta — Fast path for 1-tile viewport scroll
@@ -526,9 +550,7 @@ render_viewport_scroll_delta:
     beq !rvsd_h_scroll_left+
 !rvsd_check_h_right:
     cmp #$ff
-    bne !rvsd_no_fast_h+
-    // Rightward screen shift (player moving left) is overlap-unsafe with the
-    // current VDC block-copy path. Fall back to full redraw for correctness.
+    beq !rvsd_h_scroll_right+
 !rvsd_no_fast_h:
     clc
     rts
@@ -561,27 +583,16 @@ render_viewport_scroll_delta:
     lda zp_view_x
     clc
     adc #VIEWPORT_W - 1
-    sta rvsd_map_x
-    lda #0
-    sta rvsd_row
-!rvsd_hl_strip_loop:
-    lda rvsd_map_x
-    sta zp_temp0
-    lda zp_view_y
-    clc
-    adc rvsd_row
-    sta zp_temp1
-    jsr render_single_tile
-    inc rvsd_row
-    lda rvsd_row
-    cmp #VIEWPORT_H
-    bne !rvsd_hl_strip_loop-
+    jsr rvsd_h_exposed_strip
     sec
     rts
 
 !rvsd_h_scroll_right:
     // New viewport moved left by 1 map tile; screen shifts right by 1.
     // Copy cols [VIEWPORT_X .. VIEWPORT_X+76] -> [VIEWPORT_X+1 .. VIEWPORT_X+77]
+    // A forward VDC block copy smears when dst > src within an overlapping
+    // segment, so each row hops through a non-overlapping VDC scratch line:
+    // row -> scratch, then scratch -> row+1. Both hops are overlap-free.
     lda #0
     sta rvsd_row
 !rvsd_hr_row_loop:
@@ -596,7 +607,7 @@ render_viewport_scroll_delta:
     sta rvsd_dst_col
     lda #VIEWPORT_W - 1
     sta rvsd_copy_len
-    jsr rvsd_copy_segment
+    jsr rvsd_copy_segment_via_scratch
 
     inc rvsd_row
     lda rvsd_row
@@ -605,10 +616,18 @@ render_viewport_scroll_delta:
 
     // Redraw newly exposed leftmost map column.
     lda zp_view_x
+    jsr rvsd_h_exposed_strip
+    sec
+    rts
+
+// rvsd_h_exposed_strip — Redraw the newly exposed map column A after a
+// horizontal shift, tile by tile (a vertical strip is not contiguous in
+// VDC RAM, so no burst). Input: A = map X of the exposed column.
+rvsd_h_exposed_strip:
     sta rvsd_map_x
     lda #0
     sta rvsd_row
-!rvsd_hr_strip_loop:
+!loop:
     lda rvsd_map_x
     sta zp_temp0
     lda zp_view_y
@@ -619,8 +638,7 @@ render_viewport_scroll_delta:
     inc rvsd_row
     lda rvsd_row
     cmp #VIEWPORT_H
-    bne !rvsd_hr_strip_loop-
-    sec
+    bne !loop-
     rts
 
 !rvsd_check_vertical:
@@ -670,25 +688,12 @@ render_viewport_scroll_delta:
     cmp #VIEWPORT_H - 1
     bne !rvsd_vu_row_loop-
 
-    // Redraw newly exposed bottom map row.
-    lda zp_view_y
-    clc
-    adc #VIEWPORT_H - 1
-    sta rvsd_map_y
-    lda #0
-    sta rvsd_col
-!rvsd_vu_strip_loop:
-    lda zp_view_x
-    clc
-    adc rvsd_col
-    sta zp_temp0
-    lda rvsd_map_y
-    sta zp_temp1
-    jsr render_single_tile
-    inc rvsd_col
-    lda rvsd_col
-    cmp #VIEWPORT_W
-    bne !rvsd_vu_strip_loop-
+    // Redraw the newly exposed bottom map row through the shared row
+    // renderer (burst write; identical output to a full redraw).
+    lda #VIEWPORT_H - 1
+    sta zp_render_y
+    jsr rv_cache_player_vx
+    jsr rv_render_row
     sec
     rts
 
@@ -718,23 +723,12 @@ render_viewport_scroll_delta:
     dec rvsd_row
     bpl !rvsd_vd_row_loop-
 !rvsd_vd_rows_done:
-    // Redraw newly exposed top map row.
-    lda zp_view_y
-    sta rvsd_map_y
+    // Redraw the newly exposed top map row through the shared row
+    // renderer (burst write; identical output to a full redraw).
     lda #0
-    sta rvsd_col
-!rvsd_vd_strip_loop:
-    lda zp_view_x
-    clc
-    adc rvsd_col
-    sta zp_temp0
-    lda rvsd_map_y
-    sta zp_temp1
-    jsr render_single_tile
-    inc rvsd_col
-    lda rvsd_col
-    cmp #VIEWPORT_W
-    bne !rvsd_vd_strip_loop-
+    sta zp_render_y
+    jsr rv_cache_player_vx
+    jsr rv_render_row
     sec
     rts
 
@@ -749,6 +743,9 @@ rv_populate_row_items:
     sta rv_row_occ,y
     dey
     bpl !rv_row_occ_zero-
+    // Skip the 42-slot floor-item scan when no floor items exist.
+    lda zp_item_count
+    beq rv_items_done
     ldx #0
 rv_items_scan:
     cpx #MAX_FLOOR_ITEMS
@@ -829,67 +826,108 @@ rvsd_copy_segment:
     rts
 
 rvsd_block_copy_chars:
+    jsr rvsd_compute_char_addrs
+    jmp rvsd_copy_plane
+
+rvsd_compute_char_addrs:
     ldx rvsd_src_row
     lda screen_row_lo,x
     clc
     adc rvsd_src_col
-    sta rvsd_src_char_lo
+    sta rvsd_plane_src_lo
     lda screen_row_hi,x
     adc #0
-    sta rvsd_src_char_hi
+    sta rvsd_plane_src_hi
 
     ldx rvsd_dst_row
     lda screen_row_lo,x
     clc
     adc rvsd_dst_col
-    sta rvsd_dst_char_lo
+    sta rvsd_plane_dst_lo
     lda screen_row_hi,x
     adc #0
-    sta rvsd_dst_char_hi
+    sta rvsd_plane_dst_hi
+    rts
 
-    lda rvsd_dst_char_lo
+rvsd_block_copy_attrs:
+    jsr rvsd_compute_attr_addrs
+    jmp rvsd_copy_plane
+
+rvsd_compute_attr_addrs:
+    ldx rvsd_src_row
+    lda color_row_lo,x
+    clc
+    adc rvsd_src_col
+    sta rvsd_plane_src_lo
+    lda color_row_hi,x
+    adc #0
+    sta rvsd_plane_src_hi
+
+    ldx rvsd_dst_row
+    lda color_row_lo,x
+    clc
+    adc rvsd_dst_col
+    sta rvsd_plane_dst_lo
+    lda color_row_hi,x
+    adc #0
+    sta rvsd_plane_dst_hi
+    rts
+
+rvsd_copy_plane:
+    lda rvsd_plane_dst_lo
     tay
-    lda rvsd_dst_char_hi
+    lda rvsd_plane_dst_hi
     jsr vdc_set_update_addr
 
-    lda rvsd_src_char_lo
+    lda rvsd_plane_src_lo
     tay
-    lda rvsd_src_char_hi
+    lda rvsd_plane_src_hi
     jsr vdc_set_block_src_addr
 
     jsr rvsd_issue_block_copy
     rts
 
-rvsd_block_copy_attrs:
-    ldx rvsd_src_row
-    lda color_row_lo,x
-    clc
-    adc rvsd_src_col
-    sta rvsd_src_attr_lo
-    lda color_row_hi,x
-    adc #0
-    sta rvsd_src_attr_hi
+// rvsd_copy_segment_via_scratch — Overlap-safe segment copy (char+attr)
+// for dst > src shifts, where a single forward VDC block copy would smear.
+// Each plane hops through a non-overlapping VDC scratch line:
+// src -> scratch, then scratch -> dst. Inputs match rvsd_copy_segment.
+rvsd_copy_segment_via_scratch:
+    php
+    sei
+    jsr rvsd_compute_char_addrs
+    lda #<RVSD_SCRATCH_CHAR
+    ldy #>RVSD_SCRATCH_CHAR
+    jsr rvsd_hop_plane_via_scratch
+    jsr rvsd_compute_attr_addrs
+    lda #<RVSD_SCRATCH_ATTR
+    ldy #>RVSD_SCRATCH_ATTR
+    jsr rvsd_hop_plane_via_scratch
+    plp
+    rts
 
-    ldx rvsd_dst_row
-    lda color_row_lo,x
-    clc
-    adc rvsd_dst_col
-    sta rvsd_dst_attr_lo
-    lda color_row_hi,x
-    adc #0
-    sta rvsd_dst_attr_hi
-
-    lda rvsd_dst_attr_lo
-    tay
-    lda rvsd_dst_attr_hi
-    jsr vdc_set_update_addr
-
-    lda rvsd_src_attr_lo
-    tay
-    lda rvsd_src_attr_hi
-    jsr vdc_set_block_src_addr
-
-    jsr rvsd_issue_block_copy
+// rvsd_hop_plane_via_scratch — Plane src/dst addrs already computed;
+// A = scratch lo, Y = scratch hi. Copies src -> scratch -> dst.
+rvsd_hop_plane_via_scratch:
+    sta rvsd_scratch_lo
+    sty rvsd_scratch_hi
+    lda rvsd_plane_dst_lo
+    pha
+    lda rvsd_plane_dst_hi
+    pha
+    lda rvsd_scratch_lo
+    sta rvsd_plane_dst_lo
+    lda rvsd_scratch_hi
+    sta rvsd_plane_dst_hi
+    jsr rvsd_copy_plane             // src -> scratch
+    lda rvsd_scratch_lo
+    sta rvsd_plane_src_lo
+    lda rvsd_scratch_hi
+    sta rvsd_plane_src_hi
+    pla
+    sta rvsd_plane_dst_hi
+    pla
+    sta rvsd_plane_dst_lo
+    jsr rvsd_copy_plane             // scratch -> dst
     rts
 
 rvsd_issue_block_copy:
@@ -910,25 +948,21 @@ rsd_save_x: .byte 0
 
 // Scratch bytes for scroll-delta renderer
 rvsd_row:      .byte 0
-rvsd_col:      .byte 0
 rvsd_src_row:  .byte 0
 rvsd_dst_row:  .byte 0
 rvsd_src_col:  .byte 0
 rvsd_dst_col:  .byte 0
 rvsd_copy_len: .byte 0
 rvsd_map_x:    .byte 0
-rvsd_map_y:    .byte 0
 rv_row_map_y:  .byte 0        // Current map row for item/monster caches
 rv_row_col_idx: .byte 0       // Column scratch for caches
 
-rvsd_src_char_lo: .byte 0
-rvsd_src_char_hi: .byte 0
-rvsd_dst_char_lo: .byte 0
-rvsd_dst_char_hi: .byte 0
-rvsd_src_attr_lo: .byte 0
-rvsd_src_attr_hi: .byte 0
-rvsd_dst_attr_lo: .byte 0
-rvsd_dst_attr_hi: .byte 0
+rvsd_plane_src_lo: .byte 0
+rvsd_plane_src_hi: .byte 0
+rvsd_plane_dst_lo: .byte 0
+rvsd_plane_dst_hi: .byte 0
+rvsd_scratch_lo: .byte 0
+rvsd_scratch_hi: .byte 0
 
 // Pre-translated VDC attribute bytes for standard tile types (indexed by tile type 0-15).
 // Values are VDC RGBI + Set1 flag ($80), matching vic_to_vdc_color[tile_colors[i]].
@@ -956,6 +990,13 @@ tile_vdc_colors:
 // Input: zp_temp0 = map_x, zp_temp1 = map_y
 // Preserves: zp_temp0, zp_temp1
 render_single_tile:
+    // Preserve zp_ptr0 across the lookup calls below (monster_find_at and
+    // friends iterate through monster_get_ptr, clobbering it). Callers in
+    // the monster-AI loop depend on that pointer surviving.
+    lda zp_ptr0
+    pha
+    lda zp_ptr0_hi
+    pha
     // Compute screen row
     lda zp_temp1
     sec
@@ -1201,6 +1242,10 @@ rst_apply_player_override_vdc:
     lda zp_temp4                // Already VDC RGBI (Opt 2: translation moved to each color path)
     jsr vdc_write_data
     plp                         // Restore caller IRQ state.
+    pla
+    sta zp_ptr0_hi
+    pla
+    sta zp_ptr0
     rts
 
 rst_col_tmp: .byte 0

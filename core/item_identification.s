@@ -144,6 +144,9 @@ staff_name_lo: .byte <sfn_0, <sfn_1, <sfn_2, <sfn_3, <sfn_4
 staff_name_hi: .byte >sfn_0, >sfn_1, >sfn_2, >sfn_3, >sfn_4
 staff_colors:  .byte COL_WHITE, COL_BROWN, COL_ORANGE, COL_LGREEN, COL_LGREY
 
+#if PLATFORM_PRODUCT_OVERLAY_RUNTIME
+:ItemInitIdentSegment()
+#endif
 // ============================================================
 // item_init_identification — Reset id_known and shuffle tables
 // Called once at new game start.
@@ -253,6 +256,9 @@ iid_shuffle_ptr:
 iid_save_x: .byte 0                // Scratch for Fisher-Yates
 iid_rand_y: .byte 0
 
+#if PLATFORM_PRODUCT_OVERLAY_RUNTIME
+:ItemInitIdentRestoreSegment()
+#endif
 // ============================================================
 // item_get_name_ptr — Get name string pointer for an item type
 // Input: A = item type ID
@@ -374,7 +380,7 @@ item_get_name_ptr:
     lda it_name_hi,x
     sta zp_ptr0_hi
 #endif
-#if C128_PRODUCT_OVERLAY_RUNTIME
+#if C128_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME
     jmp item_decode_name_ptr_bank1
 #else
     jmp item_decode_name_ptr
@@ -398,7 +404,7 @@ item_get_name_ptr:
     lda it_name_hi,x
     sta zp_ptr0_hi
 #endif
-#if C128_PRODUCT_OVERLAY_RUNTIME
+#if C128_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME
     jmp item_decode_name_ptr_bank1_at_dst
 #else
     jmp item_decode_name_ptr_at_dst
@@ -524,9 +530,10 @@ item_decode_name_ptr_at_dst:
     sta zp_ptr0_hi
     rts
 
-#if C128_PRODUCT_OVERLAY_RUNTIME
-// C128 known item-name streams live in Bank 1 DB RAM. Token strings remain in
-// Bank 0 resident item data, so only source stream reads use the MMU helper.
+#if C128_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME
+// C128 known item-name streams live in Bank 1 DB RAM (mmu_safe_db_read_ptr0);
+// on Apple II they live in aux RAM (mmu_safe_map_read_ptr0 aux thunk). Token
+// strings remain resident, so only source stream reads need the safe read.
 item_decode_name_ptr_bank1:
     lda #0
     sta item_name_dst_idx
@@ -539,7 +546,7 @@ item_decode_name_ptr_bank1_at_dst:
     sta item_name_src_idx
 !idnp_loop:
     ldy item_name_src_idx
-    jsr mmu_safe_db_read_ptr0
+    :ItemNameRead_ptr0_y()
     beq !idnp_done+
     bmi !idnp_token+
     ldx item_name_dst_idx

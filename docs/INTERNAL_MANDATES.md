@@ -83,6 +83,8 @@ Re-check the full contract before patching local logic near the newest crash.
 - Shared `platforms/commodore/common/` changes that affect
   platform-conditional code must be verified on C64, C128, and Plus/4 where the
   code is included.
+- Shared `core/` and `platforms/shared/` changes must be verified on all
+  shipping platforms: C64, C128, Plus/4, and Apple IIe.
 
 ## Verification
 

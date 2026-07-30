@@ -180,7 +180,8 @@ status_draw:
     lda zp_text_color
     pha
 
-    // Clear input row (row 24) — many code paths bypass vp_render_status_loop
+    // Clear the platform input row — many code paths bypass
+    // vp_render_status_loop.
     lda #INPUT_ROW
     jsr hal_screen_clear_row
 

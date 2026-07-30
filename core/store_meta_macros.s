@@ -2,17 +2,17 @@
 // store_meta_macros.s — Packed store-slot metadata helpers.
 
 .macro LoadStoreFlagsX() {
-    lda si_meta,x
+    :AuxReadX(si_meta)
     and #ITEM_META_FLAGS_MASK
 }
 
 .macro LoadStoreFlagsY() {
-    lda si_meta,y
+    :AuxReadY(si_meta)
     and #ITEM_META_FLAGS_MASK
 }
 
 .macro LoadStoreEgoX() {
-    lda si_meta,x
+    :AuxReadX(si_meta)
     lsr
     lsr
     lsr
@@ -20,7 +20,7 @@
 }
 
 .macro LoadStoreEgoY() {
-    lda si_meta,y
+    :AuxReadY(si_meta)
     lsr
     lsr
     lsr
@@ -30,10 +30,10 @@
 .macro StoreStoreFlagsYFromA() {
     and #ITEM_META_FLAGS_MASK
     sta zp_temp0
-    lda si_meta,y
+    :AuxReadY(si_meta)
     and #ITEM_META_EGO_MASK
     ora zp_temp0
-    sta si_meta,y
+    :AuxWriteY(si_meta)
 }
 
 .macro StoreStoreEgoYFromA() {
@@ -43,10 +43,10 @@
     asl
     and #ITEM_META_EGO_MASK
     sta zp_temp0
-    lda si_meta,y
+    :AuxReadY(si_meta)
     and #ITEM_META_FLAGS_MASK
     ora zp_temp0
-    sta si_meta,y
+    :AuxWriteY(si_meta)
 }
 
 .macro StoreStoreMetaY(flags, ego) {
@@ -56,7 +56,7 @@
     asl
     asl
     ora #flags
-    sta si_meta,y
+    :AuxWriteY(si_meta)
 }
 
 .macro StoreStoreMetaYFromAdd() {
@@ -70,7 +70,7 @@
     lda fi_add_flags
     and #ITEM_META_FLAGS_MASK
     ora zp_temp0
-    sta si_meta,y
+    :AuxWriteY(si_meta)
 }
 
 .macro StoreStoreMetaYFromInvX() {
@@ -84,5 +84,5 @@
     lda inv_flags,x
     and #ITEM_META_FLAGS_MASK
     ora zp_temp0
-    sta si_meta,y
+    :AuxWriteY(si_meta)
 }

@@ -25,23 +25,58 @@ store_init_all:
     ldx #STORE_TOTAL_SLOTS - 1
     lda #FI_EMPTY
 !sia_clr:
-    sta si_item_id,x
+    :AuxWriteX(si_item_id)
     dex
     bpl !sia_clr-
 
     ldx #STORE_TOTAL_SLOTS - 1
     lda #0
 !sia_clr2:
-    sta si_qty,x
-    sta si_p1,x
-    sta si_to_hit,x
-    sta si_to_dam,x
-    sta si_to_ac,x
-    sta si_meta,x
+#if APPLE2
+    jsr sia2_clear_slot
     dex
     bpl !sia_clr2-
+#else
+    :AuxWriteX(si_qty)
+    :AuxWriteX(si_p1)
+    :AuxWriteX(si_to_hit)
+    :AuxWriteX(si_to_dam)
+    :AuxWriteX(si_to_ac)
+    :AuxWriteX(si_meta)
+    dex
+    bpl !sia_clr2-
+#endif
 
     jmp store_restock_all
+
+#if APPLE2
+// sia2_clear_slot — Compact aux clear of one store slot's meta tables.
+// The per-table AuxWrite macro costs ~19 bytes inline; six of them per slot
+// overflowed the ITEMS window. The six si_* arrays are contiguous 96-byte
+// blocks, so one pointer walks them all.
+// In: X = slot (0..STORE_TOTAL_SLOTS-1). Clobbers: A, Y, zp_ptr1.
+sia2_clear_slot:
+    txa
+    tay
+    lda #<si_qty
+    sta zp_ptr1
+    lda #>si_qty
+    sta zp_ptr1_hi
+!scs_loop:
+    lda #0
+    jsr mmu_safe_map_write_ptr1     // preserves A
+    lda zp_ptr1
+    clc
+    adc #STORE_TOTAL_SLOTS
+    sta zp_ptr1
+    lda zp_ptr1_hi
+    adc #0
+    sta zp_ptr1_hi
+    cmp #>sia2_end
+    bne !scs_loop-
+    rts
+.label sia2_end = si_meta + STORE_TOTAL_SLOTS
+#endif
 
 // store_restock_all — Restock all stores + reset kicked flags
 // Skips home (STORE_HOME) — player items persist, no restock.
@@ -86,7 +121,7 @@ store_restock_one:
     stx srr_save_x
 
     ldy srr_abs_slot
-    lda si_item_id,y
+    :AuxReadY(si_item_id)
     cmp #FI_EMPTY
     bne !sro_cnt_inc+
 
@@ -97,10 +132,10 @@ store_restock_one:
 
     jsr store_pick_item
     ldy srr_abs_slot
-    sta si_item_id,y
+    :AuxWriteY(si_item_id)
     lda #1
-    sta si_qty,y
-    lda si_item_id,y
+    :AuxWriteY(si_qty)
+    :AuxReadY(si_item_id)
     tax
     lda it_category,x
     jsr sro_set_p1
@@ -132,9 +167,21 @@ sro_set_p1:
     cmp #ICAT_BOOTS + 1
     bcc !sro_enchant+
     cmp #ICAT_BOOK
+#if APPLE2
+    bne !sro_not_book+
+    jmp !sro_book+
+!sro_not_book:
+#else
     beq !sro_book+
+#endif
     cmp #ICAT_RING
+#if APPLE2
+    bne !sro_not_ring+
+    jmp !sro_ring+
+!sro_not_ring:
+#else
     beq !sro_ring+
+#endif
     cmp #ICAT_LIGHT
     bne !sro_not_light+
     jmp !sro_light+
@@ -163,23 +210,23 @@ sro_set_p1:
     sta srr_tmp0
     lda #0
     ldy srr_abs_slot
-    sta si_p1,y
-    sta si_to_hit,y
-    sta si_to_dam,y
-    sta si_to_ac,y
-    lda si_item_id,y
+    :AuxWriteY(si_p1)
+    :AuxWriteY(si_to_hit)
+    :AuxWriteY(si_to_dam)
+    :AuxWriteY(si_to_ac)
+    :AuxReadY(si_item_id)
     tax
     lda it_category,x
     cmp #ICAT_WEAPON
     bne !sro_enchant_armor+
     lda srr_tmp0
-    sta si_to_hit,y
+    :AuxWriteY(si_to_hit)
     lda srr_tmp0
-    sta si_to_dam,y
+    :AuxWriteY(si_to_dam)
     jmp sro_store_identified
 !sro_enchant_armor:
     lda srr_tmp0
-    sta si_to_ac,y
+    :AuxWriteY(si_to_ac)
     jmp sro_store_identified
 
 !sro_book:
@@ -192,11 +239,11 @@ sro_set_p1:
     sta srr_tmp0
     ldy srr_abs_slot
     lda #0
-    sta si_p1,y
-    sta si_to_hit,y
-    sta si_to_dam,y
-    sta si_to_ac,y
-    lda si_item_id,y
+    :AuxWriteY(si_p1)
+    :AuxWriteY(si_to_hit)
+    :AuxWriteY(si_to_dam)
+    :AuxWriteY(si_to_ac)
+    :AuxReadY(si_item_id)
     cmp #23
     beq !sro_ring_protection+
     cmp #24
@@ -204,16 +251,16 @@ sro_set_p1:
     jmp sro_store_identified
 !sro_ring_protection:
     lda srr_tmp0
-    sta si_to_ac,y
+    :AuxWriteY(si_to_ac)
     jmp sro_store_identified
 !sro_ring_strength:
     lda srr_tmp0
-    sta si_p1,y
+    :AuxWriteY(si_p1)
     jmp sro_store_identified
 
 !sro_light:
     ldy srr_abs_slot
-    lda si_item_id,y
+    :AuxReadY(si_item_id)
     cmp #13
     beq !sro_light_torch+
     lda #LANTERN_MAX_CHARGES
@@ -223,11 +270,11 @@ sro_set_p1:
 
 sro_store_p1:
     ldy srr_abs_slot
-    sta si_p1,y
+    :AuxWriteY(si_p1)
     lda #0
-    sta si_to_hit,y
-    sta si_to_dam,y
-    sta si_to_ac,y
+    :AuxWriteY(si_to_hit)
+    :AuxWriteY(si_to_dam)
+    :AuxWriteY(si_to_ac)
 sro_store_identified:
     :StoreStoreMetaY(IF_IDENTIFIED, 0)
     rts

@@ -28,6 +28,22 @@ mmu_safe_map_write_ptr1:
     sta (zp_ptr1),y
     rts
 
+mmu_safe_db_read_ptr0:
+    lda (zp_ptr0),y
+    rts
+
+mmu_safe_db_write_ptr0:
+    sta (zp_ptr0),y
+    rts
+
+mmu_safe_db_read_ptr1:
+    lda (zp_ptr1),y
+    rts
+
+mmu_safe_db_write_ptr1:
+    sta (zp_ptr1),y
+    rts
+
 #import "../../../../core/dungeon_data.s"
 
 walkable_table:
@@ -68,6 +84,7 @@ test_mon_y:         .byte 0
 test_mon_type:      .byte 0
 test_mon_flags:     .byte 0
 test_glyph_active:  .byte 0
+.label glyph_active = test_glyph_active
 test_glyph_x:       .byte 0
 test_glyph_y:       .byte 0
 test_expect_char:   .byte 0

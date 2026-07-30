@@ -134,7 +134,9 @@ save_io_error:  .byte 0         // I/O error flag
 load_result:    .byte LOAD_RESULT_IOERR
 load_save_version: .byte 0
 load_floor_item_count: .byte 0
+#if !SAVE_SLOT_INDEX_EXTERNAL
 save_slot_index: .byte $ff       // $ff until a slot is selected; then 0-3
+#endif
 #if PLUS4_TEST_SCRIPTED_LOAD_RESUME_PRODUCT || PLUS4_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
 plus4_test_file_cksum_lo: .byte 0
 plus4_test_file_cksum_hi: .byte 0
@@ -1293,6 +1295,9 @@ save_write_block:
     sta zp_ptr0
     lda save_block_hi
     sta zp_ptr0_hi
+#if APPLE2
+    jsr a2_save_block_mode
+#endif
     ldy #0
 !swb_loop:
     // Check if count == 0
@@ -1300,7 +1305,7 @@ save_write_block:
     ora save_count_hi
     beq !swb_done+
     // Read byte from source
-    lda (zp_ptr0),y
+    :SaveByteRead_ptr0_y()
     // Accumulate checksum
     clc
     adc save_cksum_lo
@@ -1309,7 +1314,7 @@ save_write_block:
     inc save_cksum_hi
 !swb_no_carry:
     // Write byte
-    lda (zp_ptr0),y
+    :SaveByteRead_ptr0_y()
     jsr SAVE_CHROUT
     // Check status
     jsr SAVE_READST
@@ -1641,6 +1646,9 @@ load_read_block:
 !lrb_c128_done:
     rts
 #else
+#if APPLE2
+    jsr a2_save_block_mode
+#endif
 !lrb_loop:
     lda save_io_error
     bne !lrb_done+
@@ -1652,7 +1660,7 @@ load_read_block:
     jsr load_read_byte
     // Store at destination
     ldy #0
-    sta (zp_ptr0),y
+    :SaveByteWrite_ptr0_y()
     // Advance dest pointer
     inc zp_ptr0
     bne !lrb_no_hi+
@@ -1928,11 +1936,13 @@ save_version_uses_legacy_floor_layout:
     sec
     rts
 
-#if HAL_STORAGE_MAP_BANKED
+#if C128 && HAL_STORAGE_MAP_BANKED
 // ============================================================
 // C128 map I/O helpers — MAP_BASE is in Bank 1 RAM on C128.
 // Save/load all non-map blocks through normal bank0 pointers; map bytes
 // must be read/written through explicit MMU bank switching.
+// Apple II implements the same contract in platforms/apple2/save_stream.s
+// (aux-RAM map through the p0 thunk instead of MMU banks).
 // ============================================================
 save_write_map_c128:
     lda #<MAP_BASE

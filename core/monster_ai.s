@@ -20,7 +20,7 @@ mat_sign_dx:  .byte 0       // Direction sign toward player (-1, 0, +1)
 mat_sign_dy:  .byte 0
 mat_fleeing:  .byte 0       // 1 = fleeing (suppress attack in try_step)
 mat_any_moved: .byte 0       // 1 if any monster moved/spawned this tick
-mat_scene_dirty: .byte 0     // 1 if any monster changed a non-local visible tile
+mat_scene_dirty: .byte 0     // count of immediate non-local visible tile renders this turn (nonzero = cheap redraw path)
 mat_action_dirty: .byte 0    // 1 if current monster changed gameplay state
 mat_player_stealth: .byte 0  // Race/class threshold cached once per AI tick
 
@@ -341,8 +341,7 @@ mat_mark_tile_dirty_if_nonlocal:
     beq !mtd_done+
 
 !mtd_mark:
-    lda #1
-    sta mat_scene_dirty
+    jsr scene_render_mat_tile
 !mtd_done:
     rts
 

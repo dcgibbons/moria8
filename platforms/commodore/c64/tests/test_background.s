@@ -66,6 +66,7 @@ test_exit_trampoline:
 #import "../../../../core/dungeon_los.s"
 #import "../../../../core/player_move.s"
 #import "../../../../core/combat.s"
+#import "../../../../core/scene_mat_tile.s"
 #import "../../../../core/monster_attack.s"
 #import "../../../../core/turn.s"
 

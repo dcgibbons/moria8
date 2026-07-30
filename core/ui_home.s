@@ -131,7 +131,7 @@ home_retrieve:
 
     // Check if slot occupied
     tax
-    lda si_item_id,x
+    :AuxReadX(si_item_id)
     cmp #FI_EMPTY
     bne !hr_slot_occupied+
     rts                         // Empty slot
@@ -154,17 +154,17 @@ home_retrieve:
 !hr_has_room:
     // Copy item from store to inventory
     ldx hm_store_slot
-    lda si_item_id,x
+    :AuxReadX(si_item_id)
     sta fi_add_id
-    lda si_qty,x
+    :AuxReadX(si_qty)
     sta fi_add_qty
-    lda si_p1,x
+    :AuxReadX(si_p1)
     sta fi_add_p1
-    lda si_to_hit,x
+    :AuxReadX(si_to_hit)
     sta fi_add_to_hit
-    lda si_to_dam,x
+    :AuxReadX(si_to_dam)
     sta fi_add_to_dam
-    lda si_to_ac,x
+    :AuxReadX(si_to_ac)
     sta fi_add_to_ac
     :LoadStoreFlagsX()
     sta fi_add_flags
@@ -175,14 +175,14 @@ home_retrieve:
     // Clear store slot
     ldx hm_store_slot
     lda #FI_EMPTY
-    sta si_item_id,x
+    :AuxWriteX(si_item_id)
     lda #0
-    sta si_qty,x
-    sta si_p1,x
-    sta si_to_hit,x
-    sta si_to_dam,x
-    sta si_to_ac,x
-    sta si_meta,x
+    :AuxWriteX(si_qty)
+    :AuxWriteX(si_p1)
+    :AuxWriteX(si_to_hit)
+    :AuxWriteX(si_to_dam)
+    :AuxWriteX(si_to_ac)
+    :AuxWriteX(si_meta)
 
     // Success message
     lda #COL_LGREEN
@@ -320,17 +320,17 @@ home_deposit:
     ldx hm_inv_slot
     lda inv_item_id,x
     ldy hm_store_slot
-    sta si_item_id,y
+    :AuxWriteY(si_item_id)
     lda inv_qty,x
-    sta si_qty,y
+    :AuxWriteY(si_qty)
     lda inv_p1,x
-    sta si_p1,y
+    :AuxWriteY(si_p1)
     lda inv_to_hit,x
-    sta si_to_hit,y
+    :AuxWriteY(si_to_hit)
     lda inv_to_dam,x
-    sta si_to_dam,y
+    :AuxWriteY(si_to_dam)
     lda inv_to_ac,x
-    sta si_to_ac,y
+    :AuxWriteY(si_to_ac)
     :StoreStoreMetaYFromInvX()
 
     // Remove from inventory

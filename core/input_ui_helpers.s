@@ -16,7 +16,7 @@ input_prepare_modal_dismiss_key:
 // C128 keeps the existing fast-path get-key behavior after the release wait.
 input_get_modal_dismiss_key:
     jsr input_prepare_modal_dismiss_key
-#if hal_input_modal_dismiss_uses_fast_key
+#if HAL_INPUT_MODAL_DISMISS_USES_FAST_KEY
     jmp input_get_key_fast
 #else
     jmp hal_input_get_key
@@ -25,17 +25,28 @@ input_get_modal_dismiss_key:
 // input_get_followup_key — Read a key for a secondary selectable prompt after
 // input_prepare_followup_key has already applied the platform's release policy.
 input_get_followup_key:
-#if hal_input_followup_uses_fast_key
+#if HAL_INPUT_FOLLOWUP_USES_FAST_KEY
     jmp input_get_key_fast
 #else
     jmp hal_input_get_key
+#endif
+
+#if APPLE2
+// A selectable overlay is entered with '?'. The bounded Apple key-release
+// fallback can let that held initiating key relatch, but '?' is never a valid
+// choice inside these lists. Keep waiting for a selection or cancel key.
+input_get_selectable_overlay_key:
+    jsr input_get_followup_key
+    cmp #$3f
+    beq input_get_selectable_overlay_key
+    rts
 #endif
 
 // input_prepare_selectable_overlay_key — Prepare for a selectable overlay that
 // follows an initiating key. C128 keeps the follow-up policy; 40-column ports
 // keep the modal-dismiss policy they historically used for spell-list overlays.
 input_prepare_selectable_overlay_key:
-#if hal_input_selectable_overlay_prepare_followup
+#if HAL_INPUT_SELECTABLE_OVERLAY_PREPARE_FOLLOWUP
     jmp input_prepare_followup_key
 #else
     jmp input_prepare_modal_dismiss_key
@@ -56,7 +67,7 @@ input_is_modal_escape_key:
 // input_flush_run_cancel_buffer — Hide the raw keyboard-buffer flush needed
 // when cancelling a run on C64. C128 direct-scan input does not use it.
 input_flush_run_cancel_buffer:
-#if hal_input_flush_run_cancel_buffer
+#if HAL_INPUT_FLUSH_RUN_CANCEL_BUFFER
     lda #0
     sta hal_input_kbdbuf_count
 #endif
@@ -67,7 +78,7 @@ input_flush_run_cancel_buffer:
 // Input/Output: A = PETSCII key
 // Preserves: X, Y
 input_normalize_inventory_letter_key:
-#if hal_input_inventory_letter_normalize_shifted
+#if HAL_INPUT_INVENTORY_LETTER_NORMALIZE_SHIFTED
     cmp #$c1
     bcc !done+
     cmp #$db

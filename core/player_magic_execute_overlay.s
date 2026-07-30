@@ -52,7 +52,11 @@ pmx_pick_recharge_item:
     pla
 !pmx_no_selector_overlay_hint:
 #endif
+#if APPLE2
+    jmp tramp_select_filtered_inv_key_spell
+#else
     jmp piw_select_filtered_inv_key
+#endif
 
 pmx_print_recharged_item:
     lda #0

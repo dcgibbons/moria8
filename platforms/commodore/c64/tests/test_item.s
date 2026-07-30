@@ -85,6 +85,7 @@ test_exit_trampoline:
 #import "../../../../core/dungeon_los.s"
 #import "../../../../core/player_move.s"
 #import "../../../../core/combat.s"
+#import "../../../../core/scene_mat_tile.s"
 eff_fear_timer: .byte 0
 monster_attack_player:
 player_update_hunger_state:

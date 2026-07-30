@@ -1,5 +1,14 @@
 # Troubleshooting
 
+## Apple IIe Storage Errors
+
+The Apple IIe port reports ProDOS MLI errors through its storage status
+mapping (`platforms/apple2/storage_mli.s`): write-protected media, disk
+full, and wrong-media verdicts are shown as friendly status text, and the
+boot loader halts with the MLI error code in the top-left screen cell if
+`MORIA8.PAK` cannot be opened or read. Save-media rejection alternates
+with the insert-save prompt and cancels back to the menu with `Q` or ESC.
+
 ## Commodore I/O Errors
 
 Moria8 storage failures can come from two places:

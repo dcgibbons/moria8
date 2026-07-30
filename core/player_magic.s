@@ -5,7 +5,9 @@
 
 #import "ui_restore.s"
 #import "input_ui_helpers.s"
+#if !PLAYER_ITEM_SELECT_EXTERNAL
 #import "player_item_select.s"
+#endif
 
 .encoding "screencode_mixed"
 
@@ -15,6 +17,9 @@
 // player_cast_spell — Handle 'm' (mage-affinity spell classes)
 // Output: carry SET = turn consumed, CLEAR = cancelled
 // ============================================================
+#if PLATFORM_PRODUCT_OVERLAY_RUNTIME
+:PlayerCastSegment()
+#endif
 player_cast_spell:
     lda player_data + PL_SPELL_TYPE
     cmp #SPELL_MAGE
@@ -99,7 +104,11 @@ player_cast_spell:
     clc
     rts
 !pm_ready:
+#if APPLE2
+    jsr tramp_calc_spell_failure
+#else
     jsr calc_spell_failure
+#endif
     bcc !pm_success+
     jsr pm_handle_fail_roll
 #if C128_TEST_SCRIPTED_SPELL
@@ -215,7 +224,11 @@ player_pray:
     clc
     rts
 !pp_ready:
+#if APPLE2
+    jsr tramp_calc_spell_failure
+#else
     jsr calc_spell_failure
+#endif
     bcc !pp_success+
     jsr pm_handle_fail_roll
 #if C128_TEST_SCRIPTED_PRAYER
@@ -260,19 +273,23 @@ c128_test_spell_pass_sym:
 // ============================================================
 // Helpers
 // ============================================================
+#if PLATFORM_PRODUCT_OVERLAY_RUNTIME
+:PlayerCastRestoreResidentSegment()
+:PmHelpersSegment()
+#endif
 pm_setup_active_tables:
     ldx player_data + PL_CLASS
-    lda class_spell_mana_lo,x
+    :AuxReadX(class_spell_mana_lo)
     sta pm_mana_tbl_lo
-    lda class_spell_mana_hi,x
+    :AuxReadX(class_spell_mana_hi)
     sta pm_mana_tbl_hi
-    lda class_spell_level_lo,x
+    :AuxReadX(class_spell_level_lo)
     sta pm_lvl_tbl_lo
-    lda class_spell_level_hi,x
+    :AuxReadX(class_spell_level_hi)
     sta pm_lvl_tbl_hi
-    lda class_spell_fail_lo,x
+    :AuxReadX(class_spell_fail_lo)
     sta pm_fail_tbl_lo
-    lda class_spell_fail_hi,x
+    :AuxReadX(class_spell_fail_hi)
     sta pm_fail_tbl_hi
 
     lda pm_spell_type
@@ -300,7 +317,7 @@ pm_setup_active_tables:
 
 pm_require_class_level:
     ldx player_data + PL_CLASS
-    lda class_spell_min_level,x
+    :AuxReadX(class_spell_min_level)
     cmp zp_player_lvl
     beq !pm_rcl_ready+
     bcc !pm_rcl_ready+
@@ -335,7 +352,11 @@ pm_select_book:
     pla
 !pm_select_no_ui_return_hint:
 #endif
+#if APPLE2
+    jsr tramp_select_filtered_inv
+#else
     jsr piw_select_filtered_inv
+#endif
 #if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME
     php
     pha
@@ -353,7 +374,7 @@ pm_select_book:
     rts
 !pm_book_type_ok:
     stx pm_book_idx
-    lda book_spell_affinity,x
+    :AuxReadX(book_spell_affinity)
     cmp pm_spell_type
     beq !pm_book_aff_ok+
     ldx #HSTR_IGS_WRONG_TYPE
@@ -383,7 +404,7 @@ pm_build_known_list_from_book:
     sta zp_ptr0_hi
     txa
     tay
-    lda (zp_ptr0),y
+    :HuffRead_ptr0_y()
     cmp #99
     beq !pm_bk_next+
 
@@ -427,7 +448,7 @@ pm_build_learnable_list_from_book:
     sta zp_ptr0_hi
     txa
     tay
-    lda (zp_ptr0),y
+    :HuffRead_ptr0_y()
     cmp #99
     beq !pm_bl_next+
     cmp zp_player_lvl
@@ -493,9 +514,17 @@ pm_prompt_visible_spell_choice:
 #if C64_TEST_SCRIPTED_SPELL_LIST_OVERLAY || C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY
     jmp test_assert_spell_list_overlay
 #endif
+#if APPLE2
+    jsr input_get_selectable_overlay_key
+#else
     jsr input_get_followup_key
+#endif
     pha
+#if APPLE2
+    jsr tramp_ui_view_restore_spell_overlay
+#else
     jsr ui_view_restore_modal_overlay
+#endif
     pla
     cmp #$20
     beq !pm_psc_cancel+
@@ -539,7 +568,7 @@ pm_validate_selected_spell:
     lda pm_mana_tbl_hi
     sta zp_ptr0_hi
     ldy pm_spell_idx
-    lda (zp_ptr0),y
+    :HuffRead_ptr0_y()
     sta pm_cost_tmp
 
     lda pm_lvl_tbl_lo
@@ -547,7 +576,7 @@ pm_validate_selected_spell:
     lda pm_lvl_tbl_hi
     sta zp_ptr0_hi
     ldy pm_spell_idx
-    lda (zp_ptr0),y
+    :HuffRead_ptr0_y()
     cmp zp_player_lvl
     beq !pm_valid_done+
     bcc !pm_valid_done+
@@ -609,6 +638,9 @@ pm_consume_mana:
     sta player_data + PL_MANA
 !pm_cm_done:
     rts
+#if PLATFORM_PRODUCT_OVERLAY_RUNTIME
+:PmHelpersRestoreSegment()
+#endif
 
 #if !HAL_PLATFORM_PLAYER_MAGIC_HELPERS_EXTERNAL
     #import "player_magic_levelup.s"

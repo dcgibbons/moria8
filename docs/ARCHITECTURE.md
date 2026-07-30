@@ -11,14 +11,15 @@
 | `platforms/commodore/c128/` | C128 boot, VDC/MMU code, tests, and harness scripts |
 | `platforms/commodore/plus4/` | Plus/4 entry, TED platform code, tests, and harness scripts |
 | `platforms/commodore/common/` | Shared Commodore KERNAL, disk, overlay, and compatibility modules |
+| `platforms/apple2/` | Apple IIe entry, ProDOS/aux platform code, and MAME harness |
 | `build/` | Generated payloads, disk images, checksums, and test scratch output |
 | `data/` | Source data used by generators |
 | `tools/` | Build-time conversion, generation, lint, and disk helpers |
 | `artwork/` | Source artwork and public art credits |
 
 Primary entry points are `platforms/commodore/c64/main.s`,
-`platforms/commodore/c128/main.s`, and
-`platforms/commodore/plus4/main.s`.
+`platforms/commodore/c128/main.s`,
+`platforms/commodore/plus4/main.s`, and `platforms/apple2/main.s`.
 
 ## Shared Runtime Modules
 
@@ -43,6 +44,7 @@ mutually exclusive overlay had to coexist in one contiguous address space.
 | C64 | 51,481 bytes | 28,002 bytes | 4,068 bytes | 79,483 bytes / 77.6 KiB |
 | C128 | 56,114 bytes | 29,254 bytes | 4,088 bytes | 85,368 bytes / 83.4 KiB |
 | Plus/4 | 50,494 bytes | 27,793 bytes | 4,068 bytes | 78,287 bytes / 76.5 KiB |
+| Apple IIe | 38,400 bytes | 39,445 bytes | 5,632 bytes | 77,845 bytes / 76.0 KiB |
 
 The overlay architecture is therefore not optional polish: every current port
 would exceed a practical flat 64 KB target if all loaded pieces had to be
@@ -129,6 +131,45 @@ Current product payloads:
 | `ovl.items` | `$E000-$EC47` | 3,144 bytes |
 | `ovl.spell` | `$E000-$E9BD` | 2,494 bytes |
 | `ovl.gen` | `$E000-$EDF7` | 3,576 bytes |
+
+## Apple IIe Runtime Model
+
+The Apple IIe port is ProDOS-based, 80-column, and uses the 128K IIe
+main/aux memory split with disk-loaded overlays and an aux-resident cache
+for hot classes. Memory rules live in `docs/APPLE2_MEMORY_POLICY.md`.
+
+- `MORIA8.SYSTEM` (ProDOS SYS) loads at `$2000`, then streams the
+  single-open `MORIA8.PAK` container (resident + auxdata + six hot
+  overlays) with an `n/8` progress line before jumping to the resident
+  entry.
+- Resident code and data: `$0A00-$7BFF` in main RAM (hard boundary; the
+  memory-contract checker enforces it).
+- `A2.PLAY` (play payload, load-once + signature): `$7C00-$9FFF` in main RAM.
+- Overlay window: `$A400-$B9FF` in main RAM; one overlay class resident at a
+  time (start, town, death, modal, help, ui, items, spell, gen, storage,
+  title).
+- `A2.AUXDATA` (aux RAM at `$3B0C-$56FF`): read-only lookup tables, store
+  data, spell helper tables, spell names; all access through the
+  `AuxRead`/`AuxWrite` thunks.
+- Dungeon map: aux RAM at `$0800` (198x66 tile rows); row pointer tables in
+  main RAM, tile access through the `MapRead`/`MapWrite` thunks.
+- Hot overlay classes are cached in aux RAM; cold classes load from disk on
+  demand (`docs/CROSS_PLATFORM_STRATEGY.md` — partial cache, not full
+  preload).
+- Overlay-loaded code must return through the owning overlay's resident
+  trampoline; trampolines that switch overlays restore the caller's overlay
+  (see the spell/item/modal restore trampolines in
+  `platforms/apple2/main.s`).
+
+Current product payloads:
+
+| Payload | Linked range | Size |
+| --- | ---: | ---: |
+| `MORIA8.SYSTEM` | `$2000-$21DD` | 478 bytes |
+| `MORIA8.PAK` | `$0A00-$7BFF` resident | ~62 KB |
+| `A2.PLAY` | `$7C00-$9FFF` | 9,216 bytes |
+| `OVL.*` (11 classes) | `$A400-$B9FF` window | 0.3-5.6 KB each |
+| `A2.AUXDATA` | aux `$3B0C-$55B5` | ~6.7 KB |
 
 ## C128 Runtime Model
 
@@ -281,11 +322,14 @@ later, banked, or entered through a trampoline, verify all five facts together:
 
 Asserting only the trampoline address is insufficient. The callee placement and
 the staged source span must also be covered by assertions or direct inspection.
-
 ## Test Harnesses
 
 Runtime tests assemble target-specific PRGs and execute them under VICE
-headless. C128 also has Python compare and smoke harnesses for faster iteration.
+headless. C128 also has Python compare and smoke harnesses for faster
+iteration. The Apple IIe gate is a MAME (apple2ee) Lua harness
+(`platforms/apple2/harness_smoke.py`, 14 scenarios + `boot_title`) plus a
+static memory-contract checker (`make testapple2`); both need `A2ROMS` for
+runtime runs.
 
 Useful gates:
 
@@ -294,6 +338,7 @@ make test
 make test128-fast
 make test128-fast-smoke
 make test128
+make testapple2
 ```
 
 Tests that cross `$A000` on C64 need a bootstrap trampoline below the BASIC ROM

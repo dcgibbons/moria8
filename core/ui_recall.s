@@ -177,7 +177,7 @@ ui_recall_display:
 
     jsr rcl_white
     ldx recall_found_type
-    lda recall_spells,x
+    :AuxReadX(recall_spells)
     bne !rcl_has_spl+
     lda #<rcl_s_none
     ldy #>rcl_s_none
@@ -199,7 +199,7 @@ ui_recall_display:
     jsr rcl_put_str
     jsr rcl_white
     ldx recall_found_type
-    lda recall_kills,x
+    :AuxReadX(recall_kills)
     jsr screen_put_decimal
 
     lda #16
@@ -210,7 +210,7 @@ ui_recall_display:
     jsr rcl_put_str
     jsr rcl_white
     ldx recall_found_type
-    lda recall_deaths,x
+    :AuxReadX(recall_deaths)
     jsr screen_put_decimal
 
     // --- Press any key (row 16) ---

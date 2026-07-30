@@ -26,6 +26,7 @@
 .const hal_input_modal_escape_primary = $03
 .const hal_input_modal_escape_secondary = $1b
 .const hal_input_flush_run_cancel_buffer = true
+#define HAL_INPUT_FLUSH_RUN_CANCEL_BUFFER
 .const hal_input_help_footer_uses_esc_stop = false
 .const hal_input_inventory_letter_normalize_shifted = false
 .const KERNAL_SHIFT_MODE = $0291

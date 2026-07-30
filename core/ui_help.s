@@ -8,10 +8,10 @@
 //   [type_byte] [string_data...] [$00] repeated for 23 lines.
 // The banked code walks this data sequentially.
 //
-// Layout (SCREEN_COLS columns, 25 rows):
+// Layout (SCREEN_COLS columns, SCREEN_ROWS rows):
 //   Row 0:     Top border with "COMMAND REFERENCE" title
-//   Rows 1-23: Content area with left/right borders
-//   Row 24:    Bottom border with page-aware footer
+//   Rows 1..SCREEN_ROWS-2: Content area with left/right borders
+//   Last row:  Bottom border with page-aware footer
 //
 // Colors: borders GREY, title/footer WHITE, headers CYAN,
 //         keys WHITE, descriptions LGREY
@@ -19,12 +19,12 @@
 // ============================================================
 // Constants
 // ============================================================
-.const HELP_LINE_COUNT = 23
+.const HELP_LINE_COUNT = SCREEN_ROWS - 2
 .const HELP_FRAME_LEFT_COL = 0
 .const HELP_FRAME_RIGHT_COL = SCREEN_COLS - 1
 .const HELP_FRAME_HSEG_COUNT = SCREEN_COLS - 2
 .const HELP_TITLE_COL = (SCREEN_COLS - 17) / 2
-#if hal_input_help_footer_uses_esc_stop
+#if HAL_INPUT_HELP_FOOTER_USES_ESC_STOP
 .const HELP_FOOTER_LEN = 28
 .const HELP_FOOTER_MORE_LEN = 33
 #else
@@ -68,7 +68,7 @@ ui_help_display:
     sta zp_text_color
     jsr ui_help_clear_all
 
-    // 2. Draw left/right borders (rows 1-23)
+    // 2. Draw left/right borders on the content rows.
     lda #COL_GREY
     sta zp_text_color
     lda #1
@@ -84,7 +84,7 @@ ui_help_display:
     jsr hal_screen_put_char_at
     inc zp_temp0
     lda zp_temp0
-    cmp #24
+    cmp #(SCREEN_ROWS - 1)
     bcc !border_loop-
 
     // 3. Draw top border (row 0): +---...---+
@@ -104,14 +104,14 @@ ui_help_display:
     sta zp_ptr0_hi
     jsr hal_screen_put_string
 
-    // 4. Draw bottom border (row 24): +---...---+
-    lda #24
+    // 4. Draw the bottom border: +---...---+
+    lda #(SCREEN_ROWS - 1)
     jsr help_draw_hborder
 
     // Footer text depends on whether this is the final page.
     lda #COL_WHITE
     sta zp_text_color
-    lda #24
+    lda #(SCREEN_ROWS - 1)
     sta zp_cursor_row
     lda help_page_idx
     clc
@@ -141,11 +141,11 @@ ui_help_display:
     lda zp_ptr1_hi
     sta zp_ptr0_hi
     lda #1
-    sta help_line_idx           // row counter (rows 1-23)
+    sta help_line_idx           // content-row counter
 
 !content_loop:
     lda help_line_idx
-    cmp #24
+    cmp #(SCREEN_ROWS - 1)
     bcs !content_done+
 
     // Read type byte and advance ptr past it
@@ -326,7 +326,7 @@ help_draw_hborder:
     jmp hal_screen_put_char             // tail call
 
 // Local footer strings remain in the overlay.
-#if hal_input_help_footer_uses_esc_stop
+#if HAL_INPUT_HELP_FOOTER_USES_ESC_STOP
 uh_press_key_str: .text "SPACE/RETURN/Q/ESC/STOP done" ; .byte 0
 uh_next_key_str: .text "SPACE/RETURN next Q/ESC/STOP quit" ; .byte 0
 #else

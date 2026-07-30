@@ -408,7 +408,7 @@ do_look:
 // Input: dl_name_lo/hi = name string pointer
 dl_print_you_see:
     jsr look_flash_target
-#if hal_platform_describe_look_masks_irq
+#if HAL_PLATFORM_DESCRIBE_LOOK_MASKS_IRQ
     php
     sei
 #endif
@@ -429,7 +429,7 @@ dl_print_you_see:
     jsr hal_screen_put_char
     pla
     sta zp_text_color
-#if hal_platform_describe_look_masks_irq
+#if HAL_PLATFORM_DESCRIBE_LOOK_MASKS_IRQ
     plp
 #endif
     rts
@@ -441,7 +441,7 @@ dl_print_you_see:
 dl_print_item_you_see:
     sta dl_scratch
     jsr look_flash_target
-#if hal_platform_describe_look_masks_irq
+#if HAL_PLATFORM_DESCRIBE_LOOK_MASKS_IRQ
     php
     sei
 #endif
@@ -458,7 +458,7 @@ dl_print_item_you_see:
     ldy #>cmb_period
     jsr combat_append_str
     jsr cmb_term_and_print
-#if hal_platform_describe_look_masks_irq
+#if HAL_PLATFORM_DESCRIBE_LOOK_MASKS_IRQ
     plp
 #endif
     rts

@@ -960,7 +960,7 @@ player_search_work: .byte 0
 .const UDBG_COL = hal_layout_character_background_col
 
 ui_char_draw_background:
-#if hal_platform_character_background_resync
+#if HAL_PLATFORM_CHARACTER_BACKGROUND_RESYNC
     jsr hal_platform_runtime_resync
 #endif
     // --- Sex / Social Class (row 12) ---

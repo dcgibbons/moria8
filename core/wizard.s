@@ -50,6 +50,11 @@ wizard_execute_level_jump:
 wizard_reset_session_state:
     lda #0
     sta wizard_wall_walk_enabled
+    // eff_invuln_timer is not persisted (outside the saved ZP range, no
+    // save block); without this clear a loaded game keeps arbitrary ZP
+    // residue, granting phantom invulnerability. Runs on both session
+    // starts: game_new_start and load_resume_game.
+    sta eff_invuln_timer
     rts
 
 wizard_wall_walk_active:
@@ -62,6 +67,9 @@ wizard_wall_walk_active:
     lda #0
     rts
 
+#if PLATFORM_PRODUCT_OVERLAY_RUNTIME
+:WizardGenExecSegment()
+#endif
 // wizard_generate_item_execute — Create a usable item for Wizard mode.
 // Non-gold items prefer inventory placement so the item is immediately usable.
 // Gold and inventory-overflow cases fall back to floor placement at the
@@ -81,7 +89,11 @@ wizard_generate_item_execute:
     jsr roll_enchantment
     sta fi_add_p1
     lda fi_add_id
+#if APPLE2
+    jsr tramp_roll_ego_type_modal
+#else
     jsr tramp_roll_ego_type
+#endif
     sta fi_add_ego
 
     lda #1
@@ -123,6 +135,9 @@ wizard_generate_item_execute:
 !wiz_item_ok:
     sec
     rts
+#if PLATFORM_PRODUCT_OVERLAY_RUNTIME
+:WizardGenExecRestoreSegment()
+#endif
 
 // wizard_reveal_level — Reveal a floor-plan view of the current level without
 // marking every solid-rock tile as explored. Reveals lit room geometry plus
@@ -638,6 +653,9 @@ wiz_wall_off_str:
     .text "WALL OFF" ; .byte 0
 wiz_done_str:
     .text "OK" ; .byte 0
+#if PLATFORM_PRODUCT_OVERLAY_RUNTIME
+:WizardGenExecRestoreSegment()
+#endif
 wiz_fail_str:
     .text "FAIL" ; .byte 0
 wiz_item_prompt_str:

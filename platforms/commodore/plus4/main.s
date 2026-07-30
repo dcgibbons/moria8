@@ -30,6 +30,37 @@
 
 #import "../common/save_slot_policy.s"
 
+// Huffman data placement: resident on this platform.
+.macro HuffmanDataSegment() {
+    .segment Default
+}
+
+// Cast/pray cores stay resident on this platform.
+.macro PlayerCastSegment() {
+    .segment Default
+}
+.macro PlayerCastRestoreResidentSegment() {
+    .segment Default
+}
+.macro PmHelpersSegment() {
+    .segment Default
+}
+.macro PmHelpersRestoreSegment() {
+    .segment Default
+}
+.macro ItemInitIdentSegment() {
+    .segment Default
+}
+.macro WizardGenExecSegment() {
+    .segment Default
+}
+.macro WizardGenExecRestoreSegment() {
+    .segment Default
+}
+.macro ItemInitIdentRestoreSegment() {
+    .segment Default
+}
+
 .const TED_BG      = $ff15
 .const TED_BORDER  = $ff19
 .const TED_SOUND_CTRL = $ff11
@@ -340,6 +371,9 @@ ol_target:        .byte 0
 #import "../common/overlay.s"
 #undef OVERLAY_LOAD_PROMPT_GAME
 #import "../../../core/monster_ai.s"
+#import "../../../core/scene_dirty.s"
+#import "../../../core/scene_mat_tile.s"
+#import "../../../core/scene_force.s"
 #import "../../../core/recall.s"
 #import "../../../core/monster_magic.s"
 #import "../../../core/item.s"
@@ -388,7 +422,7 @@ run_initialize:
 #import "../../../core/store_data.s"
 #import "../../../core/runtime_ui_strings.s"
 #import "../common/compat/io_kernal_consts.s"
-#import "../common/save.s"
+#import "../../shared/save.s"
 #import "hal/storage_policy.s"
 #import "../common/disk_swap.s"
 #import "../../../core/score_io.s"

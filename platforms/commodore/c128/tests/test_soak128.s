@@ -27,6 +27,22 @@ c128_restore_runtime_state:
 #import "../../../../core/zeropage.s"
 #import "test_helpers128.s"
 #import "../memory128.s"
+
+// config128.s is not imported by tests; the unit test links all data into one
+// RAM bank, so the db thunks are direct accesses here.
+mmu_safe_db_read_ptr0:
+    lda (zp_ptr0),y
+    rts
+mmu_safe_db_write_ptr0:
+    sta (zp_ptr0),y
+    rts
+mmu_safe_db_read_ptr1:
+    lda (zp_ptr1),y
+    rts
+mmu_safe_db_write_ptr1:
+    sta (zp_ptr1),y
+    rts
+
 #import "../../../../core/rng.s"
 #import "../../../../core/math.s"
 #import "../../../../core/tables.s"

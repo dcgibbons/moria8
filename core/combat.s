@@ -169,7 +169,7 @@ player_attack_monster:
 
     // Track kill in recall
     ldx cmb_type
-    inc recall_kills,x
+    :AuxIncX(recall_kills)
 
     ldx cmb_slot
     jsr monster_remove
@@ -1161,12 +1161,12 @@ combat_apply_levelup:
     jsr player_calc_combat
 
     // Recalculate mana and learn new spells
-#if hal_platform_levelup_magic_uses_trampoline
+#if HAL_PLATFORM_LEVELUP_MAGIC_USES_TRAMPOLINE
     jsr tramp_magic_recalc_mana
 #else
     jsr magic_recalc_mana
 #endif
-#if hal_platform_levelup_magic_uses_trampoline
+#if HAL_PLATFORM_LEVELUP_MAGIC_USES_TRAMPOLINE
     jsr tramp_magic_check_new_spells
 #else
     jsr magic_check_new_spells
@@ -1330,11 +1330,19 @@ combat_print_winner_message:
     beq !done+
     lda #0
     sta cmb_winner_pending
+#if APPLE2
+    lda #<cmb_winner_str
+    sta zp_ptr0
+    lda #>cmb_winner_str
+    sta zp_ptr0_hi
+    jsr a2_msg_print_indirect_aux
+#else
     lda #<cmb_winner_str
     sta zp_ptr0
     lda #>cmb_winner_str
     sta zp_ptr0_hi
     jsr msg_print
+#endif
 !done:
     rts
 
@@ -1354,8 +1362,10 @@ cmb_print_buf:
     sta zp_ptr0_hi
     jmp msg_print
 
+#if !CMB_WINNER_STR_EXTERNAL
 cmb_winner_str:
     .text "You have won! Shift+Q to claim victory." ; .byte 0
+#endif
 cmb_winner_pending:
     .byte 0
 

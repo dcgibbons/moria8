@@ -21,7 +21,7 @@ ui_view_restore_modal_overlay:
     sta zp_text_color
 	    jsr ui_help_clear_all
 	    jsr viewport_update
-#if hal_platform_mark_modal_restore_perf && PERF_P1
+#if HAL_PLATFORM_MARK_MODAL_RESTORE_PERF && PERF_P1
     jsr perf_p1_mark_full_reason_modal_restore
 #endif
 	    jsr render_viewport
@@ -43,7 +43,7 @@ ui_view_redraw_gameplay_view:
 #endif
 	    jsr ui_clear_full_screen_safe
 	    jsr viewport_update
-#if hal_platform_mark_modal_restore_perf && PERF_P1
+#if HAL_PLATFORM_MARK_MODAL_RESTORE_PERF && PERF_P1
     jsr perf_p1_mark_full_reason_modal_restore
 #endif
 	    jsr render_viewport

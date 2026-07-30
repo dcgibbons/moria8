@@ -720,6 +720,9 @@ recall_spells: .fill MAX_CREATURES, 0
 #import "../memory128.s"
 #import "../input128.s"
 #import "../../../../core/game_loop.s"
+#import "../../../../core/scene_dirty.s"
+#import "../../../../core/scene_force.s"
+mat_scene_dirty: .byte 0
 
 item_init_inventory:
     ldx #TOTAL_INV_SLOTS - 1
@@ -2233,8 +2236,8 @@ test_entry:
     beq *+5
     jmp test_fail
 
-    // Test 31: new game clears inventory/equipment left by a loaded game before
-    // adding starter gear.
+    // Test 31: new game clears transient inventory/equipment and invulnerability
+    // state left by a loaded game before adding starter gear.
     lda #31
     sta test_case_id
     jsr reset_state
@@ -2248,11 +2251,16 @@ test_entry:
     sta inv_to_ac + EQUIP_BODY
     sta inv_flags + 2
     sta inv_ego + 2
+    lda #$ff
+    sta eff_invuln_timer
     lda #$20
     sta test_key_script
     lda #1
     sta test_key_len
     jsr game_new_start
+    lda eff_invuln_timer
+    beq *+5
+    jmp test_fail
     lda inv_item_id + 2
     cmp #FI_EMPTY
     beq *+5

@@ -8,9 +8,15 @@
 // player_recalc_equipment: recalculate AC/combat after equip changes
 
 #import "ui_restore.s"
+#if !A2_SMALL_PLAY_EXTERNAL
 #import "input_ui_helpers.s"
+#endif
+#if !A2_SMALL_PLAY_EXTERNAL
 #import "player_heal_feedback.s"
+#endif
+#if !PLAYER_ITEM_SELECT_EXTERNAL
 #import "player_item_select.s"
+#endif
 
 // ============================================================
 // Constants
@@ -87,24 +93,40 @@ show_inv_and_select:
 #if C64_TEST_SCRIPTED_BOOK_OVERLAY || C128_TEST_SCRIPTED_BOOK_OVERLAY
     jmp test_assert_book_overlay
 #endif
+#if APPLE2
+    jsr input_get_selectable_overlay_key
+#else
     jsr input_get_followup_key
+#endif
     tay
 #if PLATFORM_PRODUCT_OVERLAY_RUNTIME
     lda piw_return_overlay
     bne !sias_have_return_overlay+
+#if APPLE2
+    // Every no-hint Apple caller is immediately resident or in OVL.ITEMS;
+    // OVL.SPELL callers provide an explicit hint before entering the selector.
+    tsx
+    lda $0102,x
+    cmp #hal_platform_overlay_window_hi_min
+    bcc !sias_return_resident+
+    cmp #hal_platform_overlay_window_hi_max_exclusive
+    bcs !sias_return_resident+
+    lda #OVL_ITEMS
+    sta piw_return_overlay
+#else
     // Restore an item overlay when either the immediate return target or the
     // selector's outer continuation is inside the overlay window.
     tsx
     lda $0102,x
-    cmp #$e0
+    cmp #hal_platform_overlay_window_hi_min
     bcc !sias_check_outer_return+
-    cmp #$f0
+    cmp #hal_platform_overlay_window_hi_max_exclusive
     bcc !sias_return_overlay+
 !sias_check_outer_return:
     lda $0104,x
-    cmp #$e0
+    cmp #hal_platform_overlay_window_hi_min
     bcc !sias_return_resident+
-    cmp #$f0
+    cmp #hal_platform_overlay_window_hi_max_exclusive
     bcs !sias_return_resident+
 !sias_return_overlay:
     lda current_overlay
@@ -114,6 +136,7 @@ show_inv_and_select:
     bne !sias_return_resident+
 !sias_store_return_overlay:
     sta piw_return_overlay
+#endif
 !sias_return_resident:
 !sias_have_return_overlay:
 #endif
@@ -162,9 +185,17 @@ show_inv_and_select:
 show_equip_and_select:
     jsr input_prepare_selectable_overlay_key
     jsr tramp_ui_equip_select_display
+#if APPLE2
+    jsr input_get_selectable_overlay_key
+#else
     jsr input_get_followup_key
+#endif
     pha
+#if APPLE2
+    jsr tramp_ui_view_restore_items_overlay
+#else
     jsr ui_view_restore_modal_overlay
+#endif
     pla
     rts
 
@@ -363,7 +394,7 @@ piw_pick_visible_equip_key:
 // Output: message printed via the message-line path
 piw_print_prompt_with_count:
     sta piw_p1
-#if hal_huffman_print_uses_cached_msg
+#if HAL_HUFFMAN_PRINT_USES_CACHED_MSG
     php
     sei
 #endif
@@ -394,7 +425,7 @@ piw_print_prompt_with_count:
     bcc !piw_prompt_patch_loop-
 
 !piw_prompt_print:
-#if hal_huffman_print_uses_cached_msg
+#if HAL_HUFFMAN_PRINT_USES_CACHED_MSG
     plp
 #endif
     jmp msg_print_current_ptr

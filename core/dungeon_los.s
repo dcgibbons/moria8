@@ -111,7 +111,7 @@ update_visibility:
 !uv_maxy_ok:
     sta vis_max_y
 
-#if hal_memory_map_row_helper_enabled
+#if HAL_MEMORY_MAP_ROW_HELPER_ENABLED
     lda #FLAG_VISITED
     sta mmu_common_row_mask
     lda #0
@@ -126,7 +126,7 @@ update_visibility:
     lda map_row_hi,x
     sta zp_ptr0_hi
 
-#if hal_memory_map_row_helper_enabled
+#if HAL_MEMORY_MAP_ROW_HELPER_ENABLED
     lda vis_max_x
     ldy vis_min_x
     jsr mmu_safe_mark_visited_row_ptr0
@@ -291,7 +291,7 @@ light_room_x:
     adc room_w,x
     sta vis_max_x
 
-#if hal_memory_map_row_helper_enabled
+#if HAL_MEMORY_MAP_ROW_HELPER_ENABLED
     lda #(FLAG_LIT | FLAG_VISITED)
     sta mmu_common_row_mask
     lda #0
@@ -305,7 +305,7 @@ light_room_x:
     lda map_row_hi,x
     sta zp_ptr0_hi
 
-#if hal_memory_map_row_helper_enabled
+#if HAL_MEMORY_MAP_ROW_HELPER_ENABLED
     lda vis_max_x
     ldy vis_min_x
     jsr mmu_safe_mark_visited_row_ptr0
@@ -358,7 +358,7 @@ reveal_room:
     adc room_w,x
     sta vis_max_x               // Right wall col
 
-#if hal_memory_map_row_helper_enabled
+#if HAL_MEMORY_MAP_ROW_HELPER_ENABLED
     lda #FLAG_VISITED
     sta mmu_common_row_mask
     lda #1
@@ -372,7 +372,7 @@ reveal_room:
     lda map_row_hi,x
     sta zp_ptr0_hi
 
-#if hal_memory_map_row_helper_enabled
+#if HAL_MEMORY_MAP_ROW_HELPER_ENABLED
     lda vis_max_x
     ldy vis_min_x
     jsr mmu_safe_mark_visited_row_ptr0

@@ -26,6 +26,34 @@ test_finish:
 #import "../memory.s"
 #import "../screen.s"
 #import "../../../../core/color.s"
+#import "mmu_macros.s"
+
+// Thunks from config.s, which is not imported by tests (main.s-only file).
+mmu_safe_map_read_ptr0:
+    lda (zp_ptr0),y
+    rts
+mmu_safe_map_write_ptr0:
+    sta (zp_ptr0),y
+    rts
+mmu_safe_map_read_ptr1:
+    lda (zp_ptr1),y
+    rts
+mmu_safe_map_write_ptr1:
+    sta (zp_ptr1),y
+    rts
+mmu_safe_db_read_ptr0:
+    lda (zp_ptr0),y
+    rts
+mmu_safe_db_write_ptr0:
+    sta (zp_ptr0),y
+    rts
+mmu_safe_db_read_ptr1:
+    lda (zp_ptr1),y
+    rts
+mmu_safe_db_write_ptr1:
+    sta (zp_ptr1),y
+    rts
+
 #import "../../../../core/rng.s"
 #import "../../../../core/numeric_format.s"
 #import "../../../../core/item_defs.s"

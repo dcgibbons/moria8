@@ -51,7 +51,7 @@ player_create:
     .if (hal_platform_chargen_cutpoint == 4) { rts }
     jsr create_select_gender
     .if (hal_platform_chargen_cutpoint == 5) { rts }
-#if hal_platform_chargen_runtime_resync
+#if HAL_PLATFORM_CHARGEN_RUNTIME_RESYNC
     jsr hal_platform_runtime_resync
 #endif
     .if (hal_platform_chargen_cutpoint == 6) { rts }
@@ -59,7 +59,7 @@ player_create:
 #if C128_TEST_STACK_SLOT_DIAG
     :C128StackSlotGuardCheck($89)
 #endif
-#if hal_platform_chargen_runtime_resync
+#if HAL_PLATFORM_CHARGEN_RUNTIME_RESYNC
     jsr hal_platform_runtime_resync
 #endif
     .if (hal_platform_chargen_cutpoint == 7) { rts }
@@ -67,7 +67,7 @@ player_create:
 #if C128_TEST_STACK_SLOT_DIAG
     :C128StackSlotGuardCheck($8a)
 #endif
-#if hal_platform_chargen_runtime_resync
+#if HAL_PLATFORM_CHARGEN_RUNTIME_RESYNC
 #if C128_TEST_FINAL_RETURN_DIAG
     :C128FinalReturnCapture($92)
 #endif
@@ -650,26 +650,14 @@ create_init_character:
     sta player_data + PL_DLEVEL
 
     // Calculate stats with modifiers
-#if C128_REAL_BOOT_DIAG
-    ldx #$71
-    jsr c128_stack_guard_begin
-#endif
+    // (No stack-guard pair here: tramp_player_create's $33 begin/check
+    // brackets this entire creation call; these are plain jsr's to
+    // always-resident Default code, and the pair bytes pushed the diag
+    // STARTUP overlay past $EFFF.)
     jsr player_calc_stats
-#if C128_REAL_BOOT_DIAG
-    ldx #$72
-    jsr c128_stack_guard_check
-#endif
 
     // Calculate max HP
-#if C128_REAL_BOOT_DIAG
-    ldx #$73
-    jsr c128_stack_guard_begin
-#endif
     jsr player_calc_hp
-#if C128_REAL_BOOT_DIAG
-    ldx #$74
-    jsr c128_stack_guard_check
-#endif
     // Set current HP = max HP
     lda player_data + PL_MHP_LO
     sta player_data + PL_HP_LO
@@ -687,7 +675,7 @@ create_init_character:
     beq !no_mana+           // No spells = no mana
 
     ldx player_data + PL_CLASS
-    lda class_spell_min_level,x
+    :AuxReadX(class_spell_min_level)
     cmp player_data + PL_LEVEL
     beq !can_cast_start+
     bcc !can_cast_start+
@@ -855,7 +843,7 @@ create_reroll_str:
 create_name_prompt:
     .text "Name (16 chars max):" ; .byte $00
 create_gender_title:
-    .text "Choose your gender" ; .byte $00
+    .text "Choose your sex" ; .byte $00
 create_gender_m:
     .text "a) Male" ; .byte $00
 create_gender_f:

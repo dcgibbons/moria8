@@ -86,6 +86,7 @@ test_finish:
 #import "../../../../core/dungeon_los.s"
 #import "../../../../core/player_move.s"
 #import "../../../../core/combat.s"
+#import "../../../../core/scene_mat_tile.s"
 eff_fear_timer: .byte 0
 monster_attack_player:
 player_update_hunger_state:
@@ -2264,8 +2265,10 @@ test_start:
     jsr monster_try_step
     bcc !t27_fail+
     jsr mat_mark_move_dirty
+    // Both old and new tiles are non-local visible, so each gets an
+    // immediate render and the aggregate bumps twice.
     lda mat_scene_dirty
-    cmp #1
+    cmp #2
     bne !t27_fail+
     lda #$01
     sta tc_results + 26

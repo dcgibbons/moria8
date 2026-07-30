@@ -425,8 +425,8 @@ score_death_screen:
     // Display high score table
     jsr hiscore_display
 
-    // Row 24: "PRESS ANY KEY"
-    lda #24
+    // Last row: "PRESS ANY KEY"
+    lda #(SCREEN_ROWS - 1)
     sta zp_cursor_row
     lda #SDS_ANYKEY_COL
     sta zp_cursor_col
@@ -696,7 +696,7 @@ hiscore_display:
 
     // Check if this row would exceed screen
     lda hd_row
-    cmp #24
+    cmp #(SCREEN_ROWS - 1)
     bcs !hd_exit+
     jmp !hd_continue+
 !hd_exit:

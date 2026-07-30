@@ -33,6 +33,37 @@
 #define HAL_STORAGE_PROGRAM_MEDIA_PRESENT_EXTERNAL
 #define STORAGE_STATUS_HELPER
 #import "../common/save_slot_policy.s"
+
+// Huffman data placement: resident on this platform.
+.macro HuffmanDataSegment() {
+    .segment Default
+}
+
+// Cast/pray cores stay in the $F000 runtime bank on this platform.
+.macro PlayerCastSegment() {
+    .segment RuntimeBankedCode
+}
+.macro PlayerCastRestoreResidentSegment() {
+    .segment RuntimeBankedCode
+}
+.macro PmHelpersSegment() {
+    .segment RuntimeBankedCode
+}
+.macro PmHelpersRestoreSegment() {
+    .segment RuntimeBankedCode
+}
+.macro ItemInitIdentSegment() {
+    .segment C128ResidentItems
+}
+.macro WizardGenExecSegment() {
+    .segment C128ResidentPlay
+}
+.macro WizardGenExecRestoreSegment() {
+    .segment C128ResidentPlay
+}
+.macro ItemInitIdentRestoreSegment() {
+    .segment C128ResidentItems
+}
 .const C128_MEDIA_UNKNOWN = 0
 .const C128_MEDIA_PROGRAM = 1
 .const C128_MEDIA_SAVE    = 2
@@ -63,7 +94,7 @@
 .segmentdef RuntimeBankedCode [outPrg=OVL_OUT + "/128.bank.prg", start=$f000, min=$f000, max=$fffa]
 
 #if C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG
-.const C128_REAL_BOOT_DIAG = 1
+#define C128_REAL_BOOT_DIAG
 #else
 .const C128_REAL_BOOT_DIAG = 0
 #endif
@@ -322,7 +353,31 @@ c128_town_dump_buf:
 #import "hal/layout.s"
 #import "hal/lifecycle_policy.s"
 #import "../../../core/color.s"
+#if C128_REAL_BOOT_DIAG
+// Diag variants exclude the sound module: scenarios verify no audio, and
+// the guard instrumentation needs the Default bytes. Stubs keep the SFX
+// call sites linkable; all entry points preserve X, Y like the real ones.
+.const SFX_NONE     = $ff
+.const SFX_BUMP     = $00
+.const SFX_HIT      = $01
+.const SFX_MISS     = $02
+.const SFX_PICKUP   = $03
+.const SFX_DEATH    = $04
+.const SFX_LEVELUP     = $05
+.const SFX_SPELL      = $06
+.const SFX_SPELL_FAIL = $07
+.const SFX_HUNGER_WARN  = $08
+.const SFX_HUNGER_FAINT = $09
+sound_init:
+hal_sound_update:
+    rts
+.label hal_sound_init = sound_init
+.label hal_sound_stop = sound_init
+.label sound_play = sound_init
+.label hal_sound_play = sound_init
+#else
 #import "../../../core/sound.s"
+#endif
 #import "config128.s"
 #import "screen_vdc.s"
 #import "../../../core/title_sysinfo_banked.s"
@@ -536,12 +591,14 @@ w_chrout:
 w_load:
     stx c128_load_arg_x
     sty c128_load_arg_y
-    php
-    pha
 #if C128_REAL_BOOT_DIAG
+    // Begin before the php/pha so the $54 check at the end compares
+    // against the same stack depth (entry SP).
     ldx #$51
     jsr c128_stack_guard_begin
 #endif
+    php
+    pha
     :EnterKernal()
 #if C128_REAL_BOOT_DIAG
     ldx #$52
@@ -863,6 +920,10 @@ tramp_player_create_return_site:
 #if C128_TEST_STACK_SLOT_DIAG
     :C128StackSlotGuardCheck($86)
 #endif
+#endif
+#if C128_REAL_BOOT_DIAG
+    ldx #$33
+    jsr c128_stack_guard_check
 #endif
     jsr c128_restore_runtime_guards
 tramp_game_over_disk_setup_failed:
@@ -1216,509 +1277,14 @@ c128_overlay_transition_pass_sym:
     jmp c128_overlay_transition_pass_sym
 #endif
 #if C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG
+// Single shared fail trap. Guards jump here with the stage id already in
+// c128_stack_guard_stage/substage; the harness breaks at this one address
+// and reports the stage from memory. The per-stage stub table + cmp-chain
+// dispatcher it replaces cost ~780 Default bytes the diag variant needs.
 c128_diag_fail_sym:
-    lda c128_stack_guard_stage
-    cmp #$11
-    bne !chk12+
-    jmp c128_diag_fail_stage_11
-!chk12:
-    cmp #$12
-    bne !chk13+
-    jmp c128_diag_fail_stage_12
-!chk13:
-    cmp #$13
-    bne !chk14+
-    jmp c128_diag_fail_stage_13
-!chk14:
-    cmp #$14
-    bne !chk15+
-    jmp c128_diag_fail_stage_14
-!chk15:
-    cmp #$15
-    bne !chk16+
-    jmp c128_diag_fail_stage_15
-!chk16:
-    cmp #$16
-    bne !chk17+
-    jmp c128_diag_fail_stage_16
-!chk17:
-    cmp #$17
-    bne !chk18+
-    jmp c128_diag_fail_stage_17
-!chk18:
-    cmp #$18
-    bne !chk19+
-    jmp c128_diag_fail_stage_18
-!chk19:
-    cmp #$19
-    bne !chk1a+
-    jmp c128_diag_fail_stage_19
-!chk1a:
-    cmp #$1a
-    bne !chk1b+
-    jmp c128_diag_fail_stage_1a
-!chk1b:
-    cmp #$1b
-    bne !chk1c+
-    jmp c128_diag_fail_stage_1b
-!chk1c:
-    cmp #$1c
-    bne !chk1d+
-    jmp c128_diag_fail_stage_1c
-!chk1d:
-    cmp #$1d
-    bne !chk1e+
-    jmp c128_diag_fail_stage_1d
-!chk1e:
-    cmp #$1e
-    bne !chk1f+
-    jmp c128_diag_fail_stage_1e
-!chk1f:
-    cmp #$1f
-    bne !chk21+
-    jmp c128_diag_fail_stage_1f
-!chk21:
-    cmp #$21
-    bne !chk22+
-    jmp c128_diag_fail_stage_21
-!chk22:
-    cmp #$22
-    bne !chk23+
-    jmp c128_diag_fail_stage_22
-!chk23:
-    cmp #$23
-    bne !chk24+
-    jmp c128_diag_fail_stage_23
-!chk24:
-    cmp #$24
-    bne !chk25+
-    jmp c128_diag_fail_stage_24
-!chk25:
-    cmp #$25
-    bne !chk26+
-    jmp c128_diag_fail_stage_25
-!chk26:
-    cmp #$26
-    bne !chk27+
-    jmp c128_diag_fail_stage_26
-!chk27:
-    cmp #$27
-    bne !chk28+
-    jmp c128_diag_fail_stage_27
-!chk28:
-    cmp #$28
-    bne !chk31+
-    jmp c128_diag_fail_stage_28
-!chk31:
-    cmp #$31
-    bne !chk32+
-    jmp c128_diag_fail_stage_31
-!chk32:
-    cmp #$32
-    bne !chk33+
-    jmp c128_diag_fail_stage_32
-!chk33:
-    cmp #$33
-    bne !chk34+
-    jmp c128_diag_fail_stage_33
-!chk34:
-    cmp #$34
-    bne !chk35+
-    jmp c128_diag_fail_stage_34
-!chk35:
-    cmp #$35
-    bne !chk36+
-    jmp c128_diag_fail_stage_35
-!chk36:
-    cmp #$36
-    bne !chk39+
-    jmp c128_diag_fail_stage_36
-!chk39:
-    cmp #$39
-    bne !chk3a+
-    jmp c128_diag_fail_stage_39
-!chk3a:
-    cmp #$3a
-    bne !chk41+
-    jmp c128_diag_fail_stage_3a
-!chk41:
-    cmp #$41
-    bne !chk42+
-    jmp c128_diag_fail_stage_41
-!chk42:
-    cmp #$42
-    bne !chk43+
-    jmp c128_diag_fail_stage_42
-!chk43:
-    cmp #$43
-    bne !chk44+
-    jmp c128_diag_fail_stage_43
-!chk44:
-    cmp #$44
-    bne !chk45+
-    jmp c128_diag_fail_stage_44
-!chk45:
-    cmp #$45
-    bne !chk46+
-    jmp c128_diag_fail_stage_45
-!chk46:
-    cmp #$46
-    bne !chk47+
-    jmp c128_diag_fail_stage_46
-!chk47:
-    cmp #$47
-    bne !chk48+
-    jmp c128_diag_fail_stage_47
-!chk48:
-    cmp #$48
-    bne !chk49+
-    jmp c128_diag_fail_stage_48
-!chk49:
-    cmp #$49
-    bne !chk4a+
-    jmp c128_diag_fail_stage_49
-!chk4a:
-    cmp #$4a
-    bne !chk4b+
-    jmp c128_diag_fail_stage_4a
-!chk4b:
-    cmp #$4b
-    bne !chk4c+
-    jmp c128_diag_fail_stage_4b
-!chk4c:
-    cmp #$4c
-    bne !chk51+
-    jmp c128_diag_fail_stage_4c
-!chk51:
-    cmp #$51
-    bne !chk52+
-    jmp c128_diag_fail_stage_51
-!chk52:
-    cmp #$52
-    bne !chk53+
-    jmp c128_diag_fail_stage_52
-!chk53:
-    cmp #$53
-    bne !chk54+
-    jmp c128_diag_fail_stage_53
-!chk54:
-    cmp #$54
-    bne !chk61+
-    jmp c128_diag_fail_stage_54
-!chk61:
-    cmp #$61
-    bne !chk62+
-    jmp c128_diag_fail_stage_61
-!chk62:
-    cmp #$62
-    bne !chk63+
-    jmp c128_diag_fail_stage_62
-!chk63:
-    cmp #$63
-    bne !chk64+
-    jmp c128_diag_fail_stage_63
-!chk64:
-    cmp #$64
-    bne !chk71+
-    jmp c128_diag_fail_stage_64
-!chk71:
-    cmp #$71
-    bne !chk72+
-    jmp c128_diag_fail_stage_71
-!chk72:
-    cmp #$72
-    bne !chk73+
-    jmp c128_diag_fail_stage_72
-!chk73:
-    cmp #$73
-    bne !chk74+
-    jmp c128_diag_fail_stage_73
-!chk74:
-    cmp #$74
-    bne !chk75+
-    jmp c128_diag_fail_stage_74
-!chk75:
-    cmp #$75
-    bne !chk76+
-    jmp c128_diag_fail_stage_75
-!chk76:
-    cmp #$76
-    bne !chk77+
-    jmp c128_diag_fail_stage_76
-!chk77:
-    cmp #$77
-    bne !chk78+
-    jmp c128_diag_fail_stage_77
-!chk78:
-    cmp #$78
-    bne !chk81+
-    jmp c128_diag_fail_stage_78
-!chk81:
-    cmp #$81
-    bne !chk82+
-    jmp c128_diag_fail_stage_81
-!chk82:
-    cmp #$82
-    bne !chk83+
-    jmp c128_diag_fail_stage_82
-!chk83:
-    cmp #$83
-    bne !chk84+
-    jmp c128_diag_fail_stage_83
-!chk84:
-    cmp #$84
-    bne !chk91+
-    jmp c128_diag_fail_stage_84
-!chk91:
-    cmp #$91
-    bne !chk92+
-    jmp c128_diag_fail_stage_91
-!chk92:
-    cmp #$92
-    bne !chk93+
-    jmp c128_diag_fail_stage_92
-!chk93:
-    cmp #$93
-    bne !chk94+
-    jmp c128_diag_fail_stage_93
-!chk94:
-    cmp #$94
-    bne !chk95+
-    jmp c128_diag_fail_stage_94
-!chk95:
-    cmp #$95
-    bne !chk96+
-    jmp c128_diag_fail_stage_95
-!chk96:
-    cmp #$96
-    bne !chk97+
-    jmp c128_diag_fail_stage_96
-!chk97:
-    cmp #$97
-    bne !chk98+
-    jmp c128_diag_fail_stage_97
-!chk98:
-    cmp #$98
-    bne !diag_default+
-    jmp c128_diag_fail_stage_98
-!diag_default:
-    jmp c128_diag_fail_default
-c128_diag_fail_default:
     nop
-    jmp c128_diag_fail_default
-c128_diag_fail_stage_11:
-    nop
-    jmp c128_diag_fail_stage_11
-c128_diag_fail_stage_12:
-    nop
-    jmp c128_diag_fail_stage_12
-c128_diag_fail_stage_13:
-    nop
-    jmp c128_diag_fail_stage_13
-c128_diag_fail_stage_14:
-    nop
-    jmp c128_diag_fail_stage_14
-c128_diag_fail_stage_15:
-    nop
-    jmp c128_diag_fail_stage_15
-c128_diag_fail_stage_16:
-    nop
-    jmp c128_diag_fail_stage_16
-c128_diag_fail_stage_17:
-    nop
-    jmp c128_diag_fail_stage_17
-c128_diag_fail_stage_18:
-    nop
-    jmp c128_diag_fail_stage_18
-c128_diag_fail_stage_19:
-    nop
-    jmp c128_diag_fail_stage_19
-c128_diag_fail_stage_1a:
-    nop
-    jmp c128_diag_fail_stage_1a
-c128_diag_fail_stage_1b:
-    nop
-    jmp c128_diag_fail_stage_1b
-c128_diag_fail_stage_1c:
-    nop
-    jmp c128_diag_fail_stage_1c
-c128_diag_fail_stage_1d:
-    nop
-    jmp c128_diag_fail_stage_1d
-c128_diag_fail_stage_1e:
-    nop
-    jmp c128_diag_fail_stage_1e
-c128_diag_fail_stage_1f:
-    nop
-    jmp c128_diag_fail_stage_1f
-c128_diag_fail_stage_21:
-    nop
-    jmp c128_diag_fail_stage_21
-c128_diag_fail_stage_22:
-    nop
-    jmp c128_diag_fail_stage_22
-c128_diag_fail_stage_23:
-    nop
-    jmp c128_diag_fail_stage_23
-c128_diag_fail_stage_24:
-    nop
-    jmp c128_diag_fail_stage_24
-c128_diag_fail_stage_25:
-    nop
-    jmp c128_diag_fail_stage_25
-c128_diag_fail_stage_26:
-    nop
-    jmp c128_diag_fail_stage_26
-c128_diag_fail_stage_27:
-    nop
-    jmp c128_diag_fail_stage_27
-c128_diag_fail_stage_28:
-    nop
-    jmp c128_diag_fail_stage_28
-c128_diag_fail_stage_31:
-    nop
-    jmp c128_diag_fail_stage_31
-c128_diag_fail_stage_32:
-    nop
-    jmp c128_diag_fail_stage_32
-c128_diag_fail_stage_33:
-    nop
-    jmp c128_diag_fail_stage_33
-c128_diag_fail_stage_34:
-    nop
-    jmp c128_diag_fail_stage_34
-c128_diag_fail_stage_35:
-    nop
-    jmp c128_diag_fail_stage_35
-c128_diag_fail_stage_36:
-    nop
-    jmp c128_diag_fail_stage_36
-c128_diag_fail_stage_39:
-    nop
-    jmp c128_diag_fail_stage_39
-c128_diag_fail_stage_3a:
-    nop
-    jmp c128_diag_fail_stage_3a
-c128_diag_fail_stage_41:
-    nop
-    jmp c128_diag_fail_stage_41
-c128_diag_fail_stage_42:
-    nop
-    jmp c128_diag_fail_stage_42
-c128_diag_fail_stage_43:
-    nop
-    jmp c128_diag_fail_stage_43
-c128_diag_fail_stage_44:
-    nop
-    jmp c128_diag_fail_stage_44
-c128_diag_fail_stage_45:
-    nop
-    jmp c128_diag_fail_stage_45
-c128_diag_fail_stage_46:
-    nop
-    jmp c128_diag_fail_stage_46
-c128_diag_fail_stage_47:
-    nop
-    jmp c128_diag_fail_stage_47
-c128_diag_fail_stage_48:
-    nop
-    jmp c128_diag_fail_stage_48
-c128_diag_fail_stage_49:
-    nop
-    jmp c128_diag_fail_stage_49
-c128_diag_fail_stage_4a:
-    nop
-    jmp c128_diag_fail_stage_4a
-c128_diag_fail_stage_4b:
-    nop
-    jmp c128_diag_fail_stage_4b
-c128_diag_fail_stage_4c:
-    nop
-    jmp c128_diag_fail_stage_4c
-c128_diag_fail_stage_51:
-    nop
-    jmp c128_diag_fail_stage_51
-c128_diag_fail_stage_52:
-    nop
-    jmp c128_diag_fail_stage_52
-c128_diag_fail_stage_53:
-    nop
-    jmp c128_diag_fail_stage_53
-c128_diag_fail_stage_54:
-    nop
-    jmp c128_diag_fail_stage_54
-c128_diag_fail_stage_61:
-    nop
-    jmp c128_diag_fail_stage_61
-c128_diag_fail_stage_62:
-    nop
-    jmp c128_diag_fail_stage_62
-c128_diag_fail_stage_63:
-    nop
-    jmp c128_diag_fail_stage_63
-c128_diag_fail_stage_64:
-    nop
-    jmp c128_diag_fail_stage_64
-c128_diag_fail_stage_71:
-    nop
-    jmp c128_diag_fail_stage_71
-c128_diag_fail_stage_72:
-    nop
-    jmp c128_diag_fail_stage_72
-c128_diag_fail_stage_73:
-    nop
-    jmp c128_diag_fail_stage_73
-c128_diag_fail_stage_74:
-    nop
-    jmp c128_diag_fail_stage_74
-c128_diag_fail_stage_75:
-    nop
-    jmp c128_diag_fail_stage_75
-c128_diag_fail_stage_76:
-    nop
-    jmp c128_diag_fail_stage_76
-c128_diag_fail_stage_77:
-    nop
-    jmp c128_diag_fail_stage_77
-c128_diag_fail_stage_78:
-    nop
-    jmp c128_diag_fail_stage_78
-c128_diag_fail_stage_81:
-    nop
-    jmp c128_diag_fail_stage_81
-c128_diag_fail_stage_82:
-    nop
-    jmp c128_diag_fail_stage_82
-c128_diag_fail_stage_83:
-    nop
-    jmp c128_diag_fail_stage_83
-c128_diag_fail_stage_84:
-    nop
-    jmp c128_diag_fail_stage_84
-c128_diag_fail_stage_91:
-    nop
-    jmp c128_diag_fail_stage_91
-c128_diag_fail_stage_92:
-    nop
-    jmp c128_diag_fail_stage_92
-c128_diag_fail_stage_93:
-    nop
-    jmp c128_diag_fail_stage_93
-c128_diag_fail_stage_94:
-    nop
-    jmp c128_diag_fail_stage_94
-c128_diag_fail_stage_95:
-    nop
-    jmp c128_diag_fail_stage_95
-c128_diag_fail_stage_96:
-    nop
-    jmp c128_diag_fail_stage_96
-c128_diag_fail_stage_97:
-    nop
-    jmp c128_diag_fail_stage_97
-c128_diag_fail_stage_98:
-    nop
-    jmp c128_diag_fail_stage_98
+    jmp c128_diag_fail_sym
+.label c128_diag_fail_default = c128_diag_fail_sym
 #endif
 
 tramp_ui_enter:
@@ -3637,7 +3203,23 @@ c128_final_return_stack_7:     .byte 0
 #import "../../../core/runtime_ui_strings.s"
 #import "../common/compat/io_kernal_consts.s"
 #import "hal/storage_policy.s"
+#if C128_REAL_BOOT_DIAG
+// Diag variants exclude score file I/O: the boot/crash scenarios never
+// reach the death flow that calls it (tramp_game_over), and the guard
+// instrumentation needs the Default bytes. Constants/state stay so the
+// DeathOverlay hiscore_insert path still links.
+.const HISCORE_ENTRY_SIZE = 23
+.const HISCORE_MAX_ENTRIES = 10
+.label hiscore_table = CREATURE_BASE
+hiscore_count:  .byte 0
+.label hiscore_io_count_lo = save_count_lo
+.label hiscore_io_count_hi = save_count_hi
+hiscore_load:
+hiscore_save:
+    rts
+#else
 #import "../../../core/score_io.s"
+#endif
 
 #import "../common/disk_swap.s"
 
@@ -3680,6 +3262,9 @@ player_get_infra_range:
 #define C128_FULL_DETECT_EVIL_EFFECT
 .segment C128ResidentItems
 c128_resident_items_start:
+.segment Default
+#import "../../../core/scene_mat_tile.s"
+#import "../../../core/scene_force.s"
 .segment C128ResidentWorld
 #import "../../../core/spell_effects.s"
 #undef C128_FULL_DETECT_EVIL_EFFECT
@@ -3956,7 +3541,7 @@ c128_resident_select_end:
 
 .segment C128ResidentPersist
 c128_resident_persist_start:
-#import "../common/save.s"
+#import "../../shared/save.s"
 save_prepare_slot_prompt:
     clc
     rts
@@ -4005,7 +3590,19 @@ c128_resident_play_body:
 // player_run uses pm_live_occ_x/y defined by the preceding player_move import.
 #import "../../../core/player_run.s"
 #import "../../../core/ui_help_clear.s"
+#if C128_REAL_BOOT_DIAG
+// Diag variants exclude wizard mode: the boot/crash scenarios never enter
+// wizard commands, and the activated guard instrumentation needs the Play
+// payload bytes. Stubs keep the command-dispatch references linkable.
+wizard_reset_session_state:
+cmd_wizard_entry:
+    rts
+wizard_wall_walk_active:
+    lda #0
+    rts
+#else
 #import "../../../core/wizard.s"
+#endif
 #define C128_SCRIPTED_SPELL_SEED_EXTERNAL
 #define DISARM_COMMAND_EXTERNAL
 #import "../../../core/game_loop.s"
@@ -5053,7 +4650,13 @@ title_str:
 .segment UiOverlay
     #import "../../../core/ui_character.s"
     #import "../../../core/ui_recall.s"
+#if C128_REAL_BOOT_DIAG
+// Diag variants exclude the wizard UI with wizard mode (see Play payload).
+ui_wizard_display:
+    rts
+#else
     #import "../../../core/ui_wizard.s"
+#endif
     #import "../../../core/spell_names.s"
     #import "../../../core/player_magic_select_overlay.s"
     #import "../../../core/player_gain_spell.s"

@@ -123,6 +123,14 @@ render_viewport:
     lda #0
     sta zp_render_x         // Screen column counter (0-37)
 
+    // Cache whether any warding glyph exists (per row); the per-cell
+    // glyph_find_at scan is skipped entirely when none are placed.
+    lda glyph_active
+    ora glyph_active+1
+    ora glyph_active+2
+    ora glyph_active+3
+    sta rv_row_has_glyph
+
 !col_loop:
     // Compute map column = view_x + render_x
     lda zp_view_x
@@ -292,6 +300,8 @@ render_viewport:
     jsr item_get_floor_color        // A = identification-aware color
     sta zp_temp1
 !rv_no_item:
+    lda rv_row_has_glyph
+    beq !rv_no_glyph+
     lda zp_view_x
     clc
     adc zp_render_x
@@ -413,6 +423,13 @@ rsd_save_x: .byte 0
 // Input: zp_temp0 = map_x, zp_temp1 = map_y
 // Preserves: zp_temp0, zp_temp1
 render_single_tile:
+    // Preserve zp_ptr0 across the lookup calls below (monster_find_at and
+    // friends iterate through monster_get_ptr, clobbering it). Callers in
+    // the monster-AI loop depend on that pointer surviving.
+    lda zp_ptr0
+    pha
+    lda zp_ptr0_hi
+    pha
     // Compute screen row
     lda zp_temp1
     sec
@@ -638,6 +655,10 @@ rst_apply_player_override:
     tax
     lda plus4_color_attr,x
     sta (zp_color_lo),y
+    pla
+    sta zp_ptr0_hi
+    pla
+    sta zp_ptr0
     rts
 
 rst_col_tmp: .byte 0
@@ -789,6 +810,7 @@ rla_min_y: .byte 0
 rla_max_y: .byte 0
 rla_cur_x: .byte 0
 rla_cur_y: .byte 0
+rv_row_has_glyph: .byte 0   // Nonzero when any warding glyph exists; gates the per-cell glyph scan
 
 // ============================================================
 // Compile-time validation

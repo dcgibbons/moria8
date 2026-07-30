@@ -1067,7 +1067,7 @@ monster_update_visibility_all:
     rts
 #endif
 
-#if !PLUS4_INLINE_RUNTIME_BANKED_TEST
+#if !PLUS4_INLINE_RUNTIME_BANKED_TEST && !APPLE2_PRODUCT_OVERLAY_RUNTIME
 .segment RuntimeBanked
 #endif
 #endif

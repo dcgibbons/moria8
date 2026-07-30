@@ -80,9 +80,11 @@ def main() -> int:
     huffman_text = COMMON_HUFFMAN_FILE.read_text(encoding="utf-8", errors="replace")
     if re.search(r"(?m)^\s*#if[^\n]*\bC128\b", huffman_text):
         errors.append("huffman.s: common decoder still branches directly on C128")
-    if "hal_huffman_lock_irq_during_decode" not in huffman_text:
+    if ("hal_huffman_lock_irq_during_decode" not in huffman_text
+            and "HAL_HUFFMAN_LOCK_IRQ_DURING_DECODE" not in huffman_text):
         errors.append("huffman.s: common decoder does not consume hal_huffman_lock_irq_during_decode")
-    if "hal_huffman_print_uses_cached_msg" not in huffman_text:
+    if ("hal_huffman_print_uses_cached_msg" not in huffman_text
+            and "HAL_HUFFMAN_PRINT_USES_CACHED_MSG" not in huffman_text):
         errors.append("huffman.s: common decoder does not consume hal_huffman_print_uses_cached_msg")
 
     dungeon_los_text = (ROOT / "core/dungeon_los.s").read_text(
@@ -90,7 +92,8 @@ def main() -> int:
     )
     if re.search(r"(?m)^\s*#if[^\n]*\bC128\b", dungeon_los_text):
         errors.append("dungeon_los.s: common visibility code still branches directly on C128")
-    if "hal_memory_map_row_helper_enabled" not in dungeon_los_text:
+    if ("hal_memory_map_row_helper_enabled" not in dungeon_los_text
+            and "HAL_MEMORY_MAP_ROW_HELPER_ENABLED" not in dungeon_los_text):
         errors.append("dungeon_los.s: common visibility code does not consume hal_memory_map_row_helper_enabled")
 
     if errors:

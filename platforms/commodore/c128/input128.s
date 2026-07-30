@@ -58,7 +58,13 @@
 .const hal_input_modal_escape_secondary = $03
 .const hal_input_flush_run_cancel_buffer = false
 .const hal_input_help_footer_uses_esc_stop = true
-.const hal_input_inventory_letter_normalize_shifted = true
+// Deferred (fit-blocked 2026-07-24): the normalization arm costs 10 bytes in
+// the resident world payload (1 byte headroom). See memory_bank_consts.s.
+.const hal_input_inventory_letter_normalize_shifted = false
+#define HAL_INPUT_MODAL_DISMISS_USES_FAST_KEY
+#define HAL_INPUT_FOLLOWUP_USES_FAST_KEY
+#define HAL_INPUT_SELECTABLE_OVERLAY_PREPARE_FOLLOWUP
+#define HAL_INPUT_HELP_FOOTER_USES_ESC_STOP
 
 // C128 runtime MMU mode used by game loop (all RAM, I/O visible)
 .const INPUT_MMU_ALL_RAM  = $3e

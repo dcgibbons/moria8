@@ -112,6 +112,7 @@ execute the changed production routine through its real dispatch/overlay path.
 | C64 spell sleep dispatch | C64 sleep/sanctuary test files | `TEST_FILTER='sleep|sanctuary' make test64`; Sleep II exercises production feedback/resistance and pins the level-40 boundary; some other paths use test-local helpers |
 | C128 spell sleep behavior | C128 sleep/sanctuary test files | `TEST_FILTER='sleep|sanctuary' make test128`; production-overlay coverage incomplete |
 | Plus/4 shared sleep/wake/aggravation producer | `platforms/commodore/plus4/tests/test_visibility_renderplus4.s` | `TEST_FILTER='visibility_renderplus4' make testplus4` |
+| Fresh-game invulnerability reset | `platforms/commodore/c128/tests/test_main_loop128.s` seeds `$FF` and calls production `game_new_start` | `TEST_FILTER='main_loop128' make test128`; C64, Plus/4, and Apple use the identical shared initializer, with runtime Apple combat confirmation still required |
 | One-byte sleep arithmetic maximum boundary | `platforms/commodore/c64/tests/test_monster.s` | `TEST_FILTER='monster' make test64`; exhaustive byte-domain gate remains `NOT IMPLEMENTED` |
 | Detected-only production free-look inspection | none | `NOT IMPLEMENTED` |
 | Complete cross-platform timed Detect Monsters producer lifecycle | none | `NOT IMPLEMENTED` |

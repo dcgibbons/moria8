@@ -219,7 +219,7 @@ def main() -> int:
             f"{COMMON_DISK_SETUP_UI_FILE.relative_to(ROOT)}:{line} uses target conditional"
         )
     for policy in COMMON_DISK_SETUP_UI_POLICIES:
-        if policy not in ui_text:
+        if policy not in ui_text and policy.upper() not in ui_text:
             ui_errors.append(
                 f"{COMMON_DISK_SETUP_UI_FILE.relative_to(ROOT)} does not consume {policy}"
             )

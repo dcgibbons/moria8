@@ -420,7 +420,7 @@ store_find_empty_slot:
     lda sd_save_x
     cmp #STORE_MAX_ITEMS
     bcs !sfes_full+
-    lda si_item_id,x
+    :AuxReadX(si_item_id)
     cmp #FI_EMPTY
     beq !sfes_found+
     inx
@@ -433,7 +433,7 @@ store_find_empty_slot:
     clc
     rts
 
-#if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME
+#if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME
 // ============================================================
 // Store name/owner strings (screen codes, null-terminated)
 // ============================================================

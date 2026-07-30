@@ -1,7 +1,10 @@
 #importonce
 // Plus/4 lifecycle HAL policy constants.
 
-.const hal_platform_reassert_before_message_render = 1
+// docs/COMMODORE_HAL_RESTRUCTURE.md slice 28 settles Plus/4 as no-op here
+// (pre-restructure guard was #if C128); the earlier 1 was never in effect
+// because #if cannot see .const values.
+.const hal_platform_reassert_before_message_render = 0
 .const hal_platform_restore_tier_after_overlay = 1
 .const hal_platform_string_bank_load_invalidates_tier = 1
 .const hal_platform_mark_modal_restore_perf = 0
@@ -39,6 +42,8 @@
 .const hal_platform_overlay_reu_stash_enabled = 1
 .const hal_platform_overlay_prompt_program_media = 1
 .const hal_platform_overlay_cpu_port_dma_bank = 0
+.const hal_platform_overlay_window_hi_min = $e0
+.const hal_platform_overlay_window_hi_max_exclusive = $f0
 #if PLATFORM_PRODUCT_OVERLAY_RUNTIME
 .const hal_platform_item_prompt_overlay_runtime = 1
 #else

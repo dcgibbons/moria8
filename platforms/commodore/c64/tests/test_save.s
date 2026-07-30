@@ -109,6 +109,7 @@ random_floor_in_room:
 #import "../../../../core/dungeon_los.s"
 #import "../../../../core/player_move.s"
 #import "../../../../core/combat.s"
+#import "../../../../core/scene_mat_tile.s"
 #import "../../../../core/monster_attack.s"
 #import "../../../../core/turn.s"
 #import "../../../../core/store_data.s"
@@ -226,7 +227,7 @@ hal_storage_save_read_name:
     .byte $2c, $53, $2c, $52
 .label hal_storage_save_read_name_len = * - hal_storage_save_read_name
     .byte $52
-#import "../../common/save.s"
+#import "../../../shared/save.s"
 #import "../../common/disk_swap.s"
 
 // Strings referenced by imported modules but defined in main.s

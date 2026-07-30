@@ -1,9 +1,9 @@
 # Moria8 Monster Reference
 
-The Commodore releases ship a selected monster roster, not the full Umoria
+The current releases ship a selected monster roster, not the full Umoria
 creature catalog. The current shipped set contains 120 selected creatures from
 Umoria's 279-creature catalog, arranged into overlapping active tiers for the
-Commodore memory model.
+per-platform memory model.
 
 The tier tables below list what can be loaded by the current game. Some
 creatures appear in more than one tier so transitions between depth bands can

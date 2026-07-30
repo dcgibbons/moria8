@@ -109,7 +109,7 @@ msg_print_cached:
     lda #$21
     jsr c128_town_dump_log
 #endif
-#if hal_platform_reassert_before_message_render
+#if HAL_PLATFORM_REASSERT_BEFORE_MESSAGE_RENDER
     // Message rendering is hit constantly during live gameplay; reassert
     // platform-selected runtime state here so leaked OS state can't persist
     // into the screen write path between overlay transitions.
@@ -203,7 +203,7 @@ msg_print_cached:
 // Platforms whose message rendering can be interrupted by pointer-clobbering
 // work cache the pointer first, using the same policy as Huffman printing.
 msg_print_current_ptr:
-#if hal_huffman_print_uses_cached_msg
+#if HAL_HUFFMAN_PRINT_USES_CACHED_MSG
     php
     sei
     lda zp_ptr0

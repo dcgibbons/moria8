@@ -207,6 +207,14 @@ title_render_data:
 !trd_done:
     rts
 
+#if APPLE2 && !HAL_LAYOUT_TITLE_REVERSE_SPACE_ATTR
+// Apple II: $A0 maps to inverse-video space through a2_char_map, so the
+// block glyph is the normal put_char path.
+title_put_block_char:
+    jsr hal_screen_put_char
+    rts
+#endif
+
 #if HAL_LAYOUT_TITLE_REVERSE_SPACE_ATTR
 // C64 title data uses $A0 as reverse-space solid blocks. On the C128 VDC
 // path, write a plain space and set reverse-video in the attribute byte so

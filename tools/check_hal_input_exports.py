@@ -95,7 +95,7 @@ def helper_policy_violations() -> list[str]:
             f"{COMMON_HELPER_FILE.relative_to(ROOT)}:{line} uses target conditional in input helper"
         )
     for const in HELPER_POLICY_CONSTANTS:
-        if const not in text:
+        if const not in text and const.upper() not in text:
             errors.append(
                 f"{COMMON_HELPER_FILE.relative_to(ROOT)} does not consume {const}"
             )
@@ -104,7 +104,8 @@ def helper_policy_violations() -> list[str]:
             f"{COMMON_HELPER_FILE.relative_to(ROOT)} does not consume hal_input_followup_prepare"
         )
     help_text = (COMMON_DIR / "ui_help.s").read_text(encoding="utf-8", errors="replace")
-    if "hal_input_help_footer_uses_esc_stop" not in help_text:
+    if ("hal_input_help_footer_uses_esc_stop" not in help_text
+            and "HAL_INPUT_HELP_FOOTER_USES_ESC_STOP" not in help_text):
         errors.append(
             "core/ui_help.s does not consume hal_input_help_footer_uses_esc_stop"
         )

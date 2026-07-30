@@ -1312,7 +1312,7 @@ tunnel_spawn_gold:
 //       zp_temp4 used internally by rng_range
 // ============================================================
 .const PIT_MAX_LEVEL = 12
-#if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME
+#if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME
 .segment DungeonGenOverlay
 #endif
 
@@ -1361,7 +1361,7 @@ pit_level_bounds:
     .byte 94     // level 12: +2 = 94
 pit_level_bounds_end:
 
-#if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME
+#if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME
 pick_item_type_overlay:
 #else
 pick_item_type:
@@ -1445,7 +1445,7 @@ pick_item_type:
 
 #if C128_PRODUCT_OVERLAY_RUNTIME
 .segment C128ResidentItems
-#elif C64_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME
+#elif C64_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME
 .segment Default
 #endif
 
@@ -1475,7 +1475,7 @@ pick_item_type:
     cli
     pla
     rts
-#elif C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME
+#elif C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME
 pick_item_type:
     lda #OVL_DUNGEON_GEN
     jsr overlay_load
@@ -1768,8 +1768,8 @@ re_negate_a:
 .assert "pit_sorted size", pit_sorted_end - pit_sorted, ITEM_TYPE_COUNT - 2
 .assert "pit_level_bounds size", pit_level_bounds_end - pit_level_bounds, PIT_MAX_LEVEL + 1
 .assert "pick_item_type entry stays resident", pick_item_type < $e000, true
-#if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME
-.assert "pick_item_type overlay impl lives in dungeon overlay", pick_item_type_overlay >= $e000 && pick_item_type_overlay < $f000, true
+#if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME
+.assert "pick_item_type overlay impl lives in dungeon overlay", pick_item_type_overlay >= BANKED_DATA_BASE && pick_item_type_overlay <= BANKED_DATA_END, true
 #endif
 // Hardcoded assertion removed for cross-platform compatibility
 .assert "Inventory total slots", TOTAL_INV_SLOTS, 31

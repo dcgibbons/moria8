@@ -520,3 +520,34 @@ Acceptance target:
 - `make test-disk` runs the same scenario executor for C64, C128, and Plus/4,
   with only adapter data varying by platform, and no platform can silently
   satisfy a scenario through a materially different test flow.
+
+## Rendering Performance (Px)
+
+Tracked candidates from the 2026-07-25 cross-platform render performance
+audit (hand-counted cycle estimates; full analysis in
+`docs/APPLE2_PORT.md` and `docs/C128_PERFORMANCE.md`). Status as of
+2026-07-28:
+
+- **P5** — ~~Tile-level scene-dirty list in core (all platforms).~~ DONE
+  2026-07-28 (immediate tile render at mark time + cheap-path scene
+  dispatch; see APPLE2_PORT.md).
+- **P6** — ~~`a2_map_char` branch-chain -> 256-byte lookup table (A2).~~
+  DONE 2026-07-29 as a 128-byte staged table: master in A2AuxData,
+  block-read into the `a2_ss_buf` tail once per `render_viewport`; ~19
+  cy/cell saved; resident cost +31 B recovered by thunk-install and
+  `screen_clear` dedups (see APPLE2_PORT.md).
+- **P7** — VDC block-fill for `screen_clear` / `screen_clear_row` (C128).
+  **BACKLOGGED** (maintainer, 2026-07-28). Revisit the reverted "Opt 5";
+  requires root-causing the past character-creation crash first.
+- **P8** — ~~X-split cell-write loops on A2 (drop the per-cell `php/plp`
+  parity shuffle in render_viewport staging).~~ DONE 2026-07-29
+  (parity branch moved before `a2_map_char`; ~7 cy/cell, byte-neutral;
+  see APPLE2_PORT.md).
+- **P9** — Burst variant of `render_single_tile` for C128 local-area
+  updates (batch consecutive cells under one VDC address setup).
+  **BACKLOGGED** (maintainer, 2026-07-28). ~400 -> ~45 cy/cell on the
+  per-step hot path.
+
+Completed: P1 (glyph/item scan early-outs), P2 (A2 AUX row block read),
+P3 (C128 leftward block-copy + V-strip burst), P4 (A2 scroll-delta
+renderer + V half-row overflow fix).

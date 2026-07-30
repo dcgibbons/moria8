@@ -80,6 +80,7 @@ test_finish:
 #import "../../../../core/projectile.s"
 #define SPELL_EFFECTS_INCLUDE_IDENTIFY
 #import "../../../../core/spell_effects.s"
+#import "../../../../core/scene_mat_tile.s"
 #undef SPELL_EFFECTS_INCLUDE_IDENTIFY
 #import "../../../../core/player_magic_state.s"
 #import "../../../../core/player_magic_state_ops.s"
@@ -109,6 +110,8 @@ cmb_slot: .byte 0
 combat_msg_buf: .fill 42, 0
 walkable_table: .fill 16, 0
 eff_fear_timer: .byte 0
+render_single_tile:
+    rts
 light_room_x: .byte 0
 vis_room_revealed: .byte 0
 projectile_msg_suffix: .byte 0

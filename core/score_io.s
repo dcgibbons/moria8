@@ -29,6 +29,16 @@
 // ============================================================
 .label hiscore_table = CREATURE_BASE
 hiscore_count:  .byte 0
+#if APPLE2
+// score_io is part of OVL.DEATH on Apple II, while save_count_lo/hi belong
+// to OVL.STORAGE at the same window addresses.  Keep this overlay's mutable
+// byte count local so high-score I/O cannot overwrite the death overlay.
+hiscore_io_count_lo:  .byte 0
+hiscore_io_count_hi:  .byte 0
+#else
+.label hiscore_io_count_lo = save_count_lo
+.label hiscore_io_count_hi = save_count_hi
+#endif
 
 // ============================================================
 // hiscore_load — Load high score table from disk
@@ -95,15 +105,15 @@ hiscore_load:
     ldx #HISCORE_ENTRY_SIZE
     jsr math_multiply           // zp_math_a = total bytes lo
     lda zp_math_a
-    sta save_count_lo
+    sta hiscore_io_count_lo
     lda zp_math_b
-    sta save_count_hi
+    sta hiscore_io_count_hi
 
     // Read block (reuse save.s loader — just read bytes into ptr0)
     ldy #0
 !hl_read:
-    lda save_count_lo
-    ora save_count_hi
+    lda hiscore_io_count_lo
+    ora hiscore_io_count_hi
     beq !hl_close_ok+
     jsr SCORE_CHRIN
     sta (zp_ptr0),y
@@ -111,12 +121,12 @@ hiscore_load:
     bne !hl_no_page+
     inc zp_ptr0_hi
 !hl_no_page:
-    lda save_count_lo
+    lda hiscore_io_count_lo
     sec
     sbc #1
-    sta save_count_lo
+    sta hiscore_io_count_lo
     bcs !hl_read-
-    dec save_count_hi
+    dec hiscore_io_count_hi
     jmp !hl_read-
 
 !hl_close_ok:
@@ -191,9 +201,9 @@ hiscore_save:
     ldx #HISCORE_ENTRY_SIZE
     jsr math_multiply
     lda zp_math_a
-    sta save_count_lo
+    sta hiscore_io_count_lo
     lda zp_math_b
-    sta save_count_hi
+    sta hiscore_io_count_hi
 
     lda #<hiscore_table
     sta zp_ptr0
@@ -202,8 +212,8 @@ hiscore_save:
 
     ldy #0
 !hs_write:
-    lda save_count_lo
-    ora save_count_hi
+    lda hiscore_io_count_lo
+    ora hiscore_io_count_hi
     beq !hs_close_ok+
     lda (zp_ptr0),y
     jsr SCORE_CHROUT
@@ -211,12 +221,12 @@ hiscore_save:
     bne !hs_no_page+
     inc zp_ptr0_hi
 !hs_no_page:
-    lda save_count_lo
+    lda hiscore_io_count_lo
     sec
     sbc #1
-    sta save_count_lo
+    sta hiscore_io_count_lo
     bcs !hs_write-
-    dec save_count_hi
+    dec hiscore_io_count_hi
     jmp !hs_write-
 
 !hs_close_ok:

@@ -90,6 +90,7 @@ recall_clear: rts
 #import "../../../../core/player_move.s"
 #import "../../../../core/player_run.s"
 #import "../../../../core/combat.s"
+#import "../../../../core/scene_mat_tile.s"
 eff_fear_timer: .byte 0
 monster_attack_player:
 player_update_hunger_state:

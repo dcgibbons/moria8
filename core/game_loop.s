@@ -11,6 +11,27 @@
 #import "platform_services_api.s"
 #import "input_ui_helpers.s"
 
+// MsgPrintStr — Print a NUL-terminated message string through zp_ptr0.
+// On Apple II the string may live in AUX (platform-externalized strings);
+// the staging printer copies it to main RAM first.
+#if APPLE2
+.macro MsgPrintStr(str) {
+    lda #<str
+    sta zp_ptr0
+    lda #>str
+    sta zp_ptr0_hi
+    jsr a2_msg_print_indirect_aux
+}
+#else
+.macro MsgPrintStr(str) {
+    lda #<str
+    sta zp_ptr0
+    lda #>str
+    sta zp_ptr0_hi
+    jsr msg_print
+}
+#endif
+
 #if C128_TEST_FORCE_DEATH
 c128_test_force_death_pending: .byte 1
 #endif
@@ -473,7 +494,9 @@ game_new_start:
     cpx #16                 // $50–$5f = 16 bytes
     bne !clear_effects-
 
-    // Clear static RAM effect timers (not in ZP $50-$5f range)
+    // Clear effect timers outside the ZP $50-$5f range. eff_invuln_timer
+    // is already cleared by wizard_reset_session_state above (shared with
+    // load_resume_game, which needs it for the non-persisted timer).
     lda #0
     sta eff_fear_timer
 
@@ -574,10 +597,18 @@ game_new_start:
 !no_book:
 
     // Recalculate combat stats with equipped items
+#if APPLE2
+    jsr tramp_item_recalc
+#else
     jsr player_recalc_equipment
+#endif
 
     // Randomize item identification (shuffle potion/scroll/ring descriptors)
+#if APPLE2
+    jsr tramp_item_init_identification
+#else
     jsr item_init_identification
+#endif
 #if C128_TEST_OVERLAY_STATE_CORRUPT
     lda #OVL_TOWN
     sta current_overlay
@@ -683,11 +714,7 @@ game_new_start:
     jsr msg_clear
 
     // Welcome message
-    lda #<welcome_str
-    sta zp_ptr0
-    lda #>welcome_str
-    sta zp_ptr0_hi
-    jsr msg_print
+    :MsgPrintStr(welcome_str)
 
 #if C64_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT
     lda #2
@@ -1346,11 +1373,15 @@ c128_town_move_diag_after_turn_post_action:
     jmp !post_move+
 
 !scene_dirty_redraw:
-#if HAL_PLATFORM_GAME_LOOP_SCROLL_DELTA_RENDER
-	    jmp !full_draw_fallback+
+#if C128
+    // Cheap path iff the turn's dirt is provably already rendered
+    // (mat_scene_dirty set); else full fallback.
+    lda mat_scene_dirty
+    beq scene_full_fallback
+    jsr render_local_area
+    jmp scene_post_move
 #else
-	    jsr render_viewport
-    jmp !post_move+
+    jmp scene_dirty_check
 #endif
 
 !full_redraw:
@@ -1383,6 +1414,7 @@ c128_town_move_diag_after_turn_post_action:
     jmp !post_move+
 !full_draw_fallback:
 #endif
+scene_full_fallback:
 #if C128_TEST_TOWN_SELF_DUMP
     lda #$1d
     jsr c128_town_dump_log
@@ -1396,6 +1428,7 @@ c128_town_move_diag_after_turn_post_action:
 #endif
 
 !post_move:
+scene_post_move:
     jsr try_store_entry
 #if HAL_PLATFORM_GAME_LOOP_PLAYER_MOVE_DIAG_LABELS
 c128_town_move_diag_before_status_draw:
@@ -1741,18 +1774,10 @@ cmd_stairs_dn:
     sta level_entry_dir         // 0 = descended
     jsr level_change_generate_current
     jsr msg_clear
-    lda #<descend_str
-    sta zp_ptr0
-    lda #>descend_str
-    sta zp_ptr0_hi
-    jsr msg_print
+    :MsgPrintStr(descend_str)
     jmp main_loop
 !no_stairs_dn:
-    lda #<no_stairs_str
-    sta zp_ptr0
-    lda #>no_stairs_str
-    sta zp_ptr0_hi
-    jsr msg_print
+    :MsgPrintStr(no_stairs_str)
     jmp main_loop
 
 cmd_stairs_up:
@@ -1776,25 +1801,13 @@ cmd_stairs_up:
     sta level_entry_dir         // 1 = ascended
     jsr level_change_generate_current
     jsr msg_clear
-    lda #<ascend_str
-    sta zp_ptr0
-    lda #>ascend_str
-    sta zp_ptr0_hi
-    jsr msg_print
+    :MsgPrintStr(ascend_str)
     jmp main_loop
 !at_surface:
-    lda #<at_surface_str
-    sta zp_ptr0
-    lda #>at_surface_str
-    sta zp_ptr0_hi
-    jsr msg_print
+    :MsgPrintStr(at_surface_str)
     jmp main_loop
 !no_stairs_up:
-    lda #<no_stairs_str
-    sta zp_ptr0
-    lda #>no_stairs_str
-    sta zp_ptr0_hi
-    jsr msg_print
+    :MsgPrintStr(no_stairs_str)
     jmp main_loop
 
 // level_change_generate_current — Shared tail after caller has already updated
@@ -1918,19 +1931,12 @@ cmd_search_mode:
     and #PLF_SEARCHING
     beq !toggle_on+
     jsr player_search_mode_off
-    lda #<search_mode_off_str
-    sta zp_ptr0
-    lda #>search_mode_off_str
-    sta zp_ptr0_hi
-    jmp !toggle_print+
+    :MsgPrintStr(search_mode_off_str)
+    jmp !toggle_done+
 !toggle_on:
     jsr player_search_mode_on
-    lda #<search_mode_on_str
-    sta zp_ptr0
-    lda #>search_mode_on_str
-    sta zp_ptr0_hi
-!toggle_print:
-    jsr msg_print
+    :MsgPrintStr(search_mode_on_str)
+!toggle_done:
     jsr status_draw
     jmp main_loop
 
@@ -2805,13 +2811,33 @@ tool_ego_prefix_hi:
 // ============================================================
 // banked_ego_put_suffix — Write ego suffix to screen
 // Input: A = ego type (0 = no ego)
-// Clobbers: A, Y, zp_ptr0
+// Clobbers: A, X, Y, zp_ptr0
 // ============================================================
 banked_ego_put_suffix:
     cmp #0
     beq !beps_done+
     cmp #EGO_TYPE_COUNT
     bcs !beps_done+
+#if APPLE2
+    // The caller may live in HELP or TOWN, so OVL.ITEMS suffix pointers are
+    // not executable/readable here. Each immutable aux slot is 16 bytes.
+    asl
+    asl
+    asl
+    asl
+    sta zp_ptr0
+    lda #>a2_ego_suffix_slots
+    sta zp_ptr0_hi
+    ldx #0
+!beps_loop:
+    txa
+    tay
+    jsr mmu_safe_map_read_ptr0
+    beq !beps_done+
+    jsr hal_screen_put_char
+    inx
+    bne !beps_loop-
+#else
     jsr ego_get_suffix_ptr
     ldy #0
 !beps_loop:
@@ -2822,6 +2848,9 @@ banked_ego_put_suffix:
     ldy beps_save_y
     iny
     jmp !beps_loop-
+#endif
 !beps_done:
     rts
+#if !APPLE2
 beps_save_y: .byte 0
+#endif

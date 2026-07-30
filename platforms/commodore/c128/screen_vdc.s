@@ -38,10 +38,13 @@
 .const STATUS_ROW  = hal_layout_status_row
 .const INPUT_ROW   = hal_layout_input_row
 .const hal_screen_full_clear_uses_bulk = true
+#define HAL_SCREEN_FULL_CLEAR_USES_BULK
 .const hal_screen_box_vertical_char = $21
 .const hal_screen_help_line_uses_api = true
 .const hal_screen_help_line_uses_color_map = false
-.const hal_screen_spell_bolt_flash_sets_color = true
+// Deferred (fit-blocked 2026-07-24): the bolt-flash color arm costs 8 bytes
+// in the resident world payload (1 byte headroom). See memory_bank_consts.s.
+.const hal_screen_spell_bolt_flash_sets_color = false
 #define HAL_SCREEN_HELP_LINE_USES_API
 
 .assert "HAL layout screen cols", SCREEN_COLS, hal_layout_screen_cols

@@ -12,13 +12,39 @@ build/
 *.d64
 *.d71
 *.d81
+*.po
+
+# Virtual ][ state
+*.viisnapshot
 
 # VICE state
 *.vsf
 **/monitor.log
 
+# MAME state from direct launches (project launchers route these under build/)
+/cfg/
+/nvram/
+/inp/
+/sta/
+/snap/
+/diff/
+/comments/
+/share/
+/platforms/apple2/cfg/
+/platforms/apple2/nvram/
+/platforms/apple2/inp/
+/platforms/apple2/sta/
+/platforms/apple2/snap/
+/platforms/apple2/diff/
+/platforms/apple2/comments/
+/platforms/apple2/share/
+
 # KickAssembler (auto-downloaded by make)
 tools/kickass/
+
+# Apple II tooling (downloaded or user-supplied; do not vendor)
+tools/applecommander/
+tools/prodos/
 
 # Python cache
 __pycache__/

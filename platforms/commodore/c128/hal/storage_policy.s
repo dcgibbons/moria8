@@ -12,7 +12,10 @@
 .const hal_storage_marker_sec_write = 2
 .const hal_storage_program_file_num = 7
 .const hal_storage_disk_setup_supports_other_drive = 1
-.const hal_storage_disk_setup_detail_command_status = 1
+// Deferred (fit-blocked 2026-07-24): the command-status detail arm costs
+// 81 bytes in the HELP overlay, which has no headroom. Re-enable with
+// HAL_STORAGE_DISK_SETUP_DETAIL_COMMAND_STATUS once a fit lever frees them.
+.const hal_storage_disk_setup_detail_command_status = 0
 .const hal_storage_disk_setup_detail_dos_drive = 0
 .const hal_storage_disk_setup_detail_status_phase = 0
 .const hal_storage_disk_setup_marker_write_status_required = 0

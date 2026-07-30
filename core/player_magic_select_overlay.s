@@ -86,7 +86,7 @@ spell_list_display:
     lda pm_mana_tbl_hi
     sta zp_ptr0_hi
     ldy pm_spell_idx
-    lda (zp_ptr0),y
+    :HuffRead_ptr0_y()
     sta pm_cost_tmp
     cmp zp_player_mp
     beq !sld_affordable+
@@ -113,20 +113,36 @@ spell_list_display:
     lda pm_name_lo_hi
     sta zp_ptr0_hi
     ldy pm_spell_idx
-    lda (zp_ptr0),y
+    :HuffRead_ptr0_y()
     sta zp_ptr2
     lda pm_name_hi_lo
     sta zp_ptr0
     lda pm_name_hi_hi
     sta zp_ptr0_hi
     ldy pm_spell_idx
-    lda (zp_ptr0),y
+    :HuffRead_ptr0_y()
     sta zp_ptr2_hi
     lda zp_ptr2
     sta zp_ptr0
     lda zp_ptr2_hi
     sta zp_ptr0_hi
+#if APPLE2
+    // Name tables and strings are aux-resident on this platform, so the
+    // mapped string print must go through the aux thunk; hal_screen_put_char
+    // clobbers Y, so the index is parked in pm_name_tmp.
+    ldy #0
+!sld_name_loop:
+    sty pm_name_tmp
+    :MapRead_ptr0_y()
+    beq !sld_name_done+
+    jsr hal_screen_put_char
+    ldy pm_name_tmp
+    iny
+    bne !sld_name_loop-
+!sld_name_done:
+#else
     jsr hal_screen_put_string
+#endif
 
     lda #30
     sta zp_cursor_col
@@ -140,7 +156,7 @@ spell_list_display:
     lda pm_lvl_tbl_hi
     sta zp_ptr0_hi
     ldy pm_spell_idx
-    lda (zp_ptr0),y
+    :HuffRead_ptr0_y()
     jsr screen_put_decimal_rj2
 
     inc pm_row_counter
@@ -149,7 +165,7 @@ spell_list_display:
 !sld_done:
     lda #COL_WHITE
     sta zp_text_color
-    lda #24
+    lda #(SCREEN_ROWS - 1)
     sta zp_cursor_row
     lda #5
     sta zp_cursor_col
