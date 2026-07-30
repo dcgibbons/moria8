@@ -1,9 +1,15 @@
 // services.s — Apple IIe hal_sound_* (speaker), hal_irq_* (SEI world),
 // hal_platform_* lifecycle.
 //
-// Sound: synchronous speaker clicks at $C030, one tone per semantic ID
-// (SFX_* IDs from core/sound.s, which this port does not import). M4 polish
-// replaces the single-tone table with shaped patterns.
+// Sound: synchronous shaped speaker patterns at $C030, one per semantic ID
+// (SFX_* IDs from core/sound.s, which this port does not import). Patterns
+// live in A2AuxData (a2_sfx_patterns): fixed 16-byte slots of
+// (period, toggles) pairs, period 0 = end. Period: smaller = higher pitch;
+// one toggle is one $C030 access (~5*period+12 cy). Shapes mirror the C64
+// SID intent (core/sound.s): bump = low double thud, hit = high-to-low
+// snap, miss = quick high blip, pickup = rising chirp, death = long
+// descent, levelup = arpeggio, spell = wobble, spell fail = low buzz,
+// hunger warn = single low tone, hunger faint = lower and harsher.
 //
 // IRQ: the game runs SEI with no interrupt sources (plan, Zero-Page
 // Strategy). hal_irq_unmask deliberately stays masked — that is the correct
@@ -16,12 +22,6 @@
 // Sound
 // ============================================================
 
-// Per-ID tone table: period (smaller = higher pitch), pulse count.
-a2_sfx_period:
-    .byte $60, $40, $20, $50, $18, $30, $28, $70, $50, $18
-a2_sfx_count:
-    .byte $18, $30, $10, $20, $c0, $60, $50, $40, $30, $e0
-
 // hal_sound_init — Silence speaker state. Preserves X, Y.
 hal_sound_init:
 hal_sound_stop:
@@ -33,27 +33,41 @@ hal_sound_stop:
     clc
     rts
 
-// hal_sound_play — A = SFX_* ID (0-9). Clicks the speaker.
-// Preserves: nothing (A, X, Y clobbered)
+// hal_sound_play — A = SFX_* ID (0-9). Plays the shaped speaker pattern.
+// Clobbers: A, X, Y, zp_ptr1, zp_temp4, a2_zp_scratch.
 hal_sound_play:
     cmp #10
     bcs !done+              // unknown ID / SFX_NONE -> silence
-    tax
-    lda a2_sfx_period,x
+    asl
+    asl
+    asl
+    asl                     // A = id * 16 (slot stride)
+    adc #<a2_sfx_patterns
+    sta zp_ptr1
+    lda #>a2_sfx_patterns
+    adc #0
+    sta zp_ptr1_hi
+    ldy #0                  // pattern byte index
+!segment:
+    jsr mmu_safe_map_read_ptr1  // period (preserves X, Y)
+    beq !done+              // period 0 = end of pattern
     sta zp_temp4
-    lda a2_sfx_count,x
-    tay
-    ldx zp_temp4
+    iny
+    jsr mmu_safe_map_read_ptr1  // toggles
+    iny
+    sty a2_zp_scratch       // park next pattern index
+    tay                     // Y = toggles
 !pulse:
     sta $c030               // toggle speaker
+    ldx zp_temp4
 !wait:
     dex
     bne !wait-
-    ldx zp_temp4
     dey
     bne !pulse-
+    ldy a2_zp_scratch
+    jmp !segment-
 !done:
-    clc
     rts
 
 // hal_sound_update — Clicks are synchronous; no envelope to advance.

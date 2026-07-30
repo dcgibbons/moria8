@@ -2178,3 +2178,28 @@ not emulation, so this retires the M4 real-hardware risk item; a IIgs pass
 was deemed unnecessary (its IIe emulation mode is the same architecture,
 and the port targets fixed IIe/80-col identity). MAME apple2ee remains the
 automated regression environment.
+
+### 2026-07-29 M4 sound polish — shaped speaker patterns
+
+Change record (Routine tier — presentation only; no game state, turn, or
+render lifecycle change; hal_sound_play API and call sites unchanged):
+
+- Problem: one fixed tone per SFX ID (period/count table); M4 calls for
+  shaped patterns matching the C64 SID intent (core/sound.s).
+- Design: patterns live in A2AuxData (a2_sfx_patterns) as fixed 16-byte
+  slots of (period, toggles) pairs, period 0 = end, one slot per ID:
+  bump = low double thud, hit = high-to-low snap, miss = quick high blip,
+  pickup = rising chirp, death = long 4-step descent, levelup = arpeggio,
+  spell = wobble, spell fail = low buzz, hunger warn = single low tone,
+  hunger faint = lower/harsher. The player (services.s) is a small
+  segment loop reading pattern bytes through the existing zp_ptr1 aux
+  thunk; pattern index parks in a2_zp_scratch (transient-lifetime
+  argument: sound never runs mid-print). Patterns in aux because resident
+  slack was 7 B: player +4 B vs the old player+table, resident ends
+  $7BFB (4 B slack). zp_ptr1 clobber matches the fire-and-forget call
+  pattern (lda #SFX; jsr hal_sound_play).
+- Verification: build clean (309 asserts, 0 failures); MAME write-tap on
+  $C030 counted exactly 7 x 18 toggles for 7 wall bumps (BUMP pattern
+  $E0,10 + $C0,8); memory contract 21/21; A2 harness all 14 scenarios
+  green (every new game plays PICKUP, death_flow plays DEATH). Audible
+  tuning is data-only (the 16-byte slots); adjust by ear on hardware.

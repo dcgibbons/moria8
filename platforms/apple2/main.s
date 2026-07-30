@@ -1090,6 +1090,22 @@ no_stairs_str:
 a2_char_map_aux:
     .fill $80, i == 0 ? $c0 : i < $1b ? (i + $60) | $80 : i < $20 ? (i + $40) | $80 : i < $5b ? i | $80 : i < $60 ? (i + $40) | $80 : $a0
 .assert "Char map table covers $00-$7F", * - a2_char_map_aux, $80
+
+// Speaker sound patterns for hal_sound_play (services.s): one 16-byte slot
+// per SFX ID, as (period, toggles) pairs with period 0 = end. Period:
+// smaller = higher pitch. Shapes mirror the C64 SID intent (core/sound.s).
+a2_sfx_patterns:
+    .byte $e0, 10, $c0, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0   // BUMP: low double thud
+    .byte $50, 8, $90, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0    // HIT: high-to-low snap
+    .byte $28, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0       // MISS: quick high blip
+    .byte $a0, 6, $70, 6, $48, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0  // PICKUP: rising chirp
+    .byte $60, 20, $90, 20, $c0, 24, $f0, 28, 0, 0, 0, 0, 0, 0, 0, 0 // DEATH: long descent
+    .byte $80, 8, $60, 8, $40, 16, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0  // LEVELUP: arpeggio up
+    .byte $58, 12, $66, 12, $58, 12, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 // SPELL: wobble
+    .byte $d0, 16, $b0, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0    // SPELL_FAIL: low buzz
+    .byte $c8, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0      // HUNGER_WARN: single low tone
+    .byte $e8, 18, $d8, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0   // HUNGER_FAINT: lower, harsher
+.assert "Sound patterns are 10 x 16-byte slots", * - a2_sfx_patterns, 160
 .segment Default
 
 // ============================================================
