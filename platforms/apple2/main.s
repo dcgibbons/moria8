@@ -992,7 +992,9 @@ a2_play_body:
 #import "../../core/player_run.s"
 #undef PLAYER_RUN_INITIALIZE_EXTERNAL
 #define PMU_TURN_FEEDBACK_EXTERNAL
+#define CMB_WINNER_STR_EXTERNAL
 #import "../../core/combat.s"
+#undef CMB_WINNER_STR_EXTERNAL
 #undef PMU_TURN_FEEDBACK_EXTERNAL
 #import "../../core/wizard.s"
 #define PLAYER_LOOK_EXTERNAL
@@ -1081,6 +1083,8 @@ at_surface_str:
     .text "You are already at the surface." ; .byte 0
 no_stairs_str:
     .text "You see no stairs here." ; .byte 0
+cmb_winner_str:
+    .text "You have won! Shift+Q to claim victory." ; .byte 0
 
 // Screen-code -> Apple display-code table for inputs $00-$7F (P6). Must
 // reproduce a2_map_char (screen_a2.s) exactly for that range: $00->$C0,

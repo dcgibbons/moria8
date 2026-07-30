@@ -7,7 +7,10 @@
 #import "hal/entropy_consts.s"
 #import "hal/lifecycle_policy.s"
 
-.const PLATFORM_COMBAT_MSG_BUF_SIZE = 42
+// 80-column message buffer (C128 class): covers the longest wear/wield
+// line ("You are wielding a Two-Handed Sword (Holy Avenger) (+9,+9)." =
+// 60 chars + NUL) with margin. 42 was a 40-column C64 inheritance.
+.const PLATFORM_COMBAT_MSG_BUF_SIZE = 64
 #define PLATFORM_GET_INFRA_RANGE_INLINE
 #define PLATFORM_COPY_DEATH_SOURCE
 .const PLATFORM_RESIDENT_PLAY = "A2PlaySlot"

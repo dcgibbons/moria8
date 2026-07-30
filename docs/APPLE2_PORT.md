@@ -2203,3 +2203,21 @@ render lifecycle change; hal_sound_play API and call sites unchanged):
   $E0,10 + $C0,8); memory contract 21/21; A2 harness all 14 scenarios
   green (every new game plays PICKUP, death_flow plays DEATH). Audible
   tuning is data-only (the 16-byte slots); adjust by ear on hardware.
+
+### 2026-07-29 fix — combat message buffer was 40-column sized
+
+User report (screenshot): "You are wearing a Hard Leather Boots [2,+"
+truncated on the 80-column display. Root cause:
+PLATFORM_COMBAT_MSG_BUF_SIZE = 42 on A2, a 40-column C64 inheritance
+(C128 uses 54). The wear/wield builder clamps into combat_msg_buf, so any
+message past 41 chars lost its tail. Fix: A2 size 64, covering the
+longest real line ("You are wielding a Two-Handed Sword (Holy Avenger)
+(+9,+9)." = 60 + NUL). combat_msg_buf lives in the play slot (1 B
+slack), so cmb_winner_str (40 B) was externalized to A2AuxData behind
+CMB_WINNER_STR_EXTERNAL (same pattern as WELCOME_STR_EXTERNAL; combat.s
+prints it via a2_msg_print_indirect_aux under #if APPLE2 — imported
+before game_loop.s, so no MsgPrintStr macro). Commodore output is
+source-identical (both guards preserve the old paths). Play slot ends
+$9FEC (19 B slack); auxdata $567D (130 B free). Verification: make build
+clean all platforms (309 A2 asserts, 0 failures); memory contract 21/21;
+A2 harness 14/14 green; MAME probe shows the wear line printing in full.
