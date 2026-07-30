@@ -8,8 +8,9 @@
 #
 # Tooling mirrors the Commodore Makefile: Kick Assembler auto-downloads into
 # ../../tools/kickass; AppleCommander (ac 13.2) auto-downloads into
-# ../../tools/applecommander. The ProDOS kernel file is user-supplied
-# (PRODOS ?= ../../tools/prodos/PRODOS; 2.4.3 from prodos8.com).
+# ../../tools/applecommander. The ProDOS kernel and boot blocks auto-download
+# from the ProDOS8-Releases repo (2.4.3, SHA256-pinned) into
+# ../../tools/prodos (override with PRODOS/BOOTBLOCKS env vars).
 
 KICKASS_DIR ?= ../../tools/kickass
 KICKASS     ?= $(KICKASS_DIR)/KickAss.jar
@@ -42,6 +43,9 @@ AC_URL       = https://github.com/AppleCommander/AppleCommander/releases/downloa
 
 PRODOS      ?= ../../tools/prodos/PRODOS
 BOOTBLOCKS  ?= ../../tools/prodos/bootblocks.bin
+PRODOS_VERSION ?= 2.4.3
+PRODOS_URL    = https://raw.githubusercontent.com/ProDOS-8/ProDOS8-Releases/master/ProDOS_2_4_3.po
+PRODOS_SHA256 = 398d333cb2ab92df9f8bb2cf64b946f2567116910eb8359cf4bdee5d4194f0fa
 
 BUILD       ?= ../../build
 OUTA2        = $(BUILD)/apple2
@@ -75,7 +79,7 @@ A2_DISK_IMAGE = $(BUILD)/moria8-apple2.po
 A2_MAIN_STAMP = $(OUTA2)/.main.stamp
 MAME_OUTPUT_ROOT = $(abspath $(OUTA2)/mame)
 
-.PHONY: all build disk run test-memory-contract test-memory-contract-selftest clean ensure-kickass kickass ac
+.PHONY: all build disk run test-memory-contract test-memory-contract-selftest clean ensure-kickass kickass ac prodos
 
 all: build
 
@@ -135,6 +139,18 @@ ac:
 ensure-ac:
 	@test -f "$(AC_BIN)" || $(MAKE) --no-print-directory ac
 
+prodos: ensure-ac
+	@mkdir -p "$(dir $(PRODOS))"
+	@echo "Downloading ProDOS $(PRODOS_VERSION)..."
+	@curl -sL "$(PRODOS_URL)" -o /tmp/prodos.po
+	@echo "$(PRODOS_SHA256)  /tmp/prodos.po" | shasum -a 256 -c -
+	@"$(AC_BIN)" -g /tmp/prodos.po PRODOS > "$(PRODOS)"
+	@dd if=/tmp/prodos.po of="$(BOOTBLOCKS)" bs=512 count=2 2>/dev/null
+	@rm /tmp/prodos.po
+
+ensure-prodos:
+	@test -f "$(PRODOS)" -a -f "$(BOOTBLOCKS)" || $(MAKE) --no-print-directory prodos
+
 # ── Assembly ──────────────────────────────────────────────
 $(VERSION_INC): $(VERSION_FILE) $(VERSION_INC_TOOL) | $(BUILD)
 	python3 "$(VERSION_INC_TOOL)" "$(VERSION_FILE)" "$(VERSION_INC)"
@@ -173,10 +189,8 @@ $(A2_BOOT_PRG): $(A2_BOOT_SRC) cache_layout.s | ensure-kickass $(OUTA2)
 
 # ── Disk image ────────────────────────────────────────────
 # PRG -> BIN conversion strips the Kick header and asserts each load
-# address. PRODOS kernel file is user-supplied (not vendored; see
-# docs/APPLE2_PORT.md).
-$(A2_DISK_IMAGE): ensure-ac $(A2_MAIN_PRG) $(A2_PLAY_PRG) $(A2_AUX_PRG) $(A2_OVL_PRGS) $(A2_TIER_PRGS) $(A2_TITLE_PRG) $(A2_BOOT_PRG)
-	@test -f "$(PRODOS)" || { echo "PRODOS kernel file required at $(PRODOS) (2.4.3 from prodos8.com)"; exit 1; }
+# address. PRODOS kernel and boot blocks auto-download (see prodos target).
+$(A2_DISK_IMAGE): ensure-ac ensure-prodos $(A2_MAIN_PRG) $(A2_PLAY_PRG) $(A2_AUX_PRG) $(A2_OVL_PRGS) $(A2_TIER_PRGS) $(A2_TITLE_PRG) $(A2_BOOT_PRG)
 	@mkdir -p "$(OUTA2)/bin"
 	$(PRG2BIN) "$(A2_BOOT_PRG)" "$(OUTA2)/bin/MORIA8.SYSTEM" --expect-addr 0x2000
 	$(PRG2BIN) "$(A2_MAIN_PRG)" "$(OUTA2)/bin/MORIA8.RES" --expect-addr 0x0A00
@@ -207,6 +221,5 @@ $(A2_DISK_IMAGE): ensure-ac $(A2_MAIN_PRG) $(A2_PLAY_PRG) $(A2_AUX_PRG) $(A2_OVL
 	  "$(AC_BIN)" -p "$@" MONSTER.DB.$$n bin 0xA400 < "$(OUTA2)/bin/MONSTER.DB.$$n" || exit 1; \
 	done
 	"$(AC_BIN)" -p "$@" TITLE bin 0x4000 < "$(OUTA2)/bin/TITLE"
-	@test -f "$(BOOTBLOCKS)" || { echo "ProDOS boot blocks required at $(BOOTBLOCKS) (blocks 0-1 of any bootable ProDOS disk)"; exit 1; }
 	dd if="$(BOOTBLOCKS)" of="$@" bs=512 count=2 conv=notrunc
 	"$(AC_BIN)" -l "$@"

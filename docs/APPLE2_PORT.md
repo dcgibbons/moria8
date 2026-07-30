@@ -27,8 +27,10 @@ Open hardware/tooling verification items (formerly the pre-merge list):
   first, so `diskapple2` recreates the image per build
 - ProDOS redistribution — RESOLVED (policy): 2.4.3 is freely
   distributed at prodos8.com (John Brooks) but carries no explicit
-  license text; ship without `PRODOS` and require a user-supplied file
-  (like the `KICKASS` override), source documented
+  license text; ship without `PRODOS` in the repo and auto-download the
+  official disk image at build time (like Kick Assembler), extracting
+  the kernel and boot blocks into `tools/prodos/` (gitignored).
+  `PRODOS`/`BOOTBLOCKS` env overrides remain for user-supplied files
 - `tools/prg_to_bin.py` — DONE
 
 ## Locked Decisions
@@ -759,7 +761,7 @@ State being changed:
 Apple II display soft-switch state after ProDOS MLI calls only. Dungeon topology, placement, monster records, combat, turn state, map bytes, and save representation are unchanged.
 
 Search scope and terms:
-a2_mli_begin, a2_mli_end, a2_platform_runtime_resync, 80STORE, PAGE2, $C000/$C001, $C054/$C055, screen_a2, dungeon_render_a2, tier_check_transition, MONSTER.DB.*, OVL.GEN, and the bundled tools/prodos/PRODOS bytes.
+a2_mli_begin, a2_mli_end, a2_platform_runtime_resync, 80STORE, PAGE2, $C000/$C001, $C054/$C055, screen_a2, dungeon_render_a2, tier_check_transition, MONSTER.DB.*, OVL.GEN, and the auto-downloaded tools/prodos/PRODOS bytes.
 
 Relevant readers/writers found and known exclusions:
 All storage_mli.s and save_stream.s runtime MLI paths converge on a2_mli_end. screen_a2.s and dungeon_render_a2.s toggle PAGE2 to choose the main or aux 80-column half and therefore require 80STORE on. The bundled ProDOS image contains STA $C001 and STA $C055 near file offset $0238, followed by STA $C054 and STA $C000 near $0258. RAMRD, RAMWRT, 80COL, ALTCHARSET, and INTC3ROM were inspected but are excluded from this repair because no evidence shows that this driver leaves them altered; restoring them would also exceed the resident boundary.

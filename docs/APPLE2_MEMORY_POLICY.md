@@ -338,8 +338,9 @@ aux overwrite is then safe.
   `/RAM` first-search on 1.x; 2.x behavior to confirm in the MAME
   spike). `PRODOS` file sourcing: 2.4.3 is freely distributed at
   prodos8.com (John Brooks) but no explicit license text — policy:
-  user-supplied `PRODOS` file (like the `KICKASS` override) with the
-  source documented.
+  never vendored in the repo; auto-downloaded at build time into
+  gitignored `tools/prodos/` with `PRODOS`/`BOOTBLOCKS` overrides for
+  user-supplied files (like the `KICKASS` override).
 - ProDOS MLI residency — RESOLVED (TRM §3.3 Figure 3-1): the MLI
   itself lives in the main Language Card (`$D000-$FFFF`); aux LC is
   partially used by ProDOS/BASIC.SYSTEM. LC-for-code stays out of
