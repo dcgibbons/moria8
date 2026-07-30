@@ -619,6 +619,9 @@ for i = 1, 10 do
 end
 assert_line("slot_has_name", name_ok,
             "saved character name missing from slot list")
+-- Regression: eff_invuln_timer ($6f) is not persisted; a stale nonzero
+-- value on load granted phantom invulnerability (Balrog hits, no damage).
+prog:write_u8(0x6f, 0xC1)
 press("1")
 local loaded = false
 for i = 1, 30 do
@@ -628,6 +631,8 @@ end
 assert_line("loaded", loaded, "load did not resume the saved game")
 assert_line("stats_restored", screen_has("test") and screen_has("Human"),
             "status line does not show the restored character")
+assert_line("invuln_cleared", prog:read_u8(0x6f) == 0,
+            "eff_invuln_timer not cleared on load: " .. prog:read_u8(0x6f))
 dump("after_load")
 print("SCENARIO DONE")
 """

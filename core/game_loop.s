@@ -494,9 +494,10 @@ game_new_start:
     cpx #16                 // $50–$5f = 16 bytes
     bne !clear_effects-
 
-    // Clear effect timers outside the ZP $50-$5f range
+    // Clear effect timers outside the ZP $50-$5f range. eff_invuln_timer
+    // is already cleared by wizard_reset_session_state above (shared with
+    // load_resume_game, which needs it for the non-persisted timer).
     lda #0
-    sta eff_invuln_timer
     sta eff_fear_timer
 
     jsr tramp_player_create

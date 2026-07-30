@@ -2221,3 +2221,29 @@ source-identical (both guards preserve the old paths). Play slot ends
 $9FEC (19 B slack); auxdata $567D (130 B free). Verification: make build
 clean all platforms (309 A2 asserts, 0 failures); memory contract 21/21;
 A2 harness 14/14 green; MAME probe shows the wear line printing in full.
+
+### 2026-07-29 fix — phantom invulnerability after load (cross-platform)
+
+User report (Balrog at dlvl 100, Virtual ][ snapshot): "The Balrog hits
+you." repeatedly with no HP loss. Snapshot analysis (VIIState blob,
+main RAM anchored by the M8P play-slot signature) showed HP 164/164 and
+eff_invuln_timer = 193 ($C1). The only writers are game_new_start (0) and
+eff_holy_word (3, priest-only — the character is a Mage).
+
+Root cause (cross-platform, shared core): eff_invuln_timer ($6F) is not
+in any save block and sits outside the saved ZP state range ($40-$5F),
+and the load path never initializes it. game_new_start clears it, but
+load_resume_game does not pass through game_new_start, so a loaded
+session inherits arbitrary ZP residue — boot/ProDOS leftovers on the
+Apple II — as phantom invulnerability (mon_atk_apply_damage skips all
+damage while the timer is nonzero, monster_attack.s:254).
+
+Fix: wizard_reset_session_state (called by both game_new_start and
+load_resume_game, all four platforms) now also clears eff_invuln_timer;
+the now-redundant clear in game_new_start was removed, so the change is
+byte-neutral (C64 resident slack was 1 B). Verified on A2 by poking
+$6F=$C1 before a load: after load it reads 0; the poke+assert is now a
+permanent part of the save_load harness scenario (11 asserts). Gates:
+make build clean all platforms (260/543/255/309 asserts, 0 failures),
+test64 179/179, testplus4 36/36, test128-fast PASS, A2 memory contract
+21/21, A2 harness 14/14.

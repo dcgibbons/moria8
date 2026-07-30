@@ -50,6 +50,11 @@ wizard_execute_level_jump:
 wizard_reset_session_state:
     lda #0
     sta wizard_wall_walk_enabled
+    // eff_invuln_timer is not persisted (outside the saved ZP range, no
+    // save block); without this clear a loaded game keeps arbitrary ZP
+    // residue, granting phantom invulnerability. Runs on both session
+    // starts: game_new_start and load_resume_game.
+    sta eff_invuln_timer
     rts
 
 wizard_wall_walk_active:
