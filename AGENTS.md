@@ -17,14 +17,16 @@ change position when the evidence changes. Prefer concise findings with exact
 source references over performative certainty or exhaustive narration.
 
 ## Repository Contract
-This is a Commodore 64 / Commodore 128 / Plus/4 6502 assembly project built
-with Kick Assembler and tested with VICE headless harnesses.
+This is a Commodore 64 / Commodore 128 / Plus/4 / Apple IIe 6502 assembly
+project built with Kick Assembler and tested with VICE and MAME headless
+harnesses.
 
 Primary entry points:
 
 - `platforms/commodore/c64/main.s`
 - `platforms/commodore/c128/main.s`
 - `platforms/commodore/plus4/main.s`
+- `platforms/apple2/main.s`
 
 Prefer small, local changes that preserve nearby assembly style, labels, memory
 ownership, and test patterns.
@@ -71,6 +73,8 @@ review.
 - `platforms/commodore/c128/`: C128 platform code, tests, and harness scripts.
 - `platforms/commodore/plus4/`: Plus/4 platform code, tests, and harness
   scripts.
+- `platforms/apple2/`: Apple IIe platform code, MAME harness scripts, and
+  memory-contract checker.
 - `build/`: generated binaries, disk images, symbols, snapshots, and test
   scratch output. Source directories should not accumulate generated `.prg`,
   `.sym`, `.vs`, or `out/` artifacts.
@@ -85,8 +89,10 @@ Run commands from the repository root.
 - `make test128-fast`: stable C128 unit batch
 - `make test128-fast-smoke`: high-value C128 runtime smoke subset
 - `make test128`: authoritative full C128 suite
+- `make testapple2`: Apple IIe memory-contract gate (static)
 - `make disk`: build shipping C64, C128, Plus/4, and Apple IIe disk images
 - `make run`, `make run64`, `make run128`, `make runplus4`: launch under VICE
+- `make runapple2`: launch under MAME apple2ee (requires `A2ROMS`)
 - `make clean`: remove build artifacts
 
 Kick Assembler downloads into `tools/kickass/` unless `KICKASS` is provided.
@@ -123,6 +129,11 @@ targets. Static/build-only checks stay sandboxed: `make build`,
 `make check-hal-boundaries`, Python static checkers, `git diff`, and similar
 commands that do not launch VICE.
 
+The Apple IIe harness (`platforms/apple2/harness_smoke.py`) drives headless
+MAME apple2ee instead of VICE and requires Apple IIe ROMs via the `A2ROMS`
+env var or `--rompath` (ROMs are not redistributable). Run one scenario per
+invocation; the suite is 14 scenarios plus `boot_title`.
+
 ## Memory And Banking Contracts
 Memory layout violations usually cause silent corruption, wild jumps, CPU JAMs,
 or VICE timeouts.
@@ -138,6 +149,11 @@ Hard boundaries:
 - Each overlay segment must fit within `$E000-$EFFF`
 - Test startup code must be reachable below `$A000` unless it uses a bootstrap
   stub
+- Apple IIe ownership comes from `docs/APPLE2_MEMORY_POLICY.md` and
+  `platforms/apple2/memory.s`: resident ends below `$7C00`, the play slot
+  spans `$7C00-$9FFF`, overlays share the `$A400-$B9FF` window, and aux RAM
+  owns the map (`$0800-$3B0B`), auxdata (`$3B0C-$56FF`), and the overlay
+  cache (`$5700-$BFFF`); aux reads execute only from the ZP thunks
 
 Never delete or weaken boundary-checking `.assert` statements. If an assert
 fails, fix the code or memory layout, not the assert.
@@ -171,9 +187,11 @@ Expand that strategy document when adding each port instead of bloating this
 agent startup context.
 
 ## Architecture Notes
-- Display is PETSCII-character based.
+- Display is character-cell based (PETSCII screen codes; the Apple IIe
+  translates to Apple display codes at write time).
 - C64 gameplay is 40-column.
 - C128 gameplay is 80-column.
+- Apple IIe gameplay is 80-column.
 - BASIC is used for the loader stub only; do not rely on BASIC routines after
   machine-code startup.
 - KERNAL routines are allowed where appropriate.

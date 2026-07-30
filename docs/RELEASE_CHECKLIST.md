@@ -59,6 +59,7 @@ Expected disk artifacts:
 - `build/moria8-c128.d71`
 - `build/moria8-c128.d81`
 - `build/moria8-plus4.d64`
+- `build/moria8-apple2.po`
 - `build/SHA256SUMS`
 - `build/*.asc`
 - `build/c64-dist/` staging directory for the C64 Ultimate loose-file distribution
@@ -88,6 +89,11 @@ make test128-fast-smoke
 - Start a new C128 game and enter town in the intended display mode.
 - Confirm save/load media prompts are readable.
 - Confirm no unexpected disk error appears during boot or first town entry.
+- Boot the Apple IIe disk in MAME (`A2ROMS`) or on hardware.
+- Confirm the `MORIA8  LOADING  n/8` progress line ticks to 8/8 and the
+  title screen appears with the current version.
+- Start a new Apple IIe game, enter town, and descend one level.
+- Confirm an Apple IIe save-and-quit reloads cleanly through the slot UI.
 
 ## Artifact Review
 

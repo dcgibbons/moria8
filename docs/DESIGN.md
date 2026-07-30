@@ -4,7 +4,9 @@ Moria8 adapts Umoria to machines with far less directly usable memory and a
 different display model than the original 80-column terminal game. The C64
 target defines the tightest budget; the C128 target adds banked memory,
 80-column VDC rendering, and a more involved boot/load model while preserving
-shared game logic where practical.
+shared game logic where practical. The Apple IIe target splits the map and
+hot data into auxiliary RAM with 80-column text and a ProDOS storage model
+(`docs/APPLE2_MEMORY_POLICY.md`).
 
 ## Core Constraints
 
@@ -24,6 +26,7 @@ space, the game is already larger than a practical 64 KB target:
 | C64 | 79,483 bytes / 77.6 KiB |
 | C128 | 85,368 bytes / 83.4 KiB |
 | Plus/4 | 78,287 bytes / 76.5 KiB |
+| Apple IIe | 77,845 bytes / 76.0 KiB |
 
 See `docs/ARCHITECTURE.md` for the per-payload memory map and current linked
 addresses.
@@ -100,7 +103,7 @@ sidecar arrays where that saves space or simplifies save/load ownership.
 
 ## Text
 
-The port keeps text compact and uppercase-friendly for Commodore display modes.
+The port keeps text compact and uppercase-friendly for small display modes.
 New shared UI and game-world text should prefer the existing string-bank and
 Huffman paths unless a code path demonstrably requires direct raw string
 ownership.

@@ -4,8 +4,8 @@
 
 Moria8 ships the full current catalog of 31 mage spells and 31 priest prayers.
 Class, book, level, mana, and fail data follow the Umoria-style tables in the
-Commodore implementation. Effect behavior follows Moria8's reconciled
-Moria/VMS/Umoria behavior, with tighter Commodore messaging where appropriate.
+current implementation. Effect behavior follows Moria8's reconciled
+Moria/VMS/Umoria behavior, with tighter messaging where appropriate.
 
 Classes:
 

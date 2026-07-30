@@ -44,6 +44,7 @@ mutually exclusive overlay had to coexist in one contiguous address space.
 | C64 | 51,481 bytes | 28,002 bytes | 4,068 bytes | 79,483 bytes / 77.6 KiB |
 | C128 | 56,114 bytes | 29,254 bytes | 4,088 bytes | 85,368 bytes / 83.4 KiB |
 | Plus/4 | 50,494 bytes | 27,793 bytes | 4,068 bytes | 78,287 bytes / 76.5 KiB |
+| Apple IIe | 38,400 bytes | 39,445 bytes | 5,632 bytes | 77,845 bytes / 76.0 KiB |
 
 The overlay architecture is therefore not optional polish: every current port
 would exceed a practical flat 64 KB target if all loaded pieces had to be
@@ -321,11 +322,14 @@ later, banked, or entered through a trampoline, verify all five facts together:
 
 Asserting only the trampoline address is insufficient. The callee placement and
 the staged source span must also be covered by assertions or direct inspection.
-
 ## Test Harnesses
 
 Runtime tests assemble target-specific PRGs and execute them under VICE
-headless. C128 also has Python compare and smoke harnesses for faster iteration.
+headless. C128 also has Python compare and smoke harnesses for faster
+iteration. The Apple IIe gate is a MAME (apple2ee) Lua harness
+(`platforms/apple2/harness_smoke.py`, 14 scenarios + `boot_title`) plus a
+static memory-contract checker (`make testapple2`); both need `A2ROMS` for
+runtime runs.
 
 Useful gates:
 
@@ -334,6 +338,7 @@ make test
 make test128-fast
 make test128-fast-smoke
 make test128
+make testapple2
 ```
 
 Tests that cross `$A000` on C64 need a bootstrap trampoline below the BASIC ROM

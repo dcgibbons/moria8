@@ -1,13 +1,14 @@
 # Moria8 Manual
 
-Moria8 is a Commodore 64, Commodore 128, and Commodore Plus/4 adaptation of the
-classic Moria roguelike. You create one adventurer, prepare in town, descend
-through the dungeon, grow stronger, and try to defeat the Balrog.
+Moria8 is a Commodore 64, Commodore 128, Commodore Plus/4, and Apple IIe
+adaptation of the classic Moria roguelike. You create one adventurer, prepare
+in town, descend through the dungeon, grow stronger, and try to defeat the
+Balrog.
 
-This manual covers the current Commodore releases. Moria8 follows Moria and
+This manual covers the current releases. Moria8 follows Moria and
 Umoria closely in spirit, but it is not a byte-for-byte reproduction. The C64
 and Plus/4 ports use compact 40-column interfaces and smaller active maps; the
-C128 port uses an 80-column VDC display and a wider memory model.
+C128 and Apple IIe ports use 80-column displays and wider memory models.
 
 ## Starting The Game
 
@@ -17,11 +18,13 @@ Use the disk image for your machine:
 - C64 Ultimate / SoftwareIEC: `moria8-c64.zip`
 - Plus/4: `moria8-plus4.d64`
 - C128: `moria8-c128.d64`
+- Apple IIe (128K, ProDOS): `moria8-apple2.po`
 
 The C64 version benefits from REU support when available because some creature
 data can be fetched without as much disk loading. The C128 version uses its own
 banked-memory path. The Plus/4 version uses a standard 1541-compatible disk
-path.
+path. The Apple IIe version caches hot data in auxiliary memory and loads cold
+payloads from ProDOS on demand.
 
 Use `D)isk Setup` on the title screen before loading or saving if your save
 disk is not already initialized. Program media and save media are deliberately
@@ -69,7 +72,7 @@ range.
 
 ## Main Commands
 
-Moria8 uses its own Commodore command layout. The in-game help screen is the
+Moria8 uses its own command layout. The in-game help screen is the
 authoritative quick reference: press `?`.
 
 ### Movement
@@ -171,7 +174,8 @@ Important dungeon habits:
 - Use run carefully; attacks, hazards, and interruptions should stop a run.
 
 The C64 and Plus/4 dungeons use compact active maps and 40-column views. The
-C128 view is wider and closer to terminal Moria, but the same core rules apply.
+C128 and Apple IIe views are wider and closer to terminal Moria, but the same
+core rules apply.
 
 ## Items And Equipment
 
@@ -204,7 +208,7 @@ attack command. When a melee message ends with a count such as `(2/3)`, the
 first number is successful hits and the second number is total blows attempted.
 
 Monster recall display exists, but recall persistence is not complete in the
-current Commodore builds. See [MONSTERS.md](MONSTERS.md) for the shipped
+current builds. See [MONSTERS.md](MONSTERS.md) for the shipped
 monster roster and threat notes.
 
 ## Magic
