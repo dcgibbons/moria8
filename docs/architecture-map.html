@@ -1,0 +1,766 @@
+<meta charset="utf-8">
+<title>moria8 — architecture map</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #14110c;
+    --bg-raised: #1b1710;
+    --bg-inset: #0f0d09;
+    --ink: #ece4d3;
+    --ink-dim: #b6ab96;
+    --ink-faint: #7d735f;
+    --rule: #33291c;
+    --rule-soft: #241d14;
+    --accent: #e0973f;
+    --accent-ink: #14110c;
+    --accent-dim: #8a5c26;
+    --teal: #5fabb0;
+    --hazard: #c0604a;
+    --free: #423a2c;
+
+    --c-c64: #6f95d6;
+    --c-c128: #5fb0a8;
+    --c-plus4: #c9a635;
+    --c-apple2: #d97f42;
+
+    --font-mono: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", Consolas, "Roboto Mono", Menlo, monospace;
+    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+
+  :root[data-theme="light"] {
+    --bg: #f6f1e6;
+    --bg-raised: #fffdf8;
+    --bg-inset: #ece4d1;
+    --ink: #241f16;
+    --ink-dim: #5b5340;
+    --ink-faint: #8c8268;
+    --rule: #ddd2b8;
+    --rule-soft: #e7dec6;
+    --accent: #b96a1c;
+    --accent-ink: #fffdf8;
+    --accent-dim: #e3b989;
+    --teal: #2f7d80;
+    --hazard: #a1432e;
+    --free: #d9cead;
+  }
+
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --bg: #f6f1e6;
+      --bg-raised: #fffdf8;
+      --bg-inset: #ece4d1;
+      --ink: #241f16;
+      --ink-dim: #5b5340;
+      --ink-faint: #8c8268;
+      --rule: #ddd2b8;
+      --rule-soft: #e7dec6;
+      --accent: #b96a1c;
+      --accent-ink: #fffdf8;
+      --accent-dim: #e3b989;
+      --teal: #2f7d80;
+      --hazard: #a1432e;
+      --free: #d9cead;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--accent); }
+  ::selection { background: var(--accent); color: var(--accent-ink); }
+
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 0 28px; }
+
+  code, .mono, .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+  /* ---------- header ---------- */
+  header.hero {
+    border-bottom: 1px solid var(--rule);
+    padding: 56px 0 32px;
+    background:
+      linear-gradient(180deg, transparent 0%, var(--bg) 100%),
+      repeating-linear-gradient(90deg, var(--rule-soft) 0 1px, transparent 1px 96px);
+  }
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    letter-spacing: .08em;
+    color: var(--accent);
+    text-transform: uppercase;
+    margin: 0 0 14px;
+  }
+  .eyebrow::before { content: "; "; color: var(--ink-faint); }
+  h1 {
+    font-family: var(--font-mono);
+    font-weight: 700;
+    font-size: clamp(28px, 4.4vw, 44px);
+    letter-spacing: -0.01em;
+    margin: 0 0 14px;
+    text-wrap: balance;
+  }
+  h1 .dim { color: var(--ink-faint); font-weight: 500; }
+  .dek {
+    max-width: 62ch;
+    color: var(--ink-dim);
+    font-size: 16.5px;
+    margin: 0 0 30px;
+  }
+
+  .statrow {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0,1fr));
+    gap: 1px;
+    background: var(--rule);
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .stat {
+    background: var(--bg-raised);
+    padding: 16px 18px;
+  }
+  .stat .n { font-family: var(--font-mono); font-size: 24px; font-weight: 700; color: var(--accent); display: block; }
+  .stat .l { font-size: 12px; color: var(--ink-faint); text-transform: uppercase; letter-spacing: .06em; margin-top: 4px; display: block; }
+
+  /* ---------- nav ---------- */
+  nav.toc {
+    position: sticky; top: 0; z-index: 20;
+    background: color-mix(in srgb, var(--bg) 88%, transparent);
+    backdrop-filter: blur(6px);
+    border-bottom: 1px solid var(--rule);
+  }
+  nav.toc .wrap { display: flex; gap: 2px; overflow-x: auto; padding: 0 28px; }
+  nav.toc a {
+    flex: none;
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    color: var(--ink-dim);
+    text-decoration: none;
+    padding: 12px 12px;
+    border-bottom: 2px solid transparent;
+    white-space: nowrap;
+  }
+  nav.toc a:hover { color: var(--ink); }
+  nav.toc a:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+  /* ---------- sections ---------- */
+  section { padding: 56px 0; border-bottom: 1px solid var(--rule-soft); }
+  section:last-of-type { border-bottom: none; }
+  .sec-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 8px; flex-wrap: wrap; }
+  .sec-num { font-family: var(--font-mono); color: var(--ink-faint); font-size: 13px; }
+  h2 {
+    font-family: var(--font-mono);
+    font-size: 21px;
+    margin: 0;
+    letter-spacing: -.01em;
+  }
+  .sec-note { color: var(--ink-dim); max-width: 68ch; margin: 6px 0 28px; font-size: 15px; }
+
+  /* ---------- repo layout table ---------- */
+  .tbl-scroll { overflow-x: auto; border: 1px solid var(--rule); border-radius: 4px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th { text-align: left; font-family: var(--font-mono); font-weight: 600; font-size: 11.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-faint); background: var(--bg-inset); padding: 10px 14px; border-bottom: 1px solid var(--rule); }
+  td { padding: 11px 14px; border-bottom: 1px solid var(--rule-soft); vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+  td.path { font-family: var(--font-mono); color: var(--accent); white-space: nowrap; }
+  td.figs { font-family: var(--font-mono); color: var(--ink-dim); white-space: nowrap; text-align: right; }
+
+  /* ---------- platform cards ---------- */
+  .platform-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 16px; }
+  .pcard { border: 1px solid var(--rule); border-radius: 5px; background: var(--bg-raised); padding: 18px 18px 20px; position: relative; overflow: hidden; }
+  .pcard::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: var(--dot); }
+  .pcard .ptitle { display: flex; align-items: center; gap: 8px; font-family: var(--font-mono); font-weight: 700; font-size: 15px; margin-bottom: 2px; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--dot); flex: none; }
+  .pcard .pstatus { font-size: 11px; color: var(--ink-faint); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 14px; }
+  .pcard dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; font-size: 13px; }
+  .pcard dt { color: var(--ink-faint); }
+  .pcard dd { margin: 0; color: var(--ink); font-family: var(--font-mono); text-align: right; }
+  .pcard .footprint { margin-top: 14px; }
+  .fp-bar { height: 7px; border-radius: 3px; background: var(--rule-soft); overflow: hidden; display: flex; }
+  .fp-bar span { display: block; height: 100%; }
+  .fp-bar .r { background: var(--dot); }
+  .fp-bar .o { background: color-mix(in srgb, var(--dot) 45%, var(--bg-inset)); }
+  .fp-legend { display: flex; justify-content: space-between; font-size: 10.5px; color: var(--ink-faint); margin-top: 5px; font-family: var(--font-mono); }
+
+  /* ---------- memory maps ---------- */
+  .memblock { margin-bottom: 34px; }
+  .memblock h3 { font-family: var(--font-mono); font-size: 14px; margin: 0 0 10px; display: flex; align-items: center; gap: 8px; }
+  .membar { display: flex; width: 100%; height: 46px; border-radius: 4px; overflow: hidden; border: 1px solid var(--rule); background: var(--free); }
+  .seg { position: relative; border-right: 1px solid color-mix(in srgb, var(--bg) 40%, transparent); cursor: pointer; min-width: 2px; transition: filter .12s ease; }
+  .seg:last-child { border-right: none; }
+  .seg:hover, .seg:focus-visible { filter: brightness(1.18); outline: none; }
+  .seg:focus-visible { box-shadow: inset 0 0 0 2px var(--ink); }
+  .seg.k-code { background: color-mix(in srgb, var(--ink-faint) 55%, var(--bg-inset)); }
+  .seg.k-map { background: var(--teal); }
+  .seg.k-io { background: var(--hazard); }
+  .seg.k-overlay { background: var(--accent); }
+  .seg.k-zp { background: var(--ink-faint); }
+  .seg.k-cache { background: color-mix(in srgb, var(--teal) 55%, var(--bg-inset)); }
+  .seg.k-transient { background: repeating-linear-gradient(135deg, var(--accent) 0 4px, color-mix(in srgb, var(--accent) 35%, var(--bg-inset)) 4px 8px); }
+  .mem-note { font-size: 12.5px; color: var(--ink-faint); margin: 8px 2px 0; max-width: 74ch; }
+  .mem-inspect {
+    margin-top: 10px; font-family: var(--font-mono); font-size: 12.5px;
+    padding: 9px 12px; border: 1px dashed var(--rule); border-radius: 4px;
+    color: var(--ink-dim); min-height: 18px; background: var(--bg-inset);
+  }
+  .mem-inspect b { color: var(--accent); font-weight: 700; }
+  .mem-key { display: flex; flex-wrap: wrap; gap: 12px; font-size: 11.5px; color: var(--ink-faint); margin-top: 16px; font-family: var(--font-mono); }
+  .mem-key span { display: inline-flex; align-items: center; gap: 5px; }
+  .mem-key i { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
+
+  /* ---------- module grid ---------- */
+  .module-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+  details.mod {
+    border: 1px solid var(--rule); border-radius: 5px; background: var(--bg-raised);
+  }
+  details.mod summary {
+    list-style: none; cursor: pointer; padding: 13px 16px;
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  }
+  details.mod summary::-webkit-details-marker { display: none; }
+  details.mod summary .mname { font-weight: 600; font-size: 13.5px; }
+  details.mod summary .mcount { font-family: var(--font-mono); font-size: 12px; color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); padding: 2px 7px; border-radius: 10px; flex: none; }
+  details.mod summary::before { content: "▸"; color: var(--ink-faint); margin-right: 8px; font-size: 11px; transition: transform .1s; }
+  details.mod[open] summary::before { transform: rotate(90deg); }
+  .mfiles { margin: 0 16px 14px; padding-top: 10px; border-top: 1px solid var(--rule-soft); font-family: var(--font-mono); font-size: 12px; color: var(--ink-dim); display: flex; flex-wrap: wrap; gap: 6px 10px; }
+  .mfiles span { white-space: nowrap; }
+
+  /* ---------- HAL ---------- */
+  .hal-principle { border-left: 3px solid var(--accent); padding: 10px 16px; background: var(--bg-raised); font-size: 14px; color: var(--ink-dim); margin-bottom: 22px; border-radius: 0 4px 4px 0; }
+  .hal-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+  .hal-item { border: 1px solid var(--rule); border-radius: 5px; padding: 12px 14px; background: var(--bg-raised); }
+  .hal-item .hname { font-family: var(--font-mono); font-size: 13px; color: var(--accent); display: block; margin-bottom: 4px; }
+  .hal-item .hpurpose { font-size: 12.5px; color: var(--ink-dim); }
+
+  /* ---------- cascade ---------- */
+  .cascade { border: 1px solid var(--rule); border-radius: 5px; overflow: hidden; background: var(--bg-raised); }
+  .cascade ol { margin: 0; padding: 10px 0; list-style: none; counter-reset: step; }
+  .cascade li { counter-increment: step; font-family: var(--font-mono); font-size: 12.5px; padding: 5px 16px 5px 54px; position: relative; color: var(--ink-dim); }
+  .cascade li::before { content: counter(step); position: absolute; left: 16px; width: 26px; text-align: right; color: var(--ink-faint); }
+  .cascade li.core { color: var(--ink); }
+  .cascade li.core::after { content: "core"; position: absolute; right: 16px; font-size: 10px; color: var(--teal); border: 1px solid var(--teal); border-radius: 8px; padding: 0 6px; }
+  .cascade li.plat::after { content: "platform"; position: absolute; right: 16px; font-size: 10px; color: var(--accent); border: 1px solid var(--accent); border-radius: 8px; padding: 0 6px; }
+
+  /* ---------- build / tooling ---------- */
+  .build-grid { display: grid; grid-template-columns: 1.1fr 1fr; gap: 24px; }
+  @media (max-width: 820px) { .build-grid { grid-template-columns: 1fr; } }
+  .kv { display: grid; grid-template-columns: minmax(140px,auto) 1fr; gap: 8px 16px; font-size: 13.5px; }
+  .kv dt { font-family: var(--font-mono); color: var(--accent); }
+  .kv dd { margin: 0; color: var(--ink-dim); padding-bottom: 10px; border-bottom: 1px solid var(--rule-soft); }
+  .tool-cat { margin-bottom: 14px; }
+  .tool-cat h4 { font-family: var(--font-mono); font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-faint); margin: 0 0 6px; }
+  .tool-cat .tools { font-family: var(--font-mono); font-size: 12px; color: var(--ink-dim); line-height: 1.9; }
+  .tool-cat .tools code { background: var(--bg-inset); padding: 1px 5px; border-radius: 3px; margin: 0 3px 3px 0; display: inline-block; }
+
+  /* ---------- docs ---------- */
+  .docs-list { display: grid; gap: 1px; background: var(--rule); border: 1px solid var(--rule); border-radius: 5px; overflow: hidden; }
+  .docs-row { background: var(--bg-raised); padding: 12px 16px; display: grid; grid-template-columns: 230px 1fr; gap: 14px; align-items: baseline; }
+  @media (max-width: 640px) { .docs-row { grid-template-columns: 1fr; } }
+  .docs-row .dfile { font-family: var(--font-mono); color: var(--accent); font-size: 13px; }
+  .docs-row .drole { font-size: 13px; color: var(--ink-dim); }
+
+  footer { padding: 40px 0 70px; }
+  footer p { color: var(--ink-faint); font-size: 12.5px; font-family: var(--font-mono); max-width: 70ch; }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; }
+  }
+</style>
+
+<header class="hero">
+  <div class="wrap">
+    <p class="eyebrow">static architecture map — generated by source inspection</p>
+    <h1>moria8 <span class="dim">/ 6502 roguelike, four ports, one core</span></h1>
+    <p class="dek">A from-scratch assembly port of Moria targeting the Commodore 64, 128, Plus/4, and Apple IIe — all four sharing a single platform-agnostic game core behind a strict hardware abstraction layer. This page and its companion <code>architecture-map.json</code> are derived from the current <code>main</code> branch tree.</p>
+    <div class="statrow">
+      <div class="stat"><span class="n">133</span><span class="l">core files</span></div>
+      <div class="stat"><span class="n">45,194</span><span class="l">core lines</span></div>
+      <div class="stat"><span class="n">4</span><span class="l">platform ports</span></div>
+      <div class="stat"><span class="n">9</span><span class="l">C64 overlay slots</span></div>
+    </div>
+  </div>
+</header>
+
+<nav class="toc" aria-label="Section navigation">
+  <div class="wrap">
+    <a href="#layout">layout</a>
+    <a href="#platforms">platforms</a>
+    <a href="#memory">memory maps</a>
+    <a href="#modules">core modules</a>
+    <a href="#hal">HAL contract</a>
+    <a href="#cascade">import cascade</a>
+    <a href="#build">build &amp; tooling</a>
+    <a href="#docs">docs index</a>
+  </div>
+</nav>
+
+<main class="wrap">
+
+  <section id="layout">
+    <div class="sec-head"><span class="sec-num">01</span><h2>repository layout</h2></div>
+    <p class="sec-note">Gameplay logic lives once, in <code>core/</code>. Everything under <code>platforms/</code> supplies display, input, memory, and loader services behind target-specific HAL implementations — no hardware register touches <code>core/</code>.</p>
+    <div class="tbl-scroll">
+      <table>
+        <thead><tr><th>path</th><th>role</th><th>size</th></tr></thead>
+        <tbody>
+          <tr><td class="path">core/</td><td>Platform-agnostic gameplay, UI, data, and shared logic. No hardware registers allowed.</td><td class="figs">133 files · 45,194 ln</td></tr>
+          <tr><td class="path">platforms/commodore/hal/</td><td>Contract-only Commodore HAL: lifecycle, memory, IRQ, layout, screen, input, sound, storage, overlay, entropy.</td><td class="figs">605 ln</td></tr>
+          <tr><td class="path">platforms/commodore/common/</td><td>Shared Commodore implementation: MMU macros, overlay loader, disk swap, REU, save-slot policy, title screen.</td><td class="figs">3,846 ln</td></tr>
+          <tr><td class="path">platforms/commodore/c64/</td><td>C64 entry point, platform code, HAL implementation, tests, harness scripts.</td><td class="figs">5,207 ln + 446 hal + 63,631 tests</td></tr>
+          <tr><td class="path">platforms/commodore/c128/</td><td>C128 boot, VDC/MMU, dual-bank runtime, tests, harness scripts.</td><td class="figs">11,420 ln + 549 hal + 42,925 tests</td></tr>
+          <tr><td class="path">platforms/commodore/plus4/</td><td>Plus/4 entry point, TED platform code, HAL implementation, tests.</td><td class="figs">4,324 ln + 453 hal + 1,736 tests</td></tr>
+          <tr><td class="path">platforms/apple2/</td><td>Apple IIe port: ProDOS MLI storage, aux-bank memory, HAL, boot stub, MAME harness.</td><td class="figs">7,573 ln + 258 hal</td></tr>
+          <tr><td class="path">platforms/shared/</td><td>Cross-architecture helper logic promoted out of Commodore-only code — currently the save subsystem.</td><td class="figs">save.s · 2,391 ln</td></tr>
+          <tr><td class="path">data/</td><td>Source data consumed by build-time generators.</td><td class="figs">—</td></tr>
+          <tr><td class="path">tools/</td><td>Python build tooling — HAL boundary/export checkers, disk builders, encoders, lint. Third-party tools (kickass, applecommander, prodos) auto-download here at build time.</td><td class="figs">40+ scripts</td></tr>
+          <tr><td class="path">docs/</td><td>Architecture, behavioral-contract, and process documentation.</td><td class="figs">31 files</td></tr>
+          <tr><td class="path">build/</td><td>Generated binaries, disk images, symbols, snapshots — not source of truth.</td><td class="figs">generated</td></tr>
+          <tr><td class="path">Makefile</td><td>Thin root wrapper dispatching to the Commodore and Apple IIe sub-makefiles.</td><td class="figs">42 ln</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="platforms">
+    <div class="sec-head"><span class="sec-num">02</span><h2>platform matrix</h2></div>
+    <p class="sec-note">Four shipping ports. Resident/overlay split shows why the overlay architecture is load-bearing: every port would exceed a flat 64&nbsp;KB image if every piece had to be resident at once.</p>
+    <div class="platform-grid">
+
+      <div class="pcard" style="--dot:var(--c-c64)">
+        <div class="ptitle"><span class="dot"></span>C64</div>
+        <div class="pstatus">shipping</div>
+        <dl>
+          <dt>display</dt><dd>40-col PETSCII</dd>
+          <dt>video/audio</dt><dd>VIC-II / SID</dd>
+          <dt>storage</dt><dd>D64 · IEC/KERNAL</dd>
+          <dt>product</dt><dd>moria8.prg</dd>
+          <dt>resident</dt><dd>51,481 B</dd>
+          <dt>overlays</dt><dd>28,002 B</dd>
+        </dl>
+        <div class="footprint">
+          <div class="fp-bar"><span class="r" style="width:64.8%"></span><span class="o" style="width:35.2%"></span></div>
+          <div class="fp-legend"><span>resident</span><span>flat-equiv 79,483 B</span></div>
+        </div>
+      </div>
+
+      <div class="pcard" style="--dot:var(--c-c128)">
+        <div class="ptitle"><span class="dot"></span>C128</div>
+        <div class="pstatus">shipping</div>
+        <dl>
+          <dt>display</dt><dd>80-col</dd>
+          <dt>video/audio</dt><dd>VDC / SID</dd>
+          <dt>storage</dt><dd>D64 · IEC/KERNAL</dd>
+          <dt>product</dt><dd>moria128.prg</dd>
+          <dt>resident</dt><dd>56,114 B</dd>
+          <dt>overlays</dt><dd>29,254 B</dd>
+        </dl>
+        <div class="footprint">
+          <div class="fp-bar"><span class="r" style="width:65.7%"></span><span class="o" style="width:34.3%"></span></div>
+          <div class="fp-legend"><span>resident</span><span>flat-equiv 85,368 B</span></div>
+        </div>
+      </div>
+
+      <div class="pcard" style="--dot:var(--c-plus4)">
+        <div class="ptitle"><span class="dot"></span>Plus/4</div>
+        <div class="pstatus">shipping</div>
+        <dl>
+          <dt>display</dt><dd>40-col (C64 layout)</dd>
+          <dt>video/audio</dt><dd>TED</dd>
+          <dt>storage</dt><dd>D64 · 1541-compat</dd>
+          <dt>product</dt><dd>moria4.prg</dd>
+          <dt>resident</dt><dd>50,494 B</dd>
+          <dt>overlays</dt><dd>27,793 B</dd>
+        </dl>
+        <div class="footprint">
+          <div class="fp-bar"><span class="r" style="width:64.5%"></span><span class="o" style="width:35.5%"></span></div>
+          <div class="fp-legend"><span>resident</span><span>flat-equiv 78,287 B</span></div>
+        </div>
+      </div>
+
+      <div class="pcard" style="--dot:var(--c-apple2)">
+        <div class="ptitle"><span class="dot"></span>Apple IIe</div>
+        <div class="pstatus">shipping</div>
+        <dl>
+          <dt>display</dt><dd>80-col (C128 layout)</dd>
+          <dt>cpu</dt><dd>128K, NMOS 6502 only</dd>
+          <dt>storage</dt><dd>ProDOS 8 · MLI</dd>
+          <dt>product</dt><dd>moria8-apple2.po</dd>
+          <dt>resident</dt><dd>38,400 B</dd>
+          <dt>overlays</dt><dd>39,445 B</dd>
+        </dl>
+        <div class="footprint">
+          <div class="fp-bar"><span class="r" style="width:49.3%"></span><span class="o" style="width:50.7%"></span></div>
+          <div class="fp-legend"><span>resident</span><span>flat-equiv 77,845 B</span></div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <section id="memory">
+    <div class="sec-head"><span class="sec-num">03</span><h2>memory maps</h2></div>
+    <p class="sec-note">Each bar spans the full 64&nbsp;KB (<code>$0000</code>–<code>$FFFF</code>) address space, proportional to region size. Click or tab into a segment for its exact range and owner. The C64 bar's striped segment marks a deliberate, assert-guarded overlap — see the caption beneath it.</p>
+
+    <div id="memblocks"></div>
+
+    <div class="mem-key">
+      <span><i style="background:var(--free)"></i>free / unlabeled</span>
+      <span><i style="background:color-mix(in srgb, var(--ink-faint) 55%, var(--bg-inset))"></i>resident code</span>
+      <span><i style="background:var(--teal)"></i>map / data table</span>
+      <span><i style="background:color-mix(in srgb, var(--teal) 55%, var(--bg-inset))"></i>overlay cache slot (Bank 1)</span>
+      <span><i style="background:var(--accent)"></i>overlay execution window</span>
+      <span><i style="background:repeating-linear-gradient(135deg,var(--accent) 0 2px,color-mix(in srgb, var(--accent) 35%, var(--bg-inset)) 2px 4px)"></i>init-only, dead before runtime data lands</span>
+      <span><i style="background:var(--hazard)"></i>I/O — forbidden for runtime payloads</span>
+      <span><i style="background:var(--ink-faint)"></i>zero page / stack / vectors</span>
+    </div>
+  </section>
+
+  <section id="modules">
+    <div class="sec-head"><span class="sec-num">04</span><h2>core modules</h2></div>
+    <p class="sec-note">133 files in <code>core/</code>, grouped by subsystem. Largest: <code>game_loop.s</code> (2,856 ln), <code>dungeon_gen.s</code> (2,605 ln), <code>item.s</code> (1,775 ln), <code>monster.s</code> (1,731 ln), <code>ui_store.s</code> (1,715 ln). Expand a group to see its files.</p>
+    <div class="module-grid" id="moduleGrid"></div>
+  </section>
+
+  <section id="hal">
+    <div class="sec-head"><span class="sec-num">05</span><h2>HAL contract</h2></div>
+    <div class="hal-principle">Contract-only directory: platform-specific register writes, banking mechanics, KERNAL wrappers, and drive behavior belong under the owning platform — never here. <code>platforms/commodore/hal/hal_contract.s</code> aggregates ten interface modules; <code>platforms/apple2/hal/</code> implements the same surface against ProDOS MLI and IIe aux-bank memory instead of KERNAL/IEC.</div>
+    <div class="hal-grid">
+      <div class="hal-item"><span class="hname">hal_lifecycle.s</span><span class="hpurpose">Boot / init / shutdown sequencing</span></div>
+      <div class="hal-item"><span class="hname">hal_memory.s</span><span class="hpurpose">Bank switching / memory visibility</span></div>
+      <div class="hal-item"><span class="hname">hal_irq.s</span><span class="hpurpose">Interrupt hook contract</span></div>
+      <div class="hal-item"><span class="hname">hal_layout.s</span><span class="hpurpose">Screen geometry (40 vs. 80 col)</span></div>
+      <div class="hal-item"><span class="hname">hal_screen.s</span><span class="hpurpose">Character-mapped display</span></div>
+      <div class="hal-item"><span class="hname">hal_input.s</span><span class="hpurpose">Keyboard / joystick input</span></div>
+      <div class="hal-item"><span class="hname">hal_sound.s</span><span class="hpurpose">SID / TED sound</span></div>
+      <div class="hal-item"><span class="hname">hal_storage.s</span><span class="hpurpose">Disk / save I/O, phase-banded status codes</span></div>
+      <div class="hal-item"><span class="hname">hal_overlay.s</span><span class="hpurpose">Overlay load / cache contract</span></div>
+      <div class="hal-item"><span class="hname">hal_entropy.s</span><span class="hpurpose">RNG seed / entropy source</span></div>
+    </div>
+  </section>
+
+  <section id="cascade">
+    <div class="sec-head"><span class="sec-num">06</span><h2>C64 import cascade</h2></div>
+    <p class="sec-note"><code>#import</code> order in <code>platforms/commodore/c64/main.s</code> — platform HAL/services first, then core in dependency order, then disk/save glue, then the game loop. The other three ports follow the same shape against their own platform files.</p>
+    <div class="cascade">
+      <ol id="cascadeList"></ol>
+    </div>
+  </section>
+
+  <section id="build">
+    <div class="sec-head"><span class="sec-num">07</span><h2>build &amp; tooling</h2></div>
+    <div class="build-grid">
+      <div>
+        <dl class="kv">
+          <dt>make / build</dt><dd>Build C64, C128, Plus/4, and Apple IIe payloads</dd>
+          <dt>make disk</dt><dd>Build all four shipping disk images</dd>
+          <dt>make test</dt><dd>Default regression mix</dd>
+          <dt>make test64 / testplus4</dt><dd>Per-platform VICE headless suites</dd>
+          <dt>make test128-fast(-smoke)</dt><dd>Stable / high-value C128 subset</dd>
+          <dt>make test128</dt><dd>Authoritative full C128 suite</dd>
+          <dt>make testapple2</dt><dd>Aliases to the Apple IIe memory-contract test</dd>
+          <dt>make run / run64 / run128 / runplus4 / runapple2</dt><dd>Launch under emulator</dd>
+          <dt>make clean</dt><dd>Remove build artifacts</dd>
+        </dl>
+      </div>
+      <div>
+        <div class="tool-cat">
+          <h4>HAL boundary / export checkers</h4>
+          <div class="tools"><code>check_hal_boundaries.py</code><code>check_hal_manifests.py</code><code>check_hal_missing_stubs.py</code><code>check_plus4_hal_independence.py</code> +13 more per-domain export checkers</div>
+        </div>
+        <div class="tool-cat">
+          <h4>lint</h4>
+          <div class="tools"><code>check_6502_lint.py</code><code>check_zp_usage.py</code></div>
+        </div>
+        <div class="tool-cat">
+          <h4>disk image / asset builders</h4>
+          <div class="tools"><code>diskart.py</code><code>make_pak.py</code><code>patch_d64_sector.py</code><code>prg_to_bin.py</code><code>ppm_to_c64_bootart.py</code><code>ppm_to_c128_bootart.py</code></div>
+        </div>
+        <div class="tool-cat">
+          <h4>data encoders</h4>
+          <div class="tools"><code>huff_encoder.py</code><code>string_bank_encoder.py</code><code>parse_creatures.py</code></div>
+        </div>
+        <div class="tool-cat">
+          <h4>third-party (auto-downloaded, SHA256-pinned)</h4>
+          <div class="tools"><code>tools/kickass/</code><code>tools/applecommander/</code><code>tools/prodos/</code></div>
+        </div>
+        <div class="tool-cat">
+          <h4>prodos auto-download</h4>
+          <div class="tools">ProDOS 2.4.3 kernel + boot blocks fetched from the ProDOS-8/ProDOS8-Releases repo into <code>tools/prodos/</code> (gitignored); <code>PRODOS</code>/<code>BOOTBLOCKS</code> env overrides supported</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="docs">
+    <div class="sec-head"><span class="sec-num">08</span><h2>docs index</h2></div>
+    <p class="sec-note">Behavioral changes route through <code>docs/BEHAVIOR_CHANGE_PROTOCOL.md</code> and the domain contract(s) they touch — never all contracts by default.</p>
+    <div class="docs-list" id="docsList"></div>
+  </section>
+
+</main>
+
+<footer class="wrap">
+  <p>Generated 2026-07-30 by static inspection of the <code>main</code> branch tree (line counts via <code>wc -l</code>; memory ranges transcribed from <code>docs/ARCHITECTURE.md</code>, <code>docs/APPLE2_MEMORY_POLICY.md</code>, and <code>platforms/apple2/memory.s</code>, and cross-checked against a live <code>make disk</code> build of all four ports). Figures are point-in-time; re-derive from source for authoritative current state. Companion data file: <code>docs/architecture-map.json</code>.</p>
+</footer>
+
+<script>
+(function () {
+  "use strict";
+
+  function hx(s) { return parseInt(s.replace("$", ""), 16); }
+  function widthPct(startHex, endHex) {
+    var start = hx(startHex), end = hx(endHex);
+    return ((end - start + 1) / 65536) * 100;
+  }
+
+  var memoryMaps = [
+    {
+      id: "c64", title: "C64 — $0000–$FFFF",
+      note: "Verified against a fresh make build64 (0/260 asserts failed). The striped sliver at $BFBD is init-only startup code (REU/Ultimate/turbo detection, banked-runtime loader) — main.s:1965 documents it as “runs once at startup before dungeon map … are used, overwritten during normal gameplay.” It physically continues another ~354 bytes into the map's own $C000+ range; that overlap is intentional and dead by the time the map is generated, so it is folded into “compact live map” below rather than double-counted.",
+      regions: [
+        { s: "$0000", e: "$0800", owner: "Zero page / stack / low RAM (BASIC stub entry at $0801)", kind: "zp" },
+        { s: "$0801", e: "$BFBC", owner: "Forever-resident code/data — asserted below program_end ≤ MAP_BASE", kind: "code" },
+        { s: "$BFBD", e: "$BFFF", owner: "program_end — init-only startup code begins here (REU/Ultimate/turbo detect, banked loader); continues transiently into $C000–$C162, overwritten once the map is generated", kind: "transient" },
+        { s: "$C000", e: "$CEFF", owner: "Compact live map (MAP_BASE) — supersedes the init-only tail above once generated", kind: "map" },
+        { s: "$CF00", e: "$CFFF", owner: "Fixed floor-item table", kind: "map" },
+        { s: "$D000", e: "$DFFF", owner: "I/O / device window when visible", kind: "io" },
+        { s: "$E000", e: "$EFFF", owner: "Overlay window — 1 of 9 mutually-exclusive overlays", kind: "overlay" },
+        { s: "$F000", e: "$FFFA", owner: "Banked runtime payload (64.bank), below CPU vectors", kind: "code" }
+      ]
+    },
+    {
+      id: "plus4", title: "Plus/4 — $0000–$FFFF",
+      regions: [
+        { s: "$0000", e: "$1000", owner: "Zero page / stack / low RAM (BASIC stub entry at $1001)", kind: "zp" },
+        { s: "$1001", e: "$C806", owner: "Resident code/data (moria4.prg)", kind: "code" },
+        { s: "$C807", e: "$CFFF", owner: "Free", kind: "free" },
+        { s: "$D000", e: "$DFFF", owner: "TED-owned (screen, color/attribute, sound, ROM/RAM switching) — not the C64 VIC-II/CIA/SID model", kind: "io" },
+        { s: "$E000", e: "$EFFF", owner: "Overlay window", kind: "overlay" },
+        { s: "$F000", e: "$FD37", owner: "Banked runtime payload", kind: "code" }
+      ]
+    },
+    {
+      id: "c128b0", title: "C128 — Bank 0 — $0000–$FFFF",
+      regions: [
+        { s: "$0000", e: "$03FF", owner: "Zero page, stack, vectors", kind: "zp" },
+        { s: "$0400", e: "$07FF", owner: "Scratch / test / BFS path area; VDC row buffers at $0500-$05ED", kind: "code" },
+        { s: "$0A80", e: "$0AFB", owner: "128.proj — projectile runtime payload", kind: "code" },
+        { s: "$0B00", e: "$0BF7", owner: "128.input — raw-input runtime payload", kind: "code" },
+        { s: "$0C00", e: "$0FF3", owner: "MMU/KERNAL save bytes, MMU helper blob, 128.fdisk feature-disk payload", kind: "code" },
+        { s: "$1000", e: "$19FD", owner: "128.runtime — low runtime payload", kind: "code" },
+        { s: "$1A00", e: "$1AFF", owner: "Floor-item table", kind: "map" },
+        { s: "$1B00", e: "$1BFF", owner: "Creature scratch", kind: "map" },
+        { s: "$1C01", e: "$5FFF", owner: "Main program image: boot path, loaders, trampolines, wrappers", kind: "code" },
+        { s: "$6000", e: "$8C69", owner: "128.world — resident world payload (cache/overlay state, filename tables, infravision)", kind: "code" },
+        { s: "$8C70", e: "$A648", owner: "128.item — resident item payload", kind: "code" },
+        { s: "$A800", e: "$AAE0", owner: "128.select — resident selector payload", kind: "code" },
+        { s: "$AB00", e: "$AEE0", owner: "128.diskio payload", kind: "code" },
+        { s: "$AF00", e: "$CFE7", owner: "128.persist / 128.play — mutually-exclusive resident slot (save-modal vs. gameplay)", kind: "overlay" },
+        { s: "$D000", e: "$DFFF", owner: "I/O hole — forbidden for ordinary runtime payloads", kind: "io" },
+        { s: "$E000", e: "$EFFF", owner: "Overlay execution window", kind: "overlay" },
+        { s: "$F000", e: "$FEAF", owner: "Reloadable banked runtime payload, asserted below $FF00", kind: "code" }
+      ]
+    },
+    {
+      id: "apple2m", title: "Apple IIe — main RAM — $0000–$FFFF",
+      note: "Verified against platforms/apple2/memory.s constants and docs/APPLE2_MEMORY_POLICY.md. MORIA8.SYSTEM boots at $2000, then relocates into $0800–$09FF loader scratch inside the resident span.",
+      regions: [
+        { s: "$0000", e: "$01FF", owner: "Zero page (core $02-$8F unchanged; platform $90-$EF) / stack", kind: "zp" },
+        { s: "$0200", e: "$03FF", owner: "Platform scratch (ZP save buffer, MLI params, boot staging) + ProDOS/reset/IRQ vectors", kind: "zp" },
+        { s: "$0400", e: "$07FF", owner: "80x24 text page, main half (odd columns)", kind: "map" },
+        { s: "$0800", e: "$09FF", owner: "Floor-item table (256) + creature scratch (256)", kind: "map" },
+        { s: "$0A00", e: "$7BFF", owner: "Always-resident code/data (MORIA8.PAK resident stream)", kind: "code" },
+        { s: "$7C00", e: "$9FFF", owner: "A2.PLAY — play/modal slot (load-once + signature)", kind: "code" },
+        { s: "$A000", e: "$A3FF", owner: "Tier-name pool (core raw-addressed)", kind: "map" },
+        { s: "$A400", e: "$B9FF", owner: "Overlay/tier window — 1 of 11 mutually-exclusive code overlays or a MONSTER.DB tier blob", kind: "overlay" },
+        { s: "$BA00", e: "$BAFF", owner: "Window tail reserved; tier data may use through $BAFF", kind: "overlay" },
+        { s: "$BB00", e: "$BEFF", owner: "ProDOS MLI I/O/staging buffer (page-aligned, one open file)", kind: "io" },
+        { s: "$BF00", e: "$BFFF", owner: "ProDOS global page (MLI entry JSR $BF00)", kind: "io" }
+      ]
+    },
+    {
+      id: "apple2a", title: "Apple IIe — aux RAM — $0000–$FFFF",
+      note: "All aux access goes through the ZP AuxRead/AuxWrite and MapRead/MapWrite thunks.",
+      regions: [
+        { s: "$0400", e: "$07FF", owner: "Text page aux half (even columns)", kind: "map" },
+        { s: "$0800", e: "$3B0B", owner: "Live dungeon map, 198x66 tiles", kind: "map" },
+        { s: "$3B0C", e: "$56FF", owner: "A2.AUXDATA — Huffman data, item-name streams, store data, recall arrays, class-spell tables, spell names, ego suffixes, externalized strings, char-map table", kind: "map" },
+        { s: "$5700", e: "$BFFF", owner: "Hot overlay cache (page-rounded slots): TOWN $5700, UI $6C00, SPELL $7900, MODAL $8D00, GEN $9900, ITEMS $AA00", kind: "cache" }
+      ]
+    },
+    {
+      id: "c128b1", title: "C128 — Bank 1 — $0000–$FFFF",
+      regions: [
+        { s: "$0000", e: "$0FFF", owner: "4 KB common RAM; not cache-safe", kind: "zp" },
+        { s: "$1000", e: "$1FFF", owner: "Overlay cache slot — OVL_UI", kind: "cache" },
+        { s: "$2000", e: "$2FFF", owner: "Overlay cache slot — OVL_HELP", kind: "cache" },
+        { s: "$3000", e: "$3FFF", owner: "Overlay cache slot — OVL_ITEMS", kind: "cache" },
+        { s: "$4000", e: "$730B", owner: "Reserved future map span / live dungeon-town map ownership", kind: "map" },
+        { s: "$7400", e: "$7FFF", owner: "Bank 1 DB/data region (incl. 128.names item-name tokens at $7400-$7734)", kind: "map" },
+        { s: "$8000", e: "$94F7", owner: "Active monster tier-cache window (5,368 bytes)", kind: "map" },
+        { s: "$94F8", e: "$9CFF", owner: "Title-art session cache", kind: "cache" },
+        { s: "$9D00", e: "$9FFF", owner: "Small overlay cache region — OVL_DISARM", kind: "cache" },
+        { s: "$A000", e: "$AFFF", owner: "Overlay cache slot — OVL_STARTUP", kind: "cache" },
+        { s: "$B000", e: "$BFFF", owner: "Overlay cache slot — OVL_TOWN", kind: "cache" },
+        { s: "$C000", e: "$CFFF", owner: "Overlay cache slot — OVL_DEATH", kind: "cache" },
+        { s: "$D000", e: "$DFFF", owner: "I/O-visible gap; not cache-safe", kind: "io" },
+        { s: "$E000", e: "$EFFF", owner: "Overlay cache slot — OVL_DUNGEON_GEN", kind: "cache" },
+        { s: "$F000", e: "$FEFF", owner: "Top common RAM shared with Bank 0; not cache-safe", kind: "zp" }
+      ]
+    }
+  ];
+
+  var kindClass = { code: "k-code", map: "k-map", io: "k-io", overlay: "k-overlay", zp: "k-zp", cache: "k-cache", free: "" };
+
+  var host = document.getElementById("memblocks");
+  memoryMaps.forEach(function (block) {
+    var wrap = document.createElement("div");
+    wrap.className = "memblock";
+
+    var h3 = document.createElement("h3");
+    h3.textContent = block.title;
+    wrap.appendChild(h3);
+
+    var bar = document.createElement("div");
+    bar.className = "membar";
+
+    var inspect = document.createElement("div");
+    inspect.className = "mem-inspect";
+    inspect.textContent = "hover or focus a segment for its range and owner";
+
+    block.regions.forEach(function (r) {
+      var seg = document.createElement("div");
+      seg.className = "seg " + (kindClass[r.kind] || "");
+      seg.style.width = widthPct(r.s, r.e) + "%";
+      seg.tabIndex = 0;
+      seg.setAttribute("role", "button");
+      seg.setAttribute("aria-label", r.s + " to " + r.e + ": " + r.owner);
+      var show = function () {
+        inspect.innerHTML = "<b>" + r.s + "–" + r.e + "</b> &mdash; " + r.owner;
+      };
+      seg.addEventListener("mouseenter", show);
+      seg.addEventListener("focus", show);
+      bar.appendChild(seg);
+    });
+
+    wrap.appendChild(bar);
+    wrap.appendChild(inspect);
+    if (block.note) {
+      var note = document.createElement("p");
+      note.className = "mem-note";
+      note.textContent = block.note;
+      wrap.appendChild(note);
+    }
+    host.appendChild(wrap);
+  });
+
+  var modules = {
+    "Dungeon generation & rendering": ["dungeon_data.s","dungeon_features.s","dungeon_gen.s","dungeon_los.s","dungeon_room_center_helpers.s","dungeon_tunnel_guard.s"],
+    "Monster AI & combat": ["monster.s","monster_ai.s","monster_attack.s","monster_magic.s"],
+    "Player magic / spellcasting": ["player_magic.s","player_magic_ball.s","player_magic_detect.s","player_magic_detect_evil_effect.s","player_magic_display.s","player_magic_display_data.s","player_magic_earthquake.s","player_magic_execute_overlay.s","player_magic_feedback.s","player_magic_learn_op.s","player_magic_levelup.s","player_magic_map.s","player_magic_select_overlay.s","player_magic_slow_runtime.s","player_magic_state.s","player_magic_state_ops.s","player_magic_tail.s","player_magic_turn_banked.s","player_magic_utility.s"],
+    "Spell data & effects": ["spell_class_data.s","spell_data.s","spell_data_defs.s","spell_effects.s","spell_helper_tables.s","spell_names.s"],
+    "Player state & actions": ["player.s","player_create.s","player_gain_spell.s","player_gain_spell_impl.s","player_heal_feedback.s","player_item_commands.s","player_item_select.s","player_items.s","player_move.s","player_move_live_occupant.s","player_recalc_equipment.s","player_run.s"],
+    "Items & identification": ["item.s","item_actions_overlay.s","item_defs.s","item_desc_banked.s","item_identification.s","item_tables.s"],
+    "Town stores": ["store.s","store_data.s","store_data_defs.s","store_door_lookup.s","store_hot_data.s","store_inventory_data.s","store_meta_macros.s","store_restock_overlay.s","store_runtime_data.s"],
+    "UI screens": ["ui_character.s","ui_disk_setup.s","ui_equipment.s","ui_help.s","ui_help_clear.s","ui_help_data.s","ui_help_page2_data.s","ui_home.s","ui_home_text.s","ui_identify.s","ui_inventory.s","ui_messages.s","ui_recall.s","ui_restore.s","ui_status.s","ui_store.s","ui_trampoline_stubs.s","ui_wizard.s"],
+    "Word of recall": ["recall.s","recall_array_data.s","recall_defs.s"],
+    "Title screen": ["title_data.s","title_sysinfo_banked.s"],
+    "Input handling": ["input_contract.s","input_run_cancel.s","input_tables.s","input_ui_helpers.s"],
+    "Text compression": ["huffman.s","huffman_data.s"],
+    "High scores": ["score.s","score_io.s"],
+    "Combat resolution": ["combat.s"],
+    "Foundational / cross-cutting": ["background_data.s","bash.s","color.s","disarm.s","disarm_helpers.s","ego_items.s","game_loop.s","game_loop_helpers.s","generation_busy.s","generation_busy_api.s","hal_missing_service_stubs.s","look_flash_target.s","los_trace.s","math.s","numeric_format.s","platform_services_api.s","projectile.s","ranged_fire.s","rng.s","royal.s","runtime_ui_strings.s","sound.s","special_rooms.s","special_rooms_stubs.s","stat_display.s","storage_status.s","string_bank.s","string_bank_banked.s","tables.s","throw.s","tier_manager.s","tunnel.s","turn.s","turn_render_state.s","wizard.s","zeropage.s"]
+  };
+
+  var grid = document.getElementById("moduleGrid");
+  Object.keys(modules).forEach(function (name) {
+    var files = modules[name];
+    var d = document.createElement("details");
+    d.className = "mod";
+    var s = document.createElement("summary");
+    var mname = document.createElement("span");
+    mname.className = "mname";
+    mname.textContent = name;
+    var mcount = document.createElement("span");
+    mcount.className = "mcount";
+    mcount.textContent = files.length;
+    s.appendChild(mname);
+    s.appendChild(mcount);
+    d.appendChild(s);
+    var list = document.createElement("div");
+    list.className = "mfiles";
+    files.forEach(function (f) {
+      var span = document.createElement("span");
+      span.textContent = f;
+      list.appendChild(span);
+    });
+    d.appendChild(list);
+    grid.appendChild(d);
+  });
+
+  var cascade = [
+    ["hal/storage_policy.s","plat"], ["../common/save_slot_policy.s","plat"], ["hal/storage_title_name.s","plat"],
+    ["core/zeropage.s","core"], ["memory.s","plat"], ["hal/layout.s","plat"], ["hal/lifecycle_policy.s","plat"], ["../common/reu.s","plat"],
+    ["screen.s","plat"], ["core/color.s","core"], ["config.s","plat"], ["input.s","plat"],
+    ["core/rng.s","core"], ["core/math.s","core"], ["core/tables.s","core"], ["core/item_defs.s","core"], ["core/player.s","core"],
+    ["core/ui_messages.s","core"], ["core/ui_status.s","core"], ["core/generation_busy.s","core"], ["core/stat_display.s","core"],
+    ["core/sound.s","core"], ["core/huffman.s","core"], ["core/dungeon_data.s","core"], ["core/dungeon_features.s","core"],
+    ["core/monster.s","core"], ["core/tier_manager.s","core"], ["../common/overlay.s","plat"], ["core/monster_ai.s","core"],
+    ["core/recall.s","core"], ["core/monster_magic.s","core"], ["core/item.s","core"], ["core/player_items.s","core"],
+    ["core/spell_data.s","core"], ["core/spell_effects.s","core"], ["core/player_magic_state.s","core"],
+    ["core/player_magic_state_ops.s","core"], ["core/player_magic.s","core"], ["dungeon_render.s","plat"],
+    ["core/dungeon_los.s","core"], ["core/player_move.s","core"], ["core/player_run.s","core"], ["core/combat.s","core"],
+    ["core/projectile.s","core"], ["core/monster_attack.s","core"], ["core/turn.s","core"], ["core/store_data.s","core"],
+    ["core/runtime_ui_strings.s","core"], ["../common/compat/io_kernal_consts.s","plat"], ["../../shared/save.s","plat"],
+    ["../common/disk_swap.s","plat"], ["core/score_io.s","core"], ["../common/title_screen.s","plat"], ["core/wizard.s","core"],
+    ["core/game_loop.s","core"], ["hal/storage.s","plat"],
+    ["core/title_sysinfo_banked.s","core"], ["core/ui_help_clear.s","core"], ["look_trampoline.s","plat"]
+  ];
+  var cList = document.getElementById("cascadeList");
+  cascade.forEach(function (row) {
+    var li = document.createElement("li");
+    li.className = row[1];
+    li.textContent = row[0];
+    cList.appendChild(li);
+  });
+
+  var docs = [
+    ["ARCHITECTURE.md", "Source layout, footprint tables, per-platform memory model — primary reference this map is derived from"],
+    ["BEHAVIOR_CHANGE_PROTOCOL.md", "Gate: load before gameplay/lifecycle/generation/rendering/C128-memory changes"],
+    ["MONSTER_STATE_CONTRACT.md", "Domain contract: monster records, AI, sleep, awareness, attacks, detection/targeting"],
+    ["DUNGEON_GENERATION_CONTRACT.md", "Domain contract: generation stages, topology, placement, gen RNG/performance"],
+    ["TURN_RENDER_CONTRACT.md", "Domain contract: turn consumption, visibility lifecycle, dirty flags, redraw"],
+    ["C128_MEMORY_CONTRACT.md", "Domain contract: C128 addresses, banks, overlays, runtime code, VDC access"],
+    ["APPLE2_PORT.md", "Apple IIe port implementation plan, status, locked decisions"],
+    ["APPLE2_MEMORY_POLICY.md", "Apple IIe memory placement source of truth — wins over the port plan on conflicts"],
+    ["COMMODORE_HAL_RESTRUCTURE.md", "History/rationale of the HAL contract split"],
+    ["CROSS_PLATFORM_STRATEGY.md", "Long-range multi-architecture roadmap (Z80, CX16, NES, Atari8, Acorn, etc.)"],
+    ["DESIGN.md", "Gameplay design reference"],
+    ["DEVELOPMENT_PROCESS.md", "Contributor process"],
+    ["COMBAT_AUDIT.md", "Combat formula audit vs. umoria"],
+    ["MONSTERS.md / SPELLS.md / MANUAL.md / PLAYER_GUIDE.md / WIZARD.md", "Player-facing and wizard-mode reference"],
+    ["ITEM_EXPANSION_PLAN.md / UNIMPLEMENTED_AUDIT.md / BACKLOG.md", "Scope tracking"],
+    ["SAVE_FILE_MIGRATION.md", "Save format compatibility notes"],
+    ["RELEASE_CHECKLIST.md / release_notes/", "Release process and history"],
+    ["TROUBLESHOOTING.md", "Known issues / diagnostics"],
+    ["INTERNAL_MANDATES.md", "Standing project mandates"]
+  ];
+  var dList = document.getElementById("docsList");
+  docs.forEach(function (row) {
+    var d = document.createElement("div");
+    d.className = "docs-row";
+    var f = document.createElement("span"); f.className = "dfile"; f.textContent = row[0];
+    var r = document.createElement("span"); r.className = "drole"; r.textContent = row[1];
+    d.appendChild(f); d.appendChild(r);
+    dList.appendChild(d);
+  });
+})();
+</script>

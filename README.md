@@ -119,6 +119,12 @@ scenario harness lives at `platforms/apple2/harness_smoke.py`.
 - [Player Guide](docs/PLAYER_GUIDE.md)
 - [Development Process](docs/DEVELOPMENT_PROCESS.md) - the story of Moria8,
   including how it was built with modern tooling.
+- [Architecture Reference](docs/ARCHITECTURE.md) - source layout, memory
+  models, footprint tables.
+- [Architecture Map](docs/architecture-map.json) - structural map of the
+  codebase, with a viewable HTML companion at
+  [docs/architecture-map.html](docs/architecture-map.html) (download and open
+  in a browser).
 
 ## Community
 
