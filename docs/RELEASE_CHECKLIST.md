@@ -64,6 +64,16 @@ Expected disk artifacts:
 - `build/*.asc`
 - `build/c64-dist/` staging directory for the C64 Ultimate loose-file distribution
 
+Every shipping image must contain the GPL license and source-offer files
+(`data/LICENSE`, `data/SOURCE-OFFER`). Verify before upload:
+
+```sh
+for d in build/moria8-c64.d64 build/moria8-c128.d64 build/moria8-c128.d71 build/moria8-c128.d81 build/moria8-plus4.d64; do
+  c1541 "$d" -list | grep -E 'license|source-offer'
+done
+tools/applecommander/ac -l build/moria8-apple2.po | grep -E 'LICENSE|SOURCE.OFFER'
+```
+
 ## Automated Gates
 
 ```sh

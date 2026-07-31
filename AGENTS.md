@@ -91,6 +91,10 @@ Run commands from the repository root.
 - `make test128`: authoritative full C128 suite
 - `make testapple2`: Apple IIe memory-contract gate (static)
 - `make disk`: build shipping C64, C128, Plus/4, and Apple IIe disk images
+- Release compliance: every shipping disk image must include `data/LICENSE`
+  and `data/SOURCE-OFFER` (LF→CR converted). Commodore images carry them as
+  SEQ files `license,s`/`source-offer,s`; the Apple IIe image carries ProDOS
+  TXT files `LICENSE`/`SOURCE.OFFER`. New platform ports must do the same.
 - `make run`, `make run64`, `make run128`, `make runplus4`: launch under VICE
 - `make runapple2`: launch under MAME apple2ee (requires `A2ROMS`)
 - `make clean`: remove build artifacts

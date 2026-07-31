@@ -47,6 +47,11 @@ PRODOS_VERSION ?= 2.4.3
 PRODOS_URL    = https://raw.githubusercontent.com/ProDOS-8/ProDOS8-Releases/master/ProDOS_2_4_3.po
 PRODOS_SHA256 = 398d333cb2ab92df9f8bb2cf64b946f2567116910eb8359cf4bdee5d4194f0fa
 
+LICENSE_FILE  = ../../data/LICENSE
+SOURCE_OFFER  = ../../data/SOURCE-OFFER
+LICENSE_DISK_FILE = $(OUTA2)/license.txt
+SOURCE_OFFER_DISK_FILE = $(OUTA2)/source-offer.txt
+
 BUILD       ?= ../../build
 OUTA2        = $(BUILD)/apple2
 OVL_OUTA2    = $(abspath $(OUTA2))
@@ -190,7 +195,13 @@ $(A2_BOOT_PRG): $(A2_BOOT_SRC) cache_layout.s | ensure-kickass $(OUTA2)
 # ── Disk image ────────────────────────────────────────────
 # PRG -> BIN conversion strips the Kick header and asserts each load
 # address. PRODOS kernel and boot blocks auto-download (see prodos target).
-$(A2_DISK_IMAGE): ensure-ac ensure-prodos $(A2_MAIN_PRG) $(A2_PLAY_PRG) $(A2_AUX_PRG) $(A2_OVL_PRGS) $(A2_TIER_PRGS) $(A2_TITLE_PRG) $(A2_BOOT_PRG)
+$(LICENSE_DISK_FILE): $(LICENSE_FILE) | $(OUTA2)
+	LC_ALL=C tr '\012' '\015' < "$<" > "$@"
+
+$(SOURCE_OFFER_DISK_FILE): $(SOURCE_OFFER) | $(OUTA2)
+	LC_ALL=C tr '\012' '\015' < "$<" > "$@"
+
+$(A2_DISK_IMAGE): ensure-ac ensure-prodos $(A2_MAIN_PRG) $(A2_PLAY_PRG) $(A2_AUX_PRG) $(A2_OVL_PRGS) $(A2_TIER_PRGS) $(A2_TITLE_PRG) $(A2_BOOT_PRG) $(LICENSE_DISK_FILE) $(SOURCE_OFFER_DISK_FILE)
 	@mkdir -p "$(OUTA2)/bin"
 	$(PRG2BIN) "$(A2_BOOT_PRG)" "$(OUTA2)/bin/MORIA8.SYSTEM" --expect-addr 0x2000
 	$(PRG2BIN) "$(A2_MAIN_PRG)" "$(OUTA2)/bin/MORIA8.RES" --expect-addr 0x0A00
@@ -221,5 +232,7 @@ $(A2_DISK_IMAGE): ensure-ac ensure-prodos $(A2_MAIN_PRG) $(A2_PLAY_PRG) $(A2_AUX
 	  "$(AC_BIN)" -p "$@" MONSTER.DB.$$n bin 0xA400 < "$(OUTA2)/bin/MONSTER.DB.$$n" || exit 1; \
 	done
 	"$(AC_BIN)" -p "$@" TITLE bin 0x4000 < "$(OUTA2)/bin/TITLE"
+	"$(AC_BIN)" -p "$@" LICENSE txt < "$(LICENSE_DISK_FILE)"
+	"$(AC_BIN)" -p "$@" SOURCE.OFFER txt < "$(SOURCE_OFFER_DISK_FILE)"
 	dd if="$(BOOTBLOCKS)" of="$@" bs=512 count=2 conv=notrunc
 	"$(AC_BIN)" -l "$@"
