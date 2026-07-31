@@ -2,7 +2,7 @@
 
 Moria8 is a port of the classic roguelike game, Moria, for 8-bit platforms
 written in platform-specific assembly. Current releases target the Commodore
-64, Plus/4, and 128 systems; the Apple IIe port ships with v1.5.0.
+64, Plus/4, and 128 systems, and the Apple II.
 
 ![Animated GIF of Commodore 64 Play Testing](docs/assets/moria8-c64-gameplay.gif)
 
@@ -10,15 +10,14 @@ written in platform-specific assembly. Current releases target the Commodore
 
 | Platform | Status | Download |
 | -------- | ------ | -------- |
-| Commodore 64 (C64) | Released ([notes](docs/release_notes/release_notes-v1.3.0.md)) | [moria8-c64.d64](https://github.com/dcgibbons/moria8/releases/download/v1.3.0/moria8-c64.d64) [moria8-c64.zip](https://github.com/dcgibbons/moria8/releases/download/v1.3.0/moria8-c64.zip) |
-| Commodore Plus/4 | Released ([notes](docs/release_notes/release_notes-v1.3.0.md)) | [moria8-plus4.d64](https://github.com/dcgibbons/moria8/releases/download/v1.3.0/moria8-plus4.d64) |
-| Commodore 128 (C128) | Released ([notes](docs/release_notes/release_notes-v1.3.0.md)) | [moria8-c128.d64](https://github.com/dcgibbons/moria8/releases/download/v1.3.0/moria8-c128.d64) |
+| Commodore 64 (C64) | Released ([notes](docs/release_notes/release_notes-v1.5.0.md)) | [moria8-c64.d64](https://github.com/dcgibbons/moria8/releases/download/v1.5.0/moria8-c64.d64) [moria8-c64.zip](https://github.com/dcgibbons/moria8/releases/download/v1.5.0/moria8-c64.zip) |
+| Commodore Plus/4 | Released ([notes](docs/release_notes/release_notes-v1.5.0.md)) | [moria8-plus4.d64](https://github.com/dcgibbons/moria8/releases/download/v1.5.0/moria8-plus4.d64) |
+| Commodore 128 (C128) | Released ([notes](docs/release_notes/release_notes-v1.5.0.md)) | [moria8-c128.d64](https://github.com/dcgibbons/moria8/releases/download/v1.5.0/moria8-c128.d64) [moria8-c128.d71](https://github.com/dcgibbons/moria8/releases/download/v1.5.0/moria8-c128.d71) [moria8-c128.d81](https://github.com/dcgibbons/moria8/releases/download/v1.5.0/moria8-c128.d81) |
 | Commodore PET | Maybe | |
 | Commodore VIC-20 | Maybe | |
 | Commander X16 | Planned | |
 | Acorn BBC Master | Planned | |
-| Apple IIe | Implemented — ships with v1.5.0 | |
-| Apple IIgs | Planned | |
+| Apple II | Released ([notes](docs/release_notes/release_notes-v1.5.0.md)) | [moria8-apple2.po](https://github.com/dcgibbons/moria8/releases/download/v1.5.0/moria8-apple2.po) |
 | Atari 8-bit | Planned | |
 | CP/M (Z80) | Planned | |
 | MSX | Planned | |
@@ -44,7 +43,7 @@ Want a real floppy disk of Moria8? Please fill out fill out the
 - `make`
 - Java, for Kick Assembler
 - VICE (`x64sc`, `x128`, `xplus4`, and `c1541`)
-- MAME, for Apple IIe run/test; Apple IIe ROMs via the `A2ROMS` env var
+- MAME, for Apple II run/test; Apple II ROMs via the `A2ROMS` env var
   (not redistributable)
 - Python 3 for build and test helper scripts
 
@@ -91,7 +90,7 @@ make runapple2
 `make run` and `make run64` launch the C64 disk. `make run128` launches the
 C128 disk. `make runplus4` launches the Plus/4 disk in `xplus4` with a 1541
 drive configuration. The Plus/4 artifact is a standard Commodore D64 image.
-`make runapple2` launches the Apple IIe image under MAME apple2ee (requires
+`make runapple2` launches the Apple II image under MAME apple2ee (requires
 `A2ROMS`).
 
 ### Test
@@ -108,7 +107,7 @@ make testapple2
 `make test` runs the default regression mix. `make test128-fast` is the fast
 C128 unit batch, `make test128-fast-smoke` covers high-value C128 runtime boot
 and town paths, and `make test128` is the broader C128 shell harness.
-`make testapple2` is the Apple IIe static memory-contract gate; the MAME
+`make testapple2` is the Apple II static memory-contract gate; the MAME
 scenario harness lives at `platforms/apple2/harness_smoke.py`.
 
 ## Documentation

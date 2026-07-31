@@ -6,8 +6,6 @@
 #   make disk64             Build the C64 shipping disk at ../../build/moria8-c64.d64
 #   make zip64              Build the C64 loose-file archive at ../../build/moria8-c64.zip
 #   make disk128            Build the C128 shipping disks at ../../build/moria8-c128.d64/.d71/.d81
-#   make artifact-checksums Build disks and SHA256SUMS without signing
-#   make artifacts          Build disks, SHA256SUMS, and detached GPG signatures
 #   make run                Launch the C64 shipping disk in C64 VICE
 #   make run128             Launch the C128 shipping disk in C128 VICE
 #   make test               Run the default regression mix (C64 + fast C128 coverage)
@@ -39,9 +37,6 @@ KICKASS_DIR_RESOLVED = $(KICKASS_DIR)
 endif
 JAVA        ?= ../../tools/kickass_java.sh
 C1541       ?= c1541
-GPG         ?= gpg
-GPG_SIGN_FLAGS ?= --armor --detach-sign
-SHASUM      ?= shasum
 VICE64      ?= x64sc
 VICE128     ?= x128
 VICEPLUS4   ?= xplus4
@@ -196,9 +191,6 @@ EMPTY_PRG          = $(OUT)/empty.prg
 DISK64_LABEL       = "moria8 c64,m8"
 DISK128_LABEL      = "moria8 c128,m8"
 DISKPLUS4_LABEL    = "moria8 plus4,m8"
-RELEASE_ARTIFACTS  = $(DISK64_IMAGE) $(C64_ZIP_IMAGE) $(DISK128_D64_IMAGE) $(DISK128_D71_IMAGE) $(DISK128_D81_IMAGE) $(DISKPLUS4_IMAGE)
-ARTIFACT_MANIFEST  = $(OUT)/SHA256SUMS
-ARTIFACT_SIGNATURES = $(addsuffix .asc,$(RELEASE_ARTIFACTS) $(ARTIFACT_MANIFEST))
 
 # ── Aggregate groups ──────────────────────────────────────
 C64_BUILD_ARTIFACTS  = $(C64_MAIN_PRG) $(C64_BOOT_PRG) $(C64_BOOTART_PRG) $(C64_TITLE_PRG) $(C64_TIER_PRGS) \
@@ -218,7 +210,7 @@ C128_MAIN_OUTPUTS = $(C128_MAIN_PRG) $(C128_OVL_START) $(C128_OVL_TOWN) $(C128_O
 		$(C128_RESIDENT_WORLD) $(C128_RESIDENT_ITEMS) $(C128_RESIDENT_ITEM_NAMES) $(C128_RESIDENT_SELECT) \
 	$(C128_RESIDENT_PERSIST) $(C128_RESIDENT_PLAY) $(C128_RUNTIME_BANKED)
 
-.PHONY: all build build64 build128 buildplus4 disk disk64 zip64 c64-dist disk128 diskplus4 artifact artifact-checksums artifacts run run64 run128 runplus4 \
+.PHONY: all build build64 build128 buildplus4 disk disk64 zip64 c64-dist disk128 diskplus4 run run64 run128 runplus4 \
 	bootart128-charset-demo \
 	test test-disk test-disk-static test-disk-debt test64 test128 test128-fast test128-fast-smoke testplus4 testplus4-build testplus4-runtime clean \
 	check-zp check-6502-lint check-hal-boundaries cleanup-source-symbols ensure-kickass kickass create-symlinks
@@ -250,10 +242,6 @@ c64-dist: $(C64_DIST_STAMP)
 disk128: $(DISK128_IMAGES)
 
 diskplus4: $(DISKPLUS4_IMAGE)
-
-artifact-checksums: $(ARTIFACT_MANIFEST)
-
-artifact artifacts: $(ARTIFACT_MANIFEST) $(ARTIFACT_SIGNATURES)
 
 run: $(DISK64_IMAGE)
 	$(VICE64) -drive8truedrive -drive8type 1541 +busdevice8 $(RUN_FLAGS64) -autostart $(DISK64_IMAGE)
@@ -570,12 +558,6 @@ $(DISKPLUS4_IMAGE): $(PLUS4_BUILD_ARTIFACTS) $(DISKART) $(VERSION_FILE) $(LICENS
 	@mkdir -p "$(OUTPLUS4)"
 	cp -f "$(DISKPLUS4_IMAGE)" "$(OUTPLUS4)/moria8-plus4.d64"
 	rm -f "$(EMPTY_PRG)"
-
-$(ARTIFACT_MANIFEST): $(RELEASE_ARTIFACTS) | $(OUT)
-	cd "$(OUT)" && $(SHASUM) -a 256 $(notdir $(RELEASE_ARTIFACTS)) > "$(notdir $@)"
-
-%.asc: %
-	$(GPG) --yes $(GPG_SIGN_FLAGS) --output "$@" "$<"
 
 define C128_DISK_WRITE_FILES
 		-write "$(C128_BOOTSECT_PRG)" "art1" \
