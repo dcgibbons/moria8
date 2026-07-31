@@ -89,6 +89,14 @@ but it is the only remaining >4K source).
 
 ## Revised Memory Map (supersedes plan tables)
 
+> **SUPERSEDED — historical M0 design record.** The Current Snapshot at the
+> top of this document is authoritative. Key deltas from this table: play
+> slot is `$7C00-$9FFF` (9,216 B), tier-name pool is `$A000-$A3FF`, and the
+> overlay/tier window is `$A400-$B9FF` (`BANKED_DATA_BASE=$A400`), per
+> `platforms/apple2/memory.s`. `A2.PLAY` is load-once resident, not a modal
+> swap slot, and there is no DISARM class (spell execution is its own SPELL
+> class on this port).
+
 ### Main RAM
 
 | Range | Size | Owner |
@@ -126,6 +134,11 @@ are the shipping stock-C64 norm, so this is not a UX regression; the aux
 cache is pure latency luxury for the hot classes.
 
 ## Payload Classes
+
+> **SUPERSEDED — historical M0 design record.** In the implementation,
+> OVL.STORAGE and OVL.TITLE are window-hosted (`$A400`) like every other
+> overlay class; nothing overwrites the play slot, and there is no DISARM
+> class. See the Current Snapshot.
 
 Existing classes carry over unchanged (START, TOWN, DEATH — which doubles as
 the spell-execution class per C128, MODAL, GEN, HELP, UI, ITEMS, DISARM).
@@ -274,6 +287,11 @@ Platform owns `$90-$EF`:
 
 ## Play/Persist Broker (five-facts applied)
 
+> **SUPERSEDED — historical design record.** The shipped implementation does
+> not swap play: `A2.PLAY` loads once at `$7C00-$9FFF`, is signature-checked,
+> and stays resident; STORAGE/TITLE modals run as window overlays. Asserts
+> pin `play_end <= $9FFF`, not `$9DFF`. See the Current Snapshot.
+
 1. **Linked symbol address**: play payload Kick segment linked at `$7C00`;
    asserts pin `play_end <= $9DFF`.
 2. **BIN load address**: `A2.PLAY` file auxtype = `$7C00`; `prg_to_bin.py`
@@ -363,6 +381,11 @@ M1 gate zero (full link + `.assert`s + contract checker) converts every
 estimate here into a hard failure if exceeded.
 
 ## Amendments to docs/APPLE2_PORT.md Implied by M0
+
+> **SUPERSEDED in part — M0-era record.** Items 2, 5, and 6 were later
+> revised: the window is `$A400-$B9FF`, the play slot is 9,216 B
+> (`$7C00-$9FFF`), aux data is `$3B0C-$56FF`, and the hot cache is
+> `$5700-$BFFF`. See the Current Snapshot at the top of this document.
 
 1. Closure levers 1-4 reframed: slot invariance means only aux-data moves,
    overlay-class moves, and region/platform changes reduce the concurrent
