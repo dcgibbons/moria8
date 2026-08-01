@@ -2463,7 +2463,7 @@ player_died:
     jmp game_over_prompt    // Platform hook returns to title/menu.
 
 player_retired:
-#if !C64_PRODUCT_OVERLAY_RUNTIME
+#if !(C64_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME)
     jsr winner_apply_retirement_bonus
 #endif
     jsr tramp_winner_royal

@@ -372,7 +372,7 @@ item_get_name_ptr:
     cmp #ICAT_BOOK
     beq !ignp_book_prefix+
 !ignp_raw_known:
-#if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME
+#if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME
     jsr item_load_known_name_ptr
 #else
     lda it_name_lo,x
@@ -396,7 +396,7 @@ item_get_name_ptr:
 !ignp_prefix_done:
     sty item_name_dst_idx
     ldx item_display_id
-#if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME
+#if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME
     jsr item_load_known_name_ptr
 #else
     lda it_name_lo,x
@@ -446,7 +446,7 @@ idgp_mage_book_prefix:   .text "Spellbook " ; .byte 0
 idgp_priest_book_prefix: .text "Holy Book of Prayers " ; .byte 0
 item_display_id: .byte 0
 
-#if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME
+#if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME
 // item_load_known_name_ptr — Resolve a known-name stream pointer without the
 // resident high-byte table. Name streams are emitted in item-ID order, so a
 // low-byte wrap between adjacent entries means the stream crossed a page.

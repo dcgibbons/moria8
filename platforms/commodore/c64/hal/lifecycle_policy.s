@@ -58,7 +58,7 @@
 .const hal_platform_monster_cpu_port_bank = 1
 .const hal_platform_monster_overlay_stale_name = 1
 .const hal_platform_monster_stale_tier_reload = 0
-#define HAL_PLATFORM_WIZARD_40COL_RESIDENT
+#define HAL_PLATFORM_WIZARD_ENTRY_OVERLAY
 #define HAL_PLATFORM_WIZARD_REVEAL_TRAMPOLINE
 #define HAL_PLATFORM_EGO_AC_BONUS_LOCAL
 #define HAL_PLATFORM_RESTORE_TIER_AFTER_OVERLAY

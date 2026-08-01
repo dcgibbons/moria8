@@ -381,7 +381,6 @@ hal_sound_update:
 #import "config128.s"
 #import "screen_vdc.s"
 #import "../../../core/title_sysinfo_banked.s"
-#import "../common/reu_loading_banked.s"
 #define C128_PRODUCT_SOUND_UPDATE_FROM_INPUT
 #import "input128.s"
 
@@ -1627,11 +1626,6 @@ title_clear_below_menu:
     bcc !tcb_loop-
     rts
 
-// tramp_reu_show_status — banked status display hook.
-// Pinned low to avoid drifting into $D000 I/O space.
-tramp_reu_show_status:
-    :C128BankedStatusTrampoline(reu_show_status_banked)
-
 // ============================================================
 .const TITLE_MENU_COL = (SCREEN_COLS - 25) / 2
 .const SAVE_DISK_IND_COL = (SCREEN_COLS - 10) / 2
@@ -1663,14 +1657,6 @@ entry_main:
     // Save BASIC's zero page state so we can restore on exit
     jsr save_zp
     jsr disk_reset_session_state
-
-    // Patch reu_show_status: RTS → JMP tramp_reu_show_status
-    lda #$4c                    // JMP absolute opcode
-    sta reu_show_status
-    lda #<tramp_reu_show_status
-    sta reu_show_status + 1
-    lda #>tramp_reu_show_status
-    sta reu_show_status + 2
 
     // Disable hardware cursor (register 10, bits 6-5 = 01 = cursor off)
     // Prevents KERNAL cursor-blink IRQ from writing to VDC regs 14/15/18/19
@@ -1736,12 +1722,6 @@ restart_entry:
     lda KERNAL_REV              // $FF80 — in KERNAL ROM
     sta tsi_krev_cached
     :MachineRestoreAllRam()     // Stable runtime invariant: Top Common ON ($D506=$0D)
-
-    lda #0                      // Force REU absent for C128 MVP
-    sta reu_present
-    sta reu_banks
-    sta reu_size_kb
-    sta reu_size_kb + 1
 
     jsr hal_sound_init
     jsr rng_seed
@@ -3189,7 +3169,8 @@ c128_final_return_stack_7:     .byte 0
 // ============================================================
 #import "../../../core/tables.s"
 #import "../../../core/item_defs.s"
-#import "../common/reu.s"
+#import "preload128.s"
+#import "reu_stub128.s"
 #import "../../../core/rng.s"
 #import "../../../core/math.s"
 #define C128_PLAYER_STAT_HELPERS_EXTERNAL

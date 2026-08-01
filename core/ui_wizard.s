@@ -297,7 +297,11 @@ ui_wizard_cmd_heal_cure:
     jmp ui_wizard_done_message
 
 ui_wizard_cmd_reveal:
+#if HAL_PLATFORM_WIZARD_REVEAL_TRAMPOLINE
+    jsr wizard_reveal_level_from_overlay
+#else
     jsr wizard_reveal_level
+#endif
     jmp ui_wizard_done_message
 
 ui_wizard_cmd_identify:

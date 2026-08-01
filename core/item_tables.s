@@ -422,10 +422,11 @@ it_cost_lo:
     .byte <120, <110, <100, <80
 it_cost_lo_end:
 
-#if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME
+#if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME
 // Base cost high bytes are sparse in the current catalog. Product builds keep
-// only non-zero high bytes. C64/Plus4 place them in the town overlay; C128
-// keeps them with the resident item payload so town overlay entry remains code.
+// only non-zero high bytes. C64/Plus4/Apple IIe place them in the town
+// overlay; C128 keeps them with the resident item payload so town overlay
+// entry remains code.
 it_cost_hi_extra_id:
     .byte 45, 55, 56, 57, 58, 59, 60, 80, 81, 91
 it_cost_hi_extra_value:
@@ -549,7 +550,7 @@ it_name_lo:
     .byte <itn_88, <itn_89, <itn_90, <itn_91
     .byte <itn_92, <itn_93, <itn_94, <itn_95
 it_name_lo_end:
-#if !(C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME)
+#if !(C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME)
 it_name_hi:
     .byte >itn_0,  >itn_1,  >itn_2,  >itn_3,  >itn_4
     .byte >itn_5,  >itn_6,  >itn_7,  >itn_8,  >itn_9

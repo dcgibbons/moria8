@@ -110,14 +110,14 @@ run: $(A2_DISK_IMAGE)
 		-share_directory "$(MAME_OUTPUT_ROOT)/share" \
 		-flop1 "$(A2_DISK_IMAGE)"
 
-test-memory-contract: build
+test-memory-contract: build main.sym boot.sym
 	python3 check_memory_contract.py
 
 test-memory-contract-selftest:
 	python3 check_memory_contract.py --selftest
 
 clean:
-	rm -rf "$(OUTA2)" "$(A2_DISK_IMAGE)"
+	rm -rf "$(OUTA2)" "$(A2_DISK_IMAGE)" main.sym boot.sym
 
 # ── Tooling ───────────────────────────────────────────────
 ensure-kickass:
@@ -167,10 +167,10 @@ $(OUTA2):
 	mkdir -p "$(OUTA2)"
 
 $(A2_MAIN_STAMP): $(A2_SOURCES) $(VERSION_INC) | ensure-kickass $(OUTA2)
-	$(JAVA) -jar "$(KICKASS_RESOLVED)" ":OVL_OUT=$(OVL_OUTA2)" "$(A2_MAIN_SRC)" $(KA_FLAGS) -o "$(A2_MAIN_PRG)"
+	$(JAVA) -jar "$(KICKASS_RESOLVED)" ":OVL_OUT=$(OVL_OUTA2)" "$(A2_MAIN_SRC)" $(KA_FLAGS) -symbolfile -o "$(A2_MAIN_PRG)"
 	touch "$(A2_MAIN_STAMP)"
 
-$(A2_MAIN_PRG) $(A2_PLAY_PRG) $(A2_AUX_PRG) $(A2_OVL_PRGS): $(A2_MAIN_STAMP)
+$(A2_MAIN_PRG) $(A2_PLAY_PRG) $(A2_AUX_PRG) $(A2_OVL_PRGS) main.sym: $(A2_MAIN_STAMP)
 	@test -f "$@" || { rm -f "$(A2_MAIN_STAMP)"; $(MAKE) "$(A2_MAIN_STAMP)"; }
 	@test -f "$@"
 
@@ -189,8 +189,8 @@ $(OUTA2)/monster.db.4: $(A2_TIER_DIR)/tier4_prg.s | ensure-kickass $(OUTA2)
 $(A2_TITLE_PRG): $(TITLE_SRC) $(VERSION_INC) | ensure-kickass $(OUTA2)
 	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(TITLE_SRC)" -define TITLE_PLATFORM_A2 -o "$@"
 
-$(A2_BOOT_PRG): $(A2_BOOT_SRC) cache_layout.s | ensure-kickass $(OUTA2)
-	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(A2_BOOT_SRC)" -o "$@"
+$(A2_BOOT_PRG) boot.sym: $(A2_BOOT_SRC) cache_layout.s | ensure-kickass $(OUTA2)
+	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(A2_BOOT_SRC)" -symbolfile -o "$(A2_BOOT_PRG)"
 
 # ── Disk image ────────────────────────────────────────────
 # PRG -> BIN conversion strips the Kick header and asserts each load

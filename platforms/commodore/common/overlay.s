@@ -72,8 +72,8 @@ overlay_load:
     sta c128_overlay_load_entry_target
 #endif
 #elif HAL_PLATFORM_OVERLAY_FORCE_RELOAD
-    // Plus/4 shares $E000 between overlays, tier staging, and KERNAL-loaded
-    // assets. Until the port has a stronger ownership guard, prefer a fresh
+    // Kept for ports that share $E000 between overlays, tier staging, and
+    // KERNAL-loaded assets without a stronger ownership guard: prefer a fresh
     // disk reload over trusting stale overlay state.
     sta ol_target
 #else

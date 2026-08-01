@@ -1297,16 +1297,17 @@ tramp_roll_ego_type:
 // contents at the same addresses.
 // Shared OVL.ITEMS dispatch for the compact trampolines: A/Y = target.
 tramp_items_dispatch:
-    sta tramp_items_target
-    sty tramp_items_target_hi
+    sta tramp_items_jmp+1
+    sty tramp_items_jmp+2
     lda #OVL_ITEMS
     jsr overlay_load
     bcs !done+
-    jmp (tramp_items_target)
+tramp_items_jmp:
+    jmp $0000               // SMC dispatch target (never JMP (addr); the
+                            // 6502 page-crossing bug reads the high byte
+                            // from $xx00 when the pointer is at $xxFF)
 !done:
     rts
-tramp_items_target:     .byte 0
-tramp_items_target_hi:  .byte 0
 
 tramp_roll_ego_type_modal:
     pha

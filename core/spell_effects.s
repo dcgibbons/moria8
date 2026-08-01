@@ -476,12 +476,13 @@ eff_find_doors:
 
 // ============================================================
 // for_each_adjacent — Iterate 8 adjacent tiles, call callback
-// Sets df_target_x/df_target_y for each direction, then calls
-// the function at adj_callback via indirect jump.
+// Sets df_target_x/df_target_y for each direction, then jumps to the
+// callback via the self-modified absolute JMP at fea_jmp_smc. The callback
+// address is stored directly in the jump operand (never via JMP (addr),
+// which hits the 6502 page-crossing bug when the pointer is at $xxFF).
 // Callbacks may clobber A, X, Y, zp_ptr0, zp_temp0-4 freely.
 // Clobbers: A, X, Y
 // ============================================================
-adj_callback: .word 0       // Function pointer for callback
 adj_dir_idx:  .byte 0       // Direction counter 0-7
 
 for_each_adjacent:
@@ -506,17 +507,18 @@ for_each_adjacent:
 !fea_done:
     rts
 !fea_dispatch:
-    jmp (adj_callback)
+fea_jmp_smc:
+    jmp $0000               // SMC callback target (set by effect entry)
 
 // ============================================================
 // eff_sleep_adjacent — Put all adjacent monsters to sleep
-// Clobbers: A, X, Y, zp_ptr0, zp_temp0-1
+// Clobbers: A, X, Y, zp_ptr0, zp_temp0-4
 // ============================================================
 eff_sleep_adjacent:
     lda #<!esa_cb+
-    sta adj_callback
+    sta fea_jmp_smc+1
     lda #>!esa_cb+
-    sta adj_callback+1
+    sta fea_jmp_smc+2
     jmp for_each_adjacent
 !esa_cb:
     lda df_target_x

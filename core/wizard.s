@@ -179,6 +179,20 @@ wizard_reveal_level:
     jmp eff_find_doors
 #endif
 
+#if HAL_PLATFORM_WIZARD_REVEAL_TRAMPOLINE
+// wizard_reveal_level_from_overlay — Reveal wrapper for callers executing
+// from an overlay window (ui_wizard.s in ModalMiscOverlay). The reveal
+// trampoline loads OVL.SPELL into the same $E000 window, evicting the
+// caller's overlay, so the wizard menu overlay must be restored before
+// returning. Resident-only callers must use wizard_reveal_level directly.
+wizard_reveal_level_from_overlay:
+    jsr wizard_reveal_level
+    lda #OVL_MODAL_MISC
+    jsr overlay_load_no_kernal
+!wrfo_done:
+    rts
+#endif
+
 cmd_wizard_entry:
 #if HAL_PLATFORM_WIZARD_ENTRY_OVERLAY
     jsr tramp_ui_wizard_display

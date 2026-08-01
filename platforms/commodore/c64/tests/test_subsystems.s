@@ -458,11 +458,14 @@ install_test_bank:
     sta zp_ptr1
     lda #>$e000
     sta zp_ptr1_hi
-    lda #$21
-    sta zp_temp0
-    lda #$00
-    sta zp_temp1
-    jmp copy_to_e000
+    ldy #0
+!copy:
+    lda (zp_ptr0),y
+    sta (zp_ptr1),y
+    iny
+    cpy #$21
+    bne !copy-
+    rts
 
 expected_direction:
     .byte $44,$09,$12,$05,$03,$14,$09,$0f,$0e,$3f,$00

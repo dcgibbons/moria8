@@ -356,7 +356,11 @@ tramp_dig_ability:
 #import "sound.s"
 #import "../../../core/huffman.s"
 #import "../../../core/dungeon_data.s"
+#define DISARM_COMMAND_EXTERNAL
+#define DISARM_HELPERS_EXTERNAL
 #import "../../../core/dungeon_features.s"
+#undef DISARM_HELPERS_EXTERNAL
+#undef DISARM_COMMAND_EXTERNAL
 #import "../../../core/monster.s"
 #import "../../../core/tier_manager.s"
 
@@ -428,7 +432,9 @@ run_initialize:
 #import "../../../core/score_io.s"
 #import "../common/title_screen.s"
 #import "../../../core/wizard.s"
+#define DISARM_COMMAND_EXTERNAL
 #import "../../../core/game_loop.s"
+#undef DISARM_COMMAND_EXTERNAL
 #import "hal/storage.s"
 
 // Resident helper for Plus/4 save-disk marker creation. It must execute from
@@ -1471,6 +1477,14 @@ tramp_bash_command:
 !done:
     jmp tramp_sr_epilogue
 
+tramp_disarm_command:
+    lda #OVL_ITEMS
+    jsr overlay_load_no_kernal
+    bcs !done+
+    jsr disarm_command
+!done:
+    jmp tramp_sr_epilogue
+
 tramp_player_tunnel:
     lda #OVL_ITEMS
     jsr overlay_load_no_kernal
@@ -1514,7 +1528,12 @@ tramp_ui_identify:
     jmp tramp_sr_epilogue
 
 tramp_ui_wizard_display:
-    jmp wizard_40col_menu_display
+    lda #OVL_MODAL_MISC
+    jsr overlay_load_no_kernal
+    bcs !done+
+    jsr ui_wizard_display
+!done:
+    jmp tramp_sr_epilogue
 
 tramp_disk_setup:
     lda #OVL_HELP
@@ -1847,6 +1866,7 @@ tramp_winner_royal:
     sta current_overlay
     sei
     jsr plus4_bank_ram
+    jsr winner_apply_retirement_bonus_overlay
     jsr royal_screen
 #if PLUS4_TEST_SCRIPTED_RETIREMENT_PRODUCT
     jmp plus4_test_retirement_pass_sym
@@ -1855,91 +1875,11 @@ tramp_winner_royal:
 !done:
     rts
 
-winner_apply_retirement_bonus:
-    lda player_data + PL_LEVEL
-    cmp #41
-    bcs !gold+
-    clc
-    adc #40
-    sta player_data + PL_LEVEL
-    sta zp_player_lvl
-!gold:
-    lda player_data + PL_GOLD_0
-    clc
-    adc #$90
-    sta player_data + PL_GOLD_0
-    lda player_data + PL_GOLD_1
-    adc #$d0
-    sta player_data + PL_GOLD_1
-    lda player_data + PL_GOLD_2
-    adc #$03
-    sta player_data + PL_GOLD_2
-    lda player_data + PL_XP_0
-    clc
-    adc #$40
-    sta player_data + PL_XP_0
-    lda player_data + PL_XP_1
-    adc #$4b
-    sta player_data + PL_XP_1
-    lda player_data + PL_XP_2
-    adc #$4c
-    sta player_data + PL_XP_2
-!done:
-    rts
-
 // ============================================================
 // game_over_prompt — return to title/menu after save, quit, or death.
 // Shown at all exit points (save+quit, voluntary quit, death).
 // ============================================================
 game_over_prompt:
-    jmp restart_entry
-
-// ============================================================
-// game_restart — reset game state, return to title screen
-// Clears mutable state (ZP vars, inventory, tier), then jumps
-// to restart_entry (skipping one-time init_copy_banked etc.).
-// ============================================================
-game_restart:
-    // Clear ZP game variables $2B–$8F (player stats, turn counter,
-    // effect timers, monster counts, etc.)
-    lda #0
-    ldx #0
-!clr_zp:
-    sta zp_player_x,x
-    inx
-    cpx #(zp_entropy - zp_player_x + 1) // 101 bytes
-    bne !clr_zp-
-
-    // Clear static game-state variables in data segments
-    lda #0
-    sta eff_fear_timer
-    ldx #3
-!clr_recall:
-    sta recall_query_sc,x
-    dex
-    bpl !clr_recall-
-
-    // Clear inventory: inv_item_id[] = FI_EMPTY ($FF), qty/p1/flags = $00
-    lda #$ff
-    ldx #TOTAL_INV_SLOTS - 1
-!clr_inv_id:
-    sta inv_item_id,x
-    dex
-    bpl !clr_inv_id-
-
-    lda #0
-    ldx #TOTAL_INV_SLOTS - 1
-!clr_inv_rest:
-    sta inv_qty,x
-    sta inv_p1,x
-    sta inv_flags,x
-    dex
-    bpl !clr_inv_rest-
-
-    // Reset tier state (zp_current_tier already zeroed above)
-    sta current_tier
-    sta tier_loaded
-
     jmp restart_entry
 
 // Safety: ensure runtime code doesn't overlap runtime data areas
@@ -2140,8 +2080,39 @@ ovl_death_end:
 // Modal-misc overlay — winner retirement art at $E000
 // ============================================================
 .segment ModalMiscOverlay
+winner_apply_retirement_bonus_overlay:
+    lda player_data + PL_LEVEL
+    cmp #41
+    bcs !gold+
+    clc
+    adc #40
+    sta player_data + PL_LEVEL
+    sta zp_player_lvl
+!gold:
+    lda player_data + PL_GOLD_0
+    clc
+    adc #$90
+    sta player_data + PL_GOLD_0
+    lda player_data + PL_GOLD_1
+    adc #$d0
+    sta player_data + PL_GOLD_1
+    lda player_data + PL_GOLD_2
+    adc #$03
+    sta player_data + PL_GOLD_2
+    lda player_data + PL_XP_0
+    clc
+    adc #$40
+    sta player_data + PL_XP_0
+    lda player_data + PL_XP_1
+    adc #$4b
+    sta player_data + PL_XP_1
+    lda player_data + PL_XP_2
+    adc #$4c
+    sta player_data + PL_XP_2
+    rts
     #import "../../../core/royal.s"
     #import "../common/save_slot_menu.s"
+    #import "../../../core/ui_wizard.s"
 ovl_modal_misc_end:
 .print "Modal-misc overlay: " + (ovl_modal_misc_end - $e000) + " bytes at $E000-$" + toHexString(ovl_modal_misc_end)
 .assert "Modal-misc overlay fits in $E000-$EFFF", ovl_modal_misc_end <= $F000, true
@@ -2197,6 +2168,8 @@ ovl_ui_end:
     #import "../../../core/ranged_fire.s"
     #import "../../../core/throw.s"
     #import "../../../core/bash.s"
+    #import "../../../core/disarm.s"
+    #import "../../../core/disarm_helpers.s"
     #import "../../../core/tunnel.s"
 ovl_items_end:
 .print "Items overlay: " + (ovl_items_end - $e000) + " bytes at $E000-$" + toHexString(ovl_items_end)

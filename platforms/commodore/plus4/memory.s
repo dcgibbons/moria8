@@ -127,48 +127,6 @@ restore_zp:
     bne !loop-
     rts
 
-read_banked_byte_a000:
-    sta PLUS4_RAM_ENABLE
-    lda (zp_ptr0),y
-    pha
-    sta PLUS4_ROM_ENABLE
-    pla
-    rts
-
-read_banked_byte_e000:
-    sei
-    sta PLUS4_RAM_ENABLE
-    lda (zp_ptr0),y
-    pha
-    sta PLUS4_ROM_ENABLE
-    pla
-    rts
-
-copy_to_e000:
-    ldy #0
-    ldx zp_temp1
-    beq !partial+
-!page:
-    lda (zp_ptr0),y
-    sta (zp_ptr1),y
-    iny
-    bne !page-
-    inc zp_ptr0_hi
-    inc zp_ptr1_hi
-    dex
-    bne !page-
-!partial:
-    ldx zp_temp0
-    beq !done+
-!tail:
-    lda (zp_ptr0),y
-    sta (zp_ptr1),y
-    iny
-    dex
-    bne !tail-
-!done:
-    rts
-
 mmu_select_bank1:
     rts
 

@@ -72,6 +72,39 @@ suite_selected() {
     return 1
 }
 
+check_static_contract() {
+    local name="$1"
+    local file="$2"
+    local pattern="$3"
+
+    if ! suite_selected "$name"; then
+        return
+    fi
+
+    echo -n "  $name: "
+    if python3 - "$file" "$pattern" <<'PY'
+from pathlib import Path
+import sys
+
+text = Path(sys.argv[1]).read_text()
+needles = [part.strip() for part in sys.argv[2].split("|||") if part.strip()]
+pos = 0
+for needle in needles:
+    idx = text.find(needle, pos)
+    if idx < 0:
+        raise SystemExit(1)
+    pos = idx + len(needle)
+PY
+    then
+        echo "PASS"
+        PASS=$((PASS + 1))
+    else
+        echo "FAIL"
+        FAIL=$((FAIL + 1))
+    fi
+    TOTAL=$((TOTAL + 1))
+}
+
 run_vice_resource_contract_plus4() {
     local name="vice_resource_contract_plus4"
     if ! suite_selected "$name"; then
@@ -624,6 +657,78 @@ run_dungeon_ascent_smoke() {
         --until-pass \
         --main-vs "$main_vs" \
         --boot-d64 "$boot_d64" \
+        --vice "$VICE"; then
+        PASS=$((PASS + 1))
+    else
+        FAIL=$((FAIL + 1))
+    fi
+}
+
+run_disarm_smoke() {
+    local name="disarm_plus4"
+    local out_dir="$PLUS4_TEST_OUT"
+    local smoke_out
+    smoke_out="$(make_product_out "$name")"
+    local smoke_out_rel="$smoke_out"
+    local smoke_plus4="$smoke_out/plus4"
+    local main_vs="$smoke_out/plus4/main.vs"
+    local boot_d64="$smoke_out/moria8-plus4.d64"
+    local build_log="$out_dir/$name.build.log"
+
+    if ! suite_selected "$name"; then
+        return
+    fi
+
+    TOTAL=$((TOTAL + 1))
+    mkdir -p "$out_dir"
+
+    if ! make -s -B -C "$REPO_ROOT/platforms/commodore" \
+        KICKASS="$KICKASS" \
+        OUT="$smoke_out_rel" \
+        KA_FLAGSPLUS4="-showmem -vicesymbols -libdir c64 -define PLUS4 -define PLUS4_TEST_SCRIPTED_DISARM_PRODUCT" \
+        "$smoke_out_rel/plus4/moria4.prg" \
+        "$smoke_out_rel/plus4/title" \
+        "$smoke_out_rel/plus4/monster.db.1" \
+        "$smoke_out_rel/plus4/monster.db.2" \
+        "$smoke_out_rel/plus4/monster.db.3" \
+        "$smoke_out_rel/plus4/monster.db.4" >"$build_log" 2>&1; then
+        echo "FAIL: $name (product disk build)"
+        tail -80 "$build_log"
+        FAIL=$((FAIL + 1))
+        return
+    fi
+
+    rm -f "$boot_d64"
+    if ! "$C1541" -format "moria8 plus4,m8" d64 "$boot_d64" \
+        -attach "$boot_d64" \
+        -write "$smoke_plus4/moria4.prg" "moria8" \
+        -write "$smoke_plus4/moria4.prg" "moria4" \
+        -write "$smoke_plus4/title" "t64" \
+        -write "$smoke_plus4/monster.db.1" "monster.db.1" \
+        -write "$smoke_plus4/monster.db.2" "monster.db.2" \
+        -write "$smoke_plus4/monster.db.3" "monster.db.3" \
+        -write "$smoke_plus4/monster.db.4" "monster.db.4" \
+        -write "$smoke_plus4/ovl.town" "4.town" \
+        -write "$smoke_plus4/ovl.death" "4.death" \
+        -write "$smoke_plus4/ovl.gen" "4.gen" \
+        -write "$smoke_plus4/ovl.help" "4.help" \
+        -write "$smoke_plus4/ovl.ui" "4.ui" \
+        -write "$smoke_plus4/ovl.items" "4.items" \
+        -write "$smoke_plus4/ovl.spell" "4.spell" \
+        -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
+        echo "FAIL: $name (product disk image)"
+        FAIL=$((FAIL + 1))
+        return
+    fi
+
+    if python3 -u tests/product_scripted_smoke.py \
+        --name "$name" \
+        --pass-symbol ".plus4_test_script_exhausted_wait" \
+        --start-symbol ".title_menu_loop" \
+        --until-pass \
+        --main-vs "$main_vs" \
+        --boot-d64 "$boot_d64" \
+        --expect-byte-symbol ".zp_player_dlvl=0x01" \
         --vice "$VICE"; then
         PASS=$((PASS + 1))
     else
@@ -2628,6 +2733,9 @@ run_boot_title_smoke
 run_new_game_to_town_smoke
 run_dungeon_entry_smoke
 run_dungeon_ascent_smoke
+check_static_contract "disarm_command_external_import_contract" "main.s" \
+    "#define DISARM_COMMAND_EXTERNAL|||#import \"../../../core/game_loop.s\"|||#undef DISARM_COMMAND_EXTERNAL"
+run_disarm_smoke
 run_overlay_load_smoke
 run_retirement_royal_smoke
 run_wand_selector_product_smoke

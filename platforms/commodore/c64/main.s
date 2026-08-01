@@ -1026,20 +1026,6 @@ c64u_turbo_normal:
 !done:
     rts
 
-c64u_turbo_force_normal:
-    lda c64_hw_flags
-    and #C64_HW_TURBO_AVAIL
-    beq !done+
-    lda #0
-    sta c64u_turbo_depth
-    lda #C64U_TURBO_NORMAL
-    sta C64U_TURBO_CONTROL
-    lda c64_hw_flags
-    and #($ff - C64_HW_TURBO_ON)
-    sta c64_hw_flags
-!done:
-    rts
-
 // ============================================================
 // Dungeon gen overlay trampoline — bank KERNAL out, call $E000 overlay
 // ============================================================
@@ -1511,7 +1497,12 @@ tramp_ui_identify:
     jmp tramp_sr_epilogue
 
 tramp_ui_wizard_display:
-    jmp wizard_40col_menu_display
+    lda #OVL_MODAL_MISC
+    jsr overlay_load_no_kernal
+    bcs !done+
+    jsr ui_wizard_display
+!done:
+    jmp tramp_sr_epilogue
 
 tramp_disk_setup:
     lda #OVL_HELP
@@ -1731,6 +1722,10 @@ c64_test_spell_fail_input_sym:
 c64_test_spell_pass_sym:
     brk
 #else
+#if C64_TEST_SCRIPTED_WIZARD_REVEAL_PRODUCT
+c64_test_wizard_reveal_fail_input_sym:
+    brk
+#else
 #if C64_TEST_SCRIPTED_DUNGEON_ASCENT_PRODUCT
 c64_test_dungeon_ascent_fail_input_sym:
     brk
@@ -1752,6 +1747,7 @@ c64_test_spell_fail_input_sym:
     brk
 c64_test_spell_pass_sym:
     brk
+#endif
 #endif
 #endif
 #endif
@@ -2342,6 +2338,7 @@ winner_apply_retirement_bonus_overlay:
     rts
     #import "../../../core/royal.s"
     #import "../common/save_slot_menu.s"
+    #import "../../../core/ui_wizard.s"
 ovl_modal_misc_end:
 .print "Modal-misc overlay: " + (ovl_modal_misc_end - $e000) + " bytes at $E000-$" + toHexString(ovl_modal_misc_end)
 .assert "Modal-misc overlay fits in $E000-$EFFF", ovl_modal_misc_end <= $F000, true

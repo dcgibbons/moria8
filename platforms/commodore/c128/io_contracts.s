@@ -26,7 +26,6 @@
 :C128AuditBelowIo("c128_modal_require_play", c128_modal_require_play)
 :C128AuditBelowIo("c128_load_runtime_banked_prg", c128_load_runtime_banked_prg)
 :C128AuditBelowIo("title_show_sysinfo", title_show_sysinfo)
-:C128AuditBelowIo("tramp_reu_show_status", tramp_reu_show_status)
 :C128AuditBelowIo("tramp_player_create", tramp_player_create)
 :C128AuditBelowIo("tramp_game_over", tramp_game_over)
 :C128AuditBelowIo("tramp_store_init_all", tramp_store_init_all)
@@ -191,7 +190,6 @@
 // Entry surfaces that may live either below the I/O hole or in the banked
 // window, but must never drift into $D000-$DFFF.
 :C128AuditOutOfIo("title_show_sysinfo_banked", title_show_sysinfo_banked, $E000)
-:C128AuditOutOfIo("reu_show_status_banked", reu_show_status_banked, $E000)
 :C128AuditOutOfIo("player_cast_spell", player_cast_spell, $F000)
 :C128AuditOutOfIo("player_pray", player_pray, $F000)
 :C128AuditItemsOverlay("item_read_scroll", item_read_scroll)

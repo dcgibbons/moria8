@@ -40,15 +40,20 @@ Relevant current constants:
 | `TOTAL_INV_SLOTS` | 31 | Inventory + equipment slots |
 | `FI_EMPTY` | `$ff` | Empty item slot sentinel |
 
-Current linked headroom after the 88-item slice:
+Current linked headroom (measured from the 2026-07-31 build symbols;
+see the Space Recovery Analysis section for the full inventory and funding
+options):
 
-| Target | Most relevant free space | Verdict |
+| Target | Resident/catalog area free | Largest other item-relevant space |
 |---|---:|---|
-| C64 | must be remeasured after each batch | Tight; overlay-only growth |
-| C128 | must be remeasured after each batch | Item storage has runway, but UI/death/world/play remain tight |
-| Plus/4 | must be remeasured after each batch | Workable but still tight |
+| C64 | 1 byte (`program_end=$BFFF`, boundary `$C000`); banked 0 bytes | gen overlay 495 B; ~7.6 KB total overlay slack; ~1,240 B hidden tier-name pool tail |
+| C128 | `128.item` ~7 bytes; main 4 bytes; play 10 bytes; banked 17 bytes | Bank 1 DB window 2,251 B; town overlay 144 B |
+| Plus/4 | 85 bytes; banked 72 bytes | gen overlay 495 B; items overlay 952 B; ~7 KB total overlay slack |
+| Apple IIe | resident 5 bytes; play 19 bytes; auxdata ~130 bytes | gen overlay slot-safe 116 B; UI aux slot ~803 B; HELP class ~3,402 B cold window |
 
-The C128 is the limiting platform.
+All four ports are effectively full in resident/banked space. Catalog growth
+is fundable only through the recovery options in the Space Recovery Analysis
+section below.
 
 ## Measured C128 Resident Item Ledger
 
@@ -118,6 +123,13 @@ Bank 1 resident data payload, `128.names.prg`, loaded at `$7400`. The token
 dictionary and all unknown/randomized-name tables remain in `128.item`; only
 known-name source bytes are read through the existing C128 Bank 1 DB helpers.
 Current C128 product layout:
+
+> **STALE — superseded by later slices.** Measured 2026-07-31: `128.names`
+> occupies `$7400-$7734` and the Bank 1 DB window has **2,251 bytes free**
+> (`$7735-$7FFF`); `128.item` occupies `$8CA0-$A7F9` (**~7 bytes free**, not
+> 773 — the Phase 1B runway was consumed by later slices and a resident
+> title-draw routine); the main program ends at `$5FFC` (**4 bytes free**,
+> not 97). The table below is the historical Phase 1B record.
 
 | Payload | Current range | Free/notes |
 |---|---:|---|
@@ -588,6 +600,12 @@ Source-faithful chest rows:
 | Ruined Chest | yes | no parsed row | no |
 
 Required live chest state:
+
+> **SUPERSEDED by the Space Recovery Analysis (2026-07-31).** Chest state can
+> ride existing per-slot fields (`fi_p1`/`inv_p1`, `fi_to_hit`/`inv_to_hit`,
+> `fi_to_dam`/`inv_to_dam`, `fi_meta` bit 7) gated on `ICAT_CHEST`, at **zero
+> new RAM and zero new save bytes** because those fields are already
+> serialized. The 126-byte sidecar plan below is retained as the fallback.
 
 | Field | Size |
 |---|---:|
@@ -1098,6 +1116,318 @@ Product recommendation: port roles, not every source row. Keep source names
 where they add flavor, but collapse rows that only change dice, AC, cost, or
 weight unless they create a real equipment choice. A meaningful-only catalog of
 about 128 item IDs is the best near-term target.
+
+## Space Recovery Analysis (2026-07-31)
+
+Deep per-port recovery survey funding 32 new rows (IDs 96-127), ~3-6 KB of
+item effect/dispatch code, and chest gameplay (~1.5-2.5 KB code + live state).
+Evidence base: `build/*/main.vs` symbol dumps and PRG payload sizes from the
+2026-07-30/31 build. This section supersedes all earlier headroom claims in
+this document (see the stale-table note under Current C128 product layout).
+
+### Lever 1: Chest State At Zero Cost
+
+Chests never fight, so the combat sidecars every floor/inventory slot already
+carries are free for chest use, gated on `ICAT_CHEST`:
+
+| Existing field | Chest meaning |
+|---|---|
+| `fi_p1` / `inv_p1` | chest flags low (trap id, locked) |
+| `fi_to_hit` / `inv_to_hit` | chest source level |
+| `fi_to_dam` / `inv_to_dam` | content flags / flags high |
+| `fi_to_ac` / `inv_to_ac` | disarm progress/state |
+| `fi_meta` bit 7 (free; bits 0-6 used, `core/item.s:53-55`) | opened |
+
+These fields are already serialized in both floor and inventory save blocks
+(`platforms/shared/save.s:395-403`, `:319-328`), so chest state costs **0 new
+RAM, 0 new save bytes, and no save migration**. Spawn/store/wizard paths
+already zero the fields (`core/item.s:103-112`,
+`core/store_restock_overlay.s:207-216`). This supersedes the 126-byte sidecar
+proposal and removes the C64/Plus4 "no home for live state" blocker. Sparse
+precedent: glyph-of-warding state (`core/item.s:75-77`).
+
+### Lever 2: Effect Dispatch Reuse (Mandatory)
+
+Item use runs from `OVL.ITEMS` on all four ports (read/aim/use via
+`core/item_actions_overlay.s`; quaff is resident on C64/Plus4, banked on
+C128, overlay on Apple IIe). The deep-play effects wanted for new items
+already exist as spell effects:
+
+- Overlay `eff_*` (`core/player_magic_execute_overlay.s`): genocide (157 B),
+  destroy_area (17), glyph_of_warding (35), haste_self (11), teleport_other
+  (107), slow_monster_dir (24), polymorph_other (40), sleep_all (57),
+  dispel_flagged (66), recharge_item (88), resist_heat_cold (11),
+  remove_curse_all (26).
+- Resident `eff_*` (`core/spell_effects.s`): cure_poison, phase_door,
+  wall_to_mud, remove_curse, detect_evil_only, heal — these need no dispatch
+  at all.
+
+Copying the ~10 wanted overlay effects into `OVL.ITEMS` would cost ~500-650
+B/port and does not fit (items-overlay free: C64 236 B, C128 118 B, Plus/4
+952 B, **Apple IIe 0 B**). Dispatch is the only option that fits everywhere.
+
+Mechanism: the item front-end finishes selection/charges/`id_known`, sets
+`pm_spell_type`/`pm_spell_idx` to a virtual spell index, and tail-calls
+`tramp_spell_execute_selected`. Production precedent: the C128 reverse-bounce
+(`tramp_eff_earthquake`, `platforms/commodore/c128/main.s:1444-1461`) already
+calls an effect across overlay boundaries and restores the previous overlay.
+
+Constraints and costs:
+
+- C128 executes spells from the death overlay, which has only 28 B free, so
+  new code must use virtual indices with no wrapper jump table; fixed item
+  power spoofs `zp_player_lvl` (2 stores) instead of level-scaled wrappers.
+- New resident cost: ~20 B dispatch trampoline (C64/Plus4/Apple IIe; C128
+  already has the mechanism) + ~5 B per item call site.
+- Runtime cost: one overlay swap per exotic item use (see performance table).
+- Shared `.const` names for virtual indices with table asserts are required
+  so item tables and spell tables cannot drift.
+
+### Lever 3: Resident Representation Packing
+
+Measured packing options, all ports (savings multiply x4 through shared
+core). At 128 rows:
+
+| Change | Resident/port | Access sites | Risk |
+|---|---:|---|---|
+| `id_known` byte-per-item -> 16-byte bitset | -112 B | 15 product sites in 7 files (+~114 test fixture refs) | medium: save V4 required |
+| `it_unknown_desc` -> nibble index; class derived from `it_category` (verified 1:1 for all 96 rows) | -64 B | 14 sites in 2 files | low |
+| dice count+sides -> 1 byte (count <=3, sides <=9) | -128 B | 3 files, always read together | low |
+| color+base AC -> 1 byte (4+4 bits) | -128 B | 4 files | low |
+| `it_display` -> derived from `it_category` (verified consistent; exception range for bows/ammo) | -80 B | 8 render files | medium-low |
+| `it_min_level` -> nibble | -64 B (gen overlay on C64/Plus4/A2; resident on C128) | 1 file | low |
+
+Gross recovery ~380-450 B/port at 128 rows, against ~200 B of packed table
+growth for the 32 new rows plus ~350-420 B of new name streams (resident only
+on C64/Plus4; banked on C128/Apple IIe). Save-format impact: the `id_known`
+bitset is the documented `id_known_bits[16]` design in
+`docs/SAVE_FILE_MIGRATION.md` and requires the save V4 layout bump.
+
+Constraint: the `it_unknown_desc` index nibble caps at 15 appearances per
+class; the Phase 3 list pushes potions past 15. Either grow the unknown-name
+pools (~250 B/port plus save-block size changes) or wrap class-local indexes
+(cosmetic duplicate appearances, 0 B, no save change). **Product decision
+pending.**
+
+### Per-Port Recovery Inventory
+
+**C64 — Tier-0 (zero performance loss) ~2,545 B resident:**
+
+| Option | Bytes | Evidence |
+|---|---:|---|
+| Wizard UI -> ModalMiscOverlay (overlay-hosted wizard already ships on C128 via `core/ui_wizard.s`) | 1,169 | `core/wizard.s:182-677` resident block `$A88E-$ACC9` |
+| Boot-only code -> init-only tail past `program_end` (`reu_detect`, `reu_load_all_tiers`, `reu_stash_overlays`, `reu_show_file`, `tier_init`, `detect_machine`, service installs) | ~854 | established tail pattern `platforms/commodore/c64/main.s:1972-1977` |
+| `roll_enchantment` -> DungeonGenOverlay (resident wrapper, `pick_item_type` pattern) | ~300 | `core/item.s:1512`, callers `:691,:825`, wizard `:89` |
+| `item_init_identification` -> ItemActionsOverlay (call from `store_init_all` body) | 127 | `core/game_loop.s:610-616`; Apple StartupOverlay precedent |
+| Dead code (`c64u_turbo_force_normal`, unused memory helpers) | ~95 | `c64/main.s:1029-1041`, `c64/memory.s:148-206` |
+
+Additional C64 assets: ~1,240 B permanently free in the $D000 tier-name pool
+tail (assert `core/tier_manager.s:527`) — fits the 821 B known-name streams
+that C128/Apple IIe already bank; ~7.6 KB total overlay slack (spell 1,497,
+death 2,491, modal 2,600, gen 495, help 339, items 236); a new overlay class
+costs ~20 B resident + one disk-image line, with REU stash/pickup automatic.
+
+**Plus/4 — Tier-0 ~2,624 B resident:**
+
+| Option | Bytes | Evidence |
+|---|---:|---|
+| Wizard UI -> ModalMiscOverlay | 1,169 | same as C64 |
+| Disarm subsystem -> ItemActionsOverlay (C64 already ships this exact layout) | ~700 | `plus4/main.s:359` vs `c64/main.s:412-416,2405-2406` |
+| `roll_enchantment` -> DungeonGenOverlay | ~300 | same as C64 |
+| `item_init_identification` -> ItemActionsOverlay | 127 | same as C64 |
+| Dead `game_restart` (zero callers) + `winner_apply_retirement_bonus` -> ModalMisc + unused memory helpers | ~181 | `plus4/main.s:1902-1943`, `:1858-1888`, `plus4/memory.s:130-170` |
+| Boot-only code -> init tail | ~147 | entry-main-only subset; `restart_entry` is re-entered on Plus/4 |
+
+Plus/4 overlay slack ~7 KB (items 952, modal 2,656, death 1,957, spell 704,
+gen 495). Caveat: `HAL_PLATFORM_OVERLAY_FORCE_RELOAD` makes every overlay
+load a disk hit — already the Plus/4 norm for read/aim/use/bash/throw.
+
+**C128 — Bank 1 plus dead code:**
+
+| Option | Bytes | Evidence |
+|---|---:|---|
+| Remove dead REU cluster from the main image (`reu_present` forced to 0; stub precedent `plus4/reu_stub.s`) | ~850-900 | `c128/main.s:1740-1744`, `core/tier_manager.s:181-207`; keep `reu_show_file` |
+| New item name streams land in `128.names` Bank 1 window (2,251 B free) — zero resident cost | funds 300-500 | `core/item_tables.s:666-772`, `item_identification.s:537-588` |
+| Unknown-name cluster + `it_unknown_desc` -> Bank 1 (write helpers exist: `mmu_safe_db_write_ptr0/1`, `config128.s:108-115`) | ~511 resident | `item_identification.s:45-145,276-360,604-678` |
+| Token dictionary -> Bank 1 | ~229 resident | `item_tables.s:615-658` |
+| `it_cost_lo` + `it_cost_hi_extra` -> TownOverlay, placed after store code | 116 resident | sole reader `core/store.s:59-83` is town-local; 144 B free |
+| `it_min_level` -> Bank 1 (sole reader is gen-overlay picker) | 96 resident | `item_tables.s:465-490`, `core/item.s:1426` |
+| New <=2 KB cached overlay class in the DB window (DISARM is the precedent) | funds 2-3 KB code | `memory128.s:124-166,574-579`, `overlay.s:384-580` |
+
+Notes: the historical `it_cost_lo` town-entry JAM is documented by symptom
+only; current C128 overlays provably start with data (`ovl.gen` begins with
+`pit_sorted`), and the failed attempt's segment restore targeted `Default`
+rather than `C128ResidentItems` (`item_tables.s:436-438`). Mitigation: place
+the table after the entry code and fix the restore segment. Bank 1 cannot
+execute code — data only. Title-cache slack ~1,176 B and a 640 B candidate
+low-common-RAM block at `$0800-$0A7F` exist but the latter has undocumented
+KERNAL/boot ownership — validate before use, and it is not needed.
+
+**Apple IIe — table conversions, cache repack, overlay homes:**
+
+| Option | Bytes | Evidence |
+|---|---:|---|
+| `it_name_hi` -> derived page-crossing (shipped on the other three ports) | +74 resident | `item_tables.s:552-577`, `item_identification.s:449-476` |
+| `it_cost_hi` -> sparse exceptions (shipped elsewhere) | +59 town overlay | `item_tables.s:425,439-463`, reader `store.s:59-83` |
+| UI aux cache slot 13 -> 10 pages (payload 2,525 B; slots single-sourced from `cache_layout.s`) | +768 aux | `platforms/apple2/cache_layout.s:5-11` |
+| Chest state fits auxdata today (~130 B free) if Lever 1 is not taken | 126 aux | auxdata ends `$567E`, limit `$56FF` |
+| `store_restock_overlay` -> GEN slot (transition-only, certified in its header) | +715 items overlay | `store_restock_overlay.s:1-6`; page math 21+10+20+12+20+22=105 |
+| Chest UI -> HELP class (cold; inventory/equipment UI already lives there) | ~3,402 cold window | `ovl_help_end=$ACB6`, window 5,632 |
+| New cold overlay class | +5,632 window | `overlay_storage.s:36-38` zero-entry pattern |
+| Overlay window tail `$B9FF->$BAFF` | +256/class | reservation-only; tier payloads end `$AC0E` |
+
+Correction to earlier window-based figures: the aux cache copy is a fixed
+$1600-byte AUXMOVE from the slot base, so slot-safe headroom is smaller than
+window headroom (town 14 B, spell 95 B, modal 94 B, gen 116 B, items 0 B;
+UI 803 B is the only whole-page slack). Cache-hit overlay swap ~60 ms; cold
+load = ProDOS read (fine for chest-open flows, not for per-round effects).
+
+### Performance Cost Summary
+
+| Path | Cost |
+|---|---|
+| Hot effects (cure, phase door, stone-to-mud, remove curse, detect evil) | zero — resident today |
+| Exotic item effects (genocide, destruction, glyph, etc.) | one overlay swap per use: C64 = disk hit (REU: DMA), Plus/4 = disk hit (status quo), C128 = ~35-50 ms Bank 1 cache copy, Apple IIe = ~60 ms auxmove |
+| Chest open/disarm | rare per level; cold-load disk hit acceptable on C64/Plus4, cached elsewhere |
+| Packed-table reads | ~8-12 extra cycles per combat blow / render lookup — invisible |
+| Bank 1 / aux data reads (C128/Apple IIe) | already the shipped name-stream pattern |
+
+### Risks And Open Product Decisions
+
+1. C128 town-entry JAM mechanism is unknown; mitigations above, runtime proof
+   required before relying on the town move.
+2. Unknown-name pools: grow (~250 B/port + save-block changes) vs wrap
+   (cosmetic duplicate appearances, 0 B). Wrap is forced anyway past 15
+   appearances/class by the nibble cap unless `it_unknown_desc` stays 1 B.
+3. REU 1700 (64 KB) capacity for tiers plus a 10th overlay on C64 is
+   untraced.
+4. Test-suite coupling: `id_known` bitset touches ~114 test fixture refs;
+   deleting C64/Plus4 memory helpers touches one test file. Mechanical but
+   real; infrastructure fixes are a separate ask per verification rules.
+5. Apple IIe storage-overlay free space is unmeasured; save-migration code
+   growth lands there.
+6. Chest sequencing: this analysis removes the state-storage blocker and
+   chest code fits existing overlay slack, so chests no longer need to wait
+   for the 128 milestone. Product call.
+7. A deep-play-optimized replacement for the Phase 3 row list was drafted
+   2026-07-31 (adds Mithril-tier armor, Healing, Mass Genocide, Destruction,
+   Teleport Level, Recharging, Magic Mapping; collapses single-stat restores
+   into one Restoration row). Pending decisions: resist scope, Mass Genocide
+   semantics, See Invisible vs Searching, amulet count. The Phase 3 table
+   below remains the committed list until those calls are made.
+
+### Suggested Sequencing
+
+1. **Phase R (recovery, no catalog change):** dead-code removal (C128 REU,
+   C64/Plus4 dead helpers), wizard->modal on C64/Plus4, disarm->items overlay
+   on Plus/4, Apple IIe table conversions (`it_name_hi`, `it_cost_hi`),
+   chest-state-on-existing-fields decision. Lands headroom with zero gameplay
+   change; each port's suite gates it.
+2. **Phase 2 (representation):** Lever 3 packing + save V4 (bitset, capacity
+   128).
+3. **Phase 3 (rows):** the 32-row list; effects mostly dispatched (Lever 2);
+   names banked on C128/Apple IIe, funded by packing + hidden pool on
+   C64/Plus4.
+4. **Chests:** code into overlay headroom (modal/death/help slack or a new
+   class), state at 0 B via Lever 1.
+
+### Phase R Implementation Status (2026-07-31)
+
+Complete and verified. Resident free space after Phase R:
+
+| Port | Before | After | Recovered |
+|---|---:|---:|---:|
+| C64 resident | 1 B | 1,042 B (`program_end=$BBEE`) | +1,041 B |
+| C128 main | 4 B | 893 B (`program_end=$5C83`) | +889 B |
+| Plus/4 resident | 85 B | 1,984 B (`program_end=$C040`) | +1,899 B |
+| Apple IIe resident | 5 B | 81 B (`program_end=$7BAF`) | +76 B (+60 B town) |
+
+After the spell_effects.s indirect-JMP fix (below), the C64 memory helpers
+were also deleted (+69 B) and `fea_jmp_smc` removed the `adj_callback` word
+(−2 B); the `testapple2` gate now generates its own `main.sym`/`boot.sym`.
+
+Landed slices:
+
+| Slice | Change | Result |
+|---|---|---|
+| R5 | Apple IIe `it_name_hi` -> derived page-crossing (3-port precedent) | +76 B resident |
+| R6 | Apple IIe `it_cost_hi` -> sparse exceptions | +60 B town overlay |
+| R2 | C64: removed dead `c64u_turbo_force_normal` (+26 B). Plus/4: removed dead `game_restart`, moved `winner_apply_retirement_bonus` to ModalMisc, removed unused memory helpers (+181 B) | verified |
+| R1 | C128: removed dead REU cluster; new `preload128.s` (C128 preload LOAD, moved out of `common/reu.s`) and `reu_stub128.s` (Plus/4 stub pattern, keeps live `reu_show_file`); removed `reu_loading_banked.s`, `tramp_reu_show_status`, and the boot patch | +889 B main |
+| R4 | Plus/4 disarm subsystem -> ItemActionsOverlay (C64 pattern; `PLATFORM_DISARM_COMMAND_INLINE` removed) | +703 B resident |
+
+R4 follow-up fix (same day): the initial R4 edit wrapped the
+`dungeon_features.s` import in `DISARM_COMMAND_EXTERNAL` but not the
+`game_loop.s` import, so `cmd_disarm` assembled a resident
+`jsr disarm_command` straight into the `$E000` overlay window. Pressing
+SHIFT+D executed whatever overlay/tier bytes were resident there and CPU
+JAMmed (reproduced deterministically: JAM at `$2F03` in a scripted flow;
+user-reported JAM at `$0115`). C64, C128, and Apple IIe all wrap both
+imports; Plus/4 now does too (plus4/main.s:435-437). Verified in the PRG:
+`cmd_disarm` now calls `tramp_disarm_command`. Regression coverage:
+`disarm_command_external_import_contract` static check in
+run_testsplus4.sh (the defect is static; the crash itself is
+timing/RNG-dependent and cannot be caught deterministically through gameplay
+scripting) plus a `disarm_plus4` scripted runtime smoke for the happy path.
+| R3 | C64/Plus4 wizard UI -> ModalMiscOverlay (`HAL_PLATFORM_WIZARD_ENTRY_OVERLAY`; `ui_wizard.s` 40-col menu already existed) | +1,015 B resident each |
+
+R3 follow-up fix (same day): the wizard reveal command (`A`) corrupted state
+or ejected the player to town. `ui_wizard_cmd_reveal` executes in the
+ModalMisc `$E000` window; its call chain reaches `tramp_reveal_floorplan`,
+which loads OVL.SPELL into the same window, evicting the menu code, and the
+return then landed in spell-overlay bytes. Fixed with resident
+`wizard_reveal_level_from_overlay` (core/wizard.s), which restores
+OVL_MODAL_MISC after the reveal before returning; gated to
+`HAL_PLATFORM_WIZARD_REVEAL_TRAMPOLINE` (C64/Plus4) since C128/Apple IIe use
+the inline resident reveal path and never evict. Regression coverage:
+`wizard_reveal_product_smoke` in `platforms/commodore/c64/run_tests.sh`
+scripts new game -> descend -> CTRL+W -> Y -> CTRL+W -> A and asserts the
+flow unwinds to input exhaustion with `zp_player_dlvl == 1` and
+`current_overlay == OVL_MODAL_MISC`; it fails on the pre-fix build with the
+reported symptom. Audit of the other overlay-hosted wizard commands found no
+other mid-call overlay loads (level-jump is resident-by-design and never
+returns to the overlay).
+
+Reverted slice: the C64 memory-helper deletion (`read_banked_byte_a000/e000`,
+`copy_to_e000`, 69 B) was reverted after it deterministically flipped
+`test_directional_effects` into a wild-execution failure (BRK storm into the
+KERNAL/BASIC input loop). Diagnosis proved the deletion is not the cause:
+restoring only a 69-byte NOP pad at the same address also passes, so the test
+has a latent layout/address-sensitive defect that any future byte shift can
+re-expose. The helpers stay until that defect is root-caused; Plus/4's
+equivalent removal (56 B) landed cleanly.
+
+Root cause found and fixed (2026-07-31): `for_each_adjacent` in
+core/spell_effects.s dispatched its callback with `jmp (adj_callback)`. The
+6502 indirect-JMP page-crossing bug reads the pointer high byte from `$9200`
+instead of `$9300` when the pointer sits at `$92FF` — exactly where the −69
+byte layout placed `adj_callback`. Every `eff_sleep_adjacent` call then
+jumped to a garbage address, cascading into stack corruption and BRK storms.
+The original layout placed it at `$9342` (safe), so the bug only appeared
+when spell_effects.s moved by a multiple of 256-page alignment into a `$xxFF`
+boundary. Fixed by replacing the indirect dispatch with a self-modified
+absolute JMP (`fea_jmp_smc`), eliminating the bug class and the `adj_callback`
+storage word. The same exposure in Apple IIe `tramp_items_target` was
+converted identically. With the fix, the C64 helper deletion landed: the
+suite passes with the 69 B reclaimed.
+
+Still available from the Tier-0 inventory (not yet done): C64 init-tail
+relocation (~854 B), `roll_enchantment` -> gen overlay (~300 B, both
+Commodore 40-col ports), `item_init_identification` -> items overlay (127 B),
+Plus/4 init tail (~147 B), C64 hidden tier-name-pool name streams
+(~820-1,030 B, higher risk).
+
+Verification: `make build` all four ports; `make test128-fast` 290 PASS;
+`make testplus4` 36/36; `make test64` 178/179 with one save-flow smoke
+flaking under full-suite load (passes in isolation on both clean and modified
+trees); Apple IIe memory-contract gate 21/21 and MAME `wizard_flow` 7/7.
+
+Infrastructure defect found and fixed: `make testapple2` used to fail from a
+clean tree because the build never generated `platforms/apple2/main.sym`/
+`boot.sym`, which `check_memory_contract.py` requires. The build now generates
+both via `-symbolfile` and `make clean` removes them; the gate passes from a
+clean tree (21/21).
+
 
 ## Final Judgment
 
