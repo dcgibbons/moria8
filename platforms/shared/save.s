@@ -1500,15 +1500,19 @@ load_read_known_items:
 
 !lrki_defaults:
     // X = first ID beyond the loaded legacy range. Implemented IDs past it
-    // take migration defaults from it_unknown_desc; IDs past ITEM_TYPE_COUNT
+    // take migration defaults from it_category (fixed-description classes
+    // known, randomized-appearance classes unknown); IDs past ITEM_TYPE_COUNT
     // stay cleared (unknown). Skip entirely when the legacy stream already
     // covered the implemented range (V2/V3: X=96).
     cpx #ITEM_TYPE_COUNT
     bcs !lrki_def_done+
 !lrki_def_loop:
-    lda it_unknown_desc,x
-    and #IUK_CLASS_MASK
+    ldy it_category,x
+    cpy #ICAT_POTION
+    bcc !lrki_def_known+
+    cpy #ICAT_BOOK
     bne !lrki_def_next+
+!lrki_def_known:
     jsr id_known_set
 !lrki_def_next:
     inx

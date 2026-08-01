@@ -677,7 +677,7 @@ player_calc_combat:
     beq !ac_next_slot+
     // Add base AC for this item type
     tay                         // Y = item type ID
-    lda it_base_ac,y
+    jsr item_get_base_ac
     clc
     adc pcc_ac_accum
     sta pcc_ac_accum

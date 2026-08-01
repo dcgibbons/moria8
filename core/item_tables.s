@@ -108,203 +108,105 @@ it_category:
     .byte ICAT_WEAPON   // 94: Broad Axe
     .byte ICAT_WEAPON   // 95: Awl-Pike
 
-// Display character (screen codes)
-it_display:
-    .byte $24   // 0: '$' Gold (small)
-    .byte $24   // 1: '$' Gold (large)
-    .byte $2f   // 2: '/' Dagger
-    .byte $2f   // 3: '/' Short sword
-    .byte $2f   // 4: '/' Long sword
-    .byte $2f   // 5: '/' Mace
-    .byte $5b   // 6: '[' Robe
-    .byte $5b   // 7: '[' Leather armor
-    .byte $5b   // 8: '[' Chain mail
-    .byte $29   // 9: ')' Small shield
-    .byte $5d   // 10: ']' Iron helm
-    .byte $5d   // 11: ']' Leather gloves
-    .byte $5d   // 12: ']' Leather boots
-    .byte $2a   // 13: '*' Wooden torch
-    .byte $2a   // 14: '*' Brass lantern
-    .byte $2c   // 15: ',' Ration of food
-    .byte $2c   // 16: ',' Slime mold
-    .byte $21   // 17: '!' Cure light wounds
-    .byte $21   // 18: '!' Speed
-    .byte $21   // 19: '!' Poison
-    .byte $3f   // 20: '?' Light
-    .byte $3f   // 21: '?' Identify
-    .byte $3f   // 22: '?' Teleportation
-    .byte $3d   // 23: '=' Protection
-    .byte $3d   // 24: '=' Strength
-    .byte $21   // 25: '!' Cure Serious Wounds
-    .byte $21   // 26: '!' Restore Mana
-    .byte $21   // 27: '!' Heroism
-    .byte $21   // 28: '!' Blindness
-    .byte $21   // 29: '!' Confusion
-    .byte $21   // 30: '!' Detect Monsters
-    .byte $21   // 31: '!' Infravision
-    .byte $3f   // 32: '?' Word of Recall
-    .byte $3f   // 33: '?' Remove Curse
-    .byte $3f   // 34: '?' Enchant Weapon
-    .byte $3f   // 35: '?' Enchant Armor
-    .byte $3f   // 36: '?' Monster Confusion
-    .byte $3f   // 37: '?' Aggravate
-    .byte $3f   // 38: '?' Protect from Evil
-    .byte $2d   // 39: '-' Wand of Light
-    .byte $2d   // 40: '-' Wand of Lightning
-    .byte $2d   // 41: '-' Wand of Frost
-    .byte $2d   // 42: '-' Wand of Stinking Cloud
-    .byte $2f   // 43: '/' Staff of Light
-    .byte $2f   // 44: '/' Staff of Detect Monsters
-    .byte $2f   // 45: '/' Staff of Teleportation
-    .byte $2f   // 46: '/' Staff of Cure Light Wounds
-    .byte $3f   // 47: '?' Beginner's Spellbook
-    .byte $3f   // 48: '?' Holy Prayer Book
-    .byte $1c   // 49: '}' Short Bow
-    .byte $1c   // 50: '}' Light Crossbow
-    .byte $1c   // 51: '}' Sling
-    .byte $1b   // 52: '{' Arrow
-    .byte $1b   // 53: '{' Bolt
-    .byte $1b   // 54: '{' Rock
-    .byte $3f   // 55: '?' Magick I
-    .byte $3f   // 56: '?' Magick II
-    .byte $3f   // 57: '?' The Mages Guide to Power
-    .byte $3f   // 58: '?' Words of Wisdom
-    .byte $3f   // 59: '?' Chants and Blessings
-    .byte $3f   // 60: '?' Exorcism and Dispelling
-    .byte $21   // 61: '!' Flask of Oil
-    .byte $5c   // 62: '\' Shovel
-    .byte $5c   // 63: '\' Pick
-    .byte $2f   // 64: '/' Main Gauche
-    .byte $5b   // 65: '[' Studded Leather Armor
-    .byte $2f   // 66: '/' Rapier
-    .byte $2f   // 67: '/' Broad Sword
-    .byte $2f   // 68: '/' Bastard Sword
-    .byte $2f   // 69: '/' Two-Handed Sword
-    .byte $2f   // 70: '/' Scimitar
-    .byte $2f   // 71: '/' Battle Axe
-    .byte $2f   // 72: '/' War Hammer
-    .byte $2f   // 73: '/' Morningstar
-    .byte $2f   // 74: '/' Spear
-    .byte $2f   // 75: '/' Pike
-    .byte $2f   // 76: '/' Halberd
-    .byte $2f   // 77: '/' Quarterstaff
-    .byte $29   // 78: ')' Large Shield
-    .byte $5b   // 79: '[' Hard Leather Armor
-    .byte $5b   // 80: '[' Scale Mail
-    .byte $5b   // 81: '[' Plate Mail
-    .byte $5b   // 82: '[' Cloak
-    .byte $5d   // 83: ']' Steel Helm
-    .byte $5d   // 84: ']' Gauntlets
-    .byte $5d   // 85: ']' Soft Leather Boots
-    .byte $5d   // 86: ']' Hard Leather Boots
-    .byte $5d   // 87: ']' Metal Cap
-    .byte $2f   // 88: '/' Sabre
-    .byte $2f   // 89: '/' Cutlass
-    .byte $2f   // 90: '/' Tulwar
-    .byte $2f   // 91: '/' Katana
-    .byte $2f   // 92: '/' Flail
-    .byte $2f   // 93: '/' Lucerne Hammer
-    .byte $2f   // 94: '/' Broad Axe
-    .byte $2f   // 95: '/' Awl-Pike
-
-// Color
-it_color:
-    .byte COL_YELLOW    // 0: Gold (small)
-    .byte COL_YELLOW    // 1: Gold (large)
-    .byte COL_LGREY     // 2: Dagger
-    .byte COL_LGREY     // 3: Short sword
-    .byte COL_WHITE     // 4: Long sword
-    .byte COL_LGREY     // 5: Mace
-    .byte COL_LGREY     // 6: Robe
-    .byte COL_BROWN     // 7: Leather armor
-    .byte COL_GREY      // 8: Chain mail
-    .byte COL_LGREY     // 9: Small shield
-    .byte COL_GREY      // 10: Iron helm
-    .byte COL_BROWN     // 11: Leather gloves
-    .byte COL_BROWN     // 12: Leather boots
-    .byte COL_YELLOW    // 13: Wooden torch
-    .byte COL_ORANGE    // 14: Brass lantern
-    .byte COL_BROWN     // 15: Ration of food
-    .byte COL_GREEN     // 16: Slime mold
-    .byte COL_WHITE     // 17: Cure light wounds
-    .byte COL_LGREEN    // 18: Speed
-    .byte COL_GREEN     // 19: Poison
-    .byte COL_WHITE     // 20: Light
-    .byte COL_LGREY     // 21: Identify
-    .byte COL_CYAN      // 22: Teleportation
-    .byte COL_YELLOW    // 23: Protection
-    .byte COL_LRED      // 24: Strength
-    .byte COL_WHITE     // 25: Cure Serious Wounds
-    .byte COL_BLUE      // 26: Restore Mana
-    .byte COL_LRED      // 27: Heroism
-    .byte COL_GREY      // 28: Blindness
-    .byte COL_PURPLE    // 29: Confusion
-    .byte COL_YELLOW    // 30: Detect Monsters
-    .byte COL_ORANGE    // 31: Infravision
-    .byte COL_LGREY     // 32: Word of Recall
-    .byte COL_CYAN      // 33: Remove Curse
-    .byte COL_WHITE     // 34: Enchant Weapon
-    .byte COL_WHITE     // 35: Enchant Armor
-    .byte COL_LGREEN    // 36: Monster Confusion
-    .byte COL_LRED      // 37: Aggravate
-    .byte COL_YELLOW    // 38: Protect from Evil
-    .byte COL_YELLOW    // 39: Wand of Light
-    .byte COL_CYAN      // 40: Wand of Lightning
-    .byte COL_BLUE      // 41: Wand of Frost
-    .byte COL_GREEN     // 42: Wand of Stinking Cloud
-    .byte COL_YELLOW    // 43: Staff of Light
-    .byte COL_LGREEN    // 44: Staff of Detect Monsters
-    .byte COL_CYAN      // 45: Staff of Teleportation
-    .byte COL_WHITE     // 46: Staff of Cure Light Wounds
-    .byte COL_PURPLE    // 47: Beginner's Spellbook
-    .byte COL_YELLOW    // 48: Holy Prayer Book
-    .byte COL_BROWN     // 49: Short Bow
-    .byte COL_LGREY     // 50: Light Crossbow
-    .byte COL_BROWN     // 51: Sling
-    .byte COL_BROWN     // 52: Arrow
-    .byte COL_LGREY     // 53: Bolt
-    .byte COL_GREY      // 54: Rock
-    .byte COL_PURPLE    // 55: Magick I
-    .byte COL_BLUE      // 56: Magick II
-    .byte COL_LRED      // 57: The Mages Guide to Power
-    .byte COL_YELLOW    // 58: Words of Wisdom
-    .byte COL_CYAN      // 59: Chants and Blessings
-    .byte COL_WHITE     // 60: Exorcism and Dispelling
-    .byte COL_ORANGE    // 61: Flask of Oil
-    .byte COL_BROWN     // 62: Shovel
-    .byte COL_LGREY     // 63: Pick
-    .byte COL_LGREY     // 64: Main Gauche
-    .byte COL_BROWN     // 65: Studded Leather Armor
-    .byte COL_LGREY     // 66: Rapier
-    .byte COL_WHITE     // 67: Broad Sword
-    .byte COL_WHITE     // 68: Bastard Sword
-    .byte COL_LGREY     // 69: Two-Handed Sword
-    .byte COL_WHITE     // 70: Scimitar
-    .byte COL_LGREY     // 71: Battle Axe
-    .byte COL_LGREY     // 72: War Hammer
-    .byte COL_WHITE     // 73: Morningstar
-    .byte COL_LGREY     // 74: Spear
-    .byte COL_LGREY     // 75: Pike
-    .byte COL_LGREY     // 76: Halberd
-    .byte COL_BROWN     // 77: Quarterstaff
-    .byte COL_LGREY     // 78: Large Shield
-    .byte COL_BROWN     // 79: Hard Leather Armor
-    .byte COL_GREY      // 80: Scale Mail
-    .byte COL_LGREY     // 81: Plate Mail
-    .byte COL_LGREY     // 82: Cloak
-    .byte COL_LGREY     // 83: Steel Helm
-    .byte COL_LGREY     // 84: Gauntlets
-    .byte COL_BROWN     // 85: Soft Leather Boots
-    .byte COL_BROWN     // 86: Hard Leather Boots
-    .byte COL_GREY      // 87: Metal Cap
-    .byte COL_WHITE     // 88: Sabre
-    .byte COL_WHITE     // 89: Cutlass
-    .byte COL_LGREY     // 90: Tulwar
-    .byte COL_LGREY     // 91: Katana
-    .byte COL_LGREY     // 92: Flail
-    .byte COL_LGREY     // 93: Lucerne Hammer
-    .byte COL_LGREY     // 94: Broad Axe
-    .byte COL_LGREY     // 95: Awl-Pike
+// Color and base armor class packed per type: high nibble = display color,
+// low nibble = base AC (<=9).
+it_color_ac:
+    .byte COL_YELLOW << 4                       // 0: Gold (small)
+    .byte COL_YELLOW << 4                       // 1: Gold (large)
+    .byte COL_LGREY << 4                        // 2: Dagger
+    .byte COL_LGREY << 4                        // 3: Short sword
+    .byte COL_WHITE << 4                        // 4: Long sword
+    .byte COL_LGREY << 4                        // 5: Mace
+    .byte (COL_LGREY << 4) | 2                  // 6: Robe
+    .byte (COL_BROWN << 4) | 4                  // 7: Leather armor
+    .byte (COL_GREY << 4) | 6                   // 8: Chain mail
+    .byte (COL_LGREY << 4) | 2                  // 9: Small shield
+    .byte (COL_GREY << 4) | 1                   // 10: Iron helm
+    .byte (COL_BROWN << 4) | 1                  // 11: Leather gloves
+    .byte (COL_BROWN << 4) | 1                  // 12: Leather boots
+    .byte COL_YELLOW << 4                       // 13: Wooden torch
+    .byte COL_ORANGE << 4                       // 14: Brass lantern
+    .byte COL_BROWN << 4                        // 15: Ration of food
+    .byte COL_GREEN << 4                        // 16: Slime mold
+    .byte COL_WHITE << 4                        // 17: Cure light wounds
+    .byte COL_LGREEN << 4                       // 18: Speed
+    .byte COL_GREEN << 4                        // 19: Poison
+    .byte COL_WHITE << 4                        // 20: Light
+    .byte COL_LGREY << 4                        // 21: Identify
+    .byte COL_CYAN << 4                         // 22: Teleportation
+    .byte (COL_YELLOW << 4) | 1                 // 23: Protection
+    .byte COL_LRED << 4                         // 24: Strength
+    .byte COL_WHITE << 4                        // 25: Cure Serious Wounds
+    .byte COL_BLUE << 4                         // 26: Restore Mana
+    .byte COL_LRED << 4                         // 27: Heroism
+    .byte COL_GREY << 4                         // 28: Blindness
+    .byte COL_PURPLE << 4                       // 29: Confusion
+    .byte COL_YELLOW << 4                       // 30: Detect Monsters
+    .byte COL_ORANGE << 4                       // 31: Infravision
+    .byte COL_LGREY << 4                        // 32: Word of Recall
+    .byte COL_CYAN << 4                         // 33: Remove Curse
+    .byte COL_WHITE << 4                        // 34: Enchant Weapon
+    .byte COL_WHITE << 4                        // 35: Enchant Armor
+    .byte COL_LGREEN << 4                       // 36: Monster Confusion
+    .byte COL_LRED << 4                         // 37: Aggravate
+    .byte COL_YELLOW << 4                       // 38: Protect from Evil
+    .byte COL_YELLOW << 4                       // 39: Wand of Light
+    .byte COL_CYAN << 4                         // 40: Wand of Lightning
+    .byte COL_BLUE << 4                         // 41: Wand of Frost
+    .byte COL_GREEN << 4                        // 42: Wand of Stinking Cloud
+    .byte COL_YELLOW << 4                       // 43: Staff of Light
+    .byte COL_LGREEN << 4                       // 44: Staff of Detect Monsters
+    .byte COL_CYAN << 4                         // 45: Staff of Teleportation
+    .byte COL_WHITE << 4                        // 46: Staff of Cure Light Wounds
+    .byte COL_PURPLE << 4                       // 47: Beginner's Spellbook
+    .byte COL_YELLOW << 4                       // 48: Holy Prayer Book
+    .byte COL_BROWN << 4                        // 49: Short Bow
+    .byte COL_LGREY << 4                        // 50: Light Crossbow
+    .byte COL_BROWN << 4                        // 51: Sling
+    .byte COL_BROWN << 4                        // 52: Arrow
+    .byte COL_LGREY << 4                        // 53: Bolt
+    .byte COL_GREY << 4                         // 54: Rock
+    .byte COL_PURPLE << 4                       // 55: Magick I
+    .byte COL_BLUE << 4                         // 56: Magick II
+    .byte COL_LRED << 4                         // 57: The Mages Guide to Power
+    .byte COL_YELLOW << 4                       // 58: Words of Wisdom
+    .byte COL_CYAN << 4                         // 59: Chants and Blessings
+    .byte COL_WHITE << 4                        // 60: Exorcism and Dispelling
+    .byte COL_ORANGE << 4                       // 61: Flask of Oil
+    .byte COL_BROWN << 4                        // 62: Shovel
+    .byte COL_LGREY << 4                        // 63: Pick
+    .byte COL_LGREY << 4                        // 64: Main Gauche
+    .byte (COL_BROWN << 4) | 5                  // 65: Studded Leather Armor
+    .byte COL_LGREY << 4                        // 66: Rapier
+    .byte COL_WHITE << 4                        // 67: Broad Sword
+    .byte COL_WHITE << 4                        // 68: Bastard Sword
+    .byte COL_LGREY << 4                        // 69: Two-Handed Sword
+    .byte COL_WHITE << 4                        // 70: Scimitar
+    .byte COL_LGREY << 4                        // 71: Battle Axe
+    .byte COL_LGREY << 4                        // 72: War Hammer
+    .byte COL_WHITE << 4                        // 73: Morningstar
+    .byte COL_LGREY << 4                        // 74: Spear
+    .byte COL_LGREY << 4                        // 75: Pike
+    .byte COL_LGREY << 4                        // 76: Halberd
+    .byte COL_BROWN << 4                        // 77: Quarterstaff
+    .byte (COL_LGREY << 4) | 3                  // 78: Large Shield
+    .byte (COL_BROWN << 4) | 6                  // 79: Hard Leather Armor
+    .byte (COL_GREY << 4) | 7                   // 80: Scale Mail
+    .byte (COL_LGREY << 4) | 9                  // 81: Plate Mail
+    .byte (COL_LGREY << 4) | 1                  // 82: Cloak
+    .byte (COL_LGREY << 4) | 2                  // 83: Steel Helm
+    .byte (COL_LGREY << 4) | 1                  // 84: Gauntlets
+    .byte (COL_BROWN << 4) | 1                  // 85: Soft Leather Boots
+    .byte (COL_BROWN << 4) | 2                  // 86: Hard Leather Boots
+    .byte (COL_GREY << 4) | 1                   // 87: Metal Cap
+    .byte COL_WHITE << 4                        // 88: Sabre
+    .byte COL_WHITE << 4                        // 89: Cutlass
+    .byte COL_LGREY << 4                        // 90: Tulwar
+    .byte COL_LGREY << 4                        // 91: Katana
+    .byte COL_LGREY << 4                        // 92: Flail
+    .byte COL_LGREY << 4                        // 93: Lucerne Hammer
+    .byte COL_LGREY << 4                        // 94: Broad Axe
+    .byte COL_LGREY << 4                        // 95: Awl-Pike
 
 // Weight (in 1/10 lbs)
 it_weight:
@@ -328,71 +230,29 @@ it_weight:
     .byte 50, 110, 100, 120                 // 88-91: added blades
     .byte 150, 120, 160, 160                // 92-95: added hafted/pole weapons
 
-// Damage dice count
-it_dmg_dice:
-    .byte 0, 0, 1, 1, 1, 2, 0, 0, 0, 0
+// Damage dice packed per type: high nibble = dice count (<=3), low nibble =
+// dice sides (<=9). 0 = no damage dice.
+it_dmg_packed:
+    .byte 0, 0, $14, $16, $18, $24, 0, 0, 0, 0
     .byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
     .byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
     .byte 0, 0, 0, 0, 0, 0, 0, 0, 0
     .byte 0, 0, 0, 0, 0, 0, 0, 0
     .byte 0, 0                              // Books (47-48)
-    .byte 0, 0, 0, 1, 1, 1                  // Bows=0d0, Arrow=1d4, Bolt=1d5, Rock=1d2
+    .byte 0, 0, 0, $14, $15, $12            // Bows=0d0, Arrow=1d4, Bolt=1d5, Rock=1d2
     .byte 0, 0, 0, 0, 0, 0                  // Books (55-60)
-    .byte 2                                  // 61: Flask of Oil (2d6)
-    .byte 1, 1                              // 62: Shovel (1d2), 63: Pick (1d3)
-    .byte 1, 0                              // 64-65: new weapon/armor
-    .byte 1, 2, 3, 3                        // 66-69: expanded swords
-    .byte 1, 3, 3, 2                        // 70-73: expanded hafted/axe
-    .byte 1, 2, 3, 1                        // 74-77: polearms/staff
+    .byte $26                               // 61: Flask of Oil (2d6)
+    .byte $12, $13                          // 62: Shovel (1d2), 63: Pick (1d3)
+    .byte $15, 0                            // 64: Main Gauche (1d5), 65: armor
+    .byte $16, $25, $34, $36                // 66-69: expanded swords
+    .byte $18, $34, $33, $26                // 70-73: expanded hafted/axe
+    .byte $16, $25, $34, $19                // 74-77: polearms/staff
     .byte 0, 0                              // 78-79: shield/armor
     .byte 0, 0                              // 80-81: armor
     .byte 0, 0, 0, 0, 0, 0                  // 82-87: defensive equipment
-    .byte 1, 1, 2, 3                        // 88-91: added blades
-    .byte 2, 2, 2, 1                        // 92-95: added hafted/pole weapons
-
-// Damage dice sides
-it_dmg_sides:
-    .byte 0, 0, 4, 6, 8, 4, 0, 0, 0, 0
-    .byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-    .byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-    .byte 0, 0, 0, 0, 0, 0, 0, 0, 0
-    .byte 0, 0, 0, 0, 0, 0, 0, 0
-    .byte 0, 0                              // Books (47-48)
-    .byte 0, 0, 0, 4, 5, 2                  // Bows=0d0, Arrow=1d4, Bolt=1d5, Rock=1d2
-    .byte 0, 0, 0, 0, 0, 0                  // Books (55-60)
-    .byte 6                                  // 61: Flask of Oil (2d6)
-    .byte 2, 3                              // 62: Shovel (1d2), 63: Pick (1d3)
-    .byte 5, 0                              // 64-65: new weapon/armor
-    .byte 6, 5, 4, 6                        // 66-69: expanded swords
-    .byte 8, 4, 3, 6                        // 70-73: expanded hafted/axe
-    .byte 6, 5, 4, 9                        // 74-77: polearms/staff
-    .byte 0, 0                              // 78-79: shield/armor
-    .byte 0, 0                              // 80-81: armor
-    .byte 0, 0, 0, 0, 0, 0                  // 82-87: defensive equipment
-    .byte 7, 7, 4, 4                        // 88-91: added blades
-    .byte 6, 5, 6, 8                        // 92-95: added hafted/pole weapons
-
-// Base armor class
-it_base_ac:
-    .byte 0, 0, 0, 0, 0, 0, 2, 4, 6, 2
-    .byte 1, 1, 1, 0, 0, 0, 0, 0, 0, 0
-    .byte 0, 0, 0, 1, 0, 0, 0, 0, 0, 0
-    .byte 0, 0, 0, 0, 0, 0, 0, 0, 0
-    .byte 0, 0, 0, 0, 0, 0, 0, 0
-    .byte 0, 0                              // Books (47-48)
-    .byte 0, 0, 0, 0, 0, 0                  // Bows, ammo: no AC
-    .byte 0, 0, 0, 0, 0, 0                  // Books (55-60): no AC
-    .byte 0                                  // 61: Flask of Oil: no AC
-    .byte 0, 0                              // 62: Shovel, 63: Pick (no AC)
-    .byte 0, 5                              // 64-65: new weapon/armor
-    .byte 0, 0, 0, 0                        // 66-69: expanded swords
-    .byte 0, 0, 0, 0                        // 70-73: expanded hafted/axe
-    .byte 0, 0, 0, 0                        // 74-77: polearms/staff
-    .byte 3, 6                              // 78-79: shield/armor
-    .byte 7, 9                              // 80-81: armor
-    .byte 1, 2, 1, 1, 2, 1                  // 82-87: cloak/helm/gloves/boots/cap
-    .byte 0, 0, 0, 0, 0, 0, 0, 0            // 88-95: weapons
-it_base_ac_end:
+    .byte $17, $17, $24, $34                // 88-91: added blades
+    .byte $26, $25, $26, $18                // 92-95: added hafted/pole weapons
+it_dmg_packed_end:
 
 #if C64_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME
 .segment TownOverlay
@@ -467,28 +327,40 @@ it_cost_hi_end:
 .segment DungeonGenOverlay
 #endif
 
-// Minimum dungeon level to appear
+// Minimum dungeon level to appear, packed two types per byte: even type in
+// the low nibble, odd type in the high nibble (max 12).
 it_min_level:
-    .byte 0, 0, 1, 1, 3, 2, 1, 2, 4, 2
-    .byte 3, 1, 1, 0, 2, 0, 1, 1, 3, 1
-    .byte 1, 2, 3, 4, 5, 3, 5, 4, 1, 1
-    .byte 2, 2, 5, 4, 6, 6, 3, 1, 4
-    .byte 3, 4, 5, 4, 3, 3, 5, 3
-    .byte 2, 2                              // Books (47-48)
-    .byte 2, 3, 1, 1, 2, 1                  // Bows, ammo
-    .byte 4, 8, 12, 4, 8, 12                // Books (55-60)
-    .byte 0                                  // 61: Flask of Oil (available immediately)
-    .byte 0, 0                              // 62: Shovel, 63: Pick (available immediately)
-    .byte 1, 3                              // 64-65: new weapon/armor
-    .byte 2, 4, 6, 8                        // 66-69: expanded swords
-    .byte 3, 7, 5, 6                        // 70-73: expanded hafted/axe
-    .byte 2, 8, 9, 1                        // 74-77: polearms/staff
-    .byte 4, 5                              // 78-79: shield/armor
-    .byte 7, 10                             // 80-81: armor
-    .byte 2, 6, 2, 1, 3, 4                  // 82-87: cloak/helm/gloves/boots/cap
-    .byte 3, 4, 5, 7                        // 88-91: added blades
-    .byte 5, 6, 5, 4                        // 92-95: added hafted/pole weapons
+    .byte $00, $11, $23, $21, $24   // 0-9
+    .byte $13, $01, $02, $11, $13   // 10-19
+    .byte $21, $43, $35, $45, $11   // 20-29
+    .byte $22, $45, $66, $13, $34   // 30-39
+    .byte $54, $34, $53, $23        // 40-47
+    .byte $22, $13, $21, $41        // 48-55
+    .byte $c8, $84, $0c             // 56-61
+    .byte $00                       // 62-63: Shovel, Pick (available immediately)
+    .byte $31, $42, $86             // 64-69
+    .byte $73, $65, $82, $19        // 70-77
+    .byte $54, $a7                  // 78-81
+    .byte $62, $12, $43             // 82-87
+    .byte $43, $75, $65, $45        // 88-95
 it_min_level_end:
+
+// iml_get_for_type — Minimum dungeon level for item type X.
+// Input: X = item type ID. Output: A = min level (0-12). Preserves X. Clobbers: A, Y.
+iml_get_for_type:
+    txa
+    lsr
+    tay
+    lda it_min_level,y
+    bcs !iml_odd+
+    and #$0f
+    rts
+!iml_odd:
+    lsr
+    lsr
+    lsr
+    lsr
+    rts
 
 #if C64_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME
 .segment Default
@@ -523,6 +395,65 @@ item_get_missile:
 !igm_zero:
     lda #0
     rts
+
+// item_get_base_ac — Get base armor class for an item type
+// Input: Y = item type ID
+// Output: A = base AC (0-9)
+// Preserves: X, Y
+item_get_base_ac:
+    lda it_color_ac,y
+    and #$0f
+    rts
+
+// Display glyph by category. Digging tools are the only category-0 types.
+// Exceptions (ranged launchers/ammo, Flask of Oil) are handled in
+// item_get_display_char.
+it_display_by_cat:
+    .byte $5c   // 0: digging — '\'
+    .byte $24   // 1: gold — '$'
+    .byte $2f   // 2: weapon — '/'
+    .byte $5b   // 3: armor — '['
+    .byte $29   // 4: shield — ')'
+    .byte $5d   // 5: helm — ']'
+    .byte $5d   // 6: gloves — ']'
+    .byte $5d   // 7: boots — ']'
+    .byte $2a   // 8: light — '*'
+    .byte $2c   // 9: food — ','
+    .byte $21   // 10: potion — '!'
+    .byte $3f   // 11: scroll — '?'
+    .byte $3d   // 12: ring — '='
+    .byte $3f   // 13: book — '?'
+    .byte $2d   // 14: wand — '-'
+    .byte $2f   // 15: staff — '/'
+
+// item_get_display_char — Get floor display glyph for an item type
+// Input: X = item type ID
+// Output: A = display glyph (screen code)
+// Preserves: X, Y
+item_get_display_char:
+    cpx #IT_MISSILE_BASE
+    bcc !igd_cat+
+    cpx #IT_MISSILE_END
+    bcs !igd_not_ranged+
+    cpx #52
+    bcc !igd_bow+
+    lda #$1b                    // '{' ammo
+    rts
+!igd_bow:
+    lda #$1c                    // '}' launcher
+    rts
+!igd_not_ranged:
+    cpx #ITEM_FLASK_OIL
+    bne !igd_cat+
+    lda #$21                    // '!' flask
+    rts
+!igd_cat:
+    sty idc_save_y
+    ldy it_category,x
+    lda it_display_by_cat,y
+    ldy idc_save_y
+    rts
+idc_save_y: .byte 0
 
 // Name pointer tables
 it_name_lo:

@@ -91,8 +91,12 @@ inv_item_id:
     .fill TOTAL_INV_SLOTS, FI_EMPTY
 inv_p1:
     .fill TOTAL_INV_SLOTS, 0
-it_base_ac:
+it_color_ac:
     .fill ITEM_TYPE_COUNT, 0
+item_get_base_ac:
+    lda it_color_ac,y
+    and #$0f
+    rts
 inv_to_ac:
     .fill TOTAL_INV_SLOTS, 0
 

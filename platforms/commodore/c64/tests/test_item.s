@@ -1113,7 +1113,7 @@ test_start:
     jsr pick_item_type
     // Check if min_level <= 3 (dlvl=1+2)
     tax
-    lda it_min_level,x
+    jsr iml_get_for_type
     cmp #4
     bcs !t22_over+
     inc tc_valid_ctr
@@ -1394,8 +1394,14 @@ test_start:
 !t29_check_color:
     lda #ITEM_TYPE_COUNT - 1
     jsr item_get_floor_color
+    sta t29_expected_color
     ldx #ITEM_TYPE_COUNT - 1
-    cmp it_color,x
+    lda it_color_ac,x
+    lsr
+    lsr
+    lsr
+    lsr
+    cmp t29_expected_color
     bne !t29_fail+
 
     lda #$01
@@ -2161,7 +2167,7 @@ test_start:
 !t44_loop:
     jsr pick_item_type
     tax
-    lda it_min_level,x
+    jsr iml_get_for_type
     cmp #3
     bcc !t44_under+
     inc tc_valid_ctr
@@ -2384,6 +2390,7 @@ t27_expected_name:
     .text "Dagger" ; .byte 0
 t29_expected_appended_name:
     .text "Awl-Pike" ; .byte 0
+t29_expected_color: .byte 0
 
 item_test_body_end:
 

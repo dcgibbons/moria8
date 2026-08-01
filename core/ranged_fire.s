@@ -123,11 +123,15 @@ ranged_fire:
 
     // 6. Hit! Roll damage using ammo dice
     ldx rf_ammo_id
-    lda it_dmg_dice,x
+    lda it_dmg_packed,x
     pha
-    lda it_dmg_sides,x
+    and #$0f
     tax                         // X = sides
-    pla                         // A = dice count
+    pla
+    lsr
+    lsr
+    lsr
+    lsr                         // A = dice count
     ldy #0                      // No bonus on dice
     jsr math_dice               // Result in zp_math_a
 

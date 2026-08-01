@@ -150,7 +150,7 @@ throw_item:
 
     // 6. Hit! Roll damage using item's dice
     ldx tw_item_id
-    lda it_dmg_dice,x
+    lda it_dmg_packed,x
     bne !tw_has_dice+
     // No dice (0d0) — use 1d1 minimum
     lda #1
@@ -158,9 +158,13 @@ throw_item:
     jmp !tw_roll_dice+
 !tw_has_dice:
     pha
-    lda it_dmg_sides,x
+    and #$0f
     tax                         // X = sides
-    pla                         // A = dice count
+    pla
+    lsr
+    lsr
+    lsr
+    lsr                         // A = dice count
 !tw_roll_dice:
     ldy #0                      // No bonus on dice
     jsr math_dice               // Result in zp_math_a

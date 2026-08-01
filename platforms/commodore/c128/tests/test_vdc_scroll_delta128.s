@@ -77,6 +77,9 @@ fi_item_id: .fill MAX_FLOOR_ITEMS, FI_EMPTY
 fi_x:       .fill MAX_FLOOR_ITEMS, 0
 fi_y:       .fill MAX_FLOOR_ITEMS, 0
 it_display: .fill 2, 0
+item_get_display_char:
+    lda it_display,x
+    rts
 
 cr_display: .fill 2, 0
 cr_color:   .fill 2, 0

@@ -294,7 +294,7 @@ render_viewport:
     // X = slot — look up item type
     lda fi_item_id,x
     tax
-    lda it_display,x
+    jsr item_get_display_char
     sta zp_temp0
     txa                             // A = item type ID
     jsr item_get_floor_color        // A = identification-aware color
@@ -566,7 +566,7 @@ render_single_tile:
     // X = slot — look up item type
     lda fi_item_id,x
     tax
-    lda it_display,x
+    jsr item_get_display_char
     sta zp_temp3
     txa                             // A = item type ID
     jsr item_get_floor_color        // A = identification-aware color

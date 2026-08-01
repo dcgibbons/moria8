@@ -161,6 +161,9 @@ vis_cached_room_idx:.byte 0
 
 fi_item_id: .fill 1, 0
 it_display: .fill 2, 0
+item_get_display_char:
+    lda it_display,x
+    rts
 cr_display: .fill 2, 0
 cr_color:   .fill 2, 0
 cr_mflags:  .fill 2, 0

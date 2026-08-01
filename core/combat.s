@@ -598,11 +598,15 @@ combat_roll_damage:
 !crd_has_melee:
 
     // Weapon equipped — use weapon dice
-    lda it_dmg_dice,x           // Dice count
-    pha                         // Save dice count
-    lda it_dmg_sides,x          // Dice sides
+    lda it_dmg_packed,x
+    pha
+    and #$0f
     tax                         // X = sides
-    pla                         // A = dice count
+    pla
+    lsr
+    lsr
+    lsr
+    lsr                         // A = dice count
     ldy #0                      // No bonus on dice roll itself
     jsr math_dice               // Result in zp_math_a
     jmp !crd_add_bonus+

@@ -1173,8 +1173,8 @@ item_append_desc:
     jsr combat_append_char
     lda #$1b                    // '[' screen code
     jsr combat_append_char
-    ldx fi_add_id
-    lda it_base_ac,x
+    ldy fi_add_id
+    jsr item_get_base_ac
     jsr combat_append_decimal
     lda #$2c
     jsr combat_append_char
@@ -1423,7 +1423,7 @@ pick_item_type:
     ldx zp_temp1
     lda pit_sorted,x             // A = item_id
     tax
-    lda it_min_level,x           // A = found_level
+    jsr iml_get_for_type         // A = found_level
     beq !pit_reroll_l0+          // Level 0: special case (no lower bound)
 
     // Re-roll uniformly within found_level's tier
@@ -1749,18 +1749,15 @@ re_negate_a:
 // Compile-time validation
 // ============================================================
 .assert "Item type count", ITEM_TYPE_COUNT, 96
-.assert "it_category size", it_display - it_category, ITEM_TYPE_COUNT
-.assert "it_display size", it_color - it_display, ITEM_TYPE_COUNT
-.assert "it_color size", it_weight - it_color, ITEM_TYPE_COUNT
-.assert "it_weight size", it_dmg_dice - it_weight, ITEM_TYPE_COUNT
-.assert "it_dmg_dice size", it_dmg_sides - it_dmg_dice, ITEM_TYPE_COUNT
-.assert "it_dmg_sides size", it_base_ac - it_dmg_sides, ITEM_TYPE_COUNT
-.assert "it_base_ac size", it_base_ac_end - it_base_ac, ITEM_TYPE_COUNT
+.assert "it_category size", it_color_ac - it_category, ITEM_TYPE_COUNT
+.assert "it_color_ac size", it_weight - it_color_ac, ITEM_TYPE_COUNT
+.assert "it_weight size", it_dmg_packed - it_weight, ITEM_TYPE_COUNT
+.assert "it_dmg_packed size", it_dmg_packed_end - it_dmg_packed, ITEM_TYPE_COUNT
 .assert "it_cost_lo size", it_cost_lo_end - it_cost_lo, ITEM_TYPE_COUNT
 #if !(C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME)
 .assert "it_cost_hi size", it_cost_hi_end - it_cost_hi, ITEM_TYPE_COUNT
 #endif
-.assert "it_min_level size", it_min_level_end - it_min_level, ITEM_TYPE_COUNT
+.assert "it_min_level size", it_min_level_end - it_min_level, (ITEM_TYPE_COUNT + 1) >> 1
 .assert "it_name_lo size", it_name_lo_end - it_name_lo, ITEM_TYPE_COUNT
 #if !(C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME)
 .assert "it_name_hi size", it_name_hi_end - it_name_hi, ITEM_TYPE_COUNT

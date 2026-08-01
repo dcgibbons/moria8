@@ -173,8 +173,8 @@ itemdesc_put_stats:
     jsr hal_screen_put_char
     lda #$1b                    // '[' screen code
     jsr hal_screen_put_char
-    ldx itemdesc_item_id
-    lda it_base_ac,x
+    ldy itemdesc_item_id
+    jsr item_get_base_ac
     jsr screen_put_decimal
     lda #$2c
     jsr hal_screen_put_char

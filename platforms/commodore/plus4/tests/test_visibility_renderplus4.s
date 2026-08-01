@@ -123,6 +123,9 @@ test_expect_char: .byte 0
 
 fi_item_id: .fill MAX_FLOOR_ITEMS, FI_EMPTY
 it_display: .fill 2, 0
+item_get_display_char:
+    lda it_display,x
+    rts
 
 item_get_floor_color:
     lda #COL_WHITE

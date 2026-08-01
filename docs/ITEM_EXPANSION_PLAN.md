@@ -744,15 +744,18 @@ Phase 0 implementation status:
 - That slice also hardened `item_get_missile` with an upper bound, because
   melee IDs above the compact ranged table must return non-ranged rather than
   reading the following code bytes.
-- `it_unknown_desc` is now the explicit per-row unknown-description descriptor.
-  It asserts to `ITEM_TYPE_COUNT`.
-- Unknown name and floor-color routing now use descriptor class/index instead
-  of numeric ID ranges. Fixed-name rows forced to unknown fall back to real
-  item name/color rather than indexing a shuffled table out of bounds.
+- `it_unknown_idx` stores the per-row class-local unknown-description index as
+  two types per byte; the class itself is derived from `it_category`
+  (potion/scroll/ring/wand/staff are the randomized classes). The table asserts
+  to `(ITEM_TYPE_COUNT + 1) >> 1`.
+- Unknown name and floor-color routing now switch on `it_category` and fetch
+  the class-local index via `iuk_index_for_type`. Fixed-name rows forced to
+  unknown fall back to real item name/color rather than indexing a shuffled
+  table out of bounds.
 - Legacy save migration now derives appended known-state defaults from
-  `it_unknown_desc`: fixed rows default known, randomized rows default unknown,
+  `it_category`: fixed rows default known, randomized rows default unknown,
   and future capacity bytes are cleared.
-- When adding IDs `66-95`, extend `it_unknown_desc` in lockstep with
+- When adding IDs `66-95`, extend `it_unknown_idx` in lockstep with
   `ITEM_TYPE_COUNT`. Do not add randomized appended IDs unless their shuffled
   unknown-name/color pools cover the class-local descriptor indexes.
 
@@ -1186,15 +1189,20 @@ Constraints and costs:
 ### Lever 3: Resident Representation Packing
 
 Measured packing options, all ports (savings multiply x4 through shared
-core). At 128 rows:
+core). At 128 rows (estimated); measured results at 96 rows below.
 
-| Change | Resident/port | Access sites | Risk |
-|---|---:|---|---|
-| `id_known` byte-per-item -> 16-byte bitset | -112 B | 15 product sites in 7 files (+~114 test fixture refs) | medium: save V4 required |
-| `it_unknown_desc` -> nibble index; class derived from `it_category` (verified 1:1 for all 96 rows) | -64 B | 14 sites in 2 files | low |
-| dice count+sides -> 1 byte (count <=3, sides <=9) | -128 B | 3 files, always read together | low |
-| color+base AC -> 1 byte (4+4 bits) | -128 B | 4 files | low |
-| `it_display` -> derived from `it_category` (verified consistent; exception range for bows/ammo) | -80 B | 8 render files | medium-low |
+| Change | Resident/port | Access sites | Risk | Status |
+|---|---:|---|---|---|
+| `id_known` byte-per-item -> 16-byte bitset | -112 B | 15 product sites in 7 files (+~114 test fixture refs) | medium: save V4 required | done |
+| `it_unknown_desc` -> nibble index; class derived from `it_category` (verified 1:1 for all 96 rows) | -64 B | 14 sites in 2 files | low | done (-48 B measured) |
+| dice count+sides -> 1 byte (count <=3, sides <=9) | -128 B | 3 files, always read together | low | done (-93 B measured) |
+| color+base AC -> 1 byte (4+4 bits) | -128 B | 4 files | low | done (-86 B measured; AC reads via `item_get_base_ac` helper) |
+| `it_display` -> derived from `it_category` (verified consistent; exception range for bows/ammo) | -80 B | 8 render files | medium-low | done (-41 B measured; `item_get_display_char` + 16-byte category table + exceptions for ranged/ammo/flask) |
+| `it_min_level` -> nibble | -64 B (gen overlay on C64/Plus4/A2; resident on C128) | 1 file | low | done (via `iml_get_for_type`) |
+
+Measured C64 resident recovery at 96 rows: program_end `$bc63` -> `$bb57`
+(268 B), with `it_min_level` savings landing in the gen overlay on
+C64/Plus4/Apple IIe and resident on C128.
 | `it_min_level` -> nibble | -64 B (gen overlay on C64/Plus4/A2; resident on C128) | 1 file | low |
 
 Gross recovery ~380-450 B/port at 128 rows, against ~200 B of packed table

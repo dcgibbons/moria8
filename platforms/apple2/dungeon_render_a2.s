@@ -389,7 +389,7 @@ render_viewport:
     // X = slot — look up item display glyph (color dropped: colorless)
     lda fi_item_id,x
     tax
-    lda it_display,x
+    jsr item_get_display_char
     sta zp_temp0
 !rv_no_item:
     lda rv_row_has_glyph
@@ -655,7 +655,7 @@ render_single_tile:
     bcc !rst_no_item+
     lda fi_item_id,x
     tax
-    lda it_display,x
+    jsr item_get_display_char
     sta zp_temp3
 !rst_no_item:
     ldy zp_temp1                // Y = map_y

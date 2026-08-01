@@ -30,7 +30,11 @@ inv_p1:      .fill TOTAL_INV_SLOTS, 0
 inv_to_hit:  .fill TOTAL_INV_SLOTS, 0
 inv_to_dam:  .fill TOTAL_INV_SLOTS, 0
 inv_to_ac:   .fill TOTAL_INV_SLOTS, 0
-it_base_ac:  .fill 62, 0
+it_color_ac: .fill 62, 0
+item_get_base_ac:
+    lda it_color_ac,y
+    and #$0f
+    rts
 
 test_start:
     // Init results
