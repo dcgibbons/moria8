@@ -203,8 +203,7 @@ eff_identify_prompt:
     // Identify that item type
     tay
     pha
-    lda #1
-    sta id_known,y
+    jsr id_known_set_y
 
     // Set IF_IDENTIFIED on the item instance
     lda inv_flags,x

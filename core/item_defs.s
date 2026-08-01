@@ -49,4 +49,94 @@
 // Save Format V1 serializes 64 known-item bytes. Do not renumber IDs 0-63.
 .const LEGACY_ITEM_TYPE_COUNT = 64
 .const ITEM_TYPE_COUNT = 96
-.const ITEM_ID_CAPACITY = 96
+.const ITEM_ID_CAPACITY = 128
+
+// Known-item identification state (Save Format V4)
+// One bit per item type ID: set = identified/known. 16 bytes at 128 IDs.
+.const ID_KNOWN_BYTES = (ITEM_ID_CAPACITY + 7) / 8
+
+id_known_bits: .fill ID_KNOWN_BYTES, 0
+
+idk_bit_mask: .byte 1, 2, 4, 8, 16, 32, 64, 128
+idk_mask:     .byte 0
+
+// id_known_test — Report whether item type X is identified/known.
+// Input:  X = item type ID
+// Output: A = 0 and Z set when the item is UNKNOWN (mirrors lda id_known,x)
+// Clobbers: A, Y (X preserved)
+id_known_test:
+    txa
+    pha
+    and #7
+    tay
+    lda idk_bit_mask,y
+    sta idk_mask
+    pla
+    lsr
+    lsr
+    lsr
+    tay
+    lda id_known_bits,y
+    and idk_mask
+    rts
+
+// id_known_set — Mark item type X as identified/known.
+// Input:  X = item type ID
+// Clobbers: A, Y (X preserved)
+id_known_set:
+    txa
+    pha
+    and #7
+    tay
+    lda idk_bit_mask,y
+    sta idk_mask
+    pla
+    lsr
+    lsr
+    lsr
+    tay
+    lda id_known_bits,y
+    ora idk_mask
+    sta id_known_bits,y
+    rts
+
+// id_known_set_y — Mark item type Y as identified/known.
+// Input:  Y = item type ID
+// Clobbers: A, Y (X preserved)
+id_known_set_y:
+    tya
+    pha
+    and #7
+    tay
+    lda idk_bit_mask,y
+    sta idk_mask
+    pla
+    lsr
+    lsr
+    lsr
+    tay
+    lda id_known_bits,y
+    ora idk_mask
+    sta id_known_bits,y
+    rts
+
+// id_known_clear — Mark item type X as unknown.
+// Input:  X = item type ID
+// Clobbers: A, Y (X preserved)
+id_known_clear:
+    txa
+    pha
+    and #7
+    tay
+    lda idk_bit_mask,y
+    eor #$ff
+    sta idk_mask
+    pla
+    lsr
+    lsr
+    lsr
+    tay
+    lda id_known_bits,y
+    and idk_mask
+    sta id_known_bits,y
+    rts

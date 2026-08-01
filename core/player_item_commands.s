@@ -434,8 +434,7 @@ item_quaff:
     sta piw_item_id
     // Identify this potion type
     ldx piw_item_id
-    lda #1
-    sta id_known,x
+    jsr id_known_set
 
     // Remove from inventory
     ldx piw_slot

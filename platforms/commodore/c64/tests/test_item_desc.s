@@ -253,8 +253,8 @@ test_start:
     // Test 5: known scrolls use Umoria-style category names.
 !t5:
     jsr test_prepare_row0
-    lda #1
-    sta id_known + 21
+    ldx #21
+    jsr id_known_set
     lda #21                         // Identify
     sta itemdesc_item_id
     lda #0
@@ -411,8 +411,7 @@ test_all_known_item_names:
     sta item_name_test_id
 !next_item:
     ldx item_name_test_id
-    lda #1
-    sta id_known,x
+    jsr id_known_set
     txa
     jsr item_get_name_ptr
     lda zp_ptr0

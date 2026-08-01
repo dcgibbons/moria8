@@ -19,11 +19,8 @@
 .const OLDEST_SAVE_VERSION = SAVE_V1_VERSION
 .const SAVE_FLOOR42_VERSION = SAVE_V1_VERSION
 .const SAVE_KNOWN96_VERSION = hal_storage_save_known96_version
-#if C128
-.const SAVE_INV31_VERSION = $12
-#else
-.const SAVE_INV31_VERSION = SAVE_VERSION
-#endif
+.const SAVE_KNOWN_BITS_VERSION = SAVE_VERSION
+.const SAVE_INV31_VERSION = hal_storage_save_inv31_version
 #if C128
 .const SAVE_ROOM21_VERSION = $13
 .const LEGACY_MAX_ROOMS = 8
@@ -1469,44 +1466,83 @@ load_read_inventory_state:
 // ============================================================
 // save_write_known_items / load_read_known_items
 //
-// Save V1 wrote ITEM_TYPE_COUNT bytes because the shipped catalog had exactly
-// 64 IDs. Save V2 writes ITEM_ID_CAPACITY bytes so IDs 64-95 can be appended
-// without changing the save stream again.
+// Save V1 wrote 64 known-item bytes; V2/V3 wrote 96 (ITEM_ID_CAPACITY at the
+// time). Save V4 writes the 16-byte id_known_bits bitset (128 IDs, one bit
+// each). Legacy loads stream the old bytes and pack them into the bitset.
 // ============================================================
 save_write_known_items:
-    :save_block(id_known, ITEM_ID_CAPACITY)
+    :save_block(id_known_bits, ID_KNOWN_BYTES)
     rts
 
 load_read_known_items:
     lda load_save_version
-    cmp #SAVE_KNOWN96_VERSION
-    bcc !lrki_v1+
-    :load_block(id_known, ITEM_ID_CAPACITY)
+    cmp #SAVE_KNOWN_BITS_VERSION
+    bcc !lrki_legacy+
+    :load_block(id_known_bits, ID_KNOWN_BYTES)
     rts
 
+!lrki_legacy:
+    cmp #SAVE_KNOWN96_VERSION
+    bcc !lrki_v1+
+    // V2/V3: 96 legacy bytes staged, then packed into the bitset
+    :load_block(idk_legacy_stage, 96)
+    jsr idk_clear_bits
+    jsr idk_pack_stage
+    ldx #96
+    jmp !lrki_defaults+
+
 !lrki_v1:
-    :load_block(id_known, LEGACY_ITEM_TYPE_COUNT)
+    // V1: 64 legacy bytes staged, then packed into the bitset
+    :load_block(idk_legacy_stage, LEGACY_ITEM_TYPE_COUNT)
+    jsr idk_clear_bits
+    jsr idk_pack_stage
     ldx #LEGACY_ITEM_TYPE_COUNT
-!lrki_apply_defaults:
+
+!lrki_defaults:
+    // X = first ID beyond the loaded legacy range. Implemented IDs past it
+    // take migration defaults from it_unknown_desc; IDs past ITEM_TYPE_COUNT
+    // stay cleared (unknown). Skip entirely when the legacy stream already
+    // covered the implemented range (V2/V3: X=96).
+    cpx #ITEM_TYPE_COUNT
+    bcs !lrki_def_done+
+!lrki_def_loop:
     lda it_unknown_desc,x
     and #IUK_CLASS_MASK
-    bne !lrki_unknown_default+
-    lda #1
-    bne !lrki_store_default+
-!lrki_unknown_default:
-    lda #0
-!lrki_store_default:
-    sta id_known,x
+    bne !lrki_def_next+
+    jsr id_known_set
+!lrki_def_next:
     inx
     cpx #ITEM_TYPE_COUNT
-    bcc !lrki_apply_defaults-
-    lda #0
-!lrki_clear_future:
-    sta id_known,x
-    inx
-    cpx #ITEM_ID_CAPACITY
-    bcc !lrki_clear_future-
+    bcc !lrki_def_loop-
+!lrki_def_done:
     rts
+
+// idk_clear_bits — Zero the known-item bitset before a legacy load packs it.
+// Clobbers: A, X
+idk_clear_bits:
+    ldx #ID_KNOWN_BYTES - 1
+    lda #0
+!icb_loop:
+    sta id_known_bits,x
+    dex
+    bpl !icb_loop-
+    rts
+
+// idk_pack_stage — Set bits for every nonzero staged legacy byte.
+// Clobbers: A, X, Y
+idk_pack_stage:
+    ldx #0
+!ips_loop:
+    lda idk_legacy_stage,x
+    beq !ips_skip+
+    jsr id_known_set
+!ips_skip:
+    inx
+    cpx #96
+    bcc !ips_loop-
+    rts
+
+idk_legacy_stage: .fill 96, 0
 
 // ============================================================
 // save_write_post_known_state / load_read_post_known_state

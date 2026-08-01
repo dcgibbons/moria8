@@ -242,9 +242,8 @@ test_start:
 
     // Check id_known set
     ldx #39
-    lda id_known,x
-    cmp #1
-    bne !t4_fail+
+    jsr id_known_test
+    beq !t4_fail+
 
     lda #$01
     sta tc_results + 3
@@ -326,9 +325,8 @@ test_start:
 
     // Check id_known
     ldx #43
-    lda id_known,x
-    cmp #1
-    bne !t6_fail+
+    jsr id_known_test
+    beq !t6_fail+
 
     lda #$01
     sta tc_results + 5

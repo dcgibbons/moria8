@@ -495,7 +495,8 @@ test_start:
     lda #0
     sta test_key_idx
     sta zp_msg_flags
-    sta id_known + 17
+    ldx #17
+    jsr id_known_clear
 
     lda #21
     sta inv_item_id
@@ -524,15 +525,15 @@ test_start:
 
     jsr item_read_scroll
 
-    lda id_known + 17
-    cmp #1
-    bne !t4_fail+
+    ldx #17
+    jsr id_known_test
+    beq !t4_fail+
     lda inv_item_id
     cmp #17
     bne !t4_fail+
-    lda id_known + 21
-    cmp #1
-    bne !t4_fail+
+    ldx #21
+    jsr id_known_test
+    beq !t4_fail+
     lda #$01
     sta tc_results + 3
     jmp !t5+
@@ -546,7 +547,8 @@ test_start:
     lda #0
     sta test_key_idx
     sta zp_msg_flags
-    sta id_known + 17
+    ldx #17
+    jsr id_known_clear
 
     lda #21
     sta inv_item_id
@@ -575,7 +577,8 @@ test_start:
 
     jsr item_read_scroll
 
-    lda id_known + 17
+    ldx #17
+    jsr id_known_test
     bne !t5_fail+
     lda inv_item_id
     cmp #17

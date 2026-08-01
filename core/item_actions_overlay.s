@@ -83,8 +83,7 @@ item_read_scroll:
     stx piw_slot
     sta piw_item_id
     ldx piw_item_id
-    lda #1
-    sta id_known,x
+    jsr id_known_set
 
     ldx piw_slot
     jsr inv_remove_item
@@ -331,8 +330,7 @@ item_aim_wand:
     dec inv_p1,x
 
     ldx piw_item_id
-    lda #1
-    sta id_known,x
+    jsr id_known_set
 
     lda piw_item_id
     cmp #39
@@ -418,8 +416,7 @@ item_use_staff:
     dec inv_p1,x
 
     ldx piw_item_id
-    lda #1
-    sta id_known,x
+    jsr id_known_set
 
     lda piw_item_id
     cmp #43

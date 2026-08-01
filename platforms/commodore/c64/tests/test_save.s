@@ -139,6 +139,7 @@ random_floor_in_room:
 .const hal_storage_save_v1_version = $0f
 .const hal_storage_save_known96_version = $10
 .const hal_storage_save_version = $11
+.const hal_storage_save_inv31_version = $11
 .const KERNAL_ERR_DEVICE_NOT_PRESENT = 5
 .const KERNAL_SETNAM = test_save_setnam
 .const KERNAL_SETLFS = test_save_setlfs
@@ -1820,9 +1821,8 @@ t22_fail_code:
 !t23_v1_stream_ok:
 
     ldx #0
-    lda #$ff
 !t23_poison_known:
-    sta id_known,x
+    jsr id_known_set
     inx
     cpx #ITEM_ID_CAPACITY
     bcc !t23_poison_known-
@@ -1832,12 +1832,11 @@ t22_fail_code:
     jsr test_stream_reset_read
     jsr load_read_known_items
 
+    // Legacy stream bytes were all nonzero: bits 0-63 must be set
     ldx #0
 !t23_check_v1_known:
-    txa
-    eor #$5a
-    cmp id_known,x
-    beq !t23_v1_next+
+    jsr id_known_test
+    bne !t23_v1_next+
     lda #2
     jmp t23_fail_code
 !t23_v1_next:
@@ -1845,11 +1844,11 @@ t22_fail_code:
     cpx #LEGACY_ITEM_TYPE_COUNT
     bcc !t23_check_v1_known-
 
+    // Appended rows are all fixed-known: bits 64-95 must be set
     ldx #LEGACY_ITEM_TYPE_COUNT
 !t23_check_v1_appended:
-    lda id_known,x
-    cmp #1
-    beq !t23_appended_next+
+    jsr id_known_test
+    bne !t23_appended_next+
     lda #3
     jmp t23_fail_code
 !t23_appended_next:
@@ -1857,9 +1856,10 @@ t22_fail_code:
     cpx #ITEM_TYPE_COUNT
     bcc !t23_check_v1_appended-
 
+    // Future capacity: bits 96-127 must be clear
     ldx #ITEM_TYPE_COUNT
 !t23_check_v1_future:
-    lda id_known,x
+    jsr id_known_test
     beq !t23_future_next+
     lda #3
     jmp t23_fail_code
@@ -1868,28 +1868,93 @@ t22_fail_code:
     cpx #ITEM_ID_CAPACITY
     bcc !t23_check_v1_future-
 
+    // V2/V3 migration: 96-byte legacy stream packs bits, future stays clear
+    lda #0
+    sta save_cksum_lo
+    sta save_cksum_hi
+    sta save_io_error
+    jsr test_stream_reset_write
+    ldx #0
+!t23_seed_v23_stream:
+    txa
+    and #1
+    sta SAVE_STREAM_BUF,x         // odd IDs nonzero, even zero
+    inx
+    cpx #96
+    bcc !t23_seed_v23_stream-
+
+    ldx #0
+!t23_poison_v23:
+    jsr id_known_set
+    inx
+    cpx #ITEM_ID_CAPACITY
+    bcc !t23_poison_v23-
+
+    lda #SAVE_KNOWN96_VERSION
+    sta load_save_version
+    jsr test_stream_reset_read
+    jsr load_read_known_items
+
+    ldx #0
+!t23_check_v23:
+    txa
+    and #1
+    beq !t23_v23_expect_clear+
+    jsr id_known_test
+    bne !t23_v23_next+
+    lda #5
+    jmp t23_fail_code
+!t23_v23_expect_clear:
+    jsr id_known_test
+    beq !t23_v23_next+
+    lda #5
+    jmp t23_fail_code
+!t23_v23_next:
+    inx
+    cpx #96
+    bcc !t23_check_v23-
+
+    ldx #96
+!t23_check_v23_future:
+    jsr id_known_test
+    beq !t23_v23f_next+
+    lda #5
+    jmp t23_fail_code
+!t23_v23f_next:
+    inx
+    cpx #ITEM_ID_CAPACITY
+    bcc !t23_check_v23_future-
+
     lda #0
     sta save_cksum_lo
     sta save_cksum_hi
     sta save_io_error
     sta test_save_sink_writes
+    ldx #ID_KNOWN_BYTES - 1
+    lda #0
+!t23_preseed_clear:
+    sta id_known_bits,x
+    dex
+    bpl !t23_preseed_clear-
     ldx #0
 !t23_seed_v2_known:
     txa
-    sta id_known,x
+    and #1
+    beq !t23_seed_skip+
+    jsr id_known_set
+!t23_seed_skip:
     inx
     cpx #ITEM_ID_CAPACITY
     bcc !t23_seed_v2_known-
     jsr test_stream_reset_write
     jsr save_write_known_items
 
-    ldx #0
+    ldx #ID_KNOWN_BYTES - 1
     lda #0
 !t23_clear_v2_known:
-    sta id_known,x
-    inx
-    cpx #ITEM_ID_CAPACITY
-    bcc !t23_clear_v2_known-
+    sta id_known_bits,x
+    dex
+    bpl !t23_clear_v2_known-
     lda #SAVE_VERSION
     sta load_save_version
     jsr test_stream_reset_read
@@ -1898,7 +1963,14 @@ t22_fail_code:
     ldx #0
 !t23_check_v2_known:
     txa
-    cmp id_known,x
+    and #1
+    beq !t23_expect_clear+
+    jsr id_known_test
+    bne !t23_v2_next+
+    lda #4
+    jmp t23_fail_code
+!t23_expect_clear:
+    jsr id_known_test
     beq !t23_v2_next+
     lda #4
     jmp t23_fail_code

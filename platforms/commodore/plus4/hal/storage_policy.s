@@ -22,7 +22,8 @@
 .const hal_storage_disk_setup_commit_sets_ui_ok = 0
 .const hal_storage_save_v1_version = $01
 .const hal_storage_save_known96_version = $02
-.const hal_storage_save_version = $03
+.const hal_storage_save_inv31_version = $03
+.const hal_storage_save_version = $04
 
 #define HAL_STORAGE_DISK_SETUP_MARKER_PROBE_DOS
 #define HAL_STORAGE_DISK_SETUP_MARKER_WRITE_STATUS_REQUIRED

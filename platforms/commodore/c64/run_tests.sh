@@ -1609,12 +1609,13 @@ run_wizard_reveal_product_smoke() {
     fi
 
     local main_vs="../../../build/test/c64/main.vs"
-    local fail_addr dlvl_addr vis_addr ovl_addr
+    local fail_addr dlvl_addr vis_addr ovl_addr arm_addr
     fail_addr=$(awk '/\.c64_test_wizard_reveal_fail_input_sym$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     dlvl_addr=$(awk '/\.zp_player_dlvl$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     vis_addr=$(awk '/\.vis_room_revealed$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     ovl_addr=$(awk '/\.current_overlay$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
-    if [ -z "${fail_addr:-}" ] || [ -z "${dlvl_addr:-}" ] || [ -z "${vis_addr:-}" ] || [ -z "${ovl_addr:-}" ]; then
+    arm_addr=$(awk '/\.item_init_identification$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    if [ -z "${fail_addr:-}" ] || [ -z "${dlvl_addr:-}" ] || [ -z "${vis_addr:-}" ] || [ -z "${ovl_addr:-}" ] || [ -z "${arm_addr:-}" ]; then
         echo "FAIL (missing wizard-reveal smoke symbols in ../../../build/test/c64/main.vs)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
@@ -1624,6 +1625,7 @@ run_wizard_reveal_product_smoke() {
     dlvl_addr=$(printf '%04X' "$((16#$dlvl_addr))")
     vis_addr=$(printf '%04X' "$((16#$vis_addr))")
     ovl_addr=$(printf '%04X' "$((16#$ovl_addr))")
+    arm_addr=$(printf '%04X' "$((16#$arm_addr))")
 
     local mon_file
     mon_file=$(mktemp -t "test_${name}_mon")
@@ -1632,7 +1634,17 @@ run_wizard_reveal_product_smoke() {
     local fail_lc
     fail_lc=$(echo "$fail_addr" | tr '[:upper:]' '[:lower:]')
 
+    # VICE exec breakpoints match PC regardless of banking, so a raw break on
+    # the brk address can fire during boot while BASIC ROM ($A000-$BFFF) is
+    # banked in and the interpreter happens to execute that address; sampling
+    # dlvl/current_overlay then reads boot-time garbage. Arm the brk break only
+    # after the game is running: item_init_identification sits below $A000
+    # (always RAM, never executed by boot/BASIC) and runs once at new-game
+    # start, before the wizard reveal flow.
     {
+        echo "break \$${arm_addr}"
+        echo "g"
+        echo "delete 1"
         echo "break \$${fail_addr}"
         echo "g"
         echo "m \$${dlvl_addr} \$${dlvl_addr}"

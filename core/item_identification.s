@@ -5,31 +5,9 @@
 // Item Identification System
 // ============================================================
 
-// Per-type identification state (0=unknown, 1=known)
-id_known:
-    .byte 1, 1              // 0-1: Gold — always known
-    .byte 1, 1, 1, 1        // 2-5: Weapons — always known
-    .byte 1, 1, 1           // 6-8: Armor — always known
-    .byte 1                  // 9: Shield — always known
-    .byte 1                  // 10: Helm — always known
-    .byte 1, 1              // 11-12: Gloves, boots — always known
-    .byte 1, 1              // 13-14: Lights — always known
-    .byte 1, 1              // 15-16: Food — always known
-    .byte 0, 0, 0           // 17-19: Potions — unknown at start
-    .byte 0, 0, 0           // 20-22: Scrolls — unknown at start
-    .byte 0, 0              // 23-24: Rings — unknown at start
-    .byte 0, 0, 0, 0, 0, 0, 0  // 25-31: Potions — unknown at start
-    .byte 0, 0, 0, 0, 0, 0, 0  // 32-38: Scrolls — unknown at start
-    .byte 0, 0, 0, 0           // 39-42: Wands — unknown at start
-    .byte 0, 0, 0, 0           // 43-46: Staves — unknown at start
-    .byte 1, 1                  // 47-48: Books — always known
-    .byte 1, 1, 1, 1, 1, 1      // 49-54: Ranged weapons/ammo — always known
-    .byte 1, 1, 1, 1, 1, 1      // 55-60: Books — always known
-    .byte 1                      // 61: Flask of Oil — always known
-    .byte 1, 1                  // 62-63: Digging tools — always known
-    .fill ITEM_TYPE_COUNT - LEGACY_ITEM_TYPE_COUNT, 1
-    .fill ITEM_ID_CAPACITY - ITEM_TYPE_COUNT, 0
-.assert "id_known capacity", it_unknown_desc - id_known, ITEM_ID_CAPACITY
+// Per-type identification state lives in id_known_bits (item_defs.s): one bit
+// per item type ID, set = known. Runtime initialization below derives defaults
+// from it_unknown_desc; there is no ROM-initialized copy.
 
 .const IUK_FIXED  = 0
 .const IUK_POTION = $10
@@ -153,11 +131,11 @@ staff_colors:  .byte COL_WHITE, COL_BROWN, COL_ORANGE, COL_LGREEN, COL_LGREY
 // Clobbers: A, X, Y
 // ============================================================
 item_init_identification:
-    // Clear the full save runway, then mark implemented fixed-description IDs known.
-    ldx #ITEM_ID_CAPACITY - 1
+    // Clear the full bitset, then mark implemented fixed-description IDs known.
+    ldx #ID_KNOWN_BYTES - 1
     lda #0
 !iid_clear:
-    sta id_known,x
+    sta id_known_bits,x
     dex
     bpl !iid_clear-
     ldx #0
@@ -165,8 +143,7 @@ item_init_identification:
     lda it_unknown_desc,x
     and #IUK_CLASS_MASK
     bne !iid_next+
-    lda #1
-    sta id_known,x
+    jsr id_known_set
 !iid_next:
     inx
     cpx #ITEM_TYPE_COUNT
@@ -268,7 +245,7 @@ iid_rand_y: .byte 0
 item_get_name_ptr:
     tax
     // Check if this type is known
-    lda id_known,x
+    jsr id_known_test
     beq !ignp_unknown+
     jmp !ignp_known+
 
@@ -604,7 +581,7 @@ item_name_save_ptr1_hi: .byte 0
 item_get_floor_color:
     tax
     // Check if known
-    lda id_known,x
+    jsr id_known_test
     bne !igfc_known+
 
     // Unknown — return randomized color

@@ -1273,8 +1273,8 @@ test_start:
     // ==========================================
 !t27:
     // Set dagger (type 2) as known (it already should be)
-    lda #1
-    sta id_known + 2
+    ldx #2
+    jsr id_known_set
 
     lda #$12
     sta zp_ptr1
@@ -1312,8 +1312,8 @@ test_start:
     // ==========================================
 !t28:
     // Set type 17 (CLW) as unknown
-    lda #0
-    sta id_known + 17
+    ldx #17
+    jsr id_known_clear
 
     lda #17
     jsr item_get_name_ptr
@@ -1339,43 +1339,43 @@ test_start:
     jsr item_init_identification
 
     // Check type 2 (dagger) is known
-    lda id_known + 2
-    cmp #1
-    bne !t29_fail+
+    ldx #2
+    jsr id_known_test
+    beq !t29_fail+
 
     // Check type 17 (CLW potion) is unknown
-    lda id_known + 17
-    cmp #0
+    ldx #17
+    jsr id_known_test
     bne !t29_fail+
 
     // Check type 23 (Protection ring) is unknown
-    lda id_known + 23
-    cmp #0
+    ldx #23
+    jsr id_known_test
     bne !t29_fail+
 
     // Appended fixed equipment defaults known; future capacity remains unknown.
-    lda id_known + 64
-    cmp #1
-    bne !t29_fail+
-    lda id_known + 65
-    cmp #1
-    bne !t29_fail+
-    lda id_known + 79
-    cmp #1
-    bne !t29_fail+
-    lda id_known + ITEM_TYPE_COUNT - 1
-    cmp #1
-    bne !t29_fail+
+    ldx #64
+    jsr id_known_test
+    beq !t29_fail+
+    ldx #65
+    jsr id_known_test
+    beq !t29_fail+
+    ldx #79
+    jsr id_known_test
+    beq !t29_fail+
+    ldx #ITEM_TYPE_COUNT - 1
+    jsr id_known_test
+    beq !t29_fail+
     .if (ITEM_TYPE_COUNT < ITEM_ID_CAPACITY) {
-        lda id_known + ITEM_TYPE_COUNT
-        cmp #0
+        ldx #ITEM_TYPE_COUNT
+        jsr id_known_test
         bne !t29_fail+
     }
 
     // If an appended fixed item is forced unknown by bad state, it still
     // resolves through fixed item data instead of a shuffled class table.
-    lda #0
-    sta id_known + ITEM_TYPE_COUNT - 1
+    ldx #ITEM_TYPE_COUNT - 1
+    jsr id_known_clear
     lda #ITEM_TYPE_COUNT - 1
     jsr item_get_name_ptr
     lda #<t29_expected_appended_name
@@ -1497,8 +1497,8 @@ test_start:
     sta zp_player_mhp_hi
 
     // Make cure light wounds known so we can verify
-    lda #1
-    sta id_known + 17
+    ldx #17
+    jsr id_known_set
 
     // Put CLW potion (type 17) in inv slot 0
     lda #17
@@ -1546,8 +1546,8 @@ test_start:
     sta zp_msg_flags
 
     // Reset id_known for type 17 to unknown
-    lda #0
-    sta id_known + 17
+    ldx #17
+    jsr id_known_clear
 
     // Put identify scroll (type 21) in inv slot 0
     lda #21
@@ -1584,9 +1584,9 @@ test_start:
     jsr item_read_scroll
 
     // id_known[17] should now be 1
-    lda id_known + 17
-    cmp #1
-    bne !t32_fail+
+    ldx #17
+    jsr id_known_test
+    beq !t32_fail+
 
     // Scroll in slot 0 should be consumed, compacting the potion into slot 0
     lda inv_item_id
@@ -1594,9 +1594,9 @@ test_start:
     bne !t32_fail+
 
     // Scroll type 21 should also be known (auto-identified on use)
-    lda id_known + 21
-    cmp #1
-    bne !t32_fail+
+    ldx #21
+    jsr id_known_test
+    beq !t32_fail+
 
     lda #$01
     sta tc_results + 31

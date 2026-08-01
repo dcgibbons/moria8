@@ -1026,7 +1026,8 @@ test_start:
 
     lda #0
     sta tpm_msg_seen
-    sta id_known + 25
+    ldx #25
+    jsr id_known_clear
 
     lda #25
     sta inv_item_id + 1
@@ -1039,9 +1040,9 @@ test_start:
 
     jsr eff_identify_prompt
 
-    lda id_known + 25
-    cmp #1
-    bne !t49_fail+
+    ldx #25
+    jsr id_known_test
+    beq !t49_fail+
     lda inv_flags + 1
     and #IF_IDENTIFIED
     beq !t49_fail+
@@ -1083,9 +1084,10 @@ test_start:
     :PatchJump(input_get_key, test_input_get_key_b)
     jsr item_init_inventory
 
-    lda #0
-    sta id_known + 17
-    sta id_known + 25
+    ldx #17
+    jsr id_known_clear
+    ldx #25
+    jsr id_known_clear
 
     lda #17
     sta inv_item_id + 1
@@ -1105,11 +1107,12 @@ test_start:
 
     jsr eff_identify_prompt
 
-    lda id_known + 17
+    ldx #17
+    jsr id_known_test
     bne !t50_fail+
-    lda id_known + 25
-    cmp #1
-    bne !t50_fail+
+    ldx #25
+    jsr id_known_test
+    beq !t50_fail+
     lda inv_flags + 4
     and #IF_IDENTIFIED
     beq !t50_fail+

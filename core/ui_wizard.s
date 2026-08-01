@@ -316,8 +316,7 @@ ui_wizard_cmd_identify:
     sta inv_flags,x
     lda inv_item_id,x
     tay
-    lda #1
-    sta id_known,y
+    jsr id_known_set_y
 !wiz_ident_next:
     dex
     bpl !wiz_ident_loop-

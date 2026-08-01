@@ -239,8 +239,8 @@ test_reset_identify_state:
     sta tid_last_huff_id
     lda #$ff
     sta tid_last_spell_idx
-    lda #0
-    sta id_known + 25
+    ldx #25
+    jsr id_known_clear
     ldx #41
     lda #0
 !clr:
@@ -318,9 +318,9 @@ test_start:
     bne !t1_fail_pre+
     lda tid_huff_calls
     bne !t1_fail_pre+
-    lda id_known + 25
-    cmp #1
-    bne !t1_fail_pre+
+    ldx #25
+    jsr id_known_test
+    beq !t1_fail_pre+
     lda inv_flags + 1
     and #IF_IDENTIFIED
     beq !t1_fail_pre+
@@ -404,7 +404,8 @@ test_start:
     lda tid_last_huff_id
     cmp #HSTR_PIQ_NOTHING
     bne !t2_fail+
-    lda id_known + 25
+    ldx #25
+    jsr id_known_test
     bne !t2_fail+
     lda inv_flags + 1
     and #IF_IDENTIFIED
@@ -444,7 +445,8 @@ test_start:
     lda tid_last_huff_id
     cmp #HSTR_PIW_NOTHING
     bne !t3_fail+
-    lda id_known + 25
+    ldx #25
+    jsr id_known_test
     bne !t3_fail+
     lda zp_player_mp
     cmp #13
@@ -484,7 +486,8 @@ test_start:
     lda tid_last_huff_id
     cmp #HSTR_PM_FAIL
     bne !t4_fail+
-    lda id_known + 25
+    ldx #25
+    jsr id_known_test
     bne !t4_fail+
     lda inv_flags + 1
     and #IF_IDENTIFIED
