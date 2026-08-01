@@ -156,8 +156,8 @@ Hard boundaries:
 - Apple IIe ownership comes from `docs/APPLE2_MEMORY_POLICY.md` and
   `platforms/apple2/memory.s`: resident ends below `$7C00`, the play slot
   spans `$7C00-$9FFF`, overlays share the `$A400-$B9FF` window, and aux RAM
-  owns the map (`$0800-$3B0B`), auxdata (`$3B0C-$56FF`), and the overlay
-  cache (`$5700-$BFFF`); aux reads execute only from the ZP thunks
+  owns the map (`$0800-$3B0B`), auxdata (`$3B0C-$59FF`), and the overlay
+  cache (`$5A00-$BFFF`); aux reads execute only from the ZP thunks
 
 Never delete or weaken boundary-checking `.assert` statements. If an assert
 fails, fix the code or memory layout, not the assert.

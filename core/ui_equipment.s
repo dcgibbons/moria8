@@ -7,8 +7,7 @@
 .const UEQ_FOOTER_COL = hal_layout_equipment_footer_col
 
 // ui_equip_display — Show equipped items.
-// Storage includes EQUIP_AMULET, but no amulet item types exist yet; keep that
-// save slot hidden until the catalog has real amulets.
+// Storage includes EQUIP_AMULET, shown since the catalog has amulets.
 // Preserves: nothing
 ui_equip_display:
     lda #<press_key_str

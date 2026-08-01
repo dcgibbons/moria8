@@ -193,26 +193,8 @@ calc_bm_sell_price:
 // Formula: (base_price × chr_price_adj[CHR-3] / 100) + p1_bonus
 // Clobbers: everything
 calc_buy_price:
-    jsr load_item_base_cost
-    jsr apply_tool_ego_multiplier
-
-    // Get CHR price adjustment
-    lda player_data + PL_CHR_CUR
-    jsr stat_bonus_index        // X = 0-15
-    lda chr_price_adj,x         // A = 100-130
-    tax
-
-    // 16-bit × 8-bit multiply
-    jsr math_mul_16x8           // Result in mul_result_0/1/2
-
-    // Divide by 100
-    lda mul_result_0
-    sta zp_math_a
-    lda mul_result_1
-    sta zp_math_b
-    ldx #100
-    jsr math_div_16x8           // Quotient in zp_math_a/b
-
+    ldy #0
+    jsr calc_chr_price
     // Ensure minimum price of 1
     lda zp_math_a
     ora zp_math_b
@@ -226,15 +208,30 @@ calc_buy_price:
 // Input: A = item type ID, sb_item_p1 = enchantment/charges
 // Output: sb_price_lo/hi = price (16-bit)
 // Formula: (base_price × chr_sell_adj[CHR-3] / 100) + p1_bonus
+// Sell price can be 0 for cheap items — that's valid
 // Clobbers: everything
 calc_sell_price:
+    ldy #1
+    jsr calc_chr_price
+    jmp store_price_and_p1      // Store price + add p1 bonus
+
+// calc_chr_price — Shared CHR-adjusted price calculation
+// Input: A = item type ID, Y = 0 for buy (chr_price_adj), 1 for sell (chr_sell_adj)
+// Output: zp_math_a/b = base_price × adj / 100
+calc_chr_price:
     jsr load_item_base_cost
     jsr apply_tool_ego_multiplier
 
-    // Get CHR sell adjustment
+    // Get CHR price adjustment
     lda player_data + PL_CHR_CUR
     jsr stat_bonus_index        // X = 0-15
+    tya
+    bne !ccp_sell+
+    lda chr_price_adj,x         // A = 100-130
+    jmp !ccp_mul+
+!ccp_sell:
     lda chr_sell_adj,x          // A = 25-50
+!ccp_mul:
     tax
 
     // 16-bit × 8-bit multiply
@@ -247,9 +244,7 @@ calc_sell_price:
     sta zp_math_b
     ldx #100
     jsr math_div_16x8           // Quotient in zp_math_a/b
-
-    // Sell price can be 0 for cheap items — that's valid
-    jmp store_price_and_p1      // Store price + add p1 bonus
+    rts
 
 // calc_buy_min_price — Minimum acceptable buy price (no CHR markup)
 // Input: A = item type ID, sb_item_p1 = enchantment/charges

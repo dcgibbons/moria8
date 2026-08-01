@@ -32,7 +32,7 @@
 .const EQUIP_AMULET = 30
 .const EQUIP_LAST   = EQUIP_AMULET
 .const EQUIP_END    = EQUIP_LAST + 1
-.const VISIBLE_EQUIP_LAST = EQUIP_RING
+.const VISIBLE_EQUIP_LAST = EQUIP_AMULET
 .const VISIBLE_EQUIP_END  = VISIBLE_EQUIP_LAST + 1
 
 // Inventory Constants
@@ -45,10 +45,63 @@
 // Item Category for Digging Tools
 .const ICAT_DIGGING = 0
 
+// Item Category Constants
+.const ICAT_NONE     = 0
+.const ICAT_GOLD     = 1
+.const ICAT_WEAPON   = 2
+.const ICAT_ARMOR    = 3
+.const ICAT_SHIELD   = 4
+.const ICAT_HELM     = 5
+.const ICAT_GLOVES   = 6
+.const ICAT_BOOTS    = 7
+.const ICAT_LIGHT    = 8
+.const ICAT_FOOD     = 9
+.const ICAT_POTION   = 10
+.const ICAT_SCROLL   = 11
+.const ICAT_RING     = 12
+.const ICAT_BOOK     = 13
+.const ICAT_WAND     = 14
+.const ICAT_STAFF    = 15
+.const ICAT_AMULET   = 16
+
+// Phase 3 item type constants (IDs 96-127)
+.const ITEM_TYPE_POT_HEALING        = 96
+.const ITEM_TYPE_POT_RESTORATION    = 97
+.const ITEM_TYPE_POT_RESIST_HEAT    = 98
+.const ITEM_TYPE_POT_RESIST_COLD    = 99
+.const ITEM_TYPE_POT_CURE_CRITICAL  = 100
+.const ITEM_TYPE_SCR_TELEPORT_LEVEL = 101
+.const ITEM_TYPE_SCR_MAGIC_MAPPING  = 102
+.const ITEM_TYPE_SCR_OBJECT_DETECT  = 103
+.const ITEM_TYPE_SCR_RECHARGING     = 104
+.const ITEM_TYPE_SCR_RUNE_PROTECTION = 105
+.const ITEM_TYPE_SCR_GENOCIDE       = 106
+.const ITEM_TYPE_SCR_MASS_GENOCIDE  = 107
+.const ITEM_TYPE_SCR_DESTRUCTION    = 108
+.const ITEM_TYPE_RING_RESIST_FIRE   = 109
+.const ITEM_TYPE_RING_RESIST_COLD   = 110
+.const ITEM_TYPE_RING_SPEED         = 111
+.const ITEM_TYPE_RING_SEE_INVIS     = 112
+.const ITEM_TYPE_RING_SLAYING       = 113
+.const ITEM_TYPE_WAND_SLOW          = 114
+.const ITEM_TYPE_WAND_STONE_MUD     = 115
+.const ITEM_TYPE_WAND_TELEPORT_AWAY = 116
+.const ITEM_TYPE_WAND_FIRE_BALL     = 117
+.const ITEM_TYPE_WAND_COLD_BALL     = 118
+.const ITEM_TYPE_STAFF_DISPEL_EVIL  = 119
+.const ITEM_TYPE_STAFF_DESTRUCTION  = 120
+.const ITEM_TYPE_STAFF_SPEED        = 121
+.const ITEM_TYPE_MITHRIL_CHAIN      = 122
+.const ITEM_TYPE_MITHRIL_PLATE      = 123
+.const ITEM_TYPE_AMULET_WISDOM      = 124
+.const ITEM_TYPE_AMULET_MAGI        = 125
+.const ITEM_TYPE_POT_NEUTRALIZE     = 126
+.const ITEM_TYPE_STAFF_REMOVE_CURSE = 127
+
 // Master Item Type Count
 // Save Format V1 serializes 64 known-item bytes. Do not renumber IDs 0-63.
 .const LEGACY_ITEM_TYPE_COUNT = 64
-.const ITEM_TYPE_COUNT = 96
+.const ITEM_TYPE_COUNT = 128
 .const ITEM_ID_CAPACITY = 128
 
 // Known-item identification state (Save Format V4)

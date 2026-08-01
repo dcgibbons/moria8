@@ -33,7 +33,7 @@ class PrgSpec:
 PRG_SPECS = (
     PrgSpec("moria8a2.prg", 0x0A00, 0x7C00, "program_end"),
     PrgSpec("a2.play", 0x7C00, 0xA000, "a2_play_end", b"M8P"),
-    PrgSpec("a2.auxdata", 0x3B0C, 0x5700),
+    PrgSpec("a2.auxdata", 0x3B0C, 0x5A00),
     PrgSpec("ovl.start", 0xA400, 0xBA00, "ovl_start_end"),
     PrgSpec("ovl.town", 0xA400, 0xBA00, "ovl_town_end"),
     PrgSpec("ovl.death", 0xA400, 0xBA00, "ovl_death_end"),

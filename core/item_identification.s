@@ -157,13 +157,16 @@ item_init_identification:
     bpl !iid_clear-
     ldx #0
 !iid_default:
-    // Randomized-appearance classes (potion/scroll/ring/wand/staff = every
-    // category at or above ICAT_POTION except ICAT_BOOK) start unknown;
-    // fixed-description classes start known.
+    // Randomized-appearance classes (potion/scroll/ring/wand/staff) start
+    // unknown; fixed-description classes (everything else, incl. amulets)
+    // start known.
     ldy it_category,x
     cpy #ICAT_POTION
     bcc !iid_set_known+
     cpy #ICAT_BOOK
+    beq !iid_set_known+
+    cpy #ICAT_AMULET
+    beq !iid_set_known+
     bne !iid_next+
 !iid_set_known:
     jsr id_known_set
@@ -363,6 +366,8 @@ item_get_name_ptr:
     beq !ignp_scroll_prefix+
     cmp #ICAT_RING
     beq !ignp_ring_prefix+
+    cmp #ICAT_AMULET
+    beq !ignp_amulet_prefix+
     cmp #ICAT_BOOK
     beq !ignp_book_prefix+
 !ignp_raw_known:
@@ -416,6 +421,10 @@ item_get_name_ptr:
     lda #<idgp_ring_prefix
     ldx #>idgp_ring_prefix
     bne !ignp_prefix_set+
+!ignp_amulet_prefix:
+    lda #<idgp_amulet_prefix
+    ldx #>idgp_amulet_prefix
+    bne !ignp_prefix_set+
 !ignp_book_prefix:
     ldx item_display_id
     cpx #48
@@ -436,6 +445,7 @@ item_get_name_ptr:
 idgp_potion_prefix:      .text "Potion of " ; .byte 0
 idgp_scroll_prefix:      .text "Scroll of " ; .byte 0
 idgp_ring_prefix:        .text "Ring of " ; .byte 0
+idgp_amulet_prefix:      .text "Amulet of " ; .byte 0
 idgp_mage_book_prefix:   .text "Spellbook " ; .byte 0
 idgp_priest_book_prefix: .text "Holy Book of Prayers " ; .byte 0
 item_display_id: .byte 0

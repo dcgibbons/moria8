@@ -1,9 +1,11 @@
 #importonce
 // cache_layout.s — Shared boot/runtime aux-cache slot addresses.
 // Slots are page-aligned because boot.s copies ceil(payload/256) pages.
+// TOWN/UI rebased down 3 pages ($5700/$6C00 -> $5A00/$6F00) so A2AuxData can
+// grow to $59FF for the 128-row catalog (Phase 3); every payload still fits.
 
-.const A2_AUX_CACHE_TOWN    = $5700
-.const A2_AUX_CACHE_UI      = $6c00
+.const A2_AUX_CACHE_TOWN    = $5a00
+.const A2_AUX_CACHE_UI      = $6f00
 .const A2_AUX_CACHE_SPELL   = $7900
 .const A2_AUX_CACHE_MODAL   = $8d00
 .const A2_AUX_CACHE_GEN     = $9900

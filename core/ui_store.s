@@ -1063,13 +1063,7 @@ hg_show_final_prompt:
     tax
     jsr show_msg
 
-    lda #COL_YELLOW
-    sta zp_text_color
-    lda #22
-    sta zp_cursor_row
-    lda #1
-    sta zp_cursor_col
-    rts
+    jmp hg_cursor_input_row
 
 // haggle_buy — Multi-round buy haggling
 // Input: sb_price_lo/hi = CHR-adjusted asking price, sb_abs_slot = store slot
@@ -1201,17 +1195,7 @@ haggle_buy:
     lda hg_ask_hi
     sbc hg_input_hi
     sta zp_temp1
-    ldx hg_pct
-    jsr math_mul_16x8
-    ldx #100
-    jsr hg_div_mul_result_24x8
-    lda mul_result_0
-    clc
-    adc #1
-    sta hg_tmp0
-    lda mul_result_1
-    adc #0
-    sta hg_tmp1
+    jsr hg_pct_step
 
     // ask -= step
     lda hg_ask_lo
@@ -1407,17 +1391,7 @@ haggle_sell:
     lda hg_input_hi
     sbc hg_ask_hi
     sta zp_temp1
-    ldx hg_pct
-    jsr math_mul_16x8
-    ldx #100
-    jsr hg_div_mul_result_24x8
-    lda mul_result_0
-    clc
-    adc #1
-    sta hg_tmp0
-    lda mul_result_1
-    adc #0
-    sta hg_tmp1
+    jsr hg_pct_step
 
     // ask += step
     lda hg_ask_lo
@@ -1553,6 +1527,25 @@ hg_show_ask:
     jsr show_msg
 
     // Position cursor for number input on row 22
+    jmp hg_cursor_input_row
+
+// hg_pct_step — step = ((zp_temp0/1) * hg_pct) / 100 + 1, result in hg_tmp0/1.
+hg_pct_step:
+    ldx hg_pct
+    jsr math_mul_16x8
+    ldx #100
+    jsr hg_div_mul_result_24x8
+    lda mul_result_0
+    clc
+    adc #1
+    sta hg_tmp0
+    lda mul_result_1
+    adc #0
+    sta hg_tmp1
+    rts
+
+// hg_cursor_input_row — Yellow text, cursor to row 22 col 1 for number input.
+hg_cursor_input_row:
     lda #COL_YELLOW
     sta zp_text_color
     lda #22
@@ -1573,13 +1566,7 @@ hg_show_offer:
     jsr show_msg
 
     // Position cursor for number input on row 22
-    lda #COL_YELLOW
-    sta zp_text_color
-    lda #22
-    sta zp_cursor_row
-    lda #1
-    sta zp_cursor_col
-    rts
+    jmp hg_cursor_input_row
 
 // hg_show_counter — Display "HOW ABOUT [ask] GP?"
 hg_show_counter:

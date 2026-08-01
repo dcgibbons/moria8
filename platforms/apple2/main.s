@@ -38,7 +38,7 @@
 .segmentdef StorageOverlay    [outPrg=OVL_OUT + "/ovl.storage", start=$a400, min=$a400, max=$b9ff]
 .segmentdef TitleOverlay      [outPrg=OVL_OUT + "/ovl.title",   start=$a400, min=$a400, max=$b9ff]
 .segmentdef A2PlaySlot        [outPrg=OVL_OUT + "/a2.play",     start=$7c00, min=$7c00, max=$9fff]
-.segmentdef A2AuxData         [outPrg=OVL_OUT + "/a2.auxdata",  start=$3b0c, min=$3b0c, max=$56ff]
+.segmentdef A2AuxData         [outPrg=OVL_OUT + "/a2.auxdata",  start=$3b0c, min=$3b0c, max=$59ff]
 
 // Huffman data placement: aux RAM at $3B0C (boot-preloaded).
 .macro HuffmanDataSegment() {

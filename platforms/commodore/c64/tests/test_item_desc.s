@@ -60,23 +60,6 @@ mmu_safe_db_write_ptr1:
 .const HD_DECODE_BUF_SIZE = 64
 hd_decode_buf: .fill HD_DECODE_BUF_SIZE, 0
 
-.const ICAT_NONE     = 0
-.const ICAT_GOLD     = 1
-.const ICAT_WEAPON   = 2
-.const ICAT_ARMOR    = 3
-.const ICAT_SHIELD   = 4
-.const ICAT_HELM     = 5
-.const ICAT_GLOVES   = 6
-.const ICAT_BOOTS    = 7
-.const ICAT_LIGHT    = 8
-.const ICAT_FOOD     = 9
-.const ICAT_POTION   = 10
-.const ICAT_SCROLL   = 11
-.const ICAT_RING     = 12
-.const ICAT_BOOK     = 13
-.const ICAT_WAND     = 14
-.const ICAT_STAFF    = 15
-
 #import "../../../../core/item_tables.s"
 #import "../../../../core/item_identification.s"
 
@@ -486,6 +469,14 @@ expected_item_name_lo:
     .byte <ein_82, <ein_83, <ein_84, <ein_85, <ein_86, <ein_87
     .byte <ein_88, <ein_89, <ein_90, <ein_91
     .byte <ein_92, <ein_93, <ein_94, <ein_95
+    .byte <ein_96, <ein_97, <ein_98, <ein_99
+    .byte <ein_100, <ein_101, <ein_102, <ein_103
+    .byte <ein_104, <ein_105, <ein_106, <ein_107
+    .byte <ein_108, <ein_109, <ein_110, <ein_111
+    .byte <ein_112, <ein_113, <ein_114, <ein_115
+    .byte <ein_116, <ein_117, <ein_118, <ein_119
+    .byte <ein_120, <ein_121, <ein_122, <ein_123
+    .byte <ein_124, <ein_125, <ein_126, <ein_127
 expected_item_name_hi:
     .byte >ein_0, >ein_1, >ein_2, >ein_3, >ein_4, >ein_5, >ein_6, >ein_7
     .byte >ein_8, >ein_9, >ein_10, >ein_11, >ein_12, >ein_13, >ein_14, >ein_15
@@ -504,6 +495,14 @@ expected_item_name_hi:
     .byte >ein_82, >ein_83, >ein_84, >ein_85, >ein_86, >ein_87
     .byte >ein_88, >ein_89, >ein_90, >ein_91
     .byte >ein_92, >ein_93, >ein_94, >ein_95
+    .byte >ein_96, >ein_97, >ein_98, >ein_99
+    .byte >ein_100, >ein_101, >ein_102, >ein_103
+    .byte >ein_104, >ein_105, >ein_106, >ein_107
+    .byte >ein_108, >ein_109, >ein_110, >ein_111
+    .byte >ein_112, >ein_113, >ein_114, >ein_115
+    .byte >ein_116, >ein_117, >ein_118, >ein_119
+    .byte >ein_120, >ein_121, >ein_122, >ein_123
+    .byte >ein_124, >ein_125, >ein_126, >ein_127
 
 ein_0:  .text "Gold (small)" ; .byte 0
 ein_1:  .text "Gold (large)" ; .byte 0
@@ -601,6 +600,38 @@ ein_92: .text "Flail" ; .byte 0
 ein_93: .text "Lucerne Hammer" ; .byte 0
 ein_94: .text "Broad Axe" ; .byte 0
 ein_95: .text "Awl-Pike" ; .byte 0
+ein_96: .text "Potion of Healing" ; .byte 0
+ein_97: .text "Potion of Restoration" ; .byte 0
+ein_98: .text "Potion of Resist Heat" ; .byte 0
+ein_99: .text "Potion of Resist Cold" ; .byte 0
+ein_100: .text "Potion of Cure Critical Wounds" ; .byte 0
+ein_101: .text "Scroll of Teleport Level" ; .byte 0
+ein_102: .text "Scroll of Magic Mapping" ; .byte 0
+ein_103: .text "Scroll of Object Detection" ; .byte 0
+ein_104: .text "Scroll of Recharging" ; .byte 0
+ein_105: .text "Scroll of Rune of Protection" ; .byte 0
+ein_106: .text "Scroll of Genocide" ; .byte 0
+ein_107: .text "Scroll of Mass Genocide" ; .byte 0
+ein_108: .text "Scroll of *Destruction*" ; .byte 0
+ein_109: .text "Ring of Resist Fire" ; .byte 0
+ein_110: .text "Ring of Resist Cold" ; .byte 0
+ein_111: .text "Ring of Speed" ; .byte 0
+ein_112: .text "Ring of See Invisible" ; .byte 0
+ein_113: .text "Ring of Slaying" ; .byte 0
+ein_114: .text "Wand of Slow Monster" ; .byte 0
+ein_115: .text "Wand of Stone-to-Mud" ; .byte 0
+ein_116: .text "Wand of Teleport Away" ; .byte 0
+ein_117: .text "Wand of Fire Balls" ; .byte 0
+ein_118: .text "Wand of Cold Balls" ; .byte 0
+ein_119: .text "Staff of Dispel Evil" ; .byte 0
+ein_120: .text "Staff of Destruction" ; .byte 0
+ein_121: .text "Staff of Speed" ; .byte 0
+ein_122: .text "Mithril Chain Mail" ; .byte 0
+ein_123: .text "Mithril Plate Mail" ; .byte 0
+ein_124: .text "Amulet of Wisdom" ; .byte 0
+ein_125: .text "Amulet of the Magi" ; .byte 0
+ein_126: .text "Potion of Neutralize Poison" ; .byte 0
+ein_127: .text "Staff of Remove Curse" ; .byte 0
 
 item_name_test_id: .byte 0
 tc_results: .fill 9, $ff

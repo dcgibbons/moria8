@@ -36,10 +36,7 @@ map_bulk_fill_all:
 #endif
     ldx #0
 !mbf_row:
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
+    jsr dg_set_row_ptr
 #if C128_PRODUCT_OVERLAY_RUNTIME
     lda #MAP_COLS
     jsr mmu_common_store_map_row
@@ -64,10 +61,7 @@ map_bulk_and_all:
     sta map_bulk_and_mask
     ldx #0
 !mba_row:
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
+    jsr dg_set_row_ptr
     ldy #0
 !mba_col:
     :MapRead_ptr0_y()
@@ -112,10 +106,7 @@ town_generate:
     // --- Step 2: Carve the fixed 66x22 town floor rectangle ---
     ldx #0
 !town_floor_rows:
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
+    jsr dg_set_row_ptr
     ldy #0
     lda #TILE_FLOOR | TOWN_FLAGS
 !town_floor_cols:
@@ -175,10 +166,7 @@ town_generate:
     // Left and right walls (interior rows)
     ldx #1              // Row index
 !side_walls:
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
+    jsr dg_set_row_ptr
     // Left wall (col 0)
     lda #TILE_WALL_V | TOWN_FLAGS
     ldy #0
@@ -243,10 +231,7 @@ draw_store:
 
     // --- Top wall of store ---
     ldx zp_temp2        // top row
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
+    jsr dg_set_row_ptr
 
     // Top-left corner
     ldy zp_temp1
@@ -270,10 +255,7 @@ draw_store:
 
     // --- Bottom wall of store ---
     ldx zp_temp4        // bottom row
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
+    jsr dg_set_row_ptr
 
     // Bottom-left corner
     ldy zp_temp1
@@ -301,10 +283,7 @@ draw_store:
     adc #1
     tax                 // Start row = top + 1
 !sides:
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
+    jsr dg_set_row_ptr
     // Left wall
     ldy zp_temp1
     lda #TILE_WALL_V | TOWN_FLAGS
@@ -330,10 +309,7 @@ draw_store:
     ldx zp_temp0        // Recover store index from zp_temp0
     lda store_door_y,x
     tax                 // Row for door
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
+    jsr dg_set_row_ptr
     ldx zp_temp0        // Re-get store index
     ldy store_door_x,x
     lda #TILE_DOOR_OPEN | TOWN_FLAGS
@@ -373,6 +349,17 @@ draw_store:
 
 // ============================================================
 // Local scratch for dungeon generation (safe from rng_range clobbering zp_temp3/4)
+
+// dg_set_row_ptr — zp_ptr0 = map row pointer for row X.
+// Input: X = map row. Output: zp_ptr0/zp_ptr0_hi set. Preserves: X, Y. Clobbers: A.
+dg_set_row_ptr:
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    rts
+
+
 dg_room_x:   .byte 0   // Current room x being placed
 dg_room_y:   .byte 0   // Current room y being placed
 dg_room_w:   .byte 0   // Current room w being placed
@@ -533,10 +520,7 @@ darken_rooms:
 
 !dr_row_loop:
     ldx dg_scan_row_start
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
+    jsr dg_set_row_ptr
 
 #if C128_PRODUCT_OVERLAY_RUNTIME
     ldy dr_start_col
@@ -597,10 +581,7 @@ blank_cave:
 fill_cave_granite:
     ldx #0
 !fcg_row:
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
+    jsr dg_set_row_ptr
 #if C128_PRODUCT_OVERLAY_RUNTIME
     lda #MAP_COLS
     jsr mmu_common_copy_map_row
@@ -941,10 +922,7 @@ draw_dungeon_room:
 
     // --- Top wall ---
     ldx zp_temp2
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
+    jsr dg_set_row_ptr
 
     // Top-left corner
     ldy zp_temp1
@@ -968,10 +946,7 @@ draw_dungeon_room:
 
     // --- Bottom wall ---
     ldx zp_temp4
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
+    jsr dg_set_row_ptr
 
     // Bottom-left corner
     ldy zp_temp1
@@ -999,10 +974,7 @@ draw_dungeon_room:
     adc #1
     tax                         // Start row = wall_top + 1
 !dr_sides:
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
+    jsr dg_set_row_ptr
 
     // Left wall
     ldy zp_temp1
@@ -1323,10 +1295,7 @@ tst_random_or_correct:
 // tunnel_stage_current — Apply one staged VMS tunnel step.
 tunnel_stage_current:
     ldx dg_cy1
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
+    jsr dg_set_row_ptr
     ldy dg_cx1
     :MapRead_ptr0_y()
     sta dg_retries
@@ -1449,10 +1418,7 @@ mnw_mark_if_lit_wall:
 materialize_staged_tunnel:
     ldx dg_scan_row_start
 !mst_row:
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
+    jsr dg_set_row_ptr
 #if C128_PRODUCT_OVERLAY_RUNTIME
     // Copy Bank 1 once per staged row; preserve row-major scan and RNG order.
     lda #MAP_COLS
@@ -1533,10 +1499,7 @@ materialize_staged_tunnel:
 #if C64_UNIT_TEST
 carve_h_corridor:
     ldx dg_cy1
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
+    jsr dg_set_row_ptr
 
     // Ensure we iterate from smaller to larger
     lda dg_cx1
@@ -1638,10 +1601,7 @@ carve_v_corridor:
     lda dg_cy2
     sta dg_room_y               // End row (temp)
 !vc_loop:
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
+    jsr dg_set_row_ptr
     ldy dg_cx1
     :MapRead_ptr0_y()             // Read existing tile
     sta dg_retries              // Stash full byte (scratch — not live here)
@@ -1681,10 +1641,7 @@ carve_v_corridor:
     jmp !vc_loop-
 !vc_single:
     ldx dg_cy1
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
+    jsr dg_set_row_ptr
     ldy dg_cx1
     :MapRead_ptr0_y()             // Read existing tile
     sta dg_retries
@@ -1751,10 +1708,7 @@ add_corridor_doors:
 place_junction_doors:
     ldx #0
 !pjd_row:
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
+    jsr dg_set_row_ptr
 #if C128_PRODUCT_OVERLAY_RUNTIME
     lda #MAP_COLS
     jsr mmu_common_copy_map_row
@@ -1816,10 +1770,7 @@ place_junction_doors:
     jsr try_junction_door
 
     ldx dg_cy1
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
+    jsr dg_set_row_ptr
     ldy dg_cx1
 !pjd_next:
     iny
@@ -1847,10 +1798,7 @@ try_junction_door:
     cmp #MAP_ROWS - 1
     bcs !tjd_no+
     ldx dg_room_y
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
+    jsr dg_set_row_ptr
     ldy dg_room_x
     :MapRead_ptr0_y()
 	// Upstream junction doors are placed only on corridor floor, never room
@@ -2108,29 +2056,20 @@ count_stair_adj_walls:
 
     ldx stair_candidate_y
     dex
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
+    jsr dg_set_row_ptr
     ldy stair_candidate_x
     :MapRead_ptr0_y()
     jsr stair_count_wall
 
     ldx stair_candidate_y
     inx
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
+    jsr dg_set_row_ptr
     ldy stair_candidate_x
     :MapRead_ptr0_y()
     jsr stair_count_wall
 
     ldx stair_candidate_y
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
+    jsr dg_set_row_ptr
     ldy stair_candidate_x
     dey
     :MapRead_ptr0_y()
@@ -2200,10 +2139,7 @@ write_tile_at_xy:
     pha                         // Save x
     tya
     tax                         // X = row
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
+    jsr dg_set_row_ptr
     pla
     tay                         // Y = column offset
     rts
@@ -2313,10 +2249,7 @@ carve_streamer:
     // Write mineral tile — only overwrite plain granite. Upstream checks
     // rock_wall1 exactly; in this port that is TILE_WALL_H with no flags.
     ldx dg_cy1
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
+    jsr dg_set_row_ptr
     ldy dg_cx1
     :MapRead_ptr0_y()
     cmp #TILE_WALL_H
@@ -2390,10 +2323,7 @@ verify_connectivity:
 
     // Mark start tile as visited
     ldx stairs_up_y
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
+    jsr dg_set_row_ptr
     ldy stairs_up_x
     :MapRead_ptr0_y()
     ora #FLAG_OCCUPIED
@@ -2406,10 +2336,7 @@ verify_connectivity:
     sta bfs_cur_y
 !vc_row:
     ldx bfs_cur_y
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
+    jsr dg_set_row_ptr
     lda #0
     sta bfs_cur_x
 !vc_col:

@@ -105,7 +105,6 @@ random_floor_in_room:
 #import "../../../../core/spell_data.s"
 #import "../../../../core/projectile.s"
 #import "../../../../core/spell_effects.s"
-#import "../dungeon_render.s"
 #import "../../../../core/dungeon_los.s"
 #import "../../../../core/player_move.s"
 #import "../../../../core/combat.s"
@@ -120,6 +119,7 @@ random_floor_in_room:
 .segment TestStoreOverlay
 #import "../../../../core/store.s"
 #import "../../../../core/ui_store.s"
+#import "../dungeon_render.s"
 .segment Default
 
 #define C64_TEST_NO_SPELL_NAME_STUBS
@@ -1843,8 +1843,9 @@ t22_fail_code:
     inx
     cpx #LEGACY_ITEM_TYPE_COUNT
     bcc !t23_check_v1_known-
-
-    // Appended rows are all fixed-known: bits 64-95 must be set
+    // Legacy migration defaults are category-derived: appended fixed rows
+    // (64-95, 122-125) must be set, randomized-class rows (96-121, 126, 127)
+    // must be clear.
     ldx #LEGACY_ITEM_TYPE_COUNT
 !t23_check_v1_appended:
     jsr id_known_test
@@ -1853,10 +1854,44 @@ t22_fail_code:
     jmp t23_fail_code
 !t23_appended_next:
     inx
-    cpx #ITEM_TYPE_COUNT
+    cpx #96
     bcc !t23_check_v1_appended-
 
-    // Future capacity: bits 96-127 must be clear
+    ldx #96
+!t23_check_v1_random:
+    jsr id_known_test
+    beq !t23_random_next+
+    lda #3
+    jmp t23_fail_code
+!t23_random_next:
+    inx
+    cpx #ITEM_TYPE_MITHRIL_CHAIN
+    bcc !t23_check_v1_random-
+
+    ldx #ITEM_TYPE_MITHRIL_CHAIN
+!t23_check_v1_fixed3:
+    jsr id_known_test
+    bne !t23_fixed3_next+
+    lda #3
+    jmp t23_fail_code
+!t23_fixed3_next:
+    inx
+    cpx #ITEM_TYPE_AMULET_MAGI + 1
+    bcc !t23_check_v1_fixed3-
+
+    ldx #ITEM_TYPE_POT_NEUTRALIZE
+!t23_check_v1_random2:
+    jsr id_known_test
+    beq !t23_random2_next+
+    lda #3
+    jmp t23_fail_code
+!t23_random2_next:
+    inx
+    cpx #ITEM_TYPE_COUNT
+    bcc !t23_check_v1_random2-
+
+    // Future capacity: bits past ITEM_TYPE_COUNT must be clear
+    .if (ITEM_TYPE_COUNT < ITEM_ID_CAPACITY) {
     ldx #ITEM_TYPE_COUNT
 !t23_check_v1_future:
     jsr id_known_test
@@ -1867,7 +1902,7 @@ t22_fail_code:
     inx
     cpx #ITEM_ID_CAPACITY
     bcc !t23_check_v1_future-
-
+    }
     // V2/V3 migration: 96-byte legacy stream packs bits, future stays clear
     lda #0
     sta save_cksum_lo
@@ -1914,6 +1949,8 @@ t22_fail_code:
     cpx #96
     bcc !t23_check_v23-
 
+    // V2/V3 appended defaults are category-derived: randomized-class rows
+    // (96-121, 126, 127) clear, fixed rows (122-125) set.
     ldx #96
 !t23_check_v23_future:
     jsr id_known_test
@@ -1922,8 +1959,30 @@ t22_fail_code:
     jmp t23_fail_code
 !t23_v23f_next:
     inx
-    cpx #ITEM_ID_CAPACITY
+    cpx #ITEM_TYPE_MITHRIL_CHAIN
     bcc !t23_check_v23_future-
+
+    ldx #ITEM_TYPE_MITHRIL_CHAIN
+!t23_check_v23_fixed3:
+    jsr id_known_test
+    bne !t23_v23f3_next+
+    lda #5
+    jmp t23_fail_code
+!t23_v23f3_next:
+    inx
+    cpx #ITEM_TYPE_AMULET_MAGI + 1
+    bcc !t23_check_v23_fixed3-
+
+    ldx #ITEM_TYPE_POT_NEUTRALIZE
+!t23_check_v23_tail:
+    jsr id_known_test
+    beq !t23_v23t_next+
+    lda #5
+    jmp t23_fail_code
+!t23_v23t_next:
+    inx
+    cpx #ITEM_ID_CAPACITY
+    bcc !t23_check_v23_tail-
 
     lda #0
     sta save_cksum_lo
@@ -2107,3 +2166,4 @@ t25_fail_code:
 
 test_body_end:
 .assert "RLE test buffer stays below test code", RLE_TEST_BUF + $0300 <= $0800, true
+.assert "Save test code stays below MAP_BASE (RLE tests overwrite MAP_BASE)", test_body_end <= MAP_BASE, true

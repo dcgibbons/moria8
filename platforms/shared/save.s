@@ -1511,6 +1511,9 @@ load_read_known_items:
     cpy #ICAT_POTION
     bcc !lrki_def_known+
     cpy #ICAT_BOOK
+    beq !lrki_def_known+
+    cpy #ICAT_AMULET
+    beq !lrki_def_known+
     bne !lrki_def_next+
 !lrki_def_known:
     jsr id_known_set

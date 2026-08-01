@@ -107,6 +107,38 @@ it_category:
     .byte ICAT_WEAPON   // 93: Lucerne Hammer
     .byte ICAT_WEAPON   // 94: Broad Axe
     .byte ICAT_WEAPON   // 95: Awl-Pike
+    .byte ICAT_POTION   // 96: Healing
+    .byte ICAT_POTION   // 97: Restoration
+    .byte ICAT_POTION   // 98: Resist Heat
+    .byte ICAT_POTION   // 99: Resist Cold
+    .byte ICAT_POTION   // 100: Cure Critical Wounds
+    .byte ICAT_SCROLL   // 101: Teleport Level
+    .byte ICAT_SCROLL   // 102: Magic Mapping
+    .byte ICAT_SCROLL   // 103: Object Detection
+    .byte ICAT_SCROLL   // 104: Recharging
+    .byte ICAT_SCROLL   // 105: Rune of Protection
+    .byte ICAT_SCROLL   // 106: Genocide
+    .byte ICAT_SCROLL   // 107: Mass Genocide
+    .byte ICAT_SCROLL   // 108: *Destruction*
+    .byte ICAT_RING     // 109: Resist Fire
+    .byte ICAT_RING     // 110: Resist Cold
+    .byte ICAT_RING     // 111: Speed
+    .byte ICAT_RING     // 112: See Invisible
+    .byte ICAT_RING     // 113: Slaying
+    .byte ICAT_WAND     // 114: Slow Monster
+    .byte ICAT_WAND     // 115: Stone-to-Mud
+    .byte ICAT_WAND     // 116: Teleport Away
+    .byte ICAT_WAND     // 117: Fire Balls
+    .byte ICAT_WAND     // 118: Cold Balls
+    .byte ICAT_STAFF    // 119: Dispel Evil
+    .byte ICAT_STAFF    // 120: Destruction
+    .byte ICAT_STAFF    // 121: Speed
+    .byte ICAT_ARMOR    // 122: Mithril Chain Mail
+    .byte ICAT_ARMOR    // 123: Mithril Plate Mail
+    .byte ICAT_AMULET   // 124: Amulet of Wisdom
+    .byte ICAT_AMULET   // 125: Amulet of the Magi
+    .byte ICAT_POTION   // 126: Neutralize Poison
+    .byte ICAT_STAFF    // 127: Remove Curse
 
 // Color and base armor class packed per type: high nibble = display color,
 // low nibble = base AC (<=9).
@@ -207,6 +239,38 @@ it_color_ac:
     .byte COL_LGREY << 4                        // 93: Lucerne Hammer
     .byte COL_LGREY << 4                        // 94: Broad Axe
     .byte COL_LGREY << 4                        // 95: Awl-Pike
+    .byte COL_WHITE << 4                        // 96: Healing
+    .byte COL_YELLOW << 4                       // 97: Restoration
+    .byte COL_LRED << 4                         // 98: Resist Heat
+    .byte COL_CYAN << 4                         // 99: Resist Cold
+    .byte COL_WHITE << 4                        // 100: Cure Critical Wounds
+    .byte COL_CYAN << 4                         // 101: Teleport Level
+    .byte COL_LGREEN << 4                       // 102: Magic Mapping
+    .byte COL_YELLOW << 4                       // 103: Object Detection
+    .byte COL_LGREEN << 4                       // 104: Recharging
+    .byte COL_YELLOW << 4                       // 105: Rune of Protection
+    .byte COL_LRED << 4                         // 106: Genocide
+    .byte COL_LRED << 4                         // 107: Mass Genocide
+    .byte COL_LRED << 4                         // 108: *Destruction*
+    .byte COL_LRED << 4                         // 109: Resist Fire
+    .byte COL_CYAN << 4                         // 110: Resist Cold
+    .byte COL_YELLOW << 4                       // 111: Speed
+    .byte COL_LGREEN << 4                       // 112: See Invisible
+    .byte COL_LRED << 4                         // 113: Slaying
+    .byte COL_GREY << 4                         // 114: Slow Monster
+    .byte COL_BROWN << 4                        // 115: Stone-to-Mud
+    .byte COL_CYAN << 4                         // 116: Teleport Away
+    .byte COL_LRED << 4                         // 117: Fire Balls
+    .byte COL_CYAN << 4                         // 118: Cold Balls
+    .byte COL_WHITE << 4                        // 119: Dispel Evil
+    .byte COL_LRED << 4                         // 120: Destruction
+    .byte COL_YELLOW << 4                       // 121: Speed
+    .byte (COL_LGREY << 4) | 11                 // 122: Mithril Chain Mail
+    .byte (COL_LGREY << 4) | 14                 // 123: Mithril Plate Mail
+    .byte COL_YELLOW << 4                       // 124: Amulet of Wisdom
+    .byte (COL_LGREEN << 4) | 3                 // 125: Amulet of the Magi
+    .byte COL_GREEN << 4                        // 126: Neutralize Poison
+    .byte COL_CYAN << 4                         // 127: Remove Curse
 
 // Weight (in 1/10 lbs)
 it_weight:
@@ -229,6 +293,14 @@ it_weight:
     .byte 10, 60, 25, 5, 20, 20             // 82-87: cloak/helm/gloves/boots/cap
     .byte 50, 110, 100, 120                 // 88-91: added blades
     .byte 150, 120, 160, 160                // 92-95: added hafted/pole weapons
+    .byte 4, 4, 4, 4, 4, 5, 5, 5            // 96-103: potions, scrolls
+    .byte 5, 5, 5, 5, 5                     // 104-108: scrolls
+    .byte 2, 2, 2, 2, 2                     // 109-113: rings
+    .byte 10, 10, 10, 10, 10                // 114-118: wands
+    .byte 50, 50, 50                        // 119-121: staves
+    .byte 200, 320                          // 122-123: mithril armor
+    .byte 3, 3                              // 124-125: amulets
+    .byte 4, 50                             // 126: potion, 127: staff
 
 // Damage dice packed per type: high nibble = dice count (<=3), low nibble =
 // dice sides (<=9). 0 = no damage dice.
@@ -252,6 +324,7 @@ it_dmg_packed:
     .byte 0, 0, 0, 0, 0, 0                  // 82-87: defensive equipment
     .byte $17, $17, $24, $34                // 88-91: added blades
     .byte $26, $25, $26, $18                // 92-95: added hafted/pole weapons
+    .fill 32, 0                             // 96-127: no damage dice
 it_dmg_packed_end:
 
 #if C64_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME
@@ -280,6 +353,10 @@ it_cost_lo:
     .byte <20, <120, <35, <8, <30, <50
     .byte <60, <85, <100, <400
     .byte <120, <110, <100, <80
+    .byte <200, <44, <30, <30, <100, <50, <40, <15
+    .byte <200, <244, <238, <232, <238, <250, <250, <184
+    .byte <244, <232, <244, <44, <94, <8, <220, <176
+    .byte <196, <244, <88, <176, <44, <136, <75, <244
 it_cost_lo_end:
 
 #if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME
@@ -289,8 +366,12 @@ it_cost_lo_end:
 // entry remains code.
 it_cost_hi_extra_id:
     .byte 45, 55, 56, 57, 58, 59, 60, 80, 81, 91
+    .byte 97, 105, 106, 107, 108, 111, 112, 113, 114, 115
+    .byte 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 127
 it_cost_hi_extra_value:
     .byte >300, >300, >500, >800, >300, >500, >800, >350, >900, >400
+    .byte >300, >500, >750, >1000, >750, >3000, >500, >1000, >500, >300
+    .byte >350, >1800, >1500, >1200, >2500, >1000, >600, >1200, >300, >5000, >500
 it_cost_hi_extra_end:
 .const IT_COST_HI_EXTRA_COUNT = it_cost_hi_extra_value - it_cost_hi_extra_id
 
@@ -320,6 +401,10 @@ it_cost_hi:
     .byte >20, >120, >35, >8, >30, >50
     .byte >60, >85, >100, >400
     .byte >120, >110, >100, >80
+    .byte >200, >300, >30, >30, >100, >50, >40, >15
+    .byte >200, >500, >750, >1000, >750, >250, >250, >3000
+    .byte >500, >1000, >500, >300, >350, >1800, >1500, >1200
+    .byte >2500, >1000, >600, >1200, >300, >5000, >75, >500
 it_cost_hi_end:
 #endif
 
@@ -343,6 +428,10 @@ it_min_level:
     .byte $54, $a7                  // 78-81
     .byte $62, $12, $43             // 82-87
     .byte $43, $75, $65, $45        // 88-95
+    .byte $84, $11, $52, $12        // 96-103
+    .byte $b9, $c9, $4a, $c4        // 104-111
+    .byte $c9, $31, $b5, $ba        // 112-119
+    .byte $ac, $75, $c5, $82        // 120-127
 it_min_level_end:
 
 // iml_get_for_type — Minimum dungeon level for item type X.
@@ -425,6 +514,7 @@ it_display_by_cat:
     .byte $3f   // 13: book — '?'
     .byte $2d   // 14: wand — '-'
     .byte $2f   // 15: staff — '/'
+    .byte $22   // 16: amulet — '"'
 
 // item_get_display_char — Get floor display glyph for an item type
 // Input: X = item type ID
@@ -480,6 +570,14 @@ it_name_lo:
     .byte <itn_82, <itn_83, <itn_84, <itn_85, <itn_86, <itn_87
     .byte <itn_88, <itn_89, <itn_90, <itn_91
     .byte <itn_92, <itn_93, <itn_94, <itn_95
+    .byte <itn_96, <itn_97, <itn_98, <itn_99
+    .byte <itn_100, <itn_101, <itn_102, <itn_103
+    .byte <itn_104, <itn_105, <itn_106, <itn_107
+    .byte <itn_108, <itn_109, <itn_110, <itn_111
+    .byte <itn_112, <itn_113, <itn_114, <itn_115
+    .byte <itn_116, <itn_117, <itn_118, <itn_119
+    .byte <itn_120, <itn_121, <itn_122, <itn_123
+    .byte <itn_124, <itn_125, <itn_126, <itn_127
 it_name_lo_end:
 #if !(C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME)
 it_name_hi:
@@ -506,6 +604,14 @@ it_name_hi:
     .byte >itn_82, >itn_83, >itn_84, >itn_85, >itn_86, >itn_87
     .byte >itn_88, >itn_89, >itn_90, >itn_91
     .byte >itn_92, >itn_93, >itn_94, >itn_95
+    .byte >itn_96, >itn_97, >itn_98, >itn_99
+    .byte >itn_100, >itn_101, >itn_102, >itn_103
+    .byte >itn_104, >itn_105, >itn_106, >itn_107
+    .byte >itn_108, >itn_109, >itn_110, >itn_111
+    .byte >itn_112, >itn_113, >itn_114, >itn_115
+    .byte >itn_116, >itn_117, >itn_118, >itn_119
+    .byte >itn_120, >itn_121, >itn_122, >itn_123
+    .byte >itn_124, >itn_125, >itn_126, >itn_127
 it_name_hi_end:
 #else
 it_name_hi_end:
@@ -695,6 +801,38 @@ itn_92: .text "Flail" ; .byte 0
 itn_93: .text "Lucerne Hammer" ; .byte 0
 itn_94: .text "Broad Axe" ; .byte 0
 itn_95: .text "Awl-Pike" ; .byte 0
+itn_96: .text "Healing" ; .byte 0
+itn_97: .text "Restoration" ; .byte 0
+itn_98: .text "Resist Heat" ; .byte 0
+itn_99: .text "Resist Cold" ; .byte 0
+itn_100: .byte ITOK_CURE ; .text "Critical" ; .byte ITOK_WOUNDS_SUFFIX ; .byte 0
+itn_101: .text "Teleport Level" ; .byte 0
+itn_102: .text "Magic Mapping" ; .byte 0
+itn_103: .text "Object Detection" ; .byte 0
+itn_104: .text "Recharging" ; .byte 0
+itn_105: .text "Rune" ; .byte ITOK_OF ; .text "Protection" ; .byte 0
+itn_106: .text "Genocide" ; .byte 0
+itn_107: .text "Mass Genocide" ; .byte 0
+itn_108: .text "*Destruction*" ; .byte 0
+itn_109: .text "Resist Fire" ; .byte 0
+itn_110: .text "Resist Cold" ; .byte 0
+itn_111: .text "Speed" ; .byte 0
+itn_112: .text "See Invisible" ; .byte 0
+itn_113: .text "Slaying" ; .byte 0
+itn_114: .byte ITOK_WAND ; .byte ITOK_OF ; .text "Slow Monster" ; .byte 0
+itn_115: .byte ITOK_WAND ; .byte ITOK_OF ; .text "Stone-to-Mud" ; .byte 0
+itn_116: .byte ITOK_WAND ; .byte ITOK_OF ; .text "Teleport Away" ; .byte 0
+itn_117: .byte ITOK_WAND ; .byte ITOK_OF ; .text "Fire Balls" ; .byte 0
+itn_118: .byte ITOK_WAND ; .byte ITOK_OF ; .text "Cold Balls" ; .byte 0
+itn_119: .byte ITOK_STAFF ; .byte ITOK_OF ; .text "Dispel Evil" ; .byte 0
+itn_120: .byte ITOK_STAFF ; .byte ITOK_OF ; .text "Destruction" ; .byte 0
+itn_121: .byte ITOK_STAFF ; .byte ITOK_OF ; .text "Speed" ; .byte 0
+itn_122: .text "Mithril Chain" ; .byte ITOK_MAIL_SUFFIX ; .byte 0
+itn_123: .text "Mithril Plate" ; .byte ITOK_MAIL_SUFFIX ; .byte 0
+itn_124: .text "Wisdom" ; .byte 0
+itn_125: .text "the Magi" ; .byte 0
+itn_126: .text "Neutralize Poison" ; .byte 0
+itn_127: .byte ITOK_STAFF ; .byte ITOK_OF ; .text "Remove Curse" ; .byte 0
 #if C128_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME
 #if HAL_PLATFORM_ITEM_NAME_STREAMS_AUX
 a2_item_name_streams_end:

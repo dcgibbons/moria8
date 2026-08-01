@@ -310,6 +310,30 @@ player_calc_stats:
     sta player_data + PL_STR_CUR
 !pcs_no_str_ring:
 
+    // Amulet of Wisdom uses p1 as a signed WIS modifier; Amulet of the Magi
+    // uses p1 as a signed INT modifier.
+    ldx #EQUIP_AMULET
+    lda inv_item_id,x
+    cmp #ITEM_TYPE_AMULET_WISDOM
+    beq !pcs_amulet_wis+
+    cmp #ITEM_TYPE_AMULET_MAGI
+    bne !pcs_no_amulet+
+    lda player_data + PL_INT_CUR
+    sta stat_work
+    lda inv_p1,x
+    jsr apply_modifier
+    lda stat_work
+    sta player_data + PL_INT_CUR
+    jmp !pcs_no_amulet+
+!pcs_amulet_wis:
+    lda player_data + PL_WIS_CUR
+    sta stat_work
+    lda inv_p1,x
+    jsr apply_modifier
+    lda stat_work
+    sta player_data + PL_WIS_CUR
+!pcs_no_amulet:
+
     // Update combat bonuses from stats
     jsr player_calc_combat
     rts

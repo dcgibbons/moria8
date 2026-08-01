@@ -75,6 +75,7 @@ equip_slot_for_cat:
     .byte $ff              // ICAT_BOOK (13) -> not equippable
     .byte $ff              // ICAT_WAND (14) -> not equippable
     .byte $ff              // ICAT_STAFF (15) -> not equippable
+    .byte EQUIP_AMULET     // ICAT_AMULET (16) -> slot 30
 
 // ============================================================
 // Subroutines

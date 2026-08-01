@@ -53,16 +53,18 @@ design record; current ownership is enforced by `platforms/apple2/memory.s`,
 | main `$BB00-$BEFF` | ProDOS MLI I/O/staging buffer |
 | main `$BF00-$BFFF` | ProDOS global page |
 | aux `$0800-$3B0B` | Live 198x66 map |
-| aux `$3B0C-$55B5` | Current immutable/mutable aux data payload (6,826 B): Huffman data, item-name streams, store inventory, recall arrays, class-spell tables, spell names, ego suffix slots, externalized message strings, and the screen-code char-map table; 330 B spare to `$56FF` |
-| aux `$5700-$BFFF` | Six boot-cached overlays under cache manifest v7; page-rounded slots exactly fill the span |
+| aux `$3B0C-$59FF` | Current immutable/mutable aux data payload: Huffman data, item-name streams, store inventory, recall arrays, class-spell tables, spell names, ego suffix slots, externalized message strings, and the screen-code char-map table; boundary raised from `$56FF` for the 128-row catalog (Phase 3, 2026-08-01) |
+| aux `$5A00-$BFFF` | Six boot-cached overlays under cache manifest v7; page-rounded slots fill the span |
 
 `A2.PLAY` is not a modal swap slot in the implementation: every overlay,
 including STORAGE and TITLE, fits the `$A400-$B9FF` code window. Play is
 loaded on demand and signature-checked, then remains resident for the session.
 
 Cache manifest v7 is shared by boot and runtime code rather than duplicated:
-TOWN `$5700`, UI `$6C00`, SPELL `$7900`, MODAL `$8D00`, GEN `$9900`, ITEMS
-`$AA00`, end `$C000`. Page-rounded slots fill the cache (the UI slot carries
+TOWN `$5A00`, UI `$6F00`, SPELL `$7900`, MODAL `$8D00`, GEN `$9900`, ITEMS
+`$AA00`, end `$C000`. TOWN/UI were rebased down 3 pages for the 128-row
+catalog (Phase 3, 2026-08-01), growing auxdata to `$59FF`. Page-rounded slots
+fill the cache (the UI slot carries
 768 B of slack; the rest are exact);
 ITEMS is last so the runtime's fixed `$1600`-byte AUXMOVE ends exactly at
 `$C000`. Link-time assertions compare every payload extent with its next slot
@@ -124,8 +126,8 @@ must also fit the slot: OVL.STORAGE est. ~4,100 (save.s 2,558 + slot menu
 | --- | ---: | --- |
 | aux `$0400-$07FF` | 1,024 | Text page aux half (even columns) |
 | aux `$0800-$3B0B` | 13,068 | Live map, 198x66 — all access via thunked MapRead/MapWrite |
-| aux `$3B0C-$56FF` | 7,156 | Aux data: Huffman data, item-name streams, store inventory/runtime, recall arrays, class-spell tables, spell names, ego suffix slots, externalized message strings, char-map table = 6,826 used; 330 B spare |
-| aux `$5700-$BFFF` | 26,880 | Hot cache (payloads, page-rounded slots): ovl.town 5,362 + ovl.ui 2,525 + ovl.spell 5,025 + ovl.modal 2,978 + ovl.gen 4,236 + ovl.items 5,632 = 25,758 used; slots TOWN `$5700`, UI `$6C00`, SPELL `$7900`, MODAL `$8D00`, GEN `$9900`, ITEMS `$AA00` |
+| aux `$3B0C-$59FF` | 7,924 | Aux data: Huffman data, item-name streams, store inventory/runtime, recall arrays, class-spell tables, spell names, ego suffix slots, externalized message strings, char-map table; boundary raised from `$56FF` for the 128-row catalog (Phase 3, 2026-08-01) |
+| aux `$5A00-$BFFF` | 26,112 | Hot cache (payloads, page-rounded slots): ovl.town 5,362 + ovl.ui 2,525 + ovl.spell 5,025 + ovl.modal 2,978 + ovl.gen 4,236 + ovl.items 5,632 = 25,758 used; slots TOWN `$5A00`, UI `$6F00`, SPELL `$7900`, MODAL `$8D00`, GEN `$9900`, ITEMS `$AA00` |
 
 On-demand from disk (never cached; all cold or disk-appropriate moments):
 ovl.start (chargen), ovl.help, ovl.modal, ovl.disarm, OVL.STORAGE,
@@ -297,11 +299,11 @@ Platform owns `$90-$EF`:
 2. **BIN load address**: `A2.PLAY` file auxtype = `$7C00`; `prg_to_bin.py`
    asserts header match per payload.
 3. **Destination bank at load**: main RAM, always visible — trivially
-   correct (no banking on the Apple II path); the aux cache at aux `$5700+`
+   correct (no banking on the Apple II path); the aux cache at aux `$5A00+`
    holds the master copy.
 4. **Visible execution bank at call site**: main RAM — trivially correct.
 5. **Source-span survival**: aux cache span is disjoint from map
-   (`$0800-$3B0B`) and aux data (`$3B0C-$56FF`); checker asserts all aux
+   (`$0800-$3B0B`) and aux data (`$3B0C-$59FF`); checker asserts all aux
    spans. Broker sequence (C128 `c128_modal_require_*` pattern): modal entry
    → AUXMOVE play → aux cache (or mark cache stale) → load modal payload
    into slot; modal exit → AUXMOVE cache → `$7C00` → validate 3-byte
@@ -336,7 +338,7 @@ established; the PAK is retained because it removes the failing boot access
 pattern, not as proof that all runtime file opens are unsafe.
 
 Aux cache manifest v7 (shared by `cache_layout.s`; payloads are exact byte
-lengths and boot copies are page-rounded): TOWN `$5700`, UI `$6C00`, SPELL
+lengths and boot copies are page-rounded): TOWN `$5A00`, UI `$6F00`, SPELL
 `$7900`, MODAL `$8D00`, GEN `$9900`, ITEMS `$AA00-$BFFF`. DEATH, HELP, and
 STORAGE remain cold. Link-time assertions bind every payload extent to its
 next slot and the fixed runtime-copy bound.
@@ -384,8 +386,8 @@ estimate here into a hard failure if exceeded.
 
 > **SUPERSEDED in part — M0-era record.** Items 2, 5, and 6 were later
 > revised: the window is `$A400-$B9FF`, the play slot is 9,216 B
-> (`$7C00-$9FFF`), aux data is `$3B0C-$56FF`, and the hot cache is
-> `$5700-$BFFF`. See the Current Snapshot at the top of this document.
+> (`$7C00-$9FFF`), aux data is `$3B0C-$59FF`, and the hot cache is
+> `$5A00-$BFFF`. See the Current Snapshot at the top of this document.
 
 1. Closure levers 1-4 reframed: slot invariance means only aux-data moves,
    overlay-class moves, and region/platform changes reduce the concurrent

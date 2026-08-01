@@ -1363,7 +1363,7 @@ test_start:
     ldx #79
     jsr id_known_test
     beq !t29_fail+
-    ldx #ITEM_TYPE_COUNT - 1
+    ldx #ITEM_TYPE_AMULET_MAGI
     jsr id_known_test
     beq !t29_fail+
     .if (ITEM_TYPE_COUNT < ITEM_ID_CAPACITY) {
@@ -1374,9 +1374,9 @@ test_start:
 
     // If an appended fixed item is forced unknown by bad state, it still
     // resolves through fixed item data instead of a shuffled class table.
-    ldx #ITEM_TYPE_COUNT - 1
+    ldx #ITEM_TYPE_MITHRIL_CHAIN
     jsr id_known_clear
-    lda #ITEM_TYPE_COUNT - 1
+    lda #ITEM_TYPE_MITHRIL_CHAIN
     jsr item_get_name_ptr
     lda #<t29_expected_appended_name
     sta zp_ptr1
@@ -1392,10 +1392,10 @@ test_start:
     iny
     bne !t29_cmp_appended-
 !t29_check_color:
-    lda #ITEM_TYPE_COUNT - 1
+    lda #ITEM_TYPE_MITHRIL_CHAIN
     jsr item_get_floor_color
     sta t29_expected_color
-    ldx #ITEM_TYPE_COUNT - 1
+    ldx #ITEM_TYPE_MITHRIL_CHAIN
     lda it_color_ac,x
     lsr
     lsr
@@ -2389,7 +2389,7 @@ test_start:
 t27_expected_name:
     .text "Dagger" ; .byte 0
 t29_expected_appended_name:
-    .text "Awl-Pike" ; .byte 0
+    .text "Mithril Chain Mail" ; .byte 0
 t29_expected_color: .byte 0
 
 item_test_body_end:

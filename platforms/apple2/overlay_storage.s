@@ -22,8 +22,8 @@
 // slot only needs the payload rounded up to a page). Six classes
 // are cached; DEATH, HELP, and STORAGE are cold (disk loads on rare
 // flows) because the current overlay set no longer fits the region.
-// Layout: auxdata $3B0C-$55B5, unused slack $55B6-$56FF, overlay cache
-// payloads $5700-$BFFF.
+// Layout: auxdata $3B0C-$59FF, unused slack (varies), overlay cache
+// payloads $5A00-$BFFF.
 // Cache hits read a full $1600-byte window; ITEMS is deliberately last at
 // $AA00 so the final full-window read ends exactly at $C000. Bytes after a
 // payload are irrelevant because no overlay can execute beyond its end.

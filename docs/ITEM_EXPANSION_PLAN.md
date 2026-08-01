@@ -781,203 +781,55 @@ Rules:
   This keeps the 96-item milestone data-only and avoids adding potion, scroll,
   ring, wand, or staff behavior during release stabilization.
 
-Target appended rows:
+Target appended rows (approved 2026-08-01, deep-play-optimized list; the
+older committed table and the 2026-07-31 chat draft are superseded):
 
-| ID | Item | Class | Notes |
-|---:|---|---|---|
-| 66 | Rapier | weapon | Fixed-known melee progression |
-| 67 | Broad Sword | weapon | Fixed-known melee progression |
-| 68 | Bastard Sword | weapon | Fixed-known melee progression |
-| 69 | Two-Handed Sword | weapon | Fixed-known heavy melee |
-| 70 | Scimitar | weapon | Fixed-known melee variety |
-| 71 | Battle Axe | weapon | Fixed-known hafted/axe role |
-| 72 | War Hammer | weapon | Fixed-known hafted role |
-| 73 | Morningstar | weapon | Fixed-known hafted role |
-| 74 | Spear | weapon | Fixed-known polearm role |
-| 75 | Pike | weapon | Fixed-known polearm role |
-| 76 | Halberd | weapon | Fixed-known polearm role |
-| 77 | Quarterstaff | weapon | Fixed-known light blunt role |
-| 78 | Large Shield | shield | Fixed-known defensive progression |
-| 79 | Hard Leather Armor | armor | Fixed-known soft armor tier |
-| 80 | Scale Mail | armor | Fixed-known hard armor tier |
-| 81 | Plate Mail | armor | Fixed-known hard armor tier |
-| 82 | Cloak | armor | Fixed-known missing slot family |
-| 83 | Steel Helm | helm | Fixed-known head progression |
-| 84 | Gauntlets | gloves | Fixed-known hand progression |
-| 85 | Soft Leather Boots | boots | Fixed-known foot progression |
-| 86 | Hard Leather Boots | boots | Fixed-known foot progression |
-| 87 | Metal Cap | helm | Fixed-known low head tier |
-| 88 | Sabre | weapon | Fixed-known blade progression |
-| 89 | Cutlass | weapon | Fixed-known blade progression |
-| 90 | Tulwar | weapon | Fixed-known blade progression |
-| 91 | Katana | weapon | Fixed-known premium blade |
-| 92 | Flail | weapon | Fixed-known hafted role |
-| 93 | Lucerne Hammer | weapon | Fixed-known hafted role |
-| 94 | Broad Axe | weapon | Fixed-known axe role |
-| 95 | Awl-Pike | weapon | Fixed-known polearm role |
+| ID | Item | Class | Cost | Min level | Notes |
+|---:|---|---|---:|---:|---|
+| 96 | Potion of Healing | potion | 200 | 12 | heal 200 HP; p1-driven heal machinery |
+| 97 | Potion of Restoration | potion | 300 | 30 | restore all drained stats; new small handler |
+| 98 | Potion of Resist Heat | potion | 30 | 1 | temp fire resist; existing resist machinery |
+| 99 | Potion of Resist Cold | potion | 30 | 1 | temp cold resist; existing resist machinery |
+| 100 | Potion of Cure Critical Wounds | potion | 100 | 5 | big heal; existing heal machinery |
+| 101 | Scroll of Teleport Level | scroll | 50 | 20 | new small handler on stairs level-change path |
+| 102 | Scroll of Magic Mapping | scroll | 40 | 5 | full-level map; wizard-reveal path product entry |
+| 103 | Scroll of Object Detection | scroll | 15 | 1 | floor-item detection; new moderate handler |
+| 104 | Scroll of Recharging | scroll | 200 | 40 | existing recharge_item dispatch |
+| 105 | Scroll of Rune of Protection | scroll | 500 | 50 | existing glyph_of_warding dispatch |
+| 106 | Scroll of Genocide | scroll | 750 | 35 | existing genocide dispatch |
+| 107 | Scroll of Mass Genocide | scroll | 1000 | 50 | all monsters in line of sight; new LOS-filtered genocide |
+| 108 | Scroll of *Destruction* | scroll | 750 | 40 | existing word_of_destruction dispatch |
+| 109 | Ring of Resist Fire | ring | 250 | 14 | new persistent resist bit + damage hook |
+| 110 | Ring of Resist Cold | ring | 250 | 14 | new persistent resist bit + damage hook |
+| 111 | Ring of Speed | ring | 3000 | 50 | new persistent speed bit (turn/energy) |
+| 112 | Ring of See Invisible | ring | 500 | 40 | new persistent see-invis bit (monster visibility) |
+| 113 | Ring of Slaying | ring | 1000 | 50 | no new code; p1 to-hit/to-dam fields apply |
+| 114 | Wand of Slow Monster | wand | 500 | 2 | existing slow_monster dispatch |
+| 115 | Wand of Stone-to-Mud | wand | 300 | 12 | existing turn_stone_to_mud dispatch |
+| 116 | Wand of Teleport Away | wand | 350 | 20 | existing teleport_other dispatch |
+| 117 | Wand of Fire Balls | wand | 1800 | 50 | existing fire_ball dispatch |
+| 118 | Wand of Cold Balls | wand | 1500 | 40 | existing frost_ball dispatch |
+| 119 | Staff of Dispel Evil | staff | 1200 | 49 | existing dispel_evil dispatch |
+| 120 | Staff of Destruction | staff | 2500 | 50 | existing word_of_destruction dispatch |
+| 121 | Staff of Speed | staff | 1000 | 40 | existing haste_self dispatch |
+| 122 | Mithril Chain Mail | armor | 600 | 14 | AC 11, weight 200; moria8-scale armor (not upstream) |
+| 123 | Mithril Plate Mail | armor | 1200 | 24 | AC 14, weight 320; fits 4-bit AC nibble |
+| 124 | Amulet of Wisdom | amulet | 300 | 20 | +WIS via p1; requires amulet slot machinery |
+| 125 | Amulet of the Magi | amulet | 5000 | 50 | +INT via p1 + see-invisible |
+| 126 | Potion of Neutralize Poison | potion | 75 | 5 | eff_cure_poison dispatch |
+| 127 | Staff of Remove Curse | staff | 500 | 30 | eff_remove_curse dispatch |
 
-Why this shape:
+Resolved decisions (2026-08-01): deep-play row list approved; unknown-name
+pools wrap class-local indexes modulo pool size (cosmetic duplicate
+appearances, 0 B, no save change); resist rings are two rows (fire, cold);
+Mass Genocide removes all monsters in line of sight; two amulet rows;
+chests follow after the 32 rows. Fill rows chosen by the agent: Cure
+Critical Wounds, Neutralize Poison, Amulet of Wisdom, Staff of Remove
+Curse; Ring of Searching dropped in favor of Ring of See Invisible.
 
-- 22 of 30 new rows are fixed-known equipment, which minimizes identification
-  and behavior risk.
-- The batch restores missing melee, polearm, armor, shield, helm, glove, and
-  boot variety before adding lower-priority systems.
-- The final eight rows intentionally avoid randomized identification and
-  effect-code growth so 96 can serve as a release parking point.
-
-Implementation slices:
-
-1. Complete Phase 1A/1B C128 catalog-storage relief. Done.
-2. Add IDs `88-95` as fixed-known ordinary equipment.
-3. Defer randomized potion/scroll/ring/wand/staff rows to the post-96 design.
-4. Update wizard docs and item catalog docs after each accepted slice.
-
-#### Phase 1A/1B: C128 Catalog-Storage Relief
-
-Goal: create enough `128.item` space for IDs `88-95` without weakening memory
-asserts, shortening player-facing strings, or moving the `$A800` selector
-boundary.
-
-Preferred order:
-
-1. Move known-name pointer tables and known-name streams behind a C128-safe
-   name lookup boundary, or otherwise remove their per-row resident growth from
-   `128.item`. Current resident cost is 929 bytes for known-name pointers plus
-   known name streams, before token tables.
-2. If name relocation is too broad for the first pass, introduce compact
-   numeric/stat profiles for fixed equipment fields. Current fixed SoA tables
-   cost 880 bytes and grow by 10 bytes per row.
-3. Keep `pit_sorted` and `pit_level_bounds` in the dungeon-generation overlay;
-   they are already relocated for product builds and are not the next
-   meaningful resident target.
-4. Avoid moving `C128ResidentSelect`, `C128ResidentDiskIo`, or the `$AF00`
-   play/persist boundary unless the catalog-local options fail. Those are
-   broader C128 layout changes.
-
-Phase 1A/1B acceptance gate:
-
-| Gate | Required proof |
-|---|---|
-| Memory | `128.item` has at least 230 bytes free before `$A800`; more is better. Current Phase 1B leaves 773 bytes. |
-| No disk churn | Inventory/store/name display does not require per-item disk loads. |
-| Name correctness | All implemented item names still pass item-description tests on C64 and C128. |
-| Product paths | Wizard grant, inventory display, store display, dungeon pickup, and save/load still work. |
-| C128 layout | `make test128` passes if the implementation changes C128 loading, banking, copied code, or runtime segment starts. |
-
-Phase 1A/1B implementation status:
-
-- Partially complete. C64 and Plus/4 move `it_cost_lo` to `TownOverlay`, but
-  C128 keeps `it_cost_lo` resident after runtime testing exposed a town-entry
-  CPU JAM when the executable town overlay started with cost data.
-- Complete. Product builds replaced the full resident `it_cost_hi` table with
-  sparse high-byte exceptions used by store pricing.
-- Complete. Product builds no longer emit the resident `it_name_hi` table.
-  Known-name lookup derives the stream high byte by counting low-byte page
-  crossings in the existing `it_name_lo` table. Names remain resident; this is
-  not a disk-backed name path.
-- Complete. C128 known-name streams now live in `128.names.prg`, loaded once at
-  startup into Bank 1 `$7400-$76F0`. The token dictionary remains in
-  `128.item`; known-name decoding reads only stream source bytes through
-  `mmu_safe_db_read_ptr0`.
-- C128 `128.item` now ends at `$A4FA`, leaving 773 bytes before `$A800`.
-  C128 town overlay now ends at `$EF78`, leaving 136 bytes; C64 and Plus/4
-  town overlays still end at `$EFE1`, leaving 30 bytes.
-- Validation: focused C128 `memory128|item_desc128|boot_title|town|load_resume|main_loop128`
-  passed 15/15, full `make test128` passed 118/118, and `make disk128` builds
-  the product disk with `128.names`.
-
-Phase 1 acceptance gate:
-
-| Gate | Required proof |
-|---|---|
-| Build | `make build` passes. |
-| C64 | `make test64` passes and product smoke covers IDs 66 and 95. |
-| C128 | `make test128` passes after any C128 layout/banking/runtime-loaded change. |
-| Plus/4 | `make testplus4` or relevant product smoke passes for appended IDs. |
-| Save/load | Old 64-ID saves, current 66-ID saves, and new 96-ID saves load deterministically. |
-| Manual smoke | Wizard grant of IDs 66 and 95 renders correct inventory text after save/load. |
-
-### Phase 2: Prepare 128-Capable Catalog
-
-Goal: reduce resident cost and save-state cost before growing beyond 96.
-
-Required work before setting `ITEM_ID_CAPACITY = 128`:
-
-1. Convert `id_known` to a bitset, or hide it behind accessors with a compact
-   save/load representation.
-2. Move cold item names and name-token streams out of scarce resident catalog
-   space where practical.
-3. Pack or profile duplicate combat/stat fields:
-   - damage dice count/sides
-   - base AC
-   - weight
-   - cost
-   - equip slot/profile
-4. Replace generation and store selection range logic with explicit eligible
-   lists or bucket tables.
-5. Decide the amulet category/store-mask model before adding amulet rows.
-6. Update save layout documentation and migration code for the 128-capacity
-   known-state representation.
-
-Resident target:
-
-| Data | Target |
-|---|---|
-| Hot item row | about 7-9 resident bytes |
-| Known state | 16 bytes for 128 IDs if bitset |
-| Names | banked/cold where possible |
-| Generation/store rarity | explicit lists or banked/cold tables |
-
-Phase 2 acceptance gate:
-
-| Gate | Required proof |
-|---|---|
-| Compatibility | Saves from V1, 66-item V2/V3, and 96-item saves migrate correctly. |
-| Accessors | All known-state reads/writes go through the new representation. |
-| Memory | C128 has real headroom, not byte-level luck. |
-| Product paths | Unknown randomized display, fixed-known display, store display, and save/load work under product smoke. |
-
-### Phase 3: Reach 128 Items
-
-Goal: add high-value consumables, rings, wands, staves, and first amulets after
-the 128-capable representation exists.
-
-Target appended rows:
-
-| ID | Item | Class | Notes |
-|---:|---|---|---|
-| 96 | Potion of Restore Strength | potion | Randomized stat restoration |
-| 97 | Potion of Restore Intelligence | potion | Randomized stat restoration |
-| 98 | Potion of Restore Wisdom | potion | Randomized stat restoration |
-| 99 | Potion of Restore Dexterity | potion | Randomized stat restoration |
-| 100 | Potion of Restore Constitution | potion | Randomized stat restoration |
-| 101 | Potion of Resist Heat | potion | Randomized resistance |
-| 102 | Potion of Resist Cold | potion | Randomized resistance |
-| 103 | Potion of Cure Poison | potion | Randomized utility |
-| 104 | Scroll of Phase Door | scroll | Randomized mobility |
-| 105 | Scroll of Treasure Detection | scroll | Randomized detection |
-| 106 | Scroll of Object Detection | scroll | Randomized detection |
-| 107 | Scroll of Detect Curse | scroll | Randomized identification support |
-| 108 | Scroll of Rune of Protection | scroll | Randomized tactical utility |
-| 109 | Scroll of Create Monster | scroll | Randomized risk item |
-| 110 | Scroll of Sleep Monster | scroll | Randomized control |
-| 111 | Scroll of Genocide | scroll | Randomized high-value effect |
-| 112 | Ring of Dexterity | ring | Persistent stat choice |
-| 113 | Ring of Constitution | ring | Persistent stat choice |
-| 114 | Ring of Searching | ring | Persistent utility |
-| 115 | Ring of See Invisible | ring | Persistent utility |
-| 116 | Ring of Speed | ring | Persistent speed |
-| 117 | Ring of Sustain Strength | ring | Persistent sustain effect |
-| 118 | Wand of Slow Monster | wand | Charged control |
-| 119 | Wand of Polymorph | wand | Charged transformation |
-| 120 | Wand of Sleep Monster | wand | Charged control |
-| 121 | Wand of Stone-to-Mud | wand | Charged utility |
-| 122 | Staff of Detect Evil | staff | Charged detection |
-| 123 | Staff of Cure Serious Wounds | staff | Charged healing |
-| 124 | Staff of Remove Curse | staff | Charged utility |
-| 125 | Staff of Dispel Evil | staff | Charged damage/control |
-| 126 | Amulet of Wisdom | amulet | Requires amulet slot/category decision |
-| 127 | Amulet of Charisma | amulet | Requires amulet slot/category decision |
+Pool wrap assignment: potions +6 -> indexes 10,11,0,1,2,3 (pool 12);
+scrolls +8 -> 10,11,0,1,2,3,4,5 (pool 12); rings +5 -> 2,3,0,1,2 (pool 4);
+wands +5 -> 4,0,1,2,3 (pool 5); staves +4 -> 4,0,1,2 (pool 5).
 
 Phase 3 acceptance gate:
 
@@ -1304,9 +1156,8 @@ load = ProDOS read (fine for chest-open flows, not for per-round effects).
 
 1. C128 town-entry JAM mechanism is unknown; mitigations above, runtime proof
    required before relying on the town move.
-2. Unknown-name pools: grow (~250 B/port + save-block changes) vs wrap
-   (cosmetic duplicate appearances, 0 B). Wrap is forced anyway past 15
-   appearances/class by the nibble cap unless `it_unknown_desc` stays 1 B.
+2. Unknown-name pools: resolved 2026-08-01 — wrap class-local indexes
+   modulo pool size (cosmetic duplicate appearances, 0 B, no save change).
 3. REU 1700 (64 KB) capacity for tiers plus a 10th overlay on C64 is
    untraced.
 4. Test-suite coupling: `id_known` bitset touches ~114 test fixture refs;
@@ -1314,15 +1165,9 @@ load = ProDOS read (fine for chest-open flows, not for per-round effects).
    real; infrastructure fixes are a separate ask per verification rules.
 5. Apple IIe storage-overlay free space is unmeasured; save-migration code
    growth lands there.
-6. Chest sequencing: this analysis removes the state-storage blocker and
-   chest code fits existing overlay slack, so chests no longer need to wait
-   for the 128 milestone. Product call.
-7. A deep-play-optimized replacement for the Phase 3 row list was drafted
-   2026-07-31 (adds Mithril-tier armor, Healing, Mass Genocide, Destruction,
-   Teleport Level, Recharging, Magic Mapping; collapses single-stat restores
-   into one Restoration row). Pending decisions: resist scope, Mass Genocide
-   semantics, See Invisible vs Searching, amulet count. The Phase 3 table
-   below remains the committed list until those calls are made.
+6. Chest sequencing: resolved 2026-08-01 — chests follow the 32 rows.
+7. Row list: resolved 2026-08-01 — the deep-play-optimized list is approved
+   and is the Phase 3 table above; the older committed table is superseded.
 
 ### Suggested Sequencing
 

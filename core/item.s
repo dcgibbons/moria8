@@ -8,24 +8,8 @@
 #import "input_ui_helpers.s"
 
 // ============================================================
-// Item Category Constants
+// Item Category Constants live in item_defs.s (imported early everywhere)
 // ============================================================
-.const ICAT_NONE     = 0
-.const ICAT_GOLD     = 1
-.const ICAT_WEAPON   = 2
-.const ICAT_ARMOR    = 3
-.const ICAT_SHIELD   = 4
-.const ICAT_HELM     = 5
-.const ICAT_GLOVES   = 6
-.const ICAT_BOOTS    = 7
-.const ICAT_LIGHT    = 8
-.const ICAT_FOOD     = 9
-.const ICAT_POTION   = 10
-.const ICAT_SCROLL   = 11
-.const ICAT_RING     = 12
-.const ICAT_BOOK     = 13
-.const ICAT_WAND     = 14
-.const ICAT_STAFF    = 15
 
 // Item system constants (IF_*, FI_*, EQUIP_*, inventory sizes)
 // are defined in item_defs.s (imported early in build order)
@@ -1320,45 +1304,52 @@ tunnel_spawn_gold:
 pit_sorted:
     // Level 0 (5 items)
     .byte 13, 15, 61, 62, 63
-    // Level 1 (18 items)
+    // Level 1 (22 items)
     .byte 2, 3, 6, 11, 12, 16, 17, 19, 20, 28, 29, 37, 51, 52, 54, 64, 77, 85
-    // Level 2 (15 items)
+    .byte 98, 99, 103, 114
+    // Level 2 (18 items)
     .byte 5, 7, 9, 14, 21, 30, 31, 47, 48, 49, 53, 66, 74, 82, 84
-    // Level 3 (15 items)
+    .byte 100, 102, 126
+    // Level 3 (16 items)
     .byte 4, 10, 18, 22, 25, 36, 39, 43, 44, 46, 50, 65, 70, 86, 88
-    // Level 4 (14 items)
+    .byte 115
+    // Level 4 (17 items)
     .byte 8, 23, 27, 33, 38, 40, 42, 55, 58, 67, 78, 87, 89, 95
-    // Level 5 (10 items)
+    .byte 96, 109, 110
+    // Level 5 (14 items)
     .byte 24, 26, 32, 41, 45, 72, 79, 90, 92, 94
+    .byte 101, 116, 122, 124
     // Level 6 (6 items)
     .byte 34, 35, 68, 73, 83, 93
-    // Level 7 (3 items)
-    .byte 71, 80, 91
-    // Level 8 (4 items)
-    .byte 56, 59, 69, 75
-    // Level 9 (1 item)
-    .byte 76
-    // Level 10 (1 item)
-    .byte 81
-    // Level 12 (2 items)
-    .byte 57, 60
+    // Level 7 (4 items)
+    .byte 71, 80, 91, 123
+    // Level 8 (6 items)
+    .byte 56, 59, 69, 75, 97, 127
+    // Level 9 (4 items)
+    .byte 76, 104, 106, 112
+    // Level 10 (4 items)
+    .byte 81, 108, 118, 121
+    // Level 11 (3 items)
+    .byte 105, 117, 119
+    // Level 12 (7 items)
+    .byte 57, 60, 107, 111, 113, 120, 125
 pit_sorted_end:
 
 // Cumulative item count per level (0-12)
 pit_level_bounds:
     .byte 5      // level 0: 5 items
-    .byte 23     // level 1: +18 = 23
-    .byte 38     // level 2: +15 = 38
-    .byte 53     // level 3: +15 = 53
-    .byte 67     // level 4: +14 = 67
-    .byte 77     // level 5: +10 = 77
-    .byte 83     // level 6: +6 = 83
-    .byte 86     // level 7: +3 = 86
-    .byte 90     // level 8: +4 = 90
-    .byte 91     // level 9: +1 = 91
-    .byte 92     // level 10: +1 = 92
-    .byte 92     // level 11: (no items)
-    .byte 94     // level 12: +2 = 94
+    .byte 27     // level 1: +22 = 27
+    .byte 45     // level 2: +18 = 45
+    .byte 61     // level 3: +16 = 61
+    .byte 78     // level 4: +17 = 78
+    .byte 92     // level 5: +14 = 92
+    .byte 98     // level 6: +6 = 98
+    .byte 102    // level 7: +4 = 102
+    .byte 108    // level 8: +6 = 108
+    .byte 112    // level 9: +4 = 112
+    .byte 116    // level 10: +4 = 116
+    .byte 119    // level 11: +3 = 119
+    .byte 126    // level 12: +7 = 126
 pit_level_bounds_end:
 
 #if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME
@@ -1539,13 +1530,15 @@ roll_enchantment:
     cmp #ICAT_STAFF
     beq !re_staff+
 
-    // Equipment categories: WEAPON(2) through BOOTS(7), RING(12)
+    // Equipment categories: WEAPON(2) through BOOTS(7), RING(12), AMULET(16)
     cmp #ICAT_WEAPON
     bcc !re_zero+               // NONE(0) or GOLD(1) → no enchant
     cmp #ICAT_LIGHT
     bcc !re_equip+              // WEAPON..BOOTS (2-7) → enchant
     cmp #ICAT_RING
     beq !re_equip+              // RING(12) → enchant
+    cmp #ICAT_AMULET
+    beq !re_equip+              // AMULET(16) → enchant
     // FOOD, POTION, SCROLL → no enchant
 !re_zero:
     lda #0
@@ -1676,6 +1669,8 @@ roll_enchantment:
     beq !re_weapon+
     cmp #ICAT_RING
     beq !re_ring+
+    cmp #ICAT_AMULET
+    beq !re_amulet+
     cmp #ICAT_ARMOR
     beq !re_armor+
     cmp #ICAT_SHIELD
@@ -1709,6 +1704,8 @@ roll_enchantment:
     beq !re_ring_protection+
     cmp #24                         // Ring of Strength
     beq !re_ring_strength+
+    cmp #ITEM_TYPE_RING_SLAYING
+    beq !re_ring_slaying+
     lda #0
     rts
 !re_ring_protection:
@@ -1717,6 +1714,18 @@ roll_enchantment:
     lda #0
     rts
 !re_ring_strength:
+    lda re_bonus_p1
+    rts
+!re_ring_slaying:
+    lda re_bonus_hit
+    sta fi_add_to_hit
+    lda re_bonus_dam
+    sta fi_add_to_dam
+    lda #0
+    rts
+
+!re_amulet:
+    // Amulet of Wisdom / Amulet of the Magi: p1 is the stat bonus
     lda re_bonus_p1
     rts
 
@@ -1748,7 +1757,7 @@ re_negate_a:
 // ============================================================
 // Compile-time validation
 // ============================================================
-.assert "Item type count", ITEM_TYPE_COUNT, 96
+.assert "Item type count", ITEM_TYPE_COUNT, 128
 .assert "it_category size", it_color_ac - it_category, ITEM_TYPE_COUNT
 .assert "it_color_ac size", it_weight - it_color_ac, ITEM_TYPE_COUNT
 .assert "it_weight size", it_dmg_packed - it_weight, ITEM_TYPE_COUNT
