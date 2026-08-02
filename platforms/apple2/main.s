@@ -1172,6 +1172,9 @@ game_restart_overlay:
     jmp title_enter_menu
 #import "../../core/score_io.s"
 #import "../../core/score.s"
+    #define SCROLL_P3_NEW_OWNER
+    #import "../../core/scroll_effects_p3.s"
+    #undef SCROLL_P3_NEW_OWNER
 ovl_death_end:
 .print "Death overlay: " + (ovl_death_end - $a400) + " bytes"
 .assert "High-score I/O counter is owned by death overlay", hiscore_io_count_lo >= $a400 && hiscore_io_count_hi < ovl_death_end, true
@@ -1209,7 +1212,8 @@ ovl_ui_end:
 
 .segment ItemActionsOverlay
 #import "../../core/store_restock_overlay.s"
-#import "../../core/item_actions_overlay.s"
+#define SCROLL_P3_ROUTER_ENABLED
+    #import "../../core/item_actions_overlay.s"
 #import "../../core/player_item_commands.s"
 #import "../../core/ego_items.s"
 #import "../../core/ranged_fire.s"
@@ -1241,6 +1245,10 @@ ovl_items_end:
 
 // Phase 3 potion handlers live in the spell overlay on Apple IIe (the items
 // overlay is full). The quaff dispatch swaps here via OVL.SPELL.
+    #define SCROLL_P3_EXISTING_OWNER
+    #import "../../core/scroll_effects_p3.s"
+    #undef SCROLL_P3_EXISTING_OWNER
+
 iq_dispatch_p3_spell:
     cmp #ITEM_TYPE_POT_HEALING
     beq iqp3_healing

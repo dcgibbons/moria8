@@ -2128,6 +2128,11 @@ ovl_modal_misc_end:
     #undef PMU_TURN_FEEDBACK_ONLY
     #import "../../../core/player_magic_execute_overlay.s"
     #undef PMX_DETECT_EFFECTS_EXTERNAL
+    #define SCROLL_P3_EXISTING_OWNER
+    #define SCROLL_P3_NEW_OWNER
+    #import "../../../core/scroll_effects_p3.s"
+    #undef SCROLL_P3_NEW_OWNER
+    #undef SCROLL_P3_EXISTING_OWNER
 ovl_spell_end:
 .print "Spell overlay: " + (ovl_spell_end - $e000) + " bytes at $E000-$" + toHexString(ovl_spell_end)
 .assert "Spell overlay fits in $E000-$EFFF", ovl_spell_end <= $F000, true
@@ -2164,6 +2169,7 @@ ovl_ui_end:
 // ============================================================
 .segment ItemActionsOverlay
     #import "../../../core/store_restock_overlay.s"
+    #define SCROLL_P3_ROUTER_ENABLED
     #import "../../../core/item_actions_overlay.s"
     #import "../../../core/ranged_fire.s"
     #import "../../../core/throw.s"

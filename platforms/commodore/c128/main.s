@@ -4588,6 +4588,11 @@ ovl_death_end:
 // ============================================================
 .segment ModalMiscOverlay
     #import "../../../core/royal.s"
+    #define SCROLL_P3_NEW_OWNER
+    #define SCROLL_P3_EXISTING_OWNER
+    #import "../../../core/scroll_effects_p3.s"
+    #undef SCROLL_P3_EXISTING_OWNER
+    #undef SCROLL_P3_NEW_OWNER
 ovl_modal_misc_end:
 .print "Modal-misc overlay: " + (ovl_modal_misc_end - $e000) + " bytes at $E000-$" + toHexString(ovl_modal_misc_end)
 .assert "Modal-misc overlay fits in $E000-$EFFF", ovl_modal_misc_end <= $f000, true
@@ -4658,6 +4663,7 @@ ovl_ui_end:
     #define ITEM_ACTIONS_EARTHQUAKE_OWNER
     #define ITEM_ACTIONS_MAP_AREA_OWNER
     #import "../../../core/store_restock_overlay.s"
+    #define SCROLL_P3_ROUTER_ENABLED
     #import "../../../core/item_actions_overlay.s"
     #import "../../../core/ranged_fire.s"
     #import "../../../core/tunnel.s"

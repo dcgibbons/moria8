@@ -100,7 +100,19 @@ item_read_scroll:
     sta zp_ptr1_hi
     jmp (zp_ptr1)
 !irs_dispatch_generic:
+    cmp #ITEM_TYPE_SCR_TELEPORT_LEVEL
+    bcc !irs_effect_generic+
+    cmp #ITEM_TYPE_SCR_DESTRUCTION + 1
+    bcc !irs_effect_p3_swap+
+!irs_effect_generic:
     jmp irs_effect_generic
+
+!irs_effect_p3_swap:
+#if SCROLL_P3_ROUTER_ENABLED
+    jmp irs_effect_p3_swap
+#else
+    jmp irs_effect_generic
+#endif
 
 irs_dispatch_lo:
     .byte <irs_effect_light, <irs_effect_identify, <irs_effect_teleport
@@ -269,6 +281,46 @@ irs_effect_protect:
 
     ldx #HSTR_PIQ_PROTECTED
     jmp hpm_sec_rts
+
+#if SCROLL_P3_ROUTER_ENABLED
+// irs_effect_p3_swap — Phase 3 scroll overlay router. Swaps to the overlay
+// owning the target effect, runs it, swaps back so the read flow's items
+// overlay continuation stays valid.
+irs_effect_p3_swap:
+#if C128
+    // All Phase 3 scroll handlers live in OVL_MODAL_MISC on C128 (existing
+    // handlers reach OVL_DEATH via an inner swap)
+    lda #OVL_MODAL_MISC
+#else
+#if APPLE2
+    // New effects live in OVL_DEATH (disk-loaded; modal cache slot is full);
+    // existing handlers in OVL_SPELL
+    cmp #ITEM_TYPE_SCR_RECHARGING
+    bcc !irsp3_death+
+    cmp #ITEM_TYPE_SCR_MASS_GENOCIDE
+    beq !irsp3_death+
+    lda #OVL_SPELL
+    .byte $2c
+!irsp3_death:
+    lda #OVL_DEATH
+#else
+    lda #OVL_SPELL
+#endif
+#endif
+    pha
+    jsr overlay_load
+    bcs !irsp3_fail+
+    pla
+    jsr irs_dispatch_p3_overlay
+    lda #OVL_ITEMS
+    jsr overlay_load
+    sec
+    rts
+!irsp3_fail:
+    pla
+    sec
+    rts
+#endif
 
 irs_effect_generic:
     ldx #HSTR_PIQ_NOTHING
