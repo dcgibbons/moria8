@@ -17,7 +17,7 @@ test_bootstrap:
 test_exit_trampoline:
     sei                         // Disable IRQs during copy
     :BankOutBasic()             // Ensure BASIC ROM off (tc_results in $A000+)
-    ldx #47-1
+    ldx #48-1
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -138,7 +138,7 @@ press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
 // Test result buffer — copy to $0400 at end (msg_print clobbers $0400)
-tc_results: .fill 47, $ff
+tc_results: .fill 48, $ff
 tc_loop_ctr: .byte 0          // Loop counter (safe from ZP clobber)
 tc_valid_ctr: .byte 0         // Valid item counter for test 22
 t16_base_ac: .byte 0          // Stable scratch for Test 16 across item_wear
@@ -154,7 +154,7 @@ t16_base_ac: .byte 0          // Stable scratch for Test 16 across item_wear
 
 test_start:
     // Initialize result area to $ff (untested)
-    ldx #47-1
+    ldx #48-1
     lda #$ff
 !clr:
     sta tc_results,x
@@ -2377,10 +2377,189 @@ test_start:
 
     lda #$01
     sta tc_results + 46
-    jmp !tests_done+
+    jmp !t48+
 !t47_fail:
     lda #$00
     sta tc_results + 46
+
+    // ==========================================
+    // Test 48: Phase 3 potions apply their effects
+    // ==========================================
+!t48:
+    // --- Potion of Healing (96): heal 200, capped at max ---
+    jsr item_init_inventory
+    lda #0
+    sta zp_msg_flags
+
+    lda #50
+    sta zp_player_hp_lo
+    lda #0
+    sta zp_player_hp_hi
+    lda #200
+    sta zp_player_mhp_lo
+    lda #0
+    sta zp_player_mhp_hi
+
+    lda #ITEM_TYPE_POT_HEALING
+    sta inv_item_id
+    lda #1
+    sta inv_qty
+    lda #0
+    sta inv_p1
+    sta inv_flags
+
+    lda #2
+    sta $c6
+    lda #$41
+    sta $0277
+    lda #$20
+    sta $0278
+
+    jsr item_quaff
+
+    lda zp_player_hp_lo
+    cmp #200
+    beq !t48_h_ok+
+    jmp !t48_fail+
+!t48_h_ok:
+    lda inv_item_id
+    cmp #FI_EMPTY
+    beq !t48_h2_ok+
+    jmp !t48_fail+
+!t48_h2_ok:
+
+    // --- Potion of Neutralize Poison (126): clears poison timer ---
+    jsr item_init_inventory
+    lda #0
+    sta zp_msg_flags
+    lda #40
+    sta zp_eff_poison
+
+    lda #ITEM_TYPE_POT_NEUTRALIZE
+    sta inv_item_id
+    lda #1
+    sta inv_qty
+    lda #0
+    sta inv_p1
+    sta inv_flags
+
+    lda #2
+    sta $c6
+    lda #$41
+    sta $0277
+    lda #$20
+    sta $0278
+
+    jsr item_quaff
+
+    lda zp_eff_poison
+    beq !t48_n_ok+
+    jmp !t48_fail+
+!t48_n_ok:
+
+    // --- Potion of Resist Heat (98): sets heat timer ---
+    jsr item_init_inventory
+    lda #0
+    sta zp_msg_flags
+
+    lda #ITEM_TYPE_POT_RESIST_HEAT
+    sta inv_item_id
+    lda #1
+    sta inv_qty
+    lda #0
+    sta inv_p1
+    sta inv_flags
+
+    lda #2
+    sta $c6
+    lda #$41
+    sta $0277
+    lda #$20
+    sta $0278
+
+    jsr item_quaff
+
+    lda zp_eff_resist
+    bne !t48_rh_ok+
+    jmp !t48_fail+
+!t48_rh_ok:
+
+    // --- Potion of Resist Cold (99): sets cold timer ---
+    jsr item_init_inventory
+    lda #0
+    sta zp_msg_flags
+
+    lda #ITEM_TYPE_POT_RESIST_COLD
+    sta inv_item_id
+    lda #1
+    sta inv_qty
+    lda #0
+    sta inv_p1
+    sta inv_flags
+
+    lda #2
+    sta $c6
+    lda #$41
+    sta $0277
+    lda #$20
+    sta $0278
+
+    jsr item_quaff
+
+    lda eff_resist_cold_timer
+    bne !t48_rc_ok+
+    jmp !t48_fail+
+!t48_rc_ok:
+
+    // --- Potion of Restoration (97): recalc restores drained stat ---
+    jsr item_init_inventory
+    lda #0
+    sta zp_msg_flags
+
+    // Base CON 12, drained to 8; restoration recalcs CUR from BASE+mods.
+    // Human (race 0) + Warrior (class 0): expected = 12 + adj(race,CON) + adj(class,CON)
+    lda #0
+    sta player_data + PL_RACE
+    sta player_data + PL_CLASS
+    lda #12
+    sta player_data + PL_CON_BASE
+    clc
+    adc race_stat_adj + 4
+    clc
+    adc class_stat_adj + 4
+    sta t48_expected_con
+    lda #8
+    sta player_data + PL_CON_CUR
+
+    lda #ITEM_TYPE_POT_RESTORATION
+    sta inv_item_id
+    lda #1
+    sta inv_qty
+    lda #0
+    sta inv_p1
+    sta inv_flags
+
+    lda #2
+    sta $c6
+    lda #$41
+    sta $0277
+    lda #$20
+    sta $0278
+
+    jsr item_quaff
+
+    lda player_data + PL_CON_CUR
+    cmp t48_expected_con
+    beq !t48_r_ok+
+    jmp !t48_fail+
+!t48_r_ok:
+
+    lda #$01
+    sta tc_results + 47
+    jmp !tests_done+
+!t48_fail:
+    lda #$00
+    sta tc_results + 47
 
 !tests_done:
     // Jump to trampoline at $033C (below $A000) to copy results + BRK
@@ -2391,6 +2570,7 @@ t27_expected_name:
 t29_expected_appended_name:
     .text "Mithril Chain Mail" ; .byte 0
 t29_expected_color: .byte 0
+t48_expected_con: .byte 0
 
 item_test_body_end:
 

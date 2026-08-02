@@ -72,7 +72,6 @@ test_exit_trampoline:
 #import "../../../../core/player_magic.s"
 #import "../../../../core/ui_inventory.s"
 #import "../../../../core/ui_equipment.s"
-#import "../dungeon_render.s"
 #import "../../../../core/dungeon_los.s"
 #import "../../../../core/player_move.s"
 #import "../../../../core/combat.s"
@@ -371,3 +370,9 @@ test_start:
 
 !finish:
     jmp test_exit_trampoline
+
+// dungeon_render.s lives in TestCreateOverlay ($D000+) so the test body stays
+// below MAP_BASE; it must come after dungeon_data.s defines MAP_COLS.
+.segment TestCreateOverlay
+#import "../dungeon_render.s"
+.segment Default

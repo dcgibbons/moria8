@@ -67,6 +67,7 @@ eff_remove_curse:
 eff_aggravate:
 eff_bolt:
 eff_directional_monster:
+eff_cure_poison:
 monster_aggravate_all:
 monster_get_ptr:
 ui_help_display:

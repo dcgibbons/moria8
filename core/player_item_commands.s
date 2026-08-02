@@ -132,18 +132,19 @@ item_wear:
     sta fi_add_to_ac
     lda piw_flags
     sta fi_add_flags
+    jmp piw_report_item_use
+
+// piw_report_item_use — Shared "used item" report tail: describe item,
+// period, print, pickup sound, consume turn. Input: piw_item_id set.
+piw_report_item_use:
     lda piw_item_id
     jsr item_append_desc
-
     lda #<cmb_period
     ldy #>cmb_period
     jsr combat_append_str
-
     jsr cmb_term_and_print
-
     lda #SFX_PICKUP
     jsr hal_sound_play
-
     sec                         // Turn consumed
     rts
 
@@ -266,20 +267,7 @@ item_takeoff:
     sta fi_add_ego
     lda piw_flags
     sta fi_add_flags
-    lda piw_item_id
-    jsr item_append_desc
-
-    lda #<cmb_period
-    ldy #>cmb_period
-    jsr combat_append_str
-
-    jsr cmb_term_and_print
-
-    lda #SFX_PICKUP
-    jsr hal_sound_play
-
-    sec                         // Turn consumed
-    rts
+    jmp piw_report_item_use
 
 !ito_cancel:
     ldx #HSTR_PIW_NEVERMIND
@@ -454,8 +442,131 @@ item_quaff:
     lda iq_dispatch_hi,x
     sta zp_ptr1_hi
     jmp (zp_ptr1)
+// Reached from item_quaff with A = potion type ID (96-100, 126, or other).
 !iq_dispatch_generic:
+#if C128
+    // C128: Phase 3 potion handlers live in the items overlay (banked payload
+    // is full). One overlay cache fetch per new-potion quaff.
+    cmp #ITEM_TYPE_POT_HEALING
+    bcc !iqd_not_p3+
+    cmp #ITEM_TYPE_POT_CURE_CRITICAL + 1
+    bcc !iqd_phase3+
+    cmp #ITEM_TYPE_POT_NEUTRALIZE
+    bne !iqd_not_p3+
+!iqd_phase3:
+    lda #OVL_ITEMS
+    jsr overlay_load
+    bcs !iqd_ol_fail+
+    jsr iq_dispatch_p3_overlay
+!iqd_ol_fail:
+!iqd_not_p3:
     jmp iq_effect_generic
+#else
+#if APPLE2
+    // Apple IIe: Phase 3 potion handlers live in the spell overlay (items
+    // overlay is full). Swap out, run, swap back so the quaff flow's
+    // continuation in the items overlay stays valid.
+    cmp #ITEM_TYPE_POT_HEALING
+    bcc !iqd_not_p3+
+    cmp #ITEM_TYPE_POT_CURE_CRITICAL + 1
+    bcc !iqd_phase3+
+    cmp #ITEM_TYPE_POT_NEUTRALIZE
+    bne !iqd_not_p3+
+!iqd_phase3:
+    lda #OVL_SPELL
+    jsr overlay_load
+    bcs !iqd_ol_fail+
+    jsr iq_dispatch_p3_spell
+    lda #OVL_ITEMS
+    jsr overlay_load
+!iqd_ol_fail:
+    sec
+    rts
+!iqd_not_p3:
+    jmp iq_effect_generic
+#else
+    cmp #ITEM_TYPE_POT_HEALING
+    beq !iq_effect_healing+
+    cmp #ITEM_TYPE_POT_RESTORATION
+    beq !iq_effect_restoration+
+    cmp #ITEM_TYPE_POT_RESIST_HEAT
+    beq !iq_effect_resist_heat+
+    cmp #ITEM_TYPE_POT_RESIST_COLD
+    beq !iq_effect_resist_cold+
+    cmp #ITEM_TYPE_POT_CURE_CRITICAL
+    beq !iq_effect_cure_critical+
+    cmp #ITEM_TYPE_POT_NEUTRALIZE
+    beq !iq_effect_neutralize+
+    jmp iq_effect_generic
+
+!iq_effect_healing:
+    // Heal 200 HP (upstream Healing; draft value)
+    lda #200
+    jsr pmx_heal_and_report
+    sec
+    rts
+
+!iq_effect_cure_critical:
+    // Heal 6d7 HP (upstream Cure Critical Wounds)
+    lda #6
+    ldx #7
+    ldy #0
+    jsr math_dice
+    lda zp_math_a
+    jsr pmx_heal_and_report
+    sec
+    rts
+
+!iq_effect_restoration:
+    // Restore all stats: current stats are recomputed from base + modifiers,
+    // which undoes stat drain (drain only lowers CUR, never BASE)
+    jsr player_calc_stats
+    ldx #HSTR_PIQ_RESTORED
+    jsr huff_print_msg
+    sec
+    rts
+
+!iq_effect_resist_heat:
+    // Resist heat/fire for rng(10) + 10 turns
+    lda #10
+    jsr rng_range
+    clc
+    adc #10
+    clc
+    adc zp_eff_resist
+    bcc !iq_rh_store+
+    lda #255
+!iq_rh_store:
+    sta zp_eff_resist
+    sec
+    rts
+
+!iq_effect_resist_cold:
+    // Resist cold for rng(10) + 10 turns (timer only; no cold-breath
+    // consumer exists yet)
+    lda #10
+    jsr rng_range
+    clc
+    adc #10
+    clc
+    adc eff_resist_cold_timer
+    bcc !iq_rc_store+
+    lda #255
+!iq_rc_store:
+    sta eff_resist_cold_timer
+    sec
+    rts
+
+!iq_effect_neutralize:
+    jsr eff_cure_poison
+    ldx #HSTR_EFF_POISON_END
+    jsr huff_print_msg
+    sec
+    rts
+#endif
+#endif
+
+
 
 iq_dispatch_lo:
     .byte <iq_effect_cure, <iq_effect_speed, <iq_effect_poison

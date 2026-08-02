@@ -1238,6 +1238,74 @@ ovl_items_end:
 #import "../../core/player_magic_execute_overlay.s"
 #undef PMX_DETECT_EFFECTS_EXTERNAL
 #undef PMX_MAP_AREA_EXTERNAL
+
+// Phase 3 potion handlers live in the spell overlay on Apple IIe (the items
+// overlay is full). The quaff dispatch swaps here via OVL.SPELL.
+iq_dispatch_p3_spell:
+    cmp #ITEM_TYPE_POT_HEALING
+    beq iqp3_healing
+    cmp #ITEM_TYPE_POT_RESTORATION
+    beq iqp3_restoration
+    cmp #ITEM_TYPE_POT_RESIST_HEAT
+    beq iqp3_resist_heat
+    cmp #ITEM_TYPE_POT_RESIST_COLD
+    beq iqp3_resist_cold
+    cmp #ITEM_TYPE_POT_NEUTRALIZE
+    beq iqp3_neutralize
+    // Fall through: caller constrains A to {96-100, 126}
+
+iqp3_healing:
+    lda #200
+    jsr pmx_heal_and_report
+    rts
+
+iqp3_cure_critical:
+    lda #6
+    ldx #7
+    ldy #0
+    jsr math_dice
+    lda zp_math_a
+    jsr pmx_heal_and_report
+    rts
+
+iqp3_restoration:
+    jsr player_calc_stats
+    ldx #HSTR_PIQ_RESTORED
+    jsr huff_print_msg
+    rts
+
+iqp3_resist_heat:
+    // No message (upstream prints nothing for resist potions)
+    lda #10
+    jsr rng_range
+    clc
+    adc #10
+    clc
+    adc zp_eff_resist
+    bcc !iqp3_rh_store+
+    lda #255
+!iqp3_rh_store:
+    sta zp_eff_resist
+    rts
+
+iqp3_resist_cold:
+    lda #10
+    jsr rng_range
+    clc
+    adc #10
+    clc
+    adc eff_resist_cold_timer
+    bcc !iqp3_rc_store+
+    lda #255
+!iqp3_rc_store:
+    sta eff_resist_cold_timer
+    rts
+
+iqp3_neutralize:
+    jsr eff_cure_poison
+    ldx #HSTR_EFF_POISON_END
+    jsr huff_print_msg
+    rts
 #undef PMX_EARTHQUAKE_EXTERNAL
 #import "../../core/player_magic_levelup.s"
 #import "../../core/player_magic_display.s"

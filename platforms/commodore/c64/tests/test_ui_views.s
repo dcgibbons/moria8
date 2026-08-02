@@ -65,6 +65,7 @@ eff_remove_curse:
 eff_aggravate:
 eff_bolt:
 eff_directional_monster:
+eff_cure_poison:
     rts
 
 player_get_infra_range:

@@ -230,3 +230,4 @@ Sorry, what was that again?
 
 @PIQ_VERY_GOOD You feel very good.
 @PID_CARRY You sense magik on what you carry.
+@PIQ_RESTORED You feel your strength return.

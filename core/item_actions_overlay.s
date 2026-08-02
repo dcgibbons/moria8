@@ -70,9 +70,7 @@ item_read_scroll:
     lda zp_eff_blind
     beq !irs_can_see+
     ldx #HSTR_PIQ_CANT_READ
-    jsr huff_print_msg
-    clc
-    rts
+    jmp hpm_clc_rts
 !irs_can_see:
     lda #ICAT_SCROLL
     ldx #HSTR_PIQ_READ_PROMPT
@@ -118,11 +116,7 @@ irs_dispatch_hi:
     .byte >irs_effect_mon_confuse, >irs_effect_aggravate, >irs_effect_protect
 
 irs_effect_light:
-    jsr eff_light_room
-    ldx #HSTR_PIQ_LIGHT
-    jsr huff_print_msg
-    sec
-    rts
+    jmp eff_light_and_report
 
 irs_effect_identify:
     jmp eff_identify_scroll_resident
@@ -130,9 +124,7 @@ irs_effect_identify:
 irs_effect_teleport:
     jsr eff_teleport_self
     ldx #HSTR_PIQ_TELEPORT
-    jsr huff_print_msg
-    sec
-    rts
+    jmp hpm_sec_rts
 
 irs_effect_wor:
     lda #15
@@ -142,16 +134,12 @@ irs_effect_wor:
     sta zp_eff_word_recall
 
     ldx #HSTR_PIQ_AIR_CRACKLE
-    jsr huff_print_msg
-    sec
-    rts
+    jmp hpm_sec_rts
 
 irs_effect_remove_curse:
     jsr eff_remove_curse
     ldx #HSTR_PIQ_CLEANSED
-    jsr huff_print_msg
-    sec
-    rts
+    jmp hpm_sec_rts
 
 irs_effect_enchant_weapon:
     ldx #EQUIP_WEAPON
@@ -159,9 +147,7 @@ irs_effect_enchant_weapon:
     cmp #FI_EMPTY
     bne !irs_ew_has+
     ldx #HSTR_PIQ_VIBRATION
-    jsr huff_print_msg
-    sec
-    rts
+    jmp hpm_sec_rts
 
 !irs_ew_has:
     ldx #EQUIP_WEAPON
@@ -186,9 +172,7 @@ irs_effect_enchant_weapon:
     cmp #5
     bcc !irs_ew_inc+
     ldx #HSTR_PIQ_NOTHING
-    jsr huff_print_msg
-    sec
-    rts
+    jmp hpm_sec_rts
 
 !irs_ew_inc:
     inc inv_to_hit + EQUIP_WEAPON
@@ -229,9 +213,7 @@ irs_effect_enchant_armor:
 
 !irs_ea_none:
     ldx #HSTR_PIQ_VIBRATION
-    jsr huff_print_msg
-    sec
-    rts
+    jmp hpm_sec_rts
 
 !irs_ea_has:
     stx piw_slot
@@ -252,9 +234,7 @@ irs_effect_enchant_armor:
     cmp #5
     bcc !irs_ea_inc+
     ldx #HSTR_PIQ_NOTHING
-    jsr huff_print_msg
-    sec
-    rts
+    jmp hpm_sec_rts
 
 !irs_ea_inc:
     inc inv_to_ac,x
@@ -262,24 +242,18 @@ irs_effect_enchant_armor:
 
 !irs_ea_msg:
     ldx #HSTR_PIQ_ARM_GLOW
-    jsr huff_print_msg
-    sec
-    rts
+    jmp hpm_sec_rts
 
 irs_effect_mon_confuse:
     lda #1
     sta zp_confuse_melee
     ldx #HSTR_PIQ_HANDS_GLOW
-    jsr huff_print_msg
-    sec
-    rts
+    jmp hpm_sec_rts
 
 irs_effect_aggravate:
     jsr monster_aggravate_all
     ldx #HSTR_PIQ_HUMMING
-    jsr huff_print_msg
-    sec
-    rts
+    jmp hpm_sec_rts
 
 irs_effect_protect:
     lda #25
@@ -294,19 +268,31 @@ irs_effect_protect:
     sta zp_eff_protect
 
     ldx #HSTR_PIQ_PROTECTED
-    jsr huff_print_msg
-    sec
-    rts
+    jmp hpm_sec_rts
 
 irs_effect_generic:
     ldx #HSTR_PIQ_NOTHING
-    jsr huff_print_msg
-    sec
-    rts
+    jmp hpm_sec_rts
 
 // ============================================================
 // item_aim_wand — Aim a wand from inventory
 // ============================================================
+// ia_bolt_d8 — Fire a bolt with 8 sides. Input: A = dice count, Y = 0 bonus.
+ia_bolt_d8:
+    ldx #8
+    ldy #0
+    jmp eff_bolt
+
+// ia_spend_charge_identify — Decrement the selected item's charges and
+// identify its type. Returns with A = piw_item_id.
+ia_spend_charge_identify:
+    ldx piw_slot
+    dec inv_p1,x
+    ldx piw_item_id
+    jsr id_known_set
+    lda piw_item_id
+    rts
+
 item_aim_wand:
     lda #ICAT_WAND
     ldx #HSTR_PIW_AIM_PROMPT
@@ -321,16 +307,10 @@ item_aim_wand:
     bne !iaw_has_charges+
 
     ldx #HSTR_PIW_NO_CHARGES
-    jsr huff_print_msg
-    clc
-    rts
+    jmp hpm_clc_rts
 
 !iaw_has_charges:
-    ldx piw_slot
-    dec inv_p1,x
-
-    ldx piw_item_id
-    jsr id_known_set
+    jsr ia_spend_charge_identify
 
     lda piw_item_id
     cmp #39
@@ -345,33 +325,21 @@ item_aim_wand:
     rts
 
 !iaw_light:
-    jsr eff_light_room
-    ldx #HSTR_PIQ_LIGHT
-    jsr huff_print_msg
-    sec
-    rts
+    jmp eff_light_and_report
 
 !iaw_lightning:
     // Temporary Balrog win-condition test hack: make Wand of Lightning hit
     // for roughly 10x its normal 3d8 damage without affecting the spell.
     lda #30
-    ldx #8
-    ldy #0
-    jsr eff_bolt
+    jsr ia_bolt_d8
     ldx #HSTR_PIW_WAND_BOLT
-    jsr huff_print_msg
-    sec
-    rts
+    jmp hpm_sec_rts
 
 !iaw_frost:
     lda #4
-    ldx #8
-    ldy #0
-    jsr eff_bolt
+    jsr ia_bolt_d8
     ldx #HSTR_PIW_WAND_FROST
-    jsr huff_print_msg
-    sec
-    rts
+    jmp hpm_sec_rts
 
 !iaw_cloud:
     jsr eff_directional_monster
@@ -381,18 +349,87 @@ item_aim_wand:
     lda #10
     sta (zp_ptr0),y
     ldx #HSTR_PIW_WAND_CLOUD
-    jsr huff_print_msg
-    sec
-    rts
+    jmp hpm_sec_rts
 !iaw_cloud_miss:
     ldx #HSTR_PIW_WAND_MISS
-    jsr huff_print_msg
-    sec
-    rts
+    jmp hpm_sec_rts
 
 // ============================================================
 // item_use_staff — Use a staff from inventory
 // ============================================================
+#if C128
+// iq_dispatch_p3_overlay — C128 Phase 3 potion dispatch + handlers.
+// Reached from the banked quaff dispatch with the items overlay loaded and
+// A = potion type ID. Lives in the items overlay because the C128 banked
+// payload is full.
+iq_dispatch_p3_overlay:
+    cmp #ITEM_TYPE_POT_HEALING
+    beq !iqp3_healing+
+    cmp #ITEM_TYPE_POT_RESTORATION
+    beq !iqp3_restoration+
+    cmp #ITEM_TYPE_POT_RESIST_HEAT
+    beq !iqp3_resist_heat+
+    cmp #ITEM_TYPE_POT_RESIST_COLD
+    beq !iqp3_resist_cold+
+    cmp #ITEM_TYPE_POT_CURE_CRITICAL
+    beq !iqp3_cure_critical+
+    cmp #ITEM_TYPE_POT_NEUTRALIZE
+    beq !iqp3_neutralize+
+    rts
+
+!iqp3_healing:
+    lda #200
+    jsr pmx_heal_and_report
+    rts
+
+!iqp3_cure_critical:
+    lda #6
+    ldx #7
+    ldy #0
+    jsr math_dice
+    lda zp_math_a
+    jsr pmx_heal_and_report
+    rts
+
+!iqp3_restoration:
+    jsr player_calc_stats
+    ldx #HSTR_PIQ_RESTORED
+    jsr huff_print_msg
+    rts
+
+!iqp3_resist_heat:
+    lda #10
+    jsr rng_range
+    clc
+    adc #10
+    clc
+    adc zp_eff_resist
+    bcc !iqp3_rh_store+
+    lda #255
+!iqp3_rh_store:
+    sta zp_eff_resist
+    rts
+
+!iqp3_resist_cold:
+    lda #10
+    jsr rng_range
+    clc
+    adc #10
+    clc
+    adc eff_resist_cold_timer
+    bcc !iqp3_rc_store+
+    lda #255
+!iqp3_rc_store:
+    sta eff_resist_cold_timer
+    rts
+
+!iqp3_neutralize:
+    jsr eff_cure_poison
+    ldx #HSTR_EFF_POISON_END
+    jsr huff_print_msg
+    rts
+#endif
+
 item_use_staff:
     lda #ICAT_STAFF
     ldx #HSTR_PIW_USE_PROMPT
@@ -407,16 +444,10 @@ item_use_staff:
     bne !ius_has_charges+
 
     ldx #HSTR_PIW_STAFF_EMPTY
-    jsr huff_print_msg
-    clc
-    rts
+    jmp hpm_clc_rts
 
 !ius_has_charges:
-    ldx piw_slot
-    dec inv_p1,x
-
-    ldx piw_item_id
-    jsr id_known_set
+    jsr ia_spend_charge_identify
 
     lda piw_item_id
     cmp #43
@@ -431,25 +462,17 @@ item_use_staff:
     rts
 
 !ius_light:
-    jsr eff_light_room
-    ldx #HSTR_PIQ_LIGHT
-    jsr huff_print_msg
-    sec
-    rts
+    jmp eff_light_and_report
 
 !ius_detect:
     jsr eff_detect_monsters
     ldx #HSTR_PIQ_SENSE
-    jsr huff_print_msg
-    sec
-    rts
+    jmp hpm_sec_rts
 
 !ius_teleport:
     jsr eff_teleport_self
     ldx #HSTR_PIQ_TELEPORT
-    jsr huff_print_msg
-    sec
-    rts
+    jmp hpm_sec_rts
 
 !ius_clw:
     lda #1
@@ -471,9 +494,7 @@ item_refuel:
     beq !ir_has_lamp+
 
     ldx #HSTR_PIR_NOT_LAMP
-    jsr huff_print_msg
-    clc
-    rts
+    jmp hpm_clc_rts
 
 !ir_has_lamp:
     ldx #0
@@ -488,9 +509,7 @@ item_refuel:
 
 !ir_no_oil:
     ldx #HSTR_PIR_NO_OIL
-    jsr huff_print_msg
-    clc
-    rts
+    jmp hpm_clc_rts
 
 !ir_found_oil:
     stx piw_slot
@@ -521,4 +540,17 @@ item_refuel:
     ldx piw_slot
     jsr inv_remove_item
     sec
+    rts
+
+// Shared effect-report tails.
+eff_light_and_report:
+    jsr eff_light_room
+    ldx #HSTR_PIQ_LIGHT
+hpm_sec_rts:
+    jsr huff_print_msg
+    sec
+    rts
+hpm_clc_rts:
+    jsr huff_print_msg
+    clc
     rts
