@@ -282,10 +282,16 @@ irs_effect_protect:
 // owning the target effect, runs it, swaps back so the read flow's items
 // overlay continuation stays valid.
 irs_effect_p3_swap:
-#if APPLE2
+#if C128 || APPLE2
+#if C128
+    // The Phase 3 scroll/wand/staff router lives in OVL_MODAL_MISC on C128
+    // (items overlay is full). Handlers manage the items-overlay restore.
+    lda #OVL_MODAL_MISC
+#else
     // Apple IIe: the Phase 3 scroll router lives in the death overlay (items
     // overlay is full). One disk-backed swap out, handlers manage the rest.
     lda #OVL_DEATH
+#endif
     jsr overlay_load
     bcs !irsp3_fail+
     jsr irs_dispatch_p3_overlay
@@ -293,13 +299,7 @@ irs_effect_p3_swap:
     sec
     rts
 #else
-#if C128
-    // All Phase 3 scroll handlers live in OVL_MODAL_MISC on C128 (existing
-    // handlers reach OVL_DEATH via an inner swap)
-    lda #OVL_MODAL_MISC
-#else
     lda #OVL_SPELL
-#endif
     pha
     jsr overlay_load
     bcs !irsp3_fail+
@@ -366,8 +366,22 @@ item_aim_wand:
     beq !iaw_frost+
     cmp #42
     beq !iaw_cloud+
+    cmp #ITEM_TYPE_WAND_SLOW
+    bcc !iaw_not_p3+
+#if SCROLL_P3_ROUTER_ENABLED
+    jmp irs_effect_p3_swap
+#endif
+!iaw_not_p3:
     sec
     rts
+!iaw_cloud:
+    lda #42
+#if SCROLL_P3_ROUTER_ENABLED
+    jmp irs_effect_p3_swap
+#else
+    sec
+    rts
+#endif
 
 !iaw_light:
     jmp eff_light_and_report
@@ -386,94 +400,8 @@ item_aim_wand:
     ldx #HSTR_PIW_WAND_FROST
     jmp hpm_sec_rts
 
-!iaw_cloud:
-    jsr eff_directional_monster
-    bcc !iaw_cloud_miss+
-    jsr monster_get_ptr
-    ldy #MX_CONFUSE
-    lda #10
-    sta (zp_ptr0),y
-    ldx #HSTR_PIW_WAND_CLOUD
-    jmp hpm_sec_rts
-!iaw_cloud_miss:
-    ldx #HSTR_PIW_WAND_MISS
-    jmp hpm_sec_rts
-
 // ============================================================
 // item_use_staff — Use a staff from inventory
-// ============================================================
-#if C128
-// iq_dispatch_p3_overlay — C128 Phase 3 potion dispatch + handlers.
-// Reached from the banked quaff dispatch with the items overlay loaded and
-// A = potion type ID. Lives in the items overlay because the C128 banked
-// payload is full.
-iq_dispatch_p3_overlay:
-    cmp #ITEM_TYPE_POT_HEALING
-    beq !iqp3_healing+
-    cmp #ITEM_TYPE_POT_RESTORATION
-    beq !iqp3_restoration+
-    cmp #ITEM_TYPE_POT_RESIST_HEAT
-    beq !iqp3_resist_heat+
-    cmp #ITEM_TYPE_POT_RESIST_COLD
-    beq !iqp3_resist_cold+
-    cmp #ITEM_TYPE_POT_CURE_CRITICAL
-    beq !iqp3_cure_critical+
-    cmp #ITEM_TYPE_POT_NEUTRALIZE
-    beq !iqp3_neutralize+
-    rts
-
-!iqp3_healing:
-    lda #200
-    jsr pmx_heal_and_report
-    rts
-
-!iqp3_cure_critical:
-    lda #6
-    ldx #7
-    ldy #0
-    jsr math_dice
-    lda zp_math_a
-    jsr pmx_heal_and_report
-    rts
-
-!iqp3_restoration:
-    jsr player_calc_stats
-    ldx #HSTR_PIQ_RESTORED
-    jsr huff_print_msg
-    rts
-
-!iqp3_resist_heat:
-    lda #10
-    jsr rng_range
-    clc
-    adc #10
-    clc
-    adc zp_eff_resist
-    bcc !iqp3_rh_store+
-    lda #255
-!iqp3_rh_store:
-    sta zp_eff_resist
-    rts
-
-!iqp3_resist_cold:
-    lda #10
-    jsr rng_range
-    clc
-    adc #10
-    clc
-    adc eff_resist_cold_timer
-    bcc !iqp3_rc_store+
-    lda #255
-!iqp3_rc_store:
-    sta eff_resist_cold_timer
-    rts
-
-!iqp3_neutralize:
-    jsr eff_cure_poison
-    ldx #HSTR_EFF_POISON_END
-    jsr huff_print_msg
-    rts
-#endif
 
 item_use_staff:
     lda #ICAT_STAFF
@@ -502,6 +430,12 @@ item_use_staff:
     beq !ius_teleport+
     cmp #46
     beq !ius_clw+
+    cmp #ITEM_TYPE_STAFF_DISPEL_EVIL
+    bcc !ius_not_p3+
+#if SCROLL_P3_ROUTER_ENABLED
+    jmp irs_effect_p3_swap
+#endif
+!ius_not_p3:
     sec
     rts
 

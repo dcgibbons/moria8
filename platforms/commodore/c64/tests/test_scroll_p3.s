@@ -13,7 +13,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #7
+    ldx #10
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -101,6 +101,25 @@ eff_destroy_area:
     lda #ITEM_TYPE_SCR_DESTRUCTION
     sta spy_last
     rts
+eff_slow_monster_dir:
+    lda #ITEM_TYPE_WAND_SLOW
+    sta spy_last
+    rts
+eff_teleport_other:
+    lda #ITEM_TYPE_WAND_TELEPORT_AWAY
+    sta spy_last
+    rts
+eff_haste_self:
+    lda #ITEM_TYPE_STAFF_SPEED
+    sta spy_last
+    rts
+eff_ball:
+    sta spy_last
+    rts
+ped_s28:
+    lda #ITEM_TYPE_STAFF_DISPEL_EVIL
+    sta spy_last
+    rts
 eff_reveal_floorplan:
     lda #ITEM_TYPE_SCR_MAGIC_MAPPING
     sta spy_last
@@ -113,7 +132,7 @@ press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
 // Test result buffer
-tc_results: .fill 8, $ff
+tc_results: .fill 11, $ff
 tc_loop_ctr: .byte 0
 t7_slot_a: .byte 0
 t7_slot_b: .byte 0
@@ -126,7 +145,7 @@ t7_slot_b: .byte 0
 #undef SCROLL_P3_EXISTING_OWNER
 
 test_start:
-    ldx #7
+    ldx #10
     lda #$ff
 !clr:
     sta tc_results,x
@@ -416,10 +435,71 @@ test_start:
     bcc !t8_fail+
     lda #$01
     sta tc_results + 7
-    jmp !tests_done+
+    jmp !t9+
 !t8_fail:
     lda #$00
     sta tc_results + 7
+
+    // ==========================================
+    // Test 9: Wand of Slow Monster routes to eff_slow_monster_dir
+    // ==========================================
+!t9:
+    lda #0
+    sta spy_last
+    lda #ITEM_TYPE_WAND_SLOW
+    jsr irs_dispatch_p3_overlay
+    lda spy_last
+    cmp #ITEM_TYPE_WAND_SLOW
+    bne !t9_fail+
+    lda #$01
+    sta tc_results + 8
+    jmp !t11+
+!t9_fail:
+    lda #$00
+    sta tc_results + 8
+
+    // ==========================================
+    // Test 11: Fire/Cold ball wands pass spell damage to eff_ball
+    // ==========================================
+!t11:
+    lda #0
+    sta spy_last
+    lda #ITEM_TYPE_WAND_FIRE_BALL
+    jsr irs_dispatch_p3_overlay
+    lda spy_last
+    cmp #49
+    bne !t11_fail+
+    lda #0
+    sta spy_last
+    lda #ITEM_TYPE_WAND_COLD_BALL
+    jsr irs_dispatch_p3_overlay
+    lda spy_last
+    cmp #33
+    bne !t11_fail+
+    lda #$01
+    sta tc_results + 9
+    jmp !t12+
+!t11_fail:
+    lda #$00
+    sta tc_results + 9
+
+    // ==========================================
+    // Test 12: Staff of Dispel Evil routes to ped_s28
+    // ==========================================
+!t12:
+    lda #0
+    sta spy_last
+    lda #ITEM_TYPE_STAFF_DISPEL_EVIL
+    jsr irs_dispatch_p3_overlay
+    lda spy_last
+    cmp #ITEM_TYPE_STAFF_DISPEL_EVIL
+    bne !t12_fail+
+    lda #$01
+    sta tc_results + 10
+    jmp !tests_done+
+!t12_fail:
+    lda #$00
+    sta tc_results + 10
 
 !tests_done:
     jmp test_exit_trampoline

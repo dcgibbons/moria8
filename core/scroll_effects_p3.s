@@ -8,6 +8,13 @@
 
 #if SCROLL_P3_EXISTING_OWNER || SCROLL_P3_NEW_OWNER
 irs_dispatch_p3_overlay:
+#if SCROLL_P3_EXISTING_OWNER
+    cmp #ITEM_TYPE_WAND_SLOW
+    bcc !irs_p3_scroll_tbl+
+    // Wand/staff Phase 3 effects (114-121) ride the same inner-swap mechanism
+    jmp irs_p3_run_existing
+!irs_p3_scroll_tbl:
+#endif
     sec
     sbc #ITEM_TYPE_SCR_TELEPORT_LEVEL
     tax
@@ -90,14 +97,18 @@ irs_p3_run_existing:
     pha
     lda #OVL_DEATH
     jsr overlay_load
-    bcs !irs_re_fail+
+    bcc !irs_re_swap_ok+
+    jmp !irs_re_fail+
+!irs_re_swap_ok:
     pla
 #else
 #if APPLE2
     pha
     lda #OVL_SPELL
     jsr overlay_load
-    bcs !irs_re_fail+
+    bcc !irs_re_swap_ok+
+    jmp !irs_re_fail+
+!irs_re_swap_ok:
     pla
 #endif
 #endif
@@ -107,7 +118,38 @@ irs_p3_run_existing:
     beq !irs_re_rune+
     cmp #ITEM_TYPE_SCR_GENOCIDE
     beq !irs_re_genocide+
+    cmp #ITEM_TYPE_WAND_SLOW
+    beq !irs_re_slow+
+    cmp #ITEM_TYPE_WAND_STONE_MUD
+    beq !irs_re_mud+
+    cmp #ITEM_TYPE_WAND_TELEPORT_AWAY
+    beq !irs_re_teleport+
+    cmp #ITEM_TYPE_WAND_FIRE_BALL
+    beq !irs_re_fire+
+    cmp #ITEM_TYPE_WAND_COLD_BALL
+    beq !irs_re_cold+
+    cmp #ITEM_TYPE_STAFF_DISPEL_EVIL
+    beq !irs_re_dispel+
+    cmp #ITEM_TYPE_STAFF_SPEED
+    beq !irs_re_speed+
+    cmp #42
+    beq !irs_re_cloud+
+    // Scroll of *Destruction* / Staff of Destruction
     jsr eff_destroy_area
+    jmp !irs_re_done+
+!irs_re_cloud:
+    jsr eff_directional_monster
+    bcc !irs_re_cloud_miss+
+    jsr monster_get_ptr
+    ldy #MX_CONFUSE
+    lda #10
+    sta (zp_ptr0),y
+    ldx #HSTR_PIW_WAND_CLOUD
+    jmp !irs_re_msg+
+!irs_re_cloud_miss:
+    ldx #HSTR_PIW_WAND_MISS
+!irs_re_msg:
+    jsr huff_print_msg
     jmp !irs_re_done+
 !irs_re_recharge:
     // Upstream Recharging scroll: Recharge II strength (A=50)
@@ -119,12 +161,35 @@ irs_p3_run_existing:
     jmp !irs_re_done+
 !irs_re_genocide:
     jsr eff_genocide
+    jmp !irs_re_done+
+!irs_re_slow:
+    jsr eff_slow_monster_dir
+    jmp !irs_re_done+
+!irs_re_mud:
+    jsr eff_wall_to_mud
+    jmp !irs_re_done+
+!irs_re_teleport:
+    jsr eff_teleport_other
+    jmp !irs_re_done+
+!irs_re_fire:
+    // Fire Ball spell damage (49)
+    lda #49
+    jsr eff_ball
+    jmp !irs_re_done+
+!irs_re_cold:
+    // Frost Ball spell damage (33)
+    lda #33
+    jsr eff_ball
+    jmp !irs_re_done+
+!irs_re_dispel:
+    jsr ped_s28
+    jmp !irs_re_done+
+!irs_re_speed:
+    jsr eff_haste_self
 !irs_re_done:
 #if C128
-    pha
-    lda #OVL_MODAL_MISC
+    lda #OVL_ITEMS
     jsr overlay_load
-    pla
     rts
 !irs_re_fail:
     pla
@@ -242,11 +307,12 @@ irs_p3_mass_genocide:
     jmp irs_p3_report
 
 // irs_p3_report — Shared message + exit tail for the new Phase 3 effects.
-// On Apple IIe the death overlay owns the handlers, so the items overlay must
-// be restored before returning to the read-scroll flow.
+// On Apple IIe the death overlay owns the handlers; on C128 the modal-misc
+// overlay owns them, so the items overlay must be restored before returning
+// to the read-scroll flow.
 irs_p3_report:
     jsr pmx_print_inline
-#if APPLE2
+#if C128 || APPLE2
     lda #OVL_ITEMS
     jsr overlay_load
 #endif
@@ -257,4 +323,78 @@ irs_mg_idx:  .byte 0
 irs_p3_map_msg: .text "You feel your map grow clearer." ; .byte 0
 irs_p3_od_msg:  .text "You sense treasure nearby." ; .byte 0
 irs_p3_mg_msg:  .text "There is a bright flash of light." ; .byte 0
+#endif
+
+
+#if C128
+// iq_dispatch_p3_overlay — C128 Phase 3 potion dispatch + handlers.
+// Reached from the banked quaff dispatch with the modal-misc overlay loaded
+// and A = potion type ID. Lives in the modal overlay because both the C128
+// banked payload and the items overlay are full.
+iq_dispatch_p3_overlay:
+    cmp #ITEM_TYPE_POT_HEALING
+    beq !iqp3_healing+
+    cmp #ITEM_TYPE_POT_RESTORATION
+    beq !iqp3_restoration+
+    cmp #ITEM_TYPE_POT_RESIST_HEAT
+    beq !iqp3_resist_heat+
+    cmp #ITEM_TYPE_POT_RESIST_COLD
+    beq !iqp3_resist_cold+
+    cmp #ITEM_TYPE_POT_CURE_CRITICAL
+    beq !iqp3_cure_critical+
+    cmp #ITEM_TYPE_POT_NEUTRALIZE
+    beq !iqp3_neutralize+
+    rts
+
+!iqp3_healing:
+    lda #200
+    jsr pmx_heal_and_report
+    rts
+
+!iqp3_cure_critical:
+    lda #6
+    ldx #7
+    ldy #0
+    jsr math_dice
+    lda zp_math_a
+    jsr pmx_heal_and_report
+    rts
+
+!iqp3_restoration:
+    jsr player_calc_stats
+    ldx #HSTR_PIQ_RESTORED
+    jsr huff_print_msg
+    rts
+
+!iqp3_resist_heat:
+    lda #10
+    jsr rng_range
+    clc
+    adc #10
+    clc
+    adc zp_eff_resist
+    bcc !iqp3_rh_store+
+    lda #255
+!iqp3_rh_store:
+    sta zp_eff_resist
+    rts
+
+!iqp3_resist_cold:
+    lda #10
+    jsr rng_range
+    clc
+    adc #10
+    clc
+    adc eff_resist_cold_timer
+    bcc !iqp3_rc_store+
+    lda #255
+!iqp3_rc_store:
+    sta eff_resist_cold_timer
+    rts
+
+!iqp3_neutralize:
+    jsr eff_cure_poison
+    ldx #HSTR_EFF_POISON_END
+    jsr huff_print_msg
+    rts
 #endif

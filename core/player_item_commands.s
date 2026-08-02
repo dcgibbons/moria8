@@ -452,9 +452,9 @@ item_quaff:
     bne !iqd_not_p3+
 !iqd_phase3:
 #if C128
-    // C128: Phase 3 potion handlers live in the items overlay (banked payload
-    // is full). One overlay cache fetch per new-potion quaff.
-    lda #OVL_ITEMS
+    // C128: Phase 3 potion handlers live in the modal-misc overlay (banked
+    // payload and items overlay are both full). One overlay cache fetch.
+    lda #OVL_MODAL_MISC
     jsr overlay_load
     bcs !iqd_not_p3+
     jsr iq_dispatch_p3_overlay
