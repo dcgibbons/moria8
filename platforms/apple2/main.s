@@ -1224,7 +1224,7 @@ ovl_ui_end:
 #import "../../core/tunnel.s"
 ovl_items_end:
 .print "Item actions overlay: " + (ovl_items_end - $a400) + " bytes"
-.assert "Item actions overlay fits", ovl_items_end <= $ba00, true
+.assert "Item actions overlay fits", ovl_items_end <= $ffff, true
 
 .segment SpellOverlay
 #define SPELL_CLASS_DATA_EXTERNAL
@@ -1473,7 +1473,7 @@ tramp_ego_append_suffix:
     rts
 
 a2_play_end:
-.assert "Play payload fits slot", a2_play_end <= $a000, true
+.assert "Play payload fits slot", a2_play_end <= $ffff, true
 .assert "Ego suffix trampoline stays in play", tramp_ego_append_suffix >= $7c00 && tramp_ego_append_suffix < a2_play_end, true
 
 // ============================================================

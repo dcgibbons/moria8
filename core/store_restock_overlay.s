@@ -190,6 +190,13 @@ sro_set_p1:
     bcc !sro_default+
     cmp #ICAT_STAFF + 1
     bcc !sro_charges+
+    cmp #ICAT_AMULET
+#if APPLE2
+    bne !sro_default+
+    jmp !sro_ring+
+#else
+    beq !sro_ring+
+#endif
 
     jmp !sro_default+
 
@@ -208,12 +215,8 @@ sro_set_p1:
     lda #3
     jsr rng_range
     sta srr_tmp0
-    lda #0
     ldy srr_abs_slot
-    :AuxWriteY(si_p1)
-    :AuxWriteY(si_to_hit)
-    :AuxWriteY(si_to_dam)
-    :AuxWriteY(si_to_ac)
+    jsr sro_zero_bonus
     :AuxReadY(si_item_id)
     tax
     lda it_category,x
@@ -238,16 +241,16 @@ sro_set_p1:
     jsr rng_range
     sta srr_tmp0
     ldy srr_abs_slot
-    lda #0
-    :AuxWriteY(si_p1)
-    :AuxWriteY(si_to_hit)
-    :AuxWriteY(si_to_dam)
-    :AuxWriteY(si_to_ac)
+    jsr sro_zero_bonus
     :AuxReadY(si_item_id)
     cmp #23
     beq !sro_ring_protection+
     cmp #24
     beq !sro_ring_strength+
+    sec
+    sbc #ITEM_TYPE_AMULET_WISDOM
+    cmp #2
+    bcc !sro_ring_strength+
     jmp sro_store_identified
 !sro_ring_protection:
     lda srr_tmp0
@@ -257,6 +260,15 @@ sro_set_p1:
     lda srr_tmp0
     :AuxWriteY(si_p1)
     jmp sro_store_identified
+
+// sro_zero_bonus — Zero p1/to_hit/to_dam/to_ac for the slot in Y.
+sro_zero_bonus:
+    lda #0
+    :AuxWriteY(si_p1)
+    :AuxWriteY(si_to_hit)
+    :AuxWriteY(si_to_dam)
+    :AuxWriteY(si_to_ac)
+    rts
 
 !sro_light:
     ldy srr_abs_slot

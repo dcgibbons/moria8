@@ -13,7 +13,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #40
+    ldx #41
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -126,7 +126,7 @@ press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
 // Test result buffer — copy to $0400 at end (msg_print clobbers $0400)
-tc_results: .fill 41, $ff
+tc_results: .fill 42, $ff
 tc_count: .byte 0
 
 .macro PatchJump(target, replacement) {
@@ -1374,6 +1374,48 @@ test_start:
     lda #$00
 !t41_store:
     sta tc_results + 40
+
+    // Test 42: amulets sell at magic shop + black market, not elsewhere
+    // ============================================================
+    // AMULET(16) in store 5 (Magic) -> allowed
+    lda #5
+    sta zp_store_idx
+    lda #ICAT_AMULET
+    jsr check_store_category
+    bcs !t42a_pass+
+    lda #$00
+    jmp !t42_store+
+!t42a_pass:
+    // AMULET(16) in store 6 (Black Market) -> allowed
+    lda #6
+    sta zp_store_idx
+    lda #ICAT_AMULET
+    jsr check_store_category
+    bcs !t42b_pass+
+    lda #$00
+    jmp !t42_store+
+!t42b_pass:
+    // AMULET(16) in store 0 (General) -> NOT allowed
+    lda #0
+    sta zp_store_idx
+    lda #ICAT_AMULET
+    jsr check_store_category
+    bcc !t42c_pass+
+    lda #$00
+    jmp !t42_store+
+!t42c_pass:
+    // AMULET(16) in store 3 (Temple) -> NOT allowed
+    lda #3
+    sta zp_store_idx
+    lda #ICAT_AMULET
+    jsr check_store_category
+    bcc !t42d_pass+
+    lda #$00
+    jmp !t42_store+
+!t42d_pass:
+    lda #$01
+!t42_store:
+    sta tc_results + 41
 
     jmp test_exit_trampoline
 

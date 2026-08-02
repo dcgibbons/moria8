@@ -492,7 +492,7 @@ ui_wizard_prompt_two_digit:
     cmp #$3a
     bcs !wiz_num_loop-
     ldx wizard_num_digits
-    cpx #2
+    cpx #3
     bcs !wiz_num_loop-
     sta wizard_num_buf0,x
     jsr hal_screen_put_char
@@ -505,18 +505,12 @@ ui_wizard_prompt_two_digit:
 ui_wizard_parse_two_digit:
     lda #0
     sta wizard_prompt_value
-    lda wizard_num_digits
-    cmp #1
-    bne !wiz_two_digits+
-    lda wizard_num_buf0
-    sec
-    sbc #$30
-    sta wizard_prompt_value
-    jmp !wiz_range_check+
-!wiz_two_digits:
-    lda wizard_num_buf0
-    sec
-    sbc #$30
+    ldx #0
+!wiz_pd_loop:
+    cpx wizard_num_digits
+    bcs !wiz_pd_done+
+    lda wizard_prompt_value
+    sta wiz_pd_tmp
     asl
     sta zp_temp0
     asl
@@ -524,13 +518,28 @@ ui_wizard_parse_two_digit:
     clc
     adc zp_temp0
     sta wizard_prompt_value
-    lda wizard_num_buf1
+    lda wizard_num_buf0,x
     sec
     sbc #$30
     clc
     adc wizard_prompt_value
     sta wizard_prompt_value
+    inx
+    jmp !wiz_pd_loop-
+!wiz_pd_done:
+    lda wizard_prompt_value
 !wiz_range_check:
+    cmp wizard_prompt_max
+    beq !wiz_parse_ok+
+    bcs !wiz_parse_fail+
+!wiz_parse_ok:
+    sec
+    rts
+!wiz_parse_fail:
+    clc
+    rts
+
+wiz_pd_tmp: .byte 0
     cmp wizard_prompt_max
     beq !wiz_parse_ok+
     bcs !wiz_parse_fail+
@@ -631,6 +640,6 @@ wiz_done_str:
 wiz_fail_str:
     .text "FAIL" ; .byte 0
 wiz_item_prompt_str:
-    .text "ITEM 0-95: " ; .byte 0
+    .text "ITEM 0-127: " ; .byte 0
 wiz_jump_prompt_str:
     .text "DLVL 0-99: " ; .byte 0

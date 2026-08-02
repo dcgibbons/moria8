@@ -17,7 +17,7 @@ test_bootstrap:
 test_exit_trampoline:
     sei                         // Disable IRQs during copy
     :BankOutBasic()             // Ensure BASIC ROM off (tc_results in $A000+)
-    ldx #49-1
+    ldx #50-1
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -138,7 +138,7 @@ press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
 // Test result buffer — copy to $0400 at end (msg_print clobbers $0400)
-tc_results: .fill 49, $ff
+tc_results: .fill 50, $ff
 tc_loop_ctr: .byte 0          // Loop counter (safe from ZP clobber)
 tc_valid_ctr: .byte 0         // Valid item counter for test 22
 t16_base_ac: .byte 0          // Stable scratch for Test 16 across item_wear
@@ -154,7 +154,7 @@ t16_base_ac: .byte 0          // Stable scratch for Test 16 across item_wear
 
 test_start:
     // Initialize result area to $ff (untested)
-    ldx #49-1
+    ldx #50-1
     lda #$ff
 !clr:
     sta tc_results,x
@@ -2632,10 +2632,70 @@ test_start:
 
     lda #$01
     sta tc_results + 48
-    jmp !tests_done+
+    jmp !t50+
 !t49_fail:
     lda #$00
     sta tc_results + 48
+
+    // ==========================================
+    // Test 50: roll_enchantment handles Phase 3 categories
+    // ==========================================
+!t50:
+    // New wand (114) gets charges in [5, 8]
+    lda #ITEM_TYPE_WAND_SLOW
+    jsr roll_enchantment
+    cmp #5
+    bcc !t50_fail+
+    cmp #9
+    bcs !t50_fail+
+
+    // New staff (119) gets charges in [3, 8]
+    lda #ITEM_TYPE_STAFF_DISPEL_EVIL
+    jsr roll_enchantment
+    cmp #3
+    bcc !t50_fail+
+    cmp #9
+    bcs !t50_fail+
+
+    // Amulet of the Magi (125) gets a stat-bonus p1 (nonzero) — retry past
+    // the magic_chance gate (dlvl 60 → 70% per try)
+    lda #60
+    sta zp_player_dlvl
+    ldx #8
+!t50_am_loop:
+    stx t50_retries
+    lda #ITEM_TYPE_AMULET_MAGI
+    jsr roll_enchantment
+    bne !t50_am_ok+
+    ldx t50_retries
+    dex
+    bne !t50_am_loop-
+    jmp !t50_fail+
+!t50_am_ok:
+
+    // Ring of Slaying (113) rolls to-hit and to-damage bonuses
+    ldx #8
+!t50_sl_loop:
+    stx t50_retries
+    lda #ITEM_TYPE_RING_SLAYING
+    jsr roll_enchantment
+    lda fi_add_to_hit
+    beq !t50_sl_retry+
+    lda fi_add_to_dam
+    bne !t50_sl_ok+
+!t50_sl_retry:
+    ldx t50_retries
+    dex
+    bne !t50_sl_loop-
+    jmp !t50_fail+
+!t50_sl_ok:
+
+    lda #$01
+    sta tc_results + 49
+    jmp !tests_done+
+!t50_fail:
+    lda #$00
+    sta tc_results + 49
 
 !tests_done:
     // Jump to trampoline at $033C (below $A000) to copy results + BRK
@@ -2647,6 +2707,7 @@ t29_expected_appended_name:
     .text "Mithril Chain Mail" ; .byte 0
 t29_expected_color: .byte 0
 t48_expected_con: .byte 0
+t50_retries: .byte 0
 t49_base_tohit: .byte 0
 t49_base_todmg: .byte 0
 

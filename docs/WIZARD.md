@@ -29,7 +29,7 @@ Commands:
 - `Q` - cancel / exit menu
 
 Prompts:
-- Item generation: `ITEM 0-95: `
+- Item generation: `ITEM 0-127: ` (up to 3 digits)
 - Level jump: `DLVL 0-99: `
 
 Feedback:
@@ -40,7 +40,9 @@ Feedback:
 
 ## Generate Item
 
-Wizard item generation uses item IDs `0-95`.
+Wizard item generation uses item IDs `0-127` (see the item catalog in
+`core/item_tables.s`; IDs `96-127` are the Phase 3 items — new potions,
+scrolls, rings, wands, staves, Mithril armor, and amulets).
 
 Behavior:
 - Non-gold items try to go into inventory first

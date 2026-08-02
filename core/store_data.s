@@ -62,8 +62,17 @@ check_player_on_store_door:
 
 #import "store_door_lookup.s"
 
+// csc_bit — Load the bit mask for category offset X into zp_temp0 and the
+// store index into X. Used by all three category-mask paths.
+csc_bit:
+    txa
+    :AuxReadX(bit_mask_table)
+    sta zp_temp0
+    ldx zp_store_idx
+    rts
+
 // check_store_category — Test if item category matches store
-// Input: A = ICAT value (0-15), zp_store_idx = store index
+// Input: A = ICAT value (0-16), zp_store_idx = store index
 // Output: carry set = category sold here, carry clear = not
 // Clobbers: A, X
 check_store_category:
@@ -71,9 +80,7 @@ check_store_category:
     bcs !csc_hi+
 
     tax
-    :AuxReadX(bit_mask_table)
-    sta zp_temp0
-    ldx zp_store_idx
+    jsr csc_bit
     :AuxReadX(store_cat_mask_lo)
     and zp_temp0
     beq !csc_no+
@@ -81,15 +88,23 @@ check_store_category:
     rts
 
 !csc_hi:
+    cmp #ICAT_AMULET
+    beq !csc_amulet+
     sec
     sbc #8
     tax
-    :AuxReadX(bit_mask_table)
-    sta zp_temp0
-    ldx zp_store_idx
+    jsr csc_bit
     :AuxReadX(store_cat_mask_hi)
     and zp_temp0
     beq !csc_no+
+    sec
+    rts
+
+!csc_amulet:
+    ldx zp_store_idx
+    :AuxReadX(store_cat_mask_x)
+    lsr
+    bcc !csc_no+
     sec
     rts
 
