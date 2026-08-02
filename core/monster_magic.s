@@ -249,9 +249,13 @@ monster_cast_breath:
     jmp !mcb_apply+
 !mcb_no_cap:
     // This path currently models only fire breath, so only the heat/fire
-    // half of Resist Heat and Cold reduces it.
+    // half of Resist Heat and Cold (temp timer or Resist Fire ring) reduces it.
     ldx zp_eff_resist
+    bne !mcb_resist+
+    lda player_pflags
+    and #PFLAG_RESIST_FIRE
     beq !mcb_store+
+!mcb_resist:
     ldx #3
     jsr math_div_16x8
 !mcb_store:

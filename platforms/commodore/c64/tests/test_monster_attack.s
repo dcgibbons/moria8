@@ -99,6 +99,10 @@ item_get_base_ac:
     rts
 inv_to_ac:
     .fill TOTAL_INV_SLOTS, 0
+inv_to_hit:
+    .fill TOTAL_INV_SLOTS, 0
+inv_to_dam:
+    .fill TOTAL_INV_SLOTS, 0
 
 // Strings referenced by imported modules but defined in main.s
 press_key_str:

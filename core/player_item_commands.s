@@ -444,9 +444,6 @@ item_quaff:
     jmp (zp_ptr1)
 // Reached from item_quaff with A = potion type ID (96-100, 126, or other).
 !iq_dispatch_generic:
-#if C128
-    // C128: Phase 3 potion handlers live in the items overlay (banked payload
-    // is full). One overlay cache fetch per new-potion quaff.
     cmp #ITEM_TYPE_POT_HEALING
     bcc !iqd_not_p3+
     cmp #ITEM_TYPE_POT_CURE_CRITICAL + 1
@@ -454,35 +451,32 @@ item_quaff:
     cmp #ITEM_TYPE_POT_NEUTRALIZE
     bne !iqd_not_p3+
 !iqd_phase3:
+#if C128
+    // C128: Phase 3 potion handlers live in the items overlay (banked payload
+    // is full). One overlay cache fetch per new-potion quaff.
     lda #OVL_ITEMS
     jsr overlay_load
-    bcs !iqd_ol_fail+
+    bcs !iqd_not_p3+
     jsr iq_dispatch_p3_overlay
-!iqd_ol_fail:
-!iqd_not_p3:
-    jmp iq_effect_generic
+    sec
+    rts
 #else
 #if APPLE2
     // Apple IIe: Phase 3 potion handlers live in the spell overlay (items
     // overlay is full). Swap out, run, swap back so the quaff flow's
     // continuation in the items overlay stays valid.
-    cmp #ITEM_TYPE_POT_HEALING
-    bcc !iqd_not_p3+
-    cmp #ITEM_TYPE_POT_CURE_CRITICAL + 1
-    bcc !iqd_phase3+
-    cmp #ITEM_TYPE_POT_NEUTRALIZE
-    bne !iqd_not_p3+
-!iqd_phase3:
     lda #OVL_SPELL
     jsr overlay_load
-    bcs !iqd_ol_fail+
+    bcs !iqd_not_p3+
     jsr iq_dispatch_p3_spell
     lda #OVL_ITEMS
     jsr overlay_load
-!iqd_ol_fail:
     sec
     rts
+#endif
+#endif
 !iqd_not_p3:
+#if C128 || APPLE2
     jmp iq_effect_generic
 #else
     cmp #ITEM_TYPE_POT_HEALING
@@ -563,7 +557,6 @@ item_quaff:
     jsr huff_print_msg
     sec
     rts
-#endif
 #endif
 
 

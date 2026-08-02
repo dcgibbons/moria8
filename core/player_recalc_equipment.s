@@ -21,6 +21,26 @@ player_recalc_equipment:
     clc
     adc player_data + PL_TODMG
     sta player_data + PL_TODMG
+!pre_no_weapon:
+
+    // Add Ring of Slaying to-hit and to-damage bonuses
+#if APPLE2
+    ldx #EQUIP_RING
+    lda inv_item_id,x
+    cmp #ITEM_TYPE_RING_SLAYING
+    bne !pre_no_slay+
+    lda inv_to_hit,x
+    clc
+    adc player_data + PL_TOHIT
+    sta player_data + PL_TOHIT
+    lda inv_to_dam,x
+    clc
+    adc player_data + PL_TODMG
+    sta player_data + PL_TODMG
+!pre_no_slay:
+#else
+    jsr player_apply_slaying_bonuses
+#endif
 
     // Ego AC bonus (Defender/HA — checked in banked code at $F000)
     ldx #EQUIP_WEAPON
@@ -32,7 +52,6 @@ player_recalc_equipment:
     adc player_data + PL_AC
     sta player_data + PL_AC
 !pre_no_ego_ac:
-!pre_no_weapon:
 
     // Sync back to ZP
     lda player_data + PL_AC

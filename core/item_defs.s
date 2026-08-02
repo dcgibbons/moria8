@@ -98,6 +98,12 @@
 .const ITEM_TYPE_POT_NEUTRALIZE     = 126
 .const ITEM_TYPE_STAFF_REMOVE_CURSE = 127
 
+// Persistent equipment-granted effect flags (player_pflags)
+.const PFLAG_RESIST_FIRE = $01
+.const PFLAG_RESIST_COLD = $02
+.const PFLAG_SPEED       = $04
+.const PFLAG_SEE_INVIS   = $08
+
 // Master Item Type Count
 // Save Format V1 serializes 64 known-item bytes. Do not renumber IDs 0-63.
 .const LEGACY_ITEM_TYPE_COUNT = 64

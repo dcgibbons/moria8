@@ -17,7 +17,7 @@ test_bootstrap:
 test_exit_trampoline:
     sei                         // Disable IRQs during copy
     :BankOutBasic()             // Ensure BASIC ROM off (tc_results in $A000+)
-    ldx #48-1
+    ldx #49-1
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -138,7 +138,7 @@ press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
 // Test result buffer — copy to $0400 at end (msg_print clobbers $0400)
-tc_results: .fill 48, $ff
+tc_results: .fill 49, $ff
 tc_loop_ctr: .byte 0          // Loop counter (safe from ZP clobber)
 tc_valid_ctr: .byte 0         // Valid item counter for test 22
 t16_base_ac: .byte 0          // Stable scratch for Test 16 across item_wear
@@ -154,7 +154,7 @@ t16_base_ac: .byte 0          // Stable scratch for Test 16 across item_wear
 
 test_start:
     // Initialize result area to $ff (untested)
-    ldx #48-1
+    ldx #49-1
     lda #$ff
 !clr:
     sta tc_results,x
@@ -2556,10 +2556,86 @@ test_start:
 
     lda #$01
     sta tc_results + 47
-    jmp !tests_done+
+    jmp !t49+
 !t48_fail:
     lda #$00
     sta tc_results + 47
+
+    // ==========================================
+    // Test 49: rings set persistent flags at recalc; slaying applies bonuses
+    // ==========================================
+!t49:
+    jsr item_init_inventory
+
+    // Resist Fire ring equipped → PFLAG_RESIST_FIRE at recalc
+    lda #ITEM_TYPE_RING_RESIST_FIRE
+    sta inv_item_id + EQUIP_RING
+    lda #1
+    sta inv_qty + EQUIP_RING
+    jsr player_calc_stats
+    lda player_pflags
+    and #PFLAG_RESIST_FIRE
+    beq !t49_fail+
+
+    // Ring of Speed equipped → PFLAG_SPEED
+    jsr item_init_inventory
+    lda #ITEM_TYPE_RING_SPEED
+    sta inv_item_id + EQUIP_RING
+    lda #1
+    sta inv_qty + EQUIP_RING
+    jsr player_calc_stats
+    lda player_pflags
+    and #PFLAG_SPEED
+    beq !t49_fail+
+    lda player_pflags
+    and #PFLAG_RESIST_FIRE
+    bne !t49_fail+
+
+    // Amulet of the Magi equipped → PFLAG_SEE_INVIS
+    jsr item_init_inventory
+    lda #ITEM_TYPE_AMULET_MAGI
+    sta inv_item_id + EQUIP_AMULET
+    lda #1
+    sta inv_qty + EQUIP_AMULET
+    jsr player_calc_stats
+    lda player_pflags
+    and #PFLAG_SEE_INVIS
+    beq !t49_fail+
+
+    // Ring of Slaying with +3/+4 to-hit/dam adds them to PL_TOHIT/PL_TODMG
+    // (measure delta vs empty ring since stat adjustments also contribute)
+    jsr item_init_inventory
+    jsr player_recalc_equipment
+    lda player_data + PL_TOHIT
+    sta t49_base_tohit
+    lda player_data + PL_TODMG
+    sta t49_base_todmg
+    lda #ITEM_TYPE_RING_SLAYING
+    sta inv_item_id + EQUIP_RING
+    lda #1
+    sta inv_qty + EQUIP_RING
+    lda #3
+    sta inv_to_hit + EQUIP_RING
+    lda #4
+    sta inv_to_dam + EQUIP_RING
+    jsr player_recalc_equipment
+    lda player_data + PL_TOHIT
+    sec
+    sbc t49_base_tohit
+    cmp #3
+    bne !t49_fail+
+    lda player_data + PL_TODMG
+    sec
+    sbc t49_base_todmg
+    cmp #4
+    bne !t49_fail+
+
+    lda #$01
+    sta tc_results + 48
+    jmp !tests_done+
+!t49_fail:
+    lda #$00
+    sta tc_results + 48
 
 !tests_done:
     // Jump to trampoline at $033C (below $A000) to copy results + BRK
@@ -2571,6 +2647,8 @@ t29_expected_appended_name:
     .text "Mithril Chain Mail" ; .byte 0
 t29_expected_color: .byte 0
 t48_expected_con: .byte 0
+t49_base_tohit: .byte 0
+t49_base_todmg: .byte 0
 
 item_test_body_end:
 

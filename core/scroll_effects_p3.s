@@ -81,8 +81,10 @@ irs_p3_genocide:
 
 // irs_p3_run_existing — Run an established spell-overlay/death-overlay
 // handler for a Phase 3 scroll. On C128 those handlers live in OVL_DEATH and
-// the router left OVL_MODAL_MISC loaded, so swap out and back. Elsewhere the
-// handlers are in the spell overlay, which the router already loaded.
+// the router left OVL_MODAL_MISC loaded, so swap out and back. On Apple IIe
+// they live in OVL_SPELL and the router lives in OVL_DEATH, so swap out and
+// back to OVL_ITEMS. Elsewhere the handlers are in the spell overlay, which
+// the router already loaded.
 irs_p3_run_existing:
 #if C128
     pha
@@ -90,6 +92,14 @@ irs_p3_run_existing:
     jsr overlay_load
     bcs !irs_re_fail+
     pla
+#else
+#if APPLE2
+    pha
+    lda #OVL_SPELL
+    jsr overlay_load
+    bcs !irs_re_fail+
+    pla
+#endif
 #endif
     cmp #ITEM_TYPE_SCR_RECHARGING
     beq !irs_re_recharge+
@@ -118,6 +128,10 @@ irs_p3_run_existing:
     rts
 !irs_re_fail:
     pla
+#endif
+#if APPLE2
+    lda #OVL_ITEMS
+    jsr overlay_load
 #endif
     rts
 #endif
@@ -156,7 +170,7 @@ irs_p3_magic_mapping:
     jsr eff_reveal_floorplan
     lda #<irs_p3_map_msg
     ldy #>irs_p3_map_msg
-    jmp pmx_print_inline
+    jmp irs_p3_report
 
 // Object Detection: reveal every floor item's tile.
 irs_p3_object_detect:
@@ -186,7 +200,7 @@ irs_p3_object_detect:
     sta vis_room_revealed
     lda #<irs_p3_od_msg
     ldy #>irs_p3_od_msg
-    jmp pmx_print_inline
+    jmp irs_p3_report
 
 // Mass Genocide: remove every monster with clear LOS to the player.
 irs_p3_mass_genocide:
@@ -225,7 +239,18 @@ irs_p3_mass_genocide:
     sta vis_room_revealed
     lda #<irs_p3_mg_msg
     ldy #>irs_p3_mg_msg
-    jmp pmx_print_inline
+    jmp irs_p3_report
+
+// irs_p3_report — Shared message + exit tail for the new Phase 3 effects.
+// On Apple IIe the death overlay owns the handlers, so the items overlay must
+// be restored before returning to the read-scroll flow.
+irs_p3_report:
+    jsr pmx_print_inline
+#if APPLE2
+    lda #OVL_ITEMS
+    jsr overlay_load
+#endif
+    rts
 
 irs_od_slot: .byte 0
 irs_mg_idx:  .byte 0

@@ -103,16 +103,12 @@ item_read_scroll:
     cmp #ITEM_TYPE_SCR_TELEPORT_LEVEL
     bcc !irs_effect_generic+
     cmp #ITEM_TYPE_SCR_DESTRUCTION + 1
-    bcc !irs_effect_p3_swap+
-!irs_effect_generic:
-    jmp irs_effect_generic
-
-!irs_effect_p3_swap:
+    bcs !irs_effect_generic+
 #if SCROLL_P3_ROUTER_ENABLED
     jmp irs_effect_p3_swap
-#else
-    jmp irs_effect_generic
 #endif
+!irs_effect_generic:
+    jmp irs_effect_generic
 
 irs_dispatch_lo:
     .byte <irs_effect_light, <irs_effect_identify, <irs_effect_teleport
@@ -176,7 +172,6 @@ irs_effect_enchant_weapon:
     jmp !irs_ew_msg+
 
 !irs_ew_not_cursed:
-    ldx #EQUIP_WEAPON
     lda inv_to_hit,x
     cmp #5
     bcc !irs_ew_inc+
@@ -287,25 +282,23 @@ irs_effect_protect:
 // owning the target effect, runs it, swaps back so the read flow's items
 // overlay continuation stays valid.
 irs_effect_p3_swap:
+#if APPLE2
+    // Apple IIe: the Phase 3 scroll router lives in the death overlay (items
+    // overlay is full). One disk-backed swap out, handlers manage the rest.
+    lda #OVL_DEATH
+    jsr overlay_load
+    bcs !irsp3_fail+
+    jsr irs_dispatch_p3_overlay
+!irsp3_fail:
+    sec
+    rts
+#else
 #if C128
     // All Phase 3 scroll handlers live in OVL_MODAL_MISC on C128 (existing
     // handlers reach OVL_DEATH via an inner swap)
     lda #OVL_MODAL_MISC
 #else
-#if APPLE2
-    // New effects live in OVL_DEATH (disk-loaded; modal cache slot is full);
-    // existing handlers in OVL_SPELL
-    cmp #ITEM_TYPE_SCR_RECHARGING
-    bcc !irsp3_death+
-    cmp #ITEM_TYPE_SCR_MASS_GENOCIDE
-    beq !irsp3_death+
     lda #OVL_SPELL
-    .byte $2c
-!irsp3_death:
-    lda #OVL_DEATH
-#else
-    lda #OVL_SPELL
-#endif
 #endif
     pha
     jsr overlay_load
@@ -320,6 +313,7 @@ irs_effect_p3_swap:
     pla
     sec
     rts
+#endif
 #endif
 
 irs_effect_generic:
@@ -364,7 +358,6 @@ item_aim_wand:
 !iaw_has_charges:
     jsr ia_spend_charge_identify
 
-    lda piw_item_id
     cmp #39
     beq !iaw_light+
     cmp #40
@@ -501,7 +494,6 @@ item_use_staff:
 !ius_has_charges:
     jsr ia_spend_charge_identify
 
-    lda piw_item_id
     cmp #43
     beq !ius_light+
     cmp #44

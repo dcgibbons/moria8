@@ -334,12 +334,66 @@ player_calc_stats:
     sta player_data + PL_WIS_CUR
 !pcs_no_amulet:
 
+    // Persistent effect flags from the equipped ring and amulet
+    lda #0
+    ldx #EQUIP_RING
+    ldy inv_item_id,x
+    cpy #ITEM_TYPE_RING_RESIST_FIRE
+    bcc !pf_none+
+    cpy #ITEM_TYPE_RING_SLAYING
+    bcs !pf_none+
+    tya
+    sec
+    sbc #ITEM_TYPE_RING_RESIST_FIRE
+    tax
+    lda pf_bit_table,x
+!pf_none:
+    // Amulet of the Magi also grants see-invisible
+    ldx #EQUIP_AMULET
+    ldy inv_item_id,x
+    cpy #ITEM_TYPE_AMULET_MAGI
+    bne !pf_store+
+    ora #PFLAG_SEE_INVIS
+!pf_store:
+    sta player_pflags
+
     // Update combat bonuses from stats
     jsr player_calc_combat
     rts
 
+pf_bit_table:
+    .byte PFLAG_RESIST_FIRE, PFLAG_RESIST_COLD, PFLAG_SPEED, PFLAG_SEE_INVIS
+
 // Working byte for stat modification (survives across increment/decrement calls)
 stat_work: .byte 0
+
+// Persistent equipment-granted effect flags, recomputed by player_calc_stats.
+// PFLAG_RESIST_FIRE: fire breath damage reduced (like the temp resist timer).
+// PFLAG_RESIST_COLD: reserved for cold mitigation (no cold-breath consumer yet).
+// PFLAG_SPEED / PFLAG_SEE_INVIS: inert until their consumers exist (the haste
+// and sense-invisible spell timers are equally inert today).
+player_pflags: .byte 0
+
+#if !APPLE2
+// player_apply_slaying_bonuses — Add Ring of Slaying to-hit/to-damage bonuses
+// to PL_TOHIT/PL_TODMG. Called from player_recalc_equipment.
+// Clobbers: A, X
+player_apply_slaying_bonuses:
+    ldx #EQUIP_RING
+    lda inv_item_id,x
+    cmp #ITEM_TYPE_RING_SLAYING
+    bne !pasb_done+
+    lda inv_to_hit,x
+    clc
+    adc player_data + PL_TOHIT
+    sta player_data + PL_TOHIT
+    lda inv_to_dam,x
+    clc
+    adc player_data + PL_TODMG
+    sta player_data + PL_TODMG
+!pasb_done:
+    rts
+#endif
 
 // apply_modifier — Apply a signed modifier to stat_work using increment/decrement
 // Each +1 or -1 is applied individually via incrementStat/decrementStat (umoria).
