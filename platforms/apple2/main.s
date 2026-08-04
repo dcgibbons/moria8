@@ -244,8 +244,7 @@ title_draw_menu:
     sta zp_ptr0
     lda #>title_menu_str
     sta zp_ptr0_hi
-    jsr screen_put_string
-    rts
+    jmp screen_put_string
 
 title_str:
     .text "MORIA 8 (APPLE II)"
@@ -387,8 +386,7 @@ save_prepare_slot_prompt:
     jmp overlay_load
 
 save_select_slot_prompt:
-    jsr save_select_slot_prompt_impl
-    rts
+    jmp save_select_slot_prompt_impl
 #endif
 
 // ============================================================
@@ -862,8 +860,7 @@ tramp_game_over_prepare:
 
 !tgo_load_overlay:
     lda #OVL_DEATH
-    jsr overlay_load
-    rts
+    jmp overlay_load
 
 tramp_game_over:
     jsr tramp_game_over_prepare
@@ -878,8 +875,7 @@ tramp_game_over_run:
 !tgo_skip_hiscore:
     lda death_source_saved
     sta zp_death_source
-    jsr score_death_screen
-    rts
+    jmp score_death_screen
 
 tramp_winner_royal:
     lda #OVL_MODAL_MISC
@@ -1173,7 +1169,9 @@ game_restart_overlay:
 #import "../../core/score_io.s"
 #import "../../core/score.s"
     #define SCROLL_P3_NEW_OWNER
+    #define SCROLL_P3_EXISTING_OWNER
     #import "../../core/scroll_effects_p3.s"
+    #undef SCROLL_P3_EXISTING_OWNER
     #undef SCROLL_P3_NEW_OWNER
 ovl_death_end:
 .print "Death overlay: " + (ovl_death_end - $a400) + " bytes"
@@ -1383,6 +1381,38 @@ tramp_items_jmp:
                             // 6502 page-crossing bug reads the high byte
                             // from $xx00 when the pointer is at $xxFF)
 !done:
+    rts
+
+// tramp_spell_call_items — Call an OVL.SPELL routine from a caller in another
+// overlay, restoring OVL.ITEMS afterward. Phase 3 potion/scroll handlers live
+// in OVL.SPELL; loading it from inside the items or death overlay would evict
+// the caller's continuation, so the swap runs from this resident trampoline.
+// Input: tsci_target staged to the handler; a2_tsci_arg = handler arg.
+// Clobbers: A, X, Y
+tramp_spell_call_items:
+    lda #OVL_SPELL
+    jsr overlay_load
+    lda a2_tsci_arg
+tsci_target:
+    jsr $0000               // SMC dispatch target (staged by caller)
+    lda #OVL_ITEMS
+    jsr overlay_load
+    rts
+a2_tsci_arg: .byte 0
+
+// irs_p3_swap_exec — Resident Phase 3 scroll/wand/staff router entry. The
+// items-overlay router jumps here because loading OVL.DEATH from the items
+// overlay would evict the router's own code mid-flight. A = item type ID on
+// entry; the dispatch reads it from A, so preserve it across the load.
+irs_p3_swap_exec:
+    pha                         // save item type ID
+    lda #OVL_DEATH
+    jsr overlay_load
+    pla                         // restore item type ID
+    jsr irs_dispatch_p3_overlay
+    lda #OVL_ITEMS
+    jsr overlay_load
+    sec
     rts
 
 tramp_roll_ego_type_modal:

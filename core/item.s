@@ -177,8 +177,7 @@ item_init_floor:
     sta fi_to_ac,x
     dex
     bpl !iif_stat_loop-
-    jsr glyph_clear_all
-    rts
+    jmp glyph_clear_all
 
 // item_init_inventory — Clear all inventory/equipment slots
 // Clobbers: A, X
@@ -1096,8 +1095,7 @@ item_append_name:
     jsr combat_append_str
     // Append ego suffix if present (reads fi_add_ego set by caller)
     lda fi_add_ego
-    jsr tramp_ego_append_suffix
-    rts
+    jmp tramp_ego_append_suffix
 
 // item_append_desc — Append item name plus identified stat suffixes to
 // combat_msg_buf. Uses fi_add_* staging fields for the selected instance.

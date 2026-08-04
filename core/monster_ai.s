@@ -664,9 +664,9 @@ monster_move_random:
     clc
     adc dir_dy,x
     sta mat_target_y
-    jsr monster_try_step
+    jmp monster_try_step
     // Don't try alternatives — confused movement is unreliable
-    rts
+
 
 // ============================================================
 // monster_check_flee — Check if monster HP is below flee threshold

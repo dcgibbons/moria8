@@ -106,8 +106,12 @@ map_get_tile:
     sta zp_ptr0_hi
     txa
     tay
+#if APPLE2
+    jmp mmu_safe_map_read_ptr0
+#else
     :MapRead_ptr0_y()
     rts
+#endif
 
 // ============================================================
 // Store position data

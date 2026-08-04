@@ -146,8 +146,8 @@ hal_storage_open:
     clc
     rts
 !fail:
-    jsr a2_map_error
-    rts                             // carry set by a2_map_error
+    jmp a2_map_error  // carry set by a2_map_error
+
 !write_mode:
     // ---- open for write ----
     jsr a2_mli_begin
@@ -174,8 +174,8 @@ hal_storage_open:
     bcc !truncate+
 !fail_end:
     jsr a2_mli_end
-    jsr a2_map_error
-    rts                             // carry set
+    jmp a2_map_error  // carry set
+
 !truncate:
     lda a2_ss_fresh
     bne !opened+

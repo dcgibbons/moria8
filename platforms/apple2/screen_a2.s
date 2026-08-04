@@ -371,8 +371,7 @@ screen_flash_at:
 
     lda sfa_save_char
     ldx sfa_save_col
-    jsr a2_write_cell
-    rts
+    jmp a2_write_cell
 
 sfa_save_row:   .byte 0
 sfa_save_col:   .byte 0

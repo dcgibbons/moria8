@@ -80,8 +80,7 @@ generation_busy_draw_frame:
     sta zp_ptr0
     lda #>gen_busy_text
     sta zp_ptr0_hi
-    jsr hal_screen_put_string
-    rts
+    jmp hal_screen_put_string
 
 generation_busy_hold:
 !gbh_outer:

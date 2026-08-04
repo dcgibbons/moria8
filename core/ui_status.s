@@ -611,8 +611,7 @@ status_put_stat_val:
     bcc !sv_normal+
     lda #18                 // 18/xx → show 18
 !sv_normal:
-    jsr screen_put_decimal_rj2
-    rts
+    jmp screen_put_decimal_rj2
 
 // status_hp_color — Set text color based on HP percentage
 // Preserves: nothing (sets zp_text_color)

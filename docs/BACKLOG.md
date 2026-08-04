@@ -330,6 +330,37 @@ Acceptance target:
   trapped, looted, ruined, and saved/loaded with behavior consistent with
   Umoria/VMS-Moria within Moria8 memory limits.
 
+### Bring Word of Destruction up to upstream area-devastation
+
+Moria8's `eff_destroy_area` (shared by the Word of Destruction prayer and the
+Phase 3 Scroll/Staff of *Destruction*) only does `eff_damage_adjacent(15,8)`
+plus `eff_destroy_traps_doors`. Upstream Umoria's `spellDestroyArea`
+(`spells.cpp:2254`) is a real devastation effect: in a 15-tile radius around
+the player it replaces non-boundary terrain with rubble/floor
+(`replaceSpot(spot, randomNumber(6))` within distance 13, `randomNumber(9)`
+within 16), destroys monsters and items in the area, and blinds the player for
+`10 + randomNumber(10)`.
+
+This gap predates the Phase 3 item work; the scroll/staff correctly reuse the
+game's existing WoD effect, so the shortfall is in the shared effect, not the
+new items.
+
+Required work:
+
+- Implement terrain destruction to rubble within the radius (skipping boundary
+  walls), per the dungeon-generation contract (map mutation + dirty/redraw).
+- Destroy monsters and floor items within the radius.
+- Apply the `10 + rng(10)` blind via the existing blindness timer.
+- Share the implementation so the prayer, scroll, and staff all use it.
+- Coverage: a C64 runtime test that a cast/read WoD turns in-radius walls to
+  rubble, clears in-radius monsters/items, leaves boundary walls, and blinds.
+
+Acceptance target:
+
+- Reading/casting Word of *Destruction* devastates terrain, monsters, and items
+  within the upstream radius, blinds the player, and does not corrupt the map,
+  save/load, or subsequent level generation on C64 and C128.
+
 ### Add Balrog victory and retirement flow
 
 Status: implemented in product code. Remaining work is focused coverage.

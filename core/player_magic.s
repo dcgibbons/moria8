@@ -334,8 +334,7 @@ pm_handle_fail_roll:
     jsr huff_print_msg
     lda #SFX_SPELL_FAIL
     jsr hal_sound_play
-    jsr pm_consume_mana
-    rts
+    jmp pm_consume_mana
 
 pm_select_book:
 !pm_select_retry:
@@ -627,8 +626,7 @@ pm_consume_mana:
     bcc !pm_cm_done+
     dec player_data + PL_CON_CUR
     dec zp_player_con
-    jsr player_calc_hp
-    rts
+    jmp player_calc_hp
 
 !pm_cm_normal:
     lda zp_player_mp

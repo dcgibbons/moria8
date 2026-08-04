@@ -443,8 +443,20 @@ press("4") press("8") press("\r")
 emu.wait(2)
 assert_line("wizard_gain", screen_has("OK"), "item generation did not report OK")
 press("I")
-emu.wait(2)
-assert_line("gain_in_inventory", screen_has("Beginners Handbook"),
+-- First inventory open cold-loads OVL.HELP from floppy; poll for the
+-- rendered content instead of asserting on a fixed timer.
+local inv_up = false
+for i = 1, 200 do
+    emu.wait(0.1)
+    if screen_has("Inventory") then inv_up = true break end
+end
+assert_line("inventory_open", inv_up, "inventory screen did not render")
+local book_seen = false
+for i = 1, 200 do
+    emu.wait(0.1)
+    if screen_has("Beginners Handbook") then book_seen = true break end
+end
+assert_line("gain_in_inventory", book_seen,
             "generated item not in inventory")
 press(" ")
 emu.wait(1)
@@ -460,6 +472,108 @@ assert_line("gain_level_msg", screen_has("Welcome to level"),
 assert_line("gain_level_lv", screen_has("LV:2"),
             "status line did not advance to LV:2")
 dump("after_wizard")
+print("SCENARIO DONE")
+"""
+
+LUA_QUAFF_P3_BODY = r"""
+-- Wizard-generate a Phase 3 potion (Restoration, 97), quaff it, and verify
+-- the effect message prints. Regression for the Apple IIe Phase 3 potion
+-- overlay swap (resident trampoline into OVL.SPELL).
+assert_line("wizard_menu", wizard_menu_open(), "wizard menu did not open")
+press_until("ITEM", "G")
+press("9") press("7") press("\r")
+emu.wait(2)
+assert_line("wizard_gain", screen_has("OK"), "item generation did not report OK")
+press(" ")
+emu.wait(1)
+press("q")
+emu.wait(1)
+assert_line("quaff_prompt", screen_has("Quaff which potion"), "quaff prompt did not open")
+press("a")
+local quaff_msg = false
+for i = 1, 100 do
+    emu.wait(0.1)
+    if screen_has("strength return") then quaff_msg = true break end
+end
+assert_line("quaff_msg", quaff_msg, "quaff effect message missing")
+print("SCENARIO DONE")
+"""
+
+
+
+LUA_SCROLL_OBJDET_BODY = r"""
+-- Wizard-generate a Scroll of Object Detection (103), read it, and verify
+-- the effect runs and reports (no poison/death misdispatch). Regression for
+-- the Apple IIe new-owner Phase 3 scroll handlers calling OVL.SPELL helpers
+-- from OVL.DEATH (wild jump into uninitialized window memory).
+assert_line("wizard_menu", wizard_menu_open(), "wizard menu did not open")
+press_until("ITEM", "G")
+press("1") press("0") press("3") press("\r")
+emu.wait(2)
+assert_line("wizard_gain", screen_has("OK"), "item generation did not report OK")
+press(" ")
+emu.wait(1)
+press("r")
+emu.wait(1)
+assert_line("read_prompt", screen_has("Read which scroll"), "read prompt did not open")
+press("a")
+local od_msg = false
+for i = 1, 100 do
+    emu.wait(0.1)
+    if screen_has("sense treasure") then od_msg = true break end
+end
+assert_line("od_msg", od_msg, "object detection message missing")
+assert_line("od_not_dead", not screen_has("slain"), "object detection slew the player")
+if screen_has("-more-") then press(" ") emu.wait(1) end
+assert_line("od_no_stray", not screen_has("tasted terrible"), "stray poison message after object detection")
+print("SCENARIO DONE")
+"""
+
+LUA_SCROLL_MAP_BODY = r"""
+-- Wizard-generate a Scroll of Magic Mapping (102), read it, and verify the
+-- effect runs and reports. Companion to scroll_objdet (spell-overlay helper).
+assert_line("wizard_menu", wizard_menu_open(), "wizard menu did not open")
+press_until("ITEM", "G")
+press("1") press("0") press("2") press("\r")
+emu.wait(2)
+assert_line("wizard_gain", screen_has("OK"), "item generation did not report OK")
+press(" ")
+emu.wait(1)
+press("r")
+emu.wait(1)
+assert_line("read_prompt", screen_has("Read which scroll"), "read prompt did not open")
+press("a")
+local map_msg = false
+for i = 1, 100 do
+    emu.wait(0.1)
+    if screen_has("map grow clearer") then map_msg = true break end
+end
+assert_line("map_msg", map_msg, "magic mapping message missing")
+assert_line("map_not_dead", not screen_has("slain"), "magic mapping slew the player")
+print("SCENARIO DONE")
+"""
+
+LUA_SCROLL_RUNE_BODY = r"""
+-- Wizard-generate a Scroll of Rune of Protection (105), read it, and verify
+-- the effect runs: the glyph is created and its message prints. Regression
+-- for the Apple IIe Phase 3 scroll overlay swaps (resident router/trampoline).
+assert_line("wizard_menu", wizard_menu_open(), "wizard menu did not open")
+press_until("ITEM", "G")
+press("1") press("0") press("5") press("\r")
+emu.wait(2)
+assert_line("wizard_gain", screen_has("OK"), "item generation did not report OK")
+press(" ")
+emu.wait(1)
+press("r")
+emu.wait(1)
+assert_line("read_prompt", screen_has("Read which scroll"), "read prompt did not open")
+press("a")
+emu.wait(3)
+assert_line("no_balrog", not screen_has("Balrog"), "Balrog appeared after rune scroll")
+assert_line("rune_msg", screen_has("strange rune"), "rune effect message missing")
+assert_line("rune_glyph", prog:read_u8(GLYPHADDR) == 1,
+            "rune of protection did not create its glyph")
+dump("after_rune")
 print("SCENARIO DONE")
 """
 
@@ -481,6 +595,46 @@ press("L") emu.wait(1)
 press("L") emu.wait(1)
 assert_line("move_ok", screen_has("DL:1"), "dungeon view lost after movement")
 dump("after_descend")
+print("SCENARIO DONE")
+"""
+
+
+
+LUA_DEEP_OBJDET_BODY = r"""
+-- Descend, wizard-jump deep, summon a monster, read object detection, and
+-- capture the message sequence (repro for the stray poison message).
+for i = 1, 10 do
+    press("L")
+    emu.wait(1)
+    shift(".")
+    emu.wait(2)
+    if screen_has("DL:1") then break end
+end
+wizard_menu_open()
+press_until("DLVL", "L")
+press("1") press("0") press("\r")
+emu.wait(5)
+wizard_menu_open()
+press("S")
+emu.wait(2)
+wizard_menu_open()
+press_until("ITEM", "G")
+press("1") press("0") press("3") press("\r")
+emu.wait(2)
+press(" ")
+emu.wait(1)
+press("r")
+emu.wait(1)
+press("a")
+local od_msg = false
+for i = 1, 100 do
+    if screen_has("-more-") then press(" ") end
+    emu.wait(0.1)
+    if screen_has("sense treasure") then od_msg = true break end
+end
+assert_line("od_msg", od_msg, "object detection message missing")
+assert_line("od_not_dead", not screen_has("slain"), "object detection slew the player")
+assert_line("od_no_terrible", not screen_has("tasted terrible"), "stray poison message appeared")
 print("SCENARIO DONE")
 """
 
@@ -1012,6 +1166,36 @@ def wizard_flow_lua() -> str:
     return _chargen_body("A") + LUA_WIZARD_BODY
 
 
+
+def quaff_p3_lua() -> str:
+    return _chargen_body("A") + LUA_QUAFF_P3_BODY
+
+
+def _sym_addr(name: str) -> int:
+    for line in (ROOT / "build" / "apple2" / "main.vs").read_text().splitlines():
+        parts = line.split()
+        if len(parts) >= 3 and parts[0] == "al" and parts[2] == "." + name:
+            return int(parts[1][2:], 16)
+    raise KeyError(name)
+
+
+def deep_objdet_lua() -> str:
+    return _chargen_body("A") + LUA_DEEP_OBJDET_BODY
+
+
+def scroll_objdet_lua() -> str:
+    return _chargen_body("A") + LUA_SCROLL_OBJDET_BODY
+
+
+def scroll_map_lua() -> str:
+    return _chargen_body("A") + LUA_SCROLL_MAP_BODY
+
+
+def scroll_rune_lua() -> str:
+    body = LUA_SCROLL_RUNE_BODY.replace("GLYPHADDR", hex(_sym_addr("glyph_active")))
+    return _chargen_body("A") + body
+
+
 def dungeon_descend_lua() -> str:
     return _chargen_body("A") + LUA_DUNGEON_BODY
 
@@ -1052,6 +1236,11 @@ SCENARIO_LUA = {
     "priest_pray": priest_pray_lua,
     "help_overlay": help_overlay_lua,
     "wizard_flow": wizard_flow_lua,
+    "scroll_rune": scroll_rune_lua,
+    "quaff_p3": quaff_p3_lua,
+    "scroll_objdet": scroll_objdet_lua,
+    "deep_objdet": deep_objdet_lua,
+    "scroll_map": scroll_map_lua,
     "dungeon_descend": dungeon_descend_lua,
     "death_flow": death_flow_lua,
     "save_load": save_load_lua,

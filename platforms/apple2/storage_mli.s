@@ -513,8 +513,8 @@ hal_storage_require_program_media:
     jsr a2i_get_file_info
     jsr a2_mli_end
     bcc !ok+
-    jsr a2_map_media_error
-    rts                             // carry set
+    jmp a2_map_media_error  // carry set
+
 !ok:
     lda #HAL_STORAGE_STATUS_OK
     sta a2_media_status
@@ -581,8 +581,8 @@ hal_storage_marker_present:
     rts
 !fail_end:
     jsr a2_mli_end
-    jsr a2_map_media_error
-    rts                             // carry set
+    jmp a2_map_media_error  // carry set
+
 
 // Requiring save media is the marker probe on the selected save volume
 // (a2_mli_set_pathname routes "0:" names by disk_mode); callers (save.s,
@@ -641,8 +641,8 @@ hal_storage_marker_init:
     pla
 !fail_end:
     jsr a2_mli_end
-    jsr a2_map_media_error
-    rts                             // carry set
+    jmp a2_map_media_error  // carry set
+
 
 // ============================================================
 // Status classifiers (contract: return A = HAL_STORAGE_STATUS_*)
@@ -755,8 +755,7 @@ hal_asset_load_prg_header:
     pla
 !fail_end:
     jsr a2_mli_end
-    jsr a2_map_error
-    rts                             // carry set
+    jmp a2_map_error                             // carry set
 
 // ============================================================
 // hal_asset_load — KERNAL LOAD equivalent over the name stashed by
@@ -817,8 +816,7 @@ hal_asset_load:
     pla
 !fail_end:
     jsr a2_mli_end
-    jsr a2_map_error
-    rts
+    jmp a2_map_error
 
 .label hal_storage_load = hal_asset_load
 
@@ -908,8 +906,7 @@ hal_asset_load_title:
     pla
 !fail_end:
     jsr a2_mli_end
-    jsr a2_map_error
-    rts
+    jmp a2_map_error
 
 a2_tc:            .byte 0
 a2_probe_buf:     .fill 8, 0        // marker magic read-back scratch

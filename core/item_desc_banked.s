@@ -70,8 +70,7 @@ itemdesc_put_staged:
     jsr item_get_name_ptr
     jsr hal_screen_put_string
     jsr itemdesc_put_stats
-    jsr itemdesc_put_sensed_suffix
-    rts
+    jmp itemdesc_put_sensed_suffix
 !idps_not_tool:
     lda itemdesc_item_id
     jsr item_get_name_ptr
@@ -83,8 +82,7 @@ itemdesc_put_staged:
 !idps_valid_ego:
     jsr banked_ego_put_suffix
     jsr itemdesc_put_stats
-    jsr itemdesc_put_sensed_suffix
-    rts
+    jmp itemdesc_put_sensed_suffix
 
 itemdesc_put_qty_prefix:
     lda itemdesc_qty

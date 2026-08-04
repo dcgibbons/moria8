@@ -463,14 +463,15 @@ item_quaff:
 #else
 #if APPLE2
     // Apple IIe: Phase 3 potion handlers live in the spell overlay (items
-    // overlay is full). Swap out, run, swap back so the quaff flow's
-    // continuation in the items overlay stays valid.
-    lda #OVL_SPELL
-    jsr overlay_load
-    bcs !iqd_not_p3+
-    jsr iq_dispatch_p3_spell
-    lda #OVL_ITEMS
-    jsr overlay_load
+    // overlay is full). Loading it here would evict this items-overlay
+    // continuation, so the swap runs through the resident trampoline.
+    lda piw_item_id
+    sta a2_tsci_arg
+    lda #<iq_dispatch_p3_spell
+    sta tsci_target+1
+    lda #>iq_dispatch_p3_spell
+    sta tsci_target+2
+    jsr tramp_spell_call_items
     sec
     rts
 #endif

@@ -245,15 +245,13 @@ tier_check_transition:
     cpx #5                      // Already at tier 4?
     bcs !tct_done-              // Yes → stay (tier 4 covers all deep levels)
     stx current_tier
-    jsr tier_load
-    rts
+    jmp tier_load
 
 !tct_need_prev:
     dex
     beq !tct_done-              // Can't go below tier 1
     stx current_tier
-    jsr tier_load
-    rts
+    jmp tier_load
 
 !tct_first_entry:
     // Determine initial tier from dungeon level
@@ -276,8 +274,7 @@ tier_check_transition:
     lda #1
 !tct_do_load:
     sta current_tier
-    jsr tier_load
-    rts
+    jmp tier_load
 
 // tier_restore_after_overlay — re-establish current tier data after an overlay
 // or modal UI action without surfacing the transient "Loading..." message.
@@ -450,8 +447,7 @@ tier_load:
     // Disk load failed — reset tier state so creature_get_name
     // uses embedded name pointers (main RAM) instead of the
     // tier path which reads from the staging region (now invalid).
-    jsr tier_invalidate_state
-    rts
+    jmp tier_invalidate_state
 
 #if HAL_PLATFORM_MONSTER_HIDDEN_NAME_POOL
 // platform_copy_tier_names_to_pool — Copy the active tier name block
@@ -668,8 +664,7 @@ tier_loading_str:
 // Input: current_tier set; tier_size tables valid.
 // Clobbers: A, X, Y, zp_ptr0, zp_ptr1, zp_temp0, zp_temp1
 c128_stage_tier_to_bank1:
-    jsr c128_stage_tier_to_cache
-    rts
+    jmp c128_stage_tier_to_cache
 
 c128_stage_tier_to_cache:
     php
