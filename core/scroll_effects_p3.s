@@ -228,7 +228,7 @@ irs_p3_teleport_level:
 !irs_tl_go:
     lda zp_player_dlvl
     sta player_data + PL_DLEVEL
-    jmp level_change_generate_current
+    jmp scroll_teleport_level_exec
 
 // Magic Mapping: reveal the whole level map (wizard reveal effect).
 irs_p3_magic_mapping:
@@ -245,6 +245,8 @@ irs_p3_object_detect:
     cmp #FI_EMPTY
     beq !irs_od_next+
     stx irs_od_slot
+    // Mark the tile visited+lit so the item renders on the map even in the
+    // dark (upstream field_mark semantics).
     lda fi_y,x
     tay
     lda map_row_lo,y
@@ -254,7 +256,7 @@ irs_p3_object_detect:
     lda fi_x,x
     tay
     :MapRead_ptr0_y()
-    ora #FLAG_VISITED
+    ora #(FLAG_VISITED | FLAG_LIT)
     :MapWrite_ptr0_y()
     ldx irs_od_slot
 !irs_od_next:

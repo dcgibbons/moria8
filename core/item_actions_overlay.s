@@ -283,6 +283,9 @@ irs_effect_protect:
 // overlay continuation stays valid.
 irs_effect_p3_swap:
 #if C128 || APPLE2
+    // A = item type ID on entry; the dispatch reads it from A. Save it across
+    // the overlay swap (overlay_load returns the overlay ID in A).
+    pha
 #if C128
     // The Phase 3 scroll/wand/staff router lives in OVL_MODAL_MISC on C128
     // (items overlay is full). Handlers manage the items-overlay restore.
@@ -294,25 +297,19 @@ irs_effect_p3_swap:
 #endif
     jsr overlay_load
     bcs !irsp3_fail+
+    pla
     jsr irs_dispatch_p3_overlay
+    sec
+    rts
 !irsp3_fail:
+    pla
     sec
     rts
 #else
-    lda #OVL_SPELL
-    pha
-    jsr overlay_load
-    bcs !irsp3_fail+
-    pla
-    jsr irs_dispatch_p3_overlay
-    lda #OVL_ITEMS
-    jsr overlay_load
-    sec
-    rts
-!irsp3_fail:
-    pla
-    sec
-    rts
+    // C64/Plus4: the swap must run from resident code. Loading the spell
+    // overlay here would evict this items overlay and the router's own
+    // continuation, so jump to the resident router.
+    jmp irs_p3_swap_exec
 #endif
 #endif
 

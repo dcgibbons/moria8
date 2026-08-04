@@ -243,8 +243,7 @@ calc_chr_price:
     lda mul_result_1
     sta zp_math_b
     ldx #100
-    jsr math_div_16x8           // Quotient in zp_math_a/b
-    rts
+    jmp math_div_16x8           // Quotient in zp_math_a/b
 
 // calc_buy_min_price — Minimum acceptable buy price (no CHR markup)
 // Input: A = item type ID, sb_item_p1 = enchantment/charges

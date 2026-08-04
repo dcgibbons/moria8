@@ -1027,8 +1027,7 @@ combat_compute_level_threshold:
     sta ccl_adj_2
     lda #100
     sta ccl_divisor
-    jsr ccl_div_24x8
-    rts
+    jmp ccl_div_24x8
 
 !ccl_late:
     sec
@@ -1182,8 +1181,7 @@ combat_apply_levelup:
 
     // Print level-up message: "Welcome to level N."
     jsr msg_build_levelup
-    jsr cmb_print_buf
-    rts
+    jmp cmb_print_buf
 
 // Scratch for 24-bit threshold computation
 ccl_adj_0: .byte 0             // 24-bit product / result (lo)
@@ -1506,8 +1504,7 @@ combat_append_char:
 combat_append_monster_name:
     ldx cmb_type
     jsr creature_get_name       // A=lo, Y=hi (handles KERNAL banking)
-    jsr combat_append_str
-    rts
+    jmp combat_append_str
 
 // combat_append_decimal — Append 8-bit decimal number to buffer
 // Input: A = value (0-255)

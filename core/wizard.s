@@ -10,6 +10,7 @@ wizard_wall_walk_enabled: .byte 0
 wizard_num_digits:        .byte 0
 wizard_num_buf0:          .byte 0
 wizard_num_buf1:          .byte 0
+wizard_num_buf2:          .byte 0
 wizard_prompt_max:        .byte 0
 wizard_prompt_value:      .byte 0
 wizard_prompt_input_col:  .byte 0
@@ -44,6 +45,43 @@ wizard_execute_level_jump:
 !wiz_not_town:
     lda wizard_entry_dir
     sta level_entry_dir
+#if !C128 && !APPLE2
+// irs_p3_swap_exec — Resident Phase 3 scroll/wand/staff effect router
+// (C64/Plus4). The items-overlay router (irs_effect_p3_swap) jumps here
+// because loading the spell overlay from the items overlay would evict the
+// router's own code mid-flight. A = item type ID on entry; the dispatch
+// reads it from A, so preserve it across the overlay load (overlay_load
+// returns the overlay ID in A).
+irs_p3_swap_exec:
+    pha                         // save item type ID
+    lda #OVL_SPELL
+    jsr overlay_load_no_kernal
+    bcs !irs3s_fail+
+    pla                         // restore item type ID
+    jsr irs_dispatch_p3_overlay
+    lda #OVL_ITEMS
+    jsr overlay_load_no_kernal
+    sec
+    rts
+!irs3s_fail:
+    pla
+    sec
+    rts
+#endif
+
+// scroll_teleport_level_exec — Resident execution tail for the Scroll of
+// Teleport Level. The Phase 3 scroll router runs from an overlay window
+// (OVL.SPELL on C64, OVL.MODAL on C128, OVL.DEATH on Apple IIe), but
+// level_change_generate_current loads the generation overlay into that same
+// window; returning into the evicted overlay would execute generation code.
+// Regenerate from resident code, then re-enter the main loop. The read
+// flow's frames are abandonable, so reset the stack first: dungeon
+// generation pushes ~250 bytes deep, which on top of the read flow's frames
+// wraps the 256-byte stack page and overwrites them; later returns would
+// then consume generation leftovers as return addresses.
+scroll_teleport_level_exec:
+    ldx #$ff
+    txs
     jsr level_change_generate_current
     jmp main_loop
 
@@ -91,7 +129,7 @@ wizard_generate_item_execute:
     jsr roll_enchantment
     sta fi_add_p1
     lda fi_add_id
-#if APPLE2
+#if HAL_PLATFORM_WIZARD_EGO_MODAL_TRAMP
     jsr tramp_roll_ego_type_modal
 #else
     jsr tramp_roll_ego_type

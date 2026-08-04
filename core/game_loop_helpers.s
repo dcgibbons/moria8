@@ -185,8 +185,7 @@ recall_show_matching_entry:
     jsr creature_get_name
     jsr tramp_ui_recall
     jsr input_prepare_modal_dismiss_key
-    jsr hal_input_get_key
-    rts
+    jmp hal_input_get_key
 #if RECALL_VIEW_OVERLAYED
 :RecallViewBodyRestoreSegment()
 #endif

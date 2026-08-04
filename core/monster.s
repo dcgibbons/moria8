@@ -957,8 +957,7 @@ monster_spawn_level:
     jmp !msl_loop-
 
 !msl_done:
-    jsr tramp_spawn_special_room_monsters
-    rts
+    jmp tramp_spawn_special_room_monsters
 
 msl_target: .byte 0
 msl_idx:    .byte 0
@@ -1047,18 +1046,23 @@ monster_find_at:
 .segment RuntimeLowData
 #elif !C64_UNIT_TEST && !C128_UNIT_TEST
 monster_update_visibility_all:
-    sei
 #if HAL_PLATFORM_MONSTER_CPU_PORT_BANK
+    // Save/restore the caller's CPU-port banking instead of forcing
+    // BANK_NO_BASIC on exit: overlay callers (Wizard restore path) return
+    // into the $E000 window and would execute KERNAL ROM if it were mapped.
+    php
+    sei
+    lda hal_memory_cpu_port
+    pha
     lda #BANK_NO_ROMS
     sta hal_memory_cpu_port
     jsr monster_update_visibility_all_impl
-    pha
-    lda #BANK_NO_BASIC
-    sta hal_memory_cpu_port
-    cli
     pla
+    sta hal_memory_cpu_port
+    plp
     rts
 #else
+    sei
     jsr plus4_bank_ram
     jsr monster_update_visibility_all_impl
     pha

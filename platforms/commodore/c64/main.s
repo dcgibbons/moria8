@@ -1121,6 +1121,20 @@ tramp_roll_ego_type:
     pla                         // Restore result
     rts
 
+// tramp_roll_ego_type_modal — Ego roll for callers executing from the $E000
+// overlay window (Wizard generate item). The standard trampoline exits with
+// KERNAL mapped at $E000, so an overlay caller's return address would execute
+// KERNAL ROM instead of overlay code. This variant keeps overlay RAM visible
+// and stays SEI'd, matching the overlay's entry banking.
+tramp_roll_ego_type_modal:
+    pha                         // Save A (item type input)
+    sei
+    lda #BANK_NO_ROMS
+    sta $01
+    pla                         // Restore A
+    jsr roll_ego_type
+    rts
+
 // tramp_ego_append_suffix — Append ego suffix to combat_msg_buf
 // Input: A = ego type
 // Copies suffix string from $F000 region to combat_msg_buf while banked out.
@@ -1722,7 +1736,7 @@ c64_test_spell_fail_input_sym:
 c64_test_spell_pass_sym:
     brk
 #else
-#if C64_TEST_SCRIPTED_WIZARD_REVEAL_PRODUCT
+#if C64_TEST_SCRIPTED_WIZARD_REVEAL_PRODUCT || C64_TEST_SCRIPTED_WIZARD_ITEM_PRODUCT || C64_TEST_SCRIPTED_SCROLL_TELEPORT_PRODUCT
 c64_test_wizard_reveal_fail_input_sym:
     brk
 #else

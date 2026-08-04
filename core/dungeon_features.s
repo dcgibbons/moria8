@@ -510,8 +510,7 @@ trap_do_pit:
     lda #1              // 1 die
     ldx #4              // d4
     ldy #0              // +0
-    jsr trap_apply_damage
-    rts
+    jmp trap_apply_damage
 
 // Arrow trap: 1d8 damage
 trap_do_arrow:
@@ -524,8 +523,7 @@ trap_do_arrow:
     lda #1
     ldx #8
     ldy #0
-    jsr trap_apply_damage
-    rts
+    jmp trap_apply_damage
 
 // Poison gas: set poison timer to 10 + 1d10
 trap_do_gas:
@@ -539,15 +537,13 @@ trap_do_gas:
     sta zp_eff_poison
     // Print "YOU FEEL POISONED."
     ldx #HSTR_DF_POISONED
-    jsr huff_print_msg
-    rts
+    jmp huff_print_msg
 
 // Teleport: move player to random floor tile
 trap_do_teleport:
     ldx #HSTR_DF_TELEPORTED
     jsr huff_print_msg
-    jsr trap_teleport
-    rts
+    jmp trap_teleport
 
 // Poison dart: 1d4 damage + 50% chance CON decrement
 trap_do_dart:
@@ -588,8 +584,7 @@ trap_do_rockfall:
     lda #2              // 2 dice
     ldx #8              // d8
     ldy #0              // +0
-    jsr trap_apply_damage
-    rts
+    jmp trap_apply_damage
 
 // ============================================================
 // trap_apply_damage — Roll damage and subtract from player HP

@@ -2487,8 +2487,7 @@ game_over_prepare_for_disk_io:
 #if PLATFORM_GAME_OVER_DISK_SETUP_JUMP
     jmp tramp_game_over_disk_setup
 #else
-    jsr tramp_game_over_disk_setup
-    rts
+    jmp tramp_game_over_disk_setup
 !configured:
     jsr tramp_game_over_prepare
     clc
@@ -2783,8 +2782,7 @@ put_tool_ego_prefix:
     sta zp_ptr0
     lda tool_ego_prefix_hi,x
     sta zp_ptr0_hi
-    jsr hal_screen_put_string       // Print prefix (e.g., "Dwarven ")
-    rts
+    jmp hal_screen_put_string       // Print prefix (e.g., "Dwarven ")
 
 #if !GAME_LOOP_LOW_DATA_EXTERNAL
 ptep_temp: .byte 0

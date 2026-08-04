@@ -1704,6 +1704,156 @@ run_wizard_reveal_product_smoke() {
     TOTAL=$((TOTAL + 1))
 }
 
+run_wizard_item_product_smoke() {
+    local name="wizard_item_product_smoke"
+    echo -n "  $name: "
+
+    local build_log
+    build_log=$(mktemp -t "build_${name}_log")
+    mkdir -p ../../../build/test/c64
+
+    if ! make -s -C .. ../../build/c64/boot.prg ../../build/c64/bootart64.prg ../../build/c64/title \
+            ../../build/c64/monster.db.1 ../../build/c64/monster.db.2 ../../build/c64/monster.db.3 ../../build/c64/monster.db.4 \
+            >"$build_log" 2>&1; then
+        echo "FAIL (asset build error)"
+        tail -20 "$build_log"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    if ! java -jar "$KICKASS" "${KICKASS_TRACE_DEFINE[@]}" main.s :OVL_OUT=../../../build/test/c64 -showmem -vicesymbols \
+            -define C64_TEST_SCRIPTED_WIZARD_ITEM_PRODUCT \
+            -o ../../../build/test/c64/moria_wizard_item_smoke.prg >"$build_log" 2>&1; then
+        echo "FAIL (assembly error)"
+        grep -i error "$build_log" | head -5
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    local scripted_d64="../../../build/test/c64/moria_wizard_item_smoke.d64"
+    rm -f "$scripted_d64"
+    if ! "$C1541" -format "moria8 c64,m8" d64 "$scripted_d64" \
+            -attach "$scripted_d64" \
+            -write ../../../build/test/c64/boot.prg "moria8" \
+            -write ../../../build/test/c64/boot.prg "boot64" \
+            -write ../../../build/test/c64/bootart64.prg "bootart64" \
+            -write ../../../build/test/c64/moria_wizard_item_smoke.prg "moria64" \
+            -write ../../../build/test/c64/64.bank "64.bank" \
+            -write ../../../build/test/c64/title "t64" \
+            -write ../../../build/test/c64/monster.db.1 "monster.db.1" \
+            -write ../../../build/test/c64/monster.db.2 "monster.db.2" \
+            -write ../../../build/test/c64/monster.db.3 "monster.db.3" \
+            -write ../../../build/test/c64/monster.db.4 "monster.db.4" \
+            -write ../../../build/test/c64/ovl.start "64.start" \
+            -write ../../../build/test/c64/ovl.town "64.town" \
+            -write ../../../build/test/c64/ovl.death "64.death" \
+            -write ../../../build/test/c64/ovl.modal "64.modal" \
+            -write ../../../build/test/c64/ovl.gen "64.gen" \
+            -write ../../../build/test/c64/ovl.help "64.help" \
+            -write ../../../build/test/c64/ovl.ui "64.ui" \
+            -write ../../../build/test/c64/ovl.items "64.items" \
+            -write ../../../build/test/c64/ovl.spell "64.spell" >>"$build_log" 2>&1; then
+        echo "FAIL (disk build error)"
+        tail -20 "$build_log"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    # Wizard generate item (G 96, then G 97) exercises the overlay-resident
+    # generate flow whose ego roll banks the $E000 window. Regression guard
+    # for the C64 tramp_roll_ego_type exit-banking bug: the standard
+    # trampoline leaves KERNAL mapped at $E000, so the overlay caller's
+    # return executed ROM (screen-scroll garbage, then BRK/JAM). The
+    # modal trampoline keeps overlay RAM visible.
+    local main_vs="../../../build/test/c64/main.vs"
+    local fail_addr dlvl_addr ovl_addr arm_addr
+    fail_addr=$(awk '/\.c64_test_wizard_reveal_fail_input_sym$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    dlvl_addr=$(awk '/\.zp_player_dlvl$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    ovl_addr=$(awk '/\.current_overlay$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    arm_addr=$(awk '/\.item_init_identification$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    if [ -z "${fail_addr:-}" ] || [ -z "${dlvl_addr:-}" ] || [ -z "${ovl_addr:-}" ] || [ -z "${arm_addr:-}" ]; then
+        echo "FAIL (missing wizard-item smoke symbols in ../../../build/test/c64/main.vs)"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+    fail_addr=$(printf '%04X' "$((16#$fail_addr))")
+    dlvl_addr=$(printf '%04X' "$((16#$dlvl_addr))")
+    ovl_addr=$(printf '%04X' "$((16#$ovl_addr))")
+    arm_addr=$(printf '%04X' "$((16#$arm_addr))")
+
+    local mon_file
+    mon_file=$(mktemp -t "test_${name}_mon")
+    local tty_log
+    tty_log=$(mktemp -t "test_${name}_ttylog")
+    local fail_lc
+    fail_lc=$(echo "$fail_addr" | tr '[:upper:]' '[:lower:]')
+
+    # Same boot-time BASIC ROM breakpoint hazard as the reveal smoke; arm the
+    # brk break only after item_init_identification runs at new-game start.
+    {
+        echo "break \$${arm_addr}"
+        echo "g"
+        echo "delete 1"
+        echo "break \$${fail_addr}"
+        echo "g"
+        echo "m \$${dlvl_addr} \$${dlvl_addr}"
+        echo "m \$${ovl_addr} \$${ovl_addr}"
+        echo "quit"
+    } > "$mon_file"
+
+    script -q "$tty_log" \
+        "$VICE" -warp -config /dev/null -default +saveres -console -nativemonitor -autostartprgmode 1 \
+        -8 "$scripted_d64" -autostart "$scripted_d64" \
+        -moncommands "$mon_file" \
+        -limitcycles 900000000 +sound -sounddev dummy \
+        +remotemonitor +binarymonitor > /dev/null 2>&1
+
+    if ! grep -qiE "Stop on  exec ${fail_lc}" "$tty_log" && ! grep -qi "^BREAK: .*C:\$${fail_addr}" "$tty_log"; then
+        if grep -qiE "JAM|Invalid opcode" "$tty_log"; then
+            echo "FAIL (wizard item flow jammed)"
+        elif grep -qi "cycle limit reached" "$tty_log"; then
+            echo "FAIL (wizard item flow timed out)"
+        else
+            echo "FAIL (did not reach scripted-input exhaustion)"
+        fi
+        echo "    Log: $tty_log"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    # Reaching scripted-input exhaustion means both generations and the
+    # overlay restore returned to the main loop. Verify invariants: still on
+    # dungeon level 1, and the wizard menu overlay was restored
+    # (OVL_MODAL_MISC = 9).
+    local dlvl_lc ovl_lc
+    dlvl_lc=$(echo "$dlvl_addr" | tr '[:upper:]' '[:lower:]')
+    ovl_lc=$(echo "$ovl_addr" | tr '[:upper:]' '[:lower:]')
+
+    if ! grep -qiE "^>C:${dlvl_lc}  01" "$tty_log"; then
+        echo "FAIL (player left dungeon level 1 after wizard item generation)"
+        echo "    Log: $tty_log"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    if ! grep -qiE "^>C:${ovl_lc}  09" "$tty_log"; then
+        echo "FAIL (wizard menu overlay not restored after item generation)"
+        echo "    Log: $tty_log"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    echo "PASS"
+    PASS=$((PASS + 1))
+    TOTAL=$((TOTAL + 1))
+}
 run_disk_setup_product_smoke() {
     local name="disk_setup_product_smoke"
     echo -n "  $name: "
@@ -3834,6 +3984,7 @@ run_suite_function "scripted_dungeon_target_spell_smoke" run_scripted_dungeon_ta
 run_suite_function "scripted_detect_evil_smoke" run_scripted_detect_evil_smoke
 run_suite_function "dungeon_ascent_product_smoke" run_dungeon_ascent_product_smoke
 run_suite_function "wizard_reveal_product_smoke" run_wizard_reveal_product_smoke
+run_suite_function "wizard_item_product_smoke" run_wizard_item_product_smoke
 run_suite_function "retirement_royal_product_smoke" run_retirement_royal_product_smoke "retirement_flow_product_smoke"
 run_suite_function "disk_setup_product_smoke" run_disk_setup_product_smoke
 run_suite_function "title_disk_setup_single_drive_returns_program_prompt" run_disk_setup_single_drive_return_product_smoke "disk_setup_single_drive_return_product_smoke"

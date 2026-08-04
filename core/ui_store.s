@@ -96,8 +96,7 @@ store_enter:
 !se_exit:
     lda #COL_BLACK
     sta zp_text_color
-    jsr ui_help_clear_all
-    rts
+    jmp ui_help_clear_all
 
 // ============================================================
 // Screen drawing

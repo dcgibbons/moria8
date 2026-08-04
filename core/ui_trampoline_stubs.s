@@ -62,6 +62,9 @@ cmd_wizard_entry:
 level_change_generate_current:
     rts
 
+scroll_teleport_level_exec:
+    jmp level_change_generate_current
+
 // $E000 store overlay trampolines
 tramp_store_init_all:
 tramp_store_restock_all:

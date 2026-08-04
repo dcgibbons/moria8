@@ -358,8 +358,7 @@ player_calc_stats:
     sta player_pflags
 
     // Update combat bonuses from stats
-    jsr player_calc_combat
-    rts
+    jmp player_calc_combat
 
 pf_bit_table:
     .byte PFLAG_RESIST_FIRE, PFLAG_RESIST_COLD, PFLAG_SPEED, PFLAG_SEE_INVIS

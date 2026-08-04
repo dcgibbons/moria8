@@ -211,6 +211,38 @@ or `Neutralize Poison` feedback:
 | 93 | Lucerne Hammer |
 | 94 | Broad Axe |
 | 95 | Awl-Pike |
+| 96 | Potion of Healing |
+| 97 | Potion of Restoration |
+| 98 | Potion of Resist Heat |
+| 99 | Potion of Resist Cold |
+| 100 | Potion of Cure Critical Wounds |
+| 101 | Scroll of Teleport Level |
+| 102 | Scroll of Magic Mapping |
+| 103 | Scroll of Object Detection |
+| 104 | Scroll of Recharging |
+| 105 | Scroll of Rune of Protection |
+| 106 | Scroll of Genocide |
+| 107 | Scroll of Mass Genocide |
+| 108 | Scroll of *Destruction* |
+| 109 | Ring of Resist Fire |
+| 110 | Ring of Resist Cold |
+| 111 | Ring of Speed |
+| 112 | Ring of See Invisible |
+| 113 | Ring of Slaying |
+| 114 | Wand of Slow Monster |
+| 115 | Wand of Stone-to-Mud |
+| 116 | Wand of Teleport Away |
+| 117 | Wand of Fire Balls |
+| 118 | Wand of Cold Balls |
+| 119 | Staff of Dispel Evil |
+| 120 | Staff of Destruction |
+| 121 | Staff of Speed |
+| 122 | Mithril Chain Mail |
+| 123 | Mithril Plate Mail |
+| 124 | Amulet of Wisdom |
+| 125 | Amulet of the Magi |
+| 126 | Potion of Neutralize Poison |
+| 127 | Staff of Remove Curse |
 
 ## Source References
 

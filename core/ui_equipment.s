@@ -178,11 +178,15 @@ ueq_lbl_hands:  .text "Hands:  " ; .byte 0
 ueq_lbl_feet:   .text "Feet:   " ; .byte 0
 ueq_lbl_light:  .text "Light:  " ; .byte 0
 ueq_lbl_ring:   .text "Ring:   " ; .byte 0
+ueq_lbl_amulet: .text "Amulet: " ; .byte 0
 
 ueq_label_ptrs_lo:
     .byte <ueq_lbl_weapon, <ueq_lbl_body, <ueq_lbl_shield, <ueq_lbl_head
     .byte <ueq_lbl_hands, <ueq_lbl_feet, <ueq_lbl_light, <ueq_lbl_ring
+    .byte <ueq_lbl_amulet
 
 ueq_label_ptrs_hi:
     .byte >ueq_lbl_weapon, >ueq_lbl_body, >ueq_lbl_shield, >ueq_lbl_head
     .byte >ueq_lbl_hands, >ueq_lbl_feet, >ueq_lbl_light, >ueq_lbl_ring
+    .byte >ueq_lbl_amulet
+.assert "Equipment label table covers visible slots", ueq_label_ptrs_hi - ueq_label_ptrs_lo, VISIBLE_EQUIP_SLOTS
