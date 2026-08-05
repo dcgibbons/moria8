@@ -516,6 +516,36 @@ Acceptance target:
   appropriate dungeon depths without breaking C64/C128 memory, loading, save,
   recall, or monster behavior contracts.
 
+## Apple IIe
+
+### Investigate AppleSqueezer accelerator incompatibility
+
+Low priority. The Apple IIe build boots and completes character creation on an
+Apple IIgs (IIe mode) but crashes on town entry when the machine has an
+AppleSqueezer accelerator installed. The same build works on the same machine
+with the original CPU, and passes the full MAME `apple2ee` harness.
+
+The crash screen shows the town map left mostly solid wall with a few carved
+building rectangles plus garbage status rows, consistent with generation dying
+partway rather than a video-mode fault. The game's hardware surface is standard
+IIe only (80STORE, RAMRD/RAMWRT, 80COL, PAGE2, INTC3ROM, kbd strobe, speaker,
+`$C01F` read, and firmware AUXMOVE at `$C311`), so the likely cause is an
+accelerator timing or softswitch/aux-bank sequencing difference affecting the
+ZP aux thunks or AUXMOVE switch-preservation assumptions
+(`platforms/apple2/memory_aux.s`).
+
+Possible investigation path:
+
+- Reproduce under MAME `apple2gs` or with accelerator-emulating config to get
+  harness visibility instead of hardware round-trips.
+- On hardware, Ctrl+OA+Reset at the freeze and record PC to distinguish wild
+  jump from hang.
+
+Acceptance target:
+
+- Apple IIe build reaches town and plays on an AppleSqueezer-equipped machine,
+  or the incompatibility is root-caused and documented as wontfix.
+
 ## Testing Infrastructure
 
 ### Collapse disk matrix execution into one shared runner
