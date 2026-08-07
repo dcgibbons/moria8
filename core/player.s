@@ -335,26 +335,27 @@ player_calc_stats:
 !pcs_no_amulet:
 
     // Persistent effect flags from the equipped ring and amulet
+player_recalc_pflags_equipment:
     lda #0
     ldx #EQUIP_RING
     ldy inv_item_id,x
     cpy #ITEM_TYPE_RING_RESIST_FIRE
-    bcc !pf_none+
+    bcc !pcs_pf_none+
     cpy #ITEM_TYPE_RING_SLAYING
-    bcs !pf_none+
+    bcs !pcs_pf_none+
     tya
     sec
     sbc #ITEM_TYPE_RING_RESIST_FIRE
     tax
     lda pf_bit_table,x
-!pf_none:
+!pcs_pf_none:
     // Amulet of the Magi also grants see-invisible
     ldx #EQUIP_AMULET
     ldy inv_item_id,x
     cpy #ITEM_TYPE_AMULET_MAGI
-    bne !pf_store+
+    bne !pcs_pf_store+
     ora #PFLAG_SEE_INVIS
-!pf_store:
+!pcs_pf_store:
     sta player_pflags
 
     // Update combat bonuses from stats
@@ -369,8 +370,7 @@ stat_work: .byte 0
 // Persistent equipment-granted effect flags, recomputed by player_calc_stats.
 // PFLAG_RESIST_FIRE: fire breath damage reduced (like the temp resist timer).
 // PFLAG_RESIST_COLD: reserved for cold mitigation (no cold-breath consumer yet).
-// PFLAG_SPEED / PFLAG_SEE_INVIS: inert until their consumers exist (the haste
-// and sense-invisible spell timers are equally inert today).
+// PFLAG_SPEED and PFLAG_SEE_INVIS are consumed alongside their timed effects.
 player_pflags: .byte 0
 
 #if !APPLE2
@@ -560,6 +560,9 @@ stat_bonus_index:
 // Umoria combat/stat adjustment helpers. These intentionally do not use
 // stat_bonus_index because exceptional 18/xx values have distinct thresholds.
 #if !C128_PLAYER_STAT_HELPERS_EXTERNAL
+player_adj_0:
+    lda #0
+    rts
 player_adj_m4:
     lda #<-4
     rts
@@ -571,9 +574,6 @@ player_adj_m2:
     rts
 player_adj_m1:
     lda #<-1
-    rts
-player_adj_0:
-    lda #0
     rts
 player_adj_1:
     lda #1

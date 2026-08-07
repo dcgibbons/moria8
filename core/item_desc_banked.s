@@ -51,6 +51,7 @@ itemdesc_put_store_slot:
     sta itemdesc_ego
     jmp itemdesc_put_staged
 
+
 // itemdesc_put_staged — Print staged item name, ego, sensed marker, and stats.
 // Uses itemdesc_* fields. Callable from $F000 banked code and $E000 overlays.
 itemdesc_put_staged:
@@ -124,17 +125,14 @@ itemdesc_put_stats:
     cmp #ICAT_WEAPON
     beq !idps_weapon+
     cmp #ICAT_ARMOR
-    beq !idps_armor+
-    cmp #ICAT_SHIELD
-    beq !idps_armor+
-    cmp #ICAT_HELM
-    beq !idps_armor+
-    cmp #ICAT_GLOVES
-    beq !idps_armor+
-    cmp #ICAT_BOOTS
-    beq !idps_armor+
+    bcc !idps_not_armor+
+    cmp #ICAT_BOOTS + 1
+    bcc !idps_armor_tramp+
+!idps_not_armor:
     cmp #ICAT_RING
     beq !idps_ring+
+    cmp #ICAT_AMULET
+    beq !idps_amulet_tramp+
     cmp #ICAT_WAND
     bne !idps_not_wand+
     jmp !idps_charges+
@@ -148,6 +146,10 @@ itemdesc_put_stats:
     jmp !idps_turns+
 !idps_not_light:
     rts
+!idps_amulet_tramp:
+    jmp !idps_ring_p1+
+!idps_armor_tramp:
+    jmp !idps_armor+
 !idps_weapon:
     lda itemdesc_to_hit
     ora itemdesc_to_dam

@@ -55,6 +55,8 @@ Sorry, what was that again?
 @EFF_CONFUSE_END You feel less confused.
 @EFF_PARALYZE_END You can move again.
 @EFF_FEAR_END You feel bolder now.
+@EFF_HASTE_END You feel yourself slow down.
+@EFF_SLOW_END You feel yourself speed up.
 @TTL_DIM Your light is growing dim.
 @TTL_OUT Your light has gone out.
 @RECALL_ARRIVE You feel yourself yanked away!

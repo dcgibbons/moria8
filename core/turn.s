@@ -136,9 +136,15 @@ turn_tick_effects:
     // Signed decrement toward 0
     bpl !pos_speed+
     inc zp_eff_speed        // Negative, increment toward 0
-    jmp !no_speed+
+    bne !no_speed+
+    ldx #HSTR_EFF_SLOW_END
+    bne !speed_msg+         // always taken
 !pos_speed:
     dec zp_eff_speed        // Positive, decrement toward 0
+    bne !no_speed+
+    ldx #HSTR_EFF_HASTE_END
+!speed_msg:
+    jsr huff_print_msg
 !no_speed:
 
     // Simple-dec effects: protect($55), invis($56), infra($57),

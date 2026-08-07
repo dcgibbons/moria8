@@ -3,6 +3,8 @@
 //
 // Full-screen equipment view for currently visible slots.
 
+#import "ui_equipment_wrap.s"
+
 .const UEQ_TITLE_COL = hal_layout_equipment_title_col
 .const UEQ_FOOTER_COL = hal_layout_equipment_footer_col
 
@@ -50,6 +52,10 @@ ui_equip_display_common:
     sta zp_ptr0_hi
     jsr hal_screen_put_string
 
+#if HAL_LAYOUT_EQUIPMENT_WRAP
+    jsr ueq_wrap_enable
+#endif
+
     // Iterate equipment slots
     lda #0
     sta ueq_slot               // maps visible rows to equipment slots
@@ -62,10 +68,17 @@ ui_equip_display_common:
     jmp !ueq_done+
 !ueq_cont:
 
-    // Row = slot + 2
+    // Row = slot * stride + 2, with a continuation row on 40-column layouts.
+#if HAL_LAYOUT_EQUIPMENT_WRAP
+    asl
+#endif
     clc
     adc #2
     sta zp_cursor_row
+#if HAL_LAYOUT_EQUIPMENT_WRAP
+    lda #0
+    sta ueq_pending_space
+#endif
     lda #1
     sta zp_cursor_col
 
@@ -115,6 +128,13 @@ ui_equip_display_common:
     // Print item description with ego/status/stat suffixes
     lda #COL_WHITE
     sta zp_text_color
+#if HAL_LAYOUT_EQUIPMENT_WRAP
+    lda zp_cursor_col
+    sta ueq_wrap_col
+    lda #0
+    sta ueq_wrap_line
+    sta ueq_pending_space
+#endif
     jsr itemdesc_put_inv_slot
     jmp !ueq_next+
 
@@ -132,6 +152,9 @@ ui_equip_display_common:
     jmp !ueq_loop-
 
 !ueq_done:
+#if HAL_LAYOUT_EQUIPMENT_WRAP
+    jsr ueq_wrap_disable
+#endif
     lda #COL_WHITE
     sta zp_text_color
     lda #(SCREEN_ROWS - 1)

@@ -111,6 +111,7 @@ work16 behavior review; this ledger is their durable approval provenance.
 | Invariant | Current gate | Command/status |
 | --- | --- | --- |
 | Dirty-latch promotion and monster dirty result | `platforms/commodore/c64/tests/test_turn.s` | `TEST_FILTER='turn' make test64` |
+| Haste/slow timer decay toward zero and expiry messages at zero crossing | `platforms/commodore/c64/tests/test_turn.s` t27-t29 exercise production `turn_tick_effects` | `TEST_FILTER='turn' make test64` |
 | C64 command/search/repeat lifecycle | `platforms/commodore/c64/tests/test_main_loop.s` | `TEST_FILTER='main_loop' make test64`; search tests do not prove asymmetric dirty-first/clean-second aggregation |
 | C128 command/search/run redraw lifecycle | `platforms/commodore/c128/tests/test_main_loop128.s` | `TEST_FILTER='main_loop128' make test128`; search tests do not prove asymmetric dirty-first/clean-second aggregation |
 | C128 physical scroll-delta rendering | `platforms/commodore/c128/tests/test_vdc_scroll_delta128.s` | `TEST_FILTER='vdc_scroll_delta128' make test128` |

@@ -1848,6 +1848,13 @@ level_change_generate_current:
 #if C128_TEST_FORCE_DUNGEON_MELEE
     jsr c128_test_force_dungeon_melee
 #endif
+#if !APPLE2
+    lda wizard_level_jump_active
+    beq !lcgc_keep_stack+
+    ldx #$ff
+    txs
+!lcgc_keep_stack:
+#endif
     jsr update_visibility
     jsr generation_busy_end_if_dungeon_api
     jsr hal_screen_clear
@@ -1876,6 +1883,14 @@ level_change_generate_current:
 #endif
 #if C128_TEST_PERF_P1_TRACE_TRANSITION
     jmp c128_test_perf_p1_trace_capture_sym
+#endif
+#if !APPLE2
+    lda wizard_level_jump_active
+    beq !lcgc_return+
+    lda #0
+    sta wizard_level_jump_active
+    jmp main_loop
+!lcgc_return:
 #endif
     rts
 

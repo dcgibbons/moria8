@@ -3845,7 +3845,7 @@ check_static_contract "title_screen_clear_ownership_contract" "../common/title_s
 check_static_contract "c64_title_reentry_uses_owned_clear_contract" "main.s" \
     "title_enter_menu:|||jsr title_clear_full_screen|||jsr title_load_and_draw|||jsr title_clear_below_menu|||jsr msg_init|||jsr title_show_sysinfo|||jsr title_draw_menu"
 check_static_contract "modal_restore_uses_safe_full_clear_contract" "../../../core/ui_restore.s" \
-    "ui_view_redraw_gameplay_view:|||jsr ui_reset_message_state|||jsr ui_clear_full_screen_safe|||jsr viewport_update|||jsr render_viewport|||jsr status_draw"
+    "ui_view_redraw_gameplay_view:|||jsr ui_reset_message_state|||#if HAL_PLATFORM_RESTORE_TIER_AFTER_OVERLAY|||jsr tier_restore_after_overlay|||#endif|||jsr ui_clear_full_screen_safe|||jsr viewport_update|||jsr render_viewport|||jmp status_draw"
 check_static_contract "c64_look_overlay_cleanup_contract" "look_trampoline.s" \
     "tramp_do_look:|||lda #OVL_MODAL_MISC|||jsr overlay_load_no_kernal|||bcs !done+|||jsr do_look|||!done:|||jmp tramp_sr_epilogue"
 check_static_contract "c64_hidden_kernal_irq_vector_contract" "main.s" \
@@ -3875,11 +3875,11 @@ run_test "config" "tests/test_config.s" "0400 0400" 1
 run_test "input"  "tests/test_input.s"  "0400 040d" 14
 run_test "main_loop" "tests/test_main_loop.s" "0400 0427" 40 500000000
 run_test "run_visibility_bank" "tests/test_run_visibility_bank.s" "0400 0400" 1 500000000
-run_test "turn" "tests/test_turn.s" "0400 0419" 26 500000000
+run_test "turn" "tests/test_turn.s" "0400 041c" 29 500000000
 run_test "player" "tests/test_player.s" "0400 0409" 10
 run_test "dungeon" "tests/test_dungeon.s" "0400 042c" 45 500000000
 run_test "monster" "tests/test_monster.s" "0400 0412" 19 500000000
-run_test "monster_ai" "tests/test_monster_ai.s" "0400 0422" 35 500000000
+run_test "monster_ai" "tests/test_monster_ai.s" "0400 0427" 40 500000000
 run_test "combat" "tests/test_combat.s" "0400 0427" 40 500000000
 run_test "msg_long" "tests/test_msg_long.s" "0400 0400" 1 20000000
 run_test "monster_attack" "tests/test_monster_attack.s" "0400 040d" 14 500000000
@@ -3951,7 +3951,7 @@ run_test "orb_of_draining_prayer" "tests/test_orb_of_draining_prayer.s" "0400 04
     run_test "prayer_feedback" "tests/test_prayer_feedback.s" "0400 040c" 13 500000000
 run_test "detect_feedback" "tests/test_detect_feedback.s" "0400 0403" 4 500000000
 run_test "item" "tests/test_item.s" "0400 0431" 50 1000000000
-run_test "scroll_p3" "tests/test_scroll_p3.s" "0400 040a" 11 1000000000
+run_test "scroll_p3" "tests/test_scroll_p3.s" "0400 040b" 12 1000000000
 run_test "item_desc" "tests/test_item_desc.s" "0400 0408" 9 500000000
 run_test "item_ui" "tests/test_item_ui.s" "0400 040f" 16 1000000000
 run_test "store" "tests/test_store.s" "0400 0429" 42 1000000000

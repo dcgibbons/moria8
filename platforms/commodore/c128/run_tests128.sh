@@ -563,7 +563,7 @@ describe_phase_token() {
             printf 'guards\tmain128_asm,c128_artifact_budget,c128_symbol_placement,c128_user_visible_string_guard,c128_prompt_irq_guard,c128_item_overlay_key_guard,c128_input_run_guard,c128_look_overlay_guard,c128_80col_layout_guard,c128_ref_hal_guard,c128_save_load_guard\n'
             ;;
         units)
-            printf 'units\tminimal128,config128,memory128,db128,tier128,input128,disk_swap128,main_loop128,msg_prompt128,vdc_attr128,item_desc128,vdc_scroll_delta128,status_coherence128,dungeon128,look_trampoline128,soak128,monster128,detect_monsters128,detect_evil128,cure_light_wounds128,cure_poison128,cure_light_wounds_prayer128,bless_prayer128,remove_fear_prayer128,call_light_prayer128,find_traps_prayer128,detect_doors_stairs_prayer128,slow_poison_prayer128,blind_creature_prayer128,portal_prayer128,cure_medium_wounds_prayer128,cure_serious_wounds_prayer128,sense_invisible_prayer128,protection_from_evil_prayer128,earthquake_prayer128,sense_surroundings_prayer128,cure_critical_wounds_prayer128,turn_undead_prayer128,prayer_prayer128,dispel_undead_prayer128,dispel_evil_prayer128,glyph_of_warding_prayer128,holy_word_prayer128,heal_prayer128,chant_prayer128,sanctuary_prayer128,neutralize_poison_prayer128,create_food_prayer128,remove_curse_prayer128,resist_heat_cold_prayer128,orb_of_draining_prayer128,find_hidden_traps_doors128,stinking_cloud128,frost_ball128,teleport_other128,haste_self128,fire_ball128,word_of_destruction128,genocide128,confusion128,lightning_bolt128,trap_door_destruction128,sleep_i128,sleep_ii128,sleep_iii128,fire_bolt128,slow_monster128,polymorph_other128,identify128,teleport_self128,recharge_item_ii128\n'
+            printf 'units\tminimal128,config128,memory128,db128,tier128,input128,disk_swap128,main_loop128,msg_prompt128,vdc_attr128,item_desc128,speed_equipment128,vdc_scroll_delta128,status_coherence128,dungeon128,look_trampoline128,soak128,monster128,detect_monsters128,detect_evil128,cure_light_wounds128,cure_poison128,cure_light_wounds_prayer128,bless_prayer128,remove_fear_prayer128,call_light_prayer128,find_traps_prayer128,detect_doors_stairs_prayer128,slow_poison_prayer128,blind_creature_prayer128,portal_prayer128,cure_medium_wounds_prayer128,cure_serious_wounds_prayer128,sense_invisible_prayer128,protection_from_evil_prayer128,earthquake_prayer128,sense_surroundings_prayer128,cure_critical_wounds_prayer128,turn_undead_prayer128,prayer_prayer128,dispel_undead_prayer128,dispel_evil_prayer128,glyph_of_warding_prayer128,holy_word_prayer128,heal_prayer128,chant_prayer128,sanctuary_prayer128,neutralize_poison_prayer128,create_food_prayer128,remove_curse_prayer128,resist_heat_cold_prayer128,orb_of_draining_prayer128,find_hidden_traps_doors128,stinking_cloud128,frost_ball128,teleport_other128,haste_self128,fire_ball128,word_of_destruction128,genocide128,confusion128,lightning_bolt128,trap_door_destruction128,sleep_i128,sleep_ii128,sleep_iii128,fire_bolt128,slow_monster128,polymorph_other128,identify128,teleport_self128,recharge_item_ii128\n'
             ;;
         smokes)
             printf 'smokes\tboot_d64_smoke,boot_title_idle_smoke,title_art_smoke,marker_init_d64_smoke,boot_title_load_missing_savefile_smoke,boot_title_load_mounted_save_smoke,boot_title_save_write_product_smoke,boot_title_save_media_fail_product_smoke,boot_title_single_drive_save_wrong_media_smoke,boot_title_single_drive_load_wrong_media_smoke,boot_title_single_drive_load_corrupt_smoke,boot_title_single_drive_load_return_smoke,boot_title_single_drive_fresh_save_smoke,vic40_clean_boot_smoke,new_key_stability_smoke,boot_title_newgame_smoke,boot_title_load_resume_smoke,boot_tier_transition_smoke,town_overlay_smoke,town_overlay_female_smoke,town_overlay_state_smoke,scripted_summary_to_town_smoke,scripted_spell_cast_smoke,scripted_book_overlay_smoke,scripted_spell_list_overlay_smoke,scripted_spell_list_cancel_smoke,scripted_prayer_cast_smoke,cache_survival_smoke,dungeon_attack_stability_smoke,death_overlay_smoke,restart_to_title_smoke,preload_partial_failure_smoke,overlay_partial_failure_smoke\n'
@@ -604,6 +604,7 @@ suite_matches_phase_token() {
         units)
             case "$suite_name" in
                 look_trampoline128) return 0 ;;
+                speed_equipment128) return 0 ;;
                 minimal128|config128|memory128|db128|tier128|input128|disk_swap128|main_loop128|msg_prompt128|vdc_attr128|item_desc128|vdc_scroll_delta128|status_coherence128|dungeon128|soak128|monster128|detect_monsters128|detect_evil128|cure_light_wounds128|cure_poison128|cure_light_wounds_prayer128|bless_prayer128|remove_fear_prayer128|call_light_prayer128|find_traps_prayer128|detect_doors_stairs_prayer128|slow_poison_prayer128|blind_creature_prayer128|portal_prayer128|cure_medium_wounds_prayer128|cure_serious_wounds_prayer128|sense_invisible_prayer128|protection_from_evil_prayer128|earthquake_prayer128|sense_surroundings_prayer128|cure_critical_wounds_prayer128|turn_undead_prayer128|prayer_prayer128|dispel_undead_prayer128|dispel_evil_prayer128|glyph_of_warding_prayer128|holy_word_prayer128|heal_prayer128|chant_prayer128|sanctuary_prayer128|neutralize_poison_prayer128|create_food_prayer128|remove_curse_prayer128|resist_heat_cold_prayer128|orb_of_draining_prayer128|find_hidden_traps_doors128|stinking_cloud128|frost_ball128|teleport_other128|haste_self128|fire_ball128|word_of_destruction128|genocide128|confusion128|lightning_bolt128|frost_bolt128|turn_stone_to_mud128|create_food128|recharge_item_i128|recharge_item_ii128|trap_door_destruction128|sleep_i128|sleep_ii128|sleep_iii128|fire_bolt128|slow_monster128|polymorph_other128|identify128|teleport_self128|remove_curse128) return 0 ;;
             esac
             ;;
@@ -1682,7 +1683,7 @@ required_chains = [
     ("cmd_recall_dismiss", loop_helpers, [
         "jsr tramp_ui_recall",
         "jsr input_prepare_modal_dismiss_key",
-        "jsr hal_input_get_key",
+        "jmp hal_input_get_key",
     ]),
     ("store_buy_prompt", store_mod, [
         "ldx #MSG_BUY_WHICH",
@@ -1817,6 +1818,7 @@ from pathlib import Path
 root = Path("..").resolve()
 core = root.parent.parent / "core"
 items = (core / "item_actions_overlay.s").read_text().splitlines()
+c128_main = (root / "c128" / "main.s").read_text().splitlines()
 
 def has_ordered_chain(lines: list[str], tokens: list[str], window: int = 28) -> bool:
     for i, ln in enumerate(lines):
@@ -1875,6 +1877,28 @@ if not has_ordered_chain(items, [
     "jmp piw_select_filtered_inv_key",
 ]):
     print("C128 item overlay must mark ?-opened inventory selectors as returning to OVL_ITEMS")
+    raise SystemExit(1)
+
+if not has_ordered_chain(items, [
+    "irs_effect_p3_swap:",
+    "#if C128",
+    "cmp #ITEM_TYPE_STAFF_SPEED",
+    "beq !irsp3_staff_speed+",
+    "!irsp3_staff_speed:",
+    "jmp tramp_staff_speed_items",
+], window=40):
+    print("C128 Staff of Speed must leave the items overlay through its resident trampoline")
+    raise SystemExit(1)
+
+if not has_ordered_chain(c128_main, [
+    "tramp_staff_speed_items:",
+    "lda #OVL_DEATH",
+    "jsr overlay_load",
+    "jsr eff_haste_self",
+    "lda #OVL_ITEMS",
+    "jsr overlay_load",
+]):
+    print("C128 Staff of Speed trampoline must run haste and restore OVL_ITEMS")
     raise SystemExit(1)
 
 magic_execute = (core / "player_magic_execute_overlay.s").read_text().splitlines()
@@ -3911,6 +3935,7 @@ run_parallel_unit_tests() {
         "msg_prompt128 tests/test_msg_prompt128.s 120000000"
         "vdc_attr128 tests/test_vdc_attr128.s 20000000"
         "item_desc128 tests/test_item_desc128.s 20000000"
+        "speed_equipment128 tests/test_speed_equipment128.s 20000000"
         "vdc_scroll_delta128 tests/test_vdc_scroll_delta128.s 30000000"
         "status_coherence128 tests/test_status_coherence128.s 20000000"
         "dungeon128 tests/test_dungeon128.s 50000000"

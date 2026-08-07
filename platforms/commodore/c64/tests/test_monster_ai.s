@@ -26,7 +26,7 @@ bootstrap:
 
 // test_finish — Copy results to $0400 and halt.
 test_finish:
-    ldx #34
+    ldx #39
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -151,7 +151,7 @@ tai_rng_values:   .fill 4, 0
 tai_rng_idx:      .byte 0
 tai_distance:     .byte 0
 auto_rest_active: .byte 0
-tc_results: .fill 35, $ff      // Result buffer (copied to $0400 at end)
+tc_results: .fill 40, $ff      // Result buffer (copied to $0400 at end)
 
 .macro PatchJump(target, replacement) {
     lda #$4c
@@ -282,6 +282,12 @@ test_start:
     // Set player dungeon level to 1
     lda #1
     sta zp_player_dlvl
+
+    // Clear player speed state read by the AI tick's player-speed fold:
+    // haste/slow timer (signed, 0 = inactive) and equipment pflags.
+    lda #0
+    sta zp_eff_speed
+    sta player_pflags
 
     // Set light radius
     lda #1
@@ -2573,10 +2579,303 @@ test_start:
     bne !t35_fail+
     lda #$01
     sta tc_results + 34
-    jmp !tests_done+
+    jmp !t36+
 !t35_fail:
     lda #$00
     sta tc_results + 34
+
+    // ==========================================
+    // Test 36: hasted player (zp_eff_speed > 0) slows a speed-1 monster to
+    // every-other-turn cadence; an odd turn skips the move entirely.
+    // ==========================================
+!t36:
+    jsr monster_init_table
+    lda #0
+    sta zp_game_flags
+
+    ldx #15
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #20
+!t36_fill:
+    lda #TILE_FLOOR | FLAG_LIT
+    sta (zp_ptr0),y
+    iny
+    cpy #31
+    bne !t36_fill-
+
+    lda #20
+    sta ms_spawn_x
+    lda #15
+    sta ms_spawn_y
+    lda #4                      // Kobold (speed=1)
+    jsr monster_spawn_one
+
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_FLAGS
+    lda #MF_AWAKE
+    sta (zp_ptr0),y
+
+    lda #30
+    sta zp_player_x
+    lda #15
+    sta zp_player_y
+
+    lda #10
+    sta zp_eff_speed            // hasted
+    lda #1
+    sta zp_turn_lo              // odd turn
+    jsr monster_ai_tick
+
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_X
+    lda (zp_ptr0),y
+    cmp #20                     // skipped: still at (20,15)
+    bne !t36_fail+
+    lda #$01
+    sta tc_results + 35
+    jmp !t37+
+!t36_fail:
+    lda #$00
+    sta tc_results + 35
+
+    // ==========================================
+    // Test 37: same haste state, even turn — the monster acts once.
+    // ==========================================
+!t37:
+    jsr monster_init_table
+    lda #0
+    sta zp_game_flags
+
+    ldx #15
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #20
+!t37_fill:
+    lda #TILE_FLOOR | FLAG_LIT
+    sta (zp_ptr0),y
+    iny
+    cpy #31
+    bne !t37_fill-
+
+    lda #20
+    sta ms_spawn_x
+    lda #15
+    sta ms_spawn_y
+    lda #4                      // Kobold (speed=1)
+    jsr monster_spawn_one
+
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_FLAGS
+    lda #MF_AWAKE
+    sta (zp_ptr0),y
+
+    lda #30
+    sta zp_player_x
+    lda #15
+    sta zp_player_y
+
+    lda #10
+    sta zp_eff_speed            // hasted
+    lda #2
+    sta zp_turn_lo              // even turn
+    jsr monster_ai_tick
+
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_X
+    lda (zp_ptr0),y
+    cmp #21                     // acted once: (20,15) -> (21,15)
+    bne !t37_fail+
+    lda #$01
+    sta tc_results + 36
+    jmp !t38+
+!t37_fail:
+    lda #$00
+    sta tc_results + 36
+
+    // ==========================================
+    // Test 38: Ring of Speed (PFLAG_SPEED) has the same every-other-turn
+    // effect as an active haste timer; odd turn skips.
+    // ==========================================
+!t38:
+    jsr monster_init_table
+    lda #0
+    sta zp_game_flags
+    sta zp_eff_speed            // no timer — ring only
+    lda #PFLAG_SPEED
+    sta player_pflags
+
+    ldx #15
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #20
+!t38_fill:
+    lda #TILE_FLOOR | FLAG_LIT
+    sta (zp_ptr0),y
+    iny
+    cpy #31
+    bne !t38_fill-
+
+    lda #20
+    sta ms_spawn_x
+    lda #15
+    sta ms_spawn_y
+    lda #4                      // Kobold (speed=1)
+    jsr monster_spawn_one
+
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_FLAGS
+    lda #MF_AWAKE
+    sta (zp_ptr0),y
+
+    lda #30
+    sta zp_player_x
+    lda #15
+    sta zp_player_y
+
+    lda #1
+    sta zp_turn_lo              // odd turn
+    jsr monster_ai_tick
+
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_X
+    lda (zp_ptr0),y
+    cmp #20                     // skipped: still at (20,15)
+    bne !t38_fail+
+    lda #$01
+    sta tc_results + 37
+    jmp !t39+
+!t38_fail:
+    lda #$00
+    sta tc_results + 37
+
+    // ==========================================
+    // Test 39: slowed player (zp_eff_speed < 0) hastens a speed-1 monster
+    // to a double move.
+    // ==========================================
+!t39:
+    jsr monster_init_table
+    lda #0
+    sta zp_game_flags
+    sta player_pflags           // no ring
+    lda #$f6                    // -10: slowed
+    sta zp_eff_speed
+
+    ldx #15
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #20
+!t39_fill:
+    lda #TILE_FLOOR | FLAG_LIT
+    sta (zp_ptr0),y
+    iny
+    cpy #31
+    bne !t39_fill-
+
+    lda #20
+    sta ms_spawn_x
+    lda #15
+    sta ms_spawn_y
+    lda #4                      // Kobold (speed=1)
+    jsr monster_spawn_one
+
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_FLAGS
+    lda #MF_AWAKE
+    sta (zp_ptr0),y
+
+    lda #30
+    sta zp_player_x
+    lda #15
+    sta zp_player_y
+
+    jsr monster_ai_tick
+
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_X
+    lda (zp_ptr0),y
+    cmp #22                     // double move: (20,15) -> (22,15)
+    bne !t39_fail+
+    lda #$01
+    sta tc_results + 38
+    jmp !t40+
+!t39_fail:
+    lda #$00
+    sta tc_results + 38
+
+    // ==========================================
+    // Test 40: hasted player clamps a speed-2 monster down to a single
+    // move (cadence cap, not negative speed).
+    // ==========================================
+!t40:
+    jsr monster_init_table
+    lda #0
+    sta zp_game_flags
+    sta player_pflags
+    lda #10
+    sta zp_eff_speed            // hasted
+
+    ldx #15
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #20
+!t40_fill:
+    lda #TILE_FLOOR | FLAG_LIT
+    sta (zp_ptr0),y
+    iny
+    cpy #31
+    bne !t40_fill-
+
+    lda #20
+    sta ms_spawn_x
+    lda #15
+    sta ms_spawn_y
+    lda #14                     // Huge brown bat (speed=2)
+    jsr monster_spawn_one
+
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_FLAGS
+    lda #MF_AWAKE
+    sta (zp_ptr0),y
+
+    lda #30
+    sta zp_player_x
+    lda #15
+    sta zp_player_y
+
+    jsr monster_ai_tick
+
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_X
+    lda (zp_ptr0),y
+    cmp #21                     // single move: (20,15) -> (21,15)
+    bne !t40_fail+
+    lda #$01
+    sta tc_results + 39
+    jmp !tests_done+
+!t40_fail:
+    lda #$00
+    sta tc_results + 39
 
 !tests_done:
     jmp test_finish

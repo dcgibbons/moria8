@@ -15,6 +15,16 @@ ui_clear_full_screen_safe:
 #if HAL_SCREEN_FULL_CLEAR_USES_BULK
     jmp hal_screen_clear
 #else
+#if APPLE2
+    lda #SCREEN_ROWS
+!hca_loop:
+    sec
+    sbc #1
+    pha
+    jsr hal_screen_clear_row
+    pla
+    bne !hca_loop-
+#else
     lda #0
     sta help_line_idx
 !hca_loop:
@@ -24,6 +34,7 @@ ui_clear_full_screen_safe:
     lda help_line_idx
     cmp #SCREEN_ROWS
     bcc !hca_loop-
+#endif
     // Full-screen modal clears wipe the status rows on C64 too, so preserve
     // the same redraw contract as screen_clear for the next status_draw.
     lda zp_ui_dirty

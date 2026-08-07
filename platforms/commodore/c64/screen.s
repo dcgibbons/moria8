@@ -61,8 +61,13 @@ screen_vectors:
 .label hal_screen_init = screen_noop
 .label hal_screen_clear = screen_clear
 .label hal_screen_clear_row = screen_clear_row
+#if HAL_LAYOUT_EQUIPMENT_WRAP
+.label hal_screen_put_char = screen_vectors + 3
+.label hal_screen_put_string = screen_vectors + 6
+#else
 .label hal_screen_put_char = screen_put_char
 .label hal_screen_put_string = screen_put_string
+#endif
 .label hal_screen_put_char_at = screen_put_char_at
 .label hal_screen_set_cursor = screen_set_cursor
 .label hal_screen_set_color = screen_set_color

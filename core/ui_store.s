@@ -278,9 +278,7 @@ store_draw_screen:
 !sds_gold_done:
     // Row 18: Menu
     ldx #MSG_MENU
-    jsr show_msg
-
-    rts
+    jmp show_msg
 
 // ============================================================
 // Buy flow
@@ -438,8 +436,7 @@ sbuy_execute:
     jsr store_clear_show_msg
 
     lda #SFX_PICKUP
-    jsr hal_sound_play
-    rts
+    jmp hal_sound_play
 
 // sbuy_show_price — Display price confirmation for buy
 sbuy_show_price:
@@ -589,8 +586,7 @@ store_sell:
     // Store doesn't buy it
     lda #<uis_no_buy_str
     ldy #>uis_no_buy_str
-    jsr ssell_show_error_ptr
-    rts
+    jmp ssell_show_error_ptr
 
 !ssell_cat_ok:
     // Check if item is cursed (RP14-4)
@@ -601,8 +597,7 @@ store_sell:
 
     lda #<uis_cursed_str
     ldy #>uis_cursed_str
-    jsr ssell_show_error_ptr
-    rts
+    jmp ssell_show_error_ptr
 
 !ssell_not_cursed:
     // Calculate sell price
@@ -627,8 +622,7 @@ store_sell:
 
     lda #<uis_worthless_str
     ldy #>uis_worthless_str
-    jsr ssell_show_error_ptr
-    rts
+    jmp ssell_show_error_ptr
 
 !ssell_has_value:
     // Cheap items (≤ 10 GP) or BM: use simple Y/N flow (no haggling)
@@ -657,8 +651,7 @@ store_sell:
     beq !ssell_do_haggle+
     lda #<hg_kicked_str
     ldy #>hg_kicked_str
-    jsr ssell_show_error_ptr
-    rts
+    jmp ssell_show_error_ptr
 
 !ssell_do_haggle:
     jsr haggle_sell
@@ -672,8 +665,7 @@ ssell_execute:
 
     lda #<uis_store_full_str
     ldy #>uis_store_full_str
-    jsr ssell_show_error_ptr
-    rts
+    jmp ssell_show_error_ptr
 
 !ssell_has_slot:
     // X = empty absolute slot
@@ -710,8 +702,7 @@ ssell_execute:
 
     lda #SFX_PICKUP
     jsr hal_sound_play
-    jsr hal_input_get_key
-    rts
+    jmp hal_input_get_key
 
 // ssell_show_error_ptr — Show error message on row 22, wait for key
 // Input: A/Y = string pointer
@@ -1046,8 +1037,7 @@ hg_show_retry_msg:
     lda #<hg_retry_str
     ldy #>hg_retry_str
     jsr uis_screen_put_inline
-    jsr hg_wait_for_ack
-    rts
+    jmp hg_wait_for_ack
 
 // hg_show_final_prompt — Display final offer line plus numeric input prompt.
 // Input: A = prompt message index (MSG_YOUR_OFFER / MSG_YOUR_PRICE)

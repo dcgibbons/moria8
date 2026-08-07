@@ -283,22 +283,16 @@ irs_effect_protect:
 // overlay continuation stays valid.
 irs_effect_p3_swap:
 #if C128
-    // A = item type ID on entry; the dispatch reads it from A. Save it across
-    // the overlay swap (overlay_load returns the overlay ID in A).
-    pha
-    // The Phase 3 scroll/wand/staff router lives in OVL_MODAL_MISC on C128
-    // (items overlay is full). Handlers manage the items-overlay restore.
-    lda #OVL_MODAL_MISC
-    jsr overlay_load
-    bcs !irsp3_fail+
-    pla
-    jsr irs_dispatch_p3_overlay
-    sec
-    rts
-!irsp3_fail:
-    pla
-    sec
-    rts
+    // Staff of Speed has a dedicated resident return path because its effect
+    // lives in the death overlay; other Phase 3 effects use the generic modal
+    // dispatcher.
+    cmp #ITEM_TYPE_STAFF_SPEED
+    beq !irsp3_staff_speed+
+    bne !irsp3_generic+
+!irsp3_staff_speed:
+    jmp tramp_staff_speed_items
+!irsp3_generic:
+    jmp tramp_p3_dispatch_items
 #else
     // Apple IIe/C64/Plus4: the router lives in an overlay (death on Apple
     // IIe, spell elsewhere); loading it from the items overlay would evict

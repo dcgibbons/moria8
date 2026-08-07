@@ -85,7 +85,18 @@ eq_cast_msg:
     .byte 0
 
 eq_process_tile:
-    jsr eq_remove_floor_items
+    // Remove all floor items on the tile (formerly eq_remove_floor_items,
+    // inlined at its only call site)
+!eq_rfi_loop:
+    lda eq_cur_x
+    ldy eq_cur_y
+    jsr floor_item_find_at
+    bcc !eq_rfi_done+
+    jsr floor_item_remove
+    lda #1
+    sta eq_changed
+    jmp !eq_rfi_loop-
+!eq_rfi_done:
 
     lda #0
     sta eq_mon_alive
@@ -179,19 +190,6 @@ eq_done_tile:
     :MapWrite_ptr0_y()
     lda #1
     sta eq_changed
-    rts
-
-eq_remove_floor_items:
-!eq_rfi_loop:
-    lda eq_cur_x
-    ldy eq_cur_y
-    jsr floor_item_find_at
-    bcc !eq_rfi_done+
-    jsr floor_item_remove
-    lda #1
-    sta eq_changed
-    jmp !eq_rfi_loop-
-!eq_rfi_done:
     rts
 
 eq_hit_monster:

@@ -475,7 +475,7 @@ test_filtered_equipment_view:
     sta zp_ptr0
     lda #>expected_filtered_eq_light
     sta zp_ptr0_hi
-    lda #8
+    lda #14
     ldx #1
     jsr assert_screen_string
     bcc !fail+

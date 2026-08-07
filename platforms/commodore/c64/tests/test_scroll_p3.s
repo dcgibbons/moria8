@@ -3,7 +3,7 @@
 // Tests: dispatch routing, object detection reveal, mass genocide LOS filter,
 // teleport level depth change.
 //
-// Results at $0400-$0407: $01 = pass, $00 = fail per test
+// Results at $0400-$040b: $01 = pass, $00 = fail per test
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_bootstrap)
@@ -13,7 +13,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #10
+    ldx #11
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -132,7 +132,7 @@ press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
 // Test result buffer
-tc_results: .fill 11, $ff
+tc_results: .fill 12, $ff
 tc_loop_ctr: .byte 0
 t7_slot_a: .byte 0
 t7_slot_b: .byte 0
@@ -145,7 +145,7 @@ t7_slot_b: .byte 0
 #undef SCROLL_P3_EXISTING_OWNER
 
 test_start:
-    ldx #10
+    ldx #11
     lda #$ff
 !clr:
     sta tc_results,x
@@ -496,10 +496,35 @@ test_start:
     bne !t12_fail+
     lda #$01
     sta tc_results + 10
-    jmp !tests_done+
+    jmp !t13+
 !t12_fail:
     lda #$00
     sta tc_results + 10
+
+    // ==========================================
+    // Test 13: Staff of Speed returns after haste instead of falling through
+    // into Teleport Level.
+    // ==========================================
+!t13:
+    lda #0
+    sta spy_last
+    lda #5
+    sta zp_player_dlvl
+    sta player_data + PL_DLEVEL
+    lda #ITEM_TYPE_STAFF_SPEED
+    jsr irs_dispatch_p3_overlay
+    lda spy_last
+    cmp #ITEM_TYPE_STAFF_SPEED
+    bne !t13_fail+
+    lda zp_player_dlvl
+    cmp #5
+    bne !t13_fail+
+    lda #$01
+    sta tc_results + 11
+    jmp !tests_done+
+!t13_fail:
+    lda #$00
+    sta tc_results + 11
 
 !tests_done:
     jmp test_exit_trampoline

@@ -166,11 +166,13 @@ monster_pick_spell:
     jmp monster_cast_heal
 
 // ============================================================
-// mm_print_monster_name — Print "THE <name>" to message line
-// Input: zp_mon_type = creature type
+// mm_print_spell_msg — Print "THE <name> <suffix>"
+// Input: zp_ptr2/hi = suffix string pointer
 // Clobbers: A, X, Y, zp_ptr0, zp_ptr1, cmb_buf_idx
 // ============================================================
-mm_print_monster_name:
+mm_print_spell_msg:
+    // Print "THE <name>" (formerly mm_print_monster_name, inlined at its
+    // only call site)
     lda #0
     sta cmb_buf_idx
 
@@ -180,15 +182,7 @@ mm_print_monster_name:
 
     ldx zp_mon_type
     jsr creature_get_name       // A=lo, Y=hi (handles KERNAL banking)
-    jmp combat_append_str
-
-// ============================================================
-// mm_print_spell_msg — Print "THE <name> <suffix>"
-// Input: zp_ptr2/hi = suffix string pointer
-// Clobbers: A, X, Y, zp_ptr0, zp_ptr1, cmb_buf_idx
-// ============================================================
-mm_print_spell_msg:
-    jsr mm_print_monster_name
+    jsr combat_append_str
 
     lda zp_ptr2
     ldy zp_ptr2_hi

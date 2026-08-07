@@ -351,8 +351,30 @@ test_start:
     lda #$00
     sta tc_results+7
 
-    // Test 9: every known base item name decodes exactly.
+    // Test 9: identified amulets show their positive stat bonus and all
+    // known base item names decode exactly.
 !t9:
+    jsr test_prepare_row0
+    lda #ITEM_TYPE_AMULET_WISDOM
+    sta itemdesc_item_id
+    lda #0
+    sta itemdesc_qty
+    sta itemdesc_to_hit
+    sta itemdesc_to_dam
+    sta itemdesc_to_ac
+    sta itemdesc_ego
+    lda #3
+    sta itemdesc_p1
+    lda #IF_IDENTIFIED
+    sta itemdesc_flags
+    jsr itemdesc_put_staged
+
+    lda #<expected_amulet_desc
+    sta zp_ptr0
+    lda #>expected_amulet_desc
+    sta zp_ptr0_hi
+    jsr assert_row0_prefix
+    bcc !t9_fail+
     jsr test_all_known_item_names
     bcc !t9_fail+
     lda #$01
@@ -450,6 +472,8 @@ expected_main_gauche_desc:
     .text "Main Gauche" ; .byte 0
 expected_studded_leather_desc:
     .text "Studded Leather Armor" ; .byte 0
+expected_amulet_desc:
+    .text "Amulet of Wisdom (+3)" ; .byte 0
 
 expected_item_name_lo:
     .byte <ein_0, <ein_1, <ein_2, <ein_3, <ein_4, <ein_5, <ein_6, <ein_7

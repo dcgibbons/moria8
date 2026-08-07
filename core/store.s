@@ -29,6 +29,7 @@ sb_item_to_dam: .byte 0
 sb_item_to_ac:  .byte 0
 sb_item_type:  .byte 0     // Item type saved for p1 bonus lookup
 sb_item_ego:   .byte 0     // Ego byte for pricing (R14)
+sb_price_mode: .byte 0     // 0 = buy, 1 = sell
 
 // Haggling state (R6.1)
 hg_ask_lo:     .byte 0     // Shopkeeper's current price (16-bit)
@@ -219,13 +220,14 @@ calc_sell_price:
 // Input: A = item type ID, Y = 0 for buy (chr_price_adj), 1 for sell (chr_sell_adj)
 // Output: zp_math_a/b = base_price × adj / 100
 calc_chr_price:
+    sty sb_price_mode
     jsr load_item_base_cost
     jsr apply_tool_ego_multiplier
 
     // Get CHR price adjustment
     lda player_data + PL_CHR_CUR
     jsr stat_bonus_index        // X = 0-15
-    tya
+    lda sb_price_mode
     bne !ccp_sell+
     lda chr_price_adj,x         // A = 100-130
     jmp !ccp_mul+
@@ -280,6 +282,8 @@ price_add_p1_bonus:
 !pap_check_ring:
     cmp #ICAT_RING
     beq !pap_ring+
+    cmp #ICAT_AMULET
+    beq !pap_ring+
 
     // Wand(14)/Staff(15)
     cmp #ICAT_WAND
@@ -297,15 +301,13 @@ price_add_p1_bonus:
     lda sb_item_to_dam
     jsr price_add_signed_stat_100
     lda sb_item_to_ac
-    jsr price_add_signed_stat_100
-    rts
+    jmp price_add_signed_stat_100
 
 !pap_ring:
     lda sb_item_to_ac
     jsr price_add_signed_stat_100
     lda sb_item_p1
-    jsr price_add_signed_stat_100
-    rts
+    jmp price_add_signed_stat_100
 
 !pap_charges:
     lda sb_item_p1

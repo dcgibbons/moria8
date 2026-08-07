@@ -924,6 +924,27 @@ a2_msg_print_indirect_aux:
 a2_play_start:
     .byte $4d, $38, $50     // "M8P"
 a2_play_body:
+// Apple item commands call this resident routine while the item overlay is
+// active. Keep the stat transition code in the always-loaded play payload.
+player_adjust_equipment_stat:
+    jsr player_adjust_equipment_stat_prepare
+    cpx #EQUIP_RING
+    bcc !paes_done+
+    cpx #EQUIP_AMULET
+    bne !paes_str+
+    lda inv_item_id,x
+    and #1
+    eor #3
+    sbc #1
+    tax
+    jmp !paes_apply+
+!paes_str:
+    ldx #0
+!paes_apply:
+    jmp player_adjust_equipment_stat_apply
+!paes_done:
+    rts
+
 #define STORE_INVENTORY_DATA_EXTERNAL
 #define STORE_RUNTIME_DATA_EXTERNAL
 #import "../../core/store_data.s"
@@ -935,6 +956,7 @@ a2_play_body:
 #undef RECALL_ARRAY_DATA_EXTERNAL
 #import "../../core/dungeon_los.s"
 #import "../../core/monster_attack.s"
+
 .macro PlayerMoveRestoreResidentSegment() {
     .segment A2PlaySlot
 }
@@ -1003,7 +1025,6 @@ a2_play_body:
 #undef PLAYER_LOOK_EXTERNAL
 #import "dungeon_scroll_a2.s"
 #import "../../core/turn.s"
-#import "../../core/dungeon_tunnel_guard.s"
 // Small play-resident modules (play is present in every gameplay phase).
 #import "../../core/player_heal_feedback.s"
 #import "../../core/ui_restore.s"
@@ -1212,6 +1233,24 @@ ovl_ui_end:
 #import "../../core/store_restock_overlay.s"
 #define SCROLL_P3_ROUTER_ENABLED
     #import "../../core/item_actions_overlay.s"
+
+player_adjust_equipment_stat_prepare:
+    lda inv_p1,x
+    bcs !paes_prepare_store+
+    eor #$ff
+    clc
+    adc #1
+!paes_prepare_store:
+    sta stat_work
+    rts
+
+player_adjust_equipment_stat_apply:
+    lda player_data + PL_STR_CUR,x
+    clc
+    adc stat_work
+    sta player_data + PL_STR_CUR,x
+    rts
+
 #import "../../core/player_item_commands.s"
 #import "../../core/ego_items.s"
 #import "../../core/ranged_fire.s"
@@ -1256,14 +1295,15 @@ iq_dispatch_p3_spell:
     beq iqp3_resist_heat
     cmp #ITEM_TYPE_POT_RESIST_COLD
     beq iqp3_resist_cold
+    cmp #ITEM_TYPE_POT_CURE_CRITICAL
+    beq iqp3_cure_critical
     cmp #ITEM_TYPE_POT_NEUTRALIZE
     beq iqp3_neutralize
     // Fall through: caller constrains A to {96-100, 126}
 
 iqp3_healing:
     lda #200
-    jsr pmx_heal_and_report
-    rts
+    jmp pmx_heal_and_report
 
 iqp3_cure_critical:
     lda #6
@@ -1271,14 +1311,12 @@ iqp3_cure_critical:
     ldy #0
     jsr math_dice
     lda zp_math_a
-    jsr pmx_heal_and_report
-    rts
+    jmp pmx_heal_and_report
 
 iqp3_restoration:
     jsr player_calc_stats
     ldx #HSTR_PIQ_RESTORED
-    jsr huff_print_msg
-    rts
+    jmp huff_print_msg
 
 iqp3_resist_heat:
     // No message (upstream prints nothing for resist potions)
@@ -1310,8 +1348,7 @@ iqp3_resist_cold:
 iqp3_neutralize:
     jsr eff_cure_poison
     ldx #HSTR_EFF_POISON_END
-    jsr huff_print_msg
-    rts
+    jmp huff_print_msg
 #undef PMX_EARTHQUAKE_EXTERNAL
 #import "../../core/player_magic_levelup.s"
 #import "../../core/player_magic_display.s"
@@ -1332,6 +1369,7 @@ ovl_spell_end:
 
 .segment DungeonGenOverlay
 #import "../../core/special_rooms.s"
+#import "../../core/dungeon_tunnel_guard.s"
 #import "../../core/dungeon_gen.s"
 ovl_gen_end:
 .print "Dungeon gen overlay: " + (ovl_gen_end - $a400) + " bytes"
@@ -1396,8 +1434,7 @@ tramp_spell_call_items:
 tsci_target:
     jsr $0000               // SMC dispatch target (staged by caller)
     lda #OVL_ITEMS
-    jsr overlay_load
-    rts
+    jmp overlay_load
 a2_tsci_arg: .byte 0
 
 // irs_p3_swap_exec — Resident Phase 3 scroll/wand/staff router entry. The
@@ -1488,7 +1525,6 @@ tramp_combat_apply_levelup_modal:
 // Input: A = ego type. Clobbers: A, X, Y, zp_ptr0.
 .segment A2PlaySlot
 tramp_ego_append_suffix:
-    cmp #0
     beq !teas_done+
     pha
     lda #OVL_ITEMS

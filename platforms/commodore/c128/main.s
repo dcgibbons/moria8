@@ -3173,6 +3173,7 @@ c128_final_return_stack_7:     .byte 0
 #import "reu_stub128.s"
 #import "../../../core/rng.s"
 #import "../../../core/math.s"
+#import "../../../core/dungeon_tunnel_guard.s"
 #define C128_PLAYER_STAT_HELPERS_EXTERNAL
 #import "../../../core/player.s"
 #undef C128_PLAYER_STAT_HELPERS_EXTERNAL
@@ -3428,11 +3429,53 @@ c128_program_read_command_status:
 !done:
     rts
 
+// Run a Phase 3 item effect from resident code. The caller is in OVL.ITEMS;
+// the dispatch lives in OVL.MODAL_MISC and established handlers may briefly
+// load OVL.DEATH. The return continuation remains resident throughout.
+tramp_p3_dispatch_items:
+    pha
+    lda #OVL_MODAL_MISC
+    jsr overlay_load
+    bcs !failed+
+    pla
+    jsr irs_dispatch_p3_overlay
+    lda #OVL_ITEMS
+    jsr overlay_load
+    sec
+    rts
+!failed:
+    pla
+    sec
+    rts
+
 c128_program_play_read_filename:
     .byte $30, $3a                              // "0:"
     .text "128.PLAY"
     .byte $2c, $50, $2c, $52                    // ",P,R"
 .label c128_program_play_read_filename_len = * - c128_program_play_read_filename
+
+c128_player_recalc_pflags:
+    lda #0
+    ldx #EQUIP_RING
+    ldy inv_item_id,x
+    cpy #ITEM_TYPE_RING_RESIST_FIRE
+    bcc !c128_pf_none+
+    cpy #ITEM_TYPE_RING_SLAYING
+    bcs !c128_pf_none+
+    tya
+    sec
+    sbc #ITEM_TYPE_RING_RESIST_FIRE
+    tax
+    lda pf_bit_table,x
+!c128_pf_none:
+    ldx #EQUIP_AMULET
+    ldy inv_item_id,x
+    cpy #ITEM_TYPE_AMULET_MAGI
+    bne !c128_pf_store+
+    ora #PFLAG_SEE_INVIS
+!c128_pf_store:
+    sta player_pflags
+    rts
 
 c128_resident_items_end:
 
@@ -3527,6 +3570,42 @@ save_prepare_slot_prompt:
     clc
     rts
 #import "../common/save_slot_menu.s"
+
+// C128 keeps the equip-stat helper out of the byte-tight banked runtime and
+// C128ResidentItems segments.  The routine is called by banked item commands.
+player_adjust_equipment_stat:
+    ldx piw_equip
+    bcs !c128_pase_add+
+    lda inv_p1,x
+    eor #$ff
+    adc #1
+    sta stat_work
+    jmp !c128_pase_item+
+!c128_pase_add:
+    lda inv_p1,x
+    sta stat_work
+!c128_pase_item:
+    lda inv_item_id,x
+    cmp #ITEM_TYPE_RING_STRENGTH
+    beq !c128_pase_str+
+    cmp #ITEM_TYPE_AMULET_WISDOM
+    beq !c128_pase_wis+
+    cmp #ITEM_TYPE_AMULET_MAGI
+    bne !c128_pase_done+
+    ldy #PL_INT_CUR - PL_STR_CUR
+    bne !c128_pase_apply+
+!c128_pase_str:
+    ldy #0
+    bne !c128_pase_apply+
+!c128_pase_wis:
+    ldy #PL_WIS_CUR - PL_STR_CUR
+!c128_pase_apply:
+    lda player_data + PL_STR_CUR,y
+    clc
+    adc stat_work
+    sta player_data + PL_STR_CUR,y
+!c128_pase_done:
+    rts
 c128_resident_persist_end:
 
 #define PRESS_KEY_STR_EXTERNAL
@@ -3581,6 +3660,10 @@ cmd_wizard_entry:
 wizard_wall_walk_active:
     lda #0
     rts
+// Diagnostic builds omit wizard.s, but scroll effects still require the
+// resident teleport-level tail to remain linkable.
+scroll_teleport_level_exec:
+    rts
 #else
 #import "../../../core/wizard.s"
 #endif
@@ -3591,7 +3674,6 @@ wizard_wall_walk_active:
 #undef C128_SCRIPTED_SPELL_SEED_EXTERNAL
 #import "../../../core/turn.s"
 #import "../../../core/player_magic_state.s"
-#import "../../../core/dungeon_tunnel_guard.s"
 #if C128_TEST_PERF_P1_TRACE
 perf_p1_decision:
     .byte PERF_P1_DECISION_NONE
@@ -4151,6 +4233,7 @@ player_adj_6:
     lda #6
     rts
 
+
 player_str_tohit_adj:
     cmp #4
     bcc player_adj_m3
@@ -4328,6 +4411,18 @@ combat_append_blow_summary:
     lda #0
     sta combat_msg_buf,x
     rts
+
+tramp_staff_speed_items:
+    lda #OVL_DEATH
+    jsr overlay_load
+    bcs !staff_speed_done+
+    jsr eff_haste_self
+    lda #OVL_ITEMS
+    jsr overlay_load
+!staff_speed_done:
+    sec
+    rts
+
 c128_resident_diskio_end:
 .segment Default
 
@@ -4404,7 +4499,9 @@ first_banked_function:
     #import "../../../core/player_magic_levelup.s"
     #import "../../../core/player_magic_learn_op.s"
     #import "../../../core/player_magic_tail.s"
+    #define PLAYER_RECALC_PFLAGS_EXTERNAL
     #import "../../../core/player_recalc_equipment.s"
+    #undef PLAYER_RECALC_PFLAGS_EXTERNAL
     #import "../../../core/player_item_commands.s"
 
 banked_code_end:
@@ -4424,6 +4521,7 @@ program_end:
 .print "Program image: $" + toHexString($1c01) + "-$" + toHexString(program_end - 1)
 #if C128
 .assert "C128 main image stays below resident world payload", program_end <= c128_resident_world_start, true
+.assert "C128 tunnel guard stays in Default payload", dungeon_tunnel_guard_reset >= $1c01 && dungeon_tunnel_guard_step < program_end, true
 .assert "C128 resident world starts at $6000", c128_resident_world_start == $6000, true
 .assert "C128 resident world fits below items payload", c128_resident_world_end <= c128_resident_items_start, true
 .assert "C128 resident items starts at $8CA0", c128_resident_items_start == $8CA0, true
@@ -4441,7 +4539,6 @@ program_end:
 .assert "C128 modal persist stays below the I/O hole", c128_resident_persist_end <= $D000, true
 .assert "C128 resident play starts at $AF00", c128_resident_play_start == $AF00, true
 .assert "C128 resident play stays below the I/O hole", c128_resident_play_end <= $D000, true
-.assert "C128 tunnel guard stays in resident PLAY payload", dungeon_tunnel_guard_reset >= c128_resident_play_start && dungeon_tunnel_guard_step < c128_resident_play_end, true
 .assert "Staged Bank1 source span matches boot scrub ceiling", BANK1_STAGE_SOURCE_END == BANK1_RESERVED_TOP_END, true
 .assert "Tier cache window remains large enough for tier preload", BANK1_TIER_CACHE_SIZE >= TIER_PRELOAD_REQUIRED, true
 .assert "MMU helper page stays inside common RAM ownership", MMU_COMMON_HELPERS_BASE >= BANK1_COMMON_BASE, true

@@ -47,5 +47,5 @@ ui_view_redraw_gameplay_view:
     jsr perf_p1_mark_full_reason_modal_restore
 #endif
 	    jsr render_viewport
-	    jsr status_draw
+    jmp status_draw
     rts

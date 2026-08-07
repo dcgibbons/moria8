@@ -212,7 +212,7 @@ C128_MAIN_OUTPUTS = $(C128_MAIN_PRG) $(C128_OVL_START) $(C128_OVL_TOWN) $(C128_O
 
 .PHONY: all build build64 build128 buildplus4 disk disk64 zip64 c64-dist disk128 diskplus4 run run64 run128 runplus4 \
 	bootart128-charset-demo \
-	test test-disk test-disk-static test-disk-debt test64 test128 test128-fast test128-fast-smoke testplus4 testplus4-build testplus4-runtime clean \
+	test test-disk test-disk-static test-disk-debt test64 test128 test128-guards test128-units test128-boot test128-town test128-cache test128-diag test128-fast test128-fast-smoke testplus4 testplus4-build testplus4-runtime clean \
 	check-zp check-6502-lint check-hal-boundaries cleanup-source-symbols ensure-kickass kickass create-symlinks
 
 all: build
@@ -279,6 +279,9 @@ test64: ensure-kickass
 
 test128: ensure-kickass
 	cd c128 && KICKASS="$(KICKASS_RESOLVED)" ./run_tests128.sh
+
+test128-guards test128-units test128-boot test128-town test128-cache test128-diag: ensure-kickass
+	cd c128 && KICKASS="$(KICKASS_RESOLVED)" TEST_PHASE="$(@:test128-%=%)" ./run_tests128.sh
 
 test128-fast: ensure-kickass
 	mkdir -p "$(BUILD)/test/c128"

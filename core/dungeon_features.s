@@ -476,7 +476,18 @@ trap_trigger:
 
     cmp #TRAP_OPEN_PIT
     bne !not_pit+
-    jmp trap_do_pit
+    // Open pit: 1d4 damage (formerly trap_do_pit, inlined at its only
+    // dispatch site)
+    ldx #HSTR_DF_YOU_FELL
+    jsr huff_print_msg
+    lda #DEATH_TRAP_PIT
+    sta df_death_source
+    lda #HSTR_DF_TRAP_0
+    sta df_death_hstr
+    lda #1              // 1 die
+    ldx #4              // d4
+    ldy #0              // +0
+    jmp trap_apply_damage
 !not_pit:
     cmp #TRAP_ARROW
     bne !not_arrow+
@@ -498,19 +509,6 @@ trap_trigger:
     jmp trap_do_rockfall
 
 // --- Trap effect handlers ---
-
-// Open pit: 1d4 damage
-trap_do_pit:
-    ldx #HSTR_DF_YOU_FELL
-    jsr huff_print_msg
-    lda #DEATH_TRAP_PIT
-    sta df_death_source
-    lda #HSTR_DF_TRAP_0
-    sta df_death_hstr
-    lda #1              // 1 die
-    ldx #4              // d4
-    ldy #0              // +0
-    jmp trap_apply_damage
 
 // Arrow trap: 1d8 damage
 trap_do_arrow:
@@ -657,9 +655,7 @@ trap_apply_damage:
     beq !trap_death+
 
     lda #SFX_HIT
-    jsr hal_sound_play
-
-    rts
+    jmp hal_sound_play
 
 !trap_death:
     jmp player_death_check

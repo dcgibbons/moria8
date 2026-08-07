@@ -16,6 +16,7 @@ wizard_prompt_value:      .byte 0
 wizard_prompt_input_col:  .byte 0
 wizard_target_depth:      .byte 0
 wizard_entry_dir:         .byte 0
+wizard_level_jump_active: .byte 0
 
 // wizard_execute_level_jump — Shared main-resident execution tail for Wizard
 // level jumps. This must live outside OVL.UI on C128 because it loads the
@@ -46,6 +47,9 @@ wizard_execute_level_jump:
     lda wizard_entry_dir
     sta level_entry_dir
 #if !C128 && !APPLE2
+    jmp wizard_level_jump_generate
+#endif
+#if !C128 && !APPLE2
 // irs_p3_swap_exec — Resident Phase 3 scroll/wand/staff effect router
 // (C64/Plus4). The items-overlay router (irs_effect_p3_swap) jumps here
 // because loading the spell overlay from the items overlay would evict the
@@ -67,6 +71,19 @@ irs_p3_swap_exec:
     pla
     sec
     rts
+#endif
+
+wizard_level_jump_generate:
+#if !APPLE2
+    lda #1
+    sta wizard_level_jump_active
+    // The generation overlay replaces the current UI overlay. Abandon the
+    // wizard call frames before generation so its deep stack use cannot wrap
+    // into stale modal return addresses.
+    ldx #$ff
+    txs
+    jsr level_change_generate_current
+    jmp main_loop
 #endif
 
 // scroll_teleport_level_exec — Resident execution tail for the Scroll of
@@ -626,8 +643,7 @@ wizard_restore_gameplay_with_message:
     jmp main_loop
 
 wizard_restore_gameplay_view:
-    jsr ui_view_redraw_gameplay_view
-    rts
+    jmp ui_view_redraw_gameplay_view
 
 wizard_40col_menu_display:
     lda #COL_WHITE
@@ -688,8 +704,7 @@ wizard_40col_menu_display:
     sta zp_ptr0
     lda #>wiz_footer_str
     sta zp_ptr0_hi
-    jsr hal_screen_put_string
-    rts
+    jmp hal_screen_put_string
 
 .encoding "screencode_mixed"
 wiz_confirm_str:

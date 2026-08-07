@@ -42,11 +42,15 @@ item_wear:
     lda equip_slot_for_cat,x
     sta piw_equip
 
+
     // Check if equip slot already occupied -> swap
     tax
     lda inv_item_id,x
     cmp #FI_EMPTY
     beq !iw_no_swap+
+
+    // Remove the old item's direct current-stat adjustment before the swap.
+    jsr player_adjust_equipment_stat
 
     // Swap: copy old equipped item to the source carried slot
     ldx piw_equip
@@ -94,6 +98,10 @@ item_wear:
     lda piw_ego
     sta inv_ego,x
 
+    // Add the new item's direct current-stat adjustment.
+    sec
+    jsr player_adjust_equipment_stat
+
     // If equipping a light, set light radius
     lda piw_equip
     cmp #EQUIP_LIGHT
@@ -101,6 +109,7 @@ item_wear:
     lda #1
     sta zp_light_radius
 !iw_not_light:
+
 
     // Recalculate combat stats
     jsr player_recalc_equipment
@@ -241,6 +250,13 @@ item_takeoff:
     // Copy saved flags to new carried slot
     lda piw_flags
     sta inv_flags,x
+
+    // Remove the equipped item's direct current-stat adjustment.
+#if APPLE2
+    ldx piw_equip
+#endif
+    clc
+    jsr player_adjust_equipment_stat
 
     // Clear equipment slot
     ldx piw_equip

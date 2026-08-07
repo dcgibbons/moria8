@@ -20,6 +20,9 @@
 .const hal_layout_store_price_col = 31
 .const hal_layout_equipment_title_col = 15
 .const hal_layout_equipment_footer_col = 12
+.const hal_layout_equipment_row_stride = 2
+.const hal_layout_equipment_wrap = 1
+#define HAL_LAYOUT_EQUIPMENT_WRAP
 .const hal_layout_inventory_title_col = 15
 .const hal_layout_inventory_footer_col = 12
 .const hal_layout_inventory_select_col = 14

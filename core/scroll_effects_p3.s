@@ -9,6 +9,10 @@
 #if SCROLL_P3_EXISTING_OWNER || SCROLL_P3_NEW_OWNER
 irs_dispatch_p3_overlay:
 #if SCROLL_P3_EXISTING_OWNER
+    // Wand of Stinking Cloud is a legacy ID (42), not a Phase 3 row. It still
+    // uses the existing-owner path, but must bypass the 101-based scroll table.
+    cmp #42
+    beq irs_p3_run_existing
     cmp #ITEM_TYPE_WAND_SLOW
     bcc !irs_p3_scroll_tbl+
     // Wand/staff Phase 3 effects (114-121) ride the same inner-swap mechanism
@@ -136,6 +140,8 @@ irs_p3_run_existing:
     beq !irs_re_dispel+
     cmp #ITEM_TYPE_STAFF_SPEED
     beq !irs_re_speed+
+    cmp #ITEM_TYPE_STAFF_REMOVE_CURSE
+    beq !irs_re_remove_curse+
     cmp #42
     beq !irs_re_cloud+
     // Scroll of *Destruction* / Staff of Destruction
@@ -230,6 +236,13 @@ irs_p3_run_existing:
 #else
     jsr eff_haste_self
 #endif
+    jmp !irs_re_done+
+!irs_re_remove_curse:
+#if APPLE2
+    :A2ReCall(eff_remove_curse)
+#else
+    jsr eff_remove_curse
+#endif
 !irs_re_done:
 #if C128
     lda #OVL_ITEMS
@@ -238,10 +251,11 @@ irs_p3_run_existing:
 !irs_re_fail:
     pla
     rts
-#endif
-#if APPLE2
+#elif APPLE2
     lda #OVL_ITEMS
     jsr overlay_load
+    rts
+#else
     rts
 #endif
 #endif

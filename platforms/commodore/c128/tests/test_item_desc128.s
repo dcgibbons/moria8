@@ -213,7 +213,32 @@ test_start:
     jmp test_fail
 !book_ok:
 
-    // Test 6: every known base item name decodes exactly.
+    // Test 6: identified amulets show their positive stat bonus.
+    jsr test_prepare_row0
+    lda #ITEM_TYPE_AMULET_WISDOM
+    sta itemdesc_item_id
+    lda #3
+    sta itemdesc_p1
+    lda #0
+    sta itemdesc_to_hit
+    sta itemdesc_to_dam
+    sta itemdesc_to_ac
+    sta itemdesc_ego
+    lda #IF_IDENTIFIED
+    sta itemdesc_flags
+    jsr itemdesc_put_staged
+
+    lda #<expected_amulet_vdc
+    sta zp_ptr0
+    lda #>expected_amulet_vdc
+    sta zp_ptr0_hi
+    lda #0
+    jsr assert_row0_from_col
+    bcs !amulet_ok+
+    jmp test_fail
+!amulet_ok:
+
+    // Test 7: every known base item name decodes exactly.
     jsr test_all_known_item_names
     bcs !names_ok+
     jmp test_fail
@@ -335,6 +360,8 @@ expected_identify_scroll_vdc:
     .byte $53, $03, $12, $0f, $0c, $0c, $20, $0f, $06, $20, $49, $04, $05, $0e, $14, $09, $06, $19, 0
 expected_prayer_book_vdc:
     .byte $48, $0f, $0c, $19, $20, $42, $0f, $0f, $0b, $20, $0f, $06, $20, $50, $12, $01, $19, $05, $12, $13, $20, $42, $05, $07, $09, $0e, $0e, $05, $12, $13, $20, $48, $01, $0e, $04, $02, $0f, $0f, $0b, 0
+expected_amulet_vdc:
+    .byte $41, $0d, $15, $0c, $05, $14, $20, $0f, $06, $20, $57, $09, $13, $04, $0f, $0d, $20, $28, $2b, $33, $29, 0
 
 expected_item_name_lo:
     .byte <ein_0, <ein_1, <ein_2, <ein_3, <ein_4, <ein_5, <ein_6, <ein_7

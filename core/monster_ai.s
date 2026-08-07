@@ -91,6 +91,29 @@ monster_ai_tick:
     bcs !mat_apply_base+
     inc zp_mon_speed
 !mat_apply_base:
+    // Fold player speed into this monster's cadence (Umoria
+    // playerChangeSpeed model, applied per-tick so no stored monster state
+    // is mutated): an active haste timer or Ring of Speed (PFLAG_SPEED)
+    // slows the monster by 1; an active slow timer hastens it by 1. The
+    // 0-2 cadence clamp makes stacking haste+ring identical to either
+    // alone, so a single step per direction suffices.
+    lda zp_eff_speed
+    bmi !mat_pc_slow+
+    bne !mat_pc_dec+
+    lda player_pflags
+    and #PFLAG_SPEED
+    beq !mat_pc_done+
+!mat_pc_dec:
+    lda zp_mon_speed
+    beq !mat_pc_done+
+    dec zp_mon_speed
+    jmp !mat_pc_done+
+!mat_pc_slow:
+    lda zp_mon_speed
+    cmp #2
+    beq !mat_pc_done+
+    inc zp_mon_speed
+!mat_pc_done:
     lda zp_mon_speed
     bne !mat_not_slow+
 
@@ -333,27 +356,8 @@ mat_mark_tile_dirty_if_nonlocal:
     sta zp_mon_scratch0
     lda zp_player_y
     sta zp_mon_scratch1
-    jsr mat_tile_within_local_radius
-    bcs !mtd_done+
-
-    lda zp_mon_flags
-    and #(MF_VISIBLE | MF_DETECTED)
-    beq !mtd_done+
-
-!mtd_mark:
-    jsr scene_render_mat_tile
-!mtd_done:
-    rts
-
-// ============================================================
-// mat_tile_within_local_radius — true if tile is within the light-radius+1
-// square around the center in zp_mon_scratch0/1.
-// Input:
-//   zp_temp0/zp_temp1 = tile x/y
-//   zp_mon_scratch0/1 = center x/y
-// Output: carry set = covered by local redraw, clear = non-local
-// ============================================================
-mat_tile_within_local_radius:
+    // Inline mat_tile_within_local_radius: true if the tile is within the
+    // light-radius+1 square around zp_mon_scratch0/1. Carry set = covered.
     lda zp_temp0
     sec
     sbc zp_mon_scratch0
@@ -381,11 +385,15 @@ mat_tile_within_local_radius:
     clc
     adc #1
     cmp zp_mon_scratch1
-    bcs !mtlr_yes+
-    clc
-    rts
-!mtlr_yes:
-    sec
+    bcs !mtd_done+              // covered by local redraw — done
+
+    lda zp_mon_flags
+    and #(MF_VISIBLE | MF_DETECTED)
+    beq !mtd_done+
+
+!mtd_mark:
+    jsr scene_render_mat_tile
+!mtd_done:
     rts
 
 // ============================================================

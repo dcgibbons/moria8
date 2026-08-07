@@ -295,6 +295,44 @@ Acceptance target:
   with explicit tests for diagonal boundaries and no regressions in visibility,
   targeting, or platform memory layout.
 
+### Implement invisible monster visibility
+
+The catalog includes the upstream invisible-movement roster, including Clear
+Icky-Thing, Poltergeist, ghosts, spirits, quasits, oozes, Quylthulgs, the
+Invisible Stalker, Evil Iggy, and the Balrog. The Ring of See Invisible plus
+Sense Invisible already expose player-side see-invisible state, but monster
+invisibility is not currently preserved or consumed: the generated monster
+flags do not carry the upstream invisible-movement bit, and `PFLAG_SEE_INVIS`
+does not affect monster visibility, rendering, detection, or targeting.
+
+Required work:
+
+- Add an explicit invisible-monster flag or generated sidecar without
+  overloading `CF_INFRA` or changing the existing one-byte monster-flag budget
+  unsafely.
+- Preserve the upstream invisible-movement bit for every affected creature in
+  the source data and generated tier data.
+- Update the authoritative monster visibility producer so ordinary LOS hides
+  invisible monsters unless the player has Ring of See Invisible or an active
+  Sense Invisible effect.
+- Define and preserve the distinction between ordinary visibility, infravision,
+  detection, inspection, and targeting; revealing a monster must not silently
+  reveal terrain or imply Detect Monsters.
+- Ensure renderers, target selection, melee/ranged attacks, and monster
+  inspection consume the same authoritative visibility state.
+- Add production-path C64, C128, Plus/4, and Apple IIe coverage for hidden and
+  revealed Invisible Stalkers, including ring equip/remove and temporary Sense
+  Invisible expiry.
+- Preserve resident, overlay, tier-cache, save/load, and platform memory
+  assertions.
+
+Acceptance target:
+
+- Every upstream invisible creature remains hidden and unavailable to ordinary
+  targeting without See Invisible, becomes visible and targetable with the
+  ring or active spell, retains normal LOS/terrain rules, and behaves
+  consistently on every platform.
+
 ### Add classic Moria chests
 
 Moria8 currently has floor objects, traps, doors, searching, opening, bashing,

@@ -1255,6 +1255,8 @@ run_save_write_product_smoke() {
         --save-d64 "$save_d64" \
         --enable-drive9-bus \
         --pass-on-script-exhausted \
+        --timeout 10 \
+        --retry-timeouts 0 \
         --vice "$VICE"; then
         if "$C1541" -attach "$save_d64" -list 2>/dev/null | grep -qi '"THE.GAME".*SEQ'; then
             PASS=$((PASS + 1))
@@ -1559,6 +1561,8 @@ run_single_drive_save_return_product_smoke() {
         return
     fi
 
+    # This script intentionally passes when input is exhausted at the next
+    # wait; avoid retrying while waiting for an unreachable target PC.
     if python3 -u tests/product_scripted_smoke.py \
         --name "$name" \
         --start-symbol ".plus4_test_single_drive_wait_for_harness" \
@@ -1569,6 +1573,8 @@ run_single_drive_save_return_product_smoke() {
         --boot-d64 "$boot_d64" \
         --attach8-at-start-d64 "$save_d64" \
         --pass-on-script-exhausted \
+        --timeout 10 \
+        --retry-timeouts 0 \
         --vice "$VICE"; then
         PASS=$((PASS + 1))
     else
@@ -1923,6 +1929,8 @@ run_single_drive_load_wrong_media_product_smoke() {
         --main-vs "$main_vs" \
         --boot-d64 "$boot_d64" \
         --pass-on-script-exhausted \
+        --timeout 10 \
+        --retry-timeouts 0 \
         --expect-byte-symbol ".disk_test_program_warning_seen=1" \
         --expect-screen-symbol ".uds_program_disk_str:3:8" \
         --expect-screen-symbol ".press_key_str:5:10" \
@@ -2109,6 +2117,8 @@ run_load_wrong_media_product_smoke() {
         --save-d64 "$save_d64" \
         --enable-drive9-bus \
         --pass-on-script-exhausted \
+        --timeout 10 \
+        --retry-timeouts 0 \
         --vice "$VICE"; then
         PASS=$((PASS + 1))
     else
@@ -2202,6 +2212,8 @@ run_load_resume_product_smoke() {
         --save-d64 "$save_d64" \
         --enable-drive9-bus \
         --pass-on-script-exhausted \
+        --timeout 10 \
+        --retry-timeouts 0 \
         --vice "$VICE"; then
         PASS=$((PASS + 1))
     else
@@ -2393,6 +2405,8 @@ run_single_drive_load_return_product_smoke() {
         --enable-drive9-bus \
         --attach8-at-start-d64 "$save_drive8_d64" \
         --pass-on-script-exhausted \
+        --timeout 10 \
+        --retry-timeouts 0 \
         --expect-screen-symbol ".ds_game_str:10:10" \
         --expect-screen-symbol ".press_key_str:11:13" \
         --vice "$VICE"; then
@@ -2619,6 +2633,8 @@ run_single_drive_load_corrupt_product_smoke() {
         --boot-d64 "$boot_d64" \
         --attach8-at-start-d64 "$save_d64" \
         --pass-on-script-exhausted \
+        --timeout 10 \
+        --retry-timeouts 0 \
         --expect-screen-symbol ".title_menu_str:18:7" \
         --vice "$VICE"; then
         PASS=$((PASS + 1))
@@ -2711,6 +2727,8 @@ run_load_missing_savefile_product_smoke() {
         --save-d64 "$save_d64" \
         --enable-drive9-bus \
         --pass-on-script-exhausted \
+        --timeout 10 \
+        --retry-timeouts 0 \
         --vice "$VICE"; then
         PASS=$((PASS + 1))
     else

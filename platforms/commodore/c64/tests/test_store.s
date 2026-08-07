@@ -3,7 +3,7 @@
 // Tests: category check, restocking, math_mul_16x8, buy/sell price calc,
 // gold operations, store door detection, find empty slot, and haggle flow.
 //
-// Results at $0400-$0428: $01 = pass, $00 = fail per test (41 tests)
+// Results at $0400-$0429: $01 = pass, $00 = fail per test (42 tests)
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_bootstrap)
@@ -1413,7 +1413,26 @@ test_start:
     lda #$00
     jmp !t42_store+
 !t42d_pass:
+    // Positive amulet p1 contributes to the same price bonus as rings.
+    lda #100
+    sta sb_price_lo
+    lda #0
+    sta sb_price_hi
+    sta sb_item_to_ac
+    lda #ITEM_TYPE_AMULET_WISDOM
+    sta sb_item_type
+    lda #1
+    sta sb_item_p1
+    jsr price_add_p1_bonus
+    lda sb_price_lo
+    cmp #200
+    bne !t42_fail+
+    lda sb_price_hi
+    bne !t42_fail+
     lda #$01
+    jmp !t42_store+
+!t42_fail:
+    lda #$00
 !t42_store:
     sta tc_results + 41
 

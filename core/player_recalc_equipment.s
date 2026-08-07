@@ -1,11 +1,22 @@
 #importonce
+#if !C128 && !APPLE2
+#import "player_adjust_equipment_stat.s"
+#endif
 // player_recalc_equipment — Recalculate AC, to-hit, to-damage from equipment
 // Called after any equip/unequip action.
 // player_calc_combat already handles DEX bonus + equipment AC (R1.6).
 // This adds weapon to-hit/to-damage and ego bonuses.
 // Clobbers: everything
 player_recalc_equipment:
-    // Resets PL_AC (with equipment), PL_TOHIT, PL_TODMG from stats
+    // Recalculate equipment-derived flags and combat values without rerolling
+    // exceptional current stats established during character creation.
+    #if APPLE2
+    // Apple's persistent equipment flags are rebuilt by player_calc_stats.
+    #elif PLAYER_RECALC_PFLAGS_EXTERNAL
+    jsr c128_player_recalc_pflags
+    #else
+    jsr player_recalc_pflags_equipment
+    #endif
     jsr player_calc_combat
 
     // Add weapon split to-hit and to-damage bonuses
@@ -56,5 +67,4 @@ player_recalc_equipment:
     // Sync back to ZP
     lda player_data + PL_AC
     sta zp_player_ac
-
     rts

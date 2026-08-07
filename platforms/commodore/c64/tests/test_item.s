@@ -190,14 +190,22 @@ test_start:
     sta zp_player_hp_hi
     sta zp_player_mhp_hi
 
-    // Set some reasonable stats
-    lda #12
-    sta player_data + PL_STR_CUR
-    sta player_data + PL_DEX_CUR
-    sta player_data + PL_CON_CUR
+    // Set a valid Human Warrior base-stat state. Equipment recalculation now
+    // rebuilds current stats before applying equipment bonuses.
+    lda #RACE_HUMAN
+    sta player_data + PL_RACE
+    lda #CLASS_WARRIOR
+    sta player_data + PL_CLASS
+    ldx #STAT_COUNT - 1
+    lda #10
+!set_base_stats:
+    sta player_data + PL_STR_BASE,x
+    dex
+    bpl !set_base_stats-
     lda #1
     sta zp_player_lvl
     sta player_data + PL_LEVEL
+    jsr player_calc_stats
 
     // Stuff keyboard buffer to avoid -more- hangs
     lda #1

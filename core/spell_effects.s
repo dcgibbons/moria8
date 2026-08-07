@@ -100,8 +100,7 @@ eff_light_room:
     bcc !elr_next+
 
     // Player is in room X — light it
-    jsr light_room_x
-    rts
+    jmp light_room_x
 
 !elr_next:
     inx
@@ -240,15 +239,12 @@ eff_identify_prompt:
     jsr combat_append_str
 !eip_print:
 
-    jsr cmb_term_and_print
-
-    rts
+    jmp cmb_term_and_print
 
 !eip_cancel:
     // Scroll already consumed — just print generic message
     ldx #HSTR_PIQ_NOTHING
-    jsr huff_print_msg
-    rts
+    jmp huff_print_msg
 
 // Resident scroll-identify completion path. item_read_scroll dispatches here
 // with a tail jump so nested inventory/help overlays do not have to return to
@@ -635,8 +631,7 @@ eff_bolt:
     bcc !eb_alive+              // Still alive
 
     // Monster killed — award XP, remove, message
-    jsr combat_kill_message     // X preserved by helper
-    rts
+    jmp combat_kill_message     // X preserved by helper
 
 !eb_alive:
     // Wake the monster
@@ -649,8 +644,7 @@ eff_bolt:
     ldx #HSTR_EB_SPELL_HITS
     jsr projectile_msg_suffix
     lda #SFX_HIT
-    jsr hal_sound_play
-    rts
+    jmp hal_sound_play
 
 // ============================================================
 // eff_damage_adjacent — Damage all adjacent monsters (area effect)
@@ -948,6 +942,4 @@ eff_kill_monster:
     // Award XP using existing combat function
     jsr combat_award_xp
     jsr combat_check_levelup
-    jsr combat_note_kill
-
-    rts
+    jmp combat_note_kill

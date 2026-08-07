@@ -702,7 +702,6 @@ test_equipment_view:
     sta inv_flags + EQUIP_WEAPON
 
     jsr ui_equip_display
-
     lda #<ueq_title_str
     sta zp_ptr0
     lda #>ueq_title_str
@@ -1361,7 +1360,7 @@ expected_identify_prompt_af:
     .text "Identify which item (a-" ; .byte $06 ; .text ")?" ; .byte 0
 expected_equip_line:
     .byte $01
-    .text ") Weapon: Long Sword (Slay Evil) (mag" ; .byte 0
+    .text ") Weapon: Long Sword (Slay Evil)" ; .byte 0
 expected_recall_lv:
     .text "LV 7" ; .byte 0
 expected_recall_hp:

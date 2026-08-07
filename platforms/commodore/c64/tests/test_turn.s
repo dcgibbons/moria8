@@ -51,6 +51,8 @@ muv_clear_detected:  .byte 0
 .const HSTR_TTL_DIM          = 45
 .const HSTR_TTL_OUT          = 46
 .const HSTR_RECALL_ARRIVE    = 47
+.const HSTR_EFF_HASTE_END    = 48
+.const HSTR_EFF_SLOW_END     = 49
 .const HSTR_PID_CARRY        = 178
 .const DEATH_POISON  = $FE
 .const DEATH_STARVE  = $FF
@@ -73,7 +75,7 @@ test_map_row:        .fill 80, FLAG_OCCUPIED
 map_row_lo:          .fill 48, <test_map_row
 map_row_hi:          .fill 48, >test_map_row
 
-tc_results: .fill 26, $ff
+tc_results: .fill 29, $ff
 
 test_seq_next: .byte 0
 test_seq_effects: .byte 0
@@ -1055,6 +1057,67 @@ t21_test:
     sta tc_results + 25
     jmp test_finish
 
+!t27:
+    // Test 27: haste timer expiry prints HSTR_EFF_HASTE_END at zero.
+    jsr reset_state
+    lda #1
+    sta zp_eff_speed
+    jsr turn_tick_effects
+    lda zp_eff_speed
+    bne !t27_fail+
+    lda test_huff_calls
+    cmp #1
+    bne !t27_fail+
+    lda test_last_huff_id
+    cmp #HSTR_EFF_HASTE_END
+    bne !t27_fail+
+    lda #$01
+    sta tc_results + 26
+    jmp !t28+
+!t27_fail:
+    lda #$00
+    sta tc_results + 26
+
+!t28:
+    // Test 28: slow timer expiry prints HSTR_EFF_SLOW_END at zero.
+    jsr reset_state
+    lda #$ff
+    sta zp_eff_speed
+    jsr turn_tick_effects
+    lda zp_eff_speed
+    bne !t28_fail+
+    lda test_huff_calls
+    cmp #1
+    bne !t28_fail+
+    lda test_last_huff_id
+    cmp #HSTR_EFF_SLOW_END
+    bne !t28_fail+
+    lda #$01
+    sta tc_results + 27
+    jmp !t29+
+!t28_fail:
+    lda #$00
+    sta tc_results + 27
+
+!t29:
+    // Test 29: mid-timer haste decays without printing a message.
+    jsr reset_state
+    lda #5
+    sta zp_eff_speed
+    jsr turn_tick_effects
+    lda zp_eff_speed
+    cmp #4
+    bne !t29_fail+
+    lda test_huff_calls
+    bne !t29_fail+
+    lda #$01
+    sta tc_results + 28
+    jmp !t1_seq-
+!t29_fail:
+    lda #$00
+    sta tc_results + 28
+    jmp !t1_seq-
+
 !t12:
     // Test 12: entering HUNGRY plays the mild hunger alert once.
     jsr reset_state
@@ -1223,14 +1286,13 @@ t21_test:
     bne !t25_fail+
     lda #$01
     sta tc_results + 24
-    jmp !t1_seq-
+    jmp !t27-
 !t25_fail:
     lda #$00
     sta tc_results + 24
-    jmp !t1_seq-
 
 test_finish:
-    ldx #25
+    ldx #28
 !copy:
     lda tc_results,x
     sta $0400,x

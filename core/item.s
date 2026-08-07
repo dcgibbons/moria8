@@ -95,20 +95,6 @@ fi_add_clear_plain_meta:
     sta fi_add_ego
     rts
 
-// floor_item_pack_add_meta — Pack fi_add_flags + fi_add_ego into floor meta
-// Output: A = packed meta byte
-// Clobbers: A
-floor_item_pack_add_meta:
-    lda fi_add_flags
-    asl
-    asl
-    asl
-    sta zp_temp0
-    lda fi_add_ego
-    and #FI_META_EGO_MASK
-    ora zp_temp0
-    rts
-
 // floor_item_get_qty_hi_x — Get 16-bit gold high byte for floor slot X
 // Output: A = qty_hi for gold items, 0 for non-gold
 floor_item_get_qty_hi_x:
@@ -239,7 +225,16 @@ floor_item_add:
     lda fi_add_qty_hi
     sta fi_p1,x
 !fia_store_meta:
-    jsr floor_item_pack_add_meta
+    // Pack fi_add_flags + fi_add_ego into the floor meta byte (formerly
+    // floor_item_pack_add_meta, inlined at its only call site)
+    lda fi_add_flags
+    asl
+    asl
+    asl
+    sta zp_temp0
+    lda fi_add_ego
+    and #FI_META_EGO_MASK
+    ora zp_temp0
     sta fi_meta,x
     lda fi_add_to_hit
     sta fi_to_hit,x
@@ -1120,6 +1115,8 @@ item_append_desc:
     beq !iad_turns_tramp+
     cmp #ICAT_RING
     beq !iad_ring_tramp+
+    cmp #ICAT_AMULET
+    beq !iad_amulet_tramp+
     cmp #ICAT_WAND
     beq !iad_charges_tramp+
     cmp #ICAT_STAFF
@@ -1128,6 +1125,8 @@ item_append_desc:
     rts
 !iad_ring_tramp:
     jmp !iad_ring+
+!iad_amulet_tramp:
+    jmp !iad_ring_p1+
 !iad_charges_tramp:
     jmp !iad_charges+
 !iad_turns_tramp:
@@ -1277,9 +1276,8 @@ tunnel_spawn_gold:
     adc #1                      // At least 1 GP
     sta fi_add_qty
 
-    jsr floor_item_add
+    jmp floor_item_add
     // Ignore failure (table full)
-    rts
 
 // ============================================================
 // pick_item_type — Select a random non-gold item type for floor spawning
