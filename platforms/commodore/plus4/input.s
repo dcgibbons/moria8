@@ -97,7 +97,7 @@ plus4_test_key_script:
 #elif PLUS4_TEST_SCRIPTED_DEATH_RETURN_PRODUCT
     .byte $20, 0                                  // Dismiss insert-save prompt
 #elif PLUS4_TEST_SCRIPTED_NEW_GAME_PRODUCT
-    .byte $4e, $41, $0d, $41, $41, $0d, $41, $20, 0 // N, race A, accept stats, class A, name A, gender A, dismiss summary
+    .byte $4e, $41, $0d, $41, $41, $0d, $41, $20, $45, 0 // N, race A, accept stats, class A, name A, gender A, dismiss summary, equipment
 #elif PLUS4_TEST_SCRIPTED_DUNGEON_ENTRY_PRODUCT
     .byte $4e, $41, $0d, $41, $41, $0d, $41, $20, $4c, $3e, 0 // New game, move east to stairs, descend
 #elif PLUS4_TEST_SCRIPTED_DUNGEON_ASCENT_PRODUCT
