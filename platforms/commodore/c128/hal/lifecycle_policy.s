@@ -45,7 +45,6 @@
 .const hal_platform_overlay_cpu_port_dma_bank = 0
 .const hal_platform_overlay_window_hi_min = $e0
 .const hal_platform_overlay_window_hi_max_exclusive = $f0
-#define HAL_PLATFORM_REU_SHOW_FILE_USES_PUT_STRING
 #define HAL_PLATFORM_TITLE_SYSINFO_80COL
 #if C128_PRODUCT_OVERLAY_RUNTIME
 .const hal_platform_item_prompt_overlay_runtime = 1

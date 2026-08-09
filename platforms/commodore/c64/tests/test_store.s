@@ -13,7 +13,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #41
+    ldx #42
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -126,7 +126,7 @@ press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
 // Test result buffer — copy to $0400 at end (msg_print clobbers $0400)
-tc_results: .fill 42, $ff
+tc_results: .fill 43, $ff
 tc_count: .byte 0
 
 .macro PatchJump(target, replacement) {
@@ -1436,7 +1436,169 @@ test_start:
 !t42_store:
     sta tc_results + 41
 
+    // ============================================================
+    // Test 43: generation/store eligibility — pit tables contain only
+    // implemented IDs in exact min-level buckets, pick_item_type emits only
+    // implemented IDs, and store fallbacks/picks sell in their own store.
+    // ============================================================
+    // Part A: pit_sorted entries are implemented IDs in ascending min-level
+    // order, level bounds are strictly increasing, and the final bound
+    // covers the whole table.
+    lda #0
+    sta t43_prev_level
+    ldx #0
+!t43a_loop:
+    stx t43_cursor
+    lda pit_sorted,x
+    cmp #2
+    bcc !t43a_bad+
+    cmp #ITEM_TYPE_COUNT
+    bcs !t43a_bad+
+    tax
+    jsr iml_get_for_type
+    cmp t43_prev_level
+    bcc !t43a_bad+
+    sta t43_prev_level
+    ldx t43_cursor
+    inx
+    cpx #(pit_sorted_end - pit_sorted)
+    bcc !t43a_loop-
+    jmp !t43a_ok+
+!t43a_bad:
+    jmp !t43_fail+
+!t43a_ok:
+
+    lda pit_level_bounds
+    bne !t43b_start+
+    jmp !t43_fail+
+!t43b_start:
+    ldx #1
+!t43b_loop:
+    lda pit_level_bounds,x
+    cmp pit_level_bounds - 1,x
+    beq !t43b_bad+
+    bcc !t43b_bad+
+    inx
+    cpx #(pit_level_bounds_end - pit_level_bounds)
+    bcc !t43b_loop-
+    lda pit_level_bounds + (pit_level_bounds_end - pit_level_bounds) - 1
+    cmp #(pit_sorted_end - pit_sorted)
+    bne !t43b_bad+
+    jmp !t43b_ok+
+!t43b_bad:
+    jmp !t43_fail+
+!t43b_ok:
+
+    // Part B: each entry's bucket level equals its min level.
+    lda #0
+    sta t43_cursor
+    sta t43_bucket
+!t43e_next:
+    ldx t43_cursor
+    cpx #(pit_sorted_end - pit_sorted)
+    bcs !t43e_done+
+    txa
+    ldy t43_bucket
+    cmp pit_level_bounds,y
+    bcc !t43e_in_bucket+
+    inc t43_bucket
+    jmp !t43e_next-
+!t43e_in_bucket:
+    lda pit_sorted,x
+    tax
+    jsr iml_get_for_type
+    cmp t43_bucket
+    beq !t43e_ok+
+    jmp !t43_fail+
+!t43e_ok:
+    inc t43_cursor
+    jmp !t43e_next-
+!t43e_done:
+
+    // Part C: production pick_item_type emits only implemented IDs at
+    // shallow and deep dungeon levels.
+    lda #1
+    sta zp_player_dlvl
+    jsr t43_pick_check
+    bcs !t43c_deep+
+    jmp !t43_fail+
+!t43c_deep:
+    lda #50
+    sta zp_player_dlvl
+    jsr t43_pick_check
+    bcs !t43c_ok+
+    jmp !t43_fail+
+!t43c_ok:
+
+    // Part D: every store fallback is implemented and sold by its store.
+    ldx #0
+!t43c_loop:
+    stx zp_store_idx
+    stx t43_cursor
+    lda store_fallback,x
+    cmp #2
+    bcc !t43_fail+
+    cmp #ITEM_TYPE_COUNT
+    bcs !t43_fail+
+    tax
+    lda it_category,x
+    jsr check_store_category
+    bcc !t43_fail+
+    ldx t43_cursor
+    inx
+    cpx #8
+    bcc !t43c_loop-
+
+    // Part E: production store_pick_item yields implemented, sellable IDs
+    // for every store.
+    ldx #0
+!t43d_loop:
+    stx zp_store_idx
+    stx t43_cursor
+    jsr store_pick_item
+    cmp #2
+    bcc !t43_fail+
+    cmp #ITEM_TYPE_COUNT
+    bcs !t43_fail+
+    tax
+    lda it_category,x
+    jsr check_store_category
+    bcc !t43_fail+
+    ldx t43_cursor
+    inx
+    cpx #8
+    bcc !t43d_loop-
+
+    lda #$01
+    jmp !t43_store+
+!t43_fail:
+    lda #$00
+!t43_store:
+    sta tc_results + 42
+
     jmp test_exit_trampoline
+
+t43_pick_check:
+    lda #64
+    sta t43_count
+!t43pc_loop:
+    jsr pick_item_type
+    cmp #2
+    bcc !t43pc_fail+
+    cmp #ITEM_TYPE_COUNT
+    bcs !t43pc_fail+
+    dec t43_count
+    bne !t43pc_loop-
+    sec
+    rts
+!t43pc_fail:
+    clc
+    rts
+
+t43_cursor:     .byte 0
+t43_bucket:     .byte 0
+t43_count:      .byte 0
+t43_prev_level: .byte 0
 
 reset_haggle_fixture:
     jsr screen_clear

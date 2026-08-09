@@ -22,10 +22,8 @@ cmb_buf_idx:     .byte 0
 combat_msg_buf:  .fill 42, 0
 
 reu_present:     .byte 0
-reu_loading_row: .byte 0
+reu_loading_count: .byte 0
 
-reu_loading_hdr:
-    .text "Loading:" ; .byte 0
 reu_fn_t1: .text "MONSTER.DB.1" ; .byte 0
 reu_fn_t2: .text "MONSTER.DB.2" ; .byte 0
 reu_fn_t3: .text "MONSTER.DB.3" ; .byte 0
@@ -44,6 +42,7 @@ eff_fear_timer: .byte 0
 eff_detect_timer: .byte 0
 
 reu_show_status:
+reu_render_progress:
 reu_load_all_tiers:
 reu_stash_overlays:
 reu_fetch_tier:

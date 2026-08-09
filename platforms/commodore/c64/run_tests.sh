@@ -1769,12 +1769,13 @@ run_wizard_item_product_smoke() {
     # return executed ROM (screen-scroll garbage, then BRK/JAM). The
     # modal trampoline keeps overlay RAM visible.
     local main_vs="../../../build/test/c64/main.vs"
-    local fail_addr dlvl_addr ovl_addr arm_addr
+    local fail_addr dlvl_addr ovl_addr arm_addr inv_addr
     fail_addr=$(awk '/\.c64_test_wizard_reveal_fail_input_sym$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     dlvl_addr=$(awk '/\.zp_player_dlvl$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     ovl_addr=$(awk '/\.current_overlay$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     arm_addr=$(awk '/\.item_init_identification$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
-    if [ -z "${fail_addr:-}" ] || [ -z "${dlvl_addr:-}" ] || [ -z "${ovl_addr:-}" ] || [ -z "${arm_addr:-}" ]; then
+    inv_addr=$(awk '/\.inv_item_id$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    if [ -z "${fail_addr:-}" ] || [ -z "${dlvl_addr:-}" ] || [ -z "${ovl_addr:-}" ] || [ -z "${arm_addr:-}" ] || [ -z "${inv_addr:-}" ]; then
         echo "FAIL (missing wizard-item smoke symbols in ../../../build/test/c64/main.vs)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
@@ -1784,6 +1785,8 @@ run_wizard_item_product_smoke() {
     dlvl_addr=$(printf '%04X' "$((16#$dlvl_addr))")
     ovl_addr=$(printf '%04X' "$((16#$ovl_addr))")
     arm_addr=$(printf '%04X' "$((16#$arm_addr))")
+    inv_addr=$(printf '%04X' "$((16#$inv_addr))")
+    inv_end=$(printf '%04X' "$((16#$inv_addr + 3))")
 
     local mon_file
     mon_file=$(mktemp -t "test_${name}_mon")
@@ -1802,6 +1805,7 @@ run_wizard_item_product_smoke() {
         echo "g"
         echo "m \$${dlvl_addr} \$${dlvl_addr}"
         echo "m \$${ovl_addr} \$${ovl_addr}"
+        echo "m \$${inv_addr} \$${inv_end}"
         echo "quit"
     } > "$mon_file"
 
@@ -1826,10 +1830,10 @@ run_wizard_item_product_smoke() {
         return
     fi
 
-    # Reaching scripted-input exhaustion means both generations and the
-    # overlay restore returned to the main loop. Verify invariants: still on
-    # dungeon level 1, and the wizard menu overlay was restored
-    # (OVL_MODAL_MISC = 9).
+    # Reaching scripted-input exhaustion means both generations, the overlay
+    # restore, and the inventory view returned to the main loop. Verify
+    # invariants: still on dungeon level 1, and the inventory display left its
+    # owning overlay resident (OVL_HELP = 5).
     local dlvl_lc ovl_lc
     dlvl_lc=$(echo "$dlvl_addr" | tr '[:upper:]' '[:lower:]')
     ovl_lc=$(echo "$ovl_addr" | tr '[:upper:]' '[:lower:]')
@@ -1842,8 +1846,21 @@ run_wizard_item_product_smoke() {
         return
     fi
 
-    if ! grep -qiE "^>C:${ovl_lc}  09" "$tty_log"; then
-        echo "FAIL (wizard menu overlay not restored after item generation)"
+    if ! grep -qiE "^>C:${ovl_lc}  05" "$tty_log"; then
+        echo "FAIL (inventory overlay not resident after inventory display)"
+        echo "    Log: $tty_log"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    # Boundary IDs: first appended (96=$60) and last appended (127=$7f) must
+    # both land in inventory through the production grant path (starting gear
+    # occupies the leading slots).
+    local inv_lc
+    inv_lc=$(echo "$inv_addr" | tr '[:upper:]' '[:lower:]')
+    if ! grep -qiE "^>C:${inv_lc}.*60 7f" "$tty_log"; then
+        echo "FAIL (boundary item IDs 96/127 not granted into inventory)"
         echo "    Log: $tty_log"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
@@ -3952,9 +3969,9 @@ run_test "orb_of_draining_prayer" "tests/test_orb_of_draining_prayer.s" "0400 04
 run_test "detect_feedback" "tests/test_detect_feedback.s" "0400 0403" 4 500000000
 run_test "item" "tests/test_item.s" "0400 0431" 50 1000000000
 run_test "scroll_p3" "tests/test_scroll_p3.s" "0400 040b" 12 1000000000
-run_test "item_desc" "tests/test_item_desc.s" "0400 0408" 9 500000000
+run_test "item_desc" "tests/test_item_desc.s" "0400 0409" 10 500000000
 run_test "item_ui" "tests/test_item_ui.s" "0400 040f" 16 1000000000
-run_test "store" "tests/test_store.s" "0400 0429" 42 1000000000
+run_test "store" "tests/test_store.s" "0400 042a" 43 1000000000
 run_test "ui_views" "tests/test_ui_views.s" "0400 0413" 17 500000000
 run_test "ui_views_filters" "tests/test_ui_views_filters.s" "0400 0413" 7 500000000
 run_test "subsystems" "tests/test_subsystems.s" "0400 0409" 10

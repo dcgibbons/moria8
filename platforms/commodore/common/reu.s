@@ -584,46 +584,36 @@ reu_ovl_idx: .byte 0
 // REU loading display
 // ============================================================
 
-// reu_show_file — Display filename during REU stashing
-// Input: zp_ptr0 = PETSCII filename string (null-terminated)
-// Uses reu_loading_row for current row, increments after display.
-// Clobbers: A, X, Y
+// reu_show_file — Advance the centered REU loading progress display.
 reu_show_file:
-    lda reu_loading_row
-    sta zp_cursor_row
-    lda #2
-    sta zp_cursor_col
-#if HAL_PLATFORM_REU_SHOW_FILE_USES_PUT_STRING
-    jsr hal_screen_put_string
-#else
-    jsr hal_screen_set_cursor
-    ldy #0
-!rsf_loop:
-    lda (zp_ptr0),y
-    beq !rsf_done+
-    cmp #$41
-    bcc !rsf_write+
-    cmp #$5b
-    bcc !rsf_upper+
-    cmp #$61
-    bcc !rsf_write+
-    cmp #$7b
-    bcs !rsf_write+
-!rsf_upper:
-    and #$1f
-!rsf_write:
-    sta (zp_screen_lo),y
-    lda zp_text_color
-    sta (zp_color_lo),y
-    iny
-    cpy #40
-    bcc !rsf_loop-
-!rsf_done:
-#endif
-    inc reu_loading_row
-    rts
+    inc reu_loading_count
+    jmp reu_render_progress
 
-reu_loading_row: .byte 0
+reu_render_progress:
+    lda #12
+    jsr hal_screen_clear_row
+    lda #12
+    sta zp_cursor_row
+    lda #4
+    sta zp_cursor_col
+    lda #<reu_loading_prefix
+    sta zp_ptr0
+    lda #>reu_loading_prefix
+    sta zp_ptr0_hi
+    jsr hal_screen_put_string
+    lda reu_loading_count
+    jsr screen_put_decimal
+    lda #$2f
+    jsr hal_screen_put_char
+    lda #13
+    jsr screen_put_decimal
+    lda #<reu_loading_suffix
+    sta zp_ptr0
+    lda #>reu_loading_suffix
+    sta zp_ptr0_hi
+    jmp hal_screen_put_string
+
+reu_loading_count: .byte 0
 
 // reu_show_status — Display REU loading progress
 // Default: RTS (safe for test builds). At startup, main.s patches
@@ -642,5 +632,6 @@ reu_show_status:
 .assert "Tier filename table count stays in sync", hal_storage_tier_name_hi - hal_storage_tier_name_lo, 4
 .assert "Overlay filename table count stays in sync", hal_storage_overlay_name_hi - hal_storage_overlay_name_lo, REU_OVERLAY_COUNT
 
-// Header string (displayed by tier_init)
-reu_loading_hdr: .text "Loading:" ; .byte 0
+// Progress message parts (reassembled by reu_render_progress)
+reu_loading_prefix: .text "MORIA8 LOADING " ; .byte 0
+reu_loading_suffix: .text " PLEASE WAIT" ; .byte 0

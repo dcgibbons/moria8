@@ -1,16 +1,16 @@
 #importonce
 // reu_loading_banked.s — REU loading status display (banked at $F000)
 //
-// Shows "X/YYYКB" progress during REU preloading.
+// Shows the centered REU capacity status during preloading.
 // Called via trampoline in reu.s (banks out KERNAL first).
 
-// reu_show_status_banked — Display "X/YYYKB" progress on row 2
+// reu_show_status_banked — Display "REU SIZE: X/YYYKB" below the load message
 // Reads reu_tier_offset_lo/hi for used bytes, reu_size_kb for total.
 // Used KB = ceiling(reu_tier_offset / 1024).
 // Clobbers: A, X, Y
 reu_show_status_banked:
-    // Clear row 2 to avoid leftover digits
-    lda #2
+    // Clear the status row to avoid leftover digits
+    lda #14
     jsr hal_screen_clear_row
 
     // Compute used KB = ceiling(offset / 1024)
@@ -27,9 +27,15 @@ reu_show_status_banked:
 
     // Position and print used KB
     pha
-    lda #2
+    lda #14
     sta zp_cursor_row
+    lda #10
     sta zp_cursor_col
+    lda #<rlb_reu_size_str
+    sta zp_ptr0
+    lda #>rlb_reu_size_str
+    sta zp_ptr0_hi
+    jsr hal_screen_put_string
     pla
     jsr screen_put_decimal      // Print used KB (8-bit)
 
@@ -52,4 +58,5 @@ reu_show_status_banked:
     jsr hal_screen_put_string
     rts
 
+rlb_reu_size_str: .text "REU SIZE: " ; .byte 0
 rlb_kb_str: .text "KB" ; .byte 0

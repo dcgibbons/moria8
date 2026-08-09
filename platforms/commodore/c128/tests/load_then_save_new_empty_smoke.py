@@ -153,7 +153,7 @@ def dump_context(connector: VICEConnector, args: argparse.Namespace) -> str:
         ".disk_ui_action",
         ".c128_media_state",
         ".c128_modal_slot_state",
-        ".load_result",
+        ".c128_test_load_then_save_new_empty_load_result",
         ".c128_test_load_then_save_new_empty_stage",
         ".c128_test_input_idx",
         ".disk_diag_phase",
@@ -252,7 +252,7 @@ def run(args: argparse.Namespace) -> MonitorTestResult:
         )
         if not result.passed:
             return phase_failure(connector, args, "load existing save", result)
-        load_result = read_symbol_byte(connector, args.symbols, ".load_result")
+        load_result = read_symbol_byte(connector, args.symbols, ".c128_test_load_then_save_new_empty_load_result")
         if load_result != 0:
             reason = "unreadable" if load_result is None else f"${load_result:02x}"
             return MonitorTestResult(False, f"load existing save failed: load_result={reason}", dump_context(connector, args))

@@ -28,7 +28,7 @@ reu_present:           .byte 0
 reu_banks:             .byte 0
 reu_size_kb:           .word 0
 reu_overlays_stashed:  .byte 0
-reu_loading_row:       .byte 0
+reu_loading_count:     .byte 0
 
 reu_detect:
     lda #0
@@ -46,11 +46,10 @@ reu_stash:
 reu_fetch:
 reu_show_file:
 reu_show_status:
+reu_render_progress:
     rts
 
 .label reu_fn_tier_lo = hal_storage_tier_name_lo
 .label reu_fn_tier_hi = hal_storage_tier_name_hi
 .label reu_fn_ovl_lo = hal_storage_overlay_name_lo
 .label reu_fn_ovl_hi = hal_storage_overlay_name_hi
-
-reu_loading_hdr: .text "Loading:" ; .byte 0

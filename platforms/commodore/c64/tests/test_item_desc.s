@@ -1,6 +1,6 @@
 // test_item_desc.s — Runtime tests for the real item description formatter
 //
-// Results at $0400-$0408: $01 = pass, $00 = fail per test (9 tests)
+// Results at $0400-$0409: $01 = pass, $00 = fail per test (10 tests)
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_bootstrap)
@@ -10,7 +10,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_finish:
-    ldx #8
+    ldx #9
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -91,7 +91,7 @@ fi_add_ego:   .byte 0
 test_start:
     jsr screen_clear
 
-    ldx #8
+    ldx #9
     lda #$ff
 !clr:
     sta tc_results,x
@@ -379,13 +379,115 @@ test_start:
     bcc !t9_fail+
     lda #$01
     sta tc_results+8
-    jmp !tests_done+
+    jmp !t10+
 !t9_fail:
     lda #$00
     sta tc_results+8
 
+    // Test 10: pool-wrap coverage — appended randomized-class rows use the
+    // approved class-local indexes, every randomized-class type resolves
+    // inside its pool, and wrapped indexes produce distinct appearances.
+!t10:
+    jsr item_init_identification
+
+    // Part A: approved wrap indexes for appended randomized-class rows.
+    ldx #0
+!t10a_loop:
+    stx t10_cursor
+    lda t10_wrap_ids,x
+    tax
+    jsr iuk_index_for_type
+    ldx t10_cursor
+    cmp t10_wrap_idx,x
+    bne !t10_fail+
+    inx
+    cpx #27
+    bcc !t10a_loop-
+
+    // Part B: every randomized-class type resolves inside its pool.
+    ldx #0
+!t10b_loop:
+    stx t10_cursor
+    ldy it_category,x
+    cpy #ICAT_POTION
+    beq !t10b_pool12+
+    cpy #ICAT_SCROLL
+    beq !t10b_pool12+
+    cpy #ICAT_RING
+    beq !t10b_pool4+
+    cpy #ICAT_WAND
+    beq !t10b_pool5+
+    cpy #ICAT_STAFF
+    beq !t10b_pool5+
+    jmp !t10b_next+
+!t10b_pool12:
+    lda #12
+    bne !t10b_check+
+!t10b_pool4:
+    lda #4
+    bne !t10b_check+
+!t10b_pool5:
+    lda #5
+!t10b_check:
+    sta t10_pool_max
+    ldx t10_cursor
+    jsr iuk_index_for_type
+    cmp t10_pool_max
+    bcs !t10_fail+
+!t10b_next:
+    ldx t10_cursor
+    inx
+    cpx #ITEM_TYPE_COUNT
+    bcc !t10b_loop-
+
+    // Part C: distinct class-local indexes (96 -> 10, 98 -> 0) produce
+    // distinct unknown appearances; index-0-only tables would collapse them.
+    // Unknown names decode into one shared buffer, so compare contents.
+    lda #96
+    jsr item_get_name_ptr
+    ldy #0
+!t10_copy:
+    lda (zp_ptr0),y
+    sta t10_name_buf,y
+    beq !t10_copy_done+
+    iny
+    cpy #32
+    bcc !t10_copy-
+!t10_copy_done:
+    lda #98
+    jsr item_get_name_ptr
+    ldy #0
+!t10_cmp:
+    lda (zp_ptr0),y
+    cmp t10_name_buf,y
+    bne !t10_pass+
+    cmp #0
+    beq !t10_fail+
+    iny
+    cpy #32
+    bcc !t10_cmp-
+!t10_fail:
+    lda #$00
+    sta tc_results+9
+    jmp !tests_done+
+!t10_pass:
+    lda #$01
+    sta tc_results+9
+
 !tests_done:
     jmp test_finish
+
+t10_cursor:  .byte 0
+t10_pool_max: .byte 0
+t10_name_buf: .fill 32, 0
+t10_wrap_ids:
+    .byte 96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107
+    .byte 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119
+    .byte 120, 121, 126, 127
+t10_wrap_idx:
+    .byte 10, 11, 0, 1, 2, 10, 11, 0, 1, 2, 3, 4
+    .byte 5, 2, 3, 0, 1, 2, 4, 0, 1, 2, 3, 4
+    .byte 0, 1, 3, 2
 
 test_prepare_row0:
     jsr screen_clear
@@ -658,9 +760,9 @@ ein_126: .text "Potion of Neutralize Poison" ; .byte 0
 ein_127: .text "Staff of Remove Curse" ; .byte 0
 
 item_name_test_id: .byte 0
-tc_results: .fill 9, $ff
+tc_results: .fill 10, $ff
 tc_results_end:
 
 item_desc_test_body_end:
-.assert "Item desc result count", tc_results_end - tc_results, 9
+.assert "Item desc result count", tc_results_end - tc_results, 10
 .assert "Item desc test stays below MAP_BASE", item_desc_test_body_end <= MAP_BASE, true

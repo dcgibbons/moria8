@@ -154,22 +154,7 @@ tier_init:
     lda c128_cache_enabled
     beq !ti_done+
 
-    lda #1
-    sta zp_screen_editor_state  // Suppress cursor blink during loading
-    lda #COL_LGREY
-    sta zp_text_color
-    jsr hal_screen_clear
-    lda #1
-    sta zp_cursor_row
-    lda #1
-    sta zp_cursor_col
-    lda #<c128_cache_loading_hdr
-    sta zp_ptr0
-    lda #>c128_cache_loading_hdr
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
-    lda #4
-    sta reu_loading_row
+    jsr c128_prepare_cache_loading_screen
     jsr c128_preload_all_tiers
     jsr c128_preload_all_overlays
 #if C128_TEST_CACHE_SURVIVAL
@@ -187,18 +172,9 @@ tier_init:
     lda #COL_LGREY
     sta zp_text_color
     jsr hal_screen_clear
-    lda #1
-    sta zp_cursor_row
-    lda #1
-    sta zp_cursor_col
-    lda #<reu_loading_hdr
-    sta zp_ptr0
-    lda #>reu_loading_hdr
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
-    jsr reu_show_status         // Show initial "0/XXXKB"
-    lda #4
-    sta reu_loading_row
+    lda #0
+    sta reu_loading_count
+    jsr reu_render_progress
 
     // REU present: load all 4 tier files from disk into REU
     jsr reu_load_all_tiers

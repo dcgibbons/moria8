@@ -1626,6 +1626,73 @@ title_clear_below_menu:
     bcc !tcb_loop-
     rts
 
+c128_prepare_cache_loading_screen:
+    lda c128_startup_preload_display
+    bne !done+
+    lda #1
+    sta zp_screen_editor_state
+    jsr hal_screen_clear
+    lda #12
+    sta c128_load_progress_total
+    lda #0
+    sta c128_load_progress_count
+    jsr c128_render_load_progress
+!done:
+    rts
+
+c128_prepare_startup_loading_screen:
+    jsr screen_clear_for_font_restore
+    jsr c128_restore_vdc_rom_font
+    jsr hal_screen_clear
+    lda #11
+    ldx c128_cache_enabled
+    beq !total_ready+
+    clc
+    adc #12
+!total_ready:
+    sta c128_load_progress_total
+    lda #0
+    sta c128_load_progress_count
+    lda #1
+    sta c128_startup_preload_display
+    jsr c128_render_load_progress
+    rts
+
+c128_show_load_progress:
+    inc c128_load_progress_count
+    jmp c128_render_load_progress
+
+c128_render_load_progress:
+    lda #12
+    jsr hal_screen_clear_row
+    lda #COL_LGREY
+    sta zp_text_color
+    lda #12
+    sta zp_cursor_row
+    lda #24
+    sta zp_cursor_col
+    lda #<c128_load_progress_prefix
+    sta zp_ptr0
+    lda #>c128_load_progress_prefix
+    sta zp_ptr0_hi
+    jsr hal_screen_put_string
+    lda c128_load_progress_count
+    jsr screen_put_decimal
+    lda #$2f
+    jsr hal_screen_put_char
+    lda c128_load_progress_total
+    jsr screen_put_decimal
+    lda #<c128_load_progress_suffix
+    sta zp_ptr0
+    lda #>c128_load_progress_suffix
+    sta zp_ptr0_hi
+    jmp hal_screen_put_string
+
+c128_load_progress_prefix:
+    .text "MORIA8 LOADING " ; .byte 0
+c128_load_progress_suffix:
+    .text " PLEASE WAIT" ; .byte 0
+
 // ============================================================
 .const TITLE_MENU_COL = (SCREEN_COLS - 25) / 2
 .const SAVE_DISK_IND_COL = (SCREEN_COLS - 10) / 2
@@ -1752,6 +1819,9 @@ restart_entry:
     lda #COL_LGREY
     sta zp_text_color
 
+    // Use one visible list for every startup resident and cache load.
+    jsr c128_prepare_startup_loading_screen
+
     lda #5
     sta c128_runtime_load_stage
     jsr c128_load_runtime_low_prg
@@ -1789,6 +1859,12 @@ restart_entry:
     jmp runtime_load_failed
 !runtime_banked_loaded:
     jsr c128_load_core_residents
+    lda #11
+    sta c128_runtime_load_stage
+    jsr c128_preload_resident_play
+    bcc !resident_play_loaded+
+    jmp runtime_load_failed
+!resident_play_loaded:
 #if C128_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT || C128_TEST_SCRIPTED_DISK_SETUP_SINGLE_DRIVE_RETURN_PRODUCT
     jsr screen_clear_for_font_restore
     jsr c128_restore_vdc_rom_font
@@ -1871,9 +1947,9 @@ c128_test_change_save_drive_unexpected_return:
 #endif
     lda #C128_MEDIA_PROGRAM
     sta c128_media_state
-    jsr screen_clear_for_font_restore
-    jsr c128_restore_vdc_rom_font
     jsr tier_init
+    lda #0
+    sta c128_startup_preload_display
     lda #1
     sta c128_kernal_irq_tail_runtime_owned
     jsr c128_restore_runtime_vectors
@@ -2134,6 +2210,12 @@ c128_test_single_drive_load_return_before_save_media:
 #if C128_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_RETURN_PRODUCT
 c128_test_single_drive_load_return_loaded:
 #endif
+#if C128_TEST_SCRIPTED_LOAD_THEN_SAVE_NEW_EMPTY_PRODUCT
+    // Snapshot load_result while PERSIST still owns the modal slot; the
+    // require_play below evicts it, so the harness cannot read it directly.
+    lda load_result
+    sta c128_test_load_then_save_new_empty_load_result
+#endif
     jsr c128_modal_require_play
     jmp load_resume_game
 !title_load_fail:
@@ -2258,7 +2340,10 @@ c128_load_runtime_prg:
     ldx zp_ptr0
     ldy zp_ptr0_hi
     jsr w_setnam
-
+    lda c128_startup_preload_display
+    beq !runtime_no_display+
+    jsr c128_show_load_progress
+!runtime_no_display:
     lda disk_temp
     ldx program_device
     ldy #1
@@ -2461,6 +2546,26 @@ c128_load_resident_play_prg:
 .const C128_RESIDENT_PLAY_SIG0 = $4d
 .const C128_RESIDENT_PLAY_SIG1 = $38
 .const C128_RESIDENT_PLAY_SIG2 = $50
+
+c128_preload_resident_play:
+    jsr c128_load_resident_play_prg
+    bcs !play_preload_failed+
+    lda c128_resident_play_sig0
+    cmp #C128_RESIDENT_PLAY_SIG0
+    bne !play_preload_failed+
+    lda c128_resident_play_sig1
+    cmp #C128_RESIDENT_PLAY_SIG1
+    bne !play_preload_failed+
+    lda c128_resident_play_sig2
+    cmp #C128_RESIDENT_PLAY_SIG2
+    bne !play_preload_failed+
+    lda #C128_MODAL_PLAY
+    sta c128_modal_slot_state
+    clc
+    rts
+!play_preload_failed:
+    sec
+    rts
 
 c128_require_program_media:
     jsr disk_prompt_game
@@ -2728,6 +2833,9 @@ kernal_irq_vec_lo: .byte 0
 kernal_irq_vec_hi: .byte 0
 c128_kernal_irq_tail_runtime_owned: .byte 0
 c128_runtime_load_stage: .byte 0
+c128_startup_preload_display: .byte 0
+c128_load_progress_count: .byte 0
+c128_load_progress_total: .byte 0
 c128_runtime_load_bank: .byte 0
 c128_runtime_load_result_a: .byte 0
 c128_runtime_load_readst: .byte 0
@@ -2740,6 +2848,7 @@ c128_test_post_save_prompt_diag: .fill 4, 0
 #endif
 #if C128_TEST_SCRIPTED_LOAD_THEN_SAVE_NEW_EMPTY_PRODUCT
 c128_test_load_then_save_new_empty_stage: .byte 0
+c128_test_load_then_save_new_empty_load_result: .byte 0
 #endif
 #if C128_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT
 c128_test_single_drive_fresh_save_armed: .byte 0
@@ -3650,18 +3759,20 @@ c128_resident_play_body:
 // player_run uses pm_live_occ_x/y defined by the preceding player_move import.
 #import "../../../core/player_run.s"
 #import "../../../core/ui_help_clear.s"
-#if C128_REAL_BOOT_DIAG
-// Diag variants exclude wizard mode: the boot/crash scenarios never enter
-// wizard commands, and the activated guard instrumentation needs the Play
-// payload bytes. Stubs keep the command-dispatch references linkable.
+#if C128_REAL_BOOT_DIAG || C128_TEST_SCRIPTED_INPUT || C128_TEST_CACHE_SURVIVAL || C128_TEST_PERF_P1_TRACE || C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_SPELL_CANCEL || C128_TEST_SCRIPTED_BOOK_OVERLAY || C128_TEST_SCRIPTED_STUDY_BOOK_OVERLAY || C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY || C128_TEST_SCRIPTED_SCROLL_SELECTOR || C128_TEST_SCRIPTED_PRAYER
+// Scripted/diag test variants exclude wizard mode: those scenarios never enter
+// wizard commands, and the test instrumentation needs the Play payload bytes.
+// Stubs keep the command-dispatch and game-loop references linkable.
 wizard_reset_session_state:
 cmd_wizard_entry:
     rts
+wizard_level_jump_active:
+    .byte 0
 wizard_wall_walk_active:
     lda #0
     rts
-// Diagnostic builds omit wizard.s, but scroll effects still require the
-// resident teleport-level tail to remain linkable.
+// These builds omit wizard.s, but scroll effects still require the resident
+// teleport-level tail to remain linkable.
 scroll_teleport_level_exec:
     rts
 #else
@@ -4378,13 +4489,6 @@ press_key_str:
     .text "Press any key" ; .byte 0
 press_key_str_end:
 
-combat_calc_bow_tohit:
-    lda player_data + PL_TOHIT
-    sta cmb_total_tohit
-    lda #4
-    ldx #1
-    jmp combat_calc_tohit_common
-
 combat_append_blow_summary:
     lda cmb_blow_count
     cmp #2
@@ -4412,6 +4516,8 @@ combat_append_blow_summary:
     sta combat_msg_buf,x
     rts
 
+// Always-resident Staff of Speed trampoline: the items overlay calls this
+// while either PLAY or PERSIST owns the $AF00 modal slot.
 tramp_staff_speed_items:
     lda #OVL_DEATH
     jsr overlay_load
@@ -4425,6 +4531,15 @@ tramp_staff_speed_items:
 
 c128_resident_diskio_end:
 .segment Default
+
+// Bow to-hit entry: resident Bank 0 RAM (callable from OVL.ITEMS while the
+// modal slot holds either payload); parked outside DiskIo for space.
+combat_calc_bow_tohit:
+    lda player_data + PL_TOHIT
+    sta cmb_total_tohit
+    lda #4
+    ldx #1
+    jmp combat_calc_tohit_common
 
 // RuntimeProjectileData segment — shared projectile helpers loaded below
 // runtime.input so the $F000 banked payload stays below the MMU register page.
@@ -4733,8 +4848,9 @@ title_str:
 .segment UiOverlay
     #import "../../../core/ui_character.s"
     #import "../../../core/ui_recall.s"
-#if C128_REAL_BOOT_DIAG
-// Diag variants exclude the wizard UI with wizard mode (see Play payload).
+#if C128_REAL_BOOT_DIAG || C128_TEST_SCRIPTED_INPUT || C128_TEST_CACHE_SURVIVAL || C128_TEST_PERF_P1_TRACE || C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_SPELL_CANCEL || C128_TEST_SCRIPTED_BOOK_OVERLAY || C128_TEST_SCRIPTED_STUDY_BOOK_OVERLAY || C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY || C128_TEST_SCRIPTED_SCROLL_SELECTOR || C128_TEST_SCRIPTED_PRAYER
+// Scripted/diag test variants exclude the wizard UI with wizard mode (see
+// Play payload).
 ui_wizard_display:
     rts
 #else

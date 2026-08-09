@@ -1203,6 +1203,24 @@ t7_set_slot31:
     lda #IF_IDENTIFIED
     sta inv_flags + EQUIP_AMULET
 
+    // Boundary IDs: first appended (96) and last appended (127) must persist.
+    lda #96
+    sta inv_item_id + 3
+    lda #1
+    sta inv_qty + 3
+    lda #12
+    sta inv_p1 + 3
+    lda #IF_IDENTIFIED
+    sta inv_flags + 3
+    lda #127
+    sta inv_item_id + 4
+    lda #1
+    sta inv_qty + 4
+    lda #9
+    sta inv_p1 + 4
+    lda #IF_TRIED
+    sta inv_flags + 4
+
     // Store/home slot 10: packed flags+ego plus split stat sidecars.
     lda #1
     sta si_item_id + 10
@@ -1279,6 +1297,23 @@ t7_set_slot31:
     :t13_expect($7f)
     lda inv_flags + EQUIP_AMULET
     :t13_expect(IF_IDENTIFIED)
+
+    lda inv_item_id + 3
+    :t13_expect(96)
+    lda inv_qty + 3
+    :t13_expect(1)
+    lda inv_p1 + 3
+    :t13_expect(12)
+    lda inv_flags + 3
+    :t13_expect(IF_IDENTIFIED)
+    lda inv_item_id + 4
+    :t13_expect(127)
+    lda inv_qty + 4
+    :t13_expect(1)
+    lda inv_p1 + 4
+    :t13_expect(9)
+    lda inv_flags + 4
+    :t13_expect(IF_TRIED)
 
     lda si_item_id + 10
     :t13_expect(1)

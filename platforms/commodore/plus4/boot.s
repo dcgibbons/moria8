@@ -44,7 +44,7 @@ print_loading_msg:
     jsr $ffd2
     clc
     ldx #12             // Row 12
-    ldy #11             // Column 11
+    ldy #4              // Center 40-column message
     jsr $fff0           // KERNAL PLOT
     ldx #0
 !loop:
@@ -78,7 +78,7 @@ use_boot_device_if_valid_nondefault:
     rts
 
 loading_msg:
-    .text "LOADING MORIA8..."
+    .text "MORIA8 LOADING 0/1 PLEASE WAIT"
     .byte 0
 
 chain_stub:

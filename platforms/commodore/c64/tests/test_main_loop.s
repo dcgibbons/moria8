@@ -82,6 +82,9 @@ winner_apply_retirement_bonus:
 wizard_reset_session_state:
     rts
 
+wizard_level_jump_active:
+    .byte 0
+
 wizard_wall_walk_active:
     lda #0
     rts

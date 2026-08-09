@@ -667,8 +667,16 @@ c64_test_input_script:
     .byte $17              // CTRL+W = open wizard menu
     .byte $47              // G = generate item
     .byte $39              // 9
-    .byte $37              // 7
+    .byte $36              // 6 = first appended ID (96)
     .byte $0d              // RETURN
+    .byte $17              // CTRL+W = open wizard menu
+    .byte $47              // G = generate item
+    .byte $31              // 1
+    .byte $32              // 2
+    .byte $37              // 7 = last appended ID (127)
+    .byte $0d              // RETURN
+    .byte $49              // I = inventory display
+    .byte $20              // SPACE = dismiss inventory view
     .byte $00
 #else
 #if C64_TEST_SCRIPTED_WIZARD_REVEAL_PRODUCT

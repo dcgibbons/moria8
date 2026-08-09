@@ -31,7 +31,26 @@ it_unknown_idx:
     .byte $03               // 42: wand 3, 43: staff 0
     .byte $21               // 44: staff 1, 45: staff 2
     .byte $03               // 46: staff 3, 47: fixed
-    .fill (((ITEM_TYPE_COUNT + 1) >> 1) - 24), 0
+    .fill 24, 0             // types 48-95: fixed/ordinary, no randomized class
+    // Approved pool-wrap assignment for appended randomized-class rows:
+    // class-local indexes wrap modulo pool size (potions/scrolls 12, rings 4,
+    // wands/staves 5). Duplicate appearances are cosmetic and save-free.
+    .byte $ba               // 96: potion 10, 97: potion 11
+    .byte $10               // 98: potion 0, 99: potion 1
+    .byte $a2               // 100: potion 2, 101: scroll 10
+    .byte $0b               // 102: scroll 11, 103: scroll 0
+    .byte $21               // 104: scroll 1, 105: scroll 2
+    .byte $43               // 106: scroll 3, 107: scroll 4
+    .byte $25               // 108: scroll 5, 109: ring 2
+    .byte $03               // 110: ring 3, 111: ring 0
+    .byte $21               // 112: ring 1, 113: ring 2
+    .byte $04               // 114: wand 4, 115: wand 0
+    .byte $21               // 116: wand 1, 117: wand 2
+    .byte $43               // 118: wand 3, 119: staff 4
+    .byte $10               // 120: staff 0, 121: staff 1
+    .byte $00               // 122-123: fixed armor
+    .byte $00               // 124-125: fixed amulets
+    .byte $23               // 126: potion 3, 127: staff 2
 .assert "it_unknown_idx size", potion_shuffle - it_unknown_idx, (ITEM_TYPE_COUNT + 1) >> 1
 
 // Shuffle tables: map category-local index → description index

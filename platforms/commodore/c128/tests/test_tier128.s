@@ -18,8 +18,7 @@ c128_restore_runtime_state:
 #import "../hal/storage_tier_names.s"
 
 reu_present: .byte 0
-reu_loading_row: .byte 0
-reu_loading_hdr: .byte 0
+reu_loading_count: .byte 0
 c128_cache_enabled: .byte 0
 c128_cache_tiers_ready: .byte 0
 c128_cache_overlays_ready: .byte 0
@@ -39,6 +38,8 @@ screen_put_string: rts
 .label hal_screen_put_string = screen_put_string
 reu_show_status: rts
 reu_show_file: rts
+reu_render_progress: rts
+c128_prepare_cache_loading_screen: rts
 reu_load_all_tiers: rts
 reu_stash_overlays: rts
 msg_print: rts
