@@ -17,7 +17,7 @@ test_bootstrap:
 test_exit_trampoline:
     sei                         // Disable IRQs during copy
     :BankOutBasic()             // Ensure BASIC ROM off (tc_results in $A000+)
-    ldx #50-1
+    ldx #51-1
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -138,7 +138,7 @@ press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
 // Test result buffer — copy to $0400 at end (msg_print clobbers $0400)
-tc_results: .fill 50, $ff
+tc_results: .fill 51, $ff
 tc_loop_ctr: .byte 0          // Loop counter (safe from ZP clobber)
 tc_valid_ctr: .byte 0         // Valid item counter for test 22
 t16_base_ac: .byte 0          // Stable scratch for Test 16 across item_wear
@@ -2700,10 +2700,48 @@ test_start:
 
     lda #$01
     sta tc_results + 49
-    jmp !tests_done+
+    jmp !t51+
 !t50_fail:
     lda #$00
     sta tc_results + 49
+
+    // ==========================================
+    // Test 51: calc_stats applies Amulet of the Magi p1 deterministically.
+    // Regression guard: equipment bonuses must use raw arithmetic; the
+    // randomized chargen stat stepping (increment_stat) ratchets 18+ stats
+    // upward on every load otherwise.
+    // ==========================================
+!t51:
+    jsr item_init_inventory
+    lda #0
+    sta player_data + PL_RACE     // Human: all-zero stat adjustments
+    lda #2
+    sta player_data + PL_CLASS    // Priest: INT adjustment -3 (exact below 18)
+    lda #14
+    sta player_data + PL_INT_BASE
+
+    lda #ITEM_TYPE_AMULET_MAGI
+    sta inv_item_id + EQUIP_AMULET
+    lda #1
+    sta inv_qty + EQUIP_AMULET
+    lda #19
+    sta inv_p1 + EQUIP_AMULET
+
+    jsr player_calc_stats
+    lda player_data + PL_INT_CUR
+    cmp #30                     // 14 - 3 + 19, exactly
+    bne !t51_fail+
+    jsr player_calc_stats
+    lda player_data + PL_INT_CUR
+    cmp #30                     // idempotent rebuild, no ratchet
+    bne !t51_fail+
+
+    lda #$01
+    sta tc_results + 50
+    jmp !tests_done+
+!t51_fail:
+    lda #$00
+    sta tc_results + 50
 
 !tests_done:
     // Jump to trampoline at $033C (below $A000) to copy results + BRK

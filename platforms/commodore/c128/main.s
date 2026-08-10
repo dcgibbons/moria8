@@ -3543,8 +3543,7 @@ c128_program_read_command_status:
 // load OVL.DEATH. The return continuation remains resident throughout.
 tramp_p3_dispatch_items:
     pha
-    lda #OVL_MODAL_MISC
-    jsr overlay_load
+    jsr c128_load_modal_misc_overlay
     bcs !failed+
     pla
     jsr irs_dispatch_p3_overlay
@@ -3679,42 +3678,6 @@ save_prepare_slot_prompt:
     clc
     rts
 #import "../common/save_slot_menu.s"
-
-// C128 keeps the equip-stat helper out of the byte-tight banked runtime and
-// C128ResidentItems segments.  The routine is called by banked item commands.
-player_adjust_equipment_stat:
-    ldx piw_equip
-    bcs !c128_pase_add+
-    lda inv_p1,x
-    eor #$ff
-    adc #1
-    sta stat_work
-    jmp !c128_pase_item+
-!c128_pase_add:
-    lda inv_p1,x
-    sta stat_work
-!c128_pase_item:
-    lda inv_item_id,x
-    cmp #ITEM_TYPE_RING_STRENGTH
-    beq !c128_pase_str+
-    cmp #ITEM_TYPE_AMULET_WISDOM
-    beq !c128_pase_wis+
-    cmp #ITEM_TYPE_AMULET_MAGI
-    bne !c128_pase_done+
-    ldy #PL_INT_CUR - PL_STR_CUR
-    bne !c128_pase_apply+
-!c128_pase_str:
-    ldy #0
-    bne !c128_pase_apply+
-!c128_pase_wis:
-    ldy #PL_WIS_CUR - PL_STR_CUR
-!c128_pase_apply:
-    lda player_data + PL_STR_CUR,y
-    clc
-    adc stat_work
-    sta player_data + PL_STR_CUR,y
-!c128_pase_done:
-    rts
 c128_resident_persist_end:
 
 #define PRESS_KEY_STR_EXTERNAL
@@ -4540,6 +4503,199 @@ combat_calc_bow_tohit:
     lda #4
     ldx #1
     jmp combat_calc_tohit_common
+
+// Equip-stat helper for banked item commands. It must live in always-resident
+// RAM: wear/takeoff call it during gameplay while PLAY owns the $AF00 modal
+// slot, so the persist payload cannot host it.
+player_adjust_equipment_stat:
+    ldx piw_equip
+    bcs !c128_pase_add+
+    lda inv_p1,x
+    eor #$ff
+    adc #1
+    sta stat_work
+    jmp !c128_pase_item+
+!c128_pase_add:
+    lda inv_p1,x
+    sta stat_work
+!c128_pase_item:
+    lda inv_item_id,x
+    cmp #ITEM_TYPE_RING_STRENGTH
+    beq !c128_pase_str+
+    cmp #ITEM_TYPE_AMULET_WISDOM
+    beq !c128_pase_wis+
+    cmp #ITEM_TYPE_AMULET_MAGI
+    bne !c128_pase_done+
+    ldy #PL_INT_CUR - PL_STR_CUR
+    bne !c128_pase_apply+
+!c128_pase_str:
+    ldy #0
+    bne !c128_pase_apply+
+!c128_pase_wis:
+    ldy #PL_WIS_CUR - PL_STR_CUR
+!c128_pase_apply:
+    lda player_data + PL_STR_CUR,y
+    clc
+    adc stat_work
+    sta player_data + PL_STR_CUR,y
+!c128_pase_done:
+    rts
+
+// C128 resident Phase 3 potion dispatch. The handlers are small and every
+// dependency is resident, so quaffing must not load an overlay (the modal
+// overlay has no Bank1 cache slot; a disk fetch per potion is wrong).
+// Input: piw_item_id = potion type ID (96-100 or 126).
+c128_quaff_p3_dispatch:
+    lda piw_item_id
+    cmp #ITEM_TYPE_POT_HEALING
+    beq !iqp3_healing+
+    cmp #ITEM_TYPE_POT_RESTORATION
+    beq !iqp3_restoration+
+    cmp #ITEM_TYPE_POT_RESIST_HEAT
+    beq !iqp3_resist_heat+
+    cmp #ITEM_TYPE_POT_RESIST_COLD
+    beq !iqp3_resist_cold+
+    cmp #ITEM_TYPE_POT_CURE_CRITICAL
+    beq !iqp3_cure_critical+
+    cmp #ITEM_TYPE_POT_NEUTRALIZE
+    beq !iqp3_neutralize+
+    rts
+
+!iqp3_healing:
+    lda #200
+    jsr pmx_heal_and_report
+    rts
+
+!iqp3_cure_critical:
+    lda #6
+    ldx #7
+    ldy #0
+    jsr math_dice
+    lda zp_math_a
+    jsr pmx_heal_and_report
+    rts
+
+!iqp3_restoration:
+    jsr player_calc_stats
+    ldx #HSTR_PIQ_RESTORED
+    jsr huff_print_msg
+    rts
+
+!iqp3_resist_heat:
+    lda #10
+    jsr rng_range
+    clc
+    adc #10
+    clc
+    adc zp_eff_resist
+    bcc !iqp3_rh_store+
+    lda #255
+!iqp3_rh_store:
+    sta zp_eff_resist
+    rts
+
+!iqp3_resist_cold:
+    lda #10
+    jsr rng_range
+    clc
+    adc #10
+    clc
+    adc eff_resist_cold_timer
+    bcc !iqp3_rc_store+
+    lda #255
+!iqp3_rc_store:
+    sta eff_resist_cold_timer
+    rts
+
+!iqp3_neutralize:
+    jsr eff_cure_poison
+    ldx #HSTR_EFF_POISON_END
+    jsr huff_print_msg
+    rts
+
+// Modal-misc overlay has no Bank1 cache slot or overlay-name-table entry on
+// C128 (those cover IDs 1-8), so overlay_load cannot fetch it: the cache path
+// reads garbage slot bounds and the disk path reads a garbage filename. Load
+// it directly from program media like the retirement path does.
+// Output: carry clear = modal overlay resident at $E000, carry set = failed.
+c128_load_modal_misc_overlay:
+    lda #hal_storage_modal_misc_name_len
+    ldx #<hal_storage_modal_misc_name
+    ldy #>hal_storage_modal_misc_name
+    jsr hal_asset_load_prg_header
+    bcs !modal_misc_done+
+    lda #OVL_MODAL_MISC
+    sta current_overlay
+!modal_misc_done:
+    rts
+
+// tramp_p3_death_items — Run a death-overlay phase-3 effect, then return with
+// OVL.ITEMS resident. The phase-3 router executes in the modal-misc overlay
+// and cannot swap to OVL_DEATH itself: the swap would evict its own
+// continuation (the modal and death overlays do not mirror each other).
+// Input: A = effect argument, tpdi_target+1/+2 = handler address in OVL_DEATH.
+// Output: carry set = effect ran, carry clear = overlay load failed.
+tramp_p3_death_items:
+    sta tpdi_arg
+    lda #OVL_DEATH
+    jsr overlay_load
+    bcs !tpdi_fail+
+    lda tpdi_arg
+    jsr tpdi_target
+    lda #OVL_ITEMS
+    jsr overlay_load
+    sec
+    rts
+!tpdi_fail:
+    clc
+    rts
+tpdi_arg: .byte 0
+tpdi_target:
+    jsr $0000                 // Operand patched by the modal-side dispatcher
+    rts
+
+// tramp_p3_death_cloud — Wand of Stinking Cloud needs monster post-processing
+// after the death-overlay effect; run the whole sequence resident.
+tramp_p3_death_cloud:
+    lda #OVL_DEATH
+    jsr overlay_load
+    bcs !tpdc_fail+
+    jsr eff_directional_monster
+    bcc !tpdc_miss+
+    jsr monster_get_ptr
+    ldy #MX_CONFUSE
+    lda #10
+    sta (zp_ptr0),y
+    ldx #HSTR_PIW_WAND_CLOUD
+    jmp !tpdc_msg+
+!tpdc_miss:
+    ldx #HSTR_PIW_WAND_MISS
+!tpdc_msg:
+    jsr huff_print_msg
+    lda #OVL_ITEMS
+    jsr overlay_load
+    sec
+    rts
+!tpdc_fail:
+    clc
+    rts
+
+// tramp_p3_death_remove_curse — Staff of Remove Curse: death-overlay effect
+// plus the cleansed report, all resident-safe.
+tramp_p3_death_remove_curse:
+    lda #OVL_DEATH
+    jsr overlay_load
+    bcs !tpdr_fail+
+    jsr eff_remove_curse
+    ldx #HSTR_PIQ_CLEANSED
+    jsr huff_print_msg
+    lda #OVL_ITEMS
+    jsr overlay_load
+    sec
+    rts
+!tpdr_fail:
+    clc
+    rts
 
 // RuntimeProjectileData segment — shared projectile helpers loaded below
 // runtime.input so the $F000 banked payload stays below the MMU register page.

@@ -112,14 +112,55 @@ irs_p3_genocide:
 #endif
 irs_p3_run_existing:
 #if C128
-    pha
-    lda #OVL_DEATH
-    jsr overlay_load
-    bcc !irs_re_swap_ok+
-    jmp !irs_re_fail+
-!irs_re_swap_ok:
-    pla
-#endif
+    // Death-overlay handlers are called through the resident swap-call
+    // trampoline; this overlay cannot swap to OVL_DEATH without evicting its
+    // own continuation. A = item type ID.
+    cmp #42
+    bne !irs_re_not_cloud+
+    jmp tramp_p3_death_cloud
+!irs_re_not_cloud:
+    cmp #ITEM_TYPE_STAFF_REMOVE_CURSE
+    bne !irs_re_not_rc+
+    jmp tramp_p3_death_remove_curse
+!irs_re_not_rc:
+    sta irs_re_item
+    ldx #0
+!irs_re_find:
+    lda irs_re_id_tab,x
+    cmp #$ff
+    beq !irs_re_found+
+    cmp irs_re_item
+    beq !irs_re_found+
+    inx
+    inx
+    inx
+    inx
+    bne !irs_re_find-
+!irs_re_found:
+    // X indexes the matching entry (or the $ff default: *Destruction*).
+    lda irs_re_id_tab + 2,x
+    sta tpdi_target + 1
+    lda irs_re_id_tab + 3,x
+    sta tpdi_target + 2
+    lda irs_re_id_tab + 1,x
+    jmp tramp_p3_death_items
+
+irs_re_item: .byte 0
+// Entries: item ID, effect argument, handler lo, handler hi. $ff terminates
+// and doubles as the *Destruction* default.
+irs_re_id_tab:
+    .byte ITEM_TYPE_SCR_RECHARGING, 50, <eff_recharge_item, >eff_recharge_item
+    .byte ITEM_TYPE_SCR_RUNE_PROTECTION, 0, <eff_glyph_of_warding, >eff_glyph_of_warding
+    .byte ITEM_TYPE_SCR_GENOCIDE, 0, <eff_genocide, >eff_genocide
+    .byte ITEM_TYPE_WAND_SLOW, 0, <eff_slow_monster_dir, >eff_slow_monster_dir
+    .byte ITEM_TYPE_WAND_STONE_MUD, 0, <eff_wall_to_mud, >eff_wall_to_mud
+    .byte ITEM_TYPE_WAND_TELEPORT_AWAY, 0, <eff_teleport_other, >eff_teleport_other
+    .byte ITEM_TYPE_WAND_FIRE_BALL, 49, <eff_ball, >eff_ball
+    .byte ITEM_TYPE_WAND_COLD_BALL, 33, <eff_ball, >eff_ball
+    .byte ITEM_TYPE_STAFF_DISPEL_EVIL, 0, <ped_s28, >ped_s28
+    .byte ITEM_TYPE_STAFF_SPEED, 0, <eff_haste_self, >eff_haste_self
+    .byte $ff, 0, <eff_destroy_area, >eff_destroy_area
+#else
     cmp #ITEM_TYPE_SCR_RECHARGING
     beq !irs_re_recharge+
     cmp #ITEM_TYPE_SCR_RUNE_PROTECTION
@@ -239,25 +280,21 @@ irs_p3_run_existing:
     jmp !irs_re_done+
 !irs_re_remove_curse:
 #if APPLE2
+    // Print before the swap-call: this overlay is evicted by it.
+    ldx #HSTR_PIQ_CLEANSED
+    jsr huff_print_msg
     :A2ReCall(eff_remove_curse)
 #else
     jsr eff_remove_curse
+    ldx #HSTR_PIQ_CLEANSED
+    jsr huff_print_msg
 #endif
 !irs_re_done:
-#if C128
+#if APPLE2
     lda #OVL_ITEMS
     jsr overlay_load
-    rts
-!irs_re_fail:
-    pla
-    rts
-#elif APPLE2
-    lda #OVL_ITEMS
-    jsr overlay_load
-    rts
-#else
-    rts
 #endif
+    rts
 #endif
 
 #if APPLE2 && SCROLL_P3_EXISTING_OWNER
@@ -312,6 +349,21 @@ irs_p3_magic_mapping:
     sty zp_ptr0_hi
     jsr msg_print
     :A2ReCall(eff_reveal_floorplan)
+#elif C128
+    // eff_reveal_floorplan lives in OVL_DEATH. Print first while this modal
+    // overlay (and its message string) is resident, then run the effect
+    // through the resident swap-call trampoline, which restores OVL.ITEMS.
+    lda #<irs_p3_map_msg
+    sta zp_ptr0
+    ldy #>irs_p3_map_msg
+    sty zp_ptr0_hi
+    jsr msg_print
+    lda #<eff_reveal_floorplan
+    sta tpdi_target + 1
+    lda #>eff_reveal_floorplan
+    sta tpdi_target + 2
+    lda #0
+    jmp tramp_p3_death_items
 #else
     jsr eff_reveal_floorplan
     lda #<irs_p3_map_msg
@@ -426,78 +478,4 @@ irs_mg_idx:  .byte 0
 irs_p3_map_msg: .text "You feel your map grow clearer." ; .byte 0
 irs_p3_od_msg:  .text "You sense treasure nearby." ; .byte 0
 irs_p3_mg_msg:  .text "There is a bright flash of light." ; .byte 0
-#endif
-
-
-#if C128
-// iq_dispatch_p3_overlay — C128 Phase 3 potion dispatch + handlers.
-// Reached from the banked quaff dispatch with the modal-misc overlay loaded
-// and A = potion type ID. Lives in the modal overlay because both the C128
-// banked payload and the items overlay are full.
-iq_dispatch_p3_overlay:
-    cmp #ITEM_TYPE_POT_HEALING
-    beq !iqp3_healing+
-    cmp #ITEM_TYPE_POT_RESTORATION
-    beq !iqp3_restoration+
-    cmp #ITEM_TYPE_POT_RESIST_HEAT
-    beq !iqp3_resist_heat+
-    cmp #ITEM_TYPE_POT_RESIST_COLD
-    beq !iqp3_resist_cold+
-    cmp #ITEM_TYPE_POT_CURE_CRITICAL
-    beq !iqp3_cure_critical+
-    cmp #ITEM_TYPE_POT_NEUTRALIZE
-    beq !iqp3_neutralize+
-    rts
-
-!iqp3_healing:
-    lda #200
-    jsr pmx_heal_and_report
-    rts
-
-!iqp3_cure_critical:
-    lda #6
-    ldx #7
-    ldy #0
-    jsr math_dice
-    lda zp_math_a
-    jsr pmx_heal_and_report
-    rts
-
-!iqp3_restoration:
-    jsr player_calc_stats
-    ldx #HSTR_PIQ_RESTORED
-    jsr huff_print_msg
-    rts
-
-!iqp3_resist_heat:
-    lda #10
-    jsr rng_range
-    clc
-    adc #10
-    clc
-    adc zp_eff_resist
-    bcc !iqp3_rh_store+
-    lda #255
-!iqp3_rh_store:
-    sta zp_eff_resist
-    rts
-
-!iqp3_resist_cold:
-    lda #10
-    jsr rng_range
-    clc
-    adc #10
-    clc
-    adc eff_resist_cold_timer
-    bcc !iqp3_rc_store+
-    lda #255
-!iqp3_rc_store:
-    sta eff_resist_cold_timer
-    rts
-
-!iqp3_neutralize:
-    jsr eff_cure_poison
-    ldx #HSTR_EFF_POISON_END
-    jsr huff_print_msg
-    rts
 #endif

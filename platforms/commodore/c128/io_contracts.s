@@ -136,6 +136,10 @@
 :C128AuditBelowIo("piw_slot", piw_slot)
 :C128AuditBelowIo("piw_visible_slots", piw_visible_slots)
 
+// Equip-stat helper: called by banked item commands during gameplay while
+// PLAY owns the $AF00 modal slot, so it must live in always-resident RAM.
+:C128AuditBelowIo("player_adjust_equipment_stat", player_adjust_equipment_stat)
+
 // Overlay entrypoints.
 :C128AuditStartupOverlay("player_create", player_create)
 :C128AuditTownOverlay("store_init_all", store_init_all)

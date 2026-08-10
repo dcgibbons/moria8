@@ -297,21 +297,22 @@ player_calc_stats:
     cpy #STAT_COUNT
     bne !stat_loop-
 
-    // Ring of Strength uses p1 as a signed STR modifier.
+    // Ring of Strength uses p1 as a signed STR modifier. Equipment bonuses
+    // must be exact: apply_modifier's randomized chargen steps would ratchet
+    // stats upward on every save/load rebuild, while wear/takeoff apply p1
+    // as raw arithmetic.
     ldx #EQUIP_RING
     lda inv_item_id,x
     cmp #24
     bne !pcs_no_str_ring+
     lda player_data + PL_STR_CUR
-    sta stat_work
-    lda inv_p1,x
-    jsr apply_modifier
-    lda stat_work
+    clc
+    adc inv_p1,x
     sta player_data + PL_STR_CUR
 !pcs_no_str_ring:
 
     // Amulet of Wisdom uses p1 as a signed WIS modifier; Amulet of the Magi
-    // uses p1 as a signed INT modifier.
+    // uses p1 as a signed INT modifier. Same deterministic rule as above.
     ldx #EQUIP_AMULET
     lda inv_item_id,x
     cmp #ITEM_TYPE_AMULET_WISDOM
@@ -319,18 +320,14 @@ player_calc_stats:
     cmp #ITEM_TYPE_AMULET_MAGI
     bne !pcs_no_amulet+
     lda player_data + PL_INT_CUR
-    sta stat_work
-    lda inv_p1,x
-    jsr apply_modifier
-    lda stat_work
+    clc
+    adc inv_p1,x
     sta player_data + PL_INT_CUR
     jmp !pcs_no_amulet+
 !pcs_amulet_wis:
     lda player_data + PL_WIS_CUR
-    sta stat_work
-    lda inv_p1,x
-    jsr apply_modifier
-    lda stat_work
+    clc
+    adc inv_p1,x
     sta player_data + PL_WIS_CUR
 !pcs_no_amulet:
 
