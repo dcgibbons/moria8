@@ -1644,11 +1644,10 @@ c128_prepare_startup_loading_screen:
     jsr screen_clear_for_font_restore
     jsr c128_restore_vdc_rom_font
     jsr hal_screen_clear
-    lda #11
-    ldx c128_cache_enabled
-    beq !total_ready+
-    clc
-    adc #12
+    // Total = 11 startup files + 13 cache files (4 tiers + 9 overlays).
+    // c128_cache_enabled lives in the world payload, which is not loaded
+    // yet at this point, so the count must be static.
+    lda #24
 !total_ready:
     sta c128_load_progress_total
     lda #0
@@ -1692,6 +1691,7 @@ c128_load_progress_prefix:
     .text "MORIA8 LOADING " ; .byte 0
 c128_load_progress_suffix:
     .text " PLEASE WAIT" ; .byte 0
+
 
 // ============================================================
 .const TITLE_MENU_COL = (SCREEN_COLS - 25) / 2
@@ -3382,6 +3382,7 @@ c128_cache_overlays_ready: .byte 0
 c128_cache_failed:         .byte 0
 c128_cache_tier_bits:      .byte 0
 c128_cache_overlay_bits:   .byte 0
+c128_cache_overlay_bits_hi: .byte 0   // Overlay IDs 9+ (modal-misc)
 c128_preload_fn_len:       .byte 0
 c128_preload_status:       .byte 0
 #if C128_CACHE_TEST_SKIP_TIER
@@ -3434,7 +3435,9 @@ ovl_cache_base_lo: .byte 0
 ovl_cache_base_hi: .byte 0
 ovl_cache_pages:   .byte 0
 ovl_ready_mask:
-    .byte 0, %00000001, %00000010, %00000100, %00001000, %00010000, %00100000, %01000000, %10000000
+    .byte 0, %00000001, %00000010, %00000100, %00001000, %00010000, %00100000, %01000000, %10000000, 0
+ovl_ready_mask_hi:
+    .byte 0, 0, 0, 0, 0, 0, 0, 0, 0, %00000001   // ID 9 = modal-misc
 c128_cache_state_end:
 #import "../../../core/dungeon_room_center_helpers.s"
 c128_resident_world_end:
@@ -3543,7 +3546,8 @@ c128_program_read_command_status:
 // load OVL.DEATH. The return continuation remains resident throughout.
 tramp_p3_dispatch_items:
     pha
-    jsr c128_load_modal_misc_overlay
+    lda #OVL_MODAL_MISC
+    jsr overlay_load
     bcs !failed+
     pla
     jsr irs_dispatch_p3_overlay
@@ -4033,6 +4037,16 @@ c128_test_expected_overlay_bits:
 #endif
     rts
 
+c128_test_expected_overlay_bits_hi:
+    lda #%00000001
+#if C128_CACHE_TEST_SKIP_OVERLAY
+    ldx c128_cache_test_skip_overlay
+    beq !cteo_hi_done+
+    eor ovl_ready_mask_hi,x
+!cteo_hi_done:
+#endif
+    rts
+
 c128_test_validate_tier_partial_state:
     lda c128_cache_tiers_ready
     cmp #1
@@ -4045,6 +4059,9 @@ c128_test_validate_tier_partial_state:
     bne !ctv_fail+
     jsr c128_test_expected_overlay_bits
     cmp c128_cache_overlay_bits
+    bne !ctv_fail+
+    jsr c128_test_expected_overlay_bits_hi
+    cmp c128_cache_overlay_bits_hi
     bne !ctv_fail+
     clc
     rts
@@ -4064,6 +4081,9 @@ c128_test_validate_overlay_partial_state:
     bne !ctvo_fail+
     jsr c128_test_expected_overlay_bits
     cmp c128_cache_overlay_bits
+    bne !ctvo_fail+
+    jsr c128_test_expected_overlay_bits_hi
+    cmp c128_cache_overlay_bits_hi
     bne !ctvo_fail+
     clc
     rts
@@ -4137,16 +4157,29 @@ c128_test_cache_survival_town_entry:
 c128_test_verify_cache_survival:
     lda c128_cache_tiers_ready
     cmp #1
-    bne !ctcs_fail+
+    beq !ctcs_tier_ok+
+    jmp !ctcs_fail+
+!ctcs_tier_ok:
     lda c128_cache_tier_bits
     cmp #%00001111
-    bne !ctcs_fail+
+    beq !ctcs_tier_bits_ok+
+    jmp !ctcs_fail+
+!ctcs_tier_bits_ok:
     lda c128_cache_overlays_ready
     cmp #1
-    bne !ctcs_fail+
+    beq !ctcs_ovl_ok+
+    jmp !ctcs_fail+
+!ctcs_ovl_ok:
     lda c128_cache_overlay_bits
     cmp #%11111111
-    bne !ctcs_fail+
+    beq !ctcs_bits_ok+
+    jmp !ctcs_fail+
+!ctcs_bits_ok:
+    lda c128_cache_overlay_bits_hi
+    cmp #%00000001
+    beq !ctcs_bits_hi_ok+
+    jmp !ctcs_fail+
+!ctcs_bits_hi_ok:
 
     lda MMU_COMMON_HELPERS_BASE
     cmp c128_test_cache_probe_common
@@ -4613,24 +4646,7 @@ c128_quaff_p3_dispatch:
     jsr huff_print_msg
     rts
 
-// Modal-misc overlay has no Bank1 cache slot or overlay-name-table entry on
-// C128 (those cover IDs 1-8), so overlay_load cannot fetch it: the cache path
-// reads garbage slot bounds and the disk path reads a garbage filename. Load
-// it directly from program media like the retirement path does.
-// Output: carry clear = modal overlay resident at $E000, carry set = failed.
-c128_load_modal_misc_overlay:
-    lda #hal_storage_modal_misc_name_len
-    ldx #<hal_storage_modal_misc_name
-    ldy #>hal_storage_modal_misc_name
-    jsr hal_asset_load_prg_header
-    bcs !modal_misc_done+
-    lda #OVL_MODAL_MISC
-    sta current_overlay
-!modal_misc_done:
-    rts
-
-// tramp_p3_death_items — Run a death-overlay phase-3 effect, then return with
-// OVL.ITEMS resident. The phase-3 router executes in the modal-misc overlay
+// tramp_p3_death_items — Run a death-overlay phase-3 effect, then return with// OVL.ITEMS resident. The phase-3 router executes in the modal-misc overlay
 // and cannot swap to OVL_DEATH itself: the swap would evict its own
 // continuation (the modal and death overlays do not mirror each other).
 // Input: A = effect argument, tpdi_target+1/+2 = handler address in OVL_DEATH.
@@ -5054,6 +5070,7 @@ ovl_disarm_end:
 .print "Disarm overlay: " + (ovl_disarm_end - $e000) + " bytes at $E000-$" + toHexString(ovl_disarm_end)
 .assert "Disarm overlay fits in $E000-$EFFF", ovl_disarm_end <= $f000, true
 .assert "Disarm overlay fits in small Bank 1 cache pages", (ovl_disarm_end - $e000) <= (C128_OVERLAY_DISARM_CACHE_PAGES * $100), true
+.assert "Modal-misc overlay fits in its Bank 1 cache slot", (ovl_modal_misc_end - $e000) <= (C128_OVERLAY_MODAL_CACHE_PAGES * $100), true
 .assert "Disarm small cache pages fit non-common Bank 1 region", (BANK1_OVERLAY_DISARM_BASE + (C128_OVERLAY_DISARM_CACHE_PAGES * $100) - 1) <= BANK1_OVERLAY_DISARM_END, true
 
 // ============================================================

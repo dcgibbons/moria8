@@ -109,12 +109,17 @@ overlay_load:
     ldx ol_target
     lda ovl_ready_mask,x
     and c128_cache_overlay_bits
+    bne !ol_cached+
+    lda ovl_ready_mask_hi,x
+    and c128_cache_overlay_bits_hi
     beq ol_check_disk
+!ol_cached:
     jsr c128_fetch_overlay_from_cache
     bcc !ol_cache_ok+
     lda #0
     sta c128_cache_overlays_ready
     sta c128_cache_overlay_bits
+    sta c128_cache_overlay_bits_hi
     sta c128_cache_failed
 ol_check_disk:
 #elif HAL_PLATFORM_OVERLAY_REU_STASH_ENABLED
@@ -385,6 +390,7 @@ c128_preload_all_overlays:
     lda #0
     sta c128_cache_overlays_ready
     sta c128_cache_overlay_bits
+    sta c128_cache_overlay_bits_hi
 
     ldx #1
 !cpao_loop:
@@ -427,6 +433,9 @@ c128_preload_all_overlays:
     lda ovl_ready_mask,x
     ora c128_cache_overlay_bits
     sta c128_cache_overlay_bits
+    lda ovl_ready_mask_hi,x
+    ora c128_cache_overlay_bits_hi
+    sta c128_cache_overlay_bits_hi
 
 cpao_next:
     ldx ol_target
@@ -458,6 +467,7 @@ cpao_next:
     lda #0
     sta c128_cache_overlays_ready
     sta c128_cache_overlay_bits
+    sta c128_cache_overlay_bits_hi
     sta c128_cache_failed
     lda #OVL_NONE
     sta current_overlay

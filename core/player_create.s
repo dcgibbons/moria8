@@ -29,7 +29,9 @@
 // build uses hal_platform_chargen_cutpoint=-1, so none of these early returns fire.
 
 player_create:
-#if !C64_UNIT_TEST
+    // C128: save_slot_index lives in the persist payload, which is not resident
+    // during chargen (play is). Writing it here stomps live play-payload code.
+#if !C64_UNIT_TEST && !C128
     lda #$ff
     sta save_slot_index
 #endif

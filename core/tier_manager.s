@@ -150,6 +150,7 @@ tier_init:
     sta c128_cache_failed
     sta c128_cache_tier_bits
     sta c128_cache_overlay_bits
+    sta c128_cache_overlay_bits_hi
 
     lda c128_cache_enabled
     beq !ti_done+

@@ -25,6 +25,7 @@ c128_cache_overlays_ready: .byte 0
 c128_cache_failed: .byte 0
 c128_cache_tier_bits: .byte 0
 c128_cache_overlay_bits: .byte 0
+c128_cache_overlay_bits_hi: .byte 0
 c128_cache_test_skip_tier: .byte 0
 active_dungeon_count: .byte 0
 tier_name_lo_addr: .word 0

@@ -42,7 +42,8 @@ overlap assertions are the executable authority; never edit this table alone.
 | `$730c-$73ff` | reserved unowned gap between map and DB regions |
 | `$7400-$7fff` | DB/data region |
 | `$8000-$94f7` | tier cache, 5368 bytes |
-| `$94f8-$9cff` | title marker/data cache |
+| `$94f8-$97ff` | title marker/data cache |
+| `$9800-$9cff` | MODAL small-overlay cache |
 | `$9d00-$9fff` | DISARM small-overlay cache |
 | `$a000-$afff` | STARTUP overlay cache |
 | `$b000-$bfff` | TOWN overlay cache |
@@ -141,3 +142,4 @@ work16 C128 memory review; this ledger is their durable approval provenance.
 | C128M-001 | Accepted | Project maintainer, 2026-07-09 | `memory128.s` constants/assertions are executable ownership authority | `make build`, `test_memory128.s` | prose-only ownership |
 | C128M-002 | Accepted | Project maintainer, 2026-07-09 | After boot staging is scrubbed, `$d000-$dfff` remains an I/O-visible reserved runtime/cache gap in Bank 1; no-I/O boot staging is the explicit temporary exception | maintainer decision; overlap assertions; boot-copy mode review | none |
 | C128M-003 | Accepted | Project maintainer, 2026-07-09 | New cache/map/common-RAM use requires a separate layout design and overlap assertions | build assertions and authoritative `make test128` | none |
+| C128M-004 | Accepted | Project maintainer, 2026-08-12 | Modal-misc overlay gets a Bank 1 cache slot at `$9800-$9CFF`, carved from title-cache slack (title art needs 593-624 B of the former 1928 B cache); overlay cache covers IDs 1-9 with a second ready-bit byte | maintainer direction this session; `memory128.s` overlap asserts; `cache_survival_smoke` and partial-failure smokes | none |

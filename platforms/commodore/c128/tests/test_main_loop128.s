@@ -655,6 +655,7 @@ c128_cache_overlays_ready: .byte 0
 c128_cache_failed: .byte 0
 c128_cache_tier_bits: .byte 0
 c128_cache_overlay_bits: .byte 0
+c128_cache_overlay_bits_hi: .byte 0
 c128_cache_test_skip_tier: .byte 0
 c128_cache_test_skip_overlay: .byte 0
 ovl_cache_base_lo: .byte 0

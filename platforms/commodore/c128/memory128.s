@@ -77,7 +77,8 @@
 //   - live map span:           $4000-$730B (Phase 10.3 = 198x66)
 //   - DB/data region:          $7400-$7FFF
 //   - tier cache window:       $8000-$94F7
-//   - title-art cache:         $94F8-$9CFF
+//   - title-art cache:         $94F8-$97FF
+//   - small overlay cache MODAL:$9800-$9CFF
 //   - small overlay cache:     $9D00-$9FFF
 //   - overlay cache STARTUP:   $A000-$AFFF
 //   - overlay cache TOWN:      $B000-$BFFF
@@ -118,9 +119,13 @@
 .const C128_TITLE_CACHE_VALID_MARKER = $a5
 .const BANK1_TITLE_CACHE_MARKER_BASE = BANK1_RESERVED_GAP0_BASE
 .const BANK1_TITLE_CACHE_DATA_BASE   = BANK1_TITLE_CACHE_MARKER_BASE + 1
-.const BANK1_TITLE_CACHE_END         = $9cff
+.const BANK1_TITLE_CACHE_END         = $97ff
 .const BANK1_TITLE_CACHE_MAX_LEN     = BANK1_TITLE_CACHE_END - BANK1_TITLE_CACHE_DATA_BASE + 1
 .const C128_TITLE_CACHE_MIN_REQUIRED = 593
+// Modal-misc overlay cache slot, carved from title-cache slack (the title art
+// needs 593-624 bytes of what was a 1928-byte cache). 1280 bytes at $9800.
+.const BANK1_OVERLAY_MODAL_BASE  = $9800
+.const BANK1_OVERLAY_MODAL_END   = $9cff
 .const BANK1_OVERLAY_DISARM_BASE  = $9d00
 .const BANK1_OVERLAY_DISARM_END   = $9fff
 .const BANK1_OVERLAY_STARTUP_BASE = $a000
@@ -164,6 +169,7 @@
 .const OVERLAY_CACHE_DISARM_BASE = BANK1_OVERLAY_DISARM_BASE
 .const OVERLAY_CACHE_DISARM_END  = BANK1_OVERLAY_DISARM_END
 .const C128_OVERLAY_DISARM_CACHE_PAGES = 3
+.const C128_OVERLAY_MODAL_CACHE_PAGES = 5
 .const FLOOR_ITEM_BASE  = $1a00 // Floor item table (Bank 0)
 .const FLOOR_ITEM_END   = $1aff
 .const CREATURE_BASE    = $1b00 // Runtime scratch area (Bank 0)
@@ -572,11 +578,11 @@ c128_vdc_reg25_cached: .byte $40
 c128_vdc_reg26_cached: .byte $f0
 
 bank1_overlay_cache_slot_lo:
-    .byte 0, <BANK1_OVERLAY_STARTUP_BASE, <BANK1_OVERLAY_TOWN_BASE, <BANK1_OVERLAY_DEATH_BASE, <BANK1_OVERLAY_DUNGEON_BASE, <BANK1_OVERLAY_HELP_BASE, <BANK1_OVERLAY_UI_BASE, <BANK1_OVERLAY_ITEMS_BASE, <BANK1_OVERLAY_DISARM_BASE
+    .byte 0, <BANK1_OVERLAY_STARTUP_BASE, <BANK1_OVERLAY_TOWN_BASE, <BANK1_OVERLAY_DEATH_BASE, <BANK1_OVERLAY_DUNGEON_BASE, <BANK1_OVERLAY_HELP_BASE, <BANK1_OVERLAY_UI_BASE, <BANK1_OVERLAY_ITEMS_BASE, <BANK1_OVERLAY_DISARM_BASE, <BANK1_OVERLAY_MODAL_BASE
 bank1_overlay_cache_slot_hi:
-    .byte 0, >BANK1_OVERLAY_STARTUP_BASE, >BANK1_OVERLAY_TOWN_BASE, >BANK1_OVERLAY_DEATH_BASE, >BANK1_OVERLAY_DUNGEON_BASE, >BANK1_OVERLAY_HELP_BASE, >BANK1_OVERLAY_UI_BASE, >BANK1_OVERLAY_ITEMS_BASE, >BANK1_OVERLAY_DISARM_BASE
+    .byte 0, >BANK1_OVERLAY_STARTUP_BASE, >BANK1_OVERLAY_TOWN_BASE, >BANK1_OVERLAY_DEATH_BASE, >BANK1_OVERLAY_DUNGEON_BASE, >BANK1_OVERLAY_HELP_BASE, >BANK1_OVERLAY_UI_BASE, >BANK1_OVERLAY_ITEMS_BASE, >BANK1_OVERLAY_DISARM_BASE, >BANK1_OVERLAY_MODAL_BASE
 bank1_overlay_cache_pages:
-    .byte 0, $10, $10, $10, $10, $10, $10, $10, C128_OVERLAY_DISARM_CACHE_PAGES
+    .byte 0, $10, $10, $10, $10, $10, $10, $10, C128_OVERLAY_DISARM_CACHE_PAGES, C128_OVERLAY_MODAL_CACHE_PAGES
 
 // Common-RAM MMU helpers copied to $0C06 at startup.
 // Labels inside the pseudopc block resolve to their runtime common addresses.
@@ -903,6 +909,8 @@ copy_to_e000:
 .assert "Title cache marker starts inside reserved gap 0", BANK1_TITLE_CACHE_MARKER_BASE >= BANK1_RESERVED_GAP0_BASE && BANK1_TITLE_CACHE_MARKER_BASE <= BANK1_RESERVED_GAP0_END, true
 .assert "Title cache data ends inside reserved gap 0", BANK1_TITLE_CACHE_DATA_BASE <= BANK1_TITLE_CACHE_END && BANK1_TITLE_CACHE_END <= BANK1_RESERVED_GAP0_END, true
 .assert "Title cache exceeds current title-art minimum", BANK1_TITLE_CACHE_MAX_LEN >= C128_TITLE_CACHE_MIN_REQUIRED, true
+:AssertRegionBefore("Title cache ends before MODAL small-overlay cache", BANK1_TITLE_CACHE_END, BANK1_OVERLAY_MODAL_BASE)
+:AssertRegionBefore("MODAL small-overlay cache ends before DISARM small-overlay cache", BANK1_OVERLAY_MODAL_END, BANK1_OVERLAY_DISARM_BASE)
 :AssertRegionBefore("Title cache ends before DISARM small-overlay cache", BANK1_TITLE_CACHE_END, BANK1_OVERLAY_DISARM_BASE)
 :AssertRegionBefore("DISARM small-overlay cache ends before STARTUP overlay slot", BANK1_OVERLAY_DISARM_END, BANK1_OVERLAY_STARTUP_BASE)
 :AssertRegionBefore("STARTUP overlay slot ends before TOWN overlay slot", BANK1_OVERLAY_STARTUP_END, BANK1_OVERLAY_TOWN_BASE)
