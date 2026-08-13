@@ -140,6 +140,8 @@ random_floor_in_room:
 .const hal_storage_save_known96_version = $10
 .const hal_storage_save_version = $11
 .const hal_storage_save_inv31_version = $11
+.const hal_storage_save_baked_stats_version = $11
+.const hal_storage_save_known_bits_version = $11
 .const KERNAL_ERR_DEVICE_NOT_PRESENT = 5
 .const KERNAL_SETNAM = test_save_setnam
 .const KERNAL_SETLFS = test_save_setlfs

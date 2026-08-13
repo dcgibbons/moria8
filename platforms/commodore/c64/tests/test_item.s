@@ -17,7 +17,7 @@ test_bootstrap:
 test_exit_trampoline:
     sei                         // Disable IRQs during copy
     :BankOutBasic()             // Ensure BASIC ROM off (tc_results in $A000+)
-    ldx #51-1
+    ldx #52-1
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -138,7 +138,7 @@ press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
 // Test result buffer — copy to $0400 at end (msg_print clobbers $0400)
-tc_results: .fill 51, $ff
+tc_results: .fill 52, $ff
 tc_loop_ctr: .byte 0          // Loop counter (safe from ZP clobber)
 tc_valid_ctr: .byte 0         // Valid item counter for test 22
 t16_base_ac: .byte 0          // Stable scratch for Test 16 across item_wear
@@ -154,7 +154,7 @@ t16_base_ac: .byte 0          // Stable scratch for Test 16 across item_wear
 
 test_start:
     // Initialize result area to $ff (untested)
-    ldx #50-1
+    ldx #52-1
     lda #$ff
 !clr:
     sta tc_results,x
@@ -2524,17 +2524,13 @@ test_start:
     lda #0
     sta zp_msg_flags
 
-    // Base CON 12, drained to 8; restoration recalcs CUR from BASE+mods.
-    // Human (race 0) + Warrior (class 0): expected = 12 + adj(race,CON) + adj(class,CON)
+    // Base CON 12, drained to 8; restoration recalcs CUR from the baked base
+    // (race/class modifiers are folded into BASE at creation, not re-applied).
     lda #0
     sta player_data + PL_RACE
     sta player_data + PL_CLASS
     lda #12
     sta player_data + PL_CON_BASE
-    clc
-    adc race_stat_adj + 4
-    clc
-    adc class_stat_adj + 4
     sta t48_expected_con
     lda #8
     sta player_data + PL_CON_CUR
@@ -2713,12 +2709,8 @@ test_start:
     // ==========================================
 !t51:
     jsr item_init_inventory
-    lda #0
-    sta player_data + PL_RACE     // Human: all-zero stat adjustments
-    lda #2
-    sta player_data + PL_CLASS    // Priest: INT adjustment -3 (exact below 18)
-    lda #14
-    sta player_data + PL_INT_BASE
+    lda #11
+    sta player_data + PL_INT_BASE    // Baked natural stat (mods included)
 
     lda #ITEM_TYPE_AMULET_MAGI
     sta inv_item_id + EQUIP_AMULET
@@ -2729,7 +2721,7 @@ test_start:
 
     jsr player_calc_stats
     lda player_data + PL_INT_CUR
-    cmp #30                     // 14 - 3 + 19, exactly
+    cmp #30                     // 11 + 19, exactly
     bne !t51_fail+
     jsr player_calc_stats
     lda player_data + PL_INT_CUR
@@ -2738,10 +2730,44 @@ test_start:
 
     lda #$01
     sta tc_results + 50
-    jmp !tests_done+
+    jmp !t52+
 !t51_fail:
     lda #$00
     sta tc_results + 50
+
+    // ==========================================
+    // Test 52: legacy-save stat migration folds race/class modifiers into
+    // the base exactly once with deterministic arithmetic.
+    // ==========================================
+!t52:
+    jsr item_init_inventory
+    lda #2
+    sta player_data + PL_RACE     // Elf: INT +2
+    lda #1
+    sta player_data + PL_CLASS    // Mage: INT +3
+    lda #14
+    sta player_data + PL_INT_BASE
+
+    lda #0
+    sta stat_bake_mode
+    jsr player_bake_stat_modifiers
+    lda player_data + PL_INT_BASE
+    cmp #19                     // 14 + 2 + 3, exactly
+    bne !t52_fail+
+    lda player_data + PL_INT_CUR
+    cmp #19                     // mirrored to current
+    bne !t52_fail+
+    jsr player_calc_stats
+    lda player_data + PL_INT_CUR
+    cmp #19                     // load-path rebuild preserves it
+    bne !t52_fail+
+
+    lda #$01
+    sta tc_results + 51
+    jmp !tests_done+
+!t52_fail:
+    lda #$00
+    sta tc_results + 51
 
 !tests_done:
     // Jump to trampoline at $033C (below $A000) to copy results + BRK

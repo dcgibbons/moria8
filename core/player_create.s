@@ -649,12 +649,9 @@ create_init_character:
     lda #0
     sta player_data + PL_DLEVEL
 
-    // Calculate stats with modifiers
-    // (No stack-guard pair here: tramp_player_create's $33 begin/check
-    // brackets this entire creation call; these are plain jsr's to
-    // always-resident Default code, and the pair bytes pushed the diag
-    // STARTUP overlay past $EFFF.)
-    jsr player_calc_stats
+    // Roll race/class modifiers into the base stats once (randomized
+    // exceptional stepping lives only here), making the result permanent.
+    jsr player_bake_creation_stats
 
     // Calculate max HP
     jsr player_calc_hp

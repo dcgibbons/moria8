@@ -21,7 +21,9 @@
 .const hal_storage_save_v1_version = $0f
 .const hal_storage_save_known96_version = $10
 .const hal_storage_save_inv31_version = $11
-.const hal_storage_save_version = $12
+.const hal_storage_save_known_bits_version = $12
+.const hal_storage_save_baked_stats_version = $12
+.const hal_storage_save_version = $13
 
 #define HAL_STORAGE_SAVE_MEDIA_STATUS_LEGACY
 #define HAL_STORAGE_SWAP_PROMPT_LEGACY_SETUP_SKIP

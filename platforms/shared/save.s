@@ -19,8 +19,13 @@
 .const OLDEST_SAVE_VERSION = SAVE_V1_VERSION
 .const SAVE_FLOOR42_VERSION = SAVE_V1_VERSION
 .const SAVE_KNOWN96_VERSION = hal_storage_save_known96_version
-.const SAVE_KNOWN_BITS_VERSION = SAVE_VERSION
+// Version where the 16-byte id_known_bits bitset layout was introduced.
+// Pinned: must not track SAVE_VERSION, or bumps misclassify current saves.
+.const SAVE_KNOWN_BITS_VERSION = hal_storage_save_known_bits_version
 .const SAVE_INV31_VERSION = hal_storage_save_inv31_version
+// Saves at or above this version store stat bases with race/class modifiers
+// already baked in; older saves get an exact one-time migration at load.
+.const SAVE_STATS_BAKED_VERSION = hal_storage_save_baked_stats_version
 #if C128
 .const SAVE_ROOM21_VERSION = $13
 .const LEGACY_MAX_ROOMS = 8
@@ -1040,6 +1045,18 @@ c128_test_load_corrupt_unexpected_success:
 #endif
     // Close file after successful read
     jsr load_close_file_restore
+
+    // Legacy-save migration: fold race/class modifiers into raw stat bases
+    // exactly once with deterministic arithmetic. Skipped for new games
+    // (version 0) and current saves.
+    lda load_save_version
+    beq !load_stats_migrated+
+    cmp #SAVE_STATS_BAKED_VERSION
+    bcs !load_stats_migrated+
+    lda #0
+    sta stat_bake_mode
+    jsr player_bake_stat_modifiers
+!load_stats_migrated:
 
     // Sync struct → ZP
     jsr player_search_clear_transient_state

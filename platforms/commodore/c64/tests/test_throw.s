@@ -85,9 +85,14 @@ test_exit_trampoline:
 #import "../../../../core/throw.s"
 #import "../../../../core/monster_attack.s"
 #import "../../../../core/turn.s"
+// Store modules move to the dummy segment so the test body stays below
+// MAP_BASE ($C000); map writes during tests must not corrupt test code.
+.segmentdef TestStoreOverlay [start=$d000, min=$d000, max=$ffff]
+.segment TestStoreOverlay
 #import "../../../../core/store_data.s"
 #import "../../../../core/store.s"
 #import "../../../../core/ui_store.s"
+.segment Default
 #import "../../../../core/ui_help.s"
 #import "../../../../core/ui_trampoline_stubs.s"
 
@@ -475,3 +480,6 @@ test_start:
 !t11_done:
 
     jmp test_exit_trampoline
+
+throw_test_body_end:
+.assert "Throw test stays below MAP_BASE", throw_test_body_end <= MAP_BASE, true

@@ -241,11 +241,42 @@ player_sync_from_zp:
     sta player_data + PL_LIGHT_RAD
     rts
 
-// player_calc_stats — Recalculate current stats from base + modifiers
-// Uses umoria's incrementStat/decrementStat for race and class modifiers.
+// player_calc_stats — Recalculate current stats from the baked base plus
+// equipment. Race/class modifiers are folded into the base once at creation
+// (player_bake_creation_stats) or at legacy-save migration
+// (player_bake_race_class_mods), so this routine must be deterministic:
+// rerolling the randomized exceptional stepping here would change 18+ stats
+// on every load and restoration.
 // Stats use single-byte encoding: 3-18 literal, 19-118 = 18/01 to 18/100.
 // Preserves: nothing
 player_calc_stats:
+    ldy #0                  // Stat index
+!stat_loop:
+    lda player_data + PL_STR_BASE,y
+    sta player_data + PL_STR_CUR,y
+    iny
+    cpy #STAT_COUNT
+    bne !stat_loop-
+    jmp !pcs_equipment+
+
+// player_bake_creation_stats — Character-creation entry: fold race/class
+// modifiers into base stats with the upstream randomized exceptional
+// stepping, making the roll permanent. The only randomizing stat path.
+player_bake_creation_stats:
+    lda #1
+    sta stat_bake_mode
+    jmp player_bake_stat_modifiers
+
+// player_bake_stat_modifiers — Fold race/class modifiers into base stats and
+// mirror the result into current stats, making the roll permanent.
+// stat_bake_mode nonzero (character creation): upstream randomized stepping
+// for the 18+ band — the only place stats may randomize.
+// stat_bake_mode zero (legacy-save migration): exact signed arithmetic, so
+// pre-baked saves convert deterministically.
+// Preserves: nothing
+stat_bake_mode: .byte 0
+
+player_bake_stat_modifiers:
     // Precompute race*6 into zp_temp0 (safe across math_dice)
     lda player_data + PL_RACE
     asl
@@ -265,38 +296,52 @@ player_calc_stats:
     sta zp_temp2            // zp_temp2 = class * 6
 
     ldy #0                  // Stat index
-!stat_loop:
+!bake_loop:
     sty zp_temp1            // Save stat index (safe across math_dice)
 
     // Start with base stat
     lda player_data + PL_STR_BASE,y
     sta stat_work
 
-    // Apply race modifier via increment/decrement
+    // Apply race modifier
     lda zp_temp0            // race*6
     clc
     adc zp_temp1            // + stat_index
     tax
     lda race_stat_adj,x
-    jsr apply_modifier
+    jsr player_bake_apply_one
 
-    // Apply class modifier via increment/decrement
+    // Apply class modifier
     lda zp_temp2            // class*6
     clc
     adc zp_temp1            // + stat_index
     tax
     lda class_stat_adj,x
-    jsr apply_modifier
+    jsr player_bake_apply_one
 
-    // Store result
+    // Bake result into base and current
     ldy zp_temp1
     lda stat_work
+    sta player_data + PL_STR_BASE,y
     sta player_data + PL_STR_CUR,y
 
     iny
     cpy #STAT_COUNT
-    bne !stat_loop-
+    bne !bake_loop-
+    rts
 
+// player_bake_apply_one — Apply modifier A to stat_work per stat_bake_mode.
+player_bake_apply_one:
+    ldx stat_bake_mode
+    bne !pbao_roll+
+    clc
+    adc stat_work
+    sta stat_work
+    rts
+!pbao_roll:
+    jmp apply_modifier
+
+!pcs_equipment:
     // Ring of Strength uses p1 as a signed STR modifier. Equipment bonuses
     // must be exact: apply_modifier's randomized chargen steps would ratchet
     // stats upward on every save/load rebuild, while wear/takeoff apply p1
