@@ -139,6 +139,13 @@ it_category:
     .byte ICAT_AMULET   // 125: Amulet of the Magi
     .byte ICAT_POTION   // 126: Neutralize Poison
     .byte ICAT_STAFF    // 127: Remove Curse
+    .byte ICAT_CHEST    // 128: Small Wooden Chest
+    .byte ICAT_CHEST    // 129: Large Wooden Chest
+    .byte ICAT_CHEST    // 130: Small Iron Chest
+    .byte ICAT_CHEST    // 131: Large Iron Chest
+    .byte ICAT_CHEST    // 132: Small Steel Chest
+    .byte ICAT_CHEST    // 133: Large Steel Chest
+    .byte ICAT_CHEST    // 134: Ruined Chest
 
 // Color and base armor class packed per type: high nibble = display color,
 // low nibble = base AC (<=9).
@@ -271,6 +278,13 @@ it_color_ac:
     .byte (COL_LGREEN << 4) | 3                 // 125: Amulet of the Magi
     .byte COL_GREEN << 4                        // 126: Neutralize Poison
     .byte COL_CYAN << 4                         // 127: Remove Curse
+    .byte COL_BROWN << 4                        // 128: Small Wooden Chest
+    .byte COL_BROWN << 4                        // 129: Large Wooden Chest
+    .byte COL_LGREY << 4                        // 130: Small Iron Chest
+    .byte COL_LGREY << 4                        // 131: Large Iron Chest
+    .byte COL_WHITE << 4                        // 132: Small Steel Chest
+    .byte COL_WHITE << 4                        // 133: Large Steel Chest
+    .byte COL_BROWN << 4                        // 134: Ruined Chest
 
 // Weight (in 1/10 lbs)
 it_weight:
@@ -301,6 +315,8 @@ it_weight:
     .byte 200, 320                          // 122-123: mithril armor
     .byte 3, 3                              // 124-125: amulets
     .byte 4, 50                             // 126: potion, 127: staff
+    // 128-134: chests (heavy rows saturate at 255; docs/CHEST_DESIGN.md)
+    .byte 250, 255, 255, 255, 255, 255, 250
 
 // Damage dice packed per type: high nibble = dice count (<=3), low nibble =
 // dice sides (<=9). 0 = no damage dice.
@@ -325,6 +341,8 @@ it_dmg_packed:
     .byte $17, $17, $24, $34                // 88-91: added blades
     .byte $26, $25, $26, $18                // 92-95: added hafted/pole weapons
     .fill 32, 0                             // 96-127: no damage dice
+    // 128-134: chest thrown damage 2d3/2d5/2d4/2d6/2d4/2d6; ruined 0d0
+    .byte $23, $25, $24, $26, $24, $26, 0
 it_dmg_packed_end:
 
 #if C64_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME
@@ -357,6 +375,8 @@ it_cost_lo:
     .byte <200, <244, <238, <232, <238, <250, <250, <184
     .byte <244, <232, <244, <44, <94, <8, <220, <176
     .byte <196, <244, <88, <176, <44, <136, <75, <244
+    // 128-134: chests (20/60/100/150/200/250, ruined 0)
+    .byte <20, <60, <100, <150, <200, <250, <0
 it_cost_lo_end:
 
 #if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME
@@ -405,10 +425,11 @@ it_cost_hi:
     .byte >200, >500, >750, >1000, >750, >250, >250, >3000
     .byte >500, >1000, >500, >300, >350, >1800, >1500, >1200
     .byte >2500, >1000, >600, >1200, >300, >5000, >75, >500
+    .byte >20, >60, >100, >150, >200, >250, >0    // 128-134: chests
 it_cost_hi_end:
 #endif
 
-#if C64_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME
+#if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME
 .segment DungeonGenOverlay
 #endif
 
@@ -432,6 +453,7 @@ it_min_level:
     .byte $b9, $c9, $4a, $c4        // 104-111
     .byte $c9, $31, $b5, $ba        // 112-119
     .byte $ac, $75, $c5, $82        // 120-127
+    .byte $42, $97, $cb, $00        // 128-134: chest levels 2/4/7/9/11/12, ruined 0
 it_min_level_end:
 
 // iml_get_for_type — Minimum dungeon level for item type X.
@@ -451,7 +473,9 @@ iml_get_for_type:
     lsr
     rts
 
-#if C64_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME
+#if C128_PRODUCT_OVERLAY_RUNTIME
+.segment C128ResidentItems
+#elif C64_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME
 .segment Default
 #endif
 
@@ -515,6 +539,7 @@ it_display_by_cat:
     .byte $2d   // 14: wand — '-'
     .byte $2f   // 15: staff — '/'
     .byte $22   // 16: amulet — '"'
+    .byte $26   // 17: chest — '&'
 
 // item_get_display_char — Get floor display glyph for an item type
 // Input: X = item type ID
@@ -546,6 +571,11 @@ item_get_display_char:
 idc_save_y: .byte 0
 
 // Name pointer tables
+#if C128_PRODUCT_OVERLAY_RUNTIME
+// The known-name pointer table rides the Bank 1 item-names payload on C128
+// (read via mmu_safe_db_read_ptr1 in item_identification.s).
+.segment C128ResidentItemNames
+#endif
 it_name_lo:
     .byte <itn_0,  <itn_1,  <itn_2,  <itn_3,  <itn_4
     .byte <itn_5,  <itn_6,  <itn_7,  <itn_8,  <itn_9
@@ -578,7 +608,12 @@ it_name_lo:
     .byte <itn_116, <itn_117, <itn_118, <itn_119
     .byte <itn_120, <itn_121, <itn_122, <itn_123
     .byte <itn_124, <itn_125, <itn_126, <itn_127
+    .byte <itn_128, <itn_129, <itn_130, <itn_131
+    .byte <itn_132, <itn_133, <itn_134
 it_name_lo_end:
+#if C128_PRODUCT_OVERLAY_RUNTIME
+.segment C128ResidentItems
+#endif
 #if !(C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME)
 it_name_hi:
     .byte >itn_0,  >itn_1,  >itn_2,  >itn_3,  >itn_4
@@ -612,6 +647,8 @@ it_name_hi:
     .byte >itn_116, >itn_117, >itn_118, >itn_119
     .byte >itn_120, >itn_121, >itn_122, >itn_123
     .byte >itn_124, >itn_125, >itn_126, >itn_127
+    .byte >itn_128, >itn_129, >itn_130, >itn_131
+    .byte >itn_132, >itn_133, >itn_134
 it_name_hi_end:
 #else
 it_name_hi_end:
@@ -648,7 +685,20 @@ it_name_hi_end:
 .const ITOK_ARMOR_SUFFIX      = $98
 .const ITOK_MAIL_SUFFIX       = $99
 .const ITOK_SHIELD_SUFFIX     = $9a
+// Chest-name tokens exist only where name streams are resident (C64/Plus4
+// and unit tests). C128/Apple IIe streams live in Bank 1/aux and spell the
+// chest names literally, so the token strings would be dead resident bytes.
+.const ITOK_SMALL             = $9b
+.const ITOK_LARGE             = $9c
+.const ITOK_WOODEN            = $9d
+.const ITOK_IRON              = $9e
+.const ITOK_STEEL             = $9f
+.const ITOK_CHEST_SUFFIX      = $a0
+#if C128_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME
 .const ITEM_NAME_TOKEN_COUNT  = $1b
+#else
+.const ITEM_NAME_TOKEN_COUNT  = $21
+#endif
 
 item_name_token_lo:
     .byte <itok_scroll_of_art, <itok_potion_suffix, <itok_of, <itok_scroll
@@ -658,6 +708,10 @@ item_name_token_lo:
     .byte <itok_cure, <itok_beginners, <itok_enchant, <itok_a_copper
     .byte <itok_cloud_suffix, <itok_sword_suffix, <itok_a_space, <itok_an_space
     .byte <itok_armor_suffix, <itok_mail_suffix, <itok_shield_suffix
+#if !(C128_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME)
+    .byte <itok_small, <itok_large, <itok_wooden, <itok_iron
+    .byte <itok_steel, <itok_chest_suffix
+#endif
 item_name_token_hi:
     .byte >itok_scroll_of_art, >itok_potion_suffix, >itok_of, >itok_scroll
     .byte >itok_light, >itok_wand, >itok_a_silver, >itok_leather
@@ -666,6 +720,10 @@ item_name_token_hi:
     .byte >itok_cure, >itok_beginners, >itok_enchant, >itok_a_copper
     .byte >itok_cloud_suffix, >itok_sword_suffix, >itok_a_space, >itok_an_space
     .byte >itok_armor_suffix, >itok_mail_suffix, >itok_shield_suffix
+#if !(C128_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME)
+    .byte >itok_small, >itok_large, >itok_wooden, >itok_iron
+    .byte >itok_steel, >itok_chest_suffix
+#endif
 
 itok_scroll_of_art:   .text "a Scroll of " ; .byte 0
 itok_potion_suffix:   .text " Potion" ; .byte 0
@@ -694,6 +752,14 @@ itok_an_space:        .text "an " ; .byte 0
 itok_armor_suffix:    .text "Armor" ; .byte 0
 itok_mail_suffix:     .text " Mail" ; .byte 0
 itok_shield_suffix:   .text " Shield" ; .byte 0
+#if !(C128_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME)
+itok_small:           .text "Small " ; .byte 0
+itok_large:           .text "Large " ; .byte 0
+itok_wooden:          .text "Wooden " ; .byte 0
+itok_iron:            .text "Iron " ; .byte 0
+itok_steel:           .text "Steel " ; .byte 0
+itok_chest_suffix:    .text "Chest" ; .byte 0
+#endif
 
 // Name streams (screen codes plus item-name tokens, null-terminated)
 #if C128_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME
@@ -705,6 +771,12 @@ a2_item_name_streams_start:
 c128_item_name_streams_start:
 #endif
 #endif
+#if C64_UNIT_TEST && C64_TEST_NAME_STREAMS_A000
+// Heavyweight C64 unit tests that bank BASIC out for the whole run may park
+// the name streams in BASIC-shadow RAM to keep Main below MAP_BASE. Opt-in
+// tests must declare `.segmentdef TestNameStreams [start=$A000]`.
+.segment TestNameStreams
+#endif
 itn_0:  .byte ITOK_GOLD ; .text " (small)" ; .byte 0
 itn_1:  .byte ITOK_GOLD ; .text " (large)" ; .byte 0
 itn_2:  .text "Dagger" ; .byte 0
@@ -715,10 +787,18 @@ itn_6:  .text "Robe" ; .byte 0
 itn_7:  .byte ITOK_LEATHER ; .byte ITOK_ARMOR_SUFFIX ; .byte 0
 itn_8:  .text "Chain" ; .byte ITOK_MAIL_SUFFIX ; .byte 0
 itn_9:  .text "Small" ; .byte ITOK_SHIELD_SUFFIX ; .byte 0
+#if C128_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME
 itn_10: .text "Iron Helm" ; .byte 0
+#else
+itn_10: .byte ITOK_IRON ; .text "Helm" ; .byte 0
+#endif
 itn_11: .byte ITOK_LEATHER ; .text "Gloves" ; .byte 0
 itn_12: .byte ITOK_LEATHER ; .text "Boots" ; .byte 0
+#if C128_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME
 itn_13: .text "Wooden Torch" ; .byte 0
+#else
+itn_13: .byte ITOK_WOODEN ; .text "Torch" ; .byte 0
+#endif
 itn_14: .text "Brass Lantern" ; .byte 0
 itn_15: .text "Ration" ; .byte ITOK_OF ; .text "Food" ; .byte 0
 itn_16: .text "Slime Mold" ; .byte 0
@@ -788,7 +868,11 @@ itn_79: .text "Hard " ; .byte ITOK_LEATHER ; .byte ITOK_ARMOR_SUFFIX ; .byte 0
 itn_80: .text "Scale" ; .byte ITOK_MAIL_SUFFIX ; .byte 0
 itn_81: .text "Plate" ; .byte ITOK_MAIL_SUFFIX ; .byte 0
 itn_82: .text "Cloak" ; .byte 0
+#if C128_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME
 itn_83: .text "Steel Helm" ; .byte 0
+#else
+itn_83: .byte ITOK_STEEL ; .text "Helm" ; .byte 0
+#endif
 itn_84: .text "Gauntlets" ; .byte 0
 itn_85: .text "Soft " ; .byte ITOK_LEATHER ; .text "Boots" ; .byte 0
 itn_86: .text "Hard " ; .byte ITOK_LEATHER ; .text "Boots" ; .byte 0
@@ -833,6 +917,26 @@ itn_124: .text "Wisdom" ; .byte 0
 itn_125: .text "the Magi" ; .byte 0
 itn_126: .text "Neutralize Poison" ; .byte 0
 itn_127: .byte ITOK_STAFF ; .byte ITOK_OF ; .text "Remove Curse" ; .byte 0
+#if C128_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME
+itn_128: .text "Small Wooden Chest" ; .byte 0
+itn_129: .text "Large Wooden Chest" ; .byte 0
+itn_130: .text "Small Iron Chest" ; .byte 0
+itn_131: .text "Large Iron Chest" ; .byte 0
+itn_132: .text "Small Steel Chest" ; .byte 0
+itn_133: .text "Large Steel Chest" ; .byte 0
+itn_134: .text "Ruined Chest" ; .byte 0
+#else
+itn_128: .byte ITOK_SMALL ; .byte ITOK_WOODEN ; .byte ITOK_CHEST_SUFFIX ; .byte 0
+itn_129: .byte ITOK_LARGE ; .byte ITOK_WOODEN ; .byte ITOK_CHEST_SUFFIX ; .byte 0
+itn_130: .byte ITOK_SMALL ; .byte ITOK_IRON ; .byte ITOK_CHEST_SUFFIX ; .byte 0
+itn_131: .byte ITOK_LARGE ; .byte ITOK_IRON ; .byte ITOK_CHEST_SUFFIX ; .byte 0
+itn_132: .byte ITOK_SMALL ; .byte ITOK_STEEL ; .byte ITOK_CHEST_SUFFIX ; .byte 0
+itn_133: .byte ITOK_LARGE ; .byte ITOK_STEEL ; .byte ITOK_CHEST_SUFFIX ; .byte 0
+itn_134: .text "Ruined " ; .byte ITOK_CHEST_SUFFIX ; .byte 0
+#endif
+#if C64_UNIT_TEST && C64_TEST_NAME_STREAMS_A000
+.segment Default
+#endif
 #if C128_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME
 #if HAL_PLATFORM_ITEM_NAME_STREAMS_AUX
 a2_item_name_streams_end:

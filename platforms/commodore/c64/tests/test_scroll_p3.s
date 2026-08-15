@@ -5,6 +5,8 @@
 //
 // Results at $0400-$040b: $01 = pass, $00 = fail per test
 
+#define C64_TEST_NAME_STREAMS_A000
+
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_bootstrap)
 
@@ -13,7 +15,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #11
+    ldx #13
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -45,6 +47,7 @@ test_exit_trampoline:
 #import "../../../../core/ui_trampoline_stubs.s"
 #import "../../../../core/stat_display.s"
 .segmentdef TestCreateOverlay [start=$D000]
+.segmentdef TestNameStreams [start=$A000]
 .segment TestCreateOverlay
 #import "../../../../core/background_data.s"
 #import "../../../../core/player_create.s"
@@ -132,7 +135,7 @@ press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
 // Test result buffer
-tc_results: .fill 12, $ff
+tc_results: .fill 14, $ff
 tc_loop_ctr: .byte 0
 t7_slot_a: .byte 0
 t7_slot_b: .byte 0
@@ -145,7 +148,7 @@ t7_slot_b: .byte 0
 #undef SCROLL_P3_EXISTING_OWNER
 
 test_start:
-    ldx #11
+    ldx #13
     lda #$ff
 !clr:
     sta tc_results,x
@@ -250,6 +253,7 @@ test_start:
 !t5_fail:
     lda #$00
     sta tc_results + 4
+
 
     // ==========================================
     // Test 6: Object Detection marks the floor item's tile visited
@@ -521,10 +525,45 @@ test_start:
     bne !t13_fail+
     lda #$01
     sta tc_results + 11
-    jmp !tests_done+
+    jmp !t14+
 !t13_fail:
     lda #$00
     sta tc_results + 11
+
+    // ==========================================
+    // Test 14: Unmatched ID is a no-op, never area destruction
+    // ==========================================
+!t14:
+    lda #0
+    sta spy_last
+    lda #128                    // No effect row owns this ID
+    jsr irs_dispatch_p3_overlay
+    lda spy_last
+    bne !t14_fail+
+    lda #$01
+    sta tc_results + 12
+    jmp !t15+
+!t14_fail:
+    lda #$00
+    sta tc_results + 12
+
+    // ==========================================
+    // Test 15: Staff of Destruction explicitly routes to eff_destroy_area
+    // ==========================================
+!t15:
+    lda #0
+    sta spy_last
+    lda #ITEM_TYPE_STAFF_DESTRUCTION
+    jsr irs_dispatch_p3_overlay
+    lda spy_last
+    cmp #ITEM_TYPE_SCR_DESTRUCTION
+    bne !t15_fail+
+    lda #$01
+    sta tc_results + 13
+    jmp !tests_done+
+!t15_fail:
+    lda #$00
+    sta tc_results + 13
 
 !tests_done:
     jmp test_exit_trampoline

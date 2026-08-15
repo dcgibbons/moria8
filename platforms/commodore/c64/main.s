@@ -26,6 +26,7 @@
 .segmentdef UiOverlay         [outPrg=OVL_OUT + "/ovl.ui",    start=$e000, min=$e000, max=$efff]
 .segmentdef ItemActionsOverlay [outPrg=OVL_OUT + "/ovl.items", start=$e000, min=$e000, max=$efff]
 .segmentdef SpellOverlay      [outPrg=OVL_OUT + "/ovl.spell", start=$e000, min=$e000, max=$efff]
+.segmentdef ChestOverlay      [outPrg=OVL_OUT + "/ovl.chest", start=$e000, min=$e000, max=$efff]
 .segmentdef DungeonGenOverlay [outPrg=OVL_OUT + "/ovl.gen",   start=$e000, min=$e000, max=$efff]
 .segmentdef RuntimeBanked     [outPrg=OVL_OUT + "/64.bank",   start=$f000, min=$f000, max=$fffa]
 
@@ -51,6 +52,14 @@
     .segment Default
 }
 .macro ItemInitIdentSegment() {
+    // One-shot new-game identification init runs from the items overlay so
+    // the resident image keeps room for the chest catalog rows.
+    .segment ItemActionsOverlay
+}
+.macro ChestRouteSegment() {
+    .segment Default
+}
+.macro ChestRouteRestoreSegment() {
     .segment Default
 }
 .macro WizardGenExecSegment() {
@@ -391,7 +400,11 @@ tramp_dig_ability:
 #import "memory.s"
 #import "hal/layout.s"
 #import "hal/lifecycle_policy.s"
+#define REU_STASH_OVERLAYS_EXTERNAL
+#define REU_LOAD_ALL_TIERS_EXTERNAL
 #import "../common/reu.s"
+#undef REU_LOAD_ALL_TIERS_EXTERNAL
+#undef REU_STASH_OVERLAYS_EXTERNAL
 #import "screen.s"
 #import "../../../core/color.s"
 #import "config.s"
@@ -404,14 +417,24 @@ tramp_dig_ability:
 #import "../../../core/player.s"
 #import "../../../core/ui_messages.s"
 #import "../../../core/ui_status.s"
+#define GENERATION_BUSY_INSTALL_EXTERNAL
 #import "../../../core/generation_busy.s"
+#undef GENERATION_BUSY_INSTALL_EXTERNAL
 #import "../../../core/stat_display.s"
 #import "../../../core/sound.s"
 #import "../../../core/huffman.s"
 #import "../../../core/dungeon_data.s"
 #define DISARM_COMMAND_EXTERNAL
 #define DISARM_HELPERS_EXTERNAL
+.macro ChestSearchSegment() {
+    .segment Default
+}
+.macro ChestSearchRestoreSegment() {
+    .segment Default
+}
+#define CHEST_ROUTING_ENABLED
 #import "../../../core/dungeon_features.s"
+#import "../../../core/chest_search.s"
 #undef DISARM_HELPERS_EXTERNAL
 #undef DISARM_COMMAND_EXTERNAL
 #import "../../../core/monster.s"
@@ -439,6 +462,7 @@ ol_target:        .byte 0
 #import "../../../core/spell_data.s"
 #define SPELL_EFFECTS_INCLUDE_IDENTIFY
 #import "../../../core/spell_effects.s"
+#import "../../../core/spell_effects_overlay.s"
 #undef SPELL_EFFECTS_INCLUDE_IDENTIFY
 #import "../../../core/player_magic_state.s"
 #import "../../../core/player_magic_state_ops.s"
@@ -1250,29 +1274,6 @@ platform_runtime_resync_c64:
     cli
     rts
 
-platform_services_install64:
-    lda #$4c
-    sta platform_main_loop_begin_api
-    sta platform_vector_reassert_api
-    sta platform_runtime_resync_api
-
-    lda #<platform_main_loop_begin_c64
-    sta platform_main_loop_begin_api + 1
-    lda #>platform_main_loop_begin_c64
-    sta platform_main_loop_begin_api + 2
-
-    lda #<platform_vector_reassert_c64
-    sta platform_vector_reassert_api + 1
-    lda #>platform_vector_reassert_c64
-    sta platform_vector_reassert_api + 2
-
-    lda #<platform_runtime_resync_c64
-    sta platform_runtime_resync_api + 1
-    lda #>platform_runtime_resync_c64
-    sta platform_runtime_resync_api + 2
-
-    jmp platform_services_mark_installed
-
 #import "../../../core/ui_help_clear.s"
 
 // ============================================================
@@ -1463,6 +1464,37 @@ tramp_disarm_command:
     jsr overlay_load_no_kernal
     bcs !done+
     jsr disarm_command
+!done:
+    jmp tramp_sr_epilogue
+
+// Chest routing (docs/CHEST_DESIGN.md). tramp_chest_open is called from the
+// resident cmd_open pre-dispatch and owns the epilogue. chest_dispatch is
+// tail-called (A/Y = handler) from bash_command/disarm_command inside the
+// items overlay; their caller trampolines run the epilogue.
+tramp_chest_open:
+    lda #OVL_CHEST
+    jsr overlay_load_no_kernal
+    bcs !done+
+    jsr chest_open_command
+!done:
+    jmp tramp_sr_epilogue
+
+chest_dispatch:
+    sta chest_disp_jmp+1
+    sty chest_disp_jmp+2
+    lda #OVL_CHEST
+    jsr overlay_load_no_kernal
+    bcs !done+
+chest_disp_jmp:
+    jmp $0000               // SMC dispatch target (never JMP (addr))
+!done:
+    rts
+
+tramp_item_init_identification:
+    lda #OVL_ITEMS
+    jsr overlay_load_no_kernal
+    bcs !done+
+    jsr item_init_identification
 !done:
     jmp tramp_sr_epilogue
 
@@ -1989,6 +2021,232 @@ program_end:
 // this init tail. Keeping it here leaves runtime-bank space for run setup.
 #import "../common/reu_loading_banked.s"
 
+// One-shot platform-services installer (called once at boot, before the map
+// exists). Lives in the init-only tail so the resident runtime image keeps
+// room for the chest routing trampolines.
+platform_services_install64:
+    lda #$4c
+    sta platform_main_loop_begin_api
+    sta platform_vector_reassert_api
+    sta platform_runtime_resync_api
+
+    lda #<platform_main_loop_begin_c64
+    sta platform_main_loop_begin_api + 1
+    lda #>platform_main_loop_begin_c64
+    sta platform_main_loop_begin_api + 2
+
+    lda #<platform_vector_reassert_c64
+    sta platform_vector_reassert_api + 1
+    lda #>platform_vector_reassert_c64
+    sta platform_vector_reassert_api + 2
+
+    lda #<platform_runtime_resync_c64
+    sta platform_runtime_resync_api + 1
+    lda #>platform_runtime_resync_c64
+    sta platform_runtime_resync_api + 2
+
+    jmp platform_services_mark_installed
+
+// One-shot generation-busy API installer (also called once at boot; the core
+// copy is skipped via GENERATION_BUSY_INSTALL_EXTERNAL). Same init-tail
+// treatment: frees resident room for the save invalid-ID hardening.
+generation_busy_install:
+    lda #$4c
+    sta generation_busy_begin_api
+    sta generation_busy_tick_api
+    sta generation_busy_end_api
+
+    lda #<generation_busy_begin
+    sta generation_busy_begin_api + 1
+    lda #>generation_busy_begin
+    sta generation_busy_begin_api + 2
+
+    lda #<generation_busy_tick
+    sta generation_busy_tick_api + 1
+    lda #>generation_busy_tick
+    sta generation_busy_tick_api + 2
+
+    lda #<generation_busy_end
+    sta generation_busy_end_api + 1
+    lda #>generation_busy_end
+    sta generation_busy_end_api + 2
+
+    lda #0
+    sta generation_busy_active_api
+    rts
+
+// One-shot REU tier and overlay stashes (run once at boot when an REU is
+// present, before the map exists; the core copies are skipped via
+// REU_LOAD_ALL_TIERS_EXTERNAL / REU_STASH_OVERLAYS_EXTERNAL). Same
+// init-tail treatment: frees resident room for chest search/trap discovery.
+reu_load_all_tiers:
+    lda #0
+    sta reu_tier_offset_lo
+    sta reu_tier_offset_hi
+    sta reu_tiers_loaded
+
+    ldx #1                      // Start with tier 1
+!rlt_loop:
+    stx reu_tier_idx
+
+    // Save REU start offset for this tier BEFORE stashing
+    lda reu_tier_offset_lo
+    sta reu_tier_start_lo,x
+    lda reu_tier_offset_hi
+    sta reu_tier_start_hi,x
+
+    // Display tier filename
+    stx current_tier            // tier_load_disk reads current_tier for filename
+    dex                         // 0-based index for display table
+    lda reu_fn_tier_lo,x
+    sta zp_ptr0
+    lda reu_fn_tier_hi,x
+    sta zp_ptr0_hi
+    jsr reu_show_file
+
+    // Load tier file from disk to $E000
+    jsr tier_load_disk
+    bcs !rlt_skip+              // Skip if load failed
+    inc reu_tiers_loaded
+
+    // Stash from $E000 to REU at current offset
+    sei
+    lda hal_memory_cpu_port
+    pha
+    lda #$35                    // Bank out KERNAL (so REU DMA reads RAM at $E000)
+    sta hal_memory_cpu_port
+
+    lda #<$e000
+    sta REU_C64LO
+    lda #>$e000
+    sta REU_C64HI
+    ldx reu_tier_idx
+    lda reu_tier_start_lo,x
+    sta REU_REULO
+    lda reu_tier_start_hi,x
+    sta REU_REUHI
+    lda #0
+    sta REU_BANK                // All tier data fits in bank 0
+    lda tier_size_lo,x
+    sta REU_LENLO
+    lda tier_size_hi,x
+    sta REU_LENHI
+    lda #0
+    sta REU_CONTROL             // Both addresses increment
+    lda #REU_CMD_STASH
+    sta REU_COMMAND             // Execute DMA
+
+    pla
+    sta hal_memory_cpu_port     // Restore bank config
+    cli
+
+!rlt_skip:
+    // Advance REU offset by tier size (even if load failed, reserve space)
+    ldx reu_tier_idx
+    clc
+    lda reu_tier_offset_lo
+    adc tier_size_lo,x
+    sta reu_tier_offset_lo
+    lda reu_tier_offset_hi
+    adc tier_size_hi,x
+    sta reu_tier_offset_hi
+
+    // Update status display with new usage
+    jsr reu_show_status
+
+    ldx reu_tier_idx
+    inx
+    cpx #5                      // Tiers 1-4
+    beq !rlt_all_done+
+    jmp !rlt_loop-
+!rlt_all_done:
+
+    // Reset game state — no tier active yet (player starts in town)
+    lda #0
+    sta current_tier
+
+    // If no tiers loaded successfully, disable REU tier path
+    // so tier_load falls back to disk → embedded creature fallback
+    lda reu_tiers_loaded
+    bne !rlt_done+
+    sta reu_present             // A is already 0
+!rlt_done:
+    rts
+
+reu_stash_overlays:
+    ldx #1                      // Start with overlay 1 (OVL_STARTUP)
+!rso_loop:
+    stx reu_ovl_idx
+
+    // Record REU start offset for this overlay
+    lda reu_tier_offset_lo
+    sta ovl_reu_start_lo,x
+    lda reu_tier_offset_hi
+    sta ovl_reu_start_hi,x
+
+    // Display overlay filename
+    dex                         // 0-based index
+    lda reu_fn_ovl_lo,x
+    sta zp_ptr0
+    lda reu_fn_ovl_hi,x
+    sta zp_ptr0_hi
+    jsr reu_show_file
+
+    // Load overlay PRG from disk to $E000
+    ldx reu_ovl_idx
+    dex                         // 0-based index for overlay_load_disk
+    jsr overlay_load_disk
+    bcs !rso_skip+              // Skip stash if load failed
+
+    // Stash $E000 (4KB) to REU at current offset
+    sei
+    lda hal_memory_cpu_port
+    pha
+    lda #$35                    // Bank out KERNAL for DMA to read RAM at $E000
+    sta hal_memory_cpu_port
+
+    lda #<$e000
+    sta REU_C64LO
+    lda #>$e000
+    sta REU_C64HI
+    ldx reu_ovl_idx
+    lda ovl_reu_start_lo,x
+    sta REU_REULO
+    lda ovl_reu_start_hi,x
+    sta REU_REUHI
+    lda #0
+    sta REU_BANK
+    sta REU_LENLO               // Length lo = $00
+    lda #$10                    // Length hi = $10 → $1000 = 4KB
+    sta REU_LENHI
+    lda #0
+    sta REU_CONTROL
+    lda #REU_CMD_STASH
+    sta REU_COMMAND             // Execute DMA
+
+    pla
+    sta hal_memory_cpu_port
+    cli
+
+!rso_skip:
+    // Advance REU offset by $1000 (4KB) — low byte unchanged
+    lda reu_tier_offset_hi
+    clc
+    adc #$10
+    sta reu_tier_offset_hi
+
+    // Update status display with new usage
+    jsr reu_show_status
+
+    ldx reu_ovl_idx
+    inx
+    cpx #(REU_OVERLAY_COUNT + 1)
+    bne !rso_loop-
+
+    lda #1
+    sta reu_overlays_stashed
+    rts
+
 // ultimate_detect — One-shot C64 Ultimate / Ultimate-family title marker.
 // Full UCI model queries do not fit the current resident/banked layout. This
 // passive ID-byte check is only used for title display and runs before MAP_BASE
@@ -2438,4 +2696,14 @@ ovl_items_end:
 ovl_gen_end:
 .print "DungeonGen overlay: " + (ovl_gen_end - $e000) + " bytes at $E000-$" + toHexString(ovl_gen_end)
 .assert "DungeonGen overlay fits in $E000-$EFFF", ovl_gen_end <= $F000, true
+
+// ============================================================
+// Chest overlay — chest open/disarm/bash handlers at $E000 (cold;
+// REU-stashed when an REU is present, disk otherwise)
+// ============================================================
+.segment ChestOverlay
+    #import "../../../core/chest.s"
+ovl_chest_end:
+.print "Chest overlay: " + (ovl_chest_end - $e000) + " bytes at $E000-$" + toHexString(ovl_chest_end)
+.assert "Chest overlay fits in $E000-$EFFF", ovl_chest_end <= $F000, true
 .assert "irq_no_blink begins with CLD", irq_no_blink_after_cld == irq_no_blink + 1, true

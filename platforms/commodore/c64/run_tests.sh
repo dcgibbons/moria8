@@ -528,7 +528,8 @@ run_scripted_spell_cast_smoke() {
             -write ../../../build/test/c64/ovl.help "64.help" \
             -write ../../../build/test/c64/ovl.ui "64.ui" \
             -write ../../../build/test/c64/ovl.items "64.items" \
-            -write ../../../build/test/c64/ovl.spell "64.spell" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c64/ovl.spell "64.spell" \
+            -write ../../../build/test/c64/ovl.chest "64.chest" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -688,7 +689,8 @@ run_scripted_book_overlay_smoke() {
             -write ../../../build/test/c64/ovl.help "64.help" \
             -write ../../../build/test/c64/ovl.ui "64.ui" \
             -write ../../../build/test/c64/ovl.items "64.items" \
-            -write ../../../build/test/c64/ovl.spell "64.spell" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c64/ovl.spell "64.spell" \
+            -write ../../../build/test/c64/ovl.chest "64.chest" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -843,7 +845,8 @@ run_scripted_scroll_selector_smoke() {
             -write ../../../build/test/c64/ovl.help "64.help" \
             -write ../../../build/test/c64/ovl.ui "64.ui" \
             -write ../../../build/test/c64/ovl.items "64.items" \
-            -write ../../../build/test/c64/ovl.spell "64.spell" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c64/ovl.spell "64.spell" \
+            -write ../../../build/test/c64/ovl.chest "64.chest" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -997,7 +1000,8 @@ run_scripted_spell_list_overlay_smoke() {
             -write ../../../build/test/c64/ovl.help "64.help" \
             -write ../../../build/test/c64/ovl.ui "64.ui" \
             -write ../../../build/test/c64/ovl.items "64.items" \
-            -write ../../../build/test/c64/ovl.spell "64.spell" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c64/ovl.spell "64.spell" \
+            -write ../../../build/test/c64/ovl.chest "64.chest" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -1152,7 +1156,8 @@ run_scripted_dungeon_target_spell_smoke() {
             -write ../../../build/test/c64/ovl.help "64.help" \
             -write ../../../build/test/c64/ovl.ui "64.ui" \
             -write ../../../build/test/c64/ovl.items "64.items" \
-            -write ../../../build/test/c64/ovl.spell "64.spell" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c64/ovl.spell "64.spell" \
+            -write ../../../build/test/c64/ovl.chest "64.chest" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -1312,7 +1317,8 @@ run_scripted_detect_evil_smoke() {
             -write ../../../build/test/c64/ovl.help "64.help" \
             -write ../../../build/test/c64/ovl.ui "64.ui" \
             -write ../../../build/test/c64/ovl.items "64.items" \
-            -write ../../../build/test/c64/ovl.spell "64.spell" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c64/ovl.spell "64.spell" \
+            -write ../../../build/test/c64/ovl.chest "64.chest" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -1471,7 +1477,8 @@ run_dungeon_ascent_product_smoke() {
             -write ../../../build/test/c64/ovl.help "64.help" \
             -write ../../../build/test/c64/ovl.ui "64.ui" \
             -write ../../../build/test/c64/ovl.items "64.items" \
-            -write ../../../build/test/c64/ovl.spell "64.spell" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c64/ovl.spell "64.spell" \
+            -write ../../../build/test/c64/ovl.chest "64.chest" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -1600,7 +1607,8 @@ run_wizard_reveal_product_smoke() {
             -write ../../../build/test/c64/ovl.help "64.help" \
             -write ../../../build/test/c64/ovl.ui "64.ui" \
             -write ../../../build/test/c64/ovl.items "64.items" \
-            -write ../../../build/test/c64/ovl.spell "64.spell" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c64/ovl.spell "64.spell" \
+            -write ../../../build/test/c64/ovl.chest "64.chest" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -1754,7 +1762,8 @@ run_wizard_item_product_smoke() {
             -write ../../../build/test/c64/ovl.help "64.help" \
             -write ../../../build/test/c64/ovl.ui "64.ui" \
             -write ../../../build/test/c64/ovl.items "64.items" \
-            -write ../../../build/test/c64/ovl.spell "64.spell" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c64/ovl.spell "64.spell" \
+            -write ../../../build/test/c64/ovl.chest "64.chest" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -1921,7 +1930,8 @@ run_disk_setup_product_smoke() {
             -write ../../../build/test/c64/ovl.help "64.help" \
             -write ../../../build/test/c64/ovl.ui "64.ui" \
             -write ../../../build/test/c64/ovl.items "64.items" \
-            -write ../../../build/test/c64/ovl.spell "64.spell" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c64/ovl.spell "64.spell" \
+            -write ../../../build/test/c64/ovl.chest "64.chest" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -2028,7 +2038,8 @@ run_retirement_royal_product_smoke() {
             -write "$smoke_c64/ovl.help" "64.help" \
             -write "$smoke_c64/ovl.ui" "64.ui" \
             -write "$smoke_c64/ovl.items" "64.items" \
-            -write "$smoke_c64/ovl.spell" "64.spell" >"$build_log" 2>&1; then
+            -write "$smoke_c64/ovl.spell" "64.spell" \
+            -write "$smoke_c64/ovl.chest" "64.chest" >"$build_log" 2>&1; then
         echo "FAIL (product disk image)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -2118,7 +2129,8 @@ run_save_write_product_smoke_impl() {
             -write ../../../build/test/c64/ovl.help "64.help" \
             -write ../../../build/test/c64/ovl.ui "64.ui" \
             -write ../../../build/test/c64/ovl.items "64.items" \
-            -write ../../../build/test/c64/ovl.spell "64.spell" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c64/ovl.spell "64.spell" \
+            -write ../../../build/test/c64/ovl.chest "64.chest" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -2303,7 +2315,8 @@ run_save_media_fail_product_smoke() {
             -write ../../../build/test/c64/ovl.help "64.help" \
             -write ../../../build/test/c64/ovl.ui "64.ui" \
             -write ../../../build/test/c64/ovl.items "64.items" \
-            -write ../../../build/test/c64/ovl.spell "64.spell" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c64/ovl.spell "64.spell" \
+            -write ../../../build/test/c64/ovl.chest "64.chest" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -2431,7 +2444,8 @@ run_change_save_drive_product_smoke() {
             -write ../../../build/test/c64/ovl.help "64.help" \
             -write ../../../build/test/c64/ovl.ui "64.ui" \
             -write ../../../build/test/c64/ovl.items "64.items" \
-            -write ../../../build/test/c64/ovl.spell "64.spell" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c64/ovl.spell "64.spell" \
+            -write ../../../build/test/c64/ovl.chest "64.chest" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -2538,7 +2552,8 @@ run_disk_setup_single_drive_return_product_smoke() {
             -write ../../../build/test/c64/ovl.help "64.help" \
             -write ../../../build/test/c64/ovl.ui "64.ui" \
             -write ../../../build/test/c64/ovl.items "64.items" \
-            -write ../../../build/test/c64/ovl.spell "64.spell" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c64/ovl.spell "64.spell" \
+            -write ../../../build/test/c64/ovl.chest "64.chest" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -2651,7 +2666,8 @@ run_disk_setup_then_load_prompts_save_product_smoke() {
             -write ../../../build/test/c64/ovl.help "64.help" \
             -write ../../../build/test/c64/ovl.ui "64.ui" \
             -write ../../../build/test/c64/ovl.items "64.items" \
-            -write ../../../build/test/c64/ovl.spell "64.spell" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c64/ovl.spell "64.spell" \
+            -write ../../../build/test/c64/ovl.chest "64.chest" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -2742,7 +2758,8 @@ run_load_resume_product_smoke() {
             -write ../../../build/test/c64/ovl.help "64.help" \
             -write ../../../build/test/c64/ovl.ui "64.ui" \
             -write ../../../build/test/c64/ovl.items "64.items" \
-            -write ../../../build/test/c64/ovl.spell "64.spell" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c64/ovl.spell "64.spell" \
+            -write ../../../build/test/c64/ovl.chest "64.chest" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -2921,7 +2938,8 @@ run_single_drive_load_return_product_smoke() {
             -write ../../../build/test/c64/ovl.help "64.help" \
             -write ../../../build/test/c64/ovl.ui "64.ui" \
             -write ../../../build/test/c64/ovl.items "64.items" \
-            -write ../../../build/test/c64/ovl.spell "64.spell" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c64/ovl.spell "64.spell" \
+            -write ../../../build/test/c64/ovl.chest "64.chest" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -3029,7 +3047,8 @@ run_load_then_save_new_empty_product_smoke() {
             -write ../../../build/test/c64/ovl.help "64.help" \
             -write ../../../build/test/c64/ovl.ui "64.ui" \
             -write ../../../build/test/c64/ovl.items "64.items" \
-            -write ../../../build/test/c64/ovl.spell "64.spell" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c64/ovl.spell "64.spell" \
+            -write ../../../build/test/c64/ovl.chest "64.chest" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -3169,7 +3188,8 @@ run_single_drive_save_wrong_media_product_smoke() {
             -write ../../../build/test/c64/ovl.help "64.help" \
             -write ../../../build/test/c64/ovl.ui "64.ui" \
             -write ../../../build/test/c64/ovl.items "64.items" \
-            -write ../../../build/test/c64/ovl.spell "64.spell" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c64/ovl.spell "64.spell" \
+            -write ../../../build/test/c64/ovl.chest "64.chest" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -3248,7 +3268,8 @@ run_single_drive_load_wrong_media_product_smoke() {
             -write ../../../build/test/c64/ovl.help "64.help" \
             -write ../../../build/test/c64/ovl.ui "64.ui" \
             -write ../../../build/test/c64/ovl.items "64.items" \
-            -write ../../../build/test/c64/ovl.spell "64.spell" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c64/ovl.spell "64.spell" \
+            -write ../../../build/test/c64/ovl.chest "64.chest" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -3326,7 +3347,8 @@ run_single_drive_load_corrupt_product_smoke() {
             -write ../../../build/test/c64/ovl.help "64.help" \
             -write ../../../build/test/c64/ovl.ui "64.ui" \
             -write ../../../build/test/c64/ovl.items "64.items" \
-            -write ../../../build/test/c64/ovl.spell "64.spell" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c64/ovl.spell "64.spell" \
+            -write ../../../build/test/c64/ovl.chest "64.chest" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -3432,7 +3454,8 @@ run_single_drive_fresh_save_product_smoke() {
             -write ../../../build/test/c64/ovl.help "64.help" \
             -write ../../../build/test/c64/ovl.ui "64.ui" \
             -write ../../../build/test/c64/ovl.items "64.items" \
-            -write ../../../build/test/c64/ovl.spell "64.spell" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c64/ovl.spell "64.spell" \
+            -write ../../../build/test/c64/ovl.chest "64.chest" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -3561,7 +3584,8 @@ run_single_drive_fresh_save_no_init_product_smoke() {
             -write ../../../build/test/c64/ovl.help "64.help" \
             -write ../../../build/test/c64/ovl.ui "64.ui" \
             -write ../../../build/test/c64/ovl.items "64.items" \
-            -write ../../../build/test/c64/ovl.spell "64.spell" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c64/ovl.spell "64.spell" \
+            -write ../../../build/test/c64/ovl.chest "64.chest" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -3664,7 +3688,8 @@ run_load_missing_savefile_product_smoke() {
             -write ../../../build/test/c64/ovl.help "64.help" \
             -write ../../../build/test/c64/ovl.ui "64.ui" \
             -write ../../../build/test/c64/ovl.items "64.items" \
-            -write ../../../build/test/c64/ovl.spell "64.spell" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c64/ovl.spell "64.spell" \
+            -write ../../../build/test/c64/ovl.chest "64.chest" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -3798,7 +3823,7 @@ check_static_contract "wizard_cancel_text_contract" "../../../core/wizard.s" \
 check_static_contract "wizard_menu_aligned_rows_contract" "../../../core/wizard.s" \
     "wiz_row1_str:|||.text \"L jump    A reveal    H heal\"|||wiz_row2_str:|||.text \"I ident   X level     G item\"|||wiz_row3_str:|||.text \"S summon  T tele      W wall\""
 check_static_contract "wizard_item_prompt_range_contract" "../../../core/wizard.s" \
-    "wiz_item_prompt_str:|||.text \"ITEM 0-127: \""
+    "wiz_item_prompt_str:|||.text \"ITEM 0-134: \""
 check_static_contract "wizard_bad_prompt_cleanup_contract" "../../../core/wizard.s" \
     "wizard_prompt_bad_value:|||jsr msg_print|||jmp wizard_prompt_clear_digits|||wizard_prompt_two_digit:|||jsr wizard_prompt_bad_value|||jmp !wiz_num_loop-"
 check_static_contract "c64_disk_prompt_dismiss_clears_full_modal_contract" "../common/disk_swap.s" \
@@ -3890,7 +3915,7 @@ run_test "rng"    "tests/test_rng.s"    "0400 0409" 10
 run_test "memory" "tests/test_memory.s" "0400 0402" 3
 run_test "config" "tests/test_config.s" "0400 0400" 1
 run_test "input"  "tests/test_input.s"  "0400 040d" 14
-run_test "main_loop" "tests/test_main_loop.s" "0400 0427" 40 500000000
+run_test "main_loop" "tests/test_main_loop.s" "0400 0429" 42 500000000
 run_test "run_visibility_bank" "tests/test_run_visibility_bank.s" "0400 0400" 1 500000000
 run_test "turn" "tests/test_turn.s" "0400 041c" 29 500000000
 run_test "player" "tests/test_player.s" "0400 0409" 10
@@ -3921,7 +3946,7 @@ run_test "polymorph_other" "tests/test_polymorph_other.s" "0400 0402" 3 50000000
 run_test "identify_spell" "tests/test_identify_spell.s" "0400 0403" 4 500000000
 run_test "teleport_self" "tests/test_teleport_self.s" "0400 0401" 2 500000000
 run_test "remove_curse" "tests/test_remove_curse.s" "0400 0402" 3 500000000
-run_test "find_hidden_traps_doors" "tests/test_find_hidden_traps_doors.s" "0400 0402" 3 500000000
+run_test "find_hidden_traps_doors" "tests/test_find_hidden_traps_doors.s" "0400 0407" 8 500000000
 run_test "stinking_cloud" "tests/test_stinking_cloud.s" "0400 0402" 3 500000000
 run_test "frost_ball" "tests/test_frost_ball.s" "0400 0402" 3 500000000
 run_test "teleport_other" "tests/test_teleport_other.s" "0400 0402" 3 500000000
@@ -3967,8 +3992,8 @@ run_test "remove_curse_prayer" "tests/test_remove_curse_prayer.s" "0400 0402" 3 
 run_test "orb_of_draining_prayer" "tests/test_orb_of_draining_prayer.s" "0400 0402" 3 500000000
     run_test "prayer_feedback" "tests/test_prayer_feedback.s" "0400 040c" 13 500000000
 run_test "detect_feedback" "tests/test_detect_feedback.s" "0400 0403" 4 500000000
-run_test "item" "tests/test_item.s" "0400 0433" 52 1000000000
-run_test "scroll_p3" "tests/test_scroll_p3.s" "0400 040b" 12 1000000000
+run_test "item" "tests/test_item.s" "0400 0438" 57 1000000000
+run_test "scroll_p3" "tests/test_scroll_p3.s" "0400 040d" 14 1000000000
 run_test "item_desc" "tests/test_item_desc.s" "0400 0409" 10 500000000
 run_test "item_ui" "tests/test_item_ui.s" "0400 040f" 16 1000000000
 run_test "store" "tests/test_store.s" "0400 042a" 43 1000000000
@@ -3976,7 +4001,7 @@ run_test "ui_views" "tests/test_ui_views.s" "0400 0413" 17 500000000
 run_test "ui_views_filters" "tests/test_ui_views_filters.s" "0400 0413" 7 500000000
 run_test "subsystems" "tests/test_subsystems.s" "0400 0409" 10
 run_sound_monitor_test
-run_test "save"  "tests/test_save.s"  "0400 0418" 25 1000000000
+run_test "save"  "tests/test_save.s"  "0400 041c" 29 1000000000
 run_test "score" "tests/test_score.s" "0400 040b" 12 500000000
 run_test "wands_staves" "tests/test_wands_staves.s" "0400 0406" 7 100000000
 run_test "monster_magic" "tests/test_monster_magic.s" "0400 040d" 14 500000000

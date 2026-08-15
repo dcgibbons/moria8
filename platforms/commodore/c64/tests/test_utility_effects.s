@@ -62,6 +62,7 @@ put_stat_val:
 #import "../../../../core/spell_data.s"
 #import "../../../../core/projectile.s"
 #import "../../../../core/spell_effects.s"
+#import "../../../../core/spell_effects_overlay.s"
 #import "../../../../core/player_magic_state.s"
 #import "../../../../core/player_magic_state_ops.s"
 #import "../../../../core/player_magic_map.s"

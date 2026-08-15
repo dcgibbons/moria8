@@ -25,7 +25,8 @@
 .const hal_storage_save_inv31_version = $03
 .const hal_storage_save_known_bits_version = $04
 .const hal_storage_save_baked_stats_version = $04
-.const hal_storage_save_version = $05
+.const hal_storage_save_known160_version = $06
+.const hal_storage_save_version = $06
 
 #define HAL_STORAGE_DISK_SETUP_MARKER_PROBE_DOS
 #define HAL_STORAGE_DISK_SETUP_MARKER_WRITE_STATUS_REQUIRED

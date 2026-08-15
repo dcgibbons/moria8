@@ -17,7 +17,7 @@ test_bootstrap:
 test_exit_trampoline:
     sei                         // Disable IRQs during copy
     :BankOutBasic()             // Ensure BASIC ROM off (tc_results in $A000+)
-    ldx #52-1
+    ldx #57-1
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -138,7 +138,7 @@ press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
 // Test result buffer — copy to $0400 at end (msg_print clobbers $0400)
-tc_results: .fill 52, $ff
+tc_results: .fill 57, $ff
 tc_loop_ctr: .byte 0          // Loop counter (safe from ZP clobber)
 tc_valid_ctr: .byte 0         // Valid item counter for test 22
 t16_base_ac: .byte 0          // Stable scratch for Test 16 across item_wear
@@ -154,7 +154,7 @@ t16_base_ac: .byte 0          // Stable scratch for Test 16 across item_wear
 
 test_start:
     // Initialize result area to $ff (untested)
-    ldx #52-1
+    ldx #57-1
     lda #$ff
 !clr:
     sta tc_results,x
@@ -2764,14 +2764,179 @@ test_start:
 
     lda #$01
     sta tc_results + 51
-    jmp !tests_done+
+    jmp !t53+
 !t52_fail:
     lda #$00
     sta tc_results + 51
 
+    // ==========================================
+    // Test 53: chest_find_at_df_target hits a chest (carry set, slot in X)
+    // ==========================================
+!t53:
+    jsr item_init_floor
+    lda #ITEM_TYPE_CHEST_SMALL_WOOD
+    sta fi_item_id
+    lda #10
+    sta fi_x
+    sta df_target_x
+    lda #12
+    sta fi_y
+    sta df_target_y
+    jsr chest_find_at_df_target
+    bcc !t53_fail+
+    cpx #0
+    bne !t53_fail+
+    lda #$01
+    sta tc_results + 52
+    jmp !t54+
+!t53_fail:
+    lda #$00
+    sta tc_results + 52
+
+    // ==========================================
+    // Test 54: chest_find_at_df_target ignores a non-chest floor item
+    // ==========================================
+!t54:
+    jsr item_init_floor
+    lda #2                      // Dagger — not a chest
+    sta fi_item_id
+    lda #10
+    sta fi_x
+    sta df_target_x
+    lda #12
+    sta fi_y
+    sta df_target_y
+    jsr chest_find_at_df_target
+    bcs !t54_fail+
+    lda #$01
+    sta tc_results + 53
+    jmp !t55+
+!t54_fail:
+    lda #$00
+    sta tc_results + 53
+
+    // ==========================================
+    // Test 55: chest_find_at_df_target misses on an empty tile
+    // ==========================================
+!t55:
+    jsr item_init_floor
+    lda #10
+    sta df_target_x
+    lda #12
+    sta df_target_y
+    jsr chest_find_at_df_target
+    bcs !t55_fail+
+    lda #$01
+    sta tc_results + 54
+    jmp !t56+
+!t55_fail:
+    lda #$00
+    sta tc_results + 54
+
+    // ==========================================
+    // Test 56: chest spawn trap-init bands (VMS randint(depth)+4)
+    // p1 = band trap bits | locked for each raw rng band; to_hit = 7
+    // for the small wooden chest. rng_range is patched to scripted returns.
+    // ==========================================
+!t56:
+    lda rng_range
+    sta t56_save0
+    lda rng_range + 1
+    sta t56_save1
+    lda rng_range + 2
+    sta t56_save2
+    :PatchJump(rng_range, test_rng_range)
+
+    lda #20
+    sta zp_player_dlvl
+    lda #0
+    sta t56_idx
+!t56_loop:
+    ldx t56_idx
+    lda t56_band_table,x
+    sta t_rng_ret
+    lda #ITEM_TYPE_CHEST_SMALL_WOOD
+    jsr roll_enchantment
+    ldx t56_idx
+    cmp t56_band_table + 1,x
+    bne !t56_fail+
+    lda fi_add_to_hit
+    cmp #7
+    bne !t56_fail+
+    lda t56_idx
+    clc
+    adc #2
+    sta t56_idx
+    cmp #12
+    bcc !t56_loop-
+    lda #$01
+    sta tc_results + 55
+    jmp !t57+
+!t56_fail:
+    lda #$00
+    sta tc_results + 55
+
+    // ==========================================
+    // Test 57: chest source levels per ID (128-134) land in to_hit;
+    // ruined chest carries source level 0.
+    // ==========================================
+!t57:
+    lda #0
+    sta t_rng_ret
+    lda #20
+    sta zp_player_dlvl
+    lda #0
+    sta t56_idx
+!t57_loop:
+    lda t56_idx
+    clc
+    adc #ITEM_TYPE_CHEST_SMALL_WOOD
+    jsr roll_enchantment
+    ldx t56_idx
+    lda fi_add_to_hit
+    cmp chest_source_level,x
+    bne !t57_fail+
+    inc t56_idx
+    lda t56_idx
+    cmp #7
+    bcc !t57_loop-
+    lda #$01
+    sta tc_results + 56
+    jmp !t57_done+
+!t57_fail:
+    lda #$00
+    sta tc_results + 56
+!t57_done:
+
+    // Restore rng_range's original entry
+    lda t56_save0
+    sta rng_range
+    lda t56_save1
+    sta rng_range + 1
+    lda t56_save2
+    sta rng_range + 2
+
 !tests_done:
     // Jump to trampoline at $033C (below $A000) to copy results + BRK
     jmp test_exit_trampoline
+
+t56_save0: .byte 0
+t56_save1: .byte 0
+t56_save2: .byte 0
+t56_idx:   .byte 0
+t_rng_ret: .byte 0
+
+test_rng_range:
+    lda t_rng_ret
+    rts
+
+t56_band_table:
+    .byte 0,  (CHEST_P1_TRAP_POISON | CHEST_P1_LOCKED)
+    .byte 2,  (CHEST_P1_TRAP_PARA | CHEST_P1_LOCKED)
+    .byte 5,  (CHEST_P1_TRAP_EXPL | CHEST_P1_LOCKED)
+    .byte 7,  (CHEST_P1_TRAP_SUMMON | CHEST_P1_LOCKED)
+    .byte 10, (CHEST_P1_TRAP_STR | CHEST_P1_TRAP_POISON | CHEST_P1_TRAP_PARA | CHEST_P1_LOCKED)
+    .byte 13, (CHEST_P1_TRAP_SUMMON | CHEST_P1_TRAP_EXPL | CHEST_P1_LOCKED)
 
 t27_expected_name:
     .text "Dagger" ; .byte 0

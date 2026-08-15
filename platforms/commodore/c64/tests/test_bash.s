@@ -8,6 +8,8 @@
 // NOTE: msg_print writes to screen row 0 ($0400+), so we store results
 // in tc_results[] and copy to $0400 at the very end.
 
+#define C64_TEST_NAME_STREAMS_A000
+
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_bootstrap)
 
@@ -46,6 +48,7 @@ test_exit_trampoline:
 #import "../../../../core/ui_character.s"
 #import "../../../../core/stat_display.s"
 .segmentdef TestCreateOverlay [start=$D000]
+.segmentdef TestNameStreams [start=$A000]
 .segment TestCreateOverlay
 #import "../../../../core/background_data.s"
 #import "../../../../core/player_create.s"
@@ -83,11 +86,8 @@ test_exit_trampoline:
 #import "../../../../core/throw.s"
 #import "../../../../core/bash.s"
 #import "../../../../core/turn_render_state.s"
-eff_fear_timer: .byte 0
-monster_attack_player:
-player_update_hunger_state:
-    sec
-    rts
+// This stub lives in the $D000 test overlay so Main stays below MAP_BASE.
+.segment TestCreateOverlay
 mon_atk_apply_damage:
     lda zp_player_hp_lo
     sec
@@ -104,6 +104,18 @@ mon_atk_apply_damage:
     clc
     rts
 !mad_dead:
+    sec
+    rts
+.segment Default
+eff_fear_timer: .byte 0
+// Chest dispatch lives in the platform main; bash.s routes to it when the
+// target tile holds a chest. No chest items exist in these tests.
+chest_dispatch:
+chest_bash_command:
+    clc
+    rts
+monster_attack_player:
+player_update_hunger_state:
     sec
     rts
 player_death_check:

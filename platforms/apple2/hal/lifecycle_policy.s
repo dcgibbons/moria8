@@ -38,8 +38,8 @@
 // Scroll-delta renderer provided by dungeon_scroll_a2.s (A2PlaySlot).
 #define HAL_PLATFORM_GAME_LOOP_SCROLL_DELTA_RENDER
 .const hal_platform_game_loop_item_actions_trampolined = 1
-// 9 shared classes + OVL.STORAGE + OVL.TITLE (slot-hosted).
-.const hal_platform_overlay_count = 11
+// 10 shared classes (incl. OVL_CHEST) + OVL.STORAGE + OVL.TITLE (slot-hosted).
+.const hal_platform_overlay_count = 12
 .const hal_platform_overlay_state_external = 0
 .const hal_platform_overlay_force_reload = 0
 .const hal_platform_overlay_tier_cache_guard = 0

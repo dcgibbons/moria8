@@ -2,9 +2,11 @@
 //
 // Tests: RLE round-trip (uniform, alternating, mixed), checksum complement,
 // recount_monsters, recount_floor_items, save-version compatibility helpers,
-// split item stat save/load persistence.
+// split item stat save/load persistence, invalid item-ID load hardening.
 //
-// Results at $0400-$0418: $01 = pass, $00 = fail per test (25 tests)
+// Results at $0400-$041c: $01 = pass, $00 = fail per test (29 tests)
+
+#define C64_TEST_NAME_STREAMS_A000
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(bootstrap)
@@ -25,7 +27,7 @@ bootstrap:
 // Must be in low memory (before imports) so BRK address is below $A000.
 // VICE breakpoint on $A000+ can false-trigger during BASIC ROM execution.
 test_finish:
-    ldx #24
+    ldx #28
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -78,6 +80,7 @@ ui_equip_display:
 #import "../../../../core/ui_character.s"
 #import "../../../../core/stat_display.s"
 .segmentdef TestCreateOverlay [start=$D000]
+.segmentdef TestNameStreams [start=$A000]
 .segment TestCreateOverlay
 #import "../../../../core/background_data.s"
 #import "../../../../core/player_create.s"
@@ -138,10 +141,11 @@ random_floor_in_room:
 .const hal_storage_program_file_num = 7
 .const hal_storage_save_v1_version = $0f
 .const hal_storage_save_known96_version = $10
-.const hal_storage_save_version = $11
+.const hal_storage_save_version = $12
 .const hal_storage_save_inv31_version = $11
 .const hal_storage_save_baked_stats_version = $11
 .const hal_storage_save_known_bits_version = $11
+.const hal_storage_save_known160_version = $12
 .const KERNAL_ERR_DEVICE_NOT_PRESENT = 5
 .const KERNAL_SETNAM = test_save_setnam
 .const KERNAL_SETLFS = test_save_setlfs
@@ -314,7 +318,7 @@ rle_decompress_map:
 !:  rts
 
 // Test result buffer — copy to $0400 at end (msg_print clobbers $0400)
-tc_results: .fill 25, $ff
+tc_results: .fill 29, $ff
 tc_count: .byte 0
 
 // Verification buffer — 256 bytes at $CF00 (floor item area, safe during tests 2-3)
@@ -525,6 +529,66 @@ test_save_legacy_inventory_state_blocks:
 !ok:
 }
 
+// ts_reset_io_state — Zero save checksum and error state. Clobbers: A
+ts_reset_io_state:
+    lda #0
+    sta save_cksum_lo
+    sta save_cksum_hi
+    sta save_io_error
+    rts
+
+// ts_poison_all_known — Set every known-item bit (X=0..ITEM_ID_CAPACITY-1).
+// Clobbers: A, X
+ts_poison_all_known:
+    ldx #0
+!loop:
+    jsr id_known_set
+    inx
+    cpx #ITEM_ID_CAPACITY
+    bcc !loop-
+    rts
+
+// ts_clear_known_bits — Zero the full known-item bitset. Clobbers: A, X
+ts_clear_known_bits:
+    ldx #ID_KNOWN_BYTES - 1
+    lda #0
+!loop:
+    sta id_known_bits,x
+    dex
+    bpl !loop-
+    rts
+
+// ts_expect_known_range / ts_expect_unknown_range — Check id_known state for
+// IDs [X, Y). Output: carry set = all matched, carry clear = mismatch.
+// Clobbers: A, X
+ts_range_end: .byte 0
+ts_expect_known_range:
+    sty ts_range_end
+!loop:
+    jsr id_known_test
+    beq !bad+
+    inx
+    cpx ts_range_end
+    bcc !loop-
+    sec
+    rts
+!bad:
+    clc
+    rts
+ts_expect_unknown_range:
+    sty ts_range_end
+!loop:
+    jsr id_known_test
+    bne !bad+
+    inx
+    cpx ts_range_end
+    bcc !loop-
+    sec
+    rts
+!bad:
+    clc
+    rts
+
 test_start:
     // BASIC ROM already banked out by bootstrap above
     :PatchJump(save_file_exists, test_save_file_not_exists)
@@ -538,7 +602,7 @@ test_start:
     sta rle_work_hi
 
     // Initialize result area to $ff (untested)
-    ldx #24
+    ldx #28
     lda #$ff
 !clr:
     sta tc_results,x
@@ -1157,10 +1221,7 @@ t7_set_slot31:
     // real save/load block representation for inventory/equipment,
     // store/home slots, and packed floor items.
     // ============================================================
-    lda #0
-    sta save_cksum_lo
-    sta save_cksum_hi
-    sta save_io_error
+    jsr ts_reset_io_state
     sta test_save_sink_writes
 
     jsr item_init_inventory
@@ -1265,10 +1326,7 @@ t7_set_slot31:
     jsr item_init_floor
     jsr test_clear_store_items
     jsr test_stream_reset_read
-    lda #0
-    sta save_cksum_lo
-    sta save_cksum_hi
-    sta save_io_error
+    jsr ts_reset_io_state
     jsr test_load_item_state_blocks
 
     lda inv_item_id + 2
@@ -1364,10 +1422,7 @@ t13_fail:
     // Writes and write-time READST succeed, but CLOSE arms a late
     // $42 status. save_game must return failure through Disk error!.
     // ============================================================
-    lda #0
-    sta save_cksum_lo
-    sta save_cksum_hi
-    sta save_io_error
+    jsr ts_reset_io_state
     sta test_save_last_msg
     sta test_save_dismiss_calls
     sta test_save_readst_value
@@ -1418,10 +1473,7 @@ t14_fail_code:
     // Test 15: saving to a configured non-save disk enters the selected-disk
     // prepare/init flow instead of reporting "Wrong Save Disk" directly.
     // ============================================================
-    lda #0
-    sta save_cksum_lo
-    sta save_cksum_hi
-    sta save_io_error
+    jsr ts_reset_io_state
     sta test_save_last_msg
     sta test_save_dismiss_calls
     sta test_save_readst_value
@@ -1482,10 +1534,7 @@ t15_fail_code:
     // not Wrong Save Disk. disk_status=1 means marker mismatch;
     // other nonzero values are hardware/media I/O status.
     // ============================================================
-    lda #0
-    sta save_cksum_lo
-    sta save_cksum_hi
-    sta save_io_error
+    jsr ts_reset_io_state
     sta test_save_last_msg
     sta test_save_dismiss_calls
     sta test_save_readst_value
@@ -1540,10 +1589,7 @@ t16_fail_code:
     // convention; this unit guards common save_game from entering
     // overwrite/file-output after the media gate fails.
     // ============================================================
-    lda #0
-    sta save_cksum_lo
-    sta save_cksum_hi
-    sta save_io_error
+    jsr ts_reset_io_state
     sta test_save_last_msg
     sta test_save_dismiss_calls
     sta test_save_readst_value
@@ -1837,10 +1883,7 @@ t22_fail_code:
     // Test 23: known-item save migration reads V1 as 64 bytes,
     // clears future IDs, and round-trips the V2 96-byte runway.
     // ============================================================
-    lda #0
-    sta save_cksum_lo
-    sta save_cksum_hi
-    sta save_io_error
+    jsr ts_reset_io_state
     jsr test_stream_reset_write
     ldx #0
 !t23_seed_v1_stream:
@@ -1857,12 +1900,7 @@ t22_fail_code:
     jmp t23_fail_code
 !t23_v1_stream_ok:
 
-    ldx #0
-!t23_poison_known:
-    jsr id_known_set
-    inx
-    cpx #ITEM_ID_CAPACITY
-    bcc !t23_poison_known-
+    jsr ts_poison_all_known
 
     lda #SAVE_V1_VERSION
     sta load_save_version
@@ -1871,80 +1909,69 @@ t22_fail_code:
 
     // Legacy stream bytes were all nonzero: bits 0-63 must be set
     ldx #0
-!t23_check_v1_known:
-    jsr id_known_test
-    bne !t23_v1_next+
+    ldy #LEGACY_ITEM_TYPE_COUNT
+    jsr ts_expect_known_range
+    bcs !t23_v1known_ok+
     lda #2
     jmp t23_fail_code
-!t23_v1_next:
-    inx
-    cpx #LEGACY_ITEM_TYPE_COUNT
-    bcc !t23_check_v1_known-
+!t23_v1known_ok:
     // Legacy migration defaults are category-derived: appended fixed rows
     // (64-95, 122-125) must be set, randomized-class rows (96-121, 126, 127)
     // must be clear.
     ldx #LEGACY_ITEM_TYPE_COUNT
-!t23_check_v1_appended:
-    jsr id_known_test
-    bne !t23_appended_next+
+    ldy #96
+    jsr ts_expect_known_range
+    bcs !t23_v1app_ok+
     lda #3
     jmp t23_fail_code
-!t23_appended_next:
-    inx
-    cpx #96
-    bcc !t23_check_v1_appended-
+!t23_v1app_ok:
 
     ldx #96
-!t23_check_v1_random:
-    jsr id_known_test
-    beq !t23_random_next+
+    ldy #ITEM_TYPE_MITHRIL_CHAIN
+    jsr ts_expect_unknown_range
+    bcs !t23_v1rand_ok+
     lda #3
     jmp t23_fail_code
-!t23_random_next:
-    inx
-    cpx #ITEM_TYPE_MITHRIL_CHAIN
-    bcc !t23_check_v1_random-
+!t23_v1rand_ok:
 
     ldx #ITEM_TYPE_MITHRIL_CHAIN
-!t23_check_v1_fixed3:
-    jsr id_known_test
-    bne !t23_fixed3_next+
+    ldy #ITEM_TYPE_AMULET_MAGI + 1
+    jsr ts_expect_known_range
+    bcs !t23_v1fix3_ok+
     lda #3
     jmp t23_fail_code
-!t23_fixed3_next:
-    inx
-    cpx #ITEM_TYPE_AMULET_MAGI + 1
-    bcc !t23_check_v1_fixed3-
+!t23_v1fix3_ok:
 
+    // Randomized-class rows 126-127 stay unknown after legacy migration
     ldx #ITEM_TYPE_POT_NEUTRALIZE
-!t23_check_v1_random2:
-    jsr id_known_test
-    beq !t23_random2_next+
+    ldy #ITEM_TYPE_CHEST_SMALL_WOOD
+    jsr ts_expect_unknown_range
+    bcs !t23_v1rand2_ok+
     lda #3
     jmp t23_fail_code
-!t23_random2_next:
-    inx
-    cpx #ITEM_TYPE_COUNT
-    bcc !t23_check_v1_random2-
+!t23_v1rand2_ok:
+
+    // Chest rows (128-134) are fixed-known after legacy migration
+    ldx #ITEM_TYPE_CHEST_SMALL_WOOD
+    ldy #ITEM_TYPE_COUNT
+    jsr ts_expect_known_range
+    bcs !t23_v1chest_ok+
+    lda #3
+    jmp t23_fail_code
+!t23_v1chest_ok:
 
     // Future capacity: bits past ITEM_TYPE_COUNT must be clear
     .if (ITEM_TYPE_COUNT < ITEM_ID_CAPACITY) {
     ldx #ITEM_TYPE_COUNT
-!t23_check_v1_future:
-    jsr id_known_test
-    beq !t23_future_next+
+    ldy #ITEM_ID_CAPACITY
+    jsr ts_expect_unknown_range
+    bcs !t23_v1future_ok+
     lda #3
     jmp t23_fail_code
-!t23_future_next:
-    inx
-    cpx #ITEM_ID_CAPACITY
-    bcc !t23_check_v1_future-
+!t23_v1future_ok:
     }
     // V2/V3 migration: 96-byte legacy stream packs bits, future stays clear
-    lda #0
-    sta save_cksum_lo
-    sta save_cksum_hi
-    sta save_io_error
+    jsr ts_reset_io_state
     jsr test_stream_reset_write
     ldx #0
 !t23_seed_v23_stream:
@@ -1955,12 +1982,7 @@ t22_fail_code:
     cpx #96
     bcc !t23_seed_v23_stream-
 
-    ldx #0
-!t23_poison_v23:
-    jsr id_known_set
-    inx
-    cpx #ITEM_ID_CAPACITY
-    bcc !t23_poison_v23-
+    jsr ts_poison_all_known
 
     lda #SAVE_KNOWN96_VERSION
     sta load_save_version
@@ -1989,49 +2011,51 @@ t22_fail_code:
     // V2/V3 appended defaults are category-derived: randomized-class rows
     // (96-121, 126, 127) clear, fixed rows (122-125) set.
     ldx #96
-!t23_check_v23_future:
-    jsr id_known_test
-    beq !t23_v23f_next+
+    ldy #ITEM_TYPE_MITHRIL_CHAIN
+    jsr ts_expect_unknown_range
+    bcs !t23_v23f_ok+
     lda #5
     jmp t23_fail_code
-!t23_v23f_next:
-    inx
-    cpx #ITEM_TYPE_MITHRIL_CHAIN
-    bcc !t23_check_v23_future-
+!t23_v23f_ok:
 
     ldx #ITEM_TYPE_MITHRIL_CHAIN
-!t23_check_v23_fixed3:
-    jsr id_known_test
-    bne !t23_v23f3_next+
+    ldy #ITEM_TYPE_AMULET_MAGI + 1
+    jsr ts_expect_known_range
+    bcs !t23_v23f3_ok+
     lda #5
     jmp t23_fail_code
-!t23_v23f3_next:
-    inx
-    cpx #ITEM_TYPE_AMULET_MAGI + 1
-    bcc !t23_check_v23_fixed3-
+!t23_v23f3_ok:
 
+    // Randomized-class rows 126-127 stay unknown after legacy migration
     ldx #ITEM_TYPE_POT_NEUTRALIZE
-!t23_check_v23_tail:
-    jsr id_known_test
-    beq !t23_v23t_next+
+    ldy #ITEM_TYPE_CHEST_SMALL_WOOD
+    jsr ts_expect_unknown_range
+    bcs !t23_v23t_ok+
     lda #5
     jmp t23_fail_code
-!t23_v23t_next:
-    inx
-    cpx #ITEM_ID_CAPACITY
-    bcc !t23_check_v23_tail-
+!t23_v23t_ok:
 
-    lda #0
-    sta save_cksum_lo
-    sta save_cksum_hi
-    sta save_io_error
+    // Chest rows (128-134) are fixed-known after legacy migration
+    ldx #ITEM_TYPE_CHEST_SMALL_WOOD
+    ldy #ITEM_TYPE_COUNT
+    jsr ts_expect_known_range
+    bcs !t23_v23c_ok+
+    lda #5
+    jmp t23_fail_code
+!t23_v23c_ok:
+
+    // Future capacity bits (135+) stay clear
+    ldx #ITEM_TYPE_COUNT
+    ldy #ITEM_ID_CAPACITY
+    jsr ts_expect_unknown_range
+    bcs !t23_v23f2_ok+
+    lda #5
+    jmp t23_fail_code
+!t23_v23f2_ok:
+
+    jsr ts_reset_io_state
     sta test_save_sink_writes
-    ldx #ID_KNOWN_BYTES - 1
-    lda #0
-!t23_preseed_clear:
-    sta id_known_bits,x
-    dex
-    bpl !t23_preseed_clear-
+    jsr ts_clear_known_bits
     ldx #0
 !t23_seed_v2_known:
     txa
@@ -2045,12 +2069,7 @@ t22_fail_code:
     jsr test_stream_reset_write
     jsr save_write_known_items
 
-    ldx #ID_KNOWN_BYTES - 1
-    lda #0
-!t23_clear_v2_known:
-    sta id_known_bits,x
-    dex
-    bpl !t23_clear_v2_known-
+    jsr ts_clear_known_bits
     lda #SAVE_VERSION
     sta load_save_version
     jsr test_stream_reset_read
@@ -2084,10 +2103,7 @@ t23_fail_code:
     // ============================================================
     // Test 24: legacy 30-slot inventory saves leave amulet slot empty.
     // ============================================================
-    lda #0
-    sta save_cksum_lo
-    sta save_cksum_hi
-    sta save_io_error
+    jsr ts_reset_io_state
     sta test_save_sink_writes
     jsr item_init_inventory
     lda #2
@@ -2109,10 +2125,7 @@ t23_fail_code:
     lda #SAVE_KNOWN96_VERSION
     sta load_save_version
     jsr test_stream_reset_read
-    lda #0
-    sta save_cksum_lo
-    sta save_cksum_hi
-    sta save_io_error
+    jsr ts_reset_io_state
     jsr load_read_inventory_state
 
     lda inv_item_id + 2
@@ -2198,6 +2211,163 @@ t24_fail_code:
 t25_fail_code:
 !t25_store:
     sta tc_results + 24
+
+    // ============================================================
+    // Test 26: old 16-byte known-bitset saves (pre-chest catalog) read
+    // IDs 0-127 from the stream, default chests 128-134 fixed-known, and
+    // clear the appended capacity bytes.
+    // ============================================================
+    jsr ts_reset_io_state
+    jsr test_stream_reset_write
+    ldx #0
+    lda #$ff                    // Bitset stream: all 128 legacy bits set
+!t26_seed_stream:
+    sta SAVE_STREAM_BUF,x
+    inx
+    cpx #16
+    bcc !t26_seed_stream-
+
+    jsr ts_poison_all_known
+
+    lda #SAVE_KNOWN_BITS_VERSION
+    sta load_save_version
+    jsr test_stream_reset_read
+    jsr load_read_known_items
+
+    // Stream bytes were all nonzero: IDs 0-127 must be set; chest rows
+    // (128-134) default fixed-known; future capacity stays clear.
+    ldx #0
+    ldy #ITEM_TYPE_COUNT
+    jsr ts_expect_known_range
+    bcs !t26_known_ok+
+    lda #2
+    jmp t26_fail_code
+!t26_known_ok:
+    ldx #ITEM_TYPE_COUNT
+    ldy #ITEM_ID_CAPACITY
+    jsr ts_expect_unknown_range
+    bcs !t26_future_ok+
+    lda #3
+    jmp t26_fail_code
+!t26_future_ok:
+
+    lda #$01
+    bne !t26_store+
+t26_fail_code:
+!t26_store:
+    sta tc_results + 25
+
+    // ============================================================
+    // Test 27: invalid item IDs in an inventory save stream wipe to
+    // empty on load (save_sanitize_id_table hardening); valid high IDs
+    // (chests) survive.
+    // ============================================================
+    jsr ts_reset_io_state
+    sta test_save_sink_writes
+    jsr item_init_inventory
+    lda #200                    // Invalid: >= ITEM_TYPE_COUNT
+    sta inv_item_id + 2
+    lda #ITEM_TYPE_CHEST_SMALL_WOOD
+    sta inv_item_id + 3
+    jsr test_stream_reset_write
+    jsr save_write_inventory_state
+
+    jsr item_init_inventory
+    lda #SAVE_VERSION
+    sta load_save_version
+    jsr test_stream_reset_read
+    jsr ts_reset_io_state
+    jsr load_read_inventory_state
+
+    lda inv_item_id + 2
+    cmp #FI_EMPTY
+    beq !t27_bad_ok+
+    lda #2
+    jmp t27_fail_code
+!t27_bad_ok:
+    lda inv_item_id + 3
+    cmp #ITEM_TYPE_CHEST_SMALL_WOOD
+    beq !t27_good_ok+
+    lda #3
+    jmp t27_fail_code
+!t27_good_ok:
+    lda #$01
+    bne !t27_store+
+t27_fail_code:
+!t27_store:
+    sta tc_results + 26
+
+    // ============================================================
+    // Test 28: invalid item IDs in a floor-item save stream wipe to
+    // empty on load; valid chest IDs survive.
+    // ============================================================
+    jsr ts_reset_io_state
+    sta test_save_sink_writes
+    jsr item_init_floor
+    lda #200                    // Invalid: >= ITEM_TYPE_COUNT
+    sta fi_item_id + 1
+    lda #10
+    sta fi_x + 1
+    lda #12
+    sta fi_y + 1
+    lda #ITEM_TYPE_CHEST_LARGE_STEEL
+    sta fi_item_id + 5
+    jsr test_stream_reset_write
+    jsr save_write_floor_items
+
+    jsr item_init_floor
+    lda #SAVE_VERSION
+    sta load_save_version
+    jsr test_stream_reset_read
+    jsr ts_reset_io_state
+    jsr load_read_floor_items
+
+    lda fi_item_id + 1
+    cmp #FI_EMPTY
+    beq !t28_bad_ok+
+    lda #2
+    jmp t28_fail_code
+!t28_bad_ok:
+    lda fi_item_id + 5
+    cmp #ITEM_TYPE_CHEST_LARGE_STEEL
+    beq !t28_good_ok+
+    lda #3
+    jmp t28_fail_code
+!t28_good_ok:
+    lda #$01
+    bne !t28_store+
+t28_fail_code:
+!t28_store:
+    sta tc_results + 27
+
+    // ============================================================
+    // Test 29: save_sanitize_store_ids wipes invalid store slot IDs
+    // and keeps valid chest IDs.
+    // ============================================================
+    jsr test_clear_store_items
+    lda #200                    // Invalid: >= ITEM_TYPE_COUNT
+    sta si_item_id + 1
+    lda #ITEM_TYPE_CHEST_RUINED
+    sta si_item_id + 7
+    jsr save_sanitize_store_ids
+
+    lda si_item_id + 1
+    cmp #FI_EMPTY
+    beq !t29_bad_ok+
+    lda #2
+    jmp t29_fail_code
+!t29_bad_ok:
+    lda si_item_id + 7
+    cmp #ITEM_TYPE_CHEST_RUINED
+    beq !t29_good_ok+
+    lda #3
+    jmp t29_fail_code
+!t29_good_ok:
+    lda #$01
+    bne !t29_store+
+t29_fail_code:
+!t29_store:
+    sta tc_results + 28
 
     jmp test_finish
 

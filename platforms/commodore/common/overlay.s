@@ -16,6 +16,9 @@
 //   OVL_ITEMS       = 7  Low-frequency item actions (read/aim/use/refuel)
 //   OVL_SPELL       = 8  Spell/prayer effect execution
 //   OVL_MODAL_MISC  = 9  Modal misc: winner retirement / save-slot selector
+//   OVL_CHEST       = 10 Chest interactions (open/disarm/bash); cold everywhere
+//                        (C128: never staged into the Bank 1 overlay cache)
+//   Apple IIe appends OVL_STORAGE/OVL.TITLE after the shared classes.
 //
 // Disk filenames are platform-owned by the storage HAL:
 // `hal_storage_overlay_name_{lo,hi,len}`.
@@ -34,6 +37,7 @@
 .const OVL_ITEMS       = 7
 .const OVL_SPELL       = 8
 .const OVL_MODAL_MISC  = 9
+.const OVL_CHEST       = 10
 .const OVL_COUNT       = hal_platform_overlay_count
 
 #import "compat/hal_storage_overlay_test_stub.s"
@@ -395,6 +399,12 @@ c128_preload_all_overlays:
     ldx #1
 !cpao_loop:
     stx ol_target
+
+    // The chest overlay is cold on C128 (docs/CHEST_DESIGN.md): no Bank 1
+    // cache slot exists for it, so boot preload must not stage it. Its
+    // ready-mask bits stay clear and overlay_load falls through to disk.
+    cpx #OVL_CHEST
+    beq cpao_next
 
 #if C128_CACHE_TEST_SKIP_OVERLAY
     txa

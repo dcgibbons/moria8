@@ -26,7 +26,8 @@
 .const hal_storage_save_inv31_version = $12
 .const hal_storage_save_known_bits_version = $14
 .const hal_storage_save_baked_stats_version = $14
-.const hal_storage_save_version = $15
+.const hal_storage_save_known160_version = $16
+.const hal_storage_save_version = $16
 
 #define HAL_STORAGE_DISK_SETUP_OTHER_DRIVE
 #define HAL_STORAGE_DISK_SETUP_COMMIT_SETS_UI_OK

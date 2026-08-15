@@ -603,6 +603,8 @@ expected_item_name_lo:
     .byte <ein_116, <ein_117, <ein_118, <ein_119
     .byte <ein_120, <ein_121, <ein_122, <ein_123
     .byte <ein_124, <ein_125, <ein_126, <ein_127
+    .byte <ein_128, <ein_129, <ein_130, <ein_131
+    .byte <ein_132, <ein_133, <ein_134
 expected_item_name_hi:
     .byte >ein_0, >ein_1, >ein_2, >ein_3, >ein_4, >ein_5, >ein_6, >ein_7
     .byte >ein_8, >ein_9, >ein_10, >ein_11, >ein_12, >ein_13, >ein_14, >ein_15
@@ -629,6 +631,8 @@ expected_item_name_hi:
     .byte >ein_116, >ein_117, >ein_118, >ein_119
     .byte >ein_120, >ein_121, >ein_122, >ein_123
     .byte >ein_124, >ein_125, >ein_126, >ein_127
+    .byte >ein_128, >ein_129, >ein_130, >ein_131
+    .byte >ein_132, >ein_133, >ein_134
 
 ein_0:  .text "Gold (small)" ; .byte 0
 ein_1:  .text "Gold (large)" ; .byte 0
@@ -758,6 +762,13 @@ ein_124: .text "Amulet of Wisdom" ; .byte 0
 ein_125: .text "Amulet of the Magi" ; .byte 0
 ein_126: .text "Potion of Neutralize Poison" ; .byte 0
 ein_127: .text "Staff of Remove Curse" ; .byte 0
+ein_128: .text "Small Wooden Chest" ; .byte 0
+ein_129: .text "Large Wooden Chest" ; .byte 0
+ein_130: .text "Small Iron Chest" ; .byte 0
+ein_131: .text "Large Iron Chest" ; .byte 0
+ein_132: .text "Small Steel Chest" ; .byte 0
+ein_133: .text "Large Steel Chest" ; .byte 0
+ein_134: .text "Ruined Chest" ; .byte 0
 
 item_name_test_id: .byte 0
 tc_results: .fill 10, $ff

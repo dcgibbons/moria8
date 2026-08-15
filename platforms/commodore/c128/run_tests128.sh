@@ -1132,6 +1132,7 @@ contract_patterns = {
     "help_overlay": re.compile(r':C128AuditHelpOverlay\("([^"]+)",\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)'),
     "ui_overlay": re.compile(r':C128AuditUiOverlay\("([^"]+)",\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)'),
     "dungeon_overlay": re.compile(r':C128AuditDungeonOverlay\("([^"]+)",\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)'),
+    "chest_overlay": re.compile(r':C128AuditChestOverlay\("([^"]+)",\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)'),
     "banked_window": re.compile(r':C128AuditBanked\("([^"]+)",\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)'),
 }
 
@@ -1168,6 +1169,7 @@ required_labels = [
     "ovl_help_end",
     "ovl_ui_end",
     "ovl_gen_end",
+    "ovl_chest_end",
 ]
 
 below_io_data = [
@@ -1239,6 +1241,7 @@ overlay_limits = {
     "help_overlay": labels.get("ovl_help_end"),
     "ui_overlay": labels.get("ovl_ui_end"),
     "dungeon_overlay": labels.get("ovl_gen_end"),
+    "chest_overlay": labels.get("ovl_chest_end"),
 }
 
 for kind, _display, symbol, arg in contracts:
@@ -2771,6 +2774,7 @@ build_save_write_product_assets() {
             -write ../../../build/test/c128/ovl.ui "128.ui" \
             -write ../../../build/test/c128/ovl.items "128.items" \
             -write ../../../build/test/c128/ovl.disarm "128.disarm" \
+            -write ../../../build/test/c128/ovl.chest "128.chest" \
             -write ../../../build/test/c128/128.runtime.prg "128.runtime" \
             -write ../../../build/test/c128/128.input.prg "128.input" \
             -write ../../../build/test/c128/128.proj.prg "128.proj" \
@@ -4829,6 +4833,7 @@ run_retirement_royal_smoke() {
             -write "$smoke_c128/ovl.ui" "128.ui" \
             -write "$smoke_c128/ovl.items" "128.items" \
             -write "$smoke_c128/ovl.disarm" "128.disarm" \
+            -write "$smoke_c128/ovl.chest" "128.chest" \
             -write "$smoke_c128/128.runtime.prg" "128.runtime" \
             -write "$smoke_c128/128.input.prg" "128.input" \
             -write "$smoke_c128/128.proj.prg" "128.proj" \

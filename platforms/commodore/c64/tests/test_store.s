@@ -1569,6 +1569,37 @@ test_start:
     cpx #8
     bcc !t43d_loop-
 
+    // Part F: picker completeness — every implemented ID 2..(COUNT-2)
+    // appears exactly once in pit_sorted; the ruined chest (COUNT-1) never
+    // appears.
+    ldx #19
+    lda #0
+!t43f_clear:
+    sta t43_seen,x
+    dex
+    bpl !t43f_clear-
+    ldx #0
+!t43f_mark:
+    stx t43_cursor
+    lda pit_sorted,x
+    tax
+    jsr t43_mark_seen
+    bcs !t43_fail+
+    ldx t43_cursor
+    inx
+    cpx #(pit_sorted_end - pit_sorted)
+    bcc !t43f_mark-
+    ldx #2
+!t43f_check:
+    jsr t43_test_seen
+    bcc !t43_fail+
+    inx
+    cpx #ITEM_TYPE_COUNT - 1
+    bcc !t43f_check-
+    ldx #ITEM_TYPE_COUNT - 1
+    jsr t43_test_seen
+    bcs !t43_fail+
+
     lda #$01
     jmp !t43_store+
 !t43_fail:
@@ -1577,6 +1608,45 @@ test_start:
     sta tc_results + 42
 
     jmp test_exit_trampoline
+
+t43_bit_addr:               // X = ID -> Y = byte index, t43_mask = bit; preserves X
+    txa
+    pha
+    and #7
+    tay
+    lda idk_bit_mask,y
+    sta t43_mask
+    pla
+    lsr
+    lsr
+    lsr
+    tay
+    rts
+
+t43_mark_seen:              // X = ID; carry set = duplicate (else marks, carry clear)
+    jsr t43_bit_addr
+    lda t43_seen,y
+    and t43_mask
+    bne !dup+
+    lda t43_seen,y
+    ora t43_mask
+    sta t43_seen,y
+    clc
+    rts
+!dup:
+    sec
+    rts
+
+t43_test_seen:              // X = ID; carry set = present
+    jsr t43_bit_addr
+    lda t43_seen,y
+    and t43_mask
+    beq !absent+
+    sec
+    rts
+!absent:
+    clc
+    rts
 
 t43_pick_check:
     lda #64
@@ -1599,6 +1669,8 @@ t43_cursor:     .byte 0
 t43_bucket:     .byte 0
 t43_count:      .byte 0
 t43_prev_level: .byte 0
+t43_mask:       .byte 0
+t43_seen:       .fill 20, 0
 
 reset_haggle_fixture:
     jsr screen_clear

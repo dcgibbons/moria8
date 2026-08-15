@@ -25,6 +25,7 @@
 .segmentdef UiOverlay         [outPrg=OVL_OUT + "/ovl.ui",    start=$e000, min=$e000, max=$efff]
 .segmentdef ItemActionsOverlay [outPrg=OVL_OUT + "/ovl.items", start=$e000, min=$e000, max=$efff]
 .segmentdef SpellOverlay      [outPrg=OVL_OUT + "/ovl.spell", start=$e000, min=$e000, max=$efff]
+.segmentdef ChestOverlay      [outPrg=OVL_OUT + "/ovl.chest", start=$e000, min=$e000, max=$efff]
 .segmentdef DungeonGenOverlay [outPrg=OVL_OUT + "/ovl.gen",   start=$e000, min=$e000, max=$efff]
 .segmentdef RuntimeBanked     [outPrg=OVL_OUT + "/4.bank",    start=$f000, min=$f000, max=$fbff]
 
@@ -58,6 +59,12 @@
     .segment Default
 }
 .macro ItemInitIdentRestoreSegment() {
+    .segment Default
+}
+.macro ChestRouteSegment() {
+    .segment Default
+}
+.macro ChestRouteRestoreSegment() {
     .segment Default
 }
 
@@ -358,7 +365,15 @@ tramp_dig_ability:
 #import "../../../core/dungeon_data.s"
 #define DISARM_COMMAND_EXTERNAL
 #define DISARM_HELPERS_EXTERNAL
+.macro ChestSearchSegment() {
+    .segment Default
+}
+.macro ChestSearchRestoreSegment() {
+    .segment Default
+}
+#define CHEST_ROUTING_ENABLED
 #import "../../../core/dungeon_features.s"
+#import "../../../core/chest_search.s"
 #undef DISARM_HELPERS_EXTERNAL
 #undef DISARM_COMMAND_EXTERNAL
 #import "../../../core/monster.s"
@@ -367,8 +382,8 @@ tramp_dig_ability:
 // Overlay state is platform-owned so product/test variant layout changes
 // cannot place these bytes inside later resident code.
 current_overlay: .byte 0
-ovl_reu_start_lo: .byte 0, 0, 0, 0, 0, 0, 0, 0, 0
-ovl_reu_start_hi: .byte 0, 0, 0, 0, 0, 0, 0, 0, 0
+ovl_reu_start_lo: .byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+ovl_reu_start_hi: .byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 ol_target:        .byte 0
 
 #define OVERLAY_LOAD_PROMPT_GAME
@@ -386,6 +401,7 @@ ol_target:        .byte 0
 #import "../../../core/spell_data.s"
 #define SPELL_EFFECTS_INCLUDE_IDENTIFY
 #import "../../../core/spell_effects.s"
+#import "../../../core/spell_effects_overlay.s"
 #undef SPELL_EFFECTS_INCLUDE_IDENTIFY
 #import "../../../core/player_magic_state.s"
 #import "../../../core/player_magic_state_ops.s"
@@ -1485,6 +1501,29 @@ tramp_disarm_command:
 !done:
     jmp tramp_sr_epilogue
 
+// Chest routing (docs/CHEST_DESIGN.md). tramp_chest_open is called from the
+// resident cmd_open pre-dispatch and owns the epilogue. chest_dispatch is
+// tail-called (A/Y = handler) from bash_command/disarm_command inside the
+// items overlay; their caller trampolines run the epilogue.
+tramp_chest_open:
+    lda #OVL_CHEST
+    jsr overlay_load_no_kernal
+    bcs !done+
+    jsr chest_open_command
+!done:
+    jmp tramp_sr_epilogue
+
+chest_dispatch:
+    sta chest_disp_jmp+1
+    sty chest_disp_jmp+2
+    lda #OVL_CHEST
+    jsr overlay_load_no_kernal
+    bcs !done+
+chest_disp_jmp:
+    jmp $0000               // SMC dispatch target (never JMP (addr))
+!done:
+    rts
+
 tramp_player_tunnel:
     lda #OVL_ITEMS
     jsr overlay_load_no_kernal
@@ -2192,4 +2231,13 @@ ovl_items_end:
 ovl_gen_end:
 .print "DungeonGen overlay: " + (ovl_gen_end - $e000) + " bytes at $E000-$" + toHexString(ovl_gen_end)
 .assert "DungeonGen overlay fits in $E000-$EFFF", ovl_gen_end <= $F000, true
+
+// ============================================================
+// Chest overlay — chest open/disarm/bash handlers at $E000 (cold disk load)
+// ============================================================
+.segment ChestOverlay
+    #import "../../../core/chest.s"
+ovl_chest_end:
+.print "Chest overlay: " + (ovl_chest_end - $e000) + " bytes at $E000-$" + toHexString(ovl_chest_end)
+.assert "Chest overlay fits in $E000-$EFFF", ovl_chest_end <= $F000, true
 .assert "irq_no_blink begins with CLD", irq_no_blink_after_cld == irq_no_blink + 1, true

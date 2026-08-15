@@ -132,6 +132,7 @@ find_random_floor:
 .assert "Door scan scratch does not overlap C128 copied map row", door_scan_x >= SCREEN_RAM + MAP_COLS, true
 #endif
 
+#if !PLACE_SECRETS_EXTERNAL
 place_secrets:
     // Don't place secrets on town level
     lda zp_player_dlvl
@@ -248,6 +249,7 @@ place_secrets:
 
 !ps_done:
     rts
+#endif
 
 #if !DUNGEON_FEATURES_GENERATION_ONLY
 
@@ -974,14 +976,14 @@ search_scan_adjacent_silent:
 
     // Check for secret door
     cmp #TILE_SECRET
-    bne !ds_check_trap+
+    bne !ds_chest_gate+
 
     lda df_search_chance
-    beq !ds_check_trap+
+    beq !ds_chest_gate+
     lda #100
     jsr rng_range
     cmp df_search_chance
-    bcs !ds_check_trap+
+    bcs !ds_chest_gate+
 
 !ds_secret_found:
     // Reveal: change to TILE_DOOR_CLOSED
@@ -996,6 +998,21 @@ search_scan_adjacent_silent:
     lda #1
     sta df_found
     jmp !ds_next+
+
+!ds_chest_gate:
+#if CHEST_ROUTING_ENABLED
+    // Chest branch (docs/CHEST_DESIGN.md): gated on FLAG_HAS_ITEM so the
+    // floor-table scan stays off the per-move hot path.
+    ldy df_target_x
+    :MapRead_ptr0_y()
+    and #FLAG_HAS_ITEM
+    beq !ds_check_trap+
+    jsr chest_search_reveal
+    bcc !ds_check_trap+
+    jmp !ds_next+
+#else
+    jmp !ds_check_trap+
+#endif
 
 !ds_check_trap:
     // Check trap table for hidden traps at this position

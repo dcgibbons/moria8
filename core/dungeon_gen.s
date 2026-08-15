@@ -390,6 +390,127 @@ level_generate:
 !dungeon:
     jmp dungeon_generate
 
+#if PLACE_SECRETS_EXTERNAL
+// Apple IIe keeps place_secrets here (GEN overlay) so the resident image
+// stays under $7C00; other platforms keep it resident in dungeon_features.s.
+place_secrets:
+    // Don't place secrets on town level
+    lda zp_player_dlvl
+    bne !ps_not_town+
+    rts
+!ps_not_town:
+
+    // Scan entire map for TILE_DOOR_CLOSED
+    lda #0
+    sta door_scan_count
+
+    ldx #1                  // Start at row 1
+!ps_row:
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    stx df_target_y         // Save row
+
+#if C128_PRODUCT_OVERLAY_RUNTIME
+    // The C128 map lives in Bank 1. Copy once per row instead of switching
+    // banks for every tile in this full-map generation scan.
+    lda #MAP_COLS
+    jsr mmu_common_copy_map_row
+#endif
+
+    ldy #1                  // Start at col 1
+!ps_col:
+#if C128_PRODUCT_OVERLAY_RUNTIME
+    lda SCREEN_RAM,y
+#else
+    :MapRead_ptr0_y()
+#endif
+    and #TILE_TYPE_MASK
+    cmp #TILE_DOOR_CLOSED
+    bne !ps_next+
+
+    // Found a closed door — add to scan list
+    lda door_scan_count
+    cmp #MAX_DOOR_SCAN
+    bcs !ps_next+           // List full
+
+    tax
+    lda df_target_y
+    sta door_scan_y,x
+    tya
+    sta door_scan_x,x
+    inc door_scan_count
+
+!ps_next:
+    iny
+    cpy #MAP_COLS - 1
+    bne !ps_col-
+
+    ldx df_target_y         // Restore row
+    inx
+    cpx #MAP_ROWS - 1
+    bne !ps_row-
+
+    // How many doors did we find?
+    lda door_scan_count
+    beq !ps_done+           // None found
+
+    // Pick 1-3 doors to convert (don't exceed count)
+    lda #3
+    jsr rng_range           // [0, 2]
+    clc
+    adc #1                  // [1, 3]
+    sta df_found            // Number to convert
+
+    // Clamp to door_scan_count
+    lda df_found
+    cmp door_scan_count
+    bcc !ps_convert+
+    lda door_scan_count
+    sta df_found
+
+!ps_convert:
+    // Pick a random door from the list
+    lda door_scan_count
+    jsr rng_range           // [0, count-1]
+    sta df_dir_idx          // Save random index
+
+    // Get its coordinates
+    tax
+    lda door_scan_y,x
+    sta df_target_y
+    lda door_scan_x,x
+    sta df_target_x
+
+    // Convert map tile to TILE_SECRET (keep flags)
+    ldx df_target_y
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy df_target_x
+    :MapRead_ptr0_y()
+    and #TILE_FLAG_MASK     // Keep flags
+    ora #TILE_SECRET        // Change type to secret
+    :MapWrite_ptr0_y()
+
+    // Remove from scan list: swap picked entry with last, decrement count
+    dec door_scan_count
+    ldx df_dir_idx          // X = picked index
+    ldy door_scan_count     // Y = new last index (was count-1)
+    lda door_scan_x,y
+    sta door_scan_x,x
+    lda door_scan_y,y
+    sta door_scan_y,x
+
+    dec df_found
+    bne !ps_convert-
+
+!ps_done:
+    rts
+#endif
+
 // ============================================================
 // dungeon_generate — Main dungeon generation routine
 // VMS order: blank cave, rooms, shuffled staged tunnels, fill granite,

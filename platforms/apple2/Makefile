@@ -74,7 +74,7 @@ A2_PLAY_PRG  = $(OUTA2)/a2.play
 A2_AUX_PRG   = $(OUTA2)/a2.auxdata
 A2_OVL_PRGS  = $(OUTA2)/ovl.start $(OUTA2)/ovl.town $(OUTA2)/ovl.death $(OUTA2)/ovl.modal \
                $(OUTA2)/ovl.gen $(OUTA2)/ovl.help $(OUTA2)/ovl.ui $(OUTA2)/ovl.items \
-               $(OUTA2)/ovl.spell $(OUTA2)/ovl.storage $(OUTA2)/ovl.title
+               $(OUTA2)/ovl.spell $(OUTA2)/ovl.chest $(OUTA2)/ovl.storage $(OUTA2)/ovl.title
 A2_TIER_PRGS = $(OUTA2)/monster.db.1 $(OUTA2)/monster.db.2 $(OUTA2)/monster.db.3 $(OUTA2)/monster.db.4
 A2_TITLE_PRG = $(OUTA2)/title.prg
 A2_BOOT_PRG  = $(OUTA2)/moria8.system.prg
@@ -206,7 +206,7 @@ $(A2_DISK_IMAGE): ensure-ac ensure-prodos $(A2_MAIN_PRG) $(A2_PLAY_PRG) $(A2_AUX
 	$(PRG2BIN) "$(A2_BOOT_PRG)" "$(OUTA2)/bin/MORIA8.SYSTEM" --expect-addr 0x2000
 	$(PRG2BIN) "$(A2_MAIN_PRG)" "$(OUTA2)/bin/MORIA8.RES" --expect-addr 0x0A00
 	$(PRG2BIN) "$(A2_PLAY_PRG)" "$(OUTA2)/bin/A2.PLAY" --expect-addr 0x7C00
-	@for f in START TOWN DEATH MODAL GEN HELP UI ITEMS SPELL STORAGE TITLE; do \
+	@for f in START TOWN DEATH MODAL GEN HELP UI ITEMS SPELL CHEST STORAGE TITLE; do \
 	  lower=$$(echo $$f | tr 'A-Z' 'a-z'); \
 	  $(PRG2BIN) "$(OUTA2)/ovl.$$lower" "$(OUTA2)/bin/OVL.$$f" --expect-addr 0xA400 || exit 1; \
 	done
@@ -225,7 +225,7 @@ $(A2_DISK_IMAGE): ensure-ac ensure-prodos $(A2_MAIN_PRG) $(A2_PLAY_PRG) $(A2_AUX
 	  "$(OUTA2)/bin/OVL.SPELL" "$(OUTA2)/bin/OVL.MODAL" "$(OUTA2)/bin/OVL.GEN"
 	"$(AC_BIN)" -p "$@" MORIA8.PAK bin 0x0000 < "$(OUTA2)/bin/MORIA8.PAK"
 	"$(AC_BIN)" -p "$@" A2.PLAY bin 0x7C00 < "$(OUTA2)/bin/A2.PLAY"
-	@for f in START DEATH GEN HELP STORAGE TITLE; do \
+	@for f in START DEATH GEN HELP CHEST STORAGE TITLE; do \
 	  "$(AC_BIN)" -p "$@" OVL.$$f bin 0xA400 < "$(OUTA2)/bin/OVL.$$f" || exit 1; \
 	done
 	@for n in 1 2 3 4; do \

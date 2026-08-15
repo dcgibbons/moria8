@@ -604,7 +604,7 @@ game_new_start:
 #endif
 
     // Randomize item identification (shuffle potion/scroll/ring descriptors)
-#if APPLE2
+#if APPLE2 || C64_PRODUCT_OVERLAY_RUNTIME || C128
     jsr tramp_item_init_identification
 #else
     jsr item_init_identification
@@ -1916,12 +1916,26 @@ cmd_open:
     jsr msg_clear
     jsr get_direction_target
     bcc !open_no_turn+          // Invalid direction, no turn consumed
-    jsr door_try_open
+    jsr chest_open_route        // Chest at target -> chest overlay, else doors
     bcc !open_no_turn+          // No door there, no turn consumed
     // Door opened or stuck — consume turn and re-render
     jmp post_turn_update_visibility_or_die
 !open_no_turn:
     jmp main_loop
+
+// chest_open_route — Resident open-command pre-dispatch (docs/CHEST_DESIGN.md).
+// A chest at the target tile routes to the chest overlay; anything else falls
+// through to the existing door path. Placed via the platform ChestRouteSegment
+// macros so tight ports can park it outside their full play payloads.
+// Output: carry set = turn consumed, carry clear = no turn.
+:ChestRouteSegment()
+chest_open_route:
+    jsr chest_find_at_df_target
+    bcc !cor_door+
+    jmp tramp_chest_open
+!cor_door:
+    jmp door_try_open
+:ChestRouteRestoreSegment()
 
 cmd_close:
     jsr msg_clear
@@ -2478,7 +2492,7 @@ player_died:
     jmp game_over_prompt    // Platform hook returns to title/menu.
 
 player_retired:
-#if !(C64_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME)
+#if !(C64_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME || APPLE2)
     jsr winner_apply_retirement_bonus
 #endif
     jsr tramp_winner_royal

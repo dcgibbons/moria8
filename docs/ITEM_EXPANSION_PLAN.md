@@ -601,7 +601,13 @@ Source-faithful chest rows:
 
 Required live chest state:
 
-> **SUPERSEDED by the Space Recovery Analysis (2026-07-31).** Chest state can
+> **SUPERSEDED by docs/CHEST_DESIGN.md (2026-08-13).** The `fi_meta` bit-7
+> plan below is invalid: `floor_item_get_flags_x` masks `fi_meta` with `$78`,
+> so bit 7 is dropped by save/load and pickup. The implemented design stores
+> all chest state in the serialized `p1`/`to_hit` fields; see CHEST_DESIGN.md.
+> The 126-byte sidecar plan remains rejected.
+>
+> ~~SUPERSEDED by the Space Recovery Analysis (2026-07-31).~~ Chest state can
 > ride existing per-slot fields (`fi_p1`/`inv_p1`, `fi_to_hit`/`inv_to_hit`,
 > `fi_to_dam`/`inv_to_dam`, `fi_meta` bit 7) gated on `ICAT_CHEST`, at **zero
 > new RAM and zero new save bytes** because those fields are already

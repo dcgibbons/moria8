@@ -337,6 +337,9 @@ reu_fetch:
 // disk to $E000 via KERNAL LOAD, then stashes to REU memory.
 // REU layout: tier 1 at bank 0 offset $0000, tier 2 follows, etc.
 // Clobbers: A, X, Y, zp_ptr0, zp_temp0, zp_temp1
+// C64 keeps its own copy in the init-only tail past program_end (one-shot;
+// the resident image funds chest search/trap discovery there).
+#if !REU_LOAD_ALL_TIERS_EXTERNAL
 reu_load_all_tiers:
     lda #0
     sta reu_tier_offset_lo
@@ -430,6 +433,7 @@ reu_load_all_tiers:
     sta reu_present             // A is already 0
 !rlt_done:
     rts
+#endif
 
 // Scratch for REU tier loading
 reu_tier_idx:       .byte 0
@@ -490,6 +494,11 @@ reu_fetch_tier:
     rts
 
 
+// Computed from the platform overlay filename table (labels resolve in a
+// later assembler pass); asserted against the table below. Kept outside the
+// REU_STASH_OVERLAYS_EXTERNAL guard so the assert still sees it on C64.
+.const REU_OVERLAY_COUNT = hal_storage_overlay_name_hi - hal_storage_overlay_name_lo
+
 // ============================================================
 // reu_stash_overlays — Stash all phase overlays into REU
 // ============================================================
@@ -497,12 +506,14 @@ reu_fetch_tier:
 // PRG from disk to $E000, then stashes 4KB to REU. REU offset
 // continues from reu_tier_offset_lo/hi (overlays sit after tiers).
 // Clobbers: A, X, Y
+// C64 keeps its own copy in the init-only tail past program_end (one-shot;
+// the resident image funds chest spawn initialization there).
+#if !REU_STASH_OVERLAYS_EXTERNAL
 reu_stash_overlays:
     // Keep this local count explicit because reu.s is imported before overlay.s.
     // The filename tables below are asserted against it so overlay additions must
     // update this contract deliberately.
 #import "compat/hal_storage_overlay_test_stub.s"
-    .const REU_OVERLAY_COUNT = hal_storage_overlay_name_hi - hal_storage_overlay_name_lo
     ldx #1                      // Start with overlay 1 (OVL_STARTUP)
 !rso_loop:
     stx reu_ovl_idx
@@ -575,6 +586,7 @@ reu_stash_overlays:
     lda #1
     sta reu_overlays_stashed
     rts
+#endif
 
 // Scratch for overlay stashing
 reu_ovl_idx: .byte 0
@@ -605,7 +617,7 @@ reu_render_progress:
     jsr screen_put_decimal
     lda #$2f
     jsr hal_screen_put_char
-    lda #13
+    lda #(4 + REU_OVERLAY_COUNT)    // tiers + overlays (chest overlay included)
     jsr screen_put_decimal
     lda #<reu_loading_suffix
     sta zp_ptr0

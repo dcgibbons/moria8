@@ -105,6 +105,15 @@ bash_command:
     jmp bash_monster
 !bash_no_monster:
 
+    // Chest at the (post-confusion) target? Dispatch to the chest overlay via
+    // the resident chest_dispatch; never returns here (docs/CHEST_DESIGN.md).
+    jsr chest_find_at_df_target
+    bcc !bash_no_chest+
+    lda #<chest_bash_command
+    ldy #>chest_bash_command
+    jmp chest_dispatch
+!bash_no_chest:
+
     // Check tile type
     lda bash_save_tile
     and #TILE_TYPE_MASK

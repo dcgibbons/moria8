@@ -233,3 +233,5 @@ Sorry, what was that again?
 @PIQ_VERY_GOOD You feel very good.
 @PID_CARRY You sense magik on what you carry.
 @PIQ_RESTORED You feel your strength return.
+@CHEST_FOUND_TRAP You have discovered a trap on the chest!
+@CHEST_TRAPPED The chest is trapped!

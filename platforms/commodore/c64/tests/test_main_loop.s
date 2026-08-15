@@ -17,7 +17,7 @@ bootstrap:
     jmp test_start
 
 test_finish:
-    ldx #39
+    ldx #41
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -184,6 +184,13 @@ tramp_bash_command:
 tramp_player_tunnel:
     rts
 
+// Chest routing lives in the platform main; cmd_open calls this when the
+// target tile holds a chest. Spy counts chest-overlay dispatches.
+tramp_chest_open:
+    inc test_chest_open_calls
+    clc
+    rts
+
 test_spell_list_display:
     rts
 
@@ -283,12 +290,16 @@ random_floor_in_room:
 #import "../../../../core/monster_attack.s"
 #import "../../../../core/turn.s"
 #import "../../../../core/generation_busy.s"
+.macro ChestRouteSegment() {
+}
+.macro ChestRouteRestoreSegment() {
+}
 #import "../../../../core/game_loop.s"
 
 save_welcome_str:
     .text "WELCOME BACK" ; .byte 0
 
-tc_results: .fill 40, $ff
+tc_results: .fill 42, $ff
 
 test_cmd_idx: .byte 0
 test_cmd_len: .byte 0
@@ -314,6 +325,7 @@ test_player_try_move_calls: .byte 0
 test_last_move_cmd: .byte 0
 test_get_dir_calls: .byte 0
 test_door_open_calls: .byte 0
+test_chest_open_calls: .byte 0
 test_read_scroll_calls: .byte 0
 test_cast_spell_calls: .byte 0
 test_pray_calls: .byte 0
@@ -482,6 +494,7 @@ reset_state:
     sta test_last_move_cmd
     sta test_get_dir_calls
     sta test_door_open_calls
+    sta test_chest_open_calls
     sta test_read_scroll_calls
     sta test_cast_spell_calls
     sta test_pray_calls
@@ -945,7 +958,7 @@ test_start:
     ldx #$ff
     txs
 
-    ldx #39
+    ldx #41
     lda #$ff
 !clr:
     sta tc_results,x
@@ -2422,8 +2435,78 @@ test_start:
     bne !t40_fail+
     lda #$01
     sta tc_results + 39
-    jmp test_finish
+    jmp !t41+
 !t40_fail:
     lda #$00
     sta tc_results + 39
+
+    // Test 41: OPEN on a chest at the target tile routes to the chest
+    // overlay trampoline, never reaching the door handler.
+!t41:
+    jsr reset_state
+    lda #40
+    sta test_case_idx
+    lda #1
+    sta test_dir_ok
+    jsr item_init_floor
+    lda #ITEM_TYPE_CHEST_SMALL_WOOD
+    sta fi_item_id
+    lda #10
+    sta fi_x
+    sta df_target_x
+    lda #12
+    sta fi_y
+    sta df_target_y
+    lda #CMD_OPEN
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    jsr run_case
+    lda test_chest_open_calls
+    cmp #1
+    bne !t41_fail+
+    lda test_door_open_calls
+    bne !t41_fail+
+    lda test_turn_calls
+    bne !t41_fail+              // Stub trampoline returns clc: no turn
+    lda #$01
+    sta tc_results + 40
+    jmp !t42+
+!t41_fail:
+    lda #$00
+    sta tc_results + 40
+
+    // Test 42: OPEN on a plain (non-chest) tile stays on the door path and
+    // never touches the chest overlay trampoline.
+!t42:
+    jsr reset_state
+    lda #41
+    sta test_case_idx
+    lda #1
+    sta test_dir_ok
+    sta test_open_ok
+    jsr item_init_floor
+    lda #10
+    sta df_target_x
+    lda #12
+    sta df_target_y
+    lda #CMD_OPEN
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    jsr run_case
+    lda test_chest_open_calls
+    bne !t42_fail+
+    lda test_door_open_calls
+    cmp #1
+    bne !t42_fail+
+    lda test_turn_calls
+    cmp #1
+    bne !t42_fail+
+    lda #$01
+    sta tc_results + 41
+    jmp test_finish
+!t42_fail:
+    lda #$00
+    sta tc_results + 41
     jmp test_finish

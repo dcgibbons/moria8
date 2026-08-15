@@ -139,7 +139,8 @@ Suggested layout milestones:
 | `SAVE_LAYOUT_V1` | 64-byte `id_known`, 30 inventory/equipment slots |
 | `SAVE_LAYOUT_V2` | 96-byte fixed-capacity `id_known`, 30 inventory/equipment slots |
 | `SAVE_LAYOUT_V3` | 96-byte fixed-capacity `id_known`, 31 inventory/equipment slots with `EQUIP_AMULET` |
-| future layout | chest sidecars or split catalog / extended item state |
+| 128-ID bitset era | 16-byte `id_known_bits` bitset (`SAVE_KNOWN_BITS_VERSION`) |
+| Chest era (v1.7.0) | 20-byte `id_known_bits` bitset, capacity 160, implemented 135 (chests 128-134); `hal_storage_save_known160_version` per platform. Old 16-byte bitset saves read 16 bytes, clear appended bytes 16-19, and default chests fixed-known |
 
 `EQUIP_AMULET` is currently a storage and migration reservation only. The
 equipment UI and take-off selector hide the amulet row until amulet item types

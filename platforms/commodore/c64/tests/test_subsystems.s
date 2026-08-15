@@ -478,6 +478,6 @@ test_bank_image:
     .byte 7, 0
     .byte 0, 0
     .byte 8, 0
-    .byte $5b, $64, $3e, $72, $ce, $e3, $85, $00
-    .byte $e0, $67, $5f, $77, $9e, $69, $b0, $cc, $f0, $b9, $2f, $5e, $ad, $33, $b4, $16, $78, $50
+    .byte $5b, $64, $3e, $73, $ce, $e3, $91, $00
+    .byte $20, $ec, $be, $ef, $1c, $52, $65, $99, $e5, $72, $7e, $bd, $5a, $76, $69, $2c, $f2, $20
 .const TEST_BANK_IMAGE_LEN = * - test_bank_image

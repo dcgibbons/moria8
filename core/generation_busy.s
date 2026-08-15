@@ -46,6 +46,9 @@ generation_busy_end:
 
 // generation_busy_install — Patch the shared API shims to JMP into the
 // real busy UI and reset the active flag.
+// C64 keeps its own copy in the init-only tail past program_end (one-shot;
+// the resident image funds the chest catalog and save hardening there).
+#if !GENERATION_BUSY_INSTALL_EXTERNAL
 generation_busy_install:
     lda #$4c
     sta generation_busy_begin_api
@@ -70,6 +73,7 @@ generation_busy_install:
     lda #0
     sta generation_busy_active_api
     rts
+#endif
 
 generation_busy_draw_frame:
     lda #GEN_BUSY_ROW

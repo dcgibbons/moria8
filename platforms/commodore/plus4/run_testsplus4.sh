@@ -398,6 +398,7 @@ run_boot_title_smoke() {
         -write "$smoke_plus4/ovl.ui" "4.ui" \
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
+        -write "$smoke_plus4/ovl.chest" "4.chest" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
@@ -477,6 +478,7 @@ run_new_game_to_town_smoke() {
         -write "$smoke_plus4/ovl.ui" "4.ui" \
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
+        -write "$smoke_plus4/ovl.chest" "4.chest" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
@@ -557,6 +559,7 @@ run_dungeon_entry_smoke() {
         -write "$smoke_plus4/ovl.ui" "4.ui" \
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
+        -write "$smoke_plus4/ovl.chest" "4.chest" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
@@ -637,6 +640,7 @@ run_dungeon_ascent_smoke() {
         -write "$smoke_plus4/ovl.ui" "4.ui" \
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
+        -write "$smoke_plus4/ovl.chest" "4.chest" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
@@ -715,6 +719,7 @@ run_disarm_smoke() {
         -write "$smoke_plus4/ovl.ui" "4.ui" \
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
+        -write "$smoke_plus4/ovl.chest" "4.chest" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
@@ -792,6 +797,7 @@ run_overlay_load_smoke() {
         -write "$smoke_plus4/ovl.ui" "4.ui" \
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
+        -write "$smoke_plus4/ovl.chest" "4.chest" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
@@ -865,6 +871,7 @@ run_retirement_royal_smoke() {
         -write "$smoke_plus4/ovl.ui" "4.ui" \
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
+        -write "$smoke_plus4/ovl.chest" "4.chest" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
@@ -938,6 +945,7 @@ run_wand_selector_product_smoke() {
         -write "$smoke_plus4/ovl.ui" "4.ui" \
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
+        -write "$smoke_plus4/ovl.chest" "4.chest" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
@@ -1063,6 +1071,7 @@ run_disk_setup_product_smoke() {
         -write "$smoke_plus4/ovl.ui" "4.ui" \
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
+        -write "$smoke_plus4/ovl.chest" "4.chest" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
@@ -1150,6 +1159,7 @@ run_disk_setup_missing_save_smoke() {
         -write "$smoke_plus4/ovl.ui" "4.ui" \
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
+        -write "$smoke_plus4/ovl.chest" "4.chest" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
@@ -1222,6 +1232,7 @@ run_save_write_product_smoke() {
         -write "$smoke_plus4/ovl.ui" "4.ui" \
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
+        -write "$smoke_plus4/ovl.chest" "4.chest" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
@@ -1326,6 +1337,7 @@ run_save_media_fail_product_smoke() {
         -write "$smoke_plus4/ovl.ui" "4.ui" \
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
+        -write "$smoke_plus4/ovl.chest" "4.chest" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
@@ -1438,6 +1450,7 @@ run_change_save_drive_product_smoke() {
         -write "$smoke_plus4/ovl.ui" "4.ui" \
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
+        -write "$smoke_plus4/ovl.chest" "4.chest" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
@@ -1540,6 +1553,7 @@ run_single_drive_save_return_product_smoke() {
         -write "$smoke_plus4/ovl.ui" "4.ui" \
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
+        -write "$smoke_plus4/ovl.chest" "4.chest" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
@@ -1636,6 +1650,7 @@ run_single_drive_fresh_save_product_smoke() {
         -write "$smoke_plus4/ovl.ui" "4.ui" \
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
+        -write "$smoke_plus4/ovl.chest" "4.chest" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
@@ -1739,6 +1754,7 @@ run_single_drive_fresh_save_no_init_product_smoke() {
         -write "$smoke_plus4/ovl.ui" "4.ui" \
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
+        -write "$smoke_plus4/ovl.chest" "4.chest" \
         -write "$smoke_plus4/4.bank" "4.bank" >>"$build_log" 2>&1; then
         echo "FAIL: $name (product disk fixture)"
         tail -40 "$build_log"
@@ -1838,6 +1854,7 @@ run_single_drive_save_wrong_media_product_smoke() {
         -write "$smoke_plus4/ovl.ui" "4.ui" \
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
+        -write "$smoke_plus4/ovl.chest" "4.chest" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
@@ -1915,6 +1932,7 @@ run_single_drive_load_wrong_media_product_smoke() {
         -write "$smoke_plus4/ovl.ui" "4.ui" \
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
+        -write "$smoke_plus4/ovl.chest" "4.chest" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
@@ -1996,6 +2014,7 @@ run_disk_setup_single_drive_return_product_smoke() {
         -write "$smoke_plus4/ovl.ui" "4.ui" \
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
+        -write "$smoke_plus4/ovl.chest" "4.chest" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
@@ -2087,6 +2106,7 @@ run_load_wrong_media_product_smoke() {
         -write "$smoke_plus4/ovl.ui" "4.ui" \
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
+        -write "$smoke_plus4/ovl.chest" "4.chest" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
@@ -2181,6 +2201,7 @@ run_load_resume_product_smoke() {
         -write "$smoke_plus4/ovl.ui" "4.ui" \
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
+        -write "$smoke_plus4/ovl.chest" "4.chest" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
@@ -2275,6 +2296,7 @@ run_death_hiscore_single_drive_product_smoke() {
         -write "$smoke_plus4/ovl.ui" "4.ui" \
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
+        -write "$smoke_plus4/ovl.chest" "4.chest" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
@@ -2369,6 +2391,7 @@ run_single_drive_load_return_product_smoke() {
         -write "$smoke_plus4/ovl.ui" "4.ui" \
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
+        -write "$smoke_plus4/ovl.chest" "4.chest" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
@@ -2473,6 +2496,7 @@ run_load_then_save_new_empty_product_smoke() {
         -write "$smoke_plus4/ovl.ui" "4.ui" \
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
+        -write "$smoke_plus4/ovl.chest" "4.chest" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
@@ -2597,6 +2621,7 @@ run_single_drive_load_corrupt_product_smoke() {
         -write "$smoke_plus4/ovl.ui" "4.ui" \
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
+        -write "$smoke_plus4/ovl.chest" "4.chest" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
@@ -2697,6 +2722,7 @@ run_load_missing_savefile_product_smoke() {
         -write "$smoke_plus4/ovl.ui" "4.ui" \
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
+        -write "$smoke_plus4/ovl.chest" "4.chest" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))

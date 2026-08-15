@@ -3,6 +3,8 @@
 //
 // This file is imported into the C128 overlay-state area so the bytes stay in
 // resident Bank 0 RAM without consuming the byte-tight Disk I/O payload.
+// The strings must stay in Bank 0: the overlay loader reads them with direct
+// CPU pointers (the item-names payload is Bank 1 and cannot host them).
 
 hal_storage_overlay_start_name:
     .byte $31,$32,$38,$2e,$53,$54,$41,$52,$54   // "128.START"
@@ -40,10 +42,14 @@ hal_storage_modal_misc_name:
     .byte $31,$32,$38,$2e,$4d,$4f,$44,$41,$4c   // "128.MODAL"
 .label hal_storage_modal_misc_name_len = * - hal_storage_modal_misc_name
     .byte 0
+hal_storage_overlay_chest_name:
+    .byte $31,$32,$38,$2e,$43,$48,$45,$53,$54   // "128.CHEST"
+.label hal_storage_overlay_chest_name_len = * - hal_storage_overlay_chest_name
+    .byte 0
 
 hal_storage_overlay_name_lo:
-    .byte <hal_storage_overlay_start_name, <hal_storage_overlay_town_name, <hal_storage_overlay_death_name, <hal_storage_overlay_gen_name, <hal_storage_overlay_help_name, <hal_storage_overlay_ui_name, <hal_storage_overlay_items_name, <hal_storage_overlay_disarm_name, <hal_storage_modal_misc_name
+    .byte <hal_storage_overlay_start_name, <hal_storage_overlay_town_name, <hal_storage_overlay_death_name, <hal_storage_overlay_gen_name, <hal_storage_overlay_help_name, <hal_storage_overlay_ui_name, <hal_storage_overlay_items_name, <hal_storage_overlay_disarm_name, <hal_storage_modal_misc_name, <hal_storage_overlay_chest_name
 hal_storage_overlay_name_hi:
-    .byte >hal_storage_overlay_start_name, >hal_storage_overlay_town_name, >hal_storage_overlay_death_name, >hal_storage_overlay_gen_name, >hal_storage_overlay_help_name, >hal_storage_overlay_ui_name, >hal_storage_overlay_items_name, >hal_storage_overlay_disarm_name, >hal_storage_modal_misc_name
+    .byte >hal_storage_overlay_start_name, >hal_storage_overlay_town_name, >hal_storage_overlay_death_name, >hal_storage_overlay_gen_name, >hal_storage_overlay_help_name, >hal_storage_overlay_ui_name, >hal_storage_overlay_items_name, >hal_storage_overlay_disarm_name, >hal_storage_modal_misc_name, >hal_storage_overlay_chest_name
 hal_storage_overlay_name_len:
-    .byte hal_storage_overlay_start_name_len, hal_storage_overlay_town_name_len, hal_storage_overlay_death_name_len, hal_storage_overlay_gen_name_len, hal_storage_overlay_help_name_len, hal_storage_overlay_ui_name_len, hal_storage_overlay_items_name_len, hal_storage_overlay_disarm_name_len, hal_storage_modal_misc_name_len
+    .byte hal_storage_overlay_start_name_len, hal_storage_overlay_town_name_len, hal_storage_overlay_death_name_len, hal_storage_overlay_gen_name_len, hal_storage_overlay_help_name_len, hal_storage_overlay_ui_name_len, hal_storage_overlay_items_name_len, hal_storage_overlay_disarm_name_len, hal_storage_modal_misc_name_len, hal_storage_overlay_chest_name_len

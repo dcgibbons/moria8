@@ -1048,8 +1048,8 @@ hal_storage_tier_name_len:
     .byte hal_storage_tier_1_name_len, hal_storage_tier_2_name_len, hal_storage_tier_3_name_len, hal_storage_tier_4_name_len
 
 // Overlay asset filenames, indexed by overlay ID - 1 (common/overlay.s).
-// IDs 1-9 are the shared classes; OVL.STORAGE (10) and OVL.TITLE (11) are
-// the Apple II slot-hosted classes appended at the end of the tables.
+// IDs 1-10 are the shared classes (incl. OVL_CHEST); OVL.STORAGE (11) and
+// OVL.TITLE (12) are the Apple II slot-hosted classes appended at the end.
 hal_storage_overlay_start_name:
     .byte $4f,$56,$4c,$2e,$53,$54,$41,$52,$54   // "OVL.START"
 .label hal_storage_overlay_start_name_len = * - hal_storage_overlay_start_name
@@ -1086,6 +1086,10 @@ hal_storage_modal_misc_name:
     .byte $4f,$56,$4c,$2e,$4d,$4f,$44,$41,$4c   // "OVL.MODAL"
 .label hal_storage_modal_misc_name_len = * - hal_storage_modal_misc_name
     .byte 0
+hal_storage_overlay_chest_name:
+    .byte $4f,$56,$4c,$2e,$43,$48,$45,$53,$54   // "OVL.CHEST"
+.label hal_storage_overlay_chest_name_len = * - hal_storage_overlay_chest_name
+    .byte 0
 hal_storage_overlay_storage_name:
     .byte $4f,$56,$4c,$2e,$53,$54,$4f,$52,$41,$47,$45 // "OVL.STORAGE"
 .label hal_storage_overlay_storage_name_len = * - hal_storage_overlay_storage_name
@@ -1096,11 +1100,11 @@ hal_storage_overlay_title_name:
     .byte 0
 
 hal_storage_overlay_name_lo:
-    .byte <hal_storage_overlay_start_name, <hal_storage_overlay_town_name, <hal_storage_overlay_death_name, <hal_storage_overlay_gen_name, <hal_storage_overlay_help_name, <hal_storage_overlay_ui_name, <hal_storage_overlay_items_name, <hal_storage_overlay_spell_name, <hal_storage_modal_misc_name, <hal_storage_overlay_storage_name, <hal_storage_overlay_title_name
+    .byte <hal_storage_overlay_start_name, <hal_storage_overlay_town_name, <hal_storage_overlay_death_name, <hal_storage_overlay_gen_name, <hal_storage_overlay_help_name, <hal_storage_overlay_ui_name, <hal_storage_overlay_items_name, <hal_storage_overlay_spell_name, <hal_storage_modal_misc_name, <hal_storage_overlay_chest_name, <hal_storage_overlay_storage_name, <hal_storage_overlay_title_name
 hal_storage_overlay_name_hi:
-    .byte >hal_storage_overlay_start_name, >hal_storage_overlay_town_name, >hal_storage_overlay_death_name, >hal_storage_overlay_gen_name, >hal_storage_overlay_help_name, >hal_storage_overlay_ui_name, >hal_storage_overlay_items_name, >hal_storage_overlay_spell_name, >hal_storage_modal_misc_name, >hal_storage_overlay_storage_name, >hal_storage_overlay_title_name
+    .byte >hal_storage_overlay_start_name, >hal_storage_overlay_town_name, >hal_storage_overlay_death_name, >hal_storage_overlay_gen_name, >hal_storage_overlay_help_name, >hal_storage_overlay_ui_name, >hal_storage_overlay_items_name, >hal_storage_overlay_spell_name, >hal_storage_modal_misc_name, >hal_storage_overlay_chest_name, >hal_storage_overlay_storage_name, >hal_storage_overlay_title_name
 hal_storage_overlay_name_len:
-    .byte hal_storage_overlay_start_name_len, hal_storage_overlay_town_name_len, hal_storage_overlay_death_name_len, hal_storage_overlay_gen_name_len, hal_storage_overlay_help_name_len, hal_storage_overlay_ui_name_len, hal_storage_overlay_items_name_len, hal_storage_overlay_spell_name_len, hal_storage_modal_misc_name_len, hal_storage_overlay_storage_name_len, hal_storage_overlay_title_name_len
+    .byte hal_storage_overlay_start_name_len, hal_storage_overlay_town_name_len, hal_storage_overlay_death_name_len, hal_storage_overlay_gen_name_len, hal_storage_overlay_help_name_len, hal_storage_overlay_ui_name_len, hal_storage_overlay_items_name_len, hal_storage_overlay_spell_name_len, hal_storage_modal_misc_name_len, hal_storage_overlay_chest_name_len, hal_storage_overlay_storage_name_len, hal_storage_overlay_title_name_len
 
 // ============================================================
 // Compile-time validation

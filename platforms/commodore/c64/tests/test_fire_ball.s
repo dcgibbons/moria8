@@ -1,5 +1,7 @@
 // test_fire_ball.s — Focused runtime tests for the Fire Ball spell row
 
+#define C64_TEST_NAME_STREAMS_A000
+
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_bootstrap)
 
@@ -47,6 +49,7 @@ test_finish:
 #import "../../../../core/ui_character.s"
 #import "../../../../core/stat_display.s"
 .segmentdef TestCreateOverlay [start=$D000]
+.segmentdef TestNameStreams [start=$A000]
 .segment TestCreateOverlay
 #import "../../../../core/background_data.s"
 #import "../../../../core/player_create.s"

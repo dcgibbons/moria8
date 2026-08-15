@@ -628,6 +628,11 @@ eff_genocide:
     sta vis_room_revealed
     rts
 
+// eff_p3_nop — Harmless default target for the C128 Phase 3 effect table.
+// Lives here because the table's handlers execute in this overlay.
+eff_p3_nop:
+    rts
+
 pmx_msg_bright_flash:
     .text "There is a bright flash of light." ; .byte 0
 pmx_msg_recharged_prefix:

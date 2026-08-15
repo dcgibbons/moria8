@@ -354,7 +354,7 @@ item_aim_wand:
     cmp #ITEM_TYPE_WAND_SLOW
     bcc !iaw_not_p3+
 #if SCROLL_P3_ROUTER_ENABLED
-    jmp irs_effect_p3_swap
+    jmp irs_effect_p3_swap    // unmatched IDs are no-ops inside the router
 #endif
 !iaw_not_p3:
     sec
@@ -418,7 +418,7 @@ item_use_staff:
     cmp #ITEM_TYPE_STAFF_DISPEL_EVIL
     bcc !ius_not_p3+
 #if SCROLL_P3_ROUTER_ENABLED
-    jmp irs_effect_p3_swap
+    jmp irs_effect_p3_swap    // unmatched IDs are no-ops inside the router
 #endif
 !ius_not_p3:
     sec

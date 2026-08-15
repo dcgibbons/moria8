@@ -359,6 +359,25 @@ floor_item_find_at:
     clc
     rts
 
+// chest_find_at_df_target — Is the floor item at (df_target_x, df_target_y)
+// a chest? Resident pre-dispatch helper for the chest overlay routing
+// (docs/CHEST_DESIGN.md): Open checks it from cmd_open; Bash/Disarm check it
+// from their overlay command bodies after direction resolution.
+// Output: carry set = chest (X = floor slot), carry clear = no chest there
+// Clobbers: A, Y (X preserved as the floor slot on a hit)
+chest_find_at_df_target:
+    lda df_target_x
+    ldy df_target_y
+    jsr floor_item_find_at
+    bcc !cfdt_done+             // No floor item — carry already clear
+    ldy fi_item_id,x
+    lda it_category,y
+    cmp #ICAT_CHEST
+    beq !cfdt_done+             // CMP equal sets carry
+    clc
+!cfdt_done:
+    rts
+
 glyph_clear_all:
     lda #0
     ldx #MAX_GLYPHS - 1
@@ -1286,7 +1305,7 @@ tunnel_spawn_gold:
 // 50% best-of-3 random picks (highest index wins), then re-roll
 //      within the winner's depth tier for uniform intra-tier distribution.
 // 1-in-12 "great item" chance sets effective level to max (full pool).
-// Output: A = item type ID (2-ITEM_TYPE_COUNT-1)
+// Output: A = item type ID (2-ITEM_TYPE_COUNT-2; ruined chest excluded)
 // Clobbers: A, X, Y
 // Uses: zp_temp0 (pool_size), zp_temp1 (best_idx), zp_temp2 (tier_lo)
 //       zp_temp4 used internally by rng_range
@@ -1296,56 +1315,56 @@ tunnel_spawn_gold:
 .segment DungeonGenOverlay
 #endif
 
-// Items 2-(ITEM_TYPE_COUNT-1) sorted ascending by it_min_level
+// Items 2-133 sorted ascending by it_min_level (ruined chest 134 excluded)
 pit_sorted:
     // Level 0 (5 items)
     .byte 13, 15, 61, 62, 63
     // Level 1 (22 items)
     .byte 2, 3, 6, 11, 12, 16, 17, 19, 20, 28, 29, 37, 51, 52, 54, 64, 77, 85
     .byte 98, 99, 103, 114
-    // Level 2 (18 items)
+    // Level 2 (19 items)
     .byte 5, 7, 9, 14, 21, 30, 31, 47, 48, 49, 53, 66, 74, 82, 84
-    .byte 100, 102, 126
+    .byte 100, 102, 126, 128
     // Level 3 (16 items)
     .byte 4, 10, 18, 22, 25, 36, 39, 43, 44, 46, 50, 65, 70, 86, 88
     .byte 115
-    // Level 4 (17 items)
+    // Level 4 (18 items)
     .byte 8, 23, 27, 33, 38, 40, 42, 55, 58, 67, 78, 87, 89, 95
-    .byte 96, 109, 110
+    .byte 96, 109, 110, 129
     // Level 5 (14 items)
     .byte 24, 26, 32, 41, 45, 72, 79, 90, 92, 94
     .byte 101, 116, 122, 124
     // Level 6 (6 items)
     .byte 34, 35, 68, 73, 83, 93
-    // Level 7 (4 items)
-    .byte 71, 80, 91, 123
+    // Level 7 (5 items)
+    .byte 71, 80, 91, 123, 130
     // Level 8 (6 items)
     .byte 56, 59, 69, 75, 97, 127
-    // Level 9 (4 items)
-    .byte 76, 104, 106, 112
+    // Level 9 (5 items)
+    .byte 76, 104, 106, 112, 131
     // Level 10 (4 items)
     .byte 81, 108, 118, 121
-    // Level 11 (3 items)
-    .byte 105, 117, 119
-    // Level 12 (7 items)
-    .byte 57, 60, 107, 111, 113, 120, 125
+    // Level 11 (4 items)
+    .byte 105, 117, 119, 132
+    // Level 12 (8 items)
+    .byte 57, 60, 107, 111, 113, 120, 125, 133
 pit_sorted_end:
 
 // Cumulative item count per level (0-12)
 pit_level_bounds:
     .byte 5      // level 0: 5 items
     .byte 27     // level 1: +22 = 27
-    .byte 45     // level 2: +18 = 45
-    .byte 61     // level 3: +16 = 61
-    .byte 78     // level 4: +17 = 78
-    .byte 92     // level 5: +14 = 92
-    .byte 98     // level 6: +6 = 98
-    .byte 102    // level 7: +4 = 102
-    .byte 108    // level 8: +6 = 108
-    .byte 112    // level 9: +4 = 112
-    .byte 116    // level 10: +4 = 116
-    .byte 119    // level 11: +3 = 119
-    .byte 126    // level 12: +7 = 126
+    .byte 46     // level 2: +19 = 46
+    .byte 62     // level 3: +16 = 62
+    .byte 80     // level 4: +18 = 80
+    .byte 94     // level 5: +14 = 94
+    .byte 100    // level 6: +6 = 100
+    .byte 105    // level 7: +5 = 105
+    .byte 111    // level 8: +6 = 111
+    .byte 116    // level 9: +5 = 116
+    .byte 120    // level 10: +4 = 120
+    .byte 124    // level 11: +4 = 124
+    .byte 132    // level 12: +8 = 132
 pit_level_bounds_end:
 
 #if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME
@@ -1518,7 +1537,7 @@ roll_enchantment:
 
     // Special case: books get random spell index
     cmp #ICAT_BOOK
-    beq !re_book+
+    beq !re_book_far+
 
     // Special case: wands and staves get charges
     cmp #ICAT_WAND
@@ -1526,19 +1545,27 @@ roll_enchantment:
     cmp #ICAT_STAFF
     beq !re_staff+
 
+    // Special case: chests get source level + trap state
+    cmp #ICAT_CHEST
+    beq !re_chest+
+
     // Equipment categories: WEAPON(2) through BOOTS(7), RING(12), AMULET(16)
     cmp #ICAT_WEAPON
     bcc !re_zero+               // NONE(0) or GOLD(1) → no enchant
     cmp #ICAT_LIGHT
-    bcc !re_equip+              // WEAPON..BOOTS (2-7) → enchant
+    bcc !re_equip_far+          // WEAPON..BOOTS (2-7) → enchant
     cmp #ICAT_RING
-    beq !re_equip+              // RING(12) → enchant
+    beq !re_equip_far+          // RING(12) → enchant
     cmp #ICAT_AMULET
-    beq !re_equip+              // AMULET(16) → enchant
+    beq !re_equip_far+          // AMULET(16) → enchant
     // FOOD, POTION, SCROLL → no enchant
 !re_zero:
     lda #0
     rts
+!re_book_far:
+    jmp !re_book+
+!re_equip_far:
+    jmp !re_equip+
 
 !re_light:
     // Torch (type 13): 67 + rng(67)  (each charge = 30 turns)
@@ -1612,6 +1639,46 @@ roll_enchantment:
     lda #0
     rts
 
+!re_chest:
+    // Chests (docs/CHEST_DESIGN.md): to_hit = source level (lock/disarm
+    // difficulty, XP award); p1 = trap flags from the VMS trap-init roll
+    // randint(depth)+4 — Moria8 form rng_range(dlvl)+5, giving 5..dlvl+4,
+    // so the unlocked/lock-only bands (1-2) and lose-STR-only band (3-4)
+    // never occur. Runs here because the shared prologue already zeroed
+    // p1/to_hit for non-equipment categories.
+    lda zp_temp0
+    sec
+    sbc #ITEM_TYPE_CHEST_SMALL_WOOD
+    tax
+    lda chest_source_level,x
+    sta fi_add_to_hit
+    lda zp_player_dlvl
+    jsr rng_range
+    // VMS roll = rng_range(dlvl)+5; the band index is roll-5, i.e. the raw
+    // rng result. Clamp to the 18+ band (idx 13).
+    cmp #14
+    bcc !re_chest_idx+
+    lda #13
+!re_chest_idx:
+    tax
+    lda chest_trap_band,x
+    ora #CHEST_P1_LOCKED
+    rts
+
+chest_source_level:
+    .byte 7, 15, 25, 35, 45, 50, 0  // IDs 128-133; ruined (134) = 0
+
+// VMS trap-init bands for rolls 5..18+ (docs/CHEST_DESIGN.md):
+// 5-6 poison, 7-9 paralysis, 10-11 explosion, 12-14 summoning,
+// 15-17 STR+poison+paralysis, 18+ summoning+explosion; all locked.
+chest_trap_band:
+    .byte CHEST_P1_TRAP_POISON, CHEST_P1_TRAP_POISON
+    .byte CHEST_P1_TRAP_PARA, CHEST_P1_TRAP_PARA, CHEST_P1_TRAP_PARA
+    .byte CHEST_P1_TRAP_EXPL, CHEST_P1_TRAP_EXPL
+    .byte CHEST_P1_TRAP_SUMMON, CHEST_P1_TRAP_SUMMON, CHEST_P1_TRAP_SUMMON
+    .byte (CHEST_P1_TRAP_STR | CHEST_P1_TRAP_POISON | CHEST_P1_TRAP_PARA), (CHEST_P1_TRAP_STR | CHEST_P1_TRAP_POISON | CHEST_P1_TRAP_PARA), (CHEST_P1_TRAP_STR | CHEST_P1_TRAP_POISON | CHEST_P1_TRAP_PARA)
+    .byte (CHEST_P1_TRAP_SUMMON | CHEST_P1_TRAP_EXPL)
+
 !re_equip:
     // magic_chance = min(15 + dlvl, 70)
     lda zp_player_dlvl
@@ -1627,7 +1694,9 @@ roll_enchantment:
     lda #100
     jsr rng_range               // [0, 99]
     cmp zp_temp1
-    bcs !re_zero-               // roll >= chance → no magic
+    bcc !re_enchant_roll+       // roll < chance → enchant
+    jmp !re_zero-               // roll >= chance → no magic
+!re_enchant_roll:
 
     jsr re_roll_bonus
     sta re_bonus_hit
@@ -1753,7 +1822,7 @@ re_negate_a:
 // ============================================================
 // Compile-time validation
 // ============================================================
-.assert "Item type count", ITEM_TYPE_COUNT, 128
+.assert "Item type count", ITEM_TYPE_COUNT, 135
 .assert "it_category size", it_color_ac - it_category, ITEM_TYPE_COUNT
 .assert "it_color_ac size", it_weight - it_color_ac, ITEM_TYPE_COUNT
 .assert "it_weight size", it_dmg_packed - it_weight, ITEM_TYPE_COUNT
@@ -1767,7 +1836,7 @@ re_negate_a:
 #if !(C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME)
 .assert "it_name_hi size", it_name_hi_end - it_name_hi, ITEM_TYPE_COUNT
 #endif
-.assert "pit_sorted size", pit_sorted_end - pit_sorted, ITEM_TYPE_COUNT - 2
+.assert "pit_sorted size (excludes ruined chest)", pit_sorted_end - pit_sorted, ITEM_TYPE_COUNT - 3
 .assert "pit_level_bounds size", pit_level_bounds_end - pit_level_bounds, PIT_MAX_LEVEL + 1
 .assert "pick_item_type entry stays resident", pick_item_type < $e000, true
 #if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME

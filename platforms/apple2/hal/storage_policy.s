@@ -26,7 +26,8 @@
 .const hal_storage_save_inv31_version = $11
 .const hal_storage_save_known_bits_version = $12
 .const hal_storage_save_baked_stats_version = $12
-.const hal_storage_save_version = $13
+.const hal_storage_save_known160_version = $14
+.const hal_storage_save_version = $14
 
 // Apple II disk_mode values (platform-owned; no shared code interprets the
 // value). 2 = separate save volume on another unit (two-drive), 3 = separate

@@ -145,6 +145,7 @@
 :C128AuditTownOverlay("store_init_all", store_init_all)
 :C128AuditTownOverlay("store_restock_all", store_restock_all)
 :C128AuditTownOverlay("store_enter", store_enter)
+:C128AuditTownOverlay("item_init_identification", item_init_identification)
 :C128AuditDeathOverlay("score_calculate", score_calculate)
 :C128AuditDeathOverlay("score_death_screen", score_death_screen)
 :C128AuditDeathOverlay("spell_execute_selected", spell_execute_selected)
@@ -207,5 +208,11 @@
 :C128AuditItemsOverlay("eff_earthquake", eff_earthquake)
 :C128AuditDisarmOverlay("disarm_command", disarm_command)
 :C128AuditDisarmOverlay("player_disarm_get_effective_chance", player_disarm_get_effective_chance)
+:C128AuditChestOverlay("chest_open_command", chest_open_command)
+:C128AuditChestOverlay("chest_bash_command", chest_bash_command)
+:C128AuditChestOverlay("chest_disarm_command", chest_disarm_command)
+:C128AuditBelowIo("tramp_chest_open", tramp_chest_open)
+:C128AuditBelowIo("chest_dispatch", chest_dispatch)
+:C128AuditBelowIo("chest_find_at_df_target", chest_find_at_df_target)
 // Spell UI display literals must stay with the UI overlay, not in low common RAM.
 .assert "AUDIT-IO-C128 pm_header_str stays in the UI overlay", pm_header_str >= $E000 && pm_header_str < $F000, true

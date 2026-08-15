@@ -22,6 +22,9 @@
 // Version where the 16-byte id_known_bits bitset layout was introduced.
 // Pinned: must not track SAVE_VERSION, or bumps misclassify current saves.
 .const SAVE_KNOWN_BITS_VERSION = hal_storage_save_known_bits_version
+
+// Pinned: first version writing the 20-byte (160-ID) known bitset.
+.const SAVE_KNOWN160_VERSION = hal_storage_save_known160_version
 .const SAVE_INV31_VERSION = hal_storage_save_inv31_version
 // Saves at or above this version store stat bases with race/class modifiers
 // already baked in; older saves get an exact one-time migration at load.
@@ -957,6 +960,7 @@ plus4_test_after_load_magic:
     lda #SAVE_BLOCK_POST_KNOWN_COUNT
     jsr load_read_block_table
 #endif
+    jsr save_sanitize_store_ids
 
     // 16. Floor items
     jsr load_read_floor_items
@@ -1463,38 +1467,111 @@ load_read_inventory_state:
     lda load_save_version
     cmp #SAVE_INV31_VERSION
     bcs !lris_current+
-    jmp !lris_legacy+
+    lda #<save_block_table_inventory_legacy
+    sta zp_ptr1
+    lda #>save_block_table_inventory_legacy
+    sta zp_ptr1_hi
+    lda #SAVE_BLOCK_INVENTORY_LEGACY_COUNT
+    jmp !lris_read+
 !lris_current:
     lda #<save_block_table_inventory_current
     sta zp_ptr1
     lda #>save_block_table_inventory_current
     sta zp_ptr1_hi
     lda #SAVE_BLOCK_INVENTORY_CURRENT_COUNT
-    jmp load_read_block_table
-
-!lris_legacy:
-    lda #<save_block_table_inventory_legacy
-    sta zp_ptr1
-    lda #>save_block_table_inventory_legacy
-    sta zp_ptr1_hi
-    lda #SAVE_BLOCK_INVENTORY_LEGACY_COUNT
-    jmp load_read_block_table
+!lris_read:
+    jsr load_read_block_table
+    ldx #TOTAL_INV_SLOTS
+    lda #<inv_item_id
+    ldy #>inv_item_id
+    jmp save_sanitize_id_table
 
 // ============================================================
 // save_write_known_items / load_read_known_items
 //
 // Save V1 wrote 64 known-item bytes; V2/V3 wrote 96 (ITEM_ID_CAPACITY at the
-// time). Save V4 writes the 16-byte id_known_bits bitset (128 IDs, one bit
-// each). Legacy loads stream the old bytes and pack them into the bitset.
+// time). The 128-ID era wrote a 16-byte id_known_bits bitset; the chest
+// catalog (135 implemented, capacity 160) writes 20 bytes. Legacy loads
+// stream the old bytes and pack them into the bitset; old bitset loads
+// stream 16 bytes and default the appended chest IDs.
 // ============================================================
 save_write_known_items:
     :save_block(id_known_bits, ID_KNOWN_BYTES)
     rts
 
+// ============================================================
+// save_sanitize_id_table — Corrupt/newer-save hardening (chest design step
+// 4): any loaded item ID that is neither FI_EMPTY nor an implemented catalog
+// ID (>= ITEM_TYPE_COUNT) resets to empty, so name/category/weight table
+// indexing can never run out of bounds. Protects all future catalog growth.
+// Input:  A = ID table lo, Y = ID table hi, X = slot count
+// Clobbers: A, Y, zp_ptr0
+// ============================================================
+save_sanitize_id_table:
+    sta zp_ptr0
+    sty zp_ptr0_hi
+    txa
+    tay
+!ssit_loop:
+    dey
+    bmi !ssit_done+
+    lda (zp_ptr0),y
+    cmp #FI_EMPTY
+    beq !ssit_loop-
+    cmp #ITEM_TYPE_COUNT
+    bcc !ssit_loop-
+    lda #FI_EMPTY
+    sta (zp_ptr0),y
+    jmp !ssit_loop-
+!ssit_done:
+    rts
+
+// save_sanitize_store_ids — Same hardening for the store slot table.
+// Apple II keeps si_item_id in aux RAM, so its loop uses the aux thunks
+// (it runs from the storage overlay where save.s lives there).
+save_sanitize_store_ids:
+#if APPLE2
+    ldx #STORE_TOTAL_SLOTS - 1
+!sssi_loop:
+    :AuxReadX(si_item_id)
+    cmp #FI_EMPTY
+    beq !sssi_next+
+    cmp #ITEM_TYPE_COUNT
+    bcc !sssi_next+
+    lda #FI_EMPTY
+    :AuxWriteX(si_item_id)
+!sssi_next:
+    dex
+    bpl !sssi_loop-
+    rts
+#else
+    ldx #STORE_TOTAL_SLOTS
+    lda #<si_item_id
+    ldy #>si_item_id
+    jmp save_sanitize_id_table
+#endif
+
 load_read_known_items:
     lda load_save_version
+    cmp #SAVE_KNOWN160_VERSION
+    bcs !lrki_current+
     cmp #SAVE_KNOWN_BITS_VERSION
     bcc !lrki_legacy+
+
+    // Old bitset saves: 16 bytes cover IDs 0-127. Clear the appended
+    // capacity bytes, then default the chest rows (128+) from it_category.
+    :load_block(id_known_bits, 16)
+    ldx #16
+    lda #0
+!lrki_old_bits_clear:
+    sta id_known_bits,x
+    inx
+    cpx #ID_KNOWN_BYTES
+    bcc !lrki_old_bits_clear-
+    ldx #128
+    jmp !lrki_defaults+
+
+!lrki_current:
     :load_block(id_known_bits, ID_KNOWN_BYTES)
     rts
 
@@ -1527,9 +1604,9 @@ load_read_known_items:
     ldy it_category,x
     cpy #ICAT_POTION
     bcc !lrki_def_known+
-    cpy #ICAT_BOOK
-    beq !lrki_def_known+
     cpy #ICAT_AMULET
+    bcs !lrki_def_known+    // AMULET, CHEST, and later fixed classes
+    cpy #ICAT_BOOK
     beq !lrki_def_known+
     bne !lrki_def_next+
 !lrki_def_known:
@@ -1962,7 +2039,10 @@ load_read_floor_items:
     lda #SAVE_BLOCK_FLOOR_ITEMS_STAT_COUNT
     jsr load_read_floor_block_table
 !lrfi_done:
-    rts
+    ldx #MAX_FLOOR_ITEMS
+    lda #<fi_item_id
+    ldy #>fi_item_id
+    jmp save_sanitize_id_table
 
 // ============================================================
 // save_version_supported — Accept any historical save version this tree

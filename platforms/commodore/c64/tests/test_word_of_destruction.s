@@ -69,6 +69,7 @@ test_finish:
 #import "../../../../core/player_items.s"
 #import "../../../../core/projectile.s"
 #import "../../../../core/spell_effects.s"
+#import "../../../../core/spell_effects_overlay.s"
 #import "../../../../core/spell_data.s"
 #import "../../../../core/player_magic_state.s"
 #import "../../../../core/player_magic_state_ops.s"

@@ -330,7 +330,7 @@ screen_clear:
 ui_clear_full_screen_safe:
     jmp test_screen_clear
 
-item_init_identification:
+tramp_item_init_identification:
     rts
 
 player_try_move:
@@ -596,6 +596,18 @@ tramp_throw_item:
 tramp_bash_command:
     rts
 
+// Chest routing lives in the platform main; cmd_open calls this when the
+// target tile holds a chest. No chest items exist in these tests.
+tramp_chest_open:
+    clc
+    rts
+
+// Resident chest pre-dispatch helper lives in item.s, which this test does
+// not import; no chest items exist in these tests.
+chest_find_at_df_target:
+    clc
+    rts
+
 disarm_command:
     rts
 
@@ -723,6 +735,10 @@ recall_spells: .fill MAX_CREATURES, 0
 #import "../../../../core/zeropage.s"
 #import "../memory128.s"
 #import "../input128.s"
+.macro ChestRouteSegment() {
+}
+.macro ChestRouteRestoreSegment() {
+}
 #import "../../../../core/game_loop.s"
 #import "../../../../core/scene_dirty.s"
 #import "../../../../core/scene_force.s"

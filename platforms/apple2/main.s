@@ -37,6 +37,7 @@
 .segmentdef DungeonGenOverlay [outPrg=OVL_OUT + "/ovl.gen",     start=$a400, min=$a400, max=$b9ff]
 .segmentdef StorageOverlay    [outPrg=OVL_OUT + "/ovl.storage", start=$a400, min=$a400, max=$b9ff]
 .segmentdef TitleOverlay      [outPrg=OVL_OUT + "/ovl.title",   start=$a400, min=$a400, max=$b9ff]
+.segmentdef ChestOverlay      [outPrg=OVL_OUT + "/ovl.chest",   start=$a400, min=$a400, max=$b9ff]
 .segmentdef A2PlaySlot        [outPrg=OVL_OUT + "/a2.play",     start=$7c00, min=$7c00, max=$9fff]
 .segmentdef A2AuxData         [outPrg=OVL_OUT + "/a2.auxdata",  start=$3b0c, min=$3b0c, max=$59ff]
 
@@ -105,9 +106,10 @@ tramp_dig_ability:
 #import "bank_port_consts.s"
 #import "hal/lifecycle_policy.s"
 #import "overlay.s"
-// Apple II-only overlay classes (slot-free; both window-hosted).
-.const OVL_STORAGE = 10
-.const OVL_TITLE   = 11
+// Apple II-only overlay classes (slot-free; both window-hosted). They sit
+// after the shared classes: OVL_CHEST (10) is shared, so STORAGE/TITLE shift.
+.const OVL_STORAGE = 11
+.const OVL_TITLE   = 12
 // save_slot_index is declared in main.s (resident), not in the shared save
 // engine's overlay window, so the loaded/saved slot survives overlay swaps.
 #define SAVE_SLOT_INDEX_EXTERNAL
@@ -132,7 +134,18 @@ tramp_dig_ability:
 #import "../../core/dungeon_data.s"
 #define DISARM_COMMAND_EXTERNAL
 #define DISARM_HELPERS_EXTERNAL
+// place_secrets runs only from dungeon generation, so on this port it lives
+// in the GEN overlay (dungeon_gen.s) instead of resident dungeon_features.s.
+#define PLACE_SECRETS_EXTERNAL
+.macro ChestSearchSegment() {
+    .segment Default
+}
+.macro ChestSearchRestoreSegment() {
+    .segment Default
+}
+#define CHEST_ROUTING_ENABLED
 #import "../../core/dungeon_features.s"
+#import "../../core/chest_search.s"
 #undef DISARM_HELPERS_EXTERNAL
 #undef DISARM_COMMAND_EXTERNAL
 #import "../../core/monster.s"
@@ -149,6 +162,7 @@ tramp_dig_ability:
 #import "../../core/player_items.s"
 #define SPELL_EFFECTS_INCLUDE_IDENTIFY
 #import "../../core/spell_effects.s"
+#import "../../core/spell_effects_overlay.s"
 #undef SPELL_EFFECTS_INCLUDE_IDENTIFY
 
 // Constants are needed by resident consumers before the data/code placement
@@ -511,6 +525,31 @@ tramp_disarm_command:
     ldy #>disarm_command
     jmp tramp_items_dispatch
 
+// Chest routing (docs/CHEST_DESIGN.md). tramp_chest_open is called from the
+// resident cmd_open pre-dispatch. chest_dispatch is tail-called (A/Y =
+// handler) from bash_command/disarm_command inside OVL.ITEMS; the overlay
+// swap runs from resident code, so the evicted caller is never returned into
+// (its caller trampoline owns the continuation). Store init/restock also ride
+// the chest overlay on this platform (transition-only code, safe in a
+// non-town overlay) because the ITEMS window is full.
+tramp_chest_open:
+    lda #<chest_open_command
+    ldy #>chest_open_command
+    jmp chest_dispatch
+
+chest_dispatch:
+    sta chest_disp_jmp+1
+    sty chest_disp_jmp+2
+    lda #OVL_CHEST
+    jsr overlay_load
+    bcs !done+
+chest_disp_jmp:
+    jmp $0000               // SMC dispatch target (never JMP (addr); the
+                            // 6502 page-crossing bug reads the high byte
+                            // from $xx00 when the pointer is at $xxFF)
+!done:
+    rts
+
 tramp_player_tunnel:
     lda #<player_tunnel
     ldy #>player_tunnel
@@ -709,12 +748,12 @@ tramp_disk_prepare_selected:
 tramp_store_init_all:
     lda #<store_init_all
     ldy #>store_init_all
-    jmp tramp_items_dispatch
+    jmp chest_dispatch
 
 tramp_store_restock_all:
     lda #<store_restock_all
     ldy #>store_restock_all
-    jmp tramp_items_dispatch
+    jmp chest_dispatch
 
 tramp_store_enter:
     lda #OVL_TOWN
@@ -738,92 +777,27 @@ tramp_player_create:
 // so no overlay loads may happen here. Only one-drive swap mode prompts:
 // two-drive mode assumes the save disk stays mounted (failures route through
 // tramp_disk_prepare_selected), and game-disk mode needs no media handling.
+// The prompt bodies live in the storage overlay (_impl): every call flow
+// (title load, in-game save, post-save swap-back) has already loaded
+// OVL.STORAGE via save_prepare_slot_prompt or the save itself, so the
+// resident names below are skip-if-current trampolines that never load.
 // Probes reuse the resident media probes: the marker probe answers "is the
 // save volume mounted" and the program probe answers "is the game volume
 // mounted" without an ON_LINE scan.
 // ============================================================
 disk_prompt_save:
-    lda disk_mode
-    cmp #A2_DISK_MODE_SWAP
-    beq !dps_check+
-    clc
+    lda #OVL_STORAGE
+    jsr overlay_load
+    bcs !done+
+    jsr disk_prompt_save_impl
+!done:
     rts
-!dps_check:
-    jsr hal_storage_marker_present
-    bcs !dps_prompt+
-    clc
-    rts
-!dps_prompt:
-    jsr ui_clear_full_screen_safe
-    jsr msg_init
-    lda #COL_WHITE
-    sta zp_text_color
-    lda #10
-    sta zp_cursor_row
-    lda #32                         // (80-16)/2 for ds_save_str
-    sta zp_cursor_col
-    lda #<ds_save_str
-    sta zp_ptr0
-    lda #>ds_save_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
-    lda #11
-    sta zp_cursor_row
-    lda #33                         // (80-13)/2 for press_key_str
-    sta zp_cursor_col
-    lda #<press_key_str
-    sta zp_ptr0
-    lda #>press_key_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
-    jsr input_get_modal_dismiss_key
-    jmp !dps_check-
 
 disk_prompt_game:
-    lda disk_mode
-    cmp #A2_DISK_MODE_SWAP
-    bne !dpg_ok+
-    jsr hal_storage_probe_media
-    bcs !dpg_off+
-!dpg_ok:
-    clc
-    rts
-!dpg_off:
-    sec
-    rts
-
-// winner_apply_retirement_bonus — core calls the plain name on this
-// platform (game_loop.s:2460 !C64_PRODUCT path); the ModalMisc inline is a
-// bare rts so the bonus is applied exactly once.
-winner_apply_retirement_bonus:
-    lda player_data + PL_LEVEL
-    cmp #41
-    bcs !gold+
-    clc
-    adc #40
-    sta player_data + PL_LEVEL
-    sta zp_player_lvl
-!gold:
-    lda player_data + PL_GOLD_0
-    clc
-    adc #$90
-    sta player_data + PL_GOLD_0
-    lda player_data + PL_GOLD_1
-    adc #$d0
-    sta player_data + PL_GOLD_1
-    lda player_data + PL_GOLD_2
-    adc #$03
-    sta player_data + PL_GOLD_2
-    lda player_data + PL_XP_0
-    clc
-    adc #$40
-    sta player_data + PL_XP_0
-    lda player_data + PL_XP_1
-    adc #$4b
-    sta player_data + PL_XP_1
-    lda player_data + PL_XP_2
-    adc #$4c
-    sta player_data + PL_XP_2
+    lda #OVL_STORAGE
+    jsr overlay_load
+    bcs !done-
+    jsr disk_prompt_game_impl
     rts
 
 // ============================================================
@@ -878,10 +852,13 @@ tramp_game_over_run:
     jmp score_death_screen
 
 tramp_winner_royal:
-    lda #OVL_MODAL_MISC
+    lda #OVL_DEATH
     jsr overlay_load
     bcs !done+
     jsr winner_apply_retirement_bonus_overlay
+    lda #OVL_MODAL_MISC
+    jsr overlay_load
+    bcs !done+
     jsr royal_screen
 !done:
     rts
@@ -995,6 +972,14 @@ player_adjust_equipment_stat:
     .segment ModalMiscOverlay
 }
 .macro RecallViewBodyRestoreSegment() {
+    .segment A2PlaySlot
+}
+.macro ChestRouteSegment() {
+    // Resident, not the play slot: the slot is full, and the open pre-dispatch
+    // is reachable from every phase anyway.
+    .segment Default
+}
+.macro ChestRouteRestoreSegment() {
     .segment A2PlaySlot
 }
 #define PLAYER_LOOK_EXTERNAL
@@ -1149,6 +1134,41 @@ ovl_start_end:
 .assert "Startup overlay fits", ovl_start_end <= $ba00, true
 
 .segment DeathOverlay
+// winner_apply_retirement_bonus_overlay — applies the retirement bonus from
+// the royal flow (same shape as C64/Plus4): game_loop.s skips its plain-name
+// call on this platform so the bonus is applied exactly once. It rides the
+// death overlay (game-end services) because the modal overlay's aux cache
+// slot is full and the resident image funds the chest routing.
+winner_apply_retirement_bonus_overlay:
+    lda player_data + PL_LEVEL
+    cmp #41
+    bcs !gold+
+    clc
+    adc #40
+    sta player_data + PL_LEVEL
+    sta zp_player_lvl
+!gold:
+    lda player_data + PL_GOLD_0
+    clc
+    adc #$90
+    sta player_data + PL_GOLD_0
+    lda player_data + PL_GOLD_1
+    adc #$d0
+    sta player_data + PL_GOLD_1
+    lda player_data + PL_GOLD_2
+    adc #$03
+    sta player_data + PL_GOLD_2
+    lda player_data + PL_XP_0
+    clc
+    adc #$40
+    sta player_data + PL_XP_0
+    lda player_data + PL_XP_1
+    adc #$4b
+    sta player_data + PL_XP_1
+    lda player_data + PL_XP_2
+    adc #$4c
+    sta player_data + PL_XP_2
+    rts
 // game_restart_overlay — reset game state, return to title screen
 // (C64 main.s:2225 semantics, de-banked).
 game_restart_overlay:
@@ -1201,11 +1221,6 @@ ovl_death_end:
 .assert "Death overlay fits", ovl_death_end <= $ba00, true
 
 .segment ModalMiscOverlay
-// winner_apply_retirement_bonus_overlay — the bonus was already applied by
-// the plain-name call in core/game_loop.s before tramp_winner_royal; this
-// overlay entry exists only so the C64-shaped royal flow links.
-winner_apply_retirement_bonus_overlay:
-    rts
 #import "../../core/royal.s"
 #import "../../core/ui_recall.s"
 #import "../../core/ui_wizard.s"
@@ -1230,7 +1245,6 @@ ovl_ui_end:
 .assert "UI overlay fits", ovl_ui_end <= $ba00, true
 
 .segment ItemActionsOverlay
-#import "../../core/store_restock_overlay.s"
 #define SCROLL_P3_ROUTER_ENABLED
     #import "../../core/item_actions_overlay.s"
 
@@ -1379,6 +1393,58 @@ ovl_gen_end:
 .assert "A2 cache full-window read stays in aux RAM", A2_AUX_CACHE_ITEMS + $1600 <= A2_AUX_CACHE_LIMIT, true
 
 .segment StorageOverlay
+// disk_prompt_save_impl / disk_prompt_game_impl — swap-mode media prompts.
+// Resident names trampoline here; see the resident block for the contract.
+disk_prompt_save_impl:
+    lda disk_mode
+    cmp #A2_DISK_MODE_SWAP
+    beq !dps_check+
+    clc
+    rts
+!dps_check:
+    jsr hal_storage_marker_present
+    bcs !dps_prompt+
+    clc
+    rts
+!dps_prompt:
+    jsr ui_clear_full_screen_safe
+    jsr msg_init
+    lda #COL_WHITE
+    sta zp_text_color
+    lda #10
+    sta zp_cursor_row
+    lda #32                         // (80-16)/2 for ds_save_str
+    sta zp_cursor_col
+    lda #<ds_save_str
+    sta zp_ptr0
+    lda #>ds_save_str
+    sta zp_ptr0_hi
+    jsr hal_screen_put_string
+    lda #11
+    sta zp_cursor_row
+    lda #33                         // (80-13)/2 for press_key_str
+    sta zp_cursor_col
+    lda #<press_key_str
+    sta zp_ptr0
+    lda #>press_key_str
+    sta zp_ptr0_hi
+    jsr hal_screen_put_string
+    jsr input_get_modal_dismiss_key
+    jmp !dps_check-
+
+disk_prompt_game_impl:
+    lda disk_mode
+    cmp #A2_DISK_MODE_SWAP
+    bne !dpg_ok+
+    jsr hal_storage_probe_media
+    bcs !dpg_off+
+!dpg_ok:
+    clc
+    rts
+!dpg_off:
+    sec
+    rts
+
 #import "../../shared/save.s"
 #import "save_slot_menu.s"
 #import "disk_setup_a2.s"
@@ -1392,6 +1458,16 @@ ovl_storage_end:
 ovl_title_end:
 .print "Title overlay: " + (ovl_title_end - $a400) + " bytes"
 .assert "Title overlay fits", ovl_title_end <= $ba00, true
+
+// Chest overlay — chest open/disarm/bash handlers plus store init/restock
+// (transition-only code, safe in a non-town overlay; the ITEMS window is
+// full). Cold MLI load, like DEATH/HELP/STORAGE (docs/CHEST_DESIGN.md).
+.segment ChestOverlay
+#import "../../core/chest.s"
+#import "../../core/store_restock_overlay.s"
+ovl_chest_end:
+.print "Chest overlay: " + (ovl_chest_end - $a400) + " bytes"
+.assert "Chest overlay fits", ovl_chest_end <= $ba00, true
 
 // ============================================================
 // Ego-item trampolines (ego_items.s lives in OVL.ITEMS on this

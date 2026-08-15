@@ -63,6 +63,7 @@
 .const ICAT_WAND     = 14
 .const ICAT_STAFF    = 15
 .const ICAT_AMULET   = 16
+.const ICAT_CHEST    = 17
 
 // Phase 3 item type constants (IDs 96-127)
 .const ITEM_TYPE_POT_HEALING        = 96
@@ -99,6 +100,27 @@
 .const ITEM_TYPE_POT_NEUTRALIZE     = 126
 .const ITEM_TYPE_STAFF_REMOVE_CURSE = 127
 
+// Chest item type constants (IDs 128-134; docs/CHEST_DESIGN.md)
+.const ITEM_TYPE_CHEST_SMALL_WOOD  = 128
+.const ITEM_TYPE_CHEST_LARGE_WOOD  = 129
+.const ITEM_TYPE_CHEST_SMALL_IRON  = 130
+.const ITEM_TYPE_CHEST_LARGE_IRON  = 131
+.const ITEM_TYPE_CHEST_SMALL_STEEL = 132
+.const ITEM_TYPE_CHEST_LARGE_STEEL = 133
+.const ITEM_TYPE_CHEST_RUINED      = 134
+
+// Chest p1 state bits (docs/CHEST_DESIGN.md state layout)
+.const CHEST_P1_LOCKED      = $01
+.const CHEST_P1_TRAP_STR    = $02
+.const CHEST_P1_TRAP_POISON = $04
+.const CHEST_P1_TRAP_PARA   = $08
+.const CHEST_P1_TRAP_EXPL   = $10
+.const CHEST_P1_TRAP_SUMMON = $20
+.const CHEST_P1_TRAP_FOUND  = $40
+.const CHEST_P1_OPENED      = $80
+// Any of the five trap bits set = armed
+.const CHEST_P1_TRAP_MASK   = $3e
+
 // Persistent equipment-granted effect flags (player_pflags)
 .const PFLAG_RESIST_FIRE = $01
 .const PFLAG_RESIST_COLD = $02
@@ -107,12 +129,14 @@
 
 // Master Item Type Count
 // Save Format V1 serializes 64 known-item bytes. Do not renumber IDs 0-63.
+// Capacity 160 (20-byte bitset) leaves runway past the chest rows at 128-134
+// so the next catalog expansion pays no save-format bump.
 .const LEGACY_ITEM_TYPE_COUNT = 64
-.const ITEM_TYPE_COUNT = 128
-.const ITEM_ID_CAPACITY = 128
+.const ITEM_TYPE_COUNT = 135
+.const ITEM_ID_CAPACITY = 160
 
 // Known-item identification state (Save Format V4)
-// One bit per item type ID: set = identified/known. 16 bytes at 128 IDs.
+// One bit per item type ID: set = identified/known. 20 bytes at 160 IDs.
 .const ID_KNOWN_BYTES = (ITEM_ID_CAPACITY + 7) / 8
 
 id_known_bits: .fill ID_KNOWN_BYTES, 0

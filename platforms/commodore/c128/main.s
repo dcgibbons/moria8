@@ -53,7 +53,10 @@
     .segment RuntimeBankedCode
 }
 .macro ItemInitIdentSegment() {
-    .segment C128ResidentItems
+    // One-shot new-game identification init runs from the town overlay
+    // (cached; the items overlay/payload and gen overlay are both full).
+    // Called through tramp_item_init_identification.
+    .segment TownOverlay
 }
 .macro WizardGenExecSegment() {
     .segment C128ResidentPlay
@@ -63,6 +66,15 @@
 }
 .macro ItemInitIdentRestoreSegment() {
     .segment C128ResidentItems
+}
+.macro ChestRouteSegment() {
+    // The chest open pre-dispatch rides the resident items payload with the
+    // chest dispatcher: the play payload and the world overlay-state area
+    // have no headroom for it.
+    .segment C128ResidentItems
+}
+.macro ChestRouteRestoreSegment() {
+    .segment C128ResidentPlay
 }
 .const C128_MEDIA_UNKNOWN = 0
 .const C128_MEDIA_PROGRAM = 1
@@ -80,13 +92,14 @@
 .segmentdef UiOverlay         [outPrg=OVL_OUT + "/ovl.ui",    start=$e000, min=$e000, max=$efff]
 .segmentdef ItemActionsOverlay [outPrg=OVL_OUT + "/ovl.items", start=$e000, min=$e000, max=$efff]
 .segmentdef DisarmOverlay     [outPrg=OVL_OUT + "/ovl.disarm", start=$e000, min=$e000, max=$efff]
+.segmentdef ChestOverlay      [outPrg=OVL_OUT + "/ovl.chest", start=$e000, min=$e000, max=$efff]
 .segmentdef RuntimeInputData  [outPrg=OVL_OUT + "/128.input.prg", start=$0b00, min=$0b00, max=$0bff]
 .segmentdef RuntimeProjectileData [outPrg=OVL_OUT + "/128.proj.prg", start=$0a80, min=$0a80, max=$0aff]
 .segmentdef RuntimeCommonData [outPrg=OVL_OUT + "/128.fdisk.prg", start=$0d60, min=$0d60, max=$0fff]
 .segmentdef RuntimeLowData    [outPrg=OVL_OUT + "/128.runtime.prg", start=$1000, min=$1000, max=$3fff]
 .segmentdef C128ResidentItemNames [outPrg=OVL_OUT + "/128.names.prg", start=$7400, min=$7400, max=$7fff]
 .segmentdef C128ResidentWorld [outPrg=OVL_OUT + "/128.world.prg", start=$6000, min=$6000, max=$8cff]
-.segmentdef C128ResidentItems [outPrg=OVL_OUT + "/128.item.prg", start=$8ca0, min=$8ca0, max=$a7ff]
+.segmentdef C128ResidentItems [outPrg=OVL_OUT + "/128.item.prg", start=$8ca0, min=$8ca0, max=$a9ff]
 .segmentdef C128ResidentSelect [outPrg=OVL_OUT + "/128.select.prg", start=$a800, min=$a800, max=$aaff]
 .segmentdef C128ResidentDiskIo [outPrg=OVL_OUT + "/128.diskio.prg", start=$ab00, min=$ab00, max=$aeff]
 .segmentdef C128ResidentPersist [outPrg=OVL_OUT + "/128.persist.prg", start=$af00, min=$af00, max=$cfff]
@@ -1315,6 +1328,12 @@ tramp_ui_exit:
 // C128 does not use the common OVL_SPELL slot; spell execution lives in other
 // C128 payloads. Overlay ID 8 is the cached direct-disarm overlay.
 .const C128_DISARM_OVERLAY_ID = 8
+// The chest overlay keeps the shared OVL_CHEST ID (10), declared here because
+// the common overlay loader (and its OVL_CHEST const) is imported after the
+// trampoline block. C128 keeps it cold: no Bank 1 cache slot, boot preload
+// skips it, and its ready-mask bits stay clear so overlay_load always falls
+// through to the disk path.
+.const C128_CHEST_OVERLAY_ID = 10
 
 .macro C128UIOverlayDisplayTrampoline(target) {
     jsr tramp_ui_enter
@@ -3319,6 +3338,7 @@ c128_resident_world_start:
 #import "../../../core/dungeon_data.s"
 #define DISARM_COMMAND_EXTERNAL
 #define DISARM_HELPERS_EXTERNAL
+#define CHEST_ROUTING_ENABLED
 #import "../../../core/dungeon_features.s"
 #undef DISARM_HELPERS_EXTERNAL
 #undef DISARM_COMMAND_EXTERNAL
@@ -3351,13 +3371,64 @@ player_get_infra_range:
 #import "../../../core/spell_data.s"
 #define SPELL_EFFECTS_INCLUDE_IDENTIFY
 #define C128_FULL_DETECT_EVIL_EFFECT
+#define EFF_FIND_DOORS_EXTERNAL
 .segment C128ResidentItems
 c128_resident_items_start:
+.macro ChestSearchSegment() {
+    .segment C128ResidentItems
+}
+.macro ChestSearchRestoreSegment() {
+    .segment C128ResidentWorld
+}
+#import "../../../core/chest_search.s"
+
+// The restore macro above returns to the world segment for the
+// dungeon_features.s import site; this block continues in the items payload.
+.segment C128ResidentItems
+
+// eff_find_doors rides the resident items payload (the world payload funds
+// chest search/trap discovery); other platforms keep it in spell_effects.s.
+eff_fd_row: .byte 0
+
+eff_find_doors:
+    lda #1
+    sta eff_fd_row
+!efd_row_loop:
+    lda eff_fd_row
+    cmp #MAP_ROWS - 1
+    bcs !efd_done+
+    ldx eff_fd_row
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #1
+!efd_col_loop:
+    :MapRead_ptr0_y()
+    and #TILE_TYPE_MASK
+    cmp #TILE_SECRET
+    bne !efd_col_next+
+    :MapRead_ptr0_y()
+    and #TILE_FLAG_MASK
+    ora #TILE_DOOR_CLOSED
+    ora #FLAG_VISITED
+    :MapWrite_ptr0_y()
+!efd_col_next:
+    iny
+    cpy #MAP_COLS - 1
+    bcc !efd_col_loop-
+    inc eff_fd_row
+    jmp !efd_row_loop-
+!efd_done:
+    lda #1
+    sta vis_room_revealed
+    rts
 .segment Default
 #import "../../../core/scene_mat_tile.s"
 #import "../../../core/scene_force.s"
 .segment C128ResidentWorld
 #import "../../../core/spell_effects.s"
+#import "../../../core/spell_effects_overlay.s"
 #undef C128_FULL_DETECT_EVIL_EFFECT
 #undef SPELL_EFFECTS_INCLUDE_IDENTIFY
 cmb_you_str:     .text "You " ; .byte 0
@@ -3400,8 +3471,6 @@ c128_startup_overlay_executing: .byte 0
 overlay_state_block_start:
 current_overlay: .byte 0
 #import "hal/storage_overlay_names.s"
-ovl_reu_start_lo: .byte 0, 0, 0, 0, 0, 0, 0, 0
-ovl_reu_start_hi: .byte 0, 0, 0, 0, 0, 0, 0, 0
 ol_target:        .byte 0
 #if C128_TEST_OVERLAY_LOAD_FAIL_TRAP
 c128_overlay_load_disk_index:  .byte 0
@@ -3435,12 +3504,11 @@ ovl_cache_base_lo: .byte 0
 ovl_cache_base_hi: .byte 0
 ovl_cache_pages:   .byte 0
 ovl_ready_mask:
-    .byte 0, %00000001, %00000010, %00000100, %00001000, %00010000, %00100000, %01000000, %10000000, 0
+    .byte 0, %00000001, %00000010, %00000100, %00001000, %00010000, %00100000, %01000000, %10000000, 0, 0
 ovl_ready_mask_hi:
-    .byte 0, 0, 0, 0, 0, 0, 0, 0, 0, %00000001   // ID 9 = modal-misc
+    .byte 0, 0, 0, 0, 0, 0, 0, 0, 0, %00000001, 0   // ID 9 = modal-misc; ID 10 = chest (cold, never ready)
 c128_cache_state_end:
 #import "../../../core/dungeon_room_center_helpers.s"
-c128_resident_world_end:
 
 .segment C128ResidentItems
 slain_str:
@@ -3589,7 +3657,35 @@ c128_player_recalc_pflags:
     sta player_pflags
     rts
 
-c128_resident_items_end:
+// Chest routing (docs/CHEST_DESIGN.md). tramp_chest_open is called from the
+// resident cmd_open pre-dispatch. chest_dispatch is tail-called (A/Y =
+// handler) from bash_command/disarm_command inside their overlays. Both ride
+// the items payload (always resident in Bank 0): the main image has no
+// headroom for them. chest_dispatch mirrors the production
+// tramp_p3_dispatch_items overlay-to-overlay pattern: the KERNAL RAM stubs
+// used by overlay_load preserve the operational MMU/$01 banking, so no bank
+// save/restore is needed around the call. Carry from the handler propagates.
+tramp_chest_open:
+    lda #<chest_open_command
+    ldy #>chest_open_command
+    jmp chest_dispatch
+
+// One-shot new-game identification init lives in the town overlay
+// (ItemInitIdentSegment) so the items payload stays within bounds.
+tramp_item_init_identification:
+    :C128OverlayComputeTrampoline(OVL_TOWN, item_init_identification)
+
+chest_dispatch:
+    sta cd128_jmp+1
+    sty cd128_jmp+2
+    lda #C128_CHEST_OVERLAY_ID
+    jsr overlay_load
+    bcs !done+
+cd128_jmp:
+    jsr $0000               // SMC dispatch target (never JMP (addr))
+!done:
+    rts
+
 
 .segment Default
 #if C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_SPELL_CANCEL || C128_TEST_SCRIPTED_BOOK_OVERLAY || C128_TEST_SCRIPTED_STUDY_BOOK_OVERLAY || C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY
@@ -3750,6 +3846,14 @@ scroll_teleport_level_exec:
 #import "../../../core/game_loop.s"
 #undef DISARM_COMMAND_EXTERNAL
 #undef C128_SCRIPTED_SPELL_SEED_EXTERNAL
+// The items and world payload end labels live past the game_loop import
+// because the chest open pre-dispatch (ChestRouteSegment) contributes to the
+// world payload from there.
+.segment C128ResidentItems
+c128_resident_items_end:
+.segment C128ResidentWorld
+c128_resident_world_end:
+.segment C128ResidentPlay
 #import "../../../core/turn.s"
 #import "../../../core/player_magic_state.s"
 #if C128_TEST_PERF_P1_TRACE
@@ -4908,6 +5012,10 @@ program_end:
     .assert "AUDIT-IO-C128 " + name + " stays in the disarm overlay", symbol >= $E000 && symbol < ovl_disarm_end, true
 }
 
+.macro C128AuditChestOverlay(name, symbol) {
+    .assert "AUDIT-IO-C128 " + name + " stays in the chest overlay", symbol >= $E000 && symbol < ovl_chest_end, true
+}
+
 .macro C128AuditDungeonOverlay(name, symbol) {
     .assert "AUDIT-IO-C128 " + name + " stays in the dungeon overlay", symbol >= $E000 && symbol < ovl_gen_end, true
 }
@@ -5072,6 +5180,16 @@ ovl_disarm_end:
 .assert "Disarm overlay fits in small Bank 1 cache pages", (ovl_disarm_end - $e000) <= (C128_OVERLAY_DISARM_CACHE_PAGES * $100), true
 .assert "Modal-misc overlay fits in its Bank 1 cache slot", (ovl_modal_misc_end - $e000) <= (C128_OVERLAY_MODAL_CACHE_PAGES * $100), true
 .assert "Disarm small cache pages fit non-common Bank 1 region", (BANK1_OVERLAY_DISARM_BASE + (C128_OVERLAY_DISARM_CACHE_PAGES * $100) - 1) <= BANK1_OVERLAY_DISARM_END, true
+
+// ============================================================
+// Chest overlay — chest open/disarm/bash handlers at $E000 (cold:
+// no Bank 1 cache slot; boot preload skips it; disk load only)
+// ============================================================
+.segment ChestOverlay
+    #import "../../../core/chest.s"
+ovl_chest_end:
+.print "Chest overlay: " + (ovl_chest_end - $e000) + " bytes at $E000-$" + toHexString(ovl_chest_end)
+.assert "Chest overlay fits in $E000-$EFFF", ovl_chest_end <= $f000, true
 
 // ============================================================
 // Dungeon generation overlay

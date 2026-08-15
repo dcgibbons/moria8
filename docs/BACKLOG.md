@@ -335,6 +335,14 @@ Acceptance target:
 
 ### Add classic Moria chests
 
+**In progress** (2026-08-14): settled design is `docs/CHEST_DESIGN.md`
+(14-step sequence). Steps 1-6 landed: catalog rows 128-134 with `&` glyph,
+20-byte known-item bitset (capacity 160) with save migration, picker buckets,
+`OVL_CHEST` cold overlay + resident chest-at-tile pre-dispatch for
+Open/Bash/Disarm with stub handlers. Remaining: steps 7-13 (spawn trap
+initialization, search reveal, open/disarm/bash gameplay, trap effects, loot
+handoff) and optional step 14 (look suffixes).
+
 Moria8 currently has floor objects, traps, doors, searching, opening, bashing,
 and direct floor-trap disarm, but it does not yet implement gameplay chests.
 This is a real gap against both local upstream references: Umoria and VMS-Moria

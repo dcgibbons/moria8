@@ -45,6 +45,7 @@ PRG_SPECS = (
     PrgSpec("ovl.gen", 0xA400, 0xBA00, "ovl_gen_end"),
     PrgSpec("ovl.storage", 0xA400, 0xBA00, "ovl_storage_end"),
     PrgSpec("ovl.title", 0xA400, 0xBA00, "ovl_title_end"),
+    PrgSpec("ovl.chest", 0xA400, 0xBA00, "ovl_chest_end"),
     PrgSpec("monster.db.1", 0xA400, 0xBB00),
     PrgSpec("monster.db.2", 0xA400, 0xBB00),
     PrgSpec("monster.db.3", 0xA400, 0xBB00),

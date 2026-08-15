@@ -147,11 +147,14 @@ irs_p3_run_existing:
 
 irs_re_item: .byte 0
 // Entries: item ID, effect argument, handler lo, handler hi. $ff terminates
-// and doubles as the *Destruction* default.
+// and defaults to a no-op; only the two explicit destruction rows may run
+// eff_destroy_area, so an unmatched ID can never destroy the level.
 irs_re_id_tab:
     .byte ITEM_TYPE_SCR_RECHARGING, 50, <eff_recharge_item, >eff_recharge_item
     .byte ITEM_TYPE_SCR_RUNE_PROTECTION, 0, <eff_glyph_of_warding, >eff_glyph_of_warding
     .byte ITEM_TYPE_SCR_GENOCIDE, 0, <eff_genocide, >eff_genocide
+    .byte ITEM_TYPE_SCR_DESTRUCTION, 0, <eff_destroy_area, >eff_destroy_area
+    .byte ITEM_TYPE_STAFF_DESTRUCTION, 0, <eff_destroy_area, >eff_destroy_area
     .byte ITEM_TYPE_WAND_SLOW, 0, <eff_slow_monster_dir, >eff_slow_monster_dir
     .byte ITEM_TYPE_WAND_STONE_MUD, 0, <eff_wall_to_mud, >eff_wall_to_mud
     .byte ITEM_TYPE_WAND_TELEPORT_AWAY, 0, <eff_teleport_other, >eff_teleport_other
@@ -159,39 +162,83 @@ irs_re_id_tab:
     .byte ITEM_TYPE_WAND_COLD_BALL, 33, <eff_ball, >eff_ball
     .byte ITEM_TYPE_STAFF_DISPEL_EVIL, 0, <ped_s28, >ped_s28
     .byte ITEM_TYPE_STAFF_SPEED, 0, <eff_haste_self, >eff_haste_self
-    .byte $ff, 0, <eff_destroy_area, >eff_destroy_area
+    .byte $ff, 0, <eff_p3_nop, >eff_p3_nop
 #else
     cmp #ITEM_TYPE_SCR_RECHARGING
-    beq !irs_re_recharge+
+    bne !irs_not_recharge+
+    jmp !irs_re_recharge+
+!irs_not_recharge:
     cmp #ITEM_TYPE_SCR_RUNE_PROTECTION
-    beq !irs_re_rune+
+    bne !irs_not_rune+
+    jmp !irs_re_rune+
+!irs_not_rune:
     cmp #ITEM_TYPE_SCR_GENOCIDE
-    beq !irs_re_genocide+
+    bne !irs_not_genocide+
+    jmp !irs_re_genocide+
+!irs_not_genocide:
     cmp #ITEM_TYPE_WAND_SLOW
-    beq !irs_re_slow+
+    bne !irs_not_slow+
+    jmp !irs_re_slow+
+!irs_not_slow:
     cmp #ITEM_TYPE_WAND_STONE_MUD
-    beq !irs_re_mud+
+    bne !irs_not_mud+
+    jmp !irs_re_mud+
+!irs_not_mud:
     cmp #ITEM_TYPE_WAND_TELEPORT_AWAY
-    beq !irs_re_teleport+
+    bne !irs_not_teleport+
+    jmp !irs_re_teleport+
+!irs_not_teleport:
     cmp #ITEM_TYPE_WAND_FIRE_BALL
-    beq !irs_re_fire+
+    bne !irs_not_fire+
+    jmp !irs_re_fire+
+!irs_not_fire:
     cmp #ITEM_TYPE_WAND_COLD_BALL
-    beq !irs_re_cold+
+    bne !irs_not_cold+
+    jmp !irs_re_cold+
+!irs_not_cold:
     cmp #ITEM_TYPE_STAFF_DISPEL_EVIL
-    beq !irs_re_dispel+
+    bne !irs_not_dispel+
+    jmp !irs_re_dispel+
+!irs_not_dispel:
     cmp #ITEM_TYPE_STAFF_SPEED
     beq !irs_re_speed+
     cmp #ITEM_TYPE_STAFF_REMOVE_CURSE
     beq !irs_re_remove_curse+
     cmp #42
     beq !irs_re_cloud+
-    // Scroll of *Destruction* / Staff of Destruction
+    cmp #ITEM_TYPE_SCR_DESTRUCTION
+    beq !irs_re_destroy+
+    cmp #ITEM_TYPE_STAFF_DESTRUCTION
+    bne !irs_re_unmatched+
+!irs_re_destroy:
 #if APPLE2
     :A2ReCall(eff_destroy_area)
 #else
     jsr eff_destroy_area
-    jmp !irs_re_done+
 #endif
+    jmp !irs_re_done+
+!irs_re_unmatched:
+    // Unmatched ID: no effect. Never default to area destruction.
+    jmp !irs_re_done+
+!irs_re_speed:
+#if APPLE2
+    :A2ReCall(eff_haste_self)
+#else
+    jsr eff_haste_self
+#endif
+    jmp !irs_re_done+
+!irs_re_remove_curse:
+#if APPLE2
+    // Print before the swap-call: this overlay is evicted by it.
+    ldx #HSTR_PIQ_CLEANSED
+    jsr huff_print_msg
+    :A2ReCall(eff_remove_curse)
+#else
+    jsr eff_remove_curse
+    ldx #HSTR_PIQ_CLEANSED
+    jsr huff_print_msg
+#endif
+    jmp !irs_re_done+
 !irs_re_cloud:
     jsr eff_directional_monster
     bcc !irs_re_cloud_miss+
@@ -270,24 +317,6 @@ irs_re_id_tab:
 #else
     jsr ped_s28
     jmp !irs_re_done+
-#endif
-!irs_re_speed:
-#if APPLE2
-    :A2ReCall(eff_haste_self)
-#else
-    jsr eff_haste_self
-#endif
-    jmp !irs_re_done+
-!irs_re_remove_curse:
-#if APPLE2
-    // Print before the swap-call: this overlay is evicted by it.
-    ldx #HSTR_PIQ_CLEANSED
-    jsr huff_print_msg
-    :A2ReCall(eff_remove_curse)
-#else
-    jsr eff_remove_curse
-    ldx #HSTR_PIQ_CLEANSED
-    jsr huff_print_msg
 #endif
 !irs_re_done:
 #if APPLE2

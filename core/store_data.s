@@ -90,6 +90,8 @@ check_store_category:
 !csc_hi:
     cmp #ICAT_AMULET
     beq !csc_amulet+
+    bcs !csc_no+            // Categories above AMULET (e.g. chest) buy nowhere;
+                            // also keeps the 8-entry bit_mask_table in bounds.
     sec
     sbc #8
     tax
@@ -103,9 +105,7 @@ check_store_category:
 !csc_amulet:
     ldx zp_store_idx
     :AuxReadX(store_cat_mask_x)
-    lsr
-    bcc !csc_no+
-    sec
+    lsr                     // Bit 0 -> carry = sold-here result
     rts
 
 !csc_no:

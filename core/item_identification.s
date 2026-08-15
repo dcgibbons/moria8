@@ -13,7 +13,16 @@
 // nibble, odd type in the high nibble. Class membership is not stored; it is
 // derived from it_category (potion/scroll/ring/wand/staff are the randomized
 // classes, everything else renders its real name/color even if a bad save
-// marks it unknown).
+// marks it unknown). Apple IIe keeps this table in aux RAM (A2AuxData) and
+// reads it through the aux thunk; other ports keep it resident.
+#if APPLE2
+.segment A2AuxData
+#endif
+#if C128_PRODUCT_OVERLAY_RUNTIME
+// On C128 the table rides the Bank 1 item-names payload (read via
+// mmu_safe_db_read_ptr1 below) to keep the resident items payload in bounds.
+.segment C128ResidentItemNames
+#endif
 it_unknown_idx:
     .fill 9, 0              // types 0-17: fixed, 17 = potion 0
     .byte $21               // 18: potion 1, 19: potion 2
@@ -51,7 +60,15 @@ it_unknown_idx:
     .byte $00               // 122-123: fixed armor
     .byte $00               // 124-125: fixed amulets
     .byte $23               // 126: potion 3, 127: staff 2
-.assert "it_unknown_idx size", potion_shuffle - it_unknown_idx, (ITEM_TYPE_COUNT + 1) >> 1
+    .fill 4, 0              // 128-134: fixed chest names
+it_unknown_idx_end:
+.assert "it_unknown_idx size", it_unknown_idx_end - it_unknown_idx, (ITEM_TYPE_COUNT + 1) >> 1
+#if APPLE2
+.segment Default
+#endif
+#if C128_PRODUCT_OVERLAY_RUNTIME
+.segment C128ResidentItems
+#endif
 
 // Shuffle tables: map category-local index → description index
 // 12 potions, 12 scrolls, 4 rings — full pool shuffled, first N used
@@ -63,20 +80,40 @@ staff_shuffle:  .fill 5, 0
 
 // iuk_index_for_type — Class-local unknown-description index for item type X.
 // Input: X = item type ID. Output: A = index (0-15). Preserves X. Clobbers: A, Y.
+// Aux-resident on Apple IIe: the read goes through the aux thunk.
 iuk_index_for_type:
     txa
     lsr
     tay
-    lda it_unknown_idx,y
     bcs !iuk_odd+
+#if C128_PRODUCT_OVERLAY_RUNTIME
+    jsr iuk_read_y_bank1
+#else
+    :AuxReadY(it_unknown_idx)
+#endif
     and #$0f
     rts
 !iuk_odd:
+#if C128_PRODUCT_OVERLAY_RUNTIME
+    jsr iuk_read_y_bank1
+#else
+    :AuxReadY(it_unknown_idx)
+#endif
     lsr
     lsr
     lsr
     lsr
     rts
+
+#if C128_PRODUCT_OVERLAY_RUNTIME
+// iuk_read_y_bank1 — Bank 1 read of it_unknown_idx,y (names payload).
+iuk_read_y_bank1:
+    lda #<it_unknown_idx
+    sta zp_ptr1
+    lda #>it_unknown_idx
+    sta zp_ptr1_hi
+    jmp mmu_safe_db_read_ptr1
+#endif
 
 // Unidentified name strings (screen codes, null-terminated)
 pn_0:  .byte ITOK_A_SPACE ; .text "Blue" ; .byte ITOK_POTION_SUFFIX ; .byte 0
@@ -177,14 +214,13 @@ item_init_identification:
     ldx #0
 !iid_default:
     // Randomized-appearance classes (potion/scroll/ring/wand/staff) start
-    // unknown; fixed-description classes (everything else, incl. amulets)
-    // start known.
+    // unknown; fixed-description classes (everything else) start known.
     ldy it_category,x
     cpy #ICAT_POTION
     bcc !iid_set_known+
-    cpy #ICAT_BOOK
-    beq !iid_set_known+
     cpy #ICAT_AMULET
+    bcs !iid_set_known+     // AMULET, CHEST, and later fixed classes
+    cpy #ICAT_BOOK
     beq !iid_set_known+
     bne !iid_next+
 !iid_set_known:
@@ -478,7 +514,12 @@ item_display_id: .byte 0
 // Clobbers: A, Y
 item_load_known_name_ptr:
     stx item_display_id
+#if C128_PRODUCT_OVERLAY_RUNTIME
+    // it_name_lo rides the Bank 1 names payload on C128 (see item_tables.s).
+    jsr inl_read_lo_bank1_x
+#else
     lda it_name_lo,x
+#endif
     sta zp_ptr0
     lda #>itn_0
     sta zp_ptr0_hi
@@ -486,8 +527,24 @@ item_load_known_name_ptr:
     beq !ilkn_done+
     ldy #0
 !ilkn_loop:
+#if C128_PRODUCT_OVERLAY_RUNTIME
+    sty ilkn_save_y
+    lda #<it_name_lo
+    sta zp_ptr1
+    lda #>it_name_lo
+    sta zp_ptr1_hi
+    ldy ilkn_save_y
+    jsr mmu_safe_db_read_ptr1
+    sta ilkn_save_a
+    ldy ilkn_save_y
+    iny
+    jsr mmu_safe_db_read_ptr1
+    ldy ilkn_save_y
+    cmp ilkn_save_a
+#else
     lda it_name_lo + 1,y
     cmp it_name_lo,y
+#endif
     bcs !ilkn_same_page+
     inc zp_ptr0_hi
 !ilkn_same_page:
@@ -496,6 +553,20 @@ item_load_known_name_ptr:
     bcc !ilkn_loop-
 !ilkn_done:
     rts
+
+#if C128_PRODUCT_OVERLAY_RUNTIME
+// inl_read_lo_bank1_x — Bank 1 read of it_name_lo,x (names payload).
+inl_read_lo_bank1_x:
+    stx ilkn_save_y
+    lda #<it_name_lo
+    sta zp_ptr1
+    lda #>it_name_lo
+    sta zp_ptr1_hi
+    ldy ilkn_save_y
+    jmp mmu_safe_db_read_ptr1
+ilkn_save_y: .byte 0
+ilkn_save_a: .byte 0
+#endif
 #endif
 
 // Decode an item-name token stream from zp_ptr0 into item_name_decode_buf.

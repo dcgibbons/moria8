@@ -18,6 +18,14 @@ disarm_bad_fail_str:
 disarm_command:
     jsr get_direction_target
     bcc !no_turn+
+    // Chest at the target tile dispatches to the chest overlay via the
+    // resident chest_dispatch; never returns here (docs/CHEST_DESIGN.md).
+    jsr chest_find_at_df_target
+    bcc !not_chest+
+    lda #<chest_disarm_command
+    ldy #>chest_disarm_command
+    jmp chest_dispatch
+!not_chest:
     jsr trap_find_target_visible
     bcs !has_trap+
     lda #<disarm_no_visible_str

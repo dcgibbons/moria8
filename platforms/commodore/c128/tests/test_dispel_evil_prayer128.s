@@ -75,6 +75,7 @@ itok_detect_monsters:
 #import "../../../../core/player_magic_state_ops.s"
 #import "../../../../core/projectile.s"
 #import "../../../../core/spell_effects.s"
+#import "../../../../core/spell_effects_overlay.s"
 #import "../../../../core/player_magic.s"
 #import "../../../../core/player_magic_utility.s"
 
