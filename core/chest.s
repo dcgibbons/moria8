@@ -56,8 +56,9 @@ chest_open_command:
     ldx chest_slot
     lda fi_to_hit,x
     asl                         // difficulty = 2 * source_level
-    tax
-    jsr chest_threshold_value   // A = skill
+    tax                         // X = difficulty
+    lda chest_skill             // A = effective skill
+    jsr chest_threshold_value   // A = success threshold (0-100)
     sta chest_skill
     lda #100
     jsr rng_range

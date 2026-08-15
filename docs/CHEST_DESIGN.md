@@ -522,7 +522,46 @@ store helper direct). Routing coverage: `test_main_loop.s` tests 41-42
 (`cmd_open` on a chest dispatches to `tramp_chest_open` and never the door
 handler; a plain tile stays on the door path).
 
-## Implementation Notes — step 8 search/Find Traps reveal (as-built, 2026-08-15)
+## Implementation Notes — step 9 Open (as-built, 2026-08-15)
+
+`chest_open_command` (core/chest.s, chest overlay) implements the Open rules:
+chest-at-tile resident pre-dispatch (`chest_open_route`); locked chests require
+a pick with success iff `rng_range(100) < clamp(skill + 99 - 2*source_level, 0,
+100)` (the value-based `chest_threshold_value`); a pick clears `CHEST_P1_LOCKED`
+and grants `source_level` XP via the 24-bit `chest_award_xp`; confused players
+are blocked with the too-confused message and no skill roll. Once unlocked the
+armed traps fire in VMS order (`chest_trigger_traps`), the trap bits are
+cleared, and `CHEST_P1_OPENED` is set — unless an explosion destroyed the chest
+(`floor_item_remove`), which suppresses the opened state and (later) contents.
+Re-opening an opened chest consumes a turn with no effect.
+
+Bug found by the new behavioral suite and fixed in the same step: the lock-pick
+threshold call dropped the skill. `chest_disarm_skill` returns the effective
+skill in A (stored to `chest_skill`), but `lda fi_to_hit,x / asl` then
+overwrote A with the difficulty before `jsr chest_threshold_value`, so the
+threshold was computed from difficulty alone (~99 always, independent of skill
+or source level). Fix: reload `lda chest_skill` into A before the threshold
+call so `X = difficulty`, `A = skill` as the helper expects.
+
+Coverage: `test_chest_open.s` tests 0-7 exercise the production
+`chest_open_command` directly (chest overlay imported into the unit assembly;
+`huff_print_msg`, `trap_apply_damage`, `rng_range`, and `chest_disarm_skill`
+patched to spies/controlled stubs for determinism): untrapped open sets OPENED
+and consumes the turn; successful pick clears the lock and awards source_level
+XP; failed pick (threshold 0) keeps the lock and awards nothing; confused lock
+prints the message and consumes no skill roll; lose-STR trap fires once,
+decrements STR, sets found and clears the trap bit; explosion empties the floor
+slot and suppresses OPENED; summoning stages `chest_pending_summons = 3` with
+no direct damage; re-open consumes a turn with no trap. The pick-success test
+(T1) failed before the threshold fix and passes after.
+
+Gates: `make build` all four ports (0 failed asserts); focused
+`TEST_FILTER='chest_open|main_loop|find_hidden_traps_doors|item' make test64`
+17/17 (incl. `chest_open` 8/8, `main_loop` 42/42 routing, `item` 57/57
+catalog). Per the verification plan the slow serial platform suites are not run
+per gameplay step; they run at the next architectural step and at feature end.
+
+
 
 Step 8 landed as two resident helpers in `core/chest_search.s`
 (`chest_search_reveal`, `chest_mark_found_all`), placed per platform through
