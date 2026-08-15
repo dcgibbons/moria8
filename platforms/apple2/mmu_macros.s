@@ -87,6 +87,13 @@
     :MapRead_ptr0_y()
 }
 
+// Spell data table reads (player_magic* selection/list UIs) via zp_ptr0.
+// The spell tables are aux-resident on this port, so these use the map-read
+// aux thunk — never the Bank 1 Huffman corpus path.
+.macro SpellTblRead_ptr0_y() {
+    :MapRead_ptr0_y()
+}
+
 // Aux-resident mutable data accessors (store inventory, recall counters).
 // These blocks live in AUX RAM on this platform (A2AuxData segment), so all
 // access goes through the p1 aux thunks. Write macros preserve the stored

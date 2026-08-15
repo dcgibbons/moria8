@@ -131,7 +131,7 @@ magic_check_new_spells:
     sta zp_ptr0_hi
     txa
     tay
-    :HuffRead_ptr0_y()
+    :SpellTblRead_ptr0_y()
     cmp #99
     beq !mcns_next_spell+
     cmp zp_player_lvl

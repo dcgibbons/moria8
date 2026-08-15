@@ -34,9 +34,9 @@
 // (index = overlay ID - 1; START=1 .. CHEST=10, STORAGE=11, TITLE=12).
 // $0000 = cold (not cached).
 a2_ovl_cache_lo:
-    .byte $00, <A2_AUX_CACHE_TOWN, $00, <A2_AUX_CACHE_GEN, $00, <A2_AUX_CACHE_UI, <A2_AUX_CACHE_ITEMS, <A2_AUX_CACHE_SPELL, <A2_AUX_CACHE_MODAL, $00, $00, $00
+    .byte $00, <A2_AUX_CACHE_TOWN, $00, $00, $00, <A2_AUX_CACHE_UI, <A2_AUX_CACHE_ITEMS, <A2_AUX_CACHE_SPELL, <A2_AUX_CACHE_MODAL, $00, $00, $00
 a2_ovl_cache_hi:
-    .byte $00, >A2_AUX_CACHE_TOWN, $00, >A2_AUX_CACHE_GEN, $00, >A2_AUX_CACHE_UI, >A2_AUX_CACHE_ITEMS, >A2_AUX_CACHE_SPELL, >A2_AUX_CACHE_MODAL, $00, $00, $00
+    .byte $00, >A2_AUX_CACHE_TOWN, $00, $00, $00, >A2_AUX_CACHE_UI, >A2_AUX_CACHE_ITEMS, >A2_AUX_CACHE_SPELL, >A2_AUX_CACHE_MODAL, $00, $00, $00
 
 // ============================================================
 // a2_overlay_try_cache — Aux-cache front end for overlay loads.

@@ -739,7 +739,12 @@ recall_spells: .fill MAX_CREATURES, 0
 }
 .macro ChestRouteRestoreSegment() {
 }
+.macro ChestSummonsSegment() {
+}
+.macro ChestSummonsRestoreSegment() {
+}
 #import "../../../../core/game_loop.s"
+#import "../../../../core/chest_summons.s"
 #import "../../../../core/scene_dirty.s"
 #import "../../../../core/scene_force.s"
 mat_scene_dirty: .byte 0

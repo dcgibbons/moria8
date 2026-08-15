@@ -340,7 +340,7 @@ file_table:
     .word STAGE, A2_AUX_CACHE_ITEMS
     .word STAGE, A2_AUX_CACHE_SPELL
     .word STAGE, A2_AUX_CACHE_MODAL
-    .word STAGE, A2_AUX_CACHE_GEN
+    .word STAGE, $9900        // A2.HUFFDATA -> aux Huffman region
 }
 loader_end:
 

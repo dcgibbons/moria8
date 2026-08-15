@@ -75,6 +75,9 @@
 #define HAL_PLATFORM_AUX_PERSISTENT_DATA
 #define HAL_PLATFORM_WIZARD_ENTRY_OVERLAY
 #define HAL_PLATFORM_WIZARD_EGO_MODAL_TRAMP
+// Wizard reveal goes through tramp_reveal_floorplan (spell overlay), so the
+// inline reveal loop and eff_find_doors leave the resident image.
+#define HAL_PLATFORM_WIZARD_REVEAL_TRAMPOLINE
 #define HAL_PLATFORM_PLAYER_MAGIC_HELPERS_EXTERNAL
 #define HAL_PLATFORM_BASH_LEVELUP_RESTORE_ITEMS
 #define HAL_PLATFORM_LEVELUP_MAGIC_USES_TRAMPOLINE

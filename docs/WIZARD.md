@@ -42,7 +42,8 @@ Feedback:
 
 Wizard item generation uses item IDs `0-134` (see the item catalog in
 `core/item_tables.s`; IDs `96-127` are the Phase 3 items — new potions,
-scrolls, rings, wands, staves, Mithril armor, and amulets).
+scrolls, rings, wands, staves, Mithril armor, and amulets; IDs `128-134` are
+the chests — wooden, iron, steel, and ruined).
 
 Behavior:
 - Non-gold items try to go into inventory first
@@ -243,6 +244,13 @@ or `Neutralize Poison` feedback:
 | 125 | Amulet of the Magi |
 | 126 | Potion of Neutralize Poison |
 | 127 | Staff of Remove Curse |
+| 128 | Small Wooden Chest |
+| 129 | Large Wooden Chest |
+| 130 | Small Iron Chest |
+| 131 | Large Iron Chest |
+| 132 | Small Steel Chest |
+| 133 | Large Steel Chest |
+| 134 | Ruined Chest |
 
 ## Source References
 

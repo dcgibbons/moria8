@@ -40,10 +40,12 @@
 .segmentdef ChestOverlay      [outPrg=OVL_OUT + "/ovl.chest",   start=$a400, min=$a400, max=$b9ff]
 .segmentdef A2PlaySlot        [outPrg=OVL_OUT + "/a2.play",     start=$7c00, min=$7c00, max=$9fff]
 .segmentdef A2AuxData         [outPrg=OVL_OUT + "/a2.auxdata",  start=$3b0c, min=$3b0c, max=$59ff]
+.segmentdef A2HuffData        [outPrg=OVL_OUT + "/a2.huffdata", start=$9900, min=$9900, max=$a9ff]
+.const A2_HUFFDATA_BASE = $9900
 
 // Huffman data placement: aux RAM at $3B0C (boot-preloaded).
 .macro HuffmanDataSegment() {
-    .segment A2AuxData
+    .segment A2HuffData
 }
 
 #import "hal/storage_policy.s"
@@ -130,6 +132,8 @@ tramp_dig_ability:
 #define A2_SMALL_PLAY_EXTERNAL
 #import "../../core/stat_display.s"
 #import "../../core/huffman.s"
+.segment A2HuffData
+ovl_huffdata_end:
 .segment Default
 #import "../../core/dungeon_data.s"
 #define DISARM_COMMAND_EXTERNAL
@@ -155,6 +159,12 @@ tramp_dig_ability:
 // scene_mat_tile lives in dungeon_render_a2.s (falls into render_single_tile).
 #import "../../core/scene_force.s"
 #import "../../core/monster_magic.s"
+.macro ChestSummonsSegment() {
+    .segment A2PlaySlot
+}
+.macro ChestSummonsRestoreSegment() {
+    .segment A2PlaySlot
+}
 #import "../../core/item.s"
 #define ITEM_ACTIONS_OVERLAY_EXTERNAL
 #define PLAYER_ITEM_COMMANDS_EXTERNAL
@@ -827,7 +837,7 @@ tramp_game_over_prepare:
     lda zp_death_source
     cmp #DEATH_ALIVE
     beq !tgo_load_overlay+
-    cmp #DEATH_TRAP_PIT
+    cmp #DEATH_CHEST_NEEDLE
     bcs !tgo_load_overlay+
     tax
     jsr creature_get_name
@@ -838,18 +848,10 @@ tramp_game_over_prepare:
 
 tramp_game_over:
     jsr tramp_game_over_prepare
-tramp_game_over_run:
-    jsr score_calculate
-    jsr hiscore_load
-    lda zp_game_flags
-    and #GAME_FLAG_WIZARD
-    bne !tgo_skip_hiscore+
-    jsr hiscore_insert
-    jsr hiscore_save
-!tgo_skip_hiscore:
-    lda death_source_saved
-    sta zp_death_source
-    jmp score_death_screen
+    bcs !done+
+    jmp tramp_game_over_run
+!done:
+    rts
 
 tramp_winner_royal:
     lda #OVL_DEATH
@@ -893,6 +895,16 @@ a2_msg_print_indirect_aux:
     sta zp_ptr0_hi
     jmp msg_print
 
+!csc_no:
+    clc
+    rts
+
+!next:
+    dex
+    bpl !loop-
+    clc
+    rts
+
 // ============================================================
 // A2PlaySlot segment — play payload (C128 play-class composition).
 // Signature "M8P" validated by a2_require_play after every load.
@@ -901,6 +913,9 @@ a2_msg_print_indirect_aux:
 a2_play_start:
     .byte $4d, $38, $50     // "M8P"
 a2_play_body:
+// Chest summoning-trap runner is called only from game_loop.s (play), so it
+// parks here in the play slot rather than the full resident Default payload.
+#import "../../core/chest_summons.s"
 // Apple item commands call this resident routine while the item overlay is
 // active. Keep the stat transition code in the always-loaded play payload.
 player_adjust_equipment_stat:
@@ -922,11 +937,11 @@ player_adjust_equipment_stat:
 !paes_done:
     rts
 
-#define STORE_INVENTORY_DATA_EXTERNAL
 #define STORE_RUNTIME_DATA_EXTERNAL
+#define STORE_INVENTORY_DATA_EXTERNAL
 #import "../../core/store_data.s"
-#undef STORE_RUNTIME_DATA_EXTERNAL
 #undef STORE_INVENTORY_DATA_EXTERNAL
+#undef STORE_RUNTIME_DATA_EXTERNAL
 #import "../../core/store_hot_data.s"
 #define RECALL_ARRAY_DATA_EXTERNAL
 #import "../../core/recall.s"
@@ -999,7 +1014,11 @@ player_adjust_equipment_stat:
 #import "../../core/combat.s"
 #undef CMB_WINNER_STR_EXTERNAL
 #undef PMU_TURN_FEEDBACK_EXTERNAL
+#define WIZARD_PROMPT_HELPERS_EXTERNAL
+#define WIZARD_EXEC_LEVEL_JUMP_EXTERNAL
 #import "../../core/wizard.s"
+#undef WIZARD_EXEC_LEVEL_JUMP_EXTERNAL
+#undef WIZARD_PROMPT_HELPERS_EXTERNAL
 #define PLAYER_LOOK_EXTERNAL
 #define DISARM_COMMAND_EXTERNAL
 #define WELCOME_STR_EXTERNAL
@@ -1209,6 +1228,23 @@ game_restart_overlay:
     jmp title_enter_menu
 #import "../../core/score_io.s"
 #import "../../core/score.s"
+
+// tramp_game_over_run — Death orchestration tail, colocated in the death
+// overlay with its callees (score, hiscore, death screen). Both entry paths
+// (tramp_game_over after prepare, game_over_save_and_show for save+quit)
+// reach it with the overlay active.
+tramp_game_over_run:
+    jsr score_calculate
+    jsr hiscore_load
+    lda zp_game_flags
+    and #GAME_FLAG_WIZARD
+    bne !tgo_skip_hiscore+
+    jsr hiscore_insert
+    jsr hiscore_save
+!tgo_skip_hiscore:
+    lda death_source_saved
+    sta zp_death_source
+    jmp score_death_screen
     #define SCROLL_P3_NEW_OWNER
     #define SCROLL_P3_EXISTING_OWNER
     #import "../../core/scroll_effects_p3.s"
@@ -1224,6 +1260,36 @@ ovl_death_end:
 #import "../../core/royal.s"
 #import "../../core/ui_recall.s"
 #import "../../core/ui_wizard.s"
+
+// Wizard prompt helpers ride the modal overlay (their remaining callers are
+// here; the resident image funds chest gameplay).
+wizard_prompt_clear_digits:
+    lda #0
+    sta wizard_num_digits
+    lda #5
+    sta zp_cursor_row
+    lda wizard_prompt_input_col
+    sta zp_cursor_col
+    lda #$20
+    jsr hal_screen_put_char
+    lda #$20
+    jsr hal_screen_put_char
+    lda #5
+    sta zp_cursor_row
+    lda wizard_prompt_input_col
+    sta zp_cursor_col
+    rts
+
+wizard_prompt_bad_value:
+    lda #<wizard_bad_value_str
+    sta zp_ptr0
+    lda #>wizard_bad_value_str
+    sta zp_ptr0_hi
+    jsr msg_print
+    jmp wizard_prompt_clear_digits
+
+wizard_bad_value_str:
+    .text "BAD" ; .byte 0
 ovl_modal_misc_end:
 .print "Modal misc overlay: " + (ovl_modal_misc_end - $a400) + " bytes"
 .assert "Modal misc overlay fits", ovl_modal_misc_end <= $ba00, true
@@ -1293,6 +1359,8 @@ ovl_items_end:
 #import "../../core/player_magic_execute_overlay.s"
 #undef PMX_DETECT_EFFECTS_EXTERNAL
 #undef PMX_MAP_AREA_EXTERNAL
+
+
 
 // Phase 3 potion handlers live in the spell overlay on Apple IIe (the items
 // overlay is full). The quaff dispatch swaps here via OVL.SPELL.
@@ -1388,7 +1456,7 @@ ovl_spell_end:
 ovl_gen_end:
 .print "Dungeon gen overlay: " + (ovl_gen_end - $a400) + " bytes"
 .assert "Dungeon gen overlay fits", ovl_gen_end <= $ba00, true
-.assert "A2 cache GEN slot fits payload", ovl_gen_end - BANKED_DATA_BASE <= A2_AUX_CACHE_ITEMS - A2_AUX_CACHE_GEN, true
+.assert "Huffman corpus fits the old GEN cache slot", ovl_huffdata_end - A2_HUFFDATA_BASE <= A2_AUX_CACHE_ITEMS - A2_HUFFDATA_BASE, true
 .assert "A2 cache ITEMS slot fits payload", ovl_items_end - BANKED_DATA_BASE <= A2_AUX_CACHE_END - A2_AUX_CACHE_ITEMS, true
 .assert "A2 cache full-window read stays in aux RAM", A2_AUX_CACHE_ITEMS + $1600 <= A2_AUX_CACHE_LIMIT, true
 

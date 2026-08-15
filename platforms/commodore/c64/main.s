@@ -456,7 +456,14 @@ ol_target:        .byte 0
 #import "../../../core/scene_force.s"
 #import "../../../core/recall.s"
 #import "../../../core/monster_magic.s"
+.macro ChestSummonsSegment() {
+    .segment Default
+}
+.macro ChestSummonsRestoreSegment() {
+    .segment Default
+}
 #import "../../../core/item.s"
+#import "../../../core/chest_summons.s"
 #define ITEM_ACTIONS_OVERLAY_EXTERNAL
 #import "../../../core/player_items.s"
 #import "../../../core/spell_data.s"
@@ -500,7 +507,6 @@ ol_target:        .byte 0
 #import "../common/compat/io_kernal_consts.s"
 #import "../../shared/save.s"
 #import "../common/disk_swap.s"
-#import "../../../core/score_io.s"
 #import "../common/title_screen.s"
 #import "../../../core/wizard.s"
 #define DISARM_COMMAND_EXTERNAL
@@ -1891,7 +1897,7 @@ tramp_game_over_prepare:
     lda zp_death_source
     cmp #DEATH_ALIVE
     beq !tgo_load_overlay+
-    cmp #DEATH_TRAP_PIT         // Special sources ($F9-$FF) don't need name
+    cmp #DEATH_CHEST_NEEDLE         // Special sources ($F7-$FF) don't need name
     bcs !tgo_load_overlay+
     tax
     jsr creature_get_name       // Copies name to creature_name_buf in main RAM
@@ -2569,6 +2575,11 @@ game_restart_overlay:
     pha
     jmp platform_runtime_resync_c64
 
+    // score_io.s lives in the death overlay on this port (its only callers
+    // are the death overlay and the resident death orchestration, which runs
+    // with this overlay already loaded). Imported before score.s for its
+    // constants.
+    #import "../../../core/score_io.s"
     #import "../../../core/score.s"
 ovl_death_end:
 .print "Death overlay: " + (ovl_death_end - $e000) + " bytes at $E000-$" + toHexString(ovl_death_end)

@@ -131,7 +131,7 @@ monster_pick_spell:
     lda recall_spell_bit,x
     ldy zp_mon_type
     ora recall_spells,y
-    sta recall_spells,y
+    :AuxWriteY(recall_spells)
 #endif
     // Dispatch
     cpx #0

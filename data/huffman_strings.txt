@@ -235,3 +235,14 @@ Sorry, what was that again?
 @PIQ_RESTORED You feel your strength return.
 @CHEST_FOUND_TRAP You have discovered a trap on the chest!
 @CHEST_TRAPPED The chest is trapped!
+@CHEST_NEEDLE A small needle has pricked you!
+@CHEST_WEAKENED You feel weakened!
+@CHEST_GAS A puff of yellow gas surrounds you!
+@CHEST_UNAFFECTED You are unaffected.
+@CHEST_CHOKE You choke and pass out.
+@CHEST_EXPLOSION There is a sudden explosion!
+@CHEST_PICKED You have picked the lock.
+@CHEST_PICK_CONFUSED You are too confused to pick the lock.
+@CHEST_PICK_FAIL You failed to pick the lock.
+@CHEST_DEATH_NEEDLE a poison needle.
+@CHEST_DEATH_EXPLODING an exploding chest.

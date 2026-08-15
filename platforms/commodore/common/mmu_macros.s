@@ -22,9 +22,83 @@
 }
 
 // Indirect class-spell table reads are resident on Commodore platforms.
+// C128 routes them through the Bank 1 safe-read thunks: its Huffman corpus
+// lives in the Bank 1 $F000 region (HAL_PLATFORM_HUFFMAN_DATA_AUX).
+#if HAL_PLATFORM_HUFFMAN_DATA_AUX
+.macro HuffRead_ptr0_y() {
+    jsr mmu_safe_db_read_ptr0
+}
+#else
 .macro HuffRead_ptr0_y() {
     lda (zp_ptr0),y
 }
+#endif
+
+// Spell data table reads (player_magic* selection/list UIs) via zp_ptr0.
+// These tables live in resident/overlay memory on Commodore, aux on Apple II
+// — never in the Huffman corpus region, so this macro stays direct even when
+// HAL_PLATFORM_HUFFMAN_DATA_AUX banks the corpus reads.
+.macro SpellTblRead_ptr0_y() {
+    lda (zp_ptr0),y
+}
+
+#if HAL_PLATFORM_HUFFMAN_DATA_AUX
+.macro HuffRead_str_index_x() {
+    txa
+    tay
+    lda #<huff_str_index
+    sta zp_ptr1
+    lda #>huff_str_index
+    sta zp_ptr1_hi
+    jsr mmu_safe_db_read_ptr1
+}
+
+.macro HuffRead_str_index_hi_x() {
+    txa
+    tay
+    lda #<huff_str_index+1
+    sta zp_ptr1
+    lda #>huff_str_index+1
+    sta zp_ptr1_hi
+    jsr mmu_safe_db_read_ptr1
+}
+
+.macro HuffRead_str_index256_x() {
+    txa
+    tay
+    lda #<huff_str_index+256
+    sta zp_ptr1
+    lda #>huff_str_index+256
+    sta zp_ptr1_hi
+    jsr mmu_safe_db_read_ptr1
+}
+
+.macro HuffRead_str_index257_x() {
+    txa
+    tay
+    lda #<huff_str_index+257
+    sta zp_ptr1
+    lda #>huff_str_index+257
+    sta zp_ptr1_hi
+    jsr mmu_safe_db_read_ptr1
+}
+
+.macro HuffRead_tree_left_y() {
+    lda #<huff_tree_left
+    sta zp_ptr1
+    lda #>huff_tree_left
+    sta zp_ptr1_hi
+    jsr mmu_safe_db_read_ptr1
+}
+
+.macro HuffRead_tree_right_y() {
+    lda #<huff_tree_right
+    sta zp_ptr1
+    lda #>huff_tree_right
+    sta zp_ptr1_hi
+    jsr mmu_safe_db_read_ptr1
+}
+#endif
 
 // Aux-resident mutable data accessors (store inventory, recall counters).
 // Commodore platforms keep these blocks in main RAM: direct access, zero

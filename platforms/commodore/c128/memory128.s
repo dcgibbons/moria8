@@ -140,6 +140,11 @@
 .const BANK1_OVERLAY_DUNGEON_END  = $efff
 .const BANK1_RESERVED_TOP_BASE    = $f000
 .const BANK1_RESERVED_TOP_END     = $feff
+// Bank 1 Huffman corpus region (tree/index/compressed strings). Read-only
+// data; all reads go through the mmu_safe_db_read thunks via the HuffRead_*
+// macros (common/mmu_macros.s). Loader: c128_load_resident_huffman_prg.
+.const BANK1_HUFFMAN_BASE         = BANK1_RESERVED_TOP_BASE
+.const BANK1_HUFFMAN_END          = BANK1_RESERVED_TOP_END
 .const BANK1_CACHE_OWNED_BASE     = BANK1_TIER_CACHE_BASE
 .const BANK1_CACHE_OWNED_END      = BANK1_OVERLAY_DUNGEON_END
 
@@ -917,6 +922,7 @@ copy_to_e000:
 :AssertRegionBefore("TOWN overlay slot ends before DEATH overlay slot", BANK1_OVERLAY_TOWN_END, BANK1_OVERLAY_DEATH_BASE)
 :AssertRegionBefore("DEATH overlay slot ends before reserved I/O window", BANK1_OVERLAY_DEATH_END, BANK1_RESERVED_IO_BASE)
 :AssertRegionBefore("Reserved I/O window ends before DUNGEON overlay slot", BANK1_RESERVED_IO_END, BANK1_OVERLAY_DUNGEON_BASE)
+:AssertRegionBefore("DUNGEON overlay slot ends before Huffman corpus region", BANK1_OVERLAY_DUNGEON_END, BANK1_HUFFMAN_BASE)
 .assert "DISARM small-overlay cache stays inside Bank1 cache span", BANK1_OVERLAY_DISARM_END <= BANK1_CACHE_OWNED_END, true
 .assert "DISARM small-overlay cache does not use top common RAM", BANK1_OVERLAY_DISARM_END < BANK1_RESERVED_TOP_BASE, true
 .assert "Tier cache window matches required preload footprint", BANK1_TIER_CACHE_SIZE, TIER_PRELOAD_REQUIRED

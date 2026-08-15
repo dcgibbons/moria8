@@ -44,6 +44,9 @@ eff_find_traps:
     sta vis_room_revealed
     rts
 
+#if EFF_DESTROY_TRAPS_DOORS_EXTERNAL
+// Apple IIe: body lives in the spell overlay segment in main.s.
+#else
 // ============================================================
 // eff_destroy_traps_doors — Destroy traps and jam doors open in radius
 // Scans 8 adjacent tiles. Traps removed, closed doors opened.
@@ -161,3 +164,4 @@ eff_destroy_traps_doors:
 
 !edtd_scan_done:
     rts
+#endif

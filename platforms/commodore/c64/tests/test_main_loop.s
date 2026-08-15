@@ -267,7 +267,14 @@ dg_idx: .byte 0
 #import "../../../../core/monster_ai.s"
 #import "../../../../core/recall.s"
 #import "../../../../core/monster_magic.s"
+.macro ChestSummonsSegment() {
+    .segment Default
+}
+.macro ChestSummonsRestoreSegment() {
+    .segment Default
+}
 #import "../../../../core/item.s"
+#import "../../../../core/chest_summons.s"
 random_floor_in_room:
     lda #0
     tay

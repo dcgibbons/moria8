@@ -72,6 +72,7 @@ A2_SOURCES   := $(shell find . ../../core ../../platforms/shared ../../platforms
 A2_MAIN_PRG  = $(OUTA2)/moria8a2.prg
 A2_PLAY_PRG  = $(OUTA2)/a2.play
 A2_AUX_PRG   = $(OUTA2)/a2.auxdata
+A2_HUFF_PRG  = $(OUTA2)/a2.huffdata
 A2_OVL_PRGS  = $(OUTA2)/ovl.start $(OUTA2)/ovl.town $(OUTA2)/ovl.death $(OUTA2)/ovl.modal \
                $(OUTA2)/ovl.gen $(OUTA2)/ovl.help $(OUTA2)/ovl.ui $(OUTA2)/ovl.items \
                $(OUTA2)/ovl.spell $(OUTA2)/ovl.chest $(OUTA2)/ovl.storage $(OUTA2)/ovl.title
@@ -170,7 +171,7 @@ $(A2_MAIN_STAMP): $(A2_SOURCES) $(VERSION_INC) | ensure-kickass $(OUTA2)
 	$(JAVA) -jar "$(KICKASS_RESOLVED)" ":OVL_OUT=$(OVL_OUTA2)" "$(A2_MAIN_SRC)" $(KA_FLAGS) -symbolfile -o "$(A2_MAIN_PRG)"
 	touch "$(A2_MAIN_STAMP)"
 
-$(A2_MAIN_PRG) $(A2_PLAY_PRG) $(A2_AUX_PRG) $(A2_OVL_PRGS) main.sym: $(A2_MAIN_STAMP)
+$(A2_MAIN_PRG) $(A2_PLAY_PRG) $(A2_AUX_PRG) $(A2_HUFF_PRG) $(A2_OVL_PRGS) main.sym: $(A2_MAIN_STAMP)
 	@test -f "$@" || { rm -f "$(A2_MAIN_STAMP)"; $(MAKE) "$(A2_MAIN_STAMP)"; }
 	@test -f "$@"
 
@@ -211,6 +212,7 @@ $(A2_DISK_IMAGE): ensure-ac ensure-prodos $(A2_MAIN_PRG) $(A2_PLAY_PRG) $(A2_AUX
 	  $(PRG2BIN) "$(OUTA2)/ovl.$$lower" "$(OUTA2)/bin/OVL.$$f" --expect-addr 0xA400 || exit 1; \
 	done
 	$(PRG2BIN) "$(OUTA2)/a2.auxdata" "$(OUTA2)/bin/A2.AUXDATA" --expect-addr 0x3B0C
+	$(PRG2BIN) "$(OUTA2)/a2.huffdata" "$(OUTA2)/bin/A2.HUFFDATA" --expect-addr 0x9900
 	@for n in 1 2 3 4; do \
 	  $(PRG2BIN) "$(OUTA2)/monster.db.$$n" "$(OUTA2)/bin/MONSTER.DB.$$n" --expect-addr 0xA400 || exit 1; \
 	done
@@ -222,7 +224,7 @@ $(A2_DISK_IMAGE): ensure-ac ensure-prodos $(A2_MAIN_PRG) $(A2_PLAY_PRG) $(A2_AUX
 	python3 ../../tools/make_pak.py "$(OUTA2)/bin/MORIA8.PAK" \
 	  "$(OUTA2)/bin/MORIA8.RES" "$(OUTA2)/bin/A2.AUXDATA" \
 	  "$(OUTA2)/bin/OVL.TOWN" "$(OUTA2)/bin/OVL.UI" "$(OUTA2)/bin/OVL.ITEMS" \
-	  "$(OUTA2)/bin/OVL.SPELL" "$(OUTA2)/bin/OVL.MODAL" "$(OUTA2)/bin/OVL.GEN"
+	  "$(OUTA2)/bin/OVL.SPELL" "$(OUTA2)/bin/OVL.MODAL" "$(OUTA2)/bin/A2.HUFFDATA"
 	"$(AC_BIN)" -p "$@" MORIA8.PAK bin 0x0000 < "$(OUTA2)/bin/MORIA8.PAK"
 	"$(AC_BIN)" -p "$@" A2.PLAY bin 0x7C00 < "$(OUTA2)/bin/A2.PLAY"
 	@for f in START DEATH GEN HELP CHEST STORAGE TITLE; do \

@@ -403,7 +403,7 @@ pm_build_known_list_from_book:
     sta zp_ptr0_hi
     txa
     tay
-    :HuffRead_ptr0_y()
+    :SpellTblRead_ptr0_y()
     cmp #99
     beq !pm_bk_next+
 
@@ -447,7 +447,7 @@ pm_build_learnable_list_from_book:
     sta zp_ptr0_hi
     txa
     tay
-    :HuffRead_ptr0_y()
+    :SpellTblRead_ptr0_y()
     cmp #99
     beq !pm_bl_next+
     cmp zp_player_lvl
@@ -567,7 +567,7 @@ pm_validate_selected_spell:
     lda pm_mana_tbl_hi
     sta zp_ptr0_hi
     ldy pm_spell_idx
-    :HuffRead_ptr0_y()
+    :SpellTblRead_ptr0_y()
     sta pm_cost_tmp
 
     lda pm_lvl_tbl_lo
@@ -575,7 +575,7 @@ pm_validate_selected_spell:
     lda pm_lvl_tbl_hi
     sta zp_ptr0_hi
     ldy pm_spell_idx
-    :HuffRead_ptr0_y()
+    :SpellTblRead_ptr0_y()
     cmp zp_player_lvl
     beq !pm_valid_done+
     bcc !pm_valid_done+

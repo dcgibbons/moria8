@@ -20,7 +20,9 @@ wizard_level_jump_active: .byte 0
 
 // wizard_execute_level_jump — Shared main-resident execution tail for Wizard
 // level jumps. This must live outside OVL.UI on C128 because it loads the
-// dungeon-generation overlay into the same $E000 window.
+// dungeon-generation overlay into the same $E000 window. Apple IIe keeps it
+// in the chest overlay (the resident image funds chest gameplay; the modal
+// wizard UI is not returned into after the level transition).
 wizard_execute_level_jump:
     lda zp_player_dlvl
     cmp wizard_target_depth
@@ -114,6 +116,7 @@ wizard_reset_session_state:
 
 wiz_rs_pd_tmp: .byte 0
 
+#if !WIZARD_WALL_WALK_EXTERNAL
 wizard_wall_walk_active:
     lda zp_game_flags
     and #GAME_FLAG_WIZARD
@@ -123,6 +126,7 @@ wizard_wall_walk_active:
 !inactive:
     lda #0
     rts
+#endif
 
 #if PLATFORM_PRODUCT_OVERLAY_RUNTIME
 :WizardGenExecSegment()
@@ -326,6 +330,7 @@ cmd_wizard_entry:
     jmp wizard_cmd_level_jump
 #endif
 
+#if !WIZARD_PROMPT_HELPERS_EXTERNAL
 wizard_prompt_clear_digits:
     lda #0
     sta wizard_num_digits
@@ -353,6 +358,7 @@ wizard_prompt_bad_value:
 
 wizard_bad_value_str:
     .text "BAD" ; .byte 0
+#endif
 
 #if HAL_PLATFORM_WIZARD_40COL_RESIDENT
 wizard_cmd_heal_cure:

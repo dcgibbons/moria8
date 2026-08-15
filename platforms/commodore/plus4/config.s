@@ -97,6 +97,8 @@ hal_asset_close_channel:
 asset_load_save_p: .byte 0
 
 .const DEATH_ALIVE   = $00
+.const DEATH_CHEST_NEEDLE = $F7
+.const DEATH_CHEST_EXPLOSION = $F8
 .const DEATH_TRAP_PIT      = $F9
 .const DEATH_TRAP_ARROW    = $FA
 .const DEATH_TRAP_DART     = $FB

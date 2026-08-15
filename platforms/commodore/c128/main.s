@@ -34,9 +34,12 @@
 #define STORAGE_STATUS_HELPER
 #import "../common/save_slot_policy.s"
 
-// Huffman data placement: resident on this platform.
+// Huffman data placement: Bank 1 $F000-$FEFF corpus region (read-only; the
+// main image has no room for it). All decoder reads go through the HuffRead_*
+// macros, which become mmu_safe_db_read Bank 1 thunks on this port
+// (HAL_PLATFORM_HUFFMAN_DATA_AUX).
 .macro HuffmanDataSegment() {
-    .segment Default
+    .segment C128Bank1Huffman
 }
 
 // Cast/pray cores stay in the $F000 runtime bank on this platform.
@@ -83,16 +86,16 @@
     .error "OVL_OUT is required; generated files belong under build/"
 }
 .eval var OVL_OUT = cmdLineVars.get("OVL_OUT")
-.segmentdef StartupOverlay    [outPrg=OVL_OUT + "/ovl.start", start=$e000, min=$e000, max=$efff]
-.segmentdef TownOverlay       [outPrg=OVL_OUT + "/ovl.town",  start=$e000, min=$e000, max=$efff]
-.segmentdef DeathOverlay      [outPrg=OVL_OUT + "/ovl.death", start=$e000, min=$e000, max=$efff]
-.segmentdef ModalMiscOverlay      [outPrg=OVL_OUT + "/ovl.modal", start=$e000, min=$e000, max=$efff]
-.segmentdef DungeonGenOverlay [outPrg=OVL_OUT + "/ovl.gen",   start=$e000, min=$e000, max=$efff]
-.segmentdef HelpOverlay       [outPrg=OVL_OUT + "/ovl.help",  start=$e000, min=$e000, max=$efff]
-.segmentdef UiOverlay         [outPrg=OVL_OUT + "/ovl.ui",    start=$e000, min=$e000, max=$efff]
-.segmentdef ItemActionsOverlay [outPrg=OVL_OUT + "/ovl.items", start=$e000, min=$e000, max=$efff]
-.segmentdef DisarmOverlay     [outPrg=OVL_OUT + "/ovl.disarm", start=$e000, min=$e000, max=$efff]
-.segmentdef ChestOverlay      [outPrg=OVL_OUT + "/ovl.chest", start=$e000, min=$e000, max=$efff]
+.segmentdef StartupOverlay    [outPrg=OVL_OUT + "/ovl.start", start=$e000, min=$e000, max=$f1ff]
+.segmentdef TownOverlay       [outPrg=OVL_OUT + "/ovl.town",  start=$e000, min=$e000, max=$f1ff]
+.segmentdef DeathOverlay      [outPrg=OVL_OUT + "/ovl.death", start=$e000, min=$e000, max=$f1ff]
+.segmentdef ModalMiscOverlay      [outPrg=OVL_OUT + "/ovl.modal", start=$e000, min=$e000, max=$f1ff]
+.segmentdef DungeonGenOverlay [outPrg=OVL_OUT + "/ovl.gen",   start=$e000, min=$e000, max=$f1ff]
+.segmentdef HelpOverlay       [outPrg=OVL_OUT + "/ovl.help",  start=$e000, min=$e000, max=$f1ff]
+.segmentdef UiOverlay         [outPrg=OVL_OUT + "/ovl.ui",    start=$e000, min=$e000, max=$f1ff]
+.segmentdef ItemActionsOverlay [outPrg=OVL_OUT + "/ovl.items", start=$e000, min=$e000, max=$f1ff]
+.segmentdef DisarmOverlay     [outPrg=OVL_OUT + "/ovl.disarm", start=$e000, min=$e000, max=$f1ff]
+.segmentdef ChestOverlay      [outPrg=OVL_OUT + "/ovl.chest", start=$e000, min=$e000, max=$f1ff]
 .segmentdef RuntimeInputData  [outPrg=OVL_OUT + "/128.input.prg", start=$0b00, min=$0b00, max=$0bff]
 .segmentdef RuntimeProjectileData [outPrg=OVL_OUT + "/128.proj.prg", start=$0a80, min=$0a80, max=$0aff]
 .segmentdef RuntimeCommonData [outPrg=OVL_OUT + "/128.fdisk.prg", start=$0d60, min=$0d60, max=$0fff]
@@ -102,9 +105,10 @@
 .segmentdef C128ResidentItems [outPrg=OVL_OUT + "/128.item.prg", start=$8ca0, min=$8ca0, max=$a9ff]
 .segmentdef C128ResidentSelect [outPrg=OVL_OUT + "/128.select.prg", start=$a800, min=$a800, max=$aaff]
 .segmentdef C128ResidentDiskIo [outPrg=OVL_OUT + "/128.diskio.prg", start=$ab00, min=$ab00, max=$aeff]
-.segmentdef C128ResidentPersist [outPrg=OVL_OUT + "/128.persist.prg", start=$af00, min=$af00, max=$cfff]
-.segmentdef C128ResidentPlay [outPrg=OVL_OUT + "/128.play.prg", start=$af00, min=$af00, max=$cfff]
+.segmentdef C128ResidentPersist [outPrg=OVL_OUT + "/128.persist.prg", start=$af00, min=$af00, max=$d1ff]
+.segmentdef C128ResidentPlay [outPrg=OVL_OUT + "/128.play.prg", start=$af00, min=$af00, max=$d1ff]
 .segmentdef RuntimeBankedCode [outPrg=OVL_OUT + "/128.bank.prg", start=$f000, min=$f000, max=$fffa]
+.segmentdef C128Bank1Huffman [outPrg=OVL_OUT + "/128.huff.prg", start=$f000, min=$f000, max=$feff]
 
 #if C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG
 #define C128_REAL_BOOT_DIAG
@@ -956,7 +960,7 @@ tramp_game_over_run:
     lda zp_death_source
     cmp #DEATH_ALIVE
     beq !tgo_load_overlay+
-    cmp #DEATH_TRAP_PIT         // Special sources ($F9-$FF) don't need name
+    cmp #DEATH_CHEST_NEEDLE         // Special sources ($F7-$FF) don't need name
     bcs !tgo_load_overlay+
     tax
     jsr creature_get_name
@@ -2323,6 +2327,12 @@ resident_item_names_filename:
 resident_item_names_filename_end:
     .byte 0
 .const RESIDENT_ITEM_NAMES_FILENAME_LEN = resident_item_names_filename_end - resident_item_names_filename
+.const RESIDENT_HUFFMAN_FILE_NUM = 15
+resident_huffman_filename:
+    .text "128.HUFF"
+resident_huffman_filename_end:
+    .byte 0
+.const RESIDENT_HUFFMAN_FILENAME_LEN = resident_huffman_filename_end - resident_huffman_filename
 .const RESIDENT_SELECT_FILE_NUM = 9
 resident_select_filename:
     .text "128.SELECT"
@@ -2523,6 +2533,24 @@ c128_load_resident_item_names_prg:
     sta c128_runtime_load_bank
     jmp c128_load_runtime_prg
 
+// Load the Huffman corpus into the Bank 1 $F000 region.
+c128_load_resident_huffman_prg:
+    lda #RESIDENT_HUFFMAN_FILE_NUM
+    sta disk_temp
+    lda #RESIDENT_HUFFMAN_FILENAME_LEN
+    sta disk_status
+    lda #<resident_huffman_filename
+    sta zp_ptr0
+    lda #>resident_huffman_filename
+    sta zp_ptr0_hi
+    lda #<BANK1_HUFFMAN_BASE
+    sta zp_ptr1
+    lda #>BANK1_HUFFMAN_BASE
+    sta zp_ptr1_hi
+    lda #1
+    sta c128_runtime_load_bank
+    jmp c128_load_runtime_prg
+
 c128_load_resident_select_prg:
     :C128RuntimeLoadFile(RESIDENT_SELECT_FILE_NUM, RESIDENT_SELECT_FILENAME_LEN, resident_select_filename, $a8)
 
@@ -2546,6 +2574,12 @@ c128_load_core_residents:
     jmp runtime_load_failed
 !resident_item_names_loaded:
     lda #4
+    sta c128_runtime_load_stage
+    jsr c128_load_resident_huffman_prg
+    bcc !resident_huffman_loaded+
+    jmp runtime_load_failed
+!resident_huffman_loaded:
+    lda #5
     sta c128_runtime_load_stage
     jsr c128_load_resident_select_prg
     bcc !resident_select_loaded+
@@ -3310,6 +3344,8 @@ c128_final_return_stack_7:     .byte 0
 #import "../../../core/generation_busy.s"
 #import "../../../core/stat_display.s"
 #import "../../../core/huffman.s"
+// huffman.s parks the corpus in the Bank 1 huffman segment; resume Default.
+.segment Default
 #import "../../../core/runtime_ui_strings.s"
 #import "../common/compat/io_kernal_consts.s"
 #import "hal/storage_policy.s"
@@ -3525,7 +3561,26 @@ ptep_temp: .byte 0
 tool_ego_prefix_hi:
     .byte >ego_tool_prefix_gnomish, >ego_tool_prefix_dwarven
     .byte >ego_tool_prefix_orcish,  >ego_tool_prefix_dwarven
-    #import "../../../core/item.s"
+    .macro ChestSummonsSegment() {
+    .segment Default
+}
+.macro ChestSummonsRestoreSegment() {
+    .segment C128ResidentItems
+}
+#import "../../../core/item.s"
+#import "../../../core/chest_summons.s"
+
+// wizard_wall_walk_active rides the main image (freed by the corpus move);
+// the play payload has no headroom for the chest summon hooks.
+wizard_wall_walk_active:
+    lda zp_game_flags
+    and #GAME_FLAG_WIZARD
+    beq !inactive+
+    lda wizard_wall_walk_enabled
+    rts
+!inactive:
+    lda #0
+    rts
     #import "../../../core/ego_items.s"
     #import "../../../core/store_data.s"
 ego_str_holy_avenger_common:
@@ -3839,7 +3894,9 @@ wizard_wall_walk_active:
 scroll_teleport_level_exec:
     rts
 #else
+#define WIZARD_WALL_WALK_EXTERNAL
 #import "../../../core/wizard.s"
+#undef WIZARD_WALL_WALK_EXTERNAL
 #endif
 #define C128_SCRIPTED_SPELL_SEED_EXTERNAL
 #define DISARM_COMMAND_EXTERNAL

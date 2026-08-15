@@ -400,7 +400,8 @@ eff_phase_door:
 // Converts TILE_SECRET to TILE_DOOR_CLOSED.
 // Clobbers: A, X, Y, zp_ptr0
 // C128 keeps its own copy in the resident items payload (the world payload
-// funds chest search/trap discovery there).
+// funds chest search/trap discovery). Apple IIe keeps its copy in the spell
+// overlay (the resident image funds chest gameplay there).
 // ============================================================
 #if !EFF_FIND_DOORS_EXTERNAL
 eff_fd_row: .byte 0

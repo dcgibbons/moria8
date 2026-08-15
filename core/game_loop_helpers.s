@@ -160,7 +160,7 @@ recall_show_matching_entry:
     :AuxReadX(recall_spells)
     ora zp_temp0
 #else
-    lda recall_kills,x
+    :AuxReadX(recall_kills)
     ora recall_deaths,x
     ora recall_attacks,x
     ora recall_spells,x
