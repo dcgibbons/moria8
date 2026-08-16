@@ -434,7 +434,20 @@ dl_print_you_see:
 #endif
     rts
 
-// dl_print_item_you_see — Print "YOU SEE A <item>."
+// dl_print_tile — Print a tile description message
+// Input: X = Huffman string ID (HSTR_*)
+dl_print_tile:
+    stx dl_scratch
+    jsr look_flash_target
+    ldx dl_scratch
+dl_print_tile_no_flash:
+    jsr huff_print_msg
+    clc
+    rts
+
+// dl_print_item_you_see — Print "YOU SEE A <item>." Moved after dl_print_tile so
+// the look tile-check branches stay in range. If dl_suffix_id is nonzero (a
+// chest state suffix), it is appended before the period (step 14).
 // Input: A = item type ID
 // item_get_name_ptr returns a shared item-name buffer, so copy the resolved
 // name into combat_msg_buf before composing the message.
@@ -454,6 +467,12 @@ dl_print_item_you_see:
     lda zp_ptr0
     ldy zp_ptr0_hi
     jsr combat_append_str
+    // Append the chest state suffix if one was computed (0 = none).
+    lda dl_suffix_id
+    beq !dl_item_no_suffix+
+    tax
+    jsr huff_append_combat
+!dl_item_no_suffix:
     lda #<cmb_period
     ldy #>cmb_period
     jsr combat_append_str
@@ -461,17 +480,6 @@ dl_print_item_you_see:
 #if HAL_PLATFORM_DESCRIBE_LOOK_MASKS_IRQ
     plp
 #endif
-    rts
-
-// dl_print_tile — Print a tile description message
-// Input: X = Huffman string ID (HSTR_*)
-dl_print_tile:
-    stx dl_scratch
-    jsr look_flash_target
-    ldx dl_scratch
-dl_print_tile_no_flash:
-    jsr huff_print_msg
-    clc
     rts
 
 !dl_floor:
@@ -486,12 +494,85 @@ dl_print_tile_no_flash:
     ldx #HSTR_PMU_GLYPH_OK
     bne dl_print_tile
 
-    // Found an item on floor — get its name
+    // Found an item on floor — describe it (chests get a state suffix, step 14).
+    // The work lives in dl_describe_floor_item so this hook stays tiny (the
+    // C128 help overlay that hosts do_look is full).
 !dl_item:
-    lda fi_item_id,x
-    jsr dl_print_item_you_see
+    jsr dl_describe_floor_item
     clc
     rts
+
+// chest_look_suffix_id — Map a chest's authoritative fi_p1 state to a look
+// suffix HSTR id (0 = none). Consumes the flags only (docs/CHEST_DESIGN.md
+// step 14). Priority: opened > trapped-and-found > locked > disarmed. An armed
+// but unfound trap stays hidden (no suffix). Input: X = floor slot. Output: A.
+// Preserves: X. Parked off the full look overlay on C128/Apple IIe (their help
+// and modal overlays have no room); the conditional uses the product-only
+// define so unit tests (no product define) leave it in the default segment.
+#if C128_PRODUCT_OVERLAY_RUNTIME
+    .segment Default
+#endif
+#if APPLE2_PRODUCT_OVERLAY_RUNTIME
+    .segment Default
+#endif
+// dl_suffix_id — chest state suffix HSTR id for look (0 = none). Parked with
+// the chest-look code so it does not spend a modal-overlay byte on Apple IIe.
+dl_suffix_id: .byte 0
+
+// dl_describe_floor_item — Describe a floor item on look; chests get their
+// state suffix. X = floor slot. Tail-calls dl_print_item_you_see.
+dl_describe_floor_item:
+    ldy fi_item_id,x
+    lda it_category,y
+    cmp #ICAT_CHEST
+    beq !ddfi_chest+
+    lda #0
+    beq !ddfi_store+
+!ddfi_chest:
+    jsr chest_look_suffix_id
+!ddfi_store:
+    sta dl_suffix_id
+    lda fi_item_id,x
+    jmp dl_print_item_you_see
+
+chest_look_suffix_id:
+    lda fi_p1,x
+    and #CHEST_P1_OPENED
+    beq !cls_not_open+
+    lda #HSTR_CHEST_SFX_EMPTY
+    rts
+!cls_not_open:
+    lda fi_p1,x
+    and #CHEST_P1_TRAP_MASK
+    beq !cls_not_armed+
+    // Armed trap: only shown once found
+    lda fi_p1,x
+    and #CHEST_P1_TRAP_FOUND
+    beq !cls_locked+
+    lda #HSTR_CHEST_SFX_TRAPPED
+    rts
+!cls_not_armed:
+!cls_locked:
+    lda fi_p1,x
+    and #CHEST_P1_LOCKED
+    beq !cls_disarmed+
+    lda #HSTR_CHEST_SFX_LOCKED
+    rts
+!cls_disarmed:
+    lda fi_p1,x
+    and #CHEST_P1_TRAP_FOUND
+    beq !cls_none+
+    lda #HSTR_CHEST_SFX_DISARMED
+    rts
+!cls_none:
+    lda #0
+    rts
+#if C128_PRODUCT_OVERLAY_RUNTIME
+    .segment HelpOverlay
+#endif
+#if APPLE2_PRODUCT_OVERLAY_RUNTIME
+    .segment ModalMiscOverlay
+#endif
 
 // Strings migrated to Huffman compression (HSTR_DL_*, HSTR_PTM_* in huffman_data.s)
 

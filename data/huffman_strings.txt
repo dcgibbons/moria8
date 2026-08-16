@@ -255,3 +255,7 @@ Sorry, what was that again?
 @CHEST_DESTROYED_CONTENTS and it's contents!
 @CHEST_LOCK_BREAKS The lock breaks open!
 @CHEST_HOLDS_FIRM The chest holds firm.
+@CHEST_SFX_EMPTY  (empty)
+@CHEST_SFX_LOCKED  (locked)
+@CHEST_SFX_TRAPPED  (trapped)
+@CHEST_SFX_DISARMED  (disarmed)

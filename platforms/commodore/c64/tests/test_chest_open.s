@@ -8,7 +8,7 @@
 :BasicUpstart2(test_bootstrap)
 
 .pc = $E000 "Result Buffer"
-tc_results: .fill 9, $ff
+tc_results: .fill 10, $ff
 
 .pc = $080E "Test Code"
 
@@ -22,7 +22,7 @@ test_finish:
     sei
     :BankOutBasic()
     :BankOutKernal()
-    ldx #8
+    ldx #9
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -449,10 +449,65 @@ test_start:
     bne !t8_fail+
     lda #$01
     sta tc_results + 8
-    jmp !done+
+    jmp !t9+
 !t8_fail:
     lda #$00
     sta tc_results + 8
+
+    // Test 9: chest_look_suffix_id maps authoritative fi_p1 state to the look
+    // suffix (step 14): opened > trapped-and-found > locked > disarmed > none.
+!t9:
+    jsr test_reset
+    lda #CHEST_P1_OPENED
+    ldx #5
+    jsr test_setup_chest
+    ldx #0
+    jsr chest_look_suffix_id
+    cmp #HSTR_CHEST_SFX_EMPTY
+    bne !t9_fail+
+
+    jsr test_reset
+    lda #CHEST_P1_TRAP_STR | CHEST_P1_TRAP_FOUND
+    ldx #5
+    jsr test_setup_chest
+    ldx #0
+    jsr chest_look_suffix_id
+    cmp #HSTR_CHEST_SFX_TRAPPED
+    bne !t9_fail+
+
+    jsr test_reset
+    lda #CHEST_P1_LOCKED | CHEST_P1_TRAP_STR   // armed but unfound trap
+    ldx #5
+    jsr test_setup_chest
+    ldx #0
+    jsr chest_look_suffix_id
+    cmp #HSTR_CHEST_SFX_LOCKED
+    bne !t9_fail+
+
+    jsr test_reset
+    lda #CHEST_P1_TRAP_FOUND                   // disarmed: found, not armed, not locked
+    ldx #5
+    jsr test_setup_chest
+    ldx #0
+    jsr chest_look_suffix_id
+    cmp #HSTR_CHEST_SFX_DISARMED
+    bne !t9_fail+
+
+    jsr test_reset
+    lda #0                                     // no state -> no suffix
+    ldx #5
+    jsr test_setup_chest
+    ldx #0
+    jsr chest_look_suffix_id
+    cmp #0
+    bne !t9_fail+
+
+    lda #$01
+    sta tc_results + 9
+    jmp !done+
+!t9_fail:
+    lda #$00
+    sta tc_results + 9
 
 !done:
     jmp test_finish

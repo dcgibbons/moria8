@@ -832,7 +832,10 @@ a2_asset_dest:    .word 0
 // is already saved by the surrounding a2_mli_begin/end.
 // Output: carry clear = success, carry set = failure (title falls back to
 // the text title in title_screen.s).
+// Cold and title-only (sole caller is in the TitleOverlay), so it rides that
+// overlay to free resident Default bytes for chest look suffixes (step 14).
 // ============================================================
+.segment TitleOverlay
 hal_asset_load_title:
     lda #hal_storage_title_name_len
     ldx #<hal_storage_title_name
@@ -909,6 +912,7 @@ hal_asset_load_title:
     jmp a2_map_error
 
 a2_tc:            .byte 0
+.segment Default
 a2_probe_buf:     .fill 8, 0        // marker magic read-back scratch
 // Title-art staging shares the save-stream buffer: title loads, ON_LINE
 // reports (disk_setup_a2.s), and save streams are never open concurrently.

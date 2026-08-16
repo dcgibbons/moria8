@@ -527,6 +527,34 @@ store helper direct). Routing coverage: `test_main_loop.s` tests 41-42
 (`cmd_open` on a chest dispatches to `tramp_chest_open` and never the door
 handler; a plain tile stays on the door path).
 
+## Implementation Notes — step 14 Look suffixes (as-built, 2026-08-15)
+
+Look now appends a chest state suffix. `do_look`'s floor-item branch calls
+`dl_describe_floor_item` (a tiny hook kept small because the C128 help overlay
+that hosts `do_look` is full), which category-checks and, for chests, calls
+`chest_look_suffix_id` to map the authoritative `fi_p1` flags to a suffix —
+priority opened `(empty)` > trapped-and-found `(trapped)` > locked `(locked)` >
+disarmed `(disarmed)`; an armed-but-unfound trap stays hidden. The suffix id is
+stashed in `dl_suffix_id` and appended by `dl_print_item_you_see` before the
+period. Four suffix strings (`@CHEST_SFX_*`) added to the corpus (222 strings).
+
+Placement was the hard part (all four ports are near their limits). The
+chest-look code rides a product-only conditional segment: C64/Plus4 in the
+modal look overlay, C128 in the Default main image (help overlay full), Apple
+IIe in Default. `dl_print_item_you_see` moved after `dl_print_tile` so the
+C64 look tile-check branches stay in range. Apple IIe needed a real headroom
+lever: the one-shot, title-only `hal_asset_load_title` (+ `a2_tc`) moved from
+resident Default into the TitleOverlay (sole caller is already there), freeing
+~154 B of Default, and `dl_suffix_id` was parked out of the full modal cache
+slot. The conditional segment uses `*_PRODUCT_OVERLAY_RUNTIME` (not a macro) so
+the 87 `player_move.s`-importing unit tests are untouched.
+
+Coverage: `test_chest_open.s` test 9 drives `chest_look_suffix_id` through the
+state mapping (empty/trapped/locked/disarmed/none, with the unfound-trap
+hidden case and locked-out-priority case). Gates: `make build` all four ports
+from clean (0 failed asserts); focused `test64` 23/23; `make test128-fast` all
+pass; `make testapple2` memory-contract 22/22.
+
 ## Implementation Notes — step 13 Loot fulfillment (as-built, 2026-08-15)
 
 Chest contents generate lazily at open time through the GEN-overlay picker,
