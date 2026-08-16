@@ -275,6 +275,11 @@ dg_idx: .byte 0
 }
 #import "../../../../core/item.s"
 #import "../../../../core/chest_summons.s"
+.macro ChestLootSegment() {
+}
+.macro ChestLootRestoreSegment() {
+}
+#import "../../../../core/chest_loot.s"
 random_floor_in_room:
     lda #0
     tay

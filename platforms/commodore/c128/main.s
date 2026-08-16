@@ -3569,6 +3569,18 @@ tool_ego_prefix_hi:
 }
 #import "../../../core/item.s"
 #import "../../../core/chest_summons.s"
+// Step-13 chest loot: latch + resident handoff stay on the C128 main image
+// (GEN overlay is full here, unlike C64/Plus4/A2); the generator rides there
+// too. Switch to Default first so the latch does not land in the items payload.
+.segment Default
+.macro ChestLootSegment() {
+    .segment Default
+}
+.macro ChestLootRestoreSegment() {
+    .segment Default
+}
+#import "../../../core/chest_loot.s"
+.segment C128ResidentItems
 
 // wizard_wall_walk_active rides the main image (freed by the corpus move);
 // the play payload has no headroom for the chest summon hooks.

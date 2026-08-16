@@ -24,6 +24,80 @@ hd_bit_mask:   .byte 0        // Bits remaining in current byte (counter)
 .assert "Huffman decode buffer fits platform scratch window", hd_decode_buf + HD_DECODE_BUF_SIZE <= HD_DECODE_BUF_LIMIT, true
 
 // ============================================================
+// AUX-banked corpus access macros (only huffman.s uses these). They reference
+// huff_str_index / huff_tree_left / huff_tree_right from huffman_data.s
+// (imported below); the forward references resolve at link time. Moved out of
+// the platform mmu_macros.s files so non-corpus importers of those files
+// (which lack the corpus) do not fail assembly. The banked read helper differs
+// by platform (Bank 1 on Commodore, aux RAM on Apple II).
+// ============================================================
+#if HAL_PLATFORM_HUFFMAN_DATA_AUX
+.macro HuffDbReadPtr1() {
+#if APPLE2
+    jsr mmu_safe_map_read_ptr1
+#else
+    jsr mmu_safe_db_read_ptr1
+#endif
+}
+
+.macro HuffRead_str_index_x() {
+    txa
+    tay
+    lda #<huff_str_index
+    sta zp_ptr1
+    lda #>huff_str_index
+    sta zp_ptr1_hi
+    :HuffDbReadPtr1()
+}
+
+.macro HuffRead_str_index_hi_x() {
+    txa
+    tay
+    lda #<huff_str_index+1
+    sta zp_ptr1
+    lda #>huff_str_index+1
+    sta zp_ptr1_hi
+    :HuffDbReadPtr1()
+}
+
+.macro HuffRead_str_index256_x() {
+    txa
+    tay
+    lda #<huff_str_index+256
+    sta zp_ptr1
+    lda #>huff_str_index+256
+    sta zp_ptr1_hi
+    :HuffDbReadPtr1()
+}
+
+.macro HuffRead_str_index257_x() {
+    txa
+    tay
+    lda #<huff_str_index+257
+    sta zp_ptr1
+    lda #>huff_str_index+257
+    sta zp_ptr1_hi
+    :HuffDbReadPtr1()
+}
+
+.macro HuffRead_tree_left_y() {
+    lda #<huff_tree_left
+    sta zp_ptr1
+    lda #>huff_tree_left
+    sta zp_ptr1_hi
+    :HuffDbReadPtr1()
+}
+
+.macro HuffRead_tree_right_y() {
+    lda #<huff_tree_right
+    sta zp_ptr1
+    lda #>huff_tree_right
+    sta zp_ptr1_hi
+    :HuffDbReadPtr1()
+}
+#endif
+
+// ============================================================
 // huff_decode_string — Decode a Huffman-compressed string
 //
 // Input:  X = string ID (0-based, 0..HUFF_STR_COUNT-1)

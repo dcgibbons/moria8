@@ -735,16 +735,34 @@ recall_spells: .fill MAX_CREATURES, 0
 #import "../../../../core/zeropage.s"
 #import "../memory128.s"
 #import "../input128.s"
+// Aux-data accessors (recall counters) used by game_loop_helpers.s. On
+// Commodore these are direct main-RAM reads (common/mmu_macros.s); defined
+// inline here because this suite does not import the macro file (its map
+// macros are already provided by memory128.s / input128.s).
+.macro AuxReadX(label) {
+    lda label,x
+}
+.macro AuxReadY(label) {
+    lda label,y
+}
+.macro AuxWriteX(label) {
+    sta label,x
+}
+.macro AuxWriteY(label) {
+    sta label,y
+}
 .macro ChestRouteSegment() {
 }
 .macro ChestRouteRestoreSegment() {
 }
-.macro ChestSummonsSegment() {
-}
-.macro ChestSummonsRestoreSegment() {
-}
 #import "../../../../core/game_loop.s"
-#import "../../../../core/chest_summons.s"
+// No chest items exist in these dispatch tests, so the deferred chest hooks
+// (whose real bodies live in chest_summons.s / chest_loot.s and need item,
+// monster, and dungeon_features deps this minimal suite does not import) are
+// stubbed like the other game_loop externals.
+chest_run_pending_summons:
+chest_run_deferred:
+    rts
 #import "../../../../core/scene_dirty.s"
 #import "../../../../core/scene_force.s"
 mat_scene_dirty: .byte 0

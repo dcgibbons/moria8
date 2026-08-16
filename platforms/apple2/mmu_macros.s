@@ -24,65 +24,6 @@
     jsr mmu_safe_map_read_ptr0
 }
 
-// Huffman decoder data reads. huffman_data.s lives in AUX RAM on this
-// platform (A2AuxData segment, boot-preloaded to aux $3B0C), so these read
-// through the p1 aux thunk. X is preserved by the thunks.
-.macro HuffRead_str_index_x() {
-    txa
-    tay
-    lda #<huff_str_index
-    sta zp_ptr1
-    lda #>huff_str_index
-    sta zp_ptr1_hi
-    jsr mmu_safe_map_read_ptr1
-}
-
-.macro HuffRead_str_index_hi_x() {
-    txa
-    tay
-    lda #<huff_str_index+1
-    sta zp_ptr1
-    lda #>huff_str_index+1
-    sta zp_ptr1_hi
-    jsr mmu_safe_map_read_ptr1
-}
-
-.macro HuffRead_str_index256_x() {
-    txa
-    tay
-    lda #<huff_str_index+256
-    sta zp_ptr1
-    lda #>huff_str_index+256
-    sta zp_ptr1_hi
-    jsr mmu_safe_map_read_ptr1
-}
-
-.macro HuffRead_str_index257_x() {
-    txa
-    tay
-    lda #<huff_str_index+257
-    sta zp_ptr1
-    lda #>huff_str_index+257
-    sta zp_ptr1_hi
-    jsr mmu_safe_map_read_ptr1
-}
-
-.macro HuffRead_tree_left_y() {
-    lda #<huff_tree_left
-    sta zp_ptr1
-    lda #>huff_tree_left
-    sta zp_ptr1_hi
-    jsr mmu_safe_map_read_ptr1
-}
-
-.macro HuffRead_tree_right_y() {
-    lda #<huff_tree_right
-    sta zp_ptr1
-    lda #>huff_tree_right
-    sta zp_ptr1_hi
-    jsr mmu_safe_map_read_ptr1
-}
-
 .macro HuffRead_ptr0_y() {
     :MapRead_ptr0_y()
 }

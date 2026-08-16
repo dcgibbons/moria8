@@ -527,6 +527,65 @@ store helper direct). Routing coverage: `test_main_loop.s` tests 41-42
 (`cmd_open` on a chest dispatches to `tramp_chest_open` and never the door
 handler; a plain tile stays on the door path).
 
+## Implementation Notes — step 13 Loot fulfillment (as-built, 2026-08-15)
+
+Chest contents generate lazily at open time through the GEN-overlay picker,
+per the "Loot fulfillment handoff" design. `core/chest_loot.s` holds the
+resident latch (`chest_loot_pending/x/y/flags`), the resident handoff
+(`chest_run_deferred` + `chest_fulfill_loot`), and the generator
+(`chest_generate_loot`). A new `ChestLootSegment` macro parks the generator in
+the GEN overlay with the picker it uses on C64/Plus4/A2, and on the C128 main
+image (its GEN overlay is full, 27 B free).
+
+Flow: `chest_open_command` marks the chest opened and `chest_stage_loot`
+records the profile (position + a 7-byte VMS flags table indexed by item id −
+128, in the chest overlay). `cmd_open` then calls `chest_run_deferred`, which
+runs the deferred summoning-trap spawns (`chest_run_pending_summons`) and then
+`chest_fulfill_loot`: validate → load GEN overlay → `chest_generate_loot` →
+clear the latch. The generator decodes the VMS flags (bits 0-1 = object/gold/
+mixed; bits 2-5 = 60%/90%/1d2/2d2 drop counts, VMS `moria.inc` chest /
+`monster_death` scheme), rolls drops at the live dungeon level, and places each
+via `pick_item_type_overlay` (object, with `roll_enchantment` + ego roll +
+ammo stacking) or the gold formula, bounded to 10 attempts per drop in a 5x5
+box that is walkable + monster-free + item-free (the upstream LOS check stays
+omitted as recorded). `pick_item_type_overlay` is called directly (the resident
+`pick_item_type` wrapper would reload GEN over the executing overlay); unit
+assemblies call `pick_item_type` instead via the same `#if` the item file uses.
+
+Stale-latch lifecycle: the latch is transient (set and cleared within one
+`cmd_open`), so instead of clearing it in the death/new-game/load reset
+routines — which on C128/A2 sit in byte-exact resident/play payloads with no
+room — `chest_fulfill_loot` validates at point of use that a chest still exists
+at the staged position and discards the latch otherwise. This enforces the
+design's death/new-game/load guarantee (no phantom loot from a stale latch)
+without touching constrained regions or the 89 `item.s`-importing test files.
+Overlay-load failure also clears the latch and discards that chest's contents.
+
+`game_loop.s` `cmd_open` uses the single combined `chest_run_deferred` call
+(summons + loot) so the A2 play payload stays byte-neutral. The step-9 open
+suite's `chest_open_command` branch needed a `jsr`-to-helper restructure
+(`chest_stage_loot`) to keep its long forward branches in range.
+
+Coverage: `test_chest_loot.s` tests 0-3 (no-op with no latch, stale-latch
+discard, valid-chest fulfill with GEN-load + drop placement + latch clear,
+zero-drop outcome). The suite fills only a 7x7 box around the chest rather
+than the whole map, because the C64 map at `$C000` overlaps this suite's Main
+code (ends `$C402`) and a whole-map fill corrupts the running test. The open /
+disarm / bash and main-loop test assemblies were updated to import
+`chest_loot.s` (chest.s stores the latch; game_loop.s calls
+`chest_run_deferred`).
+
+Gates: `make build` all four ports from clean (0 failed asserts); focused
+`TEST_FILTER='chest_open|chest_disarm|chest_bash|chest_loot|main_loop|
+find_hidden_traps_doors|item' make test64` 20/20; `make testapple2`
+memory-contract 22/22 (ovl.gen $A400-$B643, ovl.chest $A400-$AABC). C128
+runtime validation via `make test128-fast` is blocked by pre-existing step-12
+test-assembly defects in `test_main_loop128.s` (missing `AuxReadX` macro and
+`df_target_x`/`ms_spawn_*` from `chest_summons.s`) and
+`test_vdc_scroll_delta128.s` (missing `huff_str_index` import) — both reproduce
+identically on the committed step-12 HEAD, unrelated to step 13; reported as a
+separate infrastructure follow-up.
+
 ## Implementation Notes — step-13 headroom prep (as-built, 2026-08-15)
 
 Step 11 left C64 Default at exactly `$C000` (zero margin); step 13 adds loot

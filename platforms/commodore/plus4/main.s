@@ -403,6 +403,15 @@ ol_target:        .byte 0
 }
 #import "../../../core/item.s"
 #import "../../../core/chest_summons.s"
+// Step-13 chest loot: latch + resident handoff stay in Default; the generator
+// parks in the GEN overlay with the picker it uses.
+.macro ChestLootSegment() {
+    .segment DungeonGenOverlay
+}
+.macro ChestLootRestoreSegment() {
+    .segment Default
+}
+#import "../../../core/chest_loot.s"
 #define ITEM_ACTIONS_OVERLAY_EXTERNAL
 #import "../../../core/player_items.s"
 #import "../../../core/spell_data.s"

@@ -101,6 +101,11 @@ test_finish:
 }
 #import "../../../../core/chest_summons.s"
 #import "../../../../core/chest.s"
+.macro ChestLootSegment() {
+}
+.macro ChestLootRestoreSegment() {
+}
+#import "../../../../core/chest_loot.s"
 
 store_init_all:
     rts

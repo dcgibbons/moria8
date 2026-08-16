@@ -166,6 +166,15 @@ ovl_huffdata_end:
     .segment A2PlaySlot
 }
 #import "../../core/item.s"
+// Step-13 chest loot: latch + resident handoff stay in Default (play slot is
+// full); the generator parks in the GEN overlay with the picker it uses.
+.macro ChestLootSegment() {
+    .segment DungeonGenOverlay
+}
+.macro ChestLootRestoreSegment() {
+    .segment Default
+}
+#import "../../core/chest_loot.s"
 #define ITEM_ACTIONS_OVERLAY_EXTERNAL
 #define PLAYER_ITEM_COMMANDS_EXTERNAL
 #define PLAYER_ITEM_SELECT_EXTERNAL

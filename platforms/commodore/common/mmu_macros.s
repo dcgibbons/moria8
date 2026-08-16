@@ -42,64 +42,6 @@
     lda (zp_ptr0),y
 }
 
-#if HAL_PLATFORM_HUFFMAN_DATA_AUX
-.macro HuffRead_str_index_x() {
-    txa
-    tay
-    lda #<huff_str_index
-    sta zp_ptr1
-    lda #>huff_str_index
-    sta zp_ptr1_hi
-    jsr mmu_safe_db_read_ptr1
-}
-
-.macro HuffRead_str_index_hi_x() {
-    txa
-    tay
-    lda #<huff_str_index+1
-    sta zp_ptr1
-    lda #>huff_str_index+1
-    sta zp_ptr1_hi
-    jsr mmu_safe_db_read_ptr1
-}
-
-.macro HuffRead_str_index256_x() {
-    txa
-    tay
-    lda #<huff_str_index+256
-    sta zp_ptr1
-    lda #>huff_str_index+256
-    sta zp_ptr1_hi
-    jsr mmu_safe_db_read_ptr1
-}
-
-.macro HuffRead_str_index257_x() {
-    txa
-    tay
-    lda #<huff_str_index+257
-    sta zp_ptr1
-    lda #>huff_str_index+257
-    sta zp_ptr1_hi
-    jsr mmu_safe_db_read_ptr1
-}
-
-.macro HuffRead_tree_left_y() {
-    lda #<huff_tree_left
-    sta zp_ptr1
-    lda #>huff_tree_left
-    sta zp_ptr1_hi
-    jsr mmu_safe_db_read_ptr1
-}
-
-.macro HuffRead_tree_right_y() {
-    lda #<huff_tree_right
-    sta zp_ptr1
-    lda #>huff_tree_right
-    sta zp_ptr1_hi
-    jsr mmu_safe_db_read_ptr1
-}
-#endif
-
 // Aux-resident mutable data accessors (store inventory, recall counters).
 // Commodore platforms keep these blocks in main RAM: direct access, zero
 // codegen change. Apple II moves them to aux RAM and binds these to thunked

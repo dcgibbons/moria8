@@ -1917,7 +1917,7 @@ cmd_open:
     jsr get_direction_target
     bcc !open_no_turn+          // Invalid direction, no turn consumed
     jsr chest_open_route        // Chest at target -> chest overlay, else doors
-    jsr chest_run_pending_summons  // Deferred chest summoning-trap spawns
+    jsr chest_run_deferred      // Deferred chest summons + contents fulfillment
     bcc !open_no_turn+          // No door there, no turn consumed
     // Door opened or stuck — consume turn and re-render
     jmp post_turn_update_visibility_or_die

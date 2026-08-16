@@ -23,6 +23,18 @@ chest_skill:      .byte 0   // Effective disarm skill / lock threshold
 chest_difficulty: .byte 0
 chest_p1:         .byte 0   // Chest flag snapshot for trap firing
 
+// VMS contents flags per chest type (docs/CHEST_DESIGN.md "Contents"), indexed
+// by item_id - 128. Bits 0-5 mirror VMS flag bits 24-29 (carry object, carry
+// gold, 60% drop, 90% drop, 1d2 drops, 2d2 drops). Ruined chests never loot.
+chest_loot_flags_table:
+    .byte $0f   // 128 Small Wooden
+    .byte $15   // 129 Large Wooden
+    .byte $0f   // 130 Small Iron
+    .byte $1f   // 131 Large Iron
+    .byte $0f   // 132 Small Steel
+    .byte $23   // 133 Large Steel
+    .byte $00   // 134 Ruined
+
 // ============================================================
 // chest_open_command — Open a chest (docs/CHEST_DESIGN.md).
 // Locked chests require a lock pick (skill - 2*source_level); success clears
@@ -32,7 +44,9 @@ chest_p1:         .byte 0   // Chest flag snapshot for trap firing
 // ============================================================
 chest_open_command:
     jsr chest_find_at_df_target
-    bcc !co_no_turn+
+    bcs !co_have+
+    jmp !co_no_turn+
+!co_have:
     stx chest_slot
     lda fi_p1,x
     and #CHEST_P1_OPENED
@@ -94,7 +108,7 @@ chest_open_command:
     lda fi_p1,x
     ora #CHEST_P1_OPENED
     sta fi_p1,x
-    // Contents generation lands in step 13 (loot handoff).
+    jsr chest_stage_loot       // Store pending loot profile (step 13)
 !co_done:
     sec
     rts
@@ -106,6 +120,28 @@ chest_open_command:
 
 !co_no_turn:
     clc
+    rts
+
+// ============================================================
+// chest_stage_loot — Record the opened chest's contents profile for the
+// resident GEN-overlay handoff (step 13). Only called when the chest survives;
+// an explosion suppresses contents. Content depth comes from the live dungeon
+// level at fulfillment. Clobbers: A, X.
+// ============================================================
+chest_stage_loot:
+    lda #1
+    sta chest_loot_pending
+    ldx chest_slot
+    lda fi_x,x
+    sta chest_loot_x
+    lda fi_y,x
+    sta chest_loot_y
+    lda fi_item_id,x
+    sec
+    sbc #128
+    tax
+    lda chest_loot_flags_table,x
+    sta chest_loot_flags
     rts
 
 // ============================================================
