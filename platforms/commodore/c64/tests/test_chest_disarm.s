@@ -1,14 +1,14 @@
-// test_chest_open.s — Focused runtime tests for step-9 chest Open behavior
-// (docs/CHEST_DESIGN.md "Open (o <Dir>)"). Exercises the production
-// chest_open_command through its real routine: lock pick (skill-based
-// threshold), XP award, confused lockout, trap-on-open (STR / explosion /
-// summon), opened state, and re-open turn consumption.
+// test_chest_disarm.s — Focused runtime tests for step-10 chest Disarm behavior
+// (docs/CHEST_DESIGN.md "Disarm (D <Dir>)"). Exercises the production
+// chest_disarm_command: unfound-vs-not-trapped gating, the VMS chest threshold
+// (skill - source_level - 1), trap-bit clearing with lock preserved, XP award,
+// ordinary failure, and bad-fail trap firing that leaves the trap armed.
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_bootstrap)
 
 .pc = $E000 "Result Buffer"
-tc_results: .fill 9, $ff
+tc_results: .fill 6, $ff
 
 .pc = $080E "Test Code"
 
@@ -22,7 +22,7 @@ test_finish:
     sei
     :BankOutBasic()
     :BankOutKernal()
-    ldx #8
+    ldx #5
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -124,12 +124,14 @@ press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
 // ---- Test spies / controlled stubs ----------------------------------------
-tco_trap_spy:    .byte 0   // trap_apply_damage call count
-tco_huff_count:  .byte 0   // huff_print_msg call count
-tco_huff_last:   .byte 0   // last HSTR_* id printed
-tco_skill_spy:   .byte 0   // chest_disarm_skill call count
-tco_skill:       .byte 0   // controlled effective skill value
-tco_rng_next:    .byte 0   // controlled rng_range result
+tcd_trap_spy:    .byte 0   // trap_apply_damage call count
+tcd_huff_count:  .byte 0   // huff_print_msg call count
+tcd_huff_last:   .byte 0   // last HSTR_* id printed
+tcd_huff_first:  .byte 0   // first HSTR_* id printed
+tcd_skill_spy:   .byte 0   // chest_disarm_skill call count
+tcd_skill:       .byte 0   // controlled effective skill value
+tcd_rng_idx:     .byte 0   // rng sequence read index
+tcd_rng_seq:     .fill 4, 0
 
 .macro PatchJump(target, replacement) {
     lda #$4c
@@ -141,21 +143,27 @@ tco_rng_next:    .byte 0   // controlled rng_range result
 }
 
 test_huff_print_msg:
-    stx tco_huff_last
-    inc tco_huff_count
+    stx tcd_huff_last
+    lda tcd_huff_count
+    bne !not_first+
+    stx tcd_huff_first
+!not_first:
+    inc tcd_huff_count
     rts
 
 test_trap_apply_damage:
-    inc tco_trap_spy
+    inc tcd_trap_spy
     rts
 
 test_rng_range:
-    lda tco_rng_next
+    ldx tcd_rng_idx
+    lda tcd_rng_seq,x
+    inc tcd_rng_idx
     rts
 
 test_chest_disarm_skill:
-    inc tco_skill_spy
-    lda tco_skill
+    inc tcd_skill_spy
+    lda tcd_skill
     rts
 
 // test_reset — clear floor items, spies, player XP/effects; chest target (12,18).
@@ -163,10 +171,12 @@ test_reset:
     jsr player_init
     jsr item_init_floor
     lda #0
-    sta tco_trap_spy
-    sta tco_huff_count
-    sta tco_huff_last
-    sta tco_skill_spy
+    sta tcd_trap_spy
+    sta tcd_huff_count
+    sta tcd_huff_last
+    sta tcd_huff_first
+    sta tcd_skill_spy
+    sta tcd_rng_idx
     sta zp_eff_confuse
     sta zp_eff_blind
     sta zp_eff_poison
@@ -209,20 +219,20 @@ test_start:
     :PatchJump(rng_range, test_rng_range)
     :PatchJump(chest_disarm_skill, test_chest_disarm_skill)
 
-    // Test 0: unlocked, untrapped chest opens, sets OPENED, consumes the turn,
-    // fires no trap, awards no XP.
+    // Test 0: untrapped chest -> "The chest was not trapped.", no turn, no
+    // skill roll, no state change.
     jsr test_reset
     lda #0
     ldx #5
     jsr test_setup_chest
-    jsr chest_open_command
-    bcc !t0_fail+
-    lda fi_p1 + 0
-    and #CHEST_P1_OPENED
-    beq !t0_fail+
-    lda tco_trap_spy
+    jsr chest_disarm_command
+    bcs !t0_fail+
+    lda tcd_huff_last
+    cmp #HSTR_CHEST_DISARM_NOT_TRAPPED
     bne !t0_fail+
-    lda player_data + PL_XP_0
+    lda tcd_skill_spy
+    bne !t0_fail+
+    lda tcd_trap_spy
     bne !t0_fail+
     lda #$01
     sta tc_results + 0
@@ -231,28 +241,25 @@ test_start:
     lda #$00
     sta tc_results + 0
 
-    // Test 1: locked chest, successful pick (skill 50 vs source_level 5 ->
-    // difficulty 10, threshold = 50 - 10 - 1 = 39, rng 10 < 39) clears the
-    // lock, awards source_level XP, then opens (no traps) and sets OPENED.
+    // Test 1: armed but unfound trap -> "I don't see a trap...", no turn, trap
+    // stays armed and unfound, no skill roll.
 !t1:
     jsr test_reset
-    lda #50
-    sta tco_skill
-    lda #10
-    sta tco_rng_next
-    lda #CHEST_P1_LOCKED
+    lda #CHEST_P1_TRAP_STR
     ldx #5
     jsr test_setup_chest
-    jsr chest_open_command
-    bcc !t1_fail+
-    lda fi_p1 + 0
-    and #CHEST_P1_LOCKED
+    jsr chest_disarm_command
+    bcs !t1_fail+
+    lda tcd_huff_last
+    cmp #HSTR_CHEST_DISARM_UNFOUND
+    bne !t1_fail+
+    lda tcd_skill_spy
     bne !t1_fail+
     lda fi_p1 + 0
-    and #CHEST_P1_OPENED
+    and #CHEST_P1_TRAP_STR
     beq !t1_fail+
-    lda player_data + PL_XP_0
-    cmp #5
+    lda fi_p1 + 0
+    and #CHEST_P1_TRAP_FOUND
     bne !t1_fail+
     lda #$01
     sta tc_results + 1
@@ -261,27 +268,28 @@ test_start:
     lda #$00
     sta tc_results + 1
 
-    // Test 2: locked chest, failed pick (skill 50 vs source_level 127 ->
-    // difficulty 254, threshold = 50 - 254 - 1 clamped to 0, rng 0 not < 0)
-    // keeps the lock, awards no XP, sets no OPENED, consumes the turn.
+    // Test 2: armed + found, successful disarm (skill 50, source_level 5 ->
+    // threshold 44, rng 10 < 44) clears the trap, awards source_level XP,
+    // prints disarmed, consumes the turn.
 !t2:
     jsr test_reset
     lda #50
-    sta tco_skill
-    lda #0
-    sta tco_rng_next
-    lda #CHEST_P1_LOCKED
-    ldx #127
+    sta tcd_skill
+    lda #10
+    sta tcd_rng_seq + 0
+    lda #CHEST_P1_TRAP_STR | CHEST_P1_TRAP_FOUND
+    ldx #5
     jsr test_setup_chest
-    jsr chest_open_command
+    jsr chest_disarm_command
     bcc !t2_fail+
     lda fi_p1 + 0
-    and #CHEST_P1_LOCKED
-    beq !t2_fail+
-    lda fi_p1 + 0
-    and #CHEST_P1_OPENED
+    and #CHEST_P1_TRAP_STR
     bne !t2_fail+
     lda player_data + PL_XP_0
+    cmp #5
+    bne !t2_fail+
+    lda tcd_huff_last
+    cmp #HSTR_CHEST_DISARMED
     bne !t2_fail+
     lda #$01
     sta tc_results + 2
@@ -290,28 +298,25 @@ test_start:
     lda #$00
     sta tc_results + 2
 
-    // Test 3: confused player cannot pick a lock — message, lock intact, no
-    // skill roll consumed, turn consumed.
+    // Test 3: successful disarm of a locked chest clears the trap but preserves
+    // the lock.
 !t3:
     jsr test_reset
-    lda #1
-    sta zp_eff_confuse
-    lda #CHEST_P1_LOCKED
+    lda #50
+    sta tcd_skill
+    lda #10
+    sta tcd_rng_seq + 0
+    lda #CHEST_P1_LOCKED | CHEST_P1_TRAP_STR | CHEST_P1_TRAP_FOUND
     ldx #5
     jsr test_setup_chest
-    jsr chest_open_command
+    jsr chest_disarm_command
     bcc !t3_fail+
+    lda fi_p1 + 0
+    and #CHEST_P1_TRAP_STR
+    bne !t3_fail+
     lda fi_p1 + 0
     and #CHEST_P1_LOCKED
     beq !t3_fail+
-    lda fi_p1 + 0
-    and #CHEST_P1_OPENED
-    bne !t3_fail+
-    lda tco_skill_spy
-    bne !t3_fail+
-    lda tco_huff_last
-    cmp #HSTR_CHEST_PICK_CONFUSED
-    bne !t3_fail+
     lda #$01
     sta tc_results + 3
     jmp !t4+
@@ -319,30 +324,30 @@ test_start:
     lda #$00
     sta tc_results + 3
 
-    // Test 4: unlocked chest with an armed lose-STR trap fires on open — trap
-    // damage applied once, STR decremented 10->9, trap identified (bit 6) and
-    // disarmed (bit 1 cleared), OPENED set.
+    // Test 4: ordinary failure (skill 50, threshold 44, rng 50 fails; bad-fail
+    // roll rng 50 >= 5 is safe) leaves the trap armed, prints failed, consumes
+    // the turn, fires nothing.
 !t4:
     jsr test_reset
-    lda #CHEST_P1_TRAP_STR
+    lda #50
+    sta tcd_skill
+    lda #50
+    sta tcd_rng_seq + 0
+    sta tcd_rng_seq + 1
+    lda #CHEST_P1_TRAP_STR | CHEST_P1_TRAP_FOUND
     ldx #5
     jsr test_setup_chest
-    jsr chest_open_command
+    jsr chest_disarm_command
     bcc !t4_fail+
-    lda fi_p1 + 0
-    and #CHEST_P1_OPENED
-    beq !t4_fail+
+    lda tcd_huff_last
+    cmp #HSTR_CHEST_DISARM_FAIL
+    bne !t4_fail+
     lda fi_p1 + 0
     and #CHEST_P1_TRAP_STR
-    bne !t4_fail+
-    lda fi_p1 + 0
-    and #CHEST_P1_TRAP_FOUND
     beq !t4_fail+
-    lda tco_trap_spy
-    cmp #1
+    lda tcd_trap_spy
     bne !t4_fail+
-    lda player_data + PL_STR_CUR
-    cmp #9
+    lda player_data + PL_XP_0
     bne !t4_fail+
     lda #$01
     sta tc_results + 4
@@ -351,103 +356,41 @@ test_start:
     lda #$00
     sta tc_results + 4
 
-    // Test 5: explosion trap destroys the chest (slot emptied), suppresses the
-    // OPENED state, still applies damage and consumes the turn.
+    // Test 5: bad failure (skill 3 < 6 forces the bad-fail branch; threshold 0
+    // fails) fires the trap once, decrements STR, sets the found bit, and
+    // leaves the trap armed (upstream keeps flags on a bad fail).
 !t5:
     jsr test_reset
-    lda #CHEST_P1_TRAP_EXPL
+    lda #3
+    sta tcd_skill
+    lda #0
+    sta tcd_rng_seq + 0
+    lda #CHEST_P1_TRAP_STR | CHEST_P1_TRAP_FOUND
     ldx #5
     jsr test_setup_chest
-    jsr chest_open_command
+    jsr chest_disarm_command
     bcc !t5_fail+
-    lda fi_item_id + 0
-    cmp #FI_EMPTY
+    lda tcd_huff_first
+    cmp #HSTR_CHEST_DISARM_SET_OFF
     bne !t5_fail+
-    lda tco_trap_spy
+    lda tcd_trap_spy
     cmp #1
     bne !t5_fail+
+    lda player_data + PL_STR_CUR
+    cmp #9
+    bne !t5_fail+
+    lda fi_p1 + 0
+    and #CHEST_P1_TRAP_STR
+    beq !t5_fail+
+    lda fi_p1 + 0
+    and #CHEST_P1_TRAP_FOUND
+    beq !t5_fail+
     lda #$01
     sta tc_results + 5
-    jmp !t6+
+    jmp !done+
 !t5_fail:
     lda #$00
     sta tc_results + 5
-
-    // Test 6: summoning trap stages three deferred spawn attempts in the
-    // resident latch, applies no direct damage, and the chest opens.
-!t6:
-    jsr test_reset
-    lda #CHEST_P1_TRAP_SUMMON
-    ldx #5
-    jsr test_setup_chest
-    jsr chest_open_command
-    bcc !t6_fail+
-    lda chest_pending_summons
-    cmp #3
-    bne !t6_fail+
-    lda tco_trap_spy
-    bne !t6_fail+
-    lda fi_p1 + 0
-    and #CHEST_P1_OPENED
-    beq !t6_fail+
-    lda #$01
-    sta tc_results + 6
-    jmp !t7+
-!t6_fail:
-    lda #$00
-    sta tc_results + 6
-
-    // Test 7: re-opening an already-opened chest consumes a turn, fires no trap,
-    // and leaves OPENED set.
-!t7:
-    jsr test_reset
-    lda #CHEST_P1_OPENED
-    ldx #5
-    jsr test_setup_chest
-    jsr chest_open_command
-    bcc !t7_fail+
-    lda fi_p1 + 0
-    and #CHEST_P1_OPENED
-    beq !t7_fail+
-    lda tco_trap_spy
-    bne !t7_fail+
-    lda #$01
-    sta tc_results + 7
-    jmp !t8+
-!t7_fail:
-    lda #$00
-    sta tc_results + 7
-
-    // Test 8: chest_threshold_value implements the VMS chest formula
-    // threshold = skill - N - 1 (clamped to 0..100), NOT the floor-trap
-    // skill + 99 - N. Pins mid value, +1/-1 boundaries, and negative clamp.
-!t8:
-    lda #50
-    ldx #10
-    jsr chest_threshold_value     // 50 - 10 - 1 = 39
-    cmp #39
-    bne !t8_fail+
-    lda #12
-    ldx #10
-    jsr chest_threshold_value     // 12 - 10 - 1 = 1
-    cmp #1
-    bne !t8_fail+
-    lda #11
-    ldx #10
-    jsr chest_threshold_value     // 11 - 10 - 1 = 0
-    cmp #0
-    bne !t8_fail+
-    lda #5
-    ldx #10
-    jsr chest_threshold_value     // 5 - 10 - 1 < 0 -> clamp 0
-    cmp #0
-    bne !t8_fail+
-    lda #$01
-    sta tc_results + 8
-    jmp !done+
-!t8_fail:
-    lda #$00
-    sta tc_results + 8
 
 !done:
     jmp test_finish

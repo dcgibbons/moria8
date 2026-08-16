@@ -252,10 +252,13 @@ chest_award_xp:
     rts
 
 // ============================================================
-// chest_threshold_value — Value-based disarm success threshold.
-// Mirror of disarm_calc_success_threshold (disarm_helpers.s) taking the
-// difficulty as a value instead of a trap_difficulty table index.
-// Input:  A = signed disarm total, X = difficulty (e.g., 2*source_level)
+// chest_threshold_value — Value-based chest lock/disarm success threshold.
+// VMS Moria tests chests with `(skill - N) > randint(100)` (moria.inc: lock
+// pick N = 2*source_level, disarm N = source_level), and randint(100) returns
+// 1..100. rng_range(100) returns 0..99, so the equivalent threshold is
+// skill - N - 1, clamped to 0..100. (This is NOT the floor-trap helper, which
+// upstream uses an easier `total + 100 - level` form.)
+// Input:  A = signed disarm total, X = difficulty N
 // Output: A = threshold for rng_range(100); 100 means guaranteed success.
 // ============================================================
 chest_threshold_value:
@@ -268,16 +271,17 @@ chest_threshold_value:
     lda #$ff
     sta zp_math_b
 !ctv_hi:
-    clc
-    lda zp_math_a
-    adc #99
-    sta zp_math_a
-    lda zp_math_b
-    adc #0
-    sta zp_math_b
+    // 16-bit signed: skill - N - 1
     sec
     lda zp_math_a
     sbc chest_difficulty
+    sta zp_math_a
+    lda zp_math_b
+    sbc #0
+    sta zp_math_b
+    sec
+    lda zp_math_a
+    sbc #1
     sta zp_math_a
     lda zp_math_b
     sbc #0
@@ -515,9 +519,94 @@ chest_roll_bad_fail:
     rts
 
 // ============================================================
-// Stubs for steps 10-11 (disarm/bash chest branches)
+// chest_disarm_command — Disarm a found, armed chest trap (docs/CHEST_DESIGN.md).
+// Armed but unfound (bit 6 clear): "I don't see a trap..." — no turn. Never
+// trapped or already disarmed: "The chest was not trapped." — no turn. Armed
+// and found: success iff rng_range(100) < skill - source_level - 1 (VMS chest
+// form). Success clears the trap bits (lock preserved) and grants source_level
+// XP. Ordinary failure leaves state unchanged. A bad fail fires the trap; the
+// surviving trap stays armed (upstream does not clear flags on a bad fail) and
+// the trigger sets the found bit.
+// ============================================================
+chest_disarm_command:
+    jsr chest_find_at_df_target
+    bcs !cdc_have+
+    clc                       // No chest at target (safety) — no turn
+    rts
+!cdc_have:
+    stx chest_slot
+    lda fi_p1,x
+    and #CHEST_P1_TRAP_MASK
+    bne !cdc_armed+
+    ldx #HSTR_CHEST_DISARM_NOT_TRAPPED
+    jsr huff_print_msg
+    clc
+    rts
+!cdc_armed:
+    lda fi_p1,x
+    and #CHEST_P1_TRAP_FOUND
+    bne !cdc_found+
+    ldx #HSTR_CHEST_DISARM_UNFOUND
+    jsr huff_print_msg
+    clc
+    rts
+!cdc_found:
+    jsr chest_disarm_skill
+    sta df_disarm_total       // Keep the skill for a later bad-fail roll
+    ldx chest_slot
+    lda fi_to_hit,x           // difficulty = source_level (not doubled)
+    tax
+    lda df_disarm_total
+    jsr chest_threshold_value // A = skill - source_level - 1
+    sta chest_skill
+    lda #100
+    jsr rng_range
+    cmp chest_skill
+    bcs !cdc_fail+
+
+    // Success: clear the trap bits (lock preserved), award source_level XP.
+    ldx chest_slot
+    lda fi_p1,x
+    and #~CHEST_P1_TRAP_MASK & $ff
+    sta fi_p1,x
+    lda fi_to_hit,x
+    jsr chest_award_xp
+    ldx #HSTR_CHEST_DISARMED
+    jsr huff_print_msg
+    sec
+    rts
+
+!cdc_fail:
+    lda df_disarm_total
+    jsr chest_roll_bad_fail
+    bcs !cdc_bad_fail+
+    ldx #HSTR_CHEST_DISARM_FAIL
+    jsr huff_print_msg
+    sec
+    rts
+
+!cdc_bad_fail:
+    ldx #HSTR_CHEST_DISARM_SET_OFF
+    jsr huff_print_msg
+    // Fire the trap. Upstream leaves the surviving trap armed on a bad fail,
+    // so stash the armed bits and restore them if the chest survives.
+    ldx chest_slot
+    lda fi_p1,x
+    and #CHEST_P1_TRAP_MASK
+    sta chest_p1
+    jsr chest_trigger_traps
+    bcs !cdc_done+            // Explosion destroyed the chest — nothing to restore
+    ldx chest_slot
+    lda fi_p1,x
+    ora chest_p1
+    sta fi_p1,x
+!cdc_done:
+    sec
+    rts
+
+// ============================================================
+// Stub for step 11 (bash chest branch)
 // ============================================================
 chest_bash_command:
-chest_disarm_command:
     clc
     rts

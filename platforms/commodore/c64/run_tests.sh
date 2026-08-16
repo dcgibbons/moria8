@@ -3947,7 +3947,8 @@ run_test "identify_spell" "tests/test_identify_spell.s" "0400 0403" 4 500000000
 run_test "teleport_self" "tests/test_teleport_self.s" "0400 0401" 2 500000000
 run_test "remove_curse" "tests/test_remove_curse.s" "0400 0402" 3 500000000
 run_test "find_hidden_traps_doors" "tests/test_find_hidden_traps_doors.s" "0400 0407" 8 500000000
-run_test "chest_open" "tests/test_chest_open.s" "0400 0407" 8 500000000
+run_test "chest_open" "tests/test_chest_open.s" "0400 0408" 9 500000000
+run_test "chest_disarm" "tests/test_chest_disarm.s" "0400 0405" 6 500000000
 run_test "stinking_cloud" "tests/test_stinking_cloud.s" "0400 0402" 3 500000000
 run_test "frost_ball" "tests/test_frost_ball.s" "0400 0402" 3 500000000
 run_test "teleport_other" "tests/test_teleport_other.s" "0400 0402" 3 500000000

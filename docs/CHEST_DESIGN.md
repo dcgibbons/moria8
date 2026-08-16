@@ -338,7 +338,12 @@ required:
    6-entry `trap_difficulty` table, not a difficulty value (review
    2026-08-13). Chest lock/disarm formulas need difficulty = source level;
    split the helper into a value-based variant (difficulty in a register or
-   scratch) and keep the indexed wrapper for floor traps.
+   scratch) and keep the indexed wrapper for floor traps. Note the value-based
+   chest variant is NOT a mere value-taking copy of the floor helper: floor
+   traps use Umoria's easier `total + 100 - level > randint(100)`, while VMS
+   chests use the harder `(skill - N) > randint(100)` (moria.inc lock pick
+   N = 2*level, disarm N = level), so the chest threshold is `skill - N - 1`,
+   not `skill + 99 - N`.
 6. `test_store.s` picker predicates pass with duplicates; add a
    completeness/uniqueness check over IDs 2-133 plus the ruined exclusion.
 7. Wizard "ITEM 0-127" prompt strings and `run_tests.sh` static contract
@@ -522,28 +527,80 @@ store helper direct). Routing coverage: `test_main_loop.s` tests 41-42
 (`cmd_open` on a chest dispatches to `tramp_chest_open` and never the door
 handler; a plain tile stays on the door path).
 
+## Implementation Notes — step 10 Disarm (as-built, 2026-08-15)
+
+`chest_disarm_command` (core/chest.s, chest overlay) implements the Disarm
+rules, reached end-to-end through `disarm_command` → `chest_dispatch`. Gating:
+an armed-but-unfound trap (bit 6 clear) prints "I don't see a trap..." with no
+turn; a never-trapped or already-disarmed chest prints "The chest was not
+trapped." with no turn. An armed and found trap rolls success iff
+`rng_range(100) < skill - source_level - 1` (the corrected `chest_threshold_value`;
+difficulty is `source_level`, not the lock's `2*source_level`). Success clears
+the trap bits `CHEST_P1_TRAP_MASK` (lock preserved) and grants `source_level` XP.
+Ordinary failure leaves state unchanged and consumes the turn. A bad fail
+(existing `chest_roll_bad_fail` policy) prints "You set a trap off!" and fires
+the trap via `chest_trigger_traps`; because upstream leaves the surviving trap
+armed on a bad fail, the command stashes the armed bits before firing and
+restores them if the chest survives (an explosion destruction skips the
+restore).
+
+The five disarm messages were appended to the Huffman corpus
+(`@CHEST_DISARM_UNFOUND`, `@CHEST_DISARM_NOT_TRAPPED`, `@CHEST_DISARMED`,
+`@CHEST_DISARM_FAIL`, `@CHEST_DISARM_SET_OFF`; VMS text, 214 strings total) and
+`huffman_data.s` re-encoded. The ~84-byte corpus growth pushed the step-8
+`test_find_hidden_traps_doors.s` 8 bytes over its `$C000` map boundary, so that
+suite dropped the full `dungeon_gen.s` import in favor of a test-local
+`fill_map_rock` plus a `random_floor_in_room` linker stub (special-room
+generation is not exercised there) — same test-layout maintenance as prior
+steps.
+
+Coverage: `test_chest_disarm.s` tests 0-5 exercise the production
+`chest_disarm_command` directly (same harness pattern as step 9;
+`chest_disarm_skill` and a sequence-based `rng_range` patched for the two-roll
+bad-fail path): untrapped prints not-trapped/no-turn; armed-unfound prints
+unfound/no-turn and stays armed+unfound; success clears the trap and awards
+source_level XP; locked success clears the trap but preserves the lock;
+ordinary failure leaves the trap armed with no XP; bad failure fires the trap
+once (STR decrement), sets the found bit, and leaves the trap armed.
+
+Gates: `make build` all four ports from clean (0 failed asserts); focused
+`TEST_FILTER='chest_open|chest_disarm|main_loop|find_hidden_traps_doors|item'
+make test64` 18/18 (incl. `chest_open` 9/9, `chest_disarm` 6/6, `main_loop`
+42/42, `find_hidden_traps_doors` 8/8); `make testapple2` memory-contract 22/22
+(ovl.chest $A400-$AA38). Slow serial platform suites deferred per the
+verification plan.
+
 ## Implementation Notes — step 9 Open (as-built, 2026-08-15)
 
 `chest_open_command` (core/chest.s, chest overlay) implements the Open rules:
 chest-at-tile resident pre-dispatch (`chest_open_route`); locked chests require
-a pick with success iff `rng_range(100) < clamp(skill + 99 - 2*source_level, 0,
-100)` (the value-based `chest_threshold_value`); a pick clears `CHEST_P1_LOCKED`
-and grants `source_level` XP via the 24-bit `chest_award_xp`; confused players
-are blocked with the too-confused message and no skill roll. Once unlocked the
-armed traps fire in VMS order (`chest_trigger_traps`), the trap bits are
-cleared, and `CHEST_P1_OPENED` is set — unless an explosion destroyed the chest
-(`floor_item_remove`), which suppresses the opened state and (later) contents.
-Re-opening an opened chest consumes a turn with no effect.
+a pick with success iff `rng_range(100) < clamp(skill - 2*source_level - 1, 0,
+100)` (the VMS chest form `(skill - 2*level) > randint(100)` at
+moria.inc:2716, converted for 0-based `rng_range`); a pick clears
+`CHEST_P1_LOCKED` and grants `source_level` XP via the 24-bit `chest_award_xp`;
+confused players are blocked with the too-confused message and no skill roll.
+Once unlocked the armed traps fire in VMS order (`chest_trigger_traps`), the
+trap bits are cleared, and `CHEST_P1_OPENED` is set — unless an explosion
+destroyed the chest (`floor_item_remove`), which suppresses the opened state
+and (later) contents. Re-opening an opened chest consumes a turn with no effect.
 
-Bug found by the new behavioral suite and fixed in the same step: the lock-pick
-threshold call dropped the skill. `chest_disarm_skill` returns the effective
-skill in A (stored to `chest_skill`), but `lda fi_to_hit,x / asl` then
-overwrote A with the difficulty before `jsr chest_threshold_value`, so the
-threshold was computed from difficulty alone (~99 always, independent of skill
-or source level). Fix: reload `lda chest_skill` into A before the threshold
-call so `X = difficulty`, `A = skill` as the helper expects.
+Two bugs were found by the behavioral suite and fixed in the same step:
 
-Coverage: `test_chest_open.s` tests 0-7 exercise the production
+- The lock-pick threshold call dropped the skill. `chest_disarm_skill` returns
+  the effective skill in A (stored to `chest_skill`), but `lda fi_to_hit,x /
+  asl` then overwrote A with the difficulty before `jsr chest_threshold_value`,
+  so the threshold was computed from difficulty alone. Fix: reload
+  `lda chest_skill` into A before the threshold call so `X = difficulty`,
+  `A = skill` as the helper expects.
+- `chest_threshold_value` used the floor-trap `skill + 99 - N` convention
+  (mirroring `disarm_calc_success_threshold`). Upstream chests use a harder
+  `(skill - N) > randint(100)` form — floor traps are the easier
+  `total + 100 - level` — so the helper was corrected to the chest form
+  `skill - N - 1`. This made lock picking far too easy (~always succeed) before
+  the fix; the step-9 suite's initial threshold assertion had been written
+  against the wrong helper and was corrected to pin the VMS value.
+
+Coverage: `test_chest_open.s` tests 0-8 exercise the production
 `chest_open_command` directly (chest overlay imported into the unit assembly;
 `huff_print_msg`, `trap_apply_damage`, `rng_range`, and `chest_disarm_skill`
 patched to spies/controlled stubs for determinism): untrapped open sets OPENED
@@ -552,14 +609,16 @@ XP; failed pick (threshold 0) keeps the lock and awards nothing; confused lock
 prints the message and consumes no skill roll; lose-STR trap fires once,
 decrements STR, sets found and clears the trap bit; explosion empties the floor
 slot and suppresses OPENED; summoning stages `chest_pending_summons = 3` with
-no direct damage; re-open consumes a turn with no trap. The pick-success test
-(T1) failed before the threshold fix and passes after.
+no direct damage; re-open consumes a turn with no trap. Test 8 pins
+`chest_threshold_value` to the VMS `skill - N - 1` value at mid/boundary/clamp
+points (it fails under the old `+99` helper). The pick-success test (T1) failed
+before the threshold-call fix and passes after.
 
 Gates: `make build` all four ports (0 failed asserts); focused
 `TEST_FILTER='chest_open|main_loop|find_hidden_traps_doors|item' make test64`
-17/17 (incl. `chest_open` 8/8, `main_loop` 42/42 routing, `item` 57/57
-catalog). Per the verification plan the slow serial platform suites are not run
-per gameplay step; they run at the next architectural step and at feature end.
+(incl. `chest_open` 9/9, `main_loop` 42/42 routing, `item` 57/57 catalog). Per
+the verification plan the slow serial platform suites are not run per gameplay
+step; they run at the next architectural step and at feature end.
 
 
 

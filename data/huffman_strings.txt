@@ -246,3 +246,8 @@ Sorry, what was that again?
 @CHEST_PICK_FAIL You failed to pick the lock.
 @CHEST_DEATH_NEEDLE a poison needle.
 @CHEST_DEATH_EXPLODING an exploding chest.
+@CHEST_DISARM_UNFOUND I don't see a trap...
+@CHEST_DISARM_NOT_TRAPPED The chest was not trapped.
+@CHEST_DISARMED You have disarmed the chest.
+@CHEST_DISARM_FAIL You failed to disarm the chest.
+@CHEST_DISARM_SET_OFF You set a trap off!

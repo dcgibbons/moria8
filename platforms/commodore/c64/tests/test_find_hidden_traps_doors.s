@@ -53,7 +53,6 @@ test_finish:
 .segment Default
 #import "../../../../core/sound.s"
 #import "../../../../core/dungeon_data.s"
-#import "../../../../core/dungeon_gen.s"
 #import "../../../../core/huffman.s"
 .macro ChestSearchSegment() {
 }
@@ -92,6 +91,32 @@ test_finish:
 #import "../../../../core/ui_trampoline_stubs.s"
 
 store_init_all:
+    rts
+
+// Local fill_map_rock (avoids importing all of dungeon_gen.s for map setup).
+fill_map_rock:
+    ldx #0
+!fmr_row:
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #0
+!fmr_col:
+    lda #TILE_WALL_H
+    :MapWrite_ptr0_y()
+    iny
+    cpy #MAP_COLS
+    bne !fmr_col-
+    inx
+    cpx #MAP_ROWS
+    bne !fmr_row-
+    rts
+
+// Linker stub — special-room generation is never exercised by this suite.
+random_floor_in_room:
+    lda #10
+    ldy #10
     rts
 
 store_restock_all:
