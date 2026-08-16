@@ -471,7 +471,6 @@ ol_target:        .byte 0
 #import "../../../core/spell_data.s"
 #define SPELL_EFFECTS_INCLUDE_IDENTIFY
 #import "../../../core/spell_effects.s"
-#import "../../../core/spell_effects_overlay.s"
 #undef SPELL_EFFECTS_INCLUDE_IDENTIFY
 #import "../../../core/player_magic_state.s"
 #import "../../../core/player_magic_state_ops.s"
@@ -2651,6 +2650,9 @@ ovl_modal_misc_end:
     #undef PMX_DETECT_EFFECTS_EXTERNAL
     #undef PMX_MAP_AREA_EXTERNAL
     #undef PMX_EARTHQUAKE_EXTERNAL
+    // eff_find_traps / eff_destroy_traps_doors: only callers are the spell-exec
+    // and utility code in this overlay, so park them here to free resident room.
+    #import "../../../core/spell_effects_overlay.s"
     #define SCROLL_P3_EXISTING_OWNER
     #define SCROLL_P3_NEW_OWNER
     #import "../../../core/scroll_effects_p3.s"

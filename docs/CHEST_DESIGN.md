@@ -527,6 +527,26 @@ store helper direct). Routing coverage: `test_main_loop.s` tests 41-42
 (`cmd_open` on a chest dispatches to `tramp_chest_open` and never the door
 handler; a plain tile stays on the door path).
 
+## Implementation Notes — step-13 headroom prep (as-built, 2026-08-15)
+
+Step 11 left C64 Default at exactly `$C000` (zero margin); step 13 adds loot
+strings to the resident corpus. Rather than string banking (investigated and
+rejected: the corpus is dominated by small warm gameplay messages with no large
+cold payload, so banking yields only ~150-300 fragmented bytes at high wiring
+cost), the lever is code relocation. `spell_effects_overlay.s`
+(`eff_find_traps` 48 B + `eff_destroy_traps_doors` 189 B) moved from C64
+Default into the C64 `SpellOverlay` segment. Both routines' only callers are
+the spell-exec (`player_magic_execute_overlay.s`) and utility
+(`player_magic_utility.s`) code already in that overlay, so they move with
+direct calls and no trampolines — the file's designed placement (the A2
+`EFF_DESTROY_TRAPS_DOORS_EXTERNAL` pattern). Frees 237 B of Default:
+`program_end` `$C000` → `$BF13`; spell overlay `$EC54` → `$ED41` (~700 B free).
+
+Gates: `make build` all four ports from clean (0 failed asserts); focused
+`find_hidden_traps_doors` 8/8, chest suites, and the scripted spell-cast /
+book / dungeon-target / detect-evil smokes all pass through the production
+spell-exec → spell-overlay path; `make testapple2` 22/22.
+
 ## Implementation Notes — step 11 Bash (as-built, 2026-08-15)
 
 `chest_bash_command` (core/chest.s, chest overlay) implements the Bash rules,
