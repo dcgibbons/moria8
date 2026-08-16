@@ -43,11 +43,15 @@
 // input_lock_charset_switch — Disable KERNAL Shift+C= charset switching.
 // The game owns the active C64 charset; the KERNAL scanner must not let
 // Commodore+Shift toggle $D018 while IRQ-backed input is active.
+// One-shot at boot; the product keeps its copy in the init-only tail past
+// program_end (the resident image funds chest strings there).
 // Preserves: X, Y
+#if !INPUT_LOCK_CHARSET_SWITCH_EXTERNAL
 input_lock_charset_switch:
     lda #KERNAL_CHARSET_SWITCH_LOCK
     sta KERNAL_SHIFT_MODE
     rts
+#endif
 
 // input_get_key — Wait for a keypress, return PETSCII code
 // Output: A = PETSCII code of key pressed

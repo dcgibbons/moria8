@@ -527,6 +527,42 @@ store helper direct). Routing coverage: `test_main_loop.s` tests 41-42
 (`cmd_open` on a chest dispatches to `tramp_chest_open` and never the door
 handler; a plain tile stays on the door path).
 
+## Implementation Notes — step 11 Bash (as-built, 2026-08-15)
+
+`chest_bash_command` (core/chest.s, chest overlay) implements the Bash rules,
+reached through `bash_command` → `chest_dispatch` (the post-confusion target).
+A 1-in-10 roll destroys the chest — identity becomes a Ruined Chest (ID 134),
+`p1`/`to_hit` zeroed, contents never generated — and this applies even to an
+already-opened chest. Otherwise, if locked, a separate 1-in-10 breaks the lock
+("The lock breaks open!"); anything else prints "The chest holds firm." Bash
+never disarms a trap and never opens the chest, and there is no off-balance
+roll (that is monster-bash-only). VMS bash (moria.inc:3454) prints nothing on
+the no-op path; the "holds firm" message is the design's feedback addition.
+
+Four bash messages appended (`@CHEST_DESTROYED`, `@CHEST_DESTROYED_CONTENTS`,
+`@CHEST_LOCK_BREAKS`, `@CHEST_HOLDS_FIRM`; VMS text, 218 strings total) and
+`huffman_data.s` re-encoded. The ~65-byte corpus growth pushed C64 Default 6
+bytes over `$C000`; recovered by moving the one-shot boot helper
+`input_lock_charset_switch` (6 bytes) into the init-only tail via a new
+`INPUT_LOCK_CHARSET_SWITCH_EXTERNAL` guard (same pattern as
+`GENERATION_BUSY_INSTALL_EXTERNAL` / `REU_LOAD_ALL_TIERS_EXTERNAL`). C64
+`program_end` is back to exactly `$C000` — zero resident margin remains, so
+steps 13-14 (loot, look suffixes) will need a larger headroom solution.
+
+Coverage: `test_chest_bash.s` tests 0-4 exercise the production
+`chest_bash_command` directly (sequence-based `rng_range` stub; the destroy and
+lock-break branches test `beq` on the roll, so the stub loads the return value
+last to keep Z valid): destroy ruins a locked+trapped chest (ID 134, zeroed);
+lock break clears the lock and leaves the chest intact; double-fail prints
+holds firm with lock and trap preserved; unlocked opened chest holds firm with
+OPENED preserved; destroy applies to an already-opened chest.
+
+Gates: `make build` all four ports from clean (0 failed asserts); focused
+`TEST_FILTER='chest_open|chest_disarm|chest_bash|main_loop|
+find_hidden_traps_doors|item' make test64` 19/19 (incl. `chest_bash` 5/5);
+`make testapple2` memory-contract 22/22 (ovl.chest $A400-$AA8D). Slow serial
+platform suites deferred per the verification plan.
+
 ## Implementation Notes — step 10 Disarm (as-built, 2026-08-15)
 
 `chest_disarm_command` (core/chest.s, chest overlay) implements the Disarm

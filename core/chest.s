@@ -605,8 +605,55 @@ chest_disarm_command:
     rts
 
 // ============================================================
-// Stub for step 11 (bash chest branch)
+// chest_bash_command — Bash a chest (docs/CHEST_DESIGN.md; VMS bash at
+// moria.inc:3454). A 1-in-10 roll destroys the chest — identity becomes a
+// Ruined Chest (ID 134), p1/to_hit zeroed, contents never generated — even for
+// an already-opened chest. Otherwise, if locked, a separate 1-in-10 breaks the
+// lock ("The lock breaks open!"); anything else prints "The chest holds firm."
+// Bash never disarms a trap and never opens the chest; there is no off-balance
+// roll on a chest bash (that is monster-bash-only).
 // ============================================================
 chest_bash_command:
+    jsr chest_find_at_df_target
+    bcs !cbc_have+
     clc
+    rts
+!cbc_have:
+    stx chest_slot
+    lda #10
+    jsr rng_range             // 1-in-10 destroy
+    beq !cbc_destroy+
+    ldx chest_slot
+    lda fi_p1,x
+    and #CHEST_P1_LOCKED
+    beq !cbc_firm+
+    lda #10
+    jsr rng_range             // 1-in-10 break the lock
+    beq !cbc_break_lock+
+!cbc_firm:
+    ldx #HSTR_CHEST_HOLDS_FIRM
+    jsr huff_print_msg
+    sec
+    rts
+!cbc_break_lock:
+    ldx chest_slot
+    lda fi_p1,x
+    and #~CHEST_P1_LOCKED & $ff
+    sta fi_p1,x
+    ldx #HSTR_CHEST_LOCK_BREAKS
+    jsr huff_print_msg
+    sec
+    rts
+!cbc_destroy:
+    ldx chest_slot
+    lda #134                  // Ruined Chest
+    sta fi_item_id,x
+    lda #0
+    sta fi_p1,x
+    sta fi_to_hit,x
+    ldx #HSTR_CHEST_DESTROYED
+    jsr huff_print_msg
+    ldx #HSTR_CHEST_DESTROYED_CONTENTS
+    jsr huff_print_msg
+    sec
     rts
