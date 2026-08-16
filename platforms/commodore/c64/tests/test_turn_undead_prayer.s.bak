@@ -54,7 +54,7 @@ test_done_break:
 .segment Default
 #import "../../../../core/sound.s"
 #import "../../../../core/dungeon_data.s"
-// dungeon_gen removed for MAP_BASE headroom
+#import "../../../../core/dungeon_gen.s"
 #import "../../../../core/huffman.s"
 #import "../../../../core/dungeon_features.s"
 #import "../../../../core/monster.s"
@@ -87,13 +87,6 @@ test_done_break:
 #import "../../../../core/ui_trampoline_stubs.s"
 
 store_init_all:
-    rts
-
-// Linker stub — special-room generation is not exercised by this suite, and
-// dropping dungeon_gen.s keeps the test below MAP_BASE.
-random_floor_in_room:
-    lda #10
-    ldy #10
     rts
 
 store_restock_all:

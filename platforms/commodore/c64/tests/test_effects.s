@@ -63,7 +63,7 @@ test_finish:
 .segment Default
 #import "../../../../core/sound.s"
 #import "../../../../core/dungeon_data.s"
-#import "../../../../core/dungeon_gen.s"
+// dungeon_gen removed for MAP_BASE headroom
 #import "../../../../core/huffman.s"
 #import "../../../../core/dungeon_features.s"
 #import "../../../../core/monster.s"
@@ -95,6 +95,178 @@ magic_check_new_spells:
 
 store_init_all:
     rts
+
+// Local fill_map_rock (avoids importing all of dungeon_gen.s for map setup).
+fill_map_rock:
+    ldx #0
+!fmr_row:
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #0
+!fmr_col:
+    lda #TILE_WALL_H
+    :MapWrite_ptr0_y()
+    iny
+    cpy #MAP_COLS
+    bne !fmr_col-
+    inx
+    cpx #MAP_ROWS
+    bne !fmr_row-
+    rts
+
+// Linker stub — special-room generation is not exercised by this suite.
+random_floor_in_room:
+    lda #10
+    ldy #10
+    rts
+
+// Local room-drawing helpers copied from dungeon_gen.s (generator itself is
+// not imported, to keep the test below MAP_BASE).
+dg_set_row_ptr:
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    rts
+
+dg_room_x:   .byte 0
+dg_room_y:   .byte 0
+dg_room_w:   .byte 0
+dg_room_h:   .byte 0
+
+draw_dungeon_room:
+    lda dg_room_x
+    sec
+    sbc #1
+    sta zp_temp1
+    lda dg_room_y
+    sec
+    sbc #1
+    sta zp_temp2
+    lda dg_room_x
+    clc
+    adc dg_room_w
+    sta zp_temp3
+    lda dg_room_y
+    clc
+    adc dg_room_h
+    sta zp_temp4
+
+    ldx zp_temp2
+    jsr dg_set_row_ptr
+    ldy zp_temp1
+    lda #TILE_CORNER_TL | DUNGEON_FLAGS
+    :MapWrite_ptr0_y()
+    ldy zp_temp3
+    lda #TILE_CORNER_TR | DUNGEON_FLAGS
+    :MapWrite_ptr0_y()
+    ldy zp_temp1
+    iny
+    lda #TILE_WALL_H | DUNGEON_FLAGS
+!dr_top_h:
+    :MapWrite_ptr0_y()
+    iny
+    cpy zp_temp3
+    bne !dr_top_h-
+
+    ldx zp_temp4
+    jsr dg_set_row_ptr
+    ldy zp_temp1
+    lda #TILE_CORNER_BL | DUNGEON_FLAGS
+    :MapWrite_ptr0_y()
+    ldy zp_temp3
+    lda #TILE_CORNER_BR | DUNGEON_FLAGS
+    :MapWrite_ptr0_y()
+    ldy zp_temp1
+    iny
+    lda #TILE_WALL_H | DUNGEON_FLAGS
+!dr_bot_h:
+    :MapWrite_ptr0_y()
+    iny
+    cpy zp_temp3
+    bne !dr_bot_h-
+
+    lda zp_temp2
+    clc
+    adc #1
+    tax
+!dr_sides:
+    jsr dg_set_row_ptr
+    ldy zp_temp1
+    lda #TILE_WALL_V | DUNGEON_FLAGS
+    :MapWrite_ptr0_y()
+    ldy zp_temp3
+    :MapWrite_ptr0_y()
+    ldy zp_temp1
+    iny
+    lda #TILE_FLOOR | DUNGEON_FLAGS
+!dr_interior:
+    :MapWrite_ptr0_y()
+    iny
+    cpy zp_temp3
+    bne !dr_interior-
+    inx
+    cpx zp_temp4
+    bne !dr_sides-
+    rts
+
+darken_rooms:
+    lda #0
+    sta dr_idx
+!dr_loop:
+    lda dr_idx
+    cmp room_count
+    bcs !dr_done+
+    tax
+    lda room_lit,x
+    bne !dr_next+
+    lda room_y,x
+    sec
+    sbc #1
+    sta dg_scan_row_start
+    lda room_y,x
+    clc
+    adc room_h,x
+    sta dg_scan_row_end
+    lda room_x,x
+    sec
+    sbc #1
+    sta dr_start_col
+    lda room_x,x
+    clc
+    adc room_w,x
+    sta dr_end_col
+!dr_row_loop:
+    ldx dg_scan_row_start
+    jsr dg_set_row_ptr
+    ldy dr_start_col
+!dr_col_loop:
+    :MapRead_ptr0_y()
+    and #~FLAG_LIT
+    :MapWrite_ptr0_y()
+    cpy dr_end_col
+    beq !dr_row_done+
+    iny
+    jmp !dr_col_loop-
+!dr_row_done:
+    inc dg_scan_row_start
+    lda dg_scan_row_start
+    cmp dg_scan_row_end
+    beq !dr_row_loop-
+    bcc !dr_row_loop-
+!dr_next:
+    inc dr_idx
+    jmp !dr_loop-
+!dr_done:
+    rts
+
+dr_idx:            .byte 0
+dg_scan_row_start: .byte 0
+dg_scan_row_end:   .byte 0
+dr_start_col:      .byte 0
+dr_end_col:        .byte 0
 
 store_restock_all:
     rts

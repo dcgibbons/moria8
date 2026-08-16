@@ -3583,7 +3583,10 @@ tool_ego_prefix_hi:
 .segment C128ResidentItems
 
 // wizard_wall_walk_active rides the main image (freed by the corpus move);
-// the play payload has no headroom for the chest summon hooks.
+// the play payload has no headroom for the chest summon hooks. Scripted/diag
+// builds omit wizard.s and provide their own stub below, so only assemble the
+// real one in normal builds (else it double-defines against the stub).
+#if !C128_REAL_BOOT_DIAG && !C128_TEST_SCRIPTED_INPUT && !C128_TEST_CACHE_SURVIVAL && !C128_TEST_PERF_P1_TRACE && !C128_TEST_SCRIPTED_SPELL && !C128_TEST_SCRIPTED_SPELL_CANCEL && !C128_TEST_SCRIPTED_BOOK_OVERLAY && !C128_TEST_SCRIPTED_STUDY_BOOK_OVERLAY && !C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY && !C128_TEST_SCRIPTED_SCROLL_SELECTOR && !C128_TEST_SCRIPTED_PRAYER
 wizard_wall_walk_active:
     lda zp_game_flags
     and #GAME_FLAG_WIZARD
@@ -3593,6 +3596,7 @@ wizard_wall_walk_active:
 !inactive:
     lda #0
     rts
+#endif
     #import "../../../core/ego_items.s"
     #import "../../../core/store_data.s"
 ego_str_holy_avenger_common:

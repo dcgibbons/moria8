@@ -53,7 +53,7 @@
     .segment Default
 }
 .macro WizardGenExecSegment() {
-    .segment Default
+    .segment ModalMiscOverlay
 }
 .macro WizardGenExecRestoreSegment() {
     .segment Default

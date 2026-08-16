@@ -77,10 +77,24 @@ recall_spells:  .byte 0
 recall_data_end:
 recall_spell_bit: .byte 1, 2, 4, 8, 16, 32, 64
 recall_clear: rts
-#import "../../../../core/monster_magic.s"
-#import "../../../../core/spell_data.s"
-#import "../../../../core/projectile.s"
-#import "../../../../core/spell_effects.s"
+// Spell/monster-magic stubs — saves ~1.4 KB; dungeon tests never cast spells,
+// run monster AI turns, create characters, or draw the character screen.
+// monster_can_cast carry-clear keeps monster_ai on its non-casting path.
+monster_can_cast:
+    clc
+    rts
+monster_pick_spell:
+    rts
+eff_detect_timer: .byte 0
+class_spell_min_level: .byte 0, 1, 1, 5, 3, 1
+class_spell_total:     .byte 0, 31, 31, 12, 30, 31
+spell_mask_count_ptr:
+    lda #0
+    rts
+// eff_kill_monster stub — dungeon tests never kill a monster (visible monsters
+// block movement; the unseen-collision case uses fear, which forbids attacks).
+eff_kill_monster:
+    rts
 #import "../../../../core/item.s"
 #import "../../../../core/special_rooms.s"
 #import "../../../../core/ego_items.s"
