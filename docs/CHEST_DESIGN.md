@@ -128,7 +128,9 @@ because `roll_enchantment` zeroes p1/to_hit for non-equipment categories
 - An adjacent armed chest rolls the normal per-tile search chance; success
   sets p1 bit 6 and prints "You have discovered a trap on the chest!"
 - Searching an already-found trapped chest prints "The chest is trapped!"
-  (upstream repeat message).
+  (upstream repeat message), unless both message rows are already occupied by
+  the current command. In that case the redundant repeat is suppressed so it
+  cannot replace the command result; the search still reports the chest found.
 - `eff_find_traps` marks p1 bit 6 on every armed floor chest in its scan
   (upstream Find Traps reveals chest traps as well as floor traps).
 
@@ -237,6 +239,43 @@ Notes:
 - Rewards are generated at open time from live RNG. A save before opening
   and after opening legitimately diverge in loot; only chest state is
   persisted.
+
+## Change Record - saturated repeat message (2026-08-17)
+
+```text
+Problem and success criteria: A failed chest disarm fills both message rows
+with the direction prompt and failure result; search mode then finds the same
+known chest and replaces the result with its redundant repeat message. Preserve
+the full command message pair while retaining the search result and turn cost.
+State being changed: Message emission only when a known trapped chest is found
+while zp_msg_flags is MSG_PENDING|MSG_FULL; chest and search state are unchanged.
+Search scope and terms: chest disarm, chest search, CHEST_TRAPPED, message flags,
+search mode, post-turn searchable path, passive search, and explicit Search.
+Relevant readers/writers found and known exclusions: chest_search_reveal writes
+df_found and may print; search_scan_adjacent_silent consumes its carry; msg_print
+owns message-row replacement. Trap discovery messages remain excluded.
+Initialization, reset and persistence points: msg_clear resets zp_msg_flags at
+command start. No persistent chest field or save data changes.
+Affected production sequence through the changed transition: cmd_disarm ->
+chest_disarm_command -> turn_post_action_searchable_or_die ->
+search_scan_effective_silent -> chest_search_reveal.
+Contract decision or selected upstream oracle with source locations: Explicit
+maintainer bug report on 2026-08-17; retain CHEST_DESIGN explicit-search repeat
+behavior when message capacity is available.
+Intentional Moria8 deviations: Suppress the upstream known-chest repeat when
+both local message rows are occupied by the current command.
+Input/intermediate widths, signedness, carry, range and overflow policy: One-byte
+message flags; carry and df_found still report found. No arithmetic change.
+RNG reduction and bias, if applicable: N/A; known-chest repeat performs no roll.
+Affected platforms, overlays, banks and owners: Shared chest search behavior on
+C64, C128, Plus/4, and Apple IIe; no placement or banking change.
+Required production-path tests: C64 production adjacent-search regression,
+Commodore runtime gates, and Apple IIe build/memory-contract gate.
+Known behavior explicitly out of scope: Disarm odds/state, bad-fail trap effects,
+new trap discovery messages, and general -more- input handling.
+Unresolved uncertainty and risk: No automated test drives the exact player key
+sequence through every physical renderer; shared message/search logic is covered.
+```
 
 ## Architecture
 
@@ -527,6 +566,19 @@ store helper direct). Routing coverage: `test_main_loop.s` tests 41-42
 (`cmd_open` on a chest dispatches to `tramp_chest_open` and never the door
 handler; a plain tile stays on the door path).
 
+## Implementation Notes — step-8 search-reveal fix (as-built, 2026-08-16)
+
+Post-release playtesting found that search detected a chest trap (printed
+"You have discovered a trap on the chest!") but `D <Dir>` then reported "I
+don't see a trap...". Root cause: `chest_search_reveal` held the floor slot in
+X, then `jsr rng_range` (which clobbers X) before `lda fi_p1,x; sta fi_p1,x` —
+so the found bit was written to a wrong floor slot, and the disarm read the
+correct slot's (clear) found bit. Fix: preserve the slot in `csr_slot` across
+the rng roll. The step-8 unit test's rng stub happened to preserve X, so it
+never caught this; the new search→disarm integration test
+(`test_chest_disarm.s` test 6) uses an X-clobbering rng stub and fails without
+the fix.
+
 ## Implementation Notes — step 14 Look suffixes (as-built, 2026-08-15)
 
 Look now appends a chest state suffix. `do_look`'s floor-item branch calls
@@ -806,10 +858,11 @@ Measured memory levers for step 8:
   `dungeon_gen.s` (GEN overlay) via `PLACE_SECRETS_EXTERNAL` — its only
   caller is the generator.
 
-Coverage: `test_find_hidden_traps_doors.s` tests 4-8 (discovery at 100%
+Coverage: `test_find_hidden_traps_doors.s` tests 4-9 (discovery at 100%
 chance sets found + prints, repeat message on re-search, zero-chance
 no-discovery, unarmed-chest silence, `eff_find_traps` marks armed chests
-and spares unarmed). Gates: `make build`, `make test64` 182/182,
+and spares unarmed, saturated message rows suppress the repeat). Gates:
+`make build`, `make test64` 182/182,
 `make testplus4` 38/38, `make test128` 136/136 (incl. retirement-royal and
 corrupt-load smokes), `make testapple2` 22/22.
 

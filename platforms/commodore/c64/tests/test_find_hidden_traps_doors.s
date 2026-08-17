@@ -4,7 +4,7 @@
 :BasicUpstart2(test_bootstrap)
 
 .pc = $E000 "Result Buffer"
-tc_results: .fill 8, $ff
+tc_results: .fill 9, $ff
 
 .pc = $080E "Test Code"
 
@@ -18,7 +18,7 @@ test_finish:
     sei
     :BankOutBasic()
     :BankOutKernal()
-    ldx #7
+    ldx #8
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -601,10 +601,37 @@ test_start:
     bne !t8_fail+
     lda #$01
     sta tc_results + 7
-    jmp test_finish
+    jmp !t9+
 !t8_fail:
     lda #$00
     sta tc_results + 7
+
+    // Test 9: an automatic re-search of a known trapped chest must not replace
+    // a full direction-prompt + command-result message pair. It still reports
+    // the chest as found and leaves the trap state unchanged.
+!t9:
+    lda #(CHEST_P1_TRAP_POISON | CHEST_P1_TRAP_FOUND | CHEST_P1_LOCKED)
+    jsr test_setup_search_chest_map
+    lda #MSG_PENDING | MSG_FULL
+    sta zp_msg_flags
+    lda #100
+    jsr search_scan_adjacent_silent
+    bcc !t9_fail+
+    lda tfhd_huff_calls
+    bne !t9_fail+
+    lda zp_msg_flags
+    cmp #MSG_PENDING | MSG_FULL
+    bne !t9_fail+
+    lda fi_p1
+    and #CHEST_P1_TRAP_FOUND | CHEST_P1_TRAP_POISON
+    cmp #CHEST_P1_TRAP_FOUND | CHEST_P1_TRAP_POISON
+    bne !t9_fail+
+    lda #$01
+    sta tc_results + 8
+    jmp test_finish
+!t9_fail:
+    lda #$00
+    sta tc_results + 8
     jmp test_finish
 
 // test_setup_search_chest_map — Rock map, player at (20,20), floor tile at

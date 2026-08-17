@@ -43,6 +43,8 @@ if ! "$C1541_BIN" -format "moria128,m8" d64 "$diag_d64" \
         -write ../../../build/test/c128/128.runtime.prg "128.runtime" \
         -write ../../../build/test/c128/128.input.prg "128.input" \
         -write ../../../build/test/c128/128.fdisk.prg "128.fdisk" \
+        -write ../../../build/test/c128/128.huff.prg "128.huff" \
+        -write ../../../build/test/c128/128.hvec.prg "128.hvec" \
         -write ../../../build/test/c128/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
     echo "Phase 1 real-diag disk build failed"
     tail -20 "$build_log"

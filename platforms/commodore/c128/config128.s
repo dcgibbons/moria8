@@ -116,6 +116,13 @@ mmu_safe_db_read_ptr1:
 mmu_safe_db_write_ptr1:
     jmp mmu_common_db_write_ptr1
 
+// Huffman-only reads transiently expose physical Bank 1 under top common RAM.
+mmu_safe_huff_read_ptr0:
+    jmp mmu_common_huff_read_ptr0
+
+mmu_safe_huff_read_ptr1:
+    jmp mmu_common_huff_read_ptr1
+
 // db_bulk_enter/db_bulk_exit:
 // Optional fast-path wrappers for future bulk DB scans/copies.
 db_bulk_enter:

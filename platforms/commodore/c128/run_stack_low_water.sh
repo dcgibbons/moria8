@@ -64,6 +64,8 @@ if ! "$C1541_BIN" -format "moria128,m8" d64 "$diag_d64" \
         -write "$out_dir/128.runtime.prg" "128.runtime" \
         -write "$out_dir/128.input.prg" "128.input" \
         -write "$out_dir/128.fdisk.prg" "128.fdisk" \
+        -write "$out_dir/128.huff.prg" "128.huff" \
+        -write "$out_dir/128.hvec.prg" "128.hvec" \
         -write "$out_dir/128.bank.prg" "128.bank" >/tmp/moria128_stacklow_c1541.log 2>&1; then
     echo "stack_low_water d64 creation failed"
     cat /tmp/moria128_stacklow_c1541.log

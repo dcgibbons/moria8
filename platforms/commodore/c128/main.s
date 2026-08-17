@@ -109,6 +109,7 @@
 .segmentdef C128ResidentPlay [outPrg=OVL_OUT + "/128.play.prg", start=$af00, min=$af00, max=$d1ff]
 .segmentdef RuntimeBankedCode [outPrg=OVL_OUT + "/128.bank.prg", start=$f000, min=$f000, max=$fffa]
 .segmentdef C128Bank1Huffman [outPrg=OVL_OUT + "/128.huff.prg", start=$f000, min=$f000, max=$feff]
+.segmentdef C128Bank1HuffmanVector [outPrg=OVL_OUT + "/128.hvec.prg", start=$fffa, min=$fffa, max=$fffb]
 
 #if C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG
 #define C128_REAL_BOOT_DIAG
@@ -1667,10 +1668,10 @@ c128_prepare_startup_loading_screen:
     jsr screen_clear_for_font_restore
     jsr c128_restore_vdc_rom_font
     jsr hal_screen_clear
-    // Total = 11 startup files + 13 cache files (4 tiers + 9 overlays).
+    // Total = 13 startup files + 13 cache files (4 tiers + 9 overlays).
     // c128_cache_enabled lives in the world payload, which is not loaded
     // yet at this point, so the count must be static.
-    lda #24
+    lda #26
 !total_ready:
     sta c128_load_progress_total
     lda #0
@@ -2333,6 +2334,12 @@ resident_huffman_filename:
 resident_huffman_filename_end:
     .byte 0
 .const RESIDENT_HUFFMAN_FILENAME_LEN = resident_huffman_filename_end - resident_huffman_filename
+.const RESIDENT_HUFFMAN_VECTOR_FILE_NUM = 15
+resident_huffman_vector_filename:
+    .text "128.HVEC"
+resident_huffman_vector_filename_end:
+    .byte 0
+.const RESIDENT_HUFFMAN_VECTOR_FILENAME_LEN = resident_huffman_vector_filename_end - resident_huffman_vector_filename
 .const RESIDENT_SELECT_FILE_NUM = 9
 resident_select_filename:
     .text "128.SELECT"
@@ -2551,6 +2558,25 @@ c128_load_resident_huffman_prg:
     sta c128_runtime_load_bank
     jmp c128_load_runtime_prg
 
+// Load the Bank 1 NMI bridge separately so no PRG crosses the MMU register at
+// $FF00. The Huffman read helpers require this bridge before first use.
+c128_load_resident_huffman_vector_prg:
+    lda #RESIDENT_HUFFMAN_VECTOR_FILE_NUM
+    sta disk_temp
+    lda #RESIDENT_HUFFMAN_VECTOR_FILENAME_LEN
+    sta disk_status
+    lda #<resident_huffman_vector_filename
+    sta zp_ptr0
+    lda #>resident_huffman_vector_filename
+    sta zp_ptr0_hi
+    lda #<BANK1_HUFFMAN_NMI_VECTOR_BASE
+    sta zp_ptr1
+    lda #>BANK1_HUFFMAN_NMI_VECTOR_BASE
+    sta zp_ptr1_hi
+    lda #1
+    sta c128_runtime_load_bank
+    jmp c128_load_runtime_prg
+
 c128_load_resident_select_prg:
     :C128RuntimeLoadFile(RESIDENT_SELECT_FILE_NUM, RESIDENT_SELECT_FILENAME_LEN, resident_select_filename, $a8)
 
@@ -2579,6 +2605,10 @@ c128_load_core_residents:
     bcc !resident_huffman_loaded+
     jmp runtime_load_failed
 !resident_huffman_loaded:
+    jsr c128_load_resident_huffman_vector_prg
+    bcc !resident_huffman_vector_loaded+
+    jmp runtime_load_failed
+!resident_huffman_vector_loaded:
     lda #5
     sta c128_runtime_load_stage
     jsr c128_load_resident_select_prg
@@ -3344,6 +3374,17 @@ c128_final_return_stack_7:     .byte 0
 #import "../../../core/generation_busy.s"
 #import "../../../core/stat_display.s"
 #import "../../../core/huffman.s"
+// The decoder briefly disables top common RAM to expose the physical Bank 1
+// corpus. Keep NMI valid during that window via the bottom-common handler.
+c128_bank1_huffman_corpus_end:
+.assert "C128 Bank 1 Huffman corpus stays below reserved vector space", c128_bank1_huffman_corpus_end <= BANK1_HUFFMAN_END + 1, true
+.segment C128Bank1HuffmanVector
+c128_bank1_huffman_nmi_vector:
+    .word mmu_common_nmi
+c128_bank1_huffman_payload_end:
+.assert "Bank 1 Huffman NMI vector starts at $FFFA", c128_bank1_huffman_nmi_vector == BANK1_HUFFMAN_NMI_VECTOR_BASE, true
+.assert "Bank 1 Huffman NMI vector is exactly two bytes", c128_bank1_huffman_payload_end == BANK1_HUFFMAN_NMI_VECTOR_END + 1, true
+.assert "Bank 1 Huffman NMI target is in bottom common RAM", mmu_common_nmi >= BANK1_COMMON_BASE && mmu_common_nmi <= BANK1_COMMON_END, true
 // huffman.s parks the corpus in the Bank 1 huffman segment; resume Default.
 .segment Default
 #import "../../../core/runtime_ui_strings.s"

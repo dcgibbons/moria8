@@ -220,10 +220,83 @@ test_fail:
     cpx #C128_FUTURE_MAP_COLS
     bne !chk_full_store-
     jsr mmu_select_bank0
-    jmp test_pass
+    jmp !test4_start+
 !store_fail:
     jsr mmu_select_bank0
     jmp test_fail
+
+    // Test 4: Huffman reads expose physical Bank 1 under top common RAM,
+    // then restore the product's Bank 0/$D506=$0D invariant and IRQ state.
+!test4_start:
+    sei
+    lda #$05
+    sta $d506
+    lda #MMU_ALL_RAM
+    sta MMU_CR
+    lda #$a5
+    sta $f000
+    lda #MMU_RAM_BANK1
+    sta MMU_CR
+    lda #$5a
+    sta $f000
+    lda #$6b
+    sta $f001
+    lda #MMU_ALL_RAM
+    sta MMU_CR
+    lda #$0d
+    sta $d506
+
+    lda #<$f000
+    sta zp_ptr0
+    lda #>$f000
+    sta zp_ptr0_hi
+    ldy #0
+    cli
+    jsr mmu_common_huff_read_ptr0
+    cmp #$5a
+    beq !ptr0_value_ok+
+    jmp test_fail
+!ptr0_value_ok:
+    php
+    pla
+    and #$04
+    beq !ptr0_irq_ok+
+    jmp test_fail
+!ptr0_irq_ok:
+    lda MMU_CR
+    cmp #MMU_ALL_RAM
+    beq !ptr0_bank_ok+
+    jmp test_fail
+!ptr0_bank_ok:
+    lda $d506
+    cmp #$0d
+    beq !ptr0_common_ok+
+    jmp test_fail
+!ptr0_common_ok:
+
+    lda #<$f000
+    sta zp_ptr1
+    lda #>$f000
+    sta zp_ptr1_hi
+    ldy #1
+    sei
+    jsr mmu_common_huff_read_ptr1
+    cmp #$6b
+    beq !ptr1_value_ok+
+    jmp test_fail
+!ptr1_value_ok:
+    php
+    pla
+    and #$04
+    bne !ptr1_irq_ok+
+    jmp test_fail
+!ptr1_irq_ok:
+    lda $f000                  // Top common shows the untouched Bank 0 byte.
+    cmp #$a5
+    beq !ptr1_common_ok+
+    jmp test_fail
+!ptr1_common_ok:
+    jmp test_pass
 
 test_pass:
     jmp test_pass

@@ -64,6 +64,12 @@ mmu_safe_db_read_ptr1:
 mmu_safe_db_read_ptr0:
     jmp mmu_common_db_read_ptr0
 
+mmu_safe_huff_read_ptr0:
+    jmp mmu_common_huff_read_ptr0
+
+mmu_safe_huff_read_ptr1:
+    jmp mmu_common_huff_read_ptr1
+
 mmu_safe_db_write_ptr0:
     jmp mmu_common_db_write_ptr0
 

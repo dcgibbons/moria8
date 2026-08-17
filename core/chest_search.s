@@ -8,13 +8,15 @@
 // FLAG_HAS_ITEM set. Finds an armed chest at (df_target_x, df_target_y):
 // unfound traps roll the per-tile search chance and set CHEST_P1_TRAP_FOUND
 // with the discovery message on success; already-found trapped chests print
-// the upstream repeat message. Uses df_search_chance as the per-tile chance.
+// the upstream repeat message unless both message rows are already occupied.
+// Uses df_search_chance as the per-tile chance.
 // Output: carry set = something found (df_found set), carry clear = nothing
 // Clobbers: A, X, Y
 :ChestSearchSegment()
 chest_search_reveal:
     jsr chest_find_at_df_target
     bcc !csr_none+
+    stx csr_slot            // preserve the floor slot across the rng roll
     // X = floor slot; armed?
     lda fi_p1,x
     and #CHEST_P1_TRAP_MASK
@@ -27,19 +29,24 @@ chest_search_reveal:
     lda df_search_chance
     beq !csr_none+
     lda #100
-    jsr rng_range
+    jsr rng_range           // clobbers X
     cmp df_search_chance
     bcs !csr_none+
     // Discovery: mark found on the chest instance
+    ldx csr_slot            // reload the floor slot
     lda fi_p1,x
     ora #CHEST_P1_TRAP_FOUND
     sta fi_p1,x
     ldx #HSTR_CHEST_FOUND_TRAP
     jmp !csr_msg+
 !csr_repeat:
+    lda zp_msg_flags
+    cmp #MSG_PENDING | MSG_FULL
+    beq !csr_found+
     ldx #HSTR_CHEST_TRAPPED
 !csr_msg:
     jsr huff_print_msg
+!csr_found:
     lda #1
     sta df_found
     sec
@@ -47,6 +54,8 @@ chest_search_reveal:
 !csr_none:
     clc
     rts
+
+csr_slot: .byte 0
 
 // chest_mark_found_all — Find Traps chest branch: mark CHEST_P1_TRAP_FOUND
 // on every armed floor chest (upstream Find Traps reveals chest traps too).

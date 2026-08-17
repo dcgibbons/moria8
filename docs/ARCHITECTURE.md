@@ -253,7 +253,8 @@ The C128 segment definition maxima are:
 | `$C000-$CFFF` | Overlay cache slot for `OVL_DEATH` |
 | `$D000-$DFFF` | I/O-visible gap; not cache-safe |
 | `$E000-$EFFF` | Overlay cache slot for `OVL_DUNGEON_GEN` |
-| `$F000-$FEFF` | Top common RAM shared with Bank 0; not cache-safe |
+| `$F000-$FEFF` | Runtime top-common view shared with Bank 0; physical Bank 1 `$F000-$FD3A` holds the read-only Huffman corpus |
+| `$FFFA-$FFFB` | Physical Bank 1 NMI vector bridge for transient Huffman corpus reads |
 
 The C128 product disk carries eight overlay files: `128.start`, `128.town`,
 `128.death`, `128.gen`, `128.help`, `128.ui`, `128.items`, and `128.disarm`.
@@ -285,6 +286,8 @@ Current product payloads:
 | `128.persist.prg` | `$AF00-$B85A` | 2,395 bytes |
 | `128.play.prg` | `$AF00-$CFE7` | 8,424 bytes |
 | `128.bank.prg` | `$F000-$FEAF` | 3,760 bytes |
+| `128.huff.prg` | Bank 1 `$F000-$FD3A` | 3,387 bytes |
+| `128.hvec.prg` | Bank 1 `$FFFA-$FFFB` | 2 bytes |
 | `ovl.start` | `$E000-$EFDF` | 4,064 bytes |
 | `ovl.town` | `$E000-$EF6F` | 3,952 bytes |
 | `ovl.death` | `$E000-$EFF7` | 4,088 bytes |

@@ -484,7 +484,7 @@ c128_target_is_stale() {
     if find . -maxdepth 1 -type f \( -name '*.s' -o -name 'Makefile' \) -newer "$target" -print -quit | grep -q .; then
         return 0
     fi
-    if find tests ../common ../c64 -type f -name '*.s' -newer "$target" -print -quit | grep -q .; then
+    if find tests ../../../core ../common ../c64 -type f -name '*.s' -newer "$target" -print -quit | grep -q .; then
         return 0
     fi
 
@@ -508,6 +508,9 @@ c128_outputs_need_refresh() {
             inputs+=("$path")
         fi
     done
+
+    # Every C128 main variant emits these mandatory Bank 1 side payloads.
+    outputs+=(../../../build/test/c128/128.huff.prg ../../../build/test/c128/128.hvec.prg)
 
     if [ "${#outputs[@]}" -eq 0 ]; then
         return 0
@@ -1214,6 +1217,8 @@ for runtime_name, expected_load in (
     ("128.world.prg", 0x6000),
     ("128.item.prg", 0x8CA0),
     ("128.names.prg", 0x7400),
+    ("128.huff.prg", 0xF000),
+    ("128.hvec.prg", 0xFFFA),
     ("128.select.prg", 0xA800),
     ("128.persist.prg", 0xAF00),
     ("128.play.prg", 0xAF00),
@@ -2281,6 +2286,8 @@ run_vic40_clean_boot_smoke() {
             -write ../../../build/test/c128/128.world.prg "128.world" \
             -write ../../../build/test/c128/128.item.prg "128.item" \
             -write ../../../build/test/c128/128.names.prg "128.names" \
+            -write ../../../build/test/c128/128.huff.prg "128.huff" \
+            -write ../../../build/test/c128/128.hvec.prg "128.hvec" \
             -write ../../../build/test/c128/128.select.prg "128.select" \
             -write ../../../build/test/c128/128.persist.prg "128.persist" \
             -write ../../../build/test/c128/128.play.prg "128.play" \
@@ -2412,6 +2419,8 @@ build_real_boot_diag_assets() {
             -write ../../../build/test/c128/128.world.prg "128.world" \
             -write ../../../build/test/c128/128.item.prg "128.item" \
             -write ../../../build/test/c128/128.names.prg "128.names" \
+            -write ../../../build/test/c128/128.huff.prg "128.huff" \
+            -write ../../../build/test/c128/128.hvec.prg "128.hvec" \
             -write ../../../build/test/c128/128.select.prg "128.select" \
             -write ../../../build/test/c128/128.persist.prg "128.persist" \
             -write ../../../build/test/c128/128.play.prg "128.play" \
@@ -2489,6 +2498,8 @@ build_overlay_transition_diag_assets() {
             -write ../../../build/test/c128/128.world.prg "128.world" \
             -write ../../../build/test/c128/128.item.prg "128.item" \
             -write ../../../build/test/c128/128.names.prg "128.names" \
+            -write ../../../build/test/c128/128.huff.prg "128.huff" \
+            -write ../../../build/test/c128/128.hvec.prg "128.hvec" \
             -write ../../../build/test/c128/128.select.prg "128.select" \
             -write ../../../build/test/c128/128.persist.prg "128.persist" \
             -write ../../../build/test/c128/128.play.prg "128.play" \
@@ -2558,6 +2569,8 @@ build_title_art_boot_assets() {
             -write ../../../build/test/c128/128.world.prg "128.world" \
             -write ../../../build/test/c128/128.item.prg "128.item" \
             -write ../../../build/test/c128/128.names.prg "128.names" \
+            -write ../../../build/test/c128/128.huff.prg "128.huff" \
+            -write ../../../build/test/c128/128.hvec.prg "128.hvec" \
             -write ../../../build/test/c128/128.select.prg "128.select" \
             -write ../../../build/test/c128/128.persist.prg "128.persist" \
             -write ../../../build/test/c128/128.play.prg "128.play" \
@@ -2783,6 +2796,8 @@ build_save_write_product_assets() {
             -write ../../../build/test/c128/128.world.prg "128.world" \
             -write ../../../build/test/c128/128.item.prg "128.item" \
             -write ../../../build/test/c128/128.names.prg "128.names" \
+            -write ../../../build/test/c128/128.huff.prg "128.huff" \
+            -write ../../../build/test/c128/128.hvec.prg "128.hvec" \
             -write ../../../build/test/c128/128.select.prg "128.select" \
             -write ../../../build/test/c128/128.persist.prg "128.persist" \
             -write ../../../build/test/c128/128.play.prg "128.play" \
@@ -2890,6 +2905,8 @@ build_save_media_fail_product_assets() {
             -write ../../../build/test/c128/128.world.prg "128.world" \
             -write ../../../build/test/c128/128.item.prg "128.item" \
             -write ../../../build/test/c128/128.names.prg "128.names" \
+            -write ../../../build/test/c128/128.huff.prg "128.huff" \
+            -write ../../../build/test/c128/128.hvec.prg "128.hvec" \
             -write ../../../build/test/c128/128.select.prg "128.select" \
             -write ../../../build/test/c128/128.persist.prg "128.persist" \
             -write ../../../build/test/c128/128.play.prg "128.play" \
@@ -3000,6 +3017,8 @@ build_partial_failure_boot_assets() {
             -write ../../../build/test/c128/128.world.prg "128.world" \
             -write ../../../build/test/c128/128.item.prg "128.item" \
             -write ../../../build/test/c128/128.names.prg "128.names" \
+            -write ../../../build/test/c128/128.huff.prg "128.huff" \
+            -write ../../../build/test/c128/128.hvec.prg "128.hvec" \
             -write ../../../build/test/c128/128.select.prg "128.select" \
             -write ../../../build/test/c128/128.persist.prg "128.persist" \
             -write ../../../build/test/c128/128.play.prg "128.play" \
@@ -3067,6 +3086,8 @@ build_overlay_partial_failure_boot_assets() {
             -write ../../../build/test/c128/128.world.prg "128.world" \
             -write ../../../build/test/c128/128.item.prg "128.item" \
             -write ../../../build/test/c128/128.names.prg "128.names" \
+            -write ../../../build/test/c128/128.huff.prg "128.huff" \
+            -write ../../../build/test/c128/128.hvec.prg "128.hvec" \
             -write ../../../build/test/c128/128.select.prg "128.select" \
             -write ../../../build/test/c128/128.persist.prg "128.persist" \
             -write ../../../build/test/c128/128.play.prg "128.play" \
@@ -3134,6 +3155,8 @@ build_death_overlay_boot_assets() {
             -write ../../../build/test/c128/128.world.prg "128.world" \
             -write ../../../build/test/c128/128.item.prg "128.item" \
             -write ../../../build/test/c128/128.names.prg "128.names" \
+            -write ../../../build/test/c128/128.huff.prg "128.huff" \
+            -write ../../../build/test/c128/128.hvec.prg "128.hvec" \
             -write ../../../build/test/c128/128.select.prg "128.select" \
             -write ../../../build/test/c128/128.persist.prg "128.persist" \
             -write ../../../build/test/c128/128.play.prg "128.play" \
@@ -3201,6 +3224,8 @@ build_overlay_state_boot_assets() {
             -write ../../../build/test/c128/128.world.prg "128.world" \
             -write ../../../build/test/c128/128.item.prg "128.item" \
             -write ../../../build/test/c128/128.names.prg "128.names" \
+            -write ../../../build/test/c128/128.huff.prg "128.huff" \
+            -write ../../../build/test/c128/128.hvec.prg "128.hvec" \
             -write ../../../build/test/c128/128.select.prg "128.select" \
             -write ../../../build/test/c128/128.persist.prg "128.persist" \
             -write ../../../build/test/c128/128.play.prg "128.play" \
@@ -3240,6 +3265,8 @@ c128_patch_scripted_boot_d71() {
         -delete "128.world" \
         -delete "128.item" \
         -delete "128.names" \
+        -delete "128.huff" \
+        -delete "128.hvec" \
         -delete "128.select" \
         -delete "128.persist" \
         -delete "128.play" \
@@ -3257,6 +3284,8 @@ c128_patch_scripted_boot_d71() {
         -write ../../../build/test/c128/128.world.prg "128.world" \
         -write ../../../build/test/c128/128.item.prg "128.item" \
         -write ../../../build/test/c128/128.names.prg "128.names" \
+        -write ../../../build/test/c128/128.huff.prg "128.huff" \
+        -write ../../../build/test/c128/128.hvec.prg "128.hvec" \
         -write ../../../build/test/c128/128.select.prg "128.select" \
         -write ../../../build/test/c128/128.persist.prg "128.persist" \
         -write ../../../build/test/c128/128.play.prg "128.play" \
@@ -3465,6 +3494,8 @@ build_perf_p1_trace_boot_assets() {
                 -write ../../../build/test/c128/128.world.prg "128.world" \
                 -write ../../../build/test/c128/128.item.prg "128.item" \
             -write ../../../build/test/c128/128.names.prg "128.names" \
+            -write ../../../build/test/c128/128.huff.prg "128.huff" \
+            -write ../../../build/test/c128/128.hvec.prg "128.hvec" \
                 -write ../../../build/test/c128/128.select.prg "128.select" \
                 -write ../../../build/test/c128/128.persist.prg "128.persist" \
                 -write ../../../build/test/c128/128.play.prg "128.play" \
@@ -3751,6 +3782,8 @@ build_cache_survival_boot_assets() {
             -write "$target_dir/128.world.prg" "128.world" \
             -write "$target_dir/128.item.prg" "128.item" \
             -write "$target_dir/128.names.prg" "128.names" \
+            -write "$target_dir/128.huff.prg" "128.huff" \
+            -write "$target_dir/128.hvec.prg" "128.hvec" \
             -write "$target_dir/128.select.prg" "128.select" \
             -write "$target_dir/128.persist.prg" "128.persist" \
             -write "$target_dir/128.play.prg" "128.play" \
@@ -3822,6 +3855,8 @@ build_load_resume_boot_assets() {
             -write ../../../build/test/c128/128.world.prg "128.world" \
             -write ../../../build/test/c128/128.item.prg "128.item" \
             -write ../../../build/test/c128/128.names.prg "128.names" \
+            -write ../../../build/test/c128/128.huff.prg "128.huff" \
+            -write ../../../build/test/c128/128.hvec.prg "128.hvec" \
             -write ../../../build/test/c128/128.select.prg "128.select" \
             -write ../../../build/test/c128/128.persist.prg "128.persist" \
             -write ../../../build/test/c128/128.play.prg "128.play" \
@@ -4404,6 +4439,8 @@ run_boot_d64_smoke() {
             -write ../../../build/test/c128/128.world.prg "128.world" \
             -write ../../../build/test/c128/128.item.prg "128.item" \
             -write ../../../build/test/c128/128.names.prg "128.names" \
+            -write ../../../build/test/c128/128.huff.prg "128.huff" \
+            -write ../../../build/test/c128/128.hvec.prg "128.hvec" \
             -write ../../../build/test/c128/128.select.prg "128.select" \
             -write ../../../build/test/c128/128.persist.prg "128.persist" \
             -write ../../../build/test/c128/128.play.prg "128.play" \
@@ -4842,6 +4879,8 @@ run_retirement_royal_smoke() {
             -write "$smoke_c128/128.world.prg" "128.world" \
             -write "$smoke_c128/128.item.prg" "128.item" \
             -write "$smoke_c128/128.names.prg" "128.names" \
+            -write "$smoke_c128/128.huff.prg" "128.huff" \
+            -write "$smoke_c128/128.hvec.prg" "128.hvec" \
             -write "$smoke_c128/128.select.prg" "128.select" \
             -write "$smoke_c128/128.persist.prg" "128.persist" \
             -write "$smoke_c128/128.play.prg" "128.play" \
@@ -5017,6 +5056,8 @@ run_boot_title_change_save_drive_smoke() {
             -write ../../../build/test/c128/128.world.prg "128.world" \
             -write ../../../build/test/c128/128.item.prg "128.item" \
             -write ../../../build/test/c128/128.names.prg "128.names" \
+            -write ../../../build/test/c128/128.huff.prg "128.huff" \
+            -write ../../../build/test/c128/128.hvec.prg "128.hvec" \
             -write ../../../build/test/c128/128.select.prg "128.select" \
             -write ../../../build/test/c128/128.persist.prg "128.persist" \
             -write ../../../build/test/c128/128.play.prg "128.play" \
@@ -5125,6 +5166,8 @@ run_boot_title_single_drive_save_wrong_media_smoke() {
             -write ../../../build/test/c128/128.world.prg "128.world" \
             -write ../../../build/test/c128/128.item.prg "128.item" \
             -write ../../../build/test/c128/128.names.prg "128.names" \
+            -write ../../../build/test/c128/128.huff.prg "128.huff" \
+            -write ../../../build/test/c128/128.hvec.prg "128.hvec" \
             -write ../../../build/test/c128/128.select.prg "128.select" \
             -write ../../../build/test/c128/128.persist.prg "128.persist" \
             -write ../../../build/test/c128/128.play.prg "128.play" \
@@ -5215,6 +5258,8 @@ run_boot_title_single_drive_load_wrong_media_smoke() {
             -write ../../../build/test/c128/128.world.prg "128.world" \
             -write ../../../build/test/c128/128.item.prg "128.item" \
             -write ../../../build/test/c128/128.names.prg "128.names" \
+            -write ../../../build/test/c128/128.huff.prg "128.huff" \
+            -write ../../../build/test/c128/128.hvec.prg "128.hvec" \
             -write ../../../build/test/c128/128.select.prg "128.select" \
             -write ../../../build/test/c128/128.persist.prg "128.persist" \
             -write ../../../build/test/c128/128.play.prg "128.play" \
@@ -5299,6 +5344,8 @@ run_boot_title_single_drive_load_corrupt_smoke() {
             -delete "128.world" \
             -delete "128.item" \
             -delete "128.names" \
+            -delete "128.huff" \
+            -delete "128.hvec" \
             -delete "128.select" \
             -delete "128.persist" \
             -delete "128.play" \
@@ -5312,6 +5359,8 @@ run_boot_title_single_drive_load_corrupt_smoke() {
             -write ../../../build/test/c128/128.world.prg "128.world" \
             -write ../../../build/test/c128/128.item.prg "128.item" \
             -write ../../../build/test/c128/128.names.prg "128.names" \
+            -write ../../../build/test/c128/128.huff.prg "128.huff" \
+            -write ../../../build/test/c128/128.hvec.prg "128.hvec" \
             -write ../../../build/test/c128/128.select.prg "128.select" \
             -write ../../../build/test/c128/128.persist.prg "128.persist" \
             -write ../../../build/test/c128/128.play.prg "128.play" \
@@ -5410,6 +5459,8 @@ run_boot_title_single_drive_load_return_smoke() {
             -delete "128.world" \
             -delete "128.item" \
             -delete "128.names" \
+            -delete "128.huff" \
+            -delete "128.hvec" \
             -delete "128.select" \
             -delete "128.persist" \
             -delete "128.play" \
@@ -5423,6 +5474,8 @@ run_boot_title_single_drive_load_return_smoke() {
             -write ../../../build/test/c128/128.world.prg "128.world" \
             -write ../../../build/test/c128/128.item.prg "128.item" \
             -write ../../../build/test/c128/128.names.prg "128.names" \
+            -write ../../../build/test/c128/128.huff.prg "128.huff" \
+            -write ../../../build/test/c128/128.hvec.prg "128.hvec" \
             -write ../../../build/test/c128/128.select.prg "128.select" \
             -write ../../../build/test/c128/128.persist.prg "128.persist" \
             -write ../../../build/test/c128/128.play.prg "128.play" \
@@ -5513,6 +5566,8 @@ run_boot_title_load_then_save_new_empty_smoke() {
             -delete "128.world" \
             -delete "128.item" \
             -delete "128.names" \
+            -delete "128.huff" \
+            -delete "128.hvec" \
             -delete "128.select" \
             -delete "128.persist" \
             -delete "128.play" \
@@ -5526,6 +5581,8 @@ run_boot_title_load_then_save_new_empty_smoke() {
             -write ../../../build/test/c128/128.world.prg "128.world" \
             -write ../../../build/test/c128/128.item.prg "128.item" \
             -write ../../../build/test/c128/128.names.prg "128.names" \
+            -write ../../../build/test/c128/128.huff.prg "128.huff" \
+            -write ../../../build/test/c128/128.hvec.prg "128.hvec" \
             -write ../../../build/test/c128/128.select.prg "128.select" \
             -write ../../../build/test/c128/128.persist.prg "128.persist" \
             -write ../../../build/test/c128/128.play.prg "128.play" \
@@ -5631,6 +5688,8 @@ run_boot_title_disk_setup_single_drive_return_smoke() {
             -delete "128.world" \
             -delete "128.item" \
             -delete "128.names" \
+            -delete "128.huff" \
+            -delete "128.hvec" \
             -delete "128.select" \
             -delete "128.persist" \
             -delete "128.play" \
@@ -5644,6 +5703,8 @@ run_boot_title_disk_setup_single_drive_return_smoke() {
             -write ../../../build/test/c128/128.world.prg "128.world" \
             -write ../../../build/test/c128/128.item.prg "128.item" \
             -write ../../../build/test/c128/128.names.prg "128.names" \
+            -write ../../../build/test/c128/128.huff.prg "128.huff" \
+            -write ../../../build/test/c128/128.hvec.prg "128.hvec" \
             -write ../../../build/test/c128/128.select.prg "128.select" \
             -write ../../../build/test/c128/128.persist.prg "128.persist" \
             -write ../../../build/test/c128/128.play.prg "128.play" \
@@ -5738,6 +5799,8 @@ run_boot_title_single_drive_fresh_save_smoke() {
             -write ../../../build/test/c128/128.world.prg "128.world" \
             -write ../../../build/test/c128/128.item.prg "128.item" \
             -write ../../../build/test/c128/128.names.prg "128.names" \
+            -write ../../../build/test/c128/128.huff.prg "128.huff" \
+            -write ../../../build/test/c128/128.hvec.prg "128.hvec" \
             -write ../../../build/test/c128/128.select.prg "128.select" \
             -write ../../../build/test/c128/128.persist.prg "128.persist" \
             -write ../../../build/test/c128/128.play.prg "128.play" \
@@ -5846,6 +5909,8 @@ run_boot_title_single_drive_fresh_save_no_init_smoke() {
             -write ../../../build/test/c128/128.world.prg "128.world" \
             -write ../../../build/test/c128/128.item.prg "128.item" \
             -write ../../../build/test/c128/128.names.prg "128.names" \
+            -write ../../../build/test/c128/128.huff.prg "128.huff" \
+            -write ../../../build/test/c128/128.hvec.prg "128.hvec" \
             -write ../../../build/test/c128/128.select.prg "128.select" \
             -write ../../../build/test/c128/128.persist.prg "128.persist" \
             -write ../../../build/test/c128/128.play.prg "128.play" \

@@ -26,7 +26,7 @@
 // lives in the Bank 1 $F000 region (HAL_PLATFORM_HUFFMAN_DATA_AUX).
 #if HAL_PLATFORM_HUFFMAN_DATA_AUX
 .macro HuffRead_ptr0_y() {
-    jsr mmu_safe_db_read_ptr0
+    jsr mmu_safe_huff_read_ptr0
 }
 #else
 .macro HuffRead_ptr0_y() {

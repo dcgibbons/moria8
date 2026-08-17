@@ -8,7 +8,7 @@
 :BasicUpstart2(test_bootstrap)
 
 .pc = $E000 "Result Buffer"
-tc_results: .fill 6, $ff
+tc_results: .fill 7, $ff
 
 .pc = $080E "Test Code"
 
@@ -22,7 +22,7 @@ test_finish:
     sei
     :BankOutBasic()
     :BankOutKernal()
-    ldx #5
+    ldx #6
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -164,7 +164,8 @@ test_rng_range:
     ldx tcd_rng_idx
     lda tcd_rng_seq,x
     inc tcd_rng_idx
-    rts
+    ldx #$ff                    // Clobber X like the real rng_range (guards the
+    rts                         // chest_search_reveal slot-preservation fix)
 
 test_chest_disarm_skill:
     inc tcd_skill_spy
@@ -392,10 +393,44 @@ test_start:
     beq !t5_fail+
     lda #$01
     sta tc_results + 5
-    jmp !done+
+    jmp !t6+
 !t5_fail:
     lda #$00
     sta tc_results + 5
+
+    // Test 6: search reveals the trap (sets found), then disarm must take the
+    // found path — not "I don't see a trap" (regression: search/disarm found-bit).
+!t6:
+    jsr test_reset
+    lda #CHEST_P1_TRAP_STR
+    ldx #5
+    jsr test_setup_chest
+    lda #100
+    sta df_search_chance
+    jsr chest_search_reveal          // should mark the trap found
+    lda fi_p1 + 0
+    and #CHEST_P1_TRAP_FOUND
+    beq !t6_fail+
+    lda #50
+    sta tcd_skill
+    lda #0                           // search roll and disarm threshold roll both succeed
+    sta tcd_rng_seq + 0
+    sta tcd_rng_seq + 1
+    sta tcd_rng_seq + 2
+    jsr chest_disarm_command
+    bcc !t6_fail+
+    lda tcd_huff_first
+    cmp #HSTR_CHEST_DISARM_UNFOUND   // must NOT be "I don't see a trap..."
+    beq !t6_fail+
+    lda fi_p1 + 0
+    and #CHEST_P1_TRAP_STR
+    bne !t6_fail+
+    lda #$01
+    sta tc_results + 6
+    jmp !done+
+!t6_fail:
+    lda #$00
+    sta tc_results + 6
 
 !done:
     jmp test_finish

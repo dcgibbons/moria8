@@ -409,9 +409,7 @@ tramp_dig_ability:
 #import "../../../core/color.s"
 #import "config.s"
 #define C64_PRODUCT_SOUND_UPDATE_FROM_INPUT
-#define INPUT_LOCK_CHARSET_SWITCH_EXTERNAL
 #import "input.s"
-#undef INPUT_LOCK_CHARSET_SWITCH_EXTERNAL
 #import "../../../core/rng.s"
 #import "../../../core/math.s"
 #import "../../../core/tables.s"
@@ -2089,14 +2087,6 @@ generation_busy_install:
 
     lda #0
     sta generation_busy_active_api
-    rts
-
-// One-shot charset-switch lock (called once at boot; the input.s copy is
-// skipped via INPUT_LOCK_CHARSET_SWITCH_EXTERNAL). Same init-tail treatment:
-// frees resident room for chest strings.
-input_lock_charset_switch:
-    lda #KERNAL_CHARSET_SWITCH_LOCK
-    sta KERNAL_SHIFT_MODE
     rts
 
 // One-shot REU tier and overlay stashes (run once at boot when an REU is

@@ -86,6 +86,7 @@
 //   - reserved I/O-visible gap:$D000-$DFFF
 //   - overlay cache DUNGEON:   $E000-$EFFF
 //   - top common RAM:          $F000-$FEFF (shared with Bank 0; not cache-safe)
+//   - Bank 1 NMI vector bridge:$FFFA-$FFFB (visible only with top common off)
 //
 // boot128 staging source span before scrub:
 //   - $1C01-$FEFF in Bank 1, copied into Bank 0 and scrubbed page-by-page.
@@ -145,6 +146,8 @@
 // macros (common/mmu_macros.s). Loader: c128_load_resident_huffman_prg.
 .const BANK1_HUFFMAN_BASE         = BANK1_RESERVED_TOP_BASE
 .const BANK1_HUFFMAN_END          = BANK1_RESERVED_TOP_END
+.const BANK1_HUFFMAN_NMI_VECTOR_BASE = $fffa
+.const BANK1_HUFFMAN_NMI_VECTOR_END  = $fffb
 .const BANK1_CACHE_OWNED_BASE     = BANK1_TIER_CACHE_BASE
 .const BANK1_CACHE_OWNED_END      = BANK1_OVERLAY_DUNGEON_END
 
@@ -753,6 +756,41 @@ mmu_common_db_read_ptr1:
     pla
     rts
 
+// Huffman corpus reads differ from ordinary Bank 1 DB reads: the corpus is
+// physically under the runtime's 4KB top-common window. The corpus PRG places
+// an NMI vector to mmu_common_nmi in Bank 1 before these helpers can run.
+// Entry/return invariant: Bank 0 all-RAM, $D506=$0D. Preserves X and Y.
+mmu_common_huff_read_ptr0:
+    php
+    sei
+    jsr mmu_common_huff_select_bank1
+    lda (zp_ptr0),y
+    jmp mmu_common_huff_restore_bank0
+
+mmu_common_huff_read_ptr1:
+    php
+    sei
+    jsr mmu_common_huff_select_bank1
+    lda (zp_ptr1),y
+    jmp mmu_common_huff_restore_bank0
+
+mmu_common_huff_select_bank1:
+    lda #$05                    // 4KB bottom common; expose Bank 1 at $F000
+    sta $d506
+    lda #MMU_RAM_BANK1
+    sta MMU_CR
+    rts
+
+mmu_common_huff_restore_bank0:
+    sta mmu_common_huff_value
+    lda #MMU_ALL_RAM
+    sta MMU_CR
+    lda #$0d                    // Restore 4KB bottom/top common invariant
+    sta $d506
+    plp
+    lda mmu_common_huff_value
+    rts
+
 mmu_common_db_write_ptr1:
     pha
     jsr mmu_common_select_bank1
@@ -822,6 +860,8 @@ mmu_common_row_detect_new:
 mmu_common_row_seen_new:
     .byte 0
 mmu_common_tile_tmp:
+    .byte 0
+mmu_common_huff_value:
     .byte 0
 }
 mmu_common_helpers_blob_end:
@@ -923,6 +963,8 @@ copy_to_e000:
 :AssertRegionBefore("DEATH overlay slot ends before reserved I/O window", BANK1_OVERLAY_DEATH_END, BANK1_RESERVED_IO_BASE)
 :AssertRegionBefore("Reserved I/O window ends before DUNGEON overlay slot", BANK1_RESERVED_IO_END, BANK1_OVERLAY_DUNGEON_BASE)
 :AssertRegionBefore("DUNGEON overlay slot ends before Huffman corpus region", BANK1_OVERLAY_DUNGEON_END, BANK1_HUFFMAN_BASE)
+.assert "Bank 1 Huffman corpus ends before its NMI vector bridge", BANK1_HUFFMAN_END < BANK1_HUFFMAN_NMI_VECTOR_BASE, true
+.assert "Bank 1 Huffman NMI bridge ends at $FFFB", BANK1_HUFFMAN_NMI_VECTOR_END == $fffb, true
 .assert "DISARM small-overlay cache stays inside Bank1 cache span", BANK1_OVERLAY_DISARM_END <= BANK1_CACHE_OWNED_END, true
 .assert "DISARM small-overlay cache does not use top common RAM", BANK1_OVERLAY_DISARM_END < BANK1_RESERVED_TOP_BASE, true
 .assert "Tier cache window matches required preload footprint", BANK1_TIER_CACHE_SIZE, TIER_PRELOAD_REQUIRED

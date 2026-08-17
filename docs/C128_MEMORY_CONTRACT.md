@@ -50,7 +50,8 @@ overlap assertions are the executable authority; never edit this table alone.
 | `$c000-$cfff` | DEATH overlay cache |
 | `$d000-$dfff` | post-boot runtime I/O-visible gap; never runtime cache/data RAM |
 | `$e000-$efff` | DUNGEON overlay cache |
-| `$f000-$feff` | top common RAM; shared, not cache-safe |
+| `$f000-$feff` | runtime top-common view shared with Bank 0; physical Bank 1 `$f000-$fd3a` owns the read-only Huffman corpus, exposed only by the atomic Huffman helpers |
+| `$fffa-$fffb` | physical Bank 1 NMI vector bridge used only during transient Huffman reads with top common disabled |
 
 The staged PRG payload begins at `$1c01`, but the page copier physically reads
 and scrubs Bank 1 `$1c00-$feff`, including RAM under

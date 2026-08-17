@@ -12,6 +12,8 @@ mmu_common_db_read_ptr0: rts
 mmu_common_db_write_ptr0: rts
 mmu_common_db_read_ptr1: rts
 mmu_common_db_write_ptr1: rts
+mmu_common_huff_read_ptr0: rts
+mmu_common_huff_read_ptr1: rts
 mmu_select_bank0: rts
 mmu_select_bank1: rts
 
