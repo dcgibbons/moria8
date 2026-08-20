@@ -314,6 +314,10 @@ chest_loot_place_one:
     // The ordinary C64 trampoline exposes KERNAL before returning, which would
     // hide this GEN-overlay continuation at $E000.
     jsr tramp_roll_ego_type_modal
+#elif APPLE2_PRODUCT_OVERLAY_RUNTIME
+    // The A2 trampoline would load OVL.ITEMS over this executing GEN overlay;
+    // the gen variant restores OVL.GEN before returning.
+    jsr tramp_roll_ego_type_gen
 #else
     jsr tramp_roll_ego_type
 #endif

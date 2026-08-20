@@ -750,6 +750,20 @@ hidden case and locked-out-priority case). Gates: `make build` all four ports
 from clean (0 failed asserts); focused `test64` 23/23; `make test128-fast` all
 pass; `make testapple2` memory-contract 22/22.
 
+## Implementation Notes — step-13 A2 ego-overlay repair (2026-08-20)
+
+Hardware playtest found chest open locking up on Apple IIe. Root cause:
+`chest_loot_place_one`'s ego roll used the plain A2 `tramp_roll_ego_type`,
+which loads OVL.ITEMS into the `$A400` window over the executing GEN overlay;
+`roll_ego_type`'s `rts` then returned into OVL.ITEMS bytes and execution went
+wild. This is the same eviction class as the C64 KERNAL-exposure case and the
+A2 wizard OVL.MODAL case. Fix: new resident `tramp_roll_ego_type_gen`
+(platforms/apple2/main.s) restores OVL.GEN before returning, and the A2 product
+branch of `chest_loot_place_one` selects it via `APPLE2_PRODUCT_OVERLAY_RUNTIME`.
+No A2 runtime chest scenario exists locally (the MAME harness needs ROMs); gates
+were `make build` (0 failed asserts, all ports), `make testapple2` 22/22, and
+the C64/Plus4 chest suites (unchanged branches).
+
 ## Implementation Notes — step 13 Loot fulfillment (as-built, 2026-08-15)
 
 Chest contents generate lazily at open time through the GEN-overlay picker,

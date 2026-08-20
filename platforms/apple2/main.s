@@ -1624,6 +1624,28 @@ tramp_roll_ego_type_modal:
     pla
     rts
 
+// Chest loot fulfillment calls the ego roll from inside OVL.GEN; restore
+// OVL.GEN before returning or the continuation executes OVL.ITEMS bytes.
+// Same eviction class as the wizard OVL.MODAL path above.
+tramp_roll_ego_type_gen:
+    pha
+    lda #OVL_ITEMS
+    jsr overlay_load
+    bcs !load_failed+
+    pla
+    jsr roll_ego_type
+    pha
+    lda #OVL_DUNGEON_GEN
+    jsr overlay_load
+    bcc !restored+
+    brk                         // saved continuation is inside OVL.GEN
+!restored:
+    pla
+    rts
+!load_failed:
+    pla
+    rts
+
 tramp_ego_apply_damage:
     lda #<ego_apply_damage
     ldy #>ego_apply_damage

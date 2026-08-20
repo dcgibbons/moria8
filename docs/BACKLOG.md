@@ -623,6 +623,41 @@ Acceptance target:
 
 ## Apple IIe
 
+### Fix wizard summon in town rendering as `@` / unknown `?`
+
+Reported 2026-08-20 on Apple IIe hardware/emulator: summoning a monster in
+town via wizard mode produces a monster that renders with the player glyph
+`@` and has no name (combat message: `You hit the ? (3/3).`). Wizard summon
+in the dungeon works correctly, so the defect is specific to the town context.
+A second `@` appears adjacent to the player in town after the summon.
+
+Hypotheses to check, in order:
+
+- The wizard summon picker returns a creature index that is valid for the
+  dungeon tier but out of range or mismapped for the town roster, so glyph and
+  name lookups fall off the town table (glyph `$00`/default and empty name).
+- The Apple IIe town tier/name sidecar is not loaded or is banked out when the
+  wizard summon path reads the glyph/name, while the dungeon path has the
+  correct tier resident.
+- The town spawn path (`monster_spawn_town` vs wizard summon) sets a creature
+  type the A2 renderer's `a2_map_char` translation does not cover.
+
+Required work:
+
+- Reproduce under the MAME harness (wizard mode, town, summon) and capture the
+  summoned slot's `MX_TYPE`, the active roster count, and which tier/name
+  tables are mapped at read time.
+- Root-cause whether the bug is picker range, tier loading, or A2 glyph/name
+  translation; compare against the C64/C128 town summon behavior.
+- Fix at the layer that owns the defect; do not special-case the renderer.
+- Add Apple IIe harness coverage for wizard summon in town: summoned monster
+  has a non-`@` glyph and a real name in combat/inspection messages.
+
+Acceptance target:
+
+- Wizard-summoned monsters in town render and identify correctly on Apple IIe,
+  matching dungeon summon behavior and the other platforms.
+
 ### Investigate AppleSqueezer accelerator incompatibility
 
 Low priority. The Apple IIe build boots and completes character creation on an
