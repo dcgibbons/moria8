@@ -7,7 +7,7 @@
 :BasicUpstart2(test_bootstrap)
 
 .pc = $E000 "Result Buffer"
-tc_results: .fill 4, $ff
+tc_results: .fill 9, $ff
 
 .pc = $080E "Test Code"
 
@@ -21,7 +21,7 @@ test_finish:
     sei
     :BankOutBasic()
     :BankOutKernal()
-    ldx #3
+    ldx #8
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -104,7 +104,15 @@ test_finish:
 }
 .macro ChestLootRestoreSegment() {
 }
+// This unit assembly normally exposes only the resident picker wrapper. The
+// product chest-loot branch calls the same implementation inside GEN directly.
+pick_item_type_overlay:
+    jmp pick_item_type
+tramp_roll_ego_type_modal:
+    jmp tramp_roll_ego_type
+#define C64_PRODUCT_OVERLAY_RUNTIME
 #import "../../../../core/chest_loot.s"
+#undef C64_PRODUCT_OVERLAY_RUNTIME
 
 store_init_all:
     rts
@@ -129,8 +137,12 @@ press_key_str:
 
 // ---- Test spies / controlled stubs ----------------------------------------
 tcl_overlay_calls: .byte 0  // overlay_load call count
+tcl_overlay_no_kernal_calls: .byte 0
+tcl_runtime_resync_calls: .byte 0
+tcl_modal_ego_calls: .byte 0
+tcl_overlay_fail: .byte 0
 tcl_rng_idx:     .byte 0
-tcl_rng_seq:     .fill 12, 0
+tcl_rng_seq:     .fill 32, 0
 
 .macro PatchJump(target, replacement) {
     lda #$4c
@@ -143,7 +155,27 @@ tcl_rng_seq:     .fill 12, 0
 
 test_overlay_load:
     inc tcl_overlay_calls
+    lda tcl_overlay_fail
+    bne !failed+
     clc                         // pretend the GEN overlay loaded
+    rts
+!failed:
+    sec
+    rts
+
+overlay_load_no_kernal:
+    inc tcl_overlay_no_kernal_calls
+    jsr overlay_load
+    bcs !done+
+    lda #BANK_NO_KERNAL
+    sta $01
+!done:
+    rts
+
+test_runtime_resync:
+    inc tcl_runtime_resync_calls
+    lda #BANK_NO_BASIC
+    sta $01
     rts
 
 test_rng_range:
@@ -160,7 +192,8 @@ test_roll_enchantment:
     lda #0
     rts
 
-test_tramp_roll_ego_type:
+test_tramp_roll_ego_type_modal:
+    inc tcl_modal_ego_calls
     lda #0
     rts
 
@@ -173,12 +206,11 @@ test_monster_find_at:
     rts
 
 // fill_floor — Set the tiles around the chest to TILE_FLOOR so loot placement
-// finds walkable tiles. Bounded to rows 15-21 / cols 9-15: the full map
-// ($C000) overlaps this suite's Main code (ends $C402), so a whole-map fill
-// would corrupt the running test. The chest's 5x5 drop box (rows 16-20) sits
-// safely past the code.
+// finds walkable tiles. Bounded to rows 22-28 / cols 9-15: the full map
+// ($C000) overlaps this suite's Main code, so a whole-map fill would corrupt
+// the running test. The chest's 5x5 drop box (rows 22-26) sits past the code.
 fill_floor:
-    ldx #15
+    ldx #22
 !ff_row:
     lda map_row_lo,x
     sta zp_ptr0
@@ -192,18 +224,23 @@ fill_floor:
     cpy #16
     bne !ff_col-
     inx
-    cpx #22
+    cpx #29
     bne !ff_row-
     rts
 
-// test_reset — clear floor items, spies, latch; chest target tile (12,18).
+// test_reset — clear floor items, spies, latch; chest target tile (12,24).
 test_reset:
     jsr player_init
     jsr item_init_floor
     jsr fill_floor
     lda #0
     sta tcl_overlay_calls
+    sta tcl_overlay_no_kernal_calls
+    sta tcl_runtime_resync_calls
+    sta tcl_modal_ego_calls
+    sta tcl_overlay_fail
     sta tcl_rng_idx
+    sta zp_dirty_count
     sta chest_loot_pending
     sta chest_loot_x
     sta chest_loot_y
@@ -214,7 +251,7 @@ test_reset:
     lda #12
     sta df_target_x
     sta chest_loot_x
-    lda #18
+    lda #24
     sta df_target_y
     sta chest_loot_y
     rts
@@ -234,10 +271,11 @@ place_chest_at_latch:
 
 test_start:
     :PatchJump(overlay_load, test_overlay_load)
+    :PatchJump(hal_platform_runtime_resync, test_runtime_resync)
     :PatchJump(rng_range, test_rng_range)
     :PatchJump(pick_item_type, test_pick_item_type)
     :PatchJump(roll_enchantment, test_roll_enchantment)
-    :PatchJump(tramp_roll_ego_type, test_tramp_roll_ego_type)
+    :PatchJump(tramp_roll_ego_type_modal, test_tramp_roll_ego_type_modal)
     :PatchJump(item_get_missile, test_item_get_missile)
     :PatchJump(monster_find_at, test_monster_find_at)
 
@@ -283,7 +321,7 @@ test_start:
 
     // Test 2: valid opened chest with pending contents -> GEN loaded once,
     // latch cleared, drops placed (small wooden $0F: 60%+90% both succeed ->
-    // 2 mixed drops, both forced object -> 2 items at (10,16) and (14,20)).
+    // 2 mixed drops, both forced object -> 2 items at (10,22) and (14,26)).
 !t2:
     jsr test_reset
     jsr place_chest_at_latch
@@ -309,19 +347,31 @@ test_start:
     lda tcl_overlay_calls
     cmp #1
     bne !t2_fail+
+    lda tcl_overlay_no_kernal_calls
+    cmp #1
+    bne !t2_fail+
+    lda tcl_runtime_resync_calls
+    cmp #1
+    bne !t2_fail+
+    lda tcl_modal_ego_calls
+    cmp #2
+    bne !t2_fail+
+    lda $01
+    cmp #BANK_NO_BASIC
+    bne !t2_fail+
     lda chest_loot_pending
     bne !t2_fail+
-    // Drop 1 at (10,16) is the stub item id 5
+    // Drop 1 at (10,22) is the stub item id 5
     lda #10
-    ldy #16
+    ldy #22
     jsr floor_item_find_at
     bcc !t2_fail+
     lda fi_item_id,x
     cmp #5
     bne !t2_fail+
-    // Drop 2 at (14,20) is the stub item id 5
+    // Drop 2 at (14,26) is the stub item id 5
     lda #14
-    ldy #20
+    ldy #26
     jsr floor_item_find_at
     bcc !t2_fail+
     lda fi_item_id,x
@@ -350,16 +400,218 @@ test_start:
     jsr chest_fulfill_loot
     lda chest_loot_pending
     bne !t3_fail+
+    lda tcl_runtime_resync_calls
+    cmp #1
+    bne !t3_fail+
+    lda tcl_modal_ego_calls
+    bne !t3_fail+
+    lda $01
+    cmp #BANK_NO_BASIC
+    bne !t3_fail+
     // No loot items beyond the chest (slots 1+ stay empty)
     lda fi_item_id + 1
     cmp #FI_EMPTY
     bne !t3_fail+
     lda #$01
     sta tc_results + 3
-    jmp !done+
+    jmp !t4+
 !t3_fail:
     lda #$00
     sta tc_results + 3
 
+    // Test 4: GEN load failure clears the latch without generating loot and
+    // restores normal gameplay banking before returning.
+!t4:
+    jsr test_reset
+    jsr place_chest_at_latch
+    lda #1
+    sta chest_loot_pending
+    sta tcl_overlay_fail
+    lda #$0f
+    sta chest_loot_flags
+    jsr chest_fulfill_loot
+    lda tcl_overlay_no_kernal_calls
+    cmp #1
+    bne !t4_fail+
+    lda tcl_runtime_resync_calls
+    cmp #1
+    bne !t4_fail+
+    lda tcl_rng_idx
+    bne !t4_fail+
+    lda chest_loot_pending
+    bne !t4_fail+
+    lda fi_item_id + 1
+    cmp #FI_EMPTY
+    bne !t4_fail+
+    lda $01
+    cmp #BANK_NO_BASIC
+    bne !t4_fail+
+    lda #$01
+    sta tc_results + 4
+    jmp !t5+
+!t4_fail:
+    lda #$00
+    sta tc_results + 4
+
+    // Test 5: one successful object drop latches the action-owned redraw
+    // request for the enclosing command's turn_post_action.
+!t5:
+    jsr test_reset
+    jsr place_chest_at_latch
+    lda #1
+    sta chest_loot_pending
+    lda #$0f
+    sta chest_loot_flags
+    // rng seq: 60% roll=10 succeeds; 90% roll=95 fails; type=10(obj), x=0, y=0.
+    lda #10
+    sta tcl_rng_seq + 0
+    lda #95
+    sta tcl_rng_seq + 1
+    lda #10
+    sta tcl_rng_seq + 2
+    lda #0
+    sta tcl_rng_seq + 3
+    sta tcl_rng_seq + 4
+    jsr chest_fulfill_loot
+    lda chest_loot_pending
+    bne !t5_fail+
+    lda zp_dirty_count
+    cmp #1
+    bne !t5_fail+
+    lda #$01
+    sta tc_results + 5
+    jmp !t6+
+!t5_fail:
+    lda #$00
+    sta tc_results + 5
+
+    // Test 6: one successful gold drop also latches the redraw request.
+!t6:
+    jsr test_reset
+    jsr place_chest_at_latch
+    lda #1
+    sta chest_loot_pending
+    lda #$0f
+    sta chest_loot_flags
+    // rng seq: 60% roll=10 succeeds; 90% roll=95 fails; type=60(gold), x=0, y=0.
+    lda #10
+    sta tcl_rng_seq + 0
+    lda #95
+    sta tcl_rng_seq + 1
+    lda #60
+    sta tcl_rng_seq + 2
+    lda #0
+    sta tcl_rng_seq + 3
+    sta tcl_rng_seq + 4
+    jsr chest_fulfill_loot
+    lda chest_loot_pending
+    bne !t6_fail+
+    lda zp_dirty_count
+    cmp #1
+    bne !t6_fail+
+    lda #$01
+    sta tc_results + 6
+    jmp !t7+
+!t6_fail:
+    lda #$00
+    sta tc_results + 6
+
+    // Test 7: low-edge chest at (1,1) with zero RNG offsets wraps the 5x5
+    // candidate to ($ff,$ff). The bounds check must reject every attempt
+    // before any row-table or map access: drop discarded, latch cleared, no
+    // redraw latched, exactly 1 + 10*2 RNG draws consumed.
+!t7:
+    jsr test_reset
+    lda #1
+    sta chest_loot_x
+    sta chest_loot_y
+    jsr place_chest_at_latch
+    lda #1
+    sta chest_loot_pending
+    lda #$04                    // bit2 only: 60% one drop, type resolves object
+    sta chest_loot_flags
+    lda #10
+    sta tcl_rng_seq + 0         // 60% roll succeeds; offsets stay 0
+    jsr chest_fulfill_loot
+    lda chest_loot_pending
+    beq !t7_a+
+    lda #$f1
+    jmp !t7_fail+
+!t7_a:
+    lda zp_dirty_count
+    beq !t7_b+
+    lda #$f2
+    jmp !t7_fail+
+!t7_b:
+    lda tcl_rng_idx
+    cmp #21
+    beq !t7_c+
+    jmp !t7_fail+
+!t7_c:
+    lda fi_item_id + 1
+    cmp #FI_EMPTY
+    beq !t7_d+
+    lda #$f4
+    jmp !t7_fail+
+!t7_d:
+    lda #$01
+    sta tc_results + 7
+    jmp !t8+
+!t7_fail:
+    sta tc_results + 7
+
+    // Test 8: high-edge chest at (MAP_COLS-2, MAP_ROWS-2) with maximum RNG
+    // offsets lands candidates at (MAP_COLS, MAP_ROWS). Same rejection
+    // contract as test 7.
+!t8:
+    jsr test_reset
+    lda #MAP_COLS - 2
+    sta chest_loot_x
+    lda #MAP_ROWS - 2
+    sta chest_loot_y
+    jsr place_chest_at_latch
+    lda #1
+    sta chest_loot_pending
+    lda #$04
+    sta chest_loot_flags
+    lda #10
+    sta tcl_rng_seq + 0         // 60% roll succeeds
+    lda #4
+    ldx #20
+!t8_seq:
+    sta tcl_rng_seq,x           // offsets 1..20 -> 4 (candidate = MAP_COLS/ROWS)
+    dex
+    bne !t8_seq-
+    jsr chest_fulfill_loot
+    lda chest_loot_pending
+    beq !t8_a+
+    lda #$f1
+    jmp !t8_fail+
+!t8_a:
+    lda zp_dirty_count
+    beq !t8_b+
+    lda #$f2
+    jmp !t8_fail+
+!t8_b:
+    lda tcl_rng_idx
+    cmp #21
+    beq !t8_c+
+    jmp !t8_fail+
+!t8_c:
+    lda fi_item_id + 1
+    cmp #FI_EMPTY
+    beq !t8_d+
+    lda #$f4
+    jmp !t8_fail+
+!t8_d:
+    lda #$01
+    sta tc_results + 8
+    jmp !done+
+!t8_fail:
+    sta tc_results + 8
+
 !done:
     jmp test_finish
+
+test_body_end:
+.assert "Chest loot test stays below its first map write", test_body_end <= MAP_BASE + 22 * MAP_COLS + 9, true

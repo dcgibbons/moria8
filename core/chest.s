@@ -43,6 +43,17 @@ chest_loot_flags_table:
 // it. Contents generation lands in step 13.
 // ============================================================
 chest_open_command:
+#if C64_TEST_SCRIPTED_CHEST_OPEN_PRODUCT || PLUS4_TEST_SCRIPTED_CHEST_OPEN_PRODUCT
+    lda chest_product_path_stage
+    cmp #1
+    beq !co_product_entered+
+    lda #$ff
+    bne !co_product_store_stage+
+!co_product_entered:
+    lda #2
+!co_product_store_stage:
+    sta chest_product_path_stage
+#endif
     jsr chest_find_at_df_target
     bcs !co_have+
     jmp !co_no_turn+
@@ -154,6 +165,13 @@ chest_stage_loot:
 // ============================================================
 chest_trigger_traps:
     stx chest_slot
+    // Stage the chest position for the deferred summon runner before any trap
+    // effect runs: trap_apply_damage reuses df_target_x for the damage roll,
+    // and an explosion removes the floor slot, so neither is readable later.
+    lda fi_x,x
+    sta chest_summon_x
+    lda fi_y,x
+    sta chest_summon_y
     lda fi_p1,x
     sta chest_p1
     ora #CHEST_P1_TRAP_FOUND

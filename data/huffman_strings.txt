@@ -234,7 +234,6 @@ Sorry, what was that again?
 @PID_CARRY You sense magik on what you carry.
 @PIQ_RESTORED You feel your strength return.
 @CHEST_FOUND_TRAP You have discovered a trap on the chest!
-@CHEST_TRAPPED The chest is trapped!
 @CHEST_NEEDLE A small needle has pricked you!
 @CHEST_WEAKENED You feel weakened!
 @CHEST_GAS A puff of yellow gas surrounds you!

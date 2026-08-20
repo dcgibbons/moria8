@@ -15,6 +15,20 @@ chest_loot_x:       .byte 0   // chest map position
 chest_loot_y:       .byte 0
 chest_loot_flags:   .byte 0   // VMS flags byte (bits 0-5 = VMS bits 24-29)
 
+// Triggering chest position for the deferred summon runner, staged by
+// chest_trigger_traps before any trap effect runs: trap_apply_damage reuses
+// df_target_x for the damage roll and an explosion removes the floor slot,
+// so neither source is readable by the time the resident handoff executes.
+// Lives with the loot latch because tight ports park this block outside the
+// play payload where chest_summons.s runs.
+chest_summon_x:     .byte 0
+chest_summon_y:     .byte 0
+#if C64_TEST_SCRIPTED_CHEST_OPEN_PRODUCT || PLUS4_TEST_SCRIPTED_CHEST_OPEN_PRODUCT
+chest_product_path_stage:    .byte 0
+chest_product_loot_placed:   .byte 0
+chest_product_runtime_state: .byte 0
+#endif
+
 // ---- Generator scratch (resident) ------------------------------------------
 cl_typ:     .byte 0           // 1=object, 2=gold, 3=mixed (from flags bits 0-1)
 cl_drops:   .byte 0           // drops remaining to place
@@ -57,9 +71,42 @@ chest_fulfill_loot:
     cmp #ICAT_CHEST
     bne !cfl_clear+           // Not a chest -> stale latch, discard
     lda #OVL_DUNGEON_GEN
+#if C64_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME
+    // Disk loading exposes platform ROM over $E000; restore RAM before calling
+    // the freshly loaded GEN overlay. REU-backed C64 loads use the same path.
+    jsr overlay_load_no_kernal
+    bcc !cfl_loaded+
+    jsr hal_platform_runtime_resync
+    jmp !cfl_clear+
+#else
     jsr overlay_load
     bcs !cfl_clear+           // Load failed: discard this chest's contents
+#endif
+!cfl_loaded:
     jsr chest_generate_loot
+#if C64_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME
+#if C64_TEST_SCRIPTED_CHEST_OPEN_PRODUCT || PLUS4_TEST_SCRIPTED_CHEST_OPEN_PRODUCT
+chest_product_after_generate_sym:
+#endif
+    jsr hal_platform_runtime_resync
+#if C64_TEST_SCRIPTED_CHEST_OPEN_PRODUCT || PLUS4_TEST_SCRIPTED_CHEST_OPEN_PRODUCT
+    lda chest_product_path_stage
+    cmp #4
+    beq !cfl_product_resynced+
+    lda #$ff
+    bne !cfl_product_store_stage+
+!cfl_product_resynced:
+    lda #5
+!cfl_product_store_stage:
+    sta chest_product_path_stage
+#if C64_TEST_SCRIPTED_CHEST_OPEN_PRODUCT
+    lda $01
+#else
+    lda TED_SCREEN_ADDR
+#endif
+    sta chest_product_runtime_state
+#endif
+#endif
 !cfl_clear:
     lda #0
     sta chest_loot_pending
@@ -78,6 +125,17 @@ chest_fulfill_loot:
 // ============================================================
 :ChestLootSegment()
 chest_generate_loot:
+#if C64_TEST_SCRIPTED_CHEST_OPEN_PRODUCT || PLUS4_TEST_SCRIPTED_CHEST_OPEN_PRODUCT
+    lda chest_product_path_stage
+    cmp #2
+    beq !cgl_product_entered+
+    lda #$ff
+    bne !cgl_product_store_stage+
+!cgl_product_entered:
+    lda #3
+!cgl_product_store_stage:
+    sta chest_product_path_stage
+#endif
     // Drop type from flags bits 0-1
     lda chest_loot_flags
     and #$03
@@ -192,6 +250,16 @@ chest_loot_place_one:
     sbc #2
     sta fi_add_y
 
+    // Bounds: reject candidates outside the map before any row-table or map
+    // access. The unsigned compare also rejects the $ff wrap produced when an
+    // edge chest (coordinate 1) combines with a zero RNG offset.
+    lda fi_add_x
+    cmp #MAP_COLS
+    bcs !clpo_next+
+    lda fi_add_y
+    cmp #MAP_ROWS
+    bcs !clpo_next+
+
     // Walkable (floor or open door)?
     ldx fi_add_y
     lda map_row_lo,x
@@ -242,7 +310,29 @@ chest_loot_place_one:
     jsr roll_enchantment        // sets fi_add_p1 + combat/armor stats
     sta fi_add_p1
     lda fi_add_id
+#if C64_PRODUCT_OVERLAY_RUNTIME
+    // The ordinary C64 trampoline exposes KERNAL before returning, which would
+    // hide this GEN-overlay continuation at $E000.
+    jsr tramp_roll_ego_type_modal
+#else
     jsr tramp_roll_ego_type
+#endif
+#if C64_TEST_SCRIPTED_CHEST_OPEN_PRODUCT || PLUS4_TEST_SCRIPTED_CHEST_OPEN_PRODUCT
+    pha
+    lda chest_product_path_stage
+    cmp #3
+    beq !clpo_product_first_ego+
+    cmp #4
+    beq !clpo_product_ego_done+
+    lda #$ff
+    bne !clpo_product_store_stage+
+!clpo_product_first_ego:
+    lda #4
+!clpo_product_store_stage:
+    sta chest_product_path_stage
+!clpo_product_ego_done:
+    pla
+#endif
     sta fi_add_ego
     lda #1
     sta fi_add_qty
@@ -256,6 +346,15 @@ chest_loot_place_one:
     sta fi_add_qty
 !clpo_qty_done:
     jsr floor_item_add
+    bcc !clpo_object_done+      // Table full — discard this drop
+    inc zp_dirty_count          // Enclosing turn must redraw newly visible loot
+!clpo_object_done:
+#if C64_TEST_SCRIPTED_CHEST_OPEN_PRODUCT || PLUS4_TEST_SCRIPTED_CHEST_OPEN_PRODUCT
+    bcc !clpo_product_not_placed+
+    lda #1
+    sta chest_product_loot_placed
+!clpo_product_not_placed:
+#endif
     rts
 
 !clpo_place_gold:
@@ -280,7 +379,77 @@ chest_loot_place_one:
     adc #0
     sta fi_add_qty_hi
     jsr floor_item_add
+    bcc !clpo_gold_done+        // Table full — discard this drop
+    inc zp_dirty_count          // Enclosing turn must redraw newly visible loot
+!clpo_gold_done:
     rts
 
 cl_drops_this: .byte 0          // This drop's resolved type (1=object, 2=gold)
+
+#if C64_TEST_SCRIPTED_CHEST_OPEN_PRODUCT || PLUS4_TEST_SCRIPTED_CHEST_OPEN_PRODUCT
+// Deterministic product-path fixture: an unlocked Large Wooden Chest directly
+// east of the player, with a clear local area and RNG seed that guarantees at
+// least one object drop through the real picker and ego trampoline.
+chest_product_setup:
+    jsr item_init_floor
+    jsr monster_init_table
+
+    lda #0
+    sta chest_loot_pending
+    sta chest_pending_summons
+    sta chest_product_path_stage
+    sta chest_product_loot_placed
+    sta chest_product_runtime_state
+
+    lda #20
+    sta zp_player_x
+    sta player_data + PL_MAP_X
+    lda #10
+    sta zp_player_y
+    sta player_data + PL_MAP_Y
+
+    ldx #8
+!cps_row:
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #19
+    lda #(TILE_FLOOR | FLAG_VISITED | FLAG_LIT)
+!cps_col:
+    :MapWrite_ptr0_y()
+    iny
+    cpy #24
+    bne !cps_col-
+    inx
+    cpx #13
+    bne !cps_row-
+
+    lda #$12
+    sta zp_rng_0
+    lda #$34
+    sta zp_rng_1
+    lda #$56
+    sta zp_rng_2
+    lda #$78
+    sta zp_rng_3
+
+    jsr fi_add_clear_plain_meta
+    lda #21
+    sta fi_add_x
+    lda #10
+    sta fi_add_y
+    lda #ITEM_TYPE_CHEST_LARGE_WOOD
+    sta fi_add_id
+    lda #1
+    sta fi_add_qty
+    lda #15
+    sta fi_add_to_hit
+    jsr floor_item_add
+    bcs !cps_done+
+    lda #$ff
+    sta chest_product_path_stage
+!cps_done:
+    rts
+#endif
 :ChestLootRestoreSegment()

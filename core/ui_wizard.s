@@ -577,6 +577,9 @@ ui_wizard_restore_gameplay_with_message:
     lda zp_ptr0_hi
     sta ui_wizard_msg_hi
     jsr ui_view_redraw_gameplay_view
+#if C64_TEST_SCRIPTED_WIZARD_ITEM_PRODUCT
+c64_test_wizard_item_redraw_done_sym:
+#endif
     lda ui_wizard_msg_lo
     sta zp_ptr0
     lda ui_wizard_msg_hi

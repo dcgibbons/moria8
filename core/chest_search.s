@@ -7,8 +7,8 @@
 // chest_search_reveal — Search-scan branch for one adjacent tile that has
 // FLAG_HAS_ITEM set. Finds an armed chest at (df_target_x, df_target_y):
 // unfound traps roll the per-tile search chance and set CHEST_P1_TRAP_FOUND
-// with the discovery message on success; already-found trapped chests print
-// the upstream repeat message unless both message rows are already occupied.
+// with the VMS discovery message on success. A later search reports the chest
+// found but does not repeat a trap message (pinned VMS moria.inc:1445-1454).
 // Uses df_search_chance as the per-tile chance.
 // Output: carry set = something found (df_found set), carry clear = nothing
 // Clobbers: A, X, Y
@@ -21,10 +21,10 @@ chest_search_reveal:
     lda fi_p1,x
     and #CHEST_P1_TRAP_MASK
     beq !csr_none+
-    // Already found? Repeat message, no roll (upstream).
+    // Already found? VMS reports the find but emits no repeat message.
     lda fi_p1,x
     and #CHEST_P1_TRAP_FOUND
-    bne !csr_repeat+
+    bne !csr_found+
     // Unfound: roll the normal per-tile search chance
     lda df_search_chance
     beq !csr_none+
@@ -38,13 +38,6 @@ chest_search_reveal:
     ora #CHEST_P1_TRAP_FOUND
     sta fi_p1,x
     ldx #HSTR_CHEST_FOUND_TRAP
-    jmp !csr_msg+
-!csr_repeat:
-    lda zp_msg_flags
-    cmp #MSG_PENDING | MSG_FULL
-    beq !csr_found+
-    ldx #HSTR_CHEST_TRAPPED
-!csr_msg:
     jsr huff_print_msg
 !csr_found:
     lda #1

@@ -1482,6 +1482,19 @@ c128_test_perf_p1_trace_export_sym:
     sec
     sbc #CMD_STAIRS_DN
     tax
+#if C64_TEST_SCRIPTED_CHEST_OPEN_PRODUCT || PLUS4_TEST_SCRIPTED_CHEST_OPEN_PRODUCT
+    cpx #(CMD_OPEN - CMD_STAIRS_DN)
+    bne !product_not_open+
+    lda chest_product_path_stage
+    beq !product_open_ready+
+    lda #$ff
+    bne !product_store_open_stage+
+!product_open_ready:
+    lda #1
+!product_store_open_stage:
+    sta chest_product_path_stage
+!product_not_open:
+#endif
     lda command_dispatch_lo,x
     sta zp_ptr0
     lda command_dispatch_hi,x
@@ -1842,6 +1855,18 @@ level_change_generate_current:
     jsr generation_busy_tick_if_dungeon_api
     jsr item_spawn_level
     jsr generation_busy_tick_if_dungeon_api
+#if C64_TEST_SCRIPTED_CHEST_OPEN_PRODUCT || PLUS4_TEST_SCRIPTED_CHEST_OPEN_PRODUCT
+    lda #OVL_DUNGEON_GEN
+    jsr overlay_load_no_kernal
+    bcc !lcgc_product_gen_ready+
+    lda #$ff
+    sta chest_product_path_stage
+    jmp !lcgc_product_setup_done+
+!lcgc_product_gen_ready:
+    jsr chest_product_setup
+    jsr hal_platform_runtime_resync
+!lcgc_product_setup_done:
+#endif
 #if C64_TEST_SCRIPTED_DUNGEON_SPELL
     jsr c64_test_force_spell_target_monster
 #endif

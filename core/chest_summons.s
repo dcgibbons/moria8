@@ -7,33 +7,46 @@
 // macros so tight ports can park it outside full payloads.
 
 // chest_pending_summons — Pending chest summoning-trap spawn attempts.
-// Staged by the chest overlay (trap fire); consumed here.
+// Staged by the chest overlay (trap fire); consumed here as the loop
+// counter, so it is always zero on return.
 chest_pending_summons: .byte 0
 
 // chest_run_pending_summons — Each attempt picks a random adjacent tile
-// around the chest and spawns a depth-appropriate monster if the tile is
-// free; failures discard the attempt (VMS form).
+// around the staged chest position (chest_summon_x/y) and spawns a
+// depth-appropriate monster if the tile is walkable, monster-free, and not
+// the player's own tile (same invariant as find_adjacent_empty); failures
+// discard the attempt (VMS form). Preserves the caller's flags: cmd_disarm
+// and chest_run_deferred carry the turn-consumed result across this call.
 // Clobbers: A, X, Y, zp_ptr0
 :ChestSummonsSegment()
 chest_run_pending_summons:
+    php
     lda chest_pending_summons
     beq !crps_done+
-    sta crps_count
 !crps_loop:
     lda #8
     jsr rng_range
     tax
-    lda df_target_x
-    clc
-    adc dir_dx,x
-    sta ms_spawn_x
-    lda df_target_y
+    lda chest_summon_y
     clc
     adc dir_dy,x
-    sta ms_spawn_y
+    tay                         // Y = candidate y
+    lda chest_summon_x
+    clc
+    adc dir_dx,x                // A = candidate x
+
+    // Never the player's own tile
+    cpy zp_player_y
+    bne !crps_not_player+
+    cmp zp_player_x
+    beq !crps_attempt_done+
+!crps_not_player:
+    sta ms_spawn_x
+    sty ms_spawn_y
 
     // Walkable tile (floor or open door)?
-    ldx ms_spawn_y
+    tya
+    tax                         // X = candidate y (row-table index)
     lda map_row_lo,x
     sta zp_ptr0
     lda map_row_hi,x
@@ -54,12 +67,9 @@ chest_run_pending_summons:
     jsr pick_creature_type
     jsr monster_spawn_one
 !crps_attempt_done:
-    dec crps_count
+    dec chest_pending_summons
     bne !crps_loop-
-    lda #0
-    sta chest_pending_summons
 !crps_done:
+    plp
     rts
-
-crps_count: .byte 0
 :ChestSummonsRestoreSegment()

@@ -1771,31 +1771,34 @@ run_wizard_item_product_smoke() {
         return
     fi
 
-    # Wizard generate item (G 96, then G 97) exercises the overlay-resident
-    # generate flow whose ego roll banks the $E000 window. Regression guard
-    # for the C64 tramp_roll_ego_type exit-banking bug: the standard
-    # trampoline leaves KERNAL mapped at $E000, so the overlay caller's
-    # return executed ROM (screen-scroll garbage, then BRK/JAM). The
-    # modal trampoline keeps overlay RAM visible.
+    # Wizard generate item (G 128, G 96, then G 127) exercises the modal flow
+    # whose ego roll banks the $F000 runtime while returning through $E000.
+    # The resident post-ego breakpoint arms the overlay-address redraw probe
+    # only after the target item roll, avoiding earlier hits at the same
+    # $E000 address during dungeon generation.
     local main_vs="../../../build/test/c64/main.vs"
-    local fail_addr dlvl_addr ovl_addr arm_addr inv_addr
+    local fail_addr redraw_addr ego_addr dlvl_addr ovl_addr arm_addr inv_addr
     fail_addr=$(awk '/\.c64_test_wizard_reveal_fail_input_sym$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    redraw_addr=$(awk '/\.c64_test_wizard_item_redraw_done_sym$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     dlvl_addr=$(awk '/\.zp_player_dlvl$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     ovl_addr=$(awk '/\.current_overlay$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     arm_addr=$(awk '/\.item_init_identification$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     inv_addr=$(awk '/\.inv_item_id$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
-    if [ -z "${fail_addr:-}" ] || [ -z "${dlvl_addr:-}" ] || [ -z "${ovl_addr:-}" ] || [ -z "${arm_addr:-}" ] || [ -z "${inv_addr:-}" ]; then
+    ego_addr=$(awk '/\.c64_test_wizard_ego_bank_restored_sym$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    if [ -z "${fail_addr:-}" ] || [ -z "${redraw_addr:-}" ] || [ -z "${ego_addr:-}" ] || [ -z "${dlvl_addr:-}" ] || [ -z "${ovl_addr:-}" ] || [ -z "${arm_addr:-}" ] || [ -z "${inv_addr:-}" ]; then
         echo "FAIL (missing wizard-item smoke symbols in ../../../build/test/c64/main.vs)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
     fi
     fail_addr=$(printf '%04X' "$((16#$fail_addr))")
+    redraw_addr=$(printf '%04X' "$((16#$redraw_addr))")
     dlvl_addr=$(printf '%04X' "$((16#$dlvl_addr))")
     ovl_addr=$(printf '%04X' "$((16#$ovl_addr))")
     arm_addr=$(printf '%04X' "$((16#$arm_addr))")
     inv_addr=$(printf '%04X' "$((16#$inv_addr))")
-    inv_end=$(printf '%04X' "$((16#$inv_addr + 3))")
+    ego_addr=$(printf '%04X' "$((16#$ego_addr))")
+    inv_end=$(printf '%04X' "$((16#$inv_addr + 4))")
 
     local mon_file
     mon_file=$(mktemp -t "test_${name}_mon")
@@ -1809,7 +1812,15 @@ run_wizard_item_product_smoke() {
     {
         echo "break \$${arm_addr}"
         echo "g"
-        echo "delete 1"
+        echo "delete"
+        echo "break \$${ego_addr}"
+        echo "g"
+        echo "delete"
+        echo "break \$${redraw_addr}"
+        echo "g"
+        echo "m 0001 0001"
+        echo "m d800 dbe7"
+        echo "delete"
         echo "break \$${fail_addr}"
         echo "g"
         echo "m \$${dlvl_addr} \$${dlvl_addr}"
@@ -1839,7 +1850,39 @@ run_wizard_item_product_smoke() {
         return
     fi
 
-    # Reaching scripted-input exhaustion means both generations, the overlay
+    if ! grep -qiE "^>C:0001  35" "$tty_log"; then
+        echo "FAIL (wizard item redraw ran without C64 I/O visible)"
+        echo "    Log: $tty_log"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    if ! python3 - "$tty_log" <<'PY'
+import re
+import sys
+from pathlib import Path
+
+values = []
+for line in Path(sys.argv[1]).read_text(errors="ignore").splitlines():
+    if not re.match(r"^>C:d[89ab][0-9a-f]{2}\s", line, re.IGNORECASE):
+        continue
+    for token in line.split()[1:17]:
+        if re.fullmatch(r"[0-9a-f]{2}", token, re.IGNORECASE):
+            values.append(int(token, 16) & 0x0f)
+
+if len(values) < 1000 or values.count(0x0b) < 8 or values.count(0x0f) < 8:
+    raise SystemExit(1)
+PY
+    then
+        echo "FAIL (wizard item redraw did not restore physical dungeon colors)"
+        echo "    Log: $tty_log"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    # Reaching scripted-input exhaustion means all three generations, the overlay
     # restore, and the inventory view returned to the main loop. Verify
     # invariants: still on dungeon level 1, and the inventory display left its
     # owning overlay resident (OVL_HELP = 5).
@@ -1863,13 +1906,13 @@ run_wizard_item_product_smoke() {
         return
     fi
 
-    # Boundary IDs: first appended (96=$60) and last appended (127=$7f) must
-    # both land in inventory through the production grant path (starting gear
-    # occupies the leading slots).
+    # Chest 128 ($80) and the appended-range boundaries (96=$60, 127=$7f)
+    # must all land in inventory through the production grant path (starting
+    # gear occupies the leading slots).
     local inv_lc
     inv_lc=$(echo "$inv_addr" | tr '[:upper:]' '[:lower:]')
-    if ! grep -qiE "^>C:${inv_lc}.*60 7f" "$tty_log"; then
-        echo "FAIL (boundary item IDs 96/127 not granted into inventory)"
+    if ! grep -qiE "^>C:${inv_lc}.*80.*60[[:space:]]+7f" "$tty_log"; then
+        echo "FAIL (item IDs 128/96/127 not granted into inventory)"
         echo "    Log: $tty_log"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
@@ -1880,6 +1923,88 @@ run_wizard_item_product_smoke() {
     PASS=$((PASS + 1))
     TOTAL=$((TOTAL + 1))
 }
+
+run_chest_open_product_smoke() {
+    local name="chest_open_product_smoke"
+    echo -n "  $name: "
+
+    local smoke_out build_log smoke_c64 boot_d64 main_vs
+    smoke_out=$(mktemp -d "${TMPDIR:-/tmp}/moria8-c64-chest-open.XXXXXX")
+    smoke_c64="$smoke_out/c64"
+    boot_d64="$smoke_out/moria8-c64.d64"
+    main_vs="$smoke_c64/main.vs"
+    build_log=$(mktemp -t "build_${name}_log")
+
+    if ! make -s -B -C "$REPO_ROOT/platforms/commodore" \
+            KICKASS="$KICKASS" \
+            OUT="$smoke_out" \
+            KA_FLAGS64="-showmem -vicesymbols -libdir ../../core -libdir common -afo -libdir c64 -define DEBUG_FEAT_DISK_TRACE=0 -define C64_TEST_SCRIPTED_CHEST_OPEN_PRODUCT" \
+            build64 >"$build_log" 2>&1; then
+        echo "FAIL (product build)"
+        tail -80 "$build_log"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    if ! "$C1541" -format "moria8 c64,m8" d64 "$boot_d64" \
+            -attach "$boot_d64" \
+            -write "$smoke_c64/boot.prg" "moria8" \
+            -write "$smoke_c64/boot.prg" "boot64" \
+            -write "$smoke_c64/bootart64.prg" "bootart64" \
+            -write "$smoke_c64/moria8.prg" "moria64" \
+            -write "$smoke_c64/64.bank" "64.bank" \
+            -write "$smoke_c64/title" "t64" \
+            -write "$smoke_c64/monster.db.1" "monster.db.1" \
+            -write "$smoke_c64/monster.db.2" "monster.db.2" \
+            -write "$smoke_c64/monster.db.3" "monster.db.3" \
+            -write "$smoke_c64/monster.db.4" "monster.db.4" \
+            -write "$smoke_c64/ovl.start" "64.start" \
+            -write "$smoke_c64/ovl.town" "64.town" \
+            -write "$smoke_c64/ovl.death" "64.death" \
+            -write "$smoke_c64/ovl.modal" "64.modal" \
+            -write "$smoke_c64/ovl.gen" "64.gen" \
+            -write "$smoke_c64/ovl.help" "64.help" \
+            -write "$smoke_c64/ovl.ui" "64.ui" \
+            -write "$smoke_c64/ovl.items" "64.items" \
+            -write "$smoke_c64/ovl.spell" "64.spell" \
+            -write "$smoke_c64/ovl.chest" "64.chest" >"$build_log" 2>&1; then
+        echo "FAIL (product disk image)"
+        tail -20 "$build_log"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    if python3 -u ../plus4/tests/product_scripted_smoke.py \
+            --name "$name" \
+            --pass-symbol ".c64_test_script_exhausted_wait" \
+            --start-symbol ".title_menu_loop" \
+            --until-pass \
+            --main-vs "$main_vs" \
+            --boot-d64 "$boot_d64" \
+            --expect-byte-symbol ".chest_product_path_stage=0x05" \
+            --expect-byte-symbol ".chest_product_loot_placed=0x01" \
+            --expect-byte-symbol ".zp_dirty_count=0x00" \
+            --expect-byte-symbol ".turn_scene_dirty=0x00" \
+            --expect-byte-symbol ".chest_product_runtime_state=0x36" \
+            --expect-byte-symbol ".chest_loot_pending=0x00" \
+            --expect-byte-symbol ".chest_pending_summons=0x00" \
+            --expect-byte-symbol ".current_overlay=0x04" \
+            --expect-byte-symbol ".fi_item_id=0x81" \
+            --expect-byte-symbol ".fi_p1=0x80" \
+            --expect-byte-symbol ".zp_player_dlvl=0x01" \
+            --timeout 30 \
+            --retry-timeouts 0 \
+            --vice "$VICE" \
+            --screen-base 0x0400; then
+        PASS=$((PASS + 1))
+    else
+        FAIL=$((FAIL + 1))
+    fi
+    TOTAL=$((TOTAL + 1))
+}
+
 run_disk_setup_product_smoke() {
     local name="disk_setup_product_smoke"
     echo -n "  $name: "
@@ -3874,6 +3999,14 @@ check_static_contract "paralysis_final_tick_message_contract" "../../../core/gam
     "lda zp_eff_paralyze|||beq !not_paralyzed+|||cmp #1|||bne !paralyzed_tick+|||jsr msg_clear|||!paralyzed_tick:|||jsr turn_post_action"
 check_static_contract "earthquake_trampoline_no_hidden_kernal_load_contract" "main.s" \
     "tramp_eff_earthquake:|||sei|||lda #BANK_NO_KERNAL|||sta \$01|||jsr eff_earthquake_banked|||rts|||tramp_item_refuel:"
+check_static_contract "chest_loot_gen_overlay_no_hidden_kernal_contract" "../../../core/chest_loot.s" \
+    "chest_fulfill_loot:|||lda #OVL_DUNGEON_GEN|||#if C64_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME|||jsr overlay_load_no_kernal|||jsr hal_platform_runtime_resync|||!cfl_loaded:|||jsr chest_generate_loot|||jsr hal_platform_runtime_resync"
+check_static_contract "chest_loot_c64_ego_overlay_return_contract" "../../../core/chest_loot.s" \
+    "jsr roll_enchantment|||#if C64_PRODUCT_OVERLAY_RUNTIME|||jsr tramp_roll_ego_type_modal|||sta fi_add_ego"
+check_static_contract "chest_loot_object_drop_marks_redraw_contract" "../../../core/chest_loot.s" \
+    "!clpo_qty_done:|||jsr floor_item_add|||bcc !clpo_object_done+|||inc zp_dirty_count|||!clpo_object_done:|||jsr floor_item_add|||bcc !clpo_gold_done+|||inc zp_dirty_count|||!clpo_gold_done:"
+check_static_contract "chest_search_vms_discovery_only_contract" "../../../core/chest_search.s" \
+    "and #CHEST_P1_TRAP_FOUND|||bne !csr_found+|||ldx #HSTR_CHEST_FOUND_TRAP|||jsr huff_print_msg|||!csr_found:"
 check_static_contract "spell_execute_dedicated_overlay_contract" "main.s" \
     "tramp_spell_execute_selected:|||lda #OVL_SPELL|||jsr overlay_load_no_kernal|||jsr spell_execute_selected|||jmp tramp_sr_epilogue"
 check_static_contract "priest_sense_surroundings_dispatch_contract" "../../../core/player_magic_execute_overlay.s" \
@@ -3892,6 +4025,8 @@ check_static_contract "c64_look_overlay_cleanup_contract" "look_trampoline.s" \
     "tramp_do_look:|||lda #OVL_MODAL_MISC|||jsr overlay_load_no_kernal|||bcs !done+|||jsr do_look|||!done:|||jmp tramp_sr_epilogue"
 check_static_contract "c64_hidden_kernal_irq_vector_contract" "main.s" \
     "c64_irq_hidden_rom:|||lda \$dc0d|||lda \$dd0d|||lda \$d019|||sta \$d019|||rti|||c64_install_ram_irq_vectors:|||lda #BANK_NO_KERNAL|||sta \$01|||sta \$fffa|||sta \$fffe|||sta \$fffb|||sta \$ffff|||overlay_load_no_kernal:|||pha|||lda #BANK_NO_BASIC|||sta \$01|||cli|||pla|||jsr overlay_load|||sei|||jsr c64_install_ram_irq_vectors|||lda #BANK_NO_KERNAL"
+check_static_contract "c64_modal_ego_restores_io_contract" "main.s" \
+    "tramp_roll_ego_type_modal:|||lda #BANK_NO_ROMS|||jsr roll_ego_type|||pha|||lda #BANK_NO_KERNAL|||sta \$01|||pla|||rts"
 check_static_contract "c64_disk_call_preserves_args_contract" "main.s" \
     "c64_disk_call:|||lda \$01|||sta c64_disk_call_saved_bank|||lda #\$36|||sta \$01|||cli|||pla|||tay|||pla|||tax|||pla|||!cdc_jsr:|||jsr \$ffff"
 check_static_contract "c64_game_over_overlay_exit_contract" "main.s" \
@@ -3947,10 +4082,10 @@ run_test "identify_spell" "tests/test_identify_spell.s" "0400 0403" 4 500000000
 run_test "teleport_self" "tests/test_teleport_self.s" "0400 0401" 2 500000000
 run_test "remove_curse" "tests/test_remove_curse.s" "0400 0402" 3 500000000
 run_test "find_hidden_traps_doors" "tests/test_find_hidden_traps_doors.s" "0400 0408" 9 500000000
-run_test "chest_open" "tests/test_chest_open.s" "0400 0409" 10 500000000
+run_test "chest_open" "tests/test_chest_open.s" "0400 040C" 13 500000000
 run_test "chest_disarm" "tests/test_chest_disarm.s" "0400 0406" 7 500000000
 run_test "chest_bash" "tests/test_chest_bash.s" "0400 0404" 5 500000000
-run_test "chest_loot" "tests/test_chest_loot.s" "0400 0403" 4 500000000
+run_test "chest_loot" "tests/test_chest_loot.s" "0400 0408" 9 500000000
 run_test "stinking_cloud" "tests/test_stinking_cloud.s" "0400 0402" 3 500000000
 run_test "frost_ball" "tests/test_frost_ball.s" "0400 0402" 3 500000000
 run_test "teleport_other" "tests/test_teleport_other.s" "0400 0402" 3 500000000
@@ -4031,6 +4166,7 @@ run_suite_function "scripted_detect_evil_smoke" run_scripted_detect_evil_smoke
 run_suite_function "dungeon_ascent_product_smoke" run_dungeon_ascent_product_smoke
 run_suite_function "wizard_reveal_product_smoke" run_wizard_reveal_product_smoke
 run_suite_function "wizard_item_product_smoke" run_wizard_item_product_smoke
+run_suite_function "chest_open_product_smoke" run_chest_open_product_smoke
 run_suite_function "retirement_royal_product_smoke" run_retirement_royal_product_smoke "retirement_flow_product_smoke"
 run_suite_function "disk_setup_product_smoke" run_disk_setup_product_smoke
 run_suite_function "title_disk_setup_single_drive_returns_program_prompt" run_disk_setup_single_drive_return_product_smoke "disk_setup_single_drive_return_product_smoke"

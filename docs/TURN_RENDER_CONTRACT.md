@@ -116,6 +116,8 @@ work16 behavior review; this ledger is their durable approval provenance.
 | C128 command/search/run redraw lifecycle | `platforms/commodore/c128/tests/test_main_loop128.s` | `TEST_FILTER='main_loop128' make test128`; search tests do not prove asymmetric dirty-first/clean-second aggregation |
 | C128 physical scroll-delta rendering | `platforms/commodore/c128/tests/test_vdc_scroll_delta128.s` | `TEST_FILTER='vdc_scroll_delta128' make test128` |
 | Plus/4 production visibility/render path | `platforms/commodore/plus4/tests/test_visibility_renderplus4.s` | `TEST_FILTER='visibility_renderplus4' make testplus4` |
+| C64 modal return keeps physical color RAM visible | Wizard-item product smoke generates chest ID 128 and inspects `$01` plus physical `$D800-$DBE7` after redraw | `TEST_FILTER='wizard_item_product_smoke' make test64` |
+| Chest-loot placement requests same-command scene redraw | Focused chest-loot latch test plus C64/Plus4 product smokes through real Open dispatch | `TEST_FILTER='chest_loot|chest_open_product_smoke' make test64`; `TEST_FILTER='chest_open_product_plus4' make testplus4` |
 | Auto-rest stale-entry/current-turn stop policy | C64 `test_main_loop.s`, C128 `test_main_loop128.s` | focused main-loop gates; C64 explicitly seeds stale entry dirtiness |
 | Search two-turn dirty aggregation with dirty/clean and clean/dirty orderings | none | `NOT IMPLEMENTED` |
 | Detected-only production free-look inspection | none | `NOT IMPLEMENTED` |

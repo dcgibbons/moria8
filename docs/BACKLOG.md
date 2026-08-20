@@ -32,6 +32,60 @@ Acceptance target:
 - Starting a new C128 character after normal boot does not perform a disk load
   for `128.play`; gameplay entry uses the already resident/cached play payload.
 
+### Complete chest overlay banking coverage
+
+The C64 and Plus/4 product smokes cover real Open dispatch, CHEST-to-GEN disk
+overlay replacement, nested ego execution, loot placement, and runtime resync.
+Two C64 paths remain covered only indirectly or by focused stubs.
+
+Required work:
+
+- Add a C64 product smoke with an REU enabled that opens the deterministic chest
+  and proves deferred GEN fetching, nested ego return, loot placement, and
+  `$01` runtime resync through the REU-backed overlay path.
+- Add an end-to-end C64 media-load failure smoke that makes the deferred GEN
+  overlay load fail after a real chest open, then proves the loot latch clears,
+  no loot is generated, gameplay banking is restored, and the game remains
+  responsive. The current failure case uses a stubbed loader.
+- Keep individual VICE runtime timeouts at or below 30 seconds and preserve the
+  existing C64/Plus/4 product disk-fallback smokes.
+
+Acceptance target:
+
+- Chest deferred-loot banking has product-path coverage for C64 disk fallback,
+  C64 REU fetching, and real GEN media-load failure, with no JAM and correct
+  runtime state after every outcome.
+
+### Optional: physically plausible chest contents
+
+VMS Moria has no size filter on chest contents, and Moria8 deliberately follows
+it (`docs/CHEST_DESIGN.md`): any chest type can contain any object, including
+another, larger chest. Umoria added `itemBiggerThanChest`, but only for
+`CM_SMALL_OBJ` monster droppers, not chest drops — so even Umoria allows a
+large chest inside a small one here.
+
+This is a realism/polish item, not gameplay-value work: nested chests are
+amusing and harmless. It would be a deliberate deviation from the pinned VMS
+oracle, not a bug fix, so it needs a design call before implementation.
+
+Required work:
+
+- Decide the rule: e.g. contents must not outweigh/exceed the container chest,
+  or simply forbid nested chests, or adopt Umoria's `itemBiggerThanChest`
+  category/weight filter for chest loot only.
+- Record the deviation in `docs/CHEST_DESIGN.md` with VMS `summon_object`
+  (moria.inc:2259-2290) as the behavior being superseded.
+- Filter or re-roll in `chest_loot_place_one` without changing drop counts,
+  odds, or RNG order beyond the filtered retries.
+- Add focused coverage proving an ineligible item is never produced while
+  eligible drops are unaffected.
+
+Acceptance target:
+
+- Chest contents respect a documented physical-plausibility rule, with the
+  deviation from VMS recorded and tested, and no change to drop rates for
+  legal contents.
+
 ### Implement Plus/4 TED sound effects
 
 The Plus/4 has TED sound hardware, but Moria8's Plus/4 backend currently

@@ -1171,6 +1171,13 @@ tramp_roll_ego_type_modal:
     sta $01
     pla                         // Restore A
     jsr roll_ego_type
+    pha                         // Restore I/O while keeping KERNAL hidden so
+    lda #BANK_NO_KERNAL         // modal/GEN overlay continuations stay visible.
+    sta $01
+#if C64_TEST_SCRIPTED_WIZARD_ITEM_PRODUCT
+c64_test_wizard_ego_bank_restored_sym:
+#endif
+    pla
     rts
 
 // tramp_ego_append_suffix — Append ego suffix to combat_msg_buf

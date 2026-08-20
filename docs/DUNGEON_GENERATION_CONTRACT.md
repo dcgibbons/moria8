@@ -161,6 +161,7 @@ must inspect generated map data.
 | C128 focused generation-routine integration | `platforms/commodore/c128/tests/test_soak128.s` imports production generation with test-local startup/MMU wrappers | `TEST_FILTER='soak128' make test128`; shipping overlay/loader/dispatch coverage `NOT IMPLEMENTED` |
 | C128 dungeon renderer color path | `platforms/commodore/c128/tests/test_dungeon128.s` | does not execute production generation |
 | Plus/4 generation entry | Plus/4 dungeon-entry smoke | `TEST_FILTER='^dungeon_entry_plus4$' make testplus4`; topology coverage incomplete |
+| Deferred chest-loot GEN overlay entry and return | C64 and Plus/4 scripted product smokes execute real Open dispatch, CHEST-to-GEN replacement, picker/ego path, placement, and runtime resync | `TEST_FILTER='chest_open_product_smoke' make test64`; `TEST_FILTER='chest_open_product_plus4' make testplus4` |
 | Shared fixed seed corpus and permanent failure-seed registry | none | `NOT IMPLEMENTED` |
 | Aggregate topology/statistical validator with first failing seed/stage | none | `NOT IMPLEMENTED` |
 | Platform generation performance budget | none | `NOT IMPLEMENTED` |

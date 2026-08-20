@@ -127,10 +127,9 @@ because `roll_enchantment` zeroes p1/to_hit for non-equipment categories
   per-move passive-search cost at ~80 cycles instead of ~6 ms).
 - An adjacent armed chest rolls the normal per-tile search chance; success
   sets p1 bit 6 and prints "You have discovered a trap on the chest!"
-- Searching an already-found trapped chest prints "The chest is trapped!"
-  (upstream repeat message), unless both message rows are already occupied by
-  the current command. In that case the redundant repeat is suppressed so it
-  cannot replace the command result; the search still reports the chest found.
+- Searching an already-found trapped chest reports the chest as found but emits
+  no repeat message, matching the pinned VMS `moria.inc` discovery-only branch.
+  Umoria's separate "The chest is trapped!" repeat is intentionally not used.
 - `eff_find_traps` marks p1 bit 6 on every armed floor chest in its scan
   (upstream Find Traps reveals chest traps as well as floor traps).
 
@@ -195,14 +194,20 @@ because `roll_enchantment` zeroes p1/to_hit for non-equipment categories
    suppresses contents (see Open).
 5. Summoning: deferred to the resident handoff — three depth-appropriate
    monster spawn attempts at random adjacent free tiles (existing
-   `pick_creature_type`/`monster_spawn_one` pattern). Summons must not run
+   `pick_creature_type`/`monster_spawn_one` pattern), never the player's own
+   tile (same invariant as `find_adjacent_empty`). Summons must not run
    from inside the chest overlay: `monster_spawn_one` reads the tier buffer
    that aliases the `$E000` window, and `tier_check_transition`/`tier_load`
    can overwrite the executing overlay. The chest overlay records a pending
-   summon count; the resident trampoline performs the spawns. Deferred
+   summon count; the resident trampoline performs the spawns. The spawn
+   origin is staged in `chest_summon_x`/`chest_summon_y` at trigger time,
+   before any trap effect: `trap_apply_damage` reuses `df_target_x` for the
+   damage roll and an explosion removes the floor slot. Deferred
    summons still run when the chest exploded (VMS order), and still run when
    the explosion is lethal (death is deferred through `zp_death_source`;
-   upstream runs the summons but not the loot in that case).
+   upstream runs the summons but not the loot in that case). The runner
+   preserves the caller's flags so the open/disarm turn-consumed carry
+   survives the deferred handoff.
 
 ### Contents
 
@@ -229,7 +234,10 @@ Notes:
 - Content depth = current dungeon level (matching `pick_item_type`'s
   existing dlvl convention; upstream `dun_level`).
 - Placement: bounded 10 attempts per drop, candidate tiles within a 5x5 box
-  around the chest, walkable and unoccupied; failure discards that drop.
+  around the chest, in map bounds, walkable and unoccupied; failure discards
+  that drop. The bounds check runs before any row-table or map access so
+  chests on the map's edge columns/rows cannot wrap the candidate to `$ff`
+  or past the map dimensions.
   Upstream additionally requires LOS from the chest and allows 21 tries;
   the LOS check is omitted because loot fulfillment runs from the GEN
   overlay where the LOS routine is not linked (accepted approximation,
@@ -244,37 +252,172 @@ Notes:
 
 ```text
 Problem and success criteria: A failed chest disarm fills both message rows
-with the direction prompt and failure result; search mode then finds the same
-known chest and replaces the result with its redundant repeat message. Preserve
-the full command message pair while retaining the search result and turn cost.
-State being changed: Message emission only when a known trapped chest is found
-while zp_msg_flags is MSG_PENDING|MSG_FULL; chest and search state are unchanged.
-Search scope and terms: chest disarm, chest search, CHEST_TRAPPED, message flags,
-search mode, post-turn searchable path, passive search, and explicit Search.
+with the direction prompt and failure result; the known-chest search follow-up
+must not replace that pair. Match pinned VMS behavior, which emits only the
+discovery message and has no known-trap repeat.
+State being changed: Message emission for a known trapped chest. The chest and
+search-result state are unchanged.
+Search scope and terms: chest disarm, chest search, CHEST_TRAPPED,
+CHEST_FOUND_TRAP, message flags, search mode, post-turn searchable path,
+passive search, explicit Search, and pinned VMS search chest branch.
 Relevant readers/writers found and known exclusions: chest_search_reveal writes
-df_found and may print; search_scan_adjacent_silent consumes its carry; msg_print
-owns message-row replacement. Trap discovery messages remain excluded.
+df_found and may print; search_scan_adjacent_silent consumes its carry; the
+suffix/pickup renderer uses HSTR_CHEST_SFX_TRAPPED independently. Chest disarm
+and trap firing are excluded.
 Initialization, reset and persistence points: msg_clear resets zp_msg_flags at
 command start. No persistent chest field or save data changes.
-Affected production sequence through the changed transition: cmd_disarm ->
-chest_disarm_command -> turn_post_action_searchable_or_die ->
-search_scan_effective_silent -> chest_search_reveal.
+Affected production sequence through the changed transition: Search or a
+consuming command in search mode -> search_scan_adjacent_silent ->
+chest_search_reveal -> message output.
 Contract decision or selected upstream oracle with source locations: Explicit
-maintainer bug report on 2026-08-17; retain CHEST_DESIGN explicit-search repeat
-behavior when message capacity is available.
-Intentional Moria8 deviations: Suppress the upstream known-chest repeat when
-both local message rows are occupied by the current command.
+maintainer direction on 2026-08-18 selects pinned VMS Moria; VMS
+moria.inc:1445-1454 emits only "You have discovered a trap on the chest!" and
+has no known-trap repeat message.
+Intentional Moria8 deviations: Do not use Umoria's "The chest is trapped!"
+repeat; known chests still report found to the search scanner.
 Input/intermediate widths, signedness, carry, range and overflow policy: One-byte
 message flags; carry and df_found still report found. No arithmetic change.
-RNG reduction and bias, if applicable: N/A; known-chest repeat performs no roll.
+RNG reduction and bias, if applicable: N/A; the known-chest branch performs no
+roll before or after this change.
 Affected platforms, overlays, banks and owners: Shared chest search behavior on
 C64, C128, Plus/4, and Apple IIe; no placement or banking change.
-Required production-path tests: C64 production adjacent-search regression,
-Commodore runtime gates, and Apple IIe build/memory-contract gate.
+Required production-path tests: Focused C64 search regression for discovery,
+repeat, zero-chance, unarmed, Find Traps, and saturated message rows; Commodore
+runtime gates; Apple IIe build/memory-contract gate.
 Known behavior explicitly out of scope: Disarm odds/state, bad-fail trap effects,
-new trap discovery messages, and general -more- input handling.
+new trap discovery messages, pickup/display suffixes, and general -more- input
+handling.
 Unresolved uncertainty and risk: No automated test drives the exact player key
-sequence through every physical renderer; shared message/search logic is covered.
+sequence through every physical renderer; shared message/search logic is covered
+on every affected platform through the shared production helper and platform
+builds.
+```
+
+## Change Record - C64 deferred-loot ROM banking (2026-08-17)
+
+```text
+Problem and success criteria: Opening a chest without a C64 REU can JAM after
+the GEN overlay disk load. Execute chest_generate_loot and its nested ego roll
+from RAM at $E000, then restore the platform gameplay bank invariant.
+State being changed: Platform CPU/ROM banking around the deferred GEN-overlay
+load; chest and loot semantics are unchanged.
+Search scope and terms: chest_open_command, chest_run_deferred,
+chest_fulfill_loot, overlay_load, overlay_load_no_kernal, $01, $E000, JAM.
+Relevant readers/writers found and known exclusions: chest_fulfill_loot is the
+only deferred-loot GEN loader; platform overlay_load_no_kernal wrappers own the
+post-load RAM mapping. C128 cache/MMU loading is excluded.
+Initialization, reset and persistence points: No initialization, save, or
+persistent state changes. The load wrapper establishes overlay-safe banking;
+the explicit runtime resync restores normal gameplay banking after success or
+failure.
+Affected production sequence through the changed transition: cmd_open ->
+chest_run_deferred -> chest_fulfill_loot -> overlay_load_no_kernal ->
+chest_generate_loot -> tramp_roll_ego_type_modal -> platform runtime resync.
+Contract decision or selected upstream oracle with source locations: C64 and
+Plus/4 platform mechanics require RAM visible before executing their $E000
+overlay; platforms/commodore/{c64,plus4}/main.s own that wrapper.
+Intentional Moria8 deviations: N/A; this is platform execution safety.
+Input/intermediate widths, signedness, carry, range and overflow policy: Loader
+carry selects generation or discard; chest_run_deferred preserves the command's
+incoming flags. No arithmetic change.
+RNG reduction and bias, if applicable: N/A; loot RNG is unchanged.
+Affected platforms, overlays, banks and owners: C64 and Plus/4 GEN overlays;
+C64 $01 banking and Plus/4 platform RAM banking.
+Required production-path tests: C64 `chest_open_product_smoke` and Plus/4
+`chest_open_product_plus4` drive real Open dispatch, CHEST and GEN overlay
+loads, object picking, nested ego return, loot placement, and runtime resync;
+focused branch/static regressions and authoritative platform gates supplement
+them.
+Known behavior explicitly out of scope: Chest drops, placement, traps, lock
+odds, REU cache contents, and C128/Apple IIe overlay mechanics.
+Unresolved uncertainty and risk: The supplied snapshot begins after the JAM and
+VICE retains that internal CPU state even if PC is changed, so it is forensic
+trace evidence rather than executable replay coverage. The deterministic product
+smokes reproduce the affected transition independently of that snapshot.
+```
+
+## Change Record - chest loot immediate redraw (2026-08-18)
+
+```text
+Problem and success criteria: Loot generated during a chest Open can remain
+invisible until a later move or full redraw, even when the tile is already
+visible and FLAG_HAS_ITEM is set. Opening a chest must expose every newly
+placed loot tile before returning to command input.
+State being changed: the action-owned redraw request after successful chest
+object or gold placement. Chest state, drop odds, placement, visibility, and
+map data are unchanged.
+Search scope and terms: chest_open_command, chest_fulfill_loot,
+chest_loot_place_one, floor_item_add, FLAG_HAS_ITEM, zp_dirty_count,
+turn_post_action, turn_scene_dirty, render_viewport, and local redraw.
+Relevant readers/writers found and known exclusions: floor_item_add writes
+FLAG_HAS_ITEM and renderer reads it; turn_post_action folds zp_dirty_count into
+turn_scene_dirty. Pickup/drop rendering is outside this deferred-generation
+handoff.
+Initialization, reset and persistence points: zp_dirty_count is a transient
+turn latch cleared by the enclosing turn_post_action. No save state changes.
+Affected production sequence through the changed transition: cmd_open ->
+chest_run_deferred -> chest_generate_loot -> floor_item_add -> turn_post_action
+-> scene redraw -> command input.
+Contract decision or selected upstream oracle with source locations: TURN-001
+requires renderer consumption of current gameplay state; VMS/Umoria are not
+platform render timing authorities. The existing Moria8 action-redraw latch is
+the local ownership mechanism.
+Intentional Moria8 deviations: N/A; this restores the established dirty/redraw
+contract.
+Input/intermediate widths, signedness, carry, range and overflow policy: A
+one-byte monotonically increasing latch is consumed by the same command's
+turn_post_action. Overflow after 255 drops is bounded by floor-item capacity
+and is not a behavior target.
+RNG reduction and bias, if applicable: N/A; loot RNG and placement are unchanged.
+Affected platforms, overlays, banks and owners: Shared chest-loot behavior on
+C64, C128, Plus/4, and Apple IIe; no banking or ownership change.
+Required production-path tests: Focused chest-loot tests assert successful
+object and gold drops each latch one redraw request; C64/Plus4 product smokes
+assert the real Open path completes and latches are consumed; platform
+render/build gates.
+Known behavior explicitly out of scope: Loot item selection, natural item
+placement, pickup rendering, glyph/monster overlay priority, and renderer
+optimizations.
+Unresolved uncertainty and risk: The deterministic product fixture asserts
+floor state and latch consumption, but not a pixel-specific loot glyph; focused
+renderer tests already cover FLAG_HAS_ITEM consumption.
+```
+
+## Change Record - C64 Wizard Get color restoration (2026-08-17)
+
+```text
+Problem and success criteria: Wizard Get of a non-gold item redraws the dungeon
+with uniform stale colors until another action redraws it. The immediate modal
+return must update physical C64 color RAM correctly.
+State being changed: C64 CPU port state after tramp_roll_ego_type_modal changes
+from $34 (all RAM, I/O hidden) to $35 (KERNAL hidden, I/O visible).
+Search scope and terms: Wizard Get, wizard_generate_item_execute,
+tramp_roll_ego_type_modal, ui_view_redraw_gameplay_view, zp_text_color, $01,
+$D800, movement redraw, and Drop redraw.
+Relevant readers/writers found and known exclusions: The modal ego trampoline
+writes $01; the shared modal redraw writes screen and color cells. Gameplay map,
+visibility, and item state are unchanged.
+Initialization, reset and persistence points: N/A; this is a transient modal
+return invariant with no saved state.
+Affected production sequence through the changed transition: Wizard -> Get ->
+wizard_generate_item_execute -> tramp_roll_ego_type_modal ->
+ui_view_redraw_gameplay_view -> C64 screen/color renderer.
+Contract decision or selected upstream oracle with source locations: C64 color
+RAM requires I/O visible; platform-owned BANK_NO_KERNAL ($35) keeps both the
+$E000 overlay continuation and $D800 color RAM accessible.
+Intentional Moria8 deviations: N/A; platform rendering safety only.
+Input/intermediate widths, signedness, carry, range and overflow policy: The
+one-byte ego result in A is preserved across the bank switch. No arithmetic.
+RNG reduction and bias, if applicable: N/A; item generation RNG is unchanged.
+Affected platforms, overlays, banks and owners: C64 modal/GEN callers of the
+banked ego routine; C64 $01 and physical color RAM ownership.
+Required production-path tests: Scripted C64 Wizard Get of chest ID 128,
+$01=$35 assertion immediately after the affected redraw, physical color-RAM
+diversity, and full C64 gate.
+Known behavior explicitly out of scope: Wizard item generation semantics,
+movement/Drop redraw behavior, and non-C64 rendering.
+Unresolved uncertainty and risk: N/A; the production smoke captures the state
+immediately after the affected redraw.
 ```
 
 ## Architecture
@@ -646,9 +789,11 @@ Overlay-load failure also clears the latch and discards that chest's contents.
 suite's `chest_open_command` branch needed a `jsr`-to-helper restructure
 (`chest_stage_loot`) to keep its long forward branches in range.
 
-Coverage: `test_chest_loot.s` tests 0-3 (no-op with no latch, stale-latch
+Coverage: `test_chest_loot.s` tests 0-8 (no-op with no latch, stale-latch
 discard, valid-chest fulfill with GEN-load + drop placement + latch clear,
-zero-drop outcome). The suite fills only a 7x7 box around the chest rather
+zero-drop outcome, redraw latch for object and gold drops, low-edge and
+high-edge bounds rejection of 5x5 candidates). The suite fills only a 7x7 box
+around the chest rather
 than the whole map, because the C64 map at `$C000` overlaps this suite's Main
 code (ends `$C402`) and a whole-map fill corrupts the running test. The open /
 disarm / bash and main-loop test assemblies were updated to import
@@ -827,8 +972,8 @@ guarded by `CHEST_ROUTING_ENABLED` (defined by the four product mains and
 - `search_scan_adjacent_silent` (core/dungeon_features.s) gates on
   `FLAG_HAS_ITEM` before any floor-table scan, then calls
   `chest_search_reveal`: unfound armed chests roll the per-tile chance and
-  set `CHEST_P1_TRAP_FOUND` with the discovery message; already-found
-  trapped chests print the upstream repeat message. The passive per-move
+  set `CHEST_P1_TRAP_FOUND` with the VMS discovery message; already-found
+  trapped chests report found without another message. The passive per-move
   cost stays off the floor table when no item is present.
 - `eff_find_traps` calls `chest_mark_found_all` (marks every armed floor
   chest found). `eff_find_traps` and `eff_destroy_traps_doors` moved from

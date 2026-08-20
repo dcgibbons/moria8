@@ -8,7 +8,7 @@
 :BasicUpstart2(test_bootstrap)
 
 .pc = $E000 "Result Buffer"
-tc_results: .fill 10, $ff
+tc_results: .fill 13, $ff
 
 .pc = $080E "Test Code"
 
@@ -22,7 +22,7 @@ test_finish:
     sei
     :BankOutBasic()
     :BankOutKernal()
-    ldx #9
+    ldx #12
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -504,10 +504,115 @@ test_start:
 
     lda #$01
     sta tc_results + 9
-    jmp !done+
+    jmp !t10+
 !t9_fail:
     lda #$00
     sta tc_results + 9
 
+    // Test 10: combined explosion+summoning trap stages the summon origin at
+    // trigger time. The explosion damage path reuses df_target_x and removes
+    // the floor slot, so the staged chest_summon_x/y must still hold the
+    // chest's tile (12,18).
+!t10:
+    jsr test_reset
+    lda #CHEST_P1_TRAP_EXPL | CHEST_P1_TRAP_SUMMON
+    ldx #5
+    jsr test_setup_chest
+    jsr chest_open_command
+    bcc !t10_fail+
+    lda fi_item_id + 0
+    cmp #FI_EMPTY               // explosion destroyed the chest
+    bne !t10_fail+
+    lda chest_pending_summons
+    cmp #3
+    bne !t10_fail+
+    lda chest_summon_x
+    cmp #12
+    bne !t10_fail+
+    lda chest_summon_y
+    cmp #18
+    bne !t10_fail+
+    lda #$01
+    sta tc_results + 10
+    jmp !t11+
+!t10_fail:
+    lda #$00
+    sta tc_results + 10
+
+    // Test 11: deferred summon runner never spawns on the player's tile.
+    // Direction 0 is (0,-1), so with the player at (12,17) and the staged
+    // chest origin at (12,18) the single attempt targets the player and must
+    // be discarded. Rows 17-18 are redirected to a scratch row so the real
+    // map at $C000 (which this suite's code overlaps) is never touched.
+!t11:
+    jsr test_reset
+    jsr monster_init_table
+    lda #<tco_map_floor_row
+    sta map_row_lo + 17
+    sta map_row_lo + 18
+    lda #>tco_map_floor_row
+    sta map_row_hi + 17
+    sta map_row_hi + 18
+    lda #12
+    sta zp_player_x
+    sta player_data + PL_MAP_X
+    sta chest_summon_x
+    lda #17
+    sta zp_player_y
+    sta player_data + PL_MAP_Y
+    lda #18
+    sta chest_summon_y
+    lda #1
+    sta chest_pending_summons
+    lda #0
+    sta tco_rng_next            // direction 0 = (0,-1) -> the player's tile
+    jsr chest_run_pending_summons
+    lda zp_mon_count
+    bne !t11_fail+
+    lda chest_pending_summons
+    bne !t11_fail+
+    lda #$01
+    sta tc_results + 11
+    jmp !t12+
+!t11_fail:
+    lda #$00
+    sta tc_results + 11
+
+    // Test 12: the runner preserves the caller's carry (cmd_disarm's
+    // turn-consumed result) even when the final attempt fails on a wall tile.
+!t12:
+    jsr test_reset
+    jsr monster_init_table
+    lda #<tco_map_wall_row
+    sta map_row_lo + 17
+    sta map_row_lo + 18
+    lda #>tco_map_wall_row
+    sta map_row_hi + 17
+    sta map_row_hi + 18
+    lda #12
+    sta chest_summon_x
+    lda #18
+    sta chest_summon_y
+    lda #1
+    sta chest_pending_summons
+    lda #0
+    sta tco_rng_next            // direction 0 -> (12,17), a wall
+    sec
+    jsr chest_run_pending_summons
+    bcc !t12_fail+
+    lda zp_mon_count
+    bne !t12_fail+
+    lda chest_pending_summons
+    bne !t12_fail+
+    lda #$01
+    sta tc_results + 12
+    jmp !done+
+!t12_fail:
+    lda #$00
+    sta tc_results + 12
+
 !done:
     jmp test_finish
+
+tco_map_floor_row: .fill MAP_COLS, TILE_FLOOR
+tco_map_wall_row:  .fill MAP_COLS, TILE_WALL_H

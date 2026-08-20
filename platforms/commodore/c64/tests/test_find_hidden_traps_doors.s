@@ -490,8 +490,8 @@ test_start:
     lda #$00
     sta tc_results + 3
 
-    // Test 5: searching the same (now-found) chest again prints the
-    // upstream repeat message "The chest is trapped!" — no state change.
+    // Test 5: searching the same (now-found) chest again reports the find but
+    // emits no message, matching VMS discovery-only behavior.
 !t5:
     lda #0
     sta tfhd_huff_calls
@@ -499,8 +499,7 @@ test_start:
     lda #100
     jsr search_scan_adjacent_silent
     bcc !t5_fail+
-    lda tfhd_last_huff_id
-    cmp #HSTR_CHEST_TRAPPED
+    lda tfhd_huff_calls
     bne !t5_fail+
     lda fi_p1
     and #CHEST_P1_TRAP_FOUND
@@ -607,8 +606,8 @@ test_start:
     sta tc_results + 7
 
     // Test 9: an automatic re-search of a known trapped chest must not replace
-    // a full direction-prompt + command-result message pair. It still reports
-    // the chest as found and leaves the trap state unchanged.
+    // a full direction-prompt + command-result message pair. VMS has no repeat
+    // message, so the scan simply reports the chest as found.
 !t9:
     lda #(CHEST_P1_TRAP_POISON | CHEST_P1_TRAP_FOUND | CHEST_P1_LOCKED)
     jsr test_setup_search_chest_map
