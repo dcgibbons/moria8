@@ -7,13 +7,17 @@
 :BasicUpstart2(test_bootstrap)
 
 .pc = $E000 "Result Buffer"
-tc_results: .fill 9, $ff
+tc_results: .fill 10, $ff
 
 .pc = $080E "Test Code"
 
 .encoding "screencode_mixed"
 
 test_bootstrap:
+    // The overlay_load_no_kernal spy banks KERNAL out mid-test without RAM IRQ
+    // vectors installed; mask interrupts first or a raster/CIA IRQ vectors
+    // through uninitialized $FFFE/$FFFF and hangs the suite intermittently.
+    sei
     :BankOutBasic()
     jmp test_start
 
@@ -21,7 +25,7 @@ test_finish:
     sei
     :BankOutBasic()
     :BankOutKernal()
-    ldx #8
+    ldx #9
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -206,11 +210,11 @@ test_monster_find_at:
     rts
 
 // fill_floor — Set the tiles around the chest to TILE_FLOOR so loot placement
-// finds walkable tiles. Bounded to rows 22-28 / cols 9-15: the full map
+// finds walkable tiles. Bounded to rows 24-30 / cols 9-15: the full map
 // ($C000) overlaps this suite's Main code, so a whole-map fill would corrupt
-// the running test. The chest's 5x5 drop box (rows 22-26) sits past the code.
+// the running test. The chest's 5x5 drop box (rows 24-28) sits past the code.
 fill_floor:
-    ldx #22
+    ldx #24
 !ff_row:
     lda map_row_lo,x
     sta zp_ptr0
@@ -224,11 +228,11 @@ fill_floor:
     cpy #16
     bne !ff_col-
     inx
-    cpx #29
+    cpx #31
     bne !ff_row-
     rts
 
-// test_reset — clear floor items, spies, latch; chest target tile (12,24).
+// test_reset — clear floor items, spies, latch; chest target tile (12,26).
 test_reset:
     jsr player_init
     jsr item_init_floor
@@ -251,7 +255,7 @@ test_reset:
     lda #12
     sta df_target_x
     sta chest_loot_x
-    lda #24
+    lda #26
     sta df_target_y
     sta chest_loot_y
     rts
@@ -321,7 +325,7 @@ test_start:
 
     // Test 2: valid opened chest with pending contents -> GEN loaded once,
     // latch cleared, drops placed (small wooden $0F: 60%+90% both succeed ->
-    // 2 mixed drops, both forced object -> 2 items at (10,22) and (14,26)).
+    // 2 mixed drops, both forced object -> 2 items at (10,24) and (14,28)).
 !t2:
     jsr test_reset
     jsr place_chest_at_latch
@@ -361,17 +365,17 @@ test_start:
     bne !t2_fail+
     lda chest_loot_pending
     bne !t2_fail+
-    // Drop 1 at (10,22) is the stub item id 5
+    // Drop 1 at (10,24) is the stub item id 5
     lda #10
-    ldy #22
+    ldy #24
     jsr floor_item_find_at
     bcc !t2_fail+
     lda fi_item_id,x
     cmp #5
     bne !t2_fail+
-    // Drop 2 at (14,26) is the stub item id 5
+    // Drop 2 at (14,28) is the stub item id 5
     lda #14
-    ldy #26
+    ldy #28
     jsr floor_item_find_at
     bcc !t2_fail+
     lda fi_item_id,x
@@ -606,12 +610,53 @@ test_start:
 !t8_d:
     lda #$01
     sta tc_results + 8
-    jmp !done+
+    jmp !t9+
 !t8_fail:
     sta tc_results + 8
+
+    // Test 9: town-level (dlvl=0) gold drop must not hang. Without the depth
+    // clamp, rng_range_word(0) rejects every 16-bit draw and the suite times
+    // out. With the clamp (dlvl treated as 1), qty = rng_range_word(10) + 5.
+!t9:
+    jsr test_reset
+    jsr place_chest_at_latch
+    lda #0
+    sta zp_player_dlvl        // Town depth
+    lda #1
+    sta chest_loot_pending
+    lda #$06                  // bit2 (60% one drop) + type 2 (gold only)
+    sta chest_loot_flags
+    // rng seq: 60% roll=10 succeeds; offsets x=0, y=0; gold id roll=0
+    lda #10
+    sta tcl_rng_seq + 0
+    lda #0
+    sta tcl_rng_seq + 1
+    sta tcl_rng_seq + 2
+    sta tcl_rng_seq + 3
+    jsr chest_fulfill_loot
+    lda chest_loot_pending
+    bne !t9_fail+
+    lda #10
+    ldy #24
+    jsr floor_item_find_at
+    bcc !t9_fail+
+    lda fi_item_id,x
+    cmp #2                    // gold IDs are 0/1
+    bcs !t9_fail+
+    lda fi_qty,x
+    cmp #5
+    bcc !t9_fail+
+    cmp #15
+    bcs !t9_fail+
+    lda #$01
+    sta tc_results + 9
+    jmp !done+
+!t9_fail:
+    lda #$00
+    sta tc_results + 9
 
 !done:
     jmp test_finish
 
 test_body_end:
-.assert "Chest loot test stays below its first map write", test_body_end <= MAP_BASE + 22 * MAP_COLS + 9, true
+.assert "Chest loot test stays below its first map write", test_body_end <= MAP_BASE + 24 * MAP_COLS + 9, true

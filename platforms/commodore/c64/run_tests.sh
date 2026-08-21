@@ -4085,7 +4085,7 @@ run_test "find_hidden_traps_doors" "tests/test_find_hidden_traps_doors.s" "0400 
 run_test "chest_open" "tests/test_chest_open.s" "0400 040C" 13 500000000
 run_test "chest_disarm" "tests/test_chest_disarm.s" "0400 0406" 7 500000000
 run_test "chest_bash" "tests/test_chest_bash.s" "0400 0404" 5 500000000
-run_test "chest_loot" "tests/test_chest_loot.s" "0400 0408" 9 500000000
+run_test "chest_loot" "tests/test_chest_loot.s" "0400 0409" 10 500000000
 run_test "stinking_cloud" "tests/test_stinking_cloud.s" "0400 0402" 3 500000000
 run_test "frost_ball" "tests/test_frost_ball.s" "0400 0402" 3 500000000
 run_test "teleport_other" "tests/test_teleport_other.s" "0400 0402" 3 500000000

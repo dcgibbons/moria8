@@ -137,7 +137,7 @@ irs_p3_run_existing:
     inx
     bne !irs_re_find-
 !irs_re_found:
-    // X indexes the matching entry (or the $ff default: *Destruction*).
+    // X indexes the matching entry (or the $ff default: no-op).
     lda irs_re_id_tab + 2,x
     sta tpdi_target + 1
     lda irs_re_id_tab + 3,x

@@ -904,16 +904,6 @@ a2_msg_print_indirect_aux:
     sta zp_ptr0_hi
     jmp msg_print
 
-!csc_no:
-    clc
-    rts
-
-!next:
-    dex
-    bpl !loop-
-    clc
-    rts
-
 // ============================================================
 // A2PlaySlot segment — play payload (C128 play-class composition).
 // Signature "M8P" validated by a2_require_play after every load.
@@ -1024,9 +1014,7 @@ player_adjust_equipment_stat:
 #undef CMB_WINNER_STR_EXTERNAL
 #undef PMU_TURN_FEEDBACK_EXTERNAL
 #define WIZARD_PROMPT_HELPERS_EXTERNAL
-#define WIZARD_EXEC_LEVEL_JUMP_EXTERNAL
 #import "../../core/wizard.s"
-#undef WIZARD_EXEC_LEVEL_JUMP_EXTERNAL
 #undef WIZARD_PROMPT_HELPERS_EXTERNAL
 #define PLAYER_LOOK_EXTERNAL
 #define DISARM_COMMAND_EXTERNAL
@@ -1552,10 +1540,24 @@ ovl_chest_end:
 // which is also resident whenever the overlay is needed)
 // ============================================================
 .segment Default
+// Ego entry points take an argument in A (item type / ego id), which the
+// shared tramp_items_dispatch destroys (it loads A with the target address,
+// then OVL_ITEMS). These variants carry A across the overlay load on the
+// stack. Callers are resident (item.s, combat.s, player_recalc_equipment.s),
+// so no caller-overlay restore is needed; overlay callers use the modal/gen
+// variants below.
 tramp_roll_ego_type:
-    lda #<roll_ego_type
-    ldy #>roll_ego_type
-    jmp tramp_items_dispatch
+    pha                         // item type id
+    lda #OVL_ITEMS
+    jsr overlay_load
+    bcs !load_failed+
+    pla
+    jsr roll_ego_type
+    rts
+!load_failed:
+    pla
+    lda #0                      // No ego on load failure, never the raw id
+    rts
 
 // Wizard item generation calls the ego roll from OVL.MODAL; restore the
 // caller overlay before returning or the continuation executes OVL.ITEMS
@@ -1622,6 +1624,7 @@ tramp_roll_ego_type_modal:
     rts
 !load_failed:
     pla
+    lda #0                      // No ego on load failure, never the raw id
     rts
 
 // Chest loot fulfillment calls the ego roll from inside OVL.GEN; restore
@@ -1644,17 +1647,33 @@ tramp_roll_ego_type_gen:
     rts
 !load_failed:
     pla
+    lda #0                      // No ego on load failure, never the raw id
     rts
 
 tramp_ego_apply_damage:
-    lda #<ego_apply_damage
-    ldy #>ego_apply_damage
-    jmp tramp_items_dispatch
+    pha                         // ego id
+    lda #OVL_ITEMS
+    jsr overlay_load
+    bcs !load_failed+
+    pla
+    jsr ego_apply_damage
+    rts
+!load_failed:
+    pla                         // Skip the ego adjustment on load failure
+    rts
 
 tramp_ego_get_ac_bonus:
-    lda #<ego_get_ac_bonus
-    ldy #>ego_get_ac_bonus
-    jmp tramp_items_dispatch
+    pha                         // ego id
+    lda #OVL_ITEMS
+    jsr overlay_load
+    bcs !load_failed+
+    pla
+    jsr ego_get_ac_bonus
+    rts
+!load_failed:
+    pla
+    lda #0                      // No AC bonus on load failure
+    rts
 
 // Modal restore replaces the overlay window with the live tier. Reload
 // OVL.SPELL before returning to the spell-selection continuation.

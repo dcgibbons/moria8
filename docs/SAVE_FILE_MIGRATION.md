@@ -41,6 +41,19 @@ path or reject them with a clear incompatible-save message. It must not change
 
 ## Compatibility Risks
 
+**Slot-empty invariant (audited 2026-08-20):** `save_sanitize_id_table` and
+`save_sanitize_store_ids` reset out-of-range loaded IDs (>= `ITEM_TYPE_COUNT`)
+to `FI_EMPTY` but deliberately do not wipe the sibling per-slot arrays
+(`inv_qty`, `inv_flags`, `inv_p1`, `inv_to_hit`, `inv_ego`, store metadata).
+That is safe only because every consumer gates on the ID before touching
+metadata (`lda inv_item_id,x / cmp #FI_EMPTY / beq skip`): equipment recalc,
+floor/store lookup, item commands, and UI display all follow this pattern.
+Any future code that iterates slot metadata arrays without an `FI_EMPTY`
+first-check breaks this invariant and can read stale bytes from a sanitized
+or reused slot. Do not "fix" the sanitizer by zeroing metadata unless the
+invariant is being abandoned; it costs bytes on every port's save path for
+no reachable behavior change.
+
 | Change | Breaks old saves today? | Why |
 |---|---:|---|
 | Add new item IDs and increase `ITEM_TYPE_COUNT` | yes | `id_known` block size changes |

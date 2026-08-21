@@ -43,9 +43,14 @@ chest_loot_flags_table:
 // it. Contents generation lands in step 13.
 // ============================================================
 chest_open_command:
-#if C64_TEST_SCRIPTED_CHEST_OPEN_PRODUCT || PLUS4_TEST_SCRIPTED_CHEST_OPEN_PRODUCT
+#if C64_TEST_SCRIPTED_CHEST_OPEN_PRODUCT || PLUS4_TEST_SCRIPTED_CHEST_OPEN_PRODUCT || C128_TEST_SCRIPTED_CHEST_OPEN_PRODUCT
     lda chest_product_path_stage
+#if C128_TEST_SCRIPTED_CHEST_OPEN_PRODUCT
+    // C128 omits the stage-1 dispatch hook (play payload headroom): expect 0.
+    cmp #0
+#else
     cmp #1
+#endif
     beq !co_product_entered+
     lda #$ff
     bne !co_product_store_stage+

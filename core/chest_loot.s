@@ -23,7 +23,7 @@ chest_loot_flags:   .byte 0   // VMS flags byte (bits 0-5 = VMS bits 24-29)
 // play payload where chest_summons.s runs.
 chest_summon_x:     .byte 0
 chest_summon_y:     .byte 0
-#if C64_TEST_SCRIPTED_CHEST_OPEN_PRODUCT || PLUS4_TEST_SCRIPTED_CHEST_OPEN_PRODUCT
+#if C64_TEST_SCRIPTED_CHEST_OPEN_PRODUCT || PLUS4_TEST_SCRIPTED_CHEST_OPEN_PRODUCT || C128_TEST_SCRIPTED_CHEST_OPEN_PRODUCT
 chest_product_path_stage:    .byte 0
 chest_product_loot_placed:   .byte 0
 chest_product_runtime_state: .byte 0
@@ -85,11 +85,11 @@ chest_fulfill_loot:
 !cfl_loaded:
     jsr chest_generate_loot
 #if C64_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME
-#if C64_TEST_SCRIPTED_CHEST_OPEN_PRODUCT || PLUS4_TEST_SCRIPTED_CHEST_OPEN_PRODUCT
+#if C64_TEST_SCRIPTED_CHEST_OPEN_PRODUCT || PLUS4_TEST_SCRIPTED_CHEST_OPEN_PRODUCT || C128_TEST_SCRIPTED_CHEST_OPEN_PRODUCT
 chest_product_after_generate_sym:
 #endif
     jsr hal_platform_runtime_resync
-#if C64_TEST_SCRIPTED_CHEST_OPEN_PRODUCT || PLUS4_TEST_SCRIPTED_CHEST_OPEN_PRODUCT
+#if C64_TEST_SCRIPTED_CHEST_OPEN_PRODUCT || PLUS4_TEST_SCRIPTED_CHEST_OPEN_PRODUCT || C128_TEST_SCRIPTED_CHEST_OPEN_PRODUCT
     lda chest_product_path_stage
     cmp #4
     beq !cfl_product_resynced+
@@ -106,6 +106,20 @@ chest_product_after_generate_sym:
 #endif
     sta chest_product_runtime_state
 #endif
+#endif
+#if C128_TEST_SCRIPTED_CHEST_OPEN_PRODUCT
+chest_product_after_generate_sym:
+    // C128 fulfillment runs the resident generator after a cache-backed GEN
+    // fetch, so there is no runtime resync; stage 5 lands directly.
+    lda chest_product_path_stage
+    cmp #4
+    beq !cfl_product_done+
+    lda #$ff
+    bne !cfl_product_store+
+!cfl_product_done:
+    lda #5
+!cfl_product_store:
+    sta chest_product_path_stage
 #endif
 !cfl_clear:
     lda #0
@@ -125,7 +139,7 @@ chest_product_after_generate_sym:
 // ============================================================
 :ChestLootSegment()
 chest_generate_loot:
-#if C64_TEST_SCRIPTED_CHEST_OPEN_PRODUCT || PLUS4_TEST_SCRIPTED_CHEST_OPEN_PRODUCT
+#if C64_TEST_SCRIPTED_CHEST_OPEN_PRODUCT || PLUS4_TEST_SCRIPTED_CHEST_OPEN_PRODUCT || C128_TEST_SCRIPTED_CHEST_OPEN_PRODUCT
     lda chest_product_path_stage
     cmp #2
     beq !cgl_product_entered+
@@ -321,7 +335,7 @@ chest_loot_place_one:
 #else
     jsr tramp_roll_ego_type
 #endif
-#if C64_TEST_SCRIPTED_CHEST_OPEN_PRODUCT || PLUS4_TEST_SCRIPTED_CHEST_OPEN_PRODUCT
+#if C64_TEST_SCRIPTED_CHEST_OPEN_PRODUCT || PLUS4_TEST_SCRIPTED_CHEST_OPEN_PRODUCT || C128_TEST_SCRIPTED_CHEST_OPEN_PRODUCT
     pha
     lda chest_product_path_stage
     cmp #3
@@ -353,7 +367,7 @@ chest_loot_place_one:
     bcc !clpo_object_done+      // Table full — discard this drop
     inc zp_dirty_count          // Enclosing turn must redraw newly visible loot
 !clpo_object_done:
-#if C64_TEST_SCRIPTED_CHEST_OPEN_PRODUCT || PLUS4_TEST_SCRIPTED_CHEST_OPEN_PRODUCT
+#if C64_TEST_SCRIPTED_CHEST_OPEN_PRODUCT || PLUS4_TEST_SCRIPTED_CHEST_OPEN_PRODUCT || C128_TEST_SCRIPTED_CHEST_OPEN_PRODUCT
     bcc !clpo_product_not_placed+
     lda #1
     sta chest_product_loot_placed
@@ -367,7 +381,12 @@ chest_loot_place_one:
     jsr rng_range
     sta fi_add_id
     jsr fi_add_clear_plain_meta
+    // Chests are portable/wizard-spawnable into town, where dlvl=0 would make
+    // rng_range_word(0) reject every draw and hang; clamp the depth to 1.
     lda zp_player_dlvl
+    bne !clpo_dlvl_ok+
+    lda #1
+!clpo_dlvl_ok:
     ldx #10
     jsr math_multiply           // N = dlvl * 10
     lda zp_math_a
@@ -390,7 +409,7 @@ chest_loot_place_one:
 
 cl_drops_this: .byte 0          // This drop's resolved type (1=object, 2=gold)
 
-#if C64_TEST_SCRIPTED_CHEST_OPEN_PRODUCT || PLUS4_TEST_SCRIPTED_CHEST_OPEN_PRODUCT
+#if C64_TEST_SCRIPTED_CHEST_OPEN_PRODUCT || PLUS4_TEST_SCRIPTED_CHEST_OPEN_PRODUCT || C128_TEST_SCRIPTED_CHEST_OPEN_PRODUCT
 // Deterministic product-path fixture: an unlocked Large Wooden Chest directly
 // east of the player, with a clear local area and RNG seed that guarantees at
 // least one object drop through the real picker and ego trampoline.

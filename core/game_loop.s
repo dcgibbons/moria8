@@ -1867,6 +1867,11 @@ level_change_generate_current:
     jsr hal_platform_runtime_resync
 !lcgc_product_setup_done:
 #endif
+#if C128_TEST_SCRIPTED_CHEST_OPEN_PRODUCT
+    // C128 keeps the chest loot generator resident, so the deterministic
+    // fixture needs no GEN window preload or runtime resync here.
+    jsr chest_product_setup
+#endif
 #if C64_TEST_SCRIPTED_DUNGEON_SPELL
     jsr c64_test_force_spell_target_monster
 #endif

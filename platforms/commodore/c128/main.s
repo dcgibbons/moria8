@@ -105,8 +105,8 @@
 .segmentdef C128ResidentItems [outPrg=OVL_OUT + "/128.item.prg", start=$8ca0, min=$8ca0, max=$a9ff]
 .segmentdef C128ResidentSelect [outPrg=OVL_OUT + "/128.select.prg", start=$a800, min=$a800, max=$aaff]
 .segmentdef C128ResidentDiskIo [outPrg=OVL_OUT + "/128.diskio.prg", start=$ab00, min=$ab00, max=$aeff]
-.segmentdef C128ResidentPersist [outPrg=OVL_OUT + "/128.persist.prg", start=$af00, min=$af00, max=$d1ff]
-.segmentdef C128ResidentPlay [outPrg=OVL_OUT + "/128.play.prg", start=$af00, min=$af00, max=$d1ff]
+.segmentdef C128ResidentPersist [outPrg=OVL_OUT + "/128.persist.prg", start=$af00, min=$af00, max=$cfff]
+.segmentdef C128ResidentPlay [outPrg=OVL_OUT + "/128.play.prg", start=$af00, min=$af00, max=$cfff]
 .segmentdef RuntimeBankedCode [outPrg=OVL_OUT + "/128.bank.prg", start=$f000, min=$f000, max=$fffa]
 .segmentdef C128Bank1Huffman [outPrg=OVL_OUT + "/128.huff.prg", start=$f000, min=$f000, max=$feff]
 .segmentdef C128Bank1HuffmanVector [outPrg=OVL_OUT + "/128.hvec.prg", start=$fffa, min=$fffa, max=$fffb]
@@ -1259,6 +1259,9 @@ c128_test_scroll_selector_fail_sym:
 c128_test_scroll_selector_pass_sym:
     brk
 #endif
+#elif C128_TEST_SCRIPTED_CHEST_OPEN_PRODUCT
+c128_test_chest_open_pass_sym:
+    jmp c128_test_chest_open_pass_sym   // Spin: the socket harness polls PC
 #elif C128_TEST_CACHE_SURVIVAL
 c128_test_town_fail_sym:
     brk
@@ -2191,6 +2194,7 @@ c128_test_load_then_save_new_empty_write_proof:
     rts
 #endif
     cli
+title_menu_loop:                // Exported for the scripted product harness
 !title_menu_loop:
     jsr input_get_key
     cmp #$4e                // 'N' — new game
@@ -3962,7 +3966,7 @@ scroll_teleport_level_exec:
 #undef C128_SCRIPTED_SPELL_SEED_EXTERNAL
 // The items and world payload end labels live past the game_loop import
 // because the chest open pre-dispatch (ChestRouteSegment) contributes to the
-// world payload from there.
+// items payload from there.
 .segment C128ResidentItems
 c128_resident_items_end:
 .segment C128ResidentWorld

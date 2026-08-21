@@ -15,6 +15,7 @@ tc_results: .fill 13, $ff
 .encoding "screencode_mixed"
 
 test_bootstrap:
+    sei
     :BankOutBasic()
     jmp test_start
 
@@ -519,24 +520,38 @@ test_start:
     ldx #5
     jsr test_setup_chest
     jsr chest_open_command
-    bcc !t10_fail+
+    bcs !t10_a+
+    lda #$f1
+    jmp !t10_fail+
+!t10_a:
     lda fi_item_id + 0
     cmp #FI_EMPTY               // explosion destroyed the chest
-    bne !t10_fail+
+    beq !t10_b+
+    lda #$f2
+    jmp !t10_fail+
+!t10_b:
     lda chest_pending_summons
     cmp #3
-    bne !t10_fail+
+    beq !t10_c+
+    ora #$f0
+    jmp !t10_fail+
+!t10_c:
     lda chest_summon_x
     cmp #12
-    bne !t10_fail+
+    beq !t10_d+
+    ora #$c0
+    jmp !t10_fail+
+!t10_d:
     lda chest_summon_y
     cmp #18
-    bne !t10_fail+
+    beq !t10_e+
+    ora #$b0
+    jmp !t10_fail+
+!t10_e:
     lda #$01
     sta tc_results + 10
     jmp !t11+
 !t10_fail:
-    lda #$00
     sta tc_results + 10
 
     // Test 11: deferred summon runner never spawns on the player's tile.

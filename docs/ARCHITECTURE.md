@@ -256,12 +256,14 @@ The C128 segment definition maxima are:
 | `$F000-$FEFF` | Runtime top-common view shared with Bank 0; physical Bank 1 `$F000-$FD3A` holds the read-only Huffman corpus |
 | `$FFFA-$FFFB` | Physical Bank 1 NMI vector bridge for transient Huffman corpus reads |
 
-The C128 product disk carries eight overlay files: `128.start`, `128.town`,
-`128.death`, `128.gen`, `128.help`, `128.ui`, `128.items`, and `128.disarm`.
-All eight are preloaded into Bank 1 before gameplay. The first seven use full
-4 KB cache slots; `128.disarm` uses a page-counted small cache slot at `$9D00`
-because it currently needs only three pages. Runtime overlay fetches copy the
-descriptor's page count, not an unconditional 4 KB.
+The C128 product disk carries nine overlay files: `128.start`, `128.town`,
+`128.death`, `128.gen`, `128.help`, `128.ui`, `128.items`, `128.disarm`, and
+`128.chest`. The first eight are preloaded into Bank 1 before gameplay; of
+those, seven use full 4 KB cache slots while `128.disarm` uses a page-counted
+small cache slot at `$9D00` because it currently needs only three pages.
+`128.chest` is deliberately cold: it bypasses the cache and disk-loads on
+demand. Runtime overlay fetches copy the descriptor's page count, not an
+unconditional 4 KB.
 
 The C128 product disk also carries `128.names`, a resident Bank 1 DB payload
 loaded after the boot copy/scrub sequence. It currently occupies `$7400-$7734`
@@ -283,8 +285,8 @@ Current product payloads:
 | `128.item.prg` | `$8C70-$A648` | 6,617 bytes |
 | `128.select.prg` | `$A800-$AAE0` | 737 bytes |
 | `128.diskio.prg` | `$AB00-$AEE0` | 993 bytes |
-| `128.persist.prg` | `$AF00-$B85A` | 2,395 bytes |
-| `128.play.prg` | `$AF00-$CFE7` | 8,424 bytes |
+| `128.persist.prg` | `$AF00-$BC19` | 3,354 bytes |
+| `128.play.prg` | `$AF00-$CFF8` | 8,441 bytes |
 | `128.bank.prg` | `$F000-$FEAF` | 3,760 bytes |
 | `128.huff.prg` | Bank 1 `$F000-$FD3A` | 3,387 bytes |
 | `128.hvec.prg` | Bank 1 `$FFFA-$FFFB` | 2 bytes |
@@ -297,6 +299,7 @@ Current product payloads:
 | `ovl.ui` | `$E000-$EFF4` | 4,085 bytes |
 | `ovl.items` | `$E000-$EF79` | 3,962 bytes |
 | `ovl.disarm` | `$E000-$E2CB` | 716 bytes |
+| `ovl.chest` | `$E000-$E41E` | 1,055 bytes |
 
 The source of truth for C128 ownership constants and overlap assertions is
 `platforms/commodore/c128/memory128.s`; the product segment definitions and

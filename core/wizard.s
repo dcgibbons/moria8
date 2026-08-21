@@ -21,8 +21,8 @@ wizard_level_jump_active: .byte 0
 // wizard_execute_level_jump — Shared main-resident execution tail for Wizard
 // level jumps. This must live outside OVL.UI on C128 because it loads the
 // dungeon-generation overlay into the same $E000 window. Apple IIe keeps it
-// in the chest overlay (the resident image funds chest gameplay; the modal
-// wizard UI is not returned into after the level transition).
+// in the resident play payload (the modal wizard UI is not returned into
+// after the level transition).
 wizard_execute_level_jump:
     lda zp_player_dlvl
     cmp wizard_target_depth

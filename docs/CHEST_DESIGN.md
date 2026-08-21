@@ -750,6 +750,22 @@ hidden case and locked-out-priority case). Gates: `make build` all four ports
 from clean (0 failed asserts); focused `test64` 23/23; `make test128-fast` all
 pass; `make testapple2` memory-contract 22/22.
 
+## Implementation Notes — step-13 C128 cold-dispatch coverage (2026-08-20)
+
+`chest_open_product_smoke128` closes the C128 coverage gap: a scripted product
+build (`C128_TEST_SCRIPTED_CHEST_OPEN_PRODUCT`) boots the d71, plays through
+chargen, descends, and opens the deterministic fixture chest via the real Open
+dispatch — cold disk load of `128.chest` (bypassing the Bank 1 overlay cache),
+loot fulfillment through the cache-backed GEN fetch, resident generator, and
+ego trampoline. The socket harness (`product_scripted_smoke.py`, x128) asserts
+the stage chain (0→2→3→4→5; C128 omits the stage-1 dispatch hook for play
+payload headroom and skips the resync/runtime-state reads), placed loot,
+cleared latches, and `current_overlay=GEN`. C128 omits the stage-1 dispatch
+hook and the GEN preload/resync because the generator and fixture are resident
+on this port. Harness lesson: variant builds that shift the Default layout
+must refresh EVERY overlay file on the patched d71 — a stale overlay's
+absolute JSRs land in shifted Default code and JAM.
+
 ## Implementation Notes — step-13 A2 ego-overlay repair (2026-08-20)
 
 Hardware playtest found chest open locking up on Apple IIe. Root cause:
