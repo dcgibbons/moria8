@@ -40,6 +40,8 @@ def build_vice_command(args: argparse.Namespace) -> list[str]:
         "-remotemonitor",
         "-binarymonitor",
     ]
+    if args.vice_extra_arg:
+        command.extend(args.vice_extra_arg)
     if not args.autostart_only_drive8:
         command.extend([
             "-drive8truedrive",
@@ -574,6 +576,8 @@ def main() -> int:
     parser.add_argument("--limitcycles", type=int, default=0)
     parser.add_argument("--drive8-type", default="1541")
     parser.add_argument("--autostart-only-drive8", action="store_true")
+    parser.add_argument("--vice-extra-arg", action="append", default=[],
+                        help="Extra raw VICE CLI flag (repeatable), e.g. -reu")
     parser.add_argument("--drive9-type", default="1541")
     parser.add_argument("--drive10-type", default="1541")
     parser.add_argument("--enable-drive9-bus", action="store_true")

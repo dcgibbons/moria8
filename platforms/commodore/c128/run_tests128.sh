@@ -3244,6 +3244,11 @@ build_overlay_state_boot_assets() {
 }
 
 c128_patch_scripted_boot_d71() {
+    # Scripted variants can shift the Default layout versus the base build, so
+    # EVERY overlay payload must be refreshed under its real 128.* disk name:
+    # a stale overlay JSRs into shifted Default code and JAMs. (The
+    # pre-2026-08-20 version patched ovl.* names that never existed on the
+    # d71, leaving stale base 128.* overlays in place.)
     local target_d71="$1"
     local build_log="$2"
     local c1541_bin="${C1541:-c1541}"
@@ -3254,10 +3259,16 @@ c128_patch_scripted_boot_d71() {
     fi
     "$c1541_bin" -attach "$target_d71" \
         -delete "moria128" \
-        -delete "ovl.town" \
-        -delete "ovl.start" \
-        -delete "ovl.death" \
-        -delete "ovl.gen" \
+        -delete "128.start" \
+        -delete "128.town" \
+        -delete "128.death" \
+        -delete "128.modal" \
+        -delete "128.gen" \
+        -delete "128.help" \
+        -delete "128.ui" \
+        -delete "128.items" \
+        -delete "128.disarm" \
+        -delete "128.chest" \
         -delete "128.runtime" \
         -delete "128.input" \
         -delete "128.proj" \
@@ -3273,10 +3284,16 @@ c128_patch_scripted_boot_d71() {
         -delete "128.play" \
         -delete "128.bank" \
         -write ../../../build/test/c128/moria128.prg "moria128" \
-        -write ../../../build/test/c128/ovl.town "ovl.town" \
-        -write ../../../build/test/c128/ovl.start "ovl.start" \
-        -write ../../../build/test/c128/ovl.death "ovl.death" \
-        -write ../../../build/test/c128/ovl.gen "ovl.gen" \
+        -write ../../../build/test/c128/ovl.start "128.start" \
+        -write ../../../build/test/c128/ovl.town "128.town" \
+        -write ../../../build/test/c128/ovl.death "128.death" \
+        -write ../../../build/test/c128/ovl.modal "128.modal" \
+        -write ../../../build/test/c128/ovl.gen "128.gen" \
+        -write ../../../build/test/c128/ovl.help "128.help" \
+        -write ../../../build/test/c128/ovl.ui "128.ui" \
+        -write ../../../build/test/c128/ovl.items "128.items" \
+        -write ../../../build/test/c128/ovl.disarm "128.disarm" \
+        -write ../../../build/test/c128/ovl.chest "128.chest" \
         -write ../../../build/test/c128/128.runtime.prg "128.runtime" \
         -write ../../../build/test/c128/128.input.prg "128.input" \
         -write ../../../build/test/c128/128.proj.prg "128.proj" \
@@ -6820,68 +6837,7 @@ build_scripted_chest_open_boot_assets() {
 }
 
 c128_patch_scripted_chest_open_d71() {
-    // The scripted chest variant shifts the Default layout versus the base
-    // build, so EVERY overlay payload must be refreshed with the matching
-    // build — a stale overlay JSRs into shifted Default addresses and JAMs.
-    local target_d71="$1"
-    local build_log="$2"
-    local c1541_bin="${C1541:-c1541}"
-
-    rm -f "$target_d71"
-    if ! cp ../../../build/test/c128/moria128.d71 "$target_d71"; then
-        return 1
-    fi
-    "$c1541_bin" -attach "$target_d71" \
-        -delete "moria128" \
-        -delete "128.start" \
-        -delete "128.town" \
-        -delete "128.death" \
-        -delete "128.modal" \
-        -delete "128.gen" \
-        -delete "128.help" \
-        -delete "128.ui" \
-        -delete "128.items" \
-        -delete "128.disarm" \
-        -delete "128.chest" \
-        -delete "128.runtime" \
-        -delete "128.input" \
-        -delete "128.proj" \
-        -delete "128.fdisk" \
-        -delete "128.diskio" \
-        -delete "128.world" \
-        -delete "128.item" \
-        -delete "128.names" \
-        -delete "128.huff" \
-        -delete "128.hvec" \
-        -delete "128.select" \
-        -delete "128.persist" \
-        -delete "128.play" \
-        -delete "128.bank" \
-        -write ../../../build/test/c128/moria128.prg "moria128" \
-        -write ../../../build/test/c128/ovl.start "128.start" \
-        -write ../../../build/test/c128/ovl.town "128.town" \
-        -write ../../../build/test/c128/ovl.death "128.death" \
-        -write ../../../build/test/c128/ovl.modal "128.modal" \
-        -write ../../../build/test/c128/ovl.gen "128.gen" \
-        -write ../../../build/test/c128/ovl.help "128.help" \
-        -write ../../../build/test/c128/ovl.ui "128.ui" \
-        -write ../../../build/test/c128/ovl.items "128.items" \
-        -write ../../../build/test/c128/ovl.disarm "128.disarm" \
-        -write ../../../build/test/c128/ovl.chest "128.chest" \
-        -write ../../../build/test/c128/128.runtime.prg "128.runtime" \
-        -write ../../../build/test/c128/128.input.prg "128.input" \
-        -write ../../../build/test/c128/128.proj.prg "128.proj" \
-        -write ../../../build/test/c128/128.fdisk.prg "128.fdisk" \
-        -write ../../../build/test/c128/128.diskio.prg "128.diskio" \
-        -write ../../../build/test/c128/128.world.prg "128.world" \
-        -write ../../../build/test/c128/128.item.prg "128.item" \
-        -write ../../../build/test/c128/128.names.prg "128.names" \
-        -write ../../../build/test/c128/128.huff.prg "128.huff" \
-        -write ../../../build/test/c128/128.hvec.prg "128.hvec" \
-        -write ../../../build/test/c128/128.select.prg "128.select" \
-        -write ../../../build/test/c128/128.persist.prg "128.persist" \
-        -write ../../../build/test/c128/128.play.prg "128.play" \
-        -write ../../../build/test/c128/128.bank.prg "128.bank" >>"$build_log" 2>&1
+    c128_patch_scripted_boot_d71 "$@"
 }
 
 run_chest_open_product_smoke128() {

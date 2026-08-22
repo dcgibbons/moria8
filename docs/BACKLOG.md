@@ -5,57 +5,6 @@ unreleased for release notes.
 
 ## Commodore Ports
 
-### Avoid C128 disk load on new game
-
-The C128 title `N` path currently calls `c128_modal_require_play` before
-`game_new_start`. On a fresh boot `c128_modal_slot_state` is still
-`C128_MODAL_UNKNOWN`, so this path requires program media and disk-loads
-`128.play` into the shared resident slot at `$AF00`.
-
-This is inconsistent with the intended C128 cached startup model. The overlay
-cache is populated at boot and `OVL.STARTUP` is left resident for the title to
-new-game path, but the resident `PLAY` payload is not preloaded or cached.
-
-Required work:
-
-- Preload `128.play` during C128 boot after core residents are loaded.
-- Validate the `C128_RESIDENT_PLAY_SIG*` signature after preload.
-- Set `c128_modal_slot_state = C128_MODAL_PLAY` when the preload succeeds.
-- Keep save/load behavior intact: `128.persist` may still be demand-loaded for
-  save/load, and returning to gameplay after persist work must restore `PLAY`.
-- Add a C128 runtime smoke proving title `N` reaches new-game/start gameplay
-  without invoking `c128_load_resident_play_prg` after the title screen is
-  shown.
-
-Acceptance target:
-
-- Starting a new C128 character after normal boot does not perform a disk load
-  for `128.play`; gameplay entry uses the already resident/cached play payload.
-
-### Complete chest overlay banking coverage
-
-The C64 and Plus/4 product smokes cover real Open dispatch, CHEST-to-GEN disk
-overlay replacement, nested ego execution, loot placement, and runtime resync.
-Two C64 paths remain covered only indirectly or by focused stubs.
-
-Required work:
-
-- Add a C64 product smoke with an REU enabled that opens the deterministic chest
-  and proves deferred GEN fetching, nested ego return, loot placement, and
-  `$01` runtime resync through the REU-backed overlay path.
-- Add an end-to-end C64 media-load failure smoke that makes the deferred GEN
-  overlay load fail after a real chest open, then proves the loot latch clears,
-  no loot is generated, gameplay banking is restored, and the game remains
-  responsive. The current failure case uses a stubbed loader.
-- Keep individual VICE runtime timeouts at or below 30 seconds and preserve the
-  existing C64/Plus/4 product disk-fallback smokes.
-
-Acceptance target:
-
-- Chest deferred-loot banking has product-path coverage for C64 disk fallback,
-  C64 REU fetching, and real GEN media-load failure, with no JAM and correct
-  runtime state after every outcome.
-
 ### Optional: physically plausible chest contents
 
 VMS Moria has no size filter on chest contents, and Moria8 deliberately follows
@@ -387,54 +336,6 @@ Acceptance target:
   ring or active spell, retains normal LOS/terrain rules, and behaves
   consistently on every platform.
 
-### Add classic Moria chests
-
-**Complete** (2026-08-15): settled design is `docs/CHEST_DESIGN.md`
-(14-step sequence). All steps landed: catalog rows 128-134 with `&` glyph,
-20-byte known-item bitset (capacity 160) with save migration, picker buckets,
-`OVL_CHEST` cold overlay + resident chest-at-tile pre-dispatch for
-Open/Bash/Disarm, spawn trap initialization, search/Find Traps reveal, Open
-(lock pick, XP, trap-on-open, opened state, explosion suppression), Disarm
-(found/armed gating, VMS chest threshold, XP, bad-fail trap fire), Bash (1-in-10
-destroy to Ruined, 1-in-10 lock break, holds-firm), VMS-order trap effects
-(lose STR / poison / paralysis / explosion / deferred summoning), lazy loot
-fulfillment (VMS drop decode via the GEN-overlay picker, bounded 5x5 placement,
-stale-latch point-of-use guard), and look/inspection state suffixes
-(locked/trapped/disarmed/empty) — each gameplay step with a behavioral suite.
-
-Moria8 currently has floor objects, traps, doors, searching, opening, bashing,
-and direct floor-trap disarm, but it does not yet implement gameplay chests.
-This is a real gap against both local upstream references: Umoria and VMS-Moria
-have chest object types, locked/trapped chest state, chest trap effects, open
-and bash handling, and `D <Dir>` disarm support for found trapped chests.
-
-Required work:
-
-- Add chest object definitions and generation/drop rules matching classic Moria
-  scale: small/large wooden, iron, and steel chests.
-- Represent chest state compactly: locked, trapped, found trap, opened/ruined,
-  trap payload flags, and any contents/depth data needed for rewards.
-- Extend Search/Find Traps so trapped chests can reveal their trap state.
-- Extend Open so locked chests use disarm/pick-lock ability and trapped chests
-  can trigger their trap when opened.
-- Extend Bash so chests can be forced open, with the classic risk of ruining
-  contents and without implicitly disarming traps.
-- Extend Disarm so `D <Dir>` handles visible/found trapped chests separately
-  from floor traps.
-- Implement chest trap effects from the classic set where feasible: lose STR,
-  poison, paralysis, summon, explosion, and multi-trap combinations.
-- Decide and document how chest contents are stored within current floor-item
-  constraints before adding broad generation.
-- Add C64/C128 focused coverage for search reveal, open locked chest, open
-  trapped chest trigger, successful disarm, failed disarm, bad-failure trigger,
-  bash open/ruin behavior, and save/load persistence.
-
-Acceptance target:
-
-- A generated or placed chest can be found, searched, opened, bashed, disarmed,
-  trapped, looted, ruined, and saved/loaded with behavior consistent with
-  Umoria/VMS-Moria within Moria8 memory limits.
-
 ### Bring Word of Destruction up to upstream area-devastation
 
 Moria8's `eff_destroy_area` (shared by the Word of Destruction prayer and the
@@ -748,6 +649,13 @@ audit (hand-counted cycle estimates; full analysis in
   updates (batch consecutive cells under one VDC address setup).
   **BACKLOGGED** (maintainer, 2026-07-28). ~400 -> ~45 cy/cell on the
   per-step hot path.
+- **P10** — Mirror the Huffman decode tree (`huff_tree_left` +
+  `huff_tree_right`, 112 B) into resident Bank 0 RAM (C128). Today every
+  tree-node read crosses into Bank 1 through the MMU (~82 cy/read, ~16 ms
+  per 30-char message); a resident mirror eliminates ~84% of those
+  switches during text rendering. Costs 112 resident bytes on the
+  tightest-resident platform and duplicates shared data, so it needs a
+  C128 memory-contract budget check first. (Perf review, 2026-08-20.)
 
 Completed: P1 (glyph/item scan early-outs), P2 (A2 AUX row block read),
 P3 (C128 leftward block-copy + V-strip burst), P4 (A2 scroll-delta

@@ -2004,6 +2004,192 @@ run_chest_open_product_smoke() {
     fi
     TOTAL=$((TOTAL + 1))
 }
+run_chest_open_product_reu_smoke() {
+    local name="chest_open_product_reu_smoke"
+    echo -n "  $name: "
+
+    local smoke_out build_log boot_d64 main_vs
+    smoke_out=$(mktemp -d "${TMPDIR:-/tmp}/moria8-c64-chest-open-reu.XXXXXX")
+    boot_d64="$smoke_out/moria8-c64.d64"
+    main_vs="$smoke_out/c64/main.vs"
+    build_log=$(mktemp -t "build_${name}_log")
+
+    if ! make -s -B -C "$REPO_ROOT/platforms/commodore" \
+            KICKASS="$KICKASS" \
+            OUT="$smoke_out" \
+            KA_FLAGS64="-showmem -vicesymbols -libdir ../../core -libdir common -afo -libdir c64 -define DEBUG_FEAT_DISK_TRACE=0 -define C64_TEST_SCRIPTED_CHEST_OPEN_PRODUCT" \
+            build64 >"$build_log" 2>&1; then
+        echo "FAIL (product build)"
+        tail -80 "$build_log"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    if ! "$C1541" -format "moria8 c64,m8" d64 "$boot_d64" \
+            -attach "$boot_d64" \
+            -write "$smoke_out/c64/boot.prg" "moria8" \
+            -write "$smoke_out/c64/boot.prg" "boot64" \
+            -write "$smoke_out/c64/bootart64.prg" "bootart64" \
+            -write "$smoke_out/c64/moria8.prg" "moria64" \
+            -write "$smoke_out/c64/64.bank" "64.bank" \
+            -write "$smoke_out/c64/title" "t64" \
+            -write "$smoke_out/c64/monster.db.1" "monster.db.1" \
+            -write "$smoke_out/c64/monster.db.2" "monster.db.2" \
+            -write "$smoke_out/c64/monster.db.3" "monster.db.3" \
+            -write "$smoke_out/c64/monster.db.4" "monster.db.4" \
+            -write "$smoke_out/c64/ovl.start" "64.start" \
+            -write "$smoke_out/c64/ovl.town" "64.town" \
+            -write "$smoke_out/c64/ovl.death" "64.death" \
+            -write "$smoke_out/c64/ovl.modal" "64.modal" \
+            -write "$smoke_out/c64/ovl.gen" "64.gen" \
+            -write "$smoke_out/c64/ovl.help" "64.help" \
+            -write "$smoke_out/c64/ovl.ui" "64.ui" \
+            -write "$smoke_out/c64/ovl.items" "64.items" \
+            -write "$smoke_out/c64/ovl.spell" "64.spell" \
+            -write "$smoke_out/c64/ovl.chest" "64.chest" >"$build_log" 2>&1; then
+        echo "FAIL (product disk image)"
+        tail -20 "$build_log"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    # Same scripted chest open, but with a 512K REU attached: overlays stash
+    # into the REU at boot and the deferred GEN fetch (and CHEST load) come
+    # from REU DMA rather than disk. reu_overlays_stashed=1 proves the boot
+    # stash ran; the stage/loot state proves the REU-backed path completes.
+    if python3 -u ../plus4/tests/product_scripted_smoke.py \
+            --name "$name" \
+            --pass-symbol ".c64_test_script_exhausted_wait" \
+            --start-symbol ".title_menu_loop" \
+            --until-pass \
+            --main-vs "$main_vs" \
+            --boot-d64 "$boot_d64" \
+            --vice-extra-arg=-reu \
+            --vice-extra-arg=-reusize \
+            --vice-extra-arg=512 \
+            --expect-byte-symbol ".reu_overlays_stashed=0x01" \
+            --expect-byte-symbol ".chest_product_path_stage=0x05" \
+            --expect-byte-symbol ".chest_product_loot_placed=0x01" \
+            --expect-byte-symbol ".zp_dirty_count=0x00" \
+            --expect-byte-symbol ".turn_scene_dirty=0x00" \
+            --expect-byte-symbol ".chest_product_runtime_state=0x36" \
+            --expect-byte-symbol ".chest_loot_pending=0x00" \
+            --expect-byte-symbol ".chest_pending_summons=0x00" \
+            --expect-byte-symbol ".current_overlay=0x04" \
+            --expect-byte-symbol ".fi_item_id=0x81" \
+            --expect-byte-symbol ".fi_p1=0x80" \
+            --expect-byte-symbol ".zp_player_dlvl=0x01" \
+            --timeout 30 \
+            --retry-timeouts 0 \
+            --vice "$VICE" \
+            --screen-base 0x0400; then
+        PASS=$((PASS + 1))
+    else
+        FAIL=$((FAIL + 1))
+    fi
+    TOTAL=$((TOTAL + 1))
+}
+
+run_chest_open_product_genfail_smoke() {
+    local name="chest_open_product_genfail_smoke"
+    echo -n "  $name: "
+
+    local smoke_out build_log boot_d64 nogen_d64 main_vs
+    smoke_out=$(mktemp -d "${TMPDIR:-/tmp}/moria8-c64-chest-open-genfail.XXXXXX")
+    boot_d64="$smoke_out/moria8-c64.d64"
+    nogen_d64="$smoke_out/moria8-c64-nogen.d64"
+    main_vs="$smoke_out/c64/main.vs"
+    build_log=$(mktemp -t "build_${name}_log")
+
+    if ! make -s -B -C "$REPO_ROOT/platforms/commodore" \
+            KICKASS="$KICKASS" \
+            OUT="$smoke_out" \
+            KA_FLAGS64="-showmem -vicesymbols -libdir ../../core -libdir common -afo -libdir c64 -define DEBUG_FEAT_DISK_TRACE=0 -define C64_TEST_SCRIPTED_CHEST_OPEN_PRODUCT" \
+            build64 >"$build_log" 2>&1; then
+        echo "FAIL (product build)"
+        tail -80 "$build_log"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    if ! "$C1541" -format "moria8 c64,m8" d64 "$boot_d64" \
+            -attach "$boot_d64" \
+            -write "$smoke_out/c64/boot.prg" "moria8" \
+            -write "$smoke_out/c64/boot.prg" "boot64" \
+            -write "$smoke_out/c64/bootart64.prg" "bootart64" \
+            -write "$smoke_out/c64/moria8.prg" "moria64" \
+            -write "$smoke_out/c64/64.bank" "64.bank" \
+            -write "$smoke_out/c64/title" "t64" \
+            -write "$smoke_out/c64/monster.db.1" "monster.db.1" \
+            -write "$smoke_out/c64/monster.db.2" "monster.db.2" \
+            -write "$smoke_out/c64/monster.db.3" "monster.db.3" \
+            -write "$smoke_out/c64/monster.db.4" "monster.db.4" \
+            -write "$smoke_out/c64/ovl.start" "64.start" \
+            -write "$smoke_out/c64/ovl.town" "64.town" \
+            -write "$smoke_out/c64/ovl.death" "64.death" \
+            -write "$smoke_out/c64/ovl.modal" "64.modal" \
+            -write "$smoke_out/c64/ovl.gen" "64.gen" \
+            -write "$smoke_out/c64/ovl.help" "64.help" \
+            -write "$smoke_out/c64/ovl.ui" "64.ui" \
+            -write "$smoke_out/c64/ovl.items" "64.items" \
+            -write "$smoke_out/c64/ovl.spell" "64.spell" \
+            -write "$smoke_out/c64/ovl.chest" "64.chest" >"$build_log" 2>&1; then
+        echo "FAIL (product disk image)"
+        tail -20 "$build_log"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    # Swap target: every file except 64.gen, so the deferred GEN fulfillment
+    # load fails on real media after the chest overlay has already loaded.
+    cp "$boot_d64" "$nogen_d64"
+    if ! "$C1541" -attach "$nogen_d64" -delete "64.gen" >>"$build_log" 2>&1; then
+        echo "FAIL (nogen disk image)"
+        tail -20 "$build_log"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    # The swap triggers at tramp_chest_open (resident; reached only when the
+    # Open command finds a chest). At that point dungeon generation is long
+    # done and the CHEST overlay still loads fine from the swapped disk; only
+    # the deferred GEN fulfillment load fails. Expected state: stage stays at
+    # 2 (overlay entered, generator never ran), no loot placed, latch cleared,
+    # current_overlay=NONE after the failed load, and the game reaches the
+    # script-exhaustion trap (still responsive).
+    if python3 -u ../plus4/tests/product_scripted_smoke.py \
+            --name "$name" \
+            --pass-symbol ".c64_test_script_exhausted_wait" \
+            --start-symbol ".title_menu_loop" \
+            --until-pass \
+            --main-vs "$main_vs" \
+            --boot-d64 "$boot_d64" \
+            --swap-symbol ".tramp_chest_open" \
+            --swap-attach8-d64 "$nogen_d64" \
+            --swap-attach-after-hits 1 \
+            --expect-byte-symbol ".chest_product_path_stage=0x02" \
+            --expect-byte-symbol ".chest_product_loot_placed=0x00" \
+            --expect-byte-symbol ".chest_loot_pending=0x00" \
+            --expect-byte-symbol ".chest_pending_summons=0x00" \
+            --expect-byte-symbol ".current_overlay=0x00" \
+            --expect-byte-symbol ".fi_item_id=0x81" \
+            --expect-byte-symbol ".fi_p1=0x80" \
+            --expect-byte-symbol ".zp_player_dlvl=0x01" \
+            --timeout 30 \
+            --retry-timeouts 0 \
+            --vice "$VICE" \
+            --screen-base 0x0400; then
+        PASS=$((PASS + 1))
+    else
+        FAIL=$((FAIL + 1))
+    fi
+    TOTAL=$((TOTAL + 1))
+}
 
 run_disk_setup_product_smoke() {
     local name="disk_setup_product_smoke"
@@ -4167,6 +4353,8 @@ run_suite_function "dungeon_ascent_product_smoke" run_dungeon_ascent_product_smo
 run_suite_function "wizard_reveal_product_smoke" run_wizard_reveal_product_smoke
 run_suite_function "wizard_item_product_smoke" run_wizard_item_product_smoke
 run_suite_function "chest_open_product_smoke" run_chest_open_product_smoke
+run_suite_function "chest_open_product_reu_smoke" run_chest_open_product_reu_smoke
+run_suite_function "chest_open_product_genfail_smoke" run_chest_open_product_genfail_smoke
 run_suite_function "retirement_royal_product_smoke" run_retirement_royal_product_smoke "retirement_flow_product_smoke"
 run_suite_function "disk_setup_product_smoke" run_disk_setup_product_smoke
 run_suite_function "title_disk_setup_single_drive_returns_program_prompt" run_disk_setup_single_drive_return_product_smoke "disk_setup_single_drive_return_product_smoke"

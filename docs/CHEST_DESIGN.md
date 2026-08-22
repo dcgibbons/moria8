@@ -750,6 +750,20 @@ hidden case and locked-out-priority case). Gates: `make build` all four ports
 from clean (0 failed asserts); focused `test64` 23/23; `make test128-fast` all
 pass; `make testapple2` memory-contract 22/22.
 
+## Implementation Notes — step-13 C64 banking coverage complete (2026-08-20)
+
+Two product smokes close the C64 banking coverage matrix:
+`chest_open_product_reu_smoke` boots with a 512K REU attached
+(`--vice-extra-arg` passthrough added to `product_scripted_smoke.py`), proving
+the boot overlay stash plus the deferred GEN fetch, nested ego return, loot
+placement, and `$01` runtime resync all complete over the REU DMA path
+(`reu_overlays_stashed=1` plus the full stage/loot assertions).
+`chest_open_product_genfail_smoke` swaps drive 8 to a disk missing `64.gen`
+when the resident `tramp_chest_open` fires, so the deferred GEN fulfillment
+load fails on real media after the chest overlay loaded; it asserts the stage
+stays at 2, no loot is placed, the latch clears, `current_overlay` returns to
+NONE, and the game reaches the script-exhaustion trap responsive.
+
 ## Implementation Notes — step-13 C128 cold-dispatch coverage (2026-08-20)
 
 `chest_open_product_smoke128` closes the C128 coverage gap: a scripted product
