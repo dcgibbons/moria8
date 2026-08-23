@@ -369,7 +369,17 @@ Acceptance target:
 
 ### Add Balrog victory and retirement flow
 
-Status: implemented in product code. Remaining work is focused coverage.
+Status: implemented in product code; coverage landed 2026-08-20 except as
+noted. C64: `test_balrog_victory.s` (combat_note_kill guards, eff_kill_monster
+choke point, once-only message), melee kill wiring (`test_combat` t41), bash
+kill wiring (`test_bash` t9), hiscore winner marker (`test_score` t12), and
+dispatch cases for save-blocked and quit-to-retirement (`test_main_loop`
+t43/t44). C128: the same two dispatch cases in `test_main_loop128` (t33/t34).
+Plus/4: `balrog_product_plus4` scripted product smoke (deterministic one-HP
+Balrog fixture at level gen, real bump-attack kill, winner flag, save-block
+message). Apple IIe: `balrog_victory` MAME scenario (stock image; Lua rewrites
+a level-spawned slot into a one-HP stunned Balrog after generation settles,
+real bump-attack kill, winner flag, save-block), 3/3 consecutive passes.
 
 Moria8 ships the Balrog as the level-100 endgame monster. Killing it now sets a
 winner flag, prints a victory notice, blocks ordinary save-and-quit, and routes

@@ -25,7 +25,7 @@ bootstrap:
 
 // test_finish — Copy results to $0400 and halt.
 test_finish:
-    ldx #11
+    ldx #12
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -166,12 +166,12 @@ press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
 // Test result buffer
-tc_results: .fill 12, $ff
+tc_results: .fill 13, $ff
 tc_count: .byte 0
 
 test_start:
     // Initialize result area to $ff (untested)
-    ldx #11
+    ldx #12
     lda #$ff
 !clr:
     sta tc_results,x
@@ -677,6 +677,60 @@ test_start:
     lda #$01
 !t10_store:
     sta tc_results + 11
+
+    // ============================================================
+    // Test 12: hiscore_insert — winner sets the $80 class marker bit;
+    // non-winner stores the plain class byte.
+    // ============================================================
+    lda #0
+    sta hiscore_count
+    tax
+!t12_clr:
+    sta hiscore_table,x
+    inx
+    cpx #HISCORE_MAX_ENTRIES * HISCORE_ENTRY_SIZE
+    bne !t12_clr-
+
+    lda #1
+    sta player_data + PL_CLASS
+    lda #$E8
+    sta score_accum_0
+    lda #$03
+    sta score_accum_1
+    lda #$00
+    sta score_accum_2
+    lda zp_game_flags
+    ora #GAME_FLAG_WINNER
+    sta zp_game_flags
+
+    jsr hiscore_insert
+
+    lda hiscore_table + 22
+    cmp #$81                    // class 1 | $80 winner marker
+    bne !t12_fail+
+
+    // Non-winner: plain class byte
+    lda #0
+    sta hiscore_count
+    tax
+!t12_clr2:
+    sta hiscore_table,x
+    inx
+    cpx #HISCORE_MAX_ENTRIES * HISCORE_ENTRY_SIZE
+    bne !t12_clr2-
+    lda zp_game_flags
+    and #~GAME_FLAG_WINNER & $ff
+    sta zp_game_flags
+    jsr hiscore_insert
+    lda hiscore_table + 22
+    cmp #$01
+    bne !t12_fail+
+    lda #$01
+    jmp !t12_store+
+!t12_fail:
+    lda #$00
+!t12_store:
+    sta tc_results + 12
 
     jmp test_finish
 

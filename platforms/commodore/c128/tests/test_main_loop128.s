@@ -145,6 +145,11 @@ tramp_game_over:
     jmp tramp_game_over_run
 
 tramp_winner_royal:
+    inc test_winner_royal_calls
+    rts
+
+test_wpsb_spy:
+    inc test_wpsb_calls
     rts
 
 winner_apply_retirement_bonus:
@@ -830,6 +835,8 @@ test_fire_calls: .byte 0
 test_search_scan_calls: .byte 0
 test_wizard_calls: .byte 0
 test_save_game_calls: .byte 0
+test_winner_royal_calls: .byte 0
+test_wpsb_calls: .byte 0
 test_load_game_calls: .byte 0
 test_disk_prompt_save_calls: .byte 0
 test_disk_prompt_game_calls: .byte 0
@@ -932,6 +939,8 @@ reset_state:
     sta test_search_scan_calls
     sta test_wizard_calls
     sta test_save_game_calls
+    sta test_winner_royal_calls
+    sta test_wpsb_calls
     sta test_load_game_calls
     sta test_disk_prompt_save_calls
     sta test_disk_prompt_game_calls
@@ -2386,6 +2395,64 @@ test_entry:
     cmp #1
     beq *+5
     jmp test_fail
+    // Test 33: CMD_SAVE with the winner flag set is blocked before the modal
+    // persist preload: no save, no persist require, blocked message runs.
+    // (The budget-exhaust quit exercises the retirement epilogue, which also
+    // touches the disk prompt/setup spies, so only save-path-exclusive spies
+    // are asserted.)
+    lda #33
+    sta test_case_id
+    jsr reset_state
+    :PatchJump(winner_print_save_blocked, test_wpsb_spy)
+    lda #1
+    sta test_disk_setup_success
+    sta test_save_success
+    sta disk_mode
+    lda zp_game_flags
+    ora #GAME_FLAG_WINNER
+    sta zp_game_flags
+    lda #CMD_SAVE
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    jsr run_case
+    lda test_save_game_calls
+    beq *+5
+    jmp test_fail
+    lda test_c128_modal_require_persist_calls
+    beq *+5
+    jmp test_fail
+    lda test_wpsb_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda test_game_over_prompt_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+
+    // Test 34: CMD_QUIT with the winner flag routes through retirement (royal
+    // overlay) instead of the ordinary quit path.
+    lda #34
+    sta test_case_id
+    jsr reset_state
+    lda zp_game_flags
+    ora #GAME_FLAG_WINNER
+    sta zp_game_flags
+    lda #CMD_QUIT
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    jsr run_case
+    lda test_winner_royal_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda test_game_over_prompt_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+
     jmp test_pass
 
 test_fail:

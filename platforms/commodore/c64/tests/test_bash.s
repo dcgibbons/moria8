@@ -18,7 +18,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #7
+    ldx #8
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -164,7 +164,7 @@ test_get_direction_target:
 // Test scratch
 tc_loop:    .byte 0
 tc_ok:      .byte 0
-tc_results: .fill 8, $ff      // Result buffer (copied to $0400 at end)
+tc_results: .fill 9, $ff      // Result buffer (copied to $0400 at end)
 tc_saved_hp_lo: .byte 0
 tc_saved_hp_hi: .byte 0
 tc_tunnel_calls: .byte 0
@@ -668,6 +668,91 @@ test_start:
 !t8_pass:
     lda #$01
     sta tc_results + 7
+
+    // ==========================================
+    // Test 9: bash-killing the Balrog sets the winner flag (combat_note_kill
+    // wiring in the bash_monster kill path).
+    // ==========================================
+!t9:
+    jsr monster_init_table
+    lda zp_game_flags
+    and #~GAME_FLAG_WINNER & $ff
+    sta zp_game_flags
+    lda #0
+    sta cmb_winner_pending
+    sta tc_ok
+    lda #100
+    sta cr_level + CREATURE_BALROG
+
+    // Slot 0: one-HP Balrog at (11,10)
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda #CREATURE_BALROG
+    sta (zp_ptr0),y
+    ldy #MX_X
+    lda #11
+    sta (zp_ptr0),y
+    ldy #MX_Y
+    lda #10
+    sta (zp_ptr0),y
+    ldy #MX_HP_LO
+    lda #1
+    sta (zp_ptr0),y
+    ldy #MX_HP_HI
+    lda #0
+    sta (zp_ptr0),y
+    ldy #MX_FLAGS
+    lda #MF_AWAKE
+    sta (zp_ptr0),y
+    ldy #MX_STUN
+    lda #0
+    sta (zp_ptr0),y
+
+    lda #1
+    sta zp_mon_count
+
+    lda #18
+    sta zp_player_str
+    lda #9
+    sta inv_item_id + EQUIP_SHIELD
+    lda #50
+    sta zp_player_lvl
+    sta player_data + PL_LEVEL
+    lda #CLASS_WARRIOR
+    sta player_data + PL_CLASS
+
+    lda #40
+    sta tc_loop
+!t9_loop:
+    lda #8
+    sta $c6
+    ldx #0
+    stx cmb_slot
+    jsr bash_monster
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda (zp_ptr0),y
+    cmp #EMPTY_SLOT
+    beq !t9_killed+
+    dec tc_loop
+    bne !t9_loop-
+    jmp !t9_fail+
+!t9_killed:
+    lda zp_game_flags
+    and #GAME_FLAG_WINNER
+    beq !t9_fail+
+    lda #$01
+    sta tc_results + 8
+    jmp !t9_done+
+!t9_fail:
+    lda #$00
+    sta tc_results + 8
+!t9_done:
+    lda zp_game_flags
+    and #~GAME_FLAG_WINNER & $ff
+    sta zp_game_flags
 
 !tests_done:
     jmp test_exit_trampoline

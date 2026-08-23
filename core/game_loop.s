@@ -1872,6 +1872,14 @@ level_change_generate_current:
     // fixture needs no GEN window preload or runtime resync here.
     jsr chest_product_setup
 #endif
+#if PLUS4_TEST_SCRIPTED_BALROG_PRODUCT
+    lda #OVL_DUNGEON_GEN
+    jsr overlay_load_no_kernal
+    bcs !lcgc_balrog_done+
+    jsr balrog_product_setup
+    jsr hal_platform_runtime_resync
+!lcgc_balrog_done:
+#endif
 #if C64_TEST_SCRIPTED_DUNGEON_SPELL
     jsr c64_test_force_spell_target_monster
 #endif
@@ -1923,6 +1931,8 @@ level_change_generate_current:
 !lcgc_return:
 #endif
     rts
+
+
 
 #if HAL_PLATFORM_GAME_LOOP_RESTORE_GENERATION_OVERLAY
 // tier_load reuses the $E000 overlay window for tier payloads. Restore the

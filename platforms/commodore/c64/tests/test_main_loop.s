@@ -17,7 +17,7 @@ bootstrap:
     jmp test_start
 
 test_finish:
-    ldx #41
+    ldx #43
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -74,6 +74,7 @@ tramp_game_over:
     rts
 
 tramp_winner_royal:
+    inc test_winner_royal_calls
     rts
 
 winner_apply_retirement_bonus:
@@ -311,7 +312,7 @@ random_floor_in_room:
 save_welcome_str:
     .text "WELCOME BACK" ; .byte 0
 
-tc_results: .fill 42, $ff
+tc_results: .fill 44, $ff
 
 test_cmd_idx: .byte 0
 test_cmd_len: .byte 0
@@ -347,6 +348,8 @@ test_item_pickup_calls: .byte 0
 test_search_scan_calls: .byte 0
 test_wizard_calls: .byte 0
 test_save_game_calls: .byte 0
+test_winner_royal_calls: .byte 0
+test_wpsb_calls: .byte 0
 test_disk_prompt_save_calls: .byte 0
 test_disk_prompt_game_calls: .byte 0
 test_tramp_disk_setup_calls: .byte 0
@@ -516,6 +519,8 @@ reset_state:
     sta test_search_scan_calls
     sta test_wizard_calls
     sta test_save_game_calls
+    sta test_winner_royal_calls
+    sta test_wpsb_calls
     sta test_disk_prompt_save_calls
     sta test_disk_prompt_game_calls
     sta test_tramp_disk_setup_calls
@@ -653,6 +658,10 @@ test_input_run_cancel_check:
     lda test_key_script,x
     inx
     stx test_key_idx
+    rts
+
+test_wpsb_spy:
+    inc test_wpsb_calls
     rts
 
 test_msg_clear:
@@ -970,7 +979,7 @@ test_start:
     ldx #$ff
     txs
 
-    ldx #41
+    ldx #43
     lda #$ff
 !clr:
     sta tc_results,x
@@ -2149,6 +2158,22 @@ test_start:
     sta zp_player_y
     sta player_data + PL_MAP_Y
 
+    // Rows 28-31 overlap this suite's code ($C8FA-$C9BC); redirect them to
+    // scratch so the writes below cannot corrupt the running test.
+    ldx #28
+!t33_redir:
+    txa
+    sec
+    sbc #28
+    tay
+    lda t33_scratch_lo,y
+    sta map_row_lo,x
+    lda t33_scratch_hi,y
+    sta map_row_hi,x
+    inx
+    cpx #32
+    bne !t33_redir-
+
     ldx #28
 !t33_floor_loop:
     lda map_row_lo,x
@@ -2517,8 +2542,87 @@ test_start:
     bne !t42_fail+
     lda #$01
     sta tc_results + 41
-    jmp test_finish
+    jmp !t43+
 !t42_fail:
     lda #$00
     sta tc_results + 41
     jmp test_finish
+
+    // Test 43: CMD_SAVE with the winner flag set is blocked: no save, no disk
+    // setup, and the blocked message prints instead.
+!t43:
+    jsr reset_state
+    :PatchJump(winner_print_save_blocked, test_wpsb_spy)
+    lda #42
+    sta test_case_idx
+    lda #1
+    sta test_disk_setup_success
+    sta test_save_success
+    lda zp_game_flags
+    ora #GAME_FLAG_WINNER
+    sta zp_game_flags
+    lda #CMD_SAVE
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    jsr run_case
+    // The budget-exhaust quit runs the retirement epilogue, which legitimately
+    // touches the disk-prompt/setup spies; only save_game and the blocked
+    // message are exclusive to the save path.
+    lda test_save_game_calls
+    bne !t43_fail+
+    lda test_wpsb_calls
+    cmp #1
+    bne !t43_fail+
+    lda test_game_over_prompt_calls
+    cmp #1
+    bne !t43_fail+
+    lda #$01
+    sta tc_results + 42
+    jmp !t43_done+
+!t43_fail:
+    lda #$00
+    sta tc_results + 42
+!t43_done:
+    lda zp_game_flags
+    and #~GAME_FLAG_WINNER & $ff
+    sta zp_game_flags
+
+    // Test 44: CMD_QUIT with the winner flag routes through retirement (royal
+    // overlay) instead of the ordinary quit path.
+!t44:
+    jsr reset_state
+    lda #43
+    sta test_case_idx
+    lda zp_game_flags
+    ora #GAME_FLAG_WINNER
+    sta zp_game_flags
+    lda #CMD_QUIT
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    jsr run_case
+    lda test_winner_royal_calls
+    cmp #1
+    bne !t44_fail+
+    lda test_game_over_prompt_calls
+    cmp #1
+    bne !t44_fail+
+    lda #$01
+    sta tc_results + 43
+    jmp !t44_done+
+!t44_fail:
+    lda #$00
+    sta tc_results + 43
+!t44_done:
+    lda zp_game_flags
+    and #~GAME_FLAG_WINNER & $ff
+    sta zp_game_flags
+    jmp test_finish
+
+t33_scratch_lo: .byte <t33_scratch_28, <t33_scratch_29, <t33_scratch_30, <t33_scratch_31
+t33_scratch_hi: .byte >t33_scratch_28, >t33_scratch_29, >t33_scratch_30, >t33_scratch_31
+t33_scratch_28: .fill MAP_COLS, 0
+t33_scratch_29: .fill MAP_COLS, 0
+t33_scratch_30: .fill MAP_COLS, 0
+t33_scratch_31: .fill MAP_COLS, 0

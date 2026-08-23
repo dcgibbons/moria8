@@ -18,7 +18,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #39
+    ldx #40
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -142,7 +142,7 @@ press_key_str:
 // Test scratch
 tc_loop:    .byte 0
 tc_ok:      .byte 0
-tc_results: .fill 40, $ff      // Result buffer (copied to $0400 at end)
+tc_results: .fill 41, $ff      // Result buffer (copied to $0400 at end)
 
 test_start:
     // Seed RNG deterministically
@@ -1540,10 +1540,94 @@ test_start:
     bne !t40_fail+
     lda #$01
     sta tc_results + 39
-    jmp !tests_done+
+    jmp !t41+
 !t40_fail:
     lda #$00
     sta tc_results + 39
+
+    // ==========================================
+    // Test 41: melee kill of the Balrog sets the winner flag (combat_note_kill
+    // wiring in the player_attack_monster kill path).
+    // ==========================================
+!t41:
+    jsr monster_init_table
+    lda zp_game_flags
+    and #~GAME_FLAG_WINNER & $ff
+    sta zp_game_flags
+    lda #0
+    sta cmb_winner_pending
+    lda #100
+    sta cr_level + CREATURE_BALROG
+    lda #CLASS_WARRIOR
+    sta player_data + PL_CLASS
+    lda #50
+    sta zp_player_lvl
+    sta player_data + PL_LEVEL
+    lda #18
+    sta player_data + PL_STR_CUR
+    lda #118
+    sta player_data + PL_DEX_CUR
+    lda #127
+    sta player_data + PL_TOHIT
+    lda #10
+    sta player_data + PL_TODMG
+    lda #2
+    sta inv_item_id + EQUIP_WEAPON
+
+    // Occupied floor tile at (20,15) with a one-hit-kill Balrog in slot 0.
+    ldx #15
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #20
+    lda #((TILE_FLOOR << 4) | FLAG_OCCUPIED)
+    :MapWrite_ptr0_y()
+
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_X
+    lda #20
+    sta (zp_ptr0),y
+    ldy #MX_Y
+    lda #15
+    sta (zp_ptr0),y
+    ldy #MX_TYPE
+    lda #CREATURE_BALROG
+    sta (zp_ptr0),y
+    ldy #MX_HP_LO
+    lda #1
+    sta (zp_ptr0),y
+    ldy #MX_HP_HI
+    lda #0
+    sta (zp_ptr0),y
+    ldy #MX_FLAGS
+    lda #0
+    sta (zp_ptr0),y
+
+    lda #20
+    ldy #15
+    jsr player_attack_monster
+
+    lda zp_game_flags
+    and #GAME_FLAG_WINNER
+    beq !t41_fail+
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda (zp_ptr0),y
+    cmp #EMPTY_SLOT
+    bne !t41_fail+
+    lda #$01
+    sta tc_results + 40
+    jmp !t41_done+
+!t41_fail:
+    lda #$00
+    sta tc_results + 40
+!t41_done:
+    lda zp_game_flags
+    and #~GAME_FLAG_WINNER & $ff
+    sta zp_game_flags
 
 !tests_done:
     jmp test_exit_trampoline

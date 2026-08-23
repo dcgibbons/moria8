@@ -475,6 +475,160 @@ dump("after_wizard")
 print("SCENARIO DONE")
 """
 
+LUA_BALROG_BODY = r"""
+-- Descend to DL:1 first, verified against zp_player_dlvl (the status line
+-- can show DL:1 transiently before generation finishes).
+local descended = false
+for i = 1, 12 do
+    press("L")
+    emu.wait(1)
+    shift(".")
+    emu.wait(2)
+    if prog:read_u8(DLVL_ADDR) == 1 then descended = true break end
+end
+assert_line("descended", descended, "zp_player_dlvl never reached 1")
+-- dlvl flips before generation finishes; the dungeon monster spawn happens
+-- at the END and rewrites the table. Wait for the busy flag to clear.
+local settled = false
+for i = 1, 120 do
+    emu.wait(0.5)
+    if prog:read_u8(DLVL_ADDR) == 1 and prog:read_u8(BUSY_ADDR) == 0 then
+        settled = true break
+    end
+end
+emu.wait(1)
+assert_line("gen_settled", settled,
+            "dlvl=" .. prog:read_u8(DLVL_ADDR) ..
+            " busy=" .. prog:read_u8(BUSY_ADDR))
+
+-- Balrog victory flow (deterministic, no wizard): take the first live
+-- monster slot, relocate it to an adjacent floor tile (aux map occupied flag
+-- set via the aux RAM item handle), rewrite it as a 1-HP stunned Balrog,
+-- bump-attack until dead, then verify the winner flag and that save is
+-- blocked with the retirement notice.
+local mt = MONSTER_TABLE_ADDR
+
+-- Force main-RAM banking before pokes: modal/overlay returns can leave
+-- RAMRD/RAMWRT pointing at aux ($C003/$C005 select aux; $C002/$C004 main).
+prog:write_u8(0xc002, 0)
+prog:write_u8(0xc004, 0)
+
+local slot = -1
+local base = 0
+for i = 0, 31 do
+    local b = mt + i * 12
+    if prog:read_u8(b + 2) ~= 0xff then slot = i base = b break end
+end
+assert_line("monster_found", slot >= 0, "no live monster on DL:1")
+
+-- Relocate to an adjacent floor tile (A2 map stride is 198 columns).
+local px0 = prog:read_u8(PLAYER_X_ADDR)
+local py0 = prog:read_u8(PLAYER_Y_ADDR)
+local mx, my = px0 + 1, py0
+local cand = {{px0+1, py0}, {px0-1, py0}, {px0, py0+1}, {px0, py0-1}}
+for _, c in ipairs(cand) do
+    local a = 0x0800 + c[2]*198 + c[1]
+    if aux:read(a) & 0xf0 == 0 then mx, my = c[1], c[2] break end
+end
+prog:write_u8(base + 0, mx)
+prog:write_u8(base + 1, my)
+local ma = 0x0800 + my*198 + mx
+aux:write(ma, aux:read(ma) | 0x01)
+assert_line("flag_set", aux:read(ma) & 0x01 == 1, "aux byte=" .. aux:read(ma))
+
+prog:write_u8(base + 2, 56)       -- MX_TYPE = Balrog (CREATURE_BALROG)
+prog:write_u8(base + 3, 1)        -- MX_HP_LO
+prog:write_u8(base + 4, 0)        -- MX_HP_HI
+prog:write_u8(base + 8, 0xff)     -- MX_STUN: never acts
+prog:write_u8(CR_LEVEL_ADDR + 56, 100) -- cr_level[Balrog] = 100 (win guard)
+-- A level-1 warrior cannot hit a Balrog's AC; boost to-hit only (a level
+-- poke desyncs the level-up thresholds against the Balrog XP award).
+prog:write_u8(PLAYER_DATA_ADDR + 40, 127)  -- PL_TOHIT
+assert_line("poke_landed", prog:read_u8(base + 2) == 56,
+            "immediate readback=" .. prog:read_u8(base + 2) ..
+            " hp=" .. prog:read_u8(base + 3) ..
+            " stun=" .. prog:read_u8(base + 8))
+
+-- Bump-attack toward the monster until the slot empties.
+local dirkey = function(dx, dy)
+    if dx > 0 and dy > 0 then return "n" end
+    if dx > 0 and dy < 0 then return "u" end
+    if dx < 0 and dy > 0 then return "b" end
+    if dx < 0 and dy < 0 then return "y" end
+    if dx > 0 then return "l" end
+    if dx < 0 then return "h" end
+    if dy > 0 then return "j" end
+    return "k"
+end
+local dead = false
+for tries = 1, 16 do
+    local px = prog:read_u8(PLAYER_X_ADDR)
+    local py = prog:read_u8(PLAYER_Y_ADDR)
+    press(dirkey(mx - px, my - py))
+    emu.wait(0.8)
+    if screen_has("-more-") then press(" ") emu.wait(0.4) end
+    if prog:read_u8(base + 2) == 0xff then dead = true break end
+end
+local dump = "slots:"
+for i = 0, 7 do
+    local b = mt + i * 12
+    local t = prog:read_u8(b + 2)
+    if t ~= 0xff then
+        dump = dump .. " [" .. i .. "]t" .. t ..
+               "@" .. prog:read_u8(b) .. "," .. prog:read_u8(b + 1) ..
+               "hp" .. prog:read_u8(b + 3)
+    end
+end
+assert_line("balrog_killed", dead,
+            dump .. " type=" .. prog:read_u8(base + 2) ..
+            " hp=" .. prog:read_u8(base + 3) ..
+            " px=" .. prog:read_u8(PLAYER_X_ADDR) ..
+            " py=" .. prog:read_u8(PLAYER_Y_ADDR) ..
+            " mx=" .. mx .. " my=" .. my ..
+            " tile=" .. aux:read(ma) ..
+            " dlvl=" .. prog:read_u8(DLVL_ADDR))
+assert_line("winner_flag", prog:read_u8(GAME_FLAGS_ADDR) & 0x04 == 0x04,
+            "GAME_FLAG_WINNER not set after Balrog kill")
+
+-- Post-kill message prompts: the -more- marker is not always visible on A2,
+-- so press space slowly a few times to drain pending dismissals.
+for i = 1, 4 do
+    press_slow(" ")
+    emu.wait(1)
+end
+
+-- Save must be blocked with the retirement notice. Use the proven
+-- Left-Shift + S field pattern from the save scenarios. The A2
+-- return-to-gameplay redraw erases the message row quickly, so the block is
+-- proven by the save flow never proceeding: no slot picker, game alive.
+local sft = keymap["Left Shift"]
+local skey = findkey("S")
+local blocked = false
+for attempt = 1, 5 do
+    if screen_has("-more-") then press(" ") emu.wait(0.5) end
+    sft:set_value(1) emu.wait(0.02)
+    skey:set_value(1) emu.wait(0.03) skey:set_value(0) emu.wait(0.02)
+    sft:set_value(0) emu.wait(0.12)
+    local picker = false
+    for i = 1, 15 do
+        emu.wait(0.2)
+        if screen_has("Winner: Shift+Q") then blocked = true break end
+        if screen_has("Select Slot") then picker = true break end
+        if screen_has("Disk Setup") then picker = true break end
+    end
+    if blocked or picker then break end
+    press(" ")
+    emu.wait(0.5)
+end
+if not blocked then
+    blocked = not picker and screen_has("DL:1")
+end
+assert_line("save_blocked", blocked, "save flow proceeded or game lost")
+dump("after_balrog")
+print("SCENARIO DONE")
+"""
+
+
 LUA_QUAFF_P3_BODY = r"""
 -- Wizard-generate a Phase 3 potion (Restoration, 97), quaff it, and verify
 -- the effect message prints. Regression for the Apple IIe Phase 3 potion
@@ -1167,6 +1321,24 @@ def wizard_flow_lua() -> str:
 
 
 
+def _balrog_symbols(body: str) -> str:
+    return (body
+            .replace("MONSTER_TABLE_ADDR", hex(_sym_addr("monster_table")))
+            .replace("CR_LEVEL_ADDR", hex(_sym_addr("cr_level")))
+            .replace("PLAYER_X_ADDR", hex(_sym_addr("zp_player_x")))
+            .replace("PLAYER_Y_ADDR", hex(_sym_addr("zp_player_y")))
+            .replace("GAME_FLAGS_ADDR", hex(_sym_addr("zp_game_flags")))
+            .replace("PLAYER_DATA_ADDR", hex(_sym_addr("player_data")))
+            .replace("CMB_TYPE_ADDR", hex(_sym_addr("cmb_type")))
+            .replace("MSGFLAGS_ADDR", hex(_sym_addr("zp_msg_flags")))
+            .replace("DLVL_ADDR", hex(_sym_addr("zp_player_dlvl")))
+            .replace("BUSY_ADDR", hex(_sym_addr("generation_busy_active_api"))))
+
+
+def balrog_victory_lua() -> str:
+    return _chargen_body("A") + _balrog_symbols(LUA_BALROG_BODY)
+
+
 def quaff_p3_lua() -> str:
     return _chargen_body("A") + LUA_QUAFF_P3_BODY
 
@@ -1237,6 +1409,7 @@ SCENARIO_LUA = {
     "help_overlay": help_overlay_lua,
     "wizard_flow": wizard_flow_lua,
     "scroll_rune": scroll_rune_lua,
+    "balrog_victory": balrog_victory_lua,
     "quaff_p3": quaff_p3_lua,
     "scroll_objdet": scroll_objdet_lua,
     "deep_objdet": deep_objdet_lua,
@@ -1428,6 +1601,14 @@ def main() -> int:
                 failures += 1
             print(f"ASSERT host_marker {'PASS' if ok else 'FAIL'}")
         print(f"RESULT {asserts} asserts {failures} failures")
+        if asserts == 0:
+            # A scenario that produces no asserts did not run its script at
+            # all (Lua load/runtime error, boot failure). Never pass silently:
+            # show the harness output tail so the cause is visible.
+            tail = [l for l in out.splitlines() if l.strip()][-15:]
+            for l in tail:
+                print(f"HARNESS-OUT {l}")
+            return 1
         return 0 if failures == 0 else 1
 
     dumps = {}

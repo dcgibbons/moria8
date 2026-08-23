@@ -4236,14 +4236,14 @@ run_test "rng"    "tests/test_rng.s"    "0400 0409" 10
 run_test "memory" "tests/test_memory.s" "0400 0402" 3
 run_test "config" "tests/test_config.s" "0400 0400" 1
 run_test "input"  "tests/test_input.s"  "0400 040d" 14
-run_test "main_loop" "tests/test_main_loop.s" "0400 0429" 42 500000000
+run_test "main_loop" "tests/test_main_loop.s" "0400 042b" 44 500000000
 run_test "run_visibility_bank" "tests/test_run_visibility_bank.s" "0400 0400" 1 500000000
 run_test "turn" "tests/test_turn.s" "0400 041c" 29 500000000
 run_test "player" "tests/test_player.s" "0400 0409" 10
 run_test "dungeon" "tests/test_dungeon.s" "0400 042c" 45 500000000
 run_test "monster" "tests/test_monster.s" "0400 0412" 19 500000000
 run_test "monster_ai" "tests/test_monster_ai.s" "0400 0427" 40 500000000
-run_test "combat" "tests/test_combat.s" "0400 0427" 40 500000000
+run_test "combat" "tests/test_combat.s" "0400 0428" 41 500000000
 run_test "msg_long" "tests/test_msg_long.s" "0400 0400" 1 20000000
 run_test "monster_attack" "tests/test_monster_attack.s" "0400 040d" 14 500000000
 run_test "effects" "tests/test_effects.s" "0400 041e" 31 1000000000
@@ -4272,6 +4272,7 @@ run_test "chest_open" "tests/test_chest_open.s" "0400 040C" 13 500000000
 run_test "chest_disarm" "tests/test_chest_disarm.s" "0400 0406" 7 500000000
 run_test "chest_bash" "tests/test_chest_bash.s" "0400 0404" 5 500000000
 run_test "chest_loot" "tests/test_chest_loot.s" "0400 0409" 10 500000000
+run_test "balrog_victory" "tests/test_balrog_victory.s" "0400 0405" 6 500000000
 run_test "stinking_cloud" "tests/test_stinking_cloud.s" "0400 0402" 3 500000000
 run_test "frost_ball" "tests/test_frost_ball.s" "0400 0402" 3 500000000
 run_test "teleport_other" "tests/test_teleport_other.s" "0400 0402" 3 500000000
@@ -4327,7 +4328,7 @@ run_test "ui_views_filters" "tests/test_ui_views_filters.s" "0400 0413" 7 500000
 run_test "subsystems" "tests/test_subsystems.s" "0400 0409" 10
 run_sound_monitor_test
 run_test "save"  "tests/test_save.s"  "0400 041c" 29 1000000000
-run_test "score" "tests/test_score.s" "0400 040b" 12 500000000
+run_test "score" "tests/test_score.s" "0400 040c" 13 500000000
 run_test "wands_staves" "tests/test_wands_staves.s" "0400 0406" 7 100000000
 run_test "monster_magic" "tests/test_monster_magic.s" "0400 040d" 14 500000000
 run_test "tier" "tests/test_tier.s" "0400 040d" 14 500000000
@@ -4336,7 +4337,7 @@ run_test "render" "tests/test_render.s" "0400 0417" 24 500000000
 run_test "ranged" "tests/test_ranged.s" "0400 0409" 10 500000000
 run_test "ego" "tests/test_ego.s" "0400 0409" 10 500000000
 run_test "throw" "tests/test_throw.s" "0400 040a" 11 500000000
-run_test "bash" "tests/test_bash.s" "0400 0407" 8 500000000
+run_test "bash" "tests/test_bash.s" "0400 0408" 9 500000000
 run_test "tunnel" "tests/test_tunnel.s" "0400 0407" 8 500000000
 run_test "background" "tests/test_background.s" "0400 0407" 8
 run_test "look_trampoline" "tests/test_look_trampoline.s" "0400 0401" 2
