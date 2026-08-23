@@ -83,7 +83,9 @@ review.
 Run commands from the repository root.
 
 - `make` or `make build`: build C64, C128, Plus/4, and Apple IIe payloads
-- `make test`: default regression mix
+- `make test`: default regression mix; also runs the Apple IIe MAME runtime
+  suite (all `harness_smoke.py` scenarios) when `A2ROMS` is set, with a
+  skip warning otherwise
 - `make test64`: C64 tests
 - `make testplus4`: Plus/4 tests
 - `make test128-fast`: stable C128 unit batch

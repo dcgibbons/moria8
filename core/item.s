@@ -692,7 +692,13 @@ item_spawn_level:
 
     // Roll ego type for weapons (0=none for non-weapons)
     lda fi_add_id
+#if APPLE2
+    // A2: generation executes in the GEN overlay window; the ego trampoline
+    // must restore it or the item_spawn_level continuation runs OVL.ITEMS.
+    jsr tramp_roll_ego_type_gen
+#else
     jsr tramp_roll_ego_type
+#endif
     sta fi_add_ego
 
     // Set qty: ammo spawns in stacks, everything else = 1
@@ -824,7 +830,11 @@ item_spawn_level:
 
     // Roll ego type for treasure room items
     lda fi_add_id
+#if APPLE2
+    jsr tramp_roll_ego_type_gen
+#else
     jsr tramp_roll_ego_type
+#endif
     sta fi_add_ego
 
     pla                         // Restore real dlvl

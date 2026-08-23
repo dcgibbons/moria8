@@ -85,7 +85,7 @@ A2_DISK_IMAGE = $(BUILD)/moria8-apple2.po
 A2_MAIN_STAMP = $(OUTA2)/.main.stamp
 MAME_OUTPUT_ROOT = $(abspath $(OUTA2)/mame)
 
-.PHONY: all build disk run test-memory-contract test-memory-contract-selftest clean ensure-kickass kickass ac prodos
+.PHONY: all build disk run test-memory-contract test-memory-contract-selftest test-runtime clean ensure-kickass kickass ac prodos
 
 all: build
 
@@ -116,6 +116,21 @@ test-memory-contract: build main.sym boot.sym
 
 test-memory-contract-selftest:
 	python3 check_memory_contract.py --selftest
+
+# Runtime MAME suite (harness_smoke.py; one scenario per invocation). Runs only
+# when A2ROMS points at a MAME ROM directory; otherwise warns and skips so the
+# default `make test` mix stays green on ROM-less machines.
+test-runtime: $(A2_DISK_IMAGE)
+ifeq ($(strip $(A2ROMS)),)
+	@echo "WARNING: A2ROMS is not set - skipping the Apple IIe runtime harness (MAME scenarios)."
+	@echo "         Set A2ROMS to the ROM directory (containing apple2ee.zip) and rerun to include them."
+else
+	@failed=""; for s in $$(python3 -c "import sys; sys.path.insert(0,'.'); import harness_smoke as h; print(' '.join(h.SCENARIOS))"); do \
+		echo "=== apple2 scenario: $$s ==="; \
+		python3 harness_smoke.py "$$s" || failed="$$failed $$s"; \
+	done; \
+	if [ -n "$$failed" ]; then echo "FAILED apple2 scenarios:$$failed"; exit 1; fi
+endif
 
 clean:
 	rm -rf "$(OUTA2)" "$(A2_DISK_IMAGE)" main.sym boot.sym

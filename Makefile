@@ -17,9 +17,13 @@ disk:
 	$(MAKE) -C platforms/apple2 disk
 
 build64 build128 buildplus4 disk64 zip64 c64-dist disk128 diskplus4 run run64 run128 runplus4 \
-test test-disk test-disk-static test-disk-debt test64 test128 test128-guards test128-units test128-boot test128-town test128-cache test128-diag test128-fast test128-fast-smoke testplus4 testplus4-build testplus4-runtime clean \
+test-disk test-disk-static test-disk-debt test64 test128 test128-guards test128-units test128-boot test128-town test128-cache test128-diag test128-fast test128-fast-smoke testplus4 testplus4-build testplus4-runtime clean \
 check-zp check-6502-lint check-hal-boundaries ensure-kickass kickass:
 	$(MAKE) -C platforms/commodore $@
+
+test:
+	$(MAKE) -C platforms/commodore test
+	$(MAKE) -C platforms/apple2 test-runtime
 
 buildapple2:
 	$(MAKE) -C platforms/apple2 build
