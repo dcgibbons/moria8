@@ -228,13 +228,22 @@ end
 -- Enable wizard mode and open the wizard menu. The message system interposes
 -- "-more-" prompts that swallow answers, so clear them between steps.
 local function wizard_menu_open(tries)
-    for i = 1, (tries or 15) do
+    -- Patient version: after answering the WIZARD? prompt, wait for the menu
+    -- to render before pressing ctrl+W again; a re-press while the menu is
+    -- mid-render oscillates the prompt and starves the open.
+    for i = 1, (tries or 12) do
         if screen_has("Q to cancel") then return true end
-        if screen_has("-more-") then press(" ") emu.wait(0.4) end
-        if screen_has("WIZARD?") then press("Y") emu.wait(0.5) end
-        if screen_has("Q to cancel") then return true end
-        ctrl("W")
-        emu.wait(1)
+        if screen_has("-more-") then press(" ") emu.wait(0.6) end
+        if screen_has("WIZARD?") then
+            press("Y")
+            for j = 1, 16 do
+                emu.wait(0.25)
+                if screen_has("Q to cancel") then return true end
+            end
+        else
+            ctrl("W")
+            emu.wait(1.2)
+        end
     end
     return false
 end
@@ -283,12 +292,22 @@ for i = 1, 10 do
 end
 assert_line("descended", descended, "status does not show DL:1")
 local function wizard_menu_open(tries)
-    for i = 1, (tries or 15) do
+    -- Patient version: after answering the WIZARD? prompt, wait for the menu
+    -- to render before pressing ctrl+W again; a re-press while the menu is
+    -- mid-render oscillates the prompt and starves the open.
+    for i = 1, (tries or 12) do
         if screen_has("Q to cancel") then return true end
-        if screen_has("-more-") then press(" ") emu.wait(0.4) end
-        if screen_has("WIZARD?") then press("Y") emu.wait(0.5) end
-        ctrl("W")
-        emu.wait(1)
+        if screen_has("-more-") then press(" ") emu.wait(0.6) end
+        if screen_has("WIZARD?") then
+            press("Y")
+            for j = 1, 16 do
+                emu.wait(0.25)
+                if screen_has("Q to cancel") then return true end
+            end
+        else
+            ctrl("W")
+            emu.wait(1.2)
+        end
     end
     return false
 end
@@ -307,6 +326,11 @@ local function east_mobile()
     return ok >= 3
 end
 for t = 1, 10 do
+    -- Pinned RNG makes every teleport land identically; re-seed per attempt
+    -- so retries actually sample different destinations while the dungeon
+    -- itself (already generated) stays fixed for the delta asserts.
+    prog:write_u8(0x1a, 0xDE) prog:write_u8(0x1b, 0xAD + t)
+    prog:write_u8(0x1c, 0xBE + t * 16) prog:write_u8(0x1d, 0xEF)
     wizard_menu_open()
     press("T")
     emu.wait(3)
@@ -475,6 +499,11 @@ dump("after_wizard")
 print("SCENARIO DONE")
 """
 
+
+
+
+
+
 LUA_BALROG_BODY = r"""
 -- Descend to DL:1 first, verified against zp_player_dlvl (the status line
 -- can show DL:1 transiently before generation finishes).
@@ -569,18 +598,18 @@ for tries = 1, 16 do
     if screen_has("-more-") then press(" ") emu.wait(0.4) end
     if prog:read_u8(base + 2) == 0xff then dead = true break end
 end
-local dump = "slots:"
+local slotdump = "slots:"
 for i = 0, 7 do
     local b = mt + i * 12
     local t = prog:read_u8(b + 2)
     if t ~= 0xff then
-        dump = dump .. " [" .. i .. "]t" .. t ..
+        slotdump = slotdump .. " [" .. i .. "]t" .. t ..
                "@" .. prog:read_u8(b) .. "," .. prog:read_u8(b + 1) ..
                "hp" .. prog:read_u8(b + 3)
     end
 end
 assert_line("balrog_killed", dead,
-            dump .. " type=" .. prog:read_u8(base + 2) ..
+            slotdump .. " type=" .. prog:read_u8(base + 2) ..
             " hp=" .. prog:read_u8(base + 3) ..
             " px=" .. prog:read_u8(PLAYER_X_ADDR) ..
             " py=" .. prog:read_u8(PLAYER_Y_ADDR) ..
@@ -1335,6 +1364,9 @@ def _balrog_symbols(body: str) -> str:
             .replace("BUSY_ADDR", hex(_sym_addr("generation_busy_active_api"))))
 
 
+
+
+
 def balrog_victory_lua() -> str:
     return _chargen_body("A") + _balrog_symbols(LUA_BALROG_BODY)
 
@@ -1601,6 +1633,14 @@ def main() -> int:
                 failures += 1
             print(f"ASSERT host_marker {'PASS' if ok else 'FAIL'}")
         print(f"RESULT {asserts} asserts {failures} failures")
+        # A scenario that never prints its completion marker stalled mid-flow;
+        # assert counts alone cannot prove completion.
+        if "SCENARIO DONE" not in out:
+            print("HARNESS scenario did not print SCENARIO DONE (stalled)")
+            tail = [l for l in out.splitlines() if l.strip()][-15:]
+            for l in tail:
+                print(f"HARNESS-OUT {l}")
+            return 1
         if asserts == 0:
             # A scenario that produces no asserts did not run its script at
             # all (Lua load/runtime error, boot failure). Never pass silently:
