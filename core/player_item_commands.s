@@ -421,6 +421,41 @@ item_eat:
 // ============================================================
 // String data (screen codes via inherited encoding)
 // ============================================================
+#if !C128
+// ============================================================
+// piq_quaff_identify — Mark item type X identified, but only when quaffing it
+// produces a noticeable effect (upstream VMS hp_player). Heal-family potions
+// at full HP are a silent no-op: no message and no identification. Everything
+// else identifies on quaff.
+// On C128 the identical helper lives in item_defs.s (this file is in the C128
+// banked runtime, which has only ~9 bytes free).
+// Input: X = item type ID. Clobbers: A, Y (X preserved via id_known_set).
+// ============================================================
+piq_quaff_identify:
+    txa
+    cmp #17                 // Cure Light Wounds
+    beq !pqi_heal+
+    cmp #25                 // Cure Serious Wounds
+    beq !pqi_heal+
+    cmp #ITEM_TYPE_POT_HEALING
+    beq !pqi_heal+
+    cmp #ITEM_TYPE_POT_CURE_CRITICAL
+    beq !pqi_heal+
+!pqi_ident:
+    jmp id_known_set        // X = item type ID
+!pqi_heal:
+    // Full HP -> the heal is a no-op -> stays unidentified.
+    lda zp_player_hp_hi
+    cmp zp_player_mhp_hi
+    bcc !pqi_ident-
+    bne !pqi_full+
+    lda zp_player_hp_lo
+    cmp zp_player_mhp_lo
+    bcc !pqi_ident-
+!pqi_full:
+    rts
+#endif
+
 // ============================================================
 // item_quaff — Quaff a potion from inventory
 // Prompts "QUAFF WHICH POTION (A-V)?", waits for keypress.
@@ -436,9 +471,14 @@ item_quaff:
 !iq_in_range:
     stx piw_slot
     sta piw_item_id
-    // Identify this potion type
+    // The prompt has been answered; clear it so an effect that prints nothing
+    // (e.g. a heal at full HP) doesn't leave it lingering like a -more- prompt.
+    jsr msg_clear
+    // Identify the potion type only when its effect will be noticeable
+    // (upstream VMS hp_player): heal-family potions at full HP are a silent
+    // no-op, so those stay unidentified.
     ldx piw_item_id
-    jsr id_known_set
+    jsr piq_quaff_identify
 
     // Remove from inventory
     ldx piw_slot

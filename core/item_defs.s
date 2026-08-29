@@ -164,6 +164,42 @@ id_known_test:
     and idk_mask
     rts
 
+// ============================================================
+// piq_quaff_identify — Mark item type X identified, but only when quaffing it
+// produces a noticeable effect (upstream VMS hp_player). Heal-family potions
+// at full HP are a silent no-op: no message and no identification. Everything
+// else identifies on quaff.
+// On C128 this file is resident (roomy); other ports import the identical
+// helper in player_item_commands.s where their item code lives (that file is
+// in the C128 banked runtime, which has only ~9 bytes free).
+// Input: X = item type ID. Clobbers: A, Y (X preserved via id_known_set).
+// ============================================================
+#if C128
+piq_quaff_identify:
+    txa
+    cmp #17                 // Cure Light Wounds
+    beq !pqi_heal+
+    cmp #25                 // Cure Serious Wounds
+    beq !pqi_heal+
+    cmp #ITEM_TYPE_POT_HEALING
+    beq !pqi_heal+
+    cmp #ITEM_TYPE_POT_CURE_CRITICAL
+    beq !pqi_heal+
+!pqi_ident:
+    jmp id_known_set        // X = item type ID
+!pqi_heal:
+    // Full HP -> the heal is a no-op -> stays unidentified.
+    lda zp_player_hp_hi
+    cmp zp_player_mhp_hi
+    bcc !pqi_ident-
+    bne !pqi_full+
+    lda zp_player_hp_lo
+    cmp zp_player_mhp_lo
+    bcc !pqi_ident-
+!pqi_full:
+    rts
+#endif
+
 // id_known_set — Mark item type X as identified/known.
 // Input:  X = item type ID
 // Clobbers: A, Y (X preserved)
