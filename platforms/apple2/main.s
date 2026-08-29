@@ -805,6 +805,12 @@ tramp_player_create:
 // mounted" without an ON_LINE scan.
 // ============================================================
 disk_prompt_save:
+    lda disk_mode
+    cmp #A2_DISK_MODE_SWAP
+    beq !dps_load+
+    clc
+    rts
+!dps_load:
     lda #OVL_STORAGE
     jsr overlay_load
     bcs !done+
@@ -813,10 +819,17 @@ disk_prompt_save:
     rts
 
 disk_prompt_game:
+    lda disk_mode
+    cmp #A2_DISK_MODE_SWAP
+    beq !dpg_load+
+    clc
+    rts
+!dpg_load:
     lda #OVL_STORAGE
     jsr overlay_load
-    bcs !done-
+    bcs !dpg_done+
     jsr disk_prompt_game_impl
+!dpg_done:
     rts
 
 // ============================================================

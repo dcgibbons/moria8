@@ -834,7 +834,13 @@ end
 if not wizard_menu_open() then print("ASSERT died FAIL wizard menu did not open") end
 press_until("DLVL", "L")
 press("1") press("0") press("\r")
-emu.wait(5)
+-- A2 generation of a DL:10 level takes ~30 s; a fixed wait returns while the
+-- machine is still generating and the wizard reopen then fails. Wait for the
+-- banner to actually clear before summoning.
+for i = 1, 120 do
+    emu.wait(0.5)
+    if not screen_has("GENERATING") then break end
+end
 -- 'S' summons an adjacent monster on the current (deep) level.
 if not wizard_menu_open() then print("ASSERT died FAIL wizard menu did not reopen") end
 press("S")
