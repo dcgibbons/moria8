@@ -633,6 +633,31 @@ Acceptance target:
   with only adapter data varying by platform, and no platform can silently
   satisfy a scenario through a materially different test flow.
 
+### Fix Plus/4 disarm scripted-build crash
+
+`disarm_plus4` crashes ~25% of runs, but only in the scripted-input test
+build. Interactive play is clean (10/10 manual runs). The scripted variant
+hits a chargen overlay-window mismatch: `player_create` runs while the overlay
+window holds the wrong overlay, producing a wild JSR ($FFFF). This is a
+test-build defect, not player-facing — the shipped flow does not hit it.
+
+Required work:
+
+- Reproduce reliably and capture the overlay window contents +
+  `current_overlay` at the wild JSR to identify which overlay was expected
+  versus resident during scripted chargen.
+- Root-cause why only the scripted-input variant mismatches the window
+  (timing/ordering of the scripted input vs. the chargen overlay load).
+- Fix the scripted build or the chargen overlay-load ordering so the window
+  always holds the expected overlay before `player_create` runs.
+- Decide whether to keep the current ~25% flake as accepted CI noise in the
+  meantime, or gate it.
+
+Acceptance target:
+
+- `disarm_plus4` passes deterministically across repeated runs, or is
+  explicitly gated with the chargen overlay-window root cause documented.
+
 ## Rendering Performance (Px)
 
 Tracked candidates from the 2026-07-25 cross-platform render performance
