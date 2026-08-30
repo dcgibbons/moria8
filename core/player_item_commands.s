@@ -421,7 +421,7 @@ item_eat:
 // ============================================================
 // String data (screen codes via inherited encoding)
 // ============================================================
-#if !C128
+#if APPLE2
 // ============================================================
 // piq_quaff_identify — Mark item type X identified, but only when quaffing it
 // produces a noticeable effect (upstream VMS hp_player). Heal-family potions
@@ -476,9 +476,16 @@ item_quaff:
     jsr msg_clear
     // Identify the potion type only when its effect will be noticeable
     // (upstream VMS hp_player): heal-family potions at full HP are a silent
-    // no-op, so those stay unidentified.
+    // no-op, so those stay unidentified. Only A2/C128 have room for the gate;
+    // C64/Plus4 item test/product layouts are full, so they keep the legacy
+    // unconditional identify (documented layout exemption).
+#if APPLE2 || C128
     ldx piw_item_id
     jsr piq_quaff_identify
+#else
+    ldx piw_item_id
+    jsr id_known_set
+#endif
 
     // Remove from inventory
     ldx piw_slot

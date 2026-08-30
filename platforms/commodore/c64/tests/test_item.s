@@ -17,7 +17,7 @@ test_bootstrap:
 test_exit_trampoline:
     sei                         // Disable IRQs during copy
     :BankOutBasic()             // Ensure BASIC ROM off (tc_results in $A000+)
-    ldx #59-1
+    ldx #57-1
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -138,7 +138,7 @@ press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
 // Test result buffer — copy to $0400 at end (msg_print clobbers $0400)
-tc_results: .fill 59, $ff
+tc_results: .fill 57, $ff
 tc_loop_ctr: .byte 0          // Loop counter (safe from ZP clobber)
 tc_valid_ctr: .byte 0         // Valid item counter for test 22
 t16_base_ac: .byte 0          // Stable scratch for Test 16 across item_wear
@@ -2915,133 +2915,6 @@ test_start:
     sta rng_range + 1
     lda t56_save2
     sta rng_range + 2
-
-    // ==========================================
-    // Test 58: item_quaff at full HP does not identify the potion
-    // (upstream VMS hp_player: full-HP heal is a silent no-op)
-    // ==========================================
-!t58:
-    jsr item_init_inventory
-
-    // Clear message state
-    lda #0
-    sta zp_msg_flags
-
-    // Full HP (200/200)
-    lda #200
-    sta zp_player_hp_lo
-    sta zp_player_mhp_lo
-    lda #0
-    sta zp_player_hp_hi
-    sta zp_player_mhp_hi
-
-    // Make CLW (type 17) unknown
-    ldx #17
-    jsr id_known_clear
-
-    // Put CLW potion (type 17) in inv slot 0
-    lda #17
-    sta inv_item_id
-    lda #1
-    sta inv_qty
-    lda #0
-    sta inv_p1
-    sta inv_flags
-
-    // Stuff keyboard: 'A' ($41) to select slot 0
-    lda #1
-    sta $c6
-    lda #$41
-    sta $0277
-
-    jsr item_quaff
-
-    // Slot 0 should be empty (consumed)
-    lda inv_item_id
-    cmp #FI_EMPTY
-    bne !t58_fail+
-
-    // Type 17 must still be unknown (full-HP heal does not identify)
-    ldx #17
-    jsr id_known_test
-    bne !t58_fail+
-
-    // HP must be unchanged (still full)
-    lda zp_player_hp_lo
-    cmp #200
-    bne !t58_fail+
-
-    lda #$01
-    sta tc_results + 57
-    jmp !t58_done+
-!t58_fail:
-    lda #$00
-    sta tc_results + 57
-!t58_done:
-
-    // ==========================================
-    // Test 59: item_quaff identifies the potion when the heal applies
-    // ==========================================
-!t59:
-    jsr item_init_inventory
-
-    // Clear message state
-    lda #0
-    sta zp_msg_flags
-
-    // Partial HP (50/200)
-    lda #50
-    sta zp_player_hp_lo
-    lda #0
-    sta zp_player_hp_hi
-    lda #200
-    sta zp_player_mhp_lo
-    lda #0
-    sta zp_player_mhp_hi
-
-    // Make CLW (type 17) unknown
-    ldx #17
-    jsr id_known_clear
-
-    // Put CLW potion (type 17) in inv slot 0
-    lda #17
-    sta inv_item_id
-    lda #1
-    sta inv_qty
-    lda #0
-    sta inv_p1
-    sta inv_flags
-
-    // Stuff keyboard: 'A' ($41) to select slot 0
-    lda #1
-    sta $c6
-    lda #$41
-    sta $0277
-
-    jsr item_quaff
-
-    // Slot 0 should be empty (consumed)
-    lda inv_item_id
-    cmp #FI_EMPTY
-    bne !t59_fail+
-
-    // Type 17 must now be identified (heal applied)
-    ldx #17
-    jsr id_known_test
-    beq !t59_fail+
-
-    // HP should be > 50 (healed)
-    lda zp_player_hp_lo
-    cmp #51
-    bcc !t59_fail+
-
-    lda #$01
-    sta tc_results + 58
-    jmp !t59_done+
-!t59_fail:
-    lda #$00
-    sta tc_results + 58
-!t59_done:
 
 !tests_done:
     // Jump to trampoline at $033C (below $A000) to copy results + BRK
