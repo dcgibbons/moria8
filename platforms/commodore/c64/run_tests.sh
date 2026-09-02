@@ -4278,14 +4278,14 @@ run_test "frost_ball" "tests/test_frost_ball.s" "0400 0402" 3 500000000
 run_test "teleport_other" "tests/test_teleport_other.s" "0400 0402" 3 500000000
 run_test "haste_self" "tests/test_haste_self.s" "0400 0402" 3 500000000
 run_test "fire_ball" "tests/test_fire_ball.s" "0400 0402" 3 500000000
-run_test "word_of_destruction" "tests/test_word_of_destruction.s" "0400 0401" 2 500000000
+run_test "word_of_destruction" "tests/test_word_of_destruction.s" "0400 0406" 7 500000000
 run_test "light_area" "tests/test_light_area.s" "0400 0401" 2 500000000
 run_test "phase_door" "tests/test_phase_door.s" "0400 0402" 3 500000000
 run_test "genocide" "tests/test_genocide.s" "0400 0401" 2 500000000
 run_test "directional_effects" "tests/test_directional_effects.s" "0400 0403" 4 500000000
 run_test "overcast_ordering" "tests/test_overcast_ordering.s" "0400 0400" 1 500000000
 run_test "ball_effects" "tests/test_ball_effects.s" "0400 0401" 2 500000000
-run_test "utility_effects" "tests/test_utility_effects.s" "0400 0409" 10 500000000
+run_test "utility_effects" "tests/test_utility_effects.s" "0400 040c" 13 500000000
 run_test "detect_evil" "tests/test_detect_evil.s" "0400 0403" 4 500000000
 run_test "cure_light_wounds_prayer" "tests/test_cure_light_wounds_prayer.s" "0400 0402" 3 500000000
 run_test "bless_prayer" "tests/test_bless_prayer.s" "0400 0402" 3 500000000

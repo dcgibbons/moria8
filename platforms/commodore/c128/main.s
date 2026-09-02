@@ -1486,6 +1486,28 @@ tramp_eff_earthquake:
 !done:
     rts
 
+// Load the cold chest overlay to run the Word of Destruction engine, then
+// restore the spell-execution overlay so the DeathOverlay dispatch return
+// address lands in live code again (tramp_eff_earthquake pattern).
+tramp_eff_destroy_area:
+    lda #C128_CHEST_OVERLAY_ID
+    jsr overlay_load
+    bcs !done+
+    jsr c128_restore_runtime_guards
+    sei
+    lda $01
+    pha
+    :BankOutKernal()
+    jsr da_devastate
+    pla
+    sta $01
+    lda #MMU_ALL_RAM
+    sta $ff00
+    cli
+    jmp c128_return_to_death_overlay
+!done:
+    rts
+
 tramp_item_refuel:
     :C128OverlayComputeTrampoline(C128_ITEMS_OVERLAY_ID, item_refuel)
 
@@ -5185,7 +5207,9 @@ ovl_start_end:
     #define PMX_EARTHQUAKE_EXTERNAL
     #define PMX_MAP_AREA_EXTERNAL
     #define PMX_DETECT_EFFECTS_EXTERNAL
+    #define PMX_DESTROY_AREA_EXTERNAL
     #import "../../../core/player_magic_execute_overlay.s"
+    #undef PMX_DESTROY_AREA_EXTERNAL
     #undef PMX_DETECT_EFFECTS_EXTERNAL
     #undef PMX_MAP_AREA_EXTERNAL
     #undef PMX_EARTHQUAKE_EXTERNAL
@@ -5308,6 +5332,10 @@ ovl_disarm_end:
 // ============================================================
 .segment ChestOverlay
     #import "../../../core/chest.s"
+    // Word of Destruction devastation engine: cold overlay home; reached via
+    // resident tramp_eff_destroy_area (rare high-level spell, disk load is
+    // acceptable). Spell-exec returns through c128_return_to_death_overlay.
+    #import "../../../core/player_destroy_area.s"
 ovl_chest_end:
 .print "Chest overlay: " + (ovl_chest_end - $e000) + " bytes at $E000-$" + toHexString(ovl_chest_end)
 .assert "Chest overlay fits in $E000-$EFFF", ovl_chest_end <= $f000, true

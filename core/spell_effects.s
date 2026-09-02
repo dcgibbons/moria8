@@ -625,60 +625,6 @@ eff_bolt:
     jmp hal_sound_play
 
 // ============================================================
-// eff_damage_adjacent — Damage all adjacent monsters (area effect)
-// Input: A = dice count, X = dice sides
-// Clobbers: A, X, Y, zp_ptr0, zp_temp0-4, zp_math_a/b
-// ============================================================
-eff_da_dice:  .byte 0
-eff_da_sides: .byte 0
-
-eff_damage_adjacent:
-    sta eff_da_dice
-    stx eff_da_sides
-    lda #0
-    sta adj_dir_idx
-!eda_loop:
-    lda adj_dir_idx
-    cmp #8
-    bcs !eda_done+
-    tax
-    lda zp_player_x
-    clc
-    adc dir_dx,x
-    sta df_target_x
-    lda zp_player_y
-    clc
-    adc dir_dy,x
-    sta df_target_y
-    jsr !eda_cb+
-    inc adj_dir_idx
-    jmp !eda_loop-
-!eda_done:
-    rts
-!eda_cb:
-    lda df_target_x
-    ldy df_target_y
-    jsr monster_find_at
-    bcc !eda_skip+
-
-    // Monster found — roll damage
-    stx zp_temp2                    // Save monster slot
-    lda eff_da_dice
-    ldx eff_da_sides
-    ldy #0
-    jsr math_dice
-
-    // Apply damage
-    ldx zp_temp2
-    jsr combat_apply_damage_16
-    bcc !eda_skip+              // Still alive
-    // Monster killed
-    jsr eff_kill_monster        // X preserved by helper
-    jsr combat_print_winner_message
-!eda_skip:
-    rts
-
-// ============================================================
 // eff_directional_monster — Get direction, trace until the first monster hit
 // Output: carry SET = monster found (X = slot index),
 //         carry CLEAR = no monster along the traced path

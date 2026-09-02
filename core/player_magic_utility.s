@@ -183,14 +183,20 @@ eff_turn_undead_core:
     lda pmu_dispel_targets
     rts
 
+// Devastation engine target: resident-trampoline overlays (C128 Death,
+// Plus/4 ModalMisc, A2 ItemActions) route through tramp_eff_destroy_area;
+// C64 and unit tests call the co-located engine directly.
+#if PMX_DESTROY_AREA_EXTERNAL
+.const PMX_DESTROY_AREA_TARGET = tramp_eff_destroy_area
+#else
+.const PMX_DESTROY_AREA_TARGET = da_devastate
+#endif
+
 eff_destroy_area:
 #if C64_PRODUCT_OVERLAY_RUNTIME
     jsr c64u_turbo_fast
 #endif
-    lda #15
-    ldx #8
-    jsr eff_damage_adjacent
-    jsr eff_destroy_traps_doors
+    jsr PMX_DESTROY_AREA_TARGET
 #if C64_PRODUCT_OVERLAY_RUNTIME
     jsr c64u_turbo_normal
 #endif

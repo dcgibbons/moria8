@@ -100,7 +100,7 @@ Paladins use wisdom.
 | Teleport Other | Directional monster teleport. |
 | Haste Self | Temporary speed increase. |
 | Fire Ball | Targeted fire ball attack. |
-| Word of Destruction | Mutates nearby terrain and destroys nearby monsters/items in the affected area. |
+| Word of Destruction | Devastates a 15-tile radius: rerolls terrain floor/wall (boundary walls spared), silently deletes monsters, items, glyphs, and traps in the area, darkens affected rooms, and blinds the caster (message and blindness even in town). |
 | Genocide | Prompts for a monster glyph/type and removes matching monsters. |
 
 ## Priest Books

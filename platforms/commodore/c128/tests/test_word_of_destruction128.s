@@ -1,5 +1,7 @@
 #importonce
-// test_word_of_destruction128.s — Focused C128 coverage for the Word of Destruction row
+// test_word_of_destruction128.s — Focused C128 coverage for the Word of
+// Destruction row (upstream spellDestroyArea devastation engine, real
+// player_destroy_area.s against test-local tables).
 
 .const KEY_ESC = $ae
 .const SFX_HIT = $01
@@ -74,6 +76,7 @@ itok_detect_monsters:
 #import "../../../../core/spell_effects.s"
 #import "../../../../core/spell_effects_overlay.s"
 #import "../../../../core/player_magic.s"
+#import "../../../../core/player_destroy_area.s"
 #import "../../../../core/player_magic_utility.s"
 
 .pc = $0801 "BASIC Stub"
@@ -108,8 +111,19 @@ fi_add_y: .byte 0
 fi_add_id: .byte 0
 fi_add_qty: .byte 0
 
+// Engine-consumed tables (test-local)
+fi_item_id: .fill MAX_FLOOR_ITEMS, 0
+fi_x:       .fill MAX_FLOOR_ITEMS, 0
+fi_y:       .fill MAX_FLOOR_ITEMS, 0
+glyph_x:      .fill MAX_GLYPHS, 0
+glyph_y:      .fill MAX_GLYPHS, 0
+glyph_active: .fill MAX_GLYPHS, 0
+vis_cached_room_idx: .byte $ff
+turn_scene_dirty: .byte 0
+
 test_huff_calls: .byte 0
 test_last_huff: .byte 0
+test_msg_calls: .byte 0
 test_spell_exec_calls: .byte 0
 test_last_spell_idx: .byte $ff
 pmx_work_idx: .byte 0
@@ -118,6 +132,7 @@ pmx_work_damage: .byte 0
 test_progress: .byte 0
 vis_room_revealed: .byte 0
 eff_fear_timer: .byte 0
+twd128_rng_idx: .byte 0
 
 test_mon_table:
     .fill MAX_MONSTERS * MONSTER_ENTRY_SIZE, 0
@@ -147,7 +162,6 @@ viewport_update:
 render_viewport:
 status_draw:
 msg_clear:
-msg_print:
 input_wait_release:
 .label hal_input_wait_release = input_wait_release
 .label hal_input_modal_prepare = input_wait_release
@@ -186,11 +200,18 @@ los_is_visible:
     clc
     rts
 
+msg_print:
+    inc test_msg_calls
+    rts
+
 floor_item_find_at:
     clc
     rts
 
 floor_item_remove:
+    lda #FI_EMPTY
+    sta fi_item_id,x
+    dec zp_item_count
     rts
 
 fi_add_clear_plain_meta:
@@ -221,6 +242,18 @@ calc_spell_failure:
     rts
 
 tramp_spell_execute_selected:
+    rts
+
+// Mirrors core/dungeon_features.s trap_remove_at_index (swap-with-last).
+trap_remove_at_index:
+    dec trap_count
+    ldy trap_count
+    lda trap_x,y
+    sta trap_x,x
+    lda trap_y,y
+    sta trap_y,x
+    lda trap_type,y
+    sta trap_type,x
     rts
 
 monster_get_ptr:
@@ -320,6 +353,27 @@ combat_print_winner_message:
     jsr monster_remove
     inc zp_dirty_count
     rts
+
+// Scripted rng_range: uniform-fill script, wrapping 8-bit index.
+test_rng_range:
+    ldx twd128_rng_idx
+    lda twd128_rng_script,x
+    inc twd128_rng_idx
+    rts
+
+// A = fill value for the whole 256-byte script.
+twd128_rng_fill:
+    ldx #255
+!loop:
+    sta twd128_rng_script,x
+    dex
+    cpx #$ff
+    bne !loop-
+    lda #0
+    sta twd128_rng_idx
+    rts
+
+twd128_rng_script: .fill 256, 0
 
 test_tramp_spell_execute_selected:
     inc test_spell_exec_calls
@@ -423,36 +477,20 @@ test_clear_monsters:
 !done:
     rts
 
-test_place_target_monster:
-    ldx #0
-    jsr monster_get_ptr
-    ldy #MX_TYPE
-    lda #10
-    sta (zp_ptr0),y
-    iny
-    lda #23
-    sta (zp_ptr0),y
-    iny
-    lda #12
-    sta (zp_ptr0),y
-    iny
-    lda #8
-    sta (zp_ptr0),y
-    iny
-    lda #0
-    sta (zp_ptr0),y
-    rts
-
 test_reset_word_of_destruction_state:
     lda #0
     sta test_huff_calls
     sta test_last_huff
+    sta test_msg_calls
     sta test_spell_exec_calls
     sta vis_room_revealed
+    sta turn_scene_dirty
     sta trap_count
     sta zp_dirty_count
+    sta zp_eff_blind
     lda #$ff
     sta test_last_spell_idx
+    sta vis_cached_room_idx
 
     lda #CLASS_MAGE
     sta player_data + PL_CLASS
@@ -486,6 +524,8 @@ test_reset_word_of_destruction_state:
     sta zp_player_x
     lda #12
     sta zp_player_y
+    lda #1
+    sta zp_player_dlvl
     rts
 
 test_setup_destruction_map:
@@ -494,6 +534,7 @@ test_setup_destruction_map:
     lda #0
     sta vis_room_revealed
 
+    // 3x3 floor room at rows 11-13, cols 21-23 (player area)
     lda #TILE_FLOOR
     ldx #11
 !rows:
@@ -509,26 +550,135 @@ test_setup_destruction_map:
     jmp !rows-
 !room_done:
 
-    lda #TILE_SECRET
-    ldx #11
-    ldy #22
+    // Metric probes: dist-15 rock at (col 37, row 12); dist-16 floor at
+    // (col 38, row 12) and (col 34, row 20)
+    lda #TILE_FLOOR
+    ldx #12
+    ldy #38
+    jsr test_write_tile
+    lda #TILE_FLOOR
+    ldx #20
+    ldy #34
     jsr test_write_tile
 
+    // Stairs in radius at (col 24, row 12)
+    lda #TILE_STAIRS_DN
+    ldx #12
+    ldy #24
+    jsr test_write_tile
+
+    // Trap tile in radius at (col 22, row 13)
     lda #TILE_TRAP
     ldx #13
     ldy #22
     jsr test_write_tile
 
+    // Monsters: slot 0 in radius (23,12) type 10; slot 1 outside (42,12)
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda #10
+    sta (zp_ptr0),y
+    ldy #MX_X
+    lda #23
+    sta (zp_ptr0),y
+    ldy #MX_Y
+    lda #12
+    sta (zp_ptr0),y
+    ldx #1
+    jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda #10
+    sta (zp_ptr0),y
+    ldy #MX_X
+    lda #42
+    sta (zp_ptr0),y
+    ldy #MX_Y
+    lda #12
+    sta (zp_ptr0),y
+
+    // Floor items: slot 0 under player (22,12); slot 1 outside (42,12)
+    lda #FI_EMPTY
+    ldx #MAX_FLOOR_ITEMS - 1
+!fi_clear:
+    sta fi_item_id,x
+    dex
+    bpl !fi_clear-
     lda #1
+    sta fi_item_id
+    lda #22
+    sta fi_x
+    lda #12
+    sta fi_y
+    lda #2
+    sta fi_item_id + 1
+    lda #42
+    sta fi_x + 1
+    lda #12
+    sta fi_y + 1
+    lda #2
+    sta zp_item_count
+
+    // Glyphs: slot 0 in radius (23,13); slot 1 outside (42,12)
+    lda #1
+    sta glyph_active
+    lda #23
+    sta glyph_x
+    lda #13
+    sta glyph_y
+    lda #1
+    sta glyph_active + 1
+    lda #42
+    sta glyph_x + 1
+    lda #12
+    sta glyph_y + 1
+    lda #0
+    sta glyph_active + 2
+    sta glyph_active + 3
+
+    // Trap table: under player (22,12), dist 5 (27,12), dist 20 (42,12)
+    lda #3
     sta trap_count
     lda #22
     sta trap_x
-    lda #13
+    lda #12
     sta trap_y
     lda #0
     sta trap_type
+    lda #27
+    sta trap_x + 1
+    lda #12
+    sta trap_y + 1
+    lda #1
+    sta trap_type + 1
+    lda #42
+    sta trap_x + 2
+    lda #12
+    sta trap_y + 2
+    lda #2
+    sta trap_type + 2
 
-    jsr test_place_target_monster
+    // Rooms: room 0 covers the player (lit); room 1 outside the box (lit)
+    lda #2
+    sta room_count
+    lda #20
+    sta room_x
+    lda #10
+    sta room_y
+    lda #6
+    sta room_w
+    sta room_h
+    lda #1
+    sta room_lit
+    lda #40
+    sta room_x + 1
+    lda #10
+    sta room_y + 1
+    lda #5
+    sta room_w + 1
+    sta room_h + 1
+    lda #1
+    sta room_lit + 1
     rts
 
 test_fail:
@@ -536,6 +686,27 @@ test_fail:
 
 test_pass:
     jmp test_pass_loop
+
+twd128_ok: .byte 0
+
+// A = actual, X = expected; a mismatch clears twd128_ok. Checks never branch.
+twd128_expect_eq:
+    sta zp_temp3
+    txa
+    cmp zp_temp3
+    beq !tee_ok+
+    lda #0
+    sta twd128_ok
+!tee_ok:
+    rts
+
+twd128_expect_zero:
+    cmp #0
+    beq !tez_ok+
+    lda #0
+    sta twd128_ok
+!tez_ok:
+    rts
 
 test_start:
     sei
@@ -552,55 +723,136 @@ test_start:
     :PatchJump(pm_prompt_visible_spell_choice, test_pm_prompt_visible_spell_choice)
     :PatchJump(pm_validate_selected_spell, test_pm_validate_selected_spell)
     :PatchJump(tramp_spell_execute_selected, test_tramp_spell_execute_selected)
+    :PatchJump(rng_range, test_rng_range)
 
-    // Test 1: successful cast reaches spell slot 29, kills an adjacent
-    // monster, destroys adjacent trap/door fixtures, sets redraw state, spends
-    // 21 mana, and marks worked.
+    // Test 1: successful cast with all-zero script devastates the area:
+    // terrain swept, in-radius monsters/items/glyphs/traps silently deleted
+    // (outside survivors kept), room darkened, blind 11, redraw flags set,
+    // 21 mana spent, worked marked.
     :PatchJump(calc_spell_failure, test_calc_spell_failure_success)
+    lda #0
+    jsr twd128_rng_fill
     jsr test_reset_word_of_destruction_state
     jsr test_setup_destruction_map
     jsr player_cast_spell
-    bcc !t1_fail+
+    lda #1
+    sta twd128_ok
+    lda #0
+    adc #0
+    ldx #1
+    jsr twd128_expect_eq          // cast succeeded
     lda test_spell_exec_calls
-    cmp #1
-    bne !t1_fail+
+    ldx #1
+    jsr twd128_expect_eq
     lda test_last_spell_idx
-    cmp #29
-    bne !t1_fail+
-    lda zp_dirty_count
-    cmp #1
-    bne !t1_fail+
+    ldx #29
+    jsr twd128_expect_eq
+    lda test_msg_calls
+    ldx #1
+    jsr twd128_expect_eq
+    lda zp_eff_blind
+    ldx #11
+    jsr twd128_expect_eq
     lda vis_room_revealed
-    cmp #1
-    bne !t1_fail+
+    ldx #1
+    jsr twd128_expect_eq
+    lda turn_scene_dirty
+    ldx #1
+    jsr twd128_expect_eq
+    lda zp_dirty_count
+    jsr twd128_expect_zero
+    // Monsters: in-radius gone, outside alive
     ldx #0
     jsr monster_get_ptr
     ldy #MX_TYPE
     lda (zp_ptr0),y
-    cmp #EMPTY_SLOT
-    bne !t1_fail+
-    ldx #11
-    ldy #22
+    ldx #EMPTY_SLOT
+    jsr twd128_expect_eq
+    lda #42
+    ldy #12
+    jsr monster_find_at
+    lda #0
+    adc #0
+    ldx #1
+    jsr twd128_expect_eq
+    // Items: under-player deleted, outside kept
+    lda zp_item_count
+    ldx #1
+    jsr twd128_expect_eq
+    // Glyphs: in-radius cleared, outside kept
+    lda glyph_active
+    jsr twd128_expect_zero
+    lda glyph_active + 1
+    ldx #1
+    jsr twd128_expect_eq
+    // Traps: only the dist-20 entry survives
+    lda trap_count
+    ldx #1
+    jsr twd128_expect_eq
+    lda trap_x
+    ldx #42
+    jsr twd128_expect_eq
+    // Rooms: intersecting room darkened, far room kept, cache dropped
+    lda room_lit
+    jsr twd128_expect_zero
+    lda room_lit + 1
+    ldx #1
+    jsr twd128_expect_eq
+    lda vis_cached_room_idx
+    ldx #$ff
+    jsr twd128_expect_eq
+    // Terrain: rock at dist 15 swept to floor (exact byte, flags clear)
+    ldx #12
+    ldy #37
+    jsr test_read_tile
+    ldx #TILE_FLOOR
+    jsr twd128_expect_eq
+    // Stairs destroyed
+    ldx #12
+    ldy #24
     jsr test_read_tile
     and #TILE_TYPE_MASK
-    cmp #TILE_DOOR_OPEN
-    bne !t1_fail+
+    ldx #TILE_FLOOR
+    jsr twd128_expect_eq
+    // Trap tile destroyed
     ldx #13
     ldy #22
     jsr test_read_tile
     and #TILE_TYPE_MASK
-    cmp #TILE_FLOOR
-    bne !t1_fail+
-    lda trap_count
-    bne !t1_fail+
+    ldx #TILE_FLOOR
+    jsr twd128_expect_eq
+    // dist-16 probes untouched
+    ldx #12
+    ldy #38
+    jsr test_read_tile
+    and #TILE_TYPE_MASK
+    ldx #TILE_FLOOR
+    jsr twd128_expect_eq
+    ldx #20
+    ldy #34
+    jsr test_read_tile
+    and #TILE_TYPE_MASK
+    ldx #TILE_FLOOR
+    jsr twd128_expect_eq
+    // Player tile forced floor
+    ldx #12
+    ldy #22
+    jsr test_read_tile
+    and #TILE_TYPE_MASK
+    ldx #TILE_FLOOR
+    jsr twd128_expect_eq
+    // Mana and worked bookkeeping
     lda zp_player_mp
-    cmp #2
-    bne !t1_fail+
+    ldx #2
+    jsr twd128_expect_eq
     lda player_data + PL_MANA
-    cmp #2
-    bne !t1_fail+
+    ldx #2
+    jsr twd128_expect_eq
     lda player_data + PL_SPELLS_WORKED_3
     and #$20
+    ldx #$20
+    jsr twd128_expect_eq
+    lda twd128_ok
     beq !t1_fail+
     lda #1
     sta test_progress
@@ -615,49 +867,68 @@ test_after_success:
     jsr test_reset_word_of_destruction_state
     jsr test_setup_destruction_map
     jsr player_cast_spell
-    bcc !t2_fail+
+    lda #1
+    sta twd128_ok
+    lda #0
+    adc #0
+    ldx #1
+    jsr twd128_expect_eq
     lda test_spell_exec_calls
-    bne !t2_fail+
+    jsr twd128_expect_zero
     lda test_huff_calls
-    cmp #1
-    bne !t2_fail+
+    ldx #1
+    jsr twd128_expect_eq
     lda test_last_huff
-    cmp #HSTR_PM_FAIL
-    bne !t2_fail+
+    ldx #HSTR_PM_FAIL
+    jsr twd128_expect_eq
+    lda test_msg_calls
+    jsr twd128_expect_zero
     lda zp_dirty_count
-    bne !t2_fail+
+    jsr twd128_expect_zero
     lda vis_room_revealed
-    bne !t2_fail+
+    jsr twd128_expect_zero
+    lda turn_scene_dirty
+    jsr twd128_expect_zero
+    lda zp_eff_blind
+    jsr twd128_expect_zero
     ldx #0
     jsr monster_get_ptr
     ldy #MX_TYPE
     lda (zp_ptr0),y
-    cmp #10
-    bne !t2_fail+
-    ldx #11
-    ldy #22
+    ldx #10
+    jsr twd128_expect_eq
+    ldx #12
+    ldy #37
     jsr test_read_tile
     and #TILE_TYPE_MASK
-    cmp #TILE_SECRET
-    bne !t2_fail+
+    ldx #TILE_WALL_H
+    jsr twd128_expect_eq
     ldx #13
     ldy #22
     jsr test_read_tile
     and #TILE_TYPE_MASK
-    cmp #TILE_TRAP
-    bne !t2_fail+
+    ldx #TILE_TRAP
+    jsr twd128_expect_eq
     lda trap_count
-    cmp #1
-    bne !t2_fail+
+    ldx #3
+    jsr twd128_expect_eq
+    lda zp_item_count
+    ldx #2
+    jsr twd128_expect_eq
+    lda room_lit
+    ldx #1
+    jsr twd128_expect_eq
     lda zp_player_mp
-    cmp #2
-    bne !t2_fail+
+    ldx #2
+    jsr twd128_expect_eq
     lda player_data + PL_MANA
-    cmp #2
-    bne !t2_fail+
+    ldx #2
+    jsr twd128_expect_eq
     lda player_data + PL_SPELLS_WORKED_3
     and #$20
-    bne !t2_fail+
+    jsr twd128_expect_zero
+    lda twd128_ok
+    beq !t2_fail+
     lda #2
     sta test_progress
     jmp test_pass

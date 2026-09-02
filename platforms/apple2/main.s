@@ -689,6 +689,19 @@ tramp_select_filtered_inv:
     clc
     rts
 
+// Word of Destruction: the engine lives in the death overlay (co-located
+// with the scroll/staff router); run it, then restore OVL.SPELL so the
+// spell-dispatch return address lands in live code
+// (tramp_select_filtered_inv_key_spell pattern).
+tramp_eff_destroy_area:
+    lda #OVL_DEATH
+    jsr overlay_load
+    bcs !load_failed+
+    jsr da_devastate
+    jmp tramp_restore_spell_overlay
+!load_failed:
+    rts
+
 // Shared epilogue for the two item-selector trampolines: restore OVL.SPELL
 // and return A/flags from the selector. The brk is fatal because the saved
 // continuation is inside OVL.SPELL.
@@ -1260,6 +1273,11 @@ tramp_game_over_run:
     #import "../../core/scroll_effects_p3.s"
     #undef SCROLL_P3_EXISTING_OWNER
     #undef SCROLL_P3_NEW_OWNER
+    // Word of Destruction devastation engine: co-located with the scroll/
+    // staff router here (direct jsr). The mage path reaches it via resident
+    // tramp_eff_destroy_area (one disk load for a rare spell; OVL.SPELL
+    // restore is an aux-cached RAM copy).
+    #import "../../core/player_destroy_area.s"
 ovl_death_end:
 .print "Death overlay: " + (ovl_death_end - $a400) + " bytes"
 .assert "High-score I/O counter is owned by death overlay", hiscore_io_count_lo >= $a400 && hiscore_io_count_hi < ovl_death_end, true
@@ -1362,6 +1380,7 @@ ovl_items_end:
 #define PMX_EARTHQUAKE_EXTERNAL
 #define PMX_MAP_AREA_EXTERNAL
 #define PMX_DETECT_EFFECTS_EXTERNAL
+#define PMX_DESTROY_AREA_EXTERNAL
 #import "../../core/player_magic_slow_runtime.s"
 #define PMU_TURN_FEEDBACK_ONLY
 #import "../../core/player_magic_turn_banked.s"
@@ -1441,6 +1460,7 @@ iqp3_neutralize:
     jsr eff_cure_poison
     ldx #HSTR_EFF_POISON_END
     jmp huff_print_msg
+#undef PMX_DESTROY_AREA_EXTERNAL
 #undef PMX_EARTHQUAKE_EXTERNAL
 #import "../../core/player_magic_levelup.s"
 #import "../../core/player_magic_display.s"

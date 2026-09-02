@@ -15,7 +15,7 @@ test_bootstrap:
 test_finish:
     sei
     :BankOutBasic()
-    ldx #9
+    ldx #12
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -68,7 +68,14 @@ put_stat_val:
 #import "../../../../core/player_magic_map.s"
 #import "../../../../core/player_magic_feedback.s"
 #import "../../../../core/player_magic_earthquake.s"
+// WoD devastation engine is not exercised by this suite; route the
+// destroy-area target to a stub.
+#define PMX_DESTROY_AREA_EXTERNAL
 #import "../../../../core/player_magic_utility.s"
+#undef PMX_DESTROY_AREA_EXTERNAL
+tramp_eff_destroy_area:
+    rts
+
 #import "../dungeon_render.s"
 #import "../../../../core/dungeon_los.s"
 #import "../../../../core/player_move.s"
@@ -170,7 +177,7 @@ help_draw_hborder:
 press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
-tc_results: .fill 10, $ff
+tc_results: .fill 13, $ff
 
 tpm_msg_calls:    .byte 0
 tpm_last_msg_lo:  .byte 0
@@ -1033,10 +1040,146 @@ test_start:
 
     lda #$01
     sta tc_results + 9
-    jmp test_finish
+    jmp !t11+
 !t10_fail:
     lda #$00
     sta tc_results + 9
+    jmp test_finish
+
+    // Test 11: Earthquake kills an attack-only monster via the fixed-3000
+    // path — 3000 HP is far beyond the 4d8 roll (max 32), so a kill proves
+    // the CF_ATTACK_ONLY branch ran.
+!t11:
+    jsr tv_setup_dark_room
+    :PatchJump(rng_range, test_rng_range)
+    jsr test_rng_fill_ones
+    lda #21
+    sta ms_spawn_x
+    lda #11
+    sta ms_spawn_y
+    lda #0
+    jsr monster_spawn_one
+    bcs !t11_spawn_ok+
+    jmp !t11_fail+
+!t11_spawn_ok:
+    stx test_mon_slot
+    jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda #6
+    sta (zp_ptr0),y
+    lda #CF_ATTACK_ONLY
+    sta cr_mflags + 6
+    ldy #MX_HP_LO
+    lda #<3000
+    sta (zp_ptr0),y
+    iny
+    lda #>3000
+    sta (zp_ptr0),y
+    lda #21
+    sta eq_cur_x
+    lda #11
+    sta eq_cur_y
+    lda #0
+    sta eq_changed
+    lda #9
+    sta test_rng_script + 0
+    jsr eq_process_tile
+    ldx test_mon_slot
+    jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda (zp_ptr0),y
+    cmp #EMPTY_SLOT
+    bne !t11_fail+
+    lda #$01
+    sta tc_results + 10
+    jmp !t12+
+!t11_fail:
+    lda #$00
+    sta tc_results + 10
+
+    // Test 12: Earthquake never mutates map-edge tiles even when the script
+    // forces mutation (edge walls are the permanent boundary).
+!t12:
+    jsr tv_setup_dark_room
+    :PatchJump(rng_range, test_rng_range)
+    jsr test_rng_fill_zeroes
+    lda #0
+    sta eq_cur_x
+    lda #12
+    sta eq_cur_y
+    lda #0
+    sta eq_changed
+    jsr eq_process_tile
+    ldx #12
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #0
+    lda (zp_ptr0),y
+    and #TILE_TYPE_MASK
+    cmp #TILE_WALL_H
+    bne !t12_fail+
+    lda #22
+    sta eq_cur_x
+    lda #0
+    sta eq_cur_y
+    jsr eq_process_tile
+    ldx #0
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #22
+    lda (zp_ptr0),y
+    and #TILE_TYPE_MASK
+    cmp #TILE_WALL_H
+    bne !t12_fail+
+    lda #$01
+    sta tc_results + 11
+    jmp !t13+
+!t12_fail:
+    lda #$00
+    sta tc_results + 11
+
+    // Test 13: Earthquake skips the player tile — with an all-zero script
+    // every other in-box floor tile would become a wall, but the player's
+    // tile must stay floor.
+!t13:
+    jsr tv_setup_dark_room
+    :PatchJump(rng_range, test_rng_range)
+    jsr test_rng_fill_zeroes
+    lda #0
+    sta vis_room_revealed
+    sta turn_scene_dirty
+    jsr eff_earthquake
+    ldx #12
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #22
+    lda (zp_ptr0),y
+    and #TILE_TYPE_MASK
+    cmp #TILE_FLOOR
+    bne !t13_fail+
+    // Sanity: the quake did mutate (rock at (20,10) opened to floor)
+    ldx #10
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #20
+    lda (zp_ptr0),y
+    and #TILE_TYPE_MASK
+    cmp #TILE_FLOOR
+    bne !t13_fail+
+    lda #$01
+    sta tc_results + 12
+    jmp test_finish
+!t13_fail:
+    lda #$00
+    sta tc_results + 12
     jmp test_finish
 
 tv_setup_dark_room:

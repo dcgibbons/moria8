@@ -332,6 +332,9 @@ pmx_light_room_msg:
 #if !PMX_EARTHQUAKE_EXTERNAL
     #import "player_magic_earthquake.s"
 #endif
+#if !PMX_DESTROY_AREA_EXTERNAL
+    #import "player_destroy_area.s"
+#endif
 
 eff_sleep_monster_dir:
     jsr eff_directional_monster

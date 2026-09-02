@@ -2656,6 +2656,9 @@ ovl_modal_misc_end:
     #undef PMX_DETECT_EFFECTS_EXTERNAL
     #undef PMX_MAP_AREA_EXTERNAL
     #undef PMX_EARTHQUAKE_EXTERNAL
+    // Word of Destruction devastation engine: co-located with its only C64
+    // callers (mage dispatch + scroll/staff router) in this overlay.
+    #import "../../../core/player_destroy_area.s"
     // eff_find_traps / eff_destroy_traps_doors: only callers are the spell-exec
     // and utility code in this overlay, so park them here to free resident room.
     #import "../../../core/spell_effects_overlay.s"

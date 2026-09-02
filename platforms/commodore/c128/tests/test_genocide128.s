@@ -2,6 +2,7 @@
 // test_genocide128.s — Focused C128 coverage for the Genocide row
 
 .const PMX_EARTHQUAKE_EXTERNAL = 1
+#define PMX_DESTROY_AREA_EXTERNAL
 .const PMX_MAP_AREA_EXTERNAL = 1
 
 .const KEY_ESC = $ae
@@ -213,6 +214,10 @@ player_calc_stats:
 player_sync_to_zp:
 item_append_name:
 tramp_eff_earthquake:
+    clc
+    rts
+
+tramp_eff_destroy_area:
     clc
     rts
 

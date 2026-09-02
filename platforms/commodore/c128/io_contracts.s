@@ -211,6 +211,10 @@
 :C128AuditChestOverlay("chest_open_command", chest_open_command)
 :C128AuditChestOverlay("chest_bash_command", chest_bash_command)
 :C128AuditChestOverlay("chest_disarm_command", chest_disarm_command)
+// Word of Destruction engine is parked in the cold chest overlay; the
+// resident trampoline must stay below the I/O hole.
+:C128AuditChestOverlay("da_devastate", da_devastate)
+:C128AuditBelowIo("tramp_eff_destroy_area", tramp_eff_destroy_area)
 :C128AuditBelowIo("tramp_chest_open", tramp_chest_open)
 :C128AuditBelowIo("chest_dispatch", chest_dispatch)
 :C128AuditBelowIo("chest_find_at_df_target", chest_find_at_df_target)

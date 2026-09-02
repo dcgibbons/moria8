@@ -79,7 +79,14 @@ test_done_break:
 #import "../../../../core/player_magic_state.s"
 #import "../../../../core/player_magic_state_ops.s"
 #import "../../../../core/player_magic.s"
+// WoD devastation engine is not exercised by this suite; route the
+// destroy-area target to a stub.
+#define PMX_DESTROY_AREA_EXTERNAL
 #import "../../../../core/player_magic_utility.s"
+#undef PMX_DESTROY_AREA_EXTERNAL
+tramp_eff_destroy_area:
+    rts
+
 #import "../dungeon_render.s"
 #import "../../../../core/dungeon_los.s"
 #import "../../../../core/player_move.s"

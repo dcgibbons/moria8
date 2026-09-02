@@ -73,7 +73,14 @@ itok_detect_monsters:
 #import "../../../../core/spell_effects_overlay.s"
 #import "../../../../core/player_magic.s"
 #import "../../../../core/player_magic_feedback.s"
+// WoD devastation engine is not exercised by this suite; route the
+// destroy-area target to a stub.
+#define PMX_DESTROY_AREA_EXTERNAL
 #import "../../../../core/player_magic_utility.s"
+#undef PMX_DESTROY_AREA_EXTERNAL
+tramp_eff_destroy_area:
+    rts
+
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_start)

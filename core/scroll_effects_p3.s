@@ -212,7 +212,10 @@ irs_re_id_tab:
     bne !irs_re_unmatched+
 !irs_re_destroy:
 #if APPLE2
-    :A2ReCall(eff_destroy_area)
+    // A2: this router and the devastation engine share the death overlay.
+    // Tail call like A2ReCall: never return into the !irs_re_done
+    // continuation, or the read-flow epilogue prints spurious messages.
+    jmp da_devastate
 #else
     jsr eff_destroy_area
 #endif

@@ -338,34 +338,24 @@ Acceptance target:
 
 ### Bring Word of Destruction up to upstream area-devastation
 
-Moria8's `eff_destroy_area` (shared by the Word of Destruction prayer and the
-Phase 3 Scroll/Staff of *Destruction*) only does `eff_damage_adjacent(15,8)`
-plus `eff_destroy_traps_doors`. Upstream Umoria's `spellDestroyArea`
-(`spells.cpp:2254`) is a real devastation effect: in a 15-tile radius around
-the player it replaces non-boundary terrain with rubble/floor
-(`replaceSpot(spot, randomNumber(6))` within distance 13, `randomNumber(9)`
-within 16), destroys monsters and items in the area, and blinds the player for
-`10 + randomNumber(10)`.
-
-This gap predates the Phase 3 item work; the scroll/staff correctly reuse the
-game's existing WoD effect, so the shortfall is in the shared effect, not the
-new items.
-
-Required work:
-
-- Implement terrain destruction to rubble within the radius (skipping boundary
-  walls), per the dungeon-generation contract (map mutation + dirty/redraw).
-- Destroy monsters and floor items within the radius.
-- Apply the `10 + rng(10)` blind via the existing blindness timer.
-- Share the implementation so the prayer, scroll, and staff all use it.
-- Coverage: a C64 runtime test that a cast/read WoD turns in-radius walls to
-  rubble, clears in-radius monsters/items, leaves boundary walls, and blinds.
-
-Acceptance target:
-
-- Reading/casting Word of *Destruction* devastates terrain, monsters, and items
-  within the upstream radius, blinds the player, and does not corrupt the map,
-  save/load, or subsequent level generation on C64 and C128.
+DONE 2026-08-30. `eff_destroy_area` now runs the shared upstream-style
+devastation engine (`core/player_destroy_area.s`): 15-radius terrain reroll
+(floor/WALL_H/MAGMA/QUARTZ via upstream typ odds, boundary edges spared,
+player tile forced floor, upstream distance metric), silent deletion of
+in-radius monsters (no XP, no winner flag), floor items, glyphs, and traps,
+room_lit clearing, additive 11..20 blindness with 255 clamp, and the
+upstream blast message; town applies message+blind only. Placed per platform
+(C64 spell overlay, C128 chest overlay + `tramp_eff_destroy_area`,
+Plus/4 modal-misc + restore-OVL_SPELL trampoline, Apple IIe death overlay +
+restore-OVL_SPELL trampoline). Coverage: `test_word_of_destruction.s` (7
+tests, production dispatch), `test_word_of_destruction128.s`; earthquake
+regressions added to `test_utility_effects.s` (attack-only 3000 path, edge
+guard, player-tile skip); scroll/staff routing remains spy-proven in
+`test_scroll_p3.s` (exemption: that suite cannot host the engine; effect
+proven via the WoD suites). Plus/4 and Apple IIe runtime coverage exempted
+on shared-source + layout-assert evidence; gates `make test64`,
+`make test128-fast`, `make test128-fast-smoke`, `make test128`,
+`make testplus4`, `make testapple2`, `make test` all pass.
 
 ### Add Balrog victory and retirement flow
 

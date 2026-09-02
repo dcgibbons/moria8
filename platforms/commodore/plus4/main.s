@@ -1563,6 +1563,24 @@ tramp_spell_execute_selected:
 !done:
     jmp tramp_sr_epilogue
 
+// Word of Destruction: run the engine from the modal-misc overlay, then
+// restore the spell overlay so the caller (mage dispatch or scroll/staff
+// router, both in OVL_SPELL) returns into live code. First Plus/4 instance
+// of the restore-caller-overlay shape (irs_p3_swap_exec restores OVL_ITEMS).
+tramp_eff_destroy_area:
+    lda #OVL_MODAL_MISC
+    jsr overlay_load_no_kernal
+    bcs !done+
+    jsr da_devastate
+    lda #OVL_SPELL
+    jsr overlay_load_no_kernal
+    bcs !fatal+
+!done:
+    rts
+!fatal:
+    // Spell overlay could not be restored; the return address is dead.
+    jmp entry_main
+
 tramp_reveal_floorplan:
     lda #OVL_SPELL
     jsr overlay_load_no_kernal
@@ -2171,6 +2189,9 @@ winner_apply_retirement_bonus_overlay:
     #import "../../../core/royal.s"
     #import "../common/save_slot_menu.s"
     #import "../../../core/ui_wizard.s"
+    // Word of Destruction devastation engine: both callers live in the
+    // spell overlay; resident tramp_eff_destroy_area restores OVL_SPELL.
+    #import "../../../core/player_destroy_area.s"
 ovl_modal_misc_end:
 .print "Modal-misc overlay: " + (ovl_modal_misc_end - $e000) + " bytes at $E000-$" + toHexString(ovl_modal_misc_end)
 .assert "Modal-misc overlay fits in $E000-$EFFF", ovl_modal_misc_end <= $F000, true
@@ -2180,11 +2201,13 @@ ovl_modal_misc_end:
 // ============================================================
 .segment SpellOverlay
     #define PMX_DETECT_EFFECTS_EXTERNAL
+    #define PMX_DESTROY_AREA_EXTERNAL
     #import "../../../core/player_magic_slow_runtime.s"
     #define PMU_TURN_FEEDBACK_ONLY
     #import "../../../core/player_magic_turn_banked.s"
     #undef PMU_TURN_FEEDBACK_ONLY
     #import "../../../core/player_magic_execute_overlay.s"
+    #undef PMX_DESTROY_AREA_EXTERNAL
     #undef PMX_DETECT_EFFECTS_EXTERNAL
     #define SCROLL_P3_EXISTING_OWNER
     #define SCROLL_P3_NEW_OWNER
