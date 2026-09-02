@@ -517,11 +517,15 @@ for i = 1, 12 do
 end
 assert_line("descended", descended, "zp_player_dlvl never reached 1")
 -- dlvl flips before generation finishes; the dungeon monster spawn happens
--- at the END and rewrites the table. Wait for the busy flag to clear.
+-- at the END and rewrites the table. Wait for the busy flag to clear AND the
+-- "GENERATING..." screen to disappear: the busy flag can deassert before the
+-- final spawn phase, and poking mid-generation gets wiped by the table
+-- rewrite.
 local settled = false
 for i = 1, 120 do
     emu.wait(0.5)
-    if prog:read_u8(DLVL_ADDR) == 1 and prog:read_u8(BUSY_ADDR) == 0 then
+    if prog:read_u8(DLVL_ADDR) == 1 and prog:read_u8(BUSY_ADDR) == 0
+       and not screen_has("GENERATING") then
         settled = true break
     end
 end
@@ -578,7 +582,10 @@ assert_line("poke_landed", prog:read_u8(base + 2) == 56,
             " hp=" .. prog:read_u8(base + 3) ..
             " stun=" .. prog:read_u8(base + 8))
 
--- Bump-attack toward the monster until the slot empties.
+-- Bump-attack the Balrog until dead. Layout-robust: re-locate the Balrog's
+-- slot each try (coords go stale after trap teleports and spawn recycling),
+-- re-relocate it adjacent whenever the player is not adjacent (teleport
+-- traps can dislocate the player far away), and dismiss message prompts.
 local dirkey = function(dx, dy)
     if dx > 0 and dy > 0 then return "n" end
     if dx > 0 and dy < 0 then return "u" end
@@ -589,14 +596,57 @@ local dirkey = function(dx, dy)
     if dy > 0 then return "j" end
     return "k"
 end
-local dead = false
-for tries = 1, 16 do
+local find_balrog = function()
+    for i = 0, 31 do
+        local b = mt + i * 12
+        if prog:read_u8(b + 2) == 56 then return b end
+    end
+    return nil
+end
+local place_adjacent = function(b)
     local px = prog:read_u8(PLAYER_X_ADDR)
     local py = prog:read_u8(PLAYER_Y_ADDR)
-    press(dirkey(mx - px, my - py))
+    local cand = {{px+1, py}, {px-1, py}, {px, py+1}, {px, py-1},
+                  {px+1, py+1}, {px-1, py-1}, {px+1, py-1}, {px-1, py+1}}
+    for _, c in ipairs(cand) do
+        local a = 0x0800 + c[2]*198 + c[1]
+        if aux:read(a) & 0xf0 == 0 then
+            local oa = 0x0800 + prog:read_u8(b + 1)*198 + prog:read_u8(b + 0)
+            aux:write(oa, aux:read(oa) & 0xfe)
+            prog:write_u8(b + 0, c[1])
+            prog:write_u8(b + 1, c[2])
+            aux:write(a, aux:read(a) | 0x01)
+            return c[1], c[2]
+        end
+    end
+    return nil
+end
+local dead = false
+for tries = 1, 24 do
+    if screen_has("-more-") then press(" ") emu.wait(0.4) end
+    local b = find_balrog()
+    if not b then
+        -- Slot emptied or recycled; the winner flag is authoritative.
+        dead = prog:read_u8(GAME_FLAGS_ADDR) & 0x04 == 0x04
+        break
+    end
+    base = b
+    local px = prog:read_u8(PLAYER_X_ADDR)
+    local py = prog:read_u8(PLAYER_Y_ADDR)
+    local bx = prog:read_u8(b + 0)
+    local by = prog:read_u8(b + 1)
+    if math.abs(px - bx) > 1 or math.abs(py - by) > 1 then
+        local nx, ny = place_adjacent(b)
+        if not nx then break end
+        mx, my = nx, ny
+        bx, by = nx, ny
+    else
+        mx, my = bx, by
+    end
+    press(dirkey(bx - px, by - py))
     emu.wait(0.8)
     if screen_has("-more-") then press(" ") emu.wait(0.4) end
-    if prog:read_u8(base + 2) == 0xff then dead = true break end
+    if prog:read_u8(b + 2) == 0xff then dead = true break end
 end
 local slotdump = "slots:"
 for i = 0, 7 do
