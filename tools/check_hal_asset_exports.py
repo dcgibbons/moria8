@@ -29,7 +29,7 @@ TRANSACTION_BODIES = {
         ("$ffbd", "$ffba", "hal_asset_load", "$ffc3", "$ffcc"),
     ),
     "c128": (
-        ROOT / "platforms/commodore/common/reu.s",
+        ROOT / "platforms/commodore/c128/preload128.s",
         "c128_preload_asset_load",
         ("w_setnam", "w_setlfs", "w_load", "w_close", "w_clrchn", "safe_setbnk"),
     ),

@@ -16,6 +16,8 @@ REQUIRED_CONSTANTS = (
 
 C128_MEMORY_CONSTS = ROOT / "platforms/commodore/c128/hal/memory_bank_consts.s"
 COMMON_REU = ROOT / "platforms/commodore/common/reu.s"
+# The preload transaction traps moved from common/reu.s to c128/preload128.s.
+C128_PRELOAD = ROOT / "platforms/commodore/c128/preload128.s"
 COMMON_ITEM_ACTIONS = ROOT / "core/item_actions_overlay.s"
 COMMON_PLAYER_ITEMS = ROOT / "core/player_items.s"
 FORBIDDEN_COMMON_TOKENS = ("$ff00", "$d501")
@@ -41,9 +43,10 @@ def main() -> int:
     for token in FORBIDDEN_COMMON_TOKENS:
         if token in common_lower:
             errors.append(f"reu.s: common REU still contains {token}")
+    preload_text = C128_PRELOAD.read_text(encoding="utf-8", errors="replace")
     for constant in REQUIRED_CONSTANTS:
-        if constant not in common_text:
-            errors.append(f"reu.s: common REU does not consume {constant}")
+        if constant not in preload_text:
+            errors.append(f"preload128.s: C128 preload does not consume {constant}")
 
     item_text = COMMON_ITEM_ACTIONS.read_text(encoding="utf-8", errors="replace")
     item_lower = item_text.lower()

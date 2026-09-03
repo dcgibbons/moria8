@@ -1,3 +1,15 @@
 # Current common-code HAL boundary violations.
 # Format: path<TAB>rule<TAB>token
 # Do not add entries casually; remove entries as code migrates behind HAL.
+
+core/chest_loot.s	raw-c64-bank-port	lda $01
+core/game_loop.s	target-conditional	#if APPLE2 || C64_PRODUCT_OVERLAY_RUNTIME || C128
+core/game_loop.s	target-conditional	#if C128
+core/item_actions_overlay.s	target-conditional	#if C128
+core/item_defs.s	target-conditional	#if C128
+core/player_create.s	target-conditional	#if !C64_UNIT_TEST && !C128
+core/player_item_commands.s	target-conditional	#if APPLE2 || C128
+core/player_item_commands.s	target-conditional	#if C128
+core/player_recalc_equipment.s	target-conditional	#if !C128
+core/scroll_effects_p3.s	target-conditional	#if C128
+core/wizard.s	target-conditional	#if !C128

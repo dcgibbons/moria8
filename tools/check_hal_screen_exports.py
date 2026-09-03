@@ -70,6 +70,11 @@ def common_call_violations() -> list[str]:
         rf"\b(?:jsr|jmp)\s+({'|'.join(re.escape(name) for name in FORBIDDEN_COMMON_CALLS)})\b"
     )
     for path in sorted(COMMON_DIR.glob("*.s")):
+        # ui_equipment_wrap.s installs itself by patching screen_vectors, so it
+        # must call the original screen_* routines directly; routing through
+        # the hal_screen_* vector aliases would recurse into itself.
+        if path.name == "ui_equipment_wrap.s":
+            continue
         text = path.read_text(encoding="utf-8", errors="replace")
         for line_number, line in enumerate(text.splitlines(), start=1):
             match = call_pattern.search(line)

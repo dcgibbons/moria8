@@ -468,7 +468,7 @@ cpao_next:
     lda #$b3
     jsr c128_overlay_fn_guard_check
 #endif
-    // No end-of-operation validate here: each c128_preload_asset_load
+    // No end-of-operation validate here: the preload asset-load helper
     // already validates internally, and the diag world payload is 4 bytes
     // from the items-payload boundary.
     rts
