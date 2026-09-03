@@ -184,7 +184,17 @@ CF_UNDEAD      = 0x02  # Our undead flag
 CF_EVIL        = 0x04  # Evil creature (ego slay)
 CF_ANIMAL      = 0x08  # Animal creature (ego slay)
 CF_DRAGON      = 0x10  # Dragon creature (future ego slay)
-CF_INFRA       = 0x80  # Warm creature visible to infravision
+CF_INFRA      = 0x80  # Warm creature visible to infravision
+
+# Door capability (Umoria CMOVE 0x00020000) folds into cr_aaf bit 7:
+# AAF values top out at 40, so bit 7 carries CD_OPEN_DOOR.
+CD_OPEN_DOOR  = 0x80  # cr_aaf bit 7: opens/bashes doors
+
+def map_doorflags(cmove):
+    """Map umoria CMOVE door bit to the cr_aaf bit-7 flag."""
+    if cmove & 0x00020000:  # CM_OPEN_DOOR
+        return CD_OPEN_DOOR
+    return 0
 
 def map_mflags(cmove, cdefense, name):
     """Map umoria CMOVE/CDEFENSE flags to our cr_mflags byte."""
@@ -650,6 +660,7 @@ def main():
         cr['c64_color'] = assign_color(cr['name'])
         cr['c64_display'] = char_to_screencode(cr['sprite'])
         cr['c64_mflags'] = map_mflags(cr['cmove'], cr['cdefense'], cr['name'])
+        cr['c64_aaf'] = min(127, cr['aaf']) | map_doorflags(cr['cmove'])
         spell_chance, spell_flags = map_spells(cr['spell'])
         cr['c64_spell_chance'] = spell_chance
         cr['c64_spell_flags'] = spell_flags
@@ -840,7 +851,7 @@ SOA_FIELDS = [
     ("cr_hd_sides",     "hd_sides",         "Hit dice sides"),
     ("cr_ac",           "ac",               "Armor class"),
     ("cr_sleep",        "sleep",            "Sleep counter"),
-    ("cr_aaf",          "aaf",              "Area affect radius"),
+    ("cr_aaf",          "c64_aaf",          "Area affect radius + door flag (bit7)"),
     ("cr_xp_lo",        "c64_xp_lo",        "XP low byte"),
     ("cr_xp_hi",        "c64_xp_hi",        "XP high byte"),
     ("cr_atk0_type",    None,               "Attack 0 type"),
@@ -953,7 +964,7 @@ def generate_asm_tier(tier_idx, tier, creatures, selected_indices, outdir):
 def generate_asm(creatures, selected_indices):
     """Generate all tier .s files."""
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    outdir = os.path.join(script_dir, '..', 'commodore', 'c64', 'creature_data')
+    outdir = os.path.join(script_dir, '..', 'platforms', 'commodore', 'c64', 'creature_data')
     os.makedirs(outdir, exist_ok=True)
 
     print(f"Generating assembly data in {os.path.abspath(outdir)}/\n")

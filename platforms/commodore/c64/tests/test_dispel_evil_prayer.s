@@ -45,7 +45,6 @@ test_done_break:
 #import "../../../../core/ui_messages.s"
 #import "../../../../core/ui_status.s"
 #import "../../../../core/ui_help_clear.s"
-#import "../../../../core/ui_character.s"
 #import "../../../../core/stat_display.s"
 .segmentdef TestCreateOverlay [start=$D000]
 .segment TestCreateOverlay
@@ -108,6 +107,7 @@ help_draw_hborder:
 ui_inv_display:
 ui_inv_select_display:
 ui_equip_display:
+ui_char_display:
     rts
 
 press_key_str:

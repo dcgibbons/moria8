@@ -199,17 +199,19 @@ cr_sleep:
 #endif
     .byte 40,  0, 40, 50, 99,  0, 250, 250                   // 57-64: town
 
-// Area affect radius (awareness factor)
+// Area affect radius (awareness factor); bit 7 = CD_OPEN_DOOR (door-capable)
+// AAF values top out at 40 upstream, so bit 7 carries the door flag.
+.const CD_OPEN_DOOR_BIT = $80
 cr_aaf:
 #if COMPILE_EMBEDDED_DUNGEON_TEST_ROSTER
-    .byte 16,  8,  7,  4, 20, 12,  2,  7,  2, 12           // 0-9
+    .byte 16,  8,  7,  4, 20|CD_OPEN_DOOR_BIT, 12,  2,  7,  2, 12           // 0-9 (Kobold)
     .byte  7, 12,  8,  8,  8,  3,  2,  5,  2,  8           // 10-19
-    .byte 15, 10, 16, 14, 10, 16                            // 20-25
+    .byte 15, 10, 16|CD_OPEN_DOOR_BIT, 14|CD_OPEN_DOOR_BIT, 10, 16|CD_OPEN_DOOR_BIT  // 20-25 (Novice mage/priest, Orc shaman)
     .fill MAX_DUNGEON_CREATURES - 26, 0                    // 26-56
 #else
     .fill MAX_DUNGEON_CREATURES, 0                          // 0-56: loaded from tier data
 #endif
-    .byte  4,  6, 10, 10, 10, 10, 10, 10                     // 57-64: town
+    .byte  4|CD_OPEN_DOOR_BIT,  6|CD_OPEN_DOOR_BIT, 10|CD_OPEN_DOOR_BIT, 10|CD_OPEN_DOOR_BIT, 10|CD_OPEN_DOOR_BIT, 10|CD_OPEN_DOOR_BIT, 10|CD_OPEN_DOOR_BIT, 10|CD_OPEN_DOOR_BIT  // 57-64: town (all door-capable upstream)
 
 // Experience value (16-bit)
 cr_xp_lo:

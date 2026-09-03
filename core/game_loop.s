@@ -1856,7 +1856,7 @@ level_change_generate_current:
     jsr item_spawn_level
     jsr generation_busy_tick_if_dungeon_api
 #if C64_TEST_SCRIPTED_CHEST_OPEN_PRODUCT || PLUS4_TEST_SCRIPTED_CHEST_OPEN_PRODUCT
-    lda #OVL_DUNGEON_GEN
+    lda #OVL_CHEST                // Fixture parks in the CHEST overlay
     jsr overlay_load_no_kernal
     bcc !lcgc_product_gen_ready+
     lda #$ff
@@ -1873,7 +1873,7 @@ level_change_generate_current:
     jsr chest_product_setup
 #endif
 #if PLUS4_TEST_SCRIPTED_BALROG_PRODUCT
-    lda #OVL_DUNGEON_GEN
+    lda #OVL_CHEST                // Balrog fixture parks in the CHEST overlay
     jsr overlay_load_no_kernal
     bcs !lcgc_balrog_done+
     jsr balrog_product_setup

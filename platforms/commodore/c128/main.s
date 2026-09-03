@@ -3469,7 +3469,6 @@ player_get_infra_range:
 !pgir_done:
     rts
 
-#import "../../../core/recall.s"
 #import "../../../core/monster_magic.s"
 #import "../../../core/spell_data.s"
 #define SPELL_EFFECTS_INCLUDE_IDENTIFY
@@ -3644,6 +3643,12 @@ tool_ego_prefix_hi:
     .segment Default
 }
 .macro ChestLootRestoreSegment() {
+    .segment Default
+}
+.macro ChestFixtureSegment() {
+    .segment Default
+}
+.macro ChestFixtureRestoreSegment() {
     .segment Default
 }
 #import "../../../core/chest_loot.s"
@@ -3826,6 +3831,10 @@ cd128_jmp:
 
 
 .segment Default
+// recall.s rides the Default image; the world payload funds the monster door
+// engine in monster_ai.s.  Placed after monster.s (MAX_CREATURES) and before
+// save.s (RECALL_DATA_SIZE).
+#import "../../../core/recall.s"
 #if C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_SPELL_CANCEL || C128_TEST_SCRIPTED_BOOK_OVERLAY || C128_TEST_SCRIPTED_STUDY_BOOK_OVERLAY || C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY
 c128_test_seed_scripted_spell_state:
     lda #0

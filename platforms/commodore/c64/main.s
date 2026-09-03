@@ -426,6 +426,9 @@ tramp_dig_ability:
 #import "../../../core/dungeon_data.s"
 #define DISARM_COMMAND_EXTERNAL
 #define DISARM_HELPERS_EXTERNAL
+// place_secrets parks in the GEN overlay (only generation calls it), funding
+// the monster door engine in Default.
+#define PLACE_SECRETS_EXTERNAL
 .macro ChestSearchSegment() {
     .segment Default
 }
@@ -470,6 +473,14 @@ ol_target:        .byte 0
     .segment DungeonGenOverlay
 }
 .macro ChestLootRestoreSegment() {
+    .segment Default
+}
+// Scripted chest-open fixture rides the CHEST overlay on C64: GEN has no
+// room beside place_secrets and the loot generator.
+.macro ChestFixtureSegment() {
+    .segment ChestOverlay
+}
+.macro ChestFixtureRestoreSegment() {
     .segment Default
 }
 #import "../../../core/chest_loot.s"

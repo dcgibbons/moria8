@@ -372,6 +372,9 @@ tramp_dig_ability:
     .segment Default
 }
 #define CHEST_ROUTING_ENABLED
+// place_secrets parks in the GEN overlay (only generation calls it), funding
+// the monster door engine in the resident image.
+#define PLACE_SECRETS_EXTERNAL
 #import "../../../core/dungeon_features.s"
 #import "../../../core/chest_search.s"
 #undef DISARM_HELPERS_EXTERNAL
@@ -409,6 +412,14 @@ ol_target:        .byte 0
     .segment DungeonGenOverlay
 }
 .macro ChestLootRestoreSegment() {
+    .segment Default
+}
+// Scripted chest-open fixture parks in the CHEST overlay on Plus/4: the GEN
+// window has no room beside place_secrets and the loot generator.
+.macro ChestFixtureSegment() {
+    .segment ChestOverlay
+}
+.macro ChestFixtureRestoreSegment() {
     .segment Default
 }
 #import "../../../core/chest_loot.s"
@@ -2279,6 +2290,103 @@ ovl_gen_end:
 // ============================================================
 .segment ChestOverlay
     #import "../../../core/chest.s"
+#if PLUS4_TEST_SCRIPTED_BALROG_PRODUCT
+// balrog_product_setup — Deterministic Balrog-kill fixture for scripted
+// product smokes: a one-HP, permanently stunned Balrog east of the player on
+// clear floor, with the player strong enough that every bump attack hits.
+// Runs from level_change_generate_current under the scripted define only.
+// Parks in the CHEST overlay: GEN has no room beside place_secrets.
+balrog_product_setup:
+    jsr item_init_floor
+    jsr monster_init_table
+
+    lda #20
+    sta zp_player_x
+    sta player_data + PL_MAP_X
+    lda #10
+    sta zp_player_y
+    sta player_data + PL_MAP_Y
+
+    // Combat-ready player: every bump attack lands and one hit kills.
+    lda #50
+    sta zp_player_lvl
+    sta player_data + PL_LEVEL
+    lda #CLASS_WARRIOR
+    sta player_data + PL_CLASS
+    lda #18
+    sta player_data + PL_STR_CUR
+    sta zp_player_str
+    lda #118
+    sta player_data + PL_DEX_CUR
+    lda #127
+    sta player_data + PL_TOHIT
+    lda #10
+    sta player_data + PL_TODMG
+    lda #2
+    sta inv_item_id + EQUIP_WEAPON
+
+    // combat_note_kill's level-100 guard reads the active roster row.
+    lda #100
+    sta cr_level + CREATURE_BALROG
+
+    // Clear floor rows 9-11, cols 19-22.
+    ldx #9
+!bps_row:
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #19
+    lda #(TILE_FLOOR | FLAG_VISITED | FLAG_LIT)
+!bps_col:
+    :MapWrite_ptr0_y()
+    iny
+    cpy #23
+    bne !bps_col-
+    inx
+    cpx #12
+    bne !bps_row-
+
+    // Balrog in slot 0 at (21,10): one HP, stunned so it never acts.
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda #CREATURE_BALROG
+    sta (zp_ptr0),y
+    ldy #MX_X
+    lda #21
+    sta (zp_ptr0),y
+    ldy #MX_Y
+    lda #10
+    sta (zp_ptr0),y
+    ldy #MX_HP_LO
+    lda #1
+    sta (zp_ptr0),y
+    ldy #MX_HP_HI
+    lda #0
+    sta (zp_ptr0),y
+    ldy #MX_FLAGS
+    lda #MF_AWAKE
+    sta (zp_ptr0),y
+    ldy #MX_STUN
+    lda #$ff
+    sta (zp_ptr0),y
+
+    lda #1
+    sta zp_mon_count
+
+    // Mark the Balrog tile occupied for bump-attack detection.
+    ldx #10
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #21
+    :MapRead_ptr0_y()
+    ora #FLAG_OCCUPIED
+    :MapWrite_ptr0_y()
+    rts
+#endif
 ovl_chest_end:
 .print "Chest overlay: " + (ovl_chest_end - $e000) + " bytes at $E000-$" + toHexString(ovl_chest_end)
 .assert "Chest overlay fits in $E000-$EFFF", ovl_chest_end <= $F000, true

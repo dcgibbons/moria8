@@ -536,6 +536,16 @@ test_start:
     sta chest_loot_flags
     lda #10
     sta tcl_rng_seq + 0         // 60% roll succeeds; offsets stay 0
+    // Pin every placement-offset draw to 0 so candidates stay ($ff,$ff) and
+    // the bounds check rejects all 10 tries before any map access; earlier
+    // suites leave nonzero residue in tcl_rng_seq.
+    lda #0
+    ldx #1
+!t7_zero_seq:
+    sta tcl_rng_seq,x
+    inx
+    cpx #21
+    bne !t7_zero_seq-
     jsr chest_fulfill_loot
     lda chest_loot_pending
     beq !t7_a+

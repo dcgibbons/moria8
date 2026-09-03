@@ -44,7 +44,6 @@ test_finish:
 #import "../../../../core/ui_messages.s"
 #import "../../../../core/ui_status.s"
 #import "../../../../core/ui_help_clear.s"
-#import "../../../../core/ui_character.s"
 #import "../../../../core/stat_display.s"
 .segmentdef TestCreateOverlay [start=$D000]
 .segment TestCreateOverlay
@@ -74,8 +73,6 @@ test_finish:
 #import "../../../../core/player_magic_state.s"
 #import "../../../../core/player_magic_state_ops.s"
 #import "../../../../core/player_magic.s"
-#import "../../../../core/ui_inventory.s"
-#import "../../../../core/ui_equipment.s"
 #import "../dungeon_render.s"
 #import "../../../../core/dungeon_los.s"
 #import "../../../../core/player_move.s"
@@ -91,6 +88,13 @@ store_restock_all:
     rts
 
 store_enter:
+    rts
+
+// Slimmed UI stubs — this suite never drives inventory/equipment/character UI.
+ui_inv_display:
+ui_inv_select_display:
+ui_equip_display:
+ui_char_display:
     rts
 
 ui_help_show_paged:

@@ -3,7 +3,7 @@
 // Tests: monster_ai_tick, wake check, movement, speed, FLAG_OCCUPIED,
 //        confused movement.
 //
-// Results at $0400-$0422: $01 = pass, $00 = fail per test
+// Results at $0400-$042D: $01 = pass, $00 = fail per test
 // NOTE: msg_print writes to screen row 0 ($0400+), so we store results
 // in tc_results[] and copy to $0400 at the very end.
 
@@ -26,7 +26,7 @@ bootstrap:
 
 // test_finish — Copy results to $0400 and halt.
 test_finish:
-    ldx #39
+    ldx #45
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -147,11 +147,16 @@ tai_save_y: .byte 0
 tai_ok:     .byte 0
 tai_count:  .byte 0
 tai_attack_calls: .byte 0
+tai_huff_calls:  .byte 0
+tai_door_tile:   .byte 0
+tai_door_type:   .byte 0
+tai_fixed_lo:    .byte 0
+tai_fixed_hi:    .byte 0
 tai_rng_values:   .fill 4, 0
 tai_rng_idx:      .byte 0
 tai_distance:     .byte 0
 auto_rest_active: .byte 0
-tc_results: .fill 40, $ff      // Result buffer (copied to $0400 at end)
+tc_results: .fill 46, $ff      // Result buffer (copied to $0400 at end)
 
 .macro PatchJump(target, replacement) {
     lda #$4c
@@ -164,6 +169,85 @@ tc_results: .fill 40, $ff      // Result buffer (copied to $0400 at end)
 
 test_monster_attack_player:
     inc tai_attack_calls
+    rts
+
+test_huff_print_msg:
+    inc tai_huff_calls
+    rts
+
+// test_rng_word_fixed — Position-independent scripted roll for the door
+// bash tests: always returns tai_fixed_lo/hi (earlier suites consume the
+// shared tai_rng_values sequence a boot-dependent number of times).
+test_rng_word_fixed:
+    lda tai_fixed_lo
+    sta zp_temp2
+    lda tai_fixed_hi
+    sta zp_temp3
+    rts
+
+// tai_door_prep — Common door test setup.
+// Input: A = tile byte for (20,15), X = creature type
+// Sets: player (5,5), monster at (19,15), target (20,15), clears flags.
+tai_door_prep:
+    sta tai_door_tile
+    stx tai_door_type
+    jsr glyph_clear_all
+    lda #0
+    sta mat_fleeing
+    sta mat_action_dirty
+    sta zp_mon_flags
+    sta zp_view_x
+    sta zp_view_y
+    lda #1
+    sta zp_light_radius
+    lda #5
+    sta zp_player_x
+    sta zp_player_y
+    ldx #15
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #20
+    lda tai_door_tile
+    sta (zp_ptr0),y
+    lda tai_door_type
+    sta zp_mon_type
+    lda #19
+    sta zp_mon_x
+    lda #15
+    sta zp_mon_y
+    sta mat_target_y
+    lda #20
+    sta mat_target_x
+    rts
+
+// tai_read_door — A = current tile byte at (20,15)
+tai_read_door:
+    ldx #15
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #20
+    lda (zp_ptr0),y
+    rts
+
+// tai_set_hp — Set monster slot 0 HP to A (hi = 0), select slot 0,
+// reset the scripted RNG index.
+tai_set_hp:
+    pha
+    jsr monster_init_table
+    ldx #0
+    jsr monster_get_ptr
+    pla
+    ldy #MX_HP_LO
+    sta (zp_ptr0),y
+    lda #0
+    ldy #MX_HP_HI
+    sta (zp_ptr0),y
+    sta zp_mon_idx
+    sta tai_rng_idx
     rts
 
 test_rng_range:
@@ -2872,10 +2956,183 @@ test_start:
     bne !t40_fail+
     lda #$01
     sta tc_results + 39
-    jmp !tests_done+
+    jmp !t41+
 !t40_fail:
     lda #$00
     sta tc_results + 39
+
+    // ==========================================
+    // Test 41: door-capable monster opens a closed door
+    // (tile becomes open, monster stays put, action dirty).
+    // ==========================================
+!t41:
+    lda #TILE_DOOR_CLOSED
+    ldx #4                      // Kobold: CD_OPEN_DOOR
+    jsr tai_door_prep
+    jsr monster_try_step
+    bcs !t41_fail+              // opening consumes the move
+    lda mat_action_dirty
+    beq !t41_fail+
+    jsr tai_read_door
+    cmp #TILE_DOOR_OPEN
+    bne !t41_fail+
+    lda #$01
+    sta tc_results + 40
+    jmp !t42+
+!t41_fail:
+    lda #$00
+    sta tc_results + 40
+
+    // ==========================================
+    // Test 42: non-capable monster fails a bash roll —
+    // blocked, door stays closed (hp 100, roll 4000 >= K 3199).
+    // ==========================================
+!t42:
+    :PatchJump(rng_range_word, test_rng_word_fixed)
+    lda #100
+    jsr tai_set_hp
+    lda #$a0                    // roll = 4000
+    sta tai_fixed_lo
+    lda #$0f
+    sta tai_fixed_hi
+    lda #TILE_DOOR_CLOSED
+    ldx #0                      // White Harpy: not door-capable
+    jsr tai_door_prep
+    jsr monster_try_step
+    bcc !t42_notmoved+
+    lda #$e1
+    jmp !t42_fail+
+!t42_notmoved:
+    lda mat_action_dirty
+    beq !t42_notdirty+
+    lda #$e2
+    jmp !t42_fail+
+!t42_notdirty:
+    jsr tai_read_door
+    cmp #TILE_DOOR_CLOSED
+    beq !t42_pass+
+    lda #$e3
+    jmp !t42_fail+
+!t42_pass:
+    lda #$01
+    sta tc_results + 41
+    jmp !t43+
+!t42_fail:
+    sta tc_results + 41
+
+    // ==========================================
+    // Test 43: hp <= 20 can never bash, even with a
+    // winning roll (roll 0 would pass any threshold).
+    // ==========================================
+!t43:
+    lda #10
+    jsr tai_set_hp
+    lda #0
+    sta tai_fixed_lo            // roll = 0
+    sta tai_fixed_hi
+    lda #TILE_DOOR_CLOSED
+    ldx #0
+    jsr tai_door_prep
+    jsr monster_try_step
+    bcs !t43_fail+
+    jsr tai_read_door
+    cmp #TILE_DOOR_CLOSED
+    bne !t43_fail+
+    lda #$01
+    sta tc_results + 42
+    jmp !t44+
+!t43_fail:
+    lda #$00
+    sta tc_results + 42
+
+    // ==========================================
+    // Test 44: successful bash opens the door and prints
+    // "You hear a door burst open!" (hp 100, roll 0 < K 3199).
+    // ==========================================
+!t44:
+    :PatchJump(huff_print_msg, test_huff_print_msg)
+    lda #100
+    jsr tai_set_hp
+    lda #0
+    sta tai_fixed_lo            // roll = 0
+    sta tai_fixed_hi
+    sta tai_huff_calls
+    lda #TILE_DOOR_CLOSED
+    ldx #0
+    jsr tai_door_prep
+    jsr monster_try_step
+    bcs !t44_fail+
+    jsr tai_read_door
+    cmp #TILE_DOOR_OPEN
+    bne !t44_fail+
+    lda tai_huff_calls
+    cmp #1
+    bne !t44_fail+
+    lda #$01
+    sta tc_results + 43
+    jmp !t45+
+!t44_fail:
+    lda #$00
+    sta tc_results + 43
+
+    // ==========================================
+    // Test 45: secret doors — door-capable monsters pass
+    // through (door stays secret); others are blocked.
+    // ==========================================
+!t45:
+    lda #TILE_SECRET
+    ldx #4                      // Kobold: door-capable
+    jsr tai_door_prep
+    jsr tai_read_door           // monster's origin tile becomes occupied floor
+    lda #TILE_FLOOR | FLAG_OCCUPIED
+    ldy #19
+    sta (zp_ptr0),y
+    jsr monster_try_step
+    bcc !t45_fail+              // capable monster passes
+    lda zp_mon_x
+    cmp #20
+    bne !t45_fail+
+    jsr tai_read_door
+    and #TILE_TYPE_MASK
+    cmp #TILE_SECRET            // door stays secret
+    bne !t45_fail+
+    // Non-capable monster is blocked by a secret door
+    lda #TILE_SECRET
+    ldx #0                      // White Harpy
+    jsr tai_door_prep
+    jsr monster_try_step
+    bcs !t45_fail+
+    lda zp_mon_x
+    cmp #19
+    bne !t45_fail+
+    lda #$01
+    sta tc_results + 44
+    jmp !t46+
+!t45_fail:
+    lda #$00
+    sta tc_results + 44
+
+    // ==========================================
+    // Test 46: occupied closed doors cannot be opened
+    // (FLAG_OCCUPIED guard) — tile unchanged.
+    // ==========================================
+!t46:
+    lda #TILE_DOOR_CLOSED | FLAG_OCCUPIED
+    ldx #4                      // Kobold: door-capable
+    jsr tai_door_prep
+    jsr monster_try_step
+    bcs !t46_fail+
+    lda mat_action_dirty
+    bne !t46_fail+
+    jsr tai_read_door
+    cmp #TILE_DOOR_CLOSED | FLAG_OCCUPIED
+    bne !t46_fail+
+    lda #$01
+    sta tc_results + 45
+    jmp !tests_done+
+!t46_fail:
+    lda #$00
+    sta tc_results + 45
 
 !tests_done:
     jmp test_finish

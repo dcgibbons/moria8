@@ -52,9 +52,9 @@ tier0_cr_ac:
 tier0_cr_sleep:
     .byte $28, $00, $28, $32, $63, $00, $fa, $fa
 
-// Area affect radius
+// Area affect radius + door flag (bit7)
 tier0_cr_aaf:
-    .byte $04, $06, $0a, $0a, $0a, $0a, $0a, $0a
+    .byte $84, $86, $8a, $8a, $8a, $8a, $8a, $8a
 
 // XP low byte
 tier0_cr_xp_lo:

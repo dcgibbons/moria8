@@ -413,6 +413,7 @@ cl_drops_this: .byte 0          // This drop's resolved type (1=object, 2=gold)
 // Deterministic product-path fixture: an unlocked Large Wooden Chest directly
 // east of the player, with a clear local area and RNG seed that guarantees at
 // least one object drop through the real picker and ego trampoline.
+:ChestFixtureSegment()
 chest_product_setup:
     jsr item_init_floor
     jsr monster_init_table
@@ -474,5 +475,6 @@ chest_product_setup:
     sta chest_product_path_stage
 !cps_done:
     rts
+:ChestFixtureRestoreSegment()
 #endif
 :ChestLootRestoreSegment()

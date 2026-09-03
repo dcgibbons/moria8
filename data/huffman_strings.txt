@@ -24,6 +24,7 @@ Sorry, what was that again?
 @MAT_ACID  spits acid on you.
 @MAT_FEAR  frightens you.
 @MAT_SHRIEK You hear a horrible shriek!
+@MAT_DOOR_BURST You hear a door burst open!
 
 # ===== Monster magic strings (Pattern B) =====
 @MM_BOLT  casts a bolt!

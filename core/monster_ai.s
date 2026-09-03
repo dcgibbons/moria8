@@ -408,11 +408,12 @@ monster_wake_check:
     jsr monster_distance_to_player
     sta zp_mon_scratch0
 
-    // Compare distance to awareness factor
+    // Compare distance to awareness factor (bit 7 carries CD_OPEN_DOOR)
     ldx zp_mon_type
-    cmp cr_aaf,x
-    beq !mwc_in_range+          // Equal = in range
-    bcc !mwc_in_range+          // Less = in range
+    lda cr_aaf,x
+    and #$7f
+    cmp zp_mon_scratch0         // In range when aaf >= distance
+    bcs !mwc_in_range+
     lda zp_mon_flags            // Visible monsters are wake-eligible too.
     and #MF_VISIBLE
     beq !mwc_too_far+
@@ -873,7 +874,13 @@ monster_try_step:
     lsr                         // Tile type index 0-15
     jsr tile_is_walkable
     bcs !mts_walk_ok+
+#if APPLE2
+    // Apple IIe has no resident room for the door engine (see BACKLOG:
+    // "Apple IIe resident RAM expansion"); monsters stay door-blocked there.
     jmp !mts_blocked+
+#else
+    jmp !mts_door_block+
+#endif
 !mts_walk_ok:
 
     // Check FLAG_OCCUPIED
@@ -945,9 +952,138 @@ monster_try_step:
     sec                         // Success
     rts
 
+#if !APPLE2
+// Blocked tile — Umoria monsterOpenDoor parity: door-capable
+// monsters (cr_aaf bit 7) open closed doors and pass secret doors;
+// others may bash closed doors. Any door action consumes the move
+// without stepping into the doorway.
+!mts_door_block:
+    lda zp_mon_scratch1
+    and #TILE_TYPE_MASK
+    cmp #TILE_SECRET
+    beq !mts_secret+
+    cmp #TILE_DOOR_CLOSED
+    bne !mts_blocked+           // Not a door — blocked
+    lda zp_mon_scratch1
+    lsr                         // FLAG_OCCUPIED is bit 0
+    bcs !mts_blocked+           // Occupied doors cannot be opened/bashed
+    ldx zp_mon_type
+    lda cr_aaf,x
+    bpl !mts_bash+              // Bit 7 clear: bash fallback
+    jsr mts_write_open          // Door-capable: silent open (ptr intact)
+    jmp !mts_blocked+
+!mts_bash:
+    jsr mts_bash_roll           // Carry set = door bursts open
+    bcc !mts_blocked+
+    jsr mts_write_open          // zp_ptr0/y preserved by the roll
+    ldx #HSTR_MAT_DOOR_BURST
+    jsr huff_print_msg
+    jmp !mts_blocked+
+!mts_secret:
+    ldx zp_mon_type
+    lda cr_aaf,x
+    bpl !mts_blocked+           // Not door-capable: blocked
+    jmp !mts_walk_ok-           // Door-capable monsters pass secret doors
+#endif
+
 !mts_blocked:
     clc
     rts
+
+#if !APPLE2
+
+// ============================================================
+// mts_write_open — Convert the target closed door to open.
+// Expects zp_ptr0/y addressing the target tile (preserved across
+// tile_is_walkable); bash path restores the pointer first.
+// Marks gameplay state changed and dirties the tile when relevant.
+// Clobbers: A, X, Y, zp_temp0/1, zp_mon_scratch0/1
+// ============================================================
+mts_write_open:
+    lda zp_mon_scratch1
+    eor #$f0                    // $8_ closed -> $7_ open, flag nibble kept
+    :MapWrite_ptr0_y()
+    lda #1
+    sta mat_action_dirty
+    lda mat_target_x
+    ldy mat_target_y
+    jmp mat_mark_tile_dirty_if_nonlocal
+
+// ============================================================
+// mts_bash_roll — Umoria bash fallback for monsters without
+// CM_OPEN_DOOR: randomNumber((hp+1)*80) < 40*(hp-20) with current
+// HP (clamped to 254 so hp+1 fits a byte; hp 255+ plays as 254,
+// a <=0.1% probability shift). rng_range_word rolls 0..N-1, so the
+// success threshold is 40*(hp-20)-1. HP <= 20 can never bash.
+// Output: carry set = door bursts open, carry clear = holds
+// Preserves zp_ptr0/y (the target-tile pointer for mts_write_open).
+// Clobbers: A, X, zp_temp0-3, zp_math_*
+// ============================================================
+mts_bash_roll:
+    lda zp_ptr0
+    pha
+    lda zp_ptr0_hi
+    pha
+    ldx zp_mon_idx
+    jsr monster_get_ptr
+    ldy #MX_HP_HI
+    lda (zp_ptr0),y
+    beq !mbr_lo+
+    lda #$fe                    // 16-bit HP: play as 254
+    bne !mbr_capped+            // always
+!mbr_lo:
+    ldy #MX_HP_LO
+    lda (zp_ptr0),y
+!mbr_capped:
+    cmp #$ff
+    bne !mbr_in_range+
+    lda #$fe                    // clamp 255 -> 254 so hp+1 fits a byte
+!mbr_in_range:
+    cmp #21
+    bcc !mbr_out+               // hp <= 20: no bash chance (carry already clear)
+    tay                         // Y = hp across both multiplies
+    // K = 40*(hp-20) - 1 (16-bit success threshold)
+    sbc #20                     // carry set by cmp (hp >= 21)
+    ldx #40
+    jsr math_multiply           // A = lo, zp_math_b = hi
+    sec
+    sbc #1
+    sta mbr_k_lo
+    lda zp_math_b
+    sbc #0
+    sta mbr_k_hi
+    // N = (hp+1)*80 (hp <= 254, so N <= 20400)
+    tya
+    clc
+    adc #1
+    ldx #80
+    jsr math_multiply           // A = lo, zp_math_b = hi
+    sta zp_temp0
+    lda zp_math_b
+    sta zp_temp1
+    jsr rng_range_word          // zp_temp2/3 = roll in [0, N-1]
+    sec
+    lda zp_temp2
+    sbc mbr_k_lo
+    lda zp_temp3
+    sbc mbr_k_hi
+    bcc !mbr_win+               // roll < K: door bursts
+    clc
+    jmp !mbr_out+
+!mbr_win:
+    sec
+!mbr_out:
+    // PLA/STA/LDY do not affect carry; the result survives the restore.
+    pla
+    sta zp_ptr0_hi
+    pla
+    sta zp_ptr0
+    ldy mat_target_x            // Restore target Y index
+    rts
+
+mbr_k_lo:  .byte 0
+mbr_k_hi:  .byte 0
+#endif
 
 monster_should_break_glyph:
     lda #<$0bb8
