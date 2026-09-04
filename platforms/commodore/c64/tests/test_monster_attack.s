@@ -64,6 +64,7 @@ render_local_area:
 combat_append_str:
 combat_append_monster_name:
 cmb_term_and_print:
+combat_msg_monster_in_way:
 tramp_assign_special_room:
 tramp_vault_seal_entrance:
 tramp_spawn_special_room_monsters:

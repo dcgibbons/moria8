@@ -1398,6 +1398,23 @@ combat_msg_monster_dissolves:
     ldy #>cmb_dissolves_str
     jmp combat_msg_monster_suffix
 
+#if !CMB_IN_WAY_EXTERNAL
+// combat_msg_monster_in_way — Print "The <name> is in your way!"
+// Input: X = monster slot (from monster_find_at)
+// Used by door_try_close when a live monster blocks the doorway (VMS
+// closeobject / Umoria playerCloseDoor parity). Resolves cmb_type from the
+// slot: combat_append_monster_name reads cmb_type, which is stale outside
+// combat (it still held the last fought creature in the original bug).
+combat_msg_monster_in_way:
+    jsr monster_get_ptr         // zp_ptr0 = entry
+    ldy #MX_TYPE
+    lda (zp_ptr0),y
+    sta cmb_type
+    lda #<cmb_in_way_str
+    ldy #>cmb_in_way_str
+    jmp combat_msg_monster_suffix
+#endif
+
 #if !PMU_TURN_FEEDBACK_EXTERNAL
 combat_msg_monster_runs_frantically:
     lda #<cmb_runs_frantically_str
@@ -1431,6 +1448,10 @@ cmb_shudders_str:
     .text " shudders." ; .byte 0
 cmb_dissolves_str:
     .text " dissolves!" ; .byte 0
+#endif
+#if !COMBAT_STRINGS_EXTERNAL && !CMB_IN_WAY_EXTERNAL
+cmb_in_way_str:
+    .text " is in your way!" ; .byte 0
 #endif
 #if !PMU_TURN_FEEDBACK_EXTERNAL
 cmb_runs_frantically_str:

@@ -131,6 +131,7 @@ render_viewport:
 player_update_hunger_state:
 combat_apply_damage_16:
 combat_kill_message:
+combat_msg_monster_in_way:
 combat_print_winner_message:
 combat_award_xp:
 combat_check_levelup:

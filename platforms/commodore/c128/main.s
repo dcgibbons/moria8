@@ -3446,6 +3446,17 @@ c128_resident_world_start:
 #undef DISARM_HELPERS_EXTERNAL
 #undef DISARM_COMMAND_EXTERNAL
 #import "../../../core/monster.s"
+// C128 play payload is full, so the door-close refusal helper lives in the
+// world payload near its only caller (door_try_close). The suffix string
+// stays with the other combat strings in C128ResidentItems.
+combat_msg_monster_in_way:
+    jsr monster_get_ptr         // zp_ptr0 = entry
+    ldy #MX_TYPE
+    lda (zp_ptr0),y
+    sta cmb_type
+    lda #<cmb_in_way_str
+    ldy #>cmb_in_way_str
+    jmp combat_msg_monster_suffix
 #import "hal/storage_drive.s"
 #import "hal/storage_tier_names.s"
 #import "../../../core/tier_manager.s"
@@ -3544,6 +3555,8 @@ cmb_shudders_str:
     .text " shudders." ; .byte 0
 cmb_dissolves_str:
     .text " dissolves!" ; .byte 0
+cmb_in_way_str:
+    .text " is in your way!" ; .byte 0
 
 // C128 cache/overlay state is loaded with the always-resident world payload.
 // Keeping it out of the default image preserves the hard $6000 boundary while
@@ -3951,7 +3964,9 @@ c128_resident_play_body:
 #define PMU_TURN_FEEDBACK_EXTERNAL
 #define C128_COMBAT_COMMON_HELPERS_EXTERNAL
 #define COMBAT_STRINGS_EXTERNAL
+#define CMB_IN_WAY_EXTERNAL
 #import "../../../core/combat.s"
+#undef CMB_IN_WAY_EXTERNAL
 #undef COMBAT_STRINGS_EXTERNAL
 #undef C128_COMBAT_COMMON_HELPERS_EXTERNAL
 #undef PMU_TURN_FEEDBACK_EXTERNAL

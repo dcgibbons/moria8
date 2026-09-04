@@ -153,6 +153,20 @@ ovl_huffdata_end:
 #undef DISARM_HELPERS_EXTERNAL
 #undef DISARM_COMMAND_EXTERNAL
 #import "../../core/monster.s"
+// A2 play slot is full, so the door-close refusal helper lives resident near
+// its only caller (door_try_close). combat_msg_monster_suffix and friends
+// stay in the play slot; resident->play calls during the play phase are
+// precedented (monster_magic.s -> combat.s message builders).
+combat_msg_monster_in_way:
+    jsr monster_get_ptr         // zp_ptr0 = entry
+    ldy #MX_TYPE
+    lda (zp_ptr0),y
+    sta cmb_type
+    lda #<cmb_in_way_str
+    ldy #>cmb_in_way_str
+    jmp combat_msg_monster_suffix
+cmb_in_way_str:
+    .text " is in your way!" ; .byte 0
 #import "../../core/tier_manager.s"
 #import "../../core/monster_ai.s"
 #import "../../core/scene_dirty.s"
@@ -1051,7 +1065,9 @@ player_adjust_equipment_stat:
 #undef PLAYER_RUN_INITIALIZE_EXTERNAL
 #define PMU_TURN_FEEDBACK_EXTERNAL
 #define CMB_WINNER_STR_EXTERNAL
+#define CMB_IN_WAY_EXTERNAL
 #import "../../core/combat.s"
+#undef CMB_IN_WAY_EXTERNAL
 #undef CMB_WINNER_STR_EXTERNAL
 #undef PMU_TURN_FEEDBACK_EXTERNAL
 #define WIZARD_PROMPT_HELPERS_EXTERNAL

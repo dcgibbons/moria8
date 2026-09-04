@@ -105,37 +105,18 @@ c128_town_move_diag_after_map_read:
 #endif
     sta zp_temp0
 
-    // Extract tile type (bits 7-4 → 0-15)
-    lda zp_temp0
-    lsr
-    lsr
-    lsr
-    lsr
-
-    // Check walkability (closed doors are blocked — use 'o' to open)
-#if HAL_PLATFORM_GAME_LOOP_PLAYER_MOVE_DIAG_LABELS
-c128_town_move_diag_before_walkable:
-#endif
-    jsr tile_is_walkable
-#if HAL_PLATFORM_GAME_LOOP_PLAYER_MOVE_DIAG_LABELS
-c128_town_move_diag_after_walkable:
-#endif
-    bcs !walkable+
-    jsr wizard_wall_walk_active
-    beq !blocked+
-!walkable:
-
-    // Check FLAG_OCCUPIED (monster present)
-    ldy zp_temp3                // target_x (column offset)
+    // A live monster on the target tile takes precedence over terrain: VMS
+    // move_char checks cptr before door/floor handling, so bumping a monster
+    // standing on a closed door attacks the monster, not the door.
 #if HAL_PLATFORM_GAME_LOOP_PLAYER_MOVE_DIAG_LABELS
 c128_town_move_diag_before_occupied_read:
 #endif
-    :MapRead_ptr0_y()             // Re-read map byte (zp_ptr0 still valid)
+    lda zp_temp0
     and #FLAG_OCCUPIED
 #if HAL_PLATFORM_GAME_LOOP_PLAYER_MOVE_DIAG_LABELS
 c128_town_move_diag_after_occupied_read:
 #endif
-    beq !not_occupied+          // No monster → continue to move
+    beq !not_occupied+          // No monster → terrain decides
 
     lda zp_temp3
     ldy zp_temp4
@@ -171,6 +152,25 @@ c128_town_move_diag_after_occupied_read:
     rts
 
 !not_occupied:
+    // Extract tile type (bits 7-4 → 0-15)
+    lda zp_temp0
+    lsr
+    lsr
+    lsr
+    lsr
+
+    // Check walkability (closed doors are blocked — use 'o' to open)
+#if HAL_PLATFORM_GAME_LOOP_PLAYER_MOVE_DIAG_LABELS
+c128_town_move_diag_before_walkable:
+#endif
+    jsr tile_is_walkable
+#if HAL_PLATFORM_GAME_LOOP_PLAYER_MOVE_DIAG_LABELS
+c128_town_move_diag_after_walkable:
+#endif
+    bcs !walkable+
+    jsr wizard_wall_walk_active
+    beq !blocked+
+!walkable:
 #if HAL_PLATFORM_GAME_LOOP_PLAYER_MOVE_DIAG_LABELS
 c128_town_move_diag_move_success:
 #endif

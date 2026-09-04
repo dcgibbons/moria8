@@ -70,6 +70,8 @@ eff_directional_monster:
 eff_cure_poison:
 monster_aggravate_all:
 monster_get_ptr:
+monster_find_at:
+combat_msg_monster_in_way:
 ui_help_display:
 store_init_all:
 store_restock_all:

@@ -19,7 +19,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #44
+    ldx #50
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -317,7 +317,7 @@ audit_door_y:  .byte 0
 audit_check_x: .byte 0
 audit_check_y: .byte 0
 audit_pair_count: .byte 0
-tc_results: .fill 45, $ff              // Test results buffer (copied to $0400 before brk)
+tc_results: .fill 51, $ff              // Test results buffer (copied to $0400 before brk)
 t38_rockfall_name: .text "falling rock." ; .byte 0
 run_cycle_expected:
     .byte 7,3,5,0,4,2,6,1,7,3,5,0
@@ -3672,8 +3672,402 @@ test_start:
     sta tc_results + 44
 !t45_done:
 
+    // ============================================================
+    // Test 46: door_try_close closes an unoccupied open door
+    // (baseline regression for the occupied-check change)
+    // ============================================================
+    jsr fill_map_rock
+    ldx #20
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #30
+    lda #TILE_DOOR_OPEN
+    sta (zp_ptr0),y
+    lda #30
+    sta df_target_x
+    lda #20
+    sta df_target_y
+
+    jsr door_try_close
+    bcc !t46_fail+
+    ldx #20
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #30
+    lda (zp_ptr0),y
+    cmp #TILE_DOOR_CLOSED
+    bne !t46_fail+
+    lda #$01
+    sta tc_results + 45
+    jmp !t46_done+
+!t46_fail:
+    lda #$00
+    sta tc_results + 45
+!t46_done:
+
+    // ============================================================
+    // Test 47: door_try_close refuses on a live-occupied open door
+    // (VMS closeobject / Umoria playerCloseDoor: monster blocks, turn
+    // still consumed, tile unchanged)
+    // ============================================================
+    ldx #21
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #30
+    lda #TILE_DOOR_OPEN | FLAG_OCCUPIED
+    sta (zp_ptr0),y
+    lda #30
+    sta df_target_x
+    lda #21
+    sta df_target_y
+    lda #30
+    ldy #21
+    jsr td_spawn0
+
+    // Pin the refusal message content: seed cmb_type with a different
+    // creature (stale-combat-type regression — the refusal must name the
+    // monster in the doorway, not the last creature fought). Capture
+    // creature 1's name first; message composition may reuse the shared
+    // creature_name_buf.
+    ldx #1
+    jsr creature_get_name
+    sta zp_ptr1
+    sty zp_ptr1_hi
+    ldy #0
+!t47_name_copy:
+    lda (zp_ptr1),y
+    sta td_name_buf,y
+    beq !t47_name_copied+
+    iny
+    jmp !t47_name_copy-
+!t47_name_copied:
+    lda #2
+    sta cmb_type
+
+    jsr door_try_close
+    bcc !t47_fail+           // Refusal still consumes the turn
+    ldx #21
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #30
+    lda (zp_ptr0),y
+    cmp #TILE_DOOR_OPEN | FLAG_OCCUPIED
+    bne !t47_fail+
+    lda cmb_type
+    cmp #1                   // Type re-resolved from the blocking slot
+    bne !t47_fail+
+    lda #<td_name_buf
+    sta zp_ptr1
+    lda #>td_name_buf
+    sta zp_ptr1_hi
+    jsr td_buf_contains      // combat_msg_buf must name creature 1
+    bcc !t47_fail+
+    lda #$01
+    sta tc_results + 46
+    jmp !t47_done+
+!t47_fail:
+    lda #$00
+    sta tc_results + 46
+!t47_done:
+    jsr td_clear0
+
+    // ============================================================
+    // Test 48: door_try_close repairs a stale FLAG_OCCUPIED and closes
+    // ============================================================
+    ldx #22
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #30
+    lda #TILE_DOOR_OPEN | FLAG_OCCUPIED
+    sta (zp_ptr0),y
+    lda #30
+    sta df_target_x
+    lda #22
+    sta df_target_y
+
+    jsr door_try_close
+    bcc !t48_fail+
+    ldx #22
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #30
+    lda (zp_ptr0),y
+    cmp #TILE_DOOR_CLOSED
+    bne !t48_fail+
+    lda #$01
+    sta tc_results + 47
+    jmp !t48_done+
+!t48_fail:
+    lda #$00
+    sta tc_results + 47
+!t48_done:
+
+    // ============================================================
+    // Test 49: bump into a closed door holding a live monster routes
+    // to player_attack_monster (VMS move_char: creature check precedes
+    // door handling)
+    // ============================================================
+    jsr fill_map_rock
+    ldx #25
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #40
+    lda #TILE_FLOOR
+    sta (zp_ptr0),y
+    ldx #24
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #40
+    lda #TILE_DOOR_CLOSED | FLAG_OCCUPIED
+    sta (zp_ptr0),y
+    lda #40
+    sta zp_player_x
+    lda #25
+    sta zp_player_y
+    lda #$ff
+    sta zp_run_dir
+    lda #0
+    sta zp_eff_confuse
+    sta eff_fear_timer
+    sta test_pam_calls
+    lda #40
+    ldy #24
+    jsr td_spawn0
+    jsr td_patch_pam
+
+    lda #CMD_MOVE_N
+    jsr player_try_move
+    php
+    pla
+    sta test_t49_flags
+    jsr td_restore_pam
+    jsr td_clear0
+
+    lda test_t49_flags
+    and #$01                // Carry: turn consumed
+    beq !t49_fail+
+    lda test_pam_calls
+    cmp #1
+    bne !t49_fail+
+    lda test_pam_x
+    cmp #40
+    bne !t49_fail+
+    lda test_pam_y
+    cmp #24
+    bne !t49_fail+
+    lda #$01
+    sta tc_results + 48
+    jmp !t49_done+
+!t49_fail:
+    lda #$00
+    sta tc_results + 48
+!t49_done:
+
+    // ============================================================
+    // Test 50: bump into an unoccupied closed door stays blocked
+    // ============================================================
+    lda #0
+    sta test_pam_calls
+    jsr td_patch_pam
+
+    lda #CMD_MOVE_N
+    jsr player_try_move
+    php
+    pla
+    sta test_t49_flags
+    jsr td_restore_pam
+
+    lda test_t49_flags
+    and #$01
+    bne !t50_fail+          // Blocked: carry must be clear
+    lda test_pam_calls
+    bne !t50_fail+          // No attack routed
+    lda zp_player_x
+    cmp #40
+    bne !t50_fail+
+    lda zp_player_y
+    cmp #25
+    bne !t50_fail+
+    lda #$01
+    sta tc_results + 49
+    jmp !t50_done+
+!t50_fail:
+    lda #$00
+    sta tc_results + 49
+!t50_done:
+
+    // ============================================================
+    // Test 51: bump onto occupied ordinary floor still attacks
+    // (regression for the occupied-before-walkability reorder)
+    // ============================================================
+    ldx #24
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #40
+    lda #TILE_FLOOR | FLAG_OCCUPIED
+    sta (zp_ptr0),y
+    lda #0
+    sta test_pam_calls
+    lda #40
+    ldy #24
+    jsr td_spawn0
+    jsr td_patch_pam
+
+    lda #CMD_MOVE_N
+    jsr player_try_move
+    php
+    pla
+    sta test_t49_flags
+    jsr td_restore_pam
+    jsr td_clear0
+
+    lda test_t49_flags
+    and #$01
+    beq !t51_fail+
+    lda test_pam_calls
+    cmp #1
+    bne !t51_fail+
+    lda test_pam_x
+    cmp #40
+    bne !t51_fail+
+    lda test_pam_y
+    cmp #24
+    bne !t51_fail+
+    lda #$01
+    sta tc_results + 50
+    jmp !t51_done+
+!t51_fail:
+    lda #$00
+    sta tc_results + 50
+!t51_done:
+
     // Done — jump to exit trampoline (copies tc_results to $0400, then brk)
     jmp test_exit_trampoline
+
+// td_spawn0 — Place a live type-1 monster in slot 0 at (A=x, Y=y)
+td_spawn0:
+    sta test_spawn_x
+    sty test_spawn_y
+    ldx #0
+    jsr monster_get_ptr         // zp_ptr0 = slot 0
+    ldy #MX_X
+    lda test_spawn_x
+    sta (zp_ptr0),y
+    iny                         // MX_Y
+    lda test_spawn_y
+    sta (zp_ptr0),y
+    ldy #MX_TYPE
+    lda #1
+    sta (zp_ptr0),y
+    ldy #MX_FLAGS
+    lda #0
+    sta (zp_ptr0),y
+    rts
+
+// td_clear0 — Free monster slot 0
+td_clear0:
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda #EMPTY_SLOT
+    sta (zp_ptr0),y
+    rts
+
+// td_patch_pam / td_restore_pam — Redirect player_attack_monster to a
+// recording stub (routing assertion only; combat itself covered elsewhere).
+td_patch_pam:
+    lda player_attack_monster
+    sta test_pam_saved
+    lda player_attack_monster + 1
+    sta test_pam_saved + 1
+    lda player_attack_monster + 2
+    sta test_pam_saved + 2
+    lda #$4c
+    sta player_attack_monster
+    lda #<test_pam_stub
+    sta player_attack_monster + 1
+    lda #>test_pam_stub
+    sta player_attack_monster + 2
+    rts
+
+td_restore_pam:
+    lda test_pam_saved
+    sta player_attack_monster
+    lda test_pam_saved + 1
+    sta player_attack_monster + 1
+    lda test_pam_saved + 2
+    sta player_attack_monster + 2
+    rts
+
+test_pam_stub:
+    sta test_pam_x
+    sty test_pam_y
+    inc test_pam_calls
+    rts
+
+// td_buf_contains — Carry set if combat_msg_buf contains the null-terminated
+// needle at zp_ptr1.
+td_buf_contains:
+    lda #0
+    sta td_outer
+!tbc_outer:
+    ldx td_outer
+    lda combat_msg_buf,x
+    beq !tbc_fail+
+    ldy #0
+!tbc_inner:
+    lda (zp_ptr1),y
+    beq !tbc_found+          // Needle exhausted — match
+    sta td_ch
+    tya
+    clc
+    adc td_outer
+    tax
+    lda combat_msg_buf,x
+    beq !tbc_fail+           // Haystack exhausted mid-needle
+    cmp td_ch
+    bne !tbc_next+
+    iny
+    jmp !tbc_inner-
+!tbc_next:
+    inc td_outer
+    jmp !tbc_outer-
+!tbc_found:
+    sec
+    rts
+!tbc_fail:
+    clc
+    rts
+
+td_outer:         .byte 0
+td_ch:            .byte 0
+td_name_buf:      .fill 32, 0
+
+test_spawn_x:     .byte 0
+test_spawn_y:     .byte 0
+test_pam_saved:   .byte 0, 0, 0
+test_pam_x:       .byte 0
+test_pam_y:       .byte 0
+test_pam_calls:   .byte 0
+test_t49_flags:   .byte 0
 
 test_end:
 

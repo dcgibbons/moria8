@@ -254,16 +254,39 @@ resident headroom that monster door opening/bashing just consumed.
 
 ### Closing a door onto a monster's tile breaks attack targeting
 
-Player report 2026-09-02: closing a door on the tile a monster occupies
-succeeds, leaving the monster on a closed-door tile, but the monster can no
-longer be attacked (or the attack routes to the door instead). Two
-interaction bugs to untangle: (a) `door_try_close` should refuse (or
-upstream-equivalently fail) when the target tile has `FLAG_OCCUPIED` set;
-(b) attack targeting must resolve a monster standing on a closed-door tile
-(bump attack into the door tile currently goes to the door command instead
-of the monster). Decide the upstream behavior first (VMS/Umoria door close
-vs. occupied tile), then fix both sides and add focused coverage: close
-refused on occupied tile, attack hits a monster on a closed-door tile.
+DONE 2026-09-04 (player report 2026-09-02). Both halves fixed to upstream
+parity. (a) `door_try_close` now resolves `FLAG_OCCUPIED` against the live
+monster table: a live monster in the doorway refuses the close with "The
+<name> is in your way!" (new `combat_msg_monster_in_way` helper + plain-text
+suffix, VMS `closeobject` / Umoria `playerCloseDoor` parity, turn still
+consumed per both oracles), while a stale flag is repaired and the close
+proceeds (same repair semantics as `player_move_check_live_occupant`). The
+helper resolves `cmb_type` from the blocking slot before composing:
+`combat_append_monster_name` reads `cmb_type`, which is stale outside combat
+(play-test 2026-09-04: a Cloud Giant blocking the door was named "Balrog"
+from the previous level's combat). (b)
+`player_try_move` now checks `FLAG_OCCUPIED` before walkability (VMS
+`move_char` checks `cptr` before door/floor handling), so bumping a monster
+standing on a closed door — or any blocked tile — routes to
+`player_attack_monster`; Umoria's unlit-monster free-turn carve-out is not
+followed (VMS is the default oracle and Moria8 already attacks unseen
+monsters on floor). `door_try_open` on an occupied closed door is unchanged:
+the state is unreachable once close refuses. Placement: the helper parks in
+the A2 resident Default and C128 C128ResidentWorld next to its caller via the
+new `CMB_IN_WAY_EXTERNAL` define (A2 play slot and C128 play payload were
+both full); C128 keeps the string in C128ResidentItems via the existing
+`COMBAT_STRINGS_EXTERNAL` path. Coverage: test_dungeon.s t46-t51 (unoccupied
+close regression, occupied refusal with tile/turn assertions, stale-flag
+repair, closed-door bump routes to attack with coordinates, unoccupied
+closed-door bump stays blocked, occupied-floor attack regression; t47 also
+pins the refusal message content against a seeded stale cmb_type); harness
+count 45→51. Regression repairs: test_chest_loot.s drops its unused
+ui_character.s import (same pattern as 7710268) to stay under its map-write
+boundary; test_item_ui.s/test_monster_attack.s/test_ui_views_filters.s gain
+link stubs. Gates: make build all four platforms; test64 195/195; test128
+137/137 (town-move diag labels reordered with the flow, harness validation
+is order-insensitive); test128-fast/test128-fast-smoke 10/10; testplus4
+40/40; A2 MAME runtime all scenarios 0 failures; check-hal-boundaries green.
 
 ### Apple IIe resident RAM expansion
 

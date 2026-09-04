@@ -897,6 +897,37 @@ door_try_close:
     rts
 
 !dtc_open:
+    // A live monster in the doorway blocks the close (VMS closeobject /
+    // Umoria playerCloseDoor: refuse with "The <name> is in your way!" and
+    // still consume the turn). Resolve FLAG_OCCUPIED against the live monster
+    // table and repair stale flags, matching player_move_check_live_occupant.
+    lda df_dir_idx
+    and #FLAG_OCCUPIED
+    beq !dtc_do_close+
+    lda df_target_x
+    ldy df_target_y
+    jsr monster_find_at         // Clobbers zp_ptr0
+    bcc !dtc_stale+
+    jsr combat_msg_monster_in_way
+    sec                         // Turn consumed (upstream refuses without a free turn)
+    rts
+
+!dtc_stale:
+    // No live monster — repair the stale flag, then close the door.
+    ldx df_target_y
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy df_target_x
+    :MapRead_ptr0_y()
+    and #~FLAG_OCCUPIED & $ff
+    :MapWrite_ptr0_y()
+    lda df_dir_idx
+    and #~FLAG_OCCUPIED & $ff
+    sta df_dir_idx
+
+!dtc_do_close:
     // Close the door
     lda df_dir_idx
     and #TILE_FLAG_MASK
