@@ -11,6 +11,11 @@
 #else
 .const PMX_EARTHQUAKE_TARGET = eff_earthquake
 #endif
+#if PMX_MAP_AREA_TRAMPOLINE
+.const PMX_MAP_AREA_TARGET = tramp_eff_map_area
+#else
+.const PMX_MAP_AREA_TARGET = eff_map_area
+#endif
 
 pmx_work_idx:    .byte 0
 pmx_work_x:      .byte 0
@@ -278,7 +283,7 @@ ped_s19:
 ped_s20:
     jmp eff_protect_from_evil
 ped_s22:
-    jmp eff_map_area
+    jmp PMX_MAP_AREA_TARGET
 ped_s23:
     lda #16
     ldx #4

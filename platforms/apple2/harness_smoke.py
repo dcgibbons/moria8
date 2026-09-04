@@ -445,6 +445,61 @@ dump("after_p")
 print("SCENARIO DONE")
 """
 
+LUA_MAP_AREA_BODY = r"""
+-- Relocated-engine proof: Sense Surroundings (priest 22, Chants and
+-- Blessings) must cast through tramp_eff_map_area (resident) ->
+-- OVL_DEATH swap -> eff_map_area -> OVL.SPELL restore.
+-- Poke the priest into a castable state (level 33 beats the 45% fail
+-- chance; mana 50 covers the 11 cost; learnt mask bit 22; the book).
+local pd = PLAYER_DATA_ADDR
+prog:write_u8(pd + 19, 33)              -- PL_LEVEL
+prog:write_u8(0x33, 33)                 -- zp_player_lvl mirror
+prog:write_u8(pd + 37, 50)              -- PL_MANA (save copy)
+prog:write_u8(0x31, 50)                 -- zp_player_mp (live mana)
+prog:write_u8(pd + 63, prog:read_u8(pd + 63) | 0x40)  -- learnt bit 22
+local gave_book = false
+for i = 0, 30 do
+    if prog:read_u8(INV_ITEM_ID_ADDR + i) == 0xff then
+        prog:write_u8(INV_ITEM_ID_ADDR + i, 59)   -- Chants and Blessings
+        prog:write_u8(INV_QTY_ADDR + i, 1)
+        gave_book = true
+        break
+    end
+end
+assert_line("book_granted", gave_book, "no empty inventory slot for the book")
+
+press("P")
+emu.wait(3)
+assert_line("pray_prompt", screen_has("Prayer book"),
+            "'p' did not show the prayer-book prompt")
+press("B")
+emu.wait(3)
+assert_line("pray_list", screen_has("Pray which?"),
+            "book selection did not reach the prayer list")
+shift("/")
+emu.wait(3)
+assert_line("list_names", screen_has("Sense Surroundings"),
+            "'?' list missing Sense Surroundings")
+press("A")
+emu.wait(4)
+if screen_has("-more-") then press(" ") emu.wait(1) end
+assert_line("map_executed",
+            not screen_has("Prayer Book") and not screen_has("Pray which?"),
+            "prayer selection did not consume the turn")
+-- Real-cast proof: pm_consume_mana wrote 50-11=39 to both mana mirrors
+-- (the insufficient-mana faint path would have zeroed them; no cast would
+-- leave 50). Regen may tick a point or two back by read time.
+local mp_after = prog:read_u8(0x31)
+local pl_after = prog:read_u8(pd + 37)
+assert_line("map_mana_spent",
+            mp_after >= 39 and mp_after <= 41 and pl_after >= 39 and pl_after <= 41,
+            "mana mirrors not at 50-11 (+-regen): zp=" .. mp_after ..
+            " save=" .. pl_after .. " (0 = faint path, 50 = no cast)")
+assert_line("map_return", in_town(), "did not return to the town view")
+dump("after_map_area")
+print("SCENARIO DONE")
+"""
+
 LUA_HELP_BODY = r"""
 -- Help overlay: '?' from the command loop must render the command reference
 -- and return to the town view on 'q'.
@@ -1397,6 +1452,13 @@ def priest_pray_lua() -> str:
     return _chargen_body("C") + LUA_PRIEST_PRAY_BODY
 
 
+def priest_map_area_lua() -> str:
+    return (_chargen_body("C") + LUA_MAP_AREA_BODY
+            ).replace("PLAYER_DATA_ADDR", hex(_sym_addr("player_data"))
+            ).replace("INV_ITEM_ID_ADDR", hex(_sym_addr("inv_item_id"))
+            ).replace("INV_QTY_ADDR", hex(_sym_addr("inv_qty")))
+
+
 def help_overlay_lua() -> str:
     return _chargen_body("A") + LUA_HELP_BODY
 
@@ -1494,6 +1556,7 @@ def scroll_delta_lua() -> str:
 
 SCENARIO_LUA = {
     "priest_pray": priest_pray_lua,
+    "priest_map_area": priest_map_area_lua,
     "help_overlay": help_overlay_lua,
     "wizard_flow": wizard_flow_lua,
     "scroll_rune": scroll_rune_lua,

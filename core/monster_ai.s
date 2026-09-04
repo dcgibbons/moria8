@@ -874,13 +874,7 @@ monster_try_step:
     lsr                         // Tile type index 0-15
     jsr tile_is_walkable
     bcs !mts_walk_ok+
-#if APPLE2
-    // Apple IIe has no resident room for the door engine (see BACKLOG:
-    // "Apple IIe resident RAM expansion"); monsters stay door-blocked there.
-    jmp !mts_blocked+
-#else
     jmp !mts_door_block+
-#endif
 !mts_walk_ok:
 
     // Check FLAG_OCCUPIED
@@ -952,7 +946,6 @@ monster_try_step:
     sec                         // Success
     rts
 
-#if !APPLE2
 // Blocked tile — Umoria monsterOpenDoor parity: door-capable
 // monsters (cr_aaf bit 7) open closed doors and pass secret doors;
 // others may bash closed doors. Any door action consumes the move
@@ -984,13 +977,10 @@ monster_try_step:
     lda cr_aaf,x
     bpl !mts_blocked+           // Not door-capable: blocked
     jmp !mts_walk_ok-           // Door-capable monsters pass secret doors
-#endif
 
 !mts_blocked:
     clc
     rts
-
-#if !APPLE2
 
 // ============================================================
 // mts_write_open — Convert the target closed door to open.
@@ -1083,7 +1073,6 @@ mts_bash_roll:
 
 mbr_k_lo:  .byte 0
 mbr_k_hi:  .byte 0
-#endif
 
 monster_should_break_glyph:
     lda #<$0bb8

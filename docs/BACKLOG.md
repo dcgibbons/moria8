@@ -228,10 +228,13 @@ scripted chest/balrog product fixtures moved to the CHEST overlay on
 C64/Plus/4 (`ChestFixtureSegment`); C128 moved `recall.s` to the Default
 image. Gates: `make test64` 195/195, `make test128-fast`,
 `make test128-fast-smoke`, `make test128` 137/137, `make testplus4` 40/40.
-Apple IIe: engine needs ~94 resident bytes it does not have (play slot full,
-aux is data-only) — compiled out on A2 via `#if !APPLE2` in
-`core/monster_ai.s` (monsters stay door-blocked there) pending the A2 RAM
-expansion item below; remove the guard once resident room exists.
+Apple IIe: enabled 2026-09-02 — the A2 RAM expansion item below freed the
+resident bytes, so the door engine runs on all four platforms; the
+`#if !APPLE2` guard is removed. The relocated map-area engine has direct
+A2 MAME coverage (`priest_map_area` scenario casts Sense Surroundings
+through `tramp_eff_map_area` and asserts the mana-cost signature and clean
+return); earthquake shares the identical trampoline pattern (WoD exemption
+class); C64 unit suites cover the engines themselves.
 
 ### Locked/stuck/spiked doors
 
@@ -249,16 +252,34 @@ close-to-jam command path, player forced-open rolls, and the monster-side
 odds adjustments. Tile budget note: this must not regress the hard-won
 resident headroom that monster door opening/bashing just consumed.
 
+### Closing a door onto a monster's tile breaks attack targeting
+
+Player report 2026-09-02: closing a door on the tile a monster occupies
+succeeds, leaving the monster on a closed-door tile, but the monster can no
+longer be attacked (or the attack routes to the door instead). Two
+interaction bugs to untangle: (a) `door_try_close` should refuse (or
+upstream-equivalently fail) when the target tile has `FLAG_OCCUPIED` set;
+(b) attack targeting must resolve a monster standing on a closed-door tile
+(bump attack into the door tile currently goes to the door command instead
+of the monster). Decide the upstream behavior first (VMS/Umoria door close
+vs. occupied tile), then fix both sides and add focused coverage: close
+refused on occupied tile, attack hits a monster on a closed-door tile.
+
 ### Apple IIe resident RAM expansion
 
-The Apple IIe resident image is full (`$7C00` cap): the monster door engine
-needs ~94 bytes and cannot fit. The play slot (`$7C00-$9FFF`) is also full and
-aux RAM is data-only per `docs/APPLE2_MEMORY_POLICY.md`. Future backlog items
-will keep needing resident A2 RAM, so design a durable expansion: candidates
-include moving lower-traffic resident modules into overlay windows with
-dispatch trampolines, reclaiming/init-sharing low RAM, or a policy change for
-aux code execution. Blocks: monster door opening/bashing on A2, and any
-future resident-code growth.
+DONE 2026-09-02 (first tranche). The spell-execution engines
+`player_magic_map.s` (`eff_map_area`, 362 B) and
+`player_magic_earthquake.s` (`eff_earthquake`, 110 B) moved from the
+resident image into the A2 death overlay beside `player_destroy_area.s`,
+behind new resident swap trampolines (`tramp_eff_map_area`,
+`tramp_eff_earthquake`, same OVL_DEATH-load + OVL.SPELL-restore pattern as
+WoD's `tramp_eff_destroy_area`); the execute-overlay call site now routes
+through `PMX_MAP_AREA_TARGET` (`PMX_MAP_AREA_TRAMPOLINE` set only on A2).
+Result: resident ends `$7954` (684 B free, was `$7BA7` with 89 B free),
+unblocking the monster door engine on A2 and funding several future items.
+The death overlay is 4,139 B (window cap 5,632 B). The durable big lever
+remains aux code execution (policy change + execution-safety analysis +
+MAME verification) if overlay externalization runs out.
 
 ### Add upstream monster sleep immunity
 

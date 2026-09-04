@@ -45,10 +45,10 @@ design record; current ownership is enforced by `platforms/apple2/memory.s`,
 
 | Range | Current owner and measured use |
 | --- | --- |
-| main `$0A00-$7BFF` | Always-resident image; current payload `$0A00-$7BFF` (29,184 B) |
+| main `$0A00-$7BFF` | Always-resident image; current payload `$0A00-$7953` (28,500 B; 684 B free after the 2026-09-02 spell-engine externalization) |
 | main `$7C00-$9FFF` | Load-once `A2.PLAY`; current payload `$7C00-$9FFD` (9,214 B including signature) |
 | main `$A000-$A3FF` | Tier-name pool (1,024 B) |
-| main `$A400-$B9FF` | All 11 code overlays, mutually exclusive; largest is `OVL.ITEMS`, exactly 5,632 B |
+| main `$A400-$B9FF` | All 11 code overlays, mutually exclusive; window 5,632 B; largest payload `OVL.TOWN` (5,327 B); `OVL.DEATH` grew to 4,139 B in 2026-09 when the map-area/earthquake engines moved in beside the WoD engine |
 | main `$BA00-$BAFF` | Window tail reserved; tier data may use through `$BAFF` |
 | main `$BB00-$BEFF` | ProDOS MLI I/O/staging buffer |
 | main `$BF00-$BFFF` | ProDOS global page |

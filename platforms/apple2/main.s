@@ -194,10 +194,10 @@ ovl_huffdata_end:
 #import "../../core/player_magic_state_ops.s"
 #import "../../core/player_magic.s"
 #import "dungeon_render_a2.s"
-// C64 $F000-banked content is ordinary resident bytes on this platform.
+// C64 $F000-banked content is ordinary resident bytes on this platform,
+// except the map/earthquake spell engines, which ride the death overlay
+// beside player_destroy_area.s behind tramp_eff_* overlay swaps.
 #import "../../core/item_desc_banked.s"
-#import "../../core/player_magic_map.s"
-#import "../../core/player_magic_earthquake.s"
 #import "../../core/projectile.s"
 #import "compat/io_kernal_consts.s"
 #import "../../core/storage_status.s"
@@ -517,7 +517,22 @@ tramp_item_use_staff:
     jmp tramp_items_dispatch
 
 tramp_eff_earthquake:
-    jmp eff_earthquake
+    lda #OVL_DEATH
+    jsr overlay_load
+    bcs !load_failed+
+    jsr eff_earthquake
+    jmp tramp_restore_spell_overlay
+!load_failed:
+    rts
+
+tramp_eff_map_area:
+    lda #OVL_DEATH
+    jsr overlay_load
+    bcs !load_failed+
+    jsr eff_map_area
+    jmp tramp_restore_spell_overlay
+!load_failed:
+    rts
 
 tramp_item_refuel:
     lda #<item_refuel
@@ -1278,6 +1293,11 @@ tramp_game_over_run:
     // tramp_eff_destroy_area (one disk load for a rare spell; OVL.SPELL
     // restore is an aux-cached RAM copy).
     #import "../../core/player_destroy_area.s"
+    // Map Area and Earthquake engines: spell-execution engines relocated from
+    // the resident image; reached via tramp_eff_map_area / tramp_eff_earthquake
+    // (same OVL_DEATH swap + OVL.SPELL restore as Word of Destruction).
+    #import "../../core/player_magic_map.s"
+    #import "../../core/player_magic_earthquake.s"
 ovl_death_end:
 .print "Death overlay: " + (ovl_death_end - $a400) + " bytes"
 .assert "High-score I/O counter is owned by death overlay", hiscore_io_count_lo >= $a400 && hiscore_io_count_hi < ovl_death_end, true
@@ -1379,6 +1399,7 @@ ovl_items_end:
 #undef SPELL_CLASS_DATA_EXTERNAL
 #define PMX_EARTHQUAKE_EXTERNAL
 #define PMX_MAP_AREA_EXTERNAL
+#define PMX_MAP_AREA_TRAMPOLINE
 #define PMX_DETECT_EFFECTS_EXTERNAL
 #define PMX_DESTROY_AREA_EXTERNAL
 #import "../../core/player_magic_slow_runtime.s"
@@ -1387,6 +1408,7 @@ ovl_items_end:
 #undef PMU_TURN_FEEDBACK_ONLY
 #import "../../core/player_magic_execute_overlay.s"
 #undef PMX_DETECT_EFFECTS_EXTERNAL
+#undef PMX_MAP_AREA_TRAMPOLINE
 #undef PMX_MAP_AREA_EXTERNAL
 
 
