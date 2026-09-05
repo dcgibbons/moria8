@@ -24,7 +24,7 @@ bootstrap:
 
 // test_finish — Copy results to $0400 and halt.
 test_finish:
-    ldx #13
+    ldx #14
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -98,7 +98,10 @@ press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
 // Test result buffer — copy to $0400 at end (msg_print clobbers $0400)
-tc_results: .fill 14, $ff
+tc_results: .fill 15, $ff
+
+test_t15_fail: .byte 0
+test_t15_iter: .byte 0
 
 test_start:
     // Initialize result area to $ff (untested)
@@ -660,6 +663,50 @@ test_start:
     lda #$00
 !t14_store:
     sta tc_results + 13
+
+    // ============================================================
+    // Test 15: wizard summon picker in town returns an always-resident
+    // town roster index (no tier loaded in town, so dungeon rows are
+    // zeroed — glyph $00 '@', null name '?'); DL100+ still forces Balrog.
+    // ============================================================
+    lda #0
+    sta zp_player_dlvl
+    sta test_t15_fail
+    sta test_t15_iter
+!t15_loop:
+    jsr pick_wizard_summon_creature_type
+    cmp #TOWN_CREATURE_BASE
+    bcc !t15_bad+
+    cmp #TOWN_CREATURE_BASE + TOWN_CREATURE_COUNT
+    bcs !t15_bad+
+    jmp !t15_next+
+!t15_bad:
+    lda #1
+    sta test_t15_fail
+!t15_next:
+    inc test_t15_iter
+    lda test_t15_iter
+    cmp #8
+    bne !t15_loop-
+
+    lda #100
+    sta zp_player_dlvl
+    jsr pick_wizard_summon_creature_type
+    cmp #CREATE_BALROG
+    beq !t15_balrog_ok+
+    lda #1
+    sta test_t15_fail
+!t15_balrog_ok:
+    lda test_t15_fail
+    bne !t15_fail+
+    lda #$01
+    jmp !t15_store+
+!t15_fail:
+    lda #$00
+!t15_store:
+    sta tc_results + 14
+    lda #0
+    sta zp_player_dlvl
 
     // ============================================================
     // Done — copy results and halt

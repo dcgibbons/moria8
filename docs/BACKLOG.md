@@ -599,38 +599,24 @@ Acceptance target:
 
 ### Fix wizard summon in town rendering as `@` / unknown `?`
 
-Reported 2026-08-20 on Apple IIe hardware/emulator: summoning a monster in
-town via wizard mode produces a monster that renders with the player glyph
-`@` and has no name (combat message: `You hit the ? (3/3).`). Wizard summon
-in the dungeon works correctly, so the defect is specific to the town context.
-A second `@` appears adjacent to the player in town after the summon.
-
-Hypotheses to check, in order:
-
-- The wizard summon picker returns a creature index that is valid for the
-  dungeon tier but out of range or mismapped for the town roster, so glyph and
-  name lookups fall off the town table (glyph `$00`/default and empty name).
-- The Apple IIe town tier/name sidecar is not loaded or is banked out when the
-  wizard summon path reads the glyph/name, while the dungeon path has the
-  correct tier resident.
-- The town spawn path (`monster_spawn_town` vs wizard summon) sets a creature
-  type the A2 renderer's `a2_map_char` translation does not cover.
-
-Required work:
-
-- Reproduce under the MAME harness (wizard mode, town, summon) and capture the
-  summoned slot's `MX_TYPE`, the active roster count, and which tier/name
-  tables are mapped at read time.
-- Root-cause whether the bug is picker range, tier loading, or A2 glyph/name
-  translation; compare against the C64/C128 town summon behavior.
-- Fix at the layer that owns the defect; do not special-case the renderer.
-- Add Apple IIe harness coverage for wizard summon in town: summoned monster
-  has a non-`@` glyph and a real name in combat/inspection messages.
-
-Acceptance target:
-
-- Wizard-summoned monsters in town render and identify correctly on Apple IIe,
-  matching dungeon summon behavior and the other platforms.
+DONE 2026-09-04. Root cause was hypothesis 1, on every platform (not just
+A2): in town (dlvl 0) `pick_creature_type` falls back to dungeon index 0,
+but no tier is loaded in town so the dungeon roster rows are all zero —
+glyph `$00` renders as `@` and the null name pointer prints `?`. Fix at the
+picker layer (`pick_wizard_summon_creature_type` in `core/tier_manager.s`),
+not the renderer: in town, wizard summon now picks a random town creature
+from the always-resident town roster (`TOWN_CREATURE_BASE +
+rng_range(TOWN_CREATURE_COUNT)`); dungeon behavior (level-appropriate pick,
+Balrog at DL100+) is unchanged. Maintainer decision 2026-09-04: town summon
+produces a random town creature (no upstream oracle; wizard mode is
+Moria8-owned). Coverage: C64 test_tier.s t15 pins the town-picker range and
+the DL100 Balrog path; new A2 MAME scenario `wizard_summon_town` asserts the
+summoned slot is adjacent, town-roster typed, and has a nonzero glyph and
+name pointer (reproduced the bug against the unfixed image: type 0, zero
+glyph, null name). test_tier128.s gained town-roster const/rng stubs for its
+minimal tier_manager import. Gates: make test (exit 0; test64 195/195, C128
+fast batch PASS, fast-smoke 10/10, testplus4 40/40, A2 runtime incl. the new
+scenario 0 failures), make test128 137/137.
 
 ### Investigate AppleSqueezer accelerator incompatibility
 

@@ -31,12 +31,22 @@
 
 // pick_wizard_summon_creature_type — test helper for wizard summon.
 // At DL100+, force the Balrog so the win condition can be exercised directly.
+// In town (dlvl 0) no dungeon tier is loaded, so the dungeon roster rows are
+// all zero (glyph $00 = '@', null name = "?"): summon a random town creature
+// from the always-resident town roster instead.
 // Callers must run tier_check_transition before entering.
 pick_wizard_summon_creature_type:
     lda zp_player_dlvl
+    beq !town+
     cmp #100
     bcc !normal+
     lda #CREATE_BALROG
+    rts
+!town:
+    lda #TOWN_CREATURE_COUNT
+    jsr rng_range               // [0, TOWN_CREATURE_COUNT-1]
+    clc
+    adc #TOWN_CREATURE_BASE
     rts
 !normal:
     jmp pick_creature_type

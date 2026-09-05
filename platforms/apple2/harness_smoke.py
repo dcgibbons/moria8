@@ -557,6 +557,49 @@ print("SCENARIO DONE")
 
 
 
+LUA_WIZARD_SUMMON_TOWN_BODY = r"""
+-- Wizard summon in town must draw from the always-resident town roster
+-- (types 57-64). Regression: the picker fell back to dungeon index 0 while
+-- no tier was loaded, whose zeroed rows render as '@' with a '?' name.
+local mt = MONSTER_TABLE_ADDR
+local crd = CR_DISPLAY_ADDR
+local crnh = CR_NAME_HI_ADDR
+local before = {}
+for i = 0, 31 do
+    if prog:read_u8(mt + i * 12 + 2) ~= 0xff then before[i] = true end
+end
+assert_line("wizard_menu", wizard_menu_open(), "wizard menu did not open")
+press("S")
+emu.wait(3)
+if screen_has("-more-") then press(" ") emu.wait(1) end
+local px = prog:read_u8(PLAYER_X_ADDR)
+local py = prog:read_u8(PLAYER_Y_ADDR)
+local found = false
+local new_type = 0xff
+local adjacent = false
+for i = 0, 31 do
+    local ty = prog:read_u8(mt + i * 12 + 2)
+    if ty ~= 0xff and not before[i] then
+        found = true
+        new_type = ty
+        local mx = prog:read_u8(mt + i * 12)
+        local my = prog:read_u8(mt + i * 12 + 1)
+        if math.abs(mx - px) <= 1 and math.abs(my - py) <= 1 then
+            adjacent = true
+        end
+    end
+end
+assert_line("summon_spawned", found, "no new live monster slot after summon")
+assert_line("summon_town_roster", new_type >= 57 and new_type <= 64,
+            "summoned type " .. new_type .. " outside town roster")
+assert_line("summon_glyph", new_type ~= 0xff and prog:read_u8(crd + new_type) ~= 0,
+            "summoned creature has zero glyph (renders '@')")
+assert_line("summon_name", new_type ~= 0xff and prog:read_u8(crnh + new_type) ~= 0,
+            "summoned creature has null name pointer (shows '?')")
+assert_line("summon_adjacent", adjacent, "summoned monster not adjacent")
+dump("after_summon")
+print("SCENARIO DONE")
+"""
 
 
 LUA_BALROG_BODY = r"""
@@ -1467,6 +1510,16 @@ def wizard_flow_lua() -> str:
     return _chargen_body("A") + LUA_WIZARD_BODY
 
 
+def wizard_summon_town_lua() -> str:
+    body = (LUA_WIZARD_SUMMON_TOWN_BODY
+            .replace("MONSTER_TABLE_ADDR", hex(_sym_addr("monster_table")))
+            .replace("CR_DISPLAY_ADDR", hex(_sym_addr("cr_display")))
+            .replace("CR_NAME_HI_ADDR", hex(_sym_addr("cr_name_hi")))
+            .replace("PLAYER_X_ADDR", hex(_sym_addr("zp_player_x")))
+            .replace("PLAYER_Y_ADDR", hex(_sym_addr("zp_player_y"))))
+    return _chargen_body("A") + body
+
+
 
 def _balrog_symbols(body: str) -> str:
     return (body
@@ -1559,6 +1612,7 @@ SCENARIO_LUA = {
     "priest_map_area": priest_map_area_lua,
     "help_overlay": help_overlay_lua,
     "wizard_flow": wizard_flow_lua,
+    "wizard_summon_town": wizard_summon_town_lua,
     "scroll_rune": scroll_rune_lua,
     "balrog_victory": balrog_victory_lua,
     "quaff_p3": quaff_p3_lua,

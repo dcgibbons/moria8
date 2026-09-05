@@ -55,6 +55,12 @@ c128_preload_all_overlays:
 pick_creature_type:
     lda #0
     rts
+// Wizard-summon town path deps (town roster consts live in monster.s).
+.const TOWN_CREATURE_COUNT = 8
+.const TOWN_CREATURE_BASE = 57
+rng_range:
+    lda #0
+    rts
 
 #import "../../../../core/tier_manager.s"
 
