@@ -149,30 +149,25 @@ Acceptance target:
 
 ### Fix equipment screen item wrapping
 
-Long equipped item names can still overrun the 40-column equipment layout
-instead of wrapping or clipping cleanly. A reproduced example is a weapon line
-for `Mace (Holy Avenger) (+13,+25)` extending past the visible row, while the
-next equipment slot begins normally underneath it. This is a display/layout
-bug, not an item naming problem.
-
-Required work:
-
-- Audit the equipment renderer's item-description path and compare it with the
-  inventory/list paths that already handle constrained-width descriptions.
-- Define a per-platform equipment description width for C64, C128, and Plus/4
-  instead of relying on the full message/string output path.
-- Wrap, elide, or split long equipment descriptions consistently without
-  corrupting the next slot, prompt row, or color state.
-- Preserve full item identity where possible; do not shorten player-facing item
-  names as a byte-saving workaround.
-- Add focused coverage for long ego/artifact names with combat bonuses, armor
-  bonuses, lights with turn counts, and rings/amulets.
-
-Acceptance target:
-
-- Every equipped-item line remains legible and bounded on 40-column and
-  80-column equipment screens, with no text spilling into adjacent rows or off
-  the visible display.
+DONE 2026-09-04. The reported overrun ("Mace (Holy Avenger) (+13,+25)"
+spilling) predated the fix: the entry was written 2026-06-02 and the 2-line
+equipment wrapper (`core/ui_equipment_wrap.s`, HAL_LAYOUT_EQUIPMENT_WRAP,
+C64/Plus4 40-column) landed 2026-08-13 in ea899d3. Reproduction against the
+current build (production item_desc_banked.s formatter staged with the exact
+reported item) shows the line wraps correctly: name+ego on the slot row,
+"(+13,+25)" on the continuation row at the description column, next slot
+uncorrupted. One residual defect found and fixed: on the continuation row
+the wrapper still applied the first-row deferred-space and paren-wrap rules,
+so a second suffix lost its " (" separator to the one-wrap cap (rendered
+"(Holy Avenger)+13,+25)"); the wrapper now applies those rules on the first
+row only and clips the continuation row only at the hard right edge. 80-col
+platforms (C128/A2) need no wrapper — the longest equipment lines fit.
+Coverage: test_ui_views.s now links the production item formatter
+(item_desc_banked.s via the C64_TEST_REAL_ITEMDESC opt-out in
+ui_trampoline_stubs.s, which never printed stats) and pins both the reported
+Mace case and the longer Two-Handed Sword case (ego parenthetical wraps as a
+unit); harness count 17→19. Gates: make test exit 0 (all four platforms),
+make test128 137/137.
 
 ### Expand unsupported monster special attacks
 

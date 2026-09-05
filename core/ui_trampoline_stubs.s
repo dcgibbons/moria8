@@ -184,6 +184,7 @@ tool_ego_pfx_hi:
 
 // put_inv_name_with_ego — Print item name with ego prefix/suffix
 // Input: X = inventory slot index
+#if !C64_TEST_REAL_ITEMDESC
 itemdesc_put_inv_slot:
 put_inv_name_with_ego:
     lda inv_item_id,x
@@ -243,6 +244,7 @@ itemdesc_put_store_slot:
     jsr hal_screen_put_string
     :LoadStoreEgoX()
     jmp banked_ego_put_suffix
+#endif
 #else
 banked_ego_put_suffix:
 itemdesc_put_inv_slot:

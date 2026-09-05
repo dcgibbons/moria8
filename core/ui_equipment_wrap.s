@@ -49,15 +49,29 @@ ueq_wrap_put_char:
     sta ueq_pending_space
     lda ueq_wrap_char
     cmp #$28
-    beq !ueqw_wrap+
+    beq !ueqw_paren_after_space+
     cmp #$1b
-    beq !ueqw_wrap+
+    beq !ueqw_paren_after_space+
+    lda #$20
+    jsr screen_put_char
+    jmp !ueqw_no_pending+
+!ueqw_paren_after_space:
+    // Deferred space before a suffix paren: wrap on the first row so the
+    // suffix stays whole; on the continuation row write both inline.
+    lda ueq_wrap_line
+    bne !ueqw_flush_space+
+    jmp !ueqw_wrap+
+!ueqw_flush_space:
     lda #$20
     jsr screen_put_char
 !ueqw_no_pending:
     lda ueq_wrap_char
     cmp #$20
     bne !ueqw_not_space+
+    // Defer spaces near the right edge on the first row only; the
+    // continuation row writes them inline.
+    lda ueq_wrap_line
+    bne !ueqw_write+
     ldx zp_cursor_col
     cpx #(SCREEN_COLS - 14)
     bcc !ueqw_write+
@@ -73,6 +87,10 @@ ueq_wrap_put_char:
     cmp #$1b
     bne !ueqw_edge_check+
 !ueqw_suffix_check:
+    // Keep a suffix parenthetical whole on the first row only; on the
+    // continuation row fall through to the hard-edge clip.
+    lda ueq_wrap_line
+    bne !ueqw_edge_check+
     ldx zp_cursor_col
     cpx #(SCREEN_COLS - 14)
     bcs !ueqw_wrap+
@@ -80,9 +98,9 @@ ueq_wrap_put_char:
     ldx zp_cursor_col
     cpx #SCREEN_COLS
     bcc !ueqw_write+
-!ueqw_wrap:
     lda ueq_wrap_line
-    bne !ueqw_done+
+    bne !ueqw_done+             // Continuation overflow: clip cleanly
+!ueqw_wrap:
     inc ueq_wrap_line
     inc zp_cursor_row
     lda ueq_wrap_col

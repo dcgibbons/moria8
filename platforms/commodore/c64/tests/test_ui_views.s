@@ -152,7 +152,9 @@ magic_check_new_spells:
 #import "../../../../core/ui_help_page2_data.s"
 #import "../../../../core/ui_help.s"
 #define C64_TEST_FULL_ITEMDESC_STUB
+#define C64_TEST_REAL_ITEMDESC
 #import "../../../../core/ui_trampoline_stubs.s"
+#import "../../../../core/item_desc_banked.s"
 
 press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
@@ -260,6 +262,8 @@ test_start:
     jsr test_inventory_identify_select_view_six_items
     jsr test_screen_put_string_clamps_to_row
     jsr test_equipment_select_view
+    jsr test_equipment_wrap_long
+    jsr test_equipment_wrap_longer
 
     jmp test_exit_trampoline
 
@@ -725,6 +729,110 @@ test_equipment_view:
     lda #$00
 !store:
     sta tc_results + 6
+    rts
+
+// Regression: the reported "Mace (Holy Avenger) (+13,+25)" equipment line
+// must wrap onto the slot's continuation row, not overrun the 40-column row.
+test_equipment_wrap_long:
+    jsr reset_shared_state
+
+    lda #5                      // Mace
+    sta inv_item_id + EQUIP_WEAPON
+    lda #1
+    sta inv_qty + EQUIP_WEAPON
+    lda #EGO_HOLY_AVENGER
+    sta inv_ego + EQUIP_WEAPON
+    lda #IF_IDENTIFIED
+    sta inv_flags + EQUIP_WEAPON
+    lda #13
+    sta inv_to_hit + EQUIP_WEAPON
+    lda #25
+    sta inv_to_dam + EQUIP_WEAPON
+
+    jsr ui_equip_display
+
+    // Row 2: base name + ego suffix only; bonus suffix wraps off
+    lda #<expected_equip_wrap_name
+    sta zp_ptr0
+    lda #>expected_equip_wrap_name
+    sta zp_ptr0_hi
+    lda #2
+    ldx #1
+    jsr assert_screen_string
+    bcc !fail+
+
+    // Row 3: continuation row holds the bonus suffix at the description column
+    lda #<expected_equip_wrap_bonus
+    sta zp_ptr0
+    lda #>expected_equip_wrap_bonus
+    sta zp_ptr0_hi
+    lda #3
+    ldx #12
+    jsr assert_screen_string
+    bcc !fail+
+
+    // Row 4: next slot begins on its own row, uncorrupted
+    lda #<expected_equip_wrap_next
+    sta zp_ptr0
+    lda #>expected_equip_wrap_next
+    sta zp_ptr0_hi
+    lda #4
+    ldx #4
+    jsr assert_screen_string
+    bcc !fail+
+
+    lda #$01
+    bne !store+
+!fail:
+    lda #$00
+!store:
+    sta tc_results + 17
+    rts
+
+// Longer regression: the ego parenthetical itself wraps as a unit when it
+// starts near the right edge ("Two-Handed Sword (Holy Avenger) (+13,+25)").
+test_equipment_wrap_longer:
+    jsr reset_shared_state
+
+    lda #69                     // Two-Handed Sword
+    sta inv_item_id + EQUIP_WEAPON
+    lda #1
+    sta inv_qty + EQUIP_WEAPON
+    lda #EGO_HOLY_AVENGER
+    sta inv_ego + EQUIP_WEAPON
+    lda #IF_IDENTIFIED
+    sta inv_flags + EQUIP_WEAPON
+    lda #13
+    sta inv_to_hit + EQUIP_WEAPON
+    lda #25
+    sta inv_to_dam + EQUIP_WEAPON
+
+    jsr ui_equip_display
+
+    lda #<expected_equip_wrap2_name
+    sta zp_ptr0
+    lda #>expected_equip_wrap2_name
+    sta zp_ptr0_hi
+    lda #2
+    ldx #1
+    jsr assert_screen_string
+    bcc !fail+
+
+    lda #<expected_equip_wrap2_cont
+    sta zp_ptr0
+    lda #>expected_equip_wrap2_cont
+    sta zp_ptr0_hi
+    lda #3
+    ldx #12
+    jsr assert_screen_string
+    bcc !fail+
+
+    lda #$01
+    bne !store2+
+!fail:
+    lda #$00
+!store2:
+    sta tc_results + 18
     rts
 
 test_equipment_select_view:
@@ -1360,6 +1468,18 @@ expected_identify_prompt_af:
 expected_equip_line:
     .byte $01
     .text ") Weapon: Long Sword (Slay Evil)" ; .byte 0
+expected_equip_wrap_name:
+    .byte $01
+    .text ") Weapon: Mace (Holy Avenger)" ; .byte 0
+expected_equip_wrap_bonus:
+    .text "(+13,+25)" ; .byte 0
+expected_equip_wrap_next:
+    .text "Body:   (none)" ; .byte 0
+expected_equip_wrap2_name:
+    .byte $01
+    .text ") Weapon: Two-Handed Sword" ; .byte 0
+expected_equip_wrap2_cont:
+    .text "(Holy Avenger) (+13,+25)" ; .byte 0
 expected_recall_lv:
     .text "LV 7" ; .byte 0
 expected_recall_hp:
