@@ -878,6 +878,7 @@ run_disarm_smoke() {
         -write "$smoke_plus4/monster.db.2" "monster.db.2" \
         -write "$smoke_plus4/monster.db.3" "monster.db.3" \
         -write "$smoke_plus4/monster.db.4" "monster.db.4" \
+        -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
         -write "$smoke_plus4/ovl.gen" "4.gen" \
