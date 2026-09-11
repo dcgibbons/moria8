@@ -3,37 +3,7 @@
 Durable future work that is too concrete for design philosophy and too
 unreleased for release notes.
 
-## Commodore Ports
-
-### Optional: physically plausible chest contents
-
-VMS Moria has no size filter on chest contents, and Moria8 deliberately follows
-it (`docs/CHEST_DESIGN.md`): any chest type can contain any object, including
-another, larger chest. Umoria added `itemBiggerThanChest`, but only for
-`CM_SMALL_OBJ` monster droppers, not chest drops — so even Umoria allows a
-large chest inside a small one here.
-
-This is a realism/polish item, not gameplay-value work: nested chests are
-amusing and harmless. It would be a deliberate deviation from the pinned VMS
-oracle, not a bug fix, so it needs a design call before implementation.
-
-Required work:
-
-- Decide the rule: e.g. contents must not outweigh/exceed the container chest,
-  or simply forbid nested chests, or adopt Umoria's `itemBiggerThanChest`
-  category/weight filter for chest loot only.
-- Record the deviation in `docs/CHEST_DESIGN.md` with VMS `summon_object`
-  (moria.inc:2259-2290) as the behavior being superseded.
-- Filter or re-roll in `chest_loot_place_one` without changing drop counts,
-  odds, or RNG order beyond the filtered retries.
-- Add focused coverage proving an ineligible item is never produced while
-  eligible drops are unaffected.
-
-Acceptance target:
-
-- Chest contents respect a documented physical-plausibility rule, with the
-  deviation from VMS recorded and tested, and no change to drop rates for
-   legal contents.
+## Gameplay & Core Engine
 
 ### Stack identical inventory items (spikes first)
 
@@ -75,412 +45,6 @@ Acceptance target:
 - Spikes no longer consume one pack slot each (and, if general merging is
   chosen, identical consumables merge per the documented rule), with store
   stock not starving food/oil, and no change to non-stackable item handling.
-
-### Sweep platform-specific inlines in core/ behind HAL macros
-
-`core/` currently contains a few direct platform conditionals instead of HAL
-macros: `#if APPLE2 jsr mmu_safe_map_write_ptr1` in `core/ui_messages.s`
-(message-history writes) and `#if C128_PRODUCT_OVERLAY_RUNTIME jsr
-mmu_common_copy_map_row` plus `SCREEN_RAM,y` reads in
-`core/dungeon_features.s` (`place_secrets` row scan). Both work and are
-assert-guarded, but they break the convention that core stays
-platform-agnostic (`docs/CROSS_PLATFORM_STRATEGY.md`).
-
-Required work:
-
-- Introduce a HAL write macro (e.g. `:HalAuxWritePtr1()`) defaulting to
-  `sta (zp_ptr1),y` and overridden by Apple II to the aux thunk; same
-  pattern for a row-read/scan macro covering the C128 bank-copy path.
-- Sweep both call sites; no behavior change, so existing gates
-  (`make test`, `make test128`) suffice.
-
-Acceptance target:
-
-- No `#if <PLATFORM>` platform calls remain in the touched core modules;
-  all four platform builds and test gates stay green.
-
-### Implement Plus/4 TED sound effects
-
-The Plus/4 has TED sound hardware, but Moria8's Plus/4 backend currently
-silences every sound request. `platforms/commodore/plus4/sound.s` initializes
-and clears TED sound registers, and `sound_play` immediately clears them again
-instead of using the existing frequency/control tables.
-
-Required work:
-
-- Implement `sound_play` for TED using the existing `SFX_*` IDs shared by C64,
-  C128, and Plus/4.
-- Implement `hal_sound_update` so effects stop cleanly and cannot leave stuck
-  tones.
-- Preserve TED display state: sound writes must not corrupt bitmap/character
-  mode bits that `plus4_display_resync` protects.
-- Tune TED approximations for bump, hit, miss, pickup, death, level-up, spell,
-  spell-fail, hunger warning, and fainting.
-- Add Plus/4 coverage proving sound init/play/update touch the expected TED
-  registers and return to silence.
-- Document any intentional TED approximation versus SID behavior if the audible
-  effect set cannot match C64/C128 closely.
-
-Acceptance target:
-
-- Plus/4 gameplay produces audible, bounded sound effects for the existing
-  shared `SFX_*` events without stuck tones or display-mode regressions.
-
-### Complete auto-rest disturbance model
-
-Moria8 now has a first-pass `CTRL+R` rest-until-recovered command. It keeps `.`
-as one-turn rest, `R` as Read Scroll, and `SHIFT+R` as Refuel. The current
-implementation advances ordinary rest turns until HP and mana are full, clears
-search mode when started, stops on cancel input, and stops when a message asks
-for player attention. Existing C64/C128 tests cover full-recovery no-turn
-behavior, HP/mana recovery, attention-message interruption, held-key
-interruption, and search-mode clearing.
-
-Remaining polish:
-
-- Add an explicit disturbance flag so auto-rest can stop on silent-but-dangerous
-  state changes without relying on `zp_msg_flags`.
-- Stop on visible hostile monster activity even when the monster only moves and
-  no attack/spell message is generated.
-- Stop on player displacement, newly discovered objects/features, hunger
-  warnings, and other attention-worthy events through one shared disturbance
-  path.
-- Add compact status text such as `Rest *` or `Resting` if resident memory or an
-  overlay-owned display path can afford it.
-- Keep C128 resident play below `$D000`.
-
-### Optional: exact Umoria per-blow melee messages
-
-Moria8 now calculates melee blow counts from the Umoria-style STR/DEX/weapon
-weight buckets, including exceptional stats, too-heavy weapons, bare hands, and
-launcher/ammo-as-melee handling. Focused combat tests cover the reported C128
-gnome rogue/dagger case, top exceptional DEX, too-heavy weapon handling, and
-ranged launcher melee forcing one blow.
-
-The remaining difference is player-facing feedback. Umoria prints one message
-per blow; Moria8 prints one round summary and appends `(hits/blows)` when the
-attack had multiple blows, for example `You hit the skeleton kobold (2/3).`.
-This prevents multi-blow attacks from looking like single-hit attacks, but it is
-not byte-faithful Umoria message timing.
-
-Upstream behavior:
-
-- Umoria calculates blows from weapon weight, STR, and DEX before the attack.
-- Umoria loops once per blow during a single attack command.
-- Each blow rolls to hit independently.
-- Each miss prints `You miss the <monster>.`
-- Each hit prints `You hit the <monster>.`
-- If a blow kills the monster, Umoria prints `You have slain the <monster>.`
-  and stops the remaining blow loop.
-- Bare hands get 2 blows with a to-hit penalty; missile/ammo melee attacks are
-  forced to 1 blow.
-
-Required work:
-
-- Decide whether exact per-blow message parity is worth the extra message
-  traffic on 40-column targets.
-- If yes, change melee feedback so each miss/hit/slay blow is visible as its own
-  message and killing blows stop the loop immediately.
-- Add focused coverage for per-blow message order and kill-loop stopping.
-
-Acceptance target:
-
-- If this item is implemented, melee feedback matches Umoria per-blow message
-  timing. Otherwise the current `(hits/blows)` summary is the documented Moria8
-  approximation.
-
-### Implement numeric repeat prefixes
-
-The C64 and Plus/4 input parsers explicitly leave numeric repeat prefixes
-deferred, and `zp_input_count` is currently always 1. Classic Moria supports
-repeat counts for commands where repeating is safe and meaningful.
-
-Required work:
-
-- Define which commands accept numeric repeat prefixes on each Commodore
-  keyboard layout.
-- Parse multi-digit prefixes without conflicting with movement, inventory
-  letters, `SHIFT` commands, or C128 keypad input.
-- Route accepted counts through one shared repeat path and reject or ignore
-  unsafe repeats consistently.
-- Add tests for one-turn commands, movement/run interactions, prompt
-  cancellation, and non-repeatable commands.
-
-Acceptance target:
-
-- Numeric prefixes work for supported repeatable commands without changing
-  single-key command behavior or prompt input semantics.
-
-### Fix equipment screen item wrapping
-
-DONE 2026-09-04. The reported overrun ("Mace (Holy Avenger) (+13,+25)"
-spilling) predated the fix: the entry was written 2026-06-02 and the 2-line
-equipment wrapper (`core/ui_equipment_wrap.s`, HAL_LAYOUT_EQUIPMENT_WRAP,
-C64/Plus4 40-column) landed 2026-08-13 in ea899d3. Reproduction against the
-current build (production item_desc_banked.s formatter staged with the exact
-reported item) shows the line wraps correctly: name+ego on the slot row,
-"(+13,+25)" on the continuation row at the description column, next slot
-uncorrupted. One residual defect found and fixed: on the continuation row
-the wrapper still applied the first-row deferred-space and paren-wrap rules,
-so a second suffix lost its " (" separator to the one-wrap cap (rendered
-"(Holy Avenger)+13,+25)"); the wrapper now applies those rules on the first
-row only and clips the continuation row only at the hard right edge. 80-col
-platforms (C128/A2) need no wrapper — the longest equipment lines fit.
-Coverage: test_ui_views.s now links the production item formatter
-(item_desc_banked.s via the C64_TEST_REAL_ITEMDESC opt-out in
-ui_trampoline_stubs.s, which never printed stats) and pins both the reported
-Mace case and the longer Two-Handed Sword case (ego parenthetical wraps as a
-unit); harness count 17→19. Gates: make test exit 0 (all four platforms),
-make test128 137/137.
-
-### Expand unsupported monster special attacks
-
-Moria8 maps several Umoria monster attack effects into compact substitutes.
-For example, fire/cold/lightning, blindness, stealing, disenchant, eating food,
-eating light, eating charges, stat drains, and experience drain are not all
-implemented as distinct effects.
-
-Required work:
-
-- Prioritize high-impact special attacks from the shipped monster roster before
-  expanding the full monster catalog.
-- Add compact effect handlers for each accepted attack type.
-- Update `tools/parse_creatures.py` so imported data maps to real handlers
-  instead of normal/poison approximations when support exists.
-- Add per-effect tests for damage/status, messages, inventory/light/resource
-  mutation, and save/load impact where relevant.
-
-Acceptance target:
-
-- Shipped monsters no longer silently collapse high-impact upstream attacks
-  into misleading normal attacks.
-
-### Add monster door opening and bashing
-
-DONE 2026-09-02 (C64/C128/Plus/4; Apple IIe blocked on the resident-RAM
-expansion below). Door capability folds into `cr_aaf` bit 7
-(`CD_OPEN_DOOR_BIT`; AAF tops out at 40 upstream, so the bit is free),
-generated by `tools/parse_creatures.py` from Umoria `CM_OPEN_DOOR`
-(`0x00020000`) — 92 of 279 upstream creatures qualify, including all town
-creatures and the Balrog. `monster_try_step`'s blocked branch now runs the
-door engine (`!mts_door_block` in `core/monster_ai.s`): door-capable monsters
-silently open closed doors and pass secret doors (door stays secret);
-non-capable monsters bash with the exact Umoria `monsterOpenDoor` formula
-`randomNumber((hp+1)*80) < 40*(hp-20)` on current HP (clamped to 254 so
-`hp+1` fits a byte; hp≤20 never bashes) via `math_multiply` +
-`rng_range_word`; success prints "You hear a door burst open!" (new huffman
-string `@MAT_DOOR_BURST`) and any door action consumes the move without
-stepping into the doorway. Occupied doors are protected, opened tiles mark
-`mat_action_dirty` and route through `mat_mark_tile_dirty_if_nonlocal`.
-Documented approximations: no locked/stuck door state (tile-only model),
-no 50% broken-door roll, bash HP clamp at 254 (≤0.1% probability shift).
-Coverage: `test_monster_ai.s` t41-t46 (capable open, failed/successful bash,
-hp≤20 guard, secret pass/block, occupied protection), harness count 40→46.
-Regression fixes exposed by the layout growth: `test_subsystems.s` banked
-fixture re-encoded for the new huffman tree; `test_chest_loot.s` t7 now pins
-its scripted RNG offsets to zero per its documented intent (it previously
-read leftover staged draws and then code bytes as map tiles); bolt/dispel/
-effects_magic suites slim unused `ui_inventory`/`ui_equipment`/`ui_character`
-imports to stay under `$C000`. Placement funding: `place_secrets` moved to
-the GEN overlay on C64/Plus/4 (existing `PLACE_SECRETS_EXTERNAL` pattern);
-scripted chest/balrog product fixtures moved to the CHEST overlay on
-C64/Plus/4 (`ChestFixtureSegment`); C128 moved `recall.s` to the Default
-image. Gates: `make test64` 195/195, `make test128-fast`,
-`make test128-fast-smoke`, `make test128` 137/137, `make testplus4` 40/40.
-Apple IIe: enabled 2026-09-02 — the A2 RAM expansion item below freed the
-resident bytes, so the door engine runs on all four platforms; the
-`#if !APPLE2` guard is removed. The relocated map-area engine has direct
-A2 MAME coverage (`priest_map_area` scenario casts Sense Surroundings
-through `tramp_eff_map_area` and asserts the mana-cost signature and clean
-return); earthquake shares the identical trampoline pattern (WoD exemption
-class); C64 unit suites cover the engines themselves.
-
-### input_ctrl_r_held CIA matrix probe raced the KERNAL scanner
-
-DONE 2026-09-08 (found during the wizard-teleport investigation).
-`input_ctrl_r_held` (C64) reprogrammed the CIA1 keyboard-matrix
-ports/DDRs from a `CLI` context with no IRQ masking, so the KERNAL
-SCNKEY interrupt could interleave between its row-select writes and
-column reads, producing phantom "CTRL+R held" readings (confirmed stuck
-at `$01` in a live snapshot). A false positive injects `CMD_AUTOREST`
-into the command stream and starves real key input. Fix: wrap the probe
-in `php`/`sei` ... `plp` (3 bytes), matching the already-protected
-`input_run_key_held` pattern; the caller's interrupt state is preserved.
-Verified live on a patched product disk: probe executes with the new
-prologue and returns `$00` with no keys held. Gates: make test exit 0,
-make test128 137/137.
-
-### Wizard teleport freezes on a tier-mismatched level (one-step tier transition)
-
-DONE 2026-09-07 (player report + VICE snapshots). Root cause chain:
-(a) `tier_check_transition` stepped only ONE tier per call, so a
-multi-tier move (wizard level jump, Word of Recall) left `current_tier`
-behind `zp_player_dlvl` (snapshot: tier 2 on dlvl 20 — wrong-tier
-monsters as a side effect). (b) The wizard teleport's gameplay-view
-restore then fired `tier_load` for the correct tier into the `$E000`
-window, evicting the ModalMisc wizard overlay; the redraw (resident)
-completed, but the restore helper's `rts` returned into the evicted
-window and executed tier data as code — nondeterministic: benign,
-spurious overlay load, or JAM (`$FFBE` in one trace). Fix:
-`tier_check_transition` now computes the containing tier directly for any
-out-of-range dlvl (single disk load, same bounds as the first-entry
-path), so `current_tier` can never lag behind dlvl and the
-modal-restore tier load can never fire spuriously. Regression tests:
-test_tier.s t16-t17 (multi-tier up/down), 17/17. Verified end-to-end
-with a scripted level-jump-to-20 + teleport product build: previously
-JAMmed, now completes with the dungeon correctly repainted. Gates:
-make test exit 0, make test128 137/137.
-
-### Locked/stuck/spiked doors
-
-DONE 2026-09-06 (design approved 2026-09-04). All four steps shipped on
-all four platforms; change record in the session plan. (1) Per-door state
-lives in a position-keyed SoA side table (cap 16, beside the trap table in
-core/dungeon_features.s; locked 11-20, stuck = sign bit + magnitude, 1 on
-an open tile = broken); generation rolls state over place_secrets'
-leftover door scan (single rng_range(120) per leftover closed door:
-2/12 locked, 1/12 stuck, upstream distribution); new save block with
-SAVE_VERSION bump per platform and gated legacy read (old saves load
-all-plain). (2) Player semantics: door_try_open picks locks
-((skill-lock) > rng(100), Umoria-shaped disarm skill, +1 XP once, opens
-same turn) and refuses stuck doors; door_try_close refuses broken doors;
-bash_door uses Umoria's formula (STR + 75 fixed weight proxy,
-rng(chance*(20+|s|)) < 10*(chance-|s|), 50% break, step-through); WoD and
-destroy-traps-doors purge state. (3) Monster engine is state-aware:
-door-capable monsters pick locks (unlock only) and burst stuck doors
-(open + 50% break), non-capable bash gains |s| terms via the shared
-mts_state_roll helper; plain doors roll identically to before. (4) Iron
-Spike (item 135, ICAT_SPIKE, general store) and the CTRL+D (jam) command:
-VMS flat +20 magnitude per spike (locked becomes stuck, cap 127), Umoria
-turn policy, occupied doorway refuses via combat_msg_monster_in_way,
-spike consumed on success. Resident budget funded by approved cold-code
-moves (C64/Plus4 level-up magic + calc_spell_failure -> ModalMisc, picker
-chain GEN -> CHEST, C64 store_restock -> ModalMisc, C128 door-state code
- -> Default image, A2 msg_history -> aux RAM); jam handler parks in the
- C64 items overlay and the Plus4/A2 chest overlay, while C128 keeps it in
- resident Default RAM. The lock-pick roll lives beside its effective-disarm
- helper: cached Disarm on C128, Chest on the other product builds.
-Post-review fixes (2026-09-07): pick roll moved off resident (it called
-the overlay-parked disarm formula -> wild jump) and gained hopeless-skill
-guards (skill <= lock no longer wraps unsigned to always-succeed); jam
-key is CTRL+D on all platforms (CTRL+J was tried first, but the Apple IIe
-encoder emits $0A for both CTRL+J and the down-arrow key, so the chord is
-unreachable there; F was already gain-spell and first match wins; V is
-reserved for future work; SHIFT+C is character info); C64
-SCROLL_P3_ROUTER_ENABLED restored (accidentally dropped with the
-store_restock move, silently no-op'ing phase-3 scrolls). Gates: make test
-exit 0 (test64 195/195, C128 fast+smoke 10/10 each, testplus4 40/40, A2
-runtime 0 failures), make test128 137/137. Also hardened the Plus4
-disk-setup smoke harness against its $E000 window being shared with the
-KERNAL ROM (modal key reads bank ROM in for GETIN, firing window
-breakpoints on ROM keyboard code): pass/fail stops now count only when
-the Help overlay is live AND the instruction at PC matches the real
-function prologue.
-
-Post-review fixes (2026-09-10, multi-reviewer pass): (a) `mts_state_roll`
-returned success when monster hp exactly equalled the B term (`cmp`/`beq`
-exited through the carry-preserving epilogue with carry set); equality now
-explicitly `clc`s. Boundary tests t53-t55 added (red-green verified).
-(b) Phantom spike: `door_jam_at_target` consumed the spike and printed
-success even when the state table was full and `door_state_set_at`
-silently dropped the write; jamming a door with no entry now refuses
-(turn consumed, spike kept, new message) when `door_state_count` ==
-MAX_DOOR_STATES. C64 t64 pins it. (c) place_secrets' state roll used to
-scan at most the first MAX_DOOR_STATES leftover doors, which starved the
-table (~1/4 of rolls produce a state) and biased locked/stuck doors
-toward the top of the row-major map scan; a separate full-map pass now
-covers every leftover door and stops rolling only when the table fills
-(a subsequent bounded 32-door scan was also rejected). Deliberate RNG-stream
-change per DUNGEON_GENERATION_CONTRACT (draw count grows only on levels
-with >16 leftover closed doors; bounds/reduction unchanged: one
-rng_range(120) per rolled door, [0,20) locked mag 11+r/2, [60,70) stuck
-mag r-49). (d) Dead `mts_door_state` store removed; stale GEN-overlay and
-ICAT-range comments corrected. (e) item_defs' "stacks" claim removed —
-no item in this port merges slots; whether spikes should stack like
-upstream is an open design question (below).
-
-### Disturb the player mid-turn when a monster bursts a door
-
-Upstream Umoria calls `playerDisturb(1,0)` when a monster bursts a door
-(`monster.cpp::monsterOpenDoor`), interrupting rest/run immediately.
-Moria8 prints the same unconditional message, and `huff_print_msg` sets
-`zp_msg_flags`, which already breaks auto-rest and running at the
-post-turn check (`core/game_loop.s` rest loop and `run_post`). The only
-residual delta is timing: upstream's disturb fires mid-step, so a
-multi-tile run could in principle continue one step further here before
-stopping. Minor gameplay parity; no correctness issue.
-
-Required work:
-
-- If pursued, add an explicit disturb hook at the two burst-print sites
-  in `core/monster_ai.s` and verify rest/run interruption against the
-  upstream mid-step timing.
-
-### Overlay callers of the gameplay-view restore can be evicted mid-flow
-
-The C64/Plus4/A2 gameplay-view restore (`ui_view_redraw_gameplay_view`,
-resident) calls `tier_restore_after_overlay`, which can load tier data
-into the shared `$E000` window. Modal overlays whose code lives in that
-window (wizard restore helpers, spell/item modal exit paths) continue
-executing there after the load — the window then holds tier data, not
-code, so the continuation is wild. Today this only fires when the tier
-is stale (after a tier-load failure, `current_tier=0`); the normal
-in-range path skips the load. Hardening options: move the small restore
-helpers resident, or have the restore reload the caller's overlay
-before returning. Exposed by the wizard-teleport freeze above; not
-triggered in normal play once the tier always matches dlvl.
-
-### Closing a door onto a monster's tile breaks attack targeting
-
-DONE 2026-09-04 (player report 2026-09-02). Both halves fixed to upstream
-parity. (a) `door_try_close` now resolves `FLAG_OCCUPIED` against the live
-monster table: a live monster in the doorway refuses the close with "The
-<name> is in your way!" (new `combat_msg_monster_in_way` helper + plain-text
-suffix, VMS `closeobject` / Umoria `playerCloseDoor` parity, turn still
-consumed per both oracles), while a stale flag is repaired and the close
-proceeds (same repair semantics as `player_move_check_live_occupant`). The
-helper resolves `cmb_type` from the blocking slot before composing:
-`combat_append_monster_name` reads `cmb_type`, which is stale outside combat
-(play-test 2026-09-04: a Cloud Giant blocking the door was named "Balrog"
-from the previous level's combat). (b)
-`player_try_move` now checks `FLAG_OCCUPIED` before walkability (VMS
-`move_char` checks `cptr` before door/floor handling), so bumping a monster
-standing on a closed door — or any blocked tile — routes to
-`player_attack_monster`; Umoria's unlit-monster free-turn carve-out is not
-followed (VMS is the default oracle and Moria8 already attacks unseen
-monsters on floor). `door_try_open` on an occupied closed door is unchanged:
-the state is unreachable once close refuses. Placement: the helper parks in
-the A2 resident Default and C128 C128ResidentWorld next to its caller via the
-new `CMB_IN_WAY_EXTERNAL` define (A2 play slot and C128 play payload were
-both full); C128 keeps the string in C128ResidentItems via the existing
-`COMBAT_STRINGS_EXTERNAL` path. Coverage: test_dungeon.s t46-t51 (unoccupied
-close regression, occupied refusal with tile/turn assertions, stale-flag
-repair, closed-door bump routes to attack with coordinates, unoccupied
-closed-door bump stays blocked, occupied-floor attack regression; t47 also
-pins the refusal message content against a seeded stale cmb_type); harness
-count 45→51. Regression repairs: test_chest_loot.s drops its unused
-ui_character.s import (same pattern as 7710268) to stay under its map-write
-boundary; test_item_ui.s/test_monster_attack.s/test_ui_views_filters.s gain
-link stubs. Gates: make build all four platforms; test64 195/195; test128
-137/137 (town-move diag labels reordered with the flow, harness validation
-is order-insensitive); test128-fast/test128-fast-smoke 10/10; testplus4
-40/40; A2 MAME runtime all scenarios 0 failures; check-hal-boundaries green.
-
-### Apple IIe resident RAM expansion
-
-DONE 2026-09-02 (first tranche). The spell-execution engines
-`player_magic_map.s` (`eff_map_area`, 362 B) and
-`player_magic_earthquake.s` (`eff_earthquake`, 110 B) moved from the
-resident image into the A2 death overlay beside `player_destroy_area.s`,
-behind new resident swap trampolines (`tramp_eff_map_area`,
-`tramp_eff_earthquake`, same OVL_DEATH-load + OVL.SPELL-restore pattern as
-WoD's `tramp_eff_destroy_area`); the execute-overlay call site now routes
-through `PMX_MAP_AREA_TARGET` (`PMX_MAP_AREA_TRAMPOLINE` set only on A2).
-Result: resident ends `$7954` (684 B free, was `$7BA7` with 89 B free),
-unblocking the monster door engine on A2 and funding several future items.
-The death overlay is 4,139 B (window cap 5,632 B). The durable big lever
-remains aux code execution (policy change + execution-safety analysis +
-MAME verification) if overlay externalization runs out.
 
 ### Add upstream monster sleep immunity
 
@@ -587,77 +151,161 @@ Acceptance target:
   ring or active spell, retains normal LOS/terrain rules, and behaves
   consistently on every platform.
 
-### Bring Word of Destruction up to upstream area-devastation
+### Expand unsupported monster special attacks
 
-DONE 2026-08-30. `eff_destroy_area` now runs the shared upstream-style
-devastation engine (`core/player_destroy_area.s`): 15-radius terrain reroll
-(floor/WALL_H/MAGMA/QUARTZ via upstream typ odds, boundary edges spared,
-player tile forced floor, upstream distance metric), silent deletion of
-in-radius monsters (no XP, no winner flag), floor items, glyphs, and traps,
-room_lit clearing, additive 11..20 blindness with 255 clamp, and the
-upstream blast message; town applies message+blind only. Placed per platform
-(C64 spell overlay, C128 chest overlay + `tramp_eff_destroy_area`,
-Plus/4 modal-misc + restore-OVL_SPELL trampoline, Apple IIe death overlay +
-restore-OVL_SPELL trampoline). Coverage: `test_word_of_destruction.s` (7
-tests, production dispatch), `test_word_of_destruction128.s`; earthquake
-regressions added to `test_utility_effects.s` (attack-only 3000 path, edge
-guard, player-tile skip); scroll/staff routing remains spy-proven in
-`test_scroll_p3.s` (exemption: that suite cannot host the engine; effect
-proven via the WoD suites). Plus/4 and Apple IIe runtime coverage exempted
-on shared-source + layout-assert evidence; gates `make test64`,
-`make test128-fast`, `make test128-fast-smoke`, `make test128`,
-`make testplus4`, `make testapple2`, `make test` all pass.
+Moria8 maps several Umoria monster attack effects into compact substitutes.
+For example, fire/cold/lightning, blindness, stealing, disenchant, eating food,
+eating light, eating charges, stat drains, and experience drain are not all
+implemented as distinct effects.
 
-### Add Balrog victory and retirement flow
+Required work:
 
-Status: implemented in product code; coverage landed 2026-08-20 except as
-noted. C64: `test_balrog_victory.s` (combat_note_kill guards, eff_kill_monster
-choke point, once-only message), melee kill wiring (`test_combat` t41), bash
-kill wiring (`test_bash` t9), hiscore winner marker (`test_score` t12), and
-dispatch cases for save-blocked and quit-to-retirement (`test_main_loop`
-t43/t44). C128: the same two dispatch cases in `test_main_loop128` (t33/t34).
-Plus/4: `balrog_product_plus4` scripted product smoke (deterministic one-HP
-Balrog fixture at level gen, real bump-attack kill, winner flag, save-block
-message). Apple IIe: `balrog_victory` MAME scenario (stock image; Lua rewrites
-a level-spawned slot into a one-HP stunned Balrog after generation settles,
-real bump-attack kill, winner flag, save-block), 3/3 consecutive passes.
-
-Moria8 ships the Balrog as the level-100 endgame monster. Killing it now sets a
-winner flag, prints a victory notice, blocks ordinary save-and-quit, and routes
-Shift+Q through retirement, royal art, and winner score treatment.
-
-Upstream behavior:
-
-- VMS Moria sets `total_winner` when the Balrog dies, prints congratulations,
-  and tells the player to quit when ready.
-- Umoria sets `game.total_winner`, prints `*** CONGRATULATIONS *** You have
-  won the game.`, and tells the player the game cannot be saved but may be
-  retired.
-- Save-and-exit is blocked for total winners; the character must retire.
-- Final exit uses the royal/winner death-screen path and enters the score table
-  as a winner.
-
-Implemented behavior:
-
-- `CREATURE_BALROG` and `CREATURE_BALROG_TIER` are generated from creature data,
-  with assembly asserts guarding the win-creature invariant.
-- Balrog death through melee, spell/effect kill helpers, earthquake/dispel paths,
-  and bash sets `GAME_FLAG_WINNER`.
-- Save-and-exit is blocked for total winners; the character must retire.
-- Retirement applies the compact winner bonus, shows the royal overlay, and
-  records the score with a winner marker.
-
-Remaining work:
-
-- Add C64/C128/Plus/4 coverage for Balrog kill detection, winner-state display,
-  save blocking or chosen save behavior, retirement, score insertion, and
-  wizard/no-rank interaction.
+- Prioritize high-impact special attacks from the shipped monster roster before
+  expanding the full monster catalog.
+- Add compact effect handlers for each accepted attack type.
+- Update `tools/parse_creatures.py` so imported data maps to real handlers
+  instead of normal/poison approximations when support exists.
+- Add per-effect tests for damage/status, messages, inventory/light/resource
+  mutation, and save/load impact where relevant.
 
 Acceptance target:
 
-- Killing the Balrog is visibly and mechanically the win condition on every
-  supported Commodore platform, with documented retirement/save behavior and no
-  ordinary monster-kill continuation.
+- Shipped monsters no longer silently collapse high-impact upstream attacks
+  into misleading normal attacks.
+
+### Complete auto-rest disturbance model
+
+Moria8 now has a first-pass `CTRL+R` rest-until-recovered command. It keeps `.`
+as one-turn rest, `R` as Read Scroll, and `SHIFT+R` as Refuel. The current
+implementation advances ordinary rest turns until HP and mana are full, clears
+search mode when started, stops on cancel input, and stops when a message asks
+for player attention. Existing C64/C128 tests cover full-recovery no-turn
+behavior, HP/mana recovery, attention-message interruption, held-key
+interruption, and search-mode clearing.
+
+Remaining polish:
+
+- Add an explicit disturbance flag so auto-rest can stop on silent-but-dangerous
+  state changes without relying on `zp_msg_flags`.
+- Stop on visible hostile monster activity even when the monster only moves and
+  no attack/spell message is generated.
+- Stop on player displacement, newly discovered objects/features, hunger
+  warnings, and other attention-worthy events through one shared disturbance
+  path.
+- Add compact status text such as `Rest *` or `Resting` if resident memory or an
+  overlay-owned display path can afford it.
+- Keep C128 resident play below `$D000`.
+
+### Disturb the player mid-turn when a monster bursts a door
+
+Upstream Umoria calls `playerDisturb(1,0)` when a monster bursts a door
+(`monster.cpp::monsterOpenDoor`), interrupting rest/run immediately.
+Moria8 prints the same unconditional message, and `huff_print_msg` sets
+`zp_msg_flags`, which already breaks auto-rest and running at the
+post-turn check (`core/game_loop.s` rest loop and `run_post`). The only
+residual delta is timing: upstream's disturb fires mid-step, so a
+multi-tile run could in principle continue one step further here before
+stopping. Minor gameplay parity; no correctness issue.
+
+Required work:
+
+- If pursued, add an explicit disturb hook at the two burst-print sites
+  in `core/monster_ai.s` and verify rest/run interruption against the
+  upstream mid-step timing.
+
+### Expand monster catalog toward full Umoria roster
+
+Moria8 currently ships with 120 selected creatures from Umoria's 279-creature
+catalog. Expanding toward the full roster requires more than adding data files.
+
+Required work:
+
+- Redesign creature tier partitioning beyond the current four dungeon tiers.
+- Add stable global creature IDs instead of relying only on active-tier-local
+  creature indices.
+- Rework monster recall persistence around global creature identity.
+- Adjust C128 tier cache/preload ownership or switch to selective tier loading.
+- Review C64 disk/REU tier loading for larger or more numerous tier files.
+- Expand imported monster attack/spell behavior where current mappings collapse
+  Umoria effects into simplified Commodore behavior.
+
+Acceptance target:
+
+- Full or substantially expanded Umoria creature roster can appear at the
+  appropriate dungeon depths without breaking C64/C128 memory, loading, save,
+  recall, or monster behavior contracts.
+
+### Optional: exact Umoria per-blow melee messages
+
+Moria8 now calculates melee blow counts from the Umoria-style STR/DEX/weapon
+weight buckets, including exceptional stats, too-heavy weapons, bare hands, and
+launcher/ammo-as-melee handling. Focused combat tests cover the reported C128
+gnome rogue/dagger case, top exceptional DEX, too-heavy weapon handling, and
+ranged launcher melee forcing one blow.
+
+The remaining difference is player-facing feedback. Umoria prints one message
+per blow; Moria8 prints one round summary and appends `(hits/blows)` when the
+attack had multiple blows, for example `You hit the skeleton kobold (2/3).`.
+This prevents multi-blow attacks from looking like single-hit attacks, but it is
+not byte-faithful Umoria message timing.
+
+Upstream behavior:
+
+- Umoria calculates blows from weapon weight, STR, and DEX before the attack.
+- Umoria loops once per blow during a single attack command.
+- Each blow rolls to hit independently.
+- Each miss prints `You miss the <monster>.`
+- Each hit prints `You hit the <monster>.`
+- If a blow kills the monster, Umoria prints `You have slain the <monster>.`
+  and stops the remaining blow loop.
+- Bare hands get 2 blows with a to-hit penalty; missile/ammo melee attacks are
+  forced to 1 blow.
+
+Required work:
+
+- Decide whether exact per-blow message parity is worth the extra message
+  traffic on 40-column targets.
+- If yes, change melee feedback so each miss/hit/slay blow is visible as its own
+  message and killing blows stop the loop immediately.
+- Add focused coverage for per-blow message order and kill-loop stopping.
+
+Acceptance target:
+
+- If this item is implemented, melee feedback matches Umoria per-blow message
+  timing. Otherwise the current `(hits/blows)` summary is the documented Moria8
+  approximation.
+
+### Optional: physically plausible chest contents
+
+VMS Moria has no size filter on chest contents, and Moria8 deliberately follows
+it (`docs/CHEST_DESIGN.md`): any chest type can contain any object, including
+another, larger chest. Umoria added `itemBiggerThanChest`, but only for
+`CM_SMALL_OBJ` monster droppers, not chest drops — so even Umoria allows a
+large chest inside a small one here.
+
+This is a realism/polish item, not gameplay-value work: nested chests are
+amusing and harmless. It would be a deliberate deviation from the pinned VMS
+oracle, not a bug fix, so it needs a design call before implementation.
+
+Required work:
+
+- Decide the rule: e.g. contents must not outweigh/exceed the container chest,
+  or simply forbid nested chests, or adopt Umoria's `itemBiggerThanChest`
+  category/weight filter for chest loot only.
+- Record the deviation in `docs/CHEST_DESIGN.md` with VMS `summon_object`
+  (moria.inc:2259-2290) as the behavior being superseded.
+- Filter or re-roll in `chest_loot_place_one` without changing drop counts,
+  odds, or RNG order beyond the filtered retries.
+- Add focused coverage proving an ineligible item is never produced while
+  eligible drops are unaffected.
+
+Acceptance target:
+
+- Chest contents respect a documented physical-plausibility rule, with the
+  deviation from VMS recorded and tested, and no change to drop rates for
+  legal contents.
+
+## User Interface & Presentation
 
 ### Split Home/store screen ownership
 
@@ -687,37 +335,6 @@ Acceptance target:
 
 - Store and Home draw their shared body without either view writing the other's
   footer, and no Home path depends on clearing over stale Store text.
-
-### Friendlier Commodore I/O error messages
-
-The current storage HAL diagnostics preserve useful raw data, but the in-game
-error text is still too developer-oriented on space-constrained targets. For
-example, `Disk error! 74` correctly reports the drive status code, but it should
-also tell a player that the drive is not ready and what to check.
-
-The C64 bootloader has an even earlier version of this problem: it hardcodes
-the program disk to device 8, so booting with the disk attached as drive 9 can
-fall back to BASIC with no useful explanation before the main game's disk setup
-or storage diagnostics exist.
-
-Required work:
-
-- Add a compact C64 bootloader error path for main-program load failure that
-  tells the player to attach the boot disk as drive 8, or otherwise reports a
-  clear load failure before returning to BASIC.
-- Keep raw diagnostic bytes available: DOS status, KERNAL `$ST`, phase, and
-  device number.
-- Add a compact platform-owned classifier that maps common storage failures to
-  player-facing text.
-- Preserve the raw fallback for unmapped failures so debugging does not regress.
-- Avoid bloating resident code or destabilizing C64/C128 storage behavior.
-- Cover C64, C128, and Plus/4 with storage-error tests or smoke cases.
-
-Acceptance target:
-
-- Common failures such as no disk/drive not ready, write protect, disk full,
-  missing file, and wrong save disk show clear end-user messages while retaining
-  enough diagnostic detail for debugging.
 
 ### Promote `F8` to an in-game Version/System Info command
 
@@ -751,52 +368,126 @@ Acceptance target:
   supported Commodore platform, with enough diagnostic detail for user support
   and hardware-feature verification.
 
-### Expand monster catalog toward full Umoria roster
+### Implement numeric repeat prefixes
 
-Moria8 currently ships with 120 selected creatures from Umoria's 279-creature
-catalog. Expanding toward the full roster requires more than adding data files.
+The C64 and Plus/4 input parsers explicitly leave numeric repeat prefixes
+deferred, and `zp_input_count` is currently always 1. Classic Moria supports
+repeat counts for commands where repeating is safe and meaningful.
 
 Required work:
 
-- Redesign creature tier partitioning beyond the current four dungeon tiers.
-- Add stable global creature IDs instead of relying only on active-tier-local
-  creature indices.
-- Rework monster recall persistence around global creature identity.
-- Adjust C128 tier cache/preload ownership or switch to selective tier loading.
-- Review C64 disk/REU tier loading for larger or more numerous tier files.
-- Expand imported monster attack/spell behavior where current mappings collapse
-  Umoria effects into simplified Commodore behavior.
+- Define which commands accept numeric repeat prefixes on each Commodore
+  keyboard layout.
+- Parse multi-digit prefixes without conflicting with movement, inventory
+  letters, `SHIFT` commands, or C128 keypad input.
+- Route accepted counts through one shared repeat path and reject or ignore
+  unsafe repeats consistently.
+- Add tests for one-turn commands, movement/run interactions, prompt
+  cancellation, and non-repeatable commands.
 
 Acceptance target:
 
-- Full or substantially expanded Umoria creature roster can appear at the
-  appropriate dungeon depths without breaking C64/C128 memory, loading, save,
-  recall, or monster behavior contracts.
+- Numeric prefixes work for supported repeatable commands without changing
+  single-key command behavior or prompt input semantics.
 
-## Apple IIe
+### Friendlier Commodore I/O error messages
 
-### Fix wizard summon in town rendering as `@` / unknown `?`
+The current storage HAL diagnostics preserve useful raw data, but the in-game
+error text is still too developer-oriented on space-constrained targets. For
+example, `Disk error! 74` correctly reports the drive status code, but it should
+also tell a player that the drive is not ready and what to check.
 
-DONE 2026-09-04. Root cause was hypothesis 1, on every platform (not just
-A2): in town (dlvl 0) `pick_creature_type` falls back to dungeon index 0,
-but no tier is loaded in town so the dungeon roster rows are all zero —
-glyph `$00` renders as `@` and the null name pointer prints `?`. Fix at the
-picker layer (`pick_wizard_summon_creature_type` in `core/tier_manager.s`),
-not the renderer: in town, wizard summon now picks a random town creature
-from the always-resident town roster (`TOWN_CREATURE_BASE +
-rng_range(TOWN_CREATURE_COUNT)`); dungeon behavior (level-appropriate pick,
-Balrog at DL100+) is unchanged. Maintainer decision 2026-09-04: town summon
-produces a random town creature (no upstream oracle; wizard mode is
-Moria8-owned). Coverage: C64 test_tier.s t15 pins the town-picker range and
-the DL100 Balrog path; new A2 MAME scenario `wizard_summon_town` asserts the
-summoned slot is adjacent, town-roster typed, and has a nonzero glyph and
-name pointer (reproduced the bug against the unfixed image: type 0, zero
-glyph, null name). test_tier128.s gained town-roster const/rng stubs for its
-minimal tier_manager import. Gates: make test (exit 0; test64 195/195, C128
-fast batch PASS, fast-smoke 10/10, testplus4 40/40, A2 runtime incl. the new
-scenario 0 failures), make test128 137/137.
+The C64 bootloader has an even earlier version of this problem: it hardcodes
+the program disk to device 8, so booting with the disk attached as drive 9 can
+fall back to BASIC with no useful explanation before the main game's disk setup
+or storage diagnostics exist.
 
-### Investigate AppleSqueezer accelerator incompatibility
+Required work:
+
+- Add a compact C64 bootloader error path for main-program load failure that
+  tells the player to attach the boot disk as drive 8, or otherwise reports a
+  clear load failure before returning to BASIC.
+- Keep raw diagnostic bytes available: DOS status, KERNAL `$ST`, phase, and
+  device number.
+- Add a compact platform-owned classifier that maps common storage failures to
+  player-facing text.
+- Preserve the raw fallback for unmapped failures so debugging does not regress.
+- Avoid bloating resident code or destabilizing C64/C128 storage behavior.
+- Cover C64, C128, and Plus/4 with storage-error tests or smoke cases.
+
+Acceptance target:
+
+- Common failures such as no disk/drive not ready, write protect, disk full,
+  missing file, and wrong save disk show clear end-user messages while retaining
+  enough diagnostic detail for debugging.
+
+## Platform & Architecture
+
+### Sweep platform-specific inlines in core/ behind HAL macros
+
+`core/` currently contains a few direct platform conditionals instead of HAL
+macros: `#if APPLE2 jsr mmu_safe_map_write_ptr1` in `core/ui_messages.s`
+(message-history writes) and `#if C128_PRODUCT_OVERLAY_RUNTIME jsr
+mmu_common_copy_map_row` plus `SCREEN_RAM,y` reads in
+`core/dungeon_features.s` (`place_secrets` row scan). Both work and are
+assert-guarded, but they break the convention that core stays
+platform-agnostic (`docs/CROSS_PLATFORM_STRATEGY.md`).
+
+Required work:
+
+- Introduce a HAL write macro (e.g. `:HalAuxWritePtr1()`) defaulting to
+  `sta (zp_ptr1),y` and overridden by Apple II to the aux thunk; same
+  pattern for a row-read/scan macro covering the C128 bank-copy path.
+- Sweep both call sites; no behavior change, so existing gates
+  (`make test`, `make test128`) suffice.
+
+Acceptance target:
+
+- No `#if <PLATFORM>` platform calls remain in the touched core modules;
+  all four platform builds and test gates stay green.
+
+### Overlay callers of the gameplay-view restore can be evicted mid-flow
+
+The C64/Plus4/A2 gameplay-view restore (`ui_view_redraw_gameplay_view`,
+resident) calls `tier_restore_after_overlay`, which can load tier data
+into the shared `$E000` window. Modal overlays whose code lives in that
+window (wizard restore helpers, spell/item modal exit paths) continue
+executing there after the load — the window then holds tier data, not
+code, so the continuation is wild. Today this only fires when the tier
+is stale (after a tier-load failure, `current_tier=0`); the normal
+in-range path skips the load. Hardening options: move the small restore
+helpers resident, or have the restore reload the caller's overlay
+before returning. Exposed by the wizard-teleport freeze; not triggered
+in normal play once the tier always matches dlvl.
+
+### Implement Plus/4 TED sound effects
+
+The Plus/4 has TED sound hardware, but Moria8's Plus/4 backend currently
+silences every sound request. `platforms/commodore/plus4/sound.s` initializes
+and clears TED sound registers, and `sound_play` immediately clears them again
+instead of using the existing frequency/control tables.
+
+Required work:
+
+- Implement `sound_play` for TED using the existing `SFX_*` IDs shared by C64,
+  C128, and Plus/4.
+- Implement `hal_sound_update` so effects stop cleanly and cannot leave stuck
+  tones.
+- Preserve TED display state: sound writes must not corrupt bitmap/character
+  mode bits that `plus4_display_resync` protects.
+- Tune TED approximations for bump, hit, miss, pickup, death, level-up, spell,
+  spell-fail, hunger warning, and fainting.
+- Add Plus/4 coverage proving sound init/play/update touch the expected TED
+  registers and return to silence.
+- Document any intentional TED approximation versus SID behavior if the audible
+  effect set cannot match C64/C128 closely.
+
+Acceptance target:
+
+- Plus/4 gameplay produces audible, bounded sound effects for the existing
+  shared `SFX_*` events without stuck tones or display-mode regressions.
+
+### Apple IIe: Investigate AppleSqueezer accelerator incompatibility
 
 Low priority. The Apple IIe build boots and completes character creation on an
 Apple IIgs (IIe mode) but crashes on town entry when the machine has an
@@ -823,6 +514,43 @@ Acceptance target:
 
 - Apple IIe build reaches town and plays on an AppleSqueezer-equipped machine,
   or the incompatibility is root-caused and documented as wontfix.
+
+## Rendering Performance
+
+Tracked candidates from the cross-platform render performance audit
+(cycle estimates; detailed analysis in `docs/APPLE2_PORT.md` and
+`docs/C128_PERFORMANCE.md`):
+
+### P7 — VDC block-fill for `screen_clear` / `screen_clear_row` (C128)
+
+Revisit the reverted "Opt 5"; requires root-causing the past
+character-creation crash first.
+
+### P9 — Burst variant of `render_single_tile` for C128 local-area updates
+
+Batch consecutive cells under one VDC address setup. ~400 -> ~45 cy/cell on
+the per-step hot path.
+
+### P10 — Mirror Huffman decode tree into resident Bank 0 RAM (C128)
+
+Mirror the Huffman decode tree (`huff_tree_left` + `huff_tree_right`, 112 B)
+into resident Bank 0 RAM. Today every tree-node read crosses into Bank 1
+through the MMU (~82 cy/read, ~16 ms per 30-char message); a resident mirror
+eliminates ~84% of those switches during text rendering. Costs 112 resident
+bytes on the tightest-resident platform and duplicates shared data, so it
+needs a C128 memory-contract budget check first.
+
+## Data Width & Math
+
+### Audit byte-clamped rolls that could use the 16-bit helpers
+
+The monster door bash roll showed `math_multiply` + `rng_range_word` make
+16-bit probability math cheap (~25 bytes). Some existing rolls/thresholds
+may have been byte-clamped or table-approximated for lack of that pattern;
+audit call sites of `rng_range` where the upstream oracle uses
+`randint(n)` with n > 255 (or products like `(hp+1)*80`) and convert the
+ones where fidelity matters. Started from the door-bash design discussion
+(2026-09-02).
 
 ## Testing Infrastructure
 
@@ -911,66 +639,3 @@ Acceptance target:
 - `make test-disk` runs the same scenario executor for C64, C128, and Plus/4,
   with only adapter data varying by platform, and no platform can silently
   satisfy a scenario through a materially different test flow.
-
-### Fix Plus/4 disarm scripted-build crash
-
-DONE 2026-09-04. Root cause: `run_disarm_smoke` built its scripted-boot d64
-without `4.start` (the chargen overlay) — it was the only chargen-driven
-Plus4 smoke missing it. `tramp_player_create` ignores the `overlay_load`
-failure and JSRs into the $E000 window regardless, so chargen landed on
-whatever the window happened to hold from boot timing (~25% wild JSR).
-Fix: the smoke's disk now includes `4.start` like every other chargen smoke.
-Verified deterministic: 12/12 isolated runs pass (previously ~25% crash
-rate), and the full `make testplus4` gate is 40/40. Product-side hardening
-(guarding the `tramp_player_create` jump on overlay_load failure) remains
-optional future work; shipping disks always carry 4.start.
-
-## Rendering Performance (Px)
-
-Tracked candidates from the 2026-07-25 cross-platform render performance
-audit (hand-counted cycle estimates; full analysis in
-`docs/APPLE2_PORT.md` and `docs/C128_PERFORMANCE.md`). Status as of
-2026-07-28:
-
-- **P5** — ~~Tile-level scene-dirty list in core (all platforms).~~ DONE
-  2026-07-28 (immediate tile render at mark time + cheap-path scene
-  dispatch; see APPLE2_PORT.md).
-- **P6** — ~~`a2_map_char` branch-chain -> 256-byte lookup table (A2).~~
-  DONE 2026-07-29 as a 128-byte staged table: master in A2AuxData,
-  block-read into the `a2_ss_buf` tail once per `render_viewport`; ~19
-  cy/cell saved; resident cost +31 B recovered by thunk-install and
-  `screen_clear` dedups (see APPLE2_PORT.md).
-- **P7** — VDC block-fill for `screen_clear` / `screen_clear_row` (C128).
-  **BACKLOGGED** (maintainer, 2026-07-28). Revisit the reverted "Opt 5";
-  requires root-causing the past character-creation crash first.
-- **P8** — ~~X-split cell-write loops on A2 (drop the per-cell `php/plp`
-  parity shuffle in render_viewport staging).~~ DONE 2026-07-29
-  (parity branch moved before `a2_map_char`; ~7 cy/cell, byte-neutral;
-  see APPLE2_PORT.md).
-- **P9** — Burst variant of `render_single_tile` for C128 local-area
-  updates (batch consecutive cells under one VDC address setup).
-  **BACKLOGGED** (maintainer, 2026-07-28). ~400 -> ~45 cy/cell on the
-  per-step hot path.
-- **P10** — Mirror the Huffman decode tree (`huff_tree_left` +
-  `huff_tree_right`, 112 B) into resident Bank 0 RAM (C128). Today every
-  tree-node read crosses into Bank 1 through the MMU (~82 cy/read, ~16 ms
-  per 30-char message); a resident mirror eliminates ~84% of those
-  switches during text rendering. Costs 112 resident bytes on the
-  tightest-resident platform and duplicates shared data, so it needs a
-  C128 memory-contract budget check first. (Perf review, 2026-08-20.)
-
-Completed: P1 (glyph/item scan early-outs), P2 (A2 AUX row block read),
-P3 (C128 leftward block-copy + V-strip burst), P4 (A2 scroll-delta
-renderer + V half-row overflow fix).
-
-## Data Width
-
-### Audit byte-clamped rolls that could use the 16-bit helpers
-
-The monster door bash roll showed `math_multiply` + `rng_range_word` make
-16-bit probability math cheap (~25 bytes). Some existing rolls/thresholds
-may have been byte-clamped or table-approximated for lack of that pattern;
-audit call sites of `rng_range` where the upstream oracle uses
-`randint(n)` with n > 255 (or products like `(hp+1)*80`) and convert the
-ones where fidelity matters. Started from the door-bash design discussion
-(2026-09-02).
