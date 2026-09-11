@@ -12,7 +12,6 @@
 // Scratch variables
 // ============================================================
 bash_save_tile: .byte 0     // Saved tile byte at target
-bash_dir_idx:   .byte 0     // Direction index 0-7
 
 // Strings migrated to Huffman compression (HSTR_BASH_* in huffman_data.s)
 
@@ -38,34 +37,6 @@ bash_command:
     rts                         // Cancelled
 !bash_has_dir:
 
-    // Save direction index for confusion redirection
-    // Compute direction index from df_target_x/y
-    lda df_target_x
-    sec
-    sbc zp_player_x
-    sta zp_temp0                // dx
-    lda df_target_y
-    sec
-    sbc zp_player_y
-    sta zp_temp1                // dy
-
-    ldx #0
-!bash_find_dir:
-    lda dir_dx,x
-    cmp zp_temp0
-    bne !bash_dir_next+
-    lda dir_dy,x
-    cmp zp_temp1
-    beq !bash_dir_found+
-!bash_dir_next:
-    inx
-    cpx #8
-    bcc !bash_find_dir-
-    clc
-    rts                         // Shouldn't happen
-!bash_dir_found:
-    stx bash_dir_idx
-
     // Confusion check — randomize direction
     lda zp_eff_confuse
     beq !bash_not_confused+
@@ -73,7 +44,6 @@ bash_command:
     // Pick random direction 0-7
     lda #8
     jsr rng_range               // [0,7]
-    sta bash_dir_idx
     tax
 
     // Recompute target from player position
@@ -155,21 +125,70 @@ bash_command:
 
 // ============================================================
 // bash_door — Bash a closed door
+// Umoria playerBashClosedDoor: chance = STR + weight/2; success iff
+// rng(chance * (20 + |s|)) < 10 * (chance - |s|), where s = signed door
+// state (locked/stuck magnitude). Moria8 proxy: PL_WEIGHT is aesthetic and
+// never assigned, so a fixed 75 stands in for a typical body weight/2
+// (maintainer-approved deviation 2026-09-04). Success opens the door (50%
+// break) and steps into the doorway; failure prints "holds firm" and rolls
+// the DEX off-balance check.
 // ============================================================
 bash_door:
     // Print smash message
     ldx #HSTR_BASH_SMASH
     jsr huff_print_msg
 
-    // Roll: rng_range(STR + 10), success if result >= 5
     lda zp_player_str
     clc
-    adc #10
-    jsr rng_range               // [0, STR+9]
-    cmp #5
-    bcs !bash_door_success+
+    adc #75
+    sta bash_chance
 
-    // Fail — door holds
+    // |door state| — bit 7 set = stuck/jammed, magnitude in bits 0-6
+    lda df_target_x
+    ldy df_target_y
+    jsr door_state_get
+    bpl !bd_abs+
+    and #$7f
+!bd_abs:
+    sta bash_abs_state
+
+    // chance - |s| <= 0 → hopeless; the door holds
+    lda bash_chance
+    sec
+    sbc bash_abs_state
+    bcc !bd_holds+
+    beq !bd_holds+
+
+    // spread = chance * (20 + |s|)
+    lda bash_abs_state
+    clc
+    adc #20
+    tax
+    lda bash_chance
+    jsr math_multiply           // zp_math_a/b = spread
+    lda zp_math_a
+    sta zp_temp0
+    lda zp_math_b
+    sta zp_temp1
+    jsr rng_range_word          // zp_temp2/3 = roll [0, spread-1]
+
+    // threshold = 10 * (chance - |s|)
+    lda bash_chance
+    sec
+    sbc bash_abs_state
+    ldx #10
+    jsr math_multiply           // zp_math_a/b = threshold
+
+    // success iff roll < threshold (16-bit)
+    lda zp_temp3
+    cmp zp_math_b
+    bcc !bd_success+
+    bne !bd_holds+
+    lda zp_temp2
+    cmp zp_math_a
+    bcc !bd_success+
+
+!bd_holds:
     ldx #HSTR_BASH_HOLDS
     jsr huff_print_msg
     jsr bash_off_balance
@@ -178,7 +197,7 @@ bash_door:
     sec                         // Turn consumed
     rts
 
-!bash_door_success:
+!bd_success:
     // Open the door: change tile type to TILE_DOOR_OPEN, keep flags
     ldx df_target_y
     lda map_row_lo,x
@@ -191,14 +210,51 @@ bash_door:
     ora #TILE_DOOR_OPEN         // Set to open door
     :MapWrite_ptr0_y()
 
+    // 50% break (Umoria: misc_use = 1 - randomNumber(2) — any nonzero state
+    // on an open door is broken)
+    lda #2
+    jsr rng_range
+    bne !bd_unbroken+
+    // A broken result needs a state entry. Existing locked/stuck entries can
+    // be updated even when full; an untracked plain door cannot add one.
+    lda bash_abs_state
+    bne !bd_broken+
+    ldx door_state_count
+    cpx #MAX_DOOR_STATES
+    bcs !bd_unbroken+            // Full table: open, but keep it closable
+!bd_broken:
+    lda #1
+    bne !bd_set_state+           // always
+!bd_unbroken:
+    lda #0
+!bd_set_state:
+    jsr door_state_set_at
+
     // Print success message
     ldx #HSTR_BASH_CRASH
     jsr huff_print_msg
+
+    // Step into the doorway (Umoria playerMove on bash success)
+    lda df_target_x
+    sta zp_player_x
+    sta player_data + PL_MAP_X
+    lda df_target_y
+    sta zp_player_y
+    sta player_data + PL_MAP_Y
+    lda #1
+    sta player_move_relocated
+
+    // Umoria routes successful door bashes through playerMove, including its
+    // passive search after relocation. Preserve that movement side effect.
+    jsr player_move_maybe_passive_search
 
     lda #SFX_HIT
     jsr hal_sound_play
     sec                         // Turn consumed
     rts
+
+bash_chance:     .byte 0
+bash_abs_state:  .byte 0
 
 // ============================================================
 // bash_monster — Bash a monster with shield

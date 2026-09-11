@@ -4,7 +4,7 @@
 //        town, tier 4 cap), load_tier_to_buffer, and C64 tier/REU helpers
 //        preserving the caller interrupt/banking state.
 //
-// Results at $0400-$040d: $01 = pass, $00 = fail per test (14 tests)
+// Results at $0400-$0410: $01 = pass, $00 = fail per test (17 tests)
 // NOTE: msg_print writes to screen row 0 ($0400+), so we store results
 // in tc_results[] and copy to $0400 at the very end.
 
@@ -24,7 +24,7 @@ bootstrap:
 
 // test_finish — Copy results to $0400 and halt.
 test_finish:
-    ldx #14
+    ldx #16
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -98,7 +98,7 @@ press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
 // Test result buffer — copy to $0400 at end (msg_print clobbers $0400)
-tc_results: .fill 15, $ff
+tc_results: .fill 17, $ff
 
 test_t15_fail: .byte 0
 test_t15_iter: .byte 0
@@ -705,6 +705,48 @@ test_start:
     lda #$00
 !t15_store:
     sta tc_results + 14
+    lda #0
+    sta zp_player_dlvl
+
+    // ============================================================
+    // Test 16: Multi-tier step up — tier 1 -> tier 3 at DL20
+    // A wizard level jump (or Word of Recall) moves many tiers at once;
+    // the transition must land on the containing tier, not the next one.
+    // ============================================================
+    lda #1
+    sta current_tier
+    sta tier_loaded
+    lda #20
+    sta zp_player_dlvl
+    jsr tier_check_transition
+    lda current_tier
+    cmp #3
+    bne !t16_fail+
+    lda #$01
+    jmp !t16_store+
+!t16_fail:
+    lda #$00
+!t16_store:
+    sta tc_results + 15
+
+    // ============================================================
+    // Test 17: Multi-tier step down — tier 3 -> tier 1 at DL4
+    // ============================================================
+    lda #3
+    sta current_tier
+    sta tier_loaded
+    lda #4
+    sta zp_player_dlvl
+    jsr tier_check_transition
+    lda current_tier
+    cmp #1
+    bne !t17_fail+
+    lda #$01
+    jmp !t17_store+
+!t17_fail:
+    lda #$00
+!t17_store:
+    sta tc_results + 16
     lda #0
     sta zp_player_dlvl
 

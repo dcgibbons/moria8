@@ -9,7 +9,7 @@ import tempfile
 import time
 from pathlib import Path
 
-from vice_connector import VICEConnector, parse_vs_symbols
+from vice_connector import VICEConnector, allocate_free_port, parse_vs_symbols
 
 
 MSG_HIST_COUNT = 8
@@ -66,15 +66,17 @@ def run_direct_effect_probe(
     zp_eff_bless: int,
     prayer: str,
 ) -> str:
+    monitor_port = allocate_free_port()
     process = subprocess.Popen(
         build_vice_command(
             vice=vice,
+            monitor_address=f"127.0.0.1:{monitor_port}",
         ),
         stdin=subprocess.PIPE,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
-    connector = VICEConnector(timeout=socket_timeout)
+    connector = VICEConnector(port=monitor_port, timeout=socket_timeout)
     stub_addr = 0x1A00
     stop_addr = stub_addr + 3
     try:
@@ -309,6 +311,7 @@ def patch_priest_runtime_state(
 def build_vice_command(
     *,
     vice: str,
+    monitor_address: str,
     boot_d64: Path | None = None,
     keybuf: str | None = None,
     keybuf_delay: int = 8,
@@ -327,6 +330,8 @@ def build_vice_command(
         "-sounddev",
         "dummy",
         "-remotemonitor",
+        "-remotemonitoraddress",
+        monitor_address,
         "-binarymonitor",
     ]
     if boot_d64 is not None:
@@ -370,16 +375,18 @@ def run_snapshot_probe(
     description: str,
     dump_addrs: list[tuple[int, int]] | None = None,
 ) -> tuple[bool, str, list[str]]:
+    monitor_port = allocate_free_port()
     process = subprocess.Popen(
         build_vice_command(
             vice=vice,
+            monitor_address=f"127.0.0.1:{monitor_port}",
             keybuf=keybuf,
         ),
         stdin=subprocess.PIPE,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
-    connector = VICEConnector(timeout=socket_timeout)
+    connector = VICEConnector(port=monitor_port, timeout=socket_timeout)
     try:
         connector.connect(
             retries=max(1, int(connect_timeout / 0.1)),
@@ -504,9 +511,11 @@ def main() -> int:
                 stage1_mon_path,
                 main_loop=resolved["main_loop"],
             )
+            stage1_monitor_port = allocate_free_port()
             stage1_process = subprocess.Popen(
                 build_vice_command(
                     vice=args.vice,
+                    monitor_address=f"127.0.0.1:{stage1_monitor_port}",
                     boot_d64=args.boot_d64,
                     keybuf="NAA\rA\rA",
                 )

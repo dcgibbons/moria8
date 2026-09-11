@@ -660,7 +660,7 @@ run_chest_open_product_smoke() {
         --expect-byte-symbol ".chest_product_runtime_state=0x0f" \
         --expect-byte-symbol ".chest_loot_pending=0x00" \
         --expect-byte-symbol ".chest_pending_summons=0x00" \
-        --expect-byte-symbol ".current_overlay=0x04" \
+        --expect-byte-symbol ".current_overlay=0x0a" \
         --expect-byte-symbol ".fi_item_id=0x81" \
         --expect-byte-symbol ".fi_p1=0x80" \
         --expect-byte-symbol ".zp_player_dlvl=0x01" \

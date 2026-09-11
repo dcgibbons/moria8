@@ -4,7 +4,6 @@
 // gold operations, store door detection, find empty slot, and haggle flow.
 //
 // Results at $0400-$0429: $01 = pass, $00 = fail per test (42 tests)
-
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_bootstrap)
 
@@ -40,7 +39,6 @@ test_exit_trampoline:
 #import "../../../../core/ui_messages.s"
 #import "../../../../core/ui_status.s"
 #import "../../../../core/ui_help_clear.s"
-#import "../../../../core/ui_character.s"
 #import "../../../../core/stat_display.s"
 .segmentdef TestCreateOverlay [start=$D000]
 .segment TestCreateOverlay
@@ -73,8 +71,6 @@ test_exit_trampoline:
 #import "../../../../core/player_magic_state.s"
 #import "../../../../core/player_magic_state_ops.s"
 #import "../../../../core/player_magic.s"
-#import "../../../../core/ui_inventory.s"
-#import "../../../../core/ui_equipment.s"
 #import "../dungeon_render.s"
 #import "../../../../core/dungeon_los.s"
 #import "../../../../core/player_move.s"
@@ -1544,6 +1540,7 @@ test_start:
     lda it_category,x
     jsr check_store_category
     bcc !t43_fail+
+
     ldx t43_cursor
     inx
     cpx #8
@@ -1564,14 +1561,16 @@ test_start:
     lda it_category,x
     jsr check_store_category
     bcc !t43_fail+
+
     ldx t43_cursor
     inx
     cpx #8
     bcc !t43d_loop-
 
-    // Part F: picker completeness — every implemented ID 2..(COUNT-2)
-    // appears exactly once in pit_sorted; the ruined chest (COUNT-1) never
-    // appears.
+    // Part F: picker completeness — every implemented ID 2..(COUNT-1)
+    // appears exactly once in pit_sorted; the ruined chest (134) never
+    // appears. The Iron Spike (135) is a real picker entry and is checked
+    // by the same loop.
     ldx #19
     lda #0
 !t43f_clear:
@@ -1591,14 +1590,18 @@ test_start:
     bcc !t43f_mark-
     ldx #2
 !t43f_check:
+    cpx #ITEM_TYPE_CHEST_RUINED
+    beq !t43f_skip+         // Ruined chest never generates (by identity)
     jsr t43_test_seen
     bcc !t43_fail+
+
+!t43f_skip:
     inx
-    cpx #ITEM_TYPE_COUNT - 1
+    cpx #ITEM_TYPE_COUNT
     bcc !t43f_check-
-    ldx #ITEM_TYPE_COUNT - 1
+    ldx #ITEM_TYPE_CHEST_RUINED
     jsr t43_test_seen
-    bcs !t43_fail+
+    bcs !t43_fail+          // Ruined chest must never appear
 
     lda #$01
     jmp !t43_store+
@@ -1793,3 +1796,15 @@ script_sell_yes:
     .byte PETSCII_A, PETSCII_Y, 'X', 0
 script_buy_kick:
     .byte '4', $0d, 'X', '4', $0d, 'X', '4', $0d, 'X', 0
+// Dropped ui_* imports to keep the test body under MAP_BASE (map-overlap
+// boundary); stubs satisfy the trampoline references.
+ui_char_display:
+ui_inv_display:
+ui_inv_select_display:
+ui_equip_display:
+    rts
+count_spells_known:
+    jmp spell_mask_count_ptr
+player_disarm_get_effective_chance:
+    lda #0
+    rts

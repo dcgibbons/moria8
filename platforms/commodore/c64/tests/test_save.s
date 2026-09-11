@@ -4,7 +4,7 @@
 // recount_monsters, recount_floor_items, save-version compatibility helpers,
 // split item stat save/load persistence, invalid item-ID load hardening.
 //
-// Results at $0400-$041c: $01 = pass, $00 = fail per test (29 tests)
+// Results at $0400-$0421: $01 = pass, $00 = fail per test (34 tests)
 
 #define C64_TEST_NAME_STREAMS_A000
 
@@ -27,7 +27,7 @@ bootstrap:
 // Must be in low memory (before imports) so BRK address is below $A000.
 // VICE breakpoint on $A000+ can false-trigger during BASIC ROM execution.
 test_finish:
-    ldx #28
+    ldx #33
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -61,6 +61,11 @@ ui_inv_display:
 ui_inv_select_display:
 ui_equip_display:
     rts
+// Save tests do not execute monster AI; these satisfy indirect turn/render
+// links without pulling the full AI engine into the MAP_BASE-sensitive body.
+monster_ai_tick:
+    rts
+mat_scene_dirty: .byte 0
 
 #import "../../../../core/zeropage.s"
 #import "../memory.s"
@@ -77,7 +82,6 @@ ui_equip_display:
 #import "../../../../core/ui_messages.s"
 #import "../../../../core/ui_status.s"
 #import "../../../../core/ui_help_clear.s"
-#import "../../../../core/ui_character.s"
 #import "../../../../core/stat_display.s"
 .segmentdef TestCreateOverlay [start=$D000]
 .segmentdef TestNameStreams [start=$A000]
@@ -93,7 +97,6 @@ dg_idx: .byte 0
 #import "../../../../core/monster.s"
 #import "../../../../core/tier_manager.s"
 #import "../../common/overlay.s"
-#import "../../../../core/monster_ai.s"
 #import "../../../../core/recall.s"
 #import "../../../../core/monster_magic.s"
 #import "../../../../core/item.s"
@@ -146,6 +149,7 @@ random_floor_in_room:
 .const hal_storage_save_baked_stats_version = $11
 .const hal_storage_save_known_bits_version = $11
 .const hal_storage_save_known160_version = $12
+.const hal_storage_save_door_state_version = $12
 .const KERNAL_ERR_DEVICE_NOT_PRESENT = 5
 .const KERNAL_SETNAM = test_save_setnam
 .const KERNAL_SETLFS = test_save_setlfs
@@ -318,7 +322,16 @@ rle_decompress_map:
 !:  rts
 
 // Test result buffer — copy to $0400 at end (msg_print clobbers $0400)
-tc_results: .fill 29, $ff
+tc_results: .fill 34, $ff
+
+test_t31_ptr_lo: .byte 0
+test_t31_ptr_hi: .byte 0
+
+// ui_character.s dropped to keep the test body under MAP_BASE.
+ui_char_display:
+    rts
+count_spells_known:
+    jmp spell_mask_count_ptr
 tc_count: .byte 0
 
 // Verification buffer — 256 bytes at $CF00 (floor item area, safe during tests 2-3)
@@ -467,6 +480,15 @@ test_stream_reset_read:
     lda #>SAVE_STREAM_BUF
     sta zp_ptr2_hi
     rts
+
+// Load a current-version door-state block whose count byte is A.
+test_load_door_count:
+    sta SAVE_STREAM_BUF
+    lda #SAVE_VERSION
+    sta load_save_version
+    jsr test_stream_reset_read
+    jsr ts_reset_io_state
+    jmp load_read_door_state
 
 test_clear_store_items:
     ldx #STORE_TOTAL_SLOTS - 1
@@ -2368,6 +2390,151 @@ t28_fail_code:
 t29_fail_code:
 !t29_store:
     sta tc_results + 28
+
+    // ============================================================
+    // Test 30: door-state table round-trips at the current save version.
+    // ============================================================
+    lda #2
+    sta door_state_count
+    lda #10
+    sta door_state_x
+    lda #20
+    sta door_state_y
+    lda #15                     // locked, difficulty 15
+    sta door_state_val
+    lda #11
+    sta door_state_x + 1
+    lda #21
+    sta door_state_y + 1
+    lda #$94                    // stuck, magnitude 20
+    sta door_state_val + 1
+
+    jsr test_stream_reset_write
+    jsr save_write_door_state
+
+    lda #0
+    sta door_state_count
+    sta door_state_x
+    sta door_state_y
+    sta door_state_val
+    sta door_state_x + 1
+    sta door_state_y + 1
+    sta door_state_val + 1
+
+    lda #SAVE_VERSION
+    sta load_save_version
+    jsr test_stream_reset_read
+    jsr ts_reset_io_state
+    jsr load_read_door_state
+
+    lda door_state_count
+    cmp #2
+    bne !t30_fail+
+    lda door_state_x
+    cmp #10
+    bne !t30_fail+
+    lda door_state_y
+    cmp #20
+    bne !t30_fail+
+    lda door_state_val
+    cmp #15
+    bne !t30_fail+
+    lda door_state_x + 1
+    cmp #11
+    bne !t30_fail+
+    lda door_state_y + 1
+    cmp #21
+    bne !t30_fail+
+    lda door_state_val + 1
+    cmp #$94
+    bne !t30_fail+
+    lda save_io_error
+    bne !t30_fail+
+    lda #$01
+    bne !t30_store+
+!t30_fail:
+    lda #$00
+!t30_store:
+    sta tc_results + 29
+
+    // ============================================================
+    // Test 31: pre-door-state saves load with the table cleared and
+    // consume no stream bytes (block absent from the legacy layout).
+    // ============================================================
+    lda #1
+    sta door_state_count
+    jsr test_stream_reset_read
+    lda zp_ptr2
+    sta test_t31_ptr_lo
+    lda zp_ptr2_hi
+    sta test_t31_ptr_hi
+    lda #SAVE_DOOR_STATE_VERSION - 1
+    sta load_save_version
+    jsr load_read_door_state
+
+    lda door_state_count
+    bne !t31_fail+
+    lda zp_ptr2
+    cmp test_t31_ptr_lo
+    bne !t31_fail+
+    lda zp_ptr2_hi
+    cmp test_t31_ptr_hi
+    bne !t31_fail+
+    lda #$01
+    bne !t31_store+
+!t31_fail:
+    lda #$00
+!t31_store:
+    sta tc_results + 30
+
+    // ============================================================
+    // Test 32: maximum representable door-state count is accepted.
+    // ============================================================
+    lda #MAX_DOOR_STATES
+    jsr test_load_door_count
+    lda save_io_error
+    bne !t32_fail+
+    lda door_state_count
+    cmp #MAX_DOOR_STATES
+    bne !t32_fail+
+    lda #$01
+    bne !t32_store+
+!t32_fail:
+    lda #$00
+!t32_store:
+    sta tc_results + 31
+
+    // ============================================================
+    // Test 33: count 17 is rejected before runtime table access.
+    // ============================================================
+    lda #MAX_DOOR_STATES + 1
+    jsr test_load_door_count
+    lda save_io_error
+    beq !t33_fail+
+    lda door_state_count
+    bne !t33_fail+
+    lda #$01
+    bne !t33_store+
+!t33_fail:
+    lda #$00
+!t33_store:
+    sta tc_results + 32
+
+    // ============================================================
+    // Test 34: count 255 is rejected before runtime table access.
+    // ============================================================
+    lda #$ff
+    jsr test_load_door_count
+    lda save_io_error
+    beq !t34_fail+
+    lda door_state_count
+    bne !t34_fail+
+    lda #$01
+    bne !t34_store+
+!t34_fail:
+    lda #$00
+!t34_store:
+    sta tc_results + 33
 
     jmp test_finish
 

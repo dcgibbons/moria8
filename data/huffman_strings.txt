@@ -83,7 +83,11 @@ Sorry, what was that again?
 @DF_TRAP_5 a rockfall trap
 @DF_DEATH_ROCKFALL falling rock.
 @DF_DIRECTION Direction?
-@DF_DOOR_STUCK The door is stuck.
+@DF_PICKED You have picked the lock.
+@DF_PICK_FAIL You failed to pick the lock.
+@DF_STUCK It appears to be stuck.
+@DF_PICK_CONFUSED You are too confused to pick the lock.
+@DF_DOOR_BROKEN The door appears to be broken.
 @DF_FOUND_TRAP You found a trap!
 @DF_FOUND_SECRET You found a secret door!
 @DF_FOUND_NOTHING You found nothing.

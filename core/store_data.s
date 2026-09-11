@@ -72,7 +72,7 @@ csc_bit:
     rts
 
 // check_store_category — Test if item category matches store
-// Input: A = ICAT value (0-16), zp_store_idx = store index
+// Input: A = ICAT value (0-18), zp_store_idx = store index
 // Output: carry set = category sold here, carry clear = not
 // Clobbers: A, X
 check_store_category:
@@ -88,6 +88,8 @@ check_store_category:
     rts
 
 !csc_hi:
+    cmp #ICAT_SPIKE
+    beq !csc_spike+
     cmp #ICAT_AMULET
     beq !csc_amulet+
     bcs !csc_no+            // Categories above AMULET (e.g. chest) buy nowhere;
@@ -99,6 +101,16 @@ check_store_category:
     :AuxReadX(store_cat_mask_hi)
     and zp_temp0
     beq !csc_no+
+    sec
+    rts
+
+!csc_spike:
+    // Spikes sell only at the general store (store 0), matching upstream.
+    lda zp_store_idx
+    beq !csc_spike_ok+
+    clc
+    rts
+!csc_spike_ok:
     sec
     rts
 

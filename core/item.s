@@ -1321,7 +1321,9 @@ tunnel_spawn_gold:
 //       zp_temp4 used internally by rng_range
 // ============================================================
 .const PIT_MAX_LEVEL = 12
-#if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME
+#if PICKER_IN_CHEST_OVERLAY
+.segment ChestOverlay
+#elif C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME
 .segment DungeonGenOverlay
 #endif
 
@@ -1329,9 +1331,9 @@ tunnel_spawn_gold:
 pit_sorted:
     // Level 0 (5 items)
     .byte 13, 15, 61, 62, 63
-    // Level 1 (22 items)
+    // Level 1 (23 items)
     .byte 2, 3, 6, 11, 12, 16, 17, 19, 20, 28, 29, 37, 51, 52, 54, 64, 77, 85
-    .byte 98, 99, 103, 114
+    .byte 98, 99, 103, 114, 135
     // Level 2 (19 items)
     .byte 5, 7, 9, 14, 21, 30, 31, 47, 48, 49, 53, 66, 74, 82, 84
     .byte 100, 102, 126, 128
@@ -1363,18 +1365,18 @@ pit_sorted_end:
 // Cumulative item count per level (0-12)
 pit_level_bounds:
     .byte 5      // level 0: 5 items
-    .byte 27     // level 1: +22 = 27
-    .byte 46     // level 2: +19 = 46
-    .byte 62     // level 3: +16 = 62
-    .byte 80     // level 4: +18 = 80
-    .byte 94     // level 5: +14 = 94
-    .byte 100    // level 6: +6 = 100
-    .byte 105    // level 7: +5 = 105
-    .byte 111    // level 8: +6 = 111
-    .byte 116    // level 9: +5 = 116
-    .byte 120    // level 10: +4 = 120
-    .byte 124    // level 11: +4 = 124
-    .byte 132    // level 12: +8 = 132
+    .byte 28     // level 1: +23 = 28
+    .byte 47     // level 2: +19 = 47
+    .byte 63     // level 3: +16 = 63
+    .byte 81     // level 4: +18 = 81
+    .byte 95     // level 5: +14 = 95
+    .byte 101    // level 6: +6 = 101
+    .byte 106    // level 7: +5 = 106
+    .byte 112    // level 8: +6 = 112
+    .byte 117    // level 9: +5 = 117
+    .byte 121    // level 10: +4 = 121
+    .byte 125    // level 11: +4 = 125
+    .byte 133    // level 12: +8 = 133
 pit_level_bounds_end:
 
 #if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME
@@ -1468,10 +1470,18 @@ pick_item_type:
 #if PLUS4_PRODUCT_OVERLAY_RUNTIME
 pick_item_type:
     lda current_overlay
+#if PICKER_IN_CHEST_OVERLAY
+    cmp #OVL_CHEST
+#else
     cmp #OVL_DUNGEON_GEN
+#endif
     beq !pit_overlay_loaded+
 
+#if PICKER_IN_CHEST_OVERLAY
+    ldx #OVL_CHEST - 1
+#else
     ldx #OVL_DUNGEON_GEN - 1
+#endif
     jsr overlay_load_disk        // No media prompt while generating a dungeon.
     bcc !pit_disk_loaded+
     lda #OVL_NONE
@@ -1479,7 +1489,11 @@ pick_item_type:
     lda #2                      // Fallback to first non-gold type on media error.
     rts
 !pit_disk_loaded:
+#if PICKER_IN_CHEST_OVERLAY
+    lda #OVL_CHEST
+#else
     lda #OVL_DUNGEON_GEN
+#endif
     sta current_overlay
 
 !pit_overlay_loaded:
@@ -1493,7 +1507,11 @@ pick_item_type:
     rts
 #elif C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME
 pick_item_type:
+#if PICKER_IN_CHEST_OVERLAY
+    lda #OVL_CHEST
+#else
     lda #OVL_DUNGEON_GEN
+#endif
     jsr overlay_load
     bcc !pit_overlay_loaded+
     lda #2                      // Fallback to first non-gold type on media error.
@@ -1832,7 +1850,7 @@ re_negate_a:
 // ============================================================
 // Compile-time validation
 // ============================================================
-.assert "Item type count", ITEM_TYPE_COUNT, 135
+.assert "Item type count", ITEM_TYPE_COUNT, 136
 .assert "it_category size", it_color_ac - it_category, ITEM_TYPE_COUNT
 .assert "it_color_ac size", it_weight - it_color_ac, ITEM_TYPE_COUNT
 .assert "it_weight size", it_dmg_packed - it_weight, ITEM_TYPE_COUNT
@@ -1850,7 +1868,7 @@ re_negate_a:
 .assert "pit_level_bounds size", pit_level_bounds_end - pit_level_bounds, PIT_MAX_LEVEL + 1
 .assert "pick_item_type entry stays resident", pick_item_type < $e000, true
 #if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME
-.assert "pick_item_type overlay impl lives in dungeon overlay", pick_item_type_overlay >= BANKED_DATA_BASE && pick_item_type_overlay <= BANKED_DATA_END, true
+.assert "pick_item_type overlay impl lives in the $E000 overlay window", pick_item_type_overlay >= BANKED_DATA_BASE && pick_item_type_overlay <= BANKED_DATA_END, true
 #endif
 // Hardcoded assertion removed for cross-platform compatibility
 .assert "Inventory total slots", TOTAL_INV_SLOTS, 31

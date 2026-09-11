@@ -40,12 +40,9 @@ test_exit_trampoline:
 #import "../../../../core/item_defs.s"
 #import "../../../../core/player.s"
 #import "../../../../core/ui_messages.s"
-#import "../../../../core/ui_status.s"
 #import "../../../../core/ui_help_clear.s"
-#import "../../../../core/ui_character.s"
 #import "../../../../core/ui_help.s"
 #import "../../../../core/ui_trampoline_stubs.s"
-#import "../../../../core/stat_display.s"
 .segmentdef TestCreateOverlay [start=$D000]
 .segmentdef TestNameStreams [start=$A000]
 .segment TestCreateOverlay
@@ -74,8 +71,6 @@ test_exit_trampoline:
 #import "../../../../core/player_magic_state.s"
 #import "../../../../core/player_magic_state_ops.s"
 #import "../../../../core/player_magic.s"
-#import "../../../../core/ui_inventory.s"
-#import "../../../../core/ui_equipment.s"
 #import "../../../../core/dungeon_los.s"
 #import "../../../../core/los_trace.s"
 #import "../../../../core/player_move.s"
@@ -146,6 +141,30 @@ t7_slot_b: .byte 0
 #import "../../../../core/scroll_effects_p3.s"
 #undef SCROLL_P3_NEW_OWNER
 #undef SCROLL_P3_EXISTING_OWNER
+
+// stubs after dropping ui imports (map-overlap boundary)
+ui_char_display:
+    rts
+
+// stubs after dropping ui imports (map-overlap boundary)
+ui_inv_display:
+    rts
+ui_inv_select_display:
+    rts
+
+// stubs after dropping ui imports (map-overlap boundary)
+ui_equip_display:
+    rts
+
+// stubs after dropping ui imports (map-overlap boundary)
+put_stat_val:
+    rts
+
+// stubs after dropping ui imports (map-overlap boundary)
+status_draw:
+    rts
+status_mark_dirty:
+    rts
 
 test_start:
     ldx #13

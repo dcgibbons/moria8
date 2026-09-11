@@ -1431,9 +1431,9 @@ expected_help_movement:
 expected_help_actions:
     .text "Actions" ; .byte 0
 expected_help_more_keys:
-    .text "More Keys" ; .byte 0
+    .text "Keypad" ; .byte 0
 expected_help_notes:
-    .text "Notes" ; .byte 0
+    .text "Letters" ; .byte 0
 expected_inventory_line:
     .byte $01
     .text ") Long Sword (Slay Evil) (magik)" ; .byte 0

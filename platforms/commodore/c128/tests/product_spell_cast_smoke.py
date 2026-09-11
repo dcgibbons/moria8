@@ -6,7 +6,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from vice_connector import VICEConnector, parse_vs_symbols
+from vice_connector import VICEConnector, allocate_free_port, parse_vs_symbols
 
 
 def resolve_symbol_addr(vs_path: Path, symbol_name: str) -> str:
@@ -23,6 +23,7 @@ def build_vice_command(
     boot_d64: Path,
     keybuf: str,
     keybuf_delay: int,
+    monitor_address: str,
 ) -> list[str]:
     return [
         vice,
@@ -38,6 +39,8 @@ def build_vice_command(
         "-sounddev",
         "dummy",
         "-remotemonitor",
+        "-remotemonitoraddress",
+        monitor_address,
         "-binarymonitor",
         "-autostart",
         str(boot_d64),
@@ -63,6 +66,8 @@ def main() -> int:
     parser.add_argument("--socket-timeout", type=float, default=1.0)
     parser.add_argument("--success-timeout", type=float, default=20.0)
     parser.add_argument("--post-timeout", type=float, default=10.0)
+    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--port", type=int, default=0, help="VICE monitor port; 0 = auto-allocate a free port (parallel-safe)")
     args = parser.parse_args()
 
     if not args.boot_d64.exists():
@@ -78,17 +83,20 @@ def main() -> int:
         print(f"FAIL: {exc}")
         return 2
 
+    if not args.port:
+        args.port = allocate_free_port(args.host)
     vice_process = subprocess.Popen(
         build_vice_command(
             vice=args.vice,
             boot_d64=args.boot_d64,
             keybuf=args.keybuf,
             keybuf_delay=args.keybuf_delay,
+            monitor_address=f"{args.host}:{args.port}",
         ),
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
-    connector = VICEConnector(timeout=args.socket_timeout)
+    connector = VICEConnector(host=args.host, port=args.port, timeout=args.socket_timeout)
     try:
         connector.connect(
             retries=max(1, int(args.connect_timeout / 0.1)),

@@ -311,6 +311,11 @@ dst_process_col:
     cmp da_saved_tile
     beq !dpc_done+
     :MapWrite_ptr0_y()
+    // da_typ is never a door type, so any written door tile is destroyed;
+    // purge unconditionally (the table scan early-outs cheaply when empty)
+    lda da_cur_x
+    ldy da_cur_y
+    jsr door_state_clear_at
 !dpc_done:
     rts
 

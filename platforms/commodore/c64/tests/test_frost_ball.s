@@ -44,10 +44,6 @@ test_finish:
 #import "../../../../core/item_defs.s"
 #import "../../../../core/player.s"
 #import "../../../../core/ui_messages.s"
-#import "../../../../core/ui_status.s"
-#import "../../../../core/ui_help_clear.s"
-#import "../../../../core/ui_character.s"
-#import "../../../../core/stat_display.s"
 .segmentdef TestCreateOverlay [start=$D000]
 .segmentdef TestNameStreams [start=$A000]
 .segment TestCreateOverlay
@@ -78,8 +74,6 @@ test_finish:
 #import "../../../../core/player_magic_state_ops.s"
 #import "../../../../core/player_magic.s"
 #import "../../../../core/player_magic_ball.s"
-#import "../../../../core/ui_inventory.s"
-#import "../../../../core/ui_equipment.s"
 #import "../dungeon_render.s"
 #import "../../../../core/dungeon_los.s"
 #import "../../../../core/player_move.s"
@@ -269,6 +263,36 @@ tv_setup_dark_room:
     jsr update_visibility
     jsr viewport_update
     jsr render_viewport
+    rts
+
+// stubs after dropping ui imports (map-overlap boundary)
+ui_char_display:
+    rts
+
+// stubs after dropping ui imports (map-overlap boundary)
+ui_inv_display:
+    rts
+ui_inv_select_display:
+    rts
+
+// stubs after dropping ui imports (map-overlap boundary)
+ui_equip_display:
+    rts
+
+// stubs after dropping ui imports (map-overlap boundary)
+put_stat_val:
+    rts
+
+// stubs after dropping ui imports (map-overlap boundary)
+ui_clear_full_screen_safe:
+    rts
+ui_help_clear_all:
+    rts
+
+// stubs after dropping ui imports (map-overlap boundary)
+status_draw:
+    rts
+status_mark_dirty:
     rts
 
 test_start:

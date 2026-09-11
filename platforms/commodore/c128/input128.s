@@ -855,6 +855,10 @@ input_normalize_ctrl_chords_with_state:
     beq !inct_ctrl_r+
     cmp #$d2
     beq !inct_ctrl_r+
+    cmp #$44                    // D
+    beq !inct_ctrl_d+
+    cmp #$c4                    // SHIFT+D
+    beq !inct_ctrl_d+
     rts
 !inct_ctrl_w:
     lda #$17
@@ -864,6 +868,9 @@ input_normalize_ctrl_chords_with_state:
     rts
 !inct_ctrl_r:
     lda #$12
+    rts
+!inct_ctrl_d:
+    lda #$04
 !inct_done:
     rts
 #endif

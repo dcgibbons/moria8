@@ -228,17 +228,13 @@ tier_check_transition:
     rts
 
 !tct_need_next:
-    inx
-    cpx #5                      // Already at tier 4?
-    bcs !tct_done-              // Yes → stay (tier 4 covers all deep levels)
-    stx current_tier
-    jmp tier_load
-
 !tct_need_prev:
-    dex
-    beq !tct_done-              // Can't go below tier 1
-    stx current_tier
-    jmp tier_load
+    // dlvl is outside the current tier's range: compute the containing tier
+    // directly. Stepping only one tier per call left current_tier behind
+    // after multi-tier moves (wizard level jump, Word of Recall), which
+    // also forced tier loads from overlay context during gameplay-view
+    // restores.
+    jmp !tct_first_entry+
 
 !tct_first_entry:
     // Determine initial tier from dungeon level

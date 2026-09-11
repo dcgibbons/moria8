@@ -4,7 +4,7 @@
 //        bash_stun_check (stun applied), bash_off_balance (paralyze set/safe),
 //        and Shift+D dig handoff for tunnelable terrain.
 //
-// Results at $0400-$0407: $01 = pass, $00 = fail per test (8 tests)
+// Results at $0400-$040D: $01 = pass, $00 = fail per test (14 tests)
 // NOTE: msg_print writes to screen row 0 ($0400+), so we store results
 // in tc_results[] and copy to $0400 at the very end.
 
@@ -18,7 +18,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #8
+    ldx #13
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -45,7 +45,6 @@ test_exit_trampoline:
 #import "../../../../core/ui_messages.s"
 #import "../../../../core/ui_status.s"
 #import "../../../../core/ui_help_clear.s"
-#import "../../../../core/ui_character.s"
 #import "../../../../core/stat_display.s"
 .segmentdef TestCreateOverlay [start=$D000]
 .segmentdef TestNameStreams [start=$A000]
@@ -75,15 +74,11 @@ test_exit_trampoline:
 #import "../../../../core/player_magic_state.s"
 #import "../../../../core/player_magic_state_ops.s"
 #import "../../../../core/player_magic.s"
-#import "../../../../core/ui_inventory.s"
-#import "../../../../core/ui_equipment.s"
 #import "../dungeon_render.s"
 #import "../../../../core/dungeon_los.s"
 #import "../../../../core/player_move.s"
 #import "../../../../core/combat.s"
 #import "../../../../core/scene_mat_tile.s"
-#import "../../../../core/ranged_fire.s"
-#import "../../../../core/throw.s"
 #import "../../../../core/bash.s"
 #import "../../../../core/turn_render_state.s"
 // This stub lives in the $D000 test overlay so Main stays below MAP_BASE.
@@ -114,6 +109,12 @@ chest_dispatch:
 chest_bash_command:
     clc
     rts
+ui_inv_display:
+ui_inv_select_display:
+ui_equip_display:
+ui_char_display:
+ui_help_display:
+    rts
 monster_attack_player:
 player_update_hunger_state:
     sec
@@ -132,7 +133,6 @@ player_death_check:
 #import "../../../../core/store_data.s"
 #import "../../../../core/store.s"
 #import "../../../../core/ui_store.s"
-#import "../../../../core/ui_help.s"
 #import "../../../../core/ui_trampoline_stubs.s"
 
 // Strings referenced by imported modules but defined in main.s
@@ -161,13 +161,20 @@ test_get_direction_target:
     sta target + 2
 }
 
-// Test scratch
+// Test scratch. The test image loads past MAP_BASE ($C000) into the map
+// band, so all mutable scratch must live here, below MAP_BASE — data at
+// end of file would alias map cells the tests write.
 tc_loop:    .byte 0
 tc_ok:      .byte 0
-tc_results: .fill 9, $ff      // Result buffer (copied to $0400 at end)
+tc_results: .fill 14, $ff      // Result buffer (copied to $0400 at end)
 tc_saved_hp_lo: .byte 0
 tc_saved_hp_hi: .byte 0
 tc_tunnel_calls: .byte 0
+tb_rng_idx:    .byte 0
+tb_flags:      .byte 0
+tb_rng_script: .fill 8, 0
+tb_rng_saved:  .fill 6, 0        // tb_patch_rng/tb_restore_rng jmp bytes
+.assert "test scratch stays below MAP_BASE", * <= MAP_BASE, true
 
 test_start:
     :PatchJump(get_direction_target, test_get_direction_target)
@@ -188,6 +195,12 @@ test_start:
     // Initialize sound (needed to avoid crash on sound_play)
     jsr hal_sound_init
 
+    // Direct bash_door formula fixtures do not initialize passive-search
+    // state. Keep it suppressed except in the dedicated movement test.
+    lda player_data + PL_FLAGS
+    ora #PLF_SEARCHING
+    sta player_data + PL_FLAGS
+
     // Pre-stuff keyboard buffer for -more- prompts
     lda #8
     sta $c6
@@ -204,7 +217,7 @@ test_start:
     // ==========================================
     // Test 1: bash_door_success — STR 18, loop until door opens
     // Set TILE_DOOR_CLOSED at map position (10,10), bash it.
-    // STR 18 → rng_range(28), need >= 5 → 23/28 chance per try.
+    // A plain door has a 50% success chance, independent of STR.
     // Loop up to 50 attempts — at least one should succeed.
     // ==========================================
 
@@ -239,7 +252,7 @@ test_start:
     sta tc_loop
 !t1_loop:
     // Reset tile to TILE_DOOR_CLOSED each iteration
-    ldx #10
+    ldx #12
     lda map_row_lo,x
     sta zp_ptr0
     lda map_row_hi,x
@@ -283,7 +296,7 @@ test_start:
     // ==========================================
     // Test 2: bash_door_fail — STR 3, verify at least one attempt
     //   keeps door closed.
-    // STR 3 → rng_range(13), need < 5 → 5/13 chance of fail per try.
+    // A plain door has a 50% failure chance, independent of STR.
     // Loop 50 attempts — at least one should fail (door stays closed).
     // ==========================================
 !t2:
@@ -754,5 +767,411 @@ test_start:
     and #~GAME_FLAG_WINNER & $ff
     sta zp_game_flags
 
+    :BankOutBasic()             // Script helpers live after name data at $A000
+    jsr test_bash_door_locked_success
+    jsr test_bash_door_locked_fail
+    jsr test_bash_door_stuck_success
+    jsr test_bash_door_full_table_break
+    jsr test_bash_door_passive_search
+
 !tests_done:
     jmp test_exit_trampoline
+
+// ============================================================
+// Test 10: bash_door on a locked door — Umoria formula success path.
+// STR 18 → chance 93 (18 + 75 proxy), |s| = 15 → spread 93*35 = 3255,
+// threshold 10*78 = 780. Scripted word roll 779 succeeds; break roll 1
+// (no break) clears state; player steps into the doorway.
+// ============================================================
+test_bash_door_locked_success:
+    jsr tb_setup_locked_door
+    // Script: word roll 779, break roll 1
+    lda #0
+    sta tb_rng_idx
+    lda #<779
+    sta tb_rng_script
+    lda #>779
+    sta tb_rng_script + 1
+    lda #1
+    sta tb_rng_script + 2
+    jsr tb_patch_rng
+    jsr bash_door
+    php
+    pla
+    sta tb_flags
+    jsr tb_restore_rng
+
+    lda tb_flags
+    and #$01                // Carry: turn consumed
+    beq !t10_fail+
+    ldx #12
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #10
+    lda (zp_ptr0),y
+    and #TILE_TYPE_MASK
+    cmp #TILE_DOOR_OPEN
+    bne !t10_fail+
+    lda door_state_count    // No break → state entry removed
+    bne !t10_fail+
+    lda zp_player_x         // Step-through into the doorway
+    cmp #10
+    bne !t10_fail+
+    lda zp_player_y
+    cmp #12
+    bne !t10_fail+
+    lda #$01
+    sta tc_results + 9
+    jmp !t10_done+
+!t10_fail:
+    lda #$00
+    sta tc_results + 9
+!t10_done:
+    rts
+
+// ============================================================
+// Test 11: bash_door on a locked door — failure path.
+// Word roll 780 >= threshold 780 → door holds; tile closed, state
+// intact, player stays put, turn consumed.
+// ============================================================
+test_bash_door_locked_fail:
+    jsr tb_setup_locked_door
+    lda #0
+    sta tb_rng_idx
+    lda #<780
+    sta tb_rng_script
+    lda #>780
+    sta tb_rng_script + 1
+    lda #0                  // off-balance DEX roll: 0 < DEX → safe
+    sta tb_rng_script + 2
+    jsr tb_patch_rng
+    jsr bash_door
+    php
+    pla
+    sta tb_flags
+    jsr tb_restore_rng
+
+    lda tb_flags
+    and #$01
+    beq !t11_fail+
+    ldx #12
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #10
+    lda (zp_ptr0),y
+    and #TILE_TYPE_MASK
+    cmp #TILE_DOOR_CLOSED
+    bne !t11_fail+
+    lda door_state_count
+    cmp #1
+    bne !t11_fail+
+    lda door_state_val
+    cmp #15
+    bne !t11_fail+
+    lda zp_player_x
+    cmp #9                  // Unmoved
+    bne !t11_fail+
+    lda zp_eff_paralyze
+    bne !t11_fail+          // Safe DEX roll: no off-balance
+    lda #$01
+    sta tc_results + 10
+    jmp !t11_done+
+!t11_fail:
+    lda #$00
+    sta tc_results + 10
+!t11_done:
+    rts
+
+// ============================================================
+// Test 12: bash_door on a stuck door — magnitude must decode via the
+// sign-bit mask: val $8f (stuck, magnitude 15) → |s| = 15, NOT the
+// two's-complement value 113 (which made stuck doors unbashable).
+// Same math as test 10: chance 93, spread 3255, threshold 780; word
+// roll 779 succeeds, break roll 1 clears state, player steps through.
+// ============================================================
+test_bash_door_stuck_success:
+    jsr tb_setup_stuck_door
+    // Script: word roll 779, break roll 1
+    lda #0
+    sta tb_rng_idx
+    lda #<779
+    sta tb_rng_script
+    lda #>779
+    sta tb_rng_script + 1
+    lda #1
+    sta tb_rng_script + 2
+    jsr tb_patch_rng
+    jsr bash_door
+    php
+    pla
+    sta tb_flags
+    jsr tb_restore_rng
+
+    lda tb_flags
+    and #$01                // Carry: turn consumed
+    beq !t12_fail+
+    ldx #12
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #10
+    lda (zp_ptr0),y
+    and #TILE_TYPE_MASK
+    cmp #TILE_DOOR_OPEN
+    bne !t12_fail+
+    lda door_state_count    // No break → state entry removed
+    bne !t12_fail+
+    lda zp_player_x         // Step-through into the doorway
+    cmp #10
+    bne !t12_fail+
+    lda zp_player_y
+    cmp #12
+    bne !t12_fail+
+    lda #$01
+    sta tc_results + 11
+    jmp !t12_done+
+!t12_fail:
+    lda #$00
+    sta tc_results + 11
+!t12_done:
+    rts
+
+// ============================================================
+// Test 13: a plain-door break roll with a full state table opens the
+// door unbroken. The broken result cannot be represented, so it must
+// not be passed to door_state_set_at and silently dropped.
+// ============================================================
+test_bash_door_full_table_break:
+    jsr tb_setup_locked_door
+    // Make the target plain/untracked while keeping the table full.
+    ldx #MAX_DOOR_STATES - 1
+    lda #63
+!t13_x:
+    sta door_state_x,x
+    dex
+    bpl !t13_x-
+    ldx #MAX_DOOR_STATES - 1
+    lda #21
+!t13_y:
+    sta door_state_y,x
+    dex
+    bpl !t13_y-
+    lda #MAX_DOOR_STATES
+    sta door_state_count
+    // Plain-door bash: word roll 0 succeeds; break roll 0 requests broken.
+    lda #0
+    sta tb_rng_idx
+    sta tb_rng_script
+    sta tb_rng_script + 1
+    sta tb_rng_script + 2
+    jsr tb_patch_rng
+    jsr bash_door
+    php
+    pla
+    sta tb_flags
+    jsr tb_restore_rng
+
+    lda tb_flags
+    and #$01
+    beq !t13_fail+
+    ldx #12
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #10
+    lda (zp_ptr0),y
+    and #TILE_TYPE_MASK
+    cmp #TILE_DOOR_OPEN
+    bne !t13_fail+
+    lda door_state_count
+    cmp #MAX_DOOR_STATES       // No unrepresentable broken entry added
+    bne !t13_fail+
+    lda #$01
+    sta tc_results + 12
+    rts
+!t13_fail:
+    lda #$00
+    sta tc_results + 12
+    rts
+
+// ============================================================
+// Test 14: successful door bash steps through via the production bash_door
+// path and performs movement-owned passive search (Umoria playerBashClosedDoor
+// -> playerMove). A guaranteed search reveals the adjacent secret door.
+// ============================================================
+test_bash_door_passive_search:
+    jsr tb_setup_locked_door
+    lda player_data + PL_FLAGS
+    and #~PLF_SEARCHING & $ff
+    sta player_data + PL_FLAGS
+    lda #0
+    sta player_data + PL_CLASS
+    sta player_data + PL_RACE
+    sta trap_count
+
+    // Keep the destination lit so effective search chance is not dimmed.
+    ldx #12
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #10
+    lda #TILE_DOOR_CLOSED | FLAG_LIT
+    sta (zp_ptr0),y
+    sta bash_save_tile
+    iny
+    lda #TILE_SECRET
+    sta (zp_ptr0),y
+
+    // Word roll 0 succeeds, break roll 1 leaves the door intact; remaining
+    // zeroes guarantee the passive-frequency and secret-discovery rolls.
+    lda #0
+    sta tb_rng_idx
+    sta tb_rng_script
+    sta tb_rng_script + 1
+    lda #1
+    sta tb_rng_script + 2
+    lda #0
+    sta tb_rng_script + 3
+    sta tb_rng_script + 4
+    lda #8
+    sta $c6
+    jsr tb_patch_rng
+    jsr bash_door
+    php
+    pla
+    sta tb_flags
+    jsr tb_restore_rng
+
+    lda tb_flags
+    and #$01
+    beq !t14_fail+
+    ldx #12
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #11
+    lda (zp_ptr0),y
+    and #TILE_TYPE_MASK
+    cmp #TILE_DOOR_CLOSED
+    bne !t14_fail+
+    lda #$01
+    sta tc_results + 13
+    rts
+!t14_fail:
+    lda #$00
+    sta tc_results + 13
+    rts
+
+// tb_setup_stuck_door — Same door as tb_setup_locked_door but stuck
+// with magnitude 15: val = $80 | 15 = $8f (bit 7 set = stuck/jammed).
+tb_setup_stuck_door:
+    jsr tb_setup_locked_door
+    lda #$8f
+    sta door_state_val
+    rts
+
+// tb_setup_locked_door — Closed door at (10,12) with locked state 15;
+// player at (9,12), STR 18, no confusion/fear/paralysis, DEX 18. Row 12
+// keeps the mutable map cell beyond this test image's executable body.
+tb_setup_locked_door:
+    ldx #12
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #10
+    lda #TILE_DOOR_CLOSED
+    sta (zp_ptr0),y
+    lda #TILE_DOOR_CLOSED
+    sta bash_save_tile
+    lda #10
+    sta df_target_x
+    lda #12
+    sta df_target_y
+    lda #1
+    sta door_state_count
+    lda #10
+    sta door_state_x
+    lda #12
+    sta door_state_y
+    lda #15
+    sta door_state_val
+    lda #18
+    sta zp_player_str
+    sta zp_player_dex
+    lda #9
+    sta zp_player_x
+    lda #12
+    sta zp_player_y
+    lda #0
+    sta zp_eff_confuse
+    sta eff_fear_timer
+    sta zp_eff_paralyze
+    sta player_move_relocated
+    lda player_data + PL_FLAGS
+    ora #PLF_SEARCHING          // Isolate door-roll tests from passive search
+    sta player_data + PL_FLAGS
+    rts
+
+// Scripted RNG: test_rng_word_scripted returns tb_rng_script word entries
+// (lo,hi pairs) in zp_temp2/3; test_rng_range_scripted returns the following
+// bytes for rng_range calls. NOTE: ldx must follow the incs — tb_rng_idx is
+// advanced in memory, so X must be loaded after incrementing for the -2/-1
+// compensation to address the intended script byte.
+test_rng_word_scripted:
+    inc tb_rng_idx
+    inc tb_rng_idx
+    ldx tb_rng_idx
+    lda tb_rng_script - 2,x
+    sta zp_temp2
+    lda tb_rng_script - 1,x
+    sta zp_temp3
+    rts
+
+test_rng_range_scripted:
+    inc tb_rng_idx
+    ldx tb_rng_idx
+    lda tb_rng_script - 1,x
+    rts
+
+tb_patch_rng:
+    lda rng_range
+    sta tb_rng_saved
+    lda rng_range + 1
+    sta tb_rng_saved + 1
+    lda rng_range + 2
+    sta tb_rng_saved + 2
+    lda rng_range_word
+    sta tb_rng_saved + 3
+    lda rng_range_word + 1
+    sta tb_rng_saved + 4
+    lda rng_range_word + 2
+    sta tb_rng_saved + 5
+    :PatchJump(rng_range_word, test_rng_word_scripted)
+    :PatchJump(rng_range, test_rng_range_scripted)
+    rts
+
+tb_restore_rng:
+    lda tb_rng_saved
+    sta rng_range
+    lda tb_rng_saved + 1
+    sta rng_range + 1
+    lda tb_rng_saved + 2
+    sta rng_range + 2
+    lda tb_rng_saved + 3
+    sta rng_range_word
+    lda tb_rng_saved + 4
+    sta rng_range_word + 1
+    lda tb_rng_saved + 5
+    sta rng_range_word + 2
+    rts
+
+.assert "Bash test main stays below MAP_BASE", * <= MAP_BASE, true

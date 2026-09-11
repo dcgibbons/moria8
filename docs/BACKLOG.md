@@ -33,7 +33,71 @@ Acceptance target:
 
 - Chest contents respect a documented physical-plausibility rule, with the
   deviation from VMS recorded and tested, and no change to drop rates for
-  legal contents.
+   legal contents.
+
+### Stack identical inventory items (spikes first)
+
+Upstream Moria/Umoria merge identical items on pickup (`inven_carry` merges
+matching TV/subval entries, adding quantity), so iron spikes, food, oil, and
+similar consumables occupy one slot with a count. Moria8's `inv_add_item`
+(`core/item.s`) has no merge machinery at all: every item, including each
+individual Iron Spike (item 135), consumes a whole carried slot. The
+`item_defs.s` "stacks" claim was a comment bug (fixed 2026-09-10); this entry
+tracks the missing behavior.
+
+Player-visible cost is concentrated on spikes: jamming doors is a
+spike-per-attempt mechanic, and the general store restocks spikes at
+`si_qty = 1` per shelf slot (`store_restock_overlay.s`), so stocking up means
+buying many single-spike entries that each eat a pack slot, and spike shelf
+slots can crowd out food/oil in a small inventory.
+
+This is a design call, not a bug fix: one-slot-per-item is internally
+consistent (nothing in the port stacks), and adding merge machinery touches
+pickup, store buy/sell, drop, inventory display, and save format.
+
+Required work:
+
+- Decide the stacking rule: merge identical items generally (upstream parity),
+  or merge only a whitelist (spikes/food/oil), or keep one-per-slot and
+  instead sell spikes in bundles (qty 5/10 per entry) to fix only the
+  store/pack pressure.
+- If merging: define identity (which of p1/to_hit/to_dam/flags/ego must
+  match), cap quantities at 255, and decide how partial pickups from a full
+  stack behave.
+- If bundling only: pick the bundle size and update `store_restock_overlay.s`
+  plus spike pricing/weight so a bundle is coherent.
+- Regression coverage for pickup/buy/sell/drop of stackables, including the
+  full-pack and stack-overflow edges, and save/load round-trip of stacked
+  quantities.
+
+Acceptance target:
+
+- Spikes no longer consume one pack slot each (and, if general merging is
+  chosen, identical consumables merge per the documented rule), with store
+  stock not starving food/oil, and no change to non-stackable item handling.
+
+### Sweep platform-specific inlines in core/ behind HAL macros
+
+`core/` currently contains a few direct platform conditionals instead of HAL
+macros: `#if APPLE2 jsr mmu_safe_map_write_ptr1` in `core/ui_messages.s`
+(message-history writes) and `#if C128_PRODUCT_OVERLAY_RUNTIME jsr
+mmu_common_copy_map_row` plus `SCREEN_RAM,y` reads in
+`core/dungeon_features.s` (`place_secrets` row scan). Both work and are
+assert-guarded, but they break the convention that core stays
+platform-agnostic (`docs/CROSS_PLATFORM_STRATEGY.md`).
+
+Required work:
+
+- Introduce a HAL write macro (e.g. `:HalAuxWritePtr1()`) defaulting to
+  `sta (zp_ptr1),y` and overridden by Apple II to the aux thunk; same
+  pattern for a row-read/scan macro covering the C128 bank-copy path.
+- Sweep both call sites; no behavior change, so existing gates
+  (`make test`, `make test128`) suffice.
+
+Acceptance target:
+
+- No `#if <PLATFORM>` platform calls remain in the touched core modules;
+  all four platform builds and test gates stay green.
 
 ### Implement Plus/4 TED sound effects
 
@@ -231,21 +295,140 @@ through `tramp_eff_map_area` and asserts the mana-cost signature and clean
 return); earthquake shares the identical trampoline pattern (WoD exemption
 class); C64 unit suites cover the engines themselves.
 
+### input_ctrl_r_held CIA matrix probe raced the KERNAL scanner
+
+DONE 2026-09-08 (found during the wizard-teleport investigation).
+`input_ctrl_r_held` (C64) reprogrammed the CIA1 keyboard-matrix
+ports/DDRs from a `CLI` context with no IRQ masking, so the KERNAL
+SCNKEY interrupt could interleave between its row-select writes and
+column reads, producing phantom "CTRL+R held" readings (confirmed stuck
+at `$01` in a live snapshot). A false positive injects `CMD_AUTOREST`
+into the command stream and starves real key input. Fix: wrap the probe
+in `php`/`sei` ... `plp` (3 bytes), matching the already-protected
+`input_run_key_held` pattern; the caller's interrupt state is preserved.
+Verified live on a patched product disk: probe executes with the new
+prologue and returns `$00` with no keys held. Gates: make test exit 0,
+make test128 137/137.
+
+### Wizard teleport freezes on a tier-mismatched level (one-step tier transition)
+
+DONE 2026-09-07 (player report + VICE snapshots). Root cause chain:
+(a) `tier_check_transition` stepped only ONE tier per call, so a
+multi-tier move (wizard level jump, Word of Recall) left `current_tier`
+behind `zp_player_dlvl` (snapshot: tier 2 on dlvl 20 — wrong-tier
+monsters as a side effect). (b) The wizard teleport's gameplay-view
+restore then fired `tier_load` for the correct tier into the `$E000`
+window, evicting the ModalMisc wizard overlay; the redraw (resident)
+completed, but the restore helper's `rts` returned into the evicted
+window and executed tier data as code — nondeterministic: benign,
+spurious overlay load, or JAM (`$FFBE` in one trace). Fix:
+`tier_check_transition` now computes the containing tier directly for any
+out-of-range dlvl (single disk load, same bounds as the first-entry
+path), so `current_tier` can never lag behind dlvl and the
+modal-restore tier load can never fire spuriously. Regression tests:
+test_tier.s t16-t17 (multi-tier up/down), 17/17. Verified end-to-end
+with a scripted level-jump-to-20 + teleport product build: previously
+JAMmed, now completes with the dungeon correctly repainted. Gates:
+make test exit 0, make test128 137/137.
+
 ### Locked/stuck/spiked doors
 
-Upstream has per-door state Moria8 lacks: generation places locked
-(`misc_use > 0`) and stuck (`misc_use < 0`) doors, players jam doors with
-spikes (Umoria `game_run.cpp` door-close flow: locked becomes stuck, then
-`misc_use -= 1 + 190/(10 - misc_use)` with diminishing effect per spike),
-players force stuck/locked doors with STR-based rolls, and
-`monsterOpenDoor` adjusts monster open/bash odds against that state
-(door-capable monsters pick locks, stuck doors burst-open). Moria8's tile
-model stores only open/closed/secret with all four flag bits allocated, so
-door state needs a home first: a small door-position side table or a spare
-encoding, on all four platforms. Once state exists, port the spike item, the
-close-to-jam command path, player forced-open rolls, and the monster-side
-odds adjustments. Tile budget note: this must not regress the hard-won
-resident headroom that monster door opening/bashing just consumed.
+DONE 2026-09-06 (design approved 2026-09-04). All four steps shipped on
+all four platforms; change record in the session plan. (1) Per-door state
+lives in a position-keyed SoA side table (cap 16, beside the trap table in
+core/dungeon_features.s; locked 11-20, stuck = sign bit + magnitude, 1 on
+an open tile = broken); generation rolls state over place_secrets'
+leftover door scan (single rng_range(120) per leftover closed door:
+2/12 locked, 1/12 stuck, upstream distribution); new save block with
+SAVE_VERSION bump per platform and gated legacy read (old saves load
+all-plain). (2) Player semantics: door_try_open picks locks
+((skill-lock) > rng(100), Umoria-shaped disarm skill, +1 XP once, opens
+same turn) and refuses stuck doors; door_try_close refuses broken doors;
+bash_door uses Umoria's formula (STR + 75 fixed weight proxy,
+rng(chance*(20+|s|)) < 10*(chance-|s|), 50% break, step-through); WoD and
+destroy-traps-doors purge state. (3) Monster engine is state-aware:
+door-capable monsters pick locks (unlock only) and burst stuck doors
+(open + 50% break), non-capable bash gains |s| terms via the shared
+mts_state_roll helper; plain doors roll identically to before. (4) Iron
+Spike (item 135, ICAT_SPIKE, general store) and the CTRL+D (jam) command:
+VMS flat +20 magnitude per spike (locked becomes stuck, cap 127), Umoria
+turn policy, occupied doorway refuses via combat_msg_monster_in_way,
+spike consumed on success. Resident budget funded by approved cold-code
+moves (C64/Plus4 level-up magic + calc_spell_failure -> ModalMisc, picker
+chain GEN -> CHEST, C64 store_restock -> ModalMisc, C128 door-state code
+ -> Default image, A2 msg_history -> aux RAM); jam handler parks in the
+ C64 items overlay and the Plus4/A2 chest overlay, while C128 keeps it in
+ resident Default RAM. The lock-pick roll lives beside its effective-disarm
+ helper: cached Disarm on C128, Chest on the other product builds.
+Post-review fixes (2026-09-07): pick roll moved off resident (it called
+the overlay-parked disarm formula -> wild jump) and gained hopeless-skill
+guards (skill <= lock no longer wraps unsigned to always-succeed); jam
+key is CTRL+D on all platforms (CTRL+J was tried first, but the Apple IIe
+encoder emits $0A for both CTRL+J and the down-arrow key, so the chord is
+unreachable there; F was already gain-spell and first match wins; V is
+reserved for future work; SHIFT+C is character info); C64
+SCROLL_P3_ROUTER_ENABLED restored (accidentally dropped with the
+store_restock move, silently no-op'ing phase-3 scrolls). Gates: make test
+exit 0 (test64 195/195, C128 fast+smoke 10/10 each, testplus4 40/40, A2
+runtime 0 failures), make test128 137/137. Also hardened the Plus4
+disk-setup smoke harness against its $E000 window being shared with the
+KERNAL ROM (modal key reads bank ROM in for GETIN, firing window
+breakpoints on ROM keyboard code): pass/fail stops now count only when
+the Help overlay is live AND the instruction at PC matches the real
+function prologue.
+
+Post-review fixes (2026-09-10, multi-reviewer pass): (a) `mts_state_roll`
+returned success when monster hp exactly equalled the B term (`cmp`/`beq`
+exited through the carry-preserving epilogue with carry set); equality now
+explicitly `clc`s. Boundary tests t53-t55 added (red-green verified).
+(b) Phantom spike: `door_jam_at_target` consumed the spike and printed
+success even when the state table was full and `door_state_set_at`
+silently dropped the write; jamming a door with no entry now refuses
+(turn consumed, spike kept, new message) when `door_state_count` ==
+MAX_DOOR_STATES. C64 t64 pins it. (c) place_secrets' state roll used to
+scan at most the first MAX_DOOR_STATES leftover doors, which starved the
+table (~1/4 of rolls produce a state) and biased locked/stuck doors
+toward the top of the row-major map scan; a separate full-map pass now
+covers every leftover door and stops rolling only when the table fills
+(a subsequent bounded 32-door scan was also rejected). Deliberate RNG-stream
+change per DUNGEON_GENERATION_CONTRACT (draw count grows only on levels
+with >16 leftover closed doors; bounds/reduction unchanged: one
+rng_range(120) per rolled door, [0,20) locked mag 11+r/2, [60,70) stuck
+mag r-49). (d) Dead `mts_door_state` store removed; stale GEN-overlay and
+ICAT-range comments corrected. (e) item_defs' "stacks" claim removed —
+no item in this port merges slots; whether spikes should stack like
+upstream is an open design question (below).
+
+### Disturb the player mid-turn when a monster bursts a door
+
+Upstream Umoria calls `playerDisturb(1,0)` when a monster bursts a door
+(`monster.cpp::monsterOpenDoor`), interrupting rest/run immediately.
+Moria8 prints the same unconditional message, and `huff_print_msg` sets
+`zp_msg_flags`, which already breaks auto-rest and running at the
+post-turn check (`core/game_loop.s` rest loop and `run_post`). The only
+residual delta is timing: upstream's disturb fires mid-step, so a
+multi-tile run could in principle continue one step further here before
+stopping. Minor gameplay parity; no correctness issue.
+
+Required work:
+
+- If pursued, add an explicit disturb hook at the two burst-print sites
+  in `core/monster_ai.s` and verify rest/run interruption against the
+  upstream mid-step timing.
+
+### Overlay callers of the gameplay-view restore can be evicted mid-flow
+
+The C64/Plus4/A2 gameplay-view restore (`ui_view_redraw_gameplay_view`,
+resident) calls `tier_restore_after_overlay`, which can load tier data
+into the shared `$E000` window. Modal overlays whose code lives in that
+window (wizard restore helpers, spell/item modal exit paths) continue
+executing there after the load — the window then holds tier data, not
+code, so the continuation is wild. Today this only fires when the tier
+is stale (after a tier-load failure, `current_tier=0`); the normal
+in-range path skips the load. Hardening options: move the small restore
+helpers resident, or have the restore reload the caller's overlay
+before returning. Exposed by the wizard-teleport freeze above; not
+triggered in normal play once the tier always matches dlvl.
 
 ### Closing a door onto a monster's tile breaks attack targeting
 
@@ -642,6 +825,58 @@ Acceptance target:
   or the incompatibility is root-caused and documented as wontfix.
 
 ## Testing Infrastructure
+
+### Normalize cross-platform save schema and versioning
+
+The shared serializer currently interprets a platform-local version byte:
+C64 and Apple IIe use the `$0f` lineage, C128 uses the `$10` lineage with
+platform-specific migrations, and Plus/4 uses the `$01` lineage. This preserves
+existing saves but makes one shared format harder to audit because the same
+schema milestone has a different numeric version on each platform.
+
+Required work:
+
+- Define one global save-schema version sequence and an explicit platform/layout
+  identifier for data that cannot be shared across map sizes or memory models.
+- Inventory every existing platform-local version and map it to the equivalent
+  global schema and platform-specific migration steps.
+- Preserve loading of every still-supported legacy version; do not renumber
+  persisted versions in place or infer platform solely from record length.
+- Centralize format milestones so shared serialization code does not depend on
+  independently numbered platform constants.
+- Add cross-platform schema fixtures and negative tests for wrong-platform,
+  unknown-version, truncated, and malformed-but-checksummed saves.
+
+Acceptance target:
+
+- Every new save carries an unambiguous global schema version and platform/layout
+  identity, all supported legacy saves migrate correctly, and one manifest
+  documents and tests the complete format history.
+
+### Archive legacy-version save fixtures for migration testing
+
+Save-version bumps (e.g. `SAVE_DOOR_STATE_VERSION`, 2026-09 doors phase) are
+covered by unit tests (`test_save.s` legacy-stream alignment, zeroed door
+table on old versions), but no test loads a genuine binary save produced by a
+historical release. A stream-alignment slip between versions would only
+surface as garbled inventory/state when a player upgrades with an old save.
+
+Required work:
+
+- Capture real save files from the last release of each platform (C64/C128/
+  Plus/4 disk images, Apple IIe ProDOS save) at each still-supported legacy
+  version and commit them as test fixtures.
+- Add a per-platform harness step that loads each legacy fixture, migrates,
+  saves, and verifies key invariants (player stats, inventory ids/quantities,
+  dlvl, gold) against recorded expectations.
+- Wire the fixtures into the existing save tests rather than a parallel
+  runner.
+
+Acceptance target:
+
+- Every supported save-version upgrade path has at least one archived
+  binary fixture that loads cleanly on the current build on all four
+  platforms.
 
 ### Collapse disk matrix execution into one shared runner
 

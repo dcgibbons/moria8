@@ -53,7 +53,7 @@ design record; current ownership is enforced by `platforms/apple2/memory.s`,
 | main `$BB00-$BEFF` | ProDOS MLI I/O/staging buffer |
 | main `$BF00-$BFFF` | ProDOS global page |
 | aux `$0800-$3B0B` | Live 198x66 map |
-| aux `$3B0C-$59FF` | Current immutable/mutable aux data payload: Huffman data, item-name streams, store inventory, recall arrays, class-spell tables, spell names, ego suffix slots, externalized message strings, and the screen-code char-map table; boundary raised from `$56FF` for the 128-row catalog (Phase 3, 2026-08-01) |
+| aux `$3B0C-$59FF` | Current immutable/mutable aux data payload: Huffman data, item-name streams, store inventory, recall arrays, class-spell tables, spell names, ego suffix slots, externalized message strings, the screen-code char-map table, and the message-history ring buffer (`MSG_HISTORY_IN_AUX`, doors phase 2026-09: resident always-region was full; writes execute only via the ZP thunk `mmu_safe_map_write_ptr1`); boundary raised from `$56FF` for the 128-row catalog (Phase 3, 2026-08-01) |
 | aux `$5A00-$BFFF` | Six boot-cached overlays under cache manifest v7; page-rounded slots fill the span |
 
 `A2.PLAY` is not a modal swap slot in the implementation: every overlay,
@@ -178,7 +178,7 @@ replaced by the Apple II HAL budget line.
 | reu.s + reu_loading_banked.s | 987 | GONE — reu_stub.s (~20) |
 | input_contract, input_run_cancel | 64 | ALWAYS |
 | player.s | 1,349 | ALWAYS |
-| ui_messages.s + ui_status.s | 2,088 | ALWAYS code; string data → AUX (L4, est. −1,500) |
+| ui_messages.s + ui_status.s | 2,088 | ALWAYS code; string data → AUX (L4, est. −1,500); `msg_history` ring buffer → AUX (2026-09, `MSG_HISTORY_IN_AUX`) |
 | generation_busy(+api), ui_help_clear, stat_display | 308 | ALWAYS |
 | huffman.s (decoder) | 155 | ALWAYS |
 | huffman_data.s | 2,911 | AUX (L3) |

@@ -338,6 +338,27 @@ test_continue:
     cmp #CMD_NONE
     bne test_fail2
 
+    // CTRL+D chord normalizes to $04 (jam door)
+    lda #$44               // D
+    ldy #1                 // Ctrl held
+    jsr input_normalize_ctrl_chords_with_state
+    cmp #$04
+    bne test_fail2
+    lda #$c4               // SHIFT+D fallback
+    ldy #1
+    jsr input_normalize_ctrl_chords_with_state
+    cmp #$04
+    bne test_fail2
+    lda #$44
+    ldy #0                 // No Ctrl => stays D
+    jsr input_normalize_ctrl_chords_with_state
+    cmp #$44
+    bne test_fail2
+    lda #$04               // CTRL+D maps to jam
+    jsr petscii_to_command
+    cmp #CMD_JAM
+    bne test_fail2
+
     lda #0
     sta input_tree_idx
 !full_tree_loop:

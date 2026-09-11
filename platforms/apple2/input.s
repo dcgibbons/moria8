@@ -14,7 +14,9 @@
 //   arrows $08/$15/$0B/$0A  -> $9D/$1D/$91/$11 (cursor keys)
 //   DELETE $7F              -> $14 (PETSCII DEL, backspace in text entry)
 //   everything else passes through unchanged (digits, punctuation, ESC $1B,
-//   RETURN $0D, and CTRL chords $02/$12/$17 already match PETSCII).
+//   RETURN $0D, and CTRL chords $02/$04/$12/$17 already match PETSCII).
+//   (CTRL+J cannot be the jam key here: the IIe encoder emits $0A for both
+//   CTRL+J and the down-arrow key, and down-arrow movement keeps it.)
 // Note: with Caps Lock engaged the IIe encoder emits uppercase for unshifted
 // letter presses, which then decode as shifted commands — a hardware
 // limitation shared with every pre-shifted keyboard.

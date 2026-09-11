@@ -1990,7 +1990,7 @@ run_chest_open_product_smoke() {
             --expect-byte-symbol ".chest_product_runtime_state=0x36" \
             --expect-byte-symbol ".chest_loot_pending=0x00" \
             --expect-byte-symbol ".chest_pending_summons=0x00" \
-            --expect-byte-symbol ".current_overlay=0x04" \
+            --expect-byte-symbol ".current_overlay=0x0a" \
             --expect-byte-symbol ".fi_item_id=0x81" \
             --expect-byte-symbol ".fi_p1=0x80" \
             --expect-byte-symbol ".zp_player_dlvl=0x01" \
@@ -2077,7 +2077,7 @@ run_chest_open_product_reu_smoke() {
             --expect-byte-symbol ".chest_product_runtime_state=0x36" \
             --expect-byte-symbol ".chest_loot_pending=0x00" \
             --expect-byte-symbol ".chest_pending_summons=0x00" \
-            --expect-byte-symbol ".current_overlay=0x04" \
+            --expect-byte-symbol ".current_overlay=0x0a" \
             --expect-byte-symbol ".fi_item_id=0x81" \
             --expect-byte-symbol ".fi_p1=0x80" \
             --expect-byte-symbol ".zp_player_dlvl=0x01" \
@@ -4134,7 +4134,7 @@ check_static_contract "wizard_cancel_text_contract" "../../../core/wizard.s" \
 check_static_contract "wizard_menu_aligned_rows_contract" "../../../core/wizard.s" \
     "wiz_row1_str:|||.text \"L jump    A reveal    H heal\"|||wiz_row2_str:|||.text \"I ident   X level     G item\"|||wiz_row3_str:|||.text \"S summon  T tele      W wall\""
 check_static_contract "wizard_item_prompt_range_contract" "../../../core/wizard.s" \
-    "wiz_item_prompt_str:|||.text \"ITEM 0-134: \""
+    "wiz_item_prompt_str:|||.text \"ITEM 0-135: \""
 check_static_contract "wizard_bad_prompt_cleanup_contract" "../../../core/wizard.s" \
     "wizard_prompt_bad_value:|||jsr msg_print|||jmp wizard_prompt_clear_digits|||wizard_prompt_two_digit:|||jsr wizard_prompt_bad_value|||jmp !wiz_num_loop-"
 check_static_contract "c64_disk_prompt_dismiss_clears_full_modal_contract" "../common/disk_swap.s" \
@@ -4235,14 +4235,14 @@ run_test "math"   "tests/test_math.s"   "0400 040f" 16
 run_test "rng"    "tests/test_rng.s"    "0400 0409" 10
 run_test "memory" "tests/test_memory.s" "0400 0402" 3
 run_test "config" "tests/test_config.s" "0400 0400" 1
-run_test "input"  "tests/test_input.s"  "0400 040d" 14
+run_test "input"  "tests/test_input.s"  "0400 040e" 15
 run_test "main_loop" "tests/test_main_loop.s" "0400 042b" 44 500000000
 run_test "run_visibility_bank" "tests/test_run_visibility_bank.s" "0400 0400" 1 500000000
 run_test "turn" "tests/test_turn.s" "0400 041c" 29 500000000
 run_test "player" "tests/test_player.s" "0400 0409" 10
-run_test "dungeon" "tests/test_dungeon.s" "0400 0432" 51 500000000
+run_test "dungeon" "tests/test_dungeon.s" "0400 0441" 66 500000000
 run_test "monster" "tests/test_monster.s" "0400 0412" 19 500000000
-run_test "monster_ai" "tests/test_monster_ai.s" "0400 042d" 46 500000000
+run_test "monster_ai" "tests/test_monster_ai.s" "0400 0437" 56 500000000
 run_test "combat" "tests/test_combat.s" "0400 0428" 41 500000000
 run_test "msg_long" "tests/test_msg_long.s" "0400 0400" 1 20000000
 run_test "monster_attack" "tests/test_monster_attack.s" "0400 040d" 14 500000000
@@ -4327,17 +4327,17 @@ run_test "ui_views" "tests/test_ui_views.s" "0400 0413" 19 500000000
 run_test "ui_views_filters" "tests/test_ui_views_filters.s" "0400 0413" 7 500000000
 run_test "subsystems" "tests/test_subsystems.s" "0400 0409" 10
 run_sound_monitor_test
-run_test "save"  "tests/test_save.s"  "0400 041c" 29 1000000000
+run_test "save"  "tests/test_save.s"  "0400 0421" 34 1000000000
 run_test "score" "tests/test_score.s" "0400 040c" 13 500000000
 run_test "wands_staves" "tests/test_wands_staves.s" "0400 0406" 7 100000000
 run_test "monster_magic" "tests/test_monster_magic.s" "0400 040d" 14 500000000
-run_test "tier" "tests/test_tier.s" "0400 040e" 15 500000000
+run_test "tier" "tests/test_tier.s" "0400 0410" 17 500000000
 run_test "disk_swap" "tests/test_disk_swap.s" "0400 040e" 15 500000000
 run_test "render" "tests/test_render.s" "0400 0417" 24 500000000
 run_test "ranged" "tests/test_ranged.s" "0400 0409" 10 500000000
 run_test "ego" "tests/test_ego.s" "0400 0409" 10 500000000
 run_test "throw" "tests/test_throw.s" "0400 040a" 11 500000000
-run_test "bash" "tests/test_bash.s" "0400 0408" 9 500000000
+run_test "bash" "tests/test_bash.s" "0400 040d" 14 500000000
 run_test "tunnel" "tests/test_tunnel.s" "0400 0407" 8 500000000
 run_test "background" "tests/test_background.s" "0400 0407" 8
 run_test "look_trampoline" "tests/test_look_trampoline.s" "0400 0401" 2

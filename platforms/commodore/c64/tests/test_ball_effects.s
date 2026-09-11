@@ -44,7 +44,6 @@ test_finish:
 #import "../../../../core/ui_messages.s"
 #import "../../../../core/ui_status.s"
 #import "../../../../core/ui_help_clear.s"
-#import "../../../../core/ui_character.s"
 #import "../../../../core/stat_display.s"
 .segmentdef TestCreateOverlay [start=$D000]
 .segmentdef TestNameStreams [start=$A000]
@@ -76,8 +75,6 @@ test_finish:
 #import "../../../../core/player_magic_state_ops.s"
 #import "../../../../core/player_magic.s"
 #import "../../../../core/player_magic_ball.s"
-#import "../../../../core/ui_inventory.s"
-#import "../../../../core/ui_equipment.s"
 #import "../dungeon_render.s"
 #import "../../../../core/dungeon_los.s"
 #import "../../../../core/player_move.s"
@@ -148,6 +145,15 @@ test_combat_kill_message:
     inc tbf_kill_calls
     jsr monster_remove
     inc zp_dirty_count
+    rts
+
+// Dropped ui_* imports to stay under the map-overlap boundary.
+ui_char_display:
+ui_inv_display:
+ui_inv_select_display:
+ui_equip_display:
+    rts
+count_spells_known:
     rts
 
 test_start:

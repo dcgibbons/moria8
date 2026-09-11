@@ -19,7 +19,7 @@ input_tree_keys:
     .byte $44, $49, $45, $57, $54, $51, $52, $41
     .byte $5a, $4d, $50, $3f, $58, $46, $66
     .byte $c3, $d1, $c5, $d3, $c6, $d4, $d2, $c4, $02
-    .byte $12, $23, $2b, $2f, $17
+    .byte $04, $12, $23, $2b, $2f, $17
     .byte $cb, $ca, $c8, $cc, $d9, $d5, $c2, $ce
 
 input_tree_cmds:
@@ -37,7 +37,7 @@ input_tree_cmds:
     .byte CMD_LOOK, CMD_GAIN, CMD_GAIN
     .byte CMD_CHAR_INFO, CMD_QUIT, CMD_EAT, CMD_SAVE
     .byte CMD_FIRE, CMD_THROW, CMD_REFUEL, CMD_DISARM, CMD_BASH
-    .byte CMD_AUTOREST, CMD_SEARCH_MODE, CMD_TUNNEL, CMD_RECALL, CMD_WIZARD
+    .byte CMD_JAM, CMD_AUTOREST, CMD_SEARCH_MODE, CMD_TUNNEL, CMD_RECALL, CMD_WIZARD
     .byte CMD_RUN_N, CMD_RUN_S, CMD_RUN_W, CMD_RUN_E
     .byte CMD_RUN_NW, CMD_RUN_NE, CMD_RUN_SW, CMD_RUN_SE
 
@@ -503,5 +503,47 @@ test_start:
     lda #$00
     sta $040d
 !t14_done:
+
+    // ==========================================
+    // Test 15: the real held-key probe restores both banking and the caller's
+    // interrupt state from hidden-KERNAL and normal runtime contexts.
+    // ==========================================
+    sei
+    lda #BANK_NO_ROMS
+    sta $01
+    jsr input_run_key_held
+    php
+    lda $01
+    cmp #BANK_NO_ROMS
+    bne !t15_fail_pop+
+    pla
+    and #$04
+    cmp #$04
+    bne !t15_fail+
+
+    lda #BANK_NO_BASIC
+    sta $01
+    cli
+    jsr input_run_key_held
+    php
+    sei
+    lda $01
+    cmp #BANK_NO_BASIC
+    bne !t15_fail_pop+
+    pla
+    and #$04
+    bne !t15_fail+
+    lda #$01
+    sta $040e
+    jmp !t15_done+
+!t15_fail_pop:
+    pla
+!t15_fail:
+    sei
+    lda #BANK_NO_BASIC
+    sta $01
+    lda #$00
+    sta $040e
+!t15_done:
 
     brk

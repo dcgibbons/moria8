@@ -146,6 +146,7 @@ it_category:
     .byte ICAT_CHEST    // 132: Small Steel Chest
     .byte ICAT_CHEST    // 133: Large Steel Chest
     .byte ICAT_CHEST    // 134: Ruined Chest
+    .byte ICAT_SPIKE    // 135: Iron Spike
 
 // Color and base armor class packed per type: high nibble = display color,
 // low nibble = base AC (<=9).
@@ -285,6 +286,7 @@ it_color_ac:
     .byte COL_WHITE << 4                        // 132: Small Steel Chest
     .byte COL_WHITE << 4                        // 133: Large Steel Chest
     .byte COL_BROWN << 4                        // 134: Ruined Chest
+    .byte COL_WHITE << 4                        // 135: Iron Spike
 
 // Weight (in 1/10 lbs)
 it_weight:
@@ -317,6 +319,7 @@ it_weight:
     .byte 4, 50                             // 126: potion, 127: staff
     // 128-134: chests (heavy rows saturate at 255; docs/CHEST_DESIGN.md)
     .byte 250, 255, 255, 255, 255, 255, 250
+    .byte 10                                // 135: Iron Spike
 
 // Damage dice packed per type: high nibble = dice count (<=3), low nibble =
 // dice sides (<=9). 0 = no damage dice.
@@ -343,6 +346,7 @@ it_dmg_packed:
     .fill 32, 0                             // 96-127: no damage dice
     // 128-134: chest thrown damage 2d3/2d5/2d4/2d6/2d4/2d6; ruined 0d0
     .byte $23, $25, $24, $26, $24, $26, 0
+    .byte $11                                 // 135: Iron Spike (1d1)
 it_dmg_packed_end:
 
 #if C64_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME
@@ -376,7 +380,7 @@ it_cost_lo:
     .byte <244, <232, <244, <44, <94, <8, <220, <176
     .byte <196, <244, <88, <176, <44, <136, <75, <244
     // 128-134: chests (20/60/100/150/200/250, ruined 0)
-    .byte <20, <60, <100, <150, <200, <250, <0
+    .byte <20, <60, <100, <150, <200, <250, <0, <1 // 135: Iron Spike
 it_cost_lo_end:
 
 #if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME
@@ -426,10 +430,13 @@ it_cost_hi:
     .byte >500, >1000, >500, >300, >350, >1800, >1500, >1200
     .byte >2500, >1000, >600, >1200, >300, >5000, >75, >500
     .byte >20, >60, >100, >150, >200, >250, >0    // 128-134: chests
+    .byte >1                                      // 135: Iron Spike
 it_cost_hi_end:
 #endif
 
-#if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME
+#if PICKER_IN_CHEST_OVERLAY
+.segment ChestOverlay
+#elif C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME
 .segment DungeonGenOverlay
 #endif
 
@@ -453,7 +460,7 @@ it_min_level:
     .byte $b9, $c9, $4a, $c4        // 104-111
     .byte $c9, $31, $b5, $ba        // 112-119
     .byte $ac, $75, $c5, $82        // 120-127
-    .byte $42, $97, $cb, $00        // 128-134: chest levels 2/4/7/9/11/12, ruined 0
+    .byte $42, $97, $cb, $10        // 128-134: chest levels 2/4/7/9/11/12, ruined 0; 135: spike level 1 (high nibble)
 it_min_level_end:
 
 // iml_get_for_type — Minimum dungeon level for item type X.
@@ -540,6 +547,7 @@ it_display_by_cat:
     .byte $2f   // 15: staff — '/'
     .byte $22   // 16: amulet — '"'
     .byte $26   // 17: chest — '&'
+    .byte $5c   // 18: spike — '\' (tool glyph; no tilde in the C64 charset)
 
 // item_get_display_char — Get floor display glyph for an item type
 // Input: X = item type ID
@@ -609,7 +617,7 @@ it_name_lo:
     .byte <itn_120, <itn_121, <itn_122, <itn_123
     .byte <itn_124, <itn_125, <itn_126, <itn_127
     .byte <itn_128, <itn_129, <itn_130, <itn_131
-    .byte <itn_132, <itn_133, <itn_134
+    .byte <itn_132, <itn_133, <itn_134, <itn_135
 it_name_lo_end:
 #if C128_PRODUCT_OVERLAY_RUNTIME
 .segment C128ResidentItems
@@ -648,7 +656,7 @@ it_name_hi:
     .byte >itn_120, >itn_121, >itn_122, >itn_123
     .byte >itn_124, >itn_125, >itn_126, >itn_127
     .byte >itn_128, >itn_129, >itn_130, >itn_131
-    .byte >itn_132, >itn_133, >itn_134
+    .byte >itn_132, >itn_133, >itn_134, >itn_135
 it_name_hi_end:
 #else
 it_name_hi_end:
@@ -925,6 +933,7 @@ itn_131: .text "Large Iron Chest" ; .byte 0
 itn_132: .text "Small Steel Chest" ; .byte 0
 itn_133: .text "Large Steel Chest" ; .byte 0
 itn_134: .text "Ruined Chest" ; .byte 0
+itn_135: .text "Iron Spike" ; .byte 0
 #else
 itn_128: .byte ITOK_SMALL ; .byte ITOK_WOODEN ; .byte ITOK_CHEST_SUFFIX ; .byte 0
 itn_129: .byte ITOK_LARGE ; .byte ITOK_WOODEN ; .byte ITOK_CHEST_SUFFIX ; .byte 0
@@ -933,6 +942,7 @@ itn_131: .byte ITOK_LARGE ; .byte ITOK_IRON ; .byte ITOK_CHEST_SUFFIX ; .byte 0
 itn_132: .byte ITOK_SMALL ; .byte ITOK_STEEL ; .byte ITOK_CHEST_SUFFIX ; .byte 0
 itn_133: .byte ITOK_LARGE ; .byte ITOK_STEEL ; .byte ITOK_CHEST_SUFFIX ; .byte 0
 itn_134: .text "Ruined " ; .byte ITOK_CHEST_SUFFIX ; .byte 0
+itn_135: .byte ITOK_IRON ; .text "Spike" ; .byte 0
 #endif
 #if C64_UNIT_TEST && C64_TEST_NAME_STREAMS_A000
 .segment Default

@@ -424,11 +424,34 @@ tramp_dig_ability:
 #import "../../../core/sound.s"
 #import "../../../core/huffman.s"
 #import "../../../core/dungeon_data.s"
+// The jam command handler parks in the items overlay with the other
+// directional action commands (resident budget).
+#define CMD_JAM_EXTERNAL
+#define CMD_JAM_SEGMENT_CUSTOM
+.macro CmdJamSegment() {
+    .segment ItemActionsOverlay
+}
+.macro CmdJamRestoreSegment() {
+    .segment Default
+}
+// The locked-door pick roll needs the effective-disarm formula; it parks in
+// the chest overlay with chest_disarm_skill (resident budget).
+#define DOOR_PICK_EXTERNAL
+.macro DoorPickSegment() {
+    .segment ChestOverlay
+}
+.macro DoorPickRestoreSegment() {
+    .segment Default
+}
 #define DISARM_COMMAND_EXTERNAL
 #define DISARM_HELPERS_EXTERNAL
 // place_secrets parks in the GEN overlay (only generation calls it), funding
 // the monster door engine in Default.
 #define PLACE_SECRETS_EXTERNAL
+// Chest loot generator + the shared item picker park in the CHEST overlay
+// on this platform (GEN is full); gameplay drops reach the picker through the
+// resident pick_item_type wrapper, fulfillment loads OVL_CHEST.
+#define PICKER_IN_CHEST_OVERLAY
 .macro ChestSearchSegment() {
     .segment Default
 }
@@ -468,9 +491,9 @@ ol_target:        .byte 0
 #import "../../../core/item.s"
 #import "../../../core/chest_summons.s"
 // Step-13 chest loot: latch + resident handoff stay in Default; the generator
-// (chest_generate_loot) parks in the GEN overlay with the picker it uses.
+// (chest_generate_loot) parks in the CHEST overlay with the picker it uses.
 .macro ChestLootSegment() {
-    .segment DungeonGenOverlay
+    .segment ChestOverlay
 }
 .macro ChestLootRestoreSegment() {
     .segment Default
@@ -492,7 +515,19 @@ ol_target:        .byte 0
 #undef SPELL_EFFECTS_INCLUDE_IDENTIFY
 #import "../../../core/player_magic_state.s"
 #import "../../../core/player_magic_state_ops.s"
+// Park level-up magic recomputation (cold, level-up-only) in ModalMisc:
+// pre-importing here makes player_magic.s's own tail imports no-ops.
+// combat.s reaches them via tramp_magic_* (HAL_PLATFORM_LEVELUP_MAGIC_USES_TRAMPOLINE).
+.segment ModalMiscOverlay
+#import "../../../core/player_magic_levelup.s"
+#import "../../../core/player_magic_tail.s"
+// Spell-failure calc is cold (per cast attempt); parks here to fund the
+// state-aware monster door engine. player_magic.s reaches it via
+// tramp_calc_spell_failure (HAL_PLATFORM_CAST_FAILURE_USES_TRAMPOLINE).
+#import "../../../core/player_magic_display.s"
+.segment Default
 #import "../../../core/player_magic.s"
+
 #import "dungeon_render.s"
 #import "../../../core/dungeon_los.s"
 .macro PlayerMoveRestoreResidentSegment() {
@@ -1379,6 +1414,37 @@ tramp_ui_char_display:
 !done:
     jmp tramp_sr_epilogue
 
+// Level-up magic helpers live in OVL.MODAL on this platform (funds the
+// resident door-state table); combat.s level-up routes here.
+tramp_magic_recalc_mana:
+    lda #OVL_MODAL_MISC
+    jsr overlay_load_no_kernal
+    bcs !done+
+    jsr magic_recalc_mana
+!done:
+    jmp tramp_sr_epilogue
+
+tramp_magic_check_new_spells:
+    lda #OVL_MODAL_MISC
+    jsr overlay_load_no_kernal
+    bcs !done+
+    jsr magic_check_new_spells
+!done:
+    jmp tramp_sr_epilogue
+
+// calc_spell_failure lives in OVL.MODAL on this platform; carry is the
+// result, so preserve it across the resync.
+tramp_calc_spell_failure:
+    lda #OVL_MODAL_MISC
+    jsr overlay_load_no_kernal
+    bcs !done+
+    jsr calc_spell_failure
+!done:
+    php
+    jsr platform_runtime_resync_c64
+    plp
+    rts
+
 tramp_ui_inv_display:
     lda #OVL_HELP
     jsr overlay_load_no_kernal
@@ -1498,6 +1564,28 @@ tramp_disarm_command:
     jsr disarm_command
 !done:
     jmp tramp_sr_epilogue
+
+tramp_cmd_jam:
+    lda #OVL_ITEMS
+    jsr overlay_load_no_kernal
+    bcs !done+
+    jsr door_jam_command
+!done:
+    jmp tramp_sr_epilogue
+
+// door_pick_roll lives in the chest overlay with chest_disarm_skill; carry
+// (picked) propagates through the epilogue. A failed overlay load reads as
+// an ordinary pick miss (turn still consumed by the caller).
+tramp_door_pick_roll:
+    lda #OVL_CHEST
+    jsr overlay_load_no_kernal
+    bcs !load_failed+
+    jsr door_pick_roll
+    jmp tramp_sr_epilogue
+!load_failed:
+    jsr platform_runtime_resync_c64
+    clc
+    rts
 
 // Chest routing (docs/CHEST_DESIGN.md). tramp_chest_open is called from the
 // resident cmd_open pre-dispatch and owns the epilogue. chest_dispatch is
@@ -1623,7 +1711,7 @@ store_overlay_preamble:
     rts
 
 tramp_store_init_all:
-    lda #OVL_ITEMS
+    lda #OVL_MODAL_MISC
     jsr overlay_load_no_kernal
     bcs !done+
     jsr store_init_all
@@ -1631,7 +1719,7 @@ tramp_store_init_all:
     jmp tramp_sr_epilogue
 
 tramp_store_restock_all:
-    lda #OVL_ITEMS
+    lda #OVL_MODAL_MISC
     jsr overlay_load_no_kernal
     bcs !done+
     jsr store_restock_all
@@ -2648,6 +2736,10 @@ winner_apply_retirement_bonus_overlay:
     #import "../../../core/royal.s"
     #import "../common/save_slot_menu.s"
     #import "../../../core/ui_wizard.s"
+    // Store init/restock is cold (new game, town re-entry); parks in this
+    // overlay to fund door-aware bash in the items overlay. Reached via the
+    // tramp_store_init_all/tramp_store_restock_all trampolines (OVL_MODAL_MISC).
+    #import "../../../core/store_restock_overlay.s"
 ovl_modal_misc_end:
 .print "Modal-misc overlay: " + (ovl_modal_misc_end - $e000) + " bytes at $E000-$" + toHexString(ovl_modal_misc_end)
 .assert "Modal-misc overlay fits in $E000-$EFFF", ovl_modal_misc_end <= $F000, true
@@ -2714,7 +2806,6 @@ ovl_ui_end:
 // Item actions overlay — low-frequency read/aim/use/refuel commands
 // ============================================================
 .segment ItemActionsOverlay
-    #import "../../../core/store_restock_overlay.s"
     #define SCROLL_P3_ROUTER_ENABLED
     #import "../../../core/item_actions_overlay.s"
     #import "../../../core/ranged_fire.s"
@@ -2739,6 +2830,7 @@ ovl_items_end:
 ovl_gen_end:
 .print "DungeonGen overlay: " + (ovl_gen_end - $e000) + " bytes at $E000-$" + toHexString(ovl_gen_end)
 .assert "DungeonGen overlay fits in $E000-$EFFF", ovl_gen_end <= $F000, true
+
 
 // ============================================================
 // Chest overlay — chest open/disarm/bash handlers at $E000 (cold;

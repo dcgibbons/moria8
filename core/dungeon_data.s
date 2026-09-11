@@ -76,6 +76,9 @@
 // Trap table/type constants are shared by generation, save/load, search, and
 // trap gameplay. Trap storage itself lives in dungeon_features.s.
 .const MAX_TRAPS = 16
+// Door-state side table capacity (locked/stuck/broken doors only; plain
+// doors have no entry). Upstream stores this on the door treasure item.
+.const MAX_DOOR_STATES = 16
 .const TRAP_OPEN_PIT    = 0   // 1d4 damage
 .const TRAP_ARROW       = 1   // 1d8 damage
 .const TRAP_POISON_GAS  = 2   // Set poison timer

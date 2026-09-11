@@ -29,6 +29,9 @@
 // Saves at or above this version store stat bases with race/class modifiers
 // already baked in; older saves get an exact one-time migration at load.
 .const SAVE_STATS_BAKED_VERSION = hal_storage_save_baked_stats_version
+// Saves at or above this version carry the door-state table block after the
+// post-known blocks; older saves load with all doors plain (count zeroed).
+.const SAVE_DOOR_STATE_VERSION = hal_storage_save_door_state_version
 #if C128
 .const SAVE_ROOM21_VERSION = $13
 .const LEGACY_MAX_ROOMS = 8
@@ -363,6 +366,13 @@ save_block_table_post_known:
     :save_block_desc(monster_table, MAX_MONSTERS * MONSTER_ENTRY_SIZE)
 save_block_table_post_known_end:
 
+// Current-version-only block: door-state table (appended after post_known on
+// write; read is gated on SAVE_DOOR_STATE_VERSION so legacy streams stay
+// aligned).
+save_block_table_door_state:
+    :save_block_desc(door_state_count, 1 + (MAX_DOOR_STATES * 3))
+save_block_table_door_state_end:
+
 #if C128
 save_block_table_post_known_room8:
     :save_block_desc(potion_shuffle, 12)
@@ -411,6 +421,7 @@ save_block_table_floor_items_direct_end:
 .const SAVE_BLOCK_INVENTORY_CURRENT_COUNT = (save_block_table_inventory_current_end - save_block_table_inventory_current) / SAVE_BLOCK_DESC_SIZE
 .const SAVE_BLOCK_INVENTORY_LEGACY_COUNT = (save_block_table_inventory_legacy_end - save_block_table_inventory_legacy) / SAVE_BLOCK_DESC_SIZE
 .const SAVE_BLOCK_POST_KNOWN_COUNT = (save_block_table_post_known_end - save_block_table_post_known) / SAVE_BLOCK_DESC_SIZE
+.const SAVE_BLOCK_DOOR_STATE_COUNT = (save_block_table_door_state_end - save_block_table_door_state) / SAVE_BLOCK_DESC_SIZE
 #if C128
 .const SAVE_BLOCK_POST_KNOWN_ROOM8_COUNT = (save_block_table_post_known_room8_end - save_block_table_post_known_room8) / SAVE_BLOCK_DESC_SIZE
 #endif
@@ -431,6 +442,7 @@ save_block_table_floor_items_direct_end:
 .assert "Stair coordinates and entry direction stay contiguous", level_entry_dir - stairs_up_x + 1, 7
 .assert "Room save arrays stay contiguous", room_type - room_x + MAX_ROOMS, MAX_ROOMS * 6
 .assert "Trap save arrays stay contiguous", trap_type - trap_count + MAX_TRAPS, 1 + (MAX_TRAPS * 3)
+.assert "Door-state save arrays stay contiguous", door_state_val - door_state_count + MAX_DOOR_STATES, 1 + (MAX_DOOR_STATES * 3)
 .assert "Floor-item direct save block table count is stable", SAVE_BLOCK_FLOOR_ITEMS_DIRECT_COUNT, SAVE_BLOCK_FLOOR_ITEMS_HEAD_COUNT + SAVE_BLOCK_FLOOR_ITEMS_STAT_COUNT
 .assert "Pre-inventory save block table count fits in one page", SAVE_BLOCK_PRE_INVENTORY_COUNT < 64, true
 .assert "Current inventory save block table count fits in one page", SAVE_BLOCK_INVENTORY_CURRENT_COUNT < 64, true
@@ -698,6 +710,8 @@ save_open_write_len:
     lda #SAVE_BLOCK_POST_KNOWN_COUNT
     jsr save_write_block_table
 #endif
+    // 4b. Door-state table (current version only).
+    jsr save_write_door_state
 
     // 16. Floor items (logical 8-field layout, serialized from packed RAM)
     jsr save_write_floor_items
@@ -960,6 +974,8 @@ plus4_test_after_load_magic:
     lda #SAVE_BLOCK_POST_KNOWN_COUNT
     jsr load_read_block_table
 #endif
+    // 4b. Door-state table (SAVE_DOOR_STATE_VERSION+; older saves load plain).
+    jsr load_read_door_state
     jsr save_sanitize_store_ids
 
     // 16. Floor items
@@ -1644,6 +1660,39 @@ idk_pack_stage:
     rts
 
 idk_legacy_stage: .fill 96, 0
+
+// ============================================================
+// Door-state table: written unconditionally at the current version; read only
+// when the stream version carries it, so older saves stay block-aligned.
+// ============================================================
+save_write_door_state:
+    lda #<save_block_table_door_state
+    sta zp_ptr1
+    lda #>save_block_table_door_state
+    sta zp_ptr1_hi
+    lda #SAVE_BLOCK_DOOR_STATE_COUNT
+    jmp save_write_block_table
+
+load_read_door_state:
+    lda #0
+    sta door_state_count
+    lda load_save_version
+    cmp #SAVE_DOOR_STATE_VERSION
+    bcc !lrds_done+
+    lda #<save_block_table_door_state
+    sta zp_ptr1
+    lda #>save_block_table_door_state
+    sta zp_ptr1_hi
+    lda #SAVE_BLOCK_DOOR_STATE_COUNT
+    jsr load_read_block_table
+    lda door_state_count
+    cmp #MAX_DOOR_STATES + 1
+    bcc !lrds_done+
+    lda #0
+    sta door_state_count         // Reject corrupt counts before runtime readers
+    inc save_io_error
+!lrds_done:
+    rts
 
 // ============================================================
 // save_write_post_known_state / load_read_post_known_state

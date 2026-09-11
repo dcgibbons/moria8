@@ -954,21 +954,77 @@ monster_try_step:
     lda zp_mon_scratch1
     and #TILE_TYPE_MASK
     cmp #TILE_SECRET
-    beq !mts_secret+
+    bne !mts_check_closed+
+    jmp !mts_secret+
+!mts_check_closed:
     cmp #TILE_DOOR_CLOSED
-    bne !mts_blocked+           // Not a door — blocked
+    beq !mts_closed+
+    jmp !mts_blocked+           // Not a door — blocked
+!mts_closed:
     lda zp_mon_scratch1
     lsr                         // FLAG_OCCUPIED is bit 0
-    bcs !mts_blocked+           // Occupied doors cannot be opened/bashed
+    bcc !mts_unoccupied+
+    jmp !mts_blocked+           // Occupied doors cannot be opened/bashed
+!mts_unoccupied:
     ldx zp_mon_type
     lda cr_aaf,x
     bpl !mts_bash+              // Bit 7 clear: bash fallback
-    jsr mts_write_open          // Door-capable: silent open (ptr intact)
+    // Door-capable: consult per-door state (Umoria monsterOpenDoor)
+    lda mat_target_x
+    ldy mat_target_y
+    jsr door_state_get
+    beq !mts_open_plain+        // Plain closed door: silent open
+    bmi !mts_stuck+
+    // Locked (val > 0): pick the lock; success unlocks without opening,
+    // and the turn is spent (tries again next turn)
+    jsr mts_pick_roll
+    bcc !mts_blocked+
+    lda #0
+    jsr mts_set_door_state
+    jmp !mts_blocked+
+!mts_open_plain:
+    ldy mat_target_x            // door_state_get took Y; write needs the col
+    jsr mts_write_open          // Door-capable: silent open
+    jmp !mts_blocked+
+!mts_stuck:
+    // Stuck doors burst open on success (50% break, message)
+    jsr mts_burst_roll
+    bcc !mts_blocked+
+    jsr mts_write_open
+    lda #2
+    jsr rng_range               // 1 - randomNumber(2): 50% break
+    beq !mts_burst_break+
+    lda #0
+    beq !mts_burst_set+
+!mts_burst_break:
+    lda #1
+!mts_burst_set:
+    jsr mts_set_door_state
+    ldx #HSTR_MAT_DOOR_BURST
+    jsr huff_print_msg
     jmp !mts_blocked+
 !mts_bash:
     jsr mts_bash_roll           // Carry set = door bursts open
     bcc !mts_blocked+
     jsr mts_write_open          // zp_ptr0/y preserved by the roll
+    // 50% break (Umoria non-opener bash)
+    lda #2
+    jsr rng_range
+    bne !mts_bash_unbroken+
+    // Plain doors need a new side-table entry to remain broken. If the
+    // table is full, degrade consistently to an ordinary open door.
+    lda mts_abs
+    bne !mts_bash_break+         // Existing locked/stuck entry can update
+    ldx door_state_count
+    cpx #MAX_DOOR_STATES
+    bcs !mts_bash_unbroken+
+!mts_bash_break:
+    lda #1
+    bne !mts_bash_set+           // always
+!mts_bash_unbroken:
+    lda #0
+!mts_bash_set:
+    jsr mts_set_door_state
     ldx #HSTR_MAT_DOOR_BURST
     jsr huff_print_msg
     jmp !mts_blocked+
@@ -1000,16 +1056,39 @@ mts_write_open:
     jmp mat_mark_tile_dirty_if_nonlocal
 
 // ============================================================
-// mts_bash_roll — Umoria bash fallback for monsters without
-// CM_OPEN_DOOR: randomNumber((hp+1)*80) < 40*(hp-20) with current
-// HP (clamped to 254 so hp+1 fits a byte; hp 255+ plays as 254,
-// a <=0.1% probability shift). rng_range_word rolls 0..N-1, so the
-// success threshold is 40*(hp-20)-1. HP <= 20 can never bash.
-// Output: carry set = door bursts open, carry clear = holds
+// mts_door_abs_state — A = |door state| at mat_target (0 if plain)
+// Clobbers: A, X
+// ============================================================
+mts_door_abs_state:
+    lda mat_target_x
+    ldy mat_target_y
+    jsr door_state_get
+    bpl !mdas_done+
+    and #$7f
+!mdas_done:
+    rts
+
+// mts_set_door_state — Set the target door's state to A (0 = plain/removes).
 // Preserves zp_ptr0/y (the target-tile pointer for mts_write_open).
+// ============================================================
+mts_set_door_state:
+    ldx mat_target_x
+    stx df_target_x
+    ldx mat_target_y
+    stx df_target_y
+    jmp door_state_set_at
+
+// ============================================================
+// mts_state_roll — Shared Umoria door roll: randomNumber((hp+1)*A) <
+// 40*(hp-B) on current HP (clamped to 254 so hp+1 fits a byte; hp 255+
+// plays as 254, a <=0.1% probability shift). rng_range_word rolls
+// 0..N-1, so the success threshold is 40*(hp-B)-1. hp <= B never succeeds.
+// Input: mrp_a = A term, mrp_b = B term (bytes)
+// Output: carry set = success, carry clear = holds
+// Preserves zp_ptr0/y (the target-tile pointer for mts_write_open)
 // Clobbers: A, X, zp_temp0-3, zp_math_*
 // ============================================================
-mts_bash_roll:
+mts_state_roll:
     lda zp_ptr0
     pha
     lda zp_ptr0_hi
@@ -1018,22 +1097,26 @@ mts_bash_roll:
     jsr monster_get_ptr
     ldy #MX_HP_HI
     lda (zp_ptr0),y
-    beq !mbr_lo+
+    beq !msr_lo+
     lda #$fe                    // 16-bit HP: play as 254
-    bne !mbr_capped+            // always
-!mbr_lo:
+    bne !msr_capped+            // always
+!msr_lo:
     ldy #MX_HP_LO
     lda (zp_ptr0),y
-!mbr_capped:
+!msr_capped:
     cmp #$ff
-    bne !mbr_in_range+
+    bne !msr_in_range+
     lda #$fe                    // clamp 255 -> 254 so hp+1 fits a byte
-!mbr_in_range:
-    cmp #21
-    bcc !mbr_out+               // hp <= 20: no bash chance (carry already clear)
+!msr_in_range:
+    cmp mrp_b
+    bcc !msr_out+               // hp < B: no chance (carry already clear)
+    bne !msr_above+             // hp > B: roll below
+    clc                         // hp == B: no chance; cmp left carry set,
+    jmp !msr_out+               // and the epilogue preserves carry
+!msr_above:
     tay                         // Y = hp across both multiplies
-    // K = 40*(hp-20) - 1 (16-bit success threshold)
-    sbc #20                     // carry set by cmp (hp >= 21)
+    // K = 40*(hp-B) - 1 (16-bit success threshold)
+    sbc mrp_b                   // carry set by cmp (hp > B)
     ldx #40
     jsr math_multiply           // A = lo, zp_math_b = hi
     sec
@@ -1042,11 +1125,11 @@ mts_bash_roll:
     lda zp_math_b
     sbc #0
     sta mbr_k_hi
-    // N = (hp+1)*80 (hp <= 254, so N <= 20400)
+    // N = (hp+1)*A (hp <= 254, A <= 255, so N <= 65535)
     tya
     clc
     adc #1
-    ldx #80
+    ldx mrp_a
     jsr math_multiply           // A = lo, zp_math_b = hi
     sta zp_temp0
     lda zp_math_b
@@ -1057,12 +1140,12 @@ mts_bash_roll:
     sbc mbr_k_lo
     lda zp_temp3
     sbc mbr_k_hi
-    bcc !mbr_win+               // roll < K: door bursts
+    bcc !msr_win+               // roll < K: success
     clc
-    jmp !mbr_out+
-!mbr_win:
+    jmp !msr_out+
+!msr_win:
     sec
-!mbr_out:
+!msr_out:
     // PLA/STA/LDY do not affect carry; the result survives the restore.
     pla
     sta zp_ptr0_hi
@@ -1071,6 +1154,46 @@ mts_bash_roll:
     ldy mat_target_x            // Restore target Y index
     rts
 
+// mts_bash_roll — Non-opener bash: randomNumber((hp+1)*(80+|s|)) <
+// 40*(hp-20-|s|); plain doors (s=0) match the original 80/20 roll exactly.
+// mts_pick_roll — Opener lock pick: randomNumber((hp+1)*(50+p)) <
+// 40*(hp-10-p); p = lock difficulty (val 11-20).
+// mts_burst_roll — Opener stuck burst: randomNumber((hp+1)*(50+|s|)) <
+// 40*(hp-10-|s|) (Umoria's 40*(hp-10+p) with p negative).
+// All: carry set = success. Preserve zp_ptr0/y.
+// ============================================================
+mts_bash_roll:
+    jsr mts_door_abs_state
+    sta mts_abs
+    clc
+    adc #80
+    sta mrp_a
+    lda mts_abs
+    clc
+    adc #20
+    sta mrp_b
+    jmp mts_state_roll
+
+// mts_pick_roll / mts_burst_roll — one body: upstream uses the same
+// 50+|s| / 10+|s| terms for the lock pick (p = val, positive) and the
+// stuck burst (sign bit set), since mts_door_abs_state yields |s| for
+// both.
+mts_pick_roll:
+mts_burst_roll:
+    jsr mts_door_abs_state      // Locked val is positive; |s| = val
+    sta mts_abs
+    clc
+    adc #50
+    sta mrp_a
+    lda mts_abs
+    clc
+    adc #10
+    sta mrp_b
+    jmp mts_state_roll
+
+mts_abs:        .byte 0
+mrp_a:          .byte 0
+mrp_b:          .byte 0
 mbr_k_lo:  .byte 0
 mbr_k_hi:  .byte 0
 

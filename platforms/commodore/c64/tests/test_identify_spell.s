@@ -1,5 +1,4 @@
 // test_identify_spell.s — Focused runtime tests for the Identify spell row
-
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_bootstrap)
 
@@ -53,7 +52,6 @@ test_done_break:
 #import "../../../../core/ui_messages.s"
 #import "../../../../core/ui_status.s"
 #import "../../../../core/ui_help_clear.s"
-#import "../../../../core/ui_character.s"
 #import "../../../../core/stat_display.s"
 .segmentdef TestCreateOverlay [start=$D000]
 .segment TestCreateOverlay
@@ -508,3 +506,9 @@ test_start:
     lda #$00
     sta tid_results + 3
     jmp test_finish
+// Dropped the ui_character.s import to keep the test body under MAP_BASE
+// (map-overlap boundary); stubs satisfy the trampoline references.
+ui_char_display:
+    rts
+count_spells_known:
+    jmp spell_mask_count_ptr

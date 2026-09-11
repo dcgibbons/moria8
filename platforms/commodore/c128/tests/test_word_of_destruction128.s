@@ -940,3 +940,7 @@ test_fail_loop:
 
 test_pass_loop:
     jmp test_pass_loop
+
+// door_state purge call in spell_effects_overlay.s/player_destroy_area.s; no doors here.
+door_state_clear_at:
+    rts

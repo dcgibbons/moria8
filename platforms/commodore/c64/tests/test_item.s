@@ -4,7 +4,6 @@
 //        player_recalc_equipment, combat weapon damage.
 //
 // Results at $0400-$042e: $01 = pass, $00 = fail per test
-
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_bootstrap)
 
@@ -44,15 +43,12 @@ test_exit_trampoline:
 #import "../../../../core/ui_messages.s"
 #import "../../../../core/ui_status.s"
 #import "../../../../core/ui_help_clear.s"
-#import "../../../../core/ui_character.s"
 #import "../../../../core/stat_display.s"
 .segmentdef TestCreateOverlay [start=$D000]
 .segment TestCreateOverlay
 #import "../../../../core/background_data.s"
 #import "../../../../core/player_create.s"
 .segment Default
-#import "../../../../core/ui_inventory.s"
-#import "../../../../core/ui_equipment.s"
 #import "../../../../core/sound.s"
 #import "../../../../core/dungeon_data.s"
 #import "dungeon_gen_stubs.s"
@@ -2947,6 +2943,20 @@ t48_expected_con: .byte 0
 t50_retries: .byte 0
 t49_base_tohit: .byte 0
 t49_base_todmg: .byte 0
+
+// Dropped ui_* imports to keep the test body under MAP_BASE (map-overlap
+// boundary); stubs satisfy the trampoline references. Link-satisfaction only,
+// never called; kept above the assert so any layout growth is caught.
+ui_char_display:
+ui_inv_display:
+ui_inv_select_display:
+ui_equip_display:
+    rts
+count_spells_known:
+    jmp spell_mask_count_ptr
+player_disarm_get_effective_chance:
+    lda #0
+    rts
 
 item_test_body_end:
 

@@ -1595,6 +1595,14 @@ tramp_bash_command:
 tramp_disarm_command:
     :C128OverlayComputeTrampoline(C128_DISARM_OVERLAY_ID, disarm_command)
 
+tramp_cmd_jam:
+    jmp door_jam_command
+
+// The lock-pick roll and effective-disarm helper share the cached Disarm
+// overlay. Carry (picked) propagates through the standard compute trampoline.
+tramp_door_pick_roll:
+    :C128OverlayComputeTrampoline(C128_DISARM_OVERLAY_ID, door_pick_roll)
+
 // tramp_dig_ability — Calculate digging ability.
 // Pinned low to avoid $D000 drift.
 tramp_dig_ability:
@@ -3442,7 +3450,37 @@ c128_resident_world_start:
 #define DISARM_COMMAND_EXTERNAL
 #define DISARM_HELPERS_EXTERNAL
 #define CHEST_ROUTING_ENABLED
+// Door-state table, runtime helpers, and place_secrets park in the Default
+// image on this platform (ResidentWorld is full); both banks are resident.
+#define DOOR_STATE_IN_DEFAULT_IMAGE
+.macro DoorStateSegment() {
+    .segment Default
+}
+.macro DoorStateRestoreSegment() {
+    .segment C128ResidentWorld
+}
+// ResidentWorld is full, so the jam handler parks in the Default image and
+// game_loop.s reaches it through the resident tramp_cmd_jam tail call.
+#define CMD_JAM_EXTERNAL
+#define CMD_JAM_SEGMENT_CUSTOM
+.macro CmdJamSegment() {
+    .segment Default
+}
+.macro CmdJamRestoreSegment() {
+    .segment C128ResidentWorld
+}
+// The locked-door pick roll shares the cached Disarm overlay with the
+// effective-disarm formula, avoiding the cold Chest overlay.
+#define DOOR_PICK_EXTERNAL
+#define DOOR_PICK_USE_DISARM_HELPER
+.macro DoorPickSegment() {
+    .segment DisarmOverlay
+}
+.macro DoorPickRestoreSegment() {
+    .segment C128ResidentWorld
+}
 #import "../../../core/dungeon_features.s"
+#undef DOOR_PICK_USE_DISARM_HELPER
 #undef DISARM_HELPERS_EXTERNAL
 #undef DISARM_COMMAND_EXTERNAL
 #import "../../../core/monster.s"
@@ -4500,9 +4538,43 @@ c128_test_verify_cache_survival:
     jsr c128_test_read_bank1_probe_ptr1
     cmp c128_test_cache_probe_ovl_disarm
     bne !ctcs_fail+
+
+    jsr c128_test_verify_door_pick_cache
+    bcs !ctcs_fail+
     clc
     rts
 !ctcs_fail:
+    sec
+    rts
+
+// Prove the production locked-door trampoline executes from the Disarm cache:
+// make its disk filename unusable, then require a normal hopeless pick result
+// and the requested overlay ID.
+c128_test_verify_door_pick_cache:
+    ldx #C128_DISARM_OVERLAY_ID - 1
+    lda hal_storage_overlay_name_len,x
+    pha
+    lda #0
+    sta hal_storage_overlay_name_len,x
+    lda #$7f
+    sta df_found
+    jsr tramp_door_pick_roll
+    php
+    pla
+    tay
+    pla
+    ldx #C128_DISARM_OVERLAY_ID - 1
+    sta hal_storage_overlay_name_len,x
+    tya
+    pha
+    plp
+    bcs !fail+
+    lda current_overlay
+    cmp #C128_DISARM_OVERLAY_ID
+    bne !fail+
+    clc
+    rts
+!fail:
     sec
     rts
 #endif
@@ -5170,6 +5242,10 @@ program_end:
 
 .macro C128AuditItemsOverlay(name, symbol) {
     .assert "AUDIT-IO-C128 " + name + " stays in the items overlay", symbol >= $E000 && symbol < ovl_items_end, true
+}
+
+.macro C128AuditDefault(name, symbol) {
+    .assert "AUDIT-IO-C128 " + name + " stays in the Default payload", symbol >= $1c01 && symbol < program_end, true
 }
 
 .macro C128AuditDisarmOverlay(name, symbol) {

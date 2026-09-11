@@ -50,7 +50,9 @@
     .segment Default
 }
 .macro ItemInitIdentSegment() {
-    .segment Default
+    // One-shot new-game identification init parks in the death overlay
+    // (roomy on this port), funding the resident door-state machinery.
+    .segment DeathOverlay
 }
 .macro WizardGenExecSegment() {
     .segment ModalMiscOverlay
@@ -363,6 +365,26 @@ tramp_dig_ability:
 #import "sound.s"
 #import "../../../core/huffman.s"
 #import "../../../core/dungeon_data.s"
+// The jam command handler parks in the items overlay with the other
+// directional action commands (resident budget).
+#define CMD_JAM_EXTERNAL
+#define CMD_JAM_SEGMENT_CUSTOM
+.macro CmdJamSegment() {
+    // Items overlay is full; jam parks with the cold chest commands.
+    .segment ChestOverlay
+}
+.macro CmdJamRestoreSegment() {
+    .segment Default
+}
+// The locked-door pick roll needs the effective-disarm formula; it parks in
+// the chest overlay with chest_disarm_skill (resident budget).
+#define DOOR_PICK_EXTERNAL
+.macro DoorPickSegment() {
+    .segment ChestOverlay
+}
+.macro DoorPickRestoreSegment() {
+    .segment Default
+}
 #define DISARM_COMMAND_EXTERNAL
 #define DISARM_HELPERS_EXTERNAL
 .macro ChestSearchSegment() {
@@ -375,6 +397,10 @@ tramp_dig_ability:
 // place_secrets parks in the GEN overlay (only generation calls it), funding
 // the monster door engine in the resident image.
 #define PLACE_SECRETS_EXTERNAL
+// Chest loot generator + the shared item picker park in the CHEST overlay
+// on this platform (GEN is full); gameplay drops reach the picker through the
+// resident pick_item_type wrapper, fulfillment loads OVL_CHEST.
+#define PICKER_IN_CHEST_OVERLAY
 #import "../../../core/dungeon_features.s"
 #import "../../../core/chest_search.s"
 #undef DISARM_HELPERS_EXTERNAL
@@ -407,9 +433,9 @@ ol_target:        .byte 0
 #import "../../../core/item.s"
 #import "../../../core/chest_summons.s"
 // Step-13 chest loot: latch + resident handoff stay in Default; the generator
-// parks in the GEN overlay with the picker it uses.
+// parks in the CHEST overlay with the picker it uses.
 .macro ChestLootSegment() {
-    .segment DungeonGenOverlay
+    .segment ChestOverlay
 }
 .macro ChestLootRestoreSegment() {
     .segment Default
@@ -432,7 +458,16 @@ ol_target:        .byte 0
 #undef SPELL_EFFECTS_INCLUDE_IDENTIFY
 #import "../../../core/player_magic_state.s"
 #import "../../../core/player_magic_state_ops.s"
+// Park level-up magic recomputation (cold, level-up-only) in ModalMisc:
+// pre-importing here makes player_magic.s's own tail imports no-ops.
+// combat.s reaches them via tramp_magic_* (HAL_PLATFORM_LEVELUP_MAGIC_USES_TRAMPOLINE).
+.segment ModalMiscOverlay
+#import "../../../core/player_magic_levelup.s"
+#import "../../../core/player_magic_tail.s"
+#import "../../../core/player_magic_display.s"
+.segment Default
 #import "../../../core/player_magic.s"
+
 #import "dungeon_render.s"
 #import "../../../core/dungeon_los.s"
 .macro PlayerMoveRestoreResidentSegment() {
@@ -1244,6 +1279,19 @@ tramp_find_special_room:
 tramp_sr_epilogue:
     jmp plus4_platform_runtime_resync
 
+// calc_spell_failure lives in OVL.MODAL on this platform; carry is the
+// result, so the resync runs under php/plp.
+tramp_calc_spell_failure:
+    lda #OVL_MODAL_MISC
+    jsr overlay_load_no_kernal
+    bcs !done+
+    jsr calc_spell_failure
+!done:
+    php
+    jsr plus4_platform_runtime_resync
+    plp
+    rts
+
 // ============================================================
 // Ego item trampolines — SEI + bank out KERNAL, call $F000+
 // ============================================================
@@ -1413,6 +1461,34 @@ tramp_ui_char_display:
 !done:
     jmp tramp_sr_epilogue
 
+// item_init_identification parks in OVL.DEATH on this platform (funds the
+// resident door-state machinery); called once per new game.
+tramp_item_init_identification:
+    lda #OVL_DEATH
+    jsr overlay_load_no_kernal
+    bcs !done+
+    jsr item_init_identification
+!done:
+    jmp tramp_sr_epilogue
+
+// Level-up magic helpers live in OVL.MODAL on this platform (funds the
+// resident door-state table); combat.s level-up routes here.
+tramp_magic_recalc_mana:
+    lda #OVL_MODAL_MISC
+    jsr overlay_load_no_kernal
+    bcs !done+
+    jsr magic_recalc_mana
+!done:
+    jmp tramp_sr_epilogue
+
+tramp_magic_check_new_spells:
+    lda #OVL_MODAL_MISC
+    jsr overlay_load_no_kernal
+    bcs !done+
+    jsr magic_check_new_spells
+!done:
+    jmp tramp_sr_epilogue
+
 tramp_ui_inv_display:
     lda #OVL_HELP
     jsr overlay_load_no_kernal
@@ -1526,6 +1602,31 @@ tramp_disarm_command:
     jsr disarm_command
 !done:
     jmp tramp_sr_epilogue
+
+tramp_cmd_jam:
+    lda #OVL_CHEST
+    jsr overlay_load_no_kernal
+    bcs !done+
+    jsr door_jam_command
+!done:
+    jmp tramp_sr_epilogue
+
+// door_pick_roll lives in the chest overlay with chest_disarm_skill; carry
+// (picked) propagates through the resync. A failed overlay load reads as an
+// ordinary pick miss (turn still consumed by the caller).
+tramp_door_pick_roll:
+    lda #OVL_CHEST
+    jsr overlay_load_no_kernal
+    bcs !load_failed+
+    jsr door_pick_roll
+    php
+    jsr plus4_platform_runtime_resync
+    plp
+    rts
+!load_failed:
+    jsr plus4_platform_runtime_resync
+    clc
+    rts
 
 // Chest routing (docs/CHEST_DESIGN.md). tramp_chest_open is called from the
 // resident cmd_open pre-dispatch and owns the epilogue. chest_dispatch is

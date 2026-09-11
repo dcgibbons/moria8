@@ -5,7 +5,6 @@
 //        thrown-item redraw and floor metadata preservation.
 //
 // Results at $0400-$040A: $01 = pass, $00 = fail per test (11 tests)
-
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_bootstrap)
 
@@ -41,7 +40,6 @@ test_exit_trampoline:
 #import "../../../../core/ui_messages.s"
 #import "../../../../core/ui_status.s"
 #import "../../../../core/ui_help_clear.s"
-#import "../../../../core/ui_character.s"
 #import "../../../../core/stat_display.s"
 .segmentdef TestCreateOverlay [start=$D000]
 .segment TestCreateOverlay
@@ -74,8 +72,6 @@ test_exit_trampoline:
 #import "../../../../core/player_magic_state.s"
 #import "../../../../core/player_magic_state_ops.s"
 #import "../../../../core/player_magic.s"
-#import "../../../../core/ui_inventory.s"
-#import "../../../../core/ui_equipment.s"
 #import "../dungeon_render.s"
 #import "../../../../core/dungeon_los.s"
 #import "../../../../core/player_move.s"
@@ -483,3 +479,15 @@ test_start:
 
 throw_test_body_end:
 .assert "Throw test stays below MAP_BASE", throw_test_body_end <= MAP_BASE, true
+// Dropped ui_* imports to keep the test body under MAP_BASE (map-overlap
+// boundary); stubs satisfy the trampoline references.
+ui_char_display:
+ui_inv_display:
+ui_inv_select_display:
+ui_equip_display:
+    rts
+count_spells_known:
+    jmp spell_mask_count_ptr
+player_disarm_get_effective_chance:
+    lda #0
+    rts

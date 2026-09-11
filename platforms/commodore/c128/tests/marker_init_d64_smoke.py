@@ -11,7 +11,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
-from vice_connector import VICEConnector, extract_test_symbols, run_test_case
+from vice_connector import VICEConnector, allocate_free_port, extract_test_symbols, run_test_case
 
 
 MARKER_BYTES = b"M8SAVE"
@@ -54,6 +54,8 @@ def terminate_vice(process: subprocess.Popen[bytes] | None) -> None:
 
 
 def run_vice(args: argparse.Namespace) -> int:
+    if not args.port:
+        args.port = allocate_free_port(args.host)
     symbols = extract_test_symbols(args.vs)
     command = [
         args.vice,
@@ -69,6 +71,8 @@ def run_vice(args: argparse.Namespace) -> int:
         "-sounddev",
         "dummy",
         "-remotemonitor",
+        "-remotemonitoraddress",
+        f"{args.host}:{args.port}",
         "-binarymonitor",
         "-drive9type",
         str(args.drive9_type),
@@ -77,7 +81,7 @@ def run_vice(args: argparse.Namespace) -> int:
         str(args.save_d64),
     ]
     vice_process = subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    connector = VICEConnector(timeout=args.socket_timeout)
+    connector = VICEConnector(host=args.host, port=args.port, timeout=args.socket_timeout)
     try:
         connector.connect(
             retries=max(1, int(args.connect_timeout / args.connect_retry_delay)),
@@ -142,6 +146,8 @@ def main() -> int:
     parser.add_argument("--socket-timeout", type=float, default=5.0)
     parser.add_argument("--connect-timeout", type=float, default=12.0)
     parser.add_argument("--connect-retry-delay", type=float, default=0.1)
+    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--port", type=int, default=0, help="VICE monitor port; 0 = auto-allocate a free port (parallel-safe)")
     args = parser.parse_args()
 
     ok, output = format_save_disk(args)

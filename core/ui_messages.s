@@ -22,8 +22,14 @@
 .const MSG_MORE_LEN = 7
 .const MSG_MORE_MAX_COL = SCREEN_COLS - MSG_MORE_LEN
 .const MSG_MORE_OVERFLOW_CMP = MSG_MORE_MAX_COL + 1
+#if !MSG_HISTORY_IN_AUX
+.macro MsgHistorySegment() {}
+.macro MsgHistoryRestoreSegment() {}
+#endif
+:MsgHistorySegment()
 msg_history:
     .fill MSG_HIST_COUNT * MSG_HIST_LEN, 0
+:MsgHistoryRestoreSegment()
 msg_hist_idx:
     .byte 0                 // Current write index (0–7, wraps)
 msg_hist_ptr_lo:
@@ -67,7 +73,11 @@ msg_init:
     beq !done+
     ldy #0
     lda zp_temp2
+#if APPLE2
+    jsr mmu_safe_map_write_ptr1
+#else
     sta (zp_ptr1),y
+#endif
     inc zp_ptr1
     bne !dec+
     inc zp_ptr1_hi
@@ -290,14 +300,22 @@ msg_save_history:
 !copy:
     lda (zp_ptr0),y
     beq !pad+               // Null terminator
+#if APPLE2
+    jsr mmu_safe_map_write_ptr1
+#else
     sta (zp_ptr1),y
+#endif
     iny
     cpy #MSG_HIST_LEN - 1
     bcc !copy-
 !pad:
     // Null-terminate
     lda #0
+#if APPLE2
+    jsr mmu_safe_map_write_ptr1
+#else
     sta (zp_ptr1),y
+#endif
 
     // Advance history index (wrap at 8)
     lda msg_hist_idx

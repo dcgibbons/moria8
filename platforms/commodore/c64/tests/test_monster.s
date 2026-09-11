@@ -54,7 +54,6 @@ magic_check_new_spells:
 #import "../../../../core/ui_messages.s"
 #import "../../../../core/ui_status.s"
 #import "../../../../core/ui_help_clear.s"
-#import "../../../../core/ui_character.s"
 #import "../../../../core/stat_display.s"
 .segmentdef TestCreateOverlay [start=$D000]
 .segment TestCreateOverlay
@@ -80,8 +79,6 @@ magic_check_new_spells:
 #import "../../../../core/spell_data.s"
 #import "../../../../core/projectile.s"
 #import "../../../../core/spell_effects.s"
-#import "../../../../core/ui_inventory.s"
-#import "../../../../core/ui_equipment.s"
 #import "../dungeon_render.s"
 #import "../../../../core/dungeon_los.s"
 #import "../../../../core/player_move.s"
@@ -133,6 +130,15 @@ test_tier_check_transition:
     lda #60
     sta cr_level+1
 !done:
+    rts
+
+// Dropped ui_* imports to stay under the map-overlap boundary.
+ui_char_display:
+ui_inv_display:
+ui_inv_select_display:
+ui_equip_display:
+    rts
+count_spells_known:
     rts
 
 test_start:

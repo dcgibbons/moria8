@@ -26,7 +26,7 @@ bootstrap:
 
 // test_finish — Copy results to $0400 and halt.
 test_finish:
-    ldx #45
+    ldx #55
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -51,7 +51,6 @@ test_finish:
 #import "../../../../core/ui_messages.s"
 #import "../../../../core/ui_status.s"
 #import "../../../../core/ui_help_clear.s"
-#import "../../../../core/ui_character.s"
 #import "../../../../core/stat_display.s"
 .segmentdef TestCreateOverlay [start=$D000]
 .segment TestCreateOverlay
@@ -62,6 +61,15 @@ test_finish:
 #import "../../../../core/dungeon_data.s"
 #import "dungeon_gen_stubs.s"
 #import "../../../../core/huffman.s"
+// Park the jam handler (player command; never called by monster tests) in
+// the $D000 test overlay so the body stays below MAP_BASE.
+#define CMD_JAM_SEGMENT_CUSTOM
+.macro CmdJamSegment() {
+    .segment TestCreateOverlay
+}
+.macro CmdJamRestoreSegment() {
+    .segment Default
+}
 #import "../../../../core/dungeon_features.s"
 #import "../../../../core/monster.s"
 #import "../../../../core/tier_manager.s"
@@ -80,8 +88,6 @@ test_finish:
 #import "../../../../core/player_magic_state.s"
 #import "../../../../core/player_magic_state_ops.s"
 #import "../../../../core/player_magic.s"
-#import "../../../../core/ui_inventory.s"
-#import "../../../../core/ui_equipment.s"
 #import "../dungeon_render.s"
 #import "../../../../core/dungeon_los.s"
 #import "../../../../core/player_move.s"
@@ -134,6 +140,10 @@ ui_help_show_paged:
 ui_help_display:
 help_draw_line:
 help_draw_hborder:
+ui_inv_display:
+ui_inv_select_display:
+ui_equip_display:
+ui_char_display:
     rts
 #import "../../../../core/ui_trampoline_stubs.s"
 
@@ -156,7 +166,7 @@ tai_rng_values:   .fill 4, 0
 tai_rng_idx:      .byte 0
 tai_distance:     .byte 0
 auto_rest_active: .byte 0
-tc_results: .fill 46, $ff      // Result buffer (copied to $0400 at end)
+tc_results: .fill 56, $ff      // Result buffer (copied to $0400 at end)
 
 .macro PatchJump(target, replacement) {
     lda #$4c
@@ -193,6 +203,7 @@ tai_door_prep:
     stx tai_door_type
     jsr glyph_clear_all
     lda #0
+    sta door_state_count
     sta mat_fleeing
     sta mat_action_dirty
     sta zp_mon_flags
@@ -3129,10 +3140,390 @@ test_start:
     bne !t46_fail+
     lda #$01
     sta tc_results + 45
-    jmp !tests_done+
+    jmp !t47+
 !t46_fail:
     lda #$00
     sta tc_results + 45
+
+    // ==========================================
+    // Test 47: door-capable monster picks a locked door —
+    // unlocks without opening or moving (hp 100, lock 12:
+    // N=(101)*62=6262, K=40*88-1=3119; roll 0 succeeds).
+    // ==========================================
+!t47:
+    :PatchJump(rng_range_word, test_rng_word_fixed)
+    lda #100
+    jsr tai_set_hp
+    lda #0
+    sta tai_fixed_lo
+    sta tai_fixed_hi
+    lda #TILE_DOOR_CLOSED
+    ldx #4                      // Kobold: door-capable
+    jsr tai_door_prep
+    lda #1
+    sta door_state_count
+    lda #20
+    sta door_state_x
+    lda #15
+    sta door_state_y
+    lda #12
+    sta door_state_val
+    jsr monster_try_step
+    bcs !t47_fail+              // No move
+    jsr tai_read_door
+    cmp #TILE_DOOR_CLOSED       // Unlocked but NOT opened this turn
+    bne !t47_fail+
+    lda door_state_count        // Lock state cleared
+    bne !t47_fail+
+    lda #$01
+    sta tc_results + 46
+    jmp !t48+
+!t47_fail:
+    lda #$00
+    sta tc_results + 46
+
+    // ==========================================
+    // Test 48: failed pick (roll 3119 >= K 3119) leaves the
+    // door closed and locked.
+    // ==========================================
+!t48:
+    lda #100
+    jsr tai_set_hp
+    lda #$2f
+    sta tai_fixed_lo            // roll = 3119
+    lda #$0c
+    sta tai_fixed_hi
+    lda #TILE_DOOR_CLOSED
+    ldx #4
+    jsr tai_door_prep
+    lda #1
+    sta door_state_count
+    lda #20
+    sta door_state_x
+    lda #15
+    sta door_state_y
+    lda #12
+    sta door_state_val
+    jsr monster_try_step
+    bcs !t48_fail+
+    jsr tai_read_door
+    cmp #TILE_DOOR_CLOSED
+    bne !t48_fail+
+    lda door_state_count
+    cmp #1
+    bne !t48_fail+
+    lda door_state_val
+    cmp #12
+    bne !t48_fail+
+    lda #$01
+    sta tc_results + 47
+    jmp !t49+
+!t48_fail:
+    lda #$00
+    sta tc_results + 47
+
+    // ==========================================
+    // Test 49: door-capable monster bursts a stuck door —
+    // opens it; no-break roll (1) clears the state.
+    // ==========================================
+!t49:
+    :PatchJump(rng_range, test_rng_range)
+    lda #100
+    jsr tai_set_hp
+    lda #0
+    sta tai_fixed_lo            // burst roll 0 < K 2999
+    sta tai_fixed_hi
+    lda #1
+    sta tai_rng_values          // break roll: 1 = no break
+    lda #TILE_DOOR_CLOSED
+    ldx #4
+    jsr tai_door_prep
+    lda #1
+    sta door_state_count
+    lda #20
+    sta door_state_x
+    lda #15
+    sta door_state_y
+    lda #$80 | 15
+    sta door_state_val          // Stuck, magnitude 15
+    jsr monster_try_step
+    bcs !t49_fail+
+    jsr tai_read_door
+    cmp #TILE_DOOR_OPEN
+    bne !t49_fail+
+    lda door_state_count
+    bne !t49_fail+
+    lda #$01
+    sta tc_results + 48
+    jmp !t50+
+!t49_fail:
+    lda #$00
+    sta tc_results + 48
+
+    // ==========================================
+    // Test 50: failed burst (roll 2999 >= K 2999) leaves the
+    // stuck door closed and its state intact.
+    // ==========================================
+!t50:
+    lda #100
+    jsr tai_set_hp
+    lda #$b7
+    sta tai_fixed_lo            // roll = 2999
+    lda #$0b
+    sta tai_fixed_hi
+    lda #TILE_DOOR_CLOSED
+    ldx #4
+    jsr tai_door_prep
+    lda #1
+    sta door_state_count
+    lda #20
+    sta door_state_x
+    lda #15
+    sta door_state_y
+    lda #$80 | 15
+    sta door_state_val
+    jsr monster_try_step
+    bcs !t50_fail+
+    jsr tai_read_door
+    cmp #TILE_DOOR_CLOSED
+    bne !t50_fail+
+    lda door_state_count
+    cmp #1
+    bne !t50_fail+
+    lda door_state_val
+    cmp #$80 | 15
+    bne !t50_fail+
+    lda #$01
+    sta tc_results + 49
+    jmp !t51+
+!t50_fail:
+    lda #$00
+    sta tc_results + 49
+
+    // ==========================================
+    // Test 51: non-capable monster bashes a locked door with
+    // the |s|-adjusted roll (hp 100, |s| 15: N=9595,
+    // K=40*65-1=2599; roll 2598 succeeds) — door opens,
+    // no-break roll clears state.
+    // ==========================================
+!t51:
+    lda #100
+    jsr tai_set_hp
+    lda #$26
+    sta tai_fixed_lo            // roll = 2598
+    lda #$0a
+    sta tai_fixed_hi
+    lda #1
+    sta tai_rng_values          // break roll: 1 = no break
+    lda #TILE_DOOR_CLOSED
+    ldx #0                      // White Harpy: not door-capable
+    jsr tai_door_prep
+    lda #1
+    sta door_state_count
+    lda #20
+    sta door_state_x
+    lda #15
+    sta door_state_y
+    lda #15
+    sta door_state_val
+    jsr monster_try_step
+    bcs !t51_fail+
+    jsr tai_read_door
+    cmp #TILE_DOOR_OPEN
+    bne !t51_fail+
+    lda door_state_count
+    bne !t51_fail+
+    lda #$01
+    sta tc_results + 50
+    jmp !t52+
+!t51_fail:
+    lda #$00
+    sta tc_results + 50
+
+    // ==========================================
+    // Test 52: burst break path — break roll 0 marks the
+    // opened door broken (state 1).
+    // ==========================================
+!t52:
+    lda #100
+    jsr tai_set_hp
+    lda #0
+    sta tai_fixed_lo            // burst roll 0
+    sta tai_fixed_hi
+    sta tai_rng_values          // break roll: 0 = break
+    lda #TILE_DOOR_CLOSED
+    ldx #4
+    jsr tai_door_prep
+    lda #1
+    sta door_state_count
+    lda #20
+    sta door_state_x
+    lda #15
+    sta door_state_y
+    lda #$80 | 15
+    sta door_state_val
+    jsr monster_try_step
+    bcs !t52_fail+
+    jsr tai_read_door
+    cmp #TILE_DOOR_OPEN
+    bne !t52_fail+
+    lda door_state_count
+    cmp #1
+    bne !t52_fail+
+    lda door_state_val
+    cmp #1                      // Broken
+    bne !t52_fail+
+    lda #$01
+    sta tc_results + 51
+    jmp !t53+
+!t52_fail:
+    lda #$00
+    sta tc_results + 51
+
+    // ==========================================
+    // Test 53: pick boundary — hp == B (10 + lock difficulty)
+    // must never pick (hp 22, lock 12). Regression guard:
+    // cmp/beq used to exit with carry set = success.
+    // ==========================================
+!t53:
+    lda #22
+    jsr tai_set_hp
+    lda #TILE_DOOR_CLOSED
+    ldx #4                      // Kobold: door-capable
+    jsr tai_door_prep
+    lda #1
+    sta door_state_count
+    lda #20
+    sta door_state_x
+    lda #15
+    sta door_state_y
+    lda #12
+    sta door_state_val
+    jsr monster_try_step
+    bcs !t53_fail+
+    jsr tai_read_door
+    cmp #TILE_DOOR_CLOSED
+    bne !t53_fail+
+    lda door_state_count
+    cmp #1
+    bne !t53_fail+
+    lda door_state_val
+    cmp #12
+    bne !t53_fail+
+    lda #$01
+    sta tc_results + 52
+    jmp !t54+
+!t53_fail:
+    lda #$00
+    sta tc_results + 52
+
+    // ==========================================
+    // Test 54: burst boundary — hp == B (10 + |s|) must
+    // never burst (hp 25, stuck 15).
+    // ==========================================
+!t54:
+    lda #25
+    jsr tai_set_hp
+    lda #1
+    sta tai_rng_values          // break roll: 1 = no break (bug path only)
+    lda #TILE_DOOR_CLOSED
+    ldx #4
+    jsr tai_door_prep
+    lda #1
+    sta door_state_count
+    lda #20
+    sta door_state_x
+    lda #15
+    sta door_state_y
+    lda #$80 | 15
+    sta door_state_val
+    jsr monster_try_step
+    bcs !t54_fail+
+    jsr tai_read_door
+    cmp #TILE_DOOR_CLOSED
+    bne !t54_fail+
+    lda door_state_count
+    cmp #1
+    bne !t54_fail+
+    lda door_state_val
+    cmp #$80 | 15
+    bne !t54_fail+
+    lda #$01
+    sta tc_results + 53
+    jmp !t55+
+!t54_fail:
+    lda #$00
+    sta tc_results + 53
+
+    // ==========================================
+    // Test 55: bash boundary — non-capable monster vs a plain
+    // door with hp == B (20) must never burst it open.
+    // ==========================================
+!t55:
+    lda #20
+    jsr tai_set_hp
+    lda #0
+    sta tai_rng_values          // break roll: 0 = break (bug path only)
+    lda #TILE_DOOR_CLOSED
+    ldx #0                      // White Harpy: not door-capable
+    jsr tai_door_prep
+    // Plain door: no state entry (count stays 0)
+    jsr monster_try_step
+    bcs !t55_fail+
+    jsr tai_read_door
+    cmp #TILE_DOOR_CLOSED
+    bne !t55_fail+
+    lda door_state_count
+    bne !t55_fail+
+    lda #$01
+    sta tc_results + 54
+    jmp !t56+
+!t55_fail:
+    lda #$00
+    sta tc_results + 54
+
+    // ==========================================
+    // Test 56: non-opener bash of an untracked plain door with a full
+    // state table opens it unbroken even when break roll 0 is selected.
+    // ==========================================
+!t56:
+    lda #100
+    jsr tai_set_hp
+    lda #0
+    sta tai_fixed_lo            // Bash roll 0 succeeds
+    sta tai_fixed_hi
+    sta tai_rng_values          // Break roll 0 requests broken
+    lda #TILE_DOOR_CLOSED
+    ldx #0                      // White Harpy: not door-capable
+    jsr tai_door_prep
+    ldx #MAX_DOOR_STATES - 1
+    lda #63
+!t56_x:
+    sta door_state_x,x
+    dex
+    bpl !t56_x-
+    ldx #MAX_DOOR_STATES - 1
+    lda #21
+!t56_y:
+    sta door_state_y,x
+    dex
+    bpl !t56_y-
+    lda #MAX_DOOR_STATES
+    sta door_state_count
+    jsr monster_try_step
+    bcs !t56_fail+
+    jsr tai_read_door
+    cmp #TILE_DOOR_OPEN
+    bne !t56_fail+
+    lda door_state_count
+    cmp #MAX_DOOR_STATES       // No unrepresentable broken entry added
+    bne !t56_fail+
+    lda #$01
+    sta tc_results + 55
+    jmp !tests_done+
+!t56_fail:
+    lda #$00
+    sta tc_results + 55
 
 !tests_done:
     jmp test_finish

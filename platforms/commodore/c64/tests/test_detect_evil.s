@@ -59,7 +59,6 @@ test_finish:
 #import "../../../../core/monster.s"
 #import "../../../../core/tier_manager.s"
 #import "../../common/overlay.s"
-#import "../../../../core/monster_ai.s"
 #import "../../../../core/recall.s"
 #import "../../../../core/monster_magic.s"
 #import "../../../../core/item.s"
@@ -87,6 +86,11 @@ test_finish:
 
 store_init_all:
     rts
+
+// Detection exercises monster records/flags, not the AI turn engine.
+monster_ai_tick:
+    rts
+mat_scene_dirty: .byte 0
 
 store_restock_all:
     rts
@@ -326,6 +330,15 @@ test_start:
     sta test_mon_table + MX_X
     lda #12
     sta test_mon_table + MX_Y
+    // Make the observed terrain explicit instead of depending on RAM contents.
+    ldx #12
+    lda map_row_lo,x
+    sta zp_ptr1
+    lda map_row_hi,x
+    sta zp_ptr1_hi
+    ldy #20
+    lda #TILE_FLOOR
+    :MapWrite_ptr1_y()
     lda #CF_EVIL
     sta cr_mflags + 1
     lda #0
@@ -496,3 +509,6 @@ tde_t3_fail:
     lda #$00
     sta tc_results + 3
     jmp test_finish
+
+test_body_end:
+.assert "Detect evil test stays below MAP_BASE", test_body_end <= MAP_BASE, true

@@ -125,6 +125,15 @@ tramp_dig_ability:
 #import "../../core/tables.s"
 #import "../../core/item_defs.s"
 #import "../../core/player.s"
+// The message-history ring buffer lives in aux data (the resident
+// always-region is full); writes go through mmu_safe_map_write_ptr1.
+#define MSG_HISTORY_IN_AUX
+.macro MsgHistorySegment() {
+    .segment A2AuxData
+}
+.macro MsgHistoryRestoreSegment() {
+    .segment Default
+}
 #import "../../core/ui_messages.s"
 #import "../../core/ui_status.s"
 #import "../../core/runtime_ui_strings.s"
@@ -148,6 +157,35 @@ ovl_huffdata_end:
     .segment Default
 }
 #define CHEST_ROUTING_ENABLED
+#define CMD_JAM_SEGMENT_CUSTOM
+#define CMD_JAM_WRAPPER_CUSTOM
+#define CMD_JAM_EXTERNAL
+// The jam command handler parks with the cold chest commands (the play slot
+// is full); its wrapper lives resident like the other A2 overlay trampolines.
+.macro CmdJamSegment() {
+    .segment ChestOverlay
+}
+.macro CmdJamRestoreSegment() {
+    .segment Default
+}
+// The locked-door pick roll needs the effective-disarm formula; it parks in
+// the chest overlay with chest_disarm_skill.
+#define DOOR_PICK_EXTERNAL
+.macro DoorPickSegment() {
+    .segment ChestOverlay
+}
+.macro DoorPickRestoreSegment() {
+    .segment Default
+}
+.macro CmdJamWrapperSegment() {
+    .segment Default
+}
+.macro CmdJamWrapperRestoreSegment() {
+    // Only the tiny cmd_jam wrapper is resident (the dispatch table jumps
+    // to it while overlays own the window); the rest of game_loop.s stays
+    // in the play slot.
+    .segment A2PlaySlot
+}
 #import "../../core/dungeon_features.s"
 #import "../../core/chest_search.s"
 #undef DISARM_HELPERS_EXTERNAL
@@ -625,6 +663,29 @@ tramp_reveal_floorplan:
     bcs !done+
     jsr eff_reveal_floorplan
 !done:
+    rts
+
+// The jam command handler lives in the chest overlay on this platform (play
+// slot is full); carry (turn result) propagates from the handler.
+tramp_cmd_jam:
+    lda #OVL_CHEST
+    jsr overlay_load
+    bcs !done+
+    jsr door_jam_command
+!done:
+    rts
+
+// door_pick_roll lives in the chest overlay with chest_disarm_skill; carry
+// (picked) propagates from the handler. A failed overlay load reads as an
+// ordinary pick miss (turn still consumed by the caller).
+tramp_door_pick_roll:
+    lda #OVL_CHEST
+    jsr overlay_load
+    bcs !load_failed+
+    jsr door_pick_roll
+    rts
+!load_failed:
+    clc
     rts
 
 // Level-up and failure-calculation magic helpers live in OVL.SPELL on this

@@ -1,5 +1,4 @@
 // test_find_traps_prayer.s — Focused runtime tests for the Find Traps prayer row
-
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_bootstrap)
 
@@ -43,10 +42,6 @@ test_done_break:
 #import "../../../../core/item_defs.s"
 #import "../../../../core/player.s"
 #import "../../../../core/ui_messages.s"
-#import "../../../../core/ui_status.s"
-#import "../../../../core/ui_help_clear.s"
-#import "../../../../core/ui_character.s"
-#import "../../../../core/stat_display.s"
 .segmentdef TestCreateOverlay [start=$D000]
 .segment TestCreateOverlay
 #import "../../../../core/background_data.s"
@@ -267,6 +262,22 @@ test_setup_empty_detect_map:
     jsr test_write_tile
     rts
 
+// stubs after dropping ui imports (map-overlap boundary)
+put_stat_val:
+    rts
+
+// stubs after dropping ui imports (map-overlap boundary)
+ui_clear_full_screen_safe:
+    rts
+ui_help_clear_all:
+    rts
+
+// stubs after dropping ui imports (map-overlap boundary)
+status_draw:
+    rts
+status_mark_dirty:
+    rts
+
 test_start:
     :PatchJump(huff_print_msg, test_huff_print_msg)
     :PatchJump(test_spell_execute_selected, test_tramp_find_traps_prayer_execute)
@@ -415,3 +426,9 @@ test_start:
     lda #$00
     sta tc_results + 2
     jmp test_finish
+// Dropped the ui_character.s import to keep the test body under MAP_BASE
+// (map-overlap boundary); stubs satisfy the trampoline references.
+ui_char_display:
+    rts
+count_spells_known:
+    jmp spell_mask_count_ptr

@@ -43,9 +43,6 @@ test_done_break:
 #import "../../../../core/item_defs.s"
 #import "../../../../core/player.s"
 #import "../../../../core/ui_messages.s"
-#import "../../../../core/ui_status.s"
-#import "../../../../core/ui_help_clear.s"
-#import "../../../../core/stat_display.s"
 .segmentdef TestCreateOverlay [start=$D000]
 .segment TestCreateOverlay
 #import "../../../../core/background_data.s"
@@ -268,6 +265,13 @@ test_reset_dispel_evil_prayer_state:
     sta player_data + PL_SPELLS_WORKED_1
     sta player_data + PL_SPELLS_WORKED_2
     sta player_data + PL_SPELLS_WORKED_3
+    rts
+
+ui_clear_full_screen_safe:
+ui_help_clear_all:
+put_stat_val:
+status_draw:
+status_mark_dirty:
     rts
 
 test_start:

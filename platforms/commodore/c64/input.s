@@ -87,10 +87,10 @@ input_run_key_held:
     lda #0
     rts
 #else
-    lda $01
-    pha
     php
     sei
+    lda $01
+    pha
     lda #BANK_NO_BASIC
     sta $01
 
@@ -124,9 +124,9 @@ input_run_key_held:
     lda irk_save_ddrb
     sta CIA1_DDRB
 
-    plp
     pla
     sta $01
+    plp
     lda irk_result
     rts
 #endif
@@ -438,8 +438,10 @@ input_ctrl_r_held:
     lda #0
     rts
 #else
-    lda CIA1_PORTA
-    pha
+    php                         // Mask IRQs around the matrix probe: the
+    sei                         // KERNAL scanner drives the same CIA ports
+    lda CIA1_PORTA              // and a mid-probe interleave reads a phantom
+    pha                         // CTRL+R (restores caller's I flag via plp).
     lda CIA1_DDRA
     pha
     lda CIA1_DDRB
@@ -474,6 +476,7 @@ input_ctrl_r_held:
     sta CIA1_DDRA
     pla
     sta CIA1_PORTA
+    plp
     lda icr_result
     rts
 #endif

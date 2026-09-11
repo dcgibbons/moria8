@@ -370,6 +370,9 @@ check_stairs_at_player:
 door_try_close:
     rts
 
+door_jam_command:
+    rts
+
 do_search:
     rts
 
@@ -1281,6 +1284,9 @@ test_entry:
     lda #1
     sta test_dir_ok
     sta test_open_ok
+    sta test_scene_dirty     // A real door open changes the map tile, which
+                           // dirties the scene; model it explicitly rather
+                           // than depending on leftover state from test 3.
     lda #CMD_OPEN
     sta test_cmd_script
     lda #1

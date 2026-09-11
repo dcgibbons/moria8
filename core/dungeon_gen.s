@@ -96,6 +96,7 @@ town_generate:
     // Clear trap table for safety (town has no traps)
     lda #0
     sta trap_count
+    sta door_state_count
     // --- Step 1: Fill the live map with blocking unseen walls ---
     // Only the carved town rectangle should be lit/visited. The backing map
     // outside town must stay hidden so larger platform maps do not leak
@@ -391,14 +392,11 @@ level_generate:
     jmp dungeon_generate
 
 #if PLACE_SECRETS_EXTERNAL
-// Apple IIe keeps place_secrets here (GEN overlay) so the resident image
-// stays under $7C00; other platforms keep it resident in dungeon_features.s.
+// C64, Plus/4, and Apple IIe keep place_secrets here in generation-owned code
+// to recover resident space; C128 keeps it in dungeon_features.s.
 place_secrets:
-    // Don't place secrets on town level
-    lda zp_player_dlvl
-    bne !ps_not_town+
-    rts
-!ps_not_town:
+    // Only caller is dungeon_generate (dungeon levels); town uses
+    // town_generate and never reaches here.
 
     // Scan entire map for TILE_DOOR_CLOSED
     lda #0
@@ -454,7 +452,9 @@ place_secrets:
 
     // How many doors did we find?
     lda door_scan_count
-    beq !ps_done+           // None found
+    bne !ps_some+
+    rts                     // None found
+!ps_some:
 
     // Pick 1-3 doors to convert (don't exceed count)
     lda #3
@@ -507,6 +507,73 @@ place_secrets:
     dec df_found
     bne !ps_convert-
 
+
+    // ---- Locked/stuck door state roll (second map pass) ----
+    // Rescan the map after secret conversion so every remaining closed door
+    // is eligible, including doors beyond the bounded secret-selection list.
+    // Upstream closed-door branch (VMS place_door /
+    // Umoria dungeonPlaceDoor): 2/12 locked, 1/12 stuck, 9/12 plain, with
+    // uniform magnitude randint(10)+10. One rng_range(120) draw per door
+    // encodes class and magnitude exactly: [0,20) locked (mag 11+roll/2),
+    // [60,70) stuck (mag roll-49, negated), else plain. Draws append after
+    // all existing generation draws, preserving topology seeds. Every
+    // remaining closed door is rolled; rolling stops when the state table fills
+    // (MAX_DOOR_STATES entries) and any remaining doors stay plain.
+    // Capping either the roll count or the secret-selection scratch list
+    // would bias locked/stuck doors toward the top of the row-major map.
+    // Keep this loop in sync with the !PLACE_SECRETS_EXTERNAL copy in
+    // core/dungeon_features.s.
+    ldx #1
+!pss_row:
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    stx df_target_y
+    ldy #1
+!pss_col:
+    :MapRead_ptr0_y()
+    and #TILE_TYPE_MASK
+    cmp #TILE_DOOR_CLOSED
+    bne !pss_next+
+    ldx door_state_count
+    cpx #MAX_DOOR_STATES
+    bcs !pss_done+              // State table full: rest stay plain
+    lda #120
+    jsr rng_range
+    cmp #20
+    bcc !pss_locked+
+    cmp #60
+    bcc !pss_next+              // [20, 60) plain
+    cmp #70
+    bcs !pss_next+              // [70, 120) plain
+    // Stuck: roll in [60, 70) -> magnitude roll-49 in [11, 20], sign bit set
+    sec
+    sbc #49
+    ora #$80
+    jmp !pss_store+
+!pss_locked:
+    // roll in [0, 20) -> magnitude 11 + roll/2 in [11, 20] (each twice)
+    lsr
+    clc
+    adc #11
+!pss_store:
+    ldx door_state_count
+    sta door_state_val,x
+    tya
+    sta door_state_x,x
+    lda df_target_y
+    sta door_state_y,x
+    inc door_state_count
+!pss_next:
+    iny
+    cpy #MAP_COLS - 1
+    bne !pss_col-
+    ldx df_target_y
+    inx
+    cpx #MAP_ROWS - 1
+    bne !pss_row-
+!pss_done:
 !ps_done:
     rts
 #endif
@@ -519,6 +586,7 @@ place_secrets:
 dungeon_generate:
     lda #0
     sta trap_count
+    sta door_state_count
     jsr blank_cave
     jsr place_rooms
     jsr shuffle_rooms

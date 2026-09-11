@@ -1,5 +1,4 @@
 // test_phase_door.s — Focused runtime tests for the Phase Door spell row
-
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_bootstrap)
 
@@ -44,7 +43,6 @@ test_finish:
 #import "../../../../core/ui_messages.s"
 #import "../../../../core/ui_status.s"
 #import "../../../../core/ui_help_clear.s"
-#import "../../../../core/ui_character.s"
 #import "../../../../core/stat_display.s"
 .segmentdef TestCreateOverlay [start=$D000]
 .segment TestCreateOverlay
@@ -422,3 +420,9 @@ phase_door_test_body_end:
 
 .assert "Phase Door test stays below MAP_BASE", phase_door_test_body_end <= MAP_BASE, true
 .assert "Phase Door result buffer stays under KERNAL ROM", tc_results + 3 <= $10000, true
+// Dropped the ui_character.s import to keep the test body under MAP_BASE
+// (map-overlap boundary); stubs satisfy the trampoline references.
+ui_char_display:
+    rts
+count_spells_known:
+    jmp spell_mask_count_ptr

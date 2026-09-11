@@ -44,7 +44,6 @@ test_finish:
 #import "../../../../core/ui_messages.s"
 #import "../../../../core/ui_status.s"
 #import "../../../../core/ui_help_clear.s"
-#import "../../../../core/ui_character.s"
 #import "../../../../core/stat_display.s"
 .segmentdef TestCreateOverlay [start=$D000]
 .segment TestCreateOverlay
@@ -341,6 +340,12 @@ test_reset_teleport_other_state:
     sta player_data + PL_SPELLS_WORKED_1
     sta player_data + PL_SPELLS_WORKED_2
     sta player_data + PL_SPELLS_WORKED_3
+    rts
+
+// Dropped ui_* imports to stay under the map-overlap boundary.
+ui_char_display:
+    rts
+count_spells_known:
     rts
 
 test_start:

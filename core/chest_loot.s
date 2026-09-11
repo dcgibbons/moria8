@@ -4,10 +4,11 @@
 // open time from the static VMS per-type flags, never pre-generated or stored.
 //
 // The chest overlay stores a pending profile here (resident latch); the
-// resident handoff (chest_fulfill_loot) loads the GEN overlay and runs
-// chest_generate_loot, which uses the GEN-window picker (pick_item_type_overlay
-// + pit_sorted). Placed via the platform ChestLootSegment macros (GEN overlay
-// on C64/Plus4/A2; Default main image on C128 where GEN is full).
+// resident handoff (chest_fulfill_loot) loads the overlay that owns the
+// picker (pick_item_type_overlay + pit_sorted) and runs chest_generate_loot.
+// Picker placement is platform-specific: the CHEST overlay on C64/Plus4
+// (PICKER_IN_CHEST_OVERLAY) and the GEN overlay on A2 and C128. Placed via
+// the platform ChestLootSegment macros.
 
 // ---- Resident pending-loot latch (written by the chest overlay) ------------
 chest_loot_pending: .byte 0   // 1 = contents pending fulfillment
@@ -70,10 +71,14 @@ chest_fulfill_loot:
     lda it_category,y
     cmp #ICAT_CHEST
     bne !cfl_clear+           // Not a chest -> stale latch, discard
+#if PICKER_IN_CHEST_OVERLAY
+    lda #OVL_CHEST
+#else
     lda #OVL_DUNGEON_GEN
+#endif
 #if C64_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME
     // Disk loading exposes platform ROM over $E000; restore RAM before calling
-    // the freshly loaded GEN overlay. REU-backed C64 loads use the same path.
+    // the freshly loaded picker overlay. REU-backed C64 loads use the same path.
     jsr overlay_load_no_kernal
     bcc !cfl_loaded+
     jsr hal_platform_runtime_resync
@@ -313,10 +318,10 @@ chest_loot_place_one:
 
     // --- Object ---
 #if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME
-    // Product: the picker lives in the GEN overlay (same window the handoff
-    // loaded), so call the overlay impl directly — the resident pick_item_type
-    // wrapper would reload GEN over the executing overlay.
-    jsr pick_item_type_overlay  // A = item ID (GEN-window picker)
+    // Product: the picker lives in the overlay the handoff loaded (CHEST on
+    // C64/Plus4, GEN on C128/A2), so call the overlay impl directly — the
+    // resident pick_item_type wrapper would reload over the executing overlay.
+    jsr pick_item_type_overlay  // A = item ID (handoff-window picker)
 #else
     jsr pick_item_type          // Unit assemblies have no GEN overlay
 #endif

@@ -785,6 +785,10 @@ def check_tokens(label: str, values: list[str]) -> None:
         config_index = values.index("-config")
         if config_index + 1 >= len(values) or values[config_index + 1] != "/dev/null":
             missing.append("-config /dev/null")
+    if "-remotemonitor" in values and "-remotemonitoraddress" not in values:
+        # Shared default port 6510 races under parallel jobs: only the first
+        # VICE binds it and later connectors silently drive the wrong emulator.
+        missing.append("-remotemonitoraddress (per-instance monitor port)")
     if missing:
         bad.append(f"{label}: missing {', '.join(missing)}")
 

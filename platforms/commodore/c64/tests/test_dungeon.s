@@ -7,6 +7,9 @@
 // Results at $0400: $01 = pass, $00 = fail per test
 
 #define DUNGEON_TEST_OVERLAP_HELPERS
+// Match the shipping C64 owner so generation tests exercise place_secrets
+// from dungeon_gen.s rather than the resident duplicate in dungeon_features.s.
+#define PLACE_SECRETS_EXTERNAL
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_bootstrap)
@@ -19,7 +22,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #50
+    ldx #65
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -44,10 +47,6 @@ test_exit_trampoline:
 #import "../../../../core/item_defs.s"
 #import "../../../../core/player.s"
 #import "../../../../core/ui_messages.s"
-#import "../../../../core/ui_status.s"
-#import "../../../../core/ui_help_clear.s"
-#import "../../../../core/ui_character.s"
-#import "../../../../core/stat_display.s"
 .segmentdef TestCreateOverlay [start=$D000]
 .segment TestCreateOverlay
 #import "../../../../core/background_data.s"
@@ -56,11 +55,11 @@ test_exit_trampoline:
 #import "../../../../core/sound.s"
 #import "../../../../core/dungeon_data.s"
 #import "../../../../core/store_door_lookup.s"
+#import "../../../../core/huffman.s"
+#import "../../../../core/dungeon_features.s"
 #define DUNGEON_TEST_TUNNEL_HOOK
 #import "../../../../core/dungeon_gen.s"
 #undef DUNGEON_TEST_TUNNEL_HOOK
-#import "../../../../core/huffman.s"
-#import "../../../../core/dungeon_features.s"
 #import "../../../../core/monster.s"
 #import "../../../../core/tier_manager.s"
 #import "../../common/overlay.s"
@@ -104,6 +103,13 @@ eff_kill_monster:
 #import "../../../../core/player_move.s"
 #import "../../../../core/player_run.s"
 #import "../../../../core/combat.s"
+// Exercise the production tunnel transition; deterministic maximum digging
+// ability keeps its focused door-state regression independent of equipment.
+tramp_dig_ability:
+    lda #$ff
+    sta tun_dig_ability
+    rts
+#import "../../../../core/tunnel.s"
 #import "../../../../core/scene_mat_tile.s"
 eff_fear_timer: .byte 0
 monster_attack_player:
@@ -158,6 +164,13 @@ ui_equipment_display:
     rts
 // ui_help stubs — saves ~900 bytes; these are never called during dungeon tests.
 // Full ui_help.s + ui_help_data.s adds ~900 bytes of help screen strings/code.
+ui_clear_full_screen_safe:
+ui_help_clear_all:
+put_stat_val:
+status_draw:
+status_mark_dirty:
+    rts
+
 ui_help_show_paged:
 ui_help_display:
 help_draw_line:
@@ -317,7 +330,7 @@ audit_door_y:  .byte 0
 audit_check_x: .byte 0
 audit_check_y: .byte 0
 audit_pair_count: .byte 0
-tc_results: .fill 51, $ff              // Test results buffer (copied to $0400 before brk)
+tc_results: .fill 66, $ff              // Test results buffer (copied to $0400 before brk)
 t38_rockfall_name: .text "falling rock." ; .byte 0
 run_cycle_expected:
     .byte 7,3,5,0,4,2,6,1,7,3,5,0
@@ -333,6 +346,12 @@ test_set_materialize_row_bounds:
     clc
     adc #1
     sta dg_scan_row_end
+    rts
+
+// Dropped ui_* imports to stay under the map-overlap boundary.
+ui_char_display:
+    rts
+count_spells_known:
     rts
 
 test_start:
@@ -3959,6 +3978,790 @@ test_start:
     sta tc_results + 50
 !t51_done:
 
+    // ============================================================
+    // Test 52: place_secrets' door-state tail rolls upstream
+    // locked/stuck classes for leftover closed doors; converted secret
+    // doors carry no state.
+    // Full-map order after conversion: (10,10) locked 11; (20,10)
+    // converted to secret; (30,10) stuck mag 13 ($8d); (40,10) plain.
+    // ============================================================
+    jsr fill_map_rock
+    ldx #10
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #10
+    lda #TILE_DOOR_CLOSED
+    sta (zp_ptr0),y
+    ldy #20
+    sta (zp_ptr0),y
+    ldy #30
+    sta (zp_ptr0),y
+    ldy #40
+    sta (zp_ptr0),y
+    lda #3
+    sta zp_player_dlvl
+    lda #0
+    sta door_state_count
+    sta test_rng_idx
+    // Script: secrets pick 1 conversion of door idx 1; state rolls produce
+    // locked(0) = 11, stuck(62) = $8d, and plain(80).
+    lda #0
+    sta test_rng_script
+    lda #1
+    sta test_rng_script + 1
+    lda #0
+    sta test_rng_script + 2
+    lda #62
+    sta test_rng_script + 3
+    lda #80
+    sta test_rng_script + 4
+    jsr td_patch_rng
+    jsr place_secrets
+    jsr td_restore_rng
+
+    lda door_state_count
+    cmp #2
+    bne !t52_fail+
+    lda door_state_x
+    cmp #10
+    bne !t52_fail+
+    lda door_state_val
+    cmp #11
+    bne !t52_fail+
+    lda door_state_x + 1
+    cmp #30
+    bne !t52_fail+
+    lda door_state_val + 1
+    cmp #$8d
+    bne !t52_fail+
+    // Converted door became secret and carries no state
+    ldx #10
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #20
+    lda (zp_ptr0),y
+    and #TILE_TYPE_MASK
+    cmp #TILE_SECRET
+    bne !t52_fail+
+    // Plain door stayed closed with no entry
+    ldy #40
+    lda (zp_ptr0),y
+    and #TILE_TYPE_MASK
+    cmp #TILE_DOOR_CLOSED
+    bne !t52_fail+
+    lda #$01
+    sta tc_results + 51
+    jmp !t52_done+
+!t52_fail:
+    lda #$00
+    sta tc_results + 51
+!t52_done:
+
+    // ============================================================
+    // Test 53: generated door-state entries point at closed-door tiles
+    // with upstream value ranges (locked 11..20, stuck $8b..$94).
+    // ============================================================
+    lda #2
+    sta zp_player_dlvl
+    lda #0
+    sta level_entry_dir
+    jsr dungeon_generate
+
+    ldx #0
+!t53_loop:
+    cpx door_state_count
+    bcs !t53_pass+
+    stx td_t53_idx
+    lda door_state_y,x
+    tax
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldx td_t53_idx
+    ldy door_state_x,x
+    lda (zp_ptr0),y
+    and #TILE_TYPE_MASK
+    cmp #TILE_DOOR_CLOSED
+    bne !t53_fail+
+    lda door_state_val,x
+    beq !t53_fail+              // plain doors have no entry
+    bmi !t53_neg+
+    cmp #11
+    bcc !t53_fail+
+    cmp #21
+    bcs !t53_fail+
+    jmp !t53_next+
+!t53_neg:
+    and #$7f                    // stuck magnitude
+    cmp #11
+    bcc !t53_fail+
+    cmp #21
+    bcs !t53_fail+
+!t53_next:
+    inx
+    jmp !t53_loop-
+!t53_pass:
+    lda #$01
+    sta tc_results + 52
+    jmp !t53_done+
+!t53_fail:
+    lda #$00
+    sta tc_results + 52
+!t53_done:
+
+    // ============================================================
+    // Test 54: opening a locked door picks the lock (skill - lock >
+    // randint(100)), opens in the same turn, clears state, +1 XP.
+    // Human warrior DEX/INT 18 level 1: disarm skill = 127 (t41).
+    // ============================================================
+    jsr fill_map_rock
+    ldx #10
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #10
+    lda #TILE_DOOR_CLOSED
+    sta (zp_ptr0),y
+    lda #10
+    sta df_target_x
+    lda #10
+    sta df_target_y
+    // Locked, difficulty 12
+    lda #1
+    sta door_state_count
+    lda #10
+    sta door_state_x
+    sta door_state_y
+    lda #12
+    sta door_state_val
+    // Disarm-capable stats (skill 127)
+    lda #0
+    sta player_data + PL_RACE
+    sta player_data + PL_CLASS
+    sta zp_eff_confuse
+    sta player_data + PL_XP_0
+    sta player_data + PL_XP_1
+    sta player_data + PL_XP_2
+    lda #1
+    sta player_data + PL_LEVEL
+    sta zp_player_lvl
+    lda #18
+    sta player_data + PL_DEX_CUR
+    sta player_data + PL_INT_CUR
+    // rng: pick roll 5 → 6 < 127-12 → success
+    lda #0
+    sta test_rng_idx
+    lda #5
+    sta test_rng_script
+    // Two messages print (picked + opened); stuff keys for the -more- prompt
+    lda #2
+    sta $c6
+    lda #$20
+    sta $0277
+    sta $0278
+    jsr td_patch_rng
+    jsr door_try_open
+    jsr td_restore_rng
+    bcc !t54_fail+
+    ldx #10
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #10
+    lda (zp_ptr0),y
+    and #TILE_TYPE_MASK
+    cmp #TILE_DOOR_OPEN
+    bne !t54_fail+
+    lda door_state_count
+    bne !t54_fail+              // Entry removed
+    lda player_data + PL_XP_0
+    cmp #1
+    bne !t54_fail+
+    lda player_data + PL_XP_1
+    ora player_data + PL_XP_2
+    bne !t54_fail+
+    lda #$01
+    sta tc_results + 53
+    jmp !t54_done+
+!t54_fail:
+    lda #$00
+    sta tc_results + 53
+!t54_done:
+
+    // ============================================================
+    // Test 55: failed pick leaves the door closed and locked
+    // (roll 114 → 115 >= 127-12 fails by one), turn consumed.
+    // ============================================================
+    ldx #10
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #10
+    lda #TILE_DOOR_CLOSED
+    sta (zp_ptr0),y
+    lda #1
+    sta door_state_count
+    lda #10
+    sta door_state_x
+    sta door_state_y
+    lda #12
+    sta door_state_val
+    lda #0
+    sta test_rng_idx
+    lda #114
+    sta test_rng_script
+    lda #2
+    sta $c6
+    lda #$20
+    sta $0277
+    sta $0278
+    jsr td_patch_rng
+    jsr door_try_open
+    jsr td_restore_rng
+    bcc !t55_fail+              // Refusal still consumes the turn
+    ldx #10
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #10
+    lda (zp_ptr0),y
+    and #TILE_TYPE_MASK
+    cmp #TILE_DOOR_CLOSED
+    bne !t55_fail+
+    lda door_state_count
+    cmp #1
+    bne !t55_fail+
+    lda door_state_val
+    cmp #12
+    bne !t55_fail+
+    lda #$01
+    sta tc_results + 54
+    jmp !t55_done+
+!t55_fail:
+    lda #$00
+    sta tc_results + 54
+!t55_done:
+
+    // ============================================================
+    // Test 56: confused players cannot pick locks (turn consumed,
+    // door and state unchanged)
+    // ============================================================
+    lda #1
+    sta zp_eff_confuse
+    lda #2
+    sta $c6
+    lda #$20
+    sta $0277
+    sta $0278
+    jsr door_try_open
+    bcc !t56_fail+
+    ldx #10
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #10
+    lda (zp_ptr0),y
+    and #TILE_TYPE_MASK
+    cmp #TILE_DOOR_CLOSED
+    bne !t56_fail+
+    lda door_state_count
+    cmp #1
+    bne !t56_fail+
+    lda #$01
+    sta tc_results + 55
+    jmp !t56_done+
+!t56_fail:
+    lda #$00
+    sta tc_results + 55
+!t56_done:
+    lda #0
+    sta zp_eff_confuse
+
+
+    // ============================================================
+    // Test 57: stuck door cannot be opened (message, turn consumed,
+    // tile and state unchanged)
+    // ============================================================
+    lda #1
+    sta door_state_count
+    lda #10
+    sta door_state_x
+    sta door_state_y
+    lda #$80 | 15
+    sta door_state_val          // Stuck, magnitude 15
+    lda #2
+    sta $c6
+    lda #$20
+    sta $0277
+    sta $0278
+    jsr door_try_open
+    bcc !t57_fail+
+    ldx #10
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #10
+    lda (zp_ptr0),y
+    and #TILE_TYPE_MASK
+    cmp #TILE_DOOR_CLOSED
+    bne !t57_fail+
+    lda door_state_val
+    cmp #$80 | 15
+    bne !t57_fail+
+    lda #$01
+    sta tc_results + 56
+    jmp !t57_done+
+!t57_fail:
+    lda #$00
+    sta tc_results + 56
+!t57_done:
+
+    // ============================================================
+    // Test 58: closing a broken door (state 1 on an open tile) is
+    // refused, turn consumed, tile and state unchanged
+    // ============================================================
+    ldx #10
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #10
+    lda #TILE_DOOR_OPEN
+    sta (zp_ptr0),y
+    lda #1
+    sta door_state_count
+    lda #10
+    sta door_state_x
+    sta door_state_y
+    lda #1
+    sta door_state_val
+    lda #2
+    sta $c6
+    lda #$20
+    sta $0277
+    sta $0278
+    jsr door_try_close
+    bcc !t58_fail+              // Refusal still consumes the turn
+    ldx #10
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #10
+    lda (zp_ptr0),y
+    and #TILE_TYPE_MASK
+    cmp #TILE_DOOR_OPEN
+    bne !t58_fail+
+    lda door_state_val
+    cmp #1
+    bne !t58_fail+
+    lda #$01
+    sta tc_results + 57
+    jmp !t58_done+
+!t58_fail:
+    lda #$00
+    sta tc_results + 57
+!t58_done:
+    lda #0
+    sta door_state_count
+
+    // ============================================================
+    // Test 59: jam a plain closed door with spikes -> stuck mag 20,
+    // spike qty decremented, turn consumed, tile unchanged.
+    // ============================================================
+    jsr fill_map_rock
+    ldx #10
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #10
+    lda #TILE_DOOR_CLOSED
+    sta (zp_ptr0),y
+    lda #10
+    sta df_target_x
+    sta df_target_y
+    lda #0
+    sta door_state_count
+    // Two spikes in carried slot 0
+    lda #ITEM_TYPE_IRON_SPIKE
+    sta inv_item_id
+    lda #2
+    sta inv_qty
+    lda #2
+    sta $c6
+    lda #$20
+    sta $0277
+    sta $0278
+    jsr door_jam_at_target
+    bcc !t59_fail+              // Jam consumes the turn
+    lda door_state_count
+    cmp #1
+    bne !t59_fail+
+    lda door_state_val
+    cmp #$80 | 20
+    bne !t59_fail+
+    lda inv_qty
+    cmp #1
+    bne !t59_fail+
+    ldx #10
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #10
+    lda (zp_ptr0),y
+    and #TILE_TYPE_MASK
+    cmp #TILE_DOOR_CLOSED
+    bne !t59_fail+
+    lda #$01
+    sta tc_results + 58
+    jmp !t59_done+
+!t59_fail:
+    lda #$00
+    sta tc_results + 58
+!t59_done:
+
+    // ============================================================
+    // Test 60: jam a locked door (difficulty 15) -> stuck mag 35;
+    // the last spike's slot is removed (compacts to empty).
+    // ============================================================
+    lda #1
+    sta door_state_count
+    lda #10
+    sta door_state_x
+    sta door_state_y
+    lda #15
+    sta door_state_val          // Locked 15
+    lda #ITEM_TYPE_IRON_SPIKE
+    sta inv_item_id
+    lda #1
+    sta inv_qty                 // Last spike
+    lda #FI_EMPTY
+    sta inv_item_id + 1
+    lda #2
+    sta $c6
+    lda #$20
+    sta $0277
+    sta $0278
+    jsr door_jam_at_target
+    bcc !t60_fail+
+    lda door_state_val
+    cmp #$80 | 35
+    bne !t60_fail+
+    lda inv_item_id
+    cmp #FI_EMPTY
+    bne !t60_fail+
+    lda #$01
+    sta tc_results + 59
+    jmp !t60_done+
+!t60_fail:
+    lda #$00
+    sta tc_results + 59
+!t60_done:
+
+    // ============================================================
+    // Test 61: jam with no spikes -> turn consumed, no state change
+    // ============================================================
+    lda #0
+    sta door_state_count
+    lda #FI_EMPTY
+    sta inv_item_id
+    lda #2
+    sta $c6
+    lda #$20
+    sta $0277
+    sta $0278
+    jsr door_jam_at_target
+    bcc !t61_fail+              // No-spike refusal consumes the turn
+    lda door_state_count
+    bne !t61_fail+
+    lda #$01
+    sta tc_results + 60
+    jmp !t61_done+
+!t61_fail:
+    lda #$00
+    sta tc_results + 60
+!t61_done:
+
+    // ============================================================
+    // Test 62: jam an open door -> free turn, nothing changes
+    // ============================================================
+    ldx #10
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #10
+    lda #TILE_DOOR_OPEN
+    sta (zp_ptr0),y
+    lda #0
+    sta door_state_count
+    lda #2
+    sta $c6
+    lda #$20
+    sta $0277
+    sta $0278
+    jsr door_jam_at_target
+    bcs !t62_fail+              // Must-close-first is a free turn
+    lda door_state_count
+    bne !t62_fail+
+    lda #$01
+    sta tc_results + 61
+    jmp !t62_done+
+!t62_fail:
+    lda #$00
+    sta tc_results + 61
+!t62_done:
+    lda #0
+    sta door_state_count
+
+    // ============================================================
+    // Test 63: lock pick with hopeless skill (skill <= lock) fails
+    // without consuming the RNG roll. Regression: the pick check used
+    // an unsigned compare after skill - lock, so a borrow wrapped to a
+    // large unsigned threshold and weak characters ALWAYS picked hard
+    // locks (inverted odds + repeatable +1 XP).
+    // ============================================================
+    // Half-Troll mage, DEX 3 / INT 3, level 1: disarm skill saturates
+    // negative (dex bonus -8 x base), hopelessly below any lock (11-20).
+    lda #7                  // Half-Troll
+    sta player_data + PL_RACE
+    lda #1                  // Mage
+    sta player_data + PL_CLASS
+    lda #3
+    sta player_data + PL_DEX_CUR
+    sta player_data + PL_INT_CUR
+    lda #1
+    sta player_data + PL_LEVEL
+    sta zp_player_lvl
+    sta zp_light_radius
+    lda #0
+    sta zp_eff_confuse
+    sta zp_eff_blind
+    jsr player_disarm_get_effective_chance
+    bmi !t63_premise_ok+        // Negative skill: hopeless as required
+    cmp #15
+    bcc !t63_premise_ok+        // Below the lock: hopeless as required
+    jmp !t63_fail+              // Premise broken; adjust the fixture
+!t63_premise_ok:
+    lda #15
+    sta df_found                // Lock difficulty 15
+    lda #0
+    sta test_rng_idx
+    lda #50
+    sta test_rng_script         // Would succeed vs a wrapped threshold
+    jsr td_patch_rng
+    jsr door_pick_roll
+    jsr td_restore_rng
+    bcs !t63_fail+              // Hopeless pick must fail
+    lda test_rng_idx
+    bne !t63_fail+              // Guard must fail before spending the roll
+    lda #$01
+    sta tc_results + 62
+    jmp !t63_done+
+!t63_fail:
+    lda #$00
+    sta tc_results + 62
+!t63_done:
+
+    // ============================================================
+    // Test 64: jam a plain door with a FULL state table (16 entries)
+    // -> turn consumed, spike PRESERVED, no state written.
+    // Regression: door_state_set_at drops new entries when the table
+    // is full; the jam path used to consume the spike and print
+    // "You jam the door with a spike." regardless.
+    // ============================================================
+    ldx #10
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #10
+    lda #TILE_DOOR_CLOSED
+    sta (zp_ptr0),y
+    // Fill all 16 entries with a far coordinate so no stale entry from
+    // earlier tests aliases the target (10,10).
+    ldx #MAX_DOOR_STATES - 1
+    lda #63
+!t64_fx:
+    sta door_state_x,x
+    dex
+    bpl !t64_fx-
+    ldx #MAX_DOOR_STATES - 1
+    lda #21
+!t64_fy:
+    sta door_state_y,x
+    dex
+    bpl !t64_fy-
+    lda #MAX_DOOR_STATES
+    sta door_state_count
+    lda #10
+    sta df_target_x
+    sta df_target_y
+    lda #ITEM_TYPE_IRON_SPIKE
+    sta inv_item_id
+    lda #1
+    sta inv_qty
+    lda #2
+    sta $c6
+    lda #$20
+    sta $0277
+    sta $0278
+    jsr door_jam_at_target
+    bcc !t64_fail+              // Attempt consumes the turn
+    lda door_state_count
+    cmp #MAX_DOOR_STATES
+    bne !t64_fail+
+    lda inv_qty                 // Spike preserved
+    cmp #1
+    bne !t64_fail+
+    lda inv_item_id
+    cmp #ITEM_TYPE_IRON_SPIKE
+    bne !t64_fail+
+    lda #$01
+    sta tc_results + 63
+    jmp !t64_done+
+!t64_fail:
+    lda #$00
+    sta tc_results + 63
+!t64_done:
+
+    // ============================================================
+    // Test 65: place_secrets rolls EVERY leftover closed door, not
+    // just the bounded secret-selection list (DGN-015). 36 doors, 1
+    // secret conversion, 32 plain rolls then 3 locked rolls scripted:
+    // the old MAX_DOOR_SCAN path would never see the last 4 doors;
+    // the accepted full-map pass lands 3 locked entries.
+    // ============================================================
+    jsr fill_map_rock
+    ldx #10
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    lda #TILE_DOOR_CLOSED
+    ldy #2
+!t65_place:
+    sta (zp_ptr0),y           // 36 doors: (2..37, 10)
+    iny
+    cpy #38
+    bcc !t65_place-
+    lda #3
+    sta zp_player_dlvl
+    lda #0
+    sta door_state_count
+    sta test_rng_idx
+    sta test_rng_script       // 1 secret conversion
+    sta test_rng_script + 1   // convert door idx 0 -> (2,10)
+    ldx #31
+    lda #30
+!t65_script_plain:
+    sta test_rng_script + 2,x // script[2..33]: plain rolls
+    dex
+    bpl !t65_script_plain-
+    lda #0
+    sta test_rng_script + 34  // script[34..36]: locked, mag 11
+    sta test_rng_script + 35
+    sta test_rng_script + 36
+    jsr td_patch_rng
+    jsr place_secrets
+    jsr td_restore_rng
+
+    lda door_state_count
+    cmp #3
+    bne !t65_fail+
+    lda door_state_val
+    cmp #11
+    bne !t65_fail+
+    lda door_state_val + 1
+    cmp #11
+    bne !t65_fail+
+    lda door_state_val + 2
+    cmp #11
+    bne !t65_fail+
+    // Full-map order after converting (2,10): the 3 locked rolls land
+    // on the last three remaining doors, (35..37,10).
+    lda door_state_x
+    cmp #35
+    bne !t65_fail+
+    lda test_rng_idx
+    cmp #37                     // 2 selection + all 35 door rolls
+    bne !t65_fail+
+    lda #$01
+    sta tc_results + 64
+    jmp !t65_done+
+!t65_fail:
+    lda #$00
+    sta tc_results + 64
+!t65_done:
+
+    // ============================================================
+    // Test 66: successfully tunneling a tracked closed door removes
+    // its state entry when the tile becomes floor.
+    // ============================================================
+    jsr monster_init_table
+    ldx #10
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #10
+    lda #TILE_DOOR_CLOSED
+    sta (zp_ptr0),y
+    lda #1
+    sta door_state_count
+    lda #10
+    sta door_state_x
+    sta door_state_y
+    lda #15
+    sta door_state_val
+    lda #10
+    sta df_target_x
+    sta df_target_y
+    lda #0
+    sta vis_room_revealed
+    sta test_rng_idx
+    sta test_rng_script          // resistance roll 0 -> granite resistance 16
+    jsr td_patch_rng
+    jsr player_tunnel_resolved_target
+    php
+    jsr td_restore_rng
+    plp
+    bcc !t66_fail+               // Successful tunneling consumes the turn
+    lda door_state_count
+    bne !t66_fail+
+    ldx #10
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #10
+    lda (zp_ptr0),y
+    and #TILE_TYPE_MASK
+    bne !t66_fail+               // TILE_FLOOR
+    lda vis_room_revealed
+    cmp #1
+    bne !t66_fail+
+    lda #$01
+    sta tc_results + 65
+    jmp !t66_done+
+!t66_fail:
+    lda #$00
+    sta tc_results + 65
+!t66_done:
+
     // Done — jump to exit trampoline (copies tc_results to $0400, then brk)
     jmp test_exit_trampoline
 
@@ -4060,6 +4863,43 @@ td_buf_contains:
 td_outer:         .byte 0
 td_ch:            .byte 0
 td_name_buf:      .fill 32, 0
+
+// Scripted rng_range for place_door_states tests: returns test_rng_script
+// bytes in order, ignoring the range argument.
+test_rng_range_scripted:
+    ldx test_rng_idx
+    inc test_rng_idx
+    lda test_rng_script,x
+    rts
+
+td_patch_rng:
+    lda rng_range
+    sta test_rng_saved
+    lda rng_range + 1
+    sta test_rng_saved + 1
+    lda rng_range + 2
+    sta test_rng_saved + 2
+    lda #$4c
+    sta rng_range
+    lda #<test_rng_range_scripted
+    sta rng_range + 1
+    lda #>test_rng_range_scripted
+    sta rng_range + 2
+    rts
+
+td_restore_rng:
+    lda test_rng_saved
+    sta rng_range
+    lda test_rng_saved + 1
+    sta rng_range + 1
+    lda test_rng_saved + 2
+    sta rng_range + 2
+    rts
+
+test_rng_script:  .fill 40, 0
+test_rng_idx:     .byte 0
+test_rng_saved:   .byte 0, 0, 0
+td_t53_idx:       .byte 0
 
 test_spawn_x:     .byte 0
 test_spawn_y:     .byte 0

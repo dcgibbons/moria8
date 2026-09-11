@@ -40,7 +40,7 @@ help_lines:
     .byte 0
     .byte $fe ; .text "J" ; .byte $ff ; .text " Down"
     .byte $fc, HELP80_COL2
-    .byte $fe ; .text "." ; .byte $ff ; .text " Rest  "
+    .byte $fe ; .text "5" ; .byte $ff ; .text " Rest  "
     .byte $fe ; .text "CTRL+R" ; .byte $ff ; .text " Rest*"
     .byte 0
 
@@ -71,7 +71,12 @@ help_lines:
     .byte 0
     .text "Cursors also move"
     .byte $fc, HELP80_COL2
-    .byte $fe ; .text "SHIFT+DIR" ; .byte $ff ; .text " Run"
+    .byte $fe ; .text "SHIFT+DIR/." ; .byte $ff ; .text " Run"
+    .byte 0
+
+    .byte 0
+    .byte $fc, HELP80_COL2
+    .byte $fe ; .text "CTRL+D" ; .byte $ff ; .text " Jam"
     .byte 0
 
     .byte 2 ; .byte 0
@@ -127,6 +132,10 @@ help_lines:
     .byte $fe ; .text "A" ; .byte $ff ; .text " Aim Wand"
     .byte 0
 
+    .byte 0
+    .byte $fe ; .text "Z" ; .byte $ff ; .text " Use Staff"
+    .byte 0
+
 help_more_lines:
     .byte 1
     .text "Magic" ; .byte $fc, HELP80_COL2 ; .text "Other" ; .byte 0
@@ -175,7 +184,7 @@ help_more_lines:
     .byte 0
     .text "    4   5   6"
     .byte $fc, HELP80_COL2
-    .text "    H   .   L"
+    .text "    H       L"
     .byte 0
 
     .byte 0
@@ -187,9 +196,7 @@ help_more_lines:
     .byte 2 ; .byte 0
 
     .byte 0
-    .text "    5 = stay"
-    .byte $fc, HELP80_COL2
-    .text "    . = stay"
+    .text "    5 = Rest"
     .byte 0
 
     .byte 0
@@ -210,15 +217,13 @@ help_more_lines:
     .text "Prompts" ; .byte $fc, HELP80_COL2 ; .text "Notes" ; .byte 0
 
     .byte 0
-    .text "ESC/STOP/Q Cancel"
+    .text "ESC/Q Cancel"
     .byte $fc, HELP80_COL2
     .text "SPACE/RETURN advance"
     .byte 0
 
     .byte 0
     .text "SPACE Continue"
-    .byte $fc, HELP80_COL2
-    .text "Walk into monsters to attack"
     .byte 0
 
     .byte 0
@@ -233,10 +238,17 @@ help_more_lines:
     .text "S searches, # toggles Search mode"
     .byte 0
 
-    .for (var i = 0; i < 5; i++) {
+    .byte 0
+    .byte $fc, HELP80_COL2
+    .text "* Rest until healed"
+    .byte 0
+
+// Renderer always reads exactly SCREEN_ROWS-2 content lines; page 2 has 22
+// lines above, so keep exactly 1 blank to pad to 23. (Help overlay is full.)
+.for (var i = 0; i < 1; i++) {
         .byte 2
         .byte 0
-    }
+}
 
 help_pages:
     .byte 2

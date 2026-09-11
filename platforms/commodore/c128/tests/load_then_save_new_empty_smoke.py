@@ -8,7 +8,7 @@ import time
 import re
 from pathlib import Path
 
-from vice_connector import MonitorTestResult, VICEConnector, normalize_addr, parse_vs_symbols
+from vice_connector import MonitorTestResult, VICEConnector, allocate_free_port, normalize_addr, parse_vs_symbols
 
 BYTE_DUMP_RE = re.compile(r"C:([0-9A-Fa-f]{4})\s+([0-9A-Fa-f]{2})")
 
@@ -27,6 +27,8 @@ def build_vice_command(args: argparse.Namespace) -> list[str]:
         "-sounddev",
         "dummy",
         "-remotemonitor",
+        "-remotemonitoraddress",
+        f"{args.host}:{args.port}",
         "-binarymonitor",
         "-80col",
         "-drive8truedrive",
@@ -197,6 +199,8 @@ def require_symbols(symbols: dict[str, str], names: tuple[str, ...], vs_path: Pa
 
 
 def run(args: argparse.Namespace) -> MonitorTestResult:
+    if not args.port:
+        args.port = allocate_free_port(args.host)
     symbols = require_symbols(
         parse_vs_symbols(args.main_vs),
         (
@@ -329,7 +333,7 @@ def main() -> int:
     parser.add_argument("--main-vs", required=True, type=Path)
     parser.add_argument("--drive8-type", default="1541")
     parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--port", type=int, default=6510)
+    parser.add_argument("--port", type=int, default=0, help="VICE monitor port; 0 = auto-allocate a free port (parallel-safe)")
     parser.add_argument("--timeout", type=float, default=30.0)
     parser.add_argument("--socket-timeout", type=float, default=0.5)
     parser.add_argument("--connect-timeout", type=float, default=12.0)

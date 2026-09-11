@@ -604,7 +604,7 @@ game_new_start:
 #endif
 
     // Randomize item identification (shuffle potion/scroll/ring descriptors)
-#if APPLE2 || C64_PRODUCT_OVERLAY_RUNTIME || C128
+#if APPLE2 || C64_PRODUCT_OVERLAY_RUNTIME || C128 || PLUS4_PRODUCT_OVERLAY_RUNTIME
     jsr tramp_item_init_identification
 #else
     jsr item_init_identification
@@ -1195,26 +1195,7 @@ plus4_test_after_save_game:
     jmp cmd_show_help_view
 !not_help:
 
-    // Wizard mode?
-    cmp #CMD_WIZARD
-    bne !not_wizard+
-    jmp cmd_wizard_entry
-!not_wizard:
 
-    cmp #CMD_SEARCH_MODE
-    bne !not_search_mode+
-    jmp cmd_search_mode
-!not_search_mode:
-
-    cmp #CMD_DISARM
-    bne !not_disarm+
-    jmp cmd_disarm
-!not_disarm:
-
-    cmp #CMD_AUTOREST
-    bne !not_autorest_cmd+
-    jmp cmd_autorest
-!not_autorest_cmd:
 
     // Monster recall?
     cmp #CMD_RECALL
@@ -1477,7 +1458,7 @@ c128_test_perf_p1_trace_export_sym:
 !dispatch_discrete:
     cmp #CMD_STAIRS_DN
     bcc !unknown_command+
-    cmp #CMD_TUNNEL + 1
+    cmp #CMD_JAM + 1
     bcs !unknown_command+
     sec
     sbc #CMD_STAIRS_DN
@@ -1590,6 +1571,16 @@ command_dispatch_lo_bash:
     .byte <cmd_bash
 command_dispatch_lo_tunnel:
     .byte <cmd_tunnel
+command_dispatch_lo_wizard:
+    .byte <cmd_wizard_entry
+command_dispatch_lo_search_mode:
+    .byte <cmd_search_mode
+command_dispatch_lo_disarm:
+    .byte <cmd_disarm
+command_dispatch_lo_autorest:
+    .byte <cmd_autorest
+command_dispatch_lo_jam:
+    .byte <cmd_jam
 command_dispatch_lo_end:
 command_dispatch_hi:
 command_dispatch_hi_stairs_dn:
@@ -1676,10 +1667,20 @@ command_dispatch_hi_bash:
     .byte >cmd_bash
 command_dispatch_hi_tunnel:
     .byte >cmd_tunnel
+command_dispatch_hi_wizard:
+    .byte >cmd_wizard_entry
+command_dispatch_hi_search_mode:
+    .byte >cmd_search_mode
+command_dispatch_hi_disarm:
+    .byte >cmd_disarm
+command_dispatch_hi_autorest:
+    .byte >cmd_autorest
+command_dispatch_hi_jam:
+    .byte >cmd_jam
 command_dispatch_hi_end:
 
-.assert "command dispatch lo count", command_dispatch_lo_end - command_dispatch_lo, CMD_TUNNEL - CMD_STAIRS_DN + 1
-.assert "command dispatch hi count", command_dispatch_hi_end - command_dispatch_hi, CMD_TUNNEL - CMD_STAIRS_DN + 1
+.assert "command dispatch lo count", command_dispatch_lo_end - command_dispatch_lo, CMD_JAM - CMD_STAIRS_DN + 1
+.assert "command dispatch hi count", command_dispatch_hi_end - command_dispatch_hi, CMD_JAM - CMD_STAIRS_DN + 1
 .assert "CMD_STAIRS_DN dispatch index", command_dispatch_lo_stairs_dn - command_dispatch_lo, CMD_STAIRS_DN - CMD_STAIRS_DN
 .assert "CMD_STAIRS_UP dispatch index", command_dispatch_lo_stairs_up - command_dispatch_lo, CMD_STAIRS_UP - CMD_STAIRS_DN
 .assert "CMD_REST dispatch index", command_dispatch_lo_rest - command_dispatch_lo, CMD_REST - CMD_STAIRS_DN
@@ -1722,6 +1723,11 @@ command_dispatch_hi_end:
 .assert "CMD_REFUEL dispatch index", command_dispatch_lo_refuel - command_dispatch_lo, CMD_REFUEL - CMD_STAIRS_DN
 .assert "CMD_BASH dispatch index", command_dispatch_lo_bash - command_dispatch_lo, CMD_BASH - CMD_STAIRS_DN
 .assert "CMD_TUNNEL dispatch index", command_dispatch_lo_tunnel - command_dispatch_lo, CMD_TUNNEL - CMD_STAIRS_DN
+.assert "CMD_WIZARD dispatch index", command_dispatch_lo_wizard - command_dispatch_lo, CMD_WIZARD - CMD_STAIRS_DN
+.assert "CMD_SEARCH_MODE dispatch index", command_dispatch_lo_search_mode - command_dispatch_lo, CMD_SEARCH_MODE - CMD_STAIRS_DN
+.assert "CMD_DISARM dispatch index", command_dispatch_lo_disarm - command_dispatch_lo, CMD_DISARM - CMD_STAIRS_DN
+.assert "CMD_AUTOREST dispatch index", command_dispatch_lo_autorest - command_dispatch_lo, CMD_AUTOREST - CMD_STAIRS_DN
+.assert "CMD_JAM dispatch index", command_dispatch_lo_jam - command_dispatch_lo, CMD_JAM - CMD_STAIRS_DN
 .assert "CMD_STAIRS_DN hi dispatch index", command_dispatch_hi_stairs_dn - command_dispatch_hi, CMD_STAIRS_DN - CMD_STAIRS_DN
 .assert "CMD_STAIRS_UP hi dispatch index", command_dispatch_hi_stairs_up - command_dispatch_hi, CMD_STAIRS_UP - CMD_STAIRS_DN
 .assert "CMD_REST hi dispatch index", command_dispatch_hi_rest - command_dispatch_hi, CMD_REST - CMD_STAIRS_DN
@@ -1764,6 +1770,11 @@ command_dispatch_hi_end:
 .assert "CMD_REFUEL hi dispatch index", command_dispatch_hi_refuel - command_dispatch_hi, CMD_REFUEL - CMD_STAIRS_DN
 .assert "CMD_BASH hi dispatch index", command_dispatch_hi_bash - command_dispatch_hi, CMD_BASH - CMD_STAIRS_DN
 .assert "CMD_TUNNEL hi dispatch index", command_dispatch_hi_tunnel - command_dispatch_hi, CMD_TUNNEL - CMD_STAIRS_DN
+.assert "CMD_WIZARD hi dispatch index", command_dispatch_hi_wizard - command_dispatch_hi, CMD_WIZARD - CMD_STAIRS_DN
+.assert "CMD_SEARCH_MODE hi dispatch index", command_dispatch_hi_search_mode - command_dispatch_hi, CMD_SEARCH_MODE - CMD_STAIRS_DN
+.assert "CMD_DISARM hi dispatch index", command_dispatch_hi_disarm - command_dispatch_hi, CMD_DISARM - CMD_STAIRS_DN
+.assert "CMD_AUTOREST hi dispatch index", command_dispatch_hi_autorest - command_dispatch_hi, CMD_AUTOREST - CMD_STAIRS_DN
+.assert "CMD_JAM hi dispatch index", command_dispatch_hi_jam - command_dispatch_hi, CMD_JAM - CMD_STAIRS_DN
 
 cmd_dispatch_ignore:
     jmp main_loop
@@ -2152,6 +2163,21 @@ cmd_disarm:
 #endif
     jsr chest_run_pending_summons  // Deferred chest summoning-trap spawns
     jmp command_result_main_or_update_visibility
+
+#if !CMD_JAM_WRAPPER_CUSTOM
+.macro CmdJamWrapperSegment() {}
+.macro CmdJamWrapperRestoreSegment() {}
+#endif
+:CmdJamWrapperSegment()
+cmd_jam:
+    jsr msg_clear
+#if CMD_JAM_EXTERNAL
+    jsr tramp_cmd_jam
+#else
+    jsr door_jam_command
+#endif
+    jmp command_result_main_or_update_visibility
+:CmdJamWrapperRestoreSegment()
 
 cmd_tunnel:
     jsr msg_clear

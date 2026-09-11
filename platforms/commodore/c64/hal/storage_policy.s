@@ -24,7 +24,8 @@
 .const hal_storage_save_known_bits_version = $12
 .const hal_storage_save_baked_stats_version = $12
 .const hal_storage_save_known160_version = $14
-.const hal_storage_save_version = $14
+.const hal_storage_save_door_state_version = $15
+.const hal_storage_save_version = $15
 
 #define HAL_STORAGE_SAVE_MEDIA_STATUS_LEGACY
 #define HAL_STORAGE_SWAP_PROMPT_LEGACY_SETUP_SKIP

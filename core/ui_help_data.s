@@ -75,7 +75,7 @@ help_lines:
     .text " Search"
     .byte 0
 
-// Row 5: Diagonal movement + Rest
+// Row 5: Diagonal movement + Rest / Run prefix
     .byte 0
     .byte $fe
     .text "B"
@@ -88,18 +88,19 @@ help_lines:
     .text " SE"
     .byte $fc, 20
     .byte $fe
+    .text "5"
+    .byte $ff
+    .text " Rest  "
+    .byte $fe
     .text "."
     .byte $ff
-    .text " Rest "
-    .byte $fe
-    .text "CTRL+R"
-    .byte $ff
-    .text " Rest*"
+    .text " Run"
     .byte 0
 
-// Row 6: Cursor info + Stairs
+// Row 6: Cursor/digit info + Stairs
     .byte 0
-    .text "Cursors also work "
+    .text "Cursors, 1-9 move"
+    .byte $fc, 20
     .byte $fe
     .text ">"
     .byte $ff
@@ -110,31 +111,33 @@ help_lines:
     .text " Up"
     .byte 0
 
-// Row 7: Running header + Go up stairs
+// Row 7: Running + Rest-until-recovered
     .byte 0
-    .byte $fd
-    .text "Running"
+    .byte $fe
+    .text "SHIFT+DIR"
     .byte $ff
+    .text " Run"
     .byte $fc, 20
     .byte $fe
-    .text "<"
+    .text "CTRL+R"
     .byte $ff
-    .text " Go Up Stairs"
+    .text " Rest*"
     .byte 0
 
-// Row 8: Running instruction + Identify
+// Row 8: Jam door + Tunnel
     .byte 0
     .byte $fe
-    .text "SHIFT+DIRECTION"
+    .text "CTRL+D"
     .byte $ff
-    .text "  "
+    .text " Jam Door"
+    .byte $fc, 20
     .byte $fe
-    .text "/"
+    .text "+"
     .byte $ff
-    .text " Identify"
+    .text " Tunnel"
     .byte 0
 
-// Row 9: blank
+// Row 9: blank separator before next section
     .byte 2
     .byte 0
 
@@ -279,7 +282,7 @@ help_lines:
     .byte $fe
     .text "#"
     .byte $ff
-    .text " Search"
+    .text " SearchMode"
     .byte 0
 
 // Row 22: Study book + Save
@@ -295,16 +298,13 @@ help_lines:
     .text " Save"
     .byte 0
 
-// Row 23: Bash + Tunnel + Quit
+// Row 23: Bash + Quit
     .byte 0
     .byte $fe
     .text "CTRL+B"
     .byte $ff
-    .text " Bash "
-    .byte $fe
-    .text "+"
-    .byte $ff
-    .text " Tunnel "
+    .text " Bash"
+    .byte $fc, 20
     .byte $fe
     .text "SHIFT+Q"
     .byte $ff

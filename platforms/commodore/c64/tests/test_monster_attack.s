@@ -65,6 +65,7 @@ combat_append_str:
 combat_append_monster_name:
 cmb_term_and_print:
 combat_msg_monster_in_way:
+inv_remove_item:
 tramp_assign_special_room:
 tramp_vault_seal_entrance:
 tramp_spawn_special_room_monsters:
@@ -88,6 +89,8 @@ cmb_buf_idx:
     .byte 0
 cmb_the_str:
     .text "THE " ; .byte 0
+inv_qty:
+    .fill 31, 0
 inv_item_id:
     .fill TOTAL_INV_SLOTS, FI_EMPTY
 inv_p1:

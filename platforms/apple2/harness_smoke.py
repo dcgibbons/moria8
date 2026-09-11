@@ -247,6 +247,17 @@ local function wizard_menu_open(tries)
     end
     return false
 end
+
+-- Level jumps and summons can overlap a running generation; fixed waits race
+-- it. Give the busy screen a beat to appear, then wait for it to clear.
+local function wait_generation(tries)
+    emu.wait(1)
+    for i = 1, (tries or 60) do
+        if not screen_has("GENERATING") then return true end
+        emu.wait(0.5)
+    end
+    return false
+end
 """
 
 LUA_CHARGEN = r"""
@@ -944,10 +955,10 @@ end
 wizard_menu_open()
 press_until("DLVL", "L")
 press("1") press("0") press("\r")
-emu.wait(5)
+wait_generation(90)
 wizard_menu_open()
 press("S")
-emu.wait(2)
+wait_generation()
 wizard_menu_open()
 press_until("ITEM", "G")
 press("1") press("0") press("3") press("\r")

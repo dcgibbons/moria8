@@ -44,7 +44,6 @@ test_finish:
 #import "../../../../core/ui_messages.s"
 #import "../../../../core/ui_status.s"
 #import "../../../../core/ui_help_clear.s"
-#import "../../../../core/ui_character.s"
 #import "../../../../core/stat_display.s"
 .segmentdef TestCreateOverlay [start=$D000]
 .segment TestCreateOverlay
@@ -253,6 +252,12 @@ test_reset_portal_prayer_state:
     sta tpp_last_huff_id
     lda #$ff
     sta tpp_last_spell_idx
+    rts
+
+// Dropped ui_* imports to stay under the map-overlap boundary.
+ui_char_display:
+    rts
+count_spells_known:
     rts
 
 test_start:

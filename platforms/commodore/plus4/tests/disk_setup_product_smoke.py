@@ -18,6 +18,10 @@ from vice_connector import MonitorTestResult, VICEConnector, normalize_addr, par
 
 MEM_DUMP_RE = re.compile(r">\S+:\S+\s+([0-9a-fA-F]{2})")
 
+# OVL_HELP from platforms/commodore/common/overlay.s — the overlay that owns
+# the disk-setup UI (and therefore the pass/fail breakpoint symbols).
+PLUS4_OVL_HELP = 5
+
 
 def build_vice_command(args: argparse.Namespace) -> list[str]:
     command = [
@@ -119,11 +123,51 @@ def run_vice(args: argparse.Namespace, resolved: dict[str, str]) -> tuple[Monito
             elif args.expect == "setup-fail":
                 pass_addr = resolved["init_fail"]
                 fail_addr = resolved["commit_initialized"]
-            result = connector.wait_for_stop(
-                pass_addr=pass_addr,
-                fail_addr=fail_addr,
-                timeout=args.timeout,
-            )
+            # Prologue validation per pass/fail symbol: both UI handlers
+            # begin with `jsr ui_clear_full_screen_safe` and
+            # disk_setup_commit_initialized begins with
+            # `jmp disk_setup_commit_ready` (see core/ui_disk_setup.s and
+            # platforms/commodore/common/disk_setup_banked.s).
+            prologues = {
+                resolved["commit_initialized"]: (0x4C, "commit_ready"),
+                resolved["init_fail"]: (0x20, "ui_clear"),
+                resolved["no_device"]: (0x20, "ui_clear"),
+            }
+            result = MonitorTestResult(False, f"timeout after {args.timeout}s", "")
+            deadline = time.monotonic() + args.timeout
+            while True:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    break
+                result = connector.wait_for_stop(
+                    pass_addr=pass_addr,
+                    fail_addr=fail_addr,
+                    timeout=remaining,
+                )
+                if result.reason.startswith("timeout") or "JAM" in result.reason:
+                    break
+                # The pass/fail symbols live in the Help overlay's $E000
+                # window, which is shared with the KERNAL ROM: every modal
+                # key read banks ROM in for GETIN, so a breakpoint there
+                # also fires while the CPU runs ROM at the same address
+                # (current_overlay alone cannot tell these apart). Accept a
+                # stop only when the Help overlay is the live overlay AND
+                # the instruction at PC matches the real function prologue.
+                if read_byte(connector, resolved["current_overlay"]) != PLUS4_OVL_HELP:
+                    connector.go()
+                    continue
+                pc_match = re.search(r"C:([0-9a-fA-F]{4})", result.last_status or "")
+                pc = pc_match.group(1).upper() if pc_match else ""
+                prologue = prologues.get(pc)
+                if prologue is None:
+                    break
+                opcode, target_sym = prologue
+                op = read_byte(connector, pc)
+                lo = read_byte(connector, f"{int(pc, 16) + 1:04X}")
+                hi = read_byte(connector, f"{int(pc, 16) + 2:04X}")
+                if op == opcode and (lo | (hi << 8)) == int(resolved[target_sym], 16):
+                    break
+                connector.go()
             if (
                 args.expect == "setup-fail"
                 and not result.passed
@@ -177,6 +221,9 @@ def main() -> int:
         "commit_initialized": ".disk_setup_commit_initialized",
         "init_fail": ".uds_show_init_fail",
         "no_device": ".uds_show_no_device",
+        "current_overlay": ".current_overlay",
+        "commit_ready": ".disk_setup_commit_ready",
+        "ui_clear": ".ui_clear_full_screen_safe",
     }
     optional = {
         "disk_error_phase": ".disk_error_phase",

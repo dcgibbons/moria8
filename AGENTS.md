@@ -166,6 +166,9 @@ source references over performative certainty or exhaustive narration.
 
 Operational rules:
 
+- Terminology: "TODO" or "task list" means the OpenCode structured session
+  task list. "Backlog" means `docs/BACKLOG.md`. Never edit `docs/BACKLOG.md`
+  unless the user explicitly says "backlog" or names that file.
 - When you make an assumption, state it explicitly in your reply before acting
   on it; never guess silently.
 - Write only the product code needed to satisfy the stated task and the
@@ -173,6 +176,14 @@ Operational rules:
   not request. Required tests and `.assert` guards are not optional.
 - Make surgical changes; don't refactor adjacent code. Preserve nearby assembly
   style, labels, memory ownership, and test patterns.
+- Verification scope matches change scope. Small/localized edits verify
+  with the narrowest affected suite or target (e.g. one test file, one
+  smoke), not full gates. Full gates (`make test`, `make test128`) run
+  after feature work, multi-file or shared-code changes, and before
+  declaring a feature complete. For a test-only failure that does not
+  obviously connect to the change, read the failing test and harness
+  before running anything. Never burn gate cycles on repeated blind
+  reruns: two identical failures means stop and analyze, not rerun.
 - Define success as: the user's failing command passes, or `make test` passes
   if no command was given. Loop until verified. Stop and ask the user when a
   gate action is needed, infrastructure is broken, or the 30-second timeout cap

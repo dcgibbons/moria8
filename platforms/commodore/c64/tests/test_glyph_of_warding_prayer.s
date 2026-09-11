@@ -47,10 +47,6 @@ test_done_break:
 #import "../../../../core/item_defs.s"
 #import "../../../../core/player.s"
 #import "../../../../core/ui_messages.s"
-#import "../../../../core/ui_status.s"
-#import "../../../../core/ui_help_clear.s"
-#import "../../../../core/ui_character.s"
-#import "../../../../core/stat_display.s"
 .segmentdef TestCreateOverlay [start=$D000]
 .segment TestCreateOverlay
 #import "../../../../core/background_data.s"
@@ -250,6 +246,26 @@ test_reset_glyph_state:
     sta player_data + PL_MAP_Y
     lda #1
     sta zp_player_dlvl
+    rts
+
+// stubs after dropping ui imports (map-overlap boundary)
+ui_char_display:
+    rts
+
+// stubs after dropping ui imports (map-overlap boundary)
+put_stat_val:
+    rts
+
+// stubs after dropping ui imports (map-overlap boundary)
+ui_clear_full_screen_safe:
+    rts
+ui_help_clear_all:
+    rts
+
+// stubs after dropping ui imports (map-overlap boundary)
+status_draw:
+    rts
+status_mark_dirty:
     rts
 
 test_start:

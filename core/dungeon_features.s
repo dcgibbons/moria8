@@ -8,6 +8,10 @@
 #import "input_ui_helpers.s"
 #endif
 
+#if !DOOR_STATE_IN_DEFAULT_IMAGE
+.macro DoorStateSegment() {}
+.macro DoorStateRestoreSegment() {}
+#endif
 // ============================================================
 // Trap table — parallel arrays (SoA)
 // Hidden traps stored here; NOT in map tiles until triggered/found.
@@ -16,6 +20,23 @@ trap_count: .byte 0
 trap_x:     .fill MAX_TRAPS, 0
 trap_y:     .fill MAX_TRAPS, 0
 trap_type:  .fill MAX_TRAPS, 0
+
+:DoorStateSegment()
+// ============================================================
+// Door-state table — parallel arrays (SoA), position-keyed.
+// Tracks only stateful doors: val > 0 (bit 7 clear) = locked with
+// difficulty 11-20; bit 7 set = stuck/jammed with magnitude in bits 0-6
+// (11-20); val = 1 on an open-door tile = broken.
+// Plain doors have no entry. Cleared on every level/town generation.
+// Contiguous for the save block (save.s asserts the layout).
+// ============================================================
+door_state_count: .byte 0
+door_state_x:     .fill MAX_DOOR_STATES, 0
+door_state_y:     .fill MAX_DOOR_STATES, 0
+door_state_val:   .fill MAX_DOOR_STATES, 0
+:DoorStateRestoreSegment()
+
+
 
 // ============================================================
 // Local scratch (safe from rng_range clobbering zp_temp3/4)
@@ -133,12 +154,10 @@ find_random_floor:
 #endif
 
 #if !PLACE_SECRETS_EXTERNAL
+:DoorStateSegment()
 place_secrets:
-    // Don't place secrets on town level
-    lda zp_player_dlvl
-    bne !ps_not_town+
-    rts
-!ps_not_town:
+    // Only caller is dungeon_generate (dungeon levels); town uses
+    // town_generate and never reaches here.
 
     // Scan entire map for TILE_DOOR_CLOSED
     lda #0
@@ -194,7 +213,9 @@ place_secrets:
 
     // How many doors did we find?
     lda door_scan_count
-    beq !ps_done+           // None found
+    bne !ps_some+
+    rts                     // None found
+!ps_some:
 
     // Pick 1-3 doors to convert (don't exceed count)
     lda #3
@@ -247,8 +268,84 @@ place_secrets:
     dec df_found
     bne !ps_convert-
 
+
+    // ---- Locked/stuck door state roll (second map pass) ----
+    // Rescan the map after secret conversion so every remaining closed door
+    // is eligible, including doors beyond the bounded secret-selection list.
+    // Upstream closed-door branch (VMS place_door /
+    // Umoria dungeonPlaceDoor): 2/12 locked, 1/12 stuck, 9/12 plain, with
+    // uniform magnitude randint(10)+10. One rng_range(120) draw per door
+    // encodes class and magnitude exactly: [0,20) locked (mag 11+roll/2),
+    // [60,70) stuck (mag roll-49, negated), else plain. Draws append after
+    // all existing generation draws, preserving topology seeds. Every
+    // remaining closed door is rolled; rolling stops when the state table fills
+    // (MAX_DOOR_STATES entries) and any remaining doors stay plain.
+    // Keep this loop in sync with the PLACE_SECRETS_EXTERNAL copy in
+    // core/dungeon_gen.s (C64/Plus4/A2).
+    // Capping either the roll count or the secret-selection scratch list
+    // would bias locked/stuck doors toward the top of the row-major map.
+    ldx #1
+!pss_row:
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    stx df_target_y
+#if C128_PRODUCT_OVERLAY_RUNTIME
+    lda #MAP_COLS
+    jsr mmu_common_copy_map_row
+#endif
+    ldy #1
+!pss_col:
+#if C128_PRODUCT_OVERLAY_RUNTIME
+    lda SCREEN_RAM,y
+#else
+    :MapRead_ptr0_y()
+#endif
+    and #TILE_TYPE_MASK
+    cmp #TILE_DOOR_CLOSED
+    bne !pss_next+
+    ldx door_state_count
+    cpx #MAX_DOOR_STATES
+    bcs !pss_done+              // State table full: rest stay plain
+    lda #120
+    jsr rng_range
+    cmp #20
+    bcc !pss_locked+
+    cmp #60
+    bcc !pss_next+              // [20, 60) plain
+    cmp #70
+    bcs !pss_next+              // [70, 120) plain
+    // Stuck: roll in [60, 70) -> magnitude roll-49 in [11, 20], sign bit set
+    sec
+    sbc #49
+    ora #$80
+    jmp !pss_store+
+!pss_locked:
+    // roll in [0, 20) -> magnitude 11 + roll/2 in [11, 20] (each twice)
+    lsr
+    clc
+    adc #11
+!pss_store:
+    ldx door_state_count
+    sta door_state_val,x
+    tya
+    sta door_state_x,x
+    lda df_target_y
+    sta door_state_y,x
+    inc door_state_count
+!pss_next:
+    iny
+    cpy #MAP_COLS - 1
+    bne !pss_col-
+    ldx df_target_y
+    inx
+    cpx #MAP_ROWS - 1
+    bne !pss_row-
+!pss_done:
 !ps_done:
     rts
+:DoorStateRestoreSegment()
 #endif
 
 #if !DUNGEON_FEATURES_GENERATION_ONLY
@@ -783,8 +880,9 @@ get_direction_target:
     rts
 
 // ============================================================
-// door_try_open — Attempt to open a door at (df_target_x, df_target_y)
-// 25% chance the door is stuck (mitigated by STR >= 16).
+// door_try_open — Attempt to open a door at (df_target_x, df_target_y).
+// Consults per-door state: plain doors open, locked doors roll the lock
+// pick (door_pick_roll), stuck doors are refused (jam/bash to clear).
 // Output: carry set = door opened (or stuck msg shown, turn consumed)
 //         carry clear = no door there
 // ============================================================
@@ -822,23 +920,57 @@ door_try_open:
     rts
 
 !dto_closed:
-    // 25% chance stuck (roll 0-3, stuck if 0)
-    lda #4
-    jsr rng_range           // [0, 3]
-    cmp #0
-    bne !dto_open_it+
+    // Real per-door state (replaces the old transient 25% stuck roll):
+    // locked (val > 0) → pick attempt; stuck (val < 0) → must be bashed.
+    lda df_target_x
+    ldy df_target_y
+    jsr door_state_get
+    sta df_found                // Signed door state
+    beq !dto_open_it+           // Plain door → open
+    bmi !dto_stuck+
 
-    // Check STR — if >= 16, force open anyway
-    lda zp_player_str
-    cmp #16
-    bcs !dto_open_it+
+    // Locked: pick the lock (VMS openobject / Umoria playerOpenClosedObject):
+    // success iff disarm_skill - lock > randint(100); +1 XP on success.
+    lda zp_eff_confuse
+    beq !dto_pick+
+    ldx #HSTR_DF_PICK_CONFUSED
+    jsr huff_print_msg
+    sec                         // Turn consumed
+    rts
+!dto_pick:
+    // The effective-disarm formula is overlay-parked on every product build,
+    // so resident callers reach the colocated roll via tramp_door_pick_roll.
+    // Carry set = picked.
+#if DOOR_PICK_EXTERNAL
+    jsr tramp_door_pick_roll
+#else
+    jsr door_pick_roll
+#endif
+    bcs !dto_picked+
+    ldx #HSTR_DF_PICK_FAIL
+    jsr huff_print_msg
+    sec                         // Turn consumed (retry allowed)
+    rts
+!dto_picked:
+    ldx #HSTR_DF_PICKED
+    jsr huff_print_msg
+    // +1 XP (24-bit), once — state clears below, so retries pay nothing
+    inc player_data + PL_XP_0
+    bne !dto_xp_done+
+    inc player_data + PL_XP_1
+    bne !dto_xp_done+
+    inc player_data + PL_XP_2
+!dto_xp_done:
+    lda #0
+    jsr door_state_set_at       // Unlock (removes the table entry)
+    jmp !dto_open_it+           // Picked doors open in the same turn
 
-    // Door is stuck
-    ldx #HSTR_DF_DOOR_STUCK
+!dto_stuck:
+    ldx #HSTR_DF_STUCK
     jsr huff_print_msg
     lda #SFX_BUMP
     jsr hal_sound_play
-    sec                     // Turn consumed (attempted)
+    sec                         // Turn consumed
     rts
 
 !dto_open_it:
@@ -897,6 +1029,19 @@ door_try_close:
     rts
 
 !dtc_open:
+    // Broken doors (state 1 on an open tile) cannot be closed
+    // (VMS closeobject / Umoria playerCloseDoor: "The door appears to be
+    // broken.", turn consumed).
+    lda df_target_x
+    ldy df_target_y
+    jsr door_state_get
+    cmp #1
+    bne !dtc_not_broken+
+    ldx #HSTR_DF_DOOR_BROKEN
+    jsr huff_print_msg
+    sec                         // Turn consumed
+    rts
+!dtc_not_broken:
     // A live monster in the doorway blocks the close (VMS closeobject /
     // Umoria playerCloseDoor: refuse with "The <name> is in your way!" and
     // still consume the turn). Resolve FLAG_OCCUPIED against the live monster
@@ -947,6 +1092,295 @@ door_try_close:
     jsr huff_print_msg
     sec                     // Turn consumed
     rts
+
+:DoorStateSegment()
+// ============================================================
+// Door-state runtime helpers (see table definition at the trap table)
+// ============================================================
+dsf_x: .byte 0
+dsf_y: .byte 0
+dss_val: .byte 0
+
+// door_state_find — Input: A=x, Y=y.
+// Output: carry set + X = table index if tracked; carry clear if plain.
+// Clobbers: A, X
+door_state_find:
+    sta dsf_x
+    sty dsf_y
+    ldx #0
+!dsf_loop:
+    cpx door_state_count
+    bcs !dsf_miss+
+    lda door_state_x,x
+    cmp dsf_x
+    bne !dsf_next+
+    lda door_state_y,x
+    cmp dsf_y
+    bne !dsf_next+
+    sec
+    rts
+!dsf_next:
+    inx
+    bne !dsf_loop-
+!dsf_miss:
+    clc
+    rts
+
+// door_state_get — Input: A=x, Y=y. Output: A = signed state (0 = plain).
+// Clobbers: A, X
+door_state_get:
+    jsr door_state_find
+    bcc !dsg_plain+
+    lda door_state_val,x
+    rts
+!dsg_plain:
+    lda #0
+    rts
+
+// door_state_remove_idx — Remove table entry X (swap with last).
+// Clobbers: A, Y
+door_state_remove_idx:
+    dec door_state_count
+    ldy door_state_count
+    lda door_state_x,y
+    sta door_state_x,x
+    lda door_state_y,y
+    sta door_state_y,x
+    lda door_state_val,y
+    sta door_state_val,x
+    rts
+
+// door_state_clear_at — Drop any state at (A=x, Y=y), e.g. the door tile
+// was destroyed by an earthquake or a door-destruction effect.
+// Clobbers: A, X, Y
+door_state_clear_at:
+    jsr door_state_find
+    bcc !dsca_done+
+    jmp door_state_remove_idx
+!dsca_done:
+    rts
+
+// door_state_set_at — Set state at (df_target_x, df_target_y); A = val.
+// val = 0 removes any entry. New entries beyond the table cap are dropped
+// (the door stays plain).
+// Clobbers: A, X, Y
+door_state_set_at:
+    sta dss_val
+    lda df_target_x
+    ldy df_target_y
+    jsr door_state_find
+    bcs !dss_update+
+    lda dss_val
+    beq !dss_done+          // Clearing an untracked door: nothing to do
+    ldx door_state_count
+    cpx #MAX_DOOR_STATES
+    bcs !dss_done+          // Full: degrade to plain
+    lda df_target_x
+    sta door_state_x,x
+    lda df_target_y
+    sta door_state_y,x
+    lda dss_val
+    sta door_state_val,x
+    inc door_state_count
+    rts
+!dss_update:
+    lda dss_val
+    beq !dss_remove+
+    sta door_state_val,x
+!dss_done:
+    rts
+!dss_remove:
+    jmp door_state_remove_idx
+:DoorStateRestoreSegment()
+
+// ============================================================
+// cmd_jam — Jam a door with an iron spike (CTRL+D command; VMS jamdoor).
+// Target must be a closed door, unoccupied, with a spike in the pack.
+// Each spike: state magnitude += 20 (VMS flat p1 = -|p1| - 20), sign bit
+// set, capped at 127; a locked door becomes stuck. One spike consumed.
+// Turn policy (Umoria dungeonJamDoor): not-a-door and must-close-first are
+// free; occupied, no-spikes, and success consume the turn.
+// ============================================================
+#if !CMD_JAM_SEGMENT_CUSTOM
+.macro CmdJamSegment() {}
+.macro CmdJamRestoreSegment() {}
+#endif
+cj_slot: .byte 0
+
+:CmdJamSegment()
+door_jam_command:
+    jsr get_direction_target
+    bcc !djc_free+                // Invalid direction: free
+    jsr door_jam_at_target
+    rts
+!djc_free:
+    clc
+    rts
+
+// door_jam_at_target — Jam logic on (df_target_x, df_target_y).
+// Output: carry set = turn consumed, clear = free.
+door_jam_at_target:
+    // Read map tile at target
+    ldx df_target_y
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy df_target_x
+    :MapRead_ptr0_y()
+    sta df_dir_idx
+    and #TILE_TYPE_MASK
+    cmp #TILE_DOOR_CLOSED
+    beq !cj_closed+
+    cmp #TILE_DOOR_OPEN
+    beq !cj_open+
+    ldx #HSTR_DF_NO_DOOR
+    jsr huff_print_msg
+!cj_free:
+    clc                           // Free turn
+    rts
+!cj_open:
+    lda #<jam_str_close_first
+    sta zp_ptr0
+    lda #>jam_str_close_first
+    sta zp_ptr0_hi
+    jsr msg_print
+    clc                           // Free turn
+    rts
+!cj_closed:
+    // A live monster in the doorway blocks the jam (upstream: occupied
+    // refusal still costs the turn)
+    lda df_dir_idx
+    and #FLAG_OCCUPIED
+    beq !cj_unoccupied+
+    lda df_target_x
+    ldy df_target_y
+    jsr monster_find_at
+    bcc !cj_unoccupied+
+    jsr combat_msg_monster_in_way
+    sec
+    rts
+!cj_unoccupied:
+    // Spike in the pack? (carried slots only)
+    ldx #0
+!cj_scan:
+    cpx #EQUIP_WEAPON
+    bcs !cj_no_spike+
+    lda inv_item_id,x
+    cmp #ITEM_TYPE_IRON_SPIKE
+    beq !cj_have+
+    inx
+    bne !cj_scan-
+!cj_no_spike:
+    lda #<jam_str_no_spikes
+    sta zp_ptr0
+    lda #>jam_str_no_spikes
+    sta zp_ptr0_hi
+    jsr msg_print
+    sec                           // Turn consumed (Umoria)
+    rts
+!cj_have:
+    stx cj_slot
+    // state magnitude += 20, capped at 127, sign bit set (stuck)
+    lda df_target_x
+    ldy df_target_y
+    jsr door_state_get
+    bne !cj_mag+              // Existing entry: update in place
+    // New entry: refuse when the state table is full — set_at would drop
+    // the write silently and the spike would be lost for nothing.
+    ldx door_state_count
+    cpx #MAX_DOOR_STATES
+    bcs !cj_table_full+
+    lda #0
+!cj_mag:
+    and #$7f                      // Current magnitude (locked or stuck)
+    clc
+    adc #20
+    cmp #128
+    bcc !cj_mag_ok+
+    lda #127
+!cj_mag_ok:
+    ora #$80
+    jsr door_state_set_at
+    // Consume one spike
+    ldx cj_slot
+    dec inv_qty,x
+    bne !cj_done+
+    jsr inv_remove_item
+!cj_done:
+    lda #<jam_str_jammed
+    sta zp_ptr0
+    lda #>jam_str_jammed
+    sta zp_ptr0_hi
+    jsr msg_print
+    sec                           // Turn consumed
+    rts
+!cj_table_full:
+    lda #<jam_str_cannot
+    sta zp_ptr0
+    lda #>jam_str_cannot
+    sta zp_ptr0_hi
+    jsr msg_print
+    sec                           // Turn consumed (attempt made); spike kept
+    rts
+
+// Jam messages live beside the handler: on C64 that's the items overlay and
+// on Plus4/A2 the chest overlay; C128 keeps it in resident Default RAM.
+jam_str_jammed:      .text "You jam the door with a spike." ; .byte 0
+jam_str_no_spikes:   .text "But you have no spikes." ; .byte 0
+jam_str_close_first: .text "The door must be closed first." ; .byte 0
+jam_str_cannot:      .text "The door will not hold a spike." ; .byte 0
+:CmdJamRestoreSegment()
+
+// ============================================================
+// door_pick_roll — Locked-door pick roll (VMS openobject / Umoria
+// playerOpenClosedObject): success iff disarm_skill - lock > randint(100),
+// i.e. roll < skill - lock with roll in [1,100].
+//
+// The effective-disarm formula is overlay-parked on every product build, so
+// this lives beside the selected platform helper; resident door_try_open
+// reaches it via tramp_door_pick_roll. Test builds link it resident (empty
+// segment macros) and use the disarm_helpers.s original.
+//
+// Input:  df_found = lock difficulty (11-20)
+// Output: carry set = picked, carry clear = failed
+// ============================================================
+#if !DOOR_PICK_EXTERNAL
+.macro DoorPickSegment() {}
+.macro DoorPickRestoreSegment() {}
+#endif
+
+:DoorPickSegment()
+door_pick_roll:
+#if DOOR_PICK_USE_DISARM_HELPER
+    jsr player_disarm_get_effective_chance
+#else
+#if DOOR_PICK_EXTERNAL
+    jsr chest_disarm_skill      // A = signed effective disarm skill
+#else
+    jsr player_disarm_get_effective_chance
+#endif
+#endif
+    beq !dpr_fail+              // Skill 0: no chance
+    bmi !dpr_fail+              // Negative skill: no chance
+    sec
+    sbc df_found                // skill - lock; skill 1..127, lock 11..20
+    beq !dpr_fail+              // diff 0: randint(100) < 0 never succeeds
+    bcc !dpr_fail+              // skill < lock: hopeless (no unsigned wrap)
+    sta df_disarm_base          // diff in 1..116
+    lda #100
+    jsr rng_range               // [0, 99]
+    clc
+    adc #1                      // [1, 100] — randint(100) parity
+    cmp df_disarm_base          // success iff roll < skill - lock
+    bcc !dpr_picked+
+!dpr_fail:
+    clc
+    rts
+!dpr_picked:
+    sec
+    rts
+:DoorPickRestoreSegment()
 
 // ============================================================
 // search_scan_effective_silent — Shared search scan using the live player chance

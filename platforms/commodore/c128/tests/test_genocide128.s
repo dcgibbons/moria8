@@ -887,3 +887,7 @@ test_sleep_iii_hidden:
     jmp test_pass
 !t6_fail:
     jmp test_fail
+
+// door_state purge call in spell_effects_overlay.s; no doors here.
+door_state_clear_at:
+    rts

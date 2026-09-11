@@ -208,6 +208,8 @@
 :C128AuditItemsOverlay("eff_earthquake", eff_earthquake)
 :C128AuditDisarmOverlay("disarm_command", disarm_command)
 :C128AuditDisarmOverlay("player_disarm_get_effective_chance", player_disarm_get_effective_chance)
+:C128AuditDisarmOverlay("door_pick_roll", door_pick_roll)
+:C128AuditDefault("door_jam_command", door_jam_command)
 :C128AuditChestOverlay("chest_open_command", chest_open_command)
 :C128AuditChestOverlay("chest_bash_command", chest_bash_command)
 :C128AuditChestOverlay("chest_disarm_command", chest_disarm_command)

@@ -49,9 +49,6 @@ test_finish:
 #import "../../../../core/item_defs.s"
 #import "../../../../core/player.s"
 #import "../../../../core/ui_messages.s"
-#import "../../../../core/ui_status.s"
-#import "../../../../core/ui_help_clear.s"
-#import "../../../../core/stat_display.s"
 .segmentdef TestCreateOverlay [start=$D000]
 .segment TestCreateOverlay
 #import "../../../../core/background_data.s"
@@ -139,6 +136,10 @@ ui_char_display:
 // count_spells_known tail from ui_character.s (C64 path) without the module.
 count_spells_known:
     jmp spell_mask_count_ptr
+ui_clear_full_screen_safe:
+ui_help_clear_all:
+put_stat_val:
+    rts
 
 press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
@@ -275,6 +276,12 @@ place_chest_at_latch:
     sta fi_y + 0
     lda #CHEST_P1_OPENED
     sta fi_p1 + 0
+    rts
+
+// stubs after dropping ui imports (map-overlap boundary)
+status_draw:
+    rts
+status_mark_dirty:
     rts
 
 test_start:

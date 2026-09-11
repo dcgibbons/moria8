@@ -64,6 +64,11 @@
 .const ICAT_STAFF    = 15
 .const ICAT_AMULET   = 16
 .const ICAT_CHEST    = 17
+// ICAT_SPIKE: jamming spikes (upstream TV_SPIKE); not wieldable, sold at
+// the general store. Like every item in this port, spikes do not merge:
+// each occupies its own inventory slot (inv_add_item has no stacking).
+// Nothing else shares the category.
+.const ICAT_SPIKE    = 18
 
 // Phase 3 item type constants (IDs 96-127)
 .const ITEM_TYPE_POT_HEALING        = 96
@@ -108,6 +113,7 @@
 .const ITEM_TYPE_CHEST_SMALL_STEEL = 132
 .const ITEM_TYPE_CHEST_LARGE_STEEL = 133
 .const ITEM_TYPE_CHEST_RUINED      = 134
+.const ITEM_TYPE_IRON_SPIKE        = 135
 
 // Chest p1 state bits (docs/CHEST_DESIGN.md state layout)
 .const CHEST_P1_LOCKED      = $01
@@ -132,7 +138,7 @@
 // Capacity 160 (20-byte bitset) leaves runway past the chest rows at 128-134
 // so the next catalog expansion pays no save-format bump.
 .const LEGACY_ITEM_TYPE_COUNT = 64
-.const ITEM_TYPE_COUNT = 135
+.const ITEM_TYPE_COUNT = 136
 .const ITEM_ID_CAPACITY = 160
 
 // Known-item identification state (Save Format V4)

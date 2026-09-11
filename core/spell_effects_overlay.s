@@ -111,12 +111,15 @@ eff_destroy_traps_doors:
     bne !edtd_tile_done+
 
 !edtd_open_door:
-    // Open the door
+    // Open the door; any locked/stuck state clears with the lock
     :MapRead_ptr0_y()
     and #TILE_FLAG_MASK
     ora #TILE_DOOR_OPEN
     ora #FLAG_VISITED
     :MapWrite_ptr0_y()
+    lda df_target_x
+    ldy df_target_y
+    jsr door_state_clear_at
 !edtd_tile_done:
     rts
 

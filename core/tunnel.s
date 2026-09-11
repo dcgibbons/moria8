@@ -307,6 +307,16 @@ player_tunnel_resolved_target:
     lda #TILE_FLOOR | FLAG_VISITED | FLAG_LIT
     :MapWrite_ptr0_y()
 
+    // A tunneled closed door no longer owns persistent door state.
+    lda tun_save_tile
+    and #TILE_TYPE_MASK
+    cmp #TILE_DOOR_CLOSED
+    bne !tun_state_cleared+
+    lda df_target_x
+    ldy df_target_y
+    jsr door_state_clear_at
+!tun_state_cleared:
+
     // Check for treasure in vein
     lda tun_save_tile
     and #FLAG_HAS_ITEM

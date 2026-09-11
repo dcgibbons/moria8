@@ -13,10 +13,34 @@ TESTS_DIR = SCRIPT_DIR / "tests"
 if str(TESTS_DIR) not in sys.path:
     sys.path.insert(0, str(TESTS_DIR))
 
-from vice_connector import VICEConnector, extract_test_symbols, run_test_case
+from vice_connector import VICEConnector, allocate_free_port, extract_test_symbols, run_test_case
+
+
+def ensure_monitor_endpoint(args: argparse.Namespace) -> None:
+    """Pin this process's VICE remote monitor to its own port.
+
+    Parallel suites must not share the default monitor port 6510: only the
+    first VICE process binds it, and later connectors silently drive the
+    wrong emulator (the 'parallel-load timeout' flake class). An explicit
+    --monitor-address or --port is honored; otherwise an ephemeral free
+    port is allocated and both the VICE command and the connector use it.
+    """
+    if args.monitor_address:
+        # Honor the explicit address on the connector side too: split
+        # "host:port" so build_connector does not fall back to port 0.
+        host, sep, port = args.monitor_address.rpartition(":")
+        if not sep or not port.isdigit():
+            raise ValueError(f"invalid --monitor-address: {args.monitor_address}")
+        args.host = host or args.host
+        args.port = int(port)
+        return
+    if not getattr(args, "port", 0):
+        args.port = allocate_free_port(args.host)
+    args.monitor_address = f"{args.host}:{args.port}"
 
 
 def build_vice_command(args: argparse.Namespace) -> list[str]:
+    ensure_monitor_endpoint(args)
     command = [
         args.vice,
         "-config",
@@ -31,10 +55,10 @@ def build_vice_command(args: argparse.Namespace) -> list[str]:
         "-sounddev",
         "dummy",
         "-remotemonitor",
+        "-remotemonitoraddress",
+        args.monitor_address,
         "-binarymonitor",
     ]
-    if args.monitor_address:
-        command.extend(["-remotemonitoraddress", args.monitor_address])
     for extra_arg in args.vice_arg:
         command.append(extra_arg)
     return command
@@ -178,6 +202,7 @@ def create_ready_snapshot(args: argparse.Namespace, snapshot_path: Path) -> None
 
 
 def build_connector(args: argparse.Namespace) -> VICEConnector:
+    ensure_monitor_endpoint(args)
     return VICEConnector(host=args.host, port=args.port, timeout=args.socket_timeout)
 
 
@@ -194,7 +219,14 @@ def run_monitor_test(args: argparse.Namespace) -> int:
         return run_test_via_moncommands(args, prg_path=prg_path, symbols=symbols, snapshot_path=snapshot_path)
 
     vice_process: subprocess.Popen[bytes] | None = None
-    if not args.attach_only:
+    if args.attach_only:
+        if args.monitor_address:
+            ensure_monitor_endpoint(args)  # Parse explicit host:port.
+        elif not args.port:
+            # Attach to an independently launched VICE using its default
+            # monitor port; auto-allocation only works when we launch VICE.
+            args.port = 6510
+    else:
         vice_process = subprocess.Popen(
             build_vice_command(args),
             stdout=subprocess.DEVNULL,
@@ -244,7 +276,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--prepare-snapshot", help="Create a prepared .vsf snapshot and exit")
     parser.add_argument("--vice", default="x128")
     parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--port", type=int, default=6510)
+    parser.add_argument("--port", type=int, default=0, help="VICE monitor port; 0 = auto when launching, 6510 with --attach-only")
     parser.add_argument("--monitor-address", help="Optional raw VICE -remotemonitoraddress value")
     parser.add_argument("--timeout", type=float, default=5.0)
     parser.add_argument("--socket-timeout", type=float, default=0.5)

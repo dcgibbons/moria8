@@ -44,7 +44,6 @@ test_finish:
 #import "../../../../core/ui_messages.s"
 #import "../../../../core/ui_status.s"
 #import "../../../../core/ui_help_clear.s"
-#import "../../../../core/ui_character.s"
 #import "../../../../core/stat_display.s"
 .segmentdef TestCreateOverlay [start=$D000]
 .segment TestCreateOverlay
@@ -59,7 +58,6 @@ test_finish:
 #import "../../../../core/monster.s"
 #import "../../../../core/tier_manager.s"
 #import "../../common/overlay.s"
-#import "../../../../core/monster_ai.s"
 #import "../../../../core/recall.s"
 #import "../../../../core/monster_magic.s"
 #import "../../../../core/item.s"
@@ -86,6 +84,12 @@ test_finish:
 
 store_init_all:
     rts
+
+// This prayer test does not execute monster AI; satisfy indirect turn/render
+// references without placing the AI engine in the map-overlap-sensitive body.
+monster_ai_tick:
+    rts
+mat_scene_dirty: .byte 0
 
 store_restock_all:
     rts
@@ -459,3 +463,12 @@ test_start:
     lda #$00
     sta tc_results + 2
     jmp test_finish
+// Dropped the ui_character.s import to keep the test body under MAP_BASE
+// (map-overlap boundary); stubs satisfy the trampoline references.
+ui_char_display:
+    rts
+count_spells_known:
+    jmp spell_mask_count_ptr
+
+test_body_end:
+.assert "Detect doors/stairs prayer test stays below MAP_BASE", test_body_end <= MAP_BASE, true

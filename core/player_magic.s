@@ -104,7 +104,7 @@ player_cast_spell:
     clc
     rts
 !pm_ready:
-#if APPLE2
+#if HAL_PLATFORM_CAST_FAILURE_USES_TRAMPOLINE
     jsr tramp_calc_spell_failure
 #else
     jsr calc_spell_failure
@@ -224,7 +224,7 @@ player_pray:
     clc
     rts
 !pp_ready:
-#if APPLE2
+#if HAL_PLATFORM_CAST_FAILURE_USES_TRAMPOLINE
     jsr tramp_calc_spell_failure
 #else
     jsr calc_spell_failure

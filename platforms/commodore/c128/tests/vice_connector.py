@@ -74,6 +74,21 @@ def extract_test_symbols(vs_path: str | Path) -> TestSymbols:
     )
 
 
+def allocate_free_port(host: str = "127.0.0.1") -> int:
+    """Return an ephemeral free TCP port on host for a per-instance VICE monitor.
+
+    Parallel suites must not share the default monitor port 6510: only the
+    first VICE process binds it, and later connectors silently drive the
+    wrong emulator (the 'parallel-load timeout' flake class).
+    """
+    probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        probe.bind((host, 0))
+        return probe.getsockname()[1]
+    finally:
+        probe.close()
+
+
 class VICEConnector:
     def __init__(self, host: str = "127.0.0.1", port: int = 6510, timeout: float = 5.0):
         self.host = host
