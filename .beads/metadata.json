@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "moria8",
+  "project_id": "aef59dcc-1e90-4440-96f8-b516df1fe7f8"
+}
