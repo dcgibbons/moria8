@@ -33,10 +33,8 @@ ui_recall_display:
     lda #URCL_TITLE_COL
     sta zp_cursor_col
     lda #<rcl_s_title
-    sta zp_ptr0
-    lda #>rcl_s_title
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>rcl_s_title
+    jsr rcl_put_str
 
     // --- Creature char + name (row 2) ---
     lda #2
@@ -64,37 +62,26 @@ ui_recall_display:
 
     // --- LV / AC / HP (row 4) ---
     lda #4
-    sta zp_cursor_row
-    lda #2
-    sta zp_cursor_col
+    jsr rcl_row
 
-    jsr rcl_grey
     lda #<rcl_s_lv
-    ldy #>rcl_s_lv
-    jsr rcl_put_str
-    jsr rcl_white
+    jsr rcl_label
     ldx recall_found_type
     lda cr_level,x
     jsr screen_put_decimal
 
     lda #10
     sta zp_cursor_col
-    jsr rcl_grey
     lda #<rcl_s_ac
-    ldy #>rcl_s_ac
-    jsr rcl_put_str
-    jsr rcl_white
+    jsr rcl_label
     ldx recall_found_type
     lda cr_ac,x
     jsr screen_put_decimal
 
     lda #18
     sta zp_cursor_col
-    jsr rcl_grey
     lda #<rcl_s_hp
-    ldy #>rcl_s_hp
-    jsr rcl_put_str
-    jsr rcl_white
+    jsr rcl_label
     ldx recall_found_type
     lda cr_hd_num,x
     jsr screen_put_decimal
@@ -106,15 +93,9 @@ ui_recall_display:
 
     // --- Attacks (row 6): "ATK: TYP NdM  TYP NdM" ---
     lda #6
-    sta zp_cursor_row
-    lda #2
-    sta zp_cursor_col
-    jsr rcl_grey
+    jsr rcl_row
     lda #<rcl_s_atk
-    ldy #>rcl_s_atk
-    jsr rcl_put_str
-
-    jsr rcl_white
+    jsr rcl_label
     lda #0
     sta rcl_any_atk
 
@@ -167,15 +148,9 @@ ui_recall_display:
 
     // --- Spells (row 8): "SPELLS: YES/NONE" ---
     lda #8
-    sta zp_cursor_row
-    lda #2
-    sta zp_cursor_col
-    jsr rcl_grey
+    jsr rcl_row
     lda #<rcl_s_spl
-    ldy #>rcl_s_spl
-    jsr rcl_put_str
-
-    jsr rcl_white
+    jsr rcl_label
     ldx recall_found_type
     :AuxReadX(recall_spells)
     bne !rcl_has_spl+
@@ -190,25 +165,17 @@ ui_recall_display:
 
     // --- Kills / Deaths (row 10) ---
     lda #10
-    sta zp_cursor_row
-    lda #2
-    sta zp_cursor_col
-    jsr rcl_grey
+    jsr rcl_row
     lda #<rcl_s_kill
-    ldy #>rcl_s_kill
-    jsr rcl_put_str
-    jsr rcl_white
+    jsr rcl_label
     ldx recall_found_type
     :AuxReadX(recall_kills)
     jsr screen_put_decimal
 
     lda #16
     sta zp_cursor_col
-    jsr rcl_grey
     lda #<rcl_s_died
-    ldy #>rcl_s_died
-    jsr rcl_put_str
-    jsr rcl_white
+    jsr rcl_label
     ldx recall_found_type
     :AuxReadX(recall_deaths)
     jsr screen_put_decimal
@@ -221,10 +188,8 @@ ui_recall_display:
     lda #URCL_FOOTER_COL
     sta zp_cursor_col
     lda #<press_key_str
-    sta zp_ptr0
-    lda #>press_key_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>press_key_str
+    jsr rcl_put_str
 
     rts
 
@@ -238,12 +203,21 @@ rcl_put_str:
     sty zp_ptr0_hi
     jmp hal_screen_put_string       // Tail call
 
-// rcl_grey / rcl_white — Set text color
-rcl_grey:
+// rcl_row — Position cursor at row A, column 2
+rcl_row:
+    sta zp_cursor_row
+    lda #2
+    sta zp_cursor_col
+    rts
+
+// rcl_label — Print A/Y string in grey, then switch back to white
+rcl_label:
+    sta rcl_scratch
     lda #COL_LGREY
     sta zp_text_color
-    rts
-rcl_white:
+    lda rcl_scratch
+    ldy #>rcl_s_title
+    jsr rcl_put_str
     lda #COL_WHITE
     sta zp_text_color
     rts
@@ -262,14 +236,14 @@ rcl_print_atk:
     clc
     adc rcl_scratch             // *3
     tax
-    lda rcl_atk_3,x
+    lda #3
+    sta rcl_scratch             // Counter in memory: hal_screen_put_char clobbers Y
+!rpa_char:
+    lda rcl_atk_3,x             // (screen_put_char preserves X)
     jsr hal_screen_put_char
     inx
-    lda rcl_atk_3,x
-    jsr hal_screen_put_char
-    inx
-    lda rcl_atk_3,x
-    jsr hal_screen_put_char
+    dec rcl_scratch
+    bne !rpa_char-
     lda #$20
     jsr hal_screen_put_char
 !rpa_dice:
@@ -279,20 +253,6 @@ rcl_print_atk:
     jsr hal_screen_put_char
     lda rcl_sides
     jmp screen_put_decimal      // Tail call
-
-// ============================================================
-// String data (screen codes, null-terminated)
-// ============================================================
-rcl_s_title: .text "Recall" ; .byte 0
-rcl_s_lv:    .text "LV " ; .byte 0
-rcl_s_ac:    .text "AC " ; .byte 0
-rcl_s_hp:    .text "HP " ; .byte 0
-rcl_s_atk:   .text "Atk: " ; .byte 0
-rcl_s_spl:   .text "Spl: " ; .byte 0
-rcl_s_kill:  .text "K: " ; .byte 0
-rcl_s_died:  .text "D: " ; .byte 0
-rcl_s_none:  .text "None" ; .byte 0
-rcl_s_yes:   .text "Yes" ; .byte 0
 
 // Attack type 3-char abbreviations (9 × 3 = 27 bytes)
 // Stored as PETSCII-safe uppercase bytes so screen_put_char renders them
@@ -318,3 +278,19 @@ rcl_any_atk: .byte 0
 rcl_atk_type:.byte 0
 rcl_dice:    .byte 0
 rcl_sides:   .byte 0
+
+// String data (screen codes, null-terminated)
+// Start a new page only when the final label would otherwise cross one.
+.fill ((* & $ff) > $c2) ? ($100 - (* & $ff)) : 0, 0
+rcl_s_title: .text "MONSTER RECALL" ; .byte 0
+rcl_s_lv:    .text "LV " ; .byte 0
+rcl_s_ac:    .text "AC " ; .byte 0
+rcl_s_hp:    .text "HP " ; .byte 0
+rcl_s_atk:   .text "Atk: " ; .byte 0
+rcl_s_spl:   .text "SPELLS: " ; .byte 0
+rcl_s_kill:  .text "KILLED " ; .byte 0
+rcl_s_died:  .text "DIED " ; .byte 0
+rcl_s_none:  .text "None" ; .byte 0
+rcl_s_yes:   .text "Yes" ; .byte 0
+
+.assert "recall labels share one string page", (rcl_s_title & $ff00) == (rcl_s_yes & $ff00), true

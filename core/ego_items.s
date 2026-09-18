@@ -80,6 +80,10 @@ ego_chance: .byte 0
 //         (pointer is in $F000 region — caller must have KERNAL banked out)
 // Clobbers: A, X
 // ============================================================
+#if HAL_PLATFORM_EGO_HOLY_AVENGER_STRING_EXTERNAL || C64_UNIT_TEST
+// External holy-avenger string may live on another page: keep full hi table.
+// Unit-test builds also keep it: they lay out segments arbitrarily, so the
+// one-page guarantee only holds (and is asserted) in the shipping layout.
 ego_get_suffix_ptr:
     tax
     lda ego_suffix_lo,x
@@ -88,7 +92,6 @@ ego_get_suffix_ptr:
     sta zp_ptr0_hi
     rts
 
-// Suffix pointer tables (index 0 = unused/empty)
 ego_suffix_lo:
     .byte <ego_str_none
     .byte <ego_str_slay_animal, <ego_str_slay_evil, <ego_str_slay_undead
@@ -99,6 +102,23 @@ ego_suffix_hi:
     .byte >ego_str_slay_animal, >ego_str_slay_evil, >ego_str_slay_undead
     .byte >ego_str_flame, >ego_str_frost
     .byte >ego_str_defender, >ego_str_holy_avenger
+#else
+ego_get_suffix_ptr:
+    tax
+    lda ego_suffix_lo,x
+    sta zp_ptr0
+    lda #>ego_str_none
+    sta zp_ptr0_hi
+    rts
+
+// Suffix pointer table (index 0 = unused/empty).
+// All suffix strings must stay in one page; the hi byte is a constant.
+ego_suffix_lo:
+    .byte <ego_str_none
+    .byte <ego_str_slay_animal, <ego_str_slay_evil, <ego_str_slay_undead
+    .byte <ego_str_flame, <ego_str_frost
+    .byte <ego_str_defender, <ego_str_holy_avenger
+#endif
 
 // Ego suffix strings (screen codes, null-terminated)
 // These are in banked RAM at $F000+ so must be read while KERNAL is banked out.
@@ -113,6 +133,9 @@ ego_str_defender:     .text " (Defender)" ; .byte 0
 .label ego_str_holy_avenger = ego_str_holy_avenger_common
 #else
 ego_str_holy_avenger: .text " (Holy Avenger)" ; .byte 0
+#if !C64_UNIT_TEST
+.assert "Ego suffix strings stay in one page", >ego_str_none, >(ego_str_holy_avenger + 15)
+#endif
 #endif
 
 // ============================================================

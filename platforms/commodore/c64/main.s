@@ -2118,6 +2118,8 @@ pm_map_min_x: .byte 0
 pm_map_max_x: .byte 0
 pm_map_min_y: .byte 0
 pm_map_max_y: .byte 0
+pm_map_max_col: .byte 0
+pm_map_max_row: .byte 0
 eq_cur_x: .byte 0
 eq_cur_y: .byte 0
 eq_rows_left: .byte 0
@@ -2826,6 +2828,126 @@ ovl_items_end:
 // Shared constants and data tables stay in dungeon_data.s (main segment).
 .segment DungeonGenOverlay
     #import "../../../core/dungeon_gen.s"
+#if C64_TEST_SCRIPTED_DUNGEON_SPELL
+c64_test_force_spell_target_monster_impl:
+    lda zp_player_dlvl
+    bne !have_dlvl+
+    rts
+!have_dlvl:
+    lda c64_test_spell_return_pending
+    beq !ready+
+    rts
+!ready:
+    lda c64_test_spell_success_count
+    cmp active_dungeon_count
+    bcc !have_type+
+    rts
+!have_type:
+    sta c64_test_spell_target_type
+    lda zp_player_y
+    sta c64_test_spell_target_y
+    lda #1
+    sta c64_test_spell_path_offset
+!clear_path:
+    lda zp_player_x
+    clc
+    adc c64_test_spell_path_offset
+    sta c64_test_spell_target_x
+    lda c64_test_spell_target_x
+    ldy c64_test_spell_target_y
+    jsr monster_find_at
+    bcc !clear_tile+
+    jsr monster_remove
+!clear_tile:
+    ldx c64_test_spell_target_y
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy c64_test_spell_target_x
+    lda #TILE_FLOOR
+    :MapWrite_ptr0_y()
+    inc c64_test_spell_path_offset
+    lda c64_test_spell_path_offset
+    cmp #7
+    bcc !clear_path-
+    lda c64_test_spell_target_x
+    sta ms_spawn_x
+    lda c64_test_spell_target_y
+    sta ms_spawn_y
+    lda c64_test_spell_target_type
+    jsr monster_spawn_one
+    bcs !spawned+
+    rts
+!spawned:
+    jsr monster_get_ptr
+    ldy #MX_HP_LO
+    lda #1
+    sta (zp_ptr0),y
+    ldy #MX_HP_HI
+    lda #0
+    sta (zp_ptr0),y
+    ldy #MX_SLEEP_CUR
+    sta (zp_ptr0),y
+    ldy #MX_FLAGS
+    lda #MF_AWAKE
+    sta (zp_ptr0),y
+    lda #0
+    sta current_tier
+    sta tier_loaded
+    rts
+
+c64_test_spell_target_x: .byte 0
+c64_test_spell_target_y: .byte 0
+c64_test_spell_target_type: .byte 0
+c64_test_spell_path_offset: .byte 0
+#endif
+#if C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
+c64_test_force_detect_evil_monster_impl:
+    ldx #0
+!spawn_loop:
+    lda zp_player_y
+    sta c64_test_detect_row
+    ldy c64_test_detect_offsets,x
+    sty c64_test_detect_offset
+    lda zp_player_x
+    clc
+    adc c64_test_detect_offset
+    sta c64_test_detect_col
+    ldy c64_test_detect_row
+    lda map_row_lo,y
+    sta zp_ptr0
+    lda map_row_hi,y
+    sta zp_ptr0_hi
+    ldy c64_test_detect_col
+    :MapRead_ptr0_y()
+    and #TILE_TYPE_MASK
+    cmp #TILE_FLOOR
+    bne !next+
+    ldy c64_test_detect_col
+    :MapRead_ptr0_y()
+    and #(TILE_TYPE_MASK | FLAG_LIT)
+    :MapWrite_ptr0_y()
+    lda c64_test_detect_col
+    sta ms_spawn_x
+    lda c64_test_detect_row
+    sta ms_spawn_y
+    lda c64_test_detect_types,x
+    jsr monster_spawn_one
+!next:
+    inx
+    cpx #5
+    bcc !spawn_loop-
+    rts
+
+c64_test_detect_row: .byte 0
+c64_test_detect_col: .byte 0
+c64_test_detect_offset: .byte 0
+c64_test_detect_offsets:
+    .byte 6, 8, 10, 12, 14
+c64_test_detect_types:
+    .byte 0, 4, 8, 14, 22
+#endif
 
 ovl_gen_end:
 .print "DungeonGen overlay: " + (ovl_gen_end - $e000) + " bytes at $E000-$" + toHexString(ovl_gen_end)

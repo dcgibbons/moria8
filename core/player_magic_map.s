@@ -6,76 +6,34 @@ pm_map_min_x: .byte 0
 pm_map_max_x: .byte 0
 pm_map_min_y: .byte 0
 pm_map_max_y: .byte 0
+pm_map_max_col: .byte 0
+pm_map_max_row: .byte 0
 #endif
 
 eff_map_area:
 #if C64_PRODUCT_OVERLAY_RUNTIME && !PM_MAP_BANKED
     jsr c64u_turbo_fast
 #endif
-    lda zp_player_dlvl
-    beq !emap_town+
-
-    lda #20
-    jsr rng_range
-    sta zp_temp0
-    lda zp_view_x
-    sec
-    sbc zp_temp0
-    bcs !emap_dun_min_x+
-    lda #0
-!emap_dun_min_x:
-    sta pm_map_min_x
-
-    lda #20
-    jsr rng_range
-    sta zp_temp0
-    lda zp_view_x
-    clc
-    adc #VIEWPORT_W - 1
-    clc
-    adc zp_temp0
-    cmp #MAP_COLS
-    bcc !emap_dun_max_x+
-    lda #MAP_COLS - 1
-!emap_dun_max_x:
-    sta pm_map_max_x
-
-    lda #10
-    jsr rng_range
-    sta zp_temp0
-    lda zp_view_y
-    sec
-    sbc zp_temp0
-    bcs !emap_dun_min_y+
-    lda #0
-!emap_dun_min_y:
-    sta pm_map_min_y
-
-    lda #10
-    jsr rng_range
-    sta zp_temp0
-    lda zp_view_y
-    clc
-    adc #VIEWPORT_H - 1
-    clc
-    adc zp_temp0
-    cmp #MAP_ROWS
-    bcc !emap_dun_max_y+
+    // Select map dimension clamps by location (dungeon vs town).
+    ldx #MAP_COLS - 1
     lda #MAP_ROWS - 1
-!emap_dun_max_y:
-    sta pm_map_max_y
-    jmp !emap_scan+
+    ldy zp_player_dlvl
+    bne !emap_dims_ok+
+    ldx #TOWN_MAP_COLS - 1
+    lda #TOWN_MAP_ROWS - 1
+!emap_dims_ok:
+    stx pm_map_max_col
+    sta pm_map_max_row
 
-!emap_town:
     lda #20
     jsr rng_range
     sta zp_temp0
     lda zp_view_x
     sec
     sbc zp_temp0
-    bcs !emap_town_min_x+
+    bcs !emap_min_x+
     lda #0
-!emap_town_min_x:
+!emap_min_x:
     sta pm_map_min_x
 
     lda #20
@@ -86,10 +44,11 @@ eff_map_area:
     adc #VIEWPORT_W - 1
     clc
     adc zp_temp0
-    cmp #TOWN_MAP_COLS
-    bcc !emap_town_max_x+
-    lda #TOWN_MAP_COLS - 1
-!emap_town_max_x:
+    cmp pm_map_max_col
+    bcc !emap_max_x+
+    beq !emap_max_x+
+    lda pm_map_max_col
+!emap_max_x:
     sta pm_map_max_x
 
     lda #10
@@ -98,9 +57,9 @@ eff_map_area:
     lda zp_view_y
     sec
     sbc zp_temp0
-    bcs !emap_town_min_y+
+    bcs !emap_min_y+
     lda #0
-!emap_town_min_y:
+!emap_min_y:
     sta pm_map_min_y
 
     lda #10
@@ -111,10 +70,11 @@ eff_map_area:
     adc #VIEWPORT_H - 1
     clc
     adc zp_temp0
-    cmp #TOWN_MAP_ROWS
-    bcc !emap_town_max_y+
-    lda #TOWN_MAP_ROWS - 1
-!emap_town_max_y:
+    cmp pm_map_max_row
+    bcc !emap_max_y+
+    beq !emap_max_y+
+    lda pm_map_max_row
+!emap_max_y:
     sta pm_map_max_y
 
 !emap_scan:
@@ -157,43 +117,21 @@ eff_map_area:
 !emap_adj_min_x0:
     sta zp_temp3
 
-    lda zp_player_dlvl
-    beq !emap_adj_town+
-
     txa
-    cmp #MAP_ROWS - 1
-    bcs !emap_adj_max_y_dun+
+    cmp pm_map_max_row
+    bcs !emap_adj_max_y_ok+
     clc
     adc #1
-!emap_adj_max_y_dun:
+!emap_adj_max_y_ok:
     sta zp_temp2
 
     pla
     pha
-    cmp #MAP_COLS - 1
-    bcs !emap_adj_max_x_dun+
+    cmp pm_map_max_col
+    bcs !emap_adj_max_x_ok+
     clc
     adc #1
-!emap_adj_max_x_dun:
-    sta zp_temp4
-    jmp !emap_adj_rows+
-
-!emap_adj_town:
-    txa
-    cmp #TOWN_MAP_ROWS - 1
-    bcs !emap_adj_max_y_town+
-    clc
-    adc #1
-!emap_adj_max_y_town:
-    sta zp_temp2
-
-    pla
-    pha
-    cmp #TOWN_MAP_COLS - 1
-    bcs !emap_adj_max_x_town+
-    clc
-    adc #1
-!emap_adj_max_x_town:
+!emap_adj_max_x_ok:
     sta zp_temp4
 
 !emap_adj_rows:

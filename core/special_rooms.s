@@ -152,13 +152,7 @@ vault_seal_entrance:
     sec
     sbc #1
     tay                         // Y = wall row
-    lda map_row_lo,y
-    sta zp_ptr0
-    lda map_row_hi,y
-    sta zp_ptr0_hi
-    ldx zp_temp2                // Count = room width
-    ldy zp_temp0                // Start at room_x
-    jsr vse_scan_hwall
+    jsr vse_scan_hwall_row
     bcs !vse_done+
 
     // --- Scan bottom wall: y = ry+rh ---
@@ -166,61 +160,54 @@ vault_seal_entrance:
     clc
     adc zp_temp3
     tay
-    lda map_row_lo,y
-    sta zp_ptr0
-    lda map_row_hi,y
-    sta zp_ptr0_hi
-    ldx zp_temp2
-    ldy zp_temp0
-    jsr vse_scan_hwall
+    jsr vse_scan_hwall_row
     bcs !vse_done+
 
     // --- Scan left wall: x = rx-1, y from ry to ry+rh-1 ---
     lda zp_temp0
     sec
     sbc #1
-    sta vse_x
-    lda zp_temp1
-    sta vse_y_iter
-    ldx zp_temp3
-    jsr vse_scan_vwall
+    jsr vse_scan_vwall_col
     bcs !vse_done+
 
     // --- Scan right wall: x = rx+rw ---
     lda zp_temp0
     clc
     adc zp_temp2
+    jsr vse_scan_vwall_col
+
+!vse_done:
+    rts
+
+// Scan horizontal wall at row Y across the room width
+vse_scan_hwall_row:
+    lda map_row_lo,y
+    sta zp_ptr0
+    lda map_row_hi,y
+    sta zp_ptr0_hi
+    ldx zp_temp2                // Count = room width
+    ldy zp_temp0                // Start at room_x
+    jmp vse_scan_hwall
+
+// Scan vertical wall at column A down the room height
+vse_scan_vwall_col:
     sta vse_x
     lda zp_temp1
     sta vse_y_iter
     ldx zp_temp3
-    jsr vse_scan_vwall
-
-!vse_done:
-    rts
+    jmp vse_scan_vwall
 
 // Scan horizontal wall for door — zp_ptr0 = row base, Y = start col, X = count
 // Returns carry set if found and sealed
 vse_scan_hwall:
 !vsh_loop:
-	    :MapRead_ptr0_y()
-	    and #TILE_TYPE_MASK
-	    cmp #TILE_FLOOR
-	    beq !vsh_seal+
-	    cmp #TILE_DOOR_OPEN
-	    beq !vsh_seal+
-	    cmp #TILE_DOOR_CLOSED
-    beq !vsh_seal+
+    jsr vse_check_seal
+    bcs !vsh_done+
     iny
     dex
     bne !vsh_loop-
-	    clc
-	    rts
-!vsh_seal:
-	    lda #TILE_SECRET | DUNGEON_FLAGS
-	    :MapWrite_ptr0_y()
-	    sec
-	    rts
+!vsh_done:
+    rts
 
 // Scan vertical wall for door — vse_x = column, vse_y_iter = start row, X = count
 // Returns carry set if found and sealed
@@ -232,24 +219,32 @@ vse_scan_vwall:
     lda map_row_hi,y
     sta zp_ptr0_hi
     ldy vse_x
-	    :MapRead_ptr0_y()
-	    and #TILE_TYPE_MASK
-	    cmp #TILE_FLOOR
-	    beq !vsv_seal+
-	    cmp #TILE_DOOR_OPEN
-	    beq !vsv_seal+
-	    cmp #TILE_DOOR_CLOSED
-    beq !vsv_seal+
+    jsr vse_check_seal
+    bcs !vsv_done+
     inc vse_y_iter
     dex
     bne !vsv_loop-
-	    clc
-	    rts
-!vsv_seal:
-	    lda #TILE_SECRET | DUNGEON_FLAGS
-	    :MapWrite_ptr0_y()
-	    sec
-	    rts
+!vsv_done:
+    rts
+
+// Check tile at zp_ptr0+Y for a door/open floor; seal it as secret rock.
+// Returns carry set if sealed (scan stops).
+vse_check_seal:
+    :MapRead_ptr0_y()
+    and #TILE_TYPE_MASK
+    cmp #TILE_FLOOR
+    beq !vcs_seal+
+    cmp #TILE_DOOR_OPEN
+    beq !vcs_seal+
+    cmp #TILE_DOOR_CLOSED
+    beq !vcs_seal+
+    clc
+    rts
+!vcs_seal:
+    lda #TILE_SECRET | DUNGEON_FLAGS
+    :MapWrite_ptr0_y()
+    sec
+    rts
 
 #if !SPECIAL_ROOMS_GENERATION_ONLY
 

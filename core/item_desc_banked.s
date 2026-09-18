@@ -71,7 +71,7 @@ itemdesc_put_staged:
     jsr item_get_name_ptr
     jsr hal_screen_put_string
     jsr itemdesc_put_stats
-    jmp itemdesc_put_sensed_suffix
+    jmp !idps_tail+
 !idps_not_tool:
     lda itemdesc_item_id
     jsr item_get_name_ptr
@@ -83,6 +83,7 @@ itemdesc_put_staged:
 !idps_valid_ego:
     jsr banked_ego_put_suffix
     jsr itemdesc_put_stats
+!idps_tail:
     jmp itemdesc_put_sensed_suffix
 
 itemdesc_put_qty_prefix:
@@ -127,39 +128,26 @@ itemdesc_put_stats:
     cmp #ICAT_ARMOR
     bcc !idps_not_armor+
     cmp #ICAT_BOOTS + 1
-    bcc !idps_armor_tramp+
+    bcc !idps_armor+
 !idps_not_armor:
     cmp #ICAT_RING
     beq !idps_ring+
     cmp #ICAT_AMULET
-    beq !idps_amulet_tramp+
+    beq !idps_ring_p1+
     cmp #ICAT_WAND
-    bne !idps_not_wand+
-    jmp !idps_charges+
-!idps_not_wand:
+    beq !idps_charges+
     cmp #ICAT_STAFF
-    bne !idps_not_staff+
-    jmp !idps_charges+
-!idps_not_staff:
+    beq !idps_charges+
     cmp #ICAT_LIGHT
-    bne !idps_not_light+
-    jmp !idps_turns+
-!idps_not_light:
+    beq !idps_turns+
     rts
-!idps_amulet_tramp:
-    jmp !idps_ring_p1+
-!idps_armor_tramp:
-    jmp !idps_armor+
 !idps_weapon:
     lda itemdesc_to_hit
     ora itemdesc_to_dam
     bne !idps_weapon_has_bonus+
     rts
 !idps_weapon_has_bonus:
-    lda #$20
-    jsr hal_screen_put_char
-    lda #$28
-    jsr hal_screen_put_char
+    jsr itemdesc_put_open_paren
     lda itemdesc_to_hit
     jsr itemdesc_put_signed
     lda #$2c
@@ -169,10 +157,7 @@ itemdesc_put_stats:
     lda #$29
     jmp hal_screen_put_char
 !idps_armor:
-    lda #$20
-    jsr hal_screen_put_char
-    lda #$1b                    // '[' screen code
-    jsr hal_screen_put_char
+    jsr itemdesc_put_open_bracket
     ldy itemdesc_item_id
     jsr item_get_base_ac
     jsr screen_put_decimal
@@ -194,10 +179,7 @@ itemdesc_put_stats:
     bne !idps_ring_ac_has_bonus+
     rts
 !idps_ring_ac_has_bonus:
-    lda #$20
-    jsr hal_screen_put_char
-    lda #$1b                    // '[' screen code
-    jsr hal_screen_put_char
+    jsr itemdesc_put_open_bracket
     lda itemdesc_to_ac
     jsr itemdesc_put_signed
     lda #$1d                    // ']' screen code
@@ -207,10 +189,7 @@ itemdesc_put_stats:
     bne !idps_ring_p1_has_bonus+
     rts
 !idps_ring_p1_has_bonus:
-    lda #$20
-    jsr hal_screen_put_char
-    lda #$28
-    jsr hal_screen_put_char
+    jsr itemdesc_put_open_paren
     lda itemdesc_p1
     jsr itemdesc_put_signed
     lda #$29
@@ -225,16 +204,25 @@ itemdesc_put_stats:
 itemdesc_put_count_suffix:
     sta zp_ptr0
     sty zp_ptr0_hi
-    lda #$20
-    jsr hal_screen_put_char
-    lda #$28
-    jsr hal_screen_put_char
+    jsr itemdesc_put_open_paren
     lda itemdesc_p1
     jsr screen_put_decimal
     lda #$20
     jsr hal_screen_put_char
     jsr hal_screen_put_string
     lda #$29
+    jmp hal_screen_put_char
+
+// itemdesc_put_open_paren / itemdesc_put_open_bracket — shared " (" / " [" prologues
+itemdesc_put_open_paren:
+    lda #$20
+    jsr hal_screen_put_char
+    lda #$28
+    jmp hal_screen_put_char
+itemdesc_put_open_bracket:
+    lda #$20
+    jsr hal_screen_put_char
+    lda #$1b                    // '[' screen code
     jmp hal_screen_put_char
 
 itemdesc_put_signed:

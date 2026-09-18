@@ -32,6 +32,29 @@ home_put_col1_string:
     sty zp_ptr0_hi
     jmp hal_screen_put_string
 
+// home_prompt_slot — Read a slot letter key.
+// Input: X = slot count limit. Output: carry clear + A = slot index,
+// or carry set on Q/ESC/space/invalid letter.
+home_prompt_slot:
+    jsr hal_input_get_key
+    cmp #PETSCII_HM_Q
+    beq !hps_cancel+
+    jsr input_is_modal_escape_key
+    beq !hps_cancel+
+    cmp #PETSCII_HM_SPACE
+    beq !hps_cancel+
+    sec
+    sbc #PETSCII_HM_A
+    bcc !hps_cancel+
+    stx hm_save_x
+    cmp hm_save_x
+    bcs !hps_cancel+
+    clc
+    rts
+!hps_cancel:
+    sec
+    rts
+
 // ============================================================
 // home_enter — Main home mode loop
 // Input: zp_store_idx = STORE_HOME (7)
@@ -97,22 +120,9 @@ home_retrieve:
     jsr home_put_col1_string
 
     jsr input_prepare_followup_key
-    jsr hal_input_get_key
-
-    // Q/ESC/space = cancel
-    cmp #PETSCII_HM_Q
-    beq !hr_cancel_relay+
-    jsr input_is_modal_escape_key
-    beq !hr_cancel_relay+
-    cmp #PETSCII_HM_SPACE
-    beq !hr_cancel_relay+
-
-    // Convert PETSCII letter to slot index (A=0, L=11)
-    sec
-    sbc #PETSCII_HM_A
-    bcc !hr_cancel_relay+       // Below 'A'
-    cmp #STORE_MAX_ITEMS
-    bcs !hr_cancel_relay+       // Above 'L'
+    ldx #STORE_MAX_ITEMS
+    jsr home_prompt_slot
+    bcs !hr_cancel_relay+       // Cancel or invalid letter
 
     jmp !hr_valid_slot+
 !hr_cancel_relay:
@@ -267,21 +277,8 @@ home_deposit:
     jsr home_put_col1_string
 
     jsr input_prepare_followup_key
-    jsr hal_input_get_key
-
-    // Q/escape-equivalent/space = cancel
-    cmp #PETSCII_HM_Q
-    beq !hd_cancel_relay+
-    jsr input_is_modal_escape_key
-    beq !hd_cancel_relay+
-    cmp #PETSCII_HM_SPACE
-    beq !hd_cancel_relay+
-
-    // Convert PETSCII to slot (A=0, V=21)
-    sec
-    sbc #PETSCII_HM_A
-    bcc !hd_cancel_relay+
-    cmp #MAX_INV_SLOTS
+    ldx #MAX_INV_SLOTS
+    jsr home_prompt_slot
     bcs !hd_cancel_relay+
 
     jmp !hd_valid_slot+

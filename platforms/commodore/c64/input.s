@@ -281,13 +281,26 @@ c64_test_script_exhausted_wait:
 #else
 #if C64_TEST_SCRIPTED_DUNGEON_SPELL
     ldx c64_test_input_idx
-    lda c64_test_input_script,x
+    cpx #106
+    bcs !igk_dungeon_script_fail+
+    cpx #10
+    bcc !igk_dungeon_prefix+
+    txa
+    sec
+    sbc #10
+    and #3
+    tax
+    lda c64_test_input_repeat,x
+    ldx c64_test_input_idx
     bne !igk_dungeon_script_ok+
-    jmp c64_test_spell_fail_input_sym
+!igk_dungeon_prefix:
+    lda c64_test_input_script,x
 !igk_dungeon_script_ok:
     inx
     stx c64_test_input_idx
     rts
+!igk_dungeon_script_fail:
+    jmp c64_test_spell_fail_input_sym
 #else
 #if C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
     ldx c64_test_input_idx
@@ -869,10 +882,8 @@ c64_test_input_script:
     .byte $20              // SPACE = dismiss summary
     .byte $4c              // L = step onto town stairs
     .byte $3e              // > = descend into dungeon
-    .for (var i = 0; i < 24; i++) {
-        .byte $4d, $41, $41, $4c // M A A L = Magic Missile east
-    }
-    .byte $00
+c64_test_input_repeat:
+    .byte $4d, $41, $41, $4c // M A A L = Magic Missile east
 #endif
 
 #if C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT

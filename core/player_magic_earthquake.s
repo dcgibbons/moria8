@@ -120,26 +120,16 @@ eq_process_tile:
     sta eq_saved_tile
     and #TILE_TYPE_MASK
 
-    cmp #TILE_WALL_H
-    beq !eq_wall_to_floor+
-    cmp #TILE_WALL_V
-    beq !eq_wall_to_floor+
-    cmp #TILE_CORNER_TL
-    beq !eq_wall_to_floor+
-    cmp #TILE_CORNER_TR
-    beq !eq_wall_to_floor+
-    cmp #TILE_CORNER_BL
-    beq !eq_wall_to_floor+
-    cmp #TILE_CORNER_BR
-    beq !eq_wall_to_floor+
-    cmp #TILE_MAGMA
-    beq !eq_wall_to_floor+
-    cmp #TILE_QUARTZ
-    beq !eq_wall_to_floor+
-    cmp #TILE_SECRET
-    beq !eq_wall_to_floor+
     cmp #TILE_FLOOR
     beq !eq_floor_to_wall+
+    cmp #TILE_DOOR_OPEN           // $10-$60: walls/corners fall through
+    bcc !eq_wall_to_floor+
+    cmp #TILE_MAGMA
+    bcc !eq_keep+                 // $70-$B0: doors/stairs/rubble stay
+    cmp #TILE_TRAP
+    beq !eq_keep+                 // traps stay
+    bne !eq_wall_to_floor+        // $C0/$D0/$F0: magma/quartz/secret
+!eq_keep:
     rts
 
 !eq_wall_to_floor:
@@ -154,14 +144,8 @@ eq_process_tile:
     ora #FLAG_OCCUPIED
     sta eq_saved_flags
 !eq_wall_write:
-    ldy eq_cur_x
     lda #TILE_FLOOR
-    ora eq_saved_flags
-    :MapWrite_ptr0_y()
-    lda #1
-    sta eq_changed
-eq_done_tile:
-    rts
+    jmp !eq_write_tile+
 
 !eq_floor_to_wall:
     jsr eq_tile_is_edge
@@ -185,11 +169,14 @@ eq_done_tile:
     and #(FLAG_VISITED | FLAG_LIT | FLAG_OCCUPIED)
     sta eq_saved_flags
     pla
+
+!eq_write_tile:                 // A = new tile type, eq_saved_flags ready
     ldy eq_cur_x
     ora eq_saved_flags
     :MapWrite_ptr0_y()
     lda #1
     sta eq_changed
+eq_done_tile:
     rts
 
 eq_hit_monster:

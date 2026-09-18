@@ -124,6 +124,9 @@ pmx_work_flag: .byte 0
 pmx_work_damage: .byte 0
 
 test_mon_table: .fill MAX_MONSTERS * MONSTER_ENTRY_SIZE, 0
+// Scratch map row for the (20,12) tile writes; see
+// test_reset_dispel_undead_prayer_state.
+tdup_row12_buf: .fill MAP_COLS, 0
 test_mon_ptr_lo:
     .fill MAX_MONSTERS, <(test_mon_table + i * MONSTER_ENTRY_SIZE)
 test_mon_ptr_hi:
@@ -222,6 +225,15 @@ test_clear_monsters:
     rts
 
 test_reset_dispel_undead_prayer_state:
+    // Redirect map row 12 (the only row this suite writes, at col 20) to a
+    // scratch buffer. The test program's code overlaps the $C000+ map region,
+    // so a live tile write would corrupt whatever code the layout places at
+    // MAP_BASE + 12*MAP_COLS + 20 (layout lottery — corrupted the spell-choice
+    // stub when byte-recovery shifts moved it there).
+    lda #<tdup_row12_buf
+    sta map_row_lo + 12
+    lda #>tdup_row12_buf
+    sta map_row_hi + 12
     jsr player_init
     jsr test_clear_monsters
     lda #0
