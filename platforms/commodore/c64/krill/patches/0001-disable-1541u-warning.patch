@@ -1,0 +1,10 @@
+--- a/loader/src/install.s
++++ b/loader/src/install.s
+@@ -719,7 +719,0 @@
+-            ; if 1541U is detected, it runs on buggy firmware
+-            lda drivetype
+-            cmp #diskio::drivetype::DRIVE_1541U
+-            bne :+
+-            ldx #warnemubug - messages
+-            jsr message
+-

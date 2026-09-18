@@ -251,7 +251,10 @@ display_boot_art:
     jsr copy_color_to_vic_ram
     jsr copy_screen_to_vic_ram
     jsr copy_bitmap_to_vic_ram
-    jsr boot_crc_baseline
+    jsr boot_integrity_baseline
+#if C64_TEST_BOOT_HANDOFF
+c64_test_art_canaries_ready:
+#endif
     lda #$00
     sta $dd00
     lda #BITMAP_D018
@@ -510,7 +513,7 @@ c64_test_krill_bank_pre:
 c64_test_krill_bank_return:
 #endif
     bcs chain_krill_fail
-    jsr chain_crc_checkpoint
+    jsr chain_integrity_checkpoint
     bcs chain_krill_fail
     jsr chain_wait_18
     jsr chain_blank
@@ -550,14 +553,6 @@ c64_test_recovery_blanked:
     sta $0339
     sta $033a
     cli
-    ldx #150
-!frame:
-!wait:
-    lda $d012
-    cmp #$ff
-    bne !wait-
-    dex
-    bne !frame-
     jmp chain_kernal_recovery
 
 chain_kernal:
@@ -572,8 +567,8 @@ c64_test_kernal_moria_pre:
 c64_test_kernal_moria_return:
 #endif
     bcs chain_error
-    jsr chain_crc_checkpoint
-    bcs chain_crc_failure
+    jsr chain_integrity_checkpoint
+    bcs chain_integrity_failure
     jsr chain_blank
     lda #init_filename_end - init_filename
     ldx #<init_filename
@@ -588,7 +583,7 @@ c64_test_kernal_init_return:
     bcs chain_error
     jmp chain_success
 
-chain_crc_failure:
+chain_integrity_failure:
     jsr chain_blank
     lda #0
     sta $033a
@@ -658,10 +653,13 @@ c64_test_chain_kernal_load_return:
     plp
     rts
 
-chain_crc_checkpoint:
+chain_integrity_checkpoint:
     lda chain_art_present
     beq !no_art+
-    jsr chain_crc_verify
+#if C64_TEST_BOOT_HANDOFF
+c64_test_integrity_pre:
+#endif
+    jsr chain_integrity_verify
     bcs !done+
     lda $033a
     ora #$80
@@ -717,181 +715,107 @@ chain_irq_hidden_rom:
     rti
 chain_irq_hidden_rom_end:
 
-chain_crc_verify:
+chain_integrity_verify:
     ldy #0
-!span:
-    lda chain_crc_addr_lo,y
-    sta !read+ + 1
-    lda chain_crc_addr_hi,y
-    sta !read+ + 2
-    lda chain_crc_len_lo,y
-    sta ZP_DST_LO
-    lda chain_crc_len_hi,y
-    sta ZP_DST_HI
-    lda chain_crc_masks,y
-    sta !mask+ + 1
-    lda chain_crc_banks,y
-    sta $01
-    lda #$ff
-    sta ZP_SRC_LO
-    sta ZP_SRC_HI
 !next:
-    lda ZP_DST_LO
-    ora ZP_DST_HI
-    beq !done+
+    lda chain_integrity_addr_lo,y
+    sta !read+ + 1
+    lda chain_integrity_addr_hi,y
+    sta !read+ + 2
+    lda #$ff
+    sta !mask+ + 1
+    cpy #4
+    bcc !bitmap+
+    lda #BANK_NO_KERNAL
+    sta $01
+    cpy #6
+    bcc !read+
+    lda #$0f
+    sta !mask+ + 1
+    bne !read+
+!bitmap:
+    lda #BANK_NO_ROMS
+    sta $01
 !read:
     lda $ffff
 !mask:
     and #$ff
-    eor ZP_SRC_HI
-    sta ZP_SRC_HI
-    ldx #8
-!bit:
-    asl ZP_SRC_LO
-    rol ZP_SRC_HI
-    bcc !no_poly+
-    lda ZP_SRC_LO
-    eor #$21
-    sta ZP_SRC_LO
-    lda ZP_SRC_HI
-    eor #$10
-    sta ZP_SRC_HI
-!no_poly:
-    dex
-    bne !bit-
-    inc !read- + 1
-    bne !addr_ok+
-    inc !read- + 2
-!addr_ok:
-    lda ZP_DST_LO
-    bne !dec_lo+
-    dec ZP_DST_HI
-!dec_lo:
-    dec ZP_DST_LO
-    jmp !next-
-!done:
-    lda #$37
-    sta $01
-    tya
-    asl
-    tax
-    lda ZP_SRC_LO
-    cmp chain_crc_baselines,x
-    bne !failed+
-    lda ZP_SRC_HI
-    cmp chain_crc_baselines + 1,x
+    cmp chain_integrity_baselines,y
     bne !failed+
     iny
-    cpy #3
-    beq !all_done+
-    jmp !span-
-!all_done:
+    cpy #8
+    bne !next-
+    lda #$37
+    sta $01
     clc
     rts
 !failed:
+    lda #$37
+    sta $01
     sec
     rts
-chain_crc_code_end:
+chain_integrity_code_end:
 
 chain_saved_msgflg: .byte 0
 chain_art_present: .byte 0
 chain_names_state_start:
-chain_crc_baselines: .fill 6, 0
+chain_integrity_baselines: .fill 8, 0
 
 game_filename: .text "MORIA64"
 game_filename_end: .byte 0
 bank_filename: .text "64.BANK"; .byte 0
 init_filename: .text "64.INIT"
 init_filename_end: .byte 0
-chain_crc_addr_lo: .byte <ART_BITMAP_DEST, <ART_SCREEN_DEST, <ART_COLOR_DEST
-chain_crc_addr_hi: .byte >ART_BITMAP_DEST, >ART_SCREEN_DEST, >ART_COLOR_DEST
-chain_crc_len_lo: .byte <ART_BITMAP_SIZE, <ART_ATTR_SIZE, <ART_ATTR_SIZE
-chain_crc_len_hi: .byte >ART_BITMAP_SIZE, >ART_ATTR_SIZE, >ART_ATTR_SIZE
-chain_crc_masks: .byte $ff, $ff, $0f
-chain_crc_banks: .byte BANK_NO_ROMS, BANK_NO_KERNAL, BANK_NO_KERNAL
+// Boundary canaries cover the bitmap's I/O-hole crossing plus both ends of
+// each visible attribute span. The runtime harness compares every display byte.
+chain_integrity_addr_lo:
+    .byte <$c000, <$cfff, <$d000, <$df3f, <$e000, <$e3e7, <$d800, <$dbe7
+chain_integrity_addr_hi:
+    .byte >$c000, >$cfff, >$d000, >$df3f, >$e000, >$e3e7, >$d800, >$dbe7
 chain_names_state_end:
 chain_growth_start:
 chain_growth_end:
 chain_stub_end:
 }
 .label chain_stub_size = chain_stub_end - CHAIN_STUB_ADDR
-.label chain_crc_baselines_source = chain_stub_source + (chain_crc_baselines - CHAIN_STUB_ADDR)
+.label chain_integrity_baselines_source = chain_stub_source + (chain_integrity_baselines - CHAIN_STUB_ADDR)
 .label chain_art_present_source = chain_stub_source + (chain_art_present - CHAIN_STUB_ADDR)
-.label chain_crc_addr_lo_source = chain_stub_source + (chain_crc_addr_lo - CHAIN_STUB_ADDR)
-.label chain_crc_addr_hi_source = chain_stub_source + (chain_crc_addr_hi - CHAIN_STUB_ADDR)
-.label chain_crc_len_lo_source = chain_stub_source + (chain_crc_len_lo - CHAIN_STUB_ADDR)
-.label chain_crc_len_hi_source = chain_stub_source + (chain_crc_len_hi - CHAIN_STUB_ADDR)
-.label chain_crc_masks_source = chain_stub_source + (chain_crc_masks - CHAIN_STUB_ADDR)
-.label chain_crc_banks_source = chain_stub_source + (chain_crc_banks - CHAIN_STUB_ADDR)
+.label chain_integrity_addr_lo_source = chain_stub_source + (chain_integrity_addr_lo - CHAIN_STUB_ADDR)
+.label chain_integrity_addr_hi_source = chain_stub_source + (chain_integrity_addr_hi - CHAIN_STUB_ADDR)
 chain_stub_source_end:
 
-boot_crc_baseline:
+boot_integrity_baseline:
     ldy #0
-!span:
-    lda chain_crc_addr_lo_source,y
-    sta !read+ + 1
-    lda chain_crc_addr_hi_source,y
-    sta !read+ + 2
-    lda chain_crc_len_lo_source,y
-    sta ZP_DST_LO
-    lda chain_crc_len_hi_source,y
-    sta ZP_DST_HI
-    lda chain_crc_masks_source,y
-    sta !mask+ + 1
-    lda chain_crc_banks_source,y
-    sta $01
-    lda #$ff
-    sta ZP_SRC_LO
-    sta ZP_SRC_HI
 !next:
-    lda ZP_DST_LO
-    ora ZP_DST_HI
-    beq !done+
+    lda chain_integrity_addr_lo_source,y
+    sta !read+ + 1
+    lda chain_integrity_addr_hi_source,y
+    sta !read+ + 2
+    lda #$ff
+    sta !mask+ + 1
+    cpy #4
+    bcc !bitmap+
+    lda #BANK_NO_KERNAL
+    sta $01
+    cpy #6
+    bcc !read+
+    lda #$0f
+    sta !mask+ + 1
+    bne !read+
+!bitmap:
+    lda #BANK_NO_ROMS
+    sta $01
 !read:
     lda $ffff
 !mask:
     and #$ff
-    eor ZP_SRC_HI
-    sta ZP_SRC_HI
-    ldx #8
-!bit:
-    asl ZP_SRC_LO
-    rol ZP_SRC_HI
-    bcc !no_poly+
-    lda ZP_SRC_LO
-    eor #$21
-    sta ZP_SRC_LO
-    lda ZP_SRC_HI
-    eor #$10
-    sta ZP_SRC_HI
-!no_poly:
-    dex
-    bne !bit-
-    inc !read- + 1
-    bne !addr_ok+
-    inc !read- + 2
-!addr_ok:
-    lda ZP_DST_LO
-    bne !dec_lo+
-    dec ZP_DST_HI
-!dec_lo:
-    dec ZP_DST_LO
-    jmp !next-
-!done:
+    sta chain_integrity_baselines_source,y
+    iny
+    cpy #8
+    bne !next-
+!boot_done:
     lda #$37
     sta $01
-    tya
-    asl
-    tax
-    lda ZP_SRC_LO
-    sta chain_crc_baselines_source,x
-    lda ZP_SRC_HI
-    sta chain_crc_baselines_source + 1,x
-    iny
-    cpy #3
-    beq !boot_done+
-    jmp !span-
-!boot_done:
     rts
 
 art_filename: .text "BOOTART64"
@@ -910,9 +834,9 @@ boot_end:
 .print "C64 boot chain: " + chain_stub_size + " bytes at $0500-$" + toHexString(CHAIN_STUB_ADDR + chain_stub_size)
 .print "C64 chain control: " + (chain_kernal_load - chain_entry)
 .print "C64 chain load helper: " + (chain_blank - chain_kernal_load)
-.print "C64 chain waits/vectors/CRC: " + (chain_saved_msgflg - chain_blank)
+.print "C64 chain waits/vectors/integrity: " + (chain_saved_msgflg - chain_blank)
 .print "C64 chain state/names: " + (chain_stub_end - chain_saved_msgflg)
-.print "C64 chain CRC code: " + (chain_crc_code_end - chain_crc_verify)
+.print "C64 chain integrity code: " + (chain_integrity_code_end - chain_integrity_verify)
 .print "C64 boot embedded end: $" + toHexString(boot_end)
 .assert "bitmap size is 8000", ART_BITMAP_SIZE, 8000
 .assert "matrix and color size is 1000", ART_ATTR_SIZE, 1000
@@ -933,16 +857,16 @@ boot_end:
 .assert "chain starts at $0500", chain_entry, CHAIN_STUB_ADDR
 .assert "chain control and waits fit 256-byte budget", (chain_kernal_load - chain_entry) + (chain_control_end - chain_blank) <= 256, true
 .assert "chain KERNAL setup/cleanup and vector installer fit 112-byte budget", (chain_blank - chain_kernal_load) + (chain_irq_hidden_rom - chain_install_ram_vectors) <= 112, true
-.assert "chain CRC and NMI handler fit 160-byte budget", (chain_crc_code_end - chain_crc_verify) + (chain_irq_hidden_rom_end - chain_irq_hidden_rom) <= 160, true
-.assert "chain names and CRC/device state fit 48-byte budget", chain_names_state_end - chain_names_state_start <= 48, true
+.assert "chain integrity and NMI handler fit 160-byte budget", (chain_integrity_code_end - chain_integrity_verify) + (chain_irq_hidden_rom_end - chain_irq_hidden_rom) <= 160, true
+.assert "chain names and integrity/device state fit 48-byte budget", chain_names_state_end - chain_names_state_start <= 48, true
 .assert "chain growth reserve fits 192-byte budget", chain_growth_end - chain_growth_start <= 192, true
 .assert "chain fits fixed $0500-$07ff owner", CHAIN_STUB_ADDR + chain_stub_size <= $0800, true
 .assert "chain source and destination are disjoint", chain_stub_source >= $0800 || chain_stub_source_end <= CHAIN_STUB_ADDR, true
 .assert "embedded KRES64 PRG is 240 bytes", embedded_kres64_prg_end - embedded_kres64_prg, 240
 .assert "embedded KRES64 content is 238 bytes", embedded_kres64_end - embedded_kres64, 238
 .assert "KINST64 PRG header is $2000", kinst64_prg.get(0) + 256 * kinst64_prg.get(1), KRILL_INSTALL_ADDR
-.assert "KINST64 content is 6996 bytes", kinst64_prg.getSize() - 2, 6996
-.assert "KINST64 destination ends at $3b54", KRILL_INSTALL_ADDR + kinst64_prg.getSize() - 2, $3b54
+.assert "KINST64 content is 6984 bytes", kinst64_prg.getSize() - 2, 6984
+.assert "KINST64 destination ends at $3b48", KRILL_INSTALL_ADDR + kinst64_prg.getSize() - 2, $3b48
 .assert "boot embedded sources stay below KINST64", boot_end < KRILL_INSTALL_ADDR, true
 .assert "handoff bytes stay below dungeon scratch", $033b < $033c, true
 .assert "display bitmap is disjoint from 64.BANK", ART_BITMAP_DEST + ART_BITMAP_SIZE <= $e000, true

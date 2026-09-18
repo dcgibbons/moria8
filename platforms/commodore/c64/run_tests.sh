@@ -2954,6 +2954,8 @@ run_boot_handoff_runtime_matrix() {
         kinst_failure:krill:8
         bootart_failure:fallback:8
         missing_bootart_krill:noart:8
+        display_integrity:krill:8
+        display_canary_failure:krill:8
         installer_1541u_warning:krill:8
         installer_mute_failure:krill:8
         krill_install_success_cleanup:krill:8
@@ -4844,7 +4846,7 @@ queue_product_suites() {
     run_suite_function "retirement_royal_product_smoke" run_retirement_royal_product_smoke "retirement_flow_product_smoke"
     run_suite_function "fastload_product_smoke" run_fastload_product_smoke "fastload_krill_active" "fastload_kernal_fallback"
     run_suite_function "boot_handoff_runtime_matrix" run_boot_handoff_runtime_matrix \
-        "kinst_failure" "bootart_failure" "missing_bootart_krill" \
+        "kinst_failure" "bootart_failure" "missing_bootart_krill" "display_integrity" "display_canary_failure" \
         "installer_1541u_warning" "installer_mute_failure" \
         "kernal_moria_failure" "kernal_init_failure" \
         "krill_install_success_cleanup" "kernal_success_cleanup" \
@@ -4988,7 +4990,7 @@ check_static_contract "c64_look_overlay_cleanup_contract" "look_trampoline.s" \
 check_static_contract "c64_hidden_kernal_irq_vector_contract" "main.s" \
     "c64_irq_hidden_rom:|||cld|||pha|||lda \$01|||pha|||lda #BANK_NO_KERNAL|||sta \$01|||lda \$dc0d|||lda \$dd0d|||lda \$d019|||sta \$d019|||pla|||sta \$01|||pla|||rti|||c64_install_ram_irq_vectors:|||php|||sei|||sta \$fffa|||sta \$fffe|||sta \$fffb|||sta \$ffff|||plp|||rts"
 check_static_contract "c64_boot_true_address_init_contract" "boot.s" \
-    "ART_BITMAP_DEST  = \$c000|||ART_SCREEN_DEST  = \$e000|||display_boot_art:|||jsr copy_color_to_vic_ram|||jsr copy_screen_to_vic_ram|||jsr copy_bitmap_to_vic_ram|||jsr boot_crc_baseline|||jsr chain_crc_checkpoint|||jsr chain_wait_18|||jsr chain_blank|||ldx #<init_filename|||jsr KRILL_BOOT_LOADRAW"
+    "ART_BITMAP_DEST  = \$c000|||ART_SCREEN_DEST  = \$e000|||display_boot_art:|||jsr copy_color_to_vic_ram|||jsr copy_screen_to_vic_ram|||jsr copy_bitmap_to_vic_ram|||jsr boot_integrity_baseline|||jsr chain_integrity_checkpoint|||jsr chain_wait_18|||jsr chain_blank|||ldx #<init_filename|||jsr KRILL_BOOT_LOADRAW"
 check_static_contract "c64_boot_kernal_cleanup_contract" "boot.s" \
     "boot_kernal_load:|||jsr \$ffd5|||php|||pha|||jsr \$ffc3|||jsr \$ffcc|||pla|||plp|||chain_kernal_load:|||jsr \$ffd5|||php|||pha|||jsr \$ffc3|||jsr \$ffcc|||pla|||plp"
 check_static_contract "c64_boot_recovery_blanks_first_contract" "boot.s" \
@@ -4996,19 +4998,19 @@ check_static_contract "c64_boot_recovery_blanks_first_contract" "boot.s" \
 check_static_contract "c64_boot_error_trampoline_contract" "boot.s" \
     "error_trampoline:|||pha|||php|||sei|||sta error_load_p|||sta error_load_a|||ldx #\$ff|||txs|||lda #\$37|||sta \$01|||jsr \$e544|||jmp (\$a002)"
 check_static_contract "c64_boot_runtime_hook_contract" "boot.s" \
-    "#if C64_TEST_BOOT_HANDOFF|||c64_test_boot_kernal_load_return:|||c64_test_kinst_call_return:|||c64_test_installer_pre:|||c64_test_installer_return:|||c64_test_installer_reblanked:|||c64_test_installer_result_restored:|||c64_test_installer_resident_copied:|||c64_test_installer_failure_continuation:|||c64_test_krill_moria_return:|||c64_test_krill_bank_return:|||c64_test_krill_init_return:|||c64_test_kernal_moria_pre:|||c64_test_kernal_moria_return:|||c64_test_kernal_init_pre:|||c64_test_kernal_init_return:|||c64_test_recovery_moria_pre:|||c64_test_recovery_moria_return:|||c64_test_recovery_init_pre:|||c64_test_recovery_init_return:|||c64_test_chain_kernal_load_return:"
+    "#if C64_TEST_BOOT_HANDOFF|||c64_test_boot_kernal_load_return:|||c64_test_kinst_call_return:|||c64_test_installer_pre:|||c64_test_installer_return:|||c64_test_installer_reblanked:|||c64_test_installer_result_restored:|||c64_test_installer_resident_copied:|||c64_test_installer_failure_continuation:|||c64_test_art_canaries_ready:|||c64_test_krill_moria_return:|||c64_test_krill_bank_return:|||c64_test_krill_init_return:|||c64_test_kernal_moria_pre:|||c64_test_kernal_moria_return:|||c64_test_kernal_init_pre:|||c64_test_kernal_init_return:|||c64_test_recovery_moria_pre:|||c64_test_recovery_moria_return:|||c64_test_recovery_init_pre:|||c64_test_recovery_init_return:|||c64_test_chain_kernal_load_return:|||c64_test_integrity_pre:"
 check_static_contract "c64_p6_runtime_hook_contract" "main.s" \
     "c64_test_runtime_vectors_ready:|||c64_test_p6_bank_pre:|||jsr KERNAL_LOAD|||c64_test_p6_kernal_load_return:|||php|||pha|||jsr KERNAL_CLOSE|||jsr KERNAL_CLRCHN|||pla|||plp|||c64_test_p6_cleanup_return:|||c64_test_p6_bank_failure:"
 check_static_contract "c64_boot_runtime_matrix_contract" "tests/boot_handoff_smoke.py" \
-    "kinst_failure|||bootart_failure|||missing_bootart_krill|||installer_1541u_warning|||installer_mute_failure|||krill_install_success_cleanup|||kernal_success_cleanup|||device9_krill|||device9_fallback|||rom_vector_nmi|||terminal_rom_vector_nmi|||kernal_moria_failure|||kernal_init_failure|||krill_moria_failure|||krill_bank_failure|||krill_init_failure|||recovery_moria_failure|||recovery_init_failure|||recovery_success_cleanup|||p6_bank_failure"
+    "kinst_failure|||bootart_failure|||missing_bootart_krill|||display_integrity|||display_canary_failure|||installer_1541u_warning|||installer_mute_failure|||krill_install_success_cleanup|||kernal_success_cleanup|||device9_krill|||device9_fallback|||rom_vector_nmi|||terminal_rom_vector_nmi|||kernal_moria_failure|||kernal_init_failure|||krill_moria_failure|||krill_bank_failure|||krill_init_failure|||recovery_moria_failure|||recovery_init_failure|||recovery_success_cleanup|||p6_bank_failure"
 check_static_contract "c64_boot_runtime_evidence_contract" "tests/boot_handoff_smoke.py" \
-    "ERROR_MUTE_MESSAGE =|||WARNING_1541U_MESSAGE =|||def vendor_layout|||vendor message routine|||1541U warning caller|||vendor second-device loop|||vendor mutefail path|||def snapshot_canaries|||read_bytes(self.connector, 0x0340, 77)|||def assert_canaries|||read_bytes(self.connector, 0x0340, 77)|||def assert_vendor_message_entry|||def assert_vendor_message_visible"
+    "ERROR_MUTE_MESSAGE =|||WARNING_1541U_MESSAGE =|||def vendor_layout|||vendor message routine|||patched 1541U warning exit|||vendor second-device loop|||vendor mutefail path|||def snapshot_canaries|||read_bytes(self.connector, 0x0340, 77)|||def assert_canaries|||read_bytes(self.connector, 0x0340, 77)|||def assert_vendor_message_entry|||def assert_vendor_message_visible"
 check_static_contract "c64_boot_mutefail_vendor_path_contract" "tests/boot_handoff_smoke.py" \
     "scenario == \"installer_mute_failure\"|||second_device_probe|||vendor second-device state is not device 9|||vendor active-device stack byte is not device 8|||set_register(\"pc\", int(self.vendor[\"mutefail\"]))|||vendor mutefail message entry|||vendor mutefail message return|||vendor mutefail path did not restore active FA|||self.assert_title(evidence=0x80)"
 check_static_contract "c64_boot_recovery_success_cleanup_contract" "tests/boot_handoff_smoke.py" \
     "scenario == \"recovery_success_cleanup\"|||c64_test_recovery_moria_pre|||observe_chain_cleanup|||c64_test_recovery_init_pre|||observe_chain_cleanup|||c64_test_p6_bank_pre|||observe_chain_cleanup|||self.assert_title(evidence=0)"
 check_static_contract "c64_boot_runtime_registration_contract" "run_tests.sh" \
-    "missing_bootart_krill:noart:8|||installer_1541u_warning:krill:8|||installer_mute_failure:krill:8|||recovery_success_cleanup:krill:8|||device9_krill:krill:9|||device9_fallback:fallback:9|||rom_vector_nmi:fallback:8|||terminal_rom_vector_nmi:fallback:8|||\"missing_bootart_krill\"|||\"installer_1541u_warning\"|||\"installer_mute_failure\"|||\"recovery_success_cleanup\"|||\"device9_krill\"|||\"device9_fallback\"|||\"rom_vector_nmi\"|||\"terminal_rom_vector_nmi\""
+    "missing_bootart_krill:noart:8|||display_integrity:krill:8|||display_canary_failure:krill:8|||installer_1541u_warning:krill:8|||installer_mute_failure:krill:8|||recovery_success_cleanup:krill:8|||device9_krill:krill:9|||device9_fallback:fallback:9|||rom_vector_nmi:fallback:8|||terminal_rom_vector_nmi:fallback:8|||\"missing_bootart_krill\"|||\"display_integrity\"|||\"display_canary_failure\"|||\"installer_1541u_warning\"|||\"installer_mute_failure\"|||\"recovery_success_cleanup\"|||\"device9_krill\"|||\"device9_fallback\"|||\"rom_vector_nmi\"|||\"terminal_rom_vector_nmi\""
 check_static_contract "c64_boot_device9_runtime_contract" "tests/boot_handoff_smoke.py" \
     "if self.args.device == 9:|||+busdevice8|||drive8type|||drive9truedrive|||autostart|||self.args.boot_prg|||time.sleep(2.0)|||self.connector.poke(0xBA, self.args.device)|||scenario == \"device9_krill\"|||self.assert_title(evidence=0x81, device=9)|||scenario == \"device9_fallback\"|||self.assert_title(evidence=0x80, device=9)"
 check_static_contract "c64_boot_rom_vector_nmi_contract" "tests/boot_handoff_smoke.py" \

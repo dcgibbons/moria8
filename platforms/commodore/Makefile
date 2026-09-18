@@ -47,6 +47,7 @@ KRILL_URL      = https://csdb.dk/getinternalfile.php/238373/loader-v194.zip
 KRILL_SHA256   = c273980bb81eb5b16e6163869cec147fc76e27bdba6d03e8a3438b8251aa00f1
 KRILL_CONFIG   = c64/krill/loaderconfig.inc
 KRILL_CONFIG_1541 = c64/krill1541/loaderconfig.inc
+KRILL_PATCH_1541U = c64/krill/patches/0001-disable-1541u-warning.patch
 CA65          ?= ca65
 ifeq ($(filter /%,$(KRILL_DIR)),)
 KRILL_DIR_RESOLVED = $(CURDIR)/$(KRILL_DIR)
@@ -687,7 +688,7 @@ else
 	@test -f "$(KICKASS_RESOLVED)" || { echo "ERROR: custom KICKASS path does not exist: $(KICKASS_RESOLVED)"; exit 1; }
 endif
 
-ensure-krill: | $(OUT64)
+ensure-krill: $(KRILL_PATCH_1541U) | $(OUT64)
 	@if [ ! -f "$(KRILL_DIR_RESOLVED)/loader/src/Makefile" ]; then \
 		echo "Downloading Krill's Loader r194..."; \
 		mkdir -p "$(KRILL_DIR_RESOLVED)"; \
@@ -698,12 +699,19 @@ ensure-krill: | $(OUT64)
 		test -f "$(KRILL_DIR_RESOLVED)/loader/src/Makefile" || { echo "ERROR: Krill source not found after download at $(KRILL_DIR_RESOLVED)"; exit 1; }; \
 		echo "Krill's Loader ready at $(KRILL_DIR_RESOLVED)"; \
 	fi
+	@if patch -d "$(KRILL_DIR_RESOLVED)" -p1 -N -f --dry-run < "$(KRILL_PATCH_1541U)" >/dev/null 2>&1; then \
+		patch -d "$(KRILL_DIR_RESOLVED)" -p1 -N -f < "$(KRILL_PATCH_1541U)"; \
+	elif patch -d "$(KRILL_DIR_RESOLVED)" -p1 -R -f --dry-run < "$(KRILL_PATCH_1541U)" >/dev/null 2>&1; then \
+		:; \
+	else \
+		echo "ERROR: Krill 1541U warning patch does not apply cleanly"; exit 1; \
+	fi
 
 # Build the C64 Krill residents (assembled for $F000 — embedded at the top of
 # the RuntimeBanked segment by c64/main.s; and $0400 — the boot-time copy used
 # by c64/boot.s before 64.bank exists) plus the one-shot install payload
 # ($2000, loaded and run by c64/boot.s before MORIA64). Requires ca65 + perl.
-$(C64_KRILL_STAMP): $(KRILL_CONFIG) $(KRILL_CONFIG_1541) | ensure-krill $(OUT64)
+$(C64_KRILL_STAMP): $(KRILL_CONFIG) $(KRILL_CONFIG_1541) $(KRILL_PATCH_1541U) | ensure-krill $(OUT64)
 	@command -v $(CA65) >/dev/null || { echo "ERROR: ca65 (cc65) required to build Krill's Loader"; exit 1; }
 	rm -f "$(KRILL_DIR_RESOLVED)/loader/build/intermediate/loader-nonreloc-c64.o" "$(KRILL_DIR_RESOLVED)/loader/build/loader-c64.prg" "$(KRILL_DIR_RESOLVED)/loader/build/loadersymbols-c64.inc"
 	MAKEFLAGS= $(MAKE) -C "$(KRILL_DIR_RESOLVED)/loader/src" PLATFORM=c64 prg INSTALL=2000 RESIDENT=f000 ZP=e0 VERSION=194 EXTCONFIGPATH="$(CURDIR)/c64/krill"
@@ -712,7 +720,7 @@ $(C64_KRILL_STAMP): $(KRILL_CONFIG) $(KRILL_CONFIG_1541) | ensure-krill $(OUT64)
 	MAKEFLAGS= $(MAKE) -C "$(KRILL_DIR_RESOLVED)/loader/src" PLATFORM=c64 prg INSTALL=2000 RESIDENT=0400 ZP=e0 VERSION=194 EXTCONFIGPATH="$(CURDIR)/c64/krill"
 	cp "$(KRILL_DIR_RESOLVED)/loader/build/loader-c64.prg" "$(C64_KRILL_BOOT_PRG)"
 	cp "$(KRILL_DIR_RESOLVED)/loader/build/install-c64.prg" "$(C64_KRILL_INSTALL_PRG)"
-	python3 -c 'import pathlib,sys; kres,kinst=map(lambda x:pathlib.Path(x).read_bytes(),sys.argv[1:]); assert kres[:2] == bytes((0,4)) and len(kres) == 240, "KRES64 must be 238 bytes at $$0400"; assert kinst[:2] == bytes((0,32)) and len(kinst) == 6998, "KINST64 must be 6996 bytes at $$2000"' "$(C64_KRILL_BOOT_PRG)" "$(C64_KRILL_INSTALL_PRG)"
+	python3 -c 'import pathlib,sys; kres,kinst=map(lambda x:pathlib.Path(x).read_bytes(),sys.argv[1:]); assert kres[:2] == bytes((0,4)) and len(kres) == 240, "KRES64 must be 238 bytes at $$0400"; assert kinst[:2] == bytes((0,32)) and len(kinst) == 6986, "KINST64 must be 6984 bytes at $$2000"' "$(C64_KRILL_BOOT_PRG)" "$(C64_KRILL_INSTALL_PRG)"
 	rm -f "$(KRILL_DIR_RESOLVED)/loader/build/intermediate/loader-nonreloc-c64.o" "$(KRILL_DIR_RESOLVED)/loader/build/intermediate/install-nonreloc-c64.o" "$(KRILL_DIR_RESOLVED)/loader/build/loader-c64.prg" "$(KRILL_DIR_RESOLVED)/loader/build/install-c64.prg" "$(KRILL_DIR_RESOLVED)/loader/build/loadersymbols-c64.inc"
 	MAKEFLAGS= $(MAKE) -C "$(KRILL_DIR_RESOLVED)/loader/src" PLATFORM=c64 prg INSTALL=c000 RESIDENT=0400 ZP=e0 VERSION=194 EXTCONFIGPATH="$(CURDIR)/c64/krill1541"
 	cp "$(KRILL_DIR_RESOLVED)/loader/build/install-c64.prg" "$(C64_KRILL_1541_INSTALL_PRG)"

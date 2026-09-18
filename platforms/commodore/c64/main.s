@@ -2854,19 +2854,6 @@ krill_suspend:
     jsr KRILL_RUNTIME_UNINSTALL
     lda #$03
     sta $dd00
-    lda #4
-!settle_outer:
-    ldy #0
-!settle:
-    ldx #0
-!settle_inner:
-    dex
-    bne !settle_inner-
-    dey
-    bne !settle-
-    sec
-    sbc #1
-    bne !settle_outer-
     lda #0
     sta krill_active
     lda #$ff

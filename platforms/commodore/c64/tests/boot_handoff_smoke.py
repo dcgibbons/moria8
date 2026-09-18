@@ -18,6 +18,7 @@ from vice_connector import VICEConnector, normalize_addr, parse_vs_symbols
 
 
 BYTE_RE = re.compile(r"C:([0-9A-Fa-f]{4})\s+([0-9A-Fa-f]{2})")
+HEX_BYTE_RE = re.compile(r"^[0-9A-Fa-f]{2}$")
 REG_RE = re.compile(
     r"(?:\.;|\.C:)[0-9A-Fa-f]{4}\s+"
     r"([0-9A-Fa-f]{2})\s+([0-9A-Fa-f]{2})\s+"
@@ -54,6 +55,20 @@ def read_d011_mode(connector: VICEConnector) -> int:
 
 def read_bytes(connector: VICEConnector, start: int, length: int) -> bytes:
     return bytes(read_byte(connector, start + offset) for offset in range(length))
+
+
+def read_range(connector: VICEConnector, start: int, length: int) -> bytes:
+    response = connector.send_command(f"m {start:04x} {start + length - 1:04x}")
+    values: list[int] = []
+    for line in response.splitlines():
+        if not line.startswith(">C:"):
+            continue
+        for token in line.split()[1:]:
+            if not HEX_BYTE_RE.match(token):
+                break
+            values.append(int(token, 16))
+    require(len(values) == length, f"monitor returned {len(values)} of {length} bytes at ${start:04x}")
+    return bytes(values)
 
 
 def flags_value(text: str) -> int:
@@ -146,16 +161,12 @@ class BootHarness:
         message_address = base + message_offset
         warning_index = warning_offset - error_offset
         require(0 <= warning_index <= 0xFF, "vendor warning is outside the message index table")
-        caller_offset = find_unique(
+        warning_exit_offset = find_unique(
             payload,
-            [0xAD, None, None, 0xC9, DRIVE_1541U, 0xD0, None, 0xA2, warning_index,
-             0x20, message_address & 0xFF, message_address >> 8, 0x28, 0xA9, 0x00,
-             0xA2, None, 0xA0, 0xE0, 0x18, 0x60],
-            "1541U warning caller",
+            [0x28, 0xA9, 0x00, 0xA2, None, 0xA0, 0xE0, 0x18, 0x60],
+            "patched 1541U warning exit",
         )
-        drive_type = int.from_bytes(payload[caller_offset + 1:caller_offset + 3], "little")
-        require(drive_type == base + caller_offset + 16,
-                "vendor warning and success return do not share drive-type storage")
+        drive_type = base + warning_exit_offset + 4
 
         second_device_loop = find_unique(
             payload,
@@ -178,8 +189,7 @@ class BootHarness:
                 "vendor mutefail digits are not inside the complete error message")
         return {
             "message": message_address,
-            "warning_check": base + caller_offset,
-            "message_return": base + caller_offset + 12,
+            "warning_exit": base + warning_exit_offset,
             "drive_type": drive_type,
             "error_message": base + error_offset,
             "warning_message": base + warning_offset,
@@ -314,6 +324,18 @@ class BootHarness:
         require(read_bytes(self.connector, 0x0340, 77) == expected[0], "terminal trampoline or state changed across LOAD")
         require(read_bytes(self.connector, 0x0500, 0x300) == expected[1], "copied chain changed across LOAD")
 
+    def snapshot_display(self) -> tuple[bytes, bytes, bytes]:
+        saved_port = read_byte(self.connector, 0x0001)
+        try:
+            self.connector.poke(0x0001, 0x34)
+            bitmap = read_range(self.connector, 0xC000, 8000)
+            self.connector.poke(0x0001, 0x36)
+            matrix = read_range(self.connector, 0xE000, 1000)
+            color = bytes(value & 0x0F for value in read_range(self.connector, 0xD800, 1000))
+        finally:
+            self.connector.poke(0x0001, saved_port)
+        return bitmap, matrix, color
+
     def inject_kernal_failure(self, pre: str, call_return: str, status: int) -> None:
         canaries = self.snapshot_canaries()
         p6 = "p6" in pre
@@ -399,7 +421,7 @@ class BootHarness:
         if scenario == "missing_bootart_krill":
             self.arm_boot(".c64_test_fastload_pass_sym")
             evidence = read_byte(self.connector, 0x033A)
-            require(evidence == 0, f"missing Krill BOOTART64 produced CRC/art evidence ${evidence:02x}")
+            require(evidence == 0, f"missing Krill BOOTART64 produced canary/art evidence ${evidence:02x}")
             require(read_byte(self.connector, 0x0334) == 0x4B and read_byte(self.connector, 0x0335) == 0xD2,
                     "missing Krill BOOTART64 disabled the installed loader")
             require(read_byte(self.connector, self.symbol(".krill_active")) == 0xFF,
@@ -407,25 +429,32 @@ class BootHarness:
             require(read_byte(self.connector, self.symbol(".krill_boot_used")) == 1,
                     "missing Krill BOOTART64 did not complete Krill payload loading")
             return
+        if scenario == "display_integrity":
+            self.arm_boot(".c64_test_art_canaries_ready")
+            expected = self.snapshot_display()
+            self.continue_to(".c64_test_integrity_pre")
+            require(self.snapshot_display() == expected,
+                    "boot display changed across MORIA64/64.BANK production loads")
+            self.assert_title(evidence=0x81)
+            return
+        if scenario == "display_canary_failure":
+            self.arm_boot(".c64_test_integrity_pre")
+            self.connector.poke(0xC000, read_byte(self.connector, 0xC000) ^ 0xFF)
+            self.assert_title(evidence=0)
+            return
         if scenario == "installer_1541u_warning":
             self.arm_boot(".c64_test_installer_pre")
-            warning_check = int(self.vendor["warning_check"])
-            self.continue_to_address(warning_check, "vendor 1541U warning check")
+            self.continue_to_address(int(self.vendor["warning_exit"]), "patched 1541U warning exit")
             self.connector.poke(int(self.vendor["drive_type"]), DRIVE_1541U)
-            message = WARNING_1541U_MESSAGE
-            self.continue_to_address(int(self.vendor["message"]), "vendor message entry")
-            self.assert_vendor_message_entry(message, "warning_message", int(self.vendor["warning_index"]))
-            self.continue_to_address(int(self.vendor["message_return"]), "vendor message return")
-            self.assert_vendor_message_visible(message)
             self.continue_to(".c64_test_installer_result_restored")
             registers, flags = register_values(self.connector)
             d011 = read_d011_mode(self.connector)
-            require(d011 == 0x0B, f"boot did not reblank after vendor message: $D011=${d011:02x}")
+            require(d011 == 0x0B, f"patched 1541U path enabled the display: $D011=${d011:02x}")
             require(registers.get("A") == 0 and not flags & 1,
-                    f"1541U warning did not retain installer success: {registers}, P=${flags:02x}")
+                    f"patched 1541U path did not retain installer success: {registers}, P=${flags:02x}")
             self.continue_to(".c64_test_installer_resident_copied")
             require(read_bytes(self.connector, 0x0400, 238) == self.kres[2:],
-                    "post-warning resident does not match clean embedded KRES64")
+                    "patched 1541U path did not preserve the clean embedded KRES64")
             self.assert_title(evidence=0x81)
             return
         if scenario == "installer_mute_failure":
