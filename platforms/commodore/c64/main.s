@@ -29,6 +29,44 @@
 .segmentdef ChestOverlay      [outPrg=OVL_OUT + "/ovl.chest", start=$e000, min=$e000, max=$efff]
 .segmentdef DungeonGenOverlay [outPrg=OVL_OUT + "/ovl.gen",   start=$e000, min=$e000, max=$efff]
 .segmentdef RuntimeBanked     [outPrg=OVL_OUT + "/64.bank",   start=$f000, min=$f000, max=$fffa]
+.segmentdef InitTail          [outPrg=OVL_OUT + "/64.init",   start=$c000, min=$c000, max=$cfff]
+
+// Krill's Loader r194 resident (raw-load only build, assembled for $F000).
+// Emitted into RuntimeBanked before any other import can emit into the
+// segment, so link order pins it at $F000 where the resident was assembled.
+// Visible whenever KERNAL is banked out ($01=$34/$35), same as the rest of
+// the payload. Entry point is at the base of the resident.
+.segment RuntimeBanked
+krill_resident_base:
+#if !C64_UNIT_TEST
+    .import binary "../../../build/c64/krill-resident.bin"
+#else
+    // Unit tests never exercise the fast loader; keep a size-identical hole
+    // so label offsets match the shipping payload.
+    .fill 238, 0
+#endif
+.label krill_loadraw = krill_resident_base
+.label krill_uninstall = krill_resident_base + 225
+.label krill_resident_end = *
+.assert "Krill resident is 238 bytes (raw + uninstall)", krill_resident_end - krill_resident_base, 238
+// krill_load_file — Load a file via the Krill resident.
+// Input:  X/Y = 0-terminated PETSCII filename (storage HAL name tables
+//         already carry a trailing zero past their counted length).
+//         Caller must have $F000 visible ($01=$34/$35).
+// Output: carry clear = success, carry set = load error.
+// Pinned immediately after the resident; config.s calls it through the
+// KRILL_LOAD_FILE address constant (asserted in the init tail below, where
+// config.s symbols are visible).
+krill_load_file:
+    jsr krill_loadraw
+    php
+    pha
+    lda #$03                    // VIC-II bank 0, IEC released; Krill contract:
+    sta $dd00                   // $DD00 upper 6 bits must be 0 while installed
+    pla
+    plp
+    rts
+.segment Default
 
 #import "hal/storage_policy.s"
 #import "../common/save_slot_policy.s"
@@ -83,8 +121,8 @@
 // Bootstrap — MUST live below $A000 so BASIC's SYS can reach it
 // before BASIC ROM is banked out.
 entry:
-    lda #$36                // Bank out BASIC ROM (keep KERNAL + I/O)
-    sta $01
+    dec $01                 // BASIC entry has $37: bank out BASIC, keep KERNAL/I/O.
+    cld
     jmp entry_main          // Now code past $A000 is accessible
 
 // Exit trampoline — MUST live below $A000 because it banks BASIC
@@ -112,8 +150,7 @@ exit_trampoline:
     lda $d018
     ora #%00000010          // Lowercase mode (BASIC default)
     sta $d018
-    lda $dd00
-    ora #%00000011          // Restore VIC-II bank 0 (serial I/O may have corrupted)
+    lda #$03                // VIC-II bank 0, IEC lines released, upper bits 0
     sta $dd00
     lda #$93                // PETSCII clear screen
     jsr $ffd2               // KERNAL CHROUT
@@ -202,6 +239,7 @@ c64u_turbo_prev: .byte 0
 .const C64U_TURBO_DISABLED = $ff
 .const C64U_TURBO_NORMAL  = $00
 .const C64U_TURBO_FAST    = $0f
+.const KERNAL_CURRENT_DEVICE = $ba
 #if C64_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT
 c64_test_save_media_fail_armed: .byte 0
 #endif
@@ -644,11 +682,17 @@ entry_main:
     jsr save_zp
     jsr disk_reset_session_state
     jsr c64_install_ram_irq_vectors
+#if C64_TEST_BOOT_HANDOFF
+c64_test_runtime_vectors_ready:
+#endif
 
     // BASIC ROM already banked out by bootstrap above
 
     // Load banked runtime payload to $F000 before any $F000 trampoline calls.
     jsr init_load_banked
+#if C64_TEST_BOOT_HANDOFF
+c64_test_p6_complete:
+#endif
 
     // Patch reu_show_status: RTS → JMP tramp_reu_show_status
     lda #$4c                    // JMP absolute opcode
@@ -689,6 +733,16 @@ restart_entry:
     jsr rng_seed
 
 title_enter_menu:
+    bit krill_suspended
+    bpl !krill_resume_done+
+    lda #OVL_MODAL_MISC
+    jsr overlay_load
+    bcs !krill_resume_done+
+    sei
+    dec $01                    // $36 -> $35: expose modal overlay RAM
+    jsr krill_resume
+    jsr platform_runtime_resync_c64
+!krill_resume_done:
     lda #$ff
     sta save_slot_index
 #if C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || C64_TEST_SCRIPTED_SLOT2_SAVE_PRODUCT || C64_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT
@@ -697,6 +751,15 @@ title_enter_menu:
 c64_test_after_save_restart_start:
     lda #0
     sta c64_test_restart_after_save_armed
+#if C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
+    lda #OVL_HELP
+    jsr overlay_load
+    bcc !post_save_overlay_loaded+
+    jmp c64_test_save_write_fail_input_sym
+!post_save_overlay_loaded:
+c64_test_post_save_krill_overlay_pass:
+    jmp c64_test_post_save_krill_overlay_pass
+#endif
 !restart_test_done:
 #endif
     // Set default text color
@@ -722,6 +785,12 @@ c64_test_after_save_restart_start:
 
     jsr title_draw_menu
 
+#if C64_TEST_SCRIPTED_FASTLOAD_PRODUCT
+    // Fastloader smoke: reaching this point means the title art (T64) and the
+    // startup overlay were loaded via Krill when krill_active is set (or via
+    // KERNAL in the fallback case). Harness asserts .krill_active.
+c64_test_fastload_pass_sym:
+#endif
 #if C64_TEST_SCRIPTED_RETIREMENT_PRODUCT
     lda #8
     sta program_device
@@ -926,14 +995,14 @@ title_menu_loop:
     lda disk_setup_done
     bne !load_now+
     jsr tramp_disk_setup
-    bcs title_enter_menu
+    bcs !enter_menu+
 !load_now:
     jmp title_load_game
 !not_l:
     cmp #$44                // 'D' — disk setup
     bne title_menu_loop
     jsr tramp_disk_setup
-    bcs title_enter_menu
+    bcs !enter_menu+
     jsr disk_prompt_game_required
 #if C64_TEST_SCRIPTED_DISK_SETUP_SINGLE_DRIVE_RETURN_PRODUCT
     lda #1
@@ -942,6 +1011,7 @@ title_menu_loop:
 #if C64_TEST_SCRIPTED_DISK_SETUP_PRODUCT
 c64_test_after_disk_setup_product:
 #endif
+!enter_menu:
     jmp title_enter_menu
 #if C64_TEST_SCRIPTED_DISK_SETUP_SINGLE_DRIVE_RETURN_PRODUCT || C64_TEST_SCRIPTED_DISK_SETUP_THEN_LOAD_PRODUCT
 c64_test_disk_setup_single_drive_return_unexpected_return:
@@ -1038,30 +1108,37 @@ irq_no_blink_after_cld:
 c64_irq_hidden_rom:
     cld
     pha
+    lda $01
+    pha
+    lda #BANK_NO_KERNAL
+    sta $01
     lda $dc0d
     lda $dd0d
     lda $d019
     sta $d019
     pla
+    sta $01
+    pla
     rti
+c64_irq_hidden_rom_end:
 
 c64_install_ram_irq_vectors:
     php
     sei
-    lda $01
-    pha
-    lda #BANK_NO_KERNAL
-    sta $01
     lda #<c64_irq_hidden_rom
     sta $fffa
     sta $fffe
     lda #>c64_irq_hidden_rom
     sta $fffb
     sta $ffff
-    pla
-    sta $01
     plp
     rts
+c64_install_ram_irq_vectors_end:
+
+.assert "hidden-ROM NMI handler is fixed at 26 bytes", c64_irq_hidden_rom_end - c64_irq_hidden_rom, 26
+.assert "RAM vector installer is fixed at 20 bytes", c64_install_ram_irq_vectors_end - c64_install_ram_irq_vectors, 20
+.assert "hidden-ROM handler and installer retain their 46-byte span", c64_install_ram_irq_vectors_end - c64_irq_hidden_rom, 46
+.assert "hidden-ROM handler remains resident below MAP_BASE", c64_irq_hidden_rom < MAP_BASE && c64_irq_hidden_rom_end <= MAP_BASE, true
 
 .label hal_irq_install_runtime = c64_install_ram_irq_vectors
 
@@ -1335,8 +1412,7 @@ platform_runtime_resync_c64:
     jsr c64_install_ram_irq_vectors
     lda #BANK_NO_BASIC
     sta $01
-    lda $dd00
-    ora #%00000011
+    lda #$03                // VIC-II bank 0, IEC lines released, upper bits 0
     sta $dd00
     cli
     rts
@@ -1364,7 +1440,12 @@ overlay_load_no_kernal:
 #if !BYPASS_SLOT_PROMPT
 save_prepare_slot_prompt:
     lda #OVL_MODAL_MISC
-    jmp overlay_load_no_kernal
+    jsr overlay_load_no_kernal
+    bcs !done+
+    jsr krill_suspend
+    clc
+!done:
+    rts
 
 save_select_slot_prompt:
     sei
@@ -1671,6 +1752,11 @@ tramp_ui_wizard_display:
     jmp tramp_sr_epilogue
 
 tramp_disk_setup:
+    lda #OVL_MODAL_MISC
+    jsr overlay_load_no_kernal
+    bcs !tds_done+
+    jsr krill_suspend
+    jsr platform_runtime_resync_c64
     lda #OVL_HELP
     jsr overlay_load
     bcs !tds_done+
@@ -1762,11 +1848,10 @@ test_expect_row: .byte 0
 test_expect_col: .byte 0
 
 .encoding "screencode_mixed"
+#if C64_TEST_SCRIPTED_BOOK_OVERLAY
 test_inventory_title_str: .text "Inventory" ; .byte 0
 test_beginner_book_str:   .text "Beginner's Spellbook" ; .byte 0
-test_mage_book_title_str: .text "Mage Book" ; .byte 0
-test_magic_missile_str:   .text "Magic Missile" ; .byte 0
-test_phase_door_str:      .text "Phase Door" ; .byte 0
+#endif
 #endif
 
 #if C64_TEST_SCRIPTED_BOOK_OVERLAY
@@ -1796,27 +1881,27 @@ test_assert_book_overlay:
 
 #if C64_TEST_SCRIPTED_SPELL_LIST_OVERLAY
 test_assert_spell_list_overlay:
-    lda #<test_mage_book_title_str
+    lda #<pm_title_mage_str
     sta zp_ptr0
-    lda #>test_mage_book_title_str
+    lda #>pm_title_mage_str
     sta zp_ptr0_hi
     lda #0
     ldx #14
     jsr test_expect_screen_string
     bcc !list_fail+
 
-    lda #<test_magic_missile_str
+    lda #<msn_0
     sta zp_ptr0
-    lda #>test_magic_missile_str
+    lda #>msn_0
     sta zp_ptr0_hi
     lda #2
     ldx #4
     jsr test_expect_screen_string
     bcc !list_fail+
 
-    lda #<test_phase_door_str
+    lda #<msn_2
     sta zp_ptr0
-    lda #>test_phase_door_str
+    lda #>msn_2
     sta zp_ptr0_hi
     lda #4
     ldx #4
@@ -1957,6 +2042,11 @@ tramp_player_create:
 // Verify that the selected program disk is actually present.
 // Output: carry clear = program media present, carry set = absent/wrong media.
 c64_require_program_media:
+    bit krill_active
+    bmi !crpm_ok+
+    // An active Krill session cannot issue the KERNAL probe: shared IEC ATN
+    // would uninstall the drive code. The following asset load is the media
+    // check and reports its own carry/status.
     lda save_device
     pha
     lda disk_prompt_device
@@ -2017,9 +2107,16 @@ tramp_game_over_prepare:
     jsr creature_get_name       // Copies name to creature_name_buf in main RAM
 
 !tgo_load_overlay:
-    // 2. Load death overlay (replaces tier data at $E000)
+    // 2. Suspend Krill before the score stream's standard-DOS transactions.
+    lda #OVL_MODAL_MISC
+    jsr overlay_load_no_kernal
+    bcs !tgo_done+
+    jsr krill_suspend
+
+    // 3. Load death overlay (replaces the modal helper at $E000).
     lda #OVL_DEATH
     jsr overlay_load
+!tgo_done:
     rts
 
 tramp_game_over:
@@ -2069,33 +2166,10 @@ tramp_game_over_run:
     rts
 
 tramp_winner_royal:
-    jsr disk_prompt_game
-    lda #BANK_NO_BASIC
-    sta $01
-    cli
-    lda #hal_storage_modal_misc_name_len
-    ldx #<hal_storage_modal_misc_name
-    ldy #>hal_storage_modal_misc_name
-    jsr hal_asset_load_prg_header
-#if C64_TEST_SCRIPTED_RETIREMENT_PRODUCT
-    bcc !retirement_loaded+
-    jmp c64_test_retirement_fail_sym
-!retirement_loaded:
-#else
+    lda #OVL_MODAL_MISC
+    jsr overlay_load_no_kernal
     bcs !done+
-#endif
-    lda #0
-    sta current_overlay
-    sei
-    lda #BANK_NO_KERNAL
-    sta $01
-    jsr winner_apply_retirement_bonus_overlay
-    jsr royal_screen
-    inc $01
-    cli
-#if C64_TEST_SCRIPTED_RETIREMENT_PRODUCT
-    jmp c64_test_retirement_pass_sym
-#endif
+    jmp winner_royal_overlay
 !done:
     rts
 
@@ -2129,9 +2203,15 @@ eq_mon_slot: .byte 0
 eq_mon_alive: .byte 0
 eq_saved_tile: .byte 0
 eq_saved_flags: .byte 0
+.fill MAP_BASE - *, 0
 program_end:
-.assert "Program fits below MAP_BASE", program_end <= MAP_BASE, true
+.print "program_end = $" + toHexString(program_end)
+.assert "Program ends exactly at MAP_BASE", program_end, MAP_BASE
 .assert "Map and earthquake scratch stay resident below MAP_BASE", pm_map_min_x < program_end && eq_saved_flags < program_end, true
+
+.segment InitTail
+init_tail_start:
+.assert "InitTail starts exactly at MAP_BASE", init_tail_start, MAP_BASE
 
 // ============================================================
 // Init-only code below — lives past CREATURE_BASE, safe because
@@ -2545,6 +2625,27 @@ reu_detect_extended_c64:
 // Called once at startup before any $F000 trampoline is used.
 // Clobbers: A, X, Y
 init_load_banked:
+    lda #0
+    sta krill_active
+    sta krill_boot_used
+    sta krill_suspended
+    // Adopt the boot loader's Krill install result (see boot.s) at the first
+    // point of use. The two-byte magic at $0334/$0335 is set only after a
+    // successful drive-code install; anything else (including a direct
+    // MORIA64 start) keeps the KERNAL path.
+    lda $0334
+    cmp #$4b
+    bne !banked_kernal+
+    lda $0335
+    cmp #$d2
+    bne !banked_kernal+
+    // Magic present: the chain stub already Krill-loaded 64.BANK to $F000
+    // (a failed stub load clears the magic, so magic means it is there).
+    dec krill_active
+    inc krill_boot_used         // Evidence for the fastload runtime smoke:
+                                // the $F000 payload genuinely came via Krill
+    jmp !banked_done+
+!banked_kernal:
     lda #BANK_NO_BASIC          // $36 — KERNAL visible for LOAD
     sta $01
     cli
@@ -2556,31 +2657,61 @@ init_load_banked:
     ldx program_device
     ldy #1                      // Use PRG header address ($F000)
     jsr KERNAL_SETLFS
+#if C64_TEST_BOOT_HANDOFF
+c64_test_p6_bank_pre:
+#endif
     lda #0
-    ldx #$00
     ldy #$f0
     jsr KERNAL_LOAD
+#if C64_TEST_BOOT_HANDOFF
+c64_test_p6_kernal_load_return:
+#endif
     php
+    pha
     lda #2
     jsr KERNAL_CLOSE
     jsr KERNAL_CLRCHN
-    sei
-    lda $dd00
-    ora #%00000011
+    lda #$03                // VIC-II bank 0, IEC lines released, upper bits 0
     sta $dd00
     lda #BANK_NO_BASIC
     sta $01
+    pla
     plp
+    sei
+#if C64_TEST_BOOT_HANDOFF
+c64_test_p6_cleanup_return:
+#endif
     bcs !load_failed+
-    rts
+    jmp !banked_done+
 !load_failed:
+#if C64_TEST_BOOT_HANDOFF
+c64_test_p6_bank_failure:
+#endif
     lda #2
     sta $d020
     jmp !load_failed-
+!banked_done:
+    jsr $e544               // Clear the dead $0500 chain only after LOAD.
+    lda #$1b
+    sta $d011
+    rts
 
 c64_banked_fname:
     .byte $36,$34,$2e,$42,$41,$4e,$4b  // "64.BANK" in PETSCII/ASCII bytes
 .label c64_banked_fname_len = * - c64_banked_fname
+    .byte 0                         // 0-terminated for Krill loadraw
+
+.assert "krill resident base matches KRILL_RUNTIME_LOADRAW", krill_resident_base, KRILL_RUNTIME_LOADRAW
+.assert "krill_uninstall matches KRILL_RUNTIME_UNINSTALL", krill_uninstall, KRILL_RUNTIME_UNINSTALL
+.assert "krill_load_file pinned at KRILL_LOAD_FILE", krill_load_file, KRILL_LOAD_FILE
+
+init_tail_end:
+.print "Init tail: " + (init_tail_end - init_tail_start) + " bytes at $C000-$" + toHexString(init_tail_end)
+.assert "InitTail content is 873 bytes", init_tail_end - init_tail_start, 873
+.assert "InitTail fits below floor-item/map runtime ceiling", init_tail_end <= $d000, true
+.assert "boot device handoff does not overlap init tail", krill_boot_device < init_tail_start, true
+.assert "program_device does not overlap init tail", program_device < init_tail_start, true
+.assert "RAM vectors do not overlap init tail", $fffa >= init_tail_end, true
 
 // ============================================================
 // Banked runtime payload — loadable PRG at $F000.
@@ -2603,6 +2734,8 @@ c64_banked_fname:
     #undef PM_EQ_SCRATCH_EXTERNAL
     #undef PM_EQ_BANKED
 
+    // Preserve the fixed 64.BANK load span while retaining reclaimed code space.
+    .fill $fff8 - *, 0
 banked_code_end:
 
 .print "Banked runtime: " + (banked_code_end - $f000) + " bytes at $F000-$" + toHexString(banked_code_end)
@@ -2705,6 +2838,117 @@ ovl_death_end:
 // Modal-misc overlay — winner retirement art at $E000
 // ============================================================
 .segment ModalMiscOverlay
+// Temporarily return the IEC bus to stock DOS. Match Krill's standalone
+// uninstall sequence: make only the VIC bank bits outputs and clear the IEC
+// output latches before the resident switches CIA2 back to KERNAL mode.
+krill_suspend:
+    bit krill_active
+    bpl !done+
+    sei
+    lda #BANK_NO_KERNAL
+    sta $01
+    lda #$03
+    sta $dd02
+    and $dd00
+    sta $dd00
+    jsr KRILL_RUNTIME_UNINSTALL
+    lda #$03
+    sta $dd00
+    lda #4
+!settle_outer:
+    ldy #0
+!settle:
+    ldx #0
+!settle_inner:
+    dex
+    bne !settle_inner-
+    dey
+    bne !settle-
+    sec
+    sbc #1
+    bne !settle_outer-
+    lda #0
+    sta krill_active
+    lda #$ff
+    sta krill_suspended
+!done:
+    rts
+
+// Reinstall only while title owns the map window used by KINST41 at $C000.
+// Failure is nonfatal: clear suspension and continue on the KERNAL path.
+krill_resume:
+    bit krill_suspended
+    bpl !done+
+    bit krill_drive_1541
+    bpl !not_compatible+
+    ldx #krill_resume_name_end - krill_resume_name - 1
+!copy_name:
+    lda krill_resume_name,x
+    sta DUNGEON_GEN_DOOR_SCAN_BASE,x
+    dex
+    bpl !copy_name-
+    lda #krill_resume_name_end - krill_resume_name
+    ldx #<DUNGEON_GEN_DOOR_SCAN_BASE
+    ldy #>DUNGEON_GEN_DOOR_SCAN_BASE
+    jsr c64_disk_setnam
+    lda #2
+    ldx program_device
+    ldy #1
+    jsr c64_disk_setlfs
+    lda #0
+    ldx #$00
+    ldy #$c0
+    jsr c64_disk_call
+    .word $ffd5
+    php
+    lda #2
+    jsr c64_disk_close
+    jsr c64_disk_clrchn
+    plp
+    bcs !fallback+
+    lda program_device
+    sta KERNAL_CURRENT_DEVICE
+    jsr c64_disk_call
+    .word $c000
+    bcs !fallback+
+    ldx #18
+!settle_frame:
+!settle_wait:
+    lda $d012
+    cmp #$ff
+    bne !settle_wait-
+    dex
+    bne !settle_frame-
+    lda #$ff
+    sta krill_active
+    lda #0
+    sta krill_suspended
+    rts
+!not_compatible:
+!fallback:
+    lda #0
+    sta krill_suspended
+!done:
+    rts
+
+krill_resume_name:
+    .byte $4b,$49,$4e,$53,$54,$34,$31 // "KINST41"
+krill_resume_name_end:
+.assert "Krill resume filename fits transient door-scan scratch", DUNGEON_GEN_DOOR_SCAN_BASE + krill_resume_name_end - krill_resume_name <= DUNGEON_GEN_DOOR_SCAN_LIMIT, true
+
+winner_royal_overlay:
+    jsr krill_suspend
+    sei
+    lda #BANK_NO_KERNAL
+    sta $01
+    jsr winner_apply_retirement_bonus_overlay
+    jsr royal_screen
+#if C64_TEST_SCRIPTED_RETIREMENT_PRODUCT
+    jmp c64_test_retirement_pass_sym
+#else
+    jmp platform_runtime_resync_c64
+#endif
+
 winner_apply_retirement_bonus_overlay:
     lda player_data + PL_LEVEL
     cmp #41

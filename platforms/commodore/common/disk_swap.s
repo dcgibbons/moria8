@@ -174,7 +174,7 @@ disk_accept_plus4_program_device:
 #if C128
     lda #8
 #else
-    lda $ba                     // KERNAL current device from the boot/load path
+    lda krill_boot_device       // Validated C64 boot-device handoff at $033B.
 #endif
     sta program_device
 #endif

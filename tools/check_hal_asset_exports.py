@@ -43,7 +43,7 @@ TITLE_TRANSACTION_BODIES = {
     "c64": (
         ROOT / "platforms/commodore/c64/config.s",
         "hal_asset_load_title",
-        ("hal_storage_title_name", "$ffbd", "$ffba", "kernal_load_safe", "$ffc3", "$ffcc"),
+        ("hal_storage_title_name", "hal_asset_load_prg_header", "platform_runtime_resync_c64"),
     ),
     "c128": (
         ROOT / "platforms/commodore/c128/title_cache_runtime.s",

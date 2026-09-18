@@ -85,7 +85,52 @@ kernal_load:
     jsr hal_asset_load
 }
 
+// krill_active — $ff while drive code is installed, $00 on KERNAL fallback.
+// Any standard-DOS transaction first calls krill_suspend from ModalMiscOverlay;
+// title context may then reinstall the loader with the compact installer.
+// Lives next to the boot handoff magic in the always-RAM $0334-$033B gap
+// (below the cassette-buffer / door-scan window, which starts at $033C —
+// memory.s DUNGEON_GEN_DOOR_SCAN_BASE; literal here so unit tests that import
+// config.s without memory.s still assemble).
+.label krill_active = $0336
+// krill_boot_used — nonzero when init_load_banked loaded the $F000 payload
+// through the Krill boot resident (fastload smoke evidence byte).
+.label krill_boot_used = $0337
+.label krill_suspended = $0338
+.label krill_drive_1541 = $0339
+.label krill_boot_art_used = $033a
+.label krill_boot_device = $033b
+.assert "krill state bytes stay below the cassette-buffer window", krill_boot_device < $033c, true
+.assert "boot device handoff follows art evidence", krill_boot_device, krill_boot_art_used + 1
+
+// Krill's Loader entry constants. The boot-time resident is loaded to $0400
+// by boot.s (screen RAM — but it is only ever used by the chain stub, before
+// the game takes over the display); the runtime
+// resident rides inside 64.bank at $F000 (see main.s RuntimeBanked segment).
+.const KRILL_BOOT_LOADRAW    = $0400
+.const KRILL_BOOT_UNINSTALL  = $0400 + 225
+// Runtime resident inside 64.bank (raw 225 bytes + UNINSTALL_API 13 bytes).
+.const KRILL_RUNTIME_LOADRAW    = $F000
+.const KRILL_RUNTIME_UNINSTALL  = $F000 + 225
+// krill_load_file wrapper, pinned immediately after the resident in the
+// RuntimeBanked segment (main.s asserts the label lands here). Kept as an
+// address constant so unit tests that import config.s without main.s link.
+.const KRILL_LOAD_FILE          = $F000 + 238
+
+// Krill's Loader entry constants (resident assembled at $F000, see main.s
+// RuntimeBanked segment). Status codes returned in A by loadraw.
+.const KRILL_STATUS_OK                 = $00
+.const KRILL_STATUS_DEVICE_INCOMPATIBLE = $fb
+.const KRILL_STATUS_TOO_MANY_DEVICES   = $fc
+.const KRILL_STATUS_GENERIC_KERNAL_ERROR = $fd
+.const KRILL_STATUS_DEVICE_NOT_PRESENT = $fe
+.const KRILL_STATUS_FILE_NOT_FOUND     = $ff
+
 hal_asset_load_prg_header:
+#if !C64_UNIT_TEST
+    bit krill_active
+    bmi hal_asset_krill_call
+#endif
     php
     jsr $ffbd               // SETNAM
     lda #2
@@ -104,17 +149,39 @@ hal_asset_load_prg_header:
     lda #2
     jsr $ffc3               // CLOSE
     jsr $ffcc               // CLRCHN
-    lda $dd00
-    ora #%00000011          // Restore VIC-II bank 0 after serial I/O
-    sta $dd00
-    plp
-    php
-    pla
-    sta asset_load_save_p
-    plp
-    lda asset_load_save_p
+    lda #%00000011          // Restore VIC-II bank 0, IEC lines released,
+    sta $dd00               // upper 6 bits 0 (Krill $DD00 contract)
+    pla                     // A = result flags
+    tax
+    plp                     // restore caller flags
+    txa
     pha
-    plp
+    plp                     // restore result flags (carry)
+    rts
+
+// Krill path shared by all asset loads. Caller may be in any banking/IRQ
+// state; the Krill resident lives under KERNAL at $F000, so bank to all-RAM
+// for the call. IRQs are not masked: the RAM wedge vectors RTI them, and the
+// Krill 2-bit+ATN protocol is fully asynchronous. Result carry is preserved
+// across the bank restore.
+// Input:  X/Y = 0-terminated PETSCII filename.
+// Output: carry clear = success, carry set = error (same contract as KERNAL path).
+hal_asset_krill_call:
+    lda $01
+    pha
+    lda #$35                // I/O + RAM under KERNAL visible
+    sta $01
+    jsr KRILL_LOAD_FILE
+    php                     // push result flags
+    tay                     // preserve Krill status while restoring banking
+    pla
+    tax                     // X = result flags (pla/tax keep carry in P1 byte)
+    pla
+    sta $01                 // restore caller banking
+    txa
+    pha
+    plp                     // restore result flags (carry)
+    tya
     rts
 
 #if PLATFORM_PRODUCT_OVERLAY_RUNTIME
@@ -122,23 +189,8 @@ hal_asset_load_title:
     lda #hal_storage_title_name_len
     ldx #<hal_storage_title_name
     ldy #>hal_storage_title_name
-    jsr $ffbd               // SETNAM
-    lda #2
-#if C64_UNIT_TEST
-    ldx #8
-#else
-    ldx program_device
-#endif
-    ldy #0                  // Use caller destination at MAP_BASE
-    jsr $ffba               // SETLFS
-    lda #0
-    ldx #<MAP_BASE
-    ldy #>MAP_BASE
-    jsr kernal_load_safe
+    jsr hal_asset_load_prg_header
     php
-    lda #2
-    jsr $ffc3               // CLOSE
-    jsr $ffcc               // CLRCHN
     jsr platform_runtime_resync_c64
     plp
     rts
@@ -149,12 +201,14 @@ hal_asset_load_title:
 #endif
 
 hal_asset_close_channel:
+    bit krill_active
+    bpl !open+              // Krill owns the drive; no KERNAL file table to clean
+    rts
+!open:
     lda #2
     jsr $ffc3               // CLOSE
     jsr $ffcc               // CLRCHN
     rts
-
-asset_load_save_p: .byte 0
 
 .const DEATH_ALIVE   = $00    // Player is alive
 .const DEATH_CHEST_NEEDLE = $F7

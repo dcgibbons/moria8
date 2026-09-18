@@ -41,6 +41,19 @@ VICE64      ?= x64sc
 VICE128     ?= x128
 VICEPLUS4   ?= xplus4
 
+# ── Krill's Loader (C64 fast loader; auto-downloaded, BSD-3-Clause) ──
+KRILL_DIR     ?= ../../tools/krill
+KRILL_URL      = https://csdb.dk/getinternalfile.php/238373/loader-v194.zip
+KRILL_SHA256   = c273980bb81eb5b16e6163869cec147fc76e27bdba6d03e8a3438b8251aa00f1
+KRILL_CONFIG   = c64/krill/loaderconfig.inc
+KRILL_CONFIG_1541 = c64/krill1541/loaderconfig.inc
+CA65          ?= ca65
+ifeq ($(filter /%,$(KRILL_DIR)),)
+KRILL_DIR_RESOLVED = $(CURDIR)/$(KRILL_DIR)
+else
+KRILL_DIR_RESOLVED = $(KRILL_DIR)
+endif
+
 # ── Output layout ─────────────────────────────────────────
 BUILD       ?= ../../build
 OUT         ?= $(BUILD)
@@ -123,6 +136,12 @@ C64_OVL_ITEMS      = $(OUT64)/ovl.items
 C64_OVL_SPELL      = $(OUT64)/ovl.spell
 C64_OVL_CHEST      = $(OUT64)/ovl.chest
 C64_RUNTIME_BANKED = $(OUT64)/64.bank
+C64_INIT_TAIL      = $(OUT64)/64.init
+C64_KRILL_RESIDENT_BIN = $(OUT64)/krill-resident.bin
+C64_KRILL_INSTALL_PRG  = $(OUT64)/kinst64.prg
+C64_KRILL_BOOT_PRG     = $(OUT64)/kres64.prg
+C64_KRILL_1541_INSTALL_PRG = $(OUT64)/kinst41.prg
+C64_KRILL_STAMP        = $(OUT64)/.krill-built.stamp
 
 # ── Plus/4 artifacts ──────────────────────────────────────
 PLUS4_MAIN_PRG       = $(OUTPLUS4)/moria4.prg
@@ -198,7 +217,7 @@ DISK128_LABEL      = "moria8 c128,m8"
 DISKPLUS4_LABEL    = "moria8 plus4,m8"
 
 # ── Aggregate groups ──────────────────────────────────────
-C64_BUILD_ARTIFACTS  = $(C64_MAIN_PRG) $(C64_BOOT_PRG) $(C64_BOOTART_PRG) $(C64_TITLE_PRG) $(C64_TIER_PRGS) \
+C64_BUILD_ARTIFACTS  = $(C64_MAIN_PRG) $(C64_INIT_TAIL) $(C64_BOOT_PRG) $(C64_BOOTART_PRG) $(C64_TITLE_PRG) $(C64_TIER_PRGS) \
 	$(C64_OVL_START) $(C64_OVL_TOWN) $(C64_OVL_DEATH) $(C64_OVL_MODAL_MISC) $(C64_OVL_GEN) $(C64_OVL_HELP) $(C64_OVL_UI) $(C64_OVL_ITEMS) $(C64_OVL_SPELL) $(C64_OVL_CHEST) \
 	$(C64_RUNTIME_BANKED)
 PLUS4_BUILD_ARTIFACTS  = $(PLUS4_MAIN_PRG) $(PLUS4_BOOT_PRG) $(PLUS4_TITLE_PRG) $(PLUS4_TIER_PRGS) \
@@ -218,7 +237,7 @@ C128_MAIN_OUTPUTS = $(C128_MAIN_PRG) $(C128_OVL_START) $(C128_OVL_TOWN) $(C128_O
 .PHONY: all build build64 build128 buildplus4 disk disk64 zip64 c64-dist disk128 diskplus4 run run64 run128 runplus4 \
 	bootart128-charset-demo \
 	test test-disk test-disk-static test-disk-debt test64 test128 test128-guards test128-units test128-boot test128-town test128-cache test128-diag test128-fast test128-fast-smoke testplus4 testplus4-build testplus4-runtime clean \
-	check-zp check-6502-lint check-hal-boundaries cleanup-source-symbols ensure-kickass kickass create-symlinks
+	check-zp check-6502-lint check-hal-boundaries cleanup-source-symbols ensure-kickass ensure-krill kickass create-symlinks
 
 all: build
 
@@ -334,8 +353,9 @@ check-hal-boundaries:
 $(VERSION_INC): $(VERSION_FILE) $(VERSION_INC_TOOL) | $(OUT)
 	python3 "$(VERSION_INC_TOOL)" "$(VERSION_FILE)" "$(VERSION_INC)"
 
-$(C64_MAIN_PRG): $(C64_SOURCES) $(VERSION_INC) | ensure-kickass $(OUT64)
+$(C64_MAIN_PRG): $(C64_SOURCES) $(VERSION_INC) $(C64_KRILL_RESIDENT_BIN) | ensure-kickass $(OUT64)
 	$(JAVA) -jar "$(KICKASS_RESOLVED)" ":OVL_OUT=$(OVL_OUT64)" "$(C64_MAIN_SRC)" $(KA_FLAGS64) -o "$(C64_MAIN_PRG)"
+	python3 -c 'import pathlib,sys; main,init,bank=map(lambda x:pathlib.Path(x).read_bytes(),sys.argv[1:]); assert main[:2] == bytes((1,8)) and len(main) == 47105, "MORIA64 must be $$0801-$$BFFF"; assert init[:2] == bytes((0,192)) and len(init) == 875, "64.INIT must be 873 bytes at $$C000"; assert bank[:2] == bytes((0,240)) and len(bank) == 4090, "64.BANK must be 4088 bytes at $$F000"' "$(C64_MAIN_PRG)" "$(C64_INIT_TAIL)" "$(C64_RUNTIME_BANKED)"
 
 $(C64_OVL_START): $(C64_MAIN_PRG)
 $(C64_OVL_TOWN): $(C64_MAIN_PRG)
@@ -348,9 +368,11 @@ $(C64_OVL_ITEMS): $(C64_MAIN_PRG)
 $(C64_OVL_SPELL): $(C64_MAIN_PRG)
 $(C64_OVL_CHEST): $(C64_MAIN_PRG)
 $(C64_RUNTIME_BANKED): $(C64_MAIN_PRG)
+$(C64_INIT_TAIL): $(C64_MAIN_PRG)
 
-$(C64_BOOT_PRG): $(C64_SOURCES) | ensure-kickass $(OUT64)
+$(C64_BOOT_PRG): $(C64_SOURCES) $(C64_KRILL_BOOT_PRG) | ensure-kickass $(OUT64)
 	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(C64_BOOT_SRC)" -o "$(C64_BOOT_PRG)"
+	python3 -c 'import pathlib,sys; p=pathlib.Path(sys.argv[1]).read_bytes(); assert p[:2] == bytes((1, 8)) and len(p) < 0x1801, "boot.prg embedded source must end below $$2000"' "$(C64_BOOT_PRG)"
 
 $(C64_BOOTART_PPM): $(C64_BOOTART_PNG) $(C64_BOOTART_SRC_TOOL) | $(OUT64)
 	@test -f "$(C64_BOOTART_PNG)" || { echo "Missing source art: $(C64_BOOTART_PNG)"; false; }
@@ -463,7 +485,7 @@ $(LICENSE_DISK_FILE): $(LICENSE_FILE) | $(OUT)
 $(SOURCE_OFFER_DISK_FILE): $(SOURCE_OFFER) | $(OUT)
 	LC_ALL=C tr '\012' '\015' < "$<" > "$@"
 
-$(C64_DIST_STAMP): $(C64_BUILD_ARTIFACTS) $(LICENSE_DISK_FILE) $(SOURCE_OFFER_DISK_FILE) $(EMPTY_PRG) | $(OUT)
+$(C64_DIST_STAMP): $(C64_BUILD_ARTIFACTS) $(C64_KRILL_INSTALL_PRG) $(C64_KRILL_BOOT_PRG) $(C64_KRILL_1541_INSTALL_PRG) $(LICENSE_DISK_FILE) $(SOURCE_OFFER_DISK_FILE) $(EMPTY_PRG) | $(OUT)
 	rm -rf "$(C64_DIST_DIR)"
 	mkdir -p "$(C64_DIST_DIR)"
 	cp -f "$(EMPTY_PRG)" "$(C64_DIST_DIR)/art1"
@@ -474,7 +496,11 @@ $(C64_DIST_STAMP): $(C64_BUILD_ARTIFACTS) $(LICENSE_DISK_FILE) $(SOURCE_OFFER_DI
 	cp -f "$(C64_BOOT_PRG)" "$(C64_DIST_DIR)/moria8"
 	cp -f "$(C64_BOOT_PRG)" "$(C64_DIST_DIR)/boot64"
 	cp -f "$(C64_BOOTART_PRG)" "$(C64_DIST_DIR)/bootart64"
+	cp -f "$(C64_KRILL_INSTALL_PRG)" "$(C64_DIST_DIR)/kinst64"
+	cp -f "$(C64_KRILL_BOOT_PRG)" "$(C64_DIST_DIR)/kres64"
+	cp -f "$(C64_KRILL_1541_INSTALL_PRG)" "$(C64_DIST_DIR)/kinst41"
 	cp -f "$(C64_MAIN_PRG)" "$(C64_DIST_DIR)/moria64"
+	cp -f "$(C64_INIT_TAIL)" "$(C64_DIST_DIR)/64.init"
 	cp -f "$(C64_TITLE_PRG)" "$(C64_DIST_DIR)/t64"
 	cp -f "$(OUT64)/monster.db.1" "$(C64_DIST_DIR)/monster.db.1"
 	cp -f "$(OUT64)/monster.db.2" "$(C64_DIST_DIR)/monster.db.2"
@@ -499,7 +525,7 @@ $(C64_ZIP_IMAGE): $(C64_DIST_STAMP)
 	rm -f "$(C64_ZIP_IMAGE)"
 	cd "$(C64_DIST_DIR)" && zip -q -r "../$(notdir $(C64_ZIP_IMAGE))" . -x .stamp
 
-$(DISK64_IMAGE): $(C64_BUILD_ARTIFACTS) $(DISKART) $(VERSION_FILE) $(LICENSE_DISK_FILE) $(SOURCE_OFFER_DISK_FILE) | $(OUT)
+$(DISK64_IMAGE): $(C64_BUILD_ARTIFACTS) $(C64_KRILL_INSTALL_PRG) $(C64_KRILL_BOOT_PRG) $(C64_KRILL_1541_INSTALL_PRG) $(DISKART) $(VERSION_FILE) $(LICENSE_DISK_FILE) $(SOURCE_OFFER_DISK_FILE) | $(OUT)
 	printf '\x01\x08' > "$(EMPTY_PRG)"
 	rm -f "$(DISK64_IMAGE)"
 	$(C1541) -format $(DISK64_LABEL) d64 "$(DISK64_IMAGE)" \
@@ -512,7 +538,11 @@ $(DISK64_IMAGE): $(C64_BUILD_ARTIFACTS) $(DISKART) $(VERSION_FILE) $(LICENSE_DIS
 		-write "$(C64_BOOT_PRG)" "moria8" \
 		-write "$(C64_BOOT_PRG)" "boot64" \
 		-write "$(C64_BOOTART_PRG)" "bootart64" \
+		-write "$(C64_KRILL_INSTALL_PRG)" "kinst64" \
+		-write "$(C64_KRILL_BOOT_PRG)" "kres64" \
+		-write "$(C64_KRILL_1541_INSTALL_PRG)" "kinst41" \
 		-write "$(C64_MAIN_PRG)" "moria64" \
+		-write "$(C64_INIT_TAIL)" "64.init" \
 		-write "$(C64_TITLE_PRG)" "t64" \
 		-write "$(OUT64)/monster.db.1" "monster.db.1" \
 		-write "$(OUT64)/monster.db.2" "monster.db.2" \
@@ -531,6 +561,7 @@ $(DISK64_IMAGE): $(C64_BUILD_ARTIFACTS) $(DISKART) $(VERSION_FILE) $(LICENSE_DIS
 			-write "$(C64_RUNTIME_BANKED)" "64.bank" \
 			-write "$(LICENSE_DISK_FILE)" "license,s" \
 			-write "$(SOURCE_OFFER_DISK_FILE)" "source-offer,s"
+	python3 ../../tools/check_krill_filenames.py
 	python3 "$(DISKART)" "$(DISK64_IMAGE)" c64
 	@mkdir -p "$(OUT64)"
 	cp -f "$(DISK64_IMAGE)" "$(OUT64)/moria8-c64.d64"
@@ -655,6 +686,43 @@ ifeq ($(origin KICKASS),file)
 else
 	@test -f "$(KICKASS_RESOLVED)" || { echo "ERROR: custom KICKASS path does not exist: $(KICKASS_RESOLVED)"; exit 1; }
 endif
+
+ensure-krill: | $(OUT64)
+	@if [ ! -f "$(KRILL_DIR_RESOLVED)/loader/src/Makefile" ]; then \
+		echo "Downloading Krill's Loader r194..."; \
+		mkdir -p "$(KRILL_DIR_RESOLVED)"; \
+		curl -sL "$(KRILL_URL)" -o "$(KRILL_DIR_RESOLVED)/loader-v194.zip" || { echo "ERROR: failed to download Krill's Loader"; exit 1; }; \
+		echo "$(KRILL_SHA256)  $(KRILL_DIR_RESOLVED)/loader-v194.zip" | shasum -a 256 -c - || { echo "ERROR: Krill's Loader archive checksum mismatch"; rm -f "$(KRILL_DIR_RESOLVED)/loader-v194.zip"; exit 1; }; \
+		unzip -qo "$(KRILL_DIR_RESOLVED)/loader-v194.zip" -d "$(KRILL_DIR_RESOLVED)" || { echo "ERROR: failed to unpack Krill's Loader"; rm -f "$(KRILL_DIR_RESOLVED)/loader-v194.zip"; exit 1; }; \
+		rm -f "$(KRILL_DIR_RESOLVED)/loader-v194.zip"; \
+		test -f "$(KRILL_DIR_RESOLVED)/loader/src/Makefile" || { echo "ERROR: Krill source not found after download at $(KRILL_DIR_RESOLVED)"; exit 1; }; \
+		echo "Krill's Loader ready at $(KRILL_DIR_RESOLVED)"; \
+	fi
+
+# Build the C64 Krill residents (assembled for $F000 — embedded at the top of
+# the RuntimeBanked segment by c64/main.s; and $0400 — the boot-time copy used
+# by c64/boot.s before 64.bank exists) plus the one-shot install payload
+# ($2000, loaded and run by c64/boot.s before MORIA64). Requires ca65 + perl.
+$(C64_KRILL_STAMP): $(KRILL_CONFIG) $(KRILL_CONFIG_1541) | ensure-krill $(OUT64)
+	@command -v $(CA65) >/dev/null || { echo "ERROR: ca65 (cc65) required to build Krill's Loader"; exit 1; }
+	rm -f "$(KRILL_DIR_RESOLVED)/loader/build/intermediate/loader-nonreloc-c64.o" "$(KRILL_DIR_RESOLVED)/loader/build/loader-c64.prg" "$(KRILL_DIR_RESOLVED)/loader/build/loadersymbols-c64.inc"
+	MAKEFLAGS= $(MAKE) -C "$(KRILL_DIR_RESOLVED)/loader/src" PLATFORM=c64 prg INSTALL=2000 RESIDENT=f000 ZP=e0 VERSION=194 EXTCONFIGPATH="$(CURDIR)/c64/krill"
+	python3 ../../tools/prg_to_bin.py "$(KRILL_DIR_RESOLVED)/loader/build/loader-c64.prg" "$(C64_KRILL_RESIDENT_BIN)" --expect-addr 0xf000
+	rm -f "$(KRILL_DIR_RESOLVED)/loader/build/intermediate/loader-nonreloc-c64.o" "$(KRILL_DIR_RESOLVED)/loader/build/loader-c64.prg" "$(KRILL_DIR_RESOLVED)/loader/build/loadersymbols-c64.inc"
+	MAKEFLAGS= $(MAKE) -C "$(KRILL_DIR_RESOLVED)/loader/src" PLATFORM=c64 prg INSTALL=2000 RESIDENT=0400 ZP=e0 VERSION=194 EXTCONFIGPATH="$(CURDIR)/c64/krill"
+	cp "$(KRILL_DIR_RESOLVED)/loader/build/loader-c64.prg" "$(C64_KRILL_BOOT_PRG)"
+	cp "$(KRILL_DIR_RESOLVED)/loader/build/install-c64.prg" "$(C64_KRILL_INSTALL_PRG)"
+	python3 -c 'import pathlib,sys; kres,kinst=map(lambda x:pathlib.Path(x).read_bytes(),sys.argv[1:]); assert kres[:2] == bytes((0,4)) and len(kres) == 240, "KRES64 must be 238 bytes at $$0400"; assert kinst[:2] == bytes((0,32)) and len(kinst) == 6998, "KINST64 must be 6996 bytes at $$2000"' "$(C64_KRILL_BOOT_PRG)" "$(C64_KRILL_INSTALL_PRG)"
+	rm -f "$(KRILL_DIR_RESOLVED)/loader/build/intermediate/loader-nonreloc-c64.o" "$(KRILL_DIR_RESOLVED)/loader/build/intermediate/install-nonreloc-c64.o" "$(KRILL_DIR_RESOLVED)/loader/build/loader-c64.prg" "$(KRILL_DIR_RESOLVED)/loader/build/install-c64.prg" "$(KRILL_DIR_RESOLVED)/loader/build/loadersymbols-c64.inc"
+	MAKEFLAGS= $(MAKE) -C "$(KRILL_DIR_RESOLVED)/loader/src" PLATFORM=c64 prg INSTALL=c000 RESIDENT=0400 ZP=e0 VERSION=194 EXTCONFIGPATH="$(CURDIR)/c64/krill1541"
+	cp "$(KRILL_DIR_RESOLVED)/loader/build/install-c64.prg" "$(C64_KRILL_1541_INSTALL_PRG)"
+	python3 -c 'import pathlib,sys; p=pathlib.Path(sys.argv[1]).read_bytes(); assert p[:2] == bytes((0, 192)) and len(p) <= 0x1002, "kinst41 must load wholly within title-owned $$C000-$$CFFF"' "$(C64_KRILL_1541_INSTALL_PRG)"
+	touch "$(C64_KRILL_STAMP)"
+
+$(C64_KRILL_RESIDENT_BIN): $(C64_KRILL_STAMP)
+$(C64_KRILL_INSTALL_PRG): $(C64_KRILL_STAMP)
+$(C64_KRILL_BOOT_PRG): $(C64_KRILL_STAMP)
+$(C64_KRILL_1541_INSTALL_PRG): $(C64_KRILL_STAMP)
 
 $(OUT):
 	mkdir -p "$(OUT)"

@@ -27,6 +27,7 @@
 
 #import "../../../../core/zeropage.s"
 #import "../hal/memory_bank_consts.s"
+#import "../config.s"
 
 .const SCREEN_COLS = 40
 .const STATUS_ROW = 21
@@ -474,7 +475,7 @@ test_start:
     lda #1
     sta disk_setup_done
     lda #8
-    sta $ba
+    sta krill_boot_device
     jsr disk_reset_session_state
     lda disk_mode
     bne !t1_fail+
@@ -483,7 +484,7 @@ test_start:
     bne !t1_fail+
     jsr reset_harness_state
     lda #9
-    sta $ba
+    sta krill_boot_device
     jsr disk_reset_session_state
     lda program_device
     cmp #9

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import subprocess
 import sys
@@ -39,6 +40,8 @@ def build_vice_command(args: argparse.Namespace) -> list[str]:
         "dummy",
         "-remotemonitor",
         "-binarymonitor",
+        "-binarymonitoraddress",
+        f"{args.host}:{args.port}",
     ]
     if args.vice_extra_arg:
         command.extend(args.vice_extra_arg)
@@ -114,7 +117,6 @@ def terminate_vice(process: subprocess.Popen[bytes] | None) -> None:
     except subprocess.TimeoutExpired:
         process.kill()
         process.wait(timeout=2.0)
-    time.sleep(1.0)
 
 def read_monitor_byte(connector: VICEConnector, addr: int | str) -> int | None:
     response = connector.send_command(f"m {normalize_addr(addr)} {normalize_addr(addr)}")
@@ -231,21 +233,46 @@ def attach_drive8(connector: VICEConnector, disk_path: Path, delay: float = 0.5,
     time.sleep(delay)
 
 
+def attach_drive9(connector: VICEConnector, disk_path: Path, drive_type: str, delay: float = 0.5) -> None:
+    connector.send_command(f'resourceset "Drive9Type" "{drive_type}"')
+    connector.send_command('resourceset "AttachDevice9d0Readonly" "0"')
+    response = connector.send_command(f'attach "{disk_path.resolve()}" 9')
+    if "Cannot" in response or "Error" in response or "Failed" in response:
+        raise RuntimeError(f"failed to attach drive 9 image {disk_path}: {response.strip()}")
+    connector.send_command("reset 9")
+    time.sleep(delay)
+
+
+def set_breakpoint(connector: VICEConnector, args: argparse.Namespace, addr: int | str) -> None:
+    if args.c64_ram_breakpoints:
+        connector.send_command(f"break exec {normalize_addr(addr)} if (@cpu:$01 & $03) != $03")
+    else:
+        connector.break_at(addr)
+
+
 def wait_for_native_start(args: argparse.Namespace) -> MonitorTestResult:
     deadline = time.monotonic() + args.timeout
     needle = f"C:${args.start_addr}"
+    stop_needle = f"EXEC {args.start_addr}"
     while time.monotonic() < deadline:
         try:
             log_text = args.native_start_log.read_text(errors="ignore").upper()
         except FileNotFoundError:
             log_text = ""
-        if "JAM" in log_text or "INVALID OPCODE" in log_text:
-            return MonitorTestResult(False, "native start wait saw crash", log_text[-1000:])
-        for line in log_text.splitlines():
+        try:
+            output_text = args.native_start_output.read_text(errors="ignore").upper()
+        except FileNotFoundError:
+            output_text = ""
+        evidence = log_text + output_text
+        if "JAM" in evidence or "INVALID OPCODE" in evidence:
+            return MonitorTestResult(False, "native start wait saw crash", evidence[-1000:])
+        for line in evidence.splitlines():
+            if args.c64_ram_breakpoints and "STOP ON" in line and stop_needle in line:
+                return MonitorTestResult(True, "native monitor reached C64 RAM start symbol", line)
             if line.startswith("UNTIL:") and needle in line:
                 return MonitorTestResult(True, "native monitor reached start symbol", line)
         time.sleep(0.1)
-    return MonitorTestResult(False, f"timeout after {args.timeout:.1f}s", log_text[-1000:] if "log_text" in locals() else "")
+    return MonitorTestResult(False, f"timeout after {args.timeout:.1f}s", evidence[-1000:] if "evidence" in locals() else "")
 
 
 def run_until_pass(connector: VICEConnector, pass_addr: str, timeout: float) -> MonitorTestResult:
@@ -297,15 +324,20 @@ def run_vice(args: argparse.Namespace, pass_addr: str, fail_addr: str | None, du
             native_tmp_dir = tempfile.TemporaryDirectory(prefix="moria-product-smoke-")
             args.native_start_moncommands = Path(native_tmp_dir.name) / "native-start.mon"
             args.native_start_log = Path(native_tmp_dir.name) / "native-start.log"
-            args.native_start_moncommands.write_text(f"until ${args.start_addr}\n")
+            args.native_start_output = Path(native_tmp_dir.name) / "native-start.out"
+            if args.c64_ram_breakpoints:
+                args.native_start_moncommands.write_text(
+                    f"break exec ${args.start_addr} if (@cpu:$01 & $03) != $03\ng\n"
+                )
+            else:
+                args.native_start_moncommands.write_text(f"until ${args.start_addr}\n")
         else:
             args.native_start_moncommands = None
             args.native_start_log = None
-        process = subprocess.Popen(
-            build_vice_command(args),
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
+        command = build_vice_command(args)
+        if args.native_start:
+            command = ["script", "-q", str(args.native_start_output), *command]
+        process = subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         try:
             if args.startup_delay > 0:
                 time.sleep(args.startup_delay)
@@ -319,6 +351,8 @@ def run_vice(args: argparse.Namespace, pass_addr: str, fail_addr: str | None, du
                 )
                 if args.attach8_at_start_d64:
                     attach_drive8(connector, args.attach8_at_start_d64, args.attach_delay, reset_for(args, "attach8_at_start_reset8_after_attach"))
+                if args.attach9_at_start_d64:
+                    attach_drive9(connector, args.attach9_at_start_d64, args.drive9_type, args.attach_delay)
             else:
                 connector.connect(
                     retries=max(1, int(args.connect_timeout / args.connect_retry_delay)),
@@ -326,7 +360,7 @@ def run_vice(args: argparse.Namespace, pass_addr: str, fail_addr: str | None, du
                 )
             if args.start_symbol and not args.native_start:
                 connector.clear_breakpoints()
-                connector.break_at(args.start_addr)
+                set_breakpoint(connector, args, args.start_addr)
                 connector.go()
                 start_result = connector.wait_for_stop(
                     pass_addr=args.start_addr,
@@ -351,12 +385,14 @@ def run_vice(args: argparse.Namespace, pass_addr: str, fail_addr: str | None, du
                     return start_result, dumps
                 if args.attach8_at_start_d64:
                     attach_drive8(connector, args.attach8_at_start_d64, args.attach_delay, reset_for(args, "attach8_at_start_reset8_after_attach"))
+                if args.attach9_at_start_d64:
+                    attach_drive9(connector, args.attach9_at_start_d64, args.drive9_type, args.attach_delay)
             connector.clear_breakpoints()
             if args.swap_addr:
-                connector.break_at(args.swap_addr)
-                connector.break_at(pass_addr)
+                set_breakpoint(connector, args, args.swap_addr)
+                set_breakpoint(connector, args, pass_addr)
                 if fail_addr:
-                    connector.break_at(fail_addr)
+                    set_breakpoint(connector, args, fail_addr)
                 swap_hits = 0
                 resume_addr = args.resume_addr
                 while True:
@@ -373,9 +409,9 @@ def run_vice(args: argparse.Namespace, pass_addr: str, fail_addr: str | None, du
                             attach_drive8(connector, args.swap_attach8_d64, args.attach_delay, reset_for(args, "swap_reset8_after_attach"))
                             if args.swap2_addr:
                                 connector.clear_breakpoints()
-                                connector.break_at(args.swap2_addr)
+                                set_breakpoint(connector, args, args.swap2_addr)
                                 if fail_addr:
-                                    connector.break_at(fail_addr)
+                                    set_breakpoint(connector, args, fail_addr)
                                 connector.go()
                                 result = connector.wait_for_stop(
                                     pass_addr=args.swap2_addr,
@@ -391,9 +427,9 @@ def run_vice(args: argparse.Namespace, pass_addr: str, fail_addr: str | None, du
                                 attach_drive8(connector, args.swap2_attach8_d64, args.attach_delay, reset_for(args, "swap2_reset8_after_attach"))
                                 if args.swap3_addr:
                                     connector.clear_breakpoints()
-                                    connector.break_at(args.swap3_addr)
+                                    set_breakpoint(connector, args, args.swap3_addr)
                                     if fail_addr:
-                                        connector.break_at(fail_addr)
+                                        set_breakpoint(connector, args, fail_addr)
                                     connector.go()
                                     result = connector.wait_for_stop(
                                         pass_addr=args.swap3_addr,
@@ -409,9 +445,9 @@ def run_vice(args: argparse.Namespace, pass_addr: str, fail_addr: str | None, du
                                     attach_drive8(connector, args.swap3_attach8_d64, args.attach_delay, reset_for(args, "swap3_reset8_after_attach"))
                                     if args.swap4_addr:
                                         connector.clear_breakpoints()
-                                        connector.break_at(args.swap4_addr)
+                                        set_breakpoint(connector, args, args.swap4_addr)
                                         if fail_addr:
-                                            connector.break_at(fail_addr)
+                                            set_breakpoint(connector, args, fail_addr)
                                         connector.go()
                                         result = connector.wait_for_stop(
                                             pass_addr=args.swap4_addr,
@@ -426,9 +462,9 @@ def run_vice(args: argparse.Namespace, pass_addr: str, fail_addr: str | None, du
                                             return result, dumps
                                         attach_drive8(connector, args.swap4_attach8_d64, args.attach_delay, reset_for(args, "swap4_reset8_after_attach"))
                             connector.clear_breakpoints()
-                            connector.break_at(pass_addr)
+                            set_breakpoint(connector, args, pass_addr)
                             if fail_addr:
-                                connector.break_at(fail_addr)
+                                set_breakpoint(connector, args, fail_addr)
                             connector.go()
                             result = connector.wait_for_stop(
                                 pass_addr=pass_addr,
@@ -458,11 +494,11 @@ def run_vice(args: argparse.Namespace, pass_addr: str, fail_addr: str | None, du
                     break
             else:
                 if not args.until_pass:
-                    connector.break_at(pass_addr)
+                    set_breakpoint(connector, args, pass_addr)
                 if fail_addr and not args.until_pass:
-                    connector.break_at(fail_addr)
+                    set_breakpoint(connector, args, fail_addr)
                 if args.require_hit_addr:
-                    connector.break_at(args.require_hit_addr)
+                    set_breakpoint(connector, args, args.require_hit_addr)
                     continue_from(connector, args.resume_addr)
                     required_result = connector.wait_for_stop(
                         pass_addr=args.require_hit_addr,
@@ -481,9 +517,9 @@ def run_vice(args: argparse.Namespace, pass_addr: str, fail_addr: str | None, du
                                 dumps.append(f"{start}: {exc}")
                         return required_result, dumps
                     connector.clear_breakpoints()
-                    connector.break_at(pass_addr)
+                    set_breakpoint(connector, args, pass_addr)
                     if fail_addr:
-                        connector.break_at(fail_addr)
+                        set_breakpoint(connector, args, fail_addr)
                     connector.go()
                     result = connector.wait_for_stop(
                         pass_addr=pass_addr,
@@ -557,7 +593,6 @@ def run_vice(args: argparse.Namespace, pass_addr: str, fail_addr: str | None, du
         terminate_vice(process)
         if native_tmp_dir is not None:
             native_tmp_dir.cleanup()
-        time.sleep(1.0)
 
 
 def main() -> int:
@@ -582,6 +617,7 @@ def main() -> int:
     parser.add_argument("--drive10-type", default="1541")
     parser.add_argument("--enable-drive9-bus", action="store_true")
     parser.add_argument("--attach8-at-start-d64", type=Path)
+    parser.add_argument("--attach9-at-start-d64", type=Path)
     parser.add_argument("--attach-delay", type=float, default=0.5)
     parser.add_argument("--reset8-after-attach", action="store_true")
     parser.add_argument("--attach8-at-start-reset8-after-attach", action="store_true")
@@ -602,7 +638,7 @@ def main() -> int:
     parser.add_argument("--require-hit-symbol")
     parser.add_argument("--until-pass", action="store_true")
     parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--port", type=int, default=6510)
+    parser.add_argument("--port", type=int, default=int(os.environ.get("VICE_MONITOR_PORT", "6510")))
     parser.add_argument("--timeout", type=float, default=30.0)
     parser.add_argument("--retry-timeouts", type=int, default=2)
     parser.add_argument("--connect-timeout", type=float, default=12.0)
@@ -610,6 +646,7 @@ def main() -> int:
     parser.add_argument("--startup-delay", type=float, default=0.0)
     parser.add_argument("--socket-timeout", type=float, default=0.5)
     parser.add_argument("--pass-on-script-exhausted", action="store_true")
+    parser.add_argument("--c64-ram-breakpoints", action="store_true")
     parser.add_argument("--screen-base", type=lambda value: int(value, 0), default=0x0c00)
     parser.add_argument("--screen-cols", type=int, default=40)
     parser.add_argument("--expect-screen-symbol", action="append", default=[])

@@ -203,6 +203,8 @@ test_huff_print_msg:
     rts
 
 test_msg_print_capture:
+    php
+    sei
     :BankOutKernal()
     ldy #0
 !copy:
@@ -215,11 +217,14 @@ test_msg_print_capture:
     bcc !copy-
 !done:
     :BankInKernal()
+    plp
     lda #1
     sta tpm_msg_seen
     rts
 
 test_cmb_term_and_print_capture:
+    php
+    sei
     :BankOutKernal()
     ldx cmb_buf_idx
     lda #0
@@ -235,6 +240,7 @@ test_cmb_term_and_print_capture:
     bcc !copy-
 !done:
     :BankInKernal()
+    plp
     lda #1
     sta tpm_msg_seen
     rts
@@ -1062,25 +1068,30 @@ test_start:
     sta zp_ptr1
     lda #>tpm_msg_buf
     sta zp_ptr1_hi
+    php
+    sei
     :BankOutKernal()
     ldy #0
 !t48_cmp:
     lda (zp_ptr0),y
     cmp (zp_ptr1),y
-    bne !t49_fail+
+    bne !t49_cmp_fail+
     cmp #0
     beq !t49_pass+
     iny
     cpy #42
     bcc !t48_cmp-
-    bcs !t49_fail+
+!t49_cmp_fail:
+    :BankInKernal()
+    plp
+    jmp !t49_fail+
 !t49_pass:
     :BankInKernal()
+    plp
     lda #$01
     sta tc_results + 48
     jmp !t50+
 !t49_fail:
-    :BankInKernal()
     lda #$00
     sta tc_results + 48
 
