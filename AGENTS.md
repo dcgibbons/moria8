@@ -56,11 +56,13 @@ If the quote does not name the action, stop and ask.
    and `data/SOURCE-OFFER` (LF→CR converted). Commodore images carry them as
    SEQ files `license,s`/`source-offer,s`; the Apple IIe image carries ProDOS
    TXT files `LICENSE`/`SOURCE.OFFER`. New platform ports must do the same.
-8. Runtime verification uses VICE warp mode and never relies on timeouts above
-   30 seconds. Commands that launch VICE or MAME need localhost monitor/socket
-   access, which sandboxed execution blocks (you'll see `PermissionError`) —
-   request escalated permission on the first attempt; do not try a sandboxed
-   run first. See Memory And Verification Details for the full escalation list.
+8. Runtime verification uses VICE warp mode. Whole-suite command timeouts must
+   allow the selected gate to finish; individual emulator scenarios retain
+   bounded timeouts for hang detection. Commands that launch VICE or MAME need
+   localhost monitor/socket access, which sandboxed execution blocks (you'll
+   see `PermissionError`) — request escalated permission on the first attempt;
+   do not try a sandboxed run first. See Memory And Verification Details for
+   the full escalation list.
 
 Additional durable invariants for memory, banking, zero-page, C128, and
 shared-code work live in `docs/INTERNAL_MANDATES.md`; load it before any such
@@ -200,8 +202,10 @@ source references over performative certainty or exhaustive narration.
 Operational rules:
 
 - Terminology: "TODO" or "task list" means the OpenCode structured session
-  task list. "Backlog" means `docs/BACKLOG.md`. Never edit `docs/BACKLOG.md`
-  unless the user explicitly says "backlog" or names that file.
+  task list. "Backlog" means `docs/BACKLOG.md`; "backlog bead" means a bead
+  with `status=deferred`. Never edit `docs/BACKLOG.md` unless the user
+  explicitly says "backlog" or names that file. A bead's priority is
+  independent of whether it is deferred; do not map backlog beads to P4.
 - When you make an assumption, state it explicitly in your reply before acting
   on it; never guess silently.
 - Write only the product code needed to satisfy the stated task and the
@@ -219,8 +223,8 @@ Operational rules:
   reruns: two identical failures means stop and analyze, not rerun.
 - Define success as: the user's failing command passes, or `make test` passes
   if no command was given. Loop until verified. Stop and ask the user when a
-  gate action is needed, infrastructure is broken, or the 30-second timeout cap
-  blocks verification (see Non-Negotiable Rules).
+  gate action is needed or infrastructure is broken (see Non-Negotiable
+  Rules).
 
 ## Finishing A Task
 

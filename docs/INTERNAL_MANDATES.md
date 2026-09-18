@@ -94,5 +94,6 @@ Re-check the full contract before patching local logic near the newest crash.
 - For C128 work, prefer `make test128-fast` for unit iteration and
   `make test128-fast-smoke` for fast runtime smoke coverage. Use `make test128`
   before signing off broad banking, loader, overlay, or MMU changes.
-- Headless VICE tests should use warp mode and should not rely on timeouts over
-  30 seconds.
+- Headless VICE tests should use warp mode. Whole-suite command timeouts must
+  allow the selected gate to finish; keep bounded per-scenario timeouts for
+  hang detection.
