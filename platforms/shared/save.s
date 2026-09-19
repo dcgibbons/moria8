@@ -407,6 +407,15 @@ save_block_table_post_floor:
 #endif
 save_block_table_post_floor_end:
 
+#if HAL_STORAGE_MAP_RESTORE_STAGED
+// Load-side twin: save_game must continue reading the live map from MAP_BASE.
+save_block_table_post_floor_load:
+    :save_block_desc(recall_data_start, RECALL_DATA_SIZE)
+    :save_block_desc(MAP_STAGE_BASE, MAP_SIZE)
+save_block_table_post_floor_load_end:
+.assert "Staged load table matches post-floor table shape", save_block_table_post_floor_load_end - save_block_table_post_floor_load, save_block_table_post_floor_end - save_block_table_post_floor
+#endif
+
 save_block_table_floor_items_direct:
     :save_block_desc(fi_item_id, MAX_FLOOR_ITEMS)
     :save_block_desc(fi_x, MAX_FLOOR_ITEMS)
@@ -982,10 +991,17 @@ plus4_test_after_load_magic:
     jsr load_read_floor_items
 
     // 16b-17. Recall data plus non-banked map data.
+#if HAL_STORAGE_MAP_RESTORE_STAGED
+    lda #<save_block_table_post_floor_load
+    sta zp_ptr1
+    lda #>save_block_table_post_floor_load
+    sta zp_ptr1_hi
+#else
     lda #<save_block_table_post_floor
     sta zp_ptr1
     lda #>save_block_table_post_floor
     sta zp_ptr1_hi
+#endif
     lda #SAVE_BLOCK_POST_FLOOR_COUNT
     jsr load_read_block_table
 #if HAL_STORAGE_MAP_BANKED
@@ -1302,8 +1318,15 @@ load_close_file_restore:
 
 #if HAL_STORAGE_VIC_BANK_RESTORE_AFTER_SERIAL
 c64_restore_vic_bank0_after_serial:
+    lda $dd02
+    and #%00111100
+    beq !krill_owned+
     lda hal_memory_vic_bank_select
     ora #hal_memory_vic_bank0_mask
+    sta hal_memory_vic_bank_select
+    rts
+!krill_owned:
+    lda #hal_memory_vic_bank0_mask
     sta hal_memory_vic_bank_select
     rts
 #endif

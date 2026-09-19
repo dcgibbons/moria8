@@ -37,6 +37,7 @@
 .const C64_TIER_NAME_POOL_END  = PLATFORM_TIER_NAME_POOL_END
 .const BANKED_DATA_BASE = $e000 // Item tiers, recall, spells (under KERNAL ROM)
 .const BANKED_DATA_END  = $ffff
+.const MAP_STAGE_BASE   = $e000 // Restore staging before Krill overwrites MAP_BASE
 // C128-only constant used by shared tier_manager staging metadata.
 // C64 never executes this path (runtime machine check), but symbol must exist.
 .const BANK1_DB_BASE    = $e000
@@ -151,6 +152,7 @@ mmu_select_bank0:
 // Compile-time validation
 // ============================================================
 .assert "Map fits in $C000 region", MAP_END - MAP_BASE + 1, 3840
+.assert "Staged map fits overlay window", MAP_STAGE_BASE + (MAP_END - MAP_BASE + 1) <= $f000, true
 .assert "Floor items fit", FLOOR_ITEM_END - FLOOR_ITEM_BASE + 1, 256
 .assert "Dungeon-gen scan scratch remains page-aligned", <DUNGEON_GEN_SCAN_SCRATCH_BASE, 0
 .assert "Dungeon-gen scan scratch stays in screen scratch window", DUNGEON_GEN_SCAN_SCRATCH_END <= $07ff, true

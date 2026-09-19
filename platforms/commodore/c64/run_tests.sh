@@ -3751,6 +3751,7 @@ run_load_resume_product_smoke() {
     mkdir -p ../../../build/test/c64
 
     if ! make -s -C .. ../../build/c64/boot.prg ../../build/c64/bootart64.prg ../../build/c64/title \
+            ../../build/c64/kinst64.prg ../../build/c64/kres64.prg ../../build/c64/kinst41.prg \
             ../../build/c64/monster.db.1 ../../build/c64/monster.db.2 ../../build/c64/monster.db.3 ../../build/c64/monster.db.4 \
             >"$build_log" 2>&1; then
         echo "FAIL (asset build error)"
@@ -3777,6 +3778,9 @@ run_load_resume_product_smoke() {
             -write ../../../build/test/c64/boot.prg "moria8" \
             -write ../../../build/test/c64/boot.prg "boot64" \
             -write ../../../build/test/c64/bootart64.prg "bootart64" \
+            -write ../../../build/c64/kinst64.prg "kinst64" \
+            -write ../../../build/c64/kres64.prg "kres64" \
+            -write ../../../build/c64/kinst41.prg "kinst41" \
             -write ../../../build/test/c64/moria_load_resume_smoke.prg "moria64" \
             -write ../../../build/test/c64/64.init "64.init" \
             -write ../../../build/test/c64/64.bank "64.bank" \
@@ -3843,83 +3847,32 @@ run_load_resume_product_smoke() {
     fi
 
     local main_vs="../../../build/test/c64/main.vs"
-    local pass_addr fail_addr prompt_fail_addr
-    pass_addr=$(awk '/\.c64_test_after_load_resume_game$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
-    fail_addr=$(awk '/\.c64_test_load_resume_fail_input_sym$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
-    prompt_fail_addr=$(awk '/\.disk_prompt_game_required_error_shown$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
-    if [ -z "${pass_addr:-}" ] || [ -z "${fail_addr:-}" ] || [ -z "${prompt_fail_addr:-}" ]; then
-        echo "FAIL (missing load-resume smoke symbols in ../../../build/test/c64/main.vs)"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    local mon_file
-    mon_file=$(mktemp -t "test_${name}_mon")
-    local tty_log
-    tty_log=$(mktemp -t "test_${name}_ttylog")
-    local pass_lc fail_lc prompt_fail_lc
-    pass_lc=$(echo "$pass_addr" | tr '[:upper:]' '[:lower:]')
-    fail_lc=$(echo "$fail_addr" | tr '[:upper:]' '[:lower:]')
-    prompt_fail_lc=$(echo "$prompt_fail_addr" | tr '[:upper:]' '[:lower:]')
-
-    {
-        echo "break \$${fail_addr}"
-        echo "break \$${prompt_fail_addr}"
-        echo "break \$${pass_addr}"
-        echo "g"
-        echo "quit"
-    } > "$mon_file"
-
-    script -q "$tty_log" \
-        "$VICE" -warp -config /dev/null -default +saveres -console -nativemonitor -autostartprgmode 1 \
-        -drive9type 1541 -8 "$scripted_d64" -attach9rw -9 "$save_d64" -autostart "$scripted_d64" \
-        -moncommands "$mon_file" \
-        -limitcycles 900000000 +sound -sounddev dummy \
-        +remotemonitor +binarymonitor > /dev/null 2>&1
-
-    if grep -qiE "Stop on  exec ${pass_lc}" "$tty_log" || grep -qi "^BREAK: .*C:\$${pass_addr}" "$tty_log"; then
-        echo "PASS"
+    if python3 -u ../plus4/tests/product_scripted_smoke.py \
+            --name "$name" \
+            --vice "$VICE" \
+            --boot-d64 "$scripted_d64" \
+            --save-d64 "$save_d64" \
+            --enable-drive9-bus \
+            --start-symbol ".c64_test_slot2_load_wait_for_harness" \
+            --resume-symbol ".c64_test_slot2_load_resume" \
+            --drive8-type 1542 \
+            --drive9-type 1542 \
+            --main-vs "$main_vs" \
+            --require-hit-symbol ".krill_load_file" \
+            --pass-symbol ".c64_test_after_load_resume_game" \
+            --fail-symbol ".c64_test_load_resume_fail_input_sym" \
+            --expect-byte-symbol ".krill_active=0xff" \
+            --expect-byte-symbol ".krill_suspended=0x00" \
+            --expect-byte-symbol ".krill_boot_used=0x01" \
+            --expect-byte-symbol ".c64_test_restored_map_last=0x10" \
+            --c64-ram-breakpoints \
+            --timeout 45 \
+            --retry-timeouts 0 \
+            --screen-base 0x0400; then
         PASS=$((PASS + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    if grep -qiE "Stop on  exec ${fail_lc}" "$tty_log" || grep -qi "^BREAK: .*C:\$${fail_addr}" "$tty_log"; then
-        echo "FAIL (scripted input exhausted)"
-        echo "    Log: $tty_log"
+    else
         FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
     fi
-
-    if grep -qiE "Stop on  exec ${prompt_fail_lc}" "$tty_log" || grep -qi "^BREAK: .*C:\$${prompt_fail_addr}" "$tty_log"; then
-        echo "FAIL (program-media verify prompt shown)"
-        echo "    Log: $tty_log"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    if grep -qiE "JAM|Invalid opcode" "$tty_log"; then
-        echo "FAIL (load-resume flow hung or jammed)"
-        echo "    Log: $tty_log"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    if grep -qi "cycle limit reached" "$tty_log"; then
-        echo "FAIL (load-resume flow timed out)"
-        echo "    Log: $tty_log"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    echo "FAIL (did not reach load-resume pass trap)"
-    echo "    Log: $tty_log"
-    FAIL=$((FAIL + 1))
     TOTAL=$((TOTAL + 1))
 }
 
@@ -4962,7 +4915,7 @@ check_static_contract "overcast_faint_more_contract" "../../../core/player_magic
 check_static_contract "paralysis_final_tick_message_contract" "../../../core/game_loop.s" \
     "lda zp_eff_paralyze|||beq !not_paralyzed+|||cmp #1|||bne !paralyzed_tick+|||jsr msg_clear|||!paralyzed_tick:|||jsr turn_post_action"
 check_static_contract "earthquake_trampoline_no_hidden_kernal_load_contract" "main.s" \
-    "tramp_eff_earthquake:|||sei|||lda #BANK_NO_KERNAL|||sta \$01|||jsr eff_earthquake_banked|||rts|||tramp_item_refuel:"
+    "tramp_eff_earthquake:|||sei|||lda #BANK_NO_KERNAL|||sta \$01|||jsr eff_earthquake_banked|||rts"
 check_static_contract "chest_loot_gen_overlay_no_hidden_kernal_contract" "../../../core/chest_loot.s" \
     "chest_fulfill_loot:|||lda #OVL_DUNGEON_GEN|||#if C64_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME|||jsr overlay_load_no_kernal|||jsr hal_platform_runtime_resync|||!cfl_loaded:|||jsr chest_generate_loot|||jsr hal_platform_runtime_resync"
 check_static_contract "chest_loot_c64_ego_overlay_return_contract" "../../../core/chest_loot.s" \
@@ -4972,11 +4925,11 @@ check_static_contract "chest_loot_object_drop_marks_redraw_contract" "../../../c
 check_static_contract "chest_search_vms_discovery_only_contract" "../../../core/chest_search.s" \
     "and #CHEST_P1_TRAP_FOUND|||bne !csr_found+|||ldx #HSTR_CHEST_FOUND_TRAP|||jsr huff_print_msg|||!csr_found:"
 check_static_contract "spell_execute_dedicated_overlay_contract" "main.s" \
-    "tramp_spell_execute_selected:|||lda #OVL_SPELL|||jsr overlay_load_no_kernal|||jsr spell_execute_selected|||jmp tramp_sr_epilogue"
+    "tramp_spell_execute_selected:|||ldx #27|||tramp_reveal_floorplan:|||ldx #28|||lda #OVL_SPELL|||tramp_overlay_target_lo:|||<spell_execute_selected, <eff_reveal_floorplan"
 check_static_contract "priest_sense_surroundings_dispatch_contract" "../../../core/player_magic_execute_overlay.s" \
     "ped_tbl_lo:|||.byte <(ped_s20-1), <(PMX_EARTHQUAKE_TARGET-1), <(ped_s22-1), <(ped_s23-1)|||ped_tbl_hi:|||.byte >(ped_s20-1), >(PMX_EARTHQUAKE_TARGET-1), >(ped_s22-1), >(ped_s23-1)|||ped_s22:|||jmp PMX_MAP_AREA_TARGET"
 check_static_contract "wizard_reveal_uses_spell_overlay_contract" "main.s" \
-    "tramp_reveal_floorplan:|||lda #OVL_SPELL|||jsr overlay_load_no_kernal|||jsr eff_reveal_floorplan|||jmp tramp_sr_epilogue"
+    "tramp_reveal_floorplan:|||ldx #28|||lda #OVL_SPELL|||tramp_overlay_target_hi:|||>spell_execute_selected, >eff_reveal_floorplan"
 check_static_contract "c64_game_over_returns_to_title_contract" "main.s" \
     "game_over_prompt:|||lda #OVL_DEATH|||jsr overlay_load|||bcc !overlay_ok+|||jmp title_enter_menu|||!overlay_ok:|||sei|||dec \$01|||jmp game_restart_overlay"
 check_static_contract "title_screen_clear_ownership_contract" "../common/title_screen.s" \
@@ -4985,8 +4938,12 @@ check_static_contract "c64_title_reentry_uses_owned_clear_contract" "main.s" \
     "title_enter_menu:|||jsr title_clear_full_screen|||jsr title_load_and_draw|||jsr title_clear_below_menu|||jsr msg_init|||jsr title_show_sysinfo|||jsr title_draw_menu"
 check_static_contract "modal_restore_uses_safe_full_clear_contract" "../../../core/ui_restore.s" \
     "ui_view_redraw_gameplay_view:|||jsr ui_reset_message_state|||#if HAL_PLATFORM_RESTORE_TIER_AFTER_OVERLAY|||jsr tier_restore_after_overlay|||#endif|||jsr ui_clear_full_screen_safe|||jsr viewport_update|||jsr render_viewport|||jmp status_draw"
-check_static_contract "c64_look_overlay_cleanup_contract" "look_trampoline.s" \
-    "tramp_do_look:|||lda #OVL_MODAL_MISC|||jsr overlay_load_no_kernal|||bcs !done+|||jsr do_look|||!done:|||jmp tramp_sr_epilogue"
+check_static_contract "c64_look_overlay_cleanup_contract" "main.s" \
+    "tramp_do_look:|||ldx #10|||lda #OVL_MODAL_MISC|||tramp_overlay_dispatch:|||jsr overlay_load_no_kernal|||jmp tramp_sr_epilogue|||tramp_overlay_target_lo:|||<do_look"
+check_static_contract "c64_restore_stages_map_load_only_contract" "../../../platforms/shared/save.s" \
+    "save_block_table_post_floor:|||save_block_desc(MAP_BASE, MAP_SIZE)|||save_block_table_post_floor_load:|||save_block_desc(MAP_STAGE_BASE, MAP_SIZE)|||lda #<save_block_table_post_floor_load|||jsr load_read_block_table"
+check_static_contract "c64_restore_resume_copy_order_contract" "main.s" \
+    "title_load_game:|||jsr load_game|||jsr overlay_invalidate|||bcc !title_load_fail+|||jsr disk_prompt_game_required|||jsr krill_resume|||jsr map_stage_copy|||jmp load_resume_game"
 check_static_contract "c64_hidden_kernal_irq_vector_contract" "main.s" \
     "c64_irq_hidden_rom:|||cld|||pha|||lda \$01|||pha|||lda #BANK_NO_KERNAL|||sta \$01|||lda \$dc0d|||lda \$dd0d|||lda \$d019|||sta \$d019|||pla|||sta \$01|||pla|||rti|||c64_install_ram_irq_vectors:|||php|||sei|||sta \$fffa|||sta \$fffe|||sta \$fffb|||sta \$ffff|||plp|||rts"
 check_static_contract "c64_boot_true_address_init_contract" "boot.s" \

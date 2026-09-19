@@ -50,7 +50,32 @@ tramp_sr_epilogue:
     plp
     rts
 
-#import "../look_trampoline.s"
+// Mirror the consolidated resident dispatch ABI used by tramp_do_look in
+// main.s. The static contract separately pins this sequence to product code.
+tramp_do_look:
+    ldx #10
+    lda #OVL_MODAL_MISC
+
+tramp_overlay_dispatch:
+    pha
+    lda tramp_overlay_target_lo - 1,x
+    sta !call+ + 1
+    lda tramp_overlay_target_hi - 1,x
+    sta !call+ + 2
+    pla
+    jsr overlay_load_no_kernal
+    bcs !done+
+!call:
+    jsr $ffff
+!done:
+    jmp tramp_sr_epilogue
+
+tramp_overlay_target_lo:
+    .fill 9, <test_fail
+    .byte <do_look
+tramp_overlay_target_hi:
+    .fill 9, >test_fail
+    .byte >do_look
 
 test_reset:
     lda #0

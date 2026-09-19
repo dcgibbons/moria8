@@ -583,6 +583,7 @@ c64_test_input_script:
     .byte $39              // 9
     .byte $0d              // RETURN
     .byte $33              // 3 = done
+    .byte $20              // SPACE = acknowledge insert-save-disk prompt
     .byte $32              // 2 = load from save slot 2
     .byte $00
 #else

@@ -76,7 +76,9 @@ def main() -> int:
     for _ in range(11):
         payload.extend(block(MAX_FLOOR_ITEMS))
     payload.extend(block(RECALL_DATA_SIZE))
-    payload.extend(block(MAP_SIZE))
+    dungeon_map = block(MAP_SIZE)
+    dungeon_map[-1] = 0x10  # Far-corner wall probes the final staged-copy page.
+    payload.extend(dungeon_map)
 
     checksum = sum(payload) & 0xFFFF
     payload.extend(bytes((checksum & 0xFF, checksum >> 8)))

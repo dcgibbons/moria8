@@ -122,6 +122,11 @@ krill_load_file:
 // before BASIC ROM is banked out.
 entry:
     dec $01                 // BASIC entry has $37: bank out BASIC, keep KERNAL/I/O.
+#if C64_TEST_SCRIPTED_SLOT2_LOAD_PRODUCT
+c64_test_slot2_load_wait_for_harness:
+    jmp c64_test_slot2_load_wait_for_harness
+c64_test_slot2_load_resume:
+#endif
     cld
     jmp entry_main          // Now code past $A000 is accessible
 
@@ -192,7 +197,6 @@ c64_disk_marker_write_resident:
     ldy #hal_storage_marker_sec_write
     jsr $ffba
     jsr $ffc0
-    bcc !cdmw_open_ok+
     bcs !cdmw_close+
 !cdmw_open_ok:
     ldx #hal_storage_marker_file_num
@@ -389,13 +393,11 @@ c64_disk_marker_present:
     ldy #hal_storage_marker_sec_read
     jsr $ffba
     jsr $ffc0
-    bcc !cdmp_open_ok+
-    bcs !cdmp_open_fail+
+    bcs !cdmp_close+
 !cdmp_open_ok:
     ldx #hal_storage_check_file_num
     jsr $ffc6
-    bcc !cdmp_chkin_ok+
-    bcs !cdmp_read_fail+
+    bcs !cdmp_close+
 !cdmp_chkin_ok:
     jsr $ffcf
     cmp #$4d
@@ -409,11 +411,7 @@ c64_disk_marker_present:
     lda #hal_storage_check_file_num
     jsr $ffc3
     jmp !cdmp_done+
-!cdmp_read_fail:
-    jmp !cdmp_close-
 !cdmp_marker_fail:
-    jmp !cdmp_close-
-!cdmp_open_fail:
     jmp !cdmp_close-
 !cdmp_done:
     jsr c64_restore_vic_bank0_after_serial
@@ -733,16 +731,8 @@ restart_entry:
     jsr rng_seed
 
 title_enter_menu:
-    bit krill_suspended
-    bpl !krill_resume_done+
-    lda #OVL_MODAL_MISC
-    jsr overlay_load
-    bcs !krill_resume_done+
-    sei
-    dec $01                    // $36 -> $35: expose modal overlay RAM
     jsr krill_resume
     jsr platform_runtime_resync_c64
-!krill_resume_done:
     lda #$ff
     sta save_slot_index
 #if C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || C64_TEST_SCRIPTED_SLOT2_SAVE_PRODUCT || C64_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT
@@ -1048,6 +1038,7 @@ title_load_game:
     jsr save_select_slot_prompt
 #endif
     jsr load_game
+    jsr overlay_invalidate
     // Fail closed on the explicit load carry result before resuming gameplay.
     bcc !title_load_fail+
 #if C64_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_RETURN_PRODUCT
@@ -1070,6 +1061,12 @@ c64_test_load_then_save_new_empty_fail:
 #endif
     jsr disk_prompt_game        // Swap back for tier loading
     jsr disk_prompt_game_required // Verify program media before resume loads tiers
+    jsr krill_resume
+    jsr map_stage_copy
+#if C64_TEST_SCRIPTED_SLOT2_LOAD_PRODUCT
+c64_test_after_restore_map_copy:
+.label c64_test_restored_map_last = MAP_END
+#endif
 #if C64_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_RETURN_PRODUCT
 c64_test_single_drive_load_return_media_ready:
 #endif
@@ -1147,10 +1144,7 @@ c64_install_ram_irq_vectors_end:
 // ============================================================
 kernal_load_safe:
     jsr $ffd5               // KERNAL LOAD — carry set on error
-    php                     // Preserve carry for caller
-    jsr platform_runtime_resync_c64
-    plp
-    rts
+    jmp tramp_sr_epilogue   // Preserve carry while restoring runtime state
 
 // ============================================================
 // C64 Ultimate turbo wrappers — resident, callable from any overlay
@@ -1455,8 +1449,6 @@ save_select_slot_prompt:
     jmp platform_runtime_resync_c64
 #endif
 
-#import "look_trampoline.s"
-
 #import "run_visibility_trampoline.s"
 
 // Run initialization executes once when SHIFT+direction begins. Its larger
@@ -1487,114 +1479,147 @@ tramp_ui_help_display:
     jsr ui_help_display
     jmp tramp_sr_epilogue
 
+// Compact dispatch for overlay calls whose targets take no live register input.
 tramp_ui_char_display:
+    ldx #1
+    bne !ui+
+tramp_item_gain_spell:
+    ldx #2
+    bne !ui+
+tramp_spell_list_display:
+    ldx #3
+!ui:
     lda #OVL_UI
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr ui_char_display
-!done:
-    jmp tramp_sr_epilogue
+    bne tramp_overlay_dispatch
 
-// Level-up magic helpers live in OVL.MODAL on this platform (funds the
-// resident door-state table); combat.s level-up routes here.
 tramp_magic_recalc_mana:
-    lda #OVL_MODAL_MISC
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr magic_recalc_mana
-!done:
-    jmp tramp_sr_epilogue
-
+    ldx #4
+    bne !modal+
 tramp_magic_check_new_spells:
-    lda #OVL_MODAL_MISC
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr magic_check_new_spells
-!done:
-    jmp tramp_sr_epilogue
-
-// calc_spell_failure lives in OVL.MODAL on this platform; carry is the
-// result, so preserve it across the resync.
+    ldx #5
+    bne !modal+
 tramp_calc_spell_failure:
+    ldx #6
+    bne !modal+
+tramp_ui_wizard_display:
+    ldx #7
+    bne !modal+
+tramp_store_init_all:
+    ldx #8
+    bne !modal+
+tramp_store_restock_all:
+    ldx #9
+    bne !modal+
+tramp_do_look:
+    ldx #10
+!modal:
     lda #OVL_MODAL_MISC
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr calc_spell_failure
-!done:
-    php
-    jsr platform_runtime_resync_c64
-    plp
-    rts
+    bne tramp_overlay_dispatch
 
 tramp_ui_inv_display:
-    lda #OVL_HELP
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr ui_inv_display
-!done:
-    jmp tramp_sr_epilogue
-
+    ldx #11
+    bne !help+
 tramp_ui_inv_select_display:
-    lda #OVL_HELP
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr ui_inv_select_display
-!done:
-    jmp tramp_sr_epilogue
-
+    ldx #12
+    bne !help+
 tramp_ui_equip_display:
+    ldx #13
+    bne !help+
+tramp_ui_equip_select_display:
+    ldx #14
+!help:
     lda #OVL_HELP
+    bne tramp_overlay_dispatch
+
+tramp_item_read_scroll:
+    ldx #15
+    bne !items+
+tramp_item_aim_wand:
+    ldx #16
+    bne !items+
+tramp_item_use_staff:
+    ldx #17
+    bne !items+
+tramp_item_refuel:
+    ldx #18
+    bne !items+
+tramp_ranged_fire:
+    ldx #19
+    bne !items+
+tramp_throw_item:
+    ldx #20
+    bne !items+
+tramp_bash_command:
+    ldx #21
+    bne !items+
+tramp_disarm_command:
+    ldx #22
+    bne !items+
+tramp_cmd_jam:
+    ldx #23
+    bne !items+
+tramp_item_init_identification:
+    ldx #24
+    bne !items+
+tramp_player_tunnel:
+    ldx #25
+!items:
+    lda #OVL_ITEMS
+    bne tramp_overlay_dispatch
+
+tramp_chest_open:
+    ldx #26
+    bne !chest+
+!chest:
+    lda #OVL_CHEST
+    bne tramp_overlay_dispatch
+
+tramp_spell_execute_selected:
+    ldx #27
+    bne !spell+
+tramp_reveal_floorplan:
+    ldx #28
+!spell:
+    lda #OVL_SPELL
+
+tramp_overlay_dispatch:
+    pha
+    lda tramp_overlay_target_lo - 1,x
+    sta !call+ + 1
+    lda tramp_overlay_target_hi - 1,x
+    sta !call+ + 2
+    pla
     jsr overlay_load_no_kernal
     bcs !done+
-    jsr ui_equip_display
+!call:
+    jsr $ffff
 !done:
     jmp tramp_sr_epilogue
 
-tramp_ui_equip_select_display:
-    lda #OVL_HELP
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr ui_equip_select_display
-!done:
-    jmp tramp_sr_epilogue
+tramp_overlay_target_lo:
+    .byte <ui_char_display, <item_gain_spell, <spell_list_display
+    .byte <magic_recalc_mana, <magic_check_new_spells, <calc_spell_failure
+    .byte <ui_wizard_display, <store_init_all, <store_restock_all, <do_look
+    .byte <ui_inv_display, <ui_inv_select_display, <ui_equip_display, <ui_equip_select_display
+    .byte <item_read_scroll, <item_aim_wand, <item_use_staff, <item_refuel
+    .byte <ranged_fire, <throw_item, <bash_command, <disarm_command, <door_jam_command
+    .byte <item_init_identification, <player_tunnel, <chest_open_command
+    .byte <spell_execute_selected, <eff_reveal_floorplan
+tramp_overlay_target_hi:
+    .byte >ui_char_display, >item_gain_spell, >spell_list_display
+    .byte >magic_recalc_mana, >magic_check_new_spells, >calc_spell_failure
+    .byte >ui_wizard_display, >store_init_all, >store_restock_all, >do_look
+    .byte >ui_inv_display, >ui_inv_select_display, >ui_equip_display, >ui_equip_select_display
+    .byte >item_read_scroll, >item_aim_wand, >item_use_staff, >item_refuel
+    .byte >ranged_fire, >throw_item, >bash_command, >disarm_command, >door_jam_command
+    .byte >item_init_identification, >player_tunnel, >chest_open_command
+    .byte >spell_execute_selected, >eff_reveal_floorplan
 
 tramp_ui_recall:
     sei
     lda #BANK_NO_KERNAL       // $35 — I/O visible for color RAM writes
     sta $01
     jsr ui_recall_display
-    jmp tramp_sr_epilogue
-
-tramp_item_gain_spell:
-    lda #OVL_UI
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr item_gain_spell
-!done:
-    jmp tramp_sr_epilogue
-
-tramp_item_read_scroll:
-    lda #OVL_ITEMS
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr item_read_scroll
-!done:
-    jmp tramp_sr_epilogue
-
-tramp_item_aim_wand:
-    lda #OVL_ITEMS
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr item_aim_wand
-!done:
-    jmp tramp_sr_epilogue
-
-tramp_item_use_staff:
-    lda #OVL_ITEMS
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr item_use_staff
-!done:
     jmp tramp_sr_epilogue
 
 tramp_eff_earthquake:
@@ -1605,54 +1630,6 @@ tramp_eff_earthquake:
     jsr eff_earthquake_banked
     jsr c64u_turbo_normal
     rts
-
-tramp_item_refuel:
-    lda #OVL_ITEMS
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr item_refuel
-!done:
-    jmp tramp_sr_epilogue
-
-tramp_ranged_fire:
-    lda #OVL_ITEMS
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr ranged_fire
-!done:
-    jmp tramp_sr_epilogue
-
-tramp_throw_item:
-    lda #OVL_ITEMS
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr throw_item
-!done:
-    jmp tramp_sr_epilogue
-
-tramp_bash_command:
-    lda #OVL_ITEMS
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr bash_command
-!done:
-    jmp tramp_sr_epilogue
-
-tramp_disarm_command:
-    lda #OVL_ITEMS
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr disarm_command
-!done:
-    jmp tramp_sr_epilogue
-
-tramp_cmd_jam:
-    lda #OVL_ITEMS
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr door_jam_command
-!done:
-    jmp tramp_sr_epilogue
 
 // door_pick_roll lives in the chest overlay with chest_disarm_skill; carry
 // (picked) propagates through the epilogue. A failed overlay load reads as
@@ -1672,14 +1649,6 @@ tramp_door_pick_roll:
 // resident cmd_open pre-dispatch and owns the epilogue. chest_dispatch is
 // tail-called (A/Y = handler) from bash_command/disarm_command inside the
 // items overlay; their caller trampolines run the epilogue.
-tramp_chest_open:
-    lda #OVL_CHEST
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr chest_open_command
-!done:
-    jmp tramp_sr_epilogue
-
 chest_dispatch:
     sta chest_disp_jmp+1
     sty chest_disp_jmp+2
@@ -1691,46 +1660,6 @@ chest_disp_jmp:
 !done:
     rts
 
-tramp_item_init_identification:
-    lda #OVL_ITEMS
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr item_init_identification
-!done:
-    jmp tramp_sr_epilogue
-
-tramp_player_tunnel:
-    lda #OVL_ITEMS
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr player_tunnel
-!done:
-    jmp tramp_sr_epilogue
-
-tramp_spell_list_display:
-    lda #OVL_UI
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr spell_list_display
-!done:
-    jmp tramp_sr_epilogue
-
-tramp_spell_execute_selected:
-    lda #OVL_SPELL
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr spell_execute_selected
-!done:
-    jmp tramp_sr_epilogue
-
-tramp_reveal_floorplan:
-    lda #OVL_SPELL
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr eff_reveal_floorplan
-!done:
-    jmp tramp_sr_epilogue
-
 tramp_ui_identify:
     lda #OVL_UI
     jsr overlay_load_no_kernal
@@ -1740,14 +1669,6 @@ tramp_ui_identify:
     sta $01
     cli
     jsr tier_restore_after_overlay
-!done:
-    jmp tramp_sr_epilogue
-
-tramp_ui_wizard_display:
-    lda #OVL_MODAL_MISC
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr ui_wizard_display
 !done:
     jmp tramp_sr_epilogue
 
@@ -1795,22 +1716,6 @@ store_overlay_preamble:
     lda #BANK_NO_KERNAL         // $35 — $E000 = RAM + I/O for color RAM
     sta $01
     rts
-
-tramp_store_init_all:
-    lda #OVL_MODAL_MISC
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr store_init_all
-!done:
-    jmp tramp_sr_epilogue
-
-tramp_store_restock_all:
-    lda #OVL_MODAL_MISC
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr store_restock_all
-!done:
-    jmp tramp_sr_epilogue
 
 tramp_store_enter:
     jsr store_overlay_preamble
@@ -2186,6 +2091,81 @@ game_over_prompt:
     sei
     dec $01
     jmp game_restart_overlay
+
+// Reinstall only while title owns the map window used by KINST41 at $C000.
+// Failure is nonfatal: clear suspension and continue on the KERNAL path.
+krill_resume:
+    bit krill_suspended
+    bpl !done+
+    bit krill_drive_1541
+    bpl !clear_suspended+
+    lda #krill_resume_name_end - krill_resume_name
+    ldx #<krill_resume_name
+    ldy #>krill_resume_name
+    jsr c64_disk_setnam
+    lda #2
+    ldx program_device
+    ldy #1
+    jsr c64_disk_setlfs
+    lda #0
+    tax
+    ldy #$c0
+    jsr c64_disk_call
+    .word $ffd5
+    php
+    lda #2
+    jsr c64_disk_close
+    jsr c64_disk_clrchn
+    plp
+    bcs !clear_suspended+
+    lda program_device
+    sta KERNAL_CURRENT_DEVICE
+    jsr c64_disk_call
+    .word $c000
+    bcs !clear_suspended+
+    // The enabled drive watchdog resets after a few starved frames.
+    lda #$ff
+    sta krill_active
+!clear_suspended:
+    lda #0
+    sta krill_suspended
+!done:
+    rts
+
+krill_resume_name:
+    .byte $4b,$49,$4e,$53,$54,$34,$31 // "KINST41"
+krill_resume_name_end:
+
+// Restore the staged map after KINST41 has finished using MAP_BASE.
+map_stage_copy:
+    php
+    sei
+    lda $01
+    pha
+    lda #BANK_NO_KERNAL
+    sta $01
+    lda #0
+    sta zp_ptr0
+    sta zp_ptr1
+    lda #>MAP_STAGE_BASE
+    sta zp_ptr0_hi
+    lda #>MAP_BASE
+    sta zp_ptr1_hi
+    ldx #>MAP_SIZE
+    ldy #0
+!page:
+    lda (zp_ptr0),y
+    sta (zp_ptr1),y
+    iny
+    bne !page-
+    inc zp_ptr0_hi
+    inc zp_ptr1_hi
+    dex
+    bne !page-
+    pla
+    sta $01
+    plp
+    rts
 
 // Safety: ensure runtime code doesn't overlap runtime data areas
 pm_map_min_x: .byte 0
@@ -2860,68 +2840,6 @@ krill_suspend:
     sta krill_suspended
 !done:
     rts
-
-// Reinstall only while title owns the map window used by KINST41 at $C000.
-// Failure is nonfatal: clear suspension and continue on the KERNAL path.
-krill_resume:
-    bit krill_suspended
-    bpl !done+
-    bit krill_drive_1541
-    bpl !not_compatible+
-    ldx #krill_resume_name_end - krill_resume_name - 1
-!copy_name:
-    lda krill_resume_name,x
-    sta DUNGEON_GEN_DOOR_SCAN_BASE,x
-    dex
-    bpl !copy_name-
-    lda #krill_resume_name_end - krill_resume_name
-    ldx #<DUNGEON_GEN_DOOR_SCAN_BASE
-    ldy #>DUNGEON_GEN_DOOR_SCAN_BASE
-    jsr c64_disk_setnam
-    lda #2
-    ldx program_device
-    ldy #1
-    jsr c64_disk_setlfs
-    lda #0
-    ldx #$00
-    ldy #$c0
-    jsr c64_disk_call
-    .word $ffd5
-    php
-    lda #2
-    jsr c64_disk_close
-    jsr c64_disk_clrchn
-    plp
-    bcs !fallback+
-    lda program_device
-    sta KERNAL_CURRENT_DEVICE
-    jsr c64_disk_call
-    .word $c000
-    bcs !fallback+
-    ldx #18
-!settle_frame:
-!settle_wait:
-    lda $d012
-    cmp #$ff
-    bne !settle_wait-
-    dex
-    bne !settle_frame-
-    lda #$ff
-    sta krill_active
-    lda #0
-    sta krill_suspended
-    rts
-!not_compatible:
-!fallback:
-    lda #0
-    sta krill_suspended
-!done:
-    rts
-
-krill_resume_name:
-    .byte $4b,$49,$4e,$53,$54,$34,$31 // "KINST41"
-krill_resume_name_end:
-.assert "Krill resume filename fits transient door-scan scratch", DUNGEON_GEN_DOOR_SCAN_BASE + krill_resume_name_end - krill_resume_name <= DUNGEON_GEN_DOOR_SCAN_LIMIT, true
 
 winner_royal_overlay:
     jsr krill_suspend
