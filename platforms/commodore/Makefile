@@ -116,9 +116,9 @@ C64_TIER_DIR       = c64/creature_data
 PLUS4_MAIN_SRC     = plus4/main.s
 PLUS4_BOOT_SRC     = plus4/boot.s
 
-C64_SOURCES        := $(shell find c64 common ../../core -type f -name '*.s' -print)
-C128_SOURCES       := $(shell find c128 common c64 ../../core -type f -name '*.s' -print)
-PLUS4_SOURCES      := $(shell find plus4 common ../../core -type f -name '*.s' -print)
+C64_SOURCES        := $(shell find c64 common ../shared ../../core -type f -name '*.s' -print)
+C128_SOURCES       := $(shell find c128 common c64 ../shared ../../core -type f -name '*.s' -print)
+PLUS4_SOURCES      := $(shell find plus4 common ../shared ../../core -type f -name '*.s' -print)
 
 # ── C64 artifacts ─────────────────────────────────────────
 C64_MAIN_PRG       = $(OUT64)/moria8.prg

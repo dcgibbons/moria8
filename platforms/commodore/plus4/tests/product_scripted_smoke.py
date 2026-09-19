@@ -497,26 +497,29 @@ def run_vice(args: argparse.Namespace, pass_addr: str, fail_addr: str | None, du
                     set_breakpoint(connector, args, pass_addr)
                 if fail_addr and not args.until_pass:
                     set_breakpoint(connector, args, fail_addr)
-                if args.require_hit_addr:
-                    set_breakpoint(connector, args, args.require_hit_addr)
-                    continue_from(connector, args.resume_addr)
-                    required_result = connector.wait_for_stop(
-                        pass_addr=args.require_hit_addr,
-                        fail_addr=fail_addr,
-                        timeout=args.timeout,
-                    )
-                    if not required_result.passed:
-                        try:
-                            dumps.append(connector.send_command("bt"))
-                        except Exception as exc:
-                            dumps.append(f"bt: {exc}")
-                        for start, end in dump_ranges:
+                if args.require_hit_addrs:
+                    resume_addr = args.resume_addr
+                    for required_addr in args.require_hit_addrs:
+                        set_breakpoint(connector, args, required_addr)
+                        continue_from(connector, resume_addr)
+                        resume_addr = None
+                        required_result = connector.wait_for_stop(
+                            pass_addr=required_addr,
+                            fail_addr=fail_addr,
+                            timeout=args.timeout,
+                        )
+                        if not required_result.passed:
                             try:
-                                dumps.append(connector.send_command(f"m {start} {end}"))
+                                dumps.append(connector.send_command("bt"))
                             except Exception as exc:
-                                dumps.append(f"{start}: {exc}")
-                        return required_result, dumps
-                    connector.clear_breakpoints()
+                                dumps.append(f"bt: {exc}")
+                            for start, end in dump_ranges:
+                                try:
+                                    dumps.append(connector.send_command(f"m {start} {end}"))
+                                except Exception as exc:
+                                    dumps.append(f"{start}: {exc}")
+                            return required_result, dumps
+                        connector.clear_breakpoints()
                     set_breakpoint(connector, args, pass_addr)
                     if fail_addr:
                         set_breakpoint(connector, args, fail_addr)
@@ -635,7 +638,7 @@ def main() -> int:
     parser.add_argument("--swap4-attach8-d64", type=Path)
     parser.add_argument("--swap4-reset8-after-attach", action="store_true")
     parser.add_argument("--fail-on-extra-swap", action="store_true")
-    parser.add_argument("--require-hit-symbol")
+    parser.add_argument("--require-hit-symbol", action="append", default=[])
     parser.add_argument("--until-pass", action="store_true")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=int(os.environ.get("VICE_MONITOR_PORT", "6510")))
@@ -751,13 +754,13 @@ def main() -> int:
             print("FAIL: --swap4-symbol requires --swap4-attach8-d64")
             return 2
         args.swap4_addr = normalize_addr(args.swap4_addr)
-    args.require_hit_addr = None
-    if args.require_hit_symbol:
-        args.require_hit_addr = symbols.get(args.require_hit_symbol)
-        if not args.require_hit_addr:
-            print(f"FAIL: missing symbol {args.require_hit_symbol} in {args.main_vs}")
+    args.require_hit_addrs = []
+    for symbol in args.require_hit_symbol:
+        required_addr = symbols.get(symbol)
+        if not required_addr:
+            print(f"FAIL: missing symbol {symbol} in {args.main_vs}")
             return 2
-        args.require_hit_addr = normalize_addr(args.require_hit_addr)
+        args.require_hit_addrs.append(normalize_addr(required_addr))
 
     dump_ranges: list[tuple[str, str]] = []
     dump_symbols = (

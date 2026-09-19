@@ -2372,6 +2372,8 @@ run_chest_open_product_smoke() {
             --pass-symbol ".c64_test_script_exhausted_wait" \
             --start-symbol ".title_menu_loop" \
             --require-hit-symbol ".krill_load_file" \
+            --require-hit-symbol ".tramp_level_generate" \
+            --require-hit-symbol ".chest_product_setup" \
             --until-pass \
             --main-vs "$main_vs" \
             --boot-d64 "$boot_d64" \
