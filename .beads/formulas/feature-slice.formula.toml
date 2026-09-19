@@ -1,0 +1,120 @@
+formula = "feature-slice"
+description = "Design → design review → implement → implementation review"
+version = 2
+type = "workflow"
+
+[vars.title]
+description = "Name of this feature slice"
+required = true
+
+[vars.designer]
+description = "Who writes the design"
+default = "captain_kirk"
+
+[vars.reviewer]
+description = "Who reviews design and implementation. Reviewer only — never implements."
+default = "mr_spock"
+
+[vars.implementer]
+description = "Who implements"
+default = "scotty"
+
+[[steps]]
+id = "design"
+title = "Design: {{title}}"
+type = "task"
+description = """
+Assignee: {{designer}}
+
+Write the design for {{title}}.
+Cover approach, constraints, invariants, failure modes, and open questions.
+Put the design in this bead's design field and/or description.
+Do not implement.
+
+When the design is ready for review, close this bead.
+Do not wait for the reviewer.
+
+After close: do not reopen this bead when findings appear.
+Your next work on this slice is finding beads assigned to you.
+"""
+
+[[steps]]
+id = "design-review"
+title = "Review design: {{title}}"
+type = "task"
+needs = ["design"]
+description = """
+Assignee: {{reviewer}}
+Role: reviewer only.
+Do not implement. Do not rewrite the design.
+
+Done condition:
+- PASS: comment "PASS" on this bead, then close this bead.
+- REWORK or BLOCK: do NOT close this bead.
+
+On REWORK or BLOCK:
+1. Create one finding bead per issue, assigned to {{designer}}.
+2. Each finding must explain what is wrong, where, and what done looks like.
+3. Link each finding with --deps discovered-from:<design-step-id>
+4. Make each finding block this review:
+   bd dep add <this-review-id> <finding-id>
+5. Comment the verdict and all finding IDs on this bead.
+6. Stop. Leave this bead open.
+
+This review becomes ready again when every finding is closed.
+Then re-review and either PASS or file new findings.
+Never reopen the design bead.
+Never assign findings to yourself.
+Never close this bead just because the first-pass review writeup is finished.
+"""
+
+[[steps]]
+id = "implement"
+title = "Implement: {{title}}"
+type = "task"
+needs = ["design-review"]
+description = """
+Assignee: {{implementer}}
+
+Implement {{title}} against the accepted design.
+Do not change the design contract without a new design-review pass.
+Do not start until design-review is closed PASS.
+
+When the change is ready for implementation review, close this bead.
+Do not wait for the reviewer.
+
+After close: do not reopen this bead when findings appear.
+Your next work on this slice is finding beads assigned to you.
+Do not treat the impl-review bead as your inbox.
+"""
+
+[[steps]]
+id = "impl-review"
+title = "Review implementation: {{title}}"
+type = "task"
+needs = ["implement"]
+description = """
+Assignee: {{reviewer}}
+Role: reviewer only.
+Do not write product code. Do not "just fix" the findings.
+
+Done condition:
+- PASS: comment "PASS" on this bead, then close this bead.
+- REWORK or BLOCK: do NOT close this bead.
+
+On REWORK or BLOCK:
+1. Create one finding bead per issue, assigned to {{implementer}}.
+2. Each finding must explain what is wrong, where, and what done looks like.
+3. Link each finding with --deps discovered-from:<implement-step-id>
+4. Make each finding block this review:
+   bd dep add <this-review-id> <finding-id>
+5. Comment the verdict and all finding IDs on this bead.
+6. Stop. Leave this bead open.
+
+This review becomes ready again when every finding is closed.
+Then re-review the current diff and either PASS or file new findings.
+Never reopen the implement bead.
+Never assign findings to yourself.
+Never close this bead just because the first-pass review writeup is finished.
+The slice is not done until this bead is closed with PASS.
+"""
