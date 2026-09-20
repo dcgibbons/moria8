@@ -12,6 +12,23 @@
 # from the ProDOS8-Releases repo (2.4.3, SHA256-pinned) into
 # ../../tools/prodos (override with PRODOS/BOOTBLOCKS env vars).
 
+# ── Mixed clean/build invocation guard ────────────────────
+# A mixed 'make clean <goals>' invocation (e.g. 'make -j clean disk') cannot
+# be serialized safely inside one make process: clean's rm -rf races the
+# concurrent build recipes, and make's cached stat results (recorded before
+# clean ran) make it treat freshly deleted outputs as up to date. Serialize
+# across a process boundary instead: run clean, then re-invoke make for the
+# remaining goals; the fresh process sees the post-clean tree and builds with
+# full parallelism. Plain 'make -j <goals>' is unaffected.
+ifneq (,$(and $(filter clean,$(MAKECMDGOALS)),$(filter-out clean,$(MAKECMDGOALS))))
+.PHONY: __clean_then_goals
+__clean_then_goals:
+	@$(MAKE) --no-print-directory clean
+	@$(MAKE) --no-print-directory $(filter-out clean,$(MAKECMDGOALS))
+
+$(MAKECMDGOALS): __clean_then_goals
+else
+
 KICKASS_DIR ?= ../../tools/kickass
 KICKASS     ?= $(KICKASS_DIR)/KickAss.jar
 KICKASS_URL  = https://theweb.dk/KickAssembler/KickAssembler.zip
@@ -253,3 +270,5 @@ $(A2_DISK_IMAGE): ensure-ac ensure-prodos $(A2_MAIN_PRG) $(A2_PLAY_PRG) $(A2_AUX
 	"$(AC_BIN)" -p "$@" SOURCE.OFFER txt < "$(SOURCE_OFFER_DISK_FILE)"
 	dd if="$(BOOTBLOCKS)" of="$@" bs=512 count=2 conv=notrunc
 	"$(AC_BIN)" -l "$@"
+
+endif # mixed clean/build invocation guard

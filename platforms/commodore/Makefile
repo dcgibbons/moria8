@@ -21,6 +21,22 @@
 # Debug targets:
 #   make build64 build128
 
+# ── Mixed clean/build invocation guard ────────────────────
+# A mixed 'make clean <goals>' invocation (e.g. 'make -j clean disk') cannot
+# be serialized safely inside one make process: clean's rm -rf races the
+# concurrent build recipes, and make's cached stat results (recorded before
+# clean ran) make it treat freshly deleted outputs as up to date. Serialize
+# across a process boundary instead: run clean, then re-invoke make for the
+# remaining goals; the fresh process sees the post-clean tree and builds with
+# full parallelism. Plain 'make -j <goals>' is unaffected.
+ifneq (,$(and $(filter clean,$(MAKECMDGOALS)),$(filter-out clean,$(MAKECMDGOALS))))
+.PHONY: __clean_then_goals
+__clean_then_goals:
+	@$(MAKE) --no-print-directory clean
+	@$(MAKE) --no-print-directory $(filter-out clean,$(MAKECMDGOALS))
+
+$(MAKECMDGOALS): __clean_then_goals
+else
 # ── Tool paths ────────────────────────────────────────────
 KICKASS_DIR ?= ../../tools/kickass
 KICKASS     ?= $(KICKASS_DIR)/KickAss.jar
@@ -527,15 +543,15 @@ $(C64_ZIP_IMAGE): $(C64_DIST_STAMP)
 	cd "$(C64_DIST_DIR)" && zip -q -r "../$(notdir $(C64_ZIP_IMAGE))" . -x .stamp
 
 $(DISK64_IMAGE): $(C64_BUILD_ARTIFACTS) $(C64_KRILL_INSTALL_PRG) $(C64_KRILL_BOOT_PRG) $(C64_KRILL_1541_INSTALL_PRG) $(DISKART) $(VERSION_FILE) $(LICENSE_DISK_FILE) $(SOURCE_OFFER_DISK_FILE) | $(OUT)
-	printf '\x01\x08' > "$(EMPTY_PRG)"
+	printf '\x01\x08' > "$@.empty.prg"
 	rm -f "$(DISK64_IMAGE)"
 	$(C1541) -format $(DISK64_LABEL) d64 "$(DISK64_IMAGE)" \
 		-attach "$(DISK64_IMAGE)" \
-		-write "$(EMPTY_PRG)" "art1" \
-		-write "$(EMPTY_PRG)" "art2" \
-		-write "$(EMPTY_PRG)" "art3" \
-		-write "$(EMPTY_PRG)" "art4" \
-		-write "$(EMPTY_PRG)" "art5" \
+		-write "$@.empty.prg" "art1" \
+		-write "$@.empty.prg" "art2" \
+		-write "$@.empty.prg" "art3" \
+		-write "$@.empty.prg" "art4" \
+		-write "$@.empty.prg" "art5" \
 		-write "$(C64_BOOT_PRG)" "moria8" \
 		-write "$(C64_BOOT_PRG)" "boot64" \
 		-write "$(C64_BOOTART_PRG)" "bootart64" \
@@ -566,18 +582,18 @@ $(DISK64_IMAGE): $(C64_BUILD_ARTIFACTS) $(C64_KRILL_INSTALL_PRG) $(C64_KRILL_BOO
 	python3 "$(DISKART)" "$(DISK64_IMAGE)" c64
 	@mkdir -p "$(OUT64)"
 	cp -f "$(DISK64_IMAGE)" "$(OUT64)/moria8-c64.d64"
-	rm -f "$(EMPTY_PRG)"
+	rm -f "$@.empty.prg"
 
 $(DISKPLUS4_IMAGE): $(PLUS4_BUILD_ARTIFACTS) $(DISKART) $(VERSION_FILE) $(LICENSE_DISK_FILE) $(SOURCE_OFFER_DISK_FILE) | $(OUT)
-	printf '\x01\x08' > "$(EMPTY_PRG)"
+	printf '\x01\x08' > "$@.empty.prg"
 	rm -f "$(DISKPLUS4_IMAGE)"
 	$(C1541) -format $(DISKPLUS4_LABEL) d64 "$(DISKPLUS4_IMAGE)" \
 		-attach "$(DISKPLUS4_IMAGE)" \
-		-write "$(EMPTY_PRG)" "art1" \
-		-write "$(EMPTY_PRG)" "art2" \
-		-write "$(EMPTY_PRG)" "art3" \
-		-write "$(EMPTY_PRG)" "art4" \
-		-write "$(EMPTY_PRG)" "art5" \
+		-write "$@.empty.prg" "art1" \
+		-write "$@.empty.prg" "art2" \
+		-write "$@.empty.prg" "art3" \
+		-write "$@.empty.prg" "art4" \
+		-write "$@.empty.prg" "art5" \
 		-write "$(PLUS4_BOOT_PRG)" "moria8" \
 		-write "$(PLUS4_BOOT_PRG)" "boot4" \
 		-write "$(PLUS4_MAIN_PRG)" "moria4" \
@@ -602,7 +618,7 @@ $(DISKPLUS4_IMAGE): $(PLUS4_BUILD_ARTIFACTS) $(DISKART) $(VERSION_FILE) $(LICENS
 	python3 "$(DISKART)" "$(DISKPLUS4_IMAGE)" plus4
 	@mkdir -p "$(OUTPLUS4)"
 	cp -f "$(DISKPLUS4_IMAGE)" "$(OUTPLUS4)/moria8-plus4.d64"
-	rm -f "$(EMPTY_PRG)"
+	rm -f "$@.empty.prg"
 
 define C128_DISK_WRITE_FILES
 		-write "$(C128_BOOTSECT_PRG)" "art1" \
@@ -648,7 +664,6 @@ define C128_DISK_WRITE_FILES
 endef
 
 define BUILD_C128_DISK_IMAGE
-	printf '\x01\x08' > "$(EMPTY_PRG)"
 	rm -f "$@"
 	$(C1541) -format $(DISK128_LABEL) $(1) "$@"
 	python3 "$(RESERVE_SECTOR)" "$@" 1 0
@@ -659,7 +674,6 @@ $(C128_DISK_WRITE_FILES)
 	@mkdir -p "$(OUT128)"
 	cp -f "$@" "$(OUT128)/$(notdir $@)"
 	cp -f "$@" "$(OUT128)/moria128.$(1)"
-	rm -f "$(EMPTY_PRG)"
 endef
 
 $(DISK128_D64_IMAGE): $(C128_BUILD_ARTIFACTS) $(C128_BOOT_CHAIN_PRG) $(C128_BOOTSECT_PRG) $(DISKART) $(RESERVE_SECTOR) $(VERSION_FILE) $(LICENSE_DISK_FILE) $(SOURCE_OFFER_DISK_FILE) | $(OUT)
@@ -757,3 +771,5 @@ clean:
 	rm -f plus4/*.prg plus4/*.sym plus4/*.vs plus4/tests/*.prg plus4/tests/*.vs plus4/tests/*.sym
 	rm -f ../../core/*.sym ../../core/*.vs
 	rm -f /tmp/test_*.mon
+
+endif # mixed clean/build invocation guard

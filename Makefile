@@ -97,3 +97,15 @@ $(ARTIFACT_MANIFEST): $(RELEASE_ARTIFACTS)
 	$(GPG) --yes $(GPG_SIGN_FLAGS) --output "$@" "$<"
 
 FORCE:
+
+# ── clean serialization ───────────────────────────────────
+# A mixed 'make clean <goals>' invocation (e.g. 'make -j clean disk') races:
+# clean's rm -rf deletes build/ while the other goals' sub-makes assemble
+# into it. When clean appears alongside other goals, make every other goal
+# wait for clean; the release artifact files need the same ordering because
+# 'artifact' is a prerequisite-only aggregator that delegates through FORCE.
+# Plain 'make -j <goals>' is unaffected and keeps full parallelism.
+ifneq (,$(and $(filter clean,$(MAKECMDGOALS)),$(filter-out clean,$(MAKECMDGOALS))))
+$(filter-out clean,$(MAKECMDGOALS)): clean
+$(RELEASE_ARTIFACTS): | clean
+endif
