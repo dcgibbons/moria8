@@ -2137,6 +2137,7 @@ krill_resume_name:
 krill_resume_name_end:
 
 // Restore the staged map after KINST41 has finished using MAP_BASE.
+.assert "C64 staged map copy requires page-aligned MAP_SIZE", <MAP_SIZE, 0
 map_stage_copy:
     php
     sei

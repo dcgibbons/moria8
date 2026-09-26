@@ -210,6 +210,10 @@ c64_test_installer_resident_copied:
     lda $d012
     cmp #$ff
     bne !wait-
+!wait_clear:
+    lda $d012
+    cmp #$ff
+    beq !wait_clear-
     dex
     bne !frame-
     rts
@@ -534,6 +538,10 @@ chain_krill_fail:
 #if C64_TEST_BOOT_HANDOFF
 c64_test_recovery_blanked:
 #endif
+    lda #$03
+    sta $dd02
+    and $dd00
+    sta $dd00
     jsr KRILL_BOOT_UNINSTALL
     sei
     cld
@@ -681,6 +689,10 @@ chain_wait_18:
     lda $d012
     cmp #$ff
     bne !wait-
+!wait_clear:
+    lda $d012
+    cmp #$ff
+    beq !wait_clear-
     dex
     bne !frame-
     rts

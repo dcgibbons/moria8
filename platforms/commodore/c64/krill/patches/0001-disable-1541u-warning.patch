@@ -1,6 +1,22 @@
 --- a/loader/src/install.s
 +++ b/loader/src/install.s
-@@ -719,7 +719,0 @@
+@@ -76,0 +77,9 @@
++.export message
++.export drivetype
++.export moria8_second_device_probe
++.export moria8_warning_exit
++.if ONLY_1541_AND_COMPATIBLE = 0
++.export mutefail
++.export errormute
++.export moria8_mutefail_message_return
++.endif
+@@ -429,0 +439,1 @@
++moria8_second_device_probe:
+@@ -459,0 +470,1 @@
++moria8_mutefail_message_return:
+@@ -718,0 +730,1 @@
++moria8_warning_exit:
+@@ -721,7 +732,0 @@
 -            ; if 1541U is detected, it runs on buggy firmware
 -            lda drivetype
 -            cmp #diskio::drivetype::DRIVE_1541U

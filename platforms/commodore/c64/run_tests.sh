@@ -51,7 +51,8 @@ krill_status=0
 "${COMMODORE_MAKE[@]}" ../../build/version_strings.inc \
     ../../build/c64/boot.prg ../../build/c64/bootart64.prg ../../build/c64/title \
     ../../build/c64/monster.db.1 ../../build/c64/monster.db.2 ../../build/c64/monster.db.3 ../../build/c64/monster.db.4 \
-    ../../build/c64/krill-resident.bin ../../build/c64/kinst64.prg ../../build/c64/kres64.prg ../../build/c64/kinst41.prg || krill_status=$?
+    ../../build/c64/krill-resident.bin ../../build/c64/kinst64.prg ../../build/c64/kinst64.map \
+    ../../build/c64/kres64.prg ../../build/c64/kinst41.prg || krill_status=$?
 if [ "$krill_status" -ne 0 ]; then
     exit 1
 fi
@@ -2990,6 +2991,7 @@ run_boot_handoff_runtime_matrix() {
                 --boot-prg "$out/boot.prg" --device "$device" \
                 --boot-vs "$boot_vs" --main-vs "$main_vs" \
                 --kinst-prg ../../../build/test/c64/kinst64.prg \
+                --kinst-symbols ../../../build/test/c64/kinst64.map \
                 --kres-prg ../../../build/test/c64/kres64.prg \
                 --port "$VICE_MONITOR_PORT" --timeout "$timeout"; then
             echo "FAIL ($scenario)"
@@ -4963,7 +4965,7 @@ check_static_contract "c64_p6_runtime_hook_contract" "main.s" \
 check_static_contract "c64_boot_runtime_matrix_contract" "tests/boot_handoff_smoke.py" \
     "kinst_failure|||bootart_failure|||missing_bootart_krill|||display_integrity|||display_canary_failure|||installer_1541u_warning|||installer_mute_failure|||krill_install_success_cleanup|||kernal_success_cleanup|||device9_krill|||device9_fallback|||rom_vector_nmi|||terminal_rom_vector_nmi|||kernal_moria_failure|||kernal_init_failure|||krill_moria_failure|||krill_bank_failure|||krill_init_failure|||recovery_moria_failure|||recovery_init_failure|||recovery_success_cleanup|||p6_bank_failure"
 check_static_contract "c64_boot_runtime_evidence_contract" "tests/boot_handoff_smoke.py" \
-    "ERROR_MUTE_MESSAGE =|||WARNING_1541U_MESSAGE =|||def vendor_layout|||vendor message routine|||patched 1541U warning exit|||vendor second-device loop|||vendor mutefail path|||def snapshot_canaries|||read_bytes(self.connector, 0x0340, 77)|||def assert_canaries|||read_bytes(self.connector, 0x0340, 77)|||def assert_vendor_message_entry|||def assert_vendor_message_visible"
+    "ERROR_MUTE_MESSAGE =|||def parse_krill_symbols|||def vendor_layout|||KINST64 symbols are missing|||KINST64 vendor error message does not match its build symbol|||def snapshot_canaries|||read_bytes(self.connector, 0x0340, 77)|||def assert_canaries|||read_bytes(self.connector, 0x0340, 77)|||def assert_vendor_message_entry|||def assert_vendor_message_visible"
 check_static_contract "c64_boot_mutefail_vendor_path_contract" "tests/boot_handoff_smoke.py" \
     "scenario == \"installer_mute_failure\"|||second_device_probe|||vendor second-device state is not device 9|||vendor active-device stack byte is not device 8|||set_register(\"pc\", int(self.vendor[\"mutefail\"]))|||vendor mutefail message entry|||vendor mutefail message return|||vendor mutefail path did not restore active FA|||self.assert_title(evidence=0x80)"
 check_static_contract "c64_boot_recovery_success_cleanup_contract" "tests/boot_handoff_smoke.py" \
@@ -4971,7 +4973,7 @@ check_static_contract "c64_boot_recovery_success_cleanup_contract" "tests/boot_h
 check_static_contract "c64_boot_runtime_registration_contract" "run_tests.sh" \
     "missing_bootart_krill:noart:8|||display_integrity:krill:8|||display_canary_failure:krill:8|||installer_1541u_warning:krill:8|||installer_mute_failure:krill:8|||recovery_success_cleanup:krill:8|||device9_krill:krill:9|||device9_fallback:fallback:9|||rom_vector_nmi:fallback:8|||terminal_rom_vector_nmi:fallback:8|||\"missing_bootart_krill\"|||\"display_integrity\"|||\"display_canary_failure\"|||\"installer_1541u_warning\"|||\"installer_mute_failure\"|||\"recovery_success_cleanup\"|||\"device9_krill\"|||\"device9_fallback\"|||\"rom_vector_nmi\"|||\"terminal_rom_vector_nmi\""
 check_static_contract "c64_boot_device9_runtime_contract" "tests/boot_handoff_smoke.py" \
-    "if self.args.device == 9:|||+busdevice8|||drive8type|||drive9truedrive|||autostart|||self.args.boot_prg|||time.sleep(2.0)|||self.connector.poke(0xBA, self.args.device)|||scenario == \"device9_krill\"|||self.assert_title(evidence=0x81, device=9)|||scenario == \"device9_fallback\"|||self.assert_title(evidence=0x80, device=9)"
+    "if self.args.device == 9:|||+busdevice8|||drive8type|||drive9truedrive|||autostart|||self.args.boot_prg|||self.connector.connect(retries=120, retry_delay=0.1)|||self.connector.poke(0xBA, self.args.device)|||scenario == \"device9_krill\"|||self.assert_title(evidence=0x81, device=9)|||scenario == \"device9_fallback\"|||self.assert_title(evidence=0x80, device=9)"
 check_static_contract "c64_boot_rom_vector_nmi_contract" "tests/boot_handoff_smoke.py" \
     "def inject_nmi_and_continue_to|||send_command(\"nmi\")|||scenario == \"rom_vector_nmi\"|||c64_test_chain_rom_vectors_ready|||chain did not expose ROM vectors|||c64_test_runtime_vectors_ready|||scenario == \"terminal_rom_vector_nmi\"|||c64_test_terminal_rom_vectors_ready|||terminal path did not expose ROM vectors|||c64_test_terminal_before_warm_start"
 check_static_contract "c64_main_init_tail_contract" "main.s" \

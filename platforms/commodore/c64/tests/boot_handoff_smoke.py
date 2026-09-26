@@ -19,6 +19,7 @@ from vice_connector import VICEConnector, normalize_addr, parse_vs_symbols
 
 BYTE_RE = re.compile(r"C:([0-9A-Fa-f]{4})\s+([0-9A-Fa-f]{2})")
 HEX_BYTE_RE = re.compile(r"^[0-9A-Fa-f]{2}$")
+KRILL_SYMBOL_RE = re.compile(r"\b([A-Za-z_][A-Za-z0-9_]*)\s+([0-9A-Fa-f]{6})\s+\w{2}\b")
 REG_RE = re.compile(
     r"(?:\.;|\.C:)[0-9A-Fa-f]{4}\s+"
     r"([0-9A-Fa-f]{2})\s+([0-9A-Fa-f]{2})\s+"
@@ -35,12 +36,6 @@ STATUS_TOO_MANY_DEVICES = 0xFC
 ERROR_MUTE_MESSAGE = (
     b"\x0e\x05\xc5\xd2\xd2\xcf\xd2: \xc6AILED TO MUTE DEVICE #00.\x00"
 )
-WARNING_1541U_MESSAGE = (
-    b"\x0e\x05\xd7\xc1\xd2\xce\xc9\xce\xc7: \xc2UGGY 1541\xd5 FIRMWARE DETECTED. "
-    b"\xd0LEASE UPDATE.\x00"
-)
-
-
 def read_byte(connector: VICEConnector, address: int) -> int:
     response = connector.send_command(f"m {address:04x} {address:04x}")
     match = BYTE_RE.search(response)
@@ -103,15 +98,20 @@ def require(condition: bool, message: str) -> None:
         raise RuntimeError(message)
 
 
-def find_unique(data: bytes, pattern: list[int | None], name: str) -> int:
-    matches = [
-        offset
-        for offset in range(len(data) - len(pattern) + 1)
-        if all(expected is None or data[offset + index] == expected for index, expected in enumerate(pattern))
-    ]
-    if len(matches) != 1:
-        raise RuntimeError(f"expected one {name} pattern, found {len(matches)}")
-    return matches[0]
+def parse_krill_symbols(path: Path) -> dict[str, int]:
+    symbols: dict[str, int] = {}
+    in_exports = False
+    for line in path.read_text(encoding="ascii").splitlines():
+        if line.startswith("Exports list by name:"):
+            in_exports = True
+            continue
+        if in_exports and line.startswith("Exports list by value:"):
+            break
+        if not in_exports:
+            continue
+        for match in KRILL_SYMBOL_RE.finditer(line):
+            symbols[match.group(1)] = int(match.group(2), 16)
+    return symbols
 
 
 def screen_codes(message: bytes) -> bytes:
@@ -141,63 +141,33 @@ class BootHarness:
         self.kres = args.kres_prg.read_bytes()
         require(self.kres[:2] == bytes((0x00, 0x04)), "KRES64 has the wrong PRG header")
         require(len(self.kres) == 240, "KRES64 has the wrong size")
-        self.vendor = self.vendor_layout(args.kinst_prg)
+        self.vendor = self.vendor_layout(args.kinst_prg, args.kinst_symbols)
 
     @staticmethod
-    def vendor_layout(path: Path) -> dict[str, int | bytes]:
+    def vendor_layout(path: Path, symbols_path: Path) -> dict[str, int]:
         image = path.read_bytes()
         require(image[:2] == bytes((0x00, 0x20)), "KINST64 has the wrong PRG header")
-        payload = image[2:]
         base = 0x2000
-        error_offset = payload.find(ERROR_MUTE_MESSAGE)
-        warning_offset = payload.find(WARNING_1541U_MESSAGE)
-        require(error_offset >= 0 and warning_offset >= 0, "KINST64 vendor messages are incomplete")
-
-        message_offset = find_unique(
-            payload,
-            [0xAD, 0x20, 0xD0, 0x48, 0xAD, 0x21, 0xD0, 0x48, 0xA9, 0x02, 0x8D, 0x20, 0xD0, 0x8D, 0x21, 0xD0],
-            "vendor message routine",
-        )
-        message_address = base + message_offset
-        warning_index = warning_offset - error_offset
-        require(0 <= warning_index <= 0xFF, "vendor warning is outside the message index table")
-        warning_exit_offset = find_unique(
-            payload,
-            [0x28, 0xA9, 0x00, 0xA2, None, 0xA0, 0xE0, 0x18, 0x60],
-            "patched 1541U warning exit",
-        )
-        drive_type = base + warning_exit_offset + 4
-
-        second_device_loop = find_unique(
-            payload,
-            [0xA5, 0xBA, 0x48, 0xA2, 0x08, 0x86, 0xBA, 0x68, 0x48, 0xC5, 0xBA,
-             0xF0, None, 0xA9, 0x00, 0x85, 0x90],
-            "vendor second-device loop",
-        )
-        mutefail_offset = find_unique(
-            payload,
-            [0xA5, 0xBA, 0xA2, 0x2F, 0x38, 0xE8, 0xA8, 0xE9, 0x0A, 0xB0, 0xFA,
-             0x8E, None, None, 0x98, 0x69, 0x30, 0x8D, None, None, 0xA2, 0x00,
-             0x20, message_address & 0xFF, message_address >> 8, 0x68, 0x85, 0xBA,
-             0xA9, STATUS_TOO_MANY_DEVICES, 0x4C, None, None],
-            "vendor mutefail path",
-        )
-        mute_device = int.from_bytes(payload[mutefail_offset + 12:mutefail_offset + 14], "little")
-        require(mute_device + 1 == int.from_bytes(payload[mutefail_offset + 18:mutefail_offset + 20], "little"),
-                "vendor mutefail digits are not adjacent")
-        require(mute_device == base + error_offset + ERROR_MUTE_MESSAGE.index(b"00."),
-                "vendor mutefail digits are not inside the complete error message")
-        return {
-            "message": message_address,
-            "warning_exit": base + warning_exit_offset,
-            "drive_type": drive_type,
-            "error_message": base + error_offset,
-            "warning_message": base + warning_offset,
-            "warning_index": warning_index,
-            "second_device_probe": base + second_device_loop + 13,
-            "mutefail": base + mutefail_offset,
-            "mutefail_message_return": base + mutefail_offset + 25,
+        symbols = parse_krill_symbols(symbols_path)
+        required = {
+            "message": "message",
+            "warning_exit": "moria8_warning_exit",
+            "drive_type": "drivetype",
+            "error_message": "errormute",
+            "second_device_probe": "moria8_second_device_probe",
+            "mutefail": "mutefail",
+            "mutefail_message_return": "moria8_mutefail_message_return",
         }
+        missing = [symbol for symbol in required.values() if symbol not in symbols]
+        require(not missing, f"KINST64 symbols are missing: {', '.join(missing)}")
+        layout = {name: symbols[symbol] for name, symbol in required.items()}
+        end = base + len(image) - 2
+        require(all(base <= address < end for address in layout.values()),
+                "KINST64 symbols fall outside the installer payload")
+        error_offset = layout["error_message"] - base
+        require(image[2 + error_offset:2 + error_offset + len(ERROR_MUTE_MESSAGE)] == ERROR_MUTE_MESSAGE,
+                "KINST64 vendor error message does not match its build symbol")
+        return layout
 
     def symbol(self, name: str) -> int:
         value = self.symbols.get(name)
@@ -227,8 +197,6 @@ class BootHarness:
 
     def start(self) -> None:
         self.process = subprocess.Popen(self.command(), stdout=self.vice_log, stderr=subprocess.STDOUT)
-        if self.args.device == 9:
-            time.sleep(2.0)
         self.connector.connect(retries=120, retry_delay=0.1)
 
     def diagnostics(self) -> str:
@@ -607,6 +575,7 @@ def main() -> int:
     parser.add_argument("--boot-vs", required=True, type=Path)
     parser.add_argument("--main-vs", required=True, type=Path)
     parser.add_argument("--kinst-prg", required=True, type=Path)
+    parser.add_argument("--kinst-symbols", required=True, type=Path)
     parser.add_argument("--kres-prg", required=True, type=Path)
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=6510)

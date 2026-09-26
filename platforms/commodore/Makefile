@@ -156,6 +156,7 @@ C64_RUNTIME_BANKED = $(OUT64)/64.bank
 C64_INIT_TAIL      = $(OUT64)/64.init
 C64_KRILL_RESIDENT_BIN = $(OUT64)/krill-resident.bin
 C64_KRILL_INSTALL_PRG  = $(OUT64)/kinst64.prg
+C64_KRILL_INSTALL_SYMBOLS = $(OUT64)/kinst64.map
 C64_KRILL_BOOT_PRG     = $(OUT64)/kres64.prg
 C64_KRILL_1541_INSTALL_PRG = $(OUT64)/kinst41.prg
 C64_KRILL_STAMP        = $(OUT64)/.krill-built.stamp
@@ -734,6 +735,7 @@ $(C64_KRILL_STAMP): $(KRILL_CONFIG) $(KRILL_CONFIG_1541) $(KRILL_PATCH_1541U) | 
 	MAKEFLAGS= $(MAKE) -C "$(KRILL_DIR_RESOLVED)/loader/src" PLATFORM=c64 prg INSTALL=2000 RESIDENT=0400 ZP=e0 VERSION=194 EXTCONFIGPATH="$(CURDIR)/c64/krill"
 	cp "$(KRILL_DIR_RESOLVED)/loader/build/loader-c64.prg" "$(C64_KRILL_BOOT_PRG)"
 	cp "$(KRILL_DIR_RESOLVED)/loader/build/install-c64.prg" "$(C64_KRILL_INSTALL_PRG)"
+	cp "$(KRILL_DIR_RESOLVED)/loader/build/intermediate/loader-c64.map" "$(C64_KRILL_INSTALL_SYMBOLS)"
 	python3 -c 'import pathlib,sys; kres,kinst=map(lambda x:pathlib.Path(x).read_bytes(),sys.argv[1:]); assert kres[:2] == bytes((0,4)) and len(kres) == 240, "KRES64 must be 238 bytes at $$0400"; assert kinst[:2] == bytes((0,32)) and len(kinst) == 6986, "KINST64 must be 6984 bytes at $$2000"' "$(C64_KRILL_BOOT_PRG)" "$(C64_KRILL_INSTALL_PRG)"
 	rm -f "$(KRILL_DIR_RESOLVED)/loader/build/intermediate/loader-nonreloc-c64.o" "$(KRILL_DIR_RESOLVED)/loader/build/intermediate/install-nonreloc-c64.o" "$(KRILL_DIR_RESOLVED)/loader/build/loader-c64.prg" "$(KRILL_DIR_RESOLVED)/loader/build/install-c64.prg" "$(KRILL_DIR_RESOLVED)/loader/build/loadersymbols-c64.inc"
 	MAKEFLAGS= $(MAKE) -C "$(KRILL_DIR_RESOLVED)/loader/src" PLATFORM=c64 prg INSTALL=c000 RESIDENT=0400 ZP=e0 VERSION=194 EXTCONFIGPATH="$(CURDIR)/c64/krill1541"
@@ -743,6 +745,7 @@ $(C64_KRILL_STAMP): $(KRILL_CONFIG) $(KRILL_CONFIG_1541) $(KRILL_PATCH_1541U) | 
 
 $(C64_KRILL_RESIDENT_BIN): $(C64_KRILL_STAMP)
 $(C64_KRILL_INSTALL_PRG): $(C64_KRILL_STAMP)
+$(C64_KRILL_INSTALL_SYMBOLS): $(C64_KRILL_STAMP)
 $(C64_KRILL_BOOT_PRG): $(C64_KRILL_STAMP)
 $(C64_KRILL_1541_INSTALL_PRG): $(C64_KRILL_STAMP)
 
