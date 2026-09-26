@@ -554,12 +554,9 @@ $(DISK64_IMAGE): $(C64_BUILD_ARTIFACTS) $(C64_KRILL_INSTALL_PRG) $(C64_KRILL_BOO
 		-write "$@.empty.prg" "art4" \
 		-write "$@.empty.prg" "art5" \
 		-write "$(C64_BOOT_PRG)" "moria8" \
-		-write "$(C64_BOOT_PRG)" "boot64" \
 		-write "$(C64_BOOTART_PRG)" "bootart64" \
-		-write "$(C64_KRILL_INSTALL_PRG)" "kinst64" \
-		-write "$(C64_KRILL_BOOT_PRG)" "kres64" \
-		-write "$(C64_KRILL_1541_INSTALL_PRG)" "kinst41" \
 		-write "$(C64_MAIN_PRG)" "moria64" \
+		-write "$(C64_RUNTIME_BANKED)" "64.bank" \
 		-write "$(C64_INIT_TAIL)" "64.init" \
 		-write "$(C64_TITLE_PRG)" "t64" \
 		-write "$(OUT64)/monster.db.1" "monster.db.1" \
@@ -569,16 +566,19 @@ $(DISK64_IMAGE): $(C64_BUILD_ARTIFACTS) $(C64_KRILL_INSTALL_PRG) $(C64_KRILL_BOO
 		-write "$(C64_OVL_START)" "64.start" \
 		-write "$(C64_OVL_TOWN)" "64.town" \
 		-write "$(C64_OVL_DEATH)" "64.death" \
+		-write "$(C64_OVL_GEN)" "64.gen" \
+		-write "$(C64_OVL_HELP)" "64.help" \
+		-write "$(C64_OVL_UI)" "64.ui" \
+		-write "$(C64_OVL_ITEMS)" "64.items" \
+		-write "$(C64_OVL_SPELL)" "64.spell" \
 		-write "$(C64_OVL_MODAL_MISC)" "64.modal" \
-			-write "$(C64_OVL_GEN)" "64.gen" \
-			-write "$(C64_OVL_HELP)" "64.help" \
-			-write "$(C64_OVL_UI)" "64.ui" \
-			-write "$(C64_OVL_ITEMS)" "64.items" \
-			-write "$(C64_OVL_SPELL)" "64.spell" \
-			-write "$(C64_OVL_CHEST)" "64.chest" \
-			-write "$(C64_RUNTIME_BANKED)" "64.bank" \
-			-write "$(LICENSE_DISK_FILE)" "license,s" \
-			-write "$(SOURCE_OFFER_DISK_FILE)" "source-offer,s"
+		-write "$(C64_OVL_CHEST)" "64.chest" \
+		-write "$(C64_BOOT_PRG)" "boot64" \
+		-write "$(C64_KRILL_INSTALL_PRG)" "kinst64" \
+		-write "$(C64_KRILL_BOOT_PRG)" "kres64" \
+		-write "$(C64_KRILL_1541_INSTALL_PRG)" "kinst41" \
+		-write "$(LICENSE_DISK_FILE)" "license,s" \
+		-write "$(SOURCE_OFFER_DISK_FILE)" "source-offer,s"
 	python3 ../../tools/check_krill_filenames.py
 	python3 "$(DISKART)" "$(DISK64_IMAGE)" c64
 	@mkdir -p "$(OUT64)"
