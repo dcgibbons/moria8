@@ -387,7 +387,17 @@ class BootHarness:
             require(read_byte(self.connector, 0x033A) == 0, "BOOTART64 failure left art evidence set")
             return
         if scenario == "missing_bootart_krill":
-            self.arm_boot(".c64_test_fastload_pass_sym")
+            self.arm_boot(".c64_test_cache_populate_pre")
+            require(read_d011_mode(self.connector) == 0x0B,
+                    "KINST41 cache population began before the boot display was blanked")
+            self.continue_to(".c64_test_cache_populate_return")
+            cpu_port = read_byte(self.connector, 0x0001)
+            self.connector.poke(0x0001, 0x30)
+            cache_magic = read_bytes(self.connector, 0xDFFE, 2)
+            self.connector.poke(0x0001, cpu_port)
+            require(cache_magic == bytes((0x4B, 0x49)),
+                    f"KINST41 cache population did not write its validity magic: {cache_magic.hex()}")
+            self.continue_to(".c64_test_fastload_pass_sym")
             evidence = read_byte(self.connector, 0x033A)
             require(evidence == 0, f"missing Krill BOOTART64 produced canary/art evidence ${evidence:02x}")
             require(read_byte(self.connector, 0x0334) == 0x4B and read_byte(self.connector, 0x0335) == 0xD2,

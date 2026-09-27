@@ -1,6 +1,7 @@
 // boot.s - C64 boot-art loader and MORIA64 handoff
 
 #import "hal/memory_bank_consts.s"
+#import "hal/krill_cache_consts.s"
 #import "../common/bank_port_consts.s"
 
 .const VIC_BANK0_SELECT = $03
@@ -519,8 +520,14 @@ c64_test_krill_bank_return:
     bcs chain_krill_fail
     jsr chain_integrity_checkpoint
     bcs chain_krill_fail
-    jsr chain_wait_18
     jsr chain_blank
+#if C64_TEST_BOOT_HANDOFF
+c64_test_cache_populate_pre:
+#endif
+    jsr chain_krill_cache_populate
+#if C64_TEST_BOOT_HANDOFF
+c64_test_cache_populate_return:
+#endif
     ldx #<init_filename
     ldy #>init_filename
 #if C64_TEST_BOOT_HANDOFF
@@ -786,6 +793,87 @@ chain_integrity_addr_hi:
     .byte >$c000, >$cfff, >$d000, >$df3f, >$e000, >$e3e7, >$d800, >$dbe7
 chain_names_state_end:
 chain_growth_start:
+.assert "Krill cache helper has fixed chain address", chain_growth_start, KRILL_INSTALL_CACHE_POPULATE
+// Called by the boot chain after MORIA64/64.BANK and before its normal 64.INIT
+// load restores the init-only $C000 tail.
+chain_krill_cache_populate:
+    lda ZP_SRC_LO
+    pha
+    lda ZP_SRC_HI
+    pha
+    lda ZP_DST_LO
+    pha
+    lda ZP_DST_HI
+    pha
+    php
+    sei
+    lda $01
+    pha
+    lda #BANK_ALL_RAM
+    sta $01
+    lda #0
+    sta KRILL_INSTALL_CACHE_MAGIC
+    sta KRILL_INSTALL_CACHE_MAGIC + 1
+    pla
+    sta $01
+    plp
+    jsr chain_wait_18
+    ldx #<chain_krill_cache_name
+    ldy #>chain_krill_cache_name
+    jsr KRILL_BOOT_LOADRAW
+    bcs !done+
+    lda #VIC_BANK0_SELECT
+    sta $dd00
+    php
+    sei
+    lda $01
+    pha
+    lda #BANK_ALL_RAM
+    sta $01
+    lda #<$c000
+    sta ZP_SRC_LO
+    lda #>$c000
+    sta ZP_SRC_HI
+    lda #<KRILL_INSTALL_CACHE_BASE
+    sta ZP_DST_LO
+    lda #>KRILL_INSTALL_CACHE_BASE
+    sta ZP_DST_HI
+    ldx #>KRILL_INSTALL_CACHE_SIZE
+    ldy #0
+!page:
+    lda (ZP_SRC_LO),y
+    sta (ZP_DST_LO),y
+    iny
+    bne !page-
+    inc ZP_SRC_HI
+    inc ZP_DST_HI
+    dex
+    bne !page-
+!tail:
+    lda (ZP_SRC_LO),y
+    sta (ZP_DST_LO),y
+    iny
+    cpy #<KRILL_INSTALL_CACHE_SIZE
+    bne !tail-
+    lda #KRILL_INSTALL_CACHE_MAGIC_LO
+    sta KRILL_INSTALL_CACHE_MAGIC
+    lda #KRILL_INSTALL_CACHE_MAGIC_HI
+    sta KRILL_INSTALL_CACHE_MAGIC + 1
+    pla
+    sta $01
+    plp
+!done:
+    pla
+    sta ZP_DST_HI
+    pla
+    sta ZP_DST_LO
+    pla
+    sta ZP_SRC_HI
+    pla
+    sta ZP_SRC_LO
+    jmp chain_wait_18
+chain_krill_cache_name: .text "KINST41"
+    .byte 0
 chain_growth_end:
 chain_stub_end:
 }
@@ -834,13 +922,13 @@ art_filename: .text "BOOTART64"
 art_filename_end: .byte 0
 krill_inst_name: .text "KINST64"
 krill_inst_name_end:
-
 embedded_kres64_prg:
     .import binary "../../../build/c64/kres64.prg"
 embedded_kres64_prg_end:
 .label embedded_kres64 = embedded_kres64_prg + 2
 .label embedded_kres64_end = embedded_kres64_prg_end
 .var kinst64_prg = LoadBinary("../../../build/c64/kinst64.prg")
+.var kinst41_prg = LoadBinary("../../../build/c64/kinst41.prg")
 boot_end:
 
 .print "C64 boot chain: " + chain_stub_size + " bytes at $0500-$" + toHexString(CHAIN_STUB_ADDR + chain_stub_size)
@@ -879,6 +967,9 @@ boot_end:
 .assert "KINST64 PRG header is $2000", kinst64_prg.get(0) + 256 * kinst64_prg.get(1), KRILL_INSTALL_ADDR
 .assert "KINST64 content is 6984 bytes", kinst64_prg.getSize() - 2, 6984
 .assert "KINST64 destination ends at $3b48", KRILL_INSTALL_ADDR + kinst64_prg.getSize() - 2, $3b48
+.assert "KINST41 PRG header is $c000", (kinst41_prg.get(0) & $ff) + 256 * (kinst41_prg.get(1) & $ff), $c000
+.assert "KINST41 payload matches cache copy size", kinst41_prg.getSize() - 2, KRILL_INSTALL_CACHE_SIZE
+.assert "KINST41 payload fits installer cache", kinst41_prg.getSize() - 2 <= KRILL_INSTALL_CACHE_MAGIC - KRILL_INSTALL_CACHE_BASE, true
 .assert "boot embedded sources stay below KINST64", boot_end < KRILL_INSTALL_ADDR, true
 .assert "handoff bytes stay below dungeon scratch", $033b < $033c, true
 .assert "display bitmap is disjoint from 64.BANK", ART_BITMAP_DEST + ART_BITMAP_SIZE <= $e000, true

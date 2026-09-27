@@ -417,29 +417,30 @@ test_start:
     lda #$30                    // All RAM, including RAM under I/O
     sta $01
 
-    // Name string 0 at hidden $D010: screen codes $01,$02 + null
+    // Exercise the partially occupied final page of the reduced pool.
+    // Name string 0 at hidden $D310: screen codes $01,$02 + null
     lda #$01
-    sta C64_TIER_NAME_POOL_BASE + $10
+    sta C64_TIER_NAME_POOL_BASE + $310
     lda #$02
-    sta C64_TIER_NAME_POOL_BASE + $11
+    sta C64_TIER_NAME_POOL_BASE + $311
     lda #$00
-    sta C64_TIER_NAME_POOL_BASE + $12
+    sta C64_TIER_NAME_POOL_BASE + $312
 
-    // Name string 1 at hidden $D013: screen codes $03,$04 + null
+    // Name string 1 at hidden $D313: screen codes $03,$04 + null
     lda #$03
-    sta C64_TIER_NAME_POOL_BASE + $13
+    sta C64_TIER_NAME_POOL_BASE + $313
     lda #$04
-    sta C64_TIER_NAME_POOL_BASE + $14
+    sta C64_TIER_NAME_POOL_BASE + $314
     lda #$00
-    sta C64_TIER_NAME_POOL_BASE + $15
+    sta C64_TIER_NAME_POOL_BASE + $315
 
-    // Name string 2 at hidden $D016: screen codes $05,$06 + null
+    // Name string 2 at hidden $D316: screen codes $05,$06 + null
     lda #$05
-    sta C64_TIER_NAME_POOL_BASE + $16
+    sta C64_TIER_NAME_POOL_BASE + $316
     lda #$06
-    sta C64_TIER_NAME_POOL_BASE + $17
+    sta C64_TIER_NAME_POOL_BASE + $317
     lda #$00
-    sta C64_TIER_NAME_POOL_BASE + $18
+    sta C64_TIER_NAME_POOL_BASE + $318
 
     // Restore KERNAL
     pla
@@ -453,9 +454,9 @@ test_start:
     sta active_dungeon_count    // 3 creatures
 
     // Set active tier name pointers to hidden RAM.
-    lda #<(C64_TIER_NAME_POOL_BASE + $13)
+    lda #<(C64_TIER_NAME_POOL_BASE + $313)
     sta cr_name_lo + 1
-    lda #>(C64_TIER_NAME_POOL_BASE + $13)
+    lda #>(C64_TIER_NAME_POOL_BASE + $313)
     sta cr_name_hi + 1
 
     // Call creature_get_name(X=1) from the live spell-style C64 context:
@@ -627,9 +628,9 @@ test_start:
     lda #$60                    // RTS
     sta tier_load + 11
 
-    lda #<(C64_TIER_NAME_POOL_BASE + $13)
+    lda #<(C64_TIER_NAME_POOL_BASE + $313)
     sta cr_name_lo + 1
-    lda #>(C64_TIER_NAME_POOL_BASE + $13)
+    lda #>(C64_TIER_NAME_POOL_BASE + $313)
     sta cr_name_hi + 1
     lda #3
     sta active_dungeon_count

@@ -250,6 +250,9 @@ c64_test_save_media_fail_armed: .byte 0
 #if C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || C64_TEST_SCRIPTED_SLOT2_SAVE_PRODUCT || C64_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT
 c64_test_restart_after_save_armed: .byte 0
 #endif
+#if C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
+c64_test_krill_resume_stage: .byte 0
+#endif
 #if C64_TEST_SCRIPTED_DISK_SETUP_SINGLE_DRIVE_RETURN_PRODUCT
 c64_test_disk_setup_single_drive_return_armed: .byte 0
 #endif
@@ -691,7 +694,6 @@ c64_test_runtime_vectors_ready:
 #if C64_TEST_BOOT_HANDOFF
 c64_test_p6_complete:
 #endif
-
     // Patch reu_show_status: RTS → JMP tramp_reu_show_status
     lda #$4c                    // JMP absolute opcode
     sta reu_show_status
@@ -731,7 +733,18 @@ restart_entry:
     jsr rng_seed
 
 title_enter_menu:
+#if C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
+    lda c64_test_restart_after_save_armed
+    beq !cached_resume_test_done+
+c64_test_before_cached_krill_resume:
+#endif
     jsr krill_resume
+#if C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
+    lda c64_test_restart_after_save_armed
+    beq !cached_resume_test_done+
+c64_test_after_cached_krill_resume:
+!cached_resume_test_done:
+#endif
     jsr platform_runtime_resync_c64
     lda #$ff
     sta save_slot_index
@@ -742,6 +755,7 @@ c64_test_after_save_restart_start:
     lda #0
     sta c64_test_restart_after_save_armed
 #if C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
+    .label c64_test_kernal_load_entry = $ffd5
     lda #OVL_HELP
     jsr overlay_load
     bcc !post_save_overlay_loaded+
@@ -2095,29 +2109,54 @@ game_over_prompt:
 // Reinstall only while title owns the map window used by KINST41 at $C000.
 // Failure is nonfatal: clear suspension and continue on the KERNAL path.
 krill_resume:
+#if C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
+    lda #1
+    sta c64_test_krill_resume_stage
+#endif
     bit krill_suspended
     bpl !done+
+#if C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
+    inc c64_test_krill_resume_stage
+#endif
     bit krill_drive_1541
     bpl !clear_suspended+
-    lda #krill_resume_name_end - krill_resume_name
-    ldx #<krill_resume_name
-    ldy #>krill_resume_name
-    jsr c64_disk_setnam
-    lda #2
-    ldx program_device
-    ldy #1
-    jsr c64_disk_setlfs
-    lda #0
-    tax
-    ldy #$c0
-    jsr c64_disk_call
-    .word $ffd5
+#if C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
+    inc c64_test_krill_resume_stage
+#endif
     php
-    lda #2
-    jsr c64_disk_close
-    jsr c64_disk_clrchn
+    sei
+    lda $01
+    pha
+    lda #BANK_ALL_RAM
+    sta $01
+    lda KRILL_INSTALL_CACHE_MAGIC
+    cmp #KRILL_INSTALL_CACHE_MAGIC_LO
+    bne !cache_miss+
+    lda KRILL_INSTALL_CACHE_MAGIC + 1
+    cmp #KRILL_INSTALL_CACHE_MAGIC_HI
+    bne !cache_miss+
+#if C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
+    inc c64_test_krill_resume_stage
+#endif
+    lda #<KRILL_INSTALL_CACHE_BASE
+    sta zp_ptr0
+    lda #>KRILL_INSTALL_CACHE_BASE
+    sta zp_ptr0_hi
+    ldy #0
+    sty zp_ptr1
+    lda #>$c000
+    sta zp_ptr1_hi
+    ldx #>KRILL_INSTALL_CACHE_SIZE
+    jsr banked_page_copy
+!tail:
+    lda (zp_ptr0),y
+    sta (zp_ptr1),y
+    iny
+    cpy #<KRILL_INSTALL_CACHE_SIZE
+    bne !tail-
+    pla
+    sta $01
     plp
-    bcs !clear_suspended+
     lda program_device
     sta KERNAL_CURRENT_DEVICE
     jsr c64_disk_call
@@ -2126,15 +2165,19 @@ krill_resume:
     // The enabled drive watchdog resets after a few starved frames.
     lda #$ff
     sta krill_active
+#if C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
+    inc c64_test_krill_resume_stage
+#endif
+    jmp !clear_suspended+
+!cache_miss:
+    pla
+    sta $01
+    plp
 !clear_suspended:
     lda #0
     sta krill_suspended
 !done:
     rts
-
-krill_resume_name:
-    .byte $4b,$49,$4e,$53,$54,$34,$31 // "KINST41"
-krill_resume_name_end:
 
 // Restore the staged map after KINST41 has finished using MAP_BASE.
 .assert "C64 staged map copy requires page-aligned MAP_SIZE", <MAP_SIZE, 0
@@ -2145,15 +2188,21 @@ map_stage_copy:
     pha
     lda #BANK_NO_KERNAL
     sta $01
-    lda #0
-    sta zp_ptr0
-    sta zp_ptr1
+    ldy #0
+    sty zp_ptr0
+    sty zp_ptr1
     lda #>MAP_STAGE_BASE
     sta zp_ptr0_hi
     lda #>MAP_BASE
     sta zp_ptr1_hi
     ldx #>MAP_SIZE
-    ldy #0
+    jsr banked_page_copy
+    pla
+    sta $01
+    plp
+    rts
+
+banked_page_copy:
 !page:
     lda (zp_ptr0),y
     sta (zp_ptr1),y
@@ -2163,9 +2212,6 @@ map_stage_copy:
     inc zp_ptr1_hi
     dex
     bne !page-
-    pla
-    sta $01
-    plp
     rts
 
 // Safety: ensure runtime code doesn't overlap runtime data areas
@@ -2672,7 +2718,7 @@ c64_test_p6_bank_failure:
     sta $d020
     jmp !load_failed-
 !banked_done:
-    jsr $e544               // Clear the dead $0500 chain only after LOAD.
+    jsr $e544               // Clear the retired boot resident and chain.
     lda #$1b
     sta $d011
     rts

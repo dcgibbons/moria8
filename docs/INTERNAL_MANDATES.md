@@ -27,8 +27,10 @@ product reason, and verify the rendered path on the affected target.
 - C64 main segment must end below `$C000`.
 - C128 main/default segment must end below its asserted runtime ceiling.
 - The C64 map owns `$C000-$CEFF`; the C64 floor-item table owns `$CF00-$CFFF`.
-- `$D000-$DFFF` is the I/O hole when I/O is visible and must not receive normal
-  executable code or ordinary runtime payload data.
+- `$D000-$D33F` under C64 I/O owns active tier names; `$D340-$DFCB` owns the
+  inert KINST41 cache and `$DFFE-$DFFF` its validity magic. Access these C64
+  tenants only with I/O banked out; execute KINST41 only after copying it to
+  the title-owned `$C000-$CFFF` window.
 - Banked payloads must end below CPU vectors.
 - Each overlay segment must fit in `$E000-$EFFF`.
 - Test code entered directly through BASIC must start below `$A000`, or use a

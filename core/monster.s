@@ -1617,7 +1617,8 @@ creature_get_name:
 #if HAL_PLATFORM_MONSTER_HIDDEN_NAME_POOL
     cmp #>PLATFORM_TIER_NAME_POOL_BASE
     bcc !cgn_setup_linear_c64+
-    cmp #>(PLATFORM_TIER_NAME_POOL_END + 1)
+    // Round the inclusive ceiling up so a partially owned final page is hidden.
+    cmp #>(PLATFORM_TIER_NAME_POOL_END + $100)
     bcc !cgn_setup_hidden_c64+
 !cgn_setup_linear_c64:
 #endif
@@ -1638,7 +1639,7 @@ creature_get_name:
 
 #if HAL_PLATFORM_MONSTER_HIDDEN_NAME_POOL
 !cgn_setup_hidden_c64:
-    // Hidden $D000-$D7FF RAM is only visible with I/O banked out.
+    // Hidden $D000-$D33F RAM is only visible with I/O banked out.
     sta zp_ptr1_hi
     lda cr_name_lo,x
     sta zp_ptr1

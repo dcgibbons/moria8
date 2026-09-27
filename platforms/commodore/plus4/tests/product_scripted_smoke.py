@@ -250,6 +250,13 @@ def set_breakpoint(connector: VICEConnector, args: argparse.Namespace, addr: int
         connector.break_at(addr)
 
 
+def set_fail_breakpoint(connector: VICEConnector, args: argparse.Namespace, addr: int | str) -> None:
+    if args.c64_rom_fail_breakpoint:
+        connector.send_command(f"break exec {normalize_addr(addr)} if (@cpu:$01 & $03) == $03")
+    else:
+        set_breakpoint(connector, args, addr)
+
+
 def wait_for_native_start(args: argparse.Namespace) -> MonitorTestResult:
     deadline = time.monotonic() + args.timeout
     needle = f"C:${args.start_addr}"
@@ -392,7 +399,7 @@ def run_vice(args: argparse.Namespace, pass_addr: str, fail_addr: str | None, du
                 set_breakpoint(connector, args, args.swap_addr)
                 set_breakpoint(connector, args, pass_addr)
                 if fail_addr:
-                    set_breakpoint(connector, args, fail_addr)
+                    set_fail_breakpoint(connector, args, fail_addr)
                 swap_hits = 0
                 resume_addr = args.resume_addr
                 while True:
@@ -411,7 +418,7 @@ def run_vice(args: argparse.Namespace, pass_addr: str, fail_addr: str | None, du
                                 connector.clear_breakpoints()
                                 set_breakpoint(connector, args, args.swap2_addr)
                                 if fail_addr:
-                                    set_breakpoint(connector, args, fail_addr)
+                                    set_fail_breakpoint(connector, args, fail_addr)
                                 connector.go()
                                 result = connector.wait_for_stop(
                                     pass_addr=args.swap2_addr,
@@ -429,7 +436,7 @@ def run_vice(args: argparse.Namespace, pass_addr: str, fail_addr: str | None, du
                                     connector.clear_breakpoints()
                                     set_breakpoint(connector, args, args.swap3_addr)
                                     if fail_addr:
-                                        set_breakpoint(connector, args, fail_addr)
+                                        set_fail_breakpoint(connector, args, fail_addr)
                                     connector.go()
                                     result = connector.wait_for_stop(
                                         pass_addr=args.swap3_addr,
@@ -447,7 +454,7 @@ def run_vice(args: argparse.Namespace, pass_addr: str, fail_addr: str | None, du
                                         connector.clear_breakpoints()
                                         set_breakpoint(connector, args, args.swap4_addr)
                                         if fail_addr:
-                                            set_breakpoint(connector, args, fail_addr)
+                                            set_fail_breakpoint(connector, args, fail_addr)
                                         connector.go()
                                         result = connector.wait_for_stop(
                                             pass_addr=args.swap4_addr,
@@ -464,7 +471,7 @@ def run_vice(args: argparse.Namespace, pass_addr: str, fail_addr: str | None, du
                             connector.clear_breakpoints()
                             set_breakpoint(connector, args, pass_addr)
                             if fail_addr:
-                                set_breakpoint(connector, args, fail_addr)
+                                set_fail_breakpoint(connector, args, fail_addr)
                             connector.go()
                             result = connector.wait_for_stop(
                                 pass_addr=pass_addr,
@@ -495,8 +502,8 @@ def run_vice(args: argparse.Namespace, pass_addr: str, fail_addr: str | None, du
             else:
                 if not args.until_pass:
                     set_breakpoint(connector, args, pass_addr)
-                if fail_addr and not args.until_pass:
-                    set_breakpoint(connector, args, fail_addr)
+                if fail_addr and not args.until_pass and not args.defer_fail_until_required:
+                    set_fail_breakpoint(connector, args, fail_addr)
                 if args.require_hit_addrs:
                     resume_addr = args.resume_addr
                     for required_addr in args.require_hit_addrs:
@@ -505,7 +512,7 @@ def run_vice(args: argparse.Namespace, pass_addr: str, fail_addr: str | None, du
                         resume_addr = None
                         required_result = connector.wait_for_stop(
                             pass_addr=required_addr,
-                            fail_addr=fail_addr,
+                            fail_addr=None if args.defer_fail_until_required else fail_addr,
                             timeout=args.timeout,
                         )
                         if not required_result.passed:
@@ -522,7 +529,7 @@ def run_vice(args: argparse.Namespace, pass_addr: str, fail_addr: str | None, du
                         connector.clear_breakpoints()
                     set_breakpoint(connector, args, pass_addr)
                     if fail_addr:
-                        set_breakpoint(connector, args, fail_addr)
+                        set_fail_breakpoint(connector, args, fail_addr)
                     connector.go()
                     result = connector.wait_for_stop(
                         pass_addr=pass_addr,
@@ -650,6 +657,8 @@ def main() -> int:
     parser.add_argument("--socket-timeout", type=float, default=0.5)
     parser.add_argument("--pass-on-script-exhausted", action="store_true")
     parser.add_argument("--c64-ram-breakpoints", action="store_true")
+    parser.add_argument("--c64-rom-fail-breakpoint", action="store_true")
+    parser.add_argument("--defer-fail-until-required", action="store_true")
     parser.add_argument("--screen-base", type=lambda value: int(value, 0), default=0x0c00)
     parser.add_argument("--screen-cols", type=int, default=40)
     parser.add_argument("--expect-screen-symbol", action="append", default=[])

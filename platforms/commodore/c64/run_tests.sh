@@ -3107,6 +3107,17 @@ run_resume_missing_kinst41_product_smoke() {
         "missing_kinst41"
 }
 
+run_cached_krill_resume_product_smoke() {
+    run_save_write_product_smoke_impl "cached_krill_resume_product_smoke" \
+        "C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT" \
+        "the.game,s" \
+        '"THE.GAME".*SEQ' \
+        "post_save_cached" \
+        "" \
+        ".c64_test_kernal_load_entry" \
+        ".c64_test_before_cached_krill_resume"
+}
+
 run_slot2_save_product_smoke() {
     run_save_write_product_smoke_impl "slot2_save_product_smoke" \
         "C64_TEST_SCRIPTED_SLOT2_SAVE_PRODUCT" \
@@ -3121,6 +3132,8 @@ run_save_write_product_smoke_impl() {
     local expected_save_re="$4"
     local post_save_mode="${5:-}"
     local resume_failure_mode="${6:-}"
+    local fail_symbol="${7:-.c64_test_save_write_fail_input_sym}"
+    local required_symbol="${8:-.c64_test_after_save_restart_start}"
     echo -n "  $name: "
 
     local build_log
@@ -3230,7 +3243,7 @@ run_save_write_product_smoke_impl() {
         --native-start
         --attach9-at-start-d64 "$save_d64"
     )
-    if [ "$post_save_mode" = "post_save_krill" ]; then
+    if [ "$post_save_mode" = "post_save_krill" ] || [ "$post_save_mode" = "post_save_cached" ]; then
         pass_symbol=".c64_test_post_save_krill_overlay_pass"
         drive9_args=(
             --save-d64 "$save_d64"
@@ -3247,6 +3260,15 @@ run_save_write_product_smoke_impl() {
             --expect-byte-symbol ".krill_suspended=0x00"
         )
     fi
+    local resume_path_expectations=()
+    if [ "$post_save_mode" = "post_save_cached" ]; then
+        pass_symbol=".c64_test_after_cached_krill_resume"
+        resume_path_expectations=(
+            --c64-rom-fail-breakpoint
+            --defer-fail-until-required
+            --expect-byte-symbol ".c64_test_krill_resume_stage=0x05"
+        )
+    fi
     if python3 -u ../plus4/tests/product_scripted_smoke.py \
             --name "$name" \
             --vice "$VICE" \
@@ -3255,10 +3277,11 @@ run_save_write_product_smoke_impl() {
             --drive8-type 1542 \
             --drive9-type 1542 \
             --main-vs "$main_vs" \
-            --require-hit-symbol ".c64_test_after_save_restart_start" \
+            --require-hit-symbol "$required_symbol" \
             --pass-symbol "$pass_symbol" \
-            --fail-symbol ".c64_test_save_write_fail_input_sym" \
+            --fail-symbol "$fail_symbol" \
             "${krill_state_expectations[@]}" \
+            "${resume_path_expectations[@]}" \
             --expect-byte-symbol ".krill_boot_used=0x01" \
             --c64-ram-breakpoints \
             --timeout 20 \
@@ -4824,6 +4847,7 @@ queue_product_suites() {
     run_suite_function "load_missing_savefile_product_smoke" run_load_missing_savefile_product_smoke "missing_device_or_no_disk"
     run_suite_function "save_media_fail_product_smoke" run_save_media_fail_product_smoke "wrong_media_detection_selected_devices" "write_protected_or_forced_write_error"
     run_suite_function "dual_drive_load_then_save_no_program_prompt" run_save_write_product_smoke "save_existing_overwrite" "save_write_product_smoke"
+    run_suite_function "cached_krill_resume_product_smoke" run_cached_krill_resume_product_smoke
     run_suite_function "resume_missing_kinst41_product_smoke" run_resume_missing_kinst41_product_smoke
     run_suite_function "slot2_save_product_smoke" run_slot2_save_product_smoke
     run_suite_function "disk_setup_product_smoke" run_disk_setup_product_smoke
@@ -4951,7 +4975,7 @@ check_static_contract "c64_restore_resume_copy_order_contract" "main.s" \
 check_static_contract "c64_hidden_kernal_irq_vector_contract" "main.s" \
     "c64_irq_hidden_rom:|||cld|||pha|||lda \$01|||pha|||lda #BANK_NO_KERNAL|||sta \$01|||lda \$dc0d|||lda \$dd0d|||lda \$d019|||sta \$d019|||pla|||sta \$01|||pla|||rti|||c64_install_ram_irq_vectors:|||php|||sei|||sta \$fffa|||sta \$fffe|||sta \$fffb|||sta \$ffff|||plp|||rts"
 check_static_contract "c64_boot_true_address_init_contract" "boot.s" \
-    "ART_BITMAP_DEST  = \$c000|||ART_SCREEN_DEST  = \$e000|||display_boot_art:|||jsr copy_color_to_vic_ram|||jsr copy_screen_to_vic_ram|||jsr copy_bitmap_to_vic_ram|||jsr boot_integrity_baseline|||jsr chain_integrity_checkpoint|||jsr chain_wait_18|||jsr chain_blank|||ldx #<init_filename|||jsr KRILL_BOOT_LOADRAW"
+    "ART_BITMAP_DEST  = \$c000|||ART_SCREEN_DEST  = \$e000|||display_boot_art:|||jsr copy_color_to_vic_ram|||jsr copy_screen_to_vic_ram|||jsr copy_bitmap_to_vic_ram|||jsr boot_integrity_baseline|||jsr chain_integrity_checkpoint|||jsr chain_blank|||jsr chain_krill_cache_populate|||ldx #<init_filename|||jsr KRILL_BOOT_LOADRAW"
 check_static_contract "c64_boot_kernal_cleanup_contract" "boot.s" \
     "boot_kernal_load:|||jsr \$ffd5|||php|||pha|||jsr \$ffc3|||jsr \$ffcc|||pla|||plp|||chain_kernal_load:|||jsr \$ffd5|||php|||pha|||jsr \$ffc3|||jsr \$ffcc|||pla|||plp"
 check_static_contract "c64_boot_recovery_blanks_first_contract" "boot.s" \

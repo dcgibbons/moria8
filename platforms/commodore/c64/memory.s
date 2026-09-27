@@ -18,6 +18,7 @@
 #import "hal/memory_bank_consts.s"
 #import "hal/sound_consts.s"
 #import "hal/entropy_consts.s"
+#import "hal/krill_cache_consts.s"
 #import "../common/bank_port_consts.s"
 
 // ============================================================
@@ -32,7 +33,7 @@
 .const CREATURE_BASE    = $c020 // Runtime scratch area (RLE, hiscore) — overlaps map but only used at save/game-over
 .const CREATURE_END     = $c0ff
 .const PLATFORM_TIER_NAME_POOL_BASE = $d000 // Hidden RAM under I/O; active tier names
-.const PLATFORM_TIER_NAME_POOL_END  = $d7ff
+.const PLATFORM_TIER_NAME_POOL_END  = $d33f
 .const C64_TIER_NAME_POOL_BASE = PLATFORM_TIER_NAME_POOL_BASE // Legacy C64 tests
 .const C64_TIER_NAME_POOL_END  = PLATFORM_TIER_NAME_POOL_END
 .const BANKED_DATA_BASE = $e000 // Item tiers, recall, spells (under KERNAL ROM)
@@ -154,6 +155,11 @@ mmu_select_bank0:
 .assert "Map fits in $C000 region", MAP_END - MAP_BASE + 1, 3840
 .assert "Staged map fits overlay window", MAP_STAGE_BASE + (MAP_END - MAP_BASE + 1) <= $f000, true
 .assert "Floor items fit", FLOOR_ITEM_END - FLOOR_ITEM_BASE + 1, 256
+.assert "Tier name pool is 832 bytes", PLATFORM_TIER_NAME_POOL_END - PLATFORM_TIER_NAME_POOL_BASE + 1, 832
+.assert "Krill installer cache follows tier name pool", PLATFORM_TIER_NAME_POOL_END + 1, KRILL_INSTALL_CACHE_BASE
+.assert "Krill installer cache fits below its magic", KRILL_INSTALL_CACHE_END < KRILL_INSTALL_CACHE_MAGIC, true
+.assert "Krill installer cache leaves 50 bytes before magic", KRILL_INSTALL_CACHE_MAGIC - KRILL_INSTALL_CACHE_END - 1, 50
+.assert "Krill installer magic fits in hidden RAM", KRILL_INSTALL_CACHE_MAGIC + 1 <= $dfff, true
 .assert "Dungeon-gen scan scratch remains page-aligned", <DUNGEON_GEN_SCAN_SCRATCH_BASE, 0
 .assert "Dungeon-gen scan scratch stays in screen scratch window", DUNGEON_GEN_SCAN_SCRATCH_END <= $07ff, true
 .assert "Dungeon-gen door scan stays in cassette buffer", DUNGEON_GEN_DOOR_SCAN_BASE >= $033c && DUNGEON_GEN_DOOR_SCAN_BASE + 65 <= $0400, true

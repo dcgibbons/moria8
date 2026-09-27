@@ -457,7 +457,7 @@ platform_copy_tier_names_to_pool:
     lda #>PLATFORM_TIER_NAME_POOL_BASE
     sta zp_ptr1_hi
 
-    // C64 only: hide I/O so writes to $D000-$D7FF reach RAM, not registers.
+    // C64 only: hide I/O so writes to $D000-$D33F reach RAM, not registers.
 #if HAL_PLATFORM_MONSTER_CPU_PORT_BANK
     lda #BANK_ALL_RAM
     sta hal_memory_cpu_port
