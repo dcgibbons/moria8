@@ -75,6 +75,5 @@ Use agent-local planning tools only for the current turn's execution checklist. 
 
 - Do not create markdown TODO files as the source of truth when Beads is available.
 - Do not use `bd edit`; it opens an interactive editor. Use `bd update` flags instead.
-- Prefer `--json` when parsing `bd` output programmatically.
 - If hooks are installed, `bd prime` may already be injected. Run it manually when context is missing.
 - Do not auto-close or mutate tasks unless the work is actually complete.
