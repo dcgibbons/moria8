@@ -32,6 +32,9 @@
 // Saves at or above this version carry the door-state table block after the
 // post-known blocks; older saves load with all doors plain (count zeroed).
 .const SAVE_DOOR_STATE_VERSION = hal_storage_save_door_state_version
+#if !C128 && !PLUS4 && !APPLE2
+.const SAVE_SPLIT_VERSION = $16
+#endif
 #if C128
 .const SAVE_ROOM21_VERSION = $13
 .const LEGACY_MAX_ROOMS = 8
@@ -41,6 +44,15 @@
 .const LOAD_RESULT_CORRUPT   = 2
 .const LOAD_RESULT_IOERR     = 3
 .const LOAD_RESULT_UNSUPPORTED = 4
+#if !C128 && !PLUS4 && !APPLE2
+.const C64_V16_STATE_CHECKSUM_SIZE = 2554
+.const C64_V16_STATE_PAYLOAD_SIZE = C64_V16_STATE_CHECKSUM_SIZE + 2 + 2
+.const C64_V16_STATE_FILE_SIZE = C64_V16_STATE_PAYLOAD_SIZE + 2
+.const C64_V16_STATE_STAGE_END = MAP_BASE + C64_V16_STATE_PAYLOAD_SIZE
+.const C64_V16_MAP_PAYLOAD_SIZE = MAP_SIZE
+.const C64_V16_MAP_FILE_SIZE = C64_V16_MAP_PAYLOAD_SIZE + 2
+.const C64_V16_MAP_STAGE_END = MAP_BASE + C64_V16_MAP_PAYLOAD_SIZE
+#endif
 
 // ZP game state range to save ($40–$5f = 32 bytes)
 // Coverage: player struct fields ($2B-$3F) saved via player_sync_from_zp.
@@ -142,6 +154,14 @@ save_io_error:  .byte 0         // I/O error flag
 load_result:    .byte LOAD_RESULT_IOERR
 load_save_version: .byte 0
 load_floor_item_count: .byte 0
+#if !C128 && !PLUS4 && !APPLE2 && !C64_UNIT_TEST
+load_stage_mode: .byte 0
+load_stage_ptr_lo: .byte 0
+load_stage_ptr_hi: .byte 0
+save_map_cksum_lo: .byte 0
+save_map_cksum_hi: .byte 0
+load_split_format: .byte 0
+#endif
 #if !SAVE_SLOT_INDEX_EXTERNAL
 save_slot_index: .byte $ff       // $ff until a slot is selected; then 0-3
 #endif
@@ -286,10 +306,17 @@ save_drive_not_ready_str:
 // ============================================================
 
 .macro save_block(addr, size) {
+#if !C128 && !PLUS4 && !APPLE2
+    lda #<addr
+    sta zp_ptr0
+    lda #>addr
+    sta zp_ptr0_hi
+#else
     lda #<addr
     sta save_block_lo
     lda #>addr
     sta save_block_hi
+#endif
     lda #<size
     sta save_count_lo
     lda #>size
@@ -335,6 +362,7 @@ save_block_table_inventory_current:
     :save_block_desc(inv_ego, TOTAL_INV_SLOTS)
 save_block_table_inventory_current_end:
 
+#if C64_UNIT_TEST
 save_block_table_inventory_legacy:
     :save_block_desc(inv_item_id, LEGACY_TOTAL_INV_SLOTS)
     :save_block_desc(inv_qty, LEGACY_TOTAL_INV_SLOTS)
@@ -345,6 +373,7 @@ save_block_table_inventory_legacy:
     :save_block_desc(inv_flags, LEGACY_TOTAL_INV_SLOTS)
     :save_block_desc(inv_ego, LEGACY_TOTAL_INV_SLOTS)
 save_block_table_inventory_legacy_end:
+#endif
 
 save_block_table_post_known:
     :save_block_desc(potion_shuffle, 12)
@@ -428,7 +457,9 @@ save_block_table_floor_items_direct_end:
 
 .const SAVE_BLOCK_PRE_INVENTORY_COUNT = (save_block_table_pre_inventory_end - save_block_table_pre_inventory) / SAVE_BLOCK_DESC_SIZE
 .const SAVE_BLOCK_INVENTORY_CURRENT_COUNT = (save_block_table_inventory_current_end - save_block_table_inventory_current) / SAVE_BLOCK_DESC_SIZE
+#if C64_UNIT_TEST
 .const SAVE_BLOCK_INVENTORY_LEGACY_COUNT = (save_block_table_inventory_legacy_end - save_block_table_inventory_legacy) / SAVE_BLOCK_DESC_SIZE
+#endif
 .const SAVE_BLOCK_POST_KNOWN_COUNT = (save_block_table_post_known_end - save_block_table_post_known) / SAVE_BLOCK_DESC_SIZE
 .const SAVE_BLOCK_DOOR_STATE_COUNT = (save_block_table_door_state_end - save_block_table_door_state) / SAVE_BLOCK_DESC_SIZE
 #if C128
@@ -441,7 +472,10 @@ save_block_table_floor_items_direct_end:
 .const SAVE_BLOCK_FLOOR_ITEMS_STAT_TABLE = save_block_table_floor_items_direct + (SAVE_BLOCK_FLOOR_ITEMS_HEAD_COUNT * SAVE_BLOCK_DESC_SIZE)
 .assert "Pre-inventory save block table entries are 4 bytes", SAVE_BLOCK_PRE_INVENTORY_COUNT * SAVE_BLOCK_DESC_SIZE, save_block_table_pre_inventory_end - save_block_table_pre_inventory
 .assert "Current inventory save block table entries are 4 bytes", SAVE_BLOCK_INVENTORY_CURRENT_COUNT * SAVE_BLOCK_DESC_SIZE, save_block_table_inventory_current_end - save_block_table_inventory_current
-.assert "Legacy inventory save block table entries are 4 bytes", SAVE_BLOCK_INVENTORY_LEGACY_COUNT * SAVE_BLOCK_DESC_SIZE, save_block_table_inventory_legacy_end - save_block_table_inventory_legacy
+#if C64_UNIT_TEST
+.assert "Legacy inventory test table entries are 4 bytes", SAVE_BLOCK_INVENTORY_LEGACY_COUNT * SAVE_BLOCK_DESC_SIZE, save_block_table_inventory_legacy_end - save_block_table_inventory_legacy
+#endif
+.assert "Inventory save fields stay equal-sized and contiguous", inv_qty == inv_item_id + TOTAL_INV_SLOTS && inv_p1 == inv_qty + TOTAL_INV_SLOTS && inv_to_hit == inv_p1 + TOTAL_INV_SLOTS && inv_to_dam == inv_to_hit + TOTAL_INV_SLOTS && inv_to_ac == inv_to_dam + TOTAL_INV_SLOTS && inv_flags == inv_to_ac + TOTAL_INV_SLOTS && inv_ego == inv_flags + TOTAL_INV_SLOTS, true
 .assert "Post-known save block table entries are 4 bytes", SAVE_BLOCK_POST_KNOWN_COUNT * SAVE_BLOCK_DESC_SIZE, save_block_table_post_known_end - save_block_table_post_known
 #if C128
 .assert "C128 legacy room8 post-known save block table entries are 4 bytes", SAVE_BLOCK_POST_KNOWN_ROOM8_COUNT * SAVE_BLOCK_DESC_SIZE, save_block_table_post_known_room8_end - save_block_table_post_known_room8
@@ -455,7 +489,6 @@ save_block_table_floor_items_direct_end:
 .assert "Floor-item direct save block table count is stable", SAVE_BLOCK_FLOOR_ITEMS_DIRECT_COUNT, SAVE_BLOCK_FLOOR_ITEMS_HEAD_COUNT + SAVE_BLOCK_FLOOR_ITEMS_STAT_COUNT
 .assert "Pre-inventory save block table count fits in one page", SAVE_BLOCK_PRE_INVENTORY_COUNT < 64, true
 .assert "Current inventory save block table count fits in one page", SAVE_BLOCK_INVENTORY_CURRENT_COUNT < 64, true
-.assert "Legacy inventory save block table count fits in one page", SAVE_BLOCK_INVENTORY_LEGACY_COUNT < 64, true
 .assert "Post-known save block table count fits in one page", SAVE_BLOCK_POST_KNOWN_COUNT < 64, true
 .assert "Post-floor save block table count fits in one page", SAVE_BLOCK_POST_FLOOR_COUNT < 64, true
 
@@ -506,6 +539,10 @@ save_confirm_write_len:
     rts
 #else
 save_select_output_name_c64:
+#if !C64_UNIT_TEST
+    lda #BANK_NO_KERNAL
+    sta hal_memory_cpu_port
+#endif
     jsr save_file_exists
     bcc !save_select_ok+
     ldx #HSTR_SAVE_OVERWRITE
@@ -560,7 +597,12 @@ save_game:
     jmp !save_not_bad_media+
 !save_bad_media:
     jsr tramp_disk_prepare_selected
-    bcc !save_media_ok+
+    bcs save_return_fail
+#if !C128 && !PLUS4 && !APPLE2 && !C64_UNIT_TEST
+    jmp !save_media_ok+
+#else
+    jmp !save_media_ok+
+#endif
     jmp save_return_fail
 !save_not_bad_media:
 #if HAL_STORAGE_FRIENDLY_STATUS_MESSAGES
@@ -596,6 +638,7 @@ save_return_fail:
 #if HAL_STORAGE_CPU_PORT_RESTORE_AFTER_IO
     clc
 save_return_c64_with_carry:
+save_return_c64_bank:
     lda #BANK_NO_BASIC
     sta hal_memory_cpu_port
     rts
@@ -632,6 +675,25 @@ save_return_c64_with_carry:
     jsr player_sync_from_zp
     jsr player_search_clear_transient_state
 
+#if !C128 && !PLUS4 && !APPLE2 && !C64_UNIT_TEST
+    lda current_overlay
+    cmp #OVL_SAVE
+    bne save_v16_error
+    lda #BANK_NO_KERNAL
+    sta hal_memory_cpu_port
+    jsr ovl_save_writer_run
+    php
+    lda #BANK_NO_BASIC
+    sta hal_memory_cpu_port
+    cli
+    plp
+    bcs save_success_message
+save_v16_error:
+    ldx #HSTR_SAVE_IOERR
+    jsr huff_print_msg
+    jsr input_get_modal_dismiss_key
+    jmp save_return_fail
+#else
     // Reset checksum
     lda #0
     sta save_cksum_lo
@@ -706,7 +768,11 @@ save_open_write_len:
     jsr save_write_inventory_state
 
     // 3. Known-item state uses the V2 96-byte runway.
+#if !C128 && !PLUS4 && !APPLE2 && !C64_UNIT_TEST
+    :save_block(id_known_bits, ID_KNOWN_BYTES)
+#else
     jsr save_write_known_items
+#endif
 
     // 4. Remaining resident state through monster table.
 #if C128
@@ -720,7 +786,16 @@ save_open_write_len:
     jsr save_write_block_table
 #endif
     // 4b. Door-state table (current version only).
+#if !C128 && !PLUS4 && !APPLE2 && !C64_UNIT_TEST
+    lda #<save_block_table_door_state
+    sta zp_ptr1
+    lda #>save_block_table_door_state
+    sta zp_ptr1_hi
+    lda #SAVE_BLOCK_DOOR_STATE_COUNT
+    jsr save_write_block_table
+#else
     jsr save_write_door_state
+#endif
 
     // 16. Floor items (logical 8-field layout, serialized from packed RAM)
     jsr save_write_floor_items
@@ -760,8 +835,10 @@ save_open_write_len:
 #if HAL_STORAGE_VIC_BANK_RESTORE_AFTER_SERIAL
     jsr c64_restore_vic_bank0_after_serial
 #endif
+#endif
 
     // Show success
+save_success_message:
     ldx #HSTR_SAVE_DONE
     jsr huff_print_msg
 #if HAL_STORAGE_CPU_PORT_RESTORE_AFTER_IO
@@ -772,12 +849,7 @@ save_open_write_len:
     rts
 
 !save_error_close:
-    jsr save_restore_channels
-    lda #hal_storage_save_file_num
-    jsr SAVE_CLOSE
-#if HAL_STORAGE_VIC_BANK_RESTORE_AFTER_SERIAL
-    jsr c64_restore_vic_bank0_after_serial
-#endif
+    jsr load_close_file_restore
 !save_error:
 #if HAL_STORAGE_FRIENDLY_STATUS_MESSAGES
     jsr hal_storage_save_stream_status
@@ -875,7 +947,31 @@ plus4_test_load_media_fail:
     sta save_cksum_lo
     sta save_cksum_hi
     sta save_io_error
-
+#if !C128 && !PLUS4 && !APPLE2 && !C64_UNIT_TEST
+    jsr c64_load_open_state
+    cmp #0
+    beq load_magic_read_done
+    cmp #1
+    bne !open_not_notfound+
+    jmp !load_notfound+
+!open_not_notfound:
+    cmp #3
+    bne !open_corrupt+
+    jmp !load_fail+
+!open_corrupt:
+    jmp !load_corrupt+
+load_parse_staged:
+    lda #LOAD_RESULT_IOERR
+    sta load_result
+    lda #0
+    sta save_cksum_lo
+    sta save_cksum_hi
+    sta save_io_error
+    lda #1
+    sta load_split_format
+    :load_block(save_magic_buf, SAVE_MAGIC_SIZE)
+    jmp load_magic_read_done
+#else
 #if HAL_STORAGE_CLOSE_SAVE_FILE_BEFORE_LOAD
     jsr SAVE_CLRCHN
     lda #hal_storage_save_file_num
@@ -894,6 +990,23 @@ load_open_read_len:
     jsr SAVE_SETLFS
     jsr SAVE_OPEN
     bcc !load_open_ok+
+#if !C128 && !PLUS4 && !APPLE2 && !C64_UNIT_TEST
+    lda load_split_format
+    beq !load_notfound+
+load_open_legacy_retry:
+    lda #0
+    sta load_split_format
+    lda load_open_read_len + 1
+    ldx #<hal_storage_legacy_save_read_name
+    ldy #>hal_storage_legacy_save_read_name
+    jsr SAVE_SETNAM
+    lda #hal_storage_save_file_num
+    ldx save_device
+    ldy #hal_storage_save_sec_read
+    jsr SAVE_SETLFS
+    jsr SAVE_OPEN
+    bcc !load_open_ok+
+#endif
     // OPEN failed — file not found is the most common cause
 #if HAL_STORAGE_VIC_BANK_RESTORE_AFTER_SERIAL
     jsr c64_restore_vic_bank0_after_serial
@@ -913,23 +1026,80 @@ load_open_read_len:
     jsr SAVE_CHKIN
     bcc !load_chkin_ok+
     // CHKIN failed — close and bail
-    lda #hal_storage_save_file_num
-    jsr SAVE_CLOSE
-#if HAL_STORAGE_VIC_BANK_RESTORE_AFTER_SERIAL
-    jsr c64_restore_vic_bank0_after_serial
-#endif
+    jsr load_close_file_restore
     jmp !load_fail+
 !load_chkin_ok:
 
     // --- Read and verify magic header ---
-    // Read 8 bytes to temp area and compare
+    // C64 v16 sequential files retain their PRG header; legacy streams begin
+    // directly with the magic byte.
+#if !C128 && !PLUS4 && !APPLE2 && !C64_UNIT_TEST
+    jsr SAVE_CHRIN
+    pha
+    jsr SAVE_READST
+    beq !load_first_byte_ok+
+    pla
+    lda load_split_format
+    beq !load_close_notfound+
+    jsr load_close_file_restore
+    jmp load_open_legacy_retry
+!load_first_byte_ok:
+    pla
+    cmp #$4d
+    beq !load_legacy_header+
+    cmp #$00
+    bne !load_corrupt+
+    jsr SAVE_CHRIN
+    cmp #$c0
+    bne !load_corrupt+
+    lda #1
+    sta load_split_format
+    jmp load_parse_magic
+!load_legacy_header:
+    lda #0
+    sta load_split_format
+    lda #$4d
+    sta save_magic_buf
+    clc
+    adc save_cksum_lo
+    sta save_cksum_lo
+    bcc !legacy_magic_no_carry+
+    inc save_cksum_hi
+!legacy_magic_no_carry:
+    lda #<(SAVE_MAGIC_SIZE - 1)
+    sta save_count_lo
+    lda #0
+    sta save_count_hi
+    lda #<(save_magic_buf + 1)
+    sta zp_ptr0
+    lda #>(save_magic_buf + 1)
+    sta zp_ptr0_hi
+    jsr load_read_block
+    jmp load_magic_read_done
+load_parse_staged:
+    lda #LOAD_RESULT_IOERR
+    sta load_result
+    lda #0
+    sta save_cksum_lo
+    sta save_cksum_hi
+    sta save_io_error
+    lda #1
+    sta load_split_format
+load_parse_magic:
+#endif
     :load_block(save_magic_buf, SAVE_MAGIC_SIZE)
+#endif
+load_magic_read_done:
 #if PLUS4_TEST_SCRIPTED_LOAD_RESUME_PRODUCT || PLUS4_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
 plus4_test_after_load_magic:
 #endif
     // Check STATUS after reading magic: file-not-found on 1541 causes OPEN to
     // succeed but first CHRINs return immediate EOF/timeout (STATUS = $42).
     // Any non-zero STATUS this early means the file doesn't exist.
+#if !C128 && !PLUS4 && !APPLE2 && !C64_UNIT_TEST
+    lda load_stage_mode
+    bne !load_magic_check+
+#endif
     jsr SAVE_READST
 #if HAL_STORAGE_MASK_CHRIN_WRITE_TIMEOUT_STATUS
     and #$fe                // Plus/4 KERNAL may leave write-timeout bit set after CHRIN
@@ -1003,6 +1173,13 @@ plus4_test_after_load_magic:
     sta zp_ptr1_hi
 #endif
     lda #SAVE_BLOCK_POST_FLOOR_COUNT
+#if !C128 && !PLUS4 && !APPLE2 && !C64_UNIT_TEST
+    ldx load_save_version
+    cpx #SAVE_SPLIT_VERSION
+    bcc !post_floor_count_ready+
+    lda #1
+!post_floor_count_ready:
+#endif
     jsr load_read_block_table
 #if HAL_STORAGE_MAP_BANKED
     jsr load_read_map_c128
@@ -1013,14 +1190,24 @@ plus4_test_after_load_magic:
 
     // 19. Read stored checksum (2 bytes, NOT accumulated into save_cksum)
 !load_read_checksum:
+#if !C128 && !PLUS4 && !APPLE2 && !C64_UNIT_TEST
+    lda load_save_version
+    cmp #SAVE_SPLIT_VERSION
+    bcc !load_state_checksum+
+    jsr load_read_raw_byte
+    sta save_map_cksum_lo
+    jsr load_read_raw_byte
+    sta save_map_cksum_hi
+!load_state_checksum:
+#endif
 #if HAL_STORAGE_STREAM_CHUNKED
-    jsr SAVE_CHRIN        // Stored checksum lo (not accumulated)
+    jsr load_read_raw_byte // Stored checksum lo (not accumulated)
     sta zp_temp0
     jsr SAVE_READST
     beq !load_checksum_hi+
     jmp !load_corrupt_nocl+
 !load_checksum_hi:
-    jsr SAVE_CHRIN        // Stored checksum hi (not accumulated)
+    jsr load_read_raw_byte // Stored checksum hi (not accumulated)
     sta zp_temp1
     jsr SAVE_READST
     beq !load_checksum_status_ok+
@@ -1029,6 +1216,10 @@ plus4_test_after_load_magic:
     jmp !load_corrupt_nocl+
 !load_checksum_status_ok:
 #else
+#if !C128 && !PLUS4 && !APPLE2 && !C64_UNIT_TEST
+    lda load_stage_mode
+    bne !load_checksum_lo+
+#endif
     jsr SAVE_READST
 #if HAL_STORAGE_MASK_CHRIN_WRITE_TIMEOUT_STATUS
     sta disk_error_readst
@@ -1037,10 +1228,14 @@ plus4_test_after_load_magic:
     beq !load_checksum_lo+
     jmp !load_corrupt_nocl+
 !load_checksum_lo:
-    jsr SAVE_CHRIN        // Stored checksum lo (not accumulated)
+    jsr load_read_raw_byte // Stored checksum lo (not accumulated)
     sta zp_temp0
 #if PLUS4_TEST_SCRIPTED_LOAD_RESUME_PRODUCT || PLUS4_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
     sta plus4_test_file_cksum_lo
+#endif
+#if !C128 && !PLUS4 && !APPLE2 && !C64_UNIT_TEST
+    lda load_stage_mode
+    bne !load_checksum_hi+
 #endif
     jsr SAVE_READST
 #if HAL_STORAGE_MASK_CHRIN_WRITE_TIMEOUT_STATUS
@@ -1050,18 +1245,24 @@ plus4_test_after_load_magic:
     beq !load_checksum_hi+
     jmp !load_corrupt_nocl+
 !load_checksum_hi:
-    jsr SAVE_CHRIN        // Stored checksum hi (not accumulated)
+    jsr load_read_raw_byte // Stored checksum hi (not accumulated)
     sta zp_temp1
 #if PLUS4_TEST_SCRIPTED_LOAD_RESUME_PRODUCT || PLUS4_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
     sta plus4_test_file_cksum_hi
 #endif
 #endif
+#if !C128 && !PLUS4 && !APPLE2 && !C64_UNIT_TEST
+    lda load_stage_mode
+    bne !load_state_eof_ok+
+    jsr C64_LOAD_STATE_EOF_STAGE
+    bcs !load_state_eof_ok+
+    jmp !load_corrupt_nocl+
+!load_state_eof_ok:
+#endif
 
     // Check for I/O errors during read
     lda save_io_error
-    beq !load_io_ok+
-    jmp !load_corrupt_nocl+
-!load_io_ok:
+    bne !load_corrupt_nocl+
 
     // Verify checksum
     lda save_cksum_lo
@@ -1081,6 +1282,17 @@ c128_test_load_corrupt_unexpected_success:
 #endif
     // Close file after successful read
     jsr load_close_file_restore
+#if !C128 && !PLUS4 && !APPLE2 && !C64_UNIT_TEST
+    lda load_save_version
+    cmp #SAVE_SPLIT_VERSION
+    bcc !load_split_map_done+
+    lda load_stage_mode
+    bne !load_split_map_done+
+    jsr c64_load_split_map
+    bcs !load_split_map_done+
+    jmp !load_corrupt_nocl+
+!load_split_map_done:
+#endif
 
     // Legacy-save migration: fold race/class modifiers into raw stat bases
     // exactly once with deterministic arithmetic. Skipped for new games
@@ -1221,9 +1433,12 @@ plus4_test_load_ioerr:
 save_write_block_table:
     sta zp_temp2
     ldy #0
-!swbt_loop:
     lda zp_temp2
     beq !swbt_done+
+!swbt_loop:
+#if !C128 && !PLUS4 && !APPLE2
+    jsr save_load_block_descriptor_c64
+#else
     lda (zp_ptr1),y
     sta save_block_lo
     iny
@@ -1236,22 +1451,26 @@ save_write_block_table:
     lda (zp_ptr1),y
     sta save_count_hi
     iny
+#endif
     tya
     pha
     jsr save_write_block
     pla
     tay
     dec zp_temp2
-    jmp !swbt_loop-
+    bne !swbt_loop-
 !swbt_done:
     rts
 
 load_read_block_table:
     sta zp_temp2
     ldy #0
-!lrbt_loop:
     lda zp_temp2
     beq !lrbt_done+
+!lrbt_loop:
+#if !C128 && !PLUS4 && !APPLE2
+    jsr save_load_block_descriptor_c64
+#else
     lda (zp_ptr1),y
     sta zp_ptr0
     iny
@@ -1264,22 +1483,26 @@ load_read_block_table:
     lda (zp_ptr1),y
     sta save_count_hi
     iny
+#endif
     tya
     pha
     jsr load_read_block
     pla
     tay
     dec zp_temp2
-    jmp !lrbt_loop-
+    bne !lrbt_loop-
 !lrbt_done:
     rts
 
 load_read_floor_block_table:
     sta zp_temp2
     ldy #0
-!lrfbt_loop:
     lda zp_temp2
     beq !lrfbt_done+
+!lrfbt_loop:
+#if !C128 && !PLUS4 && !APPLE2
+    jsr save_load_block_descriptor_c64
+#else
     lda (zp_ptr1),y
     sta zp_ptr0
     iny
@@ -1288,6 +1511,7 @@ load_read_floor_block_table:
     iny
     iny
     iny
+#endif
     lda load_floor_item_count
     sta save_count_lo
     lda #0
@@ -1298,16 +1522,40 @@ load_read_floor_block_table:
     pla
     tay
     dec zp_temp2
-    jmp !lrfbt_loop-
+    bne !lrfbt_loop-
 !lrfbt_done:
     rts
 
+#if !C128 && !PLUS4 && !APPLE2
+// All C64 descriptor walkers use zp_ptr0 directly; floor-item readers replace
+// the decoded size with their runtime legacy/current count.
+save_load_block_descriptor_c64:
+    lda (zp_ptr1),y
+    sta zp_ptr0
+    iny
+    lda (zp_ptr1),y
+    sta zp_ptr0_hi
+    iny
+    lda (zp_ptr1),y
+    sta save_count_lo
+    iny
+    lda (zp_ptr1),y
+    sta save_count_hi
+    iny
+    rts
+#endif
+
 // ============================================================
 // save_write_block — Write N bytes from addr to file with checksum
-// Input: save_block_lo/hi = source addr, save_count_lo/hi = byte count
+// Input: C64 zp_ptr0/hi, other platforms save_block_lo/hi = source;
+//        save_count_lo/hi = byte count
 // Clobbers: A, X, Y, zp_ptr0/hi
 // ============================================================
 load_close_file_restore:
+#if !C128 && !PLUS4 && !APPLE2 && !C64_UNIT_TEST
+    lda load_stage_mode
+    bne !staged+
+#endif
     jsr save_restore_channels
     lda #hal_storage_save_file_num
     jsr SAVE_CLOSE
@@ -1315,6 +1563,10 @@ load_close_file_restore:
     jsr c64_restore_vic_bank0_after_serial
 #endif
     rts
+#if !C128 && !PLUS4 && !APPLE2 && !C64_UNIT_TEST
+!staged:
+    rts
+#endif
 
 #if HAL_STORAGE_VIC_BANK_RESTORE_AFTER_SERIAL
 c64_restore_vic_bank0_after_serial:
@@ -1323,10 +1575,10 @@ c64_restore_vic_bank0_after_serial:
     beq !krill_owned+
     lda hal_memory_vic_bank_select
     ora #hal_memory_vic_bank0_mask
-    sta hal_memory_vic_bank_select
-    rts
+    bne !restore+
 !krill_owned:
     lda #hal_memory_vic_bank0_mask
+!restore:
     sta hal_memory_vic_bank_select
     rts
 #endif
@@ -1348,10 +1600,12 @@ save_write_block:
 !swb_c128_done:
     rts
 #else
+#if C128 || PLUS4 || APPLE2
     lda save_block_lo
     sta zp_ptr0
     lda save_block_hi
     sta zp_ptr0_hi
+#endif
 #if APPLE2
     jsr a2_save_block_mode
 #endif
@@ -1363,29 +1617,7 @@ save_write_block:
     beq !swb_done+
     // Read byte from source
     :SaveByteRead_ptr0_y()
-    // Accumulate checksum
-    clc
-    adc save_cksum_lo
-    sta save_cksum_lo
-    bcc !swb_no_carry+
-    inc save_cksum_hi
-!swb_no_carry:
-    // Write byte
-    :SaveByteRead_ptr0_y()
-    jsr SAVE_CHROUT
-    // Check status
-    jsr SAVE_READST
-    sta zp_temp0
-    and #$03                // Timeout or error bits
-    beq !swb_ok+
-    inc save_io_error
-#if HAL_STORAGE_APPEND_DISK_DETAIL
-    lda #$a3
-    jsr disk_error_set_phase
-    lda zp_temp0
-    sta disk_error_readst
-#endif
-!swb_ok:
+    jsr save_write_byte
     // Advance pointer
     iny
     bne !swb_no_page+
@@ -1429,6 +1661,20 @@ save_write_byte:
 #else
     pla
 #endif
+    jmp !write+
+
+// ============================================================
+// save_write_byte_raw — Write byte without checksum accumulation
+// Input: A = byte to write
+// ============================================================
+save_write_byte_raw:
+#if HAL_STORAGE_PRESERVE_X_DURING_BYTE_STREAM
+    sta zp_temp0
+    txa
+    pha
+    lda zp_temp0
+#endif
+!write:
     jsr SAVE_CHROUT
     pha
     jsr SAVE_READST
@@ -1443,40 +1689,6 @@ save_write_byte:
     sta disk_error_readst
 #endif
 !swby_ok:
-    pla
-#if HAL_STORAGE_PRESERVE_X_DURING_BYTE_STREAM
-    sta zp_temp0
-    pla
-    tax
-    lda zp_temp0
-#endif
-    rts
-
-// ============================================================
-// save_write_byte_raw — Write byte without checksum accumulation
-// Input: A = byte to write
-// ============================================================
-save_write_byte_raw:
-#if HAL_STORAGE_PRESERVE_X_DURING_BYTE_STREAM
-    sta zp_temp0
-    txa
-    pha
-    lda zp_temp0
-#endif
-    jsr SAVE_CHROUT
-    pha
-    jsr SAVE_READST
-    sta zp_temp0
-    and #$03
-    beq !swbr_ok+
-    inc save_io_error
-#if HAL_STORAGE_APPEND_DISK_DETAIL
-    lda #$a3
-    jsr disk_error_set_phase
-    lda zp_temp0
-    sta disk_error_readst
-#endif
-!swbr_ok:
     pla
 #if HAL_STORAGE_PRESERVE_X_DURING_BYTE_STREAM
     sta zp_temp0
@@ -1503,15 +1715,13 @@ save_write_inventory_state:
 
 load_read_inventory_state:
     jsr item_init_inventory
+    lda #TOTAL_INV_SLOTS
+    sta load_floor_item_count
     lda load_save_version
     cmp #SAVE_INV31_VERSION
     bcs !lris_current+
-    lda #<save_block_table_inventory_legacy
-    sta zp_ptr1
-    lda #>save_block_table_inventory_legacy
-    sta zp_ptr1_hi
-    lda #SAVE_BLOCK_INVENTORY_LEGACY_COUNT
-    jmp !lris_read+
+    lda #LEGACY_TOTAL_INV_SLOTS
+    sta load_floor_item_count
 !lris_current:
     lda #<save_block_table_inventory_current
     sta zp_ptr1
@@ -1519,7 +1729,7 @@ load_read_inventory_state:
     sta zp_ptr1_hi
     lda #SAVE_BLOCK_INVENTORY_CURRENT_COUNT
 !lris_read:
-    jsr load_read_block_table
+    jsr load_read_floor_block_table
     ldx #TOTAL_INV_SLOTS
     lda #<inv_item_id
     ldy #>inv_item_id
@@ -1534,9 +1744,11 @@ load_read_inventory_state:
 // stream the old bytes and pack them into the bitset; old bitset loads
 // stream 16 bytes and default the appended chest IDs.
 // ============================================================
+#if C128 || PLUS4 || APPLE2 || C64_UNIT_TEST
 save_write_known_items:
     :save_block(id_known_bits, ID_KNOWN_BYTES)
     rts
+#endif
 
 // ============================================================
 // save_sanitize_id_table — Corrupt/newer-save hardening (chest design step
@@ -1688,6 +1900,7 @@ idk_legacy_stage: .fill 96, 0
 // Door-state table: written unconditionally at the current version; read only
 // when the stream version carries it, so older saves stay block-aligned.
 // ============================================================
+#if C128 || PLUS4 || APPLE2 || C64_UNIT_TEST
 save_write_door_state:
     lda #<save_block_table_door_state
     sta zp_ptr1
@@ -1695,6 +1908,7 @@ save_write_door_state:
     sta zp_ptr1_hi
     lda #SAVE_BLOCK_DOOR_STATE_COUNT
     jmp save_write_block_table
+#endif
 
 load_read_door_state:
     lda #0
@@ -1855,6 +2069,12 @@ load_read_block:
 !lrb_c128_done:
     rts
 #else
+#if !C128 && !PLUS4 && !APPLE2 && !C64_UNIT_TEST
+    lda load_stage_mode
+    beq !lrb_stream+
+    jmp hal_storage_staged_read_block
+!lrb_stream:
+#endif
 #if APPLE2
     jsr a2_save_block_mode
 #endif
@@ -1897,6 +2117,13 @@ load_read_byte:
     txa
     pha
 #endif
+#if !C128 && !PLUS4 && !APPLE2 && !C64_UNIT_TEST
+    lda load_stage_mode
+    beq !lrby_stream+
+    jsr hal_storage_staged_read_byte_raw
+    jmp !lrby_checksum+
+!lrby_stream:
+#endif
     jsr SAVE_CHRIN        // Read next byte from open sequential file
     pha
 #if PLUS4_TEST_SCRIPTED_LOAD_RESUME_PRODUCT || PLUS4_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
@@ -1923,6 +2150,9 @@ load_read_byte:
 !lrby_status_ok:
 !lrby_status_done:
     pla
+#if !C128 && !PLUS4 && !APPLE2 && !C64_UNIT_TEST
+!lrby_checksum:
+#endif
     pha
     // Accumulate checksum
     clc
@@ -1939,6 +2169,226 @@ load_read_byte:
     lda zp_temp0
 #endif
     rts
+
+// Raw staged bytes are used only for stored checksums, which are excluded from
+// the running sum. Product HAL binds this to the currently resident OVL_SAVE.
+load_read_raw_byte:
+#if !C128 && !PLUS4 && !APPLE2 && !C64_UNIT_TEST
+    lda load_stage_mode
+    beq !stream+
+    jmp hal_storage_staged_read_byte_raw
+!stream:
+#endif
+    jmp SAVE_CHRIN
+
+#if !C128 && !PLUS4 && !APPLE2 && !C64_UNIT_TEST
+.label C64_LOAD_OPEN_STAGE = MAP_BASE + (c64_load_open_state_overlay - c64_load_transport_blob)
+.label C64_LOAD_OPEN_RETRY_STAGE = MAP_BASE + (c64_load_open_retry - c64_load_transport_blob)
+.label C64_LOAD_MISSING_STAGE = MAP_BASE + (c64_load_missing - c64_load_transport_blob)
+.label C64_LOAD_STATE_EOF_STAGE = MAP_BASE + (c64_load_state_exact_eof - c64_load_transport_blob)
+.label C64_LOAD_MAP_STAGE = MAP_BASE + (c64_load_split_map_overlay - c64_load_transport_blob)
+.label C64_LOAD_MAP_STREAM_STAGE = MAP_BASE + (c64_load_split_map_stream_overlay - c64_load_transport_blob)
+c64_load_open_state:
+    sei
+    lda #BANK_NO_KERNAL
+    sta hal_memory_cpu_port
+    jsr C64_LOAD_OPEN_STAGE
+    pha
+    lda #BANK_NO_BASIC
+    sta hal_memory_cpu_port
+    cli
+    pla
+    rts
+
+.segment SaveOverlay
+c64_load_transport_blob:
+c64_load_open_state_overlay:
+    lda #1
+    sta load_split_format
+c64_load_open_retry:
+!open:
+    lda #hal_storage_save_read_name_len
+    ldx save_slot_index
+    cpx #1
+    bcc !name_len_ready+
+    clc
+    adc #1
+!name_len_ready:
+    ldx load_split_format
+    bne !new_name+
+    ldx #<hal_storage_legacy_save_read_name
+    ldy #>hal_storage_legacy_save_read_name
+    bne !setnam+
+!new_name:
+    ldx #<hal_storage_save_read_name
+    ldy #>hal_storage_save_read_name
+!setnam:
+    jsr SAVE_SETNAM
+    lda #hal_storage_save_file_num
+    ldx save_device
+    ldy #hal_storage_save_sec_read
+    jsr SAVE_SETLFS
+    jsr SAVE_OPEN
+    bcc !opened+
+    jmp C64_LOAD_MISSING_STAGE
+!opened:
+    ldx #hal_storage_save_file_num
+    jsr SAVE_CHKIN
+    bcs !ioerr+
+    jsr SAVE_CHRIN
+    pha
+    jsr SAVE_READST
+    beq !first_ok+
+    pla
+    jsr load_close_file_restore
+    lda load_split_format
+    beq !notfound+
+    lda #0
+    sta load_split_format
+    jmp C64_LOAD_OPEN_RETRY_STAGE
+!first_ok:
+    pla
+    cmp #$4d
+    beq !legacy+
+    cmp #$00
+    bne !corrupt+
+    jsr SAVE_CHRIN
+    cmp #$c0
+    bne !corrupt+
+    lda #1
+    sta load_split_format
+    :load_block(save_magic_buf, SAVE_MAGIC_SIZE)
+    lda #0
+    rts
+!legacy:
+    lda #0
+    sta load_split_format
+    lda #$4d
+    sta save_magic_buf
+    clc
+    adc save_cksum_lo
+    sta save_cksum_lo
+    bcc !legacy_sum_ok+
+    inc save_cksum_hi
+!legacy_sum_ok:
+    lda #<(SAVE_MAGIC_SIZE - 1)
+    sta save_count_lo
+    lda #0
+    sta save_count_hi
+    lda #<(save_magic_buf + 1)
+    sta zp_ptr0
+    lda #>(save_magic_buf + 1)
+    sta zp_ptr0_hi
+    jsr load_read_block
+    lda #0
+    rts
+!corrupt:
+    jsr load_close_file_restore
+    lda #2
+    rts
+!ioerr:
+    jsr load_close_file_restore
+    lda #3
+    rts
+c64_load_missing:
+!missing:
+    lda load_split_format
+    beq !notfound+
+    lda #0
+    sta load_split_format
+    jmp C64_LOAD_OPEN_RETRY_STAGE
+!notfound:
+    lda #1
+    rts
+
+// Staged fast loads are already exact-bounded. Legacy streams retain their
+// historical behavior; only a stock v16 state stream requires EOI now.
+c64_load_state_exact_eof:
+    lda load_stage_mode
+    bne !ok+
+    lda load_split_format
+    beq !ok+
+    jsr SAVE_READST
+    cmp #$40
+    beq !ok+
+    clc
+    rts
+!ok:
+    sec
+    rts
+
+c64_load_split_map_overlay:
+    lda #hal_storage_map_read_name_len
+    ldx save_slot_index
+    beq !name_ready+
+    clc
+    adc #1
+!name_ready:
+    ldx #<hal_storage_map_read_name
+    ldy #>hal_storage_map_read_name
+    jsr SAVE_SETNAM
+    lda #hal_storage_save_file_num
+    ldx save_device
+    ldy #hal_storage_save_sec_read
+    jsr SAVE_SETLFS
+    jsr SAVE_OPEN
+    bcs !fail+
+    ldx #hal_storage_save_file_num
+    jsr SAVE_CHKIN
+    bcs !close_fail+
+    jsr SAVE_CHRIN
+    cmp #$00
+    bne !close_fail+
+    jsr SAVE_CHRIN
+    cmp #$c0
+    bne !close_fail+
+    lda #0
+    sta save_cksum_lo
+    sta save_cksum_hi
+    sta save_io_error
+    jmp C64_LOAD_MAP_STREAM_STAGE
+!close_fail:
+    jsr load_close_file_restore
+!fail:
+    clc
+    rts
+
+c64_load_split_map_stream_overlay:
+    :load_block(MAP_STAGE_BASE, MAP_SIZE)
+    lda save_io_error
+    bne !close_fail+
+    jsr SAVE_READST
+    cmp #$40
+    bne !close_fail+
+    jsr load_close_file_restore
+    lda save_cksum_lo
+    cmp save_map_cksum_lo
+    bne !fail+
+    lda save_cksum_hi
+    cmp save_map_cksum_hi
+    bne !fail+
+    sec
+    rts
+!close_fail:
+    jsr load_close_file_restore
+!fail:
+    clc
+    rts
+c64_load_transport_blob_end:
+.assert "C64 copied CHRIN transport fits two-page copy budget", c64_load_transport_blob_end - c64_load_transport_blob <= 512, true
+.assert "C64 copied CHRIN transport stays below floor items", MAP_BASE + (c64_load_transport_blob_end - c64_load_transport_blob) <= FLOOR_ITEM_BASE, true
+.segment Default
+
+c64_load_split_map:
+    sei
+    lda #BANK_NO_KERNAL
+    sta hal_memory_cpu_port
+    jsr C64_LOAD_MAP_STAGE
+    php
+    jsr platform_runtime_resync_c64
+    plp
+    rts
+#endif
 
 #if HAL_STORAGE_STREAM_CHUNKED
 // ============================================================
@@ -2028,8 +2478,8 @@ load_read_floor_items:
     lda #MAX_FLOOR_ITEMS
     sta load_floor_item_count
     lda load_save_version
-    jsr save_version_uses_legacy_floor_layout
-    bcc !lrfi_count_ready+
+    cmp #SAVE_FLOOR42_VERSION
+    bcs !lrfi_count_ready+
     lda #32
     sta load_floor_item_count
 !lrfi_count_ready:
@@ -2139,6 +2589,7 @@ save_version_supported:
 // Input: A = save version byte
 // Output: carry set = legacy 32-slot floor layout, carry clear = current layout
 // ============================================================
+#if C128 || PLUS4 || APPLE2 || C64_UNIT_TEST
 save_version_uses_legacy_floor_layout:
     cmp #SAVE_FLOOR42_VERSION
     bcc !svl_legacy+
@@ -2147,6 +2598,7 @@ save_version_uses_legacy_floor_layout:
 !svl_legacy:
     sec
     rts
+#endif
 
 #if C128 && HAL_STORAGE_MAP_BANKED
 // ============================================================
@@ -2265,6 +2717,9 @@ load_unstage_map_c128:
 // Output: carry set = file exists, carry clear = file not present
 // Clobbers: A, X, Y
 // ============================================================
+#if !C128 && !PLUS4 && !APPLE2 && !C64_UNIT_TEST
+.segment SaveOverlay
+#endif
 save_file_exists:
 save_file_exists_read_len:
     lda #hal_storage_save_read_name_len
@@ -2292,6 +2747,26 @@ save_file_exists_read_len:
     clc
     bcc !sfe_cleanup+
 !sfe_open_ok:
+#if !C128 && !PLUS4 && !APPLE2 && !C64_UNIT_TEST
+    lda #hal_storage_check_file_num
+    jsr SAVE_CLOSE
+    jsr save_restore_channels
+    lda save_device
+    sta disk_prompt_device
+    jsr hal_storage_read_command_status
+    lda disk_status
+    bne !sfe_missing+
+    lda save_file_exists_read_len + 1
+    ldx #<hal_storage_save_read_name
+    ldy #>hal_storage_save_read_name
+    jsr SAVE_SETNAM
+    lda #hal_storage_check_file_num
+    ldx save_device
+    ldy #hal_storage_check_sec_read
+    jsr SAVE_SETLFS
+    jsr SAVE_OPEN
+    bcs !sfe_missing+
+#endif
     ldx #hal_storage_check_file_num
     jsr SAVE_CHKIN
     bcs !sfe_cleanup+
@@ -2301,6 +2776,11 @@ save_file_exists_read_len:
     beq !sfe_exists+
     clc
     bcc !sfe_close+
+#if !C128 && !PLUS4 && !APPLE2 && !C64_UNIT_TEST
+!sfe_missing:
+    clc
+    bcc !sfe_cleanup+
+#endif
 !sfe_exists:
     sec
 !sfe_close:
@@ -2317,12 +2797,18 @@ save_file_exists_read_len:
     plp
     rts
 #endif
+#if !C128 && !PLUS4 && !APPLE2 && !C64_UNIT_TEST
+.segment Default
+#endif
 
 // ============================================================
 // save_restore_channels — restore default KERNAL channels
 // C128 workaround: avoid CLRCHN vector path; use explicit CHKIN/CHKOUT.
 // C64 path keeps CLRCHN behavior.
 // ============================================================
+#if !C128 && !PLUS4 && !APPLE2 && !HAL_STORAGE_KERNAL_ENTER_REQUIRED
+.label save_restore_channels = SAVE_CLRCHN
+#else
 save_restore_channels:
 #if HAL_STORAGE_KERNAL_ENTER_REQUIRED
     // Restore default channels through the resident C128 KERNAL wrapper before
@@ -2332,6 +2818,7 @@ save_restore_channels:
     jsr SAVE_CLRCHN
     rts
 #endif
+#endif
 
 // ============================================================
 // recount_monsters — Scan monster_table, set zp_mon_count
@@ -2340,10 +2827,8 @@ save_restore_channels:
 recount_monsters:
     lda #0
     sta zp_mon_count
-    ldx #0
+    ldx #MAX_MONSTERS - 1
 !rcm_loop:
-    cpx #MAX_MONSTERS
-    bcs !rcm_done+
     jsr monster_get_ptr
     ldy #MX_TYPE
     lda (zp_ptr0),y
@@ -2351,9 +2836,8 @@ recount_monsters:
     beq !rcm_next+
     inc zp_mon_count
 !rcm_next:
-    inx
-    jmp !rcm_loop-
-!rcm_done:
+    dex
+    bpl !rcm_loop-
     rts
 
 // ============================================================
@@ -2363,18 +2847,15 @@ recount_monsters:
 recount_floor_items:
     lda #0
     sta zp_item_count
-    ldx #0
+    ldx #MAX_FLOOR_ITEMS - 1
 !rcfi_loop:
-    cpx #MAX_FLOOR_ITEMS
-    bcs !rcfi_done+
     lda fi_item_id,x
     cmp #FI_EMPTY
     beq !rcfi_next+
     inc zp_item_count
 !rcfi_next:
-    inx
-    jmp !rcfi_loop-
-!rcfi_done:
+    dex
+    bpl !rcfi_loop-
     rts
 
 // ============================================================

@@ -16,6 +16,7 @@ DECOMPRESSOR                    = DECOMPRESSORS::NONE
 .define MEM_DECOMP_TO_API         0
 .define LOAD_TO_API               0
 .define END_ADDRESS_API           0
+.define BOUNDED_LOAD_API          0
 .define LOAD_VIA_KERNAL_FALLBACK  0
 .define CLOSE_FILE_API            0
 

@@ -532,16 +532,12 @@ c64_test_input_script:
     .byte $00
 #else
 #if C64_TEST_SCRIPTED_SLOT2_SAVE_PRODUCT
-    .byte $4c              // L = load from title
-    .byte $32              // 2 = save drive if Disk Setup prompts
-    .byte $39              // 9
-    .byte $0d              // RETURN
-    .byte $33              // 3 = done
     .byte $32              // 2 = load non-default slot
     .byte $20              // SPACE = acknowledge insert-save-disk prompt
-    .byte $59              // Y = initialize marker if the fixture marker is not accepted
+    .byte $59              // Y = initialize marker or absorb the post-load fresh key
     .byte $d3              // SHIFT+S = absorbed by post-load fresh-key path
     .byte $d3              // SHIFT+S = save in gameplay
+    .byte $32              // 2 = save back to slot 2
     .byte $59              // Y = overwrite non-default slot
     .byte $53              // S = start from title after save
     .byte $00
@@ -629,7 +625,6 @@ c64_test_input_script:
     .byte $20              // SPACE = acknowledge load save-disk prompt
     .byte $31              // 1 = load from save slot 1
     .byte $20              // SPACE = acknowledge save save-disk prompt
-    .byte $20              // SPACE = acknowledge program-disk prompt for setup UI
     .byte $20              // SPACE = acknowledge fresh save-disk insert prompt
     .byte $59              // Y = initialize fresh save disk
     .byte $20              // SPACE = acknowledge insert-program-disk prompt

@@ -9,6 +9,10 @@ save_slot_name_buf: .fill SAVE_SLOT_NAME_LEN, 0
 .const SAVE_SLOT_WRITE_DIGIT_OFF = hal_storage_save_write_name_len - 4
 .const SAVE_SLOT_READ_SUFFIX_OFF = SAVE_SLOT_READ_DIGIT_OFF + 1
 .const SAVE_SLOT_WRITE_SUFFIX_OFF = SAVE_SLOT_WRITE_DIGIT_OFF + 1
+#if !C128 && !PLUS4 && !APPLE2
+.const SAVE_SLOT_MAP_READ_DIGIT_OFF = hal_storage_map_read_name_len - 4
+.const SAVE_SLOT_MAP_WRITE_DIGIT_OFF = hal_storage_map_write_name_len - 4
+#endif
 
 .assert "Save read slot digit replaces suffix comma", SAVE_SLOT_READ_DIGIT_OFF, 10
 .assert "Save write slot digit replaces suffix comma", SAVE_SLOT_WRITE_DIGIT_OFF, 11
@@ -105,27 +109,57 @@ save_slot_apply_name:
     adc #$31                // index 1 => "2"
     sta hal_storage_save_read_name + SAVE_SLOT_READ_DIGIT_OFF
     sta hal_storage_save_write_name + SAVE_SLOT_WRITE_DIGIT_OFF
+#if !C128 && !PLUS4 && !APPLE2
+    sta hal_storage_legacy_save_read_name + SAVE_SLOT_READ_DIGIT_OFF
+    sta hal_storage_map_read_name + SAVE_SLOT_MAP_READ_DIGIT_OFF
+    sta hal_storage_map_write_name + SAVE_SLOT_MAP_WRITE_DIGIT_OFF
+#endif
     lda #$2c                // ","
     sta hal_storage_save_read_name + SAVE_SLOT_READ_SUFFIX_OFF
     sta hal_storage_save_read_name + SAVE_SLOT_READ_SUFFIX_OFF + 2
     sta hal_storage_save_write_name + SAVE_SLOT_WRITE_SUFFIX_OFF
     sta hal_storage_save_write_name + SAVE_SLOT_WRITE_SUFFIX_OFF + 2
+#if !C128 && !PLUS4 && !APPLE2
+    sta hal_storage_legacy_save_read_name + SAVE_SLOT_READ_SUFFIX_OFF
+    sta hal_storage_legacy_save_read_name + SAVE_SLOT_READ_SUFFIX_OFF + 2
+    sta hal_storage_map_read_name + SAVE_SLOT_MAP_READ_DIGIT_OFF + 1
+    sta hal_storage_map_read_name + SAVE_SLOT_MAP_READ_DIGIT_OFF + 3
+    sta hal_storage_map_write_name + SAVE_SLOT_MAP_WRITE_DIGIT_OFF + 1
+    sta hal_storage_map_write_name + SAVE_SLOT_MAP_WRITE_DIGIT_OFF + 3
+#endif
     lda #$53                // "S"
     sta hal_storage_save_read_name + SAVE_SLOT_READ_SUFFIX_OFF + 1
     sta hal_storage_save_write_name + SAVE_SLOT_WRITE_SUFFIX_OFF + 1
+#if !C128 && !PLUS4 && !APPLE2
+    sta hal_storage_legacy_save_read_name + SAVE_SLOT_READ_SUFFIX_OFF + 1
+    sta hal_storage_map_read_name + SAVE_SLOT_MAP_READ_DIGIT_OFF + 2
+    sta hal_storage_map_write_name + SAVE_SLOT_MAP_WRITE_DIGIT_OFF + 2
+#endif
     lda #$52                // "R"
     sta hal_storage_save_read_name + SAVE_SLOT_READ_SUFFIX_OFF + 3
+#if !C128 && !PLUS4 && !APPLE2
+    sta hal_storage_legacy_save_read_name + SAVE_SLOT_READ_SUFFIX_OFF + 3
+#endif
     lda #$57                // "W"
     sta hal_storage_save_write_name + SAVE_SLOT_WRITE_SUFFIX_OFF + 3
+#if !C128 && !PLUS4 && !APPLE2
+    sta hal_storage_map_write_name + SAVE_SLOT_MAP_WRITE_DIGIT_OFF + 4
+    lda #$52
+    sta hal_storage_map_read_name + SAVE_SLOT_MAP_READ_DIGIT_OFF + 4
+#endif
     lda #hal_storage_save_read_name_len + 1
+#if C128 || PLUS4 || APPLE2 || C64_UNIT_TEST
     sta load_open_read_len + 1
+#endif
     sta save_file_exists_read_len + 1
     sta save_slot_read_name_len + 1
     lda #hal_storage_save_write_name_len + 1
 #if HAL_STORAGE_SAVE_CONFIRM_OVERWRITE_PROBE
     sta save_confirm_write_len + 1
 #else
+#if C128 || PLUS4 || APPLE2 || C64_UNIT_TEST
     sta save_open_write_len + 1
+#endif
 #endif
     lda #hal_storage_save_probe_name_len + 1
 #if HAL_STORAGE_SAVE_CONFIRM_OVERWRITE_PROBE
@@ -137,23 +171,49 @@ save_slot_apply_name:
     sta hal_storage_save_read_name + SAVE_SLOT_READ_DIGIT_OFF
     sta hal_storage_save_read_name + SAVE_SLOT_READ_DIGIT_OFF + 2
     sta hal_storage_save_write_name + SAVE_SLOT_WRITE_DIGIT_OFF
+#if !C128 && !PLUS4 && !APPLE2
+    sta hal_storage_legacy_save_read_name + SAVE_SLOT_READ_DIGIT_OFF
+    sta hal_storage_map_read_name + SAVE_SLOT_MAP_READ_DIGIT_OFF
+    sta hal_storage_map_write_name + SAVE_SLOT_MAP_WRITE_DIGIT_OFF
+#endif
     sta hal_storage_save_write_name + SAVE_SLOT_WRITE_DIGIT_OFF + 2
+#if !C128 && !PLUS4 && !APPLE2
+    sta hal_storage_legacy_save_read_name + SAVE_SLOT_READ_DIGIT_OFF + 2
+    sta hal_storage_map_read_name + SAVE_SLOT_MAP_READ_DIGIT_OFF + 2
+    sta hal_storage_map_write_name + SAVE_SLOT_MAP_WRITE_DIGIT_OFF + 2
+#endif
     lda #$53                // "S"
     sta hal_storage_save_read_name + SAVE_SLOT_READ_DIGIT_OFF + 1
     sta hal_storage_save_write_name + SAVE_SLOT_WRITE_DIGIT_OFF + 1
+#if !C128 && !PLUS4 && !APPLE2
+    sta hal_storage_legacy_save_read_name + SAVE_SLOT_READ_DIGIT_OFF + 1
+    sta hal_storage_map_read_name + SAVE_SLOT_MAP_READ_DIGIT_OFF + 1
+    sta hal_storage_map_write_name + SAVE_SLOT_MAP_WRITE_DIGIT_OFF + 1
+#endif
     lda #$52                // "R"
     sta hal_storage_save_read_name + SAVE_SLOT_READ_DIGIT_OFF + 3
+#if !C128 && !PLUS4 && !APPLE2
+    sta hal_storage_legacy_save_read_name + SAVE_SLOT_READ_DIGIT_OFF + 3
+    sta hal_storage_map_read_name + SAVE_SLOT_MAP_READ_DIGIT_OFF + 3
+#endif
     lda #$57                // "W"
     sta hal_storage_save_write_name + SAVE_SLOT_WRITE_DIGIT_OFF + 3
+#if !C128 && !PLUS4 && !APPLE2
+    sta hal_storage_map_write_name + SAVE_SLOT_MAP_WRITE_DIGIT_OFF + 3
+#endif
     lda #hal_storage_save_read_name_len
+#if C128 || PLUS4 || APPLE2 || C64_UNIT_TEST
     sta load_open_read_len + 1
+#endif
     sta save_file_exists_read_len + 1
     sta save_slot_read_name_len + 1
     lda #hal_storage_save_write_name_len
 #if HAL_STORAGE_SAVE_CONFIRM_OVERWRITE_PROBE
     sta save_confirm_write_len + 1
 #else
+#if C128 || PLUS4 || APPLE2 || C64_UNIT_TEST
     sta save_open_write_len + 1
+#endif
 #endif
     lda #hal_storage_save_probe_name_len
 #if HAL_STORAGE_SAVE_CONFIRM_OVERWRITE_PROBE
@@ -162,10 +222,23 @@ save_slot_apply_name:
     rts
 
 save_slot_read_name:
+#if !C128 && !PLUS4 && !APPLE2
+    lda #0
+    sta save_slot_name_idx
+!probe:
+    lda save_slot_name_idx
+    beq !new_name+
+    lda save_slot_read_name_len + 1
+    ldx #<hal_storage_legacy_save_read_name
+    ldy #>hal_storage_legacy_save_read_name
+    bne !setnam+
+!new_name:
+#endif
 save_slot_read_name_len:
     lda #hal_storage_save_read_name_len
     ldx #<hal_storage_save_read_name
     ldy #>hal_storage_save_read_name
+!setnam:
     jsr SAVE_SETNAM
     lda #hal_storage_check_file_num
     ldx save_device
@@ -173,24 +246,70 @@ save_slot_read_name_len:
     jsr SAVE_SETLFS
     jsr SAVE_OPEN
     bcc !open_ok+
+#if !C128 && !PLUS4 && !APPLE2
+    lda save_slot_name_idx
+    bne !open_fail+
+    inc save_slot_name_idx
+    lda #hal_storage_check_file_num
+    jsr SAVE_CLOSE
+    jsr save_restore_channels
+    jmp !probe-
+!open_fail:
+#endif
     clc
-    bcc !cleanup+
+    jmp !cleanup+
 !open_ok:
     ldx #hal_storage_check_file_num
     jsr SAVE_CHKIN
     bcc !read_magic+
     clc
-    bcc !cleanup+
+    jmp !cleanup+
 !read_magic:
+#if !C128 && !PLUS4 && !APPLE2
+    jsr SAVE_CHRIN
+    pha
+    jsr SAVE_READST
+    beq !first_byte_ok+
+    pla
+    jmp !bad_magic+
+!first_byte_ok:
+    pla
+    cmp #$4d
+    beq !legacy_magic+
+    cmp #$00
+    bne !bad_magic+
+    jsr SAVE_CHRIN
+    cmp #$c0
+    bne !bad_magic+
     lda #0
     sta save_slot_name_idx
+    jmp !magic_loop+
+!legacy_magic:
+    lda #0
+    sta save_slot_name_idx
+    jmp !magic_ok+
+!bad_magic:
+    lda save_slot_name_idx
+    bne !bad_magic_done+
+    inc save_slot_name_idx
+    lda #hal_storage_check_file_num
+    jsr SAVE_CLOSE
+    jsr save_restore_channels
+    jmp !probe-
+!bad_magic_done:
+    clc
+    jmp !cleanup+
+#else
+    lda #0
+    sta save_slot_name_idx
+#endif
 !magic_loop:
     jsr SAVE_CHRIN
     ldx save_slot_name_idx
     cmp save_magic,x
     beq !magic_ok+
     clc
-    bcc !cleanup+
+    jmp !cleanup+
 !magic_ok:
     inc save_slot_name_idx
     lda save_slot_name_idx
@@ -200,7 +319,7 @@ save_slot_read_name_len:
     jsr save_version_supported
     bcs !version_ok+
     clc
-    bcc !cleanup+
+    jmp !cleanup+
 !version_ok:
     jsr SAVE_READST
 #if HAL_STORAGE_MASK_CHRIN_WRITE_TIMEOUT_STATUS
@@ -208,7 +327,7 @@ save_slot_read_name_len:
 #endif
     beq !read_name+
     clc
-    bcc !cleanup+
+    jmp !cleanup+
 !read_name:
     lda #0
     sta save_slot_name_idx
@@ -226,7 +345,7 @@ save_slot_read_name_len:
 #endif
     beq !name_ok+
     clc
-    bcc !cleanup+
+    jmp !cleanup+
 !name_ok:
     sec
 !cleanup:

@@ -1,0 +1,178 @@
+diff --git a/loader/include/loader.inc b/loader/include/loader.inc
+--- a/loader/include/loader.inc
++++ b/loader/include/loader.inc
+@@ -61,6 +61,7 @@
+     FILE_ON_DISK_TOO_SMALL  = $f8 ; -8
+     FILE_ON_DISK_TOO_LARGE  = $f9 ; -7
+     WRITE_PROTECT_ON        = $fa ; -6
++    LOAD_ADDRESS_MISMATCH   = $f6 ; -10
+ 
+     DEVICE_INCOMPATIBLE     = $fb ; -5, cannot upload loader drive code to active device, if LOAD_VIA_KERNAL_FALLBACK != 0, do not regard this as an error
+     TOO_MANY_DEVICES        = $fc ; -4, a device on the bus other than the active device is not compatible, if LOAD_VIA_KERNAL_FALLBACK != 0, do not regard this as an error
+@@ -202,6 +203,13 @@
+ ; out: c   - set on error
+ ;      a   - status
+ .import loadraw
++.if BOUNDED_LOAD_API
++; Bounded raw load. The PRG header must equal loadaddrlo/hi. No writes occur
++; above boundendlo/hi (exclusive), and success requires an exact endpoint.
++; in: x/y filename, loadaddrlo/hi destination, boundendlo/hi expected end;
++;     Moria8 callers provide a statically asserted window of at least 256 bytes
++.import loadrawbounded
++.endif
+ .macro LOADRAW name
+     .if LOAD_TO_API
+             clc
+@@ -452,6 +460,10 @@
+ 
+     .importzp bytesloadedlo
+     .importzp bytesloadedhi
++.if BOUNDED_LOAD_API
++    .importzp boundendlo
++    .importzp boundendhi
++.endif
+ .endif; !loadaddrlo
+ .endif; !__NOIMPORTVARS
+ 
+diff --git a/loader/src/resident.s b/loader/src/resident.s
+--- a/loader/src/resident.s
++++ b/loader/src/resident.s
+@@ -91,6 +91,12 @@
+     alloc_zpvar endaddrhi
+ .endif
+ 
++.if BOUNDED_LOAD_API
++    alloc_zpvar boundendlo
++    alloc_zpvar boundendhi
++    alloc_zpvar boundstatus
++.endif
++
+ alloc_zpvar_2 BLOCKDESTLO
+ BLOCKINDEX = BLOCKDESTLO
+ .if HAVE_DECOMPRESSOR
+@@ -240,6 +246,16 @@
+ .if LOAD_RAW_API
+ 
+ .export loadraw
++.if BOUNDED_LOAD_API
++.export loadrawbounded
++loadraw:    lda #0
++            beq boundedmode
++loadrawbounded:
++            lda #1
++boundedmode:
++            sta boundstatus
++            jsr openfile
++.else
+ 
+             ; --- load file without decompression ---
+             ; in:  x/y - x: lo, y: hi to 0-terminated filename string,
+@@ -251,6 +267,7 @@
+ 
+             ; C-64/128: when LOAD_UNDER_D000_DFFF is non-0, this call assumes that the IO space at $d000 is enabled
+ loadraw:    jsr openfile
++.endif
+     .if LOAD_VIA_KERNAL_FALLBACK
+             bcs openerror; only with kernal fallback because only then the call might fail
+     .endif; LOAD_VIA_KERNAL_FALLBACK
+@@ -276,6 +293,26 @@
+             RESTORE_MEMCONFIG_Y
+ .endif
+             cmp #diskio::status::OK + 1
++.if BOUNDED_LOAD_API
++            bcs boundedreturn
++            lda boundstatus
++            beq boundedreturn
++            cmp #1
++            bne boundederror
++            lda endaddrlo
++            cmp boundendlo
++            bne boundedtoosmall
++            lda endaddrhi
++            cmp boundendhi
++            beq boundedok
++boundedtoosmall:
++            lda #diskio::status::FILE_ON_DISK_TOO_SMALL
++boundederror:
++            sec
++boundedreturn:
++            rts
++boundedok:  OK_CLC
++.endif
+     .if LOAD_VIA_KERNAL_FALLBACK
+ openerror:
+     .endif; LOAD_VIA_KERNAL_FALLBACK
+@@ -451,6 +488,17 @@
+             ; first block: get load address
+ 
+             jsr get1byte; load address lo
++.if BOUNDED_LOAD_API
++            ldx boundstatus
++            beq :+
++            cmp loadaddrlo
++            beq boundedloadlo
++            lda #diskio::status::LOAD_ADDRESS_MISMATCH
++            sta boundstatus
++boundedloadlo:
++            lda loadaddrlo
++:
++.endif
+ .if LOADCOMPD_TO
+             clc
+             adc loadaddroffslo
+@@ -459,6 +507,19 @@
+ storeladrl: sta loadaddrlo; is changed to lda on load_to
+             SET_DECSRC_LO
+             jsr get1byte; load address hi
++.if BOUNDED_LOAD_API
++            ldx boundstatus
++            beq :+
++            cpx #1
++            bne boundedloadhi
++            cmp loadaddrhi
++            beq boundedloadhi
++            lda #diskio::status::LOAD_ADDRESS_MISMATCH
++            sta boundstatus
++boundedloadhi:
++            lda loadaddrhi
++:
++.endif
+ .if LOADCOMPD_TO
+             plp
+             adc loadaddroffshi
+@@ -513,6 +574,35 @@
+              sbc #1
+              sta storebyte + 2
+ 
++.if BOUNDED_LOAD_API
++            lda storebyte
++            cmp #OPC_STA_ABSY
++            bne boundedblockok
++            lda boundstatus
++            beq boundedblockok
++            cmp #1
++            bne boundeddiscard
++            lda storebyte + 2
++            clc
++            adc #1
++            cmp boundendhi
++            bcc boundedblockok
++            bne boundedtoolarge
++            lda storebyte + 1
++            cmp boundendlo
++            bcc boundedblockok
++            beq boundedblockok
++boundedtoolarge:
++            lda #diskio::status::FILE_ON_DISK_TOO_LARGE
++            sta boundstatus
++boundeddiscard:
++            lda loadaddrlo
++            sta storebyte + 1
++            lda loadaddrhi
++            sta storebyte + 2
++boundedblockok:
++.endif
++
+ .macro STORE
+ storebyte:  sta $0000,y
+ .endmacro; STORE

@@ -30,7 +30,7 @@ import sys
 C64_DISK_NAMES = [
     # Krill-loaded at runtime
     "64.START", "64.TOWN", "64.DEATH", "64.MODAL", "64.GEN",
-    "64.HELP", "64.UI", "64.ITEMS", "64.SPELL", "64.CHEST",
+    "64.HELP", "64.UI", "64.ITEMS", "64.SPELL", "64.CHEST", "64.SAVE",
     "MONSTER.DB.1", "MONSTER.DB.2", "MONSTER.DB.3", "MONSTER.DB.4",
     "T64",
     # KERNAL-loaded boot/program files (share the directory)
@@ -41,7 +41,10 @@ C64_DISK_NAMES = [
     # Dir-art placeholder files
     "ART1", "ART2", "ART3", "ART4", "ART5",
     # Runtime save-disk files (one-drive mode shares media with the above)
-    "THE.GAME", "THE.GAME2", "HALL.OF.FAME", "MORIA8.ID",
+    "THE.GAME", "THE.GAME2", "THE.GAME3", "THE.GAME4",
+    "THE.SAVE", "THE.SAVE2", "THE.SAVE3", "THE.SAVE4",
+    "THE.MAP", "THE.MAP2", "THE.MAP3", "THE.MAP4",
+    "HALL.OF.FAME", "MORIA8.ID",
 ]
 
 

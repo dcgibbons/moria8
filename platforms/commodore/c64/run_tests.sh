@@ -394,10 +394,22 @@ from pathlib import Path
 import sys
 
 lines = Path(sys.argv[1]).read_text().splitlines()
-booting = [i for i, line in enumerate(lines) if '-write ' in line and '"moria64"' in line]
-bad = [i + 1 for i in booting if i + 1 >= len(lines) or '"64.init"' not in lines[i + 1]]
+booting = [i for i, line in enumerate(lines) if line.lstrip().startswith('-write ') and '"moria64"' in line]
+bad = [
+    i + 1 for i in booting
+    if '"64.init"' not in lines[i]
+    and (i + 1 >= len(lines) or '"64.init"' not in lines[i + 1])
+]
 if not booting or bad:
     raise SystemExit(f"MORIA64 disk recipes missing adjacent 64.init at lines: {bad}")
+overlays = [i for i, line in enumerate(lines) if line.lstrip().startswith('-write ') and '"64.chest"' in line]
+bad = [
+    i + 1 for i in overlays
+    if '"64.save"' not in lines[i]
+    and (i + 1 >= len(lines) or '"64.save"' not in lines[i + 1])
+]
+if not overlays or bad:
+    raise SystemExit(f"C64 disk recipes missing 64.save after 64.chest at lines: {bad}")
 PY
     then
         echo "PASS"
@@ -406,6 +418,74 @@ PY
         echo "FAIL"
         FAIL=$((FAIL + 1))
     fi
+    TOTAL=$((TOTAL + 1))
+}
+
+run_split_save_fixture_contract() {
+    local name="split_v16_save_fixture_contract"
+
+    if ! suite_selected "$name"; then
+        return
+    fi
+
+    echo -n "  $name: "
+    local tmp
+    tmp=$(mktemp -d "${TMPDIR:-/tmp}/moria8-split-fixture.XXXXXX")
+    if python3 tests/make_load_resume_save64.py --split-v16 "$tmp/THE.SAVE" "$tmp/THE.MAP" && \
+       python3 - "$tmp" <<'PY'
+from pathlib import Path
+import subprocess
+import sys
+
+root = Path(sys.argv[1])
+state = (root / "THE.SAVE").read_bytes()
+map_file = (root / "THE.MAP").read_bytes()
+assert len(state) == 2560 and state[:2] == bytes((0, 0xC0))
+assert len(map_file) == 3842 and map_file[:2] == bytes((0, 0xC0))
+assert state[2:10] == b"MORIA01\x16"
+assert map_file[-1] == 0x10
+map_sum = sum(map_file[2:]) & 0xFFFF
+state_sum = sum(state[2:-4]) & 0xFFFF
+assert state[-4:-2] == map_sum.to_bytes(2, "little")
+assert state[-2:] == state_sum.to_bytes(2, "little")
+
+variants = ("missing", "corrupt", "wrong-header", "short", "oversized")
+expected_sizes = {"corrupt": 2560, "wrong-header": 2560, "short": 2559, "oversized": 2561}
+expected_map_sizes = {"corrupt": 3842, "wrong-header": 3842, "short": 3841, "oversized": 3843}
+tool = Path("tests/make_load_resume_save64.py")
+for variant in variants:
+    state_path = root / f"state-{variant}"
+    map_path = root / f"map-{variant}"
+    subprocess.run([
+        sys.executable, str(tool), "--split-v16", str(state_path), str(map_path),
+        "--state-variant", variant,
+    ], check=True)
+    if variant == "missing":
+        assert not state_path.exists()
+    else:
+        assert state_path.stat().st_size == expected_sizes[variant]
+    assert map_path.stat().st_size == 3842
+
+    state_path = root / f"map-variant-state-{variant}"
+    map_path = root / f"map-variant-{variant}"
+    subprocess.run([
+        sys.executable, str(tool), "--split-v16", str(state_path), str(map_path),
+        "--map-variant", variant,
+    ], check=True)
+    assert state_path.stat().st_size == 2560
+    if variant == "missing":
+        assert not map_path.exists()
+    else:
+        assert map_path.stat().st_size == expected_map_sizes[variant]
+PY
+    then
+        echo "PASS"
+        PASS=$((PASS + 1))
+    else
+        echo "FAIL"
+        FAIL=$((FAIL + 1))
+    fi
+    rm -rf "$tmp"
     TOTAL=$((TOTAL + 1))
 }
 
@@ -430,6 +510,7 @@ c1541 = sys.argv[1]
 build = Path(sys.argv[2])
 disk = build / "moria8-c64.d64"
 source = (build / "c64" / "64.init").read_bytes()
+save_overlay = (build / "c64" / "ovl.save").read_bytes()
 dist = build / "c64-dist"
 archive_path = build / "moria8-c64.zip"
 
@@ -441,6 +522,8 @@ listing = subprocess.run(
 ).stdout.lower()
 if len(re.findall(r'"64\.init"\s+prg', listing)) != 1:
     raise SystemExit("shipping D64 must contain exactly one 64.init PRG")
+if len(re.findall(r'"64\.save"\s+prg', listing)) != 1:
+    raise SystemExit("shipping D64 must contain exactly one 64.save PRG")
 for required in ('"license"', '"source-offer"'):
     if required not in listing:
         raise SystemExit(f"shipping D64 missing {required}")
@@ -453,22 +536,34 @@ with tempfile.TemporaryDirectory(prefix="moria8-c64-init-") as tmp:
         capture_output=True,
     )
     disk_bytes = extracted.read_bytes()
+    extracted_save = Path(tmp) / "64.save"
+    subprocess.run(
+        [c1541, "-attach", str(disk), "-read", "64.save", str(extracted_save)],
+        check=True,
+        capture_output=True,
+    )
+    disk_save_overlay = extracted_save.read_bytes()
 
 with zipfile.ZipFile(archive_path) as archive:
     names = archive.namelist()
     if names.count("64.init") != 1:
         raise SystemExit("shipping ZIP must contain exactly one 64.init")
+    if names.count("64.save") != 1:
+        raise SystemExit("shipping ZIP must contain exactly one 64.save")
     if not {"license", "source-offer"}.issubset(names):
         raise SystemExit("shipping ZIP missing release-compliance files")
     zip_bytes = archive.read("64.init")
+    zip_save_overlay = archive.read("64.save")
 
 if not (dist / "license").is_file() or not (dist / "source-offer").is_file():
     raise SystemExit("loose C64 distribution missing release-compliance files")
 dist_bytes = (dist / "64.init").read_bytes()
 if not (source == disk_bytes == dist_bytes == zip_bytes):
     raise SystemExit("packaged 64.init copies are not byte-identical")
-if len(source) != 875 or source[:2] != bytes((0x00, 0xC0)):
-    raise SystemExit("64.init must be an 875-byte true-address $C000 PRG")
+if not (save_overlay == disk_save_overlay == (dist / "64.save").read_bytes() == zip_save_overlay):
+    raise SystemExit("packaged 64.save copies are not byte-identical")
+if len(source) != 901 or source[:2] != bytes((0x00, 0xC0)):
+    raise SystemExit("64.init must be a 901-byte true-address $C000 PRG")
 PY
     then
         echo "PASS"
@@ -906,7 +1001,8 @@ run_scripted_spell_cast_smoke() {
             -write ../../../build/test/c64/ovl.ui "64.ui" \
             -write ../../../build/test/c64/ovl.items "64.items" \
             -write ../../../build/test/c64/ovl.spell "64.spell" \
-            -write ../../../build/test/c64/ovl.chest "64.chest" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c64/ovl.chest "64.chest" \
+            -write ../../../build/test/c64/ovl.save "64.save" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -1069,7 +1165,8 @@ run_scripted_book_overlay_smoke() {
             -write ../../../build/test/c64/ovl.ui "64.ui" \
             -write ../../../build/test/c64/ovl.items "64.items" \
             -write ../../../build/test/c64/ovl.spell "64.spell" \
-            -write ../../../build/test/c64/ovl.chest "64.chest" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c64/ovl.chest "64.chest" \
+            -write ../../../build/test/c64/ovl.save "64.save" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -1227,7 +1324,8 @@ run_scripted_scroll_selector_smoke() {
             -write ../../../build/test/c64/ovl.ui "64.ui" \
             -write ../../../build/test/c64/ovl.items "64.items" \
             -write ../../../build/test/c64/ovl.spell "64.spell" \
-            -write ../../../build/test/c64/ovl.chest "64.chest" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c64/ovl.chest "64.chest" \
+            -write ../../../build/test/c64/ovl.save "64.save" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -1340,6 +1438,7 @@ run_scripted_spell_list_overlay_smoke() {
     mkdir -p ../../../build/test/c64
 
     if ! make -s -C .. ../../build/c64/boot.prg ../../build/c64/bootart64.prg ../../build/c64/title \
+            ../../build/c64/kinst64.prg ../../build/c64/kres64.prg ../../build/c64/kinst41.prg \
             ../../build/c64/monster.db.1 ../../build/c64/monster.db.2 ../../build/c64/monster.db.3 ../../build/c64/monster.db.4 \
             >"$build_log" 2>&1; then
         echo "FAIL (asset build error)"
@@ -1383,7 +1482,8 @@ run_scripted_spell_list_overlay_smoke() {
             -write ../../../build/test/c64/ovl.ui "64.ui" \
             -write ../../../build/test/c64/ovl.items "64.items" \
             -write ../../../build/test/c64/ovl.spell "64.spell" \
-            -write ../../../build/test/c64/ovl.chest "64.chest" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c64/ovl.chest "64.chest" \
+            -write ../../../build/test/c64/ovl.save "64.save" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -1540,7 +1640,8 @@ run_scripted_dungeon_target_spell_smoke() {
             -write ../../../build/test/c64/ovl.ui "64.ui" \
             -write ../../../build/test/c64/ovl.items "64.items" \
             -write ../../../build/test/c64/ovl.spell "64.spell" \
-            -write ../../../build/test/c64/ovl.chest "64.chest" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c64/ovl.chest "64.chest" \
+            -write ../../../build/test/c64/ovl.save "64.save" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -1702,7 +1803,8 @@ run_scripted_detect_evil_smoke() {
             -write ../../../build/test/c64/ovl.ui "64.ui" \
             -write ../../../build/test/c64/ovl.items "64.items" \
             -write ../../../build/test/c64/ovl.spell "64.spell" \
-            -write ../../../build/test/c64/ovl.chest "64.chest" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c64/ovl.chest "64.chest" \
+            -write ../../../build/test/c64/ovl.save "64.save" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -1863,7 +1965,8 @@ run_dungeon_ascent_product_smoke() {
             -write ../../../build/test/c64/ovl.ui "64.ui" \
             -write ../../../build/test/c64/ovl.items "64.items" \
             -write ../../../build/test/c64/ovl.spell "64.spell" \
-            -write ../../../build/test/c64/ovl.chest "64.chest" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c64/ovl.chest "64.chest" \
+            -write ../../../build/test/c64/ovl.save "64.save" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -1994,7 +2097,8 @@ run_wizard_reveal_product_smoke() {
             -write ../../../build/test/c64/ovl.ui "64.ui" \
             -write ../../../build/test/c64/ovl.items "64.items" \
             -write ../../../build/test/c64/ovl.spell "64.spell" \
-            -write ../../../build/test/c64/ovl.chest "64.chest" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c64/ovl.chest "64.chest" \
+            -write ../../../build/test/c64/ovl.save "64.save" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -2150,7 +2254,8 @@ run_wizard_item_product_smoke() {
             -write ../../../build/test/c64/ovl.ui "64.ui" \
             -write ../../../build/test/c64/ovl.items "64.items" \
             -write ../../../build/test/c64/ovl.spell "64.spell" \
-            -write ../../../build/test/c64/ovl.chest "64.chest" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c64/ovl.chest "64.chest" \
+            -write ../../../build/test/c64/ovl.save "64.save" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -2360,7 +2465,8 @@ run_chest_open_product_smoke() {
             -write "$smoke_c64/ovl.ui" "64.ui" \
             -write "$smoke_c64/ovl.items" "64.items" \
             -write "$smoke_c64/ovl.spell" "64.spell" \
-            -write "$smoke_c64/ovl.chest" "64.chest" >"$build_log" 2>&1; then
+            -write "$smoke_c64/ovl.chest" "64.chest" \
+            -write "$smoke_c64/ovl.save" "64.save" >"$build_log" 2>&1; then
         echo "FAIL (product disk image)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -2447,7 +2553,8 @@ run_chest_open_product_reu_smoke() {
             -write "$smoke_out/c64/ovl.ui" "64.ui" \
             -write "$smoke_out/c64/ovl.items" "64.items" \
             -write "$smoke_out/c64/ovl.spell" "64.spell" \
-            -write "$smoke_out/c64/ovl.chest" "64.chest" >"$build_log" 2>&1; then
+            -write "$smoke_out/c64/ovl.chest" "64.chest" \
+            -write "$smoke_out/c64/ovl.save" "64.save" >"$build_log" 2>&1; then
         echo "FAIL (product disk image)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -2543,7 +2650,8 @@ run_chest_open_product_genfail_smoke() {
             -write "$smoke_out/c64/ovl.ui" "64.ui" \
             -write "$smoke_out/c64/ovl.items" "64.items" \
             -write "$smoke_out/c64/ovl.spell" "64.spell" \
-            -write "$smoke_out/c64/ovl.chest" "64.chest" >"$build_log" 2>&1; then
+            -write "$smoke_out/c64/ovl.chest" "64.chest" \
+            -write "$smoke_out/c64/ovl.save" "64.save" >"$build_log" 2>&1; then
         echo "FAIL (product disk image)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -2651,7 +2759,8 @@ run_disk_setup_product_smoke() {
             -write ../../../build/test/c64/ovl.ui "64.ui" \
             -write ../../../build/test/c64/ovl.items "64.items" \
             -write ../../../build/test/c64/ovl.spell "64.spell" \
-            -write ../../../build/test/c64/ovl.chest "64.chest" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c64/ovl.chest "64.chest" \
+            -write ../../../build/test/c64/ovl.save "64.save" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -2779,7 +2888,8 @@ run_fastload_product_smoke() {
             -write ../../../build/test/c64/ovl.ui "64.ui" \
             -write ../../../build/test/c64/ovl.items "64.items" \
             -write ../../../build/test/c64/ovl.spell "64.spell" \
-            -write ../../../build/test/c64/ovl.chest "64.chest" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c64/ovl.chest "64.chest" \
+            -write ../../../build/test/c64/ovl.save "64.save" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -2812,7 +2922,8 @@ run_fastload_product_smoke() {
             -write ../../../build/test/c64/ovl.ui "64.ui" \
             -write ../../../build/test/c64/ovl.items "64.items" \
             -write ../../../build/test/c64/ovl.spell "64.spell" \
-            -write ../../../build/test/c64/ovl.chest "64.chest" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c64/ovl.chest "64.chest" \
+            -write ../../../build/test/c64/ovl.save "64.save" >>"$build_log" 2>&1; then
         echo "FAIL (fallback disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -2914,7 +3025,7 @@ run_boot_handoff_runtime_matrix() {
             -write "$out/ovl.death" "64.death" -write "$out/ovl.modal" "64.modal" \
             -write "$out/ovl.gen" "64.gen" -write "$out/ovl.help" "64.help" \
             -write "$out/ovl.ui" "64.ui" -write "$out/ovl.items" "64.items" \
-            -write "$out/ovl.spell" "64.spell" -write "$out/ovl.chest" "64.chest" \
+            -write "$out/ovl.spell" "64.spell" -write "$out/ovl.chest" "64.chest" -write "$out/ovl.save" "64.save" \
             >"$build_log" 2>&1 || \
        ! "$C1541" -format "moria8 c64,m8" d64 "$fallback_d64" -attach "$fallback_d64" \
             -write "$out/boot.prg" "moria8" -write "$out/boot.prg" "boot64" \
@@ -2928,7 +3039,7 @@ run_boot_handoff_runtime_matrix() {
             -write "$out/ovl.death" "64.death" -write "$out/ovl.modal" "64.modal" \
             -write "$out/ovl.gen" "64.gen" -write "$out/ovl.help" "64.help" \
             -write "$out/ovl.ui" "64.ui" -write "$out/ovl.items" "64.items" \
-            -write "$out/ovl.spell" "64.spell" -write "$out/ovl.chest" "64.chest" \
+            -write "$out/ovl.spell" "64.spell" -write "$out/ovl.chest" "64.chest" -write "$out/ovl.save" "64.save" \
             >>"$build_log" 2>&1 || \
        ! "$C1541" -format "moria8 c64,m8" d64 "$krill_noart_d64" -attach "$krill_noart_d64" \
             -write "$out/boot.prg" "moria8" -write "$out/boot.prg" "boot64" \
@@ -2944,7 +3055,7 @@ run_boot_handoff_runtime_matrix() {
             -write "$out/ovl.death" "64.death" -write "$out/ovl.modal" "64.modal" \
             -write "$out/ovl.gen" "64.gen" -write "$out/ovl.help" "64.help" \
             -write "$out/ovl.ui" "64.ui" -write "$out/ovl.items" "64.items" \
-            -write "$out/ovl.spell" "64.spell" -write "$out/ovl.chest" "64.chest" \
+            -write "$out/ovl.spell" "64.spell" -write "$out/ovl.chest" "64.chest" -write "$out/ovl.save" "64.save" \
             >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -80 "$build_log"
@@ -3065,7 +3176,8 @@ run_retirement_royal_product_smoke() {
             -write "$smoke_c64/ovl.ui" "64.ui" \
             -write "$smoke_c64/ovl.items" "64.items" \
             -write "$smoke_c64/ovl.spell" "64.spell" \
-            -write "$smoke_c64/ovl.chest" "64.chest" >"$build_log" 2>&1; then
+            -write "$smoke_c64/ovl.chest" "64.chest" \
+            -write "$smoke_c64/ovl.save" "64.save" >"$build_log" 2>&1; then
         echo "FAIL (product disk image)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -3094,7 +3206,8 @@ run_save_write_product_smoke() {
     run_save_write_product_smoke_impl "save_write_product_smoke" \
         "C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT" \
         "the.game,s" \
-        '"THE.GAME".*SEQ' \
+        '"THE.SAVE".*SEQ' \
+        '"THE.MAP".*SEQ' \
         "post_save_krill"
 }
 
@@ -3102,7 +3215,8 @@ run_resume_missing_kinst41_product_smoke() {
     run_save_write_product_smoke_impl "resume_missing_kinst41_product_smoke" \
         "C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT" \
         "the.game,s" \
-        '"THE.GAME".*SEQ' \
+        '"THE.SAVE".*SEQ' \
+        '"THE.MAP".*SEQ' \
         "post_save_krill" \
         "missing_kinst41"
 }
@@ -3111,7 +3225,8 @@ run_cached_krill_resume_product_smoke() {
     run_save_write_product_smoke_impl "cached_krill_resume_product_smoke" \
         "C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT" \
         "the.game,s" \
-        '"THE.GAME".*SEQ' \
+        '"THE.SAVE".*SEQ' \
+        '"THE.MAP".*SEQ' \
         "post_save_cached" \
         "" \
         ".c64_test_kernal_load_entry" \
@@ -3122,7 +3237,12 @@ run_slot2_save_product_smoke() {
     run_save_write_product_smoke_impl "slot2_save_product_smoke" \
         "C64_TEST_SCRIPTED_SLOT2_SAVE_PRODUCT" \
         "the.game2,s" \
-        '"THE.GAME2".*SEQ'
+        '"THE.SAVE2".*SEQ' \
+        '"THE.MAP2".*SEQ' \
+        "post_save_slot" \
+        "" \
+        ".c64_test_save_write_fail_input_sym" \
+        ".c64_test_slot2_save_loaded"
 }
 
 run_save_write_product_smoke_impl() {
@@ -3130,10 +3250,11 @@ run_save_write_product_smoke_impl() {
     local test_define="$2"
     local save_filename="$3"
     local expected_save_re="$4"
-    local post_save_mode="${5:-}"
-    local resume_failure_mode="${6:-}"
-    local fail_symbol="${7:-.c64_test_save_write_fail_input_sym}"
-    local required_symbol="${8:-.c64_test_after_save_restart_start}"
+    local expected_map_re="$5"
+    local post_save_mode="${6:-}"
+    local resume_failure_mode="${7:-}"
+    local fail_symbol="${8:-.c64_test_save_write_fail_input_sym}"
+    local required_symbol="${9:-.c64_test_after_save_restart_start}"
     echo -n "  $name: "
 
     local build_log
@@ -3188,7 +3309,8 @@ run_save_write_product_smoke_impl() {
             -write ../../../build/test/c64/ovl.ui "64.ui" \
             -write ../../../build/test/c64/ovl.items "64.items" \
             -write ../../../build/test/c64/ovl.spell "64.spell" \
-            -write ../../../build/test/c64/ovl.chest "64.chest" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c64/ovl.chest "64.chest" \
+            -write ../../../build/test/c64/ovl.save "64.save" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -3250,6 +3372,19 @@ run_save_write_product_smoke_impl() {
             --enable-drive9-bus
         )
     fi
+    if [ "$post_save_mode" = "post_save_slot" ]; then
+        pass_symbol=".c64_test_post_save_krill_overlay_pass"
+        drive9_args=(
+            --start-symbol ".c64_test_slot2_save_wait_for_harness"
+            --resume-symbol ".c64_test_slot2_save_resume_low"
+            --save-d64 "$save_d64"
+            --enable-drive9-bus
+        )
+    fi
+    local smoke_timeout=20
+    if [ "$post_save_mode" = "post_save_slot" ]; then
+        smoke_timeout=60
+    fi
     local krill_state_expectations=(
         --expect-byte-symbol ".krill_active=0xff"
         --expect-byte-symbol ".krill_suspended=0x00"
@@ -3261,9 +3396,14 @@ run_save_write_product_smoke_impl() {
         )
     fi
     local resume_path_expectations=()
-    if [ "$post_save_mode" = "post_save_cached" ]; then
-        pass_symbol=".c64_test_after_cached_krill_resume"
+    if [ "$post_save_mode" = "post_save_slot" ]; then
         resume_path_expectations=(
+            --require-hit-symbol ".c64_test_after_save_game"
+        )
+    fi
+    if [ "$post_save_mode" = "post_save_cached" ]; then
+        resume_path_expectations=(
+            --require-hit-symbol ".c64_test_after_cached_krill_resume"
             --c64-rom-fail-breakpoint
             --defer-fail-until-required
             --expect-byte-symbol ".c64_test_krill_resume_stage=0x05"
@@ -3284,7 +3424,7 @@ run_save_write_product_smoke_impl() {
             "${resume_path_expectations[@]}" \
             --expect-byte-symbol ".krill_boot_used=0x01" \
             --c64-ram-breakpoints \
-            --timeout 20 \
+            --timeout "$smoke_timeout" \
             --retry-timeouts 0 \
             --screen-base 0x0400; then
         local dir_list
@@ -3295,11 +3435,12 @@ run_save_write_product_smoke_impl() {
             TOTAL=$((TOTAL + 1))
             return
         fi
-        if echo "$dir_list" | grep -qi "$expected_save_re"; then
+        if echo "$dir_list" | grep -qi "$expected_save_re" && \
+                echo "$dir_list" | grep -qi "$expected_map_re"; then
             echo "PASS"
             PASS=$((PASS + 1))
         else
-            echo "FAIL (save file not present as SEQ)"
+            echo "FAIL (paired state/map save files not present as SEQ)"
             echo "$dir_list" | tail -20 | sed 's/^/    /'
             FAIL=$((FAIL + 1))
         fi
@@ -3364,7 +3505,8 @@ run_save_media_fail_product_smoke() {
             -write ../../../build/test/c64/ovl.ui "64.ui" \
             -write ../../../build/test/c64/ovl.items "64.items" \
             -write ../../../build/test/c64/ovl.spell "64.spell" \
-            -write ../../../build/test/c64/ovl.chest "64.chest" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c64/ovl.chest "64.chest" \
+            -write ../../../build/test/c64/ovl.save "64.save" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -3494,7 +3636,8 @@ run_change_save_drive_product_smoke() {
             -write ../../../build/test/c64/ovl.ui "64.ui" \
             -write ../../../build/test/c64/ovl.items "64.items" \
             -write ../../../build/test/c64/ovl.spell "64.spell" \
-            -write ../../../build/test/c64/ovl.chest "64.chest" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c64/ovl.chest "64.chest" \
+            -write ../../../build/test/c64/ovl.save "64.save" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -3537,11 +3680,12 @@ run_change_save_drive_product_smoke() {
             echo "FAIL (drive-10 save disk listing error)"
             echo "$dir_list" | tail -20 | sed 's/^/    /'
             FAIL=$((FAIL + 1))
-        elif echo "$dir_list" | grep -qi '"THE.GAME".*SEQ'; then
+        elif echo "$dir_list" | grep -qi '"THE.SAVE".*SEQ' && \
+                echo "$dir_list" | grep -qi '"THE.MAP".*SEQ'; then
             echo "PASS"
             PASS=$((PASS + 1))
         else
-            echo "FAIL (drive-10 save disk missing THE.GAME)"
+            echo "FAIL (drive-10 save disk missing THE.SAVE/THE.MAP pair)"
             echo "$dir_list" | tail -20 | sed 's/^/    /'
             FAIL=$((FAIL + 1))
         fi
@@ -3607,7 +3751,8 @@ run_disk_setup_single_drive_return_product_smoke() {
             -write ../../../build/test/c64/ovl.ui "64.ui" \
             -write ../../../build/test/c64/ovl.items "64.items" \
             -write ../../../build/test/c64/ovl.spell "64.spell" \
-            -write ../../../build/test/c64/ovl.chest "64.chest" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c64/ovl.chest "64.chest" \
+            -write ../../../build/test/c64/ovl.save "64.save" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -3727,7 +3872,8 @@ run_disk_setup_then_load_prompts_save_product_smoke() {
             -write ../../../build/test/c64/ovl.ui "64.ui" \
             -write ../../../build/test/c64/ovl.items "64.items" \
             -write ../../../build/test/c64/ovl.spell "64.spell" \
-            -write ../../../build/test/c64/ovl.chest "64.chest" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c64/ovl.chest "64.chest" \
+            -write ../../../build/test/c64/ovl.save "64.save" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -3825,7 +3971,8 @@ run_load_resume_product_smoke() {
             -write ../../../build/test/c64/ovl.ui "64.ui" \
             -write ../../../build/test/c64/ovl.items "64.items" \
             -write ../../../build/test/c64/ovl.spell "64.spell" \
-            -write ../../../build/test/c64/ovl.chest "64.chest" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c64/ovl.chest "64.chest" \
+            -write ../../../build/test/c64/ovl.save "64.save" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -3903,8 +4050,17 @@ run_load_resume_product_smoke() {
     TOTAL=$((TOTAL + 1))
 }
 
-run_single_drive_load_return_product_smoke() {
-    local name="single_drive_load_return_product_smoke"
+run_single_drive_fast_load_product_smoke() {
+    C64_LOAD_FIXTURE_MODE=split run_single_drive_load_product_smoke_impl
+}
+
+run_single_drive_legacy_fallback_product_smoke() {
+    C64_LOAD_FIXTURE_MODE=legacy run_single_drive_load_product_smoke_impl
+}
+
+run_single_drive_load_product_smoke_impl() {
+    local fixture_mode="${C64_LOAD_FIXTURE_MODE:-split}"
+    local name="single_drive_${fixture_mode}_load_product_smoke"
     echo -n "  $name: "
 
     local build_log
@@ -3912,6 +4068,7 @@ run_single_drive_load_return_product_smoke() {
     mkdir -p ../../../build/test/c64
 
     if ! make -s -C .. ../../build/c64/boot.prg ../../build/c64/bootart64.prg ../../build/c64/title \
+            ../../build/c64/kinst64.prg ../../build/c64/kres64.prg ../../build/c64/kinst41.prg \
             ../../build/c64/monster.db.1 ../../build/c64/monster.db.2 ../../build/c64/monster.db.3 ../../build/c64/monster.db.4 \
             >"$build_log" 2>&1; then
         echo "FAIL (asset build error)"
@@ -3938,6 +4095,9 @@ run_single_drive_load_return_product_smoke() {
             -write ../../../build/test/c64/boot.prg "moria8" \
             -write ../../../build/test/c64/boot.prg "boot64" \
             -write ../../../build/test/c64/bootart64.prg "bootart64" \
+            -write ../../../build/c64/kinst64.prg "kinst64" \
+            -write ../../../build/c64/kres64.prg "kres64" \
+            -write ../../../build/c64/kinst41.prg "kinst41" \
             -write ../../../build/test/c64/moria_single_drive_load_return_smoke.prg "moria64" \
             -write ../../../build/test/c64/64.init "64.init" \
             -write ../../../build/test/c64/64.bank "64.bank" \
@@ -3955,7 +4115,8 @@ run_single_drive_load_return_product_smoke() {
             -write ../../../build/test/c64/ovl.ui "64.ui" \
             -write ../../../build/test/c64/ovl.items "64.items" \
             -write ../../../build/test/c64/ovl.spell "64.spell" \
-            -write ../../../build/test/c64/ovl.chest "64.chest" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c64/ovl.chest "64.chest" \
+            -write ../../../build/test/c64/ovl.save "64.save" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -3964,31 +4125,32 @@ run_single_drive_load_return_product_smoke() {
     fi
 
     local save_blob="../../../build/test/c64/THE.GAME"
+    local state_blob="../../../build/test/c64/THE.SAVE"
+    local map_blob="../../../build/test/c64/THE.MAP"
     local marker_blob="../../../build/test/c64/MORIA8.ID"
-    local save_d64="../../../build/test/c64/moria_single_drive_load_return_save.d64"
-    if ! python3 tests/make_load_resume_save64.py "$save_blob" "$marker_blob" >"$build_log" 2>&1; then
-        echo "FAIL (save generation error)"
-        tail -20 "$build_log"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
+    local fixture_args=(-write "$marker_blob" "moria8.id,s")
+    if [ "$fixture_mode" = split ]; then
+        if ! python3 tests/make_load_resume_save64.py --split-v16 "$state_blob" "$map_blob" \
+                --marker-output "$marker_blob" >"$build_log" 2>&1; then
+            echo "FAIL (split save generation error)"
+            tail -20 "$build_log"
+            FAIL=$((FAIL + 1))
+            TOTAL=$((TOTAL + 1))
+            return
+        fi
+        fixture_args+=( -write "$state_blob" "the.save,s" -write "$map_blob" "the.map,s" )
+    else
+        if ! python3 tests/make_load_resume_save64.py "$save_blob" "$marker_blob" >"$build_log" 2>&1; then
+            echo "FAIL (legacy save generation error)"
+            tail -20 "$build_log"
+            FAIL=$((FAIL + 1))
+            TOTAL=$((TOTAL + 1))
+            return
+        fi
+        fixture_args+=( -write "$save_blob" "the.game,s" )
     fi
 
-    rm -f "$save_d64"
-    if ! "$C1541" -format "moria8 save,m8" d64 "$save_d64" \
-            -attach "$save_d64" \
-            -write "$marker_blob" "moria8.id,s" \
-            -write "$save_blob" "the.game,s" >"$build_log" 2>&1; then
-        echo "FAIL (save disk build error)"
-        tail -20 "$build_log"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    if ! "$C1541" -attach "$scripted_d64" \
-            -write "$marker_blob" "moria8.id,s" \
-            -write "$save_blob" "the.game,s" >>"$build_log" 2>&1; then
+    if ! "$C1541" -attach "$scripted_d64" "${fixture_args[@]}" >>"$build_log" 2>&1; then
         echo "FAIL (combined single-drive disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -3996,6 +4158,33 @@ run_single_drive_load_return_product_smoke() {
         return
     fi
 
+    local path_args=(--require-hit-symbol ".c64_prepare_stock_save_load")
+    local failure_args=(--fail-symbol ".c64_test_single_drive_load_return_load_fail")
+    local load_value_args=(--expect-byte-symbol ".load_result=0x00")
+    local load_state_args=(
+        --expect-byte-symbol ".krill_active=0x00"
+        --expect-byte-symbol ".krill_suspended=0xff"
+    )
+    if [ "$fixture_mode" = split ]; then
+        path_args=(
+            --require-hit-symbol ".ovl_save_fast_load"
+            --require-hit-symbol ".c64_test_split_state_loaded"
+            --require-hit-symbol ".c64_test_split_state_parsed"
+            --require-hit-symbol ".c64_test_split_state_exact"
+            --require-hit-symbol ".c64_test_split_map_loaded"
+            --require-hit-symbol ".c64_test_split_fast_success"
+        )
+        failure_args=(
+            --fail-symbol ".c64_test_split_bounded_error"
+            --fail-symbol ".c64_test_split_parse_corrupt"
+        )
+        load_value_args+=(--expect-byte-symbol ".c64_test_fast_map_marker=0x10")
+        load_value_args+=(--expect-byte-symbol ".c64_test_split_bounded_status=0x00")
+        load_state_args=(
+            --expect-byte-symbol ".krill_active=0xff"
+            --expect-byte-symbol ".krill_suspended=0x00"
+        )
+    fi
     if python3 -u ../plus4/tests/product_scripted_smoke.py \
             --name "$name" \
             --vice "$VICE" \
@@ -4004,7 +4193,10 @@ run_single_drive_load_return_product_smoke() {
             --start-symbol ".c64_test_single_drive_load_return_wait_for_harness" \
             --resume-symbol ".c64_test_single_drive_load_return_resume_low" \
             --pass-symbol ".c64_test_single_drive_load_return_loaded_low" \
-            --fail-symbol ".c64_test_single_drive_load_return_load_fail" \
+            "${path_args[@]}" \
+            "${failure_args[@]}" \
+            "${load_value_args[@]}" \
+            "${load_state_args[@]}" \
             --screen-base 0x0400; then
         PASS=$((PASS + 1))
     else
@@ -4065,7 +4257,8 @@ run_load_then_save_new_empty_product_smoke() {
             -write ../../../build/test/c64/ovl.ui "64.ui" \
             -write ../../../build/test/c64/ovl.items "64.items" \
             -write ../../../build/test/c64/ovl.spell "64.spell" \
-            -write ../../../build/test/c64/ovl.chest "64.chest" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c64/ovl.chest "64.chest" \
+            -write ../../../build/test/c64/ovl.save "64.save" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -4119,12 +4312,11 @@ run_load_then_save_new_empty_product_smoke() {
             --main-vs "../../../build/test/c64/main.vs" \
             --start-symbol ".c64_test_load_then_save_new_empty_wait_for_harness" \
             --resume-symbol ".c64_test_load_then_save_new_empty_resume_low" \
-            --attach8-at-start-d64 "$load_save_d64" \
-            --swap-symbol ".c64_test_load_then_save_new_empty_before_save" \
-            --swap-attach8-d64 "$new_save_d64" \
-            --swap2-symbol ".disk_prompt_game_required_error_shown" \
+            --swap-symbol ".disk_prompt_save" \
+            --swap-attach8-d64 "$load_save_d64" \
+            --swap2-symbol ".c64_test_load_then_save_new_empty_before_save" \
             --swap2-attach8-d64 "$swap_program_d64" \
-            --swap3-symbol ".uds_show_insert_prompt" \
+            --swap3-symbol ".c64_test_load_then_save_new_empty_after_save_prepare" \
             --swap3-attach8-d64 "$new_save_d64" \
             --swap4-symbol ".c64_test_load_then_save_new_empty_before_program_prompt" \
             --swap4-attach8-d64 "$swap_program_d64" \
@@ -4141,7 +4333,8 @@ run_load_then_save_new_empty_product_smoke() {
             return
         fi
         if echo "$dir_list" | grep -qi '"MORIA8.ID".*SEQ' && \
-                echo "$dir_list" | grep -qi '"THE.GAME".*SEQ'; then
+                echo "$dir_list" | grep -qi '"THE.SAVE".*SEQ' && \
+                echo "$dir_list" | grep -qi '"THE.MAP".*SEQ'; then
             echo "PASS"
             PASS=$((PASS + 1))
         else
@@ -4207,7 +4400,8 @@ run_single_drive_save_wrong_media_product_smoke() {
             -write ../../../build/test/c64/ovl.ui "64.ui" \
             -write ../../../build/test/c64/ovl.items "64.items" \
             -write ../../../build/test/c64/ovl.spell "64.spell" \
-            -write ../../../build/test/c64/ovl.chest "64.chest" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c64/ovl.chest "64.chest" \
+            -write ../../../build/test/c64/ovl.save "64.save" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -4288,7 +4482,8 @@ run_single_drive_load_wrong_media_product_smoke() {
             -write ../../../build/test/c64/ovl.ui "64.ui" \
             -write ../../../build/test/c64/ovl.items "64.items" \
             -write ../../../build/test/c64/ovl.spell "64.spell" \
-            -write ../../../build/test/c64/ovl.chest "64.chest" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c64/ovl.chest "64.chest" \
+            -write ../../../build/test/c64/ovl.save "64.save" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -4368,7 +4563,8 @@ run_single_drive_load_corrupt_product_smoke() {
             -write ../../../build/test/c64/ovl.ui "64.ui" \
             -write ../../../build/test/c64/ovl.items "64.items" \
             -write ../../../build/test/c64/ovl.spell "64.spell" \
-            -write ../../../build/test/c64/ovl.chest "64.chest" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c64/ovl.chest "64.chest" \
+            -write ../../../build/test/c64/ovl.save "64.save" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -4409,18 +4605,117 @@ run_single_drive_load_corrupt_product_smoke() {
             --main-vs "../../../build/test/c64/main.vs" \
             --start-symbol ".c64_test_single_drive_load_corrupt_wait_for_harness" \
             --resume-symbol ".c64_test_single_drive_load_corrupt_before_load" \
-            --pass-symbol ".title_menu_loop" \
+            --pass-symbol ".c64_test_single_drive_load_corrupt_wait_for_harness" \
             --fail-symbol ".main_loop" \
-            --swap-symbol ".disk_prompt_game_required_error_shown" \
-            --swap-attach8-d64 "$program_d64" \
-            --attach8-at-start-d64 "$save_d64" \
-            --pass-on-script-exhausted \
+            --swap-symbol ".disk_prompt_save" \
+            --swap-attach8-d64 "$save_d64" \
+            --swap2-symbol ".disk_prompt_game_required_error_shown" \
+            --swap2-attach8-d64 "$program_d64" \
             --expect-screen-symbol ".title_menu_str:18:7" \
             --screen-base 0x0400; then
         PASS=$((PASS + 1))
     else
         FAIL=$((FAIL + 1))
     fi
+    TOTAL=$((TOTAL + 1))
+}
+
+run_split_save_rejection_product_smoke() {
+    local name="split_save_rejection_product_smoke"
+    echo -n "  $name: "
+
+    local smoke_out build_log smoke_c64 base_d64 main_vs marker_blob state_blob map_blob
+    smoke_out=$(mktemp -d "${TMPDIR:-/tmp}/moria8-c64-split-reject.XXXXXX")
+    smoke_c64="$smoke_out/c64"
+    base_d64="$smoke_out/base.d64"
+    main_vs="$smoke_c64/main.vs"
+    marker_blob="$smoke_out/MORIA8.ID"
+    state_blob="$smoke_out/THE.SAVE"
+    map_blob="$smoke_out/THE.MAP"
+    build_log=$(mktemp -t "build_${name}_log")
+    seed_product_build_out "$smoke_out"
+
+    if ! make -s -C "$REPO_ROOT/platforms/commodore" KICKASS="$KICKASS" OUT="$smoke_out" \
+            KA_FLAGS64="-showmem -vicesymbols -libdir ../../core -libdir common -afo -libdir c64 -define DEBUG_FEAT_DISK_TRACE=0 -define C64_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_CORRUPT_PRODUCT" \
+            build64 >"$build_log" 2>&1; then
+        echo "FAIL (product build)"
+        tail -80 "$build_log"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+    printf 'M8SAVE' > "$marker_blob"
+    if ! "$C1541" -format "moria8 c64,m8" d64 "$base_d64" -attach "$base_d64" \
+            -write "$smoke_c64/boot.prg" "moria8" -write "$smoke_c64/boot.prg" "boot64" \
+            -write "$smoke_c64/bootart64.prg" "bootart64" -write "$smoke_c64/kinst64.prg" "kinst64" \
+            -write "$smoke_c64/kres64.prg" "kres64" -write "$smoke_c64/kinst41.prg" "kinst41" \
+            -write "$smoke_c64/moria8.prg" "moria64" -write "$smoke_c64/64.init" "64.init" \
+            -write "$smoke_c64/64.bank" "64.bank" -write "$smoke_c64/title" "t64" \
+            -write "$smoke_c64/monster.db.1" "monster.db.1" -write "$smoke_c64/monster.db.2" "monster.db.2" \
+            -write "$smoke_c64/monster.db.3" "monster.db.3" -write "$smoke_c64/monster.db.4" "monster.db.4" \
+            -write "$smoke_c64/ovl.start" "64.start" -write "$smoke_c64/ovl.town" "64.town" \
+            -write "$smoke_c64/ovl.death" "64.death" -write "$smoke_c64/ovl.modal" "64.modal" \
+            -write "$smoke_c64/ovl.gen" "64.gen" -write "$smoke_c64/ovl.help" "64.help" \
+            -write "$smoke_c64/ovl.ui" "64.ui" -write "$smoke_c64/ovl.items" "64.items" \
+            -write "$smoke_c64/ovl.spell" "64.spell" -write "$smoke_c64/ovl.chest" "64.chest" \
+            -write "$smoke_c64/ovl.save" "64.save" >"$build_log" 2>&1; then
+        echo "FAIL (base disk build)"
+        tail -20 "$build_log"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    local entry scenario state_variant map_variant scenario_d64
+    local scenarios=(
+        missing_map:valid:missing
+        corrupt_state:corrupt:valid
+        wrong_header:wrong-header:valid
+        short_state:short:valid
+        oversized_state:oversized:valid
+        corrupt_map:valid:corrupt
+        wrong_map_header:valid:wrong-header
+        short_map:valid:short
+        oversized_map:valid:oversized
+    )
+    for entry in "${scenarios[@]}"; do
+        IFS=: read -r scenario state_variant map_variant <<<"$entry"
+        scenario_d64="$smoke_out/${scenario}.d64"
+        rm -f "$state_blob" "$map_blob" "$scenario_d64"
+        if ! python3 tests/make_load_resume_save64.py --split-v16 "$state_blob" "$map_blob" \
+                --state-variant "$state_variant" --map-variant "$map_variant" >>"$build_log" 2>&1 || \
+                ! cp "$base_d64" "$scenario_d64" || \
+                ! "$C1541" -attach "$scenario_d64" -write "$marker_blob" "moria8.id,s" \
+                    -write "$state_blob" "the.save,s" >>"$build_log" 2>&1; then
+            echo "FAIL ($scenario fixture build)"
+            FAIL=$((FAIL + 1))
+            TOTAL=$((TOTAL + 1))
+            return
+        fi
+        if [ -f "$map_blob" ] && ! "$C1541" -attach "$scenario_d64" \
+                -write "$map_blob" "the.map,s" >>"$build_log" 2>&1; then
+            echo "FAIL ($scenario map fixture build)"
+            FAIL=$((FAIL + 1))
+            TOTAL=$((TOTAL + 1))
+            return
+        fi
+        if ! python3 -u ../plus4/tests/product_scripted_smoke.py \
+                --name "${name}_${scenario}" --vice "$VICE" --boot-d64 "$scenario_d64" \
+                --main-vs "$main_vs" \
+                --start-symbol ".c64_test_single_drive_load_corrupt_wait_for_harness" \
+                --resume-symbol ".c64_test_single_drive_load_corrupt_before_load" \
+                --require-hit-symbol ".ovl_save_fast_load" \
+                --pass-symbol ".c64_test_single_drive_load_corrupt_clean_return" --fail-symbol ".main_loop" \
+                --expect-byte-symbol ".load_result=0x02" \
+                --expect-screen-symbol ".title_menu_str:18:7" --screen-base 0x0400; then
+            FAIL=$((FAIL + 1))
+            TOTAL=$((TOTAL + 1))
+            return
+        fi
+    done
+
+    echo "PASS (${#scenarios[@]} bounded rejection scenarios)"
+    PASS=$((PASS + 1))
     TOTAL=$((TOTAL + 1))
 }
 
@@ -4476,7 +4771,8 @@ run_single_drive_fresh_save_product_smoke() {
             -write ../../../build/test/c64/ovl.ui "64.ui" \
             -write ../../../build/test/c64/ovl.items "64.items" \
             -write ../../../build/test/c64/ovl.spell "64.spell" \
-            -write ../../../build/test/c64/ovl.chest "64.chest" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c64/ovl.chest "64.chest" \
+            -write ../../../build/test/c64/ovl.save "64.save" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -4529,7 +4825,7 @@ run_single_drive_fresh_save_product_smoke() {
             --swap2-attach8-d64 "$swap_program_d64" \
             --pass-symbol ".c64_test_after_save_restart_start" \
             --fail-symbol ".c64_test_single_drive_fresh_save_unexpected_return" \
-            --limitcycles 900000000 \
+            --limitcycles 1800000000 \
             --screen-base 0x0400; then
         local dir_list
         if ! dir_list=$("$C1541" -attach "$save_d64" -list 2>&1); then
@@ -4540,7 +4836,8 @@ run_single_drive_fresh_save_product_smoke() {
             return
         fi
         if echo "$dir_list" | grep -qi '"MORIA8.ID".*SEQ' && \
-                echo "$dir_list" | grep -qi '"THE.GAME".*SEQ'; then
+                echo "$dir_list" | grep -qi '"THE.SAVE".*SEQ' && \
+                echo "$dir_list" | grep -qi '"THE.MAP".*SEQ'; then
             echo "PASS"
             PASS=$((PASS + 1))
         else
@@ -4607,7 +4904,8 @@ run_single_drive_fresh_save_no_init_product_smoke() {
             -write ../../../build/test/c64/ovl.ui "64.ui" \
             -write ../../../build/test/c64/ovl.items "64.items" \
             -write ../../../build/test/c64/ovl.spell "64.spell" \
-            -write ../../../build/test/c64/ovl.chest "64.chest" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c64/ovl.chest "64.chest" \
+            -write ../../../build/test/c64/ovl.save "64.save" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -4646,8 +4944,8 @@ run_single_drive_fresh_save_no_init_product_smoke() {
             TOTAL=$((TOTAL + 1))
             return
         fi
-        if echo "$dir_list" | grep -qi '"THE.GAME"'; then
-            echo "FAIL (no-init path wrote THE.GAME)"
+        if echo "$dir_list" | grep -qiE '"THE\.(SAVE|MAP)[234]?"'; then
+            echo "FAIL (no-init path wrote THE.SAVE or THE.MAP)"
             echo "$dir_list" | tail -20 | sed 's/^/    /'
             FAIL=$((FAIL + 1))
         else
@@ -4712,7 +5010,8 @@ run_load_missing_savefile_product_smoke() {
             -write ../../../build/test/c64/ovl.ui "64.ui" \
             -write ../../../build/test/c64/ovl.items "64.items" \
             -write ../../../build/test/c64/ovl.spell "64.spell" \
-            -write ../../../build/test/c64/ovl.chest "64.chest" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c64/ovl.chest "64.chest" \
+            -write ../../../build/test/c64/ovl.save "64.save" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -4836,12 +5135,14 @@ queue_product_suites() {
     run_suite_function "title_disk_setup_single_drive_returns_program_prompt" run_disk_setup_single_drive_return_product_smoke "disk_setup_single_drive_return_product_smoke"
     run_suite_function "disk_setup_then_load_prompts_save_disk" run_disk_setup_then_load_prompts_save_product_smoke "disk_setup_then_load_prompts_save_product_smoke"
     run_suite_function "load_initialized_save" run_load_resume_product_smoke "load_resume_product_smoke"
-    run_suite_function "prompt_sequence_no_repeat" run_single_drive_load_return_product_smoke "single_drive_load_return_product_smoke"
+    run_suite_function "single_drive_split_fast_load" run_single_drive_fast_load_product_smoke "single_drive_split_load_product_smoke" "single_drive_load_return_product_smoke" "prompt_sequence_no_repeat" "krill_split_save_fast_load"
+    run_suite_function "single_drive_legacy_save_fallback" run_single_drive_legacy_fallback_product_smoke "single_drive_legacy_load_product_smoke" "legacy_the_game_fallback"
     run_suite_function "load_then_save_new_empty_disk" run_load_then_save_new_empty_product_smoke "load_then_save_new_empty_product_smoke"
     run_suite_function "change_save_drive_after_save" run_change_save_drive_product_smoke "change_save_drive_product_smoke" "alternate_drive_change_smoke" "alternate_drive_prompt_no_repeat"
     run_suite_function "single_drive_save_program_disk_rejected" run_single_drive_save_wrong_media_product_smoke "single_drive_save_wrong_media_product_smoke" "wrong_media_recovery"
     run_suite_function "single_drive_load_program_disk_rejected" run_single_drive_load_wrong_media_product_smoke "single_drive_load_wrong_media_product_smoke" "wrong_media_recovery" "wrong_media_detection_selected_devices"
     run_suite_function "single_drive_corrupt_save_recovery_requires_program_disk" run_single_drive_load_corrupt_product_smoke "single_drive_load_corrupt_product_smoke" "corrupt_save_file"
+    run_suite_function "split_save_bounded_rejections" run_split_save_rejection_product_smoke "split_save_rejection_product_smoke" "missing_map_corrupt_return" "bounded_save_rejection"
     run_suite_function "new_save_empty_init_writes" run_single_drive_fresh_save_product_smoke "single_drive_fresh_save_product_smoke"
     run_suite_function "new_save_empty_no_init_returns_setup" run_single_drive_fresh_save_no_init_product_smoke "single_drive_fresh_save_no_init_product_smoke" "cancel_supported_prompts"
     run_suite_function "load_missing_savefile_product_smoke" run_load_missing_savefile_product_smoke "missing_device_or_no_disk"
@@ -4971,7 +5272,11 @@ check_static_contract "c64_look_overlay_cleanup_contract" "main.s" \
 check_static_contract "c64_restore_stages_map_load_only_contract" "../../../platforms/shared/save.s" \
     "save_block_table_post_floor:|||save_block_desc(MAP_BASE, MAP_SIZE)|||save_block_table_post_floor_load:|||save_block_desc(MAP_STAGE_BASE, MAP_SIZE)|||lda #<save_block_table_post_floor_load|||jsr load_read_block_table"
 check_static_contract "c64_restore_resume_copy_order_contract" "main.s" \
-    "title_load_game:|||jsr load_game|||jsr overlay_invalidate|||bcc !title_load_fail+|||jsr disk_prompt_game_required|||jsr krill_resume|||jsr map_stage_copy|||jmp load_resume_game"
+    "title_load_game:|||jsr c64_title_load_preflight|||jsr disk_prompt_save|||jsr c64_try_fast_save_load|||jsr overlay_invalidate|||!dual_stock_load:|||jsr c64_prepare_stock_save_load|||jsr load_game|||!title_load_loaded:|||jsr disk_prompt_game_required|||bit krill_active|||jsr krill_resume|||jsr map_stage_copy|||!fast_resume:|||jmp load_resume_game"
+check_static_contract "c64_split_save_overlay_table_contract" "hal/storage.s" \
+    "hal_storage_overlay_save_name:|||.byte \$36,\$34,\$2e,\$53,\$41,\$56,\$45|||hal_storage_overlay_name_lo:|||<hal_storage_modal_misc_name, <hal_storage_overlay_chest_name, <hal_storage_overlay_save_name|||hal_storage_overlay_name_hi:|||>hal_storage_modal_misc_name, >hal_storage_overlay_chest_name, >hal_storage_overlay_save_name|||hal_storage_overlay_name_len:|||hal_storage_modal_misc_name_len, hal_storage_overlay_chest_name_len, hal_storage_overlay_save_name_len"
+check_static_contract "c64_krill_raw_and_bounded_entry_contract" "config.s" \
+    ".const KRILL_RUNTIME_LOADRAW    = \$F000|||.const KRILL_RUNTIME_LOADRAW_BOUNDED = \$F004|||.const KRILL_LOAD_FILE          = \$F000 + 382|||.const KRILL_LOAD_FILE_BOUNDED  = KRILL_LOAD_FILE + 6"
 check_static_contract "c64_hidden_kernal_irq_vector_contract" "main.s" \
     "c64_irq_hidden_rom:|||cld|||pha|||lda \$01|||pha|||lda #BANK_NO_KERNAL|||sta \$01|||lda \$dc0d|||lda \$dd0d|||lda \$d019|||sta \$d019|||pla|||sta \$01|||pla|||rti|||c64_install_ram_irq_vectors:|||php|||sei|||sta \$fffa|||sta \$fffe|||sta \$fffb|||sta \$ffff|||plp|||rts"
 check_static_contract "c64_boot_true_address_init_contract" "boot.s" \
@@ -5001,8 +5306,9 @@ check_static_contract "c64_boot_device9_runtime_contract" "tests/boot_handoff_sm
 check_static_contract "c64_boot_rom_vector_nmi_contract" "tests/boot_handoff_smoke.py" \
     "def inject_nmi_and_continue_to|||send_command(\"nmi\")|||scenario == \"rom_vector_nmi\"|||c64_test_chain_rom_vectors_ready|||chain did not expose ROM vectors|||c64_test_runtime_vectors_ready|||scenario == \"terminal_rom_vector_nmi\"|||c64_test_terminal_rom_vectors_ready|||terminal path did not expose ROM vectors|||c64_test_terminal_before_warm_start"
 check_static_contract "c64_main_init_tail_contract" "main.s" \
-    ".segmentdef InitTail|||outPrg=OVL_OUT + \"/64.init\"|||program_end:|||.assert \"Program ends exactly at MAP_BASE\"|||.segment InitTail|||init_tail_start:|||init_tail_end:|||.assert \"InitTail content is 873 bytes\""
+    ".segmentdef InitTail|||outPrg=OVL_OUT + \"/64.init\"|||program_end:|||.assert \"Program ends exactly at MAP_BASE\"|||.segment InitTail|||init_tail_start:|||init_tail_end:|||.assert \"InitTail content is 899 bytes\""
 run_boot_disk_inventory_contract
+run_split_save_fixture_contract
 run_c64_shipping_init_contract
 check_static_contract "c64_modal_ego_restores_io_contract" "main.s" \
     "tramp_roll_ego_type_modal:|||lda #BANK_NO_ROMS|||jsr roll_ego_type|||pha|||lda #BANK_NO_KERNAL|||sta \$01|||pla|||rts"
@@ -5011,7 +5317,7 @@ check_static_contract "c64_disk_call_preserves_args_contract" "main.s" \
 check_static_contract "c64_game_over_overlay_exit_contract" "main.s" \
     "game_restart_overlay:|||lda #>(title_enter_menu - 1)|||pha|||lda #<(title_enter_menu - 1)|||pha|||jmp platform_runtime_resync_c64"
 check_static_contract "c64_save_media_hal_contract" "../../shared/save.s" \
-    "!save_wrong_media:|||jsr hal_storage_save_media_status|||cmp #HAL_STORAGE_STATUS_WRONG_MEDIA|||jsr tramp_disk_prepare_selected|||bcc !save_media_ok+"
+    "!save_wrong_media:|||jsr hal_storage_save_media_status|||cmp #HAL_STORAGE_STATUS_WRONG_MEDIA|||!save_bad_media:|||jsr tramp_disk_prepare_selected|||bcs save_return_fail|||jmp !save_media_ok+"
 check_static_contract "c64_storage_classifier_export_contract" "hal/storage.s" \
     ".label hal_storage_save_media_status = disk_save_media_status"
 check_static_contract "c64_storage_diag_export_contract" "hal/storage.s" \

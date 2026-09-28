@@ -26,6 +26,7 @@ DECOMPRESSOR                    = DECOMPRESSORS::NONE
 .define MEM_DECOMP_TO_API         0 ; requires MEM_DECOMP_API != 0
 .define LOAD_TO_API               0 ; all payload files carry their final PRG load address
 .define END_ADDRESS_API           0
+.define BOUNDED_LOAD_API          0
 .define LOAD_VIA_KERNAL_FALLBACK  0 ; would force the resident below $D000; moria8 keeps its own
                                     ; KERNAL path as graceful degradation on install failure
 .define CLOSE_FILE_API            0

@@ -18,6 +18,7 @@
 //   OVL_MODAL_MISC  = 9  Modal misc: winner retirement / save-slot selector
 //   OVL_CHEST       = 10 Chest interactions (open/disarm/bash); cold everywhere
 //                        (C128: never staged into the Bank 1 overlay cache)
+//   OVL_SAVE        = 11 C64 split-save fast-load driver
 //   Apple IIe appends OVL_STORAGE/OVL.TITLE after the shared classes.
 //
 // Disk filenames are platform-owned by the storage HAL:
@@ -38,6 +39,9 @@
 .const OVL_SPELL       = 8
 .const OVL_MODAL_MISC  = 9
 .const OVL_CHEST       = 10
+#if !C128 && !PLUS4 && !APPLE2
+.const OVL_SAVE        = 11
+#endif
 .const OVL_COUNT       = hal_platform_overlay_count
 
 #import "compat/hal_storage_overlay_test_stub.s"

@@ -959,9 +959,16 @@ c128_town_move_diag_after_input_get_command:
 c128_test_after_save_game:
 #endif
 #else
-#if !BYPASS_SLOT_PROMPT && !C64_UNIT_TEST
+#if !C64_UNIT_TEST
+#if !BYPASS_SLOT_PROMPT
     jsr save_prepare_slot_prompt
     bcs !save_return_view+
+#else
+#if HAL_STORAGE_PREPARE_WRITER_BEFORE_MEDIA
+    jsr save_prepare_slot_prompt
+    bcs !save_return_view+
+#endif
+#endif
 #endif
     jsr disk_prompt_save        // Swap to save disk if dual
 #if HAL_PLATFORM_GAME_LOOP_SAVE_CLEARS_SCREEN

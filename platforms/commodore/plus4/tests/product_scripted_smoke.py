@@ -321,11 +321,17 @@ def retryable_harness_failure(result: MonitorTestResult) -> bool:
     ) or result.reason.startswith("unable to connect to VICE monitor")
 
 
-def run_vice(args: argparse.Namespace, pass_addr: str, fail_addr: str | None, dump_ranges: list[tuple[str, str]]) -> tuple[MonitorTestResult, list[str]]:
+def run_vice(args: argparse.Namespace, pass_addr: str, fail_addrs: list[str], dump_ranges: list[tuple[str, str]]) -> tuple[MonitorTestResult, list[str]]:
     process: subprocess.Popen[bytes] | None = None
     connector = VICEConnector(host=args.host, port=args.port, timeout=args.socket_timeout)
     dumps: list[str] = []
     native_tmp_dir: tempfile.TemporaryDirectory[str] | None = None
+    fail_addr = fail_addrs[0] if fail_addrs else None
+
+    def set_fail_breakpoints() -> None:
+        for addr in fail_addrs:
+            set_fail_breakpoint(connector, args, addr)
+
     try:
         if args.native_start:
             native_tmp_dir = tempfile.TemporaryDirectory(prefix="moria-product-smoke-")
@@ -398,8 +404,7 @@ def run_vice(args: argparse.Namespace, pass_addr: str, fail_addr: str | None, du
             if args.swap_addr:
                 set_breakpoint(connector, args, args.swap_addr)
                 set_breakpoint(connector, args, pass_addr)
-                if fail_addr:
-                    set_fail_breakpoint(connector, args, fail_addr)
+                set_fail_breakpoints()
                 swap_hits = 0
                 resume_addr = args.resume_addr
                 while True:
@@ -417,8 +422,7 @@ def run_vice(args: argparse.Namespace, pass_addr: str, fail_addr: str | None, du
                             if args.swap2_addr:
                                 connector.clear_breakpoints()
                                 set_breakpoint(connector, args, args.swap2_addr)
-                                if fail_addr:
-                                    set_fail_breakpoint(connector, args, fail_addr)
+                                set_fail_breakpoints()
                                 connector.go()
                                 result = connector.wait_for_stop(
                                     pass_addr=args.swap2_addr,
@@ -435,8 +439,7 @@ def run_vice(args: argparse.Namespace, pass_addr: str, fail_addr: str | None, du
                                 if args.swap3_addr:
                                     connector.clear_breakpoints()
                                     set_breakpoint(connector, args, args.swap3_addr)
-                                    if fail_addr:
-                                        set_fail_breakpoint(connector, args, fail_addr)
+                                    set_fail_breakpoints()
                                     connector.go()
                                     result = connector.wait_for_stop(
                                         pass_addr=args.swap3_addr,
@@ -453,8 +456,7 @@ def run_vice(args: argparse.Namespace, pass_addr: str, fail_addr: str | None, du
                                     if args.swap4_addr:
                                         connector.clear_breakpoints()
                                         set_breakpoint(connector, args, args.swap4_addr)
-                                        if fail_addr:
-                                            set_fail_breakpoint(connector, args, fail_addr)
+                                        set_fail_breakpoints()
                                         connector.go()
                                         result = connector.wait_for_stop(
                                             pass_addr=args.swap4_addr,
@@ -470,8 +472,7 @@ def run_vice(args: argparse.Namespace, pass_addr: str, fail_addr: str | None, du
                                         attach_drive8(connector, args.swap4_attach8_d64, args.attach_delay, reset_for(args, "swap4_reset8_after_attach"))
                             connector.clear_breakpoints()
                             set_breakpoint(connector, args, pass_addr)
-                            if fail_addr:
-                                set_fail_breakpoint(connector, args, fail_addr)
+                            set_fail_breakpoints()
                             connector.go()
                             result = connector.wait_for_stop(
                                 pass_addr=pass_addr,
@@ -502,12 +503,14 @@ def run_vice(args: argparse.Namespace, pass_addr: str, fail_addr: str | None, du
             else:
                 if not args.until_pass:
                     set_breakpoint(connector, args, pass_addr)
-                if fail_addr and not args.until_pass and not args.defer_fail_until_required:
-                    set_fail_breakpoint(connector, args, fail_addr)
+                if not args.until_pass and not args.defer_fail_until_required:
+                    set_fail_breakpoints()
                 if args.require_hit_addrs:
                     resume_addr = args.resume_addr
                     for required_addr in args.require_hit_addrs:
                         set_breakpoint(connector, args, required_addr)
+                        if not args.defer_fail_until_required:
+                            set_fail_breakpoints()
                         continue_from(connector, resume_addr)
                         resume_addr = None
                         required_result = connector.wait_for_stop(
@@ -516,6 +519,11 @@ def run_vice(args: argparse.Namespace, pass_addr: str, fail_addr: str | None, du
                             timeout=args.timeout,
                         )
                         if not required_result.passed:
+                            required_result = MonitorTestResult(
+                                required_result.passed,
+                                required_result.reason + f" while waiting for required PC ${required_addr}",
+                                required_result.last_status,
+                            )
                             try:
                                 dumps.append(connector.send_command("bt"))
                             except Exception as exc:
@@ -528,8 +536,7 @@ def run_vice(args: argparse.Namespace, pass_addr: str, fail_addr: str | None, du
                             return required_result, dumps
                         connector.clear_breakpoints()
                     set_breakpoint(connector, args, pass_addr)
-                    if fail_addr:
-                        set_fail_breakpoint(connector, args, fail_addr)
+                    set_fail_breakpoints()
                     connector.go()
                     result = connector.wait_for_stop(
                         pass_addr=pass_addr,
@@ -591,6 +598,16 @@ def run_vice(args: argparse.Namespace, pass_addr: str, fail_addr: str | None, du
                 and dumps_show_script_exhausted(args, dumps)
             ):
                 result = MonitorTestResult(True, "script exhausted at next input wait", result.last_status)
+        if args.save_d64 or args.attach9_at_start_d64:
+            try:
+                detach_response = connector.send_command("detach 9")
+                if "Cannot" in detach_response or "Error" in detach_response or "Failed" in detach_response:
+                    raise RuntimeError(f"failed to detach drive 9: {detach_response.strip()}")
+            except Exception as exc:
+                if result.passed:
+                    result = MonitorTestResult(False, f"save image flush failed: {exc}", result.last_status)
+                else:
+                    dumps.append(f"drive 9 detach: {exc}")
         return result, dumps
     finally:
         if process is not None and process.poll() is None:
@@ -615,6 +632,7 @@ def main() -> int:
     parser.add_argument("--main-vs", required=True, type=Path)
     parser.add_argument("--pass-symbol", required=True)
     parser.add_argument("--fail-symbol")
+    parser.add_argument("--forbid-symbol", action="append", default=[])
     parser.add_argument("--start-symbol")
     parser.add_argument("--native-start", action="store_true")
     parser.add_argument("--resume-symbol")
@@ -671,12 +689,14 @@ def main() -> int:
     if not pass_addr:
         print(f"FAIL: missing symbol {args.pass_symbol} in {args.main_vs}")
         return 2
-    fail_addr = None
-    if args.fail_symbol:
-        fail_addr = symbols.get(args.fail_symbol)
+    fail_symbols = ([args.fail_symbol] if args.fail_symbol else []) + args.forbid_symbol
+    fail_addrs = []
+    for symbol in fail_symbols:
+        fail_addr = symbols.get(symbol)
         if not fail_addr:
-            print(f"FAIL: missing symbol {args.fail_symbol} in {args.main_vs}")
+            print(f"FAIL: missing symbol {symbol} in {args.main_vs}")
             return 2
+        fail_addrs.append(normalize_addr(fail_addr))
     args.start_addr = None
     if args.start_symbol:
         args.start_addr = symbols.get(args.start_symbol)
@@ -828,7 +848,7 @@ def main() -> int:
             length = 8 if symbol == ".save_magic_buf" else 1
             dump_ranges.append((normalize_addr(start), normalize_addr(start + length - 1)))
 
-    result, dumps = run_vice(args, normalize_addr(pass_addr), normalize_addr(fail_addr) if fail_addr else None, dump_ranges)
+    result, dumps = run_vice(args, normalize_addr(pass_addr), fail_addrs, dump_ranges)
     if not result.passed and (
         monitor_text_has_pc(result.last_status, pass_addr)
         or any(monitor_text_has_pc(dump, pass_addr) for dump in dumps)
@@ -836,7 +856,7 @@ def main() -> int:
         result = MonitorTestResult(True, "target PC reached", result.last_status)
     retries_left = args.retry_timeouts
     while retries_left > 0 and not result.passed and retryable_harness_failure(result):
-        result, dumps = run_vice(args, normalize_addr(pass_addr), normalize_addr(fail_addr) if fail_addr else None, dump_ranges)
+        result, dumps = run_vice(args, normalize_addr(pass_addr), fail_addrs, dump_ranges)
         if not result.passed and (
             monitor_text_has_pc(result.last_status, pass_addr)
             or any(monitor_text_has_pc(dump, pass_addr) for dump in dumps)

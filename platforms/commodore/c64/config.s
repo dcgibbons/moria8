@@ -86,8 +86,8 @@ kernal_load:
 }
 
 // krill_active — $ff while drive code is installed, $00 on KERNAL fallback.
-// Any standard-DOS transaction first calls krill_suspend from ModalMiscOverlay;
-// title context may then reinstall the loader with the compact installer.
+// Standard-DOS transactions suspend from the overlay that remains resident
+// for the operation; title context may reinstall with the compact installer.
 // Lives next to the boot handoff magic in the always-RAM $0334-$033B gap
 // (below the cassette-buffer / door-scan window, which starts at $033C —
 // memory.s DUNGEON_GEN_DOOR_SCAN_BASE; literal here so unit tests that import
@@ -109,17 +109,26 @@ kernal_load:
 // resident rides inside 64.bank at $F000 (see main.s RuntimeBanked segment).
 .const KRILL_BOOT_LOADRAW    = $0400
 .const KRILL_BOOT_UNINSTALL  = $0400 + 225
-// Runtime resident inside 64.bank (raw 225 bytes + UNINSTALL_API 13 bytes).
+// Runtime resident adds the bounded save-loader API to the original build.
 .const KRILL_RUNTIME_LOADRAW    = $F000
-.const KRILL_RUNTIME_UNINSTALL  = $F000 + 225
+.const KRILL_RUNTIME_LOADRAW_BOUNDED = $F004
+.const KRILL_RUNTIME_UNINSTALL  = $F000 + 369
 // krill_load_file wrapper, pinned immediately after the resident in the
 // RuntimeBanked segment (main.s asserts the label lands here). Kept as an
 // address constant so unit tests that import config.s without main.s link.
-.const KRILL_LOAD_FILE          = $F000 + 238
+.const KRILL_LOAD_FILE          = $F000 + 382
+.const KRILL_LOAD_FILE_BOUNDED  = KRILL_LOAD_FILE + 6
+.const KRILL_ZP_LOADADDR_LO     = $e0
+.const KRILL_ZP_LOADADDR_HI     = $e1
+.const KRILL_ZP_BOUNDEND_LO     = $e4
+.const KRILL_ZP_BOUNDEND_HI     = $e5
 
 // Krill's Loader entry constants (resident assembled at $F000, see main.s
 // RuntimeBanked segment). Status codes returned in A by loadraw.
 .const KRILL_STATUS_OK                 = $00
+.const KRILL_STATUS_LOAD_ADDRESS_MISMATCH = $f6
+.const KRILL_STATUS_FILE_TOO_SMALL     = $f8
+.const KRILL_STATUS_FILE_TOO_LARGE     = $f9
 .const KRILL_STATUS_DEVICE_INCOMPATIBLE = $fb
 .const KRILL_STATUS_TOO_MANY_DEVICES   = $fc
 .const KRILL_STATUS_GENERIC_KERNAL_ERROR = $fd

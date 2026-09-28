@@ -34,6 +34,9 @@ disk_diag_scratch_status1:.byte 0
 disk_diag_write_status0:.byte 0
 disk_diag_write_status1:.byte 0
 #endif
+#if !C128 && !PLUS4 && !APPLE2 && !C64_UNIT_TEST
+.segment SaveOverlay
+#endif
 disk_marker_init:
 #if HAL_STORAGE_COMMAND_STATUS_FROM_DISK_DIAG
     lda #$90
@@ -382,6 +385,9 @@ c128_test_load_then_save_new_empty_prepare_init_prompt:
     rts
 
 #if !HAL_STORAGE_PROGRAM_MEDIA_PRESENT_EXTERNAL
+#if !C128 && !PLUS4 && !APPLE2 && !C64_UNIT_TEST
+.segment RuntimeBanked
+#endif
 // Detect program media on the selected save drive.
 // Output: carry clear = program media present, carry set = not program media
 disk_program_media_present:
@@ -441,6 +447,9 @@ disk_program_media_present:
     rts
 #endif
 
+#if !C128 && !PLUS4 && !APPLE2 && !C64_UNIT_TEST
+.segment SaveOverlay
+#endif
 #if HAL_STORAGE_DISK_SETUP_MARKER_PROBE_DOS
 disk_setup_plus4_marker_missing:
     lda disk_error_dos0
@@ -513,3 +522,7 @@ disk_setup_run:
 !fail:
     sec
     rts
+
+#if !C128 && !PLUS4 && !APPLE2 && !C64_UNIT_TEST
+.segment RuntimeBanked
+#endif

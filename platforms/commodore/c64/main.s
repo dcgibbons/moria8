@@ -28,6 +28,7 @@
 .segmentdef SpellOverlay      [outPrg=OVL_OUT + "/ovl.spell", start=$e000, min=$e000, max=$efff]
 .segmentdef ChestOverlay      [outPrg=OVL_OUT + "/ovl.chest", start=$e000, min=$e000, max=$efff]
 .segmentdef DungeonGenOverlay [outPrg=OVL_OUT + "/ovl.gen",   start=$e000, min=$e000, max=$efff]
+.segmentdef SaveOverlay       [outPrg=OVL_OUT + "/ovl.save",  start=$e000, min=$e000, max=$efff]
 .segmentdef RuntimeBanked     [outPrg=OVL_OUT + "/64.bank",   start=$f000, min=$f000, max=$fffa]
 .segmentdef InitTail          [outPrg=OVL_OUT + "/64.init",   start=$c000, min=$c000, max=$cfff]
 
@@ -43,12 +44,13 @@ krill_resident_base:
 #else
     // Unit tests never exercise the fast loader; keep a size-identical hole
     // so label offsets match the shipping payload.
-    .fill 238, 0
+    .fill 382, 0
 #endif
 .label krill_loadraw = krill_resident_base
-.label krill_uninstall = krill_resident_base + 225
+.label krill_loadraw_bounded = krill_resident_base + 4
+.label krill_uninstall = krill_resident_base + 369
 .label krill_resident_end = *
-.assert "Krill resident is 238 bytes (raw + uninstall)", krill_resident_end - krill_resident_base, 238
+.assert "Krill bounded resident is 382 bytes", krill_resident_end - krill_resident_base, 382
 // krill_load_file — Load a file via the Krill resident.
 // Input:  X/Y = 0-terminated PETSCII filename (storage HAL name tables
 //         already carry a trailing zero past their counted length).
@@ -59,6 +61,10 @@ krill_resident_base:
 // config.s symbols are visible).
 krill_load_file:
     jsr krill_loadraw
+    jmp krill_load_file_cleanup
+krill_load_file_bounded:
+    jsr krill_loadraw_bounded
+krill_load_file_cleanup:
     php
     pha
     lda #$03                    // VIC-II bank 0, IEC released; Krill contract:
@@ -260,6 +266,9 @@ c64_test_disk_setup_single_drive_return_armed: .byte 0
 c64_test_disk_setup_then_load_started: .byte 0
 #endif
 #if C64_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_RETURN_PRODUCT
+.label c64_test_fast_map_marker = $ceff
+.label c64_test_kernal_chrin_entry = $ffcf
+.label c64_test_kernal_load_entry = $ffd5
 c64_test_single_drive_load_return_resume_low:
     lda #$36                // Monitor attach/resume may expose BASIC ROM.
     sta $01
@@ -318,7 +327,6 @@ c64_disk_call:
     php
     pha
     sei
-    jsr c64_restore_vic_bank0_after_serial
     lda c64_disk_call_saved_bank
     sta $01
     pla
@@ -351,9 +359,19 @@ c64_disk_chkin:
     .word $ffc6
     rts
 
+c64_disk_chkout:
+    jsr c64_disk_call
+    .word $ffc9
+    rts
+
 c64_disk_chrin:
     jsr c64_disk_call
     .word $ffcf
+    rts
+
+c64_disk_chrout:
+    jsr c64_disk_call
+    .word $ffd2
     rts
 
 c64_disk_readst:
@@ -754,7 +772,7 @@ c64_test_after_cached_krill_resume:
 c64_test_after_save_restart_start:
     lda #0
     sta c64_test_restart_after_save_armed
-#if C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
+#if C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || C64_TEST_SCRIPTED_SLOT2_SAVE_PRODUCT
     .label c64_test_kernal_load_entry = $ffd5
     lda #OVL_HELP
     jsr overlay_load
@@ -902,6 +920,8 @@ c64_test_save_media_fail_unexpected_return:
     lda #OVL_HELP
     jsr overlay_load
     bcs c64_test_change_save_drive_unexpected_return
+    jsr save_prepare_slot_prompt
+    bcs c64_test_change_save_drive_unexpected_return
 c64_test_change_save_drive_wait_for_harness:
     jmp c64_test_change_save_drive_wait_for_harness
 c64_test_change_save_drive_before_save:
@@ -921,6 +941,8 @@ c64_test_change_save_drive_unexpected_return:
     lda #1
     sta disk_mode
     sta disk_setup_done
+    jsr save_prepare_slot_prompt
+    bcs c64_test_single_drive_save_wrong_media_unexpected_return
 c64_test_single_drive_save_wrong_media_wait_for_harness:
     jmp c64_test_single_drive_save_wrong_media_wait_for_harness
 c64_test_single_drive_save_wrong_media_before_save:
@@ -940,6 +962,8 @@ c64_test_single_drive_save_wrong_media_unexpected_return:
     sta save_slot_index
     lda #OVL_HELP
     jsr overlay_load
+    bcs c64_test_single_drive_fresh_save_unexpected_return
+    jsr save_prepare_slot_prompt
     bcs c64_test_single_drive_fresh_save_unexpected_return
 c64_test_single_drive_fresh_save_wait_for_harness:
     jmp c64_test_single_drive_fresh_save_wait_for_harness
@@ -986,6 +1010,21 @@ c64_test_disk_setup_single_drive_return_before_disk_setup:
 #if C64_TEST_SCRIPTED_DISK_SETUP_THEN_LOAD_PRODUCT
 !disk_setup_then_load_continue:
 #endif
+#endif
+
+#if C64_TEST_SCRIPTED_SLOT2_SAVE_PRODUCT
+    lda #8
+    sta program_device
+    lda #9
+    sta save_device
+    lda #2
+    sta disk_mode
+    lda #1
+    sta disk_setup_done
+c64_test_slot2_save_wait_for_harness:
+    jmp c64_test_slot2_save_wait_for_harness
+c64_test_slot2_save_resume_low:
+    jmp title_load_game
 #endif
 
 title_menu_loop:
@@ -1038,23 +1077,37 @@ title_draw_menu:
     rts
 
 title_load_game:
-    jsr rng_seed
-    lda #SFX_PICKUP
-    jsr hal_sound_play
-#if !BYPASS_SLOT_PROMPT
-    jsr save_prepare_slot_prompt
+    jsr c64_title_load_preflight
     bcs !title_load_fail+
-#endif
-    jsr disk_prompt_save        // Swap to save disk if dual
-    jsr ui_clear_full_screen_safe
-    jsr ui_reset_message_state
-#if !BYPASS_SLOT_PROMPT
-    jsr save_select_slot_prompt
-#endif
+    jsr disk_prompt_save        // OVL_SAVE is resident before save-media I/O.
+    bcs !title_load_fail+
+    lda save_device
+    cmp program_device
+    bne !dual_stock_load+
+    jsr c64_try_fast_save_load
+    cmp #0
+    bne !fast_not_ok+
+    jsr overlay_invalidate
+    jmp !title_load_loaded+
+!fast_not_ok:
+    cmp #2
+    beq !title_load_fail+
     jsr load_game
     jsr overlay_invalidate
     // Fail closed on the explicit load carry result before resuming gameplay.
     bcc !title_load_fail+
+    jmp !title_load_loaded+
+!dual_stock_load:
+    jsr c64_prepare_stock_save_load
+    cmp #2
+    beq !title_load_fail+
+    jsr load_game
+    jsr overlay_invalidate
+    bcc !title_load_fail+
+!title_load_loaded:
+#if C64_TEST_SCRIPTED_SLOT2_SAVE_PRODUCT
+c64_test_slot2_save_loaded:
+#endif
 #if C64_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_RETURN_PRODUCT
 c64_test_single_drive_load_return_before_program_prompt:
     jmp c64_test_single_drive_load_return_loaded_low
@@ -1062,6 +1115,9 @@ c64_test_single_drive_load_return_before_program_prompt:
 #if C64_TEST_SCRIPTED_LOAD_THEN_SAVE_NEW_EMPTY_PRODUCT
 c64_test_load_then_save_new_empty_loaded:
 c64_test_load_then_save_new_empty_before_save:
+    jsr save_prepare_slot_prompt
+c64_test_load_then_save_new_empty_after_save_prepare:
+    bcs c64_test_load_then_save_new_empty_fail
     jsr disk_prompt_save
     bcs c64_test_load_then_save_new_empty_fail
     jsr save_game
@@ -1075,8 +1131,11 @@ c64_test_load_then_save_new_empty_fail:
 #endif
     jsr disk_prompt_game        // Swap back for tier loading
     jsr disk_prompt_game_required // Verify program media before resume loads tiers
+    bit krill_active
+    bmi !fast_resume+
     jsr krill_resume
     jsr map_stage_copy
+!fast_resume:
 #if C64_TEST_SCRIPTED_SLOT2_LOAD_PRODUCT
 c64_test_after_restore_map_copy:
 .label c64_test_restored_map_last = MAP_END
@@ -1098,7 +1157,41 @@ c64_test_single_drive_load_return_load_fail:
 #if C64_TEST_SCRIPTED_LOAD_MISSING_SAVE_PRODUCT
 c64_test_after_load_missing_save_return:
 #endif
+#if C64_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_CORRUPT_PRODUCT
+c64_test_single_drive_load_corrupt_clean_return:
+#endif
     jmp title_enter_menu
+
+// Return A=0 success, nonzero/non-2 stock-DOS fallback, A=2 corrupt split save.
+c64_try_fast_save_load:
+    lda save_device
+    cmp program_device
+    bne !fallback_stage_transport+
+    bit krill_drive_1541
+    bpl !fallback_stage_transport+
+    jsr krill_resume
+    bit krill_active
+    bpl !fallback_stage_transport+
+    sei
+    lda #BANK_NO_KERNAL
+    sta $01
+    jsr ovl_save_fast_load
+    pha
+    jsr platform_runtime_resync_c64
+    pla
+    cmp #1
+    beq !fallback_stage_transport+
+    rts
+!fallback_stage_transport:
+    jmp c64_prepare_stock_save_load
+
+// Both callers enter with the normal $36 banking established.
+c64_prepare_stock_save_load:
+    sei
+    dec $01                     // $36 -> $35, exposing the save overlay
+    jsr ovl_save_prepare_stock_load
+    jsr platform_runtime_resync_c64
+    rts
 
 // ============================================================
 // IRQ wedge — suppress KERNAL cursor blink
@@ -1445,16 +1538,16 @@ overlay_load_no_kernal:
 !done:
     rts
 
-#if !BYPASS_SLOT_PROMPT
 save_prepare_slot_prompt:
-    lda #OVL_MODAL_MISC
+    lda #OVL_SAVE
     jsr overlay_load_no_kernal
     bcs !done+
-    jsr krill_suspend
+    jsr ovl_save_krill_suspend
     clc
 !done:
     rts
 
+#if !BYPASS_SLOT_PROMPT
 save_select_slot_prompt:
     sei
     lda #BANK_NO_KERNAL
@@ -1687,14 +1780,10 @@ tramp_ui_identify:
     jmp tramp_sr_epilogue
 
 tramp_disk_setup:
-    lda #OVL_MODAL_MISC
+    lda #OVL_SAVE
     jsr overlay_load_no_kernal
     bcs !tds_done+
-    jsr krill_suspend
-    jsr platform_runtime_resync_c64
-    lda #OVL_HELP
-    jsr overlay_load
-    bcs !tds_done+
+    jsr ovl_save_krill_suspend
     sei
     lda #BANK_NO_ROMS
     sta $01
@@ -1705,9 +1794,9 @@ tramp_disk_setup:
     rts
 
 tramp_disk_prepare_selected:
-    lda #OVL_HELP
-    jsr overlay_load
-    bcs !tdps_done+
+    lda current_overlay
+    cmp #OVL_SAVE
+    bne !tdps_fail+
     sei
     lda #BANK_NO_ROMS
     sta $01
@@ -1716,6 +1805,9 @@ tramp_disk_prepare_selected:
     jsr platform_runtime_resync_c64
     plp
 !tdps_done:
+    rts
+!tdps_fail:
+    sec
     rts
 
 
@@ -2030,7 +2122,7 @@ tramp_game_over_prepare:
     lda #OVL_MODAL_MISC
     jsr overlay_load_no_kernal
     bcs !tgo_done+
-    jsr krill_suspend
+    jsr krill_suspend_for_stock
 
     // 3. Load death overlay (replaces the modal helper at $E000).
     lda #OVL_DEATH
@@ -2085,9 +2177,10 @@ tramp_game_over_run:
     rts
 
 tramp_winner_royal:
-    lda #OVL_MODAL_MISC
-    jsr overlay_load_no_kernal
+    jsr tramp_game_over_prepare
     bcs !done+
+    sei
+    dec $01
     jmp winner_royal_overlay
 !done:
     rts
@@ -2107,19 +2200,23 @@ game_over_prompt:
     jmp game_restart_overlay
 
 // Reinstall only while title owns the map window used by KINST41 at $C000.
-// Failure is nonfatal: clear suspension and continue on the KERNAL path.
+// Installer failure is nonfatal: clear suspension and continue on the KERNAL path.
 krill_resume:
 #if C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
     lda #1
     sta c64_test_krill_resume_stage
 #endif
     bit krill_suspended
-    bpl !done+
+    bmi !resume+
+    rts
+!resume:
 #if C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
     inc c64_test_krill_resume_stage
 #endif
     bit krill_drive_1541
-    bpl !clear_suspended+
+    bmi !drive_supported+
+    jmp !clear_suspended+
+!drive_supported:
 #if C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
     inc c64_test_krill_resume_stage
 #endif
@@ -2176,7 +2273,6 @@ krill_resume:
 !clear_suspended:
     lda #0
     sta krill_suspended
-!done:
     rts
 
 // Restore the staged map after KINST41 has finished using MAP_BASE.
@@ -2230,11 +2326,32 @@ eq_mon_slot: .byte 0
 eq_mon_alive: .byte 0
 eq_saved_tile: .byte 0
 eq_saved_flags: .byte 0
+
+// KINST41 consumes the init-only $C000 window, so reusable title preflight
+// code remains in resident RAM.
+c64_title_load_preflight:
+    jsr rng_seed
+    lda #SFX_PICKUP
+    jsr hal_sound_play
+    jsr save_prepare_slot_prompt
+    bcs !failed+
+    jsr ui_clear_full_screen_safe
+    jsr ui_reset_message_state
+#if !BYPASS_SLOT_PROMPT
+    jsr save_select_slot_prompt
+#endif
+    clc
+    rts
+!failed:
+    sec
+    rts
+
 .fill MAP_BASE - *, 0
 program_end:
 .print "program_end = $" + toHexString(program_end)
 .assert "Program ends exactly at MAP_BASE", program_end, MAP_BASE
 .assert "Map and earthquake scratch stay resident below MAP_BASE", pm_map_min_x < program_end && eq_saved_flags < program_end, true
+.assert "C64 title load preflight stays resident", c64_title_load_preflight < MAP_BASE, true
 
 .segment InitTail
 init_tail_start:
@@ -2728,13 +2845,16 @@ c64_banked_fname:
 .label c64_banked_fname_len = * - c64_banked_fname
     .byte 0                         // 0-terminated for Krill loadraw
 
+    .fill 26, 0                 // Preserve the fixed 64.INIT payload shape.
+
 .assert "krill resident base matches KRILL_RUNTIME_LOADRAW", krill_resident_base, KRILL_RUNTIME_LOADRAW
 .assert "krill_uninstall matches KRILL_RUNTIME_UNINSTALL", krill_uninstall, KRILL_RUNTIME_UNINSTALL
 .assert "krill_load_file pinned at KRILL_LOAD_FILE", krill_load_file, KRILL_LOAD_FILE
+.assert "bounded Krill wrapper pinned at KRILL_LOAD_FILE_BOUNDED", krill_load_file_bounded, KRILL_LOAD_FILE_BOUNDED
 
 init_tail_end:
 .print "Init tail: " + (init_tail_end - init_tail_start) + " bytes at $C000-$" + toHexString(init_tail_end)
-.assert "InitTail content is 873 bytes", init_tail_end - init_tail_start, 873
+.assert "InitTail content is 899 bytes", init_tail_end - init_tail_start, 899
 .assert "InitTail fits below floor-item/map runtime ceiling", init_tail_end <= $d000, true
 .assert "boot device handoff does not overlap init tail", krill_boot_device < init_tail_start, true
 .assert "program_device does not overlap init tail", program_device < init_tail_start, true
@@ -2744,8 +2864,8 @@ init_tail_end:
 // Banked runtime payload — loadable PRG at $F000.
 // ============================================================
 .segment RuntimeBanked
-    #import "../../../core/special_rooms.s"
     #import "../../../core/ego_items.s"
+    #import "../../../core/special_rooms.s"
     #import "../../../core/ui_home.s"
     #import "../../../core/ui_recall.s"
     #import "../../../core/item_desc_banked.s"
@@ -2857,42 +2977,7 @@ game_restart_overlay:
     // constants.
     #import "../../../core/score_io.s"
     #import "../../../core/score.s"
-ovl_death_end:
-.print "Death overlay: " + (ovl_death_end - $e000) + " bytes at $E000-$" + toHexString(ovl_death_end)
-.assert "Death overlay fits in $E000-$EFFF", ovl_death_end <= $F000, true
-
-// ============================================================
-// Modal-misc overlay — winner retirement art at $E000
-// ============================================================
-.segment ModalMiscOverlay
-// Temporarily return the IEC bus to stock DOS. Match Krill's standalone
-// uninstall sequence: make only the VIC bank bits outputs and clear the IEC
-// output latches before the resident switches CIA2 back to KERNAL mode.
-krill_suspend:
-    bit krill_active
-    bpl !done+
-    sei
-    lda #BANK_NO_KERNAL
-    sta $01
-    lda #$03
-    sta $dd02
-    and $dd00
-    sta $dd00
-    jsr KRILL_RUNTIME_UNINSTALL
-    lda #$03
-    sta $dd00
-    lda #0
-    sta krill_active
-    lda #$ff
-    sta krill_suspended
-!done:
-    rts
-
 winner_royal_overlay:
-    jsr krill_suspend
-    sei
-    lda #BANK_NO_KERNAL
-    sta $01
     jsr winner_apply_retirement_bonus_overlay
     jsr royal_screen
 #if C64_TEST_SCRIPTED_RETIREMENT_PRODUCT
@@ -2932,7 +3017,203 @@ winner_apply_retirement_bonus_overlay:
     sta player_data + PL_XP_2
     rts
     #import "../../../core/royal.s"
+ovl_death_end:
+.print "Death overlay: " + (ovl_death_end - $e000) + " bytes at $E000-$" + toHexString(ovl_death_end)
+.assert "Death overlay fits in $E000-$EFFF", ovl_death_end <= $F000, true
+
+// ============================================================
+// Modal-misc overlay — winner retirement art at $E000
+// ============================================================
+.segment ModalMiscOverlay
+// Temporarily return the IEC bus to stock DOS. Match Krill's standalone
+// uninstall sequence: make only the VIC bank bits outputs and clear the IEC
+// output latches before the resident switches CIA2 back to KERNAL mode.
+krill_suspend:
+    bit krill_active
+    bpl !done+
+    sei
+    lda #BANK_NO_KERNAL
+    sta $01
+    lda #$03
+    sta $dd02
+    and $dd00
+    sta $dd00
+    jsr KRILL_RUNTIME_UNINSTALL
+    lda #$03
+    sta $dd00
+    lda #0
+    sta krill_active
+    lda #$ff
+    sta krill_suspended
+!done:
+    rts
+
+krill_suspend_for_stock:
+    jsr krill_suspend
+    jmp platform_runtime_resync_c64
+
+// C64 v16 writer. It executes with overlay RAM visible and reaches every
+// KERNAL routine through the resident c64_disk_call wrappers.
+.segment SaveOverlay
+ovl_save_writer_run:
+    jsr ovl_save_krill_suspend
+    sei
+    lda #BANK_NO_KERNAL
+    sta $01
+    jmp ovl_save_write_split
+
+ovl_save_write_split:
+    lda save_slot_index
+    cmp #SAVE_SLOT_COUNT
+    bcc !slot_ready+
+    lda #0
+    sta save_slot_index
+!slot_ready:
+    lda #0
+    sta save_io_error
+    lda #hal_storage_map_write_name_len
+    ldx save_slot_index
+    cpx #1
+    bcc !map_len_ready+
+    clc
+    adc #1
+!map_len_ready:
+    ldx #<hal_storage_map_write_name
+    ldy #>hal_storage_map_write_name
+    jsr ovl_save_open_output
+    bcc !map_open+
+    clc
+    rts
+!map_open:
+    lda #$00
+    jsr save_write_byte_raw
+    lda #$c0
+    jsr save_write_byte_raw
+    lda #0
+    sta save_cksum_lo
+    sta save_cksum_hi
+    :save_block(MAP_BASE, MAP_SIZE)
+    lda save_cksum_lo
+    sta save_map_cksum_lo
+    lda save_cksum_hi
+    sta save_map_cksum_hi
+    jsr ovl_save_close_output
+    lda save_io_error
+    beq !map_written+
+    clc
+    rts
+!map_written:
+
+    lda #0
+    sta save_cksum_lo
+    sta save_cksum_hi
+    sta save_io_error
+    lda #hal_storage_save_write_name_len
+    ldx save_slot_index
+    cpx #1
+    bcc !state_len_ready+
+    clc
+    adc #1
+!state_len_ready:
+    ldx #<hal_storage_save_write_name
+    ldy #>hal_storage_save_write_name
+    jsr ovl_save_open_output
+    bcc !state_open+
+    clc
+    rts
+!state_open:
+    lda #$00
+    jsr save_write_byte_raw
+    lda #$c0
+    jsr save_write_byte_raw
+    :save_block(save_magic, SAVE_MAGIC_SIZE)
+    lda #<save_block_table_pre_inventory
+    sta zp_ptr1
+    lda #>save_block_table_pre_inventory
+    sta zp_ptr1_hi
+    lda #SAVE_BLOCK_PRE_INVENTORY_COUNT
+    jsr save_write_block_table
+    jsr save_write_inventory_state
+    :save_block(id_known_bits, ID_KNOWN_BYTES)
+    lda #<save_block_table_post_known
+    sta zp_ptr1
+    lda #>save_block_table_post_known
+    sta zp_ptr1_hi
+    lda #SAVE_BLOCK_POST_KNOWN_COUNT
+    jsr save_write_block_table
+    lda #<save_block_table_door_state
+    sta zp_ptr1
+    lda #>save_block_table_door_state
+    sta zp_ptr1_hi
+    lda #SAVE_BLOCK_DOOR_STATE_COUNT
+    jsr save_write_block_table
+    jsr save_write_floor_items
+    lda #<save_block_table_post_floor
+    sta zp_ptr1
+    lda #>save_block_table_post_floor
+    sta zp_ptr1_hi
+    lda #1
+    jsr save_write_block_table
+    lda save_io_error
+    bne !close_fail+
+    lda save_map_cksum_lo
+    jsr save_write_byte_raw
+    lda save_map_cksum_hi
+    jsr save_write_byte_raw
+    lda save_cksum_lo
+    sta save_block_lo
+    lda save_cksum_hi
+    sta save_block_hi
+    lda save_block_lo
+    jsr save_write_byte_raw
+    lda save_block_hi
+    jsr save_write_byte_raw
+    jsr ovl_save_close_output
+    lda save_io_error
+    bne !fail+
+    sec
+    rts
+!close_fail:
+    jsr ovl_save_close_output
+!fail:
+    clc
+    rts
+
+ovl_save_close_output:
+    jsr save_restore_channels
+    lda #hal_storage_save_file_num
+    jsr SAVE_CLOSE
+    jsr SAVE_READST
+    and #$83
+    pha
+    jsr c64_restore_vic_bank0_after_serial
+    pla
+    beq !done+
+    lda #1
+    sta save_io_error
+!done:
+    rts
+
+ovl_save_open_output:
+    jsr SAVE_SETNAM
+    lda #hal_storage_save_file_num
+    ldx save_device
+    ldy #hal_storage_save_sec_write
+    jsr SAVE_SETLFS
+    jsr SAVE_OPEN
+    bcs !done+
+    ldx #hal_storage_save_file_num
+    jsr SAVE_CHKOUT
+    bcc !done+
+    lda #hal_storage_save_file_num
+    jsr SAVE_CLOSE
+    sec
+!done:
+    rts
+
     #import "../common/save_slot_menu.s"
+    #import "../../../core/ui_disk_setup.s"
+.segment ModalMiscOverlay
     #import "../../../core/ui_wizard.s"
     // Store init/restock is cold (new game, town re-entry); parks in this
     // overlay to fund door-aware bash in the items overlay. Reached via the
@@ -2941,6 +3222,311 @@ winner_apply_retirement_bonus_overlay:
 ovl_modal_misc_end:
 .print "Modal-misc overlay: " + (ovl_modal_misc_end - $e000) + " bytes at $E000-$" + toHexString(ovl_modal_misc_end)
 .assert "Modal-misc overlay fits in $E000-$EFFF", ovl_modal_misc_end <= $F000, true
+
+// ============================================================
+// Save overlay — C64 storage UI, split writer/loader, and staged reader
+// ============================================================
+.segment SaveOverlay
+// OVL_SAVE is loaded before media swaps and remains resident through marker
+// initialization, slot selection, writing, and loading.
+ovl_save_prepare_stock_load:
+    jsr ovl_save_krill_suspend
+    jsr ovl_save_stage_chr_transport
+    rts
+
+ovl_save_krill_suspend:
+    bit krill_active
+    bpl !done+
+    sei
+    lda #BANK_NO_KERNAL
+    sta $01
+    lda #$03
+    sta $dd02
+    and $dd00
+    sta $dd00
+    jsr KRILL_RUNTIME_UNINSTALL
+    lda #$03
+    sta $dd00
+    lda #0
+    sta krill_active
+    lda #$ff
+    sta krill_suspended
+!done:
+    rts
+
+ovl_save_stage_chr_transport:
+    lda save_slot_index
+    cmp #SAVE_SLOT_COUNT
+    bcc !slot_ready+
+    lda #0
+    sta save_slot_index
+!slot_ready:
+    lda #<c64_load_transport_blob
+    sta zp_ptr0
+    lda #>c64_load_transport_blob
+    sta zp_ptr0_hi
+    lda #<MAP_BASE
+    sta zp_ptr1
+    lda #>MAP_BASE
+    sta zp_ptr1_hi
+    lda #<(c64_load_transport_blob_end - c64_load_transport_blob)
+    sta save_count_lo
+    lda #>(c64_load_transport_blob_end - c64_load_transport_blob)
+    sta save_count_hi
+!copy:
+    lda save_count_lo
+    ora save_count_hi
+    beq !done+
+    ldy #0
+    lda (zp_ptr0),y
+    sta (zp_ptr1),y
+    inc zp_ptr0
+    bne !source_ready+
+    inc zp_ptr0_hi
+!source_ready:
+    inc zp_ptr1
+    bne !dest_ready+
+    inc zp_ptr1_hi
+!dest_ready:
+    lda save_count_lo
+    bne !dec_lo+
+    dec save_count_hi
+!dec_lo:
+    dec save_count_lo
+    bne !copy-
+    lda save_count_hi
+    bne !copy-
+!done:
+    rts
+
+ovl_save_fast_load:
+    lda #1
+    sta load_stage_mode
+    lda #<MAP_BASE
+    sta load_stage_ptr_lo
+    lda #>MAP_BASE
+    sta load_stage_ptr_hi
+    jsr ovl_save_patch_fast_names
+    lda #<MAP_BASE
+    sta KRILL_ZP_LOADADDR_LO
+    lda #>MAP_BASE
+    sta KRILL_ZP_LOADADDR_HI
+    lda #<C64_V16_STATE_STAGE_END
+    sta KRILL_ZP_BOUNDEND_LO
+    lda #>C64_V16_STATE_STAGE_END
+    sta KRILL_ZP_BOUNDEND_HI
+    ldx #<ovl_save_state_name
+    ldy #>ovl_save_state_name
+    jsr KRILL_LOAD_FILE_BOUNDED
+    bcc !state_loaded+
+    jmp !bounded_error+
+!state_loaded:
+c64_test_split_state_loaded:
+    lda MAP_BASE + SAVE_MAGIC_SIZE - 1
+    cmp #SAVE_SPLIT_VERSION
+    bcs !stage_version_ok+
+    jmp !corrupt+
+!stage_version_ok:
+    lda #BANK_NO_KERNAL
+    sta save_return_c64_bank + 1
+    jsr load_parse_staged
+    php
+    lda #BANK_NO_BASIC
+    sta save_return_c64_bank + 1
+    plp
+    bcs !stage_parsed+
+    jmp !parse_corrupt+
+!stage_parsed:
+c64_test_split_state_parsed:
+    lda load_stage_ptr_lo
+    cmp #<C64_V16_STATE_STAGE_END
+    beq !stage_end_lo_ok+
+    jmp !parse_corrupt+
+!stage_end_lo_ok:
+    lda load_stage_ptr_hi
+    cmp #>C64_V16_STATE_STAGE_END
+    beq !stage_end_ok+
+    jmp !parse_corrupt+
+!stage_end_ok:
+c64_test_split_state_exact:
+    lda #<MAP_BASE
+    sta KRILL_ZP_LOADADDR_LO
+    lda #>MAP_BASE
+    sta KRILL_ZP_LOADADDR_HI
+    lda #<C64_V16_MAP_STAGE_END
+    sta KRILL_ZP_BOUNDEND_LO
+    lda #>C64_V16_MAP_STAGE_END
+    sta KRILL_ZP_BOUNDEND_HI
+    ldx #<ovl_save_map_name
+    ldy #>ovl_save_map_name
+    jsr KRILL_LOAD_FILE_BOUNDED
+    bcc !map_loaded+
+    jmp !corrupt+
+!map_loaded:
+c64_test_split_map_loaded:
+    lda #0
+    sta save_cksum_lo
+    sta save_cksum_hi
+    lda #<MAP_BASE
+    sta zp_ptr0
+    lda #>MAP_BASE
+    sta zp_ptr0_hi
+    lda #<MAP_SIZE
+    sta save_count_lo
+    lda #>MAP_SIZE
+    sta save_count_hi
+!sum_loop:
+    lda save_count_lo
+    ora save_count_hi
+    beq !sum_done+
+    ldy #0
+    lda (zp_ptr0),y
+    clc
+    adc save_cksum_lo
+    sta save_cksum_lo
+    bcc !sum_no_carry+
+    inc save_cksum_hi
+!sum_no_carry:
+    inc zp_ptr0
+    bne !sum_ptr_ok+
+    inc zp_ptr0_hi
+!sum_ptr_ok:
+    lda save_count_lo
+    bne !sum_dec_lo+
+    dec save_count_hi
+!sum_dec_lo:
+    dec save_count_lo
+    jmp !sum_loop-
+!sum_done:
+    lda save_cksum_lo
+    cmp save_map_cksum_lo
+    bne !corrupt+
+    lda save_cksum_hi
+    cmp save_map_cksum_hi
+    bne !corrupt+
+    lda #0
+    sta load_stage_mode
+    lda #LOAD_RESULT_OK
+    sta load_result
+c64_test_split_fast_success:
+    rts
+!bounded_error:
+c64_test_split_bounded_error:
+#if C64_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_RETURN_PRODUCT
+.label c64_test_split_bounded_status = $033c
+    sta c64_test_split_bounded_status
+#endif
+    cmp #KRILL_STATUS_LOAD_ADDRESS_MISMATCH
+    beq !corrupt+
+    cmp #KRILL_STATUS_FILE_TOO_SMALL
+    beq !corrupt+
+    cmp #KRILL_STATUS_FILE_TOO_LARGE
+    beq !corrupt+
+!fallback:
+    lda #0
+    sta load_stage_mode
+    lda #1
+    rts
+!parse_corrupt:
+c64_test_split_parse_corrupt:
+    lda #0
+    sta load_stage_mode
+    lda #LOAD_RESULT_CORRUPT
+    sta load_result
+    lda #2
+    rts
+!corrupt:
+    lda #0
+    sta load_stage_mode
+    lda #LOAD_RESULT_CORRUPT
+    sta load_result
+    ldx #HSTR_SAVE_CORRUPT
+    jsr huff_print_msg
+    lda #2
+    rts
+
+ovl_save_staged_read_block:
+!loop:
+    lda save_count_lo
+    ora save_count_hi
+    beq !done+
+    jsr ovl_save_staged_read_byte_raw
+    ldy #0
+    sta (zp_ptr0),y
+    clc
+    adc save_cksum_lo
+    sta save_cksum_lo
+    bcc !no_carry+
+    inc save_cksum_hi
+!no_carry:
+    inc zp_ptr0
+    bne !dest_ok+
+    inc zp_ptr0_hi
+!dest_ok:
+    lda save_count_lo
+    bne !dec_lo+
+    dec save_count_hi
+!dec_lo:
+    dec save_count_lo
+    jmp !loop-
+!done:
+    rts
+
+ovl_save_staged_read_byte_raw:
+    lda load_stage_ptr_lo
+    sta zp_ptr2
+    lda load_stage_ptr_hi
+    sta zp_ptr2_hi
+    ldy #0
+    lda (zp_ptr2),y
+    pha
+    inc load_stage_ptr_lo
+    bne !ptr_ok+
+    inc load_stage_ptr_hi
+!ptr_ok:
+    pla
+    rts
+
+ovl_save_patch_fast_names:
+    lda #0
+    sta ovl_save_state_suffix
+    sta ovl_save_map_suffix
+    ldx save_slot_index
+    cpx #SAVE_SLOT_COUNT
+    bcc !slot_valid+
+    ldx #0
+    stx save_slot_index
+!slot_valid:
+    cpx #1
+    bcc !done+
+    txa
+    clc
+    adc #$31
+    sta ovl_save_state_suffix
+    sta ovl_save_map_suffix
+!done:
+    rts
+
+ovl_save_state_name:
+    .byte $54,$48,$45,$2e,$53,$41,$56,$45       // "THE.SAVE"
+ovl_save_state_suffix: .byte 0
+    .byte 0
+ovl_save_map_name:
+    .byte $54,$48,$45,$2e,$4d,$41,$50           // "THE.MAP"
+ovl_save_map_suffix: .byte 0
+    .byte 0
+
+ovl_save_end:
+.print "Save overlay: " + (ovl_save_end - $e000) + " bytes at $E000-$" + toHexString(ovl_save_end)
+.assert "Save overlay fits in $E000-$EFFF", ovl_save_end <= $F000, true
+.assert "C64 split map payload is 3840 bytes", C64_V16_MAP_PAYLOAD_SIZE, 3840
+.assert "C64 split map PRG is 3842 bytes", C64_V16_MAP_FILE_SIZE, 3842
+.const C64_V16_STATE_LAYOUT_SIZE = SAVE_MAGIC_SIZE + PL_STRUCT_SIZE + 160 + ZP_STATE_SIZE + 1 + ZP_RNG_SIZE + (TOTAL_INV_SLOTS * 8) + floor(ID_KNOWN_BYTES) + 12 + 12 + 4 + 5 + 5 + (STORE_TOTAL_SLOTS * 7) + 7 + 1 + (MAX_ROOMS * 6) + 1 + (MAX_TRAPS * 3) + (MAX_MONSTERS * MONSTER_ENTRY_SIZE) + 1 + (MAX_DOOR_STATES * 3) + (MAX_FLOOR_ITEMS * 11) + RECALL_DATA_SIZE
+.assert "C64 v16 checksum covers exactly 2554 state bytes", C64_V16_STATE_LAYOUT_SIZE, C64_V16_STATE_CHECKSUM_SIZE
+.assert "C64 v16 payload is state plus map and stored state checksums", C64_V16_STATE_PAYLOAD_SIZE, 2558
+.assert "C64 v16 state PRG includes header", C64_V16_STATE_FILE_SIZE, 2560
+.assert "C64 state stage endpoint is exclusive", C64_V16_STATE_STAGE_END, $C9FE
+.assert "C64 map stage endpoint is exclusive", C64_V16_MAP_STAGE_END, $CF00
 
 // ============================================================
 // Spell overlay — spell/prayer execution at $E000
@@ -2981,10 +3567,11 @@ ovl_spell_end:
     #import "../../../core/ui_help.s"
     #import "../../../core/ui_inventory.s"
     #import "../../../core/ui_equipment.s"
-    #import "../../../core/ui_disk_setup.s"
 ovl_help_end:
 .print "Help overlay: " + (ovl_help_end - $e000) + " bytes at $E000-$" + toHexString(ovl_help_end)
 .assert "Help overlay fits in $E000-$EFFF", ovl_help_end <= $F000, true
+.assert "C64 marker initialization stays in storage overlay", disk_marker_init >= $E000 && disk_marker_init < ovl_save_end, true
+.assert "C64 disk setup coordinator stays in storage overlay", disk_setup_run >= $E000 && disk_setup_run < ovl_save_end, true
 
 // ============================================================
 // UI overlay — low-frequency modal UI and symbol identify screens

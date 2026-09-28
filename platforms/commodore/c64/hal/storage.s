@@ -24,9 +24,9 @@
 .label hal_storage_open = c64_disk_open
 .label hal_storage_close = c64_disk_close
 .label hal_storage_chkin = c64_disk_chkin
-.label hal_storage_chkout = KERNAL_CHKOUT
+.label hal_storage_chkout = c64_disk_chkout
 .label hal_storage_chrin = c64_disk_chrin
-.label hal_storage_chrout = KERNAL_CHROUT
+.label hal_storage_chrout = c64_disk_chrout
 .label hal_storage_clrchn = c64_disk_clrchn
 .label hal_storage_readst = c64_disk_readst
 .label hal_storage_load = KERNAL_LOAD
@@ -40,6 +40,8 @@
 .label hal_storage_diag_dos1 = disk_status
 .label hal_storage_save_record = save_game
 .label hal_storage_load_record = load_game
+.label hal_storage_staged_read_block = ovl_save_staged_read_block
+.label hal_storage_staged_read_byte_raw = ovl_save_staged_read_byte_raw
 
 // Check whether an IEC device responds.
 // Input: X = device number (8-30)
@@ -115,19 +117,43 @@ hal_storage_marker_scratch_name:
 // Platform-owned save-record filenames. PETSCII bytes for KERNAL SETNAM.
 hal_storage_save_write_name:
     .byte $40, $30, $3a                         // "@0:"
-    .byte $54, $48, $45, $2e, $47, $41, $4d, $45 // "THE.GAME"
+    .byte $54, $48, $45, $2e, $53, $41, $56, $45 // "THE.SAVE"
     .byte $2c, $53, $2c, $57                    // ",S,W"
 .label hal_storage_save_write_name_len = * - hal_storage_save_write_name
-    .byte $57                                   // spare suffix byte for "THE.GAME2"
+    .byte $57                                   // spare suffix byte for "THE.SAVE2"
 .label hal_storage_save_probe_name = hal_storage_save_write_name + 1
 .label hal_storage_save_probe_name_len = hal_storage_save_write_name_len - 1
 
 hal_storage_save_read_name:
     .byte $30, $3a                              // "0:"
-    .byte $54, $48, $45, $2e, $47, $41, $4d, $45 // "THE.GAME"
+    .byte $54, $48, $45, $2e, $53, $41, $56, $45 // "THE.SAVE"
     .byte $2c, $53, $2c, $52                    // ",S,R"
 .label hal_storage_save_read_name_len = * - hal_storage_save_read_name
+    .byte $52                                   // spare suffix byte for "THE.SAVE2"
+
+hal_storage_legacy_save_read_name:
+    .byte $30, $3a                              // "0:"
+    .byte $54, $48, $45, $2e, $47, $41, $4d, $45 // "THE.GAME"
+    .byte $2c, $53, $2c, $52                    // ",S,R"
+.label hal_storage_legacy_save_read_name_len = * - hal_storage_legacy_save_read_name
     .byte $52                                   // spare suffix byte for "THE.GAME2"
+
+hal_storage_map_write_name:
+    .byte $40, $30, $3a                         // "@0:"
+    .byte $54, $48, $45, $2e, $4d, $41, $50    // "THE.MAP"
+    .byte $2c, $53, $2c, $57                    // ",S,W"
+.label hal_storage_map_write_name_len = * - hal_storage_map_write_name
+    .byte $57                                   // spare suffix byte for "THE.MAP2"
+
+hal_storage_map_read_name:
+    .byte $30, $3a                              // "0:"
+    .byte $54, $48, $45, $2e, $4d, $41, $50    // "THE.MAP"
+    .byte $2c, $53, $2c, $52                    // ",S,R"
+.label hal_storage_map_read_name_len = * - hal_storage_map_read_name
+    .byte $52                                   // spare suffix byte for "THE.MAP2"
+
+.assert "C64 state filename with suffix fits Krill limit", hal_storage_save_read_name_len - 6 + 1 <= 16, true
+.assert "C64 map filename with suffix fits Krill limit", hal_storage_map_read_name_len - 6 + 1 <= 16, true
 
 // Platform-owned high-score filenames. PETSCII bytes for KERNAL SETNAM.
 hal_storage_score_read_name:
@@ -215,10 +241,14 @@ hal_storage_overlay_chest_name:
     .byte $36,$34,$2e,$43,$48,$45,$53,$54       // "64.CHEST"
 .label hal_storage_overlay_chest_name_len = * - hal_storage_overlay_chest_name
     .byte 0
+hal_storage_overlay_save_name:
+    .byte $36,$34,$2e,$53,$41,$56,$45           // "64.SAVE"
+.label hal_storage_overlay_save_name_len = * - hal_storage_overlay_save_name
+    .byte 0
 
 hal_storage_overlay_name_lo:
-    .byte <hal_storage_overlay_start_name, <hal_storage_overlay_town_name, <hal_storage_overlay_death_name, <hal_storage_overlay_gen_name, <hal_storage_overlay_help_name, <hal_storage_overlay_ui_name, <hal_storage_overlay_items_name, <hal_storage_overlay_spell_name, <hal_storage_modal_misc_name, <hal_storage_overlay_chest_name
+    .byte <hal_storage_overlay_start_name, <hal_storage_overlay_town_name, <hal_storage_overlay_death_name, <hal_storage_overlay_gen_name, <hal_storage_overlay_help_name, <hal_storage_overlay_ui_name, <hal_storage_overlay_items_name, <hal_storage_overlay_spell_name, <hal_storage_modal_misc_name, <hal_storage_overlay_chest_name, <hal_storage_overlay_save_name
 hal_storage_overlay_name_hi:
-    .byte >hal_storage_overlay_start_name, >hal_storage_overlay_town_name, >hal_storage_overlay_death_name, >hal_storage_overlay_gen_name, >hal_storage_overlay_help_name, >hal_storage_overlay_ui_name, >hal_storage_overlay_items_name, >hal_storage_overlay_spell_name, >hal_storage_modal_misc_name, >hal_storage_overlay_chest_name
+    .byte >hal_storage_overlay_start_name, >hal_storage_overlay_town_name, >hal_storage_overlay_death_name, >hal_storage_overlay_gen_name, >hal_storage_overlay_help_name, >hal_storage_overlay_ui_name, >hal_storage_overlay_items_name, >hal_storage_overlay_spell_name, >hal_storage_modal_misc_name, >hal_storage_overlay_chest_name, >hal_storage_overlay_save_name
 hal_storage_overlay_name_len:
-    .byte hal_storage_overlay_start_name_len, hal_storage_overlay_town_name_len, hal_storage_overlay_death_name_len, hal_storage_overlay_gen_name_len, hal_storage_overlay_help_name_len, hal_storage_overlay_ui_name_len, hal_storage_overlay_items_name_len, hal_storage_overlay_spell_name_len, hal_storage_modal_misc_name_len, hal_storage_overlay_chest_name_len
+    .byte hal_storage_overlay_start_name_len, hal_storage_overlay_town_name_len, hal_storage_overlay_death_name_len, hal_storage_overlay_gen_name_len, hal_storage_overlay_help_name_len, hal_storage_overlay_ui_name_len, hal_storage_overlay_items_name_len, hal_storage_overlay_spell_name_len, hal_storage_modal_misc_name_len, hal_storage_overlay_chest_name_len, hal_storage_overlay_save_name_len
