@@ -23,6 +23,15 @@
   <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
   <link rel="manifest" href="site.webmanifest">
   <link rel="stylesheet" href="styles.css">
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag() { dataLayer.push(arguments); }
+    gtag("consent", "default", { ad_storage: "denied", ad_user_data: "denied", ad_personalization: "denied", analytics_storage: "denied" });
+    try { if (localStorage.getItem("moria8-consent") === "granted") gtag("consent", "update", { analytics_storage: "granted" }); } catch (e) {}
+    gtag("js", new Date());
+    gtag("config", "G-QRJJM0G78B");
+  </script>
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-QRJJM0G78B"></script>
 </head>
 <body>
   <a class="skip-link" href="#main-content">Skip to the dungeon</a>
@@ -323,7 +332,7 @@
   <footer>
     <div class="shell footer-inner">
       <p><strong>Moria8</strong> · A free, open-source 8-bit adventure.</p>
-      <p>Developed by <a href="https://github.com/dcgibbons">Chad Gibbons</a> · <a href="https://github.com/dcgibbons/moria8/blob/main/LICENSE">GPL-3.0</a></p>
+      <p>Developed by <a href="https://github.com/dcgibbons">Chad Gibbons</a> · <a href="https://github.com/dcgibbons/moria8/blob/main/LICENSE">GPL-3.0</a> · <button type="button" class="link-button" id="consent-reopen">Analytics choices</button></p>
     </div>
   </footer>
 <script>
@@ -337,6 +346,37 @@ document.querySelectorAll(".gameplay-card").forEach(function (card) {
     });
   });
 });
+</script>
+<div class="consent" id="consent" role="region" aria-label="Analytics consent" hidden>
+  <p>Moria8 would like to use Google Analytics to count visits and downloads. No ads, no personal profiles.</p>
+  <div class="consent-actions">
+    <button type="button" id="consent-accept">Allow analytics</button>
+    <button type="button" id="consent-decline">No thanks</button>
+  </div>
+</div>
+<script>
+(function () {
+  var box = document.getElementById("consent");
+  function stored() { try { return localStorage.getItem("moria8-consent"); } catch (e) { return null; } }
+  function choose(v) {
+    try { localStorage.setItem("moria8-consent", v); } catch (e) {}
+    gtag("consent", "update", { analytics_storage: v === "granted" ? "granted" : "denied" });
+    box.hidden = true;
+  }
+  if (!stored()) box.hidden = false;
+  document.getElementById("consent-accept").addEventListener("click", function () { choose("granted"); });
+  document.getElementById("consent-decline").addEventListener("click", function () { choose("denied"); });
+  var reopen = document.getElementById("consent-reopen");
+  if (reopen) reopen.addEventListener("click", function () { box.hidden = false; });
+  // count downloads per platform (the files are served by GitHub, so GA cannot see them itself)
+  document.addEventListener("click", function (e) {
+    var a = e.target.closest && e.target.closest("a[href*='/releases/latest/download/']");
+    if (!a) return;
+    var file = a.href.split("/").pop();
+    var m = /moria8-([a-z0-9]+)\./.exec(file);
+    gtag("event", "file_download", { file_name: file, platform: m ? m[1] : "unknown", link_url: a.href, transport_type: "beacon" });
+  });
+})();
 </script>
 </body>
 </html>

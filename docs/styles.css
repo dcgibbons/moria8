@@ -1096,3 +1096,38 @@ footer {
 
 .clip-tabs button:last-child { border-right: 0; }
 .clip-tabs button[aria-pressed="true"] { background: rgba(255, 217, 61, 0.14); color: #ffd93d; }
+
+.consent {
+  position: fixed;
+  inset: auto 1rem 1rem;
+  z-index: 50;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1.5rem;
+  max-width: 44rem;
+  margin-inline: auto;
+  padding: 0.9rem 1.1rem;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  box-shadow: 0 0.5rem 2rem rgba(0, 0, 0, 0.6);
+  font-size: 0.85rem;
+}
+
+.consent[hidden] { display: none; }
+.consent p { margin: 0; flex: 1 1 18rem; color: var(--paper); }
+.consent-actions { display: flex; gap: 0.5rem; }
+
+.consent button,
+.link-button {
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--paper);
+  font: inherit;
+  cursor: pointer;
+}
+
+.consent button { padding: 0.5rem 0.9rem; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.06em; }
+.consent #consent-accept { background: var(--gold); border-color: var(--gold); color: var(--black); }
+.link-button { padding: 0; border: 0; text-decoration: underline; color: inherit; }
