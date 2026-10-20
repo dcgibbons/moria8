@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://moria8.org/sitemap.xml
