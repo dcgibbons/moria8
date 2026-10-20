@@ -506,13 +506,10 @@ dl_print_item_you_see:
 // suffix HSTR id (0 = none). Consumes the flags only (docs/CHEST_DESIGN.md
 // step 14). Priority: opened > trapped-and-found > locked > disarmed. An armed
 // but unfound trap stays hidden (no suffix). Input: X = floor slot. Output: A.
-// Preserves: X. Parked off the full look overlay on C128/Apple IIe (their help
-// and modal overlays have no room); the conditional uses the product-only
-// define so unit tests (no product define) leave it in the default segment.
-#if C128_PRODUCT_OVERLAY_RUNTIME
-    .segment Default
-#endif
-#if APPLE2_PRODUCT_OVERLAY_RUNTIME
+// Preserves: X. Parked off the full look overlay on C128/Apple IIe/CX16 (where
+// HAL_PLATFORM_PLAYER_MOVE_LOOK_SEGMENTED is set under product overlay runtime
+// so unit tests leave it in the default segment).
+#if HAL_PLATFORM_PLAYER_MOVE_LOOK_SEGMENTED
     .segment Default
 #endif
 // dl_suffix_id — chest state suffix HSTR id for look (0 = none). Parked with
@@ -567,11 +564,8 @@ chest_look_suffix_id:
 !cls_none:
     lda #0
     rts
-#if C128_PRODUCT_OVERLAY_RUNTIME
-    .segment HelpOverlay
-#endif
-#if APPLE2_PRODUCT_OVERLAY_RUNTIME
-    .segment ModalMiscOverlay
+#if HAL_PLATFORM_PLAYER_MOVE_LOOK_SEGMENTED
+    :PlayerMoveLookSegment()
 #endif
 
 // Strings migrated to Huffman compression (HSTR_DL_*, HSTR_PTM_* in huffman_data.s)

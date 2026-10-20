@@ -14,6 +14,9 @@ DEFAULT_SCAN_DIRS = (
     ROOT / "core",
     ROOT / "platforms" / "commodore" / "c64",
     ROOT / "platforms" / "commodore" / "c128",
+    ROOT / "platforms" / "commodore" / "plus4",
+    ROOT / "platforms" / "apple2",
+    ROOT / "platforms" / "cx16",
 )
 SKIP_PATH_PARTS = {"out", "tests"}
 SKIP_FILES = {
@@ -105,6 +108,10 @@ def classify_operand(path: Path, line_no: int, line: str) -> list[Finding]:
             }
             if rel.as_posix() in allowed_paths:
                 continue
+        if addr in (0xaa, 0xae) and rel.as_posix() == "platforms/commodore/plus4/boot.s":
+            continue
+        if addr in (0x3c, 0x3d, 0x3e, 0x3f, 0x42, 0x43) and rel.as_posix() == "platforms/apple2/memory_aux.s":
+            continue
         if HIGH_ZP_MIN <= addr <= HIGH_ZP_MAX:
             findings.append(
                 Finding(

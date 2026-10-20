@@ -47,7 +47,7 @@ item_gain_spell:
     jsr hal_input_get_key
     jsr pm_pick_visible_spell
     bcc !igs_cancel_restore+
-#if APPLE2
+#if HAL_PLATFORM_AUX_PERSISTENT_DATA
     jsr tramp_ui_view_restore_spell_overlay
 #else
     jsr ui_view_restore_modal_overlay
@@ -75,7 +75,7 @@ item_gain_spell:
     rts
 
 !igs_cancel_restore:
-#if APPLE2
+#if HAL_PLATFORM_AUX_PERSISTENT_DATA
     jsr tramp_ui_view_restore_spell_overlay
 #else
     jsr ui_view_restore_modal_overlay

@@ -92,6 +92,7 @@ mmu_safe_map_read_ptr0:
 
 // mmu_safe_map_read_ptr1 — A = aux byte at (zp_ptr1),y. Preserves X, Y.
 mmu_safe_map_read_ptr1:
+mmu_safe_huff_read_ptr1:
     jmp A2_ZP_THUNK_READ_P1
 
 // mmu_safe_map_read_block — Copy X bytes from aux (zp_ptr0),y to main

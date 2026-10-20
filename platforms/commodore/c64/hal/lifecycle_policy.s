@@ -15,12 +15,17 @@
 .const hal_platform_ego_ac_bonus_external = 0
 .const hal_platform_chargen_runtime_resync = 0
 .const hal_platform_chargen_cutpoint = -1
-.const hal_platform_wizard_entry_uses_overlay = 0
-.const hal_platform_wizard_40col_resident_enabled = 1
+.const hal_platform_wizard_entry_uses_overlay = 1
+.const hal_platform_wizard_40col_resident_enabled = 0
 .const hal_platform_wizard_reveal_uses_trampoline = 1
+#if PLATFORM_PRODUCT_OVERLAY_RUNTIME
+.const hal_platform_levelup_magic_uses_trampoline = 1
+#else
 .const hal_platform_levelup_magic_uses_trampoline = 0
+#endif
 .const hal_platform_title_sysinfo_80col = 0
 .const hal_platform_title_sysinfo_sx64_probe = 1
+#define HAL_PLATFORM_TITLE_SYSINFO_SX64_PROBE
 .const hal_platform_player_move_diag_labels = 0
 .const hal_platform_describe_look_masks_irq = 0
 .const hal_platform_game_loop_runtime_resync = 0
@@ -69,7 +74,18 @@
 #define HAL_PLATFORM_MONSTER_VISIBILITY_SCRATCH_RESIDENT
 #define HAL_PLATFORM_MONSTER_OVERLAY_STALE_NAME
 #define HAL_PLATFORM_GAME_LOOP_SAVE_CLEARS_SCREEN
-#if C64_PRODUCT_OVERLAY_RUNTIME
+#define HAL_PLATFORM_GENERATION_BUSY_COLOR_BAR
+#define HAL_PLATFORM_SPELL_EXECUTE_DEDICATED_OVERLAY
+#if PLATFORM_PRODUCT_OVERLAY_RUNTIME
+#define HAL_PLATFORM_CHEST_LOOT_LOAD_NO_KERNAL
+#define HAL_PLATFORM_CHEST_LOOT_EGO_MODAL_TRAMP
+#define HAL_PLATFORM_TURBO_BURST_HOOKS
+#define HAL_PLATFORM_RETIREMENT_BONUS_IN_OVERLAY
+#define HAL_PLATFORM_ITEM_ACTIONS_RESTORE_BEFORE_RETURN
+#define HAL_PLATFORM_PLAYER_MAGIC_RESTORE_BEFORE_RETURN
+#define HAL_PLATFORM_PICK_ITEM_IN_GEN_OVERLAY
+#define HAL_PLATFORM_ITEM_COST_IN_TOWN_OVERLAY
+#define HAL_PLATFORM_OVERLAY_PROMPT_GAME_REQUIRED
 #else
 #define HAL_PLATFORM_OVERLAY_STATE_LOCAL
 #endif
@@ -78,7 +94,7 @@
 #define HAL_PLATFORM_OVERLAY_PROMPT_PROGRAM_MEDIA
 #define HAL_PLATFORM_OVERLAY_CPU_PORT_DMA_BANK
 #define HAL_PLATFORM_OVERLAY_FN_GUARD_LEGACY_NAMES
-#if C64_PRODUCT_OVERLAY_RUNTIME
+#if PLATFORM_PRODUCT_OVERLAY_RUNTIME
 #define HAL_PLATFORM_LEVELUP_MAGIC_USES_TRAMPOLINE
 #define HAL_PLATFORM_CAST_FAILURE_USES_TRAMPOLINE
 #endif

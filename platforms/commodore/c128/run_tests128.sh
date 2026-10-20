@@ -1894,7 +1894,7 @@ if not has_ordered_chain(items, [
 
 if not has_ordered_chain(items, [
     "irs_effect_p3_swap:",
-    "#if C128",
+    "#if HAL_PLATFORM_STAFF_SPEED_TRAMPOLINED",
     "cmp #ITEM_TYPE_STAFF_SPEED",
     "beq !irsp3_staff_speed+",
     "!irsp3_staff_speed:",

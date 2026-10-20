@@ -20,6 +20,8 @@ PLATFORM_FILES = {
     "c64": ROOT / "platforms/commodore/c64/hal/entropy_consts.s",
     "c128": ROOT / "platforms/commodore/c128/hal/entropy_consts.s",
     "plus4": ROOT / "platforms/commodore/plus4/hal/entropy_consts.s",
+    "apple2": ROOT / "platforms/apple2/hal/entropy_consts.s",
+    "cx16": ROOT / "platforms/cx16/hal/entropy_consts.s",
 }
 
 RNG_COMMON = ROOT / "core/rng.s"

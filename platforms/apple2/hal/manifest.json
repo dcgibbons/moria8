@@ -7,38 +7,43 @@
   "display": {
     "hardware": "apple2e_80col_text",
     "columns": 80,
-    "rows": 25,
+    "rows": 24,
     "viewport": {
       "x": 1,
       "y": 2,
       "width": 78,
-      "height": 19
+      "height": 18
     },
-    "screen_ram": "$0400 main + $0400 aux (interleaved)"
+    "screen_ram": "$0400 main + $0400 aux (interleaved)",
+    "color_ram": null
   },
   "storage": {
     "bus": "prodos8_mli",
     "program_media": "po140",
     "save_media": "game volume",
-    "default_program_device": "boot slot",
-    "default_save_device": "boot slot",
+    "default_program_device": 8,
+    "default_save_device": 8,
     "compatible_drives": ["disk_ii", "prodos_block_device"]
   },
   "memory": {
     "banking": "soft_switches_ramrd_ramwrt_altzp_off",
-    "map_base": "aux $0800",
-    "map_end": "aux $3b0b",
-    "banked_data_base": "$a200",
-    "banked_data_end": "$baff",
-    "play_slot": "$7c00-$9dff",
-    "tier_name_pool": "$9e00-$a1ff"
+    "map_base": "$0800",
+    "map_end": "$3b0b",
+    "banked_data_base": "$a400",
+    "banked_data_end": "$b9ff",
+    "io_hole_base": "$c000",
+    "io_hole_end": "$cfff",
+    "play_slot": "$7c00-$9fff",
+    "tier_name_pool": "$a000-$a3ff"
   },
   "capabilities": {
     "reu_overlay_cache": false,
     "aux_overlay_cache": true,
     "vdc_80_column": false,
+    "ted_display": false,
     "native_80_column": true,
     "sid_sound": false,
+    "ted_sound": false,
     "speaker_sound": true,
     "two_drive_save": false
   }

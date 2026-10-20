@@ -40,6 +40,18 @@ PLATFORMS = {
         "map_cols": "MAP40_COLS",
         "map_rows": "MAP40_ROWS",
     },
+    "apple2": {
+        "layout": ROOT / "platforms/apple2/hal/layout.s",
+        "screen": ROOT / "platforms/apple2/screen_a2.s",
+        "map_cols": "C128_MAP_COLS",
+        "map_rows": "C128_MAP_ROWS",
+    },
+    "cx16": {
+        "layout": ROOT / "platforms/cx16/hal/layout.s",
+        "screen": ROOT / "platforms/cx16/screen_vera.s",
+        "map_cols": "C128_MAP_COLS",
+        "map_rows": "C128_MAP_ROWS",
+    },
 }
 
 MAP_CONSTANTS = {

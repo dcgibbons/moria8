@@ -36,6 +36,8 @@ PLATFORM_FILES = {
     "c64": ROOT / "platforms/commodore/c64/hal/memory_bank_consts.s",
     "c128": ROOT / "platforms/commodore/c128/hal/memory_bank_consts.s",
     "plus4": ROOT / "platforms/commodore/plus4/hal/memory_bank_consts.s",
+    "apple2": ROOT / "platforms/apple2/hal/memory_bank_consts.s",
+    "cx16": ROOT / "platforms/cx16/hal/memory_bank_consts.s",
 }
 
 COMMON_ALIAS_FILE = ROOT / "platforms/commodore/common/bank_port_consts.s"

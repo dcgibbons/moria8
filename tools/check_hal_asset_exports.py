@@ -16,10 +16,19 @@ REQUIRED_LABELS = (
     "hal_asset_close_channel",
 )
 
-PLATFORM_FILES = {
-    "c64": ROOT / "platforms/commodore/c64/config.s",
-    "c128": ROOT / "platforms/commodore/c128/config128.s",
-    "plus4": ROOT / "platforms/commodore/plus4/config.s",
+PLATFORM_FILES: dict[str, tuple[Path, ...]] = {
+    "c64": (ROOT / "platforms/commodore/c64/config.s",),
+    "c128": (ROOT / "platforms/commodore/c128/config128.s",),
+    "plus4": (ROOT / "platforms/commodore/plus4/config.s",),
+    "apple2": (
+        ROOT / "platforms/apple2/config.s",
+        ROOT / "platforms/apple2/storage_mli.s",
+        ROOT / "platforms/apple2/overlay_storage.s",
+    ),
+    "cx16": (
+        ROOT / "platforms/cx16/config.s",
+        ROOT / "platforms/cx16/storage_kernal.s",
+    ),
 }
 
 TRANSACTION_BODIES = {
@@ -38,6 +47,16 @@ TRANSACTION_BODIES = {
         "hal_asset_load_prg_header",
         ("plus4_kernal_setnam", "plus4_kernal_setlfs", "plus4_kernal_load", "plus4_kernal_close", "plus4_kernal_clrchn"),
     ),
+    "apple2": (
+        ROOT / "platforms/apple2/storage_mli.s",
+        "hal_asset_load_prg_header",
+        ("a2_overlay_try_cache", "a2i_get_file_info", "a2i_open", "a2i_read", "a2i_close_open_ref"),
+    ),
+    "cx16": (
+        ROOT / "platforms/cx16/storage_kernal.s",
+        "hal_asset_load_prg_header",
+        ("cx16_asset_try_bank_switch", "cx16_kernal_load_banked_window"),
+    ),
 }
 TITLE_TRANSACTION_BODIES = {
     "c64": (
@@ -55,6 +74,16 @@ TITLE_TRANSACTION_BODIES = {
         "hal_asset_load_title",
         ("hal_storage_title_name", "plus4_kernal_setnam", "plus4_kernal_setlfs", "plus4_kernal_load", "plus4_kernal_close", "plus4_kernal_clrchn"),
     ),
+    "apple2": (
+        ROOT / "platforms/apple2/storage_mli.s",
+        "hal_asset_load_title",
+        ("hal_storage_title_name", "a2i_get_file_info", "a2i_open", "a2i_read", "a2i_close_open_ref"),
+    ),
+    "cx16": (
+        ROOT / "platforms/cx16/storage_kernal.s",
+        "hal_asset_load_title",
+        ("CX16_BANK_TITLE_ART", "CX16_BANK_MAP_LO"),
+    ),
 }
 CLOSE_TRANSACTION_BODIES = {
     "c64": (
@@ -66,6 +95,16 @@ CLOSE_TRANSACTION_BODIES = {
         ROOT / "platforms/commodore/plus4/config.s",
         "hal_asset_close_channel",
         ("$ffc3", "$ffcc", ":EnterKernal()", ":ExitKernal()"),
+    ),
+    "apple2": (
+        ROOT / "platforms/apple2/storage_mli.s",
+        "hal_asset_close_channel",
+        ("a2_mli_begin", "a2i_close", "a2_mli_end"),
+    ),
+    "cx16": (
+        ROOT / "platforms/cx16/storage_kernal.s",
+        "hal_asset_close_channel",
+        ("hal_storage_close", "hal_storage_clrchn"),
     ),
 }
 OVERLAY_COMMON = ROOT / "platforms/commodore/common/overlay.s"
@@ -121,6 +160,8 @@ ASSEMBLY_ROOTS = (
     ROOT / "platforms/commodore/c128",
     ROOT / "platforms/commodore/plus4",
     ROOT / "platforms/commodore/hal",
+    ROOT / "platforms/apple2",
+    ROOT / "platforms/cx16",
 )
 ASSET_NAME_NAMESPACE_RE = re.compile(r"\bhal_asset_[A-Za-z0-9_]*name[A-Za-z0-9_]*\b")
 
@@ -248,19 +289,24 @@ def check_asset_name_namespace() -> list[str]:
 
 def main() -> int:
     failed = False
-    for platform, path in PLATFORM_FILES.items():
-        if not path.exists():
-            print(f"{platform}: missing {path.relative_to(ROOT)}")
+    for platform, paths in PLATFORM_FILES.items():
+        missing_paths = [p for p in paths if not p.exists()]
+        if missing_paths:
+            for p in missing_paths:
+                print(f"{platform}: missing {p.relative_to(ROOT)}")
             failed = True
             continue
-        labels = exported_labels(path)
+        labels: set[str] = set()
+        for p in paths:
+            labels.update(exported_labels(p))
+        path = paths[0]
         missing = [label for label in REQUIRED_LABELS if label not in labels]
         if missing:
             print(f"{platform}: missing asset-loader HAL exports in {path.relative_to(ROOT)}")
             for label in missing:
                 print(f"  {label}")
             failed = True
-        if not macro_uses_asset_hal(path):
+        if not any(macro_uses_asset_hal(p) for p in paths):
             print(f"{platform}: AssetLoad() does not route through hal_asset_load")
             failed = True
 

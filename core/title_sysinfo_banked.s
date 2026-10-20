@@ -10,7 +10,7 @@ title_show_sysinfo_banked:
     sta zp_text_color
     lda #23
     sta zp_cursor_row
-#if APPLE2
+#if HAL_PLATFORM_TITLE_SYSINFO_PRODOS_ROM_ID
     // Apple II: detect machine from ROM ID bytes (Apple II Miscellaneous
     // Technical Note #7), and ProDOS version from KVERSION ($BFFF).
     ldx #28                     // center for ~24 chars
@@ -169,7 +169,7 @@ tsi_mach_hi:
 #if HAL_PLATFORM_TITLE_SYSINFO_SX64_PROBE
     .byte >tsi_c64_str, >tsi_sx64_str, >tsi_c64u_str
 #endif
-#if APPLE2
+#if HAL_PLATFORM_TITLE_SYSINFO_PRODOS_ROM_ID
 tsi_apple2_str:    .text "APPLE II" ; .byte 0
 tsi_apple_iie_str: .text "APPLE IIe" ; .byte 0
 tsi_apple_iic_str: .text "APPLE IIc" ; .byte 0

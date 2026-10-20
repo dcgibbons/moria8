@@ -31,7 +31,7 @@ input_get_followup_key:
     jmp hal_input_get_key
 #endif
 
-#if APPLE2
+#if HAL_INPUT_SELECTABLE_OVERLAY_FILTER_HELP_KEY
 // A selectable overlay is entered with '?'. The bounded Apple key-release
 // fallback can let that held initiating key relatch, but '?' is never a valid
 // choice inside these lists. Keep waiting for a selection or cancel key.

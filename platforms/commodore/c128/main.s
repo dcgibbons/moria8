@@ -30,6 +30,7 @@
 #define PLATFORM_PRODUCT_OVERLAY_RUNTIME
 #define PLATFORM_PRODUCT_OVERLAY_RELOAD_RESYNC
 #define C128_PRODUCT_MODAL_PERSIST
+#define HAL_PLATFORM_GAME_LOOP_MODAL_PERSIST
 #define HAL_STORAGE_PROGRAM_MEDIA_PRESENT_EXTERNAL
 #define STORAGE_STATUS_HELPER
 #import "../common/save_slot_policy.s"
@@ -40,6 +41,27 @@
 // (HAL_PLATFORM_HUFFMAN_DATA_AUX).
 .macro HuffmanDataSegment() {
     .segment C128Bank1Huffman
+}
+.macro ItemNameStreamsSegment() {
+    .segment C128ResidentItemNames
+@c128_item_name_streams_start:
+}
+.macro ItemNameStreamsRestoreSegment() {
+@c128_item_name_streams_end:
+    .assert "C128 item name streams live in Bank 1 DB region", c128_item_name_streams_start >= BANK1_DB_BASE && c128_item_name_streams_end <= BANK1_DB_END + 1, true
+    .segment C128ResidentItems
+}
+.macro ResidentItemsSegment() {
+    .segment C128ResidentItems
+}
+.macro ResidentItemNamesSegment() {
+    .segment C128ResidentItemNames
+}
+.macro ResidentWorldSegment() {
+    .segment C128ResidentWorld
+}
+.macro ResidentPlaySegment() {
+    .segment C128ResidentPlay
 }
 
 // Cast/pray cores stay in the $F000 runtime bank on this platform.
@@ -3400,9 +3422,9 @@ c128_final_return_stack_7:     .byte 0
 #import "../../../core/rng.s"
 #import "../../../core/math.s"
 #import "../../../core/dungeon_tunnel_guard.s"
-#define C128_PLAYER_STAT_HELPERS_EXTERNAL
+#define PLAYER_STAT_HELPERS_EXTERNAL
 #import "../../../core/player.s"
-#undef C128_PLAYER_STAT_HELPERS_EXTERNAL
+#undef PLAYER_STAT_HELPERS_EXTERNAL
 #import "../../../core/ui_messages.s"
 #import "../../../core/ui_status.s"
 #import "../../../core/generation_busy.s"
@@ -3521,7 +3543,7 @@ player_get_infra_range:
 #import "../../../core/monster_magic.s"
 #import "../../../core/spell_data.s"
 #define SPELL_EFFECTS_INCLUDE_IDENTIFY
-#define C128_FULL_DETECT_EVIL_EFFECT
+#define FULL_DETECT_EVIL_EFFECT
 #define EFF_FIND_DOORS_EXTERNAL
 .segment C128ResidentItems
 c128_resident_items_start:
@@ -3580,7 +3602,7 @@ eff_find_doors:
 .segment C128ResidentWorld
 #import "../../../core/spell_effects.s"
 #import "../../../core/spell_effects_overlay.s"
-#undef C128_FULL_DETECT_EVIL_EFFECT
+#undef FULL_DETECT_EVIL_EFFECT
 #undef SPELL_EFFECTS_INCLUDE_IDENTIFY
 cmb_you_str:     .text "You " ; .byte 0
 cmb_the_str:     .text " the " ; .byte 0
@@ -3828,6 +3850,7 @@ c128_program_play_read_filename:
     .byte $2c, $50, $2c, $52                    // ",P,R"
 .label c128_program_play_read_filename_len = * - c128_program_play_read_filename
 
+hal_player_recalc_pflags:
 c128_player_recalc_pflags:
     lda #0
     ldx #EQUIP_RING
@@ -4000,13 +4023,13 @@ c128_resident_play_body:
 #undef C128_PRODUCT_PLAY_SEGMENT
 #import "../../../core/monster_attack.s"
 #define PMU_TURN_FEEDBACK_EXTERNAL
-#define C128_COMBAT_COMMON_HELPERS_EXTERNAL
+#define COMBAT_COMMON_HELPERS_EXTERNAL
 #define COMBAT_STRINGS_EXTERNAL
 #define CMB_IN_WAY_EXTERNAL
 #import "../../../core/combat.s"
 #undef CMB_IN_WAY_EXTERNAL
 #undef COMBAT_STRINGS_EXTERNAL
-#undef C128_COMBAT_COMMON_HELPERS_EXTERNAL
+#undef COMBAT_COMMON_HELPERS_EXTERNAL
 #undef PMU_TURN_FEEDBACK_EXTERNAL
 #import "../../../core/look_flash_target.s"
 .macro PlayerMoveRestoreResidentSegment() {
@@ -4918,6 +4941,7 @@ player_adjust_equipment_stat:
 // dependency is resident, so quaffing must not load an overlay (the modal
 // overlay has no Bank1 cache slot; a disk fetch per potion is wrong).
 // Input: piw_item_id = potion type ID (96-100 or 126).
+hal_quaff_p3_dispatch:
 c128_quaff_p3_dispatch:
     lda piw_item_id
     cmp #ITEM_TYPE_POT_HEALING

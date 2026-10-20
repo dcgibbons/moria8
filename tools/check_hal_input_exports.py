@@ -14,6 +14,8 @@ PLATFORM_FILES = {
     "c64": ROOT / "platforms/commodore/c64/input.s",
     "c128": ROOT / "platforms/commodore/c128/input128.s",
     "plus4": ROOT / "platforms/commodore/plus4/input.s",
+    "apple2": ROOT / "platforms/apple2/input.s",
+    "cx16": ROOT / "platforms/cx16/input.s",
 }
 
 REQUIRED_LABELS = (

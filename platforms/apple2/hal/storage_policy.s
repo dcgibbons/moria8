@@ -67,6 +67,8 @@
 #define HAL_STORAGE_FRIENDLY_STATUS_MESSAGES
 #define HAL_STORAGE_STREAM_STATUS_HELPERS
 #define HAL_STORAGE_RETURN_LOCAL_STATUS
+#define HAL_STORAGE_SAVE_BLOCK_MODE_HOOK
 // The map lives in aux RAM: excluded from the generic save-block table and
 // streamed by the platform map helpers (save_stream.s) like C128's Bank 1.
 #define HAL_STORAGE_MAP_BANKED
+#define HAL_STORAGE_NO_UNIT_TEST_STUBS

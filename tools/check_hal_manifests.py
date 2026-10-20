@@ -8,7 +8,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-PLATFORMS = ("c64", "c128", "plus4")
+PLATFORMS = ("c64", "c128", "plus4", "apple2", "cx16")
 REQUIRED_TOP_KEYS = ("platform", "machine", "display", "storage", "memory", "capabilities")
 REQUIRED_CAPABILITIES = (
     "reu_overlay_cache",
@@ -62,11 +62,43 @@ EXPECTED = {
         "display": "ted",
         "banking": "$ff3e/$ff3f",
         "map_base": "$c800",
+        "default_save_device": 9,
         "requires_drives": {"1541", "1551"},
+        "manifest_file": "platforms/commodore/plus4/hal/manifest.json",
         "layout_file": "platforms/commodore/plus4/hal/layout.s",
         "memory_file": "platforms/commodore/plus4/memory.s",
         "screen_file": "platforms/commodore/plus4/screen.s",
         "direct_display_consts": True,
+    },
+    "apple2": {
+        "columns": 80,
+        "rows": 24,
+        "viewport": {"x": 1, "y": 2, "width": 78, "height": 18},
+        "display": "apple2e_80col_text",
+        "banking": "soft_switches_ramrd_ramwrt_altzp_off",
+        "map_base": "$0800",
+        "default_save_device": 8,
+        "requires_drives": {"disk_ii", "prodos_block_device"},
+        "manifest_file": "platforms/apple2/hal/manifest.json",
+        "layout_file": "platforms/apple2/hal/layout.s",
+        "memory_file": "platforms/apple2/memory.s",
+        "screen_file": "platforms/apple2/screen_a2.s",
+        "direct_display_consts": False,
+    },
+    "cx16": {
+        "columns": 80,
+        "rows": 24,
+        "viewport": {"x": 1, "y": 2, "width": 78, "height": 18},
+        "display": "vera",
+        "banking": "$00+$01",
+        "map_base": "$2000",
+        "default_save_device": 8,
+        "requires_drives": {"hostfs", "sd"},
+        "manifest_file": "platforms/cx16/hal/manifest.json",
+        "layout_file": "platforms/cx16/hal/layout.s",
+        "memory_file": "platforms/cx16/memory.s",
+        "screen_file": "platforms/cx16/screen_vera.s",
+        "direct_display_consts": False,
     },
 }
 
@@ -179,8 +211,9 @@ def validate_manifest(platform: str, data: dict) -> list[str]:
             fail(errors, platform, f"storage missing {key}")
     if storage.get("default_program_device") != 8:
         fail(errors, platform, "default_program_device must be 8")
-    if storage.get("default_save_device") != 9:
-        fail(errors, platform, "default_save_device must be 9")
+    expected_save_dev = expected.get("default_save_device", 9)
+    if storage.get("default_save_device") != expected_save_dev:
+        fail(errors, platform, f"default_save_device must be {expected_save_dev}")
     compatible = set(storage.get("compatible_drives", []))
     missing_drives = sorted(expected["requires_drives"] - compatible)
     if missing_drives:
@@ -228,7 +261,10 @@ def validate_manifest(platform: str, data: dict) -> list[str]:
 def main() -> int:
     errors: list[str] = []
     for platform in PLATFORMS:
-        path = ROOT / "platforms" / "commodore" / platform / "hal" / "manifest.json"
+        manifest_rel = EXPECTED[platform].get(
+            "manifest_file", f"platforms/commodore/{platform}/hal/manifest.json"
+        )
+        path = ROOT / manifest_rel
         if not path.exists():
             errors.append(f"{platform}: missing {path.relative_to(ROOT)}")
             continue

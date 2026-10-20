@@ -57,6 +57,7 @@ pick_wizard_summon_creature_type:
 current_tier:   .byte 0     // 0 = no tier (town/embedded), 1-4 = active tier
 tier_loaded:    .byte 0     // 1 = a tier has been loaded from disk/REU
 tier_silent_restore: .byte 0    // 1 = suppress transient "Loading..." during overlay restore
+#if HAL_PLATFORM_OVERLAY_CACHE_ENABLED
 // C128 tier cache metadata: active tier payload mirrored into the named Bank 1
 // tier-cache ownership window from memory128.s.
 c128_tier_cache_base_lo: .byte 0
@@ -65,6 +66,7 @@ c128_tier_cache_size_lo: .byte 0
 c128_tier_cache_size_hi: .byte 0
 c128_tier_soa_end_lo: .byte 0
 c128_tier_soa_end_hi: .byte 0
+#endif
 #if HAL_PLATFORM_MONSTER_HIDDEN_NAME_POOL
 platform_tier_name_src_lo: .byte 0
 platform_tier_name_src_hi: .byte 0
@@ -78,9 +80,9 @@ tier_invalidate_state:
     sta current_tier
     sta tier_loaded
     sta tier_silent_restore
+#if HAL_PLATFORM_OVERLAY_CACHE_ENABLED
     sta c128_tier_cache_size_lo
     sta c128_tier_cache_size_hi
-#if HAL_PLATFORM_OVERLAY_CACHE_ENABLED
     sta tier_name_lo_addr
     sta tier_name_lo_addr+1
     sta tier_name_hi_addr

@@ -8,10 +8,10 @@
 // player_recalc_equipment: recalculate AC/combat after equip changes
 
 #import "ui_restore.s"
-#if !A2_SMALL_PLAY_EXTERNAL
+#if !SMALL_PLAY_EXTERNAL
 #import "input_ui_helpers.s"
 #endif
-#if !A2_SMALL_PLAY_EXTERNAL
+#if !SMALL_PLAY_EXTERNAL
 #import "player_heal_feedback.s"
 #endif
 #if !PLAYER_ITEM_SELECT_EXTERNAL
@@ -96,7 +96,7 @@ show_inv_and_select:
 #if C64_TEST_SCRIPTED_BOOK_OVERLAY || C128_TEST_SCRIPTED_BOOK_OVERLAY
     jmp test_assert_book_overlay
 #endif
-#if APPLE2
+#if HAL_INPUT_SELECTABLE_OVERLAY_FILTER_HELP_KEY
     jsr input_get_selectable_overlay_key
 #else
     jsr input_get_followup_key
@@ -105,8 +105,8 @@ show_inv_and_select:
 #if PLATFORM_PRODUCT_OVERLAY_RUNTIME
     lda piw_return_overlay
     bne !sias_have_return_overlay+
-#if APPLE2
-    // Every no-hint Apple caller is immediately resident or in OVL.ITEMS;
+#if HAL_PLATFORM_AUX_PERSISTENT_DATA
+    // Every no-hint Apple/CX16 caller is immediately resident or in OVL.ITEMS;
     // OVL.SPELL callers provide an explicit hint before entering the selector.
     tsx
     lda $0102,x
@@ -160,6 +160,7 @@ show_inv_and_select:
     // resident would execute arbitrary $E000 contents.
     brk
 !sias_overlay_loaded:
+#if !HAL_PLATFORM_AUX_PERSISTENT_DATA
 #if PLATFORM_PRODUCT_OVERLAY_RELOAD_RESYNC
     jsr hal_platform_runtime_resync
     lda #MMU_ALL_RAM
@@ -169,12 +170,13 @@ show_inv_and_select:
 #if PLATFORM_PRODUCT_IRQ_VECTOR_RUNTIME
     jsr hal_irq_install_runtime
 #endif
-#if PLUS4_PRODUCT_OVERLAY_RUNTIME
+#if HAL_PLATFORM_ITEM_PROMPT_RELOAD_PLUS4_BANK_RAM
     jsr plus4_install_ram_irq_vectors
     jsr plus4_bank_ram
 #else
     lda #BANK_NO_KERNAL
     sta hal_memory_cpu_port
+#endif
 #endif
 !sias_no_items_reload:
 !sias_no_overlay_reload:
@@ -188,13 +190,13 @@ show_inv_and_select:
 show_equip_and_select:
     jsr input_prepare_selectable_overlay_key
     jsr tramp_ui_equip_select_display
-#if APPLE2
+#if HAL_INPUT_SELECTABLE_OVERLAY_FILTER_HELP_KEY
     jsr input_get_selectable_overlay_key
 #else
     jsr input_get_followup_key
 #endif
     pha
-#if APPLE2
+#if HAL_PLATFORM_AUX_PERSISTENT_DATA
     jsr tramp_ui_view_restore_items_overlay
 #else
     jsr ui_view_restore_modal_overlay

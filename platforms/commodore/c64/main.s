@@ -71,6 +71,18 @@
 .macro ItemInitIdentRestoreSegment() {
     .segment Default
 }
+.macro ResidentItemsSegment() {
+    .segment Default
+}
+.macro ResidentItemNamesSegment() {
+    .segment Default
+}
+.macro ResidentWorldSegment() {
+    .segment Default
+}
+.macro ResidentPlaySegment() {
+    .segment Default
+}
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(entry)

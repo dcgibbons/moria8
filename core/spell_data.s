@@ -42,12 +42,12 @@ book_mask_7: .byte $00, $00, $00, $7e   // [Exorcisms and Dispellings]
 // Output: C clear = found, X = book index (0..7)
 //         C set = not a spell/prayer book
 book_find_index:
-#if APPLE2
+#if HAL_PLATFORM_AUX_PERSISTENT_DATA
     sta zp_temp0
 #endif
     ldx #BOOK_COUNT - 1
 !bfi_loop:
-#if APPLE2
+#if HAL_PLATFORM_AUX_PERSISTENT_DATA
     :AuxReadX(book_type_ids)
     cmp zp_temp0
 #else
@@ -70,7 +70,7 @@ book_find_index:
 spell_mask_test_ptr:
     stx zp_temp1
     tax
-#if APPLE2
+#if HAL_PLATFORM_AUX_PERSISTENT_DATA
     :AuxReadX(spell_mask_shift)
     tay
 #else
@@ -97,7 +97,7 @@ spell_mask_test_ptr:
 // Clobbers: A, X, Y, zp_temp0
 spell_mask_set_ptr:
     tax
-#if APPLE2
+#if HAL_PLATFORM_AUX_PERSISTENT_DATA
     :AuxReadX(spell_mask_shift)
     sta zp_temp1
     tay
@@ -110,7 +110,7 @@ spell_mask_set_ptr:
     tax
     :AuxReadX(spell_bit_mask)
     ora zp_temp0
-#if APPLE2
+#if HAL_PLATFORM_AUX_PERSISTENT_DATA
     ldy zp_temp1
 #endif
     sta (zp_ptr0),y
@@ -122,7 +122,7 @@ spell_mask_set_ptr:
 // Clobbers: A, X, Y, zp_temp0
 spell_mask_clear_ptr:
     tax
-#if APPLE2
+#if HAL_PLATFORM_AUX_PERSISTENT_DATA
     :AuxReadX(spell_mask_shift)
     sta zp_temp1
     tay
@@ -135,7 +135,7 @@ spell_mask_clear_ptr:
     tax
     :AuxReadX(spell_bit_inverse)
     and zp_temp0
-#if APPLE2
+#if HAL_PLATFORM_AUX_PERSISTENT_DATA
     ldy zp_temp1
 #endif
     sta (zp_ptr0),y
@@ -150,7 +150,7 @@ spell_mask_count_ptr:
     sta zp_temp0
     ldy #0
 !smcp_byte:
-#if APPLE2
+#if HAL_PLATFORM_AUX_PERSISTENT_DATA
     sty zp_temp1
 #else
     lda (zp_ptr0),y
@@ -159,7 +159,7 @@ spell_mask_count_ptr:
     ldx #7
 !smcp_bits:
     :AuxReadX(spell_bit_mask)
-#if APPLE2
+#if HAL_PLATFORM_AUX_PERSISTENT_DATA
     ldy zp_temp1
 #endif
     and (zp_ptr0),y

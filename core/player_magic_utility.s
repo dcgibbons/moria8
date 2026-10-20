@@ -42,7 +42,7 @@ pmu_find_visible_flagged:
 #endif
 
 eff_reveal_floorplan:
-#if C64_PRODUCT_OVERLAY_RUNTIME
+#if HAL_PLATFORM_TURBO_BURST_HOOKS
     jsr c64u_turbo_fast
 #endif
     ldx #0
@@ -78,7 +78,7 @@ eff_reveal_floorplan:
     lda #1
     sta vis_room_revealed
     jsr eff_find_doors
-#if C64_PRODUCT_OVERLAY_RUNTIME
+#if HAL_PLATFORM_TURBO_BURST_HOOKS
     jsr c64u_turbo_normal
 #endif
     rts
@@ -193,11 +193,11 @@ eff_turn_undead_core:
 #endif
 
 eff_destroy_area:
-#if C64_PRODUCT_OVERLAY_RUNTIME
+#if HAL_PLATFORM_TURBO_BURST_HOOKS
     jsr c64u_turbo_fast
 #endif
     jsr PMX_DESTROY_AREA_TARGET
-#if C64_PRODUCT_OVERLAY_RUNTIME
+#if HAL_PLATFORM_TURBO_BURST_HOOKS
     jsr c64u_turbo_normal
 #endif
     rts

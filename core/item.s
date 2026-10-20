@@ -692,8 +692,8 @@ item_spawn_level:
 
     // Roll ego type for weapons (0=none for non-weapons)
     lda fi_add_id
-#if APPLE2
-    // A2: generation executes in the GEN overlay window; the ego trampoline
+#if HAL_PLATFORM_CHEST_LOOT_EGO_GEN_TRAMP
+    // A2/CX16: generation executes in the GEN overlay window; the ego trampoline
     // must restore it or the item_spawn_level continuation runs OVL.ITEMS.
     jsr tramp_roll_ego_type_gen
 #else
@@ -830,7 +830,7 @@ item_spawn_level:
 
     // Roll ego type for treasure room items
     lda fi_add_id
-#if APPLE2
+#if HAL_PLATFORM_CHEST_LOOT_EGO_GEN_TRAMP
     jsr tramp_roll_ego_type_gen
 #else
     jsr tramp_roll_ego_type
@@ -1323,7 +1323,7 @@ tunnel_spawn_gold:
 .const PIT_MAX_LEVEL = 12
 #if PICKER_IN_CHEST_OVERLAY
 .segment ChestOverlay
-#elif C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME
+#elif PLATFORM_PRODUCT_OVERLAY_RUNTIME
 .segment DungeonGenOverlay
 #endif
 
@@ -1379,7 +1379,7 @@ pit_level_bounds:
     .byte 133    // level 12: +8 = 133
 pit_level_bounds_end:
 
-#if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME
+#if PLATFORM_PRODUCT_OVERLAY_RUNTIME
 pick_item_type_overlay:
 #else
 pick_item_type:
@@ -1461,13 +1461,13 @@ pick_item_type:
     jsr rng_range                // [0, count-1]
     jmp !pit_return_idx-
 
-#if C128_PRODUCT_OVERLAY_RUNTIME
-.segment C128ResidentItems
-#elif C64_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME
+#if HAL_PLATFORM_PICK_ITEM_RESIDENT_ITEMS_SEGMENT
+:ResidentItemsSegment()
+#elif HAL_PLATFORM_PICK_ITEM_IN_GEN_OVERLAY
 .segment Default
 #endif
 
-#if PLUS4_PRODUCT_OVERLAY_RUNTIME
+#if HAL_PLATFORM_PICK_ITEM_PLUS4_BANK_RAM
 pick_item_type:
     lda current_overlay
 #if PICKER_IN_CHEST_OVERLAY
@@ -1505,7 +1505,7 @@ pick_item_type:
     cli
     pla
     rts
-#elif C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME
+#elif PLATFORM_PRODUCT_OVERLAY_RUNTIME
 pick_item_type:
 #if PICKER_IN_CHEST_OVERLAY
     lda #OVL_CHEST
@@ -1856,18 +1856,18 @@ re_negate_a:
 .assert "it_weight size", it_dmg_packed - it_weight, ITEM_TYPE_COUNT
 .assert "it_dmg_packed size", it_dmg_packed_end - it_dmg_packed, ITEM_TYPE_COUNT
 .assert "it_cost_lo size", it_cost_lo_end - it_cost_lo, ITEM_TYPE_COUNT
-#if !(C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME)
+#if !PLATFORM_PRODUCT_OVERLAY_RUNTIME
 .assert "it_cost_hi size", it_cost_hi_end - it_cost_hi, ITEM_TYPE_COUNT
 #endif
 .assert "it_min_level size", it_min_level_end - it_min_level, (ITEM_TYPE_COUNT + 1) >> 1
 .assert "it_name_lo size", it_name_lo_end - it_name_lo, ITEM_TYPE_COUNT
-#if !(C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME)
+#if !PLATFORM_PRODUCT_OVERLAY_RUNTIME
 .assert "it_name_hi size", it_name_hi_end - it_name_hi, ITEM_TYPE_COUNT
 #endif
 .assert "pit_sorted size (excludes ruined chest)", pit_sorted_end - pit_sorted, ITEM_TYPE_COUNT - 3
 .assert "pit_level_bounds size", pit_level_bounds_end - pit_level_bounds, PIT_MAX_LEVEL + 1
 .assert "pick_item_type entry stays resident", pick_item_type < $e000, true
-#if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME
+#if PLATFORM_PRODUCT_OVERLAY_RUNTIME
 .assert "pick_item_type overlay impl lives in the $E000 overlay window", pick_item_type_overlay >= BANKED_DATA_BASE && pick_item_type_overlay <= BANKED_DATA_END, true
 #endif
 // Hardcoded assertion removed for cross-platform compatibility

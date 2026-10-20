@@ -514,7 +514,7 @@ monster_initial_sleep:
     rts
 
 #if HAL_PLATFORM_MONSTER_SPLIT_RESIDENT_SEGMENTS && !C128_UNIT_TEST
-.segment C128ResidentWorld
+:ResidentWorldSegment()
 #endif
 
 // Monster-attack aggravation shares the explicit wake transition.
@@ -1046,7 +1046,7 @@ monster_find_at:
 
 #if HAL_PLATFORM_MONSTER_SPLIT_RESIDENT_SEGMENTS && !C128_UNIT_TEST
 .segment RuntimeLowData
-#elif !C64_UNIT_TEST && !C128_UNIT_TEST
+#elif !HAL_PLATFORM_MONSTER_VISIBILITY_DIRECT && !C64_UNIT_TEST && !C128_UNIT_TEST
 monster_update_visibility_all:
 #if HAL_PLATFORM_MONSTER_CPU_PORT_BANK
     // Save/restore the caller's CPU-port banking instead of forcing
@@ -1073,7 +1073,7 @@ monster_update_visibility_all:
     rts
 #endif
 
-#if !PLUS4_INLINE_RUNTIME_BANKED_TEST && !APPLE2_PRODUCT_OVERLAY_RUNTIME
+#if !PLUS4_INLINE_RUNTIME_BANKED_TEST && !HAL_PLATFORM_MONSTER_VISIBILITY_DIRECT
 .segment RuntimeBanked
 #endif
 #endif
@@ -1264,7 +1264,7 @@ muv_changed:   .byte 0
 muv_clear_detected: .byte 0
 
 #if HAL_PLATFORM_MONSTER_SPLIT_RESIDENT_SEGMENTS && !C128_UNIT_TEST
-.segment C128ResidentWorld
+:ResidentWorldSegment()
 #elif !C64_UNIT_TEST
 .segment Default
 #endif

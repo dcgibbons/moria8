@@ -61,6 +61,7 @@
 // Deferred (fit-blocked 2026-07-24): the normalization arm costs 10 bytes in
 // the resident world payload (1 byte headroom). See memory_bank_consts.s.
 .const hal_input_inventory_letter_normalize_shifted = false
+.const hal_input_selectable_overlay_filter_help_key = false
 #define HAL_INPUT_MODAL_DISMISS_USES_FAST_KEY
 #define HAL_INPUT_FOLLOWUP_USES_FAST_KEY
 #define HAL_INPUT_SELECTABLE_OVERLAY_PREPARE_FOLLOWUP

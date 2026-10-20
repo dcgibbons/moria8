@@ -28,13 +28,25 @@ RAW_C64_BANK_PORT_RE = re.compile(
 )
 
 
+TARGET_CONDITIONAL_RE = re.compile(
+    r"#(?:if|elif)[^\n]*(?:\b(?:C64|C128|PLUS4|APPLE2|CX16)\b|"
+    r"\b(?:C64|C128|PLUS4|APPLE2|CX16|A2)_"
+    r"(?!UNIT_TEST(?:_|\b)|TEST(?:_|\b)|CACHE_TEST(?:_|\b)|REAL_BOOT_DIAG(?:_|\b)|STATUS_SP_CANARY_DIAG(?:_|\b)|"
+    r"SCRIPTED_SPELL_SEED_EXTERNAL(?:_|\b)|INLINE_RUNTIME_BANKED_TEST(?:_|\b))[A-Z0-9_]+\b)"
+)
+
 RULES: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("raw-c64-bank-port", RAW_C64_BANK_PORT_RE),
     ("raw-vic-cia-sid-ted-vdc-address", re.compile(r"\$(?:d[0-9a-f]{3}|dd00|ff3e|ff3f)\b", re.IGNORECASE)),
     ("platform-name", re.compile(r"\b(?:VIC|VDC|TED|SID|CIA|REU|MMU)\b", re.IGNORECASE)),
     ("drive-model", re.compile(r"\b(?:1541|1551|1571|1581|SD2IEC)\b", re.IGNORECASE)),
     ("kernal-symbol", re.compile(r"\bKERNAL_[A-Z0-9_]+\b")),
-    ("target-conditional", re.compile(r"#if[^\n]*(?:C64|C128|PLUS4)\b")),
+    ("target-conditional", TARGET_CONDITIONAL_RE),
+)
+
+SHARED_TARGET_CONDITIONAL_DIRS: tuple[Path, ...] = (
+    Path("platforms/shared"),
+    Path("platforms/commodore/common"),
 )
 
 DEFAULT_SKIP_NAMES = {
@@ -94,6 +106,18 @@ def main() -> int:
     args = parser.parse_args()
 
     findings = find_violations(args.root)
+    if args.root == Path("core"):
+        for shared_dir in SHARED_TARGET_CONDITIONAL_DIRS:
+            if not shared_dir.exists():
+                continue
+            for source in sorted(shared_dir.rglob("*.s")):
+                if any(part in DEFAULT_SKIP_NAMES for part in source.parts):
+                    continue
+                rel = source.as_posix()
+                for raw_line in source.read_text(encoding="utf-8", errors="replace").splitlines():
+                    line = strip_comment(raw_line)
+                    for match in TARGET_CONDITIONAL_RE.finditer(line):
+                        findings.add(Finding(rel, "target-conditional", match.group(0)))
 
     if args.write_baseline:
         write_baseline(args.baseline, findings)

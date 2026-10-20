@@ -39,6 +39,7 @@
 .const INPUT_ROW   = hal_layout_input_row
 .const hal_screen_full_clear_uses_bulk = true
 #define HAL_SCREEN_FULL_CLEAR_USES_BULK
+.const hal_screen_full_clear_uses_blanked_bulk = false
 .const hal_screen_box_vertical_char = $21
 .const hal_screen_help_line_uses_api = true
 .const hal_screen_help_line_uses_color_map = false

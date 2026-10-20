@@ -148,7 +148,7 @@ find_random_floor:
 .label door_scan_y = door_scan_x + MAX_DOOR_SCAN
 .label door_scan_count = door_scan_y + MAX_DOOR_SCAN
 .assert "Door scan scratch stays inside platform scratch window", door_scan_count < hal_layout_dungeon_door_scan_limit, true
-#if C128_PRODUCT_OVERLAY_RUNTIME
+#if HAL_LAYOUT_DUNGEON_GEN_ROW_BATCHED_MAP
 .assert "C128 HAL door scan base matches memory ownership", door_scan_x == DUNGEON_GEN_DOOR_SCAN_BASE, true
 .assert "Door scan scratch does not overlap C128 copied map row", door_scan_x >= SCREEN_RAM + MAP_COLS, true
 #endif
@@ -171,7 +171,7 @@ place_secrets:
     sta zp_ptr0_hi
     stx df_target_y         // Save row
 
-#if C128_PRODUCT_OVERLAY_RUNTIME
+#if HAL_LAYOUT_DUNGEON_GEN_ROW_BATCHED_MAP
     // The C128 map lives in Bank 1. Copy once per row instead of switching
     // banks for every tile in this full-map generation scan.
     lda #MAP_COLS
@@ -180,7 +180,7 @@ place_secrets:
 
     ldy #1                  // Start at col 1
 !ps_col:
-#if C128_PRODUCT_OVERLAY_RUNTIME
+#if HAL_LAYOUT_DUNGEON_GEN_ROW_BATCHED_MAP
     lda SCREEN_RAM,y
 #else
     :MapRead_ptr0_y()
@@ -291,13 +291,13 @@ place_secrets:
     lda map_row_hi,x
     sta zp_ptr0_hi
     stx df_target_y
-#if C128_PRODUCT_OVERLAY_RUNTIME
+#if HAL_LAYOUT_DUNGEON_GEN_ROW_BATCHED_MAP
     lda #MAP_COLS
     jsr mmu_common_copy_map_row
 #endif
     ldy #1
 !pss_col:
-#if C128_PRODUCT_OVERLAY_RUNTIME
+#if HAL_LAYOUT_DUNGEON_GEN_ROW_BATCHED_MAP
     lda SCREEN_RAM,y
 #else
     :MapRead_ptr0_y()

@@ -15,6 +15,7 @@
 #define DUNGEON_FEATURES_GENERATION_ONLY
 #define SPECIAL_ROOMS_GENERATION_ONLY
 #define C128_PRODUCT_OVERLAY_RUNTIME
+#define PLATFORM_PRODUCT_OVERLAY_RUNTIME
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_start)
@@ -31,12 +32,14 @@ c128_restore_runtime_state:
 // config128.s is not imported by tests; the unit test links all data into one
 // RAM bank, so the db thunks are direct accesses here.
 mmu_safe_db_read_ptr0:
+mmu_safe_huff_read_ptr0:
     lda (zp_ptr0),y
     rts
 mmu_safe_db_write_ptr0:
     sta (zp_ptr0),y
     rts
 mmu_safe_db_read_ptr1:
+mmu_safe_huff_read_ptr1:
     lda (zp_ptr1),y
     rts
 mmu_safe_db_write_ptr1:
@@ -103,6 +106,7 @@ tramp_vault_seal_entrance:
 
 #import "../../../../core/dungeon_gen.s"
 #undef C128_PRODUCT_OVERLAY_RUNTIME
+#undef PLATFORM_PRODUCT_OVERLAY_RUNTIME
 
 seed_idx: .byte 0
 iter_count: .byte 0

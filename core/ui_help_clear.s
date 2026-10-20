@@ -15,7 +15,7 @@ ui_clear_full_screen_safe:
 #if HAL_SCREEN_FULL_CLEAR_USES_BULK
     jmp hal_screen_clear
 #else
-#if APPLE2
+#if HAL_SCREEN_FULL_CLEAR_USES_BLANKED_BULK
     lda #SCREEN_ROWS
 !hca_loop:
     sec
@@ -51,8 +51,8 @@ uh_title_str: .text "Command Reference" ; .byte 0
 help_line_idx: .byte 0
 help_page_idx: .byte 0
 help_page_count: .byte 1
-#if APPLE2_PRODUCT_OVERLAY_RUNTIME
-// Apple II help is reachable only through tramp_ui_help_display, which loads
+#if HAL_PLATFORM_AUX_PERSISTENT_DATA && PLATFORM_PRODUCT_OVERLAY_RUNTIME
+// Apple II / CX16 help is reachable only through tramp_ui_help_display, which loads
 // OVL.HELP and installs help_pages before calling ui_help_display.
 help_pages_src_lo: .byte 0
 help_pages_src_hi: .byte 0

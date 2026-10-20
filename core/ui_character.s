@@ -402,7 +402,7 @@ count_spells_known:
     sta zp_ptr0
     lda #>player_data + PL_SPELLS_LEARNT_0
     sta zp_ptr0_hi
-#if APPLE2
+#if HAL_PLATFORM_AUX_PERSISTENT_DATA
     lda #0
     sta zp_temp0
     ldy #SPELL_MASK_BYTES - 1

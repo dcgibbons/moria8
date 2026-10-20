@@ -14,6 +14,9 @@ DEFAULT_SCAN_DIRS = (
     ROOT / "core",
     ROOT / "platforms" / "commodore" / "c64",
     ROOT / "platforms" / "commodore" / "c128",
+    ROOT / "platforms" / "commodore" / "plus4",
+    ROOT / "platforms" / "apple2",
+    ROOT / "platforms" / "cx16",
 )
 SKIP_PATH_PARTS = {"out", "tests"}
 SKIP_FILES = {

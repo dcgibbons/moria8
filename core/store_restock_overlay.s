@@ -32,7 +32,7 @@ store_init_all:
     ldx #STORE_TOTAL_SLOTS - 1
     lda #0
 !sia_clr2:
-#if APPLE2
+#if HAL_PLATFORM_AUX_PERSISTENT_DATA
     jsr sia2_clear_slot
     dex
     bpl !sia_clr2-
@@ -49,12 +49,12 @@ store_init_all:
 
     jmp store_restock_all
 
-#if APPLE2
+#if HAL_PLATFORM_AUX_PERSISTENT_DATA
 // sia2_clear_slot — Compact aux clear of one store slot's meta tables.
 // The per-table AuxWrite macro costs ~19 bytes inline; six of them per slot
 // overflowed the ITEMS window. The six si_* arrays are contiguous 96-byte
 // blocks, so one pointer walks them all.
-// In: X = slot (0..STORE_TOTAL_SLOTS-1). Clobbers: A, Y, zp_ptr1.
+// In: X = slot (0..STORE_TOTAL_SLOTS-1). Clobbers: A, Y, zp_ptr1, zp_temp0.
 sia2_clear_slot:
     txa
     tay
@@ -62,6 +62,8 @@ sia2_clear_slot:
     sta zp_ptr1
     lda #>si_qty
     sta zp_ptr1_hi
+    lda #6
+    sta zp_temp0
 !scs_loop:
     lda #0
     jsr mmu_safe_map_write_ptr1     // preserves A
@@ -69,13 +71,12 @@ sia2_clear_slot:
     clc
     adc #STORE_TOTAL_SLOTS
     sta zp_ptr1
-    lda zp_ptr1_hi
-    adc #0
-    sta zp_ptr1_hi
-    cmp #>sia2_end
+    bcc !scs_no_carry+
+    inc zp_ptr1_hi
+!scs_no_carry:
+    dec zp_temp0
     bne !scs_loop-
     rts
-.label sia2_end = si_meta + STORE_TOTAL_SLOTS
 #endif
 
 // store_restock_all — Restock all stores + reset kicked flags
@@ -167,15 +168,9 @@ sro_set_p1:
     cmp #ICAT_BOOTS + 1
     bcc !sro_enchant+
     cmp #ICAT_BOOK
-#if APPLE2
-    bne !sro_not_book+
-    jmp !sro_book+
-!sro_not_book:
-#else
-    beq !sro_book+
-#endif
+    beq !sro_default+
     cmp #ICAT_RING
-#if APPLE2
+#if HAL_PLATFORM_AUX_PERSISTENT_DATA
     bne !sro_not_ring+
     jmp !sro_ring+
 !sro_not_ring:
@@ -191,14 +186,13 @@ sro_set_p1:
     cmp #ICAT_STAFF + 1
     bcc !sro_charges+
     cmp #ICAT_AMULET
-#if APPLE2
+#if HAL_PLATFORM_AUX_PERSISTENT_DATA
     bne !sro_default+
     jmp !sro_ring+
 #else
     beq !sro_ring+
-#endif
-
     jmp !sro_default+
+#endif
 
 !sro_default:
     lda #0
@@ -231,10 +225,6 @@ sro_set_p1:
     lda srr_tmp0
     :AuxWriteY(si_to_ac)
     jmp sro_store_identified
-
-!sro_book:
-    lda #0
-    jmp sro_store_p1
 
 !sro_ring:
     lda #3

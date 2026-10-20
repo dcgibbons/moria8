@@ -69,6 +69,18 @@
 .macro ChestRouteRestoreSegment() {
     .segment Default
 }
+.macro ResidentItemsSegment() {
+    .segment Default
+}
+.macro ResidentItemNamesSegment() {
+    .segment Default
+}
+.macro ResidentWorldSegment() {
+    .segment Default
+}
+.macro ResidentPlaySegment() {
+    .segment Default
+}
 
 .const TED_BG      = $ff15
 .const TED_BORDER  = $ff19

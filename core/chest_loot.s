@@ -76,7 +76,7 @@ chest_fulfill_loot:
 #else
     lda #OVL_DUNGEON_GEN
 #endif
-#if C64_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME
+#if HAL_PLATFORM_CHEST_LOOT_LOAD_NO_KERNAL
     // Disk loading exposes platform ROM over $E000; restore RAM before calling
     // the freshly loaded picker overlay. REU-backed C64 loads use the same path.
     jsr overlay_load_no_kernal
@@ -89,12 +89,12 @@ chest_fulfill_loot:
 #endif
 !cfl_loaded:
     jsr chest_generate_loot
-#if C64_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME
-#if C64_TEST_SCRIPTED_CHEST_OPEN_PRODUCT || PLUS4_TEST_SCRIPTED_CHEST_OPEN_PRODUCT || C128_TEST_SCRIPTED_CHEST_OPEN_PRODUCT
+#if HAL_PLATFORM_CHEST_LOOT_LOAD_NO_KERNAL
+#if C64_TEST_SCRIPTED_CHEST_OPEN_PRODUCT || PLUS4_TEST_SCRIPTED_CHEST_OPEN_PRODUCT
 chest_product_after_generate_sym:
 #endif
     jsr hal_platform_runtime_resync
-#if C64_TEST_SCRIPTED_CHEST_OPEN_PRODUCT || PLUS4_TEST_SCRIPTED_CHEST_OPEN_PRODUCT || C128_TEST_SCRIPTED_CHEST_OPEN_PRODUCT
+#if C64_TEST_SCRIPTED_CHEST_OPEN_PRODUCT || PLUS4_TEST_SCRIPTED_CHEST_OPEN_PRODUCT
     lda chest_product_path_stage
     cmp #4
     beq !cfl_product_resynced+
@@ -105,7 +105,7 @@ chest_product_after_generate_sym:
 !cfl_product_store_stage:
     sta chest_product_path_stage
 #if C64_TEST_SCRIPTED_CHEST_OPEN_PRODUCT
-    lda $01
+    lda hal_memory_cpu_port
 #else
     lda TED_SCREEN_ADDR
 #endif
@@ -317,9 +317,9 @@ chest_loot_place_one:
     beq !clpo_place_gold+
 
     // --- Object ---
-#if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME
+#if PLATFORM_PRODUCT_OVERLAY_RUNTIME
     // Product: the picker lives in the overlay the handoff loaded (CHEST on
-    // C64/Plus4, GEN on C128/A2), so call the overlay impl directly — the
+    // C64/Plus4, GEN on C128/A2/CX16), so call the overlay impl directly — the
     // resident pick_item_type wrapper would reload over the executing overlay.
     jsr pick_item_type_overlay  // A = item ID (handoff-window picker)
 #else
@@ -329,12 +329,12 @@ chest_loot_place_one:
     jsr roll_enchantment        // sets fi_add_p1 + combat/armor stats
     sta fi_add_p1
     lda fi_add_id
-#if C64_PRODUCT_OVERLAY_RUNTIME
+#if HAL_PLATFORM_CHEST_LOOT_EGO_MODAL_TRAMP
     // The ordinary C64 trampoline exposes KERNAL before returning, which would
     // hide this GEN-overlay continuation at $E000.
     jsr tramp_roll_ego_type_modal
-#elif APPLE2_PRODUCT_OVERLAY_RUNTIME
-    // The A2 trampoline would load OVL.ITEMS over this executing GEN overlay;
+#elif HAL_PLATFORM_CHEST_LOOT_EGO_GEN_TRAMP
+    // The A2/CX16 trampoline would load OVL.ITEMS over this executing GEN overlay;
     // the gen variant restores OVL.GEN before returning.
     jsr tramp_roll_ego_type_gen
 #else

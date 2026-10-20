@@ -18,6 +18,7 @@
 #import "hal/memory_bank_consts.s"
 #import "hal/sound_consts.s"
 #import "hal/entropy_consts.s"
+#import "hal/layout.s"
 #import "../common/bank_port_consts.s"
 
 // ============================================================

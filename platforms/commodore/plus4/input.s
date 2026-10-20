@@ -18,6 +18,7 @@
 #define HAL_INPUT_FLUSH_RUN_CANCEL_BUFFER
 .const hal_input_help_footer_uses_esc_stop = false
 .const hal_input_inventory_letter_normalize_shifted = false
+.const hal_input_selectable_overlay_filter_help_key = false
 
 input_lock_charset_switch:
     jmp plus4_display_resync

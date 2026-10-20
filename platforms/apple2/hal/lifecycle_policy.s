@@ -22,7 +22,7 @@
 .const hal_platform_chargen_cutpoint = -1
 .const hal_platform_wizard_entry_uses_overlay = 1
 .const hal_platform_wizard_40col_resident_enabled = 0
-.const hal_platform_wizard_reveal_uses_trampoline = 0
+.const hal_platform_wizard_reveal_uses_trampoline = 1
 .const hal_platform_levelup_magic_uses_trampoline = 1
 .const hal_platform_title_sysinfo_80col = 1
 .const hal_platform_title_sysinfo_sx64_probe = 0
@@ -34,7 +34,7 @@
 .const hal_platform_game_loop_save_clears_screen = 1
 .const hal_platform_game_loop_save_return_view = 0
 .const hal_platform_game_loop_run_stop_reset_input = 0
-.const hal_platform_game_loop_scroll_delta_render = 0
+.const hal_platform_game_loop_scroll_delta_render = 1
 // Scroll-delta renderer provided by dungeon_scroll_a2.s (A2PlaySlot).
 #define HAL_PLATFORM_GAME_LOOP_SCROLL_DELTA_RENDER
 .const hal_platform_game_loop_item_actions_trampolined = 1
@@ -67,6 +67,7 @@
 #define HAL_PLATFORM_TITLE_SYSINFO_80COL
 #define HAL_PLATFORM_MONSTER_HIDDEN_NAME_POOL
 #define HAL_PLATFORM_MONSTER_OVERLAY_STALE_NAME
+#define HAL_PLATFORM_MONSTER_VISIBILITY_DIRECT
 #define HAL_PLATFORM_GAME_LOOP_SAVE_CLEARS_SCREEN
 #define HAL_PLATFORM_GAME_LOOP_ITEM_ACTIONS_TRAMPOLINED
 #define HAL_PLATFORM_EGO_AC_BONUS_LOCAL
@@ -86,3 +87,29 @@
 #define HAL_PLATFORM_OVERLAY_SKIP_IF_CURRENT
 #define HAL_PLATFORM_OVERLAY_FN_GUARD_LEGACY_NAMES
 #define HAL_PLATFORM_CAST_FAILURE_USES_TRAMPOLINE
+#define HAL_PLATFORM_CHEST_LOOT_EGO_GEN_TRAMP
+#define HAL_PLATFORM_MSG_PRINT_INDIRECT_AUX
+#define HAL_PLATFORM_MAP_GET_TILE_USES_SUBROUTINE
+#define HAL_PLATFORM_CHARGEN_ITEM_RECALC_TRAMPOLINE
+#define HAL_PLATFORM_ITEM_INIT_ID_ALWAYS_TRAMPOLINED
+#define HAL_PLATFORM_WIZARD_JUMP_INLINE_PLAY
+#define HAL_PLATFORM_RETIREMENT_BONUS_IN_OVERLAY
+#define HAL_PLATFORM_PLAYER_CREATE_CLEAN_TOP_BORDER
+#define HAL_PLATFORM_PLAYER_CREATE_TRAMP_RESET_SPELL
+#define HAL_PLATFORM_PLAYER_GAIN_SPELL_TRAMP_LIST
+#define HAL_PLATFORM_SPELL_EXECUTE_DEDICATED_OVERLAY
+#define HAL_PLATFORM_SPELL_EXECUTE_IDENTIFY_IN_OVERLAY
+#define HAL_PLATFORM_SPELL_EXECUTE_LIGHT_INLINE
+#define HAL_PLATFORM_SPELL_SELECT_EXTERNAL_BUFFERS
+#define HAL_PLATFORM_SCROLL_DESTRUCTION_DIRECT
+#define HAL_PLATFORM_TITLE_SYSINFO_KERNAL_REV_CACHED
+#define HAL_PLATFORM_TITLE_SYSINFO_PRODOS_ROM_ID
+#define HAL_PLATFORM_COMPACT_PLAY_SLOT
+#define HAL_PLATFORM_ADJUST_EQUIPMENT_STAT_EXTERNAL
+#define HAL_PLATFORM_NO_RESIDENT_IRS_P3_ROUTER
+#if PLATFORM_PRODUCT_OVERLAY_RUNTIME
+#define HAL_PLATFORM_PICK_ITEM_IN_GEN_OVERLAY
+#define HAL_PLATFORM_ITEM_COST_IN_TOWN_OVERLAY
+#define HAL_PLATFORM_ITEM_NAME_STREAMS_BANKED
+#define HAL_PLATFORM_PLAYER_MOVE_LOOK_SEGMENTED
+#endif

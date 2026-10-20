@@ -48,7 +48,7 @@ item_action_select_filtered_inv:
 !ias_have_choices:
     jsr input_prepare_followup_key
     jsr item_action_get_key
-#if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME
+#if HAL_PLATFORM_ITEM_ACTIONS_RESTORE_BEFORE_RETURN
     cmp #$3f
     bne !ias_no_selector_overlay_hint+
     pha
@@ -282,7 +282,7 @@ irs_effect_protect:
 // owning the target effect, runs it, swaps back so the read flow's items
 // overlay continuation stays valid.
 irs_effect_p3_swap:
-#if C128
+#if HAL_PLATFORM_STAFF_SPEED_TRAMPOLINED
     // Staff of Speed has a dedicated resident return path because its effect
     // lives in the death overlay; other Phase 3 effects use the generic modal
     // dispatcher.

@@ -26,7 +26,7 @@
 // Clobbers: A, X, Y, zp_ptr0/zp_ptr0_hi
 map_bulk_fill_all:
     sta map_bulk_fill_val
-#if C128_PRODUCT_OVERLAY_RUNTIME
+#if HAL_LAYOUT_DUNGEON_GEN_ROW_BATCHED_MAP
     ldy #0
 !mbf_cache:
     sta SCREEN_RAM,y
@@ -37,7 +37,7 @@ map_bulk_fill_all:
     ldx #0
 !mbf_row:
     jsr dg_set_row_ptr
-#if C128_PRODUCT_OVERLAY_RUNTIME
+#if HAL_LAYOUT_DUNGEON_GEN_ROW_BATCHED_MAP
     lda #MAP_COLS
     jsr mmu_common_store_map_row
 #else
@@ -56,7 +56,7 @@ map_bulk_fill_all:
 
 // Input: A = AND mask applied to every map byte
 // Clobbers: A, X, Y, zp_ptr0/zp_ptr0_hi
-#if !C128_PRODUCT_OVERLAY_RUNTIME || C128_TEST_DUNGEON_OVERLAP
+#if !HAL_LAYOUT_DUNGEON_GEN_ROW_BATCHED_MAP || C128_TEST_DUNGEON_OVERLAP
 map_bulk_and_all:
     sta map_bulk_and_mask
     ldx #0
@@ -410,7 +410,7 @@ place_secrets:
     sta zp_ptr0_hi
     stx df_target_y         // Save row
 
-#if C128_PRODUCT_OVERLAY_RUNTIME
+#if HAL_LAYOUT_DUNGEON_GEN_ROW_BATCHED_MAP
     // The C128 map lives in Bank 1. Copy once per row instead of switching
     // banks for every tile in this full-map generation scan.
     lda #MAP_COLS
@@ -419,7 +419,7 @@ place_secrets:
 
     ldy #1                  // Start at col 1
 !ps_col:
-#if C128_PRODUCT_OVERLAY_RUNTIME
+#if HAL_LAYOUT_DUNGEON_GEN_ROW_BATCHED_MAP
     lda SCREEN_RAM,y
 #else
     :MapRead_ptr0_y()
@@ -674,7 +674,7 @@ place_traps:
 // including walls (room_x-1 to room_x+room_w, room_y-1 to room_y+room_h).
 // ============================================================
 darken_rooms:
-#if C128_PRODUCT_OVERLAY_RUNTIME
+#if HAL_LAYOUT_DUNGEON_GEN_ROW_BATCHED_MAP
     lda #~FLAG_LIT & $ff
     sta mmu_common_row_mask
 #endif
@@ -711,7 +711,7 @@ darken_rooms:
     ldx dg_scan_row_start
     jsr dg_set_row_ptr
 
-#if C128_PRODUCT_OVERLAY_RUNTIME
+#if HAL_LAYOUT_DUNGEON_GEN_ROW_BATCHED_MAP
     ldy dr_start_col
     lda dr_end_col
     jsr mmu_common_and_map_span
@@ -771,13 +771,13 @@ fill_cave_granite:
     ldx #0
 !fcg_row:
     jsr dg_set_row_ptr
-#if C128_PRODUCT_OVERLAY_RUNTIME
+#if HAL_LAYOUT_DUNGEON_GEN_ROW_BATCHED_MAP
     lda #MAP_COLS
     jsr mmu_common_copy_map_row
 #endif
     ldy #0
 !fcg_col:
-#if C128_PRODUCT_OVERLAY_RUNTIME
+#if HAL_LAYOUT_DUNGEON_GEN_ROW_BATCHED_MAP
     lda SCREEN_RAM,y
 #else
     :MapRead_ptr0_y()
@@ -794,7 +794,7 @@ fill_cave_granite:
     bne !fcg_next+
     lda dg_tile_scratch
     and #~FLAG_OCCUPIED & $ff
-#if C128_PRODUCT_OVERLAY_RUNTIME
+#if HAL_LAYOUT_DUNGEON_GEN_ROW_BATCHED_MAP
     sta SCREEN_RAM,y
 #else
     :MapWrite_ptr0_y()
@@ -802,7 +802,7 @@ fill_cave_granite:
     jmp !fcg_next+
 !fcg_rock:
     lda #TILE_WALL_H
-#if C128_PRODUCT_OVERLAY_RUNTIME
+#if HAL_LAYOUT_DUNGEON_GEN_ROW_BATCHED_MAP
     sta SCREEN_RAM,y
 #else
     :MapWrite_ptr0_y()
@@ -810,7 +810,7 @@ fill_cave_granite:
     jmp !fcg_next+
 !fcg_floor:
     lda #TILE_FLOOR
-#if C128_PRODUCT_OVERLAY_RUNTIME
+#if HAL_LAYOUT_DUNGEON_GEN_ROW_BATCHED_MAP
     sta SCREEN_RAM,y
 #else
     :MapWrite_ptr0_y()
@@ -818,7 +818,7 @@ fill_cave_granite:
     jmp !fcg_next+
 !fcg_keep_junction:
     lda #FLAG_HAS_ITEM
-#if C128_PRODUCT_OVERLAY_RUNTIME
+#if HAL_LAYOUT_DUNGEON_GEN_ROW_BATCHED_MAP
     sta SCREEN_RAM,y
 #else
     :MapWrite_ptr0_y()
@@ -827,7 +827,7 @@ fill_cave_granite:
     iny
     cpy #MAP_COLS
     bne !fcg_col-
-#if C128_PRODUCT_OVERLAY_RUNTIME
+#if HAL_LAYOUT_DUNGEON_GEN_ROW_BATCHED_MAP
     lda #MAP_COLS
     jsr mmu_common_store_map_row
 #endif
@@ -1608,14 +1608,14 @@ materialize_staged_tunnel:
     ldx dg_scan_row_start
 !mst_row:
     jsr dg_set_row_ptr
-#if C128_PRODUCT_OVERLAY_RUNTIME
+#if HAL_LAYOUT_DUNGEON_GEN_ROW_BATCHED_MAP
     // Copy Bank 1 once per staged row; preserve row-major scan and RNG order.
     lda #MAP_COLS
     jsr mmu_common_copy_map_row
 #endif
     ldy #0
 !mst_col:
-#if C128_PRODUCT_OVERLAY_RUNTIME
+#if HAL_LAYOUT_DUNGEON_GEN_ROW_BATCHED_MAP
     lda SCREEN_RAM,y
 #else
     :MapRead_ptr0_y()
@@ -1898,13 +1898,13 @@ place_junction_doors:
     ldx #0
 !pjd_row:
     jsr dg_set_row_ptr
-#if C128_PRODUCT_OVERLAY_RUNTIME
+#if HAL_LAYOUT_DUNGEON_GEN_ROW_BATCHED_MAP
     lda #MAP_COLS
     jsr mmu_common_copy_map_row
 #endif
     ldy #0
 !pjd_col:
-#if C128_PRODUCT_OVERLAY_RUNTIME
+#if HAL_LAYOUT_DUNGEON_GEN_ROW_BATCHED_MAP
     lda SCREEN_RAM,y
 #else
     :MapRead_ptr0_y()
@@ -1920,7 +1920,7 @@ place_junction_doors:
     stx dg_cy1
     lda #TILE_FLOOR
     :MapWrite_ptr0_y()
-#if C128_PRODUCT_OVERLAY_RUNTIME
+#if HAL_LAYOUT_DUNGEON_GEN_ROW_BATCHED_MAP
     sta SCREEN_RAM,y
 #endif
     lda #0

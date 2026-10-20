@@ -29,8 +29,8 @@
 // ============================================================
 .label hiscore_table = CREATURE_BASE
 hiscore_count:  .byte 0
-#if APPLE2
-// score_io is part of OVL.DEATH on Apple II, while save_count_lo/hi belong
+#if HAL_PLATFORM_AUX_PERSISTENT_DATA
+// score_io is part of OVL.DEATH on Apple II / CX16, while save_count_lo/hi belong
 // to OVL.STORAGE at the same window addresses.  Keep this overlay's mutable
 // byte count local so high-score I/O cannot overwrite the death overlay.
 hiscore_io_count_lo:  .byte 0

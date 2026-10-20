@@ -98,20 +98,20 @@ irs_p3_genocide:
 // handler runs through tramp_spell_call_items (resident swap-call returning
 // to OVL.ITEMS, matching !irs_re_done). Elsewhere the handlers are in the
 // spell overlay, which the router already loaded.
-#if APPLE2
-.macro A2ReCall(handler) {
+#if HAL_PLATFORM_COMPACT_PLAY_SLOT
+.macro CompactReCall(handler) {
     lda #<handler
     ldy #>handler
-    jmp irs_re_a2_call
+    jmp irs_re_compact_call
 }
-.macro A2ReCallArg(handler, arg) {
+.macro CompactReCallArg(handler, arg) {
     lda #arg
-    sta a2_tsci_arg
-    :A2ReCall(handler)
+    sta hal_tsci_arg
+    :CompactReCall(handler)
 }
 #endif
 irs_p3_run_existing:
-#if C128
+#if HAL_PLATFORM_SCROLL_P3_MODAL_DEATH_TRAMP
     // Death-overlay handlers are called through the resident swap-call
     // trampoline; this overlay cannot swap to OVL_DEATH without evicting its
     // own continuation. A = item type ID.
@@ -211,37 +211,37 @@ irs_re_id_tab:
     cmp #ITEM_TYPE_STAFF_DESTRUCTION
     bne !irs_re_unmatched+
 !irs_re_destroy:
-#if APPLE2
-    // A2: this router and the devastation engine share the death overlay.
-    // Tail call like A2ReCall: never return into the !irs_re_done
+#if HAL_PLATFORM_COMPACT_PLAY_SLOT
+    // Compact play slot: this router and the devastation engine share the death overlay.
+    // Tail call like CompactReCall: never return into the !irs_re_done
     // continuation, or the read-flow epilogue prints spurious messages.
     jmp da_devastate
 #else
     jsr eff_destroy_area
-#endif
     jmp !irs_re_done+
+#endif
 !irs_re_unmatched:
     // Unmatched ID: no effect. Never default to area destruction.
     jmp !irs_re_done+
 !irs_re_speed:
-#if APPLE2
-    :A2ReCall(eff_haste_self)
+#if HAL_PLATFORM_COMPACT_PLAY_SLOT
+    :CompactReCall(eff_haste_self)
 #else
     jsr eff_haste_self
-#endif
     jmp !irs_re_done+
+#endif
 !irs_re_remove_curse:
-#if APPLE2
+#if HAL_PLATFORM_COMPACT_PLAY_SLOT
     // Print before the swap-call: this overlay is evicted by it.
     ldx #HSTR_PIQ_CLEANSED
     jsr huff_print_msg
-    :A2ReCall(eff_remove_curse)
+    :CompactReCall(eff_remove_curse)
 #else
     jsr eff_remove_curse
     ldx #HSTR_PIQ_CLEANSED
     jsr huff_print_msg
-#endif
     jmp !irs_re_done+
+#endif
 !irs_re_cloud:
     jsr eff_directional_monster
     bcc !irs_re_cloud_miss+
@@ -258,30 +258,30 @@ irs_re_id_tab:
     jmp !irs_re_done+
 !irs_re_recharge:
     // Upstream Recharging scroll: Recharge II strength (A=50)
-#if APPLE2
-    :A2ReCallArg(eff_recharge_item, 50)
+#if HAL_PLATFORM_COMPACT_PLAY_SLOT
+    :CompactReCallArg(eff_recharge_item, 50)
 #else
     lda #50
     jsr eff_recharge_item
     jmp !irs_re_done+
 #endif
 !irs_re_rune:
-#if APPLE2
-    :A2ReCall(eff_glyph_of_warding)
+#if HAL_PLATFORM_COMPACT_PLAY_SLOT
+    :CompactReCall(eff_glyph_of_warding)
 #else
     jsr eff_glyph_of_warding
     jmp !irs_re_done+
 #endif
 !irs_re_genocide:
-#if APPLE2
-    :A2ReCall(eff_genocide)
+#if HAL_PLATFORM_COMPACT_PLAY_SLOT
+    :CompactReCall(eff_genocide)
 #else
     jsr eff_genocide
     jmp !irs_re_done+
 #endif
 !irs_re_slow:
-#if APPLE2
-    :A2ReCall(eff_slow_monster_dir)
+#if HAL_PLATFORM_COMPACT_PLAY_SLOT
+    :CompactReCall(eff_slow_monster_dir)
 #else
     jsr eff_slow_monster_dir
     jmp !irs_re_done+
@@ -290,16 +290,16 @@ irs_re_id_tab:
     jsr eff_wall_to_mud
     jmp !irs_re_done+
 !irs_re_teleport:
-#if APPLE2
-    :A2ReCall(eff_teleport_other)
+#if HAL_PLATFORM_COMPACT_PLAY_SLOT
+    :CompactReCall(eff_teleport_other)
 #else
     jsr eff_teleport_other
     jmp !irs_re_done+
 #endif
 !irs_re_fire:
     // Fire Ball spell damage (49)
-#if APPLE2
-    :A2ReCallArg(eff_ball, 49)
+#if HAL_PLATFORM_COMPACT_PLAY_SLOT
+    :CompactReCallArg(eff_ball, 49)
 #else
     lda #49
     jsr eff_ball
@@ -307,34 +307,34 @@ irs_re_id_tab:
 #endif
 !irs_re_cold:
     // Frost Ball spell damage (33)
-#if APPLE2
-    :A2ReCallArg(eff_ball, 33)
+#if HAL_PLATFORM_COMPACT_PLAY_SLOT
+    :CompactReCallArg(eff_ball, 33)
 #else
     lda #33
     jsr eff_ball
     jmp !irs_re_done+
 #endif
 !irs_re_dispel:
-#if APPLE2
-    :A2ReCall(ped_s28)
+#if HAL_PLATFORM_COMPACT_PLAY_SLOT
+    :CompactReCall(ped_s28)
 #else
     jsr ped_s28
     jmp !irs_re_done+
 #endif
 !irs_re_done:
-#if APPLE2
+#if HAL_PLATFORM_COMPACT_PLAY_SLOT
     lda #OVL_ITEMS
     jsr overlay_load
 #endif
     rts
 #endif
 
-#if APPLE2 && SCROLL_P3_EXISTING_OWNER
-// irs_re_a2_call — Stage an OVL.SPELL handler and run it through the resident
+#if HAL_PLATFORM_COMPACT_PLAY_SLOT && SCROLL_P3_EXISTING_OWNER
+// irs_re_compact_call — Stage an OVL.SPELL handler and run it through the resident
 // swap-call trampoline. A/Y = handler address. Runs in the death overlay;
 // the swap to OVL.SPELL happens only inside resident code so this chain's
 // continuation is never evicted.
-irs_re_a2_call:
+irs_re_compact_call:
     sta tsci_target+1
     sty tsci_target+2
     jmp tramp_spell_call_items
@@ -371,7 +371,7 @@ irs_p3_teleport_level:
 
 // Magic Mapping: reveal the whole level map (wizard reveal effect).
 irs_p3_magic_mapping:
-#if APPLE2
+#if HAL_PLATFORM_COMPACT_PLAY_SLOT
     // eff_reveal_floorplan lives in OVL.SPELL; the message string is in this
     // overlay. Print first (msg_print is resident), then run the effect
     // through the swap-call trampoline, which restores OVL.ITEMS on exit.
@@ -380,8 +380,8 @@ irs_p3_magic_mapping:
     ldy #>irs_p3_map_msg
     sty zp_ptr0_hi
     jsr msg_print
-    :A2ReCall(eff_reveal_floorplan)
-#elif C128
+    :CompactReCall(eff_reveal_floorplan)
+#elif HAL_PLATFORM_SCROLL_P3_MODAL_DEATH_TRAMP
     // eff_reveal_floorplan lives in OVL_DEATH. Print first while this modal
     // overlay (and its message string) is resident, then run the effect
     // through the resident swap-call trampoline, which restores OVL.ITEMS.
@@ -485,7 +485,7 @@ irs_p3_mass_genocide:
 // overlay owns them, so the items overlay must be restored before returning
 // to the read-scroll flow.
 irs_p3_report:
-#if APPLE2
+#if HAL_PLATFORM_COMPACT_PLAY_SLOT
     // pmx_print_inline lives in OVL.SPELL on this platform, which is not
     // loaded here (the router runs from OVL.DEATH). Inline its body:
     // msg_print is resident and the message string is in this overlay.
@@ -498,7 +498,7 @@ irs_p3_report:
     rts
 #else
     jsr pmx_print_inline
-#if C128
+#if HAL_PLATFORM_SCROLL_P3_MODAL_DEATH_TRAMP
     lda #OVL_ITEMS
     jsr overlay_load
 #endif

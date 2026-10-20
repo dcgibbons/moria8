@@ -264,7 +264,7 @@ if not has_ordered_chain(player_items, [
     "lda #OVL_NONE",
     "jsr overlay_load",
     "brk",
-    "#if PLUS4_PRODUCT_OVERLAY_RUNTIME",
+    "#if HAL_PLATFORM_ITEM_PROMPT_RELOAD_PLUS4_BANK_RAM",
     "jsr plus4_install_ram_irq_vectors",
     "jsr plus4_bank_ram",
 ], window=80):

@@ -51,6 +51,8 @@
 .const hal_input_help_footer_uses_esc_stop = true
 #define HAL_INPUT_HELP_FOOTER_USES_ESC_STOP
 .const hal_input_inventory_letter_normalize_shifted = false
+.const hal_input_selectable_overlay_filter_help_key = true
+#define HAL_INPUT_SELECTABLE_OVERLAY_FILTER_HELP_KEY
 
 // ============================================================
 // Subroutines

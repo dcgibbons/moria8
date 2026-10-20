@@ -29,6 +29,7 @@
 #define HAL_INPUT_FLUSH_RUN_CANCEL_BUFFER
 .const hal_input_help_footer_uses_esc_stop = false
 .const hal_input_inventory_letter_normalize_shifted = false
+.const hal_input_selectable_overlay_filter_help_key = false
 .const KERNAL_SHIFT_MODE = $0291
 .const KERNAL_CHARSET_SWITCH_LOCK = $80
 .const CIA1_PORTA   = $dc00

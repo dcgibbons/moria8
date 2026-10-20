@@ -31,7 +31,7 @@
 player_create:
     // C128: save_slot_index lives in the persist payload, which is not resident
     // during chargen (play is). Writing it here stomps live play-payload code.
-#if !C64_UNIT_TEST && !C128
+#if !C64_UNIT_TEST && !HAL_PLATFORM_GAME_LOOP_MODAL_PERSIST
     lda #$ff
     sta save_slot_index
 #endif

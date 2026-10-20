@@ -23,7 +23,7 @@
 // ============================================================
 // Store name strings (screen codes, null-terminated)
 // ============================================================
-#if !(C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME)
+#if !PLATFORM_PRODUCT_OVERLAY_RUNTIME
 // Unit-test fixture strings. Product builds define these labels in TownOverlay.
 sn_general:  .text "General Store"  ; .byte 0
 sn_armory:   .text "Armory"         ; .byte 0
@@ -38,7 +38,7 @@ sn_home:     .text "Home"            ; .byte 0
 // ============================================================
 // Store owner strings (screen codes, null-terminated)
 // ============================================================
-#if !(C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME)
+#if !PLATFORM_PRODUCT_OVERLAY_RUNTIME
 so_0: .text "BILBO THE FRIENDLY"    ; .byte 0
 so_1: .text "GORN THE ARMORER"      ; .byte 0
 so_2: .text "BRYN THE FORGEMASTER"  ; .byte 0

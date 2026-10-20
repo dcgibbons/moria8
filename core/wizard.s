@@ -48,16 +48,14 @@ wizard_execute_level_jump:
 !wiz_not_town:
     lda wizard_entry_dir
     sta level_entry_dir
-#if !C128 && !APPLE2
+#if !HAL_PLATFORM_NO_RESIDENT_IRS_P3_ROUTER
     jmp wizard_level_jump_generate
-#endif
-#if !C128 && !APPLE2
+
 // irs_p3_swap_exec — Resident Phase 3 scroll/wand/staff effect router
-// (C64/Plus4). The items-overlay router (irs_effect_p3_swap) jumps here
-// because loading the spell overlay from the items overlay would evict the
-// router's own code mid-flight. A = item type ID on entry; the dispatch
-// reads it from A, so preserve it across the overlay load (overlay_load
-// returns the overlay ID in A).
+// for platforms where the items-overlay router (irs_effect_p3_swap) jumps
+// here to swap in OVL_SPELL without evicting its own continuation.
+// A = item type ID on entry; the dispatch reads it from A, so preserve it
+// across the overlay load (overlay_load returns the overlay ID in A).
 irs_p3_swap_exec:
     pha                         // save item type ID
     lda #OVL_SPELL
@@ -76,7 +74,7 @@ irs_p3_swap_exec:
 #endif
 
 wizard_level_jump_generate:
-#if !APPLE2
+#if !HAL_PLATFORM_WIZARD_JUMP_INLINE_PLAY
     lda #1
     sta wizard_level_jump_active
     // The generation overlay replaces the current UI overlay. Abandon the
