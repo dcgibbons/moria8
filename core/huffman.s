@@ -33,11 +33,7 @@ hd_bit_mask:   .byte 0        // Bits remaining in current byte (counter)
 // ============================================================
 #if HAL_PLATFORM_HUFFMAN_DATA_AUX
 .macro HuffDbReadPtr1() {
-#if APPLE2
-    jsr mmu_safe_map_read_ptr1
-#else
     jsr mmu_safe_huff_read_ptr1
-#endif
 }
 
 .macro HuffRead_str_index_x() {

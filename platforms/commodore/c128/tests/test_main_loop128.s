@@ -2,6 +2,7 @@
 // test_main_loop128.s — Focused dispatch tests for common/game_loop.s on C128
 
 #define C128_PRODUCT_MODAL_PERSIST
+#define HAL_PLATFORM_GAME_LOOP_MODAL_PERSIST
 #define HAL_PLATFORM_GAME_LOOP_VISIBILITY_PRESERVE_REVEAL_EXTERNAL
 
 .pc = $0801 "BASIC Stub"

@@ -180,7 +180,7 @@ id_known_test:
 // in the C128 banked runtime, which has only ~9 bytes free).
 // Input: X = item type ID. Clobbers: A, Y (X preserved via id_known_set).
 // ============================================================
-#if C128
+#if HAL_PLATFORM_QUAFF_IDENTIFY_RESIDENT
 piq_quaff_identify:
     txa
     cmp #17                 // Cure Light Wounds

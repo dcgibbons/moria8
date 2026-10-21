@@ -252,7 +252,7 @@ item_takeoff:
     sta inv_flags,x
 
     // Remove the equipped item's direct current-stat adjustment.
-#if APPLE2
+#if HAL_PLATFORM_COMPACT_PLAY_SLOT
     ldx piw_equip
 #endif
     clc
@@ -421,7 +421,7 @@ item_eat:
 // ============================================================
 // String data (screen codes via inherited encoding)
 // ============================================================
-#if APPLE2
+#if HAL_PLATFORM_AUX_PERSISTENT_DATA
 // ============================================================
 // piq_quaff_identify — Mark item type X identified, but only when quaffing it
 // produces a noticeable effect (upstream VMS hp_player). Heal-family potions
@@ -479,7 +479,7 @@ item_quaff:
     // no-op, so those stay unidentified. Only A2/C128 have room for the gate;
     // C64/Plus4 item test/product layouts are full, so they keep the legacy
     // unconditional identify (documented layout exemption).
-#if APPLE2 || C128
+#if HAL_PLATFORM_AUX_PERSISTENT_DATA || HAL_PLATFORM_ITEM_TABLES_SPLIT_RESIDENT
     ldx piw_item_id
     jsr piq_quaff_identify
 #else
@@ -507,6 +507,7 @@ item_quaff:
     jmp (zp_ptr1)
 // Reached from item_quaff with A = potion type ID (96-100, 126, or other).
 !iq_dispatch_generic:
+#if HAL_PLATFORM_ITEM_TABLES_SPLIT_RESIDENT || HAL_PLATFORM_COMPACT_PLAY_SLOT
     cmp #ITEM_TYPE_POT_HEALING
     bcc !iqd_not_p3+
     cmp #ITEM_TYPE_POT_CURE_CRITICAL + 1
@@ -514,18 +515,17 @@ item_quaff:
     cmp #ITEM_TYPE_POT_NEUTRALIZE
     bne !iqd_not_p3+
 !iqd_phase3:
-#if C128
-    // C128: Phase 3 potion handlers are resident; no overlay or disk access.
-    jsr c128_quaff_p3_dispatch
+#if HAL_PLATFORM_ITEM_TABLES_SPLIT_RESIDENT
+    // Phase 3 potion handlers are resident; no overlay or disk access.
+    jsr hal_quaff_p3_dispatch
     sec
     rts
 #else
-#if APPLE2
-    // Apple IIe: Phase 3 potion handlers live in the spell overlay (items
+    // Phase 3 potion handlers live in the spell overlay (items
     // overlay is full). Loading it here would evict this items-overlay
     // continuation, so the swap runs through the resident trampoline.
     lda piw_item_id
-    sta a2_tsci_arg
+    sta hal_tsci_arg
     lda #<iq_dispatch_p3_spell
     sta tsci_target+1
     lda #>iq_dispatch_p3_spell
@@ -534,9 +534,7 @@ item_quaff:
     sec
     rts
 #endif
-#endif
 !iqd_not_p3:
-#if C128 || APPLE2
     jmp iq_effect_generic
 #else
     cmp #ITEM_TYPE_POT_HEALING

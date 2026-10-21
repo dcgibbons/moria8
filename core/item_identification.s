@@ -15,13 +15,13 @@
 // classes, everything else renders its real name/color even if a bad save
 // marks it unknown). Apple IIe keeps this table in aux RAM (A2AuxData) and
 // reads it through the aux thunk; other ports keep it resident.
-#if APPLE2
-.segment A2AuxData
+#if HAL_PLATFORM_AUX_PERSISTENT_DATA
+:AuxDataSegment()
 #endif
-#if C128_PRODUCT_OVERLAY_RUNTIME
+#if HAL_PLATFORM_ITEM_TABLES_SPLIT_RESIDENT
 // On C128 the table rides the Bank 1 item-names payload (read via
 // mmu_safe_db_read_ptr1 below) to keep the resident items payload in bounds.
-.segment C128ResidentItemNames
+:ResidentItemNamesSegment()
 #endif
 it_unknown_idx:
     .fill 9, 0              // types 0-17: fixed, 17 = potion 0
@@ -63,11 +63,11 @@ it_unknown_idx:
     .fill 4, 0              // 128-134: fixed chest names
 it_unknown_idx_end:
 .assert "it_unknown_idx size", it_unknown_idx_end - it_unknown_idx, (ITEM_TYPE_COUNT + 1) >> 1
-#if APPLE2
+#if HAL_PLATFORM_AUX_PERSISTENT_DATA
 .segment Default
 #endif
-#if C128_PRODUCT_OVERLAY_RUNTIME
-.segment C128ResidentItems
+#if HAL_PLATFORM_ITEM_TABLES_SPLIT_RESIDENT
+:ResidentItemsSegment()
 #endif
 
 // Shuffle tables: map category-local index → description index
@@ -86,7 +86,7 @@ iuk_index_for_type:
     lsr
     tay
     bcs !iuk_odd+
-#if C128_PRODUCT_OVERLAY_RUNTIME
+#if HAL_PLATFORM_ITEM_TABLES_SPLIT_RESIDENT
     jsr iuk_read_y_bank1
 #else
     :AuxReadY(it_unknown_idx)
@@ -94,7 +94,7 @@ iuk_index_for_type:
     and #$0f
     rts
 !iuk_odd:
-#if C128_PRODUCT_OVERLAY_RUNTIME
+#if HAL_PLATFORM_ITEM_TABLES_SPLIT_RESIDENT
     jsr iuk_read_y_bank1
 #else
     :AuxReadY(it_unknown_idx)
@@ -105,7 +105,7 @@ iuk_index_for_type:
     lsr
     rts
 
-#if C128_PRODUCT_OVERLAY_RUNTIME
+#if HAL_PLATFORM_ITEM_TABLES_SPLIT_RESIDENT
 // iuk_read_y_bank1 — Bank 1 read of it_unknown_idx,y (names payload).
 iuk_read_y_bank1:
     lda #<it_unknown_idx
@@ -426,7 +426,7 @@ item_get_name_ptr:
     cmp #ICAT_BOOK
     beq !ignp_book_prefix+
 !ignp_raw_known:
-#if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME
+#if PLATFORM_PRODUCT_OVERLAY_RUNTIME
     jsr item_load_known_name_ptr
 #else
     lda it_name_lo,x
@@ -434,7 +434,7 @@ item_get_name_ptr:
     lda it_name_hi,x
     sta zp_ptr0_hi
 #endif
-#if C128_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME
+#if HAL_PLATFORM_ITEM_NAME_STREAMS_BANKED
     jmp item_decode_name_ptr_bank1
 #else
     jmp item_decode_name_ptr
@@ -450,7 +450,7 @@ item_get_name_ptr:
 !ignp_prefix_done:
     sty item_name_dst_idx
     ldx item_display_id
-#if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME
+#if PLATFORM_PRODUCT_OVERLAY_RUNTIME
     jsr item_load_known_name_ptr
 #else
     lda it_name_lo,x
@@ -458,7 +458,7 @@ item_get_name_ptr:
     lda it_name_hi,x
     sta zp_ptr0_hi
 #endif
-#if C128_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME
+#if HAL_PLATFORM_ITEM_NAME_STREAMS_BANKED
     jmp item_decode_name_ptr_bank1_at_dst
 #else
     jmp item_decode_name_ptr_at_dst
@@ -505,7 +505,7 @@ idgp_mage_book_prefix:   .text "Spellbook " ; .byte 0
 idgp_priest_book_prefix: .text "Holy Book of Prayers " ; .byte 0
 item_display_id: .byte 0
 
-#if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME
+#if PLATFORM_PRODUCT_OVERLAY_RUNTIME
 // item_load_known_name_ptr — Resolve a known-name stream pointer without the
 // resident high-byte table. Name streams are emitted in item-ID order, so a
 // low-byte wrap between adjacent entries means the stream crossed a page.
@@ -514,7 +514,7 @@ item_display_id: .byte 0
 // Clobbers: A, Y
 item_load_known_name_ptr:
     stx item_display_id
-#if C128_PRODUCT_OVERLAY_RUNTIME
+#if HAL_PLATFORM_ITEM_TABLES_SPLIT_RESIDENT
     // it_name_lo rides the Bank 1 names payload on C128 (see item_tables.s).
     jsr inl_read_lo_bank1_x
 #else
@@ -527,7 +527,7 @@ item_load_known_name_ptr:
     beq !ilkn_done+
     ldy #0
 !ilkn_loop:
-#if C128_PRODUCT_OVERLAY_RUNTIME
+#if HAL_PLATFORM_ITEM_TABLES_SPLIT_RESIDENT
     sty ilkn_save_y
     lda #<it_name_lo
     sta zp_ptr1
@@ -554,7 +554,7 @@ item_load_known_name_ptr:
 !ilkn_done:
     rts
 
-#if C128_PRODUCT_OVERLAY_RUNTIME
+#if HAL_PLATFORM_ITEM_TABLES_SPLIT_RESIDENT
 // inl_read_lo_bank1_x — Bank 1 read of it_name_lo,x (names payload).
 inl_read_lo_bank1_x:
     stx ilkn_save_y
@@ -624,7 +624,7 @@ item_decode_name_ptr_at_dst:
     sta zp_ptr0_hi
     rts
 
-#if C128_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME
+#if HAL_PLATFORM_ITEM_NAME_STREAMS_BANKED
 // C128 known item-name streams live in Bank 1 DB RAM (mmu_safe_db_read_ptr0);
 // on Apple II they live in aux RAM (mmu_safe_map_read_ptr0 aux thunk). Token
 // strings remain resident, so only source stream reads need the safe read.

@@ -1,0 +1,47 @@
+{
+  "platform": "cx16",
+  "machine": {
+    "cpu": "65c02",
+    "ram_kb": 512
+  },
+  "display": {
+    "hardware": "vera",
+    "columns": 80,
+    "rows": 24,
+    "viewport": {
+      "x": 1,
+      "y": 2,
+      "width": 78,
+      "height": 18
+    },
+    "screen_ram": "vram $1b000",
+    "color_ram": "vram $1b001"
+  },
+  "storage": {
+    "bus": "cmdr_dos",
+    "program_media": "hostfs_or_sd",
+    "save_media": "hostfs_or_sd",
+    "default_program_device": 8,
+    "default_save_device": 8,
+    "compatible_drives": ["hostfs", "sd"]
+  },
+  "memory": {
+    "banking": "$00+$01",
+    "map_base": "$2000",
+    "map_end": "$530b",
+    "banked_data_base": "$a000",
+    "banked_data_end": "$bfff",
+    "io_hole_base": "$9f00",
+    "io_hole_end": "$9fff"
+  },
+  "capabilities": {
+    "reu_overlay_cache": false,
+    "vdc_80_column": false,
+    "ted_display": false,
+    "native_80_column": true,
+    "sid_sound": false,
+    "ted_sound": false,
+    "vera_psg_sound": false,
+    "two_drive_save": false
+  }
+}

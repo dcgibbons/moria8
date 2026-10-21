@@ -55,12 +55,14 @@ If the quote does not name the action, stop and ask.
 7. Release compliance: every shipping disk image must include `data/LICENSE`
    and `data/SOURCE-OFFER` (LF→CR converted). Commodore images carry them as
    SEQ files `license,s`/`source-offer,s`; the Apple IIe image carries ProDOS
-   TXT files `LICENSE`/`SOURCE.OFFER`. New platform ports must do the same.
+   TXT files `LICENSE`/`SOURCE.OFFER`; the Commander X16 `.zip` bundle carries
+   `LICENSE` and `SOURCE-OFFER`. New platform ports must do the same.
 8. Runtime verification uses VICE warp mode and never relies on timeouts above
-   30 seconds. Commands that launch VICE or MAME need localhost monitor/socket
-   access, which sandboxed execution blocks (you'll see `PermissionError`) —
-   request escalated permission on the first attempt; do not try a sandboxed
-   run first. See Memory And Verification Details for the full escalation list.
+   30 seconds. Commands that launch VICE, MAME, or `x16emu` need localhost
+   monitor/socket access, which sandboxed execution blocks (you'll see
+   `PermissionError`) — request escalated permission on the first attempt; do
+   not try a sandboxed run first. See Memory And Verification Details for the
+   full escalation list.
 
 Additional durable invariants for memory, banking, zero-page, C128, and
 shared-code work live in `docs/INTERNAL_MANDATES.md`; load it before any such
@@ -78,6 +80,7 @@ load `docs/BEHAVIOR_CHANGE_PROTOCOL.md`, then every matching domain contract:
 | Turn consumption, visibility lifecycle, dirty flags, redraw, repeat commands | `docs/TURN_RENDER_CONTRACT.md` |
 | C128 addresses, banks, overlays, copied/runtime code, physical VDC access | `docs/C128_MEMORY_CONTRACT.md` |
 | Apple IIe addresses, banks, aux/main ownership, overlays, copied/runtime code | `docs/APPLE2_MEMORY_POLICY.md` |
+| Commander X16 addresses, RAM banks, overlays, VERA access | `docs/CX16_MEMORY_CONTRACT.md` |
 | None of the above | No contract load required |
 
 Before editing a matched domain, output one line:
@@ -125,6 +128,12 @@ Hard boundaries:
   owns the map (`$0800-$3B0B`), auxdata (`$3B0C-$59FF`), and the overlay
   cache (`$5A00-$BFFF`); aux reads execute only from the ZP thunks in
   `platforms/apple2/memory_aux.s` (ZP address labels are in `memory.s`)
+- Commander X16 ownership comes from `docs/CX16_MEMORY_CONTRACT.md` and
+  `platforms/cx16/memory.s`: unified resident/play ends at or below `$9AFF`,
+  the tier-name pool spans `$9B00-$9EFF`, `$9F00-$9FFF` is the VERA/VIA I/O
+  hole, and the `$A000-$BFFF` banked RAM window (switched via `$00`) hosts
+  map Banks 1–2, auxdata Bank 3, huffdata Bank 4, monster tiers Banks 5–8,
+  overlays Banks 9–20, and title art Bank 21
 
 After C128 layout, banking, runtime-loaded, copied, or trampolined-code changes,
 verify linked address, PRG load header, load destination bank, visible execution
@@ -142,11 +151,12 @@ Test files whose `test_start` would land at or above `$A000` must use a
 bootstrap stub below BASIC ROM that banks RAM visible before jumping to
 `test_start`.
 
-VICE/MAME escalation list (these launch an emulator and need unsandboxed
-localhost access): commands that invoke `x64sc`, `x128`, or `xplus4`; `make
-test64`; `make testplus4`; `make testplus4-runtime`; `make test128-fast`;
-`make test128-fast-smoke`; `make test128`; direct `harness128.py`,
-`harness128_batch.py`, or `harnessplus4.py` runs; and filtered runtime harness
+VICE/MAME/`x16emu` escalation list (these launch an emulator and need
+unsandboxed localhost access): commands that invoke `x64sc`, `x128`, `xplus4`,
+or `x16emu`; `make test64`; `make testplus4`; `make testplus4-runtime`; `make
+test128-fast`; `make test128-fast-smoke`; `make test128`; `make testcx16`;
+`make testcx16-runtime`; direct `harness128.py`, `harness128_batch.py`,
+`harnessplus4.py`, or `harness_smoke.py` runs; and filtered runtime harness
 targets. Static/build-only checks stay sandboxed: `make build`, `make
 check-hal-boundaries`, Python static checkers, `git diff`, and similar commands
 that do not launch an emulator. Before running one of these, output one line:
@@ -155,7 +165,9 @@ that do not launch an emulator. Before running one of these, output one line:
 The Apple IIe harness (`platforms/apple2/harness_smoke.py`) drives headless
 MAME apple2ee instead of VICE and requires Apple IIe ROMs via the `A2ROMS`
 env var or `--rompath` (ROMs are not redistributable). Run one scenario per
-invocation; the suite is 14 scenarios plus `boot_title`.
+invocation; the suite is 14 scenarios plus `boot_title`. The Commander X16
+harness (`platforms/cx16/harness_smoke.py`) drives headless `x16emu -testbench`
+when `X16EMU` and `X16ROM` are available (20 scenarios).
 
 ## Working Style
 
@@ -204,9 +216,9 @@ reported. Before declaring done, confirm in your reply:
 
 ## Reference
 
-This is a Commodore 64 / Commodore 128 / Plus/4 / Apple IIe 6502 assembly
-project built with Kick Assembler and tested with VICE and MAME headless
-harnesses.
+This is a Commodore 64 / Commodore 128 / Plus/4 / Apple IIe / Commander X16
+6502/65C02 assembly project built with Kick Assembler and tested with VICE,
+MAME, and `x16emu` headless harnesses.
 
 Primary entry points:
 
@@ -214,6 +226,7 @@ Primary entry points:
 - `platforms/commodore/c128/main.s`
 - `platforms/commodore/plus4/main.s`
 - `platforms/apple2/main.s`
+- `platforms/cx16/main.s`
 
 Source layout:
 
@@ -226,24 +239,28 @@ Source layout:
   scripts.
 - `platforms/apple2/`: Apple IIe platform code, MAME harness scripts, and
   memory-contract checker.
+- `platforms/cx16/`: Commander X16 platform code, `x16emu` TestBench harness
+  scripts, and memory-contract checker.
 - `build/`: generated binaries, disk images, symbols, snapshots, and test
   scratch output.
 
 Build and test (run from the repository root):
 
-- `make` or `make build`: build C64, C128, Plus/4, and Apple IIe payloads
+- `make` or `make build`: build C64, C128, Plus/4, Apple IIe, and CX16 payloads
 - `make test`: default regression mix; also runs the Apple IIe MAME runtime
-  suite (all `harness_smoke.py` scenarios) when `A2ROMS` is set, with a
-  skip warning otherwise
+  suite when `A2ROMS` is set and the Commander X16 `x16emu` runtime suite when
+  `X16EMU`/`X16ROM` are available
 - `make test64`: C64 tests
 - `make testplus4`: Plus/4 tests
 - `make test128-fast`: stable C128 unit batch
 - `make test128-fast-smoke`: high-value C128 runtime smoke subset
 - `make test128`: authoritative full C128 suite
 - `make testapple2`: Apple IIe memory-contract gate (static)
-- `make disk`: build shipping C64, C128, Plus/4, and Apple IIe disk images
+- `make testcx16`: Commander X16 memory-contract gate + `x16emu` runtime suite
+- `make disk`: build shipping C64, C128, Plus/4, Apple IIe, and CX16 packages
 - `make run`, `make run64`, `make run128`, `make runplus4`: launch under VICE
 - `make runapple2`: launch under MAME apple2ee (requires `A2ROMS`)
+- `make runcx16`: launch under `x16emu`
 - `make clean`: remove build artifacts
 
 Kick Assembler downloads into `tools/kickass/` unless the `KICKASS` env var is
@@ -253,7 +270,8 @@ Architecture notes:
 
 - Display is character-cell based (PETSCII screen codes; the Apple IIe
   translates to Apple display codes at write time).
-- C64 gameplay is 40-column. C128 and Apple IIe gameplay are 80-column.
+- C64 and Plus/4 gameplay are 40-column. C128, Apple IIe, and Commander X16
+  gameplay are 80-column.
 - BASIC is used for the loader stub only; do not rely on BASIC routines after
   machine-code startup. KERNAL routines are allowed where appropriate.
 - Preserve intentional disk-loading and memory-ownership boundaries.

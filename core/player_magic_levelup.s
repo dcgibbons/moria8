@@ -44,7 +44,7 @@ magic_check_new_spells:
     sta mcns_stat_adj
 
     lda zp_player_lvl
-#if APPLE2
+#if HAL_PLATFORM_AUX_PERSISTENT_DATA
     sta zp_temp0
     :AuxReadX(class_spell_min_level)
     sta zp_temp1
@@ -94,7 +94,7 @@ magic_check_new_spells:
     rts
 !mcns_cap_total:
     sta mcns_allowed
-#if APPLE2
+#if HAL_PLATFORM_AUX_PERSISTENT_DATA
     sta zp_temp0
     :AuxReadX(class_spell_total)
     sta zp_temp1
@@ -104,7 +104,7 @@ magic_check_new_spells:
     cmp class_spell_total,x
 #endif
     bcc !mcns_count_known+
-#if APPLE2
+#if HAL_PLATFORM_AUX_PERSISTENT_DATA
     lda zp_temp1
 #else
     :AuxReadX(class_spell_total)

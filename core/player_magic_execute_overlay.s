@@ -48,7 +48,7 @@ pmx_pick_recharge_item:
     jsr msg_print
     jsr input_prepare_followup_key
     jsr hal_input_get_key
-#if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME
+#if HAL_PLATFORM_PLAYER_MAGIC_RESTORE_BEFORE_RETURN
     cmp #$3f
     bne !pmx_no_selector_overlay_hint+
     pha
@@ -57,7 +57,7 @@ pmx_pick_recharge_item:
     pla
 !pmx_no_selector_overlay_hint:
 #endif
-#if APPLE2
+#if HAL_PLATFORM_AUX_PERSISTENT_DATA
     jmp tramp_select_filtered_inv_key_spell
 #else
     jmp piw_select_filtered_inv_key

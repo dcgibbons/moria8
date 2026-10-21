@@ -349,7 +349,7 @@ it_dmg_packed:
     .byte $11                                 // 135: Iron Spike (1d1)
 it_dmg_packed_end:
 
-#if C64_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME
+#if HAL_PLATFORM_ITEM_COST_IN_TOWN_OVERLAY
 .segment TownOverlay
 #endif
 
@@ -383,9 +383,9 @@ it_cost_lo:
     .byte <20, <60, <100, <150, <200, <250, <0, <1 // 135: Iron Spike
 it_cost_lo_end:
 
-#if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME
+#if PLATFORM_PRODUCT_OVERLAY_RUNTIME
 // Base cost high bytes are sparse in the current catalog. Product builds keep
-// only non-zero high bytes. C64/Plus4/Apple IIe place them in the town
+// only non-zero high bytes. C64/Plus4/Apple IIe/CX16 place them in the town
 // overlay; C128 keeps them with the resident item payload so town overlay
 // entry remains code.
 it_cost_hi_extra_id:
@@ -399,7 +399,7 @@ it_cost_hi_extra_value:
 it_cost_hi_extra_end:
 .const IT_COST_HI_EXTRA_COUNT = it_cost_hi_extra_value - it_cost_hi_extra_id
 
-#if C64_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME
+#if HAL_PLATFORM_ITEM_COST_IN_TOWN_OVERLAY
 .segment Default
 #endif
 #else
@@ -436,7 +436,7 @@ it_cost_hi_end:
 
 #if PICKER_IN_CHEST_OVERLAY
 .segment ChestOverlay
-#elif C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME
+#elif PLATFORM_PRODUCT_OVERLAY_RUNTIME
 .segment DungeonGenOverlay
 #endif
 
@@ -480,9 +480,9 @@ iml_get_for_type:
     lsr
     rts
 
-#if C128_PRODUCT_OVERLAY_RUNTIME
-.segment C128ResidentItems
-#elif C64_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME
+#if HAL_PLATFORM_ITEM_TABLES_SPLIT_RESIDENT
+:ResidentItemsSegment()
+#elif HAL_PLATFORM_ITEM_COST_IN_TOWN_OVERLAY
 .segment Default
 #endif
 
@@ -579,10 +579,10 @@ item_get_display_char:
 idc_save_y: .byte 0
 
 // Name pointer tables
-#if C128_PRODUCT_OVERLAY_RUNTIME
+#if HAL_PLATFORM_ITEM_TABLES_SPLIT_RESIDENT
 // The known-name pointer table rides the Bank 1 item-names payload on C128
 // (read via mmu_safe_db_read_ptr1 in item_identification.s).
-.segment C128ResidentItemNames
+:ResidentItemNamesSegment()
 #endif
 it_name_lo:
     .byte <itn_0,  <itn_1,  <itn_2,  <itn_3,  <itn_4
@@ -619,10 +619,10 @@ it_name_lo:
     .byte <itn_128, <itn_129, <itn_130, <itn_131
     .byte <itn_132, <itn_133, <itn_134, <itn_135
 it_name_lo_end:
-#if C128_PRODUCT_OVERLAY_RUNTIME
-.segment C128ResidentItems
+#if HAL_PLATFORM_ITEM_TABLES_SPLIT_RESIDENT
+:ResidentItemsSegment()
 #endif
-#if !(C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME)
+#if !PLATFORM_PRODUCT_OVERLAY_RUNTIME
 it_name_hi:
     .byte >itn_0,  >itn_1,  >itn_2,  >itn_3,  >itn_4
     .byte >itn_5,  >itn_6,  >itn_7,  >itn_8,  >itn_9
@@ -702,7 +702,7 @@ it_name_hi_end:
 .const ITOK_IRON              = $9e
 .const ITOK_STEEL             = $9f
 .const ITOK_CHEST_SUFFIX      = $a0
-#if C128_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME
+#if HAL_PLATFORM_ITEM_NAME_STREAMS_BANKED
 .const ITEM_NAME_TOKEN_COUNT  = $1b
 #else
 .const ITEM_NAME_TOKEN_COUNT  = $21
@@ -716,7 +716,7 @@ item_name_token_lo:
     .byte <itok_cure, <itok_beginners, <itok_enchant, <itok_a_copper
     .byte <itok_cloud_suffix, <itok_sword_suffix, <itok_a_space, <itok_an_space
     .byte <itok_armor_suffix, <itok_mail_suffix, <itok_shield_suffix
-#if !(C128_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME)
+#if !HAL_PLATFORM_ITEM_NAME_STREAMS_BANKED
     .byte <itok_small, <itok_large, <itok_wooden, <itok_iron
     .byte <itok_steel, <itok_chest_suffix
 #endif
@@ -728,7 +728,7 @@ item_name_token_hi:
     .byte >itok_cure, >itok_beginners, >itok_enchant, >itok_a_copper
     .byte >itok_cloud_suffix, >itok_sword_suffix, >itok_a_space, >itok_an_space
     .byte >itok_armor_suffix, >itok_mail_suffix, >itok_shield_suffix
-#if !(C128_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME)
+#if !HAL_PLATFORM_ITEM_NAME_STREAMS_BANKED
     .byte >itok_small, >itok_large, >itok_wooden, >itok_iron
     .byte >itok_steel, >itok_chest_suffix
 #endif
@@ -760,7 +760,7 @@ itok_an_space:        .text "an " ; .byte 0
 itok_armor_suffix:    .text "Armor" ; .byte 0
 itok_mail_suffix:     .text " Mail" ; .byte 0
 itok_shield_suffix:   .text " Shield" ; .byte 0
-#if !(C128_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME)
+#if !HAL_PLATFORM_ITEM_NAME_STREAMS_BANKED
 itok_small:           .text "Small " ; .byte 0
 itok_large:           .text "Large " ; .byte 0
 itok_wooden:          .text "Wooden " ; .byte 0
@@ -770,14 +770,8 @@ itok_chest_suffix:    .text "Chest" ; .byte 0
 #endif
 
 // Name streams (screen codes plus item-name tokens, null-terminated)
-#if C128_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME
-#if HAL_PLATFORM_ITEM_NAME_STREAMS_AUX
-.segment A2AuxData
-a2_item_name_streams_start:
-#else
-.segment C128ResidentItemNames
-c128_item_name_streams_start:
-#endif
+#if HAL_PLATFORM_ITEM_NAME_STREAMS_BANKED
+:ItemNameStreamsSegment()
 #endif
 #if C64_UNIT_TEST && C64_TEST_NAME_STREAMS_A000
 // Heavyweight C64 unit tests that bank BASIC out for the whole run may park
@@ -795,14 +789,14 @@ itn_6:  .text "Robe" ; .byte 0
 itn_7:  .byte ITOK_LEATHER ; .byte ITOK_ARMOR_SUFFIX ; .byte 0
 itn_8:  .text "Chain" ; .byte ITOK_MAIL_SUFFIX ; .byte 0
 itn_9:  .text "Small" ; .byte ITOK_SHIELD_SUFFIX ; .byte 0
-#if C128_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME
+#if HAL_PLATFORM_ITEM_NAME_STREAMS_BANKED
 itn_10: .text "Iron Helm" ; .byte 0
 #else
 itn_10: .byte ITOK_IRON ; .text "Helm" ; .byte 0
 #endif
 itn_11: .byte ITOK_LEATHER ; .text "Gloves" ; .byte 0
 itn_12: .byte ITOK_LEATHER ; .text "Boots" ; .byte 0
-#if C128_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME
+#if HAL_PLATFORM_ITEM_NAME_STREAMS_BANKED
 itn_13: .text "Wooden Torch" ; .byte 0
 #else
 itn_13: .byte ITOK_WOODEN ; .text "Torch" ; .byte 0
@@ -876,7 +870,7 @@ itn_79: .text "Hard " ; .byte ITOK_LEATHER ; .byte ITOK_ARMOR_SUFFIX ; .byte 0
 itn_80: .text "Scale" ; .byte ITOK_MAIL_SUFFIX ; .byte 0
 itn_81: .text "Plate" ; .byte ITOK_MAIL_SUFFIX ; .byte 0
 itn_82: .text "Cloak" ; .byte 0
-#if C128_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME
+#if HAL_PLATFORM_ITEM_NAME_STREAMS_BANKED
 itn_83: .text "Steel Helm" ; .byte 0
 #else
 itn_83: .byte ITOK_STEEL ; .text "Helm" ; .byte 0
@@ -925,7 +919,7 @@ itn_124: .text "Wisdom" ; .byte 0
 itn_125: .text "the Magi" ; .byte 0
 itn_126: .text "Neutralize Poison" ; .byte 0
 itn_127: .byte ITOK_STAFF ; .byte ITOK_OF ; .text "Remove Curse" ; .byte 0
-#if C128_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME
+#if HAL_PLATFORM_ITEM_NAME_STREAMS_BANKED
 itn_128: .text "Small Wooden Chest" ; .byte 0
 itn_129: .text "Large Wooden Chest" ; .byte 0
 itn_130: .text "Small Iron Chest" ; .byte 0
@@ -947,13 +941,6 @@ itn_135: .byte ITOK_IRON ; .text "Spike" ; .byte 0
 #if C64_UNIT_TEST && C64_TEST_NAME_STREAMS_A000
 .segment Default
 #endif
-#if C128_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME
-#if HAL_PLATFORM_ITEM_NAME_STREAMS_AUX
-a2_item_name_streams_end:
-.segment Default
-#else
-c128_item_name_streams_end:
-.assert "C128 item name streams live in Bank 1 DB region", c128_item_name_streams_start >= BANK1_DB_BASE && c128_item_name_streams_end <= BANK1_DB_END + 1, true
-.segment C128ResidentItems
-#endif
+#if HAL_PLATFORM_ITEM_NAME_STREAMS_BANKED
+:ItemNameStreamsRestoreSegment()
 #endif

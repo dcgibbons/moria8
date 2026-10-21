@@ -62,7 +62,7 @@ load_item_base_cost:
     tax
     lda it_cost_lo,x
     sta zp_temp0
-#if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME
+#if PLATFORM_PRODUCT_OVERLAY_RUNTIME
     lda #0
     sta zp_temp1
     txa
@@ -429,7 +429,7 @@ store_find_empty_slot:
     clc
     rts
 
-#if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME || APPLE2_PRODUCT_OVERLAY_RUNTIME
+#if PLATFORM_PRODUCT_OVERLAY_RUNTIME
 // ============================================================
 // Store name/owner strings (screen codes, null-terminated)
 // ============================================================

@@ -32,7 +32,7 @@
 // Saves at or above this version carry the door-state table block after the
 // post-known blocks; older saves load with all doors plain (count zeroed).
 .const SAVE_DOOR_STATE_VERSION = hal_storage_save_door_state_version
-#if C128
+#if HAL_STORAGE_LEGACY_ROOM8_MIGRATION
 .const SAVE_ROOM21_VERSION = $13
 .const LEGACY_MAX_ROOMS = 8
 #endif
@@ -79,7 +79,7 @@
 #import "save_slot_policy.s"
 
 .const SAVE_SLOT_COUNT = 4
-#if C128
+#if HAL_STORAGE_SAVE_SLOT_ASCII_CHARS
 .const SAVE_SLOT_CHAR_A = $41
 .const SAVE_SLOT_CHAR_C = $43
 .const SAVE_SLOT_CHAR_D = $44
@@ -373,7 +373,7 @@ save_block_table_door_state:
     :save_block_desc(door_state_count, 1 + (MAX_DOOR_STATES * 3))
 save_block_table_door_state_end:
 
-#if C128
+#if HAL_STORAGE_LEGACY_ROOM8_MIGRATION
 save_block_table_post_known_room8:
     :save_block_desc(potion_shuffle, 12)
     :save_block_desc(scroll_shuffle, 12)
@@ -422,7 +422,7 @@ save_block_table_floor_items_direct_end:
 .const SAVE_BLOCK_INVENTORY_LEGACY_COUNT = (save_block_table_inventory_legacy_end - save_block_table_inventory_legacy) / SAVE_BLOCK_DESC_SIZE
 .const SAVE_BLOCK_POST_KNOWN_COUNT = (save_block_table_post_known_end - save_block_table_post_known) / SAVE_BLOCK_DESC_SIZE
 .const SAVE_BLOCK_DOOR_STATE_COUNT = (save_block_table_door_state_end - save_block_table_door_state) / SAVE_BLOCK_DESC_SIZE
-#if C128
+#if HAL_STORAGE_LEGACY_ROOM8_MIGRATION
 .const SAVE_BLOCK_POST_KNOWN_ROOM8_COUNT = (save_block_table_post_known_room8_end - save_block_table_post_known_room8) / SAVE_BLOCK_DESC_SIZE
 #endif
 .const SAVE_BLOCK_POST_FLOOR_COUNT = (save_block_table_post_floor_end - save_block_table_post_floor) / SAVE_BLOCK_DESC_SIZE
@@ -434,7 +434,7 @@ save_block_table_floor_items_direct_end:
 .assert "Current inventory save block table entries are 4 bytes", SAVE_BLOCK_INVENTORY_CURRENT_COUNT * SAVE_BLOCK_DESC_SIZE, save_block_table_inventory_current_end - save_block_table_inventory_current
 .assert "Legacy inventory save block table entries are 4 bytes", SAVE_BLOCK_INVENTORY_LEGACY_COUNT * SAVE_BLOCK_DESC_SIZE, save_block_table_inventory_legacy_end - save_block_table_inventory_legacy
 .assert "Post-known save block table entries are 4 bytes", SAVE_BLOCK_POST_KNOWN_COUNT * SAVE_BLOCK_DESC_SIZE, save_block_table_post_known_end - save_block_table_post_known
-#if C128
+#if HAL_STORAGE_LEGACY_ROOM8_MIGRATION
 .assert "C128 legacy room8 post-known save block table entries are 4 bytes", SAVE_BLOCK_POST_KNOWN_ROOM8_COUNT * SAVE_BLOCK_DESC_SIZE, save_block_table_post_known_room8_end - save_block_table_post_known_room8
 #endif
 .assert "Post-floor save block table entries are 4 bytes", SAVE_BLOCK_POST_FLOOR_COUNT * SAVE_BLOCK_DESC_SIZE, save_block_table_post_floor_end - save_block_table_post_floor
@@ -516,7 +516,7 @@ save_select_output_name_c64:
 #endif
 
 save_game:
-#if C128
+#if HAL_STORAGE_MEDIA_STATE_TRACKING
     lda c128_media_state
     cmp #C128_MEDIA_SAVE
     beq !save_media_ok+
@@ -527,7 +527,7 @@ save_game:
     lda disk_setup_done
     beq !save_media_fail+
 !save_wrong_media:
-#if C128
+#if HAL_STORAGE_MEDIA_STATE_TRACKING
     lda c128_media_state
     cmp #C128_MEDIA_SAVE
     beq !save_media_ok+
@@ -540,7 +540,7 @@ save_game:
     jsr hal_storage_save_media_status
     cmp #HAL_STORAGE_STATUS_WRONG_MEDIA
     beq !save_bad_media+
-#if C64
+#if HAL_STORAGE_SAVE_MEDIA_STATUS_LEGACY
     lda save_device
     cmp program_device
     bne !save_not_bad_media+
@@ -700,7 +700,7 @@ save_open_write_len:
     jsr save_write_known_items
 
     // 4. Remaining resident state through monster table.
-#if C128
+#if HAL_STORAGE_LEGACY_ROOM8_MIGRATION
     jsr save_write_post_known_state
 #else
     lda #<save_block_table_post_known
@@ -724,7 +724,7 @@ save_open_write_len:
     lda #SAVE_BLOCK_POST_FLOOR_COUNT
     jsr save_write_block_table
 #if HAL_STORAGE_MAP_BANKED
-    jsr save_write_map_c128
+    jsr save_write_map_banked
 #endif
 
     // Check for I/O errors
@@ -812,7 +812,7 @@ load_game:
     lda disk_setup_done
     beq !load_media_fail+
 !load_wrong_media:
-#if !C128 && !PLUS4
+#if !HAL_STORAGE_LOAD_PROGRAM_MEDIA_PROBE
     lda save_device
     cmp program_device
     beq !load_program_media+
@@ -964,7 +964,7 @@ plus4_test_after_load_magic:
     jsr load_read_known_items
 
     // 4. Remaining resident state through monster table.
-#if C128
+#if HAL_STORAGE_LEGACY_ROOM8_MIGRATION
     jsr load_read_post_known_state
 #else
     lda #<save_block_table_post_known
@@ -989,7 +989,7 @@ plus4_test_after_load_magic:
     lda #SAVE_BLOCK_POST_FLOOR_COUNT
     jsr load_read_block_table
 #if HAL_STORAGE_MAP_BANKED
-    jsr load_read_map_c128
+    jsr load_read_map_banked
 #endif
     lda save_io_error
     beq !load_read_checksum+
@@ -1329,8 +1329,8 @@ save_write_block:
     sta zp_ptr0
     lda save_block_hi
     sta zp_ptr0_hi
-#if APPLE2
-    jsr a2_save_block_mode
+#if HAL_STORAGE_SAVE_BLOCK_MODE_HOOK
+    jsr hal_storage_save_block_mode
 #endif
     ldy #0
 !swb_loop:
@@ -1543,10 +1543,10 @@ save_sanitize_id_table:
     rts
 
 // save_sanitize_store_ids — Same hardening for the store slot table.
-// Apple II keeps si_item_id in aux RAM, so its loop uses the aux thunks
-// (it runs from the storage overlay where save.s lives there).
+// Platforms with HAL_PLATFORM_AUX_PERSISTENT_DATA (Apple IIe / CX16) keep
+// si_item_id in aux/banked RAM, so their loop uses the aux thunks.
 save_sanitize_store_ids:
-#if APPLE2
+#if HAL_PLATFORM_AUX_PERSISTENT_DATA
     ldx #STORE_TOTAL_SLOTS - 1
 !sssi_loop:
     :AuxReadX(si_item_id)
@@ -1702,7 +1702,7 @@ load_read_door_state:
 // Older C128 saves still carry the 8-room block; read that exact shape so the
 // following trap/monster/map/checksum stream remains aligned.
 // ============================================================
-#if C128
+#if HAL_STORAGE_LEGACY_ROOM8_MIGRATION
 save_write_post_known_state:
     lda #<save_block_table_post_known
     sta zp_ptr1
@@ -1832,8 +1832,8 @@ load_read_block:
 !lrb_c128_done:
     rts
 #else
-#if APPLE2
-    jsr a2_save_block_mode
+#if HAL_STORAGE_SAVE_BLOCK_MODE_HOOK
+    jsr hal_storage_save_block_mode
 #endif
 !lrb_loop:
     lda save_io_error
@@ -2125,7 +2125,7 @@ save_version_uses_legacy_floor_layout:
     sec
     rts
 
-#if C128 && HAL_STORAGE_MAP_BANKED
+#if HAL_STORAGE_STREAM_CHUNKED && HAL_STORAGE_MAP_BANKED
 // ============================================================
 // C128 map I/O helpers — MAP_BASE is in Bank 1 RAM on C128.
 // Save/load all non-map blocks through normal bank0 pointers; map bytes
@@ -2133,6 +2133,7 @@ save_version_uses_legacy_floor_layout:
 // Apple II implements the same contract in platforms/apple2/save_stream.s
 // (aux-RAM map through the p0 thunk instead of MMU banks).
 // ============================================================
+save_write_map_banked:
 save_write_map_c128:
     lda #<MAP_BASE
     sta zp_ptr0
@@ -2153,6 +2154,7 @@ save_write_map_c128:
 !swm_done:
     rts
 
+load_read_map_banked:
 load_read_map_c128:
     lda #<MAP_BASE
     sta zp_ptr0

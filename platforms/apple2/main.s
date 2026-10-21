@@ -47,6 +47,27 @@
 .macro HuffmanDataSegment() {
     .segment A2HuffData
 }
+.macro AuxDataSegment() {
+    .segment A2AuxData
+}
+.macro ItemNameStreamsSegment() {
+    .segment A2AuxData
+}
+.macro ItemNameStreamsRestoreSegment() {
+    .segment Default
+}
+.macro ResidentItemsSegment() {
+    .segment Default
+}
+.macro ResidentItemNamesSegment() {
+    .segment Default
+}
+.macro ResidentWorldSegment() {
+    .segment Default
+}
+.macro ResidentPlaySegment() {
+    .segment A2PlaySlot
+}
 
 #import "hal/storage_policy.s"
 #import "save_slot_policy.s"
@@ -138,7 +159,7 @@ tramp_dig_ability:
 #import "../../core/ui_status.s"
 #import "../../core/runtime_ui_strings.s"
 #import "../../core/generation_busy.s"
-#define A2_SMALL_PLAY_EXTERNAL
+#define SMALL_PLAY_EXTERNAL
 #import "../../core/stat_display.s"
 #import "../../core/huffman.s"
 .segment A2HuffData
@@ -1008,6 +1029,7 @@ game_over_prompt:
 // Clobbers: A, Y, zp_ptr0.
 .label a2_aux_str_stage = a2_ss_buf
 a2_msg_print_indirect_aux:
+hal_msg_print_indirect_aux:
     ldy #$ff
 !loop:
     iny
@@ -1182,6 +1204,7 @@ tramp_do_look:
 // the two remaining A2.PLAY bytes without loading OVL.ITEMS.
 .align $100
 a2_ego_suffix_slots:
+hal_ego_suffix_slots:
 a2_ego_suffix_none: .byte 0
     .fill 16 - (* - a2_ego_suffix_none), 0
 a2_ego_suffix_slay_animal: .text " (Slay Animal)" ; .byte 0
@@ -1722,6 +1745,7 @@ tsci_target:
     jsr $0000               // SMC dispatch target (staged by caller)
     lda #OVL_ITEMS
     jmp overlay_load
+hal_tsci_arg:
 a2_tsci_arg: .byte 0
 
 // irs_p3_swap_exec — Resident Phase 3 scroll/wand/staff router entry. The

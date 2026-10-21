@@ -256,7 +256,7 @@ help_draw_line:
     lda zp_text_color
     and #$0f
     tax
-    lda plus4_color_attr,x
+    lda hal_screen_color_attr,x
 #else
     lda zp_text_color
 #endif

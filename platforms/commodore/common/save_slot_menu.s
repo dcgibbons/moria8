@@ -14,7 +14,7 @@ save_slot_name_buf: .fill SAVE_SLOT_NAME_LEN, 0
 .assert "Save write slot digit replaces suffix comma", SAVE_SLOT_WRITE_DIGIT_OFF, 11
 .assert "Save probe filename tracks write filename without overwrite marker", hal_storage_save_probe_name_len, hal_storage_save_write_name_len - 1
 
-#if C128
+#if HAL_STORAGE_SAVE_SLOT_PROMPT_DIRECT
 save_select_slot_prompt:
 #else
 save_select_slot_prompt_impl:
@@ -270,7 +270,7 @@ save_slot_put_str:
 !done:
     rts
 
-#if C128
+#if HAL_STORAGE_SAVE_SLOT_ASCII_CHARS
 save_slots_title_str:
     .text "Save Slots:"
     .byte 0

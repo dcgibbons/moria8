@@ -2,7 +2,7 @@
 // Test-only storage HAL tier filename symbols for isolated unit assemblies
 // that import common tier/REU code without the product storage HAL.
 // Product/platform builds must export the real platform labels.
-#if !PLATFORM_PRODUCT_OVERLAY_RUNTIME && !C128 && !PLUS4 && !APPLE2
+#if !PLATFORM_PRODUCT_OVERLAY_RUNTIME && !HAL_STORAGE_NO_UNIT_TEST_STUBS
 hal_storage_tier_1_name:
     .text "MONSTER.DB.1"
 .label hal_storage_tier_1_name_len = * - hal_storage_tier_1_name

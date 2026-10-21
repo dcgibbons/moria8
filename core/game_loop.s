@@ -14,13 +14,13 @@
 // MsgPrintStr — Print a NUL-terminated message string through zp_ptr0.
 // On Apple II the string may live in AUX (platform-externalized strings);
 // the staging printer copies it to main RAM first.
-#if APPLE2
+#if HAL_PLATFORM_MSG_PRINT_INDIRECT_AUX
 .macro MsgPrintStr(str) {
     lda #<str
     sta zp_ptr0
     lda #>str
     sta zp_ptr0_hi
-    jsr a2_msg_print_indirect_aux
+    jsr hal_msg_print_indirect_aux
 }
 #else
 .macro MsgPrintStr(str) {
@@ -152,7 +152,7 @@ c128_test_seed_scripted_prayer_state:
     sta player_data + PL_SPELL_ORDER
     rts
 
-.segment C128ResidentPlay
+:ResidentPlaySegment()
 #endif
 
 #if C64_TEST_SCRIPTED_SCROLL_SELECTOR
@@ -597,14 +597,14 @@ game_new_start:
 !no_book:
 
     // Recalculate combat stats with equipped items
-#if APPLE2
+#if HAL_PLATFORM_CHARGEN_ITEM_RECALC_TRAMPOLINE
     jsr tramp_item_recalc
 #else
     jsr player_recalc_equipment
 #endif
 
     // Randomize item identification (shuffle potion/scroll/ring descriptors)
-#if APPLE2 || C64_PRODUCT_OVERLAY_RUNTIME || C128 || PLUS4_PRODUCT_OVERLAY_RUNTIME
+#if PLATFORM_PRODUCT_OVERLAY_RUNTIME || HAL_PLATFORM_ITEM_INIT_ID_ALWAYS_TRAMPOLINED
     jsr tramp_item_init_identification
 #else
     jsr item_init_identification
@@ -742,7 +742,7 @@ c128_test_town_pass_sym:
 
     jmp main_loop
 
-#if !C128_PRODUCT_MODAL_PERSIST
+#if !HAL_PLATFORM_GAME_LOOP_MODAL_PERSIST
 .const DPGR_GAME_ERROR_COL = (SCREEN_COLS - 22) / 2
 .const DPGR_PROMPT_COL = (SCREEN_COLS - 19) / 2
 .const DPGR_PRESS_ANY_KEY_COL = (SCREEN_COLS - 13) / 2
@@ -1100,14 +1100,14 @@ c128_town_move_diag_after_input_get_command:
 !save_not_winner:
     lda disk_setup_done
     bne !save_setup_ready+
-#if C128_PRODUCT_MODAL_PERSIST
+#if HAL_PLATFORM_GAME_LOOP_MODAL_PERSIST
     jsr c128_modal_require_persist
 #endif
     jsr tramp_disk_setup
     lda disk_setup_done
     beq !save_return_view+
 !save_setup_ready:
-#if C128_PRODUCT_MODAL_PERSIST
+#if HAL_PLATFORM_GAME_LOOP_MODAL_PERSIST
     jsr c128_modal_save_game
 #if C128_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
 c128_test_after_save_game:
@@ -1143,7 +1143,7 @@ plus4_test_after_save_game:
     lda #0
     adc #0
     pha
-#if !C128_PRODUCT_MODAL_PERSIST
+#if !HAL_PLATFORM_GAME_LOOP_MODAL_PERSIST
 #if PLATFORM_REQUIRES_MEDIA_PROBE
     jsr disk_prompt_game
 #endif
@@ -1354,7 +1354,7 @@ c128_town_move_diag_after_turn_post_action:
     jmp !post_move+
 
 !scene_dirty_redraw:
-#if C128
+#if HAL_PLATFORM_GAME_LOOP_MAT_SCENE_DIRTY_FASTPATH
     // Cheap path iff the turn's dirt is provably already rendered
     // (mat_scene_dirty set); else full fallback.
     lda mat_scene_dirty
@@ -1853,7 +1853,7 @@ level_change_generate_current:
 #if HAL_PLATFORM_GAME_LOOP_RUNTIME_RESYNC
     jsr hal_platform_runtime_resync
 #endif
-#if C64_PRODUCT_OVERLAY_RUNTIME
+#if HAL_PLATFORM_TURBO_BURST_HOOKS
     jsr c64u_turbo_fast
 #endif
     jsr tramp_level_generate
@@ -1897,7 +1897,7 @@ level_change_generate_current:
 #if C128_TEST_FORCE_DUNGEON_MELEE
     jsr c128_test_force_dungeon_melee
 #endif
-#if !APPLE2
+#if !HAL_PLATFORM_WIZARD_JUMP_INLINE_PLAY
     lda wizard_level_jump_active
     beq !lcgc_keep_stack+
     ldx #$ff
@@ -1923,7 +1923,7 @@ level_change_generate_current:
     jsr c128_stack_guard_begin
 #endif
     jsr status_draw
-#if C64_PRODUCT_OVERLAY_RUNTIME
+#if HAL_PLATFORM_TURBO_BURST_HOOKS
     jsr c64u_turbo_normal
 #endif
 #if C128_REAL_BOOT_DIAG || C128_STATUS_SP_CANARY_DIAG
@@ -1933,7 +1933,7 @@ level_change_generate_current:
 #if C128_TEST_PERF_P1_TRACE_TRANSITION
     jmp c128_test_perf_p1_trace_capture_sym
 #endif
-#if !APPLE2
+#if !HAL_PLATFORM_WIZARD_JUMP_INLINE_PLAY
     lda wizard_level_jump_active
     beq !lcgc_return+
     lda #0
@@ -2560,7 +2560,7 @@ player_died:
     jmp game_over_prompt    // Platform hook returns to title/menu.
 
 player_retired:
-#if !(C64_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME || APPLE2)
+#if !HAL_PLATFORM_RETIREMENT_BONUS_IN_OVERLAY
     jsr winner_apply_retirement_bonus
 #endif
     jsr tramp_winner_royal
@@ -2741,7 +2741,7 @@ c128_test_force_dungeon_melee:
 
 c128_test_force_melee_x: .byte 0
 c128_test_force_melee_y: .byte 0
-.segment C128ResidentPlay
+:ResidentPlaySegment()
 #endif
 
 // ============================================================
@@ -2913,7 +2913,7 @@ banked_ego_put_suffix:
     beq !beps_done+
     cmp #EGO_TYPE_COUNT
     bcs !beps_done+
-#if APPLE2
+#if HAL_PLATFORM_AUX_PERSISTENT_DATA
     // The caller may live in HELP or TOWN, so OVL.ITEMS suffix pointers are
     // not executable/readable here. Each immutable aux slot is 16 bytes.
     asl
@@ -2921,7 +2921,7 @@ banked_ego_put_suffix:
     asl
     asl
     sta zp_ptr0
-    lda #>a2_ego_suffix_slots
+    lda #>hal_ego_suffix_slots
     sta zp_ptr0_hi
     ldx #0
 !beps_loop:
@@ -2946,6 +2946,6 @@ banked_ego_put_suffix:
 #endif
 !beps_done:
     rts
-#if !APPLE2
+#if !HAL_PLATFORM_AUX_PERSISTENT_DATA
 beps_save_y: .byte 0
 #endif

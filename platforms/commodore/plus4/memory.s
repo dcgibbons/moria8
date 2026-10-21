@@ -9,6 +9,9 @@
 
 #import "hal/memory_bank_consts.s"
 #import "hal/entropy_consts.s"
+#import "hal/layout.s"
+#import "hal/lifecycle_policy.s"
+#import "hal/storage_policy.s"
 #import "../common/bank_port_consts.s"
 
 // Memory region bases

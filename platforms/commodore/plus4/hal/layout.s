@@ -66,3 +66,4 @@
 .const hal_layout_title_load_uses_cache = 0
 .const hal_layout_title_art_bank1_source = 0
 .const hal_layout_title_reverse_space_attr = 0
+#define HAL_LAYOUT_TITLE_MARK_ART_CACHED

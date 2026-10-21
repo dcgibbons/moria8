@@ -342,7 +342,7 @@ pm_select_book:
     lda #PIW_FILTER_MAGE_BOOK + 1
     sec
     sbc pm_spell_type
-#if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME
+#if HAL_PLATFORM_PLAYER_MAGIC_RESTORE_BEFORE_RETURN
     ldy pm_mode
     beq !pm_select_no_ui_return_hint+
     pha
@@ -351,12 +351,12 @@ pm_select_book:
     pla
 !pm_select_no_ui_return_hint:
 #endif
-#if APPLE2
+#if HAL_PLATFORM_AUX_PERSISTENT_DATA
     jsr tramp_select_filtered_inv
 #else
     jsr piw_select_filtered_inv
 #endif
-#if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME
+#if HAL_PLATFORM_PLAYER_MAGIC_RESTORE_BEFORE_RETURN
     php
     pha
     lda #OVL_NONE
@@ -513,13 +513,13 @@ pm_prompt_visible_spell_choice:
 #if C64_TEST_SCRIPTED_SPELL_LIST_OVERLAY || C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY
     jmp test_assert_spell_list_overlay
 #endif
-#if APPLE2
+#if HAL_INPUT_SELECTABLE_OVERLAY_FILTER_HELP_KEY
     jsr input_get_selectable_overlay_key
 #else
     jsr input_get_followup_key
 #endif
     pha
-#if APPLE2
+#if HAL_PLATFORM_AUX_PERSISTENT_DATA
     jsr tramp_ui_view_restore_spell_overlay
 #else
     jsr ui_view_restore_modal_overlay

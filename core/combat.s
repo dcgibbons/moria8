@@ -245,7 +245,7 @@ combat_calc_tohit:
 
 // combat_calc_bow_tohit — Compute ranged launcher hit chance.
 // Output: zp_combat_tohit = hit chance (capped at 255)
-#if !C128_COMBAT_COMMON_HELPERS_EXTERNAL
+#if !COMBAT_COMMON_HELPERS_EXTERNAL
 combat_calc_bow_tohit:
     lda player_data + PL_TOHIT
     sta cmb_total_tohit
@@ -633,7 +633,7 @@ combat_roll_damage:
 
 // combat_add_damage_bonus — Add signed PL_TODMG after ego/slay/critical.
 // Output: cmb_damage clamped to [0,255]
-#if !C128_COMBAT_COMMON_HELPERS_EXTERNAL
+#if !COMBAT_COMMON_HELPERS_EXTERNAL
 combat_add_damage_bonus:
     lda player_data + PL_TODMG
     bmi !cadb_neg+
@@ -1254,7 +1254,7 @@ mba_action_hi: .byte 0
 
 // combat_append_blow_summary — Replace trailing "." with " (hits/blows)."
 // Used only when the player had multiple blows this round.
-#if !C128_COMBAT_COMMON_HELPERS_EXTERNAL
+#if !COMBAT_COMMON_HELPERS_EXTERNAL
 combat_append_blow_summary:
     lda cmb_blow_count
     cmp #2
@@ -1332,12 +1332,12 @@ combat_print_winner_message:
     beq !done+
     lda #0
     sta cmb_winner_pending
-#if APPLE2
+#if HAL_PLATFORM_MSG_PRINT_INDIRECT_AUX
     lda #<cmb_winner_str
     sta zp_ptr0
     lda #>cmb_winner_str
     sta zp_ptr0_hi
-    jsr a2_msg_print_indirect_aux
+    jsr hal_msg_print_indirect_aux
 #else
     lda #<cmb_winner_str
     sta zp_ptr0

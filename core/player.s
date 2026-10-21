@@ -415,7 +415,7 @@ stat_work: .byte 0
 // PFLAG_SPEED and PFLAG_SEE_INVIS are consumed alongside their timed effects.
 player_pflags: .byte 0
 
-#if !APPLE2
+#if !HAL_PLATFORM_COMPACT_PLAY_SLOT
 // player_apply_slaying_bonuses — Add Ring of Slaying to-hit/to-damage bonuses
 // to PL_TOHIT/PL_TODMG. Called from player_recalc_equipment.
 // Clobbers: A, X
@@ -601,7 +601,7 @@ stat_bonus_index:
 
 // Umoria combat/stat adjustment helpers. These intentionally do not use
 // stat_bonus_index because exceptional 18/xx values have distinct thresholds.
-#if !C128_PLAYER_STAT_HELPERS_EXTERNAL
+#if !PLAYER_STAT_HELPERS_EXTERNAL
 player_adj_0:
     lda #0
     rts

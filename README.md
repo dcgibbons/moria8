@@ -2,7 +2,7 @@
 
 Moria8 is a port of the classic roguelike game, Moria, for 8-bit platforms
 written in platform-specific assembly. Current releases target the Commodore
-64, Plus/4, and 128 systems, and the Apple II.
+64, Plus/4, and 128 systems, the Apple II, and the Commander X16.
 
 ![Animated GIF of Commodore 64 Play Testing](docs/assets/moria8-c64-gameplay.gif)
 
@@ -42,9 +42,10 @@ Want a real floppy disk of Moria8? Please fill out fill out the
 - macOS or Linux host
 - `make`
 - Java, for Kick Assembler
-- VICE (`x64sc`, `x128`, `xplus4`, and `c1541`)
+- VICE 3.10+ (`x64sc`, `x128`, `xplus4`, and `c1541`)
 - MAME, for Apple II run/test; Apple II ROMs via the `A2ROMS` env var
   (not redistributable)
+- `x16emu`, for Commander X16 run/test (`X16EMU` and optional `X16ROM` env vars)
 - Python 3 for build and test helper scripts
 
 Kick Assembler is downloaded into `tools/kickass/` by the makefiles on first
@@ -62,11 +63,12 @@ make disk64
 make disk128
 make diskplus4
 make diskapple2
+make diskcx16
 ```
 
 `make` and `make build` will build the entire project for all platforms.
-`make disk64`, `make disk128`, `make diskplus4`, and `make diskapple2` build
-the individual disk images.
+`make disk64`, `make disk128`, `make diskplus4`, `make diskapple2`, and
+`make diskcx16` build the individual disk/bundle images.
 
 Disk images are emitted under `build/`:
 
@@ -76,6 +78,7 @@ Disk images are emitted under `build/`:
 - `build/moria8-c128.d81`
 - `build/moria8-plus4.d64`
 - `build/moria8-apple2.po`
+- `build/moria8-cx16.zip`
 
 ### Run
 
@@ -85,13 +88,15 @@ make run64
 make run128
 make runplus4
 make runapple2
+make runcx16
 ```
 
 `make run` and `make run64` launch the C64 disk. `make run128` launches the
 C128 disk. `make runplus4` launches the Plus/4 disk in `xplus4` with a 1541
 drive configuration. The Plus/4 artifact is a standard Commodore D64 image.
 `make runapple2` launches the Apple II image under MAME apple2ee (requires
-`A2ROMS`).
+`A2ROMS`). `make runcx16` launches the Commander X16 build in `x16emu` with
+HostFS mounted at `build/cx16/`.
 
 ### Test
 
@@ -102,13 +107,16 @@ make test128-fast-smoke
 make test128
 make testplus4
 make testapple2
+make testcx16
 ```
 
 `make test` runs the default regression mix. `make test128-fast` is the fast
 C128 unit batch, `make test128-fast-smoke` covers high-value C128 runtime boot
 and town paths, and `make test128` is the broader C128 shell harness.
 `make testapple2` is the Apple II static memory-contract gate; the MAME
-scenario harness lives at `platforms/apple2/harness_smoke.py`.
+scenario harness lives at `platforms/apple2/harness_smoke.py`. `make testcx16`
+runs the Commander X16 static memory-contract gate and the `x16emu -testbench`
+runtime scenario suite (`platforms/cx16/harness_smoke.py`).
 
 ## Documentation
 

@@ -126,7 +126,7 @@ spell_list_display:
     sta zp_ptr0
     lda zp_ptr2_hi
     sta zp_ptr0_hi
-#if APPLE2
+#if HAL_PLATFORM_AUX_PERSISTENT_DATA
     // Name tables and strings are aux-resident on this platform, so the
     // mapped string print must go through the aux thunk; hal_screen_put_char
     // clobbers Y, so the index is parked in pm_name_tmp.

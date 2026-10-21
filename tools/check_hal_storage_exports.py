@@ -110,16 +110,26 @@ REQUIRED_LABELS = (
     "hal_storage_overlay_items_name_len",
 )
 
-PLATFORM_FILES = {
-    "c64": ROOT / "platforms/commodore/c64/hal/storage.s",
-    "c128": ROOT / "platforms/commodore/c128/hal/storage.s",
-    "plus4": ROOT / "platforms/commodore/plus4/hal/storage.s",
+PLATFORM_FILES: dict[str, tuple[Path, ...]] = {
+    "c64": (ROOT / "platforms/commodore/c64/hal/storage.s",),
+    "c128": (ROOT / "platforms/commodore/c128/hal/storage.s",),
+    "plus4": (ROOT / "platforms/commodore/plus4/hal/storage.s",),
+    "apple2": (
+        ROOT / "platforms/apple2/storage_mli.s",
+        ROOT / "platforms/apple2/save_stream.s",
+    ),
+    "cx16": (
+        ROOT / "platforms/cx16/storage_kernal.s",
+        ROOT / "platforms/cx16/save_stream.s",
+    ),
 }
 
 OVERLAY_NAMES = {
     "c64": ("start", "town", "death", "gen", "help", "ui", "items", "spell"),
     "c128": ("start", "town", "death", "gen", "help", "ui", "items"),
     "plus4": ("start", "town", "death", "gen", "help", "ui", "items", "spell"),
+    "apple2": ("start", "town", "death", "gen", "help", "ui", "items", "spell"),
+    "cx16": ("start", "town", "death", "gen", "help", "ui", "items", "spell"),
 }
 
 TIER_NAMES = ("1", "2", "3", "4")
@@ -175,12 +185,17 @@ def missing_length_terminators(path: Path, prefix: str, names: tuple[str, ...], 
 
 def main() -> int:
     failed = False
-    for platform, path in PLATFORM_FILES.items():
-        if not path.exists():
-            print(f"{platform}: missing {path.relative_to(ROOT)}")
+    for platform, paths in PLATFORM_FILES.items():
+        missing_paths = [p for p in paths if not p.exists()]
+        if missing_paths:
+            for p in missing_paths:
+                print(f"{platform}: missing {p.relative_to(ROOT)}")
             failed = True
             continue
-        labels = exported_labels(path)
+        labels: set[str] = set()
+        for p in paths:
+            labels.update(exported_labels(p))
+        path = paths[0]
         missing = [label for label in REQUIRED_LABELS if label not in labels]
         if missing:
             print(f"{platform}: missing storage HAL exports in {path.relative_to(ROOT)}")

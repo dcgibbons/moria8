@@ -15,6 +15,30 @@ java() {
         command java "$@"
     fi
 }
+mktemp() {
+    if [ "$1" = "-t" ] && [ $# -eq 2 ]; then
+        case "$2" in
+            *XXXXXX*) command mktemp "$@" ;;
+            *) command mktemp -t "${2}.XXXXXX" ;;
+        esac
+    else
+        command mktemp "$@"
+    fi
+}
+script() {
+    if [ "$(uname -s)" = "Linux" ] && [ "$1" = "-q" ] && [ $# -ge 3 ] && [ "$2" != "-c" ]; then
+        local log_path="$2"
+        shift 2
+        local cmd_str=""
+        local arg
+        for arg in "$@"; do
+            cmd_str="${cmd_str} $(printf '%q' "$arg")"
+        done
+        command script -q -c "${cmd_str# }" "$log_path"
+    else
+        command script "$@"
+    fi
+}
 RUN_TESTS64_DIR="${RUN_TESTS64_DIR:-$REPO_ROOT/platforms/commodore/c64}"
 cd "$RUN_TESTS64_DIR"
 C64_TEST_OUT="${C64_TEST_OUT:-../../../build/test/c64}"
@@ -4186,9 +4210,9 @@ check_static_contract "paralysis_final_tick_message_contract" "../../../core/gam
 check_static_contract "earthquake_trampoline_no_hidden_kernal_load_contract" "main.s" \
     "tramp_eff_earthquake:|||sei|||lda #BANK_NO_KERNAL|||sta \$01|||jsr eff_earthquake_banked|||rts|||tramp_item_refuel:"
 check_static_contract "chest_loot_gen_overlay_no_hidden_kernal_contract" "../../../core/chest_loot.s" \
-    "chest_fulfill_loot:|||lda #OVL_DUNGEON_GEN|||#if C64_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME|||jsr overlay_load_no_kernal|||jsr hal_platform_runtime_resync|||!cfl_loaded:|||jsr chest_generate_loot|||jsr hal_platform_runtime_resync"
+    "chest_fulfill_loot:|||lda #OVL_DUNGEON_GEN|||#if HAL_PLATFORM_CHEST_LOOT_LOAD_NO_KERNAL|||jsr overlay_load_no_kernal|||jsr hal_platform_runtime_resync|||!cfl_loaded:|||jsr chest_generate_loot|||jsr hal_platform_runtime_resync"
 check_static_contract "chest_loot_c64_ego_overlay_return_contract" "../../../core/chest_loot.s" \
-    "jsr roll_enchantment|||#if C64_PRODUCT_OVERLAY_RUNTIME|||jsr tramp_roll_ego_type_modal|||sta fi_add_ego"
+    "jsr roll_enchantment|||#if HAL_PLATFORM_CHEST_LOOT_EGO_MODAL_TRAMP|||jsr tramp_roll_ego_type_modal|||sta fi_add_ego"
 check_static_contract "chest_loot_object_drop_marks_redraw_contract" "../../../core/chest_loot.s" \
     "!clpo_qty_done:|||jsr floor_item_add|||bcc !clpo_object_done+|||inc zp_dirty_count|||!clpo_object_done:|||jsr floor_item_add|||bcc !clpo_gold_done+|||inc zp_dirty_count|||!clpo_gold_done:"
 check_static_contract "chest_search_vms_discovery_only_contract" "../../../core/chest_search.s" \

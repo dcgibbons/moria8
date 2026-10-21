@@ -14,6 +14,8 @@ PLATFORM_FILES = {
     "c64": ROOT / "platforms/commodore/c64/screen.s",
     "c128": ROOT / "platforms/commodore/c128/screen_vdc.s",
     "plus4": ROOT / "platforms/commodore/plus4/screen.s",
+    "apple2": ROOT / "platforms/apple2/screen_a2.s",
+    "cx16": ROOT / "platforms/cx16/screen_vera.s",
 }
 
 REQUIRED_LABELS = (

@@ -122,7 +122,7 @@ monster_pick_spell:
 !mps_dispatch:
     // X = bit position (spell index 0-6)
     // Track spell in recall
-#if APPLE2
+#if HAL_PLATFORM_AUX_PERSISTENT_DATA
     ldy zp_mon_type
     :AuxReadY(recall_spells)
     ora recall_spell_bit,x

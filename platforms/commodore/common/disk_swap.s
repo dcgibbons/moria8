@@ -29,13 +29,13 @@ program_device:    .byte 8             // Device# for program/runtime PRG I/O
 save_device:       .byte 8             // Device# for save/score I/O
 disk_setup_done:   .byte 0             // 0 until the session finishes Disk Setup
 
-#if PLUS4
+#if HAL_STORAGE_EXTENDED_DISK_DIAG
 disk_ui_result:    .byte 1             // 0=success, 1=cancel/failure
 disk_ui_action:    .byte 0
 disk_ui_value:     .byte 0
 disk_temp:         .byte 0
 disk_status:       .byte 0
-#elif C128
+#elif HAL_STORAGE_MEDIA_STATE_TRACKING
 disk_temp:         .byte 0
 .label disk_ui_value = disk_temp
 disk_status:       .byte 0
@@ -48,7 +48,7 @@ disk_status:       .byte 0
 .label disk_ui_result = disk_status    // 0=success, 1=cancel/failure
 #endif
 disk_prompt_device:.byte 8
-#if C128
+#if HAL_STORAGE_MEDIA_STATE_TRACKING
 .label disk_ui_action = disk_prompt_device
 #endif
 #if C64_TEST_SCRIPTED_SINGLE_DRIVE_SAVE_WRONG_MEDIA_PRODUCT || C64_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_WRONG_MEDIA_PRODUCT || PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_SAVE_WRONG_MEDIA_PRODUCT || PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_WRONG_MEDIA_PRODUCT || C128_TEST_SCRIPTED_SINGLE_DRIVE_SAVE_WRONG_MEDIA_PRODUCT || C128_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_WRONG_MEDIA_PRODUCT
@@ -120,7 +120,7 @@ disk_reset_session_state:
     sta disk_setup_done
     lda #1
     sta disk_ui_result
-#if PLUS4
+#if HAL_STORAGE_EXTENDED_DISK_DIAG
     lda #0
     sta program_device
     jsr disk_accept_plus4_chain_device
@@ -171,7 +171,7 @@ disk_accept_plus4_program_device:
     rts
 !store_program_device:
 #else
-#if C128
+#if HAL_STORAGE_MEDIA_STATE_TRACKING
     lda #8
 #else
     lda $ba                     // KERNAL current device from the boot/load path

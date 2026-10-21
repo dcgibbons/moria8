@@ -1,5 +1,5 @@
 #importonce
-#if !C128 && !APPLE2
+#if !HAL_PLATFORM_ADJUST_EQUIPMENT_STAT_EXTERNAL
 #import "player_adjust_equipment_stat.s"
 #endif
 // player_recalc_equipment — Recalculate AC, to-hit, to-damage from equipment
@@ -10,10 +10,10 @@
 player_recalc_equipment:
     // Recalculate equipment-derived flags and combat values without rerolling
     // exceptional current stats established during character creation.
-    #if APPLE2
-    // Apple's persistent equipment flags are rebuilt by player_calc_stats.
+    #if HAL_PLATFORM_COMPACT_PLAY_SLOT
+    // Persistent equipment flags are rebuilt by player_calc_stats.
     #elif PLAYER_RECALC_PFLAGS_EXTERNAL
-    jsr c128_player_recalc_pflags
+    jsr hal_player_recalc_pflags
     #else
     jsr player_recalc_pflags_equipment
     #endif
@@ -35,7 +35,7 @@ player_recalc_equipment:
 !pre_no_weapon:
 
     // Add Ring of Slaying to-hit and to-damage bonuses
-#if APPLE2
+#if HAL_PLATFORM_COMPACT_PLAY_SLOT
     ldx #EQUIP_RING
     lda inv_item_id,x
     cmp #ITEM_TYPE_RING_SLAYING

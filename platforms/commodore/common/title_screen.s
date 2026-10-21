@@ -23,7 +23,7 @@
 // dungeon, modal, or status contents were visible. Use row-owned clears here
 // instead of relying on platform bulk-clear behavior or local row patches.
 // ============================================================
-#if !C128
+#if !HAL_LAYOUT_TITLE_LOAD_USES_CACHE
 title_clear_full_screen:
     lda #0
     sta title_clear_row
@@ -72,7 +72,7 @@ title_load_and_draw:
 
     // Render the loaded art data
     jsr title_render_data
-#if PLUS4
+#if HAL_LAYOUT_TITLE_MARK_ART_CACHED
     lda #1
     sta plus4_title_art_cached
 #endif
@@ -207,9 +207,9 @@ title_render_data:
 !trd_done:
     rts
 
-#if APPLE2 && !HAL_LAYOUT_TITLE_REVERSE_SPACE_ATTR
-// Apple II: $A0 maps to inverse-video space through a2_char_map, so the
-// block glyph is the normal put_char path.
+#if HAL_LAYOUT_TITLE_ART_BANK1_SOURCE && !HAL_LAYOUT_TITLE_REVERSE_SPACE_ATTR
+// Apple II / CX16: $A0 renders directly as a solid block glyph through
+// the normal put_char path.
 title_put_block_char:
     jsr hal_screen_put_char
     rts

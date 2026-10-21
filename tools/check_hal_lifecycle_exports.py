@@ -15,11 +15,15 @@ PLATFORMS = {
     "c64": ROOT / "platforms/commodore/c64/hal/lifecycle_policy.s",
     "c128": ROOT / "platforms/commodore/c128/hal/lifecycle_policy.s",
     "plus4": ROOT / "platforms/commodore/plus4/hal/lifecycle_policy.s",
+    "apple2": ROOT / "platforms/apple2/hal/lifecycle_policy.s",
+    "cx16": ROOT / "platforms/cx16/hal/lifecycle_policy.s",
 }
 PLATFORM_MAINS = {
     "c64": ROOT / "platforms/commodore/c64/main.s",
     "c128": ROOT / "platforms/commodore/c128/main.s",
     "plus4": ROOT / "platforms/commodore/plus4/main.s",
+    "apple2": ROOT / "platforms/apple2/main.s",
+    "cx16": ROOT / "platforms/cx16/main.s",
 }
 
 REQUIRED_EXPORTS = (
@@ -109,6 +113,65 @@ def source_constants(path: Path) -> set[str]:
     return set(re.findall(r"(?m)^\s*\.const\s+([A-Za-z_][A-Za-z0-9_]*)\s*=", text))
 
 
+def source_constant_values(path: Path) -> dict[str, set[str]]:
+    text = path.read_text(encoding="utf-8", errors="replace")
+    values: dict[str, set[str]] = {}
+    for name, val in re.findall(
+        r"(?m)^\s*\.const\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*([^\s/]+)", text
+    ):
+        values.setdefault(name, set()).add(val)
+    return values
+
+
+def source_defines(path: Path) -> set[str]:
+    text = path.read_text(encoding="utf-8", errors="replace")
+    return set(re.findall(r"(?m)^\s*#define\s+([A-Za-z_][A-Za-z0-9_]*)\b", text))
+
+
+CONST_DEFINE_PARITY = {
+    "hal_platform_reassert_before_message_render": "HAL_PLATFORM_REASSERT_BEFORE_MESSAGE_RENDER",
+    "hal_platform_restore_tier_after_overlay": "HAL_PLATFORM_RESTORE_TIER_AFTER_OVERLAY",
+    "hal_platform_string_bank_load_invalidates_tier": "HAL_PLATFORM_STRING_BANK_LOAD_INVALIDATES_TIER",
+    "hal_platform_mark_modal_restore_perf": "HAL_PLATFORM_MARK_MODAL_RESTORE_PERF",
+    "hal_platform_perf_p1_command_instrumentation": "HAL_PLATFORM_GAME_LOOP_PERF_P1_INSTRUMENTATION",
+    "hal_platform_render_ball_effect_direct_perf": "HAL_PLATFORM_RENDER_BALL_EFFECT_DIRECT_PERF",
+    "hal_platform_character_sheet_begin_enabled": "HAL_PLATFORM_CHARACTER_SHEET_BEGIN_ENABLED",
+    "hal_platform_character_background_resync": "HAL_PLATFORM_CHARACTER_BACKGROUND_RESYNC",
+    "hal_platform_player_magic_helpers_external": "HAL_PLATFORM_PLAYER_MAGIC_HELPERS_EXTERNAL",
+    "hal_platform_item_action_key_restores_bank": "HAL_PLATFORM_ITEM_ACTION_KEY_RESTORES_BANK",
+    "hal_platform_ego_holy_avenger_string_external": "HAL_PLATFORM_EGO_HOLY_AVENGER_STRING_EXTERNAL",
+    "hal_platform_ego_ac_bonus_external": "HAL_PLATFORM_EGO_AC_BONUS_EXTERNAL",
+    "hal_platform_chargen_runtime_resync": "HAL_PLATFORM_CHARGEN_RUNTIME_RESYNC",
+    "hal_platform_wizard_entry_uses_overlay": "HAL_PLATFORM_WIZARD_ENTRY_OVERLAY",
+    "hal_platform_wizard_40col_resident_enabled": "HAL_PLATFORM_WIZARD_40COL_RESIDENT",
+    "hal_platform_wizard_reveal_uses_trampoline": "HAL_PLATFORM_WIZARD_REVEAL_TRAMPOLINE",
+    "hal_platform_levelup_magic_uses_trampoline": "HAL_PLATFORM_LEVELUP_MAGIC_USES_TRAMPOLINE",
+    "hal_platform_title_sysinfo_80col": "HAL_PLATFORM_TITLE_SYSINFO_80COL",
+    "hal_platform_title_sysinfo_sx64_probe": "HAL_PLATFORM_TITLE_SYSINFO_SX64_PROBE",
+    "hal_platform_player_move_diag_labels": "HAL_PLATFORM_GAME_LOOP_PLAYER_MOVE_DIAG_LABELS",
+    "hal_platform_describe_look_masks_irq": "HAL_PLATFORM_DESCRIBE_LOOK_MASKS_IRQ",
+    "hal_platform_game_loop_runtime_resync": "HAL_PLATFORM_GAME_LOOP_RUNTIME_RESYNC",
+    "hal_platform_game_loop_main_loop_begin": "HAL_PLATFORM_GAME_LOOP_MAIN_LOOP_BEGIN",
+    "hal_platform_game_loop_restore_generation_overlay": "HAL_PLATFORM_GAME_LOOP_RESTORE_GENERATION_OVERLAY",
+    "hal_platform_game_loop_save_clears_screen": "HAL_PLATFORM_GAME_LOOP_SAVE_CLEARS_SCREEN",
+    "hal_platform_game_loop_save_return_view": "HAL_PLATFORM_GAME_LOOP_SAVE_RETURN_VIEW",
+    "hal_platform_game_loop_run_stop_reset_input": "HAL_PLATFORM_GAME_LOOP_RUN_STOP_RESET_INPUT",
+    "hal_platform_game_loop_scroll_delta_render": "HAL_PLATFORM_GAME_LOOP_SCROLL_DELTA_RENDER",
+    "hal_platform_game_loop_item_actions_trampolined": "HAL_PLATFORM_GAME_LOOP_ITEM_ACTIONS_TRAMPOLINED",
+    "hal_platform_overlay_force_reload": "HAL_PLATFORM_OVERLAY_FORCE_RELOAD",
+    "hal_platform_overlay_tier_cache_guard": "HAL_PLATFORM_OVERLAY_TIER_CACHE_GUARD",
+    "hal_platform_overlay_cache_enabled": "HAL_PLATFORM_OVERLAY_CACHE_ENABLED",
+    "hal_platform_overlay_reu_stash_enabled": "HAL_PLATFORM_OVERLAY_REU_STASH_ENABLED",
+    "hal_platform_overlay_prompt_program_media": "HAL_PLATFORM_OVERLAY_PROMPT_PROGRAM_MEDIA",
+    "hal_platform_overlay_cpu_port_dma_bank": "HAL_PLATFORM_OVERLAY_CPU_PORT_DMA_BANK",
+    "hal_platform_monster_bank1_tier_names": "HAL_PLATFORM_MONSTER_BANK1_TIER_NAMES",
+    "hal_platform_monster_hidden_name_pool": "HAL_PLATFORM_MONSTER_HIDDEN_NAME_POOL",
+    "hal_platform_monster_cpu_port_bank": "HAL_PLATFORM_MONSTER_CPU_PORT_BANK",
+    "hal_platform_monster_overlay_stale_name": "HAL_PLATFORM_MONSTER_OVERLAY_STALE_NAME",
+    "hal_platform_monster_stale_tier_reload": "HAL_PLATFORM_MONSTER_STALE_TIER_RELOAD",
+}
+
+
 def main() -> int:
     labels = exported_labels(PLATFORM_SERVICES)
     missing = [name for name in REQUIRED_EXPORTS if name not in labels]
@@ -120,9 +183,20 @@ def main() -> int:
             policy_missing.append(f"{platform}: missing {path.relative_to(ROOT)}")
             continue
         constants = source_constants(path)
+        const_vals = source_constant_values(path)
+        defines = source_defines(path)
         for name in REQUIRED_POLICY_CONSTANTS:
             if name not in constants:
                 policy_missing.append(f"{platform}: missing {name} in {path.relative_to(ROOT)}")
+        for const_name, define_name in CONST_DEFINE_PARITY.items():
+            vals = const_vals.get(const_name, set())
+            has_one = "1" in vals
+            has_def = define_name in defines
+            if has_one != has_def:
+                policy_missing.append(
+                    f"{platform}: {const_name}={sorted(vals)} disagrees with "
+                    f"#define {define_name} (present={has_def}) in {path.relative_to(ROOT)}"
+                )
     for platform, path in PLATFORM_MAINS.items():
         if platform != "c128":
             continue

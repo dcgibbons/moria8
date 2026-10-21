@@ -488,6 +488,7 @@ hal_storage_readst:
 // Clobbers: A
 // ============================================================
 a2_save_block_mode:
+hal_storage_save_block_mode:
     lda #0
     sta a2_save_aux_mode_flag
 
@@ -527,6 +528,7 @@ a2_save_block_mode:
 // platforms/shared/save.s.
 // ============================================================
 save_write_map_c128:
+save_write_map_banked:
     lda #<MAP_BASE
     sta zp_ptr0
     lda #>MAP_BASE
@@ -571,6 +573,7 @@ save_write_map_c128:
     rts
 
 load_read_map_c128:
+load_read_map_banked:
     lda #<MAP_BASE
     sta zp_ptr0
     lda #>MAP_BASE

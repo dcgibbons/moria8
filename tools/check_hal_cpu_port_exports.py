@@ -18,6 +18,7 @@ PLATFORM_FILES = {
 }
 
 COMMON_CPU_PORT_USERS = {
+    "chest_loot.s": ROOT / "core/chest_loot.s",
     "disk_swap.s": ROOT / "platforms/commodore/common/disk_swap.s",
     "disk_setup_banked.s": ROOT / "platforms/commodore/common/disk_setup_banked.s",
     "item_actions_overlay.s": ROOT / "core/item_actions_overlay.s",

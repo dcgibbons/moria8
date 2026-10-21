@@ -111,7 +111,13 @@ pick_item_type_overlay:
 tramp_roll_ego_type_modal:
     jmp tramp_roll_ego_type
 #define C64_PRODUCT_OVERLAY_RUNTIME
+#define PLATFORM_PRODUCT_OVERLAY_RUNTIME
+#define HAL_PLATFORM_CHEST_LOOT_LOAD_NO_KERNAL
+#define HAL_PLATFORM_CHEST_LOOT_EGO_MODAL_TRAMP
 #import "../../../../core/chest_loot.s"
+#undef HAL_PLATFORM_CHEST_LOOT_EGO_MODAL_TRAMP
+#undef HAL_PLATFORM_CHEST_LOOT_LOAD_NO_KERNAL
+#undef PLATFORM_PRODUCT_OVERLAY_RUNTIME
 #undef C64_PRODUCT_OVERLAY_RUNTIME
 
 store_init_all:

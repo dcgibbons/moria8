@@ -42,10 +42,10 @@ ensure native performance and idiomatic hardware utilization.
 
 ## 2. The Assembler & ISA (Instruction Set Architecture)
 
-* **The 6502 Track:** All active 6502 ports (C64, C128, Plus/4, Apple IIe)
-  retain Kick Assembler per in-tree precedent; the earlier `ca65` migration
-  note is superseded. Platform-specific configurations and segmenting are
-  handled with Kick Assembler segment directives. The `core/` game logic
+* **The 6502 Track:** All active 6502/65C02 ports (C64, C128, Plus/4, Apple IIe,
+  Commander X16) retain Kick Assembler per in-tree precedent; the earlier `ca65`
+  migration note is superseded. Platform-specific configurations and segmenting
+  are handled with Kick Assembler segment directives. The `core/` game logic
   targets the standard 6502/65C02.
 * **The Z80 Track:** A native rewrite of the game logic specifically for the
   Zilog Z80. Using `z88dk` (`z80asm`) or `sjasmplus`, this track establishes a
@@ -142,7 +142,46 @@ the second 128K-class target after the C128.
   heuristic screen sniffing (e.g. "in town") must tolerate legitimate
   dungeon features.
 
-## 7. Current Codebase Assessment & Next Steps
+## 7. Commander X16 Release Track
+
+The Commander X16 port lives under `platforms/cx16/` and is the third
+128K+-class target (512 KB banked RAM + 38.6 KB unbanked low RAM) after the
+C128 and Apple IIe.
+
+* Source lives under `platforms/cx16/` and links the shared `core/` and
+  `platforms/shared/` modules through semantic HAL policy contracts (`hal/layout.s`,
+  `hal/lifecycle_policy.s`, `hal/storage_policy.s`, `hal/memory_bank_consts.s`,
+  `hal/entropy_consts.s`, `screen_vera.s`, `input.s`) and a 12-overlay +
+  banked-data layout (`Cx16AuxData`, `Cx16HuffData`).
+* The release target is a stock 512 KB Commander X16 (65C02, VERA video,
+  CX16 KERNAL R47/R48) running from a host/SD filesystem directory or
+  shipping `.zip` bundle (`build/moria8-cx16.zip`).
+* Memory model (authority: `docs/CX16_MEMORY_CONTRACT.md`):
+  * Unbanked low RAM (`$0801-$9AFF`) holds the unified Resident + Play image;
+    `$9B00-$9EFF` holds the active monster tier name pool (`1,024` B);
+    `$0400-$07FF` holds `FLOOR_ITEM_BASE`, `CREATURE_BASE`, Huffman/door-scan
+    scratch, and VERA row / file I/O staging; `$9F00-$9FFF` is the VERA/VIA
+    hardware I/O hole.
+  * Banked RAM (`$A000-$BFFF`, 8 KB × 64 banks via ZP `$00`) holds:
+    * Bank 0: reserved for CX16 KERNAL (`KVARSB0`)
+    * Banks 1–2: live 198×66 dungeon map (virtual `$2000-$530B`)
+    * Bank 3: `Cx16AuxData` (`CX16.AUXDATA`, virtual `$6000-$7FFF`)
+    * Bank 4: `Cx16HuffData` (`CX16.HUFFDATA`, virtual `$8000-$9FFF`)
+    * Banks 5–8: preloaded monster tiers 1–4 (`MONSTER.DB.1..4`)
+    * Banks 9–20: preloaded 12 code overlays (`OVL.START`..`OVL.TITLE`),
+      executing directly in-place at `$A000-$BFFF` via `$00` bank selection
+    * Bank 21: preloaded title screen artwork (`TITLE`).
+* Unlike the Apple IIe, switching ZP `$00` on CX16 banks *only* `$A000-$BFFF`
+  and never affects `$0000-$9EFF`, so resident map/aux/huffman accessors in
+  fixed low RAM switch `$00`, perform the access in `$A000-$BFFF`, and restore
+  `$00` directly without zero-page execution thunks.
+* Display is 80×24 text in VERA VRAM (`$1B000`, 256-byte row stride,
+  interleaved screen code + attribute bytes) streamed via `VERA_DATA0`
+  auto-increment (`VERA_INC_1`).
+* Testing is headless `x16emu -testbench` driven by `platforms/cx16/harness_smoke.py`
+  across 20 permanent runtime scenarios.
+
+## 8. Current Codebase Assessment & Next Steps
 
 Moria8 is currently well-positioned because the 8-bit logic is increasingly platform-agnostic.
 

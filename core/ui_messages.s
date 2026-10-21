@@ -73,7 +73,7 @@ msg_init:
     beq !done+
     ldy #0
     lda zp_temp2
-#if APPLE2
+#if MSG_HISTORY_IN_AUX
     jsr mmu_safe_map_write_ptr1
 #else
     sta (zp_ptr1),y
@@ -300,7 +300,7 @@ msg_save_history:
 !copy:
     lda (zp_ptr0),y
     beq !pad+               // Null terminator
-#if APPLE2
+#if MSG_HISTORY_IN_AUX
     jsr mmu_safe_map_write_ptr1
 #else
     sta (zp_ptr1),y
@@ -311,7 +311,7 @@ msg_save_history:
 !pad:
     // Null-terminate
     lda #0
-#if APPLE2
+#if MSG_HISTORY_IN_AUX
     jsr mmu_safe_map_write_ptr1
 #else
     sta (zp_ptr1),y
