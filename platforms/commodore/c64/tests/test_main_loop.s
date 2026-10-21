@@ -17,7 +17,7 @@ bootstrap:
     jmp test_start
 
 test_finish:
-    ldx #43
+    ldx #45
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -312,7 +312,7 @@ random_floor_in_room:
 save_welcome_str:
     .text "WELCOME BACK" ; .byte 0
 
-tc_results: .fill 44, $ff
+tc_results: .fill 46, $ff
 
 test_cmd_idx: .byte 0
 test_cmd_len: .byte 0
@@ -397,6 +397,7 @@ test_scene_dirty: .byte 0
 test_trap_fires: .byte 0
 test_trap_trigger_calls: .byte 0
 test_turn_sets_message: .byte 0
+test_turn_disturbs: .byte 0     // Turn reports damage/hunger (turn_rest_disturbed)
 test_turn_heal_hp: .byte 0
 test_turn_heal_mp: .byte 0
 test_any_key_held_sample: .byte 0
@@ -565,6 +566,7 @@ reset_state:
     sta test_trap_fires
     sta test_trap_trigger_calls
     sta test_turn_sets_message
+    sta test_turn_disturbs
     sta test_turn_heal_hp
     sta test_turn_heal_mp
     sta test_any_key_held_sample
@@ -685,6 +687,10 @@ test_turn_post_action:
 !no_mp:
     lda test_scene_dirty
     sta turn_scene_dirty
+    lda test_turn_disturbs          // Damage/hunger this turn set it (never cleared per turn)
+    beq !no_disturb+
+    sta turn_rest_disturbed
+!no_disturb:
     lda test_turn_sets_message
     beq !done+
     lda #MSG_PENDING
@@ -979,7 +985,7 @@ test_start:
     ldx #$ff
     txs
 
-    ldx #43
+    ldx #45
     lda #$ff
 !clr:
     sta tc_results,x
@@ -2618,6 +2624,65 @@ test_start:
     lda zp_game_flags
     and #~GAME_FLAG_WINNER & $ff
     sta zp_game_flags
+
+    // Test 45: a rest turn that reports damage or worsening hunger
+    // (turn_rest_disturbed) stops auto-rest after that turn. VMS Moria
+    // take_hit calls rest_off; hunger alerts interrupt resting (TRN-007).
+    jsr reset_state
+    lda #44
+    sta test_case_idx
+    lda #8
+    sta zp_player_hp_lo
+    lda #1
+    sta test_turn_heal_hp
+    sta test_turn_disturbs
+    lda #CMD_AUTOREST
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    jsr run_case
+    lda test_turn_calls
+    cmp #1
+    bne !t45_fail+
+    lda auto_rest_active
+    bne !t45_fail+
+    lda #$01
+    sta tc_results + 44
+    jmp !t46+
+!t45_fail:
+    lda #$00
+    sta tc_results + 44
+
+    // Test 46: a disturbance left over from before CTRL+R is stale: auto-rest
+    // entry clears it, and resting continues until recovered.
+!t46:
+    jsr reset_state
+    lda #45
+    sta test_case_idx
+    lda #8
+    sta zp_player_hp_lo
+    lda #1
+    sta test_turn_heal_hp
+    sta turn_rest_disturbed     // Stale, from the preceding command
+    lda #CMD_AUTOREST
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    jsr run_case
+    lda test_turn_calls
+    cmp #2
+    bne !t46_fail+
+    lda auto_rest_active
+    bne !t46_fail+
+    lda zp_player_hp_lo
+    cmp #10
+    bne !t46_fail+
+    lda #$01
+    sta tc_results + 45
+    jmp test_finish
+!t46_fail:
+    lda #$00
+    sta tc_results + 45
     jmp test_finish
 
 t33_scratch_lo: .byte <t33_scratch_28, <t33_scratch_29, <t33_scratch_30, <t33_scratch_31

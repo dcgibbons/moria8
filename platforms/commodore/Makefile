@@ -36,6 +36,9 @@ else
 KICKASS_DIR_RESOLVED = $(KICKASS_DIR)
 endif
 JAVA        ?= ../../tools/kickass_java.sh
+
+# Python tools and harnesses must not leave __pycache__ in source directories.
+export PYTHONDONTWRITEBYTECODE := 1
 C1541       ?= c1541
 VICE64      ?= x64sc
 VICE128     ?= x128
@@ -335,7 +338,7 @@ $(VERSION_INC): $(VERSION_FILE) $(VERSION_INC_TOOL) | $(OUT)
 	python3 "$(VERSION_INC_TOOL)" "$(VERSION_FILE)" "$(VERSION_INC)"
 
 $(C64_MAIN_PRG): $(C64_SOURCES) $(VERSION_INC) | ensure-kickass $(OUT64)
-	$(JAVA) -jar "$(KICKASS_RESOLVED)" ":OVL_OUT=$(OVL_OUT64)" "$(C64_MAIN_SRC)" $(KA_FLAGS64) -o "$(C64_MAIN_PRG)"
+	$(JAVA) -jar "$(KICKASS_RESOLVED)" ":OVL_OUT=$(OVL_OUT64)" "$(C64_MAIN_SRC)" $(KA_FLAGS64) -symbolfiledir "$(OVL_OUT64)" -o "$(C64_MAIN_PRG)"
 
 $(C64_OVL_START): $(C64_MAIN_PRG)
 $(C64_OVL_TOWN): $(C64_MAIN_PRG)
@@ -350,7 +353,7 @@ $(C64_OVL_CHEST): $(C64_MAIN_PRG)
 $(C64_RUNTIME_BANKED): $(C64_MAIN_PRG)
 
 $(C64_BOOT_PRG): $(C64_SOURCES) | ensure-kickass $(OUT64)
-	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(C64_BOOT_SRC)" -o "$(C64_BOOT_PRG)"
+	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(C64_BOOT_SRC)" -symbolfiledir "$(OVL_OUT64)" -o "$(C64_BOOT_PRG)"
 
 $(C64_BOOTART_PPM): $(C64_BOOTART_PNG) $(C64_BOOTART_SRC_TOOL) | $(OUT64)
 	@test -f "$(C64_BOOTART_PNG)" || { echo "Missing source art: $(C64_BOOTART_PNG)"; false; }
@@ -360,23 +363,23 @@ $(C64_BOOTART_PRG): $(C64_BOOTART_PPM) $(C64_BOOTART_TOOL) | $(OUT64)
 	python3 "$(C64_BOOTART_TOOL)" "$(C64_BOOTART_PPM)" "$(C64_BOOTART_PRG)"
 
 $(C64_TITLE_PRG): $(TITLE_SRC) $(VERSION_INC) | ensure-kickass $(OUT64)
-	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(TITLE_SRC)" -define TITLE_PLATFORM_64 -o "$(C64_TITLE_PRG)"
+	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(TITLE_SRC)" -define TITLE_PLATFORM_64 -symbolfiledir "$(OVL_OUT64)" -o "$(C64_TITLE_PRG)"
 
 $(OUT64)/monster.db.1: $(C64_TIER_DIR)/tier1_prg.s $(C64_TIER_DIR)/tier1.s | ensure-kickass $(OUT64)
-	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(C64_TIER_DIR)/tier1_prg.s" -o "$@"
+	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(C64_TIER_DIR)/tier1_prg.s" -symbolfiledir "$(OVL_OUT64)" -o "$@"
 
 $(OUT64)/monster.db.2: $(C64_TIER_DIR)/tier2_prg.s $(C64_TIER_DIR)/tier2.s | ensure-kickass $(OUT64)
-	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(C64_TIER_DIR)/tier2_prg.s" -o "$@"
+	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(C64_TIER_DIR)/tier2_prg.s" -symbolfiledir "$(OVL_OUT64)" -o "$@"
 
 $(OUT64)/monster.db.3: $(C64_TIER_DIR)/tier3_prg.s $(C64_TIER_DIR)/tier3.s | ensure-kickass $(OUT64)
-	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(C64_TIER_DIR)/tier3_prg.s" -o "$@"
+	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(C64_TIER_DIR)/tier3_prg.s" -symbolfiledir "$(OVL_OUT64)" -o "$@"
 
 $(OUT64)/monster.db.4: $(C64_TIER_DIR)/tier4_prg.s $(C64_TIER_DIR)/tier4.s | ensure-kickass $(OUT64)
-	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(C64_TIER_DIR)/tier4_prg.s" -o "$@"
+	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(C64_TIER_DIR)/tier4_prg.s" -symbolfiledir "$(OVL_OUT64)" -o "$@"
 
 # ── Plus/4 build rules ────────────────────────────────────
 $(PLUS4_MAIN_PRG): $(PLUS4_SOURCES) $(VERSION_INC) | ensure-kickass $(OUTPLUS4)
-	$(JAVA) -jar "$(KICKASS_RESOLVED)" ":OVL_OUT=$(OVL_OUTPLUS4)" "$(PLUS4_MAIN_SRC)" $(KA_FLAGSPLUS4) -o "$(PLUS4_MAIN_PRG)"
+	$(JAVA) -jar "$(KICKASS_RESOLVED)" ":OVL_OUT=$(OVL_OUTPLUS4)" "$(PLUS4_MAIN_SRC)" $(KA_FLAGSPLUS4) -symbolfiledir "$(OVL_OUTPLUS4)" -o "$(PLUS4_MAIN_PRG)"
 
 $(PLUS4_OVL_START): $(PLUS4_MAIN_PRG)
 $(PLUS4_OVL_TOWN): $(PLUS4_MAIN_PRG)
@@ -391,26 +394,26 @@ $(PLUS4_OVL_CHEST): $(PLUS4_MAIN_PRG)
 $(PLUS4_RUNTIME_BANKED): $(PLUS4_MAIN_PRG)
 
 $(PLUS4_BOOT_PRG): $(PLUS4_SOURCES) | ensure-kickass $(OUTPLUS4)
-	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(PLUS4_BOOT_SRC)" $(KA_FLAGSPLUS4) -o "$(PLUS4_BOOT_PRG)"
+	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(PLUS4_BOOT_SRC)" $(KA_FLAGSPLUS4) -symbolfiledir "$(OVL_OUTPLUS4)" -o "$(PLUS4_BOOT_PRG)"
 
 $(PLUS4_TITLE_PRG): $(TITLE_SRC) $(VERSION_INC) | ensure-kickass $(OUTPLUS4)
-	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(TITLE_SRC)" -define TITLE_PLATFORM_4 -o "$(PLUS4_TITLE_PRG)"
+	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(TITLE_SRC)" -define TITLE_PLATFORM_4 -symbolfiledir "$(OVL_OUTPLUS4)" -o "$(PLUS4_TITLE_PRG)"
 
 $(OUTPLUS4)/monster.db.1: $(C64_TIER_DIR)/tier1_prg.s $(C64_TIER_DIR)/tier1.s | ensure-kickass $(OUTPLUS4)
-	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(C64_TIER_DIR)/tier1_prg.s" -o "$@"
+	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(C64_TIER_DIR)/tier1_prg.s" -symbolfiledir "$(OVL_OUTPLUS4)" -o "$@"
 
 $(OUTPLUS4)/monster.db.2: $(C64_TIER_DIR)/tier2_prg.s $(C64_TIER_DIR)/tier2.s | ensure-kickass $(OUTPLUS4)
-	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(C64_TIER_DIR)/tier2_prg.s" -o "$@"
+	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(C64_TIER_DIR)/tier2_prg.s" -symbolfiledir "$(OVL_OUTPLUS4)" -o "$@"
 
 $(OUTPLUS4)/monster.db.3: $(C64_TIER_DIR)/tier3_prg.s $(C64_TIER_DIR)/tier3.s | ensure-kickass $(OUTPLUS4)
-	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(C64_TIER_DIR)/tier3_prg.s" -o "$@"
+	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(C64_TIER_DIR)/tier3_prg.s" -symbolfiledir "$(OVL_OUTPLUS4)" -o "$@"
 
 $(OUTPLUS4)/monster.db.4: $(C64_TIER_DIR)/tier4_prg.s $(C64_TIER_DIR)/tier4.s | ensure-kickass $(OUTPLUS4)
-	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(C64_TIER_DIR)/tier4_prg.s" -o "$@"
+	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(C64_TIER_DIR)/tier4_prg.s" -symbolfiledir "$(OVL_OUTPLUS4)" -o "$@"
 
 # ── C128 build rules ──────────────────────────────────────
 $(C128_MAIN_STAMP): $(C128_SOURCES) $(VERSION_INC) | ensure-kickass $(OUT128)
-	$(JAVA) -jar "$(KICKASS_RESOLVED)" ":OVL_OUT=$(OVL_OUT128)" "$(C128_MAIN_SRC)" $(KA_FLAGS128) -o "$(C128_MAIN_PRG)"
+	$(JAVA) -jar "$(KICKASS_RESOLVED)" ":OVL_OUT=$(OVL_OUT128)" "$(C128_MAIN_SRC)" $(KA_FLAGS128) -symbolfiledir "$(OVL_OUT128)" -o "$(C128_MAIN_PRG)"
 	touch "$(C128_MAIN_STAMP)"
 
 $(C128_MAIN_OUTPUTS): $(C128_MAIN_STAMP)
@@ -418,13 +421,13 @@ $(C128_MAIN_OUTPUTS): $(C128_MAIN_STAMP)
 	@test -f "$@"
 
 $(C128_BOOT_PRG): $(C128_SOURCES) | ensure-kickass $(OUT128)
-	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(C128_BOOT_SRC)" -o "$(C128_BOOT_PRG)"
+	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(C128_BOOT_SRC)" -symbolfiledir "$(OVL_OUT128)" -o "$(C128_BOOT_PRG)"
 
 $(C128_BOOT_CHAIN_PRG): $(C128_SOURCES) | ensure-kickass $(OUT128)
-	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(C128_BOOT_SRC)" -define BOOT128_CHAIN -o "$(C128_BOOT_CHAIN_PRG)"
+	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(C128_BOOT_SRC)" -define BOOT128_CHAIN -symbolfiledir "$(OVL_OUT128)" -o "$(C128_BOOT_CHAIN_PRG)"
 
 $(C128_CHARSET_DEMO_PRG): $(C128_CHARSET_DEMO_SRC) | ensure-kickass $(OUT128)
-	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(C128_CHARSET_DEMO_SRC)" $(KA_FLAGS128) -o "$(C128_CHARSET_DEMO_PRG)"
+	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(C128_CHARSET_DEMO_SRC)" $(KA_FLAGS128) -symbolfiledir "$(OVL_OUT128)" -o "$(C128_CHARSET_DEMO_PRG)"
 
 $(C128_BOOTART_PPM): $(C128_BOOTART_PNG) $(C128_BOOTART_SRC_TOOL) | $(OUT128)
 	python3 "$(C128_BOOTART_SRC_TOOL)" "$(C128_BOOTART_PNG)" 640 200 "$@"
@@ -433,25 +436,25 @@ $(C128_BOOTART_INC) $(C128_BOOTART_CHARSET_BIN) $(C128_BOOTART_SCREEN_BIN) $(C12
 	python3 "$(C128_BOOTART_TOOL)" "$(C128_BOOTART_PPM)" "$(OUT128)/bootart128"
 
 $(C128_BOOTART_DIAG_PRG): $(C128_BOOTART_SRC) $(C128_BOOTART_INC) $(C128_BOOTART_CHARSET_BIN) $(C128_BOOTART_SCREEN_BIN) $(C128_BOOTART_ATTR_BIN) | ensure-kickass $(OUT128)
-	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(C128_BOOTART_SRC)" $(KA_FLAGS128) -o "$(C128_BOOTART_DIAG_PRG)"
+	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(C128_BOOTART_SRC)" $(KA_FLAGS128) -symbolfiledir "$(OVL_OUT128)" -o "$(C128_BOOTART_DIAG_PRG)"
 
 $(C128_TITLE_PRG): $(TITLE_SRC) $(VERSION_INC) | ensure-kickass $(OUT128)
-	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(TITLE_SRC)" -define TITLE_PLATFORM_128 -o "$(C128_TITLE_PRG)"
+	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(TITLE_SRC)" -define TITLE_PLATFORM_128 -symbolfiledir "$(OVL_OUT128)" -o "$(C128_TITLE_PRG)"
 
 $(OUT128)/monster.db.1: $(C64_TIER_DIR)/tier1_prg.s $(C64_TIER_DIR)/tier1.s | ensure-kickass $(OUT128)
-	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(C64_TIER_DIR)/tier1_prg.s" -o "$@"
+	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(C64_TIER_DIR)/tier1_prg.s" -symbolfiledir "$(OVL_OUT128)" -o "$@"
 
 $(OUT128)/monster.db.2: $(C64_TIER_DIR)/tier2_prg.s $(C64_TIER_DIR)/tier2.s | ensure-kickass $(OUT128)
-	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(C64_TIER_DIR)/tier2_prg.s" -o "$@"
+	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(C64_TIER_DIR)/tier2_prg.s" -symbolfiledir "$(OVL_OUT128)" -o "$@"
 
 $(OUT128)/monster.db.3: $(C64_TIER_DIR)/tier3_prg.s $(C64_TIER_DIR)/tier3.s | ensure-kickass $(OUT128)
-	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(C64_TIER_DIR)/tier3_prg.s" -o "$@"
+	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(C64_TIER_DIR)/tier3_prg.s" -symbolfiledir "$(OVL_OUT128)" -o "$@"
 
 $(OUT128)/monster.db.4: $(C64_TIER_DIR)/tier4_prg.s $(C64_TIER_DIR)/tier4.s | ensure-kickass $(OUT128)
-	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(C64_TIER_DIR)/tier4_prg.s" -o "$@"
+	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(C64_TIER_DIR)/tier4_prg.s" -symbolfiledir "$(OVL_OUT128)" -o "$@"
 
 $(C128_BOOTSECT_PRG): $(C128_BOOTSECT_SRC) | ensure-kickass $(OUT128)
-	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(C128_BOOTSECT_SRC)" -o "$(C128_BOOTSECT_PRG)"
+	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(C128_BOOTSECT_SRC)" -symbolfiledir "$(OVL_OUT128)" -o "$(C128_BOOTSECT_PRG)"
 
 # ── Disk recipes ──────────────────────────────────────────
 $(EMPTY_PRG): | $(OUT)

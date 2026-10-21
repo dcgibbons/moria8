@@ -130,7 +130,9 @@ def run_test_via_moncommands(
             command.append(extra_arg)
         if limitcycles is not None:
             command.extend(["-limitcycles", str(limitcycles)])
-        command.extend(["-moncommands", str(mon_file), "-monlog", "-monlogname", str(log_file)])
+        # Name before -monlog: VICE opens the log as soon as -monlog is parsed, so the
+        # other order also leaves an empty monitor.log in the cwd.
+        command.extend(["-moncommands", str(mon_file), "-monlogname", str(log_file), "-monlog"])
 
         try:
             subprocess.run(

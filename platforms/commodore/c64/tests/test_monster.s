@@ -15,7 +15,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #18
+    ldx #21
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -104,7 +104,7 @@ t7_count:  .byte 0
 t7_ok:     .byte 0
 t9_count:  .byte 0
 t9_mask:   .byte 0
-tc_results: .fill 19, $ff       // Test results buffer (copied to $0400 by trampoline)
+tc_results: .fill 22, $ff       // Test results buffer (copied to $0400 by trampoline)
 test_force_deep_tier_spawn: .byte 0
 
 .macro PatchJump(target, replacement) {
@@ -844,16 +844,152 @@ test_start:
     bne !t18_fail+
     lda #$01
     sta tc_results+18
-    jmp !tests_done+
+    jmp !t19+
 !t18_fail:
     lda #$00
     sta tc_results+18
+
+    // ==========================================
+    // Test 20: an adjacent monster diagonally across a wall corner is
+    // visible. VMS Moria los and Umoria los() treat any square within one
+    // step as in line of sight; light radius 1 covers it.
+    // ==========================================
+!t19:
+    lda #9                      // Monster at (9,9): walls at (9,10) and (10,9)
+    ldy #9
+    jsr setup_corner_visibility
+    jsr monster_update_visibility_all
+    jsr corner_monster_visible
+    beq !t19_fail+
+    lda #$01
+    sta tc_results+19
+    jmp !t20+
+!t19_fail:
+    lda #$00
+    sta tc_results+19
+
+    // ==========================================
+    // Test 21: blindness still hides that adjacent monster.
+    // ==========================================
+!t20:
+    lda #9
+    ldy #9
+    jsr setup_corner_visibility
+    lda #10
+    sta zp_eff_blind
+    jsr monster_update_visibility_all
+    lda #0
+    sta zp_eff_blind
+    jsr corner_monster_visible
+    bne !t20_fail+
+    lda #$01
+    sta tc_results+20
+    jmp !t21+
+!t20_fail:
+    lda #$00
+    sta tc_results+20
+
+    // ==========================================
+    // Test 22: two squares away behind the wall stays hidden (LOS still
+    // blocks beyond adjacency; light radius 4 for this case).
+    // ==========================================
+!t21:
+    lda #8                      // Monster at (8,10), wall at (9,10)
+    ldy #10
+    jsr setup_corner_visibility
+    lda #4
+    sta zp_light_radius
+    jsr monster_update_visibility_all
+    jsr corner_monster_visible
+    bne !t21_fail+
+    lda #$01
+    sta tc_results+21
+    jmp !tests_done+
+!t21_fail:
+    lda #$00
+    sta tc_results+21
 
 !tests_done:
     jmp test_exit_trampoline
 
 test_rng_max_sleep:
     lda #249
+    rts
+
+// setup_corner_visibility — player at (10,10), light radius 1, unlit visited
+// floor on (8..11, 8..11) with walls at (9,10) and (10,9), and one monster
+// (type 1, not yet visible) at (A, Y).
+setup_corner_visibility:
+    pha
+    tya
+    pha
+    jsr monster_init_table
+    lda #0
+    sta eff_detect_timer
+    sta muv_clear_detected
+    sta zp_eff_blind
+    sta cr_mflags + 1           // No infravision shortcut
+    lda #1
+    sta zp_player_dlvl
+    sta zp_light_radius
+    lda #10
+    sta zp_player_x
+    sta zp_player_y
+    ldx #8
+!scv_row:
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #8
+!scv_col:
+    lda #TILE_FLOOR | FLAG_VISITED
+    sta (zp_ptr0),y
+    iny
+    cpy #12
+    bne !scv_col-
+    inx
+    cpx #12
+    bne !scv_row-
+    ldx #10
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #9
+    lda #TILE_WALL_V | FLAG_VISITED
+    sta (zp_ptr0),y
+    ldx #9
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #10
+    lda #TILE_WALL_H | FLAG_VISITED
+    sta (zp_ptr0),y
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda #1
+    sta (zp_ptr0),y
+    ldy #MX_FLAGS
+    lda #MF_AWAKE
+    sta (zp_ptr0),y
+    pla
+    ldy #MX_Y
+    sta (zp_ptr0),y
+    pla
+    ldy #MX_X
+    sta (zp_ptr0),y
+    rts
+
+// corner_monster_visible — A = MF_VISIBLE bit of slot 0 (Z set if hidden).
+corner_monster_visible:
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_FLAGS
+    lda (zp_ptr0),y
+    and #MF_VISIBLE
     rts
 
 setup_visibility_axis_test:

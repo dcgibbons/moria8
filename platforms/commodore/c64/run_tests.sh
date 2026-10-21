@@ -4352,13 +4352,13 @@ run_test "rng"    "tests/test_rng.s"    "0400 0409" 10
 run_test "memory" "tests/test_memory.s" "0400 0402" 3
 run_test "config" "tests/test_config.s" "0400 0400" 1
 run_test "input"  "tests/test_input.s"  "0400 040e" 15
-run_test "main_loop" "tests/test_main_loop.s" "0400 042b" 44 500000000
+run_test "main_loop" "tests/test_main_loop.s" "0400 042d" 46 500000000
 run_test "run_visibility_bank" "tests/test_run_visibility_bank.s" "0400 0400" 1 500000000
-run_test "turn" "tests/test_turn.s" "0400 041c" 29 500000000
+run_test "turn" "tests/test_turn.s" "0400 0420" 33 500000000
 run_test "player" "tests/test_player.s" "0400 0409" 10
 run_test "dungeon" "tests/test_dungeon.s" "0400 0441" 66 500000000
-run_test "monster" "tests/test_monster.s" "0400 0412" 19 500000000
-run_test "monster_ai" "tests/test_monster_ai.s" "0400 0437" 56 500000000
+run_test "monster" "tests/test_monster.s" "0400 0415" 22 500000000
+run_test "monster_ai" "tests/test_monster_ai.s" "0400 0439" 58 500000000
 run_test "combat" "tests/test_combat.s" "0400 0428" 41 500000000
 run_test "msg_long" "tests/test_msg_long.s" "0400 0400" 1 20000000
 run_test "monster_attack" "tests/test_monster_attack.s" "0400 040d" 14 500000000

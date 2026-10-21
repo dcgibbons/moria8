@@ -30,9 +30,9 @@ def run_vice(args: argparse.Namespace, moncommands: Path, monlog: Path) -> int:
         str(args.keybuf_delay),
         "-moncommands",
         str(moncommands),
-        "-monlog",
-        "-monlogname",
+        "-monlogname",          # before -monlog, or VICE also creates ./monitor.log
         str(monlog),
+        "-monlog",
         "-limitcycles",
         str(args.limitcycles),
         "+sound",

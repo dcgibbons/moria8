@@ -110,7 +110,7 @@ log_file="$(test128_tmp_file "test128_${NAME}.log")"
 } > "$mon_file"
 
 "$VICE" -console -nativemonitor -warp -80col \
-    -moncommands "$mon_file" -monlog -monlogname "$log_file" \
+    -moncommands "$mon_file" -monlogname "$log_file" -monlog \
     -limitcycles "$CYCLES" +sound -sounddev dummy \
     +remotemonitor +binarymonitor >/dev/null 2>&1
 

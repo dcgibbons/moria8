@@ -2037,6 +2037,7 @@ cmd_autorest:
     jsr hal_input_wait_release
     lda #0
     sta turn_scene_dirty        // Discard preceding command's scene change.
+    sta turn_rest_disturbed     // ...and its damage/hunger disturbance (stale).
     lda #1
     sta auto_rest_active
     jmp main_loop
@@ -2210,19 +2211,18 @@ auto_rest_check_recovered:
     clc
     rts
 
-// auto_rest_should_stop — Carry set if auto-rest must stop.
+// auto_rest_should_stop — Carry set if auto-rest must stop: recovered, or
+// its own rest turn printed a message, dirtied the scene, or disturbed the
+// player with damage or worsening hunger (TRN-007).
 auto_rest_should_stop:
     jsr auto_rest_check_recovered
-    bcs !stop+
+    bcs !done+                  // Recovered: carry set = stop
 
     lda zp_msg_flags
     ora turn_scene_dirty
-    bne !stop+
-
-    clc
-    rts
-!stop:
-    sec
+    ora turn_rest_disturbed
+    cmp #1                      // Any stop event: carry set = stop
+!done:
     rts
 
 cmd_run:

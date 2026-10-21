@@ -75,7 +75,7 @@ test_map_row:        .fill 80, FLAG_OCCUPIED
 map_row_lo:          .fill 48, <test_map_row
 map_row_hi:          .fill 48, >test_map_row
 
-tc_results: .fill 29, $ff
+tc_results: .fill 33, $ff
 
 test_seq_next: .byte 0
 test_seq_effects: .byte 0
@@ -1291,8 +1291,93 @@ t21_test:
     lda #$00
     sta tc_results + 24
 
+// Tests 30-33 run last, whatever path reached test_finish: the auto-rest
+// disturbance event (turn_rest_disturbed, TRN-007) and its producers.
 test_finish:
-    ldx #28
+    // Test 30: an ordinary turn neither sets nor clears the disturbance
+    // (only producers set it; auto-rest entry clears it).
+    jsr reset_state
+    jsr install_turn_patches
+    lda #0
+    sta turn_rest_disturbed
+    jsr turn_post_action
+    lda turn_rest_disturbed
+    bne !t30_fail+
+    lda #1
+    sta turn_rest_disturbed
+    jsr turn_post_action
+    lda turn_rest_disturbed
+    beq !t30_fail+
+    lda #$01
+    sta tc_results + 29
+    jmp !t31+
+!t30_fail:
+    lda #$00
+    sta tc_results + 29
+
+!t31:
+    // Test 31: per-turn damage (production turn_apply_one_damage, used by
+    // the poison and starvation ticks) disturbs.
+    jsr reset_state
+    lda #0
+    sta turn_rest_disturbed
+    sta zp_player_hp_hi
+    lda #20
+    sta zp_player_hp_lo
+    jsr turn_apply_one_damage
+    lda turn_rest_disturbed
+    beq !t31_fail+
+    lda zp_player_hp_lo
+    cmp #19
+    bne !t31_fail+
+    lda #$01
+    sta tc_results + 30
+    jmp !t32+
+!t31_fail:
+    lda #$00
+    sta tc_results + 30
+
+!t32:
+    // Test 32: hunger getting worse (production turn_maybe_play_hunger_alert,
+    // called by every food tick) disturbs.
+    jsr reset_state
+    lda #0
+    sta turn_rest_disturbed
+    lda #HUNGER_HUNGRY
+    sta zp_hunger_state
+    lda #HUNGER_FULL            // Previous state
+    jsr turn_maybe_play_hunger_alert
+    lda turn_rest_disturbed
+    beq !t32_fail+
+    lda #$01
+    sta tc_results + 31
+    jmp !t33+
+!t32_fail:
+    lda #$00
+    sta tc_results + 31
+
+!t33:
+    // Test 33: unchanged or improved hunger does not disturb.
+    jsr reset_state
+    lda #0
+    sta turn_rest_disturbed
+    lda #HUNGER_FULL
+    sta zp_hunger_state
+    lda #HUNGER_FULL            // Unchanged
+    jsr turn_maybe_play_hunger_alert
+    lda #HUNGER_HUNGRY          // Improved (ate): HUNGRY -> FULL
+    jsr turn_maybe_play_hunger_alert
+    lda turn_rest_disturbed
+    bne !t33_fail+
+    lda #$01
+    sta tc_results + 32
+    jmp test_copy_results
+!t33_fail:
+    lda #$00
+    sta tc_results + 32
+
+test_copy_results:
+    ldx #32
 !copy:
     lda tc_results,x
     sta $0400,x

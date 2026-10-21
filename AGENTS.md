@@ -153,8 +153,9 @@ bootstrap stub below BASIC ROM that banks RAM visible before jumping to
 
 VICE/MAME/`x16emu` escalation list (these launch an emulator and need
 unsandboxed localhost access): commands that invoke `x64sc`, `x128`, `xplus4`,
-or `x16emu`; `make test64`; `make testplus4`; `make testplus4-runtime`; `make
-test128-fast`; `make test128-fast-smoke`; `make test128`; `make testcx16`;
+or `x16emu`; `make test64`; `make testplus4`; `make testplus4-runtime`;
+`make testapple2-runtime`; `make test128-fast`; `make test128-fast-smoke`;
+`make test128`; `make testcx16`;
 `make testcx16-runtime`; direct `harness128.py`, `harness128_batch.py`,
 `harnessplus4.py`, or `harness_smoke.py` runs; and filtered runtime harness
 targets. Static/build-only checks stay sandboxed: `make build`, `make
@@ -256,6 +257,8 @@ Build and test (run from the repository root):
 - `make test128-fast-smoke`: high-value C128 runtime smoke subset
 - `make test128`: authoritative full C128 suite
 - `make testapple2`: Apple IIe memory-contract gate (static)
+- `make testapple2-runtime`: Apple IIe memory-contract gate + MAME runtime
+  suite (requires `A2ROMS`)
 - `make testcx16`: Commander X16 memory-contract gate + `x16emu` runtime suite
 - `make disk`: build shipping C64, C128, Plus/4, Apple IIe, and CX16 packages
 - `make run`, `make run64`, `make run128`, `make runplus4`: launch under VICE

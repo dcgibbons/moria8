@@ -94,7 +94,7 @@ run_capture_until() {
     set +e
     "$VICE" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -keybuf "$keybuf" -keybuf-delay "$keybuf_delay" \
-        -moncommands "$mon_file" -monlog -monlogname "$log_file" \
+        -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles "$limitcycles" +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
     set -e
@@ -120,7 +120,7 @@ run_capture_jam() {
     set +e
     "$VICE" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -keybuf "$keybuf" -keybuf-delay "$keybuf_delay" \
-        -moncommands "$mon_file" -monlog -monlogname "$log_file" \
+        -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles "$limitcycles" +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
     set -e

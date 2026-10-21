@@ -26,7 +26,7 @@ bootstrap:
 
 // test_finish — Copy results to $0400 and halt.
 test_finish:
-    ldx #55
+    ldx #57
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -166,7 +166,7 @@ tai_rng_values:   .fill 4, 0
 tai_rng_idx:      .byte 0
 tai_distance:     .byte 0
 auto_rest_active: .byte 0
-tc_results: .fill 56, $ff      // Result buffer (copied to $0400 at end)
+tc_results: .fill 58, $ff      // Result buffer (copied to $0400 at end)
 
 .macro PatchJump(target, replacement) {
     lda #$4c
@@ -242,6 +242,74 @@ tai_read_door:
     sta zp_ptr0_hi
     ldy #20
     lda (zp_ptr0),y
+    rts
+
+// tai_attack_once — Open lit floor around (25,15), one awake normal-speed
+// Kobold (type 4) there, player at (26, A), one AI tick through production
+// monster_ai_tick. Z set if exactly one attack happened and the monster
+// stayed at (25,15).
+tai_attack_once:
+    sta zp_player_y
+    lda #26
+    sta zp_player_x
+    jsr monster_init_table
+    lda #0
+    sta zp_game_flags
+    sta mat_fleeing
+    sta zp_eff_speed
+    sta player_pflags
+    sta tai_attack_calls
+    lda #200
+    sta zp_player_hp_lo
+    sta player_data + PL_HP_LO
+    lda #0
+    sta zp_player_hp_hi
+    sta player_data + PL_HP_HI
+    lda #8                      // Pre-fill the keyboard buffer for any -more- (as Test 7)
+    sta $c6
+    ldx #12
+!tas_row:
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #22
+!tas_col:
+    lda #TILE_FLOOR | FLAG_LIT
+    sta (zp_ptr0),y
+    iny
+    cpy #29
+    bne !tas_col-
+    inx
+    cpx #19
+    bne !tas_row-
+    lda #1
+    sta cr_speed + 4            // Normal speed: exactly one process per tick
+    lda #25
+    sta ms_spawn_x
+    lda #15
+    sta ms_spawn_y
+    lda #4                      // Kobold
+    jsr monster_spawn_one
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_FLAGS
+    lda #MF_AWAKE
+    sta (zp_ptr0),y
+    jsr monster_ai_tick
+    lda tai_attack_calls
+    cmp #1
+    bne !tma_done+
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_X
+    lda (zp_ptr0),y
+    cmp #25
+    bne !tma_done+
+    ldy #MX_Y
+    lda (zp_ptr0),y
+    cmp #15
+!tma_done:
     rts
 
 // tai_set_hp — Set monster slot 0 HP to A (hi = 0), select slot 0,
@@ -3520,10 +3588,43 @@ test_start:
     bne !t56_fail+
     lda #$01
     sta tc_results + 55
-    jmp !tests_done+
+    jmp !t57+
 !t56_fail:
     lda #$00
     sta tc_results + 55
+
+    // ==========================================
+    // Test 57: an orthogonally adjacent normal-speed monster attacks exactly
+    // once per AI tick and stays put. VMS Moria make_move ends the monster's
+    // turn after make_attack (flag := true); trying the next direction must
+    // not reach the player a second time.
+    // ==========================================
+!t57:
+    lda #15                     // Player at (26,15): east of the monster
+    jsr tai_attack_once
+    bne !t57_fail+
+    lda #$01
+    sta tc_results + 56
+    jmp !t58+
+!t57_fail:
+    lda #$00
+    sta tc_results + 56
+
+    // ==========================================
+    // Test 58: a diagonally adjacent monster attacks exactly once and does
+    // not also step to an orthogonal square in the same tick (open floor all
+    // around, so a follow-on move would succeed).
+    // ==========================================
+!t58:
+    lda #14                     // Player at (26,14): north-east of the monster
+    jsr tai_attack_once
+    bne !t58_fail+
+    lda #$01
+    sta tc_results + 57
+    jmp !tests_done+
+!t58_fail:
+    lda #$00
+    sta tc_results + 57
 
 !tests_done:
     jmp test_finish

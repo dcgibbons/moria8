@@ -113,8 +113,9 @@ make testcx16
 `make test` runs the default regression mix. `make test128-fast` is the fast
 C128 unit batch, `make test128-fast-smoke` covers high-value C128 runtime boot
 and town paths, and `make test128` is the broader C128 shell harness.
-`make testapple2` is the Apple II static memory-contract gate; the MAME
-scenario harness lives at `platforms/apple2/harness_smoke.py`. `make testcx16`
+`make testapple2` is the Apple II static memory-contract gate;
+`make testapple2-runtime` also runs the MAME scenario harness
+(`platforms/apple2/harness_smoke.py`, which needs `A2ROMS`). `make testcx16`
 runs the Commander X16 static memory-contract gate and the `x16emu -testbench`
 runtime scenario suite (`platforms/cx16/harness_smoke.py`).
 

@@ -1909,9 +1909,10 @@ test_start:
     sta tc_results + 28
 
     // ==========================================
-    // Test 35: Final diagonal target cannot bypass corner blockers
-    // Regresses a monster becoming visible around a wall corner because
-    // the target tile exemption ran before diagonal side-cell checks.
+    // Test 35: Adjacent diagonal monster across a wall corner is visible
+    // VMS Moria los and Umoria los() treat any square within one step as
+    // in line of sight, so a monster that can attack across the corner is
+    // seen (MON-010; supersedes the PR #46 corner-hidden expectation).
     // ==========================================
 !t35:
     jsr fill_map_rock
@@ -1968,7 +1969,7 @@ test_start:
     jsr update_visibility
     lda monster_table + MX_FLAGS
     and #MF_VISIBLE
-    bne !t35_fail+
+    beq !t35_fail+
     lda #$01
     sta tc_results + 29
     jmp !t36+

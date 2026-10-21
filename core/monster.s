@@ -1216,6 +1216,13 @@ monster_update_visibility_one:
     bcc !muvo_store+
 
 !muvo_check_los:
+    // Any square within one step is in line of sight (VMS Moria los only
+    // tests the player's own square at distance 1; Umoria los() returns
+    // true for adjacency). Light/infravision range was checked above, so
+    // an adjacent monster across a wall corner is seen, as it can attack.
+    lda muv_dist                // 1..20 here (distance 0 returned visible above)
+    lsr
+    beq !muvo_visible+          // distance 1
     // Closed doors/walls block normal sight and infravision.
     lda zp_player_x
     sta zp_temp0                // mm_los_cx

@@ -71,7 +71,7 @@ EOF
 set +e
 "$VICE" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
     -keybuf $'NAA\rA\rA' -keybuf-delay 8 \
-    -moncommands "$mon_file" -monlog -monlogname "$log_file" \
+    -moncommands "$mon_file" -monlogname "$log_file" -monlog \
     -limitcycles 320000000 +sound -sounddev dummy \
     +remotemonitor +binarymonitor >/dev/null 2>&1
 rc=$?

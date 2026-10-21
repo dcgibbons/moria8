@@ -558,6 +558,7 @@ msg_clear:
 
 turn_post_action:
     jmp test_turn_post_action
+turn_rest_disturbed: .byte 0     // core/turn.s (not imported here); auto-rest stop latch
 
 ui_help_clear_all:
     jmp test_ui_help_clear_all

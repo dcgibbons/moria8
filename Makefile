@@ -5,6 +5,9 @@
 	buildcx16 diskcx16 runcx16 testcx16 testcx16-smoke testcx16-runtime testcx16-memory-contract testcx16-memory-contract-selftest \
 	artifact artifact-checksums artifacts
 
+# Python tools and harnesses must not leave __pycache__ in source directories.
+export PYTHONDONTWRITEBYTECODE := 1
+
 all:
 	$(MAKE) -C platforms/commodore all
 	$(MAKE) -C platforms/apple2 build
@@ -47,9 +50,10 @@ runapple2:
 
 testapple2: testapple2-memory-contract
 
-testapple2-smoke: testapple2-memory-contract
+testapple2-smoke: testapple2-runtime
 
 testapple2-runtime: testapple2-memory-contract
+	$(MAKE) -C platforms/apple2 test-runtime
 
 testapple2-memory-contract:
 	$(MAKE) -C platforms/apple2 test-memory-contract

@@ -45,11 +45,21 @@ player_update_hunger_state:
     sta zp_hunger_state
     rts
 
+// turn_rest_disturbed — the player took damage or got hungrier. Set by the
+// producers below; cleared when auto-rest starts (cmd_autorest), so while
+// auto-rest runs a nonzero value means one of its own rest turns disturbed
+// the player and it must stop (VMS Moria take_hit -> rest_off, hunger
+// alerts; TRN-007). Platforms with a full play slot define it elsewhere.
+#if !TURN_REST_DISTURBED_EXTERNAL
+turn_rest_disturbed: .byte 0
+#endif
+
 // turn_maybe_play_hunger_alert — Alert only when hunger gets worse.
 // Input: A = previous hunger state, zp_hunger_state = current state
 turn_maybe_play_hunger_alert:
     cmp zp_hunger_state
     bcs !done+              // Same or improved state: no alert
+    inc turn_rest_disturbed
 
     lda zp_hunger_state
     cmp #HUNGER_FAINT
@@ -336,8 +346,9 @@ turn_tick_hunger:
     jmp player_death_check
 
 // turn_apply_one_damage — Subtract 1 HP from the player, clamped at 0.
-// Syncs HP back to player_data.
+// Syncs HP back to player_data. Disturbs auto-rest (turn_rest_disturbed).
 turn_apply_one_damage:
+    inc turn_rest_disturbed
     lda zp_player_hp_lo
     sec
     sbc #1

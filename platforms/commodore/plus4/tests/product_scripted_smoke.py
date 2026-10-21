@@ -98,9 +98,9 @@ def build_vice_command(args: argparse.Namespace) -> list[str]:
         command.extend([
             "-moncommands",
             str(args.native_start_moncommands),
-            "-monlog",
-            "-monlogname",
+            "-monlogname",      # before -monlog, or VICE also creates ./monitor.log
             str(args.native_start_log),
+            "-monlog",
         ])
     return command
 

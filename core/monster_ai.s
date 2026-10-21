@@ -791,7 +791,8 @@ monster_move_away:
 // monster_try_step — Validate and execute a single tile move
 // Input: mat_target_x, mat_target_y = target position
 //        zp_mon_x/y = current position
-// Output: carry set = moved, carry clear = blocked
+// Output: carry set = moved or attacked (the monster's action is spent),
+//         carry clear = blocked
 // Side effects: updates zp_mon_x/y, clears old FLAG_OCCUPIED,
 //               sets new FLAG_OCCUPIED
 // Clobbers: A, X, Y, zp_ptr0/hi
@@ -834,9 +835,17 @@ monster_try_step:
     bne !mts_do_attack+         // Provoked — attack
     jmp !mts_blocked+           // Not provoked — don't attack
 !mts_do_attack:
-    // Monster is adjacent → attack player
+    // Monster is adjacent → attack player. The attack is the monster's whole
+    // action (VMS Moria make_move sets flag := true after make_attack), so
+    // report it as spent: callers must not try another direction, which
+    // could reach the player again or step away after attacking.
     jsr monster_attack_player
-    jmp !mts_blocked+           // Monster stays in place
+    lda zp_mon_x                // Stayed in place: old == current, so the
+    sta mat_old_x               // caller's move-dirty marking touches only
+    lda zp_mon_y                // this monster's own (player-adjacent) tile
+    sta mat_old_y
+    sec
+    rts
 !mts_not_player:
 
     // Bounds check

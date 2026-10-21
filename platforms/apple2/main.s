@@ -1165,7 +1165,9 @@ player_adjust_equipment_stat:
 #undef DISARM_COMMAND_EXTERNAL
 #undef PLAYER_LOOK_EXTERNAL
 #import "dungeon_scroll_a2.s"
+#define TURN_REST_DISTURBED_EXTERNAL
 #import "../../core/turn.s"
+#undef TURN_REST_DISTURBED_EXTERNAL
 // Small play-resident modules (play is present in every gameplay phase).
 #import "../../core/player_heal_feedback.s"
 #import "../../core/ui_restore.s"
@@ -1270,6 +1272,10 @@ a2_sfx_patterns:
     .byte $e8, 18, $d8, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0   // HUNGER_FAINT: lower, harsher
 .assert "Sound patterns are 10 x 16-byte slots", * - a2_sfx_patterns, 160
 .segment Default
+
+// Auto-rest disturbance flag (core/turn.s, TRN-007) in resident main RAM:
+// the play slot has no room for it (TURN_REST_DISTURBED_EXTERNAL).
+turn_rest_disturbed: .byte 0
 
 // ============================================================
 // Overlay segment blocks (C64 composition, adjusted)

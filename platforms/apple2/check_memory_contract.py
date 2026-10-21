@@ -12,8 +12,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 BUILD = ROOT / "build" / "apple2"
-MAIN_SYM = Path(__file__).with_name("main.sym")
-BOOT_SYM = Path(__file__).with_name("boot.sym")
+MAIN_SYM = BUILD / "main.sym"
+BOOT_SYM = BUILD / "boot.sym"
 SYMBOL_RE = re.compile(r"^\.label ([A-Za-z0-9_]+)=\$([0-9a-fA-F]+)$")
 
 

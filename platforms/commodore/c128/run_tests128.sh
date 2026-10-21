@@ -2330,7 +2330,7 @@ run_vic40_clean_boot_smoke() {
     } > "$mon_file"
 
     "$VICE" -config /dev/null -default +saveres -console -nativemonitor -warp -80col -autostart "$abs_d64" \
-        -moncommands "$mon_file" -monlog -monlogname "$log_file" \
+        -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 180000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
     local vice_rc=$?
@@ -3965,7 +3965,7 @@ run_test_internal() {
     } > "$mon_file"
 
     "$VICE" -config /dev/null -default +saveres -console -nativemonitor -warp -80col \
-        -moncommands "$mon_file" -monlog -monlogname "$log_file" \
+        -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles "$cycles" +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
 
@@ -4250,7 +4250,7 @@ run_test() {
     } > "$mon_file"
 
     "$VICE" -config /dev/null -default +saveres -console -nativemonitor -warp -80col \
-        -moncommands "$mon_file" -monlog -monlogname "$log_file" \
+        -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles "$cycles" +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
 
@@ -4498,7 +4498,7 @@ run_boot_d64_smoke() {
     } > "$mon_file"
 
     "$VICE" -config /dev/null -default +saveres -console -nativemonitor -warp -80col -autostart "$abs_d64" \
-        -moncommands "$mon_file" -monlog -monlogname "$log_file" \
+        -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 120000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
     local vice_rc=$?
@@ -4545,7 +4545,7 @@ run_boot_title_newgame_smoke() {
 
     "$VICE" -config /dev/null -default +saveres -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -keybuf $'NAA\rA\rA' -keybuf-delay 8 \
-        -moncommands "$mon_file" -monlog -monlogname "$log_file" \
+        -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 320000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
     local vice_rc=$?
@@ -4602,7 +4602,7 @@ run_new_key_stability_smoke() {
 
     "$VICE" -config /dev/null -default +saveres -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -keybuf 'N' -keybuf-delay 8 \
-        -moncommands "$mon_file" -monlog -monlogname "$log_file" \
+        -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 220000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
     local vice_rc=$?
@@ -4660,7 +4660,7 @@ run_title_art_smoke() {
     } > "$mon_file"
 
     "$VICE" -config /dev/null -default +saveres -console -nativemonitor -warp -80col -autostart "$abs_d64" \
-        -moncommands "$mon_file" -monlog -monlogname "$log_file" \
+        -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 180000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
     local vice_rc=$?
@@ -4807,7 +4807,7 @@ run_boot_title_save_write_product_smoke() {
 
     "$VICE" -config /dev/null -default +saveres -console -nativemonitor -warp -80col -autostart "$abs_boot_d64" \
         -drive9type 1541 -attach9rw -9 "$abs_save_d64" \
-        -moncommands "$mon_file" -monlog -monlogname "$log_file" \
+        -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 320000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
     local vice_rc=$?
@@ -5005,7 +5005,7 @@ run_boot_title_save_media_fail_product_smoke() {
 
     "$VICE" -config /dev/null -default +saveres -console -nativemonitor -warp -80col -autostart "$abs_boot_d64" \
         -drive9type 1541 -attach9rw -9 "$abs_save_d64" \
-        -moncommands "$mon_file" -monlog -monlogname "$log_file" \
+        -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 360000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
     local vice_rc=$?
@@ -5219,7 +5219,7 @@ run_boot_title_single_drive_save_wrong_media_smoke() {
     } > "$mon_file"
 
     "$VICE" -config /dev/null -default +saveres -console -nativemonitor -warp -80col -autostart "$wrong_media_d64" \
-        -moncommands "$mon_file" -monlog -monlogname "$log_file" \
+        -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 360000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
     local vice_rc=$?
@@ -5311,7 +5311,7 @@ run_boot_title_single_drive_load_wrong_media_smoke() {
     } > "$mon_file"
 
     "$VICE" -config /dev/null -default +saveres -console -nativemonitor -warp -80col -autostart "$wrong_media_d64" \
-        -moncommands "$mon_file" -monlog -monlogname "$log_file" \
+        -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 360000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
     local vice_rc=$?
@@ -6021,7 +6021,7 @@ run_boot_title_load_resume_smoke() {
 
     "$VICE" -config /dev/null -default +saveres -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -keybuf "L" -keybuf-delay 8 \
-        -moncommands "$mon_file" -monlog -monlogname "$log_file" \
+        -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 220000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
     local vice_rc=$?
@@ -6076,7 +6076,7 @@ run_boot_title_idle_smoke() {
     } > "$mon_file"
 
     "$VICE" -config /dev/null -default +saveres -console -nativemonitor -warp -80col -autostart "$abs_d64" \
-        -moncommands "$mon_file" -monlog -monlogname "$log_file" \
+        -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 120000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
     local vice_rc=$?
@@ -6101,7 +6101,7 @@ run_boot_title_idle_smoke() {
     } > "$mon_file"
 
     "$VICE" -config /dev/null -default +saveres -console -nativemonitor -warp -80col -autostart "$abs_d64" \
-        -moncommands "$mon_file" -monlog -monlogname "$log_file" \
+        -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 120000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
     vice_rc=$?
@@ -6127,7 +6127,7 @@ run_boot_title_idle_smoke() {
     } > "$mon_file"
     "$VICE" -config /dev/null -default +saveres -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" \
-        -monlog -monlogname "$log_file" \
+        -monlogname "$log_file" -monlog \
         -limitcycles 220000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
     vice_rc=$?
@@ -6183,7 +6183,7 @@ run_boot_tier_transition_smoke() {
 
     "$VICE" -config /dev/null -default +saveres -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -keybuf $'NAA\rA\rA L>' -keybuf-delay 8 \
-        -moncommands "$mon_file" -monlog -monlogname "$log_file" \
+        -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 320000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
     local vice_rc=$?
@@ -6237,7 +6237,7 @@ run_town_overlay_smoke() {
 
     "$VICE" -config /dev/null -default +saveres -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -keybuf $'NAA\rA\rA LLLLLLLL' -keybuf-delay 8 \
-        -moncommands "$mon_file" -monlog -monlogname "$log_file" \
+        -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 320000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
     local vice_rc=$?
@@ -6292,7 +6292,7 @@ run_town_overlay_female_smoke() {
 
     "$VICE" -config /dev/null -default +saveres -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -keybuf $'NAA\rA\rB LLLLLLLL' -keybuf-delay 8 \
-        -moncommands "$mon_file" -monlog -monlogname "$log_file" \
+        -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 320000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
     local vice_rc=$?
@@ -6354,7 +6354,7 @@ run_town_overlay_state_smoke() {
 
     "$VICE" -config /dev/null -default +saveres -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -keybuf $'NAA\rA\rB LLLLLLLL' -keybuf-delay 8 \
-        -moncommands "$mon_file" -monlog -monlogname "$log_file" \
+        -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 320000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
     local vice_rc=$?
@@ -6417,7 +6417,7 @@ run_scripted_summary_to_town_smoke() {
     } > "$mon_file"
 
     "$VICE" -config /dev/null -default +saveres -console -nativemonitor -warp -80col -8 "$abs_d64" -9 "$abs_d64" -autostart "$abs_d64" \
-        -moncommands "$mon_file" -monlog -monlogname "$log_file" \
+        -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 320000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
     local vice_rc=$?
@@ -6485,7 +6485,7 @@ perf_p1_trace_run_product_assert() {
     } > "$mon_file"
 
     "$VICE" -config /dev/null -default +saveres -console -nativemonitor -warp -80col -8 "$abs_d64" -9 "$abs_d64" -autostart "$abs_d64" \
-        -moncommands "$mon_file" -monlog -monlogname "$log_file" \
+        -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 700000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
     local vice_rc=$?
@@ -6531,7 +6531,7 @@ perf_p1_trace_run_modal_assert() {
     } > "$mon_file"
 
     "$VICE" -config /dev/null -default +saveres -console -nativemonitor -warp -80col -8 "$abs_d64" -9 "$abs_d64" -autostart "$abs_d64" \
-        -moncommands "$mon_file" -monlog -monlogname "$log_file" \
+        -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 700000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
     local vice_rc=$?
@@ -6577,7 +6577,7 @@ perf_p1_trace_run_command_assert() {
     } > "$mon_file"
 
     "$VICE" -config /dev/null -default +saveres -console -nativemonitor -warp -80col -8 "$abs_d64" -9 "$abs_d64" -autostart "$abs_d64" \
-        -moncommands "$mon_file" -monlog -monlogname "$log_file" \
+        -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 700000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
     local vice_rc=$?
@@ -6623,7 +6623,7 @@ perf_p1_trace_run_transition_assert() {
     } > "$mon_file"
 
     "$VICE" -config /dev/null -default +saveres -console -nativemonitor -warp -80col -8 "$abs_d64" -9 "$abs_d64" -autostart "$abs_d64" \
-        -moncommands "$mon_file" -monlog -monlogname "$log_file" \
+        -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 700000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
     local vice_rc=$?
@@ -6756,7 +6756,7 @@ run_scripted_spell_cast_smoke() {
     } > "$mon_file"
 
     "$VICE" -config /dev/null -default +saveres -console -nativemonitor -warp -80col -autostart "$abs_d64" \
-        -moncommands "$mon_file" -monlog -monlogname "$log_file" \
+        -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 320000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
     local vice_rc=$?
@@ -6929,7 +6929,7 @@ run_scripted_book_overlay_smoke() {
     } > "$mon_file"
 
     "$VICE" -config /dev/null -default +saveres -console -nativemonitor -warp -80col -autostart "$abs_d64" \
-        -moncommands "$mon_file" -monlog -monlogname "$log_file" \
+        -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 320000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
     local vice_rc=$?
@@ -7023,7 +7023,7 @@ run_scripted_spell_list_overlay_smoke() {
     } > "$mon_file"
 
     "$VICE" -config /dev/null -default +saveres -console -nativemonitor -warp -80col -autostart "$abs_d64" \
-        -moncommands "$mon_file" -monlog -monlogname "$log_file" \
+        -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 320000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
     local vice_rc=$?
@@ -7122,7 +7122,7 @@ run_scripted_spell_list_cancel_smoke() {
     } > "$mon_file"
 
     "$VICE" -config /dev/null -default +saveres -console -nativemonitor -warp -80col -autostart "$abs_d64" \
-        -moncommands "$mon_file" -monlog -monlogname "$log_file" \
+        -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 320000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
     local vice_rc=$?
@@ -7222,7 +7222,7 @@ run_scripted_prayer_cast_smoke() {
     } > "$mon_file"
 
     "$VICE" -config /dev/null -default +saveres -console -nativemonitor -warp -80col -autostart "$abs_d64" \
-        -moncommands "$mon_file" -monlog -monlogname "$log_file" \
+        -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 320000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
     local vice_rc=$?
@@ -7342,7 +7342,7 @@ run_real_input_town_move_diag() {
 
     "$VICE" -config /dev/null -default +saveres -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -keybuf $'NAA\rA\rA L' -keybuf-delay 8 \
-        -moncommands "$mon_file" -monlog -monlogname "$log_file" \
+        -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 320000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
     local vice_rc=$?
@@ -7419,7 +7419,7 @@ run_real_boot_crash_harness() {
 
     "$VICE" -config /dev/null -default +saveres -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -keybuf $'NAA\rA\rA L>' -keybuf-delay 8 \
-        -moncommands "$mon_file" -monlog -monlogname "$log_file" \
+        -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 520000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
     local vice_rc=$?
@@ -7490,7 +7490,7 @@ run_overlay_data_transition_smoke() {
     } > "$mon_file"
 
     "$VICE" -config /dev/null -default +saveres -console -nativemonitor -warp -80col -autostart "$abs_d64" \
-        -moncommands "$mon_file" -monlog -monlogname "$log_file" \
+        -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 420000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
     local vice_rc=$?
@@ -7558,7 +7558,7 @@ run_cache_survival_smoke() {
     } > "$mon_file"
 
     "$VICE" -config /dev/null -default +saveres -console -nativemonitor -warp -80col -autostart "$abs_d64" \
-        -moncommands "$mon_file" -monlog -monlogname "$log_file" \
+        -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 700000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
     local vice_rc=$?
@@ -7622,7 +7622,7 @@ run_dungeon_attack_stability_smoke() {
 
     "$VICE" -config /dev/null -default +saveres -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -keybuf $'NAA\rA\rA L>L' -keybuf-delay 8 \
-        -moncommands "$mon_file" -monlog -monlogname "$log_file" \
+        -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 620000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
     local vice_rc=$?
@@ -7678,7 +7678,7 @@ run_death_overlay_smoke() {
 
     "$VICE" -config /dev/null -default +saveres -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -keybuf "N" -keybuf-delay 8 \
-        -moncommands "$mon_file" -monlog -monlogname "$log_file" \
+        -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 240000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
     local vice_rc=$?
@@ -7733,7 +7733,7 @@ run_restart_to_title_smoke() {
 
     "$VICE" -config /dev/null -default +saveres -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -keybuf $'NAA\rA\rA  S' -keybuf-delay 8 \
-        -moncommands "$mon_file" -monlog -monlogname "$log_file" \
+        -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 420000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
     local vice_rc=$?
@@ -7793,7 +7793,7 @@ run_preload_partial_failure_smoke() {
 
     "$VICE" -config /dev/null -default +saveres -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -keybuf $'NAA\rA\rA L>' -keybuf-delay 8 \
-        -moncommands "$mon_file" -monlog -monlogname "$log_file" \
+        -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 320000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
     local vice_rc=$?
@@ -7820,7 +7820,7 @@ run_preload_partial_failure_smoke() {
 
     "$VICE" -config /dev/null -default +saveres -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -keybuf $'NAA\rA\rA L>' -keybuf-delay 8 \
-        -moncommands "$mon_file" -monlog -monlogname "$log_file" \
+        -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 320000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
     vice_rc=$?
@@ -7880,7 +7880,7 @@ run_overlay_partial_failure_smoke() {
 
     "$VICE" -config /dev/null -default +saveres -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -keybuf $'NAA\rA\rA LLLLLLLL' -keybuf-delay 8 \
-        -moncommands "$mon_file" -monlog -monlogname "$log_file" \
+        -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 320000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
     local vice_rc=$?
@@ -7907,7 +7907,7 @@ run_overlay_partial_failure_smoke() {
 
     "$VICE" -config /dev/null -default +saveres -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -keybuf $'NAA\rA\rA LLLLLLLL' -keybuf-delay 8 \
-        -moncommands "$mon_file" -monlog -monlogname "$log_file" \
+        -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 320000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
     vice_rc=$?
@@ -7965,7 +7965,7 @@ run_boot_diag_copy() {
     } > "$mon_file"
 
     "$VICE" -config /dev/null -default +saveres -console -nativemonitor -warp -80col \
-        -moncommands "$mon_file" -monlog -monlogname "$log_file" \
+        -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 120000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
     local vice_rc=$?

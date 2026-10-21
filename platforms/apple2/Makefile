@@ -52,6 +52,9 @@ SOURCE_OFFER  = ../../data/SOURCE-OFFER
 LICENSE_DISK_FILE = $(OUTA2)/license.txt
 SOURCE_OFFER_DISK_FILE = $(OUTA2)/source-offer.txt
 
+# Python tools and harnesses must not leave __pycache__ in source directories.
+export PYTHONDONTWRITEBYTECODE := 1
+
 BUILD       ?= ../../build
 OUTA2        = $(BUILD)/apple2
 OVL_OUTA2    = $(abspath $(OUTA2))
@@ -111,7 +114,7 @@ run: $(A2_DISK_IMAGE)
 		-share_directory "$(MAME_OUTPUT_ROOT)/share" \
 		-flop1 "$(A2_DISK_IMAGE)"
 
-test-memory-contract: build main.sym boot.sym
+test-memory-contract: build $(OUTA2)/main.sym $(OUTA2)/boot.sym
 	python3 check_memory_contract.py
 
 test-memory-contract-selftest:
@@ -133,7 +136,7 @@ else
 endif
 
 clean:
-	rm -rf "$(OUTA2)" "$(A2_DISK_IMAGE)" main.sym boot.sym
+	rm -rf "$(OUTA2)" "$(A2_DISK_IMAGE)"
 
 # ── Tooling ───────────────────────────────────────────────
 ensure-kickass:
@@ -183,30 +186,30 @@ $(OUTA2):
 	mkdir -p "$(OUTA2)"
 
 $(A2_MAIN_STAMP): $(A2_SOURCES) $(VERSION_INC) | ensure-kickass $(OUTA2)
-	$(JAVA) -jar "$(KICKASS_RESOLVED)" ":OVL_OUT=$(OVL_OUTA2)" "$(A2_MAIN_SRC)" $(KA_FLAGS) -symbolfile -o "$(A2_MAIN_PRG)"
+	$(JAVA) -jar "$(KICKASS_RESOLVED)" ":OVL_OUT=$(OVL_OUTA2)" "$(A2_MAIN_SRC)" $(KA_FLAGS) -symbolfile -symbolfiledir "$(OVL_OUTA2)" -o "$(A2_MAIN_PRG)"
 	touch "$(A2_MAIN_STAMP)"
 
-$(A2_MAIN_PRG) $(A2_PLAY_PRG) $(A2_AUX_PRG) $(A2_HUFF_PRG) $(A2_OVL_PRGS) main.sym: $(A2_MAIN_STAMP)
+$(A2_MAIN_PRG) $(A2_PLAY_PRG) $(A2_AUX_PRG) $(A2_HUFF_PRG) $(A2_OVL_PRGS) $(OUTA2)/main.sym: $(A2_MAIN_STAMP)
 	@test -f "$@" || { rm -f "$(A2_MAIN_STAMP)"; $(MAKE) "$(A2_MAIN_STAMP)"; }
 	@test -f "$@"
 
 $(OUTA2)/monster.db.1: $(A2_TIER_DIR)/tier1_prg.s | ensure-kickass $(OUTA2)
-	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(A2_TIER_DIR)/tier1_prg.s" -o "$@"
+	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(A2_TIER_DIR)/tier1_prg.s" -symbolfiledir "$(OVL_OUTA2)" -o "$@"
 
 $(OUTA2)/monster.db.2: $(A2_TIER_DIR)/tier2_prg.s | ensure-kickass $(OUTA2)
-	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(A2_TIER_DIR)/tier2_prg.s" -o "$@"
+	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(A2_TIER_DIR)/tier2_prg.s" -symbolfiledir "$(OVL_OUTA2)" -o "$@"
 
 $(OUTA2)/monster.db.3: $(A2_TIER_DIR)/tier3_prg.s | ensure-kickass $(OUTA2)
-	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(A2_TIER_DIR)/tier3_prg.s" -o "$@"
+	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(A2_TIER_DIR)/tier3_prg.s" -symbolfiledir "$(OVL_OUTA2)" -o "$@"
 
 $(OUTA2)/monster.db.4: $(A2_TIER_DIR)/tier4_prg.s | ensure-kickass $(OUTA2)
-	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(A2_TIER_DIR)/tier4_prg.s" -o "$@"
+	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(A2_TIER_DIR)/tier4_prg.s" -symbolfiledir "$(OVL_OUTA2)" -o "$@"
 
 $(A2_TITLE_PRG): $(TITLE_SRC) $(VERSION_INC) | ensure-kickass $(OUTA2)
-	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(TITLE_SRC)" -define TITLE_PLATFORM_A2 -o "$@"
+	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(TITLE_SRC)" -define TITLE_PLATFORM_A2 -symbolfiledir "$(OVL_OUTA2)" -o "$@"
 
-$(A2_BOOT_PRG) boot.sym: $(A2_BOOT_SRC) cache_layout.s | ensure-kickass $(OUTA2)
-	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(A2_BOOT_SRC)" -symbolfile -o "$(A2_BOOT_PRG)"
+$(A2_BOOT_PRG) $(OUTA2)/boot.sym: $(A2_BOOT_SRC) cache_layout.s | ensure-kickass $(OUTA2)
+	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(A2_BOOT_SRC)" -symbolfile -symbolfiledir "$(OVL_OUTA2)" -o "$(A2_BOOT_PRG)"
 
 # ── Disk image ────────────────────────────────────────────
 # PRG -> BIN conversion strips the Kick header and asserts each load

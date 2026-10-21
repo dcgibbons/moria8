@@ -17,6 +17,9 @@ KICKASS_RESOLVED = $(KICKASS)
 endif
 JAVA        ?= ../../tools/kickass_java.sh
 
+# Python tools and harnesses must not leave __pycache__ in source directories.
+export PYTHONDONTWRITEBYTECODE := 1
+
 X16EMU      ?= x16emu
 X16ROM      ?=
 ifneq ($(strip $(X16ROM)),)
