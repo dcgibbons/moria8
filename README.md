@@ -15,10 +15,10 @@ written in platform-specific assembly. Current releases target the Commodore
 | Commodore 128 (C128) | Released ([notes](docs/release_notes/release_notes-v1.5.0.md)) | [moria8-c128.d64](https://github.com/dcgibbons/moria8/releases/download/v1.5.0/moria8-c128.d64) [moria8-c128.d71](https://github.com/dcgibbons/moria8/releases/download/v1.5.0/moria8-c128.d71) [moria8-c128.d81](https://github.com/dcgibbons/moria8/releases/download/v1.5.0/moria8-c128.d81) |
 | Commodore PET | Maybe | |
 | Commodore VIC-20 | Maybe | |
-| Commander X16 | Planned | |
+| Commander X16 | In Progress | |
 | Acorn BBC Master | Planned | |
 | Apple II | Released ([notes](docs/release_notes/release_notes-v1.5.0.md)) | [moria8-apple2.po](https://github.com/dcgibbons/moria8/releases/download/v1.5.0/moria8-apple2.po) |
-| Atari 8-bit | Planned | |
+| Atari 8-bit | In Progress | |
 | CP/M (Z80) | Planned | |
 | MSX | Planned | |
 | Nintendo Entertainment System | Planned | |
