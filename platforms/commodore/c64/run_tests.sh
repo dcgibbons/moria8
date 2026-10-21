@@ -2397,6 +2397,98 @@ run_retirement_royal_product_smoke() {
     TOTAL=$((TOTAL + 1))
 }
 
+# Production game over (death overlay + high-score I/O) from the title: first
+# with no save media configured (the Disk Setup "Back" path), then with a
+# separate save disk in drive 9 that must receive HALL.OF.FAME.
+run_game_over_product_smoke() {
+    local name="game_over_product_smoke"
+    echo -n "  $name: "
+
+    local smoke_out build_log smoke_c64 boot_d64 save_d64 main_vs
+    smoke_out=$(mktemp -d "${TMPDIR:-/tmp}/moria8-c64-game-over.XXXXXX")
+    smoke_c64="$smoke_out/c64"
+    boot_d64="$smoke_out/moria8-c64.d64"
+    save_d64="$smoke_out/moria8-save.d64"
+    main_vs="$smoke_c64/main.vs"
+    build_log=$(mktemp -t "build_${name}_log")
+
+    if ! make -s -B -C "$REPO_ROOT/platforms/commodore" \
+            KICKASS="$KICKASS" \
+            OUT="$smoke_out" \
+            KA_FLAGS64="-showmem -vicesymbols -libdir ../../core -libdir common -afo -libdir c64 -define DEBUG_FEAT_DISK_TRACE=0 -define C64_TEST_SCRIPTED_GAME_OVER_PRODUCT" \
+            build64 >"$build_log" 2>&1; then
+        echo "FAIL (product build)"
+        tail -80 "$build_log"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    if ! "$C1541" -format "moria8 c64,m8" d64 "$boot_d64" \
+            -attach "$boot_d64" \
+            -write "$smoke_c64/boot.prg" "moria8" \
+            -write "$smoke_c64/boot.prg" "boot64" \
+            -write "$smoke_c64/bootart64.prg" "bootart64" \
+            -write "$smoke_c64/moria8.prg" "moria64" \
+            -write "$smoke_c64/64.bank" "64.bank" \
+            -write "$smoke_c64/title" "t64" \
+            -write "$smoke_c64/monster.db.1" "monster.db.1" \
+            -write "$smoke_c64/monster.db.2" "monster.db.2" \
+            -write "$smoke_c64/monster.db.3" "monster.db.3" \
+            -write "$smoke_c64/monster.db.4" "monster.db.4" \
+            -write "$smoke_c64/ovl.start" "64.start" \
+            -write "$smoke_c64/ovl.town" "64.town" \
+            -write "$smoke_c64/ovl.death" "64.death" \
+            -write "$smoke_c64/ovl.modal" "64.modal" \
+            -write "$smoke_c64/ovl.gen" "64.gen" \
+            -write "$smoke_c64/ovl.help" "64.help" \
+            -write "$smoke_c64/ovl.ui" "64.ui" \
+            -write "$smoke_c64/ovl.items" "64.items" \
+            -write "$smoke_c64/ovl.spell" "64.spell" \
+            -write "$smoke_c64/ovl.chest" "64.chest" >"$build_log" 2>&1; then
+        echo "FAIL (product disk image)"
+        tail -20 "$build_log"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    local marker_blob="$smoke_out/MORIA8.ID"
+    printf 'M8SAVE' >"$marker_blob"
+    if ! "$C1541" -format "moria8 save,m8" d64 "$save_d64" \
+            -attach "$save_d64" \
+            -write "$marker_blob" "moria8.id,s" >"$build_log" 2>&1; then
+        echo "FAIL (save disk build error)"
+        tail -20 "$build_log"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    if ! python3 -u ../plus4/tests/product_scripted_smoke.py \
+            --name "$name" \
+            --pass-symbol ".c64_test_game_over_pass_sym" \
+            --fail-symbol ".c64_test_game_over_fail_sym" \
+            --main-vs "$main_vs" \
+            --boot-d64 "$boot_d64" \
+            --save-d64 "$save_d64" \
+            --vice "$VICE" \
+            --screen-base 0x0400; then
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    if "$C1541" -attach "$save_d64" -list 2>/dev/null | grep -qi '"hall.of.fame" *seq'; then
+        PASS=$((PASS + 1))
+    else
+        echo "    FAIL (HALL.OF.FAME not written to the save disk)"
+        "$C1541" -attach "$save_d64" -list 2>&1 | sed 's/^/      /'
+        FAIL=$((FAIL + 1))
+    fi
+    TOTAL=$((TOTAL + 1))
+}
+
 run_save_write_product_smoke() {
     run_save_write_product_smoke_impl "save_write_product_smoke" \
         "C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT" \
@@ -4381,6 +4473,7 @@ run_suite_function "chest_open_product_smoke" run_chest_open_product_smoke
 run_suite_function "chest_open_product_reu_smoke" run_chest_open_product_reu_smoke
 run_suite_function "chest_open_product_genfail_smoke" run_chest_open_product_genfail_smoke
 run_suite_function "retirement_royal_product_smoke" run_retirement_royal_product_smoke "retirement_flow_product_smoke"
+run_suite_function "game_over_product_smoke" run_game_over_product_smoke
 run_suite_function "disk_setup_product_smoke" run_disk_setup_product_smoke
 run_suite_function "title_disk_setup_single_drive_returns_program_prompt" run_disk_setup_single_drive_return_product_smoke "disk_setup_single_drive_return_product_smoke"
 run_suite_function "disk_setup_then_load_prompts_save_disk" run_disk_setup_then_load_prompts_save_product_smoke "disk_setup_then_load_prompts_save_product_smoke"

@@ -1,7 +1,9 @@
 #importonce
-// score_io.s — High score disk I/O (main RAM)
+// score_io.s — High score disk I/O
 //
-// hiscore_load and hiscore_save use storage HAL I/O and must stay in main RAM.
+// hiscore_load and hiscore_save use storage HAL I/O. C128 keeps them in main
+// RAM; C64, Plus/4, Apple II, and CX16 import them into the death overlay,
+// and the Commodore ports call them with RAM (not KERNAL ROM) visible there.
 // Score calculation and death screen display live in the death overlay
 // at $E000 (score.s).
 
@@ -19,9 +21,16 @@
 .const SCORE_OPEN   = hal_storage_open
 .const SCORE_CLOSE  = hal_storage_close
 .const SCORE_CHKIN  = hal_storage_chkin
-.const SCORE_CHKOUT = hal_storage_chkout
 .const SCORE_CHRIN  = hal_storage_chrin
+#if SCORE_IO_PLATFORM_CHANNEL_OUT
+// The importing platform runs score_io from an overlay with the KERNAL banked
+// out and supplies bank-safe score_io_chkout/score_io_chrout (C64).
+.label SCORE_CHKOUT = score_io_chkout
+.label SCORE_CHROUT = score_io_chrout
+#else
+.const SCORE_CHKOUT = hal_storage_chkout
 .const SCORE_CHROUT = hal_storage_chrout
+#endif
 .const SCORE_CLRCHN = hal_storage_clrchn
 
 // ============================================================

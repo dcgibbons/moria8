@@ -752,6 +752,39 @@ c64_test_retirement_fail_sym:
     jmp c64_test_retirement_fail_sym
 #endif
 
+#if C64_TEST_SCRIPTED_GAME_OVER_PRODUCT
+    // Production game-over orchestration (core/game_loop.s player death),
+    // driven from the title so the death overlay, score I/O, and banking run
+    // on the real disk image.
+    lda #DEATH_STARVE
+    sta death_source_saved
+    lda #8
+    sta program_device
+    // Phase 1: no save media configured (Disk Setup answered with Back).
+    lda #0
+    sta disk_setup_done
+    jsr tramp_game_over_disk_setup_failed
+    lda death_source_saved
+    sta zp_death_source
+    jsr tramp_game_over
+    jsr input_get_modal_dismiss_key
+    // Phase 2: separate save disk in drive 9 loads, inserts, and writes the
+    // high-score file.
+    lda #9
+    sta save_device
+    lda #2
+    sta disk_mode
+    lda #1
+    sta disk_setup_done
+    jsr game_over_prepare_for_disk_io
+    bcs c64_test_game_over_fail_sym
+    jsr game_over_save_and_show
+c64_test_game_over_pass_sym:
+    jmp c64_test_game_over_pass_sym
+c64_test_game_over_fail_sym:
+    jmp c64_test_game_over_fail_sym
+#endif
+
 #if C64_TEST_SCRIPTED_DISK_SETUP_SINGLE_DRIVE_RETURN_PRODUCT
     lda c64_test_disk_setup_single_drive_return_armed
     beq !disk_setup_return_test_not_armed+
@@ -2037,33 +2070,14 @@ tramp_game_over_prepare:
 tramp_game_over:
     jsr tramp_game_over_prepare
 tramp_game_over_run:
-    // 3. Calculate score (overlay code, no KERNAL needed)
+    // 3-6. Score and high-score load/insert/save (c64_death_score_io). All of
+    // it, including score_io.s, lives in the death overlay at $E000, so it
+    // runs with RAM visible there; each storage call banks the KERNAL in and
+    // out itself (c64_disk_call).
     sei
-    lda #BANK_NO_ROMS
+    lda #BANK_NO_KERNAL         // $35 — I/O visible for color RAM
     sta $01
-    jsr score_calculate
-    lda #BANK_NO_BASIC
-    sta $01
-    cli
-
-    // 4. Load high scores from disk (main RAM, needs KERNAL)
-    jsr hiscore_load
-
-    // 5. Insert into high score table (overlay code)
-    lda zp_game_flags
-    and #GAME_FLAG_WIZARD
-    bne !tgo_skip_hiscore+
-    sei
-    lda #BANK_NO_ROMS
-    sta $01
-    jsr hiscore_insert
-    lda #BANK_NO_BASIC
-    sta $01
-    cli
-
-    // 6. Save high scores to disk (main RAM, needs KERNAL)
-    jsr hiscore_save
-!tgo_skip_hiscore:
+    jsr c64_death_score_io
     lda death_source_saved
     sta zp_death_source
 
@@ -2072,9 +2086,6 @@ tramp_game_over_run:
     // KERNAL uses CIA2 ($DD00) bits 3-5 for serial bus;
     // bits 0-1 select VIC bank. Ensure bank 0 ($0000-$3FFF).
     jsr c64_restore_vic_bank0_after_serial
-    sei
-    lda #BANK_NO_KERNAL         // $35 — I/O visible for color RAM
-    sta $01
     jsr score_death_screen
     inc $01
     cli
@@ -2703,10 +2714,38 @@ game_restart_overlay:
 
     // score_io.s lives in the death overlay on this port (its only callers
     // are the death overlay and the resident death orchestration, which runs
-    // with this overlay already loaded). Imported before score.s for its
-    // constants.
+    // with this overlay already loaded and RAM visible at $E000). Imported
+    // before score.s for its constants. The C64 storage HAL binds CHKOUT and
+    // CHROUT straight to KERNAL ROM, which is banked out while this overlay
+    // runs, so score_io uses these bank-safe wrappers instead.
+score_io_chkout:
+    jsr c64_disk_call
+    .word KERNAL_CHKOUT
+    rts
+
+score_io_chrout:
+    jsr c64_disk_call
+    .word KERNAL_CHROUT
+    rts
+    #define SCORE_IO_PLATFORM_CHANNEL_OUT
     #import "../../../core/score_io.s"
+    #undef SCORE_IO_PLATFORM_CHANNEL_OUT
     #import "../../../core/score.s"
+
+// c64_death_score_io — game-over steps 3-6 for tramp_game_over_run: score,
+// then high-score load, insert, and save (insert/save skipped for wizard
+// runs). Runs here in the death overlay with $01 = BANK_NO_KERNAL and IRQs
+// masked.
+c64_death_score_io:
+    jsr score_calculate
+    jsr hiscore_load
+    lda zp_game_flags
+    and #GAME_FLAG_WIZARD
+    bne !done+
+    jsr hiscore_insert
+    jsr hiscore_save
+!done:
+    rts
 ovl_death_end:
 .print "Death overlay: " + (ovl_death_end - $e000) + " bytes at $E000-$" + toHexString(ovl_death_end)
 .assert "Death overlay fits in $E000-$EFFF", ovl_death_end <= $F000, true
