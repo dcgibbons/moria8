@@ -372,9 +372,7 @@ item_aim_wand:
     jmp eff_light_and_report
 
 !iaw_lightning:
-    // Temporary Balrog win-condition test hack: make Wand of Lightning hit
-    // for roughly 10x its normal 3d8 damage without affecting the spell.
-    lda #30
+    lda #3
     jsr ia_bolt_d8
     ldx #HSTR_PIW_WAND_BOLT
     jmp hpm_sec_rts

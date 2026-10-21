@@ -1,6 +1,7 @@
 // test_wands_staves.s — Runtime tests for Step 7.7
 //
-// Tests: Wand/Staff generation, charges, aiming, using.
+// Tests: Wand/Staff generation, charges, aiming, using, Wand of Lightning
+// bolt dice.
 //
 // Results at $0400-$041f: $01 = pass, $00 = fail per test
 
@@ -12,7 +13,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #6
+    ldx #7
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -89,6 +90,21 @@ press_key_str:
 // Test result buffer
 tc_results: .fill 32, $ff
 tc_loop_ctr: .byte 0
+
+// Captured eff_bolt arguments for Test 8.
+tws_bolt_calls: .byte 0
+tws_bolt_dice:  .byte 0
+tws_bolt_sides: .byte 0
+tws_bolt_bonus: .byte 0
+
+// test_eff_bolt_capture — replaces eff_bolt for Test 8: records the
+// A=dice, X=sides, Y=bonus arguments without prompting for a direction.
+test_eff_bolt_capture:
+    sta tws_bolt_dice
+    stx tws_bolt_sides
+    sty tws_bolt_bonus
+    inc tws_bolt_calls
+    rts
 
 test_start:
     // Initialize result area
@@ -363,10 +379,79 @@ test_start:
 
     lda #$01
     sta tc_results + 6
-    jmp !finish+
+    jmp !t8+
 !t7_fail:
     lda #$00
     sta tc_results + 6
+
+    // ==========================================
+    // Test 8: item_aim_wand (Wand of Lightning) fires a 3d8 bolt
+    // ==========================================
+    // Oracle: VMS Moria wands.inc (rev adce6c88) Lightning Bolt wand
+    // fire_bolt(..., damroll('3d8'), ...). eff_bolt is replaced with a
+    // capture stub so the production item_aim_wand dispatch is checked
+    // without a direction prompt.
+!t8:
+    jsr item_init_inventory
+    lda #0
+    sta zp_msg_flags
+    sta tws_bolt_calls
+    sta tws_bolt_dice
+    sta tws_bolt_sides
+    lda #$ff
+    sta tws_bolt_bonus
+
+    lda #$4c                    // JMP test_eff_bolt_capture
+    sta eff_bolt
+    lda #<test_eff_bolt_capture
+    sta eff_bolt + 1
+    lda #>test_eff_bolt_capture
+    sta eff_bolt + 2
+
+    // Wand of Lightning (40) in slot 0 with 5 charges
+    lda #40
+    sta inv_item_id
+    lda #1
+    sta inv_qty
+    lda #5
+    sta inv_p1
+    lda #0
+    sta inv_flags
+
+    // Stuff input: 'A' + space for -more- after effect message
+    lda #2
+    sta $c6
+    lda #$41
+    sta $0277
+    lda #$20
+    sta $0278
+
+    jsr item_aim_wand
+    bcc !t8_fail+               // Should consume turn
+
+    lda tws_bolt_calls
+    cmp #1
+    bne !t8_fail+
+    lda tws_bolt_dice
+    cmp #3
+    bne !t8_fail+
+    lda tws_bolt_sides
+    cmp #8
+    bne !t8_fail+
+    lda tws_bolt_bonus
+    bne !t8_fail+
+
+    // Charges decremented to 4
+    lda inv_p1
+    cmp #4
+    bne !t8_fail+
+
+    lda #$01
+    sta tc_results + 7
+    jmp !finish+
+!t8_fail:
+    lda #$00
+    sta tc_results + 7
 
 !finish:
     jmp test_exit_trampoline

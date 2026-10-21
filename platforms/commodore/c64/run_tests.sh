@@ -4353,7 +4353,7 @@ run_test "subsystems" "tests/test_subsystems.s" "0400 0409" 10
 run_sound_monitor_test
 run_test "save"  "tests/test_save.s"  "0400 0421" 34 1000000000
 run_test "score" "tests/test_score.s" "0400 040c" 13 500000000
-run_test "wands_staves" "tests/test_wands_staves.s" "0400 0406" 7 100000000
+run_test "wands_staves" "tests/test_wands_staves.s" "0400 0407" 8 100000000
 run_test "monster_magic" "tests/test_monster_magic.s" "0400 040d" 14 500000000
 run_test "tier" "tests/test_tier.s" "0400 0410" 17 500000000
 run_test "disk_swap" "tests/test_disk_swap.s" "0400 040e" 15 500000000
