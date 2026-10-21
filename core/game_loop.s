@@ -871,6 +871,15 @@ c64_test_single_drive_load_return_resume_entry:
 c64_test_after_load_resume_game:
 #endif
 main_loop:
+#if PLAYTEST_FAULT_STACK_LEAK
+    // Playtester self-test only (`make playtest-selftest`): once the first
+    // turn has passed, leak one stack byte per main-loop pass so the auditor's
+    // command-prompt SP check must fire. Never defined in shipping builds.
+    lda zp_turn_lo
+    beq !pt_leak_done+
+    pha
+!pt_leak_done:
+#endif
 #if HAL_PLATFORM_GAME_LOOP_MAIN_LOOP_BEGIN
 c128_town_move_diag_loop_top:
     jsr hal_platform_main_loop_begin

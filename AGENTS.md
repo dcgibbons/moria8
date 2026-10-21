@@ -65,7 +65,14 @@ If the quote does not name the action, stop and ask.
    monitor/socket access, which sandboxed execution blocks (you'll see
    `PermissionError`) — request escalated permission on the first attempt; do
    not try a sandboxed run first. See Memory And Verification Details for the
-   full escalation list.
+   full escalation list. Exception: AI playtest *sessions* and measurement
+   runs (`make playtest-session`, `make playtest-qualify`, `make
+   playtest-regress`, `make playtest-m0-report`) are long-running operational
+   jobs, not runtime verification. They have no overall time limit and run until their goal is
+   reached. Every emulator command and resume inside a session has a
+   60-second response timeout, after which the emulator process is killed and
+   restarted. `make playtest-check` and `make playtest-smoke` remain ≤30-second
+   verification gates. See `docs/AI_PLAYTEST_DESIGN.md`.
 9. Never hardcode or reference any paths outside the project directory in
    Makefiles, scripts, harnesses, or source files (no `$HOME`/`~`, user home
    directories, `/tmp`, or host-specific filesystem locations). External
@@ -188,12 +195,14 @@ or `x16emu`; `make test64`; `make testplus4`; `make testplus4-runtime`;
 `make testapple2-runtime`; `make test128-fast`; `make test128-fast-smoke`;
 `make test128`; `make testcx16`; `make testcx16-runtime`;
 `make testatari8-runtime`; `make testatari8-fast-smoke`;
-`make testbbcmaster-runtime`; `make testbbcmaster-fast-smoke`; direct `harness128.py`,
-`harness128_batch.py`, `harnessplus4.py`, or `harness_smoke.py` runs; and
-filtered runtime harness targets. Static/build-only checks stay sandboxed:
-`make build`, `make check-hal-boundaries`, Python static checkers, `git diff`,
-and similar commands that do not launch an emulator. Before running one of
-these, output one line:
+`make testbbcmaster-runtime`; `make testbbcmaster-fast-smoke`;
+`make playtest-smoke`; `make playtest-session`; `make playtest-repro`;
+`make playtest-m0-report`; `make playtest-qualify`; `make playtest-regress`;
+`make playtest-selftest`; direct `harness128.py`, `harness128_batch.py`,
+`harnessplus4.py`, or `harness_smoke.py` runs; and filtered runtime harness
+targets. Static/build-only checks stay sandboxed: `make build`, `make
+check-hal-boundaries`, Python static checkers, `git diff`, and similar commands
+that do not launch an emulator. Before running one of these, output one line:
 `ESCALATE: <command> launches VICE/MAME.`
 
 The Apple IIe harness (`platforms/apple2/harness_smoke.py`) drives headless

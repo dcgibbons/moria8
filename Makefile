@@ -5,7 +5,9 @@
 	buildcx16 diskcx16 runcx16 testcx16 testcx16-smoke testcx16-runtime testcx16-memory-contract testcx16-memory-contract-selftest \
 	buildatari8 diskatari8 runatari8 runatari8-130xe testatari8 testatari8-smoke testatari8-fast-smoke testatari8-runtime testatari8-memory-contract testatari8-memory-contract-selftest \
 	buildbbcmaster diskbbcmaster runbbcmaster testbbcmaster testbbcmaster-smoke testbbcmaster-fast-smoke testbbcmaster-runtime testbbcmaster-memory-contract testbbcmaster-memory-contract-selftest \
-	artifact artifact-checksums artifacts
+	artifact artifact-checksums artifacts \
+	playtest-check playtest-smoke playtest-m0-report playtest-session playtest-qualify \
+	playtest-regress playtest-repro playtest-dashboard playtest-selftest
 
 # Python tools and harnesses must not leave __pycache__ in source directories.
 export PYTHONDONTWRITEBYTECODE := 1
@@ -56,6 +58,41 @@ test:
 	$(MAKE) -C platforms/atari8 test-runtime
 	$(MAKE) -C platforms/bbcmaster test-memory-contract
 	$(MAKE) -C platforms/bbcmaster test-runtime
+
+# AI playtester (docs/AI_PLAYTEST_DESIGN.md). playtest-check and
+# playtest-dashboard do not launch an emulator; every other playtest-* target
+# launches VICE (see AGENTS.md).
+PLAYTEST_PY = PYTHONPATH=playtest PYTHONDONTWRITEBYTECODE=1 python3
+GOAL ?= enter_dungeon
+WORKERS ?= 4
+PLAYTEST_SEEDS = $(if $(SEEDS),--seeds $(SEEDS))
+
+playtest-check: build64
+	$(PLAYTEST_PY) -m moria_playtest.check
+
+playtest-smoke: disk64
+	$(PLAYTEST_PY) -m moria_playtest.smoke
+
+playtest-m0-report: disk64
+	$(PLAYTEST_PY) -m moria_playtest.m0
+
+playtest-session: disk64
+	$(PLAYTEST_PY) -m moria_playtest.session --goal $(GOAL) --workers $(WORKERS) $(PLAYTEST_SEEDS) $(PLAYTEST_ARGS)
+
+playtest-qualify: disk64
+	$(PLAYTEST_PY) -m moria_playtest.session --qualify --goal $(GOAL) --workers $(WORKERS) $(PLAYTEST_SEEDS) $(PLAYTEST_ARGS)
+
+playtest-regress: disk64
+	$(PLAYTEST_PY) -m moria_playtest.session --regress --workers $(WORKERS)
+
+playtest-repro: disk64
+	$(PLAYTEST_PY) -m moria_playtest.repro $(FINDING)
+
+playtest-dashboard:
+	$(PLAYTEST_PY) -m moria_playtest.dashboard
+
+playtest-selftest:
+	$(PLAYTEST_PY) -m moria_playtest.selftest
 
 buildapple2:
 	$(MAKE) -C platforms/apple2 build

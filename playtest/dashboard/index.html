@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Moria8 Playtest</title>
+<style>
+  :root {
+    --bg: #f6f6f3; --panel: #ffffff; --ink: #1d1d1b; --muted: #6b6b66; --line: #deded8;
+    --ok: #2f7d3b; --bad: #b3261e; --warn: #9a6a00; --accent: #3b4a9c;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #141413; --panel: #1d1d1b; --ink: #ecebe6; --muted: #9b9a94; --line: #33332f;
+      --ok: #6cc47a; --bad: #f08a80; --warn: #e0b04a; --accent: #9aa6f0;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { padding: 14px 16px; border-bottom: 1px solid var(--line); display: flex;
+           flex-wrap: wrap; gap: 8px 24px; align-items: baseline; }
+  header h1 { font-size: 16px; margin: 0; }
+  .muted { color: var(--muted); }
+  main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; padding: 16px; }
+  @media (max-width: 900px) { main { grid-template-columns: minmax(0, 1fr); } }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px;
+            min-width: 0; }
+  section h2 { font-size: 13px; margin: 0 0 8px; text-transform: uppercase; letter-spacing: .04em;
+               color: var(--muted); }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  th, td { text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  tr.sel td { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+  tbody tr { cursor: pointer; }
+  .scroll { overflow: auto; max-height: 360px; }
+  .ok { color: var(--ok); } .bad { color: var(--bad); } .warn { color: var(--warn); }
+  #screen { background: #000; padding: 8px; border-radius: 6px; overflow-x: auto;
+            font: 13px/1.15 ui-monospace, "SF Mono", Menlo, Consolas, monospace; white-space: pre; }
+  .stat { font-size: 22px; font-weight: 600; }
+  .stats { display: flex; gap: 24px; flex-wrap: wrap; }
+  code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Moria8 Playtest</h1>
+  <span id="session" class="muted">no session</span>
+  <span id="updated" class="muted"></span>
+</header>
+<main>
+  <section>
+    <h2>Goal</h2>
+    <div class="stats">
+      <div><div class="muted">Goal</div><div class="stat" id="goal">–</div></div>
+      <div><div class="muted">Mode</div><div class="stat" id="mode">–</div></div>
+      <div><div class="muted">Reached</div><div class="stat" id="reached">–</div></div>
+      <div><div class="muted">Findings</div><div class="stat" id="findings">–</div></div>
+    </div>
+  </section>
+  <section>
+    <h2>Workers</h2>
+    <div class="scroll"><table>
+      <thead><tr><th>W</th><th>Seed</th><th>Mode</th><th>DL</th><th>LV</th><th>HP</th>
+        <th>Steps</th><th>Steps/s</th><th>Outcome</th></tr></thead>
+      <tbody id="workers"></tbody>
+    </table></div>
+  </section>
+  <section>
+    <h2>Screen <span id="screen-label" class="muted"></span></h2>
+    <div id="screen"></div>
+  </section>
+  <section>
+    <h2>Last decisions</h2>
+    <div class="scroll"><table>
+      <thead><tr><th>Step</th><th>Mode</th><th>Key</th><th>Layer</th><th>Reason</th></tr></thead>
+      <tbody id="decisions"></tbody>
+    </table></div>
+  </section>
+  <section>
+    <h2>Characters</h2>
+    <div class="scroll"><table>
+      <thead><tr><th>Seed</th><th>Outcome</th><th>Steps</th><th>Max DL</th><th>LV</th><th>Restarts</th><th>Findings</th></tr></thead>
+      <tbody id="characters"></tbody>
+    </table></div>
+  </section>
+  <section>
+    <h2>Events</h2>
+    <div class="scroll"><table>
+      <thead><tr><th>Time</th><th>Event</th><th>Detail</th></tr></thead>
+      <tbody id="events"></tbody>
+    </table></div>
+  </section>
+</main>
+<script>
+// C64 palette (Pepto) for color RAM nibbles.
+const PALETTE = ["#000000","#ffffff","#68372b","#70a4b2","#6f3d86","#588d43","#352879","#b8c76f",
+                 "#6f4f25","#433900","#9a6759","#444444","#6c6c6c","#9ad284","#6c5eb5","#959595"];
+let selected = 0;
+const esc = s => String(s).replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+const outcomeClass = o => o === "reached" ? "ok" : (o === "finding" || o === "died") ? "bad" : "warn";
+
+function renderScreen(w) {
+  const el = document.getElementById("screen");
+  if (!w || !w.rows) { el.textContent = ""; return; }
+  const colors = w.colors || "";
+  let html = "";
+  w.rows.forEach((row, r) => {
+    for (let c = 0; c < row.length; c++) {
+      const nib = parseInt(colors.substr((r * 40 + c) * 2, 2), 16) || 1;
+      html += `<span style="color:${PALETTE[nib & 15]}">${esc(row[c])}</span>`;
+    }
+    html += "\n";
+  });
+  el.innerHTML = html;
+  document.getElementById("screen-label").textContent = `worker ${w.worker} · seed ${w.seed}`;
+}
+
+function eventDetail(e) {
+  const skip = new Set(["t", "kind"]);
+  return Object.entries(e).filter(([k]) => !skip.has(k))
+    .map(([k, v]) => `${k}=${typeof v === "string" && v.length > 60 ? v.slice(-60) : v}`).join(" ");
+}
+
+async function refresh() {
+  let data;
+  try { data = await (await fetch("/api/status", {cache: "no-store"})).json(); }
+  catch { return; }
+  if (!data.session) return;
+  const s = data.summary || {};
+  const chars = s.characters || [];
+  document.getElementById("session").textContent = data.session;
+  document.getElementById("updated").textContent = "updated " + new Date().toLocaleTimeString();
+  document.getElementById("goal").textContent = s.goal || "–";
+  document.getElementById("mode").textContent = s.mode || "–";
+  document.getElementById("reached").textContent =
+    `${chars.filter(c => c.outcome === "reached").length}/${chars.length}`;
+  document.getElementById("findings").textContent =
+    data.events.filter(e => e.kind === "finding").length + (s.findings != null ? ` (total ${s.findings})` : "");
+
+  const workers = data.workers || [];
+  document.getElementById("workers").innerHTML = workers.map(w => `
+    <tr class="${w.worker === selected ? "sel" : ""}" data-w="${w.worker}">
+      <td>${w.worker}</td><td>${w.seed}</td><td>${esc(w.mode)}${w.stage ? ":" + esc(w.stage) : ""}</td>
+      <td>${w.dlvl}</td><td>${w.clvl}</td><td>${w.hp}/${w.mhp}</td><td>${w.steps}</td>
+      <td>${w.steps_per_s}</td><td class="${outcomeClass(w.outcome)}">${w.outcome || "playing"}</td></tr>`).join("");
+  document.querySelectorAll("#workers tr").forEach(tr =>
+    tr.onclick = () => { selected = Number(tr.dataset.w); refresh(); });
+  const w = workers.find(x => x.worker === selected) || workers[0];
+  renderScreen(w);
+  document.getElementById("decisions").innerHTML = ((w && w.decisions) || []).slice().reverse().map(d => `
+    <tr><td>${d.step}</td><td>${esc(d.mode)}</td><td><code>${esc(d.key)}</code></td>
+    <td>${esc(d.layer)}</td><td>${esc(d.reason)}</td></tr>`).join("");
+  document.getElementById("characters").innerHTML = chars.slice().reverse().map(c => `
+    <tr><td>${c.seed}</td><td class="${outcomeClass(c.outcome)}">${c.outcome}</td><td>${c.steps}</td>
+    <td>${c.max_dlvl}</td><td>${c.clvl}</td><td>${c.restarts}</td><td>${esc((c.findings || []).join("; "))}</td></tr>`).join("");
+  document.getElementById("events").innerHTML = data.events.slice().reverse().map(e => `
+    <tr><td>${new Date(e.t * 1000).toLocaleTimeString()}</td>
+    <td class="${e.kind === "finding" || e.kind === "plateau" ? "bad" : ""}">${esc(e.kind)}</td>
+    <td>${esc(eventDetail(e))}</td></tr>`).join("");
+}
+refresh();
+setInterval(refresh, 1000);
+</script>
+</body>
+</html>
