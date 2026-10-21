@@ -348,7 +348,18 @@ def scenario_boot_title(tb: X16Bench) -> None:
     )
     tb.assert_line("title_art_present", art_nonzero > 64, f"nonzero={art_nonzero}")
     tb.assert_line("sysinfo_label", "COMMANDER X16" in row23_txt, f"row23={row23_txt!r}")
+    tb.assert_line("sysinfo_rom", "ROM R" in row23_txt, f"row23={row23_txt!r}")
     tb.assert_line("sysinfo_ram", "512KB RAM" in row23_txt, f"row23={row23_txt!r}")
+    tb.assert_line(
+        "sysinfo_probed",
+        tb.read_u8(tb.syms["tsi_ram_banks_cached"]) == 64 and tb.read_u8(tb.syms["tsi_krev_cached"]) != 0,
+        f"banks={tb.read_u8(tb.syms['tsi_ram_banks_cached'])} krev={tb.read_u8(tb.syms['tsi_krev_cached'])}",
+    )
+    tb.assert_line(
+        "sound_init_state",
+        tb.read_u8(tb.syms["zp_snd_effect"]) == 0xFF and tb.read_u8(tb.syms["zp_snd_timer"]) == 0,
+        f"eff={tb.read_u8(tb.syms['zp_snd_effect'])} timer={tb.read_u8(tb.syms['zp_snd_timer'])}",
+    )
     tb.log("SCENARIO DONE")
 
 
@@ -863,6 +874,11 @@ def scenario_save_load(tb: X16Bench) -> None:
     )
     tb.press("L")
     tb.assert_line("load_slots", tb.screen_has("Save Slots:"), "load did not show the slot list")
+    tb.assert_line(
+        "sfx_pickup_triggered",
+        tb.read_u8(tb.syms["zp_snd_effect"]) == 3 and tb.read_u8(tb.syms["zp_snd_timer"]) > 0,
+        f"eff={tb.read_u8(tb.syms['zp_snd_effect'])} timer={tb.read_u8(tb.syms['zp_snd_timer'])}",
+    )
     tb.assert_line("slot_has_name", tb.screen_has("test"), "saved character name missing from slot list")
     tb.write_u8(0x6F, 0xC1)
     tb.press("1")
@@ -1011,16 +1027,25 @@ def scenario_disk_setup(tb: X16Bench) -> None:
     save_dev_addr = tb.syms["save_device"]
     tb.press("D")
     tb.assert_line("ds_menu", tb.screen_has("Disk Setup"), "disk setup menu did not appear")
-    tb.assert_line("ds_prog_dev", tb.screen_has("Program Device: #8"), "program device #8 not shown")
+    tb.assert_line("ds_prog_dev", tb.screen_has("Program:  8"), "program device 8 not shown")
     tb.press("2")
-    tb.assert_line("ds_dev9", tb.screen_has("Save Device:    #9") and tb.read_u8(save_dev_addr) == 9, "save device #9 not active")
-    tb.press("3")
-    tb.assert_line("ds_dev10", tb.screen_has("Save Device:    #10") and tb.read_u8(save_dev_addr) == 10, "save device #10 not active")
-    tb.press("4")
-    tb.assert_line("ds_dev11", tb.screen_has("Save Device:    #11") and tb.read_u8(save_dev_addr) == 11, "save device #11 not active")
+    tb.assert_line("ds_prompt", tb.screen_has("Save drive (8-11):"), "save drive prompt did not appear")
+    tb.press("9")
+    tb.press("\r")
+    tb.assert_line("ds_dev9", tb.screen_has("Save:     9") and tb.read_u8(save_dev_addr) == 9, "save device 9 not active")
+    tb.press("2")
     tb.press("1")
-    tb.assert_line("ds_dev8", tb.screen_has("Save Device:    #8") and tb.read_u8(save_dev_addr) == 8, "save device #8 not active")
-    tb.press("5")
+    tb.press("0")
+    tb.press("\r")
+    tb.assert_line("ds_dev10", tb.screen_has("Save:    10") and tb.read_u8(save_dev_addr) == 10, "save device 10 not active")
+    tb.press("2")
+    tb.press("1")
+    tb.press("1")
+    tb.press("\r")
+    tb.assert_line("ds_dev11", tb.screen_has("Save:    11") and tb.read_u8(save_dev_addr) == 11, "save device 11 not active")
+    tb.press("1")
+    tb.assert_line("ds_dev8", tb.screen_has("Save:     8") and tb.read_u8(save_dev_addr) == 8, "save device 8 not active")
+    tb.press("3")
     tb.assert_line("ds_done", tb.on_title(), "did not return to title after setup")
     tb.dump("after_disk_setup")
     tb.log("SCENARIO DONE")

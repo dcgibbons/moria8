@@ -21,11 +21,20 @@
 .const COLUMNS_40 = $00
 .const COLUMNS_80 = $80
 
+.const CX16_KERNAL_REV    = $ff80
+.const CX16_KERNAL_MEMTOP = $ff99
+
 detect_machine:
     lda #MACHINE_CX16
     sta zp_machine_type
     lda #COLUMNS_80
     sta zp_column_mode
+    stz CX16_ROM_BANK_REG
+    lda CX16_KERNAL_REV
+    sta tsi_krev_cached
+    sec
+    jsr CX16_KERNAL_MEMTOP
+    sta tsi_ram_banks_cached
     rts
 
 .macro AssetLoad() {

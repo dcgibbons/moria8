@@ -96,7 +96,8 @@ save_device:        .byte 8
 program_device:     .byte 8
 disk_mode:          .byte 1
 disk_setup_done:    .byte 1
-tsi_krev_cached:    .byte 0
+tsi_krev_cached:      .byte 0
+tsi_ram_banks_cached: .byte 0
 // save_slot_index lives in unbanked resident low RAM so the selected slot
 // survives overlay bank switches.
 save_slot_index:    .byte $ff
@@ -342,6 +343,12 @@ title_load_game:
     jmp title_enter_menu
 
 title_show_sysinfo:
+    stz CX16_ROM_BANK_REG
+    lda CX16_KERNAL_REV
+    sta tsi_krev_cached
+    sec
+    jsr CX16_KERNAL_MEMTOP
+    sta tsi_ram_banks_cached
     lda #OVL_TITLE
     jsr overlay_load
     bcs !done+
@@ -1276,15 +1283,75 @@ title_show_sysinfo_banked:
     sta zp_text_color
     lda #23
     sta zp_cursor_row
-    lda #((SCREEN_COLS - 24) / 2)
+    lda #((SCREEN_COLS - 34) / 2)
     sta zp_cursor_col
-    lda #<cx16_sysinfo_str
+    lda #<cx16_sysinfo_prefix_str
     sta zp_ptr0
-    lda #>cx16_sysinfo_str
+    lda #>cx16_sysinfo_prefix_str
+    sta zp_ptr0_hi
+    jsr hal_screen_put_string
+
+    // KERNAL ROM revision byte ($FF80 cached in tsi_krev_cached):
+    //   $01..$7F = official release R<N>
+    //   $80..$FE = prerelease/custom build (-N -> R<N>+)
+    //   $00/$FF  = unknown ('?')
+    lda tsi_krev_cached
+    beq !krev_unknown+
+    cmp #$ff
+    beq !krev_unknown+
+    bpl !krev_release+
+    eor #$ff
+    clc
+    adc #1
+    jsr screen_put_decimal
+    lda #$2b                // '+'
+    jsr hal_screen_put_char
+    bra !print_ram+
+!krev_release:
+    jsr screen_put_decimal
+    bra !print_ram+
+!krev_unknown:
+    lda #$3f                // '?'
+    jsr hal_screen_put_char
+
+!print_ram:
+    lda #<cx16_sysinfo_sep_str
+    sta zp_ptr0
+    lda #>cx16_sysinfo_sep_str
+    sta zp_ptr0_hi
+    jsr hal_screen_put_string
+
+    // Banked RAM size from MEMTOP ($FF99 with C=1 -> A = 8KB bank count;
+    // 0 means 256 banks = 2048KB, 1..255 means A * 8KB).
+    lda tsi_ram_banks_cached
+    bne !banks_nonzero+
+    stz zp_temp0
+    lda #>2048
+    sta zp_temp1
+    bra !emit_ram_kb+
+!banks_nonzero:
+    sta zp_temp0
+    stz zp_temp1
+    asl zp_temp0
+    rol zp_temp1
+    asl zp_temp0
+    rol zp_temp1
+    asl zp_temp0
+    rol zp_temp1
+!emit_ram_kb:
+    jsr screen_put_decimal_16
+    lda #<cx16_sysinfo_suffix_str
+    sta zp_ptr0
+    lda #>cx16_sysinfo_suffix_str
     sta zp_ptr0_hi
     jmp hal_screen_put_string
-cx16_sysinfo_str:
-    .text "COMMANDER X16  512KB RAM" ; .byte 0
+
+cx16_sysinfo_prefix_str:
+    .text "COMMANDER X16  ROM R" ; .byte 0
+cx16_sysinfo_sep_str:
+    .text "  " ; .byte 0
+cx16_sysinfo_suffix_str:
+    .text "KB RAM" ; .byte 0
 ovl_title_end:
 .print "Title overlay: " + (ovl_title_end - $a000) + " bytes"
 .assert "Title overlay fits 8KB bank", ovl_title_end <= $c000, true

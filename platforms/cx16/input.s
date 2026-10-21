@@ -47,6 +47,7 @@ input_get_key:
     sty igk_save_y
 input_get_key_poll:
     inc zp_entropy
+    jsr hal_sound_update
     lda CX16_RAM_BANK_REG
     sta igk_save_bank
     lda #CX16_BANK_KERNAL_VARS
@@ -88,6 +89,7 @@ input_wait_release:
     stz hal_input_kbdbuf_count
 !drain:
     inc zp_entropy
+    jsr hal_sound_update
     jsr KERNAL_GETIN
     bne !drain-
     pla

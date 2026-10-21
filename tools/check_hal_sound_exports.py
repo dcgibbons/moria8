@@ -24,6 +24,8 @@ SID_PLATFORM_FILES = {
 SOUND_IMPL_FILES = {
     "sid": ROOT / "core/sound.s",
     "plus4": ROOT / "platforms/commodore/plus4/sound.s",
+    "apple2": ROOT / "platforms/apple2/services.s",
+    "cx16": ROOT / "platforms/cx16/services.s",
 }
 
 COMMON_SOUND = ROOT / "core/sound.s"
