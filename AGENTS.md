@@ -205,6 +205,12 @@ check-hal-boundaries`, Python static checkers, `git diff`, and similar commands
 that do not launch an emulator. Before running one of these, output one line:
 `ESCALATE: <command> launches VICE/MAME.`
 
+Root-Makefile emulator test targets and playtest runs execute inside a private
+network namespace (`tools/isolated.sh`; `ISOLATE=auto|1|0`, default `auto`),
+so concurrent runs on the same machine cannot share fixed monitor ports.
+Direct `make -C platforms/...` and harness invocations are not isolated;
+prefix them with `tools/isolated.sh` when other agents may be testing.
+
 The Apple IIe harness (`platforms/apple2/harness_smoke.py`) drives headless
 MAME apple2ee instead of VICE and requires Apple IIe ROMs via the `A2ROMS`
 env var or `--rompath` (ROMs are not redistributable). Run one scenario per
@@ -305,7 +311,8 @@ Build and test (run from the repository root):
   suite when `A2ROMS` is set, the Commander X16 `x16emu` runtime suite when
   `X16EMU`/`X16ROM` are available, the Atari 8-bit MAME runtime suite when
   `ATARI8ROMS` is set, and the BBC Master 128 MAME runtime suite when
-  `BBCMROMS` is set
+  `BBCMROMS` is set. `make -j7 -O test` runs its seven isolated platform
+  stages in parallel after one shared build
 - `make test64`: C64 tests
 - `make testplus4`: Plus/4 tests
 - `make test128-fast`: stable C128 unit batch

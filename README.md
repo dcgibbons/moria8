@@ -142,6 +142,14 @@ suite (`platforms/atari8/harness_smoke.py`, which needs `ATARI8ROMS`).
 and the MAME `bbcm` runtime scenario suite
 (`platforms/bbcmaster/harness_smoke.py`, which needs `BBCMROMS`).
 
+On Linux, emulator test targets run inside a private network namespace
+(`tools/isolated.sh`) so parallel runs on one machine cannot collide on
+emulator monitor ports. `ISOLATE=1` requires isolation, `ISOLATE=0` turns it
+off, and the default `auto` falls back to a normal run where unprivileged
+namespaces are unavailable (for example on macOS). Because each stage is
+isolated, `make -j7 -O test` runs the C64, C128, Plus/4, Apple IIe, Commander
+X16, Atari 8-bit and BBC Master 128 stages in parallel after one shared build.
+
 ## Documentation
 
 - [Player Manual](docs/MANUAL.md)
