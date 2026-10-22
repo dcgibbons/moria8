@@ -1,8 +1,8 @@
 # AI Playtest Design
 
-Status: revision 6, 2026-10-21. M0, M1, and M2 are implemented and their exit
-criteria are met (§8.1–§8.3), re-verified after the F-M2 game fixes. Goals beyond the first three are re-planned
-next (§12.4).
+Status: revision 7, 2026-10-21. M0, M1, and M2 are implemented and their exit
+criteria are met (§8.1–§8.3), re-verified after the F-M2 game fixes. M3 is
+proposed in §14, measured against baselines and pending maintainer decisions.
 - Revision 2 folds in an adversarial review by three reviewers: a staff
   engineer, an engineering manager, and a 6502 performance specialist.
 - Maintainer decisions are in §13.
@@ -554,6 +554,7 @@ Each milestone has a measurable exit criterion and an explicit stop rule.
 | **M0 Foundations** | VICE client and launch (§6.1); symbol/offset table and check (§6.2); seeding (§6.3); one-key sync and four-mode detection (§6.4); supervisor with timeouts and restart (§6.7); snapshot + brain-state + key-log replay; `playtest-smoke` | All items of the measurement checklist (§9) are done and recorded in `build/playtest/m0-report.json`. `playtest-smoke` ≤ 30 s (title undump, chargen, town, all decoders checked). The replay test passes. A 20k-step keystroke fuzz from town either yields zero `UNKNOWN` modes or files each one as an event, and has no unexplained hang. |
 | **M1 `enter_dungeon`** | Brain prompt and town-navigation layers; fair-play view; auditor v0; recorder; dashboard v0 | `enter_dungeon` works (§7.2). A deliberately broken test build (one invariant violated) is caught and its finding replays. |
 | **M2 `reach_dl2`, `reach_clvl2`** | Dungeon navigation, doors, search, stairs; fight, emergency, rest; anti-stall; plateau alert; frozen suites | Both goals work, and `enter_dungeon` still passes its frozen suite. No `unknown_prompt` in the final qualification runs. **No further goals are added until M2 is met.** |
+| **M3 `reach_dl5`, `clvl5`** | The brain rounds in §14.3: any-glyph creatures, food and light logistics, threat memory, avoiding stationary monsters, sealed-area fallback | Both goals work (§7.2); all frozen suites still pass; no `unknown_prompt`. |
 
 **Stop rules** (defaults, tunable by the maintainer):
 
@@ -562,6 +563,8 @@ Each milestone has a measurable exit criterion and an explicit stop rule.
   logs), or stop the project.
 - **M2 gets 15 brain-change cycles (§7.3).** If both goals are not working by
   then, stop and write up what blocked them before continuing.
+- **M3 gets 10 brain-change cycles.** Same rule. The size signpost rises to
+  about 5,000 lines of runtime code (maintainer decision, §14.6).
 
 ### 8.1 M0 result (2026-10-20)
 
@@ -1027,3 +1030,126 @@ or more is decided from the M0 item 8 contention measurements.
 10. **Size signpost.** About 3,500 lines of runtime code through M2, with
     tests and M0 measurement tooling excluded. It is a warning to pause and
     check for sprawl, not a hard stop (§5).
+
+## 14. M3 proposal (2026-10-21, pending maintainer decisions)
+
+The maintainer decided the scope on 2026-10-21 (§14.6). M3 is now in the
+milestone table (§8); this section keeps the evidence and the plan.
+
+### 14.1 Baselines
+
+Both runs use the committed brain v1 with shopping (`ee1795f`) on the fixed
+game (`dea5d1a`), seeds 1001–1020, first character, fair-play view. The goals
+were registered only for the probe; nothing in the repo changed.
+
+| Probe | Budget | Result | Notes |
+|---|---|---|---|
+| `reach_dl5` (`target_dlvl=5`) | 50k steps | **16/20**, 4 died | Successes take 234–2,914 steps |
+| `clvl10` (`want_xp`, `target_dlvl=5`) | 60k steps | **0/20**, all died | Highest clvl 7; clvl 5+ on 8 seeds |
+
+Sessions: `build/playtest/sessions/m3-baseline-reach_dl5` and
+`m3-baseline-clvl10`.
+
+### 14.2 Death clusters (24 deaths across both probes)
+
+| Cluster | Deaths | Evidence | Root cause in the bot |
+|---|---|---|---|
+| **Non-letter creatures** | 10 | Creeping Copper Coins (`$`) 7; White Mushroom patch (`,`) 3 | `build_view` only treats letters as creatures, so the bot rests "with nothing in view" next to a monster that is hitting, poisoning, or paralyzing it |
+| **Food logistics** | 7 | All 7 starved deep (DL3–5) after "You have no food." | Buys at most five rations per town visit; turns for town only once food is gone; no known up stairs means it rests while starving |
+| **Fire from out of view** | 4 | Novice Priest / Novice Mage bolts (10–18 damage), confusion | `unseen_attack` lasts one turn: the bot rests between spells and never leaves |
+| **Stationary killers** | 2 | Yellow Jelly, Green Naga acid | Melee or approach of monsters a player would walk around |
+| **Sealed area** | 1 | `reach_dl5` seed 1014: 148 squares, search budget spent, 4,478 "nothing to do" turns, starved | Search budget is final; no fallback (more search, tunnel) |
+
+**Also measured:** the starting Wooden Torch dims at about 4,000 game turns
+on every run that lasts that long (7 runs), and the bot continues in the dark.
+The General Store sells a Brass Lantern (24 gp) and Flasks of Oil (12 gp).
+
+### 14.3 Proposed brain rounds
+
+Each round is one change with red/green unit tests (§7.3), ordered by deaths
+removed:
+
+1. **Unfamiliar glyphs: look first, or learn the hard way** (maintainer
+   direction 2026-10-21: players use the look command, or get caught
+   off-guard). A non-terrain glyph the bot has not identified (`$`, `,`, and
+   so on) is treated as unknown, not as floor. When it lies on one of the
+   eight lines from the player, the bot looks at it (`X` + direction; no game
+   turn) and records what the game reports ("You see …"). Otherwise it keeps
+   its distance and lines up or waits. An attack message while an
+   unidentified glyph is adjacent marks that glyph as a creature. The monster
+   table is no longer used to identify glyphs.
+2. **Food and light logistics.** Keep a reserve (e.g. three rations), read it
+   from the inventory screen (`I`), and head for town when below it rather
+   than when out. Buy a lantern and oil; refuel with `SHIFT+R`.
+3. **Threat memory.** Any attack or spell message (including confusion and
+   blindness) puts the bot in a threatened state for N turns: no resting, and
+   leave by the nearest stairs.
+4. **Avoid stationary monsters.** Never melee or path next to creatures that
+   do not move (jellies, molds, mushroom patches), learned by watching
+   position over turns.
+5. **Sealed-area fallback.** When nothing else applies, search again at the
+   best spots (no budget), then tunnel.
+
+Deferred unless the clusters demand them: potion identification by use and
+buying Cure Light Wounds (stores sell potions unidentified; appearances wrap
+modulo 12, so the bot must key an item on appearance *and* price), weapon and
+armor upgrades, escapes.
+
+### 14.4 Proposed goals and exit criterion
+
+- **M3 goals:** `reach_dl5` (budget 20k steps) and **`clvl5`** (`want_xp`,
+  `target_dlvl=4`, budget 30k). The ladder's `clvl10` moves to M4 with
+  `reach_dl10`: at 0/20 with highest clvl 7, it needs more than the five
+  rounds above (consumables, gear, light over long runs).
+- **Exit:** both goals qualify 20/20 (§7.2), all frozen suites still pass, no
+  `unknown_prompt`.
+- **Stop rule:** 10 brain-change rounds. If either goal is not working by
+  then, stop and write up the blockers.
+- **Size:** runtime code is 2,884 lines. The rounds above are estimated at
+  400–600 lines, so the signpost would rise to about 4,000 for M3.
+
+### 14.5 Game questions surfaced (not changed)
+
+- **Monster bolts.** Every bolt caster uses one generic bolt, 2d8 + creature
+  level (`core/monster_magic.s` `monster_cast_bolt`). VMS Moria's Novice Mage
+  Magic Missile is 2d4, and its Novice Priest has no bolt (Cause Light Wounds
+  instead). At DL2–5 the bolts did 10–18 damage.
+- **Healing rate.** A level-1 Half-Troll took about 1,000 turns to recover
+  13 HP (§8.3 run). Not yet compared with the VMS regeneration formula.
+
+### 14.6 Maintainer decisions (2026-10-21)
+
+1. **Goals.** M3 is `reach_dl5` + `clvl5`. `clvl10` moves to M4.
+2. **Limits.** 10 brain-change rounds; size signpost about 5,000 lines.
+3. **Monster wound spells follow VMS Moria**, after checking Umoria. Umoria
+   at the pinned revision is identical: no monster bolts; Cause Light Wounds
+   3d8 and Cause Serious Wounds 8d8, each resisted by a player saving throw;
+   Novice Mage casts blink, Cause Light Wounds and confuse; Novice Priest casts
+   Cause Light Wounds and fear. This is a separate game change (open design
+   points in §14.7).
+4. **Test isolation.** Under discussion: running emulator tests in private
+   network namespaces instead of fixing each fixed-port harness.
+
+### 14.7 Monster-spell alignment
+
+Maintainer decisions (2026-10-21): align the whole spell set except breath,
+as its own game task (wound spells with saves, blind/confuse with VMS saves,
+durations and stacking, fear, removal of the unused heal spell); use the VMS
+save formula with Moria8's existing race/class save values; use Umoria's
+corrected "You resist the effects of the spell." Element-correct breath is in
+`docs/BACKLOG.md` ("Element-correct monster breath").
+
+Findings that shaped it:
+
+- `tools/parse_creatures.py` maps both upstream wound spells to one
+  `MSF_BOLT` bit, and all eight `cr_spell_flags` bits are taken. Creature
+  level cannot tell them apart (Death Quasit, level 40, casts Cause Light
+  Wounds; Cause Serious Wounds casters are level 28+), so light vs serious
+  needs data: a per-creature bit elsewhere, or a small list.
+- Moria8 has no player saving throw. VMS uses `player_saves(wis_adj + lev)`
+  against the race/class save skill, so a save stat (race and class tables)
+  is needed.
+- The message becomes upstream's "casts a spell." instead of "casts a bolt!".
+- `MSF_FEAR` (`$80`) is set by the generator for 38 upstream fear casters,
+  but the game dispatches only spells 0–6, so fear is never cast. Upstream
+  casts it.

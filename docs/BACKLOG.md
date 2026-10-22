@@ -255,6 +255,38 @@ Acceptance target:
 - Shipped monsters no longer silently collapse high-impact upstream attacks
   into misleading normal attacks.
 
+### Element-correct monster breath
+
+Monster breath (`core/monster_magic.s` `monster_cast_breath`) models only fire:
+every breather prints "breathes fire!", does HP/3, and only Resist Fire
+reduces it. Pinned VMS Moria (`creature.inc` `cast_spell`, spells 20-24) and
+Umoria (`monster.cpp`) have five elements: lightning (HP/4), gas, acid, frost
+and fire (HP/3), each with its own message and resistance, and the elemental
+damage routines also destroy vulnerable inventory items. Found during the AI
+playtest M3 spell audit (`docs/AI_PLAYTEST_DESIGN.md` §14.7); split from the
+wound/blind/confuse/fear alignment by maintainer decision (2026-10-21).
+
+Shipped breathers start at DL14 (Giant White Dragon Fly) and include the
+young/mature/ancient dragons and the Balrog.
+
+Required work:
+
+- Carry a breath element per creature. `cr_spell_flags` has no free bit once
+  Cause Serious Wounds and fear use bits 6-7, so this needs a data-layout
+  decision (new per-creature field, packed spare bits, or a breather list)
+  and a `tools/parse_creatures.py` mapping from upstream breath bits.
+- Add the four missing breath messages within the Apple IIe and C128 memory
+  budgets.
+- Apply per-element resistance and, if accepted, upstream inventory
+  destruction for acid/fire/frost.
+- Tests per element for damage (HP/4 vs HP/3, resisted and unresisted),
+  message, and any inventory effect.
+
+Acceptance target:
+
+- Every shipped breather uses its upstream element, damage divisor, message
+  and resistance, with the inventory-damage decision recorded.
+
 ### Add monster door opening and bashing
 
 DONE 2026-09-02 (C64/C128/Plus/4; Apple IIe blocked on the resident-RAM
@@ -825,6 +857,33 @@ Acceptance target:
   or the incompatibility is root-caused and documented as wontfix.
 
 ## Testing Infrastructure
+
+### Run the C64 suite in parallel
+
+`make -j5 -O test` runs the five platform stages in parallel (each in a private
+network namespace via `tools/isolated.sh`), cutting a full run from about 20
+to about 8.5 minutes. The C64 stage (`platforms/commodore/c64/run_tests.sh`,
+196 suites) still runs one suite at a time and is likely the long pole. C128
+already runs its units in parallel (`TEST_JOBS`, default 8, in
+`run_tests128.sh`).
+
+Required work:
+
+- Measure per-stage wall time to confirm C64 is the long pole.
+- Add a `TEST_JOBS`-style worker pool to `run_tests.sh`, keeping per-suite
+  results and the existing pass/fail summary format.
+- Build every product variant that tests currently make on demand (24
+  `make -s -C ..` calls inside tests) before starting workers, so parallel
+  suites never rebuild shared `build/c64` outputs.
+- Audit remaining shared scratch paths in `build/test/c64` and `/tmp` (fixed
+  `/tmp` names already include `$$`) and give each suite unique names.
+- Keep `TEST_FILTER` and serial runs (`TEST_JOBS=1`) working, and watch the
+  save-flow smokes that have flaked under load.
+
+Acceptance target:
+
+- `make -j5 -O test` wall time drops further with no new flakes across
+  repeated runs, and serial C64 runs still pass.
 
 ### Normalize cross-platform save schema and versioning
 
