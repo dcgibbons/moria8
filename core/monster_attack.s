@@ -6,6 +6,8 @@
 // special effects (poison, confusion, paralysis, acid, aggravation),
 // and player death. Uses umoria formulas.
 
+#import "player_save.s"
+
 // ============================================================
 // Base to-hit by attack type (from umoria playerTestAttackHits)
 // ============================================================
@@ -453,34 +455,19 @@ mon_atk_effect_confuse:
     rts
 
 // mon_atk_effect_paralyze — Saving throw, then set paralysis timer
-// Saving throw: class_save_base + player_level
-// Resist if rng_range(100) < saving
+// Saving throw: VMS player_saves(con_adj) (creature.inc paralysis attack;
+// player_save.s, MON-011)
 // Timer = rng_range(cr_level) + 1
-// Clobbers: A, X, Y, zp_temp3, zp_temp4, zp_math_*
+// Clobbers: A, X, Y, zp_temp0, zp_temp1, zp_temp3, zp_temp4, zp_math_*
 mon_atk_effect_paralyze:
     // Already paralyzed? No stacking
     lda zp_eff_paralyze
     bne !mepa_done+
 
-    // Compute saving throw = class_save_base + player_level
-    // class_save_base is class_properties offset 6
-    lda player_data + PL_CLASS
-    ldx #CLASS_PROP_SIZE
-    jsr math_multiply           // zp_math_a = class * 10
-    lda zp_math_a
-    clc
-    adc #6                      // Offset to save field
-    tax
-    lda class_properties,x      // save base
-    clc
-    adc zp_player_lvl           // + player level
-    sta zp_temp0                // saving throw value
-
-    // Roll: rng_range(100). Resist if roll < saving.
-    lda #100
-    jsr rng_range               // [0, 99]
-    cmp zp_temp0
-    bcc !mepa_resist+           // roll < saving → resist
+    lda player_data + PL_CON_CUR
+    jsr player_con_hp_adj       // VMS con_adj
+    jsr player_saving_throw
+    bcc !mepa_resist+           // Saved → resist
 
     // Failed save — set paralysis timer (umoria: randomNumber(level) + 3)
     // rng_range(level) gives [0, level-1], + 4 gives [4, level+3]
@@ -566,28 +553,6 @@ player_death_check:
     sta zp_game_flags
     lda #SFX_DEATH
     jmp hal_sound_play
-
-// ============================================================
-// Message builders
-// ============================================================
-
-// mon_atk_build_effect_msg — "THE <name> <effect string>"
-// Input: zp_ptr2 = effect string pointer (lo/hi)
-mon_atk_build_effect_msg:
-    lda #0
-    sta cmb_buf_idx
-
-    lda #<cmb_the_str + 1
-    ldy #>cmb_the_str + 1
-    jsr combat_append_str
-
-    jsr combat_append_monster_name
-
-    lda zp_ptr2
-    ldy zp_ptr2_hi
-    jsr combat_append_str
-
-    jmp cmb_term_and_print
 
 // ============================================================
 // Compile-time validation

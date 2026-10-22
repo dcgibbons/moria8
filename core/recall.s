@@ -9,7 +9,7 @@
 //   recall_kills   — times player killed this creature type
 //   recall_deaths  — times this creature type killed the player
 //   recall_attacks — attack rounds observed (reveals attack info)
-//   recall_spells  — bitmask of spells observed (bits 0-6)
+//   recall_spells  — bitmask of spells observed (bits 0-7)
 //
 // Hooks in: combat.s, monster_attack.s, monster_magic.s
 // Persistence: save.s (single contiguous block)
@@ -24,7 +24,7 @@
 
 // Spell bit lookup table (7 entries, indexed by spell position 0-6)
 recall_spell_bit:
-    .byte 1, 2, 4, 8, 16, 32, 64
+    .byte 1, 2, 4, 8, 16, 32, 64, 128
 
 // ============================================================
 // recall_clear — Zero all recall data

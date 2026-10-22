@@ -224,14 +224,14 @@ def map_mflags(cmove, cdefense, name):
 # Spell mapping
 # ============================================================
 # Our spell flags
-MSF_BOLT    = 0x01
-MSF_BREATH  = 0x02
-MSF_SUMMON  = 0x04
-MSF_TELEPORT= 0x08
-MSF_BLIND   = 0x10
-MSF_CONFUSE = 0x20
-MSF_HEAL    = 0x40
-MSF_FEAR    = 0x80  # Future expansion
+MSF_WOUND_LIGHT   = 0x01
+MSF_BREATH        = 0x02
+MSF_SUMMON        = 0x04
+MSF_TELEPORT      = 0x08
+MSF_BLIND         = 0x10
+MSF_CONFUSE       = 0x20
+MSF_WOUND_SERIOUS = 0x40
+MSF_FEAR          = 0x80
 
 def map_spells(spell_word):
     """Map umoria spell flags to our spell_flags and spell_chance."""
@@ -247,10 +247,10 @@ def map_spells(spell_word):
 
     flags = 0
     # Map spell bits
-    if spell_word & 0x000080:  # Cause light wound
-        flags |= MSF_BOLT
-    if spell_word & 0x000100:  # Cause serious wound
-        flags |= MSF_BOLT
+    if spell_word & 0x000080:  # Cause light wound (3d8)
+        flags |= MSF_WOUND_LIGHT
+    if spell_word & 0x000100:  # Cause serious wound (8d8)
+        flags |= MSF_WOUND_SERIOUS
     if spell_word & 0x000200:  # Hold person
         pass  # Not mapped to our flags
     if spell_word & 0x000400:  # Blindness
@@ -271,8 +271,6 @@ def map_spells(spell_word):
     breath_bits = (spell_word >> 19) & 0x1F
     if breath_bits:
         flags |= MSF_BREATH
-    # Heal: not explicitly in umoria spell flags for most creatures
-    # But some creatures have it via special logic — we'll add manually
 
     return chance, flags
 

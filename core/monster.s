@@ -52,14 +52,16 @@
 .const MF_VISIBLE   = $08   // Current real sight; renderer authority
 .const MF_DETECTED  = $10   // Timed Detect Monsters overlay; renderer authority
 
-// Spell flag constants (needed by cr_spell_flags data below)
-.const MSF_BOLT       = $01    // Bit 0: bolt (2d8 + level)
-.const MSF_BREATH     = $02    // Bit 1: breath (HP/3)
-.const MSF_SUMMON     = $04    // Bit 2: summon
-.const MSF_TELEPORT   = $08    // Bit 3: teleport-to
-.const MSF_BLIND      = $10    // Bit 4: blind
-.const MSF_CONFUSE    = $20    // Bit 5: confuse
-.const MSF_HEAL       = $40    // Bit 6: heal self
+// Spell flag constants (needed by cr_spell_flags data below). Bit order is
+// the dispatch order in monster_magic.s and the recall_spell_bit order.
+.const MSF_WOUND_LIGHT   = $01 // Bit 0: Cause Light Wounds (3d8, save)
+.const MSF_BREATH        = $02 // Bit 1: breath (HP/3)
+.const MSF_SUMMON        = $04 // Bit 2: summon
+.const MSF_TELEPORT      = $08 // Bit 3: teleport-to
+.const MSF_BLIND         = $10 // Bit 4: blind (save)
+.const MSF_CONFUSE       = $20 // Bit 5: confuse (save)
+.const MSF_WOUND_SERIOUS = $40 // Bit 6: Cause Serious Wounds (8d8, save)
+.const MSF_FEAR          = $80 // Bit 7: cause fear (save)
 
 // ============================================================
 // Active creature buffers — Struct-of-Arrays (65 entries)
@@ -318,12 +320,12 @@ cr_spell_flags:
 #if COMPILE_EMBEDDED_DUNGEON_TEST_ROSTER
     .byte  0,  0,  0,  0,  0,  0,  0,  0,  0,  0           // 0-9
     .byte  0,  0,  0,  0,  0,  0,  0,  0,  0,  0           // 10-19
-    .byte MSF_BOLT | MSF_HEAL                               // 20: Kobold shaman
+    .byte MSF_WOUND_LIGHT                                   // 20: Kobold shaman
     .byte 0                                                  // 21: Giant white ant lion
-    .byte MSF_BOLT | MSF_CONFUSE | MSF_BLIND                // 22: Novice mage
-    .byte MSF_HEAL | MSF_SUMMON                             // 23: Novice priest
+    .byte MSF_WOUND_LIGHT | MSF_CONFUSE | MSF_BLIND         // 22: Novice mage
+    .byte MSF_WOUND_LIGHT | MSF_FEAR | MSF_SUMMON           // 23: Novice priest
     .byte MSF_BREATH                                        // 24: Giant salamander
-    .byte MSF_BOLT | MSF_CONFUSE | MSF_HEAL                 // 25: Orc shaman
+    .byte MSF_WOUND_LIGHT | MSF_CONFUSE                     // 25: Orc shaman
     .fill MAX_DUNGEON_CREATURES - 26, 0                    // 26-56
 #else
     .fill MAX_DUNGEON_CREATURES, 0                          // 0-56: loaded from tier data

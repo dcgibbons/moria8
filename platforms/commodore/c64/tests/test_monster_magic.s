@@ -1,9 +1,10 @@
 // test_monster_magic.s — Runtime tests for monster_magic.s
 //
-// Tests: monster_can_cast (4 tests), monster_cast_bolt, monster_cast_breath,
-//        monster_cast_blind, monster_cast_heal.
+// Tests: monster_can_cast (4 tests), wound/blind/confuse/fear spells against
+//        VMS Moria cast_spell (MON-011), monster_cast_breath, the shared
+//        player saving throw (player_save.s) and the paralysis touch save.
 //
-// Results at $0400-$040a: $01 = pass, $00 = fail per test
+// Results at $0400-$0419: $01 = pass, $00 = fail per test
 // NOTE: msg_print writes to screen row 0 ($0400+), so we store results
 // in tc_results[] and copy to $0400 at the very end.
 .pc = $0801 "BASIC Stub"
@@ -14,7 +15,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #13
+    ldx #25
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -101,7 +102,7 @@ press_key_str:
 // Test scratch
 tc_loop:    .byte 0
 tc_ok:      .byte 0
-tc_results: .fill 14, $ff      // Result buffer (copied to $0400 at end)
+tc_results: .fill 26, $ff      // Result buffer (copied to $0400 at end)
 
 test_start:
     // Seed RNG deterministically
@@ -358,70 +359,50 @@ test_start:
     sta cr_spell_chance,x
 
     // ==========================================
-    // Test 5: Bolt damage range check
-    // Call monster_cast_bolt with type 20 (Kobold Shaman, level 3)
-    // Damage = 2d8 + 3, range [5, 19]
-    // Run 10 trials, verify all in range
+    // Test 5: Cause Light Wounds = 3d8 when the save fails (VMS spell 8),
+    // and the save adjustment is wis_adj + level (VMS player_saves).
+    // Wisdom 18 -> wis_adj 3, level 5 -> adjustment 8.
     // ==========================================
 !t5:
+    jsr tst_patch_save
     lda #0
-    sta zp_msg_flags
-
-    // Re-stuff keyboard buffer
-    lda #8
-    sta $c6
-    lda #$20
-    sta $0277
-    sta $0278
-    sta $0279
-    sta $027a
-    sta $027b
-    sta $027c
-    sta $027d
-    sta $027e
-
+    sta tst_save_mode            // Player fails every save
+    lda #18
+    sta player_data + PL_WIS_CUR
+    lda #5
+    sta zp_player_lvl
     lda #1
-    sta tc_ok                   // Assume pass
+    sta tc_ok
     lda #10
     sta tc_loop
-
 !t5_loop:
-    // Reset player HP to 100 before each trial
-    lda #100
-    sta zp_player_hp_lo
-    sta player_data + PL_HP_LO
-    lda #0
-    sta zp_player_hp_hi
-    sta player_data + PL_HP_HI
-    sta zp_game_flags
-    sta zp_msg_flags
-
-    lda #20                     // Kobold Shaman (level 3)
+    jsr tst_prep
+    lda #20                      // Kobold Shaman
     sta zp_mon_type
     lda #0
-    sta zp_mon_idx              // Dummy slot
-
-    jsr monster_cast_bolt
-
-    // Damage = 100 - remaining HP
+    sta zp_mon_idx
+    lda #$ee
+    sta tst_save_adj
+    jsr monster_cast_wound_light
     lda #100
     sec
-    sbc zp_player_hp_lo         // A = damage dealt
-
-    // Check range [5, 19]
-    cmp #5
-    bcc !t5_out+                // Too low
-    cmp #20
-    bcc !t5_in+                 // < 20 → in range
-!t5_out:
+    sbc zp_player_hp_lo          // A = damage dealt
+    cmp #3
+    bcc !t5_bad+
+    cmp #25
+    bcs !t5_bad+
+    lda tst_save_adj
+    cmp #8
+    beq !t5_next+
+!t5_bad:
     lda #0
     sta tc_ok
-!t5_in:
+!t5_next:
     dec tc_loop
     bne !t5_loop-
-
     lda tc_ok
     sta tc_results + 4
+    jsr tst_unpatch_save
 
     // ==========================================
     // Test 6: Breath damage = HP/3
@@ -495,116 +476,109 @@ test_start:
     sta tc_results + 5
 
     // ==========================================
-    // Test 7: Blind sets timer in range [11, 20]
-    // monster_cast_blind rolls 1d10+10
+    // Test 7: Blind, save failed, not already blind: 12 + randint(3)
+    // (VMS spell 11) -> timer in [13, 15] on each of 10 trials.
     // ==========================================
 !t7:
+    jsr tst_patch_save
     lda #0
-    sta zp_msg_flags
+    sta tst_save_mode
+    lda #1
+    sta tc_ok
+    lda #10
+    sta tc_loop
+!t7_loop:
+    jsr tst_prep
+    lda #0
     sta zp_eff_blind
-
-    // Re-stuff keyboard buffer
-    lda #8
-    sta $c6
-    lda #$20
-    sta $0277
-    sta $0278
-    sta $0279
-    sta $027a
-    sta $027b
-    sta $027c
-    sta $027d
-    sta $027e
-
-    lda #22                     // Novice Mage
+    lda #22                      // Novice Mage
     sta zp_mon_type
-
     jsr monster_cast_blind
-
-    // Check zp_eff_blind in [11, 20]
     lda zp_eff_blind
-    cmp #11
-    bcc !t7_fail+               // < 11
-    cmp #21
-    bcs !t7_fail+               // >= 21
-    lda #$01
-    sta tc_results + 6
-    jmp !t8+
-!t7_fail:
-    lda #$00
+    cmp #13
+    bcc !t7_bad+
+    cmp #16
+    bcc !t7_next+
+!t7_bad:
+    lda #0
+    sta tc_ok
+!t7_next:
+    dec tc_loop
+    bne !t7_loop-
+    lda tc_ok
     sta tc_results + 6
 
     // ==========================================
-    // Test 8: Heal caps at max HP
-    // Set monster HP to 1, max = 6*8 = 48 (Giant Salamander)
-    // After heal (3d8, range [3,24]), HP should be in [4, 48]
+    // Test 8: Spell bit 6 dispatches Cause Serious Wounds (VMS spell 9):
+    // 8d8 damage on each of 10 trials, at least one above 3d8's maximum of
+    // 24, and the caster's HP unchanged (no monster heal spell).
     // ==========================================
 !t8:
+    lda #1
+    sta tc_ok
     lda #0
-    sta zp_msg_flags
-
-    // Re-stuff keyboard buffer
-    lda #8
-    sta $c6
-    lda #$20
-    sta $0277
-    sta $0278
-    sta $0279
-    sta $027a
-    sta $027b
-    sta $027c
-    sta $027d
-    sta $027e
-
-    // Set up monster in slot 0 with HP=1, type 24 (Giant Salamander, 6d8 max=48)
+    sta tst_max                  // Highest damage seen
+    lda #10
+    sta tc_loop
+!t8_loop:
+    jsr tst_prep
     jsr monster_init_table
     ldx #0
     jsr monster_get_ptr
     ldy #MX_TYPE
-    lda #24
+    lda #20
     sta (zp_ptr0),y
     ldy #MX_HP_LO
-    lda #1
+    lda #10
     sta (zp_ptr0),y
     ldy #MX_HP_HI
     lda #0
     sta (zp_ptr0),y
-    ldy #MX_X
-    lda #12
-    sta (zp_ptr0),y
-    ldy #MX_Y
-    lda #12
-    sta (zp_ptr0),y
-
-    lda #24
+    lda cr_spell_flags + 20
+    pha
+    lda #MSF_WOUND_SERIOUS
+    sta cr_spell_flags + 20
+    lda #20
     sta zp_mon_type
     lda #0
     sta zp_mon_idx
-
-    jsr monster_cast_heal
-
-    // Read monster HP — should be in [4, 48]
+    lda #0
+    sta tst_save_mode
+    jsr monster_pick_spell
+    pla
+    sta cr_spell_flags + 20
+    lda #100
+    sec
+    sbc zp_player_hp_lo          // A = damage dealt
+    cmp #8
+    bcc !t8_bad+
+    cmp #65
+    bcs !t8_bad+
+    cmp tst_max
+    bcc !t8_hp+
+    sta tst_max
+!t8_hp:
     ldx #0
     jsr monster_get_ptr
     ldy #MX_HP_LO
     lda (zp_ptr0),y
-    // Check >= 4
-    cmp #4
-    bcc !t8_fail+
-    // Check <= 48
-    cmp #49
-    bcs !t8_fail+
-    // Check hi byte is 0
-    ldy #MX_HP_HI
-    lda (zp_ptr0),y
-    bne !t8_fail+
-
-    lda #$01
+    cmp #10
+    beq !t8_next+
+!t8_bad:
+    lda #0
+    sta tc_ok
+!t8_next:
+    dec tc_loop
+    bne !t8_loop-
+    lda tst_max
+    cmp #25
+    bcs !t8_store+
+    lda #0
+    sta tc_ok
+!t8_store:
+    lda tc_ok
     sta tc_results + 7
-    jmp !t9+
-!t8_fail:
-    lda #$00
-    sta tc_results + 7
+    jsr tst_unpatch_save
 
     // ==========================================
     // Test 9: Active resist reduces breath damage
@@ -942,8 +916,342 @@ test_start:
     pla
     sta cr_spell_chance + 22
 
+    // ==========================================
+    // Tests 15-22: blind/confuse/fear timers and resisted spells (VMS
+    // spells 11-13, MON-011). Saves are forced by the patched stub.
+    // ==========================================
+!t15:
+    jsr tst_patch_save
+    lda #0
+    sta tst_save_mode
+    lda #22
+    sta zp_mon_type
+    // Test 15: already blind 10 -> +6 = 16
+    jsr tst_prep
+    lda #10
+    sta zp_eff_blind
+    jsr monster_cast_blind
+    lda zp_eff_blind
+    cmp #16
+    jsr tst_result_eq
+    sta tc_results + 14
+
+    // Test 16: blind resisted: timer stays 0, no damage
+    jsr tst_prep
+    lda #1
+    sta tst_save_mode
+    lda #0
+    sta zp_eff_blind
+    jsr monster_cast_blind
+    lda zp_eff_blind
+    ora #0
+    jsr tst_result_eq
+    sta tc_results + 15
+    lda #0
+    sta tst_save_mode
+
+    // Test 17: confuse fresh: randint(5) + 3 -> [4, 8]
+    jsr tst_prep
+    lda #0
+    sta zp_eff_confuse
+    jsr monster_cast_confuse
+    lda zp_eff_confuse
+    ldx #4
+    ldy #9
+    jsr tst_result_range
+    sta tc_results + 16
+
+    // Test 18: already confused 5 -> +2 = 7
+    jsr tst_prep
+    lda #5
+    sta zp_eff_confuse
+    jsr monster_cast_confuse
+    lda zp_eff_confuse
+    cmp #7
+    jsr tst_result_eq
+    sta tc_results + 17
+    lda #0
+    sta zp_eff_confuse
+
+    // Test 19: bit 7 dispatches fear: fresh randint(5) + 3 -> [4, 8],
+    // and recall records spell bit 7.
+    jsr tst_prep
+    lda #0
+    sta eff_fear_timer
+    sta zp_eff_hero
+    sta recall_spells + 20
+    lda cr_spell_flags + 20
+    pha
+    lda #MSF_FEAR
+    sta cr_spell_flags + 20
+    lda #20
+    sta zp_mon_type
+    jsr monster_pick_spell
+    pla
+    sta cr_spell_flags + 20
+    lda recall_spells + 20
+    cmp #$80
+    bne !t19_fail+
+    lda eff_fear_timer
+    ldx #4
+    ldy #9
+    jsr tst_result_range
+    jmp !t19_store+
+!t19_fail:
+    lda #0
+!t19_store:
+    sta tc_results + 18
+
+    // Test 20: already afraid 3 -> +2 = 5
+    jsr tst_prep
+    lda #3
+    sta eff_fear_timer
+    jsr monster_cast_fear
+    lda eff_fear_timer
+    cmp #5
+    jsr tst_result_eq
+    sta tc_results + 19
+
+    // Test 21: heroism blocks fear even when the save fails
+    jsr tst_prep
+    lda #0
+    sta eff_fear_timer
+    lda #5
+    sta zp_eff_hero
+    jsr monster_cast_fear
+    lda #0
+    sta zp_eff_hero
+    lda eff_fear_timer
+    ora #0
+    jsr tst_result_eq
+    sta tc_results + 20
+
+    // Test 22: Cause Light Wounds resisted: no damage
+    jsr tst_prep
+    lda #1
+    sta tst_save_mode
+    lda #20
+    sta zp_mon_type
+    jsr monster_cast_wound_light
+    lda zp_player_hp_lo
+    cmp #100
+    jsr tst_result_eq
+    sta tc_results + 21
+    jsr tst_unpatch_save
+
+    // ==========================================
+    // Test 23: player_save_value = race save + class save + adjustment,
+    // clamped at 0 (core/tables.s values; MON-011).
+    // ==========================================
+!t23:
+    lda #1
+    sta tc_ok
+    lda #7                       // Half-Troll (save -8)
+    sta player_data + PL_RACE
+    lda #0                       // Warrior (save 18)
+    sta player_data + PL_CLASS
+    lda #0
+    jsr player_save_value
+    cmp #10
+    bne !t23_fail+
+    lda #<-20
+    jsr player_save_value        // -8 + 18 - 20 < 0 -> 0
+    cmp #0
+    bne !t23_fail+
+    lda #3                       // Halfling (save 18)
+    sta player_data + PL_RACE
+    lda #1                       // Mage (save 36)
+    sta player_data + PL_CLASS
+    lda #20
+    jsr player_save_value
+    cmp #74
+    beq !t23_store+
+!t23_fail:
+    lda #0
+    sta tc_ok
+!t23_store:
+    lda tc_ok
+    sta tc_results + 22
+
+    // ==========================================
+    // Test 24: player_wis_save_adj matches VMS wis_adj at every threshold
+    // ==========================================
+!t24:
+    lda #1
+    sta tc_ok
+    ldy #0
+!t24_loop:
+    lda tst_wis_in,y
+    jsr player_wis_save_adj
+    cmp tst_wis_out,y
+    beq !t24_next+
+    lda #0
+    sta tc_ok
+!t24_next:
+    iny
+    cpy #14
+    bne !t24_loop-
+    lda tc_ok
+    sta tc_results + 23
+
+    // ==========================================
+    // Test 25: player_saving_throw (unpatched): a 0 target never saves,
+    // a target above 100 always saves (roll 0..99 < target).
+    // ==========================================
+!t25:
+    lda #7
+    sta player_data + PL_RACE
+    lda #0
+    sta player_data + PL_CLASS
+    lda #1
+    sta tc_ok
+    lda #50
+    sta tc_loop
+!t25_loop:
+    lda #<-100
+    jsr player_saving_throw      // target 0
+    bcs !t25_ok1+
+    lda #0
+    sta tc_ok
+!t25_ok1:
+    lda #100
+    jsr player_saving_throw      // target 110
+    bcc !t25_ok2+
+    lda #0
+    sta tc_ok
+!t25_ok2:
+    dec tc_loop
+    bne !t25_loop-
+    lda tc_ok
+    sta tc_results + 24
+
+    // ==========================================
+    // Test 26: paralysis touch saves with VMS con_adj (creature.inc attack
+    // 11): CON 3 -> -4; a saved roll leaves the player unparalyzed, a failed
+    // one paralyzes for randint(level) + 3.
+    // ==========================================
+!t26:
+    jsr tst_patch_save
+    jsr tst_prep
+    lda #3
+    sta player_data + PL_CON_CUR
+    lda #20
+    sta mat_type2
+    lda #0
+    sta zp_eff_paralyze
+    lda #1
+    sta tst_save_mode
+    jsr mon_atk_effect_paralyze
+    lda tst_save_adj
+    cmp #<-4
+    bne !t26_fail+
+    lda zp_eff_paralyze
+    bne !t26_fail+
+    lda #0
+    sta tst_save_mode
+    jsr mon_atk_effect_paralyze
+    lda zp_eff_paralyze
+    beq !t26_fail+
+    lda #$01
+    sta tc_results + 25
+    jmp !t26_done+
+!t26_fail:
+    lda #$00
+    sta tc_results + 25
+!t26_done:
+    lda #0
+    sta zp_eff_paralyze
+    jsr tst_unpatch_save
+
 !tests_done:
     jmp test_exit_trampoline
+
+// ------------------------------------------------------------
+// Helpers for tests 5-26
+// ------------------------------------------------------------
+tst_save_mode: .byte 0           // 0 = the player fails, 1 = the player saves
+tst_save_adj:  .byte 0           // Adjustment passed to player_saving_throw
+tst_save_orig: .byte 0, 0, 0
+tst_max:       .byte 0           // Test 8: highest damage seen
+
+// tst_save_stub — Replaces player_saving_throw while patched.
+tst_save_stub:
+    sta tst_save_adj
+    lda tst_save_mode
+    eor #1
+    lsr                          // Carry clear when the player saves
+    rts
+
+tst_patch_save:
+    ldx #2
+!copy:
+    lda player_saving_throw,x
+    sta tst_save_orig,x
+    dex
+    bpl !copy-
+    lda #$4c
+    sta player_saving_throw
+    lda #<tst_save_stub
+    sta player_saving_throw + 1
+    lda #>tst_save_stub
+    sta player_saving_throw + 2
+    rts
+
+tst_unpatch_save:
+    ldx #2
+!copy:
+    lda tst_save_orig,x
+    sta player_saving_throw,x
+    dex
+    bpl !copy-
+    rts
+
+// tst_prep — Clear message state, refill the -more- keys, player HP 100.
+tst_prep:
+    lda #0
+    sta zp_msg_flags
+    sta zp_game_flags
+    sta zp_player_hp_hi
+    sta player_data + PL_HP_HI
+    lda #100
+    sta zp_player_hp_lo
+    sta player_data + PL_HP_LO
+    lda #8
+    sta $c6
+    lda #$20
+    ldx #7
+!fill:
+    sta $0277,x
+    dex
+    bpl !fill-
+    rts
+
+// tst_result_eq — A = $01 when the preceding compare set Z, else $00.
+tst_result_eq:
+    beq !yes+
+    lda #$00
+    rts
+!yes:
+    lda #$01
+    rts
+
+// tst_result_range — A = $01 when X <= A < Y, else $00.
+tst_result_range:
+    stx tc_loop
+    cmp tc_loop
+    bcc !no+
+    sty tc_loop
+    cmp tc_loop
+    bcs !no+
+    lda #$01
+    rts
+!no:
+    lda #$00
+    rts
+
+// VMS wis_adj boundaries: wisdom in, adjustment out.
+tst_wis_in:  .byte 7, 8, 14, 15, 17, 18, 67, 68, 87, 88, 107, 108, 117, 118
+tst_wis_out: .byte 0, 1,  1,  2,  2,  3,  3,  4,  4,  5,   5,   6,   6,   7
 // Dropped ui_* imports to keep the test body under MAP_BASE (map-overlap
 // boundary); stubs satisfy the trampoline references.
 ui_char_display:
@@ -953,3 +1261,5 @@ ui_equip_display:
     rts
 count_spells_known:
     jmp spell_mask_count_ptr
+
+.assert "Test body fits below MAP_BASE", * <= MAP_BASE, true

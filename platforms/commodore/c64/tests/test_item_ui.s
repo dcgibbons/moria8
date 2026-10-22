@@ -119,6 +119,7 @@ cmb_the_str: .text "the " ; .byte 0
 cmb_period: .text "." ; .byte 0
 
 combat_append_str:
+mon_atk_build_effect_msg:
 combat_append_char:
 combat_append_decimal:
 combat_append_decimal_16:

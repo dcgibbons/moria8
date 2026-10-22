@@ -1527,6 +1527,26 @@ combat_append_monster_name:
     jsr creature_get_name       // A=lo, Y=hi (handles KERNAL banking)
     jmp combat_append_str
 
+// mon_atk_build_effect_msg — "THE <name> <effect string>"
+// Input: zp_ptr2 = effect string pointer (lo/hi)
+// Shared by monster melee effects (monster_attack.s) and monster spells
+// (monster_magic.s), so it lives here with the cmb_* buffer.
+mon_atk_build_effect_msg:
+    lda #0
+    sta cmb_buf_idx
+
+    lda #<cmb_the_str + 1
+    ldy #>cmb_the_str + 1
+    jsr combat_append_str
+
+    jsr combat_append_monster_name
+
+    lda zp_ptr2
+    ldy zp_ptr2_hi
+    jsr combat_append_str
+
+    jmp cmb_term_and_print
+
 // combat_append_decimal — Append 8-bit decimal number to buffer
 // Input: A = value (0-255)
 // Clobbers: A, X

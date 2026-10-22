@@ -74,7 +74,7 @@ recall_deaths:  .byte 0
 recall_attacks: .byte 0
 recall_spells:  .byte 0
 recall_data_end:
-recall_spell_bit: .byte 1, 2, 4, 8, 16, 32, 64
+recall_spell_bit: .byte 1, 2, 4, 8, 16, 32, 64, 128
 recall_clear: rts
 // Spell/monster-magic stubs — saves ~1.4 KB; dungeon tests never cast spells,
 // run monster AI turns, create characters, or draw the character screen.

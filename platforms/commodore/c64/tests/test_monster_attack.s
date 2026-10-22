@@ -63,6 +63,7 @@ render_local_area:
 
 combat_append_str:
 combat_append_monster_name:
+mon_atk_build_effect_msg:
 cmb_term_and_print:
 combat_msg_monster_in_way:
 inv_remove_item:
@@ -352,7 +353,8 @@ test_start:
     // ==========================================
     // Test 9: Paralysis effect sets timer (force fail)
     // Use creature type 8 (Floating Eye, level 2)
-    // Set class=Warrior (save=18), level=1 → saving=19
+    // Warrior: save = race save + 18 + con_adj (VMS player_saves(con_adj),
+    // MON-011), well under 100, so repeated attempts must paralyze
     // Run multiple attempts until paralyzed (save roll is random)
     // ==========================================
 !t9:
