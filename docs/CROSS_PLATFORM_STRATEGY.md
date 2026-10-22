@@ -43,10 +43,10 @@ ensure native performance and idiomatic hardware utilization.
 ## 2. The Assembler & ISA (Instruction Set Architecture)
 
 * **The 6502 Track:** All active 6502/65C02 ports (C64, C128, Plus/4, Apple IIe,
-  Commander X16) retain Kick Assembler per in-tree precedent; the earlier `ca65`
-  migration note is superseded. Platform-specific configurations and segmenting
-  are handled with Kick Assembler segment directives. The `core/` game logic
-  targets the standard 6502/65C02.
+  Commander X16, Atari 8-bit) retain Kick Assembler per in-tree precedent; the
+  earlier `ca65` migration note is superseded. Platform-specific configurations
+  and segmenting are handled with Kick Assembler segment directives. The `core/`
+  game logic targets the standard 6502/65C02.
 * **The Z80 Track:** A native rewrite of the game logic specifically for the
   Zilog Z80. Using `z88dk` (`z80asm`) or `sjasmplus`, this track establishes a
   parallel `core_z80/` for native efficiency on CP/M, ZX Spectrum, and MSX.
@@ -181,7 +181,61 @@ C128 and Apple IIe.
 * Testing is headless `x16emu -testbench` driven by `platforms/cx16/harness_smoke.py`
   across 20 permanent runtime scenarios.
 
-## 8. Current Codebase Assessment & Next Steps
+## 8. Atari 8-Bit Release Track
+
+The Atari 8-bit port lives under `platforms/atari8/` (design & execution plan:
+`docs/ATARI8_PORT_PLAN.md`; memory authority: `docs/ATARI8_MEMORY_CONTRACT.md`).
+
+* Source lives under `platforms/atari8/` and links the unmodified `core/` and
+  `platforms/shared/` modules through the semantic HAL policy contracts with
+  40×25 gameplay geometry (`80×48` map = `3,840` B, identical to C64 and Plus/4).
+* The release target is a stock **64 KB Atari 800XL / 65XE** baseline (PIA
+  `PORTB` `$D301` banking RAM under OS ROM at `$C000-$CFFF` and `$D800-$FFFF`)
+  with automatic runtime detection of **128 KB Atari 130XE** extended RAM (`4 ×
+  16 KB` banks at `$4000-$7FFF`, preloading hot overlays, Tier 1, and title art
+  at boot and write-allocating cold overlays/tiers on first load across 15 of
+  the 16 available 4 KB slots).
+* Memory model (authority: `docs/ATARI8_MEMORY_CONTRACT.md`):
+  * `$D000-$D7FF` (`GTIA`, `POKEY`, `PIA`, `ANTIC`) is an immovable 2 KB hardware
+    I/O hole, and `$0200-$031A` is preserved untouched for Atari OS vectors,
+    Page 2 display/timer shadows, and the `SIOV` DCB.
+  * Because `PORTB` bit 0 controls OS ROM visibility for both the CPU and ANTIC,
+    and because the Atari XL/XE MMU disables RAM `CAS` (dropping CPU writes to
+    `$C000-$CFFF` and `$D800-$FFFF`) while OS ROM is enabled, all ANTIC display
+    structures (`ATARI_DISPLAY_LIST` at `$0380`, 1 KB C64-screen-code-ordered RAM
+    font `ATARI_CHARSET_BASE` at `$0400`, and `SCREEN_RAM` at `$0800-$0BE7`) plus
+    `EnterSio`/`ExitSio`, `hal_asset_load_prg_header`, the `SIOV` 128-byte sector
+    bounce buffer (using named platform ZP labels in `$0092-$00AF`, with `$0090`
+    reserved for `zp_kernal_status`), interrupt/exit handlers, and 130XE
+    bank-copy helpers (executed with `SEI`, `NMIEN = $00`, and `STA NMIRES`
+    before restoring `NMIEN = $C0`) reside in fixed low RAM below `$4000`.
+  * Resident code/data fills `$0C00-$C0FF` (entered at `entry_main` in `< $4000`
+    from `boot.s` at `$0800`); `MAP_BASE` (`$C100-$CFFF`, `15` pages = `3,840` B,
+    zero linked code) sits immediately below the `$D000` I/O hole; high
+    RAM under OS ROM (`$D800-$FFFF`) holds `PLATFORM_TIER_NAME_POOL_BASE`
+    (`$D800-$DBFF`), `FLOOR_ITEM_BASE` (`$DC00-$DCFF`),
+    `PLATFORM_HD_DECODE_BUF_BASE` (`$DD00-$DD3F`), `zp_save_buf`
+    (`$DD40-$DDCD`), `msg_history` (`$DDCE-$DF0D`), the shared `$E000-$EFFF`
+    overlay/tier window, `RuntimeBanked` (`$F000-$FFF9`), and RAM CPU vectors
+    (`$FFFA-$FFFF`).
+* Display uses a custom 40×25 ANTIC Mode 2 Display List (`200` scanlines),
+  zero-translation screen-code rendering via the C64-ordered 1 KB RAM font at
+  `$0400`, classic monochrome LOS differentiation (`.` for lit floor vs ` ` for
+  remembered out-of-LOS floor), hardware bit-7 inverse video for player/cursor/
+  status highlights, and a self-healing VBI->DLI horizontal color chain
+  (disabled via `NMIEN = $40` during `SIOV` calls to prevent 19,200-baud serial
+  overruns).
+* Shipping media is a self-contained **130 KB Enhanced Density (`1,040 × 128 B`
+  sectors) Atari DOS 2.5 compatible `.atr`** (`build/moria8-atari8.atr`) built
+  by `tools/make_atr.py`, booted without resident `DOS.SYS` using ROM `SIOV`
+  (`$E459`) 10-bit sector-link reads (`$7D` byte count, `$7E` `(file_index << 2) | link_hi`,
+  `$7F` `link_lo`) and contiguous pre-allocated 56-sector (`7,000` B) save slots
+  (`SAVE0.SAV`..`SAVE3.SAV`), `MORIA8.ID`, `HISCORE.DAT`, `LICENSE.TXT`, and
+  `SRCOFFER.TXT` on `D1:`.
+* Testing uses headless MAME (`a800xl` 15-scenario behavioral suite + `a130xe`
+  3-scenario cache/SIO suite) driven by `platforms/atari8/harness_smoke.py`.
+
+## 9. Current Codebase Assessment & Next Steps
 
 Moria8 is currently well-positioned because the 8-bit logic is increasingly platform-agnostic.
 

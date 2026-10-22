@@ -31,6 +31,11 @@ product reason, and verify the rendered path on the affected target.
 - Commander X16 unified resident/play ends at or below `$9AFF`, tier-name pool
   spans `$9B00-$9EFF`, `$9F00-$9FFF` is the VERA/VIA I/O hole, and banked
   overlays fit in `$A000-$BFFF` (`docs/CX16_MEMORY_CONTRACT.md`).
+- Atari 8-bit low resident banking/SIO/130XE/interrupt helpers end at or below
+  `$4000`, `Default` resident ends at or below `$C100`, `MAP_BASE` spans
+  `$C100-$CFFF` (`3,840` B), `$D000-$D7FF` is the immovable GTIA/POKEY/PIA/ANTIC
+  I/O hole, overlays fit in `$E000-$EFFF`, and `RuntimeBanked` spans
+  `$F000-$FFF9` (`docs/ATARI8_MEMORY_CONTRACT.md`).
 - The C64 map owns `$C000-$CEFF`; the C64 floor-item table owns `$CF00-$CFFF`.
 - `$D000-$DFFF` is the Commodore I/O hole when I/O is visible and must not
   receive normal executable code or ordinary runtime payload data.
@@ -89,7 +94,8 @@ Re-check the full contract before patching local logic near the newest crash.
   platform-conditional code must be verified on C64, C128, and Plus/4 where the
   code is included.
 - Shared `core/` and `platforms/shared/` changes must be verified on all
-  shipping platforms: C64, C128, Plus/4, Apple IIe, and Commander X16.
+  shipping platforms: C64, C128, Plus/4, Apple IIe, Commander X16, and Atari
+  8-bit.
 
 ## Verification
 

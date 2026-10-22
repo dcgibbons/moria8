@@ -122,6 +122,11 @@ PLATFORM_FILES: dict[str, tuple[Path, ...]] = {
         ROOT / "platforms/cx16/storage_kernal.s",
         ROOT / "platforms/cx16/save_stream.s",
     ),
+    "atari8": (
+        ROOT / "platforms/atari8/hal/storage.s",
+        ROOT / "platforms/atari8/storage.s",
+        ROOT / "platforms/atari8/save_stream.s",
+    ),
 }
 
 OVERLAY_NAMES = {
@@ -130,6 +135,18 @@ OVERLAY_NAMES = {
     "plus4": ("start", "town", "death", "gen", "help", "ui", "items", "spell"),
     "apple2": ("start", "town", "death", "gen", "help", "ui", "items", "spell"),
     "cx16": ("start", "town", "death", "gen", "help", "ui", "items", "spell"),
+    "atari8": (
+        "start",
+        "town",
+        "death",
+        "gen",
+        "help",
+        "ui",
+        "items",
+        "spell",
+        "modal_misc",
+        "chest",
+    ),
 }
 
 TIER_NAMES = ("1", "2", "3", "4")

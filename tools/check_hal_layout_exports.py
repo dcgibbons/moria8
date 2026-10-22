@@ -52,6 +52,12 @@ PLATFORMS = {
         "map_cols": "C128_MAP_COLS",
         "map_rows": "C128_MAP_ROWS",
     },
+    "atari8": {
+        "layout": ROOT / "platforms/atari8/hal/layout.s",
+        "screen": ROOT / "platforms/atari8/screen.s",
+        "map_cols": "MAP40_COLS",
+        "map_rows": "MAP40_ROWS",
+    },
 }
 
 MAP_CONSTANTS = {

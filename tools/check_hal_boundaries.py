@@ -29,8 +29,8 @@ RAW_C64_BANK_PORT_RE = re.compile(
 
 
 TARGET_CONDITIONAL_RE = re.compile(
-    r"#(?:if|elif)[^\n]*(?:\b(?:C64|C128|PLUS4|APPLE2|CX16)\b|"
-    r"\b(?:C64|C128|PLUS4|APPLE2|CX16|A2)_"
+    r"#(?:if|elif)[^\n]*(?:\b(?:C64|C128|PLUS4|APPLE2|CX16|ATARI8)\b|"
+    r"\b(?:C64|C128|PLUS4|APPLE2|CX16|A2|ATARI8)_"
     r"(?!UNIT_TEST(?:_|\b)|TEST(?:_|\b)|CACHE_TEST(?:_|\b)|REAL_BOOT_DIAG(?:_|\b)|STATUS_SP_CANARY_DIAG(?:_|\b)|"
     r"SCRIPTED_SPELL_SEED_EXTERNAL(?:_|\b)|INLINE_RUNTIME_BANKED_TEST(?:_|\b))[A-Z0-9_]+\b)"
 )

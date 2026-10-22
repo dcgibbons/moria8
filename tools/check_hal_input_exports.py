@@ -16,6 +16,7 @@ PLATFORM_FILES = {
     "plus4": ROOT / "platforms/commodore/plus4/input.s",
     "apple2": ROOT / "platforms/apple2/input.s",
     "cx16": ROOT / "platforms/cx16/input.s",
+    "atari8": ROOT / "platforms/atari8/input.s",
 }
 
 REQUIRED_LABELS = (

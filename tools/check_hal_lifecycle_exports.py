@@ -17,6 +17,7 @@ PLATFORMS = {
     "plus4": ROOT / "platforms/commodore/plus4/hal/lifecycle_policy.s",
     "apple2": ROOT / "platforms/apple2/hal/lifecycle_policy.s",
     "cx16": ROOT / "platforms/cx16/hal/lifecycle_policy.s",
+    "atari8": ROOT / "platforms/atari8/hal/lifecycle_policy.s",
 }
 PLATFORM_MAINS = {
     "c64": ROOT / "platforms/commodore/c64/main.s",
@@ -24,6 +25,7 @@ PLATFORM_MAINS = {
     "plus4": ROOT / "platforms/commodore/plus4/main.s",
     "apple2": ROOT / "platforms/apple2/main.s",
     "cx16": ROOT / "platforms/cx16/main.s",
+    "atari8": ROOT / "platforms/atari8/main.s",
 }
 
 REQUIRED_EXPORTS = (

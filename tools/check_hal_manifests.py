@@ -8,7 +8,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-PLATFORMS = ("c64", "c128", "plus4", "apple2", "cx16")
+PLATFORMS = ("c64", "c128", "plus4", "apple2", "cx16", "atari8")
 REQUIRED_TOP_KEYS = ("platform", "machine", "display", "storage", "memory", "capabilities")
 REQUIRED_CAPABILITIES = (
     "reu_overlay_cache",
@@ -98,6 +98,21 @@ EXPECTED = {
         "layout_file": "platforms/cx16/hal/layout.s",
         "memory_file": "platforms/cx16/memory.s",
         "screen_file": "platforms/cx16/screen_vera.s",
+        "direct_display_consts": False,
+    },
+    "atari8": {
+        "columns": 40,
+        "rows": 25,
+        "viewport": {"x": 1, "y": 2, "width": 38, "height": 19},
+        "display": "antic",
+        "banking": "$d301",
+        "map_base": "$c100",
+        "default_save_device": 8,
+        "requires_drives": {"1050", "xf551"},
+        "manifest_file": "platforms/atari8/hal/manifest.json",
+        "layout_file": "platforms/atari8/hal/layout.s",
+        "memory_file": "platforms/atari8/memory.s",
+        "screen_file": "platforms/atari8/screen.s",
         "direct_display_consts": False,
     },
 }
