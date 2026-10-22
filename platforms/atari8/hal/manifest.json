@@ -1,0 +1,47 @@
+{
+  "platform": "atari8",
+  "machine": "Atari 800XL / 65XE (64 KB baseline) + Atari 130XE (128 KB extended cache)",
+  "display": {
+    "hardware": "antic",
+    "columns": 40,
+    "rows": 25,
+    "viewport": {
+      "x": 1,
+      "y": 2,
+      "width": 38,
+      "height": 19
+    },
+    "screen_ram": "$0800",
+    "color_ram": null
+  },
+  "storage": {
+    "bus": "sio",
+    "program_media": "atr_130k",
+    "save_media": "atr_130k",
+    "default_program_device": 8,
+    "default_save_device": 8,
+    "compatible_drives": [
+      "1050",
+      "xf551",
+      "sio2sd",
+      "fujinet"
+    ]
+  },
+  "memory": {
+    "banking": "$d301",
+    "map_base": "$c100",
+    "map_end": "$cfff",
+    "banked_data_base": "$e000",
+    "banked_data_end": "$ffff",
+    "io_hole_base": "$d000",
+    "io_hole_end": "$d7ff"
+  },
+  "capabilities": {
+    "reu_overlay_cache": false,
+    "vdc_80_column": false,
+    "ted_display": false,
+    "sid_sound": false,
+    "ted_sound": false,
+    "two_drive_save": true
+  }
+}

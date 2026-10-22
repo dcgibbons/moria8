@@ -13,6 +13,7 @@ build/
 *.d71
 *.d81
 *.po
+*.atr
 
 # Virtual ][ state
 *.viisnapshot
@@ -38,6 +39,14 @@ build/
 /platforms/apple2/diff/
 /platforms/apple2/comments/
 /platforms/apple2/share/
+/platforms/atari8/cfg/
+/platforms/atari8/nvram/
+/platforms/atari8/inp/
+/platforms/atari8/sta/
+/platforms/atari8/snap/
+/platforms/atari8/diff/
+/platforms/atari8/comments/
+/platforms/atari8/share/
 
 # KickAssembler (auto-downloaded by make)
 tools/kickass/

@@ -17,6 +17,7 @@ DEFAULT_SCAN_DIRS = (
     ROOT / "platforms" / "commodore" / "plus4",
     ROOT / "platforms" / "apple2",
     ROOT / "platforms" / "cx16",
+    ROOT / "platforms" / "atari8",
 )
 SKIP_PATH_PARTS = {"out", "tests"}
 SKIP_FILES = {
