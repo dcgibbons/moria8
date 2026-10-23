@@ -1655,7 +1655,7 @@ required_chains = [
     ]),
     ("throw_item", throw_mod, [
         "ldx #HSTR_TW_PROMPT",
-        "jsr piw_select_filtered_inv",
+        "jsr item_action_select_filtered_inv",   # ITEMS-overlay command, like read/aim/use
     ]),
     ("get_direction_target", dfeat, [
         "ldx #HSTR_DF_DIRECTION",

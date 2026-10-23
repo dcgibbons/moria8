@@ -32,10 +32,12 @@ tw_save_ego:   .byte 0     // Saved ego before consumption
 // Clobbers: everything
 // ============================================================
 throw_item:
-    // 1. Prompt for item
+    // 1. Prompt for item. The overlay's own selector records OVL_ITEMS as the
+    // return overlay, so a `?` inventory list (loaded into the same window)
+    // is followed by reloading this overlay before returning here.
     lda #$ff
     ldx #HSTR_TW_PROMPT
-    jsr piw_select_filtered_inv
+    jsr item_action_select_filtered_inv
     bcs !tw_slot_ok+
     rts
 
