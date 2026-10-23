@@ -16,7 +16,7 @@ written in platform-specific assembly. Current releases target the Commodore
 | Commodore PET | Maybe | |
 | Commodore VIC-20 | Maybe | |
 | Commander X16 | In Progress | |
-| Acorn BBC Master | Planned | |
+| Acorn BBC Master | In Progress | |
 | Apple II | Released ([notes](docs/release_notes/release_notes-v1.5.0.md)) | [moria8-apple2.po](https://github.com/dcgibbons/moria8/releases/download/v1.5.0/moria8-apple2.po) |
 | Atari 8-bit | In Progress | |
 | CP/M (Z80) | Planned | |
