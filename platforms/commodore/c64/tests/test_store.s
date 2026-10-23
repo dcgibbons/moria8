@@ -3,7 +3,7 @@
 // Tests: category check, restocking, math_mul_16x8, buy/sell price calc,
 // gold operations, store door detection, find empty slot, and haggle flow.
 //
-// Results at $0400-$0429: $01 = pass, $00 = fail per test (42 tests)
+// Results at $0400-$042d: $01 = pass, $00 = fail per test (46 tests)
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_bootstrap)
 
@@ -12,7 +12,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #42
+    ldx #45
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -122,7 +122,7 @@ press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
 // Test result buffer — copy to $0400 at end (msg_print clobbers $0400)
-tc_results: .fill 43, $ff
+tc_results: .fill 46, $ff
 tc_count: .byte 0
 
 .macro PatchJump(target, replacement) {
@@ -843,9 +843,9 @@ test_start:
     sta tc_results + 26
 
     // ============================================================
-    // Test 28: Variable probability restock — empty store fills well
-    // Clear store 0, call store_restock_one. With 0 items, 75% fill
-    // rate should stock at least 4 of 12 slots.
+    // Test 28: VMS store_maint, under-stocked branch — an empty store
+    // stocks store$min_inven - store_ctr + 2 items (store1.inc), scaled:
+    // STORE_MIN_KEEP + 2 = 9 of 12 slots.
     // ============================================================
     ldx #0
 !t28_clr:
@@ -876,8 +876,8 @@ test_start:
     jmp !t28_loop-
 !t28_done:
     lda tc_count
-    cmp #4                      // At least 4 stocked (75% rate, very likely)
-    bcc !t28_fail+
+    cmp #STORE_MIN_KEEP + 2
+    bne !t28_fail+
     lda #$01
     jmp !t28_store+
 !t28_fail:
@@ -1610,7 +1610,132 @@ test_start:
 !t43_store:
     sta tc_results + 42
 
+    // ============================================================
+    // Test 44: VMS store_maint turnover — between the keep bounds a store
+    // sells off 1+randint(3) items before restocking (store1.inc). Nine
+    // daggers (never General Store stock) in store 0 leave 5..7 daggers.
+    // ============================================================
+    lda #2                      // Dagger
+    ldx #9
+    jsr t44_fill_store0
+    lda #0
+    sta zp_store_idx
+    jsr store_restock_one
+    lda #2
+    jsr t44_count_id
+    cmp #5
+    bcc !t44_fail+
+    cmp #8
+    bcs !t44_fail+
+    lda #$01
+    jmp !t44_store+
+!t44_fail:
+    lda #$00
+!t44_store:
+    sta tc_results + 43
+
+    // ============================================================
+    // Test 45: VMS store_maint over-stocked branch — a full store sells off
+    // store_ctr - store$max_inven + 2 items and stocks none: 12 daggers
+    // leave exactly 12 - (12 - STORE_MAX_KEEP + 2) = 8 items.
+    // ============================================================
+    lda #2
+    ldx #STORE_MAX_ITEMS
+    jsr t44_fill_store0
+    lda #0
+    sta zp_store_idx
+    jsr store_restock_one
+    lda #2
+    jsr t44_count_id
+    cmp #STORE_MAX_KEEP - 2
+    bne !t45_fail+
+    lda tc_count
+    cmp #STORE_MAX_KEEP - 2
+    bne !t45_fail+
+    lda #$01
+    jmp !t45_store+
+!t45_fail:
+    lda #$00
+!t45_store:
+    sta tc_results + 44
+
+    // ============================================================
+    // Test 46: General Store stock follows VMS store_choice: 15 of its 26
+    // choices are food (values.inc). 100 picks must be at least 40 food.
+    // ============================================================
+    lda #0
+    sta zp_store_idx
+    sta t44_food
+    lda #100
+    sta t44_left
+!t46_loop:
+    jsr store_pick_item
+    tax
+    lda it_category,x
+    cmp #ICAT_FOOD
+    bne !t46_next+
+    inc t44_food
+!t46_next:
+    dec t44_left
+    bne !t46_loop-
+    lda t44_food
+    cmp #40
+    bcc !t46_fail+
+    lda #$01
+    jmp !t46_store+
+!t46_fail:
+    lda #$00
+!t46_store:
+    sta tc_results + 45
+
     jmp test_exit_trampoline
+
+// t44_fill_store0 — A = item id for slots 0..X-1 of store 0, rest empty.
+t44_fill_store0:
+    stx t44_left
+    ldx #0
+!t44f_loop:
+    cpx t44_left
+    bcc !t44f_item+
+    pha
+    lda #FI_EMPTY
+    sta si_item_id,x
+    pla
+    jmp !t44f_next+
+!t44f_item:
+    sta si_item_id,x
+!t44f_next:
+    inx
+    cpx #STORE_MAX_ITEMS
+    bcc !t44f_loop-
+    rts
+
+// t44_count_id — A = item id; returns A = its count in store 0 and
+// tc_count = occupied slots.
+t44_count_id:
+    sta t44_id
+    lda #0
+    sta tc_count
+    sta t44_food
+    ldx #0
+!t44c_loop:
+    lda si_item_id,x
+    cmp #FI_EMPTY
+    beq !t44c_next+
+    inc tc_count
+    cmp t44_id
+    bne !t44c_next+
+    inc t44_food
+!t44c_next:
+    inx
+    cpx #STORE_MAX_ITEMS
+    bcc !t44c_loop-
+    lda t44_food
+    rts
+
+t44_id:   .byte 0
+t44_left: .byte 0
+t44_food: .byte 0
 
 t43_bit_addr:               // X = ID -> Y = byte index, t43_mask = bit; preserves X
     txa
