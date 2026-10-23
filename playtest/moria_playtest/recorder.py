@@ -12,10 +12,13 @@
 
 from __future__ import annotations
 
+import contextlib
+import fcntl
 import gzip
 import json
 import threading
 import time
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
@@ -31,34 +34,58 @@ def write_json(path: Path, data: Any) -> None:
 
 
 class SessionLog:
-    """Session-wide files shared by all workers (thread safe)."""
+    """Session-wide files shared by all workers: thread and process safe.
 
-    def __init__(self, session_dir: Path, summary: dict[str, Any]) -> None:
+    The owning (parent) process records characters in ``summary.json``;
+    worker processes ``attach`` and only append events and findings.
+    """
+
+    def __init__(self, session_dir: Path, summary: dict[str, Any] | None, *, owner: bool = True) -> None:
         self.dir = session_dir
         (session_dir / "findings").mkdir(parents=True, exist_ok=True)
-        self.summary = summary
+        self.owner = owner
+        self.summary = summary if summary is not None else {}
         self.summary.setdefault("characters", [])
-        self.findings = 0
-        self.save_summary()
+        if owner:
+            self.save_summary()
+
+    @classmethod
+    def attach(cls, session_dir: Path) -> "SessionLog":
+        """A worker process's view of a session another process owns."""
+        return cls(session_dir, None, owner=False)
+
+    @property
+    def findings(self) -> int:
+        """Findings filed by every process of the session."""
+        return len(list((self.dir / "findings").glob("F*.json")))
+
+    @contextlib.contextmanager
+    def locked(self) -> Iterator[None]:
+        with _LOCK, (self.dir / ".lock").open("a") as fh:
+            fcntl.flock(fh, fcntl.LOCK_EX)
+            yield
 
     def event(self, kind: str, **data: Any) -> None:
         line = json.dumps({"t": round(time.time(), 2), "kind": kind, **data}, default=str)
-        with _LOCK, (self.dir / "events.jsonl").open("a") as fh:
+        with self.locked(), (self.dir / "events.jsonl").open("a") as fh:
             fh.write(line + "\n")
 
     def character(self, result: dict[str, Any]) -> None:
-        with _LOCK:
+        if not self.owner:
+            return   # the owning process records results it collects from workers
+        with self.locked():
             self.summary["characters"].append(result)
             write_json(self.dir / "summary.json", self.summary)
 
     def save_summary(self) -> None:
-        with _LOCK:
+        if not self.owner:
+            return
+        with self.locked():
             write_json(self.dir / "summary.json", self.summary)
 
     def finding(self, record: dict[str, Any]) -> Path:
-        with _LOCK:
-            self.findings += 1
-            record["id"] = f"F{self.findings:04d}"
+        with self.locked():
+            record["id"] = f"F{self.findings + 1:04d}"
             path = self.dir / "findings" / f"{record['id']}.json"
             write_json(path, record)
         self.event("finding", id=record["id"], finding_kind=record["kind"], cls=record["cls"],

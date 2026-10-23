@@ -13,9 +13,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import multiprocessing
+import queue
+import signal
 import sys
 import time
-from concurrent.futures import ThreadPoolExecutor
+import traceback
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -33,13 +36,14 @@ from .worker import Snapshot, Worker
 
 SUITES = ROOT / "playtest" / "suites"
 PLATEAU_CHARACTERS = 10
+WIND_DOWN_SECONDS = 5   # a failed run waits this long per worker before SIGTERM
 MAX_RESTARTS_PER_STEP = 2
 
 
 @dataclass
 class Result:
     seed: int
-    outcome: str = "budget"   # reached | died | budget | finding
+    outcome: str = "budget"   # reached | died | budget | finding | error
     steps: int = 0
     dlvl: int = 0
     clvl: int = 0
@@ -176,34 +180,92 @@ class Character:
         self.result.wall_s = round(time.monotonic() - started, 2)
         self.session.event("character_end", seed=self.seed, outcome=self.result.outcome,
                            steps=self.result.steps, dlvl=self.result.dlvl)
-        self.session.character(self.result.__dict__)
         return self.result
 
 
 # -- modes ------------------------------------------------------------------------
 
+def _worker_process(worker_id: int, goal: Goal, session_dir: Path, build: Build,
+                    pending: "multiprocessing.Queue[int]", done: "multiprocessing.Queue[dict[str, Any]]",
+                    stop: Any, stop_on_reach: bool) -> None:
+    """One worker in its own process: the brain and the emulator protocol are
+    CPU-bound Python, so threads would share one core under the GIL."""
+    # SIGTERM (the parent winding down) unwinds like an exception, so the
+    # emulator is stopped: VICE runs in its own session and outlives us.
+    signal.signal(signal.SIGTERM, lambda signum, frame: sys.exit(1))
+    session = SessionLog.attach(session_dir)
+    worker: Worker | None = None
+    try:
+        while True:
+            seed = pending.get()
+            if seed is None or stop.is_set():
+                return
+            try:
+                worker = worker or Worker(session_dir, worker_id, build=build)
+                result = Character(worker, goal, seed, session).play()
+            except Exception as exc:   # anything but a GameFault: record it, never drop the seed
+                session.event("worker_error", seed=seed, worker=worker_id, error=repr(exc),
+                              traceback=traceback.format_exc())
+                result = Result(seed, outcome="error", findings=[f"error: {exc!r}"])
+                if worker is not None:
+                    worker.stop()   # no emulator left holding the worker's port
+                worker = None   # a fresh worker for the next seed
+            done.put(result.__dict__)
+            if result.outcome == "reached" and stop_on_reach:
+                stop.set()
+    finally:
+        if worker is not None:
+            worker.stop()
+
+
 def run_seeds(goal: Goal, seeds: list[int], workers: int, session: SessionLog, build: Build,
               stop_on_reach: bool) -> list[Result]:
-    """Play one character per seed on ``workers`` parallel workers."""
-    pending = list(seeds)
+    """Play one character per seed on ``workers`` parallel worker processes.
+
+    Every seed gets a result: a character that raised, or whose worker
+    process died, is recorded as ``error`` (unless an earlier character
+    reached the goal and ``stop_on_reach`` ended the batch).
+    """
+    context = multiprocessing.get_context("fork")   # inherits goals registered by callers
+    pending, done, stop = context.Queue(), context.Queue(), context.Event()
+    count = min(workers, len(seeds))
+    procs = [context.Process(target=_worker_process, args=(worker_id, goal, session.dir, build,
+                                                           pending, done, stop, stop_on_reach))
+             for worker_id in range(count)]
+    for proc in procs:   # fork before the queue's feeder thread starts
+        proc.start()
     results: list[Result] = []
-    stop = False
-
-    def worker_loop(worker_id: int) -> None:
-        nonlocal stop
-        worker = Worker(session.dir, worker_id, build=build)
-        while not stop:
+    try:
+        for seed in seeds:
+            pending.put(seed)
+        for _ in procs:
+            pending.put(None)   # one sentinel per worker
+        while any(proc.is_alive() for proc in procs) or not done.empty():
             try:
-                seed = pending.pop(0)
-            except IndexError:
-                return
-            result = Character(worker, goal, seed, session).play()
+                result = Result(**done.get(timeout=1))
+            except queue.Empty:
+                continue
+            session.character(result.__dict__)
             results.append(result)
-            if result.outcome == "reached" and stop_on_reach:
-                stop = True
-
-    with ThreadPoolExecutor(max_workers=workers) as pool:
-        list(pool.map(worker_loop, range(workers)))
+    except BaseException:
+        stop.set()   # the parent failed: no worker keeps playing on its own
+        for proc in procs:
+            proc.join(timeout=WIND_DOWN_SECONDS)   # finish the current character
+        for proc in procs:
+            if proc.is_alive():
+                proc.terminate()   # SIGTERM: the worker stops its emulator, then exits
+        raise
+    finally:
+        for proc in procs:
+            proc.join()
+    if not stop.is_set():
+        played = {r.seed for r in results}
+        dead = [p.exitcode for p in procs if p.exitcode]
+        for seed in seeds:
+            if seed not in played:   # its worker died without reporting
+                result = Result(seed, outcome="error", findings=[f"error: worker exit codes {dead}"])
+                session.character(result.__dict__)
+                results.append(result)
     return sorted(results, key=lambda r: r.seed)
 
 
@@ -262,8 +324,8 @@ def main(argv: list[str] | None = None) -> int:
             goal = GOALS[suite["goal"]]
             results = run_seeds(goal, suite["seeds"], args.workers, session, build, False)
             passed = sum(r.outcome == "reached" for r in results)
-            report[goal.name] = f"{passed}/{len(results)}"
-            ok &= passed == len(results)
+            report[goal.name] = f"{passed}/{len(suite['seeds'])}"
+            ok &= passed == len(suite["seeds"])
         session.summary["regress"] = report
         print(json.dumps(report))
     elif mode == "qualify":

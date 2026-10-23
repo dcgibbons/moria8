@@ -258,6 +258,110 @@ class AuditorTest(unittest.TestCase):
         self.assertEqual(auditor.check(obs, None), [])
 
 
+class RunSeedsTest(unittest.TestCase):
+    """The process runner reports every seed: a character that raises or a
+    worker that dies becomes an ``error`` result, never a missing one (review)."""
+
+    def test_every_seed_gets_a_result_and_unique_findings(self) -> None:
+        import os
+        import tempfile
+        from pathlib import Path
+        from moria_playtest import session as sess
+        from moria_playtest.recorder import SessionLog
+
+        stops = Path(tempfile.mkdtemp()) / "stops"
+
+        class FakeWorker:
+            def __init__(self, *args, **kwargs) -> None:
+                self.seed = None
+
+            def stop(self) -> None:   # runs in the worker process: record it in a file
+                with stops.open("a") as fh:
+                    fh.write(f"stop {self.seed}\n")
+
+        class FakeCharacter:
+            def __init__(self, worker, goal, seed, log) -> None:
+                self.seed, self.log = seed, log
+                worker.seed = seed
+
+            def play(self):
+                self.log.finding({"kind": "k", "cls": "bot", "detail": str(self.seed),
+                                  "seed": self.seed, "step": 0})
+                if self.seed == 3:
+                    raise RuntimeError("brain bug")
+                if self.seed == 5:
+                    os._exit(1)   # the worker process dies without reporting
+                return sess.Result(self.seed, outcome="reached")
+
+        saved = sess.Worker, sess.Character
+        sess.Worker, sess.Character = FakeWorker, FakeCharacter
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                log = SessionLog(Path(tmp), {"mode": "qualify"})
+                results = sess.run_seeds(GOALS["reach_dl2"], list(range(1, 9)), 3, log, None, False)
+                ids = [p.name for p in (Path(tmp) / "findings").glob("F*.json")]
+                characters = log.summary["characters"]
+        finally:
+            sess.Worker, sess.Character = saved
+        self.assertEqual([r.seed for r in results], list(range(1, 9)))
+        self.assertEqual({r.seed: r.outcome for r in results if r.outcome != "reached"},
+                         {3: "error", 5: "error"})
+        self.assertEqual(len(ids), len(set(ids)))
+        self.assertEqual(len(ids), 8)
+        self.assertEqual(len(characters), 8)
+        # The worker that raised on seed 3 is replaced, so only the error path
+        # can have stopped it.
+        self.assertIn("stop 3", stops.read_text().splitlines())
+
+
+class RunSeedsParentFailureTest(unittest.TestCase):
+    """Review round 4: if the parent fails, every worker still stops its
+    emulator (graceful wind-down, then SIGTERM, which unwinds like an error)."""
+
+    def test_every_worker_stops_its_emulator(self) -> None:
+        import tempfile
+        import time
+        from pathlib import Path
+        from moria_playtest import session as sess
+        from moria_playtest.recorder import SessionLog
+
+        stops = Path(tempfile.mkdtemp()) / "stops"
+
+        class FakeWorker:
+            def __init__(self, *args, **kwargs) -> None:
+                with stops.open("a") as fh:
+                    fh.write("start\n")
+
+            def stop(self) -> None:
+                with stops.open("a") as fh:
+                    fh.write("stop\n")
+
+        class FakeCharacter:
+            def __init__(self, worker, goal, seed, log) -> None:
+                self.seed = seed
+
+            def play(self):
+                time.sleep(30 if self.seed > 1 else 0.1)   # most are mid-game: SIGTERM path
+                return sess.Result(self.seed, outcome="reached")
+
+        class FailingLog(SessionLog):
+            def character(self, result) -> None:
+                raise RuntimeError("parent failure")
+
+        saved = sess.Worker, sess.Character, sess.WIND_DOWN_SECONDS
+        sess.Worker, sess.Character, sess.WIND_DOWN_SECONDS = FakeWorker, FakeCharacter, 0.5
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                log = FailingLog(Path(tmp), {"mode": "qualify"})
+                with self.assertRaises(RuntimeError):
+                    sess.run_seeds(GOALS["reach_dl2"], [1, 2, 3], 3, log, None, False)
+        finally:
+            sess.Worker, sess.Character, sess.WIND_DOWN_SECONDS = saved
+        lines = stops.read_text().splitlines()
+        self.assertGreater(lines.count("start"), 0)
+        self.assertEqual(lines.count("stop"), lines.count("start"))
+
+
 class RecorderPathTest(unittest.TestCase):
     def test_same_seed_on_two_goals_keeps_both_traces_and_snapshots(self) -> None:
         import tempfile
