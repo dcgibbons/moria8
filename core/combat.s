@@ -1147,17 +1147,14 @@ combat_apply_levelup:
     jsr player_calc_hp
 
     // Heal to full
+    // ... and sync max HP to ZP
     lda player_data + PL_MHP_LO
     sta player_data + PL_HP_LO
     sta zp_player_hp_lo
+    sta zp_player_mhp_lo
     lda player_data + PL_MHP_HI
     sta player_data + PL_HP_HI
     sta zp_player_hp_hi
-
-    // Sync max HP to ZP
-    lda player_data + PL_MHP_LO
-    sta zp_player_mhp_lo
-    lda player_data + PL_MHP_HI
     sta zp_player_mhp_hi
 
     // Recalculate combat bonuses (may change with level)
@@ -1165,13 +1162,13 @@ combat_apply_levelup:
 
     // Recalculate mana and learn new spells
 #if HAL_PLATFORM_LEVELUP_MAGIC_USES_TRAMPOLINE
-    jsr tramp_magic_recalc_mana
+    // The magic trampolines load an overlay over the window, which would
+    // strand a level-up from overlay code (a thrown or fired missile, a bash,
+    // a spell). main_loop runs them once only resident code is on the stack.
+    lda #1
+    sta levelup_magic_pending
 #else
     jsr magic_recalc_mana
-#endif
-#if HAL_PLATFORM_LEVELUP_MAGIC_USES_TRAMPOLINE
-    jsr tramp_magic_check_new_spells
-#else
     jsr magic_check_new_spells
 #endif
 
@@ -1180,9 +1177,11 @@ combat_apply_levelup:
     jsr hal_sound_play
 
     // Print level-up message: "Welcome to level N."
-    jsr msg_build_levelup
-    jmp cmb_print_buf
+    jmp msg_build_levelup
 
+#if HAL_PLATFORM_LEVELUP_MAGIC_USES_TRAMPOLINE
+levelup_magic_pending: .byte 0 // 1 = main_loop owes a mana/spell recalc (level-up)
+#endif
 // Scratch for 24-bit threshold computation
 ccl_adj_0: .byte 0             // 24-bit product / result (lo)
 ccl_adj_1: .byte 0             // (mid)
@@ -1460,7 +1459,7 @@ cmb_unaffected_str:
     .text " is unaffected." ; .byte 0
 #endif
 
-// msg_build_levelup — "Welcome to level N."
+// msg_build_levelup — Build and print "Welcome to level N."
 msg_build_levelup:
     lda #0
     sta cmb_buf_idx
@@ -1474,12 +1473,7 @@ msg_build_levelup:
     lda #<cmb_period
     ldy #>cmb_period
     jsr combat_append_str
-
-    jsr combat_clamp_msg_idx
-    ldx cmb_buf_idx
-    lda #0
-    sta combat_msg_buf,x
-    rts
+    jmp cmb_term_and_print
 
 // combat_append_str — Append null-terminated string to combat_msg_buf
 // Input: A = string ptr lo, Y = string ptr hi

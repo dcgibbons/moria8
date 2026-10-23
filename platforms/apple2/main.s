@@ -1862,9 +1862,9 @@ tramp_combat_check_levelup_items:
 !restored:
     rts
 
-// Wizard gain-level runs with OVL.MODAL owning the window; apply_levelup
-// loads OVL.SPELL for mana/spell learning, so restore the caller overlay
-// before returning or the continuation executes OVL.SPELL contents.
+// Wizard gain-level runs with OVL.MODAL owning the window. apply_levelup no
+// longer loads OVL.SPELL itself (main_loop runs the mana/spell recalc, TRN-008);
+// the reload stays as a guard so the continuation always finds OVL.MODAL.
 tramp_combat_apply_levelup_modal:
     jsr combat_apply_levelup
     lda #OVL_MODAL_MISC

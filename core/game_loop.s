@@ -636,6 +636,9 @@ game_new_start:
     sta zp_run_dir              // Not running
     lda #0
     sta auto_rest_active
+#if HAL_PLATFORM_LEVELUP_MAGIC_USES_TRAMPOLINE
+    sta levelup_magic_pending   // none owed by a previous character
+#endif
     sta zp_view_x
     sta zp_view_y
     sta old_view_x
@@ -824,6 +827,9 @@ c64_test_single_drive_load_return_resume_entry:
     sta zp_run_dir
     lda #0
     sta auto_rest_active
+#if HAL_PLATFORM_LEVELUP_MAGIC_USES_TRAMPOLINE
+    sta levelup_magic_pending   // none owed by the game played before the load
+#endif
 
     // Re-init SID
     jsr hal_sound_init
@@ -883,6 +889,16 @@ main_loop:
 #if HAL_PLATFORM_GAME_LOOP_MAIN_LOOP_BEGIN
 c128_town_move_diag_loop_top:
     jsr hal_platform_main_loop_begin
+#endif
+#if HAL_PLATFORM_LEVELUP_MAGIC_USES_TRAMPOLINE
+    // Deferred level-up mana/spell recalc (combat_apply_levelup): once,
+    // however many levels were gained; then show the new maximum mana.
+    lsr levelup_magic_pending
+    bcc !no_levelup_magic+
+    jsr tramp_magic_recalc_mana
+    jsr tramp_magic_check_new_spells
+    jsr status_draw
+!no_levelup_magic:
 #endif
 #if C128_TEST_TOWN_SELF_DUMP
     lda c128_town_dump_countdown

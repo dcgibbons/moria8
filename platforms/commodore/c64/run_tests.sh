@@ -4275,6 +4275,10 @@ check_static_contract "inventory_overlay_fresh_key_contract" "../../../core/play
     "show_inv_and_select:|||jsr input_prepare_selectable_overlay_key|||jsr tramp_ui_inv_select_display|||jsr input_get_followup_key"
 check_static_contract "inventory_overlay_items_reload_contract" "../../../core/player_items.s" \
     "show_inv_and_select:|||lda piw_return_overlay|||bne !sias_have_return_overlay+|||tsx|||lda \$0102,x|||cmp #hal_platform_overlay_window_hi_min|||!sias_check_outer_return:|||lda \$0104,x|||!sias_return_overlay:|||lda current_overlay|||cmp #OVL_ITEMS|||!sias_store_return_overlay:|||sta piw_return_overlay|||jsr ui_view_restore_modal_overlay|||lda #OVL_NONE|||sta piw_return_overlay|||txa|||beq !sias_no_overlay_reload+|||jsr overlay_load|||brk|||sei|||jsr hal_irq_install_runtime|||lda #BANK_NO_KERNAL|||sta hal_memory_cpu_port"
+check_static_contract "levelup_magic_deferred_contract" "../../../core/combat.s" \
+    "combat_apply_levelup:|||#if HAL_PLATFORM_LEVELUP_MAGIC_USES_TRAMPOLINE|||lda #1|||sta levelup_magic_pending|||#else|||jsr magic_recalc_mana|||jmp msg_build_levelup"
+check_static_contract "levelup_magic_main_loop_contract" "../../../core/game_loop.s" \
+    "main_loop:|||lsr levelup_magic_pending|||bcc !no_levelup_magic+|||jsr tramp_magic_recalc_mana|||jsr tramp_magic_check_new_spells|||jsr status_draw|||!no_levelup_magic:"
 check_static_contract "item_action_inventory_overlay_hint_contract" "../../../core/item_actions_overlay.s" \
     "item_action_select_filtered_inv:|||jsr item_action_get_key|||cmp #\$3f|||lda #OVL_ITEMS|||sta piw_return_overlay|||jmp piw_select_filtered_inv_key"
 check_static_contract "spell_recharge_inventory_overlay_hint_contract" "../../../core/player_magic_execute_overlay.s" \

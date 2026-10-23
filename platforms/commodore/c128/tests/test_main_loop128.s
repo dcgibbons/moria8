@@ -591,7 +591,11 @@ tramp_player_pray:
     rts
 
 tramp_magic_check_new_spells:
+tramp_magic_recalc_mana:
     rts
+
+// combat.s is not imported here; game_loop.s runs deferred level-up magic.
+levelup_magic_pending: .byte 0
 
 tramp_ranged_fire:
     inc test_fire_calls
