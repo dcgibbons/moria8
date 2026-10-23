@@ -1,8 +1,9 @@
 # Moria8
 
 Moria8 is a port of the classic roguelike game, Moria, for 8-bit platforms
-written in platform-specific assembly. Current releases target the Commodore
-64, Plus/4, and 128 systems, the Apple II, and the Commander X16.
+written in platform-specific assembly. It targets the Commodore 64, Plus/4, and
+128 systems, the Apple II, the Commander X16, Atari 8-bit systems, and the
+Acorn BBC Master 128.
 
 ![Animated GIF of Commodore 64 Play Testing](docs/assets/moria8-c64-gameplay.gif)
 
@@ -13,8 +14,8 @@ written in platform-specific assembly. Current releases target the Commodore
 | Commodore 64 (C64) | Released ([notes](docs/release_notes/release_notes-v1.5.0.md)) | [moria8-c64.d64](https://github.com/dcgibbons/moria8/releases/download/v1.5.0/moria8-c64.d64) [moria8-c64.zip](https://github.com/dcgibbons/moria8/releases/download/v1.5.0/moria8-c64.zip) |
 | Commodore Plus/4 | Released ([notes](docs/release_notes/release_notes-v1.5.0.md)) | [moria8-plus4.d64](https://github.com/dcgibbons/moria8/releases/download/v1.5.0/moria8-plus4.d64) |
 | Commodore 128 (C128) | Released ([notes](docs/release_notes/release_notes-v1.5.0.md)) | [moria8-c128.d64](https://github.com/dcgibbons/moria8/releases/download/v1.5.0/moria8-c128.d64) [moria8-c128.d71](https://github.com/dcgibbons/moria8/releases/download/v1.5.0/moria8-c128.d71) [moria8-c128.d81](https://github.com/dcgibbons/moria8/releases/download/v1.5.0/moria8-c128.d81) |
-| Commodore PET | Maybe | |
-| Commodore VIC-20 | Maybe | |
+| Commodore PET | Unlikely | |
+| Commodore VIC-20 | Unlikely | |
 | Commander X16 | In Progress | |
 | Acorn BBC Master | In Progress | |
 | Apple II | Released ([notes](docs/release_notes/release_notes-v1.5.0.md)) | [moria8-apple2.po](https://github.com/dcgibbons/moria8/releases/download/v1.5.0/moria8-apple2.po) |
@@ -32,7 +33,7 @@ details on upcoming ports.
 
 ### Real Floppy Users
 
-Want a real floppy disk of Moria8? Please fill out fill out the
+Want a real floppy disk of Moria8? Please fill out the
 [Google Form](https://forms.gle/aVDEXfVxjjsaLFNm6) to indicate interest.
 
 ## Building from Source
@@ -43,8 +44,9 @@ Want a real floppy disk of Moria8? Please fill out fill out the
 - `make`
 - Java, for Kick Assembler
 - VICE 3.10+ (`x64sc`, `x128`, `xplus4`, and `c1541`)
-- MAME, for Apple II run/test; Apple II ROMs via the `A2ROMS` env var
-  (not redistributable)
+- MAME, for Apple II (`apple2ee`), Atari 8-bit (`a800xl` / `a130xe`), and
+  Acorn BBC Master 128 (`bbcm`) run/test; system ROMs via the `A2ROMS`,
+  `ATARI8ROMS`, and `BBCMROMS` env vars (not redistributable)
 - `x16emu`, for Commander X16 run/test (`X16EMU` and optional `X16ROM` env vars)
 - Python 3 for build and test helper scripts
 
@@ -59,16 +61,20 @@ example `make run VICE=/path/to/x64sc`.
 ```sh
 make
 make build
+make disk
 make disk64
 make disk128
 make diskplus4
 make diskapple2
 make diskcx16
+make diskatari8
+make diskbbcmaster
 ```
 
 `make` and `make build` will build the entire project for all platforms.
-`make disk64`, `make disk128`, `make diskplus4`, `make diskapple2`, and
-`make diskcx16` build the individual disk/bundle images.
+`make disk` builds all shipping disk/bundle images, or use `make disk64`,
+`make disk128`, `make diskplus4`, `make diskapple2`, `make diskcx16`,
+`make diskatari8`, and `make diskbbcmaster` to build the individual images.
 
 Disk images are emitted under `build/`:
 
@@ -79,6 +85,8 @@ Disk images are emitted under `build/`:
 - `build/moria8-plus4.d64`
 - `build/moria8-apple2.po`
 - `build/moria8-cx16.zip`
+- `build/moria8-atari8.atr`
+- `build/moria8-bbcmaster.ssd`
 
 ### Run
 
@@ -89,35 +97,50 @@ make run128
 make runplus4
 make runapple2
 make runcx16
+make runatari8
+make runatari8-130xe
+make runbbcmaster
 ```
 
 `make run` and `make run64` launch the C64 disk. `make run128` launches the
 C128 disk. `make runplus4` launches the Plus/4 disk in `xplus4` with a 1541
 drive configuration. The Plus/4 artifact is a standard Commodore D64 image.
-`make runapple2` launches the Apple II image under MAME apple2ee (requires
+`make runapple2` launches the Apple II image under MAME `apple2ee` (requires
 `A2ROMS`). `make runcx16` launches the Commander X16 build in `x16emu` with
-HostFS mounted at `build/cx16/`.
+HostFS mounted at `build/cx16/`. `make runatari8` and `make runatari8-130xe`
+launch the Atari 8-bit disk under MAME `a800xl` and `a130xe` (requires
+`ATARI8ROMS`). `make runbbcmaster` launches the BBC Master 128 disk under MAME
+`bbcm` (requires `BBCMROMS`).
 
 ### Test
 
 ```sh
 make test
+make test64
 make test128-fast
 make test128-fast-smoke
 make test128
 make testplus4
 make testapple2
 make testcx16
+make testatari8
+make testbbcmaster
 ```
 
-`make test` runs the default regression mix. `make test128-fast` is the fast
-C128 unit batch, `make test128-fast-smoke` covers high-value C128 runtime boot
-and town paths, and `make test128` is the broader C128 shell harness.
-`make testapple2` is the Apple II static memory-contract gate;
-`make testapple2-runtime` also runs the MAME scenario harness
-(`platforms/apple2/harness_smoke.py`, which needs `A2ROMS`). `make testcx16`
-runs the Commander X16 static memory-contract gate and the `x16emu -testbench`
-runtime scenario suite (`platforms/cx16/harness_smoke.py`).
+`make test` runs the default regression mix. `make test64` and `make testplus4`
+run the C64 and Plus/4 suites. `make test128-fast` is the fast C128 unit batch,
+`make test128-fast-smoke` covers high-value C128 runtime boot and town paths,
+and `make test128` is the broader C128 shell harness. `make testapple2` is the
+Apple II static memory-contract gate; `make testapple2-runtime` also runs the
+MAME scenario harness (`platforms/apple2/harness_smoke.py`, which needs
+`A2ROMS`). `make testcx16` runs the Commander X16 static memory-contract gate
+and the `x16emu -testbench` runtime scenario suite
+(`platforms/cx16/harness_smoke.py`). `make testatari8` runs the Atari 8-bit
+static memory-contract gate and the MAME `a800xl`/`a130xe` runtime scenario
+suite (`platforms/atari8/harness_smoke.py`, which needs `ATARI8ROMS`).
+`make testbbcmaster` runs the Acorn BBC Master 128 static memory-contract gate
+and the MAME `bbcm` runtime scenario suite
+(`platforms/bbcmaster/harness_smoke.py`, which needs `BBCMROMS`).
 
 ## Documentation
 

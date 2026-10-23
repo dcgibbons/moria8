@@ -4,14 +4,17 @@
 
 | Path | Purpose |
 | --- | --- |
-| `Makefile` | Thin root wrapper around `platforms/commodore/Makefile` |
+| `Makefile` | Root build, disk, run, and test wrapper across all seven platform ports |
 | `core/` | Platform-agnostic 6502 gameplay, UI, data, and utility modules |
 | `platforms/commodore/Makefile` | Commodore build, disk, run, and test orchestration |
 | `platforms/commodore/c64/` | C64 entry, platform code, tests, and harness scripts |
 | `platforms/commodore/c128/` | C128 boot, VDC/MMU code, tests, and harness scripts |
 | `platforms/commodore/plus4/` | Plus/4 entry, TED platform code, tests, and harness scripts |
 | `platforms/commodore/common/` | Shared Commodore KERNAL, disk, overlay, and compatibility modules |
-| `platforms/apple2/` | Apple IIe entry, ProDOS/aux platform code, and MAME harness |
+| `platforms/apple2/` | Apple IIe entry, ProDOS/aux platform code, MAME harness, and memory-contract checker |
+| `platforms/cx16/` | Commander X16 entry, VERA/banked-RAM platform code, `x16emu` TestBench harness, and memory-contract checker |
+| `platforms/atari8/` | Atari 8-bit (800XL/65XE/130XE) entry, ANTIC/POKEY/SIO/130XE platform code, MAME harness, and memory-contract checker |
+| `platforms/bbcmaster/` | Acorn BBC Master 128 entry, Mode 0 `LYNNE`/Sideways RAM/DFS platform code, MAME harness, and memory-contract checker |
 | `build/` | Generated payloads, disk images, checksums, and test scratch output |
 | `data/` | Source data used by generators |
 | `tools/` | Build-time conversion, generation, lint, and disk helpers |
@@ -19,7 +22,11 @@
 
 Primary entry points are `platforms/commodore/c64/main.s`,
 `platforms/commodore/c128/main.s`,
-`platforms/commodore/plus4/main.s`, and `platforms/apple2/main.s`.
+`platforms/commodore/plus4/main.s`,
+`platforms/apple2/main.s`,
+`platforms/cx16/main.s`,
+`platforms/atari8/main.s`, and
+`platforms/bbcmaster/main.s`.
 
 ## Shared Runtime Modules
 
@@ -45,6 +52,9 @@ mutually exclusive overlay had to coexist in one contiguous address space.
 | C128 | 56,114 bytes | 29,254 bytes | 4,088 bytes | 85,368 bytes / 83.4 KiB |
 | Plus/4 | 50,494 bytes | 27,793 bytes | 4,068 bytes | 78,287 bytes / 76.5 KiB |
 | Apple IIe | 38,400 bytes | 39,445 bytes | 5,632 bytes | 77,845 bytes / 76.0 KiB |
+| Commander X16 | 45,276 bytes | 42,332 bytes | 5,573 bytes | 87,608 bytes / 85.6 KiB |
+| Atari 8-bit | 49,905 bytes | 35,862 bytes | 4,095 bytes | 85,767 bytes / 83.8 KiB |
+| BBC Master 128 | 46,982 bytes | 42,746 bytes | 5,300 bytes | 89,728 bytes / 87.6 KiB |
 
 The overlay architecture is therefore not optional polish: every current port
 would exceed a practical flat 64 KB target if all loaded pieces had to be
@@ -328,23 +338,153 @@ later, banked, or entered through a trampoline, verify all five facts together:
 
 Asserting only the trampoline address is insufficient. The callee placement and
 the staged source span must also be covered by assertions or direct inspection.
+
+## Commander X16 Runtime Model
+
+The Commander X16 port is 80-column (VERA text in VRAM `$1B000`), uses the
+38.6 KB unbanked low RAM (`$0801-$9EFF`) for a unified resident + gameplay
+image, and maps the `$A000-$BFFF` 8 KB banked RAM window (selected via ZP
+`$00`) to hold the live 198x66 dungeon map, read-only data banks, monster
+tiers, and preloaded overlays. Full rules live in `docs/CX16_MEMORY_CONTRACT.md`.
+
+- `$0400-$07FF` holds `FLOOR_ITEM_BASE` (`$0400`), `CREATURE_BASE` (`$0500`),
+  `PLATFORM_HD_DECODE_BUF_BASE` / `DUNGEON_GEN_DOOR_SCAN_BASE` (`$0600`), and
+  `CX16_ROW_STAGE_BASE` (`$0700`).
+- `MORIA8.PRG`: `$0801-$97C8` (unified resident + gameplay image, asserted
+  `<= $9AFF`).
+- `PLATFORM_TIER_NAME_POOL_BASE`: `$9B00-$9EFF` (1,024 bytes).
+- `$9F00-$9FFF`: VERA / VIA1 / VIA2 hardware I/O hole (forbidden to code/data).
+- `$A000-$BFFF` banked RAM window (8 KB per bank):
+  - Bank 0: reserved for CX16 KERNAL `KVARSB0`
+  - Banks 1–2: live 198x66 dungeon map (virtual `$2000-$530B`)
+  - Bank 3: `CX16.AUXDATA` (virtual `$6000-$737F`)
+  - Bank 4: `CX16.HUFFDATA` (virtual `$8000-$8D93`)
+  - Banks 5–8: `MONSTER.DB.1..4` (preloaded at boot)
+  - Banks 9–20: `OVL.START`..`OVL.TITLE` (12 overlays, preloaded at boot)
+  - Bank 21: `TITLE` artwork stream
+
+Current product payloads:
+
+| Payload | Linked range | Size |
+| --- | ---: | ---: |
+| `MORIA8.PRG` | `$0801-$97C8` | 36,808 bytes |
+| `CX16.AUXDATA` | virtual `$6000-$737F` (Bank 3) | 4,992 bytes |
+| `CX16.HUFFDATA` | virtual `$8000-$8D93` (Bank 4) | 3,476 bytes |
+| `OVL.*` (12 classes) | `$A000-$BFFF` window (Banks 9–20) | 0.3–5.6 KB each |
+
+## Atari 8-Bit Runtime Model
+
+The Atari 8-bit port targets the stock 64 KB Atari 800XL / 65XE (40-column
+ANTIC Mode 2 display with DLI color zones and a 1 KB C64-screen-code-ordered
+RAM font at `$0400-$07FF`) and automatically detects 128 KB Atari 130XE
+extended RAM (`$4000-$7FFF` via `PORTB` `$D301`) at boot to cache overlays,
+monster tiers, and title artwork. Full rules live in
+`docs/ATARI8_MEMORY_CONTRACT.md`.
+
+- `$0200-$031A` is reserved for Atari OS vectors, Page 2 display/timer shadows,
+  and the `SIOV` DCB (`$0300-$030B`).
+- `$0380-$03BF` holds `ATARI_DISPLAY_LIST`; `$0400-$07FF` holds
+  `ATARI_CHARSET_BASE`; `$0800-$0BE7` holds `SCREEN_RAM` (all below `$4000` so
+  neither OS ROM activation nor 130XE banking affects ANTIC DMA).
+- Low resident helpers (`$0C00-$1FA1`, asserted `<= $4000`) hold all `PORTB`
+  banking, `EnterSio`/`ExitSio` bounce I/O, interrupt handlers, and 130XE cache
+  routines (`xe_detect`, `xe_cache_stash`, `xe_cache_fetch`).
+- Resident `Default` (`MORIA8.RES`): `$0C00-$C03D` (asserted `<= $C100`).
+- `MAP_BASE`: `$C100-$CFFF` (80x48 live map, 3,840 bytes, ending immediately
+  below `$D000`).
+- `$D000-$D7FF`: immovable GTIA / POKEY / PIA / ANTIC hardware I/O hole.
+- `$D800-$DFFF`: high resident tables under OS ROM (`PLATFORM_TIER_NAME_POOL_BASE`
+  `$D800-$DBFF`, `FLOOR_ITEM_BASE` `$DC00-$DCFF`, `PLATFORM_HD_DECODE_BUF_BASE`
+  `$DD00-$DD3F`, `zp_save_buf` `$DD40-$DDCD`, and `msg_history` `$DDCE-$DF0D`).
+- `$E000-$EFFF`: overlay and monster-tier execution/staging window (10 overlays
+  `OVL.STA`..`OVL.GEN` and 4 monster tiers `MONSTER.DB1..4`).
+- `$F000-$FFF9`: `RuntimeBanked` (`ATARI.BNK`), below the RAM CPU vectors at
+  `$FFFA-$FFFF`.
+
+Current product payloads:
+
+| Payload | Linked range | Size |
+| --- | ---: | ---: |
+| `boot.prg` | `$0800-$097F` | 384 bytes |
+| `MORIA8.RES` | `$0C00-$C03D` | 46,142 bytes |
+| `ATARI.BNK` | `$F000-$FEB2` | 3,763 bytes |
+| `OVL.*` (10 classes) | `$E000-$EFFF` window | 2.1–4.1 KB each |
+
+## Acorn BBC Master 128 Runtime Model
+
+The Acorn BBC Master 128 port targets the stock 128 KB BBC Master 128 (65C12,
+MOS 3.20, DFS 2.24), using an 80x24 Mode 0 bitmap in 20 KB Shadow RAM `LYNNE`
+(`$3000-$7FFF` via `ACCCON` `$FE34`), `BeebHuffData` in 4 KB Private RAM `ANDY`
+(`$8000-$8FFF` via `ROMSEL` `$FE30 = $84`), and 64 KB Sideways RAM (Banks 4–7
+at `$8000-$BFFF`). Full rules live in `docs/BBCMASTER_MEMORY_CONTRACT.md`.
+
+- `$0400-$07FF` holds `FLOOR_ITEM_BASE` (`$0400`), `CREATURE_BASE` (`$0500`),
+  `PLATFORM_HD_DECODE_BUF_BASE` (`$0600`), `DUNGEON_GEN_DOOR_SCAN_BASE`
+  (`$0640`), MOS control blocks (`$0681-$06FF`), and `beeb_ss_buf` (`$0700`).
+- `$0800-$0DFF`: preserved Acorn MOS sound/envelope/DFS workspace (`PAGE = $0E00`).
+- Low resident helpers (`$0E00-$2FFF`, asserted `<= $3000`) own all `ACCCON`
+  and `ROMSEL` switching, the Mode 0 software blitter, `EnterMos`/`ExitMos`, and
+  the `BRKV` fault handler.
+- Resident `Default` (`MORIA8.RES`): `$0E00-$7FAD` (asserted `<= $8000`).
+- 20 KB Shadow RAM `LYNNE` (`$3000-$7FFF`, `ACCCON = $05`): C64-ordered font
+  (`$3000-$33FF`), `DUNGEON_GEN_SCAN_SCRATCH_BASE` (`$3400-$37FF`),
+  `beeb_char_shadow` (`$3800-$3F7F`), and the 80x24 Mode 0 display bitmap
+  (`$4400-$7FFF`).
+- 4 KB Private RAM `ANDY` (`$8000-$8FFF`, `ROMSEL = $84`): `BeebHuffData`
+  (`$8000-$8D93`).
+- Sideways RAM Banks 4–7 (`$8000-$BFFF`):
+  - Bank 4: `BeebPlaySlot` (`$8000-$A3E5`), `PLATFORM_TIER_NAME_POOL_BASE`
+    (`$A400-$A7FF`), and the `$A800-$BFFF` active overlay/tier window (12
+    overlays and 4 monster tiers)
+  - Bank 5: live 198x66 dungeon map (`$8000-$B30B`) + cached `OVL.UI`
+    (`$B400-$BDFF`)
+  - Bank 6: `BeebAuxData` (`$8000-$945D`, virtual `$6000-$745D`) + cached
+    `OVL.TOWN`, `OVL.MODAL`, and `MONSTER.DB1`
+  - Bank 7: cached `OVL.SPELL`, `OVL.ITEMS`, and `OVL.GEN` (cold overlays and
+    tiers 2–4 load on demand from DFS disk)
+
+Current product payloads:
+
+| Payload | Linked range | Size |
+| --- | ---: | ---: |
+| `boot.prg` | `$1900-$1AAE` (relocates to `$0400`) | 431 bytes |
+| `moria8.res.prg` | `$0E00-$7FAD` | 29,102 bytes |
+| `beeb.play` | Bank 4 `$8000-$A3E5` | 9,190 bytes |
+| `beeb.auxdata` | Bank 6 `$8000-$945D` (virtual `$6000-$745D`) | 5,214 bytes |
+| `beeb.huffdata` | `ANDY` `$8000-$8D93` | 3,476 bytes |
+| `ovl.*` (12 classes) | Bank 4 `$A800-$BFFF` window | 0.2–5.3 KB each |
+
 ## Test Harnesses
 
 Runtime tests assemble target-specific PRGs and execute them under VICE
-headless. C128 also has Python compare and smoke harnesses for faster
-iteration. The Apple IIe gate is a MAME (apple2ee) Lua harness
-(`platforms/apple2/harness_smoke.py`, 14 scenarios + `boot_title`) plus a
-static memory-contract checker (`make testapple2`); both need `A2ROMS` for
-runtime runs.
+headless (`x64sc`, `x128`, `xplus4`), MAME headless (`apple2ee`, `a800xl`,
+`a130xe`, `bbcm`), and `x16emu -testbench`. The non-Commodore ports each pair a
+static memory-contract checker with a headless runtime scenario harness:
+
+- Apple IIe: `platforms/apple2/harness_smoke.py` (14 scenarios + `boot_title`,
+  requires `A2ROMS`) + `make testapple2-memory-contract`
+- Commander X16: `platforms/cx16/harness_smoke.py` (20 scenarios under
+  `x16emu -testbench`, requires `X16EMU`/`X16ROM`) +
+  `make testcx16-memory-contract`
+- Atari 8-bit: `platforms/atari8/harness_smoke.py` (15 `a800xl` scenarios + 3
+  `a130xe` scenarios, requires `ATARI8ROMS`) +
+  `make testatari8-memory-contract`
+- Acorn BBC Master 128: `platforms/bbcmaster/harness_smoke.py` (15 `bbcm`
+  scenarios, requires `BBCMROMS`) + `make testbbcmaster-memory-contract`
 
 Useful gates:
 
 ```sh
 make test
+make test64
+make testplus4
 make test128-fast
 make test128-fast-smoke
 make test128
 make testapple2
+make testcx16
+make testatari8
+make testbbcmaster
 ```
 
 Tests that cross `$A000` on C64 need a bootstrap trampoline below the BASIC ROM
