@@ -1,7 +1,10 @@
 """``make playtest-smoke``: a <=30 s production-path gate for the playtester.
 
 Title snapshot -> seeded Half-Troll Warrior chargen through the real prompts ->
-town command prompt, then checks every decoder against the screen.
+town command prompt, then checks every decoder against the screen. Then two
+game paths the M3 bot found crashing (AI_PLAYTEST_DESIGN §14.10): a throw
+through the ``?`` item list, and a level-up followed by a turn (the deferred
+mana/spell recalc at the top of ``main_loop``).
 """
 
 from __future__ import annotations
@@ -10,7 +13,7 @@ import json
 import sys
 import time
 
-from .game import Mode, Observation
+from .game import KEY_SPACE, GameFault, Mode, Observation
 from .launch import PLAYTEST_OUT, find_vice
 from .worker import Worker
 
@@ -51,6 +54,37 @@ def checks(obs: Observation) -> list[str]:
     return failures
 
 
+def settle(game, obs: Observation) -> Observation:  # type: ignore[no-untyped-def]
+    """Dismiss -more- screens back to the command prompt."""
+    while obs.mode == Mode.DISMISS:
+        obs = game.press(KEY_SPACE)
+    return obs
+
+
+def overlay_paths(game) -> list[str]:  # type: ignore[no-untyped-def]
+    """Throw via the item list, then a wizard level-up and one more turn."""
+    failures: list[str] = []
+    try:
+        obs = game.press(0xD4)                               # SHIFT+T: throw
+        for key in (ord("?"), ord("A"), ord("J")):          # list, first item, south
+            obs = game.press(key)
+        obs = settle(game, obs)
+        if obs.mode != Mode.COMMAND:
+            failures.append(f"throw via the item list ended in {obs.mode.value}")
+        obs = settle(game, game.press(0x17))                 # CTRL+W (after any -more-)
+        if "WIZARD?" not in obs.rows[0] + obs.rows[1]:
+            failures.append("CTRL+W did not ask WIZARD? (Y/N)")
+        obs = settle(game, game.press(ord("Y")))             # wizard on
+        obs = settle(game, game.press(0x17))                 # wizard menu
+        obs = settle(game, game.press(ord("X")))             # gain one level
+        obs = settle(game, game.press(ord("5")))             # a turn: main_loop runs the recalc
+        if obs.mode != Mode.COMMAND or obs.clvl != 2:
+            failures.append(f"level-up path ended in {obs.mode.value} at clvl {obs.clvl}")
+    except GameFault as fault:
+        failures.append(f"{fault.kind}: {fault.detail}")
+    return failures
+
+
 def main() -> int:
     start = time.monotonic()
     result: dict[str, object] = {"vice": find_vice()}
@@ -69,6 +103,8 @@ def main() -> int:
         result["modes"] = modes
         result["final"] = obs.summary()
         failures = checks(obs)
+        if not failures:
+            failures += overlay_paths(game)
     finally:
         worker.stop()
     elapsed = time.monotonic() - start

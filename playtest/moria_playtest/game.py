@@ -41,6 +41,7 @@ class Mode(str, Enum):
     DEATH = "DEATH"
     DIRECTION = "DIRECTION"   # get_direction_target (added for M2 doors)
     STORE = "STORE"           # store screen (ui_store.s): menu and buy prompts
+    ITEM = "ITEM"             # "Wear which item (a-v)?" and its "?" item list (M3 round 13)
     UNKNOWN = "UNKNOWN"
 
 
@@ -182,6 +183,10 @@ def classify(obs: Observation, abi: Abi, command_ret: int,
             return Mode.CHARGEN, stage
     if "Press any key" in screen:
         return Mode.DISMISS, "anykey"
+    if "which item (a-" in obs.rows[0]:
+        return Mode.ITEM, "which"
+    if obs.rows[0].strip() == "Inventory":
+        return Mode.ITEM, "list"   # the "?" list at an item prompt (no "Press any key")
     if obs.game_flags & abi.GAME_FLAG_OVER:
         return Mode.DEATH, "other"
     stage = (resident_prompts or {}).get(obs.ret, "")

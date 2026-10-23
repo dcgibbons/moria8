@@ -5,6 +5,9 @@
 - Creatures: whatever creature glyphs the *screen* shows in the viewport. The
   monster table is consulted only to identify a glyph already on screen
   (creature level), as a player would by looking at it.
+- Unknown glyphs: other non-terrain symbols (`$`, `,`, `!`, …) may be items or
+  creatures; the brain identifies them with the look command (§14.3), using
+  player knowledge of creature names from ``knowledge`` (§6.5).
 - Town: the store entrances (a fixed layout every player knows).
 The brain sees only this view. Privileged state stays with the auditor.
 """
@@ -27,6 +30,16 @@ DIRS = {(0, -1): ord("K"), (0, 1): ord("J"), (-1, 0): ord("H"), (1, 0): ord("L")
 
 Pos = tuple[int, int]
 TRAP_COST = 25   # extra steps a path will walk to go around a known trap
+UNKNOWN_COST = TRAP_COST   # ... or past an unidentified glyph (twice that onto one)
+# Screen characters that are terrain, not things (core/color.s tile_screen_codes;
+# the trap/rune glyph decodes as '·'; town store entrances are digits).
+TERRAIN_GLYPHS = set(".#'+><:%· ") | set("12345678")
+
+
+def is_unknown_glyph(char: str) -> bool:
+    """A screen symbol that could be an item or a creature: not terrain,
+    not a letter (always a creature) and not the player."""
+    return not char.isalpha() and char != "@" and char not in TERRAIN_GLYPHS
 
 
 @dataclass(frozen=True)
@@ -45,6 +58,8 @@ class View:
     creatures: dict[Pos, Creature] = field(default_factory=dict)
     blocked: set[Pos] = field(default_factory=set)   # brain memory: doors that would not open
     stores: list[Pos] = field(default_factory=list)  # town only: entrance of store N+1
+    unknown: dict[Pos, str] = field(default_factory=dict)  # unidentified glyphs on screen
+    hazards: set[Pos] = field(default_factory=set)   # brain: creatures to keep away from
 
     @property
     def monsters(self) -> set[Pos]:
@@ -84,15 +99,39 @@ class View:
                     doors: bool = True, keep_clear: bool = False) -> tuple[int, int] | None:
         """First (dx, dy) of a cheapest known-tile path to any goal; (0, 0) if on one.
 
-        A step costs 1, plus ``TRAP_COST`` onto a known trap: a detour of up to
-        that many steps is preferred, but a trap that is the only way is crossed.
+        A step costs 1, plus ``TRAP_COST`` onto a known trap, ``UNKNOWN_COST``
+        next to an unidentified glyph and twice that onto one: a detour of up
+        to that many steps is preferred, but if it is the only way the path goes
+        anyway (next to the glyph the brain looks at it first).
         ``keep_clear`` also refuses tiles next to a visible creature (fleeing).
         """
         start = self.pos
+        goals = goals - self.blocked   # a blocked tile is no goal either (round 17)
         danger = ({(x + dx, y + dy) for x, y in self.creatures for dx in (-1, 0, 1) for dy in (-1, 0, 1)}
                   if keep_clear else set())
+        near_unknown = {(x + dx, y + dy) for x, y in set(self.unknown) | self.hazards
+                        for dx in (-1, 0, 1) for dy in (-1, 0, 1)}
         if start in goals:
             return (0, 0)
+        found = self.route(goals, start, danger, near_unknown, avoid_monsters, doors)
+        return None if found is None else found[0]
+
+    def path_steps(self, goals: set[Pos], *, avoid_monsters: bool, doors: bool = True) -> int | None:
+        """Number of steps of the cheapest known-tile path to any goal, as
+        ``step_toward`` walks it (trap and glyph costs choose the path but do
+        not count as steps); None if unreachable."""
+        goals = goals - self.blocked
+        if self.pos in goals:
+            return 0
+        near_unknown = {(x + dx, y + dy) for x, y in set(self.unknown) | self.hazards
+                        for dx in (-1, 0, 1) for dy in (-1, 0, 1)}
+        found = self.route(goals, self.pos, set(), near_unknown, avoid_monsters, doors)
+        return None if found is None else found[1]
+
+    def route(self, goals: set[Pos], start: Pos, danger: set[Pos], near_unknown: set[Pos],
+              avoid_monsters: bool, doors: bool) -> tuple[tuple[int, int], int] | None:
+        """Dijkstra over known tiles: (first step, number of steps) along the
+        cheapest path to the nearest goal."""
         cost = {start: 0}
         previous = {start: start}
         heap = [(0, 0, start)]   # (cost, push order, tile): FIFO among equals, as in BFS
@@ -102,14 +141,18 @@ class View:
             if here_cost > cost[here]:
                 continue
             if here in goals:
+                steps = 1
                 while previous[here] != start:
                     here = previous[here]
-                return here[0] - start[0], here[1] - start[1]
+                    steps += 1
+                return (here[0] - start[0], here[1] - start[1]), steps
             for nxt in self.neighbors(*here):
                 if nxt not in goals and (nxt in danger or not self.passable(
                         *nxt, avoid_monsters=avoid_monsters, doors=doors)):
                     continue
-                step = 1 + (TRAP_COST if self.type_at(*nxt) == TYPE_TRAP else 0)
+                step = (1 + (TRAP_COST if self.type_at(*nxt) == TYPE_TRAP else 0)
+                        + (UNKNOWN_COST if nxt in near_unknown else 0)
+                        + (2 * UNKNOWN_COST if nxt in self.unknown else 0))
                 if here_cost + step < cost.get(nxt, here_cost + step + 1):
                     cost[nxt] = here_cost + step
                     previous[nxt] = here
@@ -127,7 +170,8 @@ class View:
             if (t not in WALKABLE_TYPES and t != TYPE_DOOR_CLOSED) or (t == TYPE_TRAP and not traps):
                 continue
             x, y = i % self.cols, i // self.cols
-            if (x, y) in self.blocked or (t == TYPE_DOOR_OPEN and self.dlvl == 0):
+            if ((x, y) in self.blocked or (x, y) in self.unknown
+                    or (t == TYPE_DOOR_OPEN and self.dlvl == 0)):
                 continue
             if any(self.type_at(nx, ny) == UNKNOWN for nx, ny in self.neighbors(x, y)):
                 out.add((x, y))
@@ -139,7 +183,8 @@ class View:
         out = set()
         for i, t in enumerate(self.types):
             if (t not in WALKABLE_TYPES or (t == TYPE_TRAP and not traps)
-                    or (i % self.cols, i // self.cols) in searched):
+                    or (i % self.cols, i // self.cols) in searched
+                    or (i % self.cols, i // self.cols) in self.unknown):
                 continue
             x, y = i % self.cols, i // self.cols
             for dx, dy in DIRS:
@@ -149,6 +194,31 @@ class View:
                     out.add((x, y))
                     break
         return out
+
+
+def sealed_search_spots(view: "View", searched: set[Pos]) -> set[Pos]:
+    """Search spots when sealed in: reachable tiles next to a wall whose far
+    side is unknown, or is floor this region cannot reach (a wall one thick
+    between two known areas is likely a secret door)."""
+    region = {view.pos}
+    todo = [view.pos]
+    while todo:
+        x, y = todo.pop()
+        for nxt in view.neighbors(x, y):
+            if nxt not in region and view.passable(*nxt, avoid_monsters=False, doors=True):
+                region.add(nxt)
+                todo.append(nxt)
+    out = set()
+    for x, y in region - searched:
+        for dx, dy in DIRS:
+            wx, wy, bx, by = x + dx, y + dy, x + 2 * dx, y + 2 * dy
+            if not view.inside(bx, by) or view.type_at(wx, wy) != WALL:
+                continue
+            beyond = view.type_at(bx, by)
+            if beyond == UNKNOWN or (beyond in WALKABLE_TYPES and (bx, by) not in region):
+                out.add((x, y))
+                break
+    return out
 
 
 def screen_to_map(game: Game, obs: Observation, col: int, row: int) -> Pos:
@@ -178,6 +248,7 @@ def build_view(game: Game, obs: Observation, tiles: bytes, levels: bytes | None 
         if rec[abi.MX_TYPE] != abi.EMPTY_SLOT:
             by_pos[(rec[abi.MX_X], rec[abi.MX_Y])] = rec[abi.MX_TYPE]
     creatures = {}
+    unknown = {}
     vx, vy = abi.hal_layout_viewport_x, abi.hal_layout_viewport_y
     for row in range(vy, vy + abi.hal_layout_viewport_h):
         line = obs.rows[row]
@@ -187,9 +258,11 @@ def build_view(game: Game, obs: Observation, tiles: bytes, levels: bytes | None 
                 kind = by_pos.get(pos)
                 level = levels[kind] if levels is not None and kind is not None and kind < len(levels) else 0
                 creatures[pos] = Creature(line[col], level)
+            elif is_unknown_glyph(line[col]):
+                unknown[screen_to_map(game, obs, col, row)] = line[col]
     stores = []
     if obs.dlvl == 0:
         xs = game.mon.mem_get(abi.store_door_x, abi.STORE_COUNT, game.ram)
         ys = game.mon.mem_get(abi.store_door_y, abi.STORE_COUNT, game.ram)
         stores = list(zip(xs, ys))
-    return View(cols, rows, types, obs.pos, obs.dlvl, creatures, stores=stores)
+    return View(cols, rows, types, obs.pos, obs.dlvl, creatures, stores=stores, unknown=unknown)

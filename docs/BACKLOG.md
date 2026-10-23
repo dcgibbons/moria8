@@ -885,6 +885,33 @@ Acceptance target:
 - `make -j5 -O test` wall time drops further with no new flakes across
   repeated runs, and serial C64 runs still pass.
 
+### Playtester: learn creature speed and stationarity by observation
+
+The AI playtester's `playtest/moria_playtest/knowledge.py` reads the shipped
+creature tier data as player knowledge: names and native levels (look
+identification, attacker names), glyphs, speed (`fast_creatures`, round 14)
+and the "moves only to attack" flag (`stationary_glyphs`, round 9). The
+original M3 plan (`docs/AI_PLAYTEST_DESIGN.md` §14.3 item 4) was to learn
+stationary monsters by watching their position over turns. The maintainer
+kept the data-driven version for M3 and asked for it to be reworked later
+(§14.6 item 7, 2026-10-22).
+
+Required work:
+
+- Learn "never moves" per creature name (or glyph) from observation: a
+  creature seen at the same tile across N turns while the player is in view.
+- Learn "faster than the player" from observation: more than one move or
+  attack per player turn.
+- Keep names and levels from the shipped data (or decide separately), and
+  keep the brain's uses unchanged (`stationary`, `chased`, hazards).
+- Re-qualify `reach_dl5` and `clvl5`; both must stay at or above the 16/20
+  bar (their frozen suites).
+
+Acceptance target:
+
+- `knowledge.py` no longer reads speed or movement flags, and M3's frozen
+  suites still pass.
+
 ### Normalize cross-platform save schema and versioning
 
 The shared serializer currently interprets a platform-local version byte:

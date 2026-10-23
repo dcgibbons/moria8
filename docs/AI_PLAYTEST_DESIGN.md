@@ -1,8 +1,9 @@
 # AI Playtest Design
 
-Status: revision 7, 2026-10-21. M0, M1, and M2 are implemented and their exit
-criteria are met (§8.1–§8.3), re-verified after the F-M2 game fixes. M3 is
-proposed in §14, measured against baselines and pending maintainer decisions.
+Status: revision 8, 2026-10-22. M0, M1, and M2 are implemented and their exit
+criteria are met (§8.1–§8.3), re-verified after the F-M2 game fixes. M3 meets
+its exit criterion at the 16/20 bar (§14.9); the game defects it found are in
+§14.10.
 - Revision 2 folds in an adversarial review by three reviewers: a staff
   engineer, an engineering manager, and a 6502 performance specialist.
 - Maintainer decisions are in §13.
@@ -350,6 +351,10 @@ Implementation notes from M0:
   which is the actual fair-play source. Memory (`MF_VISIBLE`/`MF_DETECTED`,
   the monster table) is used only to identify a glyph's creature type once it
   is visible.
+- **Player knowledge.** `knowledge.py` reads the shipped creature tier data
+  (names, native levels, glyphs, speed, "moves only to attack") as what a
+  player knows from experience or a monster memory. It is never read from
+  game memory. See §14.6 item 7.
 - **Screen and view must agree.** A disagreement between screen and
   memory-derived view is an auditor event. It catches both bot bugs and render
   bugs, cheaply.
@@ -523,14 +528,16 @@ carries:
 
 ### 7.2 When a goal works
 
-- **Qualification.** A goal **works** when **20/20 fixed qualification seeds**
-  each reach it with their **first character, within the goal's step
-  budget**, on the fair-play view and the unmodified build.
+- **Qualification.** A goal **works** when **at least 16 of the 20 fixed
+  qualification seeds** each reach it with their **first character, within
+  the goal's step budget**, on the fair-play view and the unmodified build.
+  (20/20 until 2026-10-22; §14.6 item 5: the bot need not play every
+  creature perfectly.)
 - **Determinism.** The step budget is counted in agent steps, not wall time,
   so the gate is deterministic and can fail.
 - **Regression.** Once a goal works, its 20 seeds become its **frozen
   regression suite**. Every later brain change must still pass every frozen
-  suite.
+  suite at the same bar.
 - **Plateau alert.** If N consecutive characters (default 10) fail to beat the
   session's best progress, the dashboard raises an alert. It never ends the
   session.
@@ -554,7 +561,7 @@ Each milestone has a measurable exit criterion and an explicit stop rule.
 | **M0 Foundations** | VICE client and launch (§6.1); symbol/offset table and check (§6.2); seeding (§6.3); one-key sync and four-mode detection (§6.4); supervisor with timeouts and restart (§6.7); snapshot + brain-state + key-log replay; `playtest-smoke` | All items of the measurement checklist (§9) are done and recorded in `build/playtest/m0-report.json`. `playtest-smoke` ≤ 30 s (title undump, chargen, town, all decoders checked). The replay test passes. A 20k-step keystroke fuzz from town either yields zero `UNKNOWN` modes or files each one as an event, and has no unexplained hang. |
 | **M1 `enter_dungeon`** | Brain prompt and town-navigation layers; fair-play view; auditor v0; recorder; dashboard v0 | `enter_dungeon` works (§7.2). A deliberately broken test build (one invariant violated) is caught and its finding replays. |
 | **M2 `reach_dl2`, `reach_clvl2`** | Dungeon navigation, doors, search, stairs; fight, emergency, rest; anti-stall; plateau alert; frozen suites | Both goals work, and `enter_dungeon` still passes its frozen suite. No `unknown_prompt` in the final qualification runs. **No further goals are added until M2 is met.** |
-| **M3 `reach_dl5`, `clvl5`** | The brain rounds in §14.3: any-glyph creatures, food and light logistics, threat memory, avoiding stationary monsters, sealed-area fallback | Both goals work (§7.2); all frozen suites still pass; no `unknown_prompt`. |
+| **M3 `reach_dl5`, `clvl5`** | The brain rounds in §14.3: any-glyph creatures, food and light logistics, threat memory, avoiding stationary monsters, sealed-area fallback | Both goals work (§7.2, ≥16/20); all frozen suites still pass; no `unknown_prompt`. **Met 2026-10-22 (§14.9).** |
 
 **Stop rules** (defaults, tunable by the maintainer):
 
@@ -564,7 +571,9 @@ Each milestone has a measurable exit criterion and an explicit stop rule.
 - **M2 gets 15 brain-change cycles (§7.3).** If both goals are not working by
   then, stop and write up what blocked them before continuing.
 - **M3 gets 10 brain-change cycles.** Same rule. The size signpost rises to
-  about 5,000 lines of runtime code (maintainer decision, §14.6).
+  about 5,000 lines of runtime code (maintainer decision, §14.6). Extended by
+  the maintainer on 2026-10-22 (`/goal M3`): M3 met its exit in round 28;
+  rounds 29-30 re-measured after the §14.11 review fixes (§14.8).
 
 ### 8.1 M0 result (2026-10-20)
 
@@ -1031,7 +1040,7 @@ or more is decided from the M0 item 8 contention measurements.
     tests and M0 measurement tooling excluded. It is a warning to pause and
     check for sprawl, not a hard stop (§5).
 
-## 14. M3 proposal (2026-10-21, pending maintainer decisions)
+## 14. M3 (2026-10-21 to 2026-10-22)
 
 The maintainer decided the scope on 2026-10-21 (§14.6). M3 is now in the
 milestone table (§8); this section keeps the evidence and the plan.
@@ -1101,8 +1110,8 @@ armor upgrades, escapes.
   `target_dlvl=4`, budget 30k). The ladder's `clvl10` moves to M4 with
   `reach_dl10`: at 0/20 with highest clvl 7, it needs more than the five
   rounds above (consumables, gear, light over long runs).
-- **Exit:** both goals qualify 20/20 (§7.2), all frozen suites still pass, no
-  `unknown_prompt`.
+- **Exit:** both goals qualify ≥16/20 (§7.2 with the §14.6 item 5 bar), all
+  frozen suites still pass, no `unknown_prompt`.
 - **Stop rule:** 10 brain-change rounds. If either goal is not working by
   then, stop and write up the blockers.
 - **Size:** runtime code is 2,884 lines. The rounds above are estimated at
@@ -1120,7 +1129,8 @@ armor upgrades, escapes.
 ### 14.6 Maintainer decisions (2026-10-21)
 
 1. **Goals.** M3 is `reach_dl5` + `clvl5`. `clvl10` moves to M4.
-2. **Limits.** 10 brain-change rounds; size signpost about 5,000 lines.
+2. **Limits.** 10 brain-change rounds; size signpost about 5,000 lines. The
+   round limit was lifted on 2026-10-22 (`/goal M3`, run until M3 holds).
 3. **Monster wound spells follow VMS Moria**, after checking Umoria. Umoria
    at the pinned revision is identical: no monster bolts; Cause Light Wounds
    3d8 and Cause Serious Wounds 8d8, each resisted by a player saving throw;
@@ -1129,6 +1139,38 @@ armor upgrades, escapes.
    points in §14.7).
 4. **Test isolation.** Under discussion: running emulator tests in private
    network namespaces instead of fixing each fixed-port harness.
+5. **Qualification bar (2026-10-22).** The bot does not have to play every
+   creature perfectly. Every goal, M1-M2 frozen suites included, works at
+   **≥16/20** qualification seeds reaching it with their first character
+   within the budget (§7.2 otherwise unchanged: fair-play view, unmodified
+   build, no `unknown_prompt`). Later rounds prefer general levers over
+   tactics for one creature.
+6. **Store maintenance follows VMS (2026-10-22).** The bot found a
+   starvation trap: stores only refilled empty slots, so a General Store full
+   of shovels, lanterns and spikes never offered food again (seed 1014, 18
+   empty visits). Store restocking now follows VMS `store_maint`
+   (`store1.inc`) on every return to town: above `STORE_MAX_KEEP` items sell
+   off (count − max + 2); below `STORE_MIN_KEEP` stock (min − count + 2);
+   otherwise sell off 1+randint(3) random items, then stock 1+randint(3). The
+   General Store picks from VMS `store_choice` (`values.inc`), 15 of 26 food.
+   Moria8 deviations: keep bounds scaled from VMS's 24-item stores to 12
+   slots (14/20 → 7/10, turn-around 3); Slime Mold stands in for Hard
+   Biscuit, Beef Jerky, Ale and Wine; no Cloak (25 choices); new stock goes
+   into the first empty slot and is never merged into an existing slot (VMS
+   `store_carry` merges); selling off empties the whole slot, where VMS
+   `store_destroy(..., one_of=true)` removes one unit of a stack the player
+   sold. Both are deliberate (accepted by the maintainer, 2026-10-22):
+   restocked stock is always quantity 1, and the C128 ItemActions overlay has
+   11 bytes free. A Flask of Oil keeps its
+   existing `p1 = LANTERN_MAX_CHARGES` (its 250-turn fuel). Tests:
+   `test_store.s` 28 and 44–46.
+7. **Player knowledge from shipped data (2026-10-22).** The brain may use the
+   shipped creature tier data as player knowledge (§6.5): names and levels
+   (round 1), and the speed and "moves only to attack" flags (rounds 9, 14),
+   which replaced §14.3 item 4's "learn stationary monsters by watching".
+   Maintainer decision (2026-10-22): keep it for M3 and rework it later to
+   learn speed and stationarity by observation (backlog: "Playtester: learn
+   creature speed and stationarity by observation").
 
 ### 14.7 Monster-spell alignment
 
@@ -1153,3 +1195,207 @@ Findings that shaped it:
 - `MSF_FEAR` (`$80`) is set by the generator for 38 upstream fear casters,
   but the game dispatches only spells 0–6, so fear is never cast. Upstream
   casts it.
+
+### 14.8 Round log
+
+Seeds 1001–1020, first character, fair-play view; goals registered with the
+§14.4 budgets. Frozen suites (`make playtest-regress`) after each round.
+
+| Round | Change | `reach_dl5` | `clvl5` | Frozen suites |
+|---|---|---|---|---|
+| Re-baseline | Game: monster spells follow VMS (MON-011) | 15/20 | 8/20 | 20/20 ×3 |
+| 1 | Look first: unknown glyphs are looked at (`X` + direction, free) or learned from an attack; creature names are player knowledge from the shipped tier data | 14/20 | 15/20 | 20/20 ×3 |
+| 2 | Readiness: DL n only at character level ≥ n; hunt for XP when under-levelled | 7/20 | 12/20 | 20/20 ×3 |
+| 3 | Food: count foods as a player does, keep a reserve of 2, resupply in town before running out, buy slime molds too | 8/20 | 11/20 | 20/20 ×3 |
+| 4 | Unstuck: with no way up take the down stairs and climb back; climb when too deep; re-search instead of resting | 9/20 | 12/20 | 20/20 ×3 |
+| 5 | Loop fixes: re-search only at goal depth; after an empty store keep playing 1,500 steps before another town trip | 10/20 | 12/20 | 20/20 ×3 |
+| 6 | Unknown glyphs are costly, not impassable (an item can lie in a room's only exit) | 10/20 | 12/20 | 20/20 ×3 |
+| 7 | Sealed in: search 25 times per spot, re-search at any depth | 10/20 | 12/20 | 20/20 ×3 |
+| 8 | A level marked for leaving is still explored when no staircase is reachable; sealed search also targets walls with unreachable known floor beyond | **12/20** | **14/20** | 20/20 ×3 |
+| 9 | Stationary creatures (`,` `J` `e` `m`, from the tier data's attack-only flag) are never fought and are pathed around | 6/20 | 12/20 | 20/20 ×3 |
+| 10 | Fear: "You are too afraid!" means no melee for 8 turns and retreat from adjacent creatures | 6/20 | 10/20 | 20/20 ×3 |
+| 11 | Explore/search ping-pong: a frontier tile the player stood on without revealing anything (a dark wall or corner) is dead for the level | 6/20 | 11/20 | 20/20 ×3 |
+| 12 | The last descent into a depth goal is always allowed (readiness and food no longer matter once arriving completes the goal) and preempts a town trip | 11/20 | 11/20 | 20/20 ×3 |
+| 13 | Light: buy a Brass Lantern and 2 Flasks of Oil (torches when no lantern is for sale), offering the asking price when the store haggles; wear it from the `?` list; refuel before it burns out; keep rough time (torch ~4,000 turns, lantern/flask ~7,500) and resupply below 2,000 with no refill. Item prompts get their own mode (`ITEM`) | 10/20 | 9/20 | 20/20 ×3 |
+| 14 | Fear is read on every screen (round 10 missed it on `-more-` screens; the last fear message wins); never run on foot from an attacker faster than the player (speed from the tier data) | 12/20 | 10/20 | 20/20 ×3 |
+| 15 | Stationary creatures are remembered for the level (out of sight they still block paths); retreat and rest ignore them unless adjacent; an empty store means a restock hop to DL1 and back (stores restock on every return to town), up to 5 before the 1,500-step wait. Bar 16/20 (§14.6 item 5) | **18/20** | 14/20 | 20/20 ×3 |
+| 16 | A retreat commits to one staircase, and ends (stand and fight) once it doubles back over its own path | 17/20 | 14/20 | pass |
+| 17 | A move that leaves the player in place means something unseen holds the tile: keep off it 10 steps; a blocked tile is never a path goal | 17/20 | 14/20 | pass |
+| 18 | Readiness margin: DL n (n ≥ 2) needs character level n + 1 | 13/20 | 13/20 | pass |
+| 19 | *Game:* VMS store maintenance (§14.6 item 6) | 11/20 | 14/20 | 19/20 ×2 (new dungeons) |
+| 20 | No walking onto known traps below half HP; an unseen attacker is only pinned on a glyph some creature uses; a fight that lands on the target drops the identification; store visit bookkeeping however the visit ends | 13/20 | **16/20** | pass (bar 16/20) |
+| 21 | Fight a faster attacker only when it is visible; no secret-door search while attacked unseen | 12/20 | 16/20 | pass |
+| 22 | Afraid: throw a Flask of Oil at a creature in line (fear blocks melee only); carry 3 flasks. *Game:* the throw prompt's `?` list crashed (§14.10) | 15/20 | 16/20 | pass |
+| 23 | Disarm a known trap on the path (3 tries) before walking over it | 15/20 | 16/20 | pass |
+| 24 | Readiness margin: DL n (n ≥ 3) needs level n + 2. Session workers run as processes (§14.10) | 12/20 | 19/20 | pass |
+| 25 | Hungry with no way up and nothing to explore: down stairs lead to a fresh level | 13/20 | 19/20 | pass |
+| 26 | *Game:* level-up from overlay code crashed (§14.10), first fix reverted | — | — | — |
+| 27 | *Game:* level-up magic deferred to `main_loop` | 14/20 | 19/20 | pass |
+| 28 | Retreat only to stairs within 12 path steps; farther, stand and fight (hunt even when hurt) | **16/20** | **18/20** | 20/20, 19/20, 19/20 |
+| 29 | §14.11 review fixes (runner, item prompts, attacker pinning, path steps, oil and message bookkeeping, deferred level-up flag and status redraw) | **17/20** | **18/20** | 20/20, 19/20, 19/20; `reach_dl5` 17/20, `clvl5` 18/20 |
+| 30 | §14.11 round-2 review fixes (audit exit, pending pick across `-more-`, message repeats, regress budget) | 17/20 | 18/20 | all five pass (same seeds as round 29) |
+
+After round 1, Creeping Copper Coins deaths went from 6 to 0 (48 identifications
+by look). Round 2 removed most early caster deaths but made runs much
+longer, which exposed food and stuck-level failures (rounds 3-6). Round 6
+changed nothing on these seeds: the stuck seeds were really sealed in by a
+secret door that 6 searches per spot rarely find (one took 36 searches in a
+direct probe), which round 7 addresses.
+
+### 14.9 M3 result (2026-10-22): exit criterion met
+
+Round 28 first met the §14.4 exit at the §14.6 item 5 bar (`reach_dl5`
+16/20, `clvl5` 18/20). After the §14.11 review fixes, round 29 holds it:
+`reach_dl5` 17/20 and `clvl5` 18/20 first-character seeds, every frozen suite
+passes (`enter_dungeon` 20/20, `reach_dl2` 19/20, `reach_clvl2` 19/20,
+`reach_dl5` 17/20, `clvl5` 18/20), and no `unknown_prompt` occurred. Both goals are frozen (`playtest/suites/reach_dl5.json`,
+`clvl5.json`, 16/20 bar recorded). The rounds went past the original stop
+rule of 10 at the maintainer's direction (`/goal M3`).
+
+What the bot learned, each round with unit tests that failed first (80 new;
+128 in the playtest suite after the §14.11 review fixes): look
+identification; readiness margins; food and light logistics
+(lantern, oil, restock hops); stuck, sealed and trapped levels (search,
+disarm, the down-stairs way out); fear, invisible and faster attackers
+(throwing oil); retreat discipline (one staircase, no doubling back, only
+when the stairs are near). Runtime code: 3,696 lines by the §2 rule (tests,
+`m0.py` and `fuzz.py` not counted; signpost 5,000).
+
+`reach_dl5` passes one seed above the bar (17/20): brain changes that cost
+two seeds fail its frozen suite.
+
+Remaining failures (round 29): `reach_dl5` Poltergeist (1001), the
+gas-trap-then-Kobold DL1 death (1002, unchanged since the store change gave
+it a new dungeon), and Novice Priest (1017); `clvl5` 1002 and 1017.
+
+### 14.10 Game defects found by the M3 bot (2026-10-22)
+
+1. **General Store starvation trap** (found in round 18, fixed for round 19): stores only refilled empty
+   slots, so a store full of gear never offered food again. Fixed by VMS
+   store maintenance (§14.6 item 6); `test_store.s` 28, 44-46.
+2. **Throw `?` list crash** (found and fixed in round 22): `throw_item` (ITEMS overlay) called
+   the resident selector directly, so the inventory list's HELP overlay was
+   never replaced by ITEMS before returning; every C64 throw that used `?`
+   ended in BRK. Fixed by using the overlay's `item_action_select_filtered_inv`
+   (which records the return overlay), as read/aim/use already did.
+3. **Level-up from overlay code crash** (found in round 24; a first fix in
+   round 26 was reverted; fixed for round 27): `combat_apply_levelup`
+   ran the magic trampolines, which load an overlay over the window, from a
+   kill made by ITEMS/SPELL overlay code (thrown or fired missile, bash,
+   spell); the overlay code then resumed over the wrong overlay. The same
+   path hung wizard-mode level-up on C64. Fixed by deferring the mana/spell
+   recalculation to the top of `main_loop` (resident code only on the
+   stack); level, HP, bonuses and the message stay immediate. Static
+   contracts `levelup_magic_deferred_contract` and
+   `levelup_magic_main_loop_contract`. A first fix that reloaded the overlay
+   recorded in `current_overlay` was reverted: tier loads never update that
+   byte, so it reloaded ITEMS over live creature tier data.
+Follow-on test fix (not found by the bot): C64 `test_chest_open.s` ran ~2 KB
+into the map region, and the chest explosion's map write landed on test data
+once resident code grew. Unexecuted modules now load above the result
+buffer, with a below-`MAP_BASE` assert.
+
+Session runner (round 24): workers are OS processes, not threads (the
+brain and emulator protocol are CPU-bound Python under the GIL); a
+measurement round of both goals plus the frozen suites takes about 3
+minutes with 32 workers instead of most of an hour.
+
+Known tool gap: `make playtest-repro` did not reproduce either overlay
+crash from its level-entry snapshot, though fresh-game probes did
+deterministically.
+
+### 14.11 Adversarial review (2026-10-22)
+
+Three reviewers (staff engineer, engineering manager, 6502 performance
+specialist) reviewed the M3 change set. Resolutions:
+
+- **Runner could drop seeds** (`session.py`): a worker that raised anything
+  but `GameFault`, or died, lost its seed silently, and regress measured the
+  bar against the results that came back. Now every seed gets a result
+  (`error` for a raised character or a dead worker), workers take seeds
+  through a blocking queue with sentinels (forked before the queue's feeder
+  thread starts), regress measures against the suite's seed list, and only
+  the full qualification seed list can be frozen. Test `RunSeedsTest`.
+- **`Mode.ITEM` could hide stray prompts:** an item prompt the brain did not
+  ask for (`Brain.expects_item_prompt`) is now filed as `unknown_prompt`.
+- **Attacker pinned on any glyph:** an unseen attacker's name is only given
+  to an adjacent unidentified glyph it is drawn with (`knowledge.glyphs_of`),
+  and not when a visible creature with that glyph is adjacent.
+- **Retreat range compared weighted cost:** `View.path_steps` counts steps.
+- **Oil counted before it was used:** counted when a flask is picked to
+  throw, or when the game confirms a refuel.
+- **Food and light news on `-more-` screens was lost:** messages are read on
+  every screen, once per distinct screen; the light countdown stays per
+  command step.
+- **Level-up deferral:** a flag, not a counter (one recalc however many
+  levels); `status_draw` after the recalc so the new maximum mana shows at
+  once; cleared on new game and load; ledger row TRN-008 in
+  `docs/TURN_RENDER_CONTRACT.md`.
+- **Store:** an assert that store slots stay below `$80` (the code marks
+  "none" with `$FF`); the stack and merge deviations are documented in §14.6
+  item 6.
+- **`test_chest_open.s`:** `player_magic.s` is back in the executable region
+  (the non-trampoline level-up path calls it); `monster_ai.s` stays above the
+  result buffer (only `turn_post_action` reaches it, and the tests never call
+  that).
+- **Docs:** round numbers in §14.10, test and line counts in §14.9, the round
+  limit in §8 and §14.6, the fair-play decision (§6.5, §14.6 item 7).
+- **Not changed:** `clvl5` keeps `target_dlvl=4` (its description now says
+  readiness keeps it on DL1-2); the two unused imports in `m0.py` predate M3.
+
+Round 2 (Sonnet reviewers):
+
+- **The round-1 item-prompt check broke the game-finding exit:** inserted
+  between `file_finding` and `if finding.cls == "game"`, it nested that line,
+  so game findings stopped ending characters and a stray item prompt could
+  raise. The per-observation audit is now `Character.audit`, with tests for
+  both cases (`CharacterAuditTest`). Round 29 filed only `stall` findings, so
+  its results stand.
+- **A `-more-` screen cancelled a pending item pick:** the pick path now runs
+  only on `Mode.ITEM` screens.
+- **Identical consecutive messages:** only a repeat of a prompt screen's text
+  is skipped; two pickups in a row both count.
+- **Error path left VICE running:** the worker is stopped before a fresh one
+  is made.
+- **Regress:** no frozen suite fails the gate; each suite runs with its
+  frozen step budget.
+- **Docs:** round 29 recorded; §14.9 restated against it; TRN-008 has a
+  verification-matrix row naming the smoke gate.
+- **Not changed:** the pickup message names one item even for a stack (the
+  game prints no quantity), so a stack counts once, as a player would read
+  it. Apple IIe and CX16 keep the wizard path's overlay reload after level-up
+  (now a guard; comment updated).
+
+Round 3 (Sonnet reviewers): no blocker or major findings. Minor fixes: a test
+that text already counted on a prompt screen counts once on the next command
+screen; `RunSeedsTest` now proves the error path stops its worker; the
+runner sets `stop` and terminates its workers if the parent itself fails.
+Counts in §14.9 refreshed; §8 says where the exit was met. Confirmed, not
+changed: the 16/20 bar now also governs the M1-M2 suites (§14.6 item 5).
+
+Round 4 (confirmation): the engineering-manager review found nothing. The
+staff-engineer review found that the round-3 parent-failure path sent SIGTERM
+to workers with no handler, orphaning their VICE processes (VICE runs in its
+own session). Workers now turn SIGTERM into an orderly exit and stop their
+emulator in a `finally`; a failed parent waits `WIND_DOWN_SECONDS` per worker
+before terminating. Test `RunSeedsParentFailureTest` (every started worker
+stops). Not changed: a second interrupt during that wind-down can skip the
+remaining joins (cosmetic; the workers still stop their emulators).
+
+Round 5 (confirmation): no blocker or major findings. Accepted residual
+risks, not changed: SIGTERM arriving inside a worker's own emulator stop
+could interrupt it in a narrow window (bounded by the process-group signal
+`launch.kill` already sent); an exiting worker joins its result-queue feeder
+thread, which could block only with more than about 64 KB of unread results
+(each result is a small dict).
+
+Maintainer decisions after round 5 (2026-10-22): the test-infrastructure edits
+made to validate the product changes are accepted (C128 `run_tests128.sh`
+throw chain, `test_main_loop128.s` stubs, `test_chest_open.s` layout); the
+store deviations are accepted (§14.6 item 6); the shipped-data player
+knowledge stays for now, with a backlog item to learn it by observation
+(§14.6 item 7).
+
+Round 6 (final, all three reviewers on the final tree): no findings. Final
+gates on that tree: `make -j5 -O test` and `make test128` (137/137) pass;
+playtest check, smoke and the five frozen suites pass.

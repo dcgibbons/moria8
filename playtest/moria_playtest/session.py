@@ -95,6 +95,17 @@ class Character:
             "keys": list(self.keys), "screen": obs.rows if obs else None,
             "observation": obs.summary() if obs else None})
 
+    def audit(self, obs: Observation, tiles: bytes | None) -> None:
+        """File the auditor's findings for this observation (a game finding
+        ends the character) and any item prompt the brain did not ask for."""
+        for finding in self.auditor.check(obs, tiles):
+            self.file_finding(finding.kind, finding.cls, finding.detail, obs)
+            if finding.cls == "game":
+                self.result.outcome = "finding"
+        if obs.mode == Mode.ITEM and not self.brain.expects_item_prompt():
+            # Mode.ITEM is only "known" when the brain asked for it.
+            self.file_finding("unknown_prompt", "bot", obs.rows[0].strip()[:40] or obs.stage, obs)
+
     # -- play -------------------------------------------------------------------
 
     def start(self) -> Observation:
@@ -141,10 +152,7 @@ class Character:
                     dlvl_seen = obs.dlvl
                     self.result.max_dlvl = max(self.result.max_dlvl, obs.dlvl)
                     self.take_snapshot(obs)
-                for finding in self.auditor.check(obs, tiles):
-                    self.file_finding(finding.kind, finding.cls, finding.detail, obs)
-                    if finding.cls == "game":
-                        self.result.outcome = "finding"
+                self.audit(obs, tiles)
                 if self.result.outcome == "finding":
                     break
                 if obs.mode == Mode.COMMAND and self.goal.reached(obs):

@@ -76,6 +76,13 @@ class ClassifyTest(unittest.TestCase):
         self.assertEqual(self.mode(obs({0: "    Disk Setup"})), (Mode.UNKNOWN, ""))
         self.assertEqual(self.mode(obs({}, flags=0x01)), (Mode.DEATH, "other"))
 
+    def test_item_prompt_and_its_list(self) -> None:
+        self.assertEqual(self.mode(obs({0: "Wear which item (a-c)?"})), (Mode.ITEM, "which"))
+        self.assertEqual(self.mode(obs({0: "               Inventory", 2: " a) Brass Lantern"})),
+                         (Mode.ITEM, "list"))
+        self.assertEqual(self.mode(obs({0: "               Inventory", 18: "Press any key"})),
+                         (Mode.DISMISS, "anykey"))
+
     def test_unknown_gets_resident_label(self) -> None:
         self.assertEqual(self.mode(obs({0: "Direction?"}, ret=0x39F7), {0x39F7: "direction"}),
                          (Mode.DIRECTION, "direction"))

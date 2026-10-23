@@ -98,7 +98,7 @@ class Fuzzer:
             return self.rand.choice(PROMPT_KEYS)  # explore the death flow briefly
         if obs.mode == Mode.DISMISS:
             return KEY_SPACE if self.rand.random() < 0.9 else KEY_RETURN
-        if obs.mode in (Mode.UNKNOWN, Mode.DIRECTION):
+        if obs.mode in (Mode.UNKNOWN, Mode.DIRECTION, Mode.ITEM):
             if self.pending_dir is not None:
                 key, self.pending_dir = self.pending_dir, None
                 return key
