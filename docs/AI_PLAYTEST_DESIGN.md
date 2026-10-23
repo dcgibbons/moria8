@@ -1124,7 +1124,11 @@ armor upgrades, escapes.
   Magic Missile is 2d4, and its Novice Priest has no bolt (Cause Light Wounds
   instead). At DL2–5 the bolts did 10–18 damage.
 - **Healing rate.** A level-1 Half-Troll took about 1,000 turns to recover
-  13 HP (§8.3 run). Not yet compared with the VMS regeneration formula.
+  13 HP (§8.3 run). Resolved 2026-10-22 (`TURN_RENDER_CONTRACT.md` TRN-009):
+  Moria8 healed 1 HP every 8-50 turns by CON, and read past that 16-entry
+  table for CON 18/01 and above (from 1 HP a turn to 1 HP per 128 turns, or
+  code bytes). Regeneration now follows VMS `regenhp` (max HP x 0.003 +
+  0.022 per turn, x2 while resting, slower when weak or faint).
 
 ### 14.6 Maintainer decisions (2026-10-21)
 
@@ -1234,6 +1238,7 @@ Seeds 1001–1020, first character, fair-play view; goals registered with the
 | 28 | Retreat only to stairs within 12 path steps; farther, stand and fight (hunt even when hurt) | **16/20** | **18/20** | 20/20, 19/20, 19/20 |
 | 29 | §14.11 review fixes (runner, item prompts, attacker pinning, path steps, oil and message bookkeeping, deferred level-up flag and status redraw) | **17/20** | **18/20** | 20/20, 19/20, 19/20; `reach_dl5` 17/20, `clvl5` 18/20 |
 | 30 | §14.11 round-2 review fixes (audit exit, pending pick across `-more-`, message repeats, regress budget) | 17/20 | 18/20 | all five pass (same seeds as round 29) |
+| 31 | Game: VMS HP regeneration (TRN-009). With one-turn rests the bot fell to `reach_dl5` 14/20, `clvl5` 17/20 (only CTRL+R rests at the doubled rate); the brain now rests with CTRL+R, which TRN-007 made safe (stops on damage or hunger) | **18/20** | **20/20** | all five pass: `enter_dungeon`, `reach_dl2`, `reach_clvl2` 20/20 (regress against the round-30 suites) |
 
 After round 1, Creeping Copper Coins deaths went from 6 to 0 (48 identifications
 by look). Round 2 removed most early caster deaths but made runs much

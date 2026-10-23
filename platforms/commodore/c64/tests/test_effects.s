@@ -1,6 +1,6 @@
 // test_effects.s — Runtime tests for Phase 5.5: Player Status Effects
 //
-// Tests: turn_tick_regen, confused movement, starvation damage,
+// Tests: turn_tick_regen (1-5, 32-38), confused movement, starvation damage,
 //        poison expiration, blindness visibility skip.
 //
 // Results at $0400+$: $01 = pass, $00 = fail per test
@@ -11,7 +11,7 @@
 :BasicUpstart2(test_bootstrap)
 
 .pc = $E000 "Result Buffer"
-tc_results: .fill 31, $ff      // Result buffer (copied to $0400 at the end)
+tc_results: .fill 38, $ff      // Result buffer (copied to $0400 at the end)
 
 .pc = $080E "Test Code"
 
@@ -28,7 +28,7 @@ test_finish:
     sei
     :BankOutBasic()
     :BankOutKernal()
-    ldx #30
+    ldx #37
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -288,6 +288,61 @@ ui_equip_display:
 press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
+// RegenCase — set up one turn_tick_regen case and record pass/fail in
+// tc_results[idx]: HP (ZP and player_data) and the 16-bit fraction.
+.macro RegenCase(idx, hp, mhp, frac, food, hunger, poison, resting, extra, exp_hp, exp_frac) {
+    lda #<hp
+    sta zp_player_hp_lo
+    sta player_data + PL_HP_LO
+    lda #>hp
+    sta zp_player_hp_hi
+    sta player_data + PL_HP_HI
+    lda #<mhp
+    sta zp_player_mhp_lo
+    lda #>mhp
+    sta zp_player_mhp_hi
+    lda #<frac
+    sta regen_frac_lo
+    lda #>frac
+    sta zp_regen_frac
+    lda #<food
+    sta zp_player_food
+    lda #>food
+    sta zp_player_food_hi
+    lda #hunger
+    sta zp_hunger_state
+    lda #poison
+    sta zp_eff_poison
+    lda #resting
+    sta turn_resting
+    lda #extra
+    sta zp_eff_regen
+    jsr turn_tick_regen
+    lda #$00
+    sta tc_results + idx
+    lda zp_player_hp_lo
+    cmp #<exp_hp
+    bne !fail+
+    lda zp_player_hp_hi
+    cmp #>exp_hp
+    bne !fail+
+    lda player_data + PL_HP_LO
+    cmp #<exp_hp
+    bne !fail+
+    lda player_data + PL_HP_HI
+    cmp #>exp_hp
+    bne !fail+
+    lda regen_frac_lo
+    cmp #<exp_frac
+    bne !fail+
+    lda zp_regen_frac
+    cmp #>exp_frac
+    bne !fail+
+    lda #$01
+    sta tc_results + idx
+!fail:
+}
+
 // Test scratch
 tc_loop:    .byte 0
 tc_ok:      .byte 0
@@ -398,182 +453,37 @@ test_start:
     sta zp_player_con
 
     // ==========================================
-    // Test 1: Regen counter decrements each turn tick
-    // Set counter=5, call turn_tick_regen 4x, verify counter=1
+    // Tests 1-5, 32-38: HP regeneration (turn_tick_regen), TRN-009.
+    // Expected values: VMS Moria regenhp with Umoria's 16.16 constants
+    // (rate 197 full/hungry, 98 weak, 33 faint, 0 starving; x2 resting;
+    // + 1442 per turn), computed by hand: max HP 20 at the full rate adds
+    // 20 x 197 + 1442 = 5382 = $1506 to HP.fraction.
     // ==========================================
-    lda #5
-    sta zp_regen_counter
-
-    // Set HP below max so regen is active
-    lda #10
-    sta zp_player_hp_lo
-    sta player_data + PL_HP_LO
-    lda #0
-    sta zp_player_hp_hi
-    sta player_data + PL_HP_HI
-    lda #20
-    sta zp_player_mhp_lo
-    lda #0
-    sta zp_player_mhp_hi
-
-    // No poison, no extra regen
-    lda #0
-    sta zp_eff_poison
-    sta zp_eff_regen
-
-    jsr turn_tick_regen     // 5 → 4
-    jsr turn_tick_regen     // 4 → 3
-    jsr turn_tick_regen     // 3 → 2
-    jsr turn_tick_regen     // 2 → 1
-
-    lda zp_regen_counter
-    cmp #1
-    bne !t1_fail+
-    lda #$01
-    sta tc_results + 0
-    jmp !t2+
-!t1_fail:
-    lda #$00
-    sta tc_results + 0
-
-    // ==========================================
-    // Test 2: Regen heals 1 HP when counter expires
-    // Set HP=10, max=20, counter=1, tick → HP=11
-    // ==========================================
-!t2:
-    lda #10
-    sta zp_player_hp_lo
-    sta player_data + PL_HP_LO
-    lda #0
-    sta zp_player_hp_hi
-    sta player_data + PL_HP_HI
-    lda #20
-    sta zp_player_mhp_lo
-    lda #0
-    sta zp_player_mhp_hi
-    lda #1
-    sta zp_regen_counter
-    lda #0
-    sta zp_eff_poison
-    sta zp_eff_regen
-
-    jsr turn_tick_regen
-
-    lda zp_player_hp_lo
-    cmp #11
-    bne !t2_fail+
-    lda #$01
-    sta tc_results + 1
-    jmp !t3+
-!t2_fail:
-    lda #$00
-    sta tc_results + 1
-
-    // ==========================================
-    // Test 3: Regen capped at max HP
-    // Set HP=max, counter=1, tick → HP unchanged
-    // ==========================================
-!t3:
-    lda #20
-    sta zp_player_hp_lo
-    sta player_data + PL_HP_LO
-    lda #0
-    sta zp_player_hp_hi
-    sta player_data + PL_HP_HI
-    lda #20
-    sta zp_player_mhp_lo
-    lda #0
-    sta zp_player_mhp_hi
-    lda #1
-    sta zp_regen_counter
-    lda #0
-    sta zp_eff_poison
-    sta zp_eff_regen
-
-    jsr turn_tick_regen
-
-    lda zp_player_hp_lo
-    cmp #20
-    bne !t3_fail+
-    lda #$01
-    sta tc_results + 2
-    jmp !t4+
-!t3_fail:
-    lda #$00
-    sta tc_results + 2
-
-    // ==========================================
-    // Test 4: Poison suppresses regen
-    // Set poison>0, counter=1, tick → HP unchanged, counter unchanged
-    // ==========================================
-!t4:
-    lda #10
-    sta zp_player_hp_lo
-    sta player_data + PL_HP_LO
-    lda #0
-    sta zp_player_hp_hi
-    sta player_data + PL_HP_HI
-    lda #20
-    sta zp_player_mhp_lo
-    lda #0
-    sta zp_player_mhp_hi
-    lda #1
-    sta zp_regen_counter
-    lda #5
-    sta zp_eff_poison          // Poisoned!
-    lda #0
-    sta zp_eff_regen
-
-    jsr turn_tick_regen
-
-    // HP should still be 10 (no regen while poisoned)
-    lda zp_player_hp_lo
-    cmp #10
-    bne !t4_fail+
-    // Counter should still be 1 (not decremented)
-    lda zp_regen_counter
-    cmp #1
-    bne !t4_fail+
-    lda #$01
-    sta tc_results + 3
-    jmp !t5+
-!t4_fail:
-    lda #$00
-    sta tc_results + 3
-
-    // ==========================================
-    // Test 5: Extra regen doubles tick rate
-    // Set zp_eff_regen>0, counter=3, tick → counter=1 (decremented by 2)
-    // ==========================================
-!t5:
-    lda #10
-    sta zp_player_hp_lo
-    sta player_data + PL_HP_LO
-    lda #0
-    sta zp_player_hp_hi
-    sta player_data + PL_HP_HI
-    lda #20
-    sta zp_player_mhp_lo
-    lda #0
-    sta zp_player_mhp_hi
-    lda #3
-    sta zp_regen_counter
-    lda #0
-    sta zp_eff_poison
-    lda #10
-    sta zp_eff_regen           // Extra regen active!
-
-    jsr turn_tick_regen
-
-    lda zp_regen_counter
-    cmp #1
-    bne !t5_fail+
-    lda #$01
-    sta tc_results + 4
-    jmp !t6+
-!t5_fail:
-    lda #$00
-    sta tc_results + 4
+    // 1: full, from no fraction
+    :RegenCase(0, 10, 20, $0000, 1000, HUNGER_FULL, 0, 0, 0, 10, $1506)
+    // 2: the fraction carries into HP: $F000 + $1506 = $1.0506
+    :RegenCase(1, 10, 20, $f000, 1000, HUNGER_FULL, 0, 0, 0, 11, $0506)
+    // 3: at max HP nothing changes, the fraction included
+    :RegenCase(2, 20, 20, $1234, 1000, HUNGER_FULL, 0, 0, 0, 20, $1234)
+    // 4: poison suppresses regeneration
+    :RegenCase(3, 10, 20, $1234, 1000, HUNGER_FULL, 5, 0, 0, 10, $1234)
+    // 5: the regeneration timer no longer changes HP regen (TRN-009)
+    :RegenCase(4, 10, 20, $0000, 1000, HUNGER_FULL, 0, 0, 10, 10, $1506)
+    // 32: auto-resting doubles the rate, not the base: 3940 x 2 + 1442 = $246A
+    :RegenCase(31, 10, 20, $0000, 1000, HUNGER_FULL, 0, 1, 0, 10, $246a)
+    // 33: hungry keeps the full rate
+    :RegenCase(32, 10, 20, $0000, 100, HUNGER_HUNGRY, 0, 0, 0, 10, $1506)
+    // 34: weak: 20 x 98 + 1442 = 3402 = $0D4A
+    :RegenCase(33, 10, 20, $0000, 30, HUNGER_WEAK, 0, 0, 0, 10, $0d4a)
+    // 35: faint: 20 x 33 + 1442 = 2102 = $0836
+    :RegenCase(34, 10, 20, $0000, 5, HUNGER_FAINT, 0, 0, 0, 10, $0836)
+    // 36: starving (food counter 0): the base only, 1442 = $05A2
+    :RegenCase(35, 10, 20, $0000, 0, HUNGER_FAINT, 0, 0, 0, 10, $05a2)
+    // 37: reaching max HP clears the fraction: $FF00 + $1506 = $1.1406
+    :RegenCase(36, 19, 20, $ff00, 1000, HUNGER_FULL, 0, 0, 0, 20, $0000)
+    // 38: 16-bit HP and a 24-bit product, resting: 500 x 197 x 2 + 1442 =
+    // 198442 = $3.072A, so HP 255 -> 258
+    :RegenCase(37, 255, 500, $0000, 1000, HUNGER_FULL, 0, 1, 0, 258, $072a)
 
     // ==========================================
     // Test 6: Confusion randomizes direction

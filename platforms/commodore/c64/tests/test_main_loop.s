@@ -11,13 +11,16 @@
 .encoding "screencode_mixed"
 
 .const DUNGEON_GEN_BUSY = 1
+// turn.s binds turn_resting (HP regen's resting rate) to game_loop.s's
+// auto_rest_active instead of its unit-test stand-in.
+#define TURN_PRODUCTION_REST_STATE
 
 bootstrap:
     :BankOutBasic()
     jmp test_start
 
 test_finish:
-    ldx #45
+    ldx #46
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -312,7 +315,7 @@ random_floor_in_room:
 save_welcome_str:
     .text "WELCOME BACK" ; .byte 0
 
-tc_results: .fill 46, $ff
+tc_results: .fill 47, $ff
 
 test_cmd_idx: .byte 0
 test_cmd_len: .byte 0
@@ -400,6 +403,7 @@ test_turn_sets_message: .byte 0
 test_turn_disturbs: .byte 0     // Turn reports damage/hunger (turn_rest_disturbed)
 test_turn_heal_hp: .byte 0
 test_turn_heal_mp: .byte 0
+test_turn_resting: .byte 0      // turn_resting seen by any turn of the case
 test_any_key_held_sample: .byte 0
 test_cancel_key_sample: .byte 0
 test_update_clears_reveal: .byte 0
@@ -569,6 +573,7 @@ reset_state:
     sta test_turn_disturbs
     sta test_turn_heal_hp
     sta test_turn_heal_mp
+    sta test_turn_resting
     sta test_any_key_held_sample
     sta test_cancel_key_sample
     sta test_update_clears_reveal
@@ -677,6 +682,9 @@ test_msg_clear:
 
 test_turn_post_action:
     inc test_turn_calls
+    lda turn_resting
+    ora test_turn_resting
+    sta test_turn_resting
     lda test_turn_heal_hp
     beq !no_hp+
     inc zp_player_hp_lo
@@ -985,7 +993,7 @@ test_start:
     ldx #$ff
     txs
 
-    ldx #45
+    ldx #46
     lda #$ff
 !clr:
     sta tc_results,x
@@ -2679,10 +2687,50 @@ test_start:
     bne !t46_fail+
     lda #$01
     sta tc_results + 45
-    jmp test_finish
+    jmp !t47+
 !t46_fail:
     lda #$00
     sta tc_results + 45
+
+    // Test 47: HP regeneration's resting rate (turn_tick_regen reads
+    // turn_resting, TRN-009) follows the real auto-rest flag: set on the
+    // turns CTRL+R rests, clear on an ordinary '.' rest turn.
+!t47:
+    jsr reset_state
+    lda #46
+    sta test_case_idx
+    lda #8
+    sta zp_player_hp_lo
+    lda #1
+    sta test_turn_heal_hp
+    lda #CMD_AUTOREST
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    jsr run_case
+    lda test_turn_calls
+    beq !t47_fail+
+    lda test_turn_resting
+    beq !t47_fail+
+    jsr reset_state
+    lda #46
+    sta test_case_idx
+    lda #CMD_REST
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    jsr run_case
+    lda test_turn_calls
+    cmp #1
+    bne !t47_fail+
+    lda test_turn_resting
+    bne !t47_fail+
+    lda #$01
+    sta tc_results + 46
+    jmp test_finish
+!t47_fail:
+    lda #$00
+    sta tc_results + 46
     jmp test_finish
 
 t33_scratch_lo: .byte <t33_scratch_28, <t33_scratch_29, <t33_scratch_30, <t33_scratch_31

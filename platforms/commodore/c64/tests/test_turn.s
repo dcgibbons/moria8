@@ -410,19 +410,19 @@ test_start:
     dex
     bpl !init_results-
 
-    // Test 2: poisoned regen suppression leaves HP/counter unchanged.
+    // Test 2: poisoned regen suppression leaves HP/fraction unchanged.
     jsr reset_state
     lda #1
     sta zp_eff_poison
     lda #5
-    sta zp_regen_counter
+    sta zp_regen_frac
     lda #8
     sta zp_player_hp_lo
     sta player_data + PL_HP_LO
     lda #12
     sta zp_player_mhp_lo
     jsr turn_tick_regen
-    lda zp_regen_counter
+    lda zp_regen_frac
     cmp #5
     bne !t2_fail+
     lda zp_player_hp_lo
@@ -895,13 +895,13 @@ t21_test:
     lda #3
     sta zp_turn_hi
     jsr turn_post_action
-    lda test_seq_effects
+    lda test_seq_regen          // Regen first: the turn's starting state (TRN-009)
     cmp #0
     bne !t1_fail+
-    lda test_seq_hunger
+    lda test_seq_effects
     cmp #1
     bne !t1_fail+
-    lda test_seq_regen
+    lda test_seq_hunger
     cmp #2
     bne !t1_fail+
     lda test_seq_light

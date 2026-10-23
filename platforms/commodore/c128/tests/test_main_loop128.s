@@ -559,6 +559,7 @@ msg_clear:
 turn_post_action:
     jmp test_turn_post_action
 turn_rest_disturbed: .byte 0     // core/turn.s (not imported here); auto-rest stop latch
+regen_frac_lo: .byte 0           // core/turn.s; HP regen fraction low byte (cleared on new game/load)
 
 ui_help_clear_all:
     jmp test_ui_help_clear_all

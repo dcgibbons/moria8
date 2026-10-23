@@ -287,6 +287,39 @@ Acceptance target:
 - Every shipped breather uses its upstream element, damage divisor, message
   and resistance, with the inventory-damage decision recorded.
 
+### Add "of Regeneration" equipment
+
+Moria8 has no Regeneration source. The status timer `zp_eff_regen` (ZP
+`$5B`) is counted down, cleared on new game and read by mana regeneration,
+but no item, potion, scroll or spell ever sets it, so it is always 0. HP
+regeneration (TRN-009 in `docs/TURN_RENDER_CONTRACT.md`) does not read it:
+the VMS x1.5 factor was left out because C64 resident code had no bytes for
+dead state.
+
+In pinned VMS Moria, Regeneration is a worn-equipment flag
+(`%X'00000800'`), not a timer: magic helms can roll the "of Regeneration"
+suffix (`misc.inc` helm enchantment, +1500 cost); wearing one sets
+`py.flags.regenerate` (`moria.inc` `py_bonuses`), which multiplies the
+regeneration rate by 1.5 (`moria.inc` `regen_amount*1.5`) and adds 3 to
+`food_digested` (faster hunger). Umoria not yet checked for other sources.
+
+Required work:
+
+- Add the "of Regeneration" helm ego (or the upstream item set) and an
+  equipment flag recomputed with the other worn-item flags.
+- HP regeneration: rate x1.5 while the flag is set (the product + product/2
+  on `mul_result`, about 30 bytes); decide whether mana follows VMS too.
+- Food: +3 digestion per turn while worn.
+- Retire `zp_eff_regen` or give it a producer, so no dead state remains.
+- Budget: C64 resident has about 10 spare bytes, Apple IIe play slot 5 and
+  C128 resident play 15 (2026-10-22); recover bytes first.
+
+Acceptance target:
+
+- A worn Regeneration item heals at 1.5x the TRN-009 rate and digests food
+  faster, with C64 tests computed from the VMS formula; no unread or unset
+  regeneration state remains.
+
 ### Add monster door opening and bashing
 
 DONE 2026-09-02 (C64/C128/Plus/4; Apple IIe blocked on the resident-RAM

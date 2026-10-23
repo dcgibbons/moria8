@@ -636,6 +636,7 @@ game_new_start:
     sta zp_run_dir              // Not running
     lda #0
     sta auto_rest_active
+    sta regen_frac_lo           // no HP regen fraction from a previous character
 #if HAL_PLATFORM_LEVELUP_MAGIC_USES_TRAMPOLINE
     sta levelup_magic_pending   // none owed by a previous character
 #endif
@@ -827,6 +828,7 @@ c64_test_single_drive_load_return_resume_entry:
     sta zp_run_dir
     lda #0
     sta auto_rest_active
+    sta regen_frac_lo           // not saved (zp_regen_frac, the high byte, is)
 #if HAL_PLATFORM_LEVELUP_MAGIC_USES_TRAMPOLINE
     sta levelup_magic_pending   // none owed by the game played before the load
 #endif

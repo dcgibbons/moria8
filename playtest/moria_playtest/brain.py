@@ -19,7 +19,9 @@ from .view import (DIRS, TYPE_DOOR_CLOSED, TYPE_STAIRS_DN, TYPE_STAIRS_UP, TYPE_
                    View, sealed_search_spots)
 
 KEY_BASH = 0x02          # CTRL+B
-KEY_REST = ord("5")      # rest one turn. Not CTRL+R: auto-rest ignores hunger (F-M2-1)
+KEY_REST = ord("5")      # rest one turn (waiting for a first strike)
+KEY_AUTOREST = 0x12      # CTRL+R: rest until recovered or disturbed (TRN-007); heals at
+                         # the doubled VMS resting rate (TRN-009)
 KEY_EAT = 0xC5           # SHIFT+E
 KEY_SEARCH = ord("S")
 KEY_LOOK = ord("X")      # look along a direction; takes no game turn
@@ -645,11 +647,12 @@ class Brain:
                         f"attack adjacent '{view.creatures[(x, y)].glyph}'")
 
     def rest(self, obs: Observation, view: View) -> Decision | None:
-        """Rest one turn at a time to full HP whenever nothing that can reach
-        the player is in view."""
+        """Rest to full HP (CTRL+R) whenever nothing that can reach the player
+        is in view. Auto-rest stops by itself on damage, worse hunger, a
+        message or anything coming into view, so the brain decides again."""
         if obs.dlvl == 0 or self.threats(view) or self.unseen_attack or obs.hp >= obs.mhp:
             return None
-        return Decision(KEY_REST, "rest", f"HP {obs.hp}/{obs.mhp} and nothing in view")
+        return Decision(KEY_AUTOREST, "rest", f"HP {obs.hp}/{obs.mhp} and nothing in view")
 
     def eat(self, obs: Observation, view: View) -> Decision | None:
         """Eat when hungry. Eating with no food takes no game time, so retrying

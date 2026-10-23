@@ -8,11 +8,19 @@
 // counter, HP regeneration, and status dirty flag.
 
 #import "turn_render_state.s"
+#import "eff_heal.s"
 
 // Hunger thresholds
 .const FOOD_HUNGRY_AT   = 150   // Food counter below this = hungry
 .const FOOD_WEAK_AT     = 50    // Below this = weak
 .const FOOD_FAINT_AT    = 10    // Below this = faint
+
+// HP regeneration: VMS Moria constants.inc player$regen_*, scaled by 2^16 as
+// in Umoria config.cpp PLAYER_REGEN_*
+.const REGEN_NORMAL = 197       // 0.0030 x max HP per turn: full or hungry
+.const REGEN_WEAK   = 98        // 0.0015: weak
+.const REGEN_FAINT  = 33        // 0.0005: faint
+.const REGEN_HPBASE = 1442      // 0.0220 HP per turn on top of the rate
 
 // player_update_hunger_state — classify hunger from the current food counter
 // Output: zp_hunger_state updated to FULL / HUNGRY / WEAK / FAINT
@@ -356,110 +364,114 @@ turn_apply_one_damage:
     lda zp_player_hp_hi
     sbc #0
     sta zp_player_hp_hi
-
-    lda zp_player_hp_hi
-    bmi !dead+
-    ora zp_player_hp_lo
-    bne !sync+
-!dead:
+    bpl !sync+                  // Still >= 0 (0 stays 0)
     lda #0
     sta zp_player_hp_lo
     sta zp_player_hp_hi
 !sync:
-    lda zp_player_hp_lo
-    sta player_data + PL_HP_LO
-    lda zp_player_hp_hi
-    sta player_data + PL_HP_HI
-    rts
+    jmp eff_heal_sync
 
-// turn_tick_regen — HP regeneration each turn
-// Decrements zp_regen_counter. When it expires, heal 1 HP (capped at max).
-// Poison suppresses regeneration. zp_eff_regen active = double tick rate.
+// turn_tick_regen — HP regeneration each turn: VMS Moria regenhp
+// (moria.inc), in Umoria's 16.16 fixed point (game_run.cpp
+// playerRegenerateHitPoints):
+//   HP.fraction += max HP x rate + REGEN_HPBASE
+//   rate = regen_factor[hunger state] (0 when starving: food counter 0),
+//          x2 while auto-resting (VMS rest > 0)
+// Skipped while poisoned or at max HP; reaching max HP clears the fraction.
+// turn_post_action runs it first, as VMS Moria regenerates from the turn's
+// starting hunger and poison state, before the food and effect ticks.
+// Max HP <= 42,410 keeps max HP x rate x 2 + carries in 24 bits (A <= 255).
 // Preserves: nothing
 turn_tick_regen:
-    // Skip if poisoned (poison suppresses regen)
     lda zp_eff_poison
     bne !ttr_done+
-
-    // Skip if at max HP (16-bit compare)
-    lda zp_player_hp_hi
-    cmp zp_player_mhp_hi
-    bcc !ttr_not_max+           // HP hi < MHP hi → not at max
-    bne !ttr_done+              // HP hi > MHP hi → over max (shouldn't happen)
     lda zp_player_hp_lo
     cmp zp_player_mhp_lo
-    bcs !ttr_done+              // HP lo >= MHP lo → at or over max
-!ttr_not_max:
-
-    // Decrement counter (by 2 if zp_eff_regen active, else by 1)
-    lda zp_regen_counter
-    ldx zp_eff_regen
-    beq !ttr_dec1+
-    // Extra regen: subtract 2
-    sec
-    sbc #2
-    jmp !ttr_check+
-!ttr_dec1:
-    sec
-    sbc #1
-!ttr_check:
-    beq !ttr_heal+              // Counter hit 0 → heal
-    bpl !ttr_store+             // Counter still positive → store and done
-!ttr_heal:
-
-    // Counter expired (or went negative) → heal 1 HP
-    // 16-bit increment: zp_player_hp += 1
-    inc zp_player_hp_lo
-    bne !ttr_no_carry+
-    inc zp_player_hp_hi
-!ttr_no_carry:
-    // Cap at max HP
     lda zp_player_hp_hi
-    cmp zp_player_mhp_hi
-    bcc !ttr_cap_ok+            // HP hi < MHP hi → under max
-    bne !ttr_clamp+             // HP hi > MHP hi → over max
-    lda zp_player_hp_lo
-    cmp zp_player_mhp_lo
-    bcc !ttr_cap_ok+            // HP lo < MHP lo → under max
-    beq !ttr_cap_ok+            // Equal → exactly at max
-!ttr_clamp:
-    // Clamp to max
-    lda zp_player_mhp_lo
-    sta zp_player_hp_lo
-    lda zp_player_mhp_hi
-    sta zp_player_hp_hi
-!ttr_cap_ok:
-    // Sync to player_data
-    lda zp_player_hp_lo
-    sta player_data + PL_HP_LO
-    lda zp_player_hp_hi
-    sta player_data + PL_HP_HI
+    sbc zp_player_mhp_hi
+    bcs !ttr_done+              // HP >= max HP (unsigned)
 
-    // Reset counter from regen_rate table
-    lda player_data + PL_CON_CUR
-    sec
-    sbc #3                      // Index = CON - 3
+    lda zp_player_food
+    ora zp_player_food_hi
+    beq !ttr_rate+              // Starving: rate 0, REGEN_HPBASE only
+    ldx zp_hunger_state
+    lda regen_factor,x
+!ttr_rate:
     tax
-    lda regen_rate,x
-    sta zp_regen_counter
-    rts
+    lda zp_player_mhp_lo
+    sta zp_temp0
+    lda zp_player_mhp_hi
+    sta zp_temp1
+    jsr math_mul_16x8           // mul_result = max HP x rate
+    lda turn_resting
+    beq !ttr_not_resting+
+    asl mul_result_0
+    rol mul_result_1
+    rol mul_result_2
+!ttr_not_resting:
 
-!ttr_store:
-    sta zp_regen_counter
+    // fraction += mul_result + REGEN_HPBASE; whole HP go to eff_heal
+    lda mul_result_0
+    clc
+    adc #<REGEN_HPBASE
+    tax
+    lda mul_result_1
+    adc #>REGEN_HPBASE
+    tay
+    bcc !ttr_no_carry+
+    inc mul_result_2
+!ttr_no_carry:
+    txa
+    clc
+    adc regen_frac_lo
+    sta regen_frac_lo
+    tya
+    adc zp_regen_frac
+    sta zp_regen_frac
+    lda mul_result_2
+    adc #0
+    jsr eff_heal                // HP += A, capped at max HP, synced
+    lda zp_player_hp_lo
+    eor zp_player_mhp_lo
+    bne !ttr_done+
+    lda zp_player_hp_hi
+    eor zp_player_mhp_hi
+    bne !ttr_done+
+    sta regen_frac_lo           // At max HP: no fraction carried
+    sta zp_regen_frac
 !ttr_done:
     rts
 
+// Regen rate x 2^16 per max HP by hunger state (VMS constants.inc
+// player$regen_*; Umoria config.cpp PLAYER_REGEN_*). Hungry regenerates at
+// the full rate.
+regen_factor:
+    .byte REGEN_NORMAL, REGEN_NORMAL, REGEN_WEAK, REGEN_FAINT
+.assert "regen_factor follows HUNGER_*", HUNGER_FULL == 0 && HUNGER_HUNGRY == 1 && HUNGER_WEAK == 2 && HUNGER_FAINT == 3, true
+
+// Low byte of the HP regeneration fraction; zp_regen_frac (saved with the
+// game) holds the high byte. Cleared on new game and load.
+regen_frac_lo: .byte 0
+
+// Auto-rest doubles the regeneration rate. Unit tests without game_loop.s
+// get a stand-in (test_main_loop.s binds the real flag).
+#if (C64_UNIT_TEST || C128_UNIT_TEST) && !TURN_PRODUCTION_REST_STATE
+turn_resting: .byte 0
+#else
+.label turn_resting = auto_rest_active
+#endif
+
 // turn_post_action — Run end-of-turn processing after a player action
 // Called by the main loop after any action that consumes a turn.
-// Runs effect timers, hunger tick, regen, monster AI, turn counter, status dirty.
+// Runs regen, effect timers, hunger tick, monster AI, turn counter, status dirty.
 // Preserves: nothing
 turn_post_action:
     lda #0
     sta turn_scene_dirty
 
+    jsr turn_tick_regen
     jsr turn_tick_effects
     jsr turn_tick_hunger
-    jsr turn_tick_regen
     jsr turn_tick_light
     jsr turn_tick_pseudo_id
     jsr monster_ai_tick

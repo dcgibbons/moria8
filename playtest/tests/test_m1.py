@@ -4,7 +4,7 @@ import unittest
 
 from moria_playtest import abi as abimod, knowledge
 from moria_playtest.auditor import Auditor
-from moria_playtest.brain import (FOOD_PER_VISIT, KEY_REFUEL, KEY_RETURN, KEY_WEAR, LIGHT_RESERVE,
+from moria_playtest.brain import (FOOD_PER_VISIT, KEY_AUTOREST, KEY_REFUEL, KEY_RETURN, KEY_WEAR, LIGHT_RESERVE,
                                   DISARM_TRIES, KEY_DISARM, KEY_THROW, REFUEL_AT, RESTOCK_HOPS,
                                   Brain)
 from moria_playtest.game import KEY_SPACE, Mode, Observation
@@ -895,7 +895,7 @@ class StationaryMemoryTest(unittest.TestCase):
         brain.food = 3
         view = self.corridor({(8, 5): Creature("e", 1)})
         decision = brain.decide(command_obs(pos=(5, 5), dlvl=1, clvl=3, hp=20, mhp=40), view)
-        self.assertEqual(decision.layer, "rest")
+        self.assertEqual((decision.layer, decision.key), ("rest", KEY_AUTOREST))
 
 
 class FearTest(unittest.TestCase):
