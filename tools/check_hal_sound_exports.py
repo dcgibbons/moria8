@@ -27,6 +27,7 @@ SOUND_IMPL_FILES = {
     "apple2": ROOT / "platforms/apple2/services.s",
     "cx16": ROOT / "platforms/cx16/services.s",
     "atari8": ROOT / "platforms/atari8/sound.s",
+    "bbcmaster": ROOT / "platforms/bbcmaster/sound.s",
 }
 
 COMMON_SOUND = ROOT / "core/sound.s"

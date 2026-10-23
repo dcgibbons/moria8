@@ -58,6 +58,12 @@ PLATFORMS = {
         "map_cols": "MAP40_COLS",
         "map_rows": "MAP40_ROWS",
     },
+    "bbcmaster": {
+        "layout": ROOT / "platforms/bbcmaster/hal/layout.s",
+        "screen": ROOT / "platforms/bbcmaster/screen.s",
+        "map_cols": "C128_MAP_COLS",
+        "map_rows": "C128_MAP_ROWS",
+    },
 }
 
 MAP_CONSTANTS = {

@@ -127,6 +127,11 @@ PLATFORM_FILES: dict[str, tuple[Path, ...]] = {
         ROOT / "platforms/atari8/storage.s",
         ROOT / "platforms/atari8/save_stream.s",
     ),
+    "bbcmaster": (
+        ROOT / "platforms/bbcmaster/hal/storage.s",
+        ROOT / "platforms/bbcmaster/storage.s",
+        ROOT / "platforms/bbcmaster/save_stream.s",
+    ),
 }
 
 OVERLAY_NAMES = {
@@ -146,6 +151,20 @@ OVERLAY_NAMES = {
         "spell",
         "modal_misc",
         "chest",
+    ),
+    "bbcmaster": (
+        "start",
+        "town",
+        "death",
+        "gen",
+        "help",
+        "ui",
+        "items",
+        "spell",
+        "modal_misc",
+        "chest",
+        "storage",
+        "title",
     ),
 }
 

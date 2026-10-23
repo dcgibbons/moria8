@@ -9,6 +9,10 @@ KA              = $(if $(KICKASS),$(KICKASS),java -jar $(KICKASS_JAR))
 # Python tools and harnesses must not leave __pycache__ in source directories.
 export PYTHONDONTWRITEBYTECODE := 1
 
+ifneq ($(filter clean,$(MAKECMDGOALS)),)
+$(filter-out clean,$(MAKECMDGOALS)): | clean
+endif
+
 OUT        = ../../build
 OUTATARI8  = $(OUT)/atari8
 OVL_OUTATARI8 = $(abspath $(OUTATARI8))

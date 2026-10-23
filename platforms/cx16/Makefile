@@ -20,6 +20,10 @@ JAVA        ?= ../../tools/kickass_java.sh
 # Python tools and harnesses must not leave __pycache__ in source directories.
 export PYTHONDONTWRITEBYTECODE := 1
 
+ifneq ($(filter clean,$(MAKECMDGOALS)),)
+$(filter-out clean,$(MAKECMDGOALS)): | clean
+endif
+
 X16EMU      ?= x16emu
 X16ROM      ?=
 ifneq ($(strip $(X16ROM)),)
@@ -95,9 +99,9 @@ ensure-kickass:
 kickass:
 	@mkdir -p "$(KICKASS_DIR)"
 	@echo "Downloading Kick Assembler..."
-	@curl -sL "$(KICKASS_URL)" -o /tmp/kickass.zip
-	@unzip -o /tmp/kickass.zip -d "$(KICKASS_DIR)"
-	@rm /tmp/kickass.zip
+	@curl -sL "$(KICKASS_URL)" -o "$(KICKASS_DIR)/kickass.zip"
+	@unzip -o "$(KICKASS_DIR)/kickass.zip" -d "$(KICKASS_DIR)"
+	@rm -f "$(KICKASS_DIR)/kickass.zip"
 
 $(VERSION_INC): $(VERSION_FILE) $(VERSION_INC_TOOL) | $(BUILD)
 	python3 "$(VERSION_INC_TOOL)" "$(VERSION_FILE)" "$(VERSION_INC)"

@@ -527,7 +527,7 @@ tramp_ui_char_display:
     rts
 
 tramp_ui_inv_display:
-    lda #OVL_HELP
+    lda #OVL_UI
     jsr overlay_load
     bcs !done+
     jsr ui_inv_display
@@ -535,7 +535,7 @@ tramp_ui_inv_display:
     rts
 
 tramp_ui_inv_select_display:
-    lda #OVL_HELP
+    lda #OVL_UI
     jsr overlay_load
     bcs !done+
     jsr ui_inv_select_display
@@ -543,7 +543,7 @@ tramp_ui_inv_select_display:
     rts
 
 tramp_ui_equip_display:
-    lda #OVL_HELP
+    lda #OVL_UI
     jsr overlay_load
     bcs !done+
     jsr ui_equip_display
@@ -551,7 +551,7 @@ tramp_ui_equip_display:
     rts
 
 tramp_ui_equip_select_display:
-    lda #OVL_HELP
+    lda #OVL_UI
     jsr overlay_load
     bcs !done+
     jsr ui_equip_select_display
@@ -848,7 +848,7 @@ tramp_select_filtered_inv_key_spell:
     rts
 
 tramp_ui_identify:
-    lda #OVL_UI
+    lda #OVL_HELP
     jsr overlay_load
     bcs !done+
     jsr ui_identify_print
@@ -1451,15 +1451,15 @@ ovl_modal_misc_end:
 .segment HelpOverlay
 #import "../../commodore/c128/ui_help_data_80.s"
 #import "../../core/ui_help.s"
-#import "../../core/ui_inventory.s"
-#import "../../core/ui_equipment.s"
+#import "../../core/ui_identify.s"
 ovl_help_end:
 .print "Help overlay: " + (ovl_help_end - $a400) + " bytes"
 .assert "Help overlay fits", ovl_help_end <= $ba00, true
 
 .segment UiOverlay
 #import "../../core/ui_character.s"
-#import "../../core/ui_identify.s"
+#import "../../core/ui_inventory.s"
+#import "../../core/ui_equipment.s"
 ovl_ui_end:
 .print "UI overlay: " + (ovl_ui_end - $a400) + " bytes"
 .assert "UI overlay fits", ovl_ui_end <= $ba00, true

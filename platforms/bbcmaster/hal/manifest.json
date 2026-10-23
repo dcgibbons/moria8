@@ -1,0 +1,50 @@
+{
+  "platform": "bbcmaster",
+  "machine": {
+    "cpu": "65C12",
+    "ram_kb": 128
+  },
+  "display": {
+    "hardware": "crtc_mode0_lynne",
+    "columns": 80,
+    "rows": 24,
+    "viewport": {
+      "x": 1,
+      "y": 2,
+      "width": 78,
+      "height": 18
+    },
+    "screen_ram": "$3800 shadow + $4400-$7fff LYNNE (ACCCON D=1, X=1)",
+    "color_ram": null
+  },
+  "storage": {
+    "bus": "acorn_dfs_mos",
+    "program_media": "ssd200",
+    "save_media": "ssd200",
+    "default_program_device": 8,
+    "default_save_device": 8,
+    "compatible_drives": ["dfs_1770", "ssd_80track"]
+  },
+  "memory": {
+    "banking": "$fe30+$fe34",
+    "map_base": "$8000",
+    "map_end": "$b30b",
+    "banked_data_base": "$a800",
+    "banked_data_end": "$bfff",
+    "io_hole_base": "$fc00",
+    "io_hole_end": "$feff",
+    "play_slot": "$8000-$a3ff (Bank 4)",
+    "tier_name_pool": "$a400-$a7ff (Bank 4)"
+  },
+  "capabilities": {
+    "reu_overlay_cache": false,
+    "aux_overlay_cache": true,
+    "vdc_80_column": false,
+    "ted_display": false,
+    "native_80_column": true,
+    "sid_sound": false,
+    "ted_sound": false,
+    "sn76489_sound": true,
+    "two_drive_save": true
+  }
+}
