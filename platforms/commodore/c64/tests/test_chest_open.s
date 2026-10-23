@@ -33,6 +33,10 @@ test_finish:
     brk
 
 .pc = $0840 "Main"
+// Modules the chest tests never execute load above the result buffer, so the
+// test body stays below MAP_BASE ($C000): map writes during tests (the chest
+// explosion at (12,18) is $C5AC) must not corrupt test code or data.
+.segmentdef TestUnusedOverlay [start=$E100, max=$FFF9]
 
 #import "../../../../core/zeropage.s"
 #import "../memory.s"
@@ -49,7 +53,9 @@ test_finish:
 #import "../../../../core/ui_messages.s"
 #import "../../../../core/ui_status.s"
 #import "../../../../core/ui_help_clear.s"
+.segment TestUnusedOverlay
 #import "../../../../core/ui_character.s"
+.segment Default
 #import "../../../../core/stat_display.s"
 .segmentdef TestCreateOverlay [start=$D000]
 .segment TestCreateOverlay
@@ -70,12 +76,18 @@ test_finish:
 #import "../../../../core/monster.s"
 #import "../../../../core/tier_manager.s"
 #import "../../common/overlay.s"
+.segment TestUnusedOverlay
 #import "../../../../core/monster_ai.s"
+.segment Default
 #import "../../../../core/recall.s"
+.segment TestUnusedOverlay
 #import "../../../../core/monster_magic.s"
+.segment Default
 #import "../../../../core/item.s"
 #import "../../../../core/item_tables.s"
+.segment TestUnusedOverlay
 #import "../../../../core/special_rooms.s"
+.segment Default
 #import "../../../../core/ego_items.s"
 #import "../../../../core/special_rooms_stubs.s"
 #import "../../../../core/player_items.s"
@@ -86,7 +98,9 @@ test_finish:
 #import "../../../../core/player_magic_state.s"
 #import "../../../../core/player_magic_state_ops.s"
 #import "../../../../core/player_magic.s"
+.segment TestUnusedOverlay
 #import "../../../../core/player_magic_feedback.s"
+.segment Default
 #import "../dungeon_render.s"
 #import "../../../../core/dungeon_los.s"
 #import "../../../../core/player_move.s"
@@ -94,7 +108,9 @@ test_finish:
 #import "../../../../core/scene_mat_tile.s"
 #import "../../../../core/monster_attack.s"
 #import "../../../../core/turn.s"
+.segment TestUnusedOverlay
 #import "../../../../core/item_actions_overlay.s"
+.segment Default
 #import "../../../../core/ui_trampoline_stubs.s"
 .macro ChestSummonsSegment() {
 }
@@ -631,3 +647,6 @@ test_start:
 
 tco_map_floor_row: .fill MAP_COLS, TILE_FLOOR
 tco_map_wall_row:  .fill MAP_COLS, TILE_WALL_H
+
+chest_open_test_end:
+.assert "Chest-open test body stays below MAP_BASE", chest_open_test_end <= MAP_BASE, true
