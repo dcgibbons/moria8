@@ -234,6 +234,8 @@ command_result_restore_view_or_update_visibility:
 // Shared post-turn tails and gameplay-view restore
 // ============================================================
 turn_post_action_searchable_or_die:
+    // Place the command's monster drops (MON-014) before the monsters act.
+    jsr chest_fulfill_loot
     jsr turn_post_action
     lda zp_game_flags
     and #$01

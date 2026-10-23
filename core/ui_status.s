@@ -617,14 +617,11 @@ status_put_stat_val:
 // Preserves: nothing (sets zp_text_color)
 status_hp_color:
     // Simple comparison: if HP >= MHP, green. If HP >= MHP/2, yellow. Else red.
-    lda zp_player_hp_hi
-    cmp zp_player_mhp_hi
-    bcc !check_half+
-    bne !full+
     lda zp_player_hp_lo
     cmp zp_player_mhp_lo
-    bcc !check_half+
-!full:
+    lda zp_player_hp_hi
+    sbc zp_player_mhp_hi
+    bcc !check_half+            // HP < max HP (unsigned)
     lda #COL_HP_OK
     sta zp_text_color
     rts
@@ -636,14 +633,11 @@ status_hp_color:
     lda zp_player_mhp_lo
     ror
     sta zp_temp1
-    lda zp_player_hp_hi
-    cmp zp_temp0
-    bcc !critical+
-    bne !warn+
     lda zp_player_hp_lo
     cmp zp_temp1
-    bcc !critical+
-!warn:
+    lda zp_player_hp_hi
+    sbc zp_temp0
+    bcc !critical+              // HP < max HP / 2 (unsigned)
     lda #COL_HP_WARN
     sta zp_text_color
     rts

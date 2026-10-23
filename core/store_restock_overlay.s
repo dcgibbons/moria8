@@ -7,19 +7,53 @@
 
 #import "store_meta_macros.s"
 
-// General Store stock choices: VMS store_choice (values.inc), 15 of 26 food.
-// Moria8 has no Hard Biscuit, Beef Jerky, Ale or Wine (Slime Mold stands in)
-// and no Cloak (dropped), so the table has 25 entries.
+// Stock choices: VMS store_choice (values.inc, indexing inventory_init) for
+// the General Store, Temple and Alchemy shop; the other stores pick by
+// category. Moria8 items stand in where VMS has a finer item, and VMS items
+// Moria8 lacks are left out (the entries left keep their VMS weights).
+sro_choices:
+// General Store: 15 of 26 food. Moria8 has no Hard Biscuit, Beef Jerky, Ale
+// or Wine (Slime Mold stands in) and no Cloak (dropped): 25 entries.
 sro_general_choice:
     .byte 15, 15, 15, 15, 15, 15, 15, 15    // Ration of Food x8
     .byte 16, 16, 16, 16, 16, 16, 16        // Slime Mold x7 (biscuit 3, jerky 2, ale, wine)
     .byte 61, 61, 13, 13, 13, 14            // Flask of Oil x2, Wooden Torch x3, Brass Lantern
     .byte 135, 135, 62, 63                  // Iron Spike x2, Shovel, Pick
 .const SRO_GENERAL_CHOICES = * - sro_general_choice
+// Temple: Restoration stands in for Restore Wisdom; no Boldliness, Restore
+// Life Levels or Blessing: 23 of 26 entries.
+sro_temple_choice:
+    .byte 48, 58, 59, 60, 58                // Prayer books 1-4, Words of Wisdom x2
+    .byte 33, 33, 97                        // Remove Curse x2, Restoration
+    .byte 17, 17, 17, 25, 25, 25, 100, 100  // Cure Light x3, Serious x3, Critical x2
+    .byte 27, 32, 32, 126                   // Heroism, Word of Recall x2, Neutralize Poison
+    .byte 73, 5, 72                         // Morningstar, Mace, War Hammer
+.const SRO_TEMPLE_CHOICES = * - sro_temple_choice
+// Alchemy shop: Restoration stands in for the five Restore potions, Neutralize
+// Poison for Slow Poison; no Phase Door, Treasure Detection or Detect
+// Invisible: 21 of 26 entries.
+sro_alchemy_choice:
+    .byte 34, 34, 35                        // Enchant Weapon x2 (to-hit, to-dam), Enchant Armor
+    .byte 21, 21, 20, 20, 102, 102          // Identify x2, Light x2, Magic Mapping x2
+    .byte 103, 103, 104                     // Object Detection x2, Recharging
+    .byte 97, 97, 97, 97, 97                // Restoration x5
+    .byte 32, 32, 32, 126                   // Word of Recall x3, Neutralize Poison
+.const SRO_ALCHEMY_CHOICES = * - sro_alchemy_choice
 .assert "General Store choices", SRO_GENERAL_CHOICES, 25
+.assert "Temple choices", SRO_TEMPLE_CHOICES, 23
+.assert "Alchemy choices", SRO_ALCHEMY_CHOICES, 21
+.assert "Store choice table indexes in one page", * - sro_choices <= 256, true
 
-// Fallback items per store (used when rejection sampling fails; the General
-// Store's entry is unused since it picks from sro_general_choice)
+// Per store 0-4: number of choices (0 = pick by category) and table offset.
+.const SRO_CHOICE_STORES = 5
+sro_choice_count:
+    .byte SRO_GENERAL_CHOICES, 0, 0, SRO_TEMPLE_CHOICES, SRO_ALCHEMY_CHOICES
+sro_choice_base:
+    .byte sro_general_choice - sro_choices, 0, 0
+    .byte sro_temple_choice - sro_choices, sro_alchemy_choice - sro_choices
+
+// Fallback items per store (used when rejection sampling fails; the entries
+// of stores with a choice table are unused)
 store_fallback:
     .byte 15, 7, 2, 20, 17, 23, 2, 15  // food, leather, dagger, scroll, CLW potion, ring, dagger(BM), food(Home)
 
@@ -105,6 +139,8 @@ sro_stock:
     sty srr_abs_slot
     jsr store_pick_item
     tax
+    jsr id_known_set                // VMS store_carry: identify(), so stock shows its name
+    txa
     ldy srr_abs_slot
     :AuxWriteY(si_item_id)
     lda #1
@@ -288,12 +324,15 @@ sro_store_p1:
 // Output: A = item type ID
 // Clobbers: A, X, Y
 store_pick_item:
-    lda zp_store_idx
-    bne !spi_category+
-    lda #SRO_GENERAL_CHOICES        // General Store: VMS store_choice table
-    jsr rng_range
+    ldy zp_store_idx
+    cpy #SRO_CHOICE_STORES
+    bcs !spi_category+
+    lda sro_choice_count,y
+    beq !spi_category+              // Armoury, Weaponsmith: by category
+    jsr rng_range                   // VMS store_choice; preserves Y, carry clear
+    adc sro_choice_base,y
     tax
-    lda sro_general_choice,x
+    lda sro_choices,x
     rts
 !spi_category:
     lda #STORE_PICK_RETRIES

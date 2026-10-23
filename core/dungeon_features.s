@@ -53,6 +53,8 @@ df_disarm_trap_idx: .byte 0
 df_disarm_total: .byte 0
 df_disarm_base: .byte 0
 
+#import "df_target_row.s"
+
 #if !DUNGEON_FEATURES_GENERATION_ONLY
 // ============================================================
 // Trap name Huffman indices (indexed by trap type 0-5)
@@ -110,12 +112,7 @@ find_random_floor:
     sta df_target_y
 
     // Check if tile is unoccupied floor
-    ldx df_target_y
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
-    ldy df_target_x
+    jsr df_target_row_ptr
     :MapRead_ptr0_y()
     sta zp_temp0
     and #TILE_TYPE_MASK
@@ -245,12 +242,7 @@ place_secrets:
     sta df_target_x
 
     // Convert map tile to TILE_SECRET (keep flags)
-    ldx df_target_y
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
-    ldy df_target_x
+    jsr df_target_row_ptr
     :MapRead_ptr0_y()
     and #TILE_FLAG_MASK     // Keep flags
     ora #TILE_SECRET        // Change type to secret
@@ -422,12 +414,7 @@ trap_remove_at_index:
 // Requires df_target_x/df_target_y from get_direction_target.
 // Output: carry set = found, X/index stored in df_disarm_trap_idx.
 trap_find_target_visible:
-    ldx df_target_y
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
-    ldy df_target_x
+    jsr df_target_row_ptr
     :MapRead_ptr0_y()
     and #TILE_TYPE_MASK
     cmp #TILE_TRAP
@@ -522,12 +509,7 @@ disarm_command:
     rts
 
 disarm_restore_target_floor:
-    ldx df_target_y
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
-    ldy df_target_x
+    jsr df_target_row_ptr
     :MapRead_ptr0_y()
     and #TILE_FLAG_MASK
     ora #TILE_FLOOR
@@ -804,12 +786,7 @@ trap_teleport:
     sta df_target_y
 
     // Check if floor
-    ldx df_target_y
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
-    ldy df_target_x
+    jsr df_target_row_ptr
     :MapRead_ptr0_y()
     and #TILE_TYPE_MASK
     cmp #TILE_FLOOR
@@ -866,7 +843,6 @@ get_direction_target:
     clc
     adc dir_dx,x
     sta df_target_x
-
     lda zp_player_y
     clc
     adc dir_dy,x
@@ -888,12 +864,7 @@ get_direction_target:
 // ============================================================
 door_try_open:
     // Read map tile at target
-    ldx df_target_y
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
-    ldy df_target_x
+    jsr df_target_row_ptr
     :MapRead_ptr0_y()
     sta df_dir_idx          // Save full tile byte
 
@@ -978,12 +949,7 @@ door_try_open:
     lda df_dir_idx          // Original tile byte
     and #TILE_FLAG_MASK     // Keep flags
     ora #TILE_DOOR_OPEN     // Set to open door
-    ldx df_target_y
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
-    ldy df_target_x
+    jsr df_target_row_ptr
     lda df_dir_idx
     and #TILE_FLAG_MASK
     ora #TILE_DOOR_OPEN
@@ -1000,12 +966,7 @@ door_try_open:
 // ============================================================
 door_try_close:
     // Read map tile at target
-    ldx df_target_y
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
-    ldy df_target_x
+    jsr df_target_row_ptr
     :MapRead_ptr0_y()
     sta df_dir_idx          // Save full tile byte
 
@@ -1059,12 +1020,7 @@ door_try_close:
 
 !dtc_stale:
     // No live monster — repair the stale flag, then close the door.
-    ldx df_target_y
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
-    ldy df_target_x
+    jsr df_target_row_ptr
     :MapRead_ptr0_y()
     and #~FLAG_OCCUPIED & $ff
     :MapWrite_ptr0_y()
@@ -1077,12 +1033,7 @@ door_try_close:
     lda df_dir_idx
     and #TILE_FLAG_MASK
     ora #TILE_DOOR_CLOSED
-    ldx df_target_y
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
-    ldy df_target_x
+    jsr df_target_row_ptr
     lda df_dir_idx
     and #TILE_FLAG_MASK
     ora #TILE_DOOR_CLOSED
@@ -1221,12 +1172,7 @@ door_jam_command:
 // Output: carry set = turn consumed, clear = free.
 door_jam_at_target:
     // Read map tile at target
-    ldx df_target_y
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
-    ldy df_target_x
+    jsr df_target_row_ptr
     :MapRead_ptr0_y()
     sta df_dir_idx
     and #TILE_TYPE_MASK
@@ -1410,7 +1356,6 @@ search_scan_adjacent_silent:
     clc
     adc dir_dx,x
     sta df_target_x
-
     lda zp_player_y
     clc
     adc dir_dy,x
@@ -1430,12 +1375,7 @@ search_scan_adjacent_silent:
 !ds_bounds_ok:
 
     // Read map tile
-    ldx df_target_y
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
-    ldy df_target_x
+    jsr df_target_row_ptr
     :MapRead_ptr0_y()
     and #TILE_TYPE_MASK
 

@@ -121,6 +121,12 @@ test_last_rng_bound: .byte 0
     sta target + 2
 }
 
+// player.s is not imported: VMS con_adj 0 (CON 7-16), so poison does 1 HP
+// a turn here. test_effects.s covers the production con_adj cases (TRN-010).
+player_con_hp_adj:
+    lda #0
+    rts
+
 monster_ai_tick:
     inc test_monster_ai_calls
     lda test_monster_ai_return_c

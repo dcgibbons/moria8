@@ -4306,7 +4306,11 @@ check_static_contract "paralysis_final_tick_message_contract" "../../../core/gam
 check_static_contract "earthquake_trampoline_no_hidden_kernal_load_contract" "main.s" \
     "tramp_eff_earthquake:|||sei|||lda #BANK_NO_KERNAL|||sta \$01|||jsr eff_earthquake_banked|||rts|||tramp_item_refuel:"
 check_static_contract "chest_loot_gen_overlay_no_hidden_kernal_contract" "../../../core/chest_loot.s" \
-    "chest_fulfill_loot:|||lda #OVL_DUNGEON_GEN|||#if HAL_PLATFORM_CHEST_LOOT_LOAD_NO_KERNAL|||jsr overlay_load_no_kernal|||jsr hal_platform_runtime_resync|||!cfl_loaded:|||jsr chest_generate_loot|||jsr hal_platform_runtime_resync"
+    "chest_fulfill_loot:|||lda #OVL_DUNGEON_GEN|||#if HAL_PLATFORM_CHEST_LOOT_LOAD_NO_KERNAL|||jsr overlay_load_no_kernal|||jsr hal_platform_runtime_resync|||!cfl_loaded:|||jsr loot_generate_pending|||jsr hal_platform_runtime_resync"
+check_static_contract "monster_drops_before_turn_contract" "../../../core/game_loop_helpers.s" \
+    "turn_post_action_searchable_or_die:|||jsr chest_fulfill_loot|||jsr turn_post_action"
+check_static_contract "monster_drops_staged_on_kill_contract" "../../../core/combat.s" \
+    "combat_note_kill:|||ldx cmb_type|||jsr monster_death_stage|||lda zp_game_flags"
 check_static_contract "chest_loot_c64_ego_overlay_return_contract" "../../../core/chest_loot.s" \
     "jsr roll_enchantment|||#if HAL_PLATFORM_CHEST_LOOT_EGO_MODAL_TRAMP|||jsr tramp_roll_ego_type_modal|||sta fi_add_ego"
 check_static_contract "chest_loot_object_drop_marks_redraw_contract" "../../../core/chest_loot.s" \
@@ -4356,17 +4360,17 @@ run_test "rng"    "tests/test_rng.s"    "0400 0409" 10
 run_test "memory" "tests/test_memory.s" "0400 0402" 3
 run_test "config" "tests/test_config.s" "0400 0400" 1
 run_test "input"  "tests/test_input.s"  "0400 040e" 15
-run_test "main_loop" "tests/test_main_loop.s" "0400 042e" 47 500000000
+run_test "main_loop" "tests/test_main_loop.s" "0400 042f" 48 500000000
 run_test "run_visibility_bank" "tests/test_run_visibility_bank.s" "0400 0400" 1 500000000
 run_test "turn" "tests/test_turn.s" "0400 0420" 33 500000000
 run_test "player" "tests/test_player.s" "0400 0409" 10
 run_test "dungeon" "tests/test_dungeon.s" "0400 0441" 66 500000000
 run_test "monster" "tests/test_monster.s" "0400 0415" 22 500000000
-run_test "monster_ai" "tests/test_monster_ai.s" "0400 0439" 58 500000000
+run_test "monster_ai" "tests/test_monster_ai.s" "0400 043a" 59 500000000
 run_test "combat" "tests/test_combat.s" "0400 0428" 41 500000000
 run_test "msg_long" "tests/test_msg_long.s" "0400 0400" 1 20000000
-run_test "monster_attack" "tests/test_monster_attack.s" "0400 040d" 14 500000000
-run_test "effects" "tests/test_effects.s" "0400 0425" 38 1000000000
+run_test "monster_attack" "tests/test_monster_attack.s" "0400 0410" 17 500000000
+run_test "effects" "tests/test_effects.s" "0400 042d" 46 1000000000
 run_test "effects_magic" "tests/test_effects_magic.s" "0400 0433" 24 1000000000
 run_test "cure_light_wounds" "tests/test_cure_light_wounds.s" "0400 0402" 3 500000000
 run_test "confusion" "tests/test_confusion.s" "0400 0402" 3 500000000
@@ -4391,7 +4395,7 @@ run_test "find_hidden_traps_doors" "tests/test_find_hidden_traps_doors.s" "0400 
 run_test "chest_open" "tests/test_chest_open.s" "0400 040C" 13 500000000
 run_test "chest_disarm" "tests/test_chest_disarm.s" "0400 0406" 7 500000000
 run_test "chest_bash" "tests/test_chest_bash.s" "0400 0404" 5 500000000
-run_test "chest_loot" "tests/test_chest_loot.s" "0400 0409" 10 500000000
+run_test "chest_loot" "tests/test_chest_loot.s" "0400 0410" 17 500000000
 run_test "balrog_victory" "tests/test_balrog_victory.s" "0400 0405" 6 500000000
 run_test "stinking_cloud" "tests/test_stinking_cloud.s" "0400 0402" 3 500000000
 run_test "frost_ball" "tests/test_frost_ball.s" "0400 0402" 3 500000000
@@ -4438,11 +4442,11 @@ run_test "remove_curse_prayer" "tests/test_remove_curse_prayer.s" "0400 0402" 3 
 run_test "orb_of_draining_prayer" "tests/test_orb_of_draining_prayer.s" "0400 0402" 3 500000000
     run_test "prayer_feedback" "tests/test_prayer_feedback.s" "0400 040c" 13 500000000
 run_test "detect_feedback" "tests/test_detect_feedback.s" "0400 0403" 4 500000000
-run_test "item" "tests/test_item.s" "0400 0438" 57 1000000000
+run_test "item" "tests/test_item.s" "0400 0439" 58 1000000000
 run_test "scroll_p3" "tests/test_scroll_p3.s" "0400 040d" 14 1000000000
 run_test "item_desc" "tests/test_item_desc.s" "0400 0409" 10 500000000
 run_test "item_ui" "tests/test_item_ui.s" "0400 040f" 16 1000000000
-run_test "store" "tests/test_store.s" "0400 042d" 46 1000000000
+run_test "store" "tests/test_store.s" "0400 042f" 48 1000000000
 run_test "ui_views" "tests/test_ui_views.s" "0400 0413" 19 500000000
 run_test "ui_views_filters" "tests/test_ui_views_filters.s" "0400 0413" 7 500000000
 run_test "subsystems" "tests/test_subsystems.s" "0400 0409" 10

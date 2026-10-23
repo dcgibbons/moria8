@@ -144,8 +144,8 @@ Moria8 extensions:
 | General Store | Food and light. |
 | Armory | Armor, shields, helms, gloves, boots. |
 | Weaponsmith | Weapons. |
-| Temple | Scrolls and potions useful to divine classes and survival. |
-| Alchemy Shop | Potions. |
+| Temple | Healing potions, Word of Recall, Remove Curse, prayer books, blunt weapons. |
+| Alchemy Shop | Utility scrolls (Word of Recall, Identify, Light, Magic Mapping, enchanting) and Restoration. |
 | Magic Shop | Wands, staffs, rings. |
 | Black Market | Expensive mixed goods, often outside normal shop limits. |
 | Home | Storage, not a normal buying/selling shop. |

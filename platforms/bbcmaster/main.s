@@ -221,6 +221,9 @@ cmb_in_way_str:
     .segment Default
 }
 #import "../../core/chest_loot.s"
+// The look flash rides resident RAM: the play payload has no headroom since
+// monster drops (MON-014) added their hooks there.
+#import "../../core/look_flash_target.s"
 #define ITEM_ACTIONS_OVERLAY_EXTERNAL
 #define PLAYER_ITEM_COMMANDS_EXTERNAL
 #define PLAYER_ITEM_SELECT_EXTERNAL

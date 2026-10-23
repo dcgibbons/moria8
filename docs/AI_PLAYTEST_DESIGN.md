@@ -562,6 +562,7 @@ Each milestone has a measurable exit criterion and an explicit stop rule.
 | **M1 `enter_dungeon`** | Brain prompt and town-navigation layers; fair-play view; auditor v0; recorder; dashboard v0 | `enter_dungeon` works (§7.2). A deliberately broken test build (one invariant violated) is caught and its finding replays. |
 | **M2 `reach_dl2`, `reach_clvl2`** | Dungeon navigation, doors, search, stairs; fight, emergency, rest; anti-stall; plateau alert; frozen suites | Both goals work, and `enter_dungeon` still passes its frozen suite. No `unknown_prompt` in the final qualification runs. **No further goals are added until M2 is met.** |
 | **M3 `reach_dl5`, `clvl5`** | The brain rounds in §14.3: any-glyph creatures, food and light logistics, threat memory, avoiding stationary monsters, sealed-area fallback | Both goals work (§7.2, ≥16/20); all frozen suites still pass; no `unknown_prompt`. **Met 2026-10-22 (§14.9).** |
+| **M4 `clvl10`, `reach_dl10`** | The brain rounds in §15.3: stationary hazards, fear and fast attackers, then what the re-measured clusters show | Both goals work (§7.2, ≥16/20); all frozen suites still pass; no `unknown_prompt`. Started 2026-10-22 (`/goal`, §15). |
 
 **Stop rules** (defaults, tunable by the maintainer):
 
@@ -1404,3 +1405,149 @@ knowledge stays for now, with a backlog item to learn it by observation
 Round 6 (final, all three reviewers on the final tree): no findings. Final
 gates on that tree: `make -j5 -O test` and `make test128` (137/137) pass;
 playtest check, smoke and the five frozen suites pass.
+
+## 15. M4 (from 2026-10-22)
+
+The maintainer started M4 on 2026-10-22 (`/goal proceed with M4`). The goals
+were decided with M3 (§14.4, §14.6 item 1): `clvl10` and `reach_dl10`. The
+exit criterion is M3's (§8).
+
+### 15.1 Baselines
+
+The brain after round 31 (`5c625e2`: VMS HP regeneration, CTRL+R rests),
+seeds 1001-1020, first character, fair-play view. The goals were registered
+only for the probe (100,000-step budgets, so the runs end in death rather
+than the budget).
+
+| Probe | Result | Notes |
+|---|---|---|
+| `clvl10` (`want_xp`, `target_dlvl=8`) | **0/20**: 16 died, 4 findings | Highest clvl 9, deepest DL6 |
+| `reach_dl10` (`target_dlvl=10`) | **0/20**: 16 died, 4 findings | Highest clvl 9, deepest DL6 |
+
+Sessions: `build/playtest/sessions/m4-baseline-clvl10` and
+`m4-baseline-reach_dl10`.
+
+All 8 findings were the auditor, not the game: three-digit HP fills its status
+field (`HP:105/105MP:0/0`), which the status parser could not split. They
+ended the 8 strongest characters (clvl 8-9, 100+ HP). Fixed with a regex and a
+test (`STATUS_HP`).
+
+### 15.2 Death clusters (32 deaths across both probes)
+
+Seeds 1006, 1008 and 1016 died the same way in both probes.
+
+| Cluster | Deaths | Evidence | Root cause |
+|---|---|---|---|
+| **Stationary hazards** | 14 | Yellow Jelly 6 (searching or resting beside it; its poison finished the rest); White Mushroom patch 8 (paralysis spores: one character went from 81 HP to dead without a move) | The bot searches, explores and rests next to creatures that never move. Moria8's paralysis matches Umoria (save, no stacking, `randint(level)+3` turns). |
+| **Fear and a fast attacker** | 11 | Poltergeist: "frightens you", then 50-80 hits while the bot retreats, searches or explores | Afraid, the bot cannot melee; it runs from a creature faster than itself, and threw oil once |
+| **Poison** | 2-3 | HP falls 1 a turn while resting, no attacker in view | Game: Moria8 did 1 HP every poisoned turn; VMS scales by `con_adj` (CON 18: 1 HP every other turn). Fixed by maintainer decision (TRN-010). |
+| **Others** | 4 | Green Naga 2, Novice Mage 1, Creeping Copper Coins 1 | — |
+
+Stalls: 30 `stall` findings (no new map or XP for 300 steps while
+stair-scumming), mostly on DL1-5.
+
+### 15.3 Proposed brain rounds
+
+1. **Stationary hazards.** Never search, rest or stand next to a known
+   stationary creature unless attacking it on purpose; step away first.
+2. **Fear and fast attackers.** Afraid with an attacker adjacent or close:
+   throw (oil or any missile) instead of running from a faster creature.
+   Not afraid: fight weak fast creatures rather than retreat.
+3. Re-measure; then the remaining clusters and the stair-scum stalls.
+
+Rounds 1 and 2 became rounds 32-33 (§15.5).
+
+### 15.4 Game changes during M4
+
+1. **Poison damage by `con_adj`** (2026-10-22, maintainer: "yes align the
+   poison"): `TURN_RENDER_CONTRACT.md` TRN-010.
+2. **The last paralyzed turn gives the player a command first** (2026-10-22,
+   maintainer: "yes"): `TURN_RENDER_CONTRACT.md` TRN-011. Moria8 let
+   monsters act between paralysis expiry and the player's next command, so a
+   White Mushroom patch could paralyze the player again before every move.
+3. **Fear attack** (2026-10-23, maintainer goal: "make recommended fixes as
+   discovered"): `MONSTER_STATE_CONTRACT.md` MON-012. Moria8 had no saving
+   throw and replaced the timer; VMS saves on `wis_adj`, then 3 +
+   randint(level) turns, +3 while already afraid.
+4. **Stores identify their stock** (2026-10-23, maintainer goal): VMS
+   `store_create` puts each new item through `store_carry`, which calls
+   `identify` (`desc.inc`: `object_ident[...] := true`), so every kind a store
+   stocks is known by name. Moria8 stocked unidentified flavours ("Cloudy
+   Potion"); `sro_stock` now calls `id_known_set`. Noted, not changed: Moria8's
+   Cure Light Wounds potion heals 4-11 and cures nothing else; VMS heals 2d7
+   and cures blindness (`potions.inc` effects 13 and 29).
+5. **Monster random movement** (2026-10-23, maintainer goal):
+   `MONSTER_STATE_CONTRACT.md` MON-013. `tools/parse_creatures.py` dropped
+   Umoria's `CM_20/40/75_RANDOM` bits, so erratic creatures (Poltergeist 88%
+   random, worm masses 75%, 41 creatures at 20%) chased the player on every
+   move. Paid for by two shared helpers (`core/df_target_row.s`
+   `df_target_row_ptr`, 21 inline copies; `core/df_target_dir.s`
+   `df_target_from_dir`, 3 copies), each `#importonce` and imported by every
+   user, first by a resident file on every platform.
+6. **Monster treasure drops** (2026-10-23, maintainer direction "yes
+   proceed"): `MONSTER_STATE_CONTRACT.md` MON-014. The generator also dropped
+   the CMOVE treasure bits, and no kill path called a drop routine, so the
+   only gold came from veins, floor piles and chests; the bot could rarely
+   afford potions or Word of Recall. A per-creature `cr_treasure` byte (tier
+   SoA field) and a kill-time queue feed the chest-contents generator. Memory:
+   C64 moved `combat_msg_buf` and `creature_name_buf` to free page-2 RAM
+   (`$02A7-$02FF`); C128 moved the Bank 1 tier cache base from `$8000` to
+   `$7F00` (the DB region ends at `$79D5`); C128 places the module and
+   `look_flash_target` in the main image.
+7. **Gold pickup lost 256 gold per carry** (2026-10-23, found by round 50):
+   `item_pickup` added the low byte of a gold pile, then called
+   `floor_item_get_qty_hi_x`, whose `cmp #2` cleared the carry before the
+   middle byte was added, so every pickup that crossed a multiple of 256
+   dropped 256 gold (seed 1010: 9,000 collected, 203 in hand). The high byte
+   is now fetched first. C64 `test_item.s` t58 (249 + 14 = 263; $00FF +
+   $0102 = $0201; fails on the old order).
+8. **Temple and Alchemy shop stock follows VMS** (2026-10-23, maintainer
+   direction "let's make these store stocks behave like VMS moria does"):
+   both stocked random potions and scrolls by category, so Word of Recall was
+   1 kind in 34 at the Temple and never at the Alchemist, while Genocide,
+   *Destruction*, Aggravate and Potions of Poison sold freely. They now pick
+   from VMS `store_choice` (`values.inc`, indexing `inventory_init`) like the
+   General Store (§14, item 6), mapped to Moria8 items: Temple 23 of 26
+   entries (Cure Light Wounds x3, Word of Recall x2, prayer books, Remove
+   Curse, blunt weapons; Restoration for Restore Wisdom; no Boldliness,
+   Restore Life Levels or Blessing), Alchemy shop 21 of 26 (Word of Recall
+   x3, Identify, Light, Magic Mapping, enchanting, Restoration x5 for the
+   Restore potions, Neutralize Poison for Slow Poison; no Phase Door,
+   Treasure Detection or Detect Invisible). What a store buys from the player
+   is unchanged (the Temple sells maces it will not buy; VMS's Alchemist also
+   buys scrolls). `docs/MANUAL.md` updated. C64 `test_store.s` t48
+   (mutation-checked), t43 part E narrowed to category-stocked stores. The
+   C128 ITEMS overlay, which holds the restock code, has 0 bytes left.
+
+### 15.5 Round log
+
+`clvl10` and `reach_dl10` qualification runs (20 seeds, first character,
+100,000-step provisional budgets), after the game changes in §15.4.
+
+| Round | Change | `clvl10` | `reach_dl10` | Notes |
+|---|---|---|---|---|
+| baseline | — | 0/20 | 0/20 | §15.1 |
+| 32 | `step_away` layer (move off any square next to a stationary creature); no search spots next to one; `throw` before `retreat` | 1/20 | 0/20 | Worse: the bot stepped away from a Floating Eye or Yellow Jelly beside its path, then the path stepped back, until paralysed or poisoned to death (about 12 deaths on DL1-2) |
+| 33 | `step_away` removed (paths already pay 25 per square next to one); glyph memory: unidentified glyphs are remembered off screen (seed 1003 flipped between two squares for 200 steps as a `$` scrolled in and out, then starved); no rest for 20 steps after an unseen attack (seed 1010 rested beside a blinding Bloodshot Eye until it starved) or while out of food (seed 1008); always carry 3 Flasks of Oil to throw (seed 1004 had no lantern, so no oil, against a Poltergeist) | 6/20 | 0/20 | `clvl10` successes at 15-20k steps; `reach_dl10` reaches DL8 at clvl 11. Deaths: Poltergeist ~13, Green/Black Naga 6 (stood and fought), oscillations 3, dark 2 |
+| 34 | Full pack read (item `u` on row 21 was never found: seed 1006 retried a throw 121 times); an item the list does not show resets its count; far stairs still flee a creature with no spells (seed 1014: Black Naga); an A-B-A-B oscillation blocks the square it returns to (seeds 1001, 1003, 1012); spare torches always (seed 1007: 3,400 steps in the dark) | 8/20 | 1/20 | Poltergeist 13 of 31 deaths: fear stacks +3 a hit (MON-012, as upstream) and never wore off |
+| 35 | Afraid of a faster attacker: any staircase, down too, and no give-up on doubling back; every flask may be thrown when spare torches back up the lantern | 6/20 | 4/20 | Poltergeist down to ~4; Creeping Copper Coins ~10 (they follow; each step a new unidentified `$`); White Mushroom patch 4 (stairs ringed with them) |
+| 36 | No rest with an unidentified creature glyph within 2; walk away from slow creatures (`$`) when no stairs; swat a fragile stationary creature (`,`: 1 HP) beside the path | 7/20 | 1/20 | Coins still ~8 (they follow one square behind, out of the light); ~8 starved searching sealed DL1-2 pockets |
+| 37 | Threat memory: a creature (or unidentified creature glyph) within 2 squares keeps the bot from resting for 5 steps (replaces round 36's "unidentified glyph within 2" rule); short of food with a staircase in reach, never search walls | 9/20 | 1/20 | ~10 starved in `fallback`: round 37's "no search when short of food" left no layer acting where `stair-scum` would not take down stairs |
+| 38 | Round 37's search rule replaced: short of food, `stair_scum` runs before `search` | 9/20 | 1/20 | Same deaths: `stair-scum`'s forced search came before its down-and-back hop |
+| 39 | Game: stores identify their stock (§15.4 item 4). Bot: short of food with no way up, the down-and-back hop comes before a forced search; buy Cure Light Wounds at the Alchemist (reserve 3) and drink one below 30% HP | 4/20 | 1/20 | Broken: the quaff prompt reads "Quaff which potion (a-a)?", which the item-prompt check ("which item") missed; cancel-and-retry loops ran characters out of budget (~650k quaff steps) |
+| 40 | Item prompts recognised by "which item/potion/scroll/food/wand/staff (a-" | 5/20 | 1/20 | Potions bought (~3k shop steps) but rarely decisive; Poltergeist ~10 deaths, 50-70 hits each: led to MON-013 |
+| 41 | Game: monster random movement (MON-013) | 8/20 | 4/20 | Poltergeist deaths gone. Gates pass, regress passes (17-20/20). Starvation ~10 ("You have no food" 200-300 steps before death, DL3-8); Creeping Copper Coins ~6 |
+| 42 | Food in ration units (a Slime Mold is a third); reserve 2 + depth/3 rations; 8 food purchases a visit | 12/20 | 7/20 | Starvation still 10: sealed-looking pockets whose frontier squares revealed nothing (seed 1003 rested 1,500 steps beside an open door) |
+| 43 | `grope`: before resting with nothing to do, step into the unknown neighbours of frontier squares that revealed nothing, once each | 13/20 | 7/20 | `reach_dl10`: 6 of 10 deaths still starvation (level 10-11 characters climbing home from DL2-8 through levels with no reachable up staircase); 3 out of budget |
+| 44 | Word of Recall: buy one at the Temple (Moria8's Temple sells potions and scrolls; VMS stocks Word of Recall at the Alchemist and Temple), read it from DL3+ with supplies low, and in town after shopping to return to the deepest level; wait in place for the yank | 9/20 | 1/17 (stopped) | Worse: Temple trips every visit (~6,700 steps) for 2 scrolls read; the gold was rarely there |
+| 45 | Temple trip only with the gold (status `AU:`; Cure Light Wounds 60+, Word of Recall 250+); never melee slow creatures (Creeping Coins) unless cornered, and never hunt them | 4/18 | 0/13 | Stopped early; clearly worse than round 43. Gold was the limit: monsters dropped nothing, which led to MON-014 (§15.4 item 6) |
+| 46 | Game: monster treasure drops (MON-014). Bot: `collect` walks to identified gold and food in view (12 steps) and picks it up (`G`); Creeping Coins ('$') are fought at 80% HP or more, since they now drop gold | 2/9 | 0/7 (stopped) | Gold beside a Floating Eye: the bot walked to it, stood down when the eye counted as a threat, and was walked back, 2,900 times (seed 1001); Yellow Jelly beside gold |
+| 46b | `collect` picks up on arrival whatever is in view, skips items beside a creature that never moves, gives up after 36 walks; slow creatures not worth a fight become hazards | 5/13 | 0/7 (stopped) | Coins ~8 of 15 deaths: a looked-at coin read as an unknown '$' after every step, and explore walked back beside it between hits |
+| 47 | An identified creature keeps its name when its glyph moves one square; a retreat from an unseen attacker keeps going while it may still be there | 8/13 | 0/9 (stopped) | Coins still: two squares off in the dark a torch-lit player does not see them; explore and retreat alternated |
+| 48 | A retreat also keeps going while a creature was seen close (5 steps); slow creatures stay hazards 30 steps out of sight | 14/20 | 3/17 (stopped) | `clvl10` best yet. `reach_dl10`: starvation on the climb home from DL6-8 (Word of Recall bought 6 times in 17 characters: Moria8's Temple stocks random potions and scrolls), coins, Green Naga, Yellow Jelly beside the only corridor |
+| 49 | Paths pay 150 extra per square next to a hazard (Yellow Jelly corridors) | 13/20 | | Seeds 1003, 1006, 1013, 1015, 1017 die as in round 48: a Brown Mold beside a resting, confused player; exploring back into a Green Naga at a third of HP; long DL1-2 searches |
+| 50 | Never rest, search or wait beside a creature that never moves: step off; badly hurt with resting blocked by a creature seen close, back away from where it was last seen; a Black Market trip for Word of Recall with 600 gold or more | 9/14 | 2/11 (stopped) | No Black Market trip ever: gold never reached 600 though characters picked up 3,600-9,000. The game lost 256 gold on each pickup that carried (§15.4 item 7) |
+| 51 | Game: gold pickup carry fixed | 16/20 | 4/17 (stopped) | `clvl10` meets the bar. With gold kept, 6 of 12 `reach_dl10` characters bought Word of Recall at the Black Market. Deaths: White Mushroom patches attacking a paralysed bot whose next command screen said only "You can move again." (it rested beside them), Novice Mage groups confusing it, coins, Yellow Jelly |
+| 52 | Game: Temple and Alchemy shop stock follows VMS (§15.4 item 8). Bot: an attacker named behind `-more-` counts on the next command screen | 9/17 | 0/7 (stopped) | The stock change shifts every dungeon (store RNG draws), so per-seed outcomes moved. Sealed pockets: a felt-out dead-end edge still counted as a way out, so the bot rested 2,700 turns and starved (seeds 1005, 1003, 1011); explore walked into a Yellow Jelly sitting on an unexplored edge (a goal square is entered whatever stands on it) |
+| 53 | A dead-end edge already stood on is no way out (sealed searching starts), groping comes before forced searching; no frontier square under a creature or next to a hazard | | | |
+

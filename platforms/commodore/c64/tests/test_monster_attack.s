@@ -18,7 +18,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #13
+    ldx #16
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -116,7 +116,10 @@ press_key_str:
 // Test scratch
 tc_loop:    .byte 0
 tc_ok:      .byte 0
-tc_results: .fill 14, $ff      // Result buffer (copied to $0400 at end)
+tc_results: .fill 17, $ff      // Result buffer (copied to $0400 at end)
+tc_fear_start: .byte 0          // fear_attempt: timer before each attempt
+tc_saved:   .byte 0
+tc_afraid:  .byte 0
 
 test_start:
     // Seed RNG deterministically
@@ -508,25 +511,27 @@ test_start:
     sta tc_results + 9
 
     // ==========================================
-    // Test 11: Fear effect sets timer
-    // Use creature type 0 (White Harpy, level 2)
-    // Timer should be rng_range(2) + 3 = [3,4]
+    // Test 11: Fear attack, failed save (MON-012; VMS creature.inc /
+    // Umoria monster.cpp): a new fear lasts 3 + randint(level). White
+    // Harpy (level 2): 4-5. Half-Troll Warrior, WIS 3: save 10 (-8 + 18 +
+    // wis_adj 0), so an attempt soon fails.
     // ==========================================
 !t11:
-    lda #0
-    sta eff_fear_timer          // Clear existing fear
-
+    lda #7                      // Half-Troll
+    sta player_data + PL_RACE
+    lda #CLASS_WARRIOR
+    sta player_data + PL_CLASS
+    lda #3
+    sta player_data + PL_WIS_CUR
     lda #0                      // White Harpy (level 2)
     sta mat_type2
-
-    jsr mon_atk_effect_fear
-
-    lda eff_fear_timer
-    beq !t11_fail+              // Should be > 0
-    cmp #3
-    bcc !t11_fail+              // Should be >= 3
-    cmp #5
-    bcs !t11_fail+              // Should be <= 4
+    lda #0
+    jsr fear_until_afraid
+    bcc !t11_fail+
+    cmp #4
+    bcc !t11_fail+
+    cmp #6
+    bcs !t11_fail+
     lda #$01
     sta tc_results + 10
     jmp !t13+
@@ -609,13 +614,108 @@ test_start:
     bne !t15_fail+
     lda #$01
     sta tc_results + 13
-    jmp !tests_done+
+    jmp !t16+
 !t15_fail:
     lda #$00
     sta tc_results + 13
 
+    // ==========================================
+    // Test 15: a failed save while afraid adds 3 (VMS afraid := afraid + 3)
+    // ==========================================
+!t16:
+    lda #10
+    jsr fear_until_afraid
+    bcc !t16_fail+
+    cmp #13
+    bne !t16_fail+
+    lda #$01
+    sta tc_results + 14
+    jmp !t17+
+!t16_fail:
+    lda #$00
+    sta tc_results + 14
+
+    // ==========================================
+    // Test 16: the fear timer saturates at 255
+    // ==========================================
+!t17:
+    lda #254
+    jsr fear_until_afraid
+    bcc !t17_fail+
+    cmp #$ff
+    bne !t17_fail+
+    lda #$01
+    sta tc_results + 15
+    jmp !t18+
+!t17_fail:
+    lda #$00
+    sta tc_results + 15
+
+    // ==========================================
+    // Test 17: the save resists. Halfling Mage, WIS 18/100: save 61 (18 +
+    // 36 + wis_adj 7). Of 30 attempts from no fear, some must resist (timer
+    // stays 0) and some must not.
+    // ==========================================
+!t18:
+    lda #3                      // Halfling
+    sta player_data + PL_RACE
+    lda #CLASS_MAGE
+    sta player_data + PL_CLASS
+    lda #118
+    sta player_data + PL_WIS_CUR
+    lda #0
+    sta tc_saved
+    sta tc_afraid
+    lda #30
+    sta tc_loop
+!t18_loop:
+    lda #0
+    sta eff_fear_timer
+    jsr mon_atk_effect_fear
+    lda eff_fear_timer
+    bne !t18_afraid+
+    inc tc_saved
+    bne !t18_next+              // Always taken
+!t18_afraid:
+    inc tc_afraid
+!t18_next:
+    dec tc_loop
+    bne !t18_loop-
+    lda tc_saved
+    beq !t18_fail+
+    lda tc_afraid
+    beq !t18_fail+
+    lda #$01
+    sta tc_results + 16
+    jmp !tests_done+
+!t18_fail:
+    lda #$00
+    sta tc_results + 16
+
 !tests_done:
     jmp test_exit_trampoline
+
+// fear_until_afraid — Attack with fear (mat_type2) from fear timer A until
+// a save fails (the timer changes), at most 30 tries.
+// Output: carry set and A = new timer, or carry clear if every try resisted.
+fear_until_afraid:
+    sta tc_fear_start
+    lda #30
+    sta tc_loop
+!fua_loop:
+    lda tc_fear_start
+    sta eff_fear_timer
+    jsr mon_atk_effect_fear
+    lda eff_fear_timer
+    cmp tc_fear_start
+    bne !fua_changed+
+    dec tc_loop
+    bne !fua_loop-
+    clc
+    rts
+!fua_changed:
+    sec
+    rts
 
 monster_attack_test_end:
 .assert "Monster attack test stays below MAP_BASE", monster_attack_test_end <= MAP_BASE, true

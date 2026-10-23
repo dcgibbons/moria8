@@ -26,7 +26,7 @@ bootstrap:
 
 // test_finish — Copy results to $0400 and halt.
 test_finish:
-    ldx #57
+    ldx #58
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -170,7 +170,9 @@ tai_rng_values:   .fill 4, 0
 tai_rng_idx:      .byte 0
 tai_distance:     .byte 0
 auto_rest_active: .byte 0
-tc_results: .fill 58, $ff      // Result buffer (copied to $0400 at end)
+tc_results: .fill 59, $ff      // Result buffer (copied to $0400 at end)
+t59_toward: .byte 0
+t59_left:   .byte 0
 
 .macro PatchJump(target, replacement) {
     lda #$4c
@@ -3630,10 +3632,85 @@ test_start:
     bne !t58_fail+
     lda #$01
     sta tc_results + 57
-    jmp !tests_done+
+    jmp !t59+
 !t58_fail:
     lda #$00
     sta tc_results + 57
+
+    // ==========================================
+    // Test 59: random movement (MON-013, Umoria monsterMove). A Kobold given
+    // CM_75_RANDOM (cr_speed $21) in test 16's corridor: 40 single-tick
+    // trials from 10 squares away. Without the flag every trial steps
+    // toward the player (test 16); with it about 74% of moves are random,
+    // so 4-32 of 40 step toward (22 measured; 40 with the roll removed).
+    // ==========================================
+!t59:
+    lda #$21
+    sta cr_speed + 4
+    lda #0
+    sta t59_toward
+    lda #40
+    sta t59_left
+!t59_trial:
+    jsr monster_init_table
+    lda #0
+    sta zp_game_flags
+    sta zp_eff_speed            // tests 36-40 leave haste/slow state behind
+    sta player_pflags
+    sta zp_turn_lo
+    lda #8
+    sta $c6
+    ldx #15                     // test 16's corridor, (20,15)-(30,15)
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #20
+!t59_fill:
+    lda #TILE_FLOOR | FLAG_LIT
+    sta (zp_ptr0),y
+    iny
+    cpy #31
+    bne !t59_fill-
+    lda #20
+    sta ms_spawn_x
+    lda #15
+    sta ms_spawn_y
+    lda #4
+    jsr monster_spawn_one
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_FLAGS
+    lda #MF_AWAKE
+    sta (zp_ptr0),y
+    lda #30
+    sta zp_player_x
+    lda #15
+    sta zp_player_y
+    jsr monster_ai_tick
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_X
+    lda (zp_ptr0),y
+    cmp #21
+    bne !t59_next+
+    inc t59_toward
+!t59_next:
+    dec t59_left
+    bne !t59_trial-
+    lda #1
+    sta cr_speed + 4
+    lda t59_toward
+    cmp #33                     // random: ~55% (22 measured); none: 40 of 40
+    bcs !t59_fail+
+    cmp #4                      // and it does still move
+    bcc !t59_fail+
+    lda #$01
+    sta tc_results + 58
+    jmp !tests_done+
+!t59_fail:
+    lda #$00
+    sta tc_results + 58
 
 !tests_done:
     jmp test_finish

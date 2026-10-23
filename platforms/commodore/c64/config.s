@@ -22,6 +22,15 @@
 #import "hal/storage_title_name.s"
 
 .const PLATFORM_COMBAT_MSG_BUF_SIZE = 42
+#if C64_PRODUCT_OVERLAY_RUNTIME
+// The product parks two pure scratch buffers (combat_msg_buf, creature_name_buf)
+// in page-2 RAM $02A7-$02FF, which neither KERNAL nor BASIC uses, to free
+// main-segment bytes below MAP_BASE.
+#define PLATFORM_SCRATCH_BUFS_IN_PAGE2
+#endif
+.const PLATFORM_COMBAT_MSG_BUF_BASE = $02a7
+.const PLATFORM_CREATURE_NAME_BUF_BASE = PLATFORM_COMBAT_MSG_BUF_BASE + PLATFORM_COMBAT_MSG_BUF_SIZE
+.assert "Page-2 scratch buffers stay in $02A7-$02FF", PLATFORM_CREATURE_NAME_BUF_BASE + 32 <= $0300, true
 #define PLATFORM_GET_INFRA_RANGE_INLINE
 #define PLATFORM_COPY_DEATH_SOURCE
 #if C64_PRODUCT_OVERLAY_RUNTIME

@@ -470,6 +470,13 @@ returns through the resident trampoline. The trampoline then:
    discards that chest's contents (consistent with the floor-full policy).
    Death, new game, and load transitions also clear the latch.
 
+Monster treasure drops (`docs/MONSTER_STATE_CONTRACT.md` MON-014) reuse this
+handoff: kills stage the creature's flags in a resident queue
+(`core/monster_death.s`), and `chest_fulfill_loot` generates the chest
+contents, then each staged drop, in one overlay load before the command's
+`turn_post_action`. Bit 6 of the flags byte (VMS bit 30, `damroll(4d3)`
+drops) is used only by monsters.
+
 ### Save format
 
 `ITEM_TYPE_COUNT = 135`; `ITEM_ID_CAPACITY = 160`; `ID_KNOWN_BYTES` becomes

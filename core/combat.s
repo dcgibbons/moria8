@@ -27,8 +27,13 @@ cmb_target_lit:  .byte 1
 
 // Message composition buffer. C128 is sized for the longest current
 // combat feedback string plus a 31-byte monster name and terminator.
+#if PLATFORM_SCRATCH_BUFS_IN_PAGE2
+.label combat_msg_buf = PLATFORM_COMBAT_MSG_BUF_BASE
+.label combat_msg_buf_end = combat_msg_buf + COMBAT_MSG_BUF_SIZE
+#else
 combat_msg_buf:  .fill COMBAT_MSG_BUF_SIZE, 0
 combat_msg_buf_end:
+#endif
 
 // ============================================================
 // Combat strings (screen codes via inherited encoding)
@@ -786,30 +791,22 @@ combat_critical_blow:
 
     // Compare tier_weight against thresholds (16-bit)
     // >= 900 → 5x+20
-    lda zp_temp3
-    cmp #>900
-    bcc !ccb_below_900+
-    bne !ccb_tier5+
     lda zp_temp2
     cmp #<900
-    bcs !ccb_tier5+
-!ccb_below_900:
-    // >= 700 → 4x+15
     lda zp_temp3
-    cmp #>700
-    bcc !ccb_below_700+
-    bne !ccb_tier4+
+    sbc #>900
+    bcs !ccb_tier5+
+    // >= 700 → 4x+15
     lda zp_temp2
     cmp #<700
-    bcs !ccb_tier4+
-!ccb_below_700:
-    // >= 400 → 3x+10
     lda zp_temp3
-    cmp #>400
-    bcc !ccb_tier2+
-    bne !ccb_tier3+
+    sbc #>700
+    bcs !ccb_tier4+
+    // >= 400 → 3x+10
     lda zp_temp2
     cmp #<400
+    lda zp_temp3
+    sbc #>400
     bcs !ccb_tier3+
 
 !ccb_tier2:
@@ -1300,10 +1297,14 @@ combat_kill_message:
     lda #SFX_HIT
     jmp hal_sound_play
 
-// combat_note_kill — Set winner state when the killed creature is Balrog.
-// Input: cmb_type = killed creature type.
-// Clobbers: A
+// combat_note_kill — Stage the killed creature's treasure drop (MON-014) and
+// set winner state when it is Balrog.
+// Input: cmb_type = killed creature type; mfa_x/mfa_y = its position (left by
+// the preceding monster_remove).
+// Clobbers: A, X
 combat_note_kill:
+    ldx cmb_type
+    jsr monster_death_stage
     lda zp_game_flags
     and #GAME_FLAG_WINNER
     bne !no_win+

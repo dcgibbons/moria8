@@ -1,4 +1,6 @@
 #importonce
+#import "df_target_dir.s"
+#import "df_target_row.s"
 // bash.s — Bash command (CTRL+B)
 //
 // Bash doors open, stun monsters with shield attacks. Core umoria command.
@@ -47,23 +49,11 @@ bash_command:
     tax
 
     // Recompute target from player position
-    lda zp_player_x
-    clc
-    adc dir_dx,x
-    sta df_target_x
-    lda zp_player_y
-    clc
-    adc dir_dy,x
-    sta df_target_y
+    jsr df_target_from_dir
 !bash_not_confused:
 
     // Read map tile at target
-    ldx df_target_y
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
-    ldy df_target_x
+    jsr df_target_row_ptr
     :MapRead_ptr0_y()
     sta bash_save_tile
 
@@ -199,12 +189,7 @@ bash_door:
 
 !bd_success:
     // Open the door: change tile type to TILE_DOOR_OPEN, keep flags
-    ldx df_target_y
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
-    ldy df_target_x
+    jsr df_target_row_ptr
     lda bash_save_tile
     and #TILE_FLAG_MASK         // Keep flags
     ora #TILE_DOOR_OPEN         // Set to open door

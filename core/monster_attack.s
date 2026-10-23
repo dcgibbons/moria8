@@ -494,41 +494,37 @@ mon_atk_effect_acid:
     jsr huff_decode_to_ptr2
     jmp mon_atk_build_effect_msg
 
-// mon_atk_effect_fear — Set fear timer (blocks melee)
-// Timer = rng_range(cr_level) + 3. Message only on first fear.
-// Replace timer only if new value > current (no stacking, just extend).
-// Clobbers: A, X, zp_temp3, zp_temp4
+// mon_atk_effect_fear — Fear attack: VMS creature.inc / Umoria monster.cpp
+// (MON-012). Heroism blocks it (VMS clears fear while heroic). Otherwise
+// player_saves(wis_adj) resists; a new fear lasts 3 + randint(level) turns
+// (first-fear message), an existing one gains 3 (saturating).
+// Clobbers: A, X, Y, zp_temp0, zp_math_*
 mon_atk_effect_fear:
     lda zp_eff_hero
     bne !mef_done+
-    // Compute new timer: rng_range(cr_level) + 3
+    lda player_data + PL_WIS_CUR
+    jsr player_wis_save_adj
+    jsr player_saving_throw
+    bcc !mef_done+              // Saved
+    lda eff_fear_timer
+    beq !mef_new+
+    adc #3 - 1                  // Carry set: +3
+    bcc !mef_store+
+    lda #$ff
+    bne !mef_store+             // Always taken
+!mef_new:
     ldx mat_type2
     lda cr_level,x
-    cmp #1
-    bne !mef_roll+
-    lda #4                      // Level 1: 0 + 3 + 1 = 4
-    jmp !mef_check+
-!mef_roll:
-    jsr rng_range               // [0, level-1]
+    jsr rng_range               // [0, level-1]; 0 at level 0-1
     clc
-    adc #3
-!mef_check:
-    // Only replace if new > current
-    cmp eff_fear_timer
-    bcc !mef_done+
-    beq !mef_done+
-
-    // Check if this is first fear (for message)
-    pha                         // Save new timer
-    lda eff_fear_timer
-    bne !mef_no_msg+
-
+    adc #4                      // 3 + randint(level)
+    pha
     // Print "THE <name> FRIGHTENS YOU." (first fear only)
     ldx #HSTR_MAT_FEAR
     jsr huff_decode_to_ptr2
     jsr mon_atk_build_effect_msg
-!mef_no_msg:
-    pla                         // Restore new timer
+    pla
+!mef_store:
     sta eff_fear_timer
 !mef_done:
     rts

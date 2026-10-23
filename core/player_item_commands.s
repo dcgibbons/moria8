@@ -355,14 +355,11 @@ item_eat:
     sta zp_player_food_hi
 
     // Cap at 4000
-    lda zp_player_food_hi
-    cmp #FOOD_MAX_HI
-    bcc !ie_cap_ok+
-    bne !ie_clamp+
-    lda zp_player_food
-    cmp #FOOD_MAX_LO
-    bcc !ie_cap_ok+
-    beq !ie_cap_ok+
+    lda #FOOD_MAX_LO
+    cmp zp_player_food
+    lda #FOOD_MAX_HI
+    sbc zp_player_food_hi
+    bcs !ie_cap_ok+             // Food <= 4000 (unsigned)
 !ie_clamp:
     lda #FOOD_MAX_LO
     sta zp_player_food
@@ -445,14 +442,11 @@ piq_quaff_identify:
     jmp id_known_set        // X = item type ID
 !pqi_heal:
     // Full HP -> the heal is a no-op -> stays unidentified.
-    lda zp_player_hp_hi
-    cmp zp_player_mhp_hi
-    bcc !pqi_ident-
-    bne !pqi_full+
     lda zp_player_hp_lo
     cmp zp_player_mhp_lo
-    bcc !pqi_ident-
-!pqi_full:
+    lda zp_player_hp_hi
+    sbc zp_player_mhp_hi
+    bcc !pqi_ident-             // HP < max HP (unsigned)
     rts
 #endif
 

@@ -1,4 +1,6 @@
 #importonce
+#import "df_target_dir.s"
+#import "df_target_row.s"
 // spell_effects.s — Shared effect subroutines for spells, potions, scrolls, etc.
 //
 // Phase 7.0: Extracted from player_items.s inline handlers.
@@ -432,14 +434,7 @@ for_each_adjacent:
     cmp #8
     bcs !fea_done+
     tax
-    lda zp_player_x
-    clc
-    adc dir_dx,x
-    sta df_target_x
-    lda zp_player_y
-    clc
-    adc dir_dy,x
-    sta df_target_y
+    jsr df_target_from_dir
     jsr !fea_dispatch+
     inc adj_dir_idx
     jmp !fea_loop-
@@ -645,12 +640,7 @@ eff_wall_to_mud:
     cmp #MAP_ROWS - 1
     beq !ewtm_fail+
 
-    ldx df_target_y
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
-    ldy df_target_x
+    jsr df_target_row_ptr
     :MapRead_ptr0_y()
     sta ewtm_save_tile          // Save full tile for treasure check
     and #TILE_TYPE_MASK

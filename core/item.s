@@ -885,14 +885,15 @@ item_pickup:
     bne !ipu_not_gold+
 
     // --- Gold pickup ---
-    // Add 16-bit fi_qty/fi_qty_hi to 24-bit player gold
+    // Add 16-bit fi_qty/fi_qty_hi to 24-bit player gold. Fetch the high byte
+    // first: floor_item_get_qty_hi_x compares, which would drop the carry.
     ldx ipu_slot
+    jsr floor_item_get_qty_hi_x
+    sta zp_temp1
     lda player_data + PL_GOLD_0
     clc
     adc fi_qty,x
     sta player_data + PL_GOLD_0
-    jsr floor_item_get_qty_hi_x
-    sta zp_temp1
     lda player_data + PL_GOLD_1
     adc zp_temp1
     sta player_data + PL_GOLD_1

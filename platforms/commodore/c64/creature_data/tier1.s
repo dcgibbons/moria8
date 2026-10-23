@@ -42,10 +42,10 @@ tier1_cr_color:
     .byte $01, $01, $01, $01, $01, $0b, $01, $0b, $07, $07, $06, $01, $05, $01, $0f, $09
     .byte $09, $01, $01, $0f, $01, $05, $0f, $03
 
-// Speed (0=slow, 1=normal, 2=fast)
+// Speed (bits 0-1: 0=slow, 1=normal, 2=fast) | random-move bits 3-5
 tier1_cr_speed:
-    .byte $01, $00, $01, $01, $01, $01, $02, $01, $02, $00, $00, $01, $01, $01, $01, $01
-    .byte $01, $01, $01, $01, $01, $01, $01, $01
+    .byte $01, $20, $01, $01, $01, $09, $3a, $09, $02, $00, $20, $11, $09, $01, $01, $01
+    .byte $01, $11, $01, $01, $19, $01, $01, $01
 
 // Monster flags
 tier1_cr_mflags:
@@ -131,6 +131,11 @@ tier1_cr_spell_chance:
 tier1_cr_spell_flags:
     .byte $00, $00, $00, $81, $21, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
     .byte $00, $00, $00, $00, $00, $00, $00, $00
+
+// Treasure flags: Umoria CMOVE bits 24-30 (carry obj/gold, 60%, 90%, 1d2, 2d2, 4d2/VMS 4d3)
+tier1_cr_treasure:
+    .byte $07, $00, $00, $07, $07, $00, $0f, $07, $00, $12, $00, $00, $07, $00, $00, $00
+    .byte $0b, $00, $00, $00, $0f, $00, $00, $13
 
 // Name string pointers
 tier1_cr_name_lo:

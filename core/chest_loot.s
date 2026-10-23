@@ -49,28 +49,37 @@ chest_run_deferred:
     rts
 
 // ============================================================
-// chest_fulfill_loot — Resident loot handoff. If contents are pending, first
-// validate that a chest still exists at the staged position: the latch is
-// transient (set and cleared within one cmd_open), so any latch left staged by
-// a death/new-game/load floor reset references a cleared floor and is discarded
-// here (docs/CHEST_DESIGN.md stale-latch guarantee, enforced at point of use).
-// Then load the GEN overlay and fulfill, clearing the latch. Overlay-load
-// failure also clears the latch and discards this chest's contents.
+// chest_fulfill_loot — Resident loot handoff for chest contents and staged
+// monster drops (MON-014, core/monster_death.s). If chest contents are
+// pending, first validate that a chest still exists at the staged position:
+// the latch is transient (set and cleared within one cmd_open), so any latch
+// left staged by a death/new-game/load floor reset references a cleared floor
+// and is discarded here (docs/CHEST_DESIGN.md stale-latch guarantee, enforced
+// at point of use). Then, if anything is still pending, load the GEN overlay
+// and fulfill, clearing the latch and the drop queue. Overlay-load failure
+// also clears both and discards the contents. Called by cmd_open and before
+// every consumed turn's turn_post_action (turn_post_action_searchable_or_die).
 // ============================================================
 chest_fulfill_loot:
     lda chest_loot_pending
-    bne !cfl_has+
-    rts
-!cfl_has:
+    beq !cfl_drops+
     // Stale-latch guard: no staged loot without a chest still at the position.
     lda chest_loot_x
     ldy chest_loot_y
     jsr floor_item_find_at
-    bcc !cfl_clear+           // Nothing there -> stale latch, discard
+    bcc !cfl_stale+           // Nothing there -> stale latch, discard
     ldy fi_item_id,x
     lda it_category,y
     cmp #ICAT_CHEST
-    bne !cfl_clear+           // Not a chest -> stale latch, discard
+    beq !cfl_load+
+!cfl_stale:                   // Not a chest -> stale latch, discard
+    lda #0
+    sta chest_loot_pending
+!cfl_drops:
+    lda md_count
+    bne !cfl_load+
+    rts
+!cfl_load:
 #if PICKER_IN_CHEST_OVERLAY
     lda #OVL_CHEST
 #else
@@ -88,7 +97,7 @@ chest_fulfill_loot:
     bcs !cfl_clear+           // Load failed: discard this chest's contents
 #endif
 !cfl_loaded:
-    jsr chest_generate_loot
+    jsr loot_generate_pending
 #if HAL_PLATFORM_CHEST_LOOT_LOAD_NO_KERNAL
 #if C64_TEST_SCRIPTED_CHEST_OPEN_PRODUCT || PLUS4_TEST_SCRIPTED_CHEST_OPEN_PRODUCT
 chest_product_after_generate_sym:
@@ -129,6 +138,32 @@ chest_product_after_generate_sym:
 !cfl_clear:
     lda #0
     sta chest_loot_pending
+    sta md_count
+    rts
+
+// ============================================================
+// loot_generate_pending — Generate the pending chest contents, then each
+// staged monster drop (latest first), through chest_generate_loot. Runs with
+// the GEN overlay loaded; the resident handoff clears the latch and queue.
+// ============================================================
+:ChestLootSegment()
+loot_generate_pending:
+    lda chest_loot_pending
+    beq !lgp_drops+
+    jsr chest_generate_loot
+!lgp_drops:
+    ldx md_count
+    beq !lgp_done+
+    dec md_count
+    lda md_x-1,x
+    sta chest_loot_x
+    lda md_y-1,x
+    sta chest_loot_y
+    lda md_flags-1,x
+    sta chest_loot_flags
+    jsr chest_generate_loot
+    jmp !lgp_drops-
+!lgp_done:
     rts
 
 // ============================================================
@@ -137,12 +172,12 @@ chest_product_after_generate_sym:
 //   bit0 (VMS 24) carry object, bit1 (VMS 25) carry gold -> drop type
 //   bit2 (VMS 26) 60% one drop, bit3 (VMS 27) 90% one drop
 //   bit4 (VMS 28) randint(2) drops, bit5 (VMS 29) damroll(2d2) drops
+//   bit6 (VMS 30) damroll(4d3) drops (monster drops only; no chest sets it)
 // Each mixed drop is 50/50 object/gold (VMS summon_object typ 3). Content
 // depth = current dungeon level. Placement: bounded 10 attempts per drop in a
 // 5x5 box around the chest, walkable + monster-free + item-free; failure
 // discards that drop. Clobbers: A, X, Y, zp_*, fi_add_*.
 // ============================================================
-:ChestLootSegment()
 chest_generate_loot:
 #if C64_TEST_SCRIPTED_CHEST_OPEN_PRODUCT || PLUS4_TEST_SCRIPTED_CHEST_OPEN_PRODUCT || C128_TEST_SCRIPTED_CHEST_OPEN_PRODUCT
     lda chest_product_path_stage
@@ -217,6 +252,21 @@ chest_generate_loot:
     adc cl_drops
     sta cl_drops
 !cgl_no2d2:
+
+    // bit6: damroll(4d3) drops
+    bit chest_loot_flags
+    bvc !cgl_no4d3+
+    lda #4
+    sta cl_tries                // dice remaining
+!cgl_4d3:
+    lda #3
+    jsr rng_range               // [0,2]
+    sec                         // +1: d3 = [1,3]
+    adc cl_drops
+    sta cl_drops
+    dec cl_tries
+    bne !cgl_4d3-
+!cgl_no4d3:
 
     // Place each drop
 !cgl_drop_loop:

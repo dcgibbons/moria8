@@ -1,13 +1,15 @@
 // test_chest_loot.s — Focused runtime tests for step-13 chest loot fulfillment
 // (docs/CHEST_DESIGN.md "Contents" + "Loot fulfillment handoff"). Exercises the
 // resident chest_fulfill_loot handoff (no-op, stale-latch discard, fulfill) and
-// the VMS drop decode + bounded placement in chest_generate_loot.
+// the VMS drop decode + bounded placement in chest_generate_loot. Tests 10-16
+// cover monster treasure drops (MON-014): kill staging through production
+// eff_kill_monster/combat_note_kill, queue fulfillment, and VMS 4d3 drops.
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_bootstrap)
 
 .pc = $E000 "Result Buffer"
-tc_results: .fill 10, $ff
+tc_results: .fill 17, $ff
 
 .pc = $080E "Test Code"
 
@@ -25,7 +27,7 @@ test_finish:
     sei
     :BankOutBasic()
     :BankOutKernal()
-    ldx #9
+    ldx #16
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -220,6 +222,11 @@ test_monster_find_at:
     clc                         // No monsters in this suite: tile is always free
     rts
 
+// player_init leaves no level threshold to test against; kill tests 14-15
+// exercise staging, not level gain (as test_balrog_victory.s does).
+test_check_levelup:
+    rts
+
 // fill_floor — Set the tiles around the chest to TILE_FLOOR so loot placement
 // finds walkable tiles. Bounded to rows 24-30 / cols 9-15: the full map
 // ($C000) overlaps this suite's Main code, so a whole-map fill would corrupt
@@ -261,6 +268,7 @@ test_reset:
     sta chest_loot_y
     sta chest_loot_flags
     sta chest_pending_summons
+    sta md_count
     lda #3
     sta zp_player_dlvl
     lda #12
@@ -284,6 +292,38 @@ place_chest_at_latch:
     sta fi_p1 + 0
     rts
 
+// stage_drop — queue one monster drop at the chest tile (12,26) with flags A.
+stage_drop:
+    sta md_flags + 0
+    lda #12
+    sta md_x + 0
+    lda #26
+    sta md_y + 0
+    lda #1
+    sta md_count
+    rts
+
+// place_type0 — creature type 0 with treasure flags A in monster slot 0 at
+// (12,26), ready for production eff_kill_monster (X = 0).
+place_type0:
+    sta cr_treasure + 0
+    jsr monster_init_table
+    ldx #0
+    jsr monster_get_ptr
+    lda #12
+    ldy #MX_X
+    sta (zp_ptr0),y
+    lda #26
+    ldy #MX_Y
+    sta (zp_ptr0),y
+    lda #0
+    ldy #MX_TYPE
+    sta (zp_ptr0),y
+    lda #1
+    sta zp_mon_count
+    ldx #0
+    rts
+
 // stubs after dropping ui imports (map-overlap boundary)
 status_draw:
     rts
@@ -299,6 +339,7 @@ test_start:
     :PatchJump(tramp_roll_ego_type_modal, test_tramp_roll_ego_type_modal)
     :PatchJump(item_get_missile, test_item_get_missile)
     :PatchJump(monster_find_at, test_monster_find_at)
+    :PatchJump(combat_check_levelup, test_check_levelup)
 
     // Test 0: no pending latch -> no-op (no GEN load, no loot, latch stays 0).
     jsr test_reset
@@ -677,10 +718,224 @@ test_start:
     bcs !t9_fail+
     lda #$01
     sta tc_results + 9
-    jmp !done+
+    jmp !t10+
 !t9_fail:
     lda #$00
     sta tc_results + 9
+
+    // Test 10: one staged monster drop, carry object + 1d2 ($11, Quasit):
+    // randint(2) = 2 drops at (10,24) and (14,28); one GEN load; queue and
+    // latch cleared.
+    // rng seq: 1d2 roll=1 (randint 2), x1=0,y1=0, x2=4,y2=4
+!t10:
+    jsr test_reset
+    lda #$11
+    jsr stage_drop
+    lda #1
+    sta tcl_rng_seq + 0
+    lda #0
+    sta tcl_rng_seq + 1
+    sta tcl_rng_seq + 2
+    lda #4
+    sta tcl_rng_seq + 3
+    sta tcl_rng_seq + 4
+    jsr chest_fulfill_loot
+    lda tcl_overlay_calls
+    cmp #1
+    bne !t10_fail+
+    lda md_count
+    ora chest_loot_pending
+    bne !t10_fail+
+    lda #10
+    ldy #24
+    jsr floor_item_find_at
+    bcc !t10_fail+
+    lda #14
+    ldy #28
+    jsr floor_item_find_at
+    bcc !t10_fail+
+    lda tcl_rng_idx
+    cmp #5
+    bne !t10_fail+
+    lda #$01
+    sta tc_results + 10
+    jmp !t11+
+!t10_fail:
+    lda #$00
+    sta tc_results + 10
+
+    // Test 11: VMS bit 30 damroll(4d3): d3 rolls 1,2,3,1 = 7 drops. Each drop
+    // draws one x and one y offset to a free tile, so exactly 4 + 14 RNG draws
+    // prove 7 drops were rolled and placed (an eighth would retry occupied
+    // tiles and keep drawing).
+    // rng seq: d3 0,1,2,0; offsets (0,0) (1,0) (2,0) (3,0) (4,0) (0,1) (1,1)
+!t11:
+    jsr test_reset
+    lda #$41                  // carry object + 4d3
+    jsr stage_drop
+    ldx #31
+    lda #0
+!t11_clear:
+    sta tcl_rng_seq,x
+    dex
+    bpl !t11_clear-
+    lda #1
+    sta tcl_rng_seq + 1
+    sta tcl_rng_seq + 6       // x2
+    sta tcl_rng_seq + 15      // y6
+    sta tcl_rng_seq + 16      // x7
+    sta tcl_rng_seq + 17      // y7
+    lda #2
+    sta tcl_rng_seq + 2
+    sta tcl_rng_seq + 8       // x3
+    lda #3
+    sta tcl_rng_seq + 10      // x4
+    lda #4
+    sta tcl_rng_seq + 12      // x5
+    jsr chest_fulfill_loot
+    lda tcl_rng_idx
+    cmp #18
+    bne !t11_fail+
+    lda #11                   // last drop at (12-2+1, 26-2+1)
+    ldy #25
+    jsr floor_item_find_at
+    bcc !t11_fail+
+    lda md_count
+    bne !t11_fail+
+    lda #$01
+    sta tc_results + 11
+    jmp !t12+
+!t11_fail:
+    lda #$00
+    sta tc_results + 11
+
+    // Test 12: a stale chest latch is discarded but a staged monster drop in
+    // the same handoff is still fulfilled (object + 60%, roll 10 succeeds).
+!t12:
+    jsr test_reset
+    lda #1
+    sta chest_loot_pending    // no chest at (12,26): stale
+    lda #$0f
+    sta chest_loot_flags
+    lda #$05
+    jsr stage_drop
+    lda #10
+    sta tcl_rng_seq + 0
+    lda #0
+    sta tcl_rng_seq + 1
+    sta tcl_rng_seq + 2
+    jsr chest_fulfill_loot
+    lda tcl_overlay_calls
+    cmp #1
+    bne !t12_fail+
+    lda md_count
+    ora chest_loot_pending
+    bne !t12_fail+
+    lda tcl_rng_idx
+    cmp #3                    // only the monster drop rolled
+    bne !t12_fail+
+    lda #10
+    ldy #24
+    jsr floor_item_find_at
+    bcc !t12_fail+
+    lda #$01
+    sta tc_results + 12
+    jmp !t13+
+!t12_fail:
+    lda #$00
+    sta tc_results + 12
+
+    // Test 13: GEN load failure discards staged monster drops.
+!t13:
+    jsr test_reset
+    lda #$11
+    jsr stage_drop
+    lda #1
+    sta tcl_overlay_fail
+    jsr chest_fulfill_loot
+    lda tcl_overlay_calls
+    cmp #1
+    bne !t13_fail+
+    lda md_count
+    bne !t13_fail+
+    lda tcl_rng_idx
+    bne !t13_fail+
+    lda fi_item_id + 0
+    cmp #FI_EMPTY
+    bne !t13_fail+
+    lda #$01
+    sta tc_results + 13
+    jmp !t14+
+!t13_fail:
+    lda #$00
+    sta tc_results + 13
+
+    // Test 14: a kill through production eff_kill_monster (spell/missile
+    // path; combat_note_kill) stages the creature's treasure flags at its
+    // position (Creeping Copper Coins $12) and removes the monster.
+!t14:
+    jsr test_reset
+    lda #$12
+    jsr place_type0
+    jsr eff_kill_monster
+    lda md_count
+    cmp #1
+    bne !t14_fail+
+    lda md_x + 0
+    cmp #12
+    bne !t14_fail+
+    lda md_y + 0
+    cmp #26
+    bne !t14_fail+
+    lda md_flags + 0
+    cmp #$12
+    bne !t14_fail+
+    lda zp_mon_count
+    bne !t14_fail+
+    lda #$01
+    sta tc_results + 14
+    jmp !t15+
+!t14_fail:
+    lda #$00
+    sta tc_results + 14
+
+    // Test 15: a creature without treasure flags stages nothing, and a full
+    // queue stages no further drop.
+!t15:
+    jsr test_reset
+    lda #0
+    jsr place_type0
+    jsr eff_kill_monster
+    lda md_count
+    bne !t15_fail+
+    lda #$12
+    jsr place_type0
+    lda #MD_QUEUE_MAX
+    sta md_count
+    jsr eff_kill_monster
+    lda md_count
+    cmp #MD_QUEUE_MAX
+    bne !t15_fail+
+    lda #$01
+    sta tc_results + 15
+    jmp !t16+
+!t15_fail:
+    lda #$00
+    sta tc_results + 15
+
+    // Test 16: clearing the monster table (new level) drops the staged queue.
+!t16:
+    lda #2
+    sta md_count
+    jsr monster_init_table
+    lda md_count
+    bne !t16_fail+
+    lda #$01
+    sta tc_results + 16
+    jmp !done+
+!t16_fail:
+    lda #$00
+    sta tc_results + 16
 
 !done:
     jmp test_finish

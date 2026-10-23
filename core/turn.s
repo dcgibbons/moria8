@@ -9,18 +9,12 @@
 
 #import "turn_render_state.s"
 #import "eff_heal.s"
+#import "turn_data.s"
 
 // Hunger thresholds
 .const FOOD_HUNGRY_AT   = 150   // Food counter below this = hungry
 .const FOOD_WEAK_AT     = 50    // Below this = weak
 .const FOOD_FAINT_AT    = 10    // Below this = faint
-
-// HP regeneration: VMS Moria constants.inc player$regen_*, scaled by 2^16 as
-// in Umoria config.cpp PLAYER_REGEN_*
-.const REGEN_NORMAL = 197       // 0.0030 x max HP per turn: full or hungry
-.const REGEN_WEAK   = 98        // 0.0015: weak
-.const REGEN_FAINT  = 33        // 0.0005: faint
-.const REGEN_HPBASE = 1442      // 0.0220 HP per turn on top of the rate
 
 // player_update_hunger_state — classify hunger from the current food counter
 // Output: zp_hunger_state updated to FULL / HUNGRY / WEAK / FAINT
@@ -99,8 +93,31 @@ turn_tick_effects:
     jsr huff_print_msg
     jmp !no_poison+
 !poison_still:
-    // Poison tick: 1 HP damage per turn (only while timer > 0), clamped at 0.
-    jsr turn_apply_one_damage
+    // Poison damage by VMS Moria con_adj (moria.inc; Umoria
+    // playerUpdatePoisonedState): poison_damage[con_adj + 4] HP a turn, or
+    // with bit 7 set, 1 HP on turns where turn mod (low bits) is 0 (TRN-010).
+    lda player_data + PL_CON_CUR
+    jsr player_con_hp_adj       // A = con_adj, -4..4
+    clc
+    adc #4
+    tax
+    lda poison_damage,x
+    bpl !poison_hits+
+    and #$7f
+    tax
+    lda zp_turn_lo
+    sta zp_math_a
+    lda zp_turn_hi
+    sta zp_math_b
+    jsr math_div_16x8           // A = turn mod X (Y preserved)
+    bne !no_poison+
+    lda #1
+!poison_hits:
+    tay
+!poison_hit:
+    jsr turn_apply_one_damage   // Clamped at 0; preserves Y
+    dey
+    bne !poison_hit-
     lda #DEATH_POISON
     sta zp_death_source
     jsr player_death_check
@@ -218,21 +235,8 @@ turn_tick_effects:
     sta zp_player_mhp_hi
 
     // If current HP is now above max, clamp current HP down to max.
-    lda zp_player_hp_hi
-    cmp zp_player_mhp_hi
-    bcc !no_hero+
-    bne !hero_clamp+
-    lda zp_player_hp_lo
-    cmp zp_player_mhp_lo
-    bcc !no_hero+
-    beq !no_hero+
-!hero_clamp:
-    lda zp_player_mhp_lo
-    sta zp_player_hp_lo
-    sta player_data + PL_HP_LO
-    lda zp_player_mhp_hi
-    sta zp_player_hp_hi
-    sta player_data + PL_HP_HI
+    lda #0
+    jsr eff_heal                // HP += 0, capped at max HP, synced
 !no_hero:
 
     // Word of recall
@@ -441,17 +445,6 @@ turn_tick_regen:
     sta zp_regen_frac
 !ttr_done:
     rts
-
-// Regen rate x 2^16 per max HP by hunger state (VMS constants.inc
-// player$regen_*; Umoria config.cpp PLAYER_REGEN_*). Hungry regenerates at
-// the full rate.
-regen_factor:
-    .byte REGEN_NORMAL, REGEN_NORMAL, REGEN_WEAK, REGEN_FAINT
-.assert "regen_factor follows HUNGER_*", HUNGER_FULL == 0 && HUNGER_HUNGRY == 1 && HUNGER_WEAK == 2 && HUNGER_FAINT == 3, true
-
-// Low byte of the HP regeneration fraction; zp_regen_frac (saved with the
-// game) holds the high byte. Cleared on new game and load.
-regen_frac_lo: .byte 0
 
 // Auto-rest doubles the regeneration rate. Unit tests without game_loop.s
 // get a stand-in (test_main_loop.s binds the real flag).

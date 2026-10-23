@@ -78,8 +78,8 @@
 //   - overlay cache HELP:      $2000-$2FFF
 //   - overlay cache ITEMS:     $3000-$3FFF
 //   - live map span:           $4000-$730B (Phase 10.3 = 198x66)
-//   - DB/data region:          $7400-$7FFF
-//   - tier cache window:       $8000-$94F7
+//   - DB/data region:          $7400-$7EFF
+//   - tier cache window:       $7F00-$94F7
 //   - title-art cache:         $94F8-$97FF
 //   - small overlay cache MODAL:$9800-$9CFF
 //   - small overlay cache:     $9D00-$9FFF
@@ -114,9 +114,11 @@
 .const MMU_COPY_MAP_ROW_LEN = 78
 .const MAP_END          = BANK1_MAP_RESERVED_END
 .const BANK1_DB_BASE    = $7400
-.const BANK1_DB_END     = $7fff
-.const BANK1_TIER_CACHE_BASE = $8000
-.const BANK1_TIER_CACHE_SIZE = 5368
+.const BANK1_DB_END     = $7eff
+// The tier cache took the DB region's last page when tiers gained the
+// cr_treasure SoA field (MON-014): tiers 1-4 need 5520 bytes.
+.const BANK1_TIER_CACHE_BASE = $7f00
+.const BANK1_TIER_CACHE_SIZE = $94f8 - BANK1_TIER_CACHE_BASE  // up to reserved gap 0
 .const BANK1_TIER_CACHE_END  = BANK1_TIER_CACHE_BASE + BANK1_TIER_CACHE_SIZE - 1
 .const BANK1_RESERVED_GAP0_BASE = $94f8
 .const BANK1_RESERVED_GAP0_END  = $9fff

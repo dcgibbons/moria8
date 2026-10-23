@@ -19,6 +19,7 @@ test_start:
 
 .const TILE_STAIRS_DN = $90
 .const HSTR_SAVE_WELCOME = 0
+.const HSTR_EFF_PARALYZE_END = 0   // game_loop.s paralysis expiry (TRN-011)
 .const EGO_TYPE_COUNT = 8
 .const IF_IDENTIFIED = $02
 .const IF_SENSED = $08
@@ -560,6 +561,7 @@ turn_post_action:
     jmp test_turn_post_action
 turn_rest_disturbed: .byte 0     // core/turn.s (not imported here); auto-rest stop latch
 regen_frac_lo: .byte 0           // core/turn.s; HP regen fraction low byte (cleared on new game/load)
+md_count: .byte 0                // core/monster_death.s; staged monster drops (cleared on load)
 
 ui_help_clear_all:
     jmp test_ui_help_clear_all
@@ -777,6 +779,7 @@ recall_spells: .fill MAX_CREATURES, 0
 // stubbed like the other game_loop externals.
 chest_run_pending_summons:
 chest_run_deferred:
+chest_fulfill_loot:
     rts
 #import "../../../../core/scene_dirty.s"
 #import "../../../../core/scene_force.s"

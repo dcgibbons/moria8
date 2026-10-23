@@ -256,6 +256,12 @@ cmb_in_way_str:
 #import "../../core/spell_effects.s"
 #import "../../core/spell_effects_overlay.s"
 #undef SPELL_EFFECTS_INCLUDE_IDENTIFY
+// turn.s's regen/poison tables in resident main RAM: the play slot has no
+// room (#importonce: turn.s's own import is then a no-op).
+#import "../../core/turn_data.s"
+// Heal feedback (spell/potion heal + message) in resident main RAM too: the
+// play slot has no room.
+#import "../../core/player_heal_feedback.s"
 
 // Constants are needed by resident consumers before the data/code placement
 // later in A2PlaySlot and A2AuxData. These imports emit no bytes.
@@ -1169,7 +1175,6 @@ player_adjust_equipment_stat:
 #import "../../core/turn.s"
 #undef TURN_REST_DISTURBED_EXTERNAL
 // Small play-resident modules (play is present in every gameplay phase).
-#import "../../core/player_heal_feedback.s"
 #import "../../core/ui_restore.s"
 #import "../../core/ui_help_clear.s"
 #import "../../core/stat_display.s"

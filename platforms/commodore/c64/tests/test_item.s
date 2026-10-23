@@ -16,7 +16,7 @@ test_bootstrap:
 test_exit_trampoline:
     sei                         // Disable IRQs during copy
     :BankOutBasic()             // Ensure BASIC ROM off (tc_results in $A000+)
-    ldx #57-1
+    ldx #58-1
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -134,7 +134,7 @@ press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
 // Test result buffer — copy to $0400 at end (msg_print clobbers $0400)
-tc_results: .fill 57, $ff
+tc_results: .fill 58, $ff
 tc_loop_ctr: .byte 0          // Loop counter (safe from ZP clobber)
 tc_valid_ctr: .byte 0         // Valid item counter for test 22
 t16_base_ac: .byte 0          // Stable scratch for Test 16 across item_wear
@@ -150,7 +150,7 @@ t16_base_ac: .byte 0          // Stable scratch for Test 16 across item_wear
 
 test_start:
     // Initialize result area to $ff (untested)
-    ldx #57-1
+    ldx #58-1
     lda #$ff
 !clr:
     sta tc_results,x
@@ -2912,9 +2912,85 @@ test_start:
     lda t56_save2
     sta rng_range + 2
 
+    // Test 58: item_pickup gold carries into the higher gold bytes: 249 + 14
+    // = 263 ($0107), then $00FF + $0102 = $0201 (gold keeps its quantity
+    // high byte in fi_p1). The low-byte carry used to be lost (cmp in
+    // floor_item_get_qty_hi_x), dropping 256 gold per carry.
+    jsr t58_gold_setup
+    lda #249
+    sta player_data + PL_GOLD_0
+    lda #14
+    sta fi_add_qty
+    lda #0
+    sta fi_add_qty_hi
+    jsr floor_item_add
+    jsr item_pickup
+    bcc !t58_fail+
+    lda player_data + PL_GOLD_0
+    cmp #$07
+    bne !t58_fail+
+    lda player_data + PL_GOLD_1
+    cmp #$01
+    bne !t58_fail+
+    jsr t58_gold_setup
+    lda #$ff
+    sta player_data + PL_GOLD_0
+    lda #$02
+    sta fi_add_qty
+    lda #$01
+    sta fi_add_qty_hi
+    jsr floor_item_add
+    jsr item_pickup
+    bcc !t58_fail+
+    lda player_data + PL_GOLD_0
+    cmp #$01
+    bne !t58_fail+
+    lda player_data + PL_GOLD_1
+    cmp #$02
+    bne !t58_fail+
+    lda player_data + PL_GOLD_2
+    bne !t58_fail+
+    lda #$01
+    sta tc_results + 57
+    jmp !tests_done+
+!t58_fail:
+    lda #$00
+    sta tc_results + 57
+
 !tests_done:
     // Jump to trampoline at $033C (below $A000) to copy results + BRK
     jmp test_exit_trampoline
+
+// t58_gold_setup — empty floor and gold, the player on a floor tile at
+// (20,12), and a gold floor item staged there (caller sets qty and p1).
+t58_gold_setup:
+    jsr item_init_floor
+    lda #0
+    sta zp_msg_flags
+    sta player_data + PL_GOLD_0
+    sta player_data + PL_GOLD_1
+    sta player_data + PL_GOLD_2
+    ldx #12
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #20
+    lda #TILE_FLOOR | FLAG_LIT | FLAG_VISITED
+    sta (zp_ptr0),y
+    lda #20
+    sta zp_player_x
+    sta fi_add_x
+    lda #12
+    sta zp_player_y
+    sta fi_add_y
+    lda #0                      // Gold (small)
+    sta fi_add_id
+    lda #1                      // Stuff the keyboard buffer for -more-
+    sta $c6
+    lda #$20
+    sta $0277
+    rts
 
 t56_save0: .byte 0
 t56_save1: .byte 0

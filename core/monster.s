@@ -17,7 +17,7 @@
 .const MAX_CREATURES         = MAX_DUNGEON_CREATURES + MAX_TOWN_CREATURES  // 65
 .const TOWN_CREATURE_BASE    = MAX_DUNGEON_CREATURES  // First town index = 57
 .const TOWN_CREATURE_COUNT   = 8  // All 8 umoria town creatures
-.const NUM_SOA_FIELDS        = 22 // Number of SoA arrays for tier loading
+.const NUM_SOA_FIELDS        = 23 // Number of SoA arrays for tier loading
 .const EMPTY_SLOT        = $ff
 
 // Attack type constants
@@ -126,6 +126,10 @@ cr_speed:
 .const CF_DRAGON      = $10
 .const CF_GROUP       = $20   // Pack creature: spawns extras, wakes neighbors
 .const CF_BREEDER     = $40   // Multiplying creature: chance to clone each turn
+// cr_speed: speed code in bits 0-1; Umoria CMOVE random-move bits kept in place
+// in bits 3-5 (MON-013): CM_20_RANDOM $08, CM_40_RANDOM $10, CM_75_RANDOM $20.
+.const CR_SPEED_MASK  = $03
+.const CM_RANDOM_MOVE = $38
 .const CF_INFRA       = $80   // Warm creature: visible to player infravision
 
 cr_mflags:
@@ -359,6 +363,13 @@ cr_name_hi:
     .byte >crn_t0, >crn_t1, >crn_t2, >crn_t3, >crn_t4, >crn_t5, >crn_t6, >crn_t7 // 57-64: town
 cr_name_tables_end:
 
+// Treasure flags (cr_treasure, tier SoA field after cr_spell_flags) and the
+// kill-time drop queue. Ports defining MONSTER_DEATH_EXTERNAL import it into
+// another always-visible segment.
+#if !MONSTER_DEATH_EXTERNAL
+#import "monster_death.s"
+#endif
+
 // Name strings (screen codes, null-terminated)
 // Embedded dungeon names are available only to tests that explicitly opt in.
 #if COMPILE_EMBEDDED_DUNGEON_TEST_ROSTER
@@ -557,6 +568,7 @@ monster_init_table:
     bne !loop2-                 // Clear bytes 256-383
     lda #0
     sta zp_mon_count
+    sta md_count                // no drop staged on the cleared level survives
     rts
 
 // monster_find_free_slot — Find first empty slot
@@ -1357,7 +1369,7 @@ monster_remove:
 // The tier data is sequential SoA arrays in this order:
 //   display, color, speed, mflags, level, hd_num, hd_sides, ac, sleep, aaf,
 //   xp_lo, xp_hi, atk0_type, atk0_dice, atk0_sides,
-//   atk1_type, atk1_dice, atk1_sides, spell_chance, spell_flags,
+//   atk1_type, atk1_dice, atk1_sides, spell_chance, spell_flags, treasure,
 //   name_lo, name_hi
 // Each array is `count` bytes long.
 // Clobbers: A, X, Y, zp_ptr0, zp_ptr1
@@ -1394,7 +1406,7 @@ load_tier_to_buffer:
 
     ldx ltb_array_idx           // Restore array counter
     inx
-    cpx #NUM_SOA_FIELDS         // 22 arrays
+    cpx #NUM_SOA_FIELDS         // 23 arrays
     bne !ltb_array-
 
     rts
@@ -1409,7 +1421,7 @@ ltb_dst_lo:
     .byte <cr_xp_lo, <cr_xp_hi
     .byte <cr_atk0_type, <cr_atk0_dice, <cr_atk0_sides
     .byte <cr_atk1_type, <cr_atk1_dice, <cr_atk1_sides
-    .byte <cr_spell_chance, <cr_spell_flags
+    .byte <cr_spell_chance, <cr_spell_flags, <cr_treasure
     .byte <cr_name_lo, <cr_name_hi
 ltb_dst_hi:
     .byte >cr_display, >cr_color, >cr_speed, >cr_mflags, >cr_level
@@ -1417,7 +1429,7 @@ ltb_dst_hi:
     .byte >cr_xp_lo, >cr_xp_hi
     .byte >cr_atk0_type, >cr_atk0_dice, >cr_atk0_sides
     .byte >cr_atk1_type, >cr_atk1_dice, >cr_atk1_sides
-    .byte >cr_spell_chance, >cr_spell_flags
+    .byte >cr_spell_chance, >cr_spell_flags, >cr_treasure
     .byte >cr_name_lo, >cr_name_hi
 ltb_dst_end:
 
@@ -1735,7 +1747,11 @@ creature_get_name:
 tier_name_lo_addr: .word 0
 tier_name_hi_addr: .word 0
 #endif
+#if PLATFORM_SCRATCH_BUFS_IN_PAGE2
+.label creature_name_buf = PLATFORM_CREATURE_NAME_BUF_BASE
+#else
 creature_name_buf: .fill 32, 0
+#endif
 cgn_saved_x: .byte 0           // scratch: saved creature index for tier reload
 #if HAL_PLATFORM_MONSTER_BANK1_TIER_NAMES
 cgn_src_banked: .byte 0        // 1 = copy name via C128 Bank 1 DB helper

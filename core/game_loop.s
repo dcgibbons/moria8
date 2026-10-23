@@ -829,6 +829,7 @@ c64_test_single_drive_load_return_resume_entry:
     lda #0
     sta auto_rest_active
     sta regen_frac_lo           // not saved (zp_regen_frac, the high byte, is)
+    sta md_count                // no drop staged before the load
 #if HAL_PLATFORM_LEVELUP_MAGIC_USES_TRAMPOLINE
     sta levelup_magic_pending   // none owed by the game played before the load
 #endif
@@ -1045,7 +1046,13 @@ c128_town_move_diag_loop_top:
     beq !not_paralyzed+
     cmp #1
     bne !paralyzed_tick+
+    // Last paralyzed turn: the counter runs out at the start of the turn and
+    // the player acts before the monsters (VMS/Umoria order, TRN-011).
     jsr msg_clear
+    dec zp_eff_paralyze
+    ldx #HSTR_EFF_PARALYZE_END
+    jsr huff_print_msg
+    jmp !not_paralyzed+
 !paralyzed_tick:
     jsr turn_post_action
     lda zp_game_flags
