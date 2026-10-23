@@ -12,6 +12,7 @@ Modes:
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import json
 import multiprocessing
 import queue
@@ -27,7 +28,7 @@ from . import nav
 from .auditor import Auditor
 from .brain import Brain
 from .game import EmulatorUnresponsive, GameFault, Mode, Observation
-from .goals import GOALS, QUALIFICATION_SEEDS, Goal
+from .goals import GOALS, QUALIFICATION_SEEDS, Goal, required
 from .launch import PLAYTEST_OUT, ROOT, SHIPPING, Build, build_identity
 from .recorder import CharacterLog, SessionLog, write_json
 from .vice import ViceError
@@ -319,13 +320,14 @@ def main(argv: list[str] | None = None) -> int:
     if mode == "regress":
         suites = sorted(SUITES.glob("*.json"))
         report = {}
+        ok = bool(suites)   # no frozen suite is no evidence
         for path in suites:
             suite = json.loads(path.read_text())
-            goal = GOALS[suite["goal"]]
+            goal = dataclasses.replace(GOALS[suite["goal"]], step_budget=suite["step_budget"])
             results = run_seeds(goal, suite["seeds"], args.workers, session, build, False)
             passed = sum(r.outcome == "reached" for r in results)
             report[goal.name] = f"{passed}/{len(suite['seeds'])}"
-            ok &= passed == len(suite["seeds"])
+            ok &= passed >= suite.get("required", required(goal, len(suite["seeds"])))
         session.summary["regress"] = report
         print(json.dumps(report))
     elif mode == "qualify":
@@ -333,14 +335,18 @@ def main(argv: list[str] | None = None) -> int:
         seeds = parse_seeds(args.seeds) if args.seeds else QUALIFICATION_SEEDS
         results = run_seeds(goal, seeds, args.workers, session, build, False)
         passed = [r.seed for r in results if r.outcome == "reached"]
-        ok = len(passed) == len(seeds)
-        session.summary["qualification"] = {"passed": f"{len(passed)}/{len(seeds)}", "works": ok,
+        need = required(goal, len(seeds))
+        ok = len(passed) >= need
+        session.summary["qualification"] = {"passed": f"{len(passed)}/{len(seeds)}", "required": need,
+                                            "works": ok,
                                             "failed": [r.__dict__ for r in results
                                                        if r.outcome != "reached"]}
-        print(f"qualification {goal.name}: {len(passed)}/{len(seeds)}", flush=True)
-        if ok and args.freeze:
+        print(f"qualification {goal.name}: {len(passed)}/{len(seeds)} (needs {need})", flush=True)
+        if ok and args.freeze and seeds != QUALIFICATION_SEEDS:
+            print("not frozen: a suite is the goal's full qualification seed list", flush=True)
+        elif ok and args.freeze:
             SUITES.mkdir(parents=True, exist_ok=True)
-            write_json(suite_path(goal.name), {"goal": goal.name, "seeds": seeds,
+            write_json(suite_path(goal.name), {"goal": goal.name, "seeds": seeds, "required": need,
                                                "step_budget": goal.step_budget,
                                                "frozen": time.strftime("%Y-%m-%d"),
                                                "program_sha256": build_identity(build)["program_sha256"]})

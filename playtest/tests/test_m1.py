@@ -6,7 +6,7 @@ from moria_playtest import abi as abimod
 from moria_playtest.auditor import Auditor
 from moria_playtest.brain import Brain
 from moria_playtest.game import KEY_SPACE, Mode, Observation
-from moria_playtest.goals import GOALS
+from moria_playtest.goals import GOALS, required
 from moria_playtest.screen import decode_rows
 from moria_playtest.view import DIRS, TYPE_TRAP, UNKNOWN, WALL, Creature, View
 
@@ -388,6 +388,19 @@ class RecorderPathTest(unittest.TestCase):
             self.assertNotEqual(dirs[0], dirs[1])
             self.assertTrue(all((d / "trace.jsonl.gz").exists() for d in dirs))
         self.assertEqual(len(set(names)), 2)
+
+
+class QualifyBarTest(unittest.TestCase):
+    """§7.2 / §14.6 item 5: every goal works at 16/20 (the bot need not
+    play every creature perfectly)."""
+
+    def test_bars(self) -> None:
+        self.assertEqual(required(GOALS["enter_dungeon"], 20), 16)
+        self.assertEqual(required(GOALS["reach_dl2"], 20), 16)
+        self.assertEqual(required(GOALS["reach_dl5"], 20), 16)
+        self.assertEqual(required(GOALS["clvl5"], 20), 16)
+        self.assertEqual(required(GOALS["clvl5"], 4), 4)    # scaled, rounded up
+        self.assertEqual(required(GOALS["clvl5"], 5), 4)
 
 
 class PlateauTest(unittest.TestCase):
