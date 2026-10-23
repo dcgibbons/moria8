@@ -33,6 +33,10 @@ PLATFORM_FILES: dict[str, tuple[Path, ...]] = {
         ROOT / "platforms/atari8/config.s",
         ROOT / "platforms/atari8/storage.s",
     ),
+    "bbcmaster": (
+        ROOT / "platforms/bbcmaster/config.s",
+        ROOT / "platforms/bbcmaster/storage.s",
+    ),
 }
 
 TRANSACTION_BODIES = {
@@ -66,6 +70,11 @@ TRANSACTION_BODIES = {
         "hal_asset_load_prg_header",
         ("xe_cache_fetch", "EnterSio", "ExitSio"),
     ),
+    "bbcmaster": (
+        ROOT / "platforms/bbcmaster/storage.s",
+        "hal_asset_load_prg_header",
+        ("beeb_overlay_try_cache", "beeb_dfs_load_to_bank"),
+    ),
 }
 TITLE_TRANSACTION_BODIES = {
     "c64": (
@@ -97,6 +106,11 @@ TITLE_TRANSACTION_BODIES = {
         ROOT / "platforms/atari8/storage.s",
         "hal_asset_load_title",
         ("hal_storage_title_name", "hal_asset_load_prg_header"),
+    ),
+    "bbcmaster": (
+        ROOT / "platforms/bbcmaster/storage.s",
+        "hal_asset_load_title",
+        ("hal_storage_title_name", "beeb_dfs_load_to_bank"),
     ),
 }
 CLOSE_TRANSACTION_BODIES = {
@@ -177,6 +191,7 @@ ASSEMBLY_ROOTS = (
     ROOT / "platforms/apple2",
     ROOT / "platforms/cx16",
     ROOT / "platforms/atari8",
+    ROOT / "platforms/bbcmaster",
 )
 ASSET_NAME_NAMESPACE_RE = re.compile(r"\bhal_asset_[A-Za-z0-9_]*name[A-Za-z0-9_]*\b")
 

@@ -8,7 +8,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-PLATFORMS = ("c64", "c128", "plus4", "apple2", "cx16", "atari8")
+PLATFORMS = ("c64", "c128", "plus4", "apple2", "cx16", "atari8", "bbcmaster")
 REQUIRED_TOP_KEYS = ("platform", "machine", "display", "storage", "memory", "capabilities")
 REQUIRED_CAPABILITIES = (
     "reu_overlay_cache",
@@ -113,6 +113,21 @@ EXPECTED = {
         "layout_file": "platforms/atari8/hal/layout.s",
         "memory_file": "platforms/atari8/memory.s",
         "screen_file": "platforms/atari8/screen.s",
+        "direct_display_consts": False,
+    },
+    "bbcmaster": {
+        "columns": 80,
+        "rows": 24,
+        "viewport": {"x": 1, "y": 2, "width": 78, "height": 18},
+        "display": "crtc_mode0_lynne",
+        "banking": "$fe30+$fe34",
+        "map_base": "$8000",
+        "default_save_device": 8,
+        "requires_drives": {"dfs_1770", "ssd_80track"},
+        "manifest_file": "platforms/bbcmaster/hal/manifest.json",
+        "layout_file": "platforms/bbcmaster/hal/layout.s",
+        "memory_file": "platforms/bbcmaster/memory.s",
+        "screen_file": "platforms/bbcmaster/screen.s",
         "direct_display_consts": False,
     },
 }

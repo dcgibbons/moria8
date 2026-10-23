@@ -32,8 +32,7 @@ ensure native performance and idiomatic hardware utilization.
 │   ├── apple2/            # Apple IIe/IIc (6502, 128K, Soft-switches, ProDOS)
 │   ├── apple2gs/          # Apple IIgs (65C816, Super Hi-Res, GS/OS)
 │   ├── atari8/            # Atari 8-bit (6502C, ANTIC, POKEY, 64KB XL/XE)
-│   ├── acorn/             # Acorn/BBC Micro machines
-│   │   └── bbcmaster/     # BBC Master 128 (65C02, Sideways RAM, Mode 7/0)
+│   ├── bbcmaster/         # Acorn BBC Master 128 (65C12, Sideways RAM, Mode 0 LYNNE)
 │   └── nes/               # PPU, APU, Mappers
 ├── data/                  # Shared game assets, strings, levels
 ├── tools/                 # Build tools (Python scripts, Asset Converters)
@@ -235,7 +234,65 @@ The Atari 8-bit port lives under `platforms/atari8/` (design & execution plan:
 * Testing uses headless MAME (`a800xl` 15-scenario behavioral suite + `a130xe`
   3-scenario cache/SIO suite) driven by `platforms/atari8/harness_smoke.py`.
 
-## 9. Current Codebase Assessment & Next Steps
+## 9. Acorn BBC Master 128 Release Track
+
+The Acorn BBC Master 128 port lives under `platforms/bbcmaster/` (design &
+execution plan: `docs/BBCMASTER_PORT_PLAN.md`; memory authority:
+`docs/BBCMASTER_MEMORY_CONTRACT.md`).
+
+* Source lives under `platforms/bbcmaster/` and links the unmodified `core/`
+  and `platforms/shared/` modules with `80×24` gameplay geometry (`198×66` map =
+  `13,068` B, identical to C128, Apple IIe, and Commander X16).
+* The release target is a stock **128 KB Acorn BBC Master 128** (2 MHz 65C12,
+  MOS 3.20, DFS 2.24, 32 KB Main RAM, 20 KB Shadow Screen RAM `LYNNE`, 4 KB
+  Private RAM `ANDY`, 8 KB Filing/System RAM `HAZEL`, and 64 KB Sideways RAM in
+  slots 4–7).
+* Memory model (authority: `docs/BBCMASTER_MEMORY_CONTRACT.md`):
+  * Unbanked Main RAM (`$0E00-$7FFF`, `29,184` B) holds the Always-Resident
+    image (`MORIA8.RES`), with all `ACCCON`/`ROMSEL` switching helpers,
+    Mode 0 glyph blitter, and MOS storage wrappers linked strictly below `$3000`
+    (`$0E00-$2FFF`), `WRCHV` (`$020E`) redirected to `rts`, and `VDU 23,1,0;0;0;0;`
+    disabling the MOS 100 Hz software cursor timer; `$0400-$07FF` (Language
+    Workspace) holds `FLOOR_ITEM_BASE`, `CREATURE_BASE`, Huffman/door scratch,
+    MOS `OSFILE`/`OSGBPB`/`OSWORD` parameter blocks, and the 256-byte save/bounce
+    buffer (`beeb_ss_buf`).
+  * 20 KB Shadow Screen RAM `LYNNE` (`$3000-$7FFF`, `ACCCON` bit `D = 1` for
+    CRTC display and bit `X = 1` for row-bracketed CPU access from `< $3000`)
+    hosts `beeb_font_table` (`$3000-$33FF`, 1 KB C64-ordered font),
+    `DUNGEON_GEN_SCAN_SCRATCH_BASE` (`$3400-$37FF`), `beeb_char_shadow`
+    (`$3800-$3F7F`, `80×24` C64 screen-code shadow buffer for dirty-cell skipping
+    and MAME Lua harness inspection), and the active `80×24` Mode 0 bitmap
+    (`$4400-$7FFF`, `15,360` B, CRTC `R12=$08, R13=$80`).
+  * 4 KB Private RAM `ANDY` (`$8000-$8FFF`, `ROMSEL` bit 7 = `1`) hosts
+    `BeebHuffData` linked directly at physical `$8000-$8D93` and decoded under
+    `HAL_HUFFMAN_LOCK_IRQ_DURING_DECODE = 1` (`ROMSEL = $84`) with zero per-byte
+    bank-switch thunks.
+  * 64 KB Sideways RAM (`$8000-$BFFF`, `ROMSEL = 4..7`) hosts:
+    * Bank 4 (`$04`): Active execution bank (`BeebPlaySlot` `$8000-$A3FF`,
+      `PLATFORM_TIER_NAME_POOL_BASE` `$A400-$A7FF`, and the active Overlay/Tier
+      window `$A800-$BFFF`).
+    * Bank 5 (`$05`): Live 198×66 Dungeon Map (`$8000-$B30B`) plus cached
+      `OVL.UI` (`$B400-$BDFF`, with `512` B free slack at `$BE00-$BFFF`).
+    * Bank 6 (`$06`): `BeebAuxData` (`$8000-$96FF`, `5,888` B budget = `718` B
+      slack, virtual `$6000-$76FF`) plus cached `OVL.TOWN`, `OVL.MODAL`, and
+      `MONSTER.DB1` (`512` B free slack at `$BE00-$BFFF`).
+    * Bank 7 (`$07`): Cached `OVL.SPELL`, `OVL.ITEMS`, and `OVL.GEN` (`512` B
+      free slack at `$BE00-$BFFF`), with cold modal overlays (`OVL.START`,
+      `OVL.DEATH`, `OVL.HELP`, `OVL.CHEST`, `OVL.STORAGE`, `OVL.TITLE`),
+      `MONSTER.DB.2..4`, and `TITLE` loaded on demand via MOS `OSFILE`.
+* Shipping media is a self-contained **200 KB 80-track single-sided Acorn DFS
+  `.ssd` Program Disk** (`build/moria8-bbcmaster.ssd`, `*OPT 4, 3`) built by
+  `tools/make_ssd.py`, booted via `!BOOT` -> `MORIA8` (`boot.s`) streaming
+  `MORIA8P`, plus `LICENSE` and `SRCOFFR` (Rule 7). Saves are never written to
+  the Program Disk; Disk Setup (`disk_setup_beeb.s`) supports 1-drive swap (`:0`)
+  and 2-drive (`:0`..`:3`) modes, rejects the Program Disk (`TITLE` check), and
+  initializes a separate Save Disk with `MORIAID` (`"M8SAVE"`), `HISCORE`, and 4
+  pre-allocated contiguous 64-sector (`16,384` B) save slots (`SAVE0`..`SAVE3`)
+  updated in place via `OSFIND A=$C0`.
+* Testing uses headless MAME (`bbcm`) driven by
+  `platforms/bbcmaster/harness_smoke.py` (gated by `BBCMROMS`).
+
+## 10. Current Codebase Assessment & Next Steps
 
 Moria8 is currently well-positioned because the 8-bit logic is increasingly platform-agnostic.
 

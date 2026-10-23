@@ -57,7 +57,8 @@ If the quote does not name the action, stop and ask.
    8-bit). Commodore images carry them as SEQ files `license,s`/`source-offer,s`;
    the Apple IIe image carries ProDOS TXT files `LICENSE`/`SOURCE.OFFER`; the
    Commander X16 `.zip` bundle carries `LICENSE` and `SOURCE-OFFER`; the Atari
-   8-bit `.atr` image carries DOS 2.5 files `LICENSE.TXT` and `SRCOFFER.TXT`.
+   8-bit `.atr` image carries DOS 2.5 files `LICENSE.TXT` and `SRCOFFER.TXT`;
+   the BBC Master 128 `.ssd` image carries DFS files `LICENSE` and `SRCOFFR`.
    New platform ports must do the same.
 8. Runtime verification uses VICE warp mode and never relies on timeouts above
    30 seconds. Commands that launch VICE, MAME, or `x16emu` need localhost
@@ -65,6 +66,12 @@ If the quote does not name the action, stop and ask.
    `PermissionError`) — request escalated permission on the first attempt; do
    not try a sandboxed run first. See Memory And Verification Details for the
    full escalation list.
+9. Never hardcode or reference any paths outside the project directory in
+   Makefiles, scripts, harnesses, or source files (no `$HOME`/`~`, user home
+   directories, `/tmp`, or host-specific filesystem locations). External
+   environment variables (`A2ROMS`, `X16ROM`, `ATARI8ROMS`, `BBCMROMS`, etc.)
+   must have empty defaults (`?=`) in Makefiles and be supplied solely via the
+   caller's environment.
 
 Additional durable invariants for memory, banking, zero-page, C128, and
 shared-code work live in `docs/INTERNAL_MANDATES.md`; load it before any such
@@ -84,6 +91,7 @@ load `docs/BEHAVIOR_CHANGE_PROTOCOL.md`, then every matching domain contract:
 | Apple IIe addresses, banks, aux/main ownership, overlays, copied/runtime code | `docs/APPLE2_MEMORY_POLICY.md` |
 | Commander X16 addresses, RAM banks, overlays, VERA access | `docs/CX16_MEMORY_CONTRACT.md` |
 | Atari 8-bit addresses, `PORTB` / 130XE banking, overlays, `SIOV` bounce, ANTIC/POKEY/GTIA access | `docs/ATARI8_MEMORY_CONTRACT.md` |
+| BBC Master 128 addresses, `ROMSEL` / `ACCCON` / `LYNNE` / `ANDY` banking, overlays, MOS/DFS calls | `docs/BBCMASTER_MEMORY_CONTRACT.md` |
 | None of the above | No contract load required |
 
 Before editing a matched domain, output one line:
@@ -146,6 +154,17 @@ Hard boundaries:
   `zp_save_buf`, `msg_history`), overlays and monster tiers share `$E000-$EFFF`,
   and `RuntimeBanked` spans `$F000-$FFF9` below the RAM CPU vectors
   (`$FFFA-$FFFF`)
+- BBC Master 128 ownership comes from `docs/BBCMASTER_MEMORY_CONTRACT.md` and
+  `platforms/bbcmaster/memory.s`: low resident banking/blitter/MOS helpers end
+  at or below `$3000`, `Default` resident ends at or below `$8000`, 20 KB Shadow
+  RAM `LYNNE` (`$3000-$7FFF`) holds the C64-ordered font (`$3000-$33FF`),
+  dungeon-gen scan scratch (`$3400-$37FF`), `beeb_char_shadow` (`$3800-$3F7F`),
+  and the Mode 0 display bitmap (`$4400-$7FFF`), 4 KB Private RAM `ANDY`
+  (`$8000-$8FFF`) holds `BeebHuffData`, and Sideways RAM Banks 4–7 (`$8000-$BFFF`)
+  hold `BeebPlaySlot` (`$8000-$A3FF`), `PLATFORM_TIER_NAME_POOL_BASE`
+  (`$A400-$A7FF`), the `$A800-$BFFF` overlay/tier window (Bank 4), `MAP_BASE`
+  (`$8000-$B30B`, Bank 5), `BeebAuxData` (`$8000-$96FF`, Bank 6), and cached
+  hot overlays/tier 1 (Banks 5–7)
 
 After C128 layout, banking, runtime-loaded, copied, or trampolined-code changes,
 verify linked address, PRG load header, load destination bank, visible execution
@@ -168,7 +187,8 @@ unsandboxed localhost access): commands that invoke `x64sc`, `x128`, `xplus4`,
 or `x16emu`; `make test64`; `make testplus4`; `make testplus4-runtime`;
 `make testapple2-runtime`; `make test128-fast`; `make test128-fast-smoke`;
 `make test128`; `make testcx16`; `make testcx16-runtime`;
-`make testatari8-runtime`; `make testatari8-fast-smoke`; direct `harness128.py`,
+`make testatari8-runtime`; `make testatari8-fast-smoke`;
+`make testbbcmaster-runtime`; `make testbbcmaster-fast-smoke`; direct `harness128.py`,
 `harness128_batch.py`, `harnessplus4.py`, or `harness_smoke.py` runs; and
 filtered runtime harness targets. Static/build-only checks stay sandboxed:
 `make build`, `make check-hal-boundaries`, Python static checkers, `git diff`,
@@ -184,7 +204,8 @@ harness (`platforms/cx16/harness_smoke.py`) drives headless `x16emu -testbench`
 when `X16EMU` and `X16ROM` are available (20 scenarios). The Atari 8-bit
 harness (`platforms/atari8/harness_smoke.py`) drives headless MAME `a800xl` and
 `a130xe` when `ATARI8ROMS` is set (15 `a800xl` scenarios plus 3 `a130xe`
-scenarios).
+scenarios). The BBC Master 128 harness (`platforms/bbcmaster/harness_smoke.py`)
+drives headless MAME `bbcm` when `BBCMROMS` is set (15 scenarios).
 
 ## Working Style
 
@@ -234,8 +255,8 @@ reported. Before declaring done, confirm in your reply:
 ## Reference
 
 This is a Commodore 64 / Commodore 128 / Plus/4 / Apple IIe / Commander X16 /
-Atari 8-bit 6502/65C02 assembly project built with Kick Assembler and tested
-with VICE, MAME, and `x16emu` headless harnesses.
+Atari 8-bit / Acorn BBC Master 128 6502/65C02 assembly project built with Kick
+Assembler and tested with VICE, MAME, and `x16emu` headless harnesses.
 
 Primary entry points:
 
@@ -245,6 +266,7 @@ Primary entry points:
 - `platforms/apple2/main.s`
 - `platforms/cx16/main.s`
 - `platforms/atari8/main.s`
+- `platforms/bbcmaster/main.s`
 
 Source layout:
 
@@ -261,17 +283,20 @@ Source layout:
   scripts, and memory-contract checker.
 - `platforms/atari8/`: Atari 8-bit (800XL/65XE/130XE) platform code, MAME
   harness scripts, and memory-contract checker.
+- `platforms/bbcmaster/`: Acorn BBC Master 128 platform code, MAME harness
+  scripts, and memory-contract checker.
 - `build/`: generated binaries, disk images, symbols, snapshots, and test
   scratch output.
 
 Build and test (run from the repository root):
 
-- `make` or `make build`: build C64, C128, Plus/4, Apple IIe, CX16, and Atari
-  8-bit payloads
+- `make` or `make build`: build C64, C128, Plus/4, Apple IIe, CX16, Atari
+  8-bit, and BBC Master 128 payloads
 - `make test`: default regression mix; also runs the Apple IIe MAME runtime
   suite when `A2ROMS` is set, the Commander X16 `x16emu` runtime suite when
-  `X16EMU`/`X16ROM` are available, and the Atari 8-bit MAME runtime suite when
-  `ATARI8ROMS` is set
+  `X16EMU`/`X16ROM` are available, the Atari 8-bit MAME runtime suite when
+  `ATARI8ROMS` is set, and the BBC Master 128 MAME runtime suite when
+  `BBCMROMS` is set
 - `make test64`: C64 tests
 - `make testplus4`: Plus/4 tests
 - `make test128-fast`: stable C128 unit batch
@@ -282,12 +307,14 @@ Build and test (run from the repository root):
   suite (requires `A2ROMS`)
 - `make testcx16`: Commander X16 memory-contract gate + `x16emu` runtime suite
 - `make testatari8`: Atari 8-bit memory-contract gate + MAME runtime suite
-- `make disk`: build shipping C64, C128, Plus/4, Apple IIe, CX16, and Atari
-  8-bit packages
+- `make testbbcmaster`: BBC Master 128 memory-contract gate + MAME runtime suite
+- `make disk`: build shipping C64, C128, Plus/4, Apple IIe, CX16, Atari
+  8-bit, and BBC Master 128 packages
 - `make run`, `make run64`, `make run128`, `make runplus4`: launch under VICE
 - `make runapple2`: launch under MAME apple2ee (requires `A2ROMS`)
 - `make runcx16`: launch under `x16emu`
 - `make runatari8`: launch under MAME a800xl (requires `ATARI8ROMS`)
+- `make runbbcmaster`: launch under MAME bbcm (requires `BBCMROMS`)
 - `make clean`: remove build artifacts
 
 Kick Assembler downloads into `tools/kickass/` unless the `KICKASS` env var is
@@ -296,10 +323,10 @@ set.
 Architecture notes:
 
 - Display is character-cell based (PETSCII screen codes; the Apple IIe
-  translates to Apple display codes at write time; the Atari 8-bit port builds a
-  1 KB C64-screen-code-ordered RAM font at boot).
-- C64, Plus/4, and Atari 8-bit gameplay are 40-column. C128, Apple IIe, and
-  Commander X16 gameplay are 80-column.
+  translates to Apple display codes at write time; the Atari 8-bit and BBC
+  Master 128 ports build a 1 KB C64-screen-code-ordered RAM font at boot).
+- C64, Plus/4, and Atari 8-bit gameplay are 40-column. C128, Apple IIe,
+  Commander X16, and BBC Master 128 gameplay are 80-column.
 - BASIC is used for the loader stub only; do not rely on BASIC routines after
   machine-code startup. KERNAL routines are allowed where appropriate.
 - Preserve intentional disk-loading and memory-ownership boundaries.

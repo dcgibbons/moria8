@@ -27,6 +27,7 @@ AC_DIR      ?= ../../tools/applecommander
 AC_BIN      ?= $(AC_DIR)/ac
 UNAME_S     := $(shell uname -s)
 UNAME_M     := $(shell uname -m)
+AC_HOST_BIN  = $(AC_DIR)/ac-$(UNAME_S)-$(UNAME_M)-$(AC_VERSION)
 ifeq ($(UNAME_S),Darwin)
 ifeq ($(UNAME_M),arm64)
 AC_ASSET     = ac-darwin-arm64.zip
@@ -54,6 +55,10 @@ SOURCE_OFFER_DISK_FILE = $(OUTA2)/source-offer.txt
 
 # Python tools and harnesses must not leave __pycache__ in source directories.
 export PYTHONDONTWRITEBYTECODE := 1
+
+ifneq ($(filter clean,$(MAKECMDGOALS)),)
+$(filter-out clean,$(MAKECMDGOALS)): | clean
+endif
 
 BUILD       ?= ../../build
 OUTA2        = $(BUILD)/apple2
@@ -145,32 +150,36 @@ ensure-kickass:
 kickass:
 	@mkdir -p "$(KICKASS_DIR)"
 	@echo "Downloading Kick Assembler..."
-	@curl -sL "$(KICKASS_URL)" -o /tmp/kickass.zip
-	@unzip -o /tmp/kickass.zip -d "$(KICKASS_DIR)"
-	@rm /tmp/kickass.zip
+	@curl -sL "$(KICKASS_URL)" -o "$(KICKASS_DIR)/kickass.zip"
+	@unzip -o "$(KICKASS_DIR)/kickass.zip" -d "$(KICKASS_DIR)"
+	@rm -f "$(KICKASS_DIR)/kickass.zip"
 
 ac:
 	@mkdir -p "$(AC_DIR)"
 	@echo "Downloading AppleCommander $(AC_VERSION) ($(AC_ASSET))..."
-	@curl -sL "$(AC_URL)" -o /tmp/ac.zip
-	@echo "$(AC_SHA256)  /tmp/ac.zip" | shasum -a 256 -c -
-	@unzip -o /tmp/ac.zip -d "$(AC_DIR)"
-	@rm /tmp/ac.zip
-	@bin=$$(find "$(AC_DIR)" -type f -name 'ac-*' | head -1); \
-	 test -n "$$bin" || { echo "no binary found in AppleCommander archive"; exit 1; }; \
-	 cp "$$bin" "$(AC_BIN)"; chmod +x "$(AC_BIN)"
+	@curl -sL "$(AC_URL)" -o "$(AC_DIR)/ac.zip"
+	@echo "$(AC_SHA256)  $(AC_DIR)/ac.zip" | shasum -a 256 -c -
+	@rm -rf "$(AC_DIR)/.extract" && mkdir -p "$(AC_DIR)/.extract"
+	@unzip -o "$(AC_DIR)/ac.zip" -d "$(AC_DIR)/.extract"
+	@rm -f "$(AC_DIR)/ac.zip"
+	@bin=$$(find "$(AC_DIR)/.extract" -type f -name 'ac-*' | head -1); \
+	 test -n "$$bin" || { rm -rf "$(AC_DIR)/.extract"; echo "no binary found in AppleCommander archive"; exit 1; }; \
+	 cp "$$bin" "$(AC_HOST_BIN)"; chmod +x "$(AC_HOST_BIN)"; \
+	 cp "$(AC_HOST_BIN)" "$(AC_BIN)"; chmod +x "$(AC_BIN)"; \
+	 rm -rf "$(AC_DIR)/.extract"
 
 ensure-ac:
-	@test -f "$(AC_BIN)" || $(MAKE) --no-print-directory ac
+	@test -x "$(AC_HOST_BIN)" || $(MAKE) --no-print-directory ac
+	@cmp -s "$(AC_HOST_BIN)" "$(AC_BIN)" || { cp "$(AC_HOST_BIN)" "$(AC_BIN)" && chmod +x "$(AC_BIN)"; }
 
 prodos: ensure-ac
 	@mkdir -p "$(dir $(PRODOS))"
 	@echo "Downloading ProDOS $(PRODOS_VERSION)..."
-	@curl -sL "$(PRODOS_URL)" -o /tmp/prodos.po
-	@echo "$(PRODOS_SHA256)  /tmp/prodos.po" | shasum -a 256 -c -
-	@"$(AC_BIN)" -g /tmp/prodos.po PRODOS > "$(PRODOS)"
-	@dd if=/tmp/prodos.po of="$(BOOTBLOCKS)" bs=512 count=2 2>/dev/null
-	@rm /tmp/prodos.po
+	@curl -sL "$(PRODOS_URL)" -o "$(dir $(PRODOS))prodos.po"
+	@echo "$(PRODOS_SHA256)  $(dir $(PRODOS))prodos.po" | shasum -a 256 -c -
+	@"$(AC_BIN)" -g "$(dir $(PRODOS))prodos.po" PRODOS > "$(PRODOS)"
+	@dd if="$(dir $(PRODOS))prodos.po" of="$(BOOTBLOCKS)" bs=512 count=2 2>/dev/null
+	@rm -f "$(dir $(PRODOS))prodos.po"
 
 ensure-prodos:
 	@test -f "$(PRODOS)" -a -f "$(BOOTBLOCKS)" || $(MAKE) --no-print-directory prodos
@@ -208,8 +217,10 @@ $(OUTA2)/monster.db.4: $(A2_TIER_DIR)/tier4_prg.s | ensure-kickass $(OUTA2)
 $(A2_TITLE_PRG): $(TITLE_SRC) $(VERSION_INC) | ensure-kickass $(OUTA2)
 	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(TITLE_SRC)" -define TITLE_PLATFORM_A2 -symbolfiledir "$(OVL_OUTA2)" -o "$@"
 
-$(A2_BOOT_PRG) $(OUTA2)/boot.sym: $(A2_BOOT_SRC) cache_layout.s | ensure-kickass $(OUTA2)
+$(A2_BOOT_PRG): $(A2_BOOT_SRC) cache_layout.s | ensure-kickass $(OUTA2)
 	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(A2_BOOT_SRC)" -symbolfile -symbolfiledir "$(OVL_OUTA2)" -o "$(A2_BOOT_PRG)"
+
+$(OUTA2)/boot.sym: $(A2_BOOT_PRG)
 
 # ── Disk image ────────────────────────────────────────────
 # PRG -> BIN conversion strips the Kick header and asserts each load

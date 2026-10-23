@@ -39,6 +39,7 @@ PLATFORM_FILES = {
     "apple2": ROOT / "platforms/apple2/hal/memory_bank_consts.s",
     "cx16": ROOT / "platforms/cx16/hal/memory_bank_consts.s",
     "atari8": ROOT / "platforms/atari8/hal/memory_bank_consts.s",
+    "bbcmaster": ROOT / "platforms/bbcmaster/hal/memory_bank_consts.s",
 }
 
 COMMON_ALIAS_FILE = ROOT / "platforms/commodore/common/bank_port_consts.s"

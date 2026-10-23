@@ -17,6 +17,7 @@ PLATFORM_FILES = {
     "apple2": ROOT / "platforms/apple2/input.s",
     "cx16": ROOT / "platforms/cx16/input.s",
     "atari8": ROOT / "platforms/atari8/input.s",
+    "bbcmaster": ROOT / "platforms/bbcmaster/input.s",
 }
 
 REQUIRED_LABELS = (
