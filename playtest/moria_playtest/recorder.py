@@ -5,7 +5,8 @@
 - ``w<N>/<goal>/<seed>/trace.jsonl.gz``: every decision. The goal is in the
   path because regression plays the same seeds for every goal.
 - ``w<N>/snapshots/<goal>-<seed>-s<step>-dl<N>.vsf`` + ``.brain.json``: level
-  entries (written by Worker).
+  entries (written by Worker). Each character keeps only its latest (the
+  restart point) and those a finding cites.
 - ``findings/<id>.json``: kind, detail, snapshot, and the keys that replay it.
 - ``status-w<N>.json``: live worker state for the dashboard.
 """

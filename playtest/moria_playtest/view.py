@@ -15,6 +15,7 @@ The brain sees only this view. Privileged state stays with the auditor.
 from __future__ import annotations
 
 import heapq
+from functools import lru_cache
 from dataclasses import dataclass, field
 
 from .game import Game, Observation
@@ -31,6 +32,8 @@ DIRS = {(0, -1): ord("K"), (0, 1): ord("J"), (-1, 0): ord("H"), (1, 0): ord("L")
 Pos = tuple[int, int]
 TRAP_COST = 25   # extra steps a path will walk to go around a known trap
 UNKNOWN_COST = TRAP_COST   # ... or past an unidentified glyph (twice that onto one)
+HAZARD_COST = 150   # ... or past a hazard: a Yellow Jelly's poison touch stacked on every
+                    # pass of a corridor beside it (M4 round 48, seed 1009)
 # Screen characters that are terrain, not things (core/color.s tile_screen_codes;
 # the trap/rune glyph decodes as '·'; town store entrances are digits).
 TERRAIN_GLYPHS = set(".#'+><:%· ") | set("12345678")
@@ -60,6 +63,12 @@ class View:
     stores: list[Pos] = field(default_factory=list)  # town only: entrance of store N+1
     unknown: dict[Pos, str] = field(default_factory=dict)  # unidentified glyphs on screen
     hazards: set[Pos] = field(default_factory=set)   # brain: creatures to keep away from
+    screen: tuple[int, int, int, int] = (0, 0, 0, 0)  # map x, y, width, height on screen
+
+    def on_screen(self, pos: Pos) -> bool:
+        """Whether the screen shows ``pos`` (an unset screen shows the whole map)."""
+        x, y, w, h = self.screen
+        return w == 0 or (x <= pos[0] < x + w and y <= pos[1] < y + h)
 
     @property
     def monsters(self) -> set[Pos]:
@@ -109,11 +118,10 @@ class View:
         goals = goals - self.blocked   # a blocked tile is no goal either (round 17)
         danger = ({(x + dx, y + dy) for x, y in self.creatures for dx in (-1, 0, 1) for dy in (-1, 0, 1)}
                   if keep_clear else set())
-        near_unknown = {(x + dx, y + dy) for x, y in set(self.unknown) | self.hazards
-                        for dx in (-1, 0, 1) for dy in (-1, 0, 1)}
+        near_unknown, near_hazard = self.near_costly()
         if start in goals:
             return (0, 0)
-        found = self.route(goals, start, danger, near_unknown, avoid_monsters, doors)
+        found = self.route(goals, start, danger, near_unknown, near_hazard, avoid_monsters, doors)
         return None if found is None else found[0]
 
     def path_steps(self, goals: set[Pos], *, avoid_monsters: bool, doors: bool = True) -> int | None:
@@ -123,21 +131,33 @@ class View:
         goals = goals - self.blocked
         if self.pos in goals:
             return 0
-        near_unknown = {(x + dx, y + dy) for x, y in set(self.unknown) | self.hazards
-                        for dx in (-1, 0, 1) for dy in (-1, 0, 1)}
-        found = self.route(goals, self.pos, set(), near_unknown, avoid_monsters, doors)
+        near_unknown, near_hazard = self.near_costly()
+        found = self.route(goals, self.pos, set(), near_unknown, near_hazard, avoid_monsters, doors)
         return None if found is None else found[1]
 
+    def near_costly(self) -> tuple[set[Pos], set[Pos]]:
+        """Squares next to an unidentified glyph, and next to a hazard."""
+        def around(tiles: set[Pos]) -> set[Pos]:
+            return {(x + dx, y + dy) for x, y in tiles for dx in (-1, 0, 1) for dy in (-1, 0, 1)}
+        return around(set(self.unknown)), around(self.hazards)
+
     def route(self, goals: set[Pos], start: Pos, danger: set[Pos], near_unknown: set[Pos],
-              avoid_monsters: bool, doors: bool) -> tuple[tuple[int, int], int] | None:
+              near_hazard: set[Pos], avoid_monsters: bool, doors: bool) -> tuple[tuple[int, int], int] | None:
         """Dijkstra over known tiles: (first step, number of steps) along the
-        cheapest path to the nearest goal."""
+        cheapest path to the nearest goal. Hot path: ``passable`` and
+        ``neighbors`` are inlined (same neighbour order, same tie-break)."""
+        cols, rows, types = self.cols, self.rows, self.types
+        blocked, unknown = self.blocked, self.unknown
+        creatures = self.creatures if avoid_monsters else ()
+        town = self.dlvl == 0
+        walkable = WALKABLE_TYPES
+        heappush, heappop = heapq.heappush, heapq.heappop
         cost = {start: 0}
         previous = {start: start}
         heap = [(0, 0, start)]   # (cost, push order, tile): FIFO among equals, as in BFS
         pushed = 0
         while heap:
-            here_cost, _, here = heapq.heappop(heap)
+            here_cost, _, here = heappop(heap)
             if here_cost > cost[here]:
                 continue
             if here in goals:
@@ -146,35 +166,71 @@ class View:
                     here = previous[here]
                     steps += 1
                 return (here[0] - start[0], here[1] - start[1]), steps
-            for nxt in self.neighbors(*here):
-                if nxt not in goals and (nxt in danger or not self.passable(
-                        *nxt, avoid_monsters=avoid_monsters, doors=doors)):
+            hx, hy = here
+            for dx, dy in DIRS:
+                x, y = hx + dx, hy + dy
+                if not (0 <= x < cols and 0 <= y < rows):
                     continue
-                step = (1 + (TRAP_COST if self.type_at(*nxt) == TYPE_TRAP else 0)
-                        + (UNKNOWN_COST if nxt in near_unknown else 0)
-                        + (2 * UNKNOWN_COST if nxt in self.unknown else 0))
-                if here_cost + step < cost.get(nxt, here_cost + step + 1):
-                    cost[nxt] = here_cost + step
+                nxt = (x, y)
+                t = types[y * cols + x]
+                if nxt not in goals:
+                    if nxt in danger or nxt in blocked or nxt in creatures:
+                        continue
+                    if t == TYPE_DOOR_OPEN and town:
+                        continue   # town store entrance
+                    if t not in walkable and not (doors and t == TYPE_DOOR_CLOSED):
+                        continue
+                step = 1
+                if t == TYPE_TRAP:
+                    step += TRAP_COST
+                if nxt in near_unknown:
+                    step += UNKNOWN_COST
+                if nxt in near_hazard:
+                    step += HAZARD_COST
+                if nxt in unknown:
+                    step += 2 * UNKNOWN_COST
+                new_cost = here_cost + step
+                if new_cost < cost.get(nxt, new_cost + 1):
+                    cost[nxt] = new_cost
                     previous[nxt] = here
                     pushed += 1
-                    heapq.heappush(heap, (here_cost + step, pushed, nxt))
+                    heappush(heap, (new_cost, pushed, nxt))
         return None
 
     def frontier(self, *, traps: bool = False) -> set[Pos]:
         """Known passable tiles (or closed doors) touching an unknown tile.
 
         A known trap is a frontier tile only with ``traps`` (nothing else is left).
+        A tile under a creature or next to a hazard is none: a goal is entered
+        whatever stands on it (M4 round 52: explore walked into a Yellow
+        Jelly sitting on the edge, seed 1016).
         """
-        out = set()
-        for i, t in enumerate(self.types):
+        near_hazard = {(hx + dx, hy + dy) for hx, hy in self.hazards for dx in (-1, 0, 1) for dy in (-1, 0, 1)}
+        exclude = self.blocked | set(self.unknown) | set(self.creatures) | near_hazard
+        town = self.dlvl == 0
+        return {p for p, t in self.terrain_frontier(traps)
+                if p not in exclude and not (t == TYPE_DOOR_OPEN and town)}
+
+    def terrain_frontier(self, traps: bool) -> list[tuple[Pos, int]]:
+        """Walkable tiles (or closed doors) touching an unknown tile, with their
+        type: the part of ``frontier`` that depends on the map alone, cached
+        per map contents (several layers ask each step)."""
+        key = (traps, hash(tuple(self.types)))
+        cache = self.__dict__.setdefault("_frontier_cache", {})
+        if key in cache:
+            return cache[key]
+        cols, rows, types = self.cols, self.rows, self.types
+        out = []
+        for i, t in enumerate(types):
             if (t not in WALKABLE_TYPES and t != TYPE_DOOR_CLOSED) or (t == TYPE_TRAP and not traps):
                 continue
-            x, y = i % self.cols, i // self.cols
-            if ((x, y) in self.blocked or (x, y) in self.unknown
-                    or (t == TYPE_DOOR_OPEN and self.dlvl == 0)):
-                continue
-            if any(self.type_at(nx, ny) == UNKNOWN for nx, ny in self.neighbors(x, y)):
-                out.add((x, y))
+            x, y = i % cols, i // cols
+            for dx, dy in DIRS:
+                nx, ny = x + dx, y + dy
+                if 0 <= nx < cols and 0 <= ny < rows and types[ny * cols + nx] == UNKNOWN:
+                    out.append(((x, y), t))
+                    break
+        cache[key] = out
         return out
 
     def search_spots(self, searched: set[Pos], *, traps: bool = False) -> set[Pos]:
@@ -227,20 +283,27 @@ def screen_to_map(game: Game, obs: Observation, col: int, row: int) -> Pos:
             obs.zp[abi.zp_view_y] + row - abi.hal_layout_viewport_y)
 
 
+@lru_cache(maxsize=4)
+def tile_type_table(flag_visited: int) -> tuple[int, ...]:
+    """Map tile byte -> view type: unknown until visited; secret doors and
+    every wall kind read as wall."""
+    out = []
+    for tile in range(256):
+        if not tile & flag_visited:
+            out.append(UNKNOWN)
+        elif tile >> 4 == TYPE_SECRET or tile >> 4 in (0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0xC, 0xD):
+            out.append(WALL)
+        else:
+            out.append(tile >> 4)
+    return tuple(out)
+
+
 def build_view(game: Game, obs: Observation, tiles: bytes, levels: bytes | None = None) -> View:
     """``levels`` is the resident ``cr_level`` table, read once per observation."""
     abi = game.abi
     cols, rows = abi.hal_layout_map_cols, abi.hal_layout_map_rows
-    types = []
-    for tile in tiles:
-        if not tile & abi.FLAG_VISITED:
-            types.append(UNKNOWN)
-        elif tile >> 4 == TYPE_SECRET:
-            types.append(WALL)
-        elif tile >> 4 in (0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0xC, 0xD):
-            types.append(WALL)
-        else:
-            types.append(tile >> 4)
+    table = tile_type_table(abi.FLAG_VISITED)
+    types = [table[tile] for tile in tiles]
     by_pos = {}
     size = abi.MONSTER_ENTRY_SIZE
     for slot in range(abi.MAX_MONSTERS):
@@ -265,4 +328,5 @@ def build_view(game: Game, obs: Observation, tiles: bytes, levels: bytes | None 
         xs = game.mon.mem_get(abi.store_door_x, abi.STORE_COUNT, game.ram)
         ys = game.mon.mem_get(abi.store_door_y, abi.STORE_COUNT, game.ram)
         stores = list(zip(xs, ys))
-    return View(cols, rows, types, obs.pos, obs.dlvl, creatures, stores=stores, unknown=unknown)
+    screen = (*screen_to_map(game, obs, vx, vy), abi.hal_layout_viewport_w, abi.hal_layout_viewport_h)
+    return View(cols, rows, types, obs.pos, obs.dlvl, creatures, stores=stores, unknown=unknown, screen=screen)

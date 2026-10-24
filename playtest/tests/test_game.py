@@ -78,6 +78,7 @@ class ClassifyTest(unittest.TestCase):
 
     def test_item_prompt_and_its_list(self) -> None:
         self.assertEqual(self.mode(obs({0: "Wear which item (a-c)?"})), (Mode.ITEM, "which"))
+        self.assertEqual(self.mode(obs({0: "Quaff which potion (a-a)?"})), (Mode.ITEM, "which"))   # M4 round 40
         self.assertEqual(self.mode(obs({0: "               Inventory", 2: " a) Brass Lantern"})),
                          (Mode.ITEM, "list"))
         self.assertEqual(self.mode(obs({0: "               Inventory", 18: "Press any key"})),

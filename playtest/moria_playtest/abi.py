@@ -130,6 +130,14 @@ class Abi:
     consts: dict[str, int]
     all_symbols: dict[str, list[int]]
 
+    def __post_init__(self) -> None:
+        # Plain attributes: __getattr__ ran millions of times a session (M4
+        # profile). Labels win over consts, as in __getattr__.
+        for table in (self.consts, self.labels):
+            for name, value in table.items():
+                if name.isidentifier() and name not in ("labels", "consts", "all_symbols"):
+                    self.__dict__[name] = value
+
     def __getattr__(self, name: str) -> int:
         labels = self.__dict__.get("labels", {})
         if name in labels:

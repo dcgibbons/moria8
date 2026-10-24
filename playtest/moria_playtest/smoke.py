@@ -13,6 +13,7 @@ import json
 import sys
 import time
 
+from .auditor import STATUS_HP
 from .game import KEY_SPACE, GameFault, Mode, Observation
 from .launch import PLAYTEST_OUT, find_vice
 from .worker import Worker
@@ -25,7 +26,7 @@ def status_numbers(obs: Observation) -> dict[str, int]:
     row21, row23 = obs.rows[21], obs.rows[23]
     lv = int(row21.split("LV:")[1].split()[0])
     dl = int(row21.split("DL:")[1].split()[0])
-    hp, mhp = row23.split("HP:")[1].split()[0].split("/")
+    hp, mhp = STATUS_HP.search(row23).groups()
     return {"clvl": lv, "dlvl": dl, "hp": int(hp), "mhp": int(mhp)}
 
 

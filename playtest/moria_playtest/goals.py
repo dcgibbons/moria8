@@ -26,6 +26,7 @@ class Goal:
     target_dlvl: int = 0   # the brain walks down until this depth
     want_xp: bool = False  # M2: seek monsters for XP
     qualify_bar: int = 16  # of the 20 qualification seeds, how many must reach it (§7.2)
+    ready_margin: int = 2  # character levels over the depth before going deeper (brain.ready_level)
 
 
 GOALS: dict[str, Goal] = {
@@ -45,6 +46,17 @@ GOALS: dict[str, Goal] = {
     "clvl5": Goal(
         "clvl5", "Reach character level 5. target_dlvl 4 caps depth; readiness (brain.ready_level) keeps it on DL1-2 until level 5.",
         lambda o: o.clvl >= 5, step_budget=30_000, target_dlvl=4, want_xp=True),
+    # M4 (§15): frozen 2026-10-24 at these budgets (playtest/suites/).
+    "clvl10": Goal(
+        "clvl10", "Reach character level 10. target_dlvl 8 caps depth; readiness keeps it three levels over "
+        "each depth (M4 round 84 A/B: 31/40 against 28/40 at two).",
+        lambda o: o.clvl >= 10, step_budget=100_000, target_dlvl=8, want_xp=True, ready_margin=3),
+    # reach_dl8 replaced reach_dl10 (maintainer direction 2026-10-24).
+    "reach_dl8": Goal(
+        "reach_dl8", "Descend, levelling up and resupplying, and arrive on DL8. Readiness keeps it two "
+        "levels over each depth: diving at level = depth met Green Nagas at level 5 with the starting "
+        "Dagger (maintainer direction 2026-10-23: build up first).",
+        lambda o: o.dlvl >= 8, step_budget=100_000, target_dlvl=8),
 }
 
 # Fixed qualification seeds (§7.2): 20 seeds, first character only.

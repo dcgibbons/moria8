@@ -21,9 +21,13 @@ def screen_code_to_char(code: int) -> str:
     return "·"  # graphics glyph
 
 
+# Screen code -> character for all 256 codes, for one-call decoding of a row.
+_DECODE = {code: screen_code_to_char(code) for code in range(256)}
+
+
 def decode_rows(screen: bytes) -> list[str]:
-    return ["".join(screen_code_to_char(b) for b in screen[r * COLS:(r + 1) * COLS])
-            for r in range(ROWS)]
+    text = screen[:COLS * ROWS].decode("latin-1").translate(_DECODE)
+    return [text[r * COLS:(r + 1) * COLS] for r in range(ROWS)]
 
 
 def text(rows: list[str]) -> str:

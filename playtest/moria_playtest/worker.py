@@ -39,6 +39,10 @@ class Snapshot:
     def save_brain(self) -> None:
         self.brain_path.write_text(json.dumps(self.brain, indent=1, sort_keys=True))
 
+    def delete(self) -> None:
+        self.path.unlink(missing_ok=True)
+        self.brain_path.unlink(missing_ok=True)
+
     @classmethod
     def load(cls, path: Path) -> "Snapshot":
         brain_path = path.with_suffix(".brain.json")

@@ -562,7 +562,7 @@ Each milestone has a measurable exit criterion and an explicit stop rule.
 | **M1 `enter_dungeon`** | Brain prompt and town-navigation layers; fair-play view; auditor v0; recorder; dashboard v0 | `enter_dungeon` works (§7.2). A deliberately broken test build (one invariant violated) is caught and its finding replays. |
 | **M2 `reach_dl2`, `reach_clvl2`** | Dungeon navigation, doors, search, stairs; fight, emergency, rest; anti-stall; plateau alert; frozen suites | Both goals work, and `enter_dungeon` still passes its frozen suite. No `unknown_prompt` in the final qualification runs. **No further goals are added until M2 is met.** |
 | **M3 `reach_dl5`, `clvl5`** | The brain rounds in §14.3: any-glyph creatures, food and light logistics, threat memory, avoiding stationary monsters, sealed-area fallback | Both goals work (§7.2, ≥16/20); all frozen suites still pass; no `unknown_prompt`. **Met 2026-10-22 (§14.9).** |
-| **M4 `clvl10`, `reach_dl10`** | The brain rounds in §15.3: stationary hazards, fear and fast attackers, then what the re-measured clusters show | Both goals work (§7.2, ≥16/20); all frozen suites still pass; no `unknown_prompt`. Started 2026-10-22 (`/goal`, §15). |
+| **M4 `clvl10`, `reach_dl8`** (`reach_dl10` until 2026-10-24) | The brain rounds in §15.3: stationary hazards, fear and fast attackers, then what the re-measured clusters show | Both goals work (§7.2, ≥16/20); all frozen suites still pass; no `unknown_prompt`. Started 2026-10-22 (`/goal`, §15). |
 
 **Stop rules** (defaults, tunable by the maintainer):
 
@@ -1410,7 +1410,11 @@ playtest check, smoke and the five frozen suites pass.
 
 The maintainer started M4 on 2026-10-22 (`/goal proceed with M4`). The goals
 were decided with M3 (§14.4, §14.6 item 1): `clvl10` and `reach_dl10`. The
-exit criterion is M3's (§8).
+exit criterion is M3's (§8). On 2026-10-24 the maintainer replaced
+`reach_dl10` with `reach_dl8` ("change to reach_dl8") after rounds 71-79
+held `reach_dl10` at 20-24 of 40; rows below that name `reach_dl10` are the
+history of the old goal. The same direction raised the food the bot carries
+("carry more food": up to 20 rations' worth, 16 purchases a visit).
 
 ### 15.1 Baselines
 
@@ -1518,6 +1522,32 @@ Rounds 1 and 2 became rounds 32-33 (§15.5).
    buys scrolls). `docs/MANUAL.md` updated. C64 `test_store.s` t48
    (mutation-checked), t43 part E narrowed to category-stocked stores. The
    C128 ITEMS overlay, which holds the restock code, has 0 bytes left.
+9. **Items stack** (2026-10-23, maintainer direction "yeah stack!"): Moria8
+   gave every item its own pack slot, so 20 single rations filled the
+   22-slot pack and Word of Recall could not be bought. Identical food,
+   potions, scrolls, flasks of oil, spikes and ammunition now share one
+   slot up to 255, as VMS `inven_carry` merges them (`core/inv_add.s`);
+   eating, quaffing, reading, refuelling, throwing, firing and spiking use
+   one (`inv_consume_one`); selling sells one at the one-item price; a stack
+   shows its count. Not done: a full pack still refuses an item that would
+   only merge (VMS `inven_check_num` allows it); names are not pluralised.
+   Memory: C64 moves five pure scratch groups to free page-2 RAM and BASIC's
+   line buffer ($0200-$0258; 1 byte left below $C000), Plus/4 three buffers
+   to its BASIC buffer, Atari the item-name buffer after `msg_history` in
+   high RAM, C128 `inv_add.s` to the main image, and BBC `item_spawn_level`
+   into OVL.GEN behind a resident trampoline (its Bank 7 GEN cache slot
+   grows to 21 pages; `docs/BBCMASTER_MEMORY_CONTRACT.md`). C64
+   `test_item.s` t59-t61 (mutation-checked).
+10. **Acid damages armour** (2026-10-24, maintainer direction "Full VMS"):
+   Green and Black Nagas, which spit acid every turn, caused about 40% of
+   M4 deaths. Moria8 applied the full acid dice; VMS `acid_dam`/`minus_ac`
+   damages a random worn armour piece ("Your <item> is damaged!", to-AC - 1)
+   and halves the damage while that piece has AC left (MON-015,
+   `docs/MONSTER_STATE_CONTRACT.md`). Shared code in `core/monster_acid.s`;
+   the C128 main image and the Apple IIe and BBC Master resident images
+   carry it, and the C64 found the bytes by sharing two inventory-slot copy
+   helpers (`inv_slot_to_fi_add`, `fi_add_to_inv_slot`). C64
+   `test_monster_attack.s` t18-t22 (mutation-checked).
 
 ### 15.5 Round log
 
@@ -1549,5 +1579,99 @@ Rounds 1 and 2 became rounds 32-33 (§15.5).
 | 50 | Never rest, search or wait beside a creature that never moves: step off; badly hurt with resting blocked by a creature seen close, back away from where it was last seen; a Black Market trip for Word of Recall with 600 gold or more | 9/14 | 2/11 (stopped) | No Black Market trip ever: gold never reached 600 though characters picked up 3,600-9,000. The game lost 256 gold on each pickup that carried (§15.4 item 7) |
 | 51 | Game: gold pickup carry fixed | 16/20 | 4/17 (stopped) | `clvl10` meets the bar. With gold kept, 6 of 12 `reach_dl10` characters bought Word of Recall at the Black Market. Deaths: White Mushroom patches attacking a paralysed bot whose next command screen said only "You can move again." (it rested beside them), Novice Mage groups confusing it, coins, Yellow Jelly |
 | 52 | Game: Temple and Alchemy shop stock follows VMS (§15.4 item 8). Bot: an attacker named behind `-more-` counts on the next command screen | 9/17 | 0/7 (stopped) | The stock change shifts every dungeon (store RNG draws), so per-seed outcomes moved. Sealed pockets: a felt-out dead-end edge still counted as a way out, so the bot rested 2,700 turns and starved (seeds 1005, 1003, 1011); explore walked into a Yellow Jelly sitting on an unexplored edge (a goal square is entered whatever stands on it) |
-| 53 | A dead-end edge already stood on is no way out (sealed searching starts), groping comes before forced searching; no frontier square under a creature or next to a hazard | | | |
+| 53 | A dead-end edge already stood on is no way out (sealed searching starts), groping comes before forced searching; no frontier square under a creature or next to a hazard | 13/20 | 5/20 | `reach_dl10` deaths: 4 starved sealed in (never read the Word of Recall they carried), 7 lost fights (Green Naga 3, coins 2, Novice Mage/Priest groups, Skeleton Orc) |
+| 54 | Sealed in and short of food: read Word of Recall at any depth. Harness: playtester hot paths optimised (same decisions over a 3,000-step trace, 22.2 s to 16.3 s per character: `decide` 6.0 s to 2.8 s); iteration rounds cap characters at 50,000 steps (`--step-budget`; final qualification keeps the goal's 100,000) | 13/19 | 4/17 | A full pack: items never stack in Moria8, and 20 single foods (8 bought per visit) filled 22 slots, so Word of Recall purchases failed (seed 1020) |
+| 55 | Carry at most 8 rations' worth; Slime Molds only to make up the reserve | (invalid) | (invalid) | The disk filled (2.4 TB of level-entry snapshots) and 13 workers' dumps timed out. Cause: the reserve followed the current depth, so a character with 2.33 rations went up from DL3 and back down from DL2 every step (~4,000 level entries each). Harness: keep only the latest snapshot per character and those findings cite |
+| 56 | Food reserve from the deepest level since town; creature toughness memory (a kind that cost half the HP without dying is not hunted and is fled at 80% for 3 levels) | 15/20 | 5/16+ | Round in ~8 minutes, 144 MB on disk. Characters now buy and use potions and Word of Recall; most deaths came after drinking all three Cure Light Wounds |
+| 57 | Carry 5 Cure Light Wounds | 15/20 | 3/17 | Starvation 8: once the reserve was made only Rations were bought, and none when the store had none |
+| 58 | Slime Molds up to 2 rations over the reserve; carry at most 10 rations' worth | 10/20 | 6/17 | Starvation 5; Creeping Coins 6 (fought at full HP since round 46), Green Naga 5 |
+| 59 | Never fight Creeping Coins unless cornered | 11/20 | 2/17 | Starvation 9 again. Rounds now swing about 5 characters on any change (every change reshuffles all 20 dungeons) |
+| 60-64 | Game: items stack (VMS `inven_carry`; §15.4 item 9). Bot: depth goals descend at character level = depth (40-seed A/B: 12/40 vs 6/39); no resting while a slow creature was seen in the last 30 steps; carry 2 Word of Recall; clvl10 avoids and flees creatures with monster-lore HP > 20 + 4 x level or AC > 20 + 3 x level (A/B: 24/35 vs 20/37; it halved reach_dl10, so depth goals do not use it). Harness: per-worker VICE config with the version tag (no desktop dialogs) | 15/20 | 12/20 | Round 64, full 100,000-step budget. Rounds 62-63: 11/20 and 12/20 |
+| 65-70 | 40-seed A/B tests, all rejected: creature-near memory 15 steps (reach 15/40 vs 22/40), dive at level = depth - 1 (12 vs 20), toughness at 30% HP lost (14 vs 22), retreat at 45% HP (14 vs 21), spare oil thrown at strong creatures (no effect: rarely more than 3 flasks), tunnelling out when sealed (19 vs 22; the sealed test fires too often) | | | Two `hang` findings in the input wait loop (`input_sound_update`, `hal_sound_update`) under 32-64 parallel emulators; neither reproduces from its snapshot |
+| 71-78 | 40-seed rounds (`reach_dl10` at 100,000 steps from round 76, `clvl10` at 50,000). Bot: kill a weak creature that never moves when it blocks the only way on (seed 1021 starved behind a Floating Eye; seed 1006 searched a room 12,000 turns with an eye beside its door); one level from a depth goal, the depth-scaled food reserve no longer sends it home; dark floor the game forgets stays remembered (seed 1023 oscillated 6,000 steps); with nothing else to do it searches instead of resting; casters by kind, not glyph (one Orc Shaman made every Orc a caster); `reach_dl10` builds up first (readiness margin 2, maintainer direction); buy the best affordable weapon (blows x dice from the game tables) and armour, keeping 200 gold. Rejected: walking away from strong nagas (naga deaths rose to 8 a goal). Game: MON-015 acid. Harness: an input stop that lands as a long resume is interrupted is caught (three false `hang` findings) | 30/40 best (round 74), 21-28/40 since | 24/40 best (rounds 71, 78) | Any change reshuffles about a third of the seeds: differences under about 7 of 40 are noise. Nagas remain the largest killer, then Creeping Coins and starvation |
+| 79-92 | `reach_dl8` replaces `reach_dl10` and the bot carries more food (maintainer direction 2026-10-24); clvl10 descends at three levels over each depth (40-seed A/B: 31/40 against 28/40); every round at the full 100,000-step budget from 83. Bot: Word of Recall from the Alchemist, before Temple potions (79 bought in 40 characters, from ~5), and read whatever the food after 2,000 steps without progress; fight back in town when attacked; a crowd of two or more within 3 squares of a staircase takes it, up or down (a Creeping Coins nest by the arrival stairs); explore never steps back beside slow creatures, seen or remembered; a weak Floating Eye beside the player is killed; killing a weak blocker waits until nothing else is close; a door given up on is bashed again when sealed in; sealed in, a weak stationary creature, seen or remembered, is killed so the squares beside it can be searched; an attack is unseen when nothing in view is drawn like its named attacker, and searching stops for 20 steps after one; no look through an identified item, and an attack relabels an item glyph as its attacker. Rejected: monster-lore armour threshold 14 + 3 x level (30/40 and 24/40 against 29/40 and 23/40) | 12-18/20; **18/20** (round 92) | 13-17/20; **17/20** (round 92) | Round 92 meets the exit criterion with both goals at once. Findings: only bot `stall` notes, no `unknown_prompt` |
+
+### 15.6 M4 result (2026-10-24): exit criterion met
+
+Round 92 met the exit criterion with both goals in one run on the first
+character of the 20 qualification seeds at the 100,000-step budget:
+`clvl10` 18/20 and `reach_dl8` 17/20 (bar 16/20), with no `unknown_prompt`
+and no game finding (only bot `stall` notes). Both goals are frozen
+(`playtest/suites/clvl10.json`, `reach_dl8.json`; the freeze rerun matched
+round 92 exactly, the emulator being deterministic), and every frozen suite
+passes: `clvl10` 18/20, `reach_dl8` 17/20, `clvl5`, `reach_dl5`, `reach_dl2`,
+`reach_clvl2` and `enter_dungeon` 20/20.
+
+Goal changes on the way, at the maintainer's direction: `reach_dl10` became
+`reach_dl8`, depth goals build up two levels over each depth before going
+down (`clvl10` three), and the bot carries more food. Game changes found by
+the M4 bot are listed in §15.4 (items 1-10: poison, paralysis, fear, store
+identification, random movement, monster drops, gold pickup, VMS store
+stock, item stacking, acid).
+
+Measurement lesson: any change reshuffles about a third of the seeds, so a
+40-seed A/B differs by up to about 7 characters from noise alone, and only
+larger differences were acted on. Runs on fixed seeds are deterministic, so
+a qualification result reproduces exactly on the same code.
+
+Open: the harness does not check that the disk image matches the symbol file
+it reads (a stale disk after a rebuild made every worker fail at boot in one
+round).
+
+### 15.7 M4 lessons
+
+What moved the goals, roughly in order of effect:
+
+1. **Word of Recall as the way home.** Most late deaths were characters
+   stuck on a level (sealed pockets, missed stairs) until they starved, and
+   most of them had never owned a scroll. Buying it at the Alchemist before
+   Temple potions, and reading it after 2,000 steps without progress,
+   was the largest single gain (rounds 82, 91).
+2. **Gear and readiness.** Characters reached Green Nagas on DL5 with the
+   starting Dagger and AC 4. Building up first (two levels over each depth,
+   three for `clvl10`) and buying the best affordable weapon and armour
+   turned fights the bot could not win into ones it could.
+3. **Getting unstuck.** Trace-driven fixes for specific stuck states, each
+   general once found: a weak stationary creature blocking the only exit or
+   hiding the search spot beside a secret door; a stuck door given up on
+   after 11 tries; dark floor the game forgets; an explore target that
+   flickered as the torch moved.
+4. **Not walking back into danger.** Creeping Coins killed by attrition: the
+   bot walked away, then explore led it straight back. Remembering where
+   slow creatures were (they vanish beyond the torch's one square), leaving
+   by the stairs when a crowd is beside them, and killing an adjacent
+   Floating Eye ended most of those deaths.
+5. **Perception bugs.** One Orc Shaman made every Orc a caster (judge by
+   kind, not glyph); a visible Floating Eye made an unseen caster's attacks
+   look accounted for; a look past an identified item named the item
+   instead of the mushroom patch behind it.
+6. **Game fidelity.** The bot exposed ten game deviations from VMS Moria
+   (§15.4). Each was a real bug; acid in particular made nagas twice as
+   dangerous as upstream.
+
+What did not work:
+
+- **Avoiding a strong creature by walking away** (nagas): explore led the
+  bot back to it, and naga deaths rose. Leaving the level worked better.
+- **Tuning thresholds** (retreat HP, toughness share, monster-lore armour,
+  memory lengths, dive margin by one): every change landed within the noise.
+- **Digging out of sealed pockets:** granite rarely yields to a weapon, and
+  the bot cannot tell which wall to dig.
+- **Fleeing every creature the lore calls strong, for a diver:** almost
+  everything at depth is, and running halved `reach_dl10`.
+
+Method:
+
+- **Replay the failing seed, read the trace, fix what it shows.** Runs on
+  fixed seeds are deterministic, so a replay reaches the exact moment of
+  failure. Nearly every gain came from this; almost no parameter change did.
+- **Treat 40-seed A/B differences under about 7 as noise.** Any change
+  reshuffles about a third of the seeds' dungeons and fights.
+- **Check whether a rule can fire at all.** One round changed nothing,
+  death for death, because the new recall rule needed a scroll that the
+  stuck characters never had.
+- **Rebuild the disk image after `make test`.** The gates rebuild the C64
+  program but not the disk, and a mismatched disk fails every worker at boot.
+- **Mutation-check every new bot test** (remove the rule; the test must
+  fail): several first drafts passed without exercising the rule at all.
 

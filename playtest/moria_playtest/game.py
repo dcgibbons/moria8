@@ -10,6 +10,7 @@ the entry means the game's poll loop runs once per key, which keeps
 from __future__ import annotations
 
 import hashlib
+import re
 import time
 from dataclasses import dataclass, field
 from enum import Enum
@@ -17,7 +18,7 @@ from pathlib import Path
 
 from .abi import KERNAL_KEYD, Abi
 from .screen import decode_rows
-from .vice import StopInfo, ViceMonitor, ViceTimeout
+from .vice import RESP_CHECKPOINT_INFO, StopInfo, ViceMonitor, ViceTimeout, parse_checkpoint
 
 # KERNAL entry points that only run on a crash or reset. Banked RAM code can
 # occupy the same addresses ($F000-$FFFA), so a hit is a crash only when the
@@ -30,6 +31,7 @@ KERNAL_JIFFY = 0x00A0      # 24-bit, big endian, 60 Hz; pauses while IRQs are ma
 PAL_CYCLES_PER_SECOND = 985248
 
 KEY_RETURN = 0x0D
+ITEM_PROMPT = re.compile(r"which (?:item|potion|scroll|food|wand|staff) \(a-")   # "Quaff which potion (a-c)?"
 KEY_SPACE = 0x20
 KEY_RUNSTOP = 0x03
 
@@ -183,7 +185,7 @@ def classify(obs: Observation, abi: Abi, command_ret: int,
             return Mode.CHARGEN, stage
     if "Press any key" in screen:
         return Mode.DISMISS, "anykey"
-    if "which item (a-" in obs.rows[0]:
+    if ITEM_PROMPT.search(obs.rows[0]):
         return Mode.ITEM, "which"
     if obs.rows[0].strip() == "Inventory":
         return Mode.ITEM, "list"   # the "?" list at an item prompt (no "Press any key")
@@ -336,8 +338,10 @@ class Game:
             try:
                 stop = mon.wait_stop(timeout=min(self.poll_interval, remaining))
             except ViceTimeout:
-                clock0 = self._interrupt_and_check(clock0)
-                continue
+                clock0, caught = self._interrupt_and_check(clock0)
+                if caught is None:
+                    continue
+                stop = caught
             if stop.jam:
                 raise GameFault("crash", f"CPU JAM at ${stop.pc:04X}", stop.pc)
             if stop.checkpoint == self.input_cp:
@@ -361,26 +365,37 @@ class Game:
                 self.stats["false_crash_hits"] += 1
             mon.resume()
 
-    def _interrupt_and_check(self, clock0: int | None) -> int:
+    def _interrupt_and_check(self, clock0: int | None) -> tuple[int, StopInfo | None]:
         """Stop the CPU briefly during a long resume and check emulated time.
 
         The first interrupt records the clock; a later one raises a ``hang``
         when more than ``hang_emulated_seconds`` of emulated time has passed
         since then without reaching an input stop.
+
+        A checkpoint that fired as the wait timed out is returned as the stop
+        it is: discarding its event with the interrupt's own and resuming ran
+        the CPU on past the input stop into the key-wait loop (M4 rounds
+        65-74: three false ``hang`` findings under 32 parallel emulators,
+        each with the PC in that loop).
         """
         mon = self.mon
         self.stats["interrupts"] += 1
         mon.ping()
-        mon.drain_events()
+        hits = [cp.number for event in mon.drain_events() if event.kind == RESP_CHECKPOINT_INFO
+                for cp in (parse_checkpoint(event.body),) if cp.hit]
+        regs = mon.registers()
+        pc = regs.get(self.reg_ids.get("PC", 3), 0)
+        if hits or pc == self.abi.input_get_key:
+            self.stats["caught_stops"] = self.stats.get("caught_stops", 0) + 1
+            return (clock0 or 0), StopInfo(pc=pc, checkpoint=hits[-1] if hits else self.input_cp, registers=regs)
         clock = self.cpu_clock()
         if clock0 is None:
             clock0 = clock
         elapsed = (clock - clock0) / PAL_CYCLES_PER_SECOND
         if elapsed > self.hang_emulated_seconds:
-            pc = mon.registers().get(self.reg_ids.get("PC", 3), 0)
             raise GameFault("hang", f"no input stop for {elapsed:.0f}+ emulated seconds", pc)
         mon.resume()
-        return clock0
+        return clock0, None
 
     def press(self, key: int) -> Observation:
         """Feed exactly one key at the current input stop and run to the next one."""

@@ -10,12 +10,14 @@ from __future__ import annotations
 
 import hashlib
 import os
+import re
 import shutil
 import signal
 import socket
 import subprocess
 import time
 from dataclasses import dataclass, field
+from functools import lru_cache
 from pathlib import Path
 
 from .vice import ViceMonitor
@@ -51,7 +53,10 @@ BASE_PORT = 6600
 VICE_RESOURCE_ARGS = (
     # +saveres is required: without it VICE tries to save resources through
     # GTK on exit and aborts when no display connection is available.
-    "-default", "-config", "/dev/null", "+saveres",
+    # VICE_CONFIG stands for a per-worker config naming the installed VICE
+    # version: an empty one (/dev/null) made VICE pop up "No version tag
+    # found in config file" on the desktop for every instance.
+    "-default", "-config", "VICE_CONFIG", "+saveres",
     "-console", "+sound", "-sounddev", "dummy",
     "-warp", "-pal", "-seed", "1",
     "-reu", "-reusize", "512",
@@ -65,6 +70,21 @@ def sha256(path: Path) -> str:
         for chunk in iter(lambda: fh.read(1 << 20), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+@lru_cache(maxsize=None)
+def vice_version(exe: str) -> str:
+    """The installed VICE's version, as its config files must name it."""
+    out = subprocess.run([exe, "--version"], capture_output=True, text=True, timeout=30).stdout
+    match = re.search(r"VICE (\d+(?:\.\d+)+)", out)
+    return match.group(1) if match else ""
+
+
+def write_vice_config(exe: str, workdir: Path) -> Path:
+    """An otherwise empty VICE config carrying the version tag VICE expects."""
+    path = workdir / "vicerc"
+    path.write_text(f"[Version]\nConfigVersion={vice_version(exe)}\n")
+    return path
 
 
 def find_vice(name: str = "x64sc") -> str:
@@ -101,7 +121,8 @@ class ViceProcess:
     def start(self, *, autostart: bool = True, connect_timeout: float = 30.0,
               response_timeout: float = 60.0) -> ViceMonitor:
         exe = find_vice(self.emulator)
-        self.args = [exe, *VICE_RESOURCE_ARGS,
+        config = str(write_vice_config(exe, self.workdir))
+        self.args = [exe, *(config if a == "VICE_CONFIG" else a for a in VICE_RESOURCE_ARGS),
                      "-binarymonitor", "-binarymonitoraddress", f"127.0.0.1:{self.port}"]
         if autostart:
             self.args += ["-autostart", str(self.disk)]

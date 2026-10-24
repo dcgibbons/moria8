@@ -6,6 +6,7 @@ data such as unknown prompts and stalls), so the two never mix.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 from .game import Mode, Observation
@@ -34,14 +35,18 @@ def monster_positions(obs: Observation) -> set[tuple[int, int]]:
     return positions
 
 
+# Three-digit HP fills the field: "HP:105/105MP:0/0" has no space before MP.
+STATUS_HP = re.compile(r"HP:\s*(\d+)/(\d+)")
+
+
 def status_numbers(obs: Observation) -> dict[str, int] | None:
     """LV/DL from status row 21 and HP from row 23, or None if not parseable."""
     try:
         row21, row23 = obs.rows[21], obs.rows[23]
-        hp, mhp = row23.split("HP:")[1].split()[0].split("/")
+        hp, mhp = STATUS_HP.search(row23).groups()
         return {"clvl": int(row21.split("LV:")[1].split()[0]),
                 "dlvl": int(row21.split("DL:")[1].split()[0]), "hp": int(hp), "mhp": int(mhp)}
-    except (IndexError, ValueError):
+    except (AttributeError, IndexError, ValueError):
         return None
 
 

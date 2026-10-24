@@ -69,6 +69,7 @@ class Character:
         self.result = Result(seed)
         self.snapshot: Snapshot | None = None
         self.keys: list[int] = []      # keys fed since self.snapshot
+        self.cited: set[Path] = set()  # snapshots a finding cites: kept for replay
         self.reported: set[tuple[str, str]] = set()
 
     # -- snapshots and findings ------------------------------------------------
@@ -77,7 +78,13 @@ class Character:
         self.auditor.learn(obs)
         state = {"seed": self.seed, "step": self.result.steps, "dlvl": obs.dlvl,
                  "brain": self.brain.state(), "auditor_command_sp": self.auditor.command_sp}
+        previous = self.snapshot
         self.snapshot = self.worker.snapshot(f"{self.goal.name}-{self.seed}-s{self.result.steps}-dl{obs.dlvl}", state)
+        if previous is not None and previous.path not in self.cited:
+            # Only the restart point and the snapshots findings cite are kept:
+            # one per level entry filled the disk (M4 round 55: a stair-bouncing
+            # bot wrote ~4,000 snapshots per character, 2.4 TB across rounds).
+            previous.delete()
         self.keys = []
         self.session.event("level_entry", seed=self.seed, step=self.result.steps, dlvl=obs.dlvl,
                            snapshot=str(self.snapshot.path))
@@ -88,6 +95,8 @@ class Character:
             return
         self.reported.add((kind, detail))
         self.result.findings.append(f"{kind}: {detail}")
+        if self.snapshot is not None:
+            self.cited.add(self.snapshot.path)
         self.session.finding({
             "kind": kind, "cls": cls, "detail": detail, "pc": pc, "seed": self.seed,
             "goal": self.goal.name, "step": self.result.steps, "build": self.worker.build.__dict__,
@@ -314,6 +323,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--regress", action="store_true")
     parser.add_argument("--build-out", type=Path, help="alternate build OUT directory")
     parser.add_argument("--name", help="session directory name")
+    parser.add_argument("--step-budget", type=int,
+                        help="qualify only: cap each character at this many steps instead of "
+                             "the goal's budget (quicker iteration rounds; not with --freeze)")
     args = parser.parse_args(argv)
 
     build = Build.from_out(args.build_out) if args.build_out else SHIPPING
@@ -340,6 +352,10 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(report))
     elif mode == "qualify":
         goal = GOALS[args.goal]
+        if args.step_budget:
+            if args.freeze:
+                parser.error("--step-budget is for iteration rounds; freeze with the goal's budget")
+            goal = dataclasses.replace(goal, step_budget=args.step_budget)
         seeds = parse_seeds(args.seeds) if args.seeds else QUALIFICATION_SEEDS
         results = run_seeds(goal, seeds, args.workers, session, build, False)
         passed = [r.seed for r in results if r.outcome == "reached"]
