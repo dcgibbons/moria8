@@ -234,6 +234,12 @@ Operational rules:
 - Terminology: "TODO" or "task list" means the OpenCode structured session
   task list. "Backlog" means `docs/BACKLOG.md`. Never edit `docs/BACKLOG.md`
   unless the user explicitly says "backlog" or names that file.
+- When gameplay behavior, formulas, item/monster/spell catalog data, or
+  cross-port parity seems amiss, ambiguous, or inconsistent with original
+  Moria, consult `docs/FEATURE_MAP.md` to verify intended VMS Moria 4.8 /
+  Umoria 5.7.15 semantics versus intentional Moria8 8-bit adaptations. Keep
+  `docs/FEATURE_MAP.md` updated when adding or changing gameplay features,
+  catalogs, or port capabilities.
 - When you make an assumption, state it explicitly in your reply before acting
   on it; never guess silently.
 - Write only the product code needed to satisfy the stated task and the
@@ -358,7 +364,8 @@ banking, and loader behavior behind platform-owned code. Consult
 `docs/CROSS_PLATFORM_STRATEGY.md` before starting any new platform port, and
 expand that document when adding each port.
 
-Related documents: `docs/INTERNAL_MANDATES.md` (repository hygiene, zero-page
-and KERNAL ownership, C128 banking detail, shared-code rules),
-`docs/CROSS_PLATFORM_STRATEGY.md` (new ports), `docs/BACKLOG.md` (deferred
-work).
+Related documents: `docs/FEATURE_MAP.md` (authoritative VMS Moria 4.8 / Umoria
+5.7.15 / Moria8 feature and catalog audit), `docs/INTERNAL_MANDATES.md`
+(repository hygiene, zero-page and KERNAL ownership, C128 banking detail,
+shared-code rules), `docs/CROSS_PLATFORM_STRATEGY.md` (new ports),
+`docs/BACKLOG.md` (deferred work).
