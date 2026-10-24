@@ -239,6 +239,7 @@ cmb_in_way_str:
     .segment A2PlaySlot
 }
 #import "../../core/item.s"
+#define MON_ATK_ACID_EXTERNAL   // monster_acid.s rides the resident image (below)
 // Step-13 chest loot: latch + resident handoff stay in Default (play slot is
 // full); the generator parks in the GEN overlay with the picker it uses.
 .macro ChestLootSegment() {
@@ -256,6 +257,12 @@ cmb_in_way_str:
 #import "../../core/spell_effects.s"
 #import "../../core/spell_effects_overlay.s"
 #undef SPELL_EFFECTS_INCLUDE_IDENTIFY
+// turn.s's regen/poison tables in resident main RAM: the play slot has no
+// room (#importonce: turn.s's own import is then a no-op).
+#import "../../core/turn_data.s"
+// Heal feedback (spell/potion heal + message) in resident main RAM too: the
+// play slot has no room.
+#import "../../core/player_heal_feedback.s"
 
 // Constants are needed by resident consumers before the data/code placement
 // later in A2PlaySlot and A2AuxData. These imports emit no bytes.
@@ -1169,7 +1176,6 @@ player_adjust_equipment_stat:
 #import "../../core/turn.s"
 #undef TURN_REST_DISTURBED_EXTERNAL
 // Small play-resident modules (play is present in every gameplay phase).
-#import "../../core/player_heal_feedback.s"
 #import "../../core/ui_restore.s"
 #import "../../core/ui_help_clear.s"
 #import "../../core/stat_display.s"
@@ -1276,6 +1282,10 @@ a2_sfx_patterns:
 // Auto-rest disturbance flag (core/turn.s, TRN-007) in resident main RAM:
 // the play slot has no room for it (TURN_REST_DISTURBED_EXTERNAL).
 turn_rest_disturbed: .byte 0
+
+// The acid attack's armour damage (MON-015), resident for the same reason
+// (MON_ATK_ACID_EXTERNAL).
+#import "../../core/monster_acid.s"
 
 // ============================================================
 // Overlay segment blocks (C64 composition, adjusted)
@@ -1862,9 +1872,9 @@ tramp_combat_check_levelup_items:
 !restored:
     rts
 
-// Wizard gain-level runs with OVL.MODAL owning the window; apply_levelup
-// loads OVL.SPELL for mana/spell learning, so restore the caller overlay
-// before returning or the continuation executes OVL.SPELL contents.
+// Wizard gain-level runs with OVL.MODAL owning the window. apply_levelup no
+// longer loads OVL.SPELL itself (main_loop runs the mana/spell recalc, TRN-008);
+// the reload stays as a guard so the continuation always finds OVL.MODAL.
 tramp_combat_apply_levelup_modal:
     jsr combat_apply_levelup
     lda #OVL_MODAL_MISC

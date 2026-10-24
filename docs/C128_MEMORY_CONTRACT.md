@@ -40,8 +40,8 @@ overlap assertions are the executable authority; never edit this table alone.
 | `$3000-$3fff` | ITEMS overlay cache |
 | `$4000-$730b` | reserved 198x66 live map span |
 | `$730c-$73ff` | reserved unowned gap between map and DB regions |
-| `$7400-$7fff` | DB/data region |
-| `$8000-$94f7` | tier cache, 5368 bytes |
+| `$7400-$7eff` | DB/data region (item-name streams end near `$79d5`) |
+| `$7f00-$94f7` | tier cache, 5624 bytes (tiers 1-4 use 5520 since MON-014 added `cr_treasure`) |
 | `$94f8-$97ff` | title marker/data cache |
 | `$9800-$9cff` | MODAL small-overlay cache |
 | `$9d00-$9fff` | DISARM small-overlay cache |

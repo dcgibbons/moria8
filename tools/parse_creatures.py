@@ -89,6 +89,18 @@ def map_speed(umoria_speed):
     else:
         return 2  # fast
 
+# Umoria CMOVE random-movement bits, kept in place in cr_speed bits 3-5 above
+# the speed code (MON-013): CM_20_RANDOM 0x08, CM_40_RANDOM 0x10, CM_75_RANDOM
+# 0x20. monster_ai.s rolls 75%, then 40%, then 20% before normal movement.
+CM_RANDOM_MOVE = 0x38
+
+SPEED_MASK = 0x03
+
+# Umoria CMOVE treasure bits 24-30, shifted down to cr_treasure bits 0-6
+# (MON-014): carry object, carry gold, 60%, 90%, 1d2, 2d2 and 4d2 drops (VMS
+# bit 30 is 4d3). Bit 31 (CM_WIN) is not a drop.
+CM_TREASURE = 0x7F
+
 # ============================================================
 # Color assignment based on creature name/type
 # ============================================================
@@ -224,14 +236,14 @@ def map_mflags(cmove, cdefense, name):
 # Spell mapping
 # ============================================================
 # Our spell flags
-MSF_BOLT    = 0x01
-MSF_BREATH  = 0x02
-MSF_SUMMON  = 0x04
-MSF_TELEPORT= 0x08
-MSF_BLIND   = 0x10
-MSF_CONFUSE = 0x20
-MSF_HEAL    = 0x40
-MSF_FEAR    = 0x80  # Future expansion
+MSF_WOUND_LIGHT   = 0x01
+MSF_BREATH        = 0x02
+MSF_SUMMON        = 0x04
+MSF_TELEPORT      = 0x08
+MSF_BLIND         = 0x10
+MSF_CONFUSE       = 0x20
+MSF_WOUND_SERIOUS = 0x40
+MSF_FEAR          = 0x80
 
 def map_spells(spell_word):
     """Map umoria spell flags to our spell_flags and spell_chance."""
@@ -247,10 +259,10 @@ def map_spells(spell_word):
 
     flags = 0
     # Map spell bits
-    if spell_word & 0x000080:  # Cause light wound
-        flags |= MSF_BOLT
-    if spell_word & 0x000100:  # Cause serious wound
-        flags |= MSF_BOLT
+    if spell_word & 0x000080:  # Cause light wound (3d8)
+        flags |= MSF_WOUND_LIGHT
+    if spell_word & 0x000100:  # Cause serious wound (8d8)
+        flags |= MSF_WOUND_SERIOUS
     if spell_word & 0x000200:  # Hold person
         pass  # Not mapped to our flags
     if spell_word & 0x000400:  # Blindness
@@ -271,8 +283,6 @@ def map_spells(spell_word):
     breath_bits = (spell_word >> 19) & 0x1F
     if breath_bits:
         flags |= MSF_BREATH
-    # Heal: not explicitly in umoria spell flags for most creatures
-    # But some creatures have it via special logic — we'll add manually
 
     return chance, flags
 
@@ -656,7 +666,7 @@ def main():
                     'sides': atk['sides'],
                 })
         cr['attacks'] = decoded_atks
-        cr['c64_speed'] = map_speed(cr['speed'])
+        cr['c64_speed'] = map_speed(cr['speed']) | (cr['cmove'] & CM_RANDOM_MOVE)
         cr['c64_color'] = assign_color(cr['name'])
         cr['c64_display'] = char_to_screencode(cr['sprite'])
         cr['c64_mflags'] = map_mflags(cr['cmove'], cr['cdefense'], cr['name'])
@@ -664,6 +674,7 @@ def main():
         spell_chance, spell_flags = map_spells(cr['spell'])
         cr['c64_spell_chance'] = spell_chance
         cr['c64_spell_flags'] = spell_flags
+        cr['c64_treasure'] = (cr['cmove'] >> 24) & CM_TREASURE
         cr['c64_xp_lo'] = cr['xp'] & 0xFF
         cr['c64_xp_hi'] = (cr['xp'] >> 8) & 0xFF
         cr['tiers'] = get_tiers_for_creature(cr['dlvl'])
@@ -749,7 +760,7 @@ def print_tiers(creatures, selected_indices):
         members = [(idx, cr) for idx, cr in selected.items()
                    if tier_idx in cr['tiers']]
         # Calculate data size
-        soa_bytes = len(members) * 22  # 22 SoA arrays per creature
+        soa_bytes = len(members) * TIER_BYTES_PER_CREATURE
         name_bytes = sum(len(cr['name']) + 1 for _, cr in members)  # +1 for null term
         total = soa_bytes + name_bytes
 
@@ -770,7 +781,7 @@ def print_tiers(creatures, selected_indices):
         for idx, cr in selected.items():
             if tier_idx in cr['tiers']:
                 all_members.add(idx)
-    total_soa = len(all_members) * 22
+    total_soa = len(all_members) * TIER_BYTES_PER_CREATURE
     total_names = sum(len(creatures[i]['name']) + 1 for i in all_members)
     print(f"\n{'='*60}")
     print(f"TOTAL: {len(all_members)} unique creatures")
@@ -808,7 +819,7 @@ def print_stats(creatures, selected_indices):
     # Speed distribution
     speeds = {0: 0, 1: 0, 2: 0}
     for idx, cr in selected:
-        speeds[cr['c64_speed']] += 1
+        speeds[cr['c64_speed'] & SPEED_MASK] += 1
     print(f"\nSpeed distribution: slow={speeds[0]}, normal={speeds[1]}, fast={speeds[2]}")
 
     # Flag distribution
@@ -828,7 +839,7 @@ def print_stats(creatures, selected_indices):
     for tier_idx, tier in enumerate(TIERS):
         members = [(idx, cr) for idx, cr in selected
                    if tier_idx in cr['tiers']]
-        soa_bytes = len(members) * 22
+        soa_bytes = len(members) * TIER_BYTES_PER_CREATURE
         name_bytes = sum(len(cr['name']) + 1 for _, cr in members)
         print(f"  {tier['name']}: {len(members)} creatures, "
               f"{soa_bytes + name_bytes} bytes "
@@ -844,7 +855,7 @@ def print_stats(creatures, selected_indices):
 SOA_FIELDS = [
     ("cr_display",      "c64_display",      "Display character (screen code)"),
     ("cr_color",        "c64_color",        "Color code"),
-    ("cr_speed",        "c64_speed",        "Speed (0=slow, 1=normal, 2=fast)"),
+    ("cr_speed",        "c64_speed",        "Speed (bits 0-1: 0=slow, 1=normal, 2=fast) | random-move bits 3-5"),
     ("cr_mflags",       "c64_mflags",       "Monster flags"),
     ("cr_level",        "dlvl",             "Dungeon level"),
     ("cr_hd_num",       "hd_num",           "Hit dice count"),
@@ -862,7 +873,11 @@ SOA_FIELDS = [
     ("cr_atk1_sides",   None,               "Attack 1 dice sides"),
     ("cr_spell_chance", "c64_spell_chance",  "Spell chance (0-100)"),
     ("cr_spell_flags",  "c64_spell_flags",   "Spell flags bitmask"),
+    ("cr_treasure",     "c64_treasure",      "Treasure flags: Umoria CMOVE bits 24-30 (carry obj/gold, 60%, 90%, 1d2, 2d2, 4d2/VMS 4d3)"),
 ]
+
+# Bytes per creature in a tier file: the SoA arrays plus the name lo/hi tables.
+TIER_BYTES_PER_CREATURE = len(SOA_FIELDS) + 2
 
 def get_soa_value(cr, label, key):
     """Get the SoA byte value for a creature field."""
@@ -996,7 +1011,7 @@ def generate_asm(creatures, selected_indices):
         for tier_idx, tier in enumerate(TIERS):
             members = [(idx, creatures[idx]) for idx in sorted(selected_indices)
                        if tier_idx in creatures[idx]['tiers']]
-            soa = len(members) * 22
+            soa = len(members) * TIER_BYTES_PER_CREATURE
             names = sum(len(cr['name']) + 1 for _, cr in members)
             f.write(f".const TIER{tier_idx}_SIZE = {soa + names}\n")
 

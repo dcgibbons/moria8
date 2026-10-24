@@ -32,10 +32,12 @@ tw_save_ego:   .byte 0     // Saved ego before consumption
 // Clobbers: everything
 // ============================================================
 throw_item:
-    // 1. Prompt for item
+    // 1. Prompt for item. The overlay's own selector records OVL_ITEMS as the
+    // return overlay, so a `?` inventory list (loaded into the same window)
+    // is followed by reloading this overlay before returning here.
     lda #$ff
     ldx #HSTR_TW_PROMPT
-    jsr piw_select_filtered_inv
+    jsr item_action_select_filtered_inv
     bcs !tw_slot_ok+
     rts
 
@@ -254,16 +256,8 @@ tw_consume_item:
     // Item properties were saved at selection time; inv_remove_item clears them.
     ldx tw_slot
 
-    // Consume 1 from inventory. Zero-quantity singleton records can exist
-    // after older saves or bugs; remove them instead of underflowing to $ff.
-    lda inv_qty,x
-    cmp #2
-    bcc !tw_remove_slot+
-    dec inv_qty,x
-    jmp !tw_qty_ok+
-!tw_remove_slot:
-    jsr inv_remove_item
-!tw_qty_ok:
+    // Consume 1 from inventory (zero-quantity records are removed).
+    jsr inv_consume_one
 
     // Place on floor? Potions always shatter (no floor item)
     ldx tw_item_id

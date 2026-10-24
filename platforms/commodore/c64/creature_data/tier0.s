@@ -24,9 +24,9 @@ tier0_cr_display:
 tier0_cr_color:
     .byte $0f, $0f, $0f, $0f, $03, $0f, $03, $02
 
-// Speed (0=slow, 1=normal, 2=fast)
+// Speed (bits 0-1: 0=slow, 1=normal, 2=fast) | random-move bits 3-5
 tier0_cr_speed:
-    .byte $01, $01, $01, $01, $01, $01, $01, $01
+    .byte $09, $09, $09, $09, $01, $39, $09, $09
 
 // Monster flags
 tier0_cr_mflags:
@@ -95,6 +95,10 @@ tier0_cr_spell_chance:
 // Spell flags bitmask
 tier0_cr_spell_flags:
     .byte $00, $00, $00, $00, $00, $00, $00, $00
+
+// Treasure flags: Umoria CMOVE bits 24-30 (carry obj/gold, 60%, 90%, 1d2, 2d2, 4d2/VMS 4d3)
+tier0_cr_treasure:
+    .byte $00, $00, $00, $00, $07, $06, $0b, $0b
 
 // Name string pointers
 tier0_cr_name_lo:

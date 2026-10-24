@@ -1,4 +1,6 @@
 #importonce
+#import "df_target_dir.s"
+#import "df_target_row.s"
 // spell_effects.s — Shared effect subroutines for spells, potions, scrolls, etc.
 //
 // Phase 7.0: Extracted from player_items.s inline handlers.
@@ -23,41 +25,7 @@
 
 eff_target_slot: .byte 0           // Target slot for identify
 
-// ============================================================
-// eff_heal — Heal player HP
-// Input: A = heal amount (8-bit, pre-rolled)
-// Output: HP updated in ZP and player_data, capped at max
-// Clobbers: A
-// ============================================================
-eff_heal:
-    clc
-    adc zp_player_hp_lo
-    sta zp_player_hp_lo
-    lda zp_player_hp_hi
-    adc #0
-    sta zp_player_hp_hi
-
-    // Cap at max HP (16-bit compare)
-    lda zp_player_hp_hi
-    cmp zp_player_mhp_hi
-    bcc !eh_ok+
-    bne !eh_clamp+
-    lda zp_player_hp_lo
-    cmp zp_player_mhp_lo
-    bcc !eh_ok+
-    beq !eh_ok+
-!eh_clamp:
-    lda zp_player_mhp_lo
-    sta zp_player_hp_lo
-    lda zp_player_mhp_hi
-    sta zp_player_hp_hi
-!eh_ok:
-    // Sync to player_data
-    lda zp_player_hp_lo
-    sta player_data + PL_HP_LO
-    lda zp_player_hp_hi
-    sta player_data + PL_HP_HI
-    rts
+#import "eff_heal.s"
 
 // ============================================================
 // eff_light_room — Light the room the player is in
@@ -466,14 +434,7 @@ for_each_adjacent:
     cmp #8
     bcs !fea_done+
     tax
-    lda zp_player_x
-    clc
-    adc dir_dx,x
-    sta df_target_x
-    lda zp_player_y
-    clc
-    adc dir_dy,x
-    sta df_target_y
+    jsr df_target_from_dir
     jsr !fea_dispatch+
     inc adj_dir_idx
     jmp !fea_loop-
@@ -679,12 +640,7 @@ eff_wall_to_mud:
     cmp #MAP_ROWS - 1
     beq !ewtm_fail+
 
-    ldx df_target_y
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
-    ldy df_target_x
+    jsr df_target_row_ptr
     :MapRead_ptr0_y()
     sta ewtm_save_tile          // Save full tile for treasure check
     and #TILE_TYPE_MASK

@@ -77,6 +77,9 @@ else
     KICKASS_TRACE_DEFINE=(-define DEBUG_FEAT_DISK_TRACE=0)
 fi
 VICE="${VICE:-x64sc}"
+# VICE reads this config (with the installed version tag) instead of the
+# user's vicerc; /dev/null made VICE pop up "No version tag found" dialogs.
+VICE_CONFIG="$(python3 "$REPO_ROOT/tools/vice_config.py" "$VICE")"
 C1541="${C1541:-c1541}"
 TEST_FILTER="${TEST_FILTER:-}"
 PASS=0
@@ -192,6 +195,8 @@ for path in sorted(root.glob("*.py")):
                 values.append(elt.value)
             elif isinstance(elt, ast.Attribute) and elt.attr == "vice":
                 values.append("args.vice")
+            elif isinstance(elt, ast.Call) and isinstance(elt.func, ast.Name) and elt.func.id == "vice_config":
+                values.append("vice_config()")
         if "args.vice" not in values:
             continue
         if "-remotemonitor" not in values and "-nativemonitor" not in values:
@@ -199,8 +204,8 @@ for path in sorted(root.glob("*.py")):
         missing = [flag for flag in ("-config", "-default", "+saveres") if flag not in values]
         if "-config" in values:
             config_index = values.index("-config")
-            if config_index + 1 >= len(values) or values[config_index + 1] != "/dev/null":
-                missing.append("-config /dev/null")
+            if config_index + 1 >= len(values) or values[config_index + 1] != "vice_config()":
+                missing.append("-config vice_config(<vice>) (tools/vice_config.py)")
         if missing:
             bad.append(f"{path.name}: missing {', '.join(missing)}")
 
@@ -208,7 +213,7 @@ for lineno, line in enumerate(runner.read_text().splitlines(), start=1):
     stripped = line.strip()
     if not stripped.startswith('"$VICE" '):
         continue
-    missing = [flag for flag in ("-config /dev/null", "-default", "+saveres") if flag not in line]
+    missing = [flag for flag in ('-config "$VICE_CONFIG"', "-default", "+saveres") if flag not in line]
     if missing:
         bad.append(f"{runner.name}:{lineno}: missing {', '.join(missing)}")
 
@@ -349,7 +354,7 @@ run_test() {
     run_vice_once() {
         local log_path="$1"
         script -q "$log_path" \
-            "$VICE" -warp -config /dev/null -default +saveres -console -nativemonitor -autostartprgmode 1 \
+            "$VICE" -warp -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -autostartprgmode 1 \
             -autostart "$prg_file" -moncommands "$mon_file" \
             -limitcycles "$cycles" +sound -sounddev dummy \
             +remotemonitor +binarymonitor > /dev/null 2>&1
@@ -436,7 +441,7 @@ run_sound_monitor_test() {
     }
 
     script -q "$log_file" \
-        "$VICE" -warp -config /dev/null -default +saveres -console -nativemonitor -autostartprgmode 1 \
+        "$VICE" -warp -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -autostartprgmode 1 \
         -autostart "${src%.s}.prg" -moncommands "$mon_file" \
         -limitcycles "$cycles" +sound -sounddev dummy \
         +remotemonitor +binarymonitor > /dev/null 2>&1
@@ -611,7 +616,7 @@ run_scripted_spell_cast_smoke() {
     } > "$mon_file"
 
     script -q "$tty_log" \
-        "$VICE" -warp -config /dev/null -default +saveres -console -nativemonitor -autostartprgmode 1 \
+        "$VICE" -warp -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -autostartprgmode 1 \
         -autostart "$scripted_d64" -moncommands "$mon_file" \
         -limitcycles 700000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor > /dev/null 2>&1
@@ -767,7 +772,7 @@ run_scripted_book_overlay_smoke() {
     } > "$mon_file"
 
     script -q "$tty_log" \
-        "$VICE" -warp -config /dev/null -default +saveres -console -nativemonitor -autostartprgmode 1 \
+        "$VICE" -warp -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -autostartprgmode 1 \
         -autostart "$scripted_d64" -moncommands "$mon_file" \
         -limitcycles 700000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor > /dev/null 2>&1
@@ -923,7 +928,7 @@ run_scripted_scroll_selector_smoke() {
     } > "$mon_file"
 
     script -q "$tty_log" \
-        "$VICE" -warp -config /dev/null -default +saveres -console -nativemonitor -autostartprgmode 1 \
+        "$VICE" -warp -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -autostartprgmode 1 \
         -autostart "$scripted_d64" -moncommands "$mon_file" \
         -limitcycles 700000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor > /dev/null 2>&1
@@ -1078,7 +1083,7 @@ run_scripted_spell_list_overlay_smoke() {
     } > "$mon_file"
 
     script -q "$tty_log" \
-        "$VICE" -warp -config /dev/null -default +saveres -console -nativemonitor -autostartprgmode 1 \
+        "$VICE" -warp -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -autostartprgmode 1 \
         -autostart "$scripted_d64" -moncommands "$mon_file" \
         -limitcycles 700000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor > /dev/null 2>&1
@@ -1239,7 +1244,7 @@ run_scripted_dungeon_target_spell_smoke() {
     } > "$mon_file"
 
     script -q "$tty_log" \
-        "$VICE" -warp -config /dev/null -default +saveres -console -nativemonitor -autostartprgmode 1 \
+        "$VICE" -warp -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -autostartprgmode 1 \
         -reu -reusize 512 \
         -autostart "$scripted_d64" -moncommands "$mon_file" \
         -limitcycles 700000000 +sound -sounddev dummy \
@@ -1400,7 +1405,7 @@ run_scripted_detect_evil_smoke() {
     } > "$mon_file"
 
     script -q "$tty_log" \
-        "$VICE" -warp -config /dev/null -default +saveres -console -nativemonitor -autostartprgmode 1 \
+        "$VICE" -warp -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -autostartprgmode 1 \
         -autostart "$scripted_d64" -moncommands "$mon_file" \
         -limitcycles 700000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor > /dev/null 2>&1
@@ -1538,7 +1543,7 @@ run_dungeon_ascent_product_smoke() {
     } > "$mon_file"
 
     script -q "$tty_log" \
-        "$VICE" -warp -config /dev/null -default +saveres -console -nativemonitor -autostartprgmode 1 \
+        "$VICE" -warp -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -autostartprgmode 1 \
         -8 "$scripted_d64" -autostart "$scripted_d64" \
         -moncommands "$mon_file" \
         -limitcycles 900000000 +sound -sounddev dummy \
@@ -1686,7 +1691,7 @@ run_wizard_reveal_product_smoke() {
     } > "$mon_file"
 
     script -q "$tty_log" \
-        "$VICE" -warp -config /dev/null -default +saveres -console -nativemonitor -autostartprgmode 1 \
+        "$VICE" -warp -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -autostartprgmode 1 \
         -8 "$scripted_d64" -autostart "$scripted_d64" \
         -moncommands "$mon_file" \
         -limitcycles 900000000 +sound -sounddev dummy \
@@ -1854,7 +1859,7 @@ run_wizard_item_product_smoke() {
     } > "$mon_file"
 
     script -q "$tty_log" \
-        "$VICE" -warp -config /dev/null -default +saveres -console -nativemonitor -autostartprgmode 1 \
+        "$VICE" -warp -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -autostartprgmode 1 \
         -8 "$scripted_d64" -autostart "$scripted_d64" \
         -moncommands "$mon_file" \
         -limitcycles 900000000 +sound -sounddev dummy \
@@ -2627,7 +2632,7 @@ run_save_write_product_smoke_impl() {
     } > "$mon_file"
 
     script -q "$tty_log" \
-        "$VICE" -warp -config /dev/null -default +saveres -console -nativemonitor -autostartprgmode 1 \
+        "$VICE" -warp -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -autostartprgmode 1 \
         -drive9type 1541 -8 "$scripted_d64" -attach9rw -9 "$save_d64" -autostart "$scripted_d64" \
         -moncommands "$mon_file" \
         -limitcycles 900000000 +sound -sounddev dummy \
@@ -3264,7 +3269,7 @@ run_load_resume_product_smoke() {
     } > "$mon_file"
 
     script -q "$tty_log" \
-        "$VICE" -warp -config /dev/null -default +saveres -console -nativemonitor -autostartprgmode 1 \
+        "$VICE" -warp -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -autostartprgmode 1 \
         -drive9type 1541 -8 "$scripted_d64" -attach9rw -9 "$save_d64" -autostart "$scripted_d64" \
         -moncommands "$mon_file" \
         -limitcycles 900000000 +sound -sounddev dummy \
@@ -4180,7 +4185,7 @@ run_load_missing_savefile_product_smoke() {
     } > "$mon_file"
 
     script -q "$tty_log" \
-        "$VICE" -warp -config /dev/null -default +saveres -console -nativemonitor -autostartprgmode 1 \
+        "$VICE" -warp -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -autostartprgmode 1 \
         -drive9type 1541 -8 "$scripted_d64" -attach9rw -9 "$save_d64" -autostart "$scripted_d64" \
         -moncommands "$mon_file" \
         -limitcycles 900000000 +sound -sounddev dummy \
@@ -4275,6 +4280,10 @@ check_static_contract "inventory_overlay_fresh_key_contract" "../../../core/play
     "show_inv_and_select:|||jsr input_prepare_selectable_overlay_key|||jsr tramp_ui_inv_select_display|||jsr input_get_followup_key"
 check_static_contract "inventory_overlay_items_reload_contract" "../../../core/player_items.s" \
     "show_inv_and_select:|||lda piw_return_overlay|||bne !sias_have_return_overlay+|||tsx|||lda \$0102,x|||cmp #hal_platform_overlay_window_hi_min|||!sias_check_outer_return:|||lda \$0104,x|||!sias_return_overlay:|||lda current_overlay|||cmp #OVL_ITEMS|||!sias_store_return_overlay:|||sta piw_return_overlay|||jsr ui_view_restore_modal_overlay|||lda #OVL_NONE|||sta piw_return_overlay|||txa|||beq !sias_no_overlay_reload+|||jsr overlay_load|||brk|||sei|||jsr hal_irq_install_runtime|||lda #BANK_NO_KERNAL|||sta hal_memory_cpu_port"
+check_static_contract "levelup_magic_deferred_contract" "../../../core/combat.s" \
+    "combat_apply_levelup:|||#if HAL_PLATFORM_LEVELUP_MAGIC_USES_TRAMPOLINE|||lda #1|||sta levelup_magic_pending|||#else|||jsr magic_recalc_mana|||jmp msg_build_levelup"
+check_static_contract "levelup_magic_main_loop_contract" "../../../core/game_loop.s" \
+    "main_loop:|||lsr levelup_magic_pending|||bcc !no_levelup_magic+|||jsr tramp_magic_recalc_mana|||jsr tramp_magic_check_new_spells|||jsr status_draw|||!no_levelup_magic:"
 check_static_contract "item_action_inventory_overlay_hint_contract" "../../../core/item_actions_overlay.s" \
     "item_action_select_filtered_inv:|||jsr item_action_get_key|||cmp #\$3f|||lda #OVL_ITEMS|||sta piw_return_overlay|||jmp piw_select_filtered_inv_key"
 check_static_contract "spell_recharge_inventory_overlay_hint_contract" "../../../core/player_magic_execute_overlay.s" \
@@ -4302,7 +4311,11 @@ check_static_contract "paralysis_final_tick_message_contract" "../../../core/gam
 check_static_contract "earthquake_trampoline_no_hidden_kernal_load_contract" "main.s" \
     "tramp_eff_earthquake:|||sei|||lda #BANK_NO_KERNAL|||sta \$01|||jsr eff_earthquake_banked|||rts|||tramp_item_refuel:"
 check_static_contract "chest_loot_gen_overlay_no_hidden_kernal_contract" "../../../core/chest_loot.s" \
-    "chest_fulfill_loot:|||lda #OVL_DUNGEON_GEN|||#if HAL_PLATFORM_CHEST_LOOT_LOAD_NO_KERNAL|||jsr overlay_load_no_kernal|||jsr hal_platform_runtime_resync|||!cfl_loaded:|||jsr chest_generate_loot|||jsr hal_platform_runtime_resync"
+    "chest_fulfill_loot:|||lda #OVL_DUNGEON_GEN|||#if HAL_PLATFORM_CHEST_LOOT_LOAD_NO_KERNAL|||jsr overlay_load_no_kernal|||jsr hal_platform_runtime_resync|||!cfl_loaded:|||jsr loot_generate_pending|||jsr hal_platform_runtime_resync"
+check_static_contract "monster_drops_before_turn_contract" "../../../core/game_loop_helpers.s" \
+    "turn_post_action_searchable_or_die:|||jsr chest_fulfill_loot|||jsr turn_post_action"
+check_static_contract "monster_drops_staged_on_kill_contract" "../../../core/combat.s" \
+    "combat_note_kill:|||ldx cmb_type|||jsr monster_death_stage|||lda zp_game_flags"
 check_static_contract "chest_loot_c64_ego_overlay_return_contract" "../../../core/chest_loot.s" \
     "jsr roll_enchantment|||#if HAL_PLATFORM_CHEST_LOOT_EGO_MODAL_TRAMP|||jsr tramp_roll_ego_type_modal|||sta fi_add_ego"
 check_static_contract "chest_loot_object_drop_marks_redraw_contract" "../../../core/chest_loot.s" \
@@ -4352,17 +4365,17 @@ run_test "rng"    "tests/test_rng.s"    "0400 0409" 10
 run_test "memory" "tests/test_memory.s" "0400 0402" 3
 run_test "config" "tests/test_config.s" "0400 0400" 1
 run_test "input"  "tests/test_input.s"  "0400 040e" 15
-run_test "main_loop" "tests/test_main_loop.s" "0400 042d" 46 500000000
+run_test "main_loop" "tests/test_main_loop.s" "0400 042f" 48 500000000
 run_test "run_visibility_bank" "tests/test_run_visibility_bank.s" "0400 0400" 1 500000000
 run_test "turn" "tests/test_turn.s" "0400 0420" 33 500000000
 run_test "player" "tests/test_player.s" "0400 0409" 10
 run_test "dungeon" "tests/test_dungeon.s" "0400 0441" 66 500000000
 run_test "monster" "tests/test_monster.s" "0400 0415" 22 500000000
-run_test "monster_ai" "tests/test_monster_ai.s" "0400 0439" 58 500000000
+run_test "monster_ai" "tests/test_monster_ai.s" "0400 043a" 59 500000000
 run_test "combat" "tests/test_combat.s" "0400 0428" 41 500000000
 run_test "msg_long" "tests/test_msg_long.s" "0400 0400" 1 20000000
-run_test "monster_attack" "tests/test_monster_attack.s" "0400 040d" 14 500000000
-run_test "effects" "tests/test_effects.s" "0400 041e" 31 1000000000
+run_test "monster_attack" "tests/test_monster_attack.s" "0400 0415" 22 500000000
+run_test "effects" "tests/test_effects.s" "0400 042d" 46 1000000000
 run_test "effects_magic" "tests/test_effects_magic.s" "0400 0433" 24 1000000000
 run_test "cure_light_wounds" "tests/test_cure_light_wounds.s" "0400 0402" 3 500000000
 run_test "confusion" "tests/test_confusion.s" "0400 0402" 3 500000000
@@ -4387,7 +4400,7 @@ run_test "find_hidden_traps_doors" "tests/test_find_hidden_traps_doors.s" "0400 
 run_test "chest_open" "tests/test_chest_open.s" "0400 040C" 13 500000000
 run_test "chest_disarm" "tests/test_chest_disarm.s" "0400 0406" 7 500000000
 run_test "chest_bash" "tests/test_chest_bash.s" "0400 0404" 5 500000000
-run_test "chest_loot" "tests/test_chest_loot.s" "0400 0409" 10 500000000
+run_test "chest_loot" "tests/test_chest_loot.s" "0400 0410" 17 500000000
 run_test "balrog_victory" "tests/test_balrog_victory.s" "0400 0405" 6 500000000
 run_test "stinking_cloud" "tests/test_stinking_cloud.s" "0400 0402" 3 500000000
 run_test "frost_ball" "tests/test_frost_ball.s" "0400 0402" 3 500000000
@@ -4434,11 +4447,11 @@ run_test "remove_curse_prayer" "tests/test_remove_curse_prayer.s" "0400 0402" 3 
 run_test "orb_of_draining_prayer" "tests/test_orb_of_draining_prayer.s" "0400 0402" 3 500000000
     run_test "prayer_feedback" "tests/test_prayer_feedback.s" "0400 040c" 13 500000000
 run_test "detect_feedback" "tests/test_detect_feedback.s" "0400 0403" 4 500000000
-run_test "item" "tests/test_item.s" "0400 0438" 57 1000000000
+run_test "item" "tests/test_item.s" "0400 043c" 61 1000000000
 run_test "scroll_p3" "tests/test_scroll_p3.s" "0400 040d" 14 1000000000
 run_test "item_desc" "tests/test_item_desc.s" "0400 0409" 10 500000000
 run_test "item_ui" "tests/test_item_ui.s" "0400 040f" 16 1000000000
-run_test "store" "tests/test_store.s" "0400 042a" 43 1000000000
+run_test "store" "tests/test_store.s" "0400 042f" 48 1000000000
 run_test "ui_views" "tests/test_ui_views.s" "0400 0413" 19 500000000
 run_test "ui_views_filters" "tests/test_ui_views_filters.s" "0400 0413" 7 500000000
 run_test "subsystems" "tests/test_subsystems.s" "0400 0409" 10
@@ -4446,7 +4459,7 @@ run_sound_monitor_test
 run_test "save"  "tests/test_save.s"  "0400 0421" 34 1000000000
 run_test "score" "tests/test_score.s" "0400 040c" 13 500000000
 run_test "wands_staves" "tests/test_wands_staves.s" "0400 0407" 8 100000000
-run_test "monster_magic" "tests/test_monster_magic.s" "0400 040d" 14 500000000
+run_test "monster_magic" "tests/test_monster_magic.s" "0400 0419" 26 500000000
 run_test "tier" "tests/test_tier.s" "0400 0410" 17 500000000
 run_test "disk_swap" "tests/test_disk_swap.s" "0400 040e" 15 500000000
 run_test "render" "tests/test_render.s" "0400 0417" 24 500000000

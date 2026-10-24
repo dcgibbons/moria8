@@ -65,10 +65,11 @@
 .const ICAT_AMULET   = 16
 .const ICAT_CHEST    = 17
 // ICAT_SPIKE: jamming spikes (upstream TV_SPIKE); not wieldable, sold at
-// the general store. Like every item in this port, spikes do not merge:
-// each occupies its own inventory slot (inv_add_item has no stacking).
+// the general store. Identical spikes stack in one slot (inv_add_item), as
+// do food, potions, scrolls, flasks of oil and ammunition (VMS inven_carry).
 // Nothing else shares the category.
 .const ICAT_SPIKE    = 18
+.const ITEM_TYPE_FLASK_OF_OIL = 61   // ICAT_LIGHT, but a consumable that stacks
 
 // Phase 3 item type constants (IDs 96-127)
 .const ITEM_TYPE_POT_HEALING        = 96

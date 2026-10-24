@@ -677,7 +677,7 @@ ssell_execute:
     lda inv_item_id,x
     ldy sb_abs_slot
     :AuxWriteY(si_item_id)
-    lda inv_qty,x
+    lda #1                      // one from a stack is sold (priced for one)
     :AuxWriteY(si_qty)
     lda inv_p1,x
     :AuxWriteY(si_p1)
@@ -689,9 +689,9 @@ ssell_execute:
     :AuxWriteY(si_to_ac)
     :StoreStoreMetaYFromInvX()
 
-    // Remove from inventory
+    // One from the inventory stack
     ldx ss_inv_slot
-    jsr inv_remove_item
+    jsr inv_consume_one
 
     // Add gold
     jsr gold_add_price

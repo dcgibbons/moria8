@@ -3,7 +3,7 @@
 // Tests: category check, restocking, math_mul_16x8, buy/sell price calc,
 // gold operations, store door detection, find empty slot, and haggle flow.
 //
-// Results at $0400-$0429: $01 = pass, $00 = fail per test (42 tests)
+// Results at $0400-$042e: $01 = pass, $00 = fail per test (47 tests)
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_bootstrap)
 
@@ -12,7 +12,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #42
+    ldx #47
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -122,7 +122,7 @@ press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
 // Test result buffer — copy to $0400 at end (msg_print clobbers $0400)
-tc_results: .fill 43, $ff
+tc_results: .fill 48, $ff
 tc_count: .byte 0
 
 .macro PatchJump(target, replacement) {
@@ -843,9 +843,9 @@ test_start:
     sta tc_results + 26
 
     // ============================================================
-    // Test 28: Variable probability restock — empty store fills well
-    // Clear store 0, call store_restock_one. With 0 items, 75% fill
-    // rate should stock at least 4 of 12 slots.
+    // Test 28: VMS store_maint, under-stocked branch — an empty store
+    // stocks store$min_inven - store_ctr + 2 items (store1.inc), scaled:
+    // STORE_MIN_KEEP + 2 = 9 of 12 slots.
     // ============================================================
     ldx #0
 !t28_clr:
@@ -876,8 +876,8 @@ test_start:
     jmp !t28_loop-
 !t28_done:
     lda tc_count
-    cmp #4                      // At least 4 stocked (75% rate, very likely)
-    bcc !t28_fail+
+    cmp #STORE_MIN_KEEP + 2
+    bne !t28_fail+
     lda #$01
     jmp !t28_store+
 !t28_fail:
@@ -1546,8 +1546,10 @@ test_start:
     cpx #8
     bcc !t43c_loop-
 
-    // Part E: production store_pick_item yields implemented, sellable IDs
-    // for every store.
+    // Part E: production store_pick_item yields implemented IDs for every
+    // store, sellable to it where it stocks by category. The General Store,
+    // Temple and Alchemy shop stock from VMS store_choice lists instead
+    // (Test 46, Test 48), which include items they do not buy (Temple maces).
     ldx #0
 !t43d_loop:
     stx zp_store_idx
@@ -1557,10 +1559,16 @@ test_start:
     bcc !t43_fail+
     cmp #ITEM_TYPE_COUNT
     bcs !t43_fail+
+    ldx t43_cursor
+    cpx #3
+    beq !t43d_next+         // Temple: VMS list
+    cpx #4
+    beq !t43d_next+         // Alchemy shop: VMS list
     tax
     lda it_category,x
     jsr check_store_category
     bcc !t43_fail+
+!t43d_next:
 
     ldx t43_cursor
     inx
@@ -1610,7 +1618,236 @@ test_start:
 !t43_store:
     sta tc_results + 42
 
+    // ============================================================
+    // Test 44: VMS store_maint turnover — between the keep bounds a store
+    // sells off 1+randint(3) items before restocking (store1.inc). Nine
+    // daggers (never General Store stock) in store 0 leave 5..7 daggers.
+    // ============================================================
+    lda #2                      // Dagger
+    ldx #9
+    jsr t44_fill_store0
+    lda #0
+    sta zp_store_idx
+    jsr store_restock_one
+    lda #2
+    jsr t44_count_id
+    cmp #5
+    bcc !t44_fail+
+    cmp #8
+    bcs !t44_fail+
+    lda #$01
+    jmp !t44_store+
+!t44_fail:
+    lda #$00
+!t44_store:
+    sta tc_results + 43
+
+    // ============================================================
+    // Test 45: VMS store_maint over-stocked branch — a full store sells off
+    // store_ctr - store$max_inven + 2 items and stocks none: 12 daggers
+    // leave exactly 12 - (12 - STORE_MAX_KEEP + 2) = 8 items.
+    // ============================================================
+    lda #2
+    ldx #STORE_MAX_ITEMS
+    jsr t44_fill_store0
+    lda #0
+    sta zp_store_idx
+    jsr store_restock_one
+    lda #2
+    jsr t44_count_id
+    cmp #STORE_MAX_KEEP - 2
+    bne !t45_fail+
+    lda tc_count
+    cmp #STORE_MAX_KEEP - 2
+    bne !t45_fail+
+    lda #$01
+    jmp !t45_store+
+!t45_fail:
+    lda #$00
+!t45_store:
+    sta tc_results + 44
+
+    // ============================================================
+    // Test 46: General Store stock follows VMS store_choice: 15 of its 26
+    // choices are food (values.inc). 100 picks must be at least 40 food.
+    // ============================================================
+    lda #0
+    sta zp_store_idx
+    sta t44_food
+    lda #100
+    sta t44_left
+!t46_loop:
+    jsr store_pick_item
+    tax
+    lda it_category,x
+    cmp #ICAT_FOOD
+    bne !t46_next+
+    inc t44_food
+!t46_next:
+    dec t44_left
+    bne !t46_loop-
+    lda t44_food
+    cmp #40
+    bcc !t46_fail+
+    lda #$01
+    jmp !t46_store+
+!t46_fail:
+    lda #$00
+!t46_store:
+    sta tc_results + 45
+
+    // ============================================================
+    // Test 47: stocking identifies the item kind, as VMS store_carry calls
+    // identify() (desc.inc: object_ident := true), so the store shows names.
+    // ============================================================
+    ldx #ID_KNOWN_BYTES - 1
+    lda #0
+!t47_clr_known:
+    sta id_known_bits,x
+    dex
+    bpl !t47_clr_known-
+    ldx #STORE_MAX_ITEMS - 1
+    lda #FI_EMPTY
+!t47_clr_store:
+    sta si_item_id,x
+    dex
+    bpl !t47_clr_store-
+    lda #0
+    sta zp_store_idx
+    jsr store_restock_one
+    lda #$01
+    sta tc_results + 46
+    ldy #0
+!t47_loop:
+    ldx si_item_id,y
+    cpx #FI_EMPTY
+    beq !t47_next+
+    sty t44_left
+    jsr id_known_test
+    ldy t44_left
+    cmp #0
+    bne !t47_next+
+    lda #$00
+    sta tc_results + 46
+!t47_next:
+    iny
+    cpy #STORE_MAX_ITEMS
+    bcc !t47_loop-
+
+    // ============================================================
+    // Test 48: the Temple and Alchemy shop stock from VMS store_choice
+    // (values.inc, inventory_init) mapped to Moria8 items: 200 picks each
+    // stay in the mapped set, and Word of Recall (2 of 23 Temple, 3 of 21
+    // Alchemy entries) turns up.
+    // ============================================================
+    lda #$01
+    sta tc_results + 47
+    lda #3
+    ldx #<t48_temple_set
+    ldy #>t48_temple_set
+    jsr t48_check_store
+    lda #4
+    ldx #<t48_alchemy_set
+    ldy #>t48_alchemy_set
+    jsr t48_check_store
+
     jmp test_exit_trampoline
+
+// t48_check_store — A = store, X/Y = 0-terminated set of allowed item IDs.
+// Clears tc_results+47 unless 200 picks are all in the set and include Word
+// of Recall (item 32).
+t48_check_store:
+    sta zp_store_idx
+    stx zp_ptr1
+    sty zp_ptr1_hi
+    lda #0
+    sta t48_recall
+    lda #200
+    sta t44_left
+!t48_pick:
+    jsr store_pick_item
+    cmp #32
+    bne !t48_scan+
+    inc t48_recall
+!t48_scan:
+    ldy #0
+!t48_member:
+    cmp (zp_ptr1),y
+    beq !t48_next+
+    pha
+    lda (zp_ptr1),y
+    tax
+    pla
+    cpx #0
+    beq !t48_fail+
+    iny
+    bne !t48_member-
+!t48_next:
+    dec t44_left
+    bne !t48_pick-
+    lda t48_recall
+    bne !t48_done+
+!t48_fail:
+    lda #$00
+    sta tc_results + 47
+!t48_done:
+    rts
+
+t48_recall: .byte 0
+// Temple: Prayer books 1-4, Remove Curse, Restoration, Cure Light/Serious/
+// Critical Wounds, Heroism, Word of Recall, Neutralize Poison, Morningstar,
+// Mace, War Hammer.
+t48_temple_set:  .byte 48, 58, 59, 60, 33, 97, 17, 25, 100, 27, 32, 126, 73, 5, 72, 0
+// Alchemy: Enchant Weapon/Armor, Identify, Light, Magic Mapping, Object
+// Detection, Recharging, Restoration, Word of Recall, Neutralize Poison.
+t48_alchemy_set: .byte 34, 35, 21, 20, 102, 103, 104, 97, 32, 126, 0
+
+// t44_fill_store0 — A = item id for slots 0..X-1 of store 0, rest empty.
+t44_fill_store0:
+    stx t44_left
+    ldx #0
+!t44f_loop:
+    cpx t44_left
+    bcc !t44f_item+
+    pha
+    lda #FI_EMPTY
+    sta si_item_id,x
+    pla
+    jmp !t44f_next+
+!t44f_item:
+    sta si_item_id,x
+!t44f_next:
+    inx
+    cpx #STORE_MAX_ITEMS
+    bcc !t44f_loop-
+    rts
+
+// t44_count_id — A = item id; returns A = its count in store 0 and
+// tc_count = occupied slots.
+t44_count_id:
+    sta t44_id
+    lda #0
+    sta tc_count
+    sta t44_food
+    ldx #0
+!t44c_loop:
+    lda si_item_id,x
+    cmp #FI_EMPTY
+    beq !t44c_next+
+    inc tc_count
+    cmp t44_id
+    bne !t44c_next+
+    inc t44_food
+!t44c_next:
+    inx
+    cpx #STORE_MAX_ITEMS
+    bcc !t44c_loop-
+    lda t44_food
+    rts
+
+t44_id:   .byte 0
+t44_left: .byte 0
+t44_food: .byte 0
 
 t43_bit_addr:               // X = ID -> Y = byte index, t43_mask = bit; preserves X
     txa

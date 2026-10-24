@@ -13,13 +13,15 @@ if str(C128_TESTS_DIR) not in sys.path:
     sys.path.insert(0, str(C128_TESTS_DIR))
 
 from vice_connector import VICEConnector, extract_test_symbols, parse_vs_symbols, run_test_case
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "tools"))
+from vice_config import vice_config  # noqa: E402  (VICE -config file with a version tag)
 
 
 def build_vice_command(args: argparse.Namespace) -> list[str]:
     command = [
         args.vice,
         "-config",
-        "/dev/null",
+        vice_config(args.vice),
         "-default",
         "+saveres",
         "-console",

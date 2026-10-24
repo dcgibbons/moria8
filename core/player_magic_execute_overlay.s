@@ -1,4 +1,5 @@
 #importonce
+#import "df_target_row.s"
 // player_magic_execute_overlay.s — overlay-owned spell/prayer execution
 //
 // Low-frequency spell effect execution lives here to keep the resident C64
@@ -587,12 +588,7 @@ eff_teleport_other:
     ldy #MX_SLEEP_CUR
     lda #0
     sta (zp_ptr0),y
-    ldx df_target_y
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
-    ldy df_target_x
+    jsr df_target_row_ptr
     :MapRead_ptr0_y()
     ora #FLAG_OCCUPIED
     :MapWrite_ptr0_y()

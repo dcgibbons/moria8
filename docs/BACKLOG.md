@@ -255,6 +255,71 @@ Acceptance target:
 - Shipped monsters no longer silently collapse high-impact upstream attacks
   into misleading normal attacks.
 
+### Element-correct monster breath
+
+Monster breath (`core/monster_magic.s` `monster_cast_breath`) models only fire:
+every breather prints "breathes fire!", does HP/3, and only Resist Fire
+reduces it. Pinned VMS Moria (`creature.inc` `cast_spell`, spells 20-24) and
+Umoria (`monster.cpp`) have five elements: lightning (HP/4), gas, acid, frost
+and fire (HP/3), each with its own message and resistance, and the elemental
+damage routines also destroy vulnerable inventory items. Found during the AI
+playtest M3 spell audit (`docs/AI_PLAYTEST_DESIGN.md` §14.7); split from the
+wound/blind/confuse/fear alignment by maintainer decision (2026-10-21).
+
+Shipped breathers start at DL14 (Giant White Dragon Fly) and include the
+young/mature/ancient dragons and the Balrog.
+
+Required work:
+
+- Carry a breath element per creature. `cr_spell_flags` has no free bit once
+  Cause Serious Wounds and fear use bits 6-7, so this needs a data-layout
+  decision (new per-creature field, packed spare bits, or a breather list)
+  and a `tools/parse_creatures.py` mapping from upstream breath bits.
+- Add the four missing breath messages within the Apple IIe and C128 memory
+  budgets.
+- Apply per-element resistance and, if accepted, upstream inventory
+  destruction for acid/fire/frost.
+- Tests per element for damage (HP/4 vs HP/3, resisted and unresisted),
+  message, and any inventory effect.
+
+Acceptance target:
+
+- Every shipped breather uses its upstream element, damage divisor, message
+  and resistance, with the inventory-damage decision recorded.
+
+### Add "of Regeneration" equipment
+
+Moria8 has no Regeneration source. The status timer `zp_eff_regen` (ZP
+`$5B`) is counted down, cleared on new game and read by mana regeneration,
+but no item, potion, scroll or spell ever sets it, so it is always 0. HP
+regeneration (TRN-009 in `docs/TURN_RENDER_CONTRACT.md`) does not read it:
+the VMS x1.5 factor was left out because C64 resident code had no bytes for
+dead state.
+
+In pinned VMS Moria, Regeneration is a worn-equipment flag
+(`%X'00000800'`), not a timer: magic helms can roll the "of Regeneration"
+suffix (`misc.inc` helm enchantment, +1500 cost); wearing one sets
+`py.flags.regenerate` (`moria.inc` `py_bonuses`), which multiplies the
+regeneration rate by 1.5 (`moria.inc` `regen_amount*1.5`) and adds 3 to
+`food_digested` (faster hunger). Umoria not yet checked for other sources.
+
+Required work:
+
+- Add the "of Regeneration" helm ego (or the upstream item set) and an
+  equipment flag recomputed with the other worn-item flags.
+- HP regeneration: rate x1.5 while the flag is set (the product + product/2
+  on `mul_result`, about 30 bytes); decide whether mana follows VMS too.
+- Food: +3 digestion per turn while worn.
+- Retire `zp_eff_regen` or give it a producer, so no dead state remains.
+- Budget: C64 resident has about 10 spare bytes, Apple IIe play slot 5 and
+  C128 resident play 15 (2026-10-22); recover bytes first.
+
+Acceptance target:
+
+- A worn Regeneration item heals at 1.5x the TRN-009 rate and digests food
+  faster, with C64 tests computed from the VMS formula; no unread or unset
+  regeneration state remains.
+
 ### Add monster door opening and bashing
 
 DONE 2026-09-02 (C64/C128/Plus/4; Apple IIe blocked on the resident-RAM
@@ -825,6 +890,60 @@ Acceptance target:
   or the incompatibility is root-caused and documented as wontfix.
 
 ## Testing Infrastructure
+
+### Run the C64 suite in parallel
+
+`make -j5 -O test` runs the five platform stages in parallel (each in a private
+network namespace via `tools/isolated.sh`), cutting a full run from about 20
+to about 8.5 minutes. The C64 stage (`platforms/commodore/c64/run_tests.sh`,
+196 suites) still runs one suite at a time and is likely the long pole. C128
+already runs its units in parallel (`TEST_JOBS`, default 8, in
+`run_tests128.sh`).
+
+Required work:
+
+- Measure per-stage wall time to confirm C64 is the long pole.
+- Add a `TEST_JOBS`-style worker pool to `run_tests.sh`, keeping per-suite
+  results and the existing pass/fail summary format.
+- Build every product variant that tests currently make on demand (24
+  `make -s -C ..` calls inside tests) before starting workers, so parallel
+  suites never rebuild shared `build/c64` outputs.
+- Audit remaining shared scratch paths in `build/test/c64` and `/tmp` (fixed
+  `/tmp` names already include `$$`) and give each suite unique names.
+- Keep `TEST_FILTER` and serial runs (`TEST_JOBS=1`) working, and watch the
+  save-flow smokes that have flaked under load.
+
+Acceptance target:
+
+- `make -j5 -O test` wall time drops further with no new flakes across
+  repeated runs, and serial C64 runs still pass.
+
+### Playtester: learn creature speed and stationarity by observation
+
+The AI playtester's `playtest/moria_playtest/knowledge.py` reads the shipped
+creature tier data as player knowledge: names and native levels (look
+identification, attacker names), glyphs, speed (`fast_creatures`, round 14)
+and the "moves only to attack" flag (`stationary_glyphs`, round 9). The
+original M3 plan (`docs/AI_PLAYTEST_DESIGN.md` §14.3 item 4) was to learn
+stationary monsters by watching their position over turns. The maintainer
+kept the data-driven version for M3 and asked for it to be reworked later
+(§14.6 item 7, 2026-10-22).
+
+Required work:
+
+- Learn "never moves" per creature name (or glyph) from observation: a
+  creature seen at the same tile across N turns while the player is in view.
+- Learn "faster than the player" from observation: more than one move or
+  attack per player turn.
+- Keep names and levels from the shipped data (or decide separately), and
+  keep the brain's uses unchanged (`stationary`, `chased`, hazards).
+- Re-qualify `reach_dl5` and `clvl5`; both must stay at or above the 16/20
+  bar (their frozen suites).
+
+Acceptance target:
+
+- `knowledge.py` no longer reads speed or movement flags, and M3's frozen
+  suites still pass.
 
 ### Normalize cross-platform save schema and versioning
 

@@ -122,7 +122,7 @@
 .segmentdef RuntimeProjectileData [outPrg=OVL_OUT + "/128.proj.prg", start=$0a80, min=$0a80, max=$0aff]
 .segmentdef RuntimeCommonData [outPrg=OVL_OUT + "/128.fdisk.prg", start=$0d60, min=$0d60, max=$0fff]
 .segmentdef RuntimeLowData    [outPrg=OVL_OUT + "/128.runtime.prg", start=$1000, min=$1000, max=$3fff]
-.segmentdef C128ResidentItemNames [outPrg=OVL_OUT + "/128.names.prg", start=$7400, min=$7400, max=$7fff]
+.segmentdef C128ResidentItemNames [outPrg=OVL_OUT + "/128.names.prg", start=$7400, min=$7400, max=$7eff]
 .segmentdef C128ResidentWorld [outPrg=OVL_OUT + "/128.world.prg", start=$6000, min=$6000, max=$8cff]
 .segmentdef C128ResidentItems [outPrg=OVL_OUT + "/128.item.prg", start=$8ca0, min=$8ca0, max=$a9ff]
 .segmentdef C128ResidentSelect [outPrg=OVL_OUT + "/128.select.prg", start=$a800, min=$a800, max=$aaff]
@@ -3505,6 +3505,7 @@ c128_resident_world_start:
 #undef DOOR_PICK_USE_DISARM_HELPER
 #undef DISARM_HELPERS_EXTERNAL
 #undef DISARM_COMMAND_EXTERNAL
+#define MONSTER_DEATH_EXTERNAL
 #import "../../../core/monster.s"
 // C128 play payload is full, so the door-close refusal helper lives in the
 // world payload near its only caller (door_try_close). The suffix string
@@ -3602,6 +3603,9 @@ eff_find_doors:
 .segment C128ResidentWorld
 #import "../../../core/spell_effects.s"
 #import "../../../core/spell_effects_overlay.s"
+// turn.s's regen/poison tables in bank-0 World RAM: C128ResidentPlay has no
+// room (#importonce: turn.s's own import is then a no-op).
+#import "../../../core/turn_data.s"
 #undef FULL_DETECT_EVIL_EFFECT
 #undef SPELL_EFFECTS_INCLUDE_IDENTIFY
 cmb_you_str:     .text "You " ; .byte 0
@@ -3706,6 +3710,7 @@ tool_ego_prefix_hi:
 .macro ChestSummonsRestoreSegment() {
     .segment C128ResidentItems
 }
+#define INV_ADD_EXTERNAL   // inv_add.s rides the main image (below)
 #import "../../../core/item.s"
 #import "../../../core/chest_summons.s"
 // Step-13 chest loot: latch + resident handoff stay on the C128 main image
@@ -3725,6 +3730,14 @@ tool_ego_prefix_hi:
     .segment Default
 }
 #import "../../../core/chest_loot.s"
+// Monster drops (MON-014), the look flash, inventory adding (with item
+// stacking) and the acid attack's armour damage (MON-015) ride the main
+// image: the world, play and items payloads have no headroom for them.
+#import "../../../core/monster_death.s"
+#import "../../../core/look_flash_target.s"
+#import "../../../core/inv_add.s"
+#define MON_ATK_ACID_EXTERNAL   // monster_attack.s (play payload) jumps here
+#import "../../../core/monster_acid.s"
 .segment C128ResidentItems
 
 // wizard_wall_walk_active rides the main image (freed by the corpus move);
@@ -4031,7 +4044,6 @@ c128_resident_play_body:
 #undef COMBAT_STRINGS_EXTERNAL
 #undef COMBAT_COMMON_HELPERS_EXTERNAL
 #undef PMU_TURN_FEEDBACK_EXTERNAL
-#import "../../../core/look_flash_target.s"
 .macro PlayerMoveRestoreResidentSegment() {
     .segment C128ResidentPlay
 }

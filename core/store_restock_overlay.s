@@ -7,7 +7,53 @@
 
 #import "store_meta_macros.s"
 
-// Fallback items per store (used when rejection sampling fails)
+// Stock choices: VMS store_choice (values.inc, indexing inventory_init) for
+// the General Store, Temple and Alchemy shop; the other stores pick by
+// category. Moria8 items stand in where VMS has a finer item, and VMS items
+// Moria8 lacks are left out (the entries left keep their VMS weights).
+sro_choices:
+// General Store: 15 of 26 food. Moria8 has no Hard Biscuit, Beef Jerky, Ale
+// or Wine (Slime Mold stands in) and no Cloak (dropped): 25 entries.
+sro_general_choice:
+    .byte 15, 15, 15, 15, 15, 15, 15, 15    // Ration of Food x8
+    .byte 16, 16, 16, 16, 16, 16, 16        // Slime Mold x7 (biscuit 3, jerky 2, ale, wine)
+    .byte 61, 61, 13, 13, 13, 14            // Flask of Oil x2, Wooden Torch x3, Brass Lantern
+    .byte 135, 135, 62, 63                  // Iron Spike x2, Shovel, Pick
+.const SRO_GENERAL_CHOICES = * - sro_general_choice
+// Temple: Restoration stands in for Restore Wisdom; no Boldliness, Restore
+// Life Levels or Blessing: 23 of 26 entries.
+sro_temple_choice:
+    .byte 48, 58, 59, 60, 58                // Prayer books 1-4, Words of Wisdom x2
+    .byte 33, 33, 97                        // Remove Curse x2, Restoration
+    .byte 17, 17, 17, 25, 25, 25, 100, 100  // Cure Light x3, Serious x3, Critical x2
+    .byte 27, 32, 32, 126                   // Heroism, Word of Recall x2, Neutralize Poison
+    .byte 73, 5, 72                         // Morningstar, Mace, War Hammer
+.const SRO_TEMPLE_CHOICES = * - sro_temple_choice
+// Alchemy shop: Restoration stands in for the five Restore potions, Neutralize
+// Poison for Slow Poison; no Phase Door, Treasure Detection or Detect
+// Invisible: 21 of 26 entries.
+sro_alchemy_choice:
+    .byte 34, 34, 35                        // Enchant Weapon x2 (to-hit, to-dam), Enchant Armor
+    .byte 21, 21, 20, 20, 102, 102          // Identify x2, Light x2, Magic Mapping x2
+    .byte 103, 103, 104                     // Object Detection x2, Recharging
+    .byte 97, 97, 97, 97, 97                // Restoration x5
+    .byte 32, 32, 32, 126                   // Word of Recall x3, Neutralize Poison
+.const SRO_ALCHEMY_CHOICES = * - sro_alchemy_choice
+.assert "General Store choices", SRO_GENERAL_CHOICES, 25
+.assert "Temple choices", SRO_TEMPLE_CHOICES, 23
+.assert "Alchemy choices", SRO_ALCHEMY_CHOICES, 21
+.assert "Store choice table indexes in one page", * - sro_choices <= 256, true
+
+// Per store 0-4: number of choices (0 = pick by category) and table offset.
+.const SRO_CHOICE_STORES = 5
+sro_choice_count:
+    .byte SRO_GENERAL_CHOICES, 0, 0, SRO_TEMPLE_CHOICES, SRO_ALCHEMY_CHOICES
+sro_choice_base:
+    .byte sro_general_choice - sro_choices, 0, 0
+    .byte sro_temple_choice - sro_choices, sro_alchemy_choice - sro_choices
+
+// Fallback items per store (used when rejection sampling fails; the entries
+// of stores with a choice table are unused)
 store_fallback:
     .byte 15, 7, 2, 20, 17, 23, 2, 15  // food, leather, dagger, scroll, CLW potion, ring, dagger(BM), food(Home)
 
@@ -18,8 +64,9 @@ srr_store_idx: .byte 0
 srr_count:     .byte 0
 srr_tmp0:      .byte 0
 
-// store_init_all — Clear all store slots and restock
-// Called once at game start.
+// store_init_all — Empty all store slots and restock
+// Called once at game start. Only item ids are cleared: every path that
+// fills a slot (stocking, selling, home deposit) writes all of its fields.
 // Clobbers: everything
 store_init_all:
     ldx #STORE_TOTAL_SLOTS - 1
@@ -28,56 +75,7 @@ store_init_all:
     :AuxWriteX(si_item_id)
     dex
     bpl !sia_clr-
-
-    ldx #STORE_TOTAL_SLOTS - 1
-    lda #0
-!sia_clr2:
-#if HAL_PLATFORM_AUX_PERSISTENT_DATA
-    jsr sia2_clear_slot
-    dex
-    bpl !sia_clr2-
-#else
-    :AuxWriteX(si_qty)
-    :AuxWriteX(si_p1)
-    :AuxWriteX(si_to_hit)
-    :AuxWriteX(si_to_dam)
-    :AuxWriteX(si_to_ac)
-    :AuxWriteX(si_meta)
-    dex
-    bpl !sia_clr2-
-#endif
-
-    jmp store_restock_all
-
-#if HAL_PLATFORM_AUX_PERSISTENT_DATA
-// sia2_clear_slot — Compact aux clear of one store slot's meta tables.
-// The per-table AuxWrite macro costs ~19 bytes inline; six of them per slot
-// overflowed the ITEMS window. The six si_* arrays are contiguous 96-byte
-// blocks, so one pointer walks them all.
-// In: X = slot (0..STORE_TOTAL_SLOTS-1). Clobbers: A, Y, zp_ptr1, zp_temp0.
-sia2_clear_slot:
-    txa
-    tay
-    lda #<si_qty
-    sta zp_ptr1
-    lda #>si_qty
-    sta zp_ptr1_hi
-    lda #6
-    sta zp_temp0
-!scs_loop:
-    lda #0
-    jsr mmu_safe_map_write_ptr1     // preserves A
-    lda zp_ptr1
-    clc
-    adc #STORE_TOTAL_SLOTS
-    sta zp_ptr1
-    bcc !scs_no_carry+
-    inc zp_ptr1_hi
-!scs_no_carry:
-    dec zp_temp0
-    bne !scs_loop-
-    rts
-#endif
+    // fall through: stock the empty stores
 
 // store_restock_all — Restock all stores + reset kicked flags
 // Skips home (STORE_HOME) — player items persist, no restock.
@@ -105,59 +103,114 @@ store_restock_all:
 !sra_done:
     rts
 
-// store_restock_one — Restock empty slots in store zp_store_idx
-// Variable probability: 75% if <6 items, 50% if 6-10, 25% if >10.
+// store_restock_one — VMS store_maint (store1.inc) for store zp_store_idx:
+//   more than STORE_MAX_KEEP items: sell off (count - STORE_MAX_KEEP + 2)
+//   fewer than STORE_MIN_KEEP items: stock (STORE_MIN_KEEP - count + 2)
+//   otherwise: sell off 1+randint(STORE_TURN_AROUND), stock as many again
+// Slots are chosen uniformly among the occupied (sell) or empty (stock) ones.
 // Clobbers: everything
 store_restock_one:
-    ldx zp_store_idx
-    lda store_base_idx,x
-    sta srr_abs_slot
-    lda #0
-    sta srr_count
+    jsr sro_count
+    cmp #STORE_MAX_KEEP + 1
+    bcc !sro_not_over+
+    sbc #STORE_MAX_KEEP - 2         // carry set: count - MAX + 2
+    bne sro_sell_off                // always taken
+!sro_not_over:
+    cmp #STORE_MIN_KEEP
+    bcs !sro_turnover+
+    eor #$ff                        // carry clear: MIN + 2 - count
+    adc #STORE_MIN_KEEP + 3
+    bne sro_stock                   // always taken
+!sro_turnover:
+    jsr sro_turn_around
+    jsr sro_sell_off
+    jsr sro_turn_around
+    // fall through: stock 1+randint(STORE_TURN_AROUND)
 
-    ldx #0
-!sro_loop:
-    cpx #STORE_MAX_ITEMS
-    bcs !sro_done+
-    stx srr_save_x
-
-    ldy srr_abs_slot
-    :AuxReadY(si_item_id)
-    cmp #FI_EMPTY
-    bne !sro_cnt_inc+
-
-    jsr rng_byte
-    ldy srr_count
-    cmp sro_prob_tbl,y
-    bcc !sro_next+
-
+// sro_stock — Stock A new items into empty slots (fewer if the store fills).
+sro_stock:
+    sta srr_retry
+!sst_loop:
+    dec srr_retry
+    bmi !sst_done+
+    jsr sro_count
+    ldy srr_save_x                  // first empty slot
+    bmi !sst_done+                  // none: the store is full
+    sty srr_abs_slot
     jsr store_pick_item
+    tax
+    jsr id_known_set                // VMS store_carry: identify(), so stock shows its name
+    txa
     ldy srr_abs_slot
     :AuxWriteY(si_item_id)
     lda #1
     :AuxWriteY(si_qty)
-    :AuxReadY(si_item_id)
-    tax
     lda it_category,x
     jsr sro_set_p1
-
-!sro_cnt_inc:
-    inc srr_count
-
-!sro_next:
-    ldx srr_save_x
-    inc srr_abs_slot
-    inx
-    jmp !sro_loop-
-
-!sro_done:
+    jmp !sst_loop-
+!sst_done:
     rts
 
-// Skip threshold table: rng < value -> don't stock
-sro_prob_tbl:
-    .byte 64, 64, 64, 64, 64, 64
-    .byte 128, 128, 128, 128, 128
-    .byte 192, 192
+// sro_sell_off — Empty A random occupied slots (fewer if the store runs out):
+// VMS store_destroy(randint(store_ctr)). Only the item id is cleared:
+// stocking and selling rewrite every field.
+sro_sell_off:
+    sta srr_retry
+!sso_loop:
+    dec srr_retry
+    bmi !sst_done-
+    jsr sro_count
+    beq !sst_done-
+!sso_retry:                         // uniform over occupied slots by rejection
+    lda #STORE_MAX_ITEMS
+    jsr rng_range
+    clc
+    adc srr_abs_slot
+    tay
+    :AuxReadY(si_item_id)
+    cmp #FI_EMPTY
+    beq !sso_retry-
+    lda #FI_EMPTY
+    :AuxWriteY(si_item_id)
+    jmp !sso_loop-
+
+// sro_turn_around — A = 1 + randint(STORE_TURN_AROUND) (VMS randint is 1..n)
+sro_turn_around:
+    lda #STORE_TURN_AROUND
+    jsr rng_range
+    clc
+    adc #2
+    rts
+
+// sro_count — A = occupied slots in store zp_store_idx (Z set when none);
+// srr_abs_slot = the store's first slot; srr_save_x = its first empty slot,
+// or $FF when full.
+sro_count:
+    ldx zp_store_idx
+    lda store_base_idx,x
+    sta srr_abs_slot
+    tay
+    lda #$ff
+    sta srr_save_x
+    lda #0
+    sta srr_count
+    ldx #STORE_MAX_ITEMS
+!src_loop:
+    :AuxReadY(si_item_id)
+    cmp #FI_EMPTY
+    bne !src_full+
+    lda srr_save_x
+    bpl !src_next+
+    sty srr_save_x
+    bmi !src_next+                  // always taken (srr_save_x was $FF)
+!src_full:
+    inc srr_count
+!src_next:
+    iny
+    dex
+    bne !src_loop-
+    lda srr_count
+    rts
 
 // sro_set_p1 — Set p1 and flags for newly stocked item
 // Input: A = category, srr_abs_slot = target slot
@@ -206,59 +259,46 @@ sro_set_p1:
     jmp sro_store_p1
 
 !sro_enchant:
-    lda #3
-    jsr rng_range
-    sta srr_tmp0
-    ldy srr_abs_slot
-    jsr sro_zero_bonus
-    :AuxReadY(si_item_id)
-    tax
-    lda it_category,x
+    sta srr_count                   // category (free: sro_count recounts)
+    jsr sro_bonus_base
+    lda srr_count
     cmp #ICAT_WEAPON
     bne !sro_enchant_armor+
     lda srr_tmp0
     :AuxWriteY(si_to_hit)
     lda srr_tmp0
     :AuxWriteY(si_to_dam)
-    jmp sro_store_identified
-!sro_enchant_armor:
-    lda srr_tmp0
-    :AuxWriteY(si_to_ac)
-    jmp sro_store_identified
+    rts
 
 !sro_ring:
-    lda #3
-    jsr rng_range
-    sta srr_tmp0
-    ldy srr_abs_slot
-    jsr sro_zero_bonus
+    jsr sro_bonus_base
     :AuxReadY(si_item_id)
     cmp #23
-    beq !sro_ring_protection+
+    beq !sro_enchant_armor+         // Ring of Protection: AC bonus
     cmp #24
     beq !sro_ring_strength+
     sec
     sbc #ITEM_TYPE_AMULET_WISDOM
     cmp #2
     bcc !sro_ring_strength+
-    jmp sro_store_identified
-!sro_ring_protection:
+    rts
+!sro_enchant_armor:
     lda srr_tmp0
     :AuxWriteY(si_to_ac)
-    jmp sro_store_identified
+    rts
 !sro_ring_strength:
     lda srr_tmp0
     :AuxWriteY(si_p1)
-    jmp sro_store_identified
-
-// sro_zero_bonus — Zero p1/to_hit/to_dam/to_ac for the slot in Y.
-sro_zero_bonus:
-    lda #0
-    :AuxWriteY(si_p1)
-    :AuxWriteY(si_to_hit)
-    :AuxWriteY(si_to_dam)
-    :AuxWriteY(si_to_ac)
     rts
+
+// sro_bonus_base — srr_tmp0 = bonus 0..2; zero p1/to_hit/to_dam/to_ac and
+// mark identified; Y = srr_abs_slot.
+sro_bonus_base:
+    lda #3
+    jsr rng_range
+    sta srr_tmp0
+    lda #0
+    jmp sro_store_p1
 
 !sro_light:
     ldy srr_abs_slot
@@ -277,7 +317,6 @@ sro_store_p1:
     :AuxWriteY(si_to_hit)
     :AuxWriteY(si_to_dam)
     :AuxWriteY(si_to_ac)
-sro_store_identified:
     :StoreStoreMetaY(IF_IDENTIFIED, 0)
     rts
 
@@ -285,8 +324,19 @@ sro_store_identified:
 // Output: A = item type ID
 // Clobbers: A, X, Y
 store_pick_item:
+    ldy zp_store_idx
+    cpy #SRO_CHOICE_STORES
+    bcs !spi_category+
+    lda sro_choice_count,y
+    beq !spi_category+              // Armoury, Weaponsmith: by category
+    jsr rng_range                   // VMS store_choice; preserves Y, carry clear
+    adc sro_choice_base,y
+    tax
+    lda sro_choices,x
+    rts
+!spi_category:
     lda #STORE_PICK_RETRIES
-    sta srr_retry
+    sta srr_count                   // free here: sro_count recounts each pass
 
 !spi_loop:
     lda #ITEM_TYPE_COUNT - 2
@@ -305,7 +355,7 @@ store_pick_item:
 
 !spi_reject:
     pla
-    dec srr_retry
+    dec srr_count
     bne !spi_loop-
 
     ldx zp_store_idx

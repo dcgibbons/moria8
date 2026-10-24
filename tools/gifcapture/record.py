@@ -25,6 +25,8 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 from paths import BUILD, WORK
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools"))
+from vice_config import vice_config  # noqa: E402  (VICE -config file with a version tag)
 
 CFG = {
     "c64":    dict(race="DWARF", klass="WARRIOR", name="DURIN", plat="c64", creation_only=True),
@@ -34,7 +36,7 @@ CFG = {
 }
 
 def vice_cmd(exe, port, extra, image):
-    return [exe, "-console", "-config", "/dev/null", "-default", "+saveres", "-binarymonitor",
+    return [exe, "-console", "-config", vice_config(exe), "-default", "+saveres", "-binarymonitor",
             "-binarymonitoraddress", f"ip4://127.0.0.1:{port}", "+sound"] + extra + [str(image)]
 
 def make_game(plat, cfg, out):

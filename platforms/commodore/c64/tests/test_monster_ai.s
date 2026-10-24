@@ -26,7 +26,7 @@ bootstrap:
 
 // test_finish — Copy results to $0400 and halt.
 test_finish:
-    ldx #57
+    ldx #58
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -49,7 +49,11 @@ test_finish:
 #import "../../../../core/item_defs.s"
 #import "../../../../core/player.s"
 #import "../../../../core/ui_messages.s"
-#import "../../../../core/ui_status.s"
+// ui_status.s is not imported: these tests never render the status line and
+// its ~1 KB would push the test body past MAP_BASE (assert at the end).
+// status_draw is its only referenced entry point.
+status_draw:
+    rts
 #import "../../../../core/ui_help_clear.s"
 #import "../../../../core/stat_display.s"
 .segmentdef TestCreateOverlay [start=$D000]
@@ -166,7 +170,9 @@ tai_rng_values:   .fill 4, 0
 tai_rng_idx:      .byte 0
 tai_distance:     .byte 0
 auto_rest_active: .byte 0
-tc_results: .fill 58, $ff      // Result buffer (copied to $0400 at end)
+tc_results: .fill 59, $ff      // Result buffer (copied to $0400 at end)
+t59_toward: .byte 0
+t59_left:   .byte 0
 
 .macro PatchJump(target, replacement) {
     lda #$4c
@@ -1216,7 +1222,7 @@ test_start:
     // Temporarily set spell_chance[0] = 100, spell_flags[0] = 1
     lda #100
     sta cr_spell_chance
-    lda #MSF_BOLT
+    lda #MSF_WOUND_LIGHT
     sta cr_spell_flags
 
     // Create floor tiles between monster and player for LOS
@@ -1274,7 +1280,7 @@ test_start:
     // Set spell_chance[0] = 100
     lda #100
     sta cr_spell_chance
-    lda #MSF_BOLT
+    lda #MSF_WOUND_LIGHT
     sta cr_spell_flags
 
     // Create floor at (10,15) and (12,15), wall at (11,15)
@@ -1406,7 +1412,9 @@ test_start:
     sta cr_spell_flags
 
     // ==========================================
-    // Test 15: monster_cast_heal restores monster HP
+    // Test 15: spell bit 6 is Cause Serious Wounds, not a monster heal
+    // (VMS Moria has no monster heal spell; MON-011): the caster's HP stays 1
+    // whether or not the player saves.
     // ==========================================
 !t15:
     jsr monster_init_table
@@ -1417,10 +1425,10 @@ test_start:
     lda #8
     sta $c6
 
-    // Set spell data for creature type 0 — heal only
+    // Set spell data for creature type 0 — spell bit 6 only
     lda #100
     sta cr_spell_chance
-    lda #MSF_HEAL
+    lda #MSF_WOUND_SERIOUS
     sta cr_spell_flags
 
     // Create floor at spawn position
@@ -1456,16 +1464,19 @@ test_start:
     sta zp_mon_type
     sta zp_mon_idx
 
-    // Call monster_pick_spell (will pick heal since it's the only spell)
+    // Call monster_pick_spell (bit 6 is the only spell)
     jsr monster_pick_spell
 
-    // Monster HP should be > 1 (healed by 3d8 = 3-24)
+    // Monster HP must still be exactly 1
     ldx #0
     jsr monster_get_ptr
     ldy #MX_HP_LO
     lda (zp_ptr0),y
-    cmp #2
-    bcc !t15_fail+             // HP < 2 means heal didn't work
+    cmp #1
+    bne !t15_fail+
+    ldy #MX_HP_HI
+    lda (zp_ptr0),y
+    bne !t15_fail+
 
     lda #$01
     sta tc_results + 14
@@ -3621,10 +3632,85 @@ test_start:
     bne !t58_fail+
     lda #$01
     sta tc_results + 57
-    jmp !tests_done+
+    jmp !t59+
 !t58_fail:
     lda #$00
     sta tc_results + 57
+
+    // ==========================================
+    // Test 59: random movement (MON-013, Umoria monsterMove). A Kobold given
+    // CM_75_RANDOM (cr_speed $21) in test 16's corridor: 40 single-tick
+    // trials from 10 squares away. Without the flag every trial steps
+    // toward the player (test 16); with it about 74% of moves are random,
+    // so 4-32 of 40 step toward (22 measured; 40 with the roll removed).
+    // ==========================================
+!t59:
+    lda #$21
+    sta cr_speed + 4
+    lda #0
+    sta t59_toward
+    lda #40
+    sta t59_left
+!t59_trial:
+    jsr monster_init_table
+    lda #0
+    sta zp_game_flags
+    sta zp_eff_speed            // tests 36-40 leave haste/slow state behind
+    sta player_pflags
+    sta zp_turn_lo
+    lda #8
+    sta $c6
+    ldx #15                     // test 16's corridor, (20,15)-(30,15)
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #20
+!t59_fill:
+    lda #TILE_FLOOR | FLAG_LIT
+    sta (zp_ptr0),y
+    iny
+    cpy #31
+    bne !t59_fill-
+    lda #20
+    sta ms_spawn_x
+    lda #15
+    sta ms_spawn_y
+    lda #4
+    jsr monster_spawn_one
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_FLAGS
+    lda #MF_AWAKE
+    sta (zp_ptr0),y
+    lda #30
+    sta zp_player_x
+    lda #15
+    sta zp_player_y
+    jsr monster_ai_tick
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_X
+    lda (zp_ptr0),y
+    cmp #21
+    bne !t59_next+
+    inc t59_toward
+!t59_next:
+    dec t59_left
+    bne !t59_trial-
+    lda #1
+    sta cr_speed + 4
+    lda t59_toward
+    cmp #33                     // random: ~55% (22 measured); none: 40 of 40
+    bcs !t59_fail+
+    cmp #4                      // and it does still move
+    bcc !t59_fail+
+    lda #$01
+    sta tc_results + 58
+    jmp !tests_done+
+!t59_fail:
+    lda #$00
+    sta tc_results + 58
 
 !tests_done:
     jmp test_finish

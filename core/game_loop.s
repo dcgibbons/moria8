@@ -636,6 +636,10 @@ game_new_start:
     sta zp_run_dir              // Not running
     lda #0
     sta auto_rest_active
+    sta regen_frac_lo           // no HP regen fraction from a previous character
+#if HAL_PLATFORM_LEVELUP_MAGIC_USES_TRAMPOLINE
+    sta levelup_magic_pending   // none owed by a previous character
+#endif
     sta zp_view_x
     sta zp_view_y
     sta old_view_x
@@ -824,6 +828,11 @@ c64_test_single_drive_load_return_resume_entry:
     sta zp_run_dir
     lda #0
     sta auto_rest_active
+    sta regen_frac_lo           // not saved (zp_regen_frac, the high byte, is)
+    sta md_count                // no drop staged before the load
+#if HAL_PLATFORM_LEVELUP_MAGIC_USES_TRAMPOLINE
+    sta levelup_magic_pending   // none owed by the game played before the load
+#endif
 
     // Re-init SID
     jsr hal_sound_init
@@ -871,9 +880,28 @@ c64_test_single_drive_load_return_resume_entry:
 c64_test_after_load_resume_game:
 #endif
 main_loop:
+#if PLAYTEST_FAULT_STACK_LEAK
+    // Playtester self-test only (`make playtest-selftest`): once the first
+    // turn has passed, leak one stack byte per main-loop pass so the auditor's
+    // command-prompt SP check must fire. Never defined in shipping builds.
+    lda zp_turn_lo
+    beq !pt_leak_done+
+    pha
+!pt_leak_done:
+#endif
 #if HAL_PLATFORM_GAME_LOOP_MAIN_LOOP_BEGIN
 c128_town_move_diag_loop_top:
     jsr hal_platform_main_loop_begin
+#endif
+#if HAL_PLATFORM_LEVELUP_MAGIC_USES_TRAMPOLINE
+    // Deferred level-up mana/spell recalc (combat_apply_levelup): once,
+    // however many levels were gained; then show the new maximum mana.
+    lsr levelup_magic_pending
+    bcc !no_levelup_magic+
+    jsr tramp_magic_recalc_mana
+    jsr tramp_magic_check_new_spells
+    jsr status_draw
+!no_levelup_magic:
 #endif
 #if C128_TEST_TOWN_SELF_DUMP
     lda c128_town_dump_countdown
@@ -1018,7 +1046,13 @@ c128_town_move_diag_loop_top:
     beq !not_paralyzed+
     cmp #1
     bne !paralyzed_tick+
+    // Last paralyzed turn: the counter runs out at the start of the turn and
+    // the player acts before the monsters (VMS/Umoria order, TRN-011).
     jsr msg_clear
+    dec zp_eff_paralyze
+    ldx #HSTR_EFF_PARALYZE_END
+    jsr huff_print_msg
+    jmp !not_paralyzed+
 !paralyzed_tick:
     jsr turn_post_action
     lda zp_game_flags

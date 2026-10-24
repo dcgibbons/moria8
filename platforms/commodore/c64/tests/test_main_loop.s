@@ -11,13 +11,16 @@
 .encoding "screencode_mixed"
 
 .const DUNGEON_GEN_BUSY = 1
+// turn.s binds turn_resting (HP regen's resting rate) to game_loop.s's
+// auto_rest_active instead of its unit-test stand-in.
+#define TURN_PRODUCTION_REST_STATE
 
 bootstrap:
     :BankOutBasic()
     jmp test_start
 
 test_finish:
-    ldx #45
+    ldx #47
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -252,6 +255,9 @@ tun_dig_ability: .byte 0
 #import "../../../../core/ui_help_clear.s"
 #import "../../../../core/stat_display.s"
 .segmentdef TestCreateOverlay [start=$D000]
+// Modules this test never executes load above the overlay, so the test
+// body stays below TestCreateOverlay ($D000).
+.segmentdef TestUnusedOverlay [start=$E100, max=$FFF9]
 .segment TestCreateOverlay
 #import "../../../../core/background_data.s"
 #import "../../../../core/player_create.s"
@@ -267,7 +273,9 @@ dg_idx: .byte 0
 #import "../../common/overlay.s"
 #import "../../../../core/monster_ai.s"
 #import "../../../../core/recall.s"
+.segment TestUnusedOverlay
 #import "../../../../core/monster_magic.s"
+.segment Default
 .macro ChestSummonsSegment() {
     .segment Default
 }
@@ -285,7 +293,9 @@ random_floor_in_room:
     lda #0
     tay
     rts
+.segment TestUnusedOverlay
 #import "../../../../core/special_rooms.s"
+.segment Default
 #import "../../../../core/ego_items.s"
 #import "../../../../core/special_rooms_stubs.s"
 #import "../../../../core/player_items.s"
@@ -312,7 +322,7 @@ random_floor_in_room:
 save_welcome_str:
     .text "WELCOME BACK" ; .byte 0
 
-tc_results: .fill 46, $ff
+tc_results: .fill 48, $ff
 
 test_cmd_idx: .byte 0
 test_cmd_len: .byte 0
@@ -400,6 +410,8 @@ test_turn_sets_message: .byte 0
 test_turn_disturbs: .byte 0     // Turn reports damage/hunger (turn_rest_disturbed)
 test_turn_heal_hp: .byte 0
 test_turn_heal_mp: .byte 0
+test_turn_resting: .byte 0      // turn_resting seen by any turn of the case
+test_turn_ticks_paralysis: .byte 0  // Turn counts zp_eff_paralyze down, as turn_tick_effects does
 test_any_key_held_sample: .byte 0
 test_cancel_key_sample: .byte 0
 test_update_clears_reveal: .byte 0
@@ -569,6 +581,8 @@ reset_state:
     sta test_turn_disturbs
     sta test_turn_heal_hp
     sta test_turn_heal_mp
+    sta test_turn_resting
+    sta test_turn_ticks_paralysis
     sta test_any_key_held_sample
     sta test_cancel_key_sample
     sta test_update_clears_reveal
@@ -677,6 +691,15 @@ test_msg_clear:
 
 test_turn_post_action:
     inc test_turn_calls
+    lda test_turn_ticks_paralysis
+    beq !no_paralysis_tick+
+    lda zp_eff_paralyze
+    beq !no_paralysis_tick+
+    dec zp_eff_paralyze
+!no_paralysis_tick:
+    lda turn_resting
+    ora test_turn_resting
+    sta test_turn_resting
     lda test_turn_heal_hp
     beq !no_hp+
     inc zp_player_hp_lo
@@ -985,7 +1008,7 @@ test_start:
     ldx #$ff
     txs
 
-    ldx #45
+    ldx #47
     lda #$ff
 !clr:
     sta tc_results,x
@@ -2679,10 +2702,81 @@ test_start:
     bne !t46_fail+
     lda #$01
     sta tc_results + 45
-    jmp test_finish
+    jmp !t47+
 !t46_fail:
     lda #$00
     sta tc_results + 45
+
+    // Test 47: HP regeneration's resting rate (turn_tick_regen reads
+    // turn_resting, TRN-009) follows the real auto-rest flag: set on the
+    // turns CTRL+R rests, clear on an ordinary '.' rest turn.
+!t47:
+    jsr reset_state
+    lda #46
+    sta test_case_idx
+    lda #8
+    sta zp_player_hp_lo
+    lda #1
+    sta test_turn_heal_hp
+    lda #CMD_AUTOREST
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    jsr run_case
+    lda test_turn_calls
+    beq !t47_fail+
+    lda test_turn_resting
+    beq !t47_fail+
+    jsr reset_state
+    lda #46
+    sta test_case_idx
+    lda #CMD_REST
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    jsr run_case
+    lda test_turn_calls
+    cmp #1
+    bne !t47_fail+
+    lda test_turn_resting
+    bne !t47_fail+
+    lda #$01
+    sta tc_results + 46
+    jmp !t48+
+!t47_fail:
+    lda #$00
+    sta tc_results + 46
+
+    // Test 48: the last paralyzed turn hands the player a command before
+    // the monsters act (VMS moria.inc / Umoria playDungeon order, TRN-011).
+    // Paralysis 2: one paralyzed turn (2 -> 1), then the counter runs out at
+    // the start of the next turn and the scripted REST is read and played:
+    // 2 turns. The old order spent a second paralyzed turn (3 turns).
+!t48:
+    jsr reset_state
+    lda #47
+    sta test_case_idx
+    lda #1
+    sta test_turn_ticks_paralysis
+    lda #2
+    sta zp_eff_paralyze
+    lda #CMD_REST
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    jsr run_case
+    lda zp_eff_paralyze
+    bne !t48_fail+
+    lda test_turn_calls
+    cmp #2
+    bne !t48_fail+
+    lda #$01
+    sta tc_results + 47
+    jmp test_finish
+!t48_fail:
+    lda #$00
+    sta zp_eff_paralyze
+    sta tc_results + 47
     jmp test_finish
 
 t33_scratch_lo: .byte <t33_scratch_28, <t33_scratch_29, <t33_scratch_30, <t33_scratch_31
@@ -2691,3 +2785,6 @@ t33_scratch_28: .fill MAP_COLS, 0
 t33_scratch_29: .fill MAP_COLS, 0
 t33_scratch_30: .fill MAP_COLS, 0
 t33_scratch_31: .fill MAP_COLS, 0
+
+main_loop_test_end:
+.assert "Main-loop test body stays below TestCreateOverlay", main_loop_test_end <= $D000, true

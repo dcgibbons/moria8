@@ -24,6 +24,11 @@
     .segment Default
 }
 
+// The item-name decode buffer follows msg_history in high RAM ($DF0E-$DF3D,
+// allocated in main.s HighResident) to free resident bytes below MAP_BASE.
+#define PLATFORM_ITEM_NAME_BUF_LOW
+.const PLATFORM_ITEM_NAME_DECODE_BUF_BASE = $df0e
+
 .const MACHINE_C64    = $00
 .const MACHINE_C128   = $80
 .const MACHINE_PLUS4  = $40

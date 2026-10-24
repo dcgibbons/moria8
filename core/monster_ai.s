@@ -74,6 +74,7 @@ monster_ai_tick:
     // MX_SPEED_CNT (-1 = slowed, 0 = normal base speed, +1 = hasted).
     ldx zp_mon_type
     lda cr_speed,x
+    and #CR_SPEED_MASK
     sta zp_mon_speed
     ldx zp_mon_idx
     jsr monster_get_ptr
@@ -236,9 +237,33 @@ monster_process_one:
     jmp !mpo_writeback+
 !mpo_not_town:
 
+    // Random movement before normal movement (MON-013): Umoria monsterMove
+    // rolls CM_75_RANDOM, then CM_40_RANDOM, then CM_20_RANDOM, each
+    // randomNumber(100) < 75/40/20 (1-100, so 74/39/19 here on 0-99).
+    ldx zp_mon_type
+    lda cr_speed,x
+    and #CM_RANDOM_MOVE
+    beq !mpo_no_random+
+    sta mai_random
+    ldx #2
+!mpo_random_roll:
+    lda mai_random
+    and mai_random_bit,x
+    beq !mpo_random_next+
+    stx mai_random_x
+    lda #100
+    jsr rng_range               // 0..99
+    ldx mai_random_x
+    cmp mai_random_pct,x
+    bcc !mpo_confused+          // Random step, as confused movement
+!mpo_random_next:
+    dex
+    bpl !mpo_random_roll-
+!mpo_no_random:
+
     // Check if monster should flee (HP < threshold)
     jsr monster_check_flee
-    bcs !mpo_flee+
+    bcc !mpo_flee+
 
     // Normal movement: move toward player
     jsr monster_move_toward
@@ -677,33 +702,27 @@ monster_move_random:
     // Don't try alternatives — confused movement is unreliable
 
 
+mai_random_bit: .byte $08, $10, $20          // CM_20/40/75_RANDOM
+mai_random_pct: .byte 19, 39, 74             // rng_range(100) < this
+mai_random:     .byte 0
+mai_random_x:   .byte 0
+
 // ============================================================
 // monster_check_flee — Check if monster HP is below flee threshold
-// Output: carry set = should flee, carry clear = normal
+// Output: carry clear = should flee (HP < threshold), carry set = normal
 // Clobbers: A, X, Y, zp_ptr0/hi
 // ============================================================
 monster_check_flee:
     ldx zp_mon_idx
     jsr monster_get_ptr
-    // 16-bit compare: flee_threshold > current_HP?
-    ldy #MX_FLEE_HI
-    lda (zp_ptr0),y           // flee_hi
-    ldy #MX_HP_HI
-    cmp (zp_ptr0),y           // flee_hi - hp_hi
-    bcc !mcf_no+              // flee < hp → no flee
-    bne !mcf_flee+            // flee > hp → flee
-    // Hi bytes equal — compare lo bytes
+    ldy #MX_HP_LO              // 16-bit HP - threshold: borrow = HP below it
+    lda (zp_ptr0),y
     ldy #MX_FLEE_LO
-    lda (zp_ptr0),y           // flee_lo
-    ldy #MX_HP_LO
-    cmp (zp_ptr0),y           // flee_lo - hp_lo
-    beq !mcf_no+              // equal → no flee (flee at strictly less)
-    bcc !mcf_no+              // flee < hp → no flee
-!mcf_flee:
-    sec
-    rts
-!mcf_no:
-    clc
+    cmp (zp_ptr0),y
+    ldy #MX_HP_HI
+    lda (zp_ptr0),y
+    ldy #MX_FLEE_HI
+    sbc (zp_ptr0),y
     rts
 
 // ============================================================

@@ -39,14 +39,16 @@ piw_equip:    .byte 0          // Target equipment slot index
 piw_item_id:  .byte 0          // Item type ID being processed
 piw_qty:      .byte 0          // Item qty being processed
 piw_p1:       .byte 0          // Item p1 being processed
-piw_to_hit:   .byte 0          // Item to-hit being processed
-piw_to_dam:   .byte 0          // Item to-damage being processed
-piw_to_ac:    .byte 0          // Item to-AC being processed
 piw_flags:    .byte 0          // Item flags being processed
 piw_ego:      .byte 0          // Item ego type being processed
 piw_filter:   .byte $ff        // Active inventory filter for prompt/select helpers
 piw_visible_count: .byte 0     // Number of cached visible slots
+#if PLATFORM_SCRATCH_BUFS_IN_PAGE2 || PLATFORM_LIST_BUFS_LOW
+.label piw_visible_slots = PLATFORM_PIW_VISIBLE_SLOTS_BASE  // Absolute carried/equipped slot indices
+.assert "piw_visible_slots size matches its page-2 home", MAX_INV_SLOTS, 22
+#else
 piw_visible_slots: .fill MAX_INV_SLOTS, 0  // Absolute carried/equipped slot indices
+#endif
 #if PLATFORM_PRODUCT_OVERLAY_RUNTIME
 piw_return_overlay: .byte 0    // Product overlay to restore after prompt-time modal UI
 #endif

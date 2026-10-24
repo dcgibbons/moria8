@@ -1,4 +1,5 @@
 #importonce
+#import "df_target_row.s"
 // tunnel.s — Tunnel command (+ key)
 //
 // Dig through walls, magma, quartz, and rubble. Core umoria command.
@@ -99,12 +100,7 @@ player_tunnel:
 player_tunnel_resolved_target:
 
     // Read map tile at target
-    ldx df_target_y
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
-    ldy df_target_x
+    jsr df_target_row_ptr
     :MapRead_ptr0_y()
     sta tun_save_tile
 

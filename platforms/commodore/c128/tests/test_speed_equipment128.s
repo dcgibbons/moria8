@@ -48,6 +48,9 @@ tramp_ego_get_ac_bonus:
     lda #0
     rts
 
+// Match the C128 product (hal/lifecycle_policy.s): the stat adjuster lives
+// outside player_recalc_equipment.s on C128, so it must not be pulled in here.
+#define HAL_PLATFORM_ADJUST_EQUIPMENT_STAT_EXTERNAL
 #import "../../../../core/player_recalc_equipment.s"
 
 test_start:

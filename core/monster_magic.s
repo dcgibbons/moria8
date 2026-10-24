@@ -1,20 +1,26 @@
 #importonce
 // monster_magic.s — Monster spellcasting system
 //
-// Provides spell chance/LOS checking, spell selection, and 7 spell
+// Provides spell chance/LOS checking, spell selection, and 8 spell
 // handlers for monster casters. Called from monster_process_one when
 // the monster is awake, before confused/movement logic.
 //
-// Six spellcasting creatures (IDs 20-25) have nonzero spell_chance,
-// active on dungeon levels 3-5.
+// Wound, blind, confuse and fear follow pinned VMS Moria creature.inc
+// cast_spell (spells 8, 9, 11, 12, 13; Umoria monster.cpp is identical): the
+// player first gets a saving throw (player_save.s) with wis_adj + level
+// (ledger MON-011).
 
 // ============================================================
 // Spell constants (MSF_* flags defined in monster.s)
 // ============================================================
 .const MAX_CAST_RANGE = 8
-.const MM_SPELL_COUNT = 7      // Total spell types
+.const MM_SPELL_COUNT = 8      // Total spell types (one per cr_spell_flags bit)
+.const MM_EFF_BLIND   = 0      // mm_effect_* table rows
+.const MM_EFF_CONFUSE = 1
+.const MM_EFF_FEAR    = 2
 
 #import "los_trace.s"
+#import "player_save.s"
 
 // ============================================================
 // Scratch variables
@@ -120,7 +126,7 @@ monster_pick_spell:
     rts
 
 !mps_dispatch:
-    // X = bit position (spell index 0-6)
+    // X = bit position (spell index 0-7)
     // Track spell in recall
 #if HAL_PLATFORM_AUX_PERSISTENT_DATA
     ldy zp_mon_type
@@ -133,37 +139,21 @@ monster_pick_spell:
     ora recall_spells,y
     :AuxWriteY(recall_spells)
 #endif
-    // Dispatch
-    cpx #0
-    beq !mps_bolt+
-    cpx #1
-    beq !mps_breath+
-    cpx #2
-    beq !mps_summon+
-    cpx #3
-    beq !mps_teleport+
-    cpx #4
-    beq !mps_blind+
-    cpx #5
-    beq !mps_confuse+
-    cpx #6
-    beq !mps_heal+
+    // Dispatch through the handler table (RTS jump: push address - 1)
+    lda mm_spell_hi,x
+    pha
+    lda mm_spell_lo,x
+    pha
     rts
 
-!mps_bolt:
-    jmp monster_cast_bolt
-!mps_breath:
-    jmp monster_cast_breath
-!mps_summon:
-    jmp monster_cast_summon
-!mps_teleport:
-    jmp monster_cast_teleport
-!mps_blind:
-    jmp monster_cast_blind
-!mps_confuse:
-    jmp monster_cast_confuse
-!mps_heal:
-    jmp monster_cast_heal
+// Handlers in cr_spell_flags bit order (MSF_* in monster.s)
+.var mm_spell_handlers = List().add(monster_cast_wound_light, monster_cast_breath,
+    monster_cast_summon, monster_cast_teleport, monster_cast_blind,
+    monster_cast_confuse, monster_cast_wound_serious, monster_cast_fear)
+mm_spell_lo:
+    .fill MM_SPELL_COUNT, <(mm_spell_handlers.get(i) - 1)
+mm_spell_hi:
+    .fill MM_SPELL_COUNT, >(mm_spell_handlers.get(i) - 1)
 
 // ============================================================
 // mm_print_spell_msg — Print "THE <name> <suffix>"
@@ -171,46 +161,135 @@ monster_pick_spell:
 // Clobbers: A, X, Y, zp_ptr0, zp_ptr1, cmb_buf_idx
 // ============================================================
 mm_print_spell_msg:
-    // Print "THE <name>" (formerly mm_print_monster_name, inlined at its
-    // only call site)
-    lda #0
-    sta cmb_buf_idx
-
-    lda #<cmb_the_str + 1
-    ldy #>cmb_the_str + 1
-    jsr combat_append_str
-
-    ldx zp_mon_type
-    jsr creature_get_name       // A=lo, Y=hi (handles KERNAL banking)
-    jsr combat_append_str
-
-    lda zp_ptr2
-    ldy zp_ptr2_hi
-    jsr combat_append_str
-
-    // Null-terminate
-    jmp cmb_term_and_print
+    // Same "THE <name><suffix>" build as monster melee messages; the name
+    // comes from cmb_type, which player combat always sets before reading.
+    lda zp_mon_type
+    sta cmb_type
+    jmp mon_atk_build_effect_msg
 
 // ============================================================
-// Spell handler 1: monster_cast_bolt
-// Bolt does 2d8 + creature level damage to player
+// Spell handlers 1 and 7: Cause Light / Serious Wounds
+// "THE <name> casts a spell.", then 3d8 / 8d8 damage unless the player
+// saves (VMS spells 8 and 9).
 // ============================================================
-monster_cast_bolt:
-    // Print "THE <name> CASTS A BOLT!"
-    ldx #HSTR_MM_BOLT
-    jsr huff_decode_to_ptr2
-    jsr mm_print_spell_msg
-
-    // Roll 2d8 + level
-    ldx zp_mon_type
-    lda cr_level,x
-    tay                       // Y = bonus (level)
-    lda #2                    // A = 2 dice
-    ldx #8                    // X = 8 sides
-    jsr math_dice             // → zp_math_a
-
+monster_cast_wound_serious:
+    lda #8
+    .byte $2c                 // BIT abs: skip the next lda #3
+monster_cast_wound_light:
+    lda #3
+    pha                       // Dice count
+    jsr mm_print_cast_msg
+    jsr mm_spell_save
+    pla
+    bcc mm_print_resist       // Saved: no damage
+    ldx #8                    // d8
+    ldy #0
+    jsr math_dice             // 3..24 or 8..64
     lda zp_math_a
     jmp mm_apply_spell_damage
+
+// mm_print_cast_msg — "THE <name> casts a spell."
+mm_print_cast_msg:
+    ldx #HSTR_MM_CAST
+    jsr huff_decode_to_ptr2
+    jmp mm_print_spell_msg
+
+// mm_spell_save — Saving throw against a monster spell: VMS
+// player_saves(wis_adj + lev). Output: carry clear = resisted.
+mm_spell_save:
+    lda player_data + PL_WIS_CUR
+    jsr player_wis_save_adj
+    clc
+    adc zp_player_lvl
+    jmp player_saving_throw
+
+// mm_cast_resisted — "THE <name> casts a spell." + the resist message.
+mm_cast_resisted:
+    jsr mm_print_cast_msg
+mm_print_resist:
+    ldx #HSTR_MM_RESIST
+    jmp huff_print_msg
+
+// ============================================================
+// Spell handlers 5, 6 and 8: blind, confuse, fear (VMS spells 11-13)
+// Saved: "casts a spell." + resist message. Failed: Moria8's effect message
+// (no status-line indicators, MON-011) and the VMS timer: a fresh effect
+// rolls base + randint(sides), an active one is extended by a fixed step.
+// ============================================================
+monster_cast_blind:
+    ldx #MM_EFF_BLIND
+    .byte $2c                 // BIT abs: skip the next ldx
+monster_cast_confuse:
+    ldx #MM_EFF_CONFUSE
+    jsr mm_effect_save
+    bcc !done+
+    ldx mm_chosen
+    ldy mm_effect_zp,x        // Zero-page timer of this effect
+    lda $0000,y
+    jsr mm_effect_timer       // Preserves Y
+    sta $0000,y
+!done:
+    rts
+
+// Heroism makes the player immune, as for the fear touch (monster_attack.s).
+monster_cast_fear:
+    lda zp_eff_hero
+    bne mm_cast_resisted
+    ldx #MM_EFF_FEAR
+    jsr mm_effect_save
+    bcc !done+
+    lda eff_fear_timer
+    jsr mm_effect_timer
+    sta eff_fear_timer
+!done:
+    rts
+
+// mm_effect_save — Saving throw for effect X, then its message.
+// Output: carry clear = resisted (messages printed), carry set = affected
+// (effect message printed). Saves X in mm_chosen for mm_effect_timer.
+mm_effect_save:
+    stx mm_chosen
+    jsr mm_spell_save
+    bcs !affected+
+    jsr mm_cast_resisted
+    clc
+    rts
+!affected:
+    ldx mm_chosen
+    lda mm_effect_msg,x
+    tax
+    jsr huff_decode_to_ptr2
+    jsr mm_print_spell_msg
+    sec
+    rts
+
+// mm_effect_timer — New effect timer (VMS stacking), saturating at 255.
+// Input: A = current timer, mm_chosen = effect. Output: A = new timer.
+// Preserves: Y (rng_range preserves Y)
+mm_effect_timer:
+    ldx mm_chosen
+    cmp #0
+    beq !fresh+
+    clc
+    adc mm_effect_step,x
+    bcc !done+
+    lda #255
+!done:
+    rts
+!fresh:
+    lda mm_effect_sides,x
+    jsr rng_range             // 0..sides-1
+    ldx mm_chosen
+    sec                       // + 1: randint(sides)
+    adc mm_effect_base,x
+    rts
+
+//                    blind          confuse          fear
+mm_effect_msg:   .byte HSTR_MM_BLIND, HSTR_MM_CONFUSE, HSTR_MAT_FEAR
+mm_effect_base:  .byte 12, 3, 3       // VMS: 12+randint(3), randint(5)+3 x2
+mm_effect_sides: .byte 3, 5, 5
+mm_effect_step:  .byte 6, 2, 2        // Extension when already active
+mm_effect_zp:    .byte zp_eff_blind, zp_eff_confuse
 
 // ============================================================
 // Spell handler 2: monster_cast_breath
@@ -340,108 +419,5 @@ monster_cast_teleport:
 
     jmp eff_teleport_self
 
-// ============================================================
-// Spell handler 5: monster_cast_blind
-// Blind the player for 1d10+10 turns
-// ============================================================
-monster_cast_blind:
-    // Print "THE <name> BLINDS YOU!"
-    ldx #HSTR_MM_BLIND
-    jsr huff_decode_to_ptr2
-    jsr mm_print_spell_msg
-
-    // Roll 1d10+10
-    lda #1                    // 1 die
-    ldx #10                   // 10 sides
-    ldy #10                   // +10 bonus
-    jsr math_dice
-    lda zp_math_a
-    sta zp_eff_blind
-    rts
-
-// ============================================================
-// Spell handler 6: monster_cast_confuse
-// Confuse the player for 1d5+5 turns
-// ============================================================
-monster_cast_confuse:
-    // Print "THE <name> CONFUSES YOU!"
-    ldx #HSTR_MM_CONFUSE
-    jsr huff_decode_to_ptr2
-    jsr mm_print_spell_msg
-
-    // Roll 1d5+5
-    lda #1                    // 1 die
-    ldx #5                    // 5 sides
-    ldy #5                    // +5 bonus
-    jsr math_dice
-    lda zp_math_a
-    sta zp_eff_confuse
-    rts
-
-// ============================================================
-// Spell handler 7: monster_cast_heal
-// Heal the monster for 3d8 HP (capped at max)
-// ============================================================
-monster_cast_heal:
-    // Print "THE <name> HEALS ITSELF."
-    ldx #HSTR_MM_HEAL
-    jsr huff_decode_to_ptr2
-    jsr mm_print_spell_msg
-
-    // Roll 3d8
-    lda #3                    // 3 dice
-    ldx #8                    // 8 sides
-    ldy #0                    // No bonus
-    jsr math_dice             // → zp_math_a (lo), zp_math_b (hi)
-
-    // Add to monster HP
-    ldx zp_mon_idx
-    jsr monster_get_ptr
-    ldy #MX_HP_LO
-    lda (zp_ptr0),y
-    clc
-    adc zp_math_a
-    sta (zp_ptr0),y
-    ldy #MX_HP_HI
-    lda (zp_ptr0),y
-    adc zp_math_b
-    sta (zp_ptr0),y
-
-    // Cap at max HP (cr_hd_num * cr_hd_sides)
-    // Compute max HP for this creature type
-    ldx zp_mon_type
-    lda cr_hd_num,x
-    sta zp_temp0
-    lda cr_hd_sides,x
-    tax                       // X = sides
-    lda zp_temp0              // A = num
-    jsr math_multiply         // zp_math_a = max HP lo, zp_math_b = max HP hi
-
-    // Compare current HP (16-bit) with max
-    ldx zp_mon_idx
-    jsr monster_get_ptr
-    ldy #MX_HP_HI
-    lda (zp_ptr0),y
-    cmp zp_math_b
-    bcc !mch_ok+              // HP hi < max hi → ok
-    bne !mch_clamp+           // HP hi > max hi → clamp
-    // Hi bytes equal, compare lo
-    ldy #MX_HP_LO
-    lda (zp_ptr0),y
-    cmp zp_math_a
-    bcc !mch_ok+              // HP lo < max lo → ok
-    beq !mch_ok+              // Equal → ok
-
-!mch_clamp:
-    // Clamp to max
-    ldy #MX_HP_LO
-    lda zp_math_a
-    sta (zp_ptr0),y
-    ldy #MX_HP_HI
-    lda zp_math_b
-    sta (zp_ptr0),y
-
-!mch_ok:
-    rts
 
 // Strings migrated to Huffman compression (HSTR_MM_* in huffman_data.s)

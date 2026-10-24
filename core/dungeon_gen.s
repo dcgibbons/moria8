@@ -1,4 +1,5 @@
 #importonce
+#import "df_target_row.s"
 // dungeon_gen.s — Town and dungeon map generation (loaded as $E000 overlay)
 //
 // Populates the map at MAP_BASE..MAP_END (`MAP_COLS x MAP_ROWS`, 1 byte/tile).
@@ -484,12 +485,7 @@ place_secrets:
     sta df_target_x
 
     // Convert map tile to TILE_SECRET (keep flags)
-    ldx df_target_y
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
-    ldy df_target_x
+    jsr df_target_row_ptr
     :MapRead_ptr0_y()
     and #TILE_FLAG_MASK     // Keep flags
     ora #TILE_SECRET        // Change type to secret

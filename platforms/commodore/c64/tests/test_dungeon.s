@@ -40,6 +40,9 @@ test_exit_trampoline:
 #import "../screen.s"
 #import "../../../../core/color.s"
 #import "../config.s"
+// Product layout: scratch buffers in free page-2 RAM, keeping the test body
+// below MAP_BASE now that the acid attack's helpers are in item.s.
+#define PLATFORM_SCRATCH_BUFS_IN_PAGE2
 #import "../input.s"
 #import "../../../../core/rng.s"
 #import "../../../../core/math.s"
@@ -74,7 +77,7 @@ recall_deaths:  .byte 0
 recall_attacks: .byte 0
 recall_spells:  .byte 0
 recall_data_end:
-recall_spell_bit: .byte 1, 2, 4, 8, 16, 32, 64
+recall_spell_bit: .byte 1, 2, 4, 8, 16, 32, 64, 128
 recall_clear: rts
 // Spell/monster-magic stubs — saves ~1.4 KB; dungeon tests never cast spells,
 // run monster AI turns, create characters, or draw the character screen.

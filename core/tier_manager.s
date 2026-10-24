@@ -364,7 +364,7 @@ tier_load:
 
 #if HAL_PLATFORM_OVERLAY_CACHE_ENABLED
     // Compute tier name table addresses in the staging region.
-    // After load_tier_to_buffer, zp_ptr0 is past all 22 arrays.
+    // After load_tier_to_buffer, zp_ptr0 is past all SoA arrays.
     // name_hi starts at zp_ptr0 - count, name_lo at zp_ptr0 - 2*count.
     sec
     lda zp_ptr0
@@ -505,7 +505,7 @@ platform_copy_tier_names_to_pool:
     clc
     rts
 
-.assert "Platform tier name pool fits largest name blob", TIER4_SIZE - (TIER4_COUNT * 22) <= (PLATFORM_TIER_NAME_POOL_END - PLATFORM_TIER_NAME_POOL_BASE + 1), true
+.assert "Platform tier name pool fits largest name blob", TIER4_SIZE - (TIER4_COUNT * NUM_SOA_FIELDS) <= (PLATFORM_TIER_NAME_POOL_END - PLATFORM_TIER_NAME_POOL_BASE + 1), true
 .assert "Tier staging base is page aligned", <BANKED_DATA_BASE, 0
 #endif
 

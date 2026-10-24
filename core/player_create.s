@@ -787,13 +787,9 @@ create_init_character:
     bpl !spell_order_loop-
 !no_start_spells:
 
-    // Initialize HP regen counter from CON
-    lda player_data + PL_CON_CUR
-    sec
-    sbc #3                      // Index = CON - 3
-    tax
-    lda regen_rate,x
-    sta zp_regen_counter
+    // Start with no HP regeneration fraction (main loop clears regen_frac_lo)
+    lda #0
+    sta zp_regen_frac
 
     // Pseudo-ID rate based on class
     ldx player_data + PL_CLASS

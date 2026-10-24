@@ -6,6 +6,8 @@
 // special effects (poison, confusion, paralysis, acid, aggravation),
 // and player death. Uses umoria formulas.
 
+#import "player_save.s"
+
 // ============================================================
 // Base to-hit by attack type (from umoria playerTestAttackHits)
 // ============================================================
@@ -364,7 +366,7 @@ mon_atk_effect_dispatch:
     // Full dice damage passes through (matches umoria), then apply effect
     jmp mon_atk_effect_paralyze
 !maed_acid:
-    // Acid: full damage, no AC reduction
+    // Acid: no AC reduction; worn armour may take it (VMS acid_dam)
     jmp mon_atk_effect_acid
 !maed_fear:
     // Fear: full dice damage, no AC reduction (matches umoria)
@@ -453,34 +455,19 @@ mon_atk_effect_confuse:
     rts
 
 // mon_atk_effect_paralyze — Saving throw, then set paralysis timer
-// Saving throw: class_save_base + player_level
-// Resist if rng_range(100) < saving
+// Saving throw: VMS player_saves(con_adj) (creature.inc paralysis attack;
+// player_save.s, MON-011)
 // Timer = rng_range(cr_level) + 1
-// Clobbers: A, X, Y, zp_temp3, zp_temp4, zp_math_*
+// Clobbers: A, X, Y, zp_temp0, zp_temp1, zp_temp3, zp_temp4, zp_math_*
 mon_atk_effect_paralyze:
     // Already paralyzed? No stacking
     lda zp_eff_paralyze
     bne !mepa_done+
 
-    // Compute saving throw = class_save_base + player_level
-    // class_save_base is class_properties offset 6
-    lda player_data + PL_CLASS
-    ldx #CLASS_PROP_SIZE
-    jsr math_multiply           // zp_math_a = class * 10
-    lda zp_math_a
-    clc
-    adc #6                      // Offset to save field
-    tax
-    lda class_properties,x      // save base
-    clc
-    adc zp_player_lvl           // + player level
-    sta zp_temp0                // saving throw value
-
-    // Roll: rng_range(100). Resist if roll < saving.
-    lda #100
-    jsr rng_range               // [0, 99]
-    cmp zp_temp0
-    bcc !mepa_resist+           // roll < saving → resist
+    lda player_data + PL_CON_CUR
+    jsr player_con_hp_adj       // VMS con_adj
+    jsr player_saving_throw
+    bcc !mepa_resist+           // Saved → resist
 
     // Failed save — set paralysis timer (umoria: randomNumber(level) + 3)
     // rng_range(level) gives [0, level-1], + 4 gives [4, level+3]
@@ -500,48 +487,41 @@ mon_atk_effect_paralyze:
 !mepa_resist:
     rts
 
-// mon_atk_effect_acid — Acid attack (no AC reduction, full damage)
-// Damage already applied; print effect message.
-mon_atk_effect_acid:
-    ldx #HSTR_MAT_ACID
-    jsr huff_decode_to_ptr2
-    jmp mon_atk_build_effect_msg
+#if !MON_ATK_ACID_EXTERNAL
+#import "monster_acid.s"
+#endif
 
-// mon_atk_effect_fear — Set fear timer (blocks melee)
-// Timer = rng_range(cr_level) + 3. Message only on first fear.
-// Replace timer only if new value > current (no stacking, just extend).
-// Clobbers: A, X, zp_temp3, zp_temp4
+// mon_atk_effect_fear — Fear attack: VMS creature.inc / Umoria monster.cpp
+// (MON-012). Heroism blocks it (VMS clears fear while heroic). Otherwise
+// player_saves(wis_adj) resists; a new fear lasts 3 + randint(level) turns
+// (first-fear message), an existing one gains 3 (saturating).
+// Clobbers: A, X, Y, zp_temp0, zp_math_*
 mon_atk_effect_fear:
     lda zp_eff_hero
     bne !mef_done+
-    // Compute new timer: rng_range(cr_level) + 3
+    lda player_data + PL_WIS_CUR
+    jsr player_wis_save_adj
+    jsr player_saving_throw
+    bcc !mef_done+              // Saved
+    lda eff_fear_timer
+    beq !mef_new+
+    adc #3 - 1                  // Carry set: +3
+    bcc !mef_store+
+    lda #$ff
+    bne !mef_store+             // Always taken
+!mef_new:
     ldx mat_type2
     lda cr_level,x
-    cmp #1
-    bne !mef_roll+
-    lda #4                      // Level 1: 0 + 3 + 1 = 4
-    jmp !mef_check+
-!mef_roll:
-    jsr rng_range               // [0, level-1]
+    jsr rng_range               // [0, level-1]; 0 at level 0-1
     clc
-    adc #3
-!mef_check:
-    // Only replace if new > current
-    cmp eff_fear_timer
-    bcc !mef_done+
-    beq !mef_done+
-
-    // Check if this is first fear (for message)
-    pha                         // Save new timer
-    lda eff_fear_timer
-    bne !mef_no_msg+
-
+    adc #4                      // 3 + randint(level)
+    pha
     // Print "THE <name> FRIGHTENS YOU." (first fear only)
     ldx #HSTR_MAT_FEAR
     jsr huff_decode_to_ptr2
     jsr mon_atk_build_effect_msg
-!mef_no_msg:
-    pla                         // Restore new timer
+    pla
+!mef_store:
     sta eff_fear_timer
 !mef_done:
     rts
@@ -566,28 +546,6 @@ player_death_check:
     sta zp_game_flags
     lda #SFX_DEATH
     jmp hal_sound_play
-
-// ============================================================
-// Message builders
-// ============================================================
-
-// mon_atk_build_effect_msg — "THE <name> <effect string>"
-// Input: zp_ptr2 = effect string pointer (lo/hi)
-mon_atk_build_effect_msg:
-    lda #0
-    sta cmb_buf_idx
-
-    lda #<cmb_the_str + 1
-    ldy #>cmb_the_str + 1
-    jsr combat_append_str
-
-    jsr combat_append_monster_name
-
-    lda zp_ptr2
-    ldy zp_ptr2_hi
-    jsr combat_append_str
-
-    jmp cmb_term_and_print
 
 // ============================================================
 // Compile-time validation

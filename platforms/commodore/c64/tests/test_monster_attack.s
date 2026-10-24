@@ -2,9 +2,9 @@
 //
 // Tests: mon_atk_calc_tohit, mon_atk_roll_tohit, mon_atk_ac_reduce,
 //        mon_atk_apply_damage, player_death_check, poison effect,
-//        paralysis effect, aggravation effect.
+//        paralysis effect, aggravation effect, fear, acid armour damage.
 //
-// Results at $0400-$040d: $01 = pass, $00 = fail per test
+// Results at $0400-$0415: $01 = pass, $00 = fail per test
 // NOTE: msg_print writes to screen row 0 ($0400+), so we store results
 // in tc_results[] and copy to $0400 at the very end.
 
@@ -18,7 +18,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #13
+    ldx #21
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -63,9 +63,11 @@ render_local_area:
 
 combat_append_str:
 combat_append_monster_name:
+mon_atk_build_effect_msg:
 cmb_term_and_print:
 combat_msg_monster_in_way:
 inv_remove_item:
+inv_consume_one:
 tramp_assign_special_room:
 tramp_vault_seal_entrance:
 tramp_spawn_special_room_monsters:
@@ -107,6 +109,18 @@ inv_to_hit:
     .fill TOTAL_INV_SLOTS, 0
 inv_to_dam:
     .fill TOTAL_INV_SLOTS, 0
+inv_flags:
+    .fill TOTAL_INV_SLOTS, 0
+inv_ego:
+    .fill TOTAL_INV_SLOTS, 0
+// Acid armour damage (monster_acid.s) callees outside the attack module
+inv_slot_to_fi_add:
+item_append_desc:
+    rts
+player_recalc_equipment:
+    inc tc_recalcs
+    rts
+tc_recalcs: .byte 0
 
 // Strings referenced by imported modules but defined in main.s
 press_key_str:
@@ -115,7 +129,10 @@ press_key_str:
 // Test scratch
 tc_loop:    .byte 0
 tc_ok:      .byte 0
-tc_results: .fill 14, $ff      // Result buffer (copied to $0400 at end)
+tc_results: .fill 22, $ff      // Result buffer (copied to $0400 at end)
+tc_fear_start: .byte 0          // fear_attempt: timer before each attempt
+tc_saved:   .byte 0
+tc_afraid:  .byte 0
 
 test_start:
     // Seed RNG deterministically
@@ -352,7 +369,8 @@ test_start:
     // ==========================================
     // Test 9: Paralysis effect sets timer (force fail)
     // Use creature type 8 (Floating Eye, level 2)
-    // Set class=Warrior (save=18), level=1 → saving=19
+    // Warrior: save = race save + 18 + con_adj (VMS player_saves(con_adj),
+    // MON-011), well under 100, so repeated attempts must paralyze
     // Run multiple attempts until paralyzed (save roll is random)
     // ==========================================
 !t9:
@@ -506,25 +524,27 @@ test_start:
     sta tc_results + 9
 
     // ==========================================
-    // Test 11: Fear effect sets timer
-    // Use creature type 0 (White Harpy, level 2)
-    // Timer should be rng_range(2) + 3 = [3,4]
+    // Test 11: Fear attack, failed save (MON-012; VMS creature.inc /
+    // Umoria monster.cpp): a new fear lasts 3 + randint(level). White
+    // Harpy (level 2): 4-5. Half-Troll Warrior, WIS 3: save 10 (-8 + 18 +
+    // wis_adj 0), so an attempt soon fails.
     // ==========================================
 !t11:
-    lda #0
-    sta eff_fear_timer          // Clear existing fear
-
+    lda #7                      // Half-Troll
+    sta player_data + PL_RACE
+    lda #CLASS_WARRIOR
+    sta player_data + PL_CLASS
+    lda #3
+    sta player_data + PL_WIS_CUR
     lda #0                      // White Harpy (level 2)
     sta mat_type2
-
-    jsr mon_atk_effect_fear
-
-    lda eff_fear_timer
-    beq !t11_fail+              // Should be > 0
-    cmp #3
-    bcc !t11_fail+              // Should be >= 3
-    cmp #5
-    bcs !t11_fail+              // Should be <= 4
+    lda #0
+    jsr fear_until_afraid
+    bcc !t11_fail+
+    cmp #4
+    bcc !t11_fail+
+    cmp #6
+    bcs !t11_fail+
     lda #$01
     sta tc_results + 10
     jmp !t13+
@@ -607,13 +627,263 @@ test_start:
     bne !t15_fail+
     lda #$01
     sta tc_results + 13
-    jmp !tests_done+
+    jmp !t16+
 !t15_fail:
     lda #$00
     sta tc_results + 13
 
+    // ==========================================
+    // Test 15: a failed save while afraid adds 3 (VMS afraid := afraid + 3)
+    // ==========================================
+!t16:
+    lda #10
+    jsr fear_until_afraid
+    bcc !t16_fail+
+    cmp #13
+    bne !t16_fail+
+    lda #$01
+    sta tc_results + 14
+    jmp !t17+
+!t16_fail:
+    lda #$00
+    sta tc_results + 14
+
+    // ==========================================
+    // Test 16: the fear timer saturates at 255
+    // ==========================================
+!t17:
+    lda #254
+    jsr fear_until_afraid
+    bcc !t17_fail+
+    cmp #$ff
+    bne !t17_fail+
+    lda #$01
+    sta tc_results + 15
+    jmp !t18+
+!t17_fail:
+    lda #$00
+    sta tc_results + 15
+
+    // ==========================================
+    // Test 17: the save resists. Halfling Mage, WIS 18/100: save 61 (18 +
+    // 36 + wis_adj 7). Of 30 attempts from no fear, some must resist (timer
+    // stays 0) and some must not.
+    // ==========================================
+!t18:
+    lda #3                      // Halfling
+    sta player_data + PL_RACE
+    lda #CLASS_MAGE
+    sta player_data + PL_CLASS
+    lda #118
+    sta player_data + PL_WIS_CUR
+    lda #0
+    sta tc_saved
+    sta tc_afraid
+    lda #30
+    sta tc_loop
+!t18_loop:
+    lda #0
+    sta eff_fear_timer
+    jsr mon_atk_effect_fear
+    lda eff_fear_timer
+    bne !t18_afraid+
+    inc tc_saved
+    bne !t18_next+              // Always taken
+!t18_afraid:
+    inc tc_afraid
+!t18_next:
+    dec tc_loop
+    bne !t18_loop-
+    lda tc_saved
+    beq !t18_fail+
+    lda tc_afraid
+    beq !t18_fail+
+    lda #$01
+    sta tc_results + 16
+    jmp !t19+
+!t18_fail:
+    lda #$00
+    sta tc_results + 16
+
+    // ==========================================
+    // Tests 18-22: acid (MON-015; pinned VMS moria.inc acid_dam/minus_ac).
+    // Base AC from the item table: Leather armor 4, Small shield 2,
+    // Leather gloves 1.
+    // ==========================================
+!t19:
+    lda #4
+    sta it_color_ac + 7
+    lda #2
+    sta it_color_ac + 9
+    lda #1
+    sta it_color_ac + 11
+
+    // Test 18: body armour only, AC 4 + 0: damage 7 -> 3 (div 2), to-AC -1,
+    // equipment recalculated
+    jsr acid_clear_armour
+    lda #7
+    sta inv_item_id + EQUIP_BODY
+    lda #7
+    jsr acid_hit
+    cmp #3
+    bne !t19_fail+
+    lda inv_to_ac + EQUIP_BODY
+    cmp #$ff
+    bne !t19_fail+
+    lda tc_recalcs
+    cmp #1
+    bne !t19_fail+
+    lda #$01
+    sta tc_results + 17
+    jmp !t20+
+!t19_fail:
+    lda #$00
+    sta tc_results + 17
+
+    // Test 19: worn out (AC 4, to-AC -4): full damage, nothing changes
+!t20:
+    jsr acid_clear_armour
+    lda #7
+    sta inv_item_id + EQUIP_BODY
+    lda #$fc
+    sta inv_to_ac + EQUIP_BODY
+    lda #8
+    jsr acid_hit
+    cmp #8
+    bne !t20_fail+
+    lda inv_to_ac + EQUIP_BODY
+    cmp #$fc
+    bne !t20_fail+
+    lda tc_recalcs
+    bne !t20_fail+
+    lda #$01
+    sta tc_results + 18
+    jmp !t21+
+!t20_fail:
+    lda #$00
+    sta tc_results + 18
+
+    // Test 20: no armour worn: full damage
+!t21:
+    jsr acid_clear_armour
+    lda #8
+    jsr acid_hit
+    cmp #8
+    bne !t21_fail+
+    lda tc_recalcs
+    bne !t21_fail+
+    lda #$01
+    sta tc_results + 19
+    jmp !t22+
+!t21_fail:
+    lda #$00
+    sta tc_results + 19
+
+    // Test 21: the last slot (gloves only) is found and damaged
+!t22:
+    jsr acid_clear_armour
+    lda #11
+    sta inv_item_id + EQUIP_HANDS
+    lda #8
+    jsr acid_hit
+    cmp #4
+    bne !t22_fail+
+    lda inv_to_ac + EQUIP_HANDS
+    cmp #$ff
+    bne !t22_fail+
+    lda #$01
+    sta tc_results + 20
+    jmp !t23+
+!t22_fail:
+    lda #$00
+    sta tc_results + 20
+
+    // Test 22: body armour (AC 4) and a worn-out shield (2, -2): the piece is
+    // chosen at random among those worn, so over 40 hits both outcomes occur
+!t23:
+    lda #0
+    sta tc_saved
+    sta tc_afraid
+    lda #40
+    sta tc_loop
+!t23_loop:
+    jsr acid_clear_armour
+    lda #7
+    sta inv_item_id + EQUIP_BODY
+    lda #9
+    sta inv_item_id + EQUIP_SHIELD
+    lda #$fe
+    sta inv_to_ac + EQUIP_SHIELD
+    lda #8
+    jsr acid_hit
+    cmp #4
+    bne !t23_full+
+    inc tc_saved                // body chosen: halved
+    bne !t23_next+              // Always taken
+!t23_full:
+    inc tc_afraid               // shield chosen: full damage
+!t23_next:
+    dec tc_loop
+    bne !t23_loop-
+    lda tc_saved
+    beq !t23_fail+
+    lda tc_afraid
+    beq !t23_fail+
+    lda #$01
+    sta tc_results + 21
+    jmp !tests_done+
+!t23_fail:
+    lda #$00
+    sta tc_results + 21
+
 !tests_done:
     jmp test_exit_trampoline
+
+// acid_clear_armour — Empty the body..hands slots and zero their to-AC.
+acid_clear_armour:
+    ldx #EQUIP_BODY
+!aca_loop:
+    lda #FI_EMPTY
+    sta inv_item_id,x
+    lda #0
+    sta inv_to_ac,x
+    inx
+    cpx #EQUIP_HANDS + 1
+    bne !aca_loop-
+    lda #0
+    sta tc_recalcs
+    rts
+
+// acid_hit — Production acid effect on damage A. Output: A = damage dealt.
+acid_hit:
+    sta zp_combat_dmg
+    lda #0
+    sta mat_type2
+    jsr mon_atk_effect_acid
+    lda zp_combat_dmg
+    rts
+
+// fear_until_afraid — Attack with fear (mat_type2) from fear timer A until
+// a save fails (the timer changes), at most 30 tries.
+// Output: carry set and A = new timer, or carry clear if every try resisted.
+fear_until_afraid:
+    sta tc_fear_start
+    lda #30
+    sta tc_loop
+!fua_loop:
+    lda tc_fear_start
+    sta eff_fear_timer
+    jsr mon_atk_effect_fear
+    lda eff_fear_timer
+    cmp tc_fear_start
+    bne !fua_changed+
+    dec tc_loop
+    bne !fua_loop-
+    clc
+    rts
+!fua_changed:
+    sec
+    rts
 
 monster_attack_test_end:
 .assert "Monster attack test stays below MAP_BASE", monster_attack_test_end <= MAP_BASE, true

@@ -9,13 +9,15 @@ import tempfile
 from pathlib import Path
 
 from vice_connector import normalize_addr, parse_vs_symbols
+sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "tools"))
+from vice_config import vice_config  # noqa: E402  (VICE -config file with a version tag)
 
 
 def run_vice(args: argparse.Namespace, moncommands: Path, monlog: Path) -> int:
     command = [
         args.vice,
         "-config",
-        "/dev/null",
+        vice_config(args.vice),
         "-default",
         "+saveres",
         "-console",

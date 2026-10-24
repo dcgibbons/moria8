@@ -13,6 +13,8 @@ if str(CONNECTOR_DIR) not in sys.path:
     sys.path.insert(0, str(CONNECTOR_DIR))
 
 from vice_connector import VICEConnector, parse_vs_symbols
+sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "tools"))
+from vice_config import vice_config  # noqa: E402  (VICE -config file with a version tag)
 
 
 KEYBUF = "NA\rBA\rB L>MAALI"
@@ -137,7 +139,7 @@ def main() -> int:
     command = [
         args.vice,
         "-config",
-        "/dev/null",
+        vice_config(args.vice),
         "-default",
         "+saveres",
         "-console",

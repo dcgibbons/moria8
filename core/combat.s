@@ -27,8 +27,13 @@ cmb_target_lit:  .byte 1
 
 // Message composition buffer. C128 is sized for the longest current
 // combat feedback string plus a 31-byte monster name and terminator.
+#if PLATFORM_SCRATCH_BUFS_IN_PAGE2
+.label combat_msg_buf = PLATFORM_COMBAT_MSG_BUF_BASE
+.label combat_msg_buf_end = combat_msg_buf + COMBAT_MSG_BUF_SIZE
+#else
 combat_msg_buf:  .fill COMBAT_MSG_BUF_SIZE, 0
 combat_msg_buf_end:
+#endif
 
 // ============================================================
 // Combat strings (screen codes via inherited encoding)
@@ -786,30 +791,22 @@ combat_critical_blow:
 
     // Compare tier_weight against thresholds (16-bit)
     // >= 900 → 5x+20
-    lda zp_temp3
-    cmp #>900
-    bcc !ccb_below_900+
-    bne !ccb_tier5+
     lda zp_temp2
     cmp #<900
-    bcs !ccb_tier5+
-!ccb_below_900:
-    // >= 700 → 4x+15
     lda zp_temp3
-    cmp #>700
-    bcc !ccb_below_700+
-    bne !ccb_tier4+
+    sbc #>900
+    bcs !ccb_tier5+
+    // >= 700 → 4x+15
     lda zp_temp2
     cmp #<700
-    bcs !ccb_tier4+
-!ccb_below_700:
-    // >= 400 → 3x+10
     lda zp_temp3
-    cmp #>400
-    bcc !ccb_tier2+
-    bne !ccb_tier3+
+    sbc #>700
+    bcs !ccb_tier4+
+    // >= 400 → 3x+10
     lda zp_temp2
     cmp #<400
+    lda zp_temp3
+    sbc #>400
     bcs !ccb_tier3+
 
 !ccb_tier2:
@@ -1147,17 +1144,14 @@ combat_apply_levelup:
     jsr player_calc_hp
 
     // Heal to full
+    // ... and sync max HP to ZP
     lda player_data + PL_MHP_LO
     sta player_data + PL_HP_LO
     sta zp_player_hp_lo
+    sta zp_player_mhp_lo
     lda player_data + PL_MHP_HI
     sta player_data + PL_HP_HI
     sta zp_player_hp_hi
-
-    // Sync max HP to ZP
-    lda player_data + PL_MHP_LO
-    sta zp_player_mhp_lo
-    lda player_data + PL_MHP_HI
     sta zp_player_mhp_hi
 
     // Recalculate combat bonuses (may change with level)
@@ -1165,13 +1159,13 @@ combat_apply_levelup:
 
     // Recalculate mana and learn new spells
 #if HAL_PLATFORM_LEVELUP_MAGIC_USES_TRAMPOLINE
-    jsr tramp_magic_recalc_mana
+    // The magic trampolines load an overlay over the window, which would
+    // strand a level-up from overlay code (a thrown or fired missile, a bash,
+    // a spell). main_loop runs them once only resident code is on the stack.
+    lda #1
+    sta levelup_magic_pending
 #else
     jsr magic_recalc_mana
-#endif
-#if HAL_PLATFORM_LEVELUP_MAGIC_USES_TRAMPOLINE
-    jsr tramp_magic_check_new_spells
-#else
     jsr magic_check_new_spells
 #endif
 
@@ -1180,9 +1174,11 @@ combat_apply_levelup:
     jsr hal_sound_play
 
     // Print level-up message: "Welcome to level N."
-    jsr msg_build_levelup
-    jmp cmb_print_buf
+    jmp msg_build_levelup
 
+#if HAL_PLATFORM_LEVELUP_MAGIC_USES_TRAMPOLINE
+levelup_magic_pending: .byte 0 // 1 = main_loop owes a mana/spell recalc (level-up)
+#endif
 // Scratch for 24-bit threshold computation
 ccl_adj_0: .byte 0             // 24-bit product / result (lo)
 ccl_adj_1: .byte 0             // (mid)
@@ -1301,10 +1297,14 @@ combat_kill_message:
     lda #SFX_HIT
     jmp hal_sound_play
 
-// combat_note_kill — Set winner state when the killed creature is Balrog.
-// Input: cmb_type = killed creature type.
-// Clobbers: A
+// combat_note_kill — Stage the killed creature's treasure drop (MON-014) and
+// set winner state when it is Balrog.
+// Input: cmb_type = killed creature type; mfa_x/mfa_y = its position (left by
+// the preceding monster_remove).
+// Clobbers: A, X
 combat_note_kill:
+    ldx cmb_type
+    jsr monster_death_stage
     lda zp_game_flags
     and #GAME_FLAG_WINNER
     bne !no_win+
@@ -1460,7 +1460,7 @@ cmb_unaffected_str:
     .text " is unaffected." ; .byte 0
 #endif
 
-// msg_build_levelup — "Welcome to level N."
+// msg_build_levelup — Build and print "Welcome to level N."
 msg_build_levelup:
     lda #0
     sta cmb_buf_idx
@@ -1474,12 +1474,7 @@ msg_build_levelup:
     lda #<cmb_period
     ldy #>cmb_period
     jsr combat_append_str
-
-    jsr combat_clamp_msg_idx
-    ldx cmb_buf_idx
-    lda #0
-    sta combat_msg_buf,x
-    rts
+    jmp cmb_term_and_print
 
 // combat_append_str — Append null-terminated string to combat_msg_buf
 // Input: A = string ptr lo, Y = string ptr hi
@@ -1526,6 +1521,26 @@ combat_append_monster_name:
     ldx cmb_type
     jsr creature_get_name       // A=lo, Y=hi (handles KERNAL banking)
     jmp combat_append_str
+
+// mon_atk_build_effect_msg — "THE <name> <effect string>"
+// Input: zp_ptr2 = effect string pointer (lo/hi)
+// Shared by monster melee effects (monster_attack.s) and monster spells
+// (monster_magic.s), so it lives here with the cmb_* buffer.
+mon_atk_build_effect_msg:
+    lda #0
+    sta cmb_buf_idx
+
+    lda #<cmb_the_str + 1
+    ldy #>cmb_the_str + 1
+    jsr combat_append_str
+
+    jsr combat_append_monster_name
+
+    lda zp_ptr2
+    ldy zp_ptr2_hi
+    jsr combat_append_str
+
+    jmp cmb_term_and_print
 
 // combat_append_decimal — Append 8-bit decimal number to buffer
 // Input: A = value (0-255)

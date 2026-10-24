@@ -1,4 +1,6 @@
 #importonce
+#import "df_target_dir.s"
+#import "df_target_row.s"
 // spell_effects_overlay.s — Spell effects whose only product callers live in
 // the spell-execution overlay (player_magic_execute_overlay.s) or the
 // spell-overlay player_magic_utility.s. Platforms with resident headroom
@@ -61,14 +63,7 @@ eff_destroy_traps_doors:
     cmp #8
     bcs !edtd_tiles_done+
     tax
-    lda zp_player_x
-    clc
-    adc dir_dx,x
-    sta df_target_x
-    lda zp_player_y
-    clc
-    adc dir_dy,x
-    sta df_target_y
+    jsr df_target_from_dir
     jsr !edtd_tile_cb+
     inc adj_dir_idx
     jmp !edtd_tile_loop-
@@ -82,12 +77,7 @@ eff_destroy_traps_doors:
 
 !edtd_tile_cb:
     // Read map tile
-    ldx df_target_y
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
-    ldy df_target_x
+    jsr df_target_row_ptr
     :MapRead_ptr0_y()
     and #TILE_TYPE_MASK
     sta zp_temp0

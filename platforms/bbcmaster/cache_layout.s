@@ -15,7 +15,7 @@
 // Bank 7 ($8000-$BFFF):
 //   $8000-$94FF  Cached OVL.SPELL (21 pages = 5,376 B)
 //   $9500-$A9FF  Cached OVL.ITEMS (21 pages = 5,376 B)
-//   $AA00-$BDFF  Cached OVL.GEN (20 pages = 5,120 B)
+//   $AA00-$BEFF  Cached OVL.GEN (21 pages = 5,376 B; item_spawn_level moved in)
 
 .const BEEB_CACHE_UI_BANK    = $05
 .const BEEB_CACHE_UI_ADDR    = $b400
@@ -47,7 +47,7 @@
 
 .const BEEB_CACHE_GEN_BANK   = $07
 .const BEEB_CACHE_GEN_ADDR   = $aa00
-.const BEEB_CACHE_GEN_PAGES  = 20
+.const BEEB_CACHE_GEN_PAGES  = 21
 
 .const BEEB_SWR_BANK_UI      = BEEB_CACHE_UI_BANK
 .const BEEB_SWR_ADDR_UI      = BEEB_CACHE_UI_ADDR

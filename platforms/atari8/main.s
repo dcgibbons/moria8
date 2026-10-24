@@ -248,6 +248,8 @@ low_helpers_end:
 #import "../../core/player.s"
 #import "../../core/ui_messages.s"
 .segment HighResident
+.pc = PLATFORM_ITEM_NAME_DECODE_BUF_BASE "item_name_decode_buf"
+atari_item_name_decode_buf: .fill 48, 0     // core item_name_decode_buf (config.s)
 high_resident_end:
 .assert "HighResident fits before $E000", high_resident_end <= $e000, true
 .segment Default

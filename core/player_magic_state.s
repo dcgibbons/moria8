@@ -25,7 +25,12 @@ pm_name_lo_lo:     .byte 0
 pm_name_lo_hi:     .byte 0
 pm_name_hi_lo:     .byte 0
 pm_name_hi_hi:     .byte 0
+#if PLATFORM_SCRATCH_BUFS_IN_PAGE2 || PLATFORM_LIST_BUFS_LOW
+.label pm_spell_list = PLATFORM_PM_SPELL_LIST_BASE
+.assert "pm_spell_list size matches its page-2 home", SPELL_LIST_MAX, 9
+#else
 pm_spell_list:     .fill SPELL_LIST_MAX, 0
+#endif
 #if C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_PRAYER || C128_TEST_SCRIPTED_SPELL_CANCEL || C128_TEST_SCRIPTED_BOOK_OVERLAY || C128_TEST_SCRIPTED_STUDY_BOOK_OVERLAY || C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY
 c128_test_spell_success_count: .byte 0
 c128_test_spell_return_pending: .byte 0

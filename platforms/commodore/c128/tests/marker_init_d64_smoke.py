@@ -12,6 +12,8 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 from vice_connector import VICEConnector, allocate_free_port, extract_test_symbols, run_test_case
+sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "tools"))
+from vice_config import vice_config  # noqa: E402  (VICE -config file with a version tag)
 
 
 MARKER_BYTES = b"M8SAVE"
@@ -60,7 +62,7 @@ def run_vice(args: argparse.Namespace) -> int:
     command = [
         args.vice,
         "-config",
-        "/dev/null",
+        vice_config(args.vice),
         "-default",
         "+saveres",
         "-console",

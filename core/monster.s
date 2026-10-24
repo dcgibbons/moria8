@@ -17,7 +17,7 @@
 .const MAX_CREATURES         = MAX_DUNGEON_CREATURES + MAX_TOWN_CREATURES  // 65
 .const TOWN_CREATURE_BASE    = MAX_DUNGEON_CREATURES  // First town index = 57
 .const TOWN_CREATURE_COUNT   = 8  // All 8 umoria town creatures
-.const NUM_SOA_FIELDS        = 22 // Number of SoA arrays for tier loading
+.const NUM_SOA_FIELDS        = 23 // Number of SoA arrays for tier loading
 .const EMPTY_SLOT        = $ff
 
 // Attack type constants
@@ -52,14 +52,16 @@
 .const MF_VISIBLE   = $08   // Current real sight; renderer authority
 .const MF_DETECTED  = $10   // Timed Detect Monsters overlay; renderer authority
 
-// Spell flag constants (needed by cr_spell_flags data below)
-.const MSF_BOLT       = $01    // Bit 0: bolt (2d8 + level)
-.const MSF_BREATH     = $02    // Bit 1: breath (HP/3)
-.const MSF_SUMMON     = $04    // Bit 2: summon
-.const MSF_TELEPORT   = $08    // Bit 3: teleport-to
-.const MSF_BLIND      = $10    // Bit 4: blind
-.const MSF_CONFUSE    = $20    // Bit 5: confuse
-.const MSF_HEAL       = $40    // Bit 6: heal self
+// Spell flag constants (needed by cr_spell_flags data below). Bit order is
+// the dispatch order in monster_magic.s and the recall_spell_bit order.
+.const MSF_WOUND_LIGHT   = $01 // Bit 0: Cause Light Wounds (3d8, save)
+.const MSF_BREATH        = $02 // Bit 1: breath (HP/3)
+.const MSF_SUMMON        = $04 // Bit 2: summon
+.const MSF_TELEPORT      = $08 // Bit 3: teleport-to
+.const MSF_BLIND         = $10 // Bit 4: blind (save)
+.const MSF_CONFUSE       = $20 // Bit 5: confuse (save)
+.const MSF_WOUND_SERIOUS = $40 // Bit 6: Cause Serious Wounds (8d8, save)
+.const MSF_FEAR          = $80 // Bit 7: cause fear (save)
 
 // ============================================================
 // Active creature buffers — Struct-of-Arrays (65 entries)
@@ -124,6 +126,10 @@ cr_speed:
 .const CF_DRAGON      = $10
 .const CF_GROUP       = $20   // Pack creature: spawns extras, wakes neighbors
 .const CF_BREEDER     = $40   // Multiplying creature: chance to clone each turn
+// cr_speed: speed code in bits 0-1; Umoria CMOVE random-move bits kept in place
+// in bits 3-5 (MON-013): CM_20_RANDOM $08, CM_40_RANDOM $10, CM_75_RANDOM $20.
+.const CR_SPEED_MASK  = $03
+.const CM_RANDOM_MOVE = $38
 .const CF_INFRA       = $80   // Warm creature: visible to player infravision
 
 cr_mflags:
@@ -318,12 +324,12 @@ cr_spell_flags:
 #if COMPILE_EMBEDDED_DUNGEON_TEST_ROSTER
     .byte  0,  0,  0,  0,  0,  0,  0,  0,  0,  0           // 0-9
     .byte  0,  0,  0,  0,  0,  0,  0,  0,  0,  0           // 10-19
-    .byte MSF_BOLT | MSF_HEAL                               // 20: Kobold shaman
+    .byte MSF_WOUND_LIGHT                                   // 20: Kobold shaman
     .byte 0                                                  // 21: Giant white ant lion
-    .byte MSF_BOLT | MSF_CONFUSE | MSF_BLIND                // 22: Novice mage
-    .byte MSF_HEAL | MSF_SUMMON                             // 23: Novice priest
+    .byte MSF_WOUND_LIGHT | MSF_CONFUSE | MSF_BLIND         // 22: Novice mage
+    .byte MSF_WOUND_LIGHT | MSF_FEAR | MSF_SUMMON           // 23: Novice priest
     .byte MSF_BREATH                                        // 24: Giant salamander
-    .byte MSF_BOLT | MSF_CONFUSE | MSF_HEAL                 // 25: Orc shaman
+    .byte MSF_WOUND_LIGHT | MSF_CONFUSE                     // 25: Orc shaman
     .fill MAX_DUNGEON_CREATURES - 26, 0                    // 26-56
 #else
     .fill MAX_DUNGEON_CREATURES, 0                          // 0-56: loaded from tier data
@@ -356,6 +362,13 @@ cr_name_hi:
     .fill MAX_DUNGEON_CREATURES - 26, 0                      // 26-56: loaded from tier data
     .byte >crn_t0, >crn_t1, >crn_t2, >crn_t3, >crn_t4, >crn_t5, >crn_t6, >crn_t7 // 57-64: town
 cr_name_tables_end:
+
+// Treasure flags (cr_treasure, tier SoA field after cr_spell_flags) and the
+// kill-time drop queue. Ports defining MONSTER_DEATH_EXTERNAL import it into
+// another always-visible segment.
+#if !MONSTER_DEATH_EXTERNAL
+#import "monster_death.s"
+#endif
 
 // Name strings (screen codes, null-terminated)
 // Embedded dungeon names are available only to tests that explicitly opt in.
@@ -555,6 +568,7 @@ monster_init_table:
     bne !loop2-                 // Clear bytes 256-383
     lda #0
     sta zp_mon_count
+    sta md_count                // no drop staged on the cleared level survives
     rts
 
 // monster_find_free_slot — Find first empty slot
@@ -1355,7 +1369,7 @@ monster_remove:
 // The tier data is sequential SoA arrays in this order:
 //   display, color, speed, mflags, level, hd_num, hd_sides, ac, sleep, aaf,
 //   xp_lo, xp_hi, atk0_type, atk0_dice, atk0_sides,
-//   atk1_type, atk1_dice, atk1_sides, spell_chance, spell_flags,
+//   atk1_type, atk1_dice, atk1_sides, spell_chance, spell_flags, treasure,
 //   name_lo, name_hi
 // Each array is `count` bytes long.
 // Clobbers: A, X, Y, zp_ptr0, zp_ptr1
@@ -1392,13 +1406,18 @@ load_tier_to_buffer:
 
     ldx ltb_array_idx           // Restore array counter
     inx
-    cpx #NUM_SOA_FIELDS         // 22 arrays
+    cpx #NUM_SOA_FIELDS         // 23 arrays
     bne !ltb_array-
 
     rts
 
+#if PLATFORM_SCRATCH_BUFS_IN_PAGE2
+.label ltb_count     = PLATFORM_LTB_SCRATCH_BASE   // set on every call
+.label ltb_array_idx = ltb_count + 1
+#else
 ltb_count:     .byte 0
 ltb_array_idx: .byte 0
+#endif
 
 // Destination pointer table — maps field index to active buffer base address
 ltb_dst_lo:
@@ -1407,7 +1426,7 @@ ltb_dst_lo:
     .byte <cr_xp_lo, <cr_xp_hi
     .byte <cr_atk0_type, <cr_atk0_dice, <cr_atk0_sides
     .byte <cr_atk1_type, <cr_atk1_dice, <cr_atk1_sides
-    .byte <cr_spell_chance, <cr_spell_flags
+    .byte <cr_spell_chance, <cr_spell_flags, <cr_treasure
     .byte <cr_name_lo, <cr_name_hi
 ltb_dst_hi:
     .byte >cr_display, >cr_color, >cr_speed, >cr_mflags, >cr_level
@@ -1415,7 +1434,7 @@ ltb_dst_hi:
     .byte >cr_xp_lo, >cr_xp_hi
     .byte >cr_atk0_type, >cr_atk0_dice, >cr_atk0_sides
     .byte >cr_atk1_type, >cr_atk1_dice, >cr_atk1_sides
-    .byte >cr_spell_chance, >cr_spell_flags
+    .byte >cr_spell_chance, >cr_spell_flags, >cr_treasure
     .byte >cr_name_lo, >cr_name_hi
 ltb_dst_end:
 
@@ -1733,7 +1752,11 @@ creature_get_name:
 tier_name_lo_addr: .word 0
 tier_name_hi_addr: .word 0
 #endif
+#if PLATFORM_SCRATCH_BUFS_IN_PAGE2
+.label creature_name_buf = PLATFORM_CREATURE_NAME_BUF_BASE
+#else
 creature_name_buf: .fill 32, 0
+#endif
 cgn_saved_x: .byte 0           // scratch: saved creature index for tier reload
 #if HAL_PLATFORM_MONSTER_BANK1_TIER_NAMES
 cgn_src_banked: .byte 0        // 1 = copy name via C128 Bank 1 DB helper

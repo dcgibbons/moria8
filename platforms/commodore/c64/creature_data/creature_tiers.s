@@ -22,8 +22,8 @@
 .const CREATURE_BALROG_TIER = 4
 
 // Tier file sizes (approximate, for REU allocation)
-.const TIER0_SIZE = 342
-.const TIER1_SIZE = 830
-.const TIER2_SIZE = 1109
-.const TIER3_SIZE = 1367
-.const TIER4_SIZE = 2062
+.const TIER0_SIZE = 350
+.const TIER1_SIZE = 854
+.const TIER2_SIZE = 1141
+.const TIER3_SIZE = 1406
+.const TIER4_SIZE = 2119

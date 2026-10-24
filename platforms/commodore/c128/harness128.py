@@ -14,6 +14,8 @@ if str(TESTS_DIR) not in sys.path:
     sys.path.insert(0, str(TESTS_DIR))
 
 from vice_connector import VICEConnector, allocate_free_port, extract_test_symbols, run_test_case
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "tools"))
+from vice_config import vice_config  # noqa: E402  (VICE -config file with a version tag)
 
 
 def ensure_monitor_endpoint(args: argparse.Namespace) -> None:
@@ -44,7 +46,7 @@ def build_vice_command(args: argparse.Namespace) -> list[str]:
     command = [
         args.vice,
         "-config",
-        "/dev/null",
+        vice_config(args.vice),
         "-default",
         "+saveres",
         "-console",
@@ -113,7 +115,7 @@ def run_test_via_moncommands(
         command = [
             args.vice,
             "-config",
-            "/dev/null",
+            vice_config(args.vice),
             "-default",
             "+saveres",
             "-console",

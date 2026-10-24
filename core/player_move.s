@@ -1,4 +1,5 @@
 #importonce
+#import "df_target_row.s"
 // player_move.s — Player movement and collision
 //
 // Handles 8-direction movement, tile walkability checks,
@@ -289,12 +290,7 @@ do_look:
     bcs !dl_nothing+
 
     // Read map tile at (df_target_x, df_target_y)
-    ldx df_target_y
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
-    ldy df_target_x
+    jsr df_target_row_ptr
     :MapRead_ptr0_y()
     sta dl_tile
 

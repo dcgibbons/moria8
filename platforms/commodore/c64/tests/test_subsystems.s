@@ -473,11 +473,16 @@ expected_direction:
 expected_takeoff:
     .byte $54,$01,$0b,$05,$20,$0f,$06,$06,$20,$17,$08,$09,$03,$08,$20,$09,$14,$05,$0d,$20,$28,$01,$2d,$08,$29,$3f,$00
 
+// Encoded with the game's Huffman tree, so it must be regenerated whenever
+// data/huffman_strings.txt changes: run tools/string_bank_encoder.py with
+// data/huffman_strings.txt and a two-line file ("Direction?",
+// "Take off which item (a-h)?"), then copy the PRG bytes after the load
+// address.
 test_bank_image:
     .byte 2
     .byte 7, 0
     .byte 0, 0
     .byte 8, 0
-    .byte $cf, $f0, $1e, $24, $c6, $ce, $58, $c0
-    .byte $ce, $7c, $df, $77, $8e, $2f, $38, $e0, $51, $b8, $4f, $52, $c8, $3b, $0c, $58, $e5, $8c
+    .byte $cf, $f0, $1e, $24, $c6, $ce, $38, $c0
+    .byte $ce, $7c, $df, $77, $8e, $2f, $39, $60, $52, $b8, $4f, $56, $c4, $3a, $cc, $96, $e3, $8c
 .const TEST_BANK_IMAGE_LEN = * - test_bank_image

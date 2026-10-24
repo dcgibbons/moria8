@@ -1,3 +1,4 @@
+#import "df_target_row.s"
 // disarm.s — C128 resident-play copy of direct trap disarm command.
 
 trap_difficulty:
@@ -89,12 +90,7 @@ disarm_command:
     rts
 
 disarm_restore_target_floor:
-    ldx df_target_y
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
-    ldy df_target_x
+    jsr df_target_row_ptr
     :MapRead_ptr0_y()
     and #TILE_FLAG_MASK
     ora #TILE_FLOOR

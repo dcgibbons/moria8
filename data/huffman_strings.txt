@@ -27,13 +27,13 @@ Sorry, what was that again?
 @MAT_DOOR_BURST You hear a door burst open!
 
 # ===== Monster magic strings (Pattern B) =====
-@MM_BOLT  casts a bolt!
+@MM_CAST  casts a spell.
 @MM_BREATH  breathes fire!
 @MM_SUMMON  summons help!
 @MM_TELEPORT  teleports you!
 @MM_BLIND  blinds you!
 @MM_CONFUSE  confuses you!
-@MM_HEAL  heals itself.
+@MM_RESIST You resist the effects of the spell.
 
 # ===== Ranged fire strings (Pattern A + C) =====
 @RF_NO_WEAPON No ranged weapon.
@@ -263,3 +263,7 @@ Sorry, what was that again?
 @CHEST_SFX_LOCKED  (locked)
 @CHEST_SFX_TRAPPED  (trapped)
 @CHEST_SFX_DISARMED  (disarmed)
+
+# ===== Acid damage to worn armour (VMS moria.inc minus_ac) =====
+@MAT_YOUR Your ~
+@MAT_DAMAGED  is damaged!

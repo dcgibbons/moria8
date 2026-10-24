@@ -7,6 +7,8 @@ import sys
 from pathlib import Path
 
 from vice_connector import VICEConnector, allocate_free_port, parse_vs_symbols
+sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "tools"))
+from vice_config import vice_config  # noqa: E402  (VICE -config file with a version tag)
 
 
 def resolve_symbol_addr(vs_path: Path, symbol_name: str) -> str:
@@ -28,7 +30,7 @@ def build_vice_command(
     return [
         vice,
         "-config",
-        "/dev/null",
+        vice_config(vice),
         "-default",
         "+saveres",
         "-console",
