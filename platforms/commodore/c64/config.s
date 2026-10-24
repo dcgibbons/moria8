@@ -23,14 +23,23 @@
 
 .const PLATFORM_COMBAT_MSG_BUF_SIZE = 42
 #if C64_PRODUCT_OVERLAY_RUNTIME
-// The product parks two pure scratch buffers (combat_msg_buf, creature_name_buf)
-// in page-2 RAM $02A7-$02FF, which neither KERNAL nor BASIC uses, to free
-// main-segment bytes below MAP_BASE.
+// The product parks pure scratch buffers in page-2 RAM to free main-segment
+// bytes below MAP_BASE: $02A7-$02FF, which neither KERNAL nor BASIC uses, and
+// BASIC's line-input buffer $0200-$0258 (BASIC is gone after startup; the
+// game never reads keyboard lines through CHRIN, and disk CHRIN does not use
+// the buffer).
 #define PLATFORM_SCRATCH_BUFS_IN_PAGE2
 #endif
 .const PLATFORM_COMBAT_MSG_BUF_BASE = $02a7
 .const PLATFORM_CREATURE_NAME_BUF_BASE = PLATFORM_COMBAT_MSG_BUF_BASE + PLATFORM_COMBAT_MSG_BUF_SIZE
-.assert "Page-2 scratch buffers stay in $02A7-$02FF", PLATFORM_CREATURE_NAME_BUF_BASE + 32 <= $0300, true
+.const PLATFORM_PM_SPELL_LIST_BASE = PLATFORM_CREATURE_NAME_BUF_BASE + 32
+.const PLATFORM_LTB_SCRATCH_BASE = PLATFORM_PM_SPELL_LIST_BASE + 9   // monster.s tier-loader counters
+.assert "Page-2 scratch buffers stay in $02A7-$02FF", PLATFORM_LTB_SCRATCH_BASE + 2 <= $0300, true
+.const PLATFORM_ITEM_NAME_DECODE_BUF_BASE = $0200
+.const PLATFORM_PIW_VISIBLE_SLOTS_BASE = PLATFORM_ITEM_NAME_DECODE_BUF_BASE + 48
+.const PLATFORM_MD_QUEUE_BASE = PLATFORM_PIW_VISIBLE_SLOTS_BASE + 22   // monster_death.s queue
+.const PLATFORM_CHEST_SCRATCH_BASE = PLATFORM_MD_QUEUE_BASE + 1 + 3 * 4  // chest_loot.s scratch
+.assert "BASIC-buffer scratch stays in $0200-$0258", PLATFORM_CHEST_SCRATCH_BASE + 5 <= $0259, true
 #define PLATFORM_GET_INFRA_RANGE_INLINE
 #define PLATFORM_COPY_DEATH_SOURCE
 #if C64_PRODUCT_OVERLAY_RUNTIME

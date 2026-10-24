@@ -1250,9 +1250,7 @@ door_jam_at_target:
     jsr door_state_set_at
     // Consume one spike
     ldx cj_slot
-    dec inv_qty,x
-    bne !cj_done+
-    jsr inv_remove_item
+    jsr inv_consume_one
 !cj_done:
     lda #<jam_str_jammed
     sta zp_ptr0

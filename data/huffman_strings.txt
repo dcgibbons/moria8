@@ -263,3 +263,7 @@ Sorry, what was that again?
 @CHEST_SFX_LOCKED  (locked)
 @CHEST_SFX_TRAPPED  (trapped)
 @CHEST_SFX_DISARMED  (disarmed)
+
+# ===== Acid damage to worn armour (VMS moria.inc minus_ac) =====
+@MAT_YOUR Your ~
+@MAT_DAMAGED  is damaged!

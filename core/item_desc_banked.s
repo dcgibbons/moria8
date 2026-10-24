@@ -86,15 +86,11 @@ itemdesc_put_staged:
     jmp itemdesc_put_sensed_suffix
 
 itemdesc_put_qty_prefix:
+    // Any stack shows its count (food, potions, scrolls, flasks, spikes,
+    // ammunition stack in one slot).
     lda itemdesc_qty
     cmp #2
     bcc !idqp_done+
-    lda itemdesc_item_id
-    cmp #52
-    bcc !idqp_done+
-    cmp #55
-    bcs !idqp_done+
-    lda itemdesc_qty
     jsr screen_put_decimal
     lda #$20
     jsr hal_screen_put_char

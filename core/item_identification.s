@@ -683,7 +683,12 @@ item_decode_name_ptr_bank1_at_dst:
 #endif
 
 .const ITEM_NAME_DECODE_BUF_SIZE = 48
+#if PLATFORM_SCRATCH_BUFS_IN_PAGE2 || PLATFORM_ITEM_NAME_BUF_LOW
+.label item_name_decode_buf = PLATFORM_ITEM_NAME_DECODE_BUF_BASE
+.assert "item_name_decode_buf size matches its page-2 home", ITEM_NAME_DECODE_BUF_SIZE, 48
+#else
 item_name_decode_buf: .fill ITEM_NAME_DECODE_BUF_SIZE, 0
+#endif
 item_name_src_idx: .byte 0
 item_name_dst_idx: .byte 0
 item_name_save_ptr1: .byte 0

@@ -7,6 +7,18 @@
 #import "hal/storage_title_name.s"
 
 .const PLATFORM_COMBAT_MSG_BUF_SIZE = 42
+#if PLUS4_PRODUCT_OVERLAY_RUNTIME
+// The product parks the item-name decode buffer, the inventory picker's slot
+// list and the spell list in BASIC's line-input buffer $0200-$0258 (BASIC is
+// gone after startup; the game never reads keyboard lines through CHRIN) to
+// free bytes below MAP_BASE.
+#define PLATFORM_ITEM_NAME_BUF_LOW
+#define PLATFORM_LIST_BUFS_LOW
+#endif
+.const PLATFORM_ITEM_NAME_DECODE_BUF_BASE = $0200
+.const PLATFORM_PIW_VISIBLE_SLOTS_BASE = PLATFORM_ITEM_NAME_DECODE_BUF_BASE + 48
+.const PLATFORM_PM_SPELL_LIST_BASE = PLATFORM_PIW_VISIBLE_SLOTS_BASE + 22
+.assert "Low scratch buffers stay in $0200-$0258", PLATFORM_PM_SPELL_LIST_BASE + 9 <= $0259, true
 #define PLATFORM_GET_INFRA_RANGE_INLINE
 #define PLATFORM_COPY_DEATH_SOURCE
 #define PLATFORM_REQUIRES_MEDIA_PROBE

@@ -366,7 +366,7 @@ mon_atk_effect_dispatch:
     // Full dice damage passes through (matches umoria), then apply effect
     jmp mon_atk_effect_paralyze
 !maed_acid:
-    // Acid: full damage, no AC reduction
+    // Acid: no AC reduction; worn armour may take it (VMS acid_dam)
     jmp mon_atk_effect_acid
 !maed_fear:
     // Fear: full dice damage, no AC reduction (matches umoria)
@@ -487,12 +487,9 @@ mon_atk_effect_paralyze:
 !mepa_resist:
     rts
 
-// mon_atk_effect_acid — Acid attack (no AC reduction, full damage)
-// Damage already applied; print effect message.
-mon_atk_effect_acid:
-    ldx #HSTR_MAT_ACID
-    jsr huff_decode_to_ptr2
-    jmp mon_atk_build_effect_msg
+#if !MON_ATK_ACID_EXTERNAL
+#import "monster_acid.s"
+#endif
 
 // mon_atk_effect_fear — Fear attack: VMS creature.inc / Umoria monster.cpp
 // (MON-012). Heroism blocks it (VMS clears fear while heroic). Otherwise

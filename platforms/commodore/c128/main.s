@@ -3710,6 +3710,7 @@ tool_ego_prefix_hi:
 .macro ChestSummonsRestoreSegment() {
     .segment C128ResidentItems
 }
+#define INV_ADD_EXTERNAL   // inv_add.s rides the main image (below)
 #import "../../../core/item.s"
 #import "../../../core/chest_summons.s"
 // Step-13 chest loot: latch + resident handoff stay on the C128 main image
@@ -3729,10 +3730,14 @@ tool_ego_prefix_hi:
     .segment Default
 }
 #import "../../../core/chest_loot.s"
-// Monster drops (MON-014) and the look flash ride the main image: the world
-// and play payloads have no headroom for them.
+// Monster drops (MON-014), the look flash, inventory adding (with item
+// stacking) and the acid attack's armour damage (MON-015) ride the main
+// image: the world, play and items payloads have no headroom for them.
 #import "../../../core/monster_death.s"
 #import "../../../core/look_flash_target.s"
+#import "../../../core/inv_add.s"
+#define MON_ATK_ACID_EXTERNAL   // monster_attack.s (play payload) jumps here
+#import "../../../core/monster_acid.s"
 .segment C128ResidentItems
 
 // wizard_wall_walk_active rides the main image (freed by the corpus move);

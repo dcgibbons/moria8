@@ -17,23 +17,11 @@ item_wear:
 !iw_in_range:
     stx piw_slot
 
-    // Save carried item data into scratch (before any swap)
+    // Save carried item data into the fi_add scratch (before any swap);
+    // nothing below writes it before the message reads it back
     sta piw_item_id             // A already has inv_item_id[slot]
     ldx piw_slot
-    lda inv_qty,x
-    sta piw_qty
-    lda inv_p1,x
-    sta piw_p1
-    lda inv_to_hit,x
-    sta piw_to_hit
-    lda inv_to_dam,x
-    sta piw_to_dam
-    lda inv_to_ac,x
-    sta piw_to_ac
-    lda inv_flags,x
-    sta piw_flags
-    lda inv_ego,x
-    sta piw_ego
+    jsr inv_slot_to_fi_add
 
     // The filtered picker already excludes non-equippable categories and oil.
     ldx piw_item_id
@@ -81,22 +69,7 @@ item_wear:
 !iw_write_equip:
     // Write saved carried item data to equipment slot
     ldx piw_equip
-    lda piw_item_id
-    sta inv_item_id,x
-    lda piw_qty
-    sta inv_qty,x
-    lda piw_p1
-    sta inv_p1,x
-    lda piw_to_hit
-    sta inv_to_hit,x
-    lda piw_to_dam
-    sta inv_to_dam,x
-    lda piw_to_ac
-    sta inv_to_ac,x
-    lda piw_flags
-    sta inv_flags,x
-    lda piw_ego
-    sta inv_ego,x
+    jsr fi_add_to_inv_slot
 
     // Add the new item's direct current-stat adjustment.
     sec
@@ -128,20 +101,7 @@ item_wear:
     ldx #HSTR_PIW_WEARING
 !iw_msg:
     jsr huff_append_combat
-
-    lda piw_ego
-    sta fi_add_ego
-    lda piw_p1
-    sta fi_add_p1
-    lda piw_to_hit
-    sta fi_add_to_hit
-    lda piw_to_dam
-    sta fi_add_to_dam
-    lda piw_to_ac
-    sta fi_add_to_ac
-    lda piw_flags
-    sta fi_add_flags
-    jmp piw_report_item_use
+    jmp piw_report_item_use     // fi_add_* still hold the worn item
 
 // piw_report_item_use — Shared "used item" report tail: describe item,
 // period, print, pickup sound, consume turn. Input: piw_item_id set.
@@ -218,22 +178,7 @@ item_takeoff:
     sta piw_ego
 
     // Set up fi_add scratch for inv_add_item
-    lda inv_item_id,x
-    sta fi_add_id
-    lda inv_qty,x
-    sta fi_add_qty
-    lda inv_p1,x
-    sta fi_add_p1
-    lda inv_to_hit,x
-    sta fi_add_to_hit
-    lda inv_to_dam,x
-    sta fi_add_to_dam
-    lda inv_to_ac,x
-    sta fi_add_to_ac
-    lda inv_ego,x
-    sta fi_add_ego
-    lda piw_flags
-    sta fi_add_flags
+    jsr inv_slot_to_fi_add
 
     // Find empty carried slot and add
     jsr inv_add_item
@@ -378,9 +323,9 @@ item_eat:
     jsr player_update_hunger_state
 
 !ie_remove:
-    // Remove food from inventory
+    // Use one food from the stack
     ldx piw_slot
-    jsr inv_remove_item
+    jsr inv_consume_one
 
     // Build message
     lda #0
@@ -481,9 +426,9 @@ item_quaff:
     jsr id_known_set
 #endif
 
-    // Remove from inventory
+    // Use one potion from the stack
     ldx piw_slot
-    jsr inv_remove_item
+    jsr inv_consume_one
 
     // Apply effect based on item type.
     lda piw_item_id

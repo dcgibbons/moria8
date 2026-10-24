@@ -4369,7 +4369,7 @@ run_test "monster" "tests/test_monster.s" "0400 0415" 22 500000000
 run_test "monster_ai" "tests/test_monster_ai.s" "0400 043a" 59 500000000
 run_test "combat" "tests/test_combat.s" "0400 0428" 41 500000000
 run_test "msg_long" "tests/test_msg_long.s" "0400 0400" 1 20000000
-run_test "monster_attack" "tests/test_monster_attack.s" "0400 0410" 17 500000000
+run_test "monster_attack" "tests/test_monster_attack.s" "0400 0415" 22 500000000
 run_test "effects" "tests/test_effects.s" "0400 042d" 46 1000000000
 run_test "effects_magic" "tests/test_effects_magic.s" "0400 0433" 24 1000000000
 run_test "cure_light_wounds" "tests/test_cure_light_wounds.s" "0400 0402" 3 500000000
@@ -4442,7 +4442,7 @@ run_test "remove_curse_prayer" "tests/test_remove_curse_prayer.s" "0400 0402" 3 
 run_test "orb_of_draining_prayer" "tests/test_orb_of_draining_prayer.s" "0400 0402" 3 500000000
     run_test "prayer_feedback" "tests/test_prayer_feedback.s" "0400 040c" 13 500000000
 run_test "detect_feedback" "tests/test_detect_feedback.s" "0400 0403" 4 500000000
-run_test "item" "tests/test_item.s" "0400 0439" 58 1000000000
+run_test "item" "tests/test_item.s" "0400 043c" 61 1000000000
 run_test "scroll_p3" "tests/test_scroll_p3.s" "0400 040d" 14 1000000000
 run_test "item_desc" "tests/test_item_desc.s" "0400 0409" 10 500000000
 run_test "item_ui" "tests/test_item_ui.s" "0400 040f" 16 1000000000

@@ -2,9 +2,9 @@
 //
 // Tests: mon_atk_calc_tohit, mon_atk_roll_tohit, mon_atk_ac_reduce,
 //        mon_atk_apply_damage, player_death_check, poison effect,
-//        paralysis effect, aggravation effect.
+//        paralysis effect, aggravation effect, fear, acid armour damage.
 //
-// Results at $0400-$040d: $01 = pass, $00 = fail per test
+// Results at $0400-$0415: $01 = pass, $00 = fail per test
 // NOTE: msg_print writes to screen row 0 ($0400+), so we store results
 // in tc_results[] and copy to $0400 at the very end.
 
@@ -18,7 +18,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #16
+    ldx #21
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -67,6 +67,7 @@ mon_atk_build_effect_msg:
 cmb_term_and_print:
 combat_msg_monster_in_way:
 inv_remove_item:
+inv_consume_one:
 tramp_assign_special_room:
 tramp_vault_seal_entrance:
 tramp_spawn_special_room_monsters:
@@ -108,6 +109,18 @@ inv_to_hit:
     .fill TOTAL_INV_SLOTS, 0
 inv_to_dam:
     .fill TOTAL_INV_SLOTS, 0
+inv_flags:
+    .fill TOTAL_INV_SLOTS, 0
+inv_ego:
+    .fill TOTAL_INV_SLOTS, 0
+// Acid armour damage (monster_acid.s) callees outside the attack module
+inv_slot_to_fi_add:
+item_append_desc:
+    rts
+player_recalc_equipment:
+    inc tc_recalcs
+    rts
+tc_recalcs: .byte 0
 
 // Strings referenced by imported modules but defined in main.s
 press_key_str:
@@ -116,7 +129,7 @@ press_key_str:
 // Test scratch
 tc_loop:    .byte 0
 tc_ok:      .byte 0
-tc_results: .fill 17, $ff      // Result buffer (copied to $0400 at end)
+tc_results: .fill 22, $ff      // Result buffer (copied to $0400 at end)
 tc_fear_start: .byte 0          // fear_attempt: timer before each attempt
 tc_saved:   .byte 0
 tc_afraid:  .byte 0
@@ -687,13 +700,168 @@ test_start:
     beq !t18_fail+
     lda #$01
     sta tc_results + 16
-    jmp !tests_done+
+    jmp !t19+
 !t18_fail:
     lda #$00
     sta tc_results + 16
 
+    // ==========================================
+    // Tests 18-22: acid (MON-015; pinned VMS moria.inc acid_dam/minus_ac).
+    // Base AC from the item table: Leather armor 4, Small shield 2,
+    // Leather gloves 1.
+    // ==========================================
+!t19:
+    lda #4
+    sta it_color_ac + 7
+    lda #2
+    sta it_color_ac + 9
+    lda #1
+    sta it_color_ac + 11
+
+    // Test 18: body armour only, AC 4 + 0: damage 7 -> 3 (div 2), to-AC -1,
+    // equipment recalculated
+    jsr acid_clear_armour
+    lda #7
+    sta inv_item_id + EQUIP_BODY
+    lda #7
+    jsr acid_hit
+    cmp #3
+    bne !t19_fail+
+    lda inv_to_ac + EQUIP_BODY
+    cmp #$ff
+    bne !t19_fail+
+    lda tc_recalcs
+    cmp #1
+    bne !t19_fail+
+    lda #$01
+    sta tc_results + 17
+    jmp !t20+
+!t19_fail:
+    lda #$00
+    sta tc_results + 17
+
+    // Test 19: worn out (AC 4, to-AC -4): full damage, nothing changes
+!t20:
+    jsr acid_clear_armour
+    lda #7
+    sta inv_item_id + EQUIP_BODY
+    lda #$fc
+    sta inv_to_ac + EQUIP_BODY
+    lda #8
+    jsr acid_hit
+    cmp #8
+    bne !t20_fail+
+    lda inv_to_ac + EQUIP_BODY
+    cmp #$fc
+    bne !t20_fail+
+    lda tc_recalcs
+    bne !t20_fail+
+    lda #$01
+    sta tc_results + 18
+    jmp !t21+
+!t20_fail:
+    lda #$00
+    sta tc_results + 18
+
+    // Test 20: no armour worn: full damage
+!t21:
+    jsr acid_clear_armour
+    lda #8
+    jsr acid_hit
+    cmp #8
+    bne !t21_fail+
+    lda tc_recalcs
+    bne !t21_fail+
+    lda #$01
+    sta tc_results + 19
+    jmp !t22+
+!t21_fail:
+    lda #$00
+    sta tc_results + 19
+
+    // Test 21: the last slot (gloves only) is found and damaged
+!t22:
+    jsr acid_clear_armour
+    lda #11
+    sta inv_item_id + EQUIP_HANDS
+    lda #8
+    jsr acid_hit
+    cmp #4
+    bne !t22_fail+
+    lda inv_to_ac + EQUIP_HANDS
+    cmp #$ff
+    bne !t22_fail+
+    lda #$01
+    sta tc_results + 20
+    jmp !t23+
+!t22_fail:
+    lda #$00
+    sta tc_results + 20
+
+    // Test 22: body armour (AC 4) and a worn-out shield (2, -2): the piece is
+    // chosen at random among those worn, so over 40 hits both outcomes occur
+!t23:
+    lda #0
+    sta tc_saved
+    sta tc_afraid
+    lda #40
+    sta tc_loop
+!t23_loop:
+    jsr acid_clear_armour
+    lda #7
+    sta inv_item_id + EQUIP_BODY
+    lda #9
+    sta inv_item_id + EQUIP_SHIELD
+    lda #$fe
+    sta inv_to_ac + EQUIP_SHIELD
+    lda #8
+    jsr acid_hit
+    cmp #4
+    bne !t23_full+
+    inc tc_saved                // body chosen: halved
+    bne !t23_next+              // Always taken
+!t23_full:
+    inc tc_afraid               // shield chosen: full damage
+!t23_next:
+    dec tc_loop
+    bne !t23_loop-
+    lda tc_saved
+    beq !t23_fail+
+    lda tc_afraid
+    beq !t23_fail+
+    lda #$01
+    sta tc_results + 21
+    jmp !tests_done+
+!t23_fail:
+    lda #$00
+    sta tc_results + 21
+
 !tests_done:
     jmp test_exit_trampoline
+
+// acid_clear_armour — Empty the body..hands slots and zero their to-AC.
+acid_clear_armour:
+    ldx #EQUIP_BODY
+!aca_loop:
+    lda #FI_EMPTY
+    sta inv_item_id,x
+    lda #0
+    sta inv_to_ac,x
+    inx
+    cpx #EQUIP_HANDS + 1
+    bne !aca_loop-
+    lda #0
+    sta tc_recalcs
+    rts
+
+// acid_hit — Production acid effect on damage A. Output: A = damage dealt.
+acid_hit:
+    sta zp_combat_dmg
+    lda #0
+    sta mat_type2
+    jsr mon_atk_effect_acid
+    lda zp_combat_dmg
+    rts
 
 // fear_until_afraid — Attack with fear (mat_type2) from fear timer A until
 // a save fails (the timer changes), at most 30 tries.

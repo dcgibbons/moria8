@@ -239,6 +239,7 @@ cmb_in_way_str:
     .segment A2PlaySlot
 }
 #import "../../core/item.s"
+#define MON_ATK_ACID_EXTERNAL   // monster_acid.s rides the resident image (below)
 // Step-13 chest loot: latch + resident handoff stay in Default (play slot is
 // full); the generator parks in the GEN overlay with the picker it uses.
 .macro ChestLootSegment() {
@@ -1281,6 +1282,10 @@ a2_sfx_patterns:
 // Auto-rest disturbance flag (core/turn.s, TRN-007) in resident main RAM:
 // the play slot has no room for it (TURN_REST_DISTURBED_EXTERNAL).
 turn_rest_disturbed: .byte 0
+
+// The acid attack's armour damage (MON-015), resident for the same reason
+// (MON_ATK_ACID_EXTERNAL).
+#import "../../core/monster_acid.s"
 
 // ============================================================
 // Overlay segment blocks (C64 composition, adjusted)

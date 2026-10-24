@@ -193,13 +193,7 @@ rf_miss_darkness:
 rf_consume_ammo:
     // 7. Consume 1 ammo
     ldx rf_ammo_slot
-    lda inv_qty,x
-    cmp #2
-    bcc !rf_remove_slot+
-    dec inv_qty,x
-    jmp !rf_done+
-!rf_remove_slot:
-    jsr inv_remove_item
+    jsr inv_consume_one
 
 !rf_done:
     sec                         // Turn consumed

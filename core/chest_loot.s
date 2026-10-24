@@ -22,8 +22,13 @@ chest_loot_flags:   .byte 0   // VMS flags byte (bits 0-5 = VMS bits 24-29)
 // so neither source is readable by the time the resident handoff executes.
 // Lives with the loot latch because tight ports park this block outside the
 // play payload where chest_summons.s runs.
+#if PLATFORM_SCRATCH_BUFS_IN_PAGE2
+.label chest_summon_x = PLATFORM_CHEST_SCRATCH_BASE   // staged before every read
+.label chest_summon_y = chest_summon_x + 1
+#else
 chest_summon_x:     .byte 0
 chest_summon_y:     .byte 0
+#endif
 #if C64_TEST_SCRIPTED_CHEST_OPEN_PRODUCT || PLUS4_TEST_SCRIPTED_CHEST_OPEN_PRODUCT || C128_TEST_SCRIPTED_CHEST_OPEN_PRODUCT
 chest_product_path_stage:    .byte 0
 chest_product_loot_placed:   .byte 0
@@ -31,9 +36,15 @@ chest_product_runtime_state: .byte 0
 #endif
 
 // ---- Generator scratch (resident) ------------------------------------------
+#if PLATFORM_SCRATCH_BUFS_IN_PAGE2
+.label cl_typ   = PLATFORM_CHEST_SCRATCH_BASE + 2
+.label cl_drops = cl_typ + 1
+.label cl_tries = cl_typ + 2
+#else
 cl_typ:     .byte 0           // 1=object, 2=gold, 3=mixed (from flags bits 0-1)
 cl_drops:   .byte 0           // drops remaining to place
 cl_tries:   .byte 0           // bounded placement attempts
+#endif
 
 // ============================================================
 // chest_run_deferred — Resident deferred-work handoff after a chest open:

@@ -84,7 +84,7 @@ item_read_scroll:
     jsr id_known_set
 
     ldx piw_slot
-    jsr inv_remove_item
+    jsr inv_consume_one             // one scroll from the stack
 
     lda piw_item_id
     cmp #20
@@ -499,7 +499,7 @@ item_refuel:
 
 !ir_remove_flask:
     ldx piw_slot
-    jsr inv_remove_item
+    jsr inv_consume_one             // one flask from the stack
     sec
     rts
 

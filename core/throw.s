@@ -256,16 +256,8 @@ tw_consume_item:
     // Item properties were saved at selection time; inv_remove_item clears them.
     ldx tw_slot
 
-    // Consume 1 from inventory. Zero-quantity singleton records can exist
-    // after older saves or bugs; remove them instead of underflowing to $ff.
-    lda inv_qty,x
-    cmp #2
-    bcc !tw_remove_slot+
-    dec inv_qty,x
-    jmp !tw_qty_ok+
-!tw_remove_slot:
-    jsr inv_remove_item
-!tw_qty_ok:
+    // Consume 1 from inventory (zero-quantity records are removed).
+    jsr inv_consume_one
 
     // Place on floor? Potions always shatter (no floor item)
     ldx tw_item_id

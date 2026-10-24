@@ -21,11 +21,20 @@ cr_treasure:
 cr_treasure_end:
 .assert "cr_treasure size", cr_treasure_end - cr_treasure, MAX_CREATURES
 
-// Staged drops: count, then position and flags per kill.
+// Staged drops: count, then position and flags per kill. The C64 product
+// keeps them in free page-2 RAM; md_count is cleared with the monster table
+// (every new level) and on load, before any kill can stage one.
+#if PLATFORM_SCRATCH_BUFS_IN_PAGE2
+.label md_count = PLATFORM_MD_QUEUE_BASE
+.label md_x     = md_count + 1
+.label md_y     = md_x + MD_QUEUE_MAX
+.label md_flags = md_y + MD_QUEUE_MAX
+#else
 md_count:  .byte 0
 md_x:      .fill MD_QUEUE_MAX, 0
 md_y:      .fill MD_QUEUE_MAX, 0
 md_flags:  .fill MD_QUEUE_MAX, 0
+#endif
 
 // ============================================================
 // monster_death_stage — Stage the treasure drop of a just-killed creature.

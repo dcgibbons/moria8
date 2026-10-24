@@ -79,6 +79,9 @@ test_exit_trampoline:
 #import "../../../../core/turn.s"
 
 store_init_all:
+// The acid attack's armour damage (monster_acid.s) recalculates equipment;
+// this test links no player_recalc_equipment.s
+player_recalc_equipment:
     rts
 
 store_restock_all:

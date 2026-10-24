@@ -1411,8 +1411,13 @@ load_tier_to_buffer:
 
     rts
 
+#if PLATFORM_SCRATCH_BUFS_IN_PAGE2
+.label ltb_count     = PLATFORM_LTB_SCRATCH_BASE   // set on every call
+.label ltb_array_idx = ltb_count + 1
+#else
 ltb_count:     .byte 0
 ltb_array_idx: .byte 0
+#endif
 
 // Destination pointer table — maps field index to active buffer base address
 ltb_dst_lo:

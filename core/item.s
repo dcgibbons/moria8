@@ -439,41 +439,18 @@ glyph_remove:
     sta glyph_active,x
     rts
 
-// inv_add_item — Add item to first empty carried slot (0-21)
-// Input: fi_add_id, fi_add_qty, fi_add_p1, fi_add_to_hit/dam/ac
-// Output: carry set = success (X = slot), carry clear = full
+#if !INV_ADD_EXTERNAL
+#import "inv_add.s"
+#endif
+
+// inv_consume_one — Use one item of inventory slot X: a stack shrinks by one;
+// the last one (or a zero-quantity record from an older save) frees the slot.
 // Clobbers: A, X
-inv_add_item:
-    ldx #0
-!iai_scan:
-    cpx #MAX_INV_SLOTS
-    bcs !iai_full+
-    lda inv_item_id,x
-    cmp #FI_EMPTY
-    beq !iai_found+
-    inx
-    jmp !iai_scan-
-!iai_found:
-    lda fi_add_id
-    sta inv_item_id,x
-    lda fi_add_qty
-    sta inv_qty,x
-    lda fi_add_p1
-    sta inv_p1,x
-    lda fi_add_to_hit
-    sta inv_to_hit,x
-    lda fi_add_to_dam
-    sta inv_to_dam,x
-    lda fi_add_to_ac
-    sta inv_to_ac,x
-    lda fi_add_flags                // Copy flags (preserves IF_CURSED etc.)
-    sta inv_flags,x
-    lda fi_add_ego
-    sta inv_ego,x
-    sec
-    rts
-!iai_full:
-    clc
+inv_consume_one:
+    lda inv_qty,x
+    cmp #2
+    bcc inv_remove_item
+    dec inv_qty,x
     rts
 
 // inv_remove_item — Remove item from inventory slot X
@@ -532,6 +509,12 @@ inv_count_items:
     txa
     rts
 
+#if ITEM_SPAWN_IN_GEN_OVERLAY
+// The port runs this from OVL.GEN behind a resident item_spawn_level
+// trampoline (BBC Master: resident image headroom); the picker is then
+// called directly in the loaded overlay.
+:ItemSpawnSegment()
+#endif
 // ============================================================
 // item_spawn_level — Spawn gold and items on the dungeon floor
 // Called after monster_spawn_level at each level transition.
@@ -544,7 +527,11 @@ inv_count_items:
 isl_ngold_target: .byte 0      // Non-gold item count target
 isl_treasure_dlvl: .byte 0     // Effective dlvl for treasure room enchant
 
+#if ITEM_SPAWN_IN_GEN_OVERLAY
+item_spawn_level_gen:
+#else
 item_spawn_level:
+#endif
     jsr item_init_floor
 
     // Town = no items
@@ -681,7 +668,11 @@ item_spawn_level:
     sta fi_add_y
 
     // Pick item type
+#if ITEM_SPAWN_IN_GEN_OVERLAY
+    jsr pick_item_type_overlay
+#else
     jsr pick_item_type
+#endif
     sta fi_add_id
 
     // Roll enchantment
@@ -822,7 +813,11 @@ item_spawn_level:
     lda isl_treasure_dlvl
     sta zp_player_dlvl
 
+#if ITEM_SPAWN_IN_GEN_OVERLAY
+    jsr pick_item_type_overlay
+#else
     jsr pick_item_type
+#endif
     sta fi_add_id
 
     jsr roll_enchantment
@@ -852,6 +847,9 @@ item_spawn_level:
 
 !isl_all_done:
     rts
+#if ITEM_SPAWN_IN_GEN_OVERLAY
+:ItemSpawnRestoreSegment()
+#endif
 
 // ============================================================
 // Pickup and Drop
@@ -1055,22 +1053,7 @@ item_drop:
     sta fi_add_x
     lda zp_player_y
     sta fi_add_y
-    lda inv_item_id,x
-    sta fi_add_id
-    lda inv_qty,x
-    sta fi_add_qty
-    lda inv_p1,x
-    sta fi_add_p1
-    lda inv_to_hit,x
-    sta fi_add_to_hit
-    lda inv_to_dam,x
-    sta fi_add_to_dam
-    lda inv_to_ac,x
-    sta fi_add_to_ac
-    lda inv_flags,x
-    sta fi_add_flags
-    lda inv_ego,x
-    sta fi_add_ego
+    jsr inv_slot_to_fi_add
 
     jsr floor_item_add
     bcs !idr_placed+
@@ -1112,6 +1095,49 @@ item_drop:
 // Input: A = item type ID
 // Uses item_get_name_ptr for identification-aware name resolution.
 // Clobbers: A, X, Y, zp_ptr0, zp_ptr1
+// inv_slot_to_fi_add — Copy inventory slot X into the fi_add_* scratch
+// (item_append_desc, floor_item_add and inv_add_item read it).
+// Output: A = item id. Preserves X, Y.
+inv_slot_to_fi_add:
+    lda inv_qty,x
+    sta fi_add_qty
+    lda inv_p1,x
+    sta fi_add_p1
+    lda inv_to_hit,x
+    sta fi_add_to_hit
+    lda inv_to_dam,x
+    sta fi_add_to_dam
+    lda inv_to_ac,x
+    sta fi_add_to_ac
+    lda inv_flags,x
+    sta fi_add_flags
+    lda inv_ego,x
+    sta fi_add_ego
+    lda inv_item_id,x
+    sta fi_add_id
+    rts
+
+// fi_add_to_inv_slot — Write the fi_add_* scratch into inventory slot X.
+// Preserves X, Y.
+fi_add_to_inv_slot:
+    lda fi_add_id
+    sta inv_item_id,x
+    lda fi_add_qty
+    sta inv_qty,x
+    lda fi_add_p1
+    sta inv_p1,x
+    lda fi_add_to_hit
+    sta inv_to_hit,x
+    lda fi_add_to_dam
+    sta inv_to_dam,x
+    lda fi_add_to_ac
+    sta inv_to_ac,x
+    lda fi_add_flags
+    sta inv_flags,x
+    lda fi_add_ego
+    sta inv_ego,x
+    rts
+
 item_append_name:
     sta fi_add_id
     jsr item_get_name_ptr           // zp_ptr0 = name string

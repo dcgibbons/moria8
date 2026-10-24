@@ -40,6 +40,9 @@ test_exit_trampoline:
 #import "../screen.s"
 #import "../../../../core/color.s"
 #import "../config.s"
+// Product layout: scratch buffers in free page-2 RAM, keeping the test body
+// below MAP_BASE now that the acid attack's helpers are in item.s.
+#define PLATFORM_SCRATCH_BUFS_IN_PAGE2
 #import "../input.s"
 #import "../../../../core/rng.s"
 #import "../../../../core/math.s"

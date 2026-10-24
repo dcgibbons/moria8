@@ -213,7 +213,20 @@ cmb_in_way_str:
 .macro ChestSummonsRestoreSegment() {
     .segment BeebPlaySlot
 }
+// item_spawn_level runs from OVL.GEN behind the resident trampoline below:
+// the resident image had no room once items started to stack.
+#define ITEM_SPAWN_IN_GEN_OVERLAY
+.macro ItemSpawnSegment() {
+    .segment DungeonGenOverlay
+}
+.macro ItemSpawnRestoreSegment() {
+    .segment Default
+}
 #import "../../core/item.s"
+// The acid attack's armour damage (MON-015) is resident (Default): the play
+// payload has no room for it.
+#define MON_ATK_ACID_EXTERNAL
+#import "../../core/monster_acid.s"
 .macro ChestLootSegment() {
     .segment DungeonGenOverlay
 }
@@ -410,6 +423,11 @@ tramp_spawn_special_room_monsters:
 tramp_spawn_nest_gold:
     lda #<spawn_nest_gold
     ldy #>spawn_nest_gold
+    jmp gen_dispatch
+
+item_spawn_level:
+    lda #<item_spawn_level_gen
+    ldy #>item_spawn_level_gen
     jmp gen_dispatch
 
 tramp_find_special_room:

@@ -41,7 +41,7 @@ SWR_CACHE_CAPS = {
     "monster.db.1": 4 * 256,
     "ovl.spell": 21 * 256,
     "ovl.items": 21 * 256,
-    "ovl.gen": 20 * 256,
+    "ovl.gen": 21 * 256,
 }
 
 REQUIRED_LOW_SYMBOLS = (

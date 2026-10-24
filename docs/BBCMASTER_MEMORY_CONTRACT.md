@@ -175,7 +175,7 @@ the font, character shadow, and screen bitmap in a single unified address space:
 | **Bank 6** (`$06`) | `$BA00-$BDFF` | 4p (`1,024` B) | Cache Slot | **Cached `MONSTER.DB1`** (`830` B used, **`194` B slack**) + **`$BE00-$BFFF` (`2` pages = `512` B) free Bank 6 slack**. |
 | **Bank 7** (`$07`) | `$8000-$94FF` | 21p (`5,376` B) | Cache Slot | **Cached `OVL.SPELL`** (`5,112` B used, **`264` B slack**). |
 | **Bank 7** (`$07`) | `$9500-$A9FF` | 21p (`5,376` B) | Cache Slot | **Cached `OVL.ITEMS`** (`5,106` B used, **`270` B slack**). |
-| **Bank 7** (`$07`) | `$AA00-$BDFF` | 20p (`5,120` B) | Cache Slot | **Cached `OVL.GEN`** (`4,799` B used, **`321` B slack**) + **`$BE00-$BFFF` (`2` pages = `512` B) free Bank 7 slack**. |
+| **Bank 7** (`$07`) | `$AA00-$BEFF` | 21p (`5,376` B) | Cache Slot | **Cached `OVL.GEN`** (`5,320` B used, **`56` B slack**; holds `item_spawn_level` since item stacking left the resident image no room) + **`$BF00-$BFFF` (`1` page = `256` B) free Bank 7 slack**. |
 
 * **Disk-Backed Cold Assets (Loaded on Demand via `OSFILE`):**
   `OVL.START` (`OVLSTA`), `OVL.DEATH` (`OVLDTH`), `OVL.HELP` (`OVLHLP`),
