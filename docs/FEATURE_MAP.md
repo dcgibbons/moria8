@@ -1,0 +1,1730 @@
+# Moria Feature Map & Cross-System Audit (`VMS Moria 4.8` vs `Umoria 5.7.15` vs `Moria8`)
+
+This document is the authoritative, exhaustive feature database and technical audit comparing:
+
+1. **VMS Moria 4.8** (`vms-moria`: VAX/VMS Pascal source, Robert Alan Koeneke / Jimmey Wayne Todd Jr. / Gary D. McAdoo, 1983–1987, `source/moria.pas` + `source/include/*.inc`).
+2. **Umoria 5.7.15** (`umoria`: UNIX C/C++ port derived from James E. Wilson's Umoria 5.5.2, `src/*.cpp` + `src/*.h`).
+3. **Moria8** (`moria8`: 6502/65C02 Kick Assembler implementation in `core/` and `platforms/` across **7 active hardware ports**: **Commodore 64**, **Commodore 128**, **Commodore Plus/4**, **Apple IIe**, **Commander X16**, **Atari 8-bit (`800XL`/`65XE`/`130XE`)**, and **Acorn BBC Master 128**).
+
+---
+
+## Table of Contents
+
+1. [Section 1: Overview, Verdict Taxonomy & 7-Port Hardware/Platform Matrix](#section-1-overview-verdict-taxonomy--7-port-hardwareplatform-matrix)
+   - [1.1 Verdict Taxonomy](#11-verdict-taxonomy)
+   - [1.2 Architectural Summary Across the Three Systems](#12-architectural-summary-across-the-three-systems)
+   - [1.3 Complete 7-Port Hardware & Platform Matrix (11 Axes)](#13-complete-7-port-hardware--platform-matrix-11-axes)
+   - [1.4 Complete 12-Overlay & Monster Tier Caching Matrix Across All 7 Ports](#14-complete-12-overlay--monster-tier-caching-matrix-across-all-7-ports)
+   - [1.5 Sound Effects Matrix Across All 7 Ports (All 10 SFX IDs)](#15-sound-effects-matrix-across-all-7-ports-all-10-sfx-ids)
+2. [Section 2: Character Creation, Races (All 8), Classes (All 6), Stats & Progression](#section-2-character-creation-races-all-8-classes-all-6-stats--progression)
+   - [2.1 Character Creation Pipeline & Mechanics](#21-character-creation-pipeline--mechanics)
+   - [2.2 Complete Race Catalog (All 8 Races)](#22-complete-race-catalog-all-8-races)
+   - [2.3 Race-to-Shopkeeper Price Adjustments (`rgold_adj` Matrix)](#23-race-to-shopkeeper-price-adjustments-rgold_adj-matrix)
+   - [2.4 Complete Class Catalog (All 6 Classes)](#24-complete-class-catalog-all-6-classes)
+   - [2.5 Primary Stats, `18/xx` Percentile Scale & Derived Stat Tables](#25-primary-stats-18xx-percentile-scale--derived-stat-tables)
+   - [2.6 Experience Table (`player_exp` Levels 1–40) & Level Titles](#26-experience-table-player_exp-levels-140--level-titles)
+   - [2.7 Starting Inventory (`player_init`) & Social Background Charts](#27-starting-inventory-player_init--social-background-charts)
+3. [Section 3: Turn Loop, Speed, Regeneration, Hunger, Light, Commands & Wizard Mode](#section-3-turn-loop-speed-regeneration-hunger-light-commands--wizard-mode)
+   - [3.1 Master Turn Loop, Speed Scheduling & Time-of-Day](#31-master-turn-loop-speed-scheduling--time-of-day)
+   - [3.2 Regeneration, Poison Tick, Hunger & Light Fuel](#32-regeneration-poison-tick-hunger--light-fuel)
+   - [3.3 Complete Player Command & Keybinding Matrix (All 7 Ports)](#33-complete-player-command--keybinding-matrix-all-7-ports)
+   - [3.4 Running, Resting & Disturbance System](#34-running-resting--disturbance-system)
+   - [3.5 Complete Wizard Mode & Debug Command Catalog](#35-complete-wizard-mode--debug-command-catalog)
+4. [Section 4: Dungeon Generation, Special Rooms, Terrain, Doors, Tunneling, Traps (All 18) & Line of Sight](#section-4-dungeon-generation-special-rooms-terrain-doors-tunneling-traps-all-18--line-of-sight)
+   - [4.1 Map Geometry, Panels & Generation Pipeline](#41-map-geometry-panels--generation-pipeline)
+   - [4.2 Room Types: Normal, Overlapping, Vaults, Pits & Chambers](#42-room-types-normal-overlapping-vaults-pits--chambers)
+   - [4.3 Corridors, Doors, Secret Doors, Spiking (`j`), Bashing & Tunneling (`T`/`+`)](#43-corridors-doors-secret-doors-spiking-j-bashing--tunneling-t)
+   - [4.4 Line of Sight (LOS), Room Lighting & Infravision](#44-line-of-sight-los-room-lighting--infravision)
+   - [4.5 Complete Floor Trap Catalog (All 18 Traps) & Disarming Mechanics](#45-complete-floor-trap-catalog-all-18-traps--disarming-mechanics)
+5. [Section 5: Town, Stores (6 + Black Market + Home), Shopkeepers (All 18) & Haggling](#section-5-town-stores-6--black-market--home-shopkeepers-all-18--haggling)
+   - [5.1 Town Layout, Store Mechanics, Haggling & Pricing](#51-town-layout-store-mechanics-haggling--pricing)
+   - [5.2 Store Category Purchase Masks & Stocking Tables](#52-store-category-purchase-masks--stocking-tables)
+   - [5.3 Complete Shopkeeper Catalog (All 18 Original Owners + Moria8 Buildings 0–7)](#53-complete-shopkeeper-catalog-all-18-original-owners--moria8-buildings-07)
+6. [Section 6: Combat System, Monster Attacks (All 19 Methods & 24 Effects), Status Effects, Chests & Balrog Endgame](#section-6-combat-system-monster-attacks-all-19-methods--24-effects-status-effects-chests--balrog-endgame)
+   - [6.1 Player Melee, Critical Hits, Ranged Fire (`f`) & Throwing (`v`/`T`)](#61-player-melee-critical-hits-ranged-fire-f--throwing-vt)
+   - [6.2 Monster Melee, AC Reduction & Attack Execution](#62-monster-melee-ac-reduction--attack-execution)
+   - [6.3 Complete Monster Attack Method Catalog (All 19 Attack Descriptions)](#63-complete-monster-attack-method-catalog-all-19-attack-descriptions)
+   - [6.4 Complete Monster Attack Effect Catalog (All 24 Attack Effects)](#64-complete-monster-attack-effect-catalog-all-24-attack-effects)
+   - [6.5 Complete Player Status Effect & Timed Condition Catalog](#65-complete-player-status-effect--timed-condition-catalog)
+   - [6.6 Chests, Chest Traps (All 6 Flags) & Monster Death Loot-Drop Mechanics](#66-chests-chest-traps-all-6-flags--monster-death-loot-drop-mechanics)
+   - [6.7 Balrog Battle, Total Winner Retirement, Royal Screen & High Scores](#67-balrog-battle-total-winner-retirement-royal-screen--high-scores)
+7. [Section 7: Magic System — All 31 Mage Spells & All 31 Priest Prayers](#section-7-magic-system--all-31-mage-spells--all-31-priest-prayers)
+   - [7.1 Spellcasting, Prayer, Mana, Learning & Failure Mechanics](#71-spellcasting-prayer-mana-learning--failure-mechanics)
+   - [7.2 Complete Mage / Rogue / Ranger Spell Catalog (All 31 Arcane Spells)](#72-complete-mage--rogue--ranger-spell-catalog-all-31-arcane-spells)
+   - [7.3 Complete Priest / Paladin Prayer Catalog (All 31 Divine Prayers)](#73-complete-priest--paladin-prayer-catalog-all-31-divine-prayers)
+8. [Section 8: Ego Items (All 56 `special_item_names` Templates) & Complete Base Item Catalog](#section-8-ego-items-all-56-special_item_names-templates--complete-base-item-catalog)
+   - [8.1 Inventory, Equipment Slots, Encumbrance, Flavors & Identification](#81-inventory-equipment-slots-encumbrance-flavors--identification)
+   - [8.2 Complete Ego Item Catalog (All 56 `special_item_names` / `magic_init` Templates)](#82-complete-ego-item-catalog-all-56-special_item_names--magic_init-templates)
+   - [8.3 Complete Base Item Catalog (All VMS Moria / Umoria Templates & All 136 Moria8 Items)](#83-complete-base-item-catalog-all-vms-moria--umoria-templates--all-136-moria8-items)
+9. [Section 9: Monster AI, Monster Spells/Breaths (All 18), Monster Recall & Complete 279-Monster Catalog](#section-9-monster-ai-monster-spellsbreaths-all-18-monster-recall--complete-279-monster-catalog)
+   - [9.1 Monster AI, Wake/Sleep, Movement, Multiplying, Packs & Wall Movement](#91-monster-ai-wakesleep-movement-multiplying-packs--wall-movement)
+   - [9.2 Complete Monster Spell & Breath Catalog (All 18 `CSPELL` Flags)](#92-complete-monster-spell--breath-catalog-all-18-cspell-flags)
+   - [9.3 Monster Recall (`/` / `c_recall`) & Moria8 4-Tier Monster Architecture](#93-monster-recall---c_recall--moria8-4-tier-monster-architecture)
+   - [9.4 Complete 279-Monster Catalog (VMS Moria 4.8 vs Umoria 5.7.15 vs Moria8)](#94-complete-279-monster-catalog-vms-moria-48-vs-umoria-5715-vs-moria8)
+
+---
+
+## Section 1: Overview, Verdict Taxonomy & 7-Port Hardware/Platform Matrix
+
+### 1.1 Verdict Taxonomy
+
+Every feature, mechanic, and catalog entry in this document is assigned one of four strict audit verdicts for **Moria8**:
+
+| Verdict | Definition |
+| --- | --- |
+| **`Implemented`** | Feature is present in Moria8 with exact or directly equivalent rules, formulas, constants, and observable gameplay behavior across all 7 ports (subject only to documented 40-col vs 80-col map dimensions or display capabilities). |
+| **`Approximation`** | Feature is present and fulfills the same gameplay role, but uses an intentional 8-bit adaptation (e.g., 1-byte tile encoding instead of 4-byte `cave_type`, 8-bit shifted-threshold combat math `(acc-evade)+20` instead of `BTH - level*BTH_LEV_ADJ`, simplified 16-bit haggling steps, integer Bresenham LOS, or 4-tier monster swapping instead of keeping all 279 templates in flat RAM). |
+| **`Partial`** | A subset of the feature is implemented, while other branches or items in the same subsystem are stubbed, merged, or omitted (e.g., 7 melee weapon ego types + 2 digger ego prefixes implemented out of 56 ego templates; 6 floor trap types implemented out of 18; 120 creatures out of 279; 136 items out of ~350+). |
+| **`Missing`** | Feature is not implemented in Moria8 (e.g., shopkeeper racial price markup matrix `rgold_adj`, numeric repeat count prefixes, `rogue`-like keymap toggle, oil flask throwing burn damage, or omitted base item/monster templates). |
+
+---
+
+### 1.2 Architectural Summary Across the Three Systems
+
+| Dimension | VMS Moria 4.8 (`vms-moria`) | Umoria 5.7.15 (`umoria`) | Moria8 (`moria8`) |
+| --- | --- | --- | --- |
+| **Language & Target** | VAX/VMS Pascal (`source/moria.pas`, `source/include/*.inc`) | ISO C++14 (`src/*.cpp`, refactored from C Umoria 5.5.2) | 6502 / 65C02 Kick Assembler (`core/*.s`, `platforms/**`) |
+| **Max Map Size** | `198 x 66` (`MAX_WIDTH=198`, `MAX_HEIGHT=66`, `3 x 11` panels of `66 x 22`) | `198 x 66` (`MAX_WIDTH=198`, `MAX_HEIGHT=66`) | **40-col ports** (`C64`, `Plus/4`, `Atari 8-bit`): `80 x 48` (`3,840` B)<br>**80-col ports** (`C128`, `Apple IIe`, `CX16`, `BBC Master`): `198 x 66` (`13,068` B) |
+| **Per-Tile Memory** | 8-byte Pascal record `cave_type` (`cptr`, `tptr`, `fval`, `fopen`, `fm`, `pl`, `tl`, `oct`) | 4-byte struct `Tile_t` (`cptr`, `tptr`, `fval`, bitflags `lr`/`fm`/`pl`/`tl`) | **1 byte per tile** (`bits 0-3`: tile type `0..9`; `bit 4`: `TILE_SEEN`; `bit 5`: `TILE_LIT`; `bit 6`: `TILE_TEMP_LIT`; `bit 7`: `TILE_HAS_MONSTER`) |
+| **Monster Catalog** | **279** creatures (`MAX_CREATURES=279` in `values.inc`) | **279** creatures (`MON_MAX_CREATURES=279` in `data_creatures.cpp`) | **120** creatures (`8` resident Town + `112` Dungeon across 4 depth tiers; up to `65` templates active at once) |
+| **Active Monsters / Level** | Up to **100** (`MAX_MALLOC=101`, `m_list[1..100]`) | Up to **125** (`MON_MAX_ALLOCATIONS=125`) | Up to **24** (`MAX_MONSTERS=24`, SoA parallel arrays `mon_x`, `mon_y`, `mon_hp_lo/hi`, `mon_cidx`, `mon_state`, `mon_stun`, `mon_confused`) |
+| **Item Catalog** | **343** dungeon templates (`MAX_DUNGEON_OBJ=343`) + **27** store-only (`344..370`) + traps/doors/rubble/gold (`MAX_OBJECTS=414`) | **343** dungeon + **27** store (`343..369`) + traps/doors/rubble/gold + **25** spellbooks (`game_objects[0..419]`, 420 entries) | **136** item templates (`0..135` in `core/item_tables.s`), covering all 20 item categories (`ICAT_FOOD`..`ICAT_CHEST`) |
+| **Active Floor Items** | Up to **174** (`MAX_TALLOC=175`, `t_list[1..174]`) | Up to **175** (`LEVEL_MAX_OBJECTS=175`) | Up to **42** (`MAX_FLOOR_ITEMS=42`, 6 bytes/entry = `252` B at `FLOOR_ITEM_BASE` + sidecars `fi_to_hit/dam/ac`) + **4** Glyphs of Warding (`MAX_GLYPHS=4`) |
+| **Player Inventory + Equip** | **22** pack slots + **12** equipment slots (`INVEN_MAX=35`) | **22** pack slots (`a`-`v`) + **12** equipment slots (`w`-`34`) | **22** pack slots (`MAX_INV_SLOTS=22`, `a`-`v`) + **9** equipment slots (`MAX_EQUIP_SLOTS=9`, slots `22..30`: Weapon/Digger, Body, Shield, Head, Hands, Feet, Light, Ring, Amulet; `TOTAL_INV_SLOTS=31`) |
+| **Town Buildings** | **6** stores (24 slots each; 18 owners = 3 per store) | **6** stores (24 slots each; 18 owners = 3 per store) | **8** buildings (12 slots each = `96` slots total): **6** standard stores + **Black Market** (`6`) + **Player Home** (`7`) |
+| **Spells & Prayers** | **31** Mage spells + **31** Priest prayers (**62** total across 8 books) | **31** Mage spells + **31** Priest prayers (**62** total across 8 books) | **31** Mage spells + **31** Priest prayers (**62** total across 8 books; all 62 castable) |
+| **Ego Item Templates** | **55** templates in `magic_init` (`misc.inc:800-1500`) | **56** names in `special_item_names` (`data_treasure.cpp:522-543`) | **7** melee weapon ego types (`core/ego_items.s`) + **2** digging tool prefixes (`Gnomish`/`Dwarven` in `core/game_loop.s`) |
+
+---
+
+### 1.3 Complete 7-Port Hardware & Platform Matrix (11 Axes)
+
+All 7 active Moria8 ports compile the exact same shared gameplay rules from `core/*.s` while adapting display geometry, memory banking, overlays, sound synthesis, disk I/O, and keyboard scanning through platform HALs in `platforms/`.
+
+| Axis | Commodore 64 (`c64`) | Commodore 128 (`c128`) | Commodore Plus/4 (`plus4`) | Apple IIe (`apple2`) | Commander X16 (`cx16`) | Atari 8-bit (`atari8`: `800XL`/`130XE`) | BBC Master 128 (`bbcmaster`) |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| **1. CPU & Clock** | MOS 6510 @ ~1.023 MHz (NTSC) / ~0.985 MHz (PAL); `$01` CPU port banking (`$36` Normal, `$35` No-BASIC, `$34` All-RAM) | MOS 8502 @ **2 MHz FAST mode** (`$D030=$01`, VIC-II blanked `$D011 bit 4=0`); briefly drops to 1 MHz during IEC serial I/O; Z80 boot stub switches to 8502 | MOS 7501/8501 @ ~1.77 MHz (TED single-clock / RAM mode via `$FF3E`/`$FF3F` ROM/RAM banking latches) | MOS 6502 / 65C02 @ ~1.023 MHz (Enhanced Apple IIe w/ 128 KB Aux RAM card) | WDC 65C02 @ **8 MHz**; `$00` RAM bank register (`8 KB` window at `$A000-$BFFF`), `$01` ROM bank register | MOS 6502C ("SALLY") @ ~1.79 MHz (NTSC) / ~1.77 MHz (PAL); PIA `PORTB` (`$D301`) banking (64 KB 800XL/65XE base; 128 KB 130XE extended banks) | Rockwell R65C12 @ **2 MHz**; `ROMSEL` (`$FE30`) + `ACCCON` (`$FE34`) hardware banking (`LYNNE` 20 KB Shadow RAM, `ANDY` 4 KB Private RAM, 4×16 KB Sideways RAM) |
+| **2. Display, Screen, Viewport & Map** | VIC-II 40×25 text (`SCREEN_COLS=40`, `SCREEN_ROWS=25`); Viewport **`38 x 19`** (rows 2–20, cols 1–38); Msg row 0, Status rows 21–23, Input row 24; Map **`80 x 48`** (`3,840` B, max 8 rooms) | VDC 8563 80×25 text (`SCREEN_COLS=80`, `SCREEN_ROWS=25`); Viewport **`78 x 19`** (rows 2–20); Msg row 0, Status rows 21–23, Input row 24; Map **`198 x 66`** (`13,068` B, max 21 rooms) | TED 7360/8360 40×25 text (`SCREEN_COLS=40`, `SCREEN_ROWS=25`); Viewport **`38 x 19`** (rows 2–20); Msg row 0, Status rows 21–23, Input row 24; Map **`80 x 48`** (`3,840` B, max 8 rooms) | 80-col Aux+Main interleaved text **`80 x 24`** (`SCREEN_COLS=80`, `SCREEN_ROWS=24`); Viewport **`78 x 18`** (rows 2–19); Msg row 0, Input row 20, Status rows 21–23; Map **`198 x 66`** (`13,068` B, max 21 rooms) | VERA 80×30 text mode with **`80 x 24`** active game grid (`SCREEN_COLS=80`, `SCREEN_ROWS=24`); Viewport **`78 x 18`** (rows 2–19); Msg row 0, Input row 20, Status rows 21–23; Map **`198 x 66`** (`13,068` B, max 21 rooms) | ANTIC Mode 2 (`GR.0`) **`40 x 25`** custom display list (`SCREEN_COLS=40`, `SCREEN_ROWS=25`); Viewport **`38 x 19`** (rows 2–20); Msg row 0, Status rows 21–23, Input row 24; Map **`80 x 48`** (`3,840` B, max 8 rooms) | Video ULA + 6845 CRTC custom **`80 x 24`** Mode 0 (`640 x 192` 2-color graphics bitmap, `SCREEN_COLS=80`, `SCREEN_ROWS=24`); Viewport **`78 x 18`** (rows 2–19); Msg row 0, Input row 20, Status rows 21–23; Map **`198 x 66`** (`13,068` B, max 21 rooms) |
+| **3. Color Support & Palette** | Full 16-color VIC-II palette; per-cell color RAM at `$D800-$DBFF`; black bg/border | Full 16-color RGBI VDC attributes at VDC `$0800-$0FFF`; `vic_to_vdc_color` maps C64 colors to RGBI + intensity | Full 16-color mapping via `plus4_color_attr` table into TED's 121-color (16 hue × 8 luma) palette at `COLOR_RAM=$0800-$0BFF` | **Monochrome** (1-bit text); color writes are no-ops; player `@` rendered in normal ASCII (high-bit set); out-of-LOS floor uses `.` | Full 16-color VERA palette (default indices 0–15 match C64 palette); VERA 2-byte `[screencode, color]` cells at `$1B000` (`128` stride / `256` B per row) | **Monochrome hi-res** with VBI + 3-DLI scanline luminance zones (Message row bright white `$0E`, Map dark bg/white fg, Input/Status medium-bright `$0C`, Title gold `$2A`); player `@` uses inverse video (`+$80`); out-of-LOS floor uses `' '` | **Monochrome** 2-color Mode 0 (`640 x 192`); color writes are no-ops; out-of-LOS seen floor uses `' '` instead of `.` (`TILE_CHAR_SEEN_FLOOR=' '`) for visual contrast against lit `.` |
+| **4. Character Set & Font** | Native C64 ROM Upper/Lower PETSCII charset (`$D018=$17`, ROM char gen bank 2 at `$1800`) | VDC Alt Charset (`$3000` in VDC RAM, attribute bit 7 `$80` set on every cell for lowercase/mixed-case PETSCII) | Native TED ROM Upper/Lower PETSCII charset (`$FF13` bit 2 set for lowercase/uppercase bank at `$D400`) | Native Apple IIe MouseText/Enhanced ROM (`$0400-$07FF` Main/Aux); `a2_map_char` translates C64 screen codes at write time (box-drawing `$40`/`$42`/`$43`/`$5D` -> `-`/`|`, `$66` -> `#`, `$5B` -> `+`, etc.) | VERA PETSCII Upper/Lower charset (`SCREEN_SET_CHARSET` `A=3` at boot); direct C64 screen codes | **Boot-built 1 KB C64-screen-code-ordered RAM font** at `$0400-$07FF` (`CHBAS=$04`), synthesized from Atari OS ROM `$E000-$E3FF` + custom `@`, `£`, `↑`, `←`, Checkerboard `$66`, Solid `$A0`, and box-drawing glyphs | **Boot-built 1 KB C64-screen-code-ordered RAM font** at `$3000-$33FF` in Shadow RAM `LYNNE`, synthesized from BBC MOS ROM `$C000-$C3FF` + custom `£`, `↑`, `←`, Checkerboard `$66`, Solid `$A0`, and box-drawing glyphs |
+| **5. Memory Map & Banking** | Main/Default `$0900-$BFFF`; `MAP_BASE` `$C000-$CEFF` (`3,840` B); `FLOOR_ITEM_BASE` `$CF00`; Tier Name Pool `$D000-$D7FF` (RAM under I/O); `$D800-$DFFF` I/O + Color RAM; `$E000-$EFFF` Overlay / Monster Tier window; `$F000-$FFFA` `RuntimeBanked` (`core_banked.s`, `combat.s`, `dungeon_gen.s`, Huffman) | Bank 0: Resident `$1C01-$AEFF`, Play/Persist Slot `$AF00-$CFFF`, `$D000-$DFFF` I/O, `$E000-$EFFF` Overlay window, `$F000-$FF00` `RuntimeBanked`.<br>Bank 1: `$0400` `c128_code1`, `$1000-$1FFF` `128.UI` cache, `$2000` recall/save/floor items/active monster templates, `$3000-$3FFF` `128.ITEMS` cache, `$4000-$730B` **`MAP_BASE` (`13,068` B)**, `$7400` item names, `$7F00-$94F7` cached monster tiers, `$9800-$CFFF` cached overlays (`MODAL`/`DISARM`/`START`/`TOWN`/`DEATH`), `$D000-$DFFF` I/O hole (never cache RAM), `$E000-$EFFF` `128.GEN` cache, `$F000` Huffman | Resident `$1010-$C7FF` (TED Screen `$0C00`, Color `$0800`); `MAP_BASE` `$C800-$D6FF` (`3,840` B); `FLOOR_ITEM_BASE` `$D700`; Tier Name Pool `$D800-$DFFF`; `$E000-$EFFF` Overlay / Tier window; `$F000-$FDFF` `RuntimeBanked` (`$FE00-$FFFF` TED registers/vectors) | Main RAM: Resident `$0800-$7BFF`; Load-once `A2PlaySlot` `$7C00-$9FFF`; Tier Name Pool `$A000-$A3FF`; Overlay/Tier window `$A400-$B9FF`; ProDOS `$BF00`.<br>Aux RAM (read via ZP thunks `$C0-$E4`): **`MAP_BASE` `$0800-$3B0B` (`13,068` B)**; `A2AuxData` `$3B0C-$59FF`; Hot Overlay Cache `$5A00-$98FF`; `A2HuffData` `$9900-$A9FF` | Unified Resident+Play `$0801-$9AFF` (no `$F000` split needed); Tier Name Pool `$9B00-$9EFF`; `$9F00-$9FFF` VERA/VIA I/O.<br>`$A000-$BFFF` (`8 KB` Banked RAM via `$00`): **Banks 1–2 `MAP_BASE` (`13,068` B, split across 64×198 + 2×198 rows)**; Bank 3 `Cx16AuxData`; Bank 4 `Cx16HuffData`; Banks 5–8 Monster Tiers; Banks 9–20 Overlays; Bank 21 Title Art | Low Resident `< $4000` (SIO/PORTB/IRQ/DLI/font/sound); `$4000-$7FFF` 130XE Bank Window + `Default` Resident (`$4000-$C0FF`); **`MAP_BASE` `$C100-$CFFF` (`3,840` B)**; `$D000-$D7FF` GTIA/POKEY/PIA/ANTIC hole; `$D800-$DBFF` Tier Name Pool; `$DC00-$DFFF` High Resident (`FLOOR_ITEM_BASE`, Huffman trees, `zp_save_buf`, `msg_history`); `$E000-$EFFF` Overlay/Tier window; `$F000-$FFF9` `RuntimeBanked` | Low Resident `< $3000` (banking/blitter/MOS/DFS); `$3000-$7FFF` Main `Default` Resident.<br>20 KB Shadow `LYNNE`: `$3000` Font, `$3400` scan scratch, `$3800` `beeb_char_shadow`, `$4400-$7FFF` Mode 0 bitmap.<br>4 KB `ANDY`: `$8000-$8D93` `BeebHuffData`.<br>Sideways RAM (`$8000-$BFFF`): **Bank 4** `BeebPlaySlot` (`$8000-$A3FF`) + Tier Pool (`$A400`) + `$A800-$BFFF` Overlay/Tier window; **Bank 5** `MAP_BASE` (`$8000-$B30B`) + `OVLUI`; **Bank 6** `BeebAuxData` + `OVLTWN` + `OVLMDL` + `MONDB1`; **Bank 7** `OVLSPL` + `OVLITM` + `OVLGEN` |
+| **6. Monster Tier Storage & Caching** | 4 tier files (`MONSTER.DB.1`..`4`) loaded into `$E000` staging, copied to `CREATURE_BASE` + `$D000` name pool; **cached in REU Banks 1–2 if REU detected**, else IEC disk | **All 4 tiers (`MONSTER.DB.1`..`4`) preloaded into Bank 1 (`$7F00-$94F7`) at boot**; runtime tier switches copy from Bank 1 to `$2800` with **zero disk I/O** | 4 tier files (`MONSTER.DB.1`..`4`) loaded on demand from IEC disk into `$E000`, copied to `CREATURE_BASE` + `$D800` name pool (no RAM expansion cache) | 4 tier files (`MONSTER.DB1`..`4`) loaded on demand via ProDOS MLI into `$A400`, copied to `CREATURE_BASE` + `$A000` name pool | **All 4 tiers preloaded at boot from `MORIA8.PAK` into Banked RAM Banks 5–8** (`$A000-$A5FF`); runtime tier switches copy from RAM bank with **zero disk I/O** | 4 tier files (`MONSTER.DB1`..`4`): on **800XL (64 KB)** loaded on demand via DOS 2.5 `SIOV`; on **130XE (128 KB)** **all 4 tiers cached in Extended Bank 2 (`$7000-$7FFF`, 1 KB/tier)** at boot | 4 tier files (`MONDB1`..`4`): **Tier 1 (`MONDB1`) preloaded into SWR Bank 6 (`$B800-$BD4A`) at boot** from `MORIA8P`; Tiers 2–4 loaded on demand from Acorn DFS `.ssd` |
+| **7. Overlays & Caching** | **10 overlays** (`64.START`..`64.CHEST`) at `$E000-$EFFF`; **cached in REU (`$0000-$9FFF`) if REU detected**, else loaded from IEC disk | **10 `$E000-$EFFF` overlays** (`8` preloaded in Bank 1 `$1000-$1FFF`, `$3000-$3FFF`, `$9800-$CFFF`, `$E000-$EFFF` at boot; `128.HELP` and `128.CHEST` load from disk) + **2 `$AF00-$CFFF` slot payloads** (`128.PLAY`, `128.PERSIST`) | **10 overlays** (`4.START`..`4.CHEST`) at `$E000-$EFFF`, loaded on demand from IEC disk | **12 overlays** at `$A400-$B9FF` + 1 load-once `MORIA8.PLAY` (`$7C00-$9FFF`); **5 hot overlays cached in Aux RAM (`$5A00-$98FF`)** at boot from `MORIA8.PAK`, 7 cold overlays on demand via ProDOS MLI | **12 overlays** at `$A000-$B5FF`; **all 12 overlays + Title Art preloaded into RAM Banks 9–21 at boot** from `MORIA8.PAK` (**zero runtime overlay disk I/O**) | **10 overlays** at `$E000-$EFFF`; on **800XL** loaded on demand via DOS 2.5 `SIOV` (`OVL.STA`..`OVL.CHS`); on **130XE** **all 10 overlays + `TITLE.DAT` cached in Extended Banks 0–3** at boot | **12 overlays** at `$A800-$BFFF` (SWR Bank 4) + 1 load-once `MORIA8P` (`BeebPlaySlot` `$8000-$A3FF`); **6 hot overlays cached in SWR Banks 5–7** at boot, 6 cold overlays on demand via DFS `OSFILE` |
+| **8. Sound Hardware & Engine** | **SID 6581/8580 Voice 3** (`$D40E-$D418`); raster-IRQ / frame-polled pitch/gate/waveform engine; all **10 SFX** active | **SID 8580 Voice 3** (`$D40E-$D418`, identical engine to C64); all **10 SFX** active | **Stubbed / Silent** (`platforms/commodore/plus4/sound.s`: `sound_init`, `sound_play_sfx`, `sound_update` are `rts` no-ops; TED sound not wired) | **1-bit Speaker (`$C030`)** synchronous cycle-counted pulse-train synthesizer (`sound_init`/`sound_update` no-ops; `sound_play_sfx` blocks for ~20–250 ms); all **10 SFX** active | **VERA PSG Voice 0** (`$9F9C0-$9F9C3`); 60 Hz VSYNC-driven multi-step frequency/waveform/volume engine; all **10 SFX** active | **POKEY Dual-Channel** (Ch 1 `$D200/$D201` lead + Ch 2 `$D202/$D203` bass/harmony); 60/50 Hz VBI-driven step sequencer; all **10 SFX** active | **TI SN76489 PSG** via BBC MOS `OSWORD $07` (`SOUND` 8-byte parameter block on Tone Ch 1–3 + Noise Ch 0); MOS 100 Hz envelope driver; all **10 SFX** active |
+| **9. Storage, Saves, High Scores & Multi-Drive** | `.d64` (single-drive swap w/ `MORIA8.ID` check or 2-drive `8`/`9`) & `.d81` single-disk; 4 save slots (`THE.GAME`..`THE.GAME4`, ~6.9 KB each) + `HALL.OF.FAME` (10 entries, 160 B); runtime drive selector `8..11` | `.d71` (double-sided 1571) & `.d81` (1581); 4 save slots (`THE.GAME`..`THE.GAME4`, ~16 KB each w/ `198x66` RLE map) + `HALL.OF.FAME` + `MORIA8.ID`; runtime drive selector `8..11` (`128.persist` overlay) | `.d64` (2-disk swap) & `.d81` single-disk; 4 save slots (`THE.GAME`..`THE.GAME4`) + `P4.HALL.FAME` + `MORIA8.ID`; runtime drive selector `8..11` | ProDOS 800 KB `.po` (`build/apple2/moria8.po`); MLI `$BF00` (`CREATE`/`OPEN`/`READ`/`WRITE`/`CLOSE`); 4 save slots (`THE.GAME`..`4`) + `HALL.OF.FAME` + `MORIA8.ID`; supports 1-drive swap or 2-drive ProDOS prefix | `.zip` SD/HostFS bundle (`build/cx16/moria8-cx16.zip`); KERNAL `LOAD`/`SAVE`/`OPEN` on device 8; `disk_setup_done=1` by default (single-volume HostFS/SD); 4 save slots (`THE.GAME`..`4`) + `HALL.OF.FAME` | Atari DOS 2.5 130 KB Enhanced Density `.atr` (`1,040` sectors); custom sector-level `SIOV` (`$E459`) driver writing into pre-allocated files `SAVE0.SAV`..`SAVE3.SAV` (`56` sectors = `7,000` B each) + `HISCORE.DAT` (`2` sectors); supports `D1:`/`D2:` | Acorn DFS 80-track 200 KB `.ssd` (`build/bbcmaster/moria8.ssd`); MOS `OSFILE` (`$FFDD`) + `OSPB`/`OSFIND`; 4 save slots (`:0.SAVE0`..`:0.SAVE3` or `:1.SAVE0`..`:1.SAVE3`) + `HISCORE`; supports Drive 0 / Drive 1 |
+| **10. Input & Keybinding Specifics** | KERNAL `GETIN` (`$FFE4`) + direct `CIA1` (`$DC00/$DC01`) matrix scan for physical run-key-held; `SHIFT+C=` locked via `$0291=$80`; modal cancel `RUN/STOP` (`$03`) or `ESC` (`$1B`) | KERNAL `GETIN` (`$FFE4`) + C128 keyboard matrix physical scan; native `ESC` key (`$1B`) and `RUN/STOP` (`$03`); full shared PETSCII table | KERNAL `GETIN` (`$FFE4`) + TED keyboard latch (`$FD30`/`$FF08`) scan; `SHIFT+C=` locked via `$0547=$80`; modal cancel `RUN/STOP` (`$03`) or `ESC` (`$1B`) | Direct hardware polling (`$C000` latch, `$C010` strobe + IIe Any-Key-Down bit 7); translates ASCII to PETSCII (`a-z`->`$41-$5A`, `A-Z`->`$C1-$DA`, arrows `$08/$15/$0B/$0A`->`$9D/$1D/$91/$11`, `DEL $7F`->`$14`); `CTRL+D` jams doors because `CTRL+J` (`$0A`) is the IIe Down Arrow | KERNAL `GETIN` (`$FFE4`) with RAM Bank 0 (`$00=0`) switched in to read `$A80A` queue count; yields to `$FFFD` in `-testbench` mode; full shared PETSCII table | Custom POKEY `IRQST`/`KBCODE` (`$D209`/`$D20E`) IRQ handler (`< $4000`, 8-byte buffer) + GTIA `CONSOL` (`$D01F` `START`/`SELECT`/`OPTION` mapped to Return / `'b'` / `'c'`); `Ctrl`+`+`/`*`/`-`/`=` arrows; `Break` mapped to Backspace `$14` | MOS `OSBYTE` calls: `$04 X=1` (cursor keys `$88-$8B`), `$CA X=$20` (Caps Lock off so unshifted=`a-z`, shifted=`A-Z`), `$E5 X=1` (`ESC`=`$1B`), `$81` non-blocking key read, `$79 X=$10` physical key-held scan, `$0F` flush |
+| **11. Boot/Title/Royal Art & RNG Entropy** | `moria.title` (`1,021` B compressed PETSCII + color at `$C000`); `royal.s` crown in `64.DEATH`; Entropy: **CIA1 Timer A (`$DC04-$DC05`) + CIA2 Timer A (`$DD04-$DD05`)** | `128.title` (`1,021` B compressed PETSCII + RGBI color centered on 80-col VDC); `royal.s` in `128.DEATH`; Entropy: **CIA1 Timer A (`$DC04-$DC05`) + CIA2 Timer A (`$DD04-$DD05`)** | `p4.title` (`1,021` B compressed PETSCII + TED color at `$C800`); `royal.s` in `4.DEATH`; Entropy: **TED Timer 1 (`$FF02-$FF03`) + TED Timer 2 (`$FF04-$FF05`)** | `OVL.TITLE` overlay (`title_a2.s` 80-col ASCII banner); `royal.s` in `OVL.END`; Entropy: **ZP 32-bit counter `$90-$93` ticked every poll cycle in `input_get_key` / `input_wait_release`** | `title_cx16.s` preloaded in **RAM Bank 21** from `MORIA8.PAK`; `royal.s` in `OVL.END` (Bank 18); Entropy: **VIA1 Timer 1 (`$9F04-$9F05`) + Timer 2 (`$9F08-$9F09`) + `zp_entropy`** | `TITLE.DAT` (`960` B uncompressed 40×24 screen codes, cached in 130XE Bank 3 slot 14); `royal.s` in `OVL.END`; Entropy: **POKEY Hardware Noise `RANDOM` (`$D20A`) + ANTIC `VCOUNT` (`$D40B`)** | `OVLTTL` overlay (`title_beeb.s` 80-col banner); `royal.s` in `OVLEND`; Entropy: **ZP `$90-$93` mixed with 1 MHz System VIA Timer 1 (`$FE44-$FE45`) on every input poll** |
+
+**Source Citations:**
+- **C64**: `platforms/commodore/c64/main.s`, `platforms/commodore/c64/screen.s`, `platforms/commodore/c64/sound.s`, `platforms/commodore/c64/hal/storage.s`, `platforms/commodore/c64/reu.s`, `platforms/commodore/c64/input.s`
+- **C128**: `platforms/commodore/c128/main.s`, `platforms/commodore/c128/memory128.s`, `platforms/commodore/c128/vdc128.s`, `platforms/commodore/c128/preload128.s`, `docs/C128_MEMORY_CONTRACT.md`
+- **Plus/4**: `platforms/commodore/plus4/main.s`, `platforms/commodore/plus4/screen.s`, `platforms/commodore/plus4/sound.s`, `platforms/commodore/plus4/hal/storage.s`, `platforms/commodore/plus4/input.s`
+- **Apple IIe**: `platforms/apple2/main.s`, `platforms/apple2/memory.s`, `platforms/apple2/memory_aux.s`, `platforms/apple2/screen.s`, `platforms/apple2/sound.s`, `platforms/apple2/disk_io.s`, `platforms/apple2/input.s`, `docs/APPLE2_MEMORY_POLICY.md`
+- **Commander X16**: `platforms/cx16/main.s`, `platforms/cx16/memory.s`, `platforms/cx16/screen.s`, `platforms/cx16/sound.s`, `platforms/cx16/disk_io.s`, `platforms/cx16/input.s`, `docs/CX16_MEMORY_CONTRACT.md`
+- **Atari 8-bit**: `platforms/atari8/main.s`, `platforms/atari8/memory.s`, `platforms/atari8/screen.s`, `platforms/atari8/sound.s`, `platforms/atari8/disk_io.s`, `platforms/atari8/input.s`, `docs/ATARI8_MEMORY_CONTRACT.md`
+- **BBC Master 128**: `platforms/bbcmaster/main.s`, `platforms/bbcmaster/memory.s`, `platforms/bbcmaster/screen.s`, `platforms/bbcmaster/sound.s`, `platforms/bbcmaster/disk_io.s`, `platforms/bbcmaster/input.s`, `docs/BBCMASTER_MEMORY_CONTRACT.md`
+
+---
+
+### 1.4 Complete Overlay & Monster Tier Caching Matrix Across All 7 Ports
+
+Moria8 partitions cold/modal gameplay subsystems into overlays so the resident turn loop fits within 6502 address limits.
+
+- **C64, C128, Plus/4 (`$E000-$EFFF` 10-Overlay Set)**: Use **10 overlays** (`START`, `TOWN`, `DEATH`, `GEN`, `HELP`, `UI`, `ITEMS`, `SPELL`/`DISARM`, `MODAL`, `CHEST`) plus `$F000` `RuntimeBanked` (and on C128, 2 `$AF00-$CFFF` slot overlays `128.PLAY` and `128.PERSIST`).
+- **Atari 8-bit (`$E000-$EFFF`)**: Uses **10 overlays** (`OVL.STA`..`OVL.CHS`) plus `$F000-$FFF9` `RuntimeBanked`.
+- **Apple IIe (`$A400-$B9FF`), Commander X16 (`$A000-$B5FF`), and BBC Master 128 (`$A800-$BFFF`)**: Use **12 overlays** (`5.5 KB`–`6 KB` window) plus a load-once Play Slot (`MORIA8.PLAY` / `MORIA8P` or unified resident on CX16).
+
+| Slot / Subsystem | Core Modules Hosted | C64 (`$E000-$EFFF`) | C128 (`$E000-$EFFF` + `$AF00`) | Plus/4 (`$E000-$EFFF`) | Apple IIe (`$A400-$B9FF`) | CX16 (`$A000-$B5FF`) | Atari 8-bit (`$E000-$EFFF`) | BBC Master (`$A800-$BFFF` SWR 4) |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| **1. `StartupOverlay`** | `player_create.s`, `background_data.s`, `ui_character.s` | `64.START` (REU `$0000` or Disk) | `128.START` (**Cached Bank 1 `$A000-$AFFF`**) | `4.START` (Disk) | `OVL.START` (ProDOS Disk) | `MORIA8.PAK` (**RAM Bank 9**) | `OVL.STA` (800XL Disk / **130XE Bank 0 `$4000`**) | `OVLSTA` (DFS Disk) |
+| **2. `TownOverlay`** | `store.s`, `ui_store.s`, `ui_home.s`, `store_restock_overlay.s` | `64.TOWN` (REU `$1000` or Disk) | `128.TOWN` (**Cached Bank 1 `$B000-$BFFF`**) | `4.TOWN` (Disk) | `OVL.TOWN` (**Cached Aux `$5A00-$6F2B`**) | `MORIA8.PAK` (**RAM Bank 10**) | `OVL.TWN` (800XL Disk / **130XE Bank 0 `$5000`**) | `OVLTWN` (**Cached SWR Bank 6 `$9700-$AC17`**) |
+| **3. `DeathOverlay` / `EndgameOverlay`** | `score.s`, `score_io.s`, `royal.s` | `64.DEATH` (REU `$2000` or Disk) | `128.DEATH` (**Cached Bank 1 `$C000-$CFFF`**) | `4.DEATH` (Disk) | `OVL.END` (ProDOS Disk) | `MORIA8.PAK` (**RAM Bank 18**) | `OVL.END` (800XL Disk / **130XE Bank 0 `$7000`**) | `OVLEND` (DFS Disk) |
+| **4. `GenOverlay`** | `dungeon_gen.s`, `special_rooms.s` | `64.GEN` (REU `$3000` or Disk) | `128.GEN` (**Cached Bank 1 `$E000-$EFFF`**) | `4.GEN` (Disk) | `OVL.GEN` (**Cached Aux `$8DF4-$98C2`**) | `MORIA8.PAK` (**RAM Bank 19**) | Resident in `$F000` `RuntimeBanked` | `OVLGEN` (**Cached SWR Bank 7 `$914E-$9BFF`**) |
+| **5. `HelpOverlay`** | `ui_help.s`, `ui_character.s` | `64.HELP` (REU `$4000` or Disk) | `128.HELP` (Loaded from `.d71`/`.d81` disk on demand) | `4.HELP` (Disk) | Included in `OVL.MODAL` / `OVL.UI` | Included in `MORIA8.PAK` | Included in `OVL.MDL` / `OVL.UI` | Included in `OVLMDL` / `OVLUI` |
+| **6. `UiOverlay`** | `ui_inventory.s`, `ui_character.s`, `wizard.s`, `ui_wizard.s` | `64.UI` (REU `$5000` or Disk) | `128.UI` (**Cached Bank 1 `$1000-$1FFF`**) | `4.UI` (Disk) | `OVL.UI` (**Cached Aux `$6F2C-$7CE9`**) + `OVL.WIZ` | `MORIA8.PAK` (**RAM Banks 12–13**) | `OVL.UI` + `OVL.WIZ` (800XL Disk / **130XE Bank 1**) | `OVLUI` (**Cached SWR Bank 5 `$B30C-$BFF9`**) + `OVLWIZ` |
+| **7. `ItemsOverlay`** | `items_overlay.s` (`eat`, `quaff`, `read`, `aim`, `use`, `refuel`), `spell_effects.s` | `64.ITEMS` (REU `$6000` or Disk) | `128.ITEMS` (**Cached Bank 1 `$3000-$3FFF`**) | `4.ITEMS` (Disk) | `OVL.ITEMS` (**Cached Aux `$83C7-$8DF3`**) | `MORIA8.PAK` (**RAM Bank 16**) | `OVL.ITM` (800XL Disk / **130XE Bank 2 `$4000`**) | `OVLITM` (**Cached SWR Bank 7 `$87F8-$914D`**) |
+| **8. `SpellOverlay` / `DisarmOverlay`** | `player_magic_execute_overlay.s` (`c64`/`plus4`/`a2`/`cx16`/`atari8`/`beeb`); `disarm_overlay.s` (`c128`) | `64.SPELL` (REU `$7000` or Disk) | `128.DISARM` (**Cached Bank 1 `$9D00-$9FFF`**; spells in `128.PLAY`) | `4.SPELL` (Disk) | `OVL.SPELL` (**Cached Aux `$7CEA-$83C6`**) | `MORIA8.PAK` (**RAM Bank 15**) | `OVL.SPL` (800XL Disk / **130XE Bank 1 `$7000`**) | `OVLSPL` (**Cached SWR Bank 7 `$8000-$87F7`**) |
+| **9. `ModalOverlay`** | `recall.s`, `look.s`, `save.s`, `ui_save.s` | `64.MODAL` (REU `$8000` or Disk) | `128.MODAL` (**Cached Bank 1 `$9800-$9CFF`**) | `4.MODAL` (Disk) | `OVL.MODAL` + `OVL.SAVE` (ProDOS Disk) | `MORIA8.PAK` (**RAM Banks 11, 14**) | `OVL.MDL` + `OVL.SAV` (800XL Disk / **130XE Banks 0–1**) | `OVLMDL` (**Cached SWR Bank 6 `$AC18-$B7B7`**) + `OVLSAV` |
+| **10. `ChestOverlay`** | `chest.s`, `chest_loot.s` | `64.CHEST` (REU `$9000` or Disk) | `128.CHEST` (Loaded from `.d71`/`.d81` disk on demand) | `4.CHEST` (Disk) | `OVL.CHEST` (ProDOS Disk) | `MORIA8.PAK` (**RAM Bank 17**) | `OVL.CHS` (800XL Disk / **130XE Bank 2 `$5000`**) | `OVLCHS` (DFS Disk) |
+| **11. `TitleOverlay`** | Title screen artwork & loader | `moria.title` (`$C000` pre-game) | `128.title` (Bank 0 `$4000` pre-game) | `p4.title` (`$C800` pre-game) | `OVL.TITLE` (ProDOS Disk) | `MORIA8.PAK` (**RAM Bank 21**) | `TITLE.DAT` (800XL Disk / **130XE Bank 3 `$4000`**) | `OVLTTL` (DFS Disk) |
+| **Play / Persist Slot** | Resident gameplay modules (`combat.s`, `turn.s`, `monster_ai.s`, `dungeon_features.s`, `player_magic.s`) | Split across `Default` + `$F000` `RuntimeBanked` | `$AF00-$CFFF`: swaps `128.PLAY` (gameplay) vs `128.PERSIST` (drive change) | Split across `Default` + `$F000` `RuntimeBanked` | `MORIA8.PLAY` loaded once at boot into Main `$7C00-$9FFF` (`A2PlaySlot`) | Unified resident in Main `$0801-$9AFF` | Split across `Default` + `$F000` `RuntimeBanked` | `MORIA8P` loaded once at boot into SWR Bank 4 `$8000-$A3FF` (`BeebPlaySlot`) |
+
+---
+
+### 1.5 Sound Effects Matrix Across All 7 Ports (All 10 SFX IDs)
+
+Neither VMS Moria 4.8 nor Umoria 5.7.15 had synthesized sound effects (both used only terminal `bell()` ASCII `$07` on errors/warnings). Moria8 adds a 10-effect synthesized audio HAL (`core/sound.s`, `SFX_HIT`..`SFX_VICTORY`):
+
+| SFX ID & Constant | Gameplay Trigger | C64 & C128 (`SID Voice 3`) | Plus/4 (`TED`) | Apple IIe (`$C030 Speaker`) | Commander X16 (`VERA PSG Voice 0`) | Atari 8-bit (`POKEY Ch 1+2`) | BBC Master 128 (`SN76489 PSG`) |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| **`0`: `SFX_HIT`** | Player hits monster in melee/ranged | Short noise+pulse thud | Stubbed (`rts`) | 2-burst low speaker click (`$80`/`$A0` period) | 2-step noise/pulse thud (3 ticks) | 2-step polynomial noise crunch (`$88` distortion) | Noise Ch 0 burst (`pitch=5`, 40 ms) |
+| **`1`: `SFX_MISS`** | Player misses attack | Fast descending triangle whoosh | Stubbed (`rts`) | 2-tone descending high buzz (`$30`->`$48`) | 2-step descending triangle sweep | 2-step pure-tone (`$A6`) descending whoosh | Tone Ch 1 short low blip (`pitch=60`, 30 ms) |
+| **`2`: `SFX_MON_HIT`** | Monster hits player | Low sawtooth crunch | Stubbed (`rts`) | Rough low square crunch (`$C0`->`$E0`) | 2-step low sawtooth buzz | Dual-channel low buzz + noise (`$C6` + `$88`) | Noise Ch 0 heavy crunch (`pitch=6`, 60 ms) |
+| **`3`: `SFX_KILL`** | Monster killed | Rising 3-note arpeggio | Stubbed (`rts`) | 3-note rising square arpeggio (`$70`->`$58`->`$44`) | 3-step rising pulse arpeggio | Dual-channel 3-step rising chime (`$A8`) | Tone Ch 1 rising chime (`pitch=100`, 80 ms) |
+| **`4`: `SFX_CAST`** | Spell / prayer / wand / staff cast | Shimmering high triangle sweep | Stubbed (`rts`) | 4-note shimmering high sweep (`$40`..`$28`) | 4-step high triangle shimmer | 4-step high pure-tone (`$A6`) shimmer | Tone Ch 2 mystical high tone (`pitch=148`, 100 ms) |
+| **`5`: `SFX_PICKUP`** | Gold or item picked up | Crisp 2-note high ping | Stubbed (`rts`) | 2-note high coin ping (`$38`->`$24`) | 2-step high pulse ping | 2-step high pure-tone (`$A8`) ping | Tone Ch 1 crisp high ping (`pitch=140`, 40 ms) |
+| **`6`: `SFX_TRAP`** | Floor or chest trap sprung | Harsh descending alarm | Stubbed (`rts`) | 3-burst harsh descending buzz (`$90`->`$B0`->`$D0`) | 3-step harsh saw/noise alarm | Dual-channel harsh alarm (`$C8` + `$88`) | Noise Ch 0 harsh rattle (`pitch=7`, 100 ms) |
+| **`7`: `SFX_STAIRS`** | Ascending or descending stairs | 4-step footsteps cadence | Stubbed (`rts`) | 4-step descending/ascending cadence | 4-step triangle cadence | 4-step pure-tone (`$A6`) cadence | Tone Ch 1 mid-step tone (`pitch=88`, 80 ms) |
+| **`8`: `SFX_LEVELUP`** | Player gains experience level | 4-note triumphant fanfare | Stubbed (`rts`) | 4-note major triad fanfare (`$60`->`$4C`->`$40`->`$30`) | 4-step pulse fanfare | Dual-channel 4-step harmony fanfare (`Ch1`+`Ch2`) | Tone Ch 1 bright fanfare (`pitch=128`, 150 ms) |
+| **`9`: `SFX_DEATH`** | Player dies | Slow mournful descending dirge | Stubbed (`rts`) | 4-note slow low dirge (`$90`->`$A8`->`$C0`->`$E0`) | 4-step slow low sawtooth dirge | Dual-channel 4-step slow minor dirge | Tone Ch 1 deep low dirge (`pitch=40`, 250 ms) |
+| **`10`: `SFX_VICTORY`** | Balrog slain (`MON_BALROG` death) | 6-note heroic victory fanfare | Stubbed (`rts`) | 6-note extended heroic fanfare | 6-step extended pulse fanfare | Dual-channel 6-step two-voice victory fanfare | Tone Ch 2 high heroic fanfare (`pitch=168`, 300 ms) |
+| **Runtime Toggle** | Toggle sound on/off | `sound_enabled` byte (`1` default) | Always silent | `sound_enabled` byte (`1` default) | `sound_enabled` byte (`1` default) | `sound_enabled` byte (`1` default) | `sound_enabled` byte (`1` default) |
+| **Verdict** | **Moria8 Extension (`Implemented` on 6 ports, `Missing` on Plus/4)** | `platforms/commodore/c64/sound.s` | `platforms/commodore/plus4/sound.s` | `platforms/apple2/sound.s` | `platforms/cx16/sound.s` | `platforms/atari8/sound.s` | `platforms/bbcmaster/sound.s` |
+
+---
+
+## Section 2: Character Creation, Races (All 8), Classes (All 6), Stats & Progression
+
+### 2.1 Character Creation Pipeline & Mechanics
+
+| Feature / Sub-Step | VMS Moria 4.8 (`vms-moria`) | Umoria 5.7.15 (`umoria`) | Moria8 (`core/player_create.s`, `core/player.s`) | Port Differences | Verdict | Source Citations |
+| --- | --- | --- | --- | --- | --- | --- |
+| **Creation Step Order** | 1. Race (`a`-`h`)<br>2. Sex (`M`/`F`)<br>3. Stat Roll & Reroll (`<space>` reroll, `<cr>` accept) + Background/Height/Weight/Age<br>4. Class (`a`-`f`, filtered by race)<br>5. Name entry (`<cr>` keeps login username) | 1. Sex (`M`/`F`)<br>2. Race (`a`-`h`)<br>3. Stat Roll & Reroll<br>4. Class (`a`-`f`, filtered by race)<br>5. Name entry | 1. Race (`A`-`H`, `create_select_race`)<br>2. Stat Roll & Reroll (`R` reroll, `RETURN` accept, `create_roll_stats`, showing raw + race-adjusted stats)<br>3. Class (`A`-`X` filtered by `race_class_flags`, `create_select_class`)<br>4. Name entry (1–16 chars, `create_enter_name`)<br>5. Sex (`A` Male / `B` Female, `create_select_gender`)<br>6. Background chain (`create_gen_background`)<br>7. Vitals, gold, starting spells (`create_init_character`)<br>8. Character summary screen (`tramp_ui_char_display`) | Identical flow across all 7 ports; executes from `StartupOverlay` (`moria.ovl.start` / `128.start` / `p4.ovl.start` / `OVL.START` / CX16 Bank 9 / `OVL.STA` / `OVLSTA`) | **`Implemented`** | `vms-moria: source/include/create.inc`<br>`umoria: src/character.cpp`<br>`moria8: core/player_create.s:31-89` |
+| **Base Stat Roll Formula** | `get_stat`: rolls `3d6` via `1d3 + 1d4 + 1d5 + 5` (range `8..17`); sum of all 6 base stats constrained to **`43..53` before `+30` (`73..83` total)** | `characterGetStatValue`: rolls `1d3 + 1d4 + 1d5 + 5` (range `8..17`); sum of all 6 base stats constrained to **`73..84`** (`> 42 && < 54` before `+30` in `character.cpp`) | `create_roll_stats`: rolls `1d3 + 1d4 + 1d5 + 5` (range `8..17`) per stat via `math_dice`; sum of 6 base stats constrained to **`73..84`** (`cmp #73 bcc` / `cmp #85 bcs`) | None | **`Implemented`** | `vms-moria: source/include/create.inc`<br>`umoria: src/character.cpp`<br>`moria8: core/player_create.s:328-398` |
+| **Interactive Stat Rerolling** | Unlimited rerolls at creation before choosing class | Unlimited rerolls at creation before choosing class | Unlimited rerolls (`R` to reroll, `RETURN` to accept) before choosing class | None | **`Implemented`** | `moria8: core/player_create.s:466-487` |
+| **Race & Class Stat Baking (`18/xx` Stepping)** | Applies race & class modifiers via `change_stat`, which steps each `+1`/`-1` through randomized `18/xx` increments (`1d15+5` in `18..18/69`, `1d6+2` in `18/70..18/89`, `+1` above `18/89`) | Applies race & class modifiers via `statModify` (`incrementStat` / `decrementStat`) with the exact same randomized `18/xx` bands | `player_bake_creation_stats` applies `race_stat_adj` and `class_stat_adj` once at creation via `apply_modifier` -> `increment_stat` (`1d15+5` for `18..87`, `1d6+2` for `88..107`, `+1` for `108..117`, capped at `118` = `18/100`) and `decrement_stat` | None | **`Implemented`** | `vms-moria: source/include/create.inc`<br>`umoria: src/player_stats.cpp`<br>`moria8: core/player.s:265-580` |
+| **Age, Height & Weight Generation** | Rolled per race and sex using normal distribution (`randnor(b_age, m_age)`, `randnor(b_ht, m_ht)`, `randnor(b_wt, m_wt)`) | Identical normal-distribution rolls per race and sex | Struct reserves `PL_AGE` (`57`), `PL_HEIGHT` (`58`), `PL_WEIGHT` (`59`), initialized to `0`; character sheet displays Sex, Social Class (`SC`), and 4-line Background instead of Age/Height/Weight | None | **`Partial`** | `vms-moria: source/include/values.inc:174-247`<br>`moria8: core/player.s:65-67, 1081-1153` |
+| **Social Class (`SC`) & Background History** | Walks race-specific graph in `background[1..128]` (`charts 1..23` parentage/profession/youth + `charts 50..66` eyes/hair/complexion), accumulating `sc += bonus - 50` (`1..100`) | Identical 128-entry graph (`charts 1..23` + `50..66`), `sc = randint(4) + sum(bonus - 50)` clamped to `1..100` | `create_gen_background` walks **72 entries (`charts 1..23` family/profession/youth)** with exact Umoria d100 roll thresholds and `sc = rng(4)+1 + sum(bonus - 50)` clamped to `1..100`, word-wrapped into `player_background` (`4 x 40` B); physical appearance charts `50..66` omitted to fit 4-line sheet | None | **`Approximation`** | `vms-moria: source/include/values.inc:432-571`<br>`umoria: src/data_player.cpp`<br>`moria8: core/background_data.s:1-449`, `core/player_create.s:929-1060` |
+| **Starting Gold Formula** | `gold = sc*6 + randint(25) + 325 - 5*(sum_5_stats - chr) + (female ? 50 : 0)`, min `80` (where each stat term is `stat_to_int - 10` clamped at 18) | Identical formula (`sc*6 + randint(25) + 325 - 5*(STR+INT+WIS+DEX+CON - CHR - 40) + (female ? 50 : 0)`, min `80`) | `create_calc_gold`: exact formula `SC*6 + rng_range(25)+326 - 5*(sum(min(stat,18)-10 for STR..CON) - (min(CHR,18)-10)) + (female ? 50 : 0)`, clamped to minimum `80` | None | **`Implemented`** | `vms-moria: source/include/create.inc`<br>`umoria: src/character.cpp`<br>`moria8: core/player_create.s:1216-1361` |
+| **Starting HP & Mana** | Level 1 HP = `combined_hd = race.bhitdie + class.adj_hd` (`max_hp` at L1 is full hit die + CON bonus in Umoria, or rolled in VMS); Level 1 Mana = `0` unless caster at L1 | Level 1 HP = full `hit_die` + CON adj; Level 1 Mana for L1 casters (Mage/Priest) = `spell_stat_adj * 1 / 2 + 1` once first spell learned | Level 1 HP = `race_hd + class_hd` (`player_calc_hp`); Level 1 Mana for Mage (`INT/2`, min 1) and Priest/Paladin (`WIS/2`, min 1; Rogue/Ranger start at `0` mana because `class_spell_min_level` > 1). Mage starts with spells `0..3` learned (`PL_SPELLS_LEARNT_0 = $0F`); Priest/Paladin start with prayers `0..2` learned (`$07`) | None | **`Approximation`** | `vms-moria: source/include/create.inc`<br>`umoria: src/character.cpp`<br>`moria8: core/player_create.s:658-789`, `core/player.s:838-894` |
+
+---
+
+### 2.2 Complete Race Catalog (All 8 Races)
+
+Every race in VMS Moria 4.8 (`values.inc:174-247`), Umoria 5.7.15 (`data_player.cpp`), and Moria8 (`core/tables.s:54-108`) is identical across all three games:
+
+| ID | Race | STR | INT | WIS | DEX | CON | CHR | Base Age + `1dM` | Male Ht / Wt (`base±mod`) | Female Ht / Wt (`base±mod`) | Disarm (`b_dis`) | Search (`srh`) | Stealth (`stl`) | Auto-Search (`fos`) | Melee BTH (`bth`) | Bow BTH (`bthb`) | Save (`bsav`) | Hit Die (`bhitdie`) | Infravision (`infra`) | XP Factor (`b_exp`) | Allowed Classes (`tclass` / `race_class_flags`) | Moria8 Verdict |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| **0** | **Human** | `0` | `0` | `0` | `0` | `0` | `0` | `14 + 1d6` | `72"±6` / `180±25` | `66"±4` / `150±20` | `+0` | `+0` | `+0` | `+0` | `+0` | `+0` | `+0` | `10` | `0` (0 ft) | `100%` (`1.00`) | All 6 (`$3F`: War, Mag, Pri, Rog, Rng, Pal) | **`Implemented`** |
+| **1** | **Half-Elf** | `-1` | `+1` | `0` | `+1` | `-1` | `+1` | `24 + 1d16` | `66"±6` / `130±15` | `62"±6` / `100±10` | `+2` | `+6` | `+1` | `-1` | `-1` | `+5` | `+3` | `9` | `2` (20 ft) | `110%` (`1.10`) | All 6 (`$3F`: War, Mag, Pri, Rog, Rng, Pal) | **`Implemented`** |
+| **2** | **Elf** | `-1` | `+2` | `+1` | `+1` | `-2` | `+1` | `75 + 1d75` | `60"±4` / `100±6` | `54"±4` / `80±6` | `+5` | `+8` | `+1` | `-2` | `-5` | `+15` | `+6` | `8` | `3` (30 ft) | `120%` (`1.20`) | 5 (`$1F`: War, Mag, Pri, Rog, Rng) | **`Implemented`** |
+| **3** | **Halfling** | `-2` | `+2` | `+1` | `+3` | `+1` | `+1` | `21 + 1d12` | `36"±3` / `60±3` | `33"±3` / `50±3` | `+15` | `+12` | `+4` | `-5` | `-10` | `+20` | `+18` | `6` | `4` (40 ft) | `110%` (`1.10`) | 3 (`$0B`: War, Mag, Rog) | **`Implemented`** |
+| **4** | **Gnome** | `-1` | `+2` | `0` | `+2` | `+1` | `-2` | `50 + 1d40` | `42"±3` / `90±6` | `39"±3` / `75±3` | `+10` | `+6` | `+3` | `-3` | `-8` | `+12` | `+12` | `7` | `4` (40 ft) | `125%` (`1.25`) | 4 (`$0F`: War, Mag, Pri, Rog) | **`Implemented`** |
+| **5** | **Dwarf** | `+2` | `-3` | `+1` | `-2` | `+2` | `-3` | `35 + 1d15` | `48"±3` / `150±10` | `46"±3` / `120±10` | `+2` | `+7` | `-1` | `+0` | `+15` | `+0` | `+9` | `9` | `5` (50 ft) | `120%` (`1.20`) | 2 (`$05`: War, Pri) | **`Implemented`** |
+| **6** | **Half-Orc** | `+2` | `-1` | `0` | `0` | `+1` | `-4` | `11 + 1d4` | `66"±1` / `150±5` | `62"±1` / `120±5` | `-3` | `+0` | `-1` | `+3` | `+12` | `-5` | `-3` | `10` | `3` (30 ft) | `110%` (`1.10`) | 3 (`$0D`: War, Pri, Rog) | **`Implemented`** |
+| **7** | **Half-Troll** | `+4` | `-4` | `-2` | `-4` | `+3` | `-6` | `20 + 1d10` | `96"±10` / `255±50` | `84"±8` / `225±40` | `-5` | `-1` | `-2` | `+5` | `+20` | `-10` | `-8` | `12` | `3` (30 ft) | `120%` (`1.20`) | 2 (`$05`: War, Pri) | **`Implemented`** |
+
+**Source Citations:** `vms-moria: source/include/values.inc:174-247`, `umoria: src/data_player.cpp`, `core/tables.s:54-108`
+
+---
+
+### 2.3 Race-to-Shopkeeper Price Adjustments (`rgold_adj` Matrix)
+
+In VMS Moria 4.8 (`values.inc:249-260`) and Umoria 5.7.15 (`data_store.cpp`), shopkeepers have racial biases (`rgold_adj[owner_race, player_race]`, where `100` = normal price, `>100` = higher buy price):
+
+| Shopkeeper Race \ Player Race | Human | Half-Elf | Elf | Halfling | Gnome | Dwarf | Half-Orc | Half-Troll | Moria8 Implementation | Verdict |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| **Human** | `100` | `105` | `105` | `110` | `113` | `115` | `120` | `125` | Moria8 stores use a single fixed owner per store and compute buy/sell prices solely from base item cost + `chr_price_adj[CHR]` (`100%..130%` buy) and `chr_sell_adj[CHR]` (`25%..50%` sell) without `rgold_adj` racial markups | **`Missing`** |
+| **Half-Elf** | `110` | `100` | `100` | `105` | `110` | `120` | `125` | `130` | Same as above | **`Missing`** |
+| **Elf** | `110` | `105` | `100` | `105` | `110` | `120` | `125` | `130` | Same as above | **`Missing`** |
+| **Halfling** | `115` | `110` | `105` | `95` | `105` | `110` | `115` | `130` | Same as above | **`Missing`** |
+| **Gnome** | `115` | `115` | `110` | `105` | `95` | `110` | `115` | `130` | Same as above | **`Missing`** |
+| **Dwarf** | `115` | `120` | `120` | `110` | `110` | `95` | `125` | `135` | Same as above | **`Missing`** |
+| **Half-Orc** | `115` | `120` | `125` | `115` | `115` | `130` | `110` | `115` | Same as above | **`Missing`** |
+| **Half-Troll** | `110` | `115` | `115` | `110` | `110` | `130` | `110` | `110` | Same as above | **`Missing`** |
+
+**Source Citations:** `vms-moria: source/include/values.inc:249-260`, `umoria: src/data_store.cpp`, `core/tables.s:207-216`, `core/store.s`
+
+---
+
+### 2.4 Complete Class Catalog (All 6 Classes)
+
+Every class in VMS Moria 4.8 (`values.inc:262-299`), Umoria 5.7.15 (`data_player.cpp`), and Moria8 (`core/tables.s:68-135`, `core/spell_class_data.s`) is listed below:
+
+| ID | Class | STR | INT | WIS | DEX | CON | CHR | Hit Die Bonus (`adj_hd`) | Spell Type & Stat | First Spell Level | Spell Weight Penalty Cap | XP Penalty (`m_exp`) | Base Skills (`BTH / Bow / Dis / Sav / Stl / Src / Fos`) | Per-Level Skill Gains (`BTH / Bow / Dev / Dis / Sav`) | Pseudo-ID Cadence (`pid_class_rate`) | Moria8 Verdict |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| **0** | **Warrior** | `+5` | `-2` | `-2` | `+2` | `+2` | `-1` | `+9` | None (`0`) | N/A | N/A | `+0%` (`0.00`) | `70 / 55 / 25 / 18 / 1 / 14 / 38` | `+4 / +4 / +2 / +2 / +3` | `50` | **`Implemented`** |
+| **1** | **Mage** | `-5` | `+3` | `0` | `+1` | `-2` | `+1` | `+0` | Arcane (`1`, `INT`, 31 spells) | Level `1` (Umoria/Moria8: L1; VMS: L1) | `300` (`30.0` lb) | `+30%` (`0.30`) | `34 / 20 / 30 / 36 / 2 / 16 / 20` | `+2 / +2 / +4 / +3 / +3` | `150` | **`Implemented`** |
+| **2** | **Priest** | `-3` | `-3` | `+3` | `-1` | `0` | `+2` | `+2` | Divine (`2`, `WIS`, 31 prayers) | Level `1` | `350` (`35.0` lb) | `+20%` (`0.20`) | `48 / 35 / 25 / 30 / 2 / 16 / 32` | `+2 / +2 / +4 / +3 / +3` | `100` | **`Implemented`** |
+| **3** | **Rogue** | `+2` | `+1` | `-2` | `+3` | `+1` | `-1` | `+6` | Arcane (`1`, `INT`, 12 spells) | Level `5` | `350` (`35.0` lb) | `+0%` (`0.00`) | `60 / 66 / 45 / 30 / 5 / 32 / 16` | `+3 / +4 / +3 / +4 / +3` | `75` | **`Implemented`** |
+| **4** | **Ranger** | `+2` | `+2` | `0` | `+1` | `+1` | `+1` | `+4` | Arcane (`1`, `INT`, 30 spells) | Level `3` | `400` (`40.0` lb) | `+40%` (`0.40`) | `56 / 72 / 30 / 30 / 3 / 24 / 24` | `+3 / +4 / +3 / +3 / +3` | `75` | **`Implemented`** |
+| **5** | **Paladin** | `+3` | `-3` | `+1` | `0` | `+2` | `+2` | `+6` | Divine (`2`, `WIS`, 31 prayers) | Level `1` (`core/spell_class_data.s`: L1) | `400` (`40.0` lb) | `+35%` (`0.35`) | `68 / 40 / 20 / 24 / 1 / 12 / 38` | `+3 / +3 / +3 / +2 / +3` | `100` | **`Implemented`** |
+
+> **Behavioral Note on Paladin & Rogue/Ranger Spell Levels:** In VMS Moria 4.8 (`values.inc:26-57`) and Umoria 5.7.15 (`data_player.cpp`), Paladins learn their first prayer (`Detect Evil`) at Level 1 (with higher base failure `33%`), Rangers learn `Magic Missile` at Level 3, and Rogues learn `Detect Monsters` at Level 5. Moria8 (`core/spell_class_data.s`) matches these exact per-class spell level and failure tables (`mage_class_spell_levels`, `priest_class_spell_levels`, `mage_class_spell_fails`, `priest_class_spell_fails`).
+
+**Source Citations:** `vms-moria: source/include/values.inc:262-299`, `umoria: src/data_player.cpp`, `core/tables.s:68-135`, `core/spell_class_data.s`
+
+---
+
+### 2.5 Primary Stats, `18/xx` Percentile Scale & Derived Stat Tables
+
+All three games use the 6 primary attributes (`STR`, `INT`, `WIS`, `DEX`, `CON`, `CHR`) with an exceptional `18/01`–`18/100` percentile band above `18`.
+
+| Mechanic / Derived Table | VMS Moria 4.8 (`vms-moria`) | Umoria 5.7.15 (`umoria`) | Moria8 (`core/player.s`, `core/tables.s`) | Verdict | Source Citations |
+| --- | --- | --- | --- | --- | --- |
+| **Internal Stat Encoding** | `byteint` `3..118` (`3..18` = `3..18`; `19..118` = `18/01..18/100`) | `uint8_t` `3..118` (`3..18` = `3..18`; `19..118` = `18/01..18/100`) | Single byte `3..118` (`3..18` = `3..18`; `19..118` = `18/01..18/100`; formatted by `put_stat_val` in `core/stat_display.s`) | **`Implemented`** | `vms-moria: source/include/misc.inc`<br>`umoria: src/player_stats.cpp`<br>`moria8: core/player.s:250, core/stat_display.s` |
+| **Base vs Current Stats (Drain & Restore)** | `stats.s..ca` (max/base) vs `stats.cs..cca` (current); drain lowers current; restore raises current back to max | `stats.max[6]` vs `stats.used[6]` (plus equipment modifier `stats.mod[6]`) | `PL_STR_BASE..PL_CHR_BASE` (`offsets 21..26`) vs `PL_STR_CUR..PL_CHR_CUR` (`offsets 27..32`) mirrored to `zp_player_str..chr` | **`Implemented`** | `moria8: core/player.s:21-34, 181-192` |
+| **STR To-Hit Adjustment (`todis_adj` / `player_str_tohit_adj`)** | `3`: `-3`; `4`: `-2`; `5..6`: `-1`; `7..17`: `0`; `18..18/74` (`18..93`): `+1`; `18/75..18/89` (`94..108`): `+2`; `18/90..18/98` (`109..116`): `+3`; `18/99..18/100` (`117..118`): `+4` | Identical thresholds | `player_str_tohit_adj` (`core/player.s:639-654`): `<4`: `-3`; `<5`: `-2`; `<7`: `-1`; `<18`: `0`; `<94`: `+1`; `<109`: `+2`; `<117`: `+3`; `>=117`: `+4` (exact match!) | **`Implemented`** | `vms-moria: source/include/misc.inc`<br>`umoria: src/player_stats.cpp`<br>`moria8: core/player.s:639-654` |
+| **STR To-Damage Adjustment (`todam_adj` / `player_str_damage_adj`)** | `3`: `-2`; `4`: `-1`; `5..15`: `0`; `16`: `+1`; `17`: `+2`; `18..18/74` (`18..93`): `+3`; `18/75..18/89` (`94..108`): `+4`; `18/90..18/98` (`109..116`): `+5`; `18/99..18/100` (`117..118`): `+6` | Identical thresholds | `player_str_damage_adj` (`core/player.s:656-673`): `<4`: `-2`; `<5`: `-1`; `<16`: `0`; `<17`: `+1`; `<18`: `+2`; `<94`: `+3`; `<109`: `+4`; `<117`: `+5`; `>=117`: `+6` (exact match!) | **`Implemented`** | `moria8: core/player.s:656-673` |
+| **DEX To-Hit Adjustment (`player_dex_tohit_adj`)** | `3`: `-3`; `4..5`: `-2`; `6..7`: `-1`; `8..15`: `0`; `16`: `+1`; `17`: `+2`; `18..18/49` (`18..68`): `+3`; `18/50..18/99` (`69..117`): `+4`; `18/100` (`118`): `+5` | Identical thresholds | `player_dex_tohit_adj` (`core/player.s:675-692`): `<4`: `-3`; `<6`: `-2`; `<8`: `-1`; `<16`: `0`; `<17`: `+1`; `<18`: `+2`; `<69`: `+3`; `<118`: `+4`; `>=118`: `+5` (exact match!) | **`Implemented`** | `moria8: core/player.s:675-692` |
+| **DEX AC Adjustment (`toac_adj` / `player_dex_ac_adj`)** | `3`: `-4`; `4`: `-3`; `5`: `-2`; `6`: `-1`; `7..14`: `0`; `15..17`: `+1`; `18..18/39` (`18..58`): `+2`; `18/40..18/74` (`59..93`): `+3`; `18/75..18/98` (`94..116`): `+4`; `18/99..18/100` (`117..118`): `+5` | Identical thresholds | `player_dex_ac_adj` (`core/player.s:725-744`): `<4`: `-4`; `<5`: `-3`; `<6`: `-2`; `<7`: `-1`; `<15`: `0`; `<18`: `+1`; `<59`: `+2`; `<94`: `+3`; `<117`: `+4`; `>=117`: `+5` (exact match!) | **`Implemented`** | `moria8: core/player.s:725-744` |
+| **CON HP-per-Level Adjustment (`con_adj` / `player_con_hp_adj`)** | `3`: `-4`; `4`: `-3`; `5`: `-2`; `6`: `-1`; `7..16`: `0`; `17`: `+1`; `18..18/74` (`18..93`): `+2`; `18/75..18/98` (`94..116`): `+3`; `18/99..18/100` (`117..118`): `+4` | Identical thresholds | `player_con_hp_adj` (`core/player.s:746-761`): `<7`: `stat - 7` (`-4..-1`); `<17`: `0`; `<18`: `+1`; `<94`: `+2`; `<117`: `+3`; `>=117`: `+4` (exact match!) | **`Implemented`** | `moria8: core/player.s:746-761` |
+| **DEX Disarm Bonus (`dex_disarm_bonus`)** | `3`: `-8`; `4`: `-6`; `5`: `-4`; `6`: `-2`; `7`: `-1`; `8..12`: `0`; `13..15`: `+1`; `16..17`: `+2`; `18..18/49`: `+4`; `18/50..18/89`: `+5`; `18/90..18/98`: `+6`; `18/99..18/100`: `+8` | Identical | `dex_disarm_bonus` (`core/tables.s:198-199`): `3..18` mapped via `[-8, -6, -4, -2, -1, 0, 0, 0, 0, 0, 1, 1, 1, 2, 2, 4]`; `18/xx` clamps to index 15 (`+4`) | **`Approximation`** | `moria8: core/tables.s:197-199` |
+| **INT/WIS Spell Learning & Mana Bonus (`spell_adj`)** | `3..7`: `0`; `8..13`: `1` (`0.5/lvl`); `14..15`: `2` (`1.0/lvl`); `16..17`: `3` (`1.5/lvl`); `18..18/49`: `4` (`2.0/lvl`); `18/50..18/74`: `5` (`2.5/lvl`); `18/75..18/98`: `6` (`3.0/lvl`); `18/99..18/100`: `7` (`3.5/lvl`, `4.0` at `18/100` in Umoria) | Same half-point progression (`0..7`, with `18/100` = `8` half-points = `4.0/lvl`) | `spell_stat_bonus` (`core/tables.s:202-204`, `core/player_magic_levelup.s`): `[0,0,0,0,0, 1,1,1,1,1,1, 2,2, 3,3,3]` for `3..18` | **`Approximation`** | `moria8: core/tables.s:201-204`, `core/player_magic_levelup.s` |
+| **CHR Store Price Adjustments (`chr_adj`)** | `3..18/100` scales store prices from `130%` (CHR 3) down to `90%` (`18/100`) | Identical (`130%` down to `90%`) | `chr_price_adj` (`core/tables.s:208-209`): `[130, 125, 122, 120, 118, 116, 114, 112, 110, 108, 106, 104, 103, 102, 101, 100]` for buy prices + `chr_sell_adj` (`25%..50%`) for sell prices | **`Approximation`** | `moria8: core/tables.s:207-216` |
+| **Carrying Capacity (`weight_limit`)** | `stat_to_int(STR) * 150 + 1500` (in 0.1 lb units, or `STR * 15 + 35` lb) | `STR_index * 100 + 1500` (0.1 lb units) | Not enforced as a movement speed decrement; inventory capacity is bounded by **22 carried slots (`MAX_INV_SLOTS=22`)** + **9 equipment slots**, while weapon weight is used in `blows_table` and armor weight in spell failure | **`Approximation`** | `vms-moria: source/include/misc.inc`<br>`umoria: src/player.cpp`<br>`moria8: core/item_defs.s:39-42` |
+
+---
+
+### 2.6 Experience Table (`player_exp` Levels 1–40) & Level Titles
+
+In all three systems, `MAX_PLAYER_LEVEL = 40`. The base XP threshold to reach Level $L$ is multiplied by the character's combined Race + Class XP factor (`PL_EXPFACT`, range `100%..165%`).
+
+#### Base Experience Thresholds (`player_exp` / `xp_level_*`)
+
+| Level | Base XP Required | Level | Base XP Required | Level | Base XP Required | Level | Base XP Required |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| **L1** | `0` | **L11** | `500` | **L21** | `5,400` | **L31** | `100,000` |
+| **L2** | `10` | **L12** | `650` | **L22** | `6,800` | **L32** | `150,000` |
+| **L3** | `25` | **L13** | `850` | **L23** | `8,400` | **L33** | `200,000` |
+| **L4** | `45` | **L14** | `1,100` | **L24** | `10,200` | **L34** | `300,000` |
+| **L5** | `70` | **L15** | `1,400` | **L25** | `12,500` | **L35** | `400,000` |
+| **L6** | `100` | **L16** | `1,800` | **L26** | `17,500` | **L36** | `500,000` |
+| **L7** | `140` | **L17** | `2,300` | **L27** | `25,000` | **L37** | `750,000` |
+| **L8** | `200` | **L18** | `2,900` | **L28** | `35,000` | **L38** | `1,500,000` |
+| **L9** | `280` | **L19** | `3,600` | **L29** | `50,000` | **L39** | `2,500,000` |
+| **L10** | `380` | **L20** | `4,400` | **L30** | `75,000` | **L40** | `5,000,000` |
+
+- **Moria8 Implementation (`core/tables.s:141-164`, `core/combat.s`)**: Levels 2–29 (`xp_level_lo/hi[0..27]`) store the exact 16-bit base thresholds (`10..50,000`), and Levels 30–40 (`xp_level_late_div100_lo/hi[0..10]`) store `threshold / 100` (`750..50,000`, i.e. `75,000..5,000,000`) scaled by `PL_EXPFACT`. Moria8 also tracks 16-bit fractional XP (`PL_XP_FRAC_LO/HI`) when `monster_xp * monster_level / player_level` has a remainder!
+- **Verdict**: **`Implemented`** (`core/tables.s:141-164`, `core/player.s:88-93`, `core/combat.s`).
+
+#### Class Level Titles (`player_title[class, 1..40]`)
+
+- **VMS Moria 4.8 (`values.inc:301-383`) & Umoria 5.7.15 (`data_player.cpp`)**: Define 40 per-level titles for each of the 6 classes (240 strings total, e.g., Warrior: `Rookie` -> `Soldier` -> ... -> `Lord`; Mage: `Novice` -> `Apprentice` -> ... -> `Wizard Lord`; Priest: `Believer` -> `Acolyte` -> ... -> `High Priest`; Rogue: `Vagabond` -> `Cutpurse` -> ... -> `Master Thief`; Ranger: `Runner` -> `Strider` -> ... -> `Ranger Lord`; Paladin: `Gallant` -> `Keeper` -> ... -> `Paladin Lord`).
+- **Moria8**: Omit the 240 level-title strings to conserve RAM; character sheet and tombstone display numeric `Level` (`1..40`, or `+40` retirement bonus for Total Winners) plus `Race` and `Class`.
+- **Verdict**: **`Missing`** (intentional string-table omission).
+
+---
+
+### 2.7 Starting Inventory (`player_init`) & Social Background Charts
+
+| Feature | VMS Moria 4.8 (`values.inc:2112-2122`) & Umoria 5.7.15 (`data_player.cpp`) | Moria8 (`core/game_loop.s:540-598`) | Verdict | Source Citations |
+| --- | --- | --- | --- | --- |
+| **Starting Food & Light** | Every class starts with `5` Rations of Food (`344`) and `1` Wooden Torch (`345`, `4,000` turns fuel), or tailored per class in `player_init` | Every class starts with **1 Wooden Torch** (ID `13`, equipped in `EQUIP_LIGHT`, `p1=134` charges = `4,020` turns, `zp_light_radius=1`) and **1 Ration of Food** (ID `15`, carried slot `0`) plus `2,000` initial food turns (`START_FOOD=2000`) | **`Approximation`** | `vms-moria: source/include/values.inc:2112-2122`<br>`moria8: core/game_loop.s:540-561` |
+| **Starting Weapons & Armor** | **Warrior**: Ring Mail (`366`), Broadsword (`365`), 5 Rations, Torch.<br>**Mage**: Soft Leather (`367`), Stiletto (`364`), 5 Rations, Torch, Beginner's Magik (`369`).<br>**Priest**: Soft Leather (`367`), Mace (`363`), 5 Rations, Torch, Beginners Handbook (`370`).<br>**Rogue**: Soft Leather (`367`), Stiletto (`364`), Cloak (`368`), 5 Rations, Torch, Beginner's Magik (`369`).<br>**Ranger**: Soft Leather (`367`), Broadsword (`365`), Long Bow (`361`), 20 Arrows (`362`), Torch, Beginner's Magik (`369`).<br>**Paladin**: Soft Leather (`367`), Broadsword (`365`), Scroll of Protection from Evil (`360`), Torch, Beginners Handbook (`370`). | All classes start with **Dagger (Main Gauche)** (`ID 2`, `1d4`, equipped in `EQUIP_WEAPON`) and **Soft Leather Armor** (`ID 7`, `AC 4`, equipped in `EQUIP_BODY`).<br>**Arcane Casters (Mage, Rogue, Ranger)**: also start with **Beginner's Spellbook (`[Treasures of Magic]`)** (`ID 47`) in carried slot `1`.<br>**Divine Casters (Priest, Paladin)**: also start with **Holy Prayer Book (`[Beginners Handbook]`)** (`ID 48`) in carried slot `1`. | **`Approximation`** | `vms-moria: source/include/values.inc:2112-2122`<br>`umoria: src/data_player.cpp`<br>`moria8: core/game_loop.s:563-597` |
+| **Social Background Charts (`1..23`)** | 72 entries across Charts `1, 2, 3, 4, 7, 8, 9, 10, 11, 13, 14, 16, 17, 18, 19, 20, 22, 23` (Human, Half-Elf, Elf, Halfling, Gnome, Dwarf, Half-Orc, Half-Troll parentage, siblings, parent profession, childhood) | **All 72 entries across Charts `1..23` implemented verbatim** in `core/background_data.s` (`bg_chart`, `bg_roll`, `bg_next`, `bg_bonus`, `bg_str_lo/hi`) with exact d100 probability bands and social class bonuses | **`Implemented`** | `vms-moria: source/include/values.inc:432-510`<br>`umoria: src/data_player.cpp`<br>`moria8: core/background_data.s:1-449` |
+| **Physical Appearance Charts (`50..66`)** | 56 entries across Charts `50..66` (eye type/color, hair style/color, complexion/beard/ears/body odor) | Omitted (`bg_next` terminates at `0` when original chain enters chart `>= 50`) so background fits into `4 x 40` bytes (`player_background`) on 40-column character sheets | **`Missing`** | `vms-moria: source/include/values.inc:511-571`<br>`moria8: core/background_data.s:4-8, 112-150` |
+
+---
+
+## Section 3: Turn Loop, Speed, Regeneration, Hunger, Light, Commands & Wizard Mode
+
+### 3.1 Master Turn Loop, Speed Scheduling & Time-of-Day
+
+| Feature / Mechanic | VMS Moria 4.8 (`source/include/dungeon.inc`) | Umoria 5.7.15 (`src/dungeon.cpp`) | Moria8 (`core/game_loop.s`, `core/turn.s`, `core/monster_ai.s`) | Verdict | Source Citations |
+| --- | --- | --- | --- | --- | --- |
+| **Turn Counter** | 32-bit `turn` counter (`+1` per world tick) | 32-bit `turn` counter (`+1` per world tick) | 16-bit `zp_turn_lo:zp_turn_hi` (`+1` per player-consumed turn in `turn_advance`) | **`Implemented`** | `moria8: core/turn.s:14-31` |
+| **Player Speed & Extra Actions** | `py.flags.speed` (`0` normal, `<0` faster, `>0` slower); player acts when `turn mod speed == 0` or gets multiple moves when hasted | `py.flags.speed`; hasted player gets bonus action before monsters move | When hasted (`zp_eff_speed > 0` or equipped `Ring of Speed` setting `PFLAG_SPEED` in `player_pflags`) and not slowed (`zp_eff_slow == 0`), **every odd turn (`zp_turn_lo & 1 == 1`) grants a free player action** in `turn_advance` (`core/turn.s:457-468`), skipping `monster_process_all`! When slowed (`zp_eff_slow > 0` and not hasted), `monster_process_all` runs **twice** per player turn (`core/turn.s:470-482`) | **`Approximation`** | `vms-moria: source/include/dungeon.inc`<br>`umoria: src/dungeon.cpp`<br>`moria8: core/turn.s:451-484` |
+| **Monster Speed (`cspeed` / `cr_speed`)** | `cspeed` in `-1..+3` (`0` = normal, `1` = +1 fast, `2` = +2 very fast, `3` = +3 ultra fast, `-1` = half speed); `mon_take_hit` / `creatures` loop advances `m_list[i].cspeed` accumulator | `cspeed` stored as `speed + 10` (`9` = slow, `10` = normal, `11..13` = fast) | `cr_speed` stored as `0..4` (`0` = slow `-1`, `1` = normal `0`, `2` = fast `+1`, `3` = very fast `+2`, `4` = ultra fast `+3`, e.g. Balrog). In `monster_process_all` (`core/monster_ai.s`):<br>- `speed == 0` (slow): acts only on even turns (`zp_turn_lo & 1 == 0`)<br>- `speed == 1` (normal): `1` action/turn<br>- `speed >= 2` (fast): `1` base action + `1` extra action (or `2` extra actions for `speed >= 3` on even turns). Stunned/slowed monsters (`mon_stun > 0`) act at half speed | **`Implemented`** | `vms-moria: source/include/creatures.inc`<br>`umoria: src/monster.cpp`<br>`moria8: tools/parse_creatures.py:216-225`, `core/monster_ai.s` |
+| **Town Day/Night Cycle & Store Restocking** | Town is lit during day (`(turn mod 10000)` odd/even half-days) and dark at night; `store_maint` runs every `5,000` turns (`turn mod 5000 == 0`) | Town lit during day, dark at night; `storeMaintenance()` runs every `STORE_TURN_AROUND` turns | Town is permanently lit (`FLAG_LIT` on all outdoor tiles); `tramp_store_restock_all` runs whenever the player ascends to town from the dungeon (`core/game_loop.s`) | **`Approximation`** | `vms-moria: source/include/dungeon.inc`<br>`moria8: core/town.s, core/game_loop.s` |
+| **Ambient Monster Respawning (`alloc_monster`)** | Every turn has `1 in MAX_MALLOC_CHANCE (160)` chance to spawn a new monster outside LOS (faster in town at night) | `1 in MON_SUMMON_ADJ (160)` chance per turn to spawn a distant monster | Every `32` turns (`zp_turn_lo & $1F == 0`) in the dungeon (`zp_player_dlvl > 0`), `turn_advance` calls `monster_spawn_wanderer` (`core/turn.s:486-501`) if `zp_mon_count < MAX_MONSTERS` | **`Approximation`** | `vms-moria: source/include/dungeon.inc`<br>`moria8: core/turn.s:486-501` |
+
+---
+
+### 3.2 Regeneration, Poison Tick, Hunger & Light Fuel
+
+| Subsystem | VMS Moria 4.8 (`dungeon.inc`) | Umoria 5.7.15 (`dungeon.cpp`) | Moria8 (`core/turn.s`, `core/turn_data.s`) | Verdict | Source Citations |
+| --- | --- | --- | --- | --- | --- |
+| **HP Regeneration (16.16 Fixed-Point)** | `regen_hp(regen_amount)`: `regen_amount` = `0.0030` (`197/65536`) when Full/Hungry, `0.0015` (`98/65536`) when Weak, `0.0005` (`33/65536`) when Faint; doubled (`*2`) if resting/searching; multiplied by `max_hp` + `REGEN_HPBASE (0.022 = 1442/65536)`; suppressed while poisoned (`poisoned > 0`) | Exact integer 16.16 fixed-point: `REGEN_NORMAL=197`, `REGEN_WEAK=98`, `REGEN_FAINT=33`, `REGEN_HPBASE=1442`; `new_chp = max_hp * regen_amount + REGEN_HPBASE` added to `chp_frac` | **Exact Umoria 16.16 fixed-point math** in `turn_advance` (`core/turn.s:389-447`):<br>- Suppressed when `zp_eff_poison > 0`<br>- `REGEN_NORMAL = 197` (`HUNGER_FULL`/`HUNGER_HUNGRY`), `REGEN_WEAK = 98` (`HUNGER_WEAK`), `REGEN_FAINT = 33` (`HUNGER_FAINT`)<br>- Doubled (`ASL`) when `auto_rest_active != 0`<br>- Computes `MHP * rate + REGEN_HPBASE (1442)` into `regen_frac_lo:zp_regen_frac`, carrying into `zp_player_hp_lo/hi` | **`Implemented`** | `vms-moria: source/include/dungeon.inc`<br>`umoria: src/dungeon.cpp`<br>`moria8: core/turn.s:389-447`, `core/turn_data.s:1-14` |
+| **Mana Regeneration** | `regen_mana(regen_amount)`: identical fixed-point curve applied to `cmana` / `mana` when `cmana < mana` | Identical 16.16 fixed-point curve applied to `cmana` / `cmana_frac` | Regenerates `1` MP every `8` turns (`zp_turn_lo & $07 == 0`) up to `zp_player_mmp` (`core/turn.s:362-386`) | **`Approximation`** | `moria8: core/turn.s:362-386` |
+| **Poison Damage Tick** | `poisoned > 0`: decrements `poisoned` each turn and deals damage from `con_adj` table (`4, 3, 3, 2, 1` HP/turn for `con_adj -4..0`, `1` HP every 2 turns for `+1..+3`, `1` HP every 3 turns for `+4`) | Simplified to `1` HP/turn in Umoria (`takeHit(1, "poison")`) | **Uses VMS Moria's exact `con_adj` poison table** (`poison_damage: .byte 4, 3, 3, 2, 1, $82, $82, $82, $83` in `core/turn_data.s:15-16`, `core/turn.s:86-124`): deals `4..1` HP/turn for `con_adj -4..0`, `1` HP on even turns for `+1..+3`, and `1` HP every 3rd turn for `+4` (`DEATH_POISON`) | **`Implemented`** (VMS-faithful) | `vms-moria: source/include/dungeon.inc`<br>`moria8: core/turn.s:86-124`, `core/turn_data.s:15-16` |
+| **Food & Hunger States** | `food` starts at `7,500`, max `10,000` (`PLAYER_FOOD_FULL=10000`, `PLAYER_FOOD_MAX=15000`, `HUNGRY=3000`, `WEAK=1000`, `FAINT=500`); fainting causes random paralysis (`randint(5)` turns); starvation deals damage below `0` | Same thresholds (`10000` full, `3000` hungry, `1000` weak, `500` faint) | 16-bit `zp_player_food:zp_player_food_hi` starts at `2,000` (`START_FOOD`), max `4,000` (`FOOD_MAX`); decrements by `1` per turn (or `1` every 2 turns if `PLF_SLOW_DIG` set):<br>- `>= 150`: `Full` (`HUNGER_FULL=0`)<br>- `50..149`: `Hungry` (`HUNGER_HUNGRY=1`, prints *"You are getting hungry."*)<br>- `10..49`: `Weak` (`HUNGER_WEAK=2`, prints *"You are getting weak from hunger."*)<br>- `1..9`: `Faint` (`HUNGER_FAINT=3`)<br>- `0`: deals `1 HP/turn` starvation damage (`DEATH_STARVE`) | **`Implemented`** (scaled constants) | `vms-moria: source/include/dungeon.inc`<br>`umoria: src/dungeon.cpp`<br>`moria8: core/turn.s:14-48, 330-359` |
+| **Light Source Fuel & Refueling (`F` / `SHIFT+R`)** | Equipped Torch (`p1` up to `5,000`) or Brass Lantern (`p1` up to `7,500`, max `15,000`) decrements by `1` per turn; warns at `< 100` turns; `F` refuels Lantern from Flask of Oil (`+7,500` turns) | Identical | Equipped Torch (`ID 13`, `p1=67..133` charges) or Brass Lantern (`ID 14`, `p1=125..249` charges) ticks down `light_sub_tick` every **`30` turns (`LIGHT_TICKS_PER_CHARGE=30`)** per `inv_p1` point (`core/turn.s:505-558`):<br>- Warns *"Your light is growing dim."* at `inv_p1 == 2` (`60` turns left)<br>- Extinguishes (`zp_light_radius = 0`) and removes torch/zeroes lantern at `inv_p1 == 0`<br>- `SHIFT+R` (`item_refuel` in `core/item_actions_overlay.s`) refuels Brass Lantern from a Flask of Oil (`ID 61`, up to `LANTERN_MAX_CHARGES=250` = `7,500` turns) | **`Implemented`** | `vms-moria: source/include/dungeon.inc`<br>`moria8: core/turn.s:505-558`, `core/item_actions_overlay.s` |
+| **Passive Auto-Sensing / Pseudo-ID (`IF_SENSED`)** | Not in VMS Moria 4.8 (added in Umoria 5.x) | Every 16th turn (`(turn & 0xF) == 0`) if not confused, rolls `1 in (10 + 750 / (5 + level))` (adjusted by class); then rolls `1/50` per pack item and `1/10` per equipped item to inscription `{magik}` | **Exact Umoria cadence & probability** in `turn_advance` (`core/turn.s:574-699`): when `(zp_turn_lo & $0F) == $0F` and `zp_eff_confuse == 0`, rolls `1 in (10 + 750 / (5 + level))`, then `1/50` for carried slots (`0..21`) and `1/10` for equipped slots (`22..30`), setting `IF_SENSED ($08)` (`{magik}` / `{cursed}`) and printing *"You feel the <item> is..."* | **`Implemented`** | `umoria: src/dungeon.cpp`<br>`moria8: core/turn.s:574-699` |
+
+---
+
+### 3.3 Complete Player Command & Keybinding Matrix (All 7 Ports)
+
+VMS Moria 4.8 (`dungeon.inc`) used its original keypad/letter layout; Umoria 5.7.15 (`game_run.cpp`) added both the Original keypad keymap and the `rogue`-like (`hjklyubn`) keymap. **Moria8 supports vi-keys (`HJKLYUBN`), 4-way cursor keys, and top-row numeric keys (`1-9`) simultaneously in a unified keymap (`core/input_tables.s`) across all 7 ports.**
+
+| Action / Command | VMS Moria 4.8 Key | Umoria 5.7.15 (Orig / Rogue) | Moria8 Shared Key (`core/input_tables.s`) | Port-Specific Key Additions / Overrides | Moria8 Verdict |
+| --- | --- | --- | --- | --- | --- |
+| **Move 8 Directions** | Keypad `1-9` (except `5`) | `1-9` / `h j k l y u b n` | **`h j k l y u b n`**, **`1 2 3 4 6 7 8 9`**, and **4-way Cursor Arrows** | **Apple IIe**: Left/Right/Up/Down arrows (`$08/$15/$0B/$0A`)<br>**Atari 8-bit**: `Ctrl` + `+`/`*`/`-`/`=` arrows<br>**BBC Master**: Cursor arrows (`$88-$8B`) | **`Implemented`** |
+| **Run in Direction** | `. <dir>` or Keypad with Shift/NumLock | `. <dir>` / `H J K L Y U B N` | **`. <dir>`** (`CMD_RUN`) or **`SHIFT + H/J/K/L/Y/U/B/N`** (`CMD_RUN_N..SE`) | On pre-shifted ASCII keyboards (`Apple IIe`, `Atari 8-bit`, `BBC Master`), uppercase `H J K L Y U B N` map to `SHIFT+vi-keys` (`$C8..$DF`) | **`Implemented`** |
+| **Rest 1 Turn (Stand Still)** | `5` or `.` | `5` / `.` | **`5`** (`CMD_REST`) | None | **`Implemented`** |
+| **Rest Until Recovered / N Turns** | `R` (prompts for count or `*`) | `R` (prompts for count or `*`) | **`CTRL+R`** (`$12`, `CMD_AUTOREST`: rests automatically until HP & MP full or disturbed) | None | **`Approximation`** |
+| **Go Down Stairs** | `>` | `>` | **`>`** (`CMD_STAIRS_DN`) | None | **`Implemented`** |
+| **Go Up Stairs** | `<` | `<` | **`<`** (`CMD_STAIRS_UP`) | None | **`Implemented`** |
+| **Search Adjacent Tiles (1 Turn)** | `s` | `s` | **`s`** (`CMD_SEARCH`) | None | **`Implemented`** |
+| **Toggle Search Mode (`Searching`)** | `S` | `S` / `#` | **`#`** (`CMD_SEARCH_MODE`) | None | **`Implemented`** |
+| **Open Door or Chest** | `o` | `o` | **`o`** (`CMD_OPEN`) | None | **`Implemented`** |
+| **Close Door** | `c` | `c` | **`c`** (`CMD_CLOSE`) | None | **`Implemented`** |
+| **Disarm Trap or Chest** | `D` | `D` | **`SHIFT+D`** (`$C4`, `CMD_DISARM`) | None | **`Implemented`** |
+| **Bash Door, Chest or Monster** | `B` | `B` / `f` | **`CTRL+B`** (`$02`, `CMD_BASH`) | None | **`Implemented`** |
+| **Jam Door with Iron Spike** | `j` | `j` / `S` | **`CTRL+D`** (`$04`, `CMD_JAM`) | Mapped to `CTRL+D` instead of `CTRL+J` because Apple IIe hardware emits `$0A` (`CTRL+J`) for the physical Down-Arrow key | **`Implemented`** |
+| **Tunnel / Dig Wall or Rubble** | `T` | `T` / `CTRL+T` | **`+`** (`$2B`, `CMD_TUNNEL`) | None | **`Implemented`** |
+| **Pick Up Item** | `g` (automatic on step in VMS unless `^M` move) | `g` (or auto-pickup option) | **`g`** or **`,`** (`CMD_PICKUP`) | None | **`Implemented`** |
+| **Drop Item** | `d` | `d` | **`d`** (`CMD_DROP`) | None | **`Implemented`** |
+| **Inventory List** | `i` | `i` | **`i`** (`CMD_INVENTORY`) | None | **`Implemented`** |
+| **Equipment List** | `e` | `e` | **`e`** (`CMD_EQUIPMENT`) | None | **`Implemented`** |
+| **Wear / Wield Equipment** | `w` | `w` | **`w`** (`CMD_WEAR`) | None | **`Implemented`** |
+| **Take Off Equipment** | `t` | `t` / `T` | **`t`** (`CMD_TAKEOFF`) | None | **`Implemented`** |
+| **Eat Food** | `E` | `E` | **`SHIFT+E`** (`$C5`, `CMD_EAT`) | None | **`Implemented`** |
+| **Quaff Potion** | `q` | `q` | **`q`** (`CMD_QUAFF`) | None | **`Implemented`** |
+| **Read Scroll** | `r` | `r` | **`r`** (`CMD_READ`) | None | **`Implemented`** |
+| **Aim Wand** | `a` | `a` / `z` | **`a`** (`CMD_AIM`) | None | **`Implemented`** |
+| **Use Staff** | `u` | `u` / `Z` | **`z`** (`CMD_USE`) | None | **`Implemented`** |
+| **Refuel Brass Lantern with Oil** | `F` | `F` | **`SHIFT+R`** (`$D2`, `CMD_REFUEL`) | None | **`Implemented`** |
+| **Fire Ranged Weapon (Bow/Sling)** | `f` (or `t` throw in VMS) | `t` (fire/throw) | **`SHIFT+F`** (`$C6`, `CMD_FIRE`) | None | **`Implemented`** |
+| **Throw Any Item** | `t` / `v` | `v` | **`SHIFT+T`** (`$D4`, `CMD_THROW`) | None | **`Implemented`** |
+| **Study / Gain New Spell or Prayer** | `G` | `G` | **`f`** (`$46`/`$66`, `CMD_GAIN`) | Also opens Book Browser (`b`) when no new spell slots are pending (`PL_NEW_SPELLS == 0`) | **`Implemented`** |
+| **Browse / Peruse Spellbook** | `b` | `b` / `P` | **`f`** (`CMD_GAIN` when `PL_NEW_SPELLS == 0` displays spellbook contents via `spell_list_display`) | Merged into `f` | **`Implemented`** |
+| **Cast Arcane Spell** | `m` | `m` | **`m`** (`CMD_CAST`) | None | **`Implemented`** |
+| **Pray Divine Prayer** | `p` | `p` | **`p`** (`CMD_PRAY`) | None | **`Implemented`** |
+| **Look / Examine Direction** | `l` | `l` / `x` | **`x`** (`CMD_LOOK`) | None | **`Implemented`** |
+| **Identify Monster Symbol / Recall** | `/` | `/` | **`/`** (`CMD_RECALL`: identifies symbol + opens full Monster Recall modal if seen/killed) | None | **`Implemented`** |
+| **Character Sheet** | `C` | `C` | **`SHIFT+C`** (`$C3`, `CMD_CHAR_INFO`) | None | **`Implemented`** |
+| **Help Screen** | `?` | `?` | **`?`** (`CMD_HELP`: 2-page interactive command reference) | None | **`Implemented`** |
+| **Save and Quit** | `CTRL+X` or `CTRL+Z` | `CTRL+X` | **`SHIFT+S`** (`$D3`, `CMD_SAVE`) | Prompts for Save Slot `1..4` (or `D` to change save drive on Commodore/Apple/Atari/BBC ports) | **`Implemented`** |
+| **Quit Without Saving** | `Q` | `Q` | **`SHIFT+Q`** (`$D1`, `CMD_QUIT` with `Y/N` confirmation) | None | **`Implemented`** |
+| **Wizard Mode Menu** | `CTRL+W` (password-checked) | `CTRL+W` | **`CTRL+W`** (`$17`, `CMD_WIZARD`) | None | **`Implemented`** |
+| **Modal Cancel / Escape** | `ESC` (`$1B`) or `CTRL+C` | `ESC` (`$1B`) | **`RUN/STOP` (`$03`)** or **`ESC` (`$1B`)** | **C64/Plus/4/CX16**: `RUN/STOP` primary, `ESC` secondary<br>**C128/Apple IIe/Atari 8-bit/BBC Master**: `ESC` primary, `CTRL+C`/`STOP` secondary | **`Implemented`** |
+| **Previous Message History** | `CTRL+P` | `CTRL+P` | Stored in `msg_history` ring buffer (`core/ui_messages.s`) | None | **`Partial`** |
+| **Locate Player on Map (`W` / `L`)** | `L` / `W` | `L` / `W` | Viewport auto-centers on player (`camera_x`, `camera_y`); coordinates shown in Wizard Mode | None | **`Missing`** |
+| **Inscribe Item (`{`)** | Not in VMS 4.8 | `{` (`inscribe`) | Automatic `{magik}` / `{cursed}` / `{empty}` tags only; manual free-text item inscriptions omitted | None | **`Missing`** |
+| **Exchange Primary/Secondary Weapon (`x`)** | `x` (swap pack backup slot) | `x` / `X` | No dedicated swap-slot command; use `w` to wield from pack | None | **`Missing`** |
+| **Numeric Repeat Prefix (`0-9` / `^num`)** | `^<count><cmd>` | `<count><cmd>` or `#<count><cmd>` | `zp_input_count` is fixed to `1` (`core/input_tables.s` maps `1-9` to movement/rest); multi-turn repetition is handled by Running (`. <dir>` / `SHIFT+dir`), Auto-Rest (`CTRL+R`), and Search Mode (`#`) | None | **`Missing`** |
+
+**Source Citations:** `vms-moria: source/include/dungeon.inc`, `umoria: src/game_run.cpp`, `core/input_tables.s:1-101`, `core/game_loop.s`
+
+---
+
+### 3.4 Running, Resting & Disturbance System
+
+| Feature | VMS Moria 4.8 (`dungeon.inc`) | Umoria 5.7.15 (`player_run.cpp`) | Moria8 (`core/player_run.s`, `core/turn.s`, `docs/TURN_RENDER_CONTRACT.md`) | Verdict | Source Citations |
+| --- | --- | --- | --- | --- | --- |
+| **Corridor-Following Run Algorithm (`find_run`)** | Simple straight-line movement until wall, door, item, or monster | CJS (Christopher J. Stuart) cycle-free corridor-following algorithm: tracks `find_openarea`, `find_breakleft`, `find_breakright`, `find_prevdir`; automatically follows single-tile corridor bends and stops at junctions, doors, stairs, items, or monsters | **Full CJS corridor-following algorithm** (`core/player_run.s`): `run_initialize_impl` determines open-room vs corridor mode; follows bends automatically; stops at junctions, doors, stairs, floor items, traps, or when any monster enters/remains in visibility (`monster_update_visibility_one`) | **`Implemented`** | `umoria: src/player_run.cpp`<br>`moria8: core/player_run.s`, `docs/TURN_RENDER_CONTRACT.md` |
+| **Keypress Run Cancellation** | Pressing any key aborts running/resting | Pressing any key calls `disturb()` | Edge-triggered physical-key-held detector (`input_run_cancel_check` / `core/input_run_cancel.s`): waits for the initiating `SHIFT+dir` key to release, then cancels immediately on any subsequent physical key press | **`Implemented`** | `moria8: core/input_run_cancel.s`, `core/player_run.s` |
+| **Auto-Rest (`CTRL+R`) Disturbance** | `rest_on`: cancels on HP loss, monster waking/spotting, status change, or hunger transition | `disturb(1, 0)`: cancels on monster sight, damage, status change, or full recovery | `auto_rest_active` (`core/turn.s`, `core/game_loop.s`): advances turns at 2× HP regen rate and cancels immediately if HP & MP are full, any monster is visible (`zp_mon_vis_count > 0`), player takes poison/starvation damage, hunger drops to Weak/Faint, or a key is pressed | **`Implemented`** | `moria8: core/turn.s:389-447`, `core/game_loop.s` |
+
+---
+
+### 3.5 Complete Wizard Mode & Debug Command Catalog
+
+Activating Wizard Mode sets `GAME_FLAG_WIZARD` (`zp_game_flags` bit 0), displays `WIZARD` in yellow on the Character Sheet (`core/ui_character.s:57-71`), and **suppresses Hall of Fame high-score insertion/saving** (`core/score.s`, `platforms/commodore/c64/main.s:2742-2745`) just like VMS Moria (`noscore`) and Umoria (`to_be_wizard`).
+
+| Wizard Feature | VMS Moria 4.8 (`wizard.inc`) | Umoria 5.7.15 (`wizard.cpp`) | Moria8 (`core/wizard.s`, `core/ui_wizard.s`) | Verdict | Source Citations |
+| --- | --- | --- | --- | --- | --- |
+| **Enter Wizard Mode (`CTRL+W`)** | Prompts for system wizard password (`check_pswd`) | Prompts confirmation (`"Wizard mode is for debugging and experimenting..."`) | `CTRL+W` (`$17`) opens the interactive Wizard Mode modal (`ui_wizard_display`) and sets `GAME_FLAG_WIZARD` | **`Implemented`** | `vms-moria: source/include/wizard.inc`<br>`umoria: src/wizard.cpp`<br>`moria8: core/wizard.s, core/ui_wizard.s` |
+| **Heal / Cure All (`^A` / `H`)** | `^A`: removes curses, cures poison/blind/confuse/fear, restores stats, heals HP | `^A`: cures all ailments, restores stats, heals HP & mana | **`H`) Heal Full**: restores HP to `MHP`, MP to `MMP`, Food to `FOOD_MAX`, and clears poison/blind/confuse/paralyze/fear/slow | **`Implemented`** | `moria8: core/wizard.s, core/ui_wizard.s` |
+| **Wizard Light / Reveal Map (`^L` / `R`)** | `^L`: `wizard_light` toggles full-level illumination | `^L`: `wizardLight()` lights or unlights entire level | **`R`) Reveal Map**: calls `tramp_reveal_floorplan` (`eff_reveal_floorplan`), illuminating and marking all tiles, doors, stairs, items, and monsters on the level | **`Implemented`** | `moria8: core/wizard.s, core/spell_effects.s` |
+| **Teleport / Jump to Dungeon Level (`^T` / `W`)** | `^T`: phase-door teleport; `^F` / `change_character`: jump to any dungeon depth `0..50` | `^T` teleport; `:w` / `wizardJumpLevel` jumps to any depth `0..100` | **`T` / `D` / `U` / Level Jump**: teleports player or jumps directly to target dungeon depth (`0` Town .. `50` Balrog lair), triggering level generation and monster tier swap | **`Implemented`** | `moria8: core/wizard.s, core/ui_wizard.s` |
+| **Create / Spawn Any Item (`^C` / `I`)** | `create_object`: interactive form to set `tval`, `subval`, `p1`, `tohit`, `todam`, `toac`, `flags` | `wizardCreateObjects()`: interactive item creator | **`I` / `G`) Generate Item**: lets player pick any of the **136 item templates (`0..135`)**, rolls enchantment and ego type (`tramp_roll_ego_type_modal`), identifies it, and adds it to inventory or floor | **`Implemented`** | `moria8: core/wizard.s, core/ui_wizard.s` |
+| **Gain Experience / Level Up (`L`)** | `change_character` (`^E`): edit experience, level, gold, stats, mana | `wizardChangeCharacter()` | **`L`) Level Up / `+XP` / `+Gold` / `+Stats`**: grants level-up, maxes stats, or adds gold/XP | **`Implemented`** | `moria8: core/wizard.s, core/ui_wizard.s` |
+| **Summon / Slay Monsters (`^D` / `K`)** | `^D`: slay all adjacent/nearby monsters (`td_destroy2`); `^S`: summon monster by ID | `^D` slay monsters; `^S` summon monster | **`K`) Kill Monsters / Spawn Monster / Toggle Invulnerability (`eff_invuln_timer`)**: slays active monsters or toggles wizard god-mode invulnerability | **`Implemented`** | `moria8: core/wizard.s, core/ui_wizard.s` |
+
+---
+
+## Section 4: Dungeon Generation, Special Rooms, Terrain, Doors, Tunneling, Traps (All 18) & Line of Sight
+
+### 4.1 Map Geometry, Panels & Generation Pipeline
+
+| Feature / Stage | VMS Moria 4.8 (`generate.inc`) | Umoria 5.7.15 (`dungeon_generate.cpp`) | Moria8 (`core/dungeon_gen.s`, `docs/DUNGEON_GENERATION_CONTRACT.md`) | Port Differences | Verdict | Source Citations |
+| --- | --- | --- | --- | --- | --- | --- |
+| **Dungeon Map Dimensions** | `198 x 66` (`MAX_WIDTH=198`, `MAX_HEIGHT=66`, `13,068` tiles; `3 x 11` panels of `66 x 22`) | `198 x 66` (`MAX_WIDTH=198`, `MAX_HEIGHT=66`, `13,068` tiles) | **40-col ports**: **`80 x 48`** (`3,840` B, 1 byte/tile)<br>**80-col ports**: **`198 x 66`** (`13,068` B, 1 byte/tile, exact VMS/Umoria dimensions!) | **40-col** (`C64`, `Plus/4`, `Atari 8-bit`): `80 x 48`<br>**80-col** (`C128`, `Apple IIe`, `CX16`, `BBC Master`): `198 x 66` | **`Implemented`** (80-col exact; 40-col scaled) | `vms-moria: source/include/generate.inc`<br>`umoria: src/dungeon_generate.cpp`<br>`moria8: core/dungeon_gen.s:1-80`, `docs/DUNGEON_GENERATION_CONTRACT.md` |
+| **Town Map Dimensions** | `66 x 22` (`1` panel) | `66 x 22` (`1` panel) | **40-col ports**: `80 x 48` town<br>**80-col ports**: **`66 x 22` town** (`TOWN_MAP_COLS=66`, `TOWN_MAP_ROWS=22`) carved inside the backing map with blocking unseen outer walls | 80-col ports match original `66 x 22` town dimensions | **`Implemented`** | `moria8: core/dungeon_gen.s:87-210` |
+| **Camera / Viewport Scrolling** | Discrete `66 x 22` panel scrolling (`panel_bounds` shifts when player nears panel edge) | Discrete `66 x 22` panel scrolling | Continuous player-centered viewport (`38 x 19` on 40-col; `78 x 19` on C128; `78 x 18` on Apple IIe/CX16/BBC Master) clamped to map edges (`camera_x`, `camera_y`) | Viewport height is `19` on 25-row ports (`C64`, `C128`, `Plus/4`, `Atari 8-bit`) and `18` on 24-row ports (`Apple IIe`, `CX16`, `BBC Master`) | **`Approximation`** | `moria8: platforms/*/dungeon_render.s` |
+| **Room Grid & Count (`DUN_ROOMS_MEAN`)** | `2 x 6` grid of `22 x 33` sectors (`row_rooms=2`, `col_rooms=6`), placing `randnor(DUN_ROOMS_MEAN=32, 2)` rooms | Same `2 x 6` grid, `randnor(32, 2)` rooms | **40-col**: `4 x 2` sector grid (up to **8 rooms**, `MAX_ROOMS=8`)<br>**80-col**: `7 x 3` sector grid (up to **21 rooms**, `MAX_ROOMS=21`), shuffled and connected via L-corridors plus connectivity verification (`verify_connectivity`) | `MAX_ROOMS=8` (40-col) vs `MAX_ROOMS=21` (80-col) | **`Approximation`** | `moria8: core/dungeon_gen.s`, `docs/DUNGEON_GENERATION_CONTRACT.md` |
+| **Granite, Magma & Quartz Streamers (`place_streamer`)** | Carves `DUN_STR_MC (5)` magma streamers (width `1..3`, `1/DUN_STR_MAG (3)` treasure chance) and `DUN_STR_QC (2)` quartz streamers (`1/DUN_STR_QUA (2)` treasure chance) | Identical magma & quartz streamer walks with embedded treasure (`FLAG_MAGMA`/`FLAG_QUARTZ`) | `place_veins` (`core/dungeon_gen.s`) carves magma (`TILE_MAGMA`, glyph `%`) and quartz (`TILE_QUARTZ`, glyph `%`) veins across granite walls and sets `FLAG_HAS_ITEM` on treasure-bearing vein cells (dropped as gold when tunneled or hit by Stone-to-Mud) | None | **`Implemented`** | `vms-moria: source/include/generate.inc`<br>`umoria: src/dungeon_generate.cpp`<br>`moria8: core/dungeon_gen.s, core/tunnel.s:316-328` |
+| **Stairs Placement (`place_stairs`)** | `1..2` up stairs (`<`), `2..3` down stairs (`>`); no down stairs on DL 50 (Balrog level) | Same (`1..2` up, `2..3` down; no down stairs on DL 50) | Places Up Stairs (`<`, `TILE_STAIRS_UP`) in room 0 and Down Stairs (`>`, `TILE_STAIRS_DN`) in the last room (`room_count - 1`), **suppressing Down Stairs on DL 50 (`zp_player_dlvl == 50`)** | None | **`Implemented`** | `moria8: core/dungeon_gen.s` |
+| **Rubble Placement (`place_rubble`)** | `randint(DUN_TOT_RUB=3)` rubble piles (`:`) per level | Same (`:` impassable until tunneled) | Places `TILE_RUBBLE` (`:`) on dungeon levels; blocks movement & LOS until cleared via Tunnel (`+`) or Stone-to-Mud | None | **`Implemented`** | `moria8: core/dungeon_gen.s, core/tunnel.s:223-268` |
+
+---
+
+### 4.2 Room Types: Normal, Overlapping, Vaults, Pits & Chambers
+
+| Room Type | VMS Moria 4.8 (`generate.inc`) | Umoria 5.7.15 (`dungeon_generate.cpp`) | Moria8 (`core/dungeon_gen.s`, `core/special_rooms.s`) | Verdict | Source Citations |
+| --- | --- | --- | --- | --- | --- |
+| **Type 0: Standard Rectangular Room (`build_room`)** | Rectangular floor room (`y-height..y+height`, `x-width..x+width`), lit if `dun_level <= randint(25)` | Identical (`dun_level <= randint(25)` lit probability) | Standard rectangular room with corner (`TILE_CORNER_TL..BR`) and wall (`TILE_WALL_H/V`) perimeter; lit (`room_lit[i]=1`, `FLAG_LIT`) with probability decreasing with `zp_player_dlvl` (`dun_level <= rng(25)+1`) | **`Implemented`** | `moria8: core/dungeon_gen.s` |
+| **Type 1: Overlapping Rectangular Rooms (`build_type1`)** | Two overlapping rectangles forming cross/L-shaped room (`dun_level <= randint(25)` lit) | Identical | Implemented on 80-column (`198x66`) builds (`C128_TEST_DUNGEON_OVERLAP` / overlapping room generator in `core/dungeon_gen.s`) | **`Implemented`** | `moria8: core/dungeon_gen.s` |
+| **Type 2: Cross / Inner-Chamber Vault (`build_type2`)** | Large room containing an inner room (`1: empty`, `2: treasure + trap`, `3: inner pillars + monster + treasure`, `4: maze/cross`, `5: 4 sub-chambers`) | Identical (`buildRoomType2`) | Adapted as **`RT_VAULT` (`core/special_rooms.s:130-253`, `core/item.s:726-743`)** on `dlvl >= 8`: entrance is automatically sealed with a **Secret Door (`TILE_SECRET`)** (`vault_seal_entrance`) and filled with `4..8` items rolled at `dlvl + 8` | **`Approximation`** | `vms-moria: source/include/generate.inc`<br>`moria8: core/special_rooms.s:1-253`, `core/item.s:726-743` |
+| **Type 3: Monster Pit / Nest (`build_type3`)** | Inner room packed with monsters + treasure (`1: Jelly pit`, `2: Troll/Orc/Ogre pit`, `3: Undead pit`, `4: Dragon pit`, `5: Demon pit`) | Identical (`buildRoomType3`) | Adapted as **`RT_PIT` (`dlvl >= 5`)** and **`RT_NEST` (`dlvl >= 3`)** in `core/special_rooms.s`:<br>- **`RT_PIT`**: spawns `4..8` monsters of a single creature type (`sr_fixed_type`)<br>- **`RT_NEST`**: spawns `3..6` mixed weaker creatures (`dlvl - 2`) plus `2..4` extra gold piles (`spawn_nest_gold`)<br>- Probability of a special room per level (`dlvl >= 3`): `min(dlvl * 3, 60)%` | **`Approximation`** | `vms-moria: source/include/generate.inc`<br>`moria8: core/special_rooms.s:19-426` |
+
+---
+
+### 4.3 Corridors, Doors, Secret Doors, Spiking (`j`), Bashing & Tunneling (`T`/`+`)
+
+| Feature / Mechanic | VMS Moria 4.8 (`generate.inc`, `moria.inc`) | Umoria 5.7.15 (`dungeon_generate.cpp`, `player.cpp`) | Moria8 (`core/dungeon_features.s`, `core/tunnel.s`, `core/bash.s`) | Verdict | Source Citations |
+| --- | --- | --- | --- | --- | --- |
+| **Door State Generation (`place_door`)** | Roll `randint(3)`: `1..2` closed door (`'`), `3` open door (`'`). For closed doors, `randint(12)`: `1..2` locked (`p1 = randint(10)+10` in `11..20`), `3` stuck (`p1 = -(randint(10)+10)` in `-11..-20`), `4..12` plain (`p1 = 0`) | Exact same probabilities (`2/12` locked `11..20`, `1/12` stuck `-11..-20`, `9/12` plain `0`) | **Exact upstream distribution** in `place_secrets` (`core/dungeon_features.s:264-340`): converts `1..3` closed doors to Secret Doors (`TILE_SECRET`), then rolls `rng_range(120)` on every remaining closed door:<br>- `[0..19]` (`20/120 = 2/12`): **Locked** with difficulty `11..20` (`door_state_val = 11 + roll/2`)<br>- `[60..69]` (`10/120 = 1/12`): **Stuck** with magnitude `11..20` (`door_state_val = $80 | (roll - 49)`)<br>- Otherwise (`90/120 = 9/12`): **Plain** (`0`) | **`Implemented`** | `vms-moria: source/include/generate.inc`<br>`umoria: src/dungeon_generate.cpp`<br>`moria8: core/dungeon_features.s:264-340` |
+| **Opening & Picking Locked Doors (`o`)** | Plain door opens (`'`); Locked door (`p1 > 0`) rolls `disarm - p1 > randint(100)`, awards `+1 XP` on unlock; Stuck door (`p1 < 0`) prints *"The door appears to be stuck."* | Identical | **Exact match** in `door_try_open` & `door_pick_roll` (`core/dungeon_features.s:865-961, 1280-1327`):<br>- Refuses if confused (*"You are too confused to pick the lock."*)<br>- Locked (`val > 0`): rolls `1..100 < disarm_skill - lock_diff`; on success awards **+1 XP**, clears state, and opens door in the same turn<br>- Stuck (`val < 0`): prints *"The door appears to be stuck."* | **`Implemented`** | `moria8: core/dungeon_features.s:865-961, 1280-1327` |
+| **Closing & Broken Doors (`c`)** | Open door closes (`+`); if broken (`p1 != 0` on open door), prints *"The door appears to be broken."*; if monster in doorway, prints *"The <monster> is in your way!"* (consumes turn) | Identical | **Exact match** in `door_try_close` (`core/dungeon_features.s:967-1045`):<br>- Broken door (`door_state_get == 1` on `TILE_DOOR_OPEN`): prints *"The door appears to be broken."* (consumes turn)<br>- Live monster on tile: prints *"The <monster> is in your way!"* (consumes turn) | **`Implemented`** | `moria8: core/dungeon_features.s:967-1045` |
+| **Jamming Doors with Iron Spikes (`j` / `CTRL+D`)** | Requires closed door + Iron Spike (`TV_SPIKE`); sets `p1 = -abs(p1) - 20` (stuck magnitude `+20` per spike) and consumes 1 spike | Identical (`dungeonJamDoor`) | **Exact match** in `door_jam_command` (`core/dungeon_features.s:1148-1277`):<br>- Requires closed unoccupied door + `ITEM_TYPE_IRON_SPIKE` (`ID 135`) in carried pack<br>- Adds `+20` to `|door_state|` (capped at `127`), sets sign bit `$80` (converting locked/plain to stuck), and consumes 1 spike (`inv_consume_one`) | **`Implemented`** | `moria8: core/dungeon_features.s:1148-1277` |
+| **Bashing Doors (`B` / `CTRL+B`)** | `bash`: `chance = STR_index + weight/2`; succeeds if `randint(chance*(20+|p1|)) < 10*(chance-|p1|)`; `50%` chance to break door (`p1 = 1 - randint(2)`); steps into doorway; on failure, DEX check or paralyzed `1..2` turns off-balance | Identical (`playerBashClosedDoor`) | **Exact formula** in `bash_door` (`core/bash.s:117-240`):<br>- `chance = zp_player_str + 75` (`75` = typical `weight/2`)<br>- Succeeds iff `rng_range_word(chance * (20 + |s|)) < 10 * (chance - |s|)`<br>- `50%` chance (`rng_range(2) == 0`) to mark door **broken** (`door_state = 1`), steps player into doorway, and runs passive search<br>- On failure, calls `bash_off_balance` (DEX check or `1..2` turns paralysis) | **`Implemented`** | `umoria: src/player.cpp`<br>`moria8: core/bash.s:117-240` |
+| **Tunneling / Digging (`T` / `+`)** | Requires digging tool or weapon (`tunnel` p1 * 20 + STR + weapon weight); compares against Granite (`randint(1200)+80`), Magma (`randint(600)+10`), Quartz (`randint(400)+10`), Rubble (`randint(180)`). Drops gold/item if vein had treasure | Identical (`playerTunnel`) | `player_tunnel` (`core/tunnel.s:18-346`):<br>- Confused: `75%` chance random direction<br>- Requires digging tool (`calc_dig_ability`: Shovel/Pick base + `ego` multiplier + `STR`); bare hands print *"You have no tool to dig with."*<br>- Resistance rolls (scaled 1/5th to 8-bit): **Granite/Secret/Closed Door** `rng(240)+16` (`16..255`), **Magma** `rng(120)+5` (`5..124`), **Quartz** `rng(80)+3` (`3..82`), **Rubble** `rng(40)` (`0..39`)<br>- If `FLAG_HAS_ITEM` set on Magma/Quartz vein, spawns gold via `tunnel_spawn_gold` | **`Implemented`** (8-bit scaled resistances) | `umoria: src/player.cpp`<br>`moria8: core/tunnel.s:1-346` |
+
+---
+
+### 4.4 Line of Sight (LOS), Room Lighting & Infravision
+
+| Feature | VMS Moria 4.8 (`moria.inc`, `dungeon.inc`) | Umoria 5.7.15 (`dungeon_los.cpp`, `dungeon.cpp`) | Moria8 (`core/dungeon_los.s`, `core/los_trace.s`, `docs/TURN_RENDER_CONTRACT.md`) | Verdict | Source Citations |
+| --- | --- | --- | --- | --- | --- |
+| **Three-State Tile Visibility** | `pl` (permanent light), `tl` (temporary light), `fm` (field mark / remembered wall/object) | `lr` (room border/interior), `pl` (permanently lit), `tl` (temporarily lit), `fm` (field mark) | Packed into lower nibble of each map byte:<br>- **Unseen**: `FLAG_VISITED == 0` -> rendered blank<br>- **Visible**: `FLAG_VISITED` and (`FLAG_LIT` or within `zp_light_radius`) -> rendered in full color (or bright `.` on monochrome ports)<br>- **Remembered**: `FLAG_VISITED` and not lit / outside torch radius -> rendered in dark grey `COL_DGREY` (or `' '` on Atari 8-bit & BBC Master monochrome ports) | **`Implemented`** | `moria8: core/dungeon_los.s:1-208`, `docs/TURN_RENDER_CONTRACT.md` |
+| **Torch / Lantern Local Illumination** | Lights `3 x 3` (`light_rad=1`) around player, marking adjacent walls `fm=true` | Identical | Phase A of `update_visibility` (`core/dungeon_los.s:72-155`): marks all tiles within Chebyshev distance `zp_light_radius` (`1` for Torch/Lantern) as `FLAG_VISITED` | **`Implemented`** | `moria8: core/dungeon_los.s:72-155` |
+| **Lit Room Reveal (`light_room`)** | Stepping onto a `lr` lit room tile reveals the entire room interior and perimeter walls | Identical | Phase B of `update_visibility` (`core/dungeon_los.s:156-202`): when standing on a `FLAG_LIT` tile inside a lit room (`room_lit[x] == 1`), `reveal_room` marks the entire room interior + 1-tile wall border as `FLAG_VISITED` | **`Implemented`** | `moria8: core/dungeon_los.s:156-300` |
+| **Tile-Blocked Raycast LOS (`los`)** | `los(y1, x1, y2, x2)`: 32-bit fixed-point / float slope Bresenham raycast checking `fopen` on intermediate cells (max distance `MAX_SIGHT=20`) | `los(y1, x1, y2, x2)`: integer Bresenham slope raycast checking `fopen` (max distance `MAX_SIGHT=20`) | `mm_los_clear_to_target` (`core/los_trace.s:17-193`): integer Bresenham dual-error accumulator (`mlos_adx`, `mlos_ady`, `mlos_steps`) checking `walkable_table` on every intermediate tile, **including diagonal corner-pinch blocking** (`!mlos_side_check+:115-142`: a diagonal step is blocked if both orthogonal side cells are closed walls/doors!) | **`Implemented`** | `vms-moria: source/include/moria.inc`<br>`umoria: src/dungeon_los.cpp`<br>`moria8: core/los_trace.s:1-193` |
+| **Infravision (`py.flags.see_infra` / `INF`)** | Races with `infra > 0` (`20..50` ft = `2..5` tiles) see warm-blooded (`not CM_PHASE / undead`) monsters in the dark within `infra` tiles | Same (`infra` in `0..5` tiles; monsters without `CD_NO_INFRA` visible within `see_infra` if `los()` is clear) | `race_properties` stores `INF` (`0, 2, 3, 4, 4, 5, 3, 3` for Human..Half-Troll in `core/tables.s:85-93`); monster visibility in `monster_update_visibility_all` checks torch radius, lit room, `PLF_SEE_INV`/`PFLAG_SEE_INVIS`, `MF_DETECTED`, and clear `mm_los_clear_to_target` | **`Approximation`** | `moria8: core/tables.s:85-93`, `core/dungeon_los.s` |
+
+---
+
+### 4.5 Complete Floor Trap Catalog (All 18 Traps) & Disarming Mechanics
+
+In VMS Moria 4.8 (`values.inc:2125-2167`) and Umoria 5.7.15 (`data_treasure.cpp:374-391`), there are **18 floor trap templates** (`trap_lista` hidden, `trap_listb` visible `^`). Moria8 (`core/dungeon_features.s`, `core/dungeon_data.s`) implements **6 core floor trap types** (`TRAP_TYPE_COUNT = 6`, up to `MAX_TRAPS = 16` per level).
+
+#### Disarming Mechanics Comparison
+- **VMS Moria 4.8 & Umoria 5.7.15**: `tot = disarm_ability - trap_level`; succeeds if `randint(100) <= tot` (awards `trap_xp`, removes trap, moves onto tile); if failed and `randint(tot) > 5` (or `tot <= 5`), sets the trap off!
+- **Moria8 (`core/dungeon_features.s:446-543`, `core/disarm_helpers.s`)**: `player_disarm_get_effective_chance` computes `race_disarm + class_disarm + class_disarm_lvl * level + dex_disarm_bonus` (halved/divided by 10 if blinded/no light/confused), subtracts `trap_difficulty[type]`, rolls `rng(100) < chance`:
+  - **Success**: prints *"You have disarmed the trap."*, awards `trap_disarm_xp[type]` (`1, 3, 2, 5, 6, 8` XP), restores `TILE_FLOOR`, removes trap entry, and steps player onto the tile.
+  - **Bad Fail**: prints *"You set the trap off!"*, steps player onto the tile, and triggers `trap_trigger`.
+
+#### Row-by-Row Catalog of All 18 Floor Traps
+
+| # | Trap Name (`trap_listb`) | VMS / Umoria Level (`diff`) | VMS / Umoria Damage & Effect (`hit_trap`) | Moria8 Trap ID & Name | Moria8 Difficulty & Disarm XP | Moria8 Effect (`core/dungeon_features.s:554-667`) | Verdict |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| **1** | **An open pit** | Lvl `1` (`p1=1`) | `2d6` falling damage | **`0`: `TRAP_OPEN_PIT`** (`"an open pit"`) | Diff `5`, `1` XP | Prints *"You fell into a pit!"*, deals **`1d4` damage** (`DEATH_TRAP_PIT`) | **`Implemented`** |
+| **2** | **An arrow trap** | Lvl `3` (`p1=2`) | Rolls to-hit vs AC; `1d8` damage | **`1`: `TRAP_ARROW`** (`"an arrow trap"`) | Diff `15`, `3` XP | Prints *"An arrow hits you!"*, deals **`1d8` damage** (`DEATH_TRAP_ARROW`) | **`Implemented`** |
+| **3** | **A covered pit** | Lvl `2` (`p1=3`) | `2d6` damage + converts to open pit | Consolidated into `TRAP_OPEN_PIT` | — | Represented by `TRAP_OPEN_PIT` (hidden until stepped on or found by search, then revealed as `^`) | **`Approximation`** |
+| **4** | **A trap door** | Lvl `5` (`p1=4`) | `2d8` damage + falls to `dun_level + 1` (unless Free Fall) | — | — | Not in Moria8 floor trap table | **`Missing`** |
+| **5** | **A gas trap (Sleep)** | Lvl `3` (`p1=5`) | Paralyzes player for `randint(4)+4` turns unless Free Action | — | — | Paralysis trap is implemented on **Chests** (`CHEST_P1_TRAP_PARA`), not floor traps | **`Partial`** (Chest only) |
+| **6** | **A loose rock (Hidden Object)** | Lvl `0` (`p1=6`) | Stepping/disarming reveals a buried floor item | — | — | Omitted | **`Missing`** |
+| **7** | **A dart trap (Lose STR)** | Lvl `5` (`p1=7`) | To-hit vs AC; `1d4` damage + drains `1` STR | — | — | STR-drain dart is implemented on **Chests** (`CHEST_P1_TRAP_STR`), while floor dart drains CON (see #8/#17) | **`Partial`** (Chest + #8) |
+| **8** | **A strange rune (Teleport)** | Lvl `5` (`p1=8`) | Teleports player to random floor tile | **`3`: `TRAP_TELEPORT`** (`"a teleport trap"`) | Diff `20`, `5` XP | Prints *"You are teleported!"* and moves player to a random walkable floor tile (`trap_teleport`) | **`Implemented`** |
+| **9** | **Some loose rock (Rockfall)** | Lvl `5` (`p1=9`) | `2d6` damage + places rubble (`:`) on tile | **`5`: `TRAP_ROCKFALL`** (`"a rockfall trap"`) | Diff `25`, `8` XP | Prints *"Rocks fall on you!"*, deals **`2d8` damage** (`DEATH_TRAP_ROCKFALL`) | **`Implemented`** |
+| **10** | **A corroded blade** | Lvl `10` (`p1=10`) | `4d6` damage + corrodes armor | — | — | Omitted | **`Missing`** |
+| **11** | **A gas trap (Blindness)** | Lvl `5` (`p1=11`) | Blinds player for `randint(50)+25` turns | — | — | Omitted | **`Missing`** |
+| **12** | **A gas trap (Confusion)** | Lvl `5` (`p1=12`) | Confuses player for `randint(15)+15` turns | — | — | Omitted | **`Missing`** |
+| **13** | **A gas trap (Poison)** | Lvl `5` (`p1=13`) | Poisons player for `randint(20)+10` turns | **`2`: `TRAP_POISON_GAS`** (`"a poison gas trap"`) | Diff `10`, `2` XP | Prints *"A cloud of poison gas surrounds you!"* and sets `zp_eff_poison = 11..20` turns | **`Implemented`** |
+| **14** | **A strange rune (Summon Monster)** | Lvl `5` (`p1=14`) | Summons `randint(3)+2` monsters around player | — | — | Summoning trap is implemented on **Chests** (`CHEST_P1_TRAP_SUMMON`), not floor traps | **`Partial`** (Chest only) |
+| **15** | **A blackened spot (Fire)** | Lvl `10` (`p1=15`) | `4d6` fire damage (reduced by Resist Fire) | — | — | Omitted | **`Missing`** |
+| **16** | **A corroded rock (Acid)** | Lvl `10` (`p1=16`) | `4d6` acid damage | — | — | Omitted | **`Missing`** |
+| **17** | **A dart trap (Slow / Lose CON)** | Lvl `5` (`p1=17`) | To-hit vs AC; `1d4` damage + slows player `randint(20)+10` turns (or CON drain in variants) | **`4`: `TRAP_POISON_DART`** (`"a poison dart trap"`) | Diff `20`, `6` XP | Prints *"A small dart hits you!"*, deals **`1d4` damage** (`DEATH_TRAP_DART`) + **50% chance to drain 1 CON** (`decrement_stat` on `PL_CON_CUR`, min 3) | **`Implemented`** |
+| **18** | **A chute (Aggravate)** | Lvl `5` (`p1=18`) | Shouts / wakes monsters within range | — | — | Omitted | **`Missing`** |
+
+**Source Citations:** `vms-moria: source/include/values.inc:2125-2167`, `umoria: src/data_treasure.cpp:374-391`, `core/dungeon_features.s:58-808`
+
+---
+
+## Section 5: Town, Stores (6 + Black Market + Home), Shopkeepers (All 18) & Haggling
+
+### 5.1 Town Layout, Store Mechanics, Haggling & Pricing
+
+| Feature / Mechanic | VMS Moria 4.8 (`store1.inc`, `store2.inc`) | Umoria 5.7.15 (`store.cpp`, `store_inventory.cpp`) | Moria8 (`core/store.s`, `core/ui_store.s`, `core/ui_home.s`, `core/store_restock_overlay.s`) | Verdict | Source Citations |
+| --- | --- | --- | --- | --- | --- |
+| **Town Buildings & Doors** | **6 stores** (`1` General Store, `2` Armory, `3` Weaponsmith, `4` Temple, `5` Alchemy Shop, `6` Magic-User's Store); each `10 x 5` walls with door symbol `'1'..'6'` | Identical **6 stores** (`'1'..'6'`) | **8 buildings** (`STORE_COUNT = 8`, each `10 x 5` walls):<br>- **`1`** (`0`): **General Store** (`BILBO THE FRIENDLY`)<br>- **`2`** (`1`): **Armory** (`GORN THE ARMORER`)<br>- **`3`** (`2`): **Weaponsmith** (`BRYN THE FORGEMASTER`)<br>- **`4`** (`3`): **Temple** (`GARATH THE HEALER`)<br>- **`5`** (`4`): **Alchemy Shop** (`ELARA THE ALCHEMIST`)<br>- **`6`** (`5`): **Magic Shop** (`ZOLAN THE ENCHANTER`)<br>- **`7`** (`6`): **Black Market** (`THE FENCE`) — **Moria8 addition**<br>- **`8`** (`7`): **Player Home** (`Home`, no owner) — **Moria8 addition** | **`Implemented`** (+2 Moria8 buildings) | `vms-moria: source/include/values.inc:2080-2110`<br>`umoria: src/data_store.cpp`<br>`moria8: core/store_data_defs.s`, `core/store.s:438-455` |
+| **Store Inventory Capacity** | `STORE_INVEN_MAX = 24` items per store (2 pages of 12) | `STORE_INVEN_MAX = 24` items per store | `STORE_MAX_ITEMS = 12` slots per building (`A`-`L`; `STORE_TOTAL_SLOTS = 96` across all 8 buildings) | **`Approximation`** | `moria8: core/store_data_defs.s` |
+| **Store Restocking (`store_maint`)** | Keeps stock between `STORE_MIN_INVEN (10)` and `STORE_MAX_INVEN (18)` by deleting `1..4` items and creating `1..4` items from `store_choice[store, 1..26]` | Same (`10..18` target stock, `STORE_TURN_AROUND` turnover) | `store_init_all` / `store_restock_all` (`core/store_restock_overlay.s`): initializes and restocks Stores `0..5` from per-store item pools (`store_inventory_data.s`) and restocks the **Black Market (`6`)** with high-level / enchanted dungeon items | **`Implemented`** | `moria8: core/store_restock_overlay.s`, `core/store_inventory_data.s` |
+| **Buy & Sell Price Formulas** | `sell_price`: based on `item_value * chr_adj * rgold_adj[owner_race, player_race]`, capped by `owner.max_cost` | Identical | **Normal Stores (`0..5`)**:<br>- **Buy Ask**: `(base_cost * tool_ego_mult * chr_price_adj[CHR-3] / 100) + p1_bonus` (where `chr_price_adj` is `130%` at CHR 3 down to `100%` at CHR 18, and `p1_bonus` adds `+100 GP` per `+1` hit/dam/AC/ring stat or `+10 GP` per wand/staff charge)<br>- **Buy Min Floor**: `base_cost * tool_ego_mult + p1_bonus`<br>- **Sell Max**: `(base_cost * tool_ego_mult * chr_sell_adj[CHR-3] / 100) + p1_bonus` (`25%..50%`)<br>**Black Market (`6`)**:<br>- **Buy**: `base_cost * 3 + p1_bonus` (no haggling)<br>- **Sell**: `base_cost / 10 + p1_bonus` (buys any non-cursed item, no haggling) | **`Implemented`** | `moria8: core/store.s:91-342` |
+| **Interactive Multi-Round Haggling (`purchase_haggle` / `sell_haggle`)** | Multi-round numeric bidding between shopkeeper's initial ask/offer and final price; tracks player concessions; insults shopkeeper on lowball/backwards bids; kicks player out of store after `insult_max` insults; auto-skips haggling for items `<= 10 GP` (in Umoria) | Identical (plus auto-accept once enough good bargains are made) | **Full multi-round interactive haggling** in `haggle_buy` & `haggle_sell` (`core/ui_store.s:1057-1502`):<br>- Items `<= 10 GP` or in the Black Market use fast `Y/N` confirmation (`!sb_yn_confirm+:338-355`)<br>- Items `> 10 GP` enter multi-round numeric bidding (`input_read_number`): computes player concession ratio `hg_calc_percent_from_tmp_den` (`5%..15%` step), updates shopkeeper counter-offer (`"HOW ABOUT X GP?"`), clamps at `"FINAL OFFER: X GP"`, and accepts on match/cross!<br>- **Insults & Store Kick**: Backwards or `<5%` concession bids increment `hg_insults` and print a random shopkeeper insult (`hg_show_insult_msg`); **3 insults kick the player out of the store (`hg_kicked[store] = 1`)**! Completing a purchase/sale cools `hg_insults` by 1 (`hg_decrease_insults`) | **`Implemented`** | `vms-moria: source/include/store2.inc`<br>`umoria: src/store.cpp`<br>`moria8: core/ui_store.s:830-1502` |
+| **Cursed Item Rejection on Sell** | Shopkeepers refuse to buy cursed items (*"Hmmm, it seems to be cursed."*) | Identical | `!ssell_cat_ok+` (`core/ui_store.s:592-600`) checks `inv_flags & IF_CURSED` and refuses cursed items with error message | **`Implemented`** | `moria8: core/ui_store.s:592-600` |
+| **Player Home (`STORE_HOME = 7`)** | Not in VMS Moria 4.8 or Umoria 5.7.15 (added in later Angband/Moria derivatives) | Not in Umoria 5.7.15 | **`core/ui_home.s`**: 12 persistent storage slots (`A`-`L`) where the player can stash (`D` Drop/Deposit) and retrieve (`G` Get/Withdraw) items for free across dungeon trips and save files | **`Implemented`** (Moria8 addition) | `moria8: core/ui_home.s`, `core/ui_home_text.s` |
+
+---
+
+### 5.2 Store Category Purchase Masks & Stocking Tables
+
+| Store | Categories Bought from Player (`store_buy` / `check_store_category`) | Categories Stocked (`store_choice` / `store_inventory_data.s`) | Moria8 Verdict |
+| --- | --- | --- | --- |
+| **0: General Store (`1`)** | Digging tools (`ICAT_DIGGING`), Light sources/Oil (`ICAT_LIGHT`), Food (`ICAT_FOOD`), Iron Spikes (`ICAT_SPIKE`, exclusive to General Store) + Ammo | Rations of Food, Slime Molds, Wooden Torches, Brass Lanterns, Flasks of Oil, Shovels, Picks, Cloak, Iron Spikes, Rounded Pebbles, Iron Shots, Arrows, Bolts | **`Implemented`** |
+| **1: Armory (`2`)** | Body Armor (`ICAT_ARMOR`), Shields (`ICAT_SHIELD`), Helms (`ICAT_HELM`), Gloves (`ICAT_GLOVES`), Boots (`ICAT_BOOTS`) | Soft/Studded Leather, Ring/Scale/Chain/Splint/Plate Mail, Leather/Metal Shields, Caps/Helms, Gloves/Gauntlets, Boots | **`Implemented`** |
+| **2: Weaponsmith (`3`)** | Weapons & Bows/Slings/Crossbows (`ICAT_WEAPON`) | Daggers, Swords (Bastard, Broad, Long, Two-Handed), Axes, Maces, Spears, Bows, Slings, Crossbows, Arrows, Bolts, Pebbles, Shots | **`Implemented`** |
+| **3: Temple (`4`)** | Blunt/Priest weapons, Prayer Books (`ICAT_BOOK`), Scrolls (`ICAT_SCROLL`), Potions (`ICAT_POTION`), Staves (`ICAT_STAFF`) | Prayer Books (`Beginners Handbook`, `Words of Wisdom`), Cure Light/Serious/Critical Potions, Neutralize Poison, Restore Stat Potions, Bless/Remove Curse/Word of Recall Scrolls, Maces, Morningstars | **`Implemented`** |
+| **4: Alchemy Shop (`5`)** | Scrolls (`ICAT_SCROLL`), Potions (`ICAT_POTION`) | Identify, Light, Phase Door, Teleport, Enchant Weapon/Armor, Remove Curse, Word of Recall, Summon/Aggravate/Trap/Door Scrolls; Healing, Speed, Heroism, Stat, Resistance Potions | **`Implemented`** |
+| **5: Magic Shop (`6`)** | Mage Spellbooks (`ICAT_BOOK`), Rings (`ICAT_RING`), Amulets (`ICAT_AMULET`), Wands (`ICAT_WAND`), Staves (`ICAT_STAFF`) | Mage Books (`Beginner's Spellbook`, `Conjurings and Tricks`), Rings (Protection, Strength, Searching, Slow Digestion, Feather Falling, Resist Fire/Cold, Speed, See Invisible), Amulets (Adornment, Wisdom, Magi), Wands, Staves | **`Implemented`** |
+| **6: Black Market (`7`)** | All categories except Gold and Chests (`ICAT_DIGGING`..`ICAT_AMULET`) | Random high-depth / enchanted equipment, wands, staves, rings, amulets, potions, scrolls at 3× buy / 0.1× sell price | **`Implemented`** (Moria8 addition) |
+| **7: Player Home (`8`)** | Free deposit/withdrawal of any carried item (up to 12 slots) | Player-deposited items only | **`Implemented`** (Moria8 addition) |
+
+**Source Citations:** `vms-moria: source/include/values.inc:2025-2079`, `umoria: src/data_store.cpp`, `core/store_data.s:74-125`, `core/store_inventory_data.s`
+
+---
+
+### 5.3 Complete Shopkeeper Catalog (All 18 Original Owners + Moria8 Buildings 0–7)
+
+In VMS Moria 4.8 (`values.inc:2081-2110`) and Umoria 5.7.15 (`data_store.cpp`), each of the 6 stores randomly selects 1 of 3 shopkeepers (`18` total). Moria8 (`core/store.s:438-455`) assigns 1 fixed shopkeeper per building across its 8 buildings to conserve string memory:
+
+| Store # | Store Name | VMS Moria 4.8 & Umoria 5.7.15 Owners (`max_cost`, `max_inflate`, `min_inflate`, `haggle_per`, `race`, `insult_max`) | Moria8 Owner & Pricing / Insult Rules (`core/store.s`, `core/ui_store.s`) | Verdict |
+| --- | --- | --- | --- | --- |
+| **0 (`1`)** | **General Store** | 1. **Bilbo the Friendly** (Halfling) — `250 GP`, `175/108`, `4%`, `12` insults<br>2. **Rincewind the Chicken** (Human) — `300 GP`, `170/108`, `4%`, `15` insults<br>3. **Snafu the Midget** (Gnome) — `200 GP`, `170/107`, `5%`, `16` insults | **BILBO THE FRIENDLY** (`so_0`) — 16-bit price cap, `5%..15%` haggle step, `3` insults to kick | **`Approximation`** (Owner 1 kept) |
+| **1 (`2`)** | **Armory** | 4. **Kon-Dar the Ugly** (Half-Orc) — `10,000 GP`, `200/110`, `4%`, `5` insults<br>5. **Darg-Low the Grim** (Human) — `15,000 GP`, `190/111`, `4%`, `9` insults<br>6. **Decado the Handsome** (Half-Elf) — `25,000 GP`, `200/112`, `4%`, `8` insults | **GORN THE ARMORER** (`so_1`) — 16-bit price cap, `5%..15%` haggle step, `3` insults to kick | **`Approximation`** |
+| **2 (`3`)** | **Weaponsmith** | 7. **Arndal Beast-Slayer** (Half-Elf) — `10,000 GP`, `185/110`, `5%`, `8` insults<br>8. **Tarl Beast-Master** (Hobbit/Halfling) — `15,000 GP`, `190/115`, `4%`, `7` insults<br>9. **Oglign Dragon-Slayer** (Dwarf) — `25,000 GP`, `195/112`, `4%`, `7` insults | **BRYN THE FORGEMASTER** (`so_2`) — 16-bit price cap, `5%..15%` haggle step, `3` insults to kick | **`Approximation`** |
+| **3 (`4`)** | **Temple** | 10. **Gunnar the Paladin** (Human) — `5,000 GP`, `175/109`, `6%`, `15` insults<br>11. **Sir Parsival the Pure** (Human) — `10,000 GP`, `185/107`, `5%`, `20` insults<br>12. **Delilah the Pure** (Half-Elf) — `25,000 GP`, `180/107`, `6%`, `20` insults | **GARATH THE HEALER** (`so_3`) — 16-bit price cap, `5%..15%` haggle step, `3` insults to kick | **`Approximation`** |
+| **4 (`5`)** | **Alchemy Shop** | 13. **Mauser the Chemist** (Half-Elf) — `10,000 GP`, `190/111`, `5%`, `8` insults<br>14. **Wizzle the Chaotic** (Halfling) — `10,000 GP`, `190/110`, `6%`, `8` insults<br>15. **Ga-nat the Greedy** (Gnome) — `15,000 GP`, `200/116`, `6%`, `9` insults | **ELARA THE ALCHEMIST** (`so_4`) — 16-bit price cap, `5%..15%` haggle step, `3` insults to kick | **`Approximation`** |
+| **5 (`6`)** | **Magic Shop** | 16. **Valeria Starshine** (Elf) — `15,000 GP`, `175/110`, `5%`, `11` insults<br>17. **Andy theopholis** (Gnome) — `20,000 GP`, `200/113`, `5%`, `10` insults<br>18. **Dingo the Wise** (Human) — `30,000 GP`, `200/115`, `5%`, `10` insults | **ZOLAN THE ENCHANTER** (`so_5`) — 16-bit price cap, `5%..15%` haggle step, `3` insults to kick | **`Approximation`** |
+| **6 (`7`)** | **Black Market** | Not in VMS Moria 4.8 or Umoria 5.7.15 | **THE FENCE** (`so_6`) — Fixed `3×` buy / `1/10×` sell prices, no haggling | **`Implemented`** (Moria8 addition) |
+| **7 (`8`)** | **Home** | Not in VMS Moria 4.8 or Umoria 5.7.15 | **No Owner (`""`)** (`so_7`) — 12-slot persistent player stash (`core/ui_home.s`) | **`Implemented`** (Moria8 addition) |
+
+---
+
+## Section 6: Combat System, Monster Attacks (All 19 Methods & 24 Effects), Status Effects, Chests & Balrog Endgame
+
+### 6.1 Player Melee, Critical Hits, Ranged Fire (`f`) & Throwing (`v`/`T`)
+
+| Mechanic | VMS Moria 4.8 (`moria.inc`) | Umoria 5.7.15 (`player.cpp`, `combat.cpp`) | Moria8 (`core/combat.s`, `core/ranged_fire.s`, `core/throw.s`, `core/bash.s`, `docs/COMBAT_AUDIT.md`) | Verdict | Source Citations |
+| --- | --- | --- | --- | --- | --- |
+| **Player Melee To-Hit Formula (`test_hit`)** | `bth = race.bth + class.bth + level*class.bth_lvl + (ptohit + weapon.tohit)*BTH_PLUS_ADJ(3)`. Hits if `randint(bth) > monster.ac` or `randint(20) == 1` (5% auto-hit) | Identical (`BTH_PLUS_ADJ = 3`, `randint(bth) > ac` or `1/20` auto-hit) | `player_attack_monster` (`core/combat.s:158-246`):<br>- `acc = (race_bth + class_bth)/8 + (level * class_bth_lvl)/2 + PL_TOHIT + weapon_to_hit` (plus `+2` if Blessed `zp_eff_bless > 0`, `+3` if Heroism `zp_eff_heroism > 0`)<br>- `evade = monster_ac / 4`<br>- `combat_roll_tohit`: `threshold = clamp((acc - evade) + 20, 2, 38)`; hits if `rng_range(40) < threshold` (`5%..95%`) | **`Approximation`** (8-bit shifted linear threshold) | `vms-moria: source/include/moria.inc`<br>`umoria: src/player.cpp`<br>`moria8: core/combat.s:1-250`, `docs/COMBAT_AUDIT.md` |
+| **Attacks per Round (`attack_blows` 7×6 Table)** | `blows_table[7][6]` indexed by STR/weight ratio `(STR_adj * 10) / weapon_weight` (`<2, <3, <4, <5, <7, <9, >=9`) and DEX bracket (`<10, <19, <68, <108, <118, >=118`), returning **`1..4` blows/turn** | Identical `blows_table[7][6]` | **Exact Umoria `blows_table[7][6]`** (`core/tables.s:218-240`, `core/combat.s:249-330`): computes `adj_weight = (STR * 10) / max(weapon_weight, 1)`, indexes `blow_weight_thresholds` (`2, 3, 4, 5, 7, 9`) and `blow_dex_thresholds` (`10, 19, 68, 108, 118`), returning **`1..4` blows/round** (unarmed fixed to `1` blow) | **`Implemented`** | `vms-moria: source/include/moria.inc`<br>`umoria: src/player.cpp`<br>`moria8: core/tables.s:218-240`, `core/combat.s:249-330` |
+| **Melee Base Damage & Ego Multipliers (`tot_dam`)** | Rolls weapon `NdS` (`1d2` barehanded); multiplies weapon dice by `×2` (`Slay Animal`, `Slay Evil`, `HB`), `×3` (`Slay Undead`), `×4` (`Slay Dragon`), or `×1.5` (`FT`/`FB`); adds `todam + PL_TODMG` | Identical | Rolls weapon `NdS` (`it_dmg_packed`; `1d2` unarmed); calls `ego_apply_damage` (`core/ego_items.s:126-195`):<br>- **Slay Animal (`1`)**: `×2` vs `CF_ANIMAL`<br>- **Slay Evil (`2`)**: `×2` vs `CF_EVIL`<br>- **Slay Undead (`3`)**: `×3` vs `CF_UNDEAD`<br>- **Flame Tongue (`4`)**: `+3` flat fire damage unless `CF_HURT_FIRE` immune<br>- **Frost Brand (`5`)**: `+3` flat cold damage unless `CF_IM_FROST`<br>- **Holy Avenger (`7`)**: `×2` vs `CF_EVIL` or `CF_UNDEAD`<br>Then adds `PL_TODMG + weapon_to_dam` | **`Implemented`** | `moria8: core/combat.s:335-420`, `core/ego_items.s:126-195` |
+| **Critical Hits (`critical_blow`)** | Chance = `(weight + tohit*5 + level*3) / 5000`; on crit, rolls `weight + randint(650)` across 5 tiers:<br>- `<400`: `2*dmg + 5` (*"It was a good hit!"*)<br>- `<700`: `2*dmg + 10` (*"It was an excellent hit!"*)<br>- `<900`: `3*dmg + 15` (*"It was a deadly hit!"*)<br>- `<1300`: `3*dmg + 20` (*"It was a *GREAT* hit!"*)<br>- `>=1300`: `3.5*dmg + 25` (*"It was an *AWESOME* hit!"*) | Identical (`criticalBlow` in `player.cpp`) | `combat_critical_check` (`core/combat.s:425-510`):<br>- Trigger chance: `(weapon_weight + to_hit*2 + level*2) / 2` vs `rng_range(200)`<br>- Severity roll `weapon_weight + rng_range(65)` across **3 tiers**:<br>  1. `< 40`: `dmg * 2 + 2` (*"It was a good hit!"*)<br>  2. `< 70`: `dmg * 2 + 5` (*"It was an excellent hit!"*)<br>  3. `>= 70`: `dmg * 3 + 10` (*"It was a deadly hit!"*) | **`Approximation`** (3 tiers instead of 5) | `vms-moria: source/include/moria.inc`<br>`umoria: src/player.cpp`<br>`moria8: core/combat.s:425-510` |
+| **Shield / Monster Bash (`B` / `CTRL+B`)** | `py_bash`: `bth = STR + shield_weight/2`; damage = shield dice (or `1d2`) + STR bonus; stuns monster for `randint(2)+1` turns if `randint(200) + weight/10 + STR > mon_hp/4 + mon_level`; player risks DEX off-balance paralysis | Identical (`playerBash` in `player.cpp`) | `bash_monster` & `bash_stun_check` (`core/bash.s:245-465`):<br>- `tohit = zp_player_str + 5 + shield_weight/2`<br>- Damage = `1d4 + str_damage_bonus + 3`<br>- Stun check: `25 + rng(100) + rng(100) > mon_hp/4 + mon_level` -> sets `mon_stun = rng(2) + 2` turns (`" appears stunned!"`)<br>- Off-balance check (`bash_off_balance`): rolls vs `DEX`, paralyzing player `1..2` turns on failure | **`Implemented`** | `umoria: src/player.cpp`<br>`moria8: core/bash.s:245-522` |
+| **Ranged Weapon Fire (`f` / `SHIFT+F`)** | Requires matched launcher + ammo (`Sling` + Pebbles/Shots, `Bow` + Arrows, `Crossbow` + Bolts); range up to `10..20`, adds launcher + ammo `tohit`/`todam`, applies critical hits, drops ammo on floor (`50%` breakage) | Identical | `ranged_fire` (`core/ranged_fire.s`):<br>- Verifies launcher equipped (`Sling`/`Short Bow`/`Long Bow`/`Light Crossbow`) and matching ammo in pack (`it_missile` tag)<br>- Traces projectile up to `8` tiles (`projectile.s`)<br>- Accuracy uses `race_bth_bow + class_bth_bow + level*class_bow_lvl + bow_to_hit + ammo_to_hit - distance`<br>- Damage = `ammo_dice + bow_bonus + bow_to_dam + ammo_to_dam` (`+2` Short Bow, `+4` Long Bow, `+6` Crossbow) + critical check | **`Implemented`** | `moria8: core/ranged_fire.s, core/projectile.s` |
+| **Throwing Any Item (`v` / `SHIFT+T`)** | Throws any pack item; range based on STR/weight; deals item damage (or `2d6` fire if Flask of Oil is thrown!) | Identical (`playerThrowItem`) | `throw_item` (`core/throw.s`): throws any carried item up to `6` tiles (`projectile.s`), dealing weapon dice (`NdS / 2` if not a throwing weapon, or `1d2` for non-weapons) and dropping the item at the impact tile (`floor_item_add`, with `25%` breakage on monster hit). *(Note: Flask of Oil does not deal special `2d6` fire damage when thrown)* | **`Approximation`** | `moria8: core/throw.s` |
+
+---
+
+### 6.2 Monster Melee, AC Reduction & Attack Execution
+
+| Mechanic | VMS Moria 4.8 (`creatures.inc`) | Umoria 5.7.15 (`monster.cpp`) | Moria8 (`core/monster_attack.s`, `docs/COMBAT_AUDIT.md`) | Verdict | Source Citations |
+| --- | --- | --- | --- | --- | --- |
+| **Attacks per Monster Turn** | Up to **4 attacks** (`c_list[i].damage[1..4]` indexing `monster_attacks[0..214]`) | Up to **4 attacks** (`attack[0..3]` indexing `monster_attacks[0..214]`) | Up to **2 attacks** per monster template (`cr_atk0_*`, `cr_atk1_*`, selected as the creature's 2 strongest attacks by `tools/parse_creatures.py:130-165` during build) | **`Approximation`** (2 attacks/turn max) | `vms-moria: source/include/creatures.inc`<br>`umoria: src/monster.cpp`<br>`moria8: core/monster_attack.s`, `tools/parse_creatures.py:130-165` |
+| **Monster To-Hit Formula** | `test_hit(bth = effect_base_bth + monster_level * 3, player_total_ac)` (`5%` auto-hit, `5%` auto-miss) | Identical | `monster_attack_player` (`core/monster_attack.s`):<br>- `atk = cr_level * 2 + 12`<br>- `def = zp_player_ac` (`+2` if Blessed, `+4` if Protected from Evil vs `CF_EVIL`)<br>- `combat_roll_tohit`: `threshold = clamp((atk - def) + 20, 2, 38)` vs `rng_range(40)` | **`Approximation`** | `moria8: core/monster_attack.s` |
+| **Player AC Damage Reduction** | Physical attack effects (`1` Normal, `2` Lose STR, `3` Confusion, `4` Fear, `5` Fire, `6` Acid, `7` Cold, `10` Poison, `19` Lose EXP, `20` Aggravate, `23` Eat Light) reduce rolled damage by **`dam = dam - dam * min(player_ac, 250) / 400`** (up to `62.5%` reduction at AC 250; in Umoria capped at AC 150 = `37.5%` reduction) | `dam -= dam * ((ac < 150) ? ac : 150) / 250` (up to `60%` reduction at AC 150) | In `monster_attack_player` (`core/monster_attack.s`), physical damage is reduced by `player_ac / 8` (minimum `1` damage per landing blow) | **`Approximation`** | `vms-moria: source/include/creatures.inc`<br>`umoria: src/monster.cpp`<br>`moria8: core/monster_attack.s` |
+| **Glyph of Warding Protection** | Monster attacking a player standing on a Glyph of Warding (`;`) must roll `randint(OBJ_RUNE_PROT=70) < monster.level`; if it succeeds, the glyph breaks; otherwise the attack is blocked! | Identical | **Implemented** in `monster_ai.s` / `monster_attack.s` (`glyph_find_at` in `core/item.s:390-440`): monsters cannot step onto an active Glyph of Warding unless `rng_range(70) < cr_level`, which breaks the glyph (`glyph_remove`) and prints *"The rune of protection is broken!"* | **`Implemented`** | `moria8: core/item.s:390-440`, `core/monster_ai.s` |
+
+---
+
+### 6.3 Complete Monster Attack Method Catalog (All 19 Attack Descriptions)
+
+In VMS Moria 4.8 (`creatures.inc`) and Umoria 5.7.15 (`data_creatures.cpp`), every entry in `monster_attacks[0..214]` has an `attack_type` (`1..19`) specifying the combat verb printed when the blow lands. Moria8 (`tools/parse_creatures.py:160-200`, `core/monster_attack.s`) maps these into its compact verb table:
+
+| Attack Type ID | VMS Moria 4.8 & Umoria 5.7.15 Verb (`attack_desc`) | Moria8 Mapping (`core/monster_attack.s`) | Verdict |
+| --- | --- | --- | --- |
+| **`1`** | `"hits you"` | `"hits you"` (`MATK_HIT`) | **`Implemented`** |
+| **`2`** | `"bites you"` | `"bites you"` (`MATK_BITE`) | **`Implemented`** |
+| **`3`** | `"claws you"` | `"claws you"` (`MATK_CLAW`) | **`Implemented`** |
+| **`4`** | `"stings you"` | `"stings you"` (`MATK_STING`) | **`Implemented`** |
+| **`5`** | `"touches you"` | `"touches you"` (`MATK_TOUCH`) | **`Implemented`** |
+| **`6`** | `"kicks you"` | Mapped to `"hits you"` | **`Approximation`** |
+| **`7`** | `"gazes at you"` | `"gazes at you"` (`MATK_GAZE`) | **`Implemented`** |
+| **`8`** | `"breathes on you"` | Mapped to `"hits you"` / breath handler | **`Approximation`** |
+| **`9`** | `"spits on you"` | Mapped to `"hits you"` | **`Approximation`** |
+| **`10`** | `"makes a horrible wail"` | Mapped to `"hits you"` | **`Approximation`** |
+| **`11`** | `"embraces you"` | Mapped to `"touches you"` | **`Approximation`** |
+| **`12`** | `"crawls on you"` | `"crawls on you"` (`MATK_CRAWL`) | **`Implemented`** |
+| **`13`** | `"releases a cloud of spores"` | Mapped to `"hits you"` | **`Approximation`** |
+| **`14`** | `"begs you for money"` | `"begs for money"` (Town urchins/beggars) | **`Implemented`** |
+| **`15`** | `"slimes you"` | `"touches you"` | **`Approximation`** |
+| **`16`** | `"crushes you"` | `"crushes you"` (`MATK_CRUSH`) | **`Implemented`** |
+| **`17`** | `"tramples you"` | Mapped to `"crushes you"` | **`Approximation`** |
+| **`18`** | `"drools on you"` | `"drools on you"` | **`Implemented`** |
+| **`19`** | `"insults you"` | `"insults you"` (Town muggers/urchins) | **`Implemented`** |
+
+---
+
+### 6.4 Complete Monster Attack Effect Catalog (All 24 Attack Effects)
+
+Every monster attack in VMS Moria 4.8 (`creatures.inc`) and Umoria 5.7.15 (`data_creatures.cpp`, `monster.cpp`) has an `attack_id` (`1..24`) specifying the on-hit effect. Below is the exhaustive row-by-row comparison against Moria8 (`core/monster_attack.s`, `tools/parse_creatures.py:114-158`):
+
+| Effect ID | VMS Moria 4.8 & Umoria 5.7.15 Effect (`attack_id` + Base BTH) | VMS / Umoria Mechanics | Moria8 Effect Constant & Implementation (`core/monster_attack.s`) | Verdict |
+| --- | --- | --- | --- | --- |
+| **`1`** | **Normal Damage** (`BTH 60`) | Rolls `NdS`, reduces by AC, subtracts from HP | **`MEFF_NONE (0)`**: Rolls `NdS`, reduces by AC, subtracts from HP | **`Implemented`** |
+| **`2`** | **Lose Strength (`STR`)** (`BTH 0`) | Damage + drains `1` STR (unless Sustain STR) | **`MEFF_DRAIN_STR`**: Damage + calls `decrement_stat` on `PL_STR_CUR` / `zp_player_str` (*"You feel weaker."*) | **`Implemented`** |
+| **`3`** | **Confusion** (`BTH 20`) | Damage + confuses player for `randint(4)+4` turns (save vs spell resists) | **`MEFF_CONFUSE`**: Damage + sets `zp_eff_confuse` (`4..11` turns, *"You are confused!"*) | **`Implemented`** |
+| **`4`** | **Terrify (Fear)** (`BTH 20`) | Damage + terrifies player for `randint(4)+4` turns (save resists) | **`MEFF_FEAR`**: Damage + sets `eff_fear_timer` (`4..11` turns, *"You are terrified!"*) | **`Implemented`** |
+| **`5`** | **Fire Damage** (`BTH 10`) | Fire damage + burns scrolls/staves in pack (reduced to `1/3` by Resist Fire) | **`MEFF_FIRE`**: Damage halved (`LSR`) if `zp_eff_resist_fire > 0` or `PFLAG_RESIST_FIRE` equipped | **`Implemented`** |
+| **`6`** | **Acid / Corrode Armor** (`BTH 0`) | Acid damage + corrodes random piece of worn armor (`to_ac - 1`, unless `(R)`/`(RA)`) | **`MEFF_CORRODE`**: Damage + reduces `inv_to_ac` on equipped body armor/shield/helm by `1` (*"Your armor is corroded!"*) | **`Implemented`** |
+| **`7`** | **Cold Damage** (`BTH 10`) | Cold damage + shatters potions in pack (reduced to `1/3` by Resist Cold) | **`MEFF_COLD`**: Damage halved (`LSR`) if `zp_eff_resist_cold > 0` or `PFLAG_RESIST_COLD` equipped | **`Implemented`** |
+| **`8`** | **Lightning Damage** (`BTH 10`) | Electrical damage (reduced by Resist Lightning) | Mapped to normal/elemental damage | **`Approximation`** |
+| **`9`** | **Corrosion (Weapon/Armor)** (`BTH 0`) | Rusts/corrodes worn armor or weapon | Mapped to **`MEFF_CORRODE`** (corrodes equipped armor AC) | **`Implemented`** |
+| **`10`** | **Poison** (`BTH 5`) | Damage + adds `randint(d)+d` to `poisoned` timer | **`MEFF_POISON`**: Damage + adds `5..12` turns to `zp_eff_poison` (*"You feel poisoned!"*) | **`Implemented`** |
+| **`11`** | **Paralyze** (`BTH 2`) | Damage + paralyzes player for `randint(4)+4` turns unless Free Action (`PLF_FREE_ACT`) | **`MEFF_PARALYZE`**: Damage + sets `zp_eff_paralyze` (`2..5` turns) unless `PLF_FREE_ACT` set (*"You are paralyzed!"*) | **`Implemented`** |
+| **`12`** | **Steal Gold** (`BTH 0`) | Steals `1..5%` of player gold and teleports away (`blink`) unless DEX save succeeds | **`MEFF_STEAL_GOLD`**: Rolls against DEX; steals gold from `PL_GOLD_0..2`, prints *"Your purse feels lighter."*, and blinks monster away | **`Implemented`** |
+| **`13`** | **Steal Object** (`BTH 0`) | Steals 1 random carried pack item and teleports away unless DEX save succeeds | **`MEFF_STEAL_ITEM`**: Rolls against DEX; removes 1 carried pack item (`inv_remove_item`), prints *"Something was stolen!"*, and blinks monster away | **`Implemented`** |
+| **`14`** | **Poison (Strong)** (`BTH 5`) | Damage + strong poison (`randint(10)+10` turns) | Mapped to **`MEFF_POISON`** | **`Implemented`** |
+| **`15`** | **Lose Dexterity (`DEX`)** (`BTH 0`) | Damage + drains `1` DEX | **`MEFF_DRAIN_DEX`**: Damage + calls `decrement_stat` on `PL_DEX_CUR` / `zp_player_dex` | **`Implemented`** |
+| **`16`** | **Lose Constitution (`CON`)** (`BTH 0`) | Damage + drains `1` CON | **`MEFF_DRAIN_CON`**: Damage + calls `decrement_stat` on `PL_CON_CUR` / `zp_player_con` | **`Implemented`** |
+| **`17`** | **Lose Intelligence (`INT`)** (`BTH 2`) | Damage + drains `1` INT | **`MEFF_DRAIN_INT`**: Damage + calls `decrement_stat` on `PL_INT_CUR` / `zp_player_int` | **`Implemented`** |
+| **`18`** | **Lose Wisdom (`WIS`)** (`BTH 2`) | Damage + drains `1` WIS | **`MEFF_DRAIN_WIS`**: Damage + calls `decrement_stat` on `PL_WIS_CUR` / `zp_player_wis` | **`Implemented`** |
+| **`19`** | **Lose Experience (`EXP`)** (`BTH 5`) | Damage + drains `Nd6 * (player_exp / 100)` experience (capped at `250,000` XP, triggers `lose_exp` level down) | **`MEFF_DRAIN_XP`**: Damage + subtracts rolled XP from `PL_XP_0..2` and checks for level loss (*"You feel your life draining away!"*) | **`Implemented`** |
+| **`20`** | **Aggravate Monsters** (`BTH 5`) | Shrieks, waking all monsters within `MAX_SIGHT` (`aggravate_monster`) | **`MEFF_AGGRAVATE`**: Wakes all monsters on the level (`MF_AWAKE`, *"A high-pitched shriek echoes!"*) | **`Implemented`** |
+| **`21`** | **Disenchant** (`BTH 20`) | Drains `+tohit`, `+todam`, or `+toac` from a random worn equipment piece | **`MEFF_DISENCHANT`**: Reduces positive `inv_to_hit`, `inv_to_dam`, or `inv_to_ac` on equipped weapon or armor (*"You feel avey force drain your equipment!"*) | **`Implemented`** |
+| **`22`** | **Eat Food** (`BTH 5`) | Destroys 1 food item in pack | Mapped to **`MEFF_STEAL_ITEM`** / food consumption | **`Approximation`** |
+| **`23`** | **Eat Light** (`BTH 5`) | Drains `randint(250)+250` turns of fuel from equipped light source | **`MEFF_DRAIN_LIGHT`**: Subtracts charges from `inv_p1 + EQUIP_LIGHT` (*"Your light dims!"*) | **`Implemented`** |
+| **`24`** | **Eat / Drain Charges** (`BTH 0`) | Drains charges from a random wand or staff in pack and heals monster | **`MEFF_DRAIN_CHARGES`**: Zeroes `inv_p1` on a wand/staff in inventory (*"Energy drains from your pack!"*) | **`Implemented`** |
+
+**Source Citations:** `vms-moria: source/include/creatures.inc`, `umoria: src/monster.cpp`, `core/monster_attack.s`, `tools/parse_creatures.py:114-158`
+
+---
+
+### 6.5 Complete Player Status Effect & Timed Condition Catalog
+
+| Status Condition | VMS Moria 4.8 & Umoria 5.7.15 (`py.flags.*`) | Moria8 Storage & Mechanics (`core/zeropage.s`, `core/turn.s`, `core/combat.s`) | Verdict | Source Citations |
+| --- | --- | --- | --- | --- |
+| **Poisoned (`poisoned`)** | Suppresses HP regen; ticks CON-adjusted damage (VMS) or `1` HP/turn (Umoria); cured by Neutralize Poison / Slow Poison | `zp_eff_poison` (`$50`): suppresses HP regen (`core/turn.s:391-392`) and deals VMS `con_adj` poison damage (`4..1` HP/turn or `1` HP per 2–3 turns, `core/turn.s:86-124`) | **`Implemented`** | `moria8: core/turn.s:86-124, 391-392` |
+| **Blind (`blind`)** | Suppresses map/monster visibility and room lighting; blocks reading scrolls and casting spells; `search`/`disarm` divided by 10 | `zp_eff_blind` (`$51`): skips `update_visibility` (`core/dungeon_los.s:58-63`), blocks reading scrolls & spellcasting, divides search/disarm by 10 (`core/player.s:1047-1054`) | **`Implemented`** | `moria8: core/dungeon_los.s:58-63`, `core/turn.s:126-143` |
+| **Confused (`confused`)** | Randomizes movement, tunneling (`75%`), bashing, and aiming directions; blocks reading scrolls, casting spells, and picking locks; divides search/disarm by 10 | `zp_eff_confuse` (`$52`): randomizes movement/bash/tunnel directions, blocks scroll reading/spellcasting/lockpicking (`core/dungeon_features.s:905-910`), divides search/disarm by 10 | **`Implemented`** | `moria8: core/turn.s:145-162`, `core/player_move.s` |
+| **Paralyzed (`paralysis`)** | Player forfeits turn completely while monsters act; prevented by Free Action (`PLF_FREE_ACT`) | `zp_eff_paralyze` (`$53`): player turn is skipped in `game_loop.s` while `turn_advance` ticks world & monsters | **`Implemented`** | `moria8: core/turn.s:164-175`, `core/game_loop.s` |
+| **Fast / Hasted (`fast`)** | `+1` speed (`py.flags.speed` bonus) from Potion/Staff/Spell of Haste or Ring/Boots of Speed | `zp_eff_speed` (`$54`) + persistent `PFLAG_SPEED` (`Ring of Speed`): grants a free player action on every odd turn (`core/turn.s:457-468`) | **`Implemented`** | `moria8: core/turn.s:177-194, 457-468` |
+| **Slowed (`slow`)** | `-1` speed penalty from monster spell, trap, or potion | `zp_eff_slow` (`$55`): runs `monster_process_all` twice per player turn (`core/turn.s:470-482`) | **`Implemented`** | `moria8: core/turn.s:196-213, 470-482` |
+| **Afraid / Terrified (`afraid`)** | Player cannot attack monsters in melee, bash, or tunnel (*"You are too afraid to attack!"*) | `eff_fear_timer` (main RAM, ticked in `core/turn.s:305-327`): blocks melee attack (`combat.s`), bashing (`bash.s:25`), and tunneling (`tunnel.s:24`) | **`Implemented`** | `moria8: core/turn.s:305-327`, `core/combat.s` |
+| **Blessed (`blessed`)** | `+2` AC, `+5` BTH | `zp_eff_bless` (`$56`): grants `+2` AC and `+2` to-hit (`core/combat.s`, `core/turn.s:215-232`) | **`Implemented`** | `moria8: core/turn.s:215-232` |
+| **Heroism / Super-Heroism (`hero` / `shero`)** | `+10`/`+24` Temporary HP, `+12`/`+24` BTH, immunity to fear | `zp_eff_heroism` (`$57`): grants `+3` to-hit, cures fear, and boosts HP (`core/turn.s:234-251`) | **`Implemented`** | `moria8: core/turn.s:234-251` |
+| **Protection from Evil (`protevil`)** | Evil monsters (`CD_EVIL`) must roll `monster_level > player_level` or be repelled / suffer AC defense penalty | `zp_eff_prot_evil` (`$58`): grants `+4` effective AC against evil monsters (`CF_EVIL`, `core/monster_attack.s`, `core/turn.s:253-270`) | **`Implemented`** | `moria8: core/turn.s:253-270` |
+| **Resist Heat (`resist_heat`)** | Timed fire resistance (`1/3` fire damage, `1/9` if stacked with permanent resist) | `zp_eff_resist_fire` (`$59`) + persistent `PFLAG_RESIST_FIRE` (`Ring of Resist Fire`): halves fire damage (`core/turn.s:272-286`) | **`Implemented`** | `moria8: core/turn.s:272-286` |
+| **Resist Cold (`resist_cold`)** | Timed cold resistance (`1/3` cold damage, `1/9` if stacked with permanent resist) | `zp_eff_resist_cold` (`$5A`) + persistent `PFLAG_RESIST_COLD` (`Ring of Resist Cold`): halves cold damage (`core/turn.s:288-302`) | **`Implemented`** | `moria8: core/turn.s:288-302` |
+| **See Invisible (`tim_infra` / `see_inv`)** | Reveals invisible monsters (`CM_INVISIBLE`) | `zp_eff_see_invis` (`$5B`) + persistent `PLF_SEE_INV` / `PFLAG_SEE_INVIS` (`Ring of See Invisible`, `Amulet of the Magi`): reveals `CF_INVISIBLE` monsters | **`Implemented`** | `moria8: core/player.s:98, 399-407` |
+| **Word of Recall Countdown (`word_recall`)** | Counts down `randint(20)+20` turns (`15..35`), then teleports player between Town (`DL 0`) and deepest reached dungeon level (`max_lev`) | `zp_eff_recall` (`$5C`): ticks down in `turn_advance`; at `0`, toggles `zp_player_dlvl` between Town (`0`) and `PL_MAX_DLVL` (min `1`) with *"You feel yourself yanked upward/downward!"* | **`Implemented`** | `moria8: core/turn.s` |
+| **Invulnerability (`invuln`)** | Divine `Globe of Invulnerability` (VMS only) or Wizard god-mode | `eff_invuln_timer` (`core/wizard.s`): Wizard-mode invulnerability timer | **`Implemented`** | `moria8: core/wizard.s` |
+| **Hallucination / Image (`image`)** | Randomizes monster and item glyphs on screen (`randint(255)`) from Mold spores / Gaze | Not implemented; gaze/spore attacks map to confusion or poison | **`Missing`** | `vms-moria: source/include/dungeon.inc` |
+
+---
+
+### 6.6 Chests, Chest Traps (All 6 Flags) & Monster Death Loot-Drop Mechanics
+
+#### A. Chests & Chest Traps (`core/chest.s`, `core/chest_loot.s`, `core/chest_search.s`, `docs/CHEST_DESIGN.md`)
+
+In VMS Moria 4.8 (`values.inc`, `moria.inc`) and Umoria 5.7.15 (`data_treasure.cpp`, `player.cpp`), there are **6 chest types** (`Small/Large Wooden`, `Small/Large Iron`, `Small/Large Steel`) plus `& ruined chest`. Every chest has a lock + trap bitmask in `flags` (rolled via `randint(depth) + 4` across 18 bands) and drops treasure (`p1` iterations of `place_object` at the chest's source level) when opened!
+
+**Moria8 implements the complete VMS/Umoria chest lifecycle** across all 7 ports (`core/item_defs.s:109-129`, `core/item.s:1697-1736`, `core/chest.s`, `core/chest_loot.s`, `core/chest_search.s`, `core/chest_summons.s`):
+- **All 7 Chest Item Templates (`IDs 128..134`)**:
+  - `128`: `Small Wooden Chest` (min DL `7`, treasure bits `$18`: `90%` + `1d2` drops)
+  - `129`: `Large Wooden Chest` (min DL `15`, treasure bits `$24`: `60%` + `2d2` drops)
+  - `130`: `Small Iron Chest` (min DL `25`, treasure bits `$30`: `1d2` + `2d2` drops)
+  - `131`: `Large Iron Chest` (min DL `35`, treasure bits `$28`: `90%` + `2d2` drops)
+  - `132`: `Small Steel Chest` (min DL `45`, treasure bits `$34`: `60%` + `1d2` + `2d2` drops)
+  - `133`: `Large Steel Chest` (min DL `50`, treasure bits `$38`: `90%` + `1d2` + `2d2` drops)
+  - `134`: `Ruined Chest` (cost `0`, created when a locked chest is bashed open)
+- **All 6 Chest Trap & Lock Flags (`inv_p1` / `fi_p1` bits `0..7`)**:
+  - `CHEST_P1_LOCKED ($01)`: Locked; picked via `o` (`chest_open_command` rolling `chest_disarm_skill - source_level > rng(100)+1`).
+  - `CHEST_P1_TRAP_STR ($02)`: Poison needle — drains `1` STR (`decrement_stat`) + `1d4` damage.
+  - `CHEST_P1_TRAP_POISON ($04)`: Poison needle — sets `zp_eff_poison` (`10 + 1d10` turns).
+  - `CHEST_P1_TRAP_PARA ($08)`: Gas trap — paralyzes player (`zp_eff_paralyze`).
+  - `CHEST_P1_TRAP_EXPL ($10)`: Explosion trap — destroys the chest (no loot!) and deals **`5d8` explosion damage**.
+  - `CHEST_P1_TRAP_SUMMON ($20)`: Summoning runes — summons **`3..5` monsters** around the chest (`chest_summons.s`).
+  - `CHEST_P1_TRAP_FOUND ($40)`: Discovered by adjacent Search (`s` / `#` via `chest_search_reveal` in `core/chest_search.s`) or `Find Traps` spell/scroll; enables Disarm (`SHIFT+D` -> `chest_disarm_command`).
+  - `CHEST_P1_OPENED ($80)`: Unlocked & opened (`{empty}`, value `0`).
+- **Verdict**: **`Implemented`** (100% faithful to VMS Moria / Umoria chest mechanics).
+
+---
+
+#### B. Monster Death & Loot Drops (`monster_death` / `core/monster_death.s`, `core/chest_loot.s`)
+
+When a monster dies in VMS Moria 4.8 (`moria.inc:2319-2344`), Umoria 5.7.15 (`monster.cpp:monsterDeath`), or Moria8 (`core/monster_death.s`, `core/chest_loot.s:180-290`), loot drops are governed by the **7 treasure flags** in `cmove` bits `24..30` (`cr_treasure` bits `0..6` in Moria8):
+
+| Treasure Bit (`cr_treasure`) | VMS Moria 4.8 (`moria.inc:2319-2344`) | Umoria 5.7.15 (`monster.cpp`) | Moria8 (`core/monster_death.s`, `core/chest_loot.s:180-290`) | Verdict |
+| --- | --- | --- | --- | --- |
+| **Bit 0 (`$01`): `CM_CARRY_OBJ`** | Drops carried/spawned objects (`place_object` if bit 1 clear) | Drops objects (`carry_obj`) | `chest_loot_flags` bit 0: allows non-gold item drops from `pick_item_type` | **`Implemented`** |
+| **Bit 1 (`$02`): `CM_CARRY_GOLD`** | Drops gold/gems (`place_gold` if bit 0 clear; if both bits 0 and 1 set, `randint(100) < 70` drops object else `place_gold`) | Identical (`70%` object / `30%` gold when both set) | `chest_loot_flags` bit 1: when both bit 0 and bit 1 are set, rolls `rng(100) < 70` for item vs gold (`core/chest_loot.s:295-330`) | **`Implemented`** |
+| **Bit 2 (`$04`): `CM_60_RANDOM`** | `randint(100) < 60`: `+1` drop | `randint(100) < 60`: `+1` drop | `core/chest_loot.s:225-233`: rolls `rng_range(100) < 60` -> `inc chest_drop_count` (`+1` drop) | **`Implemented`** |
+| **Bit 3 (`$08`): `CM_90_RANDOM`** | `randint(100) < 90`: `+1` drop | `randint(100) < 90`: `+1` drop | `core/chest_loot.s:235-243`: rolls `rng_range(100) < 90` -> `inc chest_drop_count` (`+1` drop) | **`Implemented`** |
+| **Bit 4 (`$10`): `CM_1D2_OBJ`** | `+ damroll('1d2')` (`1..2` drops) | `+ damroll(1, 2)` (`1..2` drops) | `core/chest_loot.s:245-254`: rolls `1d2` (`rng_range(2)+1`) and adds to `chest_drop_count` | **`Implemented`** |
+| **Bit 5 (`$20`): `CM_2D2_OBJ`** | `+ damroll('2d2')` (`2..4` drops) | `+ damroll(2, 2)` (`2..4` drops) | `core/chest_loot.s:256-265`: rolls `2d2` and adds to `chest_drop_count` | **`Implemented`** |
+| **Bit 6 (`$40`): `CM_4D2_OBJ` / `4d3`** | **`+ damroll('4d3')`** (`4..12` drops in `moria.inc:2340`!) | **`+ damroll(4, 2)`** (`4..8` drops in `monster.cpp`) | **`core/chest_loot.s:267-280` (`bit chest_loot_flags; bvc !cgl_no4d3+`)**: rolls **`4d3` (`4..12` drops)** matching VMS Moria 4.8 `moria.inc:2340`! | **`Implemented`** (VMS `4d3` exact!) |
+| **Drop Placement Radius** | radially scatters drops within distance `1..5` around death coordinates (`summon_item`) | Same radial scatter | `monster_death_stage` (`core/monster_death.s:46-59`) queues up to `MD_QUEUE_MAX = 4` kills per turn; `chest_generate_loot` scatters drops onto the death tile and free adjacent/nearby floor tiles (`core/chest_loot.s`) | **`Implemented`** |
+
+---
+
+### 6.7 Balrog Battle, Total Winner Retirement, Royal Screen & High Scores
+
+| Feature | VMS Moria 4.8 (`values.inc`, `death.inc`) | Umoria 5.7.15 (`data_creatures.cpp`, `scores.cpp`) | Moria8 (`creature_tiers.s`, `core/combat.s`, `core/royal.s`, `core/score.s`) | Verdict | Source Citations |
+| --- | --- | --- | --- | --- | --- |
+| **The Balrog (`#279` / Tier 4 `#56`)** | Depth `50`, Glyph `B`, Speed `+3`, HP **`3,000`** (`75d40` max), AC `125`, Sleep `5`, AAF `40`, XP **`55,000`**.<br>- **Attacks**: `4d12` hit, `4d12` hit, `3d12` crush, `2d12` touch (drains mana/charges)<br>- **Spells (`1 in 3`)**: Fire Breath, Lightning Breath, Blindness, Confusion, Hold Person, Teleport Self, Summon Monster, Summon Undead, Summon Demon<br>- **Flags**: `CM_WIN ($80000000)` + `4d3`/`4d2` + `2d2` + `1d2` treasure + `CM_MOVE_NORMAL` + `CM_PICKS_UP` + `CD_EVIL` + `CD_NO_SLEEP` + `CD_INFRA` + Immune to Fire/Frost/Lightning | Identical (except treasure bits roll `4d2+2d2+1d2`) | Tier 4 index **`56` (`MON_BALROG = 56`)** at Depth `50`, Glyph `B` (Red), Speed **`4` (`+3` ultra-fast)**, HP **`1,500`** (`60d25`), AC **`60`** (`125` scaled to 0..60), Sleep `1`, AAF `40`, XP **`55,000`** (`$D6D8`).<br>- **Attacks**: `10d12` fire hit (`MEFF_FIRE`) + `8d12` crush (`MEFF_NONE`)<br>- **Spells (`freq=3`, `1 in 3`)**: `cr_spell_flags = MSF_BREATH | MSF_SUMMON | MSF_BLIND | MSF_CONFUSE` (`$53` in 8-bit `cr_spell_flags`)<br>- **Flags**: `CF_EVIL | CF_NO_SLEEP | CF_INFRA | CF_IM_FIRE | CF_IM_FROST | CF_IM_POISON`, `cmove`: `CM_PICKS_UP`, `treasure`: `$73` (`4d3 + 2d2 + 1d2` drops!) | **`Implemented`** | `vms-moria: source/include/values.inc:2680-2689`<br>`umoria: src/data_creatures.cpp:655-663`<br>`moria8: tools/parse_creatures.py:100-110`, `platforms/commodore/c64/creature_data/creature_tiers.s` |
+| **Balrog Death & `Total_Winner` Trigger** | Killing any creature with `CM_WIN` sets `total_winner = true`, prints *"*** CONGRATULATIONS *** You have won the game!"* and *"You may retire (commit suicide) when you are ready."* | Identical (`total_winner = true`) | Killing `MON_BALROG` in `combat_note_kill` / `combat_print_winner_message` sets `GAME_FLAG_WINNER` in `zp_game_flags`, plays `SFX_VICTORY`, and prints *"*** CONGRATULATIONS *** You have won the game!"* | **`Implemented`** | `moria8: core/combat.s` |
+| **Winner Retirement Bonus (`kingly`)** | When `total_winner` retires, `kingly()` adds **`+40` to `lev`**, **`+250,000` to `au` (gold)**, and **`+5,000,000` to `max_exp`** (`death.inc`) | Identical (`kingly()` in `death.cpp`: `lev += 40`, `au += 250000`, `max_exp += 5000000`) | **Exact `kingly()` bonus** in `winner_apply_retirement_bonus_overlay` (`platforms/commodore/c64/main.s:2757-2786` and all 7 ports): adds **`+40` to `PL_LEVEL`**, **`+250,000` (`$03D090`) to `PL_GOLD_0..2`**, and **`+5,000,000` (`$4C4B40`) to `PL_XP_0..2`**! | **`Implemented`** | `vms-moria: source/include/death.inc`<br>`umoria: src/death.cpp`<br>`moria8: platforms/commodore/c64/main.s:2757-2786` |
+| **Royal Victory Crown Screen (`royal.s`)** | `kingly()` draws the ASCII crown (`#`, `$$$`, `*#######*#######*`) with *"Veni, Vidi, Vici! I came, I saw, I conquered! All Hail the Mighty <Title>!"* | Identical ASCII crown screen | **Exact crown art & Latin motto** in `core/royal.s:1-94`: draws the 7-row yellow crown, *"Veni, Vidi, Vici! I came, I saw, I conquered! All Hail the Mighty <Player Name>"* | **`Implemented`** | `core/royal.s:1-94` |
+| **Tombstone Screen & High Score Formula (`total_points`)** | Draws ASCII tombstone (`RIP`, Name, Level, Class, Killed By, Date); `total_points = max_exp + (100 * max_dlvl)` (or `lev*50` in variants) | Draws tombstone; `total_points()` = `max_exp + (100 * max_depth)` | `core/score.s` & `core/score_io.s`: draws Tombstone screen (Name, Race, Class, Level, Depth, Cause of Death, Score), computes score from XP + Gold + Depth, and persists the **Top 10 Hall of Fame (`HALL.OF.FAME` / `HISCORE.DAT` / `HISCORE`, 160 bytes)** to disk (unless `GAME_FLAG_WIZARD` is set) | **`Implemented`** | `moria8: core/score.s`, `core/score_io.s` |
+---
+
+# 7. Magic System — All 31 Mage Spells & All 31 Priest Prayers
+
+## 7.1 Spellcasting, Prayer, Mana, Learning & Failure Mechanics
+
+| Subsystem / Mechanic | VMS Moria 4.8 | Umoria 5.7.15 | Moria8 Core | Port Differences | Verdict | Source Citations |
+| --- | --- | --- | --- | --- | --- | --- |
+| **Spell Books & Prayer Books** | 4 Mage books (`[Beginners-Magick]`, `[Magick I]`, `[Magick II]`, `[The Mages' Guide to Power]`) and 4 Priest books (`[Beginners Handbook]`, `[Words of Wisdom]`, `[Chants and Blessings]`, `[Exorcisms and Dispellings]`) (`tval = 90` / `91`); plus 17 empty/decoy books in `object_list` (`tval 90..91` with `flags = 0`). | Same 8 active spell/prayer books (`game_objects[395..398]` Mage, `[407..410]` Priest) plus 17 decoy books (`[399..406]`, `[411..419]`). | All **8 active books** are implemented with identical 32-bit `book_mask_0..7` bitmasks (`core/spell_data.s:28-35`, `core/spell_helper_tables.s:21-27`):<br>• Mage books: ID `47` `[Beginners-Magick]` (`$7F,$00,$00,$00`, spells `0..6`), ID `55` `[Magick I]` (`$80,$FF,$00,$00`, spells `7..15`), ID `56` `[Magick II]` (`$00,$00,$FF,$00`, spells `16..23`), ID `57` `[The Mages' Guide to Power]` (`$00,$00,$00,$7F`, spells `24..30`)<br>• Priest books: ID `48` `[Beginners Handbook]` (`$FF,$00,$00,$00`, prayers `0..7`), ID `58` `[Words of Wisdom]` (`$00,$FF,$00,$00`, prayers `8..15`), ID `59` `[Chants and Blessings]` (`$00,$00,$FF,$01`, prayers `16..24`), ID `60` `[Exorcisms and Dispellings]` (`$00,$00,$00,$7E`, prayers `25..30`). (The 17 zero-mask decoy books are omitted). | Identical across all 7 ports. | **Implemented** | `vms-moria: source/include/values.inc:1750-1910`; `umoria: src/data_treasure.cpp:409-435`; `moria8: core/spell_data.s:21-35`, `core/spell_helper_tables.s:21-27` |
+| **Max Mana Calculation (`calc_mana`)** | `mana = (stat_adj * (lev - min_lev + 3)) / 2` (+1 if `stat_adj > 0`), where `stat_adj` (0..7) comes from `INT` (Mage/Rogue/Ranger) or `WIS` (Priest/Paladin). | Identical `calc_mana(stat)` in `player.cpp`. | `magic_recalc_mana` (`core/player_magic_tail.s:10-81`):<br>• `max_mana = clamp(((level * stat) >> 3) + spell_stat_bonus[stat_idx], 1, 255)` using `PL_INT_CUR` for `SPELL_MAGE` classes and `PL_WIS_CUR` for `SPELL_PRIEST` classes. | Identical across all 7 ports. | **Approximation** | `vms-moria: source/misc.inc:2110-2165`; `umoria: src/player.cpp`; `moria8: core/player_magic_tail.s:10-81` |
+| **Spell Learning (`G`) & Forgetting** | `G` (`gain_spells`): mage-type classes choose which spell from a carried book to learn; priest-type classes receive random prayers from carried books. Maximum allowed spells scales with `(lev - min_lev + 1) * stat_adj / 2`. If `INT`/`WIS` or `lev` drops, excess spells are forgotten (`PY_SPELL_FORGOTTEN` bitmask + `spell_order[32]`) and automatically re-learned when capacity returns. | Identical (`spells.cpp` / `player.cpp`). | Full 32-bit `PL_SPELLS_LEARNT_0..3`, `PL_SPELLS_WORKED_0..3`, `PL_SPELLS_FORGOTTEN_0..3`, `PL_NEW_SPELLS`, and `PL_SPELL_ORDER[0..31]` (`core/player.s:68-83`, `core/player_magic_levelup.s:17-206`):<br>• `magic_check_new_spells` computes `mcns_allowed` from `(level - min_level + 1)` scaled by `mcns_get_stat_adj` (`0` for `<8`, `1×` for `8..67`, `1.5×` for `68..107` or `>=118`, `2×` for `108..117`), capped to `class_spell_total` (`31, 31, 12, 30, 31`)<br>• Pressing `G` (`player_learn_spell` in `OVL_UI`) prompts for a carried book and lets Mage/Rogue/Ranger pick a spell or assigns a prayer for Priest/Paladin. | Identical across all 7 ports (`OVL_UI` / `OVL_SPELL`). | **Implemented** | `vms-moria: source/magic.inc`, `source/prayer.inc`; `umoria: src/player.cpp`, `src/spells.cpp`; `moria8: core/player_magic_levelup.s:17-206`, `core/player.s:68-83` |
+| **Spell Failure Rate (`chance`)** | `chance = sfail - 3 * (lev - slevel) - 3 * (stat_adj - 1)`. If `smana > cmana`, `chance += 5 * (smana - cmana)`. Clamped to `[min_fail, 95]%`. | Identical (`spells.cpp`). | `calc_spell_failure` (`core/player_magic_display.s:7-125`):<br>• `fail = base_fail - 3 * (player_lvl - spell_lvl) - spell_stat_bonus[stat_idx]`, clamped to `[5, 95]%`<br>• If `zp_hunger_state >= HUNGER_FAINT`, adds `+20%` (clamped to `95%`)<br>• If `mana_cost > zp_player_mp` (overcasting), adds `+5 * (mana_cost - zp_player_mp)%` (clamped to `95%`). | Identical across all 7 ports. | **Implemented** | `vms-moria: source/magic.inc:30-110`; `umoria: src/spells.cpp`; `moria8: core/player_magic_display.s:7-125` |
+| **Overcasting Penalty & First-Cast XP** | Casting with insufficient mana (`smana > cmana`) is allowed at `+5%` failure per missing MP, sets `cmana = 0`, faints the caster for `randint(5 * (smana - cmana))` turns (` You faint from the effort!`), and has a `1/3` (`randint(3) == 1`) chance of draining `CON` by 1. First successful cast of each spell awards `s_exp * slevel / 4` XP (`PY_SPELL_WORKED`). | Identical (`magic.cpp`, `prayer.cpp`). | Fully implemented (`pm_consume_mana` in `core/player_magic.s:590-638` and `pm_finish_success_common`):<br>• When `pm_cost_tmp > zp_player_mp`, prints `"You faint from the effort!"`, sets `zp_eff_paralyze = rng_range(5 * (pm_cost_tmp - zp_player_mp)) + 1`, sets `zp_player_mp = 0`, and rolls `rng_range(3) == 0` (`1/3` chance) to decrement `PL_CON_CUR` (down to min `3`) and recalculate HP<br>• First successful cast sets the bit in `PL_SPELLS_WORKED_0..3` and awards first-cast XP. | Identical across all 7 ports. | **Implemented** | `vms-moria: source/magic.inc:115-160`; `umoria: src/magic.cpp`, `src/prayer.cpp`; `moria8: core/player_magic.s:590-638` |
+
+---
+
+## 7.2 Complete Mage / Rogue / Ranger Spell Catalog (All 31 Arcane Spells)
+
+Every arcane spell (`0..30`) is present in VMS Moria 4.8 (`magic_spell` in `values.inc:2025-2105` / `magic.inc`), Umoria 5.7.15 (`magic_spells` in `data_player.cpp:289-425` / `magic.cpp`), and Moria8 (`core/spell_names.s:25-62`, `core/spell_class_data.s:27-65`, `core/player_magic_execute_overlay.s:97-191`). Each class entry below lists `MinLevel / Mana / BaseFail% / XP_QuarterUnits` (`99/-` = class cannot learn that spell).
+
+| ID | Book | Spell Name | Mage (`Lvl/MP/Fail%/ExpQ`) | Rogue (`Lvl/MP/Fail%/ExpQ`) | Ranger (`Lvl/MP/Fail%/ExpQ`) | VMS Moria 4.8 / Umoria 5.7.15 Effect | Moria8 Effect (`core/player_magic_execute_overlay.s`) | Verdict |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `0` | Book 0 (`#47`) `[Beginners-Magick]` | **Magic Missile** | `1 / 1 / 22% / 1` | `99 / -` | `3 / 1 / 30% / 1` | `fire_bolt(0, dir, char_row, char_col, damroll(2, 6), spell_names[0])` (`2d6` untyped bolt). | `med_s0`: `eff_bolt` (`2d6` bolt in chosen direction, range `MAX_SIGHT=12`). | **Implemented** |
+| `1` | Book 0 (`#47`) `[Beginners-Magick]` | **Detect Monsters** | `1 / 1 / 23% / 1` | `5 / 1 / 50% / 1` | `3 / 2 / 35% / 2` | `detect_monsters()` — reveals all non-invisible monsters on the current level for 1 turn. | `med_s1` (`pmx_detect_monsters_msg`): `eff_detect_monsters` sets `MF_DETECTED` + `MF_VISIBLE` on all non-invisible monsters and prints `"You sense the presence of monsters!"` or `"You sense no creatures nearby."`. | **Implemented** |
+| `2` | Book 0 (`#47`) `[Beginners-Magick]` | **Phase Door** | `1 / 2 / 24% / 1` | `7 / 2 / 55% / 1` | `3 / 2 / 35% / 2` | `teleport(10)` — short-range random teleport up to 10 tiles. | `eff_phase_door` (`core/spell_effects.s:455-512`): short-range teleport within `±5` tiles (`rng_range(11) - 5`). | **Implemented** |
+| `3` | Book 0 (`#47`) `[Beginners-Magick]` | **Light Area** | `1 / 2 / 26% / 1` | `9 / 3 / 60% / 2` | `5 / 3 / 35% / 2` | `light_area(char_row, char_col)` — lights the entire room (if in a room) and adjacent tiles, dealing `2d8` light damage to light-sensitive (`0x0008` / `CF_HURT_LIGHT`) monsters. | `med_s3` (`pmx_light_room_msg`): calls `eff_light_room` (marks current room or radius-1 tiles `FLAG_LIT \| FLAG_VISITED`) and prints `"The area is lit."`. | **Implemented** |
+| `4` | Book 0 (`#47`) `[Beginners-Magick]` | **Cure Light Wounds** | `3 / 3 / 25% / 2` | `11 / 4 / 65% / 2` | `5 / 3 / 40% / 2` | `hp_player(damroll(4, 4))` (`4d4` HP healed). | `med_s4`: `heal_dice(4, 4, 0)` (`4d4` HP healed via `pmx_heal_and_report`). | **Implemented** |
+| `5` | Book 0 (`#47`) `[Beginners-Magick]` | **Find Hidden Traps/Doors** | `3 / 3 / 25% / 1` | `13 / 5 / 70% / 3` | `5 / 4 / 45% / 3` | `detect_sdoor()` + `detect_trap()` in current viewport area. | `med_s5`: calls `eff_find_doors` (converts all `TILE_DOOR_SECRET` to `TILE_DOOR_CLOSED \| FLAG_VISITED`) and `eff_find_traps` (reveals all `TILE_TRAP_INVIS` to `TILE_TRAP_VIS \| FLAG_VISITED`). | **Implemented** |
+| `6` | Book 0 (`#47`) `[Beginners-Magick]` | **Stinking Cloud** | `3 / 3 / 27% / 2` | `99 / -` | `7 / 5 / 40% / 6` | `fire_ball(GF_POISON_GAS, dir, char_row, char_col, 9, ...)` (`9` poison gas ball, radius 2). | `med_s6`: `eff_ball(9)` (`9` damage radius-2 ball in chosen direction). | **Implemented** |
+| `7` | Book 1 (`#55`) `[Magick I]` | **Confusion** | `3 / 4 / 30% / 1` | `15 / 6 / 75% / 3` | `7 / 6 / 40% / 5` | `confuse_monster(dir, char_row, char_col)` — confuses monster along directional ray. | `med_s7` (`pmx_confuse_monster_dir_msg`): calls `eff_directional_monster` and sets `MX_CONFUSE = 10` on hit. | **Implemented** |
+| `8` | Book 1 (`#55`) `[Magick I]` | **Lightning Bolt** | `5 / 4 / 30% / 6` | `99 / -` | `9 / 7 / 40% / 7` | `fire_bolt(GF_LIGHTNING, dir, ..., damroll(3, 8), ...)` (`3d8` lightning bolt). | `med_s8`: `eff_bolt(3, 8, 1)` (`3d8` bolt in chosen direction). | **Implemented** |
+| `9` | Book 1 (`#55`) `[Magick I]` | **Trap/Door Destruction** | `5 / 5 / 30% / 8` | `17 / 7 / 80% / 4` | `9 / 8 / 45% / 8` | `td_destroy()` — destroys all adjacent traps, doors, and secret doors in the 8 surrounding tiles. | `eff_destroy_traps_doors` (`core/spell_effects.s:1265-1315`): converts all adjacent traps and closed/locked/jammed/secret doors in the 8 surrounding tiles into `TILE_FLOOR`. | **Implemented** |
+| `10` | Book 1 (`#55`) `[Magick I]` | **Sleep I** | `5 / 5 / 30% / 5` | `19 / 8 / 85% / 5` | `11 / 8 / 40% / 10` | `sleep_monsters1(dir, ...)` — puts one monster along directional ray to sleep. | `eff_sleep_monster_dir` (`core/player_magic_execute_overlay.s:345-350`): calls `eff_directional_monster` + `pmx_try_sleep_monster` (`randint(40) >= cr_level` puts monster to sleep with `MX_SLEEP_CUR = 255`). | **Implemented** |
+| `11` | Book 1 (`#55`) `[Magick I]` | **Cure Poison** | `5 / 5 / 35% / 6` | `21 / 9 / 90% / 6` | `11 / 9 / 45% / 10` | `cure_poison()` — clears player poison timer (`poisoned = 0`). | `pmx_cure_poison_msg` (`eff_cure_poison`): clears `zp_eff_poison = 0` and prints `"The poison leaves your system."`. | **Implemented** |
+| `12` | Book 1 (`#55`) `[Magick I]` | **Teleport Self** | `7 / 6 / 35% / 9` | `99 / -` | `13 / 10 / 45% / 12` | `teleport(char_lev * 5)` — long-range random teleport across the level. | `eff_teleport_self` (`core/spell_effects.s:514-565`): teleports player to a random open floor tile anywhere on the level. | **Implemented** |
+| `13` | Book 1 (`#55`) `[Magick I]` | **Remove Curse** | `7 / 6 / 50% / 10` | `23 / 10 / 95% / 7` | `13 / 11 / 55% / 13` | Clears `TR_CURSED` on all worn/wielded equipment slots. | `med_s13`: calls `eff_remove_curse` (clears `IF_CURSED` on equipped items) and prints `"You feel as if someone is watching over you."`. | **Implemented** |
+| `14` | Book 1 (`#55`) `[Magick I]` | **Frost Bolt** | `7 / 6 / 40% / 12` | `99 / -` | `15 / 12 / 50% / 15` | `fire_bolt(GF_FROST, dir, ..., damroll(4, 8), ...)` (`4d8` frost bolt). | `med_s14`: `eff_bolt(4, 8, 1)` (`4d8` bolt in chosen direction). | **Implemented** |
+| `15` | Book 1 (`#55`) `[Magick I]` | **Turn Stone to Mud** | `9 / 7 / 44% / 19` | `99 / -` | `15 / 13 / 50% / 15` | `wall_to_mud(dir, char_row, char_col)` — dissolves first wall/rubble along ray into floor and deals `1d30+20` damage to `CD_STONE` (`CF_HURT_ROCK`) monsters. | `eff_wall_to_mud` (`core/spell_effects.s:975-1035`): dissolves wall/rubble/door in chosen direction into `TILE_FLOOR`. | **Implemented** |
+| `16` | Book 2 (`#56`) `[Magick II]` | **Create Food** | `9 / 7 / 45% / 19` | `25 / 12 / 95% / 9` | `17 / 17 / 55% / 15` | `create_food()` — spawns a Ration of Food on the player's tile. | `med_s16` (`eff_create_food` / `pmu_create_food`): spawns 1 `Ration of Food` (item ID `15`) at `(zp_player_x, zp_player_y)`. | **Implemented** |
+| `17` | Book 2 (`#56`) `[Magick II]` | **Recharge Item I** | `9 / 7 / 75% / 22` | `27 / 15 / 99% / 11` | `17 / 17 / 90% / 17` | `recharge(20)` — adds charges to a wand or staff (`randint((20+2)/...)`), with a chance to blow up the item. | `med_s17`: `eff_recharge_item(20)` (`core/player_magic_execute_overlay.s:494-538`) — prompts for a wand/staff, has a `1/4` chance to destroy the item (`"There is a bright flash of light."`) if existing charges `>= (power >> 3) + 2`, otherwise adds `rng_range((20 >> 3) + 1) + 2` (`2..4`) charges. | **Implemented** |
+| `18` | Book 2 (`#56`) `[Magick II]` | **Sleep II** | `9 / 7 / 45% / 19` | `99 / -` | `21 / 17 / 55% / 17` | `sleep_monsters2()` — attempts to put all 8 adjacent monsters to sleep. | `med_s18` (`pmx_sleep_adjacent_msg`): loops over all 8 adjacent tiles and calls `pmx_try_sleep_monster` on each monster found. | **Implemented** |
+| `19` | Book 2 (`#56`) `[Magick II]` | **Polymorph Other** | `11 / 7 / 45% / 25` | `99 / -` | `21 / 19 / 60% / 18` | `poly_monster(dir, char_row, char_col)` — replaces monster along ray with a newly rolled creature type. | `eff_polymorph_other` (`core/player_magic_execute_overlay.s:539-556`): removes targeted monster along directional ray and spawns a new random creature at its coordinates via `pick_creature_type` + `monster_spawn_one`. | **Implemented** |
+| `20` | Book 2 (`#56`) `[Magick II]` | **Identify** | `11 / 7 / 99% / 19` | `29 / 18 / 99% / 19` | `23 / 25 / 95% / 20` | `ident_spell()` — identifies one carried or equipped item. | `eff_identify_prompt` (`core/spell_effects.s:1215-1263`): prompts for an inventory/equipment slot, sets `IF_IDENTIFIED` and `item_identified` bit, and prints the full identified item name. | **Implemented** |
+| `21` | Book 2 (`#56`) `[Magick II]` | **Sleep III** | `13 / 7 / 50% / 22` | `99 / -` | `23 / 20 / 60% / 20` | `sleep_monsters3()` — attempts to put all visible/LOS monsters on the level to sleep. | `eff_sleep_all` (`core/player_magic_execute_overlay.s:439-465`): iterates all `MAX_MONSTERS` with `MF_VISIBLE != 0` and rolls `pmx_try_sleep_monster`. | **Implemented** |
+| `22` | Book 2 (`#56`) `[Magick II]` | **Fire Bolt** | `15 / 9 / 50% / 25` | `99 / -` | `25 / 20 / 60% / 20` | `fire_bolt(GF_FIRE, dir, ..., damroll(6, 8), ...)` (`6d8` fire bolt). | `med_s22`: `eff_bolt(6, 8, 1)` (`6d8` bolt in chosen direction). | **Implemented** |
+| `23` | Book 2 (`#56`) `[Magick II]` | **Slow Monster** | `17 / 9 / 50% / 31` | `99 / -` | `25 / 21 / 65% / 20` | `speed_monster(dir, ..., -1)` — slows monster along directional ray. | `eff_slow_monster_dir` (`core/player_magic_execute_overlay.s:352-365`): sets `MX_SPEED_CNT = $FF` (`-1` speed) on targeted monster along directional ray. | **Implemented** |
+| `24` | Book 3 (`#57`) `[The Mages' Guide to Power]` | **Frost Ball** | `19 / 12 / 55% / 38` | `99 / -` | `27 / 21 / 65% / 22` | `fire_ball(GF_FROST, dir, ..., 33, ...)` (`33` frost ball, radius 2). | `med_s24`: `eff_ball(33)` (`33` damage radius-2 ball in chosen direction). | **Implemented** |
+| `25` | Book 3 (`#57`) `[The Mages' Guide to Power]` | **Recharge Item II** | `21 / 12 / 90% / 44` | `99 / -` | `29 / 23 / 95% / 23` | `recharge(50)` — high-power wand/staff recharge (`50` power). | `med_s25`: `eff_recharge_item(50)` — adds `rng_range((50 >> 3) + 1) + 2` (`2..8`) charges to chosen wand/staff (or `1/4` chance to destroy if charges `>= 8`). | **Implemented** |
+| `26` | Book 3 (`#57`) `[The Mages' Guide to Power]` | **Teleport Other** | `23 / 12 / 60% / 50` | `99 / -` | `31 / 25 / 70% / 25` | `teleport_monster(dir, char_row, char_col)` — teleports monster along ray to a random floor tile. | `eff_teleport_other` (`core/player_magic_execute_overlay.s:558-597`): finds monster along directional ray and relocates it to a random floor tile (`find_random_floor`), waking it (`MX_SLEEP_CUR = 0`). | **Implemented** |
+| `27` | Book 3 (`#57`) `[The Mages' Guide to Power]` | **Haste Self** | `25 / 12 / 65% / 63` | `99 / -` | `33 / 25 / 75% / 38` | `fast += randint(20) + char_lev` turns of `+1` speed. | `med_s27` (`eff_haste_self`): adds `rng_range(20) + zp_player_lvl` turns to `zp_eff_speed` (clamped to `127`). | **Implemented** |
+| `28` | Book 3 (`#57`) `[The Mages' Guide to Power]` | **Fire Ball** | `29 / 18 / 65% / 88` | `99 / -` | `35 / 25 / 80% / 50` | `fire_ball(GF_FIRE, dir, ..., 49, ...)` (`49` fire ball, radius 2). | `med_s28`: `eff_ball(49)` (`49` damage radius-2 ball in chosen direction). | **Implemented** |
+| `29` | Book 3 (`#57`) `[The Mages' Guide to Power]` | **Word of Destruction** | `33 / 21 / 80% / 125` | `99 / -` | `37 / 30 / 95% / 100` | `destroy_area(char_row, char_col)` — devastates 15-tile radius around caster, obliterating monsters/items/walls into rubble/floor and blinding the player for `1d10+10` turns. | `eff_destroy_area` (`da_devastate` in `core/player_destroy_area.s`): devastates area around caster, clearing monsters and collapsing walls/rubble. | **Implemented** |
+| `30` | Book 3 (`#57`) `[The Mages' Guide to Power]` | **Genocide** | `37 / 25 / 95% / 200` | `99 / -` | `99 / -` | `genocide()` — prompts for a monster ASCII character (`a-z`, `A-Z`), removes all monsters of that race/glyph on the level (except the Balrog), and deals `1d4` HP strain per monster removed. | `eff_genocide` (`core/player_magic_execute_overlay.s:599-633`): prompts for a monster character, converts via `recall_key_to_screen_code`, and removes all active monsters matching `cr_display == recall_query_sc`. | **Implemented** |
+
+---
+
+## 7.3 Complete Priest / Paladin Prayer Catalog (All 31 Divine Prayers)
+
+Every divine prayer (`0..30`) is present in VMS Moria 4.8 (`magic_spell` in `values.inc:2106-2184` / `prayer.inc`), Umoria 5.7.15 (`magic_spells` in `data_player.cpp:324-357, 426-459` / `prayer.cpp`), and Moria8 (`core/spell_names.s:64-95`, `core/spell_class_data.s:37-45, 67-75`, `core/player_magic_execute_overlay.s:192-324`).
+
+| ID | Book | Prayer Name | Priest (`Lvl/MP/Fail%/ExpQ`) | Paladin (`Lvl/MP/Fail%/ExpQ`) | VMS Moria 4.8 / Umoria 5.7.15 Effect | Moria8 Effect (`core/player_magic_execute_overlay.s`) | Verdict |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `0` | Book 4 (`#48`) `[Beginners Handbook]` | **Detect Evil** | `1 / 1 / 10% / 1` | `1 / 1 / 30% / 1` | `detect_evil()` — reveals all evil (`CD_EVIL` / `0x0004`) monsters on the current level for 1 turn. | `ped_s0` (`eff_detect_evil` / `pmx_detect_evil_msg`): sets `MF_DETECTED \| MF_VISIBLE` on all active monsters with `CF_EVIL ($04)` and prints `"You sense the presence of evil!"` or `"You sense no evil nearby."`. | **Implemented** |
+| `1` | Book 4 (`#48`) `[Beginners Handbook]` | **Cure Light Wounds** | `1 / 2 / 15% / 1` | `2 / 2 / 35% / 2` | `hp_player(damroll(3, 3))` (`3d3` HP healed). | `ped_s1`: `heal_dice(3, 3, 0)` (`3d3` HP healed via `pmx_heal_and_report`). | **Implemented** |
+| `2` | Book 4 (`#48`) `[Beginners Handbook]` | **Bless** | `1 / 2 / 20% / 1` | `3 / 3 / 35% / 3` | `blessed += randint(12) + 12` (`13..24` turns of `+5` To-Hit and `+2` AC). | `ped_s2`: `pmx_add_bless_msg(rng_range(12) + 12)` (`12..23` turns added to `zp_eff_bless`; prints `"You feel righteous!"`). | **Implemented** |
+| `3` | Book 4 (`#48`) `[Beginners Handbook]` | **Remove Fear** | `1 / 2 / 25% / 1` | `5 / 3 / 35% / 5` | `remove_fear()` — clears player fear timer (`afraid = 0`). | `eff_remove_fear` (`core/player_magic_execute_overlay.s:367-375`): clears `eff_fear_timer = 0` and prints `"You feel bold."`. | **Implemented** |
+| `4` | Book 4 (`#48`) `[Beginners Handbook]` | **Call Light** | `3 / 2 / 25% / 1` | `5 / 4 / 35% / 5` | `light_area(char_row, char_col)` — lights room or adjacent radius-1 area. | `ped_s4` (`pmx_light_room_msg`): calls `eff_light_room` and prints `"The area is lit."`. | **Implemented** |
+| `5` | Book 4 (`#48`) `[Beginners Handbook]` | **Find Traps** | `3 / 3 / 27% / 2` | `7 / 5 / 40% / 6` | `detect_trap()` — reveals all invisible traps in area. | `eff_find_traps` (`core/spell_effects.s`): reveals all `TILE_TRAP_INVIS` on the level to `TILE_TRAP_VIS \| FLAG_VISITED`. | **Implemented** |
+| `6` | Book 4 (`#48`) `[Beginners Handbook]` | **Detect Doors/Stairs** | `3 / 3 / 27% / 2` | `7 / 5 / 40% / 6` | `detect_sdoor()` — reveals all secret doors and stairs in area. | `ped_s6`: calls `eff_find_doors` + `eff_find_stairs` (reveals secret doors and marks `stairs_up`, `stairs_dn1`, `stairs_dn2` with `FLAG_VISITED`). | **Implemented** |
+| `7` | Book 4 (`#48`) `[Beginners Handbook]` | **Slow Poison** | `3 / 3 / 28% / 3` | `9 / 7 / 40% / 7` | `slow_poison()` — halves remaining poison timer (`poisoned = poisoned / 2`). | `ped_s7` (`pmx_slow_poison_msg` in `core/player_magic_feedback.s:78-87`): halves `zp_eff_poison` (`(zp_eff_poison >> 1) \| 1`). | **Implemented** |
+| `8` | Book 5 (`#58`) `[Words of Wisdom]` | **Blind Creature** | `5 / 4 / 29% / 4` | `9 / 7 / 40% / 8` | `confuse_monster(dir, char_row, char_col)` — confuses/blinds monster along directional ray. | `ped_s8` (`pmx_confuse_monster_dir_msg`): calls `eff_directional_monster` and sets `MX_CONFUSE = 10` on hit. | **Implemented** |
+| `9` | Book 5 (`#58`) `[Words of Wisdom]` | **Portal** | `5 / 4 / 30% / 5` | `9 / 8 / 40% / 8` | `teleport(char_lev * 3)` — medium-range random teleport. | `eff_teleport_self` (`core/spell_effects.s:514-565`): teleports player to a random open floor tile. | **Implemented** |
+| `10` | Book 5 (`#58`) `[Words of Wisdom]` | **Cure Medium Wounds** | `5 / 4 / 32% / 5` | `11 / 9 / 40% / 10` | `hp_player(damroll(4, 4))` (`4d4` HP healed). | `ped_s10`: `heal_dice(4, 4, 0)` (`4d4` HP healed). | **Implemented** |
+| `11` | Book 5 (`#58`) `[Words of Wisdom]` | **Chant** | `5 / 5 / 34% / 5` | `11 / 10 / 45% / 10` | `blessed += randint(24) + 24` (`25..48` turns of Bless). | `ped_s11`: `pmx_add_bless_msg(rng_range(24) + 24)` (`24..47` turns added to `zp_eff_bless`). | **Implemented** |
+| `12` | Book 5 (`#58`) `[Words of Wisdom]` | **Sanctuary** | `7 / 5 / 36% / 6` | `11 / 10 / 45% / 10` | `sleep_monsters2()` — attempts to put all 8 adjacent monsters to sleep. | `ped_s12` (`pmx_sleep_adjacent_msg`): loops over all 8 adjacent tiles and rolls `pmx_try_sleep_monster`. | **Implemented** |
+| `13` | Book 5 (`#58`) `[Words of Wisdom]` | **Create Food** | `7 / 5 / 38% / 7` | `13 / 10 / 45% / 12` | `create_food()` — spawns a Ration of Food on the player's tile. | `ped_s13` (`eff_create_food`): spawns 1 `Ration of Food` (item ID `15`) at player's feet. | **Implemented** |
+| `14` | Book 5 (`#58`) `[Words of Wisdom]` | **Remove Curse** | `7 / 6 / 38% / 9` | `13 / 11 / 45% / 13` | Clears `TR_CURSED` on all carried and equipped items (`0..INVEN_MAX`). | `ped_s14` (`eff_remove_curse_all` in `core/player_magic_execute_overlay.s:380-395`): clears `IF_CURSED` across all `TOTAL_INV_SLOTS = 31` pack and equipment slots. | **Implemented** |
+| `15` | Book 5 (`#58`) `[Words of Wisdom]` | **Resist Heat and Cold** | `7 / 7 / 38% / 9` | `15 / 13 / 45% / 15` | `resist_heat += randint(10) + 10; resist_cold += randint(10) + 10` (`11..20` turns of temporary fire and cold resistance). | `ped_s15` (`eff_resist_heat_cold` in `core/player_magic_execute_overlay.s:474-479`): adds `rng_range(10) + 10` (`10..19`) turns to both `zp_eff_resist` (fire) and `eff_resist_cold_timer` (cold). | **Implemented** |
+| `16` | Book 6 (`#59`) `[Chants and Blessings]` | **Neutralize Poison** | `9 / 6 / 38% / 10` | `15 / 15 / 50% / 15` | `cure_poison()` — cures all poison (`poisoned = 0`). | `pmx_cure_poison_msg` (`eff_cure_poison`): clears `zp_eff_poison = 0`. | **Implemented** |
+| `17` | Book 6 (`#59`) `[Chants and Blessings]` | **Orb of Draining** | `9 / 7 / 38% / 10` | `17 / 15 / 50% / 17` | `fire_ball(GF_HOLY_ORB, dir, ..., damroll(3, 6) + char_lev, ...)` (`3d6 + level` holy ball, radius 2; doubled against evil monsters). | `ped_s17`: rolls `math_dice(3, 6, zp_player_lvl)` (`3d6 + zp_player_lvl`) and calls `eff_ball`. | **Implemented** |
+| `18` | Book 6 (`#59`) `[Chants and Blessings]` | **Cure Serious Wounds** | `9 / 7 / 40% / 10` | `17 / 15 / 50% / 18` | `hp_player(damroll(8, 4))` (`8d4` HP healed). | `ped_s18`: `heal_dice(8, 4, 0)` (`8d4` HP healed). | **Implemented** |
+| `19` | Book 6 (`#59`) `[Chants and Blessings]` | **Sense Invisible** | `11 / 8 / 42% / 10` | `19 / 15 / 50% / 19` | `detect_inv2(randint(24) + 24)` — temporary see-invisible for `25..48` turns. | `ped_s19` (`eff_sense_invisible` / `pmx_set_see_invisible_msg`): enables `zp_eff_see_inv = 1` and `zp_eff_invis = 1` and prints `"Your eyes tingle."`. | **Implemented** |
+| `20` | Book 6 (`#59`) `[Chants and Blessings]` | **Protection from Evil** | `11 / 8 / 42% / 12` | `19 / 15 / 50% / 19` | `protevil += randint(25) + 3 * char_lev` turns of Protection from Evil. | `ped_s20` (`eff_protect_from_evil` in `core/player_magic_execute_overlay.s:484-489`): adds `rng_range(25) + 25` (`25..49`) turns to `zp_eff_protect` and prints `"You feel protected from evil!"`. | **Implemented** |
+| `21` | Book 6 (`#59`) `[Chants and Blessings]` | **Earthquake** | `11 / 9 / 55% / 15` | `21 / 17 / 50% / 20` | `earthquake()` — shakes dungeon in radius 8 around player, collapsing floor into walls/rubble and crushing monsters. | `PMX_EARTHQUAKE_TARGET` (`eff_earthquake` in `core/player_magic_earthquake.s`): shakes radius around player, collapsing walls/rubble and damaging nearby monsters. | **Implemented** |
+| `22` | Book 6 (`#59`) `[Chants and Blessings]` | **Sense Surroundings** | `13 / 10 / 45% / 15` | `23 / 17 / 50% / 20` | `map_area()` — maps surrounding rooms, walls, doors, and corridors. | `ped_s22` (`PMX_MAP_AREA_TARGET` / `eff_map_area` in `core/player_magic_map.s`): reveals dungeon layout and secret doors on the level. | **Implemented** |
+| `23` | Book 6 (`#59`) `[Chants and Blessings]` | **Cure Critical Wounds** | `13 / 11 / 45% / 16` | `25 / 20 / 50% / 20` | `hp_player(damroll(16, 4))` (`16d4` HP healed). | `ped_s23`: `heal_dice(16, 4, 0)` (`16d4` HP healed). | **Implemented** |
+| `24` | Book 6 (`#59`) `[Chants and Blessings]` | **Turn Undead** | `15 / 12 / 50% / 20` | `27 / 21 / 50% / 22` | `turn_undead()` — attempts to terrify/confuse all visible undead (`CD_UNDEAD` / `0x0008`) monsters. | `eff_turn_undead` (`core/player_magic_utility.s:146-184`): iterates all visible monsters with `CF_UNDEAD ($08)`; if `rng_range(40) >= cr_level`, sets `MX_CONFUSE = zp_player_lvl` and prints `"The <monster> runs frantically!"`. | **Implemented** |
+| `25` | Book 7 (`#60`) `[Exorcisms and Dispellings]` | **Prayer** | `15 / 14 / 50% / 22` | `29 / 22 / 50% / 24` | `blessed += randint(48) + 48` (`49..96` turns of Bless). | `ped_s25`: `pmx_add_bless_msg(rng_range(48) + 48)` (`48..95` turns added to `zp_eff_bless`). | **Implemented** |
+| `26` | Book 7 (`#60`) `[Exorcisms and Dispellings]` | **Dispel Undead** | `17 / 14 / 55% / 32` | `31 / 24 / 60% / 25` | `dispel_creature(CD_UNDEAD, 3 * char_lev)` — deals `randint(3 * char_lev)` damage to every visible undead monster. | `ped_s26`: calls `eff_dispel_flagged` (`core/player_magic_utility.s:114-144`) with `CF_UNDEAD ($08)` and `damage = 3 * zp_player_lvl` (`rng_range(3 * zp_player_lvl) + 1` per visible undead monster). | **Implemented** |
+| `27` | Book 7 (`#60`) `[Exorcisms and Dispellings]` | **Heal** | `21 / 16 / 60% / 38` | `33 / 28 / 60% / 31` | `hp_player(200)` — heals `200` HP. | `ped_s27`: `pmx_heal_and_report(200)` — heals `200` HP. | **Implemented** |
+| `28` | Book 7 (`#60`) `[Exorcisms and Dispellings]` | **Dispel Evil** | `25 / 20 / 70% / 75` | `35 / 32 / 70% / 38` | `dispel_creature(CD_EVIL, 3 * char_lev)` — deals `randint(3 * char_lev)` damage to every visible evil monster. | `ped_s28`: calls `eff_dispel_flagged` with `CF_EVIL ($04)` and `damage = 3 * zp_player_lvl` (`rng_range(3 * zp_player_lvl) + 1` per visible evil monster). | **Implemented** |
+| `29` | Book 7 (`#60`) `[Exorcisms and Dispellings]` | **Glyph of Warding** | `33 / 24 / 90% / 125` | `37 / 36 / 90% / 50` | `warding_glyph()` — places a Glyph of Warding (`;`) on the player's floor tile; monsters cannot step onto it unless they break it (`randint(OBJ_RUNE_PROT=70) < c_level`). | `ped_s29` (`eff_glyph_of_warding` in `core/player_magic_utility.s:231-249`): places a Glyph of Warding at `(zp_player_x, zp_player_y)` via `glyph_add_at` (up to `MAX_GLYPHS = 4`). | **Implemented** |
+| `30` | Book 7 (`#60`) `[Exorcisms and Dispellings]` | **Holy Word** | `39 / 32 / 80% / 200` | `39 / 38 / 90% / 100` | `dispel_creature(CD_EVIL, 4 * char_lev)` + `turn_undead()` + `hp_player(1000)` + `cure_poison()` + `remove_fear()` + `cure_blindness()`. | `ped_s30` (`eff_holy_word` in `core/player_magic_utility.s:205-229`): calls `eff_remove_fear`, `eff_cure_poison`, restores full HP (`PL_HP = PL_MHP`), grants `3` turns of `eff_invuln_timer`, dispels all visible `CF_EVIL` monsters for `1..4*zp_player_lvl` damage, and calls `eff_turn_undead_core`. | **Implemented** |
+
+---
+
+# 8. Ego Items (All 56 Templates) & Complete Base Item Catalog
+
+## 8.1 Inventory, Equipment Slots, Encumbrance, Flavors & Identification
+
+| Subsystem / Mechanic | VMS Moria 4.8 | Umoria 5.7.15 | Moria8 Core | Port Differences | Verdict | Source Citations |
+| --- | --- | --- | --- | --- | --- | --- |
+| **Inventory & Equipment Slot Layout** | `inven_max = 34`:<br>• `0..21` (`22` slots, `a`-`v`): carried pack<br>• `22`: Wielded weapon (`INVEN_WIELD`)<br>• `23`: Head (`INVEN_HEAD`)<br>• `24`: Neck (`INVEN_NECK`)<br>• `25`: Body (`INVEN_BODY`)<br>• `26`: Arm/Shield (`INVEN_ARM`)<br>• `27`: Hands (`INVEN_HANDS`)<br>• `28`: Right Ring (`INVEN_RIGHT`)<br>• `29`: Left Ring (`INVEN_LEFT`)<br>• `30`: Feet (`INVEN_FEET`)<br>• `31`: Outer Cloak (`INVEN_OUTER`)<br>• `32`: Light (`INVEN_LIGHT`)<br>• `33`: Auxiliary swap slot (`INVEN_AUX`, used by `x` exchange). | Identical `INVEN_ARRAY_SIZE = 34` (`22` pack slots + `12` equipment/swap slots). | `TOTAL_INV_SLOTS = 31` (`core/item_defs.s:71-85`):<br>• `0..21` (`MAX_INV_SLOTS = 22` pack slots, `a`-`v`)<br>• `22` (`EQUIP_WEAPON`): Wielded weapon or digging tool (`x` swaps with `player_aux_slot` buffer)<br>• `23` (`EQUIP_ARMOR`): Body armor (includes Cloak `#82`)<br>• `24` (`EQUIP_SHIELD`): Shield<br>• `25` (`EQUIP_HELM`): Headgear<br>• `26` (`EQUIP_GLOVES`): Gloves/Gauntlets<br>• `27` (`EQUIP_BOOTS`): Footwear<br>• `28` (`EQUIP_LIGHT`): Light source (`inv_p1` = fuel/20)<br>• `29` (`EQUIP_RING`): Ring (1 ring slot instead of Left+Right)<br>• `30` (`EQUIP_AMULET`): Amulet.<br>Each slot stores `inv_item_id`, `inv_qty`, `inv_p1`, `inv_flags`, `inv_ego`, `inv_to_hit`, `inv_to_dam`, `inv_to_ac` (`8 × 31 = 248` B). | Identical across all 7 ports. | **Approximation** | `vms-moria: source/include/constants.inc:56-75`; `umoria: src/config.h`; `moria8: core/item_defs.s:71-85`, `core/item.s:120-165` |
+| **Floor Item Capacity & Representation** | Linked/indexed `t_list[1..MAX_TALLOC=225]` referenced by `cave[y,x].tptr` (`1` item per floor tile). | `t_list[MAX_TALLOC=175]`, `1` item per floor tile (`cave[y][x].tptr`). | `MAX_FLOOR_ITEMS = 42` (`FLOOR_ITEM_BASE`, `6` bytes per item = `252` B + `fi_to_hit`, `fi_to_dam`, `fi_to_ac` sidecar arrays, `1` item per floor tile) + `MAX_GLYPHS = 4` (`core/item_defs.s:45-68`, `core/item.s:68-115`). | Identical across all 7 ports. | **Approximation** | `vms-moria: source/include/constants.inc:48`; `umoria: src/config.h`; `moria8: core/item_defs.s:45-68`, `core/item.s:68-115` |
+| **Weight & Encumbrance Speed Penalty** | `weight_limit = str_weight * 100 + ...`; exceeding carrying capacity reduces player speed by `1` or more tiers. | Identical (`inven.cpp`). | `it_weight[0..135]` (`core/item_tables.s:292-322`) stores item weights in `1/10 lb` units (`0..255`), displayed in inventory/equipment screens. Speed encumbrance penalty is omitted. | Identical across all 7 ports. | **Partial** | `vms-moria: source/desc.inc`; `umoria: src/inventory.cpp`; `moria8: core/item_tables.s:292-322` |
+| **Unidentified Flavors & Identification (`item_identified`)** | Randomized per-game flavor tables (`magic_init` in `misc.inc`):<br>• `67` potion colors (`colors`)<br>• `25` mushroom/mold adjectives (`mushrooms`)<br>• `25` staff woods (`woods`)<br>• `25` wand metals (`metals`)<br>• `32` ring stones (`rocks`)<br>• `15` amulet materials (`amulets`)<br>• Generated gibberish scroll titles (`syllables`).<br>Identified per item type via `object_ident[1..max_objects]` and per instance via `ident` flags (`ID_KNOWN2`, `ID_TRIED`, `ID_DAMD`). | Identical randomized flavor tables (`data_Recall.cpp` / `treasure.cpp`). | Deterministic flavor tables + per-type and per-slot identification (`core/item_identification.s`, `core/item_defs.s:89-99`):<br>• `item_identified` bit array (`17` bytes = `136` bits, 1 bit per item type ID `0..135`)<br>• Per-slot `IF_IDENTIFIED ($02)` and `IF_CURSED ($01)` flags in `inv_flags` / `fi_flags`<br>• Flavor tables in `core/item_identification.s` assign distinct colors, woods, metals, stones, and scroll titles to unidentified Potions (`ICAT_POTION`), Scrolls (`ICAT_SCROLL`), Rings (`ICAT_RING`), Wands (`ICAT_WAND`), Staves (`ICAT_STAFF`), and Amulets (`ICAT_AMULET`)<br>• Quaffing/reading/using or casting `Identify` (`#20` / Scroll `#21`) sets `item_identified` and reveals `+to_hit`, `+to_dam`, `+to_ac`, charges, and ego suffixes. | Identical across all 7 ports (`ItemNameStreams` in Bank 1 on C128, Aux RAM on Apple IIe, Bank 3 on CX16, Bank 6 on BBC Master). | **Implemented** | `vms-moria: source/include/values.inc:1890-1985`, `source/desc.inc`; `umoria: src/treasure.cpp`, `src/identification.cpp`; `moria8: core/item_identification.s`, `core/item_defs.s:89-99` |
+| **Inscription (`{`)** | `inscribe_object` (`{`): attaches a 12-character player note to an item. | Identical (`{` command). | Omitted (not in `core/`). | None. | **Missing** | `vms-moria: source/moria2.inc`; `umoria: src/dungeon.cpp` |
+
+---
+
+## 8.2 Complete Ego Item Catalog (All 56 `special_item_names` Templates + Moria8 Tool Prefixes)
+
+In VMS Moria 4.8 (`misc.inc:800-1500`) and Umoria 5.7.15 (`data_treasure.cpp:524-544`, `treasure.cpp:35-820`), `special_item_names[0..55]` defines **56 ego/special suffixes** (`0` = `CNIL`, `1..55` = named suffixes). Moria8 implements **7 melee weapon ego types** (`EGO_SLAY_ANIMAL` through `EGO_HOLY_AVENGER` in `core/ego_items.s:19-220`), **2 digging tool ego prefixes** (`Gnomish` and `Dwarven` in `core/game_loop.s:2867-2910`), and **chest lock/trap/disarmed state inspection** (`core/chest.s`).
+
+| SN ID | Suffix / Prefix Name | Item Category | VMS Moria 4.8 / Umoria 5.7.15 Flags, Bonuses & Cost Delta | Moria8 Implementation (`core/ego_items.s`, `core/game_loop.s`, `core/chest.s`) | Verdict |
+| --- | --- | --- | --- | --- | --- |
+| `0` | *(None / `CNIL`)* | All | Standard non-ego item. | `EGO_NONE = 0`. | **Implemented** |
+| `1` | **`(R)`** *(Resist)* | Hard/Soft Armor | `TR_RES_LIGHT \| TR_RES_COLD \| TR_RES_ACID \| TR_RES_FIRE`, `+5` To-AC, `+2500` GP (`1/9` of special armors). | Omitted (armor receives `+to_ac` enchantments only). | **Missing** |
+| `2` | **`(RA)`** *(Resist Acid)* | Hard/Soft Armor | `TR_RES_ACID`, `+1000` GP (`1/9` of special armors). | Omitted. | **Missing** |
+| `3` | **`(RF)`** *(Resist Fire)* | Hard/Soft Armor | `TR_RES_FIRE`, `+600` GP (`2/9` of special armors). | Omitted (Fire resistance provided by Ring `#109`, Potion `#98`, Prayer `#15`). | **Missing** |
+| `4` | **`(RC)`** *(Resist Cold)* | Hard/Soft Armor | `TR_RES_COLD`, `+600` GP (`2/9` of special armors). | Omitted (Cold resistance provided by Ring `#110`, Potion `#99`, Prayer `#15`). | **Missing** |
+| `5` | **`(RL)`** *(Resist Lightning)* | Hard/Soft Armor | `TR_RES_LIGHT`, `+500` GP (`3/9` of special armors). | Omitted. | **Missing** |
+| `6` | **`(HA)`** *(Holy Avenger)* | Swords / Hafted / Polearms | `TR_SEE_INVIS \| TR_SUST_STAT \| TR_SLAY_UNDEAD (×3) \| TR_SLAY_EVIL (×2) \| TR_STR (+1d4)`, `+5` To-Hit, `+5` To-Dam, `+1d4` To-AC, `+10000 + 500*p1` GP (`1/16` of ego weapons). | **`EGO_HOLY_AVENGER = 7`** (`" (Holy Avenger)"`, `core/ego_items.s:26, 115, 122-160`): grants **`×3` damage vs `CF_UNDEAD`**, **`×2` damage vs `CF_EVIL`**, and **`+3` AC** when wielded (`ego_ac_bonus[7] = 3`); `3×` base store cost. | **Implemented** |
+| `7` | **`(DF)`** *(Defender)* | Swords / Hafted / Polearms | `TR_FFALL \| TR_RES_LIGHT \| TR_SEE_INVIS \| TR_FREE_ACT \| TR_RES_COLD \| TR_RES_ACID \| TR_RES_FIRE \| TR_REGEN \| TR_STEALTH (+1d3)`, `+3` To-Hit, `+3` To-Dam, `+5+1d5` To-AC, `+7500 + 500*p1` GP (`1/16` of ego weapons). | **`EGO_DEFENDER = 6`** (`" (Defender)"`, `core/ego_items.s:25, 111, 126`): grants **`+5` AC** when wielded (`ego_ac_bonus[6] = 5`); `3×` base store cost. | **Implemented** |
+| `8` | **`(SA)`** *(Slay Animal)* | Swords / Hafted / Polearms | `TR_SLAY_ANIMAL` (`×2` damage vs `CD_ANIMAL`), `+2` To-Hit, `+2` To-Dam, `+3000` GP (`2/16` of ego weapons; Umoria adds `SN_SA`, VMS Moria had `SN_SM` `(SM)` Slay Monster). | **`EGO_SLAY_ANIMAL = 1`** (`" (Slay Animal)"`, `core/ego_items.s:20, 106, 122-124`): grants **`×2` damage vs `CF_ANIMAL ($40)`**; `3×` base store cost. | **Implemented** |
+| `9` | **`(SD)`** *(Slay Dragon)* | Swords / Hafted / Polearms | `TR_SLAY_DRAGON` (`×4` damage vs `CD_DRAGON`), `+3` To-Hit, `+3` To-Dam, `+4000` GP (`2/16` of ego weapons). | Omitted (`CF_DRAGON` bit is merged into `CF_EVIL`/`CF_UNDEAD`/`CF_ANIMAL` in Moria8's 8-bit `cr_mflags`). | **Missing** |
+| `10` | **`(SE)`** *(Slay Evil)* | Swords / Hafted / Polearms | `TR_SLAY_EVIL` (`×2` damage vs `CD_EVIL`), `+3` To-Hit, `+3` To-Dam, `+4000` GP (`2/16` of ego weapons). | **`EGO_SLAY_EVIL = 2`** (`" (Slay Evil)"`, `core/ego_items.s:21, 107, 122-124`): grants **`×2` damage vs `CF_EVIL ($04)`**; `3×` base store cost. | **Implemented** |
+| `11` | **`(SU)`** *(Slay Undead)* | Swords / Hafted / Polearms | `TR_SEE_INVIS \| TR_SLAY_UNDEAD` (`×3` damage vs `CD_UNDEAD`), `+3` To-Hit, `+3` To-Dam, `+5000` GP (`2/16` of ego weapons). | **`EGO_SLAY_UNDEAD = 3`** (`" (Slay Undead)"`, `core/ego_items.s:22, 108, 122-124`): grants **`×3` damage vs `CF_UNDEAD ($08)`**; `3×` base store cost. | **Implemented** |
+| `12` | **`(FT)`** *(Flame Tongue)* | Swords / Hafted / Polearms | `TR_FLAME_TONGUE` (`×1.5` damage vs `CD_FIRE`), `+1` To-Hit, `+3` To-Dam, `+2000` GP (`3/16` of ego weapons). | **`EGO_FLAME_TONGUE = 4`** (`" (Flame)"`, `core/ego_items.s:23, 109, 185-203`): adds **`+2d4` bonus fire damage** on every hit; `3×` base store cost. | **Implemented** |
+| `13` | **`(FB)`** *(Frost Brand)* | Swords / Hafted / Polearms | `TR_FROST_BRAND` (`×1.5` damage vs `CD_FROST`), `+1` To-Hit, `+1` To-Dam, `+1200` GP (`3/16` of ego weapons). | **`EGO_FROST_BRAND = 5`** (`" (Frost)"`, `core/ego_items.s:24, 110, 185-203`): adds **`+2d4` bonus frost damage** on every hit; `3×` base store cost. | **Implemented** |
+| `14` | **`of Free Action`** | Gloves / Gauntlets | `TR_FREE_ACT` (paralysis immunity), `+1000` GP (`1/2` of ego gloves). | Omitted. | **Missing** |
+| `15` | **`of Slaying`** | Gloves / Gauntlets & Missiles | Gloves: `+(1+1d3)` To-Hit, `+(1+1d3)` To-Dam, `+250*(hit+dam)` GP. Missiles: `+5` To-Hit, `+5` To-Dam, `+20` GP. | Omitted on gloves/missiles (`Ring of Slaying` `#113` is a dedicated base item). | **Partial** |
+| `16` | **`of Clumsiness`** | Gloves / Gauntlets (Cursed) | `TR_CURSED \| TR_DEX`, `-p1` DEX, `-to_ac`, `cost = 0`. | Omitted (cursed gloves have negative `-to_ac` and `IF_CURSED`). | **Missing** |
+| `17` | **`of Weakness`** | Gloves & Helms (Cursed) | `TR_CURSED \| TR_STR`, `-p1` STR, `-to_ac`, `cost = 0`. | Omitted. | **Missing** |
+| `18` | **`of Slow Descent`** | Boots | `TR_FFALL` (feather falling), `+250` GP (`7/12` of ego boots). | Omitted. | **Missing** |
+| `19` | **`of Speed`** | Boots | `TR_SPEED` (`+1` speed), `+5000` GP (`1/12` of ego boots). | Omitted (`Ring of Speed` `#111` grants permanent `+1` speed). | **Missing** |
+| `20` | **`of Stealth`** | Boots & Cloaks | `TR_STEALTH` (`+1d3` stealth), `+500` GP (`4/12` of ego boots, `1/2` of ego cloaks). | Omitted. | **Missing** |
+| `21` | **`of Slowness`** | Boots (Cursed) | `TR_CURSED \| TR_SPEED` (`-1` speed), `-to_ac`, `cost = 0`. | Omitted. | **Missing** |
+| `22` | **`of Noise`** | Boots (Cursed) | `TR_CURSED \| TR_AGGRAVATE`, `-to_ac`, `cost = 0`. | Omitted. | **Missing** |
+| `23` | **`of Great Mass`** | Boots (Cursed) | `TR_CURSED`, `weight *= 5`, `-to_ac`, `cost = 0`. | Omitted. | **Missing** |
+| `24` | **`of Intelligence`** | Caps / Helms (`subval < 6`) | `TR_INT` (`+1d2` INT), `+500*p1` GP (`1/3` of ego helms). | Omitted. | **Missing** |
+| `25` | **`of Wisdom`** | Caps / Helms (`subval < 6`) | `TR_WIS` (`+1d2` WIS), `+500*p1` GP (`1/3` of ego helms). | Omitted (`Amulet of Wisdom` `#124` grants WIS). | **Missing** |
+| `26` | **`of Infra-Vision`** | Caps / Helms (`subval < 6`) | `TR_INFRA` (`+(1+1d4)` infravision), `+250*p1` GP (`1/3` of ego helms). | Omitted (`Potion of Infravision` `#31` grants infravision). | **Missing** |
+| `27` | **`of Might`** | Crowns (`subval >= 6`) | `TR_FREE_ACT \| TR_CON \| TR_DEX \| TR_STR` (`+1d3`), `+1000 + 500*p1` GP (`1/6` of ego crowns). | Omitted. | **Missing** |
+| `28` | **`of Lordliness`** | Crowns (`subval >= 6`) | `TR_CHR \| TR_WIS` (`+1d3`), `+1000 + 500*p1` GP (`1/6` of ego crowns). | Omitted. | **Missing** |
+| `29` | **`of the Magi`** | Crowns (`subval >= 6`) | `TR_RES_LIGHT \| TR_RES_COLD \| TR_RES_ACID \| TR_RES_FIRE \| TR_INT` (`+1d3`), `+3000 + 500*p1` GP (`1/6` of ego crowns). | Omitted on crowns (`Amulet of the Magi` `#125` is a dedicated base item). | **Partial** |
+| `30` | **`of Beauty`** | Crowns (`subval >= 6`) | `TR_CHR` (`+1d3`), `+750` GP (`1/6` of ego crowns). | Omitted. | **Missing** |
+| `31` | **`of Seeing`** | Crowns (`subval >= 6`) | `TR_SEE_INVIS \| TR_SEARCH` (`+5*(1+1d4)` search), `+1000 + 100*p1` GP (`1/6` of ego crowns). | Omitted (`Ring of See Invisible` `#112` is a dedicated base item). | **Missing** |
+| `32` | **`of Regeneration`** | Crowns (`subval >= 6`) | `TR_REGEN`, `+1500` GP (`1/6` of ego crowns). | Omitted. | **Missing** |
+| `33` | **`of Stupidity`** | Helms / Crowns (Cursed) | `TR_CURSED \| TR_INT` (`-1d5` INT), `cost = 0`. | Omitted. | **Missing** |
+| `34` | **`of Dullness`** | Helms / Crowns (Cursed) | `TR_CURSED \| TR_WIS` (`-1d5` WIS), `cost = 0`. | Omitted. | **Missing** |
+| `35` | **`of Blindness`** | Helms / Crowns (Cursed) | `TR_CURSED \| TR_BLIND`, `cost = 0`. | Omitted. | **Missing** |
+| `36` | **`of Timidness`** | Helms / Crowns (Cursed) | `TR_CURSED \| TR_TIMID`, `cost = 0`. | Omitted. | **Missing** |
+| `37` | **`of Teleportation`** | Helms / Crowns (Cursed) | `TR_CURSED \| TR_TELEPORT`, `cost = 0`. | Omitted. | **Missing** |
+| `38` | **`of Ugliness`** | Helms / Crowns (Cursed) | `TR_CURSED \| TR_CHR` (`-1d5` CHR), `cost = 0`. | Omitted. | **Missing** |
+| `39` | **`of Protection`** | Cloaks | `+(2..40)` To-AC, `+250` GP (`1/2` of ego cloaks). | Omitted (Cloak `#82` can roll standard `+to_ac`). | **Missing** |
+| `40` | **`of Irritation`** | Cloaks (Cursed) | `TR_CURSED \| TR_AGGRAVATE`, `-to_ac`, `-to_hit`, `-to_dam`, `cost = 0`. | Omitted. | **Missing** |
+| `41` | **`of Vulnerability`** | Cloaks (Cursed) | `TR_CURSED`, `-(10..100)` To-AC, `cost = 0`. | Omitted. | **Missing** |
+| `42` | **`of Enveloping`** | Cloaks (Cursed) | `TR_CURSED`, `-to_ac`, `-(2..40)` To-Hit, `-(2..40)` To-Dam, `cost = 0`. | Omitted. | **Missing** |
+| `43` | **`of Fire`** | Ammo (`TV_ARROW`/`TV_BOLT`/`TV_SLING_AMMO`) | `TR_FLAME_TONGUE`, `+2` To-Hit, `+4` To-Dam, `+25` GP (`2/10` of ego ammo). | Omitted. | **Missing** |
+| `44` | **`of Slay Evil`** | Ammo (`TV_ARROW`/`TV_BOLT`/`TV_SLING_AMMO`) | `TR_SLAY_EVIL`, `+3` To-Hit, `+3` To-Dam, `+25` GP (`2/10` of ego ammo). | Omitted. | **Missing** |
+| `45` | **`of Dragon Slaying`** | Ammo (`TV_ARROW`/`TV_BOLT`/`TV_SLING_AMMO`) | `TR_SLAY_DRAGON`, `+3` To-Hit, `+3` To-Dam, `+35` GP (`1/10` of ego ammo). | Omitted. | **Missing** |
+| `46` | **`(Empty)`** | Chests (`TV_CHEST`) | `flags = 0` (already opened or spawned empty). | Represented by `inv_p1 = 0` (`CH_TRAPPED_MASK == 0` and unlocked) or `Ruined Chest` (`#134`, `core/chest.s`). | **Implemented** |
+| `47` | **`(Locked)`** | Chests (`TV_CHEST`) | `CH_LOCKED (0x01)`. | `CH_LOCKED = $01` in `inv_p1` / `fi_p1` (`core/chest.s`). | **Implemented** |
+| `48` | **`(Poison Needle)`** | Chests (`TV_CHEST`) | `CH_LOCKED \| CH_LOSE_STR (0x10)` or `CH_LOCKED \| CH_POISON (0x20)`. | `CH_LOSE_STR = $10` and `CH_POISON = $20` in `inv_p1` / `fi_p1` (`core/chest.s`). | **Implemented** |
+| `49` | **`(Gas Trap)`** | Chests (`TV_CHEST`) | `CH_LOCKED \| CH_PARALYSED (0x40)`. | `CH_PARALYSED = $40` in `inv_p1` / `fi_p1` (`core/chest.s`). | **Implemented** |
+| `50` | **`(Explosion Device)`** | Chests (`TV_CHEST`) | `CH_LOCKED \| CH_EXPLODE (0x08)`. | `CH_EXPLODE = $08` in `inv_p1` / `fi_p1` (`core/chest.s`). | **Implemented** |
+| `51` | **`(Summoning Runes)`** | Chests (`TV_CHEST`) | `CH_LOCKED \| CH_SUMMON (0x80)`. | `CH_SUMMON = $80` in `inv_p1` / `fi_p1` (`core/chest.s`). | **Implemented** |
+| `52` | **`(Multiple Traps)`** | Chests (`TV_CHEST`) | `CH_LOCKED \| CH_PARALYSED \| CH_POISON \| CH_LOSE_STR` or `CH_LOCKED \| CH_SUMMON \| CH_EXPLODE`. | Multi-bit combinations in `inv_p1` / `fi_p1` (`core/chest.s`). | **Implemented** |
+| `53` | **`(Disarmed)`** | Chests (`TV_CHEST`) | Traps disarmed (`CH_TRAPPED` bits cleared). | `CH_TRAPPED_MASK ($F8)` cleared by `chest_disarm` (`core/chest.s`). | **Implemented** |
+| `54` | **`(Unlocked)`** | Chests (`TV_CHEST`) | `CH_LOCKED` cleared. | `CH_LOCKED ($01)` cleared by `chest_open` / `eff_destroy_traps_doors` (`core/chest.s`). | **Implemented** |
+| `55` | **`of Slay Animal`** | Ammo (`TV_ARROW`/`TV_BOLT`/`TV_SLING_AMMO`) | `TR_SLAY_ANIMAL`, `+2` To-Hit, `+2` To-Dam, `+30` GP (`2/10` of ego ammo). | Omitted on ammo. | **Missing** |
+| `M8-T1` | **`Gnomish` (Prefix)** | Digging Tools (`Shovel #62`, `Pick #63`) | Separate base items (`Gnomish Shovel #89`, `Orcish Pick #87`) in VMS Moria / Umoria. | In Moria8, `roll_tool_ego_check` (`core/game_loop.s:2867-2910`) assigns `ego = 1` (`"Gnomish "` prefix, `+2` digging bonus, `5×` store value) at `dlvl >= 3` (`25%` chance). | **Implemented** |
+| `M8-T2` | **`Dwarven` (Prefix)** | Digging Tools (`Shovel #62`, `Pick #63`) | Separate base items (`Dwarven Shovel #90`, `Dwarven Pick #88`) in VMS Moria / Umoria. | In Moria8, `roll_tool_ego_check` (`core/game_loop.s:2867-2910`) assigns `ego = 2` (`"Dwarven "` prefix, `+4` digging bonus, `15×` store value) at `dlvl >= 6` (`15%` chance). | **Implemented** |
+
+---
+
+## 8.3 Complete Base Item Catalog (All VMS Moria / Umoria Templates & All 136 Moria8 Items)
+
+### 8.3.1 Moria8 Master Item Table (All 136 Item Templates, IDs `0..135`)
+
+Source: `core/item_tables.s:13-660`, `core/item_defs.s:1-44`.
+
+| M8 ID | Item Name | Category (`it_category`) | Glyph | Color | Base AC | Damage Dice | Weight (`0.1 lb`) | Base Cost (`GP`) | Min Depth (`0..12`) | VMS Moria / Umoria Origin |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `0` | **Gold (small)** | `ICAT_GOLD (1)` | `$` | Yellow | `0` | `0d0` | `0` | `0` | `0` | `TV_GOLD` (`copper` / `silver` `399..404`) |
+| `1` | **Gold (large)** | `ICAT_GOLD (1)` | `$` | Yellow | `0` | `0d0` | `0` | `0` | `0` | `TV_GOLD` (`gold` / `gems` / `mithril` `405..416`) |
+| `2` | **Dagger** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `1d4` | `12` | `10` | `1` | `Dagger (Stiletto)` (`#30`) |
+| `3` | **Short Sword** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `1d6` | `30` | `25` | `1` | `Small Sword` (`#49`) |
+| `4` | **Long Sword** | `ICAT_WEAPON (2)` | `/` | White | `0` | `1d8` | `50` | `60` | `3` | `Longsword` (`#45`, `1d10` in orig) |
+| `5` | **Mace** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `2d4` | `50` | `45` | `2` | `Mace` (`#58`) |
+| `6` | **Robe** | `ICAT_ARMOR (3)` | `[` | L.Grey | `2` | `0d0` | `20` | `15` | `1` | `Robe` (`#102`) |
+| `7` | **Leather Armor** | `ICAT_ARMOR (3)` | `[` | Brown | `4` | `0d0` | `80` | `30` | `2` | `Soft Leather Armor` (`#103`) |
+| `8` | **Chain Mail** | `ICAT_ARMOR (3)` | `[` | Grey | `6` | `0d0` | `120` | `80` | `4` | `Chain Mail` (`#112`, AC `6` on Moria8 1-nibble scale) |
+| `9` | **Small Shield** | `ICAT_SHIELD (4)` | `)` | L.Grey | `2` | `0d0` | `50` | `20` | `2` | `Small Leather Shield` (`#126`) |
+| `10` | **Iron Helm** | `ICAT_HELM (5)` | `]` | Grey | `1` | `0d0` | `30` | `15` | `3` | `Iron Helm` (`#97`) |
+| `11` | **Leather Gloves** | `ICAT_GLOVES (6)` | `]` | Brown | `1` | `0d0` | `5` | `8` | `1` | `Set of Leather Gloves` (`#124`) |
+| `12` | **Leather Boots** | `ICAT_BOOTS (7)` | `]` | Brown | `1` | `0d0` | `10` | `10` | `1` | `Pair of Soft Leather Shoes` (`#91`) |
+| `13` | **Wooden Torch** | `ICAT_LIGHT (8)` | `*` | Yellow | `0` | `0d0` | `10` | `2` | `0` | `Wooden Torch` (`#86`, `4000` turns = `inv_p1=200`) |
+| `14` | **Brass Lantern** | `ICAT_LIGHT (8)` | `*` | Orange | `0` | `0d0` | `30` | `20` | `2` | `Brass Lantern` (`#85`, `5000` turns = `inv_p1=250`) |
+| `15` | **Ration of Food** | `ICAT_FOOD (9)` | `,` | Brown | `0` | `0d0` | `10` | `3` | `0` | `Ration of Food` (`#21..23`) |
+| `16` | **Slime Mold** | `ICAT_FOOD (9)` | `,` | Green | `0` | `0d0` | `5` | `2` | `1` | `Slime Mold` (`#24`) |
+| `17` | **Cure Light Wounds Potion** | `ICAT_POTION (10)` | `!` | White | `0` | `0d0` | `4` | `50` | `1` | `Potion of Cure Light Wounds` (`#237..239`) |
+| `18` | **Speed Potion** | `ICAT_POTION (10)` | `!` | L.Green | `0` | `0d0` | `4` | `75` | `3` | `Potion of Haste Self` (`#249`) |
+| `19` | **Poison Potion** | `ICAT_POTION (10)` | `!` | Green | `0` | `0d0` | `4` | `5` | `1` | `Potion of Poison` (`#248`) |
+| `20` | **Scroll of Light** | `ICAT_SCROLL (11)` | `?` | White | `0` | `0d0` | `2` | `15` | `1` | `Scroll of Light` (`#181..183`) |
+| `21` | **Scroll of Identify** | `ICAT_SCROLL (11)` | `?` | L.Grey | `0` | `0d0` | `2` | `50` | `2` | `Scroll of Identify` (`#176..179`) |
+| `22` | **Scroll of Teleportation** | `ICAT_SCROLL (11)` | `?` | Cyan | `0` | `0d0` | `2` | `40` | `3` | `Scroll of Teleport` (`#186`) |
+| `23` | **Ring of Protection** | `ICAT_RING (12)` | `=` | Yellow | `1` | `0d0` | `2` | `100` | `4` | `Ring of Protection` (`#153`, base AC `1` + `+to_ac`) |
+| `24` | **Ring of Strength** | `ICAT_RING (12)` | `=` | L.Red | `0` | `0d0` | `2` | `120` | `5` | `Ring of Strength` (`#132`) |
+| `25` | **Cure Serious Wounds Potion** | `ICAT_POTION (10)` | `!` | White | `0` | `0d0` | `4` | `100` | `3` | `Potion of Cure Serious Wounds` (`#240`) |
+| `26` | **Restore Mana Potion** | `ICAT_POTION (10)` | `!` | Blue | `0` | `0d0` | `4` | `150` | `5` | `Potion of Restore Mana` (`#266`) |
+| `27` | **Heroism Potion** | `ICAT_POTION (10)` | `!` | L.Red | `0` | `0d0` | `4` | `80` | `4` | `Potion of Heroism` (`#257`) |
+| `28` | **Blindness Potion** | `ICAT_POTION (10)` | `!` | Grey | `0` | `0d0` | `4` | `5` | `1` | `Potion of Blindness` (`#246`) |
+| `29` | **Confusion Potion** | `ICAT_POTION (10)` | `!` | Purple | `0` | `0d0` | `4` | `5` | `1` | `Potion of Confusion` (`#247`) |
+| `30` | **Detect Monsters Potion** | `ICAT_POTION (10)` | `!` | Yellow | `0` | `0d0` | `4` | `60` | `2` | `Potion of Detect Invisible` (`#263`) / Moria8 adaptation |
+| `31` | **Infravision Potion** | `ICAT_POTION (10)` | `!` | Orange | `0` | `0d0` | `4` | `40` | `2` | `Potion of Infra-Vision` (`#267`) |
+| `32` | **Scroll of Word of Recall** | `ICAT_SCROLL (11)` | `?` | L.Grey | `0` | `0d0` | `2` | `200` | `5` | `Scroll of Word-of-Recall` (`#220`) |
+| `33` | **Scroll of Remove Curse** | `ICAT_SCROLL (11)` | `?` | Cyan | `0` | `0d0` | `2` | `80` | `4` | `Scroll of Remove Curse` (`#180`) |
+| `34` | **Scroll of Enchant Weapon** | `ICAT_SCROLL (11)` | `?` | White | `0` | `0d0` | `2` | `250` | `6` | `Scroll of Enchant Weapon To-Hit/Dam` (`#173/#174`) |
+| `35` | **Scroll of Enchant Armor** | `ICAT_SCROLL (11)` | `?` | White | `0` | `0d0` | `2` | `250` | `6` | `Scroll of Enchant Armor` (`#175`) |
+| `36` | **Scroll of Monster Confusion** | `ICAT_SCROLL (11)` | `?` | L.Green | `0` | `0d0` | `2` | `50` | `3` | `Scroll of Monster Confusion` (`#188`) |
+| `37` | **Scroll of Aggravate** | `ICAT_SCROLL (11)` | `?` | L.Red | `0` | `0d0` | `2` | `5` | `1` | `Scroll of Aggravate Monster` (`#202`) |
+| `38` | **Scroll of Protect from Evil** | `ICAT_SCROLL (11)` | `?` | Yellow | `0` | `0d0` | `2` | `100` | `4` | `Scroll of Protection from Evil` (`#209`) |
+| `39` | **Wand of Light** | `ICAT_WAND (14)` | `-` | Yellow | `0` | `0d0` | `10` | `50` | `3` | `Wand of Light` (`#269`) |
+| `40` | **Wand of Lightning** | `ICAT_WAND (14)` | `-` | Cyan | `0` | `0d0` | `10` | `200` | `4` | `Wand of Lightning Bolts` (`#270`) |
+| `41` | **Wand of Frost** | `ICAT_WAND (14)` | `-` | Blue | `0` | `0d0` | `10` | `250` | `5` | `Wand of Frost Bolts` (`#271`) |
+| `42` | **Wand of Stinking Cloud** | `ICAT_WAND (14)` | `-` | Green | `0` | `0d0` | `10` | `150` | `4` | `Wand of Stinking Cloud` (`#290`) |
+| `43` | **Staff of Light** | `ICAT_STAFF (15)` | `/` | Yellow | `0` | `0d0` | `50` | `60` | `3` | `Staff of Light` (`#293`) |
+| `44` | **Staff of Detect Monsters** | `ICAT_STAFF (15)` | `/` | L.Green | `0` | `0d0` | `50` | `100` | `3` | `Staff of Detect Invisible` (`#308`) |
+| `45` | **Staff of Teleportation** | `ICAT_STAFF (15)` | `/` | Cyan | `0` | `0d0` | `50` | `300` | `5` | `Staff of Teleportation` (`#298`) |
+| `46` | **Staff of Cure Light Wounds** | `ICAT_STAFF (15)` | `/` | White | `0` | `0d0` | `50` | `200` | `3` | `Staff of Cure Light Wounds` (`#307`) |
+| `47` | **[Beginners-Magick]** | `ICAT_BOOK (13)` | `?` | Purple | `0` | `0d0` | `30` | `100` | `2` | `[Beginners-Magick]` (Mage Book 1, `#318` / `#395`) |
+| `48` | **[Beginners Handbook]** | `ICAT_BOOK (13)` | `?` | Yellow | `0` | `0d0` | `30` | `100` | `2` | `[Beginners Handbook]` (Priest Book 1, `#322` / `#407`) |
+| `49` | **Short Bow** | `ICAT_WEAPON (2)` | `}` | Brown | `0` | `0d0` | `30` | `50` | `2` | `Short Bow` (`#74`, fires Arrows `#52`) |
+| `50` | **Light Crossbow** | `ICAT_WEAPON (2)` | `}` | L.Grey | `0` | `0d0` | `50` | `120` | `3` | `Light Crossbow` (`#77`, fires Bolts `#53`) |
+| `51` | **Sling** | `ICAT_WEAPON (2)` | `}` | Brown | `0` | `0d0` | `5` | `10` | `1` | `Sling` (`#79`, fires Rocks `#54`) |
+| `52` | **Arrow** | `ICAT_WEAPON (2)` | `{` | Brown | `0` | `1d4` | `2` | `1` | `1` | `Arrow` (`#80`) |
+| `53` | **Bolt** | `ICAT_WEAPON (2)` | `{` | L.Grey | `0` | `1d5` | `2` | `2` | `2` | `Bolt` (`#81`) |
+| `54` | **Rock** | `ICAT_WEAPON (2)` | `{` | Grey | `0` | `1d2` | `4` | `1` | `1` | `Rounded Pebble` (`#82`) |
+| `55` | **[Magick I]** | `ICAT_BOOK (13)` | `?` | Purple | `0` | `0d0` | `30` | `300` | `4` | `[Magick I]` (Mage Book 2, `#319` / `#396`) |
+| `56` | **[Magick II]** | `ICAT_BOOK (13)` | `?` | Blue | `0` | `0d0` | `30` | `500` | `8` | `[Magick II]` (Mage Book 3, `#320` / `#397`) |
+| `57` | **[The Mages' Guide to Power]** | `ICAT_BOOK (13)` | `?` | L.Red | `0` | `0d0` | `30` | `800` | `12` | `[The Mages' Guide to Power]` (Mage Book 4, `#321` / `#398`) |
+| `58` | **[Words of Wisdom]** | `ICAT_BOOK (13)` | `?` | Yellow | `0` | `0d0` | `30` | `300` | `4` | `[Words of Wisdom]` (Priest Book 2, `#323` / `#408`) |
+| `59` | **[Chants and Blessings]** | `ICAT_BOOK (13)` | `?` | Cyan | `0` | `0d0` | `30` | `500` | `8` | `[Chants and Blessings]` (Priest Book 3, `#324` / `#409`) |
+| `60` | **[Exorcisms and Dispellings]** | `ICAT_BOOK (13)` | `?` | White | `0` | `0d0` | `30` | `800` | `12` | `[Exorcisms and Dispellings]` (Priest Book 4, `#325` / `#410`) |
+| `61` | **Flask of Oil** | `ICAT_LIGHT (8)` | `!` | Orange | `0` | `2d6` | `10` | `10` | `0` | `Flask of Oil` (`#268`, refuels Lantern or `2d6` thrown fire) |
+| `62` | **Shovel** | `ICAT_DIGGING (0)` | `\` | Brown | `0` | `1d2` | `60` | `15` | `0` | `Shovel` (`#350`; can roll `Gnomish` or `Dwarven` ego prefix) |
+| `63` | **Pick** | `ICAT_DIGGING (0)` | `\` | L.Grey | `0` | `1d3` | `50` | `50` | `0` | `Pick` (`#349`; can roll `Gnomish` or `Dwarven` ego prefix) |
+| `64` | **Main Gauche** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `1d5` | `30` | `25` | `1` | `Dagger (Main Gauche)` (`#28`) |
+| `65` | **Studded Leather Armor** | `ICAT_ARMOR (3)` | `[` | Brown | `5` | `0d0` | `90` | `75` | `3` | `Soft Studded Leather` (`#104`) |
+| `66` | **Rapier** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `1d6` | `40` | `42` | `2` | `Rapier` (`#47`) |
+| `67` | **Broad Sword** | `ICAT_WEAPON (2)` | `/` | White | `0` | `2d5` | `75` | `70` | `4` | `Broadsword` (`#37`) |
+| `68` | **Bastard Sword** | `ICAT_WEAPON (2)` | `/` | White | `0` | `3d4` | `140` | `120` | `6` | `Bastard Sword` (`#34`) |
+| `69` | **Two-Handed Sword** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `3d6` | `200` | `180` | `8` | `Two-Handed Sword (Claymore)` (`#38`) |
+| `70` | **Scimitar** | `ICAT_WEAPON (2)` | `/` | White | `0` | `1d8` | `40` | `50` | `3` | `Backsword` / `Scimitar` (`#33`) |
+| `71` | **Battle Axe** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `3d4` | `170` | `120` | `7` | `Battle Axe (European)` (`#72`) |
+| `72` | **War Hammer** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `3d3` | `120` | `90` | `5` | `War Hammer` (`#59`) |
+| `73` | **Morningstar** | `ICAT_WEAPON (2)` | `/` | White | `0` | `2d6` | `150` | `100` | `6` | `Morningstar` (`#57`) |
+| `74` | **Spear** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `1d6` | `50` | `36` | `2` | `Spear` (`#68`) |
+| `75` | **Pike** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `2d5` | `160` | `100` | `8` | `Pike` (`#67`) |
+| `76` | **Halberd** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `3d4` | `190` | `150` | `9` | `Halberd` (`#65`) |
+| `77` | **Quarterstaff** | `ICAT_WEAPON (2)` | `/` | Brown | `0` | `1d9` | `40` | `20` | `1` | `Quarterstaff` (`1d9` hafted/staff weapon) |
+| `78` | **Large Shield** | `ICAT_SHIELD (4)` | `)` | L.Grey | `3` | `0d0` | `100` | `40` | `4` | `Large Leather/Metal Shield` (`#128`/`#131`) |
+| `79` | **Hard Leather Armor** | `ICAT_ARMOR (3)` | `[` | Brown | `6` | `0d0` | `120` | `100` | `5` | `Hard Leather Armor` (`#105`) |
+| `80` | **Scale Mail** | `ICAT_ARMOR (3)` | `[` | Grey | `7` | `0d0` | `250` | `350` | `7` | `Metal Scale Mail` (`#111`) |
+| `81` | **Plate Mail** | `ICAT_ARMOR (3)` | `[` | L.Grey | `9` | `0d0` | `380` | `900` | `10` | `Full Plate Armor` (`#121`) |
+| `82` | **Cloak** | `ICAT_ARMOR (3)` | `[` | L.Grey | `1` | `0d0` | `10` | `20` | `2` | `Cloak` (`#123`) |
+| `83` | **Steel Helm** | `ICAT_HELM (5)` | `]` | L.Grey | `2` | `0d0` | `60` | `120` | `6` | `Steel Helm` (`#98`) |
+| `84` | **Gauntlets** | `ICAT_GLOVES (6)` | `]` | L.Grey | `1` | `0d0` | `25` | `35` | `2` | `Set of Gauntlets` (`#125`) |
+| `85` | **Soft Leather Boots** | `ICAT_BOOTS (7)` | `]` | Brown | `1` | `0d0` | `5` | `8` | `1` | `Pair of Soft Leather Boots` (`#92`) |
+| `86` | **Hard Leather Boots** | `ICAT_BOOTS (7)` | `]` | Brown | `2` | `0d0` | `20` | `30` | `3` | `Pair of Hard Leather Boots` (`#93`) |
+| `87` | **Metal Cap** | `ICAT_HELM (5)` | `]` | Grey | `1` | `0d0` | `20` | `50` | `4` | `Metal Cap` (`#96`) |
+| `88` | **Sabre** | `ICAT_WEAPON (2)` | `/` | White | `0` | `1d7` | `50` | `60` | `3` | `Sabre` (`#48`) |
+| `89` | **Cutlass** | `ICAT_WEAPON (2)` | `/` | White | `0` | `1d7` | `110` | `85` | `4` | `Cutlass` (`#39`) |
+| `90` | **Tulwar** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `2d4` | `100` | `100` | `5` | `Tulwar` (`2d4` curved blade) |
+| `91` | **Katana** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `3d4` | `120` | `400` | `7` | `Katana` (`#44`) |
+| `92` | **Flail** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `2d6` | `150` | `120` | `5` | `Flail` (`#55`) |
+| `93` | **Lucerne Hammer** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `2d5` | `120` | `110` | `6` | `Lucerne Hammer` (`#66`) |
+| `94` | **Broad Axe** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `2d6` | `160` | `100` | `5` | `Broad Axe` (`#73`) |
+| `95` | **Awl-Pike** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `1d8` | `160` | `80` | `4` | `Awl-Pike` (`#61`) |
+| `96` | **Healing Potion** | `ICAT_POTION (10)` | `!` | White | `0` | `0d0` | `4` | `200` | `4` | `Potion of Healing` (`#242`, heals `200` HP + cures status) |
+| `97` | **Restoration Potion** | `ICAT_POTION (10)` | `!` | Yellow | `0` | `0d0` | `4` | `300` | `8` | Consolidated `Restore Stat` / `Restore Life Levels` (`#227..260`) |
+| `98` | **Resist Heat Potion** | `ICAT_POTION (10)` | `!` | L.Red | `0` | `0d0` | `4` | `30` | `1` | `Potion of Resist Heat` (`#261`) |
+| `99` | **Resist Cold Potion** | `ICAT_POTION (10)` | `!` | Cyan | `0` | `0d0` | `4` | `30` | `1` | `Potion of Resist Cold` (`#262`) |
+| `100` | **Cure Critical Wounds Potion** | `ICAT_POTION (10)` | `!` | White | `0` | `0d0` | `4` | `100` | `2` | `Potion of Cure Critical Wounds` (`#241`) |
+| `101` | **Scroll of Teleport Level** | `ICAT_SCROLL (11)` | `?` | Cyan | `0` | `0d0` | `5` | `50` | `5` | `Scroll of Teleport Level` (`#187`) |
+| `102` | **Scroll of Magic Mapping** | `ICAT_SCROLL (11)` | `?` | L.Green | `0` | `0d0` | `5` | `40` | `2` | `Scroll of Magic Mapping` (`#189`) |
+| `103` | **Scroll of Object Detection** | `ICAT_SCROLL (11)` | `?` | Yellow | `0` | `0d0` | `5` | `15` | `1` | `Scroll of Object Detection` (`#193`) |
+| `104` | **Scroll of Recharging** | `ICAT_SCROLL (11)` | `?` | L.Green | `0` | `0d0` | `5` | `200` | `9` | `Scroll of Recharging` (`#206`) |
+| `105` | **Scroll of Rune of Protection** | `ICAT_SCROLL (11)` | `?` | Yellow | `0` | `0d0` | `5` | `500` | `11` | `Scroll of Rune of Protection` (`#191`) |
+| `106` | **Scroll of Genocide** | `ICAT_SCROLL (11)` | `?` | L.Red | `0` | `0d0` | `5` | `750` | `9` | `Scroll of Genocide` (`#207`) |
+| `107` | **Scroll of Mass Genocide** | `ICAT_SCROLL (11)` | `?` | L.Red | `0` | `0d0` | `5` | `1000` | `12` | `Scroll of Mass Genocide` (`#200`) |
+| `108` | **Scroll of \*Destruction\*** | `ICAT_SCROLL (11)` | `?` | L.Red | `0` | `0d0` | `5` | `750` | `10` | `Scroll of *Destruction*` (`#221`) |
+| `109` | **Ring of Resist Fire** | `ICAT_RING (12)` | `=` | L.Red | `0` | `0d0` | `2` | `250` | `4` | `Ring of Resist Fire` (`#140`) |
+| `110` | **Ring of Resist Cold** | `ICAT_RING (12)` | `=` | Cyan | `0` | `0d0` | `2` | `250` | `4` | `Ring of Resist Cold` (`#141`) |
+| `111` | **Ring of Speed** | `ICAT_RING (12)` | `=` | Yellow | `0` | `0d0` | `2` | `3000` | `12` | `Ring of Speed` (`#136`) |
+| `112` | **Ring of See Invisible** | `ICAT_RING (12)` | `=` | L.Green | `0` | `0d0` | `2` | `500` | `9` | `Ring of See Invisible` (`#155`) |
+| `113` | **Ring of Slaying** | `ICAT_RING (12)` | `=` | L.Red | `0` | `0d0` | `2` | `1000` | `12` | `Ring of Slaying` (`#162`) |
+| `114` | **Wand of Slow Monster** | `ICAT_WAND (14)` | `-` | Grey | `0` | `0d0` | `10` | `500` | `1` | `Wand of Slow Monster` (`#277`) |
+| `115` | **Wand of Stone-to-Mud** | `ICAT_WAND (14)` | `-` | Brown | `0` | `0d0` | `10` | `300` | `3` | `Wand of Stone-to-Mud` (`#273`) |
+| `116` | **Wand of Teleport Away** | `ICAT_WAND (14)` | `-` | Cyan | `0` | `0d0` | `10` | `350` | `5` | `Wand of Teleport Away` (`#285`) |
+| `117` | **Wand of Fire Balls** | `ICAT_WAND (14)` | `-` | L.Red | `0` | `0d0` | `10` | `1800` | `11` | `Wand of Fire Balls` (`#289`) |
+| `118` | **Wand of Cold Balls** | `ICAT_WAND (14)` | `-` | Cyan | `0` | `0d0` | `10` | `1500` | `10` | `Wand of Cold Balls` (`#288`) |
+| `119` | **Staff of Dispel Evil** | `ICAT_STAFF (15)` | `/` | White | `0` | `0d0` | `50` | `1200` | `11` | `Staff of Dispel Evil` (`#315`) |
+| `120` | **Staff of Destruction** | `ICAT_STAFF (15)` | `/` | L.Red | `0` | `0d0` | `50` | `2500` | `12` | `Staff of *Destruction*` (`#302`) |
+| `121` | **Staff of Speed** | `ICAT_STAFF (15)` | `/` | Yellow | `0` | `0d0` | `50` | `1000` | `10` | `Staff of Speed` (`#309`) |
+| `122` | **Mithril Chain Mail** | `ICAT_ARMOR (3)` | `[` | L.Grey | `11` | `0d0` | `200` | `600` | `5` | High-tier Mithril Chain Mail (`AC 11`) |
+| `123` | **Mithril Plate Mail** | `ICAT_ARMOR (3)` | `[` | L.Grey | `14` | `0d0` | `320` | `1200` | `7` | High-tier Mithril Plate Mail (`AC 14`) |
+| `124` | **Amulet of Wisdom** | `ICAT_AMULET (16)` | `"` | Yellow | `0` | `0d0` | `3` | `300` | `5` | `Amulet of Wisdom` (`#163`) |
+| `125` | **Amulet of the Magi** | `ICAT_AMULET (16)` | `"` | L.Green | `3` | `0d0` | `3` | `5000` | `12` | `Amulet of the Magi` (`#171`, base AC `3` + See Invisible + Free Action) |
+| `126` | **Neutralize Poison Potion** | `ICAT_POTION (10)` | `!` | Green | `0` | `0d0` | `4` | `75` | `2` | `Potion of Neutralize Poison` (`#265`) |
+| `127` | **Staff of Remove Curse** | `ICAT_STAFF (15)` | `/` | Cyan | `0` | `0d0` | `50` | `500` | `8` | `Staff of Remove Curse` (`#312`) |
+| `128` | **Small Wooden Chest** | `ICAT_CHEST (17)` | `&` | Brown | `0` | `2d3` | `250` | `20` | `2` | `Small Wooden Chest` (`#326` / `#395`) |
+| `129` | **Large Wooden Chest** | `ICAT_CHEST (17)` | `&` | Brown | `0` | `2d5` | `255` | `60` | `4` | `Large Wooden Chest` (`#327` / `#396`) |
+| `130` | **Small Iron Chest** | `ICAT_CHEST (17)` | `&` | L.Grey | `0` | `2d4` | `255` | `100` | `7` | `Small Iron Chest` (`#328` / `#397`) |
+| `131` | **Large Iron Chest** | `ICAT_CHEST (17)` | `&` | L.Grey | `0` | `2d6` | `255` | `150` | `9` | `Large Iron Chest` (`#329` / `#398`) |
+| `132` | **Small Steel Chest** | `ICAT_CHEST (17)` | `&` | White | `0` | `2d4` | `255` | `200` | `11` | `Small Steel Chest` (`#330` / `#399`) |
+| `133` | **Large Steel Chest** | `ICAT_CHEST (17)` | `&` | White | `0` | `2d6` | `255` | `250` | `12` | `Large Steel Chest` (`#331` / `#400`) |
+| `134` | **Ruined Chest** | `ICAT_CHEST (17)` | `&` | Brown | `0` | `0d0` | `250` | `0` | `0` | `ruined chest` (`#418`) |
+| `135` | **Iron Spike** | `ICAT_SPIKE (18)` | `\` | White | `0` | `1d1` | `10` | `1` | `1` | `Iron Spike` (`#84`) |
+
+---
+### 8.3.2 Complete VMS Moria 4.8 & Umoria 5.7.15 Base Item Catalog (`0..419` Row-by-Row)
+
+In VMS Moria 4.8 (`source/include/values.inc:755-1880`) and Umoria 5.7.15 (`src/data_treasure.cpp:64-522`), `game_objects[0..343]` corresponds 1-to-1 with 1-indexed `object_list[1..344]` in VMS Moria, followed by store-only templates (`344..366`), terrain/trap objects (`367..398`), gold/gems (`399..416`), and special placeholders (`417..419`). Every template is listed below with its Umoria index (`0..419`), VMS Moria 1-based index (`1..344` / `inventory_init` / `gold_list`), category, stats (`Cost / Weight / Depth / Dam or AC`), Moria8 item ID mapping, and verdict.
+
+| Umoria ID | VMS ID | Item Name | Category (`tval`) | Cost (`GP`) | Weight (`0.1 lb`) | Depth (`dlvl`) | Stats (`Dam` / `AC` / `P1` / `Flags`) | Moria8 Mapping (`core/item_tables.s`) | Verdict |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `0` | `1` | **Mushroom of Poison** | `TV_FOOD (80)` | `0` | `1` | `7` | `food=500`, `flags=0x00000001` (poisons player) | Omitted (represented by `Poison Potion #19`) | **Missing** |
+| `1` | `2` | **Mushroom of Blindness** | `TV_FOOD (80)` | `0` | `1` | `9` | `food=500`, `flags=0x00000002` (blinds player) | Omitted (represented by `Blindness Potion #28`) | **Missing** |
+| `2` | `3` | **Mushroom of Paranoia** | `TV_FOOD (80)` | `0` | `1` | `9` | `food=500`, `flags=0x00000004` (terrifies player) | Omitted | **Missing** |
+| `3` | `4` | **Mushroom of Confusion** | `TV_FOOD (80)` | `0` | `1` | `7` | `food=500`, `flags=0x00000008` (confuses player) | Omitted (represented by `Confusion Potion #29`) | **Missing** |
+| `4` | `5` | **Mushroom of Hallucination** | `TV_FOOD (80)` | `0` | `1` | `13` | `food=500`, `flags=0x00000010` (image hallucination) | Omitted | **Missing** |
+| `5` | `6` | **Mushroom of Cure Poison** | `TV_FOOD (80)` | `60` | `1` | `8` | `food=500`, `flags=0x00000020` (cures poison) | Omitted (`Neutralize Poison Potion #126`) | **Missing** |
+| `6` | `7` | **Mushroom of Cure Blindness** | `TV_FOOD (80)` | `50` | `1` | `10` | `food=500`, `flags=0x00000040` (cures blindness) | Omitted | **Missing** |
+| `7` | `8` | **Mushroom of Cure Paranoia** | `TV_FOOD (80)` | `25` | `1` | `12` | `food=500`, `flags=0x00000080` (cures fear) | Omitted | **Missing** |
+| `8` | `9` | **Mushroom of Cure Confusion** | `TV_FOOD (80)` | `50` | `1` | `6` | `food=500`, `flags=0x00000100` (cures confusion) | Omitted | **Missing** |
+| `9` | `10` | **Mushroom of Weakness** | `TV_FOOD (80)` | `0` | `1` | `7` | `food=500`, `flags=0x04000200` (drains STR) | Omitted | **Missing** |
+| `10` | `11` | **Mushroom of Unhealth** | `TV_FOOD (80)` | `50` | `1` | `15` | `food=500`, `10d10` damage, drains CON | Omitted | **Missing** |
+| `11` | `12` | **Mushroom of Restore Constitution** | `TV_FOOD (80)` | `350` | `1` | `20` | `food=500`, `flags=0x00010000` (restores CON) | Omitted (`Restoration Potion #97`) | **Missing** |
+| `12` | `13` | **Mushroom of First-Aid** | `TV_FOOD (80)` | `5` | `1` | `6` | `food=500`, heals `1d6` HP | Omitted | **Missing** |
+| `13` | `14` | **Mushroom of Minor Cures** | `TV_FOOD (80)` | `20` | `1` | `7` | `food=500`, heals `2d6` HP | Omitted | **Missing** |
+| `14` | `15` | **Mushroom of Light Cures** | `TV_FOOD (80)` | `30` | `1` | `10` | `food=500`, heals `4d6` HP | Omitted | **Missing** |
+| `15` | `16` | **Mushroom of Restoration / Restoring** | `TV_FOOD (80)` | `1000` | `1` | `30` | `food=500`, restores all 6 primary stats | Consolidated into `Restoration Potion` (`#97`) | **Approximation** |
+| `16` | `17` | **Hairy Mold of Poison** | `TV_FOOD (80)` | `0` | `1` | `15` | `food=1200`, `flags=0x00000001` | Omitted | **Missing** |
+| `17` | `18` | **Hairy Mold of Hallucination** | `TV_FOOD (80)` | `0` | `1` | `18` | `food=1200`, `flags=0x00000010` | Omitted | **Missing** |
+| `18` | `19` | **Hairy Mold of Cure Poison** | `TV_FOOD (80)` | `75` | `1` | `19` | `food=1200`, `flags=0x00000020` | Omitted | **Missing** |
+| `19` | `20` | **Hairy Mold of Unhealth** | `TV_FOOD (80)` | `75` (`25` VMS) | `1` | `28` | `food=1200`, `10d12` (`6d8` VMS) damage | Omitted | **Missing** |
+| `20` | `21` | **Hairy Mold of Major Cures / Cure Serious Wounds** | `TV_FOOD (80)` | `75` | `2` | `16` | `food=1200`, heals `4d8` HP | Omitted | **Missing** |
+| `21..23` | `22..24` | **Ration of Food** *(3 depth rows: dlvl `0, 5, 10`)* | `TV_FOOD (80)` | `3` | `10` | `0 / 5 / 10` | `food=5000`, `subval=90` | **Moria8 `#15` (`Ration of Food`)**: `cost=3`, `wt=10`, `min_lvl=0`, `food=+50` (`5000` turns) | **Implemented** |
+| `24` | `25` | **Slime Mold** | `TV_FOOD (80)` | `2` | `5` | `1` | `food=3000`, `subval=91` | **Moria8 `#16` (`Slime Mold`)**: `cost=2`, `wt=5`, `min_lvl=1`, `food=+30` (`3000` turns) | **Implemented** |
+| `25..27` | `26..28` | **Piece of Elvish Waybread** *(3 depth rows: dlvl `6, 12, 20`)* | `TV_FOOD (80)` | `25` (`10` VMS) | `3` | `6 / 12 / 20` | `food=7500`, cures poison + heals `4d8` HP | Omitted | **Missing** |
+| `28` | `29` | **Dagger (Main Gauche)** | `TV_SWORD (23)` | `25` | `30` | `2` | `1d5` | **Moria8 `#64` (`Main Gauche`)**: `1d5`, `cost=25`, `wt=30`, `min_lvl=1` | **Implemented** |
+| `29` | `30` | **Dagger (Misericorde)** | `TV_SWORD (23)` | `10` | `15` | `0` | `1d4` | Consolidated into **Moria8 `#2` (`Dagger`)** (`1d4`, `cost=10`, `wt=12`) | **Approximation** |
+| `30` | `31` | **Dagger (Stiletto)** | `TV_SWORD (23)` | `10` | `12` | `0` | `1d4` | **Moria8 `#2` (`Dagger`)**: `1d4`, `cost=10`, `wt=12`, `min_lvl=1` | **Implemented** |
+| `31` | `32` | **Dagger (Bodkin)** | `TV_SWORD (23)` | `10` | `20` | `1` | `1d4` | Consolidated into **Moria8 `#2` (`Dagger`)** | **Approximation** |
+| `32` | `33` | **Broken Dagger** | `TV_SWORD (23)` | `0` | `15` | `0` | `1d1`, `-2` To-Hit, `-2` To-Dam | Omitted | **Missing** |
+| `33` | `34` | **Backsword** | `TV_SWORD (23)` | `150` (`60` VMS) | `95` | `7` | `1d9` | Adapted as **Moria8 `#70` (`Scimitar`)** (`1d8`, `cost=50`, `wt=40`, `min_lvl=3`) | **Approximation** |
+| `34` | `35` | **Bastard Sword** | `TV_SWORD (23)` | `350` | `140` | `14` | `3d4` | **Moria8 `#68` (`Bastard Sword`)**: `3d4`, `cost=120`, `wt=140`, `min_lvl=6` | **Implemented** |
+| `35` | `36` | **Thrusting Sword (Bilbo)** | `TV_SWORD (23)` | `60` | `80` | `4` | `1d6` | Omitted | **Missing** |
+| `36` | `37` | **Thrusting Sword (Baselard)** | `TV_SWORD (23)` | `80` | `100` | `5` | `1d7` | Omitted | **Missing** |
+| `37` | `38` | **Broadsword** | `TV_SWORD (23)` | `255` | `150` | `9` | `2d5` | **Moria8 `#67` (`Broad Sword`)**: `2d5`, `cost=70`, `wt=75`, `min_lvl=4` | **Implemented** |
+| `38` | `39` | **Two-Handed Sword (Claymore)** | `TV_SWORD (23)` | `775` | `200` | `30` | `3d6` | **Moria8 `#69` (`Two-Handed Sword`)**: `3d6`, `cost=180`, `wt=200`, `min_lvl=8` | **Implemented** |
+| `39` | `40` | **Cutlass** | `TV_SWORD (23)` | `85` | `110` | `7` | `1d7` | **Moria8 `#89` (`Cutlass`)**: `1d7`, `cost=85`, `wt=110`, `min_lvl=4` | **Implemented** |
+| `40` | `41` | **Two-Handed Sword (Espadon)** | `TV_SWORD (23)` | `655` | `180` | `35` | `3d6` | Consolidated into **Moria8 `#69` (`Two-Handed Sword`)** (`3d6`) | **Approximation** |
+| `41` | `42` | **Executioner's Sword** | `TV_SWORD (23)` | `850` | `260` | `40` | `4d5` | Omitted (max dice count in Moria8 `it_dmg_packed` is `3d9`) | **Missing** |
+| `42` | `43` | **Two-Handed Sword (Flamberge)** | `TV_SWORD (23)` | `1000` | `240` | `45` | `4d5` | Omitted | **Missing** |
+| `43` | `44` | **Foil** | `TV_SWORD (23)` | `35` | `30` | `2` | `1d5` | Omitted | **Missing** |
+| `44` | `45` | **Katana** | `TV_SWORD (23)` | `400` | `120` | `18` | `3d4` | **Moria8 `#91` (`Katana`)**: `3d4`, `cost=400`, `wt=120`, `min_lvl=7` | **Implemented** |
+| `45` | `46` | **Longsword** | `TV_SWORD (23)` | `200` (`300` VMS) | `130` | `12` | `1d10` | **Moria8 `#4` (`Long Sword`)**: `1d8` (4-bit sides max 9), `cost=60`, `wt=50`, `min_lvl=3` | **Implemented** |
+| `46` | `47` | **Two-Handed Sword (No-Dachi)** | `TV_SWORD (23)` | `675` | `200` | `45` | `4d4` | Omitted | **Missing** |
+| `47` | `48` | **Rapier** | `TV_SWORD (23)` | `42` | `40` | `4` | `1d6` | **Moria8 `#66` (`Rapier`)**: `1d6`, `cost=42`, `wt=40`, `min_lvl=2` | **Implemented** |
+| `48` | `49` | **Sabre** | `TV_SWORD (23)` | `50` | `50` | `5` | `1d7` | **Moria8 `#88` (`Sabre`)**: `1d7`, `cost=60`, `wt=50`, `min_lvl=3` | **Implemented** |
+| `49` | `50` | **Small Sword** | `TV_SWORD (23)` | `48` | `75` | `5` | `1d6` | **Moria8 `#3` (`Short Sword`)**: `1d6`, `cost=25`, `wt=30`, `min_lvl=1` | **Implemented** |
+| `50` | `51` | **Two-Handed Sword (Zweihander)** | `TV_SWORD (23)` | `1500` (`1000` VMS) | `280` | `50` | `4d6` | Omitted | **Missing** |
+| `51` | `52` | **Broken Sword** | `TV_SWORD (23)` | `0` | `75` | `0` | `1d1`, `-2` To-Hit, `-2` To-Dam | Omitted | **Missing** |
+| `52` | `54` | **Ball and Chain** | `TV_HAFTED (21)` | `200` | `150` | `20` | `2d4` | Omitted | **Missing** |
+| `53` | `57` | **Cat-o'-Nine-Tails** | `TV_HAFTED (21)` | `14` | `40` | `3` | `1d4` | Omitted | **Missing** |
+| `54` | `58` | **Wooden Club** | `TV_HAFTED (21)` | `10` (`1` VMS) | `100` | `0` | `1d3` | Replaced by **Moria8 `#77` (`Quarterstaff`)** (`1d9`, `cost=20`, `wt=40`, `min_lvl=1`) | **Approximation** |
+| `55` | `59` | **Flail** | `TV_HAFTED (21)` | `353` | `150` | `12` | `2d6` | **Moria8 `#92` (`Flail`)**: `2d6`, `cost=120`, `wt=150`, `min_lvl=5` | **Implemented** |
+| `56` | `60` | **Two-Handed Great Flail** | `TV_HAFTED (21)` | `590` | `280` | `45` | `3d6` | Omitted | **Missing** |
+| `57` | `61` | **Morningstar** | `TV_HAFTED (21)` | `396` | `150` | `10` | `2d6` | **Moria8 `#73` (`Morningstar`)**: `2d6`, `cost=100`, `wt=150`, `min_lvl=6` | **Implemented** |
+| `58` | `62` | **Mace** | `TV_HAFTED (21)` | `130` | `120` | `6` | `2d4` | **Moria8 `#5` (`Mace`)**: `2d4`, `cost=45`, `wt=50`, `min_lvl=2` | **Implemented** |
+| `59` | `63` | **War Hammer** | `TV_HAFTED (21)` | `225` | `120` | `5` | `3d3` | **Moria8 `#72` (`War Hammer`)**: `3d3`, `cost=90`, `wt=120`, `min_lvl=5` | **Implemented** |
+| `60` | `64` | **Lead-Filled Mace** | `TV_HAFTED (21)` | `502` | `180` | `15` | `3d4` | Omitted | **Missing** |
+| `61` | `65` | **Awl-Pike** | `TV_POLEARM (22)` | `200` (`340` VMS) | `160` | `8` | `1d8` | **Moria8 `#95` (`Awl-Pike`)**: `1d8`, `cost=80`, `wt=160`, `min_lvl=4` | **Implemented** |
+| `62` | `66` | **Beaked Axe** | `TV_POLEARM (22)` | `408` | `180` | `15` | `2d6` | Omitted | **Missing** |
+| `63` | `67` | **Fauchard** | `TV_POLEARM (22)` | `326` (`376` VMS) | `170` | `17` | `1d10` | Omitted | **Missing** |
+| `64` | `68` | **Glaive** | `TV_POLEARM (22)` | `363` | `190` | `20` | `2d6` | Omitted | **Missing** |
+| `65` | `69` | **Halberd** | `TV_POLEARM (22)` | `430` | `190` | `22` | `3d4` | **Moria8 `#76` (`Halberd`)**: `3d4`, `cost=150`, `wt=190`, `min_lvl=9` | **Implemented** |
+| `66` | `70` | **Lucerne Hammer** | `TV_POLEARM (22)` | `376` | `120` | `11` | `2d5` | **Moria8 `#93` (`Lucerne Hammer`)**: `2d5`, `cost=110`, `wt=120`, `min_lvl=6` | **Implemented** |
+| `67` | `71` | **Pike** | `TV_POLEARM (22)` | `358` | `160` | `15` | `2d5` | **Moria8 `#75` (`Pike`)**: `2d5`, `cost=100`, `wt=160`, `min_lvl=8` | **Implemented** |
+| `68` | `72` | **Spear** | `TV_POLEARM (22)` | `36` | `50` | `5` | `1d6` | **Moria8 `#74` (`Spear`)**: `1d6`, `cost=36`, `wt=50`, `min_lvl=2` | **Implemented** |
+| `69` | `73` | **Lance** | `TV_POLEARM (22)` | `230` | `300` | `10` | `2d8` | Omitted | **Missing** |
+| `70` | `74` | **Javelin** | `TV_POLEARM (22)` | `18` | `30` | `4` | `1d4` | Omitted | **Missing** |
+| `71` | `53` | **Battle Axe (Balestarius)** | `TV_POLEARM` (`TV_HAFTED` VMS) | `500` | `180` | `30` | `2d8` | Consolidated into **Moria8 `#71` (`Battle Axe`)** (`3d4`) | **Approximation** |
+| `72` | `55` | **Battle Axe (European)** | `TV_POLEARM` (`TV_HAFTED` VMS) | `334` | `170` | `13` | `3d4` | **Moria8 `#71` (`Battle Axe`)**: `3d4`, `cost=120`, `wt=170`, `min_lvl=7` | **Implemented** |
+| `73` | `56` | **Broad Axe** | `TV_POLEARM` (`TV_HAFTED` VMS) | `304` | `160` | `17` | `2d6` | **Moria8 `#94` (`Broad Axe`)**: `2d6`, `cost=100`, `wt=160`, `min_lvl=5` | **Implemented** |
+| `74` | `75` | **Short Bow** | `TV_BOW (20)` | `50` | `30` | `3` | `p1=2` (fires Arrows) | **Moria8 `#49` (`Short Bow`)**: `cost=50`, `wt=30`, `min_lvl=2`, `it_missile=1` | **Implemented** |
+| `75` | `76` | **Long Bow** | `TV_BOW (20)` | `120` | `40` | `10` | `p1=3` (fires Arrows) | Omitted (`Short Bow #49` covers arrow launchers) | **Missing** |
+| `76` | `77` | **Composite Bow** | `TV_BOW (20)` | `240` | `40` | `40` | `p1=4` (fires Arrows) | Omitted | **Missing** |
+| `77` | `78` | **Light Crossbow** | `TV_BOW (20)` | `140` | `110` | `15` | `p1=5` (fires Bolts) | **Moria8 `#50` (`Light Crossbow`)**: `cost=120`, `wt=50`, `min_lvl=3`, `it_missile=2` | **Implemented** |
+| `78` | `79` | **Heavy Crossbow** | `TV_BOW (20)` | `300` | `200` | `30` | `p1=6` (fires Bolts) | Omitted | **Missing** |
+| `79` | `80` | **Sling** | `TV_BOW (20)` | `5` | `5` | `1` | `p1=1` (fires Pebbles/Shots) | **Moria8 `#51` (`Sling`)**: `cost=10`, `wt=5`, `min_lvl=1`, `it_missile=3` | **Implemented** |
+| `80, 144` | `81` | **Arrow** *(dlvl `2` and `15`)* | `TV_ARROW (12)` | `1` | `2` | `2 / 15` | `1d4` | **Moria8 `#52` (`Arrow`)**: `1d4`, `cost=1`, `wt=2`, `min_lvl=1`, `it_missile=$81` | **Implemented** |
+| `81, 170` | `82` | **Bolt** *(dlvl `2` and `25`)* | `TV_BOLT (11)` | `2` | `3` | `2 / 25` | `1d5` | **Moria8 `#53` (`Bolt`)**: `1d5`, `cost=2`, `wt=2`, `min_lvl=2`, `it_missile=$82` | **Implemented** |
+| `82` | `83` | **Rounded Pebble** | `TV_SLING_AMMO (10)` | `1` | `4` | `0` | `1d2` | **Moria8 `#54` (`Rock`)**: `1d2`, `cost=1`, `wt=4`, `min_lvl=1`, `it_missile=$83` | **Implemented** |
+| `83` | `84` | **Iron Shot** | `TV_SLING_AMMO (10)` | `2` | `5` | `3` | `1d3` | Consolidated into **Moria8 `#54` (`Rock`)** | **Approximation** |
+| `84` | `85` | **Iron Spike** | `TV_SPIKE (13)` | `1` | `10` | `1` | `1d1` | **Moria8 `#135` (`Iron Spike`)**: `1d1`, `cost=1`, `wt=10`, `min_lvl=1` | **Implemented** |
+| `85` | `86` | **Brass Lantern** | `TV_LIGHT (15)` | `35` | `50` | `1` | `p1=7500` turns, `1d1` | **Moria8 `#14` (`Brass Lantern`)**: `cost=20`, `wt=30`, `min_lvl=2`, `inv_p1=250` (`5000` turns) | **Implemented** |
+| `86` | `87` | **Wooden Torch** | `TV_LIGHT (15)` | `2` | `30` | `1` | `p1=4000` turns, `1d1` | **Moria8 `#13` (`Wooden Torch`)**: `cost=2`, `wt=10`, `min_lvl=0`, `inv_p1=200` (`4000` turns) | **Implemented** |
+| `87` | `88` | **Orcish Pick** | `TV_DIGGING (25)` | `500` | `180` | `20` | `1d3`, `p1=+2` tunnel | Represented in Moria8 by **Gnomish Pick** (`#63` + `ego=1`, `250` GP) | **Approximation** |
+| `88` | `89` | **Dwarven Pick** | `TV_DIGGING (25)` | `1200` | `200` | `50` | `1d4`, `p1=+3` tunnel | **Moria8 `Dwarven Pick`** (`#63` + `ego=2`, `750` GP, `+4` dig bonus) | **Implemented** |
+| `89` | `90` | **Gnomish Shovel** | `TV_DIGGING (25)` | `100` | `50` | `20` | `1d2`, `p1=+1` tunnel | **Moria8 `Gnomish Shovel`** (`#62` + `ego=1`, `75` GP, `+2` dig bonus) | **Implemented** |
+| `90` | `91` | **Dwarven Shovel** | `TV_DIGGING (25)` | `250` | `120` | `40` | `1d3`, `p1=+2` tunnel | **Moria8 `Dwarven Shovel`** (`#62` + `ego=2`, `225` GP, `+4` dig bonus) | **Implemented** |
+| `91` | `92` | **Pair of Soft Leather Shoes** | `TV_BOOTS (30)` | `4` | `5` | `1` | `AC 1` | **Moria8 `#12` (`Leather Boots`)** (`AC 1`, `cost=10`, `wt=10`) / **`#85` (`Soft Leather Boots`)** (`AC 1`, `cost=8`, `wt=5`) | **Implemented** |
+| `92` | `93` | **Pair of Soft Leather Boots** | `TV_BOOTS (30)` | `7` | `20` | `4` | `AC 2`, `1d1` | **Moria8 `#85` (`Soft Leather Boots`)**: `AC 1`, `cost=8`, `wt=5`, `min_lvl=1` | **Implemented** |
+| `93` | `94` | **Pair of Hard Leather Boots** | `TV_BOOTS (30)` | `12` | `40` | `6` | `AC 3`, `1d1` | **Moria8 `#86` (`Hard Leather Boots`)**: `AC 2`, `cost=30`, `wt=20`, `min_lvl=3` | **Implemented** |
+| `94` | `95` | **Soft Leather Cap** | `TV_HELM (33)` | `4` | `10` | `2` | `AC 1` | Omitted | **Missing** |
+| `95` | `96` | **Hard Leather Cap** | `TV_HELM (33)` | `12` | `15` | `4` | `AC 2` | Omitted | **Missing** |
+| `96` | `97` | **Metal Cap** | `TV_HELM (33)` | `30` | `20` | `7` | `AC 3`, `1d1` | **Moria8 `#87` (`Metal Cap`)**: `AC 1`, `cost=50`, `wt=20`, `min_lvl=4` | **Implemented** |
+| `97` | `98` | **Iron Helm** | `TV_HELM (33)` | `75` | `75` | `20` | `AC 5`, `1d3` | **Moria8 `#10` (`Iron Helm`)**: `AC 1`, `cost=15`, `wt=30`, `min_lvl=3` | **Implemented** |
+| `98` | `99` | **Steel Helm** | `TV_HELM (33)` | `200` | `60` | `40` | `AC 6`, `1d3` | **Moria8 `#83` (`Steel Helm`)**: `AC 2`, `cost=120`, `wt=60`, `min_lvl=6` | **Implemented** |
+| `99` | `100` | **Silver Crown** | `TV_HELM (33)` | `500` (`250` VMS) | `20` | `44` | `AC 0`, `1d1` | Omitted | **Missing** |
+| `100` | `101` | **Golden Crown** | `TV_HELM (33)` | `1000` (`500` VMS) | `30` | `47` | `AC 0`, `1d2` | Omitted | **Missing** |
+| `101` | `102` | **Jewel-Encrusted Crown** | `TV_HELM (33)` | `2000` (`1000` VMS) | `40` | `50` | `AC 0`, `1d3` | Omitted | **Missing** |
+| `102` | `103` | **Robe** | `TV_SOFT_ARMOR (36)` | `4` | `20` | `1` | `AC 2` | **Moria8 `#6` (`Robe`)**: `AC 2`, `cost=15`, `wt=20`, `min_lvl=1` | **Implemented** |
+| `103` | `104` | **Soft Leather Armor** | `TV_SOFT_ARMOR (36)` | `18` | `80` | `2` | `AC 4` | **Moria8 `#7` (`Leather Armor`)**: `AC 4`, `cost=30`, `wt=80`, `min_lvl=2` | **Implemented** |
+| `104` | `105` | **Soft Studded Leather** | `TV_SOFT_ARMOR (36)` | `35` | `90` | `3` | `AC 5`, `1d1` | **Moria8 `#65` (`Studded Leather Armor`)**: `AC 5`, `cost=75`, `wt=90`, `min_lvl=3` | **Implemented** |
+| `105` | `106` | **Hard Leather Armor** | `TV_SOFT_ARMOR (36)` | `55` | `100` | `5` | `AC 6`, `-1` To-Hit | **Moria8 `#79` (`Hard Leather Armor`)**: `AC 6`, `cost=100`, `wt=120`, `min_lvl=5` | **Implemented** |
+| `106` | `107` | **Hard Studded Leather** | `TV_SOFT_ARMOR (36)` | `100` | `110` | `7` | `AC 7`, `-1` To-Hit | Omitted | **Missing** |
+| `107` | `108` | **Woven Cord Armor** | `TV_SOFT_ARMOR (36)` | `45` | `150` | `7` | `AC 6`, `-1` To-Hit | Omitted | **Missing** |
+| `108` | `109` | **Soft Leather Ring Mail** | `TV_SOFT_ARMOR (36)` | `160` | `130` | `10` | `AC 6`, `-1` To-Hit | Omitted | **Missing** |
+| `109` | `110` | **Hard Leather Ring Mail** | `TV_SOFT_ARMOR (36)` | `230` | `150` | `12` | `AC 8`, `-2` To-Hit | Omitted | **Missing** |
+| `110` | `111` | **Leather Scale Mail** | `TV_SOFT_ARMOR (36)` | `330` | `140` | `14` | `AC 11`, `-1` To-Hit | Omitted (`Scale Mail #80` covers scale armor) | **Missing** |
+| `111` | `112` | **Metal Scale Mail** | `TV_HARD_ARMOR (35)` | `430` | `250` | `24` | `AC 13`, `-2` To-Hit | **Moria8 `#80` (`Scale Mail`)**: `AC 7`, `cost=350`, `wt=250`, `min_lvl=7` | **Implemented** |
+| `112` | `113` | **Chain Mail** | `TV_HARD_ARMOR (35)` | `530` | `220` | `26` | `AC 14`, `-2` To-Hit | **Moria8 `#8` (`Chain Mail`)**: `AC 6`, `cost=80`, `wt=120`, `min_lvl=4` (plus **Moria8 `#122` `Mithril Chain Mail`**, `AC 11`, `cost=600`, `wt=200`, `min_lvl=5`) | **Implemented** |
+| `113` | `114` | **Rusty Chain Mail** | `TV_HARD_ARMOR (35)` | `0` | `220` | `26` | `AC 14`, `-8` To-AC, `-5` To-Hit | Omitted | **Missing** |
+| `114` | `115` | **Double Chain Mail** | `TV_HARD_ARMOR (35)` | `630` | `260` | `28` | `AC 15`, `-2` To-Hit | Omitted | **Missing** |
+| `115` | `116` | **Augmented Chain Mail** | `TV_HARD_ARMOR (35)` | `675` | `270` | `30` | `AC 16`, `-2` To-Hit | Omitted | **Missing** |
+| `116` | `117` | **Bar Chain Mail** | `TV_HARD_ARMOR (35)` | `720` | `280` | `34` | `AC 18`, `-2` To-Hit | Omitted | **Missing** |
+| `117` | `118` | **Metal Brigandine Armor** | `TV_HARD_ARMOR (35)` | `775` | `290` | `36` | `AC 19`, `-3` To-Hit | Omitted | **Missing** |
+| `118` | `119` | **Laminated Armor** | `TV_HARD_ARMOR (35)` | `825` | `300` | `38` | `AC 20`, `-3` To-Hit | Omitted | **Missing** |
+| `119` | `120` | **Partial Plate Armor** | `TV_HARD_ARMOR (35)` | `900` | `320` (`260` VMS) | `42` | `AC 22`, `-3` To-Hit | Omitted | **Missing** |
+| `120` | `121` | **Metal Lamellar Armor** | `TV_HARD_ARMOR (35)` | `950` | `340` | `44` | `AC 23`, `-3` To-Hit | Omitted | **Missing** |
+| `121` | `122` | **Full Plate Armor** | `TV_HARD_ARMOR (35)` | `1050` | `380` | `48` | `AC 25`, `-3` To-Hit | **Moria8 `#81` (`Plate Mail`)**: `AC 9`, `cost=900`, `wt=380`, `min_lvl=10` (plus **Moria8 `#123` `Mithril Plate Mail`**, `AC 14`, `cost=1200`, `wt=320`, `min_lvl=7`) | **Implemented** |
+| `122` | `123` | **Ribbed Plate Armor** | `TV_HARD_ARMOR (35)` | `1200` | `380` | `50` | `AC 28`, `-3` To-Hit | Represented by **Moria8 `#123` (`Mithril Plate Mail`)** (`AC 14`, `cost=1200`) | **Approximation** |
+| `123` | `124` | **Cloak** | `TV_CLOAK (32)` | `3` | `10` | `1` | `AC 1` | **Moria8 `#82` (`Cloak`)**: `AC 1`, `cost=20`, `wt=10`, `min_lvl=2` | **Implemented** |
+| `124` | `125` | **Set of Leather Gloves** | `TV_GLOVES (31)` | `3` | `5` | `1` | `AC 1` | **Moria8 `#11` (`Leather Gloves`)**: `AC 1`, `cost=8`, `wt=5`, `min_lvl=1` | **Implemented** |
+| `125` | `126` | **Set of Gauntlets** | `TV_GLOVES (31)` | `35` | `25` | `12` | `AC 2`, `1d1` | **Moria8 `#84` (`Gauntlets`)**: `AC 1`, `cost=35`, `wt=25`, `min_lvl=2` | **Implemented** |
+| `126` | `127` | **Small Leather Shield** | `TV_SHIELD (34)` | `30` | `50` | `3` | `AC 2`, `1d1` | **Moria8 `#9` (`Small Shield`)**: `AC 2`, `cost=20`, `wt=50`, `min_lvl=2` | **Implemented** |
+| `127` | `128` | **Medium Leather Shield** | `TV_SHIELD (34)` | `60` | `75` | `8` | `AC 3`, `1d2` | Omitted | **Missing** |
+| `128` | `129` | **Large Leather Shield** | `TV_SHIELD (34)` | `120` | `100` | `15` | `AC 4`, `1d2` | **Moria8 `#78` (`Large Shield`)**: `AC 3`, `cost=40`, `wt=100`, `min_lvl=4` | **Implemented** |
+| `129` | `130` | **Small Metal Shield** | `TV_SHIELD (34)` | `50` | `65` | `10` | `AC 3`, `1d2` | Consolidated into `Small Shield #9` | **Approximation** |
+| `130` | `131` | **Medium Metal Shield** | `TV_SHIELD (34)` | `125` | `90` | `20` | `AC 4`, `1d3` | Omitted | **Missing** |
+| `131` | `132` | **Large Metal Shield** | `TV_SHIELD (34)` | `200` | `120` | `30` | `AC 5`, `1d3` | Consolidated into `Large Shield #78` | **Approximation** |
+| `132` | `133` | **Ring of Strength / Gain Strength** | `TV_RING (45)` | `400` | `2` | `30` | `TR_STR`, `+p1` STR | **Moria8 `#24` (`Ring of Strength`)**: `cost=120`, `wt=2`, `min_lvl=5`, `+p1` STR | **Implemented** |
+| `133` | `134` | **Ring of Dexterity / Gain Dexterity** | `TV_RING (45)` | `400` | `2` | `30` | `TR_DEX`, `+p1` DEX | Omitted | **Missing** |
+| `134` | `135` | **Ring of Constitution / Gain Constitution** | `TV_RING (45)` | `400` | `2` | `30` | `TR_CON`, `+p1` CON | Omitted | **Missing** |
+| `135` | `136` | **Ring of Intelligence / Gain Intelligence** | `TV_RING (45)` | `400` (`350` VMS) | `2` | `30` | `TR_INT`, `+p1` INT | Omitted | **Missing** |
+| `136` | `137` | **Ring of Speed** | `TV_RING (45)` | `3000` | `2` | `50` | `TR_SPEED`, `+1` (or `-1` cursed) speed | **Moria8 `#111` (`Ring of Speed`)**: `cost=3000`, `wt=2`, `min_lvl=12`, `+1` speed | **Implemented** |
+| `137` | `138` | **Ring of Searching** | `TV_RING (45)` | `250` | `2` | `7` | `TR_SEARCH`, `+5*p1` search | Omitted | **Missing** |
+| `138` | `139` | **Ring of Teleportation** | `TV_RING (45)` | `0` | `2` | `7` | `TR_CURSED \| TR_TELEPORT` | Omitted | **Missing** |
+| `139` | `140` | **Ring of Slow Digestion** | `TV_RING (45)` | `200` (`250` VMS) | `2` | `7` | `TR_SLOW_DIGEST` | Omitted | **Missing** |
+| `140` | `141` | **Ring of Resist Fire** | `TV_RING (45)` | `250` | `2` | `14` | `TR_RES_FIRE` | **Moria8 `#109` (`Ring of Resist Fire`)**: `cost=250`, `wt=2`, `min_lvl=4` | **Implemented** |
+| `141` | `142` | **Ring of Resist Cold** | `TV_RING (45)` | `250` | `2` | `14` | `TR_RES_COLD` | **Moria8 `#110` (`Ring of Resist Cold`)**: `cost=250`, `wt=2`, `min_lvl=4` | **Implemented** |
+| `142` | `143` | **Ring of Feather Falling** | `TV_RING (45)` | `200` | `2` | `7` | `TR_FFALL` | Omitted | **Missing** |
+| `143` | `144..145` | **Ring of Adornment** *(2 rows in VMS)* | `TV_RING (45)` | `20` / `30` | `2` | `7` | Cosmetic ring | Omitted | **Missing** |
+| `145` | `146` | **Ring of Weakness** | `TV_RING (45)` | `0` | `2` | `7` | `TR_CURSED \| TR_STR`, `-5` STR | Cursed `Ring of Strength` (`#24` with `IF_CURSED`) | **Approximation** |
+| `146` | `147` | **Ring of Lordly Protection (FIRE)** | `TV_RING (45)` | `1200` | `2` | `50` | `TR_RES_FIRE`, `+5` To-AC | Omitted | **Missing** |
+| `147` | `148` | **Ring of Lordly Protection (ACID)** | `TV_RING (45)` | `1200` | `2` | `50` | `TR_RES_ACID`, `+5` To-AC | Omitted | **Missing** |
+| `148` | `149` | **Ring of Lordly Protection (COLD)** | `TV_RING (45)` | `1200` | `2` | `50` | `TR_RES_COLD`, `+5` To-AC | Omitted | **Missing** |
+| `149` | `150` | **Ring of WOE** | `TV_RING (45)` | `0` | `2` | `50` | `TR_CURSED \| TR_TELEPORT \| TR_AGGRAVATE`, `-5` CON/WIS, `-3` AC | Omitted | **Missing** |
+| `150` | `151` | **Ring of Stupidity** | `TV_RING (45)` | `0` | `2` | `7` (`20` VMS) | `TR_CURSED \| TR_INT`, `-5` INT | Omitted | **Missing** |
+| `151` | `152` | **Ring of Increase Damage** | `TV_RING (45)` | `100` | `2` | `20` | `+to_dam` | Consolidated into **Moria8 `#113` (`Ring of Slaying`)** | **Approximation** |
+| `152` | `153` | **Ring of Increase To-Hit** | `TV_RING (45)` | `100` | `2` | `20` | `+to_hit` | Consolidated into **Moria8 `#113` (`Ring of Slaying`)** | **Approximation** |
+| `153` | `154` | **Ring of Protection** | `TV_RING (45)` | `100` | `2` | `7` | `+to_ac` | **Moria8 `#23` (`Ring of Protection`)**: `AC 1` + `+to_ac`, `cost=100`, `wt=2`, `min_lvl=4` | **Implemented** |
+| `154` | `155` | **Ring of Aggravate Monster** | `TV_RING (45)` | `0` | `2` | `7` | `TR_CURSED \| TR_AGGRAVATE` | Omitted | **Missing** |
+| `155` | `156` | **Ring of See Invisible** | `TV_RING (45)` | `500` (`340` VMS) | `2` | `40` | `TR_SEE_INVIS` | **Moria8 `#112` (`Ring of See Invisible`)**: `cost=500`, `wt=2`, `min_lvl=9` | **Implemented** |
+| `156..161` | `157..162` | **Rings of Sustain Strength / INT / WIS / CON / DEX / CHR** *(6 items)* | `TV_RING (45)` | `500..750` | `2` | `44` (`7` CHR VMS) | `TR_SUST_STAT`, `p1=1..6` | Omitted | **Missing** |
+| `162` | `163` | **Ring of Slaying** | `TV_RING (45)` | `1000` | `2` | `50` | `+to_hit`, `+to_dam` | **Moria8 `#113` (`Ring of Slaying`)**: `cost=1000`, `wt=2`, `min_lvl=12`, `+to_hit` & `+to_dam` | **Implemented** |
+| `163` | `166` | **Amulet of Wisdom** | `TV_AMULET (40)` | `300` | `3` | `20` | `TR_WIS`, `+p1` WIS | **Moria8 `#124` (`Amulet of Wisdom`)**: `cost=300`, `wt=3`, `min_lvl=5`, `+p1` WIS | **Implemented** |
+| `164` | `167` | **Amulet of Charisma** | `TV_AMULET (40)` | `250` | `3` | `20` | `TR_CHR`, `+p1` CHR | Omitted | **Missing** |
+| `165` | `168` | **Amulet of Searching** | `TV_AMULET (40)` | `250` | `3` | `14` | `TR_SEARCH`, `+5*p1` search | Omitted | **Missing** |
+| `166` | `169` | **Amulet of Teleportation** | `TV_AMULET (40)` | `0` | `3` | `14` | `TR_CURSED \| TR_TELEPORT` | Omitted | **Missing** |
+| `167` | `170` | **Amulet of Slow Digestion** | `TV_AMULET (40)` | `200` | `3` | `14` | `TR_SLOW_DIGEST` | Omitted | **Missing** |
+| `168` | `171` | **Amulet of Resist Acid** | `TV_AMULET (40)` | `250` (`300` VMS) | `3` | `24` | `TR_RES_ACID` | Omitted | **Missing** |
+| `169` | `164..165` | **Amulet of Adornment** *(2 rows in VMS)* | `TV_AMULET (40)` | `20` / `30` | `3` | `16` | Cosmetic amulet | Omitted | **Missing** |
+| `171` | `172` | **Amulet of the Magi** | `TV_AMULET (40)` | `5000` | `3` | `50` | `TR_SEE_INVIS \| TR_FREE_ACT \| TR_SEARCH`, `+3` AC | **Moria8 `#125` (`Amulet of the Magi`)**: `AC 3` + See Invisible, `cost=5000`, `wt=3`, `min_lvl=12` | **Implemented** |
+| `172` | `173` | **Amulet of DOOM** | `TV_AMULET (40)` | `0` | `3` | `50` | `TR_CURSED`, `-5` to all 6 stats & search | Omitted | **Missing** |
+| `173` | `174` | **Scroll of Enchant Weapon To-Hit** | `TV_SCROLL1 (70)` | `125` | `5` | `12` | `+1` To-Hit on wielded weapon (uncurses) | Combined into **Moria8 `#34` (`Scroll of Enchant Weapon`)** (`+1` To-Hit and/or `+1` To-Dam, `cost=250`, `min_lvl=6`) | **Implemented** |
+| `174` | `175` | **Scroll of Enchant Weapon To-Dam** | `TV_SCROLL1 (70)` | `125` | `5` | `12` | `+1` To-Dam on wielded weapon (uncurses) | Combined into **Moria8 `#34` (`Scroll of Enchant Weapon`)** | **Implemented** |
+| `175` | `176` | **Scroll of Enchant Armor** | `TV_SCROLL1 (70)` | `125` | `5` | `12` | `+1` To-AC on worn armor (uncurses) | **Moria8 `#35` (`Scroll of Enchant Armor`)**: `cost=250`, `wt=2`, `min_lvl=6` | **Implemented** |
+| `176..179` | `177..179` | **Scroll of Identify** *(4 depth rows: dlvl `1, 5, 10, 30`; 3 in VMS)* | `TV_SCROLL1 (70)` | `50` | `5` | `1 / 5 / 10 / 30` | Identifies 1 item | **Moria8 `#21` (`Scroll of Identify`)**: `cost=50`, `wt=2`, `min_lvl=2` | **Implemented** |
+| `180` | `180` | **Scroll of Remove Curse** | `TV_SCROLL1 (70)` | `100` | `5` | `7` | Clears `TR_CURSED` on worn equipment | **Moria8 `#33` (`Scroll of Remove Curse`)**: `cost=80`, `wt=2`, `min_lvl=4` | **Implemented** |
+| `181..183` | `181..183` | **Scroll of Light** *(3 depth rows: dlvl `0, 3, 7`)* | `TV_SCROLL1 (70)` | `15` | `5` | `0 / 3 / 7` | Lights room / area | **Moria8 `#20` (`Scroll of Light`)**: `cost=15`, `wt=2`, `min_lvl=1` | **Implemented** |
+| `184` | `184` | **Scroll of Summon Monster** | `TV_SCROLL1 (70)` | `0` | `5` | `1` | Spawns `1d3` monsters adjacent to player | Omitted | **Missing** |
+| `185` | `185` | **Scroll of Phase Door** | `TV_SCROLL1 (70)` | `15` | `5` | `1` | `teleport(10)` | Omitted as scroll (implemented as Spell `#2`) | **Missing** |
+| `186` | `186` | **Scroll of Teleport** | `TV_SCROLL1 (70)` | `40` | `5` | `10` | `teleport(100)` | **Moria8 `#22` (`Scroll of Teleportation`)**: `cost=40`, `wt=2`, `min_lvl=3` | **Implemented** |
+| `187` | `187` | **Scroll of Teleport Level** | `TV_SCROLL1 (70)` | `50` | `5` | `20` | `dun_level += ±1` | **Moria8 `#101` (`Scroll of Teleport Level`)**: `cost=50`, `wt=5`, `min_lvl=5` | **Implemented** |
+| `188` | `188` | **Scroll of Monster Confusion** | `TV_SCROLL1 (70)` | `30` | `5` | `5` | Next melee hit confuses monster (`confuse_monster = true`) | **Moria8 `#36` (`Scroll of Monster Confusion`)**: `cost=50`, `wt=2`, `min_lvl=3` | **Implemented** |
+| `189` | `189` | **Scroll of Magic Mapping** | `TV_SCROLL1 (70)` | `40` | `5` | `5` | `map_area()` | **Moria8 `#102` (`Scroll of Magic Mapping`)**: `cost=40`, `wt=5`, `min_lvl=2` | **Implemented** |
+| `190` | `190` | **Scroll of Sleep Monster** | `TV_SCROLL1 (70)` | `35` | `5` | `5` | `sleep_monsters2()` (sleeps adjacent monsters) | Omitted as scroll (implemented as Spell `#18` / Prayer `#12`) | **Missing** |
+| `191` | `191` | **Scroll of Rune of Protection** | `TV_SCROLL1 (70)` | `500` | `5` | `50` | `warding_glyph()` | **Moria8 `#105` (`Scroll of Rune of Protection`)**: `cost=500`, `wt=5`, `min_lvl=11` | **Implemented** |
+| `192` | `192` | **Scroll of Treasure Detection** | `TV_SCROLL1 (70)` | `15` | `5` | `0` | Detects gold/gems in area | Consolidated into **Moria8 `#103` (`Scroll of Object Detection`)** | **Approximation** |
+| `193` | `193` | **Scroll of Object Detection** | `TV_SCROLL1 (70)` | `15` | `5` | `0` | Detects all floor items | **Moria8 `#103` (`Scroll of Object Detection`)**: `cost=15`, `wt=5`, `min_lvl=1` | **Implemented** |
+| `194..196` | `194..196` | **Scroll of Trap Detection** *(3 depth rows: dlvl `5, 8, 12`)* | `TV_SCROLL1 (70)` | `35` | `5` | `5 / 8 / 12` | `detect_trap()` | Omitted as scroll (implemented as Spell `#5` / Prayer `#5`) | **Missing** |
+| `197..199` | `197..199` | **Scroll of Door/Stair Location** *(3 depth rows: dlvl `5, 10, 15`)* | `TV_SCROLL1 (70)` | `35` | `5` | `5 / 10 / 15` | `detect_sdoor()` | Omitted as scroll (implemented as Spell `#5` / Prayer `#6`) | **Missing** |
+| `200` | `200` | **Scroll of Mass Genocide** | `TV_SCROLL1 (70)` | `1000` | `5` | `50` | `mass_genocide()` — removes all monsters within sight/radius (except Balrog) at `1d3` HP strain each | **Moria8 `#107` (`Scroll of Mass Genocide`)**: `cost=1000`, `wt=5`, `min_lvl=12` | **Implemented** |
+| `201` | `201` | **Scroll of Detect Invisible** | `TV_SCROLL1 (70)` | `15` | `5` | `1` | `detect_inv2(randint(24)+24)` | Omitted as scroll (implemented as Prayer `#19`) | **Missing** |
+| `202` | `202` | **Scroll of Aggravate Monster** | `TV_SCROLL1 (70)` | `0` | `5` | `5` | `aggravate_monster(20)` | **Moria8 `#37` (`Scroll of Aggravate`)**: `cost=5`, `wt=2`, `min_lvl=1` | **Implemented** |
+| `203` | `203` | **Scroll of Trap Creation** | `TV_SCROLL1 (70)` | `0` | `5` | `12` | `trap_creation()` — spawns traps in all 8 adjacent tiles | Omitted | **Missing** |
+| `204` | `204` | **Scroll of Trap/Door Destruction** | `TV_SCROLL1 (70)` | `50` | `5` | `12` | `td_destroy2()` along directional ray | Omitted as scroll (implemented as Spell `#9`) | **Missing** |
+| `205` | `205` | **Scroll of Door Creation** | `TV_SCROLL1 (70)` | `100` | `5` | `12` | `door_creation()` — places closed doors in adjacent open tiles | Omitted | **Missing** |
+| `206` | `206` | **Scroll of Recharging** | `TV_SCROLL1 (70)` | `200` | `5` | `40` | `recharge(60)` | **Moria8 `#104` (`Scroll of Recharging`)**: `cost=200`, `wt=5`, `min_lvl=9` | **Implemented** |
+| `207` | `207` | **Scroll of Genocide** | `TV_SCROLL1 (70)` | `750` | `5` | `35` | `genocide()` | **Moria8 `#106` (`Scroll of Genocide`)**: `cost=750`, `wt=5`, `min_lvl=9` | **Implemented** |
+| `208` | `208` | **Scroll of Darkness** | `TV_SCROLL1 (70)` | `0` | `5` | `1` | `unlight_area(char_row, char_col)` | Omitted | **Missing** |
+| `209` | `209` | **Scroll of Protection from Evil** | `TV_SCROLL1 (70)` | `100` (`50` VMS) | `5` | `30` | `protevil += randint(25) + 3 * char_lev` | **Moria8 `#38` (`Scroll of Protect from Evil`)**: `cost=100`, `wt=2`, `min_lvl=4` | **Implemented** |
+| `210` | `210` | **Scroll of Create Food** | `TV_SCROLL1 (70)` | `10` | `5` | `5` | `create_food()` | Omitted as scroll (implemented as Spell `#16` / Prayer `#13`) | **Missing** |
+| `211` | `211` | **Scroll of Dispel Undead** | `TV_SCROLL1 (70)` | `200` | `5` | `40` | `dispel_creature(CD_UNDEAD, 60)` | Omitted as scroll (implemented as Prayer `#26`) | **Missing** |
+| `212` | `212` | **Scroll of \*Enchant Weapon\*** | `TV_SCROLL2 (71)` | `500` | `5` | `50` | `+1d4` To-Hit and `+1d4` To-Dam | Consolidated into `Scroll of Enchant Weapon #34` | **Approximation** |
+| `213` | `213` | **Scroll of Curse Weapon** | `TV_SCROLL2 (71)` | `0` | `5` | `50` | Curses wielded weapon (`-1d4` hit/dam) | Omitted | **Missing** |
+| `214` | `214` | **Scroll of \*Enchant Armor\*** | `TV_SCROLL2 (71)` | `500` | `5` | `50` | `+(1d3+2)` To-AC | Consolidated into `Scroll of Enchant Armor #35` | **Approximation** |
+| `215` | `215` | **Scroll of Curse Armor** | `TV_SCROLL2 (71)` | `0` | `5` | `50` | Curses worn body armor (`-1d4` AC) | Omitted | **Missing** |
+| `216` | `216` | **Scroll of Summon Undead** | `TV_SCROLL2 (71)` | `0` | `5` | `15` | Spawns `1d3` undead monsters nearby | Omitted | **Missing** |
+| `217` | `217` | **Scroll of Blessing** | `TV_SCROLL2 (71)` | `15` | `5` | `1` | `blessed += randint(12) + 6` | Omitted as scroll (implemented as Prayer `#2`) | **Missing** |
+| `218` | `218` | **Scroll of Holy Chant** | `TV_SCROLL2 (71)` | `40` | `5` | `12` | `blessed += randint(24) + 12` | Omitted as scroll (implemented as Prayer `#11`) | **Missing** |
+| `219` | `219` | **Scroll of Holy Prayer** | `TV_SCROLL2 (71)` | `80` | `5` | `24` | `blessed += randint(48) + 24` | Omitted as scroll (implemented as Prayer `#25`) | **Missing** |
+| `220` | `220` | **Scroll of Word-of-Recall** | `TV_SCROLL2 (71)` | `150` | `5` | `5` | Sets `word_recall = randint(20) + 20` | **Moria8 `#32` (`Scroll of Word of Recall`)**: `cost=200`, `wt=2`, `min_lvl=5` | **Implemented** |
+| `221` | `221` | **Scroll of \*Destruction\*** | `TV_SCROLL2 (71)` | `750` (`250` VMS) | `5` | `40` | `destroy_area(char_row, char_col)` | **Moria8 `#108` (`Scroll of *Destruction*`)**: `cost=750`, `wt=5`, `min_lvl=10` | **Implemented** |
+| `222` | `248` | **Potion of Slime Mold Juice** | `TV_POTION1 (75)` | `2` | `4` | `0` | `food=400`, heals `2d4+1` HP | Omitted | **Missing** |
+| `223` | `249` | **Potion of Apple Juice** | `TV_POTION1 (75)` | `1` | `4` | `0` | `food=250` | Omitted | **Missing** |
+| `224` | `250` | **Potion of Water** | `TV_POTION1 (75)` | `0` | `4` | `0` | `food=200` | Omitted | **Missing** |
+| `225` | `222` | **Potion of Strength / Gain Strength** | `TV_POTION1 (75)` | `300` (`200` VMS) | `4` | `25` | Permanently raises `STR` (`inc_stat(A_STR)`) | Omitted | **Missing** |
+| `226` | `223` | **Potion of Weakness** *(VMS: second `Potion of Poison`)* | `TV_POTION1 (75)` | `0` | `4` | `3` | Drains `STR` (`dec_stat(A_STR)`) | Omitted | **Missing** |
+| `227` | `224` | **Potion of Restore Strength** | `TV_POTION1 (75)` | `300` | `4` | `40` | `res_stat(A_STR)` | Consolidated into **Moria8 `#97` (`Restoration Potion`)** (restores all drained stats & XP) | **Approximation** |
+| `228` | `225` | **Potion of Intelligence / Gain Intelligence** | `TV_POTION1 (75)` | `300` | `4` | `25` | `inc_stat(A_INT)` | Omitted (`Potion of Learning #254` in VMS) | **Missing** |
+| `229` | `226` | **Potion of Lose Intelligence** | `TV_POTION1 (75)` | `0` | `4` | `25` | `dec_stat(A_INT)` | Omitted | **Missing** |
+| `230` | `227` | **Potion of Restore Intelligence** | `TV_POTION1 (75)` | `300` | `4` | `40` | `res_stat(A_INT)` | Consolidated into **Moria8 `#97` (`Restoration Potion`)** | **Approximation** |
+| `231` | `228` | **Potion of Wisdom / Gain Wisdom** | `TV_POTION1 (75)` | `300` | `4` | `25` | `inc_stat(A_WIS)` | Omitted | **Missing** |
+| `232` | `229` | **Potion of Lose Wisdom** | `TV_POTION1 (75)` | `0` | `4` | `25` | `dec_stat(A_WIS)` | Omitted | **Missing** |
+| `233` | `230` | **Potion of Restore Wisdom** | `TV_POTION1 (75)` | `300` | `4` | `40` | `res_stat(A_WIS)` | Consolidated into **Moria8 `#97` (`Restoration Potion`)** | **Approximation** |
+| `234` | `231` | **Potion of Charisma** | `TV_POTION1 (75)` | `300` | `4` | `25` | `inc_stat(A_CHR)` | Omitted | **Missing** |
+| `235` | `232` | **Potion of Ugliness** | `TV_POTION1 (75)` | `0` | `4` | `25` | `dec_stat(A_CHR)` | Omitted | **Missing** |
+| `236` | `233` | **Potion of Restore Charisma** | `TV_POTION1 (75)` | `300` | `4` | `40` | `res_stat(A_CHR)` | Consolidated into **Moria8 `#97` (`Restoration Potion`)** | **Approximation** |
+| `237..239` | `234..236` | **Potion of Cure Light Wounds** *(3 depth rows: dlvl `0, 1, 2`)* | `TV_POTION1 (75)` | `15` | `4` | `0 / 1 / 2` | Heals `2d7` HP + cures blindness | **Moria8 `#17` (`Cure Light Wounds Potion`)**: `cost=50`, `wt=4`, `min_lvl=1`, heals `2d7` HP | **Implemented** |
+| `240` | `237` | **Potion of Cure Serious Wounds** | `TV_POTION1 (75)` | `40` | `4` | `3` | Heals `4d7` HP + cures blindness/confusion | **Moria8 `#25` (`Cure Serious Wounds Potion`)**: `cost=100`, `wt=4`, `min_lvl=3`, heals `4d7` HP | **Implemented** |
+| `241` | `238` | **Potion of Cure Critical Wounds** | `TV_POTION1 (75)` | `100` | `4` | `5` | Heals `6d7` HP + cures blindness/confusion/poison | **Moria8 `#100` (`Cure Critical Wounds Potion`)**: `cost=100`, `wt=4`, `min_lvl=2`, heals `6d7` HP | **Implemented** |
+| `242` | `239` | **Potion of Healing** | `TV_POTION1 (75)` | `200` | `4` | `12` | Heals `1000` (`200`) HP + cures status | **Moria8 `#96` (`Healing Potion`)**: `cost=200`, `wt=4`, `min_lvl=4`, heals `200` HP + cures poison/blind/confuse | **Implemented** |
+| `243` | `240` | **Potion of Constitution / Gain Constitution** | `TV_POTION1 (75)` | `300` | `4` | `25` | `inc_stat(A_CON)` | Omitted | **Missing** |
+| `244` | `241` | **Potion of Gain Experience** | `TV_POTION1 (75)` | `2500` | `4` | `50` | Adds `(exp / 2) + 10` XP (up to `100,000`) | Omitted | **Missing** |
+| `245` | `242` | **Potion of Sleep** | `TV_POTION1 (75)` | `0` | `4` | `0` | Paralyzes player for `randint(4) + 4` turns | Omitted | **Missing** |
+| `246` | `243` | **Potion of Blindness** | `TV_POTION1 (75)` | `0` | `4` | `0` | Blinds player for `randint(100) + 100` turns | **Moria8 `#28` (`Blindness Potion`)**: `cost=5`, `wt=4`, `min_lvl=1` | **Implemented** |
+| `247` | `244` | **Potion of Confusion** | `TV_POTION1 (75)` | `0` | `4` | `0` | Confuses player for `randint(20) + 15` turns | **Moria8 `#29` (`Confusion Potion`)**: `cost=5`, `wt=4`, `min_lvl=1` | **Implemented** |
+| `248` | `245` | **Potion of Poison** | `TV_POTION1 (75)` | `0` | `4` | `3` | Poisons player for `randint(15) + 10` turns | **Moria8 `#19` (`Poison Potion`)**: `cost=5`, `wt=4`, `min_lvl=1` | **Implemented** |
+| `249` | `246` | **Potion of Haste Self** | `TV_POTION1 (75)` | `75` | `4` | `1` | `fast += randint(25) + 15` turns | **Moria8 `#18` (`Speed Potion`)**: `cost=75`, `wt=4`, `min_lvl=3` | **Implemented** |
+| `250` | `247` | **Potion of Slowness** | `TV_POTION1 (75)` | `0` | `4` | `1` | `slow += randint(25) + 15` turns | Omitted | **Missing** |
+| `251` | `251` | **Potion of Dexterity / Gain Dexterity** | `TV_POTION1 (75)` | `300` | `4` | `25` | `inc_stat(A_DEX)` | Omitted | **Missing** |
+| `252` | `252` | **Potion of Restore Dexterity** | `TV_POTION1 (75)` | `300` | `4` | `40` | `res_stat(A_DEX)` | Consolidated into **Moria8 `#97` (`Restoration Potion`)** | **Approximation** |
+| `253` | `253` | **Potion of Restore Constitution** | `TV_POTION1 (75)` | `300` | `4` | `40` | `res_stat(A_CON)` | Consolidated into **Moria8 `#97` (`Restoration Potion`)** | **Approximation** |
+| *(VMS only)* | `254` | **Potion of Learning** *(VMS Moria only; removed in Umoria)* | `TV_POTION2 (76)` | `200` | `4` | `45` | Grants `+1` learnable spell (`new_spells++`) | Omitted (removed in Umoria) | **Missing** |
+| `254` | `255` | **Potion of Lose Experience / Lose Memories** | `TV_POTION2 (76)` | `0` | `4` | `10` | Drains `25%` of player XP | Omitted | **Missing** |
+| `255` | `256` | **Potion of Salt Water** | `TV_POTION2 (76)` | `0` | `4` | `0` | Vomits (`food = 0`), cures poison, paralyzes `4` turns | Omitted | **Missing** |
+| `256` | `257` | **Potion of Invulnerability** | `TV_POTION2 (76)` | `1000` (`250` VMS) | `4` | `40` | `invuln += randint(10) + 10` turns | Omitted as potion (granted by Prayer `#30` `Holy Word`) | **Missing** |
+| `257` | `258` | **Potion of Heroism** | `TV_POTION2 (76)` | `35` | `4` | `1` | `hero += randint(25) + 25`, heals `10` HP, cures fear | **Moria8 `#27` (`Heroism Potion`)**: `cost=80`, `wt=4`, `min_lvl=4` | **Implemented** |
+| `258` | `259` | **Potion of Super Heroism** | `TV_POTION2 (76)` | `100` | `4` | `3` | `shero += randint(25) + 25`, heals `30` HP, cures fear | Consolidated into `Heroism Potion #27` | **Approximation** |
+| `259` | `260` | **Potion of Boldness / Boldliness** | `TV_POTION2 (76)` | `10` | `4` | `1` | `remove_fear()` | Covered by `Heroism Potion #27` | **Approximation** |
+| `260` | `261` | **Potion of Restore Life Levels** | `TV_POTION2 (76)` | `400` | `4` | `40` | `restore_level()` | Consolidated into **Moria8 `#97` (`Restoration Potion`)** | **Implemented** |
+| `261` | `262` | **Potion of Resist Heat** | `TV_POTION2 (76)` | `30` | `4` | `1` | `resist_heat += randint(10) + 10` | **Moria8 `#98` (`Resist Heat Potion`)**: `cost=30`, `wt=4`, `min_lvl=1` | **Implemented** |
+| `262` | `263` | **Potion of Resist Cold** | `TV_POTION2 (76)` | `30` | `4` | `1` | `resist_cold += randint(10) + 10` | **Moria8 `#99` (`Resist Cold Potion`)**: `cost=30`, `wt=4`, `min_lvl=1` | **Implemented** |
+| `263` | `264` | **Potion of Detect Invisible** | `TV_POTION2 (76)` | `50` | `4` | `3` | `detect_inv2(randint(12) + 12)` | Adapted as **Moria8 `#30` (`Detect Monsters Potion`)** (`cost=60`, `wt=4`, `min_lvl=2`) | **Approximation** |
+| `264` | `265` | **Potion of Slow Poison** | `TV_POTION2 (76)` | `25` | `4` | `1` | `slow_poison()` | Consolidated into `Neutralize Poison Potion #126` | **Approximation** |
+| `265` | `266` | **Potion of Neutralize Poison** | `TV_POTION2 (76)` | `75` | `4` | `5` | `cure_poison()` | **Moria8 `#126` (`Neutralize Poison Potion`)**: `cost=75`, `wt=4`, `min_lvl=2` | **Implemented** |
+| `266` | `267` | **Potion of Restore Mana** | `TV_POTION2 (76)` | `350` (`35` VMS) | `4` | `25` | Restores `cmana = mana` | **Moria8 `#26` (`Restore Mana Potion`)**: `cost=150`, `wt=4`, `min_lvl=5` | **Implemented** |
+| `267` | `268` | **Potion of Infra-Vision** | `TV_POTION2 (76)` | `20` | `4` | `3` | `tim_infra += 100 + randint(100)` | **Moria8 `#31` (`Infravision Potion`)**: `cost=40`, `wt=4`, `min_lvl=2` | **Implemented** |
+| `268` | `269` | **Flask of Oil** | `TV_FLASK (77)` | `3` | `10` | `1` | `p1=7500` fuel, `2d6` thrown fire | **Moria8 `#61` (`Flask of Oil`)**: `cost=10`, `wt=10`, `min_lvl=0`, `2d6` thrown | **Implemented** |
+| `269` | `270` | **Wand of Light** | `TV_WAND (65)` | `200` | `10` | `2` | `1d10+6` charges, `light_line(dir)` | **Moria8 `#39` (`Wand of Light`)**: `cost=50`, `wt=10`, `min_lvl=3` | **Implemented** |
+| `270` | `271` | **Wand of Lightning Bolts** | `TV_WAND (65)` | `600` | `10` | `15` | `1d8+6` charges, `4d8` lightning bolt | **Moria8 `#40` (`Wand of Lightning`)**: `cost=200`, `wt=10`, `min_lvl=4` | **Implemented** |
+| `271` | `272` | **Wand of Frost Bolts** | `TV_WAND (65)` | `800` | `10` | `20` | `1d5+6` charges, `6d8` frost bolt | **Moria8 `#41` (`Wand of Frost`)**: `cost=250`, `wt=10`, `min_lvl=5` | **Implemented** |
+| `272` | `273` | **Wand of Fire Bolts** | `TV_WAND (65)` | `1000` | `10` | `30` | `1d8+6` charges, `9d8` fire bolt | Omitted (`Wand of Fire Balls #117` is present) | **Missing** |
+| `273` | `274` | **Wand of Stone-to-Mud** | `TV_WAND (65)` | `300` | `10` | `12` | `1d4+3` charges, `wall_to_mud(dir)` | **Moria8 `#115` (`Wand of Stone-to-Mud`)**: `cost=300`, `wt=10`, `min_lvl=3` | **Implemented** |
+| `274` | `275` | **Wand of Polymorph** | `TV_WAND (65)` | `400` | `10` | `20` | `1d8+6` charges, `poly_monster(dir)` | Omitted as wand (implemented as Spell `#19`) | **Missing** |
+| `275` | `276` | **Wand of Heal Monster** | `TV_WAND (65)` | `0` | `10` | `2` | `1d20+12` charges, heals monster `4d6` HP | Omitted | **Missing** |
+| `276` | `277` | **Wand of Haste Monster** | `TV_WAND (65)` | `0` | `10` | `2` | `1d20+12` charges, hastes monster `+1` | Omitted | **Missing** |
+| `277` | `278` | **Wand of Slow Monster** | `TV_WAND (65)` | `500` | `10` | `2` | `1d10+6` charges, slows monster `-1` | **Moria8 `#114` (`Wand of Slow Monster`)**: `cost=500`, `wt=10`, `min_lvl=1` | **Implemented** |
+| `278` | `279` | **Wand of Confuse Monster** | `TV_WAND (65)` | `400` | `10` | `2` | `1d12+6` charges, confuses monster | Omitted as wand (implemented as Spell `#7` / Prayer `#8`) | **Missing** |
+| `279` | `280` | **Wand of Sleep Monster** | `TV_WAND (65)` | `500` | `10` | `7` | `1d10+12` charges, sleeps monster | Omitted as wand (implemented as Spell `#10`) | **Missing** |
+| `280` | `281` | **Wand of Drain Life** | `TV_WAND (65)` | `1200` | `10` | `50` | `1d3+3` charges, `drain_life(dir, 75)` | Omitted | **Missing** |
+| `281` | `282` | **Wand of Trap/Door Destruction** | `TV_WAND (65)` | `500` (`100` VMS) | `10` | `12` | `1d8+6` charges, `td_destroy2(dir)` | Omitted | **Missing** |
+| `282` | `283` | **Wand of Magic Missile** | `TV_WAND (65)` | `200` | `10` | `2` | `1d10+6` charges, `2d6` bolt | Omitted as wand (implemented as Spell `#0`) | **Missing** |
+| `283` | `284` | **Wand of Wall Building** | `TV_WAND (65)` | `400` | `10` | `25` | `1d5+3` charges, `build_wall(dir)` | Omitted | **Missing** |
+| `284` | `285` | **Wand of Clone Monster** | `TV_WAND (65)` | `0` | `10` | `15` (`2` VMS) | `1d5+3` charges, `clone_monster(dir)` | Omitted | **Missing** |
+| `285` | `286` | **Wand of Teleport Away** | `TV_WAND (65)` | `350` | `10` | `20` | `1d5+6` charges, `teleport_monster(dir)` | **Moria8 `#116` (`Wand of Teleport Away`)**: `cost=350`, `wt=10`, `min_lvl=5` | **Implemented** |
+| `286` | `287` | **Wand of Disarming** | `TV_WAND (65)` | `500` (`700` VMS) | `10` | `20` | `1d5+4` charges, `disarm_all(dir)` | Omitted | **Missing** |
+| `287` | `288` | **Wand of Lightning Balls** | `TV_WAND (65)` | `1200` | `10` | `35` | `1d8+4` charges, `32` lightning ball | Omitted | **Missing** |
+| `288` | `289` | **Wand of Cold Balls** | `TV_WAND (65)` | `1500` | `10` | `40` | `1d6+2` charges, `48` cold ball | **Moria8 `#118` (`Wand of Cold Balls`)**: `cost=1500`, `wt=10`, `min_lvl=10` | **Implemented** |
+| `289` | `290` | **Wand of Fire Balls** | `TV_WAND (65)` | `1800` | `10` | `50` | `1d4+2` charges, `72` fire ball | **Moria8 `#117` (`Wand of Fire Balls`)**: `cost=1800`, `wt=10`, `min_lvl=11` | **Implemented** |
+| `290` | `291` | **Wand of Stinking Cloud** | `TV_WAND (65)` | `400` | `10` | `5` | `1d8+6` charges, `12` poison ball | **Moria8 `#42` (`Wand of Stinking Cloud`)**: `cost=150`, `wt=10`, `min_lvl=4` | **Implemented** |
+| `291` | `292` | **Wand of Acid Balls** | `TV_WAND (65)` | `1650` | `10` | `48` | `1d5+2` charges, `60` acid ball | Omitted | **Missing** |
+| `292` | `293` | **Wand of Wonder** | `TV_WAND (65)` | `250` | `10` | `2` | `1d12+12` charges, random wand effect | Omitted | **Missing** |
+| `293` | `294` | **Staff of Light** | `TV_STAFF (55)` | `250` | `50` | `5` | `1d20+12` charges, `light_area()` | **Moria8 `#43` (`Staff of Light`)**: `cost=60`, `wt=50`, `min_lvl=3` | **Implemented** |
+| `294` | `295` | **Staff of Door/Stair Location** | `TV_STAFF (55)` | `350` | `50` | `10` | `1d8+6` charges, `detect_sdoor()` | Omitted as staff (implemented as Prayer `#6`) | **Missing** |
+| `295` | `296` | **Staff of Trap Location** | `TV_STAFF (55)` | `350` | `50` | `10` | `1d5+6` charges, `detect_trap()` | Omitted as staff (implemented as Prayer `#5`) | **Missing** |
+| `296` | `297` | **Staff of Treasure Location** | `TV_STAFF (55)` | `200` | `50` | `5` | `1d20+12` charges, `detect_treasure()` | Omitted | **Missing** |
+| `297` | `298` | **Staff of Object Location** | `TV_STAFF (55)` | `200` | `50` | `5` | `1d15+6` charges, `detect_object()` | Omitted as staff (`Scroll of Object Detection #103`) | **Missing** |
+| `298` | `299` | **Staff of Teleportation** | `TV_STAFF (55)` | `800` (`400` VMS) | `50` | `20` | `1d4+5` charges, `teleport(100)` | **Moria8 `#45` (`Staff of Teleportation`)**: `cost=300`, `wt=50`, `min_lvl=5` | **Implemented** |
+| `299` | `300` | **Staff of Earthquakes** | `TV_STAFF (55)` | `350` | `50` | `40` | `1d5+3` charges, `earthquake()` | Omitted as staff (implemented as Prayer `#21`) | **Missing** |
+| `300..301` | `301..302` | **Staff of Summoning** *(2 depth rows: dlvl `10, 50`)* | `TV_STAFF (55)` | `0` | `50` | `10 / 50` | `1d3+1` charges, spawns `1d4` monsters | Omitted | **Missing** |
+| `302` | `303` | **Staff of \*Destruction\*** | `TV_STAFF (55)` | `2500` | `50` | `50` | `1d5+6` charges, `destroy_area()` | **Moria8 `#120` (`Staff of Destruction`)**: `cost=2500`, `wt=50`, `min_lvl=12` | **Implemented** |
+| `303` | `304` | **Staff of Starlight / Starlite** | `TV_STAFF (55)` | `400` (`800` VMS) | `50` | `20` | `1d10+12` charges, `starlight()` (8-way `light_line`) | Omitted | **Missing** |
+| `304` | `305` | **Staff of Haste Monsters** | `TV_STAFF (55)` | `0` | `50` | `10` | `1d5+6` charges, hastes all LOS monsters | Omitted | **Missing** |
+| `305` | `306` | **Staff of Slow Monsters** | `TV_STAFF (55)` | `800` | `50` | `10` | `1d5+6` charges, slows all LOS monsters | Omitted | **Missing** |
+| `306` | `307` | **Staff of Sleep Monsters** | `TV_STAFF (55)` | `700` | `50` | `10` | `1d5+6` charges, `sleep_monsters3()` | Omitted as staff (implemented as Spell `#21`) | **Missing** |
+| `307` | `308` | **Staff of Cure Light Wounds** | `TV_STAFF (55)` | `200` (`350` VMS) | `50` | `5` | `1d10+12` charges, heals `randint(8)` HP | **Moria8 `#46` (`Staff of Cure Light Wounds`)**: `cost=200`, `wt=50`, `min_lvl=3` | **Implemented** |
+| `308` | `309` | **Staff of Detect Invisible** | `TV_STAFF (55)` | `200` | `50` | `5` | `1d3+4` charges, `detect_inv2()` | Adapted as **Moria8 `#44` (`Staff of Detect Monsters`)** (`cost=100`, `wt=50`, `min_lvl=3`) | **Approximation** |
+| `309` | `310` | **Staff of Speed** | `TV_STAFF (55)` | `1000` (`800` VMS) | `50` | `40` | `1d3+4` charges, `fast += randint(30) + 15` | **Moria8 `#121` (`Staff of Speed`)**: `cost=1000`, `wt=50`, `min_lvl=10` | **Implemented** |
+| `310` | `311` | **Staff of Slowness** | `TV_STAFF (55)` | `0` | `50` | `40` | `1d5+6` charges, `slow += randint(30) + 15` | Omitted | **Missing** |
+| `311` | `312` | **Staff of Mass Polymorph** | `TV_STAFF (55)` | `750` | `50` | `46` | `1d5+6` charges, `mass_poly()` | Omitted | **Missing** |
+| `312` | `313` | **Staff of Remove Curse** | `TV_STAFF (55)` | `500` | `50` | `47` | `1d3+4` charges, `remove_curse()` | **Moria8 `#127` (`Staff of Remove Curse`)**: `cost=500`, `wt=50`, `min_lvl=8` | **Implemented** |
+| `313` | `314` | **Staff of Detect Evil** | `TV_STAFF (55)` | `350` | `50` | `20` | `1d10+12` charges, `detect_evil()` | Omitted as staff (implemented as Prayer `#0`) | **Missing** |
+| `314` | `315` | **Staff of Curing** | `TV_STAFF (55)` | `1000` | `50` | `25` | `1d3+4` charges, cures blind/poison/confuse/stun | Omitted | **Missing** |
+| `315` | `316` | **Staff of Dispel Evil** | `TV_STAFF (55)` | `1200` | `50` | `49` | `1d3+4` charges, `dispel_creature(CD_EVIL, 60)` | **Moria8 `#119` (`Staff of Dispel Evil`)**: `cost=1200`, `wt=50`, `min_lvl=11` | **Implemented** |
+| `316..317` | `317..318` | **Staff of Darkness** *(2 depth rows: dlvl `50, 5`)* | `TV_STAFF (55)` | `0` | `50` | `50 / 5` | `1d10+6` charges, `unlight_area()` | Omitted | **Missing** |
+| `318` | `319` | **[Beginners-Magick]** | `TV_MAGIC_BOOK (90)` | `25` | `30` | `40` (`0` store) | `flags=0x0000007F` (Mage Spells `0..6`) | **Moria8 `#47` (`[Beginners-Magick]`)**: `cost=100`, `wt=30`, `min_lvl=2` | **Implemented** |
+| `319` | `320` | **[Magick I]** | `TV_MAGIC_BOOK (90)` | `100` | `30` | `40` (`0` store) | `flags=0x0000FF80` (Mage Spells `7..15`) | **Moria8 `#55` (`[Magick I]`)**: `cost=300`, `wt=30`, `min_lvl=4` | **Implemented** |
+| `320` | `321` | **[Magick II]** | `TV_MAGIC_BOOK (90)` | `400` | `30` | `40` (`0` store) | `flags=0x00FF0000` (Mage Spells `16..23`) | **Moria8 `#56` (`[Magick II]`)**: `cost=500`, `wt=30`, `min_lvl=8` | **Implemented** |
+| `321` | `322` | **[The Mages' Guide to Power]** | `TV_MAGIC_BOOK (90)` | `800` | `30` | `40` (`0` store) | `flags=0x7F000000` (Mage Spells `24..30`) | **Moria8 `#57` (`[The Mages' Guide to Power]`)**: `cost=800`, `wt=30`, `min_lvl=12` | **Implemented** |
+| `322` | `323` | **[Beginners Handbook]** | `TV_PRAYER_BOOK (91)` | `25` | `30` | `40` (`0` store) | `flags=0x000000FF` (Priest Prayers `0..7`) | **Moria8 `#48` (`[Beginners Handbook]`)**: `cost=100`, `wt=30`, `min_lvl=2` | **Implemented** |
+| `323` | `324` | **[Words of Wisdom]** | `TV_PRAYER_BOOK (91)` | `100` | `30` | `40` (`0` store) | `flags=0x0000FF00` (Priest Prayers `8..15`) | **Moria8 `#58` (`[Words of Wisdom]`)**: `cost=300`, `wt=30`, `min_lvl=4` | **Implemented** |
+| `324` | `325` | **[Chants and Blessings]** | `TV_PRAYER_BOOK (91)` | `400` (`300` VMS) | `30` | `40` (`0` store) | `flags=0x01FF0000` (Priest Prayers `16..24`) | **Moria8 `#59` (`[Chants and Blessings]`)**: `cost=500`, `wt=30`, `min_lvl=8` | **Implemented** |
+| `325` | `326` | **[Exorcisms and Dispellings]** | `TV_PRAYER_BOOK (91)` | `800` (`900` VMS) | `30` | `40` (`0` store) | `flags=0x7E000000` (Priest Prayers `25..30`) | **Moria8 `#60` (`[Exorcisms and Dispellings]`)**: `cost=800`, `wt=30`, `min_lvl=12` | **Implemented** |
+| `326` | `327` | **Small Wooden Chest** | `TV_CHEST (2)` | `20` | `250` | `7` | `2d3`, `flags=0x13800000` | **Moria8 `#128` (`Small Wooden Chest`)**: `2d3`, `cost=20`, `wt=250`, `min_lvl=2` | **Implemented** |
+| `327` | `328` | **Large Wooden Chest** | `TV_CHEST (2)` | `60` | `500` | `15` | `2d5`, `flags=0x17800000` | **Moria8 `#129` (`Large Wooden Chest`)**: `2d5`, `cost=60`, `wt=255`, `min_lvl=4` | **Implemented** |
+| `328` | `329` | **Small Iron Chest** | `TV_CHEST (2)` | `100` | `500` (`300` VMS) | `25` | `2d4`, `flags=0x17800000` | **Moria8 `#130` (`Small Iron Chest`)**: `2d4`, `cost=100`, `wt=255`, `min_lvl=7` | **Implemented** |
+| `329` | `330` | **Large Iron Chest** | `TV_CHEST (2)` | `150` | `1000` | `35` | `2d6`, `flags=0x23800000` | **Moria8 `#131` (`Large Iron Chest`)**: `2d6`, `cost=150`, `wt=255`, `min_lvl=9` | **Implemented** |
+| `330` | `331` | **Small Steel Chest** | `TV_CHEST (2)` | `200` | `500` | `45` | `2d4`, `flags=0x1B800000` | **Moria8 `#132` (`Small Steel Chest`)**: `2d4`, `cost=200`, `wt=255`, `min_lvl=11` | **Implemented** |
+| `331` | `332` | **Large Steel Chest** | `TV_CHEST (2)` | `250` | `1000` | `50` | `2d6`, `flags=0x33800000` | **Moria8 `#133` (`Large Steel Chest`)**: `2d6`, `cost=250`, `wt=255`, `min_lvl=12` | **Implemented** |
+| `332..343` | `333..344` | **Dungeon Junk & Skeletons** *(12 items: `Rat Skeleton`, `Giant Centipede Skeleton`, `Filthy Rags`, `empty bottle`, `shards of pottery`, `Human Skeleton`, `Dwarf Skeleton`, `Elf Skeleton`, `Gnome Skeleton`, `broken set of teeth`, `large broken bone`, `broken stick`)* | `TV_MISC (1)` / `TV_SOFT_ARMOR (36)` | `0` | `2..60` | `0..1` | Flavor junk items (`AC 1` on Filthy Rags) | Omitted (except `Ruined Chest #134`) | **Missing** |
+| `344..366` | `inventory_init[1..105]` | **Store-Only Stock Templates** *(Includes `Hard Biscuit` `345`, `Strip of Beef Jerky` `346`, `Pint of Fine Ale` `347`, `Pint of Fine Wine` `348`, plain `Pick` `349`, plain `Shovel` `350`, plus multi-stack store variants)* | `TV_FOOD` / `TV_DIGGING` / etc. | `1..300` | `2..150` | `0` | Store inventory templates | `Pick` (`#63`) and `Shovel` (`#62`) are implemented; tavern foods (`Hard Biscuit`, `Beef Jerky`, `Ale`, `Wine`) are omitted (`Ration of Food #15` and `Slime Mold #16` are sold). | **Partial** |
+| `367..398` | `door_list`, `trap_list`, `rubble`, `scare_monster` | **Doors, Stairs, Store Entrances, 18 Floor Traps, Rubble, Pint of Fine Grade Mush (`397`), Scare Monster Rune (`398`)** | `TV_OPEN_DOOR` .. `TV_VIS_TRAP` | `0..1` | `0..1` | `0..10` | Terrain objects in `t_list` in VMS/Umoria | Represented directly in Moria8's tile byte (`TILE_*`) and `trap_x/y/type` arrays (`core/traps.s`) + `glyph_add_at` (`core/item.s`). | **Implemented** |
+| `399..416` | `gold_list[1..18]` | **18 Gold & Gem Types** *(`copper` ×3, `silver` ×3, `garnets` ×2, `gold` ×4, `opals`, `sapphires`, `rubies`, `diamonds`, `emeralds`, `mithril`)* | `TV_GOLD (100)` | `3..80` mult | `0` | `1` | Coin/gem value multiplier `3..80` | Consolidated into **Moria8 `#0` (`Gold (small)`)** and **`#1` (`Gold (large)`)** | **Approximation** |
+| `417..419` | — | **Placeholders (`nothing`, `& ruined chest`, `""`)** | `TV_NOTHING` / `TV_CHEST` | `0` | `0..250` | `0` | `418` = `& ruined chest` | **Moria8 `#134` (`Ruined Chest`)** (`cost=0`, `wt=250`, `min_lvl=0`) | **Implemented** |
+
+---
+---
+
+# 9. Monster AI, Monster Spells/Breaths (All 18), Monster Recall & Complete 279-Monster Catalog
+
+## 9.1 Monster AI, Wake/Sleep, Movement, Multiplying, Packs & Wall Movement
+
+| Subsystem / Mechanic | VMS Moria 4.8 | Umoria 5.7.15 | Moria8 Core | Port Differences | Verdict | Source Citations |
+| --- | --- | --- | --- | --- | --- | --- |
+| **Active Monster Table & Per-Monster State** | `m_list[1..MAX_MALLOC=101+]` linked list (`hp`, `csleep`, `cdis`, `mptr`, `nptr`, `fy`, `fx`, `stunned`, `ml`, `confused`, `cspeed`). | `m_list[MAX_MALLOC=125]` with identical fields. | `MAX_MONSTERS = 32` slots × `MONSTER_ENTRY_SIZE = 12` bytes (`384` B in `monster_table`, `core/monster.s:13-47`):<br>• `+0 MX_X`, `+1 MX_Y`: tile coordinates<br>• `+2 MX_TYPE`: tier-local creature index (`0..56` dungeon, `57..64` town, `$FF` empty)<br>• `+3..4 MX_HP_LO/HI`: 16-bit current HP (`CDEFENSE 0x4000` creatures roll max `hd_num * hd_sides`)<br>• `+5 MX_FLAGS`: `MF_AWAKE ($01)`, `MF_CONFUSED ($02)`, `MF_PROVOKED ($04)`, `MF_VISIBLE ($08)`, `MF_DETECTED ($10)`<br>• `+6 MX_SPEED_CNT`: `-1` slowed, `0` normal, `+1` hasted<br>• `+7 MX_SLEEP_CUR`: live sleep counter (`0..255`)<br>• `+8 MX_STUN`, `+9 MX_CONFUSE`: stun/confuse timers<br>• `+10..11 MX_FLEE_LO/HI`: 16-bit flee HP threshold. | Identical across all 7 ports. | **Implemented** | `vms-moria: source/include/types.inc`; `umoria: src/types.h`; `moria8: core/monster.s:13-47` |
+| **Wake / Sleep Pressure & Group Wake** | If `cdis <= aaf` or monster is in LOS, and `(randint(10) > stl)` while not resting/searching, `csleep -= (75 / cdis)` (or wakes immediately on aggravate/noise/damage). | Identical (`creatures.cpp`). | `monster_wake_check` (`core/monster_ai.s:425-566`):<br>• Checks `distance <= (cr_aaf & $7F)` or `MF_VISIBLE != 0`<br>• If `auto_rest_active == 0` and `rng_range(10) >= mat_player_stealth`, subtracts `mwc_wake_step[min(dist, 6)]` (`8, 8, 4, 3, 2, 2, 1` for dist `0..6+`) from `MX_SLEEP_CUR`<br>• When `MX_SLEEP_CUR` hits `0`, sets `MF_AWAKE` and, if `CF_GROUP ($20)` is set, calls `wake_group_nearby` to wake all same-type monsters within Chebyshev distance `<= 5`. | Identical across all 7 ports. | **Implemented** | `vms-moria: source/creature.inc:100-185`; `umoria: src/monster.cpp`; `moria8: core/monster_ai.s:425-566`, `docs/MONSTER_STATE_CONTRACT.md` |
+| **Greedy Pathfinding, Random Movement & Fleeing** | `get_moves` tries up to 5 directional steps toward player; `CM_20_RANDOM (0x08)`, `CM_40_RANDOM (0x10)`, `CM_75_RANDOM (0x20)` roll random movement before normal steps; stationary (`CM_ATTACK_ONLY = 0x01`) monsters only attack when adjacent. | Identical (`monster.cpp`). | `monster_process_one` (`core/monster_ai.s:175-336, 575-800`):<br>• Confused (`MX_CONFUSE > 0`) or unprovoked town creatures (`>= 57`) move randomly (`monster_move_random`)<br>• Rolls `CM_75_RANDOM ($20)`, `CM_40_RANDOM ($10)`, `CM_20_RANDOM ($08)` (`cr_speed` bits 3–5) against `74, 39, 19` on `0..99`<br>• Checks `monster_check_flee` (`MX_HP < MX_FLEE`); if below threshold, flees via `monster_move_away`<br>• Otherwise calls `monster_move_toward` (tries diagonal step first, then randomly alternates horizontal-first vs vertical-first to break corner sticking). `CF_ATTACK_ONLY ($01)` creatures never move, only melee when adjacent. | Identical across all 7 ports. | **Implemented** | `vms-moria: source/creature.inc:200-450`; `umoria: src/monster.cpp`; `moria8: core/monster_ai.s:175-800` |
+| **Door Opening / Bashing (`CM_OPEN_DOOR`) & Glyph Breaking** | Creatures with `CM_OPEN_DOOR (0x00020000)` open closed doors or bash locked/spiked doors; any monster stepping onto a Glyph of Warding (`;`) must roll `randint(OBJ_RUNE_PROT=70) < c_level` to break it. | Identical. | `monster_try_step` (`core/monster_ai.s:801-1268`):<br>• `CD_OPEN_DOOR_BIT ($80)` in `cr_aaf` allows monsters to open closed doors (`TILE_DOOR_CLOSED -> TILE_DOOR_OPEN`) or bash locked/jammed doors<br>• Stepping onto a Glyph of Warding (`glyph_find_at`) rolls `rng_range(70) < cr_level`; if successful, breaks the glyph (`"The rune of protection is broken!"`), otherwise blocks movement. | Identical across all 7 ports. | **Implemented** | `vms-moria: source/creature.inc:460-560`; `umoria: src/monster.cpp`; `moria8: core/monster_ai.s:801-1100` |
+| **Multiplying (`CM_MULTIPLY` / `CF_BREEDER`) & Pack Spawning (`CF_GROUP`)** | `CM_MULTIPLY (0x00200000)` creatures attempt to breed adjacent clones when `mon_tot_mult < 75`. | Identical (`monster.cpp`). | • `CF_BREEDER ($40)` (`core/monster_ai.s:297-328`): each AI turn, if `zp_mon_count < MAX_MONSTERS - 4` (`28`) and `rng_range(12) == 0`, spawns a clone in an empty adjacent tile<br>• `CF_GROUP ($20)` (`core/monster.s`): spawns pack members in adjacent tiles on level creation. | Identical across all 7 ports. | **Implemented** | `vms-moria: source/creature.inc:600-660`; `umoria: src/monster.cpp`; `moria8: core/monster_ai.s:297-328` |
+| **Pass-Wall (`CM_PHASE`), Eat-Other (`CM_EATS_OTHER`) & Pick-Up (`CM_PICKS_UP`)** | `0x00040000` moves through rock (`Xorn`, `Ghost`, `Wraith`, `Spirit`); `0x00080000` kills/absorbs weaker monsters in path; `0x00100000` picks up floor items. | Identical. | Omitted (all monsters respect wall collision, occupied monster tiles, and leave floor items undisturbed). | None. | **Missing** | `vms-moria: source/creature.inc:480-590`; `umoria: src/monster.cpp` |
+
+---
+
+## 9.2 Complete Monster Spell & Breath Catalog (All 18 `CSPELL` Flags)
+
+In VMS Moria 4.8 (`creature.inc:700-950`) and Umoria 5.7.15 (`data_creatures.cpp:95-120`, `monster.cpp`), the 32-bit `spells` word encodes cast frequency (`1 in (spells & 0x0F)`) in bits `0..3` and **18 spell/breath flags** in bits `4..23`. Moria8 (`core/monster_magic.s:13-423`, `core/monster.s:55-64`, `tools/parse_creatures.py:238-287`) converts `freq` into `cr_spell_chance = min(100, 100 / freq)%` (cast within `MAX_CAST_RANGE = 8` when LOS is clear) and packs **8 `MSF_*` spell bits** into `cr_spell_flags`.
+
+| Bit / Hex Mask | VMS Moria 4.8 / Umoria 5.7.15 Spell / Breath | VMS / Umoria Effect & Damage | Moria8 Mapping (`cr_spell_flags` / `core/monster_magic.s`) | Verdict |
+| --- | --- | --- | --- | --- |
+| `Bit 4` (`0x000010`) | **Teleport Short (Blink)** | Teleports caster up to `10` tiles (`teleport_to` / `blink`). | Omitted (`parse_creatures.py:248-287`). | **Missing** |
+| `Bit 5` (`0x000020`) | **Teleport Long** | Teleports caster across the dungeon level. | Omitted. | **Missing** |
+| `Bit 6` (`0x000040`) | **Teleport Player to Monster (`Teleport-To`)** | Teleports player adjacent to caster (`teleport_to(fy, fx)`). | **`MSF_TELEPORT ($08)`** (`monster_cast_teleport` in `core/monster_magic.s:410-421`): prints `"THE <monster> TELEPORTS YOU!"` and calls `eff_teleport_self`. | **Implemented** |
+| `Bit 7` (`0x000080`) | **Cause Light Wound** | `3d8` damage unless player passes saving throw (`player_saves(wis_adj + lev)`). | **`MSF_WOUND_LIGHT ($01)`** (`monster_cast_wound_light` in `core/monster_magic.s:178-190`): checks `mm_spell_save` (`wis_adj + zp_player_lvl`); deals `3d8` damage on failed save or prints `"You resist the effects."`. | **Implemented** |
+| `Bit 8` (`0x000100`) | **Cause Serious Wound** | `8d8` damage unless player passes saving throw. | **`MSF_WOUND_SERIOUS ($40)`** (`monster_cast_wound_serious` in `core/monster_magic.s:175-190`): checks `mm_spell_save`; deals `8d8` damage on failed save. | **Implemented** |
+| `Bit 9` (`0x000200`) | **Hold Person (Paralysis)** | Paralyzes player for `randint(5) + 4` turns unless saved or Free Action. | Omitted from `MSF_*` (paralysis is delivered via melee `ATK_PARALYZE = 11`). | **Missing** |
+| `Bit 10` (`0x000400`) | **Cause Blindness** | Blinds player for `12 + randint(3)` turns unless saved. | **`MSF_BLIND ($10)`** (`monster_cast_blind` in `core/monster_magic.s:219-232`): checks `mm_spell_save`; sets `zp_eff_blind = 12 + randint(3)` (or `+6` if already blind). | **Implemented** |
+| `Bit 11` (`0x000800`) | **Cause Confusion** | Confuses player for `randint(5) + 3` turns unless saved. | **`MSF_CONFUSE ($20)`** (`monster_cast_confuse` in `core/monster_magic.s:222-232`): checks `mm_spell_save`; sets `zp_eff_confuse = 3 + randint(5)` (or `+2` if already confused). | **Implemented** |
+| `Bit 12` (`0x001000`) | **Cause Fear** | Terrifies player for `randint(5) + 3` turns unless saved or Heroism. | **`MSF_FEAR ($80)`** (`monster_cast_fear` in `core/monster_magic.s:235-245`): blocked by `zp_eff_hero != 0` or `mm_spell_save`; sets `eff_fear_timer = 3 + randint(5)` (or `+2` if already afraid). | **Implemented** |
+| `Bit 13` (`0x002000`) | **Summon Monster** | Summons `1` random depth-appropriate monster adjacent to caster. | **`MSF_SUMMON ($04)`** (`monster_cast_summon` in `core/monster_magic.s:355-408`): prints `"THE <monster> SUMMONS HELP!"` and spawns a depth-appropriate creature in an open adjacent tile. | **Implemented** |
+| `Bit 14` (`0x004000`) | **Summon Undead** | Summons an undead monster adjacent to caster. | Mapped to **`MSF_SUMMON ($04)`** (`monster_cast_summon`). | **Approximation** |
+| `Bit 15` (`0x008000`) | **Slow Person** | Slows player unless saved or Free Action. | Omitted. | **Missing** |
+| `Bit 16` (`0x010000`) | **Drain Mana** | Drains `randint(char_lev) / 2 + 1` mana from player and heals caster. | Omitted. | **Missing** |
+| `Bits 17..18` (`0x060000`) | *(Unused in VMS Moria & Umoria)* | Unused bits. | Unused. | **Implemented** |
+| `Bit 19` (`0x080000`) | **Breathe Lightning** | Radius-2 ball dealing `mon_hp / 4` (`max 1600`) lightning damage. | Consolidated into **`MSF_BREATH ($02)`** (`monster_cast_breath` in `core/monster_magic.s:298-338`: deals `mon_hp / 3`, capped at `255`, divided by `3` if fire-resistant). | **Approximation** |
+| `Bit 20` (`0x100000`) | **Breathe Poison Gas** | Radius-2 ball dealing `mon_hp / 3` (`max 800`) poison gas damage. | Consolidated into **`MSF_BREATH ($02)`** (`mon_hp / 3`). | **Approximation** |
+| `Bit 21` (`0x200000`) | **Breathe Acid** | Radius-2 ball dealing `mon_hp / 3` (`max 1600`) acid damage. | Consolidated into **`MSF_BREATH ($02)`** (`mon_hp / 3`). | **Approximation** |
+| `Bit 22` (`0x400000`) | **Breathe Frost** | Radius-2 ball dealing `mon_hp / 3` (`max 1600`) frost damage. | Consolidated into **`MSF_BREATH ($02)`** (`mon_hp / 3`). | **Approximation** |
+| `Bit 23` (`0x800000`) | **Breathe Fire** | Radius-2 ball dealing `mon_hp / 3` (`max 1600`) fire damage. | **`MSF_BREATH ($02)`** (`monster_cast_breath` in `core/monster_magic.s:298-338`): prints `"THE <monster> BREATHES FIRE!"` and deals `mon_hp / 3` (capped at `255`), divided by `3` when `zp_eff_resist != 0` or `PFLAG_RESIST_FIRE != 0`. | **Implemented** |
+
+---
+
+## 9.3 Monster Recall & Moria8 4-Tier Monster Architecture
+
+| Subsystem / Mechanic | VMS Moria 4.8 | Umoria 5.7.15 | Moria8 Core | Port Differences | Verdict | Source Citations |
+| --- | --- | --- | --- | --- | --- | --- |
+| **Monster Recall (`/` command & `c_recall`)** | No persistent monster recall database in VMS Moria 4.8 (`/` only identifies the map character class). | Full `c_recall[MON_MAX_CREATURES]` tracking kills, deaths, wake/sleep knowledge, move flags, spells cast, defense flags, and attack slots (`recall.cpp`, `/` command). | Implemented in `core/ui_recall.s` (`OVL_RECALL`) and `recall_kills`, `recall_deaths`, `recall_spells`, `recall_defenses` arrays (`65` bytes each = `260` B):<br>• Pressing `/` prompts for a monster character (`a-z`, `A-Z`, `,`, `$`), lists matching creatures in the active tier + town roster, and displays learned kill count, player deaths caused, observed spells, and observed defenses/vulnerabilities. | Stored in Aux RAM on Apple IIe (`$3B0C+`), Bank 3 on CX16, Bank 6 on BBC Master, and resident RAM on C64/C128/Plus4/Atari8. | **Implemented** | `umoria: src/recall.cpp`; `moria8: core/ui_recall.s`, `core/monster.s` |
+| **4-Tier Dungeon Roster & Town Roster (`120` Unique Creatures)** | All `279` creatures resident in VAX virtual memory. | All `279` creatures resident in `creatures_list[279]`. | **120 unique creatures** selected from the 279-creature catalog (`tools/parse_creatures.py:401-625`, `platforms/commodore/c64/creature_data/creature_tiers.s`):<br>• **Tier 0 (Town, Resident, `dlvl 0`)**: all `8` town creatures (`indices 57..64`) always resident<br>• **Tier 1 (Shallow, `dlvl 1–8`)**: `24` creatures (`352` B SoA + `372` B names = `724` B)<br>• **Tier 2 (Early, `dlvl 5–15`)**: `32` creatures (`480` B SoA + `497` B names = `977` B)<br>• **Tier 3 (Mid, `dlvl 11–25`)**: `39` creatures (`592` B SoA + `625` B names = `1,217` B)<br>• **Tier 4 (Deep, `dlvl 20–100`)**: `57` creatures (`880` B SoA + `970` B names = `1,850` B)<br>Tier transitions (`tier_check_transition`) copy the active tier's 23 SoA fields into `cr_*[0..56]` and monster names into `PLATFORM_TIER_NAME_POOL_BASE` (`1,024` B). | • **C128**: All 4 tiers pre-cached in Bank 1 (`$B500-$DFFF`)<br>• **CX16**: All 4 tiers pre-cached in RAM Banks 5–8<br>• **Atari 130XE**: All 4 tiers pre-cached in XE Bank 0<br>• **BBC Master**: Tier 1 cached in Sideways Bank 7; Tiers 2–4 loaded from DFS<br>• **C64 / Plus/4 / Apple IIe / 800XL**: Loaded from disk (or C64 REU if present). | **Approximation** | `moria8: tools/parse_creatures.py:401-625`, `platforms/commodore/c64/creature_data/creature_tiers.s` |
+
+---
+
+## 9.4 Complete 279-Monster Catalog (VMS Moria 4.8 vs Umoria 5.7.15 vs Moria8)
+
+Every one of the **279 creatures** (`0..278` in `umoria: src/data_creatures.cpp:145-434` and `1..279` in `vms-moria: source/include/values.inc:2185-2689`) is listed below in exact dungeon-level and index order, showing its Level (`DL`), Glyph (`Sym`), Hit Dice (`HD`), Armor Class (`AC`), Speed (`Spd`, where `10`=Slow, `11`=Normal, `12`=`+1` Fast, `13`=`+2` Very Fast), Experience (`XP`), Sleep/AAF (`Slp/AAF`), Attacks, Spells/Breaths, Moria8 Tier assignment (`Tier 0`..`Tier 4` and tier-local slot index), and Verdict (`Implemented` for the 120 creatures in Moria8, `Missing` for the 159 creatures omitted from Moria8's 120-creature subset).
+
+| # | DL | Creature Name | Sym | HD | AC | Spd | XP | Slp / AAF | VMS / Umoria Attacks & Spells | Moria8 Tier(s) & Slot(s) | Verdict |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `0` | `0` | **Filthy Street Urchin** | `p` | `1d4` | `1` | `11` | `0` | `40 / 4` | Begs (`0d0`), Steals gold (`0d0`) | **Tier 0 (Town `#57`)** | **Implemented** |
+| `1` | `0` | **Blubbering Idiot** | `p` | `1d2` | `1` | `11` | `0` | `0 / 6` | Drools (`0d0`) | **Tier 0 (Town `#58`)** | **Implemented** |
+| `2` | `0` | **Pitiful-Looking Beggar** | `p` | `1d4` | `1` | `11` | `0` | `40 / 10` | Begs (`0d0`) | **Tier 0 (Town `#59`)** | **Implemented** |
+| `3` | `0` | **Mangy-Looking Leper** | `p` | `1d1` | `1` | `11` | `0` | `50 / 10` | Begs (`0d0`) | **Tier 0 (Town `#60`)** | **Implemented** |
+| `4` | `0` | **Squint-Eyed Rogue** | `p` | `2d8` | `8` | `11` | `0` | `99 / 10` | Hits `1d6`, Steals item | **Tier 0 (Town `#61`)** | **Implemented** |
+| `5` | `0` | **Singing, Happy Drunk** | `p` | `2d3` | `1` | `11` | `0` | `0 / 10` | Begs (`0d0`), 75%/40%/20% random move | **Tier 0 (Town `#62`)** | **Implemented** |
+| `6` | `0` | **Mean-Looking Mercenary** | `p` | `5d8` | `20` | `11` | `0` | `250 / 10` | Hits `1d10` | **Tier 0 (Town `#63`)** | **Implemented** |
+| `7` | `0` | **Battle-Scarred Veteran** | `p` | `7d8` | `30` | `11` | `0` | `250 / 10` | Hits `2d6` | **Tier 0 (Town `#64`)** | **Implemented** |
+| `8` | `1` | **Grey Mushroom patch** | `,` | `1d2` | `1` | `11` | `1` | `0 / 2` | Spores `1d4` Confuse (stationary) | Omitted | **Missing** |
+| `9` | `1` | **Giant Yellow Centipede** | `c` | `2d6` | `12` | `11` | `2` | `30 / 8` | Bites `1d3`, Stings `1d3` | Omitted | **Missing** |
+| `10` | `1` | **Giant White Centipede** | `c` | `3d5` | `10` | `11` | `2` | `40 / 7` | Bites `1d2`, Stings `1d2` | Omitted | **Missing** |
+| `11` | `1` | **White Icky-Thing** | `i` | `3d5` | `7` | `11` | `2` | `10 / 12` | Touches `1d2` | Omitted | **Missing** |
+| `12` | `1` | **Clear Icky-Thing** | `i` | `2d5` | `6` | `11` | `1` | `10 / 12` | Touches `1d2` (invisible) | Omitted | **Missing** |
+| `13` | `1` | **Giant White Mouse** | `r` | `1d3` | `4` | `11` | `1` | `20 / 8` | Bites `1d2` (multiplies) | Omitted | **Missing** |
+| `14` | `1` | **Large Brown Snake** | `R` | `4d6` | `35` | `10` | `3` | `99 / 4` | Bites `1d3`, Crushes `1d4` | Omitted | **Missing** |
+| `15` | `1` | **Large White Snake** | `R` | `3d6` | `30` | `11` | `2` | `99 / 4` | Bites `1d1` | Omitted | **Missing** |
+| `16` | `1` | **Kobold** | `k` | `3d7` | `16` | `11` | `5` | `10 / 20` | Hits `1d6` | **Tier 1 (`#0`)** | **Implemented** |
+| `17` | `1` | **White Worm mass** | `w` | `4d4` | `1` | `10` | `2` | `10 / 7` | Crawls `1d2` Poison (multiplies) | **Tier 1 (`#1`)** | **Implemented** |
+| `18` | `1` | **Floating Eye** | `e` | `3d6` | `6` | `11` | `1` | `10 / 2` | Gazes Paralyze; Spells (`1/13`): Drain Mana | **Tier 1 (`#2`)** | **Implemented** |
+| `19` | `2` | **Shrieker Mushroom patch** | `,` | `1d1` | `1` | `11` | `1` | `0 / 2` | Wails Aggravate (stationary) | Omitted | **Missing** |
+| `20` | `2` | **Blubbering Icky-Thing** | `i` | `5d8` | `4` | `11` | `8` | `10 / 14` | Crawls `1d4` Poison, Slimes `1d1` Eat-Food | Omitted | **Missing** |
+| `21` | `2` | **Metallic Green Centipede** | `c` | `4d4` | `4` | `12` | `3` | `10 / 5` | Crawls `1d1` | Omitted | **Missing** |
+| `22` | `2` | **Novice Warrior** | `p` | `9d4` | `16` | `11` | `6` | `5 / 20` | Hits `1d7` | Omitted | **Missing** |
+| `23` | `2` | **Novice Rogue** | `p` | `8d4` | `12` | `11` | `6` | `5 / 20` | Hits `1d6`, Steals gold | Omitted | **Missing** |
+| `24` | `2` | **Novice Priest** | `p` | `7d4` | `10` | `11` | `7` | `5 / 20` | Hits `1d5`; Spells (`1/12`): Light Wound, Fear (`MSF_WOUND_LIGHT\|MSF_FEAR`) | **Tier 1 (`#3`)** | **Implemented** |
+| `25` | `2` | **Novice Mage** | `p` | `6d4` | `6` | `11` | `7` | `5 / 20` | Hits `1d4`; Spells (`1/12`): Blink, Light Wound, Confuse (`MSF_WOUND_LIGHT\|MSF_CONFUSE`) | **Tier 1 (`#4`)** | **Implemented** |
+| `26` | `2` | **Yellow Mushroom patch** | `,` | `1d1` | `1` | `11` | `2` | `0 / 2` | Spores `1d6` Fear | Omitted | **Missing** |
+| `27` | `2` | **White Jelly** | `J` | `8d8` | `1` | `12` | `10` | `99 / 2` | Touches `1d2` Poison (stationary) | Omitted | **Missing** |
+| `28` | `2` | **Giant Green Frog** | `f` | `2d8` | `8` | `11` | `6` | `30 / 12` | Bites `1d3` | Omitted | **Missing** |
+| `29` | `2` | **Giant Black Ant** | `a` | `3d6` | `20` | `11` | `8` | `80 / 8` | Bites `1d4` | **Tier 1 (`#5`)** | **Implemented** |
+| `30` | `2` | **White Harpy** | `h` | `2d5` | `17` | `11` | `5` | `10 / 16` | Claws `1d1` ×2, Bites `1d2` | Omitted | **Missing** |
+| `31` | `2` | **Blue Yeek** | `y` | `2d6` | `14` | `11` | `4` | `10 / 18` | Hits `1d5` | Omitted | **Missing** |
+| `32` | `2` | **Green Worm mass** | `w` | `6d4` | `3` | `10` | `3` | `10 / 7` | Crawls `1d3` Corrode (multiplies) | Omitted | **Missing** |
+| `33` | `2` | **Large Black Snake** | `R` | `4d8` | `38` | `10` | `9` | `75 / 5` | Bites `1d4`, Crushes `1d6` | Omitted | **Missing** |
+| `34` | `3` | **Poltergeist** | `G` | `2d5` | `15` | `13` | `6` | `10 / 8` | Hits `1d1` Fear; Spells (`1/15`): Blink | **Tier 1 (`#6`)** | **Implemented** |
+| `35` | `3` | **Metallic Blue Centipede** | `c` | `4d5` | `6` | `12` | `7` | `15 / 6` | Crawls `1d2` | Omitted | **Missing** |
+| `36` | `3` | **Giant White Louse** | `l` | `1d1` | `5` | `12` | `1` | `10 / 6` | Bites `1d1` (multiplies) | Omitted | **Missing** |
+| `37` | `3` | **Black Naga** | `n` | `6d8` | `40` | `11` | `20` | `120 / 16` | Crushes `1d8` | **Tier 1 (`#7`)** | **Implemented** |
+| `38` | `3` | **Spotted Mushroom patch** | `,` | `1d1` | `1` | `11` | `3` | `0 / 2` | Spores `2d4` Poison | Omitted | **Missing** |
+| `39` | `3` | **Yellow Jelly** | `J` | `10d8` | `1` | `12` | `12` | `99 / 2` | Touches `1d3` Poison; Spells (`1/15`): Drain Mana | **Tier 1 (`#8`)** | **Implemented** |
+| `40` | `3` | **Scruffy-Looking Hobbit** | `p` | `3d5` | `8` | `11` | `4` | `10 / 16` | Hits `1d4`, Steals gold | Omitted | **Missing** |
+| `41` | `3` | **Huge Brown Bat** | `b` | `2d6` | `12` | `13` | `4` | `40 / 8` | Bites `1d2` | Omitted | **Missing** |
+| `42` | `3` | **Giant White Ant** | `a` | `3d6` | `16` | `11` | `7` | `80 / 8` | Bites `1d4` | Omitted | **Missing** |
+| `43` | `3` | **Yellow Mold** | `m` | `8d8` | `10` | `11` | `9` | `99 / 2` | Hits `1d4` (stationary) | Omitted | **Missing** |
+| `44` | `3` | **Metallic Red Centipede** | `c` | `4d8` | `9` | `12` | `12` | `20 / 8` | Crawls `1d2` | Omitted | **Missing** |
+| `45` | `3` | **Yellow Worm mass** | `w` | `4d8` | `4` | `10` | `4` | `10 / 7` | Crawls `1d3` Lose-DEX (multiplies) | Omitted | **Missing** |
+| `46` | `3` | **Large Green Snake** | `R` | `6d8` | `40` | `10` | `10` | `70 / 5` | Bites `1d4`, Crushes `1d6` | Omitted | **Missing** |
+| `47` | `3` | **Radiation Eye** | `e` | `3d6` | `6` | `11` | `6` | `10 / 2` | Gazes `1d6` STR-Drain; Spells (`1/11`): Drain Mana | Omitted | **Missing** |
+| `48` | `3` | **Drooling Harpy** | `h` | `2d8` | `22` | `11` | `7` | `10 / 16` | Claws `1d1` ×2, Bites `1d2`, Drools | Omitted | **Missing** |
+| `49` | `4` | **Silver Mouse** | `r` | `1d1` | `5` | `11` | `1` | `10 / 8` | Hits `1d1` Eat-Light (multiplies) | Omitted | **Missing** |
+| `50` | `4` | **Black Mushroom patch** | `,` | `8d8` | `1` | `11` | `8` | `0 / 2` | Spores `1d3` | Omitted | **Missing** |
+| `51` | `4` | **Blue Jelly** | `J` | `12d8` | `1` | `11` | `14` | `99 / 2` | Touches `1d6` Cold (stationary) | Omitted | **Missing** |
+| `52` | `4` | **Creeping Copper Coins** | `$` | `7d8` | `24` | `10` | `9` | `10 / 3` | Hits `1d4`, Touches `2d4` Poison | **Tier 1 (`#9`)** | **Implemented** |
+| `53` | `4` | **Giant White Rat** | `r` | `2d2` | `7` | `11` | `1` | `30 / 8` | Bites `1d3` Poison (multiplies) | Omitted | **Missing** |
+| `54` | `4` | **Giant Black Centipede** | `c` | `5d8` | `20` | `11` | `11` | `30 / 8` | Bites `1d2`, Stings `1d2` | Omitted | **Missing** |
+| `55` | `4` | **Giant Blue Centipede** | `c` | `4d8` | `20` | `11` | `10` | `50 / 8` | Bites `1d3`, Stings `1d4` | Omitted | **Missing** |
+| `56` | `4` | **Blue Worm mass** | `w` | `5d8` | `12` | `10` | `5` | `10 / 7` | Crawls `1d4` Cold (multiplies) | **Tier 1 (`#10`)** | **Implemented** |
+| `57` | `4` | **Large Grey Snake** | `R` | `6d8` | `41` | `10` | `14` | `50 / 6` | Bites `1d5`, Crushes `1d8` | Omitted | **Missing** |
+| `58` | `4` | **Jackal** | `j` | `3d8` | `16` | `11` | `8` | `30 / 12` | Bites `1d6` (pack creature) | **Tier 1 (`#11`)** | **Implemented** |
+| `59` | `5` | **Green Naga** | `n` | `9d8` | `40` | `11` | `30` | `120 / 18` | Crushes `1d8`, Spits `2d6` Acid | **Tier 1 (`#12`), Tier 2 (`#0`)** | **Implemented** |
+| `60` | `5` | **Green Glutton Ghost** | `G` | `3d6` | `20` | `13` | `15` | `10 / 10` | Crawls Eat-Food; Spells (`1/15`): Blink, Tele-Long | Omitted | **Missing** |
+| `61` | `5` | **White Mushroom patch** | `,` | `1d1` | `1` | `11` | `5` | `0 / 2` | Spores `2d4` Paralyze (stationary) | **Tier 1 (`#13`), Tier 2 (`#1`)** | **Implemented** |
+| `62` | `5` | **Green Jelly** | `J` | `22d8` | `1` | `12` | `18` | `99 / 2` | Touches `1d2` Corrode (stationary) | Omitted | **Missing** |
+| `63` | `5` | **Skeleton Kobold** | `s` | `5d8` | `26` | `11` | `12` | `40 / 20` | Hits `1d6` (undead) | **Tier 1 (`#14`), Tier 2 (`#2`)** | **Implemented** |
+| `64` | `5` | **Silver Jelly** | `J` | `20d8` | `25` | `11` | `15` | `40 / 2` | Touches `1d3` Eat-Light; Drain Mana | Omitted | **Missing** |
+| `65` | `5` | **Giant Black Frog** | `f` | `4d8` | `18` | `11` | `12` | `40 / 12` | Bites `1d6` | Omitted | **Missing** |
+| `66` | `5` | **Grey Icky-Thing** | `i` | `4d8` | `12` | `11` | `10` | `15 / 14` | Touches `1d5` | Omitted | **Missing** |
+| `67` | `5` | **Disenchanter Eye** | `e` | `7d8` | `10` | `10` | `20` | `10 / 2` | Gazes Disenchant; Spells (`1/9`): Drain Mana | Omitted | **Missing** |
+| `68` | `5` | **Black Yeek** | `y` | `2d8` | `16` | `11` | `8` | `10 / 18` | Hits `1d5` | Omitted | **Missing** |
+| `69` | `5` | **Red Worm mass** | `w` | `5d8` | `12` | `10` | `6` | `10 / 7` | Crawls `1d6` Fire (multiplies) | Omitted | **Missing** |
+| `70` | `5` | **Giant House Fly** | `F` | `3d8` | `16` | `13` | `10` | `20 / 12` | Bites `1d2` | Omitted | **Missing** |
+| `71` | `5` | **Copperhead Snake** | `R` | `4d6` | `20` | `11` | `15` | `1 / 6` | Bites `2d4` Poison | Omitted | **Missing** |
+| `72` | `5` | **Rot Jelly** | `J` | `20d8` | `30` | `11` | `15` | `99 / 2` | Touches `2d3` Eat-Food | Omitted | **Missing** |
+| `73` | `6` | **Purple Mushroom patch** | `,` | `1d1` | `1` | `12` | `12` | `0 / 2` | Spores `1d2` Lose-CON | Omitted | **Missing** |
+| `74` | `6` | **Brown Mold** | `m` | `15d8` | `12` | `11` | `20` | `99 / 2` | Hits `1d4` Confuse (stationary) | **Tier 1 (`#15`), Tier 2 (`#3`)** | **Implemented** |
+| `75` | `6` | **Giant Brown Bat** | `b` | `3d8` | `15` | `13` | `10` | `30 / 10` | Bites `1d3` | Omitted | **Missing** |
+| `76` | `6` | **Creeping Silver Coins** | `$` | `12d8` | `30` | `10` | `18` | `10 / 4` | Hits `1d6`, Touches `2d6` Poison | Omitted | **Missing** |
+| `77` | `6` | **Orc** | `o` | `9d8` | `32` | `11` | `16` | `30 / 20` | Hits `1d8` (pack creature) | **Tier 1 (`#16`), Tier 2 (`#4`)** | **Implemented** |
+| `78` | `6` | **Grey Harpy** | `h` | `3d8` | `20` | `12` | `14` | `10 / 16` | Claws `1d2` ×2, Bites `1d2` | Omitted | **Missing** |
+| `79` | `6` | **Blue Icky-Thing** | `i` | `4d8` | `14` | `11` | `12` | `20 / 14` | Touches `2d3` Cold; Frost Breath | Omitted | **Missing** |
+| `80` | `6` | **Rattlesnake** | `R` | `6d7` | `24` | `11` | `20` | `1 / 6` | Bites `2d5` Poison | **Tier 1 (`#17`), Tier 2 (`#5`)** | **Implemented** |
+| `81` | `7` | **Bloodshot Eye** | `e` | `4d8` | `6` | `11` | `15` | `10 / 2` | Gazes `2d6` Blind; Spells (`1/7`): Drain Mana | **Tier 1 (`#18`), Tier 2 (`#6`)** | **Implemented** |
+| `82` | `7` | **Red Naga** | `n` | `11d8` | `40` | `11` | `40` | `120 / 20` | Crushes `1d10`, Bites `1d4` STR-Drain | Omitted | **Missing** |
+| `83` | `7` | **Red Jelly** | `J` | `26d8` | `1` | `11` | `26` | `99 / 2` | Touches `1d5` STR-Drain (stationary) | Omitted | **Missing** |
+| `84` | `7` | **Giant Red Frog** | `f` | `5d8` | `16` | `11` | `16` | `50 / 12` | Bites `2d4` STR-Drain | Omitted | **Missing** |
+| `85` | `7` | **Green Icky-Thing** | `i` | `5d8` | `12` | `11` | `18` | `20 / 14` | Touches `2d5` Corrode | Omitted | **Missing** |
+| `86` | `7` | **Zombie Kobold** | `z` | `6d8` | `14` | `11` | `14` | `30 / 20` | Hits `1d2` ×2 (undead) | **Tier 1 (`#19`), Tier 2 (`#7`)** | **Implemented** |
+| `87` | `7` | **Lost Soul** | `G` | `2d8` | `10` | `11` | `18` | `10 / 12` | Hits `2d2`, Touches `0d0` Lose-WIS; Spells (`1/15`): Tele-Long, Drain Mana | **Tier 1 (`#20`), Tier 2 (`#8`)** | **Implemented** |
+| `88` | `7` | **Greedy Little Gnome** | `p` | `3d8` | `14` | `11` | `13` | `10 / 18` | Hits `1d7`, Steals item | Omitted | **Missing** |
+| `89` | `7` | **Giant Green Fly** | `F` | `3d8` | `14` | `12` | `15` | `20 / 12` | Bites `1d4` | Omitted | **Missing** |
+| `90` | `8` | **Brown Yeek** | `y` | `3d8` | `18` | `11` | `11` | `10 / 18` | Hits `1d6` | Omitted | **Missing** |
+| `91` | `8` | **Green Mold** | `m` | `21d8` | `14` | `11` | `28` | `75 / 2` | Hits `1d4` Fear (stationary) | **Tier 1 (`#21`), Tier 2 (`#9`)** | **Implemented** |
+| `92` | `8` | **Skeleton Orc** | `s` | `10d8` | `36` | `11` | `26` | `40 / 20` | Hits `2d5` (undead) | **Tier 1 (`#22`), Tier 2 (`#10`)** | **Implemented** |
+| `93` | `8` | **Seedy Looking Human** | `p` | `8d8` | `26` | `11` | `22` | `20 / 20` | Hits `3d4` | Omitted | **Missing** |
+| `94` | `8` | **Red Icky-Thing** | `i` | `4d8` | `18` | `12` | `22` | `20 / 14` | Touches `1d3`, Breathes `1d5` Acid | Omitted | **Missing** |
+| `95` | `8` | **Bandit** | `p` | `8d8` | `24` | `11` | `26` | `10 / 20` | Hits `2d4`, Steals gold | **Tier 1 (`#23`), Tier 2 (`#11`)** | **Implemented** |
+| `96` | `9` | **Yeti** | `Y` | `11d8` | `24` | `11` | `30` | `10 / 20` | Claws `1d3` ×2, Bites `1d4`; Frost Breath | Omitted | **Missing** |
+| `97` | `9` | **Bloodshot Icky-Thing** | `i` | `7d8` | `18` | `11` | `24` | `20 / 14` | Touches `1d4`, Breathes `2d4` Corrode; Drain Mana | Omitted | **Missing** |
+| `98` | `9` | **Giant Grey Rat** | `r` | `2d3` | `12` | `11` | `2` | `20 / 8` | Bites `1d4` Poison (multiplies) | Omitted | **Missing** |
+| `99` | `9` | **Black Harpy** | `h` | `3d8` | `22` | `12` | `19` | `10 / 16` | Claws `1d2` ×2, Bites `1d3` | Omitted | **Missing** |
+| `100` | `9` | **Giant Black Bat** | `b` | `2d8` | `18` | `13` | `16` | `25 / 12` | Bites `1d6` | Omitted | **Missing** |
+| `101` | `9` | **Clear Yeek** | `y` | `3d6` | `24` | `11` | `14` | `10 / 18` | Hits `1d5` (invisible) | Omitted | **Missing** |
+| `102` | `9` | **Orc Shaman** | `o` | `7d8` | `15` | `11` | `30` | `20 / 20` | Hits `1d6`; Spells (`1/5`): Light Wound, Slow (`MSF_WOUND_LIGHT`) | **Tier 2 (`#12`)** | **Implemented** |
+| `103` | `9` | **Giant Red Ant** | `a` | `4d8` | `34` | `11` | `22` | `60 / 12` | Bites `1d4`, Stings `1d4` STR-Drain | **Tier 2 (`#13`)** | **Implemented** |
+| `104` | `9` | **King Cobra** | `R` | `8d8` | `30` | `11` | `28` | `1 / 8` | Spits `1d2` Blind, Bites `3d4` Poison | **Tier 2 (`#14`)** | **Implemented** |
+| `105` | `10` | **Clear Mushroom patch** | `,` | `1d1` | `1` | `12` | `1` | `0 / 4` | Spores `1d1` (invisible, multiplies) | Omitted | **Missing** |
+| `106` | `10` | **Giant White Tick** | `t` | `15d8` | `40` | `10` | `27` | `20 / 12` | Bites `2d6` Poison | **Tier 2 (`#15`)** | **Implemented** |
+| `107` | `10` | **Hairy Mold** | `m` | `15d8` | `15` | `11` | `32` | `70 / 2` | Hits `1d3` Poison (stationary) | Omitted | **Missing** |
+| `108` | `10` | **Disenchanter Mold** | `m` | `16d8` | `20` | `11` | `40` | `70 / 2` | Touches `1d6` Disenchant; Spells (`1/11`): Drain Mana | **Tier 2 (`#16`)** | **Implemented** |
+| `109` | `10` | **Giant Red Centipede** | `c` | `3d8` | `26` | `12` | `24` | `50 / 12` | Bites `1d2`, Stings `1d2` Poison | Omitted | **Missing** |
+| `110` | `10` | **Creeping Gold Coins** | `$` | `18d8` | `36` | `10` | `32` | `10 / 5` | Hits `2d5`, Touches `3d5` Poison | **Tier 2 (`#17`)** | **Implemented** |
+| `111` | `10` | **Giant Fruit Fly** | `F` | `2d2` | `14` | `12` | `4` | `10 / 8` | Bites `1d2` (multiplies) | Omitted | **Missing** |
+| `112` | `10` | **Brigand** | `p` | `9d8` | `32` | `11` | `35` | `10 / 20` | Hits `2d4`, Steals item | Omitted | **Missing** |
+| `113` | `11` | **Orc Zombie** | `z` | `11d8` | `24` | `11` | `30` | `25 / 20` | Hits `1d4` ×2 (undead) | **Tier 2 (`#18`), Tier 3 (`#0`)** | **Implemented** |
+| `114` | `11` | **Orc Warrior** | `o` | `11d8` | `36` | `11` | `34` | `25 / 20` | Hits `2d6` (pack creature) | Omitted | **Missing** |
+| `115` | `11` | **Vorpal Bunny** | `r` | `2d3` | `10` | `12` | `2` | `30 / 8` | Bites `1d5` (multiplies) | Omitted | **Missing** |
+| `116` | `11` | **Nasty Little Gnome** | `p` | `4d8` | `10` | `11` | `32` | `10 / 18` | Hits `1d5`; Spells (`1/5`): Blink, Tele-Long, Light Wound, Summon (`MSF_WOUND_LIGHT\|MSF_SUMMON`) | **Tier 2 (`#19`), Tier 3 (`#1`)** | **Implemented** |
+| `117` | `11` | **Hobgoblin** | `H` | `12d8` | `38` | `11` | `38` | `30 / 20` | Hits `1d10` (pack creature) | **Tier 2 (`#20`), Tier 3 (`#2`)** | **Implemented** |
+| `118` | `12` | **Black Mamba** | `R` | `10d8` | `32` | `12` | `40` | `1 / 10` | Bites `4d4` Poison | **Tier 2 (`#21`), Tier 3 (`#3`)** | **Implemented** |
+| `119` | `12` | **Grape Jelly** | `J` | `52d8` | `1` | `11` | `60` | `99 / 2` | Touches `5d8` Lose-XP; Drain Mana | Omitted | **Missing** |
+| `120` | `12` | **Master Yeek** | `y` | `5d8` | `24` | `11` | `28` | `10 / 18` | Hits `1d8`; Spells (`1/8`): Blink, Slow | Omitted | **Missing** |
+| `121` | `12` | **Priest** | `p` | `7d8` | `22` | `11` | `36` | `40 / 20` | Hits `2d3`; Spells (`1/5`): Light Wound, Hold, Fear (`MSF_WOUND_LIGHT`) | **Tier 2 (`#22`), Tier 3 (`#4`)** | **Implemented** |
+| `122` | `12` | **Giant Clear Ant** | `a` | `3d7` | `18` | `11` | `24` | `60 / 12` | Bites `1d4` (invisible) | Omitted | **Missing** |
+| `123` | `12` | **Air Spirit** | `E` | `5d8` | `20` | `13` | `40` | `20 / 12` | Hits `1d3` (invisible, opens doors, 75% random) | Omitted | **Missing** |
+| `124` | `12` | **Skeleton Human** | `s` | `12d8` | `30` | `11` | `38` | `30 / 20` | Hits `1d8` (undead) | **Tier 2 (`#23`), Tier 3 (`#5`)** | **Implemented** |
+| `125` | `12` | **Human Zombie** | `z` | `11d8` | `24` | `11` | `34` | `20 / 20` | Hits `1d4` ×2 (undead) | Omitted | **Missing** |
+| `126` | `12` | **Moaning Spirit** | `G` | `4d8` | `20` | `11` | `44` | `10 / 14` | Wails Fear, Touches `1d8` Lose-DEX; Spells (`1/15`): Tele-Long, Drain Mana | Omitted | **Missing** |
+| `127` | `12` | **Swordsman** | `p` | `11d8` | `34` | `11` | `40` | `20 / 20` | Hits `3d5` | Omitted | **Missing** |
+| `128` | `13` | **Killer Brown Beetle** | `K` | `13d8` | `40` | `11` | `38` | `30 / 10` | Bites `3d4` | Omitted | **Missing** |
+| `129` | `13` | **Ogre** | `o` | `13d8` | `32` | `11` | `42` | `30 / 20` | Hits `2d8` (pack creature) | **Tier 2 (`#24`), Tier 3 (`#6`)** | **Implemented** |
+| `130` | `13` | **Giant Red Speckled Frog** | `f` | `6d8` | `20` | `11` | `32` | `30 / 12` | Bites `3d4` | Omitted | **Missing** |
+| `131` | `13` | **Magic User** | `p` | `7d8` | `10` | `11` | `35` | `10 / 20` | Hits `2d2`; Spells (`1/3`): Blink, Blind, Summon (`MSF_BLIND\|MSF_SUMMON`) | **Tier 2 (`#25`), Tier 3 (`#7`)** | **Implemented** |
+| `132` | `13` | **Black Orc** | `o` | `12d8` | `36` | `11` | `40` | `20 / 20` | Hits `3d4` (pack creature) | **Tier 2 (`#26`), Tier 3 (`#8`)** | **Implemented** |
+| `133` | `13` | **Giant Long-Eared Bat** | `b` | `5d8` | `20` | `13` | `20` | `20 / 12` | Bites `1d4`, Claws `1d2` ×2 | Omitted | **Missing** |
+| `134` | `13` | **Giant Gnat** | `F` | `1d2` | `4` | `13` | `1` | `10 / 8` | Bites `1d1` (multiplies) | Omitted | **Missing** |
+| `135` | `14` | **Killer Green Beetle** | `K` | `16d8` | `45` | `11` | `46` | `30 / 12` | Bites `4d4` | Omitted | **Missing** |
+| `136` | `14` | **Giant Flea** | `F` | `2d2` | `25` | `12` | `1` | `10 / 8` | Bites `1d2` (multiplies) | Omitted | **Missing** |
+| `137` | `14` | **Giant White Dragon Fly** | `F` | `5d8` | `20` | `11` | `54` | `50 / 20` | Bites `1d6` Cold; Spells (`1/10`): Frost Breath (`MSF_BREATH`) | **Tier 2 (`#27`), Tier 3 (`#9`)** | **Implemented** |
+| `138` | `14` | **Hill Giant** | `P` | `16d8` | `36` | `11` | `52` | `50 / 20` | Hits `3d6` | **Tier 2 (`#28`), Tier 3 (`#10`)** | **Implemented** |
+| `139` | `14` | **Skeleton Hobgoblin** | `s` | `13d8` | `34` | `11` | `46` | `30 / 20` | Hits `2d5` (undead) | Omitted | **Missing** |
+| `140` | `14` | **Flesh Golem** | `g` | `12d8` | `10` | `11` | `48` | `10 / 12` | Hits `1d6`, Hits `1d6` (immune sleep) | Tier 2 (`#29`) / Tier 3 (`#11`) | **Implemented** |
+| `141` | `14` | **White Dragon Bat** | `b` | `2d6` | `20` | `13` | `40` | `50 / 12` | Bites frost `1d3`; Spell (`1/4`): Frost Breath | Omitted | **Missing** |
+| `142` | `14` | **Giant Black Louse** | `l` | `1d1` | `7` | `12` | `1` | `10 / 6` | Bites `1d2` (multiplies) | Omitted | **Missing** |
+| `143` | `15` | **Guardian Naga** | `n` | `24d8` | `50` | `11` | `60` | `120 / 20` | Crushes `2d8`, Bites `1d8` (evil) | Omitted | **Missing** |
+| `144` | `15` | **Giant Grey Bat** | `b` | `4d8` | `22` | `13` | `22` | `15 / 12` | Bites `1d6`, Claws `1d2`, Claws `1d2` | Omitted | **Missing** |
+| `145` | `15` | **Giant Clear Centipede** | `c` | `5d8` | `30` | `11` | `30` | `30 / 12` | Bites `2d4`, Stings `2d4` (invisible) | Omitted | **Missing** |
+| `146` | `15` | **Giant Yellow Tick** | `t` | `20d8` | `48` | `10` | `48` | `20 / 12` | Bites poison `2d6` | Omitted | **Missing** |
+| `147` | `15` | **Giant Ebony Ant** | `a` | `3d4` | `24` | `11` | `3` | `60 / 12` | Bites `2d3` (multiplies) | Omitted | **Missing** |
+| `148` | `15` | **Frost Giant** | `P` | `17d8` | `38` | `11` | `54` | `50 / 20` | Hits frost `3d6`; Frost Breath (`0` freq) | Tier 2 (`#30`) / Tier 3 (`#12`) | **Implemented** |
+| `149` | `15` | **Clay Golem** | `g` | `14d8` | `20` | `11` | `50` | `10 / 12` | Hits `1d8`, Hits `1d8` (stone-to-mud vuln) | Omitted | **Missing** |
+| `150` | `15` | **Huge White Bat** | `b` | `3d8` | `12` | `12` | `3` | `40 / 7` | Bites `1d6` (multiplies) | Omitted | **Missing** |
+| `151` | `15` | **Giant Tan Bat** | `b` | `3d8` | `18` | `12` | `18` | `40 / 12` | Bites confuse `1d2`, Claws `1d1`, Claws `1d1` | Omitted | **Missing** |
+| `152` | `15` | **Violet Mold** | `m` | `17d8` | `15` | `11` | `50` | `70 / 2` | Touches paralyze `1d2`; Spells (`1/9`): Teleport-To | Tier 2 (`#31`) / Tier 3 (`#13`) | **Implemented** |
+| `153` | `16` | **Umber Hulk** | `U` | `20d8` | `20` | `11` | `75` | `10 / 20` | Gazes confuse `0d0`, Hits `1d6`, Hits `1d6`, Bites `2d6` (tunnels rock) | Tier 3 (`#14`) | **Implemented** |
+| `154` | `16` | **Gelatinous Cube** | `C` | `45d8` | `18` | `10` | `36` | `1 / 12` | Touches acid `1d10` (picks up items, dissolves doors) | Omitted | **Missing** |
+| `155` | `16` | **Giant Black Rat** | `r` | `3d4` | `16` | `11` | `3` | `20 / 8` | Bites poison `1d4` (multiplies) | Omitted | **Missing** |
+| `156` | `16` | **Giant Green Dragon Fly** | `F` | `5d8` | `20` | `11` | `58` | `50 / 20` | Bites poison `1d5`; Spell (`1/10`): Gas Breath | Omitted | **Missing** |
+| `157` | `16` | **Fire Giant** | `P` | `20d8` | `40` | `11` | `62` | `50 / 20` | Hits fire `3d7`; Fire Breath (`0` freq) | Tier 3 (`#15`) | **Implemented** |
+| `158` | `16` | **Green Dragon Bat** | `b` | `2d7` | `22` | `13` | `44` | `50 / 12` | Bites poison `1d3`; Spell (`1/4`): Gas Breath | Omitted | **Missing** |
+| `159` | `16` | **Quasit** | `q` | `5d8` | `30` | `11` | `48` | `20 / 20` | Bites lose-DEX `1d6`, Claws `1d3`, Claws `1d3` (invisible); Spells (`1/10`): Blink, Teleport, Darkness, Cause Light, Confuse, Slow, Hold | Tier 3 (`#16`) | **Implemented** |
+| `160` | `17` | **Troll** | `T` | `17d8` | `40` | `11` | `64` | `40 / 20` | Hits `1d4`, Hits `1d4`, Bites `1d6` (evil) | Tier 3 (`#17`) | **Implemented** |
+| `161` | `17` | **Water Spirit** | `E` | `8d8` | `28` | `12` | `58` | `40 / 12` | Hits `2d4` | Omitted | **Missing** |
+| `162` | `17` | **Giant Brown Scorpion** | `S` | `11d8` | `44` | `11` | `62` | `20 / 12` | Bites `2d4`, Stings lose-STR `1d7` | Tier 3 (`#18`) | **Implemented** |
+| `163` | `17` | **Earth Spirit** | `E` | `13d8` | `40` | `11` | `64` | `50 / 10` | Hits `1d8`, Hits `1d8` (moves through walls) | Tier 3 (`#19`) | **Implemented** |
+| `164` | `18` | **Fire Spirit** | `E` | `10d8` | `30` | `12` | `66` | `20 / 16` | Hits fire `2d6` (max HP) | Tier 3 (`#20`) | **Implemented** |
+| `165` | `18` | **Uruk-Hai Orc** | `o` | `14d8` | `42` | `11` | `68` | `20 / 20` | Hits `3d5` (evil) | Tier 3 (`#21`) | **Implemented** |
+| `166` | `18` | **Stone Giant** | `P` | `22d8` | `40` | `11` | `80` | `50 / 20` | Hits `3d8` (stone-to-mud vuln) | Tier 3 (`#22`) | **Implemented** |
+| `167` | `19` | **Stone Golem** | `g` | `28d8` | `75` | `10` | `100` | `10 / 12` | Hits `1d10`, Hits `1d10` (stone-to-mud vuln) | Tier 3 (`#23`) | **Implemented** |
+| `168` | `19` | **Grey Ooze** | `O` | `6d8` | `10` | `11` | `40` | `1 / 15` | Touches frost `2d6` (corrodes) | Omitted | **Missing** |
+| `169` | `19` | **Disenchanter Ooze** | `O` | `6d8` | `15` | `11` | `50` | `1 / 15` | Touches disenchant `1d6` | Omitted | **Missing** |
+| `170` | `19` | **Giant Spotted Rat** | `r` | `4d3` | `20` | `11` | `3` | `20 / 8` | Bites poison `1d4` (multiplies) | Omitted | **Missing** |
+| `171` | `19` | **Mummified Kobold** | `M` | `13d8` | `24` | `11` | `46` | `75 / 20` | Hits `1d6`, Hits `1d6` (undead) | Omitted | **Missing** |
+| `172` | `19` | **Killer Black Beetle** | `K` | `18d8` | `46` | `11` | `75` | `30 / 12` | Bites `4d5` | Tier 3 (`#24`) | **Implemented** |
+| `173` | `19` | **Red Mold** | `m` | `17d8` | `16` | `11` | `64` | `70 / 2` | Touches fire `4d4` (stationary, max HP) | Omitted | **Missing** |
+| `174` | `20` | **Quylthulg** | `Q` | `4d8` | `1` | `11` | `200` | `0 / 10` | No melee (`0d0`) (invisible, stationary, max HP); Spells (`1/4`): Blink, Teleport, Summon Monster | Tier 3 (`#25`) / Tier 4 (`#0`) | **Implemented** |
+| `175` | `20` | **Giant Red Bat** | `b` | `5d8` | `24` | `12` | `40` | `20 / 12` | Bites `1d7`, Claws `1d3`, Claws `1d3` | Omitted | **Missing** |
+| `176` | `20` | **Giant Black Dragon Fly** | `F` | `4d8` | `22` | `11` | `58` | `50 / 20` | Bites blind `1d2`; Spell (`1/9`): Acid Breath | Omitted | **Missing** |
+| `177` | `20` | **Cloud Giant** | `P` | `24d8` | `44` | `11` | `125` | `50 / 20` | Hits lightning `3d8` | Tier 3 (`#26`) / Tier 4 (`#1`) | **Implemented** |
+| `178` | `21` | **Black Dragon Bat** | `b` | `2d8` | `24` | `13` | `50` | `50 / 12` | Bites acid `1d3`; Spell (`1/4`): Acid Breath | Omitted | **Missing** |
+| `179` | `21` | **Blue Dragon Bat** | `b` | `3d6` | `26` | `13` | `54` | `50 / 12` | Bites lightning `1d3`; Spell (`1/4`): Lightning Breath | Omitted | **Missing** |
+| `180` | `21` | **Mummified Orc** | `M` | `14d8` | `28` | `11` | `56` | `75 / 20` | Hits `2d4`, Hits `2d4` (undead) | Tier 3 (`#27`) / Tier 4 (`#2`) | **Implemented** |
+| `181` | `21` | **Killer Boring Beetle** | `K` | `18d8` | `48` | `11` | `70` | `30 / 12` | Bites `4d5` | Tier 3 (`#28`) / Tier 4 (`#3`) | **Implemented** |
+| `182` | `22` | **Killer Stag Beetle** | `K` | `20d8` | `50` | `11` | `80` | `30 / 12` | Bites `3d4`, Hits `1d12` | Tier 3 (`#29`) / Tier 4 (`#4`) | **Implemented** |
+| `183` | `22` | **Black Mold** | `m` | `15d8` | `18` | `11` | `68` | `50 / 2` | Hits `4d3` (stationary) | Omitted | **Missing** |
+| `184` | `22` | **Iron Golem** | `g` | `80d8` | `99` | `9` | `160` | `10 / 12` | Hits `1d12`, Hits `1d12` (slow `9`, immune sleep) | Tier 3 (`#30`) / Tier 4 (`#5`) | **Implemented** |
+| `185` | `22` | **Giant Yellow Scorpion** | `S` | `12d8` | `38` | `11` | `60` | `20 / 12` | Bites `1d8`, Stings poison `2d6` | Tier 3 (`#31`) / Tier 4 (`#6`) | **Implemented** |
+| `186` | `22` | **Green Ooze** | `O` | `4d8` | `5` | `10` | `6` | `1 / 15` | Touches acid `2d3` (multiplies) | Omitted | **Missing** |
+| `187` | `23` | **Black Ooze** | `O` | `6d8` | `6` | `9` | `7` | `1 / 10` | Touches corrode `2d6` (multiplies); Spells (`1/11`): Teleport-To | Omitted | **Missing** |
+| `188` | `23` | **Warrior** | `p` | `15d8` | `40` | `11` | `60` | `40 / 20` | Hits `3d5` | Tier 3 (`#32`) / Tier 4 (`#7`) | **Implemented** |
+| `189` | `23` | **Red Dragon Bat** | `b` | `3d8` | `28` | `13` | `60` | `50 / 12` | Bites fire `1d3`; Spell (`1/4`): Fire Breath | Omitted | **Missing** |
+| `190` | `23` | **Killer Blue Beetle** | `K` | `20d8` | `50` | `11` | `85` | `30 / 14` | Bites `4d5` | Omitted | **Missing** |
+| `191` | `23` | **Giant Silver Ant** | `a` | `6d8` | `38` | `11` | `45` | `60 / 10` | Bites acid `4d4` | Tier 3 (`#33`) / Tier 4 (`#8`) | **Implemented** |
+| `192` | `23` | **Crimson Mold** | `m` | `16d8` | `18` | `11` | `65` | `50 / 2` | Hits `1d3`, Touches confuse `0d0` (stationary) | Omitted | **Missing** |
+| `193` | `24` | **Forest Wight** | `W` | `12d8` | `30` | `11` | `140` | `30 / 20` | Hits `1d6`, Hits `1d6`, Touches drain-XP `15d8` (undead); Spells (`1/15`): Fear | Tier 3 (`#34`) / Tier 4 (`#9`) | **Implemented** |
+| `194` | `24` | **Berzerker** | `p` | `15d8` | `20` | `11` | `65` | `10 / 20` | Hits `1d8`, Hits `1d8` | Omitted | **Missing** |
+| `195` | `24` | **Mummified Human** | `M` | `17d8` | `34` | `11` | `70` | `60 / 20` | Hits `2d4`, Hits `2d4` (undead) | Tier 3 (`#35`) / Tier 4 (`#10`) | **Implemented** |
+| `196` | `24` | **Banshee** | `G` | `6d8` | `24` | `12` | `60` | `10 / 20` | Wails fear `0d0`, Touches drain-XP `18d8` (invisible, moves through walls); Spells (`1/15`): Darkness, Teleport-To | Tier 3 (`#36`) / Tier 4 (`#11`) | **Implemented** |
+| `197` | `25` | **Giant Troll** | `T` | `19d8` | `40` | `11` | `85` | `50 / 20` | Hits `1d6`, Hits `1d6`, Bites `3d4` | Tier 3 (`#37`) / Tier 4 (`#12`) | **Implemented** |
+| `198` | `25` | **Giant Brown Tick** | `t` | `18d8` | `50` | `10` | `70` | `20 / 12` | Bites poison `1d6`, Bites lose-CON `1d6` | Omitted | **Missing** |
+| `199` | `25` | **Killer Red Beetle** | `K` | `20d8` | `50` | `11` | `85` | `30 / 14` | Bites lose-STR `4d4` | Tier 3 (`#38`) / Tier 4 (`#13`) | **Implemented** |
+| `200` | `25` | **Wooden Mold** | `m` | `25d8` | `50` | `11` | `100` | `50 / 2` | Touches poison `1d3` (stationary) | Omitted | **Missing** |
+| `201` | `25` | **Giant Blue Dragon Fly** | `F` | `6d8` | `24` | `11` | `75` | `50 / 20` | Bites `1d6`; Spell (`1/9`): Lightning Breath | Omitted | **Missing** |
+| `202` | `26` | **Giant Grey Ant Lion** | `A` | `19d8` | `40` | `11` | `90` | `40 / 10` | Bites `2d12` (tunnels rock) | Omitted | **Missing** |
+| `203` | `26` | **Disenchanter Bat** | `b` | `4d8` | `24` | `13` | `75` | `1 / 14` | Bites disenchant `0d0` | Omitted | **Missing** |
+| `204` | `26` | **Giant Fire Tick** | `t` | `16d8` | `54` | `11` | `90` | `20 / 14` | Spits fire `3d7` | Tier 4 (`#14`) | **Implemented** |
+| `205` | `26` | **White Wraith** | `W` | `15d8` | `40` | `11` | `165` | `10 / 20` | Hits `1d6`, Hits `1d6`, Touches drain-XP `20d8` (undead); Spells (`1/12`): Fear | Tier 4 (`#15`) | **Implemented** |
+| `206` | `26` | **Giant Black Scorpion** | `S` | `13d8` | `50` | `11` | `85` | `20 / 12` | Bites `1d10`, Stings poison `2d6` | Tier 4 (`#16`) | **Implemented** |
+| `207` | `26` | **Clear Ooze** | `O` | `4d8` | `14` | `11` | `12` | `1 / 10` | Hits lose-CHR `1d4` (invisible) | Omitted | **Missing** |
+| `208` | `27` | **Killer Fire Beetle** | `K` | `13d8` | `45` | `11` | `95` | `30 / 14` | Bites `3d4`, Spits fire `4d5` | Tier 4 (`#17`) | **Implemented** |
+| `209` | `27` | **Vampire** | `V` | `20d8` | `45` | `11` | `175` | `10 / 20` | Hits `1d6`, Hits `1d6`, Touches drain-XP `22d8` (undead); Spells (`1/9`): Hold, Fear | Tier 4 (`#18`) | **Implemented** |
+| `210` | `27` | **Giant Red Dragon Fly** | `F` | `7d8` | `24` | `11` | `75` | `50 / 20` | Bites confuse `1d6`; Spell (`1/8`): Fire Breath | Omitted | **Missing** |
+| `211` | `27` | **Shimmering Mold** | `m` | `32d8` | `24` | `11` | `180` | `50 / 2` | Touches lightning `5d4` (stationary) | Tier 4 (`#19`) | **Implemented** |
+| `212` | `28` | **Black Knight** | `p` | `25d8` | `60` | `11` | `140` | `10 / 20` | Hits `5d5`; Spells (`1/15`): Cause Serious | Tier 4 (`#20`) | **Implemented** |
+| `213` | `28` | **Mage** | `p` | `10d8` | `30` | `11` | `150` | `10 / 20` | Hits `2d5`; Spells (`1/3`): Blink, Teleport, Confuse, Slow, Hold, Fire Bolt, Frost Bolt, Summon Monster | Tier 4 (`#21`) | **Implemented** |
+| `214` | `28` | **Ice Troll** | `T` | `22d8` | `46` | `11` | `160` | `50 / 20` | Hits `1d5`, Hits `1d5`, Bites frost `3d6` | Tier 4 (`#22`) | **Implemented** |
+| `215` | `29` | **Giant Purple Worm** | `w` | `65d8` | `65` | `11` | `400` | `30 / 14` | Hits `1d8`, Bites acid `2d8`, Stings poison `2d4` | Tier 4 (`#23`) | **Implemented** |
+| `216` | `29` | **Young Blue Dragon** | `d` | `33d8` | `50` | `11` | `300` | `70 / 20` | Claws `1d4`, Claws `1d4`, Bites `1d6`; Spells (`1/11`): Fear, Lightning Breath | Tier 4 (`#24`) | **Implemented** |
+| `217` | `29` | **Young White Dragon** | `d` | `32d8` | `50` | `11` | `275` | `70 / 20` | Claws `1d4`, Claws `1d4`, Bites `1d6`; Spells (`1/11`): Fear, Frost Breath | Omitted | **Missing** |
+| `218` | `29` | **Young Green Dragon** | `d` | `32d8` | `50` | `11` | `290` | `70 / 20` | Claws `1d4`, Claws `1d4`, Bites `1d6`; Spells (`1/11`): Fear, Gas Breath | Tier 4 (`#25`) | **Implemented** |
+| `219` | `29` | **Giant Fire Bat** | `b` | `5d8` | `30` | `12` | `85` | `10 / 14` | Bites fire `3d6`, Claws `1d4`, Claws `1d4` | Omitted | **Missing** |
+| `220` | `29` | **Giant Glowing Rat** | `r` | `3d3` | `24` | `11` | `4` | `20 / 8` | Bites lightning `1d3` (multiplies) | Omitted | **Missing** |
+| `221` | `30` | **Skeleton Troll** | `s` | `14d8` | `55` | `11` | `225` | `20 / 20` | Hits `1d6`, Hits `1d6`, Bites `3d4` (undead, max HP) | Tier 4 (`#26`) | **Implemented** |
+| `222` | `30` | **Giant Lightning Bat** | `b` | `8d8` | `34` | `12` | `80` | `10 / 15` | Bites lightning `2d6`, Claws `1d5`, Claws `1d5` | Omitted | **Missing** |
+| `223` | `30` | **Giant Static Ant** | `a` | `8d8` | `40` | `11` | `80` | `60 / 10` | Bites lightning `5d5` | Omitted | **Missing** |
+| `224` | `30` | **Grave Wight** | `W` | `12d8` | `35` | `11` | `325` | `30 / 20` | Hits `1d7`, Hits `1d7`, Touches drain-XP `26d8` (undead, max HP); Spells (`1/10`): Cause Serious, Fear | Tier 4 (`#27`) | **Implemented** |
+| `225` | `30` | **Killer Slicer Beetle** | `K` | `22d8` | `55` | `11` | `200` | `30 / 14` | Bites `5d8` | Omitted | **Missing** |
+| `226` | `30` | **Giant White Ant Lion** | `A` | `20d8` | `45` | `11` | `175` | `40 / 12` | Bites frost `3d10` (tunnels rock) | Omitted | **Missing** |
+| `227` | `31` | **Ghost** | `G` | `13d8` | `30` | `12` | `350` | `10 / 20` | Wails fear `0d0`, Touches drain-XP `30d8`, Claws lose-INT `1d10` (undead, invisible, moves through walls, max HP); Spells (`1/15`): Darkness, Teleport-To | Tier 4 (`#28`) | **Implemented** |
+| `228` | `31` | **Giant Black Ant Lion** | `A` | `23d8` | `45` | `11` | `170` | `40 / 14` | Bites `2d12`, Spits acid `3d6` (tunnels rock) | Omitted | **Missing** |
+| `229` | `31` | **Death Watch Beetle** | `K` | `25d8` | `60` | `11` | `190` | `30 / 16` | Bites `5d4`, Wails `5d6` | Tier 4 (`#29`) | **Implemented** |
+| `230` | `31` | **Ogre Mage** | `o` | `14d8` | `42` | `11` | `250` | `30 / 20` | Hits `3d6` (max HP); Spells (`1/5`): Heal Self, Hold, Cause Serious, Cause Critical,Summon Monster | Tier 4 (`#30`) | **Implemented** |
+| `231` | `32` | **Two-Headed Troll** | `T` | `14d8` | `48` | `11` | `275` | `50 / 20` | Hits `1d8`, Hits `1d8`, Bites `1d6`, Bites `1d6` (max HP) | Tier 4 (`#31`) | **Implemented** |
+| `232` | `32` | **Invisible Stalker** | `E` | `19d8` | `46` | `13` | `200` | `20 / 20` | Hits `1d6` (invisible, random 20%, immune sleep) | Tier 4 (`#32`) | **Implemented** |
+| `233` | `32` | **Giant Hunter Ant** | `a` | `12d8` | `40` | `11` | `150` | `1 / 16` | Bites `4d8` | Omitted | **Missing** |
+| `234` | `32` | **Ninja** | `p` | `15d8` | `65` | `11` | `300` | `10 / 20` | Hits poison `3d4`, Hits lose-STR `3d4` (max HP) | Tier 4 (`#33`) | **Implemented** |
+| `235` | `33` | **Barrow Wight** | `W` | `13d8` | `40` | `11` | `375` | `10 / 20` | Hits `1d8`, Hits `1d8`, Touches drain-XP `32d8` (undead, max HP); Spells (`1/8`): Hold, Cause Serious, Fear | Tier 4 (`#34`) | **Implemented** |
+| `236` | `33` | **Skeleton 2-Headed Troll** | `s` | `20d8` | `48` | `11` | `325` | `20 / 20` | Hits `1d9`, Hits `1d9`, Bites `1d5`, Bites `1d5` (undead, max HP) | Omitted | **Missing** |
+| `237` | `33` | **Water Elemental** | `E` | `25d8` | `36` | `11` | `325` | `50 / 12` | Hits `1d10`, Hits `1d10` | Omitted | **Missing** |
+| `238` | `33` | **Fire Elemental** | `E` | `25d8` | `40` | `10` | `350` | `70 / 16` | Hits fire `4d6` (max HP) | Tier 4 (`#35`) | **Implemented** |
+| `239` | `34` | **Lich** | `L` | `25d8` | `50` | `11` | `750` | `60 / 20` | Touches lose-DEX `2d10`, Touches drain-XP `34d8`, Touches drain-mana `0d0` (undead, max HP); Spells (`1/5`): Blink, Teleport, Teleport-To, Confuse, Slow, Hold, Cause Serious, Cause Critical, Fire Bolt, Frost Bolt, Mana Bolt, Forget | Tier 4 (`#36`) | **Implemented** |
+| `240` | `34` | **Master Vampire** | `V` | `23d8` | `55` | `11` | `700` | `10 / 20` | Hits `1d6`, Hits `1d6`, Touches drain-XP `36d8` (undead, max HP); Spells (`1/7`): Hold, Cause Serious, Fear | Tier 4 (`#37`) | **Implemented** |
+| `241` | `34` | **Spirit Troll** | `G` | `15d8` | `40` | `11` | `425` | `10 / 20` | Claws `1d5`, Claws `1d5`, Bites `1d6`, Touches lose-WIS `0d0` (undead, invisible, moves through walls, max HP) | Omitted | **Missing** |
+| `242` | `34` | **Giant Red Scorpion** | `S` | `18d8` | `50` | `12` | `275` | `40 / 12` | Bites `1d6`, Stings poison `1d3` | Omitted | **Missing** |
+| `243` | `34` | **Earth Elemental** | `E` | `30d8` | `60` | `10` | `375` | `90 / 10` | Hits `4d6`, Hits `4d6` (moves through walls, destroys items) | Tier 4 (`#38`) | **Implemented** |
+| `244` | `35` | **Young Black Dragon** | `d` | `32d8` | `55` | `11` | `600` | `50 / 20` | Claws `1d5`, Claws `1d5`, Bites `1d6` (max HP); Spells (`1/11`): Fear, Acid Breath | Omitted | **Missing** |
+| `245` | `35` | **Young Red Dragon** | `d` | `36d8` | `60` | `11` | `650` | `50 / 20` | Claws `1d8`, Claws `1d8`, Bites `2d8` (max HP); Spells (`1/10`): Fear, Fire Breath | Tier 4 (`#39`) | **Implemented** |
+| `246` | `35` | **Necromancer** | `p` | `17d8` | `40` | `11` | `600` | `10 / 20` | Hits `2d6` (max HP); Spells (`1/3`): Blink, Teleport, Confuse, Slow, Hold, Cause Serious, Cause Critical, Fear, Fire Bolt, Summon Undead | Tier 4 (`#40`) | **Implemented** |
+| `247` | `35` | **Mummified Troll** | `M` | `18d8` | `38` | `11` | `400` | `50 / 20` | Hits `2d6`, Hits `2d6` (undead, max HP) | Omitted | **Missing** |
+| `248` | `35` | **Giant Red Ant Lion** | `A` | `23d8` | `48` | `11` | `350` | `40 / 14` | Bites fire `3d12` (tunnels rock) | Omitted | **Missing** |
+| `249` | `35` | **Mature White Dragon** | `d` | `48d8` | `65` | `11` | `1000` | `70 / 20` | Claws `1d8`, Claws `1d8`, Bites `2d8` (max HP); Spells (`1/10`): Fear, Frost Breath | Tier 4 (`#41`) | **Implemented** |
+| `250` | `36` | **Xorn** | `X` | `20d8` | `80` | `11` | `650` | `10 / 20` | Hits `1d6`, Hits `1d6`, Hits `1d6` (moves through walls, max HP) | Tier 4 (`#42`) | **Implemented** |
+| `251` | `36` | **Giant Mottled Ant Lion** | `A` | `24d8` | `50` | `12` | `350` | `40 / 14` | Bites `2d10` (tunnels rock) | Omitted | **Missing** |
+| `252` | `36` | **Grey Wraith** | `W` | `23d8` | `50` | `11` | `700` | `10 / 20` | Hits `1d10`, Hits `1d10`, Touches drain-XP `38d8` (undead, max HP); Spells (`1/8`): Hold, Cause Serious, Fear | Tier 4 (`#43`) | **Implemented** |
+| `253` | `36` | **Young Multi-Hued Dragon** | `d` | `40d8` | `55` | `11` | `1250` | `50 / 20` | Claws `1d9`, Claws `1d9`, Bites `2d10` (max HP); Spells (`1/5`): Fear, Lightning/Gas/Acid/Frost/Fire Breath | Omitted | **Missing** |
+| `254` | `36` | **Mature Blue Dragon** | `d` | `48d8` | `75` | `11` | `1200` | `70 / 20` | Claws `1d8`, Claws `1d8`, Bites `2d10` (max HP); Spells (`1/9`): Fear, Lightning Breath | Omitted | **Missing** |
+| `255` | `36` | **Mature Green Dragon** | `d` | `48d8` | `70` | `11` | `1100` | `70 / 20` | Claws `1d4`, Claws `1d4`, Bites `1d6` (max HP); Spells (`1/10`): Fear, Gas Breath | Omitted | **Missing** |
+| `256` | `37` | **Iridescent Beetle** | `K` | `32d8` | `60` | `11` | `850` | `30 / 16` | Bites `4d6`, Hits `1d12`, Gazes paralyze `1d2` | Tier 4 (`#44`) | **Implemented** |
+| `257` | `37` | **King Vampire** | `V` | `38d8` | `65` | `11` | `1000` | `10 / 20` | Hits `1d6`, Hits `1d6`, Touches drain-XP `44d8` (undead, max HP); Spells (`1/7`): Hold, Cause Serious, Fear | Omitted | **Missing** |
+| `258` | `37` | **King Lich** | `L` | `52d8` | `65` | `11` | `1400` | `50 / 20` | Touches lose-DEX `2d12`, Touches drain-XP `42d8`, Touches drain-mana `0d0` (undead, max HP); Spells (`1/3`): Blink, Teleport, Teleport-To, Confuse, Slow, Hold, Cause Serious, Cause Critical, Fire Bolt, Frost Bolt, Mana Bolt, Forget | Tier 4 (`#45`) | **Implemented** |
+| `259` | `37` | **Mature Red Dragon** | `d` | `60d8` | `80` | `11` | `1400` | `30 / 20` | Claws `1d10`, Claws `1d10`, Bites `2d12` (max HP); Spells (`1/8`): Fear, Fire Bolt, Fire Breath | Tier 4 (`#46`) | **Implemented** |
+| `260` | `37` | **Mature Black Dragon** | `d` | `58d8` | `55` | `11` | `1350` | `30 / 20` | Claws `1d8`, Claws `1d8`, Bites `2d10` (max HP); Spells (`1/9`): Fear, Acid Breath | Omitted | **Missing** |
+| `261` | `38` | **Mature Multi-Hued Dragon** | `d` | `80d8` | `65` | `11` | `1650` | `50 / 20` | Claws `1d10`, Claws `1d10`, Bites `2d12` (max HP); Spells (`1/5`): Hold, Fear, Fire Bolt, 5 Breaths | Omitted | **Missing** |
+| `262` | `38` | **Ancient White Dragon** | `D` | `88d8` | `80` | `12` | `1500` | `80 / 20` | Claws `1d8`, Claws `1d8`, Bites `2d8` (max HP); Spells (`1/9`): Hold, Fear, Frost Bolt, Frost Breath | Tier 4 (`#47`) | **Implemented** |
+| `263` | `38` | **Emperor Wight** | `W` | `48d8` | `40` | `12` | `1600` | `10 / 20` | Hits `1d12`, Hits `1d12`, Touches drain-XP `46d8` (undead, max HP); Spells (`1/6`): Hold, Cause Serious, Fear | Omitted | **Missing** |
+| `264` | `38` | **Black Wraith** | `W` | `50d8` | `55` | `11` | `1700` | `10 / 20` | Hits `1d12`, Hits `1d12`, Touches drain-XP `46d8` (undead, max HP); Spells (`1/7`): Hold, Cause Serious, Fear | Tier 4 (`#48`) | **Implemented** |
+| `265` | `39` | **Nether Wraith** | `W` | `58d8` | `55` | `11` | `2100` | `10 / 20` | Hits `1d12`, Hits `1d12`, Touches drain-XP `52d8` (undead, invisible, moves through walls, max HP); Spells (`1/6`): Blink, Hold, Cause Serious, Fear, Summon Undead | Tier 4 (`#49`) | **Implemented** |
+| `266` | `39` | **Sorcerer** | `p` | `30d8` | `50` | `12` | `2150` | `10 / 20` | Hits `2d8` (max HP); Spells (`1/3`): Blink, Teleport, Confuse, Slow, Hold, Cause Serious, Cause Critical, Fear, Fire Bolt, Frost Bolt, Acid Bolt, Mana Bolt, Summon Monster, Summon Undead | Tier 4 (`#50`) | **Implemented** |
+| `267` | `39` | **Ancient Blue Dragon** | `D` | `87d8` | `90` | `12` | `2500` | `80 / 20` | Claws `1d9`, Claws `1d9`, Bites `2d12` (max HP); Spells (`1/8`): Hold, Fear, Frost Bolt, Lightning Breath | Tier 4 (`#51`) | **Implemented** |
+| `268` | `39` | **Ancient Green Dragon** | `D` | `90d8` | `85` | `12` | `2400` | `80 / 20` | Claws `1d8`, Claws `1d8`, Bites `2d10` (max HP); Spells (`1/9`): Hold, Fear, Frost Bolt, Gas Breath | Omitted | **Missing** |
+| `269` | `39` | **Ancient Black Dragon** | `D` | `90d8` | `90` | `12` | `2500` | `70 / 20` | Claws `1d9`, Claws `1d9`, Bites `2d10` (max HP); Spells (`1/7`): Hold, Fear, Frost Bolt, Acid Breath | Omitted | **Missing** |
+| `270` | `40` | **Crystal Ooze** | `O` | `12d8` | `30` | `9` | `8` | `1 / 10` | Touches frost `4d4` (invisible, multiplies) | Omitted | **Missing** |
+| `271` | `40` | **Disenchanter Worm** | `w` | `10d8` | `5` | `10` | `30` | `10 / 7` |Crawls disenchant `1d4` (multiplies) | Omitted | **Missing** |
+| `272` | `40` | **Rotting Quylthulg** | `Q` | `12d8` | `1` | `12` | `1000` | `0 / 20` | No melee (`0d0`) (invisible, stationary, max HP); Spells (`1/4`): Blink, Teleport, Summon Undead | Omitted | **Missing** |
+| `273` | `40` | **Ancient Red Dragon** | `D` | `105d8` | `100` | `12` | `2750` | `70 / 20` | Claws `1d10`, Claws `1d10`, Bites `2d14` (max HP); Spells (`1/6`): Hold, Fear, Fire Bolt, Frost Bolt, Fire Breath | Tier 4 (`#52`) | **Implemented** |
+| `274` | `40` | **Death Quasit** | `q` | `55d8` | `80` | `13` | `1000` | `0 / 20` | Bites lose-DEX `3d6`, Claws `3d3`, Claws `3d3` (invisible); Spells (`1/10`): Blink, Teleport, Darkness, Cause Light, Confuse, Slow, Hold | Omitted | **Missing** |
+| `275` | `40` | **Emperor Lich** | `L` | `38d40` (`1520`) | `75` | `12` | `10000` | `50 / 20` | Touches lose-DEX `2d12`, Touches drain-XP `46d8`, Touches drain-mana `0d0` (undead, max HP); Spells (`1/2`): Blink, Teleport, Teleport-To, Confuse, Slow, Hold, Cause Serious, Cause Critical, Fire Bolt, Frost Bolt, Mana Bolt, Forget | Tier 4 (`#53`) | **Implemented** |
+| `276` | `40` | **Ancient Multi-Hued Dragon** | `D` | `52d40` (`2080`) | `100` | `12` | `12000` | `70 / 20` | Claws `1d12`, Claws `1d12`, Bites `3d12` (max HP); Spells (`1/5`): Hold, Fear, Fire Bolt, Frost Bolt, Mana Bolt, 5 Breaths | Tier 4 (`#54`) | **Implemented** |
+| `277` | `50` | **Evil Iggy** | `p` | `60d40` (`2400`) | `80` | `12` | `18000` | `0 / 30` | Hits lose-STR `4d6`, Touches blind `1d1` (invisible, picks up items, max HP); Spells (`1/3`): Blink, Teleport, Teleport-To, Cause Serious, Cause Critical, Fear, Summon Monster, Summon Undead | Tier 4 (`#55`) | **Implemented** |
+| `278` | `100` | **Balrog** | `B` | `75d40` (`3000`) | `125` | `13` | `55000` | `0 / 40` | Hits fire `10d12`, Crushes `8d12`, Touches drain-mana `0d0` (`CM_WIN` boss, invisible, moves through walls, destroys items, max HP); Spells (`1/3`): Blink, Teleport, Hold, Cause Serious, Cause Critical, Fear, Mana Bolt, Summon Monster, Summon Undead, Fire Breath | Tier 4 (`#56`) | **Implemented** |
+
+---
+
+## 10. Executive Summary Scorecard
+
+| Domain / Subsystem | VMS Moria 4.8 | Umoria 5.7.15 | Moria8 (All 7 Active Ports) | Fidelity & Port Parity Summary |
+| :--- | :--- | :--- | :--- | :--- |
+| **Races & Classes** | `8` Races, `6` Classes | `8` Races, `6` Classes | `8` Races, `6` Classes | **Implemented (`100%` Parity)** across all 7 ports (`core/tables.s`, `core/player_create.s`, `core/spell_class_data.s`). Every stat modifier, hit die, disarm/search/stealth/fight/bows/save skill, XP factor, and class spell-level requirement matches VMS Moria 4.8 / Umoria 5.7.15 byte-for-byte. |
+| **Stats (`3..18/100`)** | `3..18` + `18/01..18/100` | `3..18` + `18/01..18/100` | `3..118` (`19..118` = `18/01..18/100`) | **Implemented**. Full percentile `18/xx` range, stat drain/restore (`base` vs `cur`), and racial/class modifiers are preserved on all 7 ports (`core/player.s`, `core/stat_display.s`). |
+| **Turn Energy & Speed** | `py_speed` vs `cspeed` energy | `py_speed` vs `cspeed` energy | `player_speed` + per-monster speed counter | **Implemented**. Full speed scaling (`Slow`, `Normal`, `+1` Fast, `+2` Very Fast, `+3` Ultra-Fast) and haste/slow status effects across all 7 ports (`core/turn.s`, `core/monster_ai.s`). |
+| **Dungeon Generation** | `198×66` (`13,068` tiles) | `198×66` (`13,068` tiles) | **40-col ports**: `80×48` (`3,840` B, max `8` rooms)<br>**80-col ports**: `198×66` (`13,068` B, max `21` rooms) | **Implemented (80-col exact; 40-col scaled)**. Preserves Rectangular, Overlapping (80-col), Vault (`RT_VAULT`), Monster Pit (`RT_PIT`), and Monster Nest (`RT_NEST`) rooms, magma/quartz veins, doors, secret doors, rubble, stairs, and traps (`core/dungeon_gen.s`, `core/special_rooms.s`). |
+| **Floor & Chest Traps** | `18` Floor + `6` Chest flags | `18` Floor + `6` Chest flags | `6` Floor Trap types + all `6` Chest Trap/Lock flags | **Partial (Floor Traps) / Implemented (Chest Traps)**. Implements 6 core floor traps (`TRAP_OPEN_PIT`, `TRAP_ARROW`, `TRAP_POISON_GAS`, `TRAP_TELEPORT`, `TRAP_POISON_DART`, `TRAP_ROCKFALL` in `core/dungeon_features.s`) and all 6 chest lock/trap bitflags (`core/chest.s`, `core/chest_loot.s`, `core/chest_search.s`). |
+| **Line of Sight (LOS)** | Integer/fixed-point Bresenham raycast | Integer Bresenham raycast | Integer Bresenham raycast + corner-pinch blocking + room reveal | **Implemented**. Exact per-tile Bresenham visibility with diagonal corner-pinch blocking (`core/los_trace.s`), radius-1 torchlight, and full lit-room reveal (`core/dungeon_los.s`). |
+| **Town & Stores** | `6` Stores (`18` owners) + Haggling | `6` Stores (`18` owners) + Haggling | `6` Classic Stores + **Black Market (`#6`)** + **Player Home (`#7`)** + Interactive Multi-Round Haggling | **Implemented + Moria8 Additions**. Preserves multi-round numeric haggling with shopkeeper counter-offers, insults, and 3-insult store kicks (`core/ui_store.s:1057-1502`), and adds a Town **Black Market** (`3×` buy / `0.1×` sell) and **Player Home** (12-slot persistent stash, `core/ui_home.s`). |
+| **Combat & Monster Attacks** | `19` Methods, `24` Effects (`4` attacks/monster) | `19` Methods, `24` Effects (`4` attacks/monster) | `19` Methods, `24` Effects (`2` attacks/monster) | **Approximation**. Implements all 19 attack verbs and all 24 attack effects (`core/monster_attack.s`, `core/combat.s`), packing the 2 primary attacks per creature into its 16-byte template (`tools/parse_creatures.py`). |
+| **Mage Spells & Priest Prayers** | `31` Spells + `31` Prayers (`8` active books) | `31` Spells + `31` Prayers (`8` active books) | `31` Spells + `31` Prayers (`8` active books) | **Implemented (`100%` Catalog Parity)**. All 62 spells/prayers are implemented with matching level, mana, failure rate, overcasting faint/CON-drain penalty, and effect handlers across all 7 ports (`core/spell_data.s`, `core/player_magic*.s`). |
+| **Ego Items** | `55`–`56` Ego Templates | `56` Ego Templates | `7` Melee Weapon Ego Types + `2` Digging Tool Prefixes + Chest Status Tags | **Partial**. Implements all 7 core weapon ego types (`EGO_SLAY_ANIMAL`, `EGO_SLAY_EVIL`, `EGO_SLAY_UNDEAD`, `EGO_FLAME_TONGUE`, `EGO_FROST_BRAND`, `EGO_DEFENDER`, `EGO_HOLY_AVENGER` in `core/ego_items.s`) and `Gnomish`/`Dwarven` digging tool prefixes (`core/game_loop.s`). |
+| **Base Item Catalog** | `414`–`420` Templates | `420` Templates (`src/data_treasure.cpp`) | `136` Item Templates (`IDs 0..135` in `core/item_tables.s`) | **Partial (`136` Templates)**. Curated master item table covering all 20 item categories (`ICAT_GOLD`..`ICAT_SPIKE`), all 8 spell/prayer books, all 7 chest types, and all major weapons, armors, rings, amulets, wands, staves, potions, and scrolls (`core/item_tables.s`, `core/item_defs.s`). |
+| **Monster Spells & Breaths** | `18` `CSPELL` Flags | `18` `CSPELL` Flags | `8` Consolidated `MSF_*` Spell/Breath Categories (`cr_spell_flags`) | **Approximation**. Maps all 18 Umoria monster spells and dragon breaths into an 8-bit `cr_spell_flags` mask (`MSF_BREATH`, `MSF_SUMMON`, `MSF_TELEPORT`, `MSF_HEAL`, `MSF_BLIND`, `MSF_CONFUSE`, `MSF_HOLD`, `MSF_WOUND_LIGHT`) executed in `core/monster_magic.s`. |
+| **Monster Catalog** | `279` Creatures | `279` Creatures (`src/data_creatures.cpp`) | `120` Unique Creatures (`8` Town + `112` Dungeon = `160` Tier Entries across Tiers `0..4`) | **Partial (`43.0%` of 279)**. Curated via `tools/parse_creatures.py` into 5 overlapping depth tiers (`Tier 0` resident + `Tiers 1..4` banked/disk-loaded: `24`, `32`, `39`, `57` entries), including **Evil Iggy** (`dlvl 50`) and the **Balrog** (`dlvl 100`). |
+| **Cross-Port Gameplay Parity** | 1 Platform (VAX/VMS) | Cross-platform desktop C/C++ | `7` Active 8-Bit Ports (`C64`, `C128`, `Plus/4`, `Apple IIe`, `CX16`, `Atari 8-bit`, `BBC Master 128`) | **100% Gameplay Logic Parity Across All 7 Ports**. All 7 ports share the exact same `core/` gameplay, RNG, combat, magic, item, and monster tier tables; ports differ only in map/viewport geometry (`40×25` scrolling on `80×48` map for `C64`/`Plus4`/`Atari8` vs `80×24/25` on `198×66` map for `C128`/`Apple2`/`CX16`/`BBCMaster`), color hardware, sound (`Plus/4` stubbed), and RAM/disk banking. |
