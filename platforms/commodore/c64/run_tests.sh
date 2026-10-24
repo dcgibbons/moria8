@@ -77,6 +77,9 @@ else
     KICKASS_TRACE_DEFINE=(-define DEBUG_FEAT_DISK_TRACE=0)
 fi
 VICE="${VICE:-x64sc}"
+# VICE reads this config (with the installed version tag) instead of the
+# user's vicerc; /dev/null made VICE pop up "No version tag found" dialogs.
+VICE_CONFIG="$(python3 "$REPO_ROOT/tools/vice_config.py" "$VICE")"
 C1541="${C1541:-c1541}"
 TEST_FILTER="${TEST_FILTER:-}"
 PASS=0
@@ -192,6 +195,8 @@ for path in sorted(root.glob("*.py")):
                 values.append(elt.value)
             elif isinstance(elt, ast.Attribute) and elt.attr == "vice":
                 values.append("args.vice")
+            elif isinstance(elt, ast.Call) and isinstance(elt.func, ast.Name) and elt.func.id == "vice_config":
+                values.append("vice_config()")
         if "args.vice" not in values:
             continue
         if "-remotemonitor" not in values and "-nativemonitor" not in values:
@@ -199,8 +204,8 @@ for path in sorted(root.glob("*.py")):
         missing = [flag for flag in ("-config", "-default", "+saveres") if flag not in values]
         if "-config" in values:
             config_index = values.index("-config")
-            if config_index + 1 >= len(values) or values[config_index + 1] != "/dev/null":
-                missing.append("-config /dev/null")
+            if config_index + 1 >= len(values) or values[config_index + 1] != "vice_config()":
+                missing.append("-config vice_config(<vice>) (tools/vice_config.py)")
         if missing:
             bad.append(f"{path.name}: missing {', '.join(missing)}")
 
@@ -208,7 +213,7 @@ for lineno, line in enumerate(runner.read_text().splitlines(), start=1):
     stripped = line.strip()
     if not stripped.startswith('"$VICE" '):
         continue
-    missing = [flag for flag in ("-config /dev/null", "-default", "+saveres") if flag not in line]
+    missing = [flag for flag in ('-config "$VICE_CONFIG"', "-default", "+saveres") if flag not in line]
     if missing:
         bad.append(f"{runner.name}:{lineno}: missing {', '.join(missing)}")
 
@@ -349,7 +354,7 @@ run_test() {
     run_vice_once() {
         local log_path="$1"
         script -q "$log_path" \
-            "$VICE" -warp -config /dev/null -default +saveres -console -nativemonitor -autostartprgmode 1 \
+            "$VICE" -warp -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -autostartprgmode 1 \
             -autostart "$prg_file" -moncommands "$mon_file" \
             -limitcycles "$cycles" +sound -sounddev dummy \
             +remotemonitor +binarymonitor > /dev/null 2>&1
@@ -436,7 +441,7 @@ run_sound_monitor_test() {
     }
 
     script -q "$log_file" \
-        "$VICE" -warp -config /dev/null -default +saveres -console -nativemonitor -autostartprgmode 1 \
+        "$VICE" -warp -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -autostartprgmode 1 \
         -autostart "${src%.s}.prg" -moncommands "$mon_file" \
         -limitcycles "$cycles" +sound -sounddev dummy \
         +remotemonitor +binarymonitor > /dev/null 2>&1
@@ -611,7 +616,7 @@ run_scripted_spell_cast_smoke() {
     } > "$mon_file"
 
     script -q "$tty_log" \
-        "$VICE" -warp -config /dev/null -default +saveres -console -nativemonitor -autostartprgmode 1 \
+        "$VICE" -warp -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -autostartprgmode 1 \
         -autostart "$scripted_d64" -moncommands "$mon_file" \
         -limitcycles 700000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor > /dev/null 2>&1
@@ -767,7 +772,7 @@ run_scripted_book_overlay_smoke() {
     } > "$mon_file"
 
     script -q "$tty_log" \
-        "$VICE" -warp -config /dev/null -default +saveres -console -nativemonitor -autostartprgmode 1 \
+        "$VICE" -warp -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -autostartprgmode 1 \
         -autostart "$scripted_d64" -moncommands "$mon_file" \
         -limitcycles 700000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor > /dev/null 2>&1
@@ -923,7 +928,7 @@ run_scripted_scroll_selector_smoke() {
     } > "$mon_file"
 
     script -q "$tty_log" \
-        "$VICE" -warp -config /dev/null -default +saveres -console -nativemonitor -autostartprgmode 1 \
+        "$VICE" -warp -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -autostartprgmode 1 \
         -autostart "$scripted_d64" -moncommands "$mon_file" \
         -limitcycles 700000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor > /dev/null 2>&1
@@ -1078,7 +1083,7 @@ run_scripted_spell_list_overlay_smoke() {
     } > "$mon_file"
 
     script -q "$tty_log" \
-        "$VICE" -warp -config /dev/null -default +saveres -console -nativemonitor -autostartprgmode 1 \
+        "$VICE" -warp -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -autostartprgmode 1 \
         -autostart "$scripted_d64" -moncommands "$mon_file" \
         -limitcycles 700000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor > /dev/null 2>&1
@@ -1239,7 +1244,7 @@ run_scripted_dungeon_target_spell_smoke() {
     } > "$mon_file"
 
     script -q "$tty_log" \
-        "$VICE" -warp -config /dev/null -default +saveres -console -nativemonitor -autostartprgmode 1 \
+        "$VICE" -warp -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -autostartprgmode 1 \
         -reu -reusize 512 \
         -autostart "$scripted_d64" -moncommands "$mon_file" \
         -limitcycles 700000000 +sound -sounddev dummy \
@@ -1400,7 +1405,7 @@ run_scripted_detect_evil_smoke() {
     } > "$mon_file"
 
     script -q "$tty_log" \
-        "$VICE" -warp -config /dev/null -default +saveres -console -nativemonitor -autostartprgmode 1 \
+        "$VICE" -warp -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -autostartprgmode 1 \
         -autostart "$scripted_d64" -moncommands "$mon_file" \
         -limitcycles 700000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor > /dev/null 2>&1
@@ -1538,7 +1543,7 @@ run_dungeon_ascent_product_smoke() {
     } > "$mon_file"
 
     script -q "$tty_log" \
-        "$VICE" -warp -config /dev/null -default +saveres -console -nativemonitor -autostartprgmode 1 \
+        "$VICE" -warp -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -autostartprgmode 1 \
         -8 "$scripted_d64" -autostart "$scripted_d64" \
         -moncommands "$mon_file" \
         -limitcycles 900000000 +sound -sounddev dummy \
@@ -1686,7 +1691,7 @@ run_wizard_reveal_product_smoke() {
     } > "$mon_file"
 
     script -q "$tty_log" \
-        "$VICE" -warp -config /dev/null -default +saveres -console -nativemonitor -autostartprgmode 1 \
+        "$VICE" -warp -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -autostartprgmode 1 \
         -8 "$scripted_d64" -autostart "$scripted_d64" \
         -moncommands "$mon_file" \
         -limitcycles 900000000 +sound -sounddev dummy \
@@ -1854,7 +1859,7 @@ run_wizard_item_product_smoke() {
     } > "$mon_file"
 
     script -q "$tty_log" \
-        "$VICE" -warp -config /dev/null -default +saveres -console -nativemonitor -autostartprgmode 1 \
+        "$VICE" -warp -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -autostartprgmode 1 \
         -8 "$scripted_d64" -autostart "$scripted_d64" \
         -moncommands "$mon_file" \
         -limitcycles 900000000 +sound -sounddev dummy \
@@ -2627,7 +2632,7 @@ run_save_write_product_smoke_impl() {
     } > "$mon_file"
 
     script -q "$tty_log" \
-        "$VICE" -warp -config /dev/null -default +saveres -console -nativemonitor -autostartprgmode 1 \
+        "$VICE" -warp -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -autostartprgmode 1 \
         -drive9type 1541 -8 "$scripted_d64" -attach9rw -9 "$save_d64" -autostart "$scripted_d64" \
         -moncommands "$mon_file" \
         -limitcycles 900000000 +sound -sounddev dummy \
@@ -3264,7 +3269,7 @@ run_load_resume_product_smoke() {
     } > "$mon_file"
 
     script -q "$tty_log" \
-        "$VICE" -warp -config /dev/null -default +saveres -console -nativemonitor -autostartprgmode 1 \
+        "$VICE" -warp -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -autostartprgmode 1 \
         -drive9type 1541 -8 "$scripted_d64" -attach9rw -9 "$save_d64" -autostart "$scripted_d64" \
         -moncommands "$mon_file" \
         -limitcycles 900000000 +sound -sounddev dummy \
@@ -4180,7 +4185,7 @@ run_load_missing_savefile_product_smoke() {
     } > "$mon_file"
 
     script -q "$tty_log" \
-        "$VICE" -warp -config /dev/null -default +saveres -console -nativemonitor -autostartprgmode 1 \
+        "$VICE" -warp -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -autostartprgmode 1 \
         -drive9type 1541 -8 "$scripted_d64" -attach9rw -9 "$save_d64" -autostart "$scripted_d64" \
         -moncommands "$mon_file" \
         -limitcycles 900000000 +sound -sounddev dummy \

@@ -4,7 +4,8 @@ KICKASS_VERSION = 5.25
 KICKASS_DIR     = ../../tools/kickass
 KICKASS_JAR     = $(KICKASS_DIR)/KickAss.jar
 KICKASS_URL     = https://theweb.dk/KickAssembler/KickAssembler$(KICKASS_VERSION).zip
-KA              = $(if $(KICKASS),$(KICKASS),java -jar $(KICKASS_JAR))
+# kickass_java.sh fails the build on a failed .assert (KickAssembler itself exits 0)
+KA              = $(if $(KICKASS),$(KICKASS),../../tools/kickass_java.sh -jar $(KICKASS_JAR))
 
 # Python tools and harnesses must not leave __pycache__ in source directories.
 export PYTHONDONTWRITEBYTECODE := 1

@@ -15,6 +15,8 @@ if str(CONNECTOR_DIR) not in sys.path:
     sys.path.insert(0, str(CONNECTOR_DIR))
 
 from vice_connector import VICEConnector, normalize_addr, parse_vs_symbols
+sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "tools"))
+from vice_config import vice_config  # noqa: E402  (VICE -config file with a version tag)
 
 
 def terminate(process: subprocess.Popen[bytes] | None) -> None:
@@ -141,7 +143,7 @@ def main() -> int:
         [
             args.vice,
             "-config",
-            "/dev/null",
+            vice_config(args.vice),
             "-default",
             "+saveres",
             "-console",

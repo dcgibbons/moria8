@@ -124,8 +124,8 @@ def check_tokens(label: str, values: list[str]) -> None:
     missing = [flag for flag in ("-config", "-default", "+saveres") if flag not in values]
     if "-config" in values:
         config_index = values.index("-config")
-        if config_index + 1 >= len(values) or values[config_index + 1] != "/dev/null":
-            missing.append("-config /dev/null")
+        if config_index + 1 >= len(values) or values[config_index + 1] != "vice_config()":
+            missing.append("-config vice_config(<vice>) (tools/vice_config.py)")
     if missing:
         bad.append(f"{label}: missing {', '.join(missing)}")
 
@@ -140,6 +140,8 @@ for path in sorted((root / "tests").glob("*.py")) + [root / "harnessplus4.py"]:
                 values.append(elt.value)
             elif isinstance(elt, ast.Attribute) and elt.attr == "vice":
                 values.append("args.vice")
+            elif isinstance(elt, ast.Call) and isinstance(elt.func, ast.Name) and elt.func.id == "vice_config":
+                values.append("vice_config()")
         if "args.vice" not in values:
             continue
         if "-remotemonitor" not in values and "-nativemonitor" not in values:

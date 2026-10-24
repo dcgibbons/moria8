@@ -16,6 +16,8 @@ if str(C128_TESTS_DIR) not in sys.path:
     sys.path.insert(0, str(C128_TESTS_DIR))
 
 from vice_connector import MonitorTestResult, VICEConnector, normalize_addr, parse_vs_symbols
+sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "tools"))
+from vice_config import vice_config  # noqa: E402  (VICE -config file with a version tag)
 
 BYTE_DUMP_RE = re.compile(r"C:([0-9A-Fa-f]{4})\s+([0-9A-Fa-f]{2})")
 SCREEN_EXPECT_RE = re.compile(r"^([^:]+):([0-9]+):([0-9]+)$")
@@ -28,7 +30,7 @@ def build_vice_command(args: argparse.Namespace) -> list[str]:
     command = [
         args.vice,
         "-config",
-        "/dev/null",
+        vice_config(args.vice),
         "-default",
         "+saveres",
         "-console",
