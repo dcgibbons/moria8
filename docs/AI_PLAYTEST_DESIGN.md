@@ -1614,9 +1614,13 @@ Measurement lesson: any change reshuffles about a third of the seeds, so a
 larger differences were acted on. Runs on fixed seeds are deterministic, so
 a qualification result reproduces exactly on the same code.
 
-Open: the harness does not check that the disk image matches the symbol file
-it reads (a stale disk after a rebuild made every worker fail at boot in one
-round).
+Fixed after M4: a stale disk after a rebuild made every worker fail at boot
+in one round, so the harness now refuses a disk whose program files differ
+from the build outputs beside its symbols (`launch.check_disk`). Results now
+travel from the workers on one pipe each instead of a shared queue: a worker
+that died right after reporting could lose that result to the queue's feeder
+thread, or hang the other workers on the queue's lock (the flaky
+`RunSeedsTest`).
 
 ### 15.7 M4 lessons
 

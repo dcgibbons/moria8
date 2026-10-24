@@ -15,7 +15,7 @@ import argparse
 import dataclasses
 import json
 import multiprocessing
-import queue
+import multiprocessing.connection
 import signal
 import sys
 import time
@@ -29,7 +29,7 @@ from .auditor import Auditor
 from .brain import Brain
 from .game import EmulatorUnresponsive, GameFault, Mode, Observation
 from .goals import GOALS, QUALIFICATION_SEEDS, Goal, required
-from .launch import PLAYTEST_OUT, ROOT, SHIPPING, Build, build_identity
+from .launch import PLAYTEST_OUT, ROOT, SHIPPING, Build, StaleDisk, build_identity, check_disk
 from .recorder import CharacterLog, SessionLog, write_json
 from .vice import ViceError
 from .view import build_view
@@ -204,7 +204,7 @@ class Character:
 # -- modes ------------------------------------------------------------------------
 
 def _worker_process(worker_id: int, goal: Goal, session_dir: Path, build: Build,
-                    pending: "multiprocessing.Queue[int]", done: "multiprocessing.Queue[dict[str, Any]]",
+                    pending: "multiprocessing.Queue[int]", done: "multiprocessing.connection.Connection",
                     stop: Any, stop_on_reach: bool) -> None:
     """One worker in its own process: the brain and the emulator protocol are
     CPU-bound Python, so threads would share one core under the GIL."""
@@ -228,7 +228,7 @@ def _worker_process(worker_id: int, goal: Goal, session_dir: Path, build: Build,
                 if worker is not None:
                     worker.stop()   # no emulator left holding the worker's port
                 worker = None   # a fresh worker for the next seed
-            done.put(result.__dict__)
+            done.send(result.__dict__)
             if result.outcome == "reached" and stop_on_reach:
                 stop.set()
     finally:
@@ -245,26 +245,36 @@ def run_seeds(goal: Goal, seeds: list[int], workers: int, session: SessionLog, b
     reached the goal and ``stop_on_reach`` ended the batch).
     """
     context = multiprocessing.get_context("fork")   # inherits goals registered by callers
-    pending, done, stop = context.Queue(), context.Queue(), context.Event()
+    pending, stop = context.Queue(), context.Event()
     count = min(workers, len(seeds))
+    # One pipe per worker for results. A Queue's put hands the result to a
+    # feeder thread, so a worker that died right after a put lost it; a
+    # pipe's send is written before it returns.
+    pipes = [context.Pipe(duplex=False) for _ in range(count)]
     procs = [context.Process(target=_worker_process, args=(worker_id, goal, session.dir, build,
-                                                           pending, done, stop, stop_on_reach))
+                                                           pending, pipes[worker_id][1], stop,
+                                                           stop_on_reach))
              for worker_id in range(count)]
     for proc in procs:   # fork before the queue's feeder thread starts
         proc.start()
+    for _, writer in pipes:
+        writer.close()   # only the workers write: a reader sees EOF once they have exited
+    readers = [reader for reader, _ in pipes]
     results: list[Result] = []
     try:
         for seed in seeds:
             pending.put(seed)
         for _ in procs:
             pending.put(None)   # one sentinel per worker
-        while any(proc.is_alive() for proc in procs) or not done.empty():
-            try:
-                result = Result(**done.get(timeout=1))
-            except queue.Empty:
-                continue
-            session.character(result.__dict__)
-            results.append(result)
+        while readers:
+            for reader in multiprocessing.connection.wait(readers):
+                try:
+                    result = Result(**reader.recv())
+                except EOFError:
+                    readers.remove(reader)
+                    continue
+                session.character(result.__dict__)
+                results.append(result)
     except BaseException:
         stop.set()   # the parent failed: no worker keeps playing on its own
         for proc in procs:
@@ -276,6 +286,8 @@ def run_seeds(goal: Goal, seeds: list[int], workers: int, session: SessionLog, b
     finally:
         for proc in procs:
             proc.join()
+        for reader, _ in pipes:
+            reader.close()
     if not stop.is_set():
         played = {r.seed for r in results}
         dead = [p.exitcode for p in procs if p.exitcode]
@@ -329,6 +341,11 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     build = Build.from_out(args.build_out) if args.build_out else SHIPPING
+    try:
+        check_disk(build)   # once, before any worker: not one boot error per seed
+    except StaleDisk as exc:
+        print(f"playtest-session: {exc}", file=sys.stderr)
+        return 2
     mode = "regress" if args.regress else "qualify" if args.qualify else "session"
     name = args.name or f"{time.strftime('%Y%m%d-%H%M%S')}-{mode}-{args.goal}"
     session = SessionLog(PLAYTEST_OUT / "sessions" / name,

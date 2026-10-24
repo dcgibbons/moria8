@@ -2193,6 +2193,45 @@ class RunSeedsTest(unittest.TestCase):
         self.assertIn("stop 3", stops.read_text().splitlines())
 
 
+class RunSeedsLostResultTest(unittest.TestCase):
+    """A result sent just before the worker dies still arrives: a Queue's put
+    left it to a feeder thread that died with the worker, and a dying writer
+    could hold the Queue's lock and hang every other worker."""
+
+    def test_result_before_a_hard_exit_is_kept(self) -> None:
+        import os
+        import tempfile
+        from pathlib import Path
+        from moria_playtest import session as sess
+        from moria_playtest.recorder import SessionLog
+
+        class FakeWorker:
+            def __init__(self, *args, **kwargs) -> None:
+                pass
+
+            def stop(self) -> None:
+                pass
+
+        class FakeCharacter:
+            def __init__(self, worker, goal, seed, log) -> None:
+                self.seed = seed
+
+            def play(self):
+                if self.seed == 2:
+                    os._exit(1)   # straight after the worker sent seed 1's result
+                return sess.Result(self.seed, outcome="reached", findings=["x" * 4096])
+
+        saved = sess.Worker, sess.Character
+        sess.Worker, sess.Character = FakeWorker, FakeCharacter
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                log = SessionLog(Path(tmp), {"mode": "qualify"})
+                results = sess.run_seeds(GOALS["reach_dl2"], [1, 2], 1, log, None, False)
+        finally:
+            sess.Worker, sess.Character = saved
+        self.assertEqual({r.seed: r.outcome for r in results}, {1: "reached", 2: "error"})
+
+
 class RunSeedsParentFailureTest(unittest.TestCase):
     """Review round 4: if the parent fails, every worker still stops its
     emulator (graceful wind-down, then SIGTERM, which unwinds like an error)."""

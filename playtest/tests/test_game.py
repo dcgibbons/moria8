@@ -4,6 +4,7 @@ import unittest
 from pathlib import Path
 
 from moria_playtest import abi as abimod
+from moria_playtest import launch
 from moria_playtest import nav
 from moria_playtest.game import (Mode, Observation, classify, derive_rng, find_jsr,
                                  snapshot_cpu_clock)
@@ -150,6 +151,65 @@ class AbiTableTest(unittest.TestCase):
     @unittest.skipUnless(abimod.C64_VS.exists(), "C64 build symbols not present")
     def test_table_matches_build_and_sources(self) -> None:
         self.assertEqual(abimod.check(), [])
+
+
+def d64_image(files: dict[str, bytes]) -> bytes:
+    """A 35-track D64 holding ``files`` as closed PRGs: the directory on 18/1
+    (one entry per file, a second directory sector after eight), each file's
+    data on consecutive sectors of tracks 1-17."""
+    image = bytearray(174848)
+    free = ((track, sector) for track in range(1, 18) for sector in range(21))
+    entries = []
+    for name, data in files.items():
+        chunks = [data[i:i + 254] for i in range(0, len(data), 254)] or [b""]
+        sectors = [next(free) for _ in chunks]
+        for index, (chunk, (track, sector)) in enumerate(zip(chunks, sectors)):
+            link = sectors[index + 1] if index + 1 < len(chunks) else (0, len(chunk) + 1)
+            at = launch.d64_offset(track, sector)
+            image[at:at + 2 + len(chunk)] = bytes(link) + chunk
+        entries.append(bytes([0x82, *sectors[0]]) + name.upper().encode().ljust(16, b"\xa0"))
+    for page, start in enumerate(range(0, len(entries), 8)):
+        at = launch.d64_offset(18, 1 + page)
+        more = start + 8 < len(entries)
+        image[at:at + 2] = bytes([18, 2 + page] if more else [0, 0xFF])
+        for slot, entry in enumerate(entries[start:start + 8]):
+            image[at + slot * 32 + 2:at + slot * 32 + 2 + len(entry)] = entry
+    return bytes(image)
+
+
+class DiskCheckTest(unittest.TestCase):
+    """The harness refuses a disk not written from the program and symbols it
+    reads (a stale disk after `make test` failed every worker at boot)."""
+
+    def test_reads_every_file_across_directory_sectors(self) -> None:
+        files = {f"f{n}": bytes(range(n % 256)) * (n + 1) for n in range(10)}
+        files["big"] = bytes(range(256)) * 3   # several sectors, last one partly used
+        self.assertEqual(launch.d64_files(d64_image(files)), files)
+
+    def build(self, tmp: Path, disk_files: dict[str, bytes]) -> launch.Build:
+        out = tmp / "c64"
+        out.mkdir()
+        for source in launch.C64_DISK_FILES.values():
+            (out / source).write_bytes(source.encode() * 40)
+        (tmp / "moria8-c64.d64").write_bytes(d64_image(disk_files))
+        return launch.Build(tmp / "moria8-c64.d64", out / "moria8.prg", out / "main.vs")
+
+    def test_matching_disk_passes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            disk = {name: source.encode() * 40 for name, source in launch.C64_DISK_FILES.items()}
+            launch.check_disk(self.build(Path(tmp), disk))
+
+    def test_stale_or_missing_file_names_it(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            disk = {name: source.encode() * 40 for name, source in launch.C64_DISK_FILES.items()}
+            disk["moria64"] = b"old program"
+            del disk["64.town"]
+            with self.assertRaisesRegex(launch.StaleDisk, r"\(64\.town, moria64\); rebuild"):
+                launch.check_disk(self.build(Path(tmp), disk))
+
+    @unittest.skipUnless(launch.C64_DISK.exists(), "C64 disk not present")
+    def test_shipping_disk_reads_every_file(self) -> None:
+        self.assertEqual(set(launch.d64_files(launch.C64_DISK.read_bytes())), set(launch.C64_DISK_FILES))
 
 
 if __name__ == "__main__":

@@ -17,7 +17,7 @@ from pathlib import Path
 from . import abi as abimod
 from .game import Game, Observation
 from .launch import (PLAYTEST_OUT, SHIPPING, VICE_RESOURCE_ARGS, Build, ViceProcess,
-                     allocate_port, prepare_worker, sha256)
+                     allocate_port, check_disk, prepare_worker, sha256)
 
 CACHE = PLAYTEST_OUT / "cache"
 
@@ -58,6 +58,7 @@ class Worker:
         self.emulator = emulator
         self.hang_emulated_seconds = hang_emulated_seconds
         self.build = build
+        check_disk(build)
         self.workdir, self.disk = prepare_worker(run_dir, worker_id, build.disk)
         self.abi = abimod.load(build.vs)
         self.vp: ViceProcess | None = None
