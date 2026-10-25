@@ -30,7 +30,8 @@ Repair status for this branch:
 - Fixed: exceptional STR/DEX/CON combat and HP bonus thresholds.
 - Fixed: exceptional DEX disarm thresholds.
 - Fixed: too-heavy melee to-hit penalty and bare-hand to-hit penalty.
-- Fixed: unlit melee target BTH reduction.
+- Fixed: unseen melee target BTH reduction (keyed to `MF_VISIBLE` since
+  2026-10-24; it read the square's room light before).
 - Fixed: bless/hero BTH/BOW effects, bless AC effect, hero fear cancellation,
   hero +10 HP, and hero expiration HP clamp.
 - Fixed: player damage order now applies dice, ego/slay/brand, critical, then
@@ -71,8 +72,8 @@ Repair status for this branch:
 | Area | Umoria behavior | Moria8 behavior | Verdict | Evidence | Follow-up |
 | --- | --- | --- | --- | --- | --- |
 | Lit target to-hit | `hit_chance = bth + plus_to_hit*3 + level*class_adj`; natural 1 misses, natural 20 hits; normal hit if random in hit chance beats monster AC. | `combat_calc_tohit` computes class BTH + race BTH + `PL_TOHIT*3` + level adj, and `combat_roll_tohit` implements natural 1/20 plus equivalent AC probability. | Matches | Umoria `player.cpp::playerTestBeingHit`; Moria8 `combat_calc_tohit_common`, `combat_roll_tohit`; tests `test_combat.s` | Add a seeded probability/threshold test if RNG harness supports it. |
-| Unlit target to-hit | If monster is not lit, Umoria reduces base/level BTH and to-hit contribution before `playerTestBeingHit`. | Moria8 now captures the target tile lit flag and applies reduced melee BTH for unlit targets. | Matches for audited threshold | Umoria `player.cpp::playerCalculateBaseToHit`; Moria8 `player_attack_monster`, `combat_calc_tohit_common`; test `test_combat.s` 36 | Add a full attack-path lit/unlit monster test when practical. |
-| Invisibility/unknown monster | Umoria's audited melee branch uses `monster.lit` for both name and base-to-hit reduction. | Moria8 has visibility systems and sense-invisible spells, but the melee hit formula does not inspect target lit/visibility. | Needs deeper runtime test | Umoria `player.cpp::playerAttackMonster`; Moria8 `combat.s`, `dungeon_los.s` | Add a runtime test for invisible/unlit/unknown target melee before declaring parity. |
+| Unseen target to-hit | If the monster is not lit (Umoria `monster.lit`: the player can see it), Umoria reduces base/level BTH and to-hit contribution before `playerTestBeingHit`. Pinned VMS `py_attack` never reduces it. | Moria8 reads the target's `MF_VISIBLE` (MON-001) in `player_attack_monster` and applies the reduced melee BTH when it is clear. Until 2026-10-24 it read the square's `FLAG_LIT` (room light), so every fight in a corridor or dark room was at half BTH even with the monster in torchlight (M5a playtest, `docs/AI_PLAYTEST_DESIGN.md` §16.6 item 3). | Matches Umoria | Umoria `player.cpp::playerCalculateBaseToHit`; Moria8 `player_attack_monster`, `combat_calc_tohit_common`; tests `test_combat.s` 36 (consumer), 42 (real `player_attack_monster`, visible and unseen on a dark square) | VMS applies no reduction; following VMS instead is a maintainer choice. |
+| Invisibility/unknown monster | Umoria's audited melee branch uses `monster.lit` for both name and base-to-hit reduction. | The to-hit reduction now follows `MF_VISIBLE`; the attack message does not yet say "it" for an unseen target. | Partial | Umoria `player.cpp::playerAttackMonster`; Moria8 `combat.s`, `dungeon_los.s`; `test_combat.s` 42 | Name an unseen target "it". |
 | Blow loop | Umoria rolls each blow independently and stops remaining blows on monster death. | Moria8 loops `zp_combat_blows`, rolls each blow, stops on death, but prints one aggregate result for the round. | Matches mechanically; UI approximation | Umoria `player.cpp::playerAttackMonster`; Moria8 `player_attack_monster`; backlog `docs/BACKLOG.md` | Backlog per-blow feedback if player-visible accuracy matters. |
 | Damage order | Umoria rolls dice, applies ego/slay/brand damage, applies critical, then adds stat/equipment damage and floors at zero. | Moria8 now applies `PL_TODMG` after ego/slay/brand and critical, clamped to `[0,255]`. | Matches for audited order | Umoria `player.cpp::playerAttackMonster`; Moria8 `combat_roll_damage`, `combat_critical_blow`, `combat_add_damage_bonus`; test `test_combat.s` 40 | Add slay+critical+to-damage integration tests. |
 | Critical chance | Umoria chance is `randint(5000) <= weapon_weight + 5*plus_to_hit + class_adj*level`; tiers are weight plus `randint(650)` into x2+5, x3+10, x4+15, x5+20. | Moria8 uses weapon weight, `5*PL_TOHIT`, class adj*level, and same tiers. It uses zero-based RNG comparison, so boundary exactness needs seeded confirmation. | Needs deeper runtime test | Umoria `player.cpp::playerWeaponCriticalBlow`; Moria8 `combat_critical_blow`; test `test_combat.s` 34 | Add deterministic RNG boundary tests for `<=` vs zero-based `<` edge. |
@@ -159,7 +160,7 @@ Moria8.
 | Bless lacks BTH/BOW/AC effects. | Fixed | Covered by focused combat/monster-attack tests. |
 | Heroism lacks BTH/BOW/HP/fear gameplay effects. | Fixed | Covered by focused combat/monster-attack tests; potion activation can use more coverage. |
 | Super-heroism lacks BTH/BOW/HP/fear gameplay effects. | Missing | Backlog with potion/status tests. |
-| Unlit monster melee does not reduce BTH. | Fixed | Covered by focused combat test; add full attack-path visibility test later. |
+| Unlit monster melee does not reduce BTH. | Fixed | Reduction keyed to `MF_VISIBLE` (2026-10-24; was the square's room light); `test_combat.s` 36 and 42. |
 | Damage order multiplies `PL_TODMG` through ego/critical. | Fixed | Add slay/brand/critical integration regression tests. |
 | Too-heavy weapon to-hit penalty is not applied. | Fixed | Covered by focused combat test. |
 | Monster confuse-on-hit uses fixed 20 turns and lacks Umoria resistance/random stacking. | Partially fixed | Duration/stacking fixed; add resistant monster test. |

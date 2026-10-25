@@ -4365,14 +4365,14 @@ run_test "rng"    "tests/test_rng.s"    "0400 0409" 10
 run_test "memory" "tests/test_memory.s" "0400 0402" 3
 run_test "config" "tests/test_config.s" "0400 0400" 1
 run_test "input"  "tests/test_input.s"  "0400 040e" 15
-run_test "main_loop" "tests/test_main_loop.s" "0400 042f" 48 500000000
+run_test "main_loop" "tests/test_main_loop.s" "0400 0430" 49 500000000
 run_test "run_visibility_bank" "tests/test_run_visibility_bank.s" "0400 0400" 1 500000000
 run_test "turn" "tests/test_turn.s" "0400 0420" 33 500000000
 run_test "player" "tests/test_player.s" "0400 0409" 10
 run_test "dungeon" "tests/test_dungeon.s" "0400 0441" 66 500000000
 run_test "monster" "tests/test_monster.s" "0400 0415" 22 500000000
 run_test "monster_ai" "tests/test_monster_ai.s" "0400 043a" 59 500000000
-run_test "combat" "tests/test_combat.s" "0400 0428" 41 500000000
+run_test "combat" "tests/test_combat.s" "0400 0429" 42 500000000
 run_test "msg_long" "tests/test_msg_long.s" "0400 0400" 1 20000000
 run_test "monster_attack" "tests/test_monster_attack.s" "0400 0415" 22 500000000
 run_test "effects" "tests/test_effects.s" "0400 042d" 46 1000000000
@@ -4451,7 +4451,7 @@ run_test "item" "tests/test_item.s" "0400 043c" 61 1000000000
 run_test "scroll_p3" "tests/test_scroll_p3.s" "0400 040d" 14 1000000000
 run_test "item_desc" "tests/test_item_desc.s" "0400 0409" 10 500000000
 run_test "item_ui" "tests/test_item_ui.s" "0400 040f" 16 1000000000
-run_test "store" "tests/test_store.s" "0400 042f" 48 1000000000
+run_test "store" "tests/test_store.s" "0400 0430" 49 1000000000
 run_test "ui_views" "tests/test_ui_views.s" "0400 0413" 19 500000000
 run_test "ui_views_filters" "tests/test_ui_views_filters.s" "0400 0413" 7 500000000
 run_test "subsystems" "tests/test_subsystems.s" "0400 0409" 10

@@ -1289,6 +1289,10 @@ c128_town_move_diag_after_player_try_move:
     lda #$16
     jsr c128_town_dump_log
 #endif
+    // Only a move onto the square springs its trap: a melee turn leaves the
+    // player where they stand (VMS move_char, carry -> hit_trap).
+    lda player_move_relocated
+    beq !move_no_trap+
     jsr trap_check_at_player
 #if HAL_PLATFORM_GAME_LOOP_PLAYER_MOVE_DIAG_LABELS
 c128_town_move_diag_after_trap_check:
@@ -1298,6 +1302,7 @@ c128_town_move_diag_after_trap_check:
     jsr c128_town_dump_log
 #endif
     bcs !move_trap_fired+
+!move_no_trap:
     jsr player_move_maybe_passive_search
 !move_trap_fired:
     jsr turn_post_action_searchable_or_die

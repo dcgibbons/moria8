@@ -838,6 +838,71 @@ Acceptance target:
   appropriate dungeon depths without breaking C64/C128 memory, loading, save,
   recall, or monster behavior contracts.
 
+### Add the Scroll of Phase Door and stock it at the Alchemist
+
+Found during M5a (`docs/AI_PLAYTEST_DESIGN.md` §16): the playtester needed
+a cheap escape from Creeping Coins nests and losing fights, and Moria8 has
+none for sale. VMS Moria 4.8 sells Scroll of Phase Door (15 gp,
+`teleport(10)`) at the Alchemist; Moria8 has Phase Door only as a mage
+spell (`eff_phase_door`, `core/spell_effects.s`), and
+`core/store_restock_overlay.s` leaves it out of the Alchemist's choices
+("no Phase Door, Treasure Detection or Detect Invisible: 21 of 26
+entries"). `docs/FEATURE_MAP.md` lists the scroll as Missing. Maintainer
+chose to backlog it (2026-10-24).
+
+Required work:
+
+- Add the item (name, ICAT_SCROLL, 15 gp, VMS level) to the item tables on
+  every platform, reading it through `eff_phase_door`; check item-table,
+  Huffman and overlay sizes against their asserts.
+- Add it to the Alchemist's choices as in VMS.
+- Tests: reading it through the production item path moves the player
+  within range onto floor; the store can stock it.
+- Update `docs/FEATURE_MAP.md`; teach the playtester to buy and read it.
+
+Acceptance target:
+
+- The Alchemist sells Phase Door scrolls that work as in VMS on all seven
+  platforms, and the full gates pass.
+
+### Fix creature flag mapping: slays, breeding and packs
+
+Found during M5a (`docs/AI_PLAYTEST_DESIGN.md` §16) while checking whether
+worm masses breed; maintainer chose to backlog it (2026-10-24). In
+`tools/parse_creatures.py` `map_mflags`:
+
+- **Defense bits are shifted.** Umoria `config.cpp`: `CD_DRAGON = 0x0001`,
+  `CD_ANIMAL = 0x0002`, `CD_FROST = 0x0010`. The generator sets `CF_ANIMAL`
+  from `0x0010` (hurt by frost) and `CF_DRAGON` from `0x0002` (animal), so
+  Slay Animal doubles damage against frost-vulnerable creatures, Slay
+  Dragon against animals, and real dragons carry no dragon flag. 31 shipped
+  creatures have `CF_DRAGON`, the White Worm mass among them.
+- **`CF_BREEDER` ($40) and `CF_GROUP` ($20) are never set.** Umoria's
+  `CM_MULTIPLY` (`0x00200000`, e.g. White Worm mass `0x00200022`) is not
+  mapped, and no shipped creature has either bit, so the breeder clone code
+  (`core/monster_ai.s:297-328`) and group wake/pack spawning never run.
+  `docs/FEATURE_MAP.md` §9.1 marks both `Implemented`.
+
+Required work:
+
+- Map `CD_DRAGON`/`CD_ANIMAL` (and the other `CD_*` bits Moria8 uses) to
+  their `CF_*` flags, and `CM_MULTIPLY` to `CF_BREEDER`; decide what sets
+  `CF_GROUP` (Umoria has no group flag: VMS/Umoria packs come from
+  `CM_` bits or are absent) with the maintainer.
+- Regenerate the tier data for every platform; check tier sizes against
+  their asserts.
+- Tests: an ego slay against a real animal and a real dragon; a breeder
+  cloning through the production AI path.
+- Correct `docs/FEATURE_MAP.md` §9.1 and the ego-slay rows.
+- Breeding changes difficulty (worm masses fill levels): re-qualify the
+  frozen playtest suites afterwards.
+
+Acceptance target:
+
+- Shipped creatures carry Umoria's dragon, animal and multiply flags, slays
+  and breeding behave as upstream, and the frozen playtest suites still
+  pass or are re-frozen with a recorded maintainer decision.
+
 ## Apple IIe
 
 ### Fix wizard summon in town rendering as `@` / unknown `?`

@@ -12,7 +12,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #47
+    ldx #48
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -122,7 +122,7 @@ press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
 // Test result buffer — copy to $0400 at end (msg_print clobbers $0400)
-tc_results: .fill 48, $ff
+tc_results: .fill 49, $ff
 tc_count: .byte 0
 
 .macro PatchJump(target, replacement) {
@@ -1750,6 +1750,31 @@ test_start:
     ldx #<t48_alchemy_set
     ldy #>t48_alchemy_set
     jsr t48_check_store
+
+    // ============================================================
+    // Test 49: the CHR markup's product needs 24 bits. Mithril Chain Mail
+    // (600 gp) at CHR 3 is 600 x 130 / 100 = 780; dropping the top byte of
+    // 78,000 priced it at 124, under the haggle's base-cost floor, so the
+    // shown price was refused (M5a playtest: a Gnome offered 40 gp for it).
+    // ============================================================
+    lda #3
+    sta player_data + PL_CHR_CUR
+    lda #0
+    sta sb_item_p1
+    lda #122                    // Mithril Chain Mail
+    jsr calc_buy_price
+    lda sb_price_lo
+    cmp #<780
+    bne !t49_fail+
+    lda sb_price_hi
+    cmp #>780
+    bne !t49_fail+
+    lda #$01
+    jmp !t49_store+
+!t49_fail:
+    lda #$00
+!t49_store:
+    sta tc_results + 48
 
     jmp test_exit_trampoline
 
