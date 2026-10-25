@@ -143,7 +143,7 @@ cr_mflags:
 #else
     .fill MAX_DUNGEON_CREATURES, 0                                        // 0-56: loaded from tier data
 #endif
-    .byte $8c, $88, $88, $88, $8c, $88, $8c, $88                          // 57-64: town
+    .byte $84, $80, $80, $80, $84, $80, $84, $80                          // 57-64: town (tier0.s)
 
 // Creature level
 cr_level:

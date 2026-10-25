@@ -9,12 +9,18 @@ and 215 attack types, maps to our SoA format, and outputs:
   3. Tier assignments with overlapping level ranges
 
 Usage:
-  python3 tools/parse_creatures.py [--all | --selected | --tiers | --asm]
+  UMORIA_SRC=<path>/src/data_creatures.cpp \
+      python3 tools/parse_creatures.py [--all | --selected | --tiers | --asm]
 
   --all       Show all 279 umoria creatures
   --selected  Show the ~120 selected creatures (default)
   --tiers     Show tier breakdown with creature counts
   --asm       Generate assembly data (for R3.5.2)
+
+UMORIA_SRC names Umoria's src/data_creatures.cpp at the pinned revision in
+docs/BEHAVIOR_CHANGE_PROTOCOL.md (2a2a6b791f084cac97db85f5b78739e913dd3572);
+there is no default. --asm rewrites platforms/commodore/c64/creature_data/;
+regenerating at that revision reproduces the committed tier files.
 """
 
 import re
@@ -196,7 +202,16 @@ CF_UNDEAD      = 0x02  # Our undead flag
 CF_EVIL        = 0x04  # Evil creature (ego slay)
 CF_ANIMAL      = 0x08  # Animal creature (ego slay)
 CF_DRAGON      = 0x10  # Dragon creature (future ego slay)
+CF_BREEDER     = 0x40  # Multiplying creature (core/monster.s)
 CF_INFRA      = 0x80  # Warm creature visible to infravision
+
+# Umoria config.cpp flag bits (pinned revision 2a2a6b79).
+CM_MULTIPLY = 0x00200000
+CD_DRAGON   = 0x0001
+CD_ANIMAL   = 0x0002
+CD_EVIL     = 0x0004
+CD_UNDEAD   = 0x0008
+CD_INFRA    = 0x2000
 
 # Door capability (Umoria CMOVE 0x00020000) folds into cr_aaf bit 7:
 # AAF values top out at 40, so bit 7 carries CD_OPEN_DOOR.
@@ -215,20 +230,22 @@ def map_mflags(cmove, cdefense, name):
     move_bits = cmove & 0x3F
     if move_bits == 0x01:  # Move only to attack (stationary)
         flags |= CF_ATTACK_ONLY
-    # Undead check: CDEFENSE bit 3 (0x0008) = hurt by slay undead
-    if cdefense & 0x0008:
+    # Multiplies: Umoria CM_MULTIPLY (worm masses, lice, ...). Umoria has no
+    # pack flag, so CF_GROUP stays unset, as upstream has no packs.
+    if cmove & CM_MULTIPLY:
+        flags |= CF_BREEDER
+    # Slay classes, Umoria CD_* bits. Until 2026-10-25 animal was read from
+    # 0x0010 (CD_FROST, hurt by frost) and dragon from 0x0002 (CD_ANIMAL).
+    if cdefense & CD_UNDEAD:
         flags |= CF_UNDEAD
-    # Evil check: CDEFENSE bit 2 (0x0004) = hurt by slay evil
-    if cdefense & 0x0004:
+    if cdefense & CD_EVIL:
         flags |= CF_EVIL
-    # Animal check: CDEFENSE bit 4 (0x0010) = animal
-    if cdefense & 0x0010:
+    if cdefense & CD_ANIMAL:
         flags |= CF_ANIMAL
-    # Dragon check: CDEFENSE bit 1 (0x0002) = dragon
-    if cdefense & 0x0002:
+    if cdefense & CD_DRAGON:
         flags |= CF_DRAGON
-    # Infravision check: CDEFENSE bit 13 (0x2000) = can be seen with infravision
-    if cdefense & 0x2000:
+    # Seen with infravision
+    if cdefense & CD_INFRA:
         flags |= CF_INFRA
     return flags
 
@@ -634,16 +651,11 @@ def main():
     if len(sys.argv) > 1:
         mode = sys.argv[1].lstrip('-')
 
-    # Find source file
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    src_path = os.path.join(script_dir, '..', 'umoria_creatures.cpp')
-    if not os.path.exists(src_path):
-        src_path = '/tmp/umoria_creatures.cpp'
-    if not os.path.exists(src_path):
-        src_path = os.path.expanduser('~/Projects/thirdparty/umoria/src/data_creatures.cpp')
-    if not os.path.exists(src_path):
-        print(f"ERROR: Cannot find umoria_creatures.cpp", file=sys.stderr)
-        print(f"  Copy from: https://raw.githubusercontent.com/dungeons-of-moria/umoria/master/src/data_creatures.cpp", file=sys.stderr)
+    # Source file: supplied by the caller only (AGENTS.md rule 9).
+    src_path = os.environ.get("UMORIA_SRC", "")
+    if not src_path or not os.path.isfile(src_path):
+        print("ERROR: set UMORIA_SRC to Umoria's src/data_creatures.cpp", file=sys.stderr)
+        print("  (pinned revision: docs/BEHAVIOR_CHANGE_PROTOCOL.md)", file=sys.stderr)
         sys.exit(1)
 
     # Parse

@@ -177,6 +177,30 @@ def d64_image(files: dict[str, bytes]) -> bytes:
     return bytes(image)
 
 
+class CreatureFlagTest(unittest.TestCase):
+    """The shipped tier data carries Umoria's flags (tools/parse_creatures.py
+    map_mflags): CD_ANIMAL and CD_DRAGON for the slays, CM_MULTIPLY for
+    breeding. Until 2026-10-25 animal came from CD_FROST, dragon from
+    CD_ANIMAL, and nothing bred."""
+
+    CF_ANIMAL, CF_DRAGON, CF_GROUP, CF_BREEDER = 0x08, 0x10, 0x20, 0x40   # core/monster.s
+
+    def flags(self) -> dict[str, int]:
+        from moria_playtest import knowledge
+        return {name: f for names, tables in knowledge._tiers() for name, f in zip(names, tables["mflags"])}
+
+    def test_breeders_animals_and_dragons(self) -> None:
+        flags = self.flags()
+        self.assertTrue(flags["White Worm mass"] & self.CF_BREEDER)   # Umoria cmove 0x00200022
+        self.assertTrue(flags["Jackal"] & self.CF_ANIMAL)
+        self.assertFalse(flags["Jackal"] & self.CF_DRAGON)
+        self.assertTrue(flags["Young Blue Dragon"] & self.CF_DRAGON)
+        self.assertFalse(flags["Kobold"] & (self.CF_ANIMAL | self.CF_BREEDER))
+
+    def test_no_packs_upstream_has_none(self) -> None:
+        self.assertFalse(any(f & self.CF_GROUP for f in self.flags().values()))
+
+
 class DiskCheckTest(unittest.TestCase):
     """The harness refuses a disk not written from the program and symbols it
     reads (a stale disk after `make test` failed every worker at boot)."""
