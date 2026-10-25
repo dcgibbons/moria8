@@ -4409,7 +4409,7 @@ run_test "haste_self" "tests/test_haste_self.s" "0400 0402" 3 500000000
 run_test "fire_ball" "tests/test_fire_ball.s" "0400 0402" 3 500000000
 run_test "word_of_destruction" "tests/test_word_of_destruction.s" "0400 0406" 7 500000000
 run_test "light_area" "tests/test_light_area.s" "0400 0401" 2 500000000
-run_test "phase_door" "tests/test_phase_door.s" "0400 0402" 3 500000000
+run_test "phase_door" "tests/test_phase_door.s" "0400 0403" 4 500000000
 run_test "genocide" "tests/test_genocide.s" "0400 0401" 2 500000000
 run_test "directional_effects" "tests/test_directional_effects.s" "0400 0403" 4 500000000
 run_test "overcast_ordering" "tests/test_overcast_ordering.s" "0400 0400" 1 500000000

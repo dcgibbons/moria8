@@ -1354,13 +1354,13 @@ tunnel_spawn_gold:
 .segment DungeonGenOverlay
 #endif
 
-// Items 2-133 sorted ascending by it_min_level (ruined chest 134 excluded)
+// Items 2-136 sorted ascending by it_min_level (ruined chest 134 excluded)
 pit_sorted:
     // Level 0 (5 items)
     .byte 13, 15, 61, 62, 63
-    // Level 1 (23 items)
+    // Level 1 (24 items)
     .byte 2, 3, 6, 11, 12, 16, 17, 19, 20, 28, 29, 37, 51, 52, 54, 64, 77, 85
-    .byte 98, 99, 103, 114, 135
+    .byte 98, 99, 103, 114, 135, 136
     // Level 2 (19 items)
     .byte 5, 7, 9, 14, 21, 30, 31, 47, 48, 49, 53, 66, 74, 82, 84
     .byte 100, 102, 126, 128
@@ -1392,18 +1392,18 @@ pit_sorted_end:
 // Cumulative item count per level (0-12)
 pit_level_bounds:
     .byte 5      // level 0: 5 items
-    .byte 28     // level 1: +23 = 28
-    .byte 47     // level 2: +19 = 47
-    .byte 63     // level 3: +16 = 63
-    .byte 81     // level 4: +18 = 81
-    .byte 95     // level 5: +14 = 95
-    .byte 101    // level 6: +6 = 101
-    .byte 106    // level 7: +5 = 106
-    .byte 112    // level 8: +6 = 112
-    .byte 117    // level 9: +5 = 117
-    .byte 121    // level 10: +4 = 121
-    .byte 125    // level 11: +4 = 125
-    .byte 133    // level 12: +8 = 133
+    .byte 29     // level 1: +24 = 29
+    .byte 48     // level 2: +19 = 48
+    .byte 64     // level 3: +16 = 64
+    .byte 82     // level 4: +18 = 82
+    .byte 96     // level 5: +14 = 96
+    .byte 102    // level 6: +6 = 102
+    .byte 107    // level 7: +5 = 107
+    .byte 113    // level 8: +6 = 113
+    .byte 118    // level 9: +5 = 118
+    .byte 122    // level 10: +4 = 122
+    .byte 126    // level 11: +4 = 126
+    .byte 134    // level 12: +8 = 134
 pit_level_bounds_end:
 
 #if PLATFORM_PRODUCT_OVERLAY_RUNTIME
@@ -1877,7 +1877,7 @@ re_negate_a:
 // ============================================================
 // Compile-time validation
 // ============================================================
-.assert "Item type count", ITEM_TYPE_COUNT, 136
+.assert "Item type count", ITEM_TYPE_COUNT, 137
 .assert "it_category size", it_color_ac - it_category, ITEM_TYPE_COUNT
 .assert "it_color_ac size", it_weight - it_color_ac, ITEM_TYPE_COUNT
 .assert "it_weight size", it_dmg_packed - it_weight, ITEM_TYPE_COUNT

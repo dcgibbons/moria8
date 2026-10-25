@@ -3,7 +3,7 @@
 :BasicUpstart2(test_bootstrap)
 
 .pc = $E000 "Result Buffer"
-tc_results: .fill 3, $ff
+tc_results: .fill 4, $ff
 
 .pc = $080E "Test Code"
 
@@ -17,7 +17,7 @@ test_finish:
     sei
     :BankOutBasic()
     :BankOutKernal()
-    ldx #2
+    ldx #3
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -120,6 +120,10 @@ tpd_find_random_floor_calls: .byte 0
     lda #>replacement
     sta target + 2
 }
+
+test_input_get_key_a:
+    lda #$41
+    rts
 
 test_input_get_key_c:
     lda #$43
@@ -411,10 +415,50 @@ test_start:
     bne !t3_fail+
     lda #$01
     sta tc_results + 2
-    jmp !tests_done+
+    jmp !t4+
 !t3_fail:
     lda #$00
     sta tc_results + 2
+
+    // Test 4: the Scroll of Phase Door (item 136, VMS teleport(10)) read
+    // through the real item_read_scroll dispatch moves the player to the
+    // validated nearby tile, is consumed, and becomes known.
+!t4:
+    jsr item_init_inventory
+    jsr test_setup_phase_door_room
+    lda #0
+    sta zp_eff_blind
+    sta zp_msg_flags
+    ldx #ITEM_TYPE_SCR_PHASE_DOOR
+    jsr id_known_clear
+    lda #ITEM_TYPE_SCR_PHASE_DOOR
+    sta inv_item_id
+    lda #1
+    sta inv_qty
+    lda #0
+    sta inv_p1
+    sta inv_flags
+    :PatchJump(input_get_key, test_input_get_key_a)   // 'A': the scroll in slot 0
+    jsr item_read_scroll
+    bcc !t4_fail+
+    lda zp_player_x
+    cmp #25
+    bne !t4_fail+
+    lda zp_player_y
+    cmp #14
+    bne !t4_fail+
+    lda inv_item_id
+    cmp #FI_EMPTY
+    bne !t4_fail+
+    ldx #ITEM_TYPE_SCR_PHASE_DOOR
+    jsr id_known_test
+    beq !t4_fail+
+    lda #$01
+    sta tc_results + 3
+    jmp !tests_done+
+!t4_fail:
+    lda #$00
+    sta tc_results + 3
 
 !tests_done:
     jmp test_finish
@@ -422,7 +466,7 @@ test_start:
 phase_door_test_body_end:
 
 .assert "Phase Door test stays below MAP_BASE", phase_door_test_body_end <= MAP_BASE, true
-.assert "Phase Door result buffer stays under KERNAL ROM", tc_results + 3 <= $10000, true
+.assert "Phase Door result buffer stays under KERNAL ROM", tc_results + 4 <= $10000, true
 // Dropped the ui_character.s import to keep the test body under MAP_BASE
 // (map-overlap boundary); stubs satisfy the trampoline references.
 ui_char_display:

@@ -30,18 +30,19 @@ sro_temple_choice:
     .byte 73, 5, 72                         // Morningstar, Mace, War Hammer
 .const SRO_TEMPLE_CHOICES = * - sro_temple_choice
 // Alchemy shop: Restoration stands in for the five Restore potions, Neutralize
-// Poison for Slow Poison; no Phase Door, Treasure Detection or Detect
-// Invisible: 21 of 26 entries.
+// Poison for Slow Poison; no Treasure Detection or Detect Invisible: 22 of 26
+// entries (Phase Door added 2026-10-25).
 sro_alchemy_choice:
     .byte 34, 34, 35                        // Enchant Weapon x2 (to-hit, to-dam), Enchant Armor
     .byte 21, 21, 20, 20, 102, 102          // Identify x2, Light x2, Magic Mapping x2
     .byte 103, 103, 104                     // Object Detection x2, Recharging
     .byte 97, 97, 97, 97, 97                // Restoration x5
     .byte 32, 32, 32, 126                   // Word of Recall x3, Neutralize Poison
+    .byte ITEM_TYPE_SCR_PHASE_DOOR          // Phase Door
 .const SRO_ALCHEMY_CHOICES = * - sro_alchemy_choice
 .assert "General Store choices", SRO_GENERAL_CHOICES, 25
 .assert "Temple choices", SRO_TEMPLE_CHOICES, 23
-.assert "Alchemy choices", SRO_ALCHEMY_CHOICES, 21
+.assert "Alchemy choices", SRO_ALCHEMY_CHOICES, 22
 .assert "Store choice table indexes in one page", * - sro_choices <= 256, true
 
 // Per store 0-4: number of choices (0 = pick by category) and table offset.

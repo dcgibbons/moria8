@@ -115,6 +115,7 @@
 .const ITEM_TYPE_CHEST_LARGE_STEEL = 133
 .const ITEM_TYPE_CHEST_RUINED      = 134
 .const ITEM_TYPE_IRON_SPIKE        = 135
+.const ITEM_TYPE_SCR_PHASE_DOOR    = 136   // VMS Scroll of Phase Door (teleport(10))
 
 // Chest p1 state bits (docs/CHEST_DESIGN.md state layout)
 .const CHEST_P1_LOCKED      = $01
@@ -139,7 +140,7 @@
 // Capacity 160 (20-byte bitset) leaves runway past the chest rows at 128-134
 // so the next catalog expansion pays no save-format bump.
 .const LEGACY_ITEM_TYPE_COUNT = 64
-.const ITEM_TYPE_COUNT = 136
+.const ITEM_TYPE_COUNT = 137
 .const ITEM_ID_CAPACITY = 160
 
 // Known-item identification state (Save Format V4)

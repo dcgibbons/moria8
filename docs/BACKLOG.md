@@ -838,33 +838,6 @@ Acceptance target:
   appropriate dungeon depths without breaking C64/C128 memory, loading, save,
   recall, or monster behavior contracts.
 
-### Add the Scroll of Phase Door and stock it at the Alchemist
-
-Found during M5a (`docs/AI_PLAYTEST_DESIGN.md` §16): the playtester needed
-a cheap escape from Creeping Coins nests and losing fights, and Moria8 has
-none for sale. VMS Moria 4.8 sells Scroll of Phase Door (15 gp,
-`teleport(10)`) at the Alchemist; Moria8 has Phase Door only as a mage
-spell (`eff_phase_door`, `core/spell_effects.s`), and
-`core/store_restock_overlay.s` leaves it out of the Alchemist's choices
-("no Phase Door, Treasure Detection or Detect Invisible: 21 of 26
-entries"). `docs/FEATURE_MAP.md` lists the scroll as Missing. Maintainer
-chose to backlog it (2026-10-24).
-
-Required work:
-
-- Add the item (name, ICAT_SCROLL, 15 gp, VMS level) to the item tables on
-  every platform, reading it through `eff_phase_door`; check item-table,
-  Huffman and overlay sizes against their asserts.
-- Add it to the Alchemist's choices as in VMS.
-- Tests: reading it through the production item path moves the player
-  within range onto floor; the store can stock it.
-- Update `docs/FEATURE_MAP.md`; teach the playtester to buy and read it.
-
-Acceptance target:
-
-- The Alchemist sells Phase Door scrolls that work as in VMS on all seven
-  platforms, and the full gates pass.
-
 ## Apple IIe
 
 ### Fix wizard summon in town rendering as `@` / unknown `?`

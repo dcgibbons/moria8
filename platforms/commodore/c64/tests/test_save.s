@@ -1973,14 +1973,23 @@ t22_fail_code:
     jmp t23_fail_code
 !t23_v1rand2_ok:
 
-    // Chest rows (128-134) are fixed-known after legacy migration
+    // Chest rows (128-134) and the Iron Spike are fixed-known after legacy
+    // migration; the Phase Door scroll (136) is a randomized-appearance
+    // class, so it migrates unknown (lrki_defaults).
     ldx #ITEM_TYPE_CHEST_SMALL_WOOD
-    ldy #ITEM_TYPE_COUNT
+    ldy #ITEM_TYPE_SCR_PHASE_DOOR
     jsr ts_expect_known_range
     bcs !t23_v1chest_ok+
     lda #3
     jmp t23_fail_code
 !t23_v1chest_ok:
+    ldx #ITEM_TYPE_SCR_PHASE_DOOR
+    ldy #ITEM_TYPE_SCR_PHASE_DOOR + 1
+    jsr ts_expect_unknown_range
+    bcs !t23_v1scroll_ok+
+    lda #3
+    jmp t23_fail_code
+!t23_v1scroll_ok:
 
     // Future capacity: bits past ITEM_TYPE_COUNT must be clear
     .if (ITEM_TYPE_COUNT < ITEM_ID_CAPACITY) {
@@ -2057,14 +2066,22 @@ t22_fail_code:
     jmp t23_fail_code
 !t23_v23t_ok:
 
-    // Chest rows (128-134) are fixed-known after legacy migration
+    // Chest rows (128-134) and the spike are fixed-known after legacy
+    // migration; the Phase Door scroll (136) migrates unknown.
     ldx #ITEM_TYPE_CHEST_SMALL_WOOD
-    ldy #ITEM_TYPE_COUNT
+    ldy #ITEM_TYPE_SCR_PHASE_DOOR
     jsr ts_expect_known_range
     bcs !t23_v23c_ok+
     lda #5
     jmp t23_fail_code
 !t23_v23c_ok:
+    ldx #ITEM_TYPE_SCR_PHASE_DOOR
+    ldy #ITEM_TYPE_SCR_PHASE_DOOR + 1
+    jsr ts_expect_unknown_range
+    bcs !t23_v23s_ok+
+    lda #5
+    jmp t23_fail_code
+!t23_v23s_ok:
 
     // Future capacity bits (135+) stay clear
     ldx #ITEM_TYPE_COUNT
@@ -2257,14 +2274,23 @@ t25_fail_code:
     jsr load_read_known_items
 
     // Stream bytes were all nonzero: IDs 0-127 must be set; chest rows
-    // (128-134) default fixed-known; future capacity stays clear.
+    // (128-134) and the spike default fixed-known; the Phase Door scroll
+    // (136, randomized appearance) defaults unknown; future capacity stays
+    // clear.
     ldx #0
-    ldy #ITEM_TYPE_COUNT
+    ldy #ITEM_TYPE_SCR_PHASE_DOOR
     jsr ts_expect_known_range
     bcs !t26_known_ok+
     lda #2
     jmp t26_fail_code
 !t26_known_ok:
+    ldx #ITEM_TYPE_SCR_PHASE_DOOR
+    ldy #ITEM_TYPE_SCR_PHASE_DOOR + 1
+    jsr ts_expect_unknown_range
+    bcs !t26_scroll_ok+
+    lda #2
+    jmp t26_fail_code
+!t26_scroll_ok:
     ldx #ITEM_TYPE_COUNT
     ldy #ITEM_ID_CAPACITY
     jsr ts_expect_unknown_range

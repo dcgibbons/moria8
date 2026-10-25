@@ -60,6 +60,7 @@ eff_light_room:
 eff_identify_prompt:
 eff_identify_scroll_resident:
 eff_teleport_self:
+eff_phase_door:
 eff_remove_curse:
 eff_aggravate:
 eff_bolt:

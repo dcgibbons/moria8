@@ -147,6 +147,7 @@ it_category:
     .byte ICAT_CHEST    // 133: Large Steel Chest
     .byte ICAT_CHEST    // 134: Ruined Chest
     .byte ICAT_SPIKE    // 135: Iron Spike
+    .byte ICAT_SCROLL   // 136: Phase Door
 
 // Color and base armor class packed per type: high nibble = display color,
 // low nibble = base AC (<=9).
@@ -287,6 +288,7 @@ it_color_ac:
     .byte COL_WHITE << 4                        // 133: Large Steel Chest
     .byte COL_BROWN << 4                        // 134: Ruined Chest
     .byte COL_WHITE << 4                        // 135: Iron Spike
+    .byte COL_CYAN << 4                         // 136: Phase Door
 
 // Weight (in 1/10 lbs)
 it_weight:
@@ -320,6 +322,7 @@ it_weight:
     // 128-134: chests (heavy rows saturate at 255; docs/CHEST_DESIGN.md)
     .byte 250, 255, 255, 255, 255, 255, 250
     .byte 10                                // 135: Iron Spike
+    .byte 5                                 // 136: Phase Door (scroll, 0.5 lb)
 
 // Damage dice packed per type: high nibble = dice count (<=3), low nibble =
 // dice sides (<=9). 0 = no damage dice.
@@ -347,6 +350,7 @@ it_dmg_packed:
     // 128-134: chest thrown damage 2d3/2d5/2d4/2d6/2d4/2d6; ruined 0d0
     .byte $23, $25, $24, $26, $24, $26, 0
     .byte $11                                 // 135: Iron Spike (1d1)
+    .byte 0                                   // 136: Phase Door
 it_dmg_packed_end:
 
 #if HAL_PLATFORM_ITEM_COST_IN_TOWN_OVERLAY
@@ -381,6 +385,7 @@ it_cost_lo:
     .byte <196, <244, <88, <176, <44, <136, <75, <244
     // 128-134: chests (20/60/100/150/200/250, ruined 0)
     .byte <20, <60, <100, <150, <200, <250, <0, <1 // 135: Iron Spike
+    .byte <15                               // 136: Phase Door (VMS 15 gp)
 it_cost_lo_end:
 
 #if PLATFORM_PRODUCT_OVERLAY_RUNTIME
@@ -431,6 +436,7 @@ it_cost_hi:
     .byte >2500, >1000, >600, >1200, >300, >5000, >75, >500
     .byte >20, >60, >100, >150, >200, >250, >0    // 128-134: chests
     .byte >1                                      // 135: Iron Spike
+    .byte >15                                     // 136: Phase Door
 it_cost_hi_end:
 #endif
 
@@ -461,6 +467,7 @@ it_min_level:
     .byte $c9, $31, $b5, $ba        // 112-119
     .byte $ac, $75, $c5, $82        // 120-127
     .byte $42, $97, $cb, $10        // 128-134: chest levels 2/4/7/9/11/12, ruined 0; 135: spike level 1 (high nibble)
+    .byte $01                       // 136: Phase Door level 1 (VMS level 1)
 it_min_level_end:
 
 // iml_get_for_type — Minimum dungeon level for item type X.
@@ -618,6 +625,7 @@ it_name_lo:
     .byte <itn_124, <itn_125, <itn_126, <itn_127
     .byte <itn_128, <itn_129, <itn_130, <itn_131
     .byte <itn_132, <itn_133, <itn_134, <itn_135
+    .byte <itn_136
 it_name_lo_end:
 #if HAL_PLATFORM_ITEM_TABLES_SPLIT_RESIDENT
 :ResidentItemsSegment()
@@ -657,6 +665,7 @@ it_name_hi:
     .byte >itn_124, >itn_125, >itn_126, >itn_127
     .byte >itn_128, >itn_129, >itn_130, >itn_131
     .byte >itn_132, >itn_133, >itn_134, >itn_135
+    .byte >itn_136
 it_name_hi_end:
 #else
 it_name_hi_end:
@@ -938,6 +947,8 @@ itn_133: .byte ITOK_LARGE ; .byte ITOK_STEEL ; .byte ITOK_CHEST_SUFFIX ; .byte 0
 itn_134: .text "Ruined " ; .byte ITOK_CHEST_SUFFIX ; .byte 0
 itn_135: .byte ITOK_IRON ; .text "Spike" ; .byte 0
 #endif
+// Emitted after 135: product builds find a name by stream order.
+itn_136: .text "Phase Door" ; .byte 0
 #if C64_UNIT_TEST && C64_TEST_NAME_STREAMS_A000
 .segment Default
 #endif

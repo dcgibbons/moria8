@@ -1824,8 +1824,9 @@ t48_recall: .byte 0
 // Mace, War Hammer.
 t48_temple_set:  .byte 48, 58, 59, 60, 33, 97, 17, 25, 100, 27, 32, 126, 73, 5, 72, 0
 // Alchemy: Enchant Weapon/Armor, Identify, Light, Magic Mapping, Object
-// Detection, Recharging, Restoration, Word of Recall, Neutralize Poison.
-t48_alchemy_set: .byte 34, 35, 21, 20, 102, 103, 104, 97, 32, 126, 0
+// Detection, Recharging, Restoration, Word of Recall, Neutralize Poison,
+// Phase Door (VMS store_choice; added 2026-10-25).
+t48_alchemy_set: .byte 34, 35, 21, 20, 102, 103, 104, 97, 32, 126, ITEM_TYPE_SCR_PHASE_DOOR, 0
 
 // t44_fill_store0 — A = item id for slots 0..X-1 of store 0, rest empty.
 t44_fill_store0:
