@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -88,7 +89,9 @@ class Worker:
         if not path.exists():
             game = self._spawn(autostart=True)
             game.boot()
-            tmp = path.with_suffix(f".tmp{self.worker_id}.vsf")
+            # Unique per process: concurrent sessions each have a worker 3,
+            # and one's rename removed the other's file (M5a round 3).
+            tmp = path.with_suffix(f".tmp{os.getpid()}.vsf")
             game.dump(tmp)
             tmp.replace(path)
             self.stop()

@@ -15,6 +15,7 @@ from .launch import ROOT
 from .screen import screen_code_to_char
 
 TIER_DIR = ROOT / "platforms/commodore/c64/creature_data"
+MONSTER_ATTACK = ROOT / "core/monster_attack.s"
 TIER_LINE = re.compile(r"^//\s+\d+: \[\s*\d+\] DL\s*(\d+) (.+?)\s*$")
 TIER_TABLE = re.compile(r"^tier\d+_cr_(\w+):\n((?:[ \t]*\.byte[^\n]*\n)+)", re.M)
 CF_ATTACK_ONLY = 0x01   # cr_mflags: moves only to attack (tools/parse_creatures.py)
@@ -71,6 +72,57 @@ def strength() -> dict[tuple[str, int], tuple[float, int]]:
             old = out.get(key, (0.0, 0))
             out[key] = (max(old[0], hp), max(old[1], ac))
     return out
+
+
+@lru_cache(maxsize=1)
+def attacks() -> dict[tuple[str, int], tuple[tuple[int, int, int], ...]]:
+    """(screen glyph, creature level) -> melee attacks (type, dice, sides) of
+    the most damaging shipped creature drawn that way at that level."""
+    def average(blows: tuple[tuple[int, int, int], ...]) -> float:
+        return sum(dice * (sides + 1) / 2 for _, dice, sides in blows)
+
+    out: dict[tuple[str, int], tuple[tuple[int, int, int], ...]] = {}
+    for _, tables in _tiers():
+        for code, level, *atk in zip(tables["display"], tables["level"],
+                                     tables["atk0_type"], tables["atk0_dice"], tables["atk0_sides"],
+                                     tables["atk1_type"], tables["atk1_dice"], tables["atk1_sides"]):
+            blows = tuple((atk[i], atk[i + 1], atk[i + 2]) for i in (0, 3) if atk[i] and atk[i + 1])
+            key = (screen_code_to_char(code), level)
+            if average(blows) > average(out.get(key, ())):
+                out[key] = blows
+    return out
+
+
+@lru_cache(maxsize=1)
+def attack_tohit() -> list[int]:
+    """Base to-hit by monster attack type (``mon_atk_base_tohit``, Umoria's
+    ``playerTestAttackHits``); a creature adds three a level."""
+    return _table_bytes(MONSTER_ATTACK.read_text(), "mon_atk_base_tohit")
+
+
+SPELL_WOUND_LIGHT, SPELL_BREATH, SPELL_WOUND_SERIOUS = 0x01, 0x02, 0x40   # cr_spell_flags (mm_spell_handlers)
+
+
+@lru_cache(maxsize=None)
+def spell_max(depth: int) -> int:
+    """Most damage one spell can do from a shipped caster native to ``depth``
+    or shallower: Cause Light Wounds 3d8, Cause Serious Wounds 8d8, breath a
+    third of the caster's HP (``core/monster_magic.s``)."""
+    most = 0
+    for _, tables in _tiers():
+        for level, flags, chance, num, sides in zip(tables["level"], tables["spell_flags"], tables["spell_chance"],
+                                                    tables["hd_num"], tables["hd_sides"]):
+            if chance and level <= depth:
+                most = max(most, 24 if flags & SPELL_WOUND_LIGHT else 0, 64 if flags & SPELL_WOUND_SERIOUS else 0,
+                           num * sides // 3 if flags & SPELL_BREATH else 0)
+    return most
+
+
+def hit_chance(skill: int, ac: int) -> float:
+    """Chance a to-hit ``skill`` hits armour ``ac``: 1 in 20 always misses,
+    1 in 20 always hits, else randint(skill) > ac (Umoria
+    ``playerTestBeingHit``; ``mon_atk_roll_tohit``)."""
+    return 0.05 + 0.9 * (max(0, skill - ac) / skill if skill > 0 else 0.0)
 
 
 @lru_cache(maxsize=1)
@@ -143,6 +195,19 @@ def slow_glyphs() -> frozenset[str]:
     for _, glyph, speed, flags in _creatures():
         by_glyph.setdefault(glyph, []).append(speed == SPEED_SLOW and not flags & CF_ATTACK_ONLY)
     return frozenset(glyph for glyph, slow in by_glyph.items() if all(slow))
+
+
+@lru_cache(maxsize=1)
+def slow_kinds() -> frozenset[tuple[str, int]]:
+    """(screen glyph, creature level) whose every shipped creature moves
+    slower than the player: by kind, as ``ranged_kinds`` (a White Worm mass
+    is slow, a Giant Purple Worm is not)."""
+    by_kind: dict[tuple[str, int], list[bool]] = {}
+    for _, tables in _tiers():
+        for code, level, speed, flags in zip(tables["display"], tables["level"], tables["speed"], tables["mflags"]):
+            by_kind.setdefault((screen_code_to_char(code), level), []).append(
+                speed & SPEED_MASK == SPEED_SLOW and not flags & CF_ATTACK_ONLY)
+    return frozenset(kind for kind, slow in by_kind.items() if all(slow))
 
 
 @lru_cache(maxsize=1)

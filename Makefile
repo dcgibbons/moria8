@@ -120,6 +120,8 @@ PLAYTEST_RUN = $(ISOLATED) env PYTHONPATH=playtest PYTHONDONTWRITEBYTECODE=1 pyt
 GOAL ?= enter_dungeon
 WORKERS ?= 4
 PLAYTEST_SEEDS = $(if $(SEEDS),--seeds $(SEEDS))
+# CHARACTER=human-warrior etc. (playtest/moria_playtest/goals.py CHARACTERS)
+PLAYTEST_CHARACTER = $(if $(CHARACTER),--character $(CHARACTER))
 
 playtest-check: build64
 	$(PLAYTEST_PY) -m moria_playtest.check
@@ -131,13 +133,13 @@ playtest-m0-report: disk64
 	$(PLAYTEST_RUN) -m moria_playtest.m0
 
 playtest-session: disk64
-	$(PLAYTEST_RUN) -m moria_playtest.session --goal $(GOAL) --workers $(WORKERS) $(PLAYTEST_SEEDS) $(PLAYTEST_ARGS)
+	$(PLAYTEST_RUN) -m moria_playtest.session --goal $(GOAL) --workers $(WORKERS) $(PLAYTEST_SEEDS) $(PLAYTEST_CHARACTER) $(PLAYTEST_ARGS)
 
 playtest-qualify: disk64
-	$(PLAYTEST_RUN) -m moria_playtest.session --qualify --goal $(GOAL) --workers $(WORKERS) $(PLAYTEST_SEEDS) $(PLAYTEST_ARGS)
+	$(PLAYTEST_RUN) -m moria_playtest.session --qualify --goal $(GOAL) --workers $(WORKERS) $(PLAYTEST_SEEDS) $(PLAYTEST_CHARACTER) $(PLAYTEST_ARGS)
 
 playtest-regress: disk64
-	$(PLAYTEST_RUN) -m moria_playtest.session --regress --workers $(WORKERS)
+	$(PLAYTEST_RUN) -m moria_playtest.session --regress --workers $(WORKERS) $(PLAYTEST_CHARACTER) $(PLAYTEST_ARGS)
 
 playtest-repro: disk64
 	$(PLAYTEST_RUN) -m moria_playtest.repro $(FINDING)

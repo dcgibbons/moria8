@@ -15,8 +15,8 @@ from dataclasses import dataclass, field
 from . import knowledge
 from .game import ITEM_PROMPT, KEY_RUNSTOP, KEY_SPACE, Game, Mode, Observation
 from .goals import Goal
-from .view import (DIRS, TYPE_DOOR_CLOSED, TYPE_STAIRS_DN, TYPE_STAIRS_UP, TYPE_TRAP, UNKNOWN, Creature, Pos,
-                   View, sealed_search_spots)
+from .view import (DIRS, TYPE_DOOR_CLOSED, TYPE_STAIRS_DN, TYPE_STAIRS_UP, TYPE_TRAP, UNKNOWN, WALKABLE_TYPES,
+                   Creature, Pos, View, sealed_search_spots)
 
 KEY_BASH = 0x02          # CTRL+B
 KEY_REST = ord("5")      # rest one turn (waiting for a first strike)
@@ -44,6 +44,12 @@ NEAR_STEPS = 5           # steps a creature seen within 2 squares keeps the bot 
 STILL_LAYERS = ("fallback", "rest", "search", "hunt", "stair-scum")   # layers that may stand still
 STRONG_HP_BASE, STRONG_HP_PER_LEVEL = 20, 4   # more average HP than base + this x character level: too strong
 STRONG_AC_BASE, STRONG_AC_PER_LEVEL = 20, 3   # ... or more AC than base + this x character level
+EAT_CLEAR = 5            # a creature this close puts off a meal while only Hungry (M5a)
+COINS_ODDS = 0.5         # fight odds under which Creeping Coins are fought, not walked away from (M5a)
+READY_SPELLS = 2         # strongest spells at a depth that maximum HP must outlast before going there (M5a)
+FIGHT_ODDS = 0.6         # ... or more than this share of the turns it needs to kill the character: at
+                         # 1.0 a fight is a coin flip (M5a round 7; 1.0 until round 6)
+BTH, BTH_PER_LEVEL = 70, 4   # Warrior melee skill (core/tables.s class_properties, class_level_adj)
 TOUGH_LOSS = 0.5         # HP share lost to one kind of creature, still alive, that marks it tough
 TOUGH_LEVELS = 3         # character levels until a tough kind is worth fighting again
 CROWD_RANGE, CROWD_COUNT = 3, 2   # this many creatures this close to a staircase: take it (M4 round 88)
@@ -66,6 +72,8 @@ GENERAL_STORE = 0        # store index (entrance "1")
 ARMOURY = 1              # store index (entrance "2")
 WEAPONSMITH = 2          # store index (entrance "3")
 GEAR_RESERVE = 200       # gold kept back from armour and weapons: the next trip's food and potions
+GEAR_TRIP_GOLD = 1000    # gold at which a town trip to spend it on armour and weapons is worth it (M5a)
+GEAR_TRIP_WAIT = 5000    # steps after a town visit before gold alone is reason for another (M5a)
 STARTING_WEAPON = ("Dagger", 0)               # core/game_loop.s starting equipment: (name, to-dam)
 STARTING_ARMOUR = {"ICAT_ARMOR": 4}           # Leather Armor [4,+0]; AC worn per armour slot
 ARMOUR_SLOTS = ("ICAT_ARMOR", "ICAT_SHIELD", "ICAT_HELM", "ICAT_GLOVES", "ICAT_BOOTS")
@@ -86,6 +94,7 @@ CLW_GOLD = 60            # gold worth a Temple trip for Cure Light Wounds (base 
 RECALL_GOLD = 250        # ... for Word of Recall (base 200 gp; M4 round 45: round 44's
                          # trips without the gold cost ~6,700 steps for 2 scrolls)
 STATUS_GOLD = re.compile(r"AU:\s*(\d+)")
+STATUS_AC = re.compile(r"AC:\s*(-?\d+)")
 CLW = "Potion of Cure Light"   # Cure Light Wounds (the store line may cut the name short)
 CLW_RESERVE = 5          # potions to carry for a fight gone wrong (M4; 3 until round 56, when
                          # most deaths came after drinking all three and gold was plentiful)
@@ -105,6 +114,9 @@ LANTERN, OIL, TORCH = "Brass Lantern", "Flask of Oil", "Wooden Torch"
 OIL_RESERVE = 3          # flasks to carry: each refills the lantern (§14.3 round 13)
                          # or is thrown when fear blocks melee (round 22)
 THROW_RANGE = 5          # farthest in-line creature worth a thrown flask
+OIL_THROW = 7            # flasks carried to throw, beyond the lantern's reserve (M5a)
+OIL_WORTH_HP = 8         # lore HP at which an approaching creature is worth a flask (M5a)
+OIL_GOLD = 10            # a flask's base price (core/item_tables.s)
 TORCH_RESERVE = 2        # spare torches to carry: the light, or the lantern's backup (M4)
 TORCH_TURNS = 4000       # a torch burns ~4,000 turns, a lantern or flask ~7,500: the
 LAMP_TURNS = 7500        # screens show no torch charges, so a player keeps rough time
@@ -190,6 +202,7 @@ class Brain:
         self.armoury_done = False              # done at the Armoury on this town visit
         self.weapons_done = False              # done at the Weaponsmith on this town visit
         self.weapon = STARTING_WEAPON          # (kind, to-dam) wielded or bought to wield
+        self.adjacent: list[Creature] = []     # creatures beside the player this step (fight_odds)
         self.armour = dict(STARTING_ARMOUR)    # armour slot -> AC worn or bought to wear
         self.to_wear: list[str] = []           # bought, not yet worn or wielded
         self.gear: dict[str, tuple[str, object]] = {}   # store name -> what buying it changes
@@ -216,6 +229,8 @@ class Brain:
         self.picking: str | None = None        # item to pick at the next item prompt (wear, throw)
         self.listed = False                    # the wear prompt's item list is showing
         self.resupply_after = 0                # step before which town is not worth a trip
+        self.recall_trip_after = 0             # ... for Word of Recall alone (the Alchemist may have none)
+        self.gear_trip_after = 0               # ... for armour and weapons alone
         self.hops = 0                          # restock hops since supplies were last found
         self.afraid = 0                        # turns the player is too afraid to melee
         self.chased = False                    # attacked this turn by a creature faster than the player
@@ -305,6 +320,7 @@ class Brain:
         threats = self.threats(view)
         if threats:
             self.level.last_threat = min(threats, key=lambda p: chebyshev(p, view.pos))
+        self.adjacent = [c for p, c in view.creatures.items() if chebyshev(p, view.pos) == 1]
         decision = self.choose(obs, view)
         decision = self.shun_stationary(obs, view, decision)
         decision = self.break_oscillation(obs, view, decision)
@@ -449,7 +465,7 @@ class Brain:
                 return Decision(ord("B"), "shop", f"buy {pick[1]}")
         elif obs.stage == "menu" and not done:
             gold = re.search(r"Gold: (\d+)", obs.rows[16])
-            for want in self.shopping_list():
+            for want in self.shopping_list(int(gold.group(1)) if gold else None):
                 for row in obs.rows[3:15]:
                     match = STORE_ITEM.match(row)
                     if match and match.group(2).startswith(want) and \
@@ -491,8 +507,10 @@ class Brain:
             # Still nothing: keep playing a while instead (round 5).
             self.hops, self.resupply_after = 0, obs.step + RESTOCK_WAIT
 
-    def shopping_list(self) -> list[str]:
-        """Store items worth buying now, most important first."""
+    def shopping_list(self, gold: int | None = None) -> list[str]:
+        """Store items worth buying now, most important first. ``gold``, when
+        the store shows it, limits flasks to throw to what the Temple's and
+        the Alchemist's shortfalls leave spare."""
         wants: list[str] = []
         if self.shop_buys < FOOD_PER_VISIT and self.food < FOOD_MAX:
             # A Slime Mold is a third of a ration in a whole slot: only near
@@ -503,8 +521,18 @@ class Brain:
             wants.append(LANTERN)
         if self.torches < TORCH_RESERVE:
             wants.append(TORCH)   # backup light (M4: seed 1007 played 3,400 steps in the dark)
-        if self.oil < OIL_RESERVE:
-            wants.append(OIL)   # lantern fuel, and a missile fear cannot stop (M4: Poltergeist)
+        committed = (max(0, CLW_RESERVE - self.clw) * CLW_GOLD
+                     + max(0, RECALL_RESERVE - self.recall) * RECALL_GOLD)
+        if self.oil < OIL_RESERVE or (self.oil < OIL_RESERVE + OIL_THROW
+                                      and gold is not None and gold >= committed + OIL_GOLD):
+            # Lantern fuel, a missile fear cannot stop (M4: Poltergeist), and
+            # 2d6 at whatever approaches: 10 gp a flask against 50 for a Cure
+            # Light Wounds that heals as much (M5a: Halflings and Elves lost
+            # melee with DL1 Kobolds). Flasks to throw only from gold the
+            # potions and scrolls do not need: the General Store comes first,
+            # and a Half-Troll that spent it there starved without Word of
+            # Recall (M5a round 1).
+            wants.append(OIL)
         if self.clw < CLW_RESERVE:
             wants.append(CLW)
         if self.recall < RECALL_RESERVE:
@@ -537,6 +565,16 @@ class Brain:
         DL5-9 with the starting Dagger and AC 4, carrying thousands of gold)."""
         gold = re.search(r"Gold: (\d+)", obs.rows[16])
         budget = (int(gold.group(1)) if gold else 0) - GEAR_RESERVE
+        # Bought this visit counts as worn: a second body armour for the slot
+        # just filled is no gain (M5a: several pieces a visit now, §16).
+        worn, wielded = dict(self.armour), self.weapon
+        for name in self.to_wear:
+            kind, change = self.gear.get(name, ("", None))
+            if kind == "armour":
+                slot, ac = change
+                worn[slot] = max(worn.get(slot, 0), ac)
+            elif kind == "weapon":
+                wielded = change
         best: tuple[float, int, str, str, tuple[str, object]] | None = None
         for row in obs.rows[3:15]:
             match = STORE_ITEM.match(row)
@@ -549,12 +587,12 @@ class Brain:
                 if kind is None or kind.category not in ARMOUR_SLOTS:
                     continue
                 ac = int(armour.group(2)) + int((armour.group(3) or "0").replace(" ", ""))
-                gain, change = ac - self.armour.get(kind.category, 0), ("armour", (kind.category, ac))
+                gain, change = ac - worn.get(kind.category, 0), ("armour", (kind.category, ac))
             else:
                 weapon = GEAR_WEAPON.match(name)
                 to_dam = int(weapon.group(3)) if weapon and weapon.group(3) else 0
                 base = weapon.group(1) if weapon else name
-                gain = self.melee_score(base, to_dam, obs) - self.melee_score(*self.weapon, obs)
+                gain = self.melee_score(base, to_dam, obs) - self.melee_score(*wielded, obs)
                 change = ("weapon", (base, to_dam))
             if gain > 0 and (best is None or (gain, -price) > (best[0], best[1])):
                 best = (gain, -price, letter, name, change)
@@ -669,8 +707,13 @@ class Brain:
             seen = {c.glyph for p, c in view.creatures.items() if chebyshev(p, view.pos) == 1}
             for pos, glyph in view.unknown.items():
                 known = self.level.identified.get((pos, glyph))
+                # Not a glyph in rock: a treasure vein's '$' beside Creeping
+                # Coins was taken for them, and the bot attacked the wall,
+                # which takes no game time, for 85,000 steps (M5a focused
+                # round 12, seed 1018).
                 if chebyshev(pos, view.pos) == 1 and (known is None or known[0] == "item") \
-                        and glyph in glyphs and glyph not in seen:
+                        and glyph in glyphs and glyph not in seen \
+                        and (view.type_at(*pos) in WALKABLE_TYPES or view.type_at(*pos) == UNKNOWN):
                     # An attack also overrides an item the glyph was taken
                     # for (M4 round 86: a patch looked at as "a Rock").
                     self.level.identified[(pos, glyph)] = ("creature", attacker)
@@ -753,9 +796,13 @@ class Brain:
         (a layer, a view change), going back again is no progress. Block the
         square for a while and choose again (M4 round 34: seeds 1001, 1003,
         1012 stepped A-B-A-B for hundreds of steps and died there)."""
-        self.trail = (self.trail + [view.pos])[-OSCILLATION_STEPS:]
         if decision.key not in DIRS.values() or decision.layer in ("fight", "look", "prompt"):
             return decision
+        # Moves only: a potion drunk between the steps put the same square in
+        # the trail twice, which reads as standing still, and a Halfling
+        # stepped back and forth beside a Yellow Jelly, drinking every few
+        # steps, until it died (M5a round 7: 5 Yellow Jelly deaths).
+        self.trail = (self.trail + [view.pos])[-OSCILLATION_STEPS:]
         if len(self.trail) < OSCILLATION_STEPS or len(set(self.trail)) != 2 or any(
                 a == b for a, b in zip(self.trail, self.trail[1:])):
             return decision
@@ -793,6 +840,9 @@ class Brain:
         if obs.dlvl != self.last_dlvl:
             self.last_dlvl = obs.dlvl
             self.level = LevelMemory()
+            if obs.dlvl == 0:
+                self.recall_trip_after = obs.step + RESTOCK_WAIT   # one try per visit: the Alchemist may have none
+                self.gear_trip_after = obs.step + GEAR_TRIP_WAIT   # the stores restock slowly
             self.shopped, self.shop_buys, self.potions_done, self.market_done = False, 0, False, False
             self.armoury_done = self.weapons_done = self.alchemist_done = False
             self.recalling = False
@@ -845,8 +895,27 @@ class Brain:
 
     def needs_resupply(self, obs: Observation) -> bool:
         """Food or light is low and a town trip could help (not right after a
-        visit that found the store without it)."""
-        return self.supplies_low() and obs.step >= self.resupply_after
+        visit that found the store without it), or the character carries no
+        Word of Recall and can now afford one."""
+        return ((self.supplies_low() and obs.step >= self.resupply_after) or self.wants_recall(obs)
+                or self.wants_gear(obs))
+
+    def wants_recall(self, obs: Observation) -> bool:
+        """No Word of Recall, gold for one, and no town visit lately: a trip
+        to buy it. Recall is the way home from a sealed pocket (M4 §15.7
+        item 1); a character that could not afford one on its last visit
+        played 35,000 steps on DL1-2 and starved there in one (M5a round 2:
+        about 7 such deaths)."""
+        return (not self.recall and obs.dlvl > 0 and obs.step >= self.recall_trip_after
+                and self.gold(obs) >= RECALL_GOLD + GEAR_RESERVE)   # and the next trip's food and potions
+
+    def wants_gear(self, obs: Observation) -> bool:
+        """Gold enough for real armour and a while since the last town visit:
+        a trip to spend it. Town trips came only for food, light or Word of
+        Recall, so gold piled up below (M5a: a Half-Elf on DL5 with 1,547 gold
+        and AC 7; several characters visited the Armoury once in a run), and
+        Creeping Coins and nagas hit low AC hardest."""
+        return obs.dlvl > 0 and obs.step >= self.gear_trip_after and self.gold(obs) >= GEAR_TRIP_GOLD
 
     def supplies_low(self) -> bool:
         return self.food_low() or self.light_low()
@@ -915,8 +984,15 @@ class Brain:
     def underleveled(self, obs: Observation) -> bool:
         """Readiness (§14.3 rounds 2, 18): not deeper before ``ready_level``.
         A level-1 character cannot survive one Cause Light Wounds (3d8) from a
-        DL2 caster, so a player gains levels before going deeper."""
-        return obs.clvl < ready_level(obs.dlvl + 1, self.goal.ready_margin)
+        DL2 caster, so a player gains levels before going deeper.
+
+        Also not before maximum HP outlasts ``READY_SPELLS`` of the strongest
+        spells cast that deep (``knowledge.spell_max``): character level alone
+        sent Elves and Gnomes to DL2 with 33-41 HP, where two Cause Light
+        Wounds (3d8) from a Novice Priest or Mage killed them (M5a round 4: 12
+        of 30 reach_dl8 deaths)."""
+        return (obs.clvl < ready_level(obs.dlvl + 1, self.goal.ready_margin)
+                or obs.mhp < READY_SPELLS * knowledge.spell_max(obs.dlvl + 1))
 
     def too_strong(self, creature: Creature, obs: Observation) -> bool:
         """Monster lore, before any fight: far more HP or armour than the
@@ -927,11 +1003,49 @@ class Brain:
         reach_dl10 (M4 round 64 A/B: 13 of 40 against 22 of 40)."""
         return self.goal.want_xp and self.lore_strong(creature, obs)
 
-    @staticmethod
-    def lore_strong(creature: Creature, obs: Observation) -> bool:
+    def lore_strong(self, creature: Creature, obs: Observation) -> bool:
         hp, ac = knowledge.strength().get((creature.glyph, creature.level), (0.0, 0))
         return (hp > STRONG_HP_BASE + STRONG_HP_PER_LEVEL * obs.clvl
-                or ac > STRONG_AC_BASE + STRONG_AC_PER_LEVEL * obs.clvl)
+                or ac > STRONG_AC_BASE + STRONG_AC_PER_LEVEL * obs.clvl
+                or self.fight_odds(creature, obs) > FIGHT_ODDS)
+
+    def fight_odds(self, creature: Creature, obs: Observation) -> float:
+        """Turns this character needs to kill ``creature`` over the turns it
+        needs to kill the character, by the lore: the weapon's blows and
+        dice at the character's strength (``melee_score``) and its chance to
+        hit the creature's armour, against the creature's attacks and their
+        chance to hit the character's armour. Above 1, the character dies
+        first. The M4 thresholds judge the creature by character level alone,
+        so a Human or Halfling Warrior met DL5 nagas the Half-Troll's
+        strength could fight (M5a: 50 of 141 deaths)."""
+        hp, ac = knowledge.strength().get((creature.glyph, creature.level), (0.0, 0))
+        if not hp:
+            return 0.0
+        mine = self.melee_score(*self.weapon, obs) * knowledge.hit_chance(BTH + BTH_PER_LEVEL * obs.clvl, ac)
+        match = STATUS_AC.search(obs.rows[23])
+        armour = int(match.group(1)) if match else 0
+        def damage(c: Creature) -> float:
+            return sum(dice * (sides + 1) / 2
+                       * knowledge.hit_chance((tohit[kind] if kind < len(tohit) else 0) + 3 * c.level, armour)
+                       for kind, dice, sides in knowledge.attacks().get((c.glyph, c.level), ()))
+
+        tohit = knowledge.attack_tohit()
+        own = damage(creature)
+        if not own:
+            return 0.0
+        # Everything else beside the player hits too while this one is
+        # fought: one pile of a Creeping Coins nest at a time looked an easy
+        # fight each, and three together killed a Human from 82 HP (M5a
+        # round 8: 12 coin deaths).
+        others = list(self.adjacent)
+        if creature in others:
+            others.remove(creature)
+        theirs = own + sum(damage(c) for c in others)
+        if not theirs:
+            return 0.0
+        if mine <= 0:
+            return float("inf")
+        return (hp / mine) / (max(obs.hp, 1) / theirs)
 
     def outmatched(self, creature: Creature, obs: Observation) -> bool:
         """Too strong by the lore, for any goal, yet unable to keep up with
@@ -948,12 +1062,13 @@ class Brain:
                 and (creature.glyph not in knowledge.slow_glyphs() or self.coins_worth_it(creature, obs))
                 and creature.level <= obs.clvl + 2)
 
-    @staticmethod
-    def coins_worth_it(creature: Creature, obs: Observation) -> bool:
+    def coins_worth_it(self, creature: Creature, obs: Observation) -> bool:
         """Never: Creeping Coins drop their gold when killed (MON-014), but
-        their poison touch killed 6 a round even fought at full strength (M4
-        round 58), and other drops pay for supplies now. Kept as the one
-        place to change that policy."""
+        their poison touch lingers and a nest corners a character that
+        fights one pile. M5a rounds 6-10 fought them below fight odds 0.5
+        with no gain (coin deaths 9, 9, 12, 11), and walking away again lifted
+        Elf ``clvl10`` from 16 to 18 (focused round 12). Kept as the one place
+        to change that policy."""
         return False
 
     @staticmethod
@@ -1028,7 +1143,10 @@ class Brain:
                         any(chebyshev(view.pos, p) > 1 for p in view.creatures):
                     step = None   # the only way out runs into contact: fight instead
         if step is None:
-            return self.walk_away(view, threats)
+            # Out of food, walking away from a slow creature only meets it
+            # again on the way to the stairs: fight through (M5a round 2: 7
+            # characters starved stepping between the two).
+            return None if self.out_of_food() else self.walk_away(view, threats)
         ranged = any(knowledge.casts(c.glyph, c.level) for c in view.creatures.values())
         if not (self.afraid or self.unseen_attack) and ranged:
             far = view.path_steps({self.level.retreat_to}, avoid_monsters=True, doors=False)
@@ -1060,6 +1178,9 @@ class Brain:
             return None
         key = ord("<") if here == TYPE_STAIRS_UP else ord(">")
         return Decision(key, "retreat", f"{len(close)} creatures close: take the stairs")
+
+    def out_of_food(self) -> bool:
+        return self.no_food or self.food <= 0
 
     @staticmethod
     def walk_away(view: View, threats: set[Pos]) -> Decision | None:
@@ -1140,16 +1261,41 @@ class Brain:
         """Fear blocks melee, not throwing: throw a Flask of Oil (2d6) at the
         nearest creature in line (round 22). The lantern keeps one flask unless
         spare torches back it up (M4 round 35). Before running (M4 round 32):
-        a fast attacker follows a runner."""
-        if obs.dlvl == 0 or not self.afraid or self.oil <= (1 if self.lamp and not self.torches else 0):
+        a fast attacker follows a runner.
+
+        Not afraid, a flask beyond the lantern's reserve goes at a creature
+        worth one (``OIL_WORTH_HP`` by the lore) while it approaches, 2 to
+        ``THROW_RANGE`` squares off: damage before it reaches the player, for
+        characters whose melee is weak (M5a)."""
+        if obs.dlvl == 0:
+            return None
+        keep = (1 if self.lamp and not self.torches else 0) if self.afraid else \
+            (OIL_RESERVE if self.lamp or self.lamp_packed else 0)
+        if self.oil <= keep:
             return None
         for pos in sorted(self.threats(view), key=lambda p: chebyshev(p, view.pos)):
+            creature = view.creatures[pos]
             step = self.line_to(view, pos)
-            if step is None or chebyshev(pos, view.pos) > THROW_RANGE or self.stationary(view.creatures[pos]):
+            if step is None or chebyshev(pos, view.pos) > THROW_RANGE or self.stationary(creature):
+                continue
+            if not self.afraid and (chebyshev(pos, view.pos) < 2 or not self.worth_oil(creature, obs)):
                 continue
             self.picking, self.listed, self.pending = OIL, False, DIRS[step]
-            return Decision(KEY_THROW, "throw", f"afraid: throw oil at '{view.creatures[pos].glyph}'")
+            why = "afraid" if self.afraid else "approaching"
+            return Decision(KEY_THROW, "throw", f"{why}: throw oil at '{creature.glyph}'")
         return None
+
+    def worth_oil(self, creature: Creature, obs: Observation) -> bool:
+        """Strong enough to be worth a flask. A slow creature only when
+        meleeing it is costly (fight odds at least ``COINS_ODDS``): Creeping
+        Coins, which cornered and killed characters in melee (M5a rounds
+        5-9: 9-12 deaths a round), are shot as they creep up; a worm mass
+        the character beats easily is walked away from or fought (M5a
+        round 1: 74 flasks at 'w')."""
+        if knowledge.strength().get((creature.glyph, creature.level), (0.0, 0))[0] < OIL_WORTH_HP:
+            return False
+        return ((creature.glyph, creature.level) not in knowledge.slow_kinds()
+                or self.fight_odds(creature, obs) >= COINS_ODDS)
 
     def fight(self, obs: Observation, view: View) -> Decision | None:
         if (obs.dlvl == 0 and not self.attacked) or self.afraid:
@@ -1163,7 +1309,7 @@ class Brain:
                           and not self.stationary(c))
         if not adjacent:
             return None
-        if all(view.creatures[p].glyph in knowledge.slow_glyphs()
+        if not self.out_of_food() and all(view.creatures[p].glyph in knowledge.slow_glyphs()
                and not self.coins_worth_it(view.creatures[p], obs) for _, p in adjacent):
             # Creeping coins: each poison touch stacks more poison, and they
             # cannot keep up; when hurt, fight only when cornered (M4 round
@@ -1261,6 +1407,12 @@ class Brain:
         status = obs.rows[23]
         if self.no_food or not any(word in status for word in ("Hungry", "Weak", "Faint")):
             return None
+        if "Hungry" in status and any(chebyshev(p, view.pos) <= EAT_CLEAR for p in self.threats(view)):
+            # Hungry is a warning, hundreds of turns before Weak: a meal can
+            # wait out a creature closing in (M5a round 11: a Half-Elf
+            # stopped to eat with a Rattlesnake two squares behind it and
+            # died three turns later).
+            return None
         self.pending_item = ord("A")
         return Decision(KEY_EAT, "eat", "hungry: eat the first food item")
 
@@ -1290,7 +1442,9 @@ class Brain:
             # seed 1026 back up from DL9 with 4 rations, into a sealed DL8
             # pocket where it starved (M4 round 70).
             return None
-        why = ("light low" if not self.food_low() else f"{self.food:.3g} food left") \
+        why = (("no Word of Recall" if self.wants_recall(obs) else "gold for armour")
+               if not self.supplies_low() else "light low" if not self.food_low()
+               else f"{self.food:.3g} food left") \
             if self.needs_resupply(obs) else f"DL{obs.dlvl} too deep for level {obs.clvl}"
         if view.type_at(*view.pos) == TYPE_STAIRS_UP:
             return Decision(ord("<"), "resupply", f"{why}: go up")
@@ -1349,7 +1503,8 @@ class Brain:
                 self.alchemist_done or self.recall >= RECALL_RESERVE or self.gold(obs) < RECALL_GOLD) and (
                 self.market_done or not self.market_worth_it(obs)) and not self.to_wear and (
                 self.weapons_done or not spare) and (self.armoury_done or not spare)
-            if not ready or self.max_dlvl < RECALL_FROM or self.supplies_low():
+            if not ready or self.max_dlvl < RECALL_FROM or self.supplies_low() or self.recall < 2:
+                # The last scroll is the way home, not the way down (M5a).
                 return None
         elif not (self.food_low() and self.sealed(view)) and not self.stuck(view) and (
                 obs.dlvl < RECALL_FROM or not self.needs_resupply(obs)):
@@ -1392,9 +1547,20 @@ class Brain:
             (self.recall < RECALL_RESERVE and gold >= RECALL_GOLD)
 
     def quaff(self, obs: Observation, view: View) -> Decision | None:
-        """Badly hurt with a Cure Light Wounds potion: drink it (M4)."""
+        """Badly hurt with a Cure Light Wounds potion: drink it (M4).
+
+        Not beside creatures that are all slower than the player while a
+        step away exists: a potion heals ~8 while a Creeping Coins nest hits
+        for ~12 a turn, and stepping away costs nothing they can catch up
+        to (M5a round 10: a Half-Elf drank five in a row beside them and
+        died). Out of reach, the next decision drinks."""
         if obs.dlvl == 0 or not self.clw or obs.hp >= QUAFF_HP * obs.mhp:
             return None
+        beside = {p for p, c in view.creatures.items() if chebyshev(p, view.pos) == 1 and not self.stationary(c)}
+        if beside and all(view.creatures[p].glyph in knowledge.slow_glyphs() for p in beside):
+            away = self.walk_away(view, beside)
+            if away is not None:
+                return Decision(away.key, "retreat", "hurt beside slow creatures: step away before drinking")
         self.picking, self.listed = CLW, False
         return Decision(ord("Q"), "quaff", f"HP {obs.hp}/{obs.mhp}: drink Cure Light Wounds")
 

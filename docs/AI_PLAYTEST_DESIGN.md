@@ -562,7 +562,8 @@ Each milestone has a measurable exit criterion and an explicit stop rule.
 | **M1 `enter_dungeon`** | Brain prompt and town-navigation layers; fair-play view; auditor v0; recorder; dashboard v0 | `enter_dungeon` works (§7.2). A deliberately broken test build (one invariant violated) is caught and its finding replays. |
 | **M2 `reach_dl2`, `reach_clvl2`** | Dungeon navigation, doors, search, stairs; fight, emergency, rest; anti-stall; plateau alert; frozen suites | Both goals work, and `enter_dungeon` still passes its frozen suite. No `unknown_prompt` in the final qualification runs. **No further goals are added until M2 is met.** |
 | **M3 `reach_dl5`, `clvl5`** | The brain rounds in §14.3: any-glyph creatures, food and light logistics, threat memory, avoiding stationary monsters, sealed-area fallback | Both goals work (§7.2, ≥16/20); all frozen suites still pass; no `unknown_prompt`. **Met 2026-10-22 (§14.9).** |
-| **M4 `clvl10`, `reach_dl8`** (`reach_dl10` until 2026-10-24) | The brain rounds in §15.3: stationary hazards, fear and fast attackers, then what the re-measured clusters show | Both goals work (§7.2, ≥16/20); all frozen suites still pass; no `unknown_prompt`. Started 2026-10-22 (`/goal`, §15). |
+| **M4 `clvl10`, `reach_dl8`** (`reach_dl10` until 2026-10-24) | The brain rounds in §15.3: stationary hazards, fear and fast attackers, then what the re-measured clusters show | Both goals work (§7.2, ≥16/20); all frozen suites still pass; no `unknown_prompt`. Started 2026-10-22 (`/goal`, §15). **Met 2026-10-24 (§15.6).** |
+| **M5 Every race and class at M4** | §16: the M4 goals for every Warrior race, then Paladin and Priest, then Rogue and Ranger, then Mage, then every other race of each class; a C128 backend in between | `clvl10` and `reach_dl8` work (§7.2, ≥16/20) for each of the 31 race/class combinations, each frozen as its own suite; all frozen suites still pass; no `unknown_prompt`. Planned 2026-10-24 (§16). **M5a (every Warrior race) met 2026-10-25 (§16.8).** |
 
 **Stop rules** (defaults, tunable by the maintainer):
 
@@ -1679,3 +1680,196 @@ Method:
 - **Mutation-check every new bot test** (remove the rule; the test must
   fail): several first drafts passed without exercising the rule at all.
 
+## 16. M5: every race and class at M4 (planned 2026-10-24)
+
+### 16.1 Decision
+
+The maintainer chose this fork on 2026-10-24 over two others: pushing the
+Half-Troll Warrior on toward the Balrog, or putting M4 on other platforms
+first. The M4 bar is kept for every combination ("let's keep the milestone
+the same"): a Gnome Mage must reach `clvl10` and `reach_dl8` on 16 of 20 seeds
+like the Half-Troll Warrior. "For playability, those should all be equal but
+it might require different techniques": a combination that cannot reach the
+bar gets new brain technique (spells, missiles, stealth) or is reported as a
+balance finding; its bar is never lowered.
+
+Why this order:
+
+- **Race costs no bot work.** `Goal.character` already picks the race and
+  class letters for the scripted chargen, and every race can be a Warrior.
+  Race changes stats, hit dice, infravision, the experience penalty,
+  searching and stealth: tables no run has exercised past the Half-Troll.
+- **Class is where play differs.** Spells, prayers, mana, book learning,
+  spell failure and missiles are large areas of game code the bot has never
+  touched (the brain has no cast command today).
+- **Casters help the Balrog later.** Detection, teleport and identify are
+  layers a deep run needs anyway; building them for the classes first makes
+  a later Balrog push easier for every class, the Warrior included.
+- **The C128 finds a different class of bug.** Banking, overlay and layout
+  faults are silent corruption on this codebase. The same frozen suites on
+  `x128` are a regression test of all the shared code, with no brain work.
+
+### 16.2 Stages
+
+| Stage | Combinations | New bot work | Exit |
+|---|---|---|---|
+| **M5a Warrior races** | Human, Half-Elf, Elf, Halfling, Gnome, Dwarf, Half-Orc Warriors (Half-Troll is M4) | None at first: baselines with the M4 brain, then trace-driven fixes | Both goals ≥16/20 for each; frozen |
+| **M5b Paladin, Priest** | Human Paladin, then Half-Troll Priest | A cast layer: choose a prayer, target it, track mana, learn from books, buy books; prayers for healing, fear and light first | Both goals ≥16/20 for each; frozen |
+| **M5c C128 backend** | Half-Troll Warrior on `x128` | None in the brain: the backend (§12.7) for VDC screen text, banked reads, the C128 keyboard buffer and the 198×66 map | Every frozen C64 suite passes on the C128 at its bar |
+| **M5d Rogue, Ranger** | Human Rogue, Human Ranger | Missiles: buy ammunition, fire, target; stealth-aware choices; the cast layer for their spells | Both goals ≥16/20 for each; frozen |
+| **M5e Mage** | Human Mage | Spells for survival, not only utility: Magic Missile, Phase Door, detection; a fragile character's readiness | Both goals ≥16/20; frozen |
+| **M5f The rest** | The other 20 combinations (§12.6) | Trace-driven fixes for what fails | Both goals ≥16/20 for each; frozen |
+
+M5c runs between brain rounds: it is self-contained, and once it works,
+every later suite can also run on the C128. Within a class, Human comes
+first (no race adjustment), then the other races in M5f.
+
+### 16.3 Method
+
+M4's lessons apply (§15.7): replay the failing seed and fix what the trace
+shows; treat 40-seed differences under about 7 as noise; check that a rule
+can fire at all; mutation-check every new bot test. Each stage starts with a
+baseline of the current brain on the qualification seeds (1001-1020, first
+character, 100,000 steps), and its death clusters, like §15.1-15.2.
+
+A difference between races or classes on the same seeds is evidence for a
+game deviation, not just a weaker character: check the race or class table,
+the spell, or the formula against VMS Moria before tuning the bot.
+
+### 16.4 Maintainer decisions (2026-10-24)
+
+The maintainer accepted all four proposals and started M5a (`/goal Proceed
+with M5a`).
+
+1. **Suite names.** The Half-Troll Warrior suites keep their names; other
+   combinations add the race and class (`clvl10-human-warrior.json`, with a
+   `character` field), and `--regress` runs all of them.
+2. **Regression time.** The lower goals (`clvl5` and below) stay Half-Troll
+   Warrior only. `--character` (`make playtest-regress CHARACTER=...`) runs
+   one combination's suites. "Let's not hyperfocus on perfection here,
+   let's get it working before we do that": a faster regression is later
+   work.
+3. **The cast layer's scope.** Only the spells and prayers the M4 goals
+   need (healing, light, fear, detection, Phase Door, Magic Missile), added
+   as the traces call for them, not the whole book.
+4. **M5c scope.** The C128 backend changes only the harness (§12.7); a game
+   bug it finds is fixed as a game change with its contract loaded, like
+   M4's (§15.4).
+
+Harness support: `--character` on every session mode
+(`make playtest-qualify CHARACTER=human-warrior`); the names are in
+`playtest/moria_playtest/goals.py` (`CHARACTERS`).
+
+
+Weak-by-design combinations (maintainer decision 2026-10-24, during M5a
+round 9: "it might be fair to consider that halfling and gnome are just not
+appropriate for warriors"; chose "freeze at their level"): Halfling and
+Gnome Warriors are a balance finding, not a bot failure. Against a Human
+Warrior, the race table gives a Halfling hit die 6 (Human 10), STR -2 and
+melee BTH -10, and a Gnome hit die 7 and BTH -8; their strengths (stealth,
+searching, saves, bows) do nothing for a melee character. Each is frozen at
+what it reliably reaches, as a regression suite with its own bar
+(`goals.CHARACTER_BARS`), and M5a is met once every other Warrior race
+qualifies at 16/20. They return at the full bar with a class that suits them
+(Halfling Rogue, Gnome Mage).
+
+### 16.5 M5a baseline (2026-10-24)
+
+The M4 brain (`19bdcbf`), seeds 1001-1020, first character, 100,000 steps,
+every other Warrior race (sessions `m5a-base-<goal>-<race>`):
+
+| Race | `clvl10` | `reach_dl8` |
+|---|---|---|
+| Human | 13 | 10 |
+| Half-Elf | 10 | 7 |
+| Elf | 8 | 5 |
+| Halfling | 6 | 5 |
+| Gnome | 11 | 8 |
+| Dwarf | 16 | 13 |
+| Half-Orc | 11 | 15 |
+| Half-Troll (M4) | 18 | 17 |
+
+Moria8's race table matches Umoria's (`data_player.cpp`) exactly, so the gap
+is play, not a race deviation. Deaths (141): nagas 50 (DL5, the first level a
+two-level margin allows at level 7), Kobolds on DL1-2 27 (Halflings and Elves
+lost even melee), traps and poison 15, Novice Priests 13, Creeping Coins 11.
+
+### 16.6 Game changes during M5a
+
+1. **A melee turn no longer springs the trap under the player** (2026-10-24).
+   The move command ran `trap_check_at_player` after every successful
+   `player_try_move`, so a Human fighting a Green Naga from a dart trap was
+   hit, and drained of strength, on every swing. Pinned VMS `move_char`
+   (`moria.inc`) springs a trap only through `carry` in the branch that moves
+   the player; the run path already checked `player_move_relocated`. Now the
+   move path does too (`core/game_loop.s`); C64 `test_main_loop.s` t49 (fails
+   on the old code). A repair to the upstream rule: no ledger row.
+2. **Store prices over about 500 gp were wrong for low CHR** (2026-10-24).
+   `calc_chr_price` divided only the low 16 bits of the 24-bit `cost x CHR%`
+   product: Mithril Chain Mail (600 gp) at CHR 8 showed 40 gp, and the haggle
+   refused that offer (its floor is the base cost), so low-CHR characters
+   (Gnome, Dwarf, Half-Orc, Half-Troll) could never buy it and kept Leather
+   Armour. Now all 24 bits are divided (`hg_div_mul_result_24x8`,
+   `core/store.s`); C64 `test_store.s` 49 (fails on the old code). Moria8's
+   own formula (`base x chr_price_adj / 100`), computed correctly.
+3. **Melee to-hit was halved in every corridor** (2026-10-24). The
+   audited Umoria rule halves base and level to-hit against a target the
+   player cannot see (`playerCalculateBaseToHit(monster.lit)`), but
+   `player_attack_monster` read the target square's `FLAG_LIT` (room light),
+   so a monster in torchlight in a corridor or dark room was hit at half
+   skill: an Elf hit a Black Naga with about 20% of blows. It now reads the
+   monster's `MF_VISIBLE` (MON-001); C64 `test_combat.s` 42 (fails on the
+   old code); `docs/COMBAT_AUDIT.md` updated. Pinned VMS `py_attack` never
+   halves; the Umoria rule the audit chose is kept, and following VMS is
+   left to the maintainer.
+
+### 16.7 M5a round log
+
+Rounds run all eight races (Half-Troll to watch its frozen suites);
+sums are the seven new races' 14 qualifications (baseline 138 of 280).
+
+| Round | Change | Sum | Notes |
+|---|---|---|---|
+| 1 | Trap fix (§16.6 item 1); throw oil (2d6) at approaching creatures worth one, carry 7 more flasks | 134 | Kobold deaths 27 → 17, but flasks bought first at the General Store left no gold for Word of Recall: starvation 18; Half-Troll 14/15 |
+| 2 | Throwing flasks only from gold the potions and scrolls leave; none at slow creatures; fight odds (turns to kill against turns to die, from the lore's HP, AC and attacks and the character's own blows) join the M4 "too strong" test | 155 | Dwarf 18/16 meets the bar; nagas 43, starvation 19, Novice Priests 16; Half-Troll 14/16 |
+| 3 | Store price fix (§16.6 item 2); out of food, fight through slow creatures instead of walking away; no Word of Recall and gold for it: a town trip; the last scroll is kept for the way home | 174 | Starvation 19 → 1; Half-Orc 17 and Dwarf 16 on `clvl10`; Half-Troll 18/17 (its frozen numbers). One Human seed lost to a harness race (title-snapshot temp file shared by concurrent sessions; fixed) |
+| 4 | Melee to-hit fix (§16.6 item 3) | 228 | 12 of 16 qualify: Human 18/17, Dwarf 17/19, Half-Orc 18/19, Half-Troll 20/17, and `clvl10` for Half-Elf 16, Elf 17, Halfling 17, Gnome 16. Nagas 43 → 3; `reach_dl8` short for Half-Elf 12, Elf 15, Halfling 13, Gnome 14, whose deaths are now Novice Priests and Mages on DL2-3 (12 of 30) |
+| 5 | Readiness also needs maximum HP for two of the strongest spells cast at the next depth (`knowledge.spell_max`: Cause Light Wounds 3d8 from DL2) | 230 | Every `clvl10` passes; `reach_dl8` 14 for Half-Elf, Elf, Halfling, Gnome. Novice caster deaths 12 → 6; Creeping Coins 9 (walked away into a dead end and cornered) and nagas 7 lead |
+| 6 | Creeping Coins fought when the fight odds are under 0.5 (walked away from otherwise) | 227 | Within noise of round 5; Gnome 16/16 now qualifies, Human, Half-Elf and Halfling `clvl10` dip to 15-14. Nagas 14, coins 9; two seeds (Halfling 1012, Human 1015) die every round to a DL1 poison gas trap at level 1 (VMS's is harsher: 2d6 at once plus 12 + 1d(damage) turns) |
+| 7 | Fight odds must be under 0.6, not 1.0: at 1.0 a fight is a coin flip | 233 | 11 of 16: Human 20/17 joins Dwarf, Gnome, Half-Orc, Half-Troll; Half-Elf `clvl10` 16. Short: Elf 15/14, Half-Elf `reach_dl8` 15, Halfling 14/13. Yellow Jellies 5: a potion drunk between steps hid an A-B-A-B oscillation beside one |
+| 8 | The oscillation breaker counts moves only (a potion drunk between steps hid the A-B-A-B) | 235 | 12 of 16: Elf `reach_dl8` 16, Gnome `reach_dl8` 16 and Halfling `clvl10` 17 join. Short: Elf and Gnome `clvl10` 15, Half-Elf `reach_dl8` 15, Halfling `reach_dl8` 13. Coins 12: each pile of a nest looked an easy fight alone |
+| 9 | Fight odds count every adjacent attacker (a coin nest was fought one pile at a time) | 238 | 12 of 16; short at 16/20 only Elf `clvl10` 15 and Half-Elf `reach_dl8` 15 (Gnome and Halfling `reach_dl8` 15 and 14 get their own bars, §16.1). Coins 11 lead. Checking whether worm masses breed found a generator bug: no creature has `CF_BREEDER` or `CF_GROUP`, and the dragon/animal defense bits are mapped from the wrong Umoria bits (backlogged by the maintainer, `docs/BACKLOG.md`) |
+| 10 | Oil at slow creatures that are costly to melee (Creeping Coins) | 238 | Identical to round 9 on every goal: the rule never fired (coins look like gold until adjacent, and deeper characters carry only the lantern's flasks); kept, as it costs nothing |
+
+Focused rounds (maintainer direction 2026-10-24: run only the goals under
+the bar, 14 workers each, then confirm everything once on the final code):
+
+| Round | Change | Goals run | Result |
+|---|---|---|---|
+| F11 | Hurt beside creatures that are all slow: step away before drinking | Elf `clvl10`, Half-Elf `reach_dl8` | 16, 14 |
+| F12 | Creeping Coins never fought by choice again (M4 policy; rounds 6-10 showed no gain) | same | 18, 14 |
+| F13 | A treasure vein's `$` in rock is never taken for an attacker (seed 1018 attacked a wall, which takes no game time, for 85,000 steps); while only Hungry, no meal with a creature within 5 squares (seed 1012 ate with a Rattlesnake closing in) | same | 19, 15 |
+| F14 | Gold for armour (1,000 or more, 5,000 steps since town) is a town trip; a piece bought but not yet worn counts as worn, so one visit fills several slots (a Half-Elf on DL5 carried 1,547 gold in AC 7) | + Gnome, Halfling `reach_dl8` | Elf 20, Half-Elf 17, Gnome 16, Halfling 16: every goal at 16/20 |
+
+The maintainer chose to try an escape item as well; Moria8 has no Phase
+Door scroll (the Alchemist omits it, `docs/FEATURE_MAP.md` lists it Missing),
+so it was backlogged (`docs/BACKLOG.md`) instead.
+
+### 16.8 M5a freeze (2026-10-25)
+
+One run of all 14 goals on the final code (after focused round F14), first
+character on seeds 1001-1020 at 100,000 steps, each frozen on reaching its bar:
+
+| Race | `clvl10` | `reach_dl8` |
+|---|---|---|
+| Human | 19 | 18 |
+| Half-Elf | 20 | 17 |
+| Elf | 20 | 19 |
+| Halfling | 15 (own bar 15, §16.1) | 16 |
+| Gnome | 17 | 16 |
+| Dwarf | 19 | 20 |
+| Half-Orc | 20 | 19 |
+
+From a baseline of 138 of 280 to 255. Only Halfling `clvl10` needed its
+own bar (`goals.CHARACTER_BARS`); every other Halfling and Gnome goal met
+16/20 once armour was bought (F14). Suites: `playtest/suites/<goal>-<race>-warrior.json`.

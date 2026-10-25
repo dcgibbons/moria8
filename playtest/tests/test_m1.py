@@ -369,8 +369,9 @@ class ReadinessTest(unittest.TestCase):
         brain.food = 3
         view = town_view((5, 5), (5, 5), dlvl=2)            # on a down staircase
         view.types[5 * COLS + 20] = 0xA
-        self.assertNotEqual(brain.decide(command_obs(pos=(5, 5), dlvl=2, clvl=4), view).key, ord(">"))
-        self.assertEqual(brain.decide(command_obs(pos=(5, 5), dlvl=2, clvl=5), view).key, ord(">"))
+        # HP for two DL3 spells (M5a SpellReadinessTest), so the level decides.
+        self.assertNotEqual(brain.decide(command_obs(pos=(5, 5), dlvl=2, clvl=4, hp=60, mhp=60), view).key, ord(">"))
+        self.assertEqual(brain.decide(command_obs(pos=(5, 5), dlvl=2, clvl=5, hp=60, mhp=60), view).key, ord(">"))
         town = town_view((5, 5), (5, 5), dlvl=0)
         brain.shopped = True
         self.assertEqual(brain.decide(command_obs(pos=(5, 5), dlvl=0, clvl=1), town).key, ord(">"))
@@ -617,7 +618,7 @@ class LoopFixTest(unittest.TestCase):
         self.assertEqual(brain.decide(o, None).key, ord("Q"))
         view = town_view((5, 5), (5, 5), dlvl=1)            # on a down staircase
         view.types[5 * COLS + 20] = 0xA                      # up stairs known
-        decision = brain.decide(command_obs(pos=(5, 5), dlvl=1, clvl=3), view)   # ready for DL2 (round 18)
+        decision = brain.decide(command_obs(pos=(5, 5), dlvl=1, clvl=3, hp=60, mhp=60), view)   # ready for DL2 (round 18)
         self.assertEqual((decision.layer, decision.key), ("descend", ord(">")))
         later = command_obs(pos=(5, 5), dlvl=1, clvl=3)
         later.step = o.step + 2000
@@ -792,7 +793,10 @@ class OutmatchedTest(unittest.TestCase):
         brain.food = 5
         view = town_view((5, 5), (2, 5), dlvl=6, stairs_type=0xA)
         view.creatures = {(7, 5): Creature("n", 5)}
-        decision = brain.decide(command_obs(pos=(5, 5), dlvl=6, clvl=10, hp=60, mhp=60), view)
+        brain.weapon = ("Broad Sword", 0)   # and the strength to use it (M5a: fight_odds)
+        o = command_obs(pos=(5, 5), dlvl=6, clvl=10, hp=90, mhp=90,
+                        rows={19: "ST:18/50 DX:12", 23: "HP:90/90  MP:0/0   AC:20  AU:277"})
+        decision = brain.decide(o, view)
         self.assertNotEqual(decision.layer, "retreat")
         self.assertFalse(brain.level.scum)
 
@@ -903,6 +907,92 @@ class MemoryTest(unittest.TestCase):
         view.creatures = {(6, 5): Creature("$", 4)}
         decision = brain.decide(command_obs(pos=(5, 5), dlvl=4, clvl=8, hp=60, mhp=60), view)
         self.assertEqual(decision.reason, "walk away from a slower creature")
+
+    def test_no_recall_and_the_gold_for_one_heads_for_town(self) -> None:
+        """M5a round 2: a character that could not afford Word of Recall on
+        its last visit played 35,000 steps on DL1-2 without one and starved
+        in a sealed pocket."""
+        brain = Brain(GOALS["clvl10"])
+        brain.food, brain.recall = 10, 0
+        o = command_obs(pos=(5, 5), dlvl=2, clvl=6, hp=60, mhp=60,
+                        rows={23: "HP:60/60  MP:0/0   AC:20  AU:500"})
+        self.assertTrue(brain.needs_resupply(o))
+        brain.recall = 1
+        self.assertFalse(brain.needs_resupply(o))
+        brain.recall = 0
+        poor = command_obs(pos=(5, 5), dlvl=2, clvl=6, hp=60, mhp=60,
+                           rows={23: "HP:60/60  MP:0/0   AC:20  AU:300"})
+        self.assertFalse(brain.needs_resupply(poor))
+        brain.track(command_obs(pos=(5, 5), dlvl=0), town_view((5, 5), (40, 40)))   # a town visit
+        o.step = 10
+        self.assertFalse(brain.needs_resupply(o))        # not straight back: the Alchemist may have had none
+
+    def test_the_last_scroll_is_kept_for_the_way_home(self) -> None:
+        brain = Brain(GOALS["reach_dl8"])
+        brain.food, brain.recall, brain.max_dlvl = 10, 1, 6
+        brain.shopped = brain.potions_done = brain.alchemist_done = brain.market_done = True
+        brain.weapons_done = brain.armoury_done = True
+        o = command_obs(pos=(5, 5), dlvl=0, clvl=9, rows={23: "HP:60/60  MP:0/0   AC:20  AU:100"})
+        self.assertIsNone(brain.recall_trip(o, town_view((5, 5), (40, 40))))
+        brain.recall = 2
+        self.assertEqual(brain.recall_trip(o, town_view((5, 5), (40, 40))).layer, "recall")
+
+    def test_hurt_beside_slow_coins_steps_away_before_drinking(self) -> None:
+        """M5a round 10: a Half-Elf drank five potions in a row beside a
+        coin nest that hit harder than each potion healed."""
+        brain = Brain(GOALS["reach_dl8"])
+        brain.food, brain.clw = 5, 3
+        view = town_view((5, 5), (40, 40), dlvl=4)
+        view.creatures = {(6, 5): Creature("$", 4), (6, 6): Creature("$", 4)}
+        o = command_obs(pos=(5, 5), dlvl=4, clvl=7, hp=14, mhp=72)
+        decision = brain.decide(o, view)
+        self.assertEqual(decision.layer, "retreat")
+        self.assertIn(decision.key, (DIRS[(-1, 0)], DIRS[(-1, -1)], DIRS[(-1, 1)]))
+        away = town_view((3, 5), (40, 40), dlvl=4)                     # out of reach: drink
+        away.creatures = {(6, 5): Creature("$", 4)}
+        self.assertEqual(brain.decide(command_obs(pos=(3, 5), dlvl=4, clvl=7, hp=14, mhp=72), away).layer,
+                         "quaff")
+
+    def test_hungry_waits_to_eat_while_a_creature_closes_in(self) -> None:
+        """M5a round 11: a Half-Elf stopped to eat with a Rattlesnake two
+        squares behind it and died three turns later."""
+        brain = Brain(GOALS["reach_dl8"])
+        brain.food = 5
+        hungry = {23: "HP:40/74  MP:0/0  AC:20  AU:277  Hungry"}   # 40 columns
+        view = town_view((5, 5), (40, 40), dlvl=6)
+        view.creatures = {(8, 5): Creature("R", 5)}
+        o = command_obs(pos=(5, 5), dlvl=6, clvl=8, hp=40, mhp=74, rows=hungry)
+        self.assertNotEqual(brain.decide(o, view).layer, "eat")
+        weak = command_obs(pos=(5, 5), dlvl=6, clvl=8, hp=40, mhp=74,
+                           rows={23: "HP:40/74  MP:0/0  AC:20  AU:277  Weak"})
+        self.assertEqual(brain.eat(weak, view).layer, "eat")
+        clear = town_view((5, 5), (40, 40), dlvl=6)
+        self.assertEqual(brain.eat(o, clear).layer, "eat")
+
+    def test_an_attack_never_labels_a_glyph_in_rock(self) -> None:
+        """M5a focused round 12, seed 1018: Creeping Coins hit from the
+        dark beside a treasure vein's '$'; the vein was taken for them and
+        attacked (no game time) for 85,000 steps."""
+        brain = Brain(GOALS["reach_dl8"])
+        brain.food = 5
+        view = town_view((5, 5), (40, 40), dlvl=5, walls=[(5, 6)])
+        view.unknown = {(5, 6): "$", (6, 5): "$"}                      # a vein in the wall, the coins on floor
+        o = command_obs(pos=(5, 5), dlvl=5, clvl=7, hp=60, mhp=72,
+                        rows={0: "the Creeping Copper Coins hits you."})
+        decision = brain.decide(o, view)
+        self.assertNotEqual(brain.level.identified.get(((5, 6), "$"), ("", ""))[0], "creature")
+        self.assertEqual(brain.level.identified.get(((6, 5), "$"), ("", ""))[0], "creature")
+        self.assertNotEqual(decision.key, DIRS[(0, 1)])                 # never into the wall
+
+    def test_out_of_food_fights_through_slow_coins(self) -> None:
+        """M5a round 2: with no food, walking away from coins on the way to
+        the stairs met them again each step; 7 characters starved there."""
+        brain = Brain(GOALS["reach_dl2"])
+        brain.food = 0
+        view = town_view((5, 5), (40, 40), dlvl=4)
+        view.creatures = {(6, 5): Creature("$", 4)}
+        decision = brain.decide(command_obs(pos=(5, 5), dlvl=4, clvl=8, hp=60, mhp=60), view)
+        self.assertEqual((decision.layer, decision.key), ("fight", DIRS[(1, 0)]))
 
     def test_dropped_gold_is_collected(self) -> None:
         """MON-014: walk to identified gold in view, then pick it up."""
@@ -1165,6 +1255,25 @@ class OscillationTest(unittest.TestCase):
         self.assertIn((5, 5), brain.level.bumped)
         self.assertNotEqual(decision.key, DIRS[(-1, 0)])
 
+    def test_a_potion_between_the_flips_still_counts(self) -> None:
+        """M5a round 7: a drink every few steps beside a Yellow Jelly put
+        the same square in the trail twice and hid the oscillation."""
+        from moria_playtest.brain import Decision
+        brain = Brain(GOALS["reach_dl2"])
+        left, right = town_view((5, 5), (40, 40), dlvl=2), town_view((6, 5), (40, 40), dlvl=2)
+        brain.track(command_obs(pos=(5, 5), dlvl=2, clvl=3), left)
+        go_right, go_left = Decision(DIRS[(1, 0)], "explore", "on"), Decision(DIRS[(-1, 0)], "hunt", "back")
+        quaff = Decision(ord("q"), "quaff", "drink")
+        at_left, at_right = command_obs(pos=(5, 5), dlvl=2, clvl=3), command_obs(pos=(6, 5), dlvl=2, clvl=3)
+        for _ in range(2):
+            brain.break_oscillation(at_left, left, go_right)
+            brain.break_oscillation(at_right, right, quaff)        # a drink between the steps
+            brain.break_oscillation(at_right, right, go_left)
+        brain.break_oscillation(at_left, left, go_right)
+        decision = brain.break_oscillation(at_right, right, go_left)
+        self.assertIn((5, 5), brain.level.bumped)
+        self.assertNotEqual(decision.key, DIRS[(-1, 0)])
+
     def test_moving_on_is_untouched(self) -> None:
         from moria_playtest.brain import Decision
         brain = Brain(GOALS["reach_dl2"])
@@ -1300,6 +1409,33 @@ class GearTest(unittest.TestCase):
         o.rows[22] = "ST:18  IN: 6  WI:11  DX:12  CO:14  CH: 6"
         return o
 
+    def test_a_slot_just_bought_for_is_not_bought_again(self) -> None:
+        """M5a: bought, not yet worn, counts as worn; the next piece goes to
+        another slot."""
+        brain = Brain(GOALS["reach_dl8"])
+        stock = [("Hard Leather Armor [6,+2]", 300), ("Studded Leather Armor [5,+2]", 250),
+                 ("Iron Helm [1,+0]", 80)]                       # +4, +3 and +1 over Leather Armor [4]
+        brain.decide(self.store(brain, 1, stock, 1200), None)
+        self.assertEqual(brain.store_letter, "a")                 # the biggest gain, on the body
+        brain.count_purchase()
+        brain.decide(self.store(brain, 1, stock[1:], 900), None)
+        self.assertEqual(brain.store_letter, "b")                 # the helm, not a second body armour
+
+    def test_gold_for_armour_is_a_town_trip(self) -> None:
+        """M5a: a Half-Elf on DL5 carried 1,547 gold in AC 7; town trips came
+        only for food, light or Word of Recall."""
+        brain = Brain(GOALS["reach_dl8"])
+        brain.food, brain.recall = 10, 2
+        rich = command_obs(pos=(5, 5), dlvl=5, clvl=7, hp=70, mhp=70,
+                           rows={23: "HP:70/70  MP:0/0   AC:7  AU:1547"})
+        self.assertTrue(brain.needs_resupply(rich))
+        poor = command_obs(pos=(5, 5), dlvl=5, clvl=7, hp=70, mhp=70,
+                           rows={23: "HP:70/70  MP:0/0   AC:7  AU:600"})
+        self.assertFalse(brain.needs_resupply(poor))
+        brain.track(command_obs(pos=(5, 5), dlvl=0), town_view((5, 5), (40, 40)))   # just been to town
+        rich.step = 100
+        self.assertFalse(brain.needs_resupply(rich))
+
     def test_blows_follow_the_game_table(self) -> None:
         self.assertEqual(knowledge.blows(18, 12, 12), 2)    # Dagger, 1.2 lb
         self.assertEqual(knowledge.blows(18, 12, 200), 1)   # Two-Handed Sword, 20 lb
@@ -1380,8 +1516,10 @@ class RecallTest(unittest.TestCase):
         self.assertEqual((waiting.layer, waiting.key), ("recall", ord("5")))
 
     def test_in_town_after_shopping_reads_one_to_go_back(self) -> None:
+        """Two scrolls: one to go back, one kept for the way home (M5a; one
+        was read until then)."""
         brain = Brain(GOALS["reach_dl2"])
-        brain.food, brain.recall, brain.max_dlvl, brain.torches, brain.oil = 6, 1, 6, 2, 3
+        brain.food, brain.recall, brain.max_dlvl, brain.torches, brain.oil = 6, 2, 6, 2, 3
         view = town_view((5, 5), (40, 40), dlvl=0)
         brain.track(command_obs(pos=(5, 5), dlvl=0, clvl=8), view)
         brain.shopped = brain.potions_done = brain.weapons_done = brain.armoury_done = True
@@ -1875,7 +2013,10 @@ class FastAttackerTest(unittest.TestCase):
         o = command_obs(pos=(5, 5), dlvl=3, clvl=5, hp=30, mhp=40)   # 75%: retreat early
         o.step = 2
         self.assertEqual(brain.decide(o, view).layer, "retreat")
-        o = command_obs(pos=(5, 5), dlvl=3, clvl=8, hp=40, mhp=40)   # three levels on
+        # Three levels on, and armed to win (M5a: fight_odds also decides).
+        brain.weapon = ("Broad Sword", 0)
+        o = command_obs(pos=(5, 5), dlvl=3, clvl=8, hp=70, mhp=70,
+                        rows={19: "ST:18/50 DX:12", 23: "HP:70/70  MP:0/0   AC:20  AU:277"})
         self.assertTrue(brain.engageable(Creature("n", 3), o))
 
     def test_monster_lore_marks_a_naga_too_strong_early(self) -> None:
@@ -1887,7 +2028,12 @@ class FastAttackerTest(unittest.TestCase):
         self.assertFalse(Brain(GOALS["reach_dl8"]).too_strong(Creature("n", 5), o))   # depth goals dive
         self.assertFalse(brain.engageable(Creature("n", 5), o))
         self.assertFalse(brain.too_strong(Creature("k", 1), command_obs(pos=(5, 5), dlvl=1, clvl=1)))
-        self.assertFalse(brain.too_strong(Creature("n", 5), command_obs(pos=(5, 5), dlvl=5, clvl=7)))
+        # Outgrown at level 7 with the strength and weapon to win (M5a: the
+        # odds are the character's own melee, fight_odds).
+        brain.weapon = ("Broad Sword", 0)
+        strong = command_obs(pos=(5, 5), dlvl=5, clvl=7, hp=80, mhp=80,
+                             rows={19: "ST:18/50 DX:12", 23: "HP:80/80  MP:0/0   AC:20  AU:277"})
+        self.assertFalse(brain.too_strong(Creature("n", 5), strong))
 
     def test_a_retreat_from_an_unseen_attacker_keeps_going(self) -> None:
         """M4 round 46b: the turn after an unseen Green Naga hit, explore
@@ -2000,6 +2146,66 @@ class FastAttackerTest(unittest.TestCase):
         for _ in range(2):
             brain.decide(command_obs(pos=(5, 5), dlvl=1, clvl=2, rows={0: "You picked up a Ration of Food."}), view)
         self.assertEqual(brain.food, start + 2)
+
+    def test_throws_oil_at_an_approaching_creature(self) -> None:
+        """M5a: a weak Warrior (Halfling, Elf) lost melee with DL1 Kobolds;
+        2d6 thrown while one approaches is damage before contact."""
+        brain = Brain(GOALS["reach_dl5"])
+        brain.food, brain.oil = 3, 2
+        view = town_view((5, 5), (40, 40), dlvl=1, monsters={(5, 8)})   # a Kobold three squares off
+        o = command_obs(pos=(5, 5), dlvl=1, clvl=1, hp=15, mhp=15)
+        self.assertEqual(brain.decide(o, view).layer, "throw")
+
+    def test_no_oil_at_a_creature_already_adjacent_or_too_weak(self) -> None:
+        """Not afraid, melee answers an adjacent creature; one the lore puts
+        under OIL_WORTH_HP is not worth a flask."""
+        brain = Brain(GOALS["reach_dl5"])
+        brain.food, brain.oil = 3, 2
+        o = command_obs(pos=(5, 5), dlvl=1, clvl=1, hp=15, mhp=15)
+        self.assertNotEqual(brain.decide(o, town_view((5, 5), (40, 40), dlvl=1, monsters={(5, 6)})).layer,
+                            "throw")
+        weak = town_view((5, 5), (40, 40), dlvl=1)
+        weak.creatures[(5, 8)] = Creature("G", 3)   # a Poltergeist's 6 HP
+        self.assertNotEqual(brain.decide(o, weak).layer, "throw")
+
+    def test_lantern_reserve_is_not_thrown_unless_afraid(self) -> None:
+        brain = Brain(GOALS["reach_dl5"])
+        brain.food, brain.oil, brain.lamp = 3, 3, True
+        view = town_view((5, 5), (40, 40), dlvl=1, monsters={(5, 8)})
+        o = command_obs(pos=(5, 5), dlvl=1, clvl=1, hp=15, mhp=15)
+        self.assertNotEqual(brain.decide(o, view).layer, "throw")
+        brain.oil = 4
+        self.assertEqual(brain.decide(o, view).layer, "throw")
+
+    def test_stocks_flasks_to_throw_from_spare_gold(self) -> None:
+        """M5a round 1: the General Store comes first, and a Half-Troll that
+        spent its gold on flasks there had no Word of Recall and starved."""
+        brain = Brain(GOALS["reach_dl2"])
+        brain.shop_buys, brain.lamp, brain.torches, brain.oil = FOOD_PER_VISIT, True, 2, 3
+        brain.clw, brain.recall = 5, 2
+        self.assertIn("Flask of Oil", brain.shopping_list(100))
+        brain.clw, brain.recall = 0, 0           # 5 x 60 + 2 x 250 still to buy
+        self.assertNotIn("Flask of Oil", brain.shopping_list(500))
+        self.assertIn("Flask of Oil", brain.shopping_list(900))
+        self.assertNotIn("Flask of Oil", brain.shopping_list())   # gold not shown
+
+    def test_oil_at_a_slow_creature_only_when_melee_is_costly(self) -> None:
+        """M5a round 1: 74 flasks went at worm masses a character could walk
+        away from or beat; rounds 5-9: Creeping Coins cornered and killed
+        characters in melee, so a costly slow creature is shot as it creeps."""
+        brain = Brain(GOALS["reach_dl5"])
+        brain.food, brain.oil, brain.weapon = 3, 2, ("Broad Sword", 0)
+        strong = command_obs(pos=(5, 5), dlvl=3, clvl=8, hp=80, mhp=80,
+                             rows={19: "ST:18/50 DX:14", 23: "HP:80/80  MP:0/0   AC:20  AU:277"})
+        view = town_view((5, 5), (40, 40), dlvl=3)
+        view.creatures[(5, 8)] = Creature("w", 4)   # Blue Worm mass: slow, an easy fight
+        self.assertNotEqual(brain.decide(strong, view).layer, "throw")
+        weak = Brain(GOALS["reach_dl5"])
+        weak.food, weak.oil = 3, 2
+        coins = town_view((5, 5), (40, 40), dlvl=3)
+        coins.creatures[(5, 8)] = Creature("$", 4)   # Creeping Copper Coins, for a Dagger at 30 HP
+        o = command_obs(pos=(5, 5), dlvl=3, clvl=3, hp=30, mhp=30)
+        self.assertEqual(weak.decide(o, coins).layer, "throw")
 
     def test_keeps_the_last_flask_for_the_lantern(self) -> None:
         brain = Brain(GOALS["reach_dl5"])
@@ -2191,6 +2397,97 @@ class RunSeedsTest(unittest.TestCase):
         # The worker that raised on seed 3 is replaced, so only the error path
         # can have stopped it.
         self.assertIn("stop 3", stops.read_text().splitlines())
+
+
+class SpellReadinessTest(unittest.TestCase):
+    """M5a round 4: Elves and Gnomes reached DL2 at level 4 with 33-41 HP,
+    where two Cause Light Wounds (3d8) from a Novice caster killed them."""
+
+    def test_the_lore_knows_the_strongest_spell_by_depth(self) -> None:
+        self.assertEqual(knowledge.spell_max(1), 0)
+        self.assertEqual(knowledge.spell_max(2), 24)       # Novice Priest / Mage: 3d8
+
+    def test_not_deeper_without_hp_for_two_spells(self) -> None:
+        brain = Brain(GOALS["reach_dl8"])
+        self.assertTrue(brain.underleveled(command_obs(dlvl=1, clvl=4, hp=41, mhp=41)))
+        self.assertFalse(brain.underleveled(command_obs(dlvl=1, clvl=4, hp=48, mhp=48)))
+        self.assertFalse(brain.underleveled(command_obs(dlvl=0, clvl=1, hp=15, mhp=15)))   # DL1 has no casters
+
+
+class FightOddsTest(unittest.TestCase):
+    """M5a: whether a creature is too strong depends on the character's own
+    melee, not its level alone (50 of 141 baseline deaths were nagas)."""
+
+    @staticmethod
+    def obs(hp: int, clvl: int, strength: str):
+        return command_obs(hp=hp, mhp=hp, clvl=clvl, dlvl=5,
+                           rows={19: f"ST:{strength} DX:12", 23: f"HP:{hp}/{hp}  MP:0/0   AC:4  AU:277"})
+
+    def test_a_dagger_loses_to_a_green_naga_and_beats_a_kobold(self) -> None:
+        brain = Brain(GOALS["reach_dl8"])
+        o = self.obs(73, 7, "16")
+        self.assertGreater(brain.fight_odds(Creature("n", 5), o), 1.0)   # 1d8 crush + 2d6 acid, 40 HP
+        self.assertLess(brain.fight_odds(Creature("k", 1), o), 0.5)
+        self.assertTrue(brain.lore_strong(Creature("n", 5), o))
+        self.assertFalse(brain.lore_strong(Creature("k", 1), o))
+
+    def test_a_better_weapon_turns_the_odds(self) -> None:
+        brain = Brain(GOALS["reach_dl8"])
+        o = self.obs(73, 7, "18/50")
+        dagger = brain.fight_odds(Creature("n", 5), o)
+        brain.weapon = ("Broad Sword", 0)
+        self.assertLess(brain.fight_odds(Creature("n", 5), o), dagger)
+
+    def test_other_adjacent_attackers_count(self) -> None:
+        """M5a round 8: a nest fought one at a time looked an easy fight each."""
+        brain = Brain(GOALS["reach_dl8"])
+        o = self.obs(40, 4, "16")
+        alone = brain.fight_odds(Creature("k", 1), o)
+        brain.adjacent = [Creature("k", 1), Creature("k", 1), Creature("k", 1)]
+        self.assertGreater(brain.fight_odds(Creature("k", 1), o), 2.5 * alone)
+
+    def test_hurt_raises_the_odds(self) -> None:
+        brain = Brain(GOALS["reach_dl8"])
+        self.assertGreater(brain.fight_odds(Creature("k", 1), self.obs(8, 7, "16")),
+                           brain.fight_odds(Creature("k", 1), self.obs(73, 7, "16")))
+
+
+class CharacterTest(unittest.TestCase):
+    """M5 (§16): a goal is played by a named race and class, and its suite is
+    named for it unless it is the M0-M4 Half-Troll Warrior."""
+
+    def test_characters_and_suite_names(self) -> None:
+        from moria_playtest import goals
+        from moria_playtest.session import SUITES, suite_path
+        self.assertEqual(goals.for_character(GOALS["clvl10"], "human-warrior").character, ("A", "A"))
+        self.assertEqual(goals.for_character(GOALS["clvl10"], "half-troll-warrior"), GOALS["clvl10"])
+        self.assertEqual(len([name for name in goals.CHARACTERS if name.endswith("-warrior")]), 8)
+        self.assertEqual(suite_path("clvl10"), SUITES / "clvl10.json")
+        self.assertEqual(suite_path("clvl10", "gnome-warrior"), SUITES / "clvl10-gnome-warrior.json")
+
+    def test_a_weak_combination_has_its_own_bar(self) -> None:
+        """§16.1: Halfling and Gnome Warriors are frozen at their level."""
+        from moria_playtest import goals
+        saved = dict(goals.CHARACTER_BARS)
+        try:
+            goals.CHARACTER_BARS.clear()
+            goals.CHARACTER_BARS[("halfling-warrior", "reach_dl8")] = 12
+            self.assertEqual(goals.for_character(GOALS["reach_dl8"], "halfling-warrior").qualify_bar, 12)
+            self.assertEqual(goals.for_character(GOALS["clvl10"], "halfling-warrior").qualify_bar, 16)
+            self.assertEqual(goals.for_character(GOALS["reach_dl8"], "human-warrior").qualify_bar, 16)
+        finally:
+            goals.CHARACTER_BARS.clear()
+            goals.CHARACTER_BARS.update(saved)
+
+    def test_chargen_types_the_race_and_class(self) -> None:
+        from moria_playtest import goals
+        from moria_playtest.brain import Brain
+        brain = Brain(goals.for_character(GOALS["reach_dl2"], "dwarf-warrior"))
+        typed = {}
+        for stage in ("race", "class"):
+            o = dataclasses.replace(command_obs(), mode=Mode.CHARGEN, stage=stage)
+            typed[stage] = chr(brain.decide(o, None).key)
+        self.assertEqual(typed, {"race": "F", "class": "A"})
 
 
 class RunSeedsLostResultTest(unittest.TestCase):

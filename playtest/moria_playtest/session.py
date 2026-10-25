@@ -28,7 +28,8 @@ from . import nav
 from .auditor import Auditor
 from .brain import Brain
 from .game import EmulatorUnresponsive, GameFault, Mode, Observation
-from .goals import GOALS, QUALIFICATION_SEEDS, Goal, required
+from .goals import (CHARACTERS, DEFAULT_CHARACTER, GOALS, QUALIFICATION_SEEDS, Goal, for_character,
+                    required)
 from .launch import PLAYTEST_OUT, ROOT, SHIPPING, Build, StaleDisk, build_identity, check_disk
 from .recorder import CharacterLog, SessionLog, write_json
 from .vice import ViceError
@@ -320,13 +321,18 @@ def session_until_reached(goal: Goal, seed_start: int, workers: int, session: Se
             return results
 
 
-def suite_path(goal: str) -> Path:
-    return SUITES / f"{goal}.json"
+def suite_path(goal: str, character: str = DEFAULT_CHARACTER) -> Path:
+    """The Half-Troll Warrior's suites are named by goal alone (M0-M4); other
+    characters' add the character (§16.4 item 1)."""
+    return SUITES / (f"{goal}.json" if character == DEFAULT_CHARACTER else f"{goal}-{character}.json")
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="playtest-session")
     parser.add_argument("--goal", default="enter_dungeon", choices=sorted(GOALS))
+    parser.add_argument("--character", choices=sorted(CHARACTERS),
+                        help=f"race and class (default {DEFAULT_CHARACTER}); with --regress, "
+                             "only that character's suites")
     parser.add_argument("--seeds", help="e.g. 1001-1020 or 5,9,12 (default: qualification seeds)")
     parser.add_argument("--seed-start", type=int, default=1)
     parser.add_argument("--workers", type=int, default=4)
@@ -347,28 +353,34 @@ def main(argv: list[str] | None = None) -> int:
         print(f"playtest-session: {exc}", file=sys.stderr)
         return 2
     mode = "regress" if args.regress else "qualify" if args.qualify else "session"
-    name = args.name or f"{time.strftime('%Y%m%d-%H%M%S')}-{mode}-{args.goal}"
+    character = args.character or DEFAULT_CHARACTER
+    tag = args.goal if character == DEFAULT_CHARACTER else f"{args.goal}-{character}"
+    name = args.name or f"{time.strftime('%Y%m%d-%H%M%S')}-{mode}-{tag}"
     session = SessionLog(PLAYTEST_OUT / "sessions" / name,
-                         {"mode": mode, "goal": args.goal, "build": build_identity(build),
+                         {"mode": mode, "goal": args.goal, "character": character,
+                          "build": build_identity(build),
                           "started": time.strftime("%Y-%m-%dT%H:%M:%S")})
     print(f"session: {session.dir}", flush=True)
 
     ok = True
     if mode == "regress":
-        suites = sorted(SUITES.glob("*.json"))
+        suites = [path for path in sorted(SUITES.glob("*.json"))
+                  if args.character in (None, json.loads(path.read_text()).get("character", DEFAULT_CHARACTER))]
         report = {}
         ok = bool(suites)   # no frozen suite is no evidence
         for path in suites:
             suite = json.loads(path.read_text())
-            goal = dataclasses.replace(GOALS[suite["goal"]], step_budget=suite["step_budget"])
+            goal = dataclasses.replace(for_character(GOALS[suite["goal"]],
+                                                     suite.get("character", DEFAULT_CHARACTER)),
+                                       step_budget=suite["step_budget"])
             results = run_seeds(goal, suite["seeds"], args.workers, session, build, False)
             passed = sum(r.outcome == "reached" for r in results)
-            report[goal.name] = f"{passed}/{len(suite['seeds'])}"
+            report[path.stem] = f"{passed}/{len(suite['seeds'])}"
             ok &= passed >= suite.get("required", required(goal, len(suite["seeds"])))
         session.summary["regress"] = report
         print(json.dumps(report))
     elif mode == "qualify":
-        goal = GOALS[args.goal]
+        goal = for_character(GOALS[args.goal], character)
         if args.step_budget:
             if args.freeze:
                 parser.error("--step-budget is for iteration rounds; freeze with the goal's budget")
@@ -387,13 +399,16 @@ def main(argv: list[str] | None = None) -> int:
             print("not frozen: a suite is the goal's full qualification seed list", flush=True)
         elif ok and args.freeze:
             SUITES.mkdir(parents=True, exist_ok=True)
-            write_json(suite_path(goal.name), {"goal": goal.name, "seeds": seeds, "required": need,
-                                               "step_budget": goal.step_budget,
+            suite = {"goal": goal.name, "seeds": seeds, "required": need,
+                     "step_budget": goal.step_budget}
+            if character != DEFAULT_CHARACTER:
+                suite["character"] = character
+            write_json(suite_path(goal.name, character), {**suite,
                                                "frozen": time.strftime("%Y-%m-%d"),
                                                "program_sha256": build_identity(build)["program_sha256"]})
-            print(f"froze {suite_path(goal.name).relative_to(ROOT)}")
+            print(f"froze {suite_path(goal.name, character).relative_to(ROOT)}")
     else:
-        results = session_until_reached(GOALS[args.goal], args.seed_start, args.workers, session, build)
+        results = session_until_reached(for_character(GOALS[args.goal], character), args.seed_start, args.workers, session, build)
         reached = [r.seed for r in results if r.outcome == "reached"]
         print(f"goal {args.goal} reached by seed {reached[0]} after {len(results)} characters")
     session.summary["findings"] = session.findings

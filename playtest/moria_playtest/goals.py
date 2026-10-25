@@ -7,13 +7,28 @@ steps, so qualification is deterministic and can fail.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Callable
 
 from .game import Observation
 
 # Chargen keys for the scripted path (§6.4): race letter, class letter.
 HALF_TROLL_WARRIOR = ("H", "A")
+
+# Race menu letters, in race table order (core/player_create.s). The class
+# menu lists only the classes a race allows (race_class_flags), so a class's
+# letter depends on the race; Warrior, allowed to every race, is always A.
+RACE_KEYS = {"human": "A", "half-elf": "B", "elf": "C", "halfling": "D", "gnome": "E",
+             "dwarf": "F", "half-orc": "G", "half-troll": "H"}
+DEFAULT_CHARACTER = "half-troll-warrior"
+CHARACTERS: dict[str, tuple[str, str]] = {f"{race}-warrior": (key, "A") for race, key in RACE_KEYS.items()}
+
+# Bars below 16/20 for combinations weak by design (maintainer decision
+# 2026-10-24, §16.1): each is frozen at what it reliably reaches.
+CHARACTER_BARS: dict[tuple[str, str], int] = {
+    # M5a freeze run (2026-10-25): 15/20; 14-17 across rounds 4-10.
+    ("halfling-warrior", "clvl10"): 15,
+}
 
 
 @dataclass(frozen=True)
@@ -67,3 +82,10 @@ def required(goal: Goal, seeds: int) -> int:
     """Seeds that must reach ``goal`` out of ``seeds`` run: its bar, scaled
     to the seed count and rounded up."""
     return -(-goal.qualify_bar * seeds // len(QUALIFICATION_SEEDS))
+
+
+def for_character(goal: Goal, character: str) -> Goal:
+    """``goal`` played by ``character`` (a CHARACTERS name), at its bar."""
+    return replace(goal, character=CHARACTERS[character],
+                   qualify_bar=CHARACTER_BARS.get((character, goal.name), goal.qualify_bar))
+
