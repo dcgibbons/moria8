@@ -21,7 +21,22 @@ HALF_TROLL_WARRIOR = ("H", "A")
 RACE_KEYS = {"human": "A", "half-elf": "B", "elf": "C", "halfling": "D", "gnome": "E",
              "dwarf": "F", "half-orc": "G", "half-troll": "H"}
 DEFAULT_CHARACTER = "half-troll-warrior"
-CHARACTERS: dict[str, tuple[str, str]] = {f"{race}-warrior": (key, "A") for race, key in RACE_KEYS.items()}
+CLASSES = ("warrior", "mage", "priest", "rogue", "ranger", "paladin")   # class table order
+# Classes each race allows, bit n = CLASSES[n] (core/tables.s race_class_flags).
+RACE_CLASS_FLAGS = {"human": 0b111111, "half-elf": 0b111111, "elf": 0b011111, "halfling": 0b001011,
+                    "gnome": 0b001111, "dwarf": 0b000101, "half-orc": 0b001101, "half-troll": 0b000101}
+
+
+def class_key(race: str, klass: str) -> str:
+    """The class menu lists only the classes the race allows, in table
+    order (core/player_create.s), so a class's letter depends on the race."""
+    allowed = [c for i, c in enumerate(CLASSES) if RACE_CLASS_FLAGS[race] >> i & 1]
+    return chr(ord("A") + allowed.index(klass))
+
+
+CHARACTERS: dict[str, tuple[str, str]] = {
+    f"{race}-{klass}": (key, class_key(race, klass))
+    for race, key in RACE_KEYS.items() for i, klass in enumerate(CLASSES) if RACE_CLASS_FLAGS[race] >> i & 1}
 
 # Bars below 16/20 for combinations weak by design (maintainer decision
 # 2026-10-24, §16.1): each is frozen at what it reliably reaches.
@@ -29,6 +44,9 @@ CHARACTER_BARS: dict[tuple[str, str], int] = {
     # M5a freeze run (2026-10-25): 15/20; 14-17 across rounds 4-10.
     ("halfling-warrior", "clvl10"): 15,
 }
+# Pure spell casters, every race and goal (maintainer decision 2026-10-26,
+# M5b): 15/20. A CHARACTER_BARS entry still decides its combination.
+CLASS_BARS: dict[str, int] = {"mage": 15, "priest": 15}
 
 
 @dataclass(frozen=True)
@@ -37,6 +55,8 @@ class Goal:
     description: str
     reached: Callable[[Observation], bool]
     character: tuple[str, str] = HALF_TROLL_WARRIOR
+    race: str = "half-troll"   # names for the brain's own estimates (melee skill)
+    klass: str = "warrior"
     step_budget: int = 2_000
     target_dlvl: int = 0   # the brain walks down until this depth
     want_xp: bool = False  # M2: seek monsters for XP
@@ -63,15 +83,17 @@ GOALS: dict[str, Goal] = {
         lambda o: o.clvl >= 5, step_budget=30_000, target_dlvl=4, want_xp=True),
     # M4 (§15): frozen 2026-10-24 at these budgets (playtest/suites/).
     "clvl10": Goal(
-        "clvl10", "Reach character level 10. target_dlvl 8 caps depth; readiness keeps it three levels over "
-        "each depth (M4 round 84 A/B: 31/40 against 28/40 at two).",
-        lambda o: o.clvl >= 10, step_budget=100_000, target_dlvl=8, want_xp=True, ready_margin=3),
+        "clvl10", "Reach character level 10. target_dlvl 8 caps depth; readiness keeps it four levels over "
+        "each depth (M4 round 84 A/B: 31/40 against 28/40 at two; three until M5b round 38: it hunts and "
+        "fights at each depth, and without the removed maximum-HP bar Priests died at twice reach_dl8's rate).",
+        lambda o: o.clvl >= 10, step_budget=100_000, target_dlvl=8, want_xp=True, ready_margin=4),
     # reach_dl8 replaced reach_dl10 (maintainer direction 2026-10-24).
     "reach_dl8": Goal(
-        "reach_dl8", "Descend, levelling up and resupplying, and arrive on DL8. Readiness keeps it two "
-        "levels over each depth: diving at level = depth met Green Nagas at level 5 with the starting "
-        "Dagger (maintainer direction 2026-10-23: build up first).",
-        lambda o: o.dlvl >= 8, step_budget=100_000, target_dlvl=8),
+        "reach_dl8", "Descend, levelling up and resupplying, and arrive on DL8. Readiness keeps it three "
+        "levels over each depth, as clvl10: diving at level = depth met Green Nagas at level 5 with the "
+        "starting Dagger (maintainer direction 2026-10-23: build up first); at two, Human Paladins met "
+        "DL2 Novice Priests at level 3 that the same seeds survived under clvl10 (M5b round 20).",
+        lambda o: o.dlvl >= 8, step_budget=100_000, target_dlvl=8, ready_margin=3),
 }
 
 # Fixed qualification seeds (§7.2): 20 seeds, first character only.
@@ -86,6 +108,8 @@ def required(goal: Goal, seeds: int) -> int:
 
 def for_character(goal: Goal, character: str) -> Goal:
     """``goal`` played by ``character`` (a CHARACTERS name), at its bar."""
-    return replace(goal, character=CHARACTERS[character],
-                   qualify_bar=CHARACTER_BARS.get((character, goal.name), goal.qualify_bar))
+    race, klass = character.rsplit("-", 1)
+    return replace(goal, character=CHARACTERS[character], race=race, klass=klass,
+                   qualify_bar=CHARACTER_BARS.get((character, goal.name),
+                                                  CLASS_BARS.get(klass, goal.qualify_bar)))
 

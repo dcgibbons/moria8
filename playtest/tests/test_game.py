@@ -201,6 +201,48 @@ class CreatureFlagTest(unittest.TestCase):
         self.assertFalse(any(f & self.CF_GROUP for f in self.flags().values()))
 
 
+class EarlyCreatureTest(unittest.TestCase):
+    """Thirty DL 1-5 creatures added to tier 1 (2026-10-25; Umoria
+    data_creatures.cpp): Moria8 had shipped only Kobold, White Worm mass and
+    Floating Eye there. They come after tier 1's original 24, so the
+    tier-local indices that saves and tests use did not move."""
+
+    ADDED = ("Giant White Centipede", "Giant Yellow Centipede", "White Icky-Thing",
+             "Large White Snake", "Giant White Mouse",
+             # the second batch, the same day (25 DL 1-5 creatures)
+             "Large Brown Snake", "Grey Mushroom patch", "Blubbering Icky-Thing", "Metallic Green Centipede",
+             "Novice Warrior", "Novice Rogue", "Giant Green Frog", "Blue Yeek", "Large Black Snake",
+             "White Harpy", "Yellow Mushroom patch", "Metallic Blue Centipede", "Scruffy-Looking Hobbit",
+             "Huge Brown Bat", "Giant White Ant", "Metallic Red Centipede", "Large Green Snake",
+             "Drooling Harpy", "Radiation Eye", "Giant Black Centipede", "Giant Blue Centipede",
+             "Large Grey Snake", "Black Yeek", "Grey Icky-Thing", "Giant Black Frog")
+
+    def tier1(self):
+        from moria_playtest import knowledge
+        names, tables = knowledge._tiers()[1]      # tier0.s is the town
+        return list(names), tables
+
+    def test_added_after_the_original_members(self) -> None:
+        names, tables = self.tier1()
+        self.assertEqual(len(names), 54)
+        self.assertEqual(tuple(names[24:]), self.ADDED)
+        self.assertEqual(names[:3], ["Kobold", "White Worm mass", "Floating Eye"])   # unmoved
+        self.assertTrue(all(1 <= tables["level"][i] <= 5 for i in range(24, 54)))
+
+    def test_tier_2_keeps_its_original_order(self) -> None:
+        from moria_playtest import knowledge
+        names, _ = knowledge._tiers()[2]
+        self.assertEqual(len(names), 35)
+        self.assertEqual(tuple(names[32:]), ("Black Yeek", "Grey Icky-Thing", "Giant Black Frog"))   # DL 5 joins tier 2
+
+    def test_upstream_stats(self) -> None:
+        names, tables = self.tier1()
+        mouse, snake = names.index("Giant White Mouse"), names.index("Large White Snake")
+        self.assertEqual((tables["hd_num"][mouse], tables["hd_sides"][mouse], tables["ac"][mouse]), (1, 3, 4))
+        self.assertTrue(tables["mflags"][mouse] & CreatureFlagTest.CF_BREEDER)        # Umoria 0x0020000A
+        self.assertEqual((tables["hd_num"][snake], tables["hd_sides"][snake], tables["ac"][snake]), (3, 6, 30))
+
+
 class DiskCheckTest(unittest.TestCase):
     """The harness refuses a disk not written from the program and symbols it
     reads (a stale disk after `make test` failed every worker at boot)."""

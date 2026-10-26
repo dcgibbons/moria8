@@ -103,6 +103,24 @@ def attack_tohit() -> list[int]:
 SPELL_WOUND_LIGHT, SPELL_BREATH, SPELL_WOUND_SERIOUS = 0x01, 0x02, 0x40   # cr_spell_flags (mm_spell_handlers)
 
 
+@lru_cache(maxsize=1)
+def spell_burst() -> dict[tuple[str, int], int]:
+    """(screen glyph, creature level) -> the most damage one spell does from
+    the strongest shipped caster drawn that way: Cause Light Wounds 3d8,
+    Cause Serious Wounds 8d8, breath a third of its HP."""
+    out: dict[tuple[str, int], int] = {}
+    for _, tables in _tiers():
+        for code, level, flags, chance, num, sides in zip(tables["display"], tables["level"],
+                                                         tables["spell_flags"], tables["spell_chance"],
+                                                         tables["hd_num"], tables["hd_sides"]):
+            if chance:
+                key = (screen_code_to_char(code), level)
+                most = max(24 if flags & SPELL_WOUND_LIGHT else 0, 64 if flags & SPELL_WOUND_SERIOUS else 0,
+                           num * sides // 3 if flags & SPELL_BREATH else 0)
+                out[key] = max(out.get(key, 0), most)
+    return out
+
+
 @lru_cache(maxsize=None)
 def spell_max(depth: int) -> int:
     """Most damage one spell can do from a shipped caster native to ``depth``
@@ -210,6 +228,18 @@ def slow_kinds() -> frozenset[tuple[str, int]]:
     return frozenset(kind for kind, slow in by_kind.items() if all(slow))
 
 
+CF_BREEDER = 0x40   # cr_mflags: multiplies (core/monster.s; Umoria CM_MULTIPLY)
+
+
+@lru_cache(maxsize=1)
+def breeder_kinds() -> frozenset[tuple[str, int]]:
+    """(screen glyph, creature level) of creatures that multiply: worm
+    masses breed faster than they can be killed (Umoria CM_MULTIPLY)."""
+    return frozenset((screen_code_to_char(code), level) for _, tables in _tiers()
+                     for code, level, flags in zip(tables["display"], tables["level"], tables["mflags"])
+                     if flags & CF_BREEDER)
+
+
 @lru_cache(maxsize=1)
 def outpaced_glyphs() -> frozenset[str]:
     """Screen glyphs whose every shipped creature a walking player outpaces:
@@ -304,3 +334,29 @@ def attacker(messages: str) -> str | None:
     """The creature named in an attack or spell message, if any."""
     match = _attack_pattern().search(messages)
     return match.group(1) if match else None
+
+
+GAME_TABLES = ROOT / "core/tables.s"
+STAT_NAMES = ("STR", "INT", "WIS", "DEX", "CON", "CHR")   # stat table order
+
+
+def _signed_rows(text: str, label: str) -> list[tuple[int, ...]]:
+    """The rows of a table of signed ``.byte`` lines, from its label to the
+    first line that is not one."""
+    rows: list[tuple[int, ...]] = []
+    for line in text.split(f"\n{label}:\n", 1)[1].splitlines():
+        code = line.split("//", 1)[0].strip()
+        if not code:
+            continue
+        if not code.startswith(".byte"):
+            break
+        rows.append(tuple(int(v) for v in re.findall(r"-?\d+", code[5:])))
+    return rows
+
+
+@lru_cache(maxsize=1)
+def stat_adjustments() -> tuple[list[tuple[int, ...]], list[tuple[int, ...]]]:
+    """Race and class stat adjustments (STR, INT, WIS, DEX, CON, CHR), in
+    race and class table order: the manual's tables, from core/tables.s."""
+    text = GAME_TABLES.read_text()
+    return _signed_rows(text, "race_stat_adj"), _signed_rows(text, "class_stat_adj")
