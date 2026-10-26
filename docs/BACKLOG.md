@@ -35,6 +35,47 @@ Acceptance target:
   deviation from VMS recorded and tested, and no change to drop rates for
    legal contents.
 
+### Give the C128 unit-test batch a per-test timeout
+
+`make test128` runs its unit tests in parallel ("running unit tests in
+parallel..." in `platforms/commodore/c128/run_tests128.sh`) with no timeout
+per test. On 2026-10-26 one `x128` instance running `test128_detect_evil128`
+spun at 100% CPU for 25 minutes and held up the whole gate until it was
+killed by hand; the same test passed in seconds when run alone
+(`TEST_FILTER='^detect_evil128$' make test128`), so it looked like a VICE
+hang rather than a code fault.
+
+Required work:
+
+- Kill a unit test's emulator after a fixed limit (the 30-second runtime cap
+  in `AGENTS.md`, or a measured ceiling with margin) and report it as a
+  timeout failure naming the test, so the batch finishes.
+- Optionally retry a timed-out test once and report a hang that recurs.
+- Check the C64 and Plus/4 runners for the same gap.
+
+### Add a cloak equipment slot
+
+VMS Moria 4.8 and Umoria 5.7.15 start every class but the VMS Rogue with a
+Cloak [1] worn in its own slot (`player_init` / `class_base_provisions`), and
+only the Warrior (and the VMS Rogue) with Soft Leather Armor. Moria8 has the
+Cloak (item 82) but no cloak slot: it is `ICAT_ARMOR`, worn in `EQUIP_BODY`,
+so it competes with body armour. Until a slot exists, every class starts with
+Soft Leather Armor and no Cloak (`core/game_loop.s` starting kit, recorded in
+`docs/FEATURE_MAP.md` Starting Weapons & Armor).
+
+With the slot (maintainer, 2026-10-25), the kits become upstream's: the Cloak
+for every class but the VMS Rogue; Soft Leather Armor only for the Warrior
+(and the VMS Rogue); a Priest or Mage buys body armour at the Armoury.
+
+Required work:
+
+- Add `EQUIP_CLOAK` and a cloak item category; route item 82 to it.
+- Equipment layout on every port (slot arrays, `EQUIP_LAST`, memory
+  contracts), the equipment screen, wear/take-off, AC totals.
+- Save format: a new slot with a migration for older saves.
+- Starting kits per class as above; the playtest bot's starting armour.
+- Tests: wearing a cloak with body armour, AC totals, save migration.
+
 ### Stack identical inventory items (spikes first)
 
 Upstream Moria/Umoria merge identical items on pickup (`inven_carry` merges

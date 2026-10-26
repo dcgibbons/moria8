@@ -483,7 +483,24 @@ they need specifications first, or they will produce false positives.
 2. replays the key log one key per stop;
 3. stops at the failing step with the monitor open.
 
-### 6.9 Dashboard v0
+### 6.9 Dashboard
+
+**Since 2026-10-26 (M5b) the dashboard shows a round, not a session.** A round
+is the sessions named `<round>-<goal>-<character>` (for example
+`m5b-r36b-clvl10-human-priest`); `/api/overview[?round=R]` returns the
+newest round (or `R`) with its suites, and the page, styled with the
+moria8.org tokens from `docs/styles.css`, shows: an overall status strip
+(elapsed, runs finished, live workers, steps/s, hangs, and per suite its score
+against the bar and whether it can still pass); a card per suite with each of
+its 20 seeds coloured by outcome and the bar marked; every live worker's C64
+screen at once (click for a large screen and its recent decisions,
+`/api/worker`); the deepest level reached over steps per character; the
+project's round-by-round scores per suite with the bar; and deaths by creature
+(parsed from the end of each dead character's trace) and by depth and level.
+Charts are inline SVG and the server is the standard library only. The
+original v0 description follows.
+
+#### Dashboard v0
 
 `make playtest-dashboard` serves one static HTML page plus JS from
 `http.server` on `127.0.0.1:8064`. The page polls a `status.json` that each
@@ -563,7 +580,7 @@ Each milestone has a measurable exit criterion and an explicit stop rule.
 | **M2 `reach_dl2`, `reach_clvl2`** | Dungeon navigation, doors, search, stairs; fight, emergency, rest; anti-stall; plateau alert; frozen suites | Both goals work, and `enter_dungeon` still passes its frozen suite. No `unknown_prompt` in the final qualification runs. **No further goals are added until M2 is met.** |
 | **M3 `reach_dl5`, `clvl5`** | The brain rounds in §14.3: any-glyph creatures, food and light logistics, threat memory, avoiding stationary monsters, sealed-area fallback | Both goals work (§7.2, ≥16/20); all frozen suites still pass; no `unknown_prompt`. **Met 2026-10-22 (§14.9).** |
 | **M4 `clvl10`, `reach_dl8`** (`reach_dl10` until 2026-10-24) | The brain rounds in §15.3: stationary hazards, fear and fast attackers, then what the re-measured clusters show | Both goals work (§7.2, ≥16/20); all frozen suites still pass; no `unknown_prompt`. Started 2026-10-22 (`/goal`, §15). **Met 2026-10-24 (§15.6).** |
-| **M5 Every race and class at M4** | §16: the M4 goals for every Warrior race, then Paladin and Priest, then Rogue and Ranger, then Mage, then every other race of each class; a C128 backend in between | `clvl10` and `reach_dl8` work (§7.2, ≥16/20) for each of the 31 race/class combinations, each frozen as its own suite; all frozen suites still pass; no `unknown_prompt`. Planned 2026-10-24 (§16). **M5a (every Warrior race) met 2026-10-25 (§16.8).** |
+| **M5 Every race and class at M4** | §16: the M4 goals for every Warrior race, then Paladin and Priest, then Rogue and Ranger, then Mage, then every other race of each class; a C128 backend in between | `clvl10` and `reach_dl8` work (§7.2, ≥16/20; ≥15/20 for Mages and Priests, §16.1 amended 2026-10-26) for each of the 31 race/class combinations, each frozen as its own suite; all frozen suites still pass; no `unknown_prompt`. Planned 2026-10-24 (§16). **M5a (every Warrior race) met 2026-10-25 (§16.8).** |
 
 **Stop rules** (defaults, tunable by the maintainer):
 
@@ -1693,6 +1710,12 @@ it might require different techniques": a combination that cannot reach the
 bar gets new brain technique (spells, missiles, stealth) or is reported as a
 balance finding; its bar is never lowered.
 
+**Amended 2026-10-26 (maintainer, M5b):** pure spell casters, Mages and
+Priests of every race, qualify at **15/20** on both goals ("I want to make
+pure spell casters (mages and priests) have a bar of 15 instead of 16").
+`CLASS_BARS` in `playtest/moria_playtest/goals.py`; a `CHARACTER_BARS` entry
+still decides its own combination. Every other class keeps 16/20.
+
 Why this order:
 
 - **Race costs no bot work.** `Goal.character` already picks the race and
@@ -1714,11 +1737,11 @@ Why this order:
 | Stage | Combinations | New bot work | Exit |
 |---|---|---|---|
 | **M5a Warrior races** | Human, Half-Elf, Elf, Halfling, Gnome, Dwarf, Half-Orc Warriors (Half-Troll is M4) | None at first: baselines with the M4 brain, then trace-driven fixes | Both goals ≥16/20 for each; frozen |
-| **M5b Paladin, Priest** | Human Paladin, then Half-Troll Priest | A cast layer: choose a prayer, target it, track mana, learn from books, buy books; prayers for healing, fear and light first | Both goals ≥16/20 for each; frozen |
+| **M5b Paladin, Priest** | Human Paladin, then Human Priest (Half-Troll until round 10, §17) | A cast layer: choose a prayer, target it, track mana, learn from books, buy books; prayers for healing, fear and light first | Both goals ≥16/20 for the Paladin, ≥15/20 for the Priest (§16.1, amended 2026-10-26); frozen. **Human and Dwarf Priest met 2026-10-26 (§17, round 55)** |
 | **M5c C128 backend** | Half-Troll Warrior on `x128` | None in the brain: the backend (§12.7) for VDC screen text, banked reads, the C128 keyboard buffer and the 198×66 map | Every frozen C64 suite passes on the C128 at its bar |
 | **M5d Rogue, Ranger** | Human Rogue, Human Ranger | Missiles: buy ammunition, fire, target; stealth-aware choices; the cast layer for their spells | Both goals ≥16/20 for each; frozen |
-| **M5e Mage** | Human Mage | Spells for survival, not only utility: Magic Missile, Phase Door, detection; a fragile character's readiness | Both goals ≥16/20; frozen |
-| **M5f The rest** | The other 20 combinations (§12.6) | Trace-driven fixes for what fails | Both goals ≥16/20 for each; frozen |
+| **M5e Mage** | Human Mage | Spells for survival, not only utility: Magic Missile, Phase Door, detection; a fragile character's readiness | Both goals ≥15/20 (§16.1, amended 2026-10-26); frozen |
+| **M5f The rest** | The other 20 combinations (§12.6) | Trace-driven fixes for what fails | Both goals ≥16/20 for each (≥15/20 for Mages and Priests); frozen |
 
 M5c runs between brain rounds: it is self-contained, and once it works,
 every later suite can also run on the C128. Within a class, Human comes
@@ -1873,3 +1896,143 @@ character on seeds 1001-1020 at 100,000 steps, each frozen on reaching its bar:
 From a baseline of 138 of 280 to 255. Only Halfling `clvl10` needed its
 own bar (`goals.CHARACTER_BARS`); every other Halfling and Gnome goal met
 16/20 once armour was bought (F14). Suites: `playtest/suites/<goal>-<race>-warrior.json`.
+
+## 17. M5b: Paladin and Priest (from 2026-10-25)
+
+Started by the maintainer on 2026-10-25 (`/goal proceed with M5b`), on the
+game after the creature flag fix (worm masses now breed) and the Phase Door
+scroll. Characters: Human Paladin, Half-Troll Priest (§16.2), both goals, the
+16/20 bar.
+
+The Priest changed after round 13 (maintainer, 2026-10-25): Human or Dwarf,
+the races players most likely pick for a Priest, Human first. The
+Half-Troll was the hardest Priest to start with, against §16.2's own rule
+(Human first within a class): WIS -2 (more prayer failure, less mana) and
+bow/throw -10. Its rounds 1-10 stay in §17.4 for comparison; the Human
+Priest starts from its own baseline (round 15).
+
+### 17.1 Harness and cast layer
+
+- `goals.CHARACTERS` holds all 31 race/class combinations; a class's menu
+  letter follows `race_class_flags` (the class menu lists only the classes a
+  race allows), checked against `core/tables.s` by a test.
+- The classifier knows the prayer prompts: `Mode.SPELL` stages `book`
+  ("Prayer book (a-v)?", "Study which book (a-v)?"), `which` ("Pray which?
+  (a-c, ESC)") and `list` (its `?` list: letter, name, mana, level).
+- `playtest/moria_playtest/magic.py`: the bot reads the list once (and again
+  after learning), studies with `F` after each level-up, and prays through
+  `P`, the first book and the prayer's letter. A refusal that takes no turn
+  ("You're not experienced enough.", "You faint from fatigue.") is not
+  retried until the next level. The `pray` layer runs after `quaff`: Remove
+  Fear when afraid, Cure Light or Medium Wounds below half HP (potions below
+  a third), Detect Doors/Stairs once a level when the way out is lost, and
+  Create Food when food is low.
+
+### 17.2 Baseline (the M5a brain, no prayers)
+
+| Character | `clvl10` | `reach_dl8` |
+|---|---|---|
+| Human Paladin | 10 | 10 |
+| Half-Troll Priest | 3 | 3 |
+
+Deaths (68): Kobolds on DL1-2 16, traps and poison 14, White Worm masses 9
+(breeding since the flag fix), Creeping Coins 6.
+
+### 17.3 Game questions surfaced
+
+1. **Starting prayers ignore the class level.** `core/player_create.s` gives
+   every Priest and Paladin prayers 0-2 (and every Mage spells 0-3) at
+   creation, so a level-1 Paladin "knows" Cure Light Wounds (Paladin level
+   2) and Bless (level 3), though the game refuses them until those levels.
+   Upstream characters learn their first spells through the normal learning
+   rules. Kept as is and recorded as a delta in `docs/FEATURE_MAP.md` §2
+   ("Starting HP & Mana"), maintainer decision 2026-10-25.
+
+### 17.4 Round log
+
+| Round | Change | Paladin | Priest | Notes |
+|---|---|---|---|---|
+| base | M5a brain, no prayers | 10 / 10 | 3 / 3 | — |
+| 1 | Cast layer (§17.1) | 13 / 11 | 6 / 6 | Kobolds on DL1 14 (10 of the Priest's 14 failures), nagas 10; three Paladin seeds (1005, 1015, 1017) die at level 1 to a poison gas trap (16 HP, 15 turns of poison, no cure at that level: upstream balance, §16.6) |
+| 2 | Fight odds use the class's and race's melee skill (`CLASS_BTH`, `RACE_BTH`; the Warrior's made a Priest fight Kobolds it lost to) | 12 / 10 | 6 / 6 | No change |
+| 3 | Three breeders in view: leave the level; breeders never hunted (a Paladin fought multiplying White Worm masses on DL1 for 3,400 steps) | 12 / 12 | 5 / 4 | Four Priests (1003, 1010, 1013, 1014) drained to death in town: `quaff` and `pray` skipped DL0, where the bot never rests |
+| 4 | Heal (prayer, potion) in town too | 12 / 11 | 6 / 5 | Town deaths 4 → 0; level-1 deaths now lead (Kobolds 16: the Priest starts with gold for 3 rations, 2 torches and one potion, a Dagger, 14 HP) |
+| 5 | On a staircase, one close creature the character would lose to (`lore_strong`): take the stairs up, or down when deeper is fine | 12 / 10 | 6 / 5 | Fired 147 times at Kobolds, 48 at nagas, but most Kobold fights start off the stairs. A level-1 Priest left town with 175 gold unspent (Dagger, Leather Armour): the 200 gear reserve |
+| 6 | Gear reserve 40 below level 5 (`gear_reserve`) | 15 / 14 | 12 / 11 | The largest M5b gain: level-1 characters now buy a weapon and armour. A level-1 Paladin still spent 480 of its 570 gold on two Word of Recall scrolls (M4's recall-first order) |
+| 7 | Early (below level 5): Weaponsmith and Armoury before the Alchemist and Temple; one Word of Recall (`recall_reserve`) | 15 / **16** | 13 / 10 | Paladin `reach_dl8` qualifies. Nagas 9 lead. A Priest sealed on DL1 starved for 54,000 steps: Detect Doors/Stairs was spent on arrival ("no up stairs seen"), before the level was explored |
+| 8 | Detect Doors/Stairs only when sealed or stuck, again every 2,000 steps (`DETECT_EVERY`) | 15 / **16** | 12 / 10 | Nagas 8, level-1 Kobolds 6, traps and poison 5. A Paladin (1002) sealed on DL2 kept HP under half while starving, so the heal always came before Detect Doors/Stairs and the way out was never looked for |
+| 9 | Detect Doors/Stairs before a heal when nothing is close; no heal the adjacent creatures outrun (3d3 / 4d4 against their lore damage, `HEAL_AVERAGE`) | 14 / 15 | 11 / 10 | Blue Worm masses 8 (new lead), level-1 Kobolds 6, traps and poison 5, nagas 4. Worm deaths: the stairs lay past a nest, and descend walked into it (its fallback ignores creatures) while `fight` struck each adjacent worm; the swarm regrew faster than it was cut down |
+| 10 | Slow breeders are walked past like Creeping Coins (`walk_past`): hazards to route around, walked away from in contact | 11 / 9 | 8 / 7 | Reverted. Worm deaths unchanged (8), White Worm masses 5 more, two Priests out of steps (not traced; likely: walking away keeps the worms in view, which blocks resting (`SLOW_MEMORY`), and the stairs past a nest stay out of reach) |
+| 11 | Paladin only (maintainer: the Paladin first, the Priest later). `descend` never falls back to a path through creatures while a breeder is in view | 14 / 15 | — | The same deaths as round 9 (fixed seeds): worms 3, traps 3, nagas 2, coins 2. Paladin 1010 stood 250 steps on one square killing Blue Worm masses as fast as they bred, every step out into contact, and drank five potions before dying there. Paladin 1002 was teleported into a pocket that Detect Doors/Stairs showed no way out of, with no Word of Recall, and starved |
+| 12 | Phase Door: up to 3 bought at the Alchemist (`PHASE_RESERVE`); read when badly hurt in contact with no retreat, beside a breeder or two creatures or near death (`phase_door`) | 11 / 13 | — | 72 bought, 6 read. Six characters stopped on a game finding, `FLAG_OCCUPIED=1 ... disagrees with the monster table`, each just after a Phase Door: `eff_teleport_apply_target` set the creature flag on the player's landing tile, left stale once the player stepped off (normal steps and `trap_teleport` never flag the player). Fixed in the game (maintainer: fix now); the six C64/C128 teleport, Phase Door and Portal tests now assert the landing tile unflagged. Level-1 Kobolds 4, Novice Priests 3 |
+| 13 | Round 12 again on the fixed game | 15 / 14 | — | No game findings. Worms 3 → 1. Level-1 Kobolds 5: seeds 1010 and 1011, which lived in round 11, died on DL1 after the same purchases; the Alchemist walk for Phase Door shifts the game's RNG, so their levels differ (noise, not the rule). Novice Priests 3 (DL2: 1d5 a hit nearly every turn on AC 9, then a 3d8 Cause Light Wounds), nagas 2, the level-1 gas trap 2 |
+| 14 | Early (below level 5) the bot buys up to 5 flasks to throw (`OIL_EARLY`) whatever potions and Word of Recall still need: the reserve for those left level-1 characters only the lantern's flasks | **16** / 13 | — | Paladin `clvl10` qualifies. Flasks thrown 147 → 234 (hits 44 → 71). Two `reach_dl8` seeds (1005, 1013) climbed to DL1 at step ~52,500, stepped on a teleport trap within ten turns into a pocket that Detect Doors/Stairs showed no way out of, with no Word of Recall left (2 and 4 bought, all read), and starved there 10,000-20,000 steps later |
+| 15 | No change: the Human Priest's baseline (§17 header), and the Paladin again | **16** / 13 | 2 / 3 (Human) | The Paladin repeats round 14 (`clvl10` qualifies again). The Human Priest dies on DL1 to Kobolds in 12 of 18 `clvl10` failures, most within 3,000 steps: 18 HP, a Flail at melee skill ~50 against AC 16, and the bot hunts Kobolds it should only meet on its terms (seed 1011: three misses in a row from 18 HP). Two flasks thrown a game: the General Store stocks Flask of Oil 2 times in 25 choices, quantity 1 (`sro_general_choice`, VMS weights), so early oil is limited by the stock, not the shopping list. Bless (Priest level 1: +5 to-hit, +2 AC for 12-23 turns) is never prayed |
+
+Round 14's two starved `reach_dl8` Paladins (replay of seed 1005, the bot's map at step 55,000): the teleport trap put it in three rooms joined by corridors it walked to their dead ends; Detect Doors/Stairs showed a down staircase and two doors four unseen rows south, with no known way there. Tunnelling cannot help (granite needs a digging score over `randint(1200) + 80`; STR plus weapon weight is ~26). It had 1,929 gold and no Word of Recall: it had read its last one home and was walking up for food. Two of 40 characters; left for now.
+
+| Round | Change | Paladin | Priest (Human) | Notes |
+|---|---|---|---|---|
+| 16 | Bless when a creature worth it (fight odds ≥ 0.25, `BLESS_ODDS`) is within 3 squares, counted 12 steps, prayed again after a failure | 15 / 12 | 2 / 2 | Bless prayed ~790 times, 268 took. No gain: Kobolds 16 of the Priest's 20 deaths. The Priest hit Kobolds 42% of the time (216 of 515) against ~66% by its skill; the Paladin 70% against ~75%. The bot buys weapons by damage alone and ignores Umoria's too-heavy penalty (weight over STR x 15 costs 3 to-hit a point, `combat_calc_melee_total_tohit_bonus`): Human Priests (ST ~10) bought a Two-Handed Sword, 20 lb |
+| 17 | Melee skill counts the too-heavy penalty (`melee_skill`); weapons are bought by damage times the chance to hit AC 20 (`melee_value`, `REFERENCE_AC`) | 12 / 11 | 3 / 4 | The Priest's hit rate on Kobolds 42% → 65% (its skill predicts ~66%); it buys light weapons now. Kobolds still 14 of its 17 `clvl10` deaths. The Paladin fell two rounds running (16/13, 16/13 → 15/12 with Bless → 12/11) |
+| 18 | Bless reverted (no Priest gain in round 16; it costs a Paladin a turn and mana at 35% failure); the melee-skill fix kept | **16** / 13 | 7 / 7 | The Paladin back to rounds 14-15 (two seeds differ a goal, both ways): Bless cost it. The Priest's best yet. Kobolds still 8 of its 12 `clvl10` deaths, all on DL1 inside 5,000 steps, at 12-18 HP: three after a hunt, the rest found by the Kobold while exploring, or caught retreating. The lore odds (0.57 for a Flail) say win; with 12 HP the swings decide |
+| 19 | Wary below 30 max HP (`WARY_HP`): a creature in view with fight odds over 0.4 (`WARY_ODDS`) sends the bot to the stairs before contact, and is not hunted (`wary_of`) | — | — | Stopped part way and reverted: early Kobold deaths rose for both characters (16 by mid-round; the Priest's first 10 `clvl10` characters all died). A Kobold moves as fast as the player, so running from it on sight gives it free bites from behind, and the stairs are often farther than the Kobold |
+
+Paladin `clvl10` frozen after round 19 (maintainer: the Paladin first, freeze): 16/20 on the round-18 brain, `playtest/suites/clvl10-human-paladin.json`.
+
+| Round | Change | Paladin `reach_dl8` | Notes |
+|---|---|---|---|
+| 20 | `reach_dl8` readiness margin 2 → 3, as `clvl10` (DL2 at level 4, not 3): round 18's seeds 1009 and 1019 died to DL2 Novice Priests that survived under `clvl10` | 15 | 1009 and 1006 now live; 1007 dies to DL5 Blue Worms. 1019 still dies at step 4,435: at level 3 a crowd (`crowded`) took it down the stairs it stood on, and with one level of slack (`resupply`'s `too_deep`) it stayed on DL2. Kobolds on DL1 3 (1005, 1010, 1011) |
+| 21 | Not ready for the depth and standing on an up staircase (where a crowd escape down arrives): go up at once, without the slack | **17** | Qualifies: 1019 now lives. Left: Kobolds on DL1 at level 1 (1005, 1010, 1011), the same three that fail `clvl10` |
+
+Paladin `reach_dl8` frozen at 17/20 (`playtest/suites/reach_dl8-human-paladin.json`).
+
+Prayer books (maintainer, 2026-10-25: "spell casters are bound by their books"). Round 18's Priests studied 363 times, learned 124 prayers and met "No new spells to learn" 239 times, and never bought a book: the bot only knew book a, so past level 5 it learned nothing and never prayed Cure Medium Wounds, Portal or Create Food. Now (Priest and Paladin only, `BOOK_LEVELS`): the next book is bought at the Temple first, once the class's level for its first prayer is reached (Priest 1/5/9/15, Paladin 1/9/15/29), with a town trip when one is wanted and affordable (`book_wanted`, `wants_book_trip`); the bot learns the books' prompt order from the book prompt's `?` list (pack order: a new book takes the first empty slot), studies each book until none has a new prayer, reads each book's list, and prays through the book that holds the prayer (`magic.py`).
+
+| Round | Change | Priest (Human) `clvl10` / `reach_dl8` | Notes |
+|---|---|---|---|
+| 22 | Prayer books bought, studied and prayed from (above); and the book prayers used: Orb of Draining (3d6 + level, doubled on evil) at a creature worth it in line within 6 squares, Blind Creature on a creature it would lose to within 2, Chant before a fight at odds over 0.4 (`invoke`), each only with mana left for the best heal (`Magic.spare`: Bless at level 1 had spent the only heal's mana); when boxed in and badly hurt, Sanctuary with two or more beside, else a Phase Door scroll, else Portal (`phase_door`) | 9 / 6 | No book bought in 40 characters, so none of the new prayers was ever prayed. Replay (seed 1003, step 18,341): the C64 Temple shows "Holy Book of Prayers Words" (the name cut to the line), not the bare title the bot matched; and the level-5 Priest had 172 gold against 309 |
+| 23 | Books matched by their shown name (`store_name`, `book_of`); a wanted book's price joins the gear reserve, and potions drop to 2 while saving for it (`CLW_SAVING`) | stopped | Books bought now, but 10 of 20 Priests a goal ran out of steps in town: a new Words of Wisdom with nothing learned from it cannot be listed ("You don't know that spell.") and the bot asked for its list again every other step. The game recounts the prayers to learn only at a level-up, from level and WIS, whatever the books (`magic_check_new_spells`): a Priest that spent its slots in book 1 learns from Words of Wisdom at its next level |
+| 23b | That answer counts the book as read until a prayer is learned from it | 7 / 5 | Books bought (Words of Wisdom 19, Chants and Blessings 12); prayed Chant 186, Cure Medium Wounds 148, Sanctuary 27; no Orb of Draining, Portal or Blind Creature yet. Kobolds on DL1 at level 1-2 still 14 deaths, before any book matters. 4 `reach_dl8` out of steps on DL1-4, not yet traced |
+
+The Dwarf Priest joins the Human (maintainer, 2026-10-25: "I want to see how it performs next to the human priest"), on the round 23b brain: WIS +1, melee skill +15, STR +2, hit die 9.
+
+Round 23b's out-of-steps: three searched DL1 dead ends; one (1010) asked for Portal 2,500 times on DL3 (it had picked up books, and Portal was known in none the prompt offered). Now a prayer in no offered book is refused until the next level and the books are listed again; a book that appears in the list counts as owned and is studied (`book_list`, `book_wanted`).
+
+Game fixes found by the M5b Priests (maintainer, 2026-10-25: a difference from VMS and Umoria is usually an early accident: fix it): the rockfall trap deals 2d6, not 2d8 (VMS `values.inc` "some loose rock", Umoria `{2, 6}`; a level-1 Dwarf Priest has 11 HP); every class starts with 5 Rations and 5 Wooden Torches, not 1 and 1 (VMS `player_init`, Umoria `class_base_provisions`), and torches stack with equal turns as upstream. The Cloak is in the backlog (no cloak slot yet). Bot: the kit counts (`STARTING_FOOD`, `STARTING_TORCHES`), and a Priest's first town stop while early is the Armoury.
+
+| Round | Change | Human Priest `clvl10` / `reach_dl8` | Dwarf Priest | Notes |
+|---|---|---|---|---|
+| 24 | The game fixes and Armoury-first above, with round 23b's book-loop guards | 5 / 3 | 10 / 3 | Kobolds on DL1 still lead; 8 `reach_dl8` out of steps: two refueling a lantern the game had removed, one Portal loop, the rest searching DL1 dead ends |
+| 25 | Search mode (`#`) while moving about with nothing in view (maintainer: "keep it on when moving about"), every character (`search_mode`); the game now ends it when a monster comes into sight, as VMS and Umoria (`monster_update_visibility_one`); a burnt-out light stays worn and a lantern is refueled, as VMS and Umoria (the game removed it: two `reach_dl8` Priests in round 24 tried to refuel a lantern that was gone for 5,000 steps each); Portal only when it can be prayed | 7 / 7 | 9 / **14** | The best Priest round: the Dwarf's `reach_dl8` is two short. Search mode on 304 times, 27 traps found before they sprang. Kobolds on DL1 still 24 deaths across the four runs: Moria8 ships 3 of upstream's 12 level-1 creatures (Kobold, White Worm mass, Floating Eye; `tools/parse_creatures.py` picked 3 "iconic" creatures a level), so DL1 has no easy prey |
+| 26 | Round 25 again (stopped part way; same code) | — | — | |
+| 27 | Five DL 1 creatures added to tier 1 (maintainer: "add creatures"): Giant White and Yellow Centipedes, White Icky-Thing, Large White Snake, Giant White Mouse (Umoria stats, `tools/parse_creatures.py` `ADDED_NAMES`, after tier 1's original 24 so saved indices hold; the C128 tier cache grows to `$9567`). DL 1 Kobolds: 1 in 3 creature picks before, 1 in 8 now | 9 / 10 | 6+ / 8 | Stopped once the result was clear. The Human's best; the Dwarf's `reach_dl8` fell 14 → 8, mostly to breeding Giant White Mice on DL1 (9 deaths by mid-round) |
+| 28 | 25 more DL 1-5 creatures (maintainer: "add 25 more creatures to tier-1"): tier 1 holds 54, tier 2 gains the three DL 5 ones (35); no more breeders, nothing invisible. C128 tier cache now `$7A00-$9567`; the BBC Master no longer preloads tier 1 | 10 / 10 | 9 / 5 | The Human's best again. Breeding mice 8 deaths, Kobolds 8, Large Brown Snakes 5 (AC 35, slow). Ten Dwarf characters out of steps on DL1 at level 8-10: 46-47 max HP against DL2's readiness bar of 48 (two Cause Light Wounds at 3d8) |
+| 29 | The HP readiness bar stops binding 3 levels past a depth's ready level (`READY_HP_LEVELS`) | 10 / 10 | 10 / 4 | The Dwarves now leave DL1 but hit other stalls (8 `reach_dl8` out of steps): full packs (worn-out gear the bot never drops; every purchase failed; a torch could not be worn from a stack), a sealed-in Dwarf healing while it starved, dead-end searching |
+| 30 | Game: wearing from a stack with a full pack drops the replaced item at the player's feet (VMS/Umoria pack overflow). Bot: drop junk when the pack is full (`drop_junk`; burnt-out lights and replaced gear); Create Food before a heal when food is low | 10 / 10 | 10 / 7 | No clear change: deaths are still most failures. Found while reviewing: stores never stacked (each stocked item took its own slot with a count of 1), so the General Store rarely had more than one or two flasks of oil for the bot to throw |
+| 31 | Game: stores stack as Umoria (`storeCarryItem`/`storeDestroyItem`/`inventoryTakeOneItem`): stock joins identical stacks up to 24, buying takes one, sales join at the next restock; restock moves to the chest overlay on C128, Plus/4 and Atari (maintainer: "I don't want the load, but let's do it for now"). Bot: store rows with a count | 11 / 9 | 13 / 14 | The Dwarf's best so far. A death census of rounds 28-31 (131 Priest deaths): 107 on DL1, 58 at character level 1; last attackers Kobold 31, Giant White Mouse 30, Large Brown Snake 16, Giant White Centipede 11. First-visit purchases barely changed (about 3 food and 1 oil a run): the Armoury takes the gold, not the store's stock |
+| 32 | Game: breeding follows VMS/Umoria (MON-016): with n creatures in its 3x3 square, itself included, a breeder multiplies when n < 4 and randint(7n) = 1, and a further 1 in 7 while the player rests; it was a flat 1 in 12 with no crowding or rest rule | — | — | Stopped after 10 runs (all deaths) for round 33 |
+| 33 | Round 32's breeding rule, and creatures act only within their alert radius or in view, awake or asleep (MON-017; maintainer: "definitely should not breed when the player isn't around"); before, an awake creature acted anywhere on the level | 11 / 9 | 8 / 7 | Not a valid measure: 10 runs hung (C64 code corruption, below). Found: on the C64, Plus/4 and Atari, `item_spawn_level` placed nest gold with `random_floor_in_room`, a dungeon-generation overlay routine, after `pick_item_type` had loaded the chest overlay into the `$E000` window, so it ran whatever bytes the chest overlay's REU slot held at `$EBC7`; tonight's modal-misc changes put text there, a gold pile went to (0, 51), off the map, and its `FLAG_HAS_ITEM` write turned a `bne` in `render_single_tile` into a JAM opcode. `tramp_spawn_nest_gold` now loads the dungeon-generation overlay first, as the Apple IIe and CX16 trampolines did |
+| 34 | Game: the creature bash follows VMS `bash` (DEX blows / 1.5, `STR/6 + 25` to-hit, the shield's dice, stun 2-3 turns after a surviving hit, off-balance `randint(140) > DEX` for 1-3 turns); shields carry VMS's dice. Bot: reroll the stats, as a player does, until the class's main stat is at least 17 (or 2 below the race/class best) and CON at least its middle value, at most 50 rolls (`roll_good`; maintainer: "I like the general policy - but make sure that would work"); every race/class passes at least 1 roll in 30 | 15 / 9 | 14 / 8 | Round 34 ran a few minutes with the reroll not reading the roll screen (`STR:15 (15)` has no space after the colon) and was restarted as 34b. No hangs. Human `reach_dl8`: 4 deaths on DL1 at level 1-2, 7 on DL4-6 at level 7-10 (Novice Warriors 3). Dwarf `reach_dl8`: 8 out of steps at level 8-10 on DL1-6: food (191 town trips for 1-3 rations each in seed 1004) and the stair-scum's nearest staircase (93 climbs from DL2) |
+| 35 | Bot: an exhausted level is left by a known down staircase when the character is ready for more depth (`stair_scum`); a caster who can pray Create Food does not climb for food (`Magic.feeds`, `needs_resupply`) | 15 / 10 | 14 / 8 | No change: on DL1-2 the food reserve kept `deeper_ok` false, so the stair change never applied (stair-scum still climbed ~250 times a run). Human deep deaths (DL4-6, level 7-10, Novice Warriors and nagas): the Priests carried Words of Wisdom but every study went to the Beginners Handbook's leftovers, so they fought praying Cure Light Wounds only |
+| 36 | Game: the store turnover sells one item of a stack at a time, as VMS `store_destroy(..., true)` (food stacks build up; Umoria's `randint(count)` emptied them); bot: DL1-2 trips keep one ration of food reserve, not two; study the latest prayer book first (Cure Medium Wounds, Portal). Search mode stays on while exploring though each move then costs two turns of food: it is there to find traps before they are walked into (maintainer, 2026-10-26: "the point of having search on all the time is to avoid trap deaths") | — | — | Stopped after a few minutes: nearly every Priest sat on DL1 at level 3-4 |
+| 36b | Round 36, and the bot's maximum-HP readiness bar (two of a depth's strongest spells at their maximum: 48 HP for DL2, so level-4 Priests with 26-30 HP waited for level 6-7) is gone; readiness is character level against depth (`ready_level`). Maintainer: "that's your made up rule, doesn't make sense" | 9 / 12 | 9 / 14 | `reach_dl8` up from 10 and 8; `clvl10` down, 10 deaths each: about half at level 1-3 on DL1 (Kobolds, snakes, centipedes; a level-1 Priest kept 3 flasks for its lantern and threw none, and never threw at an adjacent foe), the rest at level 7-9 on DL4-6 |
+| 37 | Bot: a flask is thrown at an adjacent creature worth one when the character's melee (blows x dice) is under a flask's 2d6 average (`melee_weak`); a lantern keeps 1 flask, not 3 (`LANTERN_OIL`); early, with the kit's torches, no lantern is bought (the gold goes on flasks) | 9 / 9 | 7 / 10 | Worse on all four: about 20 flasks thrown a run, town trips 47 -> 88 a run (food money went on oil: "0 food left" climbs), early deaths not fewer. All three reverted |
+| 38 | Round 36b's bot, and `clvl10` readiness four levels over each depth (was three): it hunts and fights at every depth, and in round 36b it died at twice `reach_dl8`'s rate (10 against 5-6) | 11 / 12 | 13 / 14 | `clvl10` up from 9 and 9; kept |
+| 39 | Bot: at the Armoury, while the starting Dagger is wielded and the Weaponsmith not yet visited, a weapon's price (`WEAPON_GOLD_EARLY` 60, a Mace) stays out of the armour budget: 13 of 15 deaths at level 1-3 in round 36b still held the Dagger | 10 / 8 | 11 / 11 | No weapon bought all the same (14 of 17 early deaths held the Dagger): the General Store came before the Weaponsmith and spent the money |
+| 40 | Round 39, and with the starting Dagger the Weaponsmith comes straight after the Armoury, before the General Store | 9 / 11 | 18 / 11 | Dwarf `clvl10` passes. Still only 17 of 80 bought a weapon (16 deaths at level 1-3). Monster to-hit checked against Umoria `playerTestAttackHits` (60 + level x 3 for every class): matches |
+| 41 | Round 40, and round 37's oil rules for the early levels only (below level 5): a flask at an adjacent foe when the weapon does less than a flask's 2d6, and the lantern keeps one flask, not three. Round 37 had the fewest deaths at level 1-3 (12 against 15-17) but drained gold and food later | 13 / 9 | 15 / 14 | 17 deaths at level 1-3: round 37's 12 was noise. About four runs a suite die at level 1-2 on DL1, the whole failure budget of a 16/20 bar |
+| 42 | Round 41, a weapon allowance of 110 gold at the Armoury while the Dagger is wielded (60 bought nothing: 63 of 80 kept the Dagger), and `shun`: below level 5, a creature the lore calls too strong (`lore_strong`, a level-1 Priest against a Kobold) is not met: from a staircase take it, else walk to a staircase nearer than the creature | 12 / 13 | 15 / 11 | 19 deaths at level 1-3; a weapon in 31 of 80. `shun` seldom fires: most early killers step out of the dark next to the player (a torch lights only the 3x3 around it, as in Umoria and VMS) |
+| 43 | Round 42's bot. Game: spell failure, maximum mana and spells allowed use upstream's `stat_adj` (Umoria `playerStatAdjustmentWisdomIntelligence`, VMS `wis_adj`): failure falls by 3 x (adj - 1) (was 0-3, with 18/xx as 18) and no +20% while fainting from hunger; mana is Umoria's `newMana` + 1 (a level-1 Priest with WIS 18 has 2, not 9; level 10 with 18/50, 21 not 88). Round 42's level-1 Priests failed 1 Cure Light Wounds in 5 beside a Kobold | 13 / 11 | 13 / 13 | 14 deaths at level 1-3 (19 in round 42). Five runs spent their budget at level 9-10 on DL1-2, all in the dark: an empty light was worn (a burnt-out torch, or an old empty lantern beside a new one), the game never says "gone out" for an empty one, and Moria8 showed an unidentified light's fuel nowhere. Blind, the bot searched walls for 44,000 steps or starved on the way up |
+| 44 | Game: a light's fuel shows identified or not, as upstream (VMS "with %P5 turns of light", Umoria `itemDescription`). Bot: wear the torch or lantern with the most turns (never an empty torch), and read the fuel of a light put on from "You are wearing ... (N turns)": an empty one is dark (refuel, or another torch) | 11 / 11 | 13 / 11 | 14 deaths at level 1-3 again. Five budget runs still went dark: "You are wearing a Wooden Torch (27 turns)." runs past 40 columns and the game drops the fuel, so a 27-charge torch was taken for a new one and the spares counted were burnt out; dark, the bot went 60 times between DL1 and DL2 for an up staircase it could not see |
+| 45 | Bot: the fuel of the light picked (its pack row) when the wear message drops it, and the spare torches recounted from the pack (34+ charges); dark with nothing to light, read Word of Recall at any depth (`lightless`); a flask beats melee by expected damage at each one's chance to hit, so a weapon too heavy for STR throws (`melee_weak`) | 11 / 7 | 13 / 13 | 12 deaths at level 1-3. 'p' casters (Novice Priest, Mage, Warrior) killed 12 at level 4-10. Five budget runs still went dark: search mode spends two turns a step and auto-rest many, so the bot's step count of a torch ran far behind, and the last one went out with no Word of Recall left |
+| 46 | Bot: with a caster in view whose biggest spell (lore: Cause Light Wounds 3d8, Cause Serious Wounds 8d8, breath) is over 4/3 of HP, heal (prayer, else potion) and do not hunt (`under_spell`); the last torch is the light home (`light_low` once no spare is left, three spares bought, not two); search mode counts two turns a step | 14 / 13 | 15 / 13 | The best round of M5b: 11 deaths at level 1-3, 3 to 'p' casters (12 in round 45). Five budget runs, four of them Dwarf `reach_dl8`: explore stepped back and forth between two squares for thousands of steps (seed 1015: 5,000 at a corridor bend, the way up behind a secret door), until the light and the food ran out |
+| 47 | Round 46's bot. Game: VMS base costs for every item mapped one-to-one onto an upstream template (FEATURE_MAP 8.3.1): a Potion of Cure Light Wounds 15 gp (was 50), a Flask of Oil 3 (10), the Beginners Handbook 25 (100), Words of Wisdom 100 (300), Word of Recall 150 (200), and weapons and armour dearer (Chain Mail 530, was 80; Long Sword 300, was 60). Bot: its price constants to match (`CLW_GOLD` 20, `RECALL_GOLD` 190, `OIL_GOLD` 3, `BOOK_GOLD`) | 12 / 9 | 13 / 14 | 13 deaths at level 1 (8 in round 46): at VMS prices armour and a weapon left a level-1 Priest a lantern and one flask. A level-9 Dwarf starved in town: the ration was refused for a full pack, and the visit ended there |
+| 48 | Round 47, and explore's ping-pong guard: eight explore steps between two squares mark their frontier dead, so search takes over (`EXPLORE_PINGPONG`); a pack full at a store is dropped from, then the General Store is visited again; early, no lantern while the kit's torches last, and ten flasks to throw, not five (`OIL_EARLY`) | 11 / 10 | 14 / 14 | Two budget runs (five in rounds 46-47). Kobolds killed 11, most on the first trip with one flask or none: the General Store stocked one flask at a time. Two Priests died in town to a Battle-Scarred Veteran and a Mean-Looking Mercenary, fought to the end |
+| 49 | Game: a store stocks the VMS template's number (5 rations, torches and flasks; 3 Word of Recall; 2 Cure Light Wounds, Phase Door and a few more; `sro_stock_qty`), not one of each. Bot: hurt beside a town creature, walk to the stairs down (`town_escape`) | 11 / 10 | 11 / 14 | 21 deaths at level 1-3 (14), 16 of them at level 1, mostly Kobolds. Point-blank flasks: round 45's `melee_weak` scored a flask with the melee skill, but a throw takes three quarters of the missile skill (a Dwarf's +15 is melee only), so Dwarf Priests threw where a Mace hit harder; and five rations a stocking bought a level-1 character 15 |
+| 50 | Bot: `melee_weak` at a throw's skill (3/4 of the missile skill, `CLASS_BTHB`); below level 5 at most eight rations (`FOOD_EARLY_MAX`) | 13 / 11 | 15 / 14 | 15 deaths at level 1-3 (21). A level-5 Human Priest hit 66 times in 377 swings: a store screen shows no stats, so the Weaponsmith pick assumed STR 10, and a Morningstar too heavy for the character looked fine |
+| 51 | Bot: the stats last read from the status lines at a store, not STR and DEX 10 (`last_stats`) | 16 / 14 | 15 / 16 | Human `clvl10` and Dwarf `reach_dl8` pass. No budget runs. 14 deaths at level 1-3: Kobolds 7, and traps: a level-1 Priest crushed by a rockfall that stayed a trap (VMS and Umoria turn it to rubble) |
+| 52 | Round 51's bot. Game: a sprung rockfall trap becomes rubble and leaves the trap table (VMS `pusht(tptr); place_rubble(y, x)`) | 16 / 14 | 14 / 15 | The same seeds die at level 1 round after round (Human 1002, 1008, 1016, 1018; Dwarf 1001, 1002, 1005), Kobolds 7: seed 1008 fought at 6 of 12 HP with four potions, under `QUAFF_HP`'s 3.6, and the next bite (1d6) killed it |
+| 53 | Bot: within one turn's worst melee from the creatures beside it (the lore's dice at their maximum), heal: a prayer, else a potion (`under_blow`) | 15 / 13 | 17 / 15 | 7 deaths at level 1-3 (13): Dwarf `clvl10` passes. Mid deaths lead now: DL5 Green Nagas 4, fought from full HP because every step to the stairs ran into contact, and Novice Mages 3 |
+| 54 | Bot: an outmatched creature in contact (`outmatched`: a naga) is left by Phase Door at any HP, before the fight | 14 / 16 | 18 / 16 | Bars from this round: 15/20 for Priests (§16.1, amended 2026-10-26). Three of four pass; Human `reach_dl8` up from 13 with no naga deaths. Human `clvl10` misses by one: DL2 Novice Mages, the same three seeds as round 53 (one cast took 20 of 42 HP; two casts in one step did 31) |
+| 55 | Bot: the spell threat in view sums every caster, not the strongest one (`spell_threat`) | 17 / 15 | 17 / 17 | **All four meet the Priest bar (15/20).** Frozen from a `--freeze` run of the same code (round 55f: the same 17 / 15 / 17 / 17): `playtest/suites/{clvl10,reach_dl8}-{human,dwarf}-priest.json`. Gates: `make -j7 -O test` passed (the Apple IIe, CX16, Atari and BBC runtime suites skipped: no ROM paths set); `make test128` 128/129, the real-boot diagnostic build 9 bytes over its startup overlay from the level-1 mana table, fixed (stat bands) and `real_boot_crash_harness` passes. **M5b Priest met 2026-10-26** |
