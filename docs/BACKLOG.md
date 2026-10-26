@@ -932,6 +932,36 @@ Acceptance target:
 
 ## Testing Infrastructure
 
+### Document build dependencies and test a fresh-machine build
+
+No file lists what a build and a full `make test` need on the host. A
+reinstalled Arch machine (2026-10-26) found them one at a time, each as a
+gate failure: Java for Kick Assembler (`tools/kickass_java.sh`), MAME for
+the Apple IIe, Atari 8-bit and BBC Master runtime suites, and Pillow for the
+title-art PNG decode in the C64 and C128 product builds (`error: need Pillow
+(pip install pillow) or macOS sips to decode PNG`). Already present, so not
+yet exercised: VICE (`x64sc`, `x128`, `xplus4`, `c1541`, `petcat`), Python 3
+and make. The ROM and emulator variables (`A2ROMS`, `X16EMU`, `X16ROM`,
+`ATARI8ROMS`, `BBCMROMS`) are documented only in `AGENTS.md`.
+
+Required work:
+
+- Build and run `make -j7 -O test` on an empty install of each supported host
+  (at least Arch, Debian/Ubuntu and macOS), recording every package each one
+  needs, including what `make` downloads itself (Kick Assembler, AppleCommander,
+  ProDOS) and the `x16emu` and `x16-rom` builds.
+- Write the list into the README, or a new `docs/BUILDING.md` it links to,
+  with per-host package names, minimum versions where one matters, and the
+  ROM and emulator variables with what each one enables.
+- Consider a `make check-deps` target that names each missing tool and its
+  package up front, instead of failing midway through a gate.
+
+Acceptance target:
+
+- A fresh machine with only the documented packages installed and the ROM
+  variables set builds every port and passes `make -j7 -O test` with no
+  undocumented step.
+
 ### Run the C64 suite in parallel
 
 `make -j5 -O test` runs the five platform stages in parallel (each in a private
