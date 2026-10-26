@@ -5,161 +5,351 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Moria8 Playtest</title>
 <style>
+  /* Tokens from the moria8.org site (docs/styles.css). */
   :root {
-    --bg: #f6f6f3; --panel: #ffffff; --ink: #1d1d1b; --muted: #6b6b66; --line: #deded8;
-    --ok: #2f7d3b; --bad: #b3261e; --warn: #9a6a00; --accent: #3b4a9c;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
-      --bg: #141413; --panel: #1d1d1b; --ink: #ecebe6; --muted: #9b9a94; --line: #33332f;
-      --ok: #6cc47a; --bad: #f08a80; --warn: #e0b04a; --accent: #9aa6f0;
-    }
+    color-scheme: dark;
+    --black: #080704; --black-soft: #0e0c08; --panel: #151108; --panel-light: #1c160a;
+    --gold: #ffd93d; --gold-hot: #fff171; --amber: #c57900; --amber-dark: #704000;
+    --paper: #f0e5bd; --muted: #aaa07c; --dim: #9a9172; --blue: #7779dc;
+    --red: #e0603c; --green: #9ad284;
+    --line: rgba(255, 217, 61, 0.26);
+    --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
   }
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--ink);
-         font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; }
-  header { padding: 14px 16px; border-bottom: 1px solid var(--line); display: flex;
-           flex-wrap: wrap; gap: 8px 24px; align-items: baseline; }
-  header h1 { font-size: 16px; margin: 0; }
-  .muted { color: var(--muted); }
-  main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; padding: 16px; }
-  @media (max-width: 900px) { main { grid-template-columns: minmax(0, 1fr); } }
-  section { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px;
-            min-width: 0; }
-  section h2 { font-size: 13px; margin: 0 0 8px; text-transform: uppercase; letter-spacing: .04em;
-               color: var(--muted); }
-  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
-  th, td { text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--line); white-space: nowrap; }
-  tr.sel td { background: color-mix(in srgb, var(--accent) 14%, transparent); }
-  tbody tr { cursor: pointer; }
-  .scroll { overflow: auto; max-height: 360px; }
-  .ok { color: var(--ok); } .bad { color: var(--bad); } .warn { color: var(--warn); }
-  #screen { background: #000; padding: 8px; border-radius: 6px; overflow-x: auto;
-            font: 13px/1.15 ui-monospace, "SF Mono", Menlo, Consolas, monospace; white-space: pre; }
-  .stat { font-size: 22px; font-weight: 600; }
-  .stats { display: flex; gap: 24px; flex-wrap: wrap; }
-  code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; }
+  body {
+    margin: 0; min-width: 20rem; color: var(--paper); font: 14px/1.5 var(--mono);
+    background: radial-gradient(circle at 50% -15%, rgba(197, 121, 0, 0.18), transparent 34rem), var(--black);
+  }
+  body::before {
+    position: fixed; z-index: 20; inset: 0; pointer-events: none; content: "";
+    background: repeating-linear-gradient(to bottom, rgba(255,255,255,0.018) 0, rgba(255,255,255,0.018) 1px,
+                                          transparent 1px, transparent 4px);
+  }
+  ::selection { background: var(--gold); color: var(--black); }
+  header {
+    position: sticky; top: 0; z-index: 10; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px;
+    padding: 12px 16px; background: rgba(8, 7, 4, 0.92); border-bottom: 1px solid var(--line);
+  }
+  .brand { color: var(--gold); font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+  .brand span { color: var(--amber); }
+  select, button {
+    font: inherit; color: var(--paper); background: var(--panel); border: 1px solid var(--line);
+    border-radius: 3px; padding: 3px 8px;
+  }
+  .muted { color: var(--muted); } .dim { color: var(--dim); }
+  .ok { color: var(--green); } .bad { color: var(--red); } .warn { color: var(--amber); } .gold { color: var(--gold); }
+  main { padding: 16px; display: grid; gap: 16px; max-width: 110rem; margin: 0 auto; }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 14px; min-width: 0; }
+  h2 { margin: 0 0 10px; font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--amber); }
+  h2::before { content: "> "; color: var(--gold); }
+  .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(28rem, 1fr)); gap: 16px; }
+  /* Overall status */
+  #status { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: 10px; }
+  .stat { background: var(--black-soft); border: 1px solid var(--line); border-radius: 3px; padding: 8px 10px; }
+  .stat .k { font-size: 11px; color: var(--dim); letter-spacing: .1em; text-transform: uppercase; }
+  .stat .v { font-size: 20px; color: var(--gold); }
+  #verdict { margin-top: 10px; font-size: 15px; }
+  /* Suites */
+  #suites { display: grid; grid-template-columns: repeat(auto-fit, minmax(22rem, 1fr)); gap: 12px; }
+  .suite { background: var(--black-soft); border: 1px solid var(--line); border-radius: 3px; padding: 10px; }
+  .suite h3 { margin: 0 0 6px; font-size: 13px; color: var(--paper); }
+  .score { font-size: 28px; color: var(--gold); }
+  .seeds { display: grid; grid-template-columns: repeat(20, 1fr); gap: 2px; margin: 8px 0 4px; position: relative; }
+  .seed { height: 16px; border-radius: 2px; background: #2a2416; }
+  .seed.reached { background: var(--gold); } .seed.died { background: var(--red); }
+  .seed.budget { background: var(--amber); } .seed.finding { background: var(--blue); }
+  .seed.running { background: repeating-linear-gradient(45deg, #3a3020 0 3px, #2a2416 3px 6px); }
+  .legend span { margin-right: 12px; font-size: 12px; }
+  .legend i { display: inline-block; width: 10px; height: 10px; margin-right: 4px; border-radius: 2px; vertical-align: -1px; }
+  /* Screen wall */
+  .wallgroup { margin-bottom: 14px; }
+  .wallgroup h3 { margin: 0 0 6px; font-size: 12px; color: var(--muted); font-weight: normal; }
+  .wall { display: grid; grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr)); gap: 8px; }
+  .tile { background: #000; border: 1px solid #3a3020; border-radius: 3px; cursor: pointer; overflow: hidden; }
+  .tile:hover { border-color: var(--gold); }
+  .tile .badge { display: flex; justify-content: space-between; padding: 2px 6px; font-size: 11px;
+                 background: var(--panel-light); color: var(--muted); }
+  .tile .badge b { color: var(--gold); font-weight: normal; }
+  .scr { margin: 0; padding: 3px; white-space: pre; font: 5.2px/1.05 var(--mono); letter-spacing: .5px; color: #fff; }
+  .big .scr { font-size: 15px; letter-spacing: 1px; padding: 10px; }
+  /* Charts */
+  svg { width: 100%; height: auto; display: block; }
+  svg text { fill: var(--muted); font: 11px var(--mono); }
+  .axis { stroke: #3a3020; }
+  /* Detail dialog */
+  dialog { background: var(--panel); color: var(--paper); border: 1px solid var(--gold); border-radius: 4px;
+            max-width: min(96vw, 80rem); padding: 14px; }
+  dialog::backdrop { background: rgba(0, 0, 0, 0.7); }
+  .detail { display: grid; grid-template-columns: auto minmax(18rem, 1fr); gap: 14px; align-items: start; }
+  @media (max-width: 900px) { .detail { grid-template-columns: 1fr; } }
+  .decisions { max-height: 34rem; overflow: auto; font-size: 12px; }
+  .decisions div { border-bottom: 1px solid #2a2416; padding: 2px 0; }
+  .decisions .l { color: var(--amber); }
 </style>
 </head>
 <body>
 <header>
-  <h1>Moria8 Playtest</h1>
-  <span id="session" class="muted">no session</span>
-  <span id="updated" class="muted"></span>
+  <div class="brand">Moria8 <span>// playtest</span></div>
+  <label class="muted">round <select id="round"></select></label>
+  <span class="muted" id="updated">loading…</span>
+  <span class="dim" id="poll">refresh 5s</span>
 </header>
 <main>
   <section>
-    <h2>Goal</h2>
-    <div class="stats">
-      <div><div class="muted">Goal</div><div class="stat" id="goal">–</div></div>
-      <div><div class="muted">Mode</div><div class="stat" id="mode">–</div></div>
-      <div><div class="muted">Reached</div><div class="stat" id="reached">–</div></div>
-      <div><div class="muted">Findings</div><div class="stat" id="findings">–</div></div>
+    <h2>Status</h2>
+    <div id="status"></div>
+    <div id="verdict"></div>
+  </section>
+  <section>
+    <h2>Suites</h2>
+    <div class="legend muted">
+      <span><i style="background:var(--gold)"></i>reached</span><span><i style="background:var(--red)"></i>died</span>
+      <span><i style="background:var(--amber)"></i>out of steps</span><span><i style="background:var(--blue)"></i>finding</span>
+      <span><i style="background:#3a3020"></i>running</span>
     </div>
+    <div id="suites"></div>
   </section>
   <section>
-    <h2>Workers</h2>
-    <div class="scroll"><table>
-      <thead><tr><th>W</th><th>Seed</th><th>Mode</th><th>DL</th><th>LV</th><th>HP</th>
-        <th>Steps</th><th>Steps/s</th><th>Outcome</th></tr></thead>
-      <tbody id="workers"></tbody>
-    </table></div>
+    <h2>Live screens</h2>
+    <div id="wall"></div>
   </section>
-  <section>
-    <h2>Screen <span id="screen-label" class="muted"></span></h2>
-    <div id="screen"></div>
-  </section>
-  <section>
-    <h2>Last decisions</h2>
-    <div class="scroll"><table>
-      <thead><tr><th>Step</th><th>Mode</th><th>Key</th><th>Layer</th><th>Reason</th></tr></thead>
-      <tbody id="decisions"></tbody>
-    </table></div>
-  </section>
-  <section>
-    <h2>Characters</h2>
-    <div class="scroll"><table>
-      <thead><tr><th>Seed</th><th>Outcome</th><th>Steps</th><th>Max DL</th><th>LV</th><th>Restarts</th><th>Findings</th></tr></thead>
-      <tbody id="characters"></tbody>
-    </table></div>
-  </section>
-  <section>
-    <h2>Events</h2>
-    <div class="scroll"><table>
-      <thead><tr><th>Time</th><th>Event</th><th>Detail</th></tr></thead>
-      <tbody id="events"></tbody>
-    </table></div>
-  </section>
+  <div class="grid2">
+    <section><h2>Deepest level over steps</h2><div id="depth"></div></section>
+    <section><h2>Round history</h2><div id="history"></div></section>
+  </div>
+  <div class="grid2">
+    <section><h2>Deaths by creature</h2><div id="deaths"></div></section>
+    <section><h2>Deaths by depth and level</h2><div id="deathdepth"></div></section>
+  </div>
 </main>
+<dialog id="dlg"><div id="dlgbody"></div><p style="text-align:right;margin:8px 0 0"><button id="close">close</button></p></dialog>
 <script>
+"use strict";
 // C64 palette (Pepto) for color RAM nibbles.
 const PALETTE = ["#000000","#ffffff","#68372b","#70a4b2","#6f3d86","#588d43","#352879","#b8c76f",
                  "#6f4f25","#433900","#9a6759","#444444","#6c6c6c","#9ad284","#6c5eb5","#959595"];
-let selected = 0;
-const esc = s => String(s).replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
-const outcomeClass = o => o === "reached" ? "ok" : (o === "finding" || o === "died") ? "bad" : "warn";
+const SUITE_COLORS = ["#ffd93d", "#c57900", "#7779dc", "#9ad284", "#e0603c", "#70a4b2"];
+const OUTCOME_COLOR = {reached: "#ffd93d", died: "#e0603c", budget: "#c57900", finding: "#7779dc"};
+let current = null, data = null;
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;"}[c]));
+const suiteName = s => `${s.character} ${s.goal}`;
 
-function renderScreen(w) {
-  const el = document.getElementById("screen");
-  if (!w || !w.rows) { el.textContent = ""; return; }
-  const colors = w.colors || "";
-  let html = "";
-  w.rows.forEach((row, r) => {
-    for (let c = 0; c < row.length; c++) {
-      const nib = parseInt(colors.substr((r * 40 + c) * 2, 2), 16) || 1;
-      html += `<span style="color:${PALETTE[nib & 15]}">${esc(row[c])}</span>`;
+function screenHtml(w) {
+  // One span per run of equal colour.
+  const rows = w.rows || [], colors = w.colors || "";
+  let out = "";
+  rows.forEach((row, y) => {
+    let run = "", col = -1;
+    for (let x = 0; x < row.length; x++) {
+      const c = parseInt(colors.substr((y * 40 + x) * 2, 2), 16) & 15;
+      if (c !== col && run) { out += `<span style="color:${PALETTE[col]}">${esc(run)}</span>`; run = ""; }
+      col = c; run += row[x];
     }
-    html += "\n";
+    if (run) out += `<span style="color:${PALETTE[col]}">${esc(run)}</span>`;
+    out += "\n";
   });
-  el.innerHTML = html;
-  document.getElementById("screen-label").textContent = `worker ${w.worker} · seed ${w.seed}`;
+  return out;
 }
 
-function eventDetail(e) {
-  const skip = new Set(["t", "kind"]);
-  return Object.entries(e).filter(([k]) => !skip.has(k))
-    .map(([k, v]) => `${k}=${typeof v === "string" && v.length > 60 ? v.slice(-60) : v}`).join(" ");
+function fmtTime(sec) {
+  if (!isFinite(sec) || sec < 0) return "–";
+  const h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60);
+  return h ? `${h}h ${m}m` : `${m}m`;
 }
+
+function seedOutcomes(s) {
+  const done = {};
+  s.characters.forEach(c => done[c.seed] = c.outcome);
+  const live = new Set(s.workers.filter(w => !w.outcome).map(w => w.seed));
+  return Array.from({length: s.seeds}, (_, i) => {
+    const seed = 1001 + i;
+    return {seed, outcome: done[seed] || (live.has(seed) ? "running" : "pending")};
+  });
+}
+
+function renderStatus() {
+  const suites = data.suites;
+  const started = suites.map(s => s.started).filter(Boolean).sort()[0];
+  const elapsed = started ? data.now - Date.parse(started) / 1000 : NaN;
+  const runs = suites.reduce((n, s) => n + s.characters.length, 0);
+  const total = suites.reduce((n, s) => n + s.seeds, 0);
+  const live = suites.reduce((n, s) => n + s.workers.filter(w => !w.outcome).length, 0);
+  const rate = suites.reduce((n, s) => n + s.workers.filter(w => !w.outcome).reduce((m, w) => m + (w.steps_per_s || 0), 0), 0);
+  const hangs = suites.reduce((n, s) => n + (s.findings.hang || 0), 0);
+  const stats = [["round", data.round], ["elapsed", fmtTime(elapsed)], ["runs finished", `${runs} / ${total}`],
+                 ["workers live", live], ["steps / s", Math.round(rate)], ["hangs", hangs]];
+  $("status").innerHTML = stats.map(([k, v]) =>
+    `<div class="stat"><div class="k">${k}</div><div class="v ${k === "hangs" && v ? "bad" : ""}">${esc(v)}</div></div>`).join("");
+  const lines = suites.map(s => {
+    const reached = s.characters.filter(c => c.outcome === "reached").length;
+    const open = s.seeds - s.characters.length;
+    const best = reached + open;
+    const state = reached >= s.bar ? `<span class="ok">passed</span>` :
+                  best < s.bar ? `<span class="bad">cannot pass (best ${best})</span>` :
+                  `<span class="warn">needs ${s.bar - reached} of ${open} left</span>`;
+    return `${esc(suiteName(s))}: <span class="gold">${reached}/${s.seeds}</span> (bar ${s.bar}) — ${state}`;
+  });
+  const passed = suites.filter(s => s.characters.filter(c => c.outcome === "reached").length >= s.bar).length;
+  $("verdict").innerHTML = `<div class="${passed === suites.length ? "ok" : "warn"}">` +
+    `${passed} of ${suites.length} suites at the bar</div>` + lines.map(l => `<div>${l}</div>`).join("");
+}
+
+function renderSuites() {
+  $("suites").innerHTML = data.suites.map(s => {
+    const seeds = seedOutcomes(s);
+    const count = o => s.characters.filter(c => c.outcome === o).length;
+    const cells = seeds.map(x => `<div class="seed ${x.outcome}" title="seed ${x.seed}: ${x.outcome}"></div>`).join("");
+    const markLeft = (s.bar / s.seeds * 100).toFixed(1);
+    return `<div class="suite"><h3>${esc(suiteName(s))}</h3>
+      <div><span class="score">${count("reached")}</span><span class="muted"> / ${s.seeds} · bar ${s.bar}</span></div>
+      <div class="seeds">${cells}
+        <div style="position:absolute;left:calc(${markLeft}% - 1px);top:-3px;bottom:-3px;width:2px;background:var(--paper)"
+             title="bar ${s.bar}"></div></div>
+      <div class="muted" style="font-size:12px">died ${count("died")} · out of steps ${count("budget")} ·
+        findings ${count("finding")} · running ${s.workers.filter(w => !w.outcome).length}</div></div>`;
+  }).join("");
+}
+
+function renderWall() {
+  $("wall").innerHTML = data.suites.map((s, si) => {
+    const tiles = s.workers.map(w => `<div class="tile" data-s="${si}" data-w="${w.worker}">
+        <div class="badge"><span>${w.seed} <b>L${w.clvl}</b> DL${w.dlvl}</span>
+          <span>${w.hp}/${w.mhp}${w.outcome ? ` · ${esc(w.outcome)}` : ""}</span></div>
+        <pre class="scr">${screenHtml(w)}</pre></div>`).join("");
+    return `<div class="wallgroup"><h3>${esc(suiteName(s))}</h3><div class="wall">${tiles}</div></div>`;
+  }).join("");
+  document.querySelectorAll(".tile").forEach(t => t.onclick = () => openWorker(+t.dataset.s, +t.dataset.w));
+}
+
+function lineChart(series, opts) {
+  // series: [{points: [[x, y]...], color, width, dash, label}]
+  const W = 760, H = opts.height || 300, L = 40, R = 10, T = 10, B = 28;
+  const xs = series.flatMap(s => s.points.map(p => p[0])), ys = series.flatMap(s => s.points.map(p => p[1]));
+  const xMax = opts.xMax || Math.max(1, ...xs), yMax = opts.yMax || Math.max(1, ...ys);
+  const X = x => L + x / xMax * (W - L - R), Y = y => opts.down ? T + y / yMax * (H - T - B) : H - B - y / yMax * (H - T - B);
+  let svg = `<svg viewBox="0 0 ${W} ${H}" role="img">`;
+  for (let i = 0; i <= (opts.yTicks || 4); i++) {
+    const y = yMax * i / (opts.yTicks || 4);
+    svg += `<line class="axis" x1="${L}" x2="${W - R}" y1="${Y(y)}" y2="${Y(y)}"/>` +
+           `<text x="${L - 6}" y="${Y(y) + 4}" text-anchor="end">${opts.yFmt ? opts.yFmt(y) : Math.round(y)}</text>`;
+  }
+  (opts.xLabels || []).forEach(([x, label]) =>
+    svg += `<text x="${X(x)}" y="${H - 8}" text-anchor="middle">${esc(label)}</text>`);
+  (opts.hLines || []).forEach(h => svg += `<line x1="${L}" x2="${W - R}" y1="${Y(h.y)}" y2="${Y(h.y)}" stroke="${h.color}" stroke-dasharray="4 4"/>` +
+    `<text x="${W - R}" y="${Y(h.y) - 4}" text-anchor="end" style="fill:${h.color}">${esc(h.label)}</text>`);
+  series.forEach(s => {
+    if (!s.points.length) return;
+    const d = s.points.map((p, i) => `${i ? "L" : "M"}${X(p[0]).toFixed(1)},${Y(p[1]).toFixed(1)}`).join("");
+    svg += `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="${s.width || 1.5}" ` +
+           `stroke-opacity="${s.opacity || 1}" ${s.dash ? `stroke-dasharray="${s.dash}"` : ""}><title>${esc(s.label || "")}</title></path>`;
+    if (s.dots) s.points.forEach(p => svg += `<circle cx="${X(p[0])}" cy="${Y(p[1])}" r="2.5" fill="${s.color}"/>`);
+  });
+  return svg + "</svg>";
+}
+
+function renderDepth() {
+  const series = [];
+  let xMax = 1;
+  data.suites.forEach((s, si) => {
+    const outcome = {};
+    s.characters.forEach(c => outcome[c.seed] = c.outcome);
+    Object.entries(s.depth).forEach(([seed, pts]) => {
+      const last = s.workers.find(w => String(w.seed) === seed);
+      // Deepest level so far: town trips would otherwise draw a spike each.
+      const points = [];
+      let deepest = 0;
+      pts.forEach(p => { if (p[1] > deepest) { deepest = p[1]; points.push([p[0], deepest]); } });
+      const end = last && last.step ? last.step : (pts.length ? pts[pts.length - 1][0] : 0);
+      points.unshift([0, 0]);
+      points.push([end, deepest]);
+      const stepped = points.flatMap((p, i) => i ? [[p[0], points[i - 1][1]], p] : [p]);
+      xMax = Math.max(xMax, ...points.map(p => p[0]));
+      series.push({points: stepped, color: SUITE_COLORS[si % SUITE_COLORS.length], width: 1.5, opacity: 0.7,
+                   label: `${suiteName(s)} seed ${seed} (${outcome[seed] || "running"})`});
+    });
+  });
+  const legend = data.suites.map((s, si) => `<span style="color:${SUITE_COLORS[si]}">■ ${esc(suiteName(s))}</span>`).join(" &nbsp;");
+  const ticks = [0, 0.25, 0.5, 0.75, 1].map(f => [xMax * f, `${Math.round(xMax * f / 1000)}k`]);
+  $("depth").innerHTML = `<div class="muted" style="font-size:12px;margin-bottom:6px">${legend}</div>` +
+    lineChart(series, {down: true, yMax: 8, yTicks: 8, xMax, xLabels: ticks, yFmt: y => `DL${Math.round(y)}`});
+}
+
+function renderHistory() {
+  const rounds = data.history.filter(r => Object.values(r.suites).some(v => v.done >= 20 || r.round === data.round));
+  const names = data.suites.map(s => `${s.goal} ${s.character}`);   // the round's order: same colours as above
+  const series = names.map((n, i) => ({
+    color: SUITE_COLORS[i % SUITE_COLORS.length], width: 2, dots: true, label: n,
+    points: rounds.map((r, x) => r.suites[n] ? [x, r.suites[n].reached] : null).filter(Boolean)}));
+  const step = Math.max(1, Math.ceil(rounds.length / 10));
+  const labels = rounds.map((r, x) => [x, r.round.replace(/^[^-]+-/, "")]).filter((_, x) => x % step === 0 || x === rounds.length - 1);
+  const legend = names.map((n, i) => `<span style="color:${SUITE_COLORS[i]}">■ ${esc(n.split(" ").reverse().join(" "))}</span>`).join(" &nbsp;");
+  $("history").innerHTML = `<div class="muted" style="font-size:12px;margin-bottom:6px">${legend}</div>` +
+    lineChart(series, {yMax: 20, yTicks: 4, xMax: Math.max(1, rounds.length - 1), xLabels: labels,
+                       hLines: [{y: 16, color: "#ffd93d", label: "bar 16"}]});
+}
+
+function renderDeaths() {
+  const tally = {}, depth = [];
+  data.suites.forEach(s => s.characters.filter(c => c.outcome === "died").forEach(c => {
+    const k = c.killer || "unknown";
+    tally[k] = (tally[k] || 0) + 1;
+    depth.push(c);
+  }));
+  const rows = Object.entries(tally).sort((a, b) => b[1] - a[1]).slice(0, 14);
+  const max = Math.max(1, ...rows.map(r => r[1]));
+  $("deaths").innerHTML = rows.length ? rows.map(([k, n]) =>
+    `<div style="display:grid;grid-template-columns:13rem 1fr 2rem;gap:8px;align-items:center;margin:3px 0">
+       <span>${esc(k)}</span><span style="height:12px;background:var(--red);width:${n / max * 100}%"></span>
+       <span class="gold">${n}</span></div>`).join("") : `<span class="muted">no deaths yet</span>`;
+  const W = 760, H = 260, L = 40, B = 28, T = 10, R = 10;
+  let svg = `<svg viewBox="0 0 ${W} ${H}">`;
+  for (let d = 0; d <= 8; d += 2) {
+    const y = T + d / 8 * (H - T - B);
+    svg += `<line class="axis" x1="${L}" x2="${W - R}" y1="${y}" y2="${y}"/><text x="${L - 6}" y="${y + 4}" text-anchor="end">DL${d}</text>`;
+  }
+  for (let l = 0; l <= 12; l += 2) {
+    const x = L + l / 12 * (W - L - R);
+    svg += `<text x="${x}" y="${H - 8}" text-anchor="middle">L${l}</text>`;
+  }
+  depth.forEach((c, i) => {
+    const x = L + (c.clvl + (i % 5 - 2) * 0.08) / 12 * (W - L - R), y = T + (c.dlvl + (i % 3 - 1) * 0.08) / 8 * (H - T - B);
+    svg += `<circle cx="${x}" cy="${y}" r="5" fill="var(--red)" fill-opacity="0.65"><title>seed ${c.seed}: ${esc(c.killer || "?")} DL${c.dlvl} L${c.clvl}</title></circle>`;
+  });
+  $("deathdepth").innerHTML = svg + `</svg><div class="muted" style="font-size:12px">character level across, depth down</div>`;
+}
+
+async function openWorker(si, wi) {
+  const s = data.suites[si];
+  const w = await (await fetch(`/api/worker?session=${encodeURIComponent(s.session)}&worker=${wi}`)).json();
+  if (!w) return;
+  const dec = (w.decisions || []).slice().reverse().map(d =>
+    `<div>${d.step} <span class="l">${esc(d.layer)}</span> ${esc(d.reason)} <span class="dim">${esc(d.msg || "")}</span></div>`).join("");
+  $("dlgbody").innerHTML = `<h2>${esc(suiteName(s))} · seed ${w.seed} · L${w.clvl} DL${w.dlvl} · HP ${w.hp}/${w.mhp} · step ${w.step}</h2>
+    <div class="detail big"><div class="tile" style="cursor:default"><pre class="scr">${screenHtml(w)}</pre></div>
+    <div class="decisions">${dec || "<span class='muted'>no decisions</span>"}</div></div>`;
+  $("dlg").showModal();
+}
+$("close").onclick = () => $("dlg").close();
 
 async function refresh() {
-  let data;
-  try { data = await (await fetch("/api/status", {cache: "no-store"})).json(); }
-  catch { return; }
-  if (!data.session) return;
-  const s = data.summary || {};
-  const chars = s.characters || [];
-  document.getElementById("session").textContent = data.session;
-  document.getElementById("updated").textContent = "updated " + new Date().toLocaleTimeString();
-  document.getElementById("goal").textContent = s.goal || "–";
-  document.getElementById("mode").textContent = s.mode || "–";
-  document.getElementById("reached").textContent =
-    `${chars.filter(c => c.outcome === "reached").length}/${chars.length}`;
-  document.getElementById("findings").textContent =
-    data.events.filter(e => e.kind === "finding").length + (s.findings != null ? ` (total ${s.findings})` : "");
-
-  const workers = data.workers || [];
-  document.getElementById("workers").innerHTML = workers.map(w => `
-    <tr class="${w.worker === selected ? "sel" : ""}" data-w="${w.worker}">
-      <td>${w.worker}</td><td>${w.seed}</td><td>${esc(w.mode)}${w.stage ? ":" + esc(w.stage) : ""}</td>
-      <td>${w.dlvl}</td><td>${w.clvl}</td><td>${w.hp}/${w.mhp}</td><td>${w.steps}</td>
-      <td>${w.steps_per_s}</td><td class="${outcomeClass(w.outcome)}">${w.outcome || "playing"}</td></tr>`).join("");
-  document.querySelectorAll("#workers tr").forEach(tr =>
-    tr.onclick = () => { selected = Number(tr.dataset.w); refresh(); });
-  const w = workers.find(x => x.worker === selected) || workers[0];
-  renderScreen(w);
-  document.getElementById("decisions").innerHTML = ((w && w.decisions) || []).slice().reverse().map(d => `
-    <tr><td>${d.step}</td><td>${esc(d.mode)}</td><td><code>${esc(d.key)}</code></td>
-    <td>${esc(d.layer)}</td><td>${esc(d.reason)}</td></tr>`).join("");
-  document.getElementById("characters").innerHTML = chars.slice().reverse().map(c => `
-    <tr><td>${c.seed}</td><td class="${outcomeClass(c.outcome)}">${c.outcome}</td><td>${c.steps}</td>
-    <td>${c.max_dlvl}</td><td>${c.clvl}</td><td>${c.restarts}</td><td>${esc((c.findings || []).join("; "))}</td></tr>`).join("");
-  document.getElementById("events").innerHTML = data.events.slice().reverse().map(e => `
-    <tr><td>${new Date(e.t * 1000).toLocaleTimeString()}</td>
-    <td class="${e.kind === "finding" || e.kind === "plateau" ? "bad" : ""}">${esc(e.kind)}</td>
-    <td>${esc(eventDetail(e))}</td></tr>`).join("");
+  try {
+    const r = await fetch(`/api/overview${current ? `?round=${encodeURIComponent(current)}` : ""}`);
+    data = await r.json();
+    if (!data.round) { $("updated").textContent = "no sessions yet"; return; }
+    const sel = $("round");
+    if (sel.options.length !== data.rounds.length || sel.value !== data.round) {
+      sel.innerHTML = data.rounds.map(n => `<option ${n === data.round ? "selected" : ""}>${esc(n)}</option>`).join("");
+    }
+    renderStatus(); renderSuites(); renderWall(); renderDepth(); renderHistory(); renderDeaths();
+    $("updated").textContent = `updated ${new Date().toLocaleTimeString()}`;
+  } catch (e) {
+    $("updated").textContent = `error: ${e}`;
+  }
 }
+$("round").onchange = e => { current = e.target.value; refresh(); };
 refresh();
-setInterval(refresh, 1000);
+setInterval(() => { if (!$("dlg").open) refresh(); }, 5000);
 </script>
 </body>
 </html>

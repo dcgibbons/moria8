@@ -181,7 +181,7 @@ bash_door:
 !bd_holds:
     ldx #HSTR_BASH_HOLDS
     jsr huff_print_msg
-    jsr bash_off_balance
+    jsr bash_off_balance_door
     lda #SFX_BUMP
     jsr hal_sound_play
     sec                         // Turn consumed
@@ -242,9 +242,19 @@ bash_chance:     .byte 0
 bash_abs_state:  .byte 0
 
 // ============================================================
-// bash_monster — Bash a monster with shield
+// bash_monster — Bash a monster: VMS bash (moria.inc:3384) is py_attack with
+// a stand-in weapon: the shield's damage dice (none without one), weight =
+// STR, bth = (STR + body weight) / 6, +0 to-hit, to-dam body weight/75 + 1.
+// 150 stands in for the unassigned body weight, as in bash_door, so bth =
+// STR/6 + 25 and to-dam = 3. Blows are attack_blows with weight = STR, so
+// adj_weight is 10: the DEX blows / 1.5, at least one. A creature hit and
+// left alive is stunned for randint(2) + 1 turns; then off-balance if
+// randint(140) > DEX: paralysed randint(3) turns.
+// Deltas: to-hit, the 1-in-20 rolls and criticals use Moria8's melee forms
+// (Umoria class level adjustment, the player's melee to-hit in the critical).
 // Input: X = monster slot from monster_find_at
 // ============================================================
+.const BASH_TODAM = 3           // body weight 150 / 75 + 1
 bash_monster:
     // Save slot and load creature type (same pattern as combat.s:46-58)
     stx cmb_slot
@@ -259,36 +269,50 @@ bash_monster:
     ora #MF_AWAKE | MF_PROVOKED
     sta (zp_ptr0),y
 
-    // --- Calculate to-hit ---
-    // Base: STR + 5
-    lda zp_player_str
-    clc
-    adc #5
-    sta zp_combat_tohit
+    // Blows: DEX < 19 (18 or less) one, < 118 two, 18/100 three
+    lda zp_player_dex
+    ldx #1
+    cmp #19
+    bcc !bash_blows+
+    inx
+    cmp #118
+    bcc !bash_blows+
+    inx
+!bash_blows:
+    stx bash_blows
+    lda #0
+    sta bash_hit_alive
 
-    // Add shield weight / 2
-    ldy #EQUIP_SHIELD
-    lda inv_item_id,y
-    cmp #FI_EMPTY
-    beq !bash_no_shield+
-    tax                         // X = shield item type
-    lda it_weight,x
-    lsr                         // weight / 2
+    // To-hit: STR/6 + 25 + level * class melee BTH per level
+    lda zp_player_str
+    sta zp_math_a
+    lda #0
+    sta zp_math_b
+    ldx #6
+    jsr math_div_16x8           // zp_math_a = STR / 6
+    lda zp_math_a
+    clc
+    adc #25
+    sta zp_combat_tohit
+    lda player_data + PL_CLASS
+    ldx #CLASS_LVL_SIZE
+    jsr math_multiply           // A = class * 5 (melee BTH per level first)
+    tax
+    lda class_level_adj,x
+    ldx zp_player_lvl
+    jsr math_multiply           // zp_math_a = level * BTH per level (<= 160)
+    lda zp_math_a
     clc
     adc zp_combat_tohit
     bcc !bash_tohit_ok+
-    lda #255                    // Cap at 255
-    jmp !bash_tohit_ok+
-!bash_no_shield:
+    lda #255
 !bash_tohit_ok:
     sta zp_combat_tohit
 
-    // Load monster AC
+!bash_blow:
     ldx cmb_type
     lda cr_ac,x
     sta zp_combat_atk
-
-    // Roll to-hit
     jsr combat_roll_tohit
     bcs !bash_hit+
 
@@ -299,34 +323,36 @@ bash_monster:
     jsr cmb_print_buf
     lda #SFX_MISS
     jsr hal_sound_play
-    jmp bash_monster_done
+    jmp !bash_next_blow+
 
 !bash_hit:
-    // --- Calculate damage: 1d4 + str_damage_bonus[STR-3] + 3 ---
-    lda #1                      // 1 die
-    ldx #4                      // 4 sides
-    ldy #0                      // No bonus
-    jsr math_dice               // Result in zp_math_a
-
-    // Add STR damage bonus
-    ldx zp_player_str
-    dex
-    dex
-    dex                         // X = STR - 3
-    lda str_damage_bonus,x
-    bmi !bash_str_neg+
+    // Damage: the shield's dice (0 without one), a critical for weight STR,
+    // then + BASH_TODAM
+    lda #0
+    sta zp_math_a
+    ldx inv_item_id + EQUIP_SHIELD
+    cpx #FI_EMPTY
+    beq !bash_have_dice+
+    lda it_dmg_packed,x
+    beq !bash_have_dice+
+    pha
+    and #$0f
+    tax                         // X = sides
+    pla
+    lsr
+    lsr
+    lsr
+    lsr                         // A = dice count
+    ldy #0
+    jsr math_dice               // zp_math_a = roll
+!bash_have_dice:
+    lda zp_math_a
+    sta cmb_damage
+    lda zp_player_str
+    jsr combat_critical_blow_weight
+    lda cmb_damage
     clc
-    adc zp_math_a
-    jmp !bash_add_flat+
-!bash_str_neg:
-    clc
-    adc zp_math_a
-    bpl !bash_add_flat+
-    lda #0                      // Clamp to 0
-!bash_add_flat:
-    // Add +3 flat bonus
-    clc
-    adc #3
+    adc #BASH_TODAM
     bcc !bash_dmg_ok+
     lda #255                    // Clamp at 255
 !bash_dmg_ok:
@@ -358,7 +384,7 @@ bash_monster:
 
     lda #SFX_HIT
     jsr hal_sound_play
-    jmp bash_monster_done
+    jmp bash_monster_done       // VMS py_attack: a kill ends the blows, no stun
 
 !bash_hit_alive:
     // Hit but alive
@@ -366,117 +392,28 @@ bash_monster:
     ldy #>cmb_hit_str
     jsr msg_build_action
     jsr cmb_print_buf
-
     lda #SFX_HIT
     jsr hal_sound_play
+    inc bash_hit_alive
 
-    // Check for stun
-    jsr bash_stun_check
+!bash_next_blow:
+    dec bash_blows
+    beq !bash_blows_done+
+    jmp !bash_blow-
+!bash_blows_done:
+    lda bash_hit_alive
+    beq bash_monster_done
 
-bash_monster_done:
-    // Always check off-balance after bash attempt
-    jsr bash_off_balance
-    sec                         // Turn consumed
-    rts
-
-// ============================================================
-// bash_stun_check — Check if bash stuns the monster
-// Uses cmb_slot, cmb_type (must still be valid)
-// ============================================================
-bash_stun_check:
-    // bash_power = 25 + rng_range(100) + rng_range(100) — range 25-225
-    lda #100
-    jsr rng_range               // [0,99]
-    sta zp_temp0
-    lda #100
-    jsr rng_range               // [0,99]
+    // Stunned for randint(2) + 1 turns (VMS sets the count)
+    lda #2
+    jsr rng_range               // [0,1]
     clc
-    adc zp_temp0
-    clc
-    adc #25                     // bash_power in A (may wrap but 25+99+99=223 fits)
-    sta zp_temp0                // zp_temp0 = bash_power
-
-    // mon_hp_q = monster HP / 4 (16-bit → 8-bit after shift)
+    adc #2                      // [2,3]
+    pha
     ldx cmb_slot
     jsr monster_get_ptr
-    ldy #MX_HP_HI
-    lda (zp_ptr0),y
-    sta zp_temp1                // HP hi
-    ldy #MX_HP_LO
-    lda (zp_ptr0),y
-    sta zp_temp2                // HP lo
-
-    // Divide 16-bit HP by 4 (shift right twice)
-    lsr zp_temp1
-    ror zp_temp2
-    lsr zp_temp1
-    ror zp_temp2
-
-    // If HP hi byte still nonzero after /4 → skip stun (massive monster)
-    lda zp_temp1
-    bne !bash_ignores+
-    // zp_temp2 = mon_hp_q (8-bit)
-
-    // avg_max_q = cr_hd_num[type] * (cr_hd_sides[type]+1) / 8
-    ldx cmb_type
-    lda cr_hd_sides,x
-    clc
-    adc #1                      // sides + 1
-    tax                         // X = sides+1
-    ldx cmb_type
-    lda cr_hd_num,x             // A = hd_num
-    ldx cmb_type
-    // Need: A = hd_num, X = sides+1
-    pha                         // Save hd_num
-    lda cr_hd_sides,x
-    clc
-    adc #1
-    tax                         // X = sides+1
-    pla                         // A = hd_num
-    jsr math_multiply           // zp_math_a = lo, zp_math_b = hi
-
-    // Divide by 8 (shift right 3 times on 16-bit result)
-    lda zp_math_b
-    sta zp_temp3                // hi
-    lda zp_math_a               // lo
-    lsr zp_temp3
-    ror
-    lsr zp_temp3
-    ror
-    lsr zp_temp3
-    ror
-    // A = avg_max_q (low byte; zp_temp3 should be 0 for reasonable creatures)
-
-    // mon_tough = mon_hp_q + avg_max_q (clamp at 255)
-    clc
-    adc zp_temp2                // mon_hp_q + avg_max_q
-    bcc !bash_tough_ok+
-    lda #255
-!bash_tough_ok:
-    sta zp_temp2                // zp_temp2 = mon_tough
-
-    // If bash_power > mon_tough → stun
-    lda zp_temp0                // bash_power
-    cmp zp_temp2                // compare with mon_tough
-    bcc !bash_ignores+          // bash_power < mon_tough → no stun
-    beq !bash_ignores+          // bash_power == mon_tough → no stun
-
-    // Stun! stun_add = rng_range(3) + 2, cap total at 24
-    lda #3
-    jsr rng_range               // [0,2]
-    clc
-    adc #2                      // [2,4]
-
-    // Add to existing stun timer
-    ldx cmb_slot
-    jsr monster_get_ptr
+    pla
     ldy #MX_STUN
-    clc
-    adc (zp_ptr0),y
-    cmp #25
-    bcc !bash_stun_ok+
-    lda #24                     // Cap at 24
-!bash_stun_ok:
     sta (zp_ptr0),y
 
     // Print "<name> appears stunned!"
@@ -486,33 +423,42 @@ bash_stun_check:
     ldx #HSTR_BASH_STUNNED
     jsr huff_append_combat
     jsr cmb_term_and_print
+
+bash_monster_done:
+    // Always check off-balance after bash attempt
+    jsr bash_off_balance
+    sec                         // Turn consumed
     rts
 
-!bash_ignores:
-    // Print "<name> ignores your bash!"
-    lda #0
-    sta cmb_buf_idx
-    jsr combat_append_monster_name
-    ldx #HSTR_BASH_IGNORES
-    jsr huff_append_combat
-    jsr cmb_term_and_print
-    rts
+bash_blows:     .byte 0
+bash_hit_alive: .byte 0
 
 // ============================================================
-// bash_off_balance — Check if player loses balance after bash
+// bash_off_balance — After a creature bash (VMS bash): off-balance when
+// randint(140) > DEX, paralysed randint(3) turns.
+// bash_off_balance_door — After a door bash (Umoria playerBashClosedDoor):
+// randint(150) > DEX, paralysed 1 + randint(2) turns.
 // ============================================================
-bash_off_balance:
+bash_off_balance_door:
     lda #150
-    jsr rng_range               // [0,149]
+    ldx #2
+    ldy #2
+    bne !bob_roll+              // always taken
+bash_off_balance:
+    lda #140
+    ldx #3
+    ldy #1
+!bob_roll:
+    stx bob_turns
+    sty bob_base
+    jsr rng_range               // randint(N) - 1
     cmp zp_player_dex
-    bcc !bash_balanced+         // roll < DEX → safe
-    beq !bash_balanced+         // roll == DEX → safe
+    bcc !bash_balanced+         // randint(N) <= DEX: safe
 
-    // Off balance — paralyze 1-2 turns
-    lda #2
-    jsr rng_range               // [0,1]
+    lda bob_turns
+    jsr rng_range
     clc
-    adc #1                      // [1,2]
+    adc bob_base
     sta zp_eff_paralyze
 
     ldx #HSTR_BASH_OFFBAL
@@ -520,3 +466,5 @@ bash_off_balance:
 
 !bash_balanced:
     rts
+bob_turns: .byte 0
+bob_base:  .byte 0

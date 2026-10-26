@@ -343,9 +343,10 @@ test_start:
 
     jsr calc_spell_failure
 
+    // Upstream has no hunger term: fainting leaves the chance at 5.
     lda pm_fail_work
-    cmp #25
-    bcc !t15_fail+
+    cmp #5
+    bne !t15_fail+
     lda #$01
     sta tc_results + 14
     jmp !t16+
@@ -372,10 +373,141 @@ test_start:
     bne !t16_fail+
     lda #$01
     sta tc_results + 15
-    jmp !t17+
+    jmp !tstat+
 !t16_fail:
     lda #$00
     sta tc_results + 15
+
+!tstat:
+    ldx #tem_saved_lo_end - tem_saved_lo - 1
+!save:
+    lda tem_saved_lo,x
+    sta zp_ptr0
+    lda tem_saved_hi,x
+    sta zp_ptr0_hi
+    ldy #0
+    lda (zp_ptr0),y
+    sta tem_saved_val,x
+    dex
+    bpl !save-
+
+    // Upstream stat term: chance -= 3 * (stat_adj - 1). Magic Missile
+    // (fail 22, level 1) at level 1: INT 18/50 (adj 4) -> 13, INT 7
+    // (adj 0) -> 25.
+    lda #0
+    sta pm_spell_idx
+    sta pm_cost_tmp
+    lda #1
+    sta zp_player_lvl
+    sta player_data + PL_LEVEL
+    lda #68
+    sta player_data + PL_INT_CUR
+    jsr calc_spell_failure
+    lda pm_fail_work
+    cmp #13
+    bne !tstat_hi_fail+
+    lda #$01
+    sta tc_results + 19
+    jmp !tstat_lo+
+!tstat_hi_fail:
+    lda #$00
+    sta tc_results + 19
+
+!tstat_lo:
+    lda #7
+    sta player_data + PL_INT_CUR
+    jsr calc_spell_failure
+    lda pm_fail_work
+    cmp #25
+    bne !tstat_lo_fail+
+    lda #$01
+    sta tc_results + 20
+    jmp !tmana+
+!tstat_lo_fail:
+    lda #$00
+    sta tc_results + 20
+
+    // Umoria newMana + 1: a level-1 Mage with INT 18 (adj 3) has 1 + 1,
+    // a level-10 Mage with INT 18/100 (adj 7) 40 + 1, INT 7 (adj 0) none.
+!tmana:
+    lda #SPELL_MAGE
+    sta player_data + PL_SPELL_TYPE
+    lda #CLASS_MAGE
+    sta player_data + PL_CLASS
+    lda #0
+    sta zp_player_mp
+    lda #18
+    sta player_data + PL_INT_CUR
+    jsr magic_recalc_mana
+    lda player_data + PL_MAX_MANA
+    cmp #2
+    bne !tmana_l1_fail+
+    lda zp_player_mmp
+    cmp #2
+    bne !tmana_l1_fail+
+    lda #$01
+    sta tc_results + 21
+    jmp !tmana_l10+
+!tmana_l1_fail:
+    lda #$00
+    sta tc_results + 21
+
+!tmana_l10:
+    lda #10
+    sta zp_player_lvl
+    sta player_data + PL_LEVEL
+    lda #118
+    sta player_data + PL_INT_CUR
+    jsr magic_recalc_mana
+    lda player_data + PL_MAX_MANA
+    cmp #41
+    bne !tmana_l10_fail+
+    lda #$01
+    sta tc_results + 22
+    jmp !tmana_none+
+!tmana_l10_fail:
+    lda #$00
+    sta tc_results + 22
+
+!tmana_none:
+    lda #7
+    sta player_data + PL_INT_CUR
+    jsr magic_recalc_mana
+    lda player_data + PL_MAX_MANA
+    bne !tmana_none_fail+
+    lda #$01
+    sta tc_results + 23
+    jmp !tmana_restore+
+!tmana_none_fail:
+    lda #$00
+    sta tc_results + 23
+
+!tmana_restore:
+    ldx #tem_saved_lo_end - tem_saved_lo - 1
+!restore:
+    lda tem_saved_lo,x
+    sta zp_ptr0
+    lda tem_saved_hi,x
+    sta zp_ptr0_hi
+    ldy #0
+    lda tem_saved_val,x
+    sta (zp_ptr0),y
+    dex
+    bpl !restore-
+    jmp !t17+
+
+// State the stat-term and mana tests change, put back for the tests after.
+tem_saved_lo:
+    .byte <(player_data + PL_SPELL_TYPE), <(player_data + PL_CLASS), <zp_player_lvl
+    .byte <(player_data + PL_LEVEL), <(player_data + PL_INT_CUR), <(player_data + PL_MAX_MANA)
+    .byte <(player_data + PL_MANA), <zp_player_mmp, <zp_player_mp, <pm_cost_tmp, <pm_spell_idx
+tem_saved_lo_end:
+tem_saved_hi:
+    .byte >(player_data + PL_SPELL_TYPE), >(player_data + PL_CLASS), >zp_player_lvl
+    .byte >(player_data + PL_LEVEL), >(player_data + PL_INT_CUR), >(player_data + PL_MAX_MANA)
+    .byte >(player_data + PL_MANA), >zp_player_mmp, >zp_player_mp, >pm_cost_tmp, >pm_spell_idx
+tem_saved_val:
+    .fill tem_saved_lo_end - tem_saved_lo, 0
 
 !t17:
     lda #$07

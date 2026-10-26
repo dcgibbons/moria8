@@ -78,9 +78,9 @@
 //   - overlay cache HELP:      $2000-$2FFF
 //   - overlay cache ITEMS:     $3000-$3FFF
 //   - live map span:           $4000-$730B (Phase 10.3 = 198x66)
-//   - DB/data region:          $7400-$7EFF
-//   - tier cache window:       $7F00-$94F7
-//   - title-art cache:         $94F8-$97FF
+//   - DB/data region:          $7400-$79FF
+//   - tier cache window:       $7A00-$9567
+//   - title-art cache:         $9568-$97FF
 //   - small overlay cache MODAL:$9800-$9CFF
 //   - small overlay cache:     $9D00-$9FFF
 //   - overlay cache STARTUP:   $A000-$AFFF
@@ -114,13 +114,17 @@
 .const MMU_COPY_MAP_ROW_LEN = 78
 .const MAP_END          = BANK1_MAP_RESERVED_END
 .const BANK1_DB_BASE    = $7400
-.const BANK1_DB_END     = $7eff
+.const BANK1_DB_END     = $79ff   // item names end at $79e1; the tier cache took the rest (2026-10-25)
 // The tier cache took the DB region's last page when tiers gained the
-// cr_treasure SoA field (MON-014): tiers 1-4 need 5520 bytes.
-.const BANK1_TIER_CACHE_BASE = $7f00
-.const BANK1_TIER_CACHE_SIZE = $94f8 - BANK1_TIER_CACHE_BASE  // up to reserved gap 0
+// cr_treasure SoA field (MON-014): tiers 1-4 needed 5520 bytes. Five DL 1
+// creatures added to tier 1 (2026-10-25) needed 5733: the cache's end moved
+// to $9567, into the title-art cache's slack (663 bytes left, 593-624
+// needed). Twenty-five more the same day: its start moved down to $7a00, into
+// the DB region's free tail above the item names ($79e1).
+.const BANK1_TIER_CACHE_BASE = $7a00
+.const BANK1_TIER_CACHE_SIZE = $9568 - BANK1_TIER_CACHE_BASE  // up to reserved gap 0
 .const BANK1_TIER_CACHE_END  = BANK1_TIER_CACHE_BASE + BANK1_TIER_CACHE_SIZE - 1
-.const BANK1_RESERVED_GAP0_BASE = $94f8
+.const BANK1_RESERVED_GAP0_BASE = $9568
 .const BANK1_RESERVED_GAP0_END  = $9fff
 .const C128_TITLE_CACHE_VALID_MARKER = $a5
 .const BANK1_TITLE_CACHE_MARKER_BASE = BANK1_RESERVED_GAP0_BASE
@@ -735,32 +739,6 @@ mmu_common_mark_visited_row_ptr0:
     lda mmu_common_row_seen_new
     rts
 
-mmu_common_db_read_ptr0:
-    jsr mmu_common_select_bank1
-    lda (zp_ptr0),y
-    pha
-    jsr mmu_common_select_bank0
-    pla
-    rts
-
-mmu_common_db_write_ptr0:
-    pha
-    jsr mmu_common_select_bank1
-    pla
-    sta (zp_ptr0),y
-    pha
-    jsr mmu_common_select_bank0
-    pla
-    rts
-
-mmu_common_db_read_ptr1:
-    jsr mmu_common_select_bank1
-    lda (zp_ptr1),y
-    pha
-    jsr mmu_common_select_bank0
-    pla
-    rts
-
 // Huffman corpus reads differ from ordinary Bank 1 DB reads: the corpus is
 // physically under the runtime's 4KB top-common window. The corpus PRG places
 // an NMI vector to mmu_common_nmi in Bank 1 before these helpers can run.
@@ -794,16 +772,6 @@ mmu_common_huff_restore_bank0:
     sta $d506
     plp
     lda mmu_common_huff_value
-    rts
-
-mmu_common_db_write_ptr1:
-    pha
-    jsr mmu_common_select_bank1
-    pla
-    sta (zp_ptr1),y
-    pha
-    jsr mmu_common_select_bank0
-    pla
     rts
 
 #if C128_TEST_COUNT_MAP_ROW_STORES || C128_TEST_MAP_ROW_STORE_HELPER
@@ -870,67 +838,13 @@ mmu_common_huff_value:
     .byte 0
 }
 mmu_common_helpers_blob_end:
+// The item DB shares Bank 1 with the map, so its pointer thunks are the
+// map's (identical bodies until 2026-10-25).
+.label mmu_common_db_read_ptr0  = mmu_common_map_read_ptr0
+.label mmu_common_db_write_ptr0 = mmu_common_map_write_ptr0
+.label mmu_common_db_read_ptr1  = mmu_common_map_read_ptr1
+.label mmu_common_db_write_ptr1 = mmu_common_map_write_ptr1
 
-// read_banked_byte_a000 — Read a byte from RAM under BASIC ROM
-// Input:  zp_ptr0/zp_ptr0_hi = address in $A000–$BFFF
-//         Y = offset from pointer
-// Output: A = byte read
-// Preserves: X, Y
-read_banked_byte_a000:
-    :BankOutBasic()
-    lda (zp_ptr0),y
-    pha
-    :BankInBasic()
-    pla
-    rts
-
-// read_banked_byte_e000 — Read a byte from Bank 1 RAM
-// Input:  zp_ptr0/zp_ptr0_hi = address in $E000–$FFFF
-//         Y = offset from pointer
-// Output: A = byte read
-// Preserves: X, Y
-read_banked_byte_e000:
-    sei
-    lda #MMU_RAM_BANK1
-    sta $ff00
-    lda (zp_ptr0),y
-    pha
-    lda #MMU_ALL_RAM
-    sta $ff00
-    cli
-    pla
-    rts
-
-// copy_to_e000 — Bulk copy to RAM under KERNAL ROM
-// Input:  zp_ptr0 = source address (lo/hi)
-//         zp_ptr1 = dest address in $E000–$FFFF (lo/hi)
-//         zp_temp0 = byte count lo
-//         zp_temp1 = byte count hi
-// Preserves: nothing
-copy_to_e000:
-    ldy #0
-    ldx zp_temp1        // Page counter (high byte of count)
-    beq !partial+       // Less than 256 bytes
-!page:
-    lda (zp_ptr0),y
-    sta (zp_ptr1),y
-    iny
-    bne !page-
-    inc zp_ptr0_hi
-    inc zp_ptr1_hi
-    dex
-    bne !page-
-!partial:
-    ldx zp_temp0        // Remaining bytes (low byte of count)
-    beq !done+
-!tail:
-    lda (zp_ptr0),y
-    sta (zp_ptr1),y
-    iny
-    dex
-    bne !tail-
-!done:
-    rts
 
 // ============================================================
 // Compile-time validation

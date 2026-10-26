@@ -83,7 +83,7 @@ eff_light_room:
 // ============================================================
 // eff_teleport_self — Teleport player to random floor tile
 // Input: none (reads zp_player_x/y)
-// Output: player moved, FLAG_OCCUPIED updated, vis_room_revealed set
+// Output: player moved, vis_room_revealed set
 // Clobbers: A, X, Y, zp_ptr0
 // ============================================================
 eff_teleport_self:
@@ -92,38 +92,20 @@ eff_teleport_self:
 
 // eff_teleport_apply_target — Move player to df_target_x/y
 // Input: df_target_x/y = destination, zp_player_x/y = current position
-// Output: player moved, FLAG_OCCUPIED updated, vis_room_revealed set
+// Output: player moved, vis_room_revealed set. FLAG_OCCUPIED marks creatures
+//         only (dungeon_data.s): the player's tiles are left as they are, as
+//         for a step or trap_teleport; setting it here left a stale creature
+//         flag wherever the player landed (M5b playtest round 12).
 // Clobbers: A, X, Y, zp_ptr0
 // ============================================================
 eff_teleport_apply_target:
     jsr player_search_mode_off
-    // Clear FLAG_OCCUPIED at old position
-    ldx zp_player_y
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
-    ldy zp_player_x
-    :MapRead_ptr0_y()
-    and #~FLAG_OCCUPIED & $ff
-    :MapWrite_ptr0_y()
 
     // Move player
     lda df_target_x
     sta zp_player_x
     lda df_target_y
     sta zp_player_y
-
-    // Set FLAG_OCCUPIED at new position
-    ldx zp_player_y
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
-    ldy zp_player_x
-    :MapRead_ptr0_y()
-    ora #FLAG_OCCUPIED
-    :MapWrite_ptr0_y()
 
     // Trigger full visibility update and redraw
     lda #1

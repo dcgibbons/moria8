@@ -9,7 +9,7 @@
 //   Tier-name pool:     Bank 4 ($04) $A400-$A7FF
 //   Overlay window:     Bank 4 ($04) $A800-$BFFF (6,144 B)
 //   Live 198x66 Map:    Bank 5 ($05) $8000-$B30B + cached OVL.UI ($B400-$BDFF)
-//   BeebAuxData:        Bank 6 ($06) $8000-$96FF (virt $6000-$76FF) + cached TOWN/MODAL/DB1
+//   BeebAuxData:        Bank 6 ($06) $8000-$96FF (virt $6000-$76FF) + cached TOWN/MODAL
 //   Hot Cache Bank 7:   Bank 7 ($07) cached SPELL/ITEMS/GEN
 //   BeebHuffData:       ANDY ($84) $8000-$8D93 (4 KB private RAM)
 //   LYNNE Shadow RAM:   ACCCON=$05 $3000-$7FFF (1KB font, 1KB gen scratch, char shadow, Mode 0)

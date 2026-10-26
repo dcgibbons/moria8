@@ -33,7 +33,7 @@
 //                        Active Overlay & Tier Window ($A800-$BFFF, 6,144 B)
 //   Bank 5 (ROMSEL=$05): Live 198x66 Map ($8000-$B30B, 13,068 B) + cached OVL.UI
 //   Bank 6 (ROMSEL=$06): BeebAuxData ($8000-$96FF, virt $6000-$76FF) + cached
-//                        OVL.TOWN, OVL.MODAL, MONSTER.DB1
+//                        OVL.TOWN, OVL.MODAL (monster tiers load from DFS)
 //   Bank 7 (ROMSEL=$07): cached OVL.SPELL, OVL.ITEMS, OVL.GEN
 
 #import "hal/memory_bank_consts.s"

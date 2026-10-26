@@ -11,6 +11,7 @@
 // Constants
 // ============================================================
 .const MAX_MONSTERS      = 32
+.const MON_MULT_ADJ      = 7    // VMS mon_mult_adj: high value slows multiplication
 .const MONSTER_ENTRY_SIZE = 12
 .const MAX_DUNGEON_CREATURES = 57 // Largest tier (tier 4)
 .const MAX_TOWN_CREATURES    = 8  // Town creature slots
@@ -143,7 +144,7 @@ cr_mflags:
 #else
     .fill MAX_DUNGEON_CREATURES, 0                                        // 0-56: loaded from tier data
 #endif
-    .byte $8c, $88, $88, $88, $8c, $88, $8c, $88                          // 57-64: town
+    .byte $84, $80, $80, $80, $84, $80, $84, $80                          // 57-64: town (tier0.s)
 
 // Creature level
 cr_level:
@@ -1250,6 +1251,13 @@ monster_update_visibility_one:
     jmp !muvo_store+
 
 !muvo_visible:
+    // A monster coming into sight ends search mode (VMS creature.inc
+    // update_mon search_off; Umoria updateMon playerDisturb(1, 0)).
+    lda muv_old_flags
+    and #MF_VISIBLE
+    bne !muvo_seen_before+
+    jsr player_search_mode_off
+!muvo_seen_before:
     lda muv_new_flags
     ora #MF_VISIBLE
     sta muv_new_flags

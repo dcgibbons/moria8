@@ -20,7 +20,7 @@ shadow and `beeb_acccon_shadow` in platform ZP):
 
 | Bits | Mask | Name | Gameplay State (`$04`) | Map / AuxData / Cache State (`$05`–`$07`) | `ANDY` HuffData Decode State (`$84`) |
 | ---: | --- | --- | --- | --- | --- |
-| `0..3` | `$0F` | Sideways Slot Select (`0..15`) | `4` (Bank 4: `BeebPlaySlot` + Tier Pool + Active Overlay Window) | `5` (Bank 5: Live Map + `OVL.UI`); `6` (Bank 6: `BeebAuxData` + `TOWN`/`MODAL`/`DB1`); `7` (Bank 7: `SPELL`/`ITEMS`/`GEN`) | `4` (Bank 4 upper 12 KB at `$9000-$BFFF` stays visible) |
+| `0..3` | `$0F` | Sideways Slot Select (`0..15`) | `4` (Bank 4: `BeebPlaySlot` + Tier Pool + Active Overlay Window) | `5` (Bank 5: Live Map + `OVL.UI`); `6` (Bank 6: `BeebAuxData` + `TOWN`/`MODAL`); `7` (Bank 7: `SPELL`/`ITEMS`/`GEN`) | `4` (Bank 4 upper 12 KB at `$9000-$BFFF` stays visible) |
 | `4..6` | `$70` | Unused | `0` | `0` | `0` |
 | `7` | `$80` | `ANDY` 4 KB RAM Enable (`$8000-$8FFF`) | `0` (Bank 4 lower 4 KB visible at `$8000-$8FFF`) | `0` (Bank 5–7 full 16 KB visible at `$8000-$BFFF`) | `1` (`ANDY` 4 KB mapped at `$8000-$8FFF` for direct `BeebHuffData` access) |
 
@@ -172,7 +172,7 @@ the font, character shadow, and screen bitmap in a single unified address space:
 | **Bank 6** (`$06`) | `$8000-$96FF` | 23p (`5,888` B) | `$6000-$76FF` | **`BeebAuxData` (`BEEB.AUX`)** — Preloaded at boot: `hal_ego_suffix_slots` (page-aligned at `$6000`), item-name streams, store inventory/runtime, recall arrays, spell tables/names, `msg_history` (`~5,170` B used, **`718` B free slack**). |
 | **Bank 6** (`$06`) | `$9700-$ACFF` | 22p (`5,632` B) | Cache Slot | **Cached `OVL.TOWN`** (`5,328` B used, **`304` B slack**). |
 | **Bank 6** (`$06`) | `$AD00-$B9FF` | 13p (`3,328` B) | Cache Slot | **Cached `OVL.MODAL`** (`3,072` B used, **`256` B slack**). |
-| **Bank 6** (`$06`) | `$BA00-$BDFF` | 4p (`1,024` B) | Cache Slot | **Cached `MONSTER.DB1`** (`830` B used, **`194` B slack**) + **`$BE00-$BFFF` (`2` pages = `512` B) free Bank 6 slack**. |
+| **Bank 6** (`$06`) | `$BA00-$BFFF` | 6p (`1,536` B) | free | **Free Bank 6 slack.** `MONSTER.DB1` was cached here until 2026-10-25, when tier 1 gained 30 DL 1-5 creatures (about 2,000 B, past bank 6's free pages): all four monster tiers now load from DFS into the Bank 4 window. |
 | **Bank 7** (`$07`) | `$8000-$94FF` | 21p (`5,376` B) | Cache Slot | **Cached `OVL.SPELL`** (`5,112` B used, **`264` B slack**). |
 | **Bank 7** (`$07`) | `$9500-$A9FF` | 21p (`5,376` B) | Cache Slot | **Cached `OVL.ITEMS`** (`5,106` B used, **`270` B slack**). |
 | **Bank 7** (`$07`) | `$AA00-$BEFF` | 21p (`5,376` B) | Cache Slot | **Cached `OVL.GEN`** (`5,320` B used, **`56` B slack**; holds `item_spawn_level` since item stacking left the resident image no room) + **`$BF00-$BFFF` (`1` page = `256` B) free Bank 7 slack**. |

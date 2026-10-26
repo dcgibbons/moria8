@@ -904,18 +904,6 @@ mul_x_by_a:
     lda zp_math_a
     rts
 
-// player_get_stat_bonus — Get stat bonus for a given stat index and table
-// Input: X = stat value (3–18), Y = bonus table offset
-// Output: A = bonus value (signed)
-// Table pointers are pre-set by caller.
-player_get_stat_bonus:
-    txa
-    sec
-    sbc #3                  // Index = stat - 3
-    tax
-    lda (zp_ptr0),y         // Read from bonus table
-    rts
-
 // ============================================================
 // Search mode and derived search/perception helpers
 // ============================================================

@@ -100,6 +100,8 @@ item_read_scroll:
     sta zp_ptr1_hi
     jmp (zp_ptr1)
 !irs_dispatch_generic:
+    cmp #ITEM_TYPE_SCR_PHASE_DOOR
+    beq irs_effect_phase_door
     cmp #ITEM_TYPE_SCR_TELEPORT_LEVEL
     bcc !irs_effect_generic+
     cmp #ITEM_TYPE_SCR_DESTRUCTION + 1
@@ -131,6 +133,12 @@ irs_effect_identify:
 
 irs_effect_teleport:
     jsr eff_teleport_self
+    ldx #HSTR_PIQ_TELEPORT
+    jmp hpm_sec_rts
+
+// Phase Door: VMS teleport(10), the mage spell's short-range teleport.
+irs_effect_phase_door:
+    jsr eff_phase_door
     ldx #HSTR_PIQ_TELEPORT
     jmp hpm_sec_rts
 
@@ -498,6 +506,8 @@ item_refuel:
     jsr huff_print_msg
 
 !ir_remove_flask:
+    lda #1
+    sta zp_light_radius             // a lantern that had gone out is lit again
     ldx piw_slot
     jsr inv_consume_one             // one flask from the stack
     sec

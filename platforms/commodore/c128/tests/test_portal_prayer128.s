@@ -290,7 +290,7 @@ test_setup_portal_map:
     sta zp_player_y
     sta player_data + PL_MAP_Y
 
-    lda #TILE_FLOOR | FLAG_OCCUPIED
+    lda #TILE_FLOOR                 // the player's tile: no creature flag
     ldx #12
     ldy #22
     jsr test_write_tile
@@ -395,7 +395,7 @@ test_start:
     ldy #80
     jsr test_read_tile
     and #FLAG_OCCUPIED
-    beq !t1_fail+
+    bne !t1_fail+
     lda zp_player_mp
     cmp #16
     bne !t1_fail+
@@ -441,7 +441,7 @@ test_after_success:
     ldy #22
     jsr test_read_tile
     and #FLAG_OCCUPIED
-    beq !t2_fail+
+    bne !t2_fail+
     ldx #35
     ldy #80
     jsr test_read_tile

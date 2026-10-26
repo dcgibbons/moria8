@@ -18,7 +18,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #40
+    ldx #41
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -145,7 +145,7 @@ press_key_str:
 // Test scratch
 tc_loop:    .byte 0
 tc_ok:      .byte 0
-tc_results: .fill 41, $ff      // Result buffer (copied to $0400 at end)
+tc_results: .fill 42, $ff      // Result buffer (copied to $0400 at end)
 
 test_start:
     // Seed RNG deterministically
@@ -1632,8 +1632,72 @@ test_start:
     and #~GAME_FLAG_WINNER & $ff
     sta zp_game_flags
 
+    // ==========================================
+    // Test 42: the reduced to-hit is for a target the player cannot see
+    // (Umoria playerCalculateBaseToHit(monster.lit); Moria8 MF_VISIBLE,
+    // MON-001), not for a target on an unlit square: a torch-lit corridor
+    // fight halved every blow (M5a playtest: 20% hits against a Black Naga).
+    // Real player_attack_monster on a dark floor square.
+    // ==========================================
+    lda #CLASS_WARRIOR
+    sta player_data + PL_CLASS
+    lda #1
+    sta zp_player_lvl
+    sta player_data + PL_LEVEL
+    ldx #15
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #20
+    lda #((TILE_FLOOR << 4) | FLAG_OCCUPIED)    // no FLAG_LIT
+    :MapWrite_ptr0_y()
+    lda #MF_VISIBLE
+    jsr t42_place_and_attack
+    lda cmb_target_lit
+    beq !t42_fail+
+    lda #0
+    jsr t42_place_and_attack
+    lda cmb_target_lit
+    bne !t42_fail+
+    lda #$01
+    sta tc_results + 41
+    jmp !t42_done+
+!t42_fail:
+    lda #$00
+    sta tc_results + 41
+!t42_done:
+
 !tests_done:
     jmp test_exit_trampoline
+
+// t42_place_and_attack — A = MX_FLAGS: a sturdy monster in slot 0 at
+// (20,15), then one real melee attack on it.
+t42_place_and_attack:
+    pha
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_X
+    lda #20
+    sta (zp_ptr0),y
+    ldy #MX_Y
+    lda #15
+    sta (zp_ptr0),y
+    ldy #MX_TYPE
+    lda #4
+    sta (zp_ptr0),y
+    ldy #MX_HP_LO
+    lda #250
+    sta (zp_ptr0),y
+    ldy #MX_HP_HI
+    lda #0
+    sta (zp_ptr0),y
+    ldy #MX_FLAGS
+    pla
+    sta (zp_ptr0),y
+    lda #20
+    ldy #15
+    jmp player_attack_monster
 
 tc_one_char_z:   .text "Z" ; .byte 0
 tc_one_char_dot: .text "." ; .byte 0

@@ -55,15 +55,6 @@ df_disarm_base: .byte 0
 
 #import "df_target_row.s"
 
-#if !DUNGEON_FEATURES_GENERATION_ONLY
-// ============================================================
-// Trap name Huffman indices (indexed by trap type 0-5)
-// ============================================================
-trap_name_huff_idx:
-    .byte HSTR_DF_TRAP_0, HSTR_DF_TRAP_1, HSTR_DF_TRAP_2
-    .byte HSTR_DF_TRAP_3, HSTR_DF_TRAP_4, HSTR_DF_TRAP_5
-#endif
-
 #if PLATFORM_DISARM_COMMAND_INLINE || !DISARM_HELPERS_EXTERNAL
 trap_difficulty:
     .byte 5, 15, 10, 20, 20, 25
@@ -567,7 +558,6 @@ trap_trigger:
     sta df_death_hstr
     lda #1              // 1 die
     ldx #4              // d4
-    ldy #0              // +0
     jmp trap_apply_damage
 !not_pit:
     cmp #TRAP_ARROW
@@ -601,7 +591,6 @@ trap_do_arrow:
     sta df_death_hstr
     lda #1
     ldx #8
-    ldy #0
     jmp trap_apply_damage
 
 // Poison gas: set poison timer to 10 + 1d10
@@ -634,7 +623,6 @@ trap_do_dart:
     sta df_death_hstr
     lda #1
     ldx #4
-    ldy #0
     jsr trap_apply_damage
     // 50% chance to lose 1 CON
     jsr rng_byte
@@ -652,8 +640,22 @@ trap_do_dart:
 !no_con_drain:
     rts
 
-// Rockfall: 2d8 damage
+// Rockfall: 2d6 damage (VMS values.inc "some loose rock" '2d6'; Umoria
+// data_treasure.cpp {2, 6}; 2d8 until 2026-10-25), and the trap becomes
+// rubble (VMS moria.inc pusht(tptr); place_rubble(y, x); Umoria
+// trapRockfall): it stayed a trap and fell again until 2026-10-26.
+// Input: X = trap table index.
 trap_do_rockfall:
+    lda trap_x,x
+    sta df_target_x
+    lda trap_y,x
+    sta df_target_y
+    jsr trap_remove_at_index
+    jsr df_target_row_ptr
+    :MapRead_ptr0_y()
+    and #TILE_FLAG_MASK
+    ora #TILE_RUBBLE | FLAG_VISITED
+    :MapWrite_ptr0_y()
     ldx #HSTR_DF_ROCKFALL
     jsr huff_print_msg
     lda #DEATH_TRAP_ROCKFALL
@@ -661,16 +663,16 @@ trap_do_rockfall:
     lda #HSTR_DF_DEATH_ROCKFALL
     sta df_death_hstr
     lda #2              // 2 dice
-    ldx #8              // d8
-    ldy #0              // +0
+    ldx #6              // d6
     jmp trap_apply_damage
 
 // ============================================================
 // trap_apply_damage — Roll damage and subtract from player HP
-// Input: A = dice count, X = dice sides, Y = bonus
+// Input: A = dice count, X = dice sides (no bonus: every trap is plain dice)
 // Prints "YOU TAKE N DAMAGE." message.
 // ============================================================
 trap_apply_damage:
+    ldy #0                  // +0
     jsr math_dice           // Result in zp_math_a (lo), zp_math_b (hi)
 
     // Save damage amount

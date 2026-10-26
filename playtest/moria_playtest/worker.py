@@ -11,13 +11,14 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from . import abi as abimod
 from .game import Game, Observation
 from .launch import (PLAYTEST_OUT, SHIPPING, VICE_RESOURCE_ARGS, Build, ViceProcess,
-                     allocate_port, prepare_worker, sha256)
+                     allocate_port, check_disk, prepare_worker, sha256)
 
 CACHE = PLAYTEST_OUT / "cache"
 
@@ -58,6 +59,7 @@ class Worker:
         self.emulator = emulator
         self.hang_emulated_seconds = hang_emulated_seconds
         self.build = build
+        check_disk(build)
         self.workdir, self.disk = prepare_worker(run_dir, worker_id, build.disk)
         self.abi = abimod.load(build.vs)
         self.vp: ViceProcess | None = None
@@ -87,7 +89,9 @@ class Worker:
         if not path.exists():
             game = self._spawn(autostart=True)
             game.boot()
-            tmp = path.with_suffix(f".tmp{self.worker_id}.vsf")
+            # Unique per process: concurrent sessions each have a worker 3,
+            # and one's rename removed the other's file (M5a round 3).
+            tmp = path.with_suffix(f".tmp{os.getpid()}.vsf")
             game.dump(tmp)
             tmp.replace(path)
             self.stop()

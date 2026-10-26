@@ -15,7 +15,7 @@ import argparse
 import dataclasses
 import json
 import multiprocessing
-import queue
+import multiprocessing.connection
 import signal
 import sys
 import time
@@ -28,8 +28,9 @@ from . import nav
 from .auditor import Auditor
 from .brain import Brain
 from .game import EmulatorUnresponsive, GameFault, Mode, Observation
-from .goals import GOALS, QUALIFICATION_SEEDS, Goal, required
-from .launch import PLAYTEST_OUT, ROOT, SHIPPING, Build, build_identity
+from .goals import (CHARACTERS, DEFAULT_CHARACTER, GOALS, QUALIFICATION_SEEDS, Goal, for_character,
+                    required)
+from .launch import PLAYTEST_OUT, ROOT, SHIPPING, Build, StaleDisk, build_identity, check_disk
 from .recorder import CharacterLog, SessionLog, write_json
 from .vice import ViceError
 from .view import build_view
@@ -204,7 +205,7 @@ class Character:
 # -- modes ------------------------------------------------------------------------
 
 def _worker_process(worker_id: int, goal: Goal, session_dir: Path, build: Build,
-                    pending: "multiprocessing.Queue[int]", done: "multiprocessing.Queue[dict[str, Any]]",
+                    pending: "multiprocessing.Queue[int]", done: "multiprocessing.connection.Connection",
                     stop: Any, stop_on_reach: bool) -> None:
     """One worker in its own process: the brain and the emulator protocol are
     CPU-bound Python, so threads would share one core under the GIL."""
@@ -228,7 +229,7 @@ def _worker_process(worker_id: int, goal: Goal, session_dir: Path, build: Build,
                 if worker is not None:
                     worker.stop()   # no emulator left holding the worker's port
                 worker = None   # a fresh worker for the next seed
-            done.put(result.__dict__)
+            done.send(result.__dict__)
             if result.outcome == "reached" and stop_on_reach:
                 stop.set()
     finally:
@@ -245,26 +246,36 @@ def run_seeds(goal: Goal, seeds: list[int], workers: int, session: SessionLog, b
     reached the goal and ``stop_on_reach`` ended the batch).
     """
     context = multiprocessing.get_context("fork")   # inherits goals registered by callers
-    pending, done, stop = context.Queue(), context.Queue(), context.Event()
+    pending, stop = context.Queue(), context.Event()
     count = min(workers, len(seeds))
+    # One pipe per worker for results. A Queue's put hands the result to a
+    # feeder thread, so a worker that died right after a put lost it; a
+    # pipe's send is written before it returns.
+    pipes = [context.Pipe(duplex=False) for _ in range(count)]
     procs = [context.Process(target=_worker_process, args=(worker_id, goal, session.dir, build,
-                                                           pending, done, stop, stop_on_reach))
+                                                           pending, pipes[worker_id][1], stop,
+                                                           stop_on_reach))
              for worker_id in range(count)]
     for proc in procs:   # fork before the queue's feeder thread starts
         proc.start()
+    for _, writer in pipes:
+        writer.close()   # only the workers write: a reader sees EOF once they have exited
+    readers = [reader for reader, _ in pipes]
     results: list[Result] = []
     try:
         for seed in seeds:
             pending.put(seed)
         for _ in procs:
             pending.put(None)   # one sentinel per worker
-        while any(proc.is_alive() for proc in procs) or not done.empty():
-            try:
-                result = Result(**done.get(timeout=1))
-            except queue.Empty:
-                continue
-            session.character(result.__dict__)
-            results.append(result)
+        while readers:
+            for reader in multiprocessing.connection.wait(readers):
+                try:
+                    result = Result(**reader.recv())
+                except EOFError:
+                    readers.remove(reader)
+                    continue
+                session.character(result.__dict__)
+                results.append(result)
     except BaseException:
         stop.set()   # the parent failed: no worker keeps playing on its own
         for proc in procs:
@@ -276,6 +287,8 @@ def run_seeds(goal: Goal, seeds: list[int], workers: int, session: SessionLog, b
     finally:
         for proc in procs:
             proc.join()
+        for reader, _ in pipes:
+            reader.close()
     if not stop.is_set():
         played = {r.seed for r in results}
         dead = [p.exitcode for p in procs if p.exitcode]
@@ -308,13 +321,18 @@ def session_until_reached(goal: Goal, seed_start: int, workers: int, session: Se
             return results
 
 
-def suite_path(goal: str) -> Path:
-    return SUITES / f"{goal}.json"
+def suite_path(goal: str, character: str = DEFAULT_CHARACTER) -> Path:
+    """The Half-Troll Warrior's suites are named by goal alone (M0-M4); other
+    characters' add the character (§16.4 item 1)."""
+    return SUITES / (f"{goal}.json" if character == DEFAULT_CHARACTER else f"{goal}-{character}.json")
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="playtest-session")
     parser.add_argument("--goal", default="enter_dungeon", choices=sorted(GOALS))
+    parser.add_argument("--character", choices=sorted(CHARACTERS),
+                        help=f"race and class (default {DEFAULT_CHARACTER}); with --regress, "
+                             "only that character's suites")
     parser.add_argument("--seeds", help="e.g. 1001-1020 or 5,9,12 (default: qualification seeds)")
     parser.add_argument("--seed-start", type=int, default=1)
     parser.add_argument("--workers", type=int, default=4)
@@ -329,29 +347,40 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     build = Build.from_out(args.build_out) if args.build_out else SHIPPING
+    try:
+        check_disk(build)   # once, before any worker: not one boot error per seed
+    except StaleDisk as exc:
+        print(f"playtest-session: {exc}", file=sys.stderr)
+        return 2
     mode = "regress" if args.regress else "qualify" if args.qualify else "session"
-    name = args.name or f"{time.strftime('%Y%m%d-%H%M%S')}-{mode}-{args.goal}"
+    character = args.character or DEFAULT_CHARACTER
+    tag = args.goal if character == DEFAULT_CHARACTER else f"{args.goal}-{character}"
+    name = args.name or f"{time.strftime('%Y%m%d-%H%M%S')}-{mode}-{tag}"
     session = SessionLog(PLAYTEST_OUT / "sessions" / name,
-                         {"mode": mode, "goal": args.goal, "build": build_identity(build),
+                         {"mode": mode, "goal": args.goal, "character": character,
+                          "build": build_identity(build),
                           "started": time.strftime("%Y-%m-%dT%H:%M:%S")})
     print(f"session: {session.dir}", flush=True)
 
     ok = True
     if mode == "regress":
-        suites = sorted(SUITES.glob("*.json"))
+        suites = [path for path in sorted(SUITES.glob("*.json"))
+                  if args.character in (None, json.loads(path.read_text()).get("character", DEFAULT_CHARACTER))]
         report = {}
         ok = bool(suites)   # no frozen suite is no evidence
         for path in suites:
             suite = json.loads(path.read_text())
-            goal = dataclasses.replace(GOALS[suite["goal"]], step_budget=suite["step_budget"])
+            goal = dataclasses.replace(for_character(GOALS[suite["goal"]],
+                                                     suite.get("character", DEFAULT_CHARACTER)),
+                                       step_budget=suite["step_budget"])
             results = run_seeds(goal, suite["seeds"], args.workers, session, build, False)
             passed = sum(r.outcome == "reached" for r in results)
-            report[goal.name] = f"{passed}/{len(suite['seeds'])}"
+            report[path.stem] = f"{passed}/{len(suite['seeds'])}"
             ok &= passed >= suite.get("required", required(goal, len(suite["seeds"])))
         session.summary["regress"] = report
         print(json.dumps(report))
     elif mode == "qualify":
-        goal = GOALS[args.goal]
+        goal = for_character(GOALS[args.goal], character)
         if args.step_budget:
             if args.freeze:
                 parser.error("--step-budget is for iteration rounds; freeze with the goal's budget")
@@ -370,13 +399,16 @@ def main(argv: list[str] | None = None) -> int:
             print("not frozen: a suite is the goal's full qualification seed list", flush=True)
         elif ok and args.freeze:
             SUITES.mkdir(parents=True, exist_ok=True)
-            write_json(suite_path(goal.name), {"goal": goal.name, "seeds": seeds, "required": need,
-                                               "step_budget": goal.step_budget,
+            suite = {"goal": goal.name, "seeds": seeds, "required": need,
+                     "step_budget": goal.step_budget}
+            if character != DEFAULT_CHARACTER:
+                suite["character"] = character
+            write_json(suite_path(goal.name, character), {**suite,
                                                "frozen": time.strftime("%Y-%m-%d"),
                                                "program_sha256": build_identity(build)["program_sha256"]})
-            print(f"froze {suite_path(goal.name).relative_to(ROOT)}")
+            print(f"froze {suite_path(goal.name, character).relative_to(ROOT)}")
     else:
-        results = session_until_reached(GOALS[args.goal], args.seed_start, args.workers, session, build)
+        results = session_until_reached(for_character(GOALS[args.goal], character), args.seed_start, args.workers, session, build)
         reached = [r.seed for r in results if r.outcome == "reached"]
         print(f"goal {args.goal} reached by seed {reached[0]} after {len(results)} characters")
     session.summary["findings"] = session.findings

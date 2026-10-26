@@ -77,23 +77,17 @@ player_attack_monster:
     stx cmb_slot
     lda #1
     sta cmb_target_light_valid
-    ldy cmb_target_y
-    lda map_row_lo,y
-    sta zp_ptr0
-    lda map_row_hi,y
-    sta zp_ptr0_hi
-    ldy cmb_target_x
+    jsr monster_get_ptr         // zp_ptr0 = entry
+    // A target the player cannot see is harder to hit (Umoria
+    // playerCalculateBaseToHit(monster.lit)): its sight is MF_VISIBLE
+    // (MON-001), not the square's room light.
+    ldy #MX_FLAGS
     lda (zp_ptr0),y
-    and #FLAG_LIT
+    and #MF_VISIBLE
     beq !pam_dark+
     lda #1
-    bne !pam_store_light+
 !pam_dark:
-    lda #0
-!pam_store_light:
     sta cmb_target_lit
-    ldx cmb_slot
-    jsr monster_get_ptr         // zp_ptr0 = entry
     ldy #MX_TYPE
     lda (zp_ptr0),y
     sta cmb_type
@@ -687,6 +681,8 @@ combat_critical_blow:
 
     // Save weapon weight (8-bit, will zero-extend to 16 later)
     lda it_weight,x
+// combat_critical_blow_weight — the same with A = the weight (a bash: STR)
+combat_critical_blow_weight:
     sta ccb_weight
 
     // --- Compute 16-bit chance ---

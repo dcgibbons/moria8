@@ -147,6 +147,7 @@ it_category:
     .byte ICAT_CHEST    // 133: Large Steel Chest
     .byte ICAT_CHEST    // 134: Ruined Chest
     .byte ICAT_SPIKE    // 135: Iron Spike
+    .byte ICAT_SCROLL   // 136: Phase Door
 
 // Color and base armor class packed per type: high nibble = display color,
 // low nibble = base AC (<=9).
@@ -287,6 +288,7 @@ it_color_ac:
     .byte COL_WHITE << 4                        // 133: Large Steel Chest
     .byte COL_BROWN << 4                        // 134: Ruined Chest
     .byte COL_WHITE << 4                        // 135: Iron Spike
+    .byte COL_CYAN << 4                         // 136: Phase Door
 
 // Weight (in 1/10 lbs)
 it_weight:
@@ -320,11 +322,12 @@ it_weight:
     // 128-134: chests (heavy rows saturate at 255; docs/CHEST_DESIGN.md)
     .byte 250, 255, 255, 255, 255, 255, 250
     .byte 10                                // 135: Iron Spike
+    .byte 5                                 // 136: Phase Door (scroll, 0.5 lb)
 
 // Damage dice packed per type: high nibble = dice count (<=3), low nibble =
 // dice sides (<=9). 0 = no damage dice.
 it_dmg_packed:
-    .byte 0, 0, $14, $16, $18, $24, 0, 0, 0, 0
+    .byte 0, 0, $14, $16, $18, $24, 0, 0, 0, $11  // 9: Small Shield 1d1 (VMS; a bash rolls it)
     .byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
     .byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
     .byte 0, 0, 0, 0, 0, 0, 0, 0, 0
@@ -338,7 +341,7 @@ it_dmg_packed:
     .byte $16, $25, $34, $36                // 66-69: expanded swords
     .byte $18, $34, $33, $26                // 70-73: expanded hafted/axe
     .byte $16, $25, $34, $19                // 74-77: polearms/staff
-    .byte 0, 0                              // 78-79: shield/armor
+    .byte $12, 0                            // 78: Large Shield 1d2 (VMS Large Leather Shield), 79: armor
     .byte 0, 0                              // 80-81: armor
     .byte 0, 0, 0, 0, 0, 0                  // 82-87: defensive equipment
     .byte $17, $17, $24, $34                // 88-91: added blades
@@ -347,6 +350,7 @@ it_dmg_packed:
     // 128-134: chest thrown damage 2d3/2d5/2d4/2d6/2d4/2d6; ruined 0d0
     .byte $23, $25, $24, $26, $24, $26, 0
     .byte $11                                 // 135: Iron Spike (1d1)
+    .byte 0                                   // 136: Phase Door
 it_dmg_packed_end:
 
 #if HAL_PLATFORM_ITEM_COST_IN_TOWN_OVERLAY
@@ -355,25 +359,25 @@ it_dmg_packed_end:
 
 // Base cost (lo)
 it_cost_lo:
-    .byte <0, <0, <10, <25, <60, <45, <15, <30, <80, <20
-    .byte <15, <8, <10, <2, <20, <3, <2, <50, <75, <5
+    .byte <0, <0, <10, <48, <300, <45, <4, <18, <530, <30
+    .byte <75, <3, <4, <2, <35, <3, <2, <15, <75, <5
     .byte <15, <50, <40, <100, <120
-    .byte <100, <150, <80, <5, <5, <60, <40
-    .byte <200, <80, <250, <250, <50, <5, <100
-    .byte <50, <200, <250, <150, <60, <100, <300, <200
-    .byte <100, <100                        // Books (47-48)
-    .byte <50, <120, <10, <1, <2, <1        // Bows, ammo
-    .byte <300, <500, <800, <300, <500, <800 // Books (55-60)
-    .byte <10                                // 61: Flask of Oil
+    .byte <40, <35, <35, <5, <5, <60, <20
+    .byte <150, <100, <125, <125, <30, <5, <100
+    .byte <200, <200, <250, <150, <250, <100, <400, <200
+    .byte <25, <25                        // Books (47-48)
+    .byte <50, <140, <5, <1, <2, <1        // Bows, ammo
+    .byte <100, <400, <800, <100, <300, <800 // Books (55-60)
+    .byte <3                                // 61: Flask of Oil
     .byte <15, <50                          // 62: Shovel (15gp), 63: Pick (50gp)
-    .byte <25, <75
-    .byte <42, <70, <120, <180
+    .byte <25, <35
+    .byte <42, <255, <350, <180
     .byte <50, <120, <90, <100
     .byte <36, <100, <150, <20
-    .byte <40, <100
-    .byte <350, <900
-    .byte <20, <120, <35, <8, <30, <50
-    .byte <60, <85, <100, <400
+    .byte <120, <55
+    .byte <430, <1050
+    .byte <3, <200, <35, <7, <12, <30
+    .byte <50, <85, <100, <400
     .byte <120, <110, <100, <80
     .byte <200, <44, <30, <30, <100, <50, <40, <15
     .byte <200, <244, <238, <232, <238, <250, <250, <184
@@ -381,6 +385,7 @@ it_cost_lo:
     .byte <196, <244, <88, <176, <44, <136, <75, <244
     // 128-134: chests (20/60/100/150/200/250, ruined 0)
     .byte <20, <60, <100, <150, <200, <250, <0, <1 // 135: Iron Spike
+    .byte <15                               // 136: Phase Door (VMS 15 gp)
 it_cost_lo_end:
 
 #if PLATFORM_PRODUCT_OVERLAY_RUNTIME
@@ -389,13 +394,15 @@ it_cost_lo_end:
 // overlay; C128 keeps them with the resident item payload so town overlay
 // entry remains code.
 it_cost_hi_extra_id:
-    .byte 45, 55, 56, 57, 58, 59, 60, 80, 81, 91
-    .byte 97, 105, 106, 107, 108, 111, 112, 113, 114, 115
-    .byte 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 127
+    .byte 4, 8, 45, 56, 57, 59, 60, 68, 80, 81
+    .byte 91, 97, 105, 106, 107, 108, 111, 112, 113, 114
+    .byte 115, 116, 117, 118, 119, 120, 121, 122, 123, 124
+    .byte 125, 127
 it_cost_hi_extra_value:
-    .byte >300, >300, >500, >800, >300, >500, >800, >350, >900, >400
-    .byte >300, >500, >750, >1000, >750, >3000, >500, >1000, >500, >300
-    .byte >350, >1800, >1500, >1200, >2500, >1000, >600, >1200, >300, >5000, >500
+    .byte >300, >530, >400, >400, >800, >300, >800, >350, >430, >1050
+    .byte >400, >300, >500, >750, >1000, >750, >3000, >500, >1000, >500
+    .byte >300, >350, >1800, >1500, >1200, >2500, >1000, >600, >1200, >300
+    .byte >5000, >500
 it_cost_hi_extra_end:
 .const IT_COST_HI_EXTRA_COUNT = it_cost_hi_extra_value - it_cost_hi_extra_id
 
@@ -405,25 +412,25 @@ it_cost_hi_extra_end:
 #else
 // Base cost (hi)
 it_cost_hi:
-    .byte >0, >0, >10, >25, >60, >45, >15, >30, >80, >20
-    .byte >15, >8, >10, >2, >20, >3, >2, >50, >75, >5
+    .byte >0, >0, >10, >48, >300, >45, >4, >18, >530, >30
+    .byte >75, >3, >4, >2, >35, >3, >2, >15, >75, >5
     .byte >15, >50, >40, >100, >120
-    .byte >100, >150, >80, >5, >5, >60, >40
-    .byte >200, >80, >250, >250, >50, >5, >100
-    .byte >50, >200, >250, >150, >60, >100, >300, >200
-    .byte >100, >100                        // Books (47-48)
-    .byte >50, >120, >10, >1, >2, >1        // Bows, ammo
-    .byte >300, >500, >800, >300, >500, >800 // Books (55-60)
-    .byte >10                                // 61: Flask of Oil
+    .byte >40, >35, >35, >5, >5, >60, >20
+    .byte >150, >100, >125, >125, >30, >5, >100
+    .byte >200, >200, >250, >150, >250, >100, >400, >200
+    .byte >25, >25                        // Books (47-48)
+    .byte >50, >140, >5, >1, >2, >1        // Bows, ammo
+    .byte >100, >400, >800, >100, >300, >800 // Books (55-60)
+    .byte >3                                // 61: Flask of Oil
     .byte >15, >50                          // 62: Shovel (15gp), 63: Pick (50gp)
-    .byte >25, >75
-    .byte >42, >70, >120, >180
+    .byte >25, >35
+    .byte >42, >255, >350, >180
     .byte >50, >120, >90, >100
     .byte >36, >100, >150, >20
-    .byte >40, >100
-    .byte >350, >900
-    .byte >20, >120, >35, >8, >30, >50
-    .byte >60, >85, >100, >400
+    .byte >120, >55
+    .byte >430, >1050
+    .byte >3, >200, >35, >7, >12, >30
+    .byte >50, >85, >100, >400
     .byte >120, >110, >100, >80
     .byte >200, >300, >30, >30, >100, >50, >40, >15
     .byte >200, >500, >750, >1000, >750, >250, >250, >3000
@@ -431,6 +438,7 @@ it_cost_hi:
     .byte >2500, >1000, >600, >1200, >300, >5000, >75, >500
     .byte >20, >60, >100, >150, >200, >250, >0    // 128-134: chests
     .byte >1                                      // 135: Iron Spike
+    .byte >15                                     // 136: Phase Door
 it_cost_hi_end:
 #endif
 
@@ -461,6 +469,7 @@ it_min_level:
     .byte $c9, $31, $b5, $ba        // 112-119
     .byte $ac, $75, $c5, $82        // 120-127
     .byte $42, $97, $cb, $10        // 128-134: chest levels 2/4/7/9/11/12, ruined 0; 135: spike level 1 (high nibble)
+    .byte $01                       // 136: Phase Door level 1 (VMS level 1)
 it_min_level_end:
 
 // iml_get_for_type — Minimum dungeon level for item type X.
@@ -618,6 +627,7 @@ it_name_lo:
     .byte <itn_124, <itn_125, <itn_126, <itn_127
     .byte <itn_128, <itn_129, <itn_130, <itn_131
     .byte <itn_132, <itn_133, <itn_134, <itn_135
+    .byte <itn_136
 it_name_lo_end:
 #if HAL_PLATFORM_ITEM_TABLES_SPLIT_RESIDENT
 :ResidentItemsSegment()
@@ -657,6 +667,7 @@ it_name_hi:
     .byte >itn_124, >itn_125, >itn_126, >itn_127
     .byte >itn_128, >itn_129, >itn_130, >itn_131
     .byte >itn_132, >itn_133, >itn_134, >itn_135
+    .byte >itn_136
 it_name_hi_end:
 #else
 it_name_hi_end:
@@ -938,6 +949,8 @@ itn_133: .byte ITOK_LARGE ; .byte ITOK_STEEL ; .byte ITOK_CHEST_SUFFIX ; .byte 0
 itn_134: .text "Ruined " ; .byte ITOK_CHEST_SUFFIX ; .byte 0
 itn_135: .byte ITOK_IRON ; .text "Spike" ; .byte 0
 #endif
+// Emitted after 135: product builds find a name by stream order.
+itn_136: .text "Phase Door" ; .byte 0
 #if C64_UNIT_TEST && C64_TEST_NAME_STREAMS_A000
 .segment Default
 #endif

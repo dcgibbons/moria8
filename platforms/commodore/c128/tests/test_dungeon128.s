@@ -36,6 +36,11 @@ player_get_infra_range:
     lda #0
     rts
 
+// A monster coming into sight ends search mode (core/monster.s); this unit
+// test does not import core/player.s.
+player_search_mode_off:
+    rts
+
 math_multiply:
     lda #0
     sta zp_math_a

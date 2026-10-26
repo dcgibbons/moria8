@@ -5,7 +5,7 @@
 // $0E00-$7FFF (covering $1900), boot_start first relocates the loader to
 // $0400-$05FF and jumps there.
 //
-// Opens MORIA8P (MORIA8.PAK) once and streams 11 entries sequentially:
+// Opens MORIA8P (MORIA8.PAK) once and streams 10 entries sequentially:
 //   0: MORIA8.RES    -> Main RAM $0E00
 //   1: BEEB.PLAY     -> Sideways Bank 4 ($04) $8000
 //   2: BEEB.HUFFDATA -> Private RAM ANDY ($84) $8000
@@ -13,10 +13,11 @@
 //   4: OVL.UI        -> Sideways Bank 5 ($05) $B400
 //   5: OVL.TOWN      -> Sideways Bank 6 ($06) $9700
 //   6: OVL.MODAL     -> Sideways Bank 6 ($06) $AD00
-//   7: MONSTER.DB1   -> Sideways Bank 6 ($06) $BA00
-//   8: OVL.SPELL     -> Sideways Bank 7 ($07) $8000
-//   9: OVL.ITEMS     -> Sideways Bank 7 ($07) $9500
-//  10: OVL.GEN       -> Sideways Bank 7 ($07) $AA00
+//   7: OVL.SPELL     -> Sideways Bank 7 ($07) $8000
+//   8: OVL.ITEMS     -> Sideways Bank 7 ($07) $9500
+//   9: OVL.GEN       -> Sideways Bank 7 ($07) $AA00
+// MONSTER.DB1 is no longer cached: tier 1 grew past bank 6's free pages
+// (30 creatures added, 2026-10-25) and loads from DFS like tiers 2-4.
 
 .cpu _65c02
 .pc = $1900 "Boot"
@@ -34,7 +35,7 @@
 .const HDR_BUF         = $0600
 .const GBPB_CTRL       = $0680
 .const BOUNCE_BUF      = $0700
-.const PAK_COUNT       = 11
+.const PAK_COUNT       = 10
 
 boot_start:
     cld
@@ -290,7 +291,7 @@ pak_name:
     .text "MORIA8P"
     .byte $0d
 
-// 11 entries in MORIA8P order:
+// 10 entries in MORIA8P order:
 //   0: MORIA8.RES    ($00, $0E00)
 //   1: BEEB.PLAY     ($04, $8000)
 //   2: BEEB.HUFFDATA ($84, $8000)
@@ -298,7 +299,6 @@ pak_name:
 //   4: OVL.UI        ($05, $B400)
 //   5: OVL.TOWN      ($06, $9700)
 //   6: OVL.MODAL     ($06, $AD00)
-//   7: MONSTER.DB1   ($06, $BA00)
 //   8: OVL.SPELL     ($07, $8000)
 //   9: OVL.ITEMS     ($07, $9500)
 //  10: OVL.GEN       ($07, $AA00)
@@ -310,7 +310,6 @@ file_bank_table:
     .byte BEEB_SWR_BANK_UI
     .byte BEEB_SWR_BANK_TOWN
     .byte BEEB_SWR_BANK_MODAL
-    .byte BEEB_SWR_BANK_MON1
     .byte BEEB_SWR_BANK_SPELL
     .byte BEEB_SWR_BANK_ITEMS
     .byte BEEB_SWR_BANK_GEN
@@ -323,7 +322,6 @@ file_hi_table:
     .byte >BEEB_SWR_ADDR_UI
     .byte >BEEB_SWR_ADDR_TOWN
     .byte >BEEB_SWR_ADDR_MODAL
-    .byte >BEEB_SWR_ADDR_MON1
     .byte >BEEB_SWR_ADDR_SPELL
     .byte >BEEB_SWR_ADDR_ITEMS
     .byte >BEEB_SWR_ADDR_GEN

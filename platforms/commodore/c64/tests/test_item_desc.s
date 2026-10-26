@@ -1,6 +1,6 @@
 // test_item_desc.s — Runtime tests for the real item description formatter
 //
-// Results at $0400-$0409: $01 = pass, $00 = fail per test (10 tests)
+// Results at $0400-$040A: $01 = pass, $00 = fail per test (11 tests)
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_bootstrap)
@@ -10,7 +10,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_finish:
-    ldx #9
+    ldx #10
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -91,7 +91,7 @@ fi_add_ego:   .byte 0
 test_start:
     jsr screen_clear
 
-    ldx #9
+    ldx #10
     lda #$ff
 !clr:
     sta tc_results,x
@@ -474,6 +474,37 @@ test_start:
     lda #$01
     sta tc_results+9
 
+    // Test 11: an unidentified light shows its fuel, as upstream: a
+    // burnt-out kit torch reads "(0 turns)", not like a fresh one.
+!t11:
+    jsr test_prepare_row0
+    lda #ITEM_TYPE_WOODEN_TORCH
+    sta inv_item_id
+    lda #1
+    sta inv_qty
+    lda #0
+    sta inv_p1
+    sta inv_to_hit
+    sta inv_to_dam
+    sta inv_to_ac
+    sta inv_flags
+    sta inv_ego
+    ldx #0
+    jsr itemdesc_put_inv_slot
+
+    lda #<expected_spent_torch_desc
+    sta zp_ptr0
+    lda #>expected_spent_torch_desc
+    sta zp_ptr0_hi
+    jsr assert_row0_prefix
+    bcc !t11_fail+
+    lda #$01
+    sta tc_results+10
+    jmp !tests_done+
+!t11_fail:
+    lda #$00
+    sta tc_results+10
+
 !tests_done:
     jmp test_finish
 
@@ -566,6 +597,8 @@ expected_sensed_desc:
     .text "Dagger (magik)" ; .byte 0
 expected_bolt_stack_desc:
     .text "6 Bolt" ; .byte 0
+expected_spent_torch_desc:
+    .text "Wooden Torch (0 turns)" ; .byte 0
 expected_identify_scroll_desc:
     .text "Scroll of Identify" ; .byte 0
 expected_prayer_book_desc:
@@ -604,7 +637,7 @@ expected_item_name_lo:
     .byte <ein_120, <ein_121, <ein_122, <ein_123
     .byte <ein_124, <ein_125, <ein_126, <ein_127
     .byte <ein_128, <ein_129, <ein_130, <ein_131
-    .byte <ein_132, <ein_133, <ein_134, <ein_135
+    .byte <ein_132, <ein_133, <ein_134, <ein_135, <ein_136
 expected_item_name_hi:
     .byte >ein_0, >ein_1, >ein_2, >ein_3, >ein_4, >ein_5, >ein_6, >ein_7
     .byte >ein_8, >ein_9, >ein_10, >ein_11, >ein_12, >ein_13, >ein_14, >ein_15
@@ -632,7 +665,7 @@ expected_item_name_hi:
     .byte >ein_120, >ein_121, >ein_122, >ein_123
     .byte >ein_124, >ein_125, >ein_126, >ein_127
     .byte >ein_128, >ein_129, >ein_130, >ein_131
-    .byte >ein_132, >ein_133, >ein_134, >ein_135
+    .byte >ein_132, >ein_133, >ein_134, >ein_135, >ein_136
 
 ein_0:  .text "Gold (small)" ; .byte 0
 ein_1:  .text "Gold (large)" ; .byte 0
@@ -770,11 +803,12 @@ ein_132: .text "Small Steel Chest" ; .byte 0
 ein_133: .text "Large Steel Chest" ; .byte 0
 ein_134: .text "Ruined Chest" ; .byte 0
 ein_135: .text "Iron Spike" ; .byte 0
+ein_136: .text "Scroll of Phase Door" ; .byte 0
 
 item_name_test_id: .byte 0
-tc_results: .fill 10, $ff
+tc_results: .fill 11, $ff
 tc_results_end:
 
 item_desc_test_body_end:
-.assert "Item desc result count", tc_results_end - tc_results, 10
+.assert "Item desc result count", tc_results_end - tc_results, 11
 .assert "Item desc test stays below MAP_BASE", item_desc_test_body_end <= MAP_BASE, true

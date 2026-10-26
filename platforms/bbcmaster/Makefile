@@ -120,7 +120,7 @@ $(BEEB_SSD): build ../../data/LICENSE ../../data/SOURCE-OFFER ../../tools/make_p
 	  "$(OUTBEEB)/bin/MORIA8.RES" "$(OUTBEEB)/bin/BEEB.PLAY" \
 	  "$(OUTBEEB)/bin/BEEB.HUFFDATA" "$(OUTBEEB)/bin/BEEB.AUXDATA" \
 	  "$(OUTBEEB)/bin/OVL.UI" "$(OUTBEEB)/bin/OVL.TOWN" \
-	  "$(OUTBEEB)/bin/OVL.MODAL" "$(OUTBEEB)/bin/MONSTER.DB.1" \
+	  "$(OUTBEEB)/bin/OVL.MODAL" \
 	  "$(OUTBEEB)/bin/OVL.SPELL" "$(OUTBEEB)/bin/OVL.ITEMS" \
 	  "$(OUTBEEB)/bin/OVL.GEN"
 	printf '*RUN MORIA8\r' > "$(OUTBEEB)/bin/!BOOT"

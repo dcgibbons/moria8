@@ -22,7 +22,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #65
+    ldx #66
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -33,6 +33,8 @@ test_exit_trampoline:
 .pc = $0828 "Main"
 
 .encoding "screencode_mixed"
+.const T38_TRAP_X = 10        // test 38's rockfall trap, at (10, 10)
+.const T38_TRAP_Y = T38_TRAP_X
 
 #import "../../../../core/zeropage.s"
 #import "../memory.s"
@@ -333,8 +335,9 @@ audit_door_y:  .byte 0
 audit_check_x: .byte 0
 audit_check_y: .byte 0
 audit_pair_count: .byte 0
-tc_results: .fill 66, $ff              // Test results buffer (copied to $0400 before brk)
+tc_results: .fill 67, $ff              // Test results buffer (copied to $0400 before brk)
 t38_rockfall_name: .text "falling rock." ; .byte 0
+t67_trials: .byte 0
 run_cycle_expected:
     .byte 7,3,5,0,4,2,6,1,7,3,5,0
 run_home_expected:
@@ -3360,7 +3363,8 @@ test_start:
 !t37_done:
 
     // ============================================================
-    // Test 38: lethal rockfall trap clamps HP and records source
+    // Test 38: lethal rockfall trap clamps HP and records source; the
+    // trap becomes rubble (VMS place_rubble, Umoria trapRockfall)
     // ============================================================
     lda #1
     sta zp_player_hp_lo
@@ -3379,6 +3383,12 @@ test_start:
     sta $0279
     sta $027a
 
+    ldx #1
+    stx trap_count
+    lda #T38_TRAP_X             // T38_TRAP_Y is the same square's row
+    sta trap_x
+    sta trap_y
+    dex
     jsr trap_do_rockfall
 
     lda zp_player_hp_lo
@@ -3405,6 +3415,14 @@ test_start:
     iny
     jmp !t38_name_loop-
 !t38_name_done:
+    lda trap_count
+    bne !t38_fail+
+    ldx #T38_TRAP_X
+    ldy #T38_TRAP_Y
+    jsr map_get_tile
+    and #TILE_TYPE_MASK
+    cmp #TILE_RUBBLE
+    bne !t38_fail+
     lda #$01
     sta tc_results + 37
     jmp !t38_done+
@@ -4764,6 +4782,49 @@ test_start:
     lda #$00
     sta tc_results + 65
 !t66_done:
+
+    // ============================================================
+    // Test 67: rockfall rolls 2d6, as VMS ('2d6', values.inc "some loose
+    // rock") and Umoria ({2, 6}): forty traps from 200 HP each take 2-12.
+    // Under the old 2d8, forty rolls all at most 12 has odds ~1 in 40,000.
+    // ============================================================
+    lda #40
+    sta t67_trials
+!t67_loop:
+    lda #200
+    sta zp_player_hp_lo
+    sta player_data + PL_HP_LO
+    lda #0
+    sta zp_player_hp_hi
+    sta player_data + PL_HP_HI
+    sta zp_game_flags
+    sta zp_msg_flags
+    lda #4
+    sta $c6
+    lda #$20
+    sta $0277
+    sta $0278
+    sta $0279
+    sta $027a
+    jsr trap_do_rockfall
+    lda zp_player_hp_hi
+    bne !t67_fail+
+    lda #200
+    sec
+    sbc zp_player_hp_lo          // damage taken
+    cmp #2
+    bcc !t67_fail+
+    cmp #13
+    bcs !t67_fail+
+    dec t67_trials
+    bne !t67_loop-
+    lda #$01
+    sta tc_results + 66
+    jmp !t67_done+
+!t67_fail:
+    lda #$00
+    sta tc_results + 66
+!t67_done:
 
     // Done — jump to exit trampoline (copies tc_results to $0400, then brk)
     jmp test_exit_trampoline

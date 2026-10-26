@@ -70,6 +70,7 @@
 // Nothing else shares the category.
 .const ICAT_SPIKE    = 18
 .const ITEM_TYPE_FLASK_OF_OIL = 61   // ICAT_LIGHT, but a consumable that stacks
+.const ITEM_TYPE_WOODEN_TORCH = 13   // ICAT_LIGHT; stacks with equal turns of light (VMS, Umoria)
 
 // Phase 3 item type constants (IDs 96-127)
 .const ITEM_TYPE_POT_HEALING        = 96
@@ -115,6 +116,7 @@
 .const ITEM_TYPE_CHEST_LARGE_STEEL = 133
 .const ITEM_TYPE_CHEST_RUINED      = 134
 .const ITEM_TYPE_IRON_SPIKE        = 135
+.const ITEM_TYPE_SCR_PHASE_DOOR    = 136   // VMS Scroll of Phase Door (teleport(10))
 
 // Chest p1 state bits (docs/CHEST_DESIGN.md state layout)
 .const CHEST_P1_LOCKED      = $01
@@ -139,7 +141,7 @@
 // Capacity 160 (20-byte bitset) leaves runway past the chest rows at 128-134
 // so the next catalog expansion pays no save-format bump.
 .const LEGACY_ITEM_TYPE_COUNT = 64
-.const ITEM_TYPE_COUNT = 136
+.const ITEM_TYPE_COUNT = 137
 .const ITEM_ID_CAPACITY = 160
 
 // Known-item identification state (Save Format V4)

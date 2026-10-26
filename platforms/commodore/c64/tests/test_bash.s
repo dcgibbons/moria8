@@ -1,7 +1,7 @@
 // test_bash.s — Runtime tests for bash.s
 //
 // Tests: bash_door (success/fail), bash_monster (hit + HP decrease),
-//        bash_stun_check (stun applied), bash_off_balance (paralyze set/safe),
+//        bash_monster stun (VMS 2-3 turns), bash_off_balance (paralyze set/safe),
 //        and Shift+D dig handoff for tunnelable terrain.
 //
 // Results at $0400-$040D: $01 = pass, $00 = fail per test (14 tests)
@@ -471,19 +471,17 @@ test_start:
     sta tc_results + 2
 
     // ==========================================
-    // Test 4: bash_stun_check — Weak monster, verify MX_STUN > 0
-    // Use type 1 (Fruit Bat): cr_hd_num=1, cr_hd_sides=3, cr_ac=4.
-    // Set HP=2 (low). bash_power = 25 + rng(100) + rng(100) ∈ [25,223].
-    // mon_hp_q = 2/4 = 0. avg_max_q = 1*(3+1)/8 = 0.
-    // mon_tough = 0 + 0 = 0. bash_power (25-223) > 0 → always stuns!
+    // Test 4: VMS bash (moria.inc:3384): a creature hit and left alive is
+    // stunned for randint(2) + 1 = 2-3 turns. A Kobold with 456 HP survives
+    // test 3's bashes (small shield 1d1 + 3, criticals at most 25 a blow);
+    // bash until the stun count is set, at most 30 times.
     // ==========================================
 !t4:
     jsr monster_init_table
-
     ldx #0
     jsr monster_get_ptr
     ldy #MX_TYPE
-    lda #1                      // Fruit Bat
+    lda #4                      // Kobold
     sta (zp_ptr0),y
     ldy #MX_X
     lda #11
@@ -492,10 +490,10 @@ test_start:
     lda #10
     sta (zp_ptr0),y
     ldy #MX_HP_LO
-    lda #2
+    lda #200
     sta (zp_ptr0),y
     ldy #MX_HP_HI
-    lda #0
+    lda #1
     sta (zp_ptr0),y
     ldy #MX_FLAGS
     lda #MF_AWAKE
@@ -503,41 +501,42 @@ test_start:
     ldy #MX_STUN
     lda #0
     sta (zp_ptr0),y
-
     lda #1
     sta zp_mon_count
 
-    // Set combat variables for bash_stun_check
-    lda #0
-    sta cmb_slot
-    lda #1
-    sta cmb_type                // Fruit Bat
-
-    // Re-stuff keyboard buffer
+    lda #30
+    sta tc_loop
+!t4_loop:
     lda #8
-    sta $c6
-
-    jsr bash_stun_check
-
-    // Check MX_STUN > 0
+    sta $c6                     // Re-stuff keyboard buffer
+    lda #0
+    sta zp_eff_paralyze
+    ldx #0
+    jsr bash_monster
     ldx #0
     jsr monster_get_ptr
     ldy #MX_STUN
     lda (zp_ptr0),y
-    cmp #1
-    bcs !t4_pass+
-    lda #$00
+    bne !t4_check+
+    dec tc_loop
+    bne !t4_loop-
+    beq !t4_fail+
+!t4_check:
+    cmp #2
+    bcc !t4_fail+
+    cmp #4
+    bcs !t4_fail+
+    lda #$01
     sta tc_results + 3
     jmp !t5+
-!t4_pass:
-    lda #$01
+!t4_fail:
+    lda #$00
     sta tc_results + 3
 
     // ==========================================
     // Test 5: bash_off_balance — Low DEX, run 50 times.
-    // DEX=3. rng_range(150) returns [0,149].
-    // Off-balance if roll > DEX (i.e., roll > 3).
-    // Chance: 146/150 ≈ 97% per try. At least one in 50 should trigger.
+    // DEX=3. VMS: off-balance if randint(140) > DEX: 137/140 a try.
+    // At least one in 50 should trigger.
     // Verify zp_eff_paralyze > 0 at least once.
     // ==========================================
 !t5:
@@ -570,12 +569,8 @@ test_start:
     // ==========================================
     // Test 6: bash_off_balance_safe — High DEX, run 50 times.
     // DEX=150 (well, max stat is 18, but zp_player_dex is just a byte).
-    // Actually: rng_range(150) returns [0,149]. If DEX >= 150 then
-    // roll is always < DEX → always safe. But DEX caps at 18.
-    // DEX=18 → roll > 18 fails (131/150 ≈ 87%). Not guaranteed safe.
-    //
-    // Instead: Verify that with DEX=18, at least one trial stays safe
-    // (roll <= 18 → 19/150 ≈ 13% → in 50 tries, P(all fail) = 0.87^50 ≈ 0.001).
+    // DEX=18: randint(140) > 18 fails 122/140 (87%) of tries, so verify
+    // that at least one of 50 stays safe (P(all fail) = 0.87^50 ≈ 0.001).
     // ==========================================
 !t6:
     lda #18

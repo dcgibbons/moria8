@@ -20,7 +20,7 @@ bootstrap:
     jmp test_start
 
 test_finish:
-    ldx #47
+    ldx #48
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -322,7 +322,7 @@ random_floor_in_room:
 save_welcome_str:
     .text "WELCOME BACK" ; .byte 0
 
-tc_results: .fill 48, $ff
+tc_results: .fill 49, $ff
 
 test_cmd_idx: .byte 0
 test_cmd_len: .byte 0
@@ -2772,12 +2772,73 @@ test_start:
     bne !t48_fail+
     lda #$01
     sta tc_results + 47
-    jmp test_finish
+    jmp !t49+
 !t48_fail:
     lda #$00
     sta zp_eff_paralyze
     sta tc_results + 47
+
+    // Test 49: only a move onto the square springs its trap (VMS moria.inc
+    // move_char: carry -> hit_trap in the moved branch; the attack branch
+    // calls py_attack alone). Real trap_check_at_player with a trap under
+    // the player: a melee turn (move succeeds, no relocation) must not
+    // trigger it; a relocating move onto it triggers it once.
+!t49:
+    jsr reset_state
+    lda #48
+    sta test_case_idx
+    jsr restore_real_trap_check
+    jsr t49_trap_under_player
+    lda #1
+    sta test_move_ok
+    lda #CMD_MOVE_N
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    jsr run_case
+    lda test_turn_calls
+    cmp #1
+    bne !t49_fail+
+    lda test_trap_trigger_calls
+    bne !t49_fail+
+    jsr reset_state
+    lda #48
+    sta test_case_idx
+    jsr t49_trap_under_player
+    lda #1
+    sta test_move_ok
+    sta test_move_relocated
+    lda #CMD_MOVE_N
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    jsr run_case
+    lda test_trap_trigger_calls
+    cmp #1
+    bne !t49_fail+
+    lda #0
+    sta trap_count
+    lda #$01
+    sta tc_results + 48
     jmp test_finish
+!t49_fail:
+    lda #0
+    sta trap_count
+    lda #$00
+    sta tc_results + 48
+    jmp test_finish
+
+// A trap of type 0 at the player's reset position (10, 10).
+t49_trap_under_player:
+    lda zp_player_x
+    sta trap_x
+    lda zp_player_y
+    sta trap_y
+    lda #1
+    sta trap_count
+    lda #0
+    sta trap_type
+    rts
 
 t33_scratch_lo: .byte <t33_scratch_28, <t33_scratch_29, <t33_scratch_30, <t33_scratch_31
 t33_scratch_hi: .byte >t33_scratch_28, >t33_scratch_29, >t33_scratch_30, >t33_scratch_31

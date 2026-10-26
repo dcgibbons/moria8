@@ -61,6 +61,7 @@ it_unknown_idx:
     .byte $00               // 124-125: fixed amulets
     .byte $23               // 126: potion 3, 127: staff 2
     .fill 4, 0              // 128-134: fixed chest names
+    .byte $06               // 136: scroll 6 (pool wrap, as 96-127)
 it_unknown_idx_end:
 .assert "it_unknown_idx size", it_unknown_idx_end - it_unknown_idx, (ITEM_TYPE_COUNT + 1) >> 1
 #if HAL_PLATFORM_AUX_PERSISTENT_DATA

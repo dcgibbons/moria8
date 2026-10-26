@@ -638,7 +638,25 @@ tramp_do_look:
 .label tramp_assign_special_room = assign_special_room
 .label tramp_vault_seal_entrance = vault_seal_entrance
 .label tramp_spawn_special_room_monsters = spawn_special_room_monsters
-.label tramp_spawn_nest_gold = spawn_nest_gold
+tramp_spawn_nest_gold:
+    // pick_item_type leaves the chest overlay (PICKER_IN_CHEST_OVERLAY) in the
+    // $E000 window, and spawn_nest_gold calls random_floor_in_room in the
+    // dungeon-generation overlay: load it back first, as the Apple IIe and CX16
+    // trampolines do (M5b round 33: nest gold placed off the map corrupted code)
+    lda current_overlay
+    cmp #OVL_DUNGEON_GEN
+    beq !tsng_loaded+
+    ldx #OVL_DUNGEON_GEN - 1
+    jsr overlay_load_disk       // No media prompt while generating a dungeon.
+    bcs !tsng_failed+
+    lda #OVL_DUNGEON_GEN
+    sta current_overlay
+!tsng_loaded:
+    jmp spawn_nest_gold
+!tsng_failed:
+    lda #OVL_NONE               // as pick_item_type on a media error
+    sta current_overlay
+    rts
 .label tramp_find_special_room = find_special_room
 .label tramp_sr_epilogue = atari_platform_runtime_resync
 
@@ -964,7 +982,7 @@ store_overlay_preamble:
     jmp overlay_load
 
 tramp_store_init_all:
-    lda #OVL_ITEMS
+    lda #OVL_CHEST
     jsr overlay_load_no_kernal
     bcs !done+
     jsr store_init_all
@@ -972,7 +990,7 @@ tramp_store_init_all:
     jmp tramp_sr_epilogue
 
 tramp_store_restock_all:
-    lda #OVL_ITEMS
+    lda #OVL_CHEST
     jsr overlay_load_no_kernal
     bcs !done+
     jsr store_restock_all
@@ -1249,7 +1267,6 @@ ovl_ui_end:
 .assert "UI overlay fits in $E000-$EFFF", ovl_ui_end <= $f000, true
 
 .segment ItemActionsOverlay
-    #import "../../core/store_restock_overlay.s"
     #define SCROLL_P3_ROUTER_ENABLED
     #import "../../core/item_actions_overlay.s"
     #import "../../core/ranged_fire.s"
@@ -1270,6 +1287,9 @@ ovl_gen_end:
 
 .segment ChestOverlay
     #import "../../core/chest.s"
+    // Store init/restock: transition-only (new game, town re-entry), moved
+    // from the full items overlay for store stacking (2026-10-25).
+    #import "../../core/store_restock_overlay.s"
 ovl_chest_end:
 .print "Chest overlay: " + (ovl_chest_end - $e000) + " bytes at $E000-$" + toHexString(ovl_chest_end)
 .assert "Chest overlay fits in $E000-$EFFF", ovl_chest_end <= $f000, true

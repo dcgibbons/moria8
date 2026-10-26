@@ -32,6 +32,11 @@ PAL_CYCLES_PER_SECOND = 985248
 
 KEY_RETURN = 0x0D
 ITEM_PROMPT = re.compile(r"which (?:item|potion|scroll|food|wand|staff) \(a-")   # "Quaff which potion (a-c)?"
+# Spells and prayers (core/huffman_data.s PM_YOU_PRAY/PM_YOU_CAST/IGS_PROMPT,
+# PM_FOOTER_PRAY/PM_FOOTER_CAST): book choice, spell choice, and the "?" list.
+SPELL_BOOK_PROMPT = re.compile(r"^(?:Prayer book|Spell book|Study which book) \(a-")
+SPELL_WHICH_PROMPT = re.compile(r"^(?:Pray|Cast) which\? \(a-", re.I)
+SPELL_LIST_TITLES = ("Prayer Book", "Magic Book", "Spell Book")
 KEY_SPACE = 0x20
 KEY_RUNSTOP = 0x03
 
@@ -44,6 +49,7 @@ class Mode(str, Enum):
     DIRECTION = "DIRECTION"   # get_direction_target (added for M2 doors)
     STORE = "STORE"           # store screen (ui_store.s): menu and buy prompts
     ITEM = "ITEM"             # "Wear which item (a-v)?" and its "?" item list (M3 round 13)
+    SPELL = "SPELL"           # book prompt, "Pray which?" and its "?" list (core/player_magic.s, M5b)
     UNKNOWN = "UNKNOWN"
 
 
@@ -185,6 +191,12 @@ def classify(obs: Observation, abi: Abi, command_ret: int,
             return Mode.CHARGEN, stage
     if "Press any key" in screen:
         return Mode.DISMISS, "anykey"
+    if SPELL_BOOK_PROMPT.search(obs.rows[0]):
+        return Mode.SPELL, "book"
+    if SPELL_WHICH_PROMPT.search(obs.rows[0]):
+        return Mode.SPELL, "which"
+    if obs.rows[0].strip() in SPELL_LIST_TITLES and SPELL_WHICH_PROMPT.search(obs.rows[24].strip()):
+        return Mode.SPELL, "list"
     if ITEM_PROMPT.search(obs.rows[0]):
         return Mode.ITEM, "which"
     if obs.rows[0].strip() == "Inventory":

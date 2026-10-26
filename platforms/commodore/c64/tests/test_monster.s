@@ -15,7 +15,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #21
+    ldx #23
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -104,7 +104,7 @@ t7_count:  .byte 0
 t7_ok:     .byte 0
 t9_count:  .byte 0
 t9_mask:   .byte 0
-tc_results: .fill 22, $ff       // Test results buffer (copied to $0400 by trampoline)
+tc_results: .fill 24, $ff       // Test results buffer (copied to $0400 by trampoline)
 test_force_deep_tier_spawn: .byte 0
 
 .macro PatchJump(target, replacement) {
@@ -904,10 +904,59 @@ test_start:
     bne !t21_fail+
     lda #$01
     sta tc_results+21
-    jmp !tests_done+
+    jmp !t22+
 !t21_fail:
     lda #$00
     sta tc_results+21
+
+    // ==========================================
+    // Test 23: a monster coming into sight ends search mode (VMS creature.inc
+    // update_mon search_off; Umoria updateMon playerDisturb(1, 0)).
+    // ==========================================
+!t22:
+    lda #9
+    ldy #9
+    jsr setup_corner_visibility
+    jsr player_search_mode_on
+    jsr monster_update_visibility_all
+    jsr corner_monster_visible
+    beq !t22_fail+
+    lda player_data + PL_FLAGS
+    and #PLF_SEARCHING
+    bne !t22_fail+
+    lda #$01
+    sta tc_results+22
+    jmp !t23+
+!t22_fail:
+    lda #$00
+    sta tc_results+22
+
+    // ==========================================
+    // Test 24: search mode stays on for a monster already in sight, and for
+    // one that stays hidden behind the wall.
+    // ==========================================
+!t23:
+    jsr player_search_mode_on
+    jsr monster_update_visibility_all   // the (9,9) monster stays visible
+    lda player_data + PL_FLAGS
+    and #PLF_SEARCHING
+    beq !t23_fail+
+    lda #8
+    ldy #10
+    jsr setup_corner_visibility
+    lda #4
+    sta zp_light_radius
+    jsr player_search_mode_on
+    jsr monster_update_visibility_all   // hidden behind the wall
+    lda player_data + PL_FLAGS
+    and #PLF_SEARCHING
+    beq !t23_fail+
+    lda #$01
+    sta tc_results+23
+    jmp !tests_done+
+!t23_fail:
+    lda #$00
+    sta tc_results+23
 
 !tests_done:
     jmp test_exit_trampoline

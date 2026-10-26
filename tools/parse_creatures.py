@@ -9,12 +9,18 @@ and 215 attack types, maps to our SoA format, and outputs:
   3. Tier assignments with overlapping level ranges
 
 Usage:
-  python3 tools/parse_creatures.py [--all | --selected | --tiers | --asm]
+  UMORIA_SRC=<path>/src/data_creatures.cpp \
+      python3 tools/parse_creatures.py [--all | --selected | --tiers | --asm]
 
   --all       Show all 279 umoria creatures
   --selected  Show the ~120 selected creatures (default)
   --tiers     Show tier breakdown with creature counts
   --asm       Generate assembly data (for R3.5.2)
+
+UMORIA_SRC names Umoria's src/data_creatures.cpp at the pinned revision in
+docs/BEHAVIOR_CHANGE_PROTOCOL.md (2a2a6b791f084cac97db85f5b78739e913dd3572);
+there is no default. --asm rewrites platforms/commodore/c64/creature_data/;
+regenerating at that revision reproduces the committed tier files.
 """
 
 import re
@@ -196,7 +202,16 @@ CF_UNDEAD      = 0x02  # Our undead flag
 CF_EVIL        = 0x04  # Evil creature (ego slay)
 CF_ANIMAL      = 0x08  # Animal creature (ego slay)
 CF_DRAGON      = 0x10  # Dragon creature (future ego slay)
+CF_BREEDER     = 0x40  # Multiplying creature (core/monster.s)
 CF_INFRA      = 0x80  # Warm creature visible to infravision
+
+# Umoria config.cpp flag bits (pinned revision 2a2a6b79).
+CM_MULTIPLY = 0x00200000
+CD_DRAGON   = 0x0001
+CD_ANIMAL   = 0x0002
+CD_EVIL     = 0x0004
+CD_UNDEAD   = 0x0008
+CD_INFRA    = 0x2000
 
 # Door capability (Umoria CMOVE 0x00020000) folds into cr_aaf bit 7:
 # AAF values top out at 40, so bit 7 carries CD_OPEN_DOOR.
@@ -215,20 +230,22 @@ def map_mflags(cmove, cdefense, name):
     move_bits = cmove & 0x3F
     if move_bits == 0x01:  # Move only to attack (stationary)
         flags |= CF_ATTACK_ONLY
-    # Undead check: CDEFENSE bit 3 (0x0008) = hurt by slay undead
-    if cdefense & 0x0008:
+    # Multiplies: Umoria CM_MULTIPLY (worm masses, lice, ...). Umoria has no
+    # pack flag, so CF_GROUP stays unset, as upstream has no packs.
+    if cmove & CM_MULTIPLY:
+        flags |= CF_BREEDER
+    # Slay classes, Umoria CD_* bits. Until 2026-10-25 animal was read from
+    # 0x0010 (CD_FROST, hurt by frost) and dragon from 0x0002 (CD_ANIMAL).
+    if cdefense & CD_UNDEAD:
         flags |= CF_UNDEAD
-    # Evil check: CDEFENSE bit 2 (0x0004) = hurt by slay evil
-    if cdefense & 0x0004:
+    if cdefense & CD_EVIL:
         flags |= CF_EVIL
-    # Animal check: CDEFENSE bit 4 (0x0010) = animal
-    if cdefense & 0x0010:
+    if cdefense & CD_ANIMAL:
         flags |= CF_ANIMAL
-    # Dragon check: CDEFENSE bit 1 (0x0002) = dragon
-    if cdefense & 0x0002:
+    if cdefense & CD_DRAGON:
         flags |= CF_DRAGON
-    # Infravision check: CDEFENSE bit 13 (0x2000) = can be seen with infravision
-    if cdefense & 0x2000:
+    # Seen with infravision
+    if cdefense & CD_INFRA:
         flags |= CF_INFRA
     return flags
 
@@ -604,6 +621,55 @@ SELECTED_NAMES = [
     "Balrog",                     # final boss (DL 100)
 ]
 
+# Creatures added after the original 120 (maintainer, 2026-10-25): upstream's
+# DL 1 is full of weak prey, and the 3-per-level selection above left Kobold,
+# White Worm mass and Floating Eye as Moria8's only DL 1 creatures (found by
+# the M5b playtest). Each tier lists them after its original members, in this
+# order, so the tier-local indices that saves and tests use do not move.
+ADDED_NAMES = [
+    "Giant White Centipede",      # DL 1, bite 1d2, sting 1d2
+    "Giant Yellow Centipede",     # DL 1, bite 1d3, sting 1d3
+    "White Icky-Thing",           # DL 1, touch 1d2
+    "Large White Snake",          # DL 1, bite 1d1, slow
+    "Giant White Mouse",          # DL 1, bite 1d2, breeds
+    # Second batch (maintainer, 2026-10-25: "add 25 more creatures to tier-1"):
+    # DL 1-5 creatures upstream has and Moria8 lacked; no more breeders and
+    # nothing invisible.
+    "Large Brown Snake",          # DL 1
+    "Grey Mushroom patch",        # DL 1, stationary, confusion spores
+    "Blubbering Icky-Thing",      # DL 2, poison touch
+    "Metallic Green Centipede",   # DL 2
+    "Novice Warrior",             # DL 2
+    "Novice Rogue",               # DL 2
+    "Giant Green Frog",           # DL 2
+    "Blue Yeek",                  # DL 2
+    "Large Black Snake",          # DL 2
+    "White Harpy",                # DL 2, erratic flyer
+    "Yellow Mushroom patch",      # DL 2, stationary, fear spores
+    "Metallic Blue Centipede",    # DL 3
+    "Scruffy-Looking Hobbit",     # DL 3
+    "Huge Brown Bat",             # DL 3, fast, erratic
+    "Giant White Ant",            # DL 3
+    "Metallic Red Centipede",     # DL 3
+    "Large Green Snake",          # DL 3
+    "Drooling Harpy",             # DL 3
+    "Radiation Eye",              # DL 3, stationary, spells
+    "Giant Black Centipede",      # DL 4
+    "Giant Blue Centipede",       # DL 4
+    "Large Grey Snake",           # DL 4
+    "Black Yeek",                 # DL 5
+    "Grey Icky-Thing",            # DL 5
+    "Giant Black Frog",           # DL 5
+]
+ADDED_ORDER: list[int] = []       # their indices, resolved in main()
+
+
+def tier_order(indices):
+    """Selected creature indices in tier order: the original selection by
+    Umoria index, then ADDED_NAMES in their listed order."""
+    added = [i for i in ADDED_ORDER if i in indices]
+    return [i for i in sorted(indices) if i not in ADDED_ORDER] + added
+
 
 # ============================================================
 # Tier assignment
@@ -634,16 +700,11 @@ def main():
     if len(sys.argv) > 1:
         mode = sys.argv[1].lstrip('-')
 
-    # Find source file
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    src_path = os.path.join(script_dir, '..', 'umoria_creatures.cpp')
-    if not os.path.exists(src_path):
-        src_path = '/tmp/umoria_creatures.cpp'
-    if not os.path.exists(src_path):
-        src_path = os.path.expanduser('~/Projects/thirdparty/umoria/src/data_creatures.cpp')
-    if not os.path.exists(src_path):
-        print(f"ERROR: Cannot find umoria_creatures.cpp", file=sys.stderr)
-        print(f"  Copy from: https://raw.githubusercontent.com/dungeons-of-moria/umoria/master/src/data_creatures.cpp", file=sys.stderr)
+    # Source file: supplied by the caller only (AGENTS.md rule 9).
+    src_path = os.environ.get("UMORIA_SRC", "")
+    if not src_path or not os.path.isfile(src_path):
+        print("ERROR: set UMORIA_SRC to Umoria's src/data_creatures.cpp", file=sys.stderr)
+        print("  (pinned revision: docs/BEHAVIOR_CHANGE_PROTOCOL.md)", file=sys.stderr)
         sys.exit(1)
 
     # Parse
@@ -687,6 +748,12 @@ def main():
             selected_indices.add(name_to_index[name])
         else:
             print(f"WARNING: Selected creature not found: '{name}'", file=sys.stderr)
+    for name in ADDED_NAMES:
+        if name in name_to_index:
+            selected_indices.add(name_to_index[name])
+            ADDED_ORDER.append(name_to_index[name])
+        else:
+            print(f"WARNING: Added creature not found: '{name}'", file=sys.stderr)
 
     if mode == "all":
         print_all(creatures, selected_indices)
@@ -903,7 +970,7 @@ def generate_asm_tier(tier_idx, tier, creatures, selected_indices, outdir):
     """Generate a .s file for one tier."""
     # Collect tier members sorted by dungeon level, then by umoria index
     members = []
-    for idx in sorted(selected_indices):
+    for idx in tier_order(selected_indices):
         cr = creatures[idx]
         if tier_idx in cr['tiers']:
             members.append((idx, cr))
@@ -997,7 +1064,7 @@ def generate_asm(creatures, selected_indices):
         f.write("// Generated by parse_creatures.py — DO NOT EDIT\n\n")
         f.write(f".const TOTAL_TIERS = {len(TIERS)}\n")
         for tier_idx, tier in enumerate(TIERS):
-            members = [idx for idx in sorted(selected_indices)
+            members = [idx for idx in tier_order(selected_indices)
                        if tier_idx in creatures[idx]['tiers']]
             f.write(f".const TIER{tier_idx}_COUNT = {len(members)}\n")
             f.write(f".const TIER{tier_idx}_MIN_DLVL = {tier['min_dlvl']}\n")
@@ -1009,7 +1076,7 @@ def generate_asm(creatures, selected_indices):
                     f.write(f".const CREATURE_BALROG_TIER = {tier_idx}\n")
         f.write(f"\n// Tier file sizes (approximate, for REU allocation)\n")
         for tier_idx, tier in enumerate(TIERS):
-            members = [(idx, creatures[idx]) for idx in sorted(selected_indices)
+            members = [(idx, creatures[idx]) for idx in tier_order(selected_indices)
                        if tier_idx in creatures[idx]['tiers']]
             soa = len(members) * TIER_BYTES_PER_CREATURE
             names = sum(len(cr['name']) + 1 for _, cr in members)

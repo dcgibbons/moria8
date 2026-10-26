@@ -1827,7 +1827,7 @@ run_wizard_item_product_smoke() {
     arm_addr=$(printf '%04X' "$((16#$arm_addr))")
     inv_addr=$(printf '%04X' "$((16#$inv_addr))")
     ego_addr=$(printf '%04X' "$((16#$ego_addr))")
-    inv_end=$(printf '%04X' "$((16#$inv_addr + 4))")
+    inv_end=$(printf '%04X' "$((16#$inv_addr + 5))")   # rations, book, spare torches, then the grants
 
     local mon_file
     mon_file=$(mktemp -t "test_${name}_mon")
@@ -1937,7 +1937,7 @@ PY
 
     # Chest 128 ($80) and the appended-range boundaries (96=$60, 127=$7f)
     # must all land in inventory through the production grant path (starting
-    # gear occupies the leading slots).
+    # gear occupies the leading slots: rations, the book, the spare torches).
     local inv_lc
     inv_lc=$(echo "$inv_addr" | tr '[:upper:]' '[:lower:]')
     if ! grep -qiE "^>C:${inv_lc}.*80.*60[[:space:]]+7f" "$tty_log"; then
@@ -4274,6 +4274,10 @@ check_static_contract "c64_charset_switch_locked_before_irq_input_contract" "inp
     "input_get_key:|||lda #BANK_NO_BASIC|||sta \$01|||jsr c64_install_ram_irq_vectors|||jsr input_lock_charset_switch|||cli|||!igk_poll:"
 check_static_contract "c64_charset_switch_locked_before_irq_release_contract" "input.s" \
     "input_wait_release:|||lda #BANK_NO_BASIC|||sta \$01|||jsr c64_install_ram_irq_vectors|||jsr input_lock_charset_switch|||cli|||!iwr_drain:"
+# Nest gold calls random_floor_in_room in the dungeon-generation overlay after
+# pick_item_type has loaded the chest overlay (M5b round 33 code corruption).
+check_static_contract "nest_gold_restores_generation_overlay_contract" "main.s" \
+    "tramp_spawn_nest_gold:|||lda #OVL_DUNGEON_GEN|||jsr overlay_load|||jsr spawn_nest_gold"
 check_static_contract "c64_input_restores_bank_before_irq_contract" "input.s" \
     "input_get_key:|||jsr KERNAL_GETIN|||sta igk_key|||sei|||pla|||sta \$01|||jsr c64_install_ram_irq_vectors|||plp|||lda igk_key"
 check_static_contract "inventory_overlay_fresh_key_contract" "../../../core/player_items.s" \
@@ -4365,18 +4369,18 @@ run_test "rng"    "tests/test_rng.s"    "0400 0409" 10
 run_test "memory" "tests/test_memory.s" "0400 0402" 3
 run_test "config" "tests/test_config.s" "0400 0400" 1
 run_test "input"  "tests/test_input.s"  "0400 040e" 15
-run_test "main_loop" "tests/test_main_loop.s" "0400 042f" 48 500000000
+run_test "main_loop" "tests/test_main_loop.s" "0400 0430" 49 500000000
 run_test "run_visibility_bank" "tests/test_run_visibility_bank.s" "0400 0400" 1 500000000
 run_test "turn" "tests/test_turn.s" "0400 0420" 33 500000000
 run_test "player" "tests/test_player.s" "0400 0409" 10
-run_test "dungeon" "tests/test_dungeon.s" "0400 0441" 66 500000000
-run_test "monster" "tests/test_monster.s" "0400 0415" 22 500000000
-run_test "monster_ai" "tests/test_monster_ai.s" "0400 043a" 59 500000000
-run_test "combat" "tests/test_combat.s" "0400 0428" 41 500000000
+run_test "dungeon" "tests/test_dungeon.s" "0400 0442" 67 500000000
+run_test "monster" "tests/test_monster.s" "0400 0417" 24 500000000
+run_test "monster_ai" "tests/test_monster_ai.s" "0400 0440" 65 500000000
+run_test "combat" "tests/test_combat.s" "0400 0429" 42 500000000
 run_test "msg_long" "tests/test_msg_long.s" "0400 0400" 1 20000000
 run_test "monster_attack" "tests/test_monster_attack.s" "0400 0415" 22 500000000
 run_test "effects" "tests/test_effects.s" "0400 042d" 46 1000000000
-run_test "effects_magic" "tests/test_effects_magic.s" "0400 0433" 24 1000000000
+run_test "effects_magic" "tests/test_effects_magic.s" "0400 0433" 29 1000000000
 run_test "cure_light_wounds" "tests/test_cure_light_wounds.s" "0400 0402" 3 500000000
 run_test "confusion" "tests/test_confusion.s" "0400 0402" 3 500000000
 run_test "lightning_bolt" "tests/test_lightning_bolt.s" "0400 0402" 3 500000000
@@ -4409,7 +4413,7 @@ run_test "haste_self" "tests/test_haste_self.s" "0400 0402" 3 500000000
 run_test "fire_ball" "tests/test_fire_ball.s" "0400 0402" 3 500000000
 run_test "word_of_destruction" "tests/test_word_of_destruction.s" "0400 0406" 7 500000000
 run_test "light_area" "tests/test_light_area.s" "0400 0401" 2 500000000
-run_test "phase_door" "tests/test_phase_door.s" "0400 0402" 3 500000000
+run_test "phase_door" "tests/test_phase_door.s" "0400 0403" 4 500000000
 run_test "genocide" "tests/test_genocide.s" "0400 0401" 2 500000000
 run_test "directional_effects" "tests/test_directional_effects.s" "0400 0403" 4 500000000
 run_test "overcast_ordering" "tests/test_overcast_ordering.s" "0400 0400" 1 500000000
@@ -4447,11 +4451,11 @@ run_test "remove_curse_prayer" "tests/test_remove_curse_prayer.s" "0400 0402" 3 
 run_test "orb_of_draining_prayer" "tests/test_orb_of_draining_prayer.s" "0400 0402" 3 500000000
     run_test "prayer_feedback" "tests/test_prayer_feedback.s" "0400 040c" 13 500000000
 run_test "detect_feedback" "tests/test_detect_feedback.s" "0400 0403" 4 500000000
-run_test "item" "tests/test_item.s" "0400 043c" 61 1000000000
+run_test "item" "tests/test_item.s" "0400 043f" 64 1000000000
 run_test "scroll_p3" "tests/test_scroll_p3.s" "0400 040d" 14 1000000000
-run_test "item_desc" "tests/test_item_desc.s" "0400 0409" 10 500000000
+run_test "item_desc" "tests/test_item_desc.s" "0400 040a" 11 500000000
 run_test "item_ui" "tests/test_item_ui.s" "0400 040f" 16 1000000000
-run_test "store" "tests/test_store.s" "0400 042f" 48 1000000000
+run_test "store" "tests/test_store.s" "0400 0435" 54 1000000000
 run_test "ui_views" "tests/test_ui_views.s" "0400 0413" 19 500000000
 run_test "ui_views_filters" "tests/test_ui_views_filters.s" "0400 0413" 7 500000000
 run_test "subsystems" "tests/test_subsystems.s" "0400 0409" 10

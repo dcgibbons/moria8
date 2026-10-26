@@ -392,8 +392,7 @@ disk_require_save_media:
     sec
     rts
 #endif
-    jsr disk_marker_present
-    rts
+    jmp disk_marker_present
 
 // ============================================================
 // Swap prompts

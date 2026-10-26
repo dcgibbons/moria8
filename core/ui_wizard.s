@@ -540,15 +540,6 @@ ui_wizard_parse_two_digit:
     rts
 
 wiz_pd_tmp: .byte 0
-    cmp wizard_prompt_max
-    beq !wiz_parse_ok+
-    bcs !wiz_parse_fail+
-!wiz_parse_ok:
-    sec
-    rts
-!wiz_parse_fail:
-    clc
-    rts
 
 ui_wizard_restore_gameplay_with_visibility_message:
     jsr update_visibility

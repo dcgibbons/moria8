@@ -239,13 +239,15 @@ calc_chr_price:
     // 16-bit × 8-bit multiply
     jsr math_mul_16x8           // Result in mul_result_0/1/2
 
-    // Divide by 100
+    // Divide all 24 bits by 100: 600 gp × 116% is 69,600, and dropping
+    // the top byte priced Mithril Chain Mail at 40 gp, under the haggle floor.
+    ldx #100
+    jsr hg_div_mul_result_24x8
     lda mul_result_0
     sta zp_math_a
     lda mul_result_1
-    sta zp_math_b
-    ldx #100
-    jmp math_div_16x8           // Quotient in zp_math_a/b
+    sta zp_math_b               // Quotient in zp_math_a/b (it fits 16 bits)
+    rts
 
 // calc_buy_min_price — Minimum acceptable buy price (no CHR markup)
 // Input: A = item type ID, sb_item_p1 = enchantment/charges

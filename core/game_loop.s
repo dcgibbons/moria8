@@ -538,23 +538,31 @@ game_new_start:
 #endif
 
     // --- Starting equipment ---
-    // Wooden torch (type 13) in EQUIP_LIGHT with 134 charges (134 × 30 = 4,020 turns)
+    // Wooden torch (type 13) in EQUIP_LIGHT with 134 charges (134 × 30 = 4,020
+    // turns), and four more in carried slot 2: VMS player_init / Umoria
+    // class_base_provisions give every class 5 torches and 5 rations (one of
+    // each until 2026-10-25, found by the M5b playtest).
     lda #13
     sta inv_item_id + EQUIP_LIGHT
+    sta inv_item_id + 2
     lda #1
     sta inv_qty + EQUIP_LIGHT
     lda #134
     sta inv_p1 + EQUIP_LIGHT
+    sta inv_p1 + 2
     lda #0
     sta inv_flags + EQUIP_LIGHT
+    sta inv_flags + 2
+    lda #4
+    sta inv_qty + 2
     lda #1
     sta zp_light_radius
     sta player_data + PL_LIGHT_RAD
 
-    // Ration of food (type 15) in carried slot 0
+    // Five rations of food (type 15) in carried slot 0
     lda #15
     sta inv_item_id
-    lda #1
+    lda #5
     sta inv_qty
     lda #0
     sta inv_p1
@@ -1289,6 +1297,10 @@ c128_town_move_diag_after_player_try_move:
     lda #$16
     jsr c128_town_dump_log
 #endif
+    // Only a move onto the square springs its trap: a melee turn leaves the
+    // player where they stand (VMS move_char, carry -> hit_trap).
+    lda player_move_relocated
+    beq !move_no_trap+
     jsr trap_check_at_player
 #if HAL_PLATFORM_GAME_LOOP_PLAYER_MOVE_DIAG_LABELS
 c128_town_move_diag_after_trap_check:
@@ -1298,6 +1310,7 @@ c128_town_move_diag_after_trap_check:
     jsr c128_town_dump_log
 #endif
     bcs !move_trap_fired+
+!move_no_trap:
     jsr player_move_maybe_passive_search
 !move_trap_fired:
     jsr turn_post_action_searchable_or_die

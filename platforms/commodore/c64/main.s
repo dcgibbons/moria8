@@ -646,8 +646,7 @@ c64_storage_read_command_status:
 !cdrs_close:
     jsr c64_disk_clrchn
     lda #15
-    jsr c64_disk_close
-    rts
+    jmp c64_disk_close
 // ============================================================
 // Entry point
 // ============================================================
@@ -1005,8 +1004,7 @@ title_draw_menu:
     sta zp_ptr0
     lda #>title_menu_str
     sta zp_ptr0_hi
-    jsr screen_put_string
-    rts
+    jmp screen_put_string
 
 title_load_game:
     jsr rng_seed
@@ -1211,11 +1209,20 @@ tramp_spawn_special_room_monsters:
     jmp tramp_sr_epilogue
 
 tramp_spawn_nest_gold:
+    // pick_item_type leaves the chest overlay (PICKER_IN_CHEST_OVERLAY) in the
+    // $E000 window, and spawn_nest_gold calls random_floor_in_room in the
+    // dungeon-generation overlay: load it back first, as the Apple IIe and CX16
+    // trampolines do (M5b round 33: nest gold placed off the map corrupted code)
+    lda #OVL_DUNGEON_GEN
+    jsr overlay_load
+    bcs !tsng_failed+
     sei
     lda #BANK_NO_ROMS
     sta $01
     jsr spawn_nest_gold
     jmp tramp_sr_epilogue
+!tsng_failed:
+    rts                         // no nest gold on a media error
 
 tramp_find_special_room:
     pha                         // Save A (room type input)
@@ -2064,8 +2071,7 @@ tramp_game_over_prepare:
 !tgo_load_overlay:
     // 2. Load death overlay (replaces tier data at $E000)
     lda #OVL_DEATH
-    jsr overlay_load
-    rts
+    jmp overlay_load
 
 tramp_game_over:
     jsr tramp_game_over_prepare
