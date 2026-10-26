@@ -471,7 +471,8 @@ test_start:
     sta tc_results + 2
 !t3_done:
 
-    // Test 4: light warning/depletion path emits messages and clears slot.
+    // Test 4: light warning/depletion path emits messages; the burnt-out light
+    // stays worn with no light (VMS moria.inc, Umoria playerUpdateLight).
     jsr reset_state
     ldx #EQUIP_LIGHT
     lda #13
@@ -500,12 +501,13 @@ test_start:
     sta light_tick_counter
     jsr turn_tick_light
     lda inv_item_id + EQUIP_LIGHT
-    cmp #FI_EMPTY
+    cmp #13                         // still worn
+    bne !t4_fail+
+    lda inv_p1 + EQUIP_LIGHT
     bne !t4_fail+
     lda zp_light_radius
     bne !t4_fail+
     lda test_inv_remove_calls
-    cmp #1
     bne !t4_fail+
     lda test_last_huff_id
     cmp #HSTR_TTL_OUT

@@ -230,7 +230,7 @@ test_setup_phase_door_room:
     sta zp_player_y
     sta player_data + PL_MAP_Y
 
-    lda #TILE_FLOOR | FLAG_OCCUPIED
+    lda #TILE_FLOOR                 // the player's tile: no creature flag
     ldx #12
     ldy #22
     jsr test_write_tile
@@ -335,7 +335,7 @@ test_start:
     ldy #25
     jsr test_read_tile
     and #FLAG_OCCUPIED
-    beq !t1_fail+
+    bne !t1_fail+
     ldx #30
     ldy #40
     jsr test_read_tile

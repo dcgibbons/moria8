@@ -220,16 +220,6 @@ command_result_main_or_update_visibility:
 !cruv_no_turn:
     jmp main_loop
 
-command_result_restore_view_or_update_visibility:
-    bcc !crrv_no_turn+
-    jmp post_turn_update_visibility_or_die
-!crrv_no_turn:
-	    jsr hal_screen_clear
-#if HAL_PLATFORM_MARK_MODAL_RESTORE_PERF && PERF_P1
-    jsr perf_p1_set_reason_modal_restore
-#endif
-	    jmp vp_render_status_loop
-
 // ============================================================
 // Shared post-turn tails and gameplay-view restore
 // ============================================================

@@ -3,7 +3,7 @@
 // Tests: category check, restocking, math_mul_16x8, buy/sell price calc,
 // gold operations, store door detection, find empty slot, and haggle flow.
 //
-// Results at $0400-$042e: $01 = pass, $00 = fail per test (47 tests)
+// Results at $0400-$0435: $01 = pass, $00 = fail per test (54 tests)
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_bootstrap)
 
@@ -12,7 +12,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #48
+    ldx #53
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -23,6 +23,7 @@ test_exit_trampoline:
 .pc = $0828 "Main"
 
 .encoding "screencode_mixed"
+.const T53_STORE = 0        // the General Store (test 53)
 
 #import "../../../../core/zeropage.s"
 #import "../memory.s"
@@ -122,8 +123,10 @@ press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
 // Test result buffer — copy to $0400 at end (msg_print clobbers $0400)
-tc_results: .fill 49, $ff
+tc_results: .fill 54, $ff
 tc_count: .byte 0
+t28_slot:       .byte 0
+t28_unit:       .byte 0
 
 .macro PatchJump(target, replacement) {
     lda #$4c
@@ -845,7 +848,8 @@ test_start:
     // ============================================================
     // Test 28: VMS store_maint, under-stocked branch — an empty store
     // stocks store$min_inven - store_ctr + 2 items (store1.inc), scaled:
-    // STORE_MIN_KEEP + 2 = 9 of 12 slots.
+    // STORE_MIN_KEEP + 2 = 9 stockings, stacks sharing a slot (Umoria
+    // storeCarryItem), each of the VMS store count (sro_stock_qty).
     // ============================================================
     ldx #0
 !t28_clr:
@@ -860,7 +864,7 @@ test_start:
     sta zp_store_idx
     jsr store_restock_one
 
-    // Count non-empty slots in store 0
+    // Count the items in store 0
     lda #0
     sta tc_count
     ldx #0
@@ -870,7 +874,22 @@ test_start:
     lda si_item_id,x
     cmp #FI_EMPTY
     beq !t28_next+
+    // Each stocking brings the VMS store count (sro_stock_qty): count
+    // stockings, the slot's quantity in units of that count.
+    stx t28_slot
+    tax
+    jsr sro_stock_qty
+    sta t28_unit
+    ldx t28_slot
+    lda si_qty,x
+!t28_units:
     inc tc_count
+    sec
+    sbc t28_unit
+    beq !t28_next+
+    bcs !t28_units-
+    lda #$80                    // not a whole number of stockings
+    sta tc_count
 !t28_next:
     inx
     jmp !t28_loop-
@@ -1776,7 +1795,244 @@ test_start:
 !t49_store:
     sta tc_results + 48
 
+    // ============================================================
+    // Test 50: a stocked item joins its stack (Umoria storeCarryItem): a
+    // second Flask of Oil adds to the first; two Daggers keep two slots.
+    // ============================================================
+    jsr reset_haggle_fixture
+    lda #ITEM_TYPE_FLASK_OF_OIL
+    ldx #0
+    ldy #2
+    jsr t50_put
+    lda #ITEM_TYPE_FLASK_OF_OIL
+    ldx #3
+    ldy #1
+    jsr t50_put
+    lda #2                      // Dagger
+    ldx #1
+    ldy #1
+    jsr t50_put
+    lda #2
+    ldx #4
+    ldy #1
+    jsr t50_put
+    ldy #3
+    jsr sro_merge_slot
+    ldy #4
+    jsr sro_merge_slot
+    lda si_qty + 0
+    cmp #3
+    bne !t50_fail+
+    lda si_item_id + 3
+    cmp #FI_EMPTY
+    bne !t50_fail+
+    lda si_item_id + 1
+    cmp #2
+    bne !t50_fail+
+    lda si_item_id + 4
+    cmp #2
+    bne !t50_fail+
+    lda #$01
+    jmp !t50_store+
+!t50_fail:
+    lda #$00
+!t50_store:
+    sta tc_results + 49
+
+    // ============================================================
+    // Test 51: a store stack stops at 24 (Umoria storeCarryItem); a flask
+    // with other turns of fuel is not the same item and keeps its slot.
+    // ============================================================
+    jsr reset_haggle_fixture
+    lda #ITEM_TYPE_FLASK_OF_OIL
+    ldx #0
+    ldy #23
+    jsr t50_put
+    lda #ITEM_TYPE_FLASK_OF_OIL
+    ldx #2
+    ldy #5
+    jsr t50_put
+    ldy #2
+    jsr sro_merge_slot
+    lda #ITEM_TYPE_FLASK_OF_OIL
+    ldx #5
+    ldy #1
+    jsr t50_put
+    inc si_p1 + 5
+    ldy #5
+    jsr sro_merge_slot
+    lda si_qty + 0
+    cmp #STORE_STACK_MAX
+    bne !t51_fail+
+    lda si_item_id + 2
+    cmp #FI_EMPTY
+    bne !t51_fail+
+    lda si_item_id + 5
+    cmp #ITEM_TYPE_FLASK_OF_OIL
+    bne !t51_fail+
+    lda #$01
+    jmp !t51_store+
+!t51_fail:
+    lda #$00
+!t51_store:
+    sta tc_results + 50
+
+    // ============================================================
+    // Test 52: buying from a stack takes one (Umoria inventoryTakeOneItem)
+    // ============================================================
+    jsr reset_haggle_fixture
+    lda #STORE_BM
+    sta zp_store_idx
+    ldx #STORE_BM
+    lda store_base_idx,x
+    tax
+    lda #ITEM_TYPE_FLASK_OF_OIL
+    ldy #3
+    jsr t50_put
+    lda #<script_buy_yes
+    ldy #>script_buy_yes
+    jsr set_test_input_script
+    jsr store_buy
+    ldx #STORE_BM
+    lda store_base_idx,x
+    tax
+    lda si_qty,x
+    cmp #2
+    bne !t52_fail+
+    lda si_item_id,x
+    cmp #ITEM_TYPE_FLASK_OF_OIL
+    bne !t52_fail+
+    lda inv_item_id + 0
+    cmp #ITEM_TYPE_FLASK_OF_OIL
+    bne !t52_fail+
+    lda inv_qty + 0
+    cmp #1
+    bne !t52_fail+
+    lda #$01
+    jmp !t52_store+
+!t52_fail:
+    lda #$00
+!t52_store:
+    sta tc_results + 51
+
+    // ============================================================
+    // Test 53: a sold item joins the store's matching stack at the next
+    // restock (Umoria storeCarryItem merges at once; the C64 town overlay
+    // has no room for it). The General Store, which sells flasks: the Black
+    // Market pays a tenth of base cost, nothing for a 3 gp flask (VMS price).
+    // ============================================================
+    jsr reset_haggle_fixture
+    lda #T53_STORE
+    sta zp_store_idx
+    ldx #T53_STORE
+    lda store_base_idx,x
+    tax
+    lda #ITEM_TYPE_FLASK_OF_OIL
+    ldy #2
+    jsr t50_put
+    lda #ITEM_TYPE_FLASK_OF_OIL
+    sta inv_item_id + 0
+    lda #1
+    sta inv_qty + 0
+    lda #7
+    sta inv_p1 + 0
+    lda #0
+    sta inv_to_hit + 0
+    sta inv_to_dam + 0
+    sta inv_to_ac + 0
+    sta inv_ego + 0
+    lda #IF_IDENTIFIED
+    sta inv_flags + 0
+    lda #<script_sell_yes
+    ldy #>script_sell_yes
+    jsr set_test_input_script
+    jsr store_sell
+    lda #T53_STORE
+    sta zp_store_idx
+    jsr store_restock_one
+    // One slot holds the three 7-turn flasks (restocked flasks carry other
+    // fuel and stay apart)
+    lda #0
+    sta t44_food                // matching slots
+    ldx #T53_STORE
+    lda store_base_idx,x
+    tax
+    ldy #STORE_MAX_ITEMS
+!t53_scan:
+    lda si_item_id,x
+    cmp #ITEM_TYPE_FLASK_OF_OIL
+    bne !t53_next+
+    lda si_p1,x
+    cmp #7
+    bne !t53_next+
+    inc t44_food
+    lda si_qty,x
+    cmp #3
+    bne !t53_fail+
+!t53_next:
+    inx
+    dey
+    bne !t53_scan-
+    lda t44_food
+    cmp #1
+    bne !t53_fail+
+    lda inv_item_id + 0
+    cmp #FI_EMPTY
+    bne !t53_fail+
+    lda #$01
+    jmp !t53_store+
+!t53_fail:
+    lda #$00
+!t53_store:
+    sta tc_results + 52
+
+    // ============================================================
+    // Test 54: VMS store_maint sell-off (store1.inc store_destroy): the
+    // turnover branch takes one from a stack (one_of = true), 10 flasks leave
+    // 9; the over-stocked branch takes the whole entry (one_of = false).
+    // ============================================================
+    jsr reset_haggle_fixture
+    lda #ITEM_TYPE_FLASK_OF_OIL
+    ldx #0
+    ldy #10
+    jsr t50_put
+    lda #1
+    jsr sro_sell_one
+    lda si_item_id + 0
+    cmp #ITEM_TYPE_FLASK_OF_OIL
+    bne !t54_fail+
+    lda si_qty + 0
+    cmp #9
+    bne !t54_fail+
+    lda #1
+    jsr sro_sell_off
+    lda si_item_id + 0
+    cmp #FI_EMPTY
+    bne !t54_fail+
+    lda #$01
+    jmp !t54_store+
+!t54_fail:
+    lda #$00
+!t54_store:
+    sta tc_results + 53
+
     jmp test_exit_trampoline
+
+// t50_put — Store slot X = item A, Y of them, 7 turns of fuel, no bonuses,
+// identified.
+t50_put:
+    sta si_item_id,x
+    tya
+    sta si_qty,x
+    lda #7
+    sta si_p1,x
+    lda #0
+    sta si_to_hit,x
+    sta si_to_dam,x
+    sta si_to_ac,x
+    lda #IF_IDENTIFIED
+    sta si_meta,x
+    rts
 
 // t48_check_store — A = store, X/Y = 0-terminated set of allowed item IDs.
 // Clears tc_results+47 unless 200 picks are all in the set and include Word
@@ -1842,6 +2098,10 @@ t44_fill_store0:
     jmp !t44f_next+
 !t44f_item:
     sta si_item_id,x
+    pha
+    lda #1                      // an occupied slot holds at least one
+    sta si_qty,x
+    pla
 !t44f_next:
     inx
     cpx #STORE_MAX_ITEMS

@@ -680,7 +680,8 @@ create_init_character:
     bcc !can_cast_start+
     jmp !no_mana+
 
-    // Starting mana = spell stat / 2 (INT for mage affinity, WIS for priest)
+    // Starting mana: Umoria newMana + 1 at level 1 (magic_recalc_mana's
+    // formula), from INT for mage-type classes, WIS for priest-type ones.
 !can_cast_start:
     lda player_data + PL_SPELL_TYPE
     cmp #SPELL_MAGE
@@ -690,10 +691,18 @@ create_init_character:
 !priest_mana:
     lda player_data + PL_WIS_CUR
 !calc_mana:
-    lsr                     // / 2
-    cmp #1
-    bcs !mana_ok+
-    lda #1                  // Minimum 1 mana
+    ldx #0
+!mana_adj:
+    cmp create_level1_mana_min,x
+    bcc !mana_band+
+    inx
+    cpx #create_level1_mana_end - create_level1_mana_min
+    bne !mana_adj-
+!mana_band:
+    txa                     // band 0: no mana; band n: n + 1
+    beq !mana_ok+
+    inx
+    txa
 !mana_ok:
     sta player_data + PL_MAX_MANA
     sta player_data + PL_MANA
@@ -802,6 +811,14 @@ create_init_character:
 // Warrior=50, Mage=150, Priest=100, Rogue=75, Ranger=75, Paladin=100
 pid_class_rate:
     .byte 50, 150, 100, 75, 75, 100
+
+// Level-1 mana by INT/WIS (Umoria newMana + 1 at level 1 over
+// playerStatAdjustmentWisdomIntelligence's stat_adj 0..7: 0, 2, 2, 2, 3, 3,
+// 4, 5): the lowest stat of each band past the first (3..18, then 19..118 for
+// 18/01..18/100); band n gives n + 1, band 0 none.
+create_level1_mana_min:
+    .byte 8, 68, 108, 118
+create_level1_mana_end:
 
 // put_stat_val — extracted to stat_display.s (main RAM, always accessible)
 

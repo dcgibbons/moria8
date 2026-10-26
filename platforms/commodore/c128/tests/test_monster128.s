@@ -50,6 +50,11 @@ player_get_infra_range:
     lda test_infra_range
     rts
 
+// A monster coming into sight ends search mode (core/monster.s); this unit
+// test does not import core/player.s.
+player_search_mode_off:
+    rts
+
 mm_los_clear_to_target:
     inc test_los_calls
     lda test_los_clear

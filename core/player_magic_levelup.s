@@ -68,7 +68,8 @@ magic_check_new_spells:
     bcc !mcns_allowed_three_halves+
     cmp #6
     beq !mcns_allowed_double+
-    lda zp_temp0
+    lda zp_temp0            // stat_adj 7: 5 * levels / 2
+    asl
     asl
     clc
     adc zp_temp0

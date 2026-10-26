@@ -3,27 +3,18 @@
 // item.s imports this file unless the port defines INV_ADD_EXTERNAL and
 // imports it into another always-visible segment (C128: the main image).
 
+#import "item_stack_macros.s"
+
 // inv_add_item — Add an item to the carried slots (0-21): onto an identical
 // stack of a kind that stacks (food, potions, scrolls, flasks of oil,
-// spikes, ammunition: VMS inven_carry) while the count fits a byte, else
-// into the first empty slot.
+// wooden torches with equal turns left, spikes, ammunition: VMS
+// inven_carry) while the count fits a byte, else into the first empty slot.
 // Input: fi_add_id, fi_add_qty, fi_add_p1, fi_add_to_hit/dam/ac, flags, ego
 // Output: carry set = success (X = slot), carry clear = full
 // Clobbers: A, X
 inv_add_item:
     ldx fi_add_id
-    lda it_category,x
-    sec
-    sbc #ICAT_FOOD
-    cmp #ICAT_SCROLL - ICAT_FOOD + 1
-    bcc !iai_stacks+                // food, potion, scroll
-    cmp #ICAT_SPIKE - ICAT_FOOD
-    beq !iai_stacks+
-    cpx #ITEM_TYPE_FLASK_OF_OIL
-    beq !iai_stacks+
-    jsr item_get_missile            // bit 7 = ammunition; preserves X
-    bpl !iai_new+
-!iai_stacks:
+    :ItemStacksX(iai_new)
     ldx #MAX_INV_SLOTS - 1
 !iai_match:
     lda inv_item_id,x
@@ -54,7 +45,7 @@ inv_add_item:
 !iai_next:
     dex
     bpl !iai_match-
-!iai_new:
+iai_new:
     ldx #0
 !iai_scan:
     cpx #MAX_INV_SLOTS

@@ -33,45 +33,11 @@ sound_init:
 .label hal_sound_init = sound_init
 .label hal_sound_stop = sound_init
 
-sound_play:
-    lda #0
-    sta TED_SOUND_CTRL
-    sta TED_SND1_LO
-    sta TED_SND2_LO
-    sta TED_SND2_HI
-    lda TED_BMP_SOUND
-    and #$fc
-    sta TED_BMP_SOUND
-    jsr plus4_display_resync
-    lda #SFX_NONE
-    sta zp_snd_effect
-    rts
+// No sound effects yet: playing one only silences TED, as sound_init does.
+.label sound_play = sound_init
 .label hal_sound_play = sound_play
 
 hal_sound_update:
     clc
     rts
 
-ted_sfx_freq:
-    .word $0100  // bump
-    .word $0280  // hit
-    .word $0340  // miss
-    .word $0300  // pickup
-    .word $0080  // death
-    .word $03a0  // level up
-    .word $02d0  // spell
-    .word $0180  // spell fail
-    .word $0120  // hunger warn
-    .word $0060  // hunger faint
-
-ted_sfx_ctrl:
-    .byte TED_VOL | TED_SND2_ON | TED_NOISE2
-    .byte TED_VOL | TED_SND1_ON
-    .byte TED_VOL | TED_SND2_ON | TED_NOISE2
-    .byte TED_VOL | TED_SND1_ON | TED_SND2_ON
-    .byte TED_VOL | TED_SND2_ON | TED_NOISE2
-    .byte TED_VOL | TED_SND1_ON | TED_SND2_ON
-    .byte TED_VOL | TED_SND1_ON
-    .byte TED_VOL | TED_SND2_ON
-    .byte TED_VOL | TED_SND1_ON
-    .byte TED_VOL | TED_SND2_ON | TED_NOISE2

@@ -38,7 +38,6 @@ SWR_CACHE_CAPS = {
     "ovl.ui": 10 * 256,
     "ovl.town": 22 * 256,
     "ovl.modal": 13 * 256,
-    "monster.db.1": 4 * 256,
     "ovl.spell": 21 * 256,
     "ovl.items": 21 * 256,
     "ovl.gen": 21 * 256,
@@ -242,7 +241,7 @@ def validate_build(build_dir: Path) -> list[str]:
             errors.append(f"{name} size {size} B exceeds Sideways RAM cache cap {SWR_CACHE_CAPS[name]} B")
 
     # Verify aggregate Sideways RAM bank page sums (<= 64 pages = 16,384 B per 16 KB bank)
-    bank6_items = ("beeb.auxdata", "ovl.town", "ovl.modal", "monster.db.1")
+    bank6_items = ("beeb.auxdata", "ovl.town", "ovl.modal")
     if all(k in sizes for k in bank6_items):
         bank6_pages = sum((sizes[k] + 255) // 256 for k in bank6_items)
         if bank6_pages > 64:

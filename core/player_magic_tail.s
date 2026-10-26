@@ -3,69 +3,60 @@
 
 // ============================================================
 // magic_recalc_mana — Recalculate max mana based on level + stat
-// Formula: max_mana = (level * stat) / 8 + spell_stat_bonus[stat-3]
-// Clamped to [1, 255]. Called on level-up.
+// Umoria newMana/playerGainMana: levels = level - first spell level + 1;
+// mana = levels * [0, 1, 1, 1.5, 2, 2.5, 3, 4][stat_adj] + 1 (0 when
+// stat_adj is 0 or the class has no spell yet). Called on level-up.
 // Clobbers: A, X, Y, zp_math_a/b
 // ============================================================
+mrm_mana_halves:
+    .byte 0, 2, 2, 3, 4, 5, 6, 8
+
 magic_recalc_mana:
     lda player_data + PL_SPELL_TYPE
-    bne !mrm_has_spells+
-
-    lda #0
-    sta player_data + PL_MAX_MANA
-    sta zp_player_mmp
-    sta player_data + PL_MANA
-    sta zp_player_mp
-    rts
-
-!mrm_has_spells:
-    lda player_data + PL_SPELL_TYPE
+    beq !mrm_no_mana+
     cmp #SPELL_MAGE
     bne !mrm_wis+
     lda player_data + PL_INT_CUR
     jmp !mrm_got_stat+
 !mrm_wis:
     lda player_data + PL_WIS_CUR
-
 !mrm_got_stat:
+    jsr mcns_get_stat_adj
+    beq !mrm_no_mana+
+    pha
+    ldx player_data + PL_CLASS
+    :AuxReadX(class_spell_min_level)    // may clobber Y (Apple IIe)
     sta pm_cost_tmp
-
+    pla
+    tay
     lda zp_player_lvl
-    ldx pm_cost_tmp
+    sec
+    sbc pm_cost_tmp
+    bcc !mrm_no_mana+
+    adc #0                  // C=1: levels = level - min + 1
+    ldx mrm_mana_halves,y
     jsr math_multiply
 
     lsr zp_math_b
     ror zp_math_a
-    lsr zp_math_b
-    ror zp_math_a
-    lsr zp_math_b
-    ror zp_math_a
-
     lda zp_math_b
     bne !mrm_clamp_max+
     lda zp_math_a
-    sta pm_cost_tmp
-
-    lda player_data + PL_SPELL_TYPE
-    cmp #SPELL_MAGE
-    bne !mrm_wis_bonus+
-    lda player_data + PL_INT_CUR
-    jmp !mrm_bonus+
-!mrm_wis_bonus:
-    lda player_data + PL_WIS_CUR
-!mrm_bonus:
-    jsr stat_bonus_index
-    lda spell_stat_bonus,x
     clc
-    adc pm_cost_tmp
-    bcs !mrm_clamp_max+
-    cmp #1
-    bcs !mrm_store+
-    lda #1
-    jmp !mrm_store+
+    adc #1
+    bcc !mrm_store+
 
 !mrm_clamp_max:
     lda #255
+    jmp !mrm_store+
+
+!mrm_no_mana:
+    lda #0
+    sta player_data + PL_MAX_MANA
+    sta zp_player_mmp
+    sta player_data + PL_MANA
+    sta zp_player_mp
+    rts
 
 !mrm_store:
     sta player_data + PL_MAX_MANA

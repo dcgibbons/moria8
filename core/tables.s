@@ -168,40 +168,13 @@ xp_level_late_div100_hi:
 // ============================================================
 .const STAT_TABLE_SIZE = 16  // 3..18
 
-// STR to-hit bonus
-str_tohit_bonus:
-    .byte <-3, <-2, <-1, <-1, 0, 0, 0, 0  // STR 3-10
-    .byte   0,   0,   0,   0, 0, 0, 0, 1  // STR 11-18
-
-// STR damage bonus
-str_damage_bonus:
-    .byte <-2, <-1, 0, 0, 0, 0, 0, 0      // STR 3-10
-    .byte   0,   0, 0, 0, 0, 1, 2, 3      // STR 11-18
-
-// DEX to-hit bonus
-dex_tohit_bonus:
-    .byte <-3, <-2, <-2, <-1, <-1, 0, 0, 0  // DEX 3-10
-    .byte   0,   0,   0,   0,   0, 1, 2, 3  // DEX 11-18
-
-// DEX AC bonus (positive = better AC)
-dex_ac_bonus:
-    .byte <-4, <-3, <-2, <-1, 0, 0, 0, 0  // DEX 3-10
-    .byte   0,   0,   0,   0, 1, 1, 1, 2  // DEX 11-18
-
-// CON HP bonus (per level)
-con_hp_bonus:
-    .byte <-4, <-3, <-2, <-1, 0, 0, 0, 0  // CON 3-10
-    .byte   0,   0,   0,   0, 0, 0, 1, 2  // CON 11-18
+// STR/DEX to-hit, damage and AC adjustments are player_*_adj (core/player.s),
+// which cover 18/xx.
 
 // DEX disarm bonus
 dex_disarm_bonus:
     .byte <-8, <-6, <-4, <-2, <-1, 0, 0, 0  // DEX 3-10
     .byte   0,   0,   1,   1,   1, 2, 2, 4  // DEX 11-18
-
-// INT/WIS spell bonus (extra spells)
-spell_stat_bonus:
-    .byte  0,  0,  0,  0,  0,  1,  1,  1  // 3-10
-    .byte  1,  1,  1,  2,  2,  3,  3,  3  // 11-18
 
 // CHR price adjustment (percentage, 100 = no change)
 chr_price_adj:

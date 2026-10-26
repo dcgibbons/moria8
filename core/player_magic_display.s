@@ -48,10 +48,16 @@ calc_spell_failure:
 !csf_wis:
     lda player_data + PL_WIS_CUR
 !csf_stat:
-    jsr stat_bonus_index
-    lda spell_stat_bonus,x
+    // Upstream: chance -= 3 * (stat_adj - 1), stat_adj 0..7 (VMS
+    // spell_chance, Umoria spellChanceOfSuccess).
+    jsr mcns_get_stat_adj
+    sta zp_temp0
+    asl
+    adc zp_temp0
     sta zp_temp0
     lda pm_fail_work
+    clc
+    adc #3
     sec
     sbc zp_temp0
     bcc !csf_clamp_min+
@@ -65,22 +71,8 @@ calc_spell_failure:
 !csf_cap_high:
     lda pm_fail_work
     cmp #96
-    bcc !csf_hunger+
+    bcc !csf_overcast+
     lda #95
-    sta pm_fail_work
-
-    // Preserve the existing faint-hunger failure penalty.
-!csf_hunger:
-    lda zp_hunger_state
-    cmp #HUNGER_FAINT
-    bcc !csf_roll+
-    lda pm_fail_work
-    clc
-    adc #20
-    cmp #96
-    bcc !csf_hunger_store+
-    lda #95
-!csf_hunger_store:
     sta pm_fail_work
 
     // Overcasting follows the upstream model: missing mana raises fail rate

@@ -681,6 +681,8 @@ combat_critical_blow:
 
     // Save weapon weight (8-bit, will zero-extend to 16 later)
     lda it_weight,x
+// combat_critical_blow_weight — the same with A = the weight (a bash: STR)
+combat_critical_blow_weight:
     sta ccb_weight
 
     // --- Compute 16-bit chance ---

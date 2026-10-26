@@ -41,8 +41,8 @@ overlap assertions are the executable authority; never edit this table alone.
 | `$4000-$730b` | reserved 198x66 live map span |
 | `$730c-$73ff` | reserved unowned gap between map and DB regions |
 | `$7400-$7eff` | DB/data region (item-name streams end near `$79d5`) |
-| `$7f00-$94f7` | tier cache, 5624 bytes (tiers 1-4 use 5520 since MON-014 added `cr_treasure`) |
-| `$94f8-$97ff` | title marker/data cache |
+| `$7f00-$9567` | tier cache, 5736 bytes (tiers 1-4 use 5733: 5520 since MON-014 added `cr_treasure`, then five DL 1 creatures in tier 1, 2026-10-25) |
+| `$9568-$97ff` | title marker/data cache (663 data bytes; the title art needs 593-624) |
 | `$9800-$9cff` | MODAL small-overlay cache |
 | `$9d00-$9fff` | DISARM small-overlay cache |
 | `$a000-$afff` | STARTUP overlay cache |
@@ -144,3 +144,4 @@ work16 C128 memory review; this ledger is their durable approval provenance.
 | C128M-002 | Accepted | Project maintainer, 2026-07-09 | After boot staging is scrubbed, `$d000-$dfff` remains an I/O-visible reserved runtime/cache gap in Bank 1; no-I/O boot staging is the explicit temporary exception | maintainer decision; overlap assertions; boot-copy mode review | none |
 | C128M-003 | Accepted | Project maintainer, 2026-07-09 | New cache/map/common-RAM use requires a separate layout design and overlap assertions | build assertions and authoritative `make test128` | none |
 | C128M-004 | Accepted | Project maintainer, 2026-08-12 | Modal-misc overlay gets a Bank 1 cache slot at `$9800-$9CFF`, carved from title-cache slack (title art needs 593-624 B of the former 1928 B cache); overlay cache covers IDs 1-9 with a second ready-bit byte | maintainer direction this session; `memory128.s` overlap asserts; `cache_survival_smoke` and partial-failure smokes | none |
+| C128M-005 | Accepted | Project maintainer, 2026-10-25 | Store init/restock (`store_restock_overlay.s`) moves from the items overlay (ID 7, full after store stacking) to the cold chest overlay (ID 10); `tramp_store_init_all`/`tramp_store_restock_all` load ID 10, a disk load at new game and town re-entry. Bank 1 has no free slot to cache ID 10 (largest free span: 244 B at `$730C`). Maintainer: "I don't want the load, but let's do it for now." | `main.s` ID assert and overlay-fit asserts; `make test128` | cache ID 10 if Bank 1 space is found |

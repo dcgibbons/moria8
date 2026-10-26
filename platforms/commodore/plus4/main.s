@@ -1274,10 +1274,27 @@ tramp_spawn_special_room_monsters:
     jmp tramp_sr_epilogue
 
 tramp_spawn_nest_gold:
+    // pick_item_type leaves the chest overlay (PICKER_IN_CHEST_OVERLAY) in the
+    // $E000 window, and spawn_nest_gold calls random_floor_in_room in the
+    // dungeon-generation overlay: load it back first, as the Apple IIe and CX16
+    // trampolines do (M5b round 33: nest gold placed off the map corrupted code)
+    lda current_overlay
+    cmp #OVL_DUNGEON_GEN
+    beq !tsng_loaded+
+    ldx #OVL_DUNGEON_GEN - 1
+    jsr overlay_load_disk       // No media prompt while generating a dungeon.
+    bcs !tsng_failed+
+    lda #OVL_DUNGEON_GEN
+    sta current_overlay
+!tsng_loaded:
     sei
     jsr plus4_bank_ram
     jsr spawn_nest_gold
     jmp tramp_sr_epilogue
+!tsng_failed:
+    lda #OVL_NONE               // as pick_item_type on a media error
+    sta current_overlay
+    rts
 
 tramp_find_special_room:
     pha                         // Save A (room type input)
@@ -1768,7 +1785,7 @@ store_overlay_preamble:
     rts
 
 tramp_store_init_all:
-    lda #OVL_ITEMS
+    lda #OVL_CHEST
     jsr overlay_load_no_kernal
     bcs !done+
     jsr store_init_all
@@ -1776,7 +1793,7 @@ tramp_store_init_all:
     jmp tramp_sr_epilogue
 
 tramp_store_restock_all:
-    lda #OVL_ITEMS
+    lda #OVL_CHEST
     jsr overlay_load_no_kernal
     bcs !done+
     jsr store_restock_all
@@ -2373,7 +2390,6 @@ ovl_ui_end:
 // Item actions overlay — low-frequency read/aim/use/refuel commands
 // ============================================================
 .segment ItemActionsOverlay
-    #import "../../../core/store_restock_overlay.s"
     #define SCROLL_P3_ROUTER_ENABLED
     #import "../../../core/item_actions_overlay.s"
     #import "../../../core/ranged_fire.s"
@@ -2403,6 +2419,9 @@ ovl_gen_end:
 // ============================================================
 .segment ChestOverlay
     #import "../../../core/chest.s"
+    // Store init/restock: transition-only (new game, town re-entry), moved
+    // from the full items overlay for store stacking (2026-10-25).
+    #import "../../../core/store_restock_overlay.s"
 #if PLUS4_TEST_SCRIPTED_BALROG_PRODUCT
 // balrog_product_setup — Deterministic Balrog-kill fixture for scripted
 // product smokes: a one-HP, permanently stunned Balrog east of the player on

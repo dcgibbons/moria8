@@ -147,6 +147,11 @@ player_get_infra_range:
     lda #0
     rts
 
+// A monster coming into sight ends search mode (core/monster.s); this render
+// test does not import core/player.s.
+player_search_mode_off:
+    rts
+
 #import "../dungeon_render.s"
 
 test_plus4_irq_hidden_rom:

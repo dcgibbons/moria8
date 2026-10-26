@@ -506,6 +506,8 @@ item_refuel:
     jsr huff_print_msg
 
 !ir_remove_flask:
+    lda #1
+    sta zp_light_radius             // a lantern that had gone out is lit again
     ldx piw_slot
     jsr inv_consume_one             // one flask from the stack
     sec

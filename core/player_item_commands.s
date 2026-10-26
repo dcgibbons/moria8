@@ -30,9 +30,15 @@ item_wear:
     lda equip_slot_for_cat,x
     sta piw_equip
 
+    // A stack (wooden torches, VMS/Umoria): one goes on, the rest stay, and
+    // what was worn goes back through inv_add_item.
+    ldy piw_slot
+    lda inv_qty,y
+    cmp #2
+    bcs !iw_stack+
 
     // Check if equip slot already occupied -> swap
-    tax
+    ldx piw_equip
     lda inv_item_id,x
     cmp #FI_EMPTY
     beq !iw_no_swap+
@@ -61,6 +67,32 @@ item_wear:
     sta inv_ego,y
     jmp !iw_write_equip+
 
+!iw_stack:
+    ldx piw_equip
+    lda inv_item_id,x
+    cmp #FI_EMPTY
+    beq !iw_stack_one+
+    jsr inv_slot_to_fi_add      // what is worn now goes to the pack
+    jsr inv_add_item
+    bcs !iw_stack_off+
+    lda zp_player_x             // the pack overflows: it drops at the player's
+    sta fi_add_x                // feet (VMS inven_carry overflow, Umoria pack
+    lda zp_player_y             // overflow); refused until 2026-10-25
+    sta fi_add_y
+    jsr floor_item_add          // under the player: hidden by '@', no redraw
+    bcs !iw_stack_off+
+    jmp piw_pack_full           // no room on the floor either: nothing changes
+!iw_stack_off:
+    clc
+    jsr player_adjust_equipment_stat
+!iw_stack_one:
+    ldx piw_slot
+    dec inv_qty,x
+    jsr inv_slot_to_fi_add      // one of the stack goes on
+    lda #1
+    sta fi_add_qty
+    bne !iw_write_equip+        // always
+
 !iw_no_swap:
     // Clear the source carried slot
     ldx piw_slot
@@ -75,11 +107,14 @@ item_wear:
     sec
     jsr player_adjust_equipment_stat
 
-    // If equipping a light, set light radius
+    // If equipping a light, set light radius: none from a burnt-out one
     lda piw_equip
     cmp #EQUIP_LIGHT
     bne !iw_not_light+
+    lda inv_p1 + EQUIP_LIGHT
+    beq !iw_light_radius+
     lda #1
+!iw_light_radius:
     sta zp_light_radius
 !iw_not_light:
 
@@ -185,6 +220,7 @@ item_takeoff:
     bcs !ito_added+
 
     // Pack full
+piw_pack_full:
     ldx #HSTR_UIS_PACK_FULL
     jsr huff_print_msg
     clc

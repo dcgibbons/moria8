@@ -70,6 +70,7 @@
 // Nothing else shares the category.
 .const ICAT_SPIKE    = 18
 .const ITEM_TYPE_FLASK_OF_OIL = 61   // ICAT_LIGHT, but a consumable that stacks
+.const ITEM_TYPE_WOODEN_TORCH = 13   // ICAT_LIGHT; stacks with equal turns of light (VMS, Umoria)
 
 // Phase 3 item type constants (IDs 96-127)
 .const ITEM_TYPE_POT_HEALING        = 96

@@ -16,7 +16,7 @@ test_bootstrap:
 test_exit_trampoline:
     sei                         // Disable IRQs during copy
     :BankOutBasic()             // Ensure BASIC ROM off (tc_results in $A000+)
-    ldx #61-1
+    ldx #64-1
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -134,7 +134,7 @@ press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
 // Test result buffer — copy to $0400 at end (msg_print clobbers $0400)
-tc_results: .fill 61, $ff
+tc_results: .fill 64, $ff
 tc_loop_ctr: .byte 0          // Loop counter (safe from ZP clobber)
 tc_valid_ctr: .byte 0         // Valid item counter for test 22
 t16_base_ac: .byte 0          // Stable scratch for Test 16 across item_wear
@@ -1053,8 +1053,7 @@ test_start:
 
     // Get DEX-only AC (player_calc_combat base)
     lda player_data + PL_DEX_CUR
-    jsr stat_bonus_index
-    lda dex_ac_bonus,x
+    jsr player_dex_ac_adj
     bpl !t20_use_dex+
     lda #0                      // Negative DEX bonus -> 0
 !t20_use_dex:
@@ -3034,17 +3033,163 @@ test_start:
     bne !t61_fail+
     lda #$01
     sta tc_results + 60
-    jmp !tests_done+
+    jmp !t62+
 !t61_fail:
     lda #$00
     sta tc_results + 60
+
+    // Test 62: wooden torches stack when their turns of light are equal
+    // (VMS inven_carry, Umoria), and not otherwise.
+!t62:
+    jsr item_init_inventory
+    lda #134
+    jsr t62_add_torch
+    lda #134
+    jsr t62_add_torch
+    lda #10
+    jsr t62_add_torch
+    lda inv_item_id + 0
+    cmp #ITEM_TYPE_WOODEN_TORCH
+    bne !t62_fail+
+    lda inv_qty + 0
+    cmp #2
+    bne !t62_fail+
+    lda inv_item_id + 1
+    cmp #ITEM_TYPE_WOODEN_TORCH
+    bne !t62_fail+
+    lda inv_p1 + 1
+    cmp #10
+    bne !t62_fail+
+    lda #$01
+    sta tc_results + 61
+    jmp !t63+
+!t62_fail:
+    lda #$00
+    sta tc_results + 61
+
+    // Test 63: wearing a torch from a stack of 3 with a burnt-down torch lit
+    // puts one on, leaves 2 in the stack, and the old one goes to the pack.
+!t63:
+    jsr item_init_inventory
+    lda #134
+    jsr t62_add_torch
+    lda #2
+    sta inv_qty + 0
+    lda #134
+    jsr t62_add_torch           // a stack of 3 in slot 0
+    lda #ITEM_TYPE_WOODEN_TORCH
+    sta inv_item_id + EQUIP_LIGHT
+    lda #1
+    sta inv_qty + EQUIP_LIGHT
+    lda #5
+    sta inv_p1 + EQUIP_LIGHT
+    lda #0
+    sta inv_flags + EQUIP_LIGHT
+    lda #2
+    sta $c6
+    lda #$41                    // 'A': the stack
+    sta $0277
+    lda #$20
+    sta $0278
+    jsr item_wear
+    bcc !t63_fail+
+    lda inv_qty + EQUIP_LIGHT
+    cmp #1
+    bne !t63_fail+
+    lda inv_p1 + EQUIP_LIGHT
+    cmp #134
+    bne !t63_fail+
+    lda inv_qty + 0
+    cmp #2
+    bne !t63_fail+
+    lda inv_item_id + 1
+    cmp #ITEM_TYPE_WOODEN_TORCH
+    bne !t63_fail+
+    lda inv_p1 + 1
+    cmp #5
+    bne !t63_fail+
+    lda #$01
+    sta tc_results + 62
+    jmp !t64+
+!t63_fail:
+    lda #$00
+    sta tc_results + 62
+
+    // Test 64: with the pack full, wearing a torch from a stack drops the
+    // burnt-out one at the player's feet (VMS/Umoria pack overflow) rather
+    // than refusing; it was "Your pack is full." until 2026-10-25.
+!t64:
+    jsr item_init_floor
+    jsr item_init_inventory
+    lda #134
+    jsr t62_add_torch
+    lda #134
+    jsr t62_add_torch           // a stack of 2 in slot 0
+    ldx #1
+!t64_fill:
+    lda #2                      // daggers fill slots 1..21
+    sta inv_item_id,x
+    lda #1
+    sta inv_qty,x
+    inx
+    cpx #MAX_INV_SLOTS
+    bcc !t64_fill-
+    lda #ITEM_TYPE_WOODEN_TORCH
+    sta inv_item_id + EQUIP_LIGHT
+    lda #1
+    sta inv_qty + EQUIP_LIGHT
+    lda #0
+    sta inv_p1 + EQUIP_LIGHT    // burnt out
+    lda #7
+    sta zp_player_x
+    lda #9
+    sta zp_player_y
+    lda #2
+    sta $c6
+    lda #$41                    // 'A': the stack
+    sta $0277
+    lda #$20
+    sta $0278
+    jsr item_wear
+    bcc !t64_fail+
+    lda inv_p1 + EQUIP_LIGHT
+    cmp #134                    // a fresh torch is lit
+    bne !t64_fail+
+    lda inv_qty + 0
+    cmp #1                      // one left in the stack
+    bne !t64_fail+
+    lda #7
+    ldy #9
+    jsr floor_item_find_at      // the old one lies at the player's feet
+    bcc !t64_fail+
+    lda fi_item_id,x
+    cmp #ITEM_TYPE_WOODEN_TORCH
+    bne !t64_fail+
+    lda #$01
+    sta tc_results + 63
+    jmp !tests_done+
+!t64_fail:
+    lda #$00
+    sta tc_results + 63
 
 !tests_done:
     // Jump to trampoline at $033C (below $A000) to copy results + BRK
     jmp test_exit_trampoline
 
+// t62_add_torch — inv_add_item one wooden torch with A turns (p1).
+t62_add_torch:
+    pha
+    lda #ITEM_TYPE_WOODEN_TORCH
+    jsr t59_add_one_setup
+    pla
+    sta fi_add_p1
+    jmp inv_add_item
+
 // t59_add_one — inv_add_item one plain item A (no p1, bonuses, flags or ego).
 t59_add_one:
+    jsr t59_add_one_setup
+    jmp inv_add_item
+t59_add_one_setup:
     sta fi_add_id
     lda #1
     sta fi_add_qty
@@ -3055,7 +3200,7 @@ t59_add_one:
     sta fi_add_to_ac
     sta fi_add_flags
     sta fi_add_ego
-    jmp inv_add_item
+    rts
 
 // t58_gold_setup — empty floor and gold, the player on a floor tile at
 // (20,12), and a gold floor item staged there (caller sets qty and p1).

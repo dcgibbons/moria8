@@ -403,7 +403,7 @@ sbuy_execute:
     ldx sb_abs_slot
     :AuxReadX(si_item_id)
     sta fi_add_id
-    :AuxReadX(si_qty)
+    lda #1                      // one from a stack (Umoria inventoryTakeOneItem)
     sta fi_add_qty
     :AuxReadX(si_p1)
     sta fi_add_p1
@@ -419,17 +419,19 @@ sbuy_execute:
     sta fi_add_ego
     jsr inv_add_item
 
-    // Remove from store
+    // Remove one from the store stack. An emptied slot clears only its
+    // item id: every path that fills a slot writes all of its fields.
     ldx sb_abs_slot
+    :AuxReadX(si_qty)
+    sec
+    sbc #1
+    bne !sb_left+
     lda #FI_EMPTY
     :AuxWriteX(si_item_id)
-    lda #0
+    jmp !sb_bought+
+!sb_left:
     :AuxWriteX(si_qty)
-    :AuxWriteX(si_p1)
-    :AuxWriteX(si_to_hit)
-    :AuxWriteX(si_to_dam)
-    :AuxWriteX(si_to_ac)
-    :AuxWriteX(si_meta)
+!sb_bought:
 
     // Success message
     ldx #MSG_BOUGHT

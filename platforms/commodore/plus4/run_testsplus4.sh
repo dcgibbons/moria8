@@ -2948,6 +2948,10 @@ run_dungeon_entry_smoke
 run_chest_open_product_smoke
 run_balrog_product_smoke
 run_dungeon_ascent_smoke
+# Nest gold calls random_floor_in_room in the dungeon-generation overlay after
+# pick_item_type has loaded the chest overlay (M5b round 33 code corruption).
+check_static_contract "nest_gold_restores_generation_overlay_contract" "main.s" \
+    "tramp_spawn_nest_gold:|||ldx #OVL_DUNGEON_GEN - 1|||jsr overlay_load_disk|||jsr spawn_nest_gold"
 check_static_contract "disarm_command_external_import_contract" "main.s" \
     "#define DISARM_COMMAND_EXTERNAL|||#import \"../../../core/game_loop.s\"|||#undef DISARM_COMMAND_EXTERNAL"
 run_disarm_smoke

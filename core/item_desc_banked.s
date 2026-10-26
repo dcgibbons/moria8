@@ -111,12 +111,20 @@ itemdesc_put_sensed_suffix:
     rts
 
 itemdesc_put_stats:
+    // A light's fuel shows whether identified or not (VMS "with %P5 turns
+    // of light", Umoria itemDescription): a burnt-out torch looked like a
+    // fresh one until 2026-10-26.
+    ldx itemdesc_item_id
+    lda it_category,x
+    cmp #ICAT_LIGHT
+    bne !idps_not_light+
+    jmp !idps_turns+
+!idps_not_light:
     lda itemdesc_flags
     and #IF_IDENTIFIED
     bne !idps_identified+
     rts
 !idps_identified:
-    ldx itemdesc_item_id
     lda it_category,x
     cmp #ICAT_WEAPON
     beq !idps_weapon+
@@ -137,10 +145,6 @@ itemdesc_put_stats:
     bne !idps_not_staff+
     jmp !idps_charges+
 !idps_not_staff:
-    cmp #ICAT_LIGHT
-    bne !idps_not_light+
-    jmp !idps_turns+
-!idps_not_light:
     rts
 !idps_amulet_tramp:
     jmp !idps_ring_p1+

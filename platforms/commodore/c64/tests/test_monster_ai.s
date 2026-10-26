@@ -26,7 +26,7 @@ bootstrap:
 
 // test_finish — Copy results to $0400 and halt.
 test_finish:
-    ldx #58
+    ldx #64
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -170,9 +170,18 @@ tai_rng_values:   .fill 4, 0
 tai_rng_idx:      .byte 0
 tai_distance:     .byte 0
 auto_rest_active: .byte 0
-tc_results: .fill 59, $ff      // Result buffer (copied to $0400 at end)
+tc_results: .fill 65, $ff      // Result buffer (copied to $0400 at end)
 t59_toward: .byte 0
 t59_left:   .byte 0
+t60_n:      .byte 0             // neighbours around the breeder (MON-016)
+t60_i:      .byte 0
+t60_left:   .byte 0
+t60_before: .byte 0
+t60_births: .byte 0
+tai_rng_orig: .fill 3, 0     // rng_range before any PatchJump
+tai_rng_word_orig: .fill 3, 0 // rng_range_word before any PatchJump
+t60_nx:     .byte 24, 26, 25    // west, east, north of (25,15)
+t60_ny:     .byte 15, 15, 14
 
 .macro PatchJump(target, replacement) {
     lda #$4c
@@ -420,6 +429,16 @@ tai_wake_remaining:
     .byte 92, 92, 96, 97, 98, 98, 99, 99, 99
 
 test_start:
+    // Keep the generators' first bytes: the door tests (41-56) patch them to
+    // scripted stubs, and tai_restore_rng puts them back for the later tests.
+    ldx #2
+!save_rng:
+    lda rng_range,x
+    sta tai_rng_orig,x
+    lda rng_range_word,x
+    sta tai_rng_word_orig,x
+    dex
+    bpl !save_rng-
 
     // Seed RNG deterministically
     lda #$42
@@ -990,7 +1009,7 @@ test_start:
     sta (zp_ptr0),y
 
     // Player at (30,15) — distance=10
-    lda #30
+    lda #28                     // within the bat's alert radius 8 (MON-017)
     sta zp_player_x
     lda #15
     sta zp_player_y
@@ -1051,7 +1070,7 @@ test_start:
     sta (zp_ptr0),y
 
     // Player at (30,20)
-    lda #30
+    lda #24                     // within type 3's alert radius 4 (MON-017)
     sta zp_player_x
     lda #20
     sta zp_player_y
@@ -3031,7 +3050,7 @@ test_start:
     lda #MF_AWAKE
     sta (zp_ptr0),y
 
-    lda #30
+    lda #28                     // within the bat's alert radius 8 (MON-017)
     sta zp_player_x
     lda #15
     sta zp_player_y
@@ -3611,6 +3630,7 @@ test_start:
     // not reach the player a second time.
     // ==========================================
 !t57:
+    jsr tai_restore_rng         // real generators from here on (tests 59-63 roll)
     lda #15                     // Player at (26,15): east of the monster
     jsr tai_attack_once
     bne !t57_fail+
@@ -3642,7 +3662,10 @@ test_start:
     // CM_75_RANDOM (cr_speed $21) in test 16's corridor: 40 single-tick
     // trials from 10 squares away. Without the flag every trial steps
     // toward the player (test 16); with it about 74% of moves are random,
-    // so 4-32 of 40 step toward (22 measured; 40 with the roll removed).
+    // and in the one-row corridor only an east step of the eight random
+    // ones lands on (21,15): about 34%, 14 of 40, step toward (band 4-32;
+    // 40 with the roll removed). Before tai_restore_rng (2026-10-25) this ran
+    // on the door tests' scripted stub, not real random numbers.
     // ==========================================
 !t59:
     lda #$21
@@ -3707,13 +3730,242 @@ test_start:
     bcc !t59_fail+
     lda #$01
     sta tc_results + 58
-    jmp !tests_done+
+    jmp !t60+
 !t59_fail:
     lda #$00
     sta tc_results + 58
 
+    // ==========================================
+    // Tests 60-63: breeding (MON-016; VMS creature.inc mon_move, Umoria
+    // monsterMultiplyCritter). An attack-only breeder (type 16, never moves)
+    // with n creatures in its 3x3 square, itself included, multiplies when
+    // n < 4 and randint(7n) = 1; while the player rests, a further 1 in 7.
+    // Each trial is one production monster_ai_tick; a trial breeds or not.
+    // ==========================================
+!t60:
+    // Test 60: three neighbours (n = 4): never, in 60 trials (the old flat
+    // 1-in-12 roll bred about 5 times)
+    lda #0
+    sta auto_rest_active
+    lda #3
+    ldx #60
+    jsr t60_run
+    lda t60_births
+    bne !t60_fail+
+    lda #$01
+    .byte $2c
+!t60_fail:
+    lda #$00
+    sta tc_results + 59
+
+    // Test 61: alone (n = 1): 1 in 7, about 36 of 250 (band 22-52)
+    lda #0
+    ldx #250
+    jsr t60_run
+    lda t60_births
+    cmp #22
+    bcc !t61_fail+
+    cmp #53
+    bcs !t61_fail+
+    lda #$01
+    .byte $2c
+!t61_fail:
+    lda #$00
+    sta tc_results + 60
+
+    // Test 62: two neighbours (n = 3): 1 in 21, about 12 of 250 (band 3-21)
+    lda #2
+    ldx #250
+    jsr t60_run
+    lda t60_births
+    cmp #3
+    bcc !t62_fail+
+    cmp #22
+    bcs !t62_fail+
+    lda #$01
+    .byte $2c
+!t62_fail:
+    lda #$00
+    sta tc_results + 61
+
+    // Test 63: alone while resting: 1 in 49, about 5 of 250 (at most 13;
+    // the old roll ignored rest and bred about 21)
+    lda #1
+    sta auto_rest_active
+    lda #0
+    ldx #250
+    jsr t60_run
+    lda #0
+    sta auto_rest_active
+    lda t60_births
+    cmp #14
+    bcs !t63_fail+
+    lda #$01
+    .byte $2c
+!t63_fail:
+    lda #$00
+    sta tc_results + 62
+
+    // ==========================================
+    // Tests 64-65: a creature acts only within its alert radius or in view
+    // (MON-017; VMS creature.inc creatures `(cdis <= aaf) or (ml)`, Umoria
+    // monsterAttackingUpdate). An awake Kobold (aaf 20) 25 squares down a
+    // corridor: unseen it stays put; seen (MF_VISIBLE) it steps toward the
+    // player. (Test 59 covers a Kobold inside its radius.)
+    // ==========================================
+    lda #0
+    jsr t64_case
+    cmp #20
+    bne !t64_fail+
+    lda #$01
+    .byte $2c
+!t64_fail:
+    lda #$00
+    sta tc_results + 63
+
+    lda #MF_VISIBLE
+    jsr t64_case
+    cmp #21
+    bne !t65_fail+
+    lda #$01
+    .byte $2c
+!t65_fail:
+    lda #$00
+    sta tc_results + 64
+
 !tests_done:
     jmp test_finish
+
+// tai_restore_rng — Undo the door tests' PatchJump on both generators.
+tai_restore_rng:
+    ldx #2
+!trr_loop:
+    lda tai_rng_orig,x
+    sta rng_range,x
+    lda tai_rng_word_orig,x
+    sta rng_range_word,x
+    dex
+    bpl !trr_loop-
+    rts
+
+// t64_case — A = extra monster flags (0 or MF_VISIBLE): an awake Kobold at
+// (20,15), the player at (45,15), one monster_ai_tick; A = the Kobold's x.
+t64_case:
+    sta t60_i
+    jsr monster_init_table
+    lda #0
+    sta zp_game_flags
+    sta zp_eff_speed
+    sta player_pflags
+    sta zp_turn_lo
+    ldx #15
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #20
+    lda #TILE_FLOOR | FLAG_LIT
+!t64_fill:
+    sta (zp_ptr0),y
+    iny
+    cpy #47
+    bne !t64_fill-
+    lda #20
+    sta ms_spawn_x
+    lda #15
+    sta ms_spawn_y
+    lda #4                      // Kobold, aaf 20
+    jsr monster_spawn_one
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_FLAGS
+    lda t60_i
+    ora #MF_AWAKE
+    sta (zp_ptr0),y
+    lda #45
+    sta zp_player_x
+    lda #15
+    sta zp_player_y
+    jsr monster_ai_tick
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_X
+    lda (zp_ptr0),y
+    rts
+
+// t60_run — A = neighbours (0-3), X = trials: t60_births = trials in which
+// a lone attack-only breeder at (25,15) multiplied in one monster_ai_tick.
+t60_run:
+    sta t60_n
+    stx t60_left
+    lda #0
+    sta t60_births
+!t60r_trial:
+    jsr monster_init_table
+    lda #0
+    sta zp_game_flags
+    sta zp_eff_speed
+    sta player_pflags
+    sta zp_turn_lo
+    ldx #14                     // floor at (20-34, 14-16)
+!t60r_row:
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #20
+    lda #TILE_FLOOR | FLAG_LIT
+!t60r_fill:
+    sta (zp_ptr0),y
+    iny
+    cpy #35
+    bne !t60r_fill-
+    inx
+    cpx #17
+    bne !t60r_row-
+    lda #25
+    sta ms_spawn_x
+    lda #15
+    sta ms_spawn_y
+    lda #16                     // CF_ATTACK_ONLY | CF_BREEDER
+    jsr monster_spawn_one
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_FLAGS
+    lda #MF_AWAKE
+    sta (zp_ptr0),y
+    ldx #0
+!t60r_nb:
+    cpx t60_n
+    beq !t60r_nb_done+
+    stx t60_i
+    lda t60_nx,x
+    sta ms_spawn_x
+    lda t60_ny,x
+    sta ms_spawn_y
+    lda #6                      // CF_ATTACK_ONLY, not a breeder
+    jsr monster_spawn_one
+    ldx t60_i
+    inx
+    jmp !t60r_nb-
+!t60r_nb_done:
+    lda #27                     // within the breeder's alert radius 2 (MON-017)
+    sta zp_player_x
+    lda #15
+    sta zp_player_y
+    lda zp_mon_count
+    sta t60_before
+    jsr monster_ai_tick
+    lda zp_mon_count
+    cmp t60_before
+    beq !t60r_next+
+    inc t60_births
+!t60r_next:
+    dec t60_left
+    beq !t60r_done+
+    jmp !t60r_trial-
+!t60r_done:
+    rts
 
 test_end:
 

@@ -1095,7 +1095,7 @@ winner_apply_retirement_bonus:
     rts
 
 tramp_store_init_all:
-    lda #7                      // OVL_ITEMS (transition-only store maintenance)
+    lda #10                     // C128_CHEST_OVERLAY_ID: store maintenance (cold)
 #if C128_REAL_BOOT_DIAG
     ldx #$34
     jsr c128_stack_guard_begin
@@ -1116,7 +1116,7 @@ tramp_store_init_all:
     jmp store_init_all
 
 tramp_store_restock_all:
-    lda #7                      // OVL_ITEMS (transition-only store maintenance)
+    lda #10                     // C128_CHEST_OVERLAY_ID: store maintenance (cold)
     jsr overlay_load
     bcc !tsra_loaded+
     jmp entry_main
@@ -1364,6 +1364,7 @@ tramp_ui_exit:
 // skips it, and its ready-mask bits stay clear so overlay_load always falls
 // through to the disk path.
 .const C128_CHEST_OVERLAY_ID = 10
+.assert "Store maintenance trampolines load the chest overlay (ID 10)", C128_CHEST_OVERLAY_ID, 10
 
 .macro C128UIOverlayDisplayTrampoline(target) {
     jsr tramp_ui_enter
@@ -4089,6 +4090,10 @@ scroll_teleport_level_exec:
 .segment C128ResidentItems
 c128_resident_items_end:
 .segment C128ResidentWorld
+// The recall prompt lives in the resident world payload: RuntimeLowData was
+// full when a monster sighting began ending search mode (2026-10-25).
+recall_prompt_str:
+    .text "Recall which? " ; .byte 0
 c128_resident_world_end:
 .segment C128ResidentPlay
 #import "../../../core/turn.s"
@@ -5120,8 +5125,6 @@ at_surface_str:
     .text "You are already at the surface." ; .byte 0
 no_stairs_str:
     .text "You see no stairs here." ; .byte 0
-recall_prompt_str:
-    .text "Recall which? " ; .byte 0
 pmx_cure_poison_msg:
     lda zp_eff_poison
     beq !pcpm_done+
@@ -5436,7 +5439,6 @@ ovl_ui_end:
 .segment ItemActionsOverlay
     #define ITEM_ACTIONS_EARTHQUAKE_OWNER
     #define ITEM_ACTIONS_MAP_AREA_OWNER
-    #import "../../../core/store_restock_overlay.s"
     #define SCROLL_P3_ROUTER_ENABLED
     #import "../../../core/item_actions_overlay.s"
     #import "../../../core/ranged_fire.s"
@@ -5468,6 +5470,10 @@ ovl_disarm_end:
 // ============================================================
 .segment ChestOverlay
     #import "../../../core/chest.s"
+    // Store init/restock: transition-only (new game, town re-entry), moved
+    // from the full items overlay for store stacking (2026-10-25). Reached
+    // via tramp_store_init_all/tramp_store_restock_all; a disk load.
+    #import "../../../core/store_restock_overlay.s"
     // Word of Destruction devastation engine: cold overlay home; reached via
     // resident tramp_eff_destroy_area (rare high-level spell, disk load is
     // acceptable). Spell-exec returns through c128_return_to_death_overlay.

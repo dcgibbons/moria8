@@ -5,10 +5,10 @@
 .const TIER0_COUNT = 8
 .const TIER0_MIN_DLVL = 0
 .const TIER0_MAX_DLVL = 0
-.const TIER1_COUNT = 24
+.const TIER1_COUNT = 54
 .const TIER1_MIN_DLVL = 1
 .const TIER1_MAX_DLVL = 8
-.const TIER2_COUNT = 32
+.const TIER2_COUNT = 35
 .const TIER2_MIN_DLVL = 5
 .const TIER2_MAX_DLVL = 15
 .const TIER3_COUNT = 39
@@ -23,7 +23,7 @@
 
 // Tier file sizes (approximate, for REU allocation)
 .const TIER0_SIZE = 350
-.const TIER1_SIZE = 854
-.const TIER2_SIZE = 1141
+.const TIER1_SIZE = 2086
+.const TIER2_SIZE = 1254
 .const TIER3_SIZE = 1406
 .const TIER4_SIZE = 2119

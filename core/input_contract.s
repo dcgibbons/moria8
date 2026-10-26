@@ -64,4 +64,3 @@
 // Index = CMD_MOVE_x - CMD_MOVE_N
 dir_dx: .byte  0,  0, -1, 1, -1, 1, -1, 1
 dir_dy: .byte -1,  1,  0, 0, -1,-1,  1, 1
-dir_opposite: .byte 1, 0, 3, 2, 7, 6, 5, 4

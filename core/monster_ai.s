@@ -179,15 +179,22 @@ monster_process_one:
     // If not awake, try to wake up
     lda zp_mon_flags
     and #MF_AWAKE
-    bne !mpo_awake+
+    bne !mpo_awake_gate+
 
     jsr monster_wake_check
     // Check if now awake
     lda zp_mon_flags
     and #MF_AWAKE
     bne !mpo_awake+
+!mpo_idle:
     jmp !mpo_done+              // Still asleep, done
 
+    // VMS creature.inc creatures / Umoria monsterAttackingUpdate: a creature
+    // acts (moves, attacks, casts, breeds) only within its alert radius or in
+    // the player's view, awake or not (MON-017).
+!mpo_awake_gate:
+    jsr monster_in_awareness
+    bcc !mpo_idle-
 !mpo_awake:
     // Tick stun/confuse timers
     ldx zp_mon_idx
@@ -294,7 +301,12 @@ monster_process_one:
     bpl !mpo_no_move_dirty+
     jsr mat_mark_move_dirty
 !mpo_no_move_dirty:
-    // Breeder check: clone if CF_BREEDER, room, and lucky roll
+    // Breeder check (VMS creature.inc mon_move, Umoria monsterMultiplyCritter):
+    // with n creatures in the 3x3 square, the breeder included, a breeder
+    // multiplies when n < 4 and randint(n * MON_MULT_ADJ) = 1. While the
+    // player rests upstream checks only every 7th rest turn; here a further
+    // 1-in-7 roll (MON-016). The monster table's room stands in for VMS's
+    // 75-reproduction cap, which a 32-slot table never reaches.
     ldx zp_mon_type
     lda cr_mflags,x
     and #CF_BREEDER
@@ -302,9 +314,22 @@ monster_process_one:
     lda zp_mon_count
     cmp #MAX_MONSTERS - 4
     bcs !mpo_done+
-    lda #12
-    jsr rng_range
-    cmp #0
+#if (C64_UNIT_TEST || C128_UNIT_TEST) && !MONSTER_AI_PRODUCTION_REST_STATE
+    lda monster_resting
+#else
+    lda auto_rest_active
+#endif
+    beq !mpo_breed_roll+
+    lda #MON_MULT_ADJ
+    jsr rng_range               // sets Z for A
+    bne !mpo_done+
+!mpo_breed_roll:
+    jsr mpo_count_neighbours
+    cmp #4
+    bcs !mpo_done+
+    tax
+    lda mpo_breed_odds - 1,x    // n * MON_MULT_ADJ
+    jsr rng_range               // sets Z for A
     bne !mpo_done+
     // Spawn clone adjacent
     lda zp_mon_x
@@ -334,6 +359,48 @@ monster_process_one:
 !mpo_done_clear:
     clc
     rts
+
+// ============================================================
+// mpo_count_neighbours — A = creatures in the 3x3 square around the monster
+// at zp_mon_x/zp_mon_y, itself included (VMS cave[].cptr > 1: FLAG_OCCUPIED
+// marks creatures only, never the player). Monsters never stand on the map
+// edge, so the square stays in bounds.
+// Clobbers: A, X, Y, zp_ptr0/hi, zp_mon_scratch0/1, zp_temp1
+// ============================================================
+mpo_count_neighbours:
+    lda #0
+    sta zp_mon_scratch0         // count
+    ldx zp_mon_y
+    dex
+    stx zp_mon_scratch1         // row
+!mcn_row:
+    ldx zp_mon_scratch1
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy zp_mon_x
+    dey
+    lda #3
+    sta zp_temp1                // columns left
+!mcn_col:
+    :MapRead_ptr0_y()
+    lsr                         // FLAG_OCCUPIED is bit 0
+    bcc !mcn_next+
+    inc zp_mon_scratch0
+!mcn_next:
+    iny
+    dec zp_temp1
+    bne !mcn_col-
+    inc zp_mon_scratch1
+    ldx zp_mon_y
+    inx
+    cpx zp_mon_scratch1
+    bcs !mcn_row-               // rows y-1 .. y+1
+    lda zp_mon_scratch0
+    rts
+mpo_breed_odds: .byte MON_MULT_ADJ, 2 * MON_MULT_ADJ, 3 * MON_MULT_ADJ
+.assert "FLAG_OCCUPIED is bit 0 (mpo_count_neighbours shifts it out)", FLAG_OCCUPIED, 1
 
 // ============================================================
 // mat_mark_move_dirty — mark old/new monster tiles dirty only when the
@@ -430,19 +497,9 @@ mat_mark_tile_dirty_if_nonlocal:
 // Clobbers: A, X, Y, zp_temp0-4, zp_math_a/b/tmp0/tmp1
 // ============================================================
 monster_wake_check:
-    jsr monster_distance_to_player
-    sta zp_mon_scratch0
+    jsr monster_in_awareness
+    bcc !mwc_too_far+
 
-    // Compare distance to awareness factor (bit 7 carries CD_OPEN_DOOR)
-    ldx zp_mon_type
-    lda cr_aaf,x
-    and #$7f
-    cmp zp_mon_scratch0         // In range when aaf >= distance
-    bcs !mwc_in_range+
-    lda zp_mon_flags            // Visible monsters are wake-eligible too.
-    and #MF_VISIBLE
-    beq !mwc_too_far+
-!mwc_in_range:
     ldy #MX_SLEEP_CUR
     lda (zp_ptr0),y
     beq !mwc_wake+              // Naturally alert monsters do not roll stealth.
@@ -500,6 +557,25 @@ monster_wake_check:
     jsr wake_group_nearby
 
 !mwc_too_far:
+    rts
+
+// monster_in_awareness — Carry set when the monster is within its alert
+// radius (cr_aaf, bit 7 carries CD_OPEN_DOOR) or MF_VISIBLE: VMS creatures'
+// `(cdis <= aaf) or (ml)`, which gates waking and every action.
+// Output: carry, zp_mon_scratch0 = distance to the player
+// Clobbers: A, X
+monster_in_awareness:
+    jsr monster_distance_to_player
+    sta zp_mon_scratch0
+    ldx zp_mon_type
+    lda cr_aaf,x
+    and #$7f
+    cmp zp_mon_scratch0         // In range when aaf >= distance
+    bcs !mia_done+
+    lda zp_mon_flags            // Visible monsters are in range too.
+    and #MF_VISIBLE
+    cmp #1                      // carry set when visible
+!mia_done:
     rts
 
 // Compact scale for VMS Moria's floor(75/d) pressure after compressing the

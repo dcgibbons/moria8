@@ -3,7 +3,7 @@
 //
 // Authority: docs/BBCMASTER_MEMORY_CONTRACT.md & cache_layout.s.
 // Six hot overlay classes (TOWN, GEN, UI, ITEMS, SPELL, MODAL) and Monster Tier 1
-// (MONDB1) are preloaded into Sideways RAM Banks 5, 6, and 7 at boot by MORIA8P.
+// (no longer MONDB1) are preloaded into Sideways RAM Banks 5, 6, and 7 at boot by MORIA8P.
 // Cache hits copy the payload pages via beeb_swr_copy_to_window into Bank 4's
 // $A800-$BFFF window with zero disk I/O. Cold overlays (OVLSTA, OVLDTH, OVLHLP,
 // OVLCHS, OVLSTO, OVLTTL) and MONDB2..4 fall through to DFS.
@@ -30,7 +30,7 @@ beeb_ovl_cache_pages:
     .byte BEEB_SWR_PAGES_ITEMS, BEEB_SWR_PAGES_SPELL, BEEB_SWR_PAGES_MODAL, $00, $00, $00
 
 // ============================================================
-// beeb_overlay_try_cache — Sideways RAM cache front end for overlays & MONDB1.
+// beeb_overlay_try_cache — Sideways RAM cache front end for overlays.
 // Input:  X = filename pointer lo, Y = filename pointer hi
 // Output: C=0 cache hit (Bank 4 $A800 window populated);
 //         C=1 miss (caller runs DFS path)
@@ -40,24 +40,8 @@ beeb_overlay_try_cache:
     stx zp_temp0
     sty zp_temp1
 
-    // Check Monster Tier 1 (hal_storage_tier_1_name) first
-    cpx #<hal_storage_tier_1_name
-    bne !chk_ovl+
-    cpy #>hal_storage_tier_1_name
-    bne !chk_ovl+
-    lda #$00
-    sta zp_ptr0
-    lda #>BEEB_SWR_ADDR_MON1
-    sta zp_ptr0_hi
-    lda #<BANKED_DATA_BASE
-    sta zp_ptr1
-    lda #>BANKED_DATA_BASE
-    sta zp_ptr1_hi
-    lda #BEEB_SWR_BANK_MON1
-    ldx #BEEB_SWR_PAGES_MON1
-    jmp beeb_swr_copy_to_window
-
-!chk_ovl:
+    // Monster tiers are not cached (tier 1 outgrew its bank 6 slot when
+    // 30 DL 1-5 creatures were added, 2026-10-25): all four load from DFS.
     ldx #hal_platform_overlay_count - 1
 !find:
     lda hal_storage_overlay_name_lo,x

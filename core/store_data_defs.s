@@ -9,6 +9,8 @@
 .const STORE_MIN_KEEP    = 7
 .const STORE_MAX_KEEP    = 10
 .const STORE_TURN_AROUND = 3
+// Umoria storeCarryItem caps a store stack at 24.
+.const STORE_STACK_MAX   = 24
 .assert "Store keep bounds fit the store", STORE_MIN_KEEP < STORE_MAX_KEEP && STORE_MAX_KEEP + 2 <= STORE_MAX_ITEMS, true
 // store_restock_overlay.s marks "no slot" with $FF and tests slots with N.
 .assert "Store slot indexes stay below $80", STORE_TOTAL_SLOTS <= $80, true

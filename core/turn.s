@@ -542,13 +542,11 @@ turn_tick_light:
     cmp #0
     bne !ttl_done+
 
-    // Light expired
+    // Light expired: dark, but the light stays worn (VMS moria.inc,
+    // Umoria playerUpdateLight): a lantern can be refueled. It was removed
+    // until 2026-10-25 (found by the M5b playtest).
     lda #0
     sta zp_light_radius
-
-    // Clear equip slot
-    ldx #EQUIP_LIGHT
-    jsr inv_remove_item
 
     // Print "YOUR LIGHT HAS GONE OUT."
     ldx #HSTR_TTL_OUT

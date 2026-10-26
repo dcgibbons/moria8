@@ -94,8 +94,7 @@ title_fallback_render:
     sta zp_ptr0_hi
     lda #TITLE_FALLBACK_COL
     sta zp_cursor_col
-    jsr hal_screen_put_string
-    rts
+    jmp hal_screen_put_string
 
 // ============================================================
 // title_render_data — Render segment stream from MAP_BASE
