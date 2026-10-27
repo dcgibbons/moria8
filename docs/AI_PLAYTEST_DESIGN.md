@@ -1740,7 +1740,7 @@ Why this order:
 | **M5b Paladin, Priest** | Human Paladin, then Human Priest (Half-Troll until round 10, §17) | A cast layer: choose a prayer, target it, track mana, learn from books, buy books; prayers for healing, fear and light first | Both goals ≥16/20 for the Paladin, ≥15/20 for the Priest (§16.1, amended 2026-10-26); frozen. **Human and Dwarf Priest met 2026-10-26 (§17, round 55)** |
 | **M5c C128 backend** | Half-Troll Warrior on `x128` | None in the brain: the backend (§12.7) for VDC screen text, banked reads, the C128 keyboard buffer and the 198×66 map | Every frozen C64 suite passes on the C128 at its bar |
 | **M5d Rogue, Ranger** | Human Rogue, Human Ranger | Missiles: buy ammunition, fire, target; stealth-aware choices; the cast layer for their spells | Both goals ≥16/20 for each; frozen. **Met 2026-10-26 (§18, round 5)** |
-| **M5e Mage** | Human Mage | Spells for survival, not only utility: Magic Missile, Phase Door, detection; a fragile character's readiness | Both goals ≥15/20 (§16.1, amended 2026-10-26); frozen |
+| **M5e Mage** | Human Mage | Spells for survival, not only utility: Magic Missile, Phase Door, detection; a fragile character's readiness | Both goals ≥15/20 (§16.1, amended 2026-10-26); frozen. **Met 2026-10-26 (§19, baseline 19 / 18)** |
 | **M5f The rest** | The other 20 combinations (§12.6) | Trace-driven fixes for what fails | Both goals ≥16/20 for each (≥15/20 for Mages and Priests); frozen |
 
 M5c runs between brain rounds: it is self-contained, and once it works,
@@ -2109,3 +2109,44 @@ lie, since a player (and the bot) cannot see sleep state; and Detect
 Monsters. Also found: Moria8 has no `x` weapon swap (VMS has one), and
 throwing differs from VMS (a thrown item always lands, STR adds damage, no
 distance penalty).
+
+## 19. M5e: Mage (from 2026-10-26)
+
+Started by the maintainer on 2026-10-26 (`/goal M5e make it so`), after M5d
+and its follow-ups (VMS firing and throwing, the three missing launchers).
+Character: Human Mage, both goals, the 15/20 bar for pure casters (§16.1).
+
+The Mage's class data was checked with the Rogue and Ranger in §18 (class
+table, per-level gains, the Mage-book spell table). It starts knowing
+spells 0-3 (Magic Missile, Detect Monsters, Phase Door, Light Area), the
+recorded starting-spell delta (§17.3), and casts through the M5d Mage-book
+layer.
+
+### 19.1 Baseline (the M5d brain, after the VMS throwing change)
+
+| Character | `clvl10` | `reach_dl8` |
+|---|---|---|
+| Human Mage | 19 | 18 |
+
+Both goals pass the 15/20 caster bar with no new bot work: the M5d
+Mage-book layer (learning by `LEARN_ORDER`, Magic Missile at a creature worth
+it, the Phase Door spell, Cure Light Wounds) and the M5b readiness and heal
+rules carry a Mage. Three deaths, none a stall or a budget run: a level-1
+Mage to a DL1 Kobold beside it while it threw oil (seed 1016, step 705), one
+to a Giant Yellow Centipede on DL1 (1011), and one to a Novice Mage's spell
+on DL2 after 43,741 steps (1013).
+
+### 19.2 Freeze
+
+Frozen from a `--freeze` run of the same code (the same 19 / 18):
+`playtest/suites/{clvl10,reach_dl8}-human-mage.json`. **M5e met
+2026-10-26** with no Mage-specific bot work. Two harness fixes found on the
+way, neither changing a decision: the dashboard took every session's
+character from its name, and names without the character at the end
+(`m5e-base-clvl10`, `m5d-r1-human-rogue-clvl10`) showed as Half-Troll
+Warriors; it now reads the goal and character each session records in
+`summary.json` (`dashboard.session_parts`). And every junk drop was filed as
+an `unknown_prompt` finding, since `expects_item_prompt` ignored the drop the
+bot had asked for. Detect Monsters, which M5e had expected to need, was not
+needed for the bar.
+

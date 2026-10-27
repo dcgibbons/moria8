@@ -72,11 +72,29 @@ def bar(goal: str, character: str) -> int:
     return required(for_character(GOALS[goal], character), len(QUALIFICATION_SEEDS))
 
 
+def session_parts(path: Path) -> tuple[str, str, str] | None:
+    """``(round, goal, character)``: the goal and character the session
+    recorded in its summary, the round its name less those; a summary
+    without them falls back to the name (``split_name``). Names put the
+    character before the goal or after it, or leave it out (M5d and M5e
+    sessions showed as Half-Troll Warriors, 2026-10-26)."""
+    summary = read_json(path / "summary.json") or {}
+    goal, character = summary.get("goal"), summary.get("character")
+    if goal not in GOALS or character not in CHARACTERS:
+        return split_name(path.name)
+    round_name = path.name
+    for token in (character, goal):
+        round_name = re.sub(rf"(^|-){re.escape(token)}(?=-|$)", "", round_name)
+    return round_name, goal, character
+
+
 def sessions() -> list[tuple[Path, str, str, str]]:
     found = []
     for path in SESSIONS.glob("*"):
-        parts = split_name(path.name) if path.is_dir() else None
-        if parts and (path / "summary.json").exists():
+        if not path.is_dir() or not (path / "summary.json").exists():
+            continue
+        parts = session_parts(path)
+        if parts:
             found.append((path, *parts))
     return found
 

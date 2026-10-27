@@ -2222,6 +2222,12 @@ class MissileTest(unittest.TestCase):
         warrior = Brain(GOALS["clvl10"])
         self.assertIsNone(warrior.missile_pick(GearTest().store(warrior, 2, stock, 500)))
 
+    def test_a_junk_drop_is_an_expected_prompt(self) -> None:
+        brain, _ = self.ranger()
+        self.assertFalse(brain.expects_item_prompt())
+        brain.dropping = True
+        self.assertTrue(brain.expects_item_prompt())
+
     def test_keeps_the_launcher_and_ammunition_when_dropping_junk(self) -> None:
         brain, _ = self.ranger()
         brain.dropping = True

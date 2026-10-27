@@ -868,8 +868,11 @@ class Brain:
             self.to_wear.remove(item)   # the counted purchase did not happen
 
     def expects_item_prompt(self) -> bool:
-        """An item prompt (or its list) is one the brain asked for."""
-        return self.picking is not None or self.pending_item is not None
+        """An item prompt (or its list) is one the brain asked for: a pick, a
+        drop of junk, or the book prompt's list (M5e: every junk drop was
+        filed as an unknown prompt)."""
+        return self.picking is not None or self.pending_item is not None or self.dropping \
+            or self.magic.listing_books
 
     def pick_item(self, obs: Observation) -> Decision:
         """Answer an item prompt (wear, throw): list the items, then pick by name."""
