@@ -68,13 +68,16 @@
   .stat { background: var(--black-soft); border: 1px solid var(--line); border-radius: 3px; padding: 4px 8px; }
   .stat .k { font-size: 10px; color: var(--dim); letter-spacing: .1em; text-transform: uppercase; }
   .stat .v { font-size: 17px; color: var(--gold); }
+  .tablewrap { overflow-x: auto; }   /* last resort: scroll inside the box, never past it */
   table { width: 100%; border-collapse: collapse; }
   th { text-align: left; font-weight: normal; color: var(--dim); font-size: 10px; letter-spacing: .1em;
        text-transform: uppercase; padding: 0 6px 4px 0; }
   td { padding: 3px 6px 3px 0; border-top: 1px solid #241e12; vertical-align: middle; white-space: nowrap; }
   td.name { text-transform: capitalize; }
   .score { color: var(--gold); font-size: 15px; }
-  .seeds { display: grid; grid-template-columns: repeat(20, 1fr); gap: 1px; width: 11rem; position: relative; }
+  .seeds { display: grid; grid-template-columns: repeat(20, 1fr); gap: 1px; width: 100%; min-width: 5rem; max-width: 11rem; position: relative; }
+  td.strip { width: 40%; }
+  td.spark svg { width: 100%; max-width: 90px; min-width: 40px; }
   .seed { height: 12px; border-radius: 1px; background: var(--track); }
   .seed.reached { background: var(--gold); } .seed.died { background: var(--red); }
   .seed.budget { background: var(--amber); } .seed.finding { background: var(--blue); }
@@ -146,8 +149,8 @@
   <section style="grid-area: round">
     <h2><span>This round</span><small id="rverdict"></small></h2>
     <div class="tiles" id="tiles"></div>
-    <table><thead><tr><th>character</th><th>goal</th><th>seeds</th><th>score</th><th>state</th><th>eta</th><th>rounds</th></tr></thead>
-      <tbody id="rtable"></tbody></table>
+    <div class="tablewrap"><table><thead><tr><th>character</th><th>goal</th><th>seeds</th><th>score</th><th>state</th><th>eta</th><th>rounds</th></tr></thead>
+      <tbody id="rtable"></tbody></table></div>
   </section>
   <section style="grid-area: causes">
     <h2><span>Deaths by cause</span><small>stacked by character level · this round</small></h2>
@@ -231,7 +234,7 @@ function sparkline(points, bar) {
   const pts = points.map((v, i) => v == null ? null : [X(i), Y(v)]).filter(Boolean);
   const d = pts.map((p, i) => `${i ? "L" : "M"}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join("");
   const last = pts[pts.length - 1];
-  return `<svg viewBox="0 0 ${W} ${H}" style="width:${W}px;height:${H}px;display:inline-block;vertical-align:middle">
+  return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="height:${H}px;display:inline-block;vertical-align:middle">
     <line x1="0" x2="${W}" y1="${Y(bar)}" y2="${Y(bar)}" stroke="var(--dim)" stroke-dasharray="2 2"/>
     <path d="${d}" fill="none" stroke="var(--gold)" stroke-width="1.3"/>
     ${last ? `<circle cx="${last[0]}" cy="${last[1]}" r="2" fill="var(--gold)"/>` : ""}</svg>`;
@@ -290,9 +293,9 @@ function renderRound() {
     const key = `${s.goal} ${s.character}`;
     const spark = sparkline(rounds.map(x => x.suites[key] && x.suites[key].done >= 20 ? x.suites[key].reached : null).filter(v => v != null), s.bar);
     return `<tr><td class="name">${esc(cap(s.character))}</td><td class="muted">${esc(s.goal)}</td>
-      <td><div class="seeds">${cells}<div class="barmark" style="left:calc(${(s.bar / s.seeds * 100).toFixed(1)}% - 1px)" title="bar ${s.bar}"></div></div></td>
+      <td class="strip"><div class="seeds">${cells}<div class="barmark" style="left:calc(${(s.bar / s.seeds * 100).toFixed(1)}% - 1px)" title="bar ${s.bar}"></div></div></td>
       <td><span class="score">${r}</span><span class="dim">/${s.seeds} · ${s.bar}</span></td><td>${state}</td>
-      <td class="muted">${eta}</td><td>${spark}</td></tr>`;
+      <td class="muted">${eta}</td><td class="spark">${spark}</td></tr>`;
   }).join("");
 }
 
@@ -427,11 +430,22 @@ async function refresh() {
       sel.innerHTML = data.rounds.map(n => `<option ${n === data.round ? "selected" : ""}>${esc(n)}</option>`).join("");
     }
     renderRound(); renderCauses(); renderKit(); renderWall();
-    $("updated").textContent = `updated ${new Date().toLocaleTimeString()}`;
+    renderUpdated();
   } catch (e) {
     $("updated").textContent = `error: ${e}`;
   }
 }
+function renderUpdated() {
+  // When the data was made (the snapshot's own time, in the viewer's zone),
+  // not when this page fetched it: a stopped publisher shows as stale.
+  if (!data || !data.now) return;
+  const made = new Date(data.now * 1000), age = Math.max(0, Date.now() / 1000 - data.now);
+  const when = made.toLocaleTimeString([], {hour: "numeric", minute: "2-digit", second: "2-digit", timeZoneName: "short"});
+  const ago = age < 90 ? `${Math.round(age)} s ago` : age < 5400 ? `${Math.round(age / 60)} min ago` : `${Math.round(age / 3600)} h ago`;
+  const stale = age > 120;
+  $("updated").innerHTML = `<span class="${stale ? "bad" : ""}" title="${esc(made.toString())}">data ${esc(when)} · ${ago}${stale ? " · stale" : ""}</span>`;
+}
+
 async function refreshMilestone() {
   try {
     const r = await fetch(URLS.milestone());
@@ -456,6 +470,7 @@ if (STATIC) $("round").parentElement.style.display = "none";
 setInterval(() => { if (!$("dlg").open) refresh(); }, STATIC ? 30000 : 5000);
 setInterval(refreshMilestone, 30000);
 setInterval(renderFocus, STATIC ? 5000 : 1000);
+setInterval(renderUpdated, 1000);
 </script>
 </body>
 </html>
