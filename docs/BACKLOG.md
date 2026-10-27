@@ -962,6 +962,32 @@ Acceptance target:
   variables set builds every port and passes `make -j7 -O test` with no
   undocumented step.
 
+### C64 suites sometimes return no results under the parallel gate
+
+Twice on 2026-10-26, a C64 unit suite failed during `make -j7 -O test` with
+no result bytes at all (`identify_spell: FAIL (0/4 tests passed)`, then
+`effects_magic: FAIL (0/29 tests passed)`, each with an empty `Raw:` line
+after the monitor's autostart lines), and passed in full when run by itself
+with `TEST_FILTER`. Neither failure was tied to its test's code, and the
+other platforms' stages passed. The working guess, not yet diagnosed, is
+that the C64 runner (`platforms/commodore/c64/run_tests.sh`) loses the
+result read under load: a VICE startup or monitor timing race with seven
+emulator stages running at once.
+
+Required work:
+
+- Reproduce: rerun the C64 stage under `-j7` load (or a CPU hog) until a
+  suite comes back empty, keeping its VICE log and monitor transcript.
+- Find whether the test program never reached its exit BRK (a slow boot
+  against the cycle limit) or reached it and the result dump was missed.
+- Fix the race in the runner, or retry an empty-result suite once with a
+  clear "retried" note, without raising the 30-second timeout cap.
+
+Acceptance target:
+
+- Repeated `make -j7 -O test` runs on a loaded machine produce no
+  empty-result C64 failures, and a real 0/N failure still fails.
+
 ### Run the C64 suite in parallel
 
 `make -j5 -O test` runs the five platform stages in parallel (each in a private
