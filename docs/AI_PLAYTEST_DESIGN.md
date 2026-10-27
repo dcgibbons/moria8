@@ -187,6 +187,15 @@ x64sc -default -config /dev/null +saveres -console +sound -sounddev dummy
   configuration.
 - **Each worker gets a private copy of the `.d64`.** The game writes saves,
   and a shared image would corrupt.
+- **Optional ROMs (maintainer, 2026-10-27).** `PLAYTEST_KERNAL` and
+  `PLAYTEST_DOS1541`, from the caller's environment only, name a C64 KERNAL
+  and a 1541 drive ROM that are added as `-kernal` and `-dos1541`
+  (`launch.rom_args`). Unset, VICE's own ROMs are used. JiffyDOS is the
+  maintainer's preference: its KERNAL with its 16 KB 1541 image (the pair
+  works only together, over the true drive). A cold boot took 3.7 s against
+  14.1 s with the stock ROMs. The title snapshot's cache key includes each
+  ROM's hash, so a snapshot is never restored under the other KERNAL. Any
+  other ROM option can be played the same way, to verify the game under it.
 
 **Boot once, then reuse.** Cold boot loads all tiers and overlays into the REU
 through a true-drive 1541. After the first boot of a build, the client dumps a

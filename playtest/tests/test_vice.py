@@ -98,3 +98,26 @@ class ProtocolTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RomArgsTest(unittest.TestCase):
+    """Optional ROM images (maintainer, 2026-10-27): JiffyDOS by preference,
+    any other KERNAL and 1541 pair later."""
+
+    def test_unset_means_vice_own_roms(self) -> None:
+        from moria_playtest.launch import rom_args
+        self.assertEqual(rom_args({}), [])
+        self.assertEqual(rom_args({"PLAYTEST_KERNAL": "", "PLAYTEST_DOS1541": ""}), [])
+
+    def test_set_names_each_rom(self) -> None:
+        import tempfile
+        from pathlib import Path
+        from moria_playtest.launch import rom_args
+        with tempfile.TemporaryDirectory() as tmp:
+            kernal, drive = Path(tmp) / "k.bin", Path(tmp) / "d.bin"
+            kernal.write_bytes(b"\0" * 8192)
+            drive.write_bytes(b"\0" * 16384)
+            self.assertEqual(rom_args({"PLAYTEST_KERNAL": str(kernal), "PLAYTEST_DOS1541": str(drive)}),
+                             ["-kernal", str(kernal.resolve()), "-dos1541", str(drive.resolve())])
+            with self.assertRaises(FileNotFoundError):
+                rom_args({"PLAYTEST_KERNAL": str(Path(tmp) / "missing.bin")})

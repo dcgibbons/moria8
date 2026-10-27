@@ -18,13 +18,16 @@ from pathlib import Path
 from . import abi as abimod
 from .game import Game, Observation
 from .launch import (PLAYTEST_OUT, SHIPPING, VICE_RESOURCE_ARGS, Build, ViceProcess,
-                     allocate_port, check_disk, prepare_worker, sha256)
+                     allocate_port, check_disk, prepare_worker, rom_args, sha256)
 
 CACHE = PLAYTEST_OUT / "cache"
 
 
 def cache_key(emulator: str, build: Build = SHIPPING) -> str:
-    material = "|".join([sha256(build.prg), sha256(build.disk), emulator, *VICE_RESOURCE_ARGS])
+    # A title snapshot taken under one KERNAL is not restored under another.
+    roms = rom_args()
+    material = "|".join([sha256(build.prg), sha256(build.disk), emulator, *VICE_RESOURCE_ARGS,
+                         *(sha256(Path(a)) if i % 2 else a for i, a in enumerate(roms))])
     return hashlib.sha256(material.encode()).hexdigest()[:16]
 
 
