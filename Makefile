@@ -8,7 +8,7 @@
 	buildbbcmaster diskbbcmaster runbbcmaster testbbcmaster testbbcmaster-smoke testbbcmaster-fast-smoke testbbcmaster-runtime testbbcmaster-memory-contract testbbcmaster-memory-contract-selftest \
 	artifact artifact-checksums artifacts \
 	playtest-check playtest-smoke playtest-m0-report playtest-session playtest-qualify \
-	playtest-regress playtest-repro playtest-dashboard playtest-selftest
+	playtest-regress playtest-repro playtest-dashboard playtest-publish playtest-selftest
 
 # Python tools and harnesses must not leave __pycache__ in source directories.
 export PYTHONDONTWRITEBYTECODE := 1
@@ -144,6 +144,12 @@ playtest-repro: disk64
 
 playtest-dashboard:
 	$(PLAYTEST_PY) -m moria_playtest.dashboard
+
+# Publishes the dashboard as static files with rsync over SSH, every 30 s:
+# PLAYTEST_PUBLISH_TARGET (user@host:/path/) and PLAYTEST_PUBLISH_KEY come from
+# the caller's environment. PLAYTEST_PUBLISH_ARGS: --once, --no-push, --every N.
+playtest-publish:
+	$(PLAYTEST_PY) -m moria_playtest.publish $(PLAYTEST_PUBLISH_ARGS)
 
 playtest-selftest:
 	$(PLAYTEST_RUN) -m moria_playtest.selftest

@@ -509,6 +509,103 @@ project's round-by-round scores per suite with the bar; and deaths by creature
 Charts are inline SVG and the server is the standard library only. The
 original v0 description follows.
 
+**Since 2026-10-27 (M5f) it is one page**, laid out to fit one screen:
+
+- **M5 grid:** every race (rows) and class (columns), each cell's clvl10 and
+  reach_dl8 side by side: frozen (with the bar it was frozen at), the latest
+  full run at the bar but not frozen, below the bar, or not run.
+  `/api/milestone` reads `playtest/suites/` and the newest finished session
+  of each.
+- **This round:** tiles (elapsed, runs, suites passed, deaths, hangs), then a
+  row per session: its seed strip with the bar marked, score, verdict, ETA,
+  and a sparkline of its score in earlier rounds.
+- **Deaths by cause,** stacked by character level: falling rock, pit, arrow,
+  poison, a caster's spell, or the creature that hit, read from each dead
+  character's trace (`dashboard.death`).
+- **What they died holding:** Cure Light Wounds potions, flasks of oil and
+  mana left, from the trace's `clw`, `oil` and `status` fields (M5f).
+- **Live screens,** with an HP bar under each. A click opens the **focus
+  view**: the full-size screen, HP, mana, potions and oil, HP and maximum
+  mana over the last 400 steps with potions, Phase Doors and retreats marked,
+  and the decisions newest first, refreshed every second. `#watch=<session>/<worker>`
+  in the URL opens it directly.
+
+#### Publishing (`make playtest-publish`, https://playtest.moria8.org)
+
+The dashboard is public (maintainer, 2026-10-27). `playtest/moria_playtest/publish.py`
+writes it as static files every 30 s under `build/playtest/publish/`: the page
+(with a `playtest-static` meta tag, which makes it read `data/*.json` instead
+of `/api/...`, hide the round picker and poll every 30 s), `data/overview.json`
+(the newest round only), `data/milestone.json` and `data/workers/<session>--w<N>.json`
+for each live worker's focus view. Every absolute host path is cut to its
+last part before anything is written (`publish.scrub`). The snapshot is then
+copied with `rsync -az --delete-after` over SSH.
+
+The caller's environment names the destination (AGENTS.md rule 9):
+
+| Variable | Meaning |
+|---|---|
+| `PLAYTEST_PUBLISH_TARGET` | `user@host:/path/`, the web root on the server |
+| `PLAYTEST_PUBLISH_KEY` | the SSH private key for that user (optional) |
+
+`PLAYTEST_PUBLISH_ARGS`: `--once` (one snapshot and push), `--no-push` (write
+`build/playtest/publish/` only, e.g. to check it with `python3 -m http.server`
+from that directory), `--every N`.
+
+**The server** (2026-10-27): a DigitalOcean droplet, Ubuntu 24.04 LTS, on the
+maintainer's tailnet. Public DNS (Squarespace) has an A record `playtest` for
+its public IP; GitHub Pages keeps serving `moria8.org`. On the server:
+
+- nginx serves `/var/www/playtest` for `playtest.moria8.org`, with `gzip` on
+  for JSON, CSS and JS and `Cache-Control: no-cache` on `/data/`; certbot
+  gives it HTTPS.
+- A `deploy` user owns `/var/www/playtest` and nothing else; its
+  `authorized_keys` holds only the publish key (`ssh-keygen -t ed25519` with
+  no passphrase, so the loop runs unattended: the key can only rewrite the
+  dashboard).
+- `ufw` allows 80 and 443 from anywhere and 22 only on `tailscale0`: the
+  publisher reaches the server by its tailnet name.
+
+Traffic is small: an update is about 100 KB of JSON (most of it live screens),
+about 20 KB gzipped, so a tab left open costs about 60 MB a day; only the
+server's outbound transfer is metered.
+
+**The publisher runs as a systemd user service** on the machine that plays,
+from this working tree (`moria8-playtesting`, kept for the purpose). The unit
+lives in `~/.config/systemd/user/moria8-playtest-publish.service`, outside the
+repository:
+
+```ini
+[Unit]
+Description=Moria8 playtest dashboard publisher (playtest.moria8.org)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=<this working tree>
+Environment=PLAYTEST_PUBLISH_TARGET=deploy@<tailnet host>:/var/www/playtest/
+Environment=PLAYTEST_PUBLISH_KEY=<home>/.ssh/moria8_publish
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/make -s playtest-publish
+Restart=always
+RestartSec=30
+
+[Install]
+WantedBy=default.target
+```
+
+Install it with `systemctl --user daemon-reload`, `systemctl --user enable --now moria8-playtest-publish`
+and `loginctl enable-linger <user>` (so it starts at boot and outlives the
+login). Day to day:
+
+- `systemctl --user status moria8-playtest-publish`: is it running.
+- `journalctl --user -u moria8-playtest-publish -f`: one line per publish
+  (suites and live workers), or the error.
+- `systemctl --user restart moria8-playtest-publish`: after changing
+  `publish.py` or `dashboard.py`. A change to `playtest/dashboard/index.html`
+  goes out with the next snapshot without one.
+
 #### Dashboard v0
 
 `make playtest-dashboard` serves one static HTML page plus JS from
