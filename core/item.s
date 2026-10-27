@@ -692,11 +692,12 @@ item_spawn_level:
     ldx fi_add_id
     jsr item_get_missile
     bpl !isl_qty_done+          // Bit 7 clear = not ammo
-    // Ammo: qty = rng(6) + 5 → [5, 10]
-    lda #6
-    jsr rng_range
-    clc
-    adc #5
+    // Ammo: qty = 7d6 → [7, 42] (VMS magic_treasure, misc.inc)
+    lda #7
+    ldx #6
+    ldy #0
+    jsr math_dice
+    lda zp_math_a
     sta fi_add_qty
 !isl_qty_done:
 

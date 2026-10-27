@@ -42,21 +42,7 @@ throw_item:
     rts
 
 !tw_slot_ok:
-    stx tw_slot
-    lda inv_item_id,x
-    sta tw_item_id
-    lda inv_p1,x
-    sta tw_save_p1
-    lda inv_to_hit,x
-    sta tw_save_to_hit
-    lda inv_to_dam,x
-    sta tw_save_to_dam
-    lda inv_to_ac,x
-    sta tw_save_to_ac
-    lda inv_flags,x
-    sta tw_save_flags
-    lda inv_ego,x
-    sta tw_save_ego
+    jsr tw_save_slot
 
     // 2. Get direction
     jsr get_direction_target
@@ -265,7 +251,36 @@ tw_consume_item:
     cmp #ICAT_POTION
     beq !tw_done+
 
-    // Place 1 copy on floor at last walkable position
+    jsr tw_drop_saved
+!tw_done:
+    sec                         // Turn consumed
+    rts
+
+// tw_save_slot — Save inventory slot X's item before it is consumed (throw,
+// and ranged_fire's ammunition)
+// Clobbers: A
+tw_save_slot:
+    stx tw_slot
+    lda inv_item_id,x
+    sta tw_item_id
+    lda inv_p1,x
+    sta tw_save_p1
+    lda inv_to_hit,x
+    sta tw_save_to_hit
+    lda inv_to_dam,x
+    sta tw_save_to_dam
+    lda inv_to_ac,x
+    sta tw_save_to_ac
+    lda inv_flags,x
+    sta tw_save_flags
+    lda inv_ego,x
+    sta tw_save_ego
+    rts
+
+// tw_drop_saved — Place one copy of the saved item on the floor at the last
+// walkable position of the flight (ignored when the floor table is full)
+// Clobbers: A, X, Y
+tw_drop_saved:
     lda tw_last_x
     sta fi_add_x
     lda tw_last_y
@@ -276,11 +291,9 @@ tw_consume_item:
     sta fi_add_qty
     jsr tw_stage_saved_item_fields
     jsr floor_item_add
-    bcc !tw_done+                  // Ignore failure (table full)
+    bcc !tw_drop_done+             // Ignore failure (table full)
     inc turn_action_redraw_pending
-
-!tw_done:
-    sec                         // Turn consumed
+!tw_drop_done:
     rts
 
 // ============================================================

@@ -317,19 +317,20 @@ sro_count:
 // sro_stock_qty — How many of item X a store stocks at once: the VMS store
 // templates' number (values.inc store items): 5 rations, torches and flasks,
 // 3 Word of Recall and Light, 2 of a few potions and scrolls, else 1. Moria8
-// stocked one of everything until 2026-10-26 (M5b playtest).
+// stocked one of everything until 2026-10-26 (M5b playtest). Ammunition: VMS
+// magic_treasure gives every stack 7d6 (misc.inc), the store's too
+// (store_create); Moria8 stocks the average at Umoria's 24-item store cap,
+// as the town overlay has no room for the roll (M5d playtest, 2026-10-26).
 // Input: X = item id. Output: A = count. Clobbers: Y. Preserves: X.
 sro_stock_qty:
-    ldy #sro_stack_qty - sro_stack_id - 1
-!ssq_loop:
     txa
-    cmp sro_stack_id,y
+    ldy #sro_stack_qty - sro_stack_id
+!ssq_loop:
+    cmp sro_stack_id - 1,y
     beq !ssq_found+
     dey
-    bpl !ssq_loop-
-    lda #1
-    rts
-!ssq_found:
+    bne !ssq_loop-
+!ssq_found:                         // Y = 0: not listed, one
     lda sro_stack_qty,y
     rts
 sro_stack_id:
@@ -337,10 +338,14 @@ sro_stack_id:
     .byte 32, 20                    // Word of Recall, Light
     .byte 17, 21, 27                // Cure Light Wounds, Identify, Heroism
     .byte ITEM_TYPE_SCR_MAGIC_MAPPING, ITEM_TYPE_SCR_OBJECT_DETECT, 136   // ..., Phase Door
+    .byte 52, 53, 54                // Arrow, Bolt, Rock
 sro_stack_qty:
+    .byte 1                         // not listed
     .byte 5, 5, 5
     .byte 3, 3, 2, 2, 2, 2, 2, 2
-.assert "sro_stack tables pair up", sro_stack_qty - sro_stack_id, * - sro_stack_qty
+    .byte 24, 24, 24
+.assert "sro_stack tables pair up", sro_stack_qty - sro_stack_id + 1, * - sro_stack_qty
+.assert "Stocked ammunition fits a store stack", 24 <= STORE_STACK_MAX, true
 
 // sro_set_p1 — Set p1 and flags for newly stocked item
 // Input: A = category, srr_abs_slot = target slot

@@ -3,7 +3,7 @@
 // Tests: category check, restocking, math_mul_16x8, buy/sell price calc,
 // gold operations, store door detection, find empty slot, and haggle flow.
 //
-// Results at $0400-$0435: $01 = pass, $00 = fail per test (54 tests)
+// Results at $0400-$0436: $01 = pass, $00 = fail per test (55 tests)
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_bootstrap)
 
@@ -12,7 +12,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #53
+    ldx #54
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -123,7 +123,7 @@ press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
 // Test result buffer — copy to $0400 at end (msg_print clobbers $0400)
-tc_results: .fill 54, $ff
+tc_results: .fill 55, $ff
 tc_count: .byte 0
 t28_slot:       .byte 0
 t28_unit:       .byte 0
@@ -2016,7 +2016,37 @@ test_start:
 !t54_store:
     sta tc_results + 53
 
+    // ============================================================
+    // Test 55: store counts (VMS values.inc store templates; ammunition
+    // VMS 7d6 averaged at Umoria's 24-item store cap, M5d 2026-10-26):
+    // Arrow, Bolt and Rock 24, Ration of Food 5, Phase Door 2, Dagger 1,
+    // and X preserved
+    // ============================================================
+    ldy #0
+!t55_loop:
+    ldx t55_ids,y
+    sty t28_slot
+    jsr sro_stock_qty
+    ldy t28_slot
+    cmp t55_qty,y
+    bne !t55_fail+
+    txa
+    cmp t55_ids,y
+    bne !t55_fail+
+    iny
+    cpy #t55_qty - t55_ids
+    bne !t55_loop-
+    lda #$01
+    jmp !t55_store+
+!t55_fail:
+    lda #$00
+!t55_store:
+    sta tc_results + 54
+
     jmp test_exit_trampoline
+
+t55_ids: .byte 52, 53, 54, 15, 136, 2
+t55_qty: .byte 24, 24, 24, 5, 2, 1
 
 // t50_put — Store slot X = item A, Y of them, 7 turns of fuel, no bonuses,
 // identified.

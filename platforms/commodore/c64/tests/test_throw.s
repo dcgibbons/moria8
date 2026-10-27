@@ -2,9 +2,11 @@
 //
 // Tests: range calculation (light/heavy/weightless), potion detection,
 //        item consumption, to-hit calculation, throw selector filtering,
-//        thrown-item redraw and floor metadata preservation.
+//        thrown-item redraw and floor metadata preservation, and a fired
+//        shot's range by launcher and a missed shot's landing (ranged_fire.s
+//        rf_fly and rf_shot_lands, M5d 2026-10-26).
 //
-// Results at $0400-$040A: $01 = pass, $00 = fail per test (11 tests)
+// Results at $0400-$040C: $01 = pass, $00 = fail per test (13 tests)
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_bootstrap)
 
@@ -13,7 +15,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #10
+    ldx #12
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -97,7 +99,9 @@ press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
 // Test scratch
-tc_results: .fill 11, $ff
+tc_results: .fill 13, $ff
+tt_seen: .byte 0
+tt_count: .byte 0
 
 test_start:
     // Seed RNG
@@ -475,7 +479,130 @@ test_start:
     sta tc_results+10
 !t11_done:
 
+    // ==========================================
+    // Test 12: Range by launcher (VMS facts): east along open floor with
+    // nothing in the way, a Sling shot ends 20 squares out, a Short Bow 25
+    // ==========================================
+    jsr msg_init
+    jsr monster_init_table
+    ldx #15
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #4
+!t12_floor:
+    lda #TILE_FLOOR | FLAG_LIT | FLAG_VISITED
+    sta (zp_ptr0),y
+    iny
+    cpy #45
+    bne !t12_floor-
+    lda #5
+    sta zp_player_x
+    lda #15
+    sta zp_player_y
+    lda #51 - IT_MISSILE_BASE   // Sling
+    sta rf_launcher
+    jsr t12_shot
+    lda tw_last_x
+    cmp #25
+    bne !t12_fail+
+    lda #49 - IT_MISSILE_BASE   // Short Bow
+    sta rf_launcher
+    jsr t12_shot
+    lda tw_last_x
+    cmp #30
+    bne !t12_fail+
+    lda #$01
+    sta tc_results+11
+    jmp !t12_done+
+!t12_fail:
+    lda #$00
+    sta tc_results+11
+!t12_done:
+
+    // ==========================================
+    // Test 13: A missed shot lands at the last open square when
+    // randint(10) > 1 (VMS drop_throw): 40 to 49 of 50 with the seeded RNG,
+    // keeping its to-hit; a shot that hit is used up, nothing lands
+    // ==========================================
+    lda #0
+    sta tt_seen
+    lda #50
+    sta tt_count
+!t13_loop:
+    jsr t13_stock_arrow
+    jsr rf_shot_lands
+    lda #20
+    ldy #15
+    jsr floor_item_find_at
+    bcc !t13_next+
+    lda fi_to_hit,x
+    cmp #2
+    bne !t13_fail+
+    inc tt_seen
+!t13_next:
+    dec tt_count
+    bne !t13_loop-
+    lda tt_seen
+    cmp #40
+    bcc !t13_fail+
+    cmp #50
+    bcs !t13_fail+
+    jsr t13_stock_arrow
+    jsr rf_consume_ammo
+    lda #20
+    ldy #15
+    jsr floor_item_find_at
+    bcs !t13_fail+
+    lda #$01
+    sta tc_results+12
+    jmp !t13_done+
+!t13_fail:
+    lda #$00
+    sta tc_results+12
+!t13_done:
+
     jmp test_exit_trampoline
+
+// One Arrow +2 in pack slot 0, saved as the shot, its flight ending at
+// (20, 15), and an empty floor
+t13_stock_arrow:
+    jsr item_init_floor
+    jsr item_init_inventory
+    lda #52                     // Arrow
+    sta inv_item_id
+    sta rf_ammo_id
+    lda #1
+    sta inv_qty
+    lda #2
+    sta inv_to_hit
+    lda #0
+    sta rf_ammo_slot
+    tax
+    jsr tw_save_slot
+    lda #20
+    sta tw_last_x
+    lda #15
+    sta tw_last_y
+    rts
+
+// Fire east from (5, 15) with one Arrow in pack slot 0 and an empty floor
+t12_shot:
+    jsr item_init_floor
+    jsr item_init_inventory
+    lda #52                     // Arrow
+    sta inv_item_id
+    sta rf_ammo_id
+    lda #1
+    sta inv_qty
+    lda #0
+    sta rf_ammo_slot
+    tax
+    jsr tw_save_slot
+    lda #3                      // East (dir_dx/dir_dy index)
+    sta proj_dir
+    jmp rf_fly
 
 throw_test_body_end:
 .assert "Throw test stays below MAP_BASE", throw_test_body_end <= MAP_BASE, true

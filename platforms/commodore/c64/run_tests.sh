@@ -4455,7 +4455,7 @@ run_test "item" "tests/test_item.s" "0400 043f" 64 1000000000
 run_test "scroll_p3" "tests/test_scroll_p3.s" "0400 040d" 14 1000000000
 run_test "item_desc" "tests/test_item_desc.s" "0400 040a" 11 500000000
 run_test "item_ui" "tests/test_item_ui.s" "0400 040f" 16 1000000000
-run_test "store" "tests/test_store.s" "0400 0435" 54 1000000000
+run_test "store" "tests/test_store.s" "0400 0436" 55 1000000000
 run_test "ui_views" "tests/test_ui_views.s" "0400 0413" 19 500000000
 run_test "ui_views_filters" "tests/test_ui_views_filters.s" "0400 0413" 7 500000000
 run_test "subsystems" "tests/test_subsystems.s" "0400 0409" 10
@@ -4467,10 +4467,10 @@ run_test "monster_magic" "tests/test_monster_magic.s" "0400 0419" 26 500000000
 run_test "tier" "tests/test_tier.s" "0400 0410" 17 500000000
 run_test "disk_swap" "tests/test_disk_swap.s" "0400 040e" 15 500000000
 run_test "render" "tests/test_render.s" "0400 0417" 24 500000000
-run_test "ranged" "tests/test_ranged.s" "0400 0409" 10 500000000
+run_test "ranged" "tests/test_ranged.s" "0400 040c" 13 500000000
 run_test "ego" "tests/test_ego.s" "0400 0409" 10 500000000
-run_test "throw" "tests/test_throw.s" "0400 040a" 11 500000000
-run_test "bash" "tests/test_bash.s" "0400 040d" 14 500000000
+run_test "throw" "tests/test_throw.s" "0400 040c" 13 500000000
+run_test "bash" "tests/test_bash.s" "0400 040c" 13 500000000
 run_test "tunnel" "tests/test_tunnel.s" "0400 0407" 8 500000000
 run_test "background" "tests/test_background.s" "0400 0407" 8
 run_test "look_trampoline" "tests/test_look_trampoline.s" "0400 0401" 2
