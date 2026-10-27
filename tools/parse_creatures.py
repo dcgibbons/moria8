@@ -15,7 +15,9 @@ Usage:
   --all       Show all 279 umoria creatures
   --selected  Show the ~120 selected creatures (default)
   --tiers     Show tier breakdown with creature counts
-  --asm       Generate assembly data (for R3.5.2)
+  --asm       Generate assembly data (for R3.5.2) and sync docs/monsters.html
+  --sync-web  Sync docs/monsters.html directly from tier0.s..tier4.s (no UMORIA_SRC needed)
+  --check-web Verify docs/monsters.html matches tier0.s..tier4.s byte-for-byte
 
 UMORIA_SRC names Umoria's src/data_creatures.cpp at the pinned revision in
 docs/BEHAVIOR_CHANGE_PROTOCOL.md (2a2a6b791f084cac97db85f5b78739e913dd3572);
@@ -700,6 +702,13 @@ def main():
     if len(sys.argv) > 1:
         mode = sys.argv[1].lstrip('-')
 
+    if mode == "sync-web":
+        sync_web(check_only=False)
+        return
+    if mode == "check-web":
+        sync_web(check_only=True)
+        return
+
     # Source file: supplied by the caller only (AGENTS.md rule 9).
     src_path = os.environ.get("UMORIA_SRC", "")
     if not src_path or not os.path.isfile(src_path):
@@ -1083,7 +1092,166 @@ def generate_asm(creatures, selected_indices):
             f.write(f".const TIER{tier_idx}_SIZE = {soa + names}\n")
 
     print(f"  creature_tiers.s: tier configuration constants")
+    sync_web(check_only=False)
     print(f"\nDone.")
+
+
+WEB_TIER_LABELS = {
+    0: "Tier 0 · Town (DL 0)",
+    1: "Tier 1 · Shallow (DL 1–8)",
+    2: "Tier 2 · Early (DL 5–15)",
+    3: "Tier 3 · Mid (DL 11–25)",
+    4: "Tier 4 · Deep (DL 20–100)",
+}
+
+WEB_SOA_KEYS = [
+    ("cr_display",      "display"),
+    ("cr_color",        "color"),
+    ("cr_speed",        "speed"),
+    ("cr_mflags",       "mflags"),
+    ("cr_level",        "level"),
+    ("cr_hd_num",       "hd_num"),
+    ("cr_hd_sides",     "hd_sides"),
+    ("cr_ac",           "ac"),
+    ("cr_sleep",        "sleep"),
+    ("cr_aaf",          "aaf"),
+    ("cr_xp_lo",        "xp_lo"),
+    ("cr_xp_hi",        "xp_hi"),
+    ("cr_atk0_type",    "atk0_type"),
+    ("cr_atk0_dice",    "atk0_dice"),
+    ("cr_atk0_sides",   "atk0_sides"),
+    ("cr_atk1_type",    "atk1_type"),
+    ("cr_atk1_dice",    "atk1_dice"),
+    ("cr_atk1_sides",   "atk1_sides"),
+    ("cr_spell_chance", "spell_chance"),
+    ("cr_spell_flags",  "spell_flags"),
+    ("cr_treasure",     "treasure"),
+]
+
+WEB_BEGIN_MARKER = "// BEGIN GENERATED_CREATURE_DATA"
+WEB_END_MARKER = "// END GENERATED_CREATURE_DATA"
+
+
+def parse_asm_tier_file(filepath, tier_idx):
+    """Parse a committed tier{N}.s file into its exact SoA arrays and metadata."""
+    with open(filepath, "r", encoding="utf-8") as f:
+        text = f.read()
+
+    count_m = re.search(r"\.const\s+TIER_COUNT\s*=\s*(\d+)", text)
+    if not count_m:
+        raise ValueError(f"{filepath}: missing .const TIER_COUNT")
+    count = int(count_m.group(1))
+
+    # Extract Umoria IDs from header comments: //   0: [ 16] DL 1 Kobold
+    ids = [int(m.group(2)) for m in re.finditer(r"^//\s+(\d+):\s+\[\s*(\d+)\]\s+DL\s*\d+\s+", text, re.MULTILINE)]
+    if len(ids) != count:
+        raise ValueError(f"{filepath}: expected {count} header index comments, found {len(ids)}")
+
+    # Extract names from tierN_crn_<i>: .text "..."
+    prefix = f"tier{tier_idx}"
+    names = [m.group(2) for m in re.finditer(rf'^{prefix}_crn_(\d+):\s*\.text\s+"([^"]+)"', text, re.MULTILINE)]
+    if len(names) != count:
+        raise ValueError(f"{filepath}: expected {count} .text name entries, found {len(names)}")
+
+    arrays = {}
+    for asm_field, js_key in WEB_SOA_KEYS:
+        label = f"{prefix}_{asm_field}:"
+        pos = text.find(label)
+        if pos < 0:
+            raise ValueError(f"{filepath}: missing label {label}")
+        rest = text[pos + len(label):]
+        vals = []
+        for line in rest.splitlines():
+            s = line.strip()
+            if not s:
+                if vals:
+                    break
+                continue
+            if s.startswith("//"):
+                continue
+            if not s.startswith(".byte"):
+                break
+            byte_part = s[len(".byte"):].split("//")[0]
+            for tok in byte_part.split(","):
+                tok = tok.strip()
+                if not tok:
+                    continue
+                if tok.startswith("$"):
+                    vals.append(int(tok[1:], 16))
+                else:
+                    vals.append(int(tok, 10))
+        if len(vals) != count:
+            raise ValueError(f"{filepath} {label}: expected {count} bytes, found {len(vals)}")
+        arrays[js_key] = vals
+
+    return {
+        "tier": tier_idx,
+        "label": WEB_TIER_LABELS[tier_idx],
+        "ids": ids,
+        "names": names,
+        "arrays": arrays,
+    }
+
+
+def render_web_tiers_block(tier_dir):
+    """Render the const TIERS_RAW = [...] JS block from tier0.s..tier4.s."""
+    import json
+    lines = [WEB_BEGIN_MARKER, "const TIERS_RAW = ["]
+    for tier_idx in range(len(TIERS)):
+        tier_path = os.path.join(tier_dir, f"tier{tier_idx}.s")
+        t = parse_asm_tier_file(tier_path, tier_idx)
+        lines.append("  {")
+        lines.append(f'    tier: {t["tier"]}, label: {json.dumps(t["label"], ensure_ascii=False)},')
+        lines.append(f'    ids: [{",".join(str(x) for x in t["ids"])}],')
+        lines.append(f'    names: [{",".join(json.dumps(n, ensure_ascii=False) for n in t["names"])}],')
+        for idx, (_, js_key) in enumerate(WEB_SOA_KEYS):
+            vals = t["arrays"][js_key]
+            formatted = ",".join(f"0x{v:02x}" for v in vals)
+            comma = "," if idx + 1 < len(WEB_SOA_KEYS) else ""
+            lines.append(f"    {js_key}: [{formatted}]{comma}")
+        close = "  }," if tier_idx + 1 < len(TIERS) else "  }"
+        lines.append(close)
+    lines.append("];")
+    lines.append(WEB_END_MARKER)
+    return "\n".join(lines)
+
+
+def sync_web(check_only=False):
+    """Sync or verify docs/monsters.html against platforms/commodore/c64/creature_data/tier0.s..tier4.s."""
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    repo_root = os.path.abspath(os.path.join(script_dir, ".."))
+    tier_dir = os.path.join(repo_root, "platforms", "commodore", "c64", "creature_data")
+    html_path = os.path.join(repo_root, "docs", "monsters.html")
+
+    with open(html_path, "r", encoding="utf-8") as f:
+        html = f.read()
+
+    start = html.find(WEB_BEGIN_MARKER)
+    end = html.find(WEB_END_MARKER)
+    if start < 0 or end < 0 or end < start:
+        print(f"ERROR: {html_path} is missing {WEB_BEGIN_MARKER} / {WEB_END_MARKER} markers", file=sys.stderr)
+        sys.exit(1)
+    end += len(WEB_END_MARKER)
+
+    rendered = render_web_tiers_block(tier_dir)
+    current = html[start:end]
+
+    if check_only:
+        if current != rendered:
+            print(
+                "ERROR: docs/monsters.html creature data is out of sync with "
+                "platforms/commodore/c64/creature_data/tier0.s..tier4.s.\n"
+                "Run: python3 tools/parse_creatures.py --sync-web",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        return
+
+    if current != rendered:
+        new_html = html[:start] + rendered + html[end:]
+        with open(html_path, "w", encoding="utf-8") as f:
+            f.write(new_html)
+        print("Updated docs/monsters.html from tier0.s..tier4.s")
 
 
 if __name__ == "__main__":

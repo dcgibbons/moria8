@@ -233,6 +233,7 @@ build: build64 build128 buildplus4
 
 build64: $(C64_BUILD_ARTIFACTS)
 	@mkdir -p "$(OUT64)"
+	@python3 ../../tools/parse_creatures.py --sync-web
 	@$(MAKE) --no-print-directory cleanup-source-symbols
 
 build128: $(C128_BUILD_ARTIFACTS)
@@ -315,6 +316,7 @@ check-zp:
 
 check-6502-lint:
 	python3 ../../tools/check_6502_lint.py
+	python3 ../../tools/parse_creatures.py --check-web
 
 check-hal-boundaries:
 	cd ../.. && python3 tools/check_hal_boundaries_selftest.py
