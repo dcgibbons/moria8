@@ -2101,10 +2101,10 @@ only; the list title it expected ("Magic Book") is "Mage Book" in the game.
 | 4 | Game: ammunition stocked 24 at a time (VMS 7d6 averaged at Umoria's store cap; the C64 town overlay has no room for the roll) and dungeon stacks 7d6 (`magic_treasure`) | 19 / 18 | 14 / 14 | Launchers fire now (216-389 shots a run, a bit over half hitting). Ranger misses both: 9 deaths on DL1 at level 2-4, most to Kobolds, four of them casting Magic Missile at 1-9 HP beside the Kobold (a third of the casts failing) while holding Phase Door: `invoke` comes before `retreat` and `phase_door` |
 | 5 | Bot: no Magic Missile below `RETREAT_HP` with a creature beside (the escapes first) | 19 / 18 | 17 / 17 | **All four meet the bar with launchers in use.** 9 deaths, 6 of them at level 1-2 on DL1. Frozen from a `--freeze` run of the same code (round 5f: the same 19 / 18 / 17 / 17): `playtest/suites/{clvl10,reach_dl8}-human-{rogue,ranger}.json`. **M5d met 2026-10-26** |
 
-Not built (maintainer, 2026-10-26: "let's freeze and we'll come back to the
-launchers"): the Long Bow, Composite Bow and Heavy Crossbow, which need
-about 75 bytes of C64 resident RAM (1 free), about 55 on the Atari, and town
-overlay bytes on the 40-column ports (0 free); letting sleeping creatures
+Not built at the freeze (maintainer, 2026-10-26: "let's freeze and we'll
+come back to the launchers"): the Long Bow, Composite Bow and Heavy Crossbow,
+added after it as item IDs 137-139 once shared call helpers freed the bytes
+(the bot buys and fires them; the frozen suites predate them); letting sleeping creatures
 lie, since a player (and the bot) cannot see sleep state; and Detect
 Monsters. Also found: Moria8 has no `x` weapon swap (VMS has one), and
 throwing differs from VMS (a thrown item always lands, STR adds damage, no

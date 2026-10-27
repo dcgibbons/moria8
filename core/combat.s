@@ -263,9 +263,11 @@ combat_calc_melee_total_tohit_bonus:
     cmp #FI_EMPTY
     beq !ccmt_unarmed+
 
+    cmp #IT_MISSILE2_BASE           // the appended launchers
+    bcs !ccmt_done+
     cmp #IT_MISSILE_BASE
     bcc !ccmt_weapon+
-    cmp #55
+    cmp #IT_MISSILE_END
     bcc !ccmt_done+
 !ccmt_weapon:
     tay
@@ -472,10 +474,13 @@ combat_calc_blows:
     beq !ccb_unarmed+
 
     // Ranged launchers/ammo used as melee are forced to one blow.
+    cmp #IT_MISSILE2_BASE           // the appended launchers
+    bcs !ccb_one_blow+
     cmp #IT_MISSILE_BASE
     bcc !ccb_get_weight+
-    cmp #55
+    cmp #IT_MISSILE_END
     bcs !ccb_get_weight+
+!ccb_one_blow:
     lda #1
     bne !ccb_store_blows+
 

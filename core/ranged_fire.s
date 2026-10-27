@@ -21,14 +21,16 @@
 rf_ammo_type:  .byte 0     // Matching ammo type (1=arrow, 2=bolt, 3=rock)
 rf_ammo_slot:  .byte 0     // Inventory slot of ammo
 rf_ammo_id:    .byte 0     // Item type ID of ammo
-rf_launcher:   .byte 0     // Launcher index (item type - IT_MISSILE_BASE)
+rf_launcher:   .byte 0     // Launcher index into rf_range_tbl/rf_mult_tbl
 rf_dist:       .byte 0     // Squares flown
 
-// Per launcher, Short Bow, Light Crossbow, Sling (IT_MISSILE_BASE + 0..2):
-// range (VMS facts: 25, 25, 20) and damage multiplier (Umoria: x2, x3, x2).
-rf_range_tbl:  .byte 25, 25, 20
-rf_mult_tbl:   .byte 2, 3, 2
-.assert "Launcher tables cover Short Bow, Light Crossbow and Sling", rf_mult_tbl - rf_range_tbl, 3
+// Per launcher, Short Bow, Light Crossbow, Sling (IT_MISSILE_BASE + 0..2),
+// then Long Bow, Composite Bow, Heavy Crossbow (IT_MISSILE2_BASE + 0..2):
+// range (VMS facts: 25, 25, 20, 30, 35, 35) and damage multiplier (Umoria:
+// x2, x3, x2, x3, x4, x4).
+rf_range_tbl:  .byte 25, 25, 20, 30, 35, 35
+rf_mult_tbl:   .byte 2, 3, 2, 3, 4, 4
+.assert "Launcher tables cover the six launchers", rf_mult_tbl - rf_range_tbl, 3 + IT_MISSILE2_END - IT_MISSILE2_BASE
 // Strings migrated to Huffman compression (HSTR_RF_* in huffman_data.s)
 
 // ============================================================
@@ -59,6 +61,10 @@ ranged_fire:
     lda inv_item_id + EQUIP_WEAPON
     sec
     sbc #IT_MISSILE_BASE
+    cmp #IT_MISSILE2_BASE - IT_MISSILE_BASE
+    bcc !rf_index+
+    sbc #IT_MISSILE2_BASE - IT_MISSILE_BASE - 3   // carry set: index 3-5
+!rf_index:
     sta rf_launcher
 
     // 2. Scan inventory (slots 0-21) for matching ammo

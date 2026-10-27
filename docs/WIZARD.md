@@ -29,7 +29,7 @@ Commands:
 - `Q` - cancel / exit menu
 
 Prompts:
-- Item generation: `ITEM 0-135: ` (up to 3 digits)
+- Item generation: `ITEM 0-139: ` (up to 3 digits)
 - Level jump: `DLVL 0-99: `
 
 Feedback:
@@ -40,16 +40,19 @@ Feedback:
 
 ## Generate Item
 
-Wizard item generation uses item IDs `0-135` (see the item catalog in
+Wizard item generation uses item IDs `0-139` (see the item catalog in
 `core/item_tables.s`; IDs `96-127` are the Phase 3 items — new potions,
 scrolls, rings, wands, staves, Mithril armor, and amulets; IDs `128-134` are
-the chests — wooden, iron, steel, and ruined; ID `135` is the Iron Spike).
+the chests — wooden, iron, steel, and ruined; ID `135` is the Iron Spike;
+ID `136` is the Scroll of Phase Door; IDs `137-139` are the Long Bow,
+Composite Bow and Heavy Crossbow).
 
 Behavior:
 - Non-gold items try to go into inventory first
 - If inventory is full, they fall back to the floor at the player tile
 - Gold always becomes floor gold
-- Missiles may generate in small stacks
+- Ammunition (Arrow, Bolt, Rock) comes in a stack of 5-10 (`core/wizard.s`;
+  dungeon stacks are 7d6 and store stacks 24)
 
 ## Common Workflows
 
@@ -105,6 +108,10 @@ or `Neutralize Poison` feedback:
 - Staff of Detect Monsters: `44`
 - Staff of Cure Light Wounds: `46`
 - Flask of Oil: `61`
+- Launchers: Short Bow `49`, Light Crossbow `50`, Sling `51`, Long Bow `137`,
+  Composite Bow `138`, Heavy Crossbow `139`; ammunition: Arrow `52`, Bolt
+  `53`, Rock `54`. Wield the launcher, then `SHIFT+F` fires the first
+  matching ammunition in the pack.
 
 ### Movement / traversal helpers
 
@@ -252,6 +259,10 @@ or `Neutralize Poison` feedback:
 | 133 | Large Steel Chest |
 | 134 | Ruined Chest |
 | 135 | Iron Spike |
+| 136 | Scroll of Phase Door |
+| 137 | Long Bow |
+| 138 | Composite Bow |
+| 139 | Heavy Crossbow |
 
 ## Source References
 

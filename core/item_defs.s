@@ -141,7 +141,7 @@
 // Capacity 160 (20-byte bitset) leaves runway past the chest rows at 128-134
 // so the next catalog expansion pays no save-format bump.
 .const LEGACY_ITEM_TYPE_COUNT = 64
-.const ITEM_TYPE_COUNT = 137
+.const ITEM_TYPE_COUNT = 140
 .const ITEM_ID_CAPACITY = 160
 
 // Known-item identification state (Save Format V4)

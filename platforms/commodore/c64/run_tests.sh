@@ -4255,7 +4255,7 @@ check_static_contract "wizard_cancel_text_contract" "../../../core/wizard.s" \
 check_static_contract "wizard_menu_aligned_rows_contract" "../../../core/wizard.s" \
     "wiz_row1_str:|||.text \"L jump    A reveal    H heal\"|||wiz_row2_str:|||.text \"I ident   X level     G item\"|||wiz_row3_str:|||.text \"S summon  T tele      W wall\""
 check_static_contract "wizard_item_prompt_range_contract" "../../../core/wizard.s" \
-    "wiz_item_prompt_str:|||.text \"ITEM 0-135: \""
+    "wiz_item_prompt_str:|||.text \"ITEM 0-139: \""
 check_static_contract "wizard_bad_prompt_cleanup_contract" "../../../core/wizard.s" \
     "wizard_prompt_bad_value:|||jsr msg_print|||jmp wizard_prompt_clear_digits|||wizard_prompt_two_digit:|||jsr wizard_prompt_bad_value|||jmp !wiz_num_loop-"
 check_static_contract "c64_disk_prompt_dismiss_clears_full_modal_contract" "../common/disk_swap.s" \
@@ -4467,7 +4467,7 @@ run_test "monster_magic" "tests/test_monster_magic.s" "0400 0419" 26 500000000
 run_test "tier" "tests/test_tier.s" "0400 0410" 17 500000000
 run_test "disk_swap" "tests/test_disk_swap.s" "0400 040e" 15 500000000
 run_test "render" "tests/test_render.s" "0400 0417" 24 500000000
-run_test "ranged" "tests/test_ranged.s" "0400 040c" 13 500000000
+run_test "ranged" "tests/test_ranged.s" "0400 040f" 16 500000000
 run_test "ego" "tests/test_ego.s" "0400 0409" 10 500000000
 run_test "throw" "tests/test_throw.s" "0400 040c" 13 500000000
 run_test "bash" "tests/test_bash.s" "0400 040c" 13 500000000

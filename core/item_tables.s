@@ -148,6 +148,9 @@ it_category:
     .byte ICAT_CHEST    // 134: Ruined Chest
     .byte ICAT_SPIKE    // 135: Iron Spike
     .byte ICAT_SCROLL   // 136: Phase Door
+    .byte ICAT_WEAPON   // 137: Long Bow
+    .byte ICAT_WEAPON   // 138: Composite Bow
+    .byte ICAT_WEAPON   // 139: Heavy Crossbow
 
 // Color and base armor class packed per type: high nibble = display color,
 // low nibble = base AC (<=9).
@@ -289,6 +292,9 @@ it_color_ac:
     .byte COL_BROWN << 4                        // 134: Ruined Chest
     .byte COL_WHITE << 4                        // 135: Iron Spike
     .byte COL_CYAN << 4                         // 136: Phase Door
+    .byte COL_BROWN << 4                        // 137: Long Bow
+    .byte COL_BROWN << 4                        // 138: Composite Bow
+    .byte COL_LGREY << 4                        // 139: Heavy Crossbow
 
 // Weight (in 1/10 lbs)
 it_weight:
@@ -323,6 +329,7 @@ it_weight:
     .byte 250, 255, 255, 255, 255, 255, 250
     .byte 10                                // 135: Iron Spike
     .byte 5                                 // 136: Phase Door (scroll, 0.5 lb)
+    .byte 40, 40, 200                       // 137-139: Long Bow, Composite Bow, Heavy Crossbow (VMS)
 
 // Damage dice packed per type: high nibble = dice count (<=3), low nibble =
 // dice sides (<=9). 0 = no damage dice.
@@ -351,6 +358,7 @@ it_dmg_packed:
     .byte $23, $25, $24, $26, $24, $26, 0
     .byte $11                                 // 135: Iron Spike (1d1)
     .byte 0                                   // 136: Phase Door
+    .byte 0, 0, 0                             // 137-139: launchers 0d0
 it_dmg_packed_end:
 
 #if HAL_PLATFORM_ITEM_COST_IN_TOWN_OVERLAY
@@ -386,6 +394,7 @@ it_cost_lo:
     // 128-134: chests (20/60/100/150/200/250, ruined 0)
     .byte <20, <60, <100, <150, <200, <250, <0, <1 // 135: Iron Spike
     .byte <15                               // 136: Phase Door (VMS 15 gp)
+    .byte <120, <240, <300                  // 137-139: Long Bow, Composite Bow, Heavy Crossbow (VMS)
 it_cost_lo_end:
 
 #if PLATFORM_PRODUCT_OVERLAY_RUNTIME
@@ -397,12 +406,12 @@ it_cost_hi_extra_id:
     .byte 4, 8, 45, 56, 57, 59, 60, 68, 80, 81
     .byte 91, 97, 105, 106, 107, 108, 111, 112, 113, 114
     .byte 115, 116, 117, 118, 119, 120, 121, 122, 123, 124
-    .byte 125, 127
+    .byte 125, 127, 139
 it_cost_hi_extra_value:
     .byte >300, >530, >400, >400, >800, >300, >800, >350, >430, >1050
     .byte >400, >300, >500, >750, >1000, >750, >3000, >500, >1000, >500
     .byte >300, >350, >1800, >1500, >1200, >2500, >1000, >600, >1200, >300
-    .byte >5000, >500
+    .byte >5000, >500, >300
 it_cost_hi_extra_end:
 .const IT_COST_HI_EXTRA_COUNT = it_cost_hi_extra_value - it_cost_hi_extra_id
 
@@ -439,6 +448,7 @@ it_cost_hi:
     .byte >20, >60, >100, >150, >200, >250, >0    // 128-134: chests
     .byte >1                                      // 135: Iron Spike
     .byte >15                                     // 136: Phase Door
+    .byte >120, >240, >300                        // 137-139: launchers
 it_cost_hi_end:
 #endif
 
@@ -469,7 +479,10 @@ it_min_level:
     .byte $c9, $31, $b5, $ba        // 112-119
     .byte $ac, $75, $c5, $82        // 120-127
     .byte $42, $97, $cb, $10        // 128-134: chest levels 2/4/7/9/11/12, ruined 0; 135: spike level 1 (high nibble)
-    .byte $01                       // 136: Phase Door level 1 (VMS level 1)
+    .byte $41                       // 136: Phase Door level 1 (VMS level 1); 137: Long Bow 4
+    .byte $8a                       // 138: Composite Bow 10, 139: Heavy Crossbow 8
+    // Launchers on Moria8's compressed scale (VMS depth 10 -> 3-6, 30 -> 4-8,
+    // 40 -> 6-10 elsewhere in this table): VMS 10, 40 and 30.
 it_min_level_end:
 
 // iml_get_for_type — Minimum dungeon level for item type X.
@@ -509,17 +522,31 @@ it_missile:
     .byte $81           // 52: Arrow — IS arrow ammo
     .byte $82           // 53: Bolt — IS bolt ammo
     .byte $83           // 54: Rock — IS rock ammo
+// The launchers appended after the original catalog (VMS p1 3, 4, 6)
+.const IT_MISSILE2_BASE = 137
+.const IT_MISSILE2_END  = 140
+it_missile2:
+    .byte 1             // 137: Long Bow — fires arrows
+    .byte 1             // 138: Composite Bow — fires arrows
+    .byte 2             // 139: Heavy Crossbow — fires bolts
+.assert "it_missile2 covers its range", * - it_missile2, IT_MISSILE2_END - IT_MISSILE2_BASE
+.assert "The appended launchers are the last item types", IT_MISSILE2_END, ITEM_TYPE_COUNT
 
 // item_get_missile — Get missile type for an item
 // Input: X = item type ID
 // Output: A = missile value (0 if not ranged)
 // Preserves: X, Y
 item_get_missile:
+    cpx #IT_MISSILE2_BASE
+    bcs !igm_late+
     cpx #IT_MISSILE_BASE
     bcc !igm_zero+
     cpx #IT_MISSILE_END
     bcs !igm_zero+
     lda it_missile - IT_MISSILE_BASE,x
+    rts
+!igm_late:
+    lda it_missile2 - IT_MISSILE2_BASE,x
     rts
 !igm_zero:
     lda #0
@@ -575,6 +602,8 @@ item_get_display_char:
     lda #$1c                    // '}' launcher
     rts
 !igd_not_ranged:
+    cpx #IT_MISSILE2_BASE           // the appended launchers
+    bcs !igd_bow-
     cpx #ITEM_FLASK_OIL
     bne !igd_cat+
     lda #$21                    // '!' flask
@@ -627,7 +656,7 @@ it_name_lo:
     .byte <itn_124, <itn_125, <itn_126, <itn_127
     .byte <itn_128, <itn_129, <itn_130, <itn_131
     .byte <itn_132, <itn_133, <itn_134, <itn_135
-    .byte <itn_136
+    .byte <itn_136, <itn_137, <itn_138, <itn_139
 it_name_lo_end:
 #if HAL_PLATFORM_ITEM_TABLES_SPLIT_RESIDENT
 :ResidentItemsSegment()
@@ -667,7 +696,7 @@ it_name_hi:
     .byte >itn_124, >itn_125, >itn_126, >itn_127
     .byte >itn_128, >itn_129, >itn_130, >itn_131
     .byte >itn_132, >itn_133, >itn_134, >itn_135
-    .byte >itn_136
+    .byte >itn_136, >itn_137, >itn_138, >itn_139
 it_name_hi_end:
 #else
 it_name_hi_end:
@@ -951,6 +980,9 @@ itn_135: .byte ITOK_IRON ; .text "Spike" ; .byte 0
 #endif
 // Emitted after 135: product builds find a name by stream order.
 itn_136: .text "Phase Door" ; .byte 0
+itn_137: .text "Long Bow" ; .byte 0
+itn_138: .text "Composite Bow" ; .byte 0
+itn_139: .text "Heavy Crossbow" ; .byte 0
 #if C64_UNIT_TEST && C64_TEST_NAME_STREAMS_A000
 .segment Default
 #endif

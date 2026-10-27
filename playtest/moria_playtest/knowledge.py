@@ -278,7 +278,7 @@ def _table_bytes(text: str, label: str) -> list[int]:
     return values
 
 
-MISSILE_IDS = range(49, 55)   # bows, ammunition (IT_MISSILE_BASE, core/item_tables.s): one blow in melee
+MISSILE_IDS = (*range(49, 55), *range(137, 140))   # launchers, ammunition (IT_MISSILE_BASE, IT_MISSILE2_BASE, core/item_tables.s): one blow in melee
 
 
 @dataclass(frozen=True)

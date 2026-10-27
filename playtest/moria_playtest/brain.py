@@ -107,7 +107,8 @@ STARTING_TORCHES = 4     # ... 1 each until the 2026-10-25 kit fix), and torches
 STARTING_WEAPON = ("Dagger", 0)               # core/game_loop.s starting equipment: (name, to-dam)
 # Launchers (core/ranged_fire.s, MON-018): ammunition, damage multiplier and
 # range; the ammunition's dice average (core/item_tables.s: 1d5, 1d4, 1d2).
-LAUNCHERS = {"Light Crossbow": ("Bolt", 3, 25), "Short Bow": ("Arrow", 2, 25), "Sling": ("Rock", 2, 20)}
+LAUNCHERS = {"Heavy Crossbow": ("Bolt", 4, 35), "Composite Bow": ("Arrow", 4, 35), "Long Bow": ("Arrow", 3, 30),
+             "Light Crossbow": ("Bolt", 3, 25), "Short Bow": ("Arrow", 2, 25), "Sling": ("Rock", 2, 20)}
 AMMO_AVERAGE = {"Bolt": 3.0, "Arrow": 2.5, "Rock": 1.5}
 MISSILE_CLASSES = ("rogue", "ranger")   # the best missile skills (core/tables.s: 66, 72)
 AMMO_RESERVE = 20        # shots carried
