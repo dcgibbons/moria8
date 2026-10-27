@@ -6,7 +6,7 @@
 //        shot's range by launcher and a missed shot's landing (ranged_fire.s
 //        rf_fly and rf_shot_lands, M5d 2026-10-26).
 //
-// Results at $0400-$040C: $01 = pass, $00 = fail per test (13 tests)
+// Results at $0400-$040F: $01 = pass, $00 = fail per test (16 tests)
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_bootstrap)
 
@@ -15,7 +15,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #12
+    ldx #15
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -99,7 +99,8 @@ press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
 // Test scratch
-tc_results: .fill 13, $ff
+tc_results: .fill 16, $ff
+tt_base: .byte 0
 tt_seen: .byte 0
 tt_count: .byte 0
 
@@ -446,7 +447,8 @@ test_start:
     lda #15
     sta tw_last_y
 
-    jsr tw_consume_item
+    jsr tw_drop_saved               // the landing itself (its 9-in-10 roll: test 16)
+    sec
     bcc !t11_fail+
     lda turn_action_redraw_pending
     beq !t11_fail+
@@ -563,6 +565,153 @@ test_start:
     sta tc_results+12
 !t13_done:
 
+    // ==========================================
+    // Test 14: Thrown damage (VMS facts plus Moria8's STR bonus): a Flask
+    // of Oil's 2d6 with STR 10 (bonus 0) is 2-12 whatever PL_TODMG holds
+    // (+10 here); its own +3 to-dam makes 5-15; -20 floors at 0
+    // ==========================================
+    lda #10
+    sta zp_player_str
+    lda #10
+    sta player_data + PL_TODMG
+    lda #ITEM_FLASK_OIL
+    sta tw_item_id
+    lda #0
+    sta tw_save_to_dam
+    lda #2
+    ldx #12
+    jsr t14_range
+    bcc !t14_fail+
+    lda #3
+    sta tw_save_to_dam
+    lda #5
+    ldx #15
+    jsr t14_range
+    bcc !t14_fail+
+    lda #$ec                    // -20
+    sta tw_save_to_dam
+    lda #0
+    ldx #0
+    jsr t14_range
+    bcc !t14_fail+
+    lda #$01
+    sta tc_results+13
+    jmp !t14_done+
+!t14_fail:
+    lda #$00
+    sta tc_results+13
+!t14_done:
+    lda #0
+    sta tw_save_to_dam
+    sta player_data + PL_TODMG
+
+    // ==========================================
+    // Test 15: Thrown to-hit (VMS tbth - cur_dis, tpth with the item's
+    // to-hit): six squares cost 6; +4 item to-hit adds 3 x 4 x 3/4 = 9; a
+    // long flight floors at 0
+    // ==========================================
+    lda #0
+    sta player_data + PL_CLASS  // Warrior
+    sta player_data + PL_RACE   // Human
+    sta player_data + PL_TOHIT
+    sta zp_eff_bless
+    sta tw_save_to_hit
+    sta rf_dist
+    lda #1
+    sta zp_player_lvl
+    jsr throw_calc_tohit
+    lda zp_combat_tohit
+    sta tt_base
+    lda #6
+    sta rf_dist
+    jsr throw_calc_tohit
+    lda tt_base
+    sec
+    sbc #6
+    cmp zp_combat_tohit
+    bne !t15_fail+
+    lda #0
+    sta rf_dist
+    lda #4
+    sta tw_save_to_hit
+    jsr throw_calc_tohit
+    lda tt_base
+    clc
+    adc #9
+    cmp zp_combat_tohit
+    bne !t15_fail+
+    lda #0
+    sta tw_save_to_hit
+    lda #255
+    sta rf_dist
+    jsr throw_calc_tohit
+    lda zp_combat_tohit
+    bne !t15_fail+
+    lda #$01
+    sta tc_results+14
+    jmp !t15_done+
+!t15_fail:
+    lda #$00
+    sta tc_results+14
+!t15_done:
+    lda #0
+    sta rf_dist
+
+    // ==========================================
+    // Test 16: A thrown item that misses lands when randint(10) > 1 (VMS
+    // drop_throw): 40 to 49 of 50 with the seeded RNG; a potion never lands
+    // (Moria8: it shatters); one that hits is used up
+    // ==========================================
+    lda #0
+    sta tt_seen
+    lda #50
+    sta tt_count
+!t16_loop:
+    jsr t13_stock_arrow
+    jsr tw_consume_item
+    lda #20
+    ldy #15
+    jsr floor_item_find_at
+    bcc !t16_next+
+    inc tt_seen
+!t16_next:
+    dec tt_count
+    bne !t16_loop-
+    lda tt_seen
+    cmp #40
+    bcc !t16_fail+
+    cmp #50
+    bcs !t16_fail+
+    lda #20
+    sta tt_count
+!t16_potion:
+    jsr t13_stock_arrow
+    lda #17                     // Potion of Cure Light Wounds
+    sta tw_item_id
+    jsr tw_consume_item
+    lda #20
+    ldy #15
+    jsr floor_item_find_at
+    bcs !t16_fail+
+    dec tt_count
+    bne !t16_potion-
+    jsr t13_stock_arrow
+    jsr tw_hit_used_up
+    lda #20
+    ldy #15
+    jsr floor_item_find_at
+    bcs !t16_fail+
+    lda inv_item_id             // used up from the pack
+    cmp #FI_EMPTY
+    bne !t16_fail+
+    lda #$01
+    sta tc_results+15
+    jmp !t16_done+
+!t16_fail:
+    lda #$00
+    sta tc_results+15
+!t16_done:
+
     jmp test_exit_trampoline
 
 // One Arrow +2 in pack slot 0, saved as the shot, its flight ending at
@@ -617,4 +766,29 @@ count_spells_known:
     jmp spell_mask_count_ptr
 player_disarm_get_effective_chance:
     lda #0
+    rts
+
+// tw_roll_damage 40 times: carry set when every roll is within A..X
+t14_lo: .byte 0
+t14_hi: .byte 0
+t14_n:  .byte 0
+t14_range:
+    sta t14_lo
+    stx t14_hi
+    lda #40
+    sta t14_n
+!t14r_loop:
+    jsr tw_roll_damage
+    lda cmb_damage
+    cmp t14_lo
+    bcc !t14r_bad+
+    lda t14_hi
+    cmp cmb_damage
+    bcc !t14r_bad+
+    dec t14_n
+    bne !t14r_loop-
+    sec
+    rts
+!t14r_bad:
+    clc
     rts

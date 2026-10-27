@@ -8,8 +8,7 @@
 ui_identify_print:
     jsr msg_clear
     jsr identify_symbol_get_desc
-    jsr msg_print
-    rts
+    jmp msg_print              // tail call
 
 identify_symbol_get_desc:
     lda recall_query_sc

@@ -319,8 +319,7 @@ rf_msg_ammo_prefix:
     lda #0
     sta fi_add_ego              // Ammo has no ego
     lda rf_ammo_id
-    jsr item_append_name
-    rts
+    jmp item_append_name              // tail call
 
 // rf_print_msg — Null-terminate and print combat_msg_buf
 // Clobbers: A, X

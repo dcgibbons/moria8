@@ -491,8 +491,7 @@ irs_p3_report:
     // resident router (irs_p3_swap_exec) restores OVL.ITEMS after we return.
     sta zp_ptr0
     sty zp_ptr0_hi
-    jsr msg_print
-    rts
+    jmp msg_print              // tail call
 #else
     jsr pmx_print_inline
 #if HAL_PLATFORM_SCROLL_P3_MODAL_DEATH_TRAMP

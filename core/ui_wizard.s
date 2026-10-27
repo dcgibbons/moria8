@@ -31,8 +31,7 @@ ui_wizard_display:
     sta zp_game_flags
     lda #<wiz_enabled_str
     ldy #>wiz_enabled_str
-    jsr msg_print_ay
-    rts
+    jmp msg_print_ay              // tail call
 !wiz_menu:
     jsr ui_wizard_draw_menu
     jsr input_prepare_followup_key
@@ -135,8 +134,7 @@ ui_wizard_draw_menu:
     sta zp_cursor_col
     lda #<wiz_footer_str
     ldy #>wiz_footer_str
-    jsr screen_put_string_ay
-    rts
+    jmp screen_put_string_ay              // tail call
 #else
     lda #0
     sta zp_cursor_row
@@ -229,8 +227,7 @@ ui_wizard_draw_menu:
     sta zp_cursor_col
     lda #<wiz_footer_str
     ldy #>wiz_footer_str
-    jsr screen_put_string_ay
-    rts
+    jmp screen_put_string_ay              // tail call
 #endif
 
 ui_wizard_cmd_heal_cure:
@@ -323,8 +320,7 @@ ui_wizard_cmd_gain_level:
 #else
     jsr combat_apply_levelup
 #endif
-    jsr status_draw
-    rts
+    jmp status_draw              // tail call
 
 ui_wizard_cmd_teleport:
     jsr eff_teleport_self
@@ -537,8 +533,7 @@ c64_test_wizard_item_redraw_done_sym:
     sta zp_ptr0
     lda ui_wizard_msg_hi
     sta zp_ptr0_hi
-    jsr msg_print
-    rts
+    jmp msg_print              // tail call
 
 ui_wizard_restore_gameplay_view:
     jsr ui_view_redraw_gameplay_view

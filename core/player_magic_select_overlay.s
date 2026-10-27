@@ -200,5 +200,4 @@ spell_list_display:
 
     lda #<pm_footer_suffix
     ldy #>pm_footer_suffix
-    jsr screen_put_string_ay
-    rts
+    jmp screen_put_string_ay              // tail call

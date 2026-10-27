@@ -150,9 +150,8 @@ ui_inv_display_common:
     sta zp_ptr0
     lda uinv_footer_hi
     sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    jmp hal_screen_put_string              // tail call
 
-    rts
 
 // ============================================================
 // Scratch

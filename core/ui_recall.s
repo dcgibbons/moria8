@@ -218,9 +218,8 @@ ui_recall_display:
     sta zp_cursor_col
     lda #<press_key_str
     ldy #>press_key_str
-    jsr screen_put_string_ay
+    jmp screen_put_string_ay              // tail call
 
-    rts
 
 // ============================================================
 // Helpers

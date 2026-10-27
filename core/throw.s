@@ -3,9 +3,16 @@
 //
 // SHIFT+T throws any inventory item at a target in a direction.
 // Traces projectile path (like ranged_fire.s), checks for monster hit,
-// rolls damage. Potions shatter on impact; other items land on floor.
-// Reuses melee combat subroutines for to-hit and damage application.
-// Reference: umoria player_throw.cpp
+// rolls damage. Reuses melee combat subroutines for to-hit and damage.
+//
+// Pinned VMS Moria moria.inc throw_object/facts/drop_throw, with Moria8's
+// own additions kept (maintainer, 2026-10-26): to-hit is three quarters of
+// the missile skill with the player's and the item's to-hit, less one per
+// square flown; damage is the item's dice (a 0d0 item 1d1, Moria8) plus its
+// own to-dam and the STR damage bonus (Moria8; VMS adds no STR), then a
+// critical hit by its weight; an item that hits is used up, one that misses
+// lands at the last open square 9 times in 10; a potion always shatters
+// (Moria8).
 
 #import "input_ui_helpers.s"
 
@@ -93,6 +100,8 @@ throw_item:
     lda zp_player_y
     sta proj_cy
     sta tw_last_y
+    lda #0
+    sta rf_dist                 // squares flown (ranged_fire.s)
 
 !tw_trace:
     dec proj_steps
@@ -103,6 +112,7 @@ throw_item:
     jmp tw_miss_darkness
 !tw_step_ok:
 
+    inc rf_dist
     // Update last walkable position
     lda proj_cx
     sta tw_last_x
@@ -136,57 +146,13 @@ throw_item:
     jmp tw_miss_monster
 !tw_hit:
 
-    // 6. Hit! Roll damage using item's dice
+    // 6. Hit! Roll damage
+    jsr tw_roll_damage
+
+    // Critical hit by the item's weight (VMS critical_blow)
     ldx tw_item_id
-    lda it_dmg_packed,x
-    bne !tw_has_dice+
-    // No dice (0d0) — use 1d1 minimum
-    lda #1
-    ldx #1
-    jmp !tw_roll_dice+
-!tw_has_dice:
-    pha
-    and #$0f
-    tax                         // X = sides
-    pla
-    lsr
-    lsr
-    lsr
-    lsr                         // A = dice count
-!tw_roll_dice:
-    ldy #0                      // No bonus on dice
-    jsr math_dice               // Result in zp_math_a
-
-    // Add STR damage bonus, including exceptional 18/xx thresholds.
-    lda zp_player_str
-    jsr player_str_damage_adj
-    bmi !tw_str_neg+
-    clc
-    adc zp_math_a
-    jmp !tw_add_todmg+
-!tw_str_neg:
-    clc
-    adc zp_math_a
-    bpl !tw_add_todmg+
-    lda #0                      // Clamp to 0
-!tw_add_todmg:
-
-    // Add PL_TODMG
-    sta zp_temp0
-    lda player_data + PL_TODMG
-    bmi !tw_todmg_neg+
-    clc
-    adc zp_temp0
-    bcc !tw_dmg_ok+
-    lda #255
-    jmp !tw_dmg_ok+
-!tw_todmg_neg:
-    clc
-    adc zp_temp0
-    bpl !tw_dmg_ok+
-    lda #0                      // Clamp to 0
-!tw_dmg_ok:
-    sta cmb_damage
+    lda it_weight,x
+    jsr combat_critical_blow_weight
 
     // Apply damage
     ldx cmb_slot
@@ -197,7 +163,7 @@ throw_item:
     // Monster killed — "YOU HAVE SLAIN THE <name>."
     ldx cmb_slot
     jsr combat_kill_message
-    jmp tw_consume_item
+    jmp tw_hit_used_up
 
 !tw_hit_alive:
     // Wake the monster
@@ -209,7 +175,7 @@ throw_item:
     jsr projectile_msg_suffix
     lda #SFX_HIT
     jsr hal_sound_play
-    jmp tw_consume_item
+    jmp tw_hit_used_up
 
 tw_miss_monster:
     // Message: "THE <item> MISSES THE <name>."
@@ -239,20 +205,32 @@ tw_miss_darkness:
     jsr cmb_term_and_print
 
 tw_consume_item:
-    // Item properties were saved at selection time; inv_remove_item clears them.
+    // A miss. Item properties were saved at selection time; inv_remove_item
+    // clears them.
     ldx tw_slot
 
     // Consume 1 from inventory (zero-quantity records are removed).
     jsr inv_consume_one
 
-    // Place on floor? Potions always shatter (no floor item)
+    // Place on floor? Potions always shatter (no floor item); anything else
+    // lands when randint(10) > 1 (VMS drop_throw)
     ldx tw_item_id
     lda it_category,x
     cmp #ICAT_POTION
     beq !tw_done+
+    lda #10
+    jsr rng_range               // [0,9]
+    beq !tw_done+
 
     jsr tw_drop_saved
 !tw_done:
+    sec                         // Turn consumed
+    rts
+
+tw_hit_used_up:
+    // A hit uses the item up (VMS throw_object drops only a miss)
+    ldx tw_slot
+    jsr inv_consume_one
     sec                         // Turn consumed
     rts
 
@@ -296,6 +274,64 @@ tw_drop_saved:
 !tw_drop_done:
     rts
 
+// tw_roll_damage — The thrown item's damage before a critical hit: its dice
+// (0d0: 1d1), the STR damage bonus and its own to-dam, floored at 0
+// Output: cmb_damage
+// Clobbers: A, X, Y, zp_math_a/b, zp_temp0
+tw_roll_damage:
+    ldx tw_item_id
+    lda it_dmg_packed,x
+    bne !tw_has_dice+
+    // No dice (0d0) — use 1d1 minimum
+    lda #1
+    ldx #1
+    jmp !tw_roll_dice+
+!tw_has_dice:
+    pha
+    and #$0f
+    tax                         // X = sides
+    pla
+    lsr
+    lsr
+    lsr
+    lsr                         // A = dice count
+!tw_roll_dice:
+    ldy #0                      // No bonus on dice
+    jsr math_dice               // Result in zp_math_a
+
+    // Add STR damage bonus, including exceptional 18/xx thresholds.
+    lda zp_player_str
+    jsr player_str_damage_adj
+    bmi !tw_str_neg+
+    clc
+    adc zp_math_a
+    jmp !tw_add_todmg+
+!tw_str_neg:
+    clc
+    adc zp_math_a
+    bpl !tw_add_todmg+
+    lda #0                      // Clamp to 0
+!tw_add_todmg:
+
+    // Add the item's own to-dam (VMS facts), not PL_TODMG: a thrown flask
+    // gains nothing from the wielded weapon or rings
+    sta zp_temp0
+    lda tw_save_to_dam
+    bmi !tw_todmg_neg+
+    clc
+    adc zp_temp0
+    bcc !tw_dmg_ok+
+    lda #255
+    jmp !tw_dmg_ok+
+!tw_todmg_neg:
+    clc
+    adc zp_temp0
+    bcs !tw_dmg_ok+             // still >= 0
+    lda #0                      // Clamp to 0
+!tw_dmg_ok:
+    sta cmb_damage
+    rts
+
 // ============================================================
 // throw_calc_tohit — BOW-based to-hit at 75%
 // Like combat_calc_tohit but uses BTH_BOW (offset 4) instead of BTH (offset 3)
@@ -305,6 +341,8 @@ tw_drop_saved:
 // ============================================================
 throw_calc_tohit:
     lda player_data + PL_TOHIT
+    clc
+    adc tw_save_to_hit              // VMS tpth: the item's to-hit too
     sta cmb_total_tohit
     lda #4                          // BTH_BOW offset in class_properties
     ldx #1                          // BOW level adj offset
@@ -322,6 +360,11 @@ throw_calc_tohit:
 !tct_div4:
     lsr                         // /2
     lsr                         // /4 → 75%
+    sec
+    sbc rf_dist                 // VMS tbth - cur_dis
+    bcs !tct_dist_ok+
+    lda #0
+!tct_dist_ok:
     sta zp_combat_tohit
     rts
 
@@ -337,7 +380,7 @@ tw_msg_item_prefix:
     jsr combat_append_str
     jsr tw_stage_saved_item_fields
     lda tw_item_id
-    jsr item_append_desc
+    jsr item_append_desc            // literal call: the C64 throw-message contract checks it
     rts
 
 tw_stage_saved_item_fields:

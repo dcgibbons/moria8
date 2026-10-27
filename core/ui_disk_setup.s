@@ -139,13 +139,11 @@ uds_confirm_drive9:
     bne !cfm_key-
     lda #DISK_UI_RES_NO
     sta disk_ui_result
-    jsr uds_clear_after_modal
-    rts
+    jmp uds_clear_after_modal              // tail call
 !cfm_yes:
     lda #DISK_UI_RES_YES
     sta disk_ui_result
-    jsr uds_clear_after_modal
-    rts
+    jmp uds_clear_after_modal              // tail call
 
 uds_show_insert_prompt:
     jsr ui_clear_full_screen_safe
@@ -175,7 +173,7 @@ uds_insert_prompt_wait_key:
     jsr input_get_modal_dismiss_key
     lda #DISK_UI_RES_OK
     sta disk_ui_result
-    jsr uds_clear_after_modal
+    jsr uds_clear_after_modal        // literal call: the C64 insert-dismiss contract checks it
     rts
 
 uds_show_init_prompt:
@@ -191,13 +189,11 @@ uds_show_init_prompt:
     bne !prep_init_key-
     lda #DISK_UI_RES_NO
     sta disk_ui_result
-    jsr uds_clear_after_modal
-    rts
+    jmp uds_clear_after_modal              // tail call
 !prep_init_yes:
     lda #DISK_UI_RES_YES
     sta disk_ui_result
-    jsr uds_clear_after_modal
-    rts
+    jmp uds_clear_after_modal              // tail call
 
 uds_enter_device:
     jsr ui_clear_full_screen_safe
@@ -312,8 +308,7 @@ uds_show_no_drive9:
     jsr input_get_modal_dismiss_key
     lda #DISK_UI_RES_CANCEL
     sta disk_ui_result
-    jsr uds_clear_after_modal
-    rts
+    jmp uds_clear_after_modal              // tail call
 
 uds_show_no_device:
     jsr ui_clear_full_screen_safe
@@ -323,8 +318,7 @@ uds_show_no_device:
     jsr input_get_modal_dismiss_key
     lda #DISK_UI_RES_CANCEL
     sta disk_ui_result
-    jsr uds_clear_after_modal
-    rts
+    jmp uds_clear_after_modal              // tail call
 
 uds_show_program_disk:
 #if C64_TEST_SCRIPTED_SINGLE_DRIVE_SAVE_WRONG_MEDIA_PRODUCT || C64_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_WRONG_MEDIA_PRODUCT || PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_SAVE_WRONG_MEDIA_PRODUCT || PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_WRONG_MEDIA_PRODUCT || C128_TEST_SCRIPTED_SINGLE_DRIVE_SAVE_WRONG_MEDIA_PRODUCT || C128_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_WRONG_MEDIA_PRODUCT
@@ -338,8 +332,7 @@ uds_show_program_disk:
     jsr input_get_modal_dismiss_key
     lda #DISK_UI_RES_CANCEL
     sta disk_ui_result
-    jsr uds_clear_after_modal
-    rts
+    jmp uds_clear_after_modal              // tail call
 
 uds_show_init_fail:
     jsr ui_clear_full_screen_safe
@@ -350,8 +343,7 @@ uds_show_init_fail:
     jsr input_get_modal_dismiss_key
     lda #DISK_UI_RES_CANCEL
     sta disk_ui_result
-    jsr uds_clear_after_modal
-    rts
+    jmp uds_clear_after_modal              // tail call
 
 uds_clear_after_modal:
     jsr ui_clear_full_screen_safe
@@ -433,8 +425,7 @@ uds_show_c128_status_error:
     lda hal_storage_diag_phase
     jsr screen_put_hex
     lda #$2e
-    jsr hal_screen_put_char
-    rts
+    jmp hal_screen_put_char              // tail call
 #endif
 
 #if HAL_STORAGE_DISK_SETUP_DETAIL_DOS_DRIVE
@@ -456,8 +447,7 @@ uds_show_plus4_disk_error:
     lda hal_storage_diag_device
     jsr screen_put_decimal_rj2
     lda #$2e
-    jsr hal_screen_put_char
-    rts
+    jmp hal_screen_put_char              // tail call
 
 #endif
 
@@ -478,8 +468,7 @@ uds_show_plus4_status_error:
     lda hal_storage_diag_phase
     jsr screen_put_hex
     lda #$2e
-    jsr hal_screen_put_char
-    rts
+    jmp hal_screen_put_char              // tail call
 #endif
 
 uds_draw_drive_summary:

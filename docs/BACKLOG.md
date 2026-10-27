@@ -53,6 +53,36 @@ Required work:
 - Optionally retry a timed-out test once and report a hang that recurs.
 - Check the C64 and Plus/4 runners for the same gap.
 
+### Add the VMS `x` weapon swap (secondary weapon slot)
+
+VMS Moria keeps a secondary weapon in its own equipment slot
+(`inventory[34]`) and `x` swaps it with the wielded one (`moria.inc`
+`switch_weapon`, 615-650): refused with "The <weapon> you are wielding
+appears to be cursed." when the wielded weapon is cursed, otherwise the two
+trade places, their bonuses move (`py_bonuses(...,-1)` / `(...,1)`), it
+prints "Primary weapon   : <name>" and "Secondary weapon : <name>", and it
+takes a turn; with neither weapon, "But you are wielding no weapons."
+Moria8 has no such slot or command (`docs/FEATURE_MAP.md` "Exchange
+Primary/Secondary Weapon", `Missing`; the slot-layout row there wrongly
+mentions an `x` swap and `player_aux_slot`). A Rogue or Ranger switching
+between launcher and melee weapon spends a turn wielding from the pack each
+way (M5d playtest, 2026-10-26).
+
+Required work:
+
+- Add a 32nd inventory slot (`TOTAL_INV_SLOTS`, 8 parallel arrays, 34 uses)
+  excluded from the pack, the equipment bonus sum and pack-only loops.
+- Bump the save format, loading older saves with the slot empty.
+- `x`: the VMS behavior above, through the shared equipment recalculation.
+- Show the secondary weapon on the equipment screen; correct the
+  FEATURE_MAP slot-layout row.
+- Teach the playtest bot to keep its melee weapon (or launcher) there.
+
+Acceptance target:
+
+- `x` swaps as VMS does on every port, old saves load, and focused tests
+  cover the cursed refusal, the empty case, bonus transfer and the turn.
+
 ### Add a cloak equipment slot
 
 VMS Moria 4.8 and Umoria 5.7.15 start every class but the VMS Rogue with a

@@ -416,9 +416,8 @@ score_death_screen:
     sta zp_text_color
     lda #<sds_anykey_str
     ldy #>sds_anykey_str
-    jsr screen_put_string_ay
+    jmp screen_put_string_ay              // tail call
 
-    rts
 
 // ============================================================
 // sds_print_death_source — Print death source at cursor

@@ -818,8 +818,7 @@ put_choose_suffix:
     adc #$01                // A=$01, B=$02, ..., H=$08
     jsr hal_screen_put_char
     lda #$29                // ')'
-    jsr hal_screen_put_char
-    rts
+    jmp hal_screen_put_char              // tail call
 
 // ============================================================
 // String data (screen codes)
@@ -899,13 +898,11 @@ create_select_gender:
 !gender_male:
     lda #PLF_MALE
     sta player_data + PL_FLAGS
-    jsr hal_input_wait_release
-    rts
+    jmp hal_input_wait_release              // tail call
 !gender_female:
     lda #0
     sta player_data + PL_FLAGS
-    jsr hal_input_wait_release
-    rts
+    jmp hal_input_wait_release              // tail call
 
 // ============================================================
 // Background generation — chain walker
@@ -1050,8 +1047,7 @@ create_gen_background:
     sta player_data + PL_SOCIAL_CLASS
 
     // Word-wrap text into player_background
-    jsr bg_word_wrap
-    rts
+    jmp bg_word_wrap              // tail call
 
 // ============================================================
 // bg_word_wrap — Wrap bg_text_buf into player_background

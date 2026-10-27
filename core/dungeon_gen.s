@@ -596,8 +596,7 @@ dungeon_generate:
     jsr place_traps
     jsr place_secrets
     jsr darken_rooms            // Strip FLAG_LIT from dark rooms (after all generation)
-    jsr position_player_dungeon
-    rts
+    jmp position_player_dungeon              // tail call
 
 // ============================================================
 // place_traps — Place hidden traps on the dungeon floor
@@ -1300,8 +1299,7 @@ connect_rooms:
 	    dex
 	    jsr conn_room_center_to_target
 	    jsr carve_staged_tunnel
-	    jsr materialize_staged_tunnel
-	    rts
+	    jmp materialize_staged_tunnel              // tail call
 
 #if !DUNGEON_TUNNEL_HELPERS_EXTERNAL
 #import "dungeon_room_center_helpers.s"
@@ -1549,8 +1547,7 @@ mark_staged_wall:
     ora #FLAG_HAS_ITEM
     ora #FLAG_OCCUPIED
     :MapWrite_ptr0_y()
-    jsr mark_neighbor_walls_temp
-    rts
+    jmp mark_neighbor_walls_temp              // tail call
 
 mark_neighbor_walls_temp:
     lda dg_cy1
@@ -2218,8 +2215,7 @@ random_wall_adj_stair_floor:
 
 !rwas_fallback:
 	    ldx stair_room_idx
-	    jsr random_floor_in_room
-	    rts
+	    jmp random_floor_in_room              // tail call
 
 stair_candidate_valid:
     lda stair_candidate_x
@@ -2343,8 +2339,7 @@ place_streamers:
     lda #TILE_QUARTZ
     sta dg_room_w
     jsr carve_streamer
-    jsr carve_streamer
-    rts
+    jmp carve_streamer              // tail call
 
 // ============================================================
 // carve_streamer — Carve one mineral streamer across the map

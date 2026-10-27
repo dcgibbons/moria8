@@ -1147,8 +1147,7 @@ cj_slot: .byte 0
 door_jam_command:
     jsr get_direction_target
     bcc !djc_free+                // Invalid direction: free
-    jsr door_jam_at_target
-    rts
+    jmp door_jam_at_target              // tail call
 !djc_free:
     clc
     rts

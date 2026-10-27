@@ -273,9 +273,8 @@ ui_char_display:
     sta zp_cursor_col
     lda #<press_key_str
     ldy #>press_key_str
-    jsr screen_put_string_ay
+    jmp screen_put_string_ay              // tail call
 
-    rts
 
 // ui_char_draw_stats — Draw the 6 stats in 2 rows of 3
 // Row 6: STR, INT, WIS
