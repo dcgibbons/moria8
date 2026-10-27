@@ -3691,9 +3691,15 @@ class CharacterTest(unittest.TestCase):
         """Maintainer, 2026-10-27 (M5f): Mages and Priests qualify at 10/20
         (15/20 from 2026-10-26)."""
         from moria_playtest import goals
-        for character in ("human-priest", "dwarf-priest", "gnome-priest", "human-mage", "elf-mage", "halfling-mage"):
+        for character in ("human-priest", "dwarf-priest", "human-mage", "elf-mage", "elf-priest"):
             for goal in ("clvl10", "reach_dl8"):
                 self.assertEqual(goals.for_character(GOALS[goal], character).qualify_bar, 10)
+        self.assertEqual(goals.for_character(GOALS["clvl10"], "gnome-priest").qualify_bar, 10)
+        # Frozen at their level (maintainer, 2026-10-27): CHARACTER_BARS decides.
+        for character, goal, bar in (("gnome-mage", "clvl10", 8), ("gnome-mage", "reach_dl8", 7),
+                                     ("halfling-mage", "clvl10", 8), ("halfling-mage", "reach_dl8", 5),
+                                     ("gnome-priest", "reach_dl8", 5)):
+            self.assertEqual(goals.for_character(GOALS[goal], character).qualify_bar, bar)
         self.assertEqual(goals.for_character(GOALS["clvl10"], "human-paladin").qualify_bar, 16)
         self.assertEqual(goals.for_character(GOALS["clvl10"], "human-warrior").qualify_bar, 16)
 
