@@ -10,7 +10,10 @@ and the scores of earlier rounds of the same project.
 
 - ``/api/overview[?round=R]``: the round (default: the newest), its suites,
   the round list and the project's history.
-- ``/api/worker?session=S&worker=N``: one worker's status with its decisions.
+- ``/api/worker?session=S&worker=N``: one worker's status with its decisions,
+  and the HP and mana of its last ``TIMELINE`` steps.
+- ``/api/milestone``: every race and class on the M5 goals: frozen or not,
+  its bar, and the latest full result.
 """
 
 from __future__ import annotations
@@ -26,11 +29,16 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
-from .goals import CHARACTERS, GOALS, QUALIFICATION_SEEDS, for_character, required
+from .goals import CHARACTERS, CLASSES, GOALS, QUALIFICATION_SEEDS, RACE_KEYS, for_character, required
 from .launch import PLAYTEST_OUT, ROOT
 
 INDEX = ROOT / "playtest" / "dashboard" / "index.html"
 SESSIONS = PLAYTEST_OUT / "sessions"
+SUITES = ROOT / "playtest" / "suites"
+MILESTONE_GOALS = ("clvl10", "reach_dl8")   # M4 and M5 (§16)
+DEFAULT_CHARACTER = "half-troll-warrior"     # suites named by goal alone (session.suite_path)
+TIMELINE = 400                               # steps of HP and mana the focus view draws
+STATUS = re.compile(r"HP:\s*(-?\d+)/(\d+)\s+MP:\s*(\d+)/(\d+)")
 KILLER = re.compile(r"[Tt]he ([A-Z][a-z]+(?: [A-Z][a-z]+)*?) "
                     r"(?:hits|bites|touches|stings|claws|crushes|kicks|casts|breathes|gazes|spits|butts|crawls)")
 _cache: dict[tuple[str, float], Any] = {}
@@ -72,11 +80,29 @@ def bar(goal: str, character: str) -> int:
     return required(for_character(GOALS[goal], character), len(QUALIFICATION_SEEDS))
 
 
+def session_parts(path: Path) -> tuple[str, str, str] | None:
+    """``(round, goal, character)``: the goal and character the session
+    recorded in its summary, the round its name less those; a summary
+    without them falls back to the name (``split_name``). Names put the
+    character before the goal or after it, or leave it out (M5d and M5e
+    sessions showed as Half-Troll Warriors, 2026-10-26)."""
+    summary = read_json(path / "summary.json") or {}
+    goal, character = summary.get("goal"), summary.get("character")
+    if goal not in GOALS or character not in CHARACTERS:
+        return split_name(path.name)
+    round_name = path.name
+    for token in (character, goal):
+        round_name = re.sub(rf"(^|-){re.escape(token)}(?=-|$)", "", round_name)
+    return round_name, goal, character
+
+
 def sessions() -> list[tuple[Path, str, str, str]]:
     found = []
     for path in SESSIONS.glob("*"):
-        parts = split_name(path.name) if path.is_dir() else None
-        if parts and (path / "summary.json").exists():
+        if not path.is_dir() or not (path / "summary.json").exists():
+            continue
+        parts = session_parts(path)
+        if parts:
             found.append((path, *parts))
     return found
 
@@ -115,13 +141,61 @@ def killer(trace: Path) -> str:
     return found[-1] if found else ""
 
 
+def trace_tail(trace: Path, count: int) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    try:
+        with gzip.open(trace, "rt") as handle:
+            for line in handle:
+                try:
+                    rows.append(json.loads(line))
+                except ValueError:
+                    break   # still being written
+                del rows[:-count]
+    except (OSError, EOFError):
+        pass
+    return rows
+
+
+def death(trace: Path) -> dict[str, Any]:
+    """How a character died, from its trace's end: the cause in groups (a
+    trap, poison, a caster's spell, or the creature that hit it), the kit it
+    still held, and its mana (the M5f questions: what kills them, and did
+    they die holding potions?)."""
+    rows = trace_tail(trace, 60)
+    if not rows:
+        return {}
+    text = " | ".join(r.get("msg") or "" for r in rows[-6:])
+    commands = [r for r in rows if r.get("mode") == "COMMAND"]
+    last = commands[-1] if commands else rows[-1]
+    found = KILLER.findall(" ".join(r.get("msg") or "" for r in rows[-15:]))
+    if "falling rock" in text or "Rocks fall" in text:
+        cause = "trap: falling rock"
+    elif "pit" in text:
+        cause = "trap: pit"
+    elif "arrow" in text.lower():
+        cause = "trap: arrow"
+    elif "casts a spell" in text:
+        cause = "caster's spell"
+    elif any("poison" in (r.get("msg") or "").lower() for r in rows) and \
+            all(r.get("layer") in ("rest", "search-mode", "explore", "look") for r in commands[-3:]):
+        cause = "poison"
+    else:
+        cause = found[-1] if found else "unknown"
+    status = STATUS.search(last.get("status") or "")
+    return {"cause": cause, "killer": found[-1] if found else "", "clw": last.get("clw"),
+            "oil": last.get("oil"), "mp": int(status.group(3)) if status else None,
+            "mmp": int(status.group(4)) if status else None, "last": last.get("reason") or ""}
+
+
 def suite(path: Path, goal: str, character: str) -> dict[str, Any]:
     summary = read_json(path / "summary.json") or {}
     characters = summary.get("characters", [])
     for char in characters:
         if char.get("outcome") == "died":
             traces = list(path.glob(f"w*/*/{char['seed']}/trace.jsonl.gz"))
-            char["killer"] = cached(traces[0], killer) if traces else ""
+            detail = cached(traces[0], death) if traces else {}
+            char.update(detail or {})
+            char.setdefault("killer", "")
     workers = []
     for status_path in sorted(path.glob("status-w*.json")):
         status = read_json(status_path)
@@ -174,8 +248,53 @@ def overview(round_name: str | None) -> dict[str, Any]:
 
 
 def worker(session: str, number: int) -> dict[str, Any] | None:
-    path = SESSIONS / Path(session).name / f"status-w{number}.json"
-    return read_json(path)
+    base = SESSIONS / Path(session).name
+    status = read_json(base / f"status-w{number}.json")
+    if not status:
+        return status
+    traces = sorted(base.glob(f"w{number}/*/{status.get('seed')}/trace.jsonl.gz"))
+    timeline = []
+    for row in trace_tail(traces[0], TIMELINE * 2) if traces else []:
+        match = STATUS.search(row.get("status") or "")
+        if row.get("mode") == "COMMAND" and match:
+            timeline.append([row["step"], int(match.group(1)), int(match.group(2)),
+                             int(match.group(3)), int(match.group(4)), row.get("layer") or ""])
+    status["timeline"] = timeline[-TIMELINE:]
+    if timeline:
+        last = traces and trace_tail(traces[0], 1)
+        status["kit"] = {"clw": last[0].get("clw"), "oil": last[0].get("oil")} if last else {}
+    return status
+
+
+def suite_file(goal: str, character: str) -> Path:
+    return SUITES / (f"{goal}.json" if character == DEFAULT_CHARACTER else f"{goal}-{character}.json")
+
+
+def milestone() -> dict[str, Any]:
+    """Every allowed race and class on the M5 goals: its bar, whether its
+    suite is frozen (and at what), and its latest finished result."""
+    latest: dict[tuple[str, str], tuple[float, int, int]] = {}
+    for path, _, goal, character in sessions():
+        if goal not in MILESTONE_GOALS:
+            continue
+        summary = cached(path / "summary.json", read_json) or {}
+        chars = summary.get("characters", [])
+        if len(chars) < len(QUALIFICATION_SEEDS):
+            continue
+        when = mtime(path)
+        if when > latest.get((goal, character), (0.0, 0, 0))[0]:
+            latest[(goal, character)] = (when, sum(c.get("outcome") == "reached" for c in chars), len(chars))
+    cells = {}
+    for character in CHARACTERS:
+        for goal in MILESTONE_GOALS:
+            frozen = read_json(suite_file(goal, character))
+            result = latest.get((goal, character))
+            cells[f"{character} {goal}"] = {
+                "bar": bar(goal, character), "frozen": bool(frozen),
+                "frozen_bar": (frozen or {}).get("required"), "frozen_on": (frozen or {}).get("frozen"),
+                "latest": result[1] if result else None}
+    return {"races": list(RACE_KEYS), "classes": list(CLASSES), "goals": list(MILESTONE_GOALS),
+            "characters": sorted(CHARACTERS), "cells": cells}
 
 
 def make_handler() -> type[BaseHTTPRequestHandler]:
@@ -185,6 +304,9 @@ def make_handler() -> type[BaseHTTPRequestHandler]:
             query = {k: v[-1] for k, v in parse_qs(url.query).items()}
             if url.path == "/api/overview":
                 body = json.dumps(overview(query.get("round")), default=str).encode()
+                kind = "application/json"
+            elif url.path == "/api/milestone":
+                body = json.dumps(milestone(), default=str).encode()
                 kind = "application/json"
             elif url.path == "/api/worker":
                 body = json.dumps(worker(query.get("session", ""), int(query.get("worker", "0"))),

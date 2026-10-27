@@ -40,8 +40,8 @@ overlap assertions are the executable authority; never edit this table alone.
 | `$3000-$3fff` | ITEMS overlay cache |
 | `$4000-$730b` | reserved 198x66 live map span |
 | `$730c-$73ff` | reserved unowned gap between map and DB regions |
-| `$7400-$7eff` | DB/data region (item-name streams end near `$79d5`) |
-| `$7f00-$9567` | tier cache, 5736 bytes (tiers 1-4 use 5733: 5520 since MON-014 added `cr_treasure`, then five DL 1 creatures in tier 1, 2026-10-25) |
+| `$7400-$7a0f` | DB/data region (item-name streams end at `$7a0a` since the three launchers, 2026-10-26) |
+| `$7a10-$9567` | tier cache, 7000 bytes, tiers packed back to back from its base (tiers 1-4 use 6873 since the 25 DL 1-5 creatures of 2026-10-25; the start moved from `$7f00` to `$7a00` then, and to `$7a10` for the launcher names) |
 | `$9568-$97ff` | title marker/data cache (663 data bytes; the title art needs 593-624) |
 | `$9800-$9cff` | MODAL small-overlay cache |
 | `$9d00-$9fff` | DISARM small-overlay cache |

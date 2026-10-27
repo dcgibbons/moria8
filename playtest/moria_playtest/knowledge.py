@@ -39,6 +39,13 @@ def creature_levels() -> dict[str, int]:
 
 
 @lru_cache(maxsize=1)
+def kinds_by_name() -> dict[str, tuple[str, int]]:
+    """Creature name -> (screen glyph, native level), the key the lore tables use."""
+    levels = creature_levels()
+    return {name: (glyph, levels[name]) for name, glyph, _, _ in _creatures() if name in levels}
+
+
+@lru_cache(maxsize=1)
 def _tiers() -> list[tuple[list[str], dict[str, list[int]]]]:
     """(creature names, byte tables by label) for each shipped tier file."""
     tiers = []
@@ -216,6 +223,15 @@ def slow_glyphs() -> frozenset[str]:
 
 
 @lru_cache(maxsize=1)
+def slow_names() -> frozenset[str]:
+    """Creatures, by name, that move slower than the player: the messages
+    name one in contact even where its glyph and level are shared with a
+    faster one (a Large Brown Snake is slow, a Large White Snake is not)."""
+    return frozenset(name for name, _, speed, flags in _creatures()
+                     if speed == SPEED_SLOW and not flags & CF_ATTACK_ONLY)
+
+
+@lru_cache(maxsize=1)
 def slow_kinds() -> frozenset[tuple[str, int]]:
     """(screen glyph, creature level) whose every shipped creature moves
     slower than the player: by kind, as ``ranged_kinds`` (a White Worm mass
@@ -278,7 +294,7 @@ def _table_bytes(text: str, label: str) -> list[int]:
     return values
 
 
-MISSILE_IDS = range(49, 55)   # bows, ammunition (IT_MISSILE_BASE, core/item_tables.s): one blow in melee
+MISSILE_IDS = (*range(49, 55), *range(137, 140))   # launchers, ammunition (IT_MISSILE_BASE, IT_MISSILE2_BASE, core/item_tables.s): one blow in melee
 
 
 @dataclass(frozen=True)

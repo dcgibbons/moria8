@@ -103,10 +103,8 @@ itemdesc_put_sensed_suffix:
     cmp #IF_SENSED
     bne !idps_done+
     lda #<itemdesc_sensed_suffix
-    sta zp_ptr0
-    lda #>itemdesc_sensed_suffix
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>itemdesc_sensed_suffix
+    jsr screen_put_string_ay
 !idps_done:
     rts
 

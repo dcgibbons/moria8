@@ -45,5 +45,4 @@ pm_learn_selected_spell:
 
 !pm_lss_msg:
     ldx #HSTR_IGS_SUCCESS
-    jsr huff_print_msg
-    rts
+    jmp huff_print_msg              // tail call

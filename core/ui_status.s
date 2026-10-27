@@ -230,20 +230,16 @@ status_draw:
         lda #STS_ROW21_STATE_COL
         sta zp_cursor_col
         lda #<status_searching_str
-        sta zp_ptr0
-        lda #>status_searching_str
-        sta zp_ptr0_hi
-        jsr hal_screen_put_string
+        ldy #>status_searching_str
+        jsr screen_put_string_ay
 !sd_row21_state_done:
     }
 
     lda #STS_ROW21_LV_COL
     sta zp_cursor_col
     lda #<status_lv_str
-    sta zp_ptr0
-    lda #>status_lv_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>status_lv_str
+    jsr screen_put_string_ay
 
     lda #COL_WHITE
     sta zp_text_color
@@ -256,10 +252,8 @@ status_draw:
     lda #STS_ROW21_DL_COL
     sta zp_cursor_col
     lda #<status_dl_str
-    sta zp_ptr0
-    lda #>status_dl_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>status_dl_str
+    jsr screen_put_string_ay
 
     lda #COL_WHITE
     sta zp_text_color
@@ -283,10 +277,8 @@ status_draw:
     lda #STS_ROW22_ST_COL
     sta zp_cursor_col
     lda #<stat_st_str
-    sta zp_ptr0
-    lda #>stat_st_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>stat_st_str
+    jsr screen_put_string_ay
     lda #COL_WHITE
     sta zp_text_color
     lda zp_player_str
@@ -298,10 +290,8 @@ status_draw:
     lda #STS_ROW22_IN_COL
     sta zp_cursor_col
     lda #<stat_in_str
-    sta zp_ptr0
-    lda #>stat_in_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>stat_in_str
+    jsr screen_put_string_ay
     lda #COL_WHITE
     sta zp_text_color
     lda zp_player_int
@@ -313,10 +303,8 @@ status_draw:
     lda #STS_ROW22_WI_COL
     sta zp_cursor_col
     lda #<stat_wi_str
-    sta zp_ptr0
-    lda #>stat_wi_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>stat_wi_str
+    jsr screen_put_string_ay
     lda #COL_WHITE
     sta zp_text_color
     lda zp_player_wis
@@ -328,10 +316,8 @@ status_draw:
     lda #STS_ROW22_DX_COL
     sta zp_cursor_col
     lda #<stat_dx_str
-    sta zp_ptr0
-    lda #>stat_dx_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>stat_dx_str
+    jsr screen_put_string_ay
     lda #COL_WHITE
     sta zp_text_color
     lda zp_player_dex
@@ -343,10 +329,8 @@ status_draw:
     lda #STS_ROW22_CO_COL
     sta zp_cursor_col
     lda #<stat_co_str
-    sta zp_ptr0
-    lda #>stat_co_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>stat_co_str
+    jsr screen_put_string_ay
     lda #COL_WHITE
     sta zp_text_color
     lda zp_player_con
@@ -358,10 +342,8 @@ status_draw:
     lda #STS_ROW22_CH_COL
     sta zp_cursor_col
     lda #<stat_ch_str
-    sta zp_ptr0
-    lda #>stat_ch_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>stat_ch_str
+    jsr screen_put_string_ay
     lda #COL_WHITE
     sta zp_text_color
     lda zp_player_chr
@@ -384,10 +366,8 @@ status_draw:
     lda #STS_ROW23_HP_COL
     sta zp_cursor_col
     lda #<status_hp_str
-    sta zp_ptr0
-    lda #>status_hp_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>status_hp_str
+    jsr screen_put_string_ay
 
     // Color HP by percentage
     jsr status_hp_color
@@ -418,10 +398,8 @@ status_draw:
     lda #STS_ROW23_MP_COL
     sta zp_cursor_col
     lda #<status_mp_str
-    sta zp_ptr0
-    lda #>status_mp_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>status_mp_str
+    jsr screen_put_string_ay
 
     lda #COL_WHITE
     sta zp_text_color
@@ -442,10 +420,8 @@ status_draw:
     lda #STS_ROW23_AC_COL
     sta zp_cursor_col
     lda #<status_ac_str
-    sta zp_ptr0
-    lda #>status_ac_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>status_ac_str
+    jsr screen_put_string_ay
 
     lda #COL_WHITE
     sta zp_text_color
@@ -458,10 +434,8 @@ status_draw:
     lda #STS_ROW23_AU_COL
     sta zp_cursor_col
     lda #<status_au_str
-    sta zp_ptr0
-    lda #>status_au_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>status_au_str
+    jsr screen_put_string_ay
 
     lda player_data + PL_GOLD_0
     sta zp_temp0
@@ -506,10 +480,8 @@ status_draw:
         lda #STS_ROW23_STATE_COL
         sta zp_cursor_col
         lda #<status_searching_str
-        sta zp_ptr0
-        lda #>status_searching_str
-        sta zp_ptr0_hi
-        jsr hal_screen_put_string
+        ldy #>status_searching_str
+        jsr screen_put_string_ay
 !sd_row23_state_done:
     }
 

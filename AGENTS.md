@@ -249,9 +249,9 @@ Operational rules:
   style, labels, memory ownership, and test patterns.
 - Verification scope matches change scope. Small/localized edits verify
   with the narrowest affected suite or target (e.g. one test file, one
-  smoke), not full gates. Full gates (`make test`, `make test128`) run
-  after feature work, multi-file or shared-code changes, and before
-  declaring a feature complete. For a test-only failure that does not
+  smoke), not full gates. The full gate (`make test`, which includes
+  `make test128`) runs after feature work, multi-file or shared-code
+  changes, and before declaring a feature complete. For a test-only failure that does not
   obviously connect to the change, read the failing test and harness
   before running anything. Never burn gate cycles on repeated blind
   reruns: two identical failures means stop and analyze, not rerun.
@@ -313,7 +313,8 @@ Build and test (run from the repository root):
 
 - `make` or `make build`: build C64, C128, Plus/4, Apple IIe, CX16, Atari
   8-bit, and BBC Master 128 payloads
-- `make test`: default regression mix; also runs the Apple IIe MAME runtime
+- `make test`: default regression mix, including the full C128 suite
+  (`make test128`); also runs the Apple IIe MAME runtime
   suite when `A2ROMS` is set, the Commander X16 `x16emu` runtime suite when
   `X16EMU`/`X16ROM` are available, the Atari 8-bit MAME runtime suite when
   `ATARI8ROMS` is set, and the BBC Master 128 MAME runtime suite when

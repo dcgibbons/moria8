@@ -11,13 +11,13 @@
     --black: #080704; --black-soft: #0e0c08; --panel: #151108; --panel-light: #1c160a;
     --gold: #ffd93d; --gold-hot: #fff171; --amber: #c57900; --amber-dark: #704000;
     --paper: #f0e5bd; --muted: #aaa07c; --dim: #9a9172; --blue: #7779dc;
-    --red: #e0603c; --green: #9ad284;
+    --red: #e0603c; --green: #9ad284; --track: #2a2416;
     --line: rgba(255, 217, 61, 0.26);
     --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
   }
   * { box-sizing: border-box; }
   body {
-    margin: 0; min-width: 20rem; color: var(--paper); font: 14px/1.5 var(--mono);
+    margin: 0; min-width: 20rem; color: var(--paper); font: 13px/1.45 var(--mono);
     background: radial-gradient(circle at 50% -15%, rgba(197, 121, 0, 0.18), transparent 34rem), var(--black);
   }
   body::before {
@@ -27,113 +27,168 @@
   }
   ::selection { background: var(--gold); color: var(--black); }
   header {
-    position: sticky; top: 0; z-index: 10; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px;
-    padding: 12px 16px; background: rgba(8, 7, 4, 0.92); border-bottom: 1px solid var(--line);
+    position: sticky; top: 0; z-index: 10; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px;
+    padding: 8px 16px; background: rgba(8, 7, 4, 0.94); border-bottom: 1px solid var(--line);
   }
   .brand { color: var(--gold); font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
   .brand span { color: var(--amber); }
+  header .grow { flex: 1; }
+  .pill { padding: 1px 8px; border: 1px solid var(--line); border-radius: 10px; color: var(--muted); }
+  .pill b { color: var(--gold); font-weight: normal; }
   select, button {
     font: inherit; color: var(--paper); background: var(--panel); border: 1px solid var(--line);
-    border-radius: 3px; padding: 3px 8px;
+    border-radius: 3px; padding: 2px 8px;
   }
   .muted { color: var(--muted); } .dim { color: var(--dim); }
   .ok { color: var(--green); } .bad { color: var(--red); } .warn { color: var(--amber); } .gold { color: var(--gold); }
-  main { padding: 16px; display: grid; gap: 16px; max-width: 110rem; margin: 0 auto; }
-  section { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 14px; min-width: 0; }
-  h2 { margin: 0 0 10px; font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--amber); }
-  h2::before { content: "> "; color: var(--gold); }
-  .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(28rem, 1fr)); gap: 16px; }
-  /* Overall status */
-  #status { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: 10px; }
-  .stat { background: var(--black-soft); border: 1px solid var(--line); border-radius: 3px; padding: 8px 10px; }
-  .stat .k { font-size: 11px; color: var(--dim); letter-spacing: .1em; text-transform: uppercase; }
-  .stat .v { font-size: 20px; color: var(--gold); }
-  #verdict { margin-top: 10px; font-size: 15px; }
-  /* Suites */
-  #suites { display: grid; grid-template-columns: repeat(auto-fit, minmax(22rem, 1fr)); gap: 12px; }
-  .suite { background: var(--black-soft); border: 1px solid var(--line); border-radius: 3px; padding: 10px; }
-  .suite h3 { margin: 0 0 6px; font-size: 13px; color: var(--paper); }
-  .score { font-size: 28px; color: var(--gold); }
-  .seeds { display: grid; grid-template-columns: repeat(20, 1fr); gap: 2px; margin: 8px 0 4px; position: relative; }
-  .seed { height: 16px; border-radius: 2px; background: #2a2416; }
+  main { padding: 12px 16px; display: grid; gap: 12px; max-width: 120rem; margin: 0 auto;
+         grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+         grid-template-areas: "milestone round" "causes kit" "wall wall"; }
+  @media (max-width: 1100px) { main { grid-template-columns: 1fr; grid-template-areas: "round" "milestone" "causes" "kit" "wall"; } }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 10px 12px; min-width: 0; }
+  h2 { margin: 0 0 8px; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--amber);
+       display: flex; justify-content: space-between; gap: 8px; }
+  h2 span::before { content: "> "; color: var(--gold); }
+  h2 small { color: var(--dim); letter-spacing: 0; text-transform: none; font-size: 11px; }
+  /* Milestone grid: race rows, class columns, a box per goal. */
+  .mgrid { display: grid; grid-template-columns: 6.5rem repeat(6, 1fr); gap: 3px; font-size: 11px; }
+  .mgrid .h { color: var(--dim); text-align: center; text-transform: capitalize; padding-bottom: 2px; }
+  .mgrid .r { color: var(--muted); text-transform: capitalize; align-self: center; }
+  .cell { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; }
+  .box { height: 22px; border-radius: 2px; display: grid; place-items: center; font-size: 11px; cursor: default;
+         background: var(--black-soft); color: var(--dim); border: 1px solid transparent; }
+  .box.frozen { background: rgba(154, 210, 132, .18); color: var(--green); border-color: rgba(154, 210, 132, .35); }
+  .box.near { background: rgba(197, 121, 0, .18); color: var(--gold); border-color: rgba(197, 121, 0, .45); }
+  .box.short { background: rgba(224, 96, 60, .14); color: var(--red); border-color: rgba(224, 96, 60, .35); }
+  .box.none { background: transparent; }
+  .mlegend { margin-top: 6px; font-size: 11px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 4px 12px; }
+  .mlegend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+  /* Round table */
+  .tiles { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-bottom: 8px; }
+  .stat { background: var(--black-soft); border: 1px solid var(--line); border-radius: 3px; padding: 4px 8px; }
+  .stat .k { font-size: 10px; color: var(--dim); letter-spacing: .1em; text-transform: uppercase; }
+  .stat .v { font-size: 17px; color: var(--gold); }
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; font-weight: normal; color: var(--dim); font-size: 10px; letter-spacing: .1em;
+       text-transform: uppercase; padding: 0 6px 4px 0; }
+  td { padding: 3px 6px 3px 0; border-top: 1px solid #241e12; vertical-align: middle; white-space: nowrap; }
+  td.name { text-transform: capitalize; }
+  .score { color: var(--gold); font-size: 15px; }
+  .seeds { display: grid; grid-template-columns: repeat(20, 1fr); gap: 1px; width: 11rem; position: relative; }
+  .seed { height: 12px; border-radius: 1px; background: var(--track); }
   .seed.reached { background: var(--gold); } .seed.died { background: var(--red); }
   .seed.budget { background: var(--amber); } .seed.finding { background: var(--blue); }
-  .seed.running { background: repeating-linear-gradient(45deg, #3a3020 0 3px, #2a2416 3px 6px); }
-  .legend span { margin-right: 12px; font-size: 12px; }
-  .legend i { display: inline-block; width: 10px; height: 10px; margin-right: 4px; border-radius: 2px; vertical-align: -1px; }
-  /* Screen wall */
-  .wallgroup { margin-bottom: 14px; }
-  .wallgroup h3 { margin: 0 0 6px; font-size: 12px; color: var(--muted); font-weight: normal; }
-  .wall { display: grid; grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr)); gap: 8px; }
+  .seed.running { background: repeating-linear-gradient(45deg, #4a3c20 0 2px, var(--track) 2px 4px); }
+  .barmark { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--paper); }
+  /* Death causes and kit */
+  .hbar { display: grid; grid-template-columns: 12rem 1fr 2.2rem; gap: 6px; align-items: center; margin: 2px 0; }
+  .stack { display: flex; height: 12px; background: var(--track); border-radius: 1px; overflow: hidden; }
+  .stack span { height: 100%; }
+  .kit { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .kit h3 { margin: 0 0 4px; font-size: 11px; color: var(--muted); font-weight: normal; }
+  .hist { display: flex; align-items: flex-end; gap: 2px; height: 70px; border-bottom: 1px solid #3a3020; margin-top: 14px; }
+  .hist div { flex: 1; background: var(--amber); min-height: 1px; position: relative; }
+  .hist div span { position: absolute; bottom: 100%; left: 0; right: 0; text-align: center; font-size: 10px; color: var(--muted); }
+  .histx { display: flex; gap: 2px; font-size: 10px; color: var(--dim); } .histx span { flex: 1; text-align: center; }
+  .callout { margin-top: 8px; font-size: 12px; }
+  /* Live screens */
+  .wallgroup { margin-bottom: 8px; }
+  .wallgroup h3 { margin: 0 0 4px; font-size: 11px; color: var(--muted); font-weight: normal; text-transform: capitalize; }
+  .wall { display: grid; grid-template-columns: repeat(auto-fill, minmax(10.5rem, 1fr)); gap: 6px; }
   .tile { background: #000; border: 1px solid #3a3020; border-radius: 3px; cursor: pointer; overflow: hidden; }
   .tile:hover { border-color: var(--gold); }
-  .tile .badge { display: flex; justify-content: space-between; padding: 2px 6px; font-size: 11px;
+  .tile .badge { display: flex; justify-content: space-between; padding: 1px 5px; font-size: 10px;
                  background: var(--panel-light); color: var(--muted); }
   .tile .badge b { color: var(--gold); font-weight: normal; }
-  .scr { margin: 0; padding: 3px; white-space: pre; font: 5.2px/1.05 var(--mono); letter-spacing: .5px; color: #fff; }
-  .big .scr { font-size: 15px; letter-spacing: 1px; padding: 10px; }
-  /* Charts */
-  svg { width: 100%; height: auto; display: block; }
-  svg text { fill: var(--muted); font: 11px var(--mono); }
-  .axis { stroke: #3a3020; }
-  /* Detail dialog */
+  .tile .hpbar { height: 3px; background: var(--track); } .tile .hpbar i { display: block; height: 100%; background: var(--green); }
+  .scr { margin: 0; padding: 2px; white-space: pre; font: 4.2px/1.05 var(--mono); letter-spacing: .4px; color: #fff; }
+  /* Focus view */
   dialog { background: var(--panel); color: var(--paper); border: 1px solid var(--gold); border-radius: 4px;
-            max-width: min(96vw, 80rem); padding: 14px; }
-  dialog::backdrop { background: rgba(0, 0, 0, 0.7); }
-  .detail { display: grid; grid-template-columns: auto minmax(18rem, 1fr); gap: 14px; align-items: start; }
-  @media (max-width: 900px) { .detail { grid-template-columns: 1fr; } }
-  .decisions { max-height: 34rem; overflow: auto; font-size: 12px; }
-  .decisions div { border-bottom: 1px solid #2a2416; padding: 2px 0; }
-  .decisions .l { color: var(--amber); }
+           width: min(98vw, 92rem); max-height: 96vh; padding: 12px; }
+  dialog::backdrop { background: rgba(0, 0, 0, 0.75); }
+  .focus { display: grid; grid-template-columns: auto minmax(20rem, 1fr); gap: 12px; align-items: start; }
+  @media (max-width: 1000px) { .focus { grid-template-columns: 1fr; } }
+  .focus .scr { font-size: 14px; letter-spacing: 1px; padding: 8px; }
+  .meters { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 8px; }
+  .meter .k { font-size: 10px; color: var(--dim); text-transform: uppercase; letter-spacing: .1em; }
+  .meter .v { font-size: 16px; color: var(--gold); }
+  .meter .track { height: 5px; background: var(--track); border-radius: 2px; margin-top: 2px; }
+  .meter .track i { display: block; height: 100%; border-radius: 2px; }
+  .decisions { max-height: 22rem; overflow: auto; font-size: 11.5px; }
+  .decisions div { border-bottom: 1px solid #241e12; padding: 1px 0; }
+  .decisions .l { color: var(--amber); display: inline-block; min-width: 6.5rem; }
+  svg { width: 100%; height: auto; display: block; }
+  svg text { fill: var(--muted); font: 10px var(--mono); }
+  .axis { stroke: #3a3020; }
 </style>
 </head>
 <body>
 <header>
   <div class="brand">Moria8 <span>// playtest</span></div>
   <label class="muted">round <select id="round"></select></label>
-  <span class="muted" id="updated">loading…</span>
-  <span class="dim" id="poll">refresh 5s</span>
+  <span class="grow"></span>
+  <span class="pill">workers <b id="hworkers">–</b></span>
+  <span class="pill">steps/s <b id="hrate">–</b></span>
+  <span class="dim" id="updated">loading…</span>
 </header>
 <main>
-  <section>
-    <h2>Status</h2>
-    <div id="status"></div>
-    <div id="verdict"></div>
-  </section>
-  <section>
-    <h2>Suites</h2>
-    <div class="legend muted">
-      <span><i style="background:var(--gold)"></i>reached</span><span><i style="background:var(--red)"></i>died</span>
-      <span><i style="background:var(--amber)"></i>out of steps</span><span><i style="background:var(--blue)"></i>finding</span>
-      <span><i style="background:#3a3020"></i>running</span>
+  <section style="grid-area: milestone">
+    <h2><span>M5 · every race and class</span><small id="mcount"></small></h2>
+    <div class="mgrid" id="mgrid"></div>
+    <div class="mlegend">
+      <span><i style="background:rgba(154,210,132,.4)"></i>frozen (bar)</span>
+      <span><i style="background:rgba(197,121,0,.45)"></i>latest at the bar, not frozen</span>
+      <span><i style="background:rgba(224,96,60,.35)"></i>latest below the bar</span>
+      <span><i style="background:var(--black-soft)"></i>not run</span>
+      <span class="dim">each cell: clvl10 | reach_dl8</span>
     </div>
-    <div id="suites"></div>
   </section>
-  <section>
-    <h2>Live screens</h2>
+  <section style="grid-area: round">
+    <h2><span>This round</span><small id="rverdict"></small></h2>
+    <div class="tiles" id="tiles"></div>
+    <table><thead><tr><th>character</th><th>goal</th><th>seeds</th><th>score</th><th>state</th><th>eta</th><th>rounds</th></tr></thead>
+      <tbody id="rtable"></tbody></table>
+  </section>
+  <section style="grid-area: causes">
+    <h2><span>Deaths by cause</span><small>stacked by character level · this round</small></h2>
+    <div id="causes"></div>
+    <div class="mlegend" id="clegend"></div>
+  </section>
+  <section style="grid-area: kit">
+    <h2><span>What they died holding</span><small>this round</small></h2>
+    <div class="kit" id="kit"></div>
+    <div class="callout" id="kitcall"></div>
+  </section>
+  <section style="grid-area: wall">
+    <h2><span>Live screens</span><small>click one to watch it</small></h2>
     <div id="wall"></div>
   </section>
-  <div class="grid2">
-    <section><h2>Deepest level over steps</h2><div id="depth"></div></section>
-    <section><h2>Round history</h2><div id="history"></div></section>
-  </div>
-  <div class="grid2">
-    <section><h2>Deaths by creature</h2><div id="deaths"></div></section>
-    <section><h2>Deaths by depth and level</h2><div id="deathdepth"></div></section>
-  </div>
 </main>
-<dialog id="dlg"><div id="dlgbody"></div><p style="text-align:right;margin:8px 0 0"><button id="close">close</button></p></dialog>
+<dialog id="dlg"><div id="dlgbody"></div><p style="text-align:right;margin:6px 0 0"><button id="close">close</button></p></dialog>
 <script>
 "use strict";
 // C64 palette (Pepto) for color RAM nibbles.
 const PALETTE = ["#000000","#ffffff","#68372b","#70a4b2","#6f3d86","#588d43","#352879","#b8c76f",
                  "#6f4f25","#433900","#9a6759","#444444","#6c6c6c","#9ad284","#6c5eb5","#959595"];
-const SUITE_COLORS = ["#ffd93d", "#c57900", "#7779dc", "#9ad284", "#e0603c", "#70a4b2"];
-const OUTCOME_COLOR = {reached: "#ffd93d", died: "#e0603c", budget: "#c57900", finding: "#7779dc"};
-let current = null, data = null;
+const LEVEL_BANDS = [[1, 1, "L1"], [2, 2, "L2"], [3, 4, "L3-4"], [5, 7, "L5-7"], [8, 99, "L8+"]];
+const BAND_COLORS = ["#e0603c", "#c57900", "#ffd93d", "#9ad284", "#7779dc"];
+let current = null, data = null, mile = null, watching = null;
 const $ = id => document.getElementById(id);
-const esc = s => String(s).replace(/[&<>]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;"}[c]));
-const suiteName = s => `${s.character} ${s.goal}`;
+// Published (make playtest-publish): static data files, refreshed every 30 s.
+const STATIC = !!document.querySelector('meta[name="playtest-static"]');
+const bust = () => `?t=${Date.now()}`;
+const URLS = STATIC ? {
+  overview: () => `data/overview.json${bust()}`,
+  milestone: () => `data/milestone.json${bust()}`,
+  worker: (session, n) => `data/workers/${encodeURIComponent(session)}--w${n}.json${bust()}`,
+} : {
+  overview: () => `/api/overview${current ? `?round=${encodeURIComponent(current)}` : ""}`,
+  milestone: () => "/api/milestone",
+  worker: (session, n) => `/api/worker?session=${encodeURIComponent(session)}&worker=${n}`,
+};
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+const cap = s => s.replace(/(^|-)([a-z])/g, (_, d, c) => d + c.toUpperCase()).replace(/-(?=[A-Z][a-z]+$)/, " ");
+const reached = s => s.characters.filter(c => c.outcome === "reached").length;
 
 function screenHtml(w) {
   // One span per run of equal colour.
@@ -168,7 +223,47 @@ function seedOutcomes(s) {
   });
 }
 
-function renderStatus() {
+function sparkline(points, bar) {
+  // points: [score or null per round]; bar: horizontal mark.
+  const W = 90, H = 20, n = points.length;
+  if (!n) return "";
+  const X = i => n === 1 ? W / 2 : 2 + i / (n - 1) * (W - 4), Y = v => H - 2 - v / 20 * (H - 4);
+  const pts = points.map((v, i) => v == null ? null : [X(i), Y(v)]).filter(Boolean);
+  const d = pts.map((p, i) => `${i ? "L" : "M"}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join("");
+  const last = pts[pts.length - 1];
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:${W}px;height:${H}px;display:inline-block;vertical-align:middle">
+    <line x1="0" x2="${W}" y1="${Y(bar)}" y2="${Y(bar)}" stroke="var(--dim)" stroke-dasharray="2 2"/>
+    <path d="${d}" fill="none" stroke="var(--gold)" stroke-width="1.3"/>
+    ${last ? `<circle cx="${last[0]}" cy="${last[1]}" r="2" fill="var(--gold)"/>` : ""}</svg>`;
+}
+
+function renderMilestone() {
+  if (!mile) return;
+  const goals = mile.goals, allowed = new Set(mile.characters);
+  let html = `<div></div>` + mile.classes.map(c => `<div class="h">${c}</div>`).join("");
+  let frozen = 0, total = 0;
+  mile.races.forEach(r => {
+    html += `<div class="r">${r}</div>`;
+    mile.classes.forEach(c => {
+      const ch = `${r}-${c}`;
+      if (!allowed.has(ch)) { html += `<div class="cell"><div class="box none"></div><div class="box none"></div></div>`; return; }
+      html += `<div class="cell">` + goals.map(g => {
+        const cell = mile.cells[`${ch} ${g}`] || {};
+        total++;
+        let cls = "", label = "·";
+        if (cell.frozen) { cls = "frozen"; label = "✓" + (cell.frozen_bar ?? ""); frozen++; }
+        else if (cell.latest != null) { cls = cell.latest >= cell.bar ? "near" : "short"; label = cell.latest; }
+        const tip = `${cap(ch)} ${g}: bar ${cell.bar}` + (cell.frozen ? `, frozen ${cell.frozen_on || ""} at ${cell.frozen_bar}` : "") +
+                    (cell.latest != null ? `, latest ${cell.latest}/20` : ", not run");
+        return `<div class="box ${cls}" title="${esc(tip)}">${esc(label)}</div>`;
+      }).join("") + `</div>`;
+    });
+  });
+  $("mgrid").innerHTML = html;
+  $("mcount").textContent = `${frozen} of ${total} goals frozen`;
+}
+
+function renderRound() {
   const suites = data.suites;
   const started = suites.map(s => s.started).filter(Boolean).sort()[0];
   const elapsed = started ? data.now - Date.parse(started) / 1000 : NaN;
@@ -176,180 +271,191 @@ function renderStatus() {
   const total = suites.reduce((n, s) => n + s.seeds, 0);
   const live = suites.reduce((n, s) => n + s.workers.filter(w => !w.outcome).length, 0);
   const rate = suites.reduce((n, s) => n + s.workers.filter(w => !w.outcome).reduce((m, w) => m + (w.steps_per_s || 0), 0), 0);
-  const hangs = suites.reduce((n, s) => n + (s.findings.hang || 0), 0);
-  const stats = [["round", data.round], ["elapsed", fmtTime(elapsed)], ["runs finished", `${runs} / ${total}`],
-                 ["workers live", live], ["steps / s", Math.round(rate)], ["hangs", hangs]];
-  $("status").innerHTML = stats.map(([k, v]) =>
+  const passed = suites.filter(s => reached(s) >= s.bar).length;
+  const stats = [["elapsed", fmtTime(elapsed)], ["runs", `${runs}/${total}`], ["passed", `${passed}/${suites.length}`],
+                 ["deaths", suites.reduce((n, s) => n + s.characters.filter(c => c.outcome === "died").length, 0)],
+                 ["hangs", suites.reduce((n, s) => n + (s.findings.hang || 0), 0)]];
+  $("tiles").innerHTML = stats.map(([k, v]) =>
     `<div class="stat"><div class="k">${k}</div><div class="v ${k === "hangs" && v ? "bad" : ""}">${esc(v)}</div></div>`).join("");
-  const lines = suites.map(s => {
-    const reached = s.characters.filter(c => c.outcome === "reached").length;
-    const open = s.seeds - s.characters.length;
-    const best = reached + open;
-    const state = reached >= s.bar ? `<span class="ok">passed</span>` :
-                  best < s.bar ? `<span class="bad">cannot pass (best ${best})</span>` :
-                  `<span class="warn">needs ${s.bar - reached} of ${open} left</span>`;
-    return `${esc(suiteName(s))}: <span class="gold">${reached}/${s.seeds}</span> (bar ${s.bar}) — ${state}`;
-  });
-  const passed = suites.filter(s => s.characters.filter(c => c.outcome === "reached").length >= s.bar).length;
-  $("verdict").innerHTML = `<div class="${passed === suites.length ? "ok" : "warn"}">` +
-    `${passed} of ${suites.length} suites at the bar</div>` + lines.map(l => `<div>${l}</div>`).join("");
+  $("hworkers").textContent = live; $("hrate").textContent = Math.round(rate);
+  $("rverdict").textContent = data.round;
+  const rounds = data.history;
+  $("rtable").innerHTML = suites.map((s, si) => {
+    const r = reached(s), open = s.seeds - s.characters.length, best = r + open;
+    const state = r >= s.bar ? `<span class="ok">passed</span>` : best < s.bar ? `<span class="bad">short (best ${best})</span>` :
+                  `<span class="warn">needs ${s.bar - r} of ${open}</span>`;
+    const cells = seedOutcomes(s).map(x => `<div class="seed ${x.outcome}" title="seed ${x.seed}: ${x.outcome}"></div>`).join("");
+    const age = s.started ? data.now - Date.parse(s.started) / 1000 : NaN;
+    const eta = open && s.characters.length ? fmtTime(age / s.characters.length * open) : open ? "–" : "done";
+    const key = `${s.goal} ${s.character}`;
+    const spark = sparkline(rounds.map(x => x.suites[key] && x.suites[key].done >= 20 ? x.suites[key].reached : null).filter(v => v != null), s.bar);
+    return `<tr><td class="name">${esc(cap(s.character))}</td><td class="muted">${esc(s.goal)}</td>
+      <td><div class="seeds">${cells}<div class="barmark" style="left:calc(${(s.bar / s.seeds * 100).toFixed(1)}% - 1px)" title="bar ${s.bar}"></div></div></td>
+      <td><span class="score">${r}</span><span class="dim">/${s.seeds} · ${s.bar}</span></td><td>${state}</td>
+      <td class="muted">${eta}</td><td>${spark}</td></tr>`;
+  }).join("");
 }
 
-function renderSuites() {
-  $("suites").innerHTML = data.suites.map(s => {
-    const seeds = seedOutcomes(s);
-    const count = o => s.characters.filter(c => c.outcome === o).length;
-    const cells = seeds.map(x => `<div class="seed ${x.outcome}" title="seed ${x.seed}: ${x.outcome}"></div>`).join("");
-    const markLeft = (s.bar / s.seeds * 100).toFixed(1);
-    return `<div class="suite"><h3>${esc(suiteName(s))}</h3>
-      <div><span class="score">${count("reached")}</span><span class="muted"> / ${s.seeds} · bar ${s.bar}</span></div>
-      <div class="seeds">${cells}
-        <div style="position:absolute;left:calc(${markLeft}% - 1px);top:-3px;bottom:-3px;width:2px;background:var(--paper)"
-             title="bar ${s.bar}"></div></div>
-      <div class="muted" style="font-size:12px">died ${count("died")} · out of steps ${count("budget")} ·
-        findings ${count("finding")} · running ${s.workers.filter(w => !w.outcome).length}</div></div>`;
-  }).join("");
+function causeGroup(c) {
+  const k = c.cause || c.killer || "unknown";
+  return k;
+}
+
+function renderCauses() {
+  const deaths = data.suites.flatMap(s => s.characters.filter(c => c.outcome === "died"));
+  const band = l => LEVEL_BANDS.findIndex(([lo, hi]) => l >= lo && l <= hi);
+  const tally = {};
+  deaths.forEach(c => {
+    const k = causeGroup(c);
+    (tally[k] = tally[k] || [0, 0, 0, 0, 0])[Math.max(0, band(c.clvl))]++;
+  });
+  const rows = Object.entries(tally).map(([k, v]) => [k, v, v.reduce((a, b) => a + b, 0)]).sort((a, b) => b[2] - a[2]).slice(0, 12);
+  const max = Math.max(1, ...rows.map(r => r[2]));
+  $("causes").innerHTML = rows.length ? rows.map(([k, v, n]) =>
+    `<div class="hbar"><span title="${esc(k)}">${esc(k.length > 22 ? k.slice(0, 21) + "…" : k)}</span>
+       <div class="stack" style="width:${n / max * 100}%">${v.map((x, i) => x ? `<span style="width:${x / n * 100}%;background:${BAND_COLORS[i]}" title="${LEVEL_BANDS[i][2]}: ${x}"></span>` : "").join("")}</div>
+       <span class="gold">${n}</span></div>`).join("") : `<span class="muted">no deaths yet</span>`;
+  $("clegend").innerHTML = LEVEL_BANDS.map((b, i) => `<span><i style="background:${BAND_COLORS[i]}"></i>${b[2]}</span>`).join("");
+  const early = deaths.filter(c => c.clvl <= 2).length;
+  if (deaths.length) $("clegend").innerHTML += `<span class="warn">${early} of ${deaths.length} deaths at L1-2</span>`;
+}
+
+function histogram(values, buckets, label) {
+  const counts = buckets.map(([lo, hi]) => values.filter(v => v != null && v >= lo && v <= hi).length);
+  const max = Math.max(1, ...counts);
+  return `<div><h3>${label}</h3><div class="hist">${counts.map(n => `<div style="height:${n / max * 100}%"><span>${n || ""}</span></div>`).join("")}</div>
+    <div class="histx">${buckets.map(b => `<span>${b[2]}</span>`).join("")}</div></div>`;
+}
+
+function renderKit() {
+  const deaths = data.suites.flatMap(s => s.characters.filter(c => c.outcome === "died"));
+  const potions = deaths.map(c => c.clw), oil = deaths.map(c => c.oil);
+  const mana = deaths.map(c => c.mmp ? Math.round(c.mp / c.mmp * 100) : null);
+  $("kit").innerHTML =
+    histogram(potions, [[0, 0, "0"], [1, 1, "1"], [2, 2, "2"], [3, 4, "3-4"], [5, 99, "5+"]], "Cure Light Wounds potions") +
+    histogram(oil, [[0, 0, "0"], [1, 2, "1-2"], [3, 5, "3-5"], [6, 10, "6-10"], [11, 999, "11+"]], "Flasks of oil") +
+    histogram(mana, [[0, 0, "0%"], [1, 49, "<50%"], [50, 99, "50-99%"], [100, 100, "full"]], "Mana left (casters)");
+  const known = deaths.filter(c => c.clw != null);
+  const holding = known.filter(c => c.clw > 0).length, fullMana = deaths.filter(c => c.mmp && c.mp === c.mmp).length;
+  $("kitcall").innerHTML = known.length ?
+    `<span class="${holding ? "warn" : "muted"}">${holding} of ${known.length} died holding potions</span> · ` +
+    `<span class="${fullMana ? "warn" : "muted"}">${fullMana} with full mana</span>` : `<span class="muted">no kit recorded yet</span>`;
 }
 
 function renderWall() {
   $("wall").innerHTML = data.suites.map((s, si) => {
-    const tiles = s.workers.map(w => `<div class="tile" data-s="${si}" data-w="${w.worker}">
-        <div class="badge"><span>${w.seed} <b>L${w.clvl}</b> DL${w.dlvl}</span>
-          <span>${w.hp}/${w.mhp}${w.outcome ? ` · ${esc(w.outcome)}` : ""}</span></div>
+    const tiles = s.workers.filter(w => !w.outcome).map(w => `<div class="tile" data-s="${si}" data-w="${w.worker}">
+        <div class="badge"><span>${w.seed} <b>L${w.clvl}</b> DL${w.dlvl}</span><span>${w.hp}/${w.mhp}</span></div>
+        <div class="hpbar"><i style="width:${Math.max(0, Math.min(100, w.hp / Math.max(1, w.mhp) * 100))}%;
+           background:${w.hp < w.mhp * 0.3 ? "var(--red)" : w.hp < w.mhp * 0.6 ? "var(--amber)" : "var(--green)"}"></i></div>
         <pre class="scr">${screenHtml(w)}</pre></div>`).join("");
-    return `<div class="wallgroup"><h3>${esc(suiteName(s))}</h3><div class="wall">${tiles}</div></div>`;
-  }).join("");
-  document.querySelectorAll(".tile").forEach(t => t.onclick = () => openWorker(+t.dataset.s, +t.dataset.w));
-}
-
-function lineChart(series, opts) {
-  // series: [{points: [[x, y]...], color, width, dash, label}]
-  const W = 760, H = opts.height || 300, L = 40, R = 10, T = 10, B = 28;
-  const xs = series.flatMap(s => s.points.map(p => p[0])), ys = series.flatMap(s => s.points.map(p => p[1]));
-  const xMax = opts.xMax || Math.max(1, ...xs), yMax = opts.yMax || Math.max(1, ...ys);
-  const X = x => L + x / xMax * (W - L - R), Y = y => opts.down ? T + y / yMax * (H - T - B) : H - B - y / yMax * (H - T - B);
-  let svg = `<svg viewBox="0 0 ${W} ${H}" role="img">`;
-  for (let i = 0; i <= (opts.yTicks || 4); i++) {
-    const y = yMax * i / (opts.yTicks || 4);
-    svg += `<line class="axis" x1="${L}" x2="${W - R}" y1="${Y(y)}" y2="${Y(y)}"/>` +
-           `<text x="${L - 6}" y="${Y(y) + 4}" text-anchor="end">${opts.yFmt ? opts.yFmt(y) : Math.round(y)}</text>`;
-  }
-  (opts.xLabels || []).forEach(([x, label]) =>
-    svg += `<text x="${X(x)}" y="${H - 8}" text-anchor="middle">${esc(label)}</text>`);
-  (opts.hLines || []).forEach(h => svg += `<line x1="${L}" x2="${W - R}" y1="${Y(h.y)}" y2="${Y(h.y)}" stroke="${h.color}" stroke-dasharray="4 4"/>` +
-    `<text x="${W - R}" y="${Y(h.y) - 4}" text-anchor="end" style="fill:${h.color}">${esc(h.label)}</text>`);
-  series.forEach(s => {
-    if (!s.points.length) return;
-    const d = s.points.map((p, i) => `${i ? "L" : "M"}${X(p[0]).toFixed(1)},${Y(p[1]).toFixed(1)}`).join("");
-    svg += `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="${s.width || 1.5}" ` +
-           `stroke-opacity="${s.opacity || 1}" ${s.dash ? `stroke-dasharray="${s.dash}"` : ""}><title>${esc(s.label || "")}</title></path>`;
-    if (s.dots) s.points.forEach(p => svg += `<circle cx="${X(p[0])}" cy="${Y(p[1])}" r="2.5" fill="${s.color}"/>`);
+    return tiles ? `<div class="wallgroup"><h3>${esc(cap(s.character))} · ${esc(s.goal)}</h3><div class="wall">${tiles}</div></div>` : "";
+  }).join("") || `<span class="muted">no live workers</span>`;
+  document.querySelectorAll(".tile").forEach(t => t.onclick = () => {
+    const s = data.suites[+t.dataset.s];
+    watch(s.session, +t.dataset.w);
   });
-  return svg + "</svg>";
 }
 
-function renderDepth() {
-  const series = [];
-  let xMax = 1;
-  data.suites.forEach((s, si) => {
-    const outcome = {};
-    s.characters.forEach(c => outcome[c.seed] = c.outcome);
-    Object.entries(s.depth).forEach(([seed, pts]) => {
-      const last = s.workers.find(w => String(w.seed) === seed);
-      // Deepest level so far: town trips would otherwise draw a spike each.
-      const points = [];
-      let deepest = 0;
-      pts.forEach(p => { if (p[1] > deepest) { deepest = p[1]; points.push([p[0], deepest]); } });
-      const end = last && last.step ? last.step : (pts.length ? pts[pts.length - 1][0] : 0);
-      points.unshift([0, 0]);
-      points.push([end, deepest]);
-      const stepped = points.flatMap((p, i) => i ? [[p[0], points[i - 1][1]], p] : [p]);
-      xMax = Math.max(xMax, ...points.map(p => p[0]));
-      series.push({points: stepped, color: SUITE_COLORS[si % SUITE_COLORS.length], width: 1.5, opacity: 0.7,
-                   label: `${suiteName(s)} seed ${seed} (${outcome[seed] || "running"})`});
-    });
-  });
-  const legend = data.suites.map((s, si) => `<span style="color:${SUITE_COLORS[si]}">■ ${esc(suiteName(s))}</span>`).join(" &nbsp;");
-  const ticks = [0, 0.25, 0.5, 0.75, 1].map(f => [xMax * f, `${Math.round(xMax * f / 1000)}k`]);
-  $("depth").innerHTML = `<div class="muted" style="font-size:12px;margin-bottom:6px">${legend}</div>` +
-    lineChart(series, {down: true, yMax: 8, yTicks: 8, xMax, xLabels: ticks, yFmt: y => `DL${Math.round(y)}`});
-}
-
-function renderHistory() {
-  const rounds = data.history.filter(r => Object.values(r.suites).some(v => v.done >= 20 || r.round === data.round));
-  const names = data.suites.map(s => `${s.goal} ${s.character}`);   // the round's order: same colours as above
-  const series = names.map((n, i) => ({
-    color: SUITE_COLORS[i % SUITE_COLORS.length], width: 2, dots: true, label: n,
-    points: rounds.map((r, x) => r.suites[n] ? [x, r.suites[n].reached] : null).filter(Boolean)}));
-  const step = Math.max(1, Math.ceil(rounds.length / 10));
-  const labels = rounds.map((r, x) => [x, r.round.replace(/^[^-]+-/, "")]).filter((_, x) => x % step === 0 || x === rounds.length - 1);
-  const legend = names.map((n, i) => `<span style="color:${SUITE_COLORS[i]}">■ ${esc(n.split(" ").reverse().join(" "))}</span>`).join(" &nbsp;");
-  $("history").innerHTML = `<div class="muted" style="font-size:12px;margin-bottom:6px">${legend}</div>` +
-    lineChart(series, {yMax: 20, yTicks: 4, xMax: Math.max(1, rounds.length - 1), xLabels: labels,
-                       hLines: [{y: 16, color: "#ffd93d", label: "bar 16"}]});
-}
-
-function renderDeaths() {
-  const tally = {}, depth = [];
-  data.suites.forEach(s => s.characters.filter(c => c.outcome === "died").forEach(c => {
-    const k = c.killer || "unknown";
-    tally[k] = (tally[k] || 0) + 1;
-    depth.push(c);
-  }));
-  const rows = Object.entries(tally).sort((a, b) => b[1] - a[1]).slice(0, 14);
-  const max = Math.max(1, ...rows.map(r => r[1]));
-  $("deaths").innerHTML = rows.length ? rows.map(([k, n]) =>
-    `<div style="display:grid;grid-template-columns:13rem 1fr 2rem;gap:8px;align-items:center;margin:3px 0">
-       <span>${esc(k)}</span><span style="height:12px;background:var(--red);width:${n / max * 100}%"></span>
-       <span class="gold">${n}</span></div>`).join("") : `<span class="muted">no deaths yet</span>`;
-  const W = 760, H = 260, L = 40, B = 28, T = 10, R = 10;
+function timelineChart(points) {
+  // points: [step, hp, mhp, mp, mmp, layer]
+  if (!points.length) return `<span class="muted">no timeline yet</span>`;
+  const W = 760, H = 150, L = 30, R = 6, T = 6, B = 18;
+  const x0 = points[0][0], x1 = Math.max(x0 + 1, points[points.length - 1][0]);
+  const yMax = Math.max(1, ...points.map(p => Math.max(p[2], p[4])));
+  const X = x => L + (x - x0) / (x1 - x0) * (W - L - R), Y = y => H - B - y / yMax * (H - T - B);
+  const path = i => points.map((p, j) => `${j ? "L" : "M"}${X(p[0]).toFixed(1)},${Y(p[i]).toFixed(1)}`).join("");
   let svg = `<svg viewBox="0 0 ${W} ${H}">`;
-  for (let d = 0; d <= 8; d += 2) {
-    const y = T + d / 8 * (H - T - B);
-    svg += `<line class="axis" x1="${L}" x2="${W - R}" y1="${y}" y2="${y}"/><text x="${L - 6}" y="${y + 4}" text-anchor="end">DL${d}</text>`;
-  }
-  for (let l = 0; l <= 12; l += 2) {
-    const x = L + l / 12 * (W - L - R);
-    svg += `<text x="${x}" y="${H - 8}" text-anchor="middle">L${l}</text>`;
-  }
-  depth.forEach((c, i) => {
-    const x = L + (c.clvl + (i % 5 - 2) * 0.08) / 12 * (W - L - R), y = T + (c.dlvl + (i % 3 - 1) * 0.08) / 8 * (H - T - B);
-    svg += `<circle cx="${x}" cy="${y}" r="5" fill="var(--red)" fill-opacity="0.65"><title>seed ${c.seed}: ${esc(c.killer || "?")} DL${c.dlvl} L${c.clvl}</title></circle>`;
+  [0, 0.5, 1].forEach(f => svg += `<line class="axis" x1="${L}" x2="${W - R}" y1="${Y(yMax * f)}" y2="${Y(yMax * f)}"/>` +
+    `<text x="${L - 4}" y="${Y(yMax * f) + 3}" text-anchor="end">${Math.round(yMax * f)}</text>`);
+  svg += `<text x="${L}" y="${H - 4}">step ${x0}</text><text x="${W - R}" y="${H - 4}" text-anchor="end">${x1}</text>`;
+  points.forEach(p => {
+    const mark = {quaff: "#9ad284", phase: "#7779dc", retreat: "#c57900"}[p[5]];
+    if (mark) svg += `<line x1="${X(p[0])}" x2="${X(p[0])}" y1="${T}" y2="${H - B}" stroke="${mark}" stroke-opacity=".35"/>`;
   });
-  $("deathdepth").innerHTML = svg + `</svg><div class="muted" style="font-size:12px">character level across, depth down</div>`;
+  svg += `<path d="${path(2)}" fill="none" stroke="var(--dim)" stroke-dasharray="3 3"/>`;
+  svg += `<path d="${path(4)}" fill="none" stroke="#6c5eb5" stroke-width="1.2" stroke-opacity=".7"/>`;
+  svg += `<path d="${path(1)}" fill="none" stroke="var(--red)" stroke-width="1.6"/>`;
+  return svg + `</svg><div class="mlegend"><span><i style="background:var(--red)"></i>HP</span>
+    <span><i style="background:#6c5eb5"></i>max mana</span><span><i style="background:#9ad284"></i>quaff</span>
+    <span><i style="background:#7779dc"></i>phase</span><span><i style="background:#c57900"></i>retreat</span></div>`;
 }
 
-async function openWorker(si, wi) {
-  const s = data.suites[si];
-  const w = await (await fetch(`/api/worker?session=${encodeURIComponent(s.session)}&worker=${wi}`)).json();
-  if (!w) return;
-  const dec = (w.decisions || []).slice().reverse().map(d =>
-    `<div>${d.step} <span class="l">${esc(d.layer)}</span> ${esc(d.reason)} <span class="dim">${esc(d.msg || "")}</span></div>`).join("");
-  $("dlgbody").innerHTML = `<h2>${esc(suiteName(s))} · seed ${w.seed} · L${w.clvl} DL${w.dlvl} · HP ${w.hp}/${w.mhp} · step ${w.step}</h2>
-    <div class="detail big"><div class="tile" style="cursor:default"><pre class="scr">${screenHtml(w)}</pre></div>
-    <div class="decisions">${dec || "<span class='muted'>no decisions</span>"}</div></div>`;
-  $("dlg").showModal();
+function meter(k, v, max, color) {
+  const pct = max ? Math.max(0, Math.min(100, v / max * 100)) : 0;
+  return `<div class="meter"><div class="k">${k}</div><div class="v">${esc(v)}${max ? `<span class="dim">/${max}</span>` : ""}</div>
+    ${max ? `<div class="track"><i style="width:${pct}%;background:${color}"></i></div>` : ""}</div>`;
 }
-$("close").onclick = () => $("dlg").close();
+
+async function renderFocus() {
+  if (!watching || !$("dlg").open) return;
+  const r = await fetch(URLS.worker(watching.session, watching.worker));
+  if (!r.ok) { $("dlgbody").innerHTML = `<span class="muted">this worker is no longer live</span>`; return; }
+  const w = await r.json();
+  if (!w) return;
+  const st = /MP:\s*(\d+)\/(\d+)/.exec((w.rows || [])[23] || "") || [];
+  const kit = w.kit || {};
+  const dec = (w.decisions || []).slice().reverse().map(d =>
+    `<div>${d.step} <span class="l">${esc(d.layer)}</span>${esc(d.reason)} <span class="dim">${esc(d.msg || "")}</span></div>`).join("");
+  $("dlgbody").innerHTML = `<h2><span>${esc(watching.name)} · seed ${w.seed} · L${w.clvl} DL${w.dlvl} · step ${w.step}</span>
+      <small>${w.outcome ? esc(w.outcome) : `${w.steps_per_s || "–"} steps/s · live`}</small></h2>
+    <div class="focus"><div class="tile" style="cursor:default"><pre class="scr">${screenHtml(w)}</pre></div>
+    <div><div class="meters">${meter("HP", w.hp, w.mhp, w.hp < w.mhp * 0.3 ? "var(--red)" : "var(--green)")}
+      ${meter("Mana", st[1] ?? "–", st[2] ? +st[2] : 0, "#6c5eb5")}${meter("Potions", kit.clw ?? "–", 0)}${meter("Oil", kit.oil ?? "–", 0)}</div>
+      ${timelineChart(w.timeline || [])}
+      <h2 style="margin-top:8px"><span>Decisions</span><small>newest first</small></h2>
+      <div class="decisions">${dec || "<span class='muted'>no decisions</span>"}</div></div></div>`;
+}
+function watch(session, worker) {
+  // #watch=<session>/<worker> opens this view directly: a session to share or bookmark.
+  const s = (data && data.suites || []).find(x => x.session === session);
+  watching = {session, worker, name: s ? `${cap(s.character)} · ${s.goal}` : session};
+  history.replaceState(null, "", `#watch=${encodeURIComponent(session)}/${worker}`);
+  if (!$("dlg").open) $("dlg").showModal();
+  renderFocus();
+}
+$("close").onclick = () => { $("dlg").close(); watching = null; history.replaceState(null, "", location.pathname); };
+$("dlg").addEventListener("close", () => { watching = null; });
 
 async function refresh() {
   try {
-    const r = await fetch(`/api/overview${current ? `?round=${encodeURIComponent(current)}` : ""}`);
+    const r = await fetch(URLS.overview());
     data = await r.json();
     if (!data.round) { $("updated").textContent = "no sessions yet"; return; }
     const sel = $("round");
     if (sel.options.length !== data.rounds.length || sel.value !== data.round) {
       sel.innerHTML = data.rounds.map(n => `<option ${n === data.round ? "selected" : ""}>${esc(n)}</option>`).join("");
     }
-    renderStatus(); renderSuites(); renderWall(); renderDepth(); renderHistory(); renderDeaths();
+    renderRound(); renderCauses(); renderKit(); renderWall();
     $("updated").textContent = `updated ${new Date().toLocaleTimeString()}`;
   } catch (e) {
     $("updated").textContent = `error: ${e}`;
   }
 }
+async function refreshMilestone() {
+  try {
+    const r = await fetch(URLS.milestone());
+    if (!r.ok) {
+      // The page is read from disk on every request; the server's code only at its start.
+      $("mgrid").innerHTML = `<div class="warn" style="grid-column:1/-1">no milestone data (HTTP ${r.status})` +
+        (STATIC ? "" : `: the dashboard server is older than this page — restart <b>make playtest-dashboard</b>`) + `</div>`;
+      return;
+    }
+    mile = await r.json(); renderMilestone();
+  } catch (e) {
+    $("mgrid").innerHTML = `<div class="warn" style="grid-column:1/-1">milestone: ${esc(e)}</div>`;
+  }
+}
 $("round").onchange = e => { current = e.target.value; refresh(); };
-refresh();
-setInterval(() => { if (!$("dlg").open) refresh(); }, 5000);
+refresh().then(() => {
+  const m = /^#watch=([^/]+)\/(\d+)$/.exec(location.hash);
+  if (m) watch(decodeURIComponent(m[1]), +m[2]);
+});
+refreshMilestone();
+if (STATIC) $("round").parentElement.style.display = "none";
+setInterval(() => { if (!$("dlg").open) refresh(); }, STATIC ? 30000 : 5000);
+setInterval(refreshMilestone, 30000);
+setInterval(renderFocus, STATIC ? 5000 : 1000);
 </script>
 </body>
 </html>

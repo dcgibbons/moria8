@@ -79,12 +79,12 @@
 // Door-state side table capacity (locked/stuck/broken doors only; plain
 // doors have no entry). Upstream stores this on the door treasure item.
 .const MAX_DOOR_STATES = 16
-.const TRAP_OPEN_PIT    = 0   // 1d4 damage
+.const TRAP_OPEN_PIT    = 0   // 2d6 damage
 .const TRAP_ARROW       = 1   // 1d8 damage
 .const TRAP_POISON_GAS  = 2   // Set poison timer
 .const TRAP_TELEPORT    = 3   // Random teleport
 .const TRAP_POISON_DART = 4   // 1d4 damage + 50% CON loss
-.const TRAP_ROCKFALL    = 5   // 2d8 damage
+.const TRAP_ROCKFALL    = 5   // 2d6 damage
 .const TRAP_TYPE_COUNT  = 6
 
 // ============================================================
@@ -95,6 +95,22 @@ map_row_lo:
     .fill MAP_ROWS, <(MAP_BASE + i * MAP_COLS)
 map_row_hi:
     .fill MAP_ROWS, >(MAP_BASE + i * MAP_COLS)
+
+// map_row_ptr0_x / map_row_ptr0_y — zp_ptr0 = the start of map row X (or
+// Y), for code off the hot paths; A and the flags are left as the inline
+// loads leave them (A = the high byte). 7 bytes saved a call.
+map_row_ptr0_x:
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    rts
+map_row_ptr0_y:
+    lda map_row_lo,y
+    sta zp_ptr0
+    lda map_row_hi,y
+    sta zp_ptr0_hi
+    rts
 
 // ============================================================
 // Map accessor (single-tile API boundary)

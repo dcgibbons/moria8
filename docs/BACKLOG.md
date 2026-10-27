@@ -53,6 +53,36 @@ Required work:
 - Optionally retry a timed-out test once and report a hang that recurs.
 - Check the C64 and Plus/4 runners for the same gap.
 
+### Add the VMS `x` weapon swap (secondary weapon slot)
+
+VMS Moria keeps a secondary weapon in its own equipment slot
+(`inventory[34]`) and `x` swaps it with the wielded one (`moria.inc`
+`switch_weapon`, 615-650): refused with "The <weapon> you are wielding
+appears to be cursed." when the wielded weapon is cursed, otherwise the two
+trade places, their bonuses move (`py_bonuses(...,-1)` / `(...,1)`), it
+prints "Primary weapon   : <name>" and "Secondary weapon : <name>", and it
+takes a turn; with neither weapon, "But you are wielding no weapons."
+Moria8 has no such slot or command (`docs/FEATURE_MAP.md` "Exchange
+Primary/Secondary Weapon", `Missing`; the slot-layout row there wrongly
+mentions an `x` swap and `player_aux_slot`). A Rogue or Ranger switching
+between launcher and melee weapon spends a turn wielding from the pack each
+way (M5d playtest, 2026-10-26).
+
+Required work:
+
+- Add a 32nd inventory slot (`TOTAL_INV_SLOTS`, 8 parallel arrays, 34 uses)
+  excluded from the pack, the equipment bonus sum and pack-only loops.
+- Bump the save format, loading older saves with the slot empty.
+- `x`: the VMS behavior above, through the shared equipment recalculation.
+- Show the secondary weapon on the equipment screen; correct the
+  FEATURE_MAP slot-layout row.
+- Teach the playtest bot to keep its melee weapon (or launcher) there.
+
+Acceptance target:
+
+- `x` swaps as VMS does on every port, old saves load, and focused tests
+  cover the cursed refusal, the empty case, bonus transfer and the turn.
+
 ### Add a cloak equipment slot
 
 VMS Moria 4.8 and Umoria 5.7.15 start every class but the VMS Rogue with a
@@ -931,6 +961,62 @@ Acceptance target:
   or the incompatibility is root-caused and documented as wontfix.
 
 ## Testing Infrastructure
+
+### Document build dependencies and test a fresh-machine build
+
+No file lists what a build and a full `make test` need on the host. A
+reinstalled Arch machine (2026-10-26) found them one at a time, each as a
+gate failure: Java for Kick Assembler (`tools/kickass_java.sh`), MAME for
+the Apple IIe, Atari 8-bit and BBC Master runtime suites, and Pillow for the
+title-art PNG decode in the C64 and C128 product builds (`error: need Pillow
+(pip install pillow) or macOS sips to decode PNG`). Already present, so not
+yet exercised: VICE (`x64sc`, `x128`, `xplus4`, `c1541`, `petcat`), Python 3
+and make. The ROM and emulator variables (`A2ROMS`, `X16EMU`, `X16ROM`,
+`ATARI8ROMS`, `BBCMROMS`) are documented only in `AGENTS.md`.
+
+Required work:
+
+- Build and run `make -j7 -O test` on an empty install of each supported host
+  (at least Arch, Debian/Ubuntu and macOS), recording every package each one
+  needs, including what `make` downloads itself (Kick Assembler, AppleCommander,
+  ProDOS) and the `x16emu` and `x16-rom` builds.
+- Write the list into the README, or a new `docs/BUILDING.md` it links to,
+  with per-host package names, minimum versions where one matters, and the
+  ROM and emulator variables with what each one enables.
+- Consider a `make check-deps` target that names each missing tool and its
+  package up front, instead of failing midway through a gate.
+
+Acceptance target:
+
+- A fresh machine with only the documented packages installed and the ROM
+  variables set builds every port and passes `make -j7 -O test` with no
+  undocumented step.
+
+### C64 suites sometimes return no results under the parallel gate
+
+Twice on 2026-10-26, a C64 unit suite failed during `make -j7 -O test` with
+no result bytes at all (`identify_spell: FAIL (0/4 tests passed)`, then
+`effects_magic: FAIL (0/29 tests passed)`, each with an empty `Raw:` line
+after the monitor's autostart lines), and passed in full when run by itself
+with `TEST_FILTER`. Neither failure was tied to its test's code, and the
+other platforms' stages passed. The working guess, not yet diagnosed, is
+that the C64 runner (`platforms/commodore/c64/run_tests.sh`) loses the
+result read under load: a VICE startup or monitor timing race with seven
+emulator stages running at once.
+
+Required work:
+
+- Reproduce: rerun the C64 stage under `-j7` load (or a CPU hog) until a
+  suite comes back empty, keeping its VICE log and monitor transcript.
+- Find whether the test program never reached its exit BRK (a slow boot
+  against the cycle limit) or reached it and the result dump was missed.
+- Fix the race in the runner, or retry an empty-result suite once with a
+  clear "retried" note, without raising the 30-second timeout cap.
+
+Acceptance target:
+
+- Repeated `make -j7 -O test` runs on a loaded machine produce no
+  empty-result C64 failures, and a real 0/N failure still fails.
 
 ### Run the C64 suite in parallel
 

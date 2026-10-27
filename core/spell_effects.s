@@ -367,10 +367,7 @@ eff_find_doors:
     cmp #MAP_ROWS - 1
     bcs !efd_done+
     ldx eff_fd_row
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
+    jsr map_row_ptr0_x
     ldy #1
 !efd_col_loop:
     :MapRead_ptr0_y()

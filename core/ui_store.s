@@ -142,8 +142,7 @@ store_draw_screen:
     lda #COL_DGREY
     sta zp_text_color
     lda #2
-    sta zp_cursor_row
-    jsr draw_separator
+    jsr draw_separator_at_a
 
     // Rows 3-14: Item list
     lda #COL_LGREY
@@ -181,12 +180,7 @@ store_draw_screen:
     // Letter: A + slot_counter (screen code A = $01)
     lda #COL_WHITE
     sta zp_text_color
-    lda sd_save_x
-    clc
-    adc #$01                    // Screen code 'A'
-    jsr hal_screen_put_char
-    lda #$29                    // ')'
-    jsr hal_screen_put_char
+    jsr store_put_letter
     lda #$20                    // Space
     jsr hal_screen_put_char
 
@@ -231,12 +225,7 @@ store_draw_screen:
     // Show dash for empty slot
     lda #COL_DGREY
     sta zp_text_color
-    lda sd_save_x
-    clc
-    adc #$01
-    jsr hal_screen_put_char
-    lda #$29                    // ')'
-    jsr hal_screen_put_char
+    jsr store_put_letter
 
 !sds_next_slot:
     lda #COL_LGREY
@@ -251,8 +240,7 @@ store_draw_screen:
     lda #COL_DGREY
     sta zp_text_color
     lda #15
-    sta zp_cursor_row
-    jsr draw_separator
+    jsr draw_separator_at_a
 
     // Row 16: Gold display
     ldx #MSG_GOLD
@@ -477,8 +465,7 @@ store_sell:
     lda #COL_DGREY
     sta zp_text_color
     lda #1
-    sta zp_cursor_row
-    jsr draw_separator
+    jsr draw_separator_at_a
 
     // List inventory items (A-V = slots 0-21)
     lda #2
@@ -523,12 +510,7 @@ store_sell:
 
 !ssl_print_item:
     // Letter
-    lda sd_save_x
-    clc
-    adc #$01                    // Screen code 'A'
-    jsr hal_screen_put_char
-    lda #$29                    // ')'
-    jsr hal_screen_put_char
+    jsr store_put_letter
     lda #$20                    // Space
     jsr hal_screen_put_char
 
@@ -798,8 +780,10 @@ check_cancel:
     rts
 
 // draw_separator — Draw SCREEN_COLS dashes across current row
-// Input: zp_cursor_row set
+// Input: zp_cursor_row set (draw_separator_at_a: A = the row)
 // Clobbers: A, X, Y
+draw_separator_at_a:
+    sta zp_cursor_row
 draw_separator:
     lda #0
     sta zp_cursor_col
@@ -1691,3 +1675,13 @@ msg_tbl_hi:
     .byte >uis_price_str, >uis_no_afford_str, >uis_pack_full_str, >uis_sell_title_str, >uis_sell_which_str
     .byte >uis_offer_str, >uis_sold_str, >hg_asks_str, >hg_your_offer_str, >hg_offers_str
     .byte >hg_your_price_str, >hg_counter_str, >hg_final_str, >hg_take_str, >hg_agreed_str
+
+// store_put_letter — "A)" for the slot in sd_save_x (screen code A = $01)
+// Clobbers: A, X, Y (hal_screen_put_char)
+store_put_letter:
+    lda sd_save_x
+    clc
+    adc #$01                    // Screen code 'A'
+    jsr hal_screen_put_char
+    lda #$29                    // ')'
+    jmp hal_screen_put_char

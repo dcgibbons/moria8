@@ -120,10 +120,7 @@ eff_map_area:
 !emap_scan:
     ldx pm_map_min_y
 !emap_row:
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
+    jsr map_row_ptr0_x
     ldy pm_map_min_x
 !emap_col:
     :MapRead_ptr0_y()

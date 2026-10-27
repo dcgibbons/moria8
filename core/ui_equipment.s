@@ -36,10 +36,8 @@ ui_equip_display_common:
     lda #UEQ_TITLE_COL
     sta zp_cursor_col
     lda #<ueq_title_str
-    sta zp_ptr0
-    lda #>ueq_title_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>ueq_title_str
+    jsr screen_put_string_ay
 
     // Separator
     lda #1
@@ -47,10 +45,8 @@ ui_equip_display_common:
     lda #UEQ_TITLE_COL
     sta zp_cursor_col
     lda #<ueq_sep_str
-    sta zp_ptr0
-    lda #>ueq_sep_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>ueq_sep_str
+    jsr screen_put_string_ay
 
 #if HAL_LAYOUT_EQUIPMENT_WRAP
     jsr ueq_wrap_enable
@@ -142,10 +138,8 @@ ui_equip_display_common:
     lda #COL_DGREY
     sta zp_text_color
     lda #<ueq_none_str
-    sta zp_ptr0
-    lda #>ueq_none_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>ueq_none_str
+    jsr screen_put_string_ay
 
 !ueq_next:
     inc ueq_slot
@@ -165,9 +159,8 @@ ui_equip_display_common:
     sta zp_ptr0
     lda ueq_footer_hi
     sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    jmp hal_screen_put_string              // tail call
 
-    rts
 
 // ============================================================
 // Scratch

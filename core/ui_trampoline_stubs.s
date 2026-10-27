@@ -227,10 +227,8 @@ put_inv_sensed_suffix:
     cmp #IF_SENSED
     bne !pinwe_done+
     lda #<pinwe_sensed_suffix
-    sta zp_ptr0
-    lda #>pinwe_sensed_suffix
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>pinwe_sensed_suffix
+    jsr screen_put_string_ay
 !pinwe_done:
     rts
 

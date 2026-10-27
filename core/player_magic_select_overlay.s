@@ -57,10 +57,8 @@ spell_list_display:
     lda #1
     sta zp_cursor_col
     lda #<pm_header_str
-    sta zp_ptr0
-    lda #>pm_header_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>pm_header_str
+    jsr screen_put_string_ay
 
     lda #0
     sta pm_row_counter
@@ -201,8 +199,5 @@ spell_list_display:
     jsr hal_screen_put_char
 
     lda #<pm_footer_suffix
-    sta zp_ptr0
-    lda #>pm_footer_suffix
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
-    rts
+    ldy #>pm_footer_suffix
+    jmp screen_put_string_ay              // tail call

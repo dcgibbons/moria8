@@ -169,6 +169,9 @@ screen_flash_at:
 msg_clear:
     rts
 
+msg_print_ay:                       // as core/ui_messages.s: A/Y = pointer
+    sta zp_ptr0
+    sty zp_ptr0_hi
 msg_print:
     inc test_msg_calls
     lda zp_ptr0

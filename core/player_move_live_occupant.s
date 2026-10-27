@@ -15,10 +15,7 @@ player_move_check_live_occupant:
     bcs !found+
 
     ldx pm_live_occ_y
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
+    jsr map_row_ptr0_x
     ldy pm_live_occ_x
     :MapRead_ptr0_y()
     and #~FLAG_OCCUPIED & $ff

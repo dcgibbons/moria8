@@ -44,9 +44,12 @@ CHARACTER_BARS: dict[tuple[str, str], int] = {
     # M5a freeze run (2026-10-25): 15/20; 14-17 across rounds 4-10.
     ("halfling-warrior", "clvl10"): 15,
 }
-# Pure spell casters, every race and goal (maintainer decision 2026-10-26,
-# M5b): 15/20. A CHARACTER_BARS entry still decides its combination.
-CLASS_BARS: dict[str, int] = {"mage": 15, "priest": 15}
+# Pure spell casters, every race and goal: 10/20, half the seeds
+# (maintainer decision 2026-10-27, M5f: "it is OK to accept them as weaker
+# and have a lower bar"; 15/20 from 2026-10-26, M5b). Suites frozen before
+# keep the bar they were frozen at. A CHARACTER_BARS entry still decides its
+# combination.
+CLASS_BARS: dict[str, int] = {"mage": 10, "priest": 10}
 
 
 @dataclass(frozen=True)

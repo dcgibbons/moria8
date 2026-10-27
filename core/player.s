@@ -950,10 +950,7 @@ player_search_has_no_light:
     bne !has_light+
 
     ldx zp_player_y
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
+    jsr map_row_ptr0_x
     ldy zp_player_x
     :MapRead_ptr0_y()
     and #PLAYER_SEARCH_FLAG_LIT
@@ -1078,10 +1075,8 @@ ui_char_draw_background:
     lda #COL_LGREY
     sta zp_text_color
     lda #<char_sex_label
-    sta zp_ptr0
-    lda #>char_sex_label
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>char_sex_label
+    jsr screen_put_string_ay
 
     lda #COL_WHITE
     sta zp_text_color
@@ -1104,10 +1099,8 @@ ui_char_draw_background:
     lda #COL_LGREY
     sta zp_text_color
     lda #<char_sc_label
-    sta zp_ptr0
-    lda #>char_sc_label
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>char_sc_label
+    jsr screen_put_string_ay
     lda #COL_WHITE
     sta zp_text_color
     lda player_data + PL_SOCIAL_CLASS

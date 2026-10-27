@@ -270,6 +270,12 @@ test_reset_dispel_undead_prayer_state:
     sta player_data + PL_SPELLS_WORKED_3
     rts
 
+// The one map row this test writes (creature and player at column 20; the
+// kill clears it). This program runs past MAP_BASE, so the row must start
+// above its last byte: row 12 landed on the test's own stubs and a 7-byte
+// layout change made every test crash (2026-10-26).
+.const TDUP_ROW = 30
+
 test_start:
     :PatchJump(huff_print_msg, test_huff_print_msg)
     :PatchJump(rng_range, test_rng_range)
@@ -292,10 +298,10 @@ test_start:
     lda #20
     sta test_mon_table + (0 * MONSTER_ENTRY_SIZE) + MX_X
     sta zp_player_x
-    lda #12
+    lda #TDUP_ROW
     sta test_mon_table + (0 * MONSTER_ENTRY_SIZE) + MX_Y
     sta zp_player_y
-    ldx #12
+    ldx #TDUP_ROW
     lda map_row_lo,x
     sta zp_ptr1
     lda map_row_hi,x
@@ -450,3 +456,7 @@ test_start:
     lda #$00
     sta tc_results + 2
     jmp test_finish
+
+tdup_program_end:
+.assert "Dispel Undead test's map row starts above its code", MAP_BASE + TDUP_ROW * MAP_COLS >= tdup_program_end, true
+.assert "Dispel Undead test's map row is inside the map", TDUP_ROW < MAP_ROWS, true

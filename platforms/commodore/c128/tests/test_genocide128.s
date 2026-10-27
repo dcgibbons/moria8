@@ -177,6 +177,9 @@ viewport_update:
 render_viewport:
 status_draw:
 msg_clear:
+msg_print_ay:                       // as core/ui_messages.s: A/Y = pointer
+    sta zp_ptr0
+    sty zp_ptr0_hi
 msg_print:
 input_wait_release:
 .label hal_input_wait_release = input_wait_release

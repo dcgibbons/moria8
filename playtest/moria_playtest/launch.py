@@ -127,6 +127,27 @@ VICE_RESOURCE_ARGS = (
 )
 
 
+# Optional ROM images, from the caller's environment only (AGENTS.md rule 9):
+# a KERNAL and a 1541 drive ROM, e.g. JiffyDOS's pair, which only works as a
+# pair. Unset: VICE's own ROMs. Any other ROM option can be played the same
+# way (maintainer, 2026-10-27).
+ROM_ENV = (("PLAYTEST_KERNAL", "-kernal"), ("PLAYTEST_DOS1541", "-dos1541"))
+
+
+def rom_args(env: dict[str, str] | None = None) -> list[str]:
+    """VICE arguments for the ROM images the environment names."""
+    env = os.environ if env is None else env
+    args: list[str] = []
+    for var, option in ROM_ENV:
+        path = env.get(var, "")
+        if not path:
+            continue
+        if not Path(path).is_file():
+            raise FileNotFoundError(f"{var}={path}: no such ROM image")
+        args += [option, str(Path(path).resolve())]
+    return args
+
+
 def sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as fh:
@@ -185,7 +206,7 @@ class ViceProcess:
               response_timeout: float = 60.0) -> ViceMonitor:
         exe = find_vice(self.emulator)
         config = str(write_vice_config(exe, self.workdir))
-        self.args = [exe, *(config if a == "VICE_CONFIG" else a for a in VICE_RESOURCE_ARGS),
+        self.args = [exe, *(config if a == "VICE_CONFIG" else a for a in VICE_RESOURCE_ARGS), *rom_args(),
                      "-binarymonitor", "-binarymonitoraddress", f"127.0.0.1:{self.port}"]
         if autostart:
             self.args += ["-autostart", str(self.disk)]

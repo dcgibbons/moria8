@@ -621,10 +621,7 @@ find_monster_floor:
 
     // Check tile type = TILE_FLOOR
     tax                         // X = y
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
+    jsr map_row_ptr0_x
     ldy ms_spawn_x
     :MapRead_ptr0_y()
 
@@ -800,10 +797,7 @@ monster_spawn_one:
 
     // Set FLAG_OCCUPIED on map tile
     ldx ms_spawn_y
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
+    jsr map_row_ptr0_x
     ldy ms_spawn_x
     :MapRead_ptr0_y()
     ora #FLAG_OCCUPIED
@@ -843,10 +837,7 @@ find_adjacent_empty:
     sta ms_spawn_y
     // Check tile: floor + unoccupied
     ldx ms_spawn_y
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
+    jsr map_row_ptr0_x
     ldy ms_spawn_x
     :MapRead_ptr0_y()
     and #TILE_TYPE_MASK | FLAG_OCCUPIED
@@ -1324,10 +1315,7 @@ monster_remove:
 
     // Clear FLAG_OCCUPIED on map tile
     ldx mfa_y
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
+    jsr map_row_ptr0_x
     ldy mfa_x
     :MapRead_ptr0_y()
     and #~FLAG_OCCUPIED & $ff   // Clear bit 0

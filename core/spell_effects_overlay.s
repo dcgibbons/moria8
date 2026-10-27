@@ -20,10 +20,7 @@ eff_find_traps:
 
     // Reveal trap on map
     ldy trap_y,x
-    lda map_row_lo,y
-    sta zp_ptr0
-    lda map_row_hi,y
-    sta zp_ptr0_hi
+    jsr map_row_ptr0_y
     ldy trap_x,x
     :MapRead_ptr0_y()
     and #TILE_FLAG_MASK

@@ -36,7 +36,8 @@ ITEM_PROMPT = re.compile(r"which (?:item|potion|scroll|food|wand|staff) \(a-")  
 # PM_FOOTER_PRAY/PM_FOOTER_CAST): book choice, spell choice, and the "?" list.
 SPELL_BOOK_PROMPT = re.compile(r"^(?:Prayer book|Spell book|Study which book) \(a-")
 SPELL_WHICH_PROMPT = re.compile(r"^(?:Pray|Cast) which\? \(a-", re.I)
-SPELL_LIST_TITLES = ("Prayer Book", "Magic Book", "Spell Book")
+SPELL_LIST_TITLES = ("Prayer Book", "Mage Book")   # core/player_magic_select_overlay.s
+SPELL_LEARN_TITLE, SPELL_LEARN_PROMPT = "Study", "Learn which? (a-"   # the Mage-book Study list (M5d)
 KEY_SPACE = 0x20
 KEY_RUNSTOP = 0x03
 
@@ -197,6 +198,8 @@ def classify(obs: Observation, abi: Abi, command_ret: int,
         return Mode.SPELL, "which"
     if obs.rows[0].strip() in SPELL_LIST_TITLES and SPELL_WHICH_PROMPT.search(obs.rows[24].strip()):
         return Mode.SPELL, "list"
+    if obs.rows[0].strip() == SPELL_LEARN_TITLE and obs.rows[24].strip().startswith(SPELL_LEARN_PROMPT):
+        return Mode.SPELL, "learn"
     if ITEM_PROMPT.search(obs.rows[0]):
         return Mode.ITEM, "which"
     if obs.rows[0].strip() == "Inventory":

@@ -152,10 +152,7 @@ vault_seal_entrance:
     sec
     sbc #1
     tay                         // Y = wall row
-    lda map_row_lo,y
-    sta zp_ptr0
-    lda map_row_hi,y
-    sta zp_ptr0_hi
+    jsr map_row_ptr0_y
     ldx zp_temp2                // Count = room width
     ldy zp_temp0                // Start at room_x
     jsr vse_scan_hwall
@@ -166,10 +163,7 @@ vault_seal_entrance:
     clc
     adc zp_temp3
     tay
-    lda map_row_lo,y
-    sta zp_ptr0
-    lda map_row_hi,y
-    sta zp_ptr0_hi
+    jsr map_row_ptr0_y
     ldx zp_temp2
     ldy zp_temp0
     jsr vse_scan_hwall
@@ -227,10 +221,7 @@ vse_scan_hwall:
 vse_scan_vwall:
 !vsv_loop:
     ldy vse_y_iter
-    lda map_row_lo,y
-    sta zp_ptr0
-    lda map_row_hi,y
-    sta zp_ptr0_hi
+    jsr map_row_ptr0_y
     ldy vse_x
 	    :MapRead_ptr0_y()
 	    and #TILE_TYPE_MASK
@@ -305,10 +296,7 @@ spawn_special_room_monsters:
     // Verify: floor tile, not occupied, not player
     tya
     tax                         // X = y row
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
+    jsr map_row_ptr0_x
     ldy ms_spawn_x
     :MapRead_ptr0_y()
     and #TILE_TYPE_MASK | FLAG_OCCUPIED

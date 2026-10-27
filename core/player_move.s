@@ -92,10 +92,7 @@ player_try_move:
 
     // Read target tile from map
     ldx zp_temp4            // map row
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
+    jsr map_row_ptr0_x
     ldy zp_temp3            // map column
 #if HAL_PLATFORM_GAME_LOOP_PLAYER_MOVE_DIAG_LABELS
 c128_town_move_diag_after_map_ptr_setup:

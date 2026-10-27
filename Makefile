@@ -8,7 +8,7 @@
 	buildbbcmaster diskbbcmaster runbbcmaster testbbcmaster testbbcmaster-smoke testbbcmaster-fast-smoke testbbcmaster-runtime testbbcmaster-memory-contract testbbcmaster-memory-contract-selftest \
 	artifact artifact-checksums artifacts \
 	playtest-check playtest-smoke playtest-m0-report playtest-session playtest-qualify \
-	playtest-regress playtest-repro playtest-dashboard playtest-selftest
+	playtest-regress playtest-repro playtest-dashboard playtest-publish playtest-selftest
 
 # Python tools and harnesses must not leave __pycache__ in source directories.
 export PYTHONDONTWRITEBYTECODE := 1
@@ -71,9 +71,8 @@ clean:
 # `make test` runs one up-front build, then seven isolated stages. They are
 # independent (each writes only its own build/test/<platform> scratch), so
 # `make -j7 -O test` runs them in parallel; plain `make test` runs them in
-# order. The C64/C128/Plus4 stages mirror platforms/commodore's `test`
-# (test64 test128-fast test128-fast-smoke testplus4); the two C128 steps
-# share build/test/c128 and stay sequential within their stage.
+# order. The C64 and Plus/4 stages run test64 and testplus4; the C128 stage
+# runs the full test128 suite, not the test128-fast subsets.
 TEST_STAGES = test-stage-c64 test-stage-c128 test-stage-plus4 test-stage-apple2 test-stage-cx16 \
 	test-stage-atari8 test-stage-bbcmaster
 
@@ -92,8 +91,7 @@ test-stage-c64: test-prebuild
 	$(ISOLATED) $(MAKE) -C platforms/commodore test64
 
 test-stage-c128: test-prebuild
-	$(ISOLATED) $(MAKE) -C platforms/commodore test128-fast
-	$(ISOLATED) $(MAKE) -C platforms/commodore test128-fast-smoke
+	$(ISOLATED) $(MAKE) -C platforms/commodore test128
 
 test-stage-plus4: test-prebuild
 	$(ISOLATED) $(MAKE) -C platforms/commodore testplus4
@@ -146,6 +144,12 @@ playtest-repro: disk64
 
 playtest-dashboard:
 	$(PLAYTEST_PY) -m moria_playtest.dashboard
+
+# Publishes the dashboard as static files with rsync over SSH, every 30 s:
+# PLAYTEST_PUBLISH_TARGET (user@host:/path/) and PLAYTEST_PUBLISH_KEY come from
+# the caller's environment. PLAYTEST_PUBLISH_ARGS: --once, --no-push, --every N.
+playtest-publish:
+	$(PLAYTEST_PY) -m moria_playtest.publish $(PLAYTEST_PUBLISH_ARGS)
 
 playtest-selftest:
 	$(PLAYTEST_RUN) -m moria_playtest.selftest

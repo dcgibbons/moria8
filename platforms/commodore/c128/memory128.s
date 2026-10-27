@@ -78,8 +78,8 @@
 //   - overlay cache HELP:      $2000-$2FFF
 //   - overlay cache ITEMS:     $3000-$3FFF
 //   - live map span:           $4000-$730B (Phase 10.3 = 198x66)
-//   - DB/data region:          $7400-$79FF
-//   - tier cache window:       $7A00-$9567
+//   - DB/data region:          $7400-$7A0F
+//   - tier cache window:       $7A10-$9567
 //   - title-art cache:         $9568-$97FF
 //   - small overlay cache MODAL:$9800-$9CFF
 //   - small overlay cache:     $9D00-$9FFF
@@ -114,14 +114,16 @@
 .const MMU_COPY_MAP_ROW_LEN = 78
 .const MAP_END          = BANK1_MAP_RESERVED_END
 .const BANK1_DB_BASE    = $7400
-.const BANK1_DB_END     = $79ff   // item names end at $79e1; the tier cache took the rest (2026-10-25)
+.const BANK1_DB_END     = $7a0f   // item names end at $7a0a (three launchers, 2026-10-26); the tier cache has the rest
 // The tier cache took the DB region's last page when tiers gained the
 // cr_treasure SoA field (MON-014): tiers 1-4 needed 5520 bytes. Five DL 1
 // creatures added to tier 1 (2026-10-25) needed 5733: the cache's end moved
 // to $9567, into the title-art cache's slack (663 bytes left, 593-624
 // needed). Twenty-five more the same day: its start moved down to $7a00, into
-// the DB region's free tail above the item names ($79e1).
-.const BANK1_TIER_CACHE_BASE = $7a00
+// the DB region's free tail above the item names ($79e1). The Long Bow,
+// Composite Bow and Heavy Crossbow names (2026-10-26) took 16 bytes back:
+// tiers 1-4 need 6873 of the 7000 left.
+.const BANK1_TIER_CACHE_BASE = $7a10
 .const BANK1_TIER_CACHE_SIZE = $9568 - BANK1_TIER_CACHE_BASE  // up to reserved gap 0
 .const BANK1_TIER_CACHE_END  = BANK1_TIER_CACHE_BASE + BANK1_TIER_CACHE_SIZE - 1
 .const BANK1_RESERVED_GAP0_BASE = $9568

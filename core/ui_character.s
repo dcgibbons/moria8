@@ -49,10 +49,8 @@ ui_char_display:
     lda #UCHAR_TITLE_COL
     sta zp_cursor_col
     lda #<char_title_str
-    sta zp_ptr0
-    lda #>char_title_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>char_title_str
+    jsr screen_put_string_ay
 
     lda zp_game_flags
     and #GAME_FLAG_WIZARD
@@ -64,10 +62,8 @@ ui_char_display:
     lda #UCHAR_WIZARD_COL
     sta zp_cursor_col
     lda #<char_wizard_str
-    sta zp_ptr0
-    lda #>char_wizard_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>char_wizard_str
+    jsr screen_put_string_ay
 !ucd_not_wizard:
 
     lda #COL_LGREY
@@ -79,10 +75,8 @@ ui_char_display:
     lda #UCHAR_COL_L
     sta zp_cursor_col
     lda #<char_name_label
-    sta zp_ptr0
-    lda #>char_name_label
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>char_name_label
+    jsr screen_put_string_ay
 
     lda #COL_WHITE
     sta zp_text_color
@@ -102,10 +96,8 @@ ui_char_display:
     lda #UCHAR_COL_L
     sta zp_cursor_col
     lda #<char_race_label
-    sta zp_ptr0
-    lda #>char_race_label
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>char_race_label
+    jsr screen_put_string_ay
 
     lda #COL_WHITE
     sta zp_text_color
@@ -121,10 +113,8 @@ ui_char_display:
     lda #UCHAR_COL_R
     sta zp_cursor_col
     lda #<char_class_label
-    sta zp_ptr0
-    lda #>char_class_label
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>char_class_label
+    jsr screen_put_string_ay
 
     lda #COL_WHITE
     sta zp_text_color
@@ -143,10 +133,8 @@ ui_char_display:
     lda #UCHAR_COL_L
     sta zp_cursor_col
     lda #<char_level_label
-    sta zp_ptr0
-    lda #>char_level_label
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>char_level_label
+    jsr screen_put_string_ay
 
     lda #COL_WHITE
     sta zp_text_color
@@ -158,10 +146,8 @@ ui_char_display:
     lda #UCHAR_COL_R
     sta zp_cursor_col
     lda #<status_ac_str
-    sta zp_ptr0
-    lda #>status_ac_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>status_ac_str
+    jsr screen_put_string_ay
 
     lda #COL_WHITE
     sta zp_text_color
@@ -179,10 +165,8 @@ ui_char_display:
     lda #UCHAR_COL_L
     sta zp_cursor_col
     lda #<status_hp_str
-    sta zp_ptr0
-    lda #>status_hp_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>status_hp_str
+    jsr screen_put_string_ay
 
     lda #COL_WHITE
     sta zp_text_color
@@ -205,10 +189,8 @@ ui_char_display:
     lda #UCHAR_COL_MID
     sta zp_cursor_col
     lda #<char_mana_label
-    sta zp_ptr0
-    lda #>char_mana_label
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>char_mana_label
+    jsr screen_put_string_ay
 
     lda #COL_WHITE
     sta zp_text_color
@@ -227,10 +209,8 @@ ui_char_display:
     lda #UCHAR_COL_L
     sta zp_cursor_col
     lda #<char_gold_label
-    sta zp_ptr0
-    lda #>char_gold_label
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>char_gold_label
+    jsr screen_put_string_ay
 
     lda #COL_YELLOW
     sta zp_text_color
@@ -245,10 +225,8 @@ ui_char_display:
     lda #UCHAR_COL_MID
     sta zp_cursor_col
     lda #<status_exp_str
-    sta zp_ptr0
-    lda #>status_exp_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>status_exp_str
+    jsr screen_put_string_ay
 
     lda #COL_WHITE
     sta zp_text_color
@@ -269,10 +247,8 @@ ui_char_display:
     lda #UCHAR_COL_L
     sta zp_cursor_col
     lda #<char_spells_label
-    sta zp_ptr0
-    lda #>char_spells_label
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>char_spells_label
+    jsr screen_put_string_ay
 
     lda #COL_WHITE
     sta zp_text_color
@@ -296,12 +272,9 @@ ui_char_display:
     lda #UCHAR_FOOTER_COL
     sta zp_cursor_col
     lda #<press_key_str
-    sta zp_ptr0
-    lda #>press_key_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>press_key_str
+    jmp screen_put_string_ay              // tail call
 
-    rts
 
 // ui_char_draw_stats — Draw the 6 stats in 2 rows of 3
 // Row 6: STR, INT, WIS

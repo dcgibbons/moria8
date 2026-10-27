@@ -210,10 +210,8 @@ turn_tick_effects:
     sta zp_eff_bless
     bne !no_bless+
     lda #<turn_prayer_off_msg
-    sta zp_ptr0
-    lda #>turn_prayer_off_msg
-    sta zp_ptr0_hi
-    jsr msg_print
+    ldy #>turn_prayer_off_msg
+    jsr msg_print_ay
 !no_bless:
 
     // Heroism: expiration removes the temporary +10 HP granted on activation.
@@ -487,10 +485,7 @@ turn_post_action:
 // Safe to skip on recall fizzles, because the player remains on the same tile.
 turn_recall_clear_old_occupied:
     ldx zp_player_y
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
+    jsr map_row_ptr0_x
     ldy zp_player_x
     :MapRead_ptr0_y()
     and #~FLAG_OCCUPIED

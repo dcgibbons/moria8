@@ -180,7 +180,9 @@ class Character:
                 for event in self.brain.events:
                     self.file_finding("stall", "bot", event, obs)
                 self.brain.events.clear()
-                self.log.decision(obs, decision.as_dict())
+                # The brain's kit beside each decision: whether a death came
+                # with potions or oil left (M5f).
+                self.log.decision(obs, {**decision.as_dict(), "clw": self.brain.clw, "oil": self.brain.oil})
                 if self.result.steps % CharacterLog.STATUS_EVERY == 0:
                     self.log.status(game, obs, self.result.steps, {"character_seed": self.seed})
                 obs = self.press(decision.key)

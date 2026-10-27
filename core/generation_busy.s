@@ -81,10 +81,8 @@ generation_busy_draw_frame:
     lda #GEN_BUSY_COL
     sta zp_cursor_col
     lda #<gen_busy_text
-    sta zp_ptr0
-    lda #>gen_busy_text
-    sta zp_ptr0_hi
-    jmp hal_screen_put_string
+    ldy #>gen_busy_text
+    jmp screen_put_string_ay
 
 generation_busy_hold:
 !gbh_outer:

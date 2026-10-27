@@ -342,10 +342,7 @@ chest_loot_place_one:
 
     // Walkable (floor or open door)?
     ldx fi_add_y
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
+    jsr map_row_ptr0_x
     ldy fi_add_x
     :MapRead_ptr0_y()
     and #TILE_TYPE_MASK
@@ -500,10 +497,7 @@ chest_product_setup:
 
     ldx #8
 !cps_row:
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
+    jsr map_row_ptr0_x
     ldy #19
     lda #(TILE_FLOOR | FLAG_VISITED | FLAG_LIT)
 !cps_col:

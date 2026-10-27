@@ -43,10 +43,8 @@ pmx_pick_recharge_item:
     adc #$01                    // Screen code 'A'
     sta pmx_recharge_prompt_last
     lda #<pmx_recharge_prompt_str
-    sta zp_ptr0
-    lda #>pmx_recharge_prompt_str
-    sta zp_ptr0_hi
-    jsr msg_print
+    ldy #>pmx_recharge_prompt_str
+    jsr msg_print_ay
     jsr input_prepare_followup_key
     jsr hal_input_get_key
 #if HAL_PLATFORM_PLAYER_MAGIC_RESTORE_BEFORE_RETURN
@@ -418,10 +416,7 @@ pmx_mark_stairs_at:
     cmp #MAP_COLS
     bcs !pmsa_done+
     ldx pmx_work_y
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
+    jsr map_row_ptr0_x
     ldy pmx_work_x
     :MapRead_ptr0_y()
     and #TILE_TYPE_MASK
@@ -569,10 +564,7 @@ eff_teleport_other:
     jsr find_random_floor
     bcc !eto_done+
     ldx pmx_work_y
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
+    jsr map_row_ptr0_x
     ldy pmx_work_x
     :MapRead_ptr0_y()
     and #~FLAG_OCCUPIED & $ff

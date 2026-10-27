@@ -1,9 +1,13 @@
 // test_ranged.s — Runtime tests for ranged_fire.s
 //
 // Tests: item_get_missile, ammo matching, ammo depletion,
-//        melee unarmed fallback with bow, ranged_fire validation.
+//        melee unarmed fallback with bow, ranged_fire validation, and the
+//        fired shot (M5d, 2026-10-26): Umoria launcher multiplier, VMS range,
+//        distance penalty and missed-shot landing.
 //
-// Results at $0400-$0409: $01 = pass, $00 = fail per test (10 tests)
+// Results at $0400-$040F: $01 = pass, $00 = fail per test (16 tests)
+// The shot's range and a missed shot's landing are tested in test_throw.s,
+// whose layout keeps the map and floor-item table clear of test code.
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_bootstrap)
@@ -13,7 +17,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #9
+    ldx #15
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -77,6 +81,7 @@ test_exit_trampoline:
 #import "../../../../core/combat.s"
 #import "../../../../core/scene_mat_tile.s"
 #import "../../../../core/ranged_fire.s"
+#import "../../../../core/throw.s"
 #import "../../../../core/monster_attack.s"
 #import "../../../../core/turn.s"
 #import "../../../../core/store_data.s"
@@ -90,8 +95,11 @@ press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
 // Test scratch
-tc_results: .fill 10, $ff
+tc_results: .fill 16, $ff
 tr_save: .byte 0
+tr_count: .byte 0
+tr_seen: .byte 0
+tr_base: .byte 0
 
 test_start:
     // Seed RNG
@@ -335,5 +343,255 @@ test_start:
     lda #$00
     sta tc_results+9
 !t10_done:
+
+    // ==========================================
+    // Test 11: Light Crossbow and Bolt (1d5), no to-dam: Umoria
+    // weaponMissileFacts multiplies by 3, so 40 rolls are all multiples of
+    // 3 in 3..15 and not all the minimum
+    // ==========================================
+    lda #50 - IT_MISSILE_BASE   // Light Crossbow
+    sta rf_launcher
+    lda #53                     // Bolt
+    sta tw_item_id
+    lda #0
+    sta tw_save_to_dam
+    sta inv_to_dam + EQUIP_WEAPON
+    sta tr_seen
+    lda #40
+    sta tr_count
+!t11_loop:
+    jsr rf_roll_damage
+    lda cmb_damage
+    cmp #3
+    bcc !t11_fail+
+    cmp #16
+    bcs !t11_fail+
+    cmp #3
+    beq !t11_min+
+    inc tr_seen
+!t11_min:
+!t11_mod3:
+    sec
+    sbc #3
+    beq !t11_ok+
+    bcs !t11_mod3-
+    jmp !t11_fail+
+!t11_ok:
+    dec tr_count
+    bne !t11_loop-
+    lda tr_seen
+    beq !t11_fail+
+    lda #$01
+    sta tc_results+10
+    jmp !t11_done+
+!t11_fail:
+    lda #$00
+    sta tc_results+10
+!t11_done:
+
+    // ==========================================
+    // Test 12: Short Bow +1 to-dam and Arrow (1d4) +3: (1d4 + 4) x 2 is
+    // 10, 12, 14 or 16; an Arrow at -10 floors at 0 before the multiplier
+    // ==========================================
+    lda #49 - IT_MISSILE_BASE   // Short Bow
+    sta rf_launcher
+    lda #52                     // Arrow
+    sta tw_item_id
+    lda #3
+    sta tw_save_to_dam
+    lda #1
+    sta inv_to_dam + EQUIP_WEAPON
+    lda #30
+    sta tr_count
+!t12_loop:
+    jsr rf_roll_damage
+    lda cmb_damage
+    cmp #10
+    bcc !t12_fail+
+    cmp #17
+    bcs !t12_fail+
+    and #1
+    bne !t12_fail+
+    dec tr_count
+    bne !t12_loop-
+    lda #$f6                    // -10
+    sta tw_save_to_dam
+    lda #0
+    sta inv_to_dam + EQUIP_WEAPON
+    lda #20
+    sta tr_count
+!t12_neg:
+    jsr rf_roll_damage
+    lda cmb_damage
+    bne !t12_fail+
+    dec tr_count
+    bne !t12_neg-
+    lda #$01
+    sta tc_results+11
+    jmp !t12_done+
+!t12_fail:
+    lda #$00
+    sta tc_results+11
+!t12_done:
+    lda #0
+    sta tw_save_to_dam
+
+    // ==========================================
+    // Test 13: To-hit drops one per square flown (VMS tbth - cur_dis),
+    // gains 3 per point of ammunition to-hit (BTH_PLUS_ADJ), floors at 0
+    // ==========================================
+    lda #CLASS_RANGER           // missile skill 72
+    sta player_data + PL_CLASS
+    lda #0                      // Human
+    sta player_data + PL_RACE
+    sta player_data + PL_TOHIT
+    sta zp_eff_bless
+    sta tw_save_to_hit
+    sta inv_to_hit + EQUIP_WEAPON
+    sta rf_dist
+    lda #1
+    sta zp_player_lvl
+    jsr rf_calc_tohit
+    lda zp_combat_tohit
+    sta tr_base
+    lda #7
+    sta rf_dist
+    jsr rf_calc_tohit
+    lda tr_base
+    sec
+    sbc #7
+    cmp zp_combat_tohit
+    bne !t13_fail+
+    lda #2
+    sta tw_save_to_hit
+    jsr rf_calc_tohit
+    lda tr_base
+    sec
+    sbc #1                      // -7 + 2 x 3
+    cmp zp_combat_tohit
+    bne !t13_fail+
+    lda #0
+    sta tw_save_to_hit
+    lda #255
+    sta rf_dist
+    jsr rf_calc_tohit
+    lda zp_combat_tohit
+    bne !t13_fail+
+    lda #$01
+    sta tc_results+12
+    jmp !t13_done+
+!t13_fail:
+    lda #$00
+    sta tc_results+12
+!t13_done:
+
+    // ==========================================
+    // Test 14: The appended launchers (VMS p1 3, 4, 6): Long Bow and
+    // Composite Bow fire arrows, Heavy Crossbow bolts, each shown '}';
+    // Phase Door (136) and the Arrow keep their values
+    // ==========================================
+    ldx #137                    // Long Bow
+    jsr item_get_missile
+    cmp #1
+    bne !t14_fail+
+    ldx #138                    // Composite Bow
+    jsr item_get_missile
+    cmp #1
+    bne !t14_fail+
+    ldx #139                    // Heavy Crossbow
+    jsr item_get_missile
+    cmp #2
+    bne !t14_fail+
+    ldx #136                    // Phase Door
+    jsr item_get_missile
+    bne !t14_fail+
+    ldx #139
+    jsr item_get_display_char
+    cmp #$1c                    // '}'
+    bne !t14_fail+
+    ldx #137
+    jsr item_get_display_char
+    cmp #$1c
+    bne !t14_fail+
+    ldx #52                     // Arrow
+    jsr item_get_display_char
+    cmp #$1b                    // '{'
+    bne !t14_fail+
+    lda #$01
+    sta tc_results+13
+    jmp !t14_done+
+!t14_fail:
+    lda #$00
+    sta tc_results+13
+!t14_done:
+
+    // ==========================================
+    // Test 15: Firing tables for the appended launchers (VMS facts range,
+    // Umoria multiplier): a Heavy Crossbow with no bolts is launcher 5,
+    // range 35, x4; a Long Bow launcher 3, range 30, x3
+    // ==========================================
+    jsr msg_init
+    jsr item_init_inventory
+    ldx #EQUIP_WEAPON
+    lda #139                    // Heavy Crossbow
+    sta inv_item_id,x
+    lda #1
+    sta inv_qty,x
+    jsr ranged_fire
+    bcs !t15_fail+              // no bolts: nothing fired
+    ldx rf_launcher
+    cpx #5
+    bne !t15_fail+
+    lda rf_range_tbl,x
+    cmp #35
+    bne !t15_fail+
+    lda rf_mult_tbl,x
+    cmp #4
+    bne !t15_fail+
+    ldx #EQUIP_WEAPON
+    lda #137                    // Long Bow
+    sta inv_item_id,x
+    jsr ranged_fire
+    ldx rf_launcher
+    cpx #3
+    bne !t15_fail+
+    lda rf_range_tbl,x
+    cmp #30
+    bne !t15_fail+
+    lda rf_mult_tbl,x
+    cmp #3
+    bne !t15_fail+
+    lda #$01
+    sta tc_results+14
+    jmp !t15_done+
+!t15_fail:
+    lda #$00
+    sta tc_results+14
+!t15_done:
+
+    // ==========================================
+    // Test 16: A Heavy Crossbow in melee fights as bare hands (1d2), as
+    // the Short Bow does (test 8)
+    // ==========================================
+    ldx #EQUIP_WEAPON
+    lda #139                    // Heavy Crossbow
+    sta inv_item_id,x
+    lda #10
+    sta tr_save
+!t16_loop:
+    jsr combat_roll_damage
+    lda zp_math_a
+    beq !t16_fail+
+    cmp #3
+    bcs !t16_fail+
+    dec tr_save
+    bne !t16_loop-
+    lda #$01
+    sta tc_results+15
+    jmp !t16_done+
+!t16_fail:
+    lda #$00
+    sta tc_results+15
+!t16_done:
 
     jmp test_exit_trampoline

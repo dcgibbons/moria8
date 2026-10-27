@@ -292,10 +292,8 @@ tier_load:
     lda tier_silent_restore
     bne !tl_skip_loading_msg+
     lda #<tier_loading_str
-    sta zp_ptr0
-    lda #>tier_loading_str
-    sta zp_ptr0_hi
-    jsr msg_print
+    ldy #>tier_loading_str
+    jsr msg_print_ay
 !tl_skip_loading_msg:
 
 #if HAL_PLATFORM_OVERLAY_CACHE_ENABLED

@@ -1660,6 +1660,25 @@ class GearTest(unittest.TestCase):
         brain.decide(self.at_level(self.store(brain, 1, [("Hard Leather Armor [6,+1]", 140)], 230), 1), None)
         self.assertEqual(brain.store_letter, "a")
 
+    def test_a_mage_buys_potions_not_weapons(self) -> None:
+        """M5f: Elf and Halfling Mages bought a Tulwar, a Spear, a shield,
+        boots and gloves, left town with two potions, and died to DL1
+        Kobolds and poison gas holding none."""
+        from moria_playtest import goals
+        mage = lambda: Brain(goals.for_character(GOALS["reach_dl8"], "elf-mage"))
+        brain = mage()
+        brain.decide(self.at_level(self.store(brain, 2, [("Main Gauche (+2,+2)", 429), ("Spear", 40)], 900), 1), None)
+        self.assertIsNone(brain.store_letter)                     # no weapon at the Weaponsmith
+        brain = mage()
+        brain.decide(self.at_level(self.store(brain, 1, [("Hard Leather Armor [6,+1]", 140)], 230), 1), None)
+        self.assertIsNone(brain.store_letter)                     # 230 - 5 potions x 20 leaves 130
+        brain = mage()
+        brain.clw = 5
+        brain.decide(self.at_level(self.store(brain, 1, [("Hard Leather Armor [6,+1]", 140)], 230), 1), None)
+        self.assertEqual(brain.store_letter, "a")                 # potions held; no weapon gold kept back
+        priest = Brain(goals.for_character(GOALS["reach_dl8"], "gnome-priest"))
+        self.assertGreaterEqual(priest.gear_reserve(self.at_level(self.store(priest, 1, [], 230), 1)), 100)   # round 12
+
     def test_a_slot_just_bought_for_is_not_bought_again(self) -> None:
         """M5a: bought, not yet worn, counts as worn; the next piece goes to
         another slot."""
@@ -2024,6 +2043,36 @@ class CasterPrayerTest(unittest.TestCase):
         view.creatures = {(9, 6): Creature("k", 1)}                   # not in line
         self.assertIsNone(brain.invoke(o, view))
 
+    def test_bless_find_traps_and_slow_poison(self) -> None:
+        """M5f: Priests prayed only heals, Blind Creature, Chant and Orb;
+        Bless, Find Traps and the poison prayers went unused while traps and
+        poison killed them."""
+        brain, o = self.priest({"Bless": ("c", 1, 1), "Find Traps": ("f", 2, 3), "Slow Poison": ("h", 2, 3)})
+        view = town_view((5, 5), (40, 40), dlvl=2)
+        view.creatures = {(7, 5): Creature("p", 2)}                   # a Novice Priest two squares off
+        self.assertEqual(brain.invoke(o, view).reason, "a hard fight coming: pray Bless")
+        quiet = town_view((5, 5), (40, 40), dlvl=2)
+        self.assertEqual(brain.find_traps(o, quiet).reason, "pray Find Traps")
+        brain.poisoned = True
+        self.assertEqual(brain.pray(o, quiet).reason, "poisoned: pray Slow Poison")
+
+    def test_walks_away_from_a_slow_snake_it_cannot_hurt(self) -> None:
+        # M5f round 13, seed 1006: a Gnome Mage traded 40 blows with a Large
+        # Brown Snake (AC 35, speed 0) and died with full mana; its 'R' at
+        # level 1 is shared with the faster Large White Snake.
+        from moria_playtest import knowledge
+        self.assertIn("Large Brown Snake", knowledge.slow_names())
+        self.assertNotIn("Large White Snake", knowledge.slow_names())
+        brain = Brain(GOALS["clvl10"])
+        brain.food = 3
+        view = town_view((5, 5), (40, 40), dlvl=1)
+        view.creatures = {(5, 6): Creature("R", 1)}
+        o = command_obs(pos=(5, 5), dlvl=1, clvl=2, hp=16, mhp=16, rows={0: "You miss the Large Brown Snake."})
+        brain.messages = o.rows[0]
+        self.assertNotEqual(brain.fight(o, view).layer, "fight")               # walks away
+        brain.messages = "You miss the Large White Snake."
+        self.assertEqual(brain.fight(o, view).layer, "fight")                  # a White Snake keeps up
+
     def test_blind_creature_on_one_it_would_lose_to(self) -> None:
         brain, o = self.priest({"Blind Creature": ("a", 4, 5, "Words of Wisdom")})
         view = town_view((5, 5), (40, 40), dlvl=4)
@@ -2060,6 +2109,289 @@ class CasterPrayerTest(unittest.TestCase):
         brain, _ = self.priest({"Sanctuary": ("e", 5, 7, "Words of Wisdom")})   # no Portal known
         brain.adjacent = [Creature("w", 4)]
         self.assertIsNone(brain.phase_door(hurt, view))               # M5b round 24: no Portal loop
+
+
+def goals_for(character: str):
+    from moria_playtest import goals
+    return goals.for_character(GOALS["clvl10"], character)
+
+
+class MageBookTest(unittest.TestCase):
+    """Mage-book casters (M5d): every Rogue and Ranger stalled at its first
+    spell level on the Study list the bot did not know."""
+
+    @staticmethod
+    def caster(character: str, known: dict, mp: int = 6):
+        from moria_playtest import goals
+        from moria_playtest.magic import Prayer
+        brain = Brain(goals.for_character(GOALS["clvl10"], character))
+        brain.food, brain.magic.study_due, brain.magic.listed = 5, False, True
+        brain.magic.known = {name: Prayer(*spec) for name, spec in known.items()}
+        brain.magic.listed_books = {"Beginners-Magick"}
+        o = command_obs(pos=(5, 5), dlvl=2, clvl=5, hp=30, mhp=30,
+                        rows={23: f"HP:30/30  MP:{mp}/6 AC:10 AU:32"})
+        return brain, o
+
+    def test_the_study_list_is_classified(self) -> None:
+        from moria_playtest.game import classify
+        o = command_obs(rows={0: "              Study", 1: "    Name              Mana Lvl",
+                              2: " a) Detect Monsters            1    5", 24: "     Learn which? (a-a, esc)"})
+        self.assertEqual(classify(o, ABI, 0), (Mode.SPELL, "learn"))   # 0: not the command prompt
+        o = command_obs(rows={0: "              Mage Book", 2: " a) Magic Missile              1    3",
+                              24: "     Cast which? (a-a, esc)"})
+        self.assertEqual(classify(o, ABI, 0), (Mode.SPELL, "list"))
+
+    def test_studies_and_learns_by_rank(self) -> None:
+        brain, _ = self.caster("human-ranger", {})
+        magic = brain.magic
+        self.assertTrue(magic.mage)
+        magic.new_book()
+        self.assertEqual(magic.study()[0], ord("F"))
+        self.assertEqual(brain.decide(PrayerBookTest.spell("book", {0: "Study which book (a-a)?"}), None).key, ord("A"))
+        learn = PrayerBookTest.spell("learn", {0: "Study", 2: " a) Detect Monsters            2    3",
+                                               3: " b) Magic Missile              1    3",
+                                               4: " c) Phase Door                 2    3"})
+        self.assertEqual(brain.decide(learn, None).key, ord("B"))      # the attack first
+        magic.note("You learn from the book!")
+        self.assertTrue(magic.study_due)                                 # perhaps another
+        magic.study()
+        brain.decide(PrayerBookTest.spell("book", {0: "Study which book (a-a)?"}), None)
+        rogue = PrayerBookTest.spell("learn", {0: "Study", 2: " a) Detect Monsters            1    5"})
+        self.assertEqual(brain.decide(rogue, None).key, ord("A"))      # nothing ranked: the first offered
+
+    def test_casts_magic_missile_with_m(self) -> None:
+        brain, o = self.caster("human-ranger", {"Magic Missile": ("a", 1, 3, "Beginners-Magick")})
+        view = town_view((5, 5), (30, 30), dlvl=2)
+        view.creatures = {(9, 5): Creature("k", 1)}                   # in line, four east
+        decision = brain.invoke(o, view)
+        self.assertEqual((decision.key, decision.reason), (ord("M"), "cast Magic Missile at 'k'"))
+        self.assertEqual(brain.pending, DIRS[(1, 0)])
+        self.assertEqual(brain.decide(PrayerBookTest.spell("book", {0: "Spell book (a-a)?"}), None).key, ord("A"))
+        self.assertEqual(brain.decide(PrayerBookTest.spell("which", {0: "Cast which? (a-a, ESC)"}), None).key, ord("A"))
+        hurt = command_obs(pos=(5, 5), dlvl=2, clvl=5, hp=9, mhp=30, rows={23: "HP:9/30  MP:6/6 AC:10 AU:32"})
+        view.creatures = {(6, 5): Creature("k", 1)}                   # beside, hurt: escape first (round 4)
+        brain.adjacent = [Creature("k", 1)]
+        brain.phase = 1                                                # a Phase Door scroll held
+        near_death = command_obs(pos=(5, 5), dlvl=2, clvl=5, hp=8, mhp=30, rows={23: "HP:8/30  MP:6/6 AC:10 AU:32"})
+        self.assertIsNone(brain.invoke(near_death, view))                  # phase_door acts: escape first
+        self.assertEqual(brain.choose(near_death, view).layer, "phase")
+        self.assertEqual(brain.invoke(hurt, view).reason, "cast Magic Missile at 'k'")   # 9/30: phase_door would not act (M5f round 12)
+        self.assertEqual(brain.cornered_cast(hurt, view).reason, "cast Magic Missile at 'k'")   # no escape taken: cast, not melee
+        brain.phase = 0                                                # nothing to escape with (M5f)
+        self.assertEqual(brain.invoke(hurt, view).reason, "cast Magic Missile at 'k'")
+        brain.oil = 5
+        self.assertEqual(brain.choose(hurt, view).reason, "cast Magic Missile at 'k'")         # not oil, not the dagger
+        self.assertEqual(brain.invoke(o, view).reason, "cast Magic Missile at 'k'")   # not hurt: cast
+        priest, _ = CasterPrayerTest.priest({"Magic Missile": ("a", 1, 3)})   # a Priest's list has none
+        self.assertEqual(priest.magic.key, ord("P"))
+
+    def test_the_full_repertoire(self) -> None:
+        """M5f: Mages learned Stinking Cloud, Find Hidden Traps/Doors and the
+        second book's spells' places but cast only Magic Missile and bought
+        no second book (maintainer, 2026-10-27: "mages are only successful by
+        using their full spell repertoire")."""
+        from moria_playtest import magic as m
+        known = {"Magic Missile": ("a", 1, 1, "Beginners-Magick"), "Find Hidden Traps/Doors": ("f", 3, 3, "Beginners-Magick"),
+                 "Lightning Bolt": ("b", 4, 5, "Magick I"), "Cure Poison": ("d", 5, 5, "Magick I"),
+                 "Teleport Self": ("e", 6, 7, "Magick I")}
+        brain, o = self.caster("elf-mage", known, mp=20)
+        o.rows[23] = "HP:30/30  MP:20/20 AC:10 AU:32"
+        o = command_obs(pos=(5, 5), dlvl=2, clvl=7, hp=30, mhp=30, rows={23: "HP:30/30  MP:20/20 AC:10 AU:32"})
+        self.assertEqual(brain.mage_attack(o, Creature("r", 1)), "Magic Missile")     # 2 HP: one of either, the cheaper
+        self.assertEqual(brain.mage_attack(o, Creature("k", 1)), "Lightning Bolt")    # 12 HP: one bolt, not two missiles
+        brain.magic.known.pop("Lightning Bolt")
+        self.assertEqual(brain.mage_attack(o, Creature("k", 1)), "Magic Missile")     # the bolt not learned yet
+        brain.magic.known["Fire Bolt"] = m.Prayer("c", 9, 7, "Magick II")             # 6d8 (level 15, here 7 to test)
+        self.assertEqual(brain.mage_attack(o, Creature("p", 2)), "Fire Bolt")         # 22.5 HP: one Fire Bolt
+        view = town_view((5, 5), (30, 30), dlvl=2)
+        self.assertEqual(brain.find_traps(o, view).reason, "pray Find Hidden Traps/Doors")
+        later = command_obs(pos=(5, 5), dlvl=2, clvl=7, hp=30, mhp=30, rows={23: "HP:30/30  MP:20/20 AC:10 AU:32"})
+        later.step = 10
+        self.assertIsNone(brain.find_traps(later, view))                             # not again for FIND_TRAPS_EVERY
+        view.creatures = {(9, 5): Creature("k", 1)}
+        later.step = 100
+        self.assertIsNone(brain.find_traps(later, view))                             # not with a creature in view
+        brain.decide(command_obs(pos=(5, 5), dlvl=2, clvl=7, hp=30, mhp=30,
+                                 rows={0: "You feel poisoned.", 23: "HP:30/30  MP:20/20 AC:10 AU:32"}), town_view((5, 5), (30, 30), dlvl=2))
+        self.assertTrue(brain.poisoned)
+        self.assertEqual(brain.pray(o, town_view((5, 5), (30, 30), dlvl=2)).reason, "poisoned: pray Cure Poison")
+        self.assertTrue(brain.can_phase(o))                                          # Teleport Self is a way out
+        # Books: a level-3 Mage wants Magick I from the Magic Shop.
+        self.assertEqual(m.book_of("Spellbook Magick II"), "Magick II")
+        self.assertEqual(m.book_of("Spellbook Magick I"), "Magick I")
+        fresh = Brain(goals_for("elf-mage"))
+        self.assertIn("Beginners-Magick", fresh.books_owned)
+        self.assertEqual(fresh.book_wanted(command_obs(clvl=3)), "Magick I")
+        self.assertIsNone(fresh.book_wanted(command_obs(clvl=2)))
+        fresh.book_next, fresh.at_store = "Magick I", 5
+        self.assertEqual(fresh.shopping_list(), ["Spellbook Magick I"])
+        fresh.credit("Spellbook Magick I", 1)
+        self.assertIn("Magick I", fresh.books_owned)
+
+    def test_a_bolt_that_reached_nothing_unmarks_the_creature(self) -> None:
+        # M5f round 9: a '$' identified as Creeping Coins stayed one after
+        # they had gone, and Mages cast 14,805 Magic Missiles at floor gold.
+        brain, o = self.caster("elf-mage", {"Magic Missile": ("a", 1, 1, "Beginners-Magick")})
+        brain.decide(o, town_view((5, 5), (30, 30), dlvl=2))          # arrive on the level
+        view = town_view((5, 5), (30, 30), dlvl=2)
+        view.unknown = {(9, 5): "$"}
+        brain.level.identified[((9, 5), "$")] = ("creature", "Creeping Copper Coins")
+        o.step = 1
+        brain.decide(o, view)                                          # identify: '$' counts as coins
+        self.assertEqual(brain.aimed, ((9, 5), "$"))
+        self.assertEqual(brain.decide(PrayerBookTest.spell("book", {0: "Spell book (a-a)?"}), None).key, ord("A"))
+        after = command_obs(pos=(5, 5), dlvl=2, clvl=5, hp=30, mhp=30, rows={23: "HP:30/30  MP:5/6 AC:10 AU:32"})
+        after.step = 2
+        view = town_view((5, 5), (30, 30), dlvl=2)
+        view.unknown = {(9, 5): "$"}
+        decision = brain.decide(after, view)                          # no hit, no message: nothing there
+        self.assertEqual(brain.level.identified[((9, 5), "$")][0], "item")
+        self.assertNotIn("Magic Missile", decision.reason)
+        hit = Brain(GOALS["clvl10"])
+        hit.aimed = ((9, 5), "k")
+        hit.decide(command_obs(pos=(5, 5), dlvl=2, rows={0: "Your spell hits the Kobold."}), town_view((5, 5), (30, 30), dlvl=2))
+        self.assertNotIn(((9, 5), "k"), hit.level.identified)          # it hit something: left alone
+
+    def test_no_missile_at_a_creature_in_a_secret_door(self) -> None:
+        # M5f round 10, seed 1012: a Kobold stood in a secret door (drawn in
+        # the wall) beside an Elf Mage, which cast 14 Magic Missiles that hit
+        # nothing; VMS fire_bolt strikes only on fopen squares. Melee reaches it.
+        brain, o = self.caster("elf-mage", {"Magic Missile": ("a", 1, 1, "Beginners-Magick")})
+        view = town_view((5, 5), (30, 30), dlvl=2, walls=[(x, 6) for x in range(2, 9)])
+        view.creatures = {(5, 6): Creature("k", 1)}
+        brain.adjacent = [view.creatures[(5, 6)]]
+        brain.oil = 5
+        self.assertIsNone(brain.invoke(o, view))
+        self.assertIsNone(brain.throw(o, view))
+        self.assertEqual(brain.choose(o, view).layer, "fight")
+        view = town_view((5, 5), (30, 30), dlvl=2)                      # the same Kobold on the floor
+        view.creatures = {(5, 6): Creature("k", 1)}
+        self.assertEqual(brain.invoke(o, view).reason, "cast Magic Missile at 'k'")
+
+    def test_rests_for_mana_at_full_hp(self) -> None:
+        # M5f round 2: level-1 Halfling Mages walked on with no Magic
+        # Missile left into the next Kobold.
+        brain, _ = self.caster("halfling-mage", {"Magic Missile": ("a", 1, 1, "Beginners-Magick")})
+        view = town_view((5, 5), (30, 30), dlvl=1)
+        spent = command_obs(pos=(5, 5), dlvl=1, clvl=1, hp=6, mhp=6, rows={23: "HP:6/6  MP:0/2 AC:10 AU:32"})
+        self.assertEqual(brain.rest(spent, view).reason, "HP 6/6 MP 0/2 and nothing in view")
+        full = command_obs(pos=(5, 5), dlvl=1, clvl=1, hp=6, mhp=6, rows={23: "HP:6/6  MP:2/2 AC:10 AU:32"})
+        self.assertIsNone(brain.rest(full, view))
+        view.creatures = {(9, 5): Creature("k", 1)}
+        self.assertIsNone(brain.rest(spent, view))                     # not with a creature in view
+
+    def test_phase_door_spell_after_the_scroll(self) -> None:
+        brain, _ = self.caster("human-rogue", {"Phase Door": ("b", 2, 7, "Beginners-Magick")})
+        hurt = command_obs(pos=(5, 5), dlvl=2, clvl=7, hp=8, mhp=30, rows={23: "HP:8/30  MP:6/6 AC:10 AU:32"})
+        view = town_view((5, 5), (30, 30), dlvl=2)
+        brain.adjacent = [Creature("k", 1), Creature("k", 1)]
+        brain.phase = 1
+        self.assertEqual(brain.phase_door(hurt, view).layer, "phase")   # the scroll cannot fail
+        brain.phase = 0
+        self.assertEqual(brain.phase_door(hurt, view).reason, "HP 8/30, no way out: cast Phase Door")
+
+    def test_keeps_its_spellbook_when_dropping_junk(self) -> None:
+        """M5d round 1: a full pack dropped "Spellbook Beginners-Magick"."""
+        brain, _ = self.caster("human-ranger", {})
+        brain.dropping = True
+        o = command_obs(rows={0: "Inventory", 1: "---------", 2: "a) Spellbook Beginners-Magick",
+                              3: "b) 3 Wooden Torch (134 turns)", 4: "c) Dagger (1d4)"})
+        o.mode, o.stage = Mode.ITEM, "list"
+        self.assertEqual(brain.decide(o, None).reason, "drop Dagger (1d4)")
+
+    def test_no_book_carried_is_not_retried(self) -> None:
+        """M5d round 1: with no book, "You have nothing there." took no turn
+        and the cast was asked again 56,018 times."""
+        brain, o = self.caster("human-ranger", {"Magic Missile": ("a", 1, 3, "Beginners-Magick")})
+        magic = brain.magic
+        magic.pray("Magic Missile", "at a kobold")
+        magic.note("You have nothing there.")
+        self.assertFalse(magic.can(o, "Magic Missile"))
+        magic.study()
+        magic.note("You have nothing there.")
+        self.assertFalse(magic.study_due)
+        magic.note("Welcome to level 6.")
+        self.assertTrue(magic.can(o, "Magic Missile"))                 # tried again a level on
+
+    def test_mage_cure_light_wounds_heals_4d4(self) -> None:
+        brain, _ = self.caster("human-ranger", {"Cure Light Wounds": ("c", 3, 5, "Beginners-Magick")})
+        hurt = command_obs(pos=(5, 5), dlvl=2, clvl=5, hp=8, mhp=30, rows={23: "HP:8/30  MP:6/6 AC:10 AU:32"})
+        view = town_view((5, 5), (30, 30), dlvl=2)
+        brain.adjacent = [Creature("k", 1)]                             # a Kobold hits for ~4, under 4d4's 10
+        decision = brain.pray(hurt, view)
+        self.assertEqual((decision.key, decision.reason), (ord("M"), "HP 8/30: pray Cure Light Wounds"))
+
+
+class MissileTest(unittest.TestCase):
+    """A Rogue's or Ranger's launcher (M5d): buy one and its ammunition,
+    wield it as a creature approaches in line, fire, then wield the melee
+    weapon again beside a creature."""
+
+    @staticmethod
+    def ranger(launcher: str | None = "Short Bow", ammo: int = 10):
+        from moria_playtest import goals
+        brain = Brain(goals.for_character(GOALS["clvl10"], "human-ranger"))
+        brain.food, brain.magic.study_due, brain.magic.listed = 5, False, True
+        brain.launcher, brain.ammo = launcher, ammo
+        o = command_obs(pos=(5, 5), dlvl=2, clvl=5, hp=30, mhp=30, rows={23: "HP:30/30  MP:0/0 AC:10 AU:32"})
+        return brain, o
+
+    def test_wields_the_launcher_fires_then_wields_the_weapon(self) -> None:
+        brain, o = self.ranger()
+        view = town_view((5, 5), (30, 30), dlvl=2)
+        view.creatures = {(9, 5): Creature("k", 1)}                   # in line, four east
+        d = brain.shoot(o, view)
+        self.assertEqual((d.key, d.reason), (KEY_WEAR, "'k' approaching: wield the Short Bow"))
+        self.assertEqual(brain.picking, "Short Bow")
+        brain.picking = None
+        d = brain.shoot(o, view)
+        self.assertEqual((d.key, d.reason), (0xC6, "fire the Short Bow at 'k'"))
+        self.assertEqual((brain.pending, brain.ammo), (DIRS[(1, 0)], 9))
+        brain.pending = None
+        brain.adjacent = [Creature("k", 1)]
+        d = brain.shoot(o, view)
+        self.assertEqual((d.key, brain.picking, brain.wielding_launcher), (KEY_WEAR, "Dagger", False))
+
+    def test_holds_fire_out_of_line_too_close_or_without_ammunition(self) -> None:
+        brain, o = self.ranger()
+        view = town_view((5, 5), (30, 30), dlvl=2)
+        view.creatures = {(9, 6): Creature("k", 1)}                   # not in line
+        self.assertIsNone(brain.shoot(o, view))
+        view.creatures = {(7, 5): Creature("k", 1)}                   # two off: no turn to change
+        self.assertIsNone(brain.shoot(o, view))
+        brain.ammo = 0
+        view.creatures = {(9, 5): Creature("k", 1)}
+        self.assertIsNone(brain.shoot(o, view))
+        brain.track_missiles("No ammo.")
+        warrior = Brain(GOALS["clvl10"])
+        self.assertIsNone(warrior.shoot(o, view))                       # no launcher
+
+    def test_buys_the_best_launcher_then_its_ammunition(self) -> None:
+        brain, _ = self.ranger(launcher=None, ammo=0)
+        stock = [("Sling", 5), ("Short Bow", 50), ("Light Crossbow", 140), ("Arrow", 1)]
+        o = GearTest().store(brain, 2, stock, 100)                      # the Crossbow is over 100 - 20
+        self.assertEqual(brain.missile_pick(o), ("b", "Short Bow"))
+        brain.credit("Short Bow", 1)
+        self.assertEqual((brain.launcher, brain.ammo), ("Short Bow", 0))
+        self.assertEqual(brain.missile_pick(o), ("d", "Arrow"))         # the Crossbow is over the gear reserve
+        brain.credit("Arrow", 1)
+        self.assertEqual(brain.ammo, 1)
+        self.assertIn("Arrow", brain.shopping_list())                   # the General Store too
+        warrior = Brain(GOALS["clvl10"])
+        self.assertIsNone(warrior.missile_pick(GearTest().store(warrior, 2, stock, 500)))
+
+    def test_a_junk_drop_is_an_expected_prompt(self) -> None:
+        brain, _ = self.ranger()
+        self.assertFalse(brain.expects_item_prompt())
+        brain.dropping = True
+        self.assertTrue(brain.expects_item_prompt())
+
+    def test_keeps_the_launcher_and_ammunition_when_dropping_junk(self) -> None:
+        brain, _ = self.ranger()
+        brain.dropping = True
+        o = command_obs(rows={0: "Inventory", 2: "a) Short Bow", 3: "b) 12 Arrow", 4: "c) Bolt", 5: "d) Iron Shot"})
+        o.mode, o.stage = Mode.ITEM, "list"
+        self.assertEqual(brain.decide(o, None).reason, "drop Iron Shot")
 
 
 class StartingKitTest(unittest.TestCase):
@@ -2659,6 +2991,52 @@ class FastAttackerTest(unittest.TestCase):
         o = command_obs(pos=(5, 4), dlvl=3, clvl=4, hp=30, mhp=40)
         o.step = 1
         self.assertEqual(brain.decide(o, view).layer, "retreat")
+
+    def test_a_caster_heard_that_could_kill_sends_the_character_upstairs(self) -> None:
+        """M5f round 6: a Novice Mage blinked out of the light and hit a
+        Gnome Priest from 24 HP to 8 (Cause Light Wounds, 3d8), then killed
+        it with the next."""
+        brain = Brain(GOALS["clvl10"])
+        brain.food = 3
+        view = town_view((5, 5), (20, 5), dlvl=2, stairs_type=0xA)
+        view.creatures = {(5, 15): Creature("p", 2)}                   # a Novice Mage, seen far off
+        brain.decide(command_obs(pos=(5, 5), dlvl=2, clvl=3, hp=29, mhp=29), view)
+        view = town_view((5, 5), (20, 5), dlvl=2, stairs_type=0xA)     # gone into the dark
+        hurt = command_obs(pos=(5, 5), dlvl=2, clvl=3, hp=20, mhp=29)
+        hurt.step = 5
+        self.assertEqual(brain.decide(hurt, view).layer, "leave-caster")
+        two = command_obs(pos=(5, 5), dlvl=2, clvl=3, hp=30, mhp=49)
+        two.step = 6
+        self.assertEqual(brain.decide(two, view).layer, "leave-caster")       # one cast cannot, two can (round 8)
+        strong = command_obs(pos=(5, 5), dlvl=2, clvl=3, hp=49, mhp=49)
+        strong.step = 6
+        self.assertNotEqual(brain.decide(strong, view).layer, "leave-caster")   # two casts (48) cannot kill
+        later = command_obs(pos=(5, 5), dlvl=2, clvl=3, hp=20, mhp=29)
+        later.step = 200
+        self.assertNotEqual(brain.decide(later, view).layer, "leave-caster")  # long gone (CASTER_MEMORY)
+        heard = Brain(GOALS["clvl10"])                                      # heard, never seen
+        heard.decide(command_obs(pos=(5, 5), dlvl=2, clvl=3, hp=29, mhp=29,
+                                 rows={0: "the Novice Mage casts a spell."}), view)
+        self.assertIn(("p", 2), heard.level.casters)
+        scared = Brain(GOALS["clvl10"])                                     # round 8, seed 1008
+        scared.decide(command_obs(pos=(5, 5), dlvl=2, clvl=3, hp=29, mhp=29,
+                                  rows={0: "the Novice Priest frightens you."}), view)
+        self.assertIn(("p", 2), scared.level.casters)
+
+    def test_a_retreat_runs_all_the_way_to_the_stairs(self) -> None:
+        """M5f baseline: a Large Brown Snake dropped out of the light; after
+        NEAR_STEPS the bot auto-rested on the way and was bitten at each of
+        three rests (Elf Ranger, seed 1008)."""
+        brain = Brain(GOALS["reach_clvl2"])
+        brain.food = 3
+        view = town_view((5, 5), (30, 5), dlvl=3, monsters={(5, 6)}, stairs_type=0xA)
+        o = command_obs(pos=(5, 5), dlvl=3, clvl=4, hp=20, mhp=40)
+        self.assertEqual(brain.decide(o, view).layer, "retreat")
+        for step in range(1, 11):                                   # nothing in view, twice NEAR_STEPS
+            view = town_view((5 + step, 5), (30, 5), dlvl=3, stairs_type=0xA)
+            o = command_obs(pos=(5 + step, 5), dlvl=3, clvl=4, hp=20, mhp=40)
+            o.step = step
+            self.assertEqual(brain.decide(o, view).layer, "retreat", f"step {step}")
 
     def test_no_searching_while_something_unseen_attacks(self) -> None:
         brain = Brain(GOALS["reach_dl5"])
@@ -3309,12 +3687,13 @@ class CharacterTest(unittest.TestCase):
             goals.CHARACTER_BARS.clear()
             goals.CHARACTER_BARS.update(saved)
 
-    def test_pure_casters_have_a_bar_of_15(self) -> None:
-        """Maintainer, 2026-10-26: Mages and Priests qualify at 15/20."""
+    def test_pure_casters_have_a_bar_of_10(self) -> None:
+        """Maintainer, 2026-10-27 (M5f): Mages and Priests qualify at 10/20
+        (15/20 from 2026-10-26)."""
         from moria_playtest import goals
-        for character in ("human-priest", "dwarf-priest", "human-mage", "elf-mage"):
+        for character in ("human-priest", "dwarf-priest", "gnome-priest", "human-mage", "elf-mage", "halfling-mage"):
             for goal in ("clvl10", "reach_dl8"):
-                self.assertEqual(goals.for_character(GOALS[goal], character).qualify_bar, 15)
+                self.assertEqual(goals.for_character(GOALS[goal], character).qualify_bar, 10)
         self.assertEqual(goals.for_character(GOALS["clvl10"], "human-paladin").qualify_bar, 16)
         self.assertEqual(goals.for_character(GOALS["clvl10"], "human-warrior").qualify_bar, 16)
 

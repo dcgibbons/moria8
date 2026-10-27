@@ -30,10 +30,8 @@ disarm_command:
     jsr trap_find_target_visible
     bcs !has_trap+
     lda #<disarm_no_visible_str
-    sta zp_ptr0
-    lda #>disarm_no_visible_str
-    sta zp_ptr0_hi
-    jsr msg_print
+    ldy #>disarm_no_visible_str
+    jsr msg_print_ay
 !no_turn:
     clc
     rts
@@ -56,19 +54,15 @@ disarm_command:
     jsr disarm_roll_bad_fail
     bcs !bad_fail+
     lda #<disarm_fail_str
-    sta zp_ptr0
-    lda #>disarm_fail_str
-    sta zp_ptr0_hi
-    jsr msg_print
+    ldy #>disarm_fail_str
+    jsr msg_print_ay
     sec
     rts
 
 !success:
     lda #<disarm_success_str
-    sta zp_ptr0
-    lda #>disarm_success_str
-    sta zp_ptr0_hi
-    jsr msg_print
+    ldy #>disarm_success_str
+    jsr msg_print_ay
     jsr disarm_award_trap_xp
     jsr disarm_restore_target_floor
     ldx df_disarm_trap_idx
@@ -79,10 +73,8 @@ disarm_command:
 
 !bad_fail:
     lda #<disarm_bad_fail_str
-    sta zp_ptr0
-    lda #>disarm_bad_fail_str
-    sta zp_ptr0_hi
-    jsr msg_print
+    ldy #>disarm_bad_fail_str
+    jsr msg_print_ay
     jsr disarm_move_player_to_target
     ldx df_disarm_trap_idx
     jsr trap_trigger

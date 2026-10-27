@@ -187,6 +187,15 @@ x64sc -default -config /dev/null +saveres -console +sound -sounddev dummy
   configuration.
 - **Each worker gets a private copy of the `.d64`.** The game writes saves,
   and a shared image would corrupt.
+- **Optional ROMs (maintainer, 2026-10-27).** `PLAYTEST_KERNAL` and
+  `PLAYTEST_DOS1541`, from the caller's environment only, name a C64 KERNAL
+  and a 1541 drive ROM that are added as `-kernal` and `-dos1541`
+  (`launch.rom_args`). Unset, VICE's own ROMs are used. JiffyDOS is the
+  maintainer's preference: its KERNAL with its 16 KB 1541 image (the pair
+  works only together, over the true drive). A cold boot took 3.7 s against
+  14.1 s with the stock ROMs. The title snapshot's cache key includes each
+  ROM's hash, so a snapshot is never restored under the other KERNAL. Any
+  other ROM option can be played the same way, to verify the game under it.
 
 **Boot once, then reuse.** Cold boot loads all tiers and overlays into the REU
 through a true-drive 1541. After the first boot of a build, the client dumps a
@@ -500,6 +509,103 @@ project's round-by-round scores per suite with the bar; and deaths by creature
 Charts are inline SVG and the server is the standard library only. The
 original v0 description follows.
 
+**Since 2026-10-27 (M5f) it is one page**, laid out to fit one screen:
+
+- **M5 grid:** every race (rows) and class (columns), each cell's clvl10 and
+  reach_dl8 side by side: frozen (with the bar it was frozen at), the latest
+  full run at the bar but not frozen, below the bar, or not run.
+  `/api/milestone` reads `playtest/suites/` and the newest finished session
+  of each.
+- **This round:** tiles (elapsed, runs, suites passed, deaths, hangs), then a
+  row per session: its seed strip with the bar marked, score, verdict, ETA,
+  and a sparkline of its score in earlier rounds.
+- **Deaths by cause,** stacked by character level: falling rock, pit, arrow,
+  poison, a caster's spell, or the creature that hit, read from each dead
+  character's trace (`dashboard.death`).
+- **What they died holding:** Cure Light Wounds potions, flasks of oil and
+  mana left, from the trace's `clw`, `oil` and `status` fields (M5f).
+- **Live screens,** with an HP bar under each. A click opens the **focus
+  view**: the full-size screen, HP, mana, potions and oil, HP and maximum
+  mana over the last 400 steps with potions, Phase Doors and retreats marked,
+  and the decisions newest first, refreshed every second. `#watch=<session>/<worker>`
+  in the URL opens it directly.
+
+#### Publishing (`make playtest-publish`, https://playtest.moria8.org)
+
+The dashboard is public (maintainer, 2026-10-27). `playtest/moria_playtest/publish.py`
+writes it as static files every 30 s under `build/playtest/publish/`: the page
+(with a `playtest-static` meta tag, which makes it read `data/*.json` instead
+of `/api/...`, hide the round picker and poll every 30 s), `data/overview.json`
+(the newest round only), `data/milestone.json` and `data/workers/<session>--w<N>.json`
+for each live worker's focus view. Every absolute host path is cut to its
+last part before anything is written (`publish.scrub`). The snapshot is then
+copied with `rsync -az --delete-after` over SSH.
+
+The caller's environment names the destination (AGENTS.md rule 9):
+
+| Variable | Meaning |
+|---|---|
+| `PLAYTEST_PUBLISH_TARGET` | `user@host:/path/`, the web root on the server |
+| `PLAYTEST_PUBLISH_KEY` | the SSH private key for that user (optional) |
+
+`PLAYTEST_PUBLISH_ARGS`: `--once` (one snapshot and push), `--no-push` (write
+`build/playtest/publish/` only, e.g. to check it with `python3 -m http.server`
+from that directory), `--every N`.
+
+**The server** (2026-10-27): a DigitalOcean droplet, Ubuntu 24.04 LTS, on the
+maintainer's tailnet. Public DNS (Squarespace) has an A record `playtest` for
+its public IP; GitHub Pages keeps serving `moria8.org`. On the server:
+
+- nginx serves `/var/www/playtest` for `playtest.moria8.org`, with `gzip` on
+  for JSON, CSS and JS and `Cache-Control: no-cache` on `/data/`; certbot
+  gives it HTTPS.
+- A `deploy` user owns `/var/www/playtest` and nothing else; its
+  `authorized_keys` holds only the publish key (`ssh-keygen -t ed25519` with
+  no passphrase, so the loop runs unattended: the key can only rewrite the
+  dashboard).
+- `ufw` allows 80 and 443 from anywhere and 22 only on `tailscale0`: the
+  publisher reaches the server by its tailnet name.
+
+Traffic is small: an update is about 100 KB of JSON (most of it live screens),
+about 20 KB gzipped, so a tab left open costs about 60 MB a day; only the
+server's outbound transfer is metered.
+
+**The publisher runs as a systemd user service** on the machine that plays,
+from this working tree (`moria8-playtesting`, kept for the purpose). The unit
+lives in `~/.config/systemd/user/moria8-playtest-publish.service`, outside the
+repository:
+
+```ini
+[Unit]
+Description=Moria8 playtest dashboard publisher (playtest.moria8.org)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=<this working tree>
+Environment=PLAYTEST_PUBLISH_TARGET=deploy@<tailnet host>:/var/www/playtest/
+Environment=PLAYTEST_PUBLISH_KEY=<home>/.ssh/moria8_publish
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/make -s playtest-publish
+Restart=always
+RestartSec=30
+
+[Install]
+WantedBy=default.target
+```
+
+Install it with `systemctl --user daemon-reload`, `systemctl --user enable --now moria8-playtest-publish`
+and `loginctl enable-linger <user>` (so it starts at boot and outlives the
+login). Day to day:
+
+- `systemctl --user status moria8-playtest-publish`: is it running.
+- `journalctl --user -u moria8-playtest-publish -f`: one line per publish
+  (suites and live workers), or the error.
+- `systemctl --user restart moria8-playtest-publish`: after changing
+  `publish.py` or `dashboard.py`. A change to `playtest/dashboard/index.html`
+  goes out with the next snapshot without one.
+
 #### Dashboard v0
 
 `make playtest-dashboard` serves one static HTML page plus JS from
@@ -580,7 +686,8 @@ Each milestone has a measurable exit criterion and an explicit stop rule.
 | **M2 `reach_dl2`, `reach_clvl2`** | Dungeon navigation, doors, search, stairs; fight, emergency, rest; anti-stall; plateau alert; frozen suites | Both goals work, and `enter_dungeon` still passes its frozen suite. No `unknown_prompt` in the final qualification runs. **No further goals are added until M2 is met.** |
 | **M3 `reach_dl5`, `clvl5`** | The brain rounds in §14.3: any-glyph creatures, food and light logistics, threat memory, avoiding stationary monsters, sealed-area fallback | Both goals work (§7.2, ≥16/20); all frozen suites still pass; no `unknown_prompt`. **Met 2026-10-22 (§14.9).** |
 | **M4 `clvl10`, `reach_dl8`** (`reach_dl10` until 2026-10-24) | The brain rounds in §15.3: stationary hazards, fear and fast attackers, then what the re-measured clusters show | Both goals work (§7.2, ≥16/20); all frozen suites still pass; no `unknown_prompt`. Started 2026-10-22 (`/goal`, §15). **Met 2026-10-24 (§15.6).** |
-| **M5 Every race and class at M4** | §16: the M4 goals for every Warrior race, then Paladin and Priest, then Rogue and Ranger, then Mage, then every other race of each class; a C128 backend in between | `clvl10` and `reach_dl8` work (§7.2, ≥16/20; ≥15/20 for Mages and Priests, §16.1 amended 2026-10-26) for each of the 31 race/class combinations, each frozen as its own suite; all frozen suites still pass; no `unknown_prompt`. Planned 2026-10-24 (§16). **M5a (every Warrior race) met 2026-10-25 (§16.8).** |
+| **M5 Every race and class at M4** | §16: the M4 goals for every Warrior race, then Paladin and Priest, then Rogue and Ranger, then Mage, then every other race of each class | `clvl10` and `reach_dl8` work (§7.2, ≥16/20; ≥10/20 for Mages and Priests, §16.1 amended 2026-10-27) for each of the 31 race/class combinations, each frozen as its own suite; all frozen suites still pass; no `unknown_prompt`. Planned 2026-10-24 (§16). **M5a (every Warrior race) met 2026-10-25 (§16.8).** |
+| **C128 backend** (M5c until 2026-10-26; not scheduled) | Half-Troll Warrior on `x128`, no brain work: the backend (§12.7) for VDC screen text, banked reads, the C128 keyboard buffer and the 198×66 map | Every frozen C64 suite passes on the C128 at its bar. Moved out of M5 by the maintainer on 2026-10-26 (§16.2) |
 
 **Stop rules** (defaults, tunable by the maintainer):
 
@@ -1716,6 +1823,15 @@ pure spell casters (mages and priests) have a bar of 15 instead of 16").
 `CLASS_BARS` in `playtest/moria_playtest/goals.py`; a `CHARACTER_BARS` entry
 still decides its own combination. Every other class keeps 16/20.
 
+**Amended 2026-10-27 (maintainer, M5f):** Mages and Priests qualify at
+**10/20**, half the seeds. After 13 rounds the 6-9 HP casters (Elf, Gnome and
+Halfling Mages, Gnome Priest) sat at 4-13/20 against 15, dying at level 1-2
+to what VMS deals a character that small: "I think it is OK to accept them as
+weaker and have a lower bar ... let's aim for a bar of *10* for mages and
+priests ... as we advance to higher levels of the dungeon I would expect our
+bar to continue to be lowered." Suites frozen at 15 keep their bar; deeper
+goals are expected to set lower ones.
+
 Why this order:
 
 - **Race costs no bot work.** `Goal.character` already picks the race and
@@ -1738,14 +1854,20 @@ Why this order:
 |---|---|---|---|
 | **M5a Warrior races** | Human, Half-Elf, Elf, Halfling, Gnome, Dwarf, Half-Orc Warriors (Half-Troll is M4) | None at first: baselines with the M4 brain, then trace-driven fixes | Both goals ≥16/20 for each; frozen |
 | **M5b Paladin, Priest** | Human Paladin, then Human Priest (Half-Troll until round 10, §17) | A cast layer: choose a prayer, target it, track mana, learn from books, buy books; prayers for healing, fear and light first | Both goals ≥16/20 for the Paladin, ≥15/20 for the Priest (§16.1, amended 2026-10-26); frozen. **Human and Dwarf Priest met 2026-10-26 (§17, round 55)** |
-| **M5c C128 backend** | Half-Troll Warrior on `x128` | None in the brain: the backend (§12.7) for VDC screen text, banked reads, the C128 keyboard buffer and the 198×66 map | Every frozen C64 suite passes on the C128 at its bar |
-| **M5d Rogue, Ranger** | Human Rogue, Human Ranger | Missiles: buy ammunition, fire, target; stealth-aware choices; the cast layer for their spells | Both goals ≥16/20 for each; frozen |
-| **M5e Mage** | Human Mage | Spells for survival, not only utility: Magic Missile, Phase Door, detection; a fragile character's readiness | Both goals ≥15/20 (§16.1, amended 2026-10-26); frozen |
-| **M5f The rest** | The other 20 combinations (§12.6) | Trace-driven fixes for what fails | Both goals ≥16/20 for each (≥15/20 for Mages and Priests); frozen |
+| **M5d Rogue, Ranger** | Human Rogue, Human Ranger | Missiles: buy ammunition, fire, target; stealth-aware choices; the cast layer for their spells | Both goals ≥16/20 for each; frozen. **Met 2026-10-26 (§18, round 5)** |
+| **M5e Mage** | Human Mage | Spells for survival, not only utility: Magic Missile, Phase Door, detection; a fragile character's readiness | Both goals ≥15/20 (§16.1, amended 2026-10-26); frozen. **Met 2026-10-26 (§19, baseline 19 / 18)** |
+| **M5f The rest** | The other 20 combinations (§12.6) | Trace-driven fixes for what fails | Both goals ≥16/20 for each (≥10/20 for Mages and Priests, §16.1 amended 2026-10-27); frozen |
 
-M5c runs between brain rounds: it is self-contained, and once it works,
-every later suite can also run on the C128. Within a class, Human comes
-first (no race adjustment), then the other races in M5f.
+**M5c deferred (maintainer, 2026-10-26):** "I don't think we should do M5c
+for the c128 - that part is less interesting to me right now. Let's do M5d
+and then M5e and get those main classes tested." The order is now M5d, M5e,
+M5f. Within a class, Human comes first (no race adjustment), then the other
+races in M5f.
+
+**M5c moved out of M5 (maintainer, 2026-10-26):** "let's move M5c out of M5 -
+it doesn't make sense just yet." The C128 backend is now its own milestone,
+not scheduled (§8); M5 is met without it. The stage letters stay as they
+were, so M5 has no M5c.
 
 ### 16.3 Method
 
@@ -1775,9 +1897,9 @@ with M5a`).
 3. **The cast layer's scope.** Only the spells and prayers the M4 goals
    need (healing, light, fear, detection, Phase Door, Magic Missile), added
    as the traces call for them, not the whole book.
-4. **M5c scope.** The C128 backend changes only the harness (§12.7); a game
-   bug it finds is fixed as a game change with its contract loaded, like
-   M4's (§15.4).
+4. **M5c scope** (now the C128 backend milestone, §8). The C128 backend
+   changes only the harness (§12.7); a game bug it finds is fixed as a game
+   change with its contract loaded, like M4's (§15.4).
 
 Harness support: `--character` on every session mode
 (`make playtest-qualify CHARACTER=human-warrior`); the names are in
@@ -2036,3 +2158,185 @@ Game fixes found by the M5b Priests (maintainer, 2026-10-25: a difference from V
 | 53 | Bot: within one turn's worst melee from the creatures beside it (the lore's dice at their maximum), heal: a prayer, else a potion (`under_blow`) | 15 / 13 | 17 / 15 | 7 deaths at level 1-3 (13): Dwarf `clvl10` passes. Mid deaths lead now: DL5 Green Nagas 4, fought from full HP because every step to the stairs ran into contact, and Novice Mages 3 |
 | 54 | Bot: an outmatched creature in contact (`outmatched`: a naga) is left by Phase Door at any HP, before the fight | 14 / 16 | 18 / 16 | Bars from this round: 15/20 for Priests (§16.1, amended 2026-10-26). Three of four pass; Human `reach_dl8` up from 13 with no naga deaths. Human `clvl10` misses by one: DL2 Novice Mages, the same three seeds as round 53 (one cast took 20 of 42 HP; two casts in one step did 31) |
 | 55 | Bot: the spell threat in view sums every caster, not the strongest one (`spell_threat`) | 17 / 15 | 17 / 17 | **All four meet the Priest bar (15/20).** Frozen from a `--freeze` run of the same code (round 55f: the same 17 / 15 / 17 / 17): `playtest/suites/{clvl10,reach_dl8}-{human,dwarf}-priest.json`. Gates: `make -j7 -O test` passed (the Apple IIe, CX16, Atari and BBC runtime suites skipped: no ROM paths set); `make test128` 128/129, the real-boot diagnostic build 9 bytes over its startup overlay from the level-1 mana table, fixed (stat bands) and `real_boot_crash_harness` passes. **M5b Priest met 2026-10-26** |
+
+## 18. M5d: Rogue and Ranger (from 2026-10-26)
+
+Started by the maintainer on 2026-10-26 (`/goal M5d`), after M5b, with M5c
+deferred (§16.2). Characters: Human Rogue, Human Ranger, both goals, the
+16/20 bar.
+
+Class data checked against Umoria `data_player.cpp` before the baseline, and
+all match: the class table (hit die, disarm, search, stealth, FOS, BTH, BTHB,
+save, XP factor), per-level adjustments, the Mage-book spell levels, mana and
+fail rates for both classes (Rogue spells from level 5, Ranger from 3), and
+no starting spells or mana. The starting kit differs only by the recorded
+delta (`docs/FEATURE_MAP.md`, "Starting Weapons & Armor"): with no cloak
+slot, every class wears Soft Leather Armor in place of the Cloak.
+
+### 18.1 Baseline (the M5b brain)
+
+| Character | `clvl10` | `reach_dl8` |
+|---|---|---|
+| Human Rogue | 0 | 0 |
+| Human Ranger | 0 | 0 |
+
+Every character ran out its 100,000 steps on DL1. Each reached its class's
+first spell level (Ranger 3, Rogue 5), studied, and met the Mage-book
+"Study" list: Mage-book casters choose the spell they learn
+(`item_gain_spell`, `core/player_gain_spell_impl.s`), where the game picks a
+prayer at random. The bot did not know that screen (an `unknown_prompt`
+finding per character) and then stalled. The M5b cast layer knew prayers
+only; the list title it expected ("Magic Book") is "Mage Book" in the game.
+
+### 18.2 Game questions surfaced
+
+1. **Firing a launcher is far weaker than VMS** (`core/ranged_fire.s`
+   against VMS `moria.inc` `throw_object`, 3163-3360): no launcher damage
+   bonus (VMS +2 Sling, Short Bow and Light Crossbow; +3 Long Bow; +4
+   Composite Bow and Heavy Crossbow), one range of 19 for every launcher
+   (VMS 20-35), no to-hit penalty for distance, no critical hits, and
+   ammunition always destroyed (VMS drops a missed shot near the target 9
+   times in 10). Umoria multiplies the damage (x2-x4) where VMS adds.
+   `docs/FEATURE_MAP.md` calls VMS and Umoria identical here and describes
+   Moria8 bonuses the code does not have. **Fixed 2026-10-26** (maintainer:
+   "usually i prefer vms unless umoria was improving/fixing something" ...
+   "go with recommendations"): VMS for range, the distance penalty,
+   critical hits and a missed shot landing; Umoria's multiplier for damage,
+   a fix its source states (MON-018 in `docs/MONSTER_STATE_CONTRACT.md`,
+   `docs/FEATURE_MAP.md` "Ranged Weapon Fire"). The maintainer also wants the
+   missing Long Bow, Composite Bow and Heavy Crossbow (VMS +3 / +4 / +4,
+   Umoria x3 / x4 / x4), as a separate change after this one.
+
+### 18.3 Round log
+
+| Round | Change | Rogue | Ranger | Notes |
+|---|---|---|---|---|
+| base | M5b brain | 0 / 0 | 0 / 0 | Every character stalled on DL1 at the Study list (§18.1) |
+| 1 | Bot: Mage-book casting (`m`, "Spell book", "Mage Book" list), the Study list (learn by `LEARN_ORDER`: Magic Missile, Phase Door, Cure Light Wounds, Detect Monsters), Magic Missile at a creature worth it in line, the Phase Door spell after the scroll, the Mage book's Cure Light Wounds (4d4) | 19 / 19 | 14 / 17 | Rogue passes both. Ranger `clvl10` 4 budget runs: a full pack dropped "Spellbook Beginners-Magick" (`KEEP_PREFIXES` knew only "Holy Book"), then every cast found "You have nothing there." with no turn passing and was asked again (56,018 times on seed 1007). 2 deaths at level 1 on DL1 |
+| 2 | Bot: spellbooks kept when dropping junk ("Spellbook" in `KEEP_PREFIXES`); "You have nothing there." on a cast or study refuses it until the next level | 19 / 20 | 18 / 17 | **All four meet the 16/20 bar.** 6 deaths, all at level 1-3 on DL1-2 (Ranger seeds 1006 and 1018 die at the same steps in both goals). No budget runs |
+| 3 | Game: fired missiles follow VMS, damage Umoria's multiplier (MON-018, §18.2). Bot: a Rogue or Ranger buys the best launcher it can (Light Crossbow, Short Bow, Sling) and 20 shots, wields it as a creature approaches in line 3 or more squares off, fires from 2 to 8, wields the melee weapon again beside a creature (no swap command: a turn each way), keeps the launcher and ammunition when dropping junk, and collects missed shots | 18 / 20 | 18 / 14 | Ranger `reach_dl8` misses. Few shots fired (56 across 20 Rangers): every launcher came with about one shot. Stores stocked ammunition one at a time, where VMS gives every missile stack 7d6 (`misc.inc` `magic_treasure`, stores too); dungeon stacks were 5-10 |
+| 4 | Game: ammunition stocked 24 at a time (VMS 7d6 averaged at Umoria's store cap; the C64 town overlay has no room for the roll) and dungeon stacks 7d6 (`magic_treasure`) | 19 / 18 | 14 / 14 | Launchers fire now (216-389 shots a run, a bit over half hitting). Ranger misses both: 9 deaths on DL1 at level 2-4, most to Kobolds, four of them casting Magic Missile at 1-9 HP beside the Kobold (a third of the casts failing) while holding Phase Door: `invoke` comes before `retreat` and `phase_door` |
+| 5 | Bot: no Magic Missile below `RETREAT_HP` with a creature beside (the escapes first) | 19 / 18 | 17 / 17 | **All four meet the bar with launchers in use.** 9 deaths, 6 of them at level 1-2 on DL1. Frozen from a `--freeze` run of the same code (round 5f: the same 19 / 18 / 17 / 17): `playtest/suites/{clvl10,reach_dl8}-human-{rogue,ranger}.json`. **M5d met 2026-10-26** |
+
+Not built at the freeze (maintainer, 2026-10-26: "let's freeze and we'll
+come back to the launchers"): the Long Bow, Composite Bow and Heavy Crossbow,
+added after it as item IDs 137-139 once shared call helpers freed the bytes
+(the bot buys and fires them; the frozen suites predate them); letting sleeping creatures
+lie, since a player (and the bot) cannot see sleep state; and Detect
+Monsters. Also found: Moria8 has no `x` weapon swap (VMS has one), and
+throwing differs from VMS (a thrown item always lands, STR adds damage, no
+distance penalty).
+
+## 19. M5e: Mage (from 2026-10-26)
+
+Started by the maintainer on 2026-10-26 (`/goal M5e make it so`), after M5d
+and its follow-ups (VMS firing and throwing, the three missing launchers).
+Character: Human Mage, both goals, the 15/20 bar for pure casters (§16.1).
+
+The Mage's class data was checked with the Rogue and Ranger in §18 (class
+table, per-level gains, the Mage-book spell table). It starts knowing
+spells 0-3 (Magic Missile, Detect Monsters, Phase Door, Light Area), the
+recorded starting-spell delta (§17.3), and casts through the M5d Mage-book
+layer.
+
+### 19.1 Baseline (the M5d brain, after the VMS throwing change)
+
+| Character | `clvl10` | `reach_dl8` |
+|---|---|---|
+| Human Mage | 19 | 18 |
+
+Both goals pass the 15/20 caster bar with no new bot work: the M5d
+Mage-book layer (learning by `LEARN_ORDER`, Magic Missile at a creature worth
+it, the Phase Door spell, Cure Light Wounds) and the M5b readiness and heal
+rules carry a Mage. Three deaths, none a stall or a budget run: a level-1
+Mage to a DL1 Kobold beside it while it threw oil (seed 1016, step 705), one
+to a Giant Yellow Centipede on DL1 (1011), and one to a Novice Mage's spell
+on DL2 after 43,741 steps (1013).
+
+### 19.2 Freeze
+
+Frozen from a `--freeze` run of the same code (the same 19 / 18):
+`playtest/suites/{clvl10,reach_dl8}-human-mage.json`. **M5e met
+2026-10-26** with no Mage-specific bot work. Two harness fixes found on the
+way, neither changing a decision: the dashboard took every session's
+character from its name, and names without the character at the end
+(`m5e-base-clvl10`, `m5d-r1-human-rogue-clvl10`) showed as Half-Troll
+Warriors; it now reads the goal and character each session records in
+`summary.json` (`dashboard.session_parts`). And every junk drop was filed as
+an `unknown_prompt` finding, since `expects_item_prompt` ignored the drop the
+bot had asked for. Detect Monsters, which M5e had expected to need, was not
+needed for the bar.
+
+
+## 20. M5f: every other race (from 2026-10-26)
+
+Started by the maintainer on 2026-10-26 (`/goal M5f make it so`): the 17
+combinations without suites (§16.2), both goals, 34 suites. M5c was moved out
+of M5 the same day (§16.2).
+
+### 20.1 Baseline and the bar
+
+The baseline (the M5e brain) froze 17 of 34 at once: every Rogue, the
+Half-Elf Paladin, and most Half-Orc, Half-Troll and Half-Elf Priests. What
+failed tracked starting HP, which matches VMS (`create.inc`
+`mhp := con_adj + hitdie`): the 6-9 HP casters (Elf, Gnome and Halfling Mages,
+Gnome Priest) died at level 1-2 on DL1, four deaths in five, to two Kobold
+bites (1d6), one 2d6 trap, poison gas, or a Novice Mage's Cause Light Wounds
+(3d8, VMS flags `0000089C`). After 13 rounds the maintainer lowered the
+Mage and Priest bar to 10/20 (§16.1, amended 2026-10-27).
+
+### 20.2 Game changes (VMS parity, maintainer: "fix em all")
+
+- **Traps per level** follow VMS `randint(alloc_level)`,
+  `alloc_level = clamp(dlvl/3, 2, 10)` (`generate.inc:854-866`): 1-2 to DL8,
+  up to 10 from DL30. Moria8 placed `2..dlvl+2`, 1.7× VMS on DL1 and 3× on
+  DL5.
+- **Pits** do VMS's 2d6 (1d4 before).
+- **The falling-rock message** is VMS's: "You are hit by falling rock."
+- Tests: C64 `test_trap_door_destruction.s` t4-t5. The string bank fixture in
+  `test_subsystems.s` was re-encoded with the new Huffman tree, as its
+  comment requires.
+
+The trap mix (6 of VMS's 18 types) was not changed: no new trap types were
+wanted. The secret-door bolt case (below) was checked against VMS
+`fire_bolt` and is faithful: a bolt strikes only on `fopen` squares.
+
+### 20.3 Bot changes
+
+Each kept change has a test that fails without it:
+
+- **The full spell repertoire** (maintainer: "mages are only successful by
+  using their full spell repertoire"): Mages buy each Mage book at the Magic
+  Shop when its first spell is in reach (Magick I at level 3), learn by
+  `LEARN_ORDER`, and cast the attack that kills in the fewest casts (Magic
+  Missile, Stinking Cloud, Lightning, Frost and Fire Bolt, the balls), Find
+  Hidden Traps/Doors on each new level and every 40 steps, Cure Poison when
+  poisoned, and Teleport Self to escape. Priests gained Bless (before Chant is
+  known), Find Traps and Slow or Neutralize Poison.
+- **Missiles held back only when an escape will act** (`phase_due`): with
+  Phase Door learned at level 1, Mages threw oil at full mana.
+- **Mages rest for mana**, buy potions before armour and no weapons; Priests
+  hold potion gold before armour too.
+- **Nothing aimed at nothing:** a bolt or flask that reaches no creature
+  unmarks the glyph (14,805 Magic Missiles at floor gold in one round), and
+  no missile goes at a creature standing in a secret door.
+- **A retreat runs to the stairs**, and a **caster seen or heard** whose two
+  spells could kill sends the character to them.
+- **Slow creatures by name:** a Large Brown Snake (speed 0) shares `'R'` at
+  level 1 with the faster White Snake, so the bot traded blows with it.
+
+Tried and removed, by A/B: a potion before an early prayer (Gnome and Elf
+Priests 5 of 40 worse) and a stairs tether for fragile casters (35 against
+45 of 120 on the six holdouts).
+
+### 20.4 Tooling
+
+The traces record the status line and the bot's potions and oil; the
+dashboard became one page and is published to https://playtest.moria8.org
+(§6.9); VICE can run JiffyDOS or any other ROM pair (§6.1).
+
+### 20.5 Status (2026-10-27)
+
+56 of 62 goals frozen. Left: Elf Mage clvl10 (12 in the last A/B round,
+not yet frozen), Gnome Mage both goals (8, 7), Halfling Mage both (8, 5) and
+Gnome Priest reach_dl8 (5), with round 19 freezing what reaches 10.

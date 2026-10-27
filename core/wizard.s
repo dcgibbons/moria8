@@ -207,10 +207,7 @@ wizard_reveal_level:
 #else
     ldx #0
 !wrl_row:
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
+    jsr map_row_ptr0_x
     ldy #0
 !wrl_col:
     :MapRead_ptr0_y()
@@ -262,10 +259,8 @@ cmd_wizard_entry:
     bne !wizard_open+
 
     lda #<wiz_confirm_str
-    sta zp_ptr0
-    lda #>wiz_confirm_str
-    sta zp_ptr0_hi
-    jsr msg_print
+    ldy #>wiz_confirm_str
+    jsr msg_print_ay
     jsr hal_input_get_key
     cmp #$59                    // Y
     beq !wiz_enable+
@@ -277,10 +272,8 @@ cmd_wizard_entry:
     ora #GAME_FLAG_WIZARD
     sta zp_game_flags
     lda #<wiz_enabled_str
-    sta zp_ptr0
-    lda #>wiz_enabled_str
-    sta zp_ptr0_hi
-    jsr msg_print
+    ldy #>wiz_enabled_str
+    jsr msg_print_ay
     jmp main_loop
 
 !wizard_open:
@@ -348,10 +341,8 @@ wizard_prompt_clear_digits:
 
 wizard_prompt_bad_value:
     lda #<wizard_bad_value_str
-    sta zp_ptr0
-    lda #>wizard_bad_value_str
-    sta zp_ptr0_hi
-    jsr msg_print
+    ldy #>wizard_bad_value_str
+    jsr msg_print_ay
     jmp wizard_prompt_clear_digits
 
 wizard_bad_value_str:
@@ -658,10 +649,8 @@ wizard_40col_menu_display:
     lda #14
     sta zp_cursor_col
     lda #<wiz_title_str
-    sta zp_ptr0
-    lda #>wiz_title_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>wiz_title_str
+    jsr screen_put_string_ay
     lda #COL_LGREY
     sta zp_text_color
     lda #2
@@ -669,46 +658,36 @@ wizard_40col_menu_display:
     lda #4
     sta zp_cursor_col
     lda #<wiz_row1_str
-    sta zp_ptr0
-    lda #>wiz_row1_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>wiz_row1_str
+    jsr screen_put_string_ay
     lda #3
     sta zp_cursor_row
     lda #4
     sta zp_cursor_col
     lda #<wiz_row2_str
-    sta zp_ptr0
-    lda #>wiz_row2_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>wiz_row2_str
+    jsr screen_put_string_ay
     lda #4
     sta zp_cursor_row
     lda #4
     sta zp_cursor_col
     lda #<wiz_row3_str
-    sta zp_ptr0
-    lda #>wiz_row3_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>wiz_row3_str
+    jsr screen_put_string_ay
     lda #5
     sta zp_cursor_row
     lda #4
     sta zp_cursor_col
     lda #<wiz_row4_str
-    sta zp_ptr0
-    lda #>wiz_row4_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>wiz_row4_str
+    jsr screen_put_string_ay
     lda #18
     sta zp_cursor_row
     lda #14
     sta zp_cursor_col
     lda #<wiz_footer_str
-    sta zp_ptr0
-    lda #>wiz_footer_str
-    sta zp_ptr0_hi
-    jmp hal_screen_put_string
+    ldy #>wiz_footer_str
+    jmp screen_put_string_ay
 
 .encoding "screencode_mixed"
 wiz_confirm_str:
@@ -729,7 +708,7 @@ wiz_done_str:
 wiz_fail_str:
     .text "FAIL" ; .byte 0
 wiz_item_prompt_str:
-    .text "ITEM 0-135: " ; .byte 0
+    .text "ITEM 0-139: " ; .byte 0
 wiz_jump_prompt_str:
     .text "DLVL 0-99: " ; .byte 0
 wiz_title_str:
