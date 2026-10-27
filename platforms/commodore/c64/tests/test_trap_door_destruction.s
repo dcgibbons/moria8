@@ -4,7 +4,7 @@
 :BasicUpstart2(test_bootstrap)
 
 .pc = $E000 "Result Buffer"
-tc_results: .fill 3, $ff
+tc_results: .fill 5, $ff
 
 .pc = $080E "Test Code"
 
@@ -18,7 +18,7 @@ test_finish:
     sei
     :BankOutBasic()
     :BankOutKernal()
-    ldx #2
+    ldx #4
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -344,12 +344,147 @@ status_draw:
 status_mark_dirty:
     rts
 
+// ============================================================
+// test_vms_traps — tests 4-5: trap count and pit damage follow VMS.
+// ============================================================
+tvt_trials:   .byte 0
+tvt_max:      .byte 0
+tvt_min:      .byte 0
+tvt_idx:      .byte 0
+// Test 5 depths and their VMS alloc_level = clamp(dlvl/3, 2, 10).
+tvt_dlvls:  .byte 1, 5, 8, 9, 15, 30, 50
+tvt_allocs: .byte 2, 2, 2, 3, 5, 10, 10
+
+test_vms_traps:
+    jsr test_reset_trap_door_destruction_state
+    // Test 4: an open pit rolls 2d6, as VMS open and covered pits
+    // (values.inc trap_lista '2d6'): forty pits from 200 HP each take
+    // 2-12, and some take more than 4 (forty rolls all at most 4 under
+    // 2d6 has odds ~1 in 10^37; the old 1d4 never exceeds 4).
+    lda #40
+    sta tvt_trials
+    lda #0
+    sta tvt_max
+!t4_loop:
+    lda #200
+    sta zp_player_hp_lo
+    sta player_data + PL_HP_LO
+    sta zp_player_mhp_lo
+    sta player_data + PL_MHP_LO
+    lda #0
+    sta zp_player_hp_hi
+    sta player_data + PL_HP_HI
+    sta zp_player_mhp_hi
+    sta player_data + PL_MHP_LO + 1
+    sta zp_game_flags
+    sta zp_msg_flags
+    lda #4
+    sta $c6
+    lda #$20
+    sta $0277
+    sta $0278
+    sta $0279
+    sta $027a
+    lda #1
+    sta trap_count
+    lda #TRAP_OPEN_PIT
+    sta trap_type
+    // The damage number prints at the cursor huff_print_msg (stubbed
+    // here) would have placed: put it on the message row.
+    lda #0
+    sta zp_cursor_row
+    sta zp_cursor_col
+    jsr screen_set_cursor
+    ldx #0
+    jsr trap_trigger
+    lda zp_player_hp_hi
+    bne !t4_fail+
+    lda #200
+    sec
+    sbc zp_player_hp_lo          // damage taken
+    cmp #2
+    bcc !t4_fail+
+    cmp #13
+    bcs !t4_fail+
+    cmp tvt_max
+    bcc !t4_next+
+    sta tvt_max
+!t4_next:
+    dec tvt_trials
+    bne !t4_loop-
+    lda tvt_max
+    cmp #5
+    bcc !t4_fail+
+    lda #$01
+    .byte $2c                    // bit abs: skip the fail value
+!t4_fail:
+    lda #$00
+    sta tc_results + 3
+
+    // Test 5: place_traps places VMS randint(alloc_level) traps,
+    // alloc_level = clamp(dlvl/3, 2, 10) (generate.inc:854-866): over 60
+    // levels at each depth every count is 1..alloc_level and both ends
+    // occur. The old 2..dlvl+2 fails at DL1 (3 > 2) and never places 1.
+    lda #TILE_FLOOR
+    jsr map_bulk_fill_all            // every tile a free floor
+    lda #0
+    sta tvt_idx
+!t5_depth:
+    ldx tvt_idx
+    lda tvt_dlvls,x
+    sta zp_player_dlvl
+    lda #60
+    sta tvt_trials
+    lda #$ff
+    sta tvt_min
+    lda #0
+    sta tvt_max
+!t5_trial:
+    jsr place_traps
+    lda trap_count
+    beq !t5_fail+
+    ldx tvt_idx
+    cmp tvt_allocs,x
+    beq !t5_in_range+
+    bcs !t5_fail+
+!t5_in_range:
+    cmp tvt_min
+    bcs !t5_not_min+
+    sta tvt_min
+!t5_not_min:
+    cmp tvt_max
+    bcc !t5_not_max+
+    sta tvt_max
+!t5_not_max:
+    dec tvt_trials
+    bne !t5_trial-
+    lda tvt_min
+    cmp #1
+    bne !t5_fail+
+    ldx tvt_idx
+    lda tvt_max
+    cmp tvt_allocs,x
+    bne !t5_fail+
+    inc tvt_idx
+    lda tvt_idx
+    cmp #tvt_allocs - tvt_dlvls
+    bne !t5_depth-
+    lda #$01
+    .byte $2c                    // bit abs: skip the fail value
+!t5_fail:
+    lda #$00
+    sta tc_results + 4
+    lda #0
+    sta trap_count
+    rts
+
 test_start:
     :PatchJump(huff_print_msg, test_huff_print_msg)
     :PatchJump(test_spell_execute_selected, test_tramp_trap_door_destruction_execute)
     :PatchJump(pm_select_book, test_pm_select_book)
     :PatchJump(pm_prompt_visible_spell_choice, test_pm_prompt_visible_spell_choice)
     :PatchJump(pm_validate_selected_spell, test_pm_validate_selected_spell)
+    jsr test_vms_traps
 
     // Test 1: successful cast opens adjacent secret/closed doors, removes the
     // adjacent trap from map+table, stays message-light, spends 5 mana, and

@@ -531,16 +531,17 @@ trap_trigger:
 
     cmp #TRAP_OPEN_PIT
     bne !not_pit+
-    // Open pit: 1d4 damage (formerly trap_do_pit, inlined at its only
-    // dispatch site)
+    // Open pit: 2d6 damage, as VMS open and covered pits (values.inc
+    // trap_lista '2d6'; 1d4 until 2026-10-27). Formerly trap_do_pit,
+    // inlined at its only dispatch site.
     ldx #HSTR_DF_YOU_FELL
     jsr huff_print_msg
     lda #DEATH_TRAP_PIT
     sta df_death_source
     lda #HSTR_DF_TRAP_0
     sta df_death_hstr
-    lda #1              // 1 die
-    ldx #4              // d4
+    lda #2              // 2 dice
+    ldx #6              // d6
     jmp trap_apply_damage
 !not_pit:
     cmp #TRAP_ARROW

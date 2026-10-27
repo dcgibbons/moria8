@@ -601,30 +601,37 @@ dungeon_generate:
 // ============================================================
 // place_traps — Place hidden traps on the dungeon floor
 // Called from dungeon_generate after place_doors.
-// Number of traps: rng_range(dlvl+1) + 2, capped at MAX_TRAPS.
+// Number of traps: VMS randint(alloc_level), alloc_level = dlvl/3 clamped
+// to 2..10 (generate.inc alloc_object([1,2,4],1,randint(alloc_level))):
+// 1-2 traps to DL8, up to 10 from DL30. Moria8 placed 2..dlvl+2 until
+// 2026-10-27 (M5f playtest: 6-9 HP level-1 casters died to DL1 traps).
 // Traps placed at random floor tiles (corridors or rooms).
 // ============================================================
+.assert "place_traps: VMS alloc_level max fits the trap table", 10 <= MAX_TRAPS, true
 place_traps:
     // Don't place traps on town level
     lda zp_player_dlvl
     bne !not_town+
     rts
 !not_town:
-    // Number of traps = rng_range(dlvl+1) + 2
-    lda zp_player_dlvl
+    // alloc_level = clamp(dlvl / 3, 2, 10)
+    sta zp_math_a
+    lda #0
+    sta zp_math_b
+    ldx #3
+    jsr math_div_16x8       // zp_math_a = dlvl / 3 (dlvl < 256: hi byte 0)
+    lda zp_math_a
+    cmp #2
+    bcs !alloc_min_ok+
+    lda #2
+!alloc_min_ok:
+    cmp #11
+    bcc !alloc_ok+
+    lda #10
+!alloc_ok:
+    jsr rng_range           // [0, alloc_level-1]
     clc
-    adc #1
-    cmp #MAX_TRAPS
-    bcc !cap_ok+
-    lda #MAX_TRAPS
-!cap_ok:
-    jsr rng_range           // [0, dlvl]
-    clc
-    adc #2                  // [2, dlvl+2]
-    cmp #MAX_TRAPS + 1
-    bcc !count_ok+
-    lda #MAX_TRAPS
-!count_ok:
+    adc #1                  // randint(alloc_level): [1, alloc_level]
     sta trap_count
 
     lda #0

@@ -79,12 +79,12 @@
 // Door-state side table capacity (locked/stuck/broken doors only; plain
 // doors have no entry). Upstream stores this on the door treasure item.
 .const MAX_DOOR_STATES = 16
-.const TRAP_OPEN_PIT    = 0   // 1d4 damage
+.const TRAP_OPEN_PIT    = 0   // 2d6 damage
 .const TRAP_ARROW       = 1   // 1d8 damage
 .const TRAP_POISON_GAS  = 2   // Set poison timer
 .const TRAP_TELEPORT    = 3   // Random teleport
 .const TRAP_POISON_DART = 4   // 1d4 damage + 50% CON loss
-.const TRAP_ROCKFALL    = 5   // 2d8 damage
+.const TRAP_ROCKFALL    = 5   // 2d6 damage
 .const TRAP_TYPE_COUNT  = 6
 
 // ============================================================

@@ -101,7 +101,7 @@ Sorry, what was that again?
 @DF_POISON_GAS A cloud of gas surrounds you!
 @DF_TELEPORTED You are teleported!
 @DF_DART_HITS A dart hits you!
-@DF_ROCKFALL Rocks fall on you!
+@DF_ROCKFALL You are hit by falling rock.
 @DF_DAMAGE_PRE You take ~
 @DF_DAMAGE_POST  damage.
 @DF_CON_DRAIN You feel weakened.
