@@ -43,12 +43,25 @@ HEALS = (CURE_MEDIUM, CURE_LIGHT)   # best first
 PORTAL, SANCTUARY = "Portal", "Sanctuary"                 # escapes (Words of Wisdom)
 BLIND, CHANT, ORB = "Blind Creature", "Chant", "Orb of Draining"   # control, Bless x2, attack
 MAGIC_MISSILE, DETECT_MONSTERS, PHASE_DOOR = "Magic Missile", "Detect Monsters", "Phase Door"   # Mage book
+FIND_TRAPS, STINKING_CLOUD = "Find Hidden Traps/Doors", "Stinking Cloud"   # Beginners-Magick, level 3
+BLESS, PRIEST_FIND_TRAPS, SLOW_POISON = "Bless", "Find Traps", "Slow Poison"   # Beginners Handbook
+NEUTRALIZE_POISON = "Neutralize Poison"                                         # Chants and Blessings
+LIGHTNING_BOLT, CURE_POISON, SLEEP_I = "Lightning Bolt", "Cure Poison", "Sleep I"   # Magick I, level 5
+TELEPORT_SELF, FROST_BOLT = "Teleport Self", "Frost Bolt"   # Magick I, level 7
+FIRE_BOLT, FROST_BALL, FIRE_BALL = "Fire Bolt", "Frost Ball", "Fire Ball"   # Magick II 15; Guide to Power 19, 29
+# A Mage's attacks and their average damage (core/spell_effects.s; docs/
+# FEATURE_MAP.md §7.2): bolts 2d6, 3d8, 4d8 and 6d8; balls 9, 33 and 49.
+MAGE_ATTACKS = {MAGIC_MISSILE: 7.0, STINKING_CLOUD: 9.0, LIGHTNING_BOLT: 13.5, FROST_BOLT: 18.0,
+                FIRE_BOLT: 27.0, FROST_BALL: 33.0, FIRE_BALL: 49.0}
 
 # The prayer books in order (core/item_tables.s itn_48, itn_58-60), and the
 # character level of each book's first prayer for a Priest and a Paladin
 # (docs/FEATURE_MAP.md §7.3): a book is worth buying from then on.
 PRAYER_BOOKS = ("Beginners Handbook", "Words of Wisdom", "Chants and Blessings", "Exorcism")
-BOOK_LEVELS = {"priest": (1, 5, 9, 15), "paladin": (1, 9, 15, 29)}
+BOOK_LEVELS = {"priest": (1, 5, 9, 15), "paladin": (1, 9, 15, 29),
+               # A Mage's first spell in each book (core/spell_class_data.s
+               # mage_spell_level: spells 7, 16 and 24; M5f)
+               "mage": (1, 3, 9, 19)}
 FIRST_BOOK = PRAYER_BOOKS[0]   # every Priest and Paladin starts with it (core/player_create.s)
 # The store and pack show "Holy Book of Prayers <title>", cut to the line's
 # width: "Holy Book of Prayers Words" at the C64 Temple (M5b round 22, seed
@@ -60,18 +73,37 @@ BOOK_PREFIX = "Holy Book of Prayers "
 # that cast from them (core/tables.s class_properties, spell type 1).
 MAGE_BOOKS = ("Beginners-Magick", "Magick I", "Magick II", "The Mages Guide to Power")
 MAGE_CLASSES = ("mage", "rogue", "ranger")
+MAGE_BOOK_PREFIX = "Spellbook "   # the store and pack name (core/item_identification.s)
 # Spells to learn first when the Study list offers a choice: the attack, the
-# escape, then healing and the rest; anything else in list order.
-LEARN_ORDER = (MAGIC_MISSILE, PHASE_DOOR, CURE_LIGHT, DETECT_MONSTERS)
+# escape, then the traps that kill 6-9 HP Mages on DL1 and healing, then the
+# second book's bolts, poison cure and long escape (M5f: Mages learned their
+# whole book but cast only Magic Missile); anything else in list order.
+LEARN_ORDER = (MAGIC_MISSILE, PHASE_DOOR, FIND_TRAPS, CURE_LIGHT, STINKING_CLOUD, DETECT_MONSTERS,
+               LIGHTNING_BOLT, CURE_POISON, TELEPORT_SELF, FROST_BOLT, SLEEP_I,
+               FIRE_BOLT, FROST_BALL, FIRE_BALL)
 
 
 def store_name(book: str) -> str:
     """The shortest start of a book's shown name that tells it apart."""
+    if book in MAGE_BOOKS:
+        return MAGE_BOOK_PREFIX + book
     return BOOK_PREFIX + book.split()[0][:5]
 
 
+def books_for(klass: str) -> tuple[str, ...]:
+    return MAGE_BOOKS if klass in MAGE_CLASSES else PRAYER_BOOKS
+
+
+def mage_book_of(name: str) -> str | None:
+    """The Mage book a store or pack line names: the longest title first,
+    since "Magick I" is the start of "Magick II"."""
+    return next((book for book in sorted(MAGE_BOOKS, key=len, reverse=True) if book in name), None)
+
+
 def book_of(name: str) -> str | None:
-    """The prayer book a store or pack line names, full or cut short."""
+    """The prayer or Mage book a store or pack line names, full or cut short."""
+    if name.startswith(MAGE_BOOK_PREFIX):
+        return mage_book_of(name)
     for book in PRAYER_BOOKS:
         full = BOOK_PREFIX + book
         if book in name or (name.startswith(store_name(book)) and full.startswith(name.rstrip())):
@@ -187,7 +219,7 @@ class Magic:
     def book_of(self, name: str) -> str | None:
         """The book of this caster's kind that a pack line names."""
         if self.mage:
-            return next((book for book in MAGE_BOOKS if book in name), None)
+            return mage_book_of(name)
         return book_of(name)
 
     def pray(self, name: str, why: str) -> tuple[int, str, str]:

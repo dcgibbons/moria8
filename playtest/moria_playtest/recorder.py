@@ -113,7 +113,8 @@ class CharacterLog:
     def decision(self, obs: Observation, decision: dict[str, Any]) -> None:
         entry = {"step": obs.step, "mode": obs.mode.value, "stage": obs.stage, "dlvl": obs.dlvl,
                  "pos": list(obs.pos), "hp": obs.hp,
-                 "msg": " | ".join(r.strip() for r in obs.rows[:2] if r.strip()), **decision}
+                 "msg": " | ".join(r.strip() for r in obs.rows[:2] if r.strip()),
+                 "status": obs.rows[23].strip(), **decision}
         self.trace.write(json.dumps(entry) + "\n")
         self.recent = (self.recent + [entry])[-30:]
 

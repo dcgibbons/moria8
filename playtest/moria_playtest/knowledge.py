@@ -39,6 +39,13 @@ def creature_levels() -> dict[str, int]:
 
 
 @lru_cache(maxsize=1)
+def kinds_by_name() -> dict[str, tuple[str, int]]:
+    """Creature name -> (screen glyph, native level), the key the lore tables use."""
+    levels = creature_levels()
+    return {name: (glyph, levels[name]) for name, glyph, _, _ in _creatures() if name in levels}
+
+
+@lru_cache(maxsize=1)
 def _tiers() -> list[tuple[list[str], dict[str, list[int]]]]:
     """(creature names, byte tables by label) for each shipped tier file."""
     tiers = []
@@ -213,6 +220,15 @@ def slow_glyphs() -> frozenset[str]:
     for _, glyph, speed, flags in _creatures():
         by_glyph.setdefault(glyph, []).append(speed == SPEED_SLOW and not flags & CF_ATTACK_ONLY)
     return frozenset(glyph for glyph, slow in by_glyph.items() if all(slow))
+
+
+@lru_cache(maxsize=1)
+def slow_names() -> frozenset[str]:
+    """Creatures, by name, that move slower than the player: the messages
+    name one in contact even where its glyph and level are shared with a
+    faster one (a Large Brown Snake is slow, a Large White Snake is not)."""
+    return frozenset(name for name, _, speed, flags in _creatures()
+                     if speed == SPEED_SLOW and not flags & CF_ATTACK_ONLY)
 
 
 @lru_cache(maxsize=1)

@@ -9,12 +9,14 @@ player knowledge in ``knowledge`` (creature names).
 
 from __future__ import annotations
 
+import math
 import re
 from dataclasses import dataclass, field
 
 from . import knowledge
 from .magic import BLIND, BOOK_LEVELS, book_of, store_name, CHANT, CREATE_FOOD, ORB, PORTAL, SANCTUARY, FIRST_BOOK, PRAYER_BOOKS, CURE_LIGHT, CURE_MEDIUM, DETECT_DOORS, HEALS, REMOVE_FEAR, Magic
-from .magic import MAGIC_MISSILE, PHASE_DOOR
+from .magic import MAGIC_MISSILE, PHASE_DOOR, FIND_TRAPS, CURE_POISON, TELEPORT_SELF, MAGE_ATTACKS, MAGE_BOOKS, books_for
+from .magic import BLESS, PRIEST_FIND_TRAPS, SLOW_POISON, NEUTRALIZE_POISON
 from .game import ITEM_PROMPT, KEY_RUNSTOP, KEY_SPACE, Game, Mode, Observation
 from .goals import CLASSES, RACE_KEYS, Goal
 from .view import (DIRS, TYPE_DOOR_CLOSED, TYPE_STAIRS_DN, TYPE_STAIRS_UP, TYPE_TRAP, UNKNOWN, WALKABLE_TYPES,
@@ -44,6 +46,8 @@ DROP_RETRY = 500         # steps before looking for junk again after finding non
 KEY_RETURN = 0x0D
 LOOK_RESULT = re.compile(r"You see an? (.+?)\.")
 SLAIN = re.compile(r"You have slain the (.+?)\.")
+HIT_NEWS = re.compile(r"hits|misses|slain|fails|dies|destroyed|resists|unaffected|unharmed|immune|shrugs")
+CASTS_A_SPELL = re.compile(r"[Tt]he (.+?) (?:casts a spell|frightens you)")
 AVOID_GLYPHS = {"e"}     # Floating Eye: paralysing gaze when meleed
 RETREAT_HP = 0.60
 RETREAT_RANGE = 12       # farthest staircase worth running for; beyond, fight (round 28)
@@ -51,6 +55,8 @@ TRAP_HP = 0.50           # below this share of HP a known trap is impassable (ro
 BUMP_STEPS = 10          # steps a tile stays blocked after a move into it went nowhere
 UNSEEN_STEPS = 20        # steps an attack from something unseen keeps the bot from resting (M4)
 OSCILLATION_STEPS = 6    # command stops alternating between two squares before one is blocked (M4)
+CASTER_MEMORY = 100      # steps a caster seen or heard on the level still counts (M5f)
+CASTER_BURSTS = 2        # its biggest spells in a row that must not be able to kill (M5f round 8)
 NEAR_STEPS = 5           # steps a creature seen within 2 squares keeps the bot from resting (M4)
 STILL_LAYERS = ("fallback", "rest", "search", "hunt", "stair-scum")   # layers that may stand still
 STRONG_HP_BASE, STRONG_HP_PER_LEVEL = 20, 4   # more average HP than base + this x character level: too strong
@@ -99,7 +105,8 @@ WEAPON_GOLD_EARLY = 110  # kept from armour while the starting Dagger is wielded
                          # Sword after markup (60, a Mace, until M5b round 42: the Weaponsmith's random
                          # stock rarely had one that cheap, and 63 of 80 runs kept the Dagger)
 EARLY_LEVELS = 5
-BOOK_GOLD = {"Words of Wisdom": 110, "Chants and Blessings": 330, "Exorcism": 880}   # base price + 10% (M5b)
+BOOK_GOLD = {"Words of Wisdom": 110, "Chants and Blessings": 330, "Exorcism": 880,   # base price + 10% (M5b)
+             "Magick I": 110, "Magick II": 440, "The Mages Guide to Power": 880}       # (M5f)
 GEAR_TRIP_GOLD = 1000    # gold at which a town trip to spend it on armour and weapons is worth it (M5a)
 GEAR_TRIP_WAIT = 5000    # steps after a town visit before gold alone is reason for another (M5a)
 STARTING_FOOD = 5        # rations in the starting kit (VMS player_init, Umoria class_base_provisions;
@@ -121,7 +128,9 @@ GEAR_ARMOUR = re.compile(r"^(.+?) \[(\d+)(?:,\s*([+-]\s*\d+))?")
 GEAR_WEAPON = re.compile(r"^(.+?)(?: \(([+-]\d+),\s*([+-]\d+)\))?\s*$")
 TEMPLE = 3               # store index (entrance "4"): potions and scrolls, named since stores identify stock
 ALCHEMIST = 4            # store index (entrance "5"): VMS stocks Word of Recall 3 times in 21 there
+MAGIC_SHOP = 5           # store index (entrance "6"): Mage books (M5f)
 BLACK_MARKET = 6         # store index (entrance "7"): everything, at a premium
+FIND_TRAPS_EVERY = 40    # steps between a Mage's Find Hidden Traps/Doors while exploring (M5f)
 MARKET_GOLD = 600        # gold worth a Black Market trip for Word of Recall (M4 round 48: the
                          # Temple stocked it for 6 of 17 characters; drops pay for it, MON-014)
 RECALL = "Scroll of Word of Rec"   # Word of Recall (the store line may cut the name short)
@@ -173,6 +182,7 @@ ORB_RANGE = 6            # farthest in-line creature Orb of Draining is aimed at
 BLIND_TURNS = 10         # Blind Creature confuses for 10 turns (MX_CONFUSE): not again before
 CHANT_ODDS = 0.4         # fight odds from which a coming fight is worth a Chant
 CHANT_TURNS = 24         # Chant blesses 24-47 turns: counted from its shortest
+BLESS_TURNS = 12         # Bless, 12-24 turns (VMS bless(randint(12)+12)): counted from its shortest (M5f)
 THROW_RANGE = 5          # farthest in-line creature worth a thrown flask
 OIL_THROW = 7            # flasks carried to throw, beyond the lantern's reserve (M5a)
 OIL_EARLY = 10           # flasks to throw bought first while early, whatever else waits (M5b; 5 at 10 gp until round 48)
@@ -273,6 +283,8 @@ class LevelMemory:
     collected: set[Pos] = field(default_factory=set)   # tiles a pickup was tried on, or given up
     collect_walks: dict[Pos, int] = field(default_factory=dict)   # walk decisions toward each
     slow_seen: dict[Pos, int] = field(default_factory=dict)   # slow creature tile -> step last seen
+    casters: dict[tuple[str, int], int] = field(default_factory=dict)   # caster kind -> step last seen or heard
+    find_traps_after: int = 0       # step before which Find Hidden Traps/Doors is not cast again (M5f)
     last_threat: Pos | None = None   # where the nearest creature that could reach the player was last seen
     seen: list[int] | None = None    # tile types as last seen: the game forgets unlit floor
 
@@ -286,6 +298,7 @@ class Brain:
         self.last_dlvl: int | None = None
         self.last_xp = 0
         self.pending: int | None = None        # answer for the next direction prompt
+        self.messages = ""                     # the latest screen's message lines
         self.pending_item: int | None = None   # answer for the next item prompt
         self.waited = 0                        # first-strike waits for the current target
         self.unseen_attack = False             # attacked this turn with nothing in view
@@ -294,6 +307,8 @@ class Brain:
         self.no_food = False                   # "You have no food." until food is bought or picked up
         self.shopped = False                   # done shopping on this town visit
         self.potions_done = False              # done at the Temple on this town visit
+        self.magic_done = False                # done at the Magic Shop on this town visit
+        self.poisoned = False                  # "You feel poisoned." until "You feel better." (M5f)
         self.market_done = False               # done at the Black Market on this town visit
         self.alchemist_done = False            # done at the Alchemy shop on this town visit
         self.armoury_done = False              # done at the Armoury on this town visit
@@ -318,6 +333,7 @@ class Brain:
         self.shop_buys = 0                     # purchases started on this town visit
         self.store_letter: str | None = None   # item letter for the next "Buy which item?"
         self.pending_look: tuple[Pos, str] | None = None   # glyph the last look aimed at
+        self.aimed: tuple[Pos, str] | None = None   # glyph the last bolt, shot or flask was aimed at
         self.food = STARTING_FOOD              # foods carried, as a player counts them:
                                                # starting kit, +bought/picked up, -eaten
         self.buying: str | None = None         # store item named by the last B)uy
@@ -337,7 +353,7 @@ class Brain:
         self.recall_trip_after = 0             # ... for Word of Recall alone (the Alchemist may have none)
         self.gear_trip_after = 0               # ... for armour and weapons alone
         self.book_trip_after = 0               # ... for a prayer book alone
-        self.books_owned = {FIRST_BOOK} if goal.klass in BOOK_LEVELS else set()
+        self.books_owned = {books_for(goal.klass)[0]} if goal.klass in BOOK_LEVELS else set()
         self.book_next: str | None = None      # the book wanted at the Temple this visit
         self.chant_until = 0                   # step until which Chant is counted on
         self.search_mode_after = 0             # step before which search mode is not turned on again
@@ -367,6 +383,7 @@ class Brain:
 
     def decide(self, obs: Observation, view: View | None) -> Decision:
         messages = obs.rows[0] + obs.rows[1]
+        self.messages = messages
         fear_news = self.track_fear(messages)   # on every screen: -more- too (round 14)
         if "Your spell fails." in messages:
             if self.magic.last == CHANT:
@@ -374,6 +391,10 @@ class Brain:
             elif self.magic.last == BLIND:
                 self.level.blind_until = 0
         self.magic.note(messages)
+        if "You feel poisoned." in messages or "poisons you." in messages:
+            self.poisoned = True
+        elif "You feel better." in messages:
+            self.poisoned = False
         # An attack shown only behind -more- (while paralysed) still counts on
         # the next command screen, which may say no more than "You can move
         # again." (M4 round 51: seeds 1006, 1007 rested beside a White
@@ -394,6 +415,15 @@ class Brain:
             return self.prompt(obs)
         assert view is not None
         self.pending = self.pending_item = self.picking = None   # their prompts are past
+        if self.aimed is not None:
+            # A bolt that reached nothing says nothing, a flask "flies away":
+            # no creature stood there, whatever the glyph was taken for. A
+            # '$' identified as Creeping Coins stayed one after they moved or
+            # died, and Mages cast 14,805 Magic Missiles at floor gold (M5f
+            # round 9), out of mana and oil for the next Kobold.
+            target, self.aimed = self.aimed, None
+            if "flies away" in messages or not HIT_NEWS.search(messages):
+                self.level.identified[target] = ("item", "nothing there")
         self.clvl = obs.clvl
         self.book_next = self.book_wanted(obs)
         self.standing = False
@@ -418,6 +448,11 @@ class Brain:
         slow = {p for p, c in view.creatures.items()
                 if c.glyph in knowledge.slow_glyphs() and not self.coins_worth_it(c, obs)}
         self.level.slow_seen.update(dict.fromkeys(slow, obs.step))
+        burst = knowledge.spell_burst()
+        self.level.casters.update(dict.fromkeys(
+            [(c.glyph, c.level) for c in view.creatures.values() if burst.get((c.glyph, c.level))]
+            + [kind for name in CASTS_A_SPELL.findall(messages)
+               if (kind := knowledge.kinds_by_name().get(name)) is not None and burst.get(kind)], obs.step))
         view.hazards = set(self.level.stationary) | {
             p for p, seen in self.level.slow_seen.items() if obs.step - seen < SLOW_MEMORY}
         if any(self.outmatched(c, obs) for c in view.creatures.values()):
@@ -490,12 +525,12 @@ class Brain:
             self.level.door_attempts.clear()
         last = (self.stair_scum, self.search) if self.food_low() else (self.search, self.stair_scum)
         for layer in (self.search_mode, self.drop_junk, self.swat, self.quaff, self.pray, self.invoke, self.shoot, self.throw, self.crowded, self.shun, self.retreat, self.phase_door, self.look,
-                      self.fight, self.eat,
+                      self.cornered_cast, self.fight, self.leave_caster, self.eat,
                       self.light,
                       self.wear,
                       self.recall_trip, self.resupply,
                       self.rest, self.collect,
-                      self.shop, self.descend, self.hunt, self.explore, self.clear_way, *last):
+                      self.shop, self.find_traps, self.descend, self.hunt, self.explore, self.clear_way, *last):
             decision = layer(obs, view)
             if decision is not None:
                 return decision
@@ -598,7 +633,8 @@ class Brain:
             return Decision(KEY_SPACE, "shop", "acknowledge the store message")
         self.bought, self.typing = None, []
         done = {TEMPLE: self.potions_done, BLACK_MARKET: self.market_done, ARMOURY: self.armoury_done,
-                WEAPONSMITH: self.weapons_done, ALCHEMIST: self.alchemist_done}.get(self.at_store, self.shopped)
+                WEAPONSMITH: self.weapons_done, ALCHEMIST: self.alchemist_done,
+                MAGIC_SHOP: self.magic_done}.get(self.at_store, self.shopped)
         if obs.stage == "menu" and not done and self.at_store in (ARMOURY, WEAPONSMITH):
             pick = self.missile_pick(obs) if self.at_store == WEAPONSMITH else None
             pick = pick or self.gear_pick(obs)
@@ -628,6 +664,8 @@ class Brain:
             self.market_done = True
         elif self.at_store == ALCHEMIST:
             self.alchemist_done = True
+        elif self.at_store == MAGIC_SHOP:
+            self.magic_done = True
         elif self.at_store == ARMOURY:
             self.armoury_done = True
         elif self.at_store == WEAPONSMITH:
@@ -697,8 +735,13 @@ class Brain:
             wants.append(PHASE)
         if self.launcher is not None and self.ammo < AMMO_RESERVE:
             wants.append(LAUNCHERS[self.launcher][0])   # 1-2 gp a shot
-        if self.at_store == TEMPLE and self.book_next is not None:
+        if self.at_store == TEMPLE and self.book_next is not None and self.book_next not in MAGE_BOOKS:
             wants.insert(0, store_name(self.book_next))   # a caster's prayers first (maintainer, 2026-10-25)
+        if self.at_store == MAGIC_SHOP:
+            # Only a Mage's next book there (M5f: Mages learned one book and
+            # cast only Magic Missile; maintainer, 2026-10-27: "mages are
+            # only successful by using their full spell repertoire").
+            return [store_name(self.book_next)] if self.book_next in MAGE_BOOKS else []
         if self.at_store == BLACK_MARKET:
             wants = [w for w in wants if w == RECALL]   # nothing else is wanted there
         elif self.at_store == ALCHEMIST:
@@ -755,6 +798,13 @@ class Brain:
         a level-5 Priest reached the Temple with 172 gold against Words of
         Wisdom's 309 (M5b round 22)."""
         reserve = GEAR_RESERVE_EARLY if obs.clvl < EARLY_LEVELS else GEAR_RESERVE
+        if self.goal.klass in ("mage", "priest"):
+            # Potions before armour for a 6-12 HP Mage or Priest: Elf and
+            # Halfling Mages spent the gold on a shield, boots and gloves,
+            # left with two potions, and died to DL1 Kobolds and poison gas
+            # holding none (M5f round 4; the Human, with less to spend,
+            # carried five); 9-HP Gnome Priests died with none (round 12).
+            reserve = max(reserve, max(0, CLW_RESERVE - self.clw) * CLW_GOLD)
         book = self.book_wanted(obs)
         return reserve + (BOOK_GOLD.get(book, 0) if book else 0)
 
@@ -767,9 +817,15 @@ class Brain:
         worn in its slot, or the weapon wielded, that the gold allows while
         keeping ``GEAR_RESERVE`` (M4 round 74: characters met Green Nagas on
         DL5-9 with the starting Dagger and AC 4, carrying thousands of gold)."""
+        if self.goal.klass == "mage" and self.at_store != ARMOURY:
+            # A Mage fights with Magic Missile and flasks, not its weapon: a
+            # level-1 Halfling Mage bought a Tulwar and a Spear and left town
+            # with two potions (M5f baseline, seed 1018).
+            return None
         gold = re.search(r"Gold: (\d+)", obs.rows[16])
         budget = (int(gold.group(1)) if gold else 0) - self.gear_reserve(obs)
-        if self.at_store == ARMOURY and self.weapon == STARTING_WEAPON and not self.weapons_done:
+        if self.at_store == ARMOURY and self.weapon == STARTING_WEAPON and not self.weapons_done \
+                and self.goal.klass != "mage":
             # Armour first (a Priest's first stop) leaves the price of a
             # weapon: 13 of 15 deaths at level 1-3 still held the starting
             # Dagger, the gold spent on armour (M5b round 36b).
@@ -1098,6 +1154,7 @@ class Brain:
                 self.gear_trip_after = obs.step + GEAR_TRIP_WAIT   # the stores restock slowly
                 self.book_trip_after = obs.step + RESTOCK_WAIT     # the Temple may have none
             self.shopped, self.shop_buys, self.potions_done, self.market_done = False, 0, False, False
+            self.magic_done = False
             self.armoury_done = self.weapons_done = self.alchemist_done = False
             self.recalling = False
             self.max_dlvl = max(self.max_dlvl, obs.dlvl)
@@ -1166,7 +1223,7 @@ class Brain:
         if levels is None:
             return None
         owned = self.books_owned | set(self.magic.books or ())   # bought, or picked up and listed
-        return next((book for book, level in zip(PRAYER_BOOKS, levels)
+        return next((book for book, level in zip(books_for(self.goal.klass), levels)
                      if book not in owned and obs.clvl >= level), None)
 
     def wants_book_trip(self, obs: Observation) -> bool:
@@ -1499,6 +1556,11 @@ class Brain:
             # Doubling back: creatures block every way to the stairs in turn (round 16).
             self.level.retreat_failed = True
             return None
+        # A retreat begun runs to the stairs: a follower out of the light
+        # for NEAR_STEPS ended it, and auto-rest waited for a Large Brown
+        # Snake or a centipede to catch up (M5f baseline: ~17 deaths, one
+        # Elf Ranger bitten at each of three rests on the way).
+        self.level.near_until = max(self.level.near_until, obs.step + NEAR_STEPS)
         return Decision(DIRS[step], "retreat", "hurt: run for the nearest stairs")
 
     def crowded(self, obs: Observation, view: View) -> Decision | None:
@@ -1556,12 +1618,13 @@ class Brain:
         return self.no_food or self.food <= 0
 
     @staticmethod
-    def walk_away(view: View, threats: set[Pos]) -> Decision | None:
+    def walk_away(view: View, threats: set[Pos], *, known_slow: bool = False) -> Decision | None:
         """No stairs to run for, but every close threat is slower than the
         player: step away from them (M4 round 35: seed 1008 fought a nest of
-        Creeping Copper Coins down to 3 HP)."""
+        Creeping Copper Coins down to 3 HP). ``known_slow``: the caller has
+        judged them slow by name (M5f)."""
         close = {p for p in threats if chebyshev(p, view.pos) <= 2}
-        if not close or any(view.creatures[p].glyph not in knowledge.slow_glyphs() for p in close):
+        if not close or (not known_slow and any(view.creatures[p].glyph not in knowledge.slow_glyphs() for p in close)):
             return None
         here = min(chebyshev(p, view.pos) for p in close)
         best = None
@@ -1594,9 +1657,16 @@ class Brain:
         return None
 
     @staticmethod
-    def line_to(view: View, target: Pos) -> tuple[int, int] | None:
+    def line_to(view: View, target: Pos, *, missile: bool = False) -> tuple[int, int] | None:
         """Unit step toward ``target`` when it is the first thing a look along
-        that line would reach (only known floor in between)."""
+        that line would reach (only known floor in between). A ``missile`` (a
+        bolt, shot or flask) also needs ``target`` itself open: a creature on
+        a secret door, drawn in the wall, stops one short, as VMS
+        ``fire_bolt`` strikes only on ``fopen`` squares. A level-1 Elf Mage
+        cast 14 Magic Missiles at a Kobold standing in a secret door beside it
+        and died there (M5f round 10, seed 1012)."""
+        if missile and view.type_at(*target) not in WALKABLE_TYPES and view.type_at(*target) != UNKNOWN:
+            return None
         dx, dy = target[0] - view.pos[0], target[1] - view.pos[1]
         if (dx, dy) == (0, 0) or not (dx == 0 or dy == 0 or abs(dx) == abs(dy)):
             return None
@@ -1655,7 +1725,7 @@ class Brain:
             return None
         for pos in sorted(self.threats(view), key=lambda p: chebyshev(p, view.pos)):
             creature = view.creatures[pos]
-            step = self.line_to(view, pos)
+            step = self.line_to(view, pos, missile=True)
             if step is None or chebyshev(pos, view.pos) > THROW_RANGE or self.stationary(creature):
                 continue
             if not self.afraid and not self.worth_oil(creature, obs):
@@ -1663,6 +1733,7 @@ class Brain:
             if not self.afraid and chebyshev(pos, view.pos) < 2 and not (early and self.melee_weak(obs)):
                 continue
             self.picking, self.listed, self.pending = OIL, False, DIRS[step]
+            self.aimed = (pos, creature.glyph)
             why = "afraid" if self.afraid else "approaching"
             return Decision(KEY_THROW, "throw", f"{why}: throw oil at '{creature.glyph}'")
         return None
@@ -1728,7 +1799,7 @@ class Brain:
         for pos in sorted(self.threats(view), key=lambda p: chebyshev(p, view.pos)):
             creature = view.creatures[pos]
             far = chebyshev(pos, view.pos)
-            step = self.line_to(view, pos)
+            step = self.line_to(view, pos, missile=True)
             if step is None or far < 2 or far > min(FIRE_RANGE, LAUNCHERS[self.launcher][2]) \
                     or self.stationary(creature) or (creature.glyph, creature.level) in breeders:
                 continue
@@ -1738,6 +1809,7 @@ class Brain:
                 self.picking, self.listed, self.wielding_launcher = self.launcher, False, True
                 return Decision(KEY_WEAR, "shoot", f"'{creature.glyph}' approaching: wield the {self.launcher}")
             self.pending = DIRS[step]
+            self.aimed = (pos, creature.glyph)
             self.ammo -= 1
             return Decision(KEY_FIRE, "shoot", f"fire the {self.launcher} at '{creature.glyph}'")
         return None
@@ -1780,12 +1852,19 @@ class Brain:
                           and not self.stationary(c))
         if not adjacent:
             return None
-        if not self.out_of_food() and all(view.creatures[p].glyph in knowledge.slow_glyphs()
-               and not self.coins_worth_it(view.creatures[p], obs) for _, p in adjacent):
+        kinds = knowledge.kinds_by_name()
+        named_slow = {kinds[name] for name in knowledge.slow_names() if name in kinds and name in self.messages}
+        if not self.out_of_food() and all(
+                (view.creatures[p].glyph in knowledge.slow_glyphs() and not self.coins_worth_it(view.creatures[p], obs))
+                or (view.creatures[p].glyph, view.creatures[p].level) in named_slow for _, p in adjacent):
             # Creeping coins: each poison touch stacks more poison, and they
             # cannot keep up; when hurt, fight only when cornered (M4 round
-            # 45: ~5 deaths a round traded blows with them).
-            away = self.walk_away(view, {p for _, p in adjacent})
+            # 45: ~5 deaths a round traded blows with them). A slow creature
+            # the messages name, too: a Gnome Mage traded 40 blows with a
+            # Large Brown Snake (AC 35, speed 0; its glyph and level shared
+            # with the faster White Snake) and died with full mana (M5f
+            # round 13).
+            away = self.walk_away(view, {p for _, p in adjacent}, known_slow=True)
             if away is not None:
                 return away
         _, (x, y) = adjacent[0]
@@ -1796,8 +1875,13 @@ class Brain:
     def rest(self, obs: Observation, view: View) -> Decision | None:
         """Rest to full HP (CTRL+R) whenever nothing that can reach the player
         is in view, nothing unseen has attacked lately, and there is food. Auto-rest stops by itself on damage, worse hunger, a
-        message or anything coming into view, so the brain decides again."""
-        if obs.dlvl == 0 or self.threats(view) or self.unseen_attack or obs.hp >= obs.mhp:
+        message or anything coming into view, so the brain decides again.
+
+        Short of mana too: auto-rest waits for both. A level-1 Mage has two
+        Magic Missiles, and Halfling Mages (6 HP) walked on with none into
+        the next Kobold and died throwing oil (M5f round 2)."""
+        mp, mmp = self.magic.mana(obs)
+        if obs.dlvl == 0 or self.threats(view) or self.unseen_attack or (obs.hp >= obs.mhp and mp >= mmp):
             return None
         slow_near = any(obs.step - seen < SLOW_MEMORY for seen in self.level.slow_seen.values())
         if obs.step < max(self.level.unseen_until, self.level.near_until) or self.no_food or slow_near:
@@ -1816,7 +1900,7 @@ class Brain:
                 if away is not None:
                     return Decision(away, "rest", "hurt: back away from where it was")
             return None
-        return Decision(KEY_AUTOREST, "rest", f"HP {obs.hp}/{obs.mhp} and nothing in view")
+        return Decision(KEY_AUTOREST, "rest", f"HP {obs.hp}/{obs.mhp} MP {mp}/{mmp} and nothing in view")
 
     @staticmethod
     def step_away(view: View, pos: Pos) -> int | None:
@@ -1975,6 +2059,9 @@ class Brain:
             # left too little gold for it, and characters with none starved
             # stuck (M4 round 91: seeds 1003, 1006, 1016).
             store, why = ALCHEMIST, "walk to the Alchemy shop for Word of Recall"
+        elif not self.magic_done and self.book_next in MAGE_BOOKS and len(view.stores) > MAGIC_SHOP \
+                and self.gold(obs) >= BOOK_GOLD.get(self.book_next, 0):
+            store, why = MAGIC_SHOP, f"walk to the Magic Shop for {self.book_next}"
         elif not self.potions_done and len(view.stores) > TEMPLE and self.temple_worth_it(obs):
             store, why = TEMPLE, "walk to the Temple for Cure Light Wounds and Word of Recall"
         elif not self.alchemist_done and len(view.stores) > ALCHEMIST and self.phase < PHASE_RESERVE \
@@ -2006,6 +2093,7 @@ class Brain:
         if obs.dlvl == 0:
             spare = self.gold(obs) > self.gear_reserve(obs)
             ready = self.shopped and (self.potions_done or len(view.stores) <= TEMPLE) and (
+                self.magic_done or self.book_next not in MAGE_BOOKS or self.gold(obs) < BOOK_GOLD.get(self.book_next, 0)) and (
                 self.alchemist_done or self.recall >= self.recall_reserve() or self.gold(obs) < RECALL_GOLD) and (
                 self.market_done or not self.market_worth_it(obs)) and not self.to_wear and (
                 self.weapons_done or not spare) and (self.armoury_done or not spare)
@@ -2058,7 +2146,7 @@ class Brain:
         book = self.book_wanted(obs)
         return (self.clw < self.clw_reserve() and gold >= CLW_GOLD) or \
             (self.recall < self.recall_reserve() and gold >= RECALL_GOLD) or \
-            (book is not None and gold >= BOOK_GOLD.get(book, 0))
+            (book is not None and book not in MAGE_BOOKS and gold >= BOOK_GOLD.get(book, 0))
 
     def quaff(self, obs: Observation, view: View) -> Decision | None:
         """Badly hurt with a Cure Light Wounds potion: drink it (M4), in town
@@ -2069,7 +2157,11 @@ class Brain:
         step away exists: a potion heals ~8 while a Creeping Coins nest hits
         for ~12 a turn, and stepping away costs nothing they can catch up
         to (M5a round 10: a Half-Elf drank five in a row beside them and
-        died). Out of reach, the next decision drinks."""
+        died). Out of reach, the next decision drinks.
+
+        A known Cure Light Wounds is prayed before the potion even one blow
+        from death: drinking first at low levels (the prayer can fail) cost
+        Gnome and Elf Priests 5 of 40 on reach_dl8 (M5f round 7 A/B)."""
         if not self.clw or (obs.hp >= QUAFF_HP * obs.mhp and not (
                 (self.under_spell(obs, view) or self.under_blow(obs, view)) and not self.magic.can(obs, CURE_LIGHT))):
             return None
@@ -2089,21 +2181,9 @@ class Brain:
         contact, and died there (M5b round 11). Away from them, ``retreat``
         and ``stair_scum`` take over."""
         magic = self.magic
+        if not self.phase_due(obs):
+            return None
         beside = [c for c in self.adjacent if not self.stationary(c)]
-        # An outmatched creature in contact (a naga: too strong by the lore,
-        # no faster than a walk) is left before the fight, at any HP: four
-        # Human Priests met DL5 Green Nagas at full HP, every step to the
-        # stairs past them, and fought them to the end (M5b round 53).
-        outmatched = any(self.outmatched(c, obs) for c in beside)
-        if obs.dlvl == 0 or (obs.hp >= RETREAT_HP * obs.mhp and not outmatched) or not (
-                self.phase or magic.can(obs, PORTAL) or magic.can(obs, SANCTUARY) or magic.can(obs, PHASE_DOOR)):
-            return None
-        if not beside:
-            return None
-        breeders = knowledge.breeder_kinds()
-        if not (len(beside) >= 2 or any((c.glyph, c.level) in breeders for c in beside)
-                or obs.hp < QUAFF_HP * obs.mhp or outmatched):
-            return None
         if len(beside) >= 2 and magic.can(obs, SANCTUARY):
             # Sleeps every adjacent creature: the retreat then walks off.
             return Decision(*magic.pray(SANCTUARY, f"HP {obs.hp}/{obs.mhp}, {len(beside)} beside: pray Sanctuary"))
@@ -2115,7 +2195,31 @@ class Brain:
         if magic.can(obs, PHASE_DOOR):
             # The scroll first: the spell can fail (a Ranger's 35%, a Rogue's 55%).
             return Decision(*magic.pray(PHASE_DOOR, f"HP {obs.hp}/{obs.mhp}, no way out: cast Phase Door"))
+        if magic.can(obs, TELEPORT_SELF):
+            return Decision(*magic.pray(TELEPORT_SELF, f"HP {obs.hp}/{obs.mhp}, no way out: cast Teleport Self"))
         return None   # Sanctuary known, one beside: nothing that helps (M5b round 24: Portal asked 1,666 times)
+
+    def phase_due(self, obs: Observation) -> bool:
+        """``phase_door`` will act now: an escape at hand, and badly hurt in
+        contact beside a breeder, two or more, or near death, or beside an
+        outmatched creature at any HP. An outmatched creature in contact (a
+        naga: too strong by the lore, no faster than a walk) is left before
+        the fight: four Human Priests met DL5 Green Nagas at full HP, every
+        step to the stairs past them, and fought them to the end (M5b round
+        53)."""
+        beside = [c for c in self.adjacent if not self.stationary(c)]
+        outmatched = any(self.outmatched(c, obs) for c in beside)
+        if obs.dlvl == 0 or not beside or (obs.hp >= RETREAT_HP * obs.mhp and not outmatched) or not (
+                self.can_phase(obs) or self.magic.can(obs, SANCTUARY)):
+            return False
+        breeders = knowledge.breeder_kinds()
+        return (len(beside) >= 2 or any((c.glyph, c.level) in breeders for c in beside)
+                or obs.hp < QUAFF_HP * obs.mhp or outmatched)
+
+    def can_phase(self, obs: Observation) -> bool:
+        """A Phase Door scroll held, or Portal, Phase Door or Teleport Self castable now."""
+        magic = self.magic
+        return bool(self.phase) or magic.can(obs, PORTAL) or magic.can(obs, PHASE_DOOR) or magic.can(obs, TELEPORT_SELF)
 
     def drop_junk(self, obs: Observation, view: View) -> Decision | None:
         """A full pack refused every purchase: worn-out armour and weapons
@@ -2172,7 +2276,7 @@ class Brain:
         self.search_mode_after = obs.step + SEARCH_MODE_EVERY
         return Decision(KEY_SEARCH_MODE, "search-mode", "nothing in view: search mode on")
 
-    def invoke(self, obs: Observation, view: View) -> Decision | None:
+    def invoke(self, obs: Observation, view: View, *, cornered: bool = False) -> Decision | None:
         """A caster's fighting prayers, each only with mana left for the best
         heal (``Magic.spare``): Orb of Draining (3d6 + level, doubled on evil),
         or a Mage-book caster's Magic Missile (2d6, M5d), at a creature worth it
@@ -2187,31 +2291,42 @@ class Brain:
                        key=lambda p: chebyshev(p, view.pos))
         for pos in close:
             creature = view.creatures[pos]
-            step = self.line_to(view, pos)
+            step = self.line_to(view, pos, missile=True)
             if step is None or chebyshev(pos, view.pos) > ORB_RANGE:
                 continue
             worth = knowledge.strength().get((creature.glyph, creature.level), (0.0, 0))[0] >= OIL_WORTH_HP
             if magic.spare(obs, ORB) and worth:
                 self.pending = DIRS[step]
+                self.aimed = (pos, creature.glyph)
                 return Decision(*magic.pray(ORB, f"pray Orb of Draining at '{creature.glyph}'"))
-            if magic.spare(obs, MAGIC_MISSILE) and worth and not (
-                    obs.hp < RETREAT_HP * obs.mhp and any(not self.stationary(c) for c in self.adjacent)):
+            attack = self.mage_attack(obs, creature)
+            if attack is not None and worth and (cornered or not self.phase_due(obs)):
                 # 2d6, a flask's damage, for 1 mana (M5d). Hurt with a
                 # creature beside, the escapes come first: four Rangers cast
                 # it at 1-9 HP beside DL1 Kobolds, a third of the casts
-                # failing, and died holding Phase Door (M5d round 4).
+                # failing, and died holding Phase Door (M5d round 4). Only
+                # when ``phase_door`` will act: otherwise the cast beats the
+                # oil or dagger that came next. Level-1 Halfling Mages at 1-4
+                # HP threw oil at the Kobold beside them (M5f baseline: 9 of
+                # 15 deaths), and once Mages learned Phase Door at level 1 they
+                # threw it at full mana (round 12). ``cornered_cast`` casts
+                # it once no escape was taken.
                 self.pending = DIRS[step]
-                return Decision(*magic.pray(MAGIC_MISSILE, f"cast Magic Missile at '{creature.glyph}'"))
+                self.aimed = (pos, creature.glyph)
+                return Decision(*magic.pray(attack, f"cast {attack} at '{creature.glyph}'"))
             if chebyshev(pos, view.pos) <= 2 and obs.step >= self.level.blind_until \
                     and self.fight_odds(creature, obs) > FIGHT_ODDS and magic.spare(obs, BLIND):
                 self.level.blind_until = obs.step + BLIND_TURNS
                 self.pending = DIRS[step]
                 return Decision(*magic.pray(BLIND, f"pray Blind Creature at '{creature.glyph}'"))
-        if obs.step >= self.chant_until and magic.spare(obs, CHANT) and any(
+        blessing = CHANT if magic.spare(obs, CHANT) else BLESS if magic.spare(obs, BLESS) else None
+        if obs.step >= self.chant_until and blessing is not None and any(
                 chebyshev(p, view.pos) <= 3 and self.fight_odds(view.creatures[p], obs) > CHANT_ODDS
                 for p in close):
-            self.chant_until = obs.step + CHANT_TURNS
-            return Decision(*magic.pray(CHANT, "a hard fight coming: pray Chant"))
+            # Bless before Chant is known: +2 AC and +5 to hit from level 1,
+            # never prayed until M5f (Priests prayed Chant from level 7 only).
+            self.chant_until = obs.step + (CHANT_TURNS if blessing == CHANT else BLESS_TURNS)
+            return Decision(*magic.pray(blessing, f"a hard fight coming: pray {blessing}"))
         return None
 
     def pray(self, obs: Observation, view: View) -> Decision | None:
@@ -2230,6 +2345,11 @@ class Brain:
             return Decision(*magic.read_list())
         if self.afraid and magic.can(obs, REMOVE_FEAR):
             return Decision(*magic.pray(REMOVE_FEAR, "afraid: pray Remove Fear"))
+        cure = next((name for name in (CURE_POISON, NEUTRALIZE_POISON, SLOW_POISON) if magic.can(obs, name)), None)
+        if self.poisoned and cure is not None:
+            # Poison drains a 6-12 HP Mage or Priest a point a turn for 11-20
+            # turns: a gas trap killed them resting (M5f).
+            return Decision(*magic.pray(cure, f"poisoned: pray {cure}"))
         # Sealed in or stuck, not merely "no up stairs seen yet": prayed on
         # arrival, the one try was spent before the level was explored, and
         # a Priest later sealed in there starved for 54,000 steps (M5b round
@@ -2259,6 +2379,72 @@ class Brain:
                 if magic.can(obs, heal) and (MAGE_HEAL_AVERAGE if magic.mage else HEAL_AVERAGE)[heal] > hitting:
                     return Decision(*magic.pray(heal, f"HP {obs.hp}/{obs.mhp}: pray {heal}"))
         return None
+
+    def find_traps(self, obs: Observation, view: View) -> Decision | None:
+        """A Mage's Find Hidden Traps/Doors or a Priest's Find Traps on each new level and every
+        ``FIND_TRAPS_EVERY`` steps after, with nothing in view: it shows the
+        traps of the screen around the character, and a found trap is
+        disarmed or walked around, not stepped on. Falling rock, pits and
+        poison gas killed one 6-9 HP Mage in five (M5f baseline)."""
+        spell = next((name for name in (FIND_TRAPS, PRIEST_FIND_TRAPS) if self.magic.spare(obs, name)), None)
+        if obs.dlvl == 0 or self.threats(view) or obs.step < self.level.find_traps_after or spell is None:
+            return None
+        self.level.find_traps_after = obs.step + FIND_TRAPS_EVERY
+        return Decision(*self.magic.pray(spell, f"pray {spell}"))
+
+    def mage_attack(self, obs: Observation, creature: Creature) -> str | None:
+        """The Mage-book attack that kills ``creature`` (its lore HP) in the
+        fewest casts, the cheapest of those: Magic Missile while one or two
+        do, Lightning or Frost Bolt for a bigger creature (M5f: Mages learned
+        Stinking Cloud and the bolts but cast only Magic Missile)."""
+        hp = knowledge.strength().get((creature.glyph, creature.level), (0.0, 0))[0] or 1.0
+        usable = [name for name in MAGE_ATTACKS if self.magic.spare(obs, name)]
+        if not usable:
+            return None
+        return min(usable, key=lambda name: (math.ceil(hp / MAGE_ATTACKS[name]), self.magic.known[name].mana))
+
+    def leave_caster(self, obs: Observation, view: View) -> Decision | None:
+        """A caster seen or heard on this level lately whose biggest spell
+        (the lore's ``spell_burst``), cast ``CASTER_BURSTS`` times, could
+        kill at the character's HP: take the stairs to a fresh level rather
+        than explore within its reach. A Novice Mage's Cause Light Wounds
+        does 3d8, and one blinked out of the light then hit a Gnome Priest
+        from 24 HP to 8 and killed it with the next (M5f round 6: caster
+        spells the largest cluster of Priest deaths); an unseen Novice Priest
+        frightened another at full HP (29), then cast 14 and 17 four turns
+        apart (round 8, seed 1008). ``fight`` comes first: one in contact is
+        fought."""
+        if obs.dlvl == 0:
+            return None
+        burst = max((knowledge.spell_burst().get(kind, 0) for kind, seen in self.level.casters.items()
+                     if obs.step - seen <= CASTER_MEMORY), default=0)
+        if not burst or obs.hp > CASTER_BURSTS * burst:
+            return None
+        why = f"a caster's spell ({burst}) could kill at HP {obs.hp}"
+        here = view.type_at(*view.pos)
+        deeper_ok = self.deeper_ok(obs)
+        if here == TYPE_STAIRS_UP or (here == TYPE_STAIRS_DN and deeper_ok):
+            return Decision(ord("<") if here == TYPE_STAIRS_UP else ord(">"), "leave-caster",
+                            f"{why}: take the stairs")
+        exits = view.stairs_up() | (view.stairs_down() if deeper_ok else set())
+        if not exits:
+            return None
+        if any(knowledge.casts(c.glyph, c.level) for c in view.creatures.values()):
+            # One in view gets free shots at a long walk: stand and fight it
+            # instead, as ``retreat`` does (M4 round 28).
+            far = view.path_steps(exits, avoid_monsters=True, doors=False)
+            if far is None or far > RETREAT_RANGE:
+                return None
+        return self.move(view, view.step_toward(exits, avoid_monsters=True), "leave-caster",
+                         f"{why}: path to the nearest staircase")
+
+    def cornered_cast(self, obs: Observation, view: View) -> Decision | None:
+        """Hurt beside a creature, with no escape taken (no Phase Door yet,
+        no potion, nowhere to run): Magic Missile rather than the melee
+        ``fight`` would choose. A level-1 Elf Mage at 2 of 8 HP beside a hurt
+        Kobold swung its dagger with the mana for a missile, and died (M5f
+        baseline, seed 1009)."""
+        return self.invoke(obs, view, cornered=True)
 
     def descend(self, obs: Observation, view: View) -> Decision | None:
         if not self.deeper_ok(obs):
@@ -2317,6 +2503,10 @@ class Brain:
             self.level.dead_frontier |= set(trail) | near
             trail.clear()
         frontier = view.frontier() - self.level.dead_frontier
+        # No tether to the stairs for fragile casters: exploring only near a
+        # staircase and leaving by it cost 10 of 120 runs on the six M5f
+        # holdouts (rounds 17-18 A/B: 35 against 45), the DL1 exits running
+        # through town and out of steps.
         step = view.step_toward(frontier, avoid_monsters=True) if frontier else None
         if step is None:   # the only way on is across a known trap
             step = view.step_toward(view.frontier(traps=True) - self.level.dead_frontier,

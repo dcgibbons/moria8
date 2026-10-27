@@ -589,7 +589,8 @@ Each milestone has a measurable exit criterion and an explicit stop rule.
 | **M2 `reach_dl2`, `reach_clvl2`** | Dungeon navigation, doors, search, stairs; fight, emergency, rest; anti-stall; plateau alert; frozen suites | Both goals work, and `enter_dungeon` still passes its frozen suite. No `unknown_prompt` in the final qualification runs. **No further goals are added until M2 is met.** |
 | **M3 `reach_dl5`, `clvl5`** | The brain rounds in §14.3: any-glyph creatures, food and light logistics, threat memory, avoiding stationary monsters, sealed-area fallback | Both goals work (§7.2, ≥16/20); all frozen suites still pass; no `unknown_prompt`. **Met 2026-10-22 (§14.9).** |
 | **M4 `clvl10`, `reach_dl8`** (`reach_dl10` until 2026-10-24) | The brain rounds in §15.3: stationary hazards, fear and fast attackers, then what the re-measured clusters show | Both goals work (§7.2, ≥16/20); all frozen suites still pass; no `unknown_prompt`. Started 2026-10-22 (`/goal`, §15). **Met 2026-10-24 (§15.6).** |
-| **M5 Every race and class at M4** | §16: the M4 goals for every Warrior race, then Paladin and Priest, then Rogue and Ranger, then Mage, then every other race of each class; a C128 backend in between | `clvl10` and `reach_dl8` work (§7.2, ≥16/20; ≥15/20 for Mages and Priests, §16.1 amended 2026-10-26) for each of the 31 race/class combinations, each frozen as its own suite; all frozen suites still pass; no `unknown_prompt`. Planned 2026-10-24 (§16). **M5a (every Warrior race) met 2026-10-25 (§16.8).** |
+| **M5 Every race and class at M4** | §16: the M4 goals for every Warrior race, then Paladin and Priest, then Rogue and Ranger, then Mage, then every other race of each class | `clvl10` and `reach_dl8` work (§7.2, ≥16/20; ≥10/20 for Mages and Priests, §16.1 amended 2026-10-27) for each of the 31 race/class combinations, each frozen as its own suite; all frozen suites still pass; no `unknown_prompt`. Planned 2026-10-24 (§16). **M5a (every Warrior race) met 2026-10-25 (§16.8).** |
+| **C128 backend** (M5c until 2026-10-26; not scheduled) | Half-Troll Warrior on `x128`, no brain work: the backend (§12.7) for VDC screen text, banked reads, the C128 keyboard buffer and the 198×66 map | Every frozen C64 suite passes on the C128 at its bar. Moved out of M5 by the maintainer on 2026-10-26 (§16.2) |
 
 **Stop rules** (defaults, tunable by the maintainer):
 
@@ -1725,6 +1726,15 @@ pure spell casters (mages and priests) have a bar of 15 instead of 16").
 `CLASS_BARS` in `playtest/moria_playtest/goals.py`; a `CHARACTER_BARS` entry
 still decides its own combination. Every other class keeps 16/20.
 
+**Amended 2026-10-27 (maintainer, M5f):** Mages and Priests qualify at
+**10/20**, half the seeds. After 13 rounds the 6-9 HP casters (Elf, Gnome and
+Halfling Mages, Gnome Priest) sat at 4-13/20 against 15, dying at level 1-2
+to what VMS deals a character that small: "I think it is OK to accept them as
+weaker and have a lower bar ... let's aim for a bar of *10* for mages and
+priests ... as we advance to higher levels of the dungeon I would expect our
+bar to continue to be lowered." Suites frozen at 15 keep their bar; deeper
+goals are expected to set lower ones.
+
 Why this order:
 
 - **Race costs no bot work.** `Goal.character` already picks the race and
@@ -1747,19 +1757,20 @@ Why this order:
 |---|---|---|---|
 | **M5a Warrior races** | Human, Half-Elf, Elf, Halfling, Gnome, Dwarf, Half-Orc Warriors (Half-Troll is M4) | None at first: baselines with the M4 brain, then trace-driven fixes | Both goals ≥16/20 for each; frozen |
 | **M5b Paladin, Priest** | Human Paladin, then Human Priest (Half-Troll until round 10, §17) | A cast layer: choose a prayer, target it, track mana, learn from books, buy books; prayers for healing, fear and light first | Both goals ≥16/20 for the Paladin, ≥15/20 for the Priest (§16.1, amended 2026-10-26); frozen. **Human and Dwarf Priest met 2026-10-26 (§17, round 55)** |
-| **M5c C128 backend** | Half-Troll Warrior on `x128` | None in the brain: the backend (§12.7) for VDC screen text, banked reads, the C128 keyboard buffer and the 198×66 map | Every frozen C64 suite passes on the C128 at its bar |
 | **M5d Rogue, Ranger** | Human Rogue, Human Ranger | Missiles: buy ammunition, fire, target; stealth-aware choices; the cast layer for their spells | Both goals ≥16/20 for each; frozen. **Met 2026-10-26 (§18, round 5)** |
 | **M5e Mage** | Human Mage | Spells for survival, not only utility: Magic Missile, Phase Door, detection; a fragile character's readiness | Both goals ≥15/20 (§16.1, amended 2026-10-26); frozen. **Met 2026-10-26 (§19, baseline 19 / 18)** |
-| **M5f The rest** | The other 20 combinations (§12.6) | Trace-driven fixes for what fails | Both goals ≥16/20 for each (≥15/20 for Mages and Priests); frozen |
-
-M5c runs between brain rounds: it is self-contained, and once it works,
-every later suite can also run on the C128.
+| **M5f The rest** | The other 20 combinations (§12.6) | Trace-driven fixes for what fails | Both goals ≥16/20 for each (≥10/20 for Mages and Priests, §16.1 amended 2026-10-27); frozen |
 
 **M5c deferred (maintainer, 2026-10-26):** "I don't think we should do M5c
 for the c128 - that part is less interesting to me right now. Let's do M5d
 and then M5e and get those main classes tested." The order is now M5d, M5e,
-M5f; M5c waits. Within a class, Human comes
-first (no race adjustment), then the other races in M5f.
+M5f. Within a class, Human comes first (no race adjustment), then the other
+races in M5f.
+
+**M5c moved out of M5 (maintainer, 2026-10-26):** "let's move M5c out of M5 -
+it doesn't make sense just yet." The C128 backend is now its own milestone,
+not scheduled (§8); M5 is met without it. The stage letters stay as they
+were, so M5 has no M5c.
 
 ### 16.3 Method
 
@@ -1789,9 +1800,9 @@ with M5a`).
 3. **The cast layer's scope.** Only the spells and prayers the M4 goals
    need (healing, light, fear, detection, Phase Door, Magic Missile), added
    as the traces call for them, not the whole book.
-4. **M5c scope.** The C128 backend changes only the harness (§12.7); a game
-   bug it finds is fixed as a game change with its contract loaded, like
-   M4's (§15.4).
+4. **M5c scope** (now the C128 backend milestone, §8). The C128 backend
+   changes only the harness (§12.7); a game bug it finds is fixed as a game
+   change with its contract loaded, like M4's (§15.4).
 
 Harness support: `--character` on every session mode
 (`make playtest-qualify CHARACTER=human-warrior`); the names are in
@@ -2159,3 +2170,76 @@ an `unknown_prompt` finding, since `expects_item_prompt` ignored the drop the
 bot had asked for. Detect Monsters, which M5e had expected to need, was not
 needed for the bar.
 
+
+## 20. M5f: every other race (from 2026-10-26)
+
+Started by the maintainer on 2026-10-26 (`/goal M5f make it so`): the 17
+combinations without suites (§16.2), both goals, 34 suites. M5c was moved out
+of M5 the same day (§16.2).
+
+### 20.1 Baseline and the bar
+
+The baseline (the M5e brain) froze 17 of 34 at once: every Rogue, the
+Half-Elf Paladin, and most Half-Orc, Half-Troll and Half-Elf Priests. What
+failed tracked starting HP, which matches VMS (`create.inc`
+`mhp := con_adj + hitdie`): the 6-9 HP casters (Elf, Gnome and Halfling Mages,
+Gnome Priest) died at level 1-2 on DL1, four deaths in five, to two Kobold
+bites (1d6), one 2d6 trap, poison gas, or a Novice Mage's Cause Light Wounds
+(3d8, VMS flags `0000089C`). After 13 rounds the maintainer lowered the
+Mage and Priest bar to 10/20 (§16.1, amended 2026-10-27).
+
+### 20.2 Game changes (VMS parity, maintainer: "fix em all")
+
+- **Traps per level** follow VMS `randint(alloc_level)`,
+  `alloc_level = clamp(dlvl/3, 2, 10)` (`generate.inc:854-866`): 1-2 to DL8,
+  up to 10 from DL30. Moria8 placed `2..dlvl+2`, 1.7× VMS on DL1 and 3× on
+  DL5.
+- **Pits** do VMS's 2d6 (1d4 before).
+- **The falling-rock message** is VMS's: "You are hit by falling rock."
+- Tests: C64 `test_trap_door_destruction.s` t4-t5. The string bank fixture in
+  `test_subsystems.s` was re-encoded with the new Huffman tree, as its
+  comment requires.
+
+The trap mix (6 of VMS's 18 types) was not changed: no new trap types were
+wanted. The secret-door bolt case (below) was checked against VMS
+`fire_bolt` and is faithful: a bolt strikes only on `fopen` squares.
+
+### 20.3 Bot changes
+
+Each kept change has a test that fails without it:
+
+- **The full spell repertoire** (maintainer: "mages are only successful by
+  using their full spell repertoire"): Mages buy each Mage book at the Magic
+  Shop when its first spell is in reach (Magick I at level 3), learn by
+  `LEARN_ORDER`, and cast the attack that kills in the fewest casts (Magic
+  Missile, Stinking Cloud, Lightning, Frost and Fire Bolt, the balls), Find
+  Hidden Traps/Doors on each new level and every 40 steps, Cure Poison when
+  poisoned, and Teleport Self to escape. Priests gained Bless (before Chant is
+  known), Find Traps and Slow or Neutralize Poison.
+- **Missiles held back only when an escape will act** (`phase_due`): with
+  Phase Door learned at level 1, Mages threw oil at full mana.
+- **Mages rest for mana**, buy potions before armour and no weapons; Priests
+  hold potion gold before armour too.
+- **Nothing aimed at nothing:** a bolt or flask that reaches no creature
+  unmarks the glyph (14,805 Magic Missiles at floor gold in one round), and
+  no missile goes at a creature standing in a secret door.
+- **A retreat runs to the stairs**, and a **caster seen or heard** whose two
+  spells could kill sends the character to them.
+- **Slow creatures by name:** a Large Brown Snake (speed 0) shares `'R'` at
+  level 1 with the faster White Snake, so the bot traded blows with it.
+
+Tried and removed, by A/B: a potion before an early prayer (Gnome and Elf
+Priests 5 of 40 worse) and a stairs tether for fragile casters (35 against
+45 of 120 on the six holdouts).
+
+### 20.4 Tooling
+
+The traces record the status line and the bot's potions and oil; the
+dashboard became one page and is published to https://playtest.moria8.org
+(§6.9); VICE can run JiffyDOS or any other ROM pair (§6.1).
+
+### 20.5 Status (2026-10-27)
+
+56 of 62 goals frozen. Left: Elf Mage clvl10 (12 in the last A/B round,
+not yet frozen), Gnome Mage both goals (8, 7), Halfling Mage both (8, 5) and
+Gnome Priest reach_dl8 (5), with round 19 freezing what reaches 10.
