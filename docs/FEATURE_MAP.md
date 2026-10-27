@@ -909,7 +909,7 @@ In VMS Moria 4.8 (`misc.inc:800-1500`) and Umoria 5.7.15 (`data_treasure.cpp:524
 
 Source: `core/item_tables.s:13-660`, `core/item_defs.s:1-44`.
 
-**Base costs (fixed 2026-10-26, M5b playtest):** every item that maps one-to-one onto an upstream template (`Implemented` in 8.3.2) carries the VMS `object_list` cost (VMS `values.inc`; Umoria `data_treasure.cpp` agrees except Restore Mana `350`, Chants and Blessings `400` and Staff of Teleportation `800`). Moria8 had its own scale: a Potion of Cure Light Wounds cost `50` (VMS `15`), a Flask of Oil `10` (`3`), the Beginners Handbook `100` (`25`), Words of Wisdom `300` (`100`), Chain Mail `80` (`530`) and a Long Sword `60` (`300`). **Still to fix (C64 / Plus/4 / Atari town overlay full, 4 bytes free; each needs a sparse high byte, `it_cost_hi_extra`):** Ring of Strength (`#24`, VMS `400`, Moria8 `120`), Wand of Lightning (`#40`, `600` / `200`), Wand of Frost (`#41`, `800` / `250`), Wand of Stinking Cloud (`#42`, `400` / `150`), Pike (`#75`, `358` / `100`), Halberd (`#76`, `430` / `150`), Lucerne Hammer (`#93`, `376` / `110`), Broad Axe (`#94`, `304` / `100`), Awl-Pike (`#95`, `340` / `80`). The worthless upstream items (Poison, Blindness and Confusion potions, Aggravate Monster scroll; VMS `0`) stay at `5`: the stores refuse an item priced `0`. Adapted items (`Approximation` in 8.3.2) keep their Moria8 costs.
+**Base costs (fixed 2026-10-26, M5b playtest):** every item that maps one-to-one onto an upstream template (`Implemented` in 8.3.2) carries the VMS `object_list` cost (VMS `values.inc`; Umoria `data_treasure.cpp` agrees except Restore Mana `350`, Chants and Blessings `400` and Staff of Teleportation `800`). Moria8 had its own scale: a Potion of Cure Light Wounds cost `50` (VMS `15`), a Flask of Oil `10` (`3`), the Beginners Handbook `100` (`25`), Words of Wisdom `300` (`100`), Chain Mail `80` (`530`) and a Long Sword `60` (`300`). **Fixed 2026-10-26 (after the byte recovery freed town-overlay room):** the nine that needed a sparse high byte (`it_cost_hi_extra`) now carry the VMS price too: Ring of Strength (`#24`, `400`; was `120`), Wand of Lightning (`#40`, `600`; `200`), Wand of Frost (`#41`, `800`; `250`), Wand of Stinking Cloud (`#42`, `400`; `150`), Pike (`#75`, `358`; `100`), Halberd (`#76`, `430`; `150`), Lucerne Hammer (`#93`, `376`; `110`), Broad Axe (`#94`, `304`; `100`), Awl-Pike (`#95`, `340`; `80`). The worthless upstream items (Poison, Blindness and Confusion potions, Aggravate Monster scroll; VMS `0`) stay at `5`: the stores refuse an item priced `0`. Adapted items (`Approximation` in 8.3.2) keep their Moria8 costs.
 
 | M8 ID | Item Name | Category (`it_category`) | Glyph | Color | Base AC | Damage Dice | Weight (`0.1 lb`) | Base Cost (`GP`) | Min Depth (`0..12`) | VMS Moria / Umoria Origin |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -937,7 +937,7 @@ Source: `core/item_tables.s:13-660`, `core/item_defs.s:1-44`.
 | `21` | **Scroll of Identify** | `ICAT_SCROLL (11)` | `?` | L.Grey | `0` | `0d0` | `2` | `50` | `2` | `Scroll of Identify` (`#176..179`) |
 | `22` | **Scroll of Teleportation** | `ICAT_SCROLL (11)` | `?` | Cyan | `0` | `0d0` | `2` | `40` | `3` | `Scroll of Teleport` (`#186`) |
 | `23` | **Ring of Protection** | `ICAT_RING (12)` | `=` | Yellow | `1` | `0d0` | `2` | `100` | `4` | `Ring of Protection` (`#153`, base AC `1` + `+to_ac`) |
-| `24` | **Ring of Strength** | `ICAT_RING (12)` | `=` | L.Red | `0` | `0d0` | `2` | `120` | `5` | `Ring of Strength` (`#132`) |
+| `24` | **Ring of Strength** | `ICAT_RING (12)` | `=` | L.Red | `0` | `0d0` | `2` | `400` | `5` | `Ring of Strength` (`#132`) |
 | `25` | **Cure Serious Wounds Potion** | `ICAT_POTION (10)` | `!` | White | `0` | `0d0` | `4` | `40` | `3` | `Potion of Cure Serious Wounds` (`#240`) |
 | `26` | **Restore Mana Potion** | `ICAT_POTION (10)` | `!` | Blue | `0` | `0d0` | `4` | `35` | `5` | `Potion of Restore Mana` (`#266`) |
 | `27` | **Heroism Potion** | `ICAT_POTION (10)` | `!` | L.Red | `0` | `0d0` | `4` | `35` | `4` | `Potion of Heroism` (`#257`) |
@@ -953,9 +953,9 @@ Source: `core/item_tables.s:13-660`, `core/item_defs.s:1-44`.
 | `37` | **Scroll of Aggravate** | `ICAT_SCROLL (11)` | `?` | L.Red | `0` | `0d0` | `2` | `5` | `1` | `Scroll of Aggravate Monster` (`#202`) |
 | `38` | **Scroll of Protect from Evil** | `ICAT_SCROLL (11)` | `?` | Yellow | `0` | `0d0` | `2` | `100` | `4` | `Scroll of Protection from Evil` (`#209`) |
 | `39` | **Wand of Light** | `ICAT_WAND (14)` | `-` | Yellow | `0` | `0d0` | `10` | `200` | `3` | `Wand of Light` (`#269`) |
-| `40` | **Wand of Lightning** | `ICAT_WAND (14)` | `-` | Cyan | `0` | `0d0` | `10` | `200` | `4` | `Wand of Lightning Bolts` (`#270`) |
-| `41` | **Wand of Frost** | `ICAT_WAND (14)` | `-` | Blue | `0` | `0d0` | `10` | `250` | `5` | `Wand of Frost Bolts` (`#271`) |
-| `42` | **Wand of Stinking Cloud** | `ICAT_WAND (14)` | `-` | Green | `0` | `0d0` | `10` | `150` | `4` | `Wand of Stinking Cloud` (`#290`) |
+| `40` | **Wand of Lightning** | `ICAT_WAND (14)` | `-` | Cyan | `0` | `0d0` | `10` | `600` | `4` | `Wand of Lightning Bolts` (`#270`) |
+| `41` | **Wand of Frost** | `ICAT_WAND (14)` | `-` | Blue | `0` | `0d0` | `10` | `800` | `5` | `Wand of Frost Bolts` (`#271`) |
+| `42` | **Wand of Stinking Cloud** | `ICAT_WAND (14)` | `-` | Green | `0` | `0d0` | `10` | `400` | `4` | `Wand of Stinking Cloud` (`#290`) |
 | `43` | **Staff of Light** | `ICAT_STAFF (15)` | `/` | Yellow | `0` | `0d0` | `50` | `250` | `3` | `Staff of Light` (`#293`) |
 | `44` | **Staff of Detect Monsters** | `ICAT_STAFF (15)` | `/` | L.Green | `0` | `0d0` | `50` | `100` | `3` | `Staff of Detect Invisible` (`#308`) |
 | `45` | **Staff of Teleportation** | `ICAT_STAFF (15)` | `/` | Cyan | `0` | `0d0` | `50` | `400` | `5` | `Staff of Teleportation` (`#298`) |
@@ -988,8 +988,8 @@ Source: `core/item_tables.s:13-660`, `core/item_defs.s:1-44`.
 | `72` | **War Hammer** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `3d3` | `120` | `90` | `5` | `War Hammer` (`#59`) |
 | `73` | **Morningstar** | `ICAT_WEAPON (2)` | `/` | White | `0` | `2d6` | `150` | `100` | `6` | `Morningstar` (`#57`) |
 | `74` | **Spear** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `1d6` | `50` | `36` | `2` | `Spear` (`#68`) |
-| `75` | **Pike** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `2d5` | `160` | `100` | `8` | `Pike` (`#67`) |
-| `76` | **Halberd** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `3d4` | `190` | `150` | `9` | `Halberd` (`#65`) |
+| `75` | **Pike** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `2d5` | `160` | `358` | `8` | `Pike` (`#67`) |
+| `76` | **Halberd** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `3d4` | `190` | `430` | `9` | `Halberd` (`#65`) |
 | `77` | **Quarterstaff** | `ICAT_WEAPON (2)` | `/` | Brown | `0` | `1d9` | `40` | `20` | `1` | `Quarterstaff` (`1d9` hafted/staff weapon) |
 | `78` | **Large Shield** | `ICAT_SHIELD (4)` | `)` | L.Grey | `3` | `1d2` (VMS Large Leather Shield; `0d0` until 2026-10-25) | `100` | `120` | `4` | `Large Leather/Metal Shield` (`#128`/`#131`) |
 | `79` | **Hard Leather Armor** | `ICAT_ARMOR (3)` | `[` | Brown | `6` | `0d0` | `120` | `55` | `5` | `Hard Leather Armor` (`#105`) |
@@ -1006,9 +1006,9 @@ Source: `core/item_tables.s:13-660`, `core/item_defs.s:1-44`.
 | `90` | **Tulwar** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `2d4` | `100` | `100` | `5` | `Tulwar` (`2d4` curved blade) |
 | `91` | **Katana** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `3d4` | `120` | `400` | `7` | `Katana` (`#44`) |
 | `92` | **Flail** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `2d6` | `150` | `120` | `5` | `Flail` (`#55`) |
-| `93` | **Lucerne Hammer** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `2d5` | `120` | `110` | `6` | `Lucerne Hammer` (`#66`) |
-| `94` | **Broad Axe** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `2d6` | `160` | `100` | `5` | `Broad Axe` (`#73`) |
-| `95` | **Awl-Pike** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `1d8` | `160` | `80` | `4` | `Awl-Pike` (`#61`) |
+| `93` | **Lucerne Hammer** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `2d5` | `120` | `376` | `6` | `Lucerne Hammer` (`#66`) |
+| `94` | **Broad Axe** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `2d6` | `160` | `304` | `5` | `Broad Axe` (`#73`) |
+| `95` | **Awl-Pike** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `1d8` | `160` | `340` | `4` | `Awl-Pike` (`#61`) |
 | `96` | **Healing Potion** | `ICAT_POTION (10)` | `!` | White | `0` | `0d0` | `4` | `200` | `4` | `Potion of Healing` (`#242`, heals `200` HP + cures status) |
 | `97` | **Restoration Potion** | `ICAT_POTION (10)` | `!` | Yellow | `0` | `0d0` | `4` | `300` | `8` | Consolidated `Restore Stat` / `Restore Life Levels` (`#227..260`) |
 | `98` | **Resist Heat Potion** | `ICAT_POTION (10)` | `!` | L.Red | `0` | `0d0` | `4` | `30` | `1` | `Potion of Resist Heat` (`#261`) |
@@ -1118,19 +1118,19 @@ In VMS Moria 4.8 (`source/include/values.inc:755-1880`) and Umoria 5.7.15 (`src/
 | `58` | `62` | **Mace** | `TV_HAFTED (21)` | `130` | `120` | `6` | `2d4` | **Moria8 `#5` (`Mace`)**: `2d4`, `cost=45`, `wt=50`, `min_lvl=2` | **Implemented** |
 | `59` | `63` | **War Hammer** | `TV_HAFTED (21)` | `225` | `120` | `5` | `3d3` | **Moria8 `#72` (`War Hammer`)**: `3d3`, `cost=90`, `wt=120`, `min_lvl=5` | **Implemented** |
 | `60` | `64` | **Lead-Filled Mace** | `TV_HAFTED (21)` | `502` | `180` | `15` | `3d4` | Omitted | **Missing** |
-| `61` | `65` | **Awl-Pike** | `TV_POLEARM (22)` | `200` (`340` VMS) | `160` | `8` | `1d8` | **Moria8 `#95` (`Awl-Pike`)**: `1d8`, `cost=80`, `wt=160`, `min_lvl=4` | **Implemented** |
+| `61` | `65` | **Awl-Pike** | `TV_POLEARM (22)` | `200` (`340` VMS) | `160` | `8` | `1d8` | **Moria8 `#95` (`Awl-Pike`)**: `1d8`, `cost=340`, `wt=160`, `min_lvl=4` | **Implemented** |
 | `62` | `66` | **Beaked Axe** | `TV_POLEARM (22)` | `408` | `180` | `15` | `2d6` | Omitted | **Missing** |
 | `63` | `67` | **Fauchard** | `TV_POLEARM (22)` | `326` (`376` VMS) | `170` | `17` | `1d10` | Omitted | **Missing** |
 | `64` | `68` | **Glaive** | `TV_POLEARM (22)` | `363` | `190` | `20` | `2d6` | Omitted | **Missing** |
-| `65` | `69` | **Halberd** | `TV_POLEARM (22)` | `430` | `190` | `22` | `3d4` | **Moria8 `#76` (`Halberd`)**: `3d4`, `cost=150`, `wt=190`, `min_lvl=9` | **Implemented** |
-| `66` | `70` | **Lucerne Hammer** | `TV_POLEARM (22)` | `376` | `120` | `11` | `2d5` | **Moria8 `#93` (`Lucerne Hammer`)**: `2d5`, `cost=110`, `wt=120`, `min_lvl=6` | **Implemented** |
-| `67` | `71` | **Pike** | `TV_POLEARM (22)` | `358` | `160` | `15` | `2d5` | **Moria8 `#75` (`Pike`)**: `2d5`, `cost=100`, `wt=160`, `min_lvl=8` | **Implemented** |
+| `65` | `69` | **Halberd** | `TV_POLEARM (22)` | `430` | `190` | `22` | `3d4` | **Moria8 `#76` (`Halberd`)**: `3d4`, `cost=430`, `wt=190`, `min_lvl=9` | **Implemented** |
+| `66` | `70` | **Lucerne Hammer** | `TV_POLEARM (22)` | `376` | `120` | `11` | `2d5` | **Moria8 `#93` (`Lucerne Hammer`)**: `2d5`, `cost=376`, `wt=120`, `min_lvl=6` | **Implemented** |
+| `67` | `71` | **Pike** | `TV_POLEARM (22)` | `358` | `160` | `15` | `2d5` | **Moria8 `#75` (`Pike`)**: `2d5`, `cost=358`, `wt=160`, `min_lvl=8` | **Implemented** |
 | `68` | `72` | **Spear** | `TV_POLEARM (22)` | `36` | `50` | `5` | `1d6` | **Moria8 `#74` (`Spear`)**: `1d6`, `cost=36`, `wt=50`, `min_lvl=2` | **Implemented** |
 | `69` | `73` | **Lance** | `TV_POLEARM (22)` | `230` | `300` | `10` | `2d8` | Omitted | **Missing** |
 | `70` | `74` | **Javelin** | `TV_POLEARM (22)` | `18` | `30` | `4` | `1d4` | Omitted | **Missing** |
 | `71` | `53` | **Battle Axe (Balestarius)** | `TV_POLEARM` (`TV_HAFTED` VMS) | `500` | `180` | `30` | `2d8` | Consolidated into **Moria8 `#71` (`Battle Axe`)** (`3d4`) | **Approximation** |
 | `72` | `55` | **Battle Axe (European)** | `TV_POLEARM` (`TV_HAFTED` VMS) | `334` | `170` | `13` | `3d4` | **Moria8 `#71` (`Battle Axe`)**: `3d4`, `cost=120`, `wt=170`, `min_lvl=7` | **Implemented** |
-| `73` | `56` | **Broad Axe** | `TV_POLEARM` (`TV_HAFTED` VMS) | `304` | `160` | `17` | `2d6` | **Moria8 `#94` (`Broad Axe`)**: `2d6`, `cost=100`, `wt=160`, `min_lvl=5` | **Implemented** |
+| `73` | `56` | **Broad Axe** | `TV_POLEARM` (`TV_HAFTED` VMS) | `304` | `160` | `17` | `2d6` | **Moria8 `#94` (`Broad Axe`)**: `2d6`, `cost=304`, `wt=160`, `min_lvl=5` | **Implemented** |
 | `74` | `75` | **Short Bow** | `TV_BOW (20)` | `50` | `30` | `3` | `p1=2` (fires Arrows) | **Moria8 `#49` (`Short Bow`)**: `cost=50`, `wt=30`, `min_lvl=2`, `it_missile=1` | **Implemented** |
 | `75` | `76` | **Long Bow** | `TV_BOW (20)` | `120` | `40` | `10` | `p1=3` (fires Arrows) | **Moria8 `#137` (`Long Bow`)**: `cost=120`, `wt=40`, `min_lvl=4`, `it_missile=1` (fires Arrows), range `30`, damage `x3` (added 2026-10-26, M5d) | **Implemented** |
 | `76` | `77` | **Composite Bow** | `TV_BOW (20)` | `240` | `40` | `40` | `p1=4` (fires Arrows) | **Moria8 `#138` (`Composite Bow`)**: `cost=240`, `wt=40`, `min_lvl=10`, `it_missile=1` (fires Arrows), range `35`, damage `x4` (added 2026-10-26, M5d) | **Implemented** |
@@ -1189,7 +1189,7 @@ In VMS Moria 4.8 (`source/include/values.inc:755-1880`) and Umoria 5.7.15 (`src/
 | `129` | `130` | **Small Metal Shield** | `TV_SHIELD (34)` | `50` | `65` | `10` | `AC 3`, `1d2` | Consolidated into `Small Shield #9` | **Approximation** |
 | `130` | `131` | **Medium Metal Shield** | `TV_SHIELD (34)` | `125` | `90` | `20` | `AC 4`, `1d3` | Omitted | **Missing** |
 | `131` | `132` | **Large Metal Shield** | `TV_SHIELD (34)` | `200` | `120` | `30` | `AC 5`, `1d3` | Consolidated into `Large Shield #78` | **Approximation** |
-| `132` | `133` | **Ring of Strength / Gain Strength** | `TV_RING (45)` | `400` | `2` | `30` | `TR_STR`, `+p1` STR | **Moria8 `#24` (`Ring of Strength`)**: `cost=120`, `wt=2`, `min_lvl=5`, `+p1` STR | **Implemented** |
+| `132` | `133` | **Ring of Strength / Gain Strength** | `TV_RING (45)` | `400` | `2` | `30` | `TR_STR`, `+p1` STR | **Moria8 `#24` (`Ring of Strength`)**: `cost=400`, `wt=2`, `min_lvl=5`, `+p1` STR | **Implemented** |
 | `133` | `134` | **Ring of Dexterity / Gain Dexterity** | `TV_RING (45)` | `400` | `2` | `30` | `TR_DEX`, `+p1` DEX | Omitted | **Missing** |
 | `134` | `135` | **Ring of Constitution / Gain Constitution** | `TV_RING (45)` | `400` | `2` | `30` | `TR_CON`, `+p1` CON | Omitted | **Missing** |
 | `135` | `136` | **Ring of Intelligence / Gain Intelligence** | `TV_RING (45)` | `400` (`350` VMS) | `2` | `30` | `TR_INT`, `+p1` INT | Omitted | **Missing** |
@@ -1310,8 +1310,8 @@ In VMS Moria 4.8 (`source/include/values.inc:755-1880`) and Umoria 5.7.15 (`src/
 | `267` | `268` | **Potion of Infra-Vision** | `TV_POTION2 (76)` | `20` | `4` | `3` | `tim_infra += 100 + randint(100)` | **Moria8 `#31` (`Infravision Potion`)**: `cost=20`, `wt=4`, `min_lvl=2` | **Implemented** |
 | `268` | `269` | **Flask of Oil** | `TV_FLASK (77)` | `3` | `10` | `1` | `p1=7500` fuel, `2d6` thrown fire | **Moria8 `#61` (`Flask of Oil`)**: `cost=3`, `wt=10`, `min_lvl=0`, `2d6` thrown | **Implemented** |
 | `269` | `270` | **Wand of Light** | `TV_WAND (65)` | `200` | `10` | `2` | `1d10+6` charges, `light_line(dir)` | **Moria8 `#39` (`Wand of Light`)**: `cost=200`, `wt=10`, `min_lvl=3` | **Implemented** |
-| `270` | `271` | **Wand of Lightning Bolts** | `TV_WAND (65)` | `600` | `10` | `15` | `1d8+6` charges, `4d8` lightning bolt | **Moria8 `#40` (`Wand of Lightning`)**: `cost=200`, `wt=10`, `min_lvl=4` | **Implemented** |
-| `271` | `272` | **Wand of Frost Bolts** | `TV_WAND (65)` | `800` | `10` | `20` | `1d5+6` charges, `6d8` frost bolt | **Moria8 `#41` (`Wand of Frost`)**: `cost=250`, `wt=10`, `min_lvl=5` | **Implemented** |
+| `270` | `271` | **Wand of Lightning Bolts** | `TV_WAND (65)` | `600` | `10` | `15` | `1d8+6` charges, `4d8` lightning bolt | **Moria8 `#40` (`Wand of Lightning`)**: `cost=600`, `wt=10`, `min_lvl=4` | **Implemented** |
+| `271` | `272` | **Wand of Frost Bolts** | `TV_WAND (65)` | `800` | `10` | `20` | `1d5+6` charges, `6d8` frost bolt | **Moria8 `#41` (`Wand of Frost`)**: `cost=800`, `wt=10`, `min_lvl=5` | **Implemented** |
 | `272` | `273` | **Wand of Fire Bolts** | `TV_WAND (65)` | `1000` | `10` | `30` | `1d8+6` charges, `9d8` fire bolt | Omitted (`Wand of Fire Balls #117` is present) | **Missing** |
 | `273` | `274` | **Wand of Stone-to-Mud** | `TV_WAND (65)` | `300` | `10` | `12` | `1d4+3` charges, `wall_to_mud(dir)` | **Moria8 `#115` (`Wand of Stone-to-Mud`)**: `cost=300`, `wt=10`, `min_lvl=3` | **Implemented** |
 | `274` | `275` | **Wand of Polymorph** | `TV_WAND (65)` | `400` | `10` | `20` | `1d8+6` charges, `poly_monster(dir)` | Omitted as wand (implemented as Spell `#19`) | **Missing** |
@@ -1330,7 +1330,7 @@ In VMS Moria 4.8 (`source/include/values.inc:755-1880`) and Umoria 5.7.15 (`src/
 | `287` | `288` | **Wand of Lightning Balls** | `TV_WAND (65)` | `1200` | `10` | `35` | `1d8+4` charges, `32` lightning ball | Omitted | **Missing** |
 | `288` | `289` | **Wand of Cold Balls** | `TV_WAND (65)` | `1500` | `10` | `40` | `1d6+2` charges, `48` cold ball | **Moria8 `#118` (`Wand of Cold Balls`)**: `cost=1500`, `wt=10`, `min_lvl=10` | **Implemented** |
 | `289` | `290` | **Wand of Fire Balls** | `TV_WAND (65)` | `1800` | `10` | `50` | `1d4+2` charges, `72` fire ball | **Moria8 `#117` (`Wand of Fire Balls`)**: `cost=1800`, `wt=10`, `min_lvl=11` | **Implemented** |
-| `290` | `291` | **Wand of Stinking Cloud** | `TV_WAND (65)` | `400` | `10` | `5` | `1d8+6` charges, `12` poison ball | **Moria8 `#42` (`Wand of Stinking Cloud`)**: `cost=150`, `wt=10`, `min_lvl=4` | **Implemented** |
+| `290` | `291` | **Wand of Stinking Cloud** | `TV_WAND (65)` | `400` | `10` | `5` | `1d8+6` charges, `12` poison ball | **Moria8 `#42` (`Wand of Stinking Cloud`)**: `cost=400`, `wt=10`, `min_lvl=4` | **Implemented** |
 | `291` | `292` | **Wand of Acid Balls** | `TV_WAND (65)` | `1650` | `10` | `48` | `1d5+2` charges, `60` acid ball | Omitted | **Missing** |
 | `292` | `293` | **Wand of Wonder** | `TV_WAND (65)` | `250` | `10` | `2` | `1d12+12` charges, random wand effect | Omitted | **Missing** |
 | `293` | `294` | **Staff of Light** | `TV_STAFF (55)` | `250` | `50` | `5` | `1d20+12` charges, `light_area()` | **Moria8 `#43` (`Staff of Light`)**: `cost=250`, `wt=50`, `min_lvl=3` | **Implemented** |
