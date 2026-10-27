@@ -33,10 +33,8 @@ ui_recall_display:
     lda #URCL_TITLE_COL
     sta zp_cursor_col
     lda #<rcl_s_title
-    sta zp_ptr0
-    lda #>rcl_s_title
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>rcl_s_title
+    jsr screen_put_string_ay
 
     // --- Creature char + name (row 2) ---
     lda #2
@@ -57,10 +55,8 @@ ui_recall_display:
     lda #$20
     jsr hal_screen_put_char
     lda #<creature_name_buf
-    sta zp_ptr0
-    lda #>creature_name_buf
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>creature_name_buf
+    jsr screen_put_string_ay
 
     // --- LV / AC / HP (row 4) ---
     lda #4
@@ -221,10 +217,8 @@ ui_recall_display:
     lda #URCL_FOOTER_COL
     sta zp_cursor_col
     lda #<press_key_str
-    sta zp_ptr0
-    lda #>press_key_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>press_key_str
+    jsr screen_put_string_ay
 
     rts
 

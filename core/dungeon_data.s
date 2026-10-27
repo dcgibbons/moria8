@@ -96,6 +96,22 @@ map_row_lo:
 map_row_hi:
     .fill MAP_ROWS, >(MAP_BASE + i * MAP_COLS)
 
+// map_row_ptr0_x / map_row_ptr0_y — zp_ptr0 = the start of map row X (or
+// Y), for code off the hot paths; A and the flags are left as the inline
+// loads leave them (A = the high byte). 7 bytes saved a call.
+map_row_ptr0_x:
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    rts
+map_row_ptr0_y:
+    lda map_row_lo,y
+    sta zp_ptr0
+    lda map_row_hi,y
+    sta zp_ptr0_hi
+    rts
+
 // ============================================================
 // Map accessor (single-tile API boundary)
 // ============================================================

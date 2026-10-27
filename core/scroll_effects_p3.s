@@ -419,10 +419,7 @@ irs_p3_object_detect:
     cmp #MAP_ROWS
     bcs !irs_od_next+
     tay
-    lda map_row_lo,y
-    sta zp_ptr0
-    lda map_row_hi,y
-    sta zp_ptr0_hi
+    jsr map_row_ptr0_y
     lda fi_x,x
     cmp #MAP_COLS
     bcs !irs_od_next+

@@ -93,6 +93,13 @@ msg_init:
 !done:
     rts
 
+// screen_put_string_ay — hal_screen_put_string with A/Y = pointer (lo/hi):
+// call sites load two registers instead of zp_ptr0 (4 bytes saved a call)
+screen_put_string_ay:
+    sta zp_ptr0
+    sty zp_ptr0_hi
+    jmp hal_screen_put_string
+
 // msg_print — Display a message on the message area (rows 0-1)
 // Input: zp_ptr0/zp_ptr0_hi = pointer to null-terminated screen code string
 // State machine:
@@ -100,6 +107,11 @@ msg_init:
 //   flags = $01: Row 0 used → print on row 1
 //   flags = $03: Both rows full → show -MORE-, clear, print on row 0
 // Preserves: nothing
+// msg_print_ay — The same with A/Y = pointer (lo/hi): call sites load two
+// registers instead of zp_ptr0 (4 bytes saved a call)
+msg_print_ay:
+    sta zp_ptr0
+    sty zp_ptr0_hi
 msg_print:
 #if C128_TEST_TOWN_SELF_DUMP
     lda #$20
@@ -273,10 +285,8 @@ msg_show_more:
     sta zp_text_color
 
     lda #<more_str
-    sta zp_ptr0
-    lda #>more_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>more_str
+    jsr screen_put_string_ay
 
     pla
     sta zp_text_color

@@ -104,10 +104,8 @@ create_select_race:
     lda #11
     sta zp_cursor_col
     lda #<create_race_title
-    sta zp_ptr0
-    lda #>create_race_title
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>create_race_title
+    jsr screen_put_string_ay
 
     // List races with letter keys a-h
     ldx #0                  // Race index
@@ -163,10 +161,8 @@ create_select_race:
     lda #3
     sta zp_cursor_col
     lda #<create_choose_str
-    sta zp_ptr0
-    lda #>create_choose_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>create_choose_str
+    jsr screen_put_string_ay
     // Append final letter and closing paren
     lda #RACE_COUNT         // 8 options → last letter = 'H'
     jsr put_choose_suffix
@@ -196,10 +192,8 @@ create_select_class:
     lda #10
     sta zp_cursor_col
     lda #<create_class_title
-    sta zp_ptr0
-    lda #>create_class_title
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>create_class_title
+    jsr screen_put_string_ay
 
     // Get race class restriction bitmask
     ldx player_data + PL_RACE
@@ -280,10 +274,8 @@ create_select_class:
     lda #3
     sta zp_cursor_col
     lda #<create_choose_str
-    sta zp_ptr0
-    lda #>create_choose_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>create_choose_str
+    jsr screen_put_string_ay
     lda zp_temp4            // Number of valid classes
     jsr put_choose_suffix
 
@@ -320,10 +312,8 @@ create_roll_stats:
     lda #12
     sta zp_cursor_col
     lda #<create_stats_title
-    sta zp_ptr0
-    lda #>create_stats_title
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>create_stats_title
+    jsr screen_put_string_ay
 
     // Roll stats using umoria algorithm:
     // Per stat: d3 + d4 + d5 + 5 (range 8-17)
@@ -471,10 +461,8 @@ create_roll_stats:
     lda #3
     sta zp_cursor_col
     lda #<create_reroll_str
-    sta zp_ptr0
-    lda #>create_reroll_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>create_reroll_str
+    jsr screen_put_string_ay
 
 !stat_key:
     jsr hal_input_get_key
@@ -529,10 +517,8 @@ create_enter_name:
     lda #10
     sta zp_cursor_col
     lda #<create_name_title
-    sta zp_ptr0
-    lda #>create_name_title
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>create_name_title
+    jsr screen_put_string_ay
 
     lda #COL_LGREY
     sta zp_text_color
@@ -541,10 +527,8 @@ create_enter_name:
     lda #3
     sta zp_cursor_col
     lda #<create_name_prompt
-    sta zp_ptr0
-    lda #>create_name_prompt
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>create_name_prompt
+    jsr screen_put_string_ay
 
     // Input cursor on row 4
     lda #4
@@ -878,10 +862,8 @@ create_select_gender:
     lda #10
     sta zp_cursor_col
     lda #<create_gender_title
-    sta zp_ptr0
-    lda #>create_gender_title
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>create_gender_title
+    jsr screen_put_string_ay
 
     // Option A) Male
     lda #COL_LGREY
@@ -891,10 +873,8 @@ create_select_gender:
     lda #3
     sta zp_cursor_col
     lda #<create_gender_m
-    sta zp_ptr0
-    lda #>create_gender_m
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>create_gender_m
+    jsr screen_put_string_ay
 
     // Option B) Female
     lda #3
@@ -902,10 +882,8 @@ create_select_gender:
     lda #3
     sta zp_cursor_col
     lda #<create_gender_f
-    sta zp_ptr0
-    lda #>create_gender_f
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>create_gender_f
+    jsr screen_put_string_ay
 
 !gender_key:
     jsr hal_input_get_key

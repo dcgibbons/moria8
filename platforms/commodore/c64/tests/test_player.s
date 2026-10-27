@@ -23,6 +23,13 @@
 #import "../../../../core/dungeon_data.s"
 #import "../../../../core/player.s"
 
+// As core/ui_messages.s (not imported here): hal_screen_put_string with A/Y
+// = pointer
+screen_put_string_ay:
+    sta zp_ptr0
+    sty zp_ptr0_hi
+    jmp hal_screen_put_string
+
 // Stubs for item data arrays referenced by player_calc_combat.
 // Only need enough entries to cover equipment slot indices (22-29).
 inv_item_id: .fill TOTAL_INV_SLOTS, FI_EMPTY

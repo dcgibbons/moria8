@@ -211,10 +211,7 @@ da_sweep_tiles:
     jmp !dst_row_next+
 !dst_row_in:
     ldx da_cur_y
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
+    jsr map_row_ptr0_x
     lda zp_player_x
     sec
     sbc #15
@@ -404,10 +401,8 @@ da_darken_rooms:
 // ------------------------------------------------------------
 da_msg_blind:
     lda #<da_blast_msg
-    sta zp_ptr0
-    lda #>da_blast_msg
-    sta zp_ptr0_hi
-    jsr msg_print
+    ldy #>da_blast_msg
+    jsr msg_print_ay
     lda #10
     jsr rng_range
     clc

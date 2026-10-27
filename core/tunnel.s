@@ -117,10 +117,7 @@ player_tunnel_resolved_target:
 
     // Re-setup map pointer (monster_find_at clobbers zp_ptr0)
     ldx df_target_y
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
+    jsr map_row_ptr0_x
 
     // Boundary check: edge tiles are permanent rock
     lda df_target_x

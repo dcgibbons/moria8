@@ -1336,10 +1336,8 @@ combat_print_winner_message:
     jsr hal_msg_print_indirect_aux
 #else
     lda #<cmb_winner_str
-    sta zp_ptr0
-    lda #>cmb_winner_str
-    sta zp_ptr0_hi
-    jsr msg_print
+    ldy #>cmb_winner_str
+    jsr msg_print_ay
 #endif
 !done:
     rts
@@ -1355,10 +1353,8 @@ cmb_term_and_print:
 // Clobbers: A
 cmb_print_buf:
     lda #<combat_msg_buf
-    sta zp_ptr0
-    lda #>combat_msg_buf
-    sta zp_ptr0_hi
-    jmp msg_print
+    ldy #>combat_msg_buf
+    jmp msg_print_ay
 
 #if !CMB_WINNER_STR_EXTERNAL
 cmb_winner_str:

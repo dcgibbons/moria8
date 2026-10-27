@@ -47,10 +47,7 @@ chest_run_pending_summons:
     // Walkable tile (floor or open door)?
     tya
     tax                         // X = candidate y (row-table index)
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
+    jsr map_row_ptr0_x
     ldy ms_spawn_x
     :MapRead_ptr0_y()
     and #TILE_TYPE_MASK

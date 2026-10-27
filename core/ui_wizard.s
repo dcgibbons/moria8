@@ -16,10 +16,8 @@ ui_wizard_display:
     and #GAME_FLAG_WIZARD
     bne !wiz_menu+
     lda #<wiz_confirm_str
-    sta zp_ptr0
-    lda #>wiz_confirm_str
-    sta zp_ptr0_hi
-    jsr msg_print
+    ldy #>wiz_confirm_str
+    jsr msg_print_ay
     jsr input_prepare_followup_key
     jsr hal_input_get_key
     cmp #$59                    // Y
@@ -32,10 +30,8 @@ ui_wizard_display:
     ora #GAME_FLAG_WIZARD
     sta zp_game_flags
     lda #<wiz_enabled_str
-    sta zp_ptr0
-    lda #>wiz_enabled_str
-    sta zp_ptr0_hi
-    jsr msg_print
+    ldy #>wiz_enabled_str
+    jsr msg_print_ay
     rts
 !wiz_menu:
     jsr ui_wizard_draw_menu
@@ -95,10 +91,8 @@ ui_wizard_draw_menu:
     lda #UWIZ_TITLE_COL
     sta zp_cursor_col
     lda #<wiz_title_str
-    sta zp_ptr0
-    lda #>wiz_title_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>wiz_title_str
+    jsr screen_put_string_ay
 
     lda #COL_LGREY
     sta zp_text_color
@@ -108,50 +102,40 @@ ui_wizard_draw_menu:
     lda #UWIZ_MENU_COL
     sta zp_cursor_col
     lda #<wiz_row1_str
-    sta zp_ptr0
-    lda #>wiz_row1_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>wiz_row1_str
+    jsr screen_put_string_ay
 
     lda #3
     sta zp_cursor_row
     lda #UWIZ_MENU_COL
     sta zp_cursor_col
     lda #<wiz_row2_str
-    sta zp_ptr0
-    lda #>wiz_row2_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>wiz_row2_str
+    jsr screen_put_string_ay
 
     lda #4
     sta zp_cursor_row
     lda #UWIZ_MENU_COL
     sta zp_cursor_col
     lda #<wiz_row3_str
-    sta zp_ptr0
-    lda #>wiz_row3_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>wiz_row3_str
+    jsr screen_put_string_ay
 
     lda #5
     sta zp_cursor_row
     lda #4
     sta zp_cursor_col
     lda #<wiz_row4_str
-    sta zp_ptr0
-    lda #>wiz_row4_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>wiz_row4_str
+    jsr screen_put_string_ay
 
     lda #18
     sta zp_cursor_row
     lda #UWIZ_FOOTER_COL
     sta zp_cursor_col
     lda #<wiz_footer_str
-    sta zp_ptr0
-    lda #>wiz_footer_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>wiz_footer_str
+    jsr screen_put_string_ay
     rts
 #else
     lda #0
@@ -159,10 +143,8 @@ ui_wizard_draw_menu:
     lda #UWIZ_TITLE_COL
     sta zp_cursor_col
     lda #<wiz_title_str
-    sta zp_ptr0
-    lda #>wiz_title_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>wiz_title_str
+    jsr screen_put_string_ay
 
     lda #COL_LGREY
     sta zp_text_color
@@ -172,90 +154,72 @@ ui_wizard_draw_menu:
     lda #UWIZ_MENU_COL
     sta zp_cursor_col
     lda #<wiz_l_str
-    sta zp_ptr0
-    lda #>wiz_l_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>wiz_l_str
+    jsr screen_put_string_ay
 
     lda #3
     sta zp_cursor_row
     lda #UWIZ_MENU_COL
     sta zp_cursor_col
     lda #<wiz_a_str
-    sta zp_ptr0
-    lda #>wiz_a_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>wiz_a_str
+    jsr screen_put_string_ay
 
     lda #4
     sta zp_cursor_row
     lda #UWIZ_MENU_COL
     sta zp_cursor_col
     lda #<wiz_h_str
-    sta zp_ptr0
-    lda #>wiz_h_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>wiz_h_str
+    jsr screen_put_string_ay
 
     lda #5
     sta zp_cursor_row
     lda #UWIZ_MENU_COL
     sta zp_cursor_col
     lda #<wiz_i_str
-    sta zp_ptr0
-    lda #>wiz_i_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>wiz_i_str
+    jsr screen_put_string_ay
 
     lda #6
     sta zp_cursor_row
     lda #UWIZ_MENU_COL
     sta zp_cursor_col
     lda #<wiz_x_str
-    sta zp_ptr0
-    lda #>wiz_x_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>wiz_x_str
+    jsr screen_put_string_ay
 
     lda #7
     sta zp_cursor_row
     lda #UWIZ_MENU_COL
     sta zp_cursor_col
     lda #<wiz_g_str
-    sta zp_ptr0
-    lda #>wiz_g_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>wiz_g_str
+    jsr screen_put_string_ay
 
     lda #8
     sta zp_cursor_row
     lda #UWIZ_MENU_COL
     sta zp_cursor_col
     lda #<wiz_s_str
-    sta zp_ptr0
-    lda #>wiz_s_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>wiz_s_str
+    jsr screen_put_string_ay
 
     lda #9
     sta zp_cursor_row
     lda #UWIZ_MENU_COL
     sta zp_cursor_col
     lda #<wiz_t_str
-    sta zp_ptr0
-    lda #>wiz_t_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>wiz_t_str
+    jsr screen_put_string_ay
 
     lda #10
     sta zp_cursor_row
     lda #UWIZ_MENU_COL
     sta zp_cursor_col
     lda #<wiz_w_str
-    sta zp_ptr0
-    lda #>wiz_w_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>wiz_w_str
+    jsr screen_put_string_ay
 
     lda #COL_WHITE
     sta zp_text_color
@@ -264,10 +228,8 @@ ui_wizard_draw_menu:
     lda #UWIZ_FOOTER_COL
     sta zp_cursor_col
     lda #<wiz_footer_str
-    sta zp_ptr0
-    lda #>wiz_footer_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>wiz_footer_str
+    jsr screen_put_string_ay
     rts
 #endif
 

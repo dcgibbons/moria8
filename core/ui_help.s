@@ -99,10 +99,8 @@ ui_help_display:
     lda #HELP_TITLE_COL
     sta zp_cursor_col
     lda #<uh_title_str
-    sta zp_ptr0
-    lda #>uh_title_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>uh_title_str
+    jsr screen_put_string_ay
 
     // 4. Draw the bottom border: +---...---+
     lda #(SCREEN_ROWS - 1)

@@ -809,6 +809,14 @@ item_name_test_id: .byte 0
 tc_results: .fill 11, $ff
 tc_results_end:
 
+
+// As core/ui_messages.s (not imported here): hal_screen_put_string with A/Y
+// = pointer
+screen_put_string_ay:
+    sta zp_ptr0
+    sty zp_ptr0_hi
+    jmp hal_screen_put_string
+
 item_desc_test_body_end:
 .assert "Item desc result count", tc_results_end - tc_results, 11
 .assert "Item desc test stays below MAP_BASE", item_desc_test_body_end <= MAP_BASE, true

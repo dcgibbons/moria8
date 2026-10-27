@@ -24,6 +24,12 @@
 
 map_row_lo: .fill 1, 0
 map_row_hi: .fill 1, 0
+map_row_ptr0_x:                     // as core/dungeon_data.s
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    rts
 
 hal_screen_put_string:
 screen_put_decimal:
@@ -94,3 +100,10 @@ test_pass:
 
 test_fail:
     jmp test_fail
+
+// As core/ui_messages.s (not imported here): hal_screen_put_string with A/Y
+// = pointer
+screen_put_string_ay:
+    sta zp_ptr0
+    sty zp_ptr0_hi
+    jmp hal_screen_put_string

@@ -22,10 +22,8 @@ eff_earthquake:
     jsr c64u_turbo_fast
 #endif
     lda #<eq_cast_msg
-    sta zp_ptr0
-    lda #>eq_cast_msg
-    sta zp_ptr0_hi
-    jsr msg_print
+    ldy #>eq_cast_msg
+    jsr msg_print_ay
 
     lda #0
     sta eq_changed
@@ -111,10 +109,7 @@ eq_process_tile:
     sta eq_mon_alive
 !eq_no_monster:
     ldx eq_cur_y
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
+    jsr map_row_ptr0_x
     ldy eq_cur_x
     :MapRead_ptr0_y()
     sta eq_saved_tile

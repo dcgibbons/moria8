@@ -89,7 +89,7 @@ recall_view_body:
     sta zp_ptr0
     lda #>recall_prompt_str
     sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    jsr hal_screen_put_string           // literal call: the C128 prompt guard checks it
     jsr input_prepare_followup_key
     jsr hal_input_get_key
     jsr recall_key_to_screen_code

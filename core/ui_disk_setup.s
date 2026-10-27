@@ -163,10 +163,8 @@ uds_show_insert_prompt:
     lda #UDS_IND_COL
     sta zp_cursor_col
     lda #<uds_drive_prefix_str
-    sta zp_ptr0
-    lda #>uds_drive_prefix_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>uds_drive_prefix_str
+    jsr screen_put_string_ay
     lda save_device
     jsr screen_put_decimal_rj2
     lda #$2e                    // '.'
@@ -423,19 +421,15 @@ uds_show_c128_status_error:
     lda #UDS_LINE_COL
     sta zp_cursor_col
     lda #<uds_disk_code_str
-    sta zp_ptr0
-    lda #>uds_disk_code_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>uds_disk_code_str
+    jsr screen_put_string_ay
     lda hal_storage_diag_dos0
     jsr hal_screen_put_char
     lda hal_storage_diag_dos1
     jsr hal_screen_put_char
     lda #<uds_phase_str
-    sta zp_ptr0
-    lda #>uds_phase_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>uds_phase_str
+    jsr screen_put_string_ay
     lda hal_storage_diag_phase
     jsr screen_put_hex
     lda #$2e
@@ -450,19 +444,15 @@ uds_show_plus4_disk_error:
     lda #UDS_LINE_COL
     sta zp_cursor_col
     lda #<uds_disk_error_str
-    sta zp_ptr0
-    lda #>uds_disk_error_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>uds_disk_error_str
+    jsr screen_put_string_ay
     lda hal_storage_diag_dos0
     jsr hal_screen_put_char
     lda hal_storage_diag_dos1
     jsr hal_screen_put_char
     lda #<uds_on_drive_str
-    sta zp_ptr0
-    lda #>uds_on_drive_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>uds_on_drive_str
+    jsr screen_put_string_ay
     lda hal_storage_diag_device
     jsr screen_put_decimal_rj2
     lda #$2e
@@ -478,17 +468,13 @@ uds_show_plus4_status_error:
     lda #UDS_LINE_COL
     sta zp_cursor_col
     lda #<uds_disk_status_str
-    sta zp_ptr0
-    lda #>uds_disk_status_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>uds_disk_status_str
+    jsr screen_put_string_ay
     lda hal_storage_diag_readst
     jsr screen_put_hex
     lda #<uds_phase_str
-    sta zp_ptr0
-    lda #>uds_phase_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>uds_phase_str
+    jsr screen_put_string_ay
     lda hal_storage_diag_phase
     jsr screen_put_hex
     lda #$2e
@@ -504,10 +490,8 @@ uds_draw_drive_summary:
     lda #UDS_LINE_COL
     sta zp_cursor_col
     lda #<uds_program_drive_str
-    sta zp_ptr0
-    lda #>uds_program_drive_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>uds_program_drive_str
+    jsr screen_put_string_ay
     lda program_device
     jsr screen_put_decimal_rj2
     lda #3
@@ -515,10 +499,8 @@ uds_draw_drive_summary:
     lda #UDS_LINE_COL
     sta zp_cursor_col
     lda #<uds_save_drive_str
-    sta zp_ptr0
-    lda #>uds_save_drive_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>uds_save_drive_str
+    jsr screen_put_string_ay
     lda save_device
     jsr screen_put_decimal_rj2
     lda #$20

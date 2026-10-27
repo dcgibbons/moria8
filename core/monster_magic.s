@@ -373,10 +373,7 @@ monster_cast_summon:
 
     // Check if tile is walkable and unoccupied
     ldx ms_spawn_y
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
+    jsr map_row_ptr0_x
     ldy ms_spawn_x
     :MapRead_ptr0_y()
     sta zp_mon_scratch2       // Save tile byte

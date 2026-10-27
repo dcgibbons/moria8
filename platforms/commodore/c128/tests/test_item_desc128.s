@@ -565,3 +565,10 @@ assert_idx: .byte 0
 assert_expected: .byte 0
 item_name_test_id: .byte 0
 inv_qty: .fill TOTAL_INV_SLOTS, 0
+
+// As core/ui_messages.s (not imported here): hal_screen_put_string with A/Y
+// = pointer
+screen_put_string_ay:
+    sta zp_ptr0
+    sty zp_ptr0_hi
+    jmp hal_screen_put_string

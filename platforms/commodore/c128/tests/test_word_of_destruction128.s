@@ -200,6 +200,9 @@ los_is_visible:
     clc
     rts
 
+msg_print_ay:                       // as core/ui_messages.s: A/Y = pointer
+    sta zp_ptr0
+    sty zp_ptr0_hi
 msg_print:
     inc test_msg_calls
     rts

@@ -47,10 +47,7 @@ eff_reveal_floorplan:
 #endif
     ldx #0
 !erf_row:
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
+    jsr map_row_ptr0_x
     ldy #0
 !erf_col:
     :MapRead_ptr0_y()

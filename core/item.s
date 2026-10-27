@@ -248,10 +248,7 @@ floor_item_add:
     // Set FLAG_HAS_ITEM on map tile at (x, y)
     stx zp_temp4                // Save slot index
     ldy fi_add_y
-    lda map_row_lo,y
-    sta zp_ptr0
-    lda map_row_hi,y
-    sta zp_ptr0_hi
+    jsr map_row_ptr0_y
     ldy fi_add_x
     :MapRead_ptr0_y()
     ora #FLAG_HAS_ITEM
@@ -320,10 +317,7 @@ floor_item_remove:
 !fir_clear_flag:
     // Clear FLAG_HAS_ITEM on map tile
     ldy fi_add_y
-    lda map_row_lo,y
-    sta zp_ptr0
-    lda map_row_hi,y
-    sta zp_ptr0_hi
+    jsr map_row_ptr0_y
     ldy fi_add_x
     :MapRead_ptr0_y()
     and #~FLAG_HAS_ITEM & $ff
@@ -796,10 +790,7 @@ item_spawn_level:
 
     // Verify it's a floor tile
     ldy fi_add_y
-    lda map_row_lo,y
-    sta zp_ptr0
-    lda map_row_hi,y
-    sta zp_ptr0_hi
+    jsr map_row_ptr0_y
     ldy fi_add_x
     :MapRead_ptr0_y()
     and #$f0                    // TILE_TYPE_MASK

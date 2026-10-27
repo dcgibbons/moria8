@@ -375,10 +375,7 @@ mpo_count_neighbours:
     stx zp_mon_scratch1         // row
 !mcn_row:
     ldx zp_mon_scratch1
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
+    jsr map_row_ptr0_x
     ldy zp_mon_x
     dey
     lda #3
@@ -963,10 +960,7 @@ monster_try_step:
 
     // Read map tile at target
     ldx mat_target_y
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
+    jsr map_row_ptr0_x
     ldy mat_target_x
     :MapRead_ptr0_y()
     sta zp_mon_scratch1         // Save full tile byte
@@ -1027,10 +1021,7 @@ monster_try_step:
     sta zp_mon_y
     // Clear FLAG_OCCUPIED on old tile
     ldx mat_old_y
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
+    jsr map_row_ptr0_x
     ldy mat_old_x
     :MapRead_ptr0_y()
     and #~FLAG_OCCUPIED & $ff
@@ -1038,10 +1029,7 @@ monster_try_step:
 
     // Set FLAG_OCCUPIED on new tile
     ldx mat_target_y
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
+    jsr map_row_ptr0_x
     ldy mat_target_x
     :MapRead_ptr0_y()
     ora #FLAG_OCCUPIED

@@ -43,6 +43,7 @@ reu_render_progress: rts
 c128_prepare_cache_loading_screen: rts
 reu_load_all_tiers: rts
 reu_stash_overlays: rts
+msg_print_ay:                       // as core/ui_messages.s (a stub here)
 msg_print: rts
 overlay_invalidate: rts
 reu_fetch_tier: rts

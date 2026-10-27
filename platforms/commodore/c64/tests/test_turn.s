@@ -74,6 +74,12 @@ vis_room_revealed:   .byte 0
 test_map_row:        .fill 80, FLAG_OCCUPIED
 map_row_lo:          .fill 48, <test_map_row
 map_row_hi:          .fill 48, >test_map_row
+map_row_ptr0_x:                     // as core/dungeon_data.s
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    rts
 
 tc_results: .fill 33, $ff
 
@@ -228,6 +234,9 @@ huff_print_msg:
     stx test_last_huff_id
     rts
 
+msg_print_ay:                       // as core/ui_messages.s: A/Y = pointer
+    sta zp_ptr0
+    sty zp_ptr0_hi
 msg_print:
     inc test_msg_calls
     lda zp_ptr0

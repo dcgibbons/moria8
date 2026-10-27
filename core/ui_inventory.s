@@ -53,10 +53,8 @@ ui_inv_display_common:
     lda #UINV_TITLE_COL
     sta zp_cursor_col
     lda #<uinv_title_str
-    sta zp_ptr0
-    lda #>uinv_title_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>uinv_title_str
+    jsr screen_put_string_ay
 
     // Separator
     lda #1
@@ -64,10 +62,8 @@ ui_inv_display_common:
     lda #UINV_TITLE_COL
     sta zp_cursor_col
     lda #<uinv_sep_str
-    sta zp_ptr0
-    lda #>uinv_sep_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>uinv_sep_str
+    jsr screen_put_string_ay
 
     lda #COL_LGREY
     sta zp_text_color
@@ -130,10 +126,8 @@ ui_inv_display_common:
     lda #1
     sta zp_cursor_col
     lda #<uinv_nothing_str
-    sta zp_ptr0
-    lda #>uinv_nothing_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>uinv_nothing_str
+    jsr screen_put_string_ay
 
 !uinv_footer:
     lda #COL_WHITE

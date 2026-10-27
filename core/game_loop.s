@@ -25,10 +25,8 @@
 #else
 .macro MsgPrintStr(str) {
     lda #<str
-    sta zp_ptr0
-    lda #>str
-    sta zp_ptr0_hi
-    jsr msg_print
+    ldy #>str
+    jsr msg_print_ay
 }
 #endif
 
@@ -294,10 +292,7 @@ c64_test_force_spell_target_monster:
 
 !ctstm_clear_tile:
     ldx c64_test_spell_target_y
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
+    jsr map_row_ptr0_x
     ldy c64_test_spell_target_x
     lda #TILE_FLOOR
     :MapWrite_ptr0_y()
@@ -364,10 +359,7 @@ c64_test_force_detect_evil_monster:
     adc c64_test_detect_offset
     sta c64_test_detect_col
     ldy c64_test_detect_row
-    lda map_row_lo,y
-    sta zp_ptr0
-    lda map_row_hi,y
-    sta zp_ptr0_hi
+    jsr map_row_ptr0_y
     ldy c64_test_detect_col
     :MapRead_ptr0_y()
     and #TILE_TYPE_MASK
@@ -782,19 +774,15 @@ disk_prompt_game_required_error:
     lda #DPGR_PROMPT_COL
     sta zp_cursor_col
     lda #<ds_game_str
-    sta zp_ptr0
-    lda #>ds_game_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>ds_game_str
+    jsr screen_put_string_ay
     lda #DPGR_PROMPT_KEY_ROW + 1
     sta zp_cursor_row
     lda #DPGR_PRESS_ANY_KEY_COL
     sta zp_cursor_col
     lda #<press_key_str
-    sta zp_ptr0
-    lda #>press_key_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    ldy #>press_key_str
+    jsr screen_put_string_ay
 disk_prompt_game_required_error_shown:
     jsr input_get_modal_dismiss_key
 #if PLATFORM_REQUIRES_MEDIA_PROBE
@@ -2582,10 +2570,8 @@ player_died:
     // Show "YOU HAVE BEEN SLAIN." with -more- BEFORE disk I/O
     // so the player isn't staring at a frozen screen during file ops
     lda #<slain_str
-    sta zp_ptr0
-    lda #>slain_str
-    sta zp_ptr0_hi
-    jsr msg_print
+    ldy #>slain_str
+    jsr msg_print_ay
     jsr msg_show_more
     jsr hal_input_get_key
 
@@ -2656,10 +2642,8 @@ game_over_save_and_show:
 
 winner_print_save_blocked:
     lda #<winner_save_blocked_str
-    sta zp_ptr0
-    lda #>winner_save_blocked_str
-    sta zp_ptr0_hi
-    jmp msg_print
+    ldy #>winner_save_blocked_str
+    jmp msg_print_ay
 
 #import "ui_restore.s"
 #import "game_loop_helpers.s"
@@ -2746,10 +2730,7 @@ c128_test_force_dungeon_melee:
 
 !ctfdm_clear_tile:
     ldx c128_test_force_melee_y
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
+    jsr map_row_ptr0_x
     ldy c128_test_force_melee_x
     :MapRead_ptr0_y()
     and #TILE_FLAG_MASK & (~FLAG_OCCUPIED & $ff)

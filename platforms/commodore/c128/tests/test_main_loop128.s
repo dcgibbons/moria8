@@ -505,6 +505,9 @@ screen_unblank:
 status_draw:
     jmp test_status_draw
 
+msg_print_ay:                       // as core/ui_messages.s: A/Y = pointer
+    sta zp_ptr0
+    sty zp_ptr0_hi
 msg_print:
     rts
 
@@ -2476,3 +2479,10 @@ test_fail:
 
 test_pass:
     brk
+
+// As core/ui_messages.s (not imported here): hal_screen_put_string with A/Y
+// = pointer
+screen_put_string_ay:
+    sta zp_ptr0
+    sty zp_ptr0_hi
+    jmp hal_screen_put_string
