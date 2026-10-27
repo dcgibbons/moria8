@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 
 from . import knowledge
 from .magic import BLIND, BOOK_LEVELS, book_of, store_name, CHANT, CREATE_FOOD, ORB, PORTAL, SANCTUARY, FIRST_BOOK, PRAYER_BOOKS, CURE_LIGHT, CURE_MEDIUM, DETECT_DOORS, HEALS, REMOVE_FEAR, Magic
+from .magic import MAGIC_MISSILE, PHASE_DOOR
 from .game import ITEM_PROMPT, KEY_RUNSTOP, KEY_SPACE, Game, Mode, Observation
 from .goals import CLASSES, RACE_KEYS, Goal
 from .view import (DIRS, TYPE_DOOR_CLOSED, TYPE_STAIRS_DN, TYPE_STAIRS_UP, TYPE_TRAP, UNKNOWN, WALKABLE_TYPES,
@@ -31,13 +32,14 @@ KEY_LOOK = ord("X")      # look along a direction; takes no game turn
 KEY_WEAR = ord("W")
 KEY_REFUEL = 0xD2        # SHIFT+R
 KEY_THROW = 0xD4         # SHIFT+T
+KEY_FIRE = 0xC6          # SHIFT+F: the wielded launcher at the first matching ammunition
 KEY_DISARM = 0xC4        # SHIFT+D
 KEY_PICKUP = ord("G")
 KEY_DROP = ord("D")
 # What the bot uses (the pack list names a stack without a plural): the rest
 # is junk once the pack fills (worn-out gear, burnt-out torches).
 KEEP_PREFIXES = ("Ration", "Slime Mold", "Flask of Oil", "Wooden Torch", "Brass Lantern", "Potion of Cure",
-                 "Scroll of Word of Rec", "Scroll of Phase Door", "Holy Book")
+                 "Scroll of Word of Rec", "Scroll of Phase Door", "Holy Book", "Spellbook")
 DROP_RETRY = 500         # steps before looking for junk again after finding none
 KEY_RETURN = 0x0D
 LOOK_RESULT = re.compile(r"You see an? (.+?)\.")
@@ -103,6 +105,14 @@ GEAR_TRIP_WAIT = 5000    # steps after a town visit before gold alone is reason 
 STARTING_FOOD = 5        # rations in the starting kit (VMS player_init, Umoria class_base_provisions;
 STARTING_TORCHES = 4     # ... 1 each until the 2026-10-25 kit fix), and torches beyond the lit one
 STARTING_WEAPON = ("Dagger", 0)               # core/game_loop.s starting equipment: (name, to-dam)
+# Launchers (core/ranged_fire.s, MON-018): ammunition, damage multiplier and
+# range; the ammunition's dice average (core/item_tables.s: 1d5, 1d4, 1d2).
+LAUNCHERS = {"Light Crossbow": ("Bolt", 3, 25), "Short Bow": ("Arrow", 2, 25), "Sling": ("Rock", 2, 20)}
+AMMO_AVERAGE = {"Bolt": 3.0, "Arrow": 2.5, "Rock": 1.5}
+MISSILE_CLASSES = ("rogue", "ranger")   # the best missile skills (core/tables.s: 66, 72)
+AMMO_RESERVE = 20        # shots carried
+FIRE_RANGE = 8           # farthest in-line creature fired at
+LAUNCHER_KEEP = 20       # gold kept back from the first launcher (later ones: the gear reserve)
 STARTING_ARMOUR = {"ICAT_ARMOR": 4}           # Leather Armor [4,+0]; AC worn per armour slot
 ARMOUR_SLOTS = ("ICAT_ARMOR", "ICAT_SHIELD", "ICAT_HELM", "ICAT_GLOVES", "ICAT_BOOTS")
 STAT = re.compile(r"\b(ST|DX):\s*(\d+)(?:/(\d+|\*\*))?")
@@ -131,6 +141,7 @@ PHASE = "Scroll of Phase Door"   # a short teleport (VMS teleport(10)), at the A
 PHASE_RESERVE = 3        # scrolls to carry for a fight with no step out (M5b)
 PHASE_GOLD = 20          # gold worth an Alchemist trip for one (base 15 gp)
 HEAL_AVERAGE = {CURE_MEDIUM: 10.0, CURE_LIGHT: 6.0}   # 4d4 and 3d3 (Umoria player_pray.cpp)
+MAGE_HEAL_AVERAGE = {CURE_LIGHT: 10.0}                 # the Mage book's is 4d4 (Umoria player_magic.cpp)
 PRAY_HEAL_HP = 0.5       # below this share of max HP a known heal is prayed (M5b; potions below QUAFF_HP)
 SPELL_MARGIN = 0.75      # HP under this share of a caster's biggest spell in view: heal, do not hunt it (M5b)
 QUAFF_HP = 0.3           # below this fraction of max HP, drink one
@@ -287,7 +298,10 @@ class Brain:
         self.armoury_done = False              # done at the Armoury on this town visit
         self.weapons_done = False              # done at the Weaponsmith on this town visit
         self.weapon = STARTING_WEAPON          # (kind, to-dam) wielded or bought to wield
-        self.magic = Magic()                   # prayers known and the prayer in progress (M5b)
+        self.launcher: str | None = None       # the launcher carried (M5d)
+        self.wielding_launcher = False         # ... and wielded, the melee weapon in the pack
+        self.ammo = 0                          # shots for it carried
+        self.magic = Magic(goal.klass)         # spells known and the cast in progress (M5b; Mage books M5d)
         self.clvl = 1                          # character level at the last command screen
         self.adjacent: list[Creature] = []     # creatures beside the player this step (fight_odds)
         self.armour = dict(STARTING_ARMOUR)    # armour slot -> AC worn or bought to wear
@@ -373,6 +387,7 @@ class Brain:
             self.track_light(messages)
             if "Your pack is full." in messages:
                 self.pack_full = True
+            self.track_missiles(messages)
         self.noted_messages, self.noted_on_prompt = messages, obs.mode != Mode.COMMAND
         if obs.mode != Mode.COMMAND:
             return self.prompt(obs)
@@ -473,7 +488,7 @@ class Brain:
             self.level.blocked.clear()
             self.level.door_attempts.clear()
         last = (self.stair_scum, self.search) if self.food_low() else (self.search, self.stair_scum)
-        for layer in (self.search_mode, self.drop_junk, self.swat, self.quaff, self.pray, self.invoke, self.throw, self.crowded, self.shun, self.retreat, self.phase_door, self.look,
+        for layer in (self.search_mode, self.drop_junk, self.swat, self.quaff, self.pray, self.invoke, self.shoot, self.throw, self.crowded, self.shun, self.retreat, self.phase_door, self.look,
                       self.fight, self.eat,
                       self.light,
                       self.wear,
@@ -584,7 +599,8 @@ class Brain:
         done = {TEMPLE: self.potions_done, BLACK_MARKET: self.market_done, ARMOURY: self.armoury_done,
                 WEAPONSMITH: self.weapons_done, ALCHEMIST: self.alchemist_done}.get(self.at_store, self.shopped)
         if obs.stage == "menu" and not done and self.at_store in (ARMOURY, WEAPONSMITH):
-            pick = self.gear_pick(obs)
+            pick = self.missile_pick(obs) if self.at_store == WEAPONSMITH else None
+            pick = pick or self.gear_pick(obs)
             if pick is not None:
                 self.store_letter, self.buying = pick
                 return Decision(ord("B"), "shop", f"buy {pick[1]}")
@@ -678,6 +694,8 @@ class Brain:
             wants.append(RECALL)
         if self.phase < PHASE_RESERVE:
             wants.append(PHASE)
+        if self.launcher is not None and self.ammo < AMMO_RESERVE:
+            wants.append(LAUNCHERS[self.launcher][0])   # 1-2 gp a shot
         if self.at_store == TEMPLE and self.book_next is not None:
             wants.insert(0, store_name(self.book_next))   # a caster's prayers first (maintainer, 2026-10-25)
         if self.at_store == BLACK_MARKET:
@@ -828,6 +846,15 @@ class Brain:
             self.recall += n
         elif item.startswith(PHASE):
             self.phase += n
+        elif item.startswith(tuple(LAUNCHERS)):
+            if n > 0:
+                self.launcher = next(name for name in LAUNCHERS if item.startswith(name))
+                self.ammo = 0   # another launcher's ammunition does not fit it
+            else:
+                self.launcher = None
+        elif item.startswith(tuple(AMMO_AVERAGE)):
+            if self.launcher is not None and item.startswith(LAUNCHERS[self.launcher][0]):
+                self.ammo += n
         elif book_of(item) is not None:
             if n > 0:
                 self.books_owned.add(book_of(item))
@@ -1636,6 +1663,81 @@ class Brain:
             return Decision(KEY_THROW, "throw", f"{why}: throw oil at '{creature.glyph}'")
         return None
 
+    def missile_pick(self, obs: Observation) -> tuple[str, str] | None:
+        """At the Weaponsmith, for a class whose strength is missiles (M5d):
+        a launcher better than the one carried (multiplier times its
+        ammunition's average), then its ammunition. The first launcher from
+        all but ``LAUNCHER_KEEP`` gold; a better one from the gold the gear
+        reserve leaves."""
+        if self.goal.klass not in MISSILE_CLASSES:
+            return None
+        gold = re.search(r"Gold: (\d+)", obs.rows[16])
+        gold = int(gold.group(1)) if gold else 0
+        budget = gold - (LAUNCHER_KEEP if self.launcher is None else self.gear_reserve(obs))
+
+        def value(name: str) -> float:
+            ammo, mult, _ = LAUNCHERS[name]
+            return mult * AMMO_AVERAGE[ammo]
+        best: tuple[float, str, str] | None = None
+        ammo_row: tuple[str, str] | None = None
+        for row in obs.rows[3:15]:
+            match = STORE_ITEM.match(row)
+            if match is None:
+                continue
+            letter, name, price = match.group(1), match.group(2), int(match.group(3))
+            launcher = next((n for n in LAUNCHERS if name.startswith(n)), None)
+            if launcher is not None and price <= budget and value(launcher) > (
+                    value(self.launcher) if self.launcher else 0) and (best is None or value(launcher) > best[0]):
+                best = (value(launcher), letter, name)
+            elif (self.launcher is not None and self.ammo < AMMO_RESERVE and price <= gold
+                  and name.startswith(LAUNCHERS[self.launcher][0])):
+                ammo_row = (letter, name)
+        if best is not None:
+            return best[1], best[2]
+        return ammo_row
+
+    def track_missiles(self, messages: str) -> None:
+        """The game's answers to a shot that could not be fired."""
+        if "No ammo." in messages:
+            self.ammo = 0
+        if "No ranged weapon." in messages:
+            self.wielding_launcher = False
+        if self.launcher is not None and "You picked up" in messages and LAUNCHERS[self.launcher][0] in messages:
+            self.ammo += 1   # a shot that missed, collected
+
+    def shoot(self, obs: Observation, view: View) -> Decision | None:
+        """A Rogue or Ranger with a launcher (M5d): wield it while a creature
+        approaches in line 3 or more squares off, fire it from 2 to
+        ``FIRE_RANGE``, and wield the melee weapon again once a creature is
+        beside the player (a launcher fights as bare hands, as in Umoria;
+        Moria8 has no weapon swap command, so each change is a turn)."""
+        if obs.dlvl == 0 or self.launcher is None:
+            return None
+        beside = [c for c in self.adjacent if not self.stationary(c)]
+        if self.wielding_launcher and (beside or self.ammo <= 0):
+            self.picking, self.listed, self.wielding_launcher = self.weapon[0], False, False
+            why = "a creature beside" if beside else "out of ammunition"
+            return Decision(KEY_WEAR, "shoot", f"{why}: wield the {self.weapon[0]}")
+        if beside or self.ammo <= 0:
+            return None
+        breeders = knowledge.breeder_kinds()
+        for pos in sorted(self.threats(view), key=lambda p: chebyshev(p, view.pos)):
+            creature = view.creatures[pos]
+            far = chebyshev(pos, view.pos)
+            step = self.line_to(view, pos)
+            if step is None or far < 2 or far > min(FIRE_RANGE, LAUNCHERS[self.launcher][2]) \
+                    or self.stationary(creature) or (creature.glyph, creature.level) in breeders:
+                continue
+            if not self.wielding_launcher:
+                if far < 3:
+                    continue   # no turn to spare for the change
+                self.picking, self.listed, self.wielding_launcher = self.launcher, False, True
+                return Decision(KEY_WEAR, "shoot", f"'{creature.glyph}' approaching: wield the {self.launcher}")
+            self.pending = DIRS[step]
+            self.ammo -= 1
+            return Decision(KEY_FIRE, "shoot", f"fire the {self.launcher} at '{creature.glyph}'")
+        return None
+
     def melee_weak(self, obs: Observation) -> bool:
         """A thrown flask (2d6) does more than a turn of melee with the weapon
         wielded (a level-1 Priest's Dagger: 1d4, one blow), each at its chance
@@ -1741,7 +1843,9 @@ class Brain:
             return None
         keep_off = view.hazards | self.hazards(view)
         wanted = {p for p, (glyph, name) in self.items_seen.items()
-                  if p not in self.level.collected and (glyph == COIN_GLYPH or name.startswith(FOODS))
+                  if p not in self.level.collected and (glyph == COIN_GLYPH or name.startswith(FOODS)
+                                                        or (self.launcher is not None
+                                                            and name.startswith(LAUNCHERS[self.launcher][0])))
                   and all(chebyshev(p, h) > 1 for h in keep_off)}   # Yellow Jelly beside the gold
         reach = {p: view.path_steps({p}, avoid_monsters=True) for p in wanted}
         reach = {p: n for p, n in reach.items() if n is not None and n <= COLLECT_STEPS}
@@ -1988,7 +2092,7 @@ class Brain:
         # stairs past them, and fought them to the end (M5b round 53).
         outmatched = any(self.outmatched(c, obs) for c in beside)
         if obs.dlvl == 0 or (obs.hp >= RETREAT_HP * obs.mhp and not outmatched) or not (
-                self.phase or magic.can(obs, PORTAL) or magic.can(obs, SANCTUARY)):
+                self.phase or magic.can(obs, PORTAL) or magic.can(obs, SANCTUARY) or magic.can(obs, PHASE_DOOR)):
             return None
         if not beside:
             return None
@@ -2004,6 +2108,9 @@ class Brain:
             return Decision(ord("R"), "phase", f"HP {obs.hp}/{obs.mhp}, no way out: read Phase Door")
         if magic.can(obs, PORTAL):
             return Decision(*magic.pray(PORTAL, f"HP {obs.hp}/{obs.mhp}, no way out: pray Portal"))
+        if magic.can(obs, PHASE_DOOR):
+            # The scroll first: the spell can fail (a Ranger's 35%, a Rogue's 55%).
+            return Decision(*magic.pray(PHASE_DOOR, f"HP {obs.hp}/{obs.mhp}, no way out: cast Phase Door"))
         return None   # Sanctuary known, one beside: nothing that helps (M5b round 24: Portal asked 1,666 times)
 
     def drop_junk(self, obs: Observation, view: View) -> Decision | None:
@@ -2028,7 +2135,10 @@ class Brain:
                 match = PACK_ITEM.match(row)
                 name = match.group(2) if match else ""
                 spent = "(0 turns)" in name           # a burnt-out torch or lantern
-                if match and (spent or not name.startswith(KEEP_PREFIXES)) and name not in self.to_wear:
+                # The melee weapon is in the pack while the launcher is wielded.
+                keep = KEEP_PREFIXES + tuple(LAUNCHERS) + tuple(AMMO_AVERAGE) + \
+                    ((self.weapon[0],) if self.wielding_launcher else ())
+                if match and (spent or not name.startswith(keep)) and name not in self.to_wear:
                     self.dropping = self.pack_full = False
                     if obs.dlvl == 0:
                         # Room made in town: back to the General Store, whose
@@ -2060,8 +2170,9 @@ class Brain:
 
     def invoke(self, obs: Observation, view: View) -> Decision | None:
         """A caster's fighting prayers, each only with mana left for the best
-        heal (``Magic.spare``): Orb of Draining (3d6 + level, doubled on evil)
-        at a creature worth it in line within ``ORB_RANGE``, adjacent too;
+        heal (``Magic.spare``): Orb of Draining (3d6 + level, doubled on evil),
+        or a Mage-book caster's Magic Missile (2d6, M5d), at a creature worth it
+        in line within ``ORB_RANGE``, adjacent too;
         Blind Creature on a creature the character would lose to, close; Chant
         before such a fight. A Priest's spells are its strength past level 5,
         not its Flail (maintainer, 2026-10-25)."""
@@ -2075,10 +2186,18 @@ class Brain:
             step = self.line_to(view, pos)
             if step is None or chebyshev(pos, view.pos) > ORB_RANGE:
                 continue
-            if magic.spare(obs, ORB) and knowledge.strength().get((creature.glyph, creature.level),
-                                                                  (0.0, 0))[0] >= OIL_WORTH_HP:
+            worth = knowledge.strength().get((creature.glyph, creature.level), (0.0, 0))[0] >= OIL_WORTH_HP
+            if magic.spare(obs, ORB) and worth:
                 self.pending = DIRS[step]
                 return Decision(*magic.pray(ORB, f"pray Orb of Draining at '{creature.glyph}'"))
+            if magic.spare(obs, MAGIC_MISSILE) and worth and not (
+                    obs.hp < RETREAT_HP * obs.mhp and any(not self.stationary(c) for c in self.adjacent)):
+                # 2d6, a flask's damage, for 1 mana (M5d). Hurt with a
+                # creature beside, the escapes come first: four Rangers cast
+                # it at 1-9 HP beside DL1 Kobolds, a third of the casts
+                # failing, and died holding Phase Door (M5d round 4).
+                self.pending = DIRS[step]
+                return Decision(*magic.pray(MAGIC_MISSILE, f"cast Magic Missile at '{creature.glyph}'"))
             if chebyshev(pos, view.pos) <= 2 and obs.step >= self.level.blind_until \
                     and self.fight_odds(creature, obs) > FIGHT_ODDS and magic.spare(obs, BLIND):
                 self.level.blind_until = obs.step + BLIND_TURNS
@@ -2133,7 +2252,7 @@ class Brain:
             # Priest). Fighting on at least hurts the creature.
             hitting = sum(self.incoming(c, obs) for c in self.adjacent)
             for heal in HEALS:
-                if magic.can(obs, heal) and HEAL_AVERAGE[heal] > hitting:
+                if magic.can(obs, heal) and (MAGE_HEAL_AVERAGE if magic.mage else HEAL_AVERAGE)[heal] > hitting:
                     return Decision(*magic.pray(heal, f"HP {obs.hp}/{obs.mhp}: pray {heal}"))
         return None
 

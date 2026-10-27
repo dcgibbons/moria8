@@ -1739,12 +1739,17 @@ Why this order:
 | **M5a Warrior races** | Human, Half-Elf, Elf, Halfling, Gnome, Dwarf, Half-Orc Warriors (Half-Troll is M4) | None at first: baselines with the M4 brain, then trace-driven fixes | Both goals ≥16/20 for each; frozen |
 | **M5b Paladin, Priest** | Human Paladin, then Human Priest (Half-Troll until round 10, §17) | A cast layer: choose a prayer, target it, track mana, learn from books, buy books; prayers for healing, fear and light first | Both goals ≥16/20 for the Paladin, ≥15/20 for the Priest (§16.1, amended 2026-10-26); frozen. **Human and Dwarf Priest met 2026-10-26 (§17, round 55)** |
 | **M5c C128 backend** | Half-Troll Warrior on `x128` | None in the brain: the backend (§12.7) for VDC screen text, banked reads, the C128 keyboard buffer and the 198×66 map | Every frozen C64 suite passes on the C128 at its bar |
-| **M5d Rogue, Ranger** | Human Rogue, Human Ranger | Missiles: buy ammunition, fire, target; stealth-aware choices; the cast layer for their spells | Both goals ≥16/20 for each; frozen |
+| **M5d Rogue, Ranger** | Human Rogue, Human Ranger | Missiles: buy ammunition, fire, target; stealth-aware choices; the cast layer for their spells | Both goals ≥16/20 for each; frozen. **Met 2026-10-26 (§18, round 5)** |
 | **M5e Mage** | Human Mage | Spells for survival, not only utility: Magic Missile, Phase Door, detection; a fragile character's readiness | Both goals ≥15/20 (§16.1, amended 2026-10-26); frozen |
 | **M5f The rest** | The other 20 combinations (§12.6) | Trace-driven fixes for what fails | Both goals ≥16/20 for each (≥15/20 for Mages and Priests); frozen |
 
 M5c runs between brain rounds: it is self-contained, and once it works,
-every later suite can also run on the C128. Within a class, Human comes
+every later suite can also run on the C128.
+
+**M5c deferred (maintainer, 2026-10-26):** "I don't think we should do M5c
+for the c128 - that part is less interesting to me right now. Let's do M5d
+and then M5e and get those main classes tested." The order is now M5d, M5e,
+M5f; M5c waits. Within a class, Human comes
 first (no race adjustment), then the other races in M5f.
 
 ### 16.3 Method
@@ -2036,3 +2041,71 @@ Game fixes found by the M5b Priests (maintainer, 2026-10-25: a difference from V
 | 53 | Bot: within one turn's worst melee from the creatures beside it (the lore's dice at their maximum), heal: a prayer, else a potion (`under_blow`) | 15 / 13 | 17 / 15 | 7 deaths at level 1-3 (13): Dwarf `clvl10` passes. Mid deaths lead now: DL5 Green Nagas 4, fought from full HP because every step to the stairs ran into contact, and Novice Mages 3 |
 | 54 | Bot: an outmatched creature in contact (`outmatched`: a naga) is left by Phase Door at any HP, before the fight | 14 / 16 | 18 / 16 | Bars from this round: 15/20 for Priests (§16.1, amended 2026-10-26). Three of four pass; Human `reach_dl8` up from 13 with no naga deaths. Human `clvl10` misses by one: DL2 Novice Mages, the same three seeds as round 53 (one cast took 20 of 42 HP; two casts in one step did 31) |
 | 55 | Bot: the spell threat in view sums every caster, not the strongest one (`spell_threat`) | 17 / 15 | 17 / 17 | **All four meet the Priest bar (15/20).** Frozen from a `--freeze` run of the same code (round 55f: the same 17 / 15 / 17 / 17): `playtest/suites/{clvl10,reach_dl8}-{human,dwarf}-priest.json`. Gates: `make -j7 -O test` passed (the Apple IIe, CX16, Atari and BBC runtime suites skipped: no ROM paths set); `make test128` 128/129, the real-boot diagnostic build 9 bytes over its startup overlay from the level-1 mana table, fixed (stat bands) and `real_boot_crash_harness` passes. **M5b Priest met 2026-10-26** |
+
+## 18. M5d: Rogue and Ranger (from 2026-10-26)
+
+Started by the maintainer on 2026-10-26 (`/goal M5d`), after M5b, with M5c
+deferred (§16.2). Characters: Human Rogue, Human Ranger, both goals, the
+16/20 bar.
+
+Class data checked against Umoria `data_player.cpp` before the baseline, and
+all match: the class table (hit die, disarm, search, stealth, FOS, BTH, BTHB,
+save, XP factor), per-level adjustments, the Mage-book spell levels, mana and
+fail rates for both classes (Rogue spells from level 5, Ranger from 3), and
+no starting spells or mana. The starting kit differs only by the recorded
+delta (`docs/FEATURE_MAP.md`, "Starting Weapons & Armor"): with no cloak
+slot, every class wears Soft Leather Armor in place of the Cloak.
+
+### 18.1 Baseline (the M5b brain)
+
+| Character | `clvl10` | `reach_dl8` |
+|---|---|---|
+| Human Rogue | 0 | 0 |
+| Human Ranger | 0 | 0 |
+
+Every character ran out its 100,000 steps on DL1. Each reached its class's
+first spell level (Ranger 3, Rogue 5), studied, and met the Mage-book
+"Study" list: Mage-book casters choose the spell they learn
+(`item_gain_spell`, `core/player_gain_spell_impl.s`), where the game picks a
+prayer at random. The bot did not know that screen (an `unknown_prompt`
+finding per character) and then stalled. The M5b cast layer knew prayers
+only; the list title it expected ("Magic Book") is "Mage Book" in the game.
+
+### 18.2 Game questions surfaced
+
+1. **Firing a launcher is far weaker than VMS** (`core/ranged_fire.s`
+   against VMS `moria.inc` `throw_object`, 3163-3360): no launcher damage
+   bonus (VMS +2 Sling, Short Bow and Light Crossbow; +3 Long Bow; +4
+   Composite Bow and Heavy Crossbow), one range of 19 for every launcher
+   (VMS 20-35), no to-hit penalty for distance, no critical hits, and
+   ammunition always destroyed (VMS drops a missed shot near the target 9
+   times in 10). Umoria multiplies the damage (x2-x4) where VMS adds.
+   `docs/FEATURE_MAP.md` calls VMS and Umoria identical here and describes
+   Moria8 bonuses the code does not have. **Fixed 2026-10-26** (maintainer:
+   "usually i prefer vms unless umoria was improving/fixing something" ...
+   "go with recommendations"): VMS for range, the distance penalty,
+   critical hits and a missed shot landing; Umoria's multiplier for damage,
+   a fix its source states (MON-018 in `docs/MONSTER_STATE_CONTRACT.md`,
+   `docs/FEATURE_MAP.md` "Ranged Weapon Fire"). The maintainer also wants the
+   missing Long Bow, Composite Bow and Heavy Crossbow (VMS +3 / +4 / +4,
+   Umoria x3 / x4 / x4), as a separate change after this one.
+
+### 18.3 Round log
+
+| Round | Change | Rogue | Ranger | Notes |
+|---|---|---|---|---|
+| base | M5b brain | 0 / 0 | 0 / 0 | Every character stalled on DL1 at the Study list (§18.1) |
+| 1 | Bot: Mage-book casting (`m`, "Spell book", "Mage Book" list), the Study list (learn by `LEARN_ORDER`: Magic Missile, Phase Door, Cure Light Wounds, Detect Monsters), Magic Missile at a creature worth it in line, the Phase Door spell after the scroll, the Mage book's Cure Light Wounds (4d4) | 19 / 19 | 14 / 17 | Rogue passes both. Ranger `clvl10` 4 budget runs: a full pack dropped "Spellbook Beginners-Magick" (`KEEP_PREFIXES` knew only "Holy Book"), then every cast found "You have nothing there." with no turn passing and was asked again (56,018 times on seed 1007). 2 deaths at level 1 on DL1 |
+| 2 | Bot: spellbooks kept when dropping junk ("Spellbook" in `KEEP_PREFIXES`); "You have nothing there." on a cast or study refuses it until the next level | 19 / 20 | 18 / 17 | **All four meet the 16/20 bar.** 6 deaths, all at level 1-3 on DL1-2 (Ranger seeds 1006 and 1018 die at the same steps in both goals). No budget runs |
+| 3 | Game: fired missiles follow VMS, damage Umoria's multiplier (MON-018, §18.2). Bot: a Rogue or Ranger buys the best launcher it can (Light Crossbow, Short Bow, Sling) and 20 shots, wields it as a creature approaches in line 3 or more squares off, fires from 2 to 8, wields the melee weapon again beside a creature (no swap command: a turn each way), keeps the launcher and ammunition when dropping junk, and collects missed shots | 18 / 20 | 18 / 14 | Ranger `reach_dl8` misses. Few shots fired (56 across 20 Rangers): every launcher came with about one shot. Stores stocked ammunition one at a time, where VMS gives every missile stack 7d6 (`misc.inc` `magic_treasure`, stores too); dungeon stacks were 5-10 |
+| 4 | Game: ammunition stocked 24 at a time (VMS 7d6 averaged at Umoria's store cap; the C64 town overlay has no room for the roll) and dungeon stacks 7d6 (`magic_treasure`) | 19 / 18 | 14 / 14 | Launchers fire now (216-389 shots a run, a bit over half hitting). Ranger misses both: 9 deaths on DL1 at level 2-4, most to Kobolds, four of them casting Magic Missile at 1-9 HP beside the Kobold (a third of the casts failing) while holding Phase Door: `invoke` comes before `retreat` and `phase_door` |
+| 5 | Bot: no Magic Missile below `RETREAT_HP` with a creature beside (the escapes first) | 19 / 18 | 17 / 17 | **All four meet the bar with launchers in use.** 9 deaths, 6 of them at level 1-2 on DL1. Frozen from a `--freeze` run of the same code (round 5f: the same 19 / 18 / 17 / 17): `playtest/suites/{clvl10,reach_dl8}-human-{rogue,ranger}.json`. **M5d met 2026-10-26** |
+
+Not built (maintainer, 2026-10-26: "let's freeze and we'll come back to the
+launchers"): the Long Bow, Composite Bow and Heavy Crossbow, which need
+about 75 bytes of C64 resident RAM (1 free), about 55 on the Atari, and town
+overlay bytes on the 40-column ports (0 free); letting sleeping creatures
+lie, since a player (and the bot) cannot see sleep state; and Detect
+Monsters. Also found: Moria8 has no `x` weapon swap (VMS has one), and
+throwing differs from VMS (a thrown item always lands, STR adds damage, no
+distance penalty).
