@@ -51,6 +51,10 @@ CHARACTER_BARS: dict[tuple[str, str], int] = {
     ("halfling-mage", "clvl10"): 8,
     ("halfling-mage", "reach_dl8"): 5,
     ("gnome-priest", "reach_dl8"): 5,
+    # M5 regression (maintainer decision 2026-10-27, "capture their low bars
+    # and freeze"): frozen at 10/20, then 9/20 on both runs of the fixed
+    # brain once the VMS trap change re-rolled every map.
+    ("gnome-priest", "clvl10"): 9,
 }
 # Pure spell casters, every race and goal: 10/20, half the seeds
 # (maintainer decision 2026-10-27, M5f: "it is OK to accept them as weaker

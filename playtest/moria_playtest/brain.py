@@ -131,6 +131,9 @@ ALCHEMIST = 4            # store index (entrance "5"): VMS stocks Word of Recall
 MAGIC_SHOP = 5           # store index (entrance "6"): Mage books (M5f)
 BLACK_MARKET = 6         # store index (entrance "7"): everything, at a premium
 FIND_TRAPS_EVERY = 40    # steps between a Mage's Find Hidden Traps/Doors while exploring (M5f)
+TETHER_LEVEL = 3         # below this level a fragile Priest explores near the stairs (M5f)
+TETHER_HP = 15           # ... a Priest with less maximum HP than this
+TETHER_RADIUS = 10       # ... within this many squares of a known staircase
 MARKET_GOLD = 600        # gold worth a Black Market trip for Word of Recall (M4 round 48: the
                          # Temple stocked it for 6 of 17 characters; drops pay for it, MON-014)
 RECALL = "Scroll of Word of Rec"   # Word of Recall (the store line may cut the name short)
@@ -444,9 +447,12 @@ class Brain:
         self.remember_stationary(view)
         # Slow creatures not worth a fight are kept at a distance like the
         # stationary ones: explore stepped back beside retreated-from coins
-        # every other turn (M4 round 46, seed 1002).
+        # every other turn (M4 round 46, seed 1002). By kind, not glyph: a
+        # White Worm mass shares 'w' with the faster Giant Purple Worm, and a
+        # Half-Elf Ranger walked away from worms and straight back on the path
+        # to the stairs until the colony bred around it (M5 regression, seed 1006).
         slow = {p for p, c in view.creatures.items()
-                if c.glyph in knowledge.slow_glyphs() and not self.coins_worth_it(c, obs)}
+                if (c.glyph, c.level) in knowledge.slow_kinds() and not self.coins_worth_it(c, obs)}
         self.level.slow_seen.update(dict.fromkeys(slow, obs.step))
         burst = knowledge.spell_burst()
         self.level.casters.update(dict.fromkeys(
@@ -2036,7 +2042,13 @@ class Brain:
         if obs.dlvl != 0:
             return None
         early = obs.clvl < EARLY_LEVELS
-        if early and self.goal.klass == "priest" and not self.armoury_done and len(view.stores) > ARMOURY \
+        if self.poisoned and not self.clw and not self.potions_done and len(view.stores) > TEMPLE \
+                and self.gold(obs) >= CLW_GOLD:
+            # Poison drains a point a turn in town too: a Half-Elf Rogue gassed
+            # on DL1 climbed up at 8 HP with 132 gold and no potion, and died
+            # on the walk to the Weaponsmith (M5 regression, seed 1002).
+            store, why = TEMPLE, "poisoned with no Cure Light Wounds: walk to the Temple"
+        elif early and self.goal.klass == "priest" and not self.armoury_done and len(view.stores) > ARMOURY \
                 and self.gold(obs) > self.gear_reserve(obs):
             # A Priest's 12 HP and weak melee: armour before anything, the
             # kit's food and light last the first trip (maintainer, 2026-10-25:
@@ -2320,6 +2332,11 @@ class Brain:
                 self.pending = DIRS[step]
                 return Decision(*magic.pray(BLIND, f"pray Blind Creature at '{creature.glyph}'"))
         blessing = CHANT if magic.spare(obs, CHANT) else BLESS if magic.spare(obs, BLESS) else None
+        if obs.hp < RETREAT_HP * obs.mhp:
+            # A blessing is for a fight about to start, not a turn spent at
+            # death's door: a Dwarf Priest prayed Bless at 3 of 35 HP beside
+            # a Novice Mage, and died there (M5 regression, seed 1016).
+            blessing = None
         if obs.step >= self.chant_until and blessing is not None and any(
                 chebyshev(p, view.pos) <= 3 and self.fight_odds(view.creatures[p], obs) > CHANT_ODDS
                 for p in close):
@@ -2503,10 +2520,17 @@ class Brain:
             self.level.dead_frontier |= set(trail) | near
             trail.clear()
         frontier = view.frontier() - self.level.dead_frontier
-        # No tether to the stairs for fragile casters: exploring only near a
-        # staircase and leaving by it cost 10 of 120 runs on the six M5f
-        # holdouts (rounds 17-18 A/B: 35 against 45), the DL1 exits running
-        # through town and out of steps.
+        stairs = view.stairs_up() | (view.stairs_down() if self.deeper_ok(obs) else set())
+        if self.tethered(obs) and stairs:
+            # A fragile Priest's opening: explore near a staircase and leave
+            # by it rather than walk the level. It carried the 9-HP Gnome
+            # Priest (clvl10: 10/20 with it, 3/20 without, M5 regression),
+            # but cost the Mages 10 of 120 runs (rounds 17-18 A/B), so it is
+            # the Priest's only.
+            near = {p for p in frontier if min(chebyshev(p, s) for s in stairs) <= TETHER_RADIUS}
+            if not near:
+                return self.stair_scum(obs, view)
+            frontier = near
         step = view.step_toward(frontier, avoid_monsters=True) if frontier else None
         if step is None:   # the only way on is across a known trap
             step = view.step_toward(view.frontier(traps=True) - self.level.dead_frontier,
@@ -2514,7 +2538,7 @@ class Brain:
         if step is not None and step != (0, 0):
             target = (view.pos[0] + step[0], view.pos[1] + step[1])
             slow = {p for p, c in view.creatures.items()
-                    if c.glyph in knowledge.slow_glyphs() and not self.coins_worth_it(c, obs)}
+                    if (c.glyph, c.level) in knowledge.slow_kinds() and not self.coins_worth_it(c, obs)}
             slow |= {p for p, seen in self.level.slow_seen.items() if obs.step - seen < SLOW_MEMORY}
             if any(chebyshev(target, p) <= 1 for p in slow):
                 # Back beside the slow creature just walked away from: the
@@ -2525,6 +2549,11 @@ class Brain:
                 # seed 1002).
                 return None
         return self.move(view, step, "explore", "path to the nearest unexplored edge")
+
+    def tethered(self, obs: Observation) -> bool:
+        """A Priest below ``TETHER_LEVEL`` with under ``TETHER_HP`` maximum HP
+        (M5f; not Mages, whom it cost runs)."""
+        return self.goal.klass == "priest" and obs.dlvl > 0 and obs.clvl < TETHER_LEVEL and obs.mhp < TETHER_HP
 
     def clear_way(self, obs: Observation, view: View) -> Decision | None:
         """A creature that never moves (or is never meleed) stands in the only

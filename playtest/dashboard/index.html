@@ -32,7 +32,13 @@
   }
   .brand { color: var(--gold); font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
   .brand span { color: var(--amber); }
+  .brand a { color: inherit; text-decoration: none; }
+  .brand a:hover { color: var(--gold-hot); text-decoration: underline; text-underline-offset: 3px; }
   header .grow { flex: 1; }
+  .nowline { padding: 6px 16px; background: rgba(197, 121, 0, 0.10); border-bottom: 1px solid var(--line);
+             color: var(--paper); font-size: 12px; }
+  .nowline b { color: var(--gold); letter-spacing: .12em; text-transform: uppercase; font-size: 11px; margin-right: 8px; }
+  .tag { font-size: 10px; color: var(--blue); border: 1px solid rgba(119,121,220,.5); border-radius: 8px; padding: 0 5px; margin-left: 4px; }
   .pill { padding: 1px 8px; border: 1px solid var(--line); border-radius: 10px; color: var(--muted); }
   .pill b { color: var(--gold); font-weight: normal; }
   select, button {
@@ -43,8 +49,13 @@
   .ok { color: var(--green); } .bad { color: var(--red); } .warn { color: var(--amber); } .gold { color: var(--gold); }
   main { padding: 12px 16px; display: grid; gap: 12px; max-width: 120rem; margin: 0 auto;
          grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-         grid-template-areas: "milestone round" "causes kit" "wall wall"; }
-  @media (max-width: 1100px) { main { grid-template-columns: 1fr; grid-template-areas: "round" "milestone" "causes" "kit" "wall"; } }
+         grid-template-areas: "milestone round" "causes kit" "wall wall" "legend legend"; }
+  @media (max-width: 1100px) { main { grid-template-columns: 1fr; grid-template-areas: "round" "milestone" "causes" "kit" "wall" "legend"; } }
+  .legend-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(22rem, 1fr)); gap: 12px 22px; font-size: 12px; }
+  .legend-grid h3 { margin: 0 0 4px; font-size: 11px; color: var(--gold); letter-spacing: .1em; text-transform: uppercase; font-weight: normal; }
+  .legend-grid p { margin: 0 0 6px; color: var(--muted); }
+  .legend-grid table td { white-space: normal; border-top: 1px solid #241e12; padding: 2px 8px 2px 0; }
+  .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; vertical-align: -1px; margin-right: 4px; }
   section { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 10px 12px; min-width: 0; }
   h2 { margin: 0 0 8px; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--amber);
        display: flex; justify-content: space-between; gap: 8px; }
@@ -127,13 +138,14 @@
 </head>
 <body>
 <header>
-  <div class="brand">Moria8 <span>// playtest</span></div>
+  <div class="brand"><a href="https://moria8.org/" title="Back to moria8.org">Moria8</a> <span>// playtest</span></div>
   <label class="muted">round <select id="round"></select></label>
   <span class="grow"></span>
   <span class="pill">workers <b id="hworkers">–</b></span>
   <span class="pill">steps/s <b id="hrate">–</b></span>
   <span class="dim" id="updated">loading…</span>
 </header>
+<div class="nowline" id="nowline" hidden></div>
 <main>
   <section style="grid-area: milestone">
     <h2><span>M5 · every race and class</span><small id="mcount"></small></h2>
@@ -165,6 +177,10 @@
   <section style="grid-area: wall">
     <h2><span>Live screens</span><small>click one to watch it</small></h2>
     <div id="wall"></div>
+  </section>
+  <section style="grid-area: legend">
+    <h2><span>How to read this</span><small>numbers from playtest/moria_playtest/goals.py</small></h2>
+    <div class="legend-grid" id="legend"><span class="muted">loading…</span></div>
   </section>
 </main>
 <dialog id="dlg"><div id="dlgbody"></div><p style="text-align:right;margin:6px 0 0"><button id="close">close</button></p></dialog>
@@ -240,8 +256,39 @@ function sparkline(points, bar) {
     ${last ? `<circle cx="${last[0]}" cy="${last[1]}" r="2" fill="var(--gold)"/>` : ""}</svg>`;
 }
 
+function renderLegend() {
+  const L = mile && mile.legend;
+  if (!L) return;
+  const classBars = Object.entries(L.class_bars).map(([k, v]) => `${cap(k)}s ${v}/${L.seeds}`).join(", ");
+  const own = L.character_bars.map(b => `<tr><td>${esc(cap(b.character))}</td><td class="muted">${esc(b.goal)}</td><td class="gold">${b.bar}/${L.seeds}</td></tr>`).join("");
+  const goals = L.goals.filter(g => ["clvl10", "reach_dl8", "clvl5", "reach_dl5"].includes(g.name))
+    .map(g => `<tr><td class="gold">${esc(g.name)}</td><td>${esc(g.what)}</td><td class="muted">${(g.steps / 1000).toFixed(0)}k steps</td></tr>`).join("");
+  $("legend").innerHTML = `
+    <div><h3>The bar</h3>
+      <p>Each goal is played by ${L.seeds} characters on fixed seeds (1001-${1000 + L.seeds}), the first character of each
+      seed, with no restarts. A goal <b>qualifies</b> when at least its bar of them reach it; the passing run is then
+      <b>frozen</b> as a regression suite that must keep reaching that bar.</p>
+      <p><b class="gold">${L.default_bar}/${L.seeds}</b> by default (Warriors, Rogues, Rangers, Paladins) ·
+      <b class="gold">${esc(classBars)}</b> — pure casters are weaker by design (maintainer, 2026-10-27).</p></div>
+    <div><h3>Own bars (weakest combinations)</h3>
+      <p>Frozen at what they reliably reach, as balance findings: the 6-9 HP Gnome and Halfling casters die at level
+      1-2 to what VMS deals a character that small (M5f), and a Halfling is not built for a Warrior (M5a).</p><table>${own}</table></div>
+    <div><h3>Goals</h3><table>${goals}</table></div>
+    <div><h3>Colours and tags</h3>
+      <p><span class="swatch" style="background:var(--gold)"></span>reached ·
+      <span class="swatch" style="background:var(--red)"></span>died ·
+      <span class="swatch" style="background:var(--amber)"></span>out of steps ·
+      <span class="swatch" style="background:var(--blue)"></span>finding (a bug report) ·
+      <span class="swatch" style="background:repeating-linear-gradient(45deg,#4a3c20 0 2px,var(--track) 2px 4px)"></span>running.
+      The white mark on a seed strip is the bar.</p>
+      <p>M5 grid: <b class="ok">✓N</b> frozen at bar N · <b class="gold">amber</b> latest run at the bar, not frozen ·
+      <b class="bad">red</b> latest run below it. <span class="tag">regress</span> marks a frozen suite being rerun.
+      "Needs k of n": k more must reach the goal among the n still to finish.</p></div>`;
+}
+
 function renderMilestone() {
   if (!mile) return;
+  renderLegend();
   const goals = mile.goals, allowed = new Set(mile.characters);
   let html = `<div></div>` + mile.classes.map(c => `<div class="h">${c}</div>`).join("");
   let frozen = 0, total = 0;
@@ -292,7 +339,7 @@ function renderRound() {
     const eta = open && s.characters.length ? fmtTime(age / s.characters.length * open) : open ? "–" : "done";
     const key = `${s.goal} ${s.character}`;
     const spark = sparkline(rounds.map(x => x.suites[key] && x.suites[key].done >= 20 ? x.suites[key].reached : null).filter(v => v != null), s.bar);
-    return `<tr><td class="name">${esc(cap(s.character))}</td><td class="muted">${esc(s.goal)}</td>
+    return `<tr><td class="name">${esc(cap(s.character))}</td><td class="muted">${esc(s.goal)}${s.regress ? `<span class="tag" title="frozen suite rerun: must reach its bar again">regress</span>` : ""}</td>
       <td class="strip"><div class="seeds">${cells}<div class="barmark" style="left:calc(${(s.bar / s.seeds * 100).toFixed(1)}% - 1px)" title="bar ${s.bar}"></div></div></td>
       <td><span class="score">${r}</span><span class="dim">/${s.seeds} · ${s.bar}</span></td><td>${state}</td>
       <td class="muted">${eta}</td><td class="spark">${spark}</td></tr>`;
@@ -431,6 +478,8 @@ async function refresh() {
     }
     renderRound(); renderCauses(); renderKit(); renderWall();
     renderUpdated();
+    $("nowline").hidden = !data.now_text;
+    $("nowline").innerHTML = data.now_text ? `<b>Now</b>${esc(data.now_text)}` : "";
   } catch (e) {
     $("updated").textContent = `error: ${e}`;
   }

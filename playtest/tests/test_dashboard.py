@@ -57,3 +57,36 @@ class PublishTest(unittest.TestCase):
             self.assertIn(publish.STATIC_META, page)
             self.assertEqual(json.loads((Path(tmp) / "data" / "overview.json").read_text())["rounds"], ["r1"])
             self.assertEqual(counts, {"suites": 0, "workers": 0})
+
+
+class RegressSuitesTest(unittest.TestCase):
+    """A --regress session runs its character's frozen suites in turn and
+    records no goal of its own (summary goal enter_dungeon): the dashboard
+    shows one row per suite, at the bar it was frozen at."""
+
+    def test_characters_go_to_the_suite_they_played(self) -> None:
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            suites, path = root / "suites", root / "m5-regress-elf-mage"
+            suites.mkdir()
+            path.mkdir()
+            (suites / "clvl10-elf-mage.json").write_text(json.dumps({"seeds": [1001, 1002], "required": 1}))
+            (suites / "reach_dl8-elf-mage.json").write_text(json.dumps({"seeds": [1001, 1002], "required": 2}))
+            events = [{"kind": "character_start", "seed": 1001, "goal": "clvl10"},
+                      {"kind": "character_start", "seed": 1002, "goal": "clvl10"},
+                      {"kind": "character_end", "seed": 1002, "outcome": "reached"},
+                      {"kind": "character_end", "seed": 1001, "outcome": "reached"},
+                      {"kind": "character_start", "seed": 1001, "goal": "reach_dl8"},
+                      {"kind": "character_end", "seed": 1001, "outcome": "budget"}]
+            (path / "events.jsonl").write_text("\n".join(json.dumps(e) for e in events))
+            (path / "summary.json").write_text(json.dumps({
+                "mode": "regress", "goal": "enter_dungeon", "character": "elf-mage",
+                "characters": [{"seed": 1002, "outcome": "reached"}, {"seed": 1001, "outcome": "reached"},
+                               {"seed": 1001, "outcome": "budget"}]}))
+            with mock.patch.object(dashboard, "SUITES", suites):
+                rows = {r["goal"]: r for r in dashboard.regress_suites(path, "elf-mage")}
+        self.assertEqual(set(rows), {"clvl10", "reach_dl8"})
+        self.assertEqual([c["seed"] for c in rows["clvl10"]["characters"]], [1002, 1001])
+        self.assertEqual([c["outcome"] for c in rows["reach_dl8"]["characters"]], ["budget"])
+        self.assertEqual((rows["clvl10"]["bar"], rows["reach_dl8"]["bar"]), (1, 2))

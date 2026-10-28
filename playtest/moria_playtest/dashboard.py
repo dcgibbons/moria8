@@ -29,7 +29,8 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
-from .goals import CHARACTERS, CLASSES, GOALS, QUALIFICATION_SEEDS, RACE_KEYS, for_character, required
+from .goals import (CHARACTER_BARS, CHARACTERS, CLASS_BARS, CLASSES, GOALS, QUALIFICATION_SEEDS, RACE_KEYS,
+                    for_character, required)
 from .launch import PLAYTEST_OUT, ROOT
 
 INDEX = ROOT / "playtest" / "dashboard" / "index.html"
@@ -38,6 +39,7 @@ SUITES = ROOT / "playtest" / "suites"
 MILESTONE_GOALS = ("clvl10", "reach_dl8")   # M4 and M5 (§16)
 DEFAULT_CHARACTER = "half-troll-warrior"     # suites named by goal alone (session.suite_path)
 TIMELINE = 400                               # steps of HP and mana the focus view draws
+NOW = PLAYTEST_OUT / "now.json"              # {"text": ...}: what the current runs are for
 STATUS = re.compile(r"HP:\s*(-?\d+)/(\d+)\s+MP:\s*(\d+)/(\d+)")
 KILLER = re.compile(r"[Tt]he ([A-Z][a-z]+(?: [A-Z][a-z]+)*?) "
                     r"(?:hits|bites|touches|stings|claws|crushes|kicks|casts|breathes|gazes|spits|butts|crawls)")
@@ -212,6 +214,54 @@ def suite(path: Path, goal: str, character: str) -> dict[str, Any]:
             "depth": cached(path / "events.jsonl", depth_series) or {}, "findings": findings}
 
 
+def regress_suites(path: Path, character: str) -> list[dict[str, Any]]:
+    """A ``--regress`` session runs each of its character's frozen suites in
+    turn and records no goal of its own: one entry per suite, each with the
+    characters that played it and the bar it was frozen at. A finished
+    character's goal is its start's: each end is paired with the earliest
+    unfinished start of the same seed (the suites run one after another)."""
+    summary = read_json(path / "summary.json") or {}
+    finished = summary.get("characters", [])
+    starts: dict[int, list[str]] = {}
+    goals_done: list[str] = []
+    try:
+        lines = (path / "events.jsonl").read_text().splitlines()
+    except OSError:
+        lines = []
+    for line in lines:
+        if '"character_start"' in line or '"character_end"' in line:
+            event = json.loads(line)
+            if event["kind"] == "character_start":
+                starts.setdefault(event["seed"], []).append(event.get("goal", ""))
+            elif starts.get(event["seed"]):
+                goals_done.append(starts[event["seed"]].pop(0))
+    by_goal: dict[str, list[dict[str, Any]]] = {}
+    for char, goal in zip(finished, goals_done):
+        by_goal.setdefault(goal, []).append(char)
+    statuses = [status for status_path in sorted(path.glob("status-w*.json"))
+                if (status := read_json(status_path))]
+    for status in statuses:
+        status.pop("decisions", None)
+    entries = []
+    for goal in GOALS:
+        frozen = read_json(suite_file(goal, character))
+        if not frozen:
+            continue
+        chars = by_goal.get(goal, [])
+        for char in chars:
+            if char.get("outcome") == "died":
+                traces = [t for t in path.glob(f"w*/{goal}/{char['seed']}/trace.jsonl.gz")]
+                char.update((cached(traces[0], death) if traces else {}) or {})
+                char.setdefault("killer", "")
+        live = [w for w in statuses if w.get("goal") == goal and not w.get("outcome")
+                and len(chars) < len(frozen.get("seeds", []))]
+        entries.append({"session": path.name, "goal": goal, "character": character,
+                        "bar": frozen.get("required", bar(goal, character)), "seeds": len(frozen.get("seeds", [])),
+                        "started": summary.get("started"), "updated": mtime(path), "characters": chars,
+                        "workers": live, "depth": {}, "findings": {}, "regress": True})
+    return entries
+
+
 def history(project: str, all_sessions) -> list[dict[str, Any]]:
     rounds: dict[str, dict[str, Any]] = {}
     for path, round_name, goal, character in all_sessions:
@@ -240,9 +290,15 @@ def overview(round_name: str | None) -> dict[str, Any]:
         round_name = max(latest, key=latest.get)
     project = round_name.split("-")[0]
     members = sorted(by_round[round_name], key=lambda item: (item[3], item[2]))
-    return {"round": round_name,
+    suites = []
+    for path, _, goal, character in members:
+        if (cached(path / "summary.json", read_json) or {}).get("mode") == "regress":
+            suites += regress_suites(path, character)
+        else:
+            suites.append(suite(path, goal, character))
+    return {"round": round_name, "now_text": (read_json(NOW) or {}).get("text", ""),
             "rounds": sorted(by_round, key=latest.get, reverse=True)[:40],
-            "suites": [suite(path, goal, character) for path, _, goal, character in members],
+            "suites": suites,
             "history": history(project, all_sessions),
             "now": time.time()}
 
@@ -294,7 +350,17 @@ def milestone() -> dict[str, Any]:
                 "frozen_bar": (frozen or {}).get("required"), "frozen_on": (frozen or {}).get("frozen"),
                 "latest": result[1] if result else None}
     return {"races": list(RACE_KEYS), "classes": list(CLASSES), "goals": list(MILESTONE_GOALS),
-            "characters": sorted(CHARACTERS), "cells": cells}
+            "characters": sorted(CHARACTERS), "cells": cells, "legend": legend()}
+
+
+def legend() -> dict[str, Any]:
+    """What the page's bars and goals mean, from the code that sets them
+    (goals.py), so the explanation cannot drift from the numbers."""
+    default = next(iter(GOALS.values())).__class__.__dataclass_fields__["qualify_bar"].default
+    return {"seeds": len(QUALIFICATION_SEEDS), "default_bar": default, "class_bars": CLASS_BARS,
+            "character_bars": [{"character": c, "goal": g, "bar": b} for (c, g), b in sorted(CHARACTER_BARS.items())],
+            "goals": [{"name": g.name, "what": g.description.split(". ")[0].rstrip(".") + ".",
+                       "steps": g.step_budget} for g in GOALS.values()]}
 
 
 def make_handler() -> type[BaseHTTPRequestHandler]:

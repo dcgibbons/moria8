@@ -529,6 +529,20 @@ original v0 description follows.
   mana over the last 400 steps with potions, Phase Doors and retreats marked,
   and the decisions newest first, refreshed every second. `#watch=<session>/<worker>`
   in the URL opens it directly.
+- **Now:** a line under the header saying what the current runs are for,
+  from `build/playtest/now.json` (`{"text": ...}`), written by whoever
+  starts a phase; absent, the line is hidden.
+- **Regression sessions** (`--regress`, no goal of their own) show one row
+  per frozen suite, tagged `regress`, with the bar it was frozen at; each
+  finished character is matched to the suite it played through the
+  session's events (`dashboard.regress_suites`).
+- The header shows when the data was made, in the viewer's zone, with its
+  age; red and "stale" after two minutes. MORIA8 links to moria8.org.
+- **How to read this** (at the bottom): the bar and what frozen means, the
+  default and class bars, each combination's own bar, the goals with their
+  step budgets, and the colours and tags. Its numbers come from
+  `goals.py` through `/api/milestone` (`dashboard.legend`), so it cannot
+  drift from the bars it explains.
 
 #### Publishing (`make playtest-publish`, https://playtest.moria8.org)
 
@@ -1831,8 +1845,19 @@ Halfling Mages, Gnome Priest) sat at 4-13/20 against 15, dying at level 1-2
 to what VMS deals a character that small: "I think it is OK to accept them as
 weaker and have a lower bar ... let's aim for a bar of *10* for mages and
 priests ... as we advance to higher levels of the dungeon I would expect our
-bar to continue to be lowered." Suites frozen at 15 keep their bar; deeper
-goals are expected to set lower ones.
+bar to continue to be lowered." Deeper goals are expected to set lower
+ones. The 14 caster suites frozen at 15 were moved to 10 on 2026-10-27
+("let's make all casters a bar of 10"), each with a `bar_note`.
+
+**Amended 2026-10-27 (maintainer, M5 regression):** Gnome Priest `clvl10` is
+frozen at **9/20** ("we can capture their low bars and freeze then"). The VMS
+trap change re-rolled every seed's maps; with the regression's bot fixes
+(Bless and Chant held when hurt, the Priest tether, the Temple when poisoned,
+worm masses remembered as slow by kind) it scored 9/20 on both runs, 64 of the
+other 66 suites passing at once and the Half-Elf Ranger and Rogue after the
+fixes. These scores rank characters by how well the bot plays them, not how
+hard a person finds them: the small casters (Halfling and Gnome Mages, the
+Gnome Priest) are the hardest group, which 20 seeds cannot order within.
 
 Why this order:
 
@@ -2407,6 +2432,17 @@ with a coverage count per platform and the date each cell last ran.
   goals; survival, median level at death and early-death share rate each
   Easy to Very Hard, published for players. M5f already shows the spread
   (§20.1).
+- **The monster compendium's tactics** (maintainer, 2026-10-27): the
+  website's compendium (`docs/monsters.html`, `buildStrategy`) derives play
+  advice from the same creature tables the bot's `knowledge.py` reads. In
+  M7: one shared generator for the threat label, safe HP, recommended level
+  and hazard flags, used by both, so the site's advice and the bot cannot
+  drift and the playtest tests the advice; then the tactics the bot lacks,
+  one at a time with a trace, a test and an A/B round: break line of sight
+  around corners against casters first (Novice Mage and Priest spells were
+  M5f's top Priest killer), then Sleep and Confusion to neutralise or
+  escape, fighting breeders in a 1-tile corridor, and curing blindness or
+  confusion before reading a scroll.
 - **The Balrog:** the deep ladder (§12.4), the danger model and readiness
   checklists (§12.3), and the assisted track (§12.1), on the C64.
 
