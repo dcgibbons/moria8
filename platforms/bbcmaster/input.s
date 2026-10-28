@@ -149,7 +149,10 @@ input_wait_release:
 // input_run_key_held — Non-blocking check for any non-modifier key held.
 // OSBYTE $79, X=$10 scans keyboard from internal key 16 (skipping Shift/Ctrl/links);
 // returns X=$FF (N=1) if no key pressed, or X>=0 (N=0) if a key is pressed.
-// Output: A = nonzero if any key held, 0 if no key
+// Output: A = nonzero if any key held, 0 if no key; Z/N set from A, as on
+//         every port: core/game_loop.s branches on them. Restoring X last
+//         left Z from the caller's X, cancelling auto-rest and running at
+//         once whenever X was nonzero (M6 playtest).
 // Preserves: X, Y
 input_run_key_held:
     phx
@@ -166,6 +169,7 @@ input_run_key_held:
 !done:
     ply
     plx
+    cmp #0
     rts
 
 input_run_cancel_check:

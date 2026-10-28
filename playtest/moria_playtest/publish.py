@@ -1,9 +1,9 @@
 """``make playtest-publish``: the dashboard, published as static files.
 
 Every ``--every`` seconds, writes the dashboard page and a snapshot of its data
-(the newest round's overview, the M5 milestone grid, and each live worker's
-focus view) under ``build/playtest/publish/``, then copies it with ``rsync``
-over SSH to ``PLAYTEST_PUBLISH_TARGET`` (for example
+(the newest round's overview, the M5 milestone grid, M6's port coverage, and
+each live worker's focus view) under ``build/playtest/publish/``, then copies
+it with ``rsync`` over SSH to ``PLAYTEST_PUBLISH_TARGET`` (for example
 ``deploy@host:/var/www/playtest/``), using ``PLAYTEST_PUBLISH_KEY`` if set.
 Both come from the caller's environment only (AGENTS.md rule 9). The page
 reads the static files when it carries the ``playtest-static`` meta tag.
@@ -63,6 +63,7 @@ def snapshot(out: Path = OUT) -> dict[str, int]:
     overview["rounds"] = [overview["round"]] if overview.get("round") else []
     write_json(data / "overview.json", overview)
     write_json(data / "milestone.json", dashboard.milestone())
+    write_json(data / "ports.json", dashboard.ports())
     live = set()
     for suite in overview.get("suites", []):
         for status in suite.get("workers", []):

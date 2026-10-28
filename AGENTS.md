@@ -260,6 +260,21 @@ Operational rules:
   gate action is needed, infrastructure is broken, or the 30-second timeout cap
   blocks verification (see Non-Negotiable Rules).
 
+## Code Review Personalities
+
+When asked for a multi-agent code review with "the standard personalities",
+spawn one reviewer for each, review-only (no edits), each reporting findings
+with file:line, severity and a concrete failure scenario:
+
+1. **Grumpy staff engineer, tired of AI slop.** Rejects unneeded code,
+   speculative abstraction, comment noise, untested claims, and changes that
+   go past the request.
+2. **Worried engineering manager.** Weighs reliability, maintainability and
+   cost: what breaks next, who can maintain it, what the gates and runtime
+   cost, and what is left unverified.
+3. **6502 performance guru.** Cycle counts, byte budgets, zero-page and stack
+   use, banking/MMU overhead, page-crossing penalties, and memory layout.
+
 ## Finishing A Task
 
 A task is done when the requested change is edited, verified by its gate, and

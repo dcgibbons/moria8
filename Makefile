@@ -120,8 +120,21 @@ WORKERS ?= 4
 PLAYTEST_SEEDS = $(if $(SEEDS),--seeds $(SEEDS))
 # CHARACTER=human-warrior etc. (playtest/moria_playtest/goals.py CHARACTERS)
 PLAYTEST_CHARACTER = $(if $(CHARACTER),--character $(CHARACTER))
+# PORT=plus4, c128, apple2, atari8, bbcmaster or cx16 plays another port
+# (playtest/moria_playtest/ports.py, §21); the Plus/4 needs
+# PLAYTEST_PLUS4_KERNAL and PLAYTEST_DOS1541 (JiffyDOS), the MAME ports
+# A2ROMS, ATARI8ROMS or BBCMROMS, the X16 X16EMU and X16ROM.
+PORT ?= c64
+PLAYTEST_DISK = $(or $(PLAYTEST_DISK_$(PORT)),disk64)
+PLAYTEST_DISK_plus4 = diskplus4
+PLAYTEST_DISK_c128 = disk128
+PLAYTEST_DISK_apple2 = diskapple2
+PLAYTEST_DISK_atari8 = diskatari8
+PLAYTEST_DISK_bbcmaster = diskbbcmaster
+PLAYTEST_DISK_cx16 = buildcx16
+PLAYTEST_PORT = --port $(PORT)
 
-playtest-check: build64
+playtest-check: build64 buildplus4 build128 buildapple2 buildatari8 buildbbcmaster buildcx16
 	$(PLAYTEST_PY) -m moria_playtest.check
 
 playtest-smoke: disk64
@@ -130,14 +143,14 @@ playtest-smoke: disk64
 playtest-m0-report: disk64
 	$(PLAYTEST_RUN) -m moria_playtest.m0
 
-playtest-session: disk64
-	$(PLAYTEST_RUN) -m moria_playtest.session --goal $(GOAL) --workers $(WORKERS) $(PLAYTEST_SEEDS) $(PLAYTEST_CHARACTER) $(PLAYTEST_ARGS)
+playtest-session: $(PLAYTEST_DISK)
+	$(PLAYTEST_RUN) -m moria_playtest.session $(PLAYTEST_PORT) --goal $(GOAL) --workers $(WORKERS) $(PLAYTEST_SEEDS) $(PLAYTEST_CHARACTER) $(PLAYTEST_ARGS)
 
-playtest-qualify: disk64
-	$(PLAYTEST_RUN) -m moria_playtest.session --qualify --goal $(GOAL) --workers $(WORKERS) $(PLAYTEST_SEEDS) $(PLAYTEST_CHARACTER) $(PLAYTEST_ARGS)
+playtest-qualify: $(PLAYTEST_DISK)
+	$(PLAYTEST_RUN) -m moria_playtest.session $(PLAYTEST_PORT) --qualify --goal $(GOAL) --workers $(WORKERS) $(PLAYTEST_SEEDS) $(PLAYTEST_CHARACTER) $(PLAYTEST_ARGS)
 
-playtest-regress: disk64
-	$(PLAYTEST_RUN) -m moria_playtest.session --regress --workers $(WORKERS) $(PLAYTEST_CHARACTER) $(PLAYTEST_ARGS)
+playtest-regress: $(PLAYTEST_DISK)
+	$(PLAYTEST_RUN) -m moria_playtest.session $(PLAYTEST_PORT) --regress --workers $(WORKERS) $(PLAYTEST_CHARACTER) $(PLAYTEST_ARGS)
 
 playtest-repro: disk64
 	$(PLAYTEST_RUN) -m moria_playtest.repro $(FINDING)

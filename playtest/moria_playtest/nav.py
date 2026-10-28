@@ -22,9 +22,11 @@ DIRECTION_KEYS = {
 
 
 def read_map(game: Game) -> bytes:
+    if hasattr(game, "read_map"):   # a backend that keeps its own copy (X16Game)
+        return game.read_map()
     abi = game.abi
     size = abi.hal_layout_map_cols * abi.hal_layout_map_rows
-    return game.mon.mem_get(abi.MAP_BASE, size, game.ram)
+    return game.mon.mem_get(abi.MAP_BASE, size, game.map_bank)
 
 
 def find_tiles(tiles: bytes, cols: int, tile_type: int) -> list[tuple[int, int]]:

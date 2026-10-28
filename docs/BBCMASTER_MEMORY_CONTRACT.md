@@ -180,7 +180,7 @@ the font, character shadow, and screen bitmap in a single unified address space:
 * **Disk-Backed Cold Assets (Loaded on Demand via `OSFILE`):**
   `OVL.START` (`OVLSTA`), `OVL.DEATH` (`OVLDTH`), `OVL.HELP` (`OVLHLP`),
   `OVL.CHEST` (`OVLCHS`), `OVL.STORAGE` (`OVLSTO`), `OVL.TITLE` (`OVLTTL`),
-  `MONSTER.DB.2..4` (`MONDB2`..`MONDB4`), and `TITLE` (`TITLE`) load on demand
+  `MONSTER.DB.1..4` (`MONDB1`..`MONDB4`; `MONDB1` was left off the disk from 2026-10-25 to 2026-10-28, so every tier-1 creature was a nameless `?`), and `TITLE` (`TITLE`) load on demand
   from the DFS disk into `$A800-$BFFF` (or `MAP_BASE` `$8000` in Bank 5 for
   `TITLE`), matching the proven Apple IIe partial-cache architecture while
   leaving **`512`–`880` bytes of free growth slack in every single RAM bank**.

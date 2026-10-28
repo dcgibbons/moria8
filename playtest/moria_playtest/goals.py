@@ -11,6 +11,7 @@ from dataclasses import dataclass, replace
 from typing import Callable
 
 from .game import Observation
+from .ports import Port
 
 # Chargen keys for the scripted path (§6.4): race letter, class letter.
 HALF_TROLL_WARRIOR = ("H", "A")
@@ -119,6 +120,13 @@ def required(goal: Goal, seeds: int) -> int:
     """Seeds that must reach ``goal`` out of ``seeds`` run: its bar, scaled
     to the seed count and rounded up."""
     return -(-goal.qualify_bar * seeds // len(QUALIFICATION_SEEDS))
+
+
+def for_port(goal: Goal, port: Port) -> Goal:
+    """``goal`` on ``port``: its step budget grows with the level's area, so a
+    bigger map is the same test, not a shorter one (maintainer, 2026-10-27:
+    "they can be different"). A frozen suite records the budget it ran."""
+    return replace(goal, step_budget=round(goal.step_budget * port.map_scale))
 
 
 def for_character(goal: Goal, character: str) -> Goal:

@@ -121,3 +121,24 @@ class RomArgsTest(unittest.TestCase):
                              ["-kernal", str(kernal.resolve()), "-dos1541", str(drive.resolve())])
             with self.assertRaises(FileNotFoundError):
                 rom_args({"PLAYTEST_KERNAL": str(Path(tmp) / "missing.bin")})
+
+    def test_plus4_requires_its_jiffydos_pair(self) -> None:
+        """The Plus/4 has no REU and loads every overlay from the 1541, so it
+        plays under JiffyDOS (maintainer, 2026-10-27) and refuses to run
+        without it; the drive ROM is the C64's."""
+        import tempfile
+        from pathlib import Path
+        from moria_playtest.launch import rom_args
+        from moria_playtest.ports import PLUS4
+        with self.assertRaisesRegex(FileNotFoundError, "PLAYTEST_PLUS4_KERNAL"):
+            rom_args({"PLAYTEST_DOS1541": "x"}, PLUS4)
+        with self.assertRaisesRegex(FileNotFoundError, "PLAYTEST_DOS1541"):
+            rom_args({"PLAYTEST_PLUS4_KERNAL": "x"}, PLUS4)
+        with tempfile.TemporaryDirectory() as tmp:
+            kernal, drive = Path(tmp) / "k.bin", Path(tmp) / "d.bin"
+            kernal.write_bytes(b"\0" * 16384)
+            drive.write_bytes(b"\0" * 16384)
+            env = {"PLAYTEST_PLUS4_KERNAL": str(kernal), "PLAYTEST_DOS1541": str(drive),
+                   "PLAYTEST_KERNAL": "/the/c64/kernal.bin"}
+            self.assertEqual(rom_args(env, PLUS4),
+                             ["-kernal", str(kernal.resolve()), "-dos1541", str(drive.resolve())])

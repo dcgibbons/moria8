@@ -1225,7 +1225,7 @@ for runtime_name, expected_load in (
     ("128.proj.prg", 0x0A80),
     ("128.fdisk.prg", 0x0D60),
     ("128.world.prg", 0x6000),
-    ("128.item.prg", 0x8CA0),
+    ("128.item.prg", 0x8C50),
     ("128.names.prg", 0x7400),
     ("128.huff.prg", 0xF000),
     ("128.hvec.prg", 0xFFFA),

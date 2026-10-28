@@ -14,6 +14,8 @@ and the scores of earlier rounds of the same project.
   and the HP and mana of its last ``TIMELINE`` steps.
 - ``/api/milestone``: every race and class on the M5 goals: frozen or not,
   its bar, and the latest full result.
+- ``/api/ports``: M6's coverage map (§21.4): the primary characters on each
+  port's goals, frozen or not, the latest full result and when it ran.
 """
 
 from __future__ import annotations
@@ -32,11 +34,15 @@ from urllib.parse import parse_qs, urlparse
 from .goals import (CHARACTER_BARS, CHARACTERS, CLASS_BARS, CLASSES, GOALS, QUALIFICATION_SEEDS, RACE_KEYS,
                     for_character, required)
 from .launch import PLAYTEST_OUT, ROOT
+from .ports import C64, PORTS
 
 INDEX = ROOT / "playtest" / "dashboard" / "index.html"
 SESSIONS = PLAYTEST_OUT / "sessions"
+LIVE_SECONDS = 300   # a round that wrote within this is running
 SUITES = ROOT / "playtest" / "suites"
 MILESTONE_GOALS = ("clvl10", "reach_dl8")   # M4 and M5 (§16)
+PORT_GOALS = ("clvl5", "reach_dl5")          # M6 (§21.2)
+PORT_CHARACTERS = ("half-troll-warrior", "human-warrior", "human-priest", "human-mage", "human-rogue")
 DEFAULT_CHARACTER = "half-troll-warrior"     # suites named by goal alone (session.suite_path)
 TIMELINE = 400                               # steps of HP and mana the focus view draws
 NOW = PLAYTEST_OUT / "now.json"              # {"text": ...}: what the current runs are for
@@ -208,7 +214,8 @@ def suite(path: Path, goal: str, character: str) -> dict[str, Any]:
     for finding in path.glob("findings/*.json"):
         kind = (read_json(finding) or {}).get("kind", "?")
         findings[kind] = findings.get(kind, 0) + 1
-    return {"session": path.name, "goal": goal, "character": character, "bar": bar(goal, character),
+    return {"session": path.name, "goal": goal, "character": character, "port": summary.get("port", C64.name),
+            "bar": bar(goal, character),
             "seeds": len(QUALIFICATION_SEEDS), "started": summary.get("started"),
             "updated": mtime(path), "characters": characters, "workers": workers,
             "depth": cached(path / "events.jsonl", depth_series) or {}, "findings": findings}
@@ -244,7 +251,7 @@ def regress_suites(path: Path, character: str) -> list[dict[str, Any]]:
         status.pop("decisions", None)
     entries = []
     for goal in GOALS:
-        frozen = read_json(suite_file(goal, character))
+        frozen = read_json(suite_file(goal, character, summary.get("port", C64.name)))
         if not frozen:
             continue
         chars = by_goal.get(goal, [])
@@ -256,6 +263,7 @@ def regress_suites(path: Path, character: str) -> list[dict[str, Any]]:
         live = [w for w in statuses if w.get("goal") == goal and not w.get("outcome")
                 and len(chars) < len(frozen.get("seeds", []))]
         entries.append({"session": path.name, "goal": goal, "character": character,
+                        "port": summary.get("port", C64.name),
                         "bar": frozen.get("required", bar(goal, character)), "seeds": len(frozen.get("seeds", [])),
                         "started": summary.get("started"), "updated": mtime(path), "characters": chars,
                         "workers": live, "depth": {}, "findings": {}, "regress": True})
@@ -286,10 +294,20 @@ def overview(round_name: str | None) -> dict[str, Any]:
     for item in all_sessions:
         by_round.setdefault(item[1], []).append(item)
     latest = {name: max(mtime(p) for p, *_ in items) for name, items in by_round.items()}
-    if round_name not in by_round:
-        round_name = max(latest, key=latest.get)
-    project = round_name.split("-")[0]
-    members = sorted(by_round[round_name], key=lambda item: (item[3], item[2]))
+    rounds = sorted(by_round, key=latest.get, reverse=True)[:40]
+    if round_name in by_round:
+        names = [round_name]
+    else:
+        # Every round running now, not only the last to write: ports and
+        # regressions run side by side, and the view flipped between them
+        # (M6, 2026-10-28). With none running, the latest.
+        names = [name for name in rounds if time.time() - latest[name] < LIVE_SECONDS] or rounds[:1]
+        round_name = " + ".join(names)
+        if len(names) > 1:
+            rounds.insert(0, round_name)
+    project = names[0].split("-")[0]
+    members = sorted((item for name in names for item in by_round[name]),
+                     key=lambda item: (item[3], item[2], item[1]))
     suites = []
     for path, _, goal, character in members:
         if (cached(path / "summary.json", read_json) or {}).get("mode") == "regress":
@@ -297,7 +315,7 @@ def overview(round_name: str | None) -> dict[str, Any]:
         else:
             suites.append(suite(path, goal, character))
     return {"round": round_name, "now_text": (read_json(NOW) or {}).get("text", ""),
-            "rounds": sorted(by_round, key=latest.get, reverse=True)[:40],
+            "rounds": rounds,
             "suites": suites,
             "history": history(project, all_sessions),
             "now": time.time()}
@@ -322,8 +340,11 @@ def worker(session: str, number: int) -> dict[str, Any] | None:
     return status
 
 
-def suite_file(goal: str, character: str) -> Path:
-    return SUITES / (f"{goal}.json" if character == DEFAULT_CHARACTER else f"{goal}-{character}.json")
+def suite_file(goal: str, character: str, port: str = C64.name) -> Path:
+    """session.suite_path: the goal, then the character and port unless defaults."""
+    parts = [goal, *([character] if character != DEFAULT_CHARACTER else []),
+             *([port] if port != C64.name else [])]
+    return SUITES / f"{'-'.join(parts)}.json"
 
 
 def milestone() -> dict[str, Any]:
@@ -353,6 +374,39 @@ def milestone() -> dict[str, Any]:
             "characters": sorted(CHARACTERS), "cells": cells, "legend": legend()}
 
 
+def ports() -> dict[str, Any]:
+    """M6's coverage map (§21.4): each primary character on each port's
+    goals, its bar, whether its suite is frozen, and the latest finished
+    qualification with the day it ran."""
+    latest: dict[tuple[str, str, str], tuple[float, int, int, str]] = {}
+    for path, _, goal, character in sessions():
+        if goal not in PORT_GOALS or character not in PORT_CHARACTERS:
+            continue
+        summary = cached(path / "summary.json", read_json) or {}
+        chars = summary.get("characters", [])
+        if summary.get("mode") != "qualify" or len(chars) < len(QUALIFICATION_SEEDS):
+            continue
+        key = (summary.get("port", C64.name), goal, character)
+        when = mtime(path)
+        if when > latest.get(key, (0.0,))[0]:
+            latest[key] = (when, sum(c.get("outcome") == "reached" for c in chars), len(chars),
+                           (summary.get("started") or "")[:10])
+    cells, frozen_count = {}, {}
+    for port in PORTS:
+        frozen_count[port] = 0
+        for character in PORT_CHARACTERS:
+            for goal in PORT_GOALS:
+                frozen = read_json(suite_file(goal, character, port))
+                result = latest.get((port, goal, character))
+                frozen_count[port] += bool(frozen)
+                cells[f"{port} {character} {goal}"] = {
+                    "bar": (frozen or {}).get("required", bar(goal, character)), "frozen": bool(frozen),
+                    "frozen_on": (frozen or {}).get("frozen"),
+                    "latest": result[1] if result else None, "ran": result[3] if result else None}
+    return {"ports": list(PORTS), "characters": list(PORT_CHARACTERS), "goals": list(PORT_GOALS),
+            "cells": cells, "frozen": frozen_count, "suites": len(PORT_CHARACTERS) * len(PORT_GOALS)}
+
+
 def legend() -> dict[str, Any]:
     """What the page's bars and goals mean, from the code that sets them
     (goals.py), so the explanation cannot drift from the numbers."""
@@ -373,6 +427,9 @@ def make_handler() -> type[BaseHTTPRequestHandler]:
                 kind = "application/json"
             elif url.path == "/api/milestone":
                 body = json.dumps(milestone(), default=str).encode()
+                kind = "application/json"
+            elif url.path == "/api/ports":
+                body = json.dumps(ports(), default=str).encode()
                 kind = "application/json"
             elif url.path == "/api/worker":
                 body = json.dumps(worker(query.get("session", ""), int(query.get("worker", "0"))),

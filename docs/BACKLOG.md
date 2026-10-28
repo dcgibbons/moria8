@@ -1072,6 +1072,35 @@ Acceptance target:
 - `knowledge.py` no longer reads speed or movement flags, and M3's frozen
   suites still pass.
 
+### Playtester: block reads in the `x16emu` testbench
+
+The Commander X16 playtest backend (`playtest/moria_playtest/x16.py`) drives
+`x16emu -testbench`, whose only read is `RQM`: one byte per command and
+reply line. Reading the 198x66 map every step cost each X16 driver a full
+core (M6, 2026-10-28). `X16Game.read_map` now keeps a copy and rereads the
+view and the character's room, which cut map reads about sixfold, but the
+screen (VERA text, through the data port, several commands a cell) and every
+other read still go a byte at a time. The emulator is open source; a block
+read in the testbench would make all of them one request. Maintainer,
+2026-10-28: prepare a patch.
+
+Done 2026-10-28: a local `x16emu` commit (base `77f2bab`) adds `RQB <addr>
+<len>` (CPU space, `RQM`'s read path, one hex line), `RQV <vaddr> <len>`
+(VRAM, VERA registers untouched) and `STB <addr> <hex>`, with selftests.
+`x16.py` probes `RQB 0000 1` at start (a stock build answers `ERR`) and uses
+them when present: about 1.9 times the steps a second, half the driver CPU.
+
+Required work:
+
+- Offer the patch upstream (`X16Community/x16-emulator`); the maintainer
+  decides on submission.
+- Until it ships in a release, playtest machines need the patched build in
+  `X16EMU`; a stock build still plays, a byte at a time.
+
+Acceptance target:
+
+- The block reads are in a released `x16emu`.
+
 ### Normalize cross-platform save schema and versioning
 
 The shared serializer currently interprets a platform-local version byte:

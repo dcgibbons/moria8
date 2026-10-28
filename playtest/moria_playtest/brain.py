@@ -55,6 +55,9 @@ TRAP_HP = 0.50           # below this share of HP a known trap is impassable (ro
 BUMP_STEPS = 10          # steps a tile stays blocked after a move into it went nowhere
 UNSEEN_STEPS = 20        # steps an attack from something unseen keeps the bot from resting (M4)
 OSCILLATION_STEPS = 6    # command stops alternating between two squares before one is blocked (M4)
+LOOP_WINDOW = 40         # moves kept to catch a longer circuit (M6) ...
+LOOP_VISITS = 4          # ... a square entered this often within them ...
+LOOP_SQUARES = 12        # ... while they cover no more than this many squares is a loop
 CASTER_MEMORY = 100      # steps a caster seen or heard on the level still counts (M5f)
 CASTER_BURSTS = 2        # its biggest spells in a row that must not be able to kill (M5f round 8)
 NEAR_STEPS = 5           # steps a creature seen within 2 squares keeps the bot from resting (M4)
@@ -164,6 +167,7 @@ FOOD_PER_DEPTH = 3       # one more ration of reserve per this many levels down 
 FOOD_RESERVE = 2         # below this many known foods, head for town (§14.3 round 3)
 SHALLOW_DLVL = 2         # trips no deeper than this keep a smaller food reserve (M5b round 35)
 SHALLOW_FOOD_RESERVE = 1
+C64_MAP_AREA = 80 * 48   # the map the food reserve was tuned on; the 80-column ports' is 198x66 (M6)
 FOOD_MAX = 20            # rations' worth to carry at most (10 until M4 round 80: items stack
                          # now, so food no longer fills the pack; maintainer: "carry more food")
 RESTOCK_WAIT = 1500      # steps to keep playing after a town visit found no food
@@ -307,6 +311,7 @@ class Brain:
         self.unseen_attack = False             # attacked this turn with nothing in view
         self.attacked = False                  # attacked this turn (any message naming an attack)
         self.trail: list[Pos] = []             # recent command-stop positions (oscillation check)
+        self.loop_trail: list[Pos] = []        # recent move positions (longer-circuit check)
         self.no_food = False                   # "You have no food." until food is bought or picked up
         self.shopped = False                   # done shopping on this town visit
         self.potions_done = False              # done at the Temple on this town visit
@@ -330,6 +335,7 @@ class Brain:
         self.recalling = False                 # read one; the yank comes in 15-29 turns
         self.max_dlvl = 0                      # deepest level reached (where recall returns)
         self.trip_dlvl = 0                     # deepest level since the last time in town
+        self.map_scale = 1.0                   # the level's area against the C64's (food_reserve)
         self.at_store: int | None = None       # store the last walk into town led to
         self.clw = 0                           # Cure Light Wounds potions carried
         self.phase = 0                         # Phase Door scrolls carried
@@ -701,8 +707,7 @@ class Brain:
         # Early trips are shallow: eight rations, the gold for flasks and
         # potions (M5b round 49: with stores stocking five at a time, a
         # level-1 Dwarf left town with 15 rations and five flasks).
-        food_max = FOOD_EARLY_MAX if self.clvl < EARLY_LEVELS else FOOD_MAX
-        if self.shop_buys < FOOD_PER_VISIT and self.food < food_max:
+        if self.shop_buys < FOOD_PER_VISIT and self.food < self.food_max():
             # A Slime Mold is a third of a ration in a whole slot: only near
             # the reserve (M4 round 57: rations only once the reserve was
             # made bought nothing when the store had none, and 8 starved).
@@ -1110,7 +1115,9 @@ class Brain:
         """Two squares, back and forth: whatever flips the choice each step
         (a layer, a view change), going back again is no progress. Block the
         square for a while and choose again (M4 round 34: seeds 1001, 1003,
-        1012 stepped A-B-A-B for hundreds of steps and died there)."""
+        1012 stepped A-B-A-B for hundreds of steps and died there). A longer
+        circuit is no progress either: a C128 Warrior walked an 8-square lap
+        toward the up stairs 2,300 times and starved (M6, seed 1002)."""
         if decision.key not in DIRS.values() or decision.layer in ("fight", "look", "prompt"):
             return decision
         # Moves only: a potion drunk between the steps put the same square in
@@ -1118,16 +1125,19 @@ class Brain:
         # stepped back and forth beside a Yellow Jelly, drinking every few
         # steps, until it died (M5a round 7: 5 Yellow Jelly deaths).
         self.trail = (self.trail + [view.pos])[-OSCILLATION_STEPS:]
-        if len(self.trail) < OSCILLATION_STEPS or len(set(self.trail)) != 2 or any(
-                a == b for a, b in zip(self.trail, self.trail[1:])):
-            return decision
+        self.loop_trail = (self.loop_trail + [view.pos])[-LOOP_WINDOW:]
         step = next(d for d, k in DIRS.items() if k == decision.key)
         target = (view.pos[0] + step[0], view.pos[1] + step[1])
-        if target not in self.trail:
+        two_squares = (len(self.trail) == OSCILLATION_STEPS and len(set(self.trail)) == 2
+                       and not any(a == b for a, b in zip(self.trail, self.trail[1:]))
+                       and target in self.trail)
+        circuit = (self.loop_trail.count(target) >= LOOP_VISITS
+                   and len(set(self.loop_trail)) <= LOOP_SQUARES)
+        if not (two_squares or circuit):
             return decision
         self.level.bumped[target] = obs.step + BUMP_STEPS
         view.blocked.add(target)
-        self.trail = []
+        self.trail, self.loop_trail = [], []
         return self.choose(obs, view)
 
     def remember_glyphs(self, view: View) -> None:
@@ -1152,6 +1162,7 @@ class Brain:
                 if not self.stationary(c) or chebyshev(p, view.pos) <= 1}
 
     def track(self, obs: Observation, view: View) -> None:
+        self.map_scale = view.cols * view.rows / C64_MAP_AREA
         if obs.dlvl != self.last_dlvl:
             self.last_dlvl = obs.dlvl
             self.level = LevelMemory()
@@ -1263,7 +1274,9 @@ class Brain:
         # The last torch is the light home: steps undercount its burn (search
         # mode spends two turns a step, an auto-rest many), and characters went
         # dark far from town with no Word of Recall (M5b round 45: five runs).
-        return (self.light_left < LIGHT_RESERVE or not self.lamp) and not refill and not self.lamp_packed
+        # The way home grows with the level's area, as food_reserve's (M6).
+        return ((self.light_left < LIGHT_RESERVE * self.map_scale or not self.lamp)
+                and not refill and not self.lamp_packed)
 
     def final_step(self, obs: Observation) -> bool:
         """One more staircase down completes a depth goal (round 12)."""
@@ -1280,9 +1293,20 @@ class Brain:
         # (M5b round 35: Dwarf Priests held below two rations by a store that
         # had one or two climbed back about 250 times a run and never went
         # deeper; the starvation deaths behind the scale were on DL3-8).
+        # The way home grows with the level's area: on the 80-column ports'
+        # 198x66 maps the C64's reserve starved 53 of 66 deaths, on DL1-2 (M6
+        # C128 round m6a: "Faint" at death), and scaled by the width alone 4
+        # of 6 (m6b): an up staircase not yet seen is a level's exploring away.
         if self.trip_dlvl <= SHALLOW_DLVL:
-            return SHALLOW_FOOD_RESERVE
-        return FOOD_RESERVE + self.trip_dlvl // FOOD_PER_DEPTH
+            return math.ceil(SHALLOW_FOOD_RESERVE * self.map_scale)
+        return math.ceil((FOOD_RESERVE + self.trip_dlvl // FOOD_PER_DEPTH) * self.map_scale)
+
+    def food_max(self) -> int:
+        """Rations' worth to carry at most: eight on early, shallow trips, and
+        more on a bigger map, where the way home is longer (M6: the Apple
+        IIe's 198x66 levels starved Half-Trolls carrying the C64's eight)."""
+        food_max = FOOD_EARLY_MAX if self.clvl < EARLY_LEVELS else FOOD_MAX
+        return math.ceil(food_max * self.map_scale)
 
     def food_low(self) -> bool:
         """Below the reserve, in rations."""
@@ -2275,15 +2299,38 @@ class Brain:
         """Search mode on: the status line shows "Search*" (row 21 or 23 by layout)."""
         return any("Search*" in row for row in obs.rows[21:24])
 
+    def search_hazard(self, obs: Observation) -> str | None:
+        """Why search mode's half speed could kill now, or None."""
+        if self.unseen_attack or self.level.retreat_to is not None:
+            return "under attack"
+        if obs.hp < HUNT_HP * obs.mhp:
+            return "hurt"
+        return None
+
     def search_mode(self, obs: Observation, view: View) -> Decision | None:
         """Search mode while moving about with nothing in view: every step
         searches the squares around, finding traps before they spring
         (maintainer, 2026-10-25: rockfall traps killed level-1 Priests). It
         halves speed (an extra turn after each action); the game turns it off
         when a creature comes into view, on any attack or trap, and on a new
-        level, as Umoria's playerDisturb does."""
-        if obs.dlvl == 0 or self.searching(obs) or self.threats(view) or self.unseen_attack \
-                or obs.step < self.search_mode_after:
+        level, as Umoria's playerDisturb does.
+
+        Not always, though: a spell does not disturb (VMS), and a creature out
+        of the light never came into view. So the bot turns it off itself
+        when hurt or under attack, and does not turn it back on then. M6:
+        a C128 Warrior fled a Novice Priest's spells at half speed for 30
+        steps; Apple IIe Mages died resting from poison, searching."""
+        hazard = self.search_hazard(obs)
+        if self.searching(obs):
+            if hazard and obs.dlvl:
+                return Decision(KEY_SEARCH_MODE, "search-mode", f"{hazard}: search mode off")
+            return None
+        if self.food_low():
+            # Not on the way home for food: each step would cost two turns of
+            # it, and on the 80-column ports' 198x66 maps warriors starved
+            # walking home searching (M6).
+            return None
+        if hazard or obs.dlvl == 0 or self.threats(view) or obs.step < self.search_mode_after:
             return None
         self.search_mode_after = obs.step + SEARCH_MODE_EVERY
         return Decision(KEY_SEARCH_MODE, "search-mode", "nothing in view: search mode on")

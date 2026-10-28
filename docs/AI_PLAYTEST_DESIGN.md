@@ -701,7 +701,7 @@ Each milestone has a measurable exit criterion and an explicit stop rule.
 | **M3 `reach_dl5`, `clvl5`** | The brain rounds in §14.3: any-glyph creatures, food and light logistics, threat memory, avoiding stationary monsters, sealed-area fallback | Both goals work (§7.2, ≥16/20); all frozen suites still pass; no `unknown_prompt`. **Met 2026-10-22 (§14.9).** |
 | **M4 `clvl10`, `reach_dl8`** (`reach_dl10` until 2026-10-24) | The brain rounds in §15.3: stationary hazards, fear and fast attackers, then what the re-measured clusters show | Both goals work (§7.2, ≥16/20); all frozen suites still pass; no `unknown_prompt`. Started 2026-10-22 (`/goal`, §15). **Met 2026-10-24 (§15.6).** |
 | **M5 Every race and class at M4** | §16: the M4 goals for every Warrior race, then Paladin and Priest, then Rogue and Ranger, then Mage, then every other race of each class | `clvl10` and `reach_dl8` work (§7.2, ≥16/20; ≥10/20 for Mages and Priests, §16.1 amended 2026-10-27) for each of the 31 race/class combinations, each frozen as its own suite; all frozen suites still pass; no `unknown_prompt`. Planned 2026-10-24 (§16). **M5a (every Warrior race) met 2026-10-25 (§16.8); M5b-M5e met 2026-10-26; M5f met 2026-10-27 (§20.5): 62 of 62 goals frozen.** |
-| **M6 Every port plays** | §21: a backend per platform (Plus/4, C128, the MAME ports Apple IIe, Atari 8-bit and BBC Master 128, then the Commander X16); the C64's frozen goals on each; a platform coverage map on the dashboard | On each of the seven ports, `clvl5` and `reach_dl5` frozen for the Half-Troll Warrior and a Human Warrior, Priest, Mage and Rogue (Paladin and Ranger are not in the primary set); no `unknown_prompt`; the C64 suites still pass. The C128 backend (below) is part of it. Planned 2026-10-27 (§21). |
+| **M6 Every port plays** | §21: a backend per platform (Plus/4, C128, the MAME ports Apple IIe, Atari 8-bit and BBC Master 128, then the Commander X16); the C64's frozen goals on each; a platform coverage map on the dashboard | On each of the seven ports, `clvl5` and `reach_dl5` frozen for the Half-Troll Warrior and a Human Warrior, Priest, Mage and Rogue (Paladin and Ranger are not in the primary set); no `unknown_prompt`; the C64 suites still pass. The C128 backend (below) is part of it. Planned 2026-10-27 (§21). **M6 met 2026-10-28 (§21.10): 70 of 70 goals frozen.** |
 | **M7 More of the game, and balance** | §21.5: feature coverage (spells, items, creatures, traps, stores, recall), the first Word of Recall cycle and `reach_dl15`/`clvl15`, and a difficulty rating per race and class from 40-seed runs | Planned 2026-10-27, after M6; its exit criterion is set when it starts. |
 | **C128 backend** (M5c until 2026-10-26; not scheduled) | Half-Troll Warrior on `x128`, no brain work: the backend (§12.7) for VDC screen text, banked reads, the C128 keyboard buffer and the 198×66 map | Every frozen C64 suite passes on the C128 at its bar. Moved out of M5 by the maintainer on 2026-10-26 (§16.2) |
 
@@ -2446,3 +2446,138 @@ with a coverage count per platform and the date each cell last ran.
 - **The Balrog:** the deep ladder (§12.4), the danger model and readiness
   checklists (§12.3), and the assisted track (§12.1), on the C64.
 
+
+### 21.6 The port layer (from 2026-10-27)
+
+`playtest/moria_playtest/ports.py` describes each port to the driver: its
+emulator, disk and symbols, the source constants and labels the ABI table
+checks (`abi.tables(port)`), its KERNAL addresses, how a crash entry is
+told from banked RAM code, where the screen, colours and map are read, and
+how a key is fed. `make playtest-qualify PORT=plus4` (or `c128`) plays
+another port; a suite records `"port"` and is named with it
+(`clvl5-human-mage-plus4.json`), and `--regress` runs one port's suites.
+`make playtest-check` checks every port's ABI table against its build.
+
+| | C64 | Plus/4 | C128 |
+|---|---|---|---|
+| Emulator, disk | `x64sc`, `.d64`, REU | `xplus4`, `.d64`, no REU | `x128`, `.d71` on a 1571, REU, `-80col` |
+| Key feed | KERNAL buffer `$0277`/`$C6` | KERNAL buffer `$0527`/`$EF` | the game scans the matrix (no buffer): the driver stops in `input_get_key`'s or `input_get_key_fast`'s wait loop and returns the key through its `sta igk_key` exit |
+| Crash entries | `$FCE2`, `$FE66` with `$01` HIRAM set | `$FFF6` with TED `$FF13` bit 0 set | `$FF3D`, `$FF05` with MMU `$D500` bits 5-4 clear |
+| Screen, map | `$0400`, `$C000` | `$0C00`, `$C800` | VDC `$0000` (80 columns), Bank 1 `$4000` |
+| ROMs | optional JiffyDOS pair | JiffyDOS required (`PLAYTEST_PLUS4_KERNAL`, `PLAYTEST_DOS1541`) | VICE's |
+
+- **The Plus/4 plays under JiffyDOS** (maintainer, 2026-10-27: "definitely
+  use the jiffydos kernal on plus/4, it's too slow otherwise"): with no
+  REU, every overlay and tier crossing loads from the 1541. The drive ROM
+  is the C64's (`JiffyDOS_C1541.bin`).
+- **x128 snapshots leave out the VDC.** A restored C128 showed the VDC's
+  power-on pattern, and the game reads VDC RAM back, so the driver saves the
+  VDC's 64 KB beside each snapshot (`<name>.vdc`) and writes it back after
+  the undump (`Port.snapshot_banks`).
+- **The C128's key stop is in the wait loop, not at the entry.** Jumping
+  from `input_get_key`'s entry to its exit skipped
+  `c128_restore_runtime_vectors` (the MMU mode, the common-RAM map helpers,
+  the VDC mode), which the game runs on every key: round m6d's 19 "hangs"
+  had the PC in tables and zero page, with map/monster-table mismatches
+  beside them. These were the harness's, not the game's; m6d is void.
+- **Plus/4 snapshots do not replay exactly.** Restoring a mid-game Plus/4
+  snapshot and feeding the recorded keys diverged from the original run
+  (seed 1020 below), so a Plus/4 finding is reproduced from the seed, not
+  the snapshot.
+
+### 21.7 Plus/4 (2026-10-27)
+
+All ten primary suites froze on the first qualification, at the C64's bars
+(16/20, 10/20 for the Mage and Priest):
+
+| | Half-Troll Warrior | Human Warrior | Human Priest | Human Mage | Human Rogue |
+|---|---|---|---|---|---|
+| `clvl5` | 20/20 | 19/20 | 14/20 | 14/20 | 20/20 |
+| `reach_dl5` | 18/20 | 20/20 | 12/20 | 15/20 | 20/20 |
+
+**Open finding: a JiffyDOS load fails on the Plus/4** (maintainer,
+2026-10-27: noted, not fixed). Half-Troll Warrior `reach_dl5` seed 1020,
+step 2141: `>` on the town's staircase loads `4.GEN`, and the KERNAL `LOAD`
+returns error 4 (file not found) with ST `$43` (serial timeouts). The name
+and device are right, the disk image is unchanged, the IRQ vector is the
+KERNAL's own (`$CE0E`), and every earlier load in that game worked. It
+fails at the same step from a fresh start; under VICE's stock Plus/4 KERNAL
+and 1541 ROMs the seed reaches DL5. `level_change_generate_current` then
+takes `jmp entry_main`, which on the Plus/4 runs into `restart_entry` and
+the title, and the character is lost (the auditor files it as a `stack`
+finding at the new character's first command). Open: whether the
+transfer timeout is VICE's or the game's, and whether a failed overlay load
+should retry before giving up.
+
+### 21.8 Bigger maps (from 2026-10-27)
+
+The four 80-column ports (C128, Apple IIe, BBC Master, Commander X16) play
+Umoria's own 198x66 level, 3.4 times the C64's 80x48 (`Port.map_scale`).
+
+- **Budgets** (maintainer, 2026-10-27: "they can be different"): a port's
+  goals get the C64 budget times its map scale (`goals.for_port`):
+  `reach_dl5` 68,062 steps, `clvl5` 102,094. A frozen suite records its own.
+- **Reserves:** the food and light that send the bot home scale with the
+  area too (`Brain.map_scale`). The first C128 round (m6a) starved 53 of its
+  66 deaths, on DL1-2, with the C64's one-ration shallow reserve; scaled by
+  the width alone (two rations), 4 of the next 6 (m6b): an up staircase not
+  yet seen is a level's exploring away. On the 40-column ports the scale is 1
+  and nothing changes.
+- Other step-counted patience (`STALL_STEPS`, `STUCK_STEPS`, the search
+  budget, restock waits) is left as tuned until a trace shows it binding.
+- **Stairs** (maintainer, 2026-10-28: "I'd match"): levels had one up and
+  two down staircases, so the way out of a 198x66 level was a long walk.
+  They now carry upstream's 1..2 up and 3..4 down on every port
+  (`DGN-016`, `docs/DUNGEON_GENERATION_CONTRACT.md`). Every frozen suite's
+  levels change with it.
+- **X16 map reads** (2026-10-28): the testbench reads a byte a command, so
+  the whole map every step cost each X16 driver a full core.
+  `X16Game.read_map` keeps a copy and rereads the view and the character's
+  room (a lit room reaches past the screen edge), with the whole map on a
+  new level, after a key that can change squares out of sight, and every 50
+  steps: about six times less reading, and two seeds' 5,600 steps matched a
+  whole read. An `x16emu` patched for block reads (`RQB`, `RQV`, `STB`;
+  `docs/BACKLOG.md`) is used when present: about 1.9 times the steps a
+  second again. X16 games are not deterministic run to run on either read
+  path (two runs of one seed press different keys); the cause is not yet
+  found.
+- **Search mode off** (m6h): a monster's spell does not end search mode
+  (VMS, unlike Umoria), and nor does a creature out of the light. A C128
+  Warrior fled a Novice Priest at half speed for 30 steps, and Apple IIe
+  Mages rested from poison searching. The bot turns it off itself when hurt
+  (below `HUNT_HP`) or under attack, and does not turn it back on then.
+
+### 21.9 BBC Master auto-rest cancelled itself (fixed 2026-10-28)
+
+On the BBC Master, Ctrl+R armed auto-rest and the main loop cleared it before
+the first rest turn, so a damaged BBC character tried to rest for its whole
+budget (round m6a: clvl5 games ran out their 102,094 steps on DL1). It was
+the game, on real hardware too, not the harness: OSBYTE `$79` returned
+X = `$FF` (no key) and `input_run_key_held` put 0 in A, but its closing
+`ply`/`plx` left Z from the caller's X, and `core/game_loop.s` branches on
+the flags straight after `hal_input_any_key_held`. With X nonzero, auto-rest
+and running were cancelled at once. Found with System VIA and write taps in
+MAME; fixed by setting the flags from A (`cmp #0`) as every other port's
+probe does. The BBC `dungeon_descend` scenario now rests hurt with Ctrl+R
+and fails without the fix.
+
+The BBC `dungeon_descend` scenario also checks tier 1 is loaded on DL1:
+`MONDB1` was left off the BBC disk from 2026-10-25 (tier 1 stopped being
+cached in Sideways RAM), so every DL 1-5 creature was a nameless `?` with no
+glyph. Rounds m6a and m6j played on that disk and are void.
+
+### 21.10 M6 met (2026-10-28)
+
+**M6 met 2026-10-28: 70 of 70 goals frozen**, `clvl5` and `reach_dl5` for
+the Half-Troll Warrior and a Human Warrior, Priest, Mage and Rogue on all
+seven ports. The last port, the BBC Master (round m6k): Half-Troll 20 and
+18, Human Warrior 20 and 20, Rogue 18 and 18, Priest 14 and 13, Mage 12
+and 10 (`clvl5`, `reach_dl5`; bars 16, 10 for the Priest and Mage). The
+level changes of the round (upstream stair counts, DGN-016) were followed
+by a regression of every port's Human Warrior suites: 19/20 or 20/20 on
+each, the C64's clvl10 and reach_dl8 too.
+
+Game defects M6 found and fixed: the C128 tier cache overwriting the item
+names (`check_c128_payloads.py` now gates the payloads), stale monster tiers
+on the Apple IIe and X16 disks, the BBC Master's held-key probe (§21.9) and
+its missing `MONDB1`. Port differences fixed: stair counts (DGN-016).

@@ -17,16 +17,18 @@ from pathlib import Path
 
 from . import abi as abimod
 from .game import Game, Observation
-from .launch import (PLAYTEST_OUT, SHIPPING, VICE_RESOURCE_ARGS, Build, ViceProcess,
-                     allocate_port, check_disk, prepare_worker, rom_args, sha256)
+from .launch import (PLAYTEST_OUT, SHIPPING, Build, ViceProcess, allocate_port, check_disk,
+                     prepare_worker, rom_args, sha256)
+from .mame import MameGame, MameProcess
+from .x16 import X16Game, X16Process
 
 CACHE = PLAYTEST_OUT / "cache"
 
 
 def cache_key(emulator: str, build: Build = SHIPPING) -> str:
     # A title snapshot taken under one KERNAL is not restored under another.
-    roms = rom_args()
-    material = "|".join([sha256(build.prg), sha256(build.disk), emulator, *VICE_RESOURCE_ARGS,
+    roms = rom_args(port=build.target)
+    material = "|".join([sha256(build.prg), sha256(build.disk), emulator, *build.target.resource_args,
                          *(sha256(Path(a)) if i % 2 else a for i, a in enumerate(roms))])
     return hashlib.sha256(material.encode()).hexdigest()[:16]
 
@@ -46,6 +48,8 @@ class Snapshot:
     def delete(self) -> None:
         self.path.unlink(missing_ok=True)
         self.brain_path.unlink(missing_ok=True)
+        for side in self.path.parent.glob(f"{self.path.stem}.*"):   # ports.Port.snapshot_banks
+            side.unlink(missing_ok=True)
 
     @classmethod
     def load(cls, path: Path) -> "Snapshot":
@@ -55,17 +59,17 @@ class Snapshot:
 
 
 class Worker:
-    def __init__(self, run_dir: Path, worker_id: int = 0, *, emulator: str = "x64sc",
+    def __init__(self, run_dir: Path, worker_id: int = 0, *, emulator: str | None = None,
                  hang_emulated_seconds: float = 300.0, build: Build = SHIPPING) -> None:
         self.run_dir = run_dir
         self.worker_id = worker_id
-        self.emulator = emulator
+        self.emulator = emulator or build.target.emulator
         self.hang_emulated_seconds = hang_emulated_seconds
         self.build = build
         check_disk(build)
         self.workdir, self.disk = prepare_worker(run_dir, worker_id, build.disk)
-        self.abi = abimod.load(build.vs)
-        self.vp: ViceProcess | None = None
+        self.abi = abimod.load(build.vs, port=build.target)
+        self.vp: ViceProcess | MameProcess | None = None
         self.game: Game | None = None
         self.restarts = 0
 
@@ -73,11 +77,25 @@ class Worker:
 
     def _spawn(self, autostart: bool) -> Game:
         self.stop()
+        port = self.build.target
+        if port.backend == "mame":
+            process = MameProcess(self.worker_id, self.workdir, self.disk, port,
+                                  self.hang_emulated_seconds)
+            self.vp = process.start(rom_args(port=port), MameGame.tap_spec(self.abi, port))   # type: ignore[assignment]
+            self.game = MameGame(process, self.abi, self.workdir, port=port,
+                                 hang_emulated_seconds=self.hang_emulated_seconds)
+            return self.game
+        if port.backend == "x16":
+            process = X16Process(self.worker_id, self.workdir, self.disk, port)
+            emulator = os.environ.get("X16EMU") or port.emulator
+            self.vp = process.start_x16(emulator, rom_args(port=port)[1])   # type: ignore[assignment]
+            self.game = X16Game(process, self.abi, self.workdir, port=port)
+            return self.game
         self.vp = ViceProcess(self.worker_id, self.workdir, self.disk,
-                              allocate_port(self.worker_id), self.emulator)
+                              allocate_port(self.worker_id), self.emulator, self.build.target)
         monitor = self.vp.start(autostart=autostart)
         self.game = Game(monitor, self.abi, self.workdir,
-                         hang_emulated_seconds=self.hang_emulated_seconds)
+                         hang_emulated_seconds=self.hang_emulated_seconds, port=self.build.target)
         return self.game
 
     def stop(self) -> None:
@@ -96,12 +114,17 @@ class Worker:
             # and one's rename removed the other's file (M5a round 3).
             tmp = path.with_suffix(f".tmp{os.getpid()}.vsf")
             game.dump(tmp)
+            for bank in self.build.target.snapshot_banks:   # beside it, before it appears
+                tmp.with_suffix(f".{bank}").replace(path.with_suffix(f".{bank}"))
             tmp.replace(path)
             self.stop()
         return path
 
     def start_at_title(self) -> Observation:
-        """Fresh VICE with the private disk attached, resumed from the title snapshot."""
+        """Fresh VICE with the private disk attached, resumed from the title
+        snapshot; a port without snapshots boots."""
+        if not self.build.target.snapshots:
+            return self._spawn(autostart=True).boot()
         title = self.title_snapshot()
         return self._spawn(autostart=False).undump(title)
 
@@ -117,7 +140,10 @@ class Worker:
 
     # -- snapshots --------------------------------------------------------
 
-    def snapshot(self, name: str, brain: dict[str, object]) -> Snapshot:
+    def snapshot(self, name: str, brain: dict[str, object]) -> Snapshot | None:
+        """None on a port that cannot snapshot (``Port.snapshots``)."""
+        if not self.build.target.snapshots:
+            return None
         assert self.game is not None
         snap = Snapshot(self.workdir / "snapshots" / f"{name}.vsf", dict(brain))
         self.game.dump(snap.path)

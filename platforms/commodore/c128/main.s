@@ -122,9 +122,12 @@
 .segmentdef RuntimeProjectileData [outPrg=OVL_OUT + "/128.proj.prg", start=$0a80, min=$0a80, max=$0aff]
 .segmentdef RuntimeCommonData [outPrg=OVL_OUT + "/128.fdisk.prg", start=$0d60, min=$0d60, max=$0fff]
 .segmentdef RuntimeLowData    [outPrg=OVL_OUT + "/128.runtime.prg", start=$1000, min=$1000, max=$3fff]
-.segmentdef C128ResidentItemNames [outPrg=OVL_OUT + "/128.names.prg", start=$7400, min=$7400, max=$7eff]
-.segmentdef C128ResidentWorld [outPrg=OVL_OUT + "/128.world.prg", start=$6000, min=$6000, max=$8cff]
-.segmentdef C128ResidentItems [outPrg=OVL_OUT + "/128.item.prg", start=$8ca0, min=$8ca0, max=$a9ff]
+// Each resident payload's max is where the next owner starts, so the
+// assembler itself refuses an overrun: later imports add to these segments
+// past any end label.
+.segmentdef C128ResidentItemNames [outPrg=OVL_OUT + "/128.names.prg", start=$7400, min=$7400, max=$7a5f]
+.segmentdef C128ResidentWorld [outPrg=OVL_OUT + "/128.world.prg", start=$6000, min=$6000, max=$8c4f]
+.segmentdef C128ResidentItems [outPrg=OVL_OUT + "/128.item.prg", start=$8c50, min=$8c50, max=$a7ff]
 .segmentdef C128ResidentSelect [outPrg=OVL_OUT + "/128.select.prg", start=$a800, min=$a800, max=$aaff]
 .segmentdef C128ResidentDiskIo [outPrg=OVL_OUT + "/128.diskio.prg", start=$ab00, min=$ab00, max=$aeff]
 .segmentdef C128ResidentPersist [outPrg=OVL_OUT + "/128.persist.prg", start=$af00, min=$af00, max=$cfff]
@@ -4084,11 +4087,8 @@ scroll_teleport_level_exec:
 #import "../../../core/game_loop.s"
 #undef DISARM_COMMAND_EXTERNAL
 #undef C128_SCRIPTED_SPELL_SEED_EXTERNAL
-// The items and world payload end labels live past the game_loop import
-// because the chest open pre-dispatch (ChestRouteSegment) contributes to the
-// items payload from there.
-.segment C128ResidentItems
-c128_resident_items_end:
+// The items payload's end label is at the end of this file: the chest open
+// pre-dispatch (ChestRouteSegment) and later imports add to it past here.
 .segment C128ResidentWorld
 // The recall prompt lives in the resident world payload: RuntimeLowData was
 // full when a monster sighting began ending search mode (2026-10-25).
@@ -5190,7 +5190,7 @@ program_end:
 .assert "C128 tunnel guard stays in Default payload", dungeon_tunnel_guard_reset >= $1c01 && dungeon_tunnel_guard_step < program_end, true
 .assert "C128 resident world starts at $6000", c128_resident_world_start == $6000, true
 .assert "C128 resident world fits below items payload", c128_resident_world_end <= c128_resident_items_start, true
-.assert "C128 resident items starts at $8CA0", c128_resident_items_start == $8CA0, true
+.assert "C128 resident items starts at $8C50", c128_resident_items_start == $8C50, true
 .assert "C128 resident items fits below selector payload", c128_resident_items_end <= $A800, true
 .assert "C128 resident selector starts at $A800", c128_resident_select_start == $A800, true
 .assert "C128 resident selector fits below disk-I/O payload", c128_resident_select_end <= $AB00, true
@@ -5207,6 +5207,7 @@ program_end:
 .assert "C128 resident play stays below the I/O hole", c128_resident_play_end <= $D000, true
 .assert "Staged Bank1 source span matches boot scrub ceiling", BANK1_STAGE_SOURCE_END == BANK1_RESERVED_TOP_END, true
 .assert "Tier cache window remains large enough for tier preload", BANK1_TIER_CACHE_SIZE >= TIER_PRELOAD_REQUIRED, true
+.assert "Tiers 1-4 fit the Bank 1 tier cache", TIER1_SIZE + TIER2_SIZE + TIER3_SIZE + TIER4_SIZE <= BANK1_TIER_CACHE_SIZE, true
 .assert "MMU helper page stays inside common RAM ownership", MMU_COMMON_HELPERS_BASE >= BANK1_COMMON_BASE, true
 .assert "MMU helper page ends inside common RAM ownership", MMU_COMMON_HELPERS_BASE + (mmu_common_helpers_blob_end - mmu_common_helpers_blob) - 1 <= BANK1_COMMON_END, true
 .assert "C128 visibility row helper lives in common RAM", mmu_common_mark_visited_row_ptr0 >= MMU_COMMON_HELPERS_BASE && mmu_common_mark_visited_row_ptr0 < runtime_common_data_start, true
@@ -5220,8 +5221,8 @@ program_end:
 .assert "C128 item-name logical file avoids marker and command channel", RESIDENT_ITEM_NAMES_FILE_NUM != hal_storage_marker_file_num && RESIDENT_ITEM_NAMES_FILE_NUM < hal_storage_cmd_channel, true
 .assert "Low runtime code stays below floor-item table", runtime_low_data_end <= FLOOR_ITEM_BASE, true
 .assert "Low runtime code stays below C128 scratch page", runtime_low_data_end <= CREATURE_BASE, true
-.assert "C128 resident items loader matches segment start", c128_resident_items_start == $8ca0, true
-.assert "C128 resident items load address matches segment start", c128_resident_items_start == $8ca0, true
+.assert "C128 resident items loader matches segment start", c128_resident_items_start == $8c50, true
+.assert "C128 resident items load address matches segment start", c128_resident_items_start == $8c50, true
 .assert "C128 play signature starts payload", c128_resident_play_sig0 == c128_resident_play_start, true
 .assert "C128 play signature is three bytes", c128_resident_play_body - c128_resident_play_sig0, 3
 .assert "C128 play body follows signature", c128_resident_play_body == c128_resident_play_start + 3, true
@@ -5494,3 +5495,14 @@ ovl_gen_end:
 .print "DungeonGen overlay: " + (ovl_gen_end - $e000) + " bytes at $E000-$" + toHexString(ovl_gen_end)
 .assert "DungeonGen overlay fits in $E000-$EFFF", ovl_gen_end <= $f000, true
 .assert "banked_payload_start above overlay ceiling", first_banked_function > ovl_gen_end, true
+
+// ============================================================
+// Resident payload ends, past every import: an import that switches back
+// into one of these segments adds to it after any earlier label.
+// ============================================================
+.segment C128ResidentItems
+c128_resident_items_end:
+.segment C128ResidentItemNames
+c128_resident_item_names_end:
+.assert "C128 item-name payload ends inside the Bank 1 DB region", c128_resident_item_names_end <= BANK1_DB_END + 1, true
+.assert "C128 item-name payload ends before the tier cache", c128_resident_item_names_end <= BANK1_TIER_CACHE_BASE, true

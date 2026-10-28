@@ -2,11 +2,11 @@
 // overlay_storage.s — BBC Master 128 Sideways RAM overlay/tier cache + play-slot check (< $3000).
 //
 // Authority: docs/BBCMASTER_MEMORY_CONTRACT.md & cache_layout.s.
-// Six hot overlay classes (TOWN, GEN, UI, ITEMS, SPELL, MODAL) and Monster Tier 1
-// (no longer MONDB1) are preloaded into Sideways RAM Banks 5, 6, and 7 at boot by MORIA8P.
+// Six hot overlay classes (TOWN, GEN, UI, ITEMS, SPELL, MODAL) are preloaded
+// into Sideways RAM Banks 5, 6, and 7 at boot by MORIA8P.
 // Cache hits copy the payload pages via beeb_swr_copy_to_window into Bank 4's
 // $A800-$BFFF window with zero disk I/O. Cold overlays (OVLSTA, OVLDTH, OVLHLP,
-// OVLCHS, OVLSTO, OVLTTL) and MONDB2..4 fall through to DFS.
+// OVLCHS, OVLSTO, OVLTTL) and MONDB1..4 fall through to DFS.
 
 #import "hal/storage_policy.s"
 #import "cache_layout.s"

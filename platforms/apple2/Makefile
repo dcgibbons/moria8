@@ -202,16 +202,16 @@ $(A2_MAIN_PRG) $(A2_PLAY_PRG) $(A2_AUX_PRG) $(A2_HUFF_PRG) $(A2_OVL_PRGS) $(OUTA
 	@test -f "$@" || { rm -f "$(A2_MAIN_STAMP)"; $(MAKE) "$(A2_MAIN_STAMP)"; }
 	@test -f "$@"
 
-$(OUTA2)/monster.db.1: $(A2_TIER_DIR)/tier1_prg.s | ensure-kickass $(OUTA2)
+$(OUTA2)/monster.db.1: $(A2_TIER_DIR)/tier1_prg.s ../commodore/c64/creature_data/tier1.s | ensure-kickass $(OUTA2)
 	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(A2_TIER_DIR)/tier1_prg.s" -symbolfiledir "$(OVL_OUTA2)" -o "$@"
 
-$(OUTA2)/monster.db.2: $(A2_TIER_DIR)/tier2_prg.s | ensure-kickass $(OUTA2)
+$(OUTA2)/monster.db.2: $(A2_TIER_DIR)/tier2_prg.s ../commodore/c64/creature_data/tier2.s | ensure-kickass $(OUTA2)
 	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(A2_TIER_DIR)/tier2_prg.s" -symbolfiledir "$(OVL_OUTA2)" -o "$@"
 
-$(OUTA2)/monster.db.3: $(A2_TIER_DIR)/tier3_prg.s | ensure-kickass $(OUTA2)
+$(OUTA2)/monster.db.3: $(A2_TIER_DIR)/tier3_prg.s ../commodore/c64/creature_data/tier3.s | ensure-kickass $(OUTA2)
 	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(A2_TIER_DIR)/tier3_prg.s" -symbolfiledir "$(OVL_OUTA2)" -o "$@"
 
-$(OUTA2)/monster.db.4: $(A2_TIER_DIR)/tier4_prg.s | ensure-kickass $(OUTA2)
+$(OUTA2)/monster.db.4: $(A2_TIER_DIR)/tier4_prg.s ../commodore/c64/creature_data/tier4.s | ensure-kickass $(OUTA2)
 	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(A2_TIER_DIR)/tier4_prg.s" -symbolfiledir "$(OVL_OUTA2)" -o "$@"
 
 $(A2_TITLE_PRG): $(TITLE_SRC) $(VERSION_INC) | ensure-kickass $(OUTA2)

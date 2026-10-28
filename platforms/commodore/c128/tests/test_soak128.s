@@ -421,8 +421,8 @@ test_start:
     jmp test_fail
 !ok_dn2tile:
 
-    // Moria8 tracks exactly these three stair coordinates for save, detect,
-    // and level entry. Do not create untracked upstream-style extra stairs.
+    // Upstream counts: randint(2) up and randint(2)+2 down; the extras
+    // beyond these three tracked coordinates are untracked tiles (DGN-016).
     lda #0
     sta audit_pair_count          // up-stair count
     sta audit_door_x              // down-stair count
@@ -453,13 +453,17 @@ test_start:
     bne !stair_count_row-
 
     lda audit_pair_count
-    cmp #1
-    beq !ok_up_count+
+    sec
+    sbc #1
+    cmp #2                        // up 1..2
+    bcc !ok_up_count+
     jmp test_fail
 !ok_up_count:
     lda audit_door_x
-    cmp #2
-    beq !ok_down_count+
+    sec
+    sbc #3
+    cmp #2                        // down 3..4
+    bcc !ok_down_count+
     jmp test_fail
 !ok_down_count:
 

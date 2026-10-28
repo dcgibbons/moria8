@@ -1096,8 +1096,7 @@ test_start:
     cmp #TILE_STAIRS_DN
     bne !t13_fail+
 
-    // This port intentionally persists and reveals exactly the three tracked
-    // stair coordinates, not upstream's variable object-count stair set.
+    // Upstream counts: randint(2) up and randint(2)+2 down (DGN-016).
     lda #0
     sta t14_magma                 // Reused here as up-stair count
     sta t14_quartz                // Reused here as down-stair count
@@ -1125,11 +1124,15 @@ test_start:
     bne !t13_scan-
 
     lda t14_magma
-    cmp #1
-    bne !t13_fail+
+    sec
+    sbc #1
+    cmp #2                        // up 1..2
+    bcs !t13_fail+
     lda t14_quartz
-    cmp #2
-    bne !t13_fail+
+    sec
+    sbc #3
+    cmp #2                        // down 3..4
+    bcs !t13_fail+
 
     lda #$01
     sta tc_results+12

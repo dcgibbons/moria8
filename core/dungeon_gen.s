@@ -2128,20 +2128,13 @@ jdg_is_wall:
 	    rts
 
 // ============================================================
-// place_stairs_dungeon — Place the tracked 1 up-stairs + 2 down-stairs.
-// Upstream places 1-2 up and 3-4 down stairs as objects. This port currently
-// tracks only these three coordinates for save, detect-stairs, and level entry,
-// so generation intentionally creates only tracked stairs.
+// place_stairs_dungeon — Place 1..2 up-stairs and 3..4 down-stairs.
+// Upstream (VMS place_stairs, Umoria dungeonPlaceStairs) places randint(2)+2
+// down, then randint(2) up. Moria8 tracks the first up and two down for save
+// and level entry (DGN-016); the extra 1..2 down and 0..1 up exist only as
+// map tiles, which detect-stairs scans for.
 // ============================================================
 place_stairs_dungeon:
-    lda #0
-    sta stairs_up_x
-    sta stairs_up_y
-    sta stairs_dn1_x
-    sta stairs_dn1_y
-    sta stairs_dn2_x
-    sta stairs_dn2_y
-
     ldx #0
     jsr random_wall_adj_stair_floor
     sta stairs_up_x
@@ -2165,6 +2158,43 @@ place_stairs_dungeon:
     jsr write_tile_at_xy
     lda #TILE_STAIRS_DN | DUNGEON_FLAGS
     :MapWrite_ptr0_y()
+
+    lda #TILE_STAIRS_DN | DUNGEON_FLAGS   // extra down: 1, then 0..1
+    jsr place_extra_stair
+    lda #TILE_STAIRS_DN | DUNGEON_FLAGS
+    jsr maybe_extra_stair
+    lda #TILE_STAIRS_UP | DUNGEON_FLAGS   // extra up: 0..1
+                                          // fall through
+// maybe_extra_stair — place_extra_stair on rng_range(2) = 1.
+maybe_extra_stair:
+    pha
+    lda #2
+    jsr rng_range
+    bne !mes_place+
+    pla
+    rts
+!mes_place:
+    pla
+                                          // fall through
+// place_extra_stair — Put an untracked stair tile A in a random room.
+// Skipped when the site is not floor: the picker's unvalidated fallback
+// must not overwrite a tracked stair.
+place_extra_stair:
+    pha
+    lda room_count
+    jsr rng_range
+    tax
+    jsr random_wall_adj_stair_floor
+    jsr write_tile_at_xy
+    :MapRead_ptr0_y()
+    and #TILE_TYPE_MASK
+    cmp #TILE_FLOOR
+    bne !pes_skip+
+    pla
+    :MapWrite_ptr0_y()
+    rts
+!pes_skip:
+    pla
     rts
 
 .label rrd_start_x  = dg_cx2

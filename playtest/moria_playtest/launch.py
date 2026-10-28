@@ -20,6 +20,7 @@ from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
 
+from .ports import C64, PORTS, Port
 from .vice import ViceMonitor
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -32,47 +33,53 @@ C64_VS = BUILD / "c64" / "main.vs"
 
 @dataclass(frozen=True)
 class Build:
-    """A C64 build to play: disk image, main program, and its symbols."""
+    """A build to play: disk image, main program, its symbols, and its port."""
 
     disk: Path
     prg: Path
     vs: Path
+    port: str = C64.name
+
+    @property
+    def target(self) -> Port:
+        return PORTS[self.port]
 
     @classmethod
-    def from_out(cls, out: Path) -> "Build":
+    def from_out(cls, out: Path, port: Port = C64) -> "Build":
         """Layout produced by ``make -C platforms/commodore OUT=<out> ...``."""
-        return cls(out / "moria8-c64.d64", out / "c64" / "moria8.prg", out / "c64" / "main.vs")
+        return cls(out / port.disk, out / port.out / port.program, out / port.out / port.symbols, port.name)
+
+    @classmethod
+    def shipping(cls, port: Port = C64) -> "Build":
+        return cls.from_out(BUILD, port)
 
 
 SHIPPING = Build(C64_DISK, C64_PRG, C64_VS)
 
 # Disk file -> the build output it is written from (platforms/commodore/Makefile,
 # the disk64 recipe), relative to the program's directory.
-C64_DISK_FILES = {
-    "moria8": "boot.prg", "boot64": "boot.prg", "bootart64": "bootart64.prg",
-    "moria64": "moria8.prg", "t64": "title",
-    **{f"monster.db.{tier}": f"monster.db.{tier}" for tier in range(1, 5)},
-    **{f"64.{name}": f"ovl.{name}" for name in
-       ("start", "town", "death", "modal", "gen", "help", "ui", "items", "spell", "chest")},
-    "64.bank": "64.bank",
-}
+C64_DISK_FILES = C64.disk_files
 
 D64_TRACKS = 35
+D64_SIZE = 174848   # 683 sectors; a D71 is two of these, tracks 36-70 on side 2
 
 
 def d64_offset(track: int, sector: int) -> int:
     """Byte offset of a 1541 sector: 21 sectors on tracks 1-17, 19 on 18-24,
-    18 on 25-30, 17 on 31-35."""
-    before = sum(21 if t <= 17 else 19 if t <= 24 else 18 if t <= 30 else 17 for t in range(1, track))
-    return (before + sector) * 256
+    18 on 25-30, 17 on 31-35; a 1571's tracks 36-70 repeat them on side 2."""
+    side, track = divmod(track - 1, D64_TRACKS)
+    before = sum(21 if t <= 17 else 19 if t <= 24 else 18 if t <= 30 else 17 for t in range(1, track + 1))
+    return side * D64_SIZE + (before + sector) * 256
 
 
 def d64_files(image: bytes) -> dict[str, bytes]:
-    """The closed PRG files of a 35-track D64 image, by name."""
+    """The closed PRG files of a 35-track D64 or 70-track D71 image, by name."""
+    tracks = D64_TRACKS * (len(image) // D64_SIZE)
+
     def blocks(track: int, sector: int):  # type: ignore[no-untyped-def]
         seen = set()
         while track:
-            if not 1 <= track <= D64_TRACKS or (track, sector) in seen:
+            if not 1 <= track <= tracks or (track, sector) in seen:
                 raise ValueError(f"bad sector chain at {track}/{sector}")
             seen.add((track, sector))
             block = image[d64_offset(track, sector):d64_offset(track, sector) + 256]
@@ -101,48 +108,40 @@ class StaleDisk(RuntimeError):
 def check_disk(build: Build) -> None:
     """Every program file on the disk must equal the build output it is written
     from: ``make test`` rebuilds the program and symbols without the disk, and a
-    stale disk then fails every worker at boot."""
+    stale disk then fails every worker at boot. A disk this module cannot read
+    (ProDOS) must at least be newer than its program."""
+    if build.disk.is_dir():   # the X16's -fsroot: the build output itself
+        return
+    if not build.target.disk_files:
+        if build.disk.stat().st_mtime < build.prg.stat().st_mtime:
+            raise StaleDisk(f"{build.disk} is older than {build.prg}; "
+                            f"rebuild it with `make {build.target.disk_target}`")
+        return
     files = d64_files(build.disk.read_bytes())
-    stale = sorted(name for name, out in C64_DISK_FILES.items()
+    stale = sorted(name for name, out in build.target.disk_files.items()
                    if files.get(name) != (build.prg.parent / out).read_bytes())
     if stale:
         raise StaleDisk(f"{build.disk} does not match {build.prg.parent} ({', '.join(stale)}); "
-                        "rebuild it with `make disk64`")
+                        f"rebuild it with `make {build.target.disk_target}`")
 
 BASE_PORT = 6600
 
-# Pinned machine configuration (§6.1). REU is mandatory: without it every
-# overlay switch and tier crossing reloads from the 1541.
-VICE_RESOURCE_ARGS = (
-    # +saveres is required: without it VICE tries to save resources through
-    # GTK on exit and aborts when no display connection is available.
-    # VICE_CONFIG stands for a per-worker config naming the installed VICE
-    # version: an empty one (/dev/null) made VICE pop up "No version tag
-    # found in config file" on the desktop for every instance.
-    "-default", "-config", "VICE_CONFIG", "+saveres",
-    "-console", "+sound", "-sounddev", "dummy",
-    "-warp", "-pal", "-seed", "1",
-    "-reu", "-reusize", "512",
-    "-drive8type", "1541", "-drive8truedrive",
-)
+VICE_RESOURCE_ARGS = C64.resource_args
+ROM_ENV = C64.rom_env
 
 
-# Optional ROM images, from the caller's environment only (AGENTS.md rule 9):
-# a KERNAL and a 1541 drive ROM, e.g. JiffyDOS's pair, which only works as a
-# pair. Unset: VICE's own ROMs. Any other ROM option can be played the same
-# way (maintainer, 2026-10-27).
-ROM_ENV = (("PLAYTEST_KERNAL", "-kernal"), ("PLAYTEST_DOS1541", "-dos1541"))
-
-
-def rom_args(env: dict[str, str] | None = None) -> list[str]:
+def rom_args(env: dict[str, str] | None = None, port: Port = C64) -> list[str]:
     """VICE arguments for the ROM images the environment names."""
     env = os.environ if env is None else env
+    missing = [var for var in port.required_roms if not env.get(var, "")]
+    if missing:
+        raise FileNotFoundError(f"{port.name} plays under named ROM images: set {', '.join(missing)}")
     args: list[str] = []
-    for var, option in ROM_ENV:
+    for var, option in port.rom_env:
         path = env.get(var, "")
         if not path:
             continue
-        if not Path(path).is_file():
+        if not Path(path).exists():   # an image, or MAME's ROM directory
             raise FileNotFoundError(f"{var}={path}: no such ROM image")
         args += [option, str(Path(path).resolve())]
     return args
@@ -197,6 +196,7 @@ class ViceProcess:
     disk: Path
     port: int
     emulator: str = "x64sc"
+    target: Port = C64
     proc: subprocess.Popen[bytes] | None = None
     monitor: ViceMonitor | None = None
     args: list[str] = field(default_factory=list)
@@ -206,7 +206,8 @@ class ViceProcess:
               response_timeout: float = 60.0) -> ViceMonitor:
         exe = find_vice(self.emulator)
         config = str(write_vice_config(exe, self.workdir))
-        self.args = [exe, *(config if a == "VICE_CONFIG" else a for a in VICE_RESOURCE_ARGS), *rom_args(),
+        self.args = [exe, *(config if a == "VICE_CONFIG" else a for a in self.target.resource_args),
+                     *rom_args(port=self.target),
                      "-binarymonitor", "-binarymonitoraddress", f"127.0.0.1:{self.port}"]
         if autostart:
             self.args += ["-autostart", str(self.disk)]
@@ -256,7 +257,11 @@ def prepare_worker(run_dir: Path, worker: int, disk_template: Path = C64_DISK) -
     workdir = run_dir / f"w{worker}"
     workdir.mkdir(parents=True, exist_ok=True)
     disk = workdir / disk_template.name
-    shutil.copyfile(disk_template, disk)
+    if disk_template.is_dir():   # the X16 boots from a directory (-fsroot)
+        shutil.copytree(disk_template, disk, dirs_exist_ok=True,
+                        ignore=shutil.ignore_patterns("*.sym", "*.vs", "mame"))
+    else:
+        shutil.copyfile(disk_template, disk)
     return workdir, disk
 
 
@@ -272,7 +277,7 @@ def allocate_port(worker: int, attempts: int = 20) -> int:
 def build_identity(build: Build = SHIPPING) -> dict[str, str]:
     return {
         "disk": str(build.disk.relative_to(ROOT)) if build.disk.is_relative_to(ROOT) else str(build.disk),
-        "disk_sha256": sha256(build.disk),
+        "disk_sha256": sha256(build.disk if build.disk.is_file() else build.prg),
         "program_sha256": sha256(build.prg),
         "symbols_sha256": sha256(build.vs),
     }

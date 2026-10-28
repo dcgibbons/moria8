@@ -1,4 +1,5 @@
-"""C64 screen RAM decoding (mixed-case character set, 40x25)."""
+"""Commodore screen-code decoding (mixed-case character set, 25 rows of 40
+columns, or 80 on the C128's VDC)."""
 
 from __future__ import annotations
 
@@ -25,9 +26,9 @@ def screen_code_to_char(code: int) -> str:
 _DECODE = {code: screen_code_to_char(code) for code in range(256)}
 
 
-def decode_rows(screen: bytes) -> list[str]:
-    text = screen[:COLS * ROWS].decode("latin-1").translate(_DECODE)
-    return [text[r * COLS:(r + 1) * COLS] for r in range(ROWS)]
+def decode_rows(screen: bytes, cols: int = COLS) -> list[str]:
+    text = screen[:cols * ROWS].decode("latin-1").translate(_DECODE)
+    return [text[r * cols:(r + 1) * cols] for r in range(ROWS)]
 
 
 def text(rows: list[str]) -> str:

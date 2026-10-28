@@ -13,6 +13,7 @@
 #   make test128            Run the full C128 suite
 #   make test128-fast       Run the fast C128 compare harness
 #   make test128-fast-smoke Run the high-value C128 smoke subset
+#   make check128-payloads  Check the built C128 payloads' spans against each other and Bank 1
 #   make test-disk          Run the disk release gate, excluding deferred scenarios
 #   make test-disk-static   Validate the shared disk matrix without VICE
 #   make test-disk-debt     List non-strict/deferred disk matrix coverage
@@ -224,7 +225,7 @@ C128_MAIN_OUTPUTS = $(C128_MAIN_PRG) $(C128_OVL_START) $(C128_OVL_TOWN) $(C128_O
 
 .PHONY: all build build64 build128 buildplus4 disk disk64 zip64 c64-dist disk128 diskplus4 run run64 run128 runplus4 \
 	bootart128-charset-demo \
-	test test-disk test-disk-static test-disk-debt test64 test128 test128-guards test128-units test128-boot test128-town test128-cache test128-diag test128-fast test128-fast-smoke testplus4 testplus4-build testplus4-runtime clean \
+	test test-disk test-disk-static test-disk-debt test64 test128 check128-payloads test128-guards test128-units test128-boot test128-town test128-cache test128-diag test128-fast test128-fast-smoke testplus4 testplus4-build testplus4-runtime clean \
 	check-zp check-6502-lint check-hal-boundaries cleanup-source-symbols ensure-kickass kickass create-symlinks
 
 all: build
@@ -290,8 +291,12 @@ test-disk-debt:
 test64: ensure-kickass
 	cd c64 && KICKASS="$(KICKASS_RESOLVED)" ./run_tests.sh
 
-test128: ensure-kickass
+test128: ensure-kickass check128-payloads
 	cd c128 && KICKASS="$(KICKASS_RESOLVED)" ./run_tests128.sh
+
+# The bytes each payload emits, not labels beside them (docs/C128_MEMORY_CONTRACT.md).
+check128-payloads: $(C128_BUILD_ARTIFACTS)
+	python3 ../../tools/check_c128_payloads.py "$(OUT128)"
 
 test128-guards test128-units test128-boot test128-town test128-cache test128-diag: ensure-kickass
 	cd c128 && KICKASS="$(KICKASS_RESOLVED)" TEST_PHASE="$(@:test128-%=%)" ./run_tests128.sh
@@ -300,7 +305,7 @@ test128-fast: ensure-kickass
 	mkdir -p "$(BUILD)/test/c128"
 	cd c128 && KICKASS="$(KICKASS_RESOLVED)" python3 -u ./harness128_batch.py --mode compare --snapshot-path ../../../build/test/c128/ready.vsf --vice $(VICE128) --connect-timeout 12
 
-test128-fast-smoke: ensure-kickass
+test128-fast-smoke: ensure-kickass check128-payloads
 	cd c128 && KICKASS="$(KICKASS_RESOLVED)" TEST_FILTER='boot_title_idle_smoke|marker_init_d64_smoke|boot_title_save_write_product_smoke|scripted_summary_to_town_smoke|scripted_spell_cast_smoke|scripted_book_overlay_smoke|scripted_spell_list_overlay_smoke|scripted_spell_list_cancel_smoke|scripted_prayer_cast_smoke|town_overlay_smoke' ./run_tests128.sh
 
 testplus4-build: ensure-kickass $(PLUS4_BUILD_ARTIFACTS)

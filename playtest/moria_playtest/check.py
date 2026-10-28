@@ -1,7 +1,7 @@
 """``make playtest-check``: static gate (no emulator), <=30 s.
 
-Runs the symbol/offset table check against the current C64 build and sources,
-then the playtester unit tests.
+Runs the symbol/offset table check against each port's current build and
+sources, then the playtester unit tests.
 """
 
 from __future__ import annotations
@@ -11,13 +11,18 @@ import unittest
 from pathlib import Path
 
 from . import abi
+from .launch import Build
+from .ports import PORTS
 
 
 def main() -> int:
-    if not abi.C64_VS.exists():
-        print(f"playtest-check: {abi.C64_VS} missing; run `make build64` first")
-        return 1
-    errors = abi.check()
+    errors = []
+    for port in PORTS.values():
+        vs = Build.shipping(port).vs
+        if not vs.exists():
+            print(f"playtest-check: {vs} missing; run `make build` first")
+            return 1
+        errors += [f"{port.name}: {error}" for error in abi.check(vs, port=port)]
     for error in errors:
         print(f"playtest-check: {error}")
     tests = unittest.defaultTestLoader.discover(str(Path(__file__).resolve().parents[1] / "tests"))
