@@ -529,6 +529,20 @@ original v0 description follows.
   mana over the last 400 steps with potions, Phase Doors and retreats marked,
   and the decisions newest first, refreshed every second. `#watch=<session>/<worker>`
   in the URL opens it directly.
+- **Now:** a line under the header saying what the current runs are for,
+  from `build/playtest/now.json` (`{"text": ...}`), written by whoever
+  starts a phase; absent, the line is hidden.
+- **Regression sessions** (`--regress`, no goal of their own) show one row
+  per frozen suite, tagged `regress`, with the bar it was frozen at; each
+  finished character is matched to the suite it played through the
+  session's events (`dashboard.regress_suites`).
+- The header shows when the data was made, in the viewer's zone, with its
+  age; red and "stale" after two minutes. MORIA8 links to moria8.org.
+- **How to read this** (at the bottom): the bar and what frozen means, the
+  default and class bars, each combination's own bar, the goals with their
+  step budgets, and the colours and tags. Its numbers come from
+  `goals.py` through `/api/milestone` (`dashboard.legend`), so it cannot
+  drift from the bars it explains.
 
 #### Publishing (`make playtest-publish`, https://playtest.moria8.org)
 
@@ -686,7 +700,9 @@ Each milestone has a measurable exit criterion and an explicit stop rule.
 | **M2 `reach_dl2`, `reach_clvl2`** | Dungeon navigation, doors, search, stairs; fight, emergency, rest; anti-stall; plateau alert; frozen suites | Both goals work, and `enter_dungeon` still passes its frozen suite. No `unknown_prompt` in the final qualification runs. **No further goals are added until M2 is met.** |
 | **M3 `reach_dl5`, `clvl5`** | The brain rounds in §14.3: any-glyph creatures, food and light logistics, threat memory, avoiding stationary monsters, sealed-area fallback | Both goals work (§7.2, ≥16/20); all frozen suites still pass; no `unknown_prompt`. **Met 2026-10-22 (§14.9).** |
 | **M4 `clvl10`, `reach_dl8`** (`reach_dl10` until 2026-10-24) | The brain rounds in §15.3: stationary hazards, fear and fast attackers, then what the re-measured clusters show | Both goals work (§7.2, ≥16/20); all frozen suites still pass; no `unknown_prompt`. Started 2026-10-22 (`/goal`, §15). **Met 2026-10-24 (§15.6).** |
-| **M5 Every race and class at M4** | §16: the M4 goals for every Warrior race, then Paladin and Priest, then Rogue and Ranger, then Mage, then every other race of each class | `clvl10` and `reach_dl8` work (§7.2, ≥16/20; ≥10/20 for Mages and Priests, §16.1 amended 2026-10-27) for each of the 31 race/class combinations, each frozen as its own suite; all frozen suites still pass; no `unknown_prompt`. Planned 2026-10-24 (§16). **M5a (every Warrior race) met 2026-10-25 (§16.8).** |
+| **M5 Every race and class at M4** | §16: the M4 goals for every Warrior race, then Paladin and Priest, then Rogue and Ranger, then Mage, then every other race of each class | `clvl10` and `reach_dl8` work (§7.2, ≥16/20; ≥10/20 for Mages and Priests, §16.1 amended 2026-10-27) for each of the 31 race/class combinations, each frozen as its own suite; all frozen suites still pass; no `unknown_prompt`. Planned 2026-10-24 (§16). **M5a (every Warrior race) met 2026-10-25 (§16.8); M5b-M5e met 2026-10-26; M5f met 2026-10-27 (§20.5): 62 of 62 goals frozen.** |
+| **M6 Every port plays** | §21: a backend per platform (Plus/4, C128, the MAME ports Apple IIe, Atari 8-bit and BBC Master 128, then the Commander X16); the C64's frozen goals on each; a platform coverage map on the dashboard | On each of the seven ports, `clvl5` and `reach_dl5` frozen for the Half-Troll Warrior and a Human Warrior, Priest, Mage and Rogue (Paladin and Ranger are not in the primary set); no `unknown_prompt`; the C64 suites still pass. The C128 backend (below) is part of it. Planned 2026-10-27 (§21). |
+| **M7 More of the game, and balance** | §21.5: feature coverage (spells, items, creatures, traps, stores, recall), the first Word of Recall cycle and `reach_dl15`/`clvl15`, and a difficulty rating per race and class from 40-seed runs | Planned 2026-10-27, after M6; its exit criterion is set when it starts. |
 | **C128 backend** (M5c until 2026-10-26; not scheduled) | Half-Troll Warrior on `x128`, no brain work: the backend (§12.7) for VDC screen text, banked reads, the C128 keyboard buffer and the 198×66 map | Every frozen C64 suite passes on the C128 at its bar. Moved out of M5 by the maintainer on 2026-10-26 (§16.2) |
 
 **Stop rules** (defaults, tunable by the maintainer):
@@ -1829,8 +1845,19 @@ Halfling Mages, Gnome Priest) sat at 4-13/20 against 15, dying at level 1-2
 to what VMS deals a character that small: "I think it is OK to accept them as
 weaker and have a lower bar ... let's aim for a bar of *10* for mages and
 priests ... as we advance to higher levels of the dungeon I would expect our
-bar to continue to be lowered." Suites frozen at 15 keep their bar; deeper
-goals are expected to set lower ones.
+bar to continue to be lowered." Deeper goals are expected to set lower
+ones. The 14 caster suites frozen at 15 were moved to 10 on 2026-10-27
+("let's make all casters a bar of 10"), each with a `bar_note`.
+
+**Amended 2026-10-27 (maintainer, M5 regression):** Gnome Priest `clvl10` is
+frozen at **9/20** ("we can capture their low bars and freeze then"). The VMS
+trap change re-rolled every seed's maps; with the regression's bot fixes
+(Bless and Chant held when hurt, the Priest tether, the Temple when poisoned,
+worm masses remembered as slow by kind) it scored 9/20 on both runs, 64 of the
+other 66 suites passing at once and the Half-Elf Ranger and Rogue after the
+fixes. These scores rank characters by how well the bot plays them, not how
+hard a person finds them: the small casters (Halfling and Gnome Mages, the
+Gnome Priest) are the hardest group, which 20 seeds cannot order within.
 
 Why this order:
 
@@ -2335,8 +2362,87 @@ The traces record the status line and the bot's potions and oil; the
 dashboard became one page and is published to https://playtest.moria8.org
 (§6.9); VICE can run JiffyDOS or any other ROM pair (§6.1).
 
-### 20.5 Status (2026-10-27)
+### 20.5 Freeze (2026-10-27)
 
-56 of 62 goals frozen. Left: Elf Mage clvl10 (12 in the last A/B round,
-not yet frozen), Gnome Mage both goals (8, 7), Halfling Mage both (8, 5) and
-Gnome Priest reach_dl8 (5), with round 19 freezing what reaches 10.
+**M5f met 2026-10-27: 62 of 62 goals frozen**, all 31 combinations on both
+goals. The Elf Mage's clvl10 froze at 12/20 (round 19). The five that
+stayed below 10/20 through rounds 17-19 were frozen at their level
+(maintainer decision 2026-10-27, "freeze at their level", `CHARACTER_BARS`):
+Gnome Mage clvl10 8 and reach_dl8 7, Halfling Mage clvl10 8 and reach_dl8 5,
+Gnome Priest reach_dl8 5, the same scores in rounds 18-21.
+
+M5 closes when a regression of every frozen suite passes (§8, M5's exit).
+
+## 21. M6: every port plays (planned 2026-10-27)
+
+### 21.1 Decision
+
+The maintainer set the priorities after M5 on 2026-10-27: first, "basic
+workability for all ports" ("I'd like to be able to ship a version of the
+game where I know that all of the ports are workable"); second, game
+balance ("rate each race/class with a difficulty level for players to
+know"); third, killing the Balrog. Platform coverage comes before feature
+coverage, so M6 is the ports and M7 the features and balance.
+
+### 21.2 What workable means
+
+The same bot plays real games on each port. The primary set covers the four
+main classes ("warrior, priest, mage, rogue are the main ones to cover for
+workable"): the Half-Troll Warrior and a Human Warrior, Priest, Mage and
+Rogue, on `clvl5` and `reach_dl5`, frozen per port. Paladin and Ranger are
+not in it. A port too slow for 20 seeds may qualify on fewer, with the bar
+as the same fraction. A frozen suite records its platform
+(`clvl5-human-mage-plus4.json`); the C64's names are unchanged.
+
+Running the same characters on another port also tests all of `core/` under
+that port's banking, overlays and screen: bugs found are fixed as game
+changes with their contracts loaded, as in M4 (§15.4).
+
+### 21.3 Backends, in order
+
+The brain, goals and recorder stay platform-neutral; a backend reads the
+screen and map, sends keys, and snapshots (§12.7: extracted now, at the
+second platform).
+
+1. **Plus/4**, then **C128**: VICE's binary monitor, as the C64 (`xplus4`,
+   `x128`). The C128's VDC screen, banked reads and 198×66 map need
+   `docs/C128_MEMORY_CONTRACT.md`.
+2. **Apple IIe, Atari 8-bit, BBC Master 128**: one MAME backend (a Lua
+   plugin or the debugger), then a memory map per machine. Each port's
+   `harness_smoke.py` already drives it headless. ROMs come from `A2ROMS`,
+   `ATARI8ROMS` and `BBCMROMS`.
+3. **Commander X16** last: `x16emu -testbench` has no snapshots or
+   breakpoints.
+
+### 21.4 Coverage map
+
+The dashboard gains a grid of race and class down the side and the seven
+platforms across, each cell's goals frozen, at the bar, below it or not run,
+with a coverage count per platform and the date each cell last ran.
+
+### 21.5 M7 and after
+
+- **Feature coverage:** count what each run exercises (spells by name,
+  items used and identified, creature kinds met and killed, trap types,
+  stores, recall trips, depth), shown as a features grid with its gaps.
+- **Deeper:** the first Word of Recall cycle, then `reach_dl15` and
+  `clvl15`, for the mid-game (creature tiers 2-3, ego items, wands and
+  staves). Bars are expected to fall with depth (maintainer, 2026-10-27).
+- **Difficulty ratings:** all 31 combinations on 40 seeds to the deeper
+  goals; survival, median level at death and early-death share rate each
+  Easy to Very Hard, published for players. M5f already shows the spread
+  (§20.1).
+- **The monster compendium's tactics** (maintainer, 2026-10-27): the
+  website's compendium (`docs/monsters.html`, `buildStrategy`) derives play
+  advice from the same creature tables the bot's `knowledge.py` reads. In
+  M7: one shared generator for the threat label, safe HP, recommended level
+  and hazard flags, used by both, so the site's advice and the bot cannot
+  drift and the playtest tests the advice; then the tactics the bot lacks,
+  one at a time with a trace, a test and an A/B round: break line of sight
+  around corners against casters first (Novice Mage and Priest spells were
+  M5f's top Priest killer), then Sleep and Confusion to neutralise or
+  escape, fighting breeders in a 1-tile corridor, and curing blindness or
+  confusion before reading a scroll.
+- **The Balrog:** the deep ladder (§12.4), the danger model and readiness
+  checklists (§12.3), and the assisted track (§12.1), on the C64.
+

@@ -43,6 +43,18 @@ CHARACTERS: dict[str, tuple[str, str]] = {
 CHARACTER_BARS: dict[tuple[str, str], int] = {
     # M5a freeze run (2026-10-25): 15/20; 14-17 across rounds 4-10.
     ("halfling-warrior", "clvl10"): 15,
+    # M5f (maintainer decision 2026-10-27, "freeze at their level"): the 6-9
+    # HP casters, at what rounds 18 and 19 both reached (identical: fixed
+    # seeds, the same brain); most of their losses come at level 1-2.
+    ("gnome-mage", "clvl10"): 8,
+    ("gnome-mage", "reach_dl8"): 7,
+    ("halfling-mage", "clvl10"): 8,
+    ("halfling-mage", "reach_dl8"): 5,
+    ("gnome-priest", "reach_dl8"): 5,
+    # M5 regression (maintainer decision 2026-10-27, "capture their low bars
+    # and freeze"): frozen at 10/20, then 9/20 on both runs of the fixed
+    # brain once the VMS trap change re-rolled every map.
+    ("gnome-priest", "clvl10"): 9,
 }
 # Pure spell casters, every race and goal: 10/20, half the seeds
 # (maintainer decision 2026-10-27, M5f: "it is OK to accept them as weaker

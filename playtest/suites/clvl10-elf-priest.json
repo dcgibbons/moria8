@@ -22,9 +22,10 @@
   1019,
   1020
  ],
- "required": 15,
+ "required": 10,
  "step_budget": 100000,
  "character": "elf-priest",
  "frozen": "2026-10-27",
- "program_sha256": "6b411a626557b60d71ffa6529a893fa82f32a6b333142153ef64563d16718f37"
+ "program_sha256": "6b411a626557b60d71ffa6529a893fa82f32a6b333142153ef64563d16718f37",
+ "bar_note": "frozen at 15/20 under the earlier caster bar; 10/20 for every caster since 2026-10-27 (maintainer)"
 }

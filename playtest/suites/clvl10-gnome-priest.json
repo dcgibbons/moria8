@@ -22,9 +22,10 @@
   1019,
   1020
  ],
- "required": 10,
+ "required": 9,
  "step_budget": 100000,
  "character": "gnome-priest",
  "frozen": "2026-10-27",
- "program_sha256": "6b411a626557b60d71ffa6529a893fa82f32a6b333142153ef64563d16718f37"
+ "program_sha256": "6b411a626557b60d71ffa6529a893fa82f32a6b333142153ef64563d16718f37",
+ "bar_note": "frozen at 10/20; 9/20 since 2026-10-27 (maintainer: \"capture their low bars and freeze\"): the VMS trap change re-rolled every map, and the fixed brain scored 9, 9 on two M5 regression runs"
 }

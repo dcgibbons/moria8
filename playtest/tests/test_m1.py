@@ -778,6 +778,27 @@ class UnstuckTest(unittest.TestCase):
         self.assertEqual(decision.key, ord("B"))
         self.assertFalse(brain.shopped)
 
+    def test_a_fragile_priest_explores_near_the_stairs(self) -> None:
+        # M5 regression: the 9-HP Gnome Priest's clvl10 was 10/20 with the
+        # tether and 3/20 without; the Mages lost runs to it (rounds 17-18).
+        from moria_playtest import goals
+        def corridor(unknown_x):
+            types = [WALL] * (COLS * ROWS)
+            for x in range(2, 40):
+                types[5 * COLS + x] = 0x0
+            types[5 * COLS + 2] = 0xA                      # up stairs at the corridor's west end
+            types[5 * COLS + unknown_x] = UNKNOWN
+            return View(COLS, ROWS, types, (5, 5), 1, {})
+        o = command_obs(pos=(5, 5), dlvl=1, clvl=1, hp=9, mhp=9)
+        priest = lambda: Brain(goals.for_character(GOALS["clvl10"], "gnome-priest"))
+        self.assertEqual(priest().explore(o, corridor(30)).layer, "stair-scum")   # 28 squares out: leave
+        self.assertEqual(priest().explore(o, corridor(9)).layer, "explore")       # 7 squares: explore it
+        mage = Brain(goals.for_character(GOALS["clvl10"], "gnome-mage"))
+        self.assertEqual(mage.explore(command_obs(pos=(5, 5), dlvl=1, clvl=1, hp=7, mhp=7), corridor(30)).layer,
+                         "explore")                                                 # not a Mage
+        grown = command_obs(pos=(5, 5), dlvl=1, clvl=3, hp=14, mhp=14)
+        self.assertEqual(priest().explore(grown, corridor(30)).layer, "explore")  # TETHER_LEVEL reached
+
     def test_explore_ping_pong_drops_that_frontier(self) -> None:
         # M5b round 46, seed 1015: 5,000 steps between two corridor squares.
         brain = Brain(GOALS["reach_dl2"])
@@ -961,6 +982,23 @@ class StationaryTest(unittest.TestCase):
         brain.decide(command_obs(pos=(5, 5), dlvl=1, clvl=3), view)    # sets hazards
         step = view.step_toward({(9, 5)}, avoid_monsters=True)
         self.assertNotIn((5 + step[0], 5 + step[1]), {(6, 4), (6, 5), (6, 6)})
+
+
+    def test_paths_keep_away_from_a_worm_mass(self) -> None:
+        """M5 regression, seed 1006: 'w' is no slow glyph (the Giant Purple
+        Worm is fast), so a White Worm mass walked away from was no hazard and
+        the path to the stairs led straight back to it."""
+        brain = Brain(GOALS["reach_dl2"])
+        view = town_view((5, 5), (9, 5), dlvl=1)
+        view.creatures = {(7, 5): Creature("w", 1)}
+        brain.decide(command_obs(pos=(5, 5), dlvl=1, clvl=3), view)    # sets hazards
+        self.assertIn((7, 5), view.hazards)
+        step = view.step_toward({(9, 5)}, avoid_monsters=True)
+        self.assertNotIn((5 + step[0], 5 + step[1]), {(6, 4), (6, 5), (6, 6)})
+        view.creatures = {(7, 5): Creature("w", 29)}                     # a Giant Purple Worm
+        brain.level.slow_seen.clear()
+        brain.decide(command_obs(pos=(5, 5), dlvl=1, clvl=3), view)
+        self.assertNotIn((7, 5), view.hazards)
 
 
 class StepAwayTest(unittest.TestCase):
@@ -1553,6 +1591,25 @@ class PotionTest(unittest.TestCase):
         self.assertEqual((decision.layer, brain.at_store), ("shop", 2))
         self.assertEqual(brain.recall_reserve(), 1)
 
+    def test_poisoned_without_a_potion_goes_to_the_temple_first(self) -> None:
+        """M5 regression, seed 1002: a Half-Elf Rogue gassed on DL1 climbed
+        to town at 8 HP with 132 gold and no potion, and poison killed it on
+        the walk to the Weaponsmith."""
+        brain = Brain(GOALS["reach_dl8"])
+        view = town_view((5, 5), (40, 40), dlvl=0)
+        view.stores = [(2, 2), (3, 2), (8, 5), (5, 9), (4, 2)]   # Weaponsmith east, Temple south
+        brain.track(command_obs(pos=(5, 5), dlvl=0, clvl=1), view)
+        brain.shopped = True
+        brain.poisoned = True
+        o = command_obs(pos=(5, 5), dlvl=0, clvl=1)
+        o.rows[23] = "HP:8/22   MP:0/0   AC:9  AU:132   Full  "
+        brain.magic.study_due, brain.magic.listed = False, True
+        decision = brain.decide(o, view)
+        self.assertEqual((decision.layer, decision.key, brain.at_store), ("shop", DIRS[(0, 1)], 3))
+        self.assertIn("Potion of Cure Light", brain.shopping_list())
+        brain.at_store, brain.poisoned = None, False                 # cured: the early gear order again
+        self.assertEqual((brain.decide(o, view).layer, brain.at_store), ("shop", 2))
+
     def test_the_temple_after_the_general_store(self) -> None:
         # Level 5: past the early gear-first order (M5b round 6).
         brain = Brain(GOALS["reach_dl2"])
@@ -2051,6 +2108,9 @@ class CasterPrayerTest(unittest.TestCase):
         view = town_view((5, 5), (40, 40), dlvl=2)
         view.creatures = {(7, 5): Creature("p", 2)}                   # a Novice Priest two squares off
         self.assertEqual(brain.invoke(o, view).reason, "a hard fight coming: pray Bless")
+        brain.chant_until = 0
+        hurt = command_obs(pos=(5, 5), dlvl=4, clvl=9, hp=3, mhp=40, rows={23: "HP:3/40  MP:20/20 AC:10 AU:32"})
+        self.assertIsNone(brain.invoke(hurt, view))                    # not at 3 HP (M5 regression, seed 1016)
         quiet = town_view((5, 5), (40, 40), dlvl=2)
         self.assertEqual(brain.find_traps(o, quiet).reason, "pray Find Traps")
         brain.poisoned = True
@@ -2830,6 +2890,20 @@ class StationaryMemoryTest(unittest.TestCase):
         view.creatures = {}                                   # out of the light, but remembered
         brain.level.slow_seen[(7, 5)] = o.step
         self.assertIsNone(brain.explore(o, view))
+
+    def test_explore_never_steps_back_beside_a_worm_mass(self) -> None:
+        """M5 regression, seed 1006: by kind, a White Worm mass too ('w' is
+        shared with the fast Giant Purple Worm)."""
+        brain = Brain(GOALS["reach_dl5"])
+        brain.food = 3
+        o = command_obs(pos=(5, 5), dlvl=2, clvl=3, hp=40, mhp=40)
+        view = town_view((5, 5), (40, 40), dlvl=2)
+        for y in range(ROWS):
+            view.types[y * COLS + 12] = UNKNOWN              # the unexplored edge: east
+        view.creatures = {(7, 5): Creature("w", 1)}          # every first step east passes beside it
+        self.assertIsNone(brain.explore(o, view))
+        view.creatures = {(7, 5): Creature("w", 29)}         # a Giant Purple Worm is no slow kind
+        self.assertIsNotNone(brain.explore(o, view))
 
     def test_no_clearing_a_blocker_with_something_else_coming(self) -> None:
         brain = Brain(GOALS["reach_dl5"])
@@ -3691,9 +3765,15 @@ class CharacterTest(unittest.TestCase):
         """Maintainer, 2026-10-27 (M5f): Mages and Priests qualify at 10/20
         (15/20 from 2026-10-26)."""
         from moria_playtest import goals
-        for character in ("human-priest", "dwarf-priest", "gnome-priest", "human-mage", "elf-mage", "halfling-mage"):
+        for character in ("human-priest", "dwarf-priest", "human-mage", "elf-mage", "elf-priest"):
             for goal in ("clvl10", "reach_dl8"):
                 self.assertEqual(goals.for_character(GOALS[goal], character).qualify_bar, 10)
+        self.assertEqual(goals.for_character(GOALS["clvl10"], "half-orc-priest").qualify_bar, 10)
+        # Frozen at their level (maintainer, 2026-10-27): CHARACTER_BARS decides.
+        for character, goal, bar in (("gnome-mage", "clvl10", 8), ("gnome-mage", "reach_dl8", 7),
+                                     ("halfling-mage", "clvl10", 8), ("halfling-mage", "reach_dl8", 5),
+                                     ("gnome-priest", "reach_dl8", 5), ("gnome-priest", "clvl10", 9)):
+            self.assertEqual(goals.for_character(GOALS[goal], character).qualify_bar, bar)
         self.assertEqual(goals.for_character(GOALS["clvl10"], "human-paladin").qualify_bar, 16)
         self.assertEqual(goals.for_character(GOALS["clvl10"], "human-warrior").qualify_bar, 16)
 

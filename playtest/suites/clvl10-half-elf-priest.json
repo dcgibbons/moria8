@@ -22,9 +22,10 @@
   1019,
   1020
  ],
- "required": 15,
+ "required": 10,
  "step_budget": 100000,
  "character": "half-elf-priest",
  "frozen": "2026-10-27",
- "program_sha256": "3a3d7c4b1331ff17276917f0fe76bd1beecedb831a148cfe4aee6e6222189c62"
+ "program_sha256": "3a3d7c4b1331ff17276917f0fe76bd1beecedb831a148cfe4aee6e6222189c62",
+ "bar_note": "frozen at 15/20 under the earlier caster bar; 10/20 for every caster since 2026-10-27 (maintainer)"
 }
