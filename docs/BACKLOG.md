@@ -855,6 +855,49 @@ Acceptance target:
   missing file, and wrong save disk show clear end-user messages while retaining
   enough diagnostic detail for debugging.
 
+### CHKIN on a file the drive refused can hang the Commodore ports
+
+Six places OPEN a file that may not exist, then CHKIN it without asking the
+drive whether the OPEN worked: the save-slot probe
+(`common/save_slot_menu.s`), the C64 program-media read probe
+(`common/disk_setup_banked.s`), `load_game` and `save_file_exists`
+(`platforms/shared/save.s`), and the C128 and Plus/4 marker reads
+(`common/disk_swap.s`, `plus4/main.s`). If the drive has already failed the
+OPEN (`62 FILE NOT FOUND`) when CHKIN's TALK arrives, it stays idle and the
+KERNAL's talker turnaround waits for it forever (no timeout).
+
+Found 2026-10-29 in VICE true-drive emulation: `slot2_save_product_smoke` hung
+probing the empty slot 3 on drive 9 (C64 in the turnaround loop at
+`$EDD6`-`$EEB7`, drive 9 idle at `$EC17`). Whether the TALK wins the race
+depends on timing, so the hang comes and goes with code layout: a C64 change
+that moved code failed the smoke in some layouts and passed it in others.
+Shipping builds and the current tests pass. Not yet seen on real hardware.
+
+The obvious fix does not work: reading the drive status opens and closes the
+command channel, and closing channel 15 closes every file on the drive,
+including the one about to be read (the C64 KERNAL sends that close even for a
+nameless channel-15 OPEN).
+
+Required work:
+
+- Keep the command channel open around each such OPEN: open 15, OPEN the file,
+  read the status on the open channel, CHKIN only on `00`-`19`, then close the
+  file and 15. Split each port's status reader into open/read/close steps.
+- Fit the C64 detect-evil and dungeon-spell test builds (about 11 bytes free
+  below `$C000`) and the C128 `C128ResidentDiskIo` segment (about 9 bytes
+  free).
+- Then move `c64_storage_read_command_status` onto the shared
+  `storage_status_from_dos_digits`, as C128 and Plus/4 already are; it was
+  reverted because the timing shift exposed this hang. Until then C64 keeps an
+  inline copy of the same DOS policy.
+
+Acceptance target:
+
+- No CHKIN reaches a file the drive did not open, on C64, C128, and Plus/4.
+- `slot2_save_product_smoke` passes when code ahead of the probe is padded by
+  several different byte counts.
+- One DOS-status classifier on all three ports.
+
 ### Promote `F8` to an in-game Version/System Info command
 
 The C64 product currently has a hidden diagnostic command for proving C64
@@ -1017,6 +1060,63 @@ Acceptance target:
 
 - Repeated `make -j7 -O test` runs on a loaded machine produce no
   empty-result C64 failures, and a real 0/N failure still fails.
+
+### C128 boot smokes sometimes crash to the monitor under the parallel gate
+
+Four times on 2026-10-29, across about six `make -j7 -O test` runs, one C128
+smoke that boots the real disk never reached any checkpoint and ran out its
+cycle budget: `overlay_data_transition_smoke`, then `real_input_town_move_diag`
+and `death_overlay_smoke` in the same gate, then `title_art_smoke`. Each
+passed when rerun alone with `TEST_FILTER`. The runner's exit screenshot
+(`build/test/c128/exit/<suite>_exit.png`) for the last one showed the C128
+KERNAL monitor's `BREAK` screen (`PC EC02C SR 35 A 01 X 1F Y 00 SP F6`): the
+8502 executed a `BRK`, so it jumped into data or zeroed memory.
+
+Ruled out: host load (one affected smoke reached its pass point on the same
+emulated cycle in 208 runs, 160 at once on 32 cores), VICE being killed
+(exit code 1 is the cycle limit; a kill is 143), and the stale cached-payload
+bug fixed the same day (`c128_target_is_stale` now scans `hal/` and
+`shared/`). With identical inputs VICE is deterministic, so the working
+guess is that the failing run booted different bytes, such as a build file
+changing during the parallel gate; not yet diagnosed.
+
+Required work:
+
+- On a C128 smoke failure, keep the exact disk image(s) and `.vs` the run
+  booted (and their checksums) next to the exit screenshot.
+- Replay a kept failure alone: if it crashes again, debug the product boot
+  path from that image; if it passes, find what changed the inputs in the
+  parallel gate.
+- Fix the cause without raising the 30-second timeout cap.
+
+Acceptance target:
+
+- Repeated `make -j7 -O test` runs produce no C128 boot-smoke crash, and a
+  real boot crash still fails with its screen and inputs kept.
+
+### The C128 PERF_P1 build does not assemble
+
+`PERF_P1=1` (the C128 timing instrumentation behind
+`make test128 PERF_P1=1`, `perf_p1` and `perf_p1_trace_smoke`) fails to
+assemble: `relative address is illegal (jump distance is too far: 142)` at
+the `bcs !run_trap_stop+` in `core/game_loop.s` `run_step`. The
+`jsr perf_p1_move_start` that PERF adds to `run_step` puts the branch past
+its 127-byte reach. HEAD fails the same way (found 2026-10-29), so the timing
+suites cannot run at all; normal builds are unaffected.
+
+Required work:
+
+- Make the branch reach in every build, for example `bcc` past a
+  `jmp !run_trap_stop+`, keeping the normal builds' byte budgets.
+- Run `make test128 PERF_P1=1` (`TEST_FILTER='^perf_p1'`) and fix what the
+  timing suites then report; `perf_p1_trace_run_assert` in
+  `platforms/commodore/c128/run_tests128.sh` has not run since its four copies
+  were folded into it.
+
+Acceptance target:
+
+- `make test128 PERF_P1=1` assembles and its `perf_p1` and
+  `perf_p1_trace_smoke` suites pass.
 
 ### Run the C64 suite in parallel
 
