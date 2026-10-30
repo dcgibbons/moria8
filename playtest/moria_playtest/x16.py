@@ -4,8 +4,9 @@ The testbench has no breakpoints or snapshots. The game's key
 wait yields to it when the X16 KERNAL has no key (``cx16_testbench_enabled``,
 ``jmp $FFFD``, platforms/cx16/input.s), and a key is fed as the existing
 harness does: ``igk_char``, then ``RUN input_get_key_testbench_resume``.
-Memory is read with an emulator patched for block reads (``RQB``, ``RQV``,
-``STB``; docs/BACKLOG.md) when it has them, else one byte per ``RQM``,
+Memory is read one byte per ``RQM``, or with ``PLAYTEST_X16_BLOCK=1`` and an
+x16emu patched for block reads (``RQB``, ``RQV``, ``STB``; not yet upstream,
+docs/BACKLOG.md) a block per command,
 pipelined; banked RAM through the testbench's ``RAM`` bank select, and
 VERA's text through VRAM (``RQV``) or its address registers, each restored
 after the read. Each character boots.
@@ -92,9 +93,12 @@ class X16Monitor:
         self.pending: dict[int, bytes] = {}
         self.next_id = 0
         self.map_base = 0
-        # A stock x16emu answers the block read "ERR ...": a byte at a time.
-        process.send("RQB 0000 1")
-        self.block = not process.receive(response_timeout).startswith("ERR")
+        # Block reads only when asked for: they are not in a released x16emu.
+        self.block = os.environ.get("PLAYTEST_X16_BLOCK") == "1"
+        if self.block:
+            process.send("RQB 0000 1")
+            if process.receive(response_timeout).startswith("ERR"):   # a stock build
+                raise BridgeClosed("PLAYTEST_X16_BLOCK=1, but this x16emu has no block reads (RQB)")
 
     def bank(self, name: str) -> tuple[str, int]:
         return {"ram": ("cpu", 0), "io": ("cpu", 0)}.get(name, (name, 0))

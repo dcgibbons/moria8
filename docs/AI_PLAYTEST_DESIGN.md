@@ -2537,10 +2537,11 @@ Umoria's own 198x66 level, 3.4 times the C64's 80x48 (`Port.map_scale`).
   new level, after a key that can change squares out of sight, and every 50
   steps: about six times less reading, and two seeds' 5,600 steps matched a
   whole read. An `x16emu` patched for block reads (`RQB`, `RQV`, `STB`;
-  `docs/BACKLOG.md`) is used when present: about 1.9 times the steps a
-  second again. X16 games are not deterministic run to run on either read
-  path (two runs of one seed press different keys); the cause is not yet
-  found.
+  `docs/BACKLOG.md`) is used with `PLAYTEST_X16_BLOCK=1`: about 1.9 times
+  the steps a second again. The default is byte reads, as a stock x16emu
+  needs, until the patch is released upstream. X16 games are not
+  deterministic run to run on either read path (two runs of one seed press
+  different keys); the cause is not yet found.
 - **Search mode off** (m6h): a monster's spell does not end search mode
   (VMS, unlike Umoria), and nor does a creature out of the light. A C128
   Warrior fled a Novice Priest at half speed for 30 steps, and Apple IIe

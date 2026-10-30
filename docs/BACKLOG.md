@@ -1087,15 +1087,17 @@ read in the testbench would make all of them one request. Maintainer,
 Done 2026-10-28: a local `x16emu` commit (base `77f2bab`) adds `RQB <addr>
 <len>` (CPU space, `RQM`'s read path, one hex line), `RQV <vaddr> <len>`
 (VRAM, VERA registers untouched) and `STB <addr> <hex>`, with selftests.
-`x16.py` probes `RQB 0000 1` at start (a stock build answers `ERR`) and uses
-them when present: about 1.9 times the steps a second, half the driver CPU.
+With `PLAYTEST_X16_BLOCK=1`, `x16.py` checks for them (`RQB 0000 1`; a stock
+build answers `ERR`, an error then) and uses them: about 1.9 times the steps
+a second, half the driver CPU. By default it reads a byte at a time, as a
+stock x16emu needs.
 
 Required work:
 
 - Offer the patch upstream (`X16Community/x16-emulator`); the maintainer
   decides on submission.
-- Until it ships in a release, playtest machines need the patched build in
-  `X16EMU`; a stock build still plays, a byte at a time.
+- Until it ships in a release, block reads need the patched build in
+  `X16EMU` and `PLAYTEST_X16_BLOCK=1`; the default stays byte at a time.
 
 Acceptance target:
 

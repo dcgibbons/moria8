@@ -489,11 +489,13 @@ class X16MapTest(unittest.TestCase):
 
 
 class X16BlockReadTest(unittest.TestCase):
-    """An x16emu patched for block reads (RQB, RQV, STB; docs/BACKLOG.md)
-    is read a block a command; a stock one, which answers the probe "ERR",
-    a byte a command."""
+    """Byte reads by default: the block reads (RQB, RQV, STB; docs/BACKLOG.md)
+    are not in a released x16emu. PLAYTEST_X16_BLOCK=1 asks for them, and a
+    stock build, which answers the probe "ERR", is then an error."""
 
-    def monitor(self, patched: bool):
+    def monitor(self, patched: bool, block: bool = True):
+        import os
+        from unittest import mock
         from moria_playtest.x16 import X16Monitor
         ram = bytearray(range(256)) * 256
 
@@ -518,7 +520,8 @@ class X16BlockReadTest(unittest.TestCase):
             def receive(self, timeout):
                 return Process.replies.pop(0)
 
-        return X16Monitor(Process()), Process
+        with mock.patch.dict(os.environ, {"PLAYTEST_X16_BLOCK": "1" if block else ""}):
+            return X16Monitor(Process()), Process
 
     def test_patched_reads_a_block_a_command(self) -> None:
         mon, process = self.monitor(True)
@@ -527,8 +530,20 @@ class X16BlockReadTest(unittest.TestCase):
         self.assertEqual(mon.mem_get(0x0410, 32), bytes(range(0x10, 0x30)))
         self.assertEqual(process.sent, ["RQB 0410 20"])
 
+    def test_byte_reads_unless_asked(self) -> None:
+        mon, process = self.monitor(True, block=False)
+        self.assertFalse(mon.block)
+        self.assertEqual(process.sent, [])                                  # no probe
+        self.assertEqual(mon.mem_get(0x0410, 4), bytes(range(0x10, 0x14)))
+        self.assertEqual(process.sent, ["RQM 0410", "RQM 0411", "RQM 0412", "RQM 0413"])
+
+    def test_asked_for_on_a_stock_build_is_an_error(self) -> None:
+        from moria_playtest.mame import BridgeClosed
+        with self.assertRaises(BridgeClosed):
+            self.monitor(False)
+
     def test_stock_reads_a_byte_a_command(self) -> None:
-        mon, process = self.monitor(False)
+        mon, process = self.monitor(False, block=False)
         self.assertFalse(mon.block)
         process.sent.clear()
         self.assertEqual(mon.mem_get(0x0410, 4), bytes(range(0x10, 0x14)))
