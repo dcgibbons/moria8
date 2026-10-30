@@ -335,7 +335,12 @@ plus4_storage_marker_present:
 !cdmp_done:
     lda disk_status
     beq !cdmp_status_done+
+    lda save_device             // the drive the marker was read from
+    sta disk_prompt_device
     jsr plus4_disk_read_command_status
+    lda disk_status
+    bne !cdmp_status_done+
+    inc disk_status             // drive OK, but the marker was missing or wrong
 !cdmp_status_done:
     lda disk_status
     beq !cdmp_ok+
@@ -582,6 +587,8 @@ plus4_storage_marker_write_resident:
     jsr plus4_kernal_close
     lda disk_status
     bne !cdmw_status_done+
+    lda save_device             // the drive the marker was written to
+    sta disk_prompt_device
     jsr plus4_disk_read_command_status
 !cdmw_status_done:
     lda disk_status
@@ -594,11 +601,16 @@ plus4_storage_marker_write_resident:
     rts
 
 plus4_disk_read_command_status:
-    lda #0
+    // Failed until the drive answers, as on C64 and C128: a channel that
+    // never opens, or a code not mapped below, must not read as OK.
+    lda #2
+    sta disk_status
+    lda #$ff                    // no digits read
     sta disk_error_dos0
     sta disk_error_dos1
-    ldx #0
-    ldy #0
+    lda #0                      // no command: just read the channel
+    tax
+    tay
     jsr plus4_kernal_setnam
     lda #hal_storage_cmd_channel
     ldx disk_prompt_device
@@ -613,6 +625,7 @@ plus4_disk_read_command_status:
     sta disk_error_dos0
     jsr plus4_kernal_readst
     sta disk_error_readst
+    bne !p4dcs_close+           // as on C128: no second digit after a failed read
     jsr plus4_kernal_chrin
     sta disk_error_dos1
     jsr plus4_kernal_readst
@@ -626,53 +639,25 @@ plus4_disk_read_command_status:
     rts
 
 plus4_disk_status_to_disk_status:
+    // One DOS-code policy for every port: core/storage_status.s.
     lda disk_error_dos0
-    cmp #$30                    // "0"
-    bne !check_26+
-    lda disk_error_dos1
-    cmp #$30                    // "0"
-    bne !done+
-    lda #0
+    ldx disk_error_dos1
+    jsr storage_status_from_dos_digits
+    cmp #plus4_dos_status_codes_len
+    bcs !done+                  // UNKNOWN: disk_status keeps the failure seed
+    tax
+    lda plus4_dos_status_codes,x
     sta disk_status
-    lda #0
-    sta disk_error_dos0
+    bne !done+
+    sta disk_error_dos0         // OK: no error detail to show
     sta disk_error_dos1
-    rts
-!check_26:
-    lda disk_error_dos0
-    cmp #$32                    // "2"
-    bne !check_62+
-    lda disk_error_dos1
-    cmp #$36                    // "6"
-    bne !done+
-    lda #26
-    sta disk_status
-    rts
-!check_62:
-    cmp #$36                    // "6"
-    bne !check_72+
-    lda disk_error_dos1
-    cmp #$32                    // "2"
-    bne !done+
-    lda #62
-    sta disk_status
-    rts
-!check_72:
-    cmp #$37                    // "7"
-    bne !done+
-    lda disk_error_dos1
-    cmp #$32                    // "2"
-    bne !check_74+
-    lda #72
-    sta disk_status
-    rts
-!check_74:
-    cmp #$34                    // "4"
-    bne !done+
-    lda #74
-    sta disk_status
 !done:
     rts
+
+// disk_status for each HAL_STORAGE_STATUS_* the DOS classifier returns.
+plus4_dos_status_codes:
+    .fill HAL_STORAGE_STATUS_DEVICE_NOT_READY + 1, i == HAL_STORAGE_STATUS_OK ? 0 : i == HAL_STORAGE_STATUS_NOT_FOUND ? 62 : i == HAL_STORAGE_STATUS_WRITE_PROTECTED ? 26 : i == HAL_STORAGE_STATUS_DISK_FULL ? 72 : i == HAL_STORAGE_STATUS_DEVICE_NOT_READY ? 74 : 2
+.label plus4_dos_status_codes_len = * - plus4_dos_status_codes
 
 // ============================================================
 // Entry point
@@ -2219,15 +2204,21 @@ plus4_require_program_media:
 
 save_append_disk_detail_plus4:
     lda #$20
+!no_dos:
     jsr screen_put_char
-    lda disk_error_dos0
+    lda disk_error_dos0         // 0 or $ff: no DOS digits to show
+    beq !no_dos+
+    cmp #$ff                    // the drive never answered
     bne !dos+
     lda disk_error_phase
     ora disk_error_readst
+    cmp #$ff                    // only the first digit arrived
+    beq !no_dos1+
     bne !status+
+!no_dos1:
     rts
-!dos:
-    lda disk_error_dos0
+    rts
+!dos:                           // A = disk_error_dos0
     jsr screen_put_char
     lda disk_error_dos1
     jmp screen_put_char

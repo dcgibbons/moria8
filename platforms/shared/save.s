@@ -748,7 +748,33 @@ save_open_write_len:
     and #$83
     bne !save_error+
 #endif
+#if HAL_STORAGE_SAVE_CHECKS_DOS_STATUS
+    // CBM DOS reports a write-protected (26) or full (72) disk only on the
+    // command channel, never in READST, so a save counts as written only
+    // when the drive says so after the close.
+    lda save_device
+    sta disk_prompt_device      // C128: also disk_ui_action, not live during a save
+    jsr hal_storage_read_command_status
+#if HAL_STORAGE_COMMAND_STATUS_FROM_DISK_DIAG || HAL_STORAGE_COMMAND_STATUS_FROM_ERROR_DIAG
+    jsr hal_storage_command_status
+#else
+    lda disk_status             // 0 = DOS status 00/01
+#endif
+    pha
 #if HAL_STORAGE_VIC_BANK_RESTORE_AFTER_SERIAL
+    jsr c64_restore_vic_bank0_after_serial
+#endif
+    pla
+    beq !save_drive_ok+
+#if HAL_STORAGE_FRIENDLY_STATUS_MESSAGES
+    jsr save_print_storage_status   // A = the drive's HAL_STORAGE_STATUS_*
+    jmp !save_error_after_print+
+#else
+    inc save_io_error
+    jmp !save_error+
+#endif
+!save_drive_ok:
+#elif HAL_STORAGE_VIC_BANK_RESTORE_AFTER_SERIAL
     jsr c64_restore_vic_bank0_after_serial
 #endif
 

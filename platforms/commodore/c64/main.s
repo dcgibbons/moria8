@@ -596,23 +596,19 @@ c64_storage_read_command_status:
     ldx #15
     jsr c64_disk_chkin
     bcs !cdrs_close+
+    // The DOS policy of core/storage_status.s, kept inline here until the
+    // drive-hang backlog item lets C64 share it (docs/BACKLOG.md).
     jsr c64_disk_chrin
     cmp #$30
-    beq !cdrs_check_0x+
-    cmp #$32
+    bcc !cdrs_close+
+    cmp #$32                    // 00-19 are informational (01 FILES SCRATCHED)
+    bcc !cdrs_ok+
     beq !cdrs_check_26+
     cmp #$36
     beq !cdrs_check_62+
     cmp #$37
     beq !cdrs_check_7x+
     jmp !cdrs_close+
-!cdrs_check_0x:
-    jsr c64_disk_chrin
-    cmp #$32
-    beq !cdrs_wrong_media+
-    lda #0
-    sta disk_status
-    beq !cdrs_close+
 !cdrs_check_26:
     jsr c64_disk_chrin
     cmp #$36
@@ -629,8 +625,8 @@ c64_storage_read_command_status:
     jsr c64_disk_chrin
     cmp #$32
     beq !cdrs_disk_full+
-    cmp #$33
-    beq !cdrs_wrong_media+
+    cmp #$33                    // 73, the DOS banner after a reset: no error
+    beq !cdrs_ok+
     cmp #$34
     bne !cdrs_close+
     lda #74
@@ -642,6 +638,10 @@ c64_storage_read_command_status:
     jmp !cdrs_close+
 !cdrs_wrong_media:
     lda #1
+    sta disk_status
+    bne !cdrs_close+
+!cdrs_ok:
+    lda #0
     sta disk_status
 !cdrs_close:
     jsr c64_disk_clrchn

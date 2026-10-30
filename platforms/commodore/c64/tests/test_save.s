@@ -1757,6 +1757,86 @@ t18_fail_code:
     lda #7
     jmp t19_fail_code
 !t19_ok_unknown:
+    lda #$30                    // 01 FILES SCRATCHED: informational
+    ldx #$31
+    jsr storage_status_from_dos_digits
+    cmp #HAL_STORAGE_STATUS_OK
+    beq !t19_ok_01+
+    lda #8
+    jmp t19_fail_code
+!t19_ok_01:
+    lda #$31                    // 19: the top of the informational range
+    ldx #$39
+    jsr storage_status_from_dos_digits
+    cmp #HAL_STORAGE_STATUS_OK
+    beq !t19_ok_19+
+    lda #9
+    jmp t19_fail_code
+!t19_ok_19:
+    lda #$37                    // 73: the DOS banner after a reset
+    ldx #$33
+    jsr storage_status_from_dos_digits
+    cmp #HAL_STORAGE_STATUS_OK
+    beq !t19_ok_73+
+    lda #10
+    jmp t19_fail_code
+!t19_ok_73:
+    lda #$32                    // 20: the first error code
+    ldx #$30
+    jsr storage_status_from_dos_digits
+    cmp #HAL_STORAGE_STATUS_UNKNOWN
+    beq !t19_ok_20+
+    lda #11
+    jmp t19_fail_code
+!t19_ok_20:
+    lda #$30                    // a first digit with no second one read
+    ldx #$0d
+    jsr storage_status_from_dos_digits
+    cmp #HAL_STORAGE_STATUS_UNKNOWN
+    beq !t19_ok_nodigit+
+    lda #12
+    jmp t19_fail_code
+!t19_ok_nodigit:
+    lda #$30                    // the $ff "never read" seed as the second digit
+    ldx #$ff
+    jsr storage_status_from_dos_digits
+    cmp #HAL_STORAGE_STATUS_UNKNOWN
+    beq !t19_ok_seed2+
+    lda #13
+    jmp t19_fail_code
+!t19_ok_seed2:
+    lda #$31                    // ':' just past '9'
+    ldx #$3a
+    jsr storage_status_from_dos_digits
+    cmp #HAL_STORAGE_STATUS_UNKNOWN
+    beq !t19_ok_colon+
+    lda #14
+    jmp t19_fail_code
+!t19_ok_colon:
+    lda #$ff                    // the seed as the first digit
+    ldx #$ff
+    jsr storage_status_from_dos_digits
+    cmp #HAL_STORAGE_STATUS_UNKNOWN
+    beq !t19_ok_seed1+
+    lda #15
+    jmp t19_fail_code
+!t19_ok_seed1:
+    lda #$2f                    // just below '0' as the first digit
+    ldx #$30
+    jsr storage_status_from_dos_digits
+    cmp #HAL_STORAGE_STATUS_UNKNOWN
+    beq !t19_ok_low1+
+    lda #16
+    jmp t19_fail_code
+!t19_ok_low1:
+    lda #$30                    // ...and as the second
+    ldx #$2f
+    jsr storage_status_from_dos_digits
+    cmp #HAL_STORAGE_STATUS_UNKNOWN
+    beq !t19_ok_low2+
+    lda #17
+    jmp t19_fail_code
+!t19_ok_low2:
     lda #$01
     bne !t19_store+
 t19_fail_code:

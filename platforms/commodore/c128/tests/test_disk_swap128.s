@@ -105,6 +105,7 @@ w_setlfs_lfn_seen:       .byte 0
 w_setlfs_dev_seen:       .byte 0
 w_open_calls:            .byte 0
 w_close_calls:           .byte 0
+w_close_marker_calls:    .byte 0
 w_clrchn_calls:          .byte 0
 marker_write_count:      .byte 0
 marker_read_count:       .byte 0
@@ -132,6 +133,7 @@ press_key_str:
 
 cmd_status_bytes:
     .byte $30, $31, $30, $30, $30, $30
+cmd_status_bytes_end:
 
 hal_storage_init_command:
     .byte $49, $30
@@ -352,7 +354,13 @@ w_open:
     rts
 
 w_close:
+    php                     // callers pass carry through CLOSE
     inc w_close_calls
+    cmp #DISK_MARKER_FILE_NUM
+    bne !done+
+    inc w_close_marker_calls
+!done:
+    plp
     rts
 
 w_clrchn:
@@ -396,7 +404,12 @@ w_chrin:
     bne !marker+
     ldx command_read_count
     inc command_read_count
+    // Past the scripted statuses every further command reports "00" (OK).
+    lda #$30
+    cpx #cmd_status_bytes_end - cmd_status_bytes
+    bcs !status_ok+
     lda cmd_status_bytes,x
+!status_ok:
     clc
     rts
 !marker:
@@ -547,12 +560,14 @@ test_start:
     lda #9
     sta $ba
     jsr disk_reset_session_state
+    // The C128 always loads from drive 8 (HAL_STORAGE_MEDIA_STATE_TRACKING),
+    // so a $BA of 9 changes nothing: the save drive is the other one, 9.
     lda program_device
     cmp #8
     beq *+5
     jmp test_fail
     lda save_device
-    cmp #8
+    cmp #9
     beq *+5
     jmp test_fail
     lda disk_setup_done
@@ -630,7 +645,10 @@ test_start:
     jmp test_fail
 
     // Test 3b: in one-drive mode, a save prompt on the shared program/save
-    // device must leave the mounted media classified as SAVE, not PROGRAM.
+    // device must not leave the media classified as PROGRAM (that would skip
+    // the game-disk prompt after death), nor claim SAVE on a key press alone
+    // (save_game would skip its marker check and could write to the program
+    // disk). It stays unverified, and the next disk_prompt_game prompts.
     jsr reset_harness_state
     lda #1
     sta disk_mode
@@ -644,10 +662,15 @@ test_start:
     bcc *+5
     jmp test_fail
     lda c128_media_state
-    cmp #C128_MEDIA_SAVE
+    cmp #C128_MEDIA_UNKNOWN
     beq *+5
     jmp test_fail
     lda save_prompt_count
+    cmp #1
+    beq *+5
+    jmp test_fail
+    jsr disk_prompt_game
+    lda game_prompt_count
     cmp #1
     beq *+5
     jmp test_fail
@@ -1254,8 +1277,10 @@ test_start:
     beq *+5
     jmp test_fail
 
-    // Test 13c: marker OPEN failure is still cleaned up before falling back to
-    // THE.GAME detection on a legacy save disk.
+    // Test 13c: a failed marker OPEN closes nothing it never opened and
+    // still falls back to THE.GAME detection on a legacy save
+    // disk. Drive init, THE.GAME and program-media probes close their own
+    // channels, so only the marker file's CLOSE is counted.
     jsr reset_harness_state
     lda #1
     sta marker_open_fail
@@ -1274,10 +1299,7 @@ test_start:
     cmp #C128_MEDIA_SAVE
     beq *+5
     jmp test_fail
-    lda w_clrchn_calls
-    beq *+5
-    jmp test_fail
-    lda w_close_calls
+    lda w_close_marker_calls
     beq *+5
     jmp test_fail
     lda ui_action_count

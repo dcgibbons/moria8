@@ -16,16 +16,20 @@
 // Output: A = HAL_STORAGE_STATUS_*.
 // Clobbers: flags.
 storage_status_from_dos_digits:
-    cmp #$30                    // 00, OK
-    bne !check_26+
-    cpx #$30
-    bne !unknown+
+    cmp #$30
+    bcc !unknown+
+    cmp #$32                    // 00-19 are informational (01 FILES SCRATCHED)
+    bcs !check_26+
+    cpx #$30                    // ...once a second digit was read too
+    bcc !unknown+
+    cpx #$3a                    // ($ff: none read)
+    bcs !unknown+
+!ok:
     lda #HAL_STORAGE_STATUS_OK
     rts
 !check_26:
-    cmp #$32                    // 26, WRITE PROTECT ON
     bne !check_62+
-    cpx #$36
+    cpx #$36                    // 26, WRITE PROTECT ON
     bne !unknown+
     lda #HAL_STORAGE_STATUS_WRITE_PROTECTED
     rts
@@ -41,15 +45,14 @@ storage_status_from_dos_digits:
     bne !unknown+
     cpx #$32
     beq !disk_full+
-    cpx #$33                    // 73, DOS/version banner after init/reset
-    beq !ok+
+    // 73 is the DOS banner a drive reports after a reset or a disk swap
+    // (test_disk_swap128 8c); DOS MISMATCH shares the code and reads as OK.
+    cpx #$33
+    beq !ok-
     cpx #$34                    // 74, DRIVE NOT READY
     beq !not_ready+
 !unknown:
     lda #HAL_STORAGE_STATUS_UNKNOWN
-    rts
-!ok:
-    lda #HAL_STORAGE_STATUS_OK
     rts
 !disk_full:
     lda #HAL_STORAGE_STATUS_DISK_FULL

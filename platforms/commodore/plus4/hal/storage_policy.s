@@ -52,5 +52,8 @@
 #define HAL_STORAGE_READST_AFTER_LOAD_OPEN
 #define HAL_STORAGE_RETURN_LOCAL_STATUS
 #define HAL_STORAGE_SCORE_OPEN_RESTORES_RUNTIME
+// save_game reads the drive's command channel after the write: CBM DOS
+// reports a write-protected or full disk only there.
+#define HAL_STORAGE_SAVE_CHECKS_DOS_STATUS
 #define HAL_STORAGE_LOAD_PROGRAM_MEDIA_PROBE
 #define HAL_STORAGE_NO_UNIT_TEST_STUBS
