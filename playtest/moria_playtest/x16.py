@@ -245,6 +245,15 @@ class X16Game(MameGame):
         self.resolve_sites()
         return self.observe(StopInfo(pc=obs.pc))
 
+    def seed_title(self, seed: int) -> None:
+        """As MameGame, and set VIA1's timers: rng_seed mixes them into the RNG
+        when 'N' starts a game (platforms/cx16/hal/entropy_consts.s), and a
+        stock x16emu adds host wall-clock time to its clock during the boot's
+        HostFS loads, so their values at the title differ run to run. Writing
+        the timers' high bytes also reloads them from the latches."""
+        super().seed_title(seed)
+        self.mon.mem_set(0x9F04, b"\xff" * 6)   # T1 counter/latch, T2 counter
+
     def _run_to_input(self, wall0: float) -> Observation:
         self.stats["resumes"] += 1
         try:

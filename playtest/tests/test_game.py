@@ -487,6 +487,26 @@ class X16MapTest(unittest.TestCase):
         self.assertEqual(game.read_map()[far], 0)
 
 
+class X16SeedTest(unittest.TestCase):
+    """seed_title also sets VIA1's timers: rng_seed mixes them into the RNG
+    when 'N' starts a game, and a stock x16emu leaves them host-timing
+    dependent at the title."""
+
+    def test_seed_title_sets_the_entropy_timers(self) -> None:
+        from types import SimpleNamespace
+        from moria_playtest.game import derive_rng
+        from moria_playtest.x16 import X16Game
+        writes = []
+
+        class Mon:
+            def mem_set(self, start, data, bank=("cpu", 0)):
+                writes.append((start, bytes(data)))
+
+        game = X16Game.__new__(X16Game)
+        game.abi, game.mon, game.ram = SimpleNamespace(zp_rng_0=0x1A), Mon(), ("cpu", 0)
+        game.seed_title(1003)
+        self.assertEqual(writes, [(0x1A, derive_rng(1003, 0)), (0x9F04, b"\xff" * 6)])
+
 
 class X16BlockReadTest(unittest.TestCase):
     """Byte reads by default: the block reads (RQB, RQV, STB; docs/BACKLOG.md)
