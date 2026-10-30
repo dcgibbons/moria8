@@ -636,8 +636,8 @@ w_load:
 #if C128_REAL_BOOT_DIAG
     // Begin before the php/pha so the $54 check at the end compares
     // against the same stack depth (entry SP).
-    ldx #$51
     jsr c128_stack_guard_begin
+    .byte $51
 #endif
     php
     pha
@@ -675,10 +675,25 @@ w_load:
     lda c128_wrapper_saved_a
     plp
 #if C128_REAL_BOOT_DIAG
-    ldx #$54
+    // Keep LOAD's A/X/Y and carry for the caller: the checks below clobber
+    // them. Saved in memory, not on the stack, so the $54 check still sees
+    // the entry SP.
+    sta c128_wrapper_saved_a
+    stx c128_load_arg_x
+    sty c128_load_arg_y
+    php
+    pla
+    sta c128_wrapper_saved_p
     jsr c128_stack_guard_check
+    .byte $54
     jsr c128_stack_guard_snapshot_banking
     jsr c128_stack_guard_snapshot_return
+    lda c128_wrapper_saved_p
+    pha
+    ldx c128_load_arg_x
+    ldy c128_load_arg_y
+    lda c128_wrapper_saved_a
+    plp
 #endif
     rts
 
@@ -930,13 +945,13 @@ tramp_player_create:
     sta c128_tramp_player_create_overlay_req
 #endif
 #if C128_REAL_BOOT_DIAG
-    ldx #$31
     jsr c128_stack_guard_begin
+    .byte $31
 #endif
     jsr overlay_load
 #if C128_REAL_BOOT_DIAG
-    ldx #$32
     jsr c128_stack_guard_check
+    .byte $32
 #endif
     bcc !tpc_loaded+
 #if C128_TEST_OVERLAY_LOAD_FAIL_TRAP
@@ -949,8 +964,8 @@ tramp_player_create:
 #endif
 #endif
 #if C128_REAL_BOOT_DIAG
-    ldx #$33
     jsr c128_stack_guard_begin
+    .byte $33
 #endif
 #if !C128_TEST_SKIP_PLAYER_CREATE_CALL
     lda #1
@@ -964,8 +979,8 @@ tramp_player_create_return_site:
 #endif
 #endif
 #if C128_REAL_BOOT_DIAG
-    ldx #$33
     jsr c128_stack_guard_check
+    .byte $33
 #endif
     jsr c128_restore_runtime_guards
 tramp_game_over_disk_setup_failed:
@@ -1100,21 +1115,21 @@ winner_apply_retirement_bonus:
 tramp_store_init_all:
     lda #10                     // C128_CHEST_OVERLAY_ID: store maintenance (cold)
 #if C128_REAL_BOOT_DIAG
-    ldx #$34
     jsr c128_stack_guard_begin
+    .byte $34
 #endif
     jsr overlay_load
 #if C128_REAL_BOOT_DIAG
-    ldx #$35
     jsr c128_stack_guard_check
+    .byte $35
 #endif
     bcc !tsia_loaded+
     jmp entry_main
 !tsia_loaded:
     jsr c128_restore_runtime_guards
 #if C128_REAL_BOOT_DIAG
-    ldx #$36
-    jsr c128_stack_guard_begin
+    ldx #$36                    // stage marker: tail call, no matching check
+    stx c128_stack_guard_stage
 #endif
     jmp store_init_all
 
@@ -1173,10 +1188,11 @@ test_expect_save_x: .byte 0
 
 .encoding "screencode_mixed"
 test_inventory_title_str: .text "Inventory" ; .byte 0
-test_beginner_book_str:   .text "Beginner's Spellbook" ; .byte 0
+test_beginner_book_str:   .text "Spellbook Beginners-Magick" ; .byte 0
 test_mage_book_title_str: .text "Mage Book" ; .byte 0
 test_magic_missile_str:   .text "Magic Missile" ; .byte 0
-test_phase_door_str:      .text "Phase Door" ; .byte 0
+// The cast list shows learned spells only (as Umoria); a new mage knows one.
+test_cast_one_spell_str:  .text "Cast which? (a-a, esc)" ; .byte 0
 
 #if C128_TEST_SCRIPTED_BOOK_OVERLAY
 test_assert_book_overlay:
@@ -1223,12 +1239,12 @@ test_assert_spell_list_overlay:
     jsr test_expect_screen_string
     bcc !list_fail+
 
-    lda #<test_phase_door_str
+    lda #<test_cast_one_spell_str
     sta zp_ptr0
-    lda #>test_phase_door_str
+    lda #>test_cast_one_spell_str
     sta zp_ptr0_hi
-    lda #4
-    ldx #4
+    lda #24
+    ldx #5
     jsr test_expect_screen_string
     bcc !list_fail+
 
@@ -1254,10 +1270,16 @@ c128_test_spell_fail_known_sym:
     brk
 c128_test_spell_fail_validate_sym:
     brk
-c128_test_spell_fail_roll_sym:
+#if C128_TEST_SCRIPTED_SPELL_CANCEL
+c128_test_spell_fail_roll_sym:  // the cancel build fails on a fizzle
     brk
+#endif
 c128_test_spell_fail_cancel_sym:
     brk
+#if C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_PRAYER
+c128_test_spell_script_exhausted_sym:
+    brk
+#endif
 #if !C128_TEST_SCRIPTED_SPELL && !C128_TEST_SCRIPTED_PRAYER
 c128_test_spell_pass_sym:
     brk
@@ -1792,6 +1814,10 @@ entry_main:
     cld
     ldx #$ff
     txs
+#if C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG || C128_TEST_TITLE_ART_CONTENT || C128_TEST_STATUS_SP_CANARY || C128_TEST_STACK_SLOT_DIAG || C128_TEST_STACK_BOTTOM_DIAG || C128_TEST_FINAL_RETURN_DIAG
+    lda #0                      // the stack was just reset: no guard is open
+    sta c128_stack_guard_depth
+#endif
 
     // Mask CIA1 interrupts — game mode uses direct hardware access.
     lda #$7f
@@ -2038,17 +2064,25 @@ c128_test_change_save_drive_unexpected_return:
     jsr c128_restore_runtime_vectors
     cli
 title_enter_menu:
+#if C128_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT
+    // The restart after the save returns here; the startup preload check
+    // does not cover this path.
+    lda c128_test_single_drive_fresh_save_armed
+    beq !fresh_save_not_armed+
+    jmp c128_test_single_drive_fresh_save_after_restart
+!fresh_save_not_armed:
+#endif
     lda #$ff
     sta c128_active_save_slot
 #if C128_REAL_BOOT_DIAG
-    ldx #$27
     jsr c128_stack_guard_begin
+    .byte $27
 #endif
     jsr tramp_title_load_and_draw
 title_menu_after_art:
 #if C128_REAL_BOOT_DIAG
-    ldx #$28
     jsr c128_stack_guard_check
+    .byte $28
 #endif
 #if C128_TEST_TITLE_ART_CONTENT
     jsr c128_test_title_art_assert
@@ -2106,7 +2140,7 @@ c128_test_disk_setup_single_drive_return_before_disk_setup:
     lda #$60
     jsr c128_town_dump_mark
 #endif
-#if C128_TEST_VIC40_CLEAN_BOOT
+#if C128_TEST_VIC40_BLANKED_BOOT
     jsr c128_vic40_boot_probe
 #endif
 #if C128_TEST_OVERLAY_TRANSITION_DIAG
@@ -2883,13 +2917,13 @@ c128_load_runtime_banked_prg:
 
 tramp_level_generate:
 #if C128_REAL_BOOT_DIAG
-    ldx #$39
     jsr c128_stack_guard_begin
+    .byte $39
 #endif
     jsr level_generate
 #if C128_REAL_BOOT_DIAG
-    ldx #$3a
     jsr c128_stack_guard_check
+    .byte $3a
 #endif
     rts
 
@@ -3008,19 +3042,53 @@ kernal_hw_nmi_vec_hi: .byte 0
 // high-risk KERNAL/overlay/runtime boundaries. On mismatch, preserve the
 // expected SP, actual SP, and stage tag in RAM and break immediately.
 #if C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG || C128_TEST_TITLE_ART_CONTENT || C128_TEST_STATUS_SP_CANARY || C128_TEST_STACK_SLOT_DIAG || C128_TEST_STACK_BOTTOM_DIAG || C128_TEST_FINAL_RETURN_DIAG
+.const C128_STACK_GUARD_NEST_MAX = 8
+// Call as "jsr c128_stack_guard_begin" (or _check) followed by ".byte stage".
+// Both keep the caller's A, X, Y and flags (saved in memory, so SP is
+// unchanged for the depth check): sites sit between loading a register and
+// using it.
+// Guards nest (player_create's spans overlay and asset loads with their own):
+// begin pushes the enclosing expected SP and a passing check pops it, so each
+// check compares its own begin's depth.
 c128_stack_guard_begin:
+    sta c128_stack_guard_saved_a
+    php
+    pla
+    sta c128_stack_guard_saved_p
+    stx c128_stack_guard_saved_x
+    sty c128_stack_guard_saved_y
     jsr c128_stack_guard_verify_canaries
-    stx c128_stack_guard_stage
+    jsr c128_stack_guard_take_stage
+    ldy c128_stack_guard_depth
+    cpy #C128_STACK_GUARD_NEST_MAX
+    bcc !c128_stack_guard_push+
+    lda #$e3                    // nesting deeper than the save stack
+    sta c128_stack_guard_fail_code
+#if C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG
+    jmp c128_diag_fail_sym
+#else
+    brk
+#endif
+!c128_stack_guard_push:
+    lda c128_stack_guard_expected
+    sta c128_stack_guard_nest,y
+    inc c128_stack_guard_depth
     lda #0
     sta c128_stack_guard_fail_code
     sta c128_stack_guard_substage
     tsx
     stx c128_stack_guard_expected
-    rts
+    jmp c128_stack_guard_restore_ap
 
 c128_stack_guard_check:
+    sta c128_stack_guard_saved_a
+    php
+    pla
+    sta c128_stack_guard_saved_p
+    stx c128_stack_guard_saved_x
+    sty c128_stack_guard_saved_y
     jsr c128_stack_guard_verify_canaries
-    stx c128_stack_guard_stage
+    jsr c128_stack_guard_take_stage
     tsx
     stx c128_stack_guard_actual
     cpx c128_stack_guard_expected
@@ -3034,6 +3102,39 @@ c128_stack_guard_check:
     brk
 #endif
 !c128_stack_guard_ok:
+    ldy c128_stack_guard_depth
+    beq c128_stack_guard_restore_ap
+    dey
+    sty c128_stack_guard_depth
+    lda c128_stack_guard_nest,y
+    sta c128_stack_guard_expected
+c128_stack_guard_restore_ap:
+    ldx c128_stack_guard_saved_x
+    ldy c128_stack_guard_saved_y
+    lda c128_stack_guard_saved_p
+    pha
+    lda c128_stack_guard_saved_a
+    plp
+    rts
+
+// The stage byte follows the caller's jsr to begin/check: read it and step
+// that return address past it.
+c128_stack_guard_take_stage:
+    tsx
+    lda $0103,x                 // begin/check's return address (lo, hi)
+    clc
+    adc #1
+    sta c128_stack_guard_stage_byte + 1
+    lda $0104,x
+    adc #0
+    sta c128_stack_guard_stage_byte + 2
+c128_stack_guard_stage_byte:
+    lda $ffff                   // operand set above
+    sta c128_stack_guard_stage
+    inc $0103,x
+    bne !c128_stack_guard_take_done+
+    inc $0104,x
+!c128_stack_guard_take_done:
     rts
 
 c128_stack_guard_verify_canaries:
@@ -3267,9 +3368,23 @@ c128_diag_validate_runtime_invariants:
     sta c128_stack_guard_substage
     jmp c128_diag_fail_sym
 !mmu_ok:
+    // The software IRQ tail is the KERNAL's until the title arms the runtime
+    // (c128_kernal_irq_tail_runtime_owned); startup preloads run before that,
+    // and ExitKernal leaves the captured KERNAL vector in place.
+    lda c128_kernal_irq_tail_runtime_owned
+    bne !irq_runtime_owned+
+    lda $0314
+    cmp kernal_irq_vec_lo
+    bne !irq_lo_bad+
+    lda $0315
+    cmp kernal_irq_vec_hi
+    beq !irq_hi_ok+
+    bne !irq_hi_bad+
+!irq_runtime_owned:
     lda $0314
     cmp #<mmu_common_irq
     beq !irq_lo_ok+
+!irq_lo_bad:
     sta c128_stack_guard_fail_code
     lda #4
     sta c128_stack_guard_substage
@@ -3278,11 +3393,18 @@ c128_diag_validate_runtime_invariants:
     lda $0315
     cmp #>mmu_common_irq
     beq !irq_hi_ok+
+!irq_hi_bad:
     sta c128_stack_guard_fail_code
     lda #5
     sta c128_stack_guard_substage
     jmp c128_diag_fail_sym
 !irq_hi_ok:
+    // The hardware NMI/IRQ vectors become the runtime's at the same point
+    // (c128_restore_runtime_vectors); before it they are the KERNAL's.
+    lda c128_kernal_irq_tail_runtime_owned
+    bne !hw_vectors_owned+
+    jmp !hw_irq_hi_ok+
+!hw_vectors_owned:
     lda $fffa
     cmp #<mmu_common_nmi
     beq !nmi_lo_ok+
@@ -3370,6 +3492,12 @@ c128_stack_guard_stage:     .byte 0
 c128_stack_guard_canary_hi: .byte $5a
 c128_stack_guard_port0:     .byte 0
 c128_stack_guard_port1:     .byte 0
+c128_stack_guard_saved_a:   .byte 0
+c128_stack_guard_saved_p:   .byte 0
+c128_stack_guard_saved_y:   .byte 0
+c128_stack_guard_saved_x:   .byte 0
+c128_stack_guard_depth:     .byte 0
+c128_stack_guard_nest:      .fill C128_STACK_GUARD_NEST_MAX, 0
 c128_stack_guard_mmu:       .byte 0
 c128_stack_guard_ret_lo:    .byte 0
 c128_stack_guard_ret_hi:    .byte 0
@@ -4438,38 +4566,33 @@ c128_test_validate_overlay_partial_state:
     rts
 #endif
 
-#if C128_TEST_VIC40_CLEAN_BOOT
-.segment RuntimeLowData
+#if C128_TEST_VIC40_BLANKED_BOOT
+// In Default with its caller: RuntimeLowData has 5 bytes free below
+// FLOOR_ITEM_BASE, too few for the probe.
+// boot128 blanks the VIC display ($D011 = 0) and the 80-column game never
+// turns it on, so nothing can show on the 40-column screen: the display
+// must still be off when the game starts.
 c128_vic40_boot_probe:
     lda $d011
-    cmp #$1b
-    bne c128_vic40_boot_probe_fail_sym
-    lda $d018
-    cmp #$14
+    and #$10                    // DEN
     bne c128_vic40_boot_probe_fail_sym
 
+    // And nothing was drawn on the screen the VIC reads ($0400; bit 0
+    // is unused and reads 1) to show if the display came on.
+    lda $d018
+    and #$fe
+    cmp #$14
+    bne c128_vic40_boot_probe_fail_sym
     ldx #0
 !vic40_screen_loop:
     lda $0400,x
-    cmp #$20
-    beq !vic40_screen_ok+
-    cmp #$00
+    cmp #$20                    // boot clears it to spaces
     bne c128_vic40_boot_probe_fail_sym
-!vic40_screen_ok:
     inx
     cpx #$40
     bne !vic40_screen_loop-
-
-    lda $d800
-    sta zp_temp0
-    ldx #0
-!vic40_color_loop:
-    lda $d800,x
-    cmp zp_temp0
-    bne c128_vic40_boot_probe_fail_sym
-    inx
-    cpx #$40
-    bne !vic40_color_loop-
+    // Colour RAM is not checked: nothing writes it while the display is
+    // off, so it keeps its power-on pattern.
 
     jmp c128_vic40_boot_probe_pass_sym
 
@@ -4480,7 +4603,6 @@ c128_vic40_boot_probe_pass_sym:
 c128_vic40_boot_probe_fail_sym:
     nop
     jmp c128_vic40_boot_probe_fail_sym
-.segment Default
 #endif
 
 #if C128_TEST_CACHE_SURVIVAL

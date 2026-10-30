@@ -44,8 +44,8 @@ town_light_all:
 // Preserves: nothing
 update_visibility:
 #if C128_REAL_BOOT_DIAG
-    ldx #$61
     jsr c128_stack_guard_begin
+    .byte $61
     jsr c128_stack_guard_snapshot_banking
 #endif
 
@@ -201,8 +201,8 @@ update_visibility:
     sta vis_room_revealed
 !uv_mon_done:
 #if C128_REAL_BOOT_DIAG
-    ldx #$62
     jsr c128_stack_guard_check
+    .byte $62
     jsr c128_stack_guard_snapshot_banking
 #endif
     rts
@@ -335,8 +335,8 @@ light_room_x:
 // Preserves: nothing
 reveal_room:
 #if C128_REAL_BOOT_DIAG
-    ldx #$63
     jsr c128_stack_guard_begin
+    .byte $63
     jsr c128_stack_guard_snapshot_banking
 #endif
     // Compute bounds
@@ -407,8 +407,8 @@ reveal_room:
     jmp !rr_row-
 !rr_done:
 #if C128_REAL_BOOT_DIAG
-    ldx #$64
     jsr c128_stack_guard_check
+    .byte $64
     jsr c128_stack_guard_snapshot_banking
 #endif
     rts

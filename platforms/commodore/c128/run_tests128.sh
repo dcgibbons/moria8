@@ -9,7 +9,18 @@ java() {
     if [ "$1" = "-jar" ]; then
         local jar_path="$2"
         shift 2
-        command java -jar "$jar_path" -libdir "$REPO_ROOT/core" -libdir "$REPO_ROOT/platforms/commodore/common" -libdir "$REPO_ROOT/platforms/commodore" -afo "$@"
+        # The product builds' wrapper: KickAssembler exits 0 on a failed .assert.
+        "$REPO_ROOT/tools/kickass_java.sh" -jar "$jar_path" -libdir "$REPO_ROOT/core" -libdir "$REPO_ROOT/platforms/commodore/common" -libdir "$REPO_ROOT/platforms/commodore" -afo "$@"
+        local rc=$? prev="" arg
+        if [ "$rc" -ne 0 ]; then
+            # The assembler still wrote its -o file; left behind, the
+            # staleness checks would reuse the failed build next run.
+            for arg in "$@"; do
+                [ "$prev" = "-o" ] && rm -f "$arg"
+                prev="$arg"
+            done
+        fi
+        return "$rc"
     else
         command java "$@"
     fi
@@ -475,7 +486,7 @@ if not addr:
 elif len(addr) > 4:
     print(addr[-4:])
 else:
-    print(addr)
+    print(addr.zfill(4))        # .vs writes C:937; VICE's stops say 0937
 PY
 }
 
@@ -485,10 +496,11 @@ c128_target_is_stale() {
         return 0
     fi
 
-    if find . -maxdepth 1 -type f \( -name '*.s' -o -name 'Makefile' \) -newer "$target" -print -quit | grep -q .; then
+    if find . -maxdepth 1 -type f -name 'Makefile' -newer "$target" -print -quit | grep -q .; then
         return 0
     fi
-    if find tests ../../../core ../common ../c64 -type f -name '*.s' -newer "$target" -print -quit | grep -q .; then
+    # Every directory a C128 build includes from: one left out lets a stale payload be reused.
+    if find . ../hal ../common ../c64 ../../shared ../../../core -type f -name '*.s' -newer "$target" -print -quit | grep -q .; then
         return 0
     fi
 
@@ -553,6 +565,48 @@ c128_set_active_variant() {
     printf '%s\n' "$variant" > "$C128_ACTIVE_VARIANT_FILE"
 }
 
+# c128_disk_payload_args <dir>: the -write arguments for every file a C128 game
+# disk carries besides its boot and main programs, from <dir>, in disk order;
+# sets C128_DISK_PAYLOAD_ARGS.
+c128_disk_payload_args() {
+    local dir="$1" f
+    C128_DISK_PAYLOAD_ARGS=(-write "$dir/title" "t128")
+    for f in monster.db.1 monster.db.2 monster.db.3 monster.db.4; do
+        C128_DISK_PAYLOAD_ARGS+=(-write "$dir/$f" "$f")
+    done
+    for f in town start death gen modal help ui items disarm chest; do
+        C128_DISK_PAYLOAD_ARGS+=(-write "$dir/ovl.$f" "128.$f")
+    done
+    for f in runtime input proj fdisk diskio world item names huff hvec select persist play bank; do
+        C128_DISK_PAYLOAD_ARGS+=(-write "$dir/128.$f.prg" "128.$f")
+    done
+    # The shipping disk is the reference: a payload added there and not here
+    # would be missing from every test disk.
+    if [ -z "${C128_DISK_PAYLOAD_CHECKED:-}" ]; then
+        local want have
+        want=$(awk '/^define C128_DISK_WRITE_FILES/ { p = 1; next } /^endef/ { p = 0 }
+            p && /-write/ { split($0, q, "\""); if (take && q[4] !~ /,s$/) print q[4]; if (q[4] == "moria128") take = 1 }' ../Makefile | sort)
+        have=$(for ((f = 2; f < ${#C128_DISK_PAYLOAD_ARGS[@]}; f += 3)); do echo "${C128_DISK_PAYLOAD_ARGS[f]}"; done | sort)
+        if [ "$want" != "$have" ]; then
+            echo "c128_disk_payload_args: payloads differ from ../Makefile C128_DISK_WRITE_FILES" >&2
+            diff <(echo "$want") <(echo "$have") >&2
+            exit 1                  # every disk built from here would be wrong
+        fi
+        C128_DISK_PAYLOAD_CHECKED=1
+    fi
+}
+
+# c128_disk_payload_files <dir>: the payload source files c128_disk_payload_args
+# writes, for freshness checks; sets C128_DISK_PAYLOAD_FILES.
+c128_disk_payload_files() {
+    local i
+    c128_disk_payload_args "$1"
+    C128_DISK_PAYLOAD_FILES=()
+    for ((i = 1; i < ${#C128_DISK_PAYLOAD_ARGS[@]}; i += 3)); do
+        C128_DISK_PAYLOAD_FILES+=("${C128_DISK_PAYLOAD_ARGS[i]}")
+    done
+}
+
 c128_sync_build_out() {
     mkdir -p "$C128_TEST_OUT"
     if [ -d "$C128_BUILD_OUT" ]; then
@@ -573,10 +627,10 @@ describe_phase_token() {
             printf 'units\tminimal128,config128,memory128,db128,tier128,input128,disk_swap128,main_loop128,msg_prompt128,vdc_attr128,item_desc128,speed_equipment128,vdc_scroll_delta128,status_coherence128,dungeon128,look_trampoline128,soak128,monster128,detect_monsters128,detect_evil128,cure_light_wounds128,cure_poison128,cure_light_wounds_prayer128,bless_prayer128,remove_fear_prayer128,call_light_prayer128,find_traps_prayer128,detect_doors_stairs_prayer128,slow_poison_prayer128,blind_creature_prayer128,portal_prayer128,cure_medium_wounds_prayer128,cure_serious_wounds_prayer128,sense_invisible_prayer128,protection_from_evil_prayer128,earthquake_prayer128,sense_surroundings_prayer128,cure_critical_wounds_prayer128,turn_undead_prayer128,prayer_prayer128,dispel_undead_prayer128,dispel_evil_prayer128,glyph_of_warding_prayer128,holy_word_prayer128,heal_prayer128,chant_prayer128,sanctuary_prayer128,neutralize_poison_prayer128,create_food_prayer128,remove_curse_prayer128,resist_heat_cold_prayer128,orb_of_draining_prayer128,find_hidden_traps_doors128,stinking_cloud128,frost_ball128,teleport_other128,haste_self128,fire_ball128,word_of_destruction128,genocide128,confusion128,lightning_bolt128,trap_door_destruction128,sleep_i128,sleep_ii128,sleep_iii128,fire_bolt128,slow_monster128,polymorph_other128,identify128,teleport_self128,recharge_item_ii128\n'
             ;;
         smokes)
-            printf 'smokes\tboot_d64_smoke,boot_title_idle_smoke,title_art_smoke,marker_init_d64_smoke,boot_title_load_missing_savefile_smoke,boot_title_load_mounted_save_smoke,boot_title_save_write_product_smoke,boot_title_save_media_fail_product_smoke,boot_title_single_drive_save_wrong_media_smoke,boot_title_single_drive_load_wrong_media_smoke,boot_title_single_drive_load_corrupt_smoke,boot_title_single_drive_load_return_smoke,boot_title_single_drive_fresh_save_smoke,vic40_clean_boot_smoke,new_key_stability_smoke,boot_title_newgame_smoke,boot_title_load_resume_smoke,boot_tier_transition_smoke,town_overlay_smoke,town_overlay_female_smoke,town_overlay_state_smoke,scripted_summary_to_town_smoke,scripted_spell_cast_smoke,chest_open_product_smoke128,scripted_book_overlay_smoke,scripted_spell_list_overlay_smoke,scripted_spell_list_cancel_smoke,scripted_prayer_cast_smoke,cache_survival_smoke,dungeon_attack_stability_smoke,death_overlay_smoke,restart_to_title_smoke,preload_partial_failure_smoke,overlay_partial_failure_smoke\n'
+            printf 'smokes\tboot_d64_smoke,boot_title_idle_smoke,title_art_smoke,marker_init_d64_smoke,boot_title_load_missing_savefile_smoke,boot_title_load_mounted_save_smoke,boot_title_save_write_product_smoke,boot_title_save_media_fail_product_smoke,boot_title_single_drive_save_wrong_media_smoke,boot_title_single_drive_load_wrong_media_smoke,boot_title_single_drive_load_corrupt_smoke,boot_title_single_drive_load_return_smoke,boot_title_single_drive_fresh_save_smoke,vic40_blanked_boot_smoke,new_key_stability_smoke,boot_title_newgame_smoke,boot_title_load_resume_smoke,boot_tier_transition_smoke,town_overlay_smoke,town_overlay_female_smoke,town_overlay_state_smoke,scripted_summary_to_town_smoke,scripted_spell_cast_smoke,chest_open_product_smoke128,scripted_book_overlay_smoke,scripted_spell_list_overlay_smoke,scripted_spell_list_cancel_smoke,scripted_prayer_cast_smoke,cache_survival_smoke,dungeon_attack_stability_smoke,death_overlay_smoke,restart_to_title_smoke,preload_partial_failure_smoke,overlay_partial_failure_smoke\n'
             ;;
         boot)
-            printf 'boot\tboot_d64_smoke,boot_title_idle_smoke,title_art_smoke,boot_title_load_missing_savefile_smoke,boot_title_load_mounted_save_smoke,boot_title_save_write_product_smoke,boot_title_save_media_fail_product_smoke,vic40_clean_boot_smoke,new_key_stability_smoke,boot_title_newgame_smoke,boot_title_load_resume_smoke,boot_tier_transition_smoke,boot_diag_copy\n'
+            printf 'boot\tboot_d64_smoke,boot_title_idle_smoke,title_art_smoke,boot_title_load_missing_savefile_smoke,boot_title_load_mounted_save_smoke,boot_title_save_write_product_smoke,boot_title_save_media_fail_product_smoke,vic40_blanked_boot_smoke,new_key_stability_smoke,boot_title_newgame_smoke,boot_title_load_resume_smoke,boot_tier_transition_smoke,boot_diag_copy\n'
             ;;
         town)
             printf 'town\ttown_overlay_smoke,town_overlay_female_smoke,town_overlay_state_smoke,scripted_summary_to_town_smoke,scripted_spell_cast_smoke,chest_open_product_smoke128,scripted_book_overlay_smoke,scripted_spell_list_overlay_smoke,scripted_spell_list_cancel_smoke,scripted_prayer_cast_smoke,real_input_town_move_diag,real_boot_crash_harness\n'
@@ -617,12 +671,12 @@ suite_matches_phase_token() {
             ;;
         smokes)
             case "$suite_name" in
-                boot_d64_smoke|boot_title_idle_smoke|title_art_smoke|marker_init_d64_smoke|boot_title_load_missing_savefile_smoke|boot_title_load_mounted_save_smoke|boot_title_save_write_product_smoke|boot_title_save_media_fail_product_smoke|boot_title_single_drive_save_wrong_media_smoke|boot_title_single_drive_load_wrong_media_smoke|boot_title_single_drive_load_corrupt_smoke|boot_title_single_drive_load_return_smoke|boot_title_single_drive_fresh_save_smoke|vic40_clean_boot_smoke|new_key_stability_smoke|boot_title_newgame_smoke|boot_title_load_resume_smoke|boot_tier_transition_smoke|town_overlay_smoke|town_overlay_female_smoke|town_overlay_state_smoke|scripted_summary_to_town_smoke|scripted_spell_cast_smoke|chest_open_product_smoke128|scripted_book_overlay_smoke|scripted_spell_list_overlay_smoke|scripted_spell_list_cancel_smoke|scripted_prayer_cast_smoke|cache_survival_smoke|dungeon_attack_stability_smoke|death_overlay_smoke|restart_to_title_smoke|preload_partial_failure_smoke|overlay_partial_failure_smoke) return 0 ;;
+                boot_d64_smoke|boot_title_idle_smoke|title_art_smoke|marker_init_d64_smoke|boot_title_load_missing_savefile_smoke|boot_title_load_mounted_save_smoke|boot_title_save_write_product_smoke|boot_title_save_media_fail_product_smoke|boot_title_single_drive_save_wrong_media_smoke|boot_title_single_drive_load_wrong_media_smoke|boot_title_single_drive_load_corrupt_smoke|boot_title_single_drive_load_return_smoke|boot_title_single_drive_fresh_save_smoke|vic40_blanked_boot_smoke|new_key_stability_smoke|boot_title_newgame_smoke|boot_title_load_resume_smoke|boot_tier_transition_smoke|town_overlay_smoke|town_overlay_female_smoke|town_overlay_state_smoke|scripted_summary_to_town_smoke|scripted_spell_cast_smoke|chest_open_product_smoke128|scripted_book_overlay_smoke|scripted_spell_list_overlay_smoke|scripted_spell_list_cancel_smoke|scripted_prayer_cast_smoke|cache_survival_smoke|dungeon_attack_stability_smoke|death_overlay_smoke|restart_to_title_smoke|preload_partial_failure_smoke|overlay_partial_failure_smoke) return 0 ;;
             esac
             ;;
         boot)
             case "$suite_name" in
-                boot_d64_smoke|boot_title_idle_smoke|title_art_smoke|boot_title_load_missing_savefile_smoke|boot_title_load_mounted_save_smoke|boot_title_save_write_product_smoke|boot_title_save_media_fail_product_smoke|vic40_clean_boot_smoke|new_key_stability_smoke|boot_title_newgame_smoke|boot_title_load_resume_smoke|boot_tier_transition_smoke|boot_diag_copy) return 0 ;;
+                boot_d64_smoke|boot_title_idle_smoke|title_art_smoke|boot_title_load_missing_savefile_smoke|boot_title_load_mounted_save_smoke|boot_title_save_write_product_smoke|boot_title_save_media_fail_product_smoke|vic40_blanked_boot_smoke|new_key_stability_smoke|boot_title_newgame_smoke|boot_title_load_resume_smoke|boot_tier_transition_smoke|boot_diag_copy) return 0 ;;
             esac
             ;;
         town)
@@ -732,6 +786,19 @@ suite_matches_filter() {
     return 0
 }
 
+# Python smokes resolve these symbols only in their own overlay:
+# uds_show_insert_prompt in OVL_HELP (5), royal_screen resident (OVL_NONE, 0).
+C128_OVERLAY_COND_ARGS=(--overlay-cond ".uds_show_insert_prompt=5" --overlay-cond ".royal_screen=0")
+
+# c128_exit_png: the screen VICE saves when it exits (-exitscreenshot) for the
+# running suite; run_named_suite names it when the suite fails, since a log
+# that never reached a checkpoint says nothing about where the machine was.
+C128_EXIT_SCREEN_DIR="../../../build/test/c128/exit"
+C128_CURRENT_SUITE=""
+c128_exit_png() {
+    printf '%s/%s_exit.png\n' "$C128_EXIT_SCREEN_DIR" "${C128_CURRENT_SUITE:-unnamed}"
+}
+
 run_named_suite() {
     local suite_name="$1"
     local suite_aliases=""
@@ -754,8 +821,14 @@ run_named_suite() {
     if [ "$TEST_TIMINGS" != "0" ] || [ -n "$TEST_SUMMARY" ]; then
         timing_start="$(test128_now_ms)"
     fi
+    C128_CURRENT_SUITE="$suite_name"
+    mkdir -p "$C128_EXIT_SCREEN_DIR"
+    rm -f "$(c128_exit_png)"
     "$@"
     local suite_rc=$?
+    if [ "$FAIL" -gt "$fail_before" ] && [ -s "$(c128_exit_png)" ]; then
+        echo "    Screen: $(c128_exit_png)"
+    fi
     if [ -n "$timing_start" ] && [ "$TOTAL" -gt "$total_before" ]; then
         local duration_ms="$(( $(test128_now_ms) - timing_start ))"
         record_suite_timing "$suite_name" "$duration_ms"
@@ -783,7 +856,7 @@ root = Path(sys.argv[1])
 bad = []
 
 def check_tokens(label: str, values: list[str]) -> None:
-    missing = [flag for flag in ("-config", "-default", "+saveres") if flag not in values]
+    missing = [flag for flag in ("-config", "-default", "+saveres", "+autostart-delay-random") if flag not in values]
     if "-config" in values:
         config_index = values.index("-config")
         if config_index + 1 >= len(values) or values[config_index + 1] != "vice_config()":
@@ -816,14 +889,14 @@ for path in sorted((root / "tests").glob("*.py")) + [root / "harness128.py"]:
             continue
         check_tokens(path.name, values)
 
-runner = root / "run_tests128.sh"
-for lineno, line in enumerate(runner.read_text().splitlines(), start=1):
-    stripped = line.strip()
-    if not stripped.startswith('"$VICE" '):
-        continue
-    missing = [flag for flag in ('-config "$VICE_CONFIG"', "-default", "+saveres") if flag not in line]
-    if missing:
-        bad.append(f"{runner.name}:{lineno}: missing {', '.join(missing)}")
+for runner in (root / "run_tests128.sh", root / "run_test_internal_worker.sh"):
+    for lineno, line in enumerate(runner.read_text().splitlines(), start=1):
+        stripped = line.strip()
+        if not stripped.startswith('"$VICE" '):
+            continue
+        missing = [flag for flag in ('-config "$VICE_CONFIG"', "-default", "+saveres", "+autostart-delay-random") if flag not in line]
+        if missing:
+            bad.append(f"{runner.name}:{lineno}: missing {', '.join(missing)}")
 
 if bad:
     print("; ".join(bad))
@@ -2204,14 +2277,10 @@ build_boot_assets() {
         force_base_rebuild=1
     fi
 
+    c128_disk_payload_files "../../../build/test/c128"
     if [ "$PERF_P1_MODE" != "1" ] && c128_active_variant_is "base" && ! c128_outputs_need_refresh \
-            ../../../build/test/c128/boot128.prg ../../../build/test/c128/boot128.chain.prg ../../../build/test/c128/bootsect128.prg ../../../build/test/c128/bootart128.prg ../../../build/test/c128/moria128.prg ../../../build/test/c128/moria128.d71 ../../../build/test/c128/title ../../../build/test/c128/monster.db.1 ../../../build/test/c128/monster.db.2 \
-            ../../../build/test/c128/monster.db.3 ../../../build/test/c128/monster.db.4 ../../../build/test/c128/ovl.town ../../../build/test/c128/ovl.start ../../../build/test/c128/ovl.death \
-            ../../../build/test/c128/ovl.gen ../../../build/test/c128/128.runtime.prg ../../../build/test/c128/128.input.prg ../../../build/test/c128/128.proj.prg ../../../build/test/c128/128.fdisk.prg ../../../build/test/c128/128.world.prg ../../../build/test/c128/128.item.prg ../../../build/test/c128/128.names.prg ../../../build/test/c128/128.select.prg ../../../build/test/c128/128.persist.prg ../../../build/test/c128/128.play.prg ../../../build/test/c128/128.bank.prg ../../../build/test/c128/main.vs -- \
-            main.s boot128.s bootart128.s bootsect128.s Makefile ../version.json \
-            ../artwork/moria8_C128loadingart_tile_native.png \
-            ../tools/png_to_ppm.py ../tools/make_version_include.py ../tools/ppm_to_c128_bootart.py \
-            ../common/*.s ../c64/*.s; then
+            ../../../build/test/c128/boot128.prg ../../../build/test/c128/boot128.chain.prg ../../../build/test/c128/bootsect128.prg ../../../build/test/c128/bootart128.prg ../../../build/test/c128/moria128.prg ../../../build/test/c128/moria128.d71 "${C128_DISK_PAYLOAD_FILES[@]}" ../../../build/test/c128/main.vs -- \
+            main.s boot128.s bootart128.s bootsect128.s Makefile ../version.json ../artwork/moria8_C128loadingart_tile_native.png ../tools/png_to_ppm.py ../tools/make_version_include.py ../tools/ppm_to_c128_bootart.py ../common/*.s ../c64/*.s; then
         BOOT_ASSETS_BUILT=1
         return
     fi
@@ -2237,7 +2306,7 @@ build_boot_assets() {
     c128_sync_build_out
 
     local diag_asm
-    diag_asm=$(java -jar "$KICKASS" boot128.s -define BOOT_DIAG=1 :OVL_OUT=../../../build/test/c128 -o ../../../build/test/c128/boot128.diag.prg 2>&1)
+    diag_asm=$(java -jar "$KICKASS" boot128.s -define BOOT_DIAG :OVL_OUT=../../../build/test/c128 -o ../../../build/test/c128/boot128.diag.prg 2>&1)
     if [ $? -ne 0 ]; then
         echo "FAIL (boot128 diag assembly error)"
         echo "$diag_asm" | grep -i error | head -3 | sed 's/^/    /'
@@ -2251,8 +2320,8 @@ build_boot_assets() {
     return 0
 }
 
-run_vic40_clean_boot_smoke() {
-    local name="vic40_clean_boot_smoke"
+run_vic40_blanked_boot_smoke() {
+    local name="vic40_blanked_boot_smoke"
     echo -n "  $name: "
 
     local build_log
@@ -2265,6 +2334,8 @@ run_vic40_clean_boot_smoke() {
     c128_set_active_variant "force_base"
     build_boot_assets || return
 
+    # The probe's payloads replace the base ones in the shared output.
+    c128_set_active_variant "${name}"
     if ! java -jar "$KICKASS" main_vic40probe.s -showmem -vicesymbols -libdir ../c64 \
             -define C128 :OVL_OUT=../../../build/test/c128 \
             -o "$probe_main" >"$build_log" 2>&1; then
@@ -2275,33 +2346,12 @@ run_vic40_clean_boot_smoke() {
         return
     fi
 
+    c128_disk_payload_args "../../../build/test/c128"
     if ! "$c1541_bin" -format "moria128,m8" d64 "$probe_d64" \
             -attach "$probe_d64" \
             -write ../../../build/test/c128/boot128.prg "moria8.128" \
             -write "$probe_main" "moria128" \
-            -write ../../../build/test/c128/title "title" \
-            -write ../../../build/test/c128/monster.db.1 "monster.db.1" \
-            -write ../../../build/test/c128/monster.db.2 "monster.db.2" \
-            -write ../../../build/test/c128/monster.db.3 "monster.db.3" \
-            -write ../../../build/test/c128/monster.db.4 "monster.db.4" \
-            -write ../../../build/test/c128/ovl.town "ovl.town" \
-            -write ../../../build/test/c128/ovl.start "ovl.start" \
-            -write ../../../build/test/c128/ovl.death "ovl.death" \
-            -write ../../../build/test/c128/ovl.gen "ovl.gen" \
-            -write ../../../build/test/c128/128.runtime.prg "128.runtime" \
-            -write ../../../build/test/c128/128.input.prg "128.input" \
-			-write ../../../build/test/c128/128.proj.prg "128.proj" \
-            -write ../../../build/test/c128/128.fdisk.prg "128.fdisk" \
-            -write ../../../build/test/c128/128.diskio.prg "128.diskio" \
-            -write ../../../build/test/c128/128.world.prg "128.world" \
-            -write ../../../build/test/c128/128.item.prg "128.item" \
-            -write ../../../build/test/c128/128.names.prg "128.names" \
-            -write ../../../build/test/c128/128.huff.prg "128.huff" \
-            -write ../../../build/test/c128/128.hvec.prg "128.hvec" \
-            -write ../../../build/test/c128/128.select.prg "128.select" \
-            -write ../../../build/test/c128/128.persist.prg "128.persist" \
-            -write ../../../build/test/c128/128.play.prg "128.play" \
-            -write ../../../build/test/c128/128.bank.prg "128.bank" >"$(test128_tmp_file "test128_${name}_c1541.log")" 2>&1; then
+            "${C128_DISK_PAYLOAD_ARGS[@]}" >"$(test128_tmp_file "test128_${name}_c1541.log")" 2>&1; then
         echo "FAIL (vic40 probe d64 creation failed)"
         tail -20 "$(test128_tmp_file "test128_${name}_c1541.log")" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -2332,9 +2382,10 @@ run_vic40_clean_boot_smoke() {
         echo "break \$${fail_addr}"
         echo "until \$${pass_addr}"
         echo "g"
+        echo "quit"     # at the next stop: a stop after the last command waited forever
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 180000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -2375,11 +2426,10 @@ build_real_boot_diag_assets() {
 
     build_boot_assets || return 1
 
+    c128_disk_payload_files "../../../build/test/c128"
     if c128_active_variant_is "real_boot_diag" && ! c128_outputs_need_refresh \
             ../../../build/test/c128/moria128.realdiag.prg ../../../build/test/c128/moria128_realdiag.d64 ../../../build/test/c128/main.vs -- \
-            main.s ../../../build/test/c128/boot128.prg ../../../build/test/c128/title ../../../build/test/c128/monster.db.1 ../../../build/test/c128/monster.db.2 \
-            ../../../build/test/c128/monster.db.3 ../../../build/test/c128/monster.db.4 ../../../build/test/c128/ovl.town ../../../build/test/c128/ovl.start ../../../build/test/c128/ovl.death \
-            ../../../build/test/c128/ovl.gen ../../../build/test/c128/128.runtime.prg ../../../build/test/c128/128.input.prg ../../../build/test/c128/128.proj.prg ../../../build/test/c128/128.fdisk.prg ../../../build/test/c128/128.world.prg ../../../build/test/c128/128.item.prg ../../../build/test/c128/128.names.prg ../../../build/test/c128/128.select.prg ../../../build/test/c128/128.persist.prg ../../../build/test/c128/128.play.prg ../../../build/test/c128/128.bank.prg; then
+            main.s ../../../build/test/c128/boot128.prg "${C128_DISK_PAYLOAD_FILES[@]}"; then
         REAL_BOOT_DIAG_ASSETS_BUILT=1
         return 0
     fi
@@ -2408,33 +2458,12 @@ build_real_boot_diag_assets() {
         return 1
     fi
 
+    c128_disk_payload_args "../../../build/test/c128"
     if ! "$c1541_bin" -format "moria128,m8" d64 "$diag_d64" \
             -attach "$diag_d64" \
             -write ../../../build/test/c128/boot128.prg "moria8.128" \
             -write "$diag_main" "moria128" \
-            -write ../../../build/test/c128/title "title" \
-            -write ../../../build/test/c128/monster.db.1 "monster.db.1" \
-            -write ../../../build/test/c128/monster.db.2 "monster.db.2" \
-            -write ../../../build/test/c128/monster.db.3 "monster.db.3" \
-            -write ../../../build/test/c128/monster.db.4 "monster.db.4" \
-            -write ../../../build/test/c128/ovl.town "ovl.town" \
-            -write ../../../build/test/c128/ovl.start "ovl.start" \
-            -write ../../../build/test/c128/ovl.death "ovl.death" \
-            -write ../../../build/test/c128/ovl.gen "ovl.gen" \
-            -write ../../../build/test/c128/128.runtime.prg "128.runtime" \
-            -write ../../../build/test/c128/128.input.prg "128.input" \
-			-write ../../../build/test/c128/128.proj.prg "128.proj" \
-            -write ../../../build/test/c128/128.fdisk.prg "128.fdisk" \
-            -write ../../../build/test/c128/128.diskio.prg "128.diskio" \
-            -write ../../../build/test/c128/128.world.prg "128.world" \
-            -write ../../../build/test/c128/128.item.prg "128.item" \
-            -write ../../../build/test/c128/128.names.prg "128.names" \
-            -write ../../../build/test/c128/128.huff.prg "128.huff" \
-            -write ../../../build/test/c128/128.hvec.prg "128.hvec" \
-            -write ../../../build/test/c128/128.select.prg "128.select" \
-            -write ../../../build/test/c128/128.persist.prg "128.persist" \
-            -write ../../../build/test/c128/128.play.prg "128.play" \
-            -write ../../../build/test/c128/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
+            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1; then
         echo "FAIL (real-boot diag disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -2454,11 +2483,10 @@ build_overlay_transition_diag_assets() {
 
     build_boot_assets || return 1
 
+    c128_disk_payload_files "../../../build/test/c128"
     if c128_active_variant_is "overlay_transition_diag" && ! c128_outputs_need_refresh \
             ../../../build/test/c128/moria128.overlaydiag.prg ../../../build/test/c128/moria128_overlaydiag.d64 ../../../build/test/c128/main.vs -- \
-            main.s ../../../build/test/c128/boot128.prg ../../../build/test/c128/title ../../../build/test/c128/monster.db.1 ../../../build/test/c128/monster.db.2 \
-            ../../../build/test/c128/monster.db.3 ../../../build/test/c128/monster.db.4 ../../../build/test/c128/ovl.town ../../../build/test/c128/ovl.start ../../../build/test/c128/ovl.death \
-            ../../../build/test/c128/ovl.gen ../../../build/test/c128/128.runtime.prg ../../../build/test/c128/128.input.prg ../../../build/test/c128/128.proj.prg ../../../build/test/c128/128.fdisk.prg ../../../build/test/c128/128.world.prg ../../../build/test/c128/128.item.prg ../../../build/test/c128/128.names.prg ../../../build/test/c128/128.select.prg ../../../build/test/c128/128.persist.prg ../../../build/test/c128/128.play.prg ../../../build/test/c128/128.bank.prg; then
+            main.s ../../../build/test/c128/boot128.prg "${C128_DISK_PAYLOAD_FILES[@]}"; then
         OVERLAY_TRANSITION_DIAG_ASSETS_BUILT=1
         return 0
     fi
@@ -2487,33 +2515,12 @@ build_overlay_transition_diag_assets() {
         return 1
     fi
 
+    c128_disk_payload_args "../../../build/test/c128"
     if ! "$c1541_bin" -format "moria128,m8" d64 "$diag_d64" \
             -attach "$diag_d64" \
             -write ../../../build/test/c128/boot128.prg "moria8.128" \
             -write "$diag_main" "moria128" \
-            -write ../../../build/test/c128/title "title" \
-            -write ../../../build/test/c128/monster.db.1 "monster.db.1" \
-            -write ../../../build/test/c128/monster.db.2 "monster.db.2" \
-            -write ../../../build/test/c128/monster.db.3 "monster.db.3" \
-            -write ../../../build/test/c128/monster.db.4 "monster.db.4" \
-            -write ../../../build/test/c128/ovl.town "ovl.town" \
-            -write ../../../build/test/c128/ovl.start "ovl.start" \
-            -write ../../../build/test/c128/ovl.death "ovl.death" \
-            -write ../../../build/test/c128/ovl.gen "ovl.gen" \
-            -write ../../../build/test/c128/128.runtime.prg "128.runtime" \
-            -write ../../../build/test/c128/128.input.prg "128.input" \
-			-write ../../../build/test/c128/128.proj.prg "128.proj" \
-            -write ../../../build/test/c128/128.fdisk.prg "128.fdisk" \
-            -write ../../../build/test/c128/128.diskio.prg "128.diskio" \
-            -write ../../../build/test/c128/128.world.prg "128.world" \
-            -write ../../../build/test/c128/128.item.prg "128.item" \
-            -write ../../../build/test/c128/128.names.prg "128.names" \
-            -write ../../../build/test/c128/128.huff.prg "128.huff" \
-            -write ../../../build/test/c128/128.hvec.prg "128.hvec" \
-            -write ../../../build/test/c128/128.select.prg "128.select" \
-            -write ../../../build/test/c128/128.persist.prg "128.persist" \
-            -write ../../../build/test/c128/128.play.prg "128.play" \
-            -write ../../../build/test/c128/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
+            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1; then
         echo "FAIL (overlay-transition diag disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -2533,11 +2540,10 @@ build_title_art_boot_assets() {
 
     build_boot_assets || return 1
 
+    c128_disk_payload_files "../../../build/test/c128"
     if c128_active_variant_is "title_art" && ! c128_outputs_need_refresh \
             ../../../build/test/c128/moria128.titleart.prg ../../../build/test/c128/moria128_titleart.d64 ../../../build/test/c128/main.vs -- \
-            main.s ../../../build/test/c128/boot128.prg ../../../build/test/c128/title ../../../build/test/c128/monster.db.1 ../../../build/test/c128/monster.db.2 \
-            ../../../build/test/c128/monster.db.3 ../../../build/test/c128/monster.db.4 ../../../build/test/c128/ovl.town ../../../build/test/c128/ovl.start ../../../build/test/c128/ovl.death \
-            ../../../build/test/c128/ovl.gen ../../../build/test/c128/128.runtime.prg ../../../build/test/c128/128.input.prg ../../../build/test/c128/128.proj.prg ../../../build/test/c128/128.fdisk.prg ../../../build/test/c128/128.world.prg ../../../build/test/c128/128.item.prg ../../../build/test/c128/128.names.prg ../../../build/test/c128/128.select.prg ../../../build/test/c128/128.persist.prg ../../../build/test/c128/128.play.prg ../../../build/test/c128/128.bank.prg ../common/*.s ../c64/*.s; then
+            main.s ../../../build/test/c128/boot128.prg "${C128_DISK_PAYLOAD_FILES[@]}" ../common/*.s ../c64/*.s; then
         TITLE_ART_BOOT_ASSETS_BUILT=1
         return 0
     fi
@@ -2558,33 +2564,12 @@ build_title_art_boot_assets() {
         return 1
     fi
 
+    c128_disk_payload_args "../../../build/test/c128"
     if ! "$c1541_bin" -format "moria128,m8" d64 "$title_d64" \
             -attach "$title_d64" \
             -write ../../../build/test/c128/boot128.prg "moria8.128" \
             -write "$title_main" "moria128" \
-            -write ../../../build/test/c128/title "title" \
-            -write ../../../build/test/c128/monster.db.1 "monster.db.1" \
-            -write ../../../build/test/c128/monster.db.2 "monster.db.2" \
-            -write ../../../build/test/c128/monster.db.3 "monster.db.3" \
-            -write ../../../build/test/c128/monster.db.4 "monster.db.4" \
-            -write ../../../build/test/c128/ovl.town "ovl.town" \
-            -write ../../../build/test/c128/ovl.start "ovl.start" \
-            -write ../../../build/test/c128/ovl.death "ovl.death" \
-            -write ../../../build/test/c128/ovl.gen "ovl.gen" \
-            -write ../../../build/test/c128/128.runtime.prg "128.runtime" \
-            -write ../../../build/test/c128/128.input.prg "128.input" \
-			-write ../../../build/test/c128/128.proj.prg "128.proj" \
-            -write ../../../build/test/c128/128.fdisk.prg "128.fdisk" \
-            -write ../../../build/test/c128/128.diskio.prg "128.diskio" \
-            -write ../../../build/test/c128/128.world.prg "128.world" \
-            -write ../../../build/test/c128/128.item.prg "128.item" \
-            -write ../../../build/test/c128/128.names.prg "128.names" \
-            -write ../../../build/test/c128/128.huff.prg "128.huff" \
-            -write ../../../build/test/c128/128.hvec.prg "128.hvec" \
-            -write ../../../build/test/c128/128.select.prg "128.select" \
-            -write ../../../build/test/c128/128.persist.prg "128.persist" \
-            -write ../../../build/test/c128/128.play.prg "128.play" \
-            -write ../../../build/test/c128/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
+            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1; then
         echo "FAIL (title-art disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -2779,39 +2764,12 @@ build_save_write_product_assets() {
         return 1
     fi
 
+    c128_disk_payload_args "../../../build/test/c128"
     if ! "$c1541_bin" -format "moria128,m8" d64 "$save_write_d64" \
             -attach "$save_write_d64" \
             -write ../../../build/test/c128/boot128.prg "boot128" \
             -write ../../../build/test/c128/moria128.prg "moria128" \
-            -write ../../../build/test/c128/title "t128" \
-            -write ../../../build/test/c128/monster.db.1 "monster.db.1" \
-            -write ../../../build/test/c128/monster.db.2 "monster.db.2" \
-            -write ../../../build/test/c128/monster.db.3 "monster.db.3" \
-            -write ../../../build/test/c128/monster.db.4 "monster.db.4" \
-            -write ../../../build/test/c128/ovl.town "128.town" \
-            -write ../../../build/test/c128/ovl.start "128.start" \
-            -write ../../../build/test/c128/ovl.death "128.death" \
-            -write ../../../build/test/c128/ovl.modal "128.modal" \
-            -write ../../../build/test/c128/ovl.gen "128.gen" \
-            -write ../../../build/test/c128/ovl.help "128.help" \
-            -write ../../../build/test/c128/ovl.ui "128.ui" \
-            -write ../../../build/test/c128/ovl.items "128.items" \
-            -write ../../../build/test/c128/ovl.disarm "128.disarm" \
-            -write ../../../build/test/c128/ovl.chest "128.chest" \
-            -write ../../../build/test/c128/128.runtime.prg "128.runtime" \
-            -write ../../../build/test/c128/128.input.prg "128.input" \
-            -write ../../../build/test/c128/128.proj.prg "128.proj" \
-            -write ../../../build/test/c128/128.fdisk.prg "128.fdisk" \
-            -write ../../../build/test/c128/128.diskio.prg "128.diskio" \
-            -write ../../../build/test/c128/128.world.prg "128.world" \
-            -write ../../../build/test/c128/128.item.prg "128.item" \
-            -write ../../../build/test/c128/128.names.prg "128.names" \
-            -write ../../../build/test/c128/128.huff.prg "128.huff" \
-            -write ../../../build/test/c128/128.hvec.prg "128.hvec" \
-            -write ../../../build/test/c128/128.select.prg "128.select" \
-            -write ../../../build/test/c128/128.persist.prg "128.persist" \
-            -write ../../../build/test/c128/128.play.prg "128.play" \
-            -write ../../../build/test/c128/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
+            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1; then
         echo "FAIL (save-write product disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -2894,33 +2852,12 @@ build_save_media_fail_product_assets() {
         return 1
     fi
 
+    c128_disk_payload_args "../../../build/test/c128"
     if ! "$c1541_bin" -format "moria128,m8" d64 "$fail_d64" \
             -attach "$fail_d64" \
             -write ../../../build/test/c128/boot128.prg "moria8.128" \
             -write ../../../build/test/c128/moria128.prg "moria128" \
-            -write ../../../build/test/c128/title "title" \
-            -write ../../../build/test/c128/monster.db.1 "monster.db.1" \
-            -write ../../../build/test/c128/monster.db.2 "monster.db.2" \
-            -write ../../../build/test/c128/monster.db.3 "monster.db.3" \
-            -write ../../../build/test/c128/monster.db.4 "monster.db.4" \
-            -write ../../../build/test/c128/ovl.town "ovl.town" \
-            -write ../../../build/test/c128/ovl.start "ovl.start" \
-            -write ../../../build/test/c128/ovl.death "ovl.death" \
-            -write ../../../build/test/c128/ovl.gen "ovl.gen" \
-            -write ../../../build/test/c128/128.runtime.prg "128.runtime" \
-            -write ../../../build/test/c128/128.input.prg "128.input" \
-            -write ../../../build/test/c128/128.proj.prg "128.proj" \
-            -write ../../../build/test/c128/128.fdisk.prg "128.fdisk" \
-            -write ../../../build/test/c128/128.diskio.prg "128.diskio" \
-            -write ../../../build/test/c128/128.world.prg "128.world" \
-            -write ../../../build/test/c128/128.item.prg "128.item" \
-            -write ../../../build/test/c128/128.names.prg "128.names" \
-            -write ../../../build/test/c128/128.huff.prg "128.huff" \
-            -write ../../../build/test/c128/128.hvec.prg "128.hvec" \
-            -write ../../../build/test/c128/128.select.prg "128.select" \
-            -write ../../../build/test/c128/128.persist.prg "128.persist" \
-            -write ../../../build/test/c128/128.play.prg "128.play" \
-            -write ../../../build/test/c128/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
+            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1; then
         echo "FAIL (save-media-fail product disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -2945,8 +2882,8 @@ build_save_media_fail_product_assets() {
 
     if ! "$c1541_bin" -format "moria128,m8" d64 "$save_d64" \
             -attach "$save_d64" \
-            -write "$marker_blob" "MORIA8.ID" \
-            -write "$save_blob" "THE.GAME" >"$build_log" 2>&1; then
+            -write "$marker_blob" "moria8.id,s" \
+            -write "$save_blob" "the.game,s" >"$build_log" 2>&1; then
         echo "FAIL (save-media-fail save disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -2983,11 +2920,10 @@ build_partial_failure_boot_assets() {
 
     build_boot_assets || return 1
 
+    c128_disk_payload_files "../../../build/test/c128"
     if c128_active_variant_is "partial_failure" && ! c128_outputs_need_refresh \
             ../../../build/test/c128/moria128.skip1.prg ../../../build/test/c128/moria128_skip1.d64 ../../../build/test/c128/main.vs -- \
-            main.s ../../../build/test/c128/boot128.prg ../../../build/test/c128/title ../../../build/test/c128/monster.db.1 ../../../build/test/c128/monster.db.2 \
-            ../../../build/test/c128/monster.db.3 ../../../build/test/c128/monster.db.4 ../../../build/test/c128/ovl.town ../../../build/test/c128/ovl.start ../../../build/test/c128/ovl.death \
-            ../../../build/test/c128/ovl.gen ../../../build/test/c128/128.runtime.prg ../../../build/test/c128/128.input.prg ../../../build/test/c128/128.proj.prg ../../../build/test/c128/128.fdisk.prg ../../../build/test/c128/128.world.prg ../../../build/test/c128/128.item.prg ../../../build/test/c128/128.names.prg ../../../build/test/c128/128.select.prg ../../../build/test/c128/128.persist.prg ../../../build/test/c128/128.play.prg ../../../build/test/c128/128.bank.prg; then
+            main.s ../../../build/test/c128/boot128.prg "${C128_DISK_PAYLOAD_FILES[@]}"; then
         PARTIAL_BOOT_ASSETS_BUILT=1
         return 0
     fi
@@ -3006,33 +2942,12 @@ build_partial_failure_boot_assets() {
         return 1
     fi
 
+    c128_disk_payload_args "../../../build/test/c128"
     if ! "$c1541_bin" -format "moria128,m8" d64 "$partial_d64" \
             -attach "$partial_d64" \
             -write ../../../build/test/c128/boot128.prg "moria8.128" \
             -write "$partial_main" "moria128" \
-            -write ../../../build/test/c128/title "title" \
-            -write ../../../build/test/c128/monster.db.1 "monster.db.1" \
-            -write ../../../build/test/c128/monster.db.2 "monster.db.2" \
-            -write ../../../build/test/c128/monster.db.3 "monster.db.3" \
-            -write ../../../build/test/c128/monster.db.4 "monster.db.4" \
-            -write ../../../build/test/c128/ovl.town "ovl.town" \
-            -write ../../../build/test/c128/ovl.start "ovl.start" \
-            -write ../../../build/test/c128/ovl.death "ovl.death" \
-            -write ../../../build/test/c128/ovl.gen "ovl.gen" \
-            -write ../../../build/test/c128/128.runtime.prg "128.runtime" \
-            -write ../../../build/test/c128/128.input.prg "128.input" \
-			-write ../../../build/test/c128/128.proj.prg "128.proj" \
-            -write ../../../build/test/c128/128.fdisk.prg "128.fdisk" \
-            -write ../../../build/test/c128/128.diskio.prg "128.diskio" \
-            -write ../../../build/test/c128/128.world.prg "128.world" \
-            -write ../../../build/test/c128/128.item.prg "128.item" \
-            -write ../../../build/test/c128/128.names.prg "128.names" \
-            -write ../../../build/test/c128/128.huff.prg "128.huff" \
-            -write ../../../build/test/c128/128.hvec.prg "128.hvec" \
-            -write ../../../build/test/c128/128.select.prg "128.select" \
-            -write ../../../build/test/c128/128.persist.prg "128.persist" \
-            -write ../../../build/test/c128/128.play.prg "128.play" \
-            -write ../../../build/test/c128/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
+            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1; then
         echo "FAIL (partial-failure disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -3052,11 +2967,10 @@ build_overlay_partial_failure_boot_assets() {
 
     build_boot_assets || return 1
 
+    c128_disk_payload_files "../../../build/test/c128"
     if c128_active_variant_is "overlay_partial_failure" && ! c128_outputs_need_refresh \
             ../../../build/test/c128/moria128.skipovl2.prg ../../../build/test/c128/moria128_skipovl2.d64 ../../../build/test/c128/main.vs -- \
-            main.s ../../../build/test/c128/boot128.prg ../../../build/test/c128/title ../../../build/test/c128/monster.db.1 ../../../build/test/c128/monster.db.2 \
-            ../../../build/test/c128/monster.db.3 ../../../build/test/c128/monster.db.4 ../../../build/test/c128/ovl.town ../../../build/test/c128/ovl.start ../../../build/test/c128/ovl.death \
-            ../../../build/test/c128/ovl.gen ../../../build/test/c128/128.runtime.prg ../../../build/test/c128/128.input.prg ../../../build/test/c128/128.proj.prg ../../../build/test/c128/128.fdisk.prg ../../../build/test/c128/128.world.prg ../../../build/test/c128/128.item.prg ../../../build/test/c128/128.names.prg ../../../build/test/c128/128.select.prg ../../../build/test/c128/128.persist.prg ../../../build/test/c128/128.play.prg ../../../build/test/c128/128.bank.prg; then
+            main.s ../../../build/test/c128/boot128.prg "${C128_DISK_PAYLOAD_FILES[@]}"; then
         OVERLAY_PARTIAL_BOOT_ASSETS_BUILT=1
         return 0
     fi
@@ -3075,33 +2989,12 @@ build_overlay_partial_failure_boot_assets() {
         return 1
     fi
 
+    c128_disk_payload_args "../../../build/test/c128"
     if ! "$c1541_bin" -format "moria128,m8" d64 "$partial_d64" \
             -attach "$partial_d64" \
             -write ../../../build/test/c128/boot128.prg "moria8.128" \
             -write "$partial_main" "moria128" \
-            -write ../../../build/test/c128/title "title" \
-            -write ../../../build/test/c128/monster.db.1 "monster.db.1" \
-            -write ../../../build/test/c128/monster.db.2 "monster.db.2" \
-            -write ../../../build/test/c128/monster.db.3 "monster.db.3" \
-            -write ../../../build/test/c128/monster.db.4 "monster.db.4" \
-            -write ../../../build/test/c128/ovl.town "ovl.town" \
-            -write ../../../build/test/c128/ovl.start "ovl.start" \
-            -write ../../../build/test/c128/ovl.death "ovl.death" \
-            -write ../../../build/test/c128/ovl.gen "ovl.gen" \
-            -write ../../../build/test/c128/128.runtime.prg "128.runtime" \
-            -write ../../../build/test/c128/128.input.prg "128.input" \
-			-write ../../../build/test/c128/128.proj.prg "128.proj" \
-            -write ../../../build/test/c128/128.fdisk.prg "128.fdisk" \
-            -write ../../../build/test/c128/128.diskio.prg "128.diskio" \
-            -write ../../../build/test/c128/128.world.prg "128.world" \
-            -write ../../../build/test/c128/128.item.prg "128.item" \
-            -write ../../../build/test/c128/128.names.prg "128.names" \
-            -write ../../../build/test/c128/128.huff.prg "128.huff" \
-            -write ../../../build/test/c128/128.hvec.prg "128.hvec" \
-            -write ../../../build/test/c128/128.select.prg "128.select" \
-            -write ../../../build/test/c128/128.persist.prg "128.persist" \
-            -write ../../../build/test/c128/128.play.prg "128.play" \
-            -write ../../../build/test/c128/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
+            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1; then
         echo "FAIL (overlay-partial disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -3121,11 +3014,10 @@ build_death_overlay_boot_assets() {
 
     build_boot_assets || return 1
 
+    c128_disk_payload_files "../../../build/test/c128"
     if c128_active_variant_is "death_overlay" && ! c128_outputs_need_refresh \
             ../../../build/test/c128/moria128.death.prg ../../../build/test/c128/moria128_death.d64 ../../../build/test/c128/main.vs -- \
-            main.s ../../../build/test/c128/boot128.prg ../../../build/test/c128/title ../../../build/test/c128/monster.db.1 ../../../build/test/c128/monster.db.2 \
-            ../../../build/test/c128/monster.db.3 ../../../build/test/c128/monster.db.4 ../../../build/test/c128/ovl.town ../../../build/test/c128/ovl.start ../../../build/test/c128/ovl.death \
-            ../../../build/test/c128/ovl.gen ../../../build/test/c128/128.runtime.prg ../../../build/test/c128/128.input.prg ../../../build/test/c128/128.proj.prg ../../../build/test/c128/128.fdisk.prg ../../../build/test/c128/128.world.prg ../../../build/test/c128/128.item.prg ../../../build/test/c128/128.names.prg ../../../build/test/c128/128.select.prg ../../../build/test/c128/128.persist.prg ../../../build/test/c128/128.play.prg ../../../build/test/c128/128.bank.prg; then
+            main.s ../../../build/test/c128/boot128.prg "${C128_DISK_PAYLOAD_FILES[@]}"; then
         DEATH_BOOT_ASSETS_BUILT=1
         return 0
     fi
@@ -3136,7 +3028,7 @@ build_death_overlay_boot_assets() {
     local death_main="../../../build/test/c128/moria128.death.prg"
     local death_d64="../../../build/test/c128/moria128_death.d64"
 
-    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 -define C128 :OVL_OUT=../../../build/test/c128 -define C128_TEST_FORCE_DEATH=1 -o "$death_main" >"$build_log" 2>&1; then
+    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 -define C128 :OVL_OUT=../../../build/test/c128 -define C128_TEST_FORCE_DEATH -o "$death_main" >"$build_log" 2>&1; then
         echo "FAIL (death-overlay main assembly failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -3144,33 +3036,12 @@ build_death_overlay_boot_assets() {
         return 1
     fi
 
+    c128_disk_payload_args "../../../build/test/c128"
     if ! "$c1541_bin" -format "moria128,m8" d64 "$death_d64" \
             -attach "$death_d64" \
             -write ../../../build/test/c128/boot128.prg "moria8.128" \
             -write "$death_main" "moria128" \
-            -write ../../../build/test/c128/title "title" \
-            -write ../../../build/test/c128/monster.db.1 "monster.db.1" \
-            -write ../../../build/test/c128/monster.db.2 "monster.db.2" \
-            -write ../../../build/test/c128/monster.db.3 "monster.db.3" \
-            -write ../../../build/test/c128/monster.db.4 "monster.db.4" \
-            -write ../../../build/test/c128/ovl.town "ovl.town" \
-            -write ../../../build/test/c128/ovl.start "ovl.start" \
-            -write ../../../build/test/c128/ovl.death "ovl.death" \
-            -write ../../../build/test/c128/ovl.gen "ovl.gen" \
-            -write ../../../build/test/c128/128.runtime.prg "128.runtime" \
-            -write ../../../build/test/c128/128.input.prg "128.input" \
-			-write ../../../build/test/c128/128.proj.prg "128.proj" \
-            -write ../../../build/test/c128/128.fdisk.prg "128.fdisk" \
-            -write ../../../build/test/c128/128.diskio.prg "128.diskio" \
-            -write ../../../build/test/c128/128.world.prg "128.world" \
-            -write ../../../build/test/c128/128.item.prg "128.item" \
-            -write ../../../build/test/c128/128.names.prg "128.names" \
-            -write ../../../build/test/c128/128.huff.prg "128.huff" \
-            -write ../../../build/test/c128/128.hvec.prg "128.hvec" \
-            -write ../../../build/test/c128/128.select.prg "128.select" \
-            -write ../../../build/test/c128/128.persist.prg "128.persist" \
-            -write ../../../build/test/c128/128.play.prg "128.play" \
-            -write ../../../build/test/c128/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
+            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1; then
         echo "FAIL (death-overlay disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -3190,11 +3061,10 @@ build_overlay_state_boot_assets() {
 
     build_boot_assets || return 1
 
+    c128_disk_payload_files "../../../build/test/c128"
     if c128_active_variant_is "overlay_state" && ! c128_outputs_need_refresh \
             ../../../build/test/c128/moria128.overlaystate.prg ../../../build/test/c128/moria128_overlaystate.d64 ../../../build/test/c128/main.vs -- \
-            main.s ../../../build/test/c128/boot128.prg ../../../build/test/c128/title ../../../build/test/c128/monster.db.1 ../../../build/test/c128/monster.db.2 \
-            ../../../build/test/c128/monster.db.3 ../../../build/test/c128/monster.db.4 ../../../build/test/c128/ovl.town ../../../build/test/c128/ovl.start ../../../build/test/c128/ovl.death \
-            ../../../build/test/c128/ovl.gen ../../../build/test/c128/128.runtime.prg ../../../build/test/c128/128.input.prg ../../../build/test/c128/128.proj.prg ../../../build/test/c128/128.fdisk.prg ../../../build/test/c128/128.world.prg ../../../build/test/c128/128.item.prg ../../../build/test/c128/128.names.prg ../../../build/test/c128/128.select.prg ../../../build/test/c128/128.persist.prg ../../../build/test/c128/128.play.prg ../../../build/test/c128/128.bank.prg; then
+            main.s ../../../build/test/c128/boot128.prg "${C128_DISK_PAYLOAD_FILES[@]}"; then
         OVERLAY_STATE_BOOT_ASSETS_BUILT=1
         return 0
     fi
@@ -3205,7 +3075,7 @@ build_overlay_state_boot_assets() {
     local state_main="../../../build/test/c128/moria128.overlaystate.prg"
     local state_d64="../../../build/test/c128/moria128_overlaystate.d64"
 
-    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 -define C128 :OVL_OUT=../../../build/test/c128 -define C128_TEST_OVERLAY_STATE_CORRUPT=1 -o "$state_main" >"$build_log" 2>&1; then
+    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 -define C128 :OVL_OUT=../../../build/test/c128 -define C128_TEST_OVERLAY_STATE_CORRUPT -o "$state_main" >"$build_log" 2>&1; then
         echo "FAIL (overlay-state main assembly failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -3213,33 +3083,12 @@ build_overlay_state_boot_assets() {
         return 1
     fi
 
+    c128_disk_payload_args "../../../build/test/c128"
     if ! "$c1541_bin" -format "moria128,m8" d64 "$state_d64" \
             -attach "$state_d64" \
             -write ../../../build/test/c128/boot128.prg "moria8.128" \
             -write "$state_main" "moria128" \
-            -write ../../../build/test/c128/title "title" \
-            -write ../../../build/test/c128/monster.db.1 "monster.db.1" \
-            -write ../../../build/test/c128/monster.db.2 "monster.db.2" \
-            -write ../../../build/test/c128/monster.db.3 "monster.db.3" \
-            -write ../../../build/test/c128/monster.db.4 "monster.db.4" \
-            -write ../../../build/test/c128/ovl.town "ovl.town" \
-            -write ../../../build/test/c128/ovl.start "ovl.start" \
-            -write ../../../build/test/c128/ovl.death "ovl.death" \
-            -write ../../../build/test/c128/ovl.gen "ovl.gen" \
-            -write ../../../build/test/c128/128.runtime.prg "128.runtime" \
-            -write ../../../build/test/c128/128.input.prg "128.input" \
-			-write ../../../build/test/c128/128.proj.prg "128.proj" \
-            -write ../../../build/test/c128/128.fdisk.prg "128.fdisk" \
-            -write ../../../build/test/c128/128.diskio.prg "128.diskio" \
-            -write ../../../build/test/c128/128.world.prg "128.world" \
-            -write ../../../build/test/c128/128.item.prg "128.item" \
-            -write ../../../build/test/c128/128.names.prg "128.names" \
-            -write ../../../build/test/c128/128.huff.prg "128.huff" \
-            -write ../../../build/test/c128/128.hvec.prg "128.hvec" \
-            -write ../../../build/test/c128/128.select.prg "128.select" \
-            -write ../../../build/test/c128/128.persist.prg "128.persist" \
-            -write ../../../build/test/c128/128.play.prg "128.play" \
-            -write ../../../build/test/c128/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
+            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1; then
         echo "FAIL (overlay-state disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -3326,11 +3175,10 @@ build_scripted_input_boot_assets() {
 
     build_boot_assets || return 1
 
+    c128_disk_payload_files "../../../build/test/c128"
     if [ "$PERF_P1_MODE" != "1" ] && c128_active_variant_is "scripted_input" && ! c128_outputs_need_refresh \
             ../../../build/test/c128/moria128.prg ../../../build/test/c128/moria128_scriptedinput.d71 ../../../build/test/c128/main.vs -- \
-            main.s ../../../build/test/c128/boot128.prg ../../../build/test/c128/title ../../../build/test/c128/monster.db.1 ../../../build/test/c128/monster.db.2 \
-            ../../../build/test/c128/monster.db.3 ../../../build/test/c128/monster.db.4 ../../../build/test/c128/ovl.town ../../../build/test/c128/ovl.start ../../../build/test/c128/ovl.death \
-            ../../../build/test/c128/ovl.gen ../../../build/test/c128/128.runtime.prg ../../../build/test/c128/128.input.prg ../../../build/test/c128/128.proj.prg ../../../build/test/c128/128.fdisk.prg ../../../build/test/c128/128.world.prg ../../../build/test/c128/128.item.prg ../../../build/test/c128/128.names.prg ../../../build/test/c128/128.select.prg ../../../build/test/c128/128.persist.prg ../../../build/test/c128/128.play.prg ../../../build/test/c128/128.bank.prg; then
+            main.s ../../../build/test/c128/boot128.prg "${C128_DISK_PAYLOAD_FILES[@]}"; then
         SCRIPTED_INPUT_BOOT_ASSETS_BUILT=1
         return 0
     fi
@@ -3500,33 +3348,12 @@ build_perf_p1_trace_boot_assets() {
         return 1
     fi
     if [ "$suffix" = "assert" ] || [ "$suffix" = "modal_assert" ] || [ "$suffix" = "command_assert" ] || [ "$suffix" = "transition_assert" ]; then
+        c128_disk_payload_args "../../../build/test/c128"
         if ! "$c1541_bin" -format "moria128,m8" d64 "$trace_d64" \
                 -attach "$trace_d64" \
                 -write ../../../build/test/c128/boot128.prg "moria8.128" \
                 -write ../../../build/test/c128/moria128.prg "moria128" \
-                -write ../../../build/test/c128/title "title" \
-                -write ../../../build/test/c128/monster.db.1 "monster.db.1" \
-                -write ../../../build/test/c128/monster.db.2 "monster.db.2" \
-                -write ../../../build/test/c128/monster.db.3 "monster.db.3" \
-                -write ../../../build/test/c128/monster.db.4 "monster.db.4" \
-                -write ../../../build/test/c128/ovl.town "ovl.town" \
-                -write ../../../build/test/c128/ovl.start "ovl.start" \
-                -write ../../../build/test/c128/ovl.death "ovl.death" \
-                -write ../../../build/test/c128/ovl.gen "ovl.gen" \
-                -write ../../../build/test/c128/128.runtime.prg "128.runtime" \
-                -write ../../../build/test/c128/128.input.prg "128.input" \
-                -write ../../../build/test/c128/128.proj.prg "128.proj" \
-                -write ../../../build/test/c128/128.fdisk.prg "128.fdisk" \
-            -write ../../../build/test/c128/128.diskio.prg "128.diskio" \
-                -write ../../../build/test/c128/128.world.prg "128.world" \
-                -write ../../../build/test/c128/128.item.prg "128.item" \
-            -write ../../../build/test/c128/128.names.prg "128.names" \
-            -write ../../../build/test/c128/128.huff.prg "128.huff" \
-            -write ../../../build/test/c128/128.hvec.prg "128.hvec" \
-                -write ../../../build/test/c128/128.select.prg "128.select" \
-                -write ../../../build/test/c128/128.persist.prg "128.persist" \
-                -write ../../../build/test/c128/128.play.prg "128.play" \
-                -write ../../../build/test/c128/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
+                "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1; then
             echo "FAIL (PERF P1 trace assert disk build failed)"
             tail -20 "$build_log" | sed 's/^/    /'
             FAIL=$((FAIL + 1))
@@ -3556,11 +3383,10 @@ build_scripted_spell_boot_assets() {
 
     build_boot_assets || return 1
 
+    c128_disk_payload_files "../../../build/test/c128"
     if c128_active_variant_is "scripted_spell" && ! c128_outputs_need_refresh \
             ../../../build/test/c128/moria128.prg ../../../build/test/c128/moria128_scriptedspell.d71 ../../../build/test/c128/main.vs -- \
-            main.s ../../../build/test/c128/boot128.prg ../../../build/test/c128/title ../../../build/test/c128/monster.db.1 ../../../build/test/c128/monster.db.2 \
-            ../../../build/test/c128/monster.db.3 ../../../build/test/c128/monster.db.4 ../../../build/test/c128/ovl.town ../../../build/test/c128/ovl.start ../../../build/test/c128/ovl.death \
-            ../../../build/test/c128/ovl.gen ../../../build/test/c128/128.runtime.prg ../../../build/test/c128/128.input.prg ../../../build/test/c128/128.proj.prg ../../../build/test/c128/128.fdisk.prg ../../../build/test/c128/128.world.prg ../../../build/test/c128/128.item.prg ../../../build/test/c128/128.names.prg ../../../build/test/c128/128.select.prg ../../../build/test/c128/128.persist.prg ../../../build/test/c128/128.play.prg ../../../build/test/c128/128.bank.prg; then
+            main.s ../../../build/test/c128/boot128.prg "${C128_DISK_PAYLOAD_FILES[@]}"; then
         SCRIPTED_SPELL_BOOT_ASSETS_BUILT=1
         return 0
     fi
@@ -3598,11 +3424,10 @@ build_scripted_spell_cancel_boot_assets() {
 
     build_boot_assets || return 1
 
+    c128_disk_payload_files "../../../build/test/c128"
     if c128_active_variant_is "scripted_spell_cancel" && ! c128_outputs_need_refresh \
             ../../../build/test/c128/moria128.prg ../../../build/test/c128/moria128_scriptedspellcancel.d71 ../../../build/test/c128/main.vs -- \
-            main.s ../../../build/test/c128/boot128.prg ../../../build/test/c128/title ../../../build/test/c128/monster.db.1 ../../../build/test/c128/monster.db.2 \
-            ../../../build/test/c128/monster.db.3 ../../../build/test/c128/monster.db.4 ../../../build/test/c128/ovl.town ../../../build/test/c128/ovl.start ../../../build/test/c128/ovl.death \
-            ../../../build/test/c128/ovl.gen ../../../build/test/c128/128.runtime.prg ../../../build/test/c128/128.input.prg ../../../build/test/c128/128.proj.prg ../../../build/test/c128/128.fdisk.prg ../../../build/test/c128/128.world.prg ../../../build/test/c128/128.item.prg ../../../build/test/c128/128.names.prg ../../../build/test/c128/128.select.prg ../../../build/test/c128/128.persist.prg ../../../build/test/c128/128.play.prg ../../../build/test/c128/128.bank.prg; then
+            main.s ../../../build/test/c128/boot128.prg "${C128_DISK_PAYLOAD_FILES[@]}"; then
         SCRIPTED_SPELL_CANCEL_BOOT_ASSETS_BUILT=1
         return 0
     fi
@@ -3640,11 +3465,10 @@ build_scripted_book_overlay_boot_assets() {
 
     build_boot_assets || return 1
 
+    c128_disk_payload_files "../../../build/test/c128"
     if c128_active_variant_is "scripted_book_overlay" && ! c128_outputs_need_refresh \
             ../../../build/test/c128/moria128.prg ../../../build/test/c128/moria128_scriptedbookoverlay.d71 ../../../build/test/c128/main.vs -- \
-            main.s ../../../build/test/c128/boot128.prg ../../../build/test/c128/title ../../../build/test/c128/monster.db.1 ../../../build/test/c128/monster.db.2 \
-            ../../../build/test/c128/monster.db.3 ../../../build/test/c128/monster.db.4 ../../../build/test/c128/ovl.town ../../../build/test/c128/ovl.start ../../../build/test/c128/ovl.death \
-            ../../../build/test/c128/ovl.gen ../../../build/test/c128/128.runtime.prg ../../../build/test/c128/128.input.prg ../../../build/test/c128/128.proj.prg ../../../build/test/c128/128.fdisk.prg ../../../build/test/c128/128.world.prg ../../../build/test/c128/128.item.prg ../../../build/test/c128/128.names.prg ../../../build/test/c128/128.select.prg ../../../build/test/c128/128.persist.prg ../../../build/test/c128/128.play.prg ../../../build/test/c128/128.bank.prg; then
+            main.s ../../../build/test/c128/boot128.prg "${C128_DISK_PAYLOAD_FILES[@]}"; then
         SCRIPTED_BOOK_OVERLAY_BOOT_ASSETS_BUILT=1
         return 0
     fi
@@ -3682,11 +3506,10 @@ build_scripted_spell_list_overlay_boot_assets() {
 
     build_boot_assets || return 1
 
+    c128_disk_payload_files "../../../build/test/c128"
     if c128_active_variant_is "scripted_spell_list_overlay" && ! c128_outputs_need_refresh \
             ../../../build/test/c128/moria128.prg ../../../build/test/c128/moria128_scriptedspelllistoverlay.d71 ../../../build/test/c128/main.vs -- \
-            main.s ../../../build/test/c128/boot128.prg ../../../build/test/c128/title ../../../build/test/c128/monster.db.1 ../../../build/test/c128/monster.db.2 \
-            ../../../build/test/c128/monster.db.3 ../../../build/test/c128/monster.db.4 ../../../build/test/c128/ovl.town ../../../build/test/c128/ovl.start ../../../build/test/c128/ovl.death \
-            ../../../build/test/c128/ovl.gen ../../../build/test/c128/128.runtime.prg ../../../build/test/c128/128.input.prg ../../../build/test/c128/128.proj.prg ../../../build/test/c128/128.fdisk.prg ../../../build/test/c128/128.world.prg ../../../build/test/c128/128.item.prg ../../../build/test/c128/128.names.prg ../../../build/test/c128/128.select.prg ../../../build/test/c128/128.persist.prg ../../../build/test/c128/128.play.prg ../../../build/test/c128/128.bank.prg; then
+            main.s ../../../build/test/c128/boot128.prg "${C128_DISK_PAYLOAD_FILES[@]}"; then
         SCRIPTED_SPELL_LIST_OVERLAY_BOOT_ASSETS_BUILT=1
         return 0
     fi
@@ -3724,11 +3547,10 @@ build_scripted_prayer_boot_assets() {
 
     build_boot_assets || return 1
 
+    c128_disk_payload_files "../../../build/test/c128"
     if c128_active_variant_is "scripted_prayer" && ! c128_outputs_need_refresh \
             ../../../build/test/c128/moria128.prg ../../../build/test/c128/moria128_scriptedprayer.d71 ../../../build/test/c128/main.vs -- \
-            main.s ../../../build/test/c128/boot128.prg ../../../build/test/c128/title ../../../build/test/c128/monster.db.1 ../../../build/test/c128/monster.db.2 \
-            ../../../build/test/c128/monster.db.3 ../../../build/test/c128/monster.db.4 ../../../build/test/c128/ovl.town ../../../build/test/c128/ovl.start ../../../build/test/c128/ovl.death \
-            ../../../build/test/c128/ovl.gen ../../../build/test/c128/128.runtime.prg ../../../build/test/c128/128.input.prg ../../../build/test/c128/128.proj.prg ../../../build/test/c128/128.fdisk.prg ../../../build/test/c128/128.world.prg ../../../build/test/c128/128.item.prg ../../../build/test/c128/128.names.prg ../../../build/test/c128/128.select.prg ../../../build/test/c128/128.persist.prg ../../../build/test/c128/128.play.prg ../../../build/test/c128/128.bank.prg; then
+            main.s ../../../build/test/c128/boot128.prg "${C128_DISK_PAYLOAD_FILES[@]}"; then
         SCRIPTED_PRAYER_BOOT_ASSETS_BUILT=1
         return 0
     fi
@@ -3767,11 +3589,10 @@ build_cache_survival_boot_assets() {
 
     build_boot_assets "$target_dir" || return 1
 
+    c128_disk_payload_files "../../../build/test/c128"
     if [ "$target_dir" = "../../../build/test/c128" ] && c128_active_variant_is "cache_survival" && ! c128_outputs_need_refresh \
             ../../../build/test/c128/moria128.prg ../../../build/test/c128/moria128_cache_survival.d64 ../../../build/test/c128/main.vs -- \
-            main.s ../../../build/test/c128/boot128.prg ../../../build/test/c128/title ../../../build/test/c128/monster.db.1 ../../../build/test/c128/monster.db.2 \
-            ../../../build/test/c128/monster.db.3 ../../../build/test/c128/monster.db.4 ../../../build/test/c128/ovl.town ../../../build/test/c128/ovl.start ../../../build/test/c128/ovl.death \
-            ../../../build/test/c128/ovl.gen ../../../build/test/c128/128.runtime.prg ../../../build/test/c128/128.input.prg ../../../build/test/c128/128.proj.prg ../../../build/test/c128/128.fdisk.prg ../../../build/test/c128/128.world.prg ../../../build/test/c128/128.item.prg ../../../build/test/c128/128.names.prg ../../../build/test/c128/128.select.prg ../../../build/test/c128/128.persist.prg ../../../build/test/c128/128.play.prg ../../../build/test/c128/128.bank.prg; then
+            main.s ../../../build/test/c128/boot128.prg "${C128_DISK_PAYLOAD_FILES[@]}"; then
         CACHE_SURVIVAL_BOOT_ASSETS_BUILT=1
         return 0
     fi
@@ -3789,32 +3610,12 @@ build_cache_survival_boot_assets() {
         return 1
     fi
 
+    c128_disk_payload_args "$target_dir"
     if ! "$C1541" -format "moria128,m8" d64 "$cache_d64" \
             -attach "$cache_d64" \
             -write "$target_dir/boot128.prg" "moria8.128" \
             -write "$cache_main" "moria128" \
-            -write "$target_dir/title" "title" \
-            -write "$target_dir/monster.db.1" "monster.db.1" \
-            -write "$target_dir/monster.db.2" "monster.db.2" \
-            -write "$target_dir/monster.db.3" "monster.db.3" \
-            -write "$target_dir/monster.db.4" "monster.db.4" \
-            -write "$target_dir/ovl.town" "ovl.town" \
-            -write "$target_dir/ovl.start" "ovl.start" \
-            -write "$target_dir/ovl.death" "ovl.death" \
-            -write "$target_dir/ovl.gen" "ovl.gen" \
-            -write "$target_dir/128.runtime.prg" "128.runtime" \
-            -write "$target_dir/128.input.prg" "128.input" \
-			-write "$target_dir/128.proj.prg" "128.proj" \
-            -write "$target_dir/128.fdisk.prg" "128.fdisk" \
-            -write "$target_dir/128.world.prg" "128.world" \
-            -write "$target_dir/128.item.prg" "128.item" \
-            -write "$target_dir/128.names.prg" "128.names" \
-            -write "$target_dir/128.huff.prg" "128.huff" \
-            -write "$target_dir/128.hvec.prg" "128.hvec" \
-            -write "$target_dir/128.select.prg" "128.select" \
-            -write "$target_dir/128.persist.prg" "128.persist" \
-            -write "$target_dir/128.play.prg" "128.play" \
-            -write "$target_dir/128.bank.prg" "128.bank" >>"$build_log" 2>&1; then
+            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1; then
         echo "FAIL (cache-survival disk build failed for $target_dir)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -3831,18 +3632,17 @@ build_cache_survival_boot_assets() {
 }
 
 build_load_resume_boot_assets() {
+    # Base first, even when the disk is built: a variant built since then left
+    # its main.vs (the key-feed addresses) and payloads in the shared output.
+    build_boot_assets || return 1
     if [ "$LOAD_RESUME_BOOT_ASSETS_BUILT" -eq 1 ]; then
         return
     fi
 
-    build_boot_assets || return 1
-
+    c128_disk_payload_files "../../../build/test/c128"
     if ! c128_outputs_need_refresh \
-            ../../../build/test/c128/THE.GAME ../../../build/test/c128/moria128_loadresume.d64 -- \
-            tests/make_load_resume_save.py ../../../build/test/c128/boot128.prg ../../../build/test/c128/moria128.prg ../../../build/test/c128/title \
-            ../../../build/test/c128/monster.db.1 ../../../build/test/c128/monster.db.2 ../../../build/test/c128/monster.db.3 ../../../build/test/c128/monster.db.4 \
-            ../../../build/test/c128/ovl.town ../../../build/test/c128/ovl.start ../../../build/test/c128/ovl.death ../../../build/test/c128/ovl.gen \
-            ../../../build/test/c128/128.runtime.prg ../../../build/test/c128/128.input.prg ../../../build/test/c128/128.proj.prg ../../../build/test/c128/128.fdisk.prg ../../../build/test/c128/128.world.prg ../../../build/test/c128/128.item.prg ../../../build/test/c128/128.names.prg ../../../build/test/c128/128.select.prg ../../../build/test/c128/128.persist.prg ../../../build/test/c128/128.play.prg ../../../build/test/c128/128.bank.prg; then
+            ../../../build/test/c128/THE.GAME ../../../build/test/c128/moria128_loadresume.d64 ../../../build/test/c128/moria128_loadresume_save.d64 -- \
+            tests/make_load_resume_save.py ../../../build/test/c128/boot128.prg ../../../build/test/c128/moria128.prg "${C128_DISK_PAYLOAD_FILES[@]}"; then
         LOAD_RESUME_BOOT_ASSETS_BUILT=1
         return 0
     fi
@@ -3861,34 +3661,12 @@ build_load_resume_boot_assets() {
         return 1
     fi
 
+    c128_disk_payload_args "../../../build/test/c128"
     if ! "$c1541_bin" -format "moria128,m8" d64 "$loadresume_d64" \
             -attach "$loadresume_d64" \
             -write ../../../build/test/c128/boot128.prg "moria8.128" \
             -write ../../../build/test/c128/moria128.prg "moria128" \
-            -write ../../../build/test/c128/title "title" \
-            -write ../../../build/test/c128/monster.db.1 "monster.db.1" \
-            -write ../../../build/test/c128/monster.db.2 "monster.db.2" \
-            -write ../../../build/test/c128/monster.db.3 "monster.db.3" \
-            -write ../../../build/test/c128/monster.db.4 "monster.db.4" \
-            -write ../../../build/test/c128/ovl.town "ovl.town" \
-            -write ../../../build/test/c128/ovl.start "ovl.start" \
-            -write ../../../build/test/c128/ovl.death "ovl.death" \
-            -write ../../../build/test/c128/ovl.gen "ovl.gen" \
-            -write ../../../build/test/c128/128.runtime.prg "128.runtime" \
-            -write ../../../build/test/c128/128.input.prg "128.input" \
-			-write ../../../build/test/c128/128.proj.prg "128.proj" \
-            -write ../../../build/test/c128/128.fdisk.prg "128.fdisk" \
-            -write ../../../build/test/c128/128.diskio.prg "128.diskio" \
-            -write ../../../build/test/c128/128.world.prg "128.world" \
-            -write ../../../build/test/c128/128.item.prg "128.item" \
-            -write ../../../build/test/c128/128.names.prg "128.names" \
-            -write ../../../build/test/c128/128.huff.prg "128.huff" \
-            -write ../../../build/test/c128/128.hvec.prg "128.hvec" \
-            -write ../../../build/test/c128/128.select.prg "128.select" \
-            -write ../../../build/test/c128/128.persist.prg "128.persist" \
-            -write ../../../build/test/c128/128.play.prg "128.play" \
-            -write ../../../build/test/c128/128.bank.prg "128.bank" \
-            -write "$save_blob" "THE.GAME" >>"$build_log" 2>&1; then
+            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1; then
         echo "FAIL (load-resume disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -3896,8 +3674,27 @@ build_load_resume_boot_assets() {
         return 1
     fi
 
+    # The save goes on its own disk in drive 9: the product refuses the program
+    # disk as a save disk ("Program disk cannot hold saves.").
+    # C128 save disks carry the MORIA8.ID marker (SEQ "M8SAVE"; c1541 needs the
+    # names in lowercase to store the game's unshifted PETSCII); a bare save
+    # file is offered for initialization instead.
+    local loadresume_save_d64="../../../build/test/c128/moria128_loadresume_save.d64"
+    local loadresume_marker="../../../build/test/c128/MORIA8.ID.loadresume"
+    printf 'M8SAVE' > "$loadresume_marker"
+    if ! "$c1541_bin" -format "moria128 save,m8" d64 "$loadresume_save_d64" \
+            -attach "$loadresume_save_d64" \
+            -write "$loadresume_marker" "moria8.id,s" \
+            -write "$save_blob" "the.game,s" >>"$build_log" 2>&1; then
+        echo "FAIL (load-resume save disk build failed)"
+        tail -20 "$build_log" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return 1
+    fi
+
     local dir_list
-    if ! dir_list=$("$c1541_bin" -attach "$loadresume_d64" -list 2>&1); then
+    if ! dir_list=$("$c1541_bin" -attach "$loadresume_save_d64" -list 2>&1); then
         echo "FAIL (load-resume disk listing failed)"
         echo "$dir_list" | tail -20 | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -3905,7 +3702,7 @@ build_load_resume_boot_assets() {
         return 1
     fi
 
-    if ! echo "$dir_list" | grep -q '"THE.GAME"'; then
+    if ! echo "$dir_list" | grep -qi '"THE.GAME".*SEQ'; then
         echo "FAIL (save-seed disk missing THE.GAME)"
         echo "$dir_list" | tail -20 | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -3917,76 +3714,49 @@ build_load_resume_boot_assets() {
     return 0
 }
 
-run_test_internal() {
-    local name="$1"
-    local src="$2"
-    local cycles="${3:-20000000}"
-    local result_file="$4"
-    local start_ms
-    start_ms="$(test128_now_ms)"
-
-    local prg_file="${src%.s}.prg"
-    local abs_prg
-    abs_prg="$(cd "$(dirname "$prg_file")" && pwd)/$(basename "$prg_file")"
-    local vs_file="${src%.s}.vs"
-
-    if c128_target_is_stale "$prg_file" || c128_target_is_stale "$vs_file"; then
-        local asm_output
-        asm_output=$(java -jar "$KICKASS" "$src" -o "$prg_file" -libdir ../c64 -define C128 -vicesymbols :OVL_OUT=../../../build/test/c128 2>&1)
-        if [ $? -ne 0 ]; then
-            printf 'FAIL\t%s\t%s\t%s\n' "$name" "$(( $(test128_now_ms) - start_ms ))" "assembly error" >> "$result_file"
-            return
-        fi
-    fi
-
-    if [ ! -f "$vs_file" ]; then
-        printf 'FAIL\t%s\t%s\t%s\n' "$name" "$(( $(test128_now_ms) - start_ms ))" "missing .vs symbol file" >> "$result_file"
-        return
-    fi
-
-    local start_addr pass_addr
-    start_addr=$(awk '/\.test_start$/ { split($2,a,":"); print toupper(a[2]); exit }' "$vs_file")
-    pass_addr=$(awk '/\.test_pass$/  { split($2,a,":"); print toupper(a[2]); exit }' "$vs_file")
-
-    if [ -z "${start_addr:-}" ] || [ -z "${pass_addr:-}" ]; then
-        printf 'FAIL\t%s\t%s\t%s\n' "$name" "$(( $(test128_now_ms) - start_ms ))" "missing test_start/test_pass labels" >> "$result_file"
-        return
-    fi
-
-    start_addr=$(normalize_monitor_addr "$start_addr")
-    pass_addr=$(normalize_monitor_addr "$pass_addr")
-
-    local mon_file
-    mon_file="$(test128_tmp_file "test128_${name}.mon")"
-    local log_file
-    log_file="$(test128_tmp_file "test128_${name}.log")"
-    : > "$log_file"
-
-    {
-        echo "load \"${abs_prg}\" 0"
-        echo "r pc=${start_addr}"
-        echo "until \$${pass_addr}"
-        echo "quit"
-    } > "$mon_file"
-
-    "$VICE" -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -warp -80col \
-        -moncommands "$mon_file" -monlogname "$log_file" -monlog \
-        -limitcycles "$cycles" +sound -sounddev dummy \
-        +remotemonitor +binarymonitor >/dev/null 2>&1
-
-    if grep -qi "^UNTIL: .*C:\$${pass_addr}" "$log_file"; then
-        printf 'PASS\t%s\t%s\t\n' "$name" "$(( $(test128_now_ms) - start_ms ))" >> "$result_file"
-    else
-        printf 'FAIL\t%s\t%s\t%s\n' "$name" "$(( $(test128_now_ms) - start_ms ))" "execution failed" >> "$result_file"
-    fi
-}
-
 export -f normalize_monitor_addr
 export -f c128_target_is_stale
 export -f test128_tmp_file
 export -f test128_now_ms
-export -f run_test_internal
-export KICKASS VICE TEST128_TMP_DIR TEST_JOBS TEST_JOBS_RESOLVED TEST_TIMINGS TEST128_TIMINGS_FILE
+export KICKASS VICE VICE_CONFIG TEST128_TMP_DIR TEST_JOBS TEST_JOBS_RESOLVED TEST_TIMINGS TEST128_TIMINGS_FILE
+
+# c128_overlay_break <addr> <overlay id>: a breakpoint on an overlay address that
+# stops only while that overlay is loaded. Every overlay shares $E000-$EFFF, so
+# a bare breakpoint also stopped in other overlays' code at that address
+# (store_enter is map_bulk_fill_all's address in the generation overlay).
+c128_overlay_break() {
+    local current
+    current=$(awk '/\.current_overlay$/ { split($2,a,":"); print toupper(a[2]); exit }' ../../../build/test/c128/main.vs)
+    # Callers write monitor scripts; a missing symbol would leave one silently
+    # truncated, so stop the run here.
+    [ -n "$current" ] || { echo "c128_overlay_break: no .current_overlay in main.vs" >&2; exit 1; }
+    printf 'break $%s if @cpu:$%s == $%02X\n' "$1" "$current" "$2"
+}
+
+# c128_key_feed_cmds <keys>: monitor commands that type <keys> into the game.
+# C128 input scans the keyboard matrix itself (input128.s), so VICE's -keybuf,
+# which fills the KERNAL buffer, never reaches it. Stop at either key-wait
+# loop's BEQ back to the poll and return the key through the strict loop's
+# exit, whose tail matches the fast loop's (the playtest's key_feed "return").
+# Ends with "del": the caller's own breakpoints follow.
+c128_key_feed_cmds() {
+    local keys="$1" vs="../../../build/test/c128/main.vs" strict fast exit_pc i
+    strict=$(awk '/\.input_key_wait_strict$/ { split($2,a,":"); print toupper(a[2]); exit }' "$vs")
+    fast=$(awk '/\.input_key_wait_fast$/ { split($2,a,":"); print toupper(a[2]); exit }' "$vs")
+    if [ -z "$strict" ] || [ -z "$fast" ]; then
+        echo "c128_key_feed_cmds: no .input_key_wait_strict/.input_key_wait_fast in $vs" >&2
+        exit 1                  # as c128_overlay_break: never a truncated script
+    fi
+    exit_pc=$(printf '%04X' $((16#$strict + 2)))
+    echo "break \$${strict}"
+    echo "break \$${fast}"
+    for ((i = 0; i < ${#keys}; i++)); do
+        echo "g"
+        printf 'r a=%02x\n' "'${keys:i:1}"
+        echo "r pc=${exit_pc}"
+    done
+    echo "del"
+}
 
 run_parallel_unit_tests() {
     local test_list=(
@@ -4006,7 +3776,7 @@ run_parallel_unit_tests() {
         "status_coherence128 tests/test_status_coherence128.s 20000000"
         "dungeon128 tests/test_dungeon128.s 50000000"
         "look_trampoline128 tests/test_look_trampoline128.s 20000000"
-        "soak128 tests/test_soak128.s 300000000"
+        "soak128 tests/test_soak128.s 2000000000"
         "monster128 tests/test_monster128.s 20000000"
         "detect_monsters128 tests/test_detect_monsters128.s 20000000"
         "detect_evil128 tests/test_detect_evil128.s 20000000"
@@ -4102,6 +3872,12 @@ run_parallel_unit_tests() {
         for test_entry in "${filtered_tests[@]}"; do
             : > "$result_file"
             bash "$RUN_TESTS128_DIR/run_test_internal_worker.sh" "$result_file" ${test_entry}
+            if [ ! -s "$result_file" ]; then
+                echo "  ${test_entry%% *}: FAIL (worker produced no result)"
+                FAIL=$((FAIL + 1))
+                TOTAL=$((TOTAL + 1))
+                return 1
+            fi
             while IFS=$'\t' read -r status name duration_ms detail; do
                 echo -n "  $name: "
                 if [ "$status" = "PASS" ]; then
@@ -4161,6 +3937,18 @@ run_parallel_unit_tests() {
         fi
         TOTAL=$((TOTAL + 1))
     done < "$result_file"
+
+    # A worker that died before writing its row must not vanish from the tally.
+    local entry tname
+    for entry in "${filtered_tests[@]}"; do
+        tname="${entry%% *}"
+        if ! cut -f2 "$result_file" | grep -qxF "$tname"; then
+            echo "  $tname: FAIL (worker produced no result)"
+            FAIL=$((FAIL + 1))
+            TOTAL=$((TOTAL + 1))
+            record_suite_result "FAIL" "$tname" "" "worker produced no result"
+        fi
+    done
 }
 
 run_test() {
@@ -4252,16 +4040,20 @@ run_test() {
         echo "load \"${abs_prg}\" 0"
         echo "r pc=${start_addr}"
         echo "until \$${pass_addr}"
+        echo "quit"     # at the next stop: a stop after the last command waited forever
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -warp -80col \
+    # -initbreak ready: the C128 powers up on its Z80, and monitor commands
+    # run before the 8502 takes over set the Z80's PC, so the test never runs.
+    # Every C128 launch whose monitor commands set the PC passes it.
+    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -initbreak ready \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles "$cycles" +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
 
     local duration_ms
     duration_ms="$(( $(test128_now_ms) - start_ms ))"
-    if grep -qi "^UNTIL: .*C:\$${pass_addr}" "$log_file"; then
+    if boot_log_has_stop_at "$log_file" "${pass_addr}"; then
         if [ "$TEST_TIMINGS" != "0" ]; then
             echo "PASS (${duration_ms}ms)"
         else
@@ -4317,7 +4109,7 @@ boot_log_report_failure() {
     local timeout="no"
     local last_pc=""
 
-    if grep -qi "^UNTIL: .*C:\$${target_addr}\\|^BREAK: .*C:\$${target_addr}" "$log_file"; then
+    if boot_log_has_stop_at "$log_file" "${target_addr}"; then
         reached="yes"
     fi
     if grep -qi "JAM\\|Invalid opcode" "$log_file"; then
@@ -4375,7 +4167,7 @@ boot_wait_for_until_or_crash() {
     local deadline=$((SECONDS + 25))
 
     while :; do
-        if grep -qi "^UNTIL: .*C:\$${target_addr}" "$log_file"; then
+        if boot_log_has_stop_at "$log_file" "${target_addr}"; then
             boot_stop_vice_process "$vice_pid"
             return 0
         fi
@@ -4394,7 +4186,7 @@ boot_wait_for_until_or_crash() {
         sleep 0.1
     done
 
-    grep -qi "^UNTIL: .*C:\$${target_addr}" "$log_file"
+    boot_log_has_stop_at "$log_file" "${target_addr}"
 }
 
 boot_log_has_stop_at() {
@@ -4403,18 +4195,17 @@ boot_log_has_stop_at() {
     addr=$(printf '%s' "$2" | tr '[:lower:]' '[:upper:]')
     python3 - "$log_file" "$addr" <<'PY'
 from pathlib import Path
+import re
 import sys
 
-lines = Path(sys.argv[1]).read_text(errors="ignore").splitlines()
+# Only "#N (Stop on exec ADDR)": the CPU stopped there. "UNTIL: N C:$ADDR" and
+# "BREAK: ..." are VICE echoing the command as it sets the breakpoint, and
+# matched whether or not the address was ever reached. The worker,
+# harness128.py and the save-media-fail check use the same rule.
+text = Path(sys.argv[1]).read_text(errors="ignore")
 addr = sys.argv[2].upper()
-needles = ("C:$" + addr, "EXEC " + addr)
-for line in lines:
-    line = line.upper()
-    if not (line.startswith("#") or line.startswith("UNTIL:")):
-        continue
-    if any(n in line for n in needles):
-        sys.exit(0)
-sys.exit(1)
+pattern = r"^#\d+ \(STOP ON\s+EXEC\s+" + re.escape(addr) + r"\)"
+sys.exit(0 if re.search(pattern, text.upper(), re.M) else 1)
 PY
 }
 
@@ -4445,33 +4236,12 @@ run_boot_d64_smoke() {
     local build_log
     build_log="$(test128_tmp_file "test128_${name}_disk.log")"
     : > "$build_log"
+    c128_disk_payload_args "../../../build/test/c128"
     if ! "$c1541_bin" -format "moria128,m8" d64 "$scripted_d64" \
             -attach "$scripted_d64" \
             -write ../../../build/test/c128/boot128.prg "moria8.128" \
             -write ../../../build/test/c128/moria128.prg "moria128" \
-            -write ../../../build/test/c128/title "title" \
-            -write ../../../build/test/c128/monster.db.1 "monster.db.1" \
-            -write ../../../build/test/c128/monster.db.2 "monster.db.2" \
-            -write ../../../build/test/c128/monster.db.3 "monster.db.3" \
-            -write ../../../build/test/c128/monster.db.4 "monster.db.4" \
-            -write ../../../build/test/c128/ovl.town "ovl.town" \
-            -write ../../../build/test/c128/ovl.start "ovl.start" \
-            -write ../../../build/test/c128/ovl.death "ovl.death" \
-            -write ../../../build/test/c128/ovl.gen "ovl.gen" \
-            -write ../../../build/test/c128/128.runtime.prg "128.runtime" \
-            -write ../../../build/test/c128/128.input.prg "128.input" \
-			-write ../../../build/test/c128/128.proj.prg "128.proj" \
-            -write ../../../build/test/c128/128.fdisk.prg "128.fdisk" \
-            -write ../../../build/test/c128/128.diskio.prg "128.diskio" \
-            -write ../../../build/test/c128/128.world.prg "128.world" \
-            -write ../../../build/test/c128/128.item.prg "128.item" \
-            -write ../../../build/test/c128/128.names.prg "128.names" \
-            -write ../../../build/test/c128/128.huff.prg "128.huff" \
-            -write ../../../build/test/c128/128.hvec.prg "128.hvec" \
-            -write ../../../build/test/c128/128.select.prg "128.select" \
-            -write ../../../build/test/c128/128.persist.prg "128.persist" \
-            -write ../../../build/test/c128/128.play.prg "128.play" \
-            -write ../../../build/test/c128/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
+            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -4500,15 +4270,16 @@ run_boot_d64_smoke() {
     {
         echo "break \$${entry_main}"
         echo "g"
+        echo "quit"     # at the next stop: a stop after the last command waited forever
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 120000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
     local vice_rc=$?
 
-    if grep -qi "^BREAK: .*C:\$${entry_main}" "$log_file"; then
+    if boot_log_has_stop_at "$log_file" "${entry_main}"; then
         echo "PASS"
         PASS=$((PASS + 1))
     else
@@ -4543,13 +4314,14 @@ run_boot_title_newgame_smoke() {
     : > "$log_file"
 
     {
+        c128_key_feed_cmds $'NA\rABOT\rA '
         echo "until \$${loop_top}"
         echo "g"
         boot_diag_dump_cmds
+        echo "quit"     # at the next stop: a stop after the last command waited forever
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -warp -80col -autostart "$abs_d64" \
-        -keybuf $'NAA\rA\rA' -keybuf-delay 8 \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 320000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -4563,7 +4335,7 @@ run_boot_title_newgame_smoke() {
         return
     fi
 
-    if ! grep -qi "^UNTIL: .*C:\$${loop_top}" "$log_file"; then
+    if ! boot_log_has_stop_at "$log_file" "${loop_top}"; then
         boot_log_report_failure "did not reach first gameplay loop after character generation" "$log_file" "c128_town_move_diag_loop_top" "$loop_top" "$vice_rc"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
@@ -4600,13 +4372,14 @@ run_new_key_stability_smoke() {
     : > "$log_file"
 
     {
+        c128_key_feed_cmds $'N'
         echo "until \$${game_new_start}"
         echo "g"
         boot_diag_dump_cmds
+        echo "quit"     # at the next stop: a stop after the last command waited forever
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -warp -80col -autostart "$abs_d64" \
-        -keybuf 'N' -keybuf-delay 8 \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 220000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -4662,9 +4435,10 @@ run_title_art_smoke() {
         echo "until \$${title_art_pass}"
         echo "g"
         boot_diag_dump_cmds
+        echo "quit"     # at the next stop: a stop after the last command waited forever
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 180000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -4810,14 +4584,14 @@ run_boot_title_save_write_product_smoke() {
         echo "quit"
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -warp -80col -autostart "$abs_boot_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_boot_d64" \
         -drive9type 1541 -attach9rw -9 "$abs_save_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 320000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
     local vice_rc=$?
 
-    if ! grep -qi "^UNTIL: .*C:\$${pass_addr}" "$log_file"; then
+    if ! boot_log_has_stop_at "$log_file" "${pass_addr}"; then
         boot_log_report_failure "did not reach c128_test_after_save_game" "$log_file" \
             "c128_test_after_save_game" "$pass_addr" "$vice_rc"
         FAIL=$((FAIL + 1))
@@ -4879,39 +4653,12 @@ run_retirement_royal_smoke() {
         return
     fi
 
+    c128_disk_payload_args "$smoke_c128"
     if ! "$C1541" -format "moria128,m8" d64 "$boot_d64" \
             -attach "$boot_d64" \
             -write "$smoke_c128/boot128.prg" "boot128" \
             -write "$smoke_c128/moria128.prg" "moria128" \
-            -write "$smoke_c128/title" "t128" \
-            -write "$smoke_c128/monster.db.1" "monster.db.1" \
-            -write "$smoke_c128/monster.db.2" "monster.db.2" \
-            -write "$smoke_c128/monster.db.3" "monster.db.3" \
-            -write "$smoke_c128/monster.db.4" "monster.db.4" \
-            -write "$smoke_c128/ovl.town" "128.town" \
-            -write "$smoke_c128/ovl.start" "128.start" \
-            -write "$smoke_c128/ovl.death" "128.death" \
-            -write "$smoke_c128/ovl.modal" "128.modal" \
-            -write "$smoke_c128/ovl.gen" "128.gen" \
-            -write "$smoke_c128/ovl.help" "128.help" \
-            -write "$smoke_c128/ovl.ui" "128.ui" \
-            -write "$smoke_c128/ovl.items" "128.items" \
-            -write "$smoke_c128/ovl.disarm" "128.disarm" \
-            -write "$smoke_c128/ovl.chest" "128.chest" \
-            -write "$smoke_c128/128.runtime.prg" "128.runtime" \
-            -write "$smoke_c128/128.input.prg" "128.input" \
-            -write "$smoke_c128/128.proj.prg" "128.proj" \
-            -write "$smoke_c128/128.fdisk.prg" "128.fdisk" \
-            -write "$smoke_c128/128.diskio.prg" "128.diskio" \
-            -write "$smoke_c128/128.world.prg" "128.world" \
-            -write "$smoke_c128/128.item.prg" "128.item" \
-            -write "$smoke_c128/128.names.prg" "128.names" \
-            -write "$smoke_c128/128.huff.prg" "128.huff" \
-            -write "$smoke_c128/128.hvec.prg" "128.hvec" \
-            -write "$smoke_c128/128.select.prg" "128.select" \
-            -write "$smoke_c128/128.persist.prg" "128.persist" \
-            -write "$smoke_c128/128.play.prg" "128.play" \
-            -write "$smoke_c128/128.bank.prg" "128.bank" >"$build_log" 2>&1; then
+            "${C128_DISK_PAYLOAD_ARGS[@]}" >"$build_log" 2>&1; then
         echo "FAIL (retirement product disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -4924,6 +4671,7 @@ run_retirement_royal_smoke() {
             --vice "$VICE" \
             --boot-d64 "$boot_d64" \
             --main-vs "$main_vs" \
+            "${C128_OVERLAY_COND_ARGS[@]}" \
             --start-symbol ".title_menu_ready" \
             --resume-symbol ".tramp_winner_royal" \
             --pass-symbol ".royal_screen" \
@@ -4987,7 +4735,8 @@ run_boot_title_save_media_fail_product_smoke() {
 
     local main_vs="../../../build/test/c128/main_save_media_fail.vs"
     local fail_addr
-    fail_addr=$(awk '/\.save_return_fail$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    # The post-save drive-status check names a write-protected disk.
+    fail_addr=$(awk '/\.save_print_storage_status$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     if [ -z "${fail_addr:-}" ]; then
         echo "FAIL (missing save-media-fail smoke symbols in ../../../build/test/c128/main_save_media_fail.vs)"
         FAIL=$((FAIL + 1))
@@ -5008,16 +4757,29 @@ run_boot_title_save_media_fail_product_smoke() {
         echo "quit"
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -warp -80col -autostart "$abs_boot_d64" \
-        -drive9type 1541 -attach9rw -9 "$abs_save_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_boot_d64" \
+        -drive9type 1541 -attach9ro -9 "$abs_save_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 360000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
     local vice_rc=$?
 
-    if ! grep -qi "^UNTIL: .*C:\$${fail_addr}" "$log_file"; then
-        boot_log_report_failure "save-media failure did not reach disk-error dismiss prompt" "$log_file" \
-            "save_return_fail" "$fail_addr" "$vice_rc"
+    if ! boot_log_has_stop_at "$log_file" "${fail_addr}"; then
+        boot_log_report_failure "save to the write-protected disk did not reach the write-error path" "$log_file" \
+            "save_print_storage_status" "$fail_addr" "$vice_rc"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    # A = HAL_STORAGE_STATUS_WRITE_PROTECTED (3, core/storage_status.s).
+    local stop_a
+    stop_a=$(awk -v addr="$(printf '%s' "$fail_addr" | tr '[:upper:]' '[:lower:]')" '
+        tolower($0) ~ "stop on[[:space:]]+exec[[:space:]]+" addr "\\)" { want = 1; next }
+        want && /^\.C:/ { if (match($0, /A:[0-9A-Fa-f][0-9A-Fa-f]/)) print toupper(substr($0, RSTART + 2, 2)); exit }' "$log_file")
+    if [ "$stop_a" != "03" ]; then
+        boot_log_report_failure "the save failed, but not as write-protected" "$log_file" \
+            "save_print_storage_status" "$fail_addr" "$vice_rc"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
@@ -5025,7 +4787,7 @@ run_boot_title_save_media_fail_product_smoke() {
 
     if grep -qi "JAM\\|Invalid opcode" "$log_file"; then
         boot_log_report_failure "jam during save-media-fail product flow" "$log_file" \
-            "save_return_fail" "$fail_addr" "$vice_rc"
+            "save_print_storage_status" "$fail_addr" "$vice_rc"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
@@ -5050,6 +4812,8 @@ run_boot_title_change_save_drive_smoke() {
     local marker_blob="../../../build/test/c128/MORIA8.ID"
     local dir_type_offset0=$(((357 + 1) * 256 + 2))
 
+    # main.vs and the payloads become this variant's; base smokes must rebuild
+    c128_set_active_variant "${name}"
     if ! java -jar "$KICKASS" main.s :OVL_OUT=../../../build/test/c128 -showmem -vicesymbols -libdir ../c64 \
             -define C128 -define C128_TEST_SCRIPTED_CHANGE_SAVE_DRIVE_PRODUCT \
             -o ../../../build/test/c128/moria128.prg >"$build_log" 2>&1; then
@@ -5061,34 +4825,12 @@ run_boot_title_change_save_drive_smoke() {
     fi
 
     rm -f "$boot_d64"
+    c128_disk_payload_args "../../../build/test/c128"
     if ! "$c1541_bin" -format "moria128,m8" d64 "$boot_d64" \
             -attach "$boot_d64" \
             -write ../../../build/test/c128/boot128.prg "moria8.128" \
             -write ../../../build/test/c128/moria128.prg "moria128" \
-            -write ../../../build/test/c128/title "title" \
-            -write ../../../build/test/c128/monster.db.1 "monster.db.1" \
-            -write ../../../build/test/c128/monster.db.2 "monster.db.2" \
-            -write ../../../build/test/c128/monster.db.3 "monster.db.3" \
-            -write ../../../build/test/c128/monster.db.4 "monster.db.4" \
-            -write ../../../build/test/c128/ovl.town "ovl.town" \
-            -write ../../../build/test/c128/ovl.start "ovl.start" \
-            -write ../../../build/test/c128/ovl.death "ovl.death" \
-            -write ../../../build/test/c128/ovl.gen "ovl.gen" \
-            -write ../../../build/test/c128/ovl.help "128.help" \
-            -write ../../../build/test/c128/128.runtime.prg "128.runtime" \
-            -write ../../../build/test/c128/128.input.prg "128.input" \
-            -write ../../../build/test/c128/128.proj.prg "128.proj" \
-            -write ../../../build/test/c128/128.fdisk.prg "128.fdisk" \
-            -write ../../../build/test/c128/128.diskio.prg "128.diskio" \
-            -write ../../../build/test/c128/128.world.prg "128.world" \
-            -write ../../../build/test/c128/128.item.prg "128.item" \
-            -write ../../../build/test/c128/128.names.prg "128.names" \
-            -write ../../../build/test/c128/128.huff.prg "128.huff" \
-            -write ../../../build/test/c128/128.hvec.prg "128.hvec" \
-            -write ../../../build/test/c128/128.select.prg "128.select" \
-            -write ../../../build/test/c128/128.persist.prg "128.persist" \
-            -write ../../../build/test/c128/128.play.prg "128.play" \
-            -write ../../../build/test/c128/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
+            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1; then
         echo "FAIL (change-save-drive product disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -5126,6 +4868,7 @@ run_boot_title_change_save_drive_smoke() {
             --boot-d64 "$boot_d64" \
             --save10-d64 "$save10_d64" \
             --main-vs ../../../build/test/c128/main.vs \
+            "${C128_OVERLAY_COND_ARGS[@]}" \
             --start-symbol ".c128_test_change_save_drive_wait_for_harness" \
             --resume-symbol ".c128_test_change_save_drive_before_save" \
             --pass-symbol ".c128_test_change_save_drive_pass" \
@@ -5161,6 +4904,8 @@ run_boot_title_single_drive_save_wrong_media_smoke() {
     local c1541_bin="${C1541:-c1541}"
     local wrong_media_d64="../../../build/test/c128/moria128_single_drive_save_wrong_media.d64"
 
+    # main.vs and the payloads become this variant's; base smokes must rebuild
+    c128_set_active_variant "${name}"
     if ! java -jar "$KICKASS" main.s :OVL_OUT=../../../build/test/c128 -showmem -vicesymbols -libdir ../c64 \
             -define C128 -define C128_TEST_SCRIPTED_SINGLE_DRIVE_SAVE_WRONG_MEDIA_PRODUCT \
             -o ../../../build/test/c128/moria128.prg >"$build_log" 2>&1; then
@@ -5172,33 +4917,12 @@ run_boot_title_single_drive_save_wrong_media_smoke() {
     fi
 
     rm -f "$wrong_media_d64"
+    c128_disk_payload_args "../../../build/test/c128"
     if ! "$c1541_bin" -format "moria128,m8" d64 "$wrong_media_d64" \
             -attach "$wrong_media_d64" \
             -write ../../../build/test/c128/boot128.prg "moria8.128" \
             -write ../../../build/test/c128/moria128.prg "moria128" \
-            -write ../../../build/test/c128/title "title" \
-            -write ../../../build/test/c128/monster.db.1 "monster.db.1" \
-            -write ../../../build/test/c128/monster.db.2 "monster.db.2" \
-            -write ../../../build/test/c128/monster.db.3 "monster.db.3" \
-            -write ../../../build/test/c128/monster.db.4 "monster.db.4" \
-            -write ../../../build/test/c128/ovl.town "ovl.town" \
-            -write ../../../build/test/c128/ovl.start "ovl.start" \
-            -write ../../../build/test/c128/ovl.death "ovl.death" \
-            -write ../../../build/test/c128/ovl.gen "ovl.gen" \
-            -write ../../../build/test/c128/128.runtime.prg "128.runtime" \
-            -write ../../../build/test/c128/128.input.prg "128.input" \
-            -write ../../../build/test/c128/128.proj.prg "128.proj" \
-            -write ../../../build/test/c128/128.fdisk.prg "128.fdisk" \
-            -write ../../../build/test/c128/128.diskio.prg "128.diskio" \
-            -write ../../../build/test/c128/128.world.prg "128.world" \
-            -write ../../../build/test/c128/128.item.prg "128.item" \
-            -write ../../../build/test/c128/128.names.prg "128.names" \
-            -write ../../../build/test/c128/128.huff.prg "128.huff" \
-            -write ../../../build/test/c128/128.hvec.prg "128.hvec" \
-            -write ../../../build/test/c128/128.select.prg "128.select" \
-            -write ../../../build/test/c128/128.persist.prg "128.persist" \
-            -write ../../../build/test/c128/128.play.prg "128.play" \
-            -write ../../../build/test/c128/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
+            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1; then
         echo "FAIL (single-drive save wrong-media product disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -5223,13 +4947,13 @@ run_boot_title_single_drive_save_wrong_media_smoke() {
         echo "quit"
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -warp -80col -autostart "$wrong_media_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$wrong_media_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 360000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
     local vice_rc=$?
 
-    if ! grep -qi "^UNTIL: .*C:\$${pass_addr}" "$log_file"; then
+    if ! boot_log_has_stop_at "$log_file" "${pass_addr}"; then
         echo "FAIL"
         boot_log_report_failure "single-drive save wrong-media did not reach final insert prompt" "$log_file" \
             "script_exhausted" "$pass_addr" "$vice_rc"
@@ -5253,6 +4977,8 @@ run_boot_title_single_drive_load_wrong_media_smoke() {
     local c1541_bin="${C1541:-c1541}"
     local wrong_media_d64="../../../build/test/c128/moria128_single_drive_load_wrong_media.d64"
 
+    # main.vs and the payloads become this variant's; base smokes must rebuild
+    c128_set_active_variant "${name}"
     if ! java -jar "$KICKASS" main.s :OVL_OUT=../../../build/test/c128 -showmem -vicesymbols -libdir ../c64 \
             -define C128 -define C128_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_WRONG_MEDIA_PRODUCT \
             -o ../../../build/test/c128/moria128.prg >"$build_log" 2>&1; then
@@ -5264,33 +4990,12 @@ run_boot_title_single_drive_load_wrong_media_smoke() {
     fi
 
     rm -f "$wrong_media_d64"
+    c128_disk_payload_args "../../../build/test/c128"
     if ! "$c1541_bin" -format "moria128,m8" d64 "$wrong_media_d64" \
             -attach "$wrong_media_d64" \
             -write ../../../build/test/c128/boot128.prg "moria8.128" \
             -write ../../../build/test/c128/moria128.prg "moria128" \
-            -write ../../../build/test/c128/title "title" \
-            -write ../../../build/test/c128/monster.db.1 "monster.db.1" \
-            -write ../../../build/test/c128/monster.db.2 "monster.db.2" \
-            -write ../../../build/test/c128/monster.db.3 "monster.db.3" \
-            -write ../../../build/test/c128/monster.db.4 "monster.db.4" \
-            -write ../../../build/test/c128/ovl.town "ovl.town" \
-            -write ../../../build/test/c128/ovl.start "ovl.start" \
-            -write ../../../build/test/c128/ovl.death "ovl.death" \
-            -write ../../../build/test/c128/ovl.gen "ovl.gen" \
-            -write ../../../build/test/c128/128.runtime.prg "128.runtime" \
-            -write ../../../build/test/c128/128.input.prg "128.input" \
-            -write ../../../build/test/c128/128.proj.prg "128.proj" \
-            -write ../../../build/test/c128/128.fdisk.prg "128.fdisk" \
-            -write ../../../build/test/c128/128.diskio.prg "128.diskio" \
-            -write ../../../build/test/c128/128.world.prg "128.world" \
-            -write ../../../build/test/c128/128.item.prg "128.item" \
-            -write ../../../build/test/c128/128.names.prg "128.names" \
-            -write ../../../build/test/c128/128.huff.prg "128.huff" \
-            -write ../../../build/test/c128/128.hvec.prg "128.hvec" \
-            -write ../../../build/test/c128/128.select.prg "128.select" \
-            -write ../../../build/test/c128/128.persist.prg "128.persist" \
-            -write ../../../build/test/c128/128.play.prg "128.play" \
-            -write ../../../build/test/c128/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
+            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1; then
         echo "FAIL (single-drive load wrong-media product disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -5315,13 +5020,13 @@ run_boot_title_single_drive_load_wrong_media_smoke() {
         echo "quit"
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -warp -80col -autostart "$wrong_media_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$wrong_media_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 360000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
     local vice_rc=$?
 
-    if ! grep -qi "^UNTIL: .*C:\$${pass_addr}" "$log_file"; then
+    if ! boot_log_has_stop_at "$log_file" "${pass_addr}"; then
         echo "FAIL"
         boot_log_report_failure "single-drive load wrong-media did not reach final insert prompt" "$log_file" \
             "script_exhausted" "$pass_addr" "$vice_rc"
@@ -5349,6 +5054,8 @@ run_boot_title_single_drive_load_corrupt_smoke() {
     local save_blob="../../../build/test/c128/THE.GAME"
     local marker_blob="../../../build/test/c128/MORIA8.ID"
 
+    # main.vs and the payloads become this variant's; base smokes must rebuild
+    c128_set_active_variant "${name}"
     if ! java -jar "$KICKASS" main.s :OVL_OUT=../../../build/test/c128 -showmem -vicesymbols -libdir ../c64 \
             -define C128 -define C128_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_CORRUPT_PRODUCT \
             -o ../../../build/test/c128/moria128.prg >"$build_log" 2>&1; then
@@ -5433,6 +5140,7 @@ run_boot_title_single_drive_load_corrupt_smoke() {
             --vice "$VICE" \
             --boot-d64 "$boot_d64" \
             --main-vs ../../../build/test/c128/main.vs \
+            "${C128_OVERLAY_COND_ARGS[@]}" \
             --start-symbol ".c128_test_single_drive_load_corrupt_wait_for_harness" \
             --resume-symbol ".c128_test_single_drive_load_corrupt_before_load" \
             --pass-symbol ".c128_test_single_drive_load_corrupt_program_ready" \
@@ -5464,6 +5172,8 @@ run_boot_title_single_drive_load_return_smoke() {
     local marker_blob="../../../build/test/c128/MORIA8.ID"
     local save_blob="../../../build/test/c128/THE.GAME"
 
+    # main.vs and the payloads become this variant's; base smokes must rebuild
+    c128_set_active_variant "${name}"
     if ! java -jar "$KICKASS" main.s :OVL_OUT=../../../build/test/c128 -showmem -vicesymbols -libdir ../c64 \
             -define C128 -define C128_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_RETURN_PRODUCT \
             -o ../../../build/test/c128/moria128.prg >"$build_log" 2>&1; then
@@ -5540,6 +5250,7 @@ run_boot_title_single_drive_load_return_smoke() {
             --vice "$VICE" \
             --boot-d64 "$boot_d64" \
             --main-vs ../../../build/test/c128/main.vs \
+            "${C128_OVERLAY_COND_ARGS[@]}" \
             --start-symbol ".c128_test_single_drive_load_return_wait_for_harness" \
             --resume-symbol ".c128_test_single_drive_load_return_before_load" \
             --pass-symbol ".c128_program_media_error_prompt" \
@@ -5571,6 +5282,8 @@ run_boot_title_load_then_save_new_empty_smoke() {
     local marker_blob="../../../build/test/c128/MORIA8.ID"
     local save_blob="../../../build/test/c128/THE.GAME"
 
+    # main.vs and the payloads become this variant's; base smokes must rebuild
+    c128_set_active_variant "${name}"
     if ! java -jar "$KICKASS" main.s :OVL_OUT=../../../build/test/c128 -showmem -vicesymbols -libdir ../c64 \
             -define C128 -define C128_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_RETURN_PRODUCT -define C128_TEST_SCRIPTED_LOAD_THEN_SAVE_NEW_EMPTY_PRODUCT \
             -o ../../../build/test/c128/moria128.prg >"$build_log" 2>&1; then
@@ -5693,6 +5406,8 @@ run_boot_title_disk_setup_single_drive_return_smoke() {
     local program_d64="../../../build/test/c128/moria128_disk_setup_single_drive_return_program.d71"
     local marker_blob="../../../build/test/c128/MORIA8.ID"
 
+    # main.vs and the payloads become this variant's; base smokes must rebuild
+    c128_set_active_variant "${name}"
     if ! java -jar "$KICKASS" main.s :OVL_OUT=../../../build/test/c128 -showmem -vicesymbols -libdir ../c64 \
             -define C128 -define C128_TEST_SCRIPTED_DISK_SETUP_SINGLE_DRIVE_RETURN_PRODUCT \
             -o ../../../build/test/c128/moria128.prg >"$build_log" 2>&1; then
@@ -5766,6 +5481,7 @@ run_boot_title_disk_setup_single_drive_return_smoke() {
             --vice "$VICE" \
             --boot-d64 "$boot_d64" \
             --main-vs ../../../build/test/c128/main.vs \
+            "${C128_OVERLAY_COND_ARGS[@]}" \
             --start-symbol ".c128_test_disk_setup_single_drive_return_wait_for_harness" \
             --resume-symbol ".c128_test_disk_setup_single_drive_return_before_disk_setup" \
             --pass-symbol ".c128_test_after_disk_setup_single_drive_return" \
@@ -5793,6 +5509,8 @@ run_boot_title_single_drive_fresh_save_smoke() {
     local save_d64="../../../build/test/c128/moria128_single_drive_fresh_save_save.d64"
     local swap_program_d64="../../../build/test/c128/moria128_single_drive_fresh_save_program.d64"
 
+    # main.vs and the payloads become this variant's; base smokes must rebuild
+    c128_set_active_variant "${name}"
     if ! java -jar "$KICKASS" main.s :OVL_OUT=../../../build/test/c128 -showmem -vicesymbols -libdir ../c64 \
             -define C128 -define C128_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT \
             -o ../../../build/test/c128/moria128.prg >"$build_log" 2>&1; then
@@ -5804,34 +5522,12 @@ run_boot_title_single_drive_fresh_save_smoke() {
     fi
 
     rm -f "$fresh_d64"
+    c128_disk_payload_args "../../../build/test/c128"
     if ! "$c1541_bin" -format "moria128,m8" d64 "$fresh_d64" \
             -attach "$fresh_d64" \
             -write ../../../build/test/c128/boot128.prg "moria8.128" \
             -write ../../../build/test/c128/moria128.prg "moria128" \
-            -write ../../../build/test/c128/title "title" \
-            -write ../../../build/test/c128/monster.db.1 "monster.db.1" \
-            -write ../../../build/test/c128/monster.db.2 "monster.db.2" \
-            -write ../../../build/test/c128/monster.db.3 "monster.db.3" \
-            -write ../../../build/test/c128/monster.db.4 "monster.db.4" \
-            -write ../../../build/test/c128/ovl.town "ovl.town" \
-            -write ../../../build/test/c128/ovl.start "ovl.start" \
-            -write ../../../build/test/c128/ovl.death "ovl.death" \
-            -write ../../../build/test/c128/ovl.gen "ovl.gen" \
-            -write ../../../build/test/c128/ovl.help "128.help" \
-            -write ../../../build/test/c128/128.runtime.prg "128.runtime" \
-            -write ../../../build/test/c128/128.input.prg "128.input" \
-            -write ../../../build/test/c128/128.proj.prg "128.proj" \
-            -write ../../../build/test/c128/128.fdisk.prg "128.fdisk" \
-            -write ../../../build/test/c128/128.diskio.prg "128.diskio" \
-            -write ../../../build/test/c128/128.world.prg "128.world" \
-            -write ../../../build/test/c128/128.item.prg "128.item" \
-            -write ../../../build/test/c128/128.names.prg "128.names" \
-            -write ../../../build/test/c128/128.huff.prg "128.huff" \
-            -write ../../../build/test/c128/128.hvec.prg "128.hvec" \
-            -write ../../../build/test/c128/128.select.prg "128.select" \
-            -write ../../../build/test/c128/128.persist.prg "128.persist" \
-            -write ../../../build/test/c128/128.play.prg "128.play" \
-            -write ../../../build/test/c128/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
+            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1; then
         echo "FAIL (single-drive fresh-save product disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -5854,6 +5550,7 @@ run_boot_title_single_drive_fresh_save_smoke() {
             --vice "$VICE" \
             --boot-d64 "$fresh_d64" \
             --main-vs ../../../build/test/c128/main.vs \
+            "${C128_OVERLAY_COND_ARGS[@]}" \
             --start-symbol ".c128_test_single_drive_fresh_save_wait_for_harness" \
             --resume-symbol ".c128_test_single_drive_fresh_save_before_save" \
             --attach-delay 5.0 \
@@ -5902,6 +5599,8 @@ run_boot_title_single_drive_fresh_save_no_init_smoke() {
     local fresh_d64="../../../build/test/c128/moria128_single_drive_fresh_save_no_init.d64"
     local save_d64="../../../build/test/c128/moria128_single_drive_fresh_save_no_init_save.d64"
 
+    # main.vs and the payloads become this variant's; base smokes must rebuild
+    c128_set_active_variant "${name}"
     if ! java -jar "$KICKASS" main.s :OVL_OUT=../../../build/test/c128 -showmem -vicesymbols -libdir ../c64 \
             -define C128 -define C128_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT \
             -define C128_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_NO_INIT \
@@ -5914,34 +5613,12 @@ run_boot_title_single_drive_fresh_save_no_init_smoke() {
     fi
 
     rm -f "$fresh_d64"
+    c128_disk_payload_args "../../../build/test/c128"
     if ! "$c1541_bin" -format "moria128,m8" d64 "$fresh_d64" \
             -attach "$fresh_d64" \
             -write ../../../build/test/c128/boot128.prg "moria8.128" \
             -write ../../../build/test/c128/moria128.prg "moria128" \
-            -write ../../../build/test/c128/title "title" \
-            -write ../../../build/test/c128/monster.db.1 "monster.db.1" \
-            -write ../../../build/test/c128/monster.db.2 "monster.db.2" \
-            -write ../../../build/test/c128/monster.db.3 "monster.db.3" \
-            -write ../../../build/test/c128/monster.db.4 "monster.db.4" \
-            -write ../../../build/test/c128/ovl.town "ovl.town" \
-            -write ../../../build/test/c128/ovl.start "ovl.start" \
-            -write ../../../build/test/c128/ovl.death "ovl.death" \
-            -write ../../../build/test/c128/ovl.gen "ovl.gen" \
-            -write ../../../build/test/c128/ovl.help "128.help" \
-            -write ../../../build/test/c128/128.runtime.prg "128.runtime" \
-            -write ../../../build/test/c128/128.input.prg "128.input" \
-            -write ../../../build/test/c128/128.proj.prg "128.proj" \
-            -write ../../../build/test/c128/128.fdisk.prg "128.fdisk" \
-            -write ../../../build/test/c128/128.diskio.prg "128.diskio" \
-            -write ../../../build/test/c128/128.world.prg "128.world" \
-            -write ../../../build/test/c128/128.item.prg "128.item" \
-            -write ../../../build/test/c128/128.names.prg "128.names" \
-            -write ../../../build/test/c128/128.huff.prg "128.huff" \
-            -write ../../../build/test/c128/128.hvec.prg "128.hvec" \
-            -write ../../../build/test/c128/128.select.prg "128.select" \
-            -write ../../../build/test/c128/128.persist.prg "128.persist" \
-            -write ../../../build/test/c128/128.play.prg "128.play" \
-            -write ../../../build/test/c128/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
+            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1; then
         echo "FAIL (single-drive fresh-save no-init product disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -5963,6 +5640,7 @@ run_boot_title_single_drive_fresh_save_no_init_smoke() {
             --vice "$VICE" \
             --boot-d64 "$fresh_d64" \
             --main-vs ../../../build/test/c128/main.vs \
+            "${C128_OVERLAY_COND_ARGS[@]}" \
             --start-symbol ".c128_test_single_drive_fresh_save_wait_for_harness" \
             --resume-symbol ".c128_test_single_drive_fresh_save_before_save" \
             --attach-delay 5.0 \
@@ -6013,6 +5691,8 @@ run_boot_title_load_resume_smoke() {
     fi
     local abs_d64
     abs_d64="$(cd ../../../build/test/c128 && pwd)/moria128_loadresume.d64"
+    local abs_save_d64
+    abs_save_d64="$(cd ../../../build/test/c128 && pwd)/moria128_loadresume_save.d64"
     local mon_file
     mon_file="$(test128_tmp_file "test128_${name}.mon")"
     local log_file
@@ -6020,18 +5700,20 @@ run_boot_title_load_resume_smoke() {
     : > "$log_file"
 
     {
+        c128_key_feed_cmds $'L3 1'    # L = load; 3 = Disk Setup done (program 8, save 9); insert prompt; slot 1
         echo "until \$${load_resume_game}"
         echo "g"
+        echo "quit"     # at the next stop: a stop after the last command waited forever
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -warp -80col -autostart "$abs_d64" \
-        -keybuf "L" -keybuf-delay 8 \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+        -drive9type 1541 -attach9rw -9 "$abs_save_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 220000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
     local vice_rc=$?
 
-    if ! grep -qi "^UNTIL: .*C:\$${load_resume_game}" "$log_file"; then
+    if ! boot_log_has_stop_at "$log_file" "${load_resume_game}"; then
         boot_log_report_failure "did not reach load_resume_game from title load flow" "$log_file" "load_resume_game" "$load_resume_game" "$vice_rc"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
@@ -6078,15 +5760,16 @@ run_boot_title_idle_smoke() {
 
     {
         echo "until \$${title_show_sysinfo}"
+        echo "quit"     # at the next stop: a stop after the last command waited forever
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 120000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
     local vice_rc=$?
 
-    if ! grep -qi "^UNTIL: .*C:\$${title_show_sysinfo}" "$log_file"; then
+    if ! boot_log_has_stop_at "$log_file" "${title_show_sysinfo}"; then
         boot_log_report_failure "did not reach title_show_sysinfo on idle boot" "$log_file" "title_show_sysinfo" "$title_show_sysinfo" "$vice_rc"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
@@ -6103,15 +5786,16 @@ run_boot_title_idle_smoke() {
     : > "$log_file"
     {
         echo "until \$${title_menu_ready}"
+        echo "quit"     # at the next stop: a stop after the last command waited forever
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 120000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
     vice_rc=$?
 
-    if ! grep -qi "^UNTIL: .*C:\$${title_menu_ready}" "$log_file"; then
+    if ! boot_log_has_stop_at "$log_file" "${title_menu_ready}"; then
         boot_log_report_failure "did not reach title_menu_ready on idle boot" "$log_file" "title_menu_ready" "$title_menu_ready" "$vice_rc"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
@@ -6129,8 +5813,9 @@ run_boot_title_idle_smoke() {
     {
         echo "break \$${game_over_prompt}"
         echo "g"
+        echo "quit"     # at the next stop: a stop after the last command waited forever
     } > "$mon_file"
-    "$VICE" -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" \
         -monlogname "$log_file" -monlog \
         -limitcycles 220000000 +sound -sounddev dummy \
@@ -6182,12 +5867,13 @@ run_boot_tier_transition_smoke() {
     : > "$log_file"
 
     {
-        echo "until \$${position_player_dungeon}"
+        c128_key_feed_cmds $'NA\rABOT\rA L>'
+        c128_overlay_break "${position_player_dungeon}" 4
         echo "g"
+        echo "quit"     # at the next stop: a stop after the last command waited forever
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -warp -80col -autostart "$abs_d64" \
-        -keybuf $'NAA\rA\rA L>' -keybuf-delay 8 \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 320000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -6237,17 +5923,19 @@ run_town_overlay_smoke() {
     : > "$log_file"
 
     {
-        echo "until \$${store_enter}"
+        c128_key_feed_cmds $'NA\rABOT\rA KHHHHK'
+        c128_overlay_break "${store_enter}" 2
+        echo "g"
+        echo "quit"     # at the next stop: a stop after the last command waited forever
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -warp -80col -autostart "$abs_d64" \
-        -keybuf $'NAA\rA\rA LLLLLLLL' -keybuf-delay 8 \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 320000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
     local vice_rc=$?
 
-    if ! grep -qi "^UNTIL: .*C:\$${store_enter}" "$log_file"; then
+    if ! boot_log_has_stop_at "$log_file" "${store_enter}"; then
         boot_log_report_failure "did not reach store_enter via town overlay flow" "$log_file" "store_enter" "$store_enter" "$vice_rc"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
@@ -6291,18 +5979,20 @@ run_town_overlay_female_smoke() {
     : > "$log_file"
 
     {
+        c128_key_feed_cmds $'NA\rABOT\rB KHHHHK'
         echo "break \$d000 \$dfff"
-        echo "until \$${store_enter}"
+        c128_overlay_break "${store_enter}" 2
+        echo "g"
+        echo "quit"     # at the next stop: a stop after the last command waited forever
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -warp -80col -autostart "$abs_d64" \
-        -keybuf $'NAA\rA\rB LLLLLLLL' -keybuf-delay 8 \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 320000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
     local vice_rc=$?
 
-    if ! grep -qi "^UNTIL: .*C:\$${store_enter}" "$log_file"; then
+    if ! boot_log_has_stop_at "$log_file" "${store_enter}"; then
         boot_log_report_failure "did not reach store_enter via female town overlay flow" "$log_file" "store_enter" "$store_enter" "$vice_rc"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
@@ -6353,18 +6043,20 @@ run_town_overlay_state_smoke() {
     : > "$log_file"
 
     {
+        c128_key_feed_cmds $'NA\rABOT\rB KHHHHK'
         echo "break \$d000 \$dfff"
-        echo "until \$${store_enter}"
+        c128_overlay_break "${store_enter}" 2
+        echo "g"
+        echo "quit"     # at the next stop: a stop after the last command waited forever
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -warp -80col -autostart "$abs_d64" \
-        -keybuf $'NAA\rA\rB LLLLLLLL' -keybuf-delay 8 \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 320000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
     local vice_rc=$?
 
-    if ! grep -qi "^UNTIL: .*C:\$${store_enter}" "$log_file"; then
+    if ! boot_log_has_stop_at "$log_file" "${store_enter}"; then
         boot_log_report_failure "did not reach store_enter with corrupted overlay state" "$log_file" "store_enter" "$store_enter" "$vice_rc"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
@@ -6421,7 +6113,7 @@ run_scripted_summary_to_town_smoke() {
         echo "quit"
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -warp -80col -8 "$abs_d64" -9 "$abs_d64" -autostart "$abs_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -8 "$abs_d64" -9 "$abs_d64" -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 320000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -6465,23 +6157,27 @@ perf_p1_trace_collect_variant() {
     return 0
 }
 
-perf_p1_trace_run_product_assert() {
-    perf_p1_trace_collect_variant "assert" C128_TEST_PERF_P1_TRACE_ASSERT || return 2
+# perf_p1_trace_run_assert <variant> <label> <values> <define...>: build the
+# PERF trace variant, run it to its pass trap, and record <values>.
+perf_p1_trace_run_assert() {
+    local variant="$1" label="$2" values="$3"
+    shift 3
+    perf_p1_trace_collect_variant "$variant" "$@" || return 2
 
     local main_vs="../../../build/test/c128/main.vs"
     local pass_addr
     pass_addr=$(awk '/\.c128_test_perf_p1_trace_pass_sym$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     if [ -z "${pass_addr:-}" ]; then
-        PERF_P1_TRACE_FAIL_REASON="missing PERF trace product assert pass symbol in ../../../build/test/c128/main.vs"
+        PERF_P1_TRACE_FAIL_REASON="missing PERF trace ${label} pass symbol in ../../../build/test/c128/main.vs"
         return 1
     fi
 
     local abs_d64
     abs_d64="$(cd "$(dirname "$PERF_P1_TRACE_D64")" && pwd)/$(basename "$PERF_P1_TRACE_D64")"
     local mon_file
-    mon_file="$(test128_tmp_file "test128_perf_p1_trace_assert.mon")"
+    mon_file="$(test128_tmp_file "test128_perf_p1_trace_${variant}.mon")"
     local log_file
-    log_file="$(test128_tmp_file "test128_perf_p1_trace_assert.log")"
+    log_file="$(test128_tmp_file "test128_perf_p1_trace_${variant}.log")"
     : > "$log_file"
 
     {
@@ -6489,163 +6185,23 @@ perf_p1_trace_run_product_assert() {
         echo "quit"
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -warp -80col -8 "$abs_d64" -9 "$abs_d64" -autostart "$abs_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -8 "$abs_d64" -9 "$abs_d64" -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 700000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
     local vice_rc=$?
 
     if grep -qi "JAM\\|Invalid opcode" "$log_file"; then
-        PERF_P1_TRACE_FAIL_REASON="jam during PERF trace product assert"
+        PERF_P1_TRACE_FAIL_REASON="jam during PERF trace ${label}"
         return 1
     fi
 
-    local pass_lc
-    pass_lc=$(echo "$pass_addr" | tr '[:upper:]' '[:lower:]')
-    if ! grep -Fqi "C:\$${pass_addr}" "$log_file" && ! grep -qiE "Stop on  exec ${pass_lc}" "$log_file"; then
-        PERF_P1_TRACE_FAIL_REASON="did not reach PERF trace product assert pass trap (vice rc ${vice_rc})"
+    if ! boot_log_has_stop_at "$log_file" "$pass_addr"; then
+        PERF_P1_TRACE_FAIL_REASON="did not reach PERF trace ${label} pass trap (vice rc ${vice_rc})"
         return 1
     fi
 
-    PERF_P1_TRACE_VALUES="${PERF_P1_TRACE_VALUES}product first move local=1 full=0; "
-    return 0
-}
-
-perf_p1_trace_run_modal_assert() {
-    perf_p1_trace_collect_variant "modal_assert" C128_TEST_PERF_P1_TRACE_MODAL C128_TEST_PERF_P1_TRACE_MODAL_ASSERT || return 2
-
-    local main_vs="../../../build/test/c128/main.vs"
-    local pass_addr
-    pass_addr=$(awk '/\.c128_test_perf_p1_trace_pass_sym$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
-    if [ -z "${pass_addr:-}" ]; then
-        PERF_P1_TRACE_FAIL_REASON="missing PERF trace modal assert pass symbol in ../../../build/test/c128/main.vs"
-        return 1
-    fi
-
-    local abs_d64
-    abs_d64="$(cd "$(dirname "$PERF_P1_TRACE_D64")" && pwd)/$(basename "$PERF_P1_TRACE_D64")"
-    local mon_file
-    mon_file="$(test128_tmp_file "test128_perf_p1_trace_modal_assert.mon")"
-    local log_file
-    log_file="$(test128_tmp_file "test128_perf_p1_trace_modal_assert.log")"
-    : > "$log_file"
-
-    {
-        echo "until \$${pass_addr}"
-        echo "quit"
-    } > "$mon_file"
-
-    "$VICE" -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -warp -80col -8 "$abs_d64" -9 "$abs_d64" -autostart "$abs_d64" \
-        -moncommands "$mon_file" -monlogname "$log_file" -monlog \
-        -limitcycles 700000000 +sound -sounddev dummy \
-        +remotemonitor +binarymonitor >/dev/null 2>&1
-    local vice_rc=$?
-
-    if grep -qi "JAM\\|Invalid opcode" "$log_file"; then
-        PERF_P1_TRACE_FAIL_REASON="jam during PERF trace modal assert"
-        return 1
-    fi
-
-    local pass_lc
-    pass_lc=$(echo "$pass_addr" | tr '[:upper:]' '[:lower:]')
-    if ! grep -Fqi "C:\$${pass_addr}" "$log_file" && ! grep -qiE "Stop on  exec ${pass_lc}" "$log_file"; then
-        PERF_P1_TRACE_FAIL_REASON="did not reach PERF trace modal assert pass trap (vice rc ${vice_rc})"
-        return 1
-    fi
-
-    PERF_P1_TRACE_VALUES="${PERF_P1_TRACE_VALUES}modal restore full=1 reason=1; "
-    return 0
-}
-
-perf_p1_trace_run_command_assert() {
-    perf_p1_trace_collect_variant "command_assert" C128_TEST_PERF_P1_TRACE_COMMAND C128_TEST_PERF_P1_TRACE_COMMAND_ASSERT || return 2
-
-    local main_vs="../../../build/test/c128/main.vs"
-    local pass_addr
-    pass_addr=$(awk '/\.c128_test_perf_p1_trace_pass_sym$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
-    if [ -z "${pass_addr:-}" ]; then
-        PERF_P1_TRACE_FAIL_REASON="missing PERF trace command assert pass symbol in ../../../build/test/c128/main.vs"
-        return 1
-    fi
-
-    local abs_d64
-    abs_d64="$(cd "$(dirname "$PERF_P1_TRACE_D64")" && pwd)/$(basename "$PERF_P1_TRACE_D64")"
-    local mon_file
-    mon_file="$(test128_tmp_file "test128_perf_p1_trace_command_assert.mon")"
-    local log_file
-    log_file="$(test128_tmp_file "test128_perf_p1_trace_command_assert.log")"
-    : > "$log_file"
-
-    {
-        echo "until \$${pass_addr}"
-        echo "quit"
-    } > "$mon_file"
-
-    "$VICE" -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -warp -80col -8 "$abs_d64" -9 "$abs_d64" -autostart "$abs_d64" \
-        -moncommands "$mon_file" -monlogname "$log_file" -monlog \
-        -limitcycles 700000000 +sound -sounddev dummy \
-        +remotemonitor +binarymonitor >/dev/null 2>&1
-    local vice_rc=$?
-
-    if grep -qi "JAM\\|Invalid opcode" "$log_file"; then
-        PERF_P1_TRACE_FAIL_REASON="jam during PERF trace command assert"
-        return 1
-    fi
-
-    local pass_lc
-    pass_lc=$(echo "$pass_addr" | tr '[:upper:]' '[:lower:]')
-    if ! grep -Fqi "C:\$${pass_addr}" "$log_file" && ! grep -qiE "Stop on  exec ${pass_lc}" "$log_file"; then
-        PERF_P1_TRACE_FAIL_REASON="did not reach PERF trace command assert pass trap (vice rc ${vice_rc})"
-        return 1
-    fi
-
-    PERF_P1_TRACE_VALUES="${PERF_P1_TRACE_VALUES}command forced full=1 reason=1; "
-    return 0
-}
-
-perf_p1_trace_run_transition_assert() {
-    perf_p1_trace_collect_variant "transition_assert" C128_TEST_PERF_P1_TRACE_TRANSITION C128_TEST_PERF_P1_TRACE_TRANSITION_ASSERT || return 2
-
-    local main_vs="../../../build/test/c128/main.vs"
-    local pass_addr
-    pass_addr=$(awk '/\.c128_test_perf_p1_trace_pass_sym$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
-    if [ -z "${pass_addr:-}" ]; then
-        PERF_P1_TRACE_FAIL_REASON="missing PERF trace transition assert pass symbol in ../../../build/test/c128/main.vs"
-        return 1
-    fi
-
-    local abs_d64
-    abs_d64="$(cd "$(dirname "$PERF_P1_TRACE_D64")" && pwd)/$(basename "$PERF_P1_TRACE_D64")"
-    local mon_file
-    mon_file="$(test128_tmp_file "test128_perf_p1_trace_transition_assert.mon")"
-    local log_file
-    log_file="$(test128_tmp_file "test128_perf_p1_trace_transition_assert.log")"
-    : > "$log_file"
-
-    {
-        echo "until \$${pass_addr}"
-        echo "quit"
-    } > "$mon_file"
-
-    "$VICE" -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -warp -80col -8 "$abs_d64" -9 "$abs_d64" -autostart "$abs_d64" \
-        -moncommands "$mon_file" -monlogname "$log_file" -monlog \
-        -limitcycles 700000000 +sound -sounddev dummy \
-        +remotemonitor +binarymonitor >/dev/null 2>&1
-    local vice_rc=$?
-
-    if grep -qi "JAM\\|Invalid opcode" "$log_file"; then
-        PERF_P1_TRACE_FAIL_REASON="jam during PERF trace transition assert"
-        return 1
-    fi
-
-    local pass_lc
-    pass_lc=$(echo "$pass_addr" | tr '[:upper:]' '[:lower:]')
-    if ! grep -Fqi "C:\$${pass_addr}" "$log_file" && ! grep -qiE "Stop on  exec ${pass_lc}" "$log_file"; then
-        PERF_P1_TRACE_FAIL_REASON="did not reach PERF trace transition assert pass trap (vice rc ${vice_rc})"
-        return 1
-    fi
-
-    PERF_P1_TRACE_VALUES="${PERF_P1_TRACE_VALUES}transition full=1 reason=1; "
+    PERF_P1_TRACE_VALUES="${PERF_P1_TRACE_VALUES}${values}; "
     return 0
 }
 
@@ -6654,25 +6210,25 @@ run_perf_p1_trace_smoke() {
     echo -n "  $name: "
     PERF_P1_TRACE_VALUES=""
 
-    if ! perf_p1_trace_run_product_assert; then
+    if ! perf_p1_trace_run_assert assert "product assert" "product first move local=1 full=0" C128_TEST_PERF_P1_TRACE_ASSERT; then
         [ -n "$PERF_P1_TRACE_FAIL_REASON" ] && echo "FAIL (${PERF_P1_TRACE_FAIL_REASON})"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
     fi
-    if ! perf_p1_trace_run_modal_assert; then
+    if ! perf_p1_trace_run_assert modal_assert "modal assert" "modal restore full=1 reason=1" C128_TEST_PERF_P1_TRACE_MODAL C128_TEST_PERF_P1_TRACE_MODAL_ASSERT; then
         [ -n "$PERF_P1_TRACE_FAIL_REASON" ] && echo "FAIL (${PERF_P1_TRACE_FAIL_REASON})"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
     fi
-    if ! perf_p1_trace_run_command_assert; then
+    if ! perf_p1_trace_run_assert command_assert "command assert" "command forced full=1 reason=1" C128_TEST_PERF_P1_TRACE_COMMAND C128_TEST_PERF_P1_TRACE_COMMAND_ASSERT; then
         [ -n "$PERF_P1_TRACE_FAIL_REASON" ] && echo "FAIL (${PERF_P1_TRACE_FAIL_REASON})"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
     fi
-    if ! perf_p1_trace_run_transition_assert; then
+    if ! perf_p1_trace_run_assert transition_assert "transition assert" "transition full=1 reason=1" C128_TEST_PERF_P1_TRACE_TRANSITION C128_TEST_PERF_P1_TRACE_TRANSITION_ASSERT; then
         [ -n "$PERF_P1_TRACE_FAIL_REASON" ] && echo "FAIL (${PERF_P1_TRACE_FAIL_REASON})"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
@@ -6720,8 +6276,8 @@ run_scripted_spell_cast_smoke() {
         "c128_test_spell_fail_level_sym"
         "c128_test_spell_fail_known_sym"
         "c128_test_spell_fail_validate_sym"
-        "c128_test_spell_fail_roll_sym"
         "c128_test_spell_fail_cancel_sym"
+        "c128_test_spell_script_exhausted_sym"
     )
     local -a spell_fail_addrs=()
     local label addr
@@ -6760,7 +6316,7 @@ run_scripted_spell_cast_smoke() {
         echo "quit"
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 320000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -6864,6 +6420,7 @@ run_chest_open_product_smoke128() {
         --start-symbol ".title_menu_loop" \
         --until-pass \
         --main-vs "../../../build/test/c128/main.vs" \
+        "${C128_OVERLAY_COND_ARGS[@]}" \
         --boot-d64 "$abs_d71" \
         --drive8-type 1571 \
         --autostart-only-drive8 \
@@ -6933,7 +6490,7 @@ run_scripted_book_overlay_smoke() {
         echo "quit"
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 320000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -7027,7 +6584,7 @@ run_scripted_spell_list_overlay_smoke() {
         echo "quit"
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 320000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -7126,7 +6683,7 @@ run_scripted_spell_list_cancel_smoke() {
         echo "quit"
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 320000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -7186,8 +6743,8 @@ run_scripted_prayer_cast_smoke() {
         "c128_test_spell_fail_level_sym"
         "c128_test_spell_fail_known_sym"
         "c128_test_spell_fail_validate_sym"
-        "c128_test_spell_fail_roll_sym"
         "c128_test_spell_fail_cancel_sym"
+        "c128_test_spell_script_exhausted_sym"
     )
     local -a spell_fail_addrs=()
     local label addr
@@ -7226,7 +6783,7 @@ run_scripted_prayer_cast_smoke() {
         echo "quit"
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 320000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -7336,6 +6893,7 @@ run_real_input_town_move_diag() {
     log_file="$(test128_tmp_file "test128_${name}.log")"
     : > "$log_file"
     {
+        c128_key_feed_cmds $'NA\rABOT\rA L'
         for idx in "${!stage_addrs[@]}"; do
             echo "break \$${stage_addrs[$idx]}"
         done
@@ -7345,8 +6903,7 @@ run_real_input_town_move_diag() {
         echo "quit"
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -warp -80col -autostart "$abs_d64" \
-        -keybuf $'NAA\rA\rA L' -keybuf-delay 8 \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 320000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -7362,7 +6919,7 @@ run_real_input_town_move_diag() {
 
     local last_stage="boot"
     for idx in "${!stage_names[@]}"; do
-        if ! grep -qi "^BREAK: .*C:\$${stage_addrs[$idx]}" "$log_file"; then
+        if ! boot_log_has_stop_at "$log_file" "${stage_addrs[$idx]}"; then
             echo "FAIL (did not reach stage: ${stage_names[$idx]}; last reached: $last_stage; vice_rc=$vice_rc)"
             tail -20 "$log_file" | sed 's/^/    /'
             FAIL=$((FAIL + 1))
@@ -7414,16 +6971,17 @@ run_real_boot_crash_harness() {
     local stage_addr
     stage_addr=$(awk '/\.c128_stack_guard_stage$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     {
+        c128_key_feed_cmds $'NA\rABOT\rA L>'
         local addr
         for addr in "${diag_stage_breaks[@]}"; do
             echo "break \$${addr}"
         done
         echo "g"
         boot_diag_dump_cmds "$stage_addr"
+        echo "quit"     # at the next stop: a stop after the last command waited forever
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -warp -80col -autostart "$abs_d64" \
-        -keybuf $'NAA\rA\rA L>' -keybuf-delay 8 \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 520000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -7492,9 +7050,10 @@ run_overlay_data_transition_smoke() {
         echo "until \$${pass_addr}"
         echo "g"
         boot_diag_dump_cmds "$stage_addr"
+        echo "quit"     # at the next stop: a stop after the last command waited forever
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 420000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -7560,9 +7119,10 @@ run_cache_survival_smoke() {
         echo "break \$${c128_test_cache_survival_fail}"
         echo "until \$${c128_test_cache_survival_pass}"
         echo "g"
+        echo "quit"     # at the next stop: a stop after the last command waited forever
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 700000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -7620,13 +7180,14 @@ run_dungeon_attack_stability_smoke() {
     : > "$log_file"
 
     {
+        c128_key_feed_cmds $'NA\rABOT\rA L>L'
         echo "until \$${player_attack}"
         echo "g"
         boot_diag_dump_cmds
+        echo "quit"     # at the next stop: a stop after the last command waited forever
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -warp -80col -autostart "$abs_d64" \
-        -keybuf $'NAA\rA\rA L>L' -keybuf-delay 8 \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 620000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -7640,7 +7201,7 @@ run_dungeon_attack_stability_smoke() {
         return
     fi
 
-    if ! grep -qi "^UNTIL: .*C:\$${player_attack}" "$log_file"; then
+    if ! boot_log_has_stop_at "$log_file" "${player_attack}"; then
         boot_log_report_failure "did not reach player_attack_monster in dungeon attack flow" "$log_file" "player_attack_monster" "$player_attack" "$vice_rc"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
@@ -7677,18 +7238,19 @@ run_death_overlay_smoke() {
     : > "$log_file"
 
     {
-        echo "until \$${score_death_screen}"
+        c128_key_feed_cmds $'NA\rABOT\rA  Q'    # dismiss summary, -more-; Q = Disk Setup back
+        c128_overlay_break "${score_death_screen}" 3
         echo "g"
+        echo "quit"     # at the next stop: a stop after the last command waited forever
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -warp -80col -autostart "$abs_d64" \
-        -keybuf "N" -keybuf-delay 8 \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 240000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
     local vice_rc=$?
 
-    if ! grep -qi "^UNTIL: .*C:\$${score_death_screen}" "$log_file"; then
+    if ! boot_log_has_stop_at "$log_file" "${score_death_screen}"; then
         boot_log_report_failure "did not reach score_death_screen via death overlay flow" "$log_file" "score_death_screen" "$score_death_screen" "$vice_rc"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
@@ -7732,18 +7294,19 @@ run_restart_to_title_smoke() {
     : > "$log_file"
 
     {
+        c128_key_feed_cmds $'NA\rABOT\rA  Q '    # dismiss summary, -more-; Q = Disk Setup back; dismiss death screen
         echo "until \$${title_show_sysinfo}"
         echo "g"
+        echo "quit"     # at the next stop: a stop after the last command waited forever
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -warp -80col -autostart "$abs_d64" \
-        -keybuf $'NAA\rA\rA  S' -keybuf-delay 8 \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 420000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
     local vice_rc=$?
 
-    if ! grep -qi "^UNTIL: .*C:\$${title_show_sysinfo}" "$log_file"; then
+    if ! boot_log_has_stop_at "$log_file" "${title_show_sysinfo}"; then
         boot_log_report_failure "did not return to title_show_sysinfo after restart flow" "$log_file" "title_show_sysinfo" "$title_show_sysinfo" "$vice_rc"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
@@ -7791,13 +7354,14 @@ run_preload_partial_failure_smoke() {
     fail_lc=$(echo "$c128_test_partial_cache_fail" | tr '[:upper:]' '[:lower:]')
 
     {
+        c128_key_feed_cmds $'NA\rABOT\rA L>'
         echo "break \$${c128_test_partial_cache_fail}"
         echo "until \$${tier_load_disk}"
         echo "g"
+        echo "quit"     # at the next stop: a stop after the last command waited forever
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -warp -80col -autostart "$abs_d64" \
-        -keybuf $'NAA\rA\rA L>' -keybuf-delay 8 \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 320000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -7810,7 +7374,7 @@ run_preload_partial_failure_smoke() {
         return
     fi
 
-    if ! grep -qi "^UNTIL: .*C:\$${tier_load_disk}" "$log_file"; then
+    if ! boot_log_has_stop_at "$log_file" "${tier_load_disk}"; then
         boot_log_report_failure "missing-tier preload did not fall back to tier_load_disk" "$log_file" "tier_load_disk" "$tier_load_disk" "$vice_rc"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
@@ -7819,18 +7383,19 @@ run_preload_partial_failure_smoke() {
 
     : > "$log_file"
     {
-        echo "until \$${dungeon_generate}"
+        c128_key_feed_cmds $'NA\rABOT\rA L>'
+        c128_overlay_break "${dungeon_generate}" 4
         echo "g"
+        echo "quit"     # at the next stop: a stop after the last command waited forever
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -warp -80col -autostart "$abs_d64" \
-        -keybuf $'NAA\rA\rA L>' -keybuf-delay 8 \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 320000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
     vice_rc=$?
 
-    if ! grep -qi "^UNTIL: .*C:\$${dungeon_generate}" "$log_file"; then
+    if ! boot_log_has_stop_at "$log_file" "${dungeon_generate}"; then
         boot_log_report_failure "missing-tier preload did not continue to dungeon_generate" "$log_file" "dungeon_generate" "$dungeon_generate" "$vice_rc"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
@@ -7878,13 +7443,14 @@ run_overlay_partial_failure_smoke() {
     fail_lc=$(echo "$c128_test_overlay_cache_fail" | tr '[:upper:]' '[:lower:]')
 
     {
+        c128_key_feed_cmds $'NA\rABOT\rA KHHHHK'
         echo "break \$${c128_test_overlay_cache_fail}"
         echo "until \$${overlay_load_disk}"
         echo "g"
+        echo "quit"     # at the next stop: a stop after the last command waited forever
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -warp -80col -autostart "$abs_d64" \
-        -keybuf $'NAA\rA\rA LLLLLLLL' -keybuf-delay 8 \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 320000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -7897,7 +7463,7 @@ run_overlay_partial_failure_smoke() {
         return
     fi
 
-    if ! grep -qi "^UNTIL: .*C:\$${overlay_load_disk}" "$log_file"; then
+    if ! boot_log_has_stop_at "$log_file" "${overlay_load_disk}"; then
         boot_log_report_failure "missing overlay preload did not fall back to overlay_load_disk" "$log_file" "overlay_load_disk" "$overlay_load_disk" "$vice_rc"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
@@ -7906,18 +7472,19 @@ run_overlay_partial_failure_smoke() {
 
     : > "$log_file"
     {
-        echo "until \$${store_enter}"
+        c128_key_feed_cmds $'NA\rABOT\rA KHHHHK'
+        c128_overlay_break "${store_enter}" 2
         echo "g"
+        echo "quit"     # at the next stop: a stop after the last command waited forever
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -warp -80col -autostart "$abs_d64" \
-        -keybuf $'NAA\rA\rA LLLLLLLL' -keybuf-delay 8 \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 320000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
     vice_rc=$?
 
-    if ! grep -qi "^UNTIL: .*C:\$${store_enter}" "$log_file"; then
+    if ! boot_log_has_stop_at "$log_file" "${store_enter}"; then
         boot_log_report_failure "missing overlay preload did not continue to store_enter" "$log_file" "store_enter" "$store_enter" "$vice_rc"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
@@ -7967,15 +7534,16 @@ run_boot_diag_copy() {
         echo "r pc=1C0E"
         echo "break \$${entry_main}"
         echo "g"
+        echo "quit"     # at the next stop: a stop after the last command waited forever
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -warp -80col \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -initbreak ready \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 120000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
     local vice_rc=$?
 
-    if ! grep -qi "^BREAK: .*C:\$${entry_main}" "$log_file"; then
+    if ! boot_log_has_stop_at "$log_file" "${entry_main}"; then
         boot_log_report_failure "did not reach entry_main" "$log_file" "entry_main" "$entry_main" "$vice_rc"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
@@ -8026,7 +7594,7 @@ run_selected_suites() {
     run_named_suite title_disk_setup_single_drive_returns_program_prompt --alias boot_title_disk_setup_single_drive_return_smoke run_boot_title_disk_setup_single_drive_return_smoke || return 1
     run_named_suite new_save_empty_init_writes --alias boot_title_single_drive_fresh_save_smoke run_boot_title_single_drive_fresh_save_smoke || return 1
     run_named_suite new_save_empty_no_init_returns_setup --alias cancel_supported_prompts --alias boot_title_single_drive_fresh_save_no_init_smoke run_boot_title_single_drive_fresh_save_no_init_smoke || return 1
-    run_named_suite vic40_clean_boot_smoke run_vic40_clean_boot_smoke || return 1
+    run_named_suite vic40_blanked_boot_smoke run_vic40_blanked_boot_smoke || return 1
     run_named_suite new_key_stability_smoke run_new_key_stability_smoke || return 1
     run_named_suite boot_title_newgame_smoke run_boot_title_newgame_smoke || return 1
     run_named_suite load_initialized_save --alias boot_title_load_resume_smoke run_boot_title_load_resume_smoke || return 1

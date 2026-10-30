@@ -128,15 +128,6 @@ walkable_table:
     .byte 1, 0, 0, 0, 0, 0, 0, 1
     .byte 0, 1, 1, 1, 0, 0, 1, 0
 
-.macro PatchJump(target, replacement) {
-    lda #$4c
-    sta target
-    lda #<replacement
-    sta target + 1
-    lda #>replacement
-    sta target + 2
-}
-
 screen_clear:
 .label hal_screen_clear = screen_clear
 ui_help_clear_all:
@@ -171,8 +162,6 @@ find_random_floor:
 monster_find_at:
 combat_apply_damage_16:
 hal_sound_play:
-piw_prompt_filtered_inv:
-piw_pick_filtered_inv_key:
 piw_print_prompt_with_count:
     clc
     rts
@@ -180,9 +169,11 @@ piw_print_prompt_with_count:
 calc_spell_failure:
     clc
     rts
+    :PatchRoom(calc_spell_failure)
 
 tramp_spell_execute_selected:
     rts
+    :PatchRoom(tramp_spell_execute_selected)
 
 get_direction_target:
     lda zp_player_x
@@ -310,7 +301,7 @@ test_reset_identify_state:
     lda #$ff
     sta tid_last_spell_idx
     ldx #25
-    jsr id_known_set
+    jsr id_known_clear          // each test starts with type 25 unknown
     ldx #29
     lda #0
 !clr_inv:
@@ -363,11 +354,37 @@ test_fail:
 test_pass:
     jmp test_pass_loop
 
+// Fixtures for the core/player_items.s pickers: eff_identify_prompt needs a
+// picker that offers an item. The test stocks its one unidentified item in
+// slot 1 and scripts the key 'A' for it.
+piw_prompt_filtered_inv:
+    lda inv_item_id + 1         // the fixture's only stocked slot (cleared = 0)
+    bne !prompt_have+
+    ldx #HSTR_PIW_NOTHING       // as core: nothing visible to choose
+    jsr huff_print_msg
+    clc
+    rts
+!prompt_have:
+    sec                         // carry set: the prompt was printed
+    rts
+
+piw_pick_filtered_inv_key:
+    cmp #$41
+    bne !pick_none+
+    ldx #1                      // X = carried slot
+    lda inv_item_id + 1         // A = item type ID
+    sec
+    rts
+!pick_none:
+    clc
+    rts
+
 test_start:
     sei
     cld
     ldx #$ff
     txs
+    jsr init_common_mmu_helpers   // as boot does: common-RAM MMU helpers at $0C00
 
     lda #MMU_ALL_RAM
     sta $ff00

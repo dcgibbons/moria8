@@ -85,6 +85,7 @@ test_start:
     cld
     ldx #$ff
     txs
+    jsr init_common_mmu_helpers   // as boot does: common-RAM MMU helpers at $0C00
 
     // Capture the live KERNAL IRQ tail vector before entering all-RAM mode.
     lda $0314

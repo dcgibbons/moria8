@@ -324,6 +324,7 @@ def build_vice_command(
         vice_config(vice),
         "-default",
         "+saveres",
+        "+autostart-delay-random",
         "-console",
         "-nativemonitor",
         "-warp",

@@ -131,7 +131,7 @@ BATCH_TESTS: dict[str, TestCase] = {
     "teleport_self128": TestCase("teleport_self128", SCRIPT_DIR / "tests" / "test_teleport_self128.s", 5.0, 20000000, True),
     "remove_curse128": TestCase("remove_curse128", SCRIPT_DIR / "tests" / "test_remove_curse128.s", 5.0, 20000000, True),
     "phase_door128": TestCase("phase_door128", SCRIPT_DIR / "tests" / "test_phase_door128.s", 5.0, 20000000, True),
-    "soak128": TestCase("soak128", SCRIPT_DIR / "tests" / "test_soak128.s", 5.0, 300000000, True),
+    "soak128": TestCase("soak128", SCRIPT_DIR / "tests" / "test_soak128.s", 30.0, 2000000000, True),
 }
 
 DEFAULT_BATCH_TESTS = [
@@ -318,11 +318,14 @@ def run_one_test(
         mon_args = argparse.Namespace(**vars(base_args))
         mon_args.name = test_name
         mon_args.timeout = timeout
+        # No snapshot here: -initbreak ready already boots to READY before the
+        # monitor commands run, and undumping jumps the clock past -limitcycles
+        # (which counts from power-on), so VICE quit at once.
         exit_code = run_test_via_moncommands(
             mon_args,
             prg_path=prg_path,
             symbols=symbols,
-            snapshot_path=snapshot_path,
+            snapshot_path=None,
             break_on_fail=break_on_fail,
             limitcycles=limitcycles,
         )

@@ -4,6 +4,9 @@
 #define C128_PRODUCT_MODAL_PERSIST
 #define HAL_PLATFORM_GAME_LOOP_MODAL_PERSIST
 #define HAL_PLATFORM_GAME_LOOP_VISIBILITY_PRESERVE_REVEAL_EXTERNAL
+// As config128.s: test 16b drives the C128 "." run prefix, which game_loop.s
+// builds only under this define.
+#define PLATFORM_RUN_PREFIX_PARSER
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_start)
@@ -11,6 +14,7 @@
 .pc = $0300 "Test Stub"
 
 test_start:
+    jsr init_common_mmu_helpers   // as boot does: common-RAM MMU helpers at $0C00
     jmp test_entry
 
 .pc = $3000 "Test Code"
@@ -94,12 +98,6 @@ w_chrout:
 w_load:
     rts
 
-c128_stack_guard_begin:
-    rts
-
-c128_stack_guard_check:
-    rts
-
 c128_stack_guard_snapshot_banking:
     rts
 
@@ -157,7 +155,9 @@ test_wpsb_spy:
 winner_apply_retirement_bonus:
     rts
 
-wizard_reset_session_state:
+wizard_reset_session_state:     // as core/wizard.s: game_new_start relies on it
+    lda #0                      // to clear the unsaved invulnerability timer
+    sta eff_invuln_timer
     rts
 
 wizard_level_jump_active:
@@ -1793,8 +1793,8 @@ test_entry:
     cmp #1
     beq *+5
     jmp test_fail
-    lda test_get_key_calls
-    cmp #2
+    lda test_get_key_calls      // ".", the direction, then "Q" ends the case
+    cmp #3
     beq *+5
     jmp test_fail
     lda test_player_try_move_calls
@@ -2048,8 +2048,12 @@ test_entry:
     cmp #1
     beq *+5
     jmp test_fail
-    lda test_exit_calls
+    // player_died ends with the game_over_prompt hook (back to the title).
+    lda test_game_over_prompt_calls
     cmp #1
+    beq *+5
+    jmp test_fail
+    lda test_exit_calls
     beq *+5
     jmp test_fail
     lda test_delete_savefile_calls
@@ -2332,14 +2336,19 @@ test_entry:
     lda eff_invuln_timer
     beq *+5
     jmp test_fail
+    // Slot 2 holds the starter's four spare torches (type 13, 134 turns each;
+    // VMS player_init: 5 torches): not the loaded game's
+    // item 66 x7, and none of its p1/flags/ego.
     lda inv_item_id + 2
-    cmp #FI_EMPTY
+    cmp #13
     beq *+5
     jmp test_fail
     lda inv_qty + 2
+    cmp #4
     beq *+5
     jmp test_fail
     lda inv_p1 + 2
+    cmp #134
     beq *+5
     jmp test_fail
     lda inv_flags + 2

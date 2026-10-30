@@ -110,15 +110,6 @@ test_mon_ptr_lo:
 test_mon_ptr_hi:
     .fill MAX_MONSTERS, >(test_mon_table + i * MONSTER_ENTRY_SIZE)
 
-.macro PatchJump(target, replacement) {
-    lda #$4c
-    sta target
-    lda #<replacement
-    sta target + 1
-    lda #>replacement
-    sta target + 2
-}
-
 screen_clear:
 .label hal_screen_clear = screen_clear
 ui_help_clear_all:
@@ -203,9 +194,11 @@ eff_detect_monsters:
 calc_spell_failure:
     clc
     rts
+    :PatchRoom(calc_spell_failure)
 
 tramp_spell_execute_selected:
     rts
+    :PatchRoom(tramp_spell_execute_selected)
 
 huff_print_msg:
     stx test_last_huff
@@ -261,23 +254,28 @@ test_calc_spell_failure_fail:
     rts
 
 test_clear_monsters:
-    ldx #MAX_MONSTERS * MONSTER_ENTRY_SIZE - 1
+    // The table is 384 bytes: "ldx #MAX_MONSTERS * MONSTER_ENTRY_SIZE - 1"
+    // assembled as ldx #$7f and cleared 128 of them. Two passes cover it.
+    ldx #0
     lda #0
 !clear_loop:
     sta test_mon_table,x
-    dex
-    bpl !clear_loop-
+    sta test_mon_table + MAX_MONSTERS * MONSTER_ENTRY_SIZE - $100,x
+    inx
+    bne !clear_loop-
+.assert "test_clear_monsters covers the table in two 256-byte passes", MAX_MONSTERS * MONSTER_ENTRY_SIZE >= $100 && MAX_MONSTERS * MONSTER_ENTRY_SIZE <= $200, true
 
     ldx #0
-    lda #EMPTY_SLOT
 !empty_loop:
-    sta test_mon_table + MX_TYPE,x
-    txa
-    clc
-    adc #MONSTER_ENTRY_SIZE
-    tax
-    cpx #MAX_MONSTERS * MONSTER_ENTRY_SIZE
-    bcc !empty_loop-
+    cpx #MAX_MONSTERS
+    bcs !empty_done+
+    jsr monster_get_ptr          // every slot: an 8-bit offset reached only 11
+    ldy #MX_TYPE
+    lda #EMPTY_SLOT
+    sta (zp_ptr0),y
+    inx
+    jmp !empty_loop-
+!empty_done:
 
     ldx #64
     lda #0
@@ -344,6 +342,7 @@ test_start:
     cld
     ldx #$ff
     txs
+    jsr init_common_mmu_helpers   // as boot does: common-RAM MMU helpers at $0C00
 
     lda #MMU_ALL_RAM
     sta $ff00

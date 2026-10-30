@@ -20,6 +20,25 @@ test_start:
     cld
     ldx #$ff
     txs
+    jsr init_common_mmu_helpers   // as boot does: common-RAM MMU helpers at $0C00
+    // Test 2 runs with CLI to check IRQ-state bookkeeping, not to take IRQs:
+    // silence the boot's interrupt sources. Stop the CIA timers too: this
+    // PRG's load fills the KERNAL page $0A, and its NMI handler re-enabled
+    // CIA 2 timer A from $0A0F on every NMI (an NMI storm).
+    lda #$7f
+    sta $dc0d
+    sta $dd0d
+    lda #0
+    sta $dc0e
+    sta $dc0f
+    sta $dd0e
+    sta $dd0f
+    lda $dc0d
+    lda $dd0d
+    lda #0
+    sta $d01a
+    lda #$ff
+    sta $d019
 
     // Test 0: Common-RAM IRQ/NMI entries must clear Decimal Mode first.
     lda mmu_common_irq
@@ -67,11 +86,12 @@ test_start:
     // Case A: Call from CLI state
     cli
     jsr mmu_select_bank1
-    // (IRQ should be disabled INSIDE, but restored OUTSIDE)
+    // IRQs stay disabled while Bank 1 is mapped (mmu_select_bank1 saves P
+    // and SEIs); the paired mmu_select_bank0 restores them.
     php
     pla
     and #$04
-    bne test_fail   // Fail if I=1 (disabled) outside
+    beq test_fail   // Fail if I=0 (enabled) while Bank 1 is mapped
 
     jsr mmu_select_bank0 // Balanced restore
     php
@@ -229,7 +249,10 @@ test_fail:
     // then restore the product's Bank 0/$D506=$0D invariant and IRQ state.
 !test4_start:
     sei
-    lda #$05
+    // Bottom-only common RAM keeps $F000 private to each bank for the setup
+    // writes. 16 KB ($07), not 4 KB ($05): this code runs at $3xxx and must
+    // stay visible across the raw MMU_CR switch.
+    lda #$07
     sta $d506
     lda #MMU_ALL_RAM
     sta MMU_CR

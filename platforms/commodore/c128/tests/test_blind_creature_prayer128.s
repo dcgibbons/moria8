@@ -107,15 +107,6 @@ walkable_table:
     .byte 1, 0, 0, 0, 0, 0, 0, 1
     .byte 0, 1, 1, 1, 0, 0, 1, 0
 
-.macro PatchJump(target, replacement) {
-    lda #$4c
-    sta target
-    lda #<replacement
-    sta target + 1
-    lda #>replacement
-    sta target + 2
-}
-
 screen_clear:
 .label hal_screen_clear = screen_clear
 ui_help_clear_all:
@@ -165,9 +156,11 @@ piw_print_prompt_with_count:
 calc_spell_failure:
     clc
     rts
+    :PatchRoom(calc_spell_failure)
 
 tramp_spell_execute_selected:
     rts
+    :PatchRoom(tramp_spell_execute_selected)
 
 get_direction_target:
     lda zp_player_x
@@ -293,6 +286,7 @@ test_start:
     cld
     ldx #$ff
     txs
+    jsr init_common_mmu_helpers   // as boot does: common-RAM MMU helpers at $0C00
 
     lda #MMU_ALL_RAM
     sta $ff00
@@ -304,8 +298,6 @@ test_start:
     :PatchJump(pm_validate_selected_spell, test_pm_validate_selected_spell)
     :PatchJump(tramp_spell_execute_selected, test_tramp_blind_creature_execute)
     :PatchJump(eff_directional_monster, test_eff_directional_monster)
-    :PatchJump(monster_get_ptr, monster_get_ptr)
-
     // Test 1: successful prayer on a valid target uses the current shared
     // directional confuse behavior: MX_CONFUSE set, standard hit feedback,
     // 4 mana spent, and slot 8 marked worked.

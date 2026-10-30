@@ -733,13 +733,13 @@ game_new_start:
     sta old_view_y
     lda #OVL_DUNGEON_GEN
 #if C128_REAL_BOOT_DIAG
-    ldx #$21
     jsr c128_stack_guard_begin
+    .byte $21
 #endif
     jsr overlay_load
 #if C128_REAL_BOOT_DIAG
-    ldx #$22
     jsr c128_stack_guard_check
+    .byte $22
 #endif
     bcc !gns_ovl_ok+
     jmp entry_main
@@ -751,24 +751,24 @@ game_new_start:
     jsr hal_platform_runtime_resync
 #endif
 #if C128_REAL_BOOT_DIAG
-    ldx #$23
     jsr c128_stack_guard_begin
+    .byte $23
 #endif
     jsr tramp_level_generate
 #if C128_REAL_BOOT_DIAG
-    ldx #$24
     jsr c128_stack_guard_check
+    .byte $24
 #endif
     jsr monster_spawn_level
     jsr item_spawn_level
 #if C128_REAL_BOOT_DIAG
-    ldx #$25
     jsr c128_stack_guard_begin
+    .byte $25
 #endif
     jsr update_visibility       // Reveal starting area
 #if C128_REAL_BOOT_DIAG
-    ldx #$26
     jsr c128_stack_guard_check
+    .byte $26
 #endif
 #if C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
     jsr c64_test_force_detect_evil_monster
@@ -791,13 +791,13 @@ game_new_start:
 	    jsr render_viewport
 	    jsr hal_screen_unblank
 #if C128_REAL_BOOT_DIAG || C128_STATUS_SP_CANARY_DIAG
-    ldx #$91
     jsr c128_stack_guard_begin
+    .byte $91
 #endif
     jsr status_draw
 #if C128_REAL_BOOT_DIAG || C128_STATUS_SP_CANARY_DIAG
-    ldx #$92
     jsr c128_stack_guard_check
+    .byte $92
 #endif
 
     // Loading/tier messages are transient. The screen redraw removed them
@@ -1148,8 +1148,8 @@ c128_town_move_diag_loop_top:
     jmp !player_died+
 !not_dead:
 #if C128_REAL_BOOT_DIAG || C128_STATUS_SP_CANARY_DIAG
-    ldx #$93
     jsr c128_stack_guard_begin
+    .byte $93
 #endif
 #if C128_TEST_TOWN_SELF_DUMP
     lda #$1e
@@ -1157,8 +1157,8 @@ c128_town_move_diag_loop_top:
 #endif
     jsr status_draw
 #if C128_REAL_BOOT_DIAG || C128_STATUS_SP_CANARY_DIAG
-    ldx #$94
     jsr c128_stack_guard_check
+    .byte $94
 #endif
 #if C128_TEST_TOWN_SELF_DUMP
     lda #$1f
@@ -1545,13 +1545,13 @@ c128_town_move_diag_before_status_draw:
     jsr c128_town_dump_log
 #endif
 #if C128_REAL_BOOT_DIAG || C128_STATUS_SP_CANARY_DIAG
-    ldx #$95
     jsr c128_stack_guard_begin
+    .byte $95
 #endif
     jsr status_draw
 #if C128_REAL_BOOT_DIAG || C128_STATUS_SP_CANARY_DIAG
-    ldx #$96
     jsr c128_stack_guard_check
+    .byte $96
 #endif
 #if C128_TEST_TOWN_SELF_DUMP
     lda #$1f
@@ -2045,16 +2045,16 @@ level_change_generate_current:
 	    jsr render_viewport
 	    jsr hal_screen_unblank
 #if C128_REAL_BOOT_DIAG || C128_STATUS_SP_CANARY_DIAG
-    ldx #$97
     jsr c128_stack_guard_begin
+    .byte $97
 #endif
     jsr status_draw
 #if HAL_PLATFORM_TURBO_BURST_HOOKS
     jsr c64u_turbo_normal
 #endif
 #if C128_REAL_BOOT_DIAG || C128_STATUS_SP_CANARY_DIAG
-    ldx #$98
     jsr c128_stack_guard_check
+    .byte $98
 #endif
 #if C128_TEST_PERF_P1_TRACE_TRANSITION
     jmp c128_test_perf_p1_trace_capture_sym

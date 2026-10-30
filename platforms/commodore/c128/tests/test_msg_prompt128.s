@@ -103,6 +103,8 @@ test_start:
     bcc test_fail
 
     jsr teardown_irq_clobber
+    lda irq_armed_seen          // armed IRQs must have fired during the
+    beq test_fail               // renders, or the stability checks proved nothing
     jmp test_pass
 
 test_fail:
@@ -125,9 +127,13 @@ assert_prompt_stable:
     stx test_str_id
     jsr capture_expected_prefix
 
-    ldx #0
+    // The count lives in memory: ldx test_str_id, huff_print_msg and
+    // compare_screen_prefix all use X.
+    lda #0
+    sta aps_iter
 !iter_loop:
-    cpx #TEST_ITERS
+    lda aps_iter
+    cmp #TEST_ITERS
     bcs !ok+
 
     // Reset message state to force row 0 path every time.
@@ -147,7 +153,7 @@ assert_prompt_stable:
     jsr compare_screen_prefix
     bcc !bad+
 
-    inx
+    inc aps_iter
     jmp !iter_loop-
 
 !ok:
@@ -158,45 +164,40 @@ assert_prompt_stable:
     rts
 
 // assert_huff_prompt_integrity
-// Verifies huff index offsets and leading compressed bytes for two
-// critical prompt strings used by take-off and look direction input.
+// Verifies the huff index entries of two critical prompt strings used by
+// take-off and look direction input: each lies strictly between its
+// neighbours, as the generator writes ascending offsets, so a clobbered
+// entry shows; the decode-literal checks that follow verify the content.
 // Output: carry set = integrity OK, carry clear = mismatch
 assert_huff_prompt_integrity:
-    // HSTR_DF_DIRECTION index offset must be $02D4.
-    lda huff_str_index + (HSTR_DF_DIRECTION * 2)
-    cmp #<$02d4
-    bne !bad+
-    lda huff_str_index + (HSTR_DF_DIRECTION * 2) + 1
-    cmp #>$02d4
-    bne !bad+
+    ldx #HSTR_DF_DIRECTION * 2
+    jsr ahpi_check_ascending
+    bcc !bad+
+    ldx #HSTR_PIW_TAKEOFF_PROMPT * 2
+    jmp ahpi_check_ascending
+!bad:
+    rts
 
-    // HSTR_PIW_TAKEOFF_PROMPT index offset must be $045C.
-    lda huff_str_index + (HSTR_PIW_TAKEOFF_PROMPT * 2)
-    cmp #<$045c
-    bne !bad+
-    lda huff_str_index + (HSTR_PIW_TAKEOFF_PROMPT * 2) + 1
-    cmp #>$045c
-    bne !bad+
-
-    // Leading compressed bytes (from generated huffman_data.s).
-    lda huff_str_data + $02d4
-    cmp #$8c
-    bne !bad+
-    lda huff_str_data + $02d5
-    cmp #$77
-    bne !bad+
-    lda huff_str_data + $045c
-    cmp #$4c
-    bne !bad+
-    lda huff_str_data + $045d
-    cmp #$e8
-    bne !bad+
-
+// X = index byte offset of an entry with neighbours on both sides.
+// Carry set when index[X-2] < index[X] < index[X+2] (16-bit).
+ahpi_check_ascending:
+    lda huff_str_index - 2,x            // previous < this
+    cmp huff_str_index,x
+    lda huff_str_index - 1,x
+    sbc huff_str_index + 1,x
+    bcs !ahpi_bad+
+    lda huff_str_index,x                // this < next
+    cmp huff_str_index + 2,x
+    lda huff_str_index + 1,x
+    sbc huff_str_index + 3,x
+    bcs !ahpi_bad+
     sec
     rts
-!bad:
+!ahpi_bad:
     clc
     rts
+.assert "takeoff/direction prompts have index neighbours", HSTR_DF_DIRECTION > 0 && HSTR_PIW_TAKEOFF_PROMPT > 0, true
+.assert "takeoff/direction prompts have a next index entry", huff_str_index + HSTR_DF_DIRECTION * 2 + 3 < huff_str_data && huff_str_index + HSTR_PIW_TAKEOFF_PROMPT * 2 + 3 < huff_str_data, true
 
 // assert_decode_literal
 // Input: X = HSTR_* id, A/Y = expected null-terminated screen-code string
@@ -205,10 +206,16 @@ assert_decode_literal:
     sta adl_expected_lo
     sty adl_expected_hi
     jsr huff_decode_string
+    // (ind),y needs a zero-page pointer, so the expected text goes through
+    // zp_ptr1 (adl_expected_lo itself is not in zero page).
+    lda adl_expected_lo
+    sta zp_ptr1
+    lda adl_expected_hi
+    sta zp_ptr1_hi
     ldy #0
 !cmp:
     lda hd_decode_buf,y
-    cmp (adl_expected_lo),y
+    cmp (zp_ptr1),y
     bne !bad+
     beq !chk_done+
 !chk_done:
@@ -262,12 +269,12 @@ assert_compound_look_stable:
     lda #0
     sta irq_armed
 
-    // Verify append started at expected column with "Sq"
-    ldx #9
+    // Verify append started after "You see a " (10 columns) with "Sq"
+    ldx #10
     jsr read_msg_row0_char
     cmp #$53                    // 'S'
     bne !acl_bad+
-    ldx #10
+    ldx #11
     jsr read_msg_row0_char
     cmp #$11                    // 'q' in Set 1 lowercase
     bne !acl_bad+
@@ -399,6 +406,8 @@ read_msg_char:
 
 setup_irq_clobber:
     sei
+    lda #0
+    sta irq_armed_seen
     lda $0314
     sta irq_vec_save_lo
     lda $0315
@@ -408,15 +417,23 @@ setup_irq_clobber:
     lda #>test_irq
     sta $0315
 
-    // Clear + mask first, then enable Timer A IRQ.
+    // Clear + mask first, then enable Timer A IRQ. Only this timer: the
+    // boot's VIC raster IRQ, which test_irq does not acknowledge, refired
+    // forever.
     lda #$7f
     sta $dc0d
     lda $dc0d
+    lda #0
+    sta $d01a
+    lda #$ff
+    sta $d019
 
-    // Timer A latch: short period to maximize IRQ pressure.
-    lda #$10
+    // Timer A latch: short period for IRQ pressure, still longer than one
+    // IRQ round trip (KERNAL stub + handler + $FF33, about 80 cycles), or
+    // a new IRQ is always pending and the test cannot progress.
+    lda #<$0200
     sta $dc04
-    lda #$00
+    lda #>$0200
     sta $dc05
 
     lda #%10000001
@@ -443,34 +460,11 @@ teardown_irq_clobber:
     cli
     rts
 
-// test_irq — intentionally clobbers zp_ptr0 while armed
-test_irq:
-    pha
-    txa
-    pha
-    tya
-    pha
-
-    lda irq_armed
-    beq !done+
-    lda #<irq_garble
-    sta zp_ptr0
-    lda #>irq_garble
-    sta zp_ptr0_hi
-!done:
-    lda $dc0d               // Ack CIA1 IRQ
-
-    pla
-    tay
-    pla
-    tax
-    pla
-    rti
 
 test_str_id:      .byte 0
+aps_iter:         .byte 0
 expected_len:     .byte 0
 read_col:         .byte 0
-irq_armed:        .byte 0
 irq_vec_save_lo:  .byte 0
 irq_vec_save_hi:  .byte 0
 acl_iter:         .byte 0
@@ -509,3 +503,61 @@ test_pass:
 
 test_platform_vector_reassert_api:
     rts
+
+// The IRQ runs through the KERNAL's RAM stub, which maps the ROMs in ($FF00
+// = $00) before jmp ($0314): $4000-$7FFF is then BASIC ROM, so the handler
+// and the flag it reads live below $4000.
+.pc = $3f00 "Test IRQ"
+// test_irq — while armed, clobbers zp_ptr0 when it interrupts the masked body
+// of screen_put_string itself: from screen_put_string + 3 up to
+// screen_put_string_irq_restore. +3 skips php (+0), sei (+1) and the IRQ the
+// 6502 still takes right after sei (+2); those, and IRQs after plp, are the
+// caller's window, not the body's. Callees the body jsr's are not in the
+// range, so they are not covered. Production IRQs never touch zp_ptr0. If
+// the sei is removed, IRQs land in the body and the prompts garble.
+test_irq:
+    pha
+    txa
+    pha
+    tya
+    pha
+
+    lda irq_armed
+    beq !done+
+    sta irq_armed_seen          // nonzero: an IRQ came while armed
+    // Stack: our A/X/Y, the KERNAL stub's A/X/Y/$FF00, then P, PCL, PCH.
+    tsx
+    lda $010a,x             // interrupted PC high
+    cmp #>(screen_put_string + 3)
+    bcc !done+
+    bne !above_start+
+    lda $0109,x
+    cmp #<(screen_put_string + 3)
+    bcc !done+
+!above_start:
+    lda $010a,x
+    cmp #>screen_put_string_irq_restore
+    bcc !in_window+
+    bne !done+
+    lda $0109,x
+    cmp #<screen_put_string_irq_restore
+    bcs !done+
+!in_window:
+    lda #<irq_garble
+    sta zp_ptr0
+    lda #>irq_garble
+    sta zp_ptr0_hi
+!done:
+    lda $dc0d               // Ack CIA1 IRQ
+
+    pla
+    tay
+    pla
+    tax
+    pla
+    jmp $ff33                   // the KERNAL's IRQ return: its stub pushed A/X/Y
+                                // and $FF00 before jmp ($0314); rti left them stacked
+irq_armed:        .byte 0
+irq_armed_seen:   .byte 0
+test_irq_end:
+.assert "test IRQ handler stays in RAM below BASIC ROM", test_irq_end <= $4000, true

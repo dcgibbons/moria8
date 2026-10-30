@@ -23,6 +23,7 @@ test_start:
     cld
     ldx #$ff
     txs
+    jsr init_common_mmu_helpers   // as boot does: common-RAM MMU helpers at $0C00
 
     // Seed different values in Bank 0 / Bank 1 at DB_TEST_ADDR0
     jsr mmu_select_bank0

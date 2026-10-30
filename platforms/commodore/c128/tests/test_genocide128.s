@@ -161,15 +161,6 @@ walkable_table:
     .byte 1, 0, 0, 0, 0, 0, 0, 1
     .byte 0, 1, 1, 1, 0, 0, 1, 0
 
-.macro PatchJump(target, replacement) {
-    lda #$4c
-    sta target
-    lda #<replacement
-    sta target + 1
-    lda #>replacement
-    sta target + 2
-}
-
 screen_clear:
 .label hal_screen_clear = screen_clear
 ui_help_clear_all:
@@ -252,6 +243,7 @@ calc_spell_failure:
 
 tramp_spell_execute_selected:
     rts
+    :PatchRoom(tramp_spell_execute_selected)
 
 tier_restore_after_overlay:
     rts
@@ -304,7 +296,7 @@ test_rng_range:
     rts
 
 monster_find_at:
-    stx zp_temp0
+    sta zp_temp0                // A = x, Y = y, as core/monster.s monster_find_at
     sty zp_temp1
     ldx #0
 !mfa_loop:
@@ -457,7 +449,7 @@ fill_map_rock_test:
     ldy #0
     lda #TILE_WALL_H
 !col_loop:
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
     iny
     cpy #MAP_COLS
     bcc !col_loop-
@@ -486,7 +478,7 @@ test_setup_dark_room:
     lda map_row_hi,x
     sta zp_ptr0_hi
     lda zp_temp0
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
     iny
     cpy #30
     bcc !room_cols-
@@ -508,12 +500,16 @@ test_setup_dark_room:
     rts
 
 test_clear_monsters:
-    ldx #MAX_MONSTERS * MONSTER_ENTRY_SIZE - 1
+    // The table is 384 bytes: "ldx #MAX_MONSTERS * MONSTER_ENTRY_SIZE - 1"
+    // assembled as ldx #$7f and cleared 128 of them. Two passes cover it.
+    ldx #0
     lda #0
 !clear_loop:
     sta test_mon_table,x
-    dex
-    bpl !clear_loop-
+    sta test_mon_table + MAX_MONSTERS * MONSTER_ENTRY_SIZE - $100,x
+    inx
+    bne !clear_loop-
+.assert "test_clear_monsters covers the table in two 256-byte passes", MAX_MONSTERS * MONSTER_ENTRY_SIZE >= $100 && MAX_MONSTERS * MONSTER_ENTRY_SIZE <= $200, true
     ldx #0
 !mark_empty:
     cpx #MAX_MONSTERS
@@ -653,6 +649,7 @@ test_pass:
     jmp !pass_loop-
 
 test_start:
+    jsr init_common_mmu_helpers   // MapRead/MapWrite go through common RAM ($0C00)
     sei
     cld
     ldx #$ff

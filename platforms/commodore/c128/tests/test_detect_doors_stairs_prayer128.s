@@ -66,6 +66,7 @@ itok_detect_monsters:
 #import "../../../../core/spell_effects.s"
 #import "../../../../core/player_magic.s"
 #import "../../../../core/player_magic_feedback.s"
+#import "../../../../core/player_magic_find_stairs.s"
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_start)
@@ -99,19 +100,11 @@ test_spell_exec_calls: .byte 0
 test_last_spell_idx: .byte $ff
 test_progress: .byte 0
 vis_room_revealed: .byte 0
+pmx_work_y: .byte 0          // execute-overlay scratch for eff_find_stairs
 
 walkable_table:
     .byte 1, 0, 0, 0, 0, 0, 0, 1
     .byte 0, 1, 1, 1, 0, 0, 1, 0
-
-.macro PatchJump(target, replacement) {
-    lda #$4c
-    sta target
-    lda #<replacement
-    sta target + 1
-    lda #>replacement
-    sta target + 2
-}
 
 screen_clear:
 .label hal_screen_clear = screen_clear
@@ -163,9 +156,11 @@ screen_flash_at:
 calc_spell_failure:
     clc
     rts
+    :PatchRoom(calc_spell_failure)
 
 tramp_spell_execute_selected:
     rts
+    :PatchRoom(tramp_spell_execute_selected)
 
 get_direction_target:
     lda zp_player_x
@@ -187,7 +182,7 @@ test_tramp_spell_execute_selected:
     lda pm_spell_idx
     sta test_last_spell_idx
     jsr eff_find_doors
-    jsr test_eff_find_stairs
+    jsr eff_find_stairs
     rts
 
 test_pm_select_book:
@@ -230,7 +225,7 @@ test_write_tile:
     sta zp_ptr0_hi
     ldy zp_ptr1_hi
     pla
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
     rts
 
 test_read_tile:
@@ -241,43 +236,7 @@ test_read_tile:
     lda map_row_hi,x
     sta zp_ptr0_hi
     ldy zp_ptr1_hi
-    lda (zp_ptr0),y
-    rts
-
-test_eff_find_stairs:
-    // Production eff_find_stairs marks every stair tile, tracked or not
-    // (DGN-016).
-    lda #1
-    sta zp_ptr1
-!row:
-    ldx zp_ptr1
-    cpx #MAP_ROWS - 1
-    bcs !done+
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
-    ldy #1
-!col:
     :MapRead_ptr0_y()
-    and #TILE_TYPE_MASK
-    cmp #TILE_STAIRS_DN
-    beq !mark+
-    cmp #TILE_STAIRS_UP
-    bne !next+
-!mark:
-    :MapRead_ptr0_y()
-    ora #FLAG_VISITED
-    :MapWrite_ptr0_y()
-!next:
-    iny
-    cpy #MAP_COLS - 1
-    bcc !col-
-    inc zp_ptr1
-    bne !row-
-!done:
-    lda #1
-    sta vis_room_revealed
     rts
 
 fill_map_rock_test:
@@ -292,7 +251,7 @@ fill_map_rock_test:
     ldy #0
     lda #TILE_WALL_H
 !col_loop:
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
     iny
     cpy #MAP_COLS
     bcc !col_loop-
@@ -395,6 +354,7 @@ test_pass:
     jmp test_pass_loop
 
 test_start:
+    jsr init_common_mmu_helpers   // MapRead/MapWrite go through common RAM ($0C00)
     sei
     cld
     ldx #$ff

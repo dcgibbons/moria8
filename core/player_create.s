@@ -699,13 +699,13 @@ create_init_character:
 
     // Starting gold — umoria formula based on social class, stats, gender
 #if C128_REAL_BOOT_DIAG
-    ldx #$75
     jsr c128_stack_guard_begin
+    .byte $75
 #endif
     jsr create_calc_gold
 #if C128_REAL_BOOT_DIAG
-    ldx #$76
     jsr c128_stack_guard_check
+    .byte $76
 #endif
 
     // Experience factor = race_xp% + class_xp% (range 100-165)
@@ -748,13 +748,13 @@ create_init_character:
 
     // Sync to ZP
 #if C128_REAL_BOOT_DIAG
-    ldx #$77
     jsr c128_stack_guard_begin
+    .byte $77
 #endif
     jsr player_sync_to_zp
 #if C128_REAL_BOOT_DIAG
-    ldx #$78
     jsr c128_stack_guard_check
+    .byte $78
 #endif
 
     // player_init already zeroes the widened spell-state and sets spell order to 99.
