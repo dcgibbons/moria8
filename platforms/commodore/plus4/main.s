@@ -1822,10 +1822,11 @@ test_expect_col: .byte 0
 
 .encoding "screencode_mixed"
 test_inventory_title_str: .text "Inventory" ; .byte 0
-test_beginner_book_str:   .text "Beginner's Spellbook" ; .byte 0
+test_beginner_book_str:   .text "Spellbook Beginners-Magick" ; .byte 0
 test_mage_book_title_str: .text "Mage Book" ; .byte 0
 test_magic_missile_str:   .text "Magic Missile" ; .byte 0
-test_phase_door_str:      .text "Phase Door" ; .byte 0
+// The cast list shows learned spells only (as Umoria); a new mage knows one.
+test_cast_one_spell_str:  .text "Cast which? (a-a, esc)" ; .byte 0
 
 #if C64_TEST_SCRIPTED_BOOK_OVERLAY
 test_assert_book_overlay:
@@ -1872,12 +1873,12 @@ test_assert_spell_list_overlay:
     jsr test_expect_screen_string
     bcc !list_fail+
 
-    lda #<test_phase_door_str
+    lda #<test_cast_one_spell_str
     sta zp_ptr0
-    lda #>test_phase_door_str
+    lda #>test_cast_one_spell_str
     sta zp_ptr0_hi
-    lda #4
-    ldx #4
+    lda #24
+    ldx #5
     jsr test_expect_screen_string
     bcc !list_fail+
 
@@ -1895,8 +1896,6 @@ c64_test_spell_fail_level_sym:
 c64_test_spell_fail_known_sym:
     brk
 c64_test_spell_fail_validate_sym:
-    brk
-c64_test_spell_fail_roll_sym:
     brk
 c64_test_spell_fail_cancel_sym:
     brk
@@ -1930,8 +1929,6 @@ c64_test_spell_fail_known_sym:
     brk
 c64_test_spell_fail_validate_sym:
     brk
-c64_test_spell_fail_roll_sym:
-    brk
 c64_test_spell_fail_cancel_sym:
     brk
 c64_test_spell_fail_input_sym:
@@ -1947,8 +1944,6 @@ c64_test_spell_fail_level_sym:
 c64_test_spell_fail_known_sym:
     brk
 c64_test_spell_fail_validate_sym:
-    brk
-c64_test_spell_fail_roll_sym:
     brk
 c64_test_spell_fail_cancel_sym:
     brk
@@ -2204,24 +2199,24 @@ plus4_require_program_media:
 
 save_append_disk_detail_plus4:
     lda #$20
-!no_dos:
     jsr screen_put_char
     lda disk_error_dos0         // 0 or $ff: no DOS digits to show
     beq !no_dos+
     cmp #$ff                    // the drive never answered
     bne !dos+
+!no_dos:
     lda disk_error_phase
     ora disk_error_readst
-    cmp #$ff                    // only the first digit arrived
-    beq !no_dos1+
     bne !status+
-!no_dos1:
-    rts
     rts
 !dos:                           // A = disk_error_dos0
     jsr screen_put_char
     lda disk_error_dos1
+    cmp #$ff                    // only the first digit arrived
+    beq !no_dos1+
     jmp screen_put_char
+!no_dos1:
+    rts
 !status:
     lda #$24                    // $
     jsr screen_put_char
