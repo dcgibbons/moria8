@@ -143,6 +143,7 @@ $(BEEB_SSD): build ../../data/LICENSE ../../data/SOURCE-OFFER ../../tools/make_p
 	  "TITLE=$(OUTBEEB)/bin/TITLE:FFFF8000:FFFF8000" \
 	  "LICENSE=$(OUTBEEB)/bin/LICENSE:FFFF0000:FFFFFFFF" \
 	  "SRCOFFR=$(OUTBEEB)/bin/SRCOFFR:FFFF0000:FFFFFFFF"
+	python3 check_memory_contract.py --disk "$(BEEB_SSD)" || { rm -f "$(BEEB_SSD)"; exit 1; }
 
 test-memory-contract-selftest:
 	python3 ../../tools/make_ssd.py --selftest

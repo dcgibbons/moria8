@@ -13,6 +13,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_BUILD_DIR = ROOT / "build" / "bbcmaster"
+STORAGE_SRC = Path(__file__).resolve().parent / "hal" / "storage.s"
+OVERLAY_STORAGE_SRC = Path(__file__).resolve().parent / "overlay_storage.s"
 
 MOS_WORKSPACE_BASE = 0x0800
 MOS_WORKSPACE_END = 0x0DFF
@@ -273,6 +275,57 @@ def validate_build(build_dir: Path) -> list[str]:
     return errors
 
 
+def loader_disk_names(storage: Path = STORAGE_SRC,
+                      overlay_storage: Path = OVERLAY_STORAGE_SRC) -> dict[str, str]:
+    """What -> DFS name for every file the game loads from the disk: each
+    monster tier, and each overlay the boot pack does not preload into
+    Sideways RAM (beeb_ovl_cache_bank $00). Names come from the .byte data of
+    the loader's own table in hal/storage.s."""
+    names = {}
+    for match in re.finditer(r"^hal_storage_(tier_\d|overlay_\w+?)_name:\s*\n\s*\.byte\s+([^/\n]+)",
+                             storage.read_text(), re.M):
+        names[match.group(1)] = "".join(chr(int(b, 16)) for b in re.findall(r"\$([0-9a-fA-F]{2})", match.group(2)))
+    text = overlay_storage.read_text()
+    order = re.search(r"// Order: (.+?)\n// =+", text, re.S)
+    if order is None:
+        raise ValueError("overlay_storage.s: the '// Order:' comment listing the overlay classes is missing")
+    order = order.group(1)
+    classes = [c.lower() for c in re.findall(r"([A-Z]+)\(\d+\)", order)]
+    banks = re.search(r"^beeb_ovl_cache_bank:\s*\n((?:\s*\.byte[^\n]*\n)+)", text, re.M)
+    if banks is None:
+        raise ValueError("overlay_storage.s: the beeb_ovl_cache_bank .byte table is missing")
+    banks = banks.group(1)
+    cached = [b.strip() != "$00" for b in re.sub(r"\s*\.byte\s*", ",", banks).strip(",").split(",")]
+    if len(classes) != len(cached):
+        raise ValueError(f"overlay_storage.s: {len(classes)} overlay classes, {len(cached)} cache entries")
+    for cls, is_cached in zip(classes, cached):
+        key = next((k for k in names if k.startswith(f"overlay_{cls}")), None)
+        if key is None:
+            raise ValueError(f"hal/storage.s has no filename for overlay {cls.upper()}")
+        if is_cached:
+            del names[key]
+    if sum(k.startswith("tier_") for k in names) != 4:
+        raise ValueError("hal/storage.s: expected the four monster tier filenames")
+    return names
+
+
+def ssd_catalog(ssd: bytes) -> set[str]:
+    """Names in the default ($) directory of an Acorn DFS single-sided
+    image's catalogue, the one the loader reads."""
+    return {ssd[8 + i * 8:15 + i * 8].decode("latin-1").rstrip()
+            for i in range(ssd[0x105] // 8)
+            if ssd[15 + i * 8] & 0x7F == ord("$")}   # bit 7: locked
+
+
+def validate_disk(ssd: bytes, wanted: dict[str, str]) -> list[str]:
+    """Every file the loader reads from DFS by name (loader_disk_names: the
+    monster tiers and the overlays the boot pack does not preload) is on the
+    disk, in the default directory."""
+    catalog = ssd_catalog(ssd)
+    return [f"{what} loads {name} from the disk, which does not have it"
+            for what, name in sorted(wanted.items()) if name not in catalog]
+
+
 def write_synthetic_prg(path: Path, start: int, length: int, prefix: bytes = b"") -> None:
     body = prefix + (b"\xea" * max(0, length - len(prefix)))
     path.write_bytes(struct.pack("<H", start) + body)
@@ -342,6 +395,29 @@ def run_selftest() -> int:
             print("FAIL: failed to catch beeb.huffdata > $9000", file=sys.stderr)
             return 1
 
+        # The disk: every file the loader takes from DFS is on it.
+        sys.path.insert(0, str(ROOT / "tools"))
+        from make_ssd import DfsFileSpec, build_ssd_image
+        wanted = loader_disk_names()
+        if wanted.get("tier_1") != "MONDB1" or "overlay_town" in wanted:
+            print(f"FAIL: loader names misread: {wanted}", file=sys.stderr)
+            return 1
+        def spec(n: str, d: str = "$", lk: bool = False) -> DfsFileSpec:
+            return DfsFileSpec(name=n, directory=d, locked=lk, load_addr=0, exec_addr=0, data=b"x")
+
+        full = build_ssd_image([spec(n, lk=(n == "MONDB1")) for n in wanted.values()])
+        if validate_disk(full, wanted):
+            print("FAIL: a disk with every loaded file rejected", file=sys.stderr)
+            return 1
+        short = build_ssd_image([spec(n) for n in wanted.values() if n != "MONDB1"])
+        if not validate_disk(short, wanted):
+            print("FAIL: failed to catch MONDB1 missing from the disk", file=sys.stderr)
+            return 1
+        elsewhere = build_ssd_image([spec(n, "A" if n == "MONDB1" else "$") for n in wanted.values()])
+        if not validate_disk(elsewhere, wanted):
+            print("FAIL: failed to catch MONDB1 outside the default directory", file=sys.stderr)
+            return 1
+
     print("BBC Master 128 memory contract self-test: PASS")
     return 0
 
@@ -350,10 +426,18 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--selftest", action="store_true", help="Run synthetic pass/fail self-tests.")
     parser.add_argument("--build-dir", type=Path, default=DEFAULT_BUILD_DIR)
+    parser.add_argument("--disk", type=Path, help="check this .ssd holds every file the game loads from DFS")
     args = parser.parse_args()
 
     if args.selftest:
         return run_selftest()
+
+    if args.disk:
+        errors = validate_disk(args.disk.read_bytes(), loader_disk_names())
+        for err in errors:
+            print(f"  {err}", file=sys.stderr)
+        print(f"BBC Master 128 disk check {'FAILED' if errors else 'passed'}: {args.disk.name}")
+        return 1 if errors else 0
 
     errors = validate_build(args.build_dir)
     if errors:

@@ -16,6 +16,7 @@
 // Sideways RAM Cache Lookup Tables (index = overlay ID - 1: 0..11)
 // Order: START(0), TOWN(1), DEATH(2), GEN(3), HELP(4), UI(5),
 //        ITEMS(6), SPELL(7), MODAL(8), CHEST(9), STORAGE(10), TITLE(11)
+// (check_memory_contract.py --disk reads this Order list; keep its form.)
 // ============================================================
 beeb_ovl_cache_bank:
     .byte $00, BEEB_SWR_BANK_TOWN, $00, BEEB_SWR_BANK_GEN, $00, BEEB_SWR_BANK_UI
