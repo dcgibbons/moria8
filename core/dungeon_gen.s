@@ -1605,6 +1605,7 @@ mnw_mark_if_lit_wall:
     rts
 
 materialize_staged_tunnel:
+    inc jdg_open_mode           // corridor checks below use open mode
     ldx dg_scan_row_start
 !mst_row:
     jsr dg_set_row_ptr
@@ -1651,10 +1652,16 @@ materialize_staged_tunnel:
     cmp #TILE_WALL_V
     bne !mst_candidate_floor+
     jsr jdg_opposing_vertical
+    bcc !mst_candidate_floor+
+    jsr jdg_corridor_left_right
     jmp !mst_checked_wall+
 !mst_check_hwall:
     jsr jdg_opposing_horizontal
+    bcc !mst_candidate_floor+
+    jsr jdg_corridor_up_down
 !mst_checked_wall:
+    // A tunnel that steps into a room wall and turns back leaves rock on
+    // the far side; that penetration becomes floor, not a door into rock.
     bcc !mst_candidate_floor+
     jsr random_door_type
     ldx dg_room_y
@@ -1678,6 +1685,7 @@ materialize_staged_tunnel:
     inx
     jmp !mst_row-
 !mst_done:
+    dec jdg_open_mode
     rts
 
 // ============================================================
@@ -1926,37 +1934,23 @@ place_junction_doors:
     lda #0
     sta dg_door_flag
 
-    lda dg_cx1
-    sec
-    sbc #1
-    sta dg_room_x
-    lda dg_cy1
-    sta dg_room_y
-    jsr try_junction_door
-
+    // Left, right, up, down: the order of try_junction_door's RNG draws.
+    sta pjd_dir                 // A = 0 from the dg_door_flag clear
+!pjd_neighbor:
+    ldx pjd_dir
     lda dg_cx1
     clc
-    adc #1
-    sta dg_room_x
-    lda dg_cy1
-    sta dg_room_y
-    jsr try_junction_door
-
-    lda dg_cx1
-    sta dg_room_x
-    lda dg_cy1
-    sec
-    sbc #1
-    sta dg_room_y
-    jsr try_junction_door
-
-    lda dg_cx1
+    adc pjd_dx,x
     sta dg_room_x
     lda dg_cy1
     clc
-    adc #1
+    adc pjd_dy,x
     sta dg_room_y
     jsr try_junction_door
+    inc pjd_dir
+    lda pjd_dir
+    cmp #4
+    bne !pjd_neighbor-
 
     ldx dg_cy1
     jsr dg_set_row_ptr
@@ -1973,6 +1967,10 @@ place_junction_doors:
     jmp !pjd_row-
 !pjd_done:
     rts
+
+pjd_dir: .byte 0
+pjd_dx:  .byte $ff, 1, 0, 0
+pjd_dy:  .byte 0, 0, $ff, 1
 
 try_junction_door:
     lda dg_door_flag
@@ -2060,18 +2058,43 @@ jdg_corridor_up_down:
     clc
     rts
 
+// In open mode (materialize_staged_tunnel's wall candidates) a cell is
+// open when it is tunnel, corridor, junction or lit room floor (type floor,
+// not the $00 blank cave), a door, or another staged wall candidate.
 jdg_cell_is_corridor:
+    jsr jdg_read_cell
+    bit jdg_open_mode
+    bmi !jcic_open+
+    cmp #TILE_FLOOR
+    beq !jcic_yes+
+!jcic_no:
+    clc
+    rts
+!jcic_open:
+    cpx #1
+    bcc !jcic_no-               // $00 blank cave is rock
+    and #TILE_TYPE_MASK
+    beq !jcic_yes+
+    cmp #TILE_DOOR_OPEN         // only doors are above walls this early
+    bcs !jcic_yes+
+    txa                         // wall type: open only as a staged candidate
+    and #FLAG_HAS_ITEM
+    beq !jcic_no-
+!jcic_yes:
+    sec
+    rts
+
+// Bit 7 selects open mode (inc/dec toggle $7f/$80 around materialize_staged_tunnel).
+jdg_open_mode: .byte $7f
+
+// X = row, Y = column; A = tile, flags from the tile.
+jdg_read_cell:
     lda map_row_lo,x
     sta zp_ptr1
     lda map_row_hi,x
     sta zp_ptr1_hi
     :MapRead_ptr1_y()
-    cmp #TILE_FLOOR
-    beq !jcic_yes+
-    clc
-    rts
-!jcic_yes:
-    sec
+    tax
     rts
 
 jdg_opposing_vertical:
@@ -2109,11 +2132,7 @@ jdg_opposing_horizontal:
     rts
 
 jdg_cell_is_wall:
-    lda map_row_lo,x
-    sta zp_ptr1
-    lda map_row_hi,x
-    sta zp_ptr1_hi
-    :MapRead_ptr1_y()
+    jsr jdg_read_cell
 jdg_is_wall:
 	    and #TILE_TYPE_MASK
 	    cmp #TILE_WALL_H
@@ -2413,18 +2432,8 @@ carve_streamer:
     sta dg_room_h
 
 !cs_step:
-    // Bounds check
-    lda dg_cx1
-    cmp #1
-    bcc !cs_oob+
-    cmp #MAP_COLS - 1
-    bcs !cs_oob+
-    lda dg_cy1
-    cmp #1
-    bcc !cs_oob+
-    cmp #MAP_ROWS - 1
+    jsr cs_out_of_bounds
     bcc !cs_in_bounds+
-!cs_oob:
     jmp !cs_end+
 !cs_in_bounds:
 
@@ -2452,15 +2461,7 @@ carve_streamer:
     adc dg_cy2
     sta dg_cy1
 
-    lda dg_cx1
-    cmp #1
-    bcc !cs_no_write+
-    cmp #MAP_COLS - 1
-    bcs !cs_no_write+
-    lda dg_cy1
-    cmp #1
-    bcc !cs_no_write+
-    cmp #MAP_ROWS - 1
+    jsr cs_out_of_bounds
     bcs !cs_no_write+
 
     // Write mineral tile — only overwrite plain granite. Upstream checks
@@ -2514,6 +2515,23 @@ carve_streamer:
     jmp !cs_step-
 
 !cs_end:
+    rts
+
+// Carry set when (dg_cx1, dg_cy1) is outside 1..MAP_COLS-2 x 1..MAP_ROWS-2.
+cs_out_of_bounds:
+    lda dg_cx1
+    cmp #1
+    bcc !csob_out+
+    cmp #MAP_COLS - 1
+    bcs !csob_done+
+    lda dg_cy1
+    cmp #1
+    bcc !csob_out+
+    cmp #MAP_ROWS - 1
+!csob_done:
+    rts
+!csob_out:
+    sec
     rts
 
 cs_dx_table:

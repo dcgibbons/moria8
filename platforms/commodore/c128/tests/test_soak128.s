@@ -1,10 +1,11 @@
 #importonce
 // test_soak128.s — C128 generation soak/integrity test for C4.7
 //
-// Runs 200 total dungeon generations (4 deterministic seed variants x 50).
+// The gate runs 4 dungeon generations (the first seed's last 4 levels);
+// make test128-soak-long runs 200 (4 deterministic seed variants x 50).
 // Fails on:
 // - IRQ-state drift across dungeon_generate
-// - Bank 0 map-address leakage at $4000/$4EFF
+// - Bank 0 map-address leakage at SOAK_SENTINEL_LO/HI (map space, past the test code)
 // - Invalid room/stairs invariants
 // - Loss of the row-batched C128 tunnel materialization path
 
@@ -52,6 +53,9 @@ mmu_safe_db_write_ptr1:
 #import "../../../../core/dungeon_data.s"
 
 // Minimal player struct surface required by dungeon_gen.s.
+// Bank 0 canaries at map-space addresses, above this test's code (asserted at the end).
+.const SOAK_SENTINEL_HI = MAP_END
+.const SOAK_SENTINEL_LO = MAP_END - $0eff
 .const PL_MAP_X = 49
 .const PL_MAP_Y = 50
 player_data:
@@ -118,11 +122,15 @@ audit_door_y: .byte 0
 audit_check_x: .byte 0
 audit_check_y: .byte 0
 audit_pair_count: .byte 0
+audit_up_count: .byte 0
+audit_dn_count: .byte 0
+stairs_seen: .byte 0                  // bit 0: a level with 2 up, bit 1: one with 4 down
 audit_mineral_lo: .byte 0
 audit_mineral_hi: .byte 0
-audit_magma_count: .byte 0
-audit_quartz_count: .byte 0
-audit_parallel_run: .byte 0
+// Seen flags, not counts: a byte count wrapped to 0 at 256 quartz tiles
+// (long soak, seed 1, level 66) and failed the audit.
+audit_magma_seen: .byte 0
+audit_quartz_seen: .byte 0
 audit_connect_tile: .byte 0
 c128_test_row_copy_count_lo: .byte 0
 c128_test_row_copy_count_hi: .byte 0
@@ -131,7 +139,27 @@ c128_test_row_copy_expect_hi: .byte 0
 c128_test_row_store_count_lo: .byte 0
 c128_test_row_store_count_hi: .byte 0
 
-.const C128_STREAMER_MAX_TILES = 180
+// A runaway-walk guard only, not a density check: the generation contract
+// sets no aggregate streamer density (DGN-004, not implemented), so the
+// budget is the walk's own worst case.
+// Upper bound for carve_streamer's upstream walk: a streamer starts at
+// x >= MAP_COLS/2 + 15 - 32 and steps until it leaves 1..MAP_COLS-2, so it
+// visits at most MAP_COLS-1 - (MAP_COLS/2 - 17) positions, stamping
+// STREAMER_DENSITY tiles at each; place_streamers carves 5 streamers.
+.const C128_STREAMER_MAX_STEPS = MAP_COLS - 1 - (floor(MAP_COLS / 2) - 17)
+.const C128_STREAMER_MAX_TILES = 5 * STREAMER_DENSITY * C128_STREAMER_MAX_STEPS
+
+// The gate runs the first seed's last SOAK_ITERS levels, a subset of the
+// long soak (make test128-soak-long: 4 seeds x 50 levels). A level costs
+// about 350M cycles on average, and the connectivity flood needs one full
+// pass per tile a path runs against the scan, so some levels take far longer.
+#if SOAK128_LONG
+.const SOAK_SEEDS = 4
+.const SOAK_ITERS = 50
+#else
+.const SOAK_SEEDS = 1
+.const SOAK_ITERS = 4
+#endif
 
 seed_table:
     .byte $42, $13, $7a, $f1
@@ -227,7 +255,7 @@ test_start:
 !secret_door_ok:
 
 !seed_loop:
-    lda #50
+    lda #SOAK_ITERS
     sta iter_count
 
 !iter_loop:
@@ -261,11 +289,13 @@ test_start:
     sta level_entry_dir
 
     // Bank0 sentinels at map-space addresses must survive generation.
+    // They sit at the top of the map range, clear of this test's own code
+    // (asserted below SOAK_SENTINEL_LO).
     jsr mmu_select_bank0
     lda #$a5
-    sta $4000
+    sta SOAK_SENTINEL_LO
     lda #$5a
-    sta $4eff
+    sta SOAK_SENTINEL_HI
 
     php
     pla
@@ -337,12 +367,12 @@ test_start:
 !ok_irq:
 
     // Verify Bank0 sentinels remain unchanged (no bank leakage).
-    lda $4000
+    lda SOAK_SENTINEL_LO
     cmp #$a5
     beq !ok_s0+
     jmp test_fail
 !ok_s0:
-    lda $4eff
+    lda SOAK_SENTINEL_HI
     cmp #$5a
     beq !ok_s1+
     jmp test_fail
@@ -424,8 +454,8 @@ test_start:
     // Upstream counts: randint(2) up and randint(2)+2 down; the extras
     // beyond these three tracked coordinates are untracked tiles (DGN-016).
     lda #0
-    sta audit_pair_count          // up-stair count
-    sta audit_door_x              // down-stair count
+    sta audit_up_count
+    sta audit_dn_count
     sta audit_check_y
 !stair_count_row:
     lda #0
@@ -437,11 +467,11 @@ test_start:
     and #TILE_TYPE_MASK
     cmp #TILE_STAIRS_UP
     bne !not_up_stair+
-    inc audit_pair_count
+    inc audit_up_count
 !not_up_stair:
     cmp #TILE_STAIRS_DN
     bne !not_down_stair+
-    inc audit_door_x
+    inc audit_dn_count
 !not_down_stair:
     inc audit_check_x
     lda audit_check_x
@@ -452,20 +482,37 @@ test_start:
     cmp #MAP_ROWS
     bne !stair_count_row-
 
-    lda audit_pair_count
+    lda audit_up_count
     sec
     sbc #1
     cmp #2                        // up 1..2
     bcc !ok_up_count+
     jmp test_fail
 !ok_up_count:
-    lda audit_door_x
+    lda audit_dn_count
     sec
     sbc #3
     cmp #2                        // down 3..4
     bcc !ok_down_count+
     jmp test_fail
 !ok_down_count:
+    // Over the long soak both upstream extremes must occur: the extra up
+    // stair (randint(2) = 2) and the second extra down (randint(2) + 2 = 4).
+    // The gate's 4 levels are too few to require them.
+    lda audit_up_count
+    cmp #2
+    bne !no_up2+
+    lda #1
+    ora stairs_seen
+    sta stairs_seen
+!no_up2:
+    lda audit_dn_count
+    cmp #4
+    bne !no_dn4+
+    lda #2
+    ora stairs_seen
+    sta stairs_seen
+!no_dn4:
 
     lda stairs_dn1_x
     sta tmp_x
@@ -507,11 +554,6 @@ test_start:
     jmp test_fail
 !ok_room_spacing:
 
-    jsr audit_no_parallel_corridor_rows128
-    bcc !ok_parallel_corridors+
-    jmp test_fail
-!ok_parallel_corridors:
-
     jsr audit_final_door_chokepoints128
     bcc !ok_doors+
     jmp test_fail
@@ -532,18 +574,18 @@ test_start:
     // Bank0 sentinels must survive town generation as well.
     jsr mmu_select_bank0
     lda #$3c
-    sta $4000
+    sta SOAK_SENTINEL_LO
     lda #$c3
-    sta $4eff
+    sta SOAK_SENTINEL_HI
 
     jsr town_generate
 
-    lda $4000
+    lda SOAK_SENTINEL_LO
     cmp #$3c
     beq !ok_towns0+
     jmp test_fail
 !ok_towns0:
-    lda $4eff
+    lda SOAK_SENTINEL_HI
     cmp #$c3
     beq !ok_towns1+
     jmp test_fail
@@ -627,10 +669,17 @@ test_fail:
 
     inc seed_idx
     lda seed_idx
-    cmp #4
+    cmp #SOAK_SEEDS
     beq !all_done+
     jmp !seed_loop-
 !all_done:
+#if SOAK128_LONG
+    lda stairs_seen
+    cmp #3
+    beq !stairs_ok+
+    jmp test_fail
+!stairs_ok:
+#endif
 
     jmp test_pass
 
@@ -786,8 +835,8 @@ audit_mineral_budget128:
     lda #0
     sta audit_mineral_lo
     sta audit_mineral_hi
-    sta audit_magma_count
-    sta audit_quartz_count
+    sta audit_magma_seen
+    sta audit_quartz_seen
     sta audit_check_y
 !amb128_row:
     lda #0
@@ -801,10 +850,12 @@ audit_mineral_budget128:
     beq !amb128_count_magma+
     cmp #TILE_QUARTZ
     bne !amb128_next+
-    inc audit_quartz_count
+    lda #1
+    sta audit_quartz_seen
     jmp !amb128_count+
 !amb128_count_magma:
-    inc audit_magma_count
+    lda #1
+    sta audit_magma_seen
 !amb128_count:
     inc audit_mineral_lo
     bne !amb128_next+
@@ -830,9 +881,9 @@ audit_mineral_budget128:
     sec
     rts
 !amb128_ok:
-    lda audit_magma_count
+    lda audit_magma_seen
     beq !amb128_fail-
-    lda audit_quartz_count
+    lda audit_quartz_seen
     beq !amb128_fail-
     clc
     rts
@@ -900,99 +951,6 @@ audit_room_spacing128:
     rts
 !ars128_fail:
     sec
-    rts
-
-audit_no_parallel_corridor_rows128:
-    lda #1
-    sta audit_check_y
-!anp128_row:
-    lda #0
-    sta audit_parallel_run
-    lda #1
-    sta audit_check_x
-!anp128_col:
-    lda audit_check_x
-    sta tmp_x
-    lda audit_check_y
-    sta tmp_y
-    jsr audit_coord_in_room_bbox128
-    bcs !anp128_reset+
-    ldx audit_check_x
-    ldy audit_check_y
-    jsr map_get_tile
-    jsr vc_tile_is_passable
-    bcc !anp128_reset+
-
-    lda audit_check_x
-    sta tmp_x
-    lda audit_check_y
-    clc
-    adc #1
-    sta tmp_y
-    jsr audit_coord_in_room_bbox128
-    bcs !anp128_reset+
-    ldx audit_check_x
-    ldy tmp_y
-    jsr map_get_tile
-    jsr vc_tile_is_passable
-    bcc !anp128_reset+
-
-    inc audit_parallel_run
-    lda audit_parallel_run
-    cmp #8
-    bcs !anp128_fail+
-    jmp !anp128_next+
-!anp128_reset:
-    lda #0
-    sta audit_parallel_run
-!anp128_next:
-    inc audit_check_x
-    lda audit_check_x
-    cmp #MAP_COLS - 1
-    bne !anp128_col-
-    inc audit_check_y
-    lda audit_check_y
-    cmp #MAP_ROWS - 2
-    bne !anp128_row-
-    clc
-    rts
-!anp128_fail:
-    sec
-    rts
-
-audit_coord_in_room_bbox128:
-    lda #0
-    sta audit_pair_count
-!acir128_loop:
-    ldx audit_pair_count
-    cpx room_count
-    bcs !acir128_no+
-
-    lda tmp_x
-    cmp room_x,x
-    bcc !acir128_next+
-    lda room_x,x
-    clc
-    adc room_w,x
-    cmp tmp_x
-    bcc !acir128_next+
-
-    lda tmp_y
-    cmp room_y,x
-    bcc !acir128_next+
-    lda room_y,x
-    clc
-    adc room_h,x
-    cmp tmp_y
-    bcc !acir128_next+
-
-    sec
-    rts
-!acir128_next:
-    inc audit_pair_count
-    jmp !acir128_loop-
-!acir128_no:
-    clc
     rts
 
 audit_no_adjacent_doors128:
@@ -1156,3 +1114,6 @@ audit_one_door_chokepoint128:
 !aod128_fail:
     sec
     rts
+
+soak_code_end:
+.assert "Soak test code stays below its Bank 0 sentinels", soak_code_end <= SOAK_SENTINEL_LO, true

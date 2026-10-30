@@ -67,7 +67,8 @@ If the quote does not name the action, stop and ask.
    not try a sandboxed run first. See Memory And Verification Details for the
    full escalation list. Exception: AI playtest *sessions* and measurement
    runs (`make playtest-session`, `make playtest-qualify`, `make
-   playtest-regress`, `make playtest-m0-report`) are long-running operational
+   playtest-regress`, `make playtest-m0-report`) and the opt-in full C128
+   generation soak (`make test128-soak-long`) are long-running operational
    jobs, not runtime verification. They have no overall time limit and run until their goal is
    reached. Every emulator command and resume inside a session has a
    60-second response timeout, after which the emulator process is killed and
@@ -193,7 +194,7 @@ VICE/MAME/`x16emu` escalation list (these launch an emulator and need
 unsandboxed localhost access): commands that invoke `x64sc`, `x128`, `xplus4`,
 or `x16emu`; `make test64`; `make testplus4`; `make testplus4-runtime`;
 `make testapple2-runtime`; `make test128-fast`; `make test128-fast-smoke`;
-`make test128`; `make testcx16`; `make testcx16-runtime`;
+`make test128`; `make test128-soak-long`; `make testcx16`; `make testcx16-runtime`;
 `make testatari8-runtime`; `make testatari8-fast-smoke`;
 `make testbbcmaster-runtime`; `make testbbcmaster-fast-smoke`;
 `make playtest-smoke`; `make playtest-session`; `make playtest-repro`;
