@@ -33,6 +33,7 @@ def build_vice_command(args: argparse.Namespace) -> list[str]:
         vice_config(args.vice),
         "-default",
         "+saveres",
+        "+autostart-delay-random",
         "-console",
         "-nativemonitor",
         "-warp",
@@ -96,6 +97,8 @@ def build_vice_command(args: argparse.Namespace) -> list[str]:
     ])
     if args.limitcycles > 0:
         command.extend(["-limitcycles", str(args.limitcycles)])
+    if args.exit_screenshot:
+        command.extend(["-exitscreenshot", str(args.exit_screenshot)])
     if args.native_start_moncommands:
         command.extend([
             "-moncommands",
@@ -292,6 +295,20 @@ def retryable_harness_failure(result: MonitorTestResult) -> bool:
 def run_vice(args: argparse.Namespace, pass_addr: str, fail_addr: str | None, dump_ranges: list[tuple[str, str]]) -> tuple[MonitorTestResult, list[str]]:
     process: subprocess.Popen[bytes] | None = None
     connector = VICEConnector(host=args.host, port=args.port, timeout=args.socket_timeout)
+    if args.overlay_cond_map:
+        # Overlays share one address window, so a bare breakpoint also stops in
+        # another overlay's code at the same address: condition it on the
+        # overlay the symbol belongs to.
+        plain_break_at = connector.break_at
+
+        def break_at(addr, **kwargs):
+            ovl = args.overlay_cond_map.get(normalize_addr(addr))
+            if ovl is None:
+                return plain_break_at(addr, **kwargs)
+            return connector.send_command(
+                f"break ${normalize_addr(addr)} if @cpu:${args.current_overlay_addr} == ${ovl:02X}", **kwargs)
+
+        connector.break_at = break_at
     dumps: list[str] = []
     native_tmp_dir: tempfile.TemporaryDirectory[str] | None = None
     try:
@@ -303,6 +320,8 @@ def run_vice(args: argparse.Namespace, pass_addr: str, fail_addr: str | None, du
         else:
             args.native_start_moncommands = None
             args.native_start_log = None
+        if args.exit_screenshot:
+            args.exit_screenshot.unlink(missing_ok=True)   # never name a stale screen
         process = subprocess.Popen(
             build_vice_command(args),
             stdout=subprocess.DEVNULL,
@@ -576,6 +595,8 @@ def main() -> int:
     parser.add_argument("--native-start", action="store_true")
     parser.add_argument("--resume-symbol")
     parser.add_argument("--limitcycles", type=int, default=0)
+    parser.add_argument("--exit-screenshot", type=Path,
+                        help="PNG of the screen when VICE exits; named on failure (last attempt)")
     parser.add_argument("--drive8-type", default="1541")
     parser.add_argument("--autostart-only-drive8", action="store_true")
     parser.add_argument("--vice-extra-arg", action="append", default=[],
@@ -588,6 +609,8 @@ def main() -> int:
     parser.add_argument("--reset8-after-attach", action="store_true")
     parser.add_argument("--attach8-at-start-reset8-after-attach", action="store_true")
     parser.add_argument("--swap-symbol")
+    parser.add_argument("--overlay-cond", action="append", default=[], metavar="SYMBOL=ID",
+                        help="stop on SYMBOL only while current_overlay == ID")
     parser.add_argument("--swap-attach8-d64", type=Path)
     parser.add_argument("--swap-reset8-after-attach", action="store_true")
     parser.add_argument("--swap-attach-after-hits", type=int, default=1)
@@ -676,6 +699,20 @@ def main() -> int:
             print(f"FAIL: missing symbol {symbol} in {args.main_vs}")
             return 2
         args.expect_bytes.append((symbol, int(expected_text, 0)))
+    args.overlay_cond_map = {}
+    args.current_overlay_addr = None
+    for value in args.overlay_cond:
+        symbol, _, ovl = value.partition("=")
+        if symbol not in symbols or not ovl:
+            print(f"FAIL: invalid --overlay-cond {value!r} (SYMBOL=ID, symbol in {args.main_vs})")
+            return 2
+        args.overlay_cond_map[normalize_addr(symbols[symbol])] = int(ovl, 0)
+    if args.overlay_cond_map:
+        args.current_overlay_addr = symbols.get(".current_overlay")
+        if not args.current_overlay_addr:
+            print(f"FAIL: --overlay-cond needs .current_overlay in {args.main_vs}")
+            return 2
+        args.current_overlay_addr = normalize_addr(args.current_overlay_addr)
     args.swap_addr = None
     if args.swap_symbol:
         args.swap_addr = symbols.get(args.swap_symbol)
@@ -806,6 +843,8 @@ def main() -> int:
         return 0
 
     print(f"FAIL: {args.name} ({result.reason})")
+    if args.exit_screenshot and args.exit_screenshot.is_file():
+        print(f"Screen: {args.exit_screenshot}")
     for dump in dumps:
         print(dump.strip())
     if result.last_status:

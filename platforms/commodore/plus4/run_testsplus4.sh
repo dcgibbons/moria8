@@ -9,7 +9,8 @@ java() {
     if [ "$1" = "-jar" ]; then
         local jar_path="$2"
         shift 2
-        command java -jar "$jar_path" -libdir "$REPO_ROOT/core" -libdir "$REPO_ROOT/platforms/commodore/common" -libdir "$REPO_ROOT/platforms/commodore" -afo "$@"
+        # The product builds' wrapper: KickAssembler exits 0 on a failed .assert.
+        "$REPO_ROOT/tools/kickass_java.sh" -jar "$jar_path" -libdir "$REPO_ROOT/core" -libdir "$REPO_ROOT/platforms/commodore/common" -libdir "$REPO_ROOT/platforms/commodore" -afo "$@"
     else
         command java "$@"
     fi
@@ -121,7 +122,7 @@ root = Path(sys.argv[1])
 bad = []
 
 def check_tokens(label: str, values: list[str]) -> None:
-    missing = [flag for flag in ("-config", "-default", "+saveres") if flag not in values]
+    missing = [flag for flag in ("-config", "-default", "+saveres", "+autostart-delay-random") if flag not in values]
     if "-config" in values:
         config_index = values.index("-config")
         if config_index + 1 >= len(values) or values[config_index + 1] != "vice_config()":
