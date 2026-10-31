@@ -258,6 +258,7 @@ hal_platform_init_early:
     stz CX16_ROM_BANK_REG
     stz CX16_RAM_BANK_REG
     jsr screen_init
+    jsr cx16_input_install_key_events
     clc
     rts
 

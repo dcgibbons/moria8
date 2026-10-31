@@ -18,7 +18,7 @@ VRAM `$1B000`). Switching the active RAM bank via ZP `$00` affects **only**
 | `$0002-$008F` | 142 B | Shared Core ZP (`core/zeropage.s`) | `$02-$7F` is application ZP; `$80-$8F` is saved/restored around KERNAL file I/O (`save_zp`/`restore_zp`) |
 | `$0090-$00FF` | 112 B | CX16 KERNAL ZP | Reserved for KERNAL routines |
 | `$0100-$01FF` | 256 B | Hardware Stack | Always unbanked |
-| `$0200-$03FF` | 512 B | KERNAL Vectors & System Scratch | Reserved for CX16 KERNAL |
+| `$0200-$03FF` | 512 B | KERNAL Vectors & System Scratch | Reserved for CX16 KERNAL; boot chains the `keyhdl` vector (`$032E`) to `cx16_key_event` (`platforms/cx16/input.s`), which tracks held keys for `input_wait_release` |
 | `$0400-$04FF` | 256 B | `FLOOR_ITEM_BASE` | Active level floor-item table |
 | `$0500-$05FF` | 256 B | `CREATURE_BASE` | Runtime creature/RLE/high-score scratch |
 | `$0600-$06FF` | 256 B | `PLATFORM_HD_DECODE_BUF_BASE` / `DUNGEON_GEN_DOOR_SCAN_BASE` | Shared Huffman decode & dungeon-gen door-scan scratch |
