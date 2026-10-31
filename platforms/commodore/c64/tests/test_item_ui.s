@@ -284,7 +284,20 @@ test_pick_recharge_item:
     sec
     rts
 
+test_asset_load_fails:
+    sec
+    rts
+
 test_start:
+    // No disk here: a tier restore's load fails at once instead of a real
+    // KERNAL LOAD from the empty drive, which hung VICE's serial bus in some
+    // code layouts (as test_effects_magic does).
+    lda #$4c                    // jmp test_asset_load_fails
+    sta hal_asset_load_prg_header
+    lda #<test_asset_load_fails
+    sta hal_asset_load_prg_header + 1
+    lda #>test_asset_load_fails
+    sta hal_asset_load_prg_header + 2
     ldx #7
     lda #$ff
 !clr:
