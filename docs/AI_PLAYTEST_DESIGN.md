@@ -702,7 +702,8 @@ Each milestone has a measurable exit criterion and an explicit stop rule.
 | **M4 `clvl10`, `reach_dl8`** (`reach_dl10` until 2026-10-24) | The brain rounds in §15.3: stationary hazards, fear and fast attackers, then what the re-measured clusters show | Both goals work (§7.2, ≥16/20); all frozen suites still pass; no `unknown_prompt`. Started 2026-10-22 (`/goal`, §15). **Met 2026-10-24 (§15.6).** |
 | **M5 Every race and class at M4** | §16: the M4 goals for every Warrior race, then Paladin and Priest, then Rogue and Ranger, then Mage, then every other race of each class | `clvl10` and `reach_dl8` work (§7.2, ≥16/20; ≥10/20 for Mages and Priests, §16.1 amended 2026-10-27) for each of the 31 race/class combinations, each frozen as its own suite; all frozen suites still pass; no `unknown_prompt`. Planned 2026-10-24 (§16). **M5a (every Warrior race) met 2026-10-25 (§16.8); M5b-M5e met 2026-10-26; M5f met 2026-10-27 (§20.5): 62 of 62 goals frozen.** |
 | **M6 Every port plays** | §21: a backend per platform (Plus/4, C128, the MAME ports Apple IIe, Atari 8-bit and BBC Master 128, then the Commander X16); the C64's frozen goals on each; a platform coverage map on the dashboard | On each of the seven ports, `clvl5` and `reach_dl5` frozen for the Half-Troll Warrior and a Human Warrior, Priest, Mage and Rogue (Paladin and Ranger are not in the primary set); no `unknown_prompt`; the C64 suites still pass. The C128 backend (below) is part of it. Planned 2026-10-27 (§21). **M6 met 2026-10-28 (§21.10): 70 of 70 goals frozen.** |
-| **M7 More of the game, and balance** | §21.5: feature coverage (spells, items, creatures, traps, stores, recall), the first Word of Recall cycle and `reach_dl15`/`clvl15`, and a difficulty rating per race and class from 40-seed runs | Planned 2026-10-27, after M6; its exit criterion is set when it starts. |
+| **M7 The continuous queue and the deep game** | §23: a continuous playtest queue (every race/class combination × platform, run for good, not only in M7) with one-shot subqueues for side sessions; one game per seed to clvl 25 and DL 30 on the C64, milestones recorded on the way; spells, prayers and ranged weapons in use, with the VMS `x` weapon swap; the feature grid, difficulty ratings, the compendium generator; a strategy guide per combination | On the C64 (§23.2): each of the 31 combinations has a character that reached clvl 25 and DL 30 in the same game; every spell and prayer each casting class can learn by clvl 25 has been cast and its effect checked; a strategy for each combination is published on moria8.org; the queue runs unattended following `origin/main`, with difficulty ratings and the feature grid on the dashboard; all frozen suites still pass. Planned 2026-10-27; defined 2026-10-31 (§23). |
+| **M8 Kill the Balrog and win** | §23.9: the queue's default goal becomes winning the game; the Balrog work of §12.1, §12.3 and §12.4 | Each of the 31 combinations wins the game (kills the Balrog) at least once on the C64. The rest is set when M8 starts; intermediate milestones may be added if needed (maintainer, 2026-10-31). |
 | **C128 backend** (M5c until 2026-10-26; not scheduled) | Half-Troll Warrior on `x128`, no brain work: the backend (§12.7) for VDC screen text, banked reads, the C128 keyboard buffer and the 198×66 map | Every frozen C64 suite passes on the C128 at its bar. Moved out of M5 by the maintainer on 2026-10-26 (§16.2) |
 
 **Stop rules** (defaults, tunable by the maintainer):
@@ -2422,6 +2423,11 @@ with a coverage count per platform and the date each cell last ran.
 
 ### 21.5 M7 and after
 
+The maintainer defined M7 and M8 on 2026-10-31 (§23). The feature grid,
+the difficulty ratings and the compendium generator below stay in M7, the
+ratings now from the continuous queue rather than 40-seed batches; the
+deeper goals are clvl 25 and DL 30; the Balrog is M8.
+
 - **Feature coverage:** count what each run exercises (spells by name,
   items used and identified, creature kinds met and killed, trap types,
   stores, recall trips, depth), shown as a features grid with its gaps.
@@ -2710,3 +2716,183 @@ drive that needed a second try shows without ending the seed.
 **Not covered yet** (docs/BACKLOG.md): the MAME ports (Apple IIe, Atari
 8-bit, BBC Master) and the X16, which need their own media swapping and
 fault injection; the hall of fame on death or retirement.
+
+## 23. M7: the continuous queue and the deep game (defined 2026-10-31)
+
+### 23.1 Decision
+
+The maintainer defined M7 on 2026-10-31, after M6 and the disk work of §22.
+It has two halves:
+
+- **A continuous playtest queue** that keeps the game playtested as part of
+  continuous integration. It is built for good: it outlives M7, and its goal
+  changes with the milestone (M7's now, M8's next).
+- **The deep game:** one game per seed to character level 25 and dungeon
+  level 30, with spells, prayers and ranged weapons in use, and what is
+  learned written up as a strategy for each race and class.
+
+M8 is killing the Balrog and winning the game (§23.9). More milestones may
+go between them if needed; the maintainer does not expect any.
+
+M7 runs on the C64 only. The queue is built for every platform, but the
+other six join when the maintainer says they are ready for the smoke test
+and the continuous queue, with the M7 goal or a lighter one, decided then.
+
+### 23.2 Exit criterion
+
+M7 is met when all of these hold, on the C64:
+
+1. **The deep goal, every combination.** Each of the 31 race/class
+   combinations (§12.6) has at least one character, played by the queue, that
+   reached clvl 25 and DL 30 in the same game. A success on any build since
+   M7 started counts; the grid shows the commit it was reached on.
+   (Not a 16/20 bar: once is enough, as one character this deep is rare at
+   first.)
+2. **Spell and prayer coverage, pooled per class.** For each casting class
+   (Mage, Rogue and Ranger spells; Priest and Paladin prayers), every spell
+   or prayer the class can learn by clvl 25 has been cast successfully, and
+   its effect checked, in some run of that class.
+3. **A strategy guide.** A strategy for each of the 31 combinations is
+   published on moria8.org (§23.7).
+4. **The queue in service.** The queue runs unattended following
+   `origin/main` (§23.4), and the dashboard shows the difficulty ratings and
+   the feature grid (§23.6).
+5. **No regressions.** All frozen suites still pass (§7.2).
+
+Delivered in M7 but not exit gates themselves: the ranged policy and its
+usage report, the `x` weapon swap, and the compendium generator and
+tactics (§23.7).
+
+### 23.3 The goal: one game per seed
+
+M7's goal plays one continuous game per seed, as a player does (the
+maintainer, 2026-10-29: "it should be the same game, no?"). The M3-M6 goals
+and their frozen suites stay as they are, one game per goal.
+
+- **Success:** the same character has clvl ≥ 25 and has stood on DL ≥ 30.
+- **Milestones** are recorded as they are reached: clvl 5, 10, 15, 20 and
+  25; DL 5, 8, 10, 15, 20, 25 and 30; the first Word of Recall trip.
+  Milestones within one game are correlated: they are progress, not separate
+  results.
+- **One policy:** gain levels while weak, go down when ready, replacing the
+  goal-specific policies for this goal.
+- **Failure:** the character dies; the step budget runs out; a harness error
+  or hang (emulator crash, timeout, exception); or a game finding (a stack,
+  invariant or `unknown_prompt` finding, also filed as a finding).
+- **Step budget:** 2,000,000 steps to start. Once successes exist it
+  becomes 3× the steps of the slowest success.
+
+### 23.4 The continuous queue
+
+- **Items.** One item per race/class combination per platform: 31 per
+  platform, each with the queue's goal. In M7 only the C64's are active.
+- **Order.** A worker takes the head of its platform's queue. A run that
+  succeeds goes to the back. A run that fails goes to the head to be
+  retried, up to 3 times in a row (tunable); after that it goes to the back,
+  marked "struggling" on the dashboard until it succeeds, so one weak
+  combination cannot hold a worker forever.
+- **Seeds.** Every run draws a new seed, recorded with the run (with the
+  commit and build) so that any run can be replayed exactly. A retry tests
+  the combination again, not the same dungeon.
+- **Workers.** One total worker budget, 24 to start (the machine has 32
+  cores), tunable. The minimum is one worker per active platform; in M7
+  all of them play the C64.
+- **The build it plays.** The queue runs from this working tree
+  (`moria8-playtesting`), game and bot alike. When `origin/main` moves it
+  fast-forwards and rebuilds, but only when the tree is clean and its
+  commit is contained in `origin/main`; otherwise it keeps playing the
+  current build, and the dashboard shows that it is behind. Runs in flight
+  finish on the build they started with. Every run records its commit and
+  whether the tree was dirty. (The maintainer configured this fast-forward
+  for the service, 2026-10-31; it does not authorize agents to pull or
+  commit.)
+- **Control.** A long-running service (a systemd user unit, as the
+  publisher is, §6.9) reads a config file: total workers, the minimum per
+  platform, active platforms, the goal and the retry cap. A make target
+  submits and cancels subqueues. The public dashboard stays read-only.
+- **Retention.** A compact record of every run is kept for good: the
+  combination, platform, seed, commit, outcome, steps, milestones reached,
+  cause of death and feature counts. Full traces and snapshots are kept 14
+  days (tunable), then deleted.
+
+### 23.5 Subqueues: side sessions
+
+Other playtests run beside the main queue, independent of it: smoke-testing
+a change, an A/B round, the frozen suites before a brain change is merged.
+
+- A **subqueue** is named and one-shot: its own goal and its own list of
+  items (combinations × platforms × seeds). It drains once, reports its
+  result on the dashboard, and ends.
+- Subqueues borrow workers from the main queue's budget. The main queue
+  shrinks toward its minimum (one worker per active platform) and grows back
+  when they finish.
+- A subqueue's runs never move items in the main queue or count toward its
+  goal.
+- The frozen suites stay the gate for brain changes (§7.2, §7.3): they run
+  as a subqueue before a change is merged. The main queue measures progress
+  toward M7; it does not gate merges.
+
+### 23.6 Dashboard
+
+The dashboard (§6.9) shows both activities:
+
+- **The queue cycle** comes first: a grid of the 31 combinations by platform,
+  each cell with its last result, streak, the "struggling" mark, the deepest
+  milestone reached and the commit of its success; how far the cycle has
+  gone; the build being played and whether it is behind `origin/main`.
+- **Subqueues:** a strip of the active ones, each with its goal, progress
+  and, when drained, its result.
+- **The feature grid:** spells and prayers cast per class with the gaps
+  against criterion 2; ranged shots and kills per class; items used and
+  identified, creatures met and killed, traps, stores and recall trips.
+- **Difficulty ratings** per combination (§23.7).
+- The live screens and the focus view stay. The M5 and M6 grids and the
+  earlier rounds move to a history view.
+
+### 23.7 Game and bot work
+
+- **Ranged weapons.** A policy by class missile skill (the class tables):
+  Rangers and Rogues certainly, Warriors and Priests where the numbers say
+  so; Mages keep to spells. The bot buys and carries a launcher and
+  ammunition and fires them tactically. The dashboard reports shots and kills
+  per class. Not a pass/fail bar of its own.
+- **The `x` weapon swap.** In Moria8, as in VMS, a launcher is wielded in the
+  weapon slot, so a Rogue or Ranger spends a turn each way switching between
+  bow and melee weapon. M7 adds the VMS secondary weapon slot and `x` on
+  every port, with a save format change (docs/BACKLOG.md, "Add the VMS `x`
+  weapon swap"), then teaches the bot to keep its melee weapon or launcher
+  there.
+- **Spells and prayers.** The bot learns and casts each spell or prayer
+  where it is useful, and each cast's effect is checked (criterion 2).
+- **Difficulty ratings.** Survival, median level at death and the share of
+  early deaths, each rated Easy to Very Hard per combination, computed from
+  the queue's continuous runs instead of the 40-seed batches §21.5 planned.
+- **The compendium generator and tactics,** as §21.5: one shared generator
+  for the website's monster compendium and the bot's `knowledge.py`, then
+  the missing tactics one at a time.
+- **Strategy heuristics.** Learn from the runs what makes a character of
+  each class succeed at each level: stats, equipment, spells, how fast to go
+  down, what kills it. The result is a strategy for each of the 31
+  combinations, published for players on moria8.org beside the monster
+  compendium, with the evidence (runs, rates, causes of death) summarized
+  in this document.
+
+### 23.8 Order of work
+
+1. The queue service, subqueues and dashboard, on the C64 with the M7 goal
+   and its milestones, so that every later change is measured.
+2. A baseline of every combination.
+3. Bot rounds toward clvl 25 and DL 30: spells and prayers, ranged weapons
+   and the `x` swap.
+4. The difficulty ratings, the feature grid and the compendium generator.
+5. The strategy guide.
+
+### 23.9 M8: kill the Balrog and win
+
+After M7, the queue's default goal becomes winning the game. M8 is met when
+each of the 31 combinations has won the game (killed the Balrog) at least
+once on the C64. The game's victory and retirement flow exists
+(docs/BACKLOG.md, "Add Balrog victory and retirement flow"); the bot's
+side is the deep ladder (§12.4), the danger model and readiness checklists
+(§12.3) and the assisted track (§12.1). The rest of M8 is defined when it
+starts.
