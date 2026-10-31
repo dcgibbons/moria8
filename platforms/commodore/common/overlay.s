@@ -153,14 +153,18 @@ ol_check_disk:
     ldx ol_target
     dex                     // 0-based index (OVL_STARTUP=1 → index 0)
     jsr overlay_load_disk
-    bcs !ol_disk_fail+
+#if C64_UNIT_TEST
+    bcs !ol_disk_fail+          // only unit tests see a load fail (asset_load_retry.s)
+#endif
     lda ol_target
     sta current_overlay
     rts
+#if C64_UNIT_TEST
 !ol_disk_fail:
     lda #OVL_NONE
     sta current_overlay
     rts
+#endif
 
 #if HAL_PLATFORM_OVERLAY_REU_STASH_ENABLED
 !ol_reu:
@@ -257,7 +261,8 @@ c128_overlay_fn_guard_expect:  .byte 0
 // overlay_load_disk — KERNAL LOAD overlay PRG file
 // ============================================================
 // Input: X = 0-based overlay index (0=startup, 1=town, 2=death)
-// Output: carry clear = success, carry set = error
+// Output: C = 0: a file that will not load asks for the program disk until
+// it does (asset_load_required; C64 unit-test builds fail back with C = 1)
 // Clobbers: A, X, Y
 overlay_load_disk:
 #if C128_TEST_OVERLAY_FN_GUARD
@@ -293,7 +298,7 @@ overlay_load_disk:
     pla
     tax
     pla
-    jmp asset_load_retry
+    jmp asset_load_required
 #else
 #if C128_TEST_OVERLAY_LOAD_FAIL_TRAP
     stx c128_overlay_load_disk_index
@@ -318,7 +323,7 @@ overlay_load_disk:
     pla
     tax
     pla
-    jmp asset_load_retry
+    jmp asset_load_required
 #endif
 
 #import "asset_load_retry.s"

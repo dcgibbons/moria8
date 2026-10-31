@@ -324,9 +324,11 @@ tier_load:
 !tl_partial_state_done:
 #endif
     jsr tier_load_disk
-    bcc !tl_disk_ok+
+#if C64_UNIT_TEST
+    bcc !tl_disk_ok+            // only unit tests see a load fail (asset_load_retry.s)
     jmp !tl_failed+
 !tl_disk_ok:
+#endif
     jmp !tl_activate+
 
 #if HAL_PLATFORM_OVERLAY_CACHE_ENABLED
@@ -426,11 +428,13 @@ tier_load:
     sta tier_loaded
     rts
 
+#if C64_UNIT_TEST
 !tl_failed:
     // Disk load failed — reset tier state so creature_get_name
     // uses embedded name pointers (main RAM) instead of the
     // tier path which reads from the staging region (now invalid).
     jmp tier_invalidate_state
+#endif
 
 #if HAL_PLATFORM_MONSTER_HIDDEN_NAME_POOL
 // platform_copy_tier_names_to_pool — Copy the active tier name block
@@ -617,7 +621,8 @@ c128_select_tier_cache_slot:
 // tier_load_disk — KERNAL LOAD tier file from disk to $E000
 // ============================================================
 // Input: current_tier = tier number (1-4)
-// Output: carry clear = success, carry set = error
+// Output: C = 0: a file that will not load asks for the program disk until
+// it does (asset_load_required; C64 unit-test builds fail back with C = 1)
 // Clobbers: A, X, Y
 tier_load_disk:
     // Select filename from table
@@ -633,7 +638,7 @@ tier_load_disk:
     tax                         // X = filename addr lo, Y = hi
     pla                         // A = filename length
 
-    jmp asset_load_retry
+    jmp asset_load_required
 
 
 tier_loading_str:

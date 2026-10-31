@@ -1071,13 +1071,10 @@ tramp_winner_royal:
     lda #hal_storage_modal_misc_name_len
     ldx #<hal_storage_modal_misc_name
     ldy #>hal_storage_modal_misc_name
-    jsr asset_load_retry
-    bcs !done+
+    jsr asset_load_required     // asks for the program disk until it loads
     lda #0
     sta current_overlay
-    jsr royal_screen
-!done:
-    rts
+    jmp royal_screen
 
 winner_apply_retirement_bonus:
     .const WIN_PL_LEVEL = 19

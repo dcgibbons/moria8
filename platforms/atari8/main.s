@@ -293,7 +293,9 @@ high_resident_end:
 #undef DISARM_COMMAND_EXTERNAL
 #import "../../core/monster.s"
 #import "../../core/tier_manager.s"
+#define ASSET_LOAD_PROMPT_EXTERNAL  // in RuntimeBanked below: Default is full
 #import "../commodore/common/overlay.s"
+#undef ASSET_LOAD_PROMPT_EXTERNAL
 #import "../../core/monster_ai.s"
 #import "../../core/scene_dirty.s"
 #import "../../core/scene_mat_tile.s"
@@ -470,8 +472,8 @@ init_load_banked:
     lda #atari_banked_fname_len
     ldx #<atari_banked_fname
     ldy #>atari_banked_fname
-    jsr asset_load_retry
-    bcc !ok+
+    jsr asset_load_retry        // not asset_load_required: its prompt lives in
+    bcc !ok+                    // the RuntimeBanked code this very load brings
 !halt:
     inc COLBK
     jmp !halt-
@@ -647,16 +649,11 @@ tramp_spawn_nest_gold:
     cmp #OVL_DUNGEON_GEN
     beq !tsng_loaded+
     ldx #OVL_DUNGEON_GEN - 1
-    jsr overlay_load_disk       // No media prompt while generating a dungeon.
-    bcs !tsng_failed+
+    jsr overlay_load_disk       // asks for the program disk until it loads
     lda #OVL_DUNGEON_GEN
     sta current_overlay
 !tsng_loaded:
     jmp spawn_nest_gold
-!tsng_failed:
-    lda #OVL_NONE               // as pick_item_type on a media error
-    sta current_overlay
-    rts
 .label tramp_find_special_room = find_special_room
 .label tramp_sr_epilogue = atari_platform_runtime_resync
 
@@ -1088,6 +1085,9 @@ program_end:
 // RuntimeBanked ($F000-$FFF9)
 // ============================================================
 .segment RuntimeBanked
+    // Asks for the program disk when a required load keeps failing. Safe
+    // here: every load that reaches it comes after ATARI.BNK is in place.
+    #import "../commodore/common/asset_load_prompt.s"
     #import "../../core/special_rooms.s"
     #import "../../core/ego_items.s"
     #import "../../core/ui_home.s"

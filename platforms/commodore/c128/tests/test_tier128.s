@@ -64,7 +64,10 @@ rng_range:
     rts
 
 #import "../../../../core/tier_manager.s"
+#define ASSET_LOAD_PROMPT_EXTERNAL
 #import "../../common/asset_load_retry.s"   // the tier loads' loader
+asset_load_ask_for_disk:            // a required load failed here: a test fault
+    brk
 
 test_start:
     sei

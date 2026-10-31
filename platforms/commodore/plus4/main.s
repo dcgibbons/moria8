@@ -1295,8 +1295,7 @@ tramp_spawn_nest_gold:
     cmp #OVL_DUNGEON_GEN
     beq !tsng_loaded+
     ldx #OVL_DUNGEON_GEN - 1
-    jsr overlay_load_disk       // No media prompt while generating a dungeon.
-    bcs !tsng_failed+
+    jsr overlay_load_disk       // asks for the program disk until it loads
     lda #OVL_DUNGEON_GEN
     sta current_overlay
 !tsng_loaded:
@@ -1304,10 +1303,6 @@ tramp_spawn_nest_gold:
     jsr plus4_bank_ram
     jsr spawn_nest_gold
     jmp tramp_sr_epilogue
-!tsng_failed:
-    lda #OVL_NONE               // as pick_item_type on a media error
-    sta current_overlay
-    rts
 
 tramp_find_special_room:
     pha                         // Save A (room type input)
@@ -2075,14 +2070,7 @@ tramp_winner_royal:
     lda #hal_storage_modal_misc_name_len
     ldx #<hal_storage_modal_misc_name
     ldy #>hal_storage_modal_misc_name
-    jsr asset_load_retry
-#if PLUS4_TEST_SCRIPTED_RETIREMENT_PRODUCT
-    bcc !retirement_loaded+
-    jmp plus4_test_retirement_fail_sym
-!retirement_loaded:
-#else
-    bcs !done+
-#endif
+    jsr asset_load_required     // asks for the program disk until it loads
     lda #0
     sta current_overlay
     sei
@@ -2093,7 +2081,6 @@ tramp_winner_royal:
     jmp plus4_test_retirement_pass_sym
 #endif
     jsr plus4_bank_ram
-!done:
     rts
 
 // ============================================================

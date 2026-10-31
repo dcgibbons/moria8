@@ -104,8 +104,7 @@ a2_require_play:
     clc
     rts
 !load:
-    jsr a2_load_file_to_slot
-    bcs !fatal+
+    jsr a2_load_file_to_slot    // asks for the program disk until it loads
     jsr a2_play_signature_ok
     bcs !fatal+
     clc
@@ -136,7 +135,7 @@ a2_load_file_to_slot:
     lda #a2_play_file_name_len
     ldx #<a2_play_file_name
     ldy #>a2_play_file_name
-    jmp asset_load_retry
+    jmp asset_load_required
 
 a2_play_file_name:
     .text "A2.PLAY"

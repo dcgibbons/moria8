@@ -118,7 +118,6 @@ reu_load_all_tiers:
     lda #0
     sta reu_tier_offset_lo
     sta reu_tier_offset_hi
-    sta reu_tiers_loaded
 
     ldx #1                      // Start with tier 1
 !rlt_loop:
@@ -139,10 +138,9 @@ reu_load_all_tiers:
     sta zp_ptr0_hi
     jsr reu_show_file
 
-    // Load tier file from disk to $E000
+    // Load tier file from disk to $E000 (asset_load_required: a file that
+    // will not load asks for the program disk, so every tier is stashed)
     jsr tier_load_disk
-    bcs !rlt_skip+              // Skip if load failed
-    inc reu_tiers_loaded
 
     // Stash from $E000 to REU at current offset
     sei
@@ -175,8 +173,7 @@ reu_load_all_tiers:
     sta hal_memory_cpu_port     // Restore bank config
     cli
 
-!rlt_skip:
-    // Advance REU offset by tier size (even if load failed, reserve space)
+    // Advance REU offset by tier size
     ldx reu_tier_idx
     clc
     lda reu_tier_offset_lo
@@ -199,13 +196,6 @@ reu_load_all_tiers:
     // Reset game state — no tier active yet (player starts in town)
     lda #0
     sta current_tier
-
-    // If no tiers loaded successfully, disable REU tier path
-    // so tier_load falls back to disk → embedded creature fallback
-    lda reu_tiers_loaded
-    bne !rlt_done+
-    sta reu_present             // A is already 0
-!rlt_done:
     rts
 #endif
 
@@ -214,7 +204,6 @@ reu_tier_idx:       .byte 0
 reu_tier_offset_lo: .byte 0
 reu_tier_offset_hi: .byte 0
 reu_tier_bank:      .byte 0
-reu_tiers_loaded:   .byte 0     // Count of successfully loaded tiers
 
 // REU start offsets for each tier (filled during reu_load_all_tiers)
 // Index 0 unused; tier 1 always starts at offset 0
@@ -309,8 +298,7 @@ reu_stash_overlays:
     // Load overlay PRG from disk to $E000
     ldx reu_ovl_idx
     dex                         // 0-based index for overlay_load_disk
-    jsr overlay_load_disk
-    bcs !rso_skip+              // Skip stash if load failed
+    jsr overlay_load_disk       // asks for the disk until it loads
 
     // Stash $E000 (4KB) to REU at current offset
     sei
@@ -342,7 +330,6 @@ reu_stash_overlays:
     sta hal_memory_cpu_port
     cli
 
-!rso_skip:
     // Advance REU offset by $1000 (4KB) — low byte unchanged
     lda reu_tier_offset_hi
     clc

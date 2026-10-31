@@ -863,14 +863,26 @@ def s_load_fail_town(rig: Rig, media: Path) -> None:
     attempts = ATTEMPTS
     failed = rig.fail_loads(attempts, TOWN_LOAD[rig.port.name])
     try:
-        up_to_town(rig)
+        rig.press("<")
     except Exception as exc:   # a restart or a crash
         raise ScenarioFail(f"a load that never succeeds lost the game: {type(exc).__name__}: "
                            f"{str(exc).splitlines()[0]}") from None
+    screen = rig.screen()
+    # The name as the prompt shows it: fail_loads swapped its first character.
+    if "Insert program disk" not in screen or TOWN_LOAD[rig.port.name].upper() not in screen.upper():
+        raise ScenarioFail(f"a load that never succeeds did not ask for the disk by name:\n{screen}")
+    up_to_town_after_key(rig)
     if len(failed) != attempts:
         raise ScenarioFail(f"expected {attempts} failed loads: {failed}")
     if rig.character()[:16] != name:
         raise ScenarioFail("a load that never succeeds lost the game (a new character)")
+
+
+def up_to_town_after_key(rig: Rig) -> None:
+    """A key at the program-disk prompt: the load is tried again, into town."""
+    rig.press(" ")
+    if not in_game(rig) or rig.obs is None or rig.obs.dlvl != 0:
+        raise ScenarioFail(f"not in town after the key at the prompt:\n{rig.screen()}")
 
 
 def s_quit_confirm(rig: Rig, media: Path) -> None:
@@ -925,9 +937,8 @@ SCENARIOS = [
     Scenario("status_retry_slot", s_status_retry_slot,
              "the slot list's drive status read cut short: asked again, the saved game loads"),
     Scenario("load_fail_town", s_load_fail_town,
-             "a load on the way up to town that never succeeds keeps the game", reu=False,
-             expect_fail={port: "restarts or crashes (backlog: one fatal-load handler)"
-                          for port in ("c64", "plus4", "c128")}),
+             "a load on the way up to town that keeps failing asks for the program disk by name;"
+             " a key tries again and the game goes on", reu=False),
 ]
 
 

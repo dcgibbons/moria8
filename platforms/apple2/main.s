@@ -158,6 +158,11 @@ tramp_dig_ability:
 #import "../../core/ui_messages.s"
 #import "../../core/ui_status.s"
 #import "../../core/runtime_ui_strings.s"
+// Resident, not in the play slot: asset_load_ask_for_disk shows it when the
+// play slot's own load has failed.
+#define PRESS_KEY_STR_EXTERNAL
+press_key_str:
+    .text "Press any key" ; .byte 0
 #import "../../core/generation_busy.s"
 #define SMALL_PLAY_EXTERNAL
 #import "../../core/stat_display.s"
