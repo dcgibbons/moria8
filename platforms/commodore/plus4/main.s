@@ -2047,7 +2047,7 @@ tramp_winner_royal:
     lda #hal_storage_modal_misc_name_len
     ldx #<hal_storage_modal_misc_name
     ldy #>hal_storage_modal_misc_name
-    jsr hal_asset_load_prg_header
+    jsr asset_load_retry
 #if PLUS4_TEST_SCRIPTED_RETIREMENT_PRODUCT
     bcc !retirement_loaded+
     jmp plus4_test_retirement_fail_sym

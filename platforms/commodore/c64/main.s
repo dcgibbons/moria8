@@ -582,7 +582,30 @@ ol_target:        .byte 0
 #undef DISARM_COMMAND_EXTERNAL
 #import "hal/storage.s"
 
+// c64_storage_dos_code_status — HAL_STORAGE_STATUS_* for the DOS code
+// c64_storage_read_command_status leaves in disk_status (26, 72, 74).
+c64_storage_dos_code_status:
+    lda disk_status
+    beq !cdcs_done+             // HAL_STORAGE_STATUS_OK
+    ldx #HAL_STORAGE_STATUS_WRITE_PROTECTED
+    cmp #26
+    beq !cdcs_x+
+    ldx #HAL_STORAGE_STATUS_DISK_FULL
+    cmp #72
+    beq !cdcs_x+
+    ldx #HAL_STORAGE_STATUS_DEVICE_NOT_READY
+    cmp #74
+    beq !cdcs_x+
+    ldx #HAL_STORAGE_STATUS_UNKNOWN
+!cdcs_x:
+    txa
+!cdcs_done:
+    rts
+
 c64_storage_read_command_status:
+    // Start with no channel selected, as the Plus/4 reader must (after a write
+    // the drive refused, its JiffyDOS KERNAL never completed the CHKIN).
+    jsr c64_disk_clrchn
     lda #2
     sta disk_status
     lda #0

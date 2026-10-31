@@ -537,7 +537,7 @@ c128_preload_all_tiers:
     pla
     tax
     pla
-    jsr c128_preload_asset_load
+    jsr asset_load_retry
     bcs !cpat_next+
 
     jsr c128_stage_tier_to_cache
@@ -633,7 +633,7 @@ tier_load_disk:
     tax                         // X = filename addr lo, Y = hi
     pla                         // A = filename length
 
-    jmp hal_asset_load_prg_header
+    jmp asset_load_retry
 
 
 tier_loading_str:

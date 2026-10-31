@@ -1065,7 +1065,7 @@ tramp_winner_royal:
     lda #hal_storage_modal_misc_name_len
     ldx #<hal_storage_modal_misc_name
     ldy #>hal_storage_modal_misc_name
-    jsr hal_asset_load_prg_header
+    jsr asset_load_retry
     bcs !done+
     lda #0
     sta current_overlay
@@ -2461,7 +2461,64 @@ runtime_banked_filename_end:
     .byte 0
 .const RUNTIME_BANKED_FILENAME_LEN = runtime_banked_filename_end - runtime_banked_filename
 
+// In Default, not with overlay.s: C128ResidentWorld has no room for it.
+#import "../common/asset_load_retry.s"
+
+// Repeated on failure as asset_load_retry repeats the HAL loads (a drive can
+// miss a handshake). The inputs are kept: the load clears the bank, and the
+// progress display may use the pointers.
 c128_load_runtime_prg:
+    lda c128_runtime_load_bank
+    sta crl_bank
+    lda disk_temp
+    sta crl_file
+    lda disk_status
+    sta crl_name_len
+    lda zp_ptr0
+    sta crl_name
+    lda zp_ptr0_hi
+    sta crl_name + 1
+    lda zp_ptr1
+    sta crl_dest
+    lda zp_ptr1_hi
+    sta crl_dest + 1
+    lda #ASSET_LOAD_ATTEMPTS
+    sta crl_left
+!crl_try:
+    lda crl_bank
+    sta c128_runtime_load_bank
+    lda crl_file
+    sta disk_temp
+    lda crl_name_len
+    sta disk_status
+    lda crl_name
+    sta zp_ptr0
+    lda crl_name + 1
+    sta zp_ptr0_hi
+    lda crl_dest
+    sta zp_ptr1
+    lda crl_dest + 1
+    sta zp_ptr1_hi
+    jsr crl_load_once
+    bcc !crl_done+
+    dec crl_left                // carry stays set
+    beq !crl_done+
+    inc asset_load_retries
+    lda c128_startup_preload_display
+    beq !crl_try-
+    dec c128_load_progress_count    // the repeat shows as the same file
+    jmp !crl_try-
+!crl_done:
+    rts
+
+crl_bank:     .byte 0
+crl_file:     .byte 0
+crl_name_len: .byte 0
+crl_name:     .word 0
+crl_dest:     .word 0
+crl_left:     .byte 0
+
+crl_load_once:
     lda c128_runtime_load_bank
     ldx #0
     jsr safe_setbnk
@@ -5309,6 +5366,7 @@ program_end:
 .print "Program image: $" + toHexString($1c01) + "-$" + toHexString(program_end - 1)
 #if C128
 .assert "C128 main image stays below resident world payload", program_end <= c128_resident_world_start, true
+.assert "C128 asset load retry stays in Default payload", asset_load_retry >= $1c01 && asset_load_retries < program_end, true
 .assert "C128 tunnel guard stays in Default payload", dungeon_tunnel_guard_reset >= $1c01 && dungeon_tunnel_guard_step < program_end, true
 .assert "C128 resident world starts at $6000", c128_resident_world_start == $6000, true
 .assert "C128 resident world fits below items payload", c128_resident_world_end <= c128_resident_items_start, true

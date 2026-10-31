@@ -64,6 +64,7 @@ rng_range:
     rts
 
 #import "../../../../core/tier_manager.s"
+#import "../../common/asset_load_retry.s"   // the tier loads' loader
 
 test_start:
     sei

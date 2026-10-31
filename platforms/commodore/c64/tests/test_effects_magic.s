@@ -159,6 +159,10 @@ tpm_key_script:
 tpm_key_script_stop:
     .byte $3f, $03
 
+test_asset_load_fails:
+    sec
+    rts
+
 .macro PatchJump(target, replacement) {
     lda #$4c
     sta target
@@ -280,6 +284,9 @@ test_calc_spell_failure_fail:
     rts
 
 test_start:
+    // No disk here: a tier restore's load fails at once instead of a real
+    // KERNAL LOAD per attempt (asset_load_retry makes three).
+    :PatchJump(hal_asset_load_prg_header, test_asset_load_fails)
     lda #$42
     sta zp_rng_0
     lda #$13

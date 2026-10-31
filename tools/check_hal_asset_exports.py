@@ -105,7 +105,7 @@ TITLE_TRANSACTION_BODIES = {
     "atari8": (
         ROOT / "platforms/atari8/storage.s",
         "hal_asset_load_title",
-        ("hal_storage_title_name", "hal_asset_load_prg_header"),
+        ("hal_storage_title_name", "asset_load_retry"),
     ),
     "bbcmaster": (
         ROOT / "platforms/bbcmaster/storage.s",
@@ -136,6 +136,8 @@ CLOSE_TRANSACTION_BODIES = {
     ),
 }
 OVERLAY_COMMON = ROOT / "platforms/commodore/common/overlay.s"
+# Disk asset loads go through asset_load_retry, which repeats the HAL load.
+ASSET_LOAD_RETRY = ROOT / "platforms/commodore/common/asset_load_retry.s"
 STRING_BANK_COMMON = ROOT / "core/string_bank.s"
 TITLE_SCREEN_COMMON = ROOT / "platforms/commodore/common/title_screen.s"
 C128_TITLE_CACHE = ROOT / "platforms/commodore/c128/title_cache_runtime.s"
@@ -231,8 +233,8 @@ def check_common_overlay_loader() -> list[str]:
     body = label_body(OVERLAY_COMMON, "overlay_load_disk")
     if body is None:
         return ["overlay.s: missing overlay_load_disk body"]
-    if "hal_asset_load_prg_header" not in body:
-        errors.append("overlay.s: overlay_load_disk does not call hal_asset_load_prg_header")
+    if "asset_load_retry" not in body:
+        errors.append("overlay.s: overlay_load_disk does not call asset_load_retry")
     for token in ("hal_storage_overlay_name_len", "hal_storage_overlay_name_lo", "hal_storage_overlay_name_hi"):
         if token not in body:
             errors.append(f"overlay.s: overlay_load_disk no longer uses {token}")
@@ -244,13 +246,22 @@ def check_common_overlay_loader() -> list[str]:
     return errors
 
 
+def check_asset_load_retry() -> list[str]:
+    body = label_body(ASSET_LOAD_RETRY, "asset_load_retry")
+    if body is None:
+        return ["asset_load_retry.s: missing asset_load_retry body"]
+    if "jsr hal_asset_load_prg_header" not in body:
+        return ["asset_load_retry.s: asset_load_retry does not call hal_asset_load_prg_header"]
+    return []
+
+
 def check_common_string_bank_loader() -> list[str]:
     errors: list[str] = []
     body = label_body(STRING_BANK_COMMON, "bank_load_recall")
     if body is None:
         return ["string_bank.s: missing bank_load_recall body"]
-    if "hal_asset_load_prg_header" not in body:
-        errors.append("string_bank.s: bank_load_recall does not call hal_asset_load_prg_header")
+    if "asset_load_retry" not in body:
+        errors.append("string_bank.s: bank_load_recall does not call asset_load_retry")
     for token in STRING_BANK_FORBIDDEN_TOKENS:
         if token in body:
             errors.append(f"string_bank.s: bank_load_recall still contains {token}")
@@ -293,8 +304,8 @@ def check_common_tier_loader() -> list[str]:
 
     if load_body is None:
         return ["tier_manager.s: missing tier_load_disk body"]
-    if "hal_asset_load_prg_header" not in load_body:
-        errors.append("tier_manager.s: tier_load_disk does not call hal_asset_load_prg_header")
+    if "asset_load_retry" not in load_body:
+        errors.append("tier_manager.s: tier_load_disk does not call asset_load_retry")
     for token in ("hal_storage_tier_name_len", "hal_storage_tier_name_lo", "hal_storage_tier_name_hi"):
         if token not in load_body:
             errors.append(f"tier_manager.s: tier_load_disk no longer uses {token}")
@@ -402,6 +413,11 @@ def main() -> int:
                     print(f"  {token}")
                 failed = True
 
+    retry_errors = check_asset_load_retry()
+    if retry_errors:
+        for error in retry_errors:
+            print(error)
+        failed = True
     overlay_errors = check_common_overlay_loader()
     if overlay_errors:
         for error in overlay_errors:

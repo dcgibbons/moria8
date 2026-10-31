@@ -470,7 +470,7 @@ init_load_banked:
     lda #atari_banked_fname_len
     ldx #<atari_banked_fname
     ldy #>atari_banked_fname
-    jsr hal_asset_load_prg_header
+    jsr asset_load_retry
     bcc !ok+
 !halt:
     inc COLBK

@@ -136,6 +136,7 @@ magic_check_new_spells:
 #import "../../../../core/huffman.s"
 #import "../../../../core/monster.s"
 #import "../../../../core/tier_manager.s"
+#import "../../common/asset_load_retry.s"   // tier_load_disk's loader
 #import "../../../../core/item.s"
 #import "../../../../core/ego_items.s"
 #import "../../../../core/player_items.s"
