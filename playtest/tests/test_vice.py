@@ -83,6 +83,18 @@ class ProtocolTest(unittest.TestCase):
         stop = mon.wait_stop(timeout=2.0)
         self.assertEqual((stop.pc, stop.checkpoint), (0x10B9, 2))
 
+    def test_resource_set_sends_integers_little_endian(self) -> None:
+        # As resource_get reads them; decimal text set Drive8TrueEmulation=0 as 48.
+        mon = vice.ViceMonitor()
+        sent: list[bytes] = []
+        mon.call = lambda command, body=b"": sent.append(body)  # type: ignore[method-assign]
+        mon.resource_set("AttachDevice9d0Readonly", 1)
+        mon.resource_set("RemoteMonitorAddress", "127.0.0.1:1")
+        name = b"AttachDevice9d0Readonly"
+        self.assertEqual(sent[0], bytes([1, len(name)]) + name + bytes([4, 1, 0, 0, 0]))
+        name, value = b"RemoteMonitorAddress", b"127.0.0.1:1"
+        self.assertEqual(sent[1], bytes([0, len(name)]) + name + bytes([len(value)]) + value)
+
     def test_command_error_raises(self) -> None:
         fake = FakeVice({vice.CMD_MEM_GET: lambda rid: response(vice.CMD_MEM_GET, rid, error=0x02)})
         with self.assertRaises(vice.ViceCommandError):

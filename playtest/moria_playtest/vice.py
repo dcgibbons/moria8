@@ -455,7 +455,9 @@ class ViceMonitor:
 
     def resource_set(self, name: str, value: str | int) -> None:
         raw_name = name.encode()
-        raw_value = str(value).encode()
+        # An integer goes little-endian, as resource_get reads it back: its
+        # decimal text set "0" as 48.
+        raw_value = value.to_bytes(4, "little") if isinstance(value, int) else value.encode()
         kind = 1 if isinstance(value, int) else 0
         body = (struct.pack("<BB", kind, len(raw_name)) + raw_name
                 + struct.pack("<B", len(raw_value)) + raw_value)

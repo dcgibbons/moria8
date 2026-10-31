@@ -8,6 +8,7 @@ the resource set is recorded with every result.
 
 from __future__ import annotations
 
+import ctypes
 import hashlib
 import os
 import re
@@ -15,6 +16,8 @@ import shutil
 import signal
 import socket
 import subprocess
+import sys
+import threading
 import time
 from dataclasses import dataclass, field
 from functools import lru_cache
@@ -217,7 +220,7 @@ class ViceProcess:
         log = self.log_path.open("ab")
         self.proc = subprocess.Popen(
             self.args, cwd=self.workdir, stdin=subprocess.DEVNULL, stdout=log,
-            stderr=subprocess.STDOUT, start_new_session=True)
+            stderr=subprocess.STDOUT, start_new_session=True, preexec_fn=parent_death_hook())
         log.close()
         self.monitor = ViceMonitor(port=self.port, response_timeout=response_timeout)
         try:
@@ -263,6 +266,27 @@ def prepare_worker(run_dir: Path, worker: int, disk_template: Path = C64_DISK) -
     else:
         shutil.copyfile(disk_template, disk)
     return workdir, disk
+
+
+PR_SET_PDEATHSIG = 1
+# Looked up here, not in the forked child, where only async-signal-safe work belongs.
+_PRCTL = ctypes.CDLL(None, use_errno=True).prctl if sys.platform.startswith("linux") else None
+
+
+def die_with_parent() -> None:
+    """In the emulator child (Linux): SIGKILL when the thread that started it
+    exits for any reason. Its own session keeps it from our signals, so a
+    harness that died without stop() left emulators running for hours."""
+    _PRCTL(PR_SET_PDEATHSIG, signal.SIGKILL)
+
+
+def parent_death_hook():
+    """preexec_fn for an emulator child, or None. Linux sends the signal when
+    the forking *thread* exits, so a child started from a pool thread (m0.py)
+    would die with that thread: only the main thread arms it."""
+    if _PRCTL is None or threading.current_thread() is not threading.main_thread():
+        return None
+    return die_with_parent
 
 
 def allocate_port(worker: int, attempts: int = 20) -> int:
