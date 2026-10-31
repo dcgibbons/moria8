@@ -3,6 +3,10 @@
 save_slot_scan_idx: .byte 0
 save_slot_default_idx: .byte 0
 save_slot_name_idx: .byte 0
+#if HAL_STORAGE_SAVE_PROBE_ASKS_DRIVE
+save_slot_probe_tries: .byte 0
+save_slot_probe_lost:  .byte 0
+#endif
 save_slot_name_buf: .fill SAVE_SLOT_NAME_LEN, 0
 
 .const SAVE_SLOT_READ_DIGIT_OFF = hal_storage_save_read_name_len - 4
@@ -162,7 +166,25 @@ save_slot_apply_name:
     rts
 
 save_slot_read_name:
-save_slot_read_name_len:
+#if HAL_STORAGE_SAVE_PROBE_ASKS_DRIVE
+    // A CHKIN on a file the drive refused can wait forever in the KERNAL's
+    // talker turnaround (an empty slot; docs/BACKLOG.md). With the command
+    // channel opened first, its status after the file's OPEN says whether
+    // the file is there before any CHKIN reaches it.
+    lda #3
+    sta save_slot_probe_tries
+!probe_try:
+    lda #0
+    tax
+    tay
+    jsr SAVE_SETNAM
+    lda #hal_storage_cmd_channel
+    ldx save_device
+    ldy #hal_storage_cmd_channel
+    jsr SAVE_SETLFS
+    jsr SAVE_OPEN
+#endif
+save_slot_read_name_len:            // save_slot_apply_name patches the length
     lda #hal_storage_save_read_name_len
     ldx #<hal_storage_save_read_name
     ldy #>hal_storage_save_read_name
@@ -172,10 +194,45 @@ save_slot_read_name_len:
     ldy #hal_storage_check_sec_read
     jsr SAVE_SETLFS
     jsr SAVE_OPEN
+#if HAL_STORAGE_SAVE_PROBE_ASKS_DRIVE
+    bcs !empty+
+    ldx #hal_storage_cmd_channel
+    jsr SAVE_CHKIN
+    bcs !empty+                 // no status to read: never CHKIN the file
+    jsr SAVE_CHRIN              // the status's first digit: 0 or 1 = opened
+    pha
+    jsr SAVE_READST
+    and #$02                    // read timeout
+    sta save_slot_probe_lost
+    jsr save_restore_channels
+    pla
+    eor #$30
+    cmp #10
+    bcc !digit+
+    // No digit: a read that timed out lost it (as the status readers see
+    // under JiffyDOS); close both and ask again.
+    lda save_slot_probe_lost
+    beq !empty+
+    lda #hal_storage_check_file_num
+    jsr SAVE_CLOSE
+    lda #hal_storage_cmd_channel
+    jsr SAVE_CLOSE
+    dec save_slot_probe_tries
+    bne !probe_try-
+    beq !empty+
+!digit:
+    cmp #2                      // '2' and up: an error, 62 FILE NOT FOUND
+    bcc !opened+
+!empty:
+    clc
+    bcc !cleanup+
+!opened:
+#else
     bcc !open_ok+
     clc
     bcc !cleanup+
 !open_ok:
+#endif
     ldx #hal_storage_check_file_num
     jsr SAVE_CHKIN
     bcc !read_magic+
@@ -233,6 +290,10 @@ save_slot_read_name_len:
     php
     lda #hal_storage_check_file_num
     jsr SAVE_CLOSE
+#if HAL_STORAGE_SAVE_PROBE_ASKS_DRIVE
+    lda #hal_storage_cmd_channel
+    jsr SAVE_CLOSE
+#endif
     jsr save_restore_channels
     jsr hal_storage_read_command_status
 #if HAL_STORAGE_RESTORE_VIC_BANK_AFTER_SAVE_PROBE

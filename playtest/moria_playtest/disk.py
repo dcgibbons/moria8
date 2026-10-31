@@ -39,6 +39,22 @@ MARKER = "moria8.id"   # what Disk Setup's initialize writes (and the only thing
 TOWN_LOAD = {"c64": ".gen", "plus4": ".gen", "c128": ".chest"}
 ATTEMPTS = 3   # asset_load_retry's attempts on the Commodore ports
 KERNAL_ST = 0x90   # the KERNAL's I/O status byte (C64, C128, Plus/4)
+# Each port's drive-status reader, the READST it calls after the first byte,
+# where that byte is then (an offset on the stack: C64, pushed under READST's
+# return address; or the label it was stored at), so a lost transfer's garbage
+# can stand in for it (the readers retry only when no digit came), and how
+# many READSTs come before it (the C128 checks ST after CHKIN).
+STATUS_READERS = {
+    "c64": ("c64_storage_read_command_status", "c64_disk_readst", 3, 0),
+    "plus4": ("plus4_disk_read_command_status", "plus4_kernal_readst", "disk_error_dos0", 0),
+    "c128": ("c128_storage_read_command_status", "w_readst", "disk_diag_cmd_status0", 1),
+}
+# The program-disk check a resume makes, which reads the drive's status, and
+# where a failed check goes (C128 on two drives: a silent retry, so the
+# failure itself is what shows a lost read was not asked again).
+PROGRAM_MEDIA_PROBE = {"plus4": ("plus4_require_program_media", None),
+                       "c128": ("c128_require_program_media", "c128_program_media_error_prompt")}
+LOST_BYTE = b"\x58"   # what a JiffyDOS transfer cut short returned (commit d654ee1)
 FULL_DISK_LEFT = 12   # blocks full_disk leaves free: fewer than any save
 SAVE_PREFIX = "the.game"   # slot files (platforms/commodore/*/hal/storage.s)
 DISK_SEED = 1003   # a seed whose Human Warrior reaches DL2 quickly (any seed works)
@@ -260,33 +276,57 @@ class Rig:
         raw = mon.call(CMD_MEM_GET, body).body[2:42]
         return raw.split(b"\x00")[0].decode("latin1")
 
-    def lose_status_reads(self, count: int = 1, caller: str = "plus4_require_program_media") -> list[int]:
-        """The next ``count`` Plus/4 drive status reads made by ``caller`` lose
-        their first byte, as a JiffyDOS transfer the drive's disk-controller
-        IRQ cut short does: ST reports a read timeout ($42). Only ST is
-        patched, at the first READST after ``caller`` is entered. Returns the
-        list the lost reads are counted in."""
+    def lose_status_reads(self, count: int | None = 1, caller: str | None = None,
+                          byte_at: int | str | None = None, skip: int | None = None,
+                          code: bytes | None = None, within: str | None = None) -> list[int]:
+        """The next ``count`` (None: every) drive status reads made after ``caller`` is
+        entered (default: the port's status reader) lose their first byte, as
+        a JiffyDOS transfer the drive's disk-controller IRQ cut short does: ST
+        reports a read timeout ($42) and the byte is garbage. Both are patched
+        at the first READST after ``caller`` is entered that is called from
+        ``within`` (default: the reader; STATUS_READERS), less its ``skip``;
+        ``byte_at`` and ``skip`` override the reader's for another caller;
+        ``code``, the bytes ``caller`` starts with, for one in an overlay.
+        Returns the list the lost reads are counted in."""
         game, abi = self.game, self.game.abi
-        entry = abi.all_symbols[caller][0]
-        readst = abi.all_symbols["plus4_kernal_readst"][0]
-        code = game.mon.mem_get(entry, 8, game.ram)
+        reader, readst_name, reader_byte_at, reader_skip = STATUS_READERS[self.port.name]
+        byte_at = reader_byte_at if byte_at is None else byte_at
+        skip = reader_skip if skip is None else skip
+        entry = abi.all_symbols[caller or reader][0]
+        readst = abi.all_symbols[readst_name][0]
+        code = code or game.mon.mem_get(entry, 8, game.ram)
+        source = abi.all_symbols[within or reader][0]   # READSTs called from here count
         cpu = game.mon.bank("cpu")
         cp_entry = game.mon.checkpoint_set(entry)
         cp_readst = game.mon.checkpoint_set(readst)
         lost: list[int] = []
         armed = [False]
 
+        passed = [0]
+
         def enter(stop: StopInfo) -> None:
-            if game.mon.mem_get(entry, 8, cpu) == code:   # not the KERNAL ROM at that address
+            if game.mon.mem_get(entry, len(code), cpu) == code:   # not ROM or another overlay there
                 armed[0] = True
+                passed[0] = 0
 
         def lose(stop: StopInfo) -> None:
             if not armed[0]:
                 return
+            sp = (stop.registers or {}).get(game.reg_ids.get("SP", 4), 0xFF)
+            ret = game.mon.mem_get(0x100 + ((sp + 1) & 0xFF), 2, game.ram)
+            if not 0 <= (ret[0] | ret[1] << 8) + 1 - source < 0x100:
+                return                      # another routine's READST (an OPEN's, say)
+            if passed[0] < skip:            # a READST before the first byte
+                passed[0] += 1
+                return
             armed[0] = False
             game.mon.mem_set(KERNAL_ST, b"\x42", game.ram)
+            if isinstance(byte_at, str):
+                game.mon.mem_set(abi.all_symbols[byte_at][0], LOST_BYTE, game.ram)
+            else:
+                game.mon.mem_set(0x100 + ((sp + byte_at) & 0xFF), LOST_BYTE, game.ram)
             lost.append(entry)
-            if len(lost) >= count:
+            if count is not None and len(lost) >= count:
                 for cp in (cp_entry, cp_readst):
                     game.mon.checkpoint_delete(cp)
                     del game.stop_hooks[cp]
@@ -294,6 +334,15 @@ class Rig:
         game.stop_hooks[cp_entry] = enter
         game.stop_hooks[cp_readst] = lose
         return lost
+
+    def count_calls(self, label: str) -> list[int]:
+        """Each time ``label`` (resident code) runs from now on: a list that
+        grows by one entry per call."""
+        game = self.game
+        calls: list[int] = []
+        cp = game.mon.checkpoint_set(game.abi.all_symbols[label][0])
+        game.stop_hooks[cp] = lambda stop: calls.append(1)
+        return calls
 
     def retries(self) -> int:
         game = self.game
@@ -452,6 +501,33 @@ def at_title(rig: Rig) -> bool:
     return "N)ew  L)oad" in rig.screen()
 
 
+def overwrite_slot_losing_status(rig: Rig, slot: str) -> None:
+    """``overwrite_slot``, where the check for the slot's file loses its status
+    byte once (asked again with a fresh OPEN, so "Overwrite?" still shows)
+    and so does the next status read, the drive's answer to the write."""
+    rig.press(KEY_SAVE)
+    rig.expect("Select Slot")
+    syms = rig.game.abi.all_symbols   # the check may sit in an overlay not loaded yet:
+    name = syms["hal_storage_save_read_name"][0]   # known by its first instructions
+    probe = rig.lose_status_reads(1, caller="save_file_exists", code=bytes(
+        [0xA9, syms["hal_storage_save_read_name_len"][0], 0xA2, name & 0xFF, 0xA0, name >> 8]))
+    rig.press(slot)
+    rig.expect("Overwrite?")
+    if len(probe) != 1:
+        raise ScenarioFail(f"the check for the slot's file lost {len(probe)} status reads, not one")
+    after = rig.lose_status_reads(1)
+    rig.press("Y")
+    for _ in range(4):
+        if "error" in rig.screen().lower() or at_title(rig):
+            break
+        rig.press(" ")
+    if len(after) != 1:
+        raise ScenarioFail("the status read after the write was not lost")
+    if at_title(rig):
+        raise ScenarioFail("a status read lost after the write was taken as a save that worked")
+    rig.expect("Disk error")
+
+
 def overwrite_slot(rig: Rig, slot: str) -> None:
     """SHIFT+S, a used ``slot``, Y to overwrite: the save starts."""
     rig.press(KEY_SAVE)
@@ -581,7 +657,7 @@ def s_program_drive_as_save(rig: Rig, media: Path) -> None:
         raise ScenarioFail("the Program Disk was written to")
 
 
-def s_write_protected(rig: Rig, media: Path) -> None:
+def s_write_protected(rig: Rig, media: Path, lose_status: bool = False) -> None:
     rig.play_to("enter_dungeon")
     save = blank_d64(media / "save.d64")
     rig.attach(9, save)
@@ -589,7 +665,7 @@ def s_write_protected(rig: Rig, media: Path) -> None:
     resume(rig)
     image = rig.flush(9, save).read_bytes()
     rig.attach(9, save, readonly=True)
-    overwrite_slot(rig, "1")
+    (overwrite_slot_losing_status if lose_status else overwrite_slot)(rig, "1")
     for _ in range(6):   # until an error shows, or the save "succeeds" to the title
         if "protect" in rig.screen().lower() or "error" in rig.screen().lower() or at_title(rig):
             break
@@ -599,10 +675,17 @@ def s_write_protected(rig: Rig, media: Path) -> None:
         raise ScenarioFail("saving to a write-protected disk returned to the title with no error"
                            + (" (and the image changed: VICE wrote it)" if changed else
                               " (the image is unchanged: the save was lost silently)"))
-    rig.expect("Disk is write-protected.")
+    # A lost status byte cannot be asked for again: an error, not its name.
+    rig.expect("Disk error" if lose_status else "Disk is write-protected.")
     if changed:
         raise ScenarioFail("the write-protected image changed")
     back_out(rig, in_game)
+
+
+def s_status_lost_protected(rig: Rig, media: Path) -> None:
+    # The byte lost is the first of the drive's error, not of "00, OK": the
+    # save must still fail, never read as saved.
+    s_write_protected(rig, media, lose_status=True)
 
 
 def s_full_disk(rig: Rig, media: Path) -> None:
@@ -716,10 +799,61 @@ def s_status_retry_resume(rig: Rig, media: Path) -> None:
     rig.attach(9, blank_d64(media / "save.d64"))
     before = rig.character()
     save_first_time(rig)
-    lost = rig.lose_status_reads(1)
+    probe, failed = PROGRAM_MEDIA_PROBE[rig.port.name]
+    lost = rig.lose_status_reads(1, caller=probe)
+    failures = rig.count_calls(failed) if failed else []
     resume(rig)
     if len(lost) != 1:
         raise ScenarioFail(f"expected one lost status read, saw {len(lost)}")
+    if failures:
+        raise ScenarioFail(f"the program disk check failed {len(failures)} time(s) on a lost status read")
+    same_character(before, rig.character())
+
+
+def s_status_lost_save(rig: Rig, media: Path) -> None:
+    rig.play_to("enter_dungeon")
+    rig.attach(9, blank_d64(media / "save.d64"))
+    save_first_time(rig)
+    resume(rig)
+    for _ in range(3):
+        rig.press("5")
+    after_rest = rig.character()
+    # The status after the write cannot be asked again (a reread goes on
+    # mid-message), so the save must report an error rather than guess "saved".
+    overwrite_slot_losing_status(rig, "1")
+    back_out(rig, in_game)
+    rig.press(KEY_QUIT)
+    rig.expect("Do you really want to quit? Y/N")
+    rig.press("Y")
+    if not at_title(rig):
+        raise ScenarioFail(f"Y did not quit to the title:\n{rig.screen()}")
+    resume(rig)                             # the file itself was written
+    same_character(after_rest, rig.character())
+
+
+def s_status_retry_slot(rig: Rig, media: Path) -> None:
+    rig.play_to("enter_dungeon")
+    rig.attach(9, blank_d64(media / "save.d64"))
+    before = rig.character()
+    save_first_time(rig)
+    # Each slot's probe reads the drive's status before its file: the first
+    # read of each of the four is cut short (the byte it pushed for READST),
+    # and then the hooks go (on the Plus/4 the probe's address is KERNAL ROM
+    # code the load runs for every byte). The probe is in an overlay: it is
+    # known by its first instruction.
+    tries = rig.game.abi.all_symbols["save_slot_probe_tries"][0]
+    probe = bytes([0xA9, 3, 0x8D, tries & 0xFF, tries >> 8])   # lda #3 / sta save_slot_probe_tries
+    lost = rig.lose_status_reads(4, caller="save_slot_read_name", byte_at=3, skip=0, code=probe,
+                                 within="save_slot_read_name")
+    rig.press("L")
+    rig.expect("Select Slot")
+    if len(lost) != 4:
+        raise ScenarioFail(f"expected each of the four slot probes to lose a status read, saw {len(lost)}")
+    if re.search(r"1\)\s+Empty", rig.screen()):
+        raise ScenarioFail(f"the saved game's slot read as empty:\n{rig.screen()}")
+    rig.press("1")
+    if rig.obs is None or rig.obs.mode != Mode.COMMAND:
+        raise ScenarioFail(f"resume did not reach the command prompt:\n{rig.screen()}")
     same_character(before, rig.character())
 
 
@@ -781,7 +915,15 @@ SCENARIOS = [
              "one failed load while resuming from the title is repeated", reu=False,
              ports=("c64", "plus4")),   # the C128 resumes through its own runtime loader
     Scenario("status_retry_resume", s_status_retry_resume,
-             "a drive status read cut short while resuming is asked again", ports=("plus4",)),
+             "a drive status read cut short while resuming is asked again", ports=("plus4", "c128")),
+    Scenario("status_lost_save", s_status_lost_save,
+             "saving over a slot, the file check's status read and the one after the write cut short:"
+             " the check asks again, the save reports an error, and the game it wrote loads"),
+    Scenario("status_lost_protected", s_status_lost_protected,
+             "saving to a write-protected disk with the status after the write cut short:"
+             " still a failure"),
+    Scenario("status_retry_slot", s_status_retry_slot,
+             "the slot list's drive status read cut short: asked again, the saved game loads"),
     Scenario("load_fail_town", s_load_fail_town,
              "a load on the way up to town that never succeeds keeps the game", reu=False,
              expect_fail={port: "restarts or crashes (backlog: one fatal-load handler)"

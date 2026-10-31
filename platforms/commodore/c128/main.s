@@ -581,6 +581,12 @@ c128_wrapper_saved_p: .byte 0
     pla
     tax
     pla
+    .if (target == $ffc3) {
+        // CLOSE with carry set leaves a disk command channel (SA 15) open in
+        // the drive, and EnterKernal's compare sets it: a reread of channel
+        // 15 then went on mid-message. Close it in the drive, as C64 does.
+        clc
+    }
     jsr target
     php
     pha
@@ -3975,6 +3981,11 @@ disk_program_media_present:
     rts
 
 c128_program_play_exists:
+    // A status read cut short before its first digit (JiffyDOS) asks the
+    // whole probe again: closing channel 15 closed the probe file too.
+    lda #3
+    sta c128_ppe_tries
+!try:
     lda #c128_program_play_read_filename_len
     ldx #<c128_program_play_read_filename
     ldy #>c128_program_play_read_filename
@@ -3988,9 +3999,22 @@ c128_program_play_exists:
     jsr c128_program_read_command_status
     jsr disk_command_status
     cmp #HAL_STORAGE_STATUS_OK
-    bne !missing+
+    bne !not_ok+
     sec
     bcs !done+
+!not_ok:
+    lda disk_diag_readst
+    and #$02                    // read timeout
+    beq !missing+
+    lda disk_diag_cmd_status0
+    eor #$30
+    cmp #10                     // a digit: the drive answered
+    bcc !missing+
+    lda #C128_PROGRAM_PROBE_FILE_NUM
+    jsr w_close
+    jsr w_clrchn
+    dec c128_ppe_tries
+    bne !try-
 !missing:
     clc
 !done:
@@ -4001,13 +4025,16 @@ c128_program_play_exists:
     plp
     rts
 
+c128_ppe_tries: .byte 0
+
 c128_program_read_command_status:
     lda #$ff
     sta disk_diag_cmd_status0
     sta disk_diag_cmd_status1
     lda #0
-    ldx #0
-    ldy #0
+    sta disk_diag_readst
+    tax
+    tay
     jsr w_setnam
     lda #C128_PROGRAM_CMD_FILE_NUM
     ldx program_device
@@ -4023,6 +4050,7 @@ c128_program_read_command_status:
     jsr w_chrin
     sta disk_diag_cmd_status0
     jsr w_readst
+    sta disk_diag_readst
     bne !close+
     jsr w_chrin
     sta disk_diag_cmd_status1
