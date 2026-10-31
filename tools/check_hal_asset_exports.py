@@ -136,7 +136,8 @@ CLOSE_TRANSACTION_BODIES = {
     ),
 }
 OVERLAY_COMMON = ROOT / "platforms/commodore/common/overlay.s"
-# Disk asset loads go through asset_load_retry, which repeats the HAL load.
+# Disk asset loads go through asset_load_retry, which repeats the HAL load;
+# required ones through asset_load_required, which then asks for the disk.
 ASSET_LOAD_RETRY = ROOT / "platforms/commodore/common/asset_load_retry.s"
 STRING_BANK_COMMON = ROOT / "core/string_bank.s"
 TITLE_SCREEN_COMMON = ROOT / "platforms/commodore/common/title_screen.s"
@@ -233,8 +234,8 @@ def check_common_overlay_loader() -> list[str]:
     body = label_body(OVERLAY_COMMON, "overlay_load_disk")
     if body is None:
         return ["overlay.s: missing overlay_load_disk body"]
-    if "asset_load_retry" not in body:
-        errors.append("overlay.s: overlay_load_disk does not call asset_load_retry")
+    if "asset_load_required" not in body:
+        errors.append("overlay.s: overlay_load_disk does not call asset_load_required")
     for token in ("hal_storage_overlay_name_len", "hal_storage_overlay_name_lo", "hal_storage_overlay_name_hi"):
         if token not in body:
             errors.append(f"overlay.s: overlay_load_disk no longer uses {token}")
@@ -252,6 +253,11 @@ def check_asset_load_retry() -> list[str]:
         return ["asset_load_retry.s: missing asset_load_retry body"]
     if "jsr hal_asset_load_prg_header" not in body:
         return ["asset_load_retry.s: asset_load_retry does not call hal_asset_load_prg_header"]
+    required = label_body(ASSET_LOAD_RETRY, "asset_load_required")
+    if required is None:
+        return ["asset_load_retry.s: missing asset_load_required body"]
+    if "jsr asset_load_retry" not in required or "jsr asset_load_ask_for_disk" not in required:
+        return ["asset_load_retry.s: asset_load_required does not retry and then ask for the disk"]
     return []
 
 
@@ -260,8 +266,8 @@ def check_common_string_bank_loader() -> list[str]:
     body = label_body(STRING_BANK_COMMON, "bank_load_recall")
     if body is None:
         return ["string_bank.s: missing bank_load_recall body"]
-    if "asset_load_retry" not in body:
-        errors.append("string_bank.s: bank_load_recall does not call asset_load_retry")
+    if "asset_load_required" not in body:
+        errors.append("string_bank.s: bank_load_recall does not call asset_load_required")
     for token in STRING_BANK_FORBIDDEN_TOKENS:
         if token in body:
             errors.append(f"string_bank.s: bank_load_recall still contains {token}")
@@ -304,8 +310,8 @@ def check_common_tier_loader() -> list[str]:
 
     if load_body is None:
         return ["tier_manager.s: missing tier_load_disk body"]
-    if "asset_load_retry" not in load_body:
-        errors.append("tier_manager.s: tier_load_disk does not call asset_load_retry")
+    if "asset_load_required" not in load_body:
+        errors.append("tier_manager.s: tier_load_disk does not call asset_load_required")
     for token in ("hal_storage_tier_name_len", "hal_storage_tier_name_lo", "hal_storage_tier_name_hi"):
         if token not in load_body:
             errors.append(f"tier_manager.s: tier_load_disk no longer uses {token}")

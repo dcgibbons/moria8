@@ -131,7 +131,7 @@ input_wait_release:
     phx
     phy
     jsr input_entropy_tick
-    jsr input_run_key_held
+    jsr beeb_any_key_held
     ply
     plx
     cmp #0
@@ -175,6 +175,30 @@ input_run_key_held:
 input_run_cancel_check:
     jsr input_run_key_held
     jmp input_run_process_sample
+
+// beeb_any_key_held — As input_run_key_held, but SHIFT and CTRL count too
+// (release waits, hal_input.s). OSBYTE &79 with X = key EOR &80 tests one
+// key: internal keys 0 (SHIFT) and 1 (CTRL); the scan from 16 skips them.
+// Output: A nonzero if any key is held. Clobbers X, Y.
+beeb_any_key_held:
+    jsr input_run_key_held
+    bne !done+
+    lda #$79
+    ldx #$80                // SHIFT
+    jsr MOS_OSBYTE
+    txa
+    bmi !held+
+    lda #$79
+    ldx #$81                // CTRL
+    jsr MOS_OSBYTE
+    txa
+    bmi !held+
+    lda #0
+    rts
+!held:
+    lda #$80
+!done:
+    rts
 
 input_modal_prepare:
     jmp input_wait_release

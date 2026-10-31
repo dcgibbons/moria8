@@ -2279,28 +2279,70 @@ load_unstage_map_c128:
 // Clobbers: A, X, Y
 // ============================================================
 save_file_exists:
-save_file_exists_read_len:
+save_file_exists_read_len:          // save_slot_apply_name patches the length
     lda #hal_storage_save_read_name_len
     ldx #<hal_storage_save_read_name
     ldy #>hal_storage_save_read_name
+#if HAL_STORAGE_SAVE_PROBE_ASKS_DRIVE
+// storage_file_exists — The same for any file (A = name length, X/Y = name):
+// the save-disk marker's readers use it so that no CHKIN reaches a file the
+// drive refused (docs/BACKLOG.md). It also sets disk_prompt_device to the
+// save drive (C64, Plus/4) and leaves the status reader's results behind
+// (disk_status, and the DOS digits where the port keeps them).
+storage_file_exists:            // on the save drive
+    sta sfe_len + 1             // the name, kept in the retry's own operands
+    stx sfe_name_lo + 1
+    sty sfe_name_hi + 1
+    lda #hal_storage_check_file_num // a file left open would make the KERNAL
+    jsr SAVE_CLOSE                  // refuse the OPEN without asking the drive
+    lda #3
+    sta sfe_tries
+!sfe_try:
+sfe_len:
+    lda #0
+sfe_name_lo:
+    ldx #0
+sfe_name_hi:
+    ldy #0
+#endif
     jsr SAVE_SETNAM
     lda #hal_storage_check_file_num
     ldx save_device
     ldy #hal_storage_check_sec_read
     jsr SAVE_SETLFS
+#if HAL_STORAGE_SAVE_PROBE_ASKS_DRIVE
+#if !HAL_STORAGE_COMMAND_STATUS_FROM_DISK_DIAG
+    lda save_device             // the drive the status is read from
+    sta disk_prompt_device
+#endif
     jsr SAVE_OPEN
-#if HAL_STORAGE_SAVE_EXISTS_OPEN_ONLY
-    bcc !sfe_exists+
+    bcs !sfe_refused+
+    // No CHKIN: on a file the drive refused, one can wait forever in the
+    // KERNAL's talker turnaround (docs/BACKLOG.md). The drive's status after
+    // the OPEN says whether the file is there.
+    jsr hal_storage_read_command_status
+    lda hal_storage_status_lost
+    beq !sfe_answered+
+    // The status byte was lost on the bus: ask again with a fresh OPEN
+    // (reading the channel again would go on mid-message).
     lda #hal_storage_check_file_num
     jsr SAVE_CLOSE
+    dec sfe_tries
+    bne !sfe_try-
+    beq !sfe_absent+
+!sfe_refused:
+    // The KERNAL refused the OPEN (no drive): read the status anyway, so the
+    // reader's results say the drive gave no answer (no digits).
+    jsr hal_storage_read_command_status
+!sfe_absent:
     clc
-    rts
-!sfe_exists:
-    lda #hal_storage_check_file_num
-    jsr SAVE_CLOSE
-    sec
-    rts
+    bcc !sfe_cleanup+
+!sfe_answered:
+    :SaveDriveStatus()          // Z: the drive opened it
+    clc
+    bne !sfe_cleanup+
 #else
+    jsr SAVE_OPEN
     bcc !sfe_open_ok+
     clc
     bcc !sfe_cleanup+
@@ -2314,6 +2356,7 @@ save_file_exists_read_len:
     beq !sfe_exists+
     clc
     bcc !sfe_close+
+#endif
 !sfe_exists:
     sec
 !sfe_close:
@@ -2329,6 +2372,8 @@ save_file_exists_read_len:
 #endif
     plp
     rts
+#if HAL_STORAGE_SAVE_PROBE_ASKS_DRIVE
+sfe_tries: .byte 0
 #endif
 
 // ============================================================

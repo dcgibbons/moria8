@@ -256,20 +256,31 @@ PY
 }
 
 run_test() {
-    local name="$1"
-    local src="$2"
-    local result_range="$3"   # e.g. "0400 040b"
-    local expected_count="$4"
-    local cycles="${5:-20000000}"  # Optional cycle limit (default 20M)
-
-    if ! suite_selected "$name"; then
+    if ! suite_selected "$1"; then
         return
     fi
+    # A directory of its own: -vicesymbols writes <source>.vs beside the PRG,
+    # and with a shared /tmp name two runs at once (other worktrees or agents)
+    # deleted or read each other's symbols, so a suite broke at the wrong
+    # bootstrap and returned no result (docs/BACKLOG.md).
+    local prg_dir
+    prg_dir=$(mktemp -d -t "test_${1}.XXXXXX")
+    run_test_in "$prg_dir" "$@"
+    rm -f -- "$prg_dir/test.prg" "$prg_dir/$(basename "${2%.s}").vs" "$prg_dir/mon" "$prg_dir/tty.log"
+    rmdir -- "$prg_dir"
+}
+
+run_test_in() {
+    local prg_dir="$1"
+    local name="$2"
+    local src="$3"
+    local result_range="$4"   # e.g. "0400 040b"
+    local expected_count="$5"
+    local cycles="${6:-20000000}"  # Optional cycle limit (default 20M)
 
     echo -n "  $name: "
 
-    local prg_file
-    prg_file=$(mktemp -t "test_${name}_prg")
+    local prg_file="$prg_dir/test.prg"
 
     # Assemble and capture output
     local asm_output
@@ -359,8 +370,7 @@ run_test() {
 
     # Arm the completion breakpoint only after autostart reaches low RAM.
     # Otherwise BASIC ROM can execute a high stop address before PRG injection.
-    local mon_file
-    mon_file=$(mktemp -t "test_${name}_mon")
+    local mon_file="$prg_dir/mon"
     {
         echo "break exec \$${bootstrap_addr}"
         echo "g"
@@ -373,8 +383,7 @@ run_test() {
 
     # Run in VICE with an all-in-one monitor script; piping monitor commands
     # can race VICE startup and leave suites hanging.
-    local tty_log
-    tty_log=$(mktemp -t "test_${name}_ttylog")
+    local tty_log="$prg_dir/tty.log"
     run_vice_once() {
         local log_path="$1"
         script -q "$log_path" \

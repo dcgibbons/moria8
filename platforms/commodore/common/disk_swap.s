@@ -636,6 +636,22 @@ disk_marker_present:
     lda #hal_storage_marker_sec_read
     sta disk_diag_sec
     jsr disk_kernal_enter
+    // A CHKIN on a marker the drive refused (a fresh save disk) can wait
+    // forever in the KERNAL's talker turnaround (docs/BACKLOG.md). With the
+    // command channel opened first, its status after the OPEN says whether
+    // the marker is there before any CHKIN reaches it, as the slot probe does.
+    lda #3
+    sta dmp_tries
+!dmp_try:
+    lda #0
+    tax
+    tay
+    jsr SWAP_SETNAM
+    lda #hal_storage_cmd_channel
+    ldx save_device
+    ldy #hal_storage_cmd_channel
+    jsr SWAP_SETLFS
+    jsr SWAP_OPEN
 
     lda #hal_storage_marker_read_name_len
     ldx #<hal_storage_marker_read_name
@@ -651,14 +667,56 @@ disk_marker_present:
     sta disk_diag_carry
     lda #$81
     sta disk_status
-    jmp !dmp_done+
+    jmp !dmp_close+             // the ROM's failed OPEN still holds the LFN
 !dmp_open_ok:
     lda #0
     sta disk_diag_carry
     jsr SWAP_READST
     sta disk_diag_readst
-    beq !dmp_chkin+
+    beq !dmp_status+
     lda #$81
+    sta disk_status
+    jmp !dmp_close+
+
+!dmp_status:
+    ldx #hal_storage_cmd_channel
+    jsr SWAP_CHKIN
+    bcs !dmp_io+
+    jsr SWAP_CHRIN              // the status's first digit: 0 or 1 = opened
+    sta disk_diag_cmd_status0
+    jsr SWAP_READST
+    and #$02                    // read timeout
+    sta dmp_lost
+    jsr SWAP_CHRIN
+    sta disk_diag_cmd_status1
+    jsr SWAP_CLRCHN
+    lda disk_diag_cmd_status0
+    eor #$30
+    cmp #10
+    bcc !dmp_digit+
+    // No digit: a read that timed out lost it; close both and ask again.
+    lda dmp_lost
+    beq !dmp_io+
+    lda #hal_storage_marker_file_num
+    jsr SWAP_CLOSE
+    lda #hal_storage_cmd_channel
+    jsr SWAP_CLOSE
+    dec dmp_tries
+    beq !dmp_io+
+    jmp !dmp_try-
+!dmp_digit:
+    cmp #2                      // '2' and up: an error
+    bcc !dmp_chkin+
+    // The answer is classified here: disk_save_media_status reading the
+    // channel again would go on mid-message.
+    jsr hal_storage_command_status
+    cmp #HAL_STORAGE_STATUS_NOT_FOUND
+    bne !dmp_io+
+    lda #$83                    // a readable disk with no marker: the wrong disk
+    bne !dmp_set+
+!dmp_io:
+    lda #$81
+!dmp_set:
     sta disk_status
     jmp !dmp_close+
 
@@ -717,6 +775,8 @@ disk_marker_present:
 !dmp_close:
     jsr SWAP_CLRCHN
     lda #hal_storage_marker_file_num
+    jsr SWAP_CLOSE              // returns C = 0: the CLOSE of 15 reaches the drive
+    lda #hal_storage_cmd_channel    // after the marker: closing 15 closes all
     jsr SWAP_CLOSE
 !dmp_done:
     jsr disk_kernal_exit
@@ -727,4 +787,7 @@ disk_marker_present:
 !dmp_ok:
     clc
     rts
+
+dmp_tries: .byte 0
+dmp_lost:  .byte 0
 #endif

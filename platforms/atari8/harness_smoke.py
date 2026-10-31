@@ -99,6 +99,11 @@ def build_lua_script(scenario: str, syms: dict[str, int], machine: str) -> str:
     kbdbuf_len = syms.get("atari_kbdbuf_len", 0x0CFF)
     kbcode_table = syms.get("atari_kbcode_table", 0x1000)
     igk_char = syms.get("igk_char", 0x1080)
+    # input_get_key, the window the playtester's bridge taps: a key is fed
+    # only once the program reads the empty buffer from there. Without the
+    # symbols every key wait fails (wait_for_key_poll), as it should.
+    key_wait_start = syms.get("input_get_key", 0)
+    key_wait_end = syms.get("igk_save_x", 1) - 1
     xe_present = syms.get("xe_present", 0x0D10)
     xe_slot_pop = syms.get("xe_slot_populated", 0x0D11)
     current_ovl = syms.get("current_overlay", 0x0D20)
@@ -123,6 +128,8 @@ local KBDBUF = 0x{kbdbuf:04X}
 local KBDBUF_LEN = 0x{kbdbuf_len:04X}
 local KBCODE_TABLE = 0x{kbcode_table:04X}
 local IGK_CHAR = 0x{igk_char:04X}
+local KEY_WAIT_START = 0x{key_wait_start:04X}
+local KEY_WAIT_END = 0x{key_wait_end:04X}
 local XE_PRESENT = 0x{xe_present:04X}
 local XE_SLOT_POP = 0x{xe_slot_pop:04X}
 local CURRENT_OVL = 0x{current_ovl:04X}
@@ -179,11 +186,37 @@ local function assert_line(name, ok)
     print("ASSERT " .. (ok and "PASS " or "FAIL ") .. name)
 end
 
+-- key_polled: input_get_key has read the empty buffer since it was last
+-- cleared. A modal prompt empties the buffer before it reads
+-- (input_wait_release), so a key written as soon as the prompt's text shows
+-- would be dropped. The tap is kept in a global, as the playtester's bridge
+-- keeps its own: a tap Lua collects stops firing.
+local cpu = manager.machine.devices[":maincpu"]
+local key_polled = false
+_G.harness_key_poll_tap = prog:install_read_tap(KBDBUF_LEN, KBDBUF_LEN, "harness_key_poll",
+    function(offset, data, mask)
+        if data ~= 0 then return end   -- the dequeue taking a key, not a wait
+        local pc = cpu.state["PC"].value
+        if pc >= KEY_WAIT_START and pc <= KEY_WAIT_END then key_polled = true end
+    end)
+
+-- wait_for_key_poll: until the program waits in input_get_key; a key fed any
+-- earlier can be flushed, so not seeing the wait fails the scenario.
+local function wait_for_key_poll(keys)
+    key_polled = false
+    for _ = 1, 300 do
+        if key_polled then return end
+        emu.wait(1/60)
+    end
+    assert_line("key_wait_seen_before_" .. keys, false)
+end
+
 local function send_key(petscii)
     for _ = 1, 300 do
         if prog:read_u8(KBDBUF_LEN) == 0 and prog:read_u8(0xD301) == 0xFE then break end
         emu.wait(1/60)
     end
+    wait_for_key_poll(string.format("%02X", petscii))
     prog:write_u8(KBDBUF, petscii)
     prog:write_u8(KBDBUF_LEN, 1)
     for _ = 1, 300 do
@@ -191,6 +224,15 @@ local function send_key(petscii)
         if prog:read_u8(KBDBUF_LEN) == 0 and prog:read_u8(0xD301) == 0xFE then break end
     end
     wait_frames(10)
+end
+
+-- type_ahead: keys typed together while the program waits for one, as a
+-- fast typist's would be queued by the keyboard IRQ.
+local function type_ahead(keys)
+    wait_for_key_poll("type_ahead")
+    for i, k in ipairs(keys) do prog:write_u8(KBDBUF + i - 1, k) end
+    prog:write_u8(KBDBUF_LEN, #keys)
+    wait_frames(30)
 end
 
 local function wait_screen(txt, max_tenths)
@@ -452,6 +494,59 @@ function run()
     send_key(0x20)
     wait_frames(40)
     assert_line("ui_modals_returned", in_town())
+    -- SHIFT+Q with a 'Y' typed right after it: the prompt drops the Y (a
+    -- move), so the question waits; 'N' then plays on.
+    type_ahead({0xD1, 0x59})
+    assert_line("quit_prompt_shown", wait_screen("Do you really want to quit?", 80))
+    wait_frames(150)   -- time for a quit to leave the town screen
+    assert_line("typed_ahead_y_ignored", screen_has("Do you really want to quit?") and in_town())
+    send_key(0x4E) -- 'N'
+    wait_frames(40)
+    assert_line("quit_declined", in_town() and not screen_has("Do you really want to quit?"))
+    -- Rollover, on POKEY's own scan: SHIFT+Q, then Y pressed while Q is
+    -- still down, and Q let go first. POKEY reports the Y once the Q is up;
+    -- the prompt waits for every key to come up before it listens, so the Y
+    -- does not answer.
+    local keys = manager.machine.ioport.ports
+    local shift = keys[":fake"].fields["Shift"]
+    local q = keys[":keyboard.5"].fields["q  Q"]
+    local y = keys[":keyboard.5"].fields["y  Y"]
+    wait_for_key_poll("rollover")
+    shift:set_value(1)
+    q:set_value(1)
+    wait_frames(6)
+    y:set_value(1)
+    wait_frames(6)
+    q:set_value(0)
+    shift:set_value(0)
+    wait_frames(6)
+    y:set_value(0)
+    assert_line("rollover_prompt_shown", wait_screen("Do you really want to quit?", 80))
+    wait_frames(150)
+    assert_line("rollover_y_ignored", screen_has("Do you really want to quit?") and in_town())
+    send_key(0x4E) -- 'N'
+    wait_frames(40)
+    assert_line("rollover_declined", in_town() and not screen_has("Do you really want to quit?"))
+    -- SHIFT still down after SHIFT+Q's Q is let go: the prompt waits for it
+    -- too, so a Y pressed meanwhile (a shifted Y, which would say no) does
+    -- not answer.
+    wait_for_key_poll("shift_held")
+    shift:set_value(1)
+    q:set_value(1)
+    wait_frames(6)
+    q:set_value(0)
+    wait_frames(6)
+    y:set_value(1)
+    wait_frames(6)
+    y:set_value(0)
+    wait_frames(6)
+    shift:set_value(0)
+    assert_line("shift_prompt_shown", wait_screen("Do you really want to quit?", 80))
+    wait_frames(150)
+    assert_line("shift_held_y_ignored", screen_has("Do you really want to quit?") and in_town())
+    send_key(0x4E) -- 'N'
+    wait_frames(40)
+    assert_line("shift_declined", in_town() and not screen_has("Do you really want to quit?"))
     manager.machine:exit()
 end
 """

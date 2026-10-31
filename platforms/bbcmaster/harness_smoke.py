@@ -487,6 +487,29 @@ function run()
     send_key(0x20)
     wait_frames(40)
     assert_line("ui_modals_returned", in_town())
+    -- Real keys through MOS: SHIFT+Q, Q let go with SHIFT still down, then a
+    -- Y meanwhile (a shifted Y, which would say no). The prompt waits for
+    -- SHIFT too, so the Y does not answer.
+    local keys = manager.machine.ioport.ports
+    local shift = keys[":kbd:COL0"].fields["SHIFT"]
+    local q = keys[":kbd:COL0"].fields["q  Q"]
+    local y = keys[":kbd:COL4"].fields["y  Y"]
+    shift:set_value(1)
+    q:set_value(1)
+    wait_frames(6)
+    q:set_value(0)
+    wait_frames(6)
+    y:set_value(1)
+    wait_frames(6)
+    y:set_value(0)
+    wait_frames(6)
+    shift:set_value(0)
+    assert_line("shift_prompt_shown", wait_screen("Do you really want to quit?", 80))
+    wait_frames(150)
+    assert_line("shift_held_y_ignored", screen_has("Do you really want to quit?") and in_town())
+    send_key(0x4E) -- 'N'
+    wait_frames(40)
+    assert_line("shift_declined", in_town() and not screen_has("Do you really want to quit?"))
     manager.machine:exit()
 end
 """

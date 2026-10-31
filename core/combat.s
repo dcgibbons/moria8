@@ -1177,7 +1177,7 @@ combat_apply_levelup:
     // Print level-up message: "Welcome to level N."
     jmp msg_build_levelup
 
-#if HAL_PLATFORM_LEVELUP_MAGIC_USES_TRAMPOLINE
+#if HAL_PLATFORM_LEVELUP_MAGIC_USES_TRAMPOLINE && !LEVELUP_MAGIC_PENDING_EXTERNAL
 levelup_magic_pending: .byte 0 // 1 = main_loop owes a mana/spell recalc (level-up)
 #endif
 // Scratch for 24-bit threshold computation

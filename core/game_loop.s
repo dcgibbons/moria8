@@ -1231,7 +1231,9 @@ c128_town_move_diag_after_input_get_command:
 #if HAL_PLATFORM_GAME_LOOP_MODAL_PERSIST
     jsr c128_modal_save_game
 #if C128_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
-c128_test_after_save_game:
+    bcc !save_not_written+      // C = 1: the save was written
+    jsr c128_test_after_save_game   // the save-write smoke stops there
+!save_not_written:
 #endif
 #else
 #if !BYPASS_SLOT_PROMPT && !C64_UNIT_TEST

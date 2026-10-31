@@ -581,6 +581,12 @@ c128_wrapper_saved_p: .byte 0
     pla
     tax
     pla
+    .if (target == $ffc3) {
+        // CLOSE with carry set leaves a disk command channel (SA 15) open in
+        // the drive, and EnterKernal's compare sets it: a reread of channel
+        // 15 then went on mid-message. Close it in the drive, as C64 does.
+        clc
+    }
     jsr target
     php
     pha
@@ -1065,13 +1071,10 @@ tramp_winner_royal:
     lda #hal_storage_modal_misc_name_len
     ldx #<hal_storage_modal_misc_name
     ldy #>hal_storage_modal_misc_name
-    jsr asset_load_retry
-    bcs !done+
+    jsr asset_load_required     // asks for the program disk until it loads
     lda #0
     sta current_overlay
-    jsr royal_screen
-!done:
-    rts
+    jmp royal_screen
 
 winner_apply_retirement_bonus:
     .const WIN_PL_LEVEL = 19
@@ -2136,6 +2139,13 @@ c128_test_after_disk_setup_single_drive_return:
     sta disk_setup_done
     lda #C128_MEDIA_PROGRAM
     sta c128_media_state
+    // The state names the payload the slot holds: load PERSIST (boot left
+    // PLAY there) while the Program Disk is still in the drive.
+    lda #10
+    sta c128_runtime_load_stage
+    jsr c128_load_resident_persist_prg
+    bcc *+5
+    jmp runtime_load_failed
     lda #2                  // C128_MODAL_PERSIST; const is declared later.
     sta c128_modal_slot_state
 c128_test_disk_setup_single_drive_return_wait_for_harness:
@@ -2161,6 +2171,13 @@ c128_test_disk_setup_single_drive_return_before_disk_setup:
     sta disk_setup_done
     lda #C128_MEDIA_PROGRAM
     sta c128_media_state
+    // The state names the payload the slot holds: load PERSIST (boot left
+    // PLAY there) while the Program Disk is still in the drive.
+    lda #10
+    sta c128_runtime_load_stage
+    jsr c128_load_resident_persist_prg
+    bcc *+5
+    jmp runtime_load_failed
     lda #2                  // C128_MODAL_PERSIST; const is declared later.
     sta c128_modal_slot_state
 c128_test_single_drive_save_wrong_media_wait_for_harness:
@@ -2180,6 +2197,13 @@ c128_test_single_drive_save_wrong_media_script_exhausted:
     sta disk_setup_done
     lda #C128_MEDIA_PROGRAM
     sta c128_media_state
+    // The state names the payload the slot holds: load PERSIST (boot left
+    // PLAY there) while the Program Disk is still in the drive.
+    lda #10
+    sta c128_runtime_load_stage
+    jsr c128_load_resident_persist_prg
+    bcc *+5
+    jmp runtime_load_failed
     lda #2                  // C128_MODAL_PERSIST; const is declared later.
     sta c128_modal_slot_state
 c128_test_single_drive_load_wrong_media_wait_for_harness:
@@ -2199,6 +2223,13 @@ c128_test_single_drive_load_wrong_media_script_exhausted:
     sta disk_setup_done
     lda #C128_MEDIA_PROGRAM
     sta c128_media_state
+    // The state names the payload the slot holds: load PERSIST (boot left
+    // PLAY there) while the Program Disk is still in the drive.
+    lda #10
+    sta c128_runtime_load_stage
+    jsr c128_load_resident_persist_prg
+    bcc *+5
+    jmp runtime_load_failed
     lda #2                  // C128_MODAL_PERSIST; const is declared later.
     sta c128_modal_slot_state
 c128_test_single_drive_load_corrupt_wait_for_harness:
@@ -3085,6 +3116,13 @@ c128_active_save_slot: .byte $ff
 #if C128_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
 c128_test_after_save_media_check_active: .byte 0
 c128_test_post_save_prompt_diag: .fill 4, 0
+// The save-write smoke stops here once the save returns. In the game code
+// (the PLAY payload, $C3xx) VICE's "until" also stopped where the
+// screen-editor ROM runs the same address at boot: a pass with no save.
+// Below $4000 no ROM code runs.
+c128_test_after_save_game:
+    rts
+.assert "save-write smoke stop is below every ROM", c128_test_after_save_game < $4000, true
 #endif
 #if C128_TEST_SCRIPTED_LOAD_THEN_SAVE_NEW_EMPTY_PRODUCT
 c128_test_load_then_save_new_empty_stage: .byte 0
@@ -3975,6 +4013,11 @@ disk_program_media_present:
     rts
 
 c128_program_play_exists:
+    // A status read cut short before its first digit (JiffyDOS) asks the
+    // whole probe again: closing channel 15 closed the probe file too.
+    lda #3
+    sta c128_ppe_tries
+!try:
     lda #c128_program_play_read_filename_len
     ldx #<c128_program_play_read_filename
     ldy #>c128_program_play_read_filename
@@ -3988,9 +4031,22 @@ c128_program_play_exists:
     jsr c128_program_read_command_status
     jsr disk_command_status
     cmp #HAL_STORAGE_STATUS_OK
-    bne !missing+
+    bne !not_ok+
     sec
     bcs !done+
+!not_ok:
+    lda disk_diag_readst
+    and #$02                    // read timeout
+    beq !missing+
+    lda disk_diag_cmd_status0
+    eor #$30
+    cmp #10                     // a digit: the drive answered
+    bcc !missing+
+    lda #C128_PROGRAM_PROBE_FILE_NUM
+    jsr w_close
+    jsr w_clrchn
+    dec c128_ppe_tries
+    bne !try-
 !missing:
     clc
 !done:
@@ -4001,13 +4057,16 @@ c128_program_play_exists:
     plp
     rts
 
+c128_ppe_tries: .byte 0
+
 c128_program_read_command_status:
     lda #$ff
     sta disk_diag_cmd_status0
     sta disk_diag_cmd_status1
     lda #0
-    ldx #0
-    ldy #0
+    sta disk_diag_readst
+    tax
+    tay
     jsr w_setnam
     lda #C128_PROGRAM_CMD_FILE_NUM
     ldx program_device
@@ -4023,6 +4082,7 @@ c128_program_read_command_status:
     jsr w_chrin
     sta disk_diag_cmd_status0
     jsr w_readst
+    sta disk_diag_readst
     bne !close+
     jsr w_chrin
     sta disk_diag_cmd_status1
@@ -4234,7 +4294,9 @@ c128_resident_play_body:
 #define COMBAT_COMMON_HELPERS_EXTERNAL
 #define COMBAT_STRINGS_EXTERNAL
 #define CMB_IN_WAY_EXTERNAL
+#define LEVELUP_MAGIC_PENDING_EXTERNAL
 #import "../../../core/combat.s"
+#undef LEVELUP_MAGIC_PENDING_EXTERNAL
 #undef CMB_IN_WAY_EXTERNAL
 #undef COMBAT_STRINGS_EXTERNAL
 #undef COMBAT_COMMON_HELPERS_EXTERNAL
@@ -5050,6 +5112,24 @@ press_key_str:
     .text "Press any key" ; .byte 0
 press_key_str_end:
 
+// Always-resident Staff of Speed trampoline: the items overlay calls this
+// while either PLAY or PERSIST owns the $AF00 modal slot.
+tramp_staff_speed_items:
+    lda #OVL_DEATH
+    jsr overlay_load
+    bcs !staff_speed_done+
+    jsr eff_haste_self
+    lda #OVL_ITEMS
+    jsr overlay_load
+!staff_speed_done:
+    sec
+    rts
+
+c128_resident_diskio_end:
+.segment Default
+
+// In Default, resident Bank 0 as DiskIo is: moved out of DiskIo to make
+// room for its scripted save-test builds.
 combat_append_blow_summary:
     lda cmb_blow_count
     cmp #2
@@ -5076,22 +5156,6 @@ combat_append_blow_summary:
     lda #0
     sta combat_msg_buf,x
     rts
-
-// Always-resident Staff of Speed trampoline: the items overlay calls this
-// while either PLAY or PERSIST owns the $AF00 modal slot.
-tramp_staff_speed_items:
-    lda #OVL_DEATH
-    jsr overlay_load
-    bcs !staff_speed_done+
-    jsr eff_haste_self
-    lda #OVL_ITEMS
-    jsr overlay_load
-!staff_speed_done:
-    sec
-    rts
-
-c128_resident_diskio_end:
-.segment Default
 
 // Bow to-hit entry: resident Bank 0 RAM (callable from OVL.ITEMS while the
 // modal slot holds either payload); parked outside DiskIo for space.
@@ -5365,6 +5429,11 @@ banked_payload_end:
 .assert "C128 map span helper lives in top common RAM", mmu_common_and_map_span >= $F000 && mmu_common_and_map_span < $FF00, true
 .assert "Banked payload starts above overlay window", first_banked_function >= $F000, true
 .assert "Banked payload is emitted as external runtime PRG", banked_payload == $F000, true
+
+// combat.s's flag, kept here: main_loop shifts it every pass, and in the PLAY
+// payload it would land in PERSIST code whenever PERSIST holds the $AF00 slot.
+levelup_magic_pending: .byte 0  // 1 = main_loop owes a mana/spell recalc (level-up)
+.assert "levelup_magic_pending stays in the resident image, out of the $AF00 modal slot", levelup_magic_pending >= $1c01 && levelup_magic_pending < program_end, true
 
 // ============================================================
 // Safety: ensure runtime code doesn't overlap runtime data areas

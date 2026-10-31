@@ -1501,13 +1501,7 @@ pick_item_type:
 #else
     ldx #OVL_DUNGEON_GEN - 1
 #endif
-    jsr overlay_load_disk        // No media prompt while generating a dungeon.
-    bcc !pit_disk_loaded+
-    lda #OVL_NONE
-    sta current_overlay
-    lda #2                      // Fallback to first non-gold type on media error.
-    rts
-!pit_disk_loaded:
+    jsr overlay_load_disk        // asks for the program disk until it loads
 #if PICKER_IN_CHEST_OVERLAY
     lda #OVL_CHEST
 #else

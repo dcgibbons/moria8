@@ -7,7 +7,9 @@
 // Contract:
 //   - raw physical state only
 //   - no PETSCII decode
-//   - modifier-only rows do not count as held/cancel input for running
+//   - modifier-only rows do not count as held/cancel input for running;
+//     with irs_count_modifiers bit 7 set (a release wait) they do, all but
+//     left SHIFT, whose contact a latched SHIFT LOCK holds down
 
 // input_run_scan_held_raw — Non-blocking: returns nonzero if any non-modifier
 // key is physically down according to the raw CIA matrix state.
@@ -105,9 +107,11 @@ input_run_row_has_nonmodifier:
     cpx #1
     bne !irrn_not_lshift+
     lda irs_row_raw
-    ora #$80            // Ignore left shift
+    ora #$80            // Ignore left shift: SHIFT LOCK latches the same contact
     sta irs_row_raw
 !irrn_not_lshift:
+    bit irs_count_modifiers
+    bmi !irrn_not_alt+  // A release wait: right SHIFT, C=, CTRL and ALT count too
     cpx #6
     bne !irrn_not_rshift+
     lda irs_row_raw
@@ -136,6 +140,7 @@ input_run_row_has_nonmodifier:
     rts
 
 irs_save_pra:   .byte 0
+irs_count_modifiers: .byte 0    // bit 7: modifiers count as held (input_wait_release)
 irs_save_ddra:  .byte 0
 irs_save_ddrb:  .byte 0
 irs_ext_save:   .byte 0

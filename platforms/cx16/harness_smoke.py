@@ -324,6 +324,57 @@ class X16Bench:
         self.assert_line("town_reached", self.in_town(), "did not reach town after chargen")
 
 
+# X16 keynums (x16-rom inc/keycode.inc): Y and Left Shift; bit 7 marks key up.
+KEYNUM_Y = 0x16
+KEYNUM_LSHIFT = 0x2C
+KEY_EVENT_STUB = 0x0700     # CX16_ROW_STAGE_BASE: VERA row staging, idle at a key wait
+
+
+def key_event(tb: X16Bench, code: int) -> None:
+    """Deliver one keyboard event the way the KERNAL does: lda #code, then the
+    keyhdl hook, whose chain ends in the KERNAL's rts back to the yield."""
+    target = tb.syms["cx16_key_event"]
+    for i, byte in enumerate((0xA9, code, 0x4C, target & 0xFF, target >> 8)):
+        tb.write_u8(KEY_EVENT_STUB + i, byte)
+    tb.run_addr(KEY_EVENT_STUB)
+
+
+def check_key_event_hook(tb: X16Bench) -> None:
+    """cx16_key_event, chained on keyhdl at boot, keeps which keys are down
+    for input_wait_release: a key-down sets its bit and its key-up clears
+    it, modifiers included (as the C64 counts them)."""
+    down = tb.syms["cx16_key_down"]
+    hook = tb.read_u8(0x032E) | tb.read_u8(0x032F) << 8
+    tb.assert_line("keyhdl_hooked", hook == tb.syms["cx16_key_event"], f"keyhdl={hook:04X}")
+    y_byte, y_bit = down + KEYNUM_Y // 8, 1 << (KEYNUM_Y % 8)
+    key_event(tb, KEYNUM_Y)
+    tb.assert_line("key_down_marked", (tb.read_u8(y_byte) & y_bit) != 0, f"byte={tb.read_u8(y_byte):02X}")
+    key_event(tb, KEYNUM_LSHIFT)
+    shift_byte = tb.read_u8(down + KEYNUM_LSHIFT // 8)
+    tb.assert_line("modifier_marked", (shift_byte & (1 << (KEYNUM_LSHIFT % 8))) != 0, f"byte={shift_byte:02X}")
+    key_event(tb, KEYNUM_LSHIFT | 0x80)
+    key_event(tb, KEYNUM_Y | 0x80)
+    left = [tb.read_u8(down + i) for i in range(16)]
+    tb.assert_line("key_up_cleared", not any(left), f"down={bytes(left).hex()}")
+
+
+def check_run_cancel_flush(tb: X16Bench) -> None:
+    """Cancelling a run empties the KERNAL key queue: its count is $A80A in
+    RAM bank 0, while the game keeps an overlay's bank selected at $00. The
+    flush must clear bank 0's count and leave that overlay's byte alone."""
+    bank = tb.read_u8(0x0000)
+    saved = tb.read_bank_u8(bank, 0xA80A)
+    tb.write_bank_u8(bank, 0xA80A, 0x5A)        # a sentinel in the selected bank
+    tb.write_bank_u8(0, 0xA80A, 1)              # one key pending in the queue
+    tb.run_addr(tb.syms["input_flush_run_cancel_buffer"])
+    count = tb.read_bank_u8(0, 0xA80A)
+    kept = tb.read_bank_u8(bank, 0xA80A)
+    tb.write_bank_u8(bank, 0xA80A, saved)
+    tb.assert_line("run_cancel_flush_bank0", count == 0, f"bank 0 count={count}")
+    tb.assert_line("run_cancel_flush_spares_bank", kept == 0x5A and tb.read_u8(0x0000) == bank,
+                   f"bank {bank} byte={kept:02X} $00={tb.read_u8(0x0000)}")
+
+
 def scenario_boot_title(tb: X16Bench) -> None:
     row0 = tb.row_bytes(0)
     row18_txt = tb.rowtext(18)
@@ -355,6 +406,7 @@ def scenario_boot_title(tb: X16Bench) -> None:
         tb.read_u8(tb.syms["tsi_ram_banks_cached"]) == 64 and tb.read_u8(tb.syms["tsi_krev_cached"]) != 0,
         f"banks={tb.read_u8(tb.syms['tsi_ram_banks_cached'])} krev={tb.read_u8(tb.syms['tsi_krev_cached'])}",
     )
+    check_key_event_hook(tb)
     tb.assert_line(
         "sound_init_state",
         tb.read_u8(tb.syms["zp_snd_effect"]) == 0xFF and tb.read_u8(tb.syms["zp_snd_timer"]) == 0,
@@ -447,10 +499,14 @@ def scenario_priest_map_area(tb: X16Bench) -> None:
 
 def scenario_help_overlay(tb: X16Bench) -> None:
     tb.chargen("A")
+    key_event(tb, KEYNUM_Y)     # a key-down whose key-up never arrives
     tb.shift("/")
     tb.assert_line("help_open", tb.screen_has("Command Reference"), "'?' did not open the help overlay")
+    left = [tb.read_u8(tb.syms["cx16_key_down"] + i) for i in range(16)]
+    tb.assert_line("lost_key_up_forgotten", not any(left), f"down={bytes(left).hex()}")
     tb.press("Q")
     tb.assert_line("help_close", tb.in_town(), "help did not return to the town view")
+    check_run_cancel_flush(tb)
     tb.dump("after_help")
     tb.log("SCENARIO DONE")
 

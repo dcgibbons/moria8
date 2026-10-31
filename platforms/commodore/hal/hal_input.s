@@ -25,6 +25,10 @@
 //   hal_input_flush_run_cancel_buffer
 //   hal_input_help_footer_uses_esc_stop
 //
+// With HAL_INPUT_KBDBUF_COUNT_BANKED (the count sits in banked RAM, X16):
+//   hal_input_flush_kbdbuf — empty the key queue with the count's bank
+//   selected, keeping the caller's bank; clobbers A.
+//
 // Service contracts:
 // - hal_input_get_key: input none; output A=normalized key or 0, C=0 success;
 //   clobbers X/Y allowed; must apply platform debounce policy.
@@ -32,8 +36,14 @@
 //   clobbers X/Y allowed; owns matrix/KERNAL translation.
 // - hal_input_get_text_char: input none; output A=normalized text char or 0;
 //   clobbers X/Y allowed; must not auto-repeat a held key unless requested.
-// - hal_input_wait_release: input none; output no key held; clobbers A/X/Y
-//   allowed; must include modifier keys that affect commands.
+// - hal_input_wait_release: input none; output no key held (a bounded wait
+//   where a key-up can be lost: Apple IIe, Atari, BBC, X16) and none queued:
+//   a key typed ahead, or pressed while another was still down, is dropped;
+//   clobbers A/X/Y allowed; must include modifier keys that affect commands,
+//   as far as the hardware shows them held (the Apple IIe's keyboard shows
+//   none, the Atari's POKEY no CTRL), except the SHIFT a latched SHIFT LOCK
+//   holds down where the wait has no bound (C64 and C128 left SHIFT, Plus/4
+//   SHIFT).
 // - hal_input_any_key_held: input none; output A=0 none/nonzero held;
 //   clobbers X/Y allowed; does not consume key events.
 // - hal_input_run_cancel_check: input none; output C=1 cancel requested;

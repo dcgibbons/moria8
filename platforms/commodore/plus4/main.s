@@ -173,12 +173,11 @@ plus4_kernal_call:
     tsx
     lda $0104,x
     sta zp_vol_2
-    lda $0105,x
-    sta zp_vol_3
     clc
-    lda $0104,x
     adc #2
     sta $0104,x
+    lda $0105,x                 // keeps the carry from the adc
+    sta zp_vol_3
     bcc !cdc_target+
     inc $0105,x
 !cdc_target:
@@ -195,6 +194,11 @@ plus4_kernal_call:
     pla
     jsr plus4_bank_rom
     cli
+    // Carry is still the return-address sum's: CLOSE with it set leaves a
+    // disk command channel (SA 15) open in the drive, so the next read of
+    // channel 15 goes on mid-message, as it did on the C128. No other call
+    // here reads carry.
+    clc
 !cdc_jsr:
     jsr $ffff
     php
@@ -268,13 +272,21 @@ plus4_kernal_load:
 #import "hal/storage.s"
 
 plus4_storage_marker_present:
-    lda #1
-    sta disk_status
     lda #$81                    // DISK_ERR_MARKER_OPEN
     jsr disk_error_set_phase
-    jsr plus4_kernal_clrchn
-    lda #hal_storage_marker_file_num
-    jsr plus4_kernal_close
+    // A CHKIN on a marker the drive refused (a fresh save disk) can wait
+    // forever in the KERNAL's talker turnaround: ask the drive first. Its
+    // answer (62) stands; reading the channel again goes on mid-message.
+    lda #hal_storage_marker_read_name_len
+    ldx #<hal_storage_marker_read_name
+    ldy #>hal_storage_marker_read_name
+    jsr storage_file_exists
+    bcs !cdmp_there+
+    jmp !cdmp_status_done+      // disk_status: the drive's answer, or 2
+!cdmp_there:
+
+    lda #1                      // (the probe closed its file and channels)
+    sta disk_status
     lda #hal_storage_marker_read_name_len
     ldx #<hal_storage_marker_read_name
     ldy #>hal_storage_marker_read_name
@@ -284,23 +296,17 @@ plus4_storage_marker_present:
     ldy #hal_storage_marker_sec_read
     jsr plus4_kernal_setlfs
     jsr plus4_kernal_open
-    bcc !cdmp_open_ok+
-    sta disk_error_readst
-    jmp !cdmp_close+
-!cdmp_open_ok:
+    sta disk_error_readst       // the error code, if it failed
+    bcs !cdmp_close+
     jsr plus4_kernal_readst
     sta disk_error_readst
-    beq !cdmp_chkin+
-    jmp !cdmp_close+
-!cdmp_chkin:
+    bne !cdmp_close+
     lda #$82                    // DISK_ERR_MARKER_CHKIN
     jsr disk_error_set_phase
     ldx #hal_storage_marker_file_num
     jsr plus4_kernal_chkin
-    bcc !cdmp_chkin_ok+
-    sta disk_error_readst
-    jmp !cdmp_close+
-!cdmp_chkin_ok:
+    sta disk_error_readst       // the error code, if it failed
+    bcs !cdmp_close+
     lda #$83                    // DISK_ERR_MARKER_READ
     jsr disk_error_set_phase
     lda #0
@@ -601,12 +607,12 @@ plus4_storage_marker_write_resident:
     rts
 
 plus4_disk_read_command_status:
-    // A read that times out (ST bit 1) is a lost transfer, not an answer:
-    // under JiffyDOS a byte the drive sends while its disk-controller IRQ
-    // runs can arrive cut short (playtest-disk save_overwrite). Ask again.
-    lda #3
-    sta p4dcs_attempts
-!p4dcs_try:
+    // A read that times out (ST bit 1) before any digit came is a lost
+    // transfer, not an answer: under JiffyDOS a byte the drive sends while
+    // its disk-controller IRQ runs can arrive cut short, as $58 (playtest-disk
+    // save_overwrite). p4dcs_lost says so, for a caller that can ask again
+    // with a fresh OPEN: reading this channel again goes on mid-message. A
+    // digit is the drive's answer and stands.
     // Start with no channel selected: after a write the drive refused, the
     // JiffyDOS Plus/4 KERNAL never completed the CHKIN below (playtest-disk
     // full_disk).
@@ -619,6 +625,7 @@ plus4_disk_read_command_status:
     sta disk_error_dos0
     sta disk_error_dos1
     lda #0                      // no command: just read the channel
+    sta p4dcs_lost
     tax
     tay
     jsr plus4_kernal_setnam
@@ -635,7 +642,7 @@ plus4_disk_read_command_status:
     sta disk_error_dos0
     jsr plus4_kernal_readst
     sta disk_error_readst
-    bne !p4dcs_close+           // as on C128: no second digit after a failed read
+    bne !p4dcs_first_failed+    // as on C128: no second digit after a failed read
     jsr plus4_kernal_chrin
     sta disk_error_dos1
     jsr plus4_kernal_readst
@@ -644,16 +651,20 @@ plus4_disk_read_command_status:
 !p4dcs_close:
     jsr plus4_kernal_clrchn
     lda #hal_storage_cmd_channel
-    jsr plus4_kernal_close
-    lda disk_error_readst
+    jmp plus4_kernal_close
+!p4dcs_first_failed:
     and #$02                    // read timeout
-    beq !p4dcs_done+
-    dec p4dcs_attempts
-    bne !p4dcs_try-
+    beq !p4dcs_close-
+    lda disk_error_dos0
+    eor #$30
+    cmp #10                     // a digit: the drive answered
+    bcc !p4dcs_close-
+    inc p4dcs_lost
+    bcs !p4dcs_close-           // C = 1 from cmp
 !p4dcs_done:
     rts
 
-p4dcs_attempts: .byte 0
+p4dcs_lost: .byte 0             // nonzero: the last status read lost its byte
 
 plus4_disk_status_to_disk_status:
     // One DOS-code policy for every port: core/storage_status.s.
@@ -1284,8 +1295,7 @@ tramp_spawn_nest_gold:
     cmp #OVL_DUNGEON_GEN
     beq !tsng_loaded+
     ldx #OVL_DUNGEON_GEN - 1
-    jsr overlay_load_disk       // No media prompt while generating a dungeon.
-    bcs !tsng_failed+
+    jsr overlay_load_disk       // asks for the program disk until it loads
     lda #OVL_DUNGEON_GEN
     sta current_overlay
 !tsng_loaded:
@@ -1293,10 +1303,6 @@ tramp_spawn_nest_gold:
     jsr plus4_bank_ram
     jsr spawn_nest_gold
     jmp tramp_sr_epilogue
-!tsng_failed:
-    lda #OVL_NONE               // as pick_item_type on a media error
-    sta current_overlay
-    rts
 
 tramp_find_special_room:
     pha                         // Save A (room type input)
@@ -2064,14 +2070,7 @@ tramp_winner_royal:
     lda #hal_storage_modal_misc_name_len
     ldx #<hal_storage_modal_misc_name
     ldy #>hal_storage_modal_misc_name
-    jsr asset_load_retry
-#if PLUS4_TEST_SCRIPTED_RETIREMENT_PRODUCT
-    bcc !retirement_loaded+
-    jmp plus4_test_retirement_fail_sym
-!retirement_loaded:
-#else
-    bcs !done+
-#endif
+    jsr asset_load_required     // asks for the program disk until it loads
     lda #0
     sta current_overlay
     sei
@@ -2082,7 +2081,6 @@ tramp_winner_royal:
     jmp plus4_test_retirement_pass_sym
 #endif
     jsr plus4_bank_ram
-!done:
     rts
 
 // ============================================================
@@ -2183,29 +2181,20 @@ plus4_copy_overlay_window:
 // Verify that the selected program disk is actually present.
 // Output: carry clear = program media present, carry set = absent/wrong media.
 plus4_require_program_media:
-    jsr plus4_kernal_clrchn
-    lda #hal_storage_program_file_num
-    jsr plus4_kernal_close
+    // Does the drive open a file only the Program Disk holds? Its status after
+    // the OPEN says, asked again with a fresh OPEN when a read loses its byte.
+    // storage_file_exists asks the save drive: the program drive stands in.
+    lda save_device
+    pha
+    lda program_device
+    sta save_device
     lda #hal_storage_overlay_help_name_len
     ldx #<hal_storage_overlay_help_name
     ldy #>hal_storage_overlay_help_name
-    jsr plus4_kernal_setnam
-    lda #hal_storage_program_file_num
-    ldx program_device
-    ldy #0
-    jsr plus4_kernal_setlfs
-    jsr plus4_kernal_open
-    php
-    lda #hal_storage_program_file_num
-    jsr plus4_kernal_close
-    jsr plus4_kernal_clrchn
-    plp
-    bcs !fail+
-    lda program_device
-    sta disk_prompt_device
-    jsr plus4_disk_read_command_status
-    lda disk_status
-    bne !fail+
+    jsr storage_file_exists
+    pla
+    sta save_device             // keeps C
+    bcc !fail+
     clc
     rts
 !fail:

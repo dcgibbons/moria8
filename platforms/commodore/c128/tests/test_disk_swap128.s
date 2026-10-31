@@ -1277,10 +1277,12 @@ test_start:
     beq *+5
     jmp test_fail
 
-    // Test 13c: a failed marker OPEN closes nothing it never opened and
-    // still falls back to THE.GAME detection on a legacy save
-    // disk. Drive init, THE.GAME and program-media probes close their own
-    // channels, so only the marker file's CLOSE is counted.
+    // Test 13c: a failed marker OPEN still closes the marker file, once
+    // (the C128 ROM's OPEN enters the LFN in its table before the bus, at
+    // $EFCA, and keeps it when the drive is not there), and still falls
+    // back to THE.GAME detection on a legacy save disk. Drive init,
+    // THE.GAME and program-media probes close their own channels, so only
+    // the marker file's CLOSE is counted.
     jsr reset_harness_state
     lda #1
     sta marker_open_fail
@@ -1300,6 +1302,7 @@ test_start:
     beq *+5
     jmp test_fail
     lda w_close_marker_calls
+    cmp #1
     beq *+5
     jmp test_fail
     lda ui_action_count

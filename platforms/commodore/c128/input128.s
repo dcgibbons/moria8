@@ -219,6 +219,15 @@ input_wait_release:
     bne !iwr_wait-
     ora igk_last_sample
     bne !iwr_wait-
+    // The PETSCII sample shows no lone SHIFT, C=, CTRL or ALT; the raw scan
+    // with modifiers counted must show nothing down too (hal_input.s), but
+    // for left SHIFT: SHIFT LOCK latches it, and this wait has no bound.
+    lda #$80
+    sta irs_count_modifiers
+    jsr input_run_scan_held_raw
+    asl irs_count_modifiers     // $80 -> 0
+    tax                         // Z: the scan's result
+    bne !iwr_wait-
     sta igk_last_sample
     sta igk_stable
     rts
@@ -316,8 +325,11 @@ c128_test_input_script:
     .byte $20              // SPACE = tolerate C128 follow-up modal/fresh-key wait
 #elif C128_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
     .byte $4c              // L = load from title
-    .byte $59              // Y = accept Disk Setup drive-9 prompt if shown
+    .byte $33              // 3 = Disk Setup done (program 8, save 9)
+    .byte $20              // SPACE = acknowledge insert-save-disk prompt
     .byte $d3              // SHIFT+S = save in gameplay
+    .byte $59              // Y = overwrite slot 1
+    .byte $20              // SPACE = dismiss "Saving game... -more-"
 #elif C128_TEST_SCRIPTED_SINGLE_DRIVE_SAVE_WRONG_MEDIA_PRODUCT
     .byte $20              // SPACE = acknowledge initial save-disk prompt
     .byte $20              // SPACE = leave program disk in at setup insert prompt

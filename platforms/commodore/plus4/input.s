@@ -159,24 +159,33 @@ input_wait_release:
     sta PLUS4_RAM_ENABLE
     bne !drain-
 !wait_up:
-    jsr plus4_any_nonmodifier_key_held
+    jsr plus4_any_key_held  // C= and CTRL count here (hal_input.s)
     bne !wait_up-
     jsr plus4_input_settle
-    jsr plus4_any_nonmodifier_key_held
+    jsr plus4_any_key_held
     bne !wait_up-
     jsr plus4_display_resync
     plp
     rts
 
+// plus4_any_key_held — as below, but C= and CTRL count (release waits).
+// Not SHIFT: SHIFT LOCK latches its contact, and the waits have no bound.
+plus4_any_key_held:
+    lda #$80                // SHIFT's bit in plus4_modifier_mask
+    bne !mask+
 plus4_any_nonmodifier_key_held:
+    lda #$ff
+!mask:
+    sta pakh_mask
     ldx #0
 !scan:
     lda plus4_key_select,x
     sta PLUS4_KEY_SELECT
     lda #$ff
     sta TED_KEY_LATCH
-    lda TED_KEY_LATCH
-    ora plus4_modifier_mask,x
+    lda plus4_modifier_mask,x
+    and pakh_mask           // $ff: skip modifiers, $80: skip SHIFT only
+    ora TED_KEY_LATCH
     cmp #$ff
     bne !held+
     inx
@@ -208,8 +217,9 @@ plus4_input_settle:
 plus4_key_select:
     .byte $fe,$fd,$fb,$f7,$ef,$df,$bf,$7f
 
-plus4_modifier_mask:
-    .byte $00,$80,$00,$00,$00,$20,$00,$04
+plus4_modifier_mask:                // KERNAL key table ($E026): row 1 bit 7
+    .byte $00,$80,$00,$00,$00,$00,$00,$24  // SHIFT, row 7 bit 2 CTRL, bit 5 C=
+pakh_mask: .byte 0
 
 // input_get_command — Wait for a keypress, return command ID
 // Output: A = command ID (CMD_* constant)

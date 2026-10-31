@@ -588,7 +588,41 @@ test_run_raw_row_checks:
     cmp #1
     bne test_fail3
 
+    // A release wait counts modifiers (irs_count_modifiers bit 7), all but
+    // left shift: SHIFT LOCK latches its contact.
+    lda #$80
+    sta irs_count_modifiers
+    lda #$7f               // Row 1: left shift (or SHIFT LOCK) only
+    ldx #1
+    jsr input_run_row_has_nonmodifier
+    cmp #0
+    bne test_fail4
+    lda #$ef               // Row 6: right shift only
+    ldx #6
+    jsr input_run_row_has_nonmodifier
+    cmp #1
+    bne test_fail4
+    lda #$fb               // Row 7: CTRL only
+    ldx #7
+    jsr input_run_row_has_nonmodifier
+    cmp #1
+    bne test_fail4
+    lda #$fe               // Row 10/K0: ALT only
+    ldx #10
+    jsr input_run_row_has_nonmodifier
+    cmp #1
+    bne test_fail4
+    lda #$ff               // Row 1: nothing
+    ldx #1
+    jsr input_run_row_has_nonmodifier
+    cmp #0
+    bne test_fail4
+    lda #0
+    sta irs_count_modifiers
     jmp test_scan_restore_checks
+
+test_fail4:
+    jmp test_fail_loop
 
 test_scan_restore_checks:
     // Scan routine must always restore keyboard drive registers.

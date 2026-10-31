@@ -7,6 +7,9 @@
 .const hal_storage_save_sec_read = 2
 .const hal_storage_check_sec_read = hal_storage_save_sec_read
 .const hal_storage_cmd_channel = 15
+// The save-slot probe reads the drive's status before any CHKIN on a slot
+// file (IEC: a CHKIN on a file the drive refused can hang the KERNAL).
+#define HAL_STORAGE_SAVE_PROBE_ASKS_DRIVE
 .const hal_storage_marker_file_num = 6
 .const hal_storage_marker_sec_read = 2
 .const hal_storage_marker_sec_write = 2

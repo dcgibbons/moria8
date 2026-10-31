@@ -2630,7 +2630,7 @@ an error, or an expected failure that passed.
   load on the way to town is the cold chest overlay (store restock).
 
 **Scenarios** (each port; `x` is an expected failure, a known defect;
-2026-10-30, every port as expected: C64 15/15, Plus/4 15/15, C128 14/14):
+2026-10-31, every port as expected: C64 18/18, Plus/4 19/19, C128 18/18):
 
 | Scenario | What it checks | C64 | Plus/4 | C128 |
 |---|---|---|---|---|
@@ -2648,8 +2648,11 @@ an error, or an expected failure that passed.
 | `quit_confirm` | SHIFT+Q asks first: N plays on with no turn taken, Y quits | pass | pass | pass |
 | `load_retry_town` | one failed load on the way up to town is repeated; play goes on | pass | pass | pass |
 | `load_retry_resume` | one failed load while resuming is repeated (not the C128: its own runtime loader) | pass | pass | — |
-| `status_retry_resume` | the program-disk probe's status read cut short while resuming is asked again (Plus/4 only: its reader retries) | — | pass | — |
-| `load_fail_town` | a load that never succeeds keeps the game | x (crash, `$FE66`) | x (restart) | x (restart) |
+| `status_retry_resume` | the program-disk check's status read cut short while resuming: asked again with a fresh OPEN | — | pass | pass |
+| `status_lost_save` | saving over a slot, the file check's status read and the one after the write cut short: the check asks again ("Overwrite?" still shows), the save reports an error, and the game it wrote loads | pass | pass | pass |
+| `status_lost_protected` | saving to a write-protected disk with the status after the write cut short: still a failure, never "saved" | pass | pass | pass |
+| `status_retry_slot` | each slot's status read cut short in the save-slot list: asked again, the saved game is listed and loads | pass | pass | pass |
+| `load_fail_town` | a load that keeps failing asks for the program disk by name; a key tries again and the game goes on | pass | pass | pass |
 
 The dashboard's "Disk scenarios" panel (`/api/disk`) shows each port's
 latest full run from the `summary.json` every run writes as it goes.
@@ -2663,23 +2666,31 @@ latest full run from the `summary.json` every run writes as it goes.
   after a full disk. Found by `full_disk`.
 - Fixed: `SHIFT+Q` quit with no confirmation; it asks "Do you really want
   to quit? Y/N" (Umoria's wording), as FEATURE_MAP says. Type-ahead is
-  dropped first (a buffered `y` is a move) on every port but the Atari,
-  whose modal prepare does not empty its key buffer; any key but Y plays
-  on as Umoria's `get_check`, and the question is cleared.
+  dropped first on every port (a buffered `y` is a move); any key but Y
+  plays on as Umoria's `get_check`, and the question is cleared.
 - Fixed: disk loads that bypassed the retry (winner retirement, the C128
   boot preloads and runtime payloads, the Apple IIe play slot, the Atari
   title and banked payloads).
-- Open (docs/BACKLOG.md): a load that never succeeds still restarts the
-  game, and on the C64 crashes into the KERNAL warm start (`load_fail_town`).
+- Fixed (2026-10-30): a load that never succeeded restarted the game, and on
+  the C64 crashed into the KERNAL warm start. Required loads (overlays,
+  tiers, the recall strings, winner retirement, the Apple IIe play slot) go
+  through `asset_load_required`: when every attempt fails it shows "Insert
+  program disk", the file's name and "Press any key", then tries again.
+  The C128 cache preloads (a miss loads from disk later) and the Atari's
+  `ATARI.BNK` (it brings the prompt) keep `asset_load_retry`; the C64 REU
+  and Atari 130XE preloads ask too (a skipped REU stash was read back
+  later as if it were there).
+  `load_fail_town` now passes on all three ports.
 - Fixed: under the JiffyDOS ROMs the Plus/4 `save_overwrite` resume showed
   a spurious "Insert program disk" every time once this round's code moved:
   the program-disk probe's command-channel read came back `X` with ST `$42`
   (read timeout) while drive 8 held "00, OK". The byte was lost on the bus:
   drive 8 was in its disk-controller IRQ (`$F9D9`) as the transfer began,
   which the stock ROMs tolerate. Any code shift moves where that lands, so
-  `plus4_disk_read_command_status` now asks again (up to three times) when
-  a read times out. `status_retry_resume` loses the probe's read on purpose;
-  it fails without the retry. Same family as the missed LOAD handshake in
+  the program-disk check now asks again with a fresh OPEN (up to three
+  times) when a read times out before any digit came; rereading the channel
+  only goes on mid-message (2026-10-31). `status_retry_resume` loses the
+  probe's read on purpose; it fails without the retry. Same family as the missed LOAD handshake in
   docs/BACKLOG.md.
 - Room: the C64 had no bytes for the retry, the save causes and the quit
   prompt. Its boot-only REU detection moved into the init-only tail past

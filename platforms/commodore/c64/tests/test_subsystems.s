@@ -81,6 +81,13 @@ sb_load_arg_x: .byte 0
 sb_load_arg_y: .byte 0
 sb_load_calls: .byte 0
 sb_load_fail_left: .byte $ff    // loads to fail before one succeeds; $ff = all
+sb_ask_calls: .byte 0
+// The program-disk prompt: counted, and the disk "inserted" (loads succeed).
+asset_load_ask_for_disk:
+    inc sb_ask_calls
+    lda #0
+    sta sb_load_fail_left
+    rts
 tier_invalidate_state:
     inc sb_tier_invalidate_calls
     rts
@@ -115,6 +122,7 @@ kernal_load_safe:
 #define HAL_PLATFORM_OVERLAY_CPU_PORT_DMA_BANK
 #define HAL_PLATFORM_OVERLAY_FN_GUARD_LEGACY_NAMES
 
+#define ASSET_LOAD_PROMPT_EXTERNAL     // asset_load_ask_for_disk: the stub above
 #import "../../common/overlay.s"
 #import "../../../../core/string_bank.s"
 
@@ -143,7 +151,7 @@ test_start:
     jsr test_bank_decode_takeoff
     jsr test_bank_load_recall_error_path
     jsr test_overlay_skip_loaded
-    jsr test_overlay_disk_fail
+    jsr test_overlay_disk_asks_for_disk
     jsr test_overlay_disk_retry
 
     jmp test_exit_trampoline
@@ -323,16 +331,23 @@ test_bank_load_recall_error_path:
     sta sb_load_arg_x
     sta sb_load_arg_y
     sta sb_load_calls
+    sta sb_ask_calls
+    lda #$ff
+    sta sb_load_fail_left
     lda asset_load_retries
     sta retries_before
     lda $dd00
     and #%11111100
     sta $dd00
 
+    // Every attempt fails until the program disk is asked for; then it loads.
     jsr bank_load_recall
-    bcc !fail+
-    lda sb_load_calls           // every attempt made before failing
-    cmp #ASSET_LOAD_ATTEMPTS
+    bcs !fail+
+    lda sb_load_calls
+    cmp #ASSET_LOAD_ATTEMPTS + 1
+    bne !fail+
+    lda sb_ask_calls
+    cmp #1
     bne !fail+
     jsr retries_since_before
     cmp #ASSET_LOAD_ATTEMPTS - 1
@@ -362,6 +377,8 @@ test_bank_load_recall_error_path:
     lda #$00
 !store:
     sta tc_results + 7
+    lda #$ff
+    sta sb_load_fail_left
     rts
 
 test_overlay_skip_loaded:
@@ -387,25 +404,29 @@ test_overlay_skip_loaded:
     sta tc_results + 8
     rts
 
-test_overlay_disk_fail:
+// An overlay whose every attempt fails asks for the program disk, then
+// loads: no restart, no skipped action (load_fail_town in playtest-disk).
+test_overlay_disk_asks_for_disk:
     lda #OVL_STARTUP
     sta current_overlay
     lda #0
-    sta sb_tier_invalidate_calls
     sta reu_overlays_stashed
-
     sta sb_load_calls
+    sta sb_ask_calls
+    lda #$ff
+    sta sb_load_fail_left
 
     lda #OVL_DEATH
     jsr overlay_load
-    bcc !fail+
+    bcs !fail+
     lda current_overlay
-    cmp #OVL_NONE
-    bne !fail+
-    lda sb_tier_invalidate_calls
+    cmp #OVL_DEATH
     bne !fail+
     lda sb_load_calls
-    cmp #ASSET_LOAD_ATTEMPTS
+    cmp #ASSET_LOAD_ATTEMPTS + 1
+    bne !fail+
+    lda sb_ask_calls
+    cmp #1
     bne !fail+
     lda #$01
     bne !store+
@@ -413,6 +434,8 @@ test_overlay_disk_fail:
     lda #$00
 !store:
     sta tc_results + 9
+    lda #$ff
+    sta sb_load_fail_left
     rts
 
 // One failed load (the Plus/4 drive missing a handshake) is repeated, and

@@ -398,6 +398,8 @@ disk_program_media_present:
     jsr FEAT_SETLFS
     jsr FEAT_OPEN
     bcc !dpmp_open_ok+
+    lda #hal_storage_program_file_num   // a refused OPEN keeps its LFN in the
+    jsr FEAT_CLOSE                      // KERNAL's table: the next one would fail
     jsr FEAT_CLRCHN
 #if HAL_STORAGE_KERNAL_ENTER_REQUIRED
     jsr disk_kernal_exit

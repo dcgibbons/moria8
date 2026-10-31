@@ -348,12 +348,18 @@ c64_disk_marker_present:
 #endif
     lda #$52
     sta c64_marker_name_mode_low
-    lda #$36
+    // A CHKIN on a marker the drive refused (a fresh save disk) can wait
+    // forever in the KERNAL's talker turnaround: ask the drive first.
+    lda #c64_marker_name_low_len - 1
+    ldx #<(c64_marker_name_low + 1)
+    ldy #>(c64_marker_name_low + 1)
+    jsr storage_file_exists
+    lda #1                      // any failure is 1 here, as before: the probe's
+    sta disk_status             // status read set disk_status to its own code
+    bcc !cdmp_done+
+    lda #$36                    // (the probe closed the check file)
     sta $01
     cli
-    jsr $ffcc
-    lda #hal_storage_check_file_num
-    jsr $ffc3
     lda #c64_marker_name_low_len - 1
     ldx #<(c64_marker_name_low + 1)
     ldy #>(c64_marker_name_low + 1)
@@ -363,32 +369,21 @@ c64_disk_marker_present:
     ldy #hal_storage_marker_sec_read
     jsr $ffba
     jsr $ffc0
-    bcc !cdmp_open_ok+
-    bcs !cdmp_open_fail+
-!cdmp_open_ok:
+    bcs !cdmp_close+
     ldx #hal_storage_check_file_num
     jsr $ffc6
-    bcc !cdmp_chkin_ok+
-    bcs !cdmp_read_fail+
-!cdmp_chkin_ok:
+    bcs !cdmp_close+
     jsr $ffcf
     cmp #$4d
-    bne !cdmp_marker_fail+
+    bne !cdmp_close+
     jsr $ffcf
     cmp #$38
-    bne !cdmp_marker_fail+
+    bne !cdmp_close+
     dec disk_status
 !cdmp_close:
     jsr $ffcc
     lda #hal_storage_check_file_num
     jsr $ffc3
-    jmp !cdmp_done+
-!cdmp_read_fail:
-    jmp !cdmp_close-
-!cdmp_marker_fail:
-    jmp !cdmp_close-
-!cdmp_open_fail:
-    jmp !cdmp_close-
 !cdmp_done:
     jsr c64_restore_vic_bank0_after_serial
     pla
@@ -603,12 +598,18 @@ c64_storage_dos_code_status:
     rts
 
 c64_storage_read_command_status:
+    // A read that times out (ST bit 1) before any digit came lost its byte
+    // on the bus (JiffyDOS, playtest-disk): cdrs_lost says so, for a caller
+    // that can ask again with a fresh OPEN. Reading this channel again would
+    // only go on mid-message. A digit with that bit set is the drive's answer
+    // (save_write_product_smoke) and stands.
     // Start with no channel selected, as the Plus/4 reader must (after a write
     // the drive refused, its JiffyDOS KERNAL never completed the CHKIN).
     jsr c64_disk_clrchn
     lda #2
     sta disk_status
     lda #0
+    sta cdrs_lost
     tax
     tay
     jsr c64_disk_setnam
@@ -624,8 +625,17 @@ c64_storage_read_command_status:
     // The DOS policy of core/storage_status.s, kept inline here until the
     // drive-hang backlog item lets C64 share it (docs/BACKLOG.md).
     jsr c64_disk_chrin
+    pha
+    jsr c64_disk_readst
+    and #$02                    // read timeout
+    sta cdrs_lost
+    pla
     cmp #$30
-    bcc !cdrs_close+
+    bcc !cdrs_close+            // no digit
+    cmp #$3a
+    bcs !cdrs_close+
+    ldx #0
+    stx cdrs_lost               // a digit: the drive answered
     cmp #$32                    // 00-19 are informational (01 FILES SCRATCHED)
     bcc !cdrs_ok+
     beq !cdrs_check_26+
@@ -673,6 +683,8 @@ c64_storage_read_command_status:
     lda #15
     jsr c64_disk_close
     jmp c64_restore_vic_bank0_after_serial   // serial I/O moved the VIC bank
+
+cdrs_lost: .byte 0              // nonzero: the status byte was lost (above)
 // ============================================================
 // Entry point
 // ============================================================
@@ -2125,14 +2137,7 @@ tramp_winner_royal:
     lda #hal_storage_modal_misc_name_len
     ldx #<hal_storage_modal_misc_name
     ldy #>hal_storage_modal_misc_name
-    jsr asset_load_retry
-#if C64_TEST_SCRIPTED_RETIREMENT_PRODUCT
-    bcc !retirement_loaded+
-    jmp c64_test_retirement_fail_sym
-!retirement_loaded:
-#else
-    bcs !done+
-#endif
+    jsr asset_load_required     // asks for the program disk until it loads
     lda #0
     sta current_overlay
     sei
@@ -2145,7 +2150,6 @@ tramp_winner_royal:
 #if C64_TEST_SCRIPTED_RETIREMENT_PRODUCT
     jmp c64_test_retirement_pass_sym
 #endif
-!done:
     rts
 
 // ============================================================
@@ -2256,7 +2260,6 @@ reu_load_all_tiers:
     lda #0
     sta reu_tier_offset_lo
     sta reu_tier_offset_hi
-    sta reu_tiers_loaded
 
     ldx #1                      // Start with tier 1
 !rlt_loop:
@@ -2277,10 +2280,9 @@ reu_load_all_tiers:
     sta zp_ptr0_hi
     jsr reu_show_file
 
-    // Load tier file from disk to $E000
+    // Load tier file from disk to $E000 (asset_load_required: a file that
+    // will not load asks for the program disk, so every tier is stashed)
     jsr tier_load_disk
-    bcs !rlt_skip+              // Skip if load failed
-    inc reu_tiers_loaded
 
     // Stash from $E000 to REU at current offset
     sei
@@ -2313,8 +2315,7 @@ reu_load_all_tiers:
     sta hal_memory_cpu_port     // Restore bank config
     cli
 
-!rlt_skip:
-    // Advance REU offset by tier size (even if load failed, reserve space)
+    // Advance REU offset by tier size
     ldx reu_tier_idx
     clc
     lda reu_tier_offset_lo
@@ -2337,13 +2338,6 @@ reu_load_all_tiers:
     // Reset game state — no tier active yet (player starts in town)
     lda #0
     sta current_tier
-
-    // If no tiers loaded successfully, disable REU tier path
-    // so tier_load falls back to disk → embedded creature fallback
-    lda reu_tiers_loaded
-    bne !rlt_done+
-    sta reu_present             // A is already 0
-!rlt_done:
     rts
 
 reu_stash_overlays:
@@ -2368,8 +2362,7 @@ reu_stash_overlays:
     // Load overlay PRG from disk to $E000
     ldx reu_ovl_idx
     dex                         // 0-based index for overlay_load_disk
-    jsr overlay_load_disk
-    bcs !rso_skip+              // Skip stash if load failed
+    jsr overlay_load_disk       // asks for the disk until it loads
 
     // Stash $E000 (4KB) to REU at current offset
     sei
@@ -2401,7 +2394,6 @@ reu_stash_overlays:
     sta hal_memory_cpu_port
     cli
 
-!rso_skip:
     // Advance REU offset by $1000 (4KB) — low byte unchanged
     lda reu_tier_offset_hi
     clc
