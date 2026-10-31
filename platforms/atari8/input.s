@@ -31,7 +31,7 @@
 .label hal_input_any_key_held     = input_run_key_held
 .label hal_input_run_cancel_check = input_run_cancel_check
 .label hal_input_followup_prepare = input_noop
-.label hal_input_modal_prepare    = input_modal_prepare
+.label hal_input_modal_prepare    = input_wait_release
 .label hal_input_modal_finish     = input_noop
 
 .const ATARI_KBDBUF_MAX = 8
@@ -271,6 +271,9 @@ igk_char:   .byte 0
 // ============================================================
 // input_wait_release & Modal / Run Cancel Helpers
 // ============================================================
+// input_wait_release — Wait until no key is held, then empty the key buffer:
+// a key typed ahead, or pressed while another was still down (rollover),
+// never answers what follows (as the C64's, Plus/4's and BBC's waits).
 // Preserves: X, Y
 input_wait_release:
     txa
@@ -278,25 +281,44 @@ input_wait_release:
     tya
     pha
     ldx #0
-    ldy #16
+    ldy #80                 // Held: about 0.25 s (18-cycle loop), as the Apple IIe
 !wait_loop:
     inc zp_entropy
     lda SKSTAT
     and #$04                // Bit 2 == 0 while a key is held down
-    bne !released+
+    bne !settle+
+!wait_next:
     inx
     bne !wait_loop-
     dey
     bne !wait_loop-
+    beq !released+
+!settle:
+    // A key held under the one let go shows only on POKEY's next scans
+    // (8 ms in MAME), so stay clear for about 20 ms before trusting it.
+    ldx #0
+    lda #6
+    sta iwr_settle
+!settle_loop:
+    inc zp_entropy
+    lda SKSTAT
+    and #$04
+    beq !wait_next-         // A key is down after all: keep waiting
+    inx
+    bne !settle_loop-
+    dec iwr_settle
+    bne !settle_loop-
 !released:
+    stx atari_kbdbuf_len    // X is 0 on both ways here. The IRQ only appends,
+                            // and runs whole: a key it queues after this store
+                            // is a real answer.
     pla
     tay
     pla
     tax
     rts
 
-input_modal_prepare:
-    jmp input_wait_release
+iwr_settle: .byte 0
 
 // input_run_key_held — Return non-zero in A if a key is queued or physically held
 // Preserves: X, Y
