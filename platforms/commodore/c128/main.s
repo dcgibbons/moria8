@@ -4259,7 +4259,9 @@ c128_resident_play_body:
 #define COMBAT_COMMON_HELPERS_EXTERNAL
 #define COMBAT_STRINGS_EXTERNAL
 #define CMB_IN_WAY_EXTERNAL
+#define LEVELUP_MAGIC_PENDING_EXTERNAL
 #import "../../../core/combat.s"
+#undef LEVELUP_MAGIC_PENDING_EXTERNAL
 #undef CMB_IN_WAY_EXTERNAL
 #undef COMBAT_STRINGS_EXTERNAL
 #undef COMBAT_COMMON_HELPERS_EXTERNAL
@@ -5390,6 +5392,11 @@ banked_payload_end:
 .assert "C128 map span helper lives in top common RAM", mmu_common_and_map_span >= $F000 && mmu_common_and_map_span < $FF00, true
 .assert "Banked payload starts above overlay window", first_banked_function >= $F000, true
 .assert "Banked payload is emitted as external runtime PRG", banked_payload == $F000, true
+
+// combat.s's flag, kept here: main_loop shifts it every pass, and in the PLAY
+// payload it would land in PERSIST code whenever PERSIST holds the $AF00 slot.
+levelup_magic_pending: .byte 0  // 1 = main_loop owes a mana/spell recalc (level-up)
+.assert "levelup_magic_pending stays in the resident image, out of the $AF00 modal slot", levelup_magic_pending >= $1c01 && levelup_magic_pending < program_end, true
 
 // ============================================================
 // Safety: ensure runtime code doesn't overlap runtime data areas
