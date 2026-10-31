@@ -64,6 +64,12 @@ fi
 # VICE reads this config (with the installed version tag) instead of the
 # user's vicerc; /dev/null made VICE pop up "No version tag found" dialogs.
 VICE_CONFIG="$(python3 "$REPO_ROOT/tools/vice_config.py" "$VICE")"
+# vice_keep_inputs.py stands in for x128: it keeps the files each run boots
+# and the VICE seed (power-on RAM), so a failed suite can be replayed exactly.
+C128_VICE_REAL="$VICE"
+C128_KEEP_TOOL="$(pwd)/vice_keep_inputs.py"
+VICE="$C128_KEEP_TOOL"
+export C128_VICE_REAL
 C1541="${C1541:-c1541}"
 PERF_P1_MODE="${PERF_P1:-0}"
 TEST_JOBS="${TEST_JOBS:-8}"
@@ -824,11 +830,21 @@ run_named_suite() {
     C128_CURRENT_SUITE="$suite_name"
     mkdir -p "$C128_EXIT_SCREEN_DIR"
     rm -f "$(c128_exit_png)"
+    C128_KEEP_DIR="$(cd "$C128_EXIT_SCREEN_DIR" && pwd)/${suite_name}_inputs"
+    "$C128_KEEP_TOOL" --keep-drop "$C128_KEEP_DIR"   # never keep a stale run
+    export C128_KEEP_DIR
     "$@"
     local suite_rc=$?
     if [ "$FAIL" -gt "$fail_before" ] && [ -s "$(c128_exit_png)" ]; then
         echo "    Screen: $(c128_exit_png)"
     fi
+    if [ "$FAIL" -gt "$fail_before" ] && [ -d "$C128_KEEP_DIR" ]; then
+        echo "    Inputs: $C128_EXIT_SCREEN_DIR/${suite_name}_inputs"
+        "$C128_KEEP_TOOL" --keep-check "$C128_KEEP_DIR"
+    else
+        "$C128_KEEP_TOOL" --keep-drop "$C128_KEEP_DIR"
+    fi
+    unset C128_KEEP_DIR
     if [ -n "$timing_start" ] && [ "$TOTAL" -gt "$total_before" ]; then
         local duration_ms="$(( $(test128_now_ms) - timing_start ))"
         record_suite_timing "$suite_name" "$duration_ms"
