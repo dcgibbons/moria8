@@ -68,8 +68,12 @@ input_is_modal_escape_key:
 // when cancelling a run on C64. C128 direct-scan input does not use it.
 input_flush_run_cancel_buffer:
 #if HAL_INPUT_FLUSH_RUN_CANCEL_BUFFER
+#if HAL_INPUT_KBDBUF_COUNT_BANKED
+    jmp hal_input_flush_kbdbuf  // The count is in banked RAM: the HAL selects it
+#else
     lda #0
     sta hal_input_kbdbuf_count
+#endif
 #endif
     rts
 

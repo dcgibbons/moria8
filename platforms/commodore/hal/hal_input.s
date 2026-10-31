@@ -25,6 +25,10 @@
 //   hal_input_flush_run_cancel_buffer
 //   hal_input_help_footer_uses_esc_stop
 //
+// With HAL_INPUT_KBDBUF_COUNT_BANKED (the count sits in banked RAM, X16):
+//   hal_input_flush_kbdbuf — empty the key queue with the count's bank
+//   selected, keeping the caller's bank; clobbers A.
+//
 // Service contracts:
 // - hal_input_get_key: input none; output A=normalized key or 0, C=0 success;
 //   clobbers X/Y allowed; must apply platform debounce policy.

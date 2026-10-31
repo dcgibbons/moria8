@@ -358,6 +358,23 @@ def check_key_event_hook(tb: X16Bench) -> None:
     tb.assert_line("key_up_cleared", not any(left), f"down={bytes(left).hex()}")
 
 
+def check_run_cancel_flush(tb: X16Bench) -> None:
+    """Cancelling a run empties the KERNAL key queue: its count is $A80A in
+    RAM bank 0, while the game keeps an overlay's bank selected at $00. The
+    flush must clear bank 0's count and leave that overlay's byte alone."""
+    bank = tb.read_u8(0x0000)
+    saved = tb.read_bank_u8(bank, 0xA80A)
+    tb.write_bank_u8(bank, 0xA80A, 0x5A)        # a sentinel in the selected bank
+    tb.write_bank_u8(0, 0xA80A, 1)              # one key pending in the queue
+    tb.run_addr(tb.syms["input_flush_run_cancel_buffer"])
+    count = tb.read_bank_u8(0, 0xA80A)
+    kept = tb.read_bank_u8(bank, 0xA80A)
+    tb.write_bank_u8(bank, 0xA80A, saved)
+    tb.assert_line("run_cancel_flush_bank0", count == 0, f"bank 0 count={count}")
+    tb.assert_line("run_cancel_flush_spares_bank", kept == 0x5A and tb.read_u8(0x0000) == bank,
+                   f"bank {bank} byte={kept:02X} $00={tb.read_u8(0x0000)}")
+
+
 def scenario_boot_title(tb: X16Bench) -> None:
     row0 = tb.row_bytes(0)
     row18_txt = tb.rowtext(18)
@@ -489,6 +506,7 @@ def scenario_help_overlay(tb: X16Bench) -> None:
     tb.assert_line("lost_key_up_forgotten", not any(left), f"down={bytes(left).hex()}")
     tb.press("Q")
     tb.assert_line("help_close", tb.in_town(), "help did not return to the town view")
+    check_run_cancel_flush(tb)
     tb.dump("after_help")
     tb.log("SCENARIO DONE")
 

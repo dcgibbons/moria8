@@ -20,6 +20,7 @@
 .const hal_input_modal_escape_secondary = $1b
 .const hal_input_flush_run_cancel_buffer = true
 #define HAL_INPUT_FLUSH_RUN_CANCEL_BUFFER
+#define HAL_INPUT_KBDBUF_COUNT_BANKED   // $A80A is in RAM bank 0 (KVARS)
 .const hal_input_help_footer_uses_esc_stop = false
 .const hal_input_inventory_letter_normalize_shifted = false
 .const hal_input_selectable_overlay_filter_help_key = false
@@ -35,6 +36,19 @@
 .label hal_input_modal_finish = input_noop
 
 input_noop:
+    rts
+
+// hal_input_flush_kbdbuf — Empty the KERNAL key queue (run cancel). Its count
+// is in RAM bank 0, but the game keeps an overlay's bank selected at $00.
+// Preserves: X, Y and the caller's RAM bank
+hal_input_flush_kbdbuf:
+    lda CX16_RAM_BANK_REG
+    pha
+    lda #CX16_BANK_KERNAL_VARS
+    sta CX16_RAM_BANK_REG
+    stz hal_input_kbdbuf_count
+    pla
+    sta CX16_RAM_BANK_REG
     rts
 
 // input_get_key — Wait for a keypress from KERNAL GETIN, preserving X and Y
