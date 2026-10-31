@@ -414,7 +414,9 @@ tramp_dig_ability:
 #import "hal/lifecycle_policy.s"
 #define REU_STASH_OVERLAYS_EXTERNAL
 #define REU_LOAD_ALL_TIERS_EXTERNAL
+#define REU_DETECT_EXTERNAL         // boot only: the init-only tail
 #import "../common/reu.s"
+#undef REU_DETECT_EXTERNAL
 #undef REU_LOAD_ALL_TIERS_EXTERNAL
 #undef REU_STASH_OVERLAYS_EXTERNAL
 #import "screen.s"
@@ -2163,6 +2165,10 @@ program_end:
 // REU preload status is startup-only and is dead before MAP_BASE takes over
 // this init tail. Keeping it here leaves runtime-bank space for run setup.
 #import "../common/reu_loading_banked.s"
+
+// REU detection (restart_entry, once at boot) and its probes.
+#import "../common/reu_detect.s"
+.assert "REU detection lives in the init-only tail", reu_detect >= program_end && reu_probe_xfer >= program_end, true
 
 // One-shot platform-services installer (called once at boot, before the map
 // exists). Lives in the init-only tail so the resident runtime image keeps

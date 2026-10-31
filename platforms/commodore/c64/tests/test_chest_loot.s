@@ -40,6 +40,7 @@ test_finish:
 
 #import "../../../../core/zeropage.s"
 #import "../memory.s"
+#define REU_DETECT_EXTERNAL      // not exercised here; frees room below MAP_BASE
 #import "../../common/reu.s"
 #import "../screen.s"
 #import "../../../../core/color.s"
