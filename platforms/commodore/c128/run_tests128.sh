@@ -4330,6 +4330,13 @@ run_boot_title_newgame_smoke() {
     : > "$log_file"
 
     {
+        # boot128's page copier bounces through $0c00, so KERNAL_NESTING_DEPTH
+        # ($0c02) reaches entry_main as Bank 1 $fe02: power-on RAM, which VICE
+        # seeds randomly. Non-zero, it crashed boot to the monitor (JSR $FF62
+        # ran RAM) until entry_main cleared it. Plant one.
+        echo "bank ram01"
+        echo "> fe02 08"
+        echo "bank cpu"
         c128_key_feed_cmds $'NA\rABOT\rA '
         echo "until \$${loop_top}"
         echo "g"

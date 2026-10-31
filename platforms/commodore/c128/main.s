@@ -1814,6 +1814,12 @@ entry_main:
     cld
     ldx #$ff
     txs
+    // The stack was just reset: no KERNAL bridge is open. Nothing else sets
+    // the depth: boot128's page copier bounces through $0c00, leaving it the
+    // power-on byte of Bank 1 $fe02. Non-zero, the first EnterKernal kept all
+    // RAM mapped and JSR $FF62 ran RAM at $C027 (a BRK into the monitor).
+    lda #0
+    sta KERNAL_NESTING_DEPTH
 #if C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG || C128_TEST_TITLE_ART_CONTENT || C128_TEST_STATUS_SP_CANARY || C128_TEST_STACK_SLOT_DIAG || C128_TEST_STACK_BOTTOM_DIAG || C128_TEST_FINAL_RETURN_DIAG
     lda #0                      // the stack was just reset: no guard is open
     sta c128_stack_guard_depth
