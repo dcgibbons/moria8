@@ -1091,33 +1091,6 @@ Acceptance target:
 - Apple IIe build reaches town and plays on an AppleSqueezer-equipped machine,
   or the incompatibility is root-caused and documented as wontfix.
 
-## Atari 8-bit
-
-### Drop typed-ahead keys at the SHIFT+Q quit prompt
-
-The quit prompt ("Do you really want to quit? Y/N", `core/game_loop.s`) calls
-`input_prepare_modal_dismiss_key` so a `y` typed ahead as a move cannot
-answer it. That empties the key buffer on every port but the Atari, whose
-`input_modal_prepare` (`platforms/atari8/input.s`) only waits for key release
-and leaves `atari_kbdbuf_len` alone. So on the Atari a buffered `y` still
-quits the game.
-
-Clearing `atari_kbdbuf_len` there (as the C64 and Plus/4 clear their KERNAL
-buffers) was tried on 2026-10-30 and broke the `a800xl` `disk_setup`
-scenario: `platforms/atari8/harness_smoke.py` `send_key` writes the next key
-into `atari_kbdbuf` as soon as the expected screen text appears, which can be
-before the program reaches its modal prepare, so the flush discards it.
-
-Required work:
-
-- Make the harness wait until the program is waiting for a key before
-  injecting one, then clear `atari_kbdbuf_len` in `input_modal_prepare`.
-
-Acceptance target:
-
-- A `y` typed ahead of SHIFT+Q does not quit on the Atari, and the full
-  `make testatari8` suite passes.
-
 ## Commander X16
 
 ### The run-cancel key flush may write the wrong RAM bank
@@ -1134,14 +1107,37 @@ found by reading the code on 2026-10-30.
 Required work:
 
 - Find which RAM bank is active at the two call sites.
-- If it can be other than bank 0, flush through the X16's own
-  `input_wait_release` (which selects `CX16_BANK_KERNAL_VARS` first) or an
-  equivalent banked store, keeping the other ports' flush unchanged.
+- If it can be other than bank 0, clear the count with RAM bank 0 selected
+  (`CX16_BANK_KERNAL_VARS`, as `input_wait_release` does), keeping the other
+  ports' flush unchanged. Not through `input_wait_release` itself: since
+  2026-10-30 it waits, up to about 0.25 s, for every key to come up, and the
+  cancel key is still down when a run is cancelled.
 
 Acceptance target:
 
 - Cancelling a run on the X16 empties the keyboard queue and writes no
   banked RAM outside bank 0.
+
+### Check the key-release waits on real Atari and X16 hardware
+
+The 2026-10-30 key-release waits (a prompt listens only once every key is up,
+and keys typed ahead or rolled over are dropped) were checked only in
+emulators. Two hardware details need a real machine:
+
+- Atari 8-bit: `input_wait_release` (`platforms/atari8/input.s`) settles
+  about 20 ms after the keys look up, because POKEY reported a key held under
+  a released one about 8 ms later in MAME. Check a real POKEY's delay fits.
+- Commander X16: `cx16_key_event` (`platforms/cx16/input.s`) tracks keys from
+  the KERNAL's `keyhdl` key-down and key-up events. A PS/2 Pause key (the
+  X16's RUN/STOP) sends no separate key-up; if the SMC firmware reports none
+  either, each STOP leaves its key marked down and the next prompt waits the
+  full 0.25 s. x16emu sends both events.
+
+Acceptance target:
+
+- On real hardware: SHIFT+Q, then Y pressed while Q is still down and Q let
+  go first, leaves "Do you really want to quit? Y/N" waiting (Atari and X16);
+  pressing STOP and then opening help shows no 0.25 s pause (X16).
 
 ## Testing Infrastructure
 

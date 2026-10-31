@@ -378,7 +378,7 @@ VMS Moria 4.8 (`dungeon.inc`) used its original keypad/letter layout; Umoria 5.7
 | **Character Sheet** | `C` | `C` | **`SHIFT+C`** (`$C3`, `CMD_CHAR_INFO`) | None | **`Implemented`** |
 | **Help Screen** | `?` | `?` | **`?`** (`CMD_HELP`: 2-page interactive command reference) | None | **`Implemented`** |
 | **Save and Quit** | `CTRL+X` or `CTRL+Z` | `CTRL+X` | **`SHIFT+S`** (`$D3`, `CMD_SAVE`) | Prompts for Save Slot `1..4` (or `D` to change save drive on Commodore/Apple/Atari/BBC ports) | **`Implemented`** |
-| **Quit Without Saving** | `Q` | `Q` | **`SHIFT+Q`** (`$D1`, `CMD_QUIT` with `Y/N` confirmation: "Do you really want to quit? Y/N"; any key but `Y` plays on with no turn taken, as Umoria's `get_check`; keys typed ahead are dropped first, except on the Atari) | None | **`Implemented`** |
+| **Quit Without Saving** | `Q` | `Q` | **`SHIFT+Q`** (`$D1`, `CMD_QUIT` with `Y/N` confirmation: "Do you really want to quit? Y/N"; any key but `Y` plays on with no turn taken, as Umoria's `get_check`; it first waits, up to about 0.25 s on ports that cannot be sure of a key-up, for keys to come up, and keys typed ahead or pressed while another was still down are dropped) | None | **`Implemented`** |
 | **Wizard Mode Menu** | `CTRL+W` (password-checked) | `CTRL+W` | **`CTRL+W`** (`$17`, `CMD_WIZARD`) | None | **`Implemented`** |
 | **Modal Cancel / Escape** | `ESC` (`$1B`) or `CTRL+C` | `ESC` (`$1B`) | **`RUN/STOP` (`$03`)** or **`ESC` (`$1B`)** | **C64/Plus/4/CX16**: `RUN/STOP` primary, `ESC` secondary<br>**C128/Apple IIe/Atari 8-bit/BBC Master**: `ESC` primary, `CTRL+C`/`STOP` secondary | **`Implemented`** |
 | **Previous Message History** | `CTRL+P` | `CTRL+P` | Stored in `msg_history` ring buffer (`core/ui_messages.s`) | None | **`Partial`** |

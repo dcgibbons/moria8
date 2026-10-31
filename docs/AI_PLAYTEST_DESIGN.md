@@ -2663,9 +2663,8 @@ latest full run from the `summary.json` every run writes as it goes.
   after a full disk. Found by `full_disk`.
 - Fixed: `SHIFT+Q` quit with no confirmation; it asks "Do you really want
   to quit? Y/N" (Umoria's wording), as FEATURE_MAP says. Type-ahead is
-  dropped first (a buffered `y` is a move) on every port but the Atari,
-  whose modal prepare does not empty its key buffer; any key but Y plays
-  on as Umoria's `get_check`, and the question is cleared.
+  dropped first on every port (a buffered `y` is a move); any key but Y
+  plays on as Umoria's `get_check`, and the question is cleared.
 - Fixed: disk loads that bypassed the retry (winner retirement, the C128
   boot preloads and runtime payloads, the Apple IIe play slot, the Atari
   title and banked payloads).
