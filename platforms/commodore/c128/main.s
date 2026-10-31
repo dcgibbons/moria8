@@ -5077,6 +5077,24 @@ press_key_str:
     .text "Press any key" ; .byte 0
 press_key_str_end:
 
+// Always-resident Staff of Speed trampoline: the items overlay calls this
+// while either PLAY or PERSIST owns the $AF00 modal slot.
+tramp_staff_speed_items:
+    lda #OVL_DEATH
+    jsr overlay_load
+    bcs !staff_speed_done+
+    jsr eff_haste_self
+    lda #OVL_ITEMS
+    jsr overlay_load
+!staff_speed_done:
+    sec
+    rts
+
+c128_resident_diskio_end:
+.segment Default
+
+// In Default, resident Bank 0 as DiskIo is: moved out of DiskIo to make
+// room for its scripted save-test builds.
 combat_append_blow_summary:
     lda cmb_blow_count
     cmp #2
@@ -5103,22 +5121,6 @@ combat_append_blow_summary:
     lda #0
     sta combat_msg_buf,x
     rts
-
-// Always-resident Staff of Speed trampoline: the items overlay calls this
-// while either PLAY or PERSIST owns the $AF00 modal slot.
-tramp_staff_speed_items:
-    lda #OVL_DEATH
-    jsr overlay_load
-    bcs !staff_speed_done+
-    jsr eff_haste_self
-    lda #OVL_ITEMS
-    jsr overlay_load
-!staff_speed_done:
-    sec
-    rts
-
-c128_resident_diskio_end:
-.segment Default
 
 // Bow to-hit entry: resident Bank 0 RAM (callable from OVL.ITEMS while the
 // modal slot holds either payload); parked outside DiskIo for space.
