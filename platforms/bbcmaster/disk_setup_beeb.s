@@ -191,8 +191,10 @@ disk_prepare_selected_save_media:
     lda save_device
     jsr beeb_probe_drive_ready
     bcc !check_not_prog+
-    lda #<save_drive_not_ready_str
-    ldy #>save_drive_not_ready_str
+    ldx #HSTR_SAVE_NOT_READY    // compressed with the save messages
+    jsr huff_decode_to_ptr2
+    lda zp_ptr2
+    ldy zp_ptr2_hi
     jsr dsm_show_error
     beq !prep_cancel+
     jmp !prompt_insert-

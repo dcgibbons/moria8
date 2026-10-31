@@ -1301,7 +1301,17 @@ plus4_test_after_save_game:
     beq !quit_not_winner+
     jmp player_retired
 !quit_not_winner:
+    // Quit without saving asks first (Umoria "Do you really want to quit?").
+    ldx #HSTR_QUIT_CONFIRM
+    jsr huff_print_msg
+    jsr input_prepare_modal_dismiss_key  // a typed-ahead y (a move) must not answer
+    jsr hal_input_get_key
+    cmp #$59                // Y quits; any other key is no, as Umoria's get_check
+    bne !quit_confirm_no+
     jmp !quit+
+!quit_confirm_no:
+    jsr msg_clear           // the answered question goes
+    jmp main_loop           // no turn taken
 !not_quit:
 
     // Character info?

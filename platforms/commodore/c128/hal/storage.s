@@ -44,6 +44,9 @@
 .label hal_storage_load_record = load_game
 
 c128_storage_read_command_status:
+    // Start with no channel selected, as the Plus/4 reader must (after a write
+    // the drive refused, its JiffyDOS KERNAL never completed the CHKIN).
+    jsr KERNAL_CLRCHN
     lda #$ff
     sta disk_diag_cmd_status0
     sta disk_diag_cmd_status1

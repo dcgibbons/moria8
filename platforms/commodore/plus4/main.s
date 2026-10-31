@@ -601,6 +601,10 @@ plus4_storage_marker_write_resident:
     rts
 
 plus4_disk_read_command_status:
+    // Start with no channel selected: after a write the drive refused, the
+    // JiffyDOS Plus/4 KERNAL never completed the CHKIN below (playtest-disk
+    // full_disk).
+    jsr plus4_kernal_clrchn
     // Failed until the drive answers, as on C64 and C128: a channel that
     // never opens, or a code not mapped below, must not read as OK.
     lda #2

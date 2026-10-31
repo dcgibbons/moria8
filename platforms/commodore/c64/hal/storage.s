@@ -32,6 +32,7 @@
 .label hal_storage_load = KERNAL_LOAD
 .label hal_storage_read_command_status = c64_storage_read_command_status
 .label hal_storage_command_status = disk_save_media_status
+.label hal_storage_dos_code_status = c64_storage_dos_code_status
 .label hal_storage_diag_code = disk_status
 .label hal_storage_diag_phase = disk_status
 .label hal_storage_diag_readst = disk_status

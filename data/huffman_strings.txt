@@ -223,6 +223,12 @@ Sorry, what was that again?
 @SAVE_NEED_SAVE Need Save Disk.
 @SAVE_BAD_SAVE Wrong Save Disk.
 @SAVE_OVERWRITE Overwrite? Y/N
+@SAVE_WRITE_PROTECTED Disk is write-protected.
+@SAVE_DISK_FULL Disk is full.
+@SAVE_NOT_READY Drive is not ready.
+
+# ===== Quit (game_loop.s) =====
+@QUIT_CONFIRM Do you really want to quit? Y/N
 
 # ===== Pseudo-ID quality strings (OPT-4.8) =====
 

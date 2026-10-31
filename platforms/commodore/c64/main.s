@@ -671,7 +671,8 @@ c64_storage_read_command_status:
 !cdrs_close:
     jsr c64_disk_clrchn
     lda #15
-    jmp c64_disk_close
+    jsr c64_disk_close
+    jmp c64_restore_vic_bank0_after_serial   // serial I/O moved the VIC bank
 // ============================================================
 // Entry point
 // ============================================================
@@ -2124,7 +2125,7 @@ tramp_winner_royal:
     lda #hal_storage_modal_misc_name_len
     ldx #<hal_storage_modal_misc_name
     ldy #>hal_storage_modal_misc_name
-    jsr hal_asset_load_prg_header
+    jsr asset_load_retry
 #if C64_TEST_SCRIPTED_RETIREMENT_PRODUCT
     bcc !retirement_loaded+
     jmp c64_test_retirement_fail_sym

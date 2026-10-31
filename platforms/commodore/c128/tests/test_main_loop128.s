@@ -24,6 +24,7 @@ test_start:
 .const TILE_STAIRS_DN = $90
 .const HSTR_SAVE_WELCOME = 0
 .const HSTR_EFF_PARALYZE_END = 0   // game_loop.s paralysis expiry (TRN-011)
+.const HSTR_QUIT_CONFIRM = 0       // game_loop.s quit prompt (huff_print_msg is a stub here)
 .const EGO_TYPE_COUNT = 8
 .const IF_IDENTIFIED = $02
 .const IF_SENSED = $08
@@ -921,6 +922,7 @@ restore_real_input_get_command:
 
 reset_state:
     lda #0
+    sta zp_input_cmd            // CMD_NONE: no case inherits the last case's quit
     sta test_cmd_idx
     sta test_cmd_len
     sta test_turn_calls
@@ -1139,7 +1141,14 @@ test_door_try_open:
     rts
 
 test_input_wait_release:
+    lda zp_input_cmd            // the harness's quit prompt waits too: not the case's
+    cmp #CMD_QUIT
+    beq !twr_quit+
     inc test_wait_release_calls
+    rts
+!twr_quit:
+    lda test_key_len            // and empties the keyboard buffer: script keys
+    sta test_key_idx            // left are typed ahead
     rts
 
 test_input_get_key:
@@ -1157,6 +1166,13 @@ test_input_get_key:
     stx test_key_idx
     rts
 !default:
+    lda zp_input_cmd            // the quit asks "Y/N": the harness confirms,
+    cmp #CMD_QUIT               // and that answer is not one of the case's reads
+    bne !space+
+    dec test_get_key_calls
+    lda #$59                    // Y
+    rts
+!space:
     lda #$20
     rts
 

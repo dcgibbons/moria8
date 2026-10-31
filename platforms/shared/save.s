@@ -237,48 +237,44 @@ load_stream_status_message:
     rts
 #endif
 
+#if HAL_STORAGE_SAVE_CHECKS_DOS_STATUS
+// A = HAL_STORAGE_STATUS_* for the drive's answer to hal_storage_read_command_status.
+.macro SaveDriveStatus() {
+#if HAL_STORAGE_COMMAND_STATUS_FROM_DISK_DIAG || HAL_STORAGE_COMMAND_STATUS_FROM_ERROR_DIAG
+    jsr hal_storage_command_status
+#elif HAL_STORAGE_COMMAND_STATUS_FROM_DOS_CODE
+    jsr hal_storage_dos_code_status
+#else
+    lda disk_status             // 0 = DOS status 00/01
+#endif
+}
+#endif
+
 #if HAL_STORAGE_FRIENDLY_STATUS_MESSAGES
 // save_print_storage_status
 // Input: A = HAL_STORAGE_STATUS_*.
 // Prints a friendly direct storage-status message when the semantic status is
 // known; otherwise prints the existing compressed generic disk error.
 save_print_storage_status:
+    // Compressed like the other save messages: the C64 had no room for them
+    // as plain text.
+    ldx #HSTR_SAVE_WRITE_PROTECTED
     cmp #HAL_STORAGE_STATUS_WRITE_PROTECTED
-    bne !disk_full+
-    lda #<save_write_protected_str
-    ldy #>save_write_protected_str
-    jmp save_print_direct_status
-!disk_full:
+    beq !print+
+    ldx #HSTR_SAVE_DISK_FULL
     cmp #HAL_STORAGE_STATUS_DISK_FULL
-    bne !not_ready+
-    lda #<save_disk_full_str
-    ldy #>save_disk_full_str
-    jmp save_print_direct_status
-!not_ready:
+    beq !print+
+    ldx #HSTR_SAVE_NOT_READY
     cmp #HAL_STORAGE_STATUS_DEVICE_NOT_READY
-    bne !generic+
-    lda #<save_drive_not_ready_str
-    ldy #>save_drive_not_ready_str
-    jmp save_print_direct_status
-!generic:
+    beq !print+
     ldx #HSTR_SAVE_IOERR
     jsr huff_print_msg
 #if HAL_STORAGE_APPEND_DISK_DETAIL
     jsr save_append_disk_detail_plus4
 #endif
     rts
-
-save_print_direct_status:
-    sta zp_ptr0
-    sty zp_ptr0_hi
-    jmp msg_print
-
-save_write_protected_str:
-    .text "Disk is write-protected." ; .byte 0
-save_disk_full_str:
-    .text "Disk is full." ; .byte 0
-save_drive_not_ready_str:
-    .text "Drive is not ready." ; .byte 0
+!print:
+    jmp huff_print_msg
 #endif
 
 // ============================================================
@@ -541,12 +537,15 @@ save_game:
     cmp #HAL_STORAGE_STATUS_WRONG_MEDIA
     beq !save_bad_media+
 #if HAL_STORAGE_SAVE_MEDIA_STATUS_LEGACY
+    tax                         // the status, for the message below
     lda save_device
     cmp program_device
-    bne !save_not_bad_media+
+    bne !save_legacy_done+
     lda disk_status
     cmp #3
     beq !save_bad_media+
+!save_legacy_done:
+    txa
 #endif
     jmp !save_not_bad_media+
 !save_bad_media:
@@ -755,16 +754,7 @@ save_open_write_len:
     lda save_device
     sta disk_prompt_device      // C128: also disk_ui_action, not live during a save
     jsr hal_storage_read_command_status
-#if HAL_STORAGE_COMMAND_STATUS_FROM_DISK_DIAG || HAL_STORAGE_COMMAND_STATUS_FROM_ERROR_DIAG
-    jsr hal_storage_command_status
-#else
-    lda disk_status             // 0 = DOS status 00/01
-#endif
-    pha
-#if HAL_STORAGE_VIC_BANK_RESTORE_AFTER_SERIAL
-    jsr c64_restore_vic_bank0_after_serial
-#endif
-    pla
+    :SaveDriveStatus()          // ends loading A: Z = OK
     beq !save_drive_ok+
 #if HAL_STORAGE_FRIENDLY_STATUS_MESSAGES
     jsr save_print_storage_status   // A = the drive's HAL_STORAGE_STATUS_*
@@ -797,7 +787,25 @@ save_open_write_len:
 #endif
 !save_error:
 #if HAL_STORAGE_FRIENDLY_STATUS_MESSAGES
+#if HAL_STORAGE_SAVE_CHECKS_DOS_STATUS
+    // CBM DOS names a refused write's cause (26 write-protected, 72 full)
+    // only on the command channel; the stream knows only that it failed.
+    // Anything the drive does not name stays the generic message.
+#if HAL_STORAGE_APPEND_DISK_DETAIL
+    lda disk_error_readst       // the stream's failure, for the detail
+    pha
+#endif
+    lda save_device
+    sta disk_prompt_device
+    jsr hal_storage_read_command_status
+#if HAL_STORAGE_APPEND_DISK_DETAIL
+    pla
+    sta disk_error_readst
+#endif
+    :SaveDriveStatus()
+#else
     jsr hal_storage_save_stream_status
+#endif
     jsr save_print_storage_status
     jmp !save_error_after_print+
 #else
