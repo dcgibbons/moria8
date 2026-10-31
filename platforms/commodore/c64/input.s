@@ -62,7 +62,8 @@ input_lock_charset_switch:
 // GETIN sets $CC=$C6 internally — calling with $C6>0 keeps $CC
 // non-zero, preventing KERNAL cursor blink from corrupting color RAM.
 // Preserves: X, Y
-// input_run_key_held — Non-blocking: returns nonzero if any key is physically held
+// input_run_key_held — Non-blocking: returns nonzero if any key but left SHIFT
+// is physically held (SHIFT LOCK latches left SHIFT's contact)
 // Used by the pre-arm running path in game_loop.s. This must ignore KERNAL
 // key-repeat semantics; buffered repeats would cancel a run after a short delay.
 // Output: A = nonzero if any key held, 0 if no key
@@ -106,11 +107,18 @@ input_run_key_held:
     sta CIA1_DDRA
     lda #$00
     sta CIA1_DDRB
-    lda #$00
+    lda #%00000010          // Every column but left SHIFT's
     sta CIA1_PORTA
     lda CIA1_PORTB
     cmp #$ff
+    bne !irk_held+
+    lda #%11111101          // Its column, without left SHIFT: SHIFT LOCK
+    sta CIA1_PORTA          // latches that contact, and the release wait
+    lda CIA1_PORTB          // has no bound
+    ora #$80
+    cmp #$ff
     beq !irk_none+
+!irk_held:
     lda #1
     bne !irk_store+
 !irk_none:

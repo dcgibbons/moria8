@@ -281,12 +281,13 @@ input_wait_release:
     tya
     pha
     ldx #0
-    ldy #80                 // Held: about 0.25 s (18-cycle loop), as the Apple IIe
+    ldy #80                 // Held: about 0.25 s (20-cycle loop), as the Apple IIe
 !wait_loop:
     inc zp_entropy
     lda SKSTAT
-    and #$04                // Bit 2 == 0 while a key is held down
-    bne !settle+
+    and #$0c                // Bit 2 == 0 while a key is held, bit 3 while SHIFT is
+    cmp #$0c                // (POKEY shows no held CTRL: it cannot count)
+    beq !settle+
 !wait_next:
     inx
     bne !wait_loop-
@@ -302,8 +303,9 @@ input_wait_release:
 !settle_loop:
     inc zp_entropy
     lda SKSTAT
-    and #$04
-    beq !wait_next-         // A key is down after all: keep waiting
+    and #$0c
+    cmp #$0c
+    bne !wait_next-         // A key is down after all: keep waiting
     inx
     bne !settle_loop-
     dec iwr_settle

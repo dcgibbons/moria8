@@ -480,6 +480,7 @@ hal_sound_init:
 input_run_scan_held_raw:
     lda #0
     rts
+irs_count_modifiers: .byte 0    // input_run_raw128.s's flag, for input_wait_release
 
 viewport_update:
     jmp test_viewport_update

@@ -527,6 +527,26 @@ function run()
     send_key(0x4E) -- 'N'
     wait_frames(40)
     assert_line("rollover_declined", in_town() and not screen_has("Do you really want to quit?"))
+    -- SHIFT still down after SHIFT+Q's Q is let go: the prompt waits for it
+    -- too, so a Y pressed meanwhile (a shifted Y, which would say no) does
+    -- not answer.
+    wait_for_key_poll("shift_held")
+    shift:set_value(1)
+    q:set_value(1)
+    wait_frames(6)
+    q:set_value(0)
+    wait_frames(6)
+    y:set_value(1)
+    wait_frames(6)
+    y:set_value(0)
+    wait_frames(6)
+    shift:set_value(0)
+    assert_line("shift_prompt_shown", wait_screen("Do you really want to quit?", 80))
+    wait_frames(150)
+    assert_line("shift_held_y_ignored", screen_has("Do you really want to quit?") and in_town())
+    send_key(0x4E) -- 'N'
+    wait_frames(40)
+    assert_line("shift_declined", in_town() and not screen_has("Do you really want to quit?"))
     manager.machine:exit()
 end
 """

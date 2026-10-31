@@ -35,8 +35,11 @@
 // - hal_input_wait_release: input none; output no key held (a bounded wait
 //   where a key-up can be lost: Apple IIe, Atari, BBC, X16) and none queued:
 //   a key typed ahead, or pressed while another was still down, is dropped;
-//   clobbers A/X/Y allowed; must include modifier keys that affect commands
-//   (C64 and X16 do; Plus/4, BBC and Atari skip Shift/Ctrl).
+//   clobbers A/X/Y allowed; must include modifier keys that affect commands,
+//   as far as the hardware shows them held (the Apple IIe's keyboard shows
+//   none, the Atari's POKEY no CTRL), except the SHIFT a latched SHIFT LOCK
+//   holds down where the wait has no bound (C64 and C128 left SHIFT, Plus/4
+//   SHIFT).
 // - hal_input_any_key_held: input none; output A=0 none/nonzero held;
 //   clobbers X/Y allowed; does not consume key events.
 // - hal_input_run_cancel_check: input none; output C=1 cancel requested;

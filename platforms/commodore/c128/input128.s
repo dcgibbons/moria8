@@ -219,6 +219,15 @@ input_wait_release:
     bne !iwr_wait-
     ora igk_last_sample
     bne !iwr_wait-
+    // The PETSCII sample shows no lone SHIFT, C=, CTRL or ALT; the raw scan
+    // with modifiers counted must show nothing down too (hal_input.s), but
+    // for left SHIFT: SHIFT LOCK latches it, and this wait has no bound.
+    lda #$80
+    sta irs_count_modifiers
+    jsr input_run_scan_held_raw
+    asl irs_count_modifiers     // $80 -> 0
+    tax                         // Z: the scan's result
+    bne !iwr_wait-
     sta igk_last_sample
     sta igk_stable
     rts
