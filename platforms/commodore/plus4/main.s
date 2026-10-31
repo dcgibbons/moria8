@@ -601,6 +601,12 @@ plus4_storage_marker_write_resident:
     rts
 
 plus4_disk_read_command_status:
+    // A read that times out (ST bit 1) is a lost transfer, not an answer:
+    // under JiffyDOS a byte the drive sends while its disk-controller IRQ
+    // runs can arrive cut short (playtest-disk save_overwrite). Ask again.
+    lda #3
+    sta p4dcs_attempts
+!p4dcs_try:
     // Start with no channel selected: after a write the drive refused, the
     // JiffyDOS Plus/4 KERNAL never completed the CHKIN below (playtest-disk
     // full_disk).
@@ -639,8 +645,15 @@ plus4_disk_read_command_status:
     jsr plus4_kernal_clrchn
     lda #hal_storage_cmd_channel
     jsr plus4_kernal_close
+    lda disk_error_readst
+    and #$02                    // read timeout
+    beq !p4dcs_done+
+    dec p4dcs_attempts
+    bne !p4dcs_try-
 !p4dcs_done:
     rts
+
+p4dcs_attempts: .byte 0
 
 plus4_disk_status_to_disk_status:
     // One DOS-code policy for every port: core/storage_status.s.
