@@ -49,8 +49,8 @@
   .ok { color: var(--green); } .bad { color: var(--red); } .warn { color: var(--amber); } .gold { color: var(--gold); }
   main { padding: 12px 16px; display: grid; gap: 12px; max-width: 120rem; margin: 0 auto;
          grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-         grid-template-areas: "ports round" "causes kit" "wall wall" "milestone legend"; }
-  @media (max-width: 1100px) { main { grid-template-columns: 1fr; grid-template-areas: "ports" "round" "causes" "kit" "wall" "milestone" "legend"; } }
+         grid-template-areas: "ports round" "disk disk" "causes kit" "wall wall" "milestone legend"; }
+  @media (max-width: 1100px) { main { grid-template-columns: 1fr; grid-template-areas: "ports" "round" "disk" "causes" "kit" "wall" "milestone" "legend"; } }
   .legend-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(22rem, 1fr)); gap: 12px 22px; font-size: 12px; }
   .legend-grid h3 { margin: 0 0 4px; font-size: 11px; color: var(--gold); letter-spacing: .1em; text-transform: uppercase; font-weight: normal; }
   .legend-grid p { margin: 0 0 6px; color: var(--muted); }
@@ -77,6 +77,11 @@
   .pgrid .h { color: var(--dim); text-align: center; padding-bottom: 2px; }
   .pgrid .h b { display: block; color: var(--muted); font-weight: normal; }
   .pgrid .r { color: var(--muted); align-self: center; }
+  .dgrid { display: grid; grid-template-columns: 11rem repeat(3, minmax(0, 1fr)) minmax(0, 2fr); gap: 3px; font-size: 11px; }
+  .dgrid .h { color: var(--dim); text-align: center; padding-bottom: 2px; }
+  .dgrid .h b { display: block; color: var(--muted); font-weight: normal; }
+  .dgrid .r { color: var(--muted); align-self: center; }
+  .dgrid .doc { color: var(--dim); align-self: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .mlegend { margin-top: 6px; font-size: 11px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 4px 12px; }
   .mlegend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
   /* Round table */
@@ -174,6 +179,16 @@
       <span class="dim">each cell: clvl5 | reach_dl5</span>
     </div>
   </section>
+  <section style="grid-area: disk">
+    <h2><span>Disk scenarios · make playtest-disk</span><small id="dcount"></small></h2>
+    <div class="dgrid" id="dgrid"></div>
+    <div class="mlegend">
+      <span><i style="background:rgba(154,210,132,.4)"></i>✓ passed</span>
+      <span><i style="background:rgba(197,121,0,.45)"></i>x known defect (backlog) · … running</span>
+      <span><i style="background:rgba(224,96,60,.35)"></i>✗ failed · ! error or a known defect that passed</span>
+      <span class="dim">each port's latest full run; hover a cell for its detail</span>
+    </div>
+  </section>
   <section style="grid-area: round">
     <h2><span>This round</span><small id="rverdict"></small></h2>
     <div class="tiles" id="tiles"></div>
@@ -207,7 +222,7 @@ const PALETTE = ["#000000","#ffffff","#68372b","#70a4b2","#6f3d86","#588d43","#3
                  "#6f4f25","#433900","#9a6759","#444444","#6c6c6c","#9ad284","#6c5eb5","#959595"];
 const LEVEL_BANDS = [[1, 1, "L1"], [2, 2, "L2"], [3, 4, "L3-4"], [5, 7, "L5-7"], [8, 99, "L8+"]];
 const BAND_COLORS = ["#e0603c", "#c57900", "#ffd93d", "#9ad284", "#7779dc"];
-let current = null, data = null, mile = null, cover = null, watching = null;
+let current = null, data = null, mile = null, cover = null, diskData = null, watching = null;
 const PORT_NAMES = {c64: "C64", plus4: "Plus/4", c128: "C128", apple2: "Apple IIe", atari8: "Atari 8-bit",
                     bbcmaster: "BBC Master", cx16: "Commander X16"};
 const $ = id => document.getElementById(id);
@@ -218,11 +233,13 @@ const URLS = STATIC ? {
   overview: () => `data/overview.json${bust()}`,
   milestone: () => `data/milestone.json${bust()}`,
   ports: () => `data/ports.json${bust()}`,
+  disk: () => `data/disk.json${bust()}`,
   worker: (session, n) => `data/workers/${encodeURIComponent(session)}--w${n}.json${bust()}`,
 } : {
   overview: () => `/api/overview${current ? `?round=${encodeURIComponent(current)}` : ""}`,
   milestone: () => "/api/milestone",
   ports: () => "/api/ports",
+  disk: () => "/api/disk",
   worker: (session, n) => `/api/worker?session=${encodeURIComponent(session)}&worker=${n}`,
 };
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
@@ -364,6 +381,46 @@ async function refreshPorts() {
     cover = await r.json(); renderPorts();
   } catch (e) {
     $("pgrid").innerHTML = `<div class="warn" style="grid-column:1/-1">ports: ${esc(e)}</div>`;
+  }
+}
+
+const DISK_CELL = {pass: ["frozen", "✓"], xfail: ["near", "x"], running: ["near", "…"], pending: ["none", "·"],
+                   fail: ["short", "✗"], error: ["short", "!"], xpass: ["short", "!"]};
+function renderDisk() {
+  if (!diskData) return;
+  const ports = ["c64", "plus4", "c128"];
+  const ago = s => s ? fmtTime(Math.max(0, diskData.now - Date.parse(s) / 1000)) + " ago" : "";
+  let html = `<div></div>` + ports.map(p => {
+    const run = diskData.latest[p];
+    const head = run ? `${run.expected}/${run.total}${run.live ? " · running" : " · " + ago(run.finished || run.started)}` : "not run";
+    return `<div class="h">${esc(PORT_NAMES[p] || p)}<b>${esc(head)}</b></div>`;
+  }).join("") + `<div class="h">what it checks</div>`;
+  diskData.scenarios.forEach(name => {
+    let doc = "";
+    html += `<div class="r">${esc(name)}</div>`;
+    ports.forEach(p => {
+      const row = ((diskData.latest[p] || {}).scenarios || []).find(r => r.name === name);
+      if (!row) { html += `<div class="box none" title="not in this port's run">—</div>`; return; }
+      doc = doc || row.doc;
+      const [cls, label] = DISK_CELL[row.outcome] || ["none", "?"];
+      const tip = `${name} on ${PORT_NAMES[p] || p}: ${row.outcome}` + (row.seconds != null ? ` (${row.seconds}s)` : "") +
+                  (row.known ? `\nknown: ${row.known}` : "") + (row.detail ? `\n${row.detail}` : "");
+      html += `<div class="box ${cls}" title="${esc(tip)}">${label}</div>`;
+    });
+    html += `<div class="doc" title="${esc(doc)}">${esc(doc)}</div>`;
+  });
+  if (!diskData.scenarios.length) html += `<div class="dim" style="grid-column:1/-1">no runs yet: make playtest-disk PORT=c64</div>`;
+  $("dgrid").innerHTML = html;
+  const runs = ports.map(p => diskData.latest[p]).filter(Boolean);
+  $("dcount").textContent = runs.length ? `${runs.reduce((a, r) => a + r.expected, 0)} of ${runs.reduce((a, r) => a + r.total, 0)} as expected` : "";
+}
+async function refreshDisk() {
+  try {
+    const r = await fetch(URLS.disk());
+    if (!r.ok) { $("dgrid").innerHTML = `<div class="warn" style="grid-column:1/-1">no disk data (HTTP ${r.status})</div>`; return; }
+    diskData = await r.json(); renderDisk();
+  } catch (e) {
+    $("dgrid").innerHTML = `<div class="warn" style="grid-column:1/-1">disk: ${esc(e)}</div>`;
   }
 }
 
@@ -570,10 +627,12 @@ refresh().then(() => {
 });
 refreshMilestone();
 refreshPorts();
+refreshDisk();
 if (STATIC) $("round").parentElement.style.display = "none";
 setInterval(() => { if (!$("dlg").open) refresh(); }, STATIC ? 30000 : 5000);
 setInterval(refreshMilestone, 30000);
 setInterval(refreshPorts, 30000);
+setInterval(refreshDisk, STATIC ? 30000 : 3000);
 setInterval(renderFocus, STATIC ? 5000 : 1000);
 setInterval(renderUpdated, 1000);
 </script>

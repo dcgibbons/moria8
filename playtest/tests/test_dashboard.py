@@ -147,5 +147,40 @@ class LiveRoundsTest(unittest.TestCase):
         self.assertEqual([s["port"] for s in alone["suites"]], ["c64"])
 
 
+class DiskRunsTest(unittest.TestCase):
+    """The disk panel (§22) shows each port's run: one running now, else the
+    newest with the most scenarios, so a SCENARIOS= rerun of one does not
+    hide the last full run."""
+
+    def run_dir(self, root: Path, name: str, port: str, names: list[str], age: float, finished: bool) -> None:
+        import os
+        import time
+        path = root / name
+        path.mkdir()
+        (path / "summary.json").write_text(json.dumps({
+            "port": port, "started": "2026-10-30T12:00:00",
+            "finished": "2026-10-30T12:05:00" if finished else None,
+            "scenarios": [{"name": n, "doc": "", "outcome": "pass", "seconds": 1.0, "detail": "", "known": ""}
+                          for n in names]}))
+        stamp = time.time() - age
+        os.utime(path / "summary.json", (stamp, stamp))
+
+    def test_a_full_run_over_a_newer_partial_and_a_live_one_first(self) -> None:
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.run_dir(root, "20261030-1200-c64", "c64", ["save_resume", "full_disk"], 600, True)
+            self.run_dir(root, "20261030-1300-c64", "c64", ["full_disk"], 300, True)
+            self.run_dir(root, "20261030-1200-plus4", "plus4", ["save_resume", "full_disk"], 600, True)
+            self.run_dir(root, "20261030-1310-plus4", "plus4", ["save_resume"], 5, False)
+            with mock.patch.object(dashboard, "DISK_RUNS", root):
+                view = dashboard.disk()
+        self.assertEqual(view["ports"], ["c64", "plus4"])
+        self.assertEqual(view["latest"]["c64"]["run"], "20261030-1200-c64")
+        self.assertEqual(view["latest"]["plus4"]["run"], "20261030-1310-plus4")
+        self.assertTrue(view["latest"]["plus4"]["live"])
+        self.assertEqual(view["scenarios"], ["save_resume", "full_disk"])
+
+
 if __name__ == "__main__":
     unittest.main()

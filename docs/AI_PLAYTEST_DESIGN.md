@@ -2586,3 +2586,116 @@ Game defects M6 found and fixed: the C128 tier cache overwriting the item
 names (`check_c128_payloads.py` now gates the payloads), stale monster tiers
 on the Apple IIe and X16 disks, the BBC Master's held-key probe (§21.9) and
 its missing `MONDB1`. Port differences fixed: stair counts (DGN-016).
+
+## 22. Disk scenarios: `make playtest-disk` (from 2026-10-30)
+
+M6's Plus/4 round filed two `stack` findings (`SP at command prompt $F0,
+expected $F2`). Both were a silent restart: going up from DL1, the KERNAL
+LOAD of `4.GEN` missed the drive's handshake (ST `$43`, drive status `00`),
+`overlay_load` failed, and `level_change_generate_current` jumped to
+`entry_main`, losing the character. The same LOAD repeated succeeded. The
+game now repeats a failed disk load (`asset_load_retry`, every port's
+overlays, tiers and recall strings), and this queue keeps the disk paths
+honest.
+
+**What it is.** `make playtest-disk PORT=c64|plus4|c128 [SCENARIOS=a,b]`
+(`playtest/moria_playtest/disk.py`) runs a fixed list of scenarios, each
+on its own VICE with its own drives and media, in 3–15 s each. The bot
+plays a character where one is needed (`enter_dungeon`), then scripted keys
+drive Disk Setup, saving, loading and the failure paths through the real
+UI. Results are checked against the game (the player record with the
+zero-page fields `player_sync_from_zp` copies, the pack) and the disk
+images themselves (`c1541 -list`/`-read`). It exits non-zero on a failure,
+an error, or an expected failure that passed.
+
+**How the media and faults work, and the VICE behaviour behind it:**
+
+- Images are attached through VICE's text remote monitor (the binary
+  monitor has no attach). The connection stays open and is never sent `x`:
+  either `x` or closing it made VICE resume the CPU at later checkpoints by
+  itself, so the harness saw stops whose CPU had already run on.
+- Write protection is VICE's `AttachDevice<n>d0Readonly`: file permissions
+  cannot do it, since `tools/isolated.sh` runs us as root in a user
+  namespace. `ViceMonitor.resource_set` sent integers as decimal text
+  (0 arrived as 48); it sends them little-endian now, which also makes
+  `m0.py`'s `Drive8TrueEmulation=0` take effect.
+- True drive emulation writes a disk's tracks back to the file only on
+  detach, so images are detached and reattached before they are read.
+- A load fault renames the requested file at `hal_asset_load_prg_header`
+  (its first character becomes `!`), so the drive itself answers FILE NOT
+  FOUND; the next call restores it. Code is not patched: the emulator has
+  already fetched the opcode at a stop.
+- The C64 runs these with its REU off (`+reu`), or overlays never come from
+  disk. The C128 serves overlays from its Bank 1 cache regardless; its disk
+  load on the way to town is the cold chest overlay (store restock).
+
+**Scenarios** (each port; `x` is an expected failure, a known defect;
+2026-10-30, every port as expected: C64 15/15, Plus/4 15/15, C128 14/14):
+
+| Scenario | What it checks | C64 | Plus/4 | C128 |
+|---|---|---|---|---|
+| `save_resume` | first save to a blank drive-9 disk (initialize it), resume: the same character | pass | pass | pass |
+| `save_overwrite` | save over slot 1 after playing on; the newer game loads | pass | pass | pass |
+| `decline_init` | initialize declined: nothing written; then accepted | pass | pass | pass |
+| `foreign_disk` | another program's disk as the save disk: its files survive | pass | pass | pass |
+| `unformatted_disk` | a never-formatted disk fails cleanly; a good one then works | pass | pass | pass |
+| `program_drive_as_save` | drive 8 picked as the save drive: the Program Disk is refused, unwritten | pass | pass | pass |
+| `write_protected` | "Disk is write-protected."; the image is unchanged | pass | pass | pass |
+| `full_disk` | the drive's answer named ("Disk is full." for 72); slot 1 survives a failed overwrite | pass | pass | pass |
+| `load_empty_slot` | an empty slot starts no game | pass | pass | pass |
+| `swap_save_resume` | one drive: swap to the save disk and back, save and resume | pass | pass | pass |
+| `program_disk_as_save` | one drive: the Program Disk left in is refused | pass | pass | pass |
+| `quit_confirm` | SHIFT+Q asks first: N plays on with no turn taken, Y quits | pass | pass | pass |
+| `load_retry_town` | one failed load on the way up to town is repeated; play goes on | pass | pass | pass |
+| `load_retry_resume` | one failed load while resuming is repeated (not the C128: its own runtime loader) | pass | pass | — |
+| `status_retry_resume` | the program-disk probe's status read cut short while resuming is asked again (Plus/4 only: its reader retries) | — | pass | — |
+| `load_fail_town` | a load that never succeeds keeps the game | x (crash, `$FE66`) | x (restart) | x (restart) |
+
+The dashboard's "Disk scenarios" panel (`/api/disk`) shows each port's
+latest full run from the `summary.json` every run writes as it goes.
+
+**What the queue found, 2026-10-30:**
+
+- Fixed: a failed save named no cause on the C64 (`Disk error!`), and on
+  every Commodore port for a write the drive refused mid-stream. The save
+  path now asks the drive, and the status readers clear the KERNAL's
+  channels first: without that the JiffyDOS Plus/4 KERNAL hung in CHKIN
+  after a full disk. Found by `full_disk`.
+- Fixed: `SHIFT+Q` quit with no confirmation; it asks "Do you really want
+  to quit? Y/N" (Umoria's wording), as FEATURE_MAP says. Type-ahead is
+  dropped first (a buffered `y` is a move) on every port but the Atari,
+  whose modal prepare does not empty its key buffer; any key but Y plays
+  on as Umoria's `get_check`, and the question is cleared.
+- Fixed: disk loads that bypassed the retry (winner retirement, the C128
+  boot preloads and runtime payloads, the Apple IIe play slot, the Atari
+  title and banked payloads).
+- Open (docs/BACKLOG.md): a load that never succeeds still restarts the
+  game, and on the C64 crashes into the KERNAL warm start (`load_fail_town`).
+- Fixed: under the JiffyDOS ROMs the Plus/4 `save_overwrite` resume showed
+  a spurious "Insert program disk" every time once this round's code moved:
+  the program-disk probe's command-channel read came back `X` with ST `$42`
+  (read timeout) while drive 8 held "00, OK". The byte was lost on the bus:
+  drive 8 was in its disk-controller IRQ (`$F9D9`) as the transfer began,
+  which the stock ROMs tolerate. Any code shift moves where that lands, so
+  `plus4_disk_read_command_status` now asks again (up to three times) when
+  a read times out. `status_retry_resume` loses the probe's read on purpose;
+  it fails without the retry. Same family as the missed LOAD handshake in
+  docs/BACKLOG.md.
+- Room: the C64 had no bytes for the retry, the save causes and the quit
+  prompt. Its boot-only REU detection moved into the init-only tail past
+  `program_end` (`REU_DETECT_EXTERNAL`, as the other REU loaders), and the
+  new messages are compressed; the C64 ends at `$BEEB`, below the `$BF6E`
+  it had before.
+- A 1541 filled to 0 blocks free answers `67 ILLEGAL TRACK OR SECTOR, 36`
+  (its search runs past track 35), not `72`; `full_disk` leaves 12 blocks
+  (fewer than any port's save), and judges the message by what the drive
+  said. Emulators now die with the process that started them
+  (`launch.die_with_parent`).
+
+**Sessions.** A playtest character reads `asset_load_retries` at each level
+entry and files a `load_retry` finding (class `game`) when it moved, so a
+drive that needed a second try shows without ending the seed.
+
+**Not covered yet** (docs/BACKLOG.md): the MAME ports (Apple IIe, Atari
+8-bit, BBC Master) and the X16, which need their own media swapping and
+fault injection; the hall of fame on death or retirement.

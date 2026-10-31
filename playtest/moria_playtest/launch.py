@@ -204,13 +204,14 @@ class ViceProcess:
     monitor: ViceMonitor | None = None
     args: list[str] = field(default_factory=list)
     log_path: Path | None = None
+    extra_args: tuple[str, ...] = ()   # after the port's own: drives, cartridges (disk.py)
 
     def start(self, *, autostart: bool = True, connect_timeout: float = 30.0,
               response_timeout: float = 60.0) -> ViceMonitor:
         exe = find_vice(self.emulator)
         config = str(write_vice_config(exe, self.workdir))
         self.args = [exe, *(config if a == "VICE_CONFIG" else a for a in self.target.resource_args),
-                     *rom_args(port=self.target),
+                     *rom_args(port=self.target), *self.extra_args,
                      "-binarymonitor", "-binarymonitoraddress", f"127.0.0.1:{self.port}"]
         if autostart:
             self.args += ["-autostart", str(self.disk)]

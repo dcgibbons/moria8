@@ -16,6 +16,8 @@ and the scores of earlier rounds of the same project.
   its bar, and the latest full result.
 - ``/api/ports``: M6's coverage map (§21.4): the primary characters on each
   port's goals, frozen or not, the latest full result and when it ran.
+- ``/api/disk``: the disk scenarios (§22, ``make playtest-disk``): each
+  port's latest run, scenario by scenario, live while it runs.
 """
 
 from __future__ import annotations
@@ -38,6 +40,7 @@ from .ports import C64, PORTS
 
 INDEX = ROOT / "playtest" / "dashboard" / "index.html"
 SESSIONS = PLAYTEST_OUT / "sessions"
+DISK_RUNS = PLAYTEST_OUT / "disk"            # make playtest-disk: <time>-<port>/summary.json
 LIVE_SECONDS = 300   # a round that wrote within this is running
 SUITES = ROOT / "playtest" / "suites"
 MILESTONE_GOALS = ("clvl10", "reach_dl8")   # M4 and M5 (§16)
@@ -407,6 +410,34 @@ def ports() -> dict[str, Any]:
             "cells": cells, "frozen": frozen_count, "suites": len(PORT_CHARACTERS) * len(PORT_GOALS)}
 
 
+def disk() -> dict[str, Any]:
+    """Each port's disk-scenario run to show: one running now, else the
+    newest with the most scenarios (a SCENARIOS= rerun of a few does not
+    hide the last full run); and the recent runs."""
+    runs = []
+    for path in sorted(DISK_RUNS.glob("*/summary.json"), key=lambda p: mtime(p.parent), reverse=True)[:60]:
+        summary = cached(path, read_json)
+        if not summary or not summary.get("scenarios"):
+            continue
+        rows = summary["scenarios"]
+        runs.append({"run": path.parent.name, "port": summary.get("port"), "started": summary.get("started"),
+                     "finished": summary.get("finished"), "scenarios": rows,
+                     "live": not summary.get("finished") and time.time() - mtime(path.parent) < LIVE_SECONDS,
+                     "expected": sum(r["outcome"] in ("pass", "xfail") for r in rows), "total": len(rows)})
+    latest: dict[str, dict[str, Any]] = {}
+    for port in {run["port"] for run in runs}:
+        port_runs = [run for run in runs if run["port"] == port]   # newest first
+        live = [run for run in port_runs if run["live"]]
+        most = max(run["total"] for run in port_runs)
+        latest[port] = live[0] if live else next(run for run in port_runs if run["total"] == most)
+    names: list[str] = []
+    for run in latest.values():
+        names += [r["name"] for r in run["scenarios"] if r["name"] not in names]
+    return {"ports": [p for p in PORTS if p in latest], "latest": latest, "scenarios": names,
+            "runs": [{k: r[k] for k in ("run", "port", "started", "finished", "live", "expected", "total")}
+                     for r in runs[:20]], "now": time.time()}
+
+
 def legend() -> dict[str, Any]:
     """What the page's bars and goals mean, from the code that sets them
     (goals.py), so the explanation cannot drift from the numbers."""
@@ -430,6 +461,9 @@ def make_handler() -> type[BaseHTTPRequestHandler]:
                 kind = "application/json"
             elif url.path == "/api/ports":
                 body = json.dumps(ports(), default=str).encode()
+                kind = "application/json"
+            elif url.path == "/api/disk":
+                body = json.dumps(disk(), default=str).encode()
                 kind = "application/json"
             elif url.path == "/api/worker":
                 body = json.dumps(worker(query.get("session", ""), int(query.get("worker", "0"))),

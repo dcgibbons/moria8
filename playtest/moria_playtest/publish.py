@@ -64,6 +64,7 @@ def snapshot(out: Path = OUT) -> dict[str, int]:
     write_json(data / "overview.json", overview)
     write_json(data / "milestone.json", dashboard.milestone())
     write_json(data / "ports.json", dashboard.ports())
+    write_json(data / "disk.json", dashboard.disk())
     live = set()
     for suite in overview.get("suites", []):
         for status in suite.get("workers", []):

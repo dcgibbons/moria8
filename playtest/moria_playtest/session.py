@@ -73,6 +73,8 @@ class Character:
         self.keys: list[int] = []      # keys fed since self.snapshot
         self.cited: set[Path] = set()  # snapshots a finding cites: kept for replay
         self.reported: set[tuple[str, str]] = set()
+        self.keep_worker = False   # leave the emulator running after play() (disk.py)
+        self.load_retries: int | None = None   # asset_load_retries at the last level entry
 
     # -- snapshots and findings ------------------------------------------------
 
@@ -110,6 +112,20 @@ class Character:
             "snapshot": str(self.snapshot.path) if self.snapshot else None,
             "keys": list(self.keys), "screen": obs.rows if obs else None,
             "observation": obs.summary() if obs else None})
+
+    def check_load_retries(self, obs: Observation) -> None:
+        """A repeated disk load (asset_load_retry) is a load the drive failed
+        once: filed so it shows, without ending the character."""
+        game = self.worker.game
+        assert game is not None
+        symbol = game.abi.all_symbols.get("asset_load_retries")
+        if symbol is None:
+            return
+        count = game.mon.mem_get(symbol[0], 1, game.ram)[0]
+        if self.load_retries is not None and count != self.load_retries:
+            self.file_finding("load_retry", "game", f"a disk load was repeated by step {self.result.steps} "
+                              f"(asset_load_retries {self.load_retries} -> {count})", obs)
+        self.load_retries = count
 
     def audit(self, obs: Observation, tiles: bytes | None) -> None:
         """File the auditor's findings for this observation (a game finding
@@ -168,6 +184,7 @@ class Character:
                     dlvl_seen = obs.dlvl
                     self.result.max_dlvl = max(self.result.max_dlvl, obs.dlvl)
                     self.take_snapshot(obs)
+                    self.check_load_retries(obs)
                 self.audit(obs, tiles)
                 if self.result.outcome == "finding":
                     break
@@ -203,7 +220,8 @@ class Character:
             self.file_finding(fault.kind, "game", fault.detail, None, fault.pc)
         finally:
             self.log.close()
-            self.worker.stop()
+            if not self.keep_worker:
+                self.worker.stop()
         self.result.wall_s = round(time.monotonic() - started, 2)
         self.session.event("character_end", seed=self.seed, outcome=self.result.outcome,
                            steps=self.result.steps, dlvl=self.result.dlvl)

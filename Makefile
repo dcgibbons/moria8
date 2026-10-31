@@ -7,7 +7,7 @@
 	buildatari8 diskatari8 runatari8 runatari8-130xe testatari8 testatari8-smoke testatari8-fast-smoke testatari8-runtime testatari8-memory-contract testatari8-memory-contract-selftest \
 	buildbbcmaster diskbbcmaster runbbcmaster testbbcmaster testbbcmaster-smoke testbbcmaster-fast-smoke testbbcmaster-runtime testbbcmaster-memory-contract testbbcmaster-memory-contract-selftest \
 	artifact artifact-checksums artifacts \
-	playtest-check playtest-smoke playtest-m0-report playtest-session playtest-qualify \
+	playtest-check playtest-smoke playtest-m0-report playtest-session playtest-qualify playtest-disk \
 	playtest-regress playtest-repro playtest-dashboard playtest-publish playtest-selftest
 
 # Python tools and harnesses must not leave __pycache__ in source directories.
@@ -143,6 +143,11 @@ playtest-smoke: disk64
 
 playtest-m0-report: disk64
 	$(PLAYTEST_RUN) -m moria_playtest.m0
+
+# Disk save/load edge cases through the real UI, on the VICE ports
+# (playtest/moria_playtest/disk.py); SCENARIOS=save_resume,full_disk picks some.
+playtest-disk: $(PLAYTEST_DISK)
+	$(PLAYTEST_RUN) -m moria_playtest.disk $(PLAYTEST_PORT) $(if $(SCENARIOS),--scenarios $(SCENARIOS)) $(PLAYTEST_ARGS)
 
 playtest-session: $(PLAYTEST_DISK)
 	$(PLAYTEST_RUN) -m moria_playtest.session $(PLAYTEST_PORT) --goal $(GOAL) --workers $(WORKERS) $(PLAYTEST_SEEDS) $(PLAYTEST_CHARACTER) $(PLAYTEST_ARGS)

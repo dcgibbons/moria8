@@ -60,12 +60,14 @@ class Snapshot:
 
 class Worker:
     def __init__(self, run_dir: Path, worker_id: int = 0, *, emulator: str | None = None,
-                 hang_emulated_seconds: float = 300.0, build: Build = SHIPPING) -> None:
+                 hang_emulated_seconds: float = 300.0, build: Build = SHIPPING,
+                 extra_args: tuple[str, ...] = ()) -> None:
         self.run_dir = run_dir
         self.worker_id = worker_id
         self.emulator = emulator or build.target.emulator
         self.hang_emulated_seconds = hang_emulated_seconds
         self.build = build
+        self.extra_args = extra_args   # more emulator options (VICE only; disk.py)
         check_disk(build)
         self.workdir, self.disk = prepare_worker(run_dir, worker_id, build.disk)
         self.abi = abimod.load(build.vs, port=build.target)
@@ -92,7 +94,8 @@ class Worker:
             self.game = X16Game(process, self.abi, self.workdir, port=port)
             return self.game
         self.vp = ViceProcess(self.worker_id, self.workdir, self.disk,
-                              allocate_port(self.worker_id), self.emulator, self.build.target)
+                              allocate_port(self.worker_id), self.emulator, self.build.target,
+                              extra_args=self.extra_args)
         monitor = self.vp.start(autostart=autostart)
         self.game = Game(monitor, self.abi, self.workdir,
                          hang_emulated_seconds=self.hang_emulated_seconds, port=self.build.target)
@@ -122,8 +125,9 @@ class Worker:
 
     def start_at_title(self) -> Observation:
         """Fresh VICE with the private disk attached, resumed from the title
-        snapshot; a port without snapshots boots."""
-        if not self.build.target.snapshots:
+        snapshot; a port without snapshots boots, and so does a worker with
+        extra drives or devices (a snapshot does not carry their images)."""
+        if not self.build.target.snapshots or self.extra_args:
             return self._spawn(autostart=True).boot()
         title = self.title_snapshot()
         return self._spawn(autostart=False).undump(title)

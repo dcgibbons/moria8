@@ -15,6 +15,7 @@ import time
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
+from typing import Callable
 
 from .abi import Abi
 from .ports import C64, Port
@@ -261,6 +262,8 @@ class Game:
         self.input_cps: dict[int, int] = {}   # checkpoint -> key entry address
         self.crash_cps: dict[int, int] = {}
         self.seed_cp: int | None = None
+        # checkpoint -> called at that stop before resuming (disk.py fault injection)
+        self.stop_hooks: dict[int, Callable[[StopInfo], None]] = {}
         self.seed: int = 0
         self.step = 0
         self.keylog: list[int] = []
@@ -291,6 +294,7 @@ class Game:
         self.input_cp = next(iter(self.input_cps))
         self.crash_cps = {mon.checkpoint_set(addr): addr for addr in self.port.crash_entries}
         self.seed_cp = None
+        self.stop_hooks = {}   # their checkpoints were deleted above
 
     def key_entries(self) -> tuple[int, ...]:
         return tuple(getattr(self.abi, name) for name in self.port.key_entries)
@@ -452,6 +456,8 @@ class Game:
                 return obs
             if stop.checkpoint is not None and stop.checkpoint == self.seed_cp:
                 self._apply_seed()
+            elif stop.checkpoint in self.stop_hooks:
+                self.stop_hooks[stop.checkpoint](stop)
             elif stop.checkpoint in self.crash_cps:
                 rom = self._rom_status(stop)
                 if rom is not None:
