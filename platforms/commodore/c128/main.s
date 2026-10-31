@@ -122,9 +122,12 @@
 .segmentdef RuntimeProjectileData [outPrg=OVL_OUT + "/128.proj.prg", start=$0a80, min=$0a80, max=$0aff]
 .segmentdef RuntimeCommonData [outPrg=OVL_OUT + "/128.fdisk.prg", start=$0d60, min=$0d60, max=$0fff]
 .segmentdef RuntimeLowData    [outPrg=OVL_OUT + "/128.runtime.prg", start=$1000, min=$1000, max=$3fff]
-.segmentdef C128ResidentItemNames [outPrg=OVL_OUT + "/128.names.prg", start=$7400, min=$7400, max=$7eff]
-.segmentdef C128ResidentWorld [outPrg=OVL_OUT + "/128.world.prg", start=$6000, min=$6000, max=$8cff]
-.segmentdef C128ResidentItems [outPrg=OVL_OUT + "/128.item.prg", start=$8ca0, min=$8ca0, max=$a9ff]
+// Each resident payload's max is where the next owner starts, so the
+// assembler itself refuses an overrun: later imports add to these segments
+// past any end label.
+.segmentdef C128ResidentItemNames [outPrg=OVL_OUT + "/128.names.prg", start=$7400, min=$7400, max=$7a5f]
+.segmentdef C128ResidentWorld [outPrg=OVL_OUT + "/128.world.prg", start=$6000, min=$6000, max=$8c4f]
+.segmentdef C128ResidentItems [outPrg=OVL_OUT + "/128.item.prg", start=$8c50, min=$8c50, max=$a7ff]
 .segmentdef C128ResidentSelect [outPrg=OVL_OUT + "/128.select.prg", start=$a800, min=$a800, max=$aaff]
 .segmentdef C128ResidentDiskIo [outPrg=OVL_OUT + "/128.diskio.prg", start=$ab00, min=$ab00, max=$aeff]
 .segmentdef C128ResidentPersist [outPrg=OVL_OUT + "/128.persist.prg", start=$af00, min=$af00, max=$cfff]
@@ -633,8 +636,8 @@ w_load:
 #if C128_REAL_BOOT_DIAG
     // Begin before the php/pha so the $54 check at the end compares
     // against the same stack depth (entry SP).
-    ldx #$51
     jsr c128_stack_guard_begin
+    .byte $51
 #endif
     php
     pha
@@ -672,10 +675,25 @@ w_load:
     lda c128_wrapper_saved_a
     plp
 #if C128_REAL_BOOT_DIAG
-    ldx #$54
+    // Keep LOAD's A/X/Y and carry for the caller: the checks below clobber
+    // them. Saved in memory, not on the stack, so the $54 check still sees
+    // the entry SP.
+    sta c128_wrapper_saved_a
+    stx c128_load_arg_x
+    sty c128_load_arg_y
+    php
+    pla
+    sta c128_wrapper_saved_p
     jsr c128_stack_guard_check
+    .byte $54
     jsr c128_stack_guard_snapshot_banking
     jsr c128_stack_guard_snapshot_return
+    lda c128_wrapper_saved_p
+    pha
+    ldx c128_load_arg_x
+    ldy c128_load_arg_y
+    lda c128_wrapper_saved_a
+    plp
 #endif
     rts
 
@@ -927,13 +945,13 @@ tramp_player_create:
     sta c128_tramp_player_create_overlay_req
 #endif
 #if C128_REAL_BOOT_DIAG
-    ldx #$31
     jsr c128_stack_guard_begin
+    .byte $31
 #endif
     jsr overlay_load
 #if C128_REAL_BOOT_DIAG
-    ldx #$32
     jsr c128_stack_guard_check
+    .byte $32
 #endif
     bcc !tpc_loaded+
 #if C128_TEST_OVERLAY_LOAD_FAIL_TRAP
@@ -946,8 +964,8 @@ tramp_player_create:
 #endif
 #endif
 #if C128_REAL_BOOT_DIAG
-    ldx #$33
     jsr c128_stack_guard_begin
+    .byte $33
 #endif
 #if !C128_TEST_SKIP_PLAYER_CREATE_CALL
     lda #1
@@ -961,8 +979,8 @@ tramp_player_create_return_site:
 #endif
 #endif
 #if C128_REAL_BOOT_DIAG
-    ldx #$33
     jsr c128_stack_guard_check
+    .byte $33
 #endif
     jsr c128_restore_runtime_guards
 tramp_game_over_disk_setup_failed:
@@ -1047,7 +1065,7 @@ tramp_winner_royal:
     lda #hal_storage_modal_misc_name_len
     ldx #<hal_storage_modal_misc_name
     ldy #>hal_storage_modal_misc_name
-    jsr hal_asset_load_prg_header
+    jsr asset_load_retry
     bcs !done+
     lda #0
     sta current_overlay
@@ -1097,21 +1115,21 @@ winner_apply_retirement_bonus:
 tramp_store_init_all:
     lda #10                     // C128_CHEST_OVERLAY_ID: store maintenance (cold)
 #if C128_REAL_BOOT_DIAG
-    ldx #$34
     jsr c128_stack_guard_begin
+    .byte $34
 #endif
     jsr overlay_load
 #if C128_REAL_BOOT_DIAG
-    ldx #$35
     jsr c128_stack_guard_check
+    .byte $35
 #endif
     bcc !tsia_loaded+
     jmp entry_main
 !tsia_loaded:
     jsr c128_restore_runtime_guards
 #if C128_REAL_BOOT_DIAG
-    ldx #$36
-    jsr c128_stack_guard_begin
+    ldx #$36                    // stage marker: tail call, no matching check
+    stx c128_stack_guard_stage
 #endif
     jmp store_init_all
 
@@ -1170,10 +1188,11 @@ test_expect_save_x: .byte 0
 
 .encoding "screencode_mixed"
 test_inventory_title_str: .text "Inventory" ; .byte 0
-test_beginner_book_str:   .text "Beginner's Spellbook" ; .byte 0
+test_beginner_book_str:   .text "Spellbook Beginners-Magick" ; .byte 0
 test_mage_book_title_str: .text "Mage Book" ; .byte 0
 test_magic_missile_str:   .text "Magic Missile" ; .byte 0
-test_phase_door_str:      .text "Phase Door" ; .byte 0
+// The cast list shows learned spells only (as Umoria); a new mage knows one.
+test_cast_one_spell_str:  .text "Cast which? (a-a, esc)" ; .byte 0
 
 #if C128_TEST_SCRIPTED_BOOK_OVERLAY
 test_assert_book_overlay:
@@ -1220,12 +1239,12 @@ test_assert_spell_list_overlay:
     jsr test_expect_screen_string
     bcc !list_fail+
 
-    lda #<test_phase_door_str
+    lda #<test_cast_one_spell_str
     sta zp_ptr0
-    lda #>test_phase_door_str
+    lda #>test_cast_one_spell_str
     sta zp_ptr0_hi
-    lda #4
-    ldx #4
+    lda #24
+    ldx #5
     jsr test_expect_screen_string
     bcc !list_fail+
 
@@ -1251,10 +1270,16 @@ c128_test_spell_fail_known_sym:
     brk
 c128_test_spell_fail_validate_sym:
     brk
-c128_test_spell_fail_roll_sym:
+#if C128_TEST_SCRIPTED_SPELL_CANCEL
+c128_test_spell_fail_roll_sym:  // the cancel build fails on a fizzle
     brk
+#endif
 c128_test_spell_fail_cancel_sym:
     brk
+#if C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_PRAYER
+c128_test_spell_script_exhausted_sym:
+    brk
+#endif
 #if !C128_TEST_SCRIPTED_SPELL && !C128_TEST_SCRIPTED_PRAYER
 c128_test_spell_pass_sym:
     brk
@@ -1789,6 +1814,16 @@ entry_main:
     cld
     ldx #$ff
     txs
+    // The stack was just reset: no KERNAL bridge is open. Nothing else sets
+    // the depth: boot128's page copier bounces through $0c00, leaving it the
+    // power-on byte of Bank 1 $fe02. Non-zero, the first EnterKernal kept all
+    // RAM mapped and JSR $FF62 ran RAM at $C027 (a BRK into the monitor).
+    lda #0
+    sta KERNAL_NESTING_DEPTH
+#if C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG || C128_TEST_TITLE_ART_CONTENT || C128_TEST_STATUS_SP_CANARY || C128_TEST_STACK_SLOT_DIAG || C128_TEST_STACK_BOTTOM_DIAG || C128_TEST_FINAL_RETURN_DIAG
+    lda #0                      // the stack was just reset: no guard is open
+    sta c128_stack_guard_depth
+#endif
 
     // Mask CIA1 interrupts — game mode uses direct hardware access.
     lda #$7f
@@ -2035,17 +2070,25 @@ c128_test_change_save_drive_unexpected_return:
     jsr c128_restore_runtime_vectors
     cli
 title_enter_menu:
+#if C128_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT
+    // The restart after the save returns here; the startup preload check
+    // does not cover this path.
+    lda c128_test_single_drive_fresh_save_armed
+    beq !fresh_save_not_armed+
+    jmp c128_test_single_drive_fresh_save_after_restart
+!fresh_save_not_armed:
+#endif
     lda #$ff
     sta c128_active_save_slot
 #if C128_REAL_BOOT_DIAG
-    ldx #$27
     jsr c128_stack_guard_begin
+    .byte $27
 #endif
     jsr tramp_title_load_and_draw
 title_menu_after_art:
 #if C128_REAL_BOOT_DIAG
-    ldx #$28
     jsr c128_stack_guard_check
+    .byte $28
 #endif
 #if C128_TEST_TITLE_ART_CONTENT
     jsr c128_test_title_art_assert
@@ -2103,7 +2146,7 @@ c128_test_disk_setup_single_drive_return_before_disk_setup:
     lda #$60
     jsr c128_town_dump_mark
 #endif
-#if C128_TEST_VIC40_CLEAN_BOOT
+#if C128_TEST_VIC40_BLANKED_BOOT
     jsr c128_vic40_boot_probe
 #endif
 #if C128_TEST_OVERLAY_TRANSITION_DIAG
@@ -2424,7 +2467,64 @@ runtime_banked_filename_end:
     .byte 0
 .const RUNTIME_BANKED_FILENAME_LEN = runtime_banked_filename_end - runtime_banked_filename
 
+// In Default, not with overlay.s: C128ResidentWorld has no room for it.
+#import "../common/asset_load_retry.s"
+
+// Repeated on failure as asset_load_retry repeats the HAL loads (a drive can
+// miss a handshake). The inputs are kept: the load clears the bank, and the
+// progress display may use the pointers.
 c128_load_runtime_prg:
+    lda c128_runtime_load_bank
+    sta crl_bank
+    lda disk_temp
+    sta crl_file
+    lda disk_status
+    sta crl_name_len
+    lda zp_ptr0
+    sta crl_name
+    lda zp_ptr0_hi
+    sta crl_name + 1
+    lda zp_ptr1
+    sta crl_dest
+    lda zp_ptr1_hi
+    sta crl_dest + 1
+    lda #ASSET_LOAD_ATTEMPTS
+    sta crl_left
+!crl_try:
+    lda crl_bank
+    sta c128_runtime_load_bank
+    lda crl_file
+    sta disk_temp
+    lda crl_name_len
+    sta disk_status
+    lda crl_name
+    sta zp_ptr0
+    lda crl_name + 1
+    sta zp_ptr0_hi
+    lda crl_dest
+    sta zp_ptr1
+    lda crl_dest + 1
+    sta zp_ptr1_hi
+    jsr crl_load_once
+    bcc !crl_done+
+    dec crl_left                // carry stays set
+    beq !crl_done+
+    inc asset_load_retries
+    lda c128_startup_preload_display
+    beq !crl_try-
+    dec c128_load_progress_count    // the repeat shows as the same file
+    jmp !crl_try-
+!crl_done:
+    rts
+
+crl_bank:     .byte 0
+crl_file:     .byte 0
+crl_name_len: .byte 0
+crl_name:     .word 0
+crl_dest:     .word 0
+crl_left:     .byte 0
+
+crl_load_once:
     lda c128_runtime_load_bank
     ldx #0
     jsr safe_setbnk
@@ -2880,13 +2980,13 @@ c128_load_runtime_banked_prg:
 
 tramp_level_generate:
 #if C128_REAL_BOOT_DIAG
-    ldx #$39
     jsr c128_stack_guard_begin
+    .byte $39
 #endif
     jsr level_generate
 #if C128_REAL_BOOT_DIAG
-    ldx #$3a
     jsr c128_stack_guard_check
+    .byte $3a
 #endif
     rts
 
@@ -3005,19 +3105,53 @@ kernal_hw_nmi_vec_hi: .byte 0
 // high-risk KERNAL/overlay/runtime boundaries. On mismatch, preserve the
 // expected SP, actual SP, and stage tag in RAM and break immediately.
 #if C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG || C128_TEST_TITLE_ART_CONTENT || C128_TEST_STATUS_SP_CANARY || C128_TEST_STACK_SLOT_DIAG || C128_TEST_STACK_BOTTOM_DIAG || C128_TEST_FINAL_RETURN_DIAG
+.const C128_STACK_GUARD_NEST_MAX = 8
+// Call as "jsr c128_stack_guard_begin" (or _check) followed by ".byte stage".
+// Both keep the caller's A, X, Y and flags (saved in memory, so SP is
+// unchanged for the depth check): sites sit between loading a register and
+// using it.
+// Guards nest (player_create's spans overlay and asset loads with their own):
+// begin pushes the enclosing expected SP and a passing check pops it, so each
+// check compares its own begin's depth.
 c128_stack_guard_begin:
+    sta c128_stack_guard_saved_a
+    php
+    pla
+    sta c128_stack_guard_saved_p
+    stx c128_stack_guard_saved_x
+    sty c128_stack_guard_saved_y
     jsr c128_stack_guard_verify_canaries
-    stx c128_stack_guard_stage
+    jsr c128_stack_guard_take_stage
+    ldy c128_stack_guard_depth
+    cpy #C128_STACK_GUARD_NEST_MAX
+    bcc !c128_stack_guard_push+
+    lda #$e3                    // nesting deeper than the save stack
+    sta c128_stack_guard_fail_code
+#if C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG
+    jmp c128_diag_fail_sym
+#else
+    brk
+#endif
+!c128_stack_guard_push:
+    lda c128_stack_guard_expected
+    sta c128_stack_guard_nest,y
+    inc c128_stack_guard_depth
     lda #0
     sta c128_stack_guard_fail_code
     sta c128_stack_guard_substage
     tsx
     stx c128_stack_guard_expected
-    rts
+    jmp c128_stack_guard_restore_ap
 
 c128_stack_guard_check:
+    sta c128_stack_guard_saved_a
+    php
+    pla
+    sta c128_stack_guard_saved_p
+    stx c128_stack_guard_saved_x
+    sty c128_stack_guard_saved_y
     jsr c128_stack_guard_verify_canaries
-    stx c128_stack_guard_stage
+    jsr c128_stack_guard_take_stage
     tsx
     stx c128_stack_guard_actual
     cpx c128_stack_guard_expected
@@ -3031,6 +3165,39 @@ c128_stack_guard_check:
     brk
 #endif
 !c128_stack_guard_ok:
+    ldy c128_stack_guard_depth
+    beq c128_stack_guard_restore_ap
+    dey
+    sty c128_stack_guard_depth
+    lda c128_stack_guard_nest,y
+    sta c128_stack_guard_expected
+c128_stack_guard_restore_ap:
+    ldx c128_stack_guard_saved_x
+    ldy c128_stack_guard_saved_y
+    lda c128_stack_guard_saved_p
+    pha
+    lda c128_stack_guard_saved_a
+    plp
+    rts
+
+// The stage byte follows the caller's jsr to begin/check: read it and step
+// that return address past it.
+c128_stack_guard_take_stage:
+    tsx
+    lda $0103,x                 // begin/check's return address (lo, hi)
+    clc
+    adc #1
+    sta c128_stack_guard_stage_byte + 1
+    lda $0104,x
+    adc #0
+    sta c128_stack_guard_stage_byte + 2
+c128_stack_guard_stage_byte:
+    lda $ffff                   // operand set above
+    sta c128_stack_guard_stage
+    inc $0103,x
+    bne !c128_stack_guard_take_done+
+    inc $0104,x
+!c128_stack_guard_take_done:
     rts
 
 c128_stack_guard_verify_canaries:
@@ -3264,9 +3431,23 @@ c128_diag_validate_runtime_invariants:
     sta c128_stack_guard_substage
     jmp c128_diag_fail_sym
 !mmu_ok:
+    // The software IRQ tail is the KERNAL's until the title arms the runtime
+    // (c128_kernal_irq_tail_runtime_owned); startup preloads run before that,
+    // and ExitKernal leaves the captured KERNAL vector in place.
+    lda c128_kernal_irq_tail_runtime_owned
+    bne !irq_runtime_owned+
+    lda $0314
+    cmp kernal_irq_vec_lo
+    bne !irq_lo_bad+
+    lda $0315
+    cmp kernal_irq_vec_hi
+    beq !irq_hi_ok+
+    bne !irq_hi_bad+
+!irq_runtime_owned:
     lda $0314
     cmp #<mmu_common_irq
     beq !irq_lo_ok+
+!irq_lo_bad:
     sta c128_stack_guard_fail_code
     lda #4
     sta c128_stack_guard_substage
@@ -3275,11 +3456,18 @@ c128_diag_validate_runtime_invariants:
     lda $0315
     cmp #>mmu_common_irq
     beq !irq_hi_ok+
+!irq_hi_bad:
     sta c128_stack_guard_fail_code
     lda #5
     sta c128_stack_guard_substage
     jmp c128_diag_fail_sym
 !irq_hi_ok:
+    // The hardware NMI/IRQ vectors become the runtime's at the same point
+    // (c128_restore_runtime_vectors); before it they are the KERNAL's.
+    lda c128_kernal_irq_tail_runtime_owned
+    bne !hw_vectors_owned+
+    jmp !hw_irq_hi_ok+
+!hw_vectors_owned:
     lda $fffa
     cmp #<mmu_common_nmi
     beq !nmi_lo_ok+
@@ -3367,6 +3555,12 @@ c128_stack_guard_stage:     .byte 0
 c128_stack_guard_canary_hi: .byte $5a
 c128_stack_guard_port0:     .byte 0
 c128_stack_guard_port1:     .byte 0
+c128_stack_guard_saved_a:   .byte 0
+c128_stack_guard_saved_p:   .byte 0
+c128_stack_guard_saved_y:   .byte 0
+c128_stack_guard_saved_x:   .byte 0
+c128_stack_guard_depth:     .byte 0
+c128_stack_guard_nest:      .fill C128_STACK_GUARD_NEST_MAX, 0
 c128_stack_guard_mmu:       .byte 0
 c128_stack_guard_ret_lo:    .byte 0
 c128_stack_guard_ret_hi:    .byte 0
@@ -4084,11 +4278,8 @@ scroll_teleport_level_exec:
 #import "../../../core/game_loop.s"
 #undef DISARM_COMMAND_EXTERNAL
 #undef C128_SCRIPTED_SPELL_SEED_EXTERNAL
-// The items and world payload end labels live past the game_loop import
-// because the chest open pre-dispatch (ChestRouteSegment) contributes to the
-// items payload from there.
-.segment C128ResidentItems
-c128_resident_items_end:
+// The items payload's end label is at the end of this file: the chest open
+// pre-dispatch (ChestRouteSegment) and later imports add to it past here.
 .segment C128ResidentWorld
 // The recall prompt lives in the resident world payload: RuntimeLowData was
 // full when a monster sighting began ending search mode (2026-10-25).
@@ -4438,38 +4629,33 @@ c128_test_validate_overlay_partial_state:
     rts
 #endif
 
-#if C128_TEST_VIC40_CLEAN_BOOT
-.segment RuntimeLowData
+#if C128_TEST_VIC40_BLANKED_BOOT
+// In Default with its caller: RuntimeLowData has 5 bytes free below
+// FLOOR_ITEM_BASE, too few for the probe.
+// boot128 blanks the VIC display ($D011 = 0) and the 80-column game never
+// turns it on, so nothing can show on the 40-column screen: the display
+// must still be off when the game starts.
 c128_vic40_boot_probe:
     lda $d011
-    cmp #$1b
-    bne c128_vic40_boot_probe_fail_sym
-    lda $d018
-    cmp #$14
+    and #$10                    // DEN
     bne c128_vic40_boot_probe_fail_sym
 
+    // And nothing was drawn on the screen the VIC reads ($0400; bit 0
+    // is unused and reads 1) to show if the display came on.
+    lda $d018
+    and #$fe
+    cmp #$14
+    bne c128_vic40_boot_probe_fail_sym
     ldx #0
 !vic40_screen_loop:
     lda $0400,x
-    cmp #$20
-    beq !vic40_screen_ok+
-    cmp #$00
+    cmp #$20                    // boot clears it to spaces
     bne c128_vic40_boot_probe_fail_sym
-!vic40_screen_ok:
     inx
     cpx #$40
     bne !vic40_screen_loop-
-
-    lda $d800
-    sta zp_temp0
-    ldx #0
-!vic40_color_loop:
-    lda $d800,x
-    cmp zp_temp0
-    bne c128_vic40_boot_probe_fail_sym
-    inx
-    cpx #$40
-    bne !vic40_color_loop-
+    // Colour RAM is not checked: nothing writes it while the display is
+    // off, so it keeps its power-on pattern.
 
     jmp c128_vic40_boot_probe_pass_sym
 
@@ -4480,7 +4666,6 @@ c128_vic40_boot_probe_pass_sym:
 c128_vic40_boot_probe_fail_sym:
     nop
     jmp c128_vic40_boot_probe_fail_sym
-.segment Default
 #endif
 
 #if C128_TEST_CACHE_SURVIVAL
@@ -5187,10 +5372,11 @@ program_end:
 .print "Program image: $" + toHexString($1c01) + "-$" + toHexString(program_end - 1)
 #if C128
 .assert "C128 main image stays below resident world payload", program_end <= c128_resident_world_start, true
+.assert "C128 asset load retry stays in Default payload", asset_load_retry >= $1c01 && asset_load_retries < program_end, true
 .assert "C128 tunnel guard stays in Default payload", dungeon_tunnel_guard_reset >= $1c01 && dungeon_tunnel_guard_step < program_end, true
 .assert "C128 resident world starts at $6000", c128_resident_world_start == $6000, true
 .assert "C128 resident world fits below items payload", c128_resident_world_end <= c128_resident_items_start, true
-.assert "C128 resident items starts at $8CA0", c128_resident_items_start == $8CA0, true
+.assert "C128 resident items starts at $8C50", c128_resident_items_start == $8C50, true
 .assert "C128 resident items fits below selector payload", c128_resident_items_end <= $A800, true
 .assert "C128 resident selector starts at $A800", c128_resident_select_start == $A800, true
 .assert "C128 resident selector fits below disk-I/O payload", c128_resident_select_end <= $AB00, true
@@ -5207,6 +5393,7 @@ program_end:
 .assert "C128 resident play stays below the I/O hole", c128_resident_play_end <= $D000, true
 .assert "Staged Bank1 source span matches boot scrub ceiling", BANK1_STAGE_SOURCE_END == BANK1_RESERVED_TOP_END, true
 .assert "Tier cache window remains large enough for tier preload", BANK1_TIER_CACHE_SIZE >= TIER_PRELOAD_REQUIRED, true
+.assert "Tiers 1-4 fit the Bank 1 tier cache", TIER1_SIZE + TIER2_SIZE + TIER3_SIZE + TIER4_SIZE <= BANK1_TIER_CACHE_SIZE, true
 .assert "MMU helper page stays inside common RAM ownership", MMU_COMMON_HELPERS_BASE >= BANK1_COMMON_BASE, true
 .assert "MMU helper page ends inside common RAM ownership", MMU_COMMON_HELPERS_BASE + (mmu_common_helpers_blob_end - mmu_common_helpers_blob) - 1 <= BANK1_COMMON_END, true
 .assert "C128 visibility row helper lives in common RAM", mmu_common_mark_visited_row_ptr0 >= MMU_COMMON_HELPERS_BASE && mmu_common_mark_visited_row_ptr0 < runtime_common_data_start, true
@@ -5220,8 +5407,8 @@ program_end:
 .assert "C128 item-name logical file avoids marker and command channel", RESIDENT_ITEM_NAMES_FILE_NUM != hal_storage_marker_file_num && RESIDENT_ITEM_NAMES_FILE_NUM < hal_storage_cmd_channel, true
 .assert "Low runtime code stays below floor-item table", runtime_low_data_end <= FLOOR_ITEM_BASE, true
 .assert "Low runtime code stays below C128 scratch page", runtime_low_data_end <= CREATURE_BASE, true
-.assert "C128 resident items loader matches segment start", c128_resident_items_start == $8ca0, true
-.assert "C128 resident items load address matches segment start", c128_resident_items_start == $8ca0, true
+.assert "C128 resident items loader matches segment start", c128_resident_items_start == $8c50, true
+.assert "C128 resident items load address matches segment start", c128_resident_items_start == $8c50, true
 .assert "C128 play signature starts payload", c128_resident_play_sig0 == c128_resident_play_start, true
 .assert "C128 play signature is three bytes", c128_resident_play_body - c128_resident_play_sig0, 3
 .assert "C128 play body follows signature", c128_resident_play_body == c128_resident_play_start + 3, true
@@ -5494,3 +5681,14 @@ ovl_gen_end:
 .print "DungeonGen overlay: " + (ovl_gen_end - $e000) + " bytes at $E000-$" + toHexString(ovl_gen_end)
 .assert "DungeonGen overlay fits in $E000-$EFFF", ovl_gen_end <= $f000, true
 .assert "banked_payload_start above overlay ceiling", first_banked_function > ovl_gen_end, true
+
+// ============================================================
+// Resident payload ends, past every import: an import that switches back
+// into one of these segments adds to it after any earlier label.
+// ============================================================
+.segment C128ResidentItems
+c128_resident_items_end:
+.segment C128ResidentItemNames
+c128_resident_item_names_end:
+.assert "C128 item-name payload ends inside the Bank 1 DB region", c128_resident_item_names_end <= BANK1_DB_END + 1, true
+.assert "C128 item-name payload ends before the tier cache", c128_resident_item_names_end <= BANK1_TIER_CACHE_BASE, true

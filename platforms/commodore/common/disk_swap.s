@@ -456,10 +456,16 @@ c64_test_disk_setup_then_load_save_prompt_seen:
 #if HAL_STORAGE_MEDIA_STATE_TRACKING
     lda disk_mode
     cmp #1
-    beq !dps_media_done+
+    beq !dps_media_one_drive+
     lda #C128_MEDIA_SAVE
+    bne !dps_media_set+
+!dps_media_one_drive:
+    // One drive: disk_prompt classified the shared device as PROGRAM, and a
+    // key press does not prove the swap. Leave the media unverified so
+    // save_game checks the marker and disk_prompt_game prompts again.
+    lda #C128_MEDIA_UNKNOWN
+!dps_media_set:
     sta c128_media_state
-!dps_media_done:
     clc
 #endif
 !dps_done:
@@ -629,22 +635,6 @@ disk_marker_present:
     sta disk_diag_lfn
     lda #hal_storage_marker_sec_read
     sta disk_diag_sec
-#if C128_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT
-    lda c128_test_input_idx
-    cmp #3
-    bcc !dmp_test_normal+
-    lda #74
-    sta disk_status
-    lda #$81
-    sta disk_diag_phase
-    lda #$37
-    sta disk_diag_cmd_status0
-    lda #$34
-    sta disk_diag_cmd_status1
-    sec
-    rts
-!dmp_test_normal:
-#endif
     jsr disk_kernal_enter
 
     lda #hal_storage_marker_read_name_len

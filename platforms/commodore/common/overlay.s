@@ -293,7 +293,7 @@ overlay_load_disk:
     pla
     tax
     pla
-    jmp hal_asset_load_prg_header
+    jmp asset_load_retry
 #else
 #if C128_TEST_OVERLAY_LOAD_FAIL_TRAP
     stx c128_overlay_load_disk_index
@@ -318,8 +318,10 @@ overlay_load_disk:
     pla
     tax
     pla
-    jmp hal_asset_load_prg_header
+    jmp asset_load_retry
 #endif
+
+#import "asset_load_retry.s"
 
 
 #if HAL_PLATFORM_OVERLAY_REU_STASH_ENABLED
@@ -432,7 +434,7 @@ c128_preload_all_overlays:
     pla
     tax
     pla
-    jsr hal_asset_load_prg_header
+    jsr asset_load_retry
     bcs !cpao_fail+
 
     ldx ol_target

@@ -120,16 +120,16 @@ $(CX16_MAIN_PRG) $(CX16_AUX_PRG) $(CX16_HUFF_PRG) $(CX16_OVL_PRGS) $(OUTCX16)/ma
 	@test -f "$@" || { rm -f "$(CX16_MAIN_STAMP)"; $(MAKE) "$(CX16_MAIN_STAMP)"; }
 	@test -f "$@"
 
-$(OUTCX16)/MONSTER.DB.1: $(CX16_TIER_DIR)/tier1_prg.s | ensure-kickass $(OUTCX16)
+$(OUTCX16)/MONSTER.DB.1: $(CX16_TIER_DIR)/tier1_prg.s ../commodore/c64/creature_data/tier1.s | ensure-kickass $(OUTCX16)
 	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(CX16_TIER_DIR)/tier1_prg.s" -symbolfiledir "$(OVL_OUTCX16)" -o "$@"
 
-$(OUTCX16)/MONSTER.DB.2: $(CX16_TIER_DIR)/tier2_prg.s | ensure-kickass $(OUTCX16)
+$(OUTCX16)/MONSTER.DB.2: $(CX16_TIER_DIR)/tier2_prg.s ../commodore/c64/creature_data/tier2.s | ensure-kickass $(OUTCX16)
 	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(CX16_TIER_DIR)/tier2_prg.s" -symbolfiledir "$(OVL_OUTCX16)" -o "$@"
 
-$(OUTCX16)/MONSTER.DB.3: $(CX16_TIER_DIR)/tier3_prg.s | ensure-kickass $(OUTCX16)
+$(OUTCX16)/MONSTER.DB.3: $(CX16_TIER_DIR)/tier3_prg.s ../commodore/c64/creature_data/tier3.s | ensure-kickass $(OUTCX16)
 	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(CX16_TIER_DIR)/tier3_prg.s" -symbolfiledir "$(OVL_OUTCX16)" -o "$@"
 
-$(OUTCX16)/MONSTER.DB.4: $(CX16_TIER_DIR)/tier4_prg.s | ensure-kickass $(OUTCX16)
+$(OUTCX16)/MONSTER.DB.4: $(CX16_TIER_DIR)/tier4_prg.s ../commodore/c64/creature_data/tier4.s | ensure-kickass $(OUTCX16)
 	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(CX16_TIER_DIR)/tier4_prg.s" -symbolfiledir "$(OVL_OUTCX16)" -o "$@"
 
 $(CX16_TITLE_PRG): $(CX16_TITLE_SRC) $(VERSION_INC) | ensure-kickass $(OUTCX16)

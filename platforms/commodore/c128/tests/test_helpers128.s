@@ -3,6 +3,22 @@
 
 #import "../hal/layout.s"
 
+// PatchJump(target, replacement): overwrite a stub with jmp replacement.
+.macro PatchJump(target, replacement) {
+    lda #$4c
+    sta target
+    lda #<replacement
+    sta target + 1
+    lda #>replacement
+    sta target + 2
+}
+
+// PatchRoom(stub): after a stub that :PatchJump overwrites, pad it to the
+// 3-byte jmp so the patch never runs into the next routine.
+.macro PatchRoom(stub) {
+    .fill max(0, 3 - (* - stub)), $ea
+}
+
 .label kernal_irq_vec_lo = $03fe
 .label kernal_irq_vec_hi = $03ff
 .label c128_kernal_irq_tail_runtime_owned = $03fd
@@ -22,6 +38,7 @@ hal_input_followup_prepare:
 msg_show_more:
     clc
     rts
+    :PatchRoom(msg_show_more)
 
 ui_clear_full_screen_safe:
     rts

@@ -105,15 +105,6 @@ walkable_table:
     .byte 1, 0, 0, 0, 0, 0, 0, 1
     .byte 0, 1, 1, 1, 0, 0, 1, 0
 
-.macro PatchJump(target, replacement) {
-    lda #$4c
-    sta target
-    lda #<replacement
-    sta target + 1
-    lda #>replacement
-    sta target + 2
-}
-
 screen_clear:
 .label hal_screen_clear = screen_clear
 ui_help_clear_all:
@@ -155,6 +146,7 @@ combat_note_kill:
 find_random_floor:
     clc
     rts
+    :PatchRoom(find_random_floor)
 
 piw_prompt_filtered_inv:
 piw_pick_filtered_inv_key:
@@ -173,6 +165,7 @@ huff_print_msg:
 calc_spell_failure:
     clc
     rts
+    :PatchRoom(calc_spell_failure)
 
 tramp_spell_execute_selected:
     inc test_spell_exec_calls
@@ -257,7 +250,7 @@ test_write_tile:
     sta zp_ptr0_hi
     ldy zp_ptr1_hi
     pla
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
     rts
 
 test_read_tile:
@@ -268,7 +261,7 @@ test_read_tile:
     lda map_row_hi,x
     sta zp_ptr0_hi
     ldy zp_ptr1_hi
-    lda (zp_ptr0),y
+    :MapRead_ptr0_y()
     rts
 
 test_setup_phase_door_map:
@@ -282,7 +275,7 @@ test_setup_phase_door_map:
     ldy #MAP_COLS - 1
     lda #TILE_WALL_H
 !clear_cols:
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
     dey
     bpl !clear_cols-
     dex
@@ -360,6 +353,7 @@ test_pass:
     jmp test_pass_loop
 
 test_start:
+    jsr init_common_mmu_helpers   // MapRead/MapWrite go through common RAM ($0C00)
     sei
     cld
     ldx #$ff

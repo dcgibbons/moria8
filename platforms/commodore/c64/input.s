@@ -287,22 +287,59 @@ c64_test_script_exhausted_wait:
 #if C64_TEST_SCRIPTED_DUNGEON_SPELL
     ldx c64_test_input_idx
     lda c64_test_input_script,x
+    beq !igk_dungeon_fail+
+    cmp #$01                // repeat marker: cast again from the loop label
     bne !igk_dungeon_script_ok+
-    jmp c64_test_spell_fail_input_sym
+    // Each visit is a cast or a rest; a run that never passes fails here by
+    // name instead of at the cycle limit.
+    inc c64_test_marker_visits
+    lda c64_test_marker_visits
+    cmp #96
+    bcs !igk_dungeon_fail+
+    // Once the kills reach the goal, rest ('5') so the pass check's
+    // return-pending countdown can run out; every cast would restart it.
+    jsr c64_test_dungeon_spell_goal
+    cmp c64_test_spell_success_count
+    beq !igk_dungeon_rest+
+    bcc !igk_dungeon_rest+
+    ldx #c64_test_dungeon_cast_loop - c64_test_input_script
+    lda c64_test_input_script,x
+    bne !igk_dungeon_script_ok+
+!igk_dungeon_rest:
+    lda #$35                // 5 = rest; the index stays on the marker
+    rts
 !igk_dungeon_script_ok:
     inx
     stx c64_test_input_idx
     rts
+!igk_dungeon_fail:
+    jmp c64_test_spell_fail_input_sym
 #else
 #if C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
     ldx c64_test_input_idx
     lda c64_test_input_script,x
+    beq !igk_detect_fail+
+    cmp #$01                // repeat marker: pray again, or rest once it worked
     bne !igk_detect_script_ok+
-    jmp c64_test_spell_fail_input_sym
+    // Each visit is a prayer retry or a rest; a run that never passes fails
+    // here by name instead of at the cycle limit.
+    inc c64_test_marker_visits
+    lda c64_test_marker_visits
+    cmp #64
+    bcs !igk_detect_fail+
+    lda c64_test_spell_success_count
+    beq !igk_detect_pray_again+
+    lda #$35                // 5 = rest through the pass countdown; index stays
+    rts
+!igk_detect_pray_again:
+    ldx #c64_test_detect_pray - c64_test_input_script
+    lda c64_test_input_script,x
 !igk_detect_script_ok:
     inx
     stx c64_test_input_idx
     rts
+!igk_detect_fail:
+    jmp c64_test_spell_fail_input_sym
 #else
     php                     // Save processor flags (preserves I flag)
     lda $01
@@ -529,11 +566,10 @@ c64_test_input_script:
     .byte $39              // 9
     .byte $0d              // RETURN
     .byte $33              // 3 = done
-    .byte $32              // 2 = load non-default slot
     .byte $20              // SPACE = acknowledge insert-save-disk prompt
-    .byte $59              // Y = initialize marker if the fixture marker is not accepted
-    .byte $d3              // SHIFT+S = absorbed by post-load fresh-key path
+    .byte $32              // 2 = load non-default slot
     .byte $d3              // SHIFT+S = save in gameplay
+    .byte $32              // 2 = save to slot 2
     .byte $59              // Y = overwrite non-default slot
     .byte $53              // S = start from title after save
     .byte $00
@@ -575,6 +611,7 @@ c64_test_input_script:
     .byte $39              // 9
     .byte $0d              // RETURN
     .byte $33              // 3 = done
+    .byte $20              // SPACE = acknowledge insert-save-disk prompt
     .byte $32              // 2 = load from save slot 2
     .byte $00
 #else
@@ -634,6 +671,9 @@ c64_test_input_script:
 #else
 #if C64_TEST_SCRIPTED_LOAD_MISSING_SAVE_PRODUCT
     .byte $4c              // L = load from title
+    .byte $33              // 3 = Disk Setup done (program 8, save 9)
+    .byte $20              // SPACE = acknowledge insert-save-disk prompt
+    .byte $31              // 1 = save slot 1, which has no save file
     .byte $20              // SPACE = dismiss missing-save message
     .byte $20              // SPACE = dismiss single program-disk prompt
     .byte $00
@@ -785,14 +825,11 @@ c64_test_input_script:
     .byte $2e, $2e, $2e, $2e
     .byte $2e, $2e, $2e, $2e
 #else
-    .byte $4d, $41, $41, $4c, $20
-    .byte $4d, $41, $41, $4c, $20
-    .byte $4d, $41, $41, $4c, $20
-    .byte $4d, $41, $41, $4c, $20
-    .byte $4d, $41, $41, $4c, $20
-    .byte $4d, $41, $41, $4c, $20
-    .byte $4d, $41, $41, $4c, $20
-    .byte $4d, $41, $41, $4c, $20
+    // M A A L SPACE = Magic Missile east. The pass needs eight successes;
+    // a fizzle (the minimum failure chance) costs an attempt, so cast 12.
+    .for (var i = 0; i < 12; i++) {
+        .byte $4d, $41, $41, $4c, $20
+    }
 #endif
     .byte $00
 #endif
@@ -834,6 +871,8 @@ c64_test_input_script:
     .byte $52              // R = read scroll
     .byte $3f              // ? = inventory overlay from scroll prompt
     .byte $41              // A = first visible scroll
+    // Each main-loop pass takes a command; the pass needs eight after the read.
+    .fill 8, $35           // 5 = stay in place
     .byte $00
 #else
     .byte $4e              // N = New
@@ -869,6 +908,7 @@ c64_test_input_script:
 
 #if C64_TEST_SCRIPTED_DUNGEON_SPELL
 c64_test_input_idx: .byte 0
+c64_test_marker_visits: .byte 0
 c64_test_input_script:
     .byte $4e              // N = New
     .byte $41              // A = race
@@ -880,14 +920,18 @@ c64_test_input_script:
     .byte $20              // SPACE = dismiss summary
     .byte $4c              // L = step onto town stairs
     .byte $3e              // > = descend into dungeon
-    .for (var i = 0; i < 24; i++) {
-        .byte $4d, $41, $41, $4c // M A A L = Magic Missile east
-    }
+    // One success per monster type up to c64_test_dungeon_spell_goal, plus
+    // fizzles: cast until the pass, through the $01 repeat marker; a run
+    // that never passes ends at the cycle limit.
+c64_test_dungeon_cast_loop:
+    .byte $4d, $41, $41, $4c // M A A L = Magic Missile east
+    .byte $01
     .byte $00
 #endif
 
 #if C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
 c64_test_input_idx: .byte 0
+c64_test_marker_visits: .byte 0
 c64_test_input_script:
     .byte $4e              // N = New
     .byte $41              // A = race
@@ -897,13 +941,9 @@ c64_test_input_script:
     .byte $0d              // RETURN = finish name
     .byte $42              // B = female
     .byte $20              // SPACE = dismiss summary
-    .byte $50, $41, $41    // P A A = pray Detect Evil once
-    .byte $2e, $2e, $2e, $2e
-    .byte $2e, $2e, $2e, $2e
-    .byte $2e, $2e, $2e, $2e
-    .byte $2e, $2e, $2e, $2e
-    .byte $2e, $2e, $2e, $2e
-    .byte $2e, $2e, $2e, $2e
+c64_test_detect_pray:
+    .byte $50, $41, $41    // P A A = pray Detect Evil
+    .byte $01              // pray again until one prayer succeeds, then rest
     .byte $00
 #endif
 

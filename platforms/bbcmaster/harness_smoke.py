@@ -99,6 +99,9 @@ def build_lua_script(scenario: str, syms: dict[str, int]) -> str:
     zp_lvl = syms.get("zp_player_lvl", 0x0033)
     zp_dlvl = syms.get("zp_player_dlvl", 0x0034)
     zp_gflags = syms.get("zp_game_flags", 0x003C)
+    zp_hp = syms.get("zp_player_hp_lo", 0x002D)
+    current_tier = syms.get("current_tier", 0x4BA5)
+    zp_turn = syms.get("zp_turn_lo", 0x0040)
     player_data = syms.get("player_data", 0x2400)
     inv_item_id = syms.get("inv_item_id", 0x2500)
     inv_qty = syms.get("inv_qty", 0x2520)
@@ -123,6 +126,9 @@ local PLAYER_MP_ADDR = 0x{zp_mp:04X}
 local PLAYER_LVL_ADDR = 0x{zp_lvl:04X}
 local DLVL_ADDR = 0x{zp_dlvl:04X}
 local GAME_FLAGS_ADDR = 0x{zp_gflags:04X}
+local PLAYER_HP_ADDR = 0x{zp_hp:04X}
+local TURN_ADDR = 0x{zp_turn:04X}
+local CURRENT_TIER_ADDR = 0x{current_tier:04X}
 local PLAYER_DATA_ADDR = 0x{player_data:04X}
 local INV_ITEM_ID_ADDR = 0x{inv_item_id:04X}
 local INV_QTY_ADDR = 0x{inv_qty:04X}
@@ -434,6 +440,19 @@ function run()
     local dl1 = descend_to_dl1()
     assert_line("dlvl_1_reached", dl1 and prog:read_u8(DLVL_ADDR) == 1)
     assert_line("not_in_town", not in_town())
+    -- DL1's creatures come from tier 1, loaded from MONDB1 (it was missing
+    -- from the disk and every creature was named "?").
+    assert_line("tier_1_loaded", prog:read_u8(CURRENT_TIER_ADDR) == 1)
+    -- Hurt, Ctrl+R auto-rests for many turns: the held-key probe's flags
+    -- once cancelled it at once (M6 playtest, input_run_key_held).
+    prog:write_u8(PLAYER_HP_ADDR, 1)
+    prog:write_u8(PLAYER_HP_ADDR + 1, 0)
+    local t0 = prog:read_u8(TURN_ADDR) | (prog:read_u8(TURN_ADDR + 1) << 8)
+    send_key(0x12) -- Ctrl+R
+    wait_frames(60)
+    local t1 = prog:read_u8(TURN_ADDR) | (prog:read_u8(TURN_ADDR + 1) << 8)
+    print("auto-rest turns: " .. ((t1 - t0) & 0xFFFF))
+    assert_line("auto_rest_keeps_resting", ((t1 - t0) & 0xFFFF) >= 3)
     manager.machine:exit()
 end
 """

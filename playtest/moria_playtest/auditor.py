@@ -115,7 +115,7 @@ class Auditor:
                                   ("mhp", obs.mhp)) if shown[key] != value]
         col = obs.pos[0] - obs.zp[abi.zp_view_x] + abi.hal_layout_viewport_x
         row = obs.pos[1] - obs.zp[abi.zp_view_y] + abi.hal_layout_viewport_y
-        if not (0 <= row < 25 and 0 <= col < 40) or obs.rows[row][col] != "@":
+        if not (0 <= row < len(obs.rows) and 0 <= col < len(obs.rows[row])) or obs.rows[row][col] != "@":
             out.append(Finding("view_mismatch", "game",
                                f"player glyph not at screen ({col},{row}) for map {obs.pos}"))
         return out

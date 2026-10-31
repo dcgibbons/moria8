@@ -602,8 +602,11 @@ test_scan_restore_checks:
     lda CIA1_PORTA
     cmp #$FF
     bne !scan_restore_fail+
+    // $D02F implements K0-K2 (bits 0-2) only; bits 3-7 read back as 1, so
+    // only those bits are compared.
     lda C128_KBD_EXT
-    cmp #%00001111
+    and #%00000111
+    cmp #%00001111 & %00000111
     bne !scan_restore_fail+
     lda test_ext_orig
     sta C128_KBD_EXT
@@ -619,8 +622,11 @@ test_scan_restore_checks:
     jsr input_run_scan_held_raw
     cmp #0
     bne !scan_restore_fail+
+    // Port A reads its latch only on output bits (DDRA $34); the input bits
+    // read the idle-high lines, so only the output bits are compared.
     lda CIA1_PORTA
-    cmp #$12
+    and #$34
+    cmp #$12 & $34
     bne !scan_restore_fail+
     lda CIA1_DDRA
     cmp #$34
@@ -629,7 +635,8 @@ test_scan_restore_checks:
     cmp #$56
     bne !scan_restore_fail+
     lda C128_KBD_EXT
-    cmp #%00110011
+    and #%00000111
+    cmp #%00110011 & %00000111
     bne !scan_restore_fail+
 
     jmp test_pass

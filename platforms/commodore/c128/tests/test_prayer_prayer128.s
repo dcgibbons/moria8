@@ -110,15 +110,6 @@ walkable_table:
     .byte 1, 0, 0, 0, 0, 0, 0, 1
     .byte 0, 1, 1, 1, 0, 0, 1, 0
 
-.macro PatchJump(target, replacement) {
-    lda #$4c
-    sta target
-    lda #<replacement
-    sta target + 1
-    lda #>replacement
-    sta target + 2
-}
-
 screen_clear:
 .label hal_screen_clear = screen_clear
 ui_help_clear_all:
@@ -185,9 +176,11 @@ msg_print:
 calc_spell_failure:
     clc
     rts
+    :PatchRoom(calc_spell_failure)
 
 tramp_spell_execute_selected:
     rts
+    :PatchRoom(tramp_spell_execute_selected)
 
 get_direction_target:
     lda zp_player_x
@@ -287,6 +280,7 @@ test_reset_prayer_prayer_state:
     sta player_data + PL_SPELLS_LEARNT_2
     lda #$02
     sta player_data + PL_SPELLS_LEARNT_3
+    lda #0
     sta player_data + PL_SPELLS_WORKED_0
     sta player_data + PL_SPELLS_WORKED_1
     sta player_data + PL_SPELLS_WORKED_2
@@ -304,6 +298,7 @@ test_start:
     cld
     ldx #$ff
     txs
+    jsr init_common_mmu_helpers   // as boot does: common-RAM MMU helpers at $0C00
 
     lda #MMU_ALL_RAM
     sta $ff00

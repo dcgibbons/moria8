@@ -123,15 +123,6 @@ walkable_table:
     .byte 1, 0, 0, 0, 0, 0, 0, 1
     .byte 0, 1, 1, 1, 0, 0, 1, 0
 
-.macro PatchJump(target, replacement) {
-    lda #$4c
-    sta target
-    lda #<replacement
-    sta target + 1
-    lda #>replacement
-    sta target + 2
-}
-
 screen_clear:
 .label hal_screen_clear = screen_clear
 ui_help_clear_all:
@@ -154,7 +145,6 @@ tramp_spell_list_display:
 combat_kill_message:
 combat_print_winner_message:
 monster_wake:
-monster_apply_sleep:
 projectile_msg_suffix:
 player_calc_hp:
 light_room_x:
@@ -184,9 +174,11 @@ stat_bonus_index:
 calc_spell_failure:
     clc
     rts
+    :PatchRoom(calc_spell_failure)
 
 tramp_spell_execute_selected:
     rts
+    :PatchRoom(tramp_spell_execute_selected)
 
 get_direction_target:
     lda zp_player_x
@@ -409,10 +401,25 @@ test_reset_sleep_iii_state:
     sta test_mon1_data + MX_SLEEP_CUR
     rts
 
+// As core/monster.s monster_apply_sleep (sleep_i128 and sleep_ii128 carry the
+// same): the spell's effect is what this test checks.
+monster_apply_sleep:
+    pha
+    jsr monster_get_ptr
+    ldy #MX_FLAGS
+    lda (zp_ptr0),y
+    and #<~MF_AWAKE
+    sta (zp_ptr0),y
+    ldy #MX_SLEEP_CUR
+    pla
+    sta (zp_ptr0),y
+    rts
+
 test_start:
     sei
     ldx #$ff
     txs
+    jsr init_common_mmu_helpers   // as boot does: common-RAM MMU helpers at $0C00
 
     lda #MMU_ALL_RAM
     sta $ff00

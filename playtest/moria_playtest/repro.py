@@ -24,7 +24,7 @@ def reproduce(finding_path: Path) -> tuple[bool, str]:
     if not finding.get("snapshot"):
         return False, "finding has no snapshot to replay from"
     snapshot = Snapshot.load(Path(finding["snapshot"]))
-    build = Build(**{k: Path(v) for k, v in finding["build"].items()})
+    build = Build(**{k: v if k == "port" else Path(v) for k, v in finding["build"].items()})
     worker = Worker(PLAYTEST_OUT / "repro" / finding_path.stem, build=build)
     auditor = Auditor()
     auditor.command_sp = snapshot.brain.get("auditor_command_sp")

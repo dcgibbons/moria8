@@ -49,6 +49,7 @@ def build_vice_command(args: argparse.Namespace) -> list[str]:
         vice_config(args.vice),
         "-default",
         "+saveres",
+        "+autostart-delay-random",
         "-console",
         "-nativemonitor",
         "-warp",
@@ -118,6 +119,7 @@ def run_test_via_moncommands(
             vice_config(args.vice),
             "-default",
             "+saveres",
+            "+autostart-delay-random",
             "-console",
             "-nativemonitor",
             "-warp",
@@ -132,6 +134,8 @@ def run_test_via_moncommands(
             command.append(extra_arg)
         if limitcycles is not None:
             command.extend(["-limitcycles", str(limitcycles)])
+        # -initbreak ready: see run_tests128.sh run_test().
+        command.extend(["-initbreak", "ready"])
         # Name before -monlog: VICE opens the log as soon as -monlog is parsed, so the
         # other order also leaves an empty monitor.log in the cwd.
         command.extend(["-moncommands", str(mon_file), "-monlogname", str(log_file), "-monlog"])
@@ -149,12 +153,15 @@ def run_test_via_moncommands(
             return 2
 
         log_text = log_file.read_text(encoding="utf-8", errors="ignore") if log_file.exists() else ""
-        pass_marker = f"C:${symbols.pass_addr}"
-        fail_marker = f"C:${symbols.fail_addr}" if symbols.fail_addr is not None else None
-        if re.search(rf"UNTIL: .*{re.escape(pass_marker)}", log_text, flags=re.IGNORECASE):
+        # Only a real stop counts: see run_tests128.sh boot_log_has_stop_at().
+        def stopped_at(addr: str) -> bool:
+            return re.search(rf"^#\d+ \(Stop on\s+exec\s+{re.escape(addr)}\)", log_text,
+                             flags=re.IGNORECASE | re.MULTILINE) is not None
+
+        if stopped_at(symbols.pass_addr):
             print(f"PASS: {args.name}")
             return 0
-        if fail_marker and re.search(rf"(BREAK|STOP): .*{re.escape(fail_marker)}", log_text, flags=re.IGNORECASE):
+        if symbols.fail_addr is not None and stopped_at(symbols.fail_addr):
             print(f"FAIL: {args.name} (reached test_fail label at ${symbols.fail_addr})")
             return 2
         if "JAM" in log_text.upper() or "INVALID OPCODE" in log_text.upper():

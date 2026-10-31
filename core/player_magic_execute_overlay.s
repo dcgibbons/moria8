@@ -392,44 +392,7 @@ eff_remove_curse_all:
 !erca_done:
     rts
 
-eff_find_stairs:
-    lda stairs_up_x
-    ldy stairs_up_y
-    jsr pmx_mark_stairs_at
-    lda stairs_dn1_x
-    ldy stairs_dn1_y
-    jsr pmx_mark_stairs_at
-    lda stairs_dn2_x
-    ldy stairs_dn2_y
-    jsr pmx_mark_stairs_at
-!efs_done:
-    lda #1
-    sta vis_room_revealed
-    rts
-
-pmx_mark_stairs_at:
-    sta pmx_work_x
-    sty pmx_work_y
-    cpy #MAP_ROWS
-    bcs !pmsa_done+
-    lda pmx_work_x
-    cmp #MAP_COLS
-    bcs !pmsa_done+
-    ldx pmx_work_y
-    jsr map_row_ptr0_x
-    ldy pmx_work_x
-    :MapRead_ptr0_y()
-    and #TILE_TYPE_MASK
-    cmp #TILE_STAIRS_DN
-    beq !pmsa_mark+
-    cmp #TILE_STAIRS_UP
-    bne !pmsa_done+
-!pmsa_mark:
-    :MapRead_ptr0_y()
-    ora #FLAG_VISITED
-    :MapWrite_ptr0_y()
-!pmsa_done:
-    rts
+#import "player_magic_find_stairs.s"
 
 eff_sleep_all:
     lda #0

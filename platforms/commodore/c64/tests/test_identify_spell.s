@@ -173,6 +173,8 @@ test_huff_print_msg:
     rts
 
 test_cmb_term_and_print_capture:
+    php
+    sei                     // the IRQ vector is ROM; no IRQ with it out
     :BankOutKernal()
     ldx cmb_buf_idx
     lda #0
@@ -188,6 +190,7 @@ test_cmb_term_and_print_capture:
     bcc !copy-
 !done:
     :BankInKernal()
+    plp
     rts
 
 test_tramp_identify_execute:
@@ -338,6 +341,8 @@ test_start:
     sta zp_ptr1
     lda #>tid_msg_buf
     sta zp_ptr1_hi
+    php
+    sei                     // the IRQ vector is ROM; no IRQ with it out
     :BankOutKernal()
     ldy #0
 !cmp1:
@@ -354,6 +359,7 @@ test_start:
     jmp !t1_fail+
 !t1_pass:
     :BankInKernal()
+    plp
     lda zp_player_mp
     cmp #13
     bne !t1_fail+
@@ -368,6 +374,7 @@ test_start:
     jmp !t2+
 !t1_fail_bank:
     :BankInKernal()
+    plp
 !t1_fail:
     lda #$00
     sta tid_results + 0

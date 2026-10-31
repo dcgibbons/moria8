@@ -146,6 +146,7 @@ def main() -> int:
             vice_config(args.vice),
             "-default",
             "+saveres",
+            "+autostart-delay-random",
             "-console",
             "-nativemonitor",
             "-warp",

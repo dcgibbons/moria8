@@ -31,9 +31,6 @@ class SessionPartsTest(unittest.TestCase):
         self.assertEqual(self.parts("m4-r3-clvl10", {"goal": "clvl10"}), ("m4-r3", "clvl10", "half-troll-warrior"))
 
 
-if __name__ == "__main__":
-    unittest.main()
-
 
 class PublishTest(unittest.TestCase):
     """The published dashboard is public (maintainer, 2026-10-27): no host
@@ -90,3 +87,100 @@ class RegressSuitesTest(unittest.TestCase):
         self.assertEqual([c["seed"] for c in rows["clvl10"]["characters"]], [1002, 1001])
         self.assertEqual([c["outcome"] for c in rows["reach_dl8"]["characters"]], ["budget"])
         self.assertEqual((rows["clvl10"]["bar"], rows["reach_dl8"]["bar"]), (1, 2))
+
+
+class PortsTest(unittest.TestCase):
+    """M6's coverage map (§21.4): each primary character on each port."""
+
+    def test_frozen_suites_and_latest_results_per_port(self) -> None:
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            suites, sessions = root / "suites", root / "sessions"
+            suites.mkdir()
+            (suites / "clvl5-human-mage-plus4.json").write_text(json.dumps({"required": 10, "frozen": "2026-10-27"}))
+            (suites / "clvl5.json").write_text(json.dumps({"required": 16}))
+            path = sessions / "m6b-c128-reach_dl5-human-rogue"
+            path.mkdir(parents=True)
+            (path / "summary.json").write_text(json.dumps({
+                "mode": "qualify", "goal": "reach_dl5", "character": "human-rogue", "port": "c128",
+                "started": "2026-10-27T21:00:00",
+                "characters": [{"seed": s, "outcome": "reached" if s < 1013 else "died"} for s in range(1001, 1021)]}))
+            with mock.patch.object(dashboard, "SUITES", suites), mock.patch.object(dashboard, "SESSIONS", sessions):
+                cover = dashboard.ports()
+        self.assertEqual(cover["ports"][:3], ["c64", "plus4", "c128"])
+        self.assertEqual((cover["frozen"]["plus4"], cover["frozen"]["c64"], cover["frozen"]["c128"]), (1, 1, 0))
+        mage = cover["cells"]["plus4 human-mage clvl5"]
+        self.assertEqual((mage["frozen"], mage["bar"], mage["frozen_on"]), (True, 10, "2026-10-27"))
+        rogue = cover["cells"]["c128 human-rogue reach_dl5"]
+        self.assertEqual((rogue["frozen"], rogue["latest"], rogue["bar"], rogue["ran"]), (False, 12, 16, "2026-10-27"))
+        self.assertIsNone(cover["cells"]["c64 human-rogue reach_dl5"]["latest"])
+
+
+class LiveRoundsTest(unittest.TestCase):
+    """The default view shows every round running now: a BBC qualification
+    and C64 and X16 regressions ran side by side, and the view flipped to
+    whichever wrote last (M6, 2026-10-28)."""
+
+    def test_every_running_round_and_not_a_finished_one(self) -> None:
+        import os
+        import time
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as tmp:
+            sessions = Path(tmp)
+            for name, port, age in (("m6k-bbcmaster-clvl5-human-mage", "bbcmaster", 10),
+                                    ("m6i-c128-clvl5-human-mage", "c128", 20),
+                                    ("m6a-c64-clvl5-human-mage", "c64", 3600)):
+                path = sessions / name
+                path.mkdir()
+                (path / "summary.json").write_text(json.dumps({
+                    "mode": "qualify", "goal": "clvl5", "character": "human-mage", "port": port,
+                    "started": "2026-10-28T12:00:00", "characters": []}))
+                stamp = time.time() - age
+                os.utime(path / "summary.json", (stamp, stamp))
+            with mock.patch.object(dashboard, "SESSIONS", sessions):
+                view = dashboard.overview(None)
+                alone = dashboard.overview("m6a-c64")
+        self.assertEqual(sorted(s["port"] for s in view["suites"]), ["bbcmaster", "c128"])
+        self.assertEqual(view["round"], "m6k-bbcmaster + m6i-c128")
+        self.assertEqual(view["rounds"][0], view["round"])
+        self.assertEqual([s["port"] for s in alone["suites"]], ["c64"])
+
+
+class DiskRunsTest(unittest.TestCase):
+    """The disk panel (§22) shows each port's run: one running now, else the
+    newest with the most scenarios, so a SCENARIOS= rerun of one does not
+    hide the last full run."""
+
+    def run_dir(self, root: Path, name: str, port: str, names: list[str], age: float, finished: bool) -> None:
+        import os
+        import time
+        path = root / name
+        path.mkdir()
+        (path / "summary.json").write_text(json.dumps({
+            "port": port, "started": "2026-10-30T12:00:00",
+            "finished": "2026-10-30T12:05:00" if finished else None,
+            "scenarios": [{"name": n, "doc": "", "outcome": "pass", "seconds": 1.0, "detail": "", "known": ""}
+                          for n in names]}))
+        stamp = time.time() - age
+        os.utime(path / "summary.json", (stamp, stamp))
+
+    def test_a_full_run_over_a_newer_partial_and_a_live_one_first(self) -> None:
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.run_dir(root, "20261030-1200-c64", "c64", ["save_resume", "full_disk"], 600, True)
+            self.run_dir(root, "20261030-1300-c64", "c64", ["full_disk"], 300, True)
+            self.run_dir(root, "20261030-1200-plus4", "plus4", ["save_resume", "full_disk"], 600, True)
+            self.run_dir(root, "20261030-1310-plus4", "plus4", ["save_resume"], 5, False)
+            with mock.patch.object(dashboard, "DISK_RUNS", root):
+                view = dashboard.disk()
+        self.assertEqual(view["ports"], ["c64", "plus4"])
+        self.assertEqual(view["latest"]["c64"]["run"], "20261030-1200-c64")
+        self.assertEqual(view["latest"]["plus4"]["run"], "20261030-1310-plus4")
+        self.assertTrue(view["latest"]["plus4"]["live"])
+        self.assertEqual(view["scenarios"], ["save_resume", "full_disk"])
+
+
+if __name__ == "__main__":
+    unittest.main()

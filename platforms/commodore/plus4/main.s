@@ -335,7 +335,12 @@ plus4_storage_marker_present:
 !cdmp_done:
     lda disk_status
     beq !cdmp_status_done+
+    lda save_device             // the drive the marker was read from
+    sta disk_prompt_device
     jsr plus4_disk_read_command_status
+    lda disk_status
+    bne !cdmp_status_done+
+    inc disk_status             // drive OK, but the marker was missing or wrong
 !cdmp_status_done:
     lda disk_status
     beq !cdmp_ok+
@@ -582,6 +587,8 @@ plus4_storage_marker_write_resident:
     jsr plus4_kernal_close
     lda disk_status
     bne !cdmw_status_done+
+    lda save_device             // the drive the marker was written to
+    sta disk_prompt_device
     jsr plus4_disk_read_command_status
 !cdmw_status_done:
     lda disk_status
@@ -594,11 +601,26 @@ plus4_storage_marker_write_resident:
     rts
 
 plus4_disk_read_command_status:
-    lda #0
+    // A read that times out (ST bit 1) is a lost transfer, not an answer:
+    // under JiffyDOS a byte the drive sends while its disk-controller IRQ
+    // runs can arrive cut short (playtest-disk save_overwrite). Ask again.
+    lda #3
+    sta p4dcs_attempts
+!p4dcs_try:
+    // Start with no channel selected: after a write the drive refused, the
+    // JiffyDOS Plus/4 KERNAL never completed the CHKIN below (playtest-disk
+    // full_disk).
+    jsr plus4_kernal_clrchn
+    // Failed until the drive answers, as on C64 and C128: a channel that
+    // never opens, or a code not mapped below, must not read as OK.
+    lda #2
+    sta disk_status
+    lda #$ff                    // no digits read
     sta disk_error_dos0
     sta disk_error_dos1
-    ldx #0
-    ldy #0
+    lda #0                      // no command: just read the channel
+    tax
+    tay
     jsr plus4_kernal_setnam
     lda #hal_storage_cmd_channel
     ldx disk_prompt_device
@@ -613,6 +635,7 @@ plus4_disk_read_command_status:
     sta disk_error_dos0
     jsr plus4_kernal_readst
     sta disk_error_readst
+    bne !p4dcs_close+           // as on C128: no second digit after a failed read
     jsr plus4_kernal_chrin
     sta disk_error_dos1
     jsr plus4_kernal_readst
@@ -622,57 +645,36 @@ plus4_disk_read_command_status:
     jsr plus4_kernal_clrchn
     lda #hal_storage_cmd_channel
     jsr plus4_kernal_close
+    lda disk_error_readst
+    and #$02                    // read timeout
+    beq !p4dcs_done+
+    dec p4dcs_attempts
+    bne !p4dcs_try-
 !p4dcs_done:
     rts
 
+p4dcs_attempts: .byte 0
+
 plus4_disk_status_to_disk_status:
+    // One DOS-code policy for every port: core/storage_status.s.
     lda disk_error_dos0
-    cmp #$30                    // "0"
-    bne !check_26+
-    lda disk_error_dos1
-    cmp #$30                    // "0"
-    bne !done+
-    lda #0
+    ldx disk_error_dos1
+    jsr storage_status_from_dos_digits
+    cmp #plus4_dos_status_codes_len
+    bcs !done+                  // UNKNOWN: disk_status keeps the failure seed
+    tax
+    lda plus4_dos_status_codes,x
     sta disk_status
-    lda #0
-    sta disk_error_dos0
+    bne !done+
+    sta disk_error_dos0         // OK: no error detail to show
     sta disk_error_dos1
-    rts
-!check_26:
-    lda disk_error_dos0
-    cmp #$32                    // "2"
-    bne !check_62+
-    lda disk_error_dos1
-    cmp #$36                    // "6"
-    bne !done+
-    lda #26
-    sta disk_status
-    rts
-!check_62:
-    cmp #$36                    // "6"
-    bne !check_72+
-    lda disk_error_dos1
-    cmp #$32                    // "2"
-    bne !done+
-    lda #62
-    sta disk_status
-    rts
-!check_72:
-    cmp #$37                    // "7"
-    bne !done+
-    lda disk_error_dos1
-    cmp #$32                    // "2"
-    bne !check_74+
-    lda #72
-    sta disk_status
-    rts
-!check_74:
-    cmp #$34                    // "4"
-    bne !done+
-    lda #74
-    sta disk_status
 !done:
     rts
+
+// disk_status for each HAL_STORAGE_STATUS_* the DOS classifier returns.
+plus4_dos_status_codes:
+    .fill HAL_STORAGE_STATUS_DEVICE_NOT_READY + 1, i == HAL_STORAGE_STATUS_OK ? 0 : i == HAL_STORAGE_STATUS_NOT_FOUND ? 62 : i == HAL_STORAGE_STATUS_WRITE_PROTECTED ? 26 : i == HAL_STORAGE_STATUS_DISK_FULL ? 72 : i == HAL_STORAGE_STATUS_DEVICE_NOT_READY ? 74 : 2
+.label plus4_dos_status_codes_len = * - plus4_dos_status_codes
 
 // ============================================================
 // Entry point
@@ -1837,10 +1839,11 @@ test_expect_col: .byte 0
 
 .encoding "screencode_mixed"
 test_inventory_title_str: .text "Inventory" ; .byte 0
-test_beginner_book_str:   .text "Beginner's Spellbook" ; .byte 0
+test_beginner_book_str:   .text "Spellbook Beginners-Magick" ; .byte 0
 test_mage_book_title_str: .text "Mage Book" ; .byte 0
 test_magic_missile_str:   .text "Magic Missile" ; .byte 0
-test_phase_door_str:      .text "Phase Door" ; .byte 0
+// The cast list shows learned spells only (as Umoria); a new mage knows one.
+test_cast_one_spell_str:  .text "Cast which? (a-a, esc)" ; .byte 0
 
 #if C64_TEST_SCRIPTED_BOOK_OVERLAY
 test_assert_book_overlay:
@@ -1887,12 +1890,12 @@ test_assert_spell_list_overlay:
     jsr test_expect_screen_string
     bcc !list_fail+
 
-    lda #<test_phase_door_str
+    lda #<test_cast_one_spell_str
     sta zp_ptr0
-    lda #>test_phase_door_str
+    lda #>test_cast_one_spell_str
     sta zp_ptr0_hi
-    lda #4
-    ldx #4
+    lda #24
+    ldx #5
     jsr test_expect_screen_string
     bcc !list_fail+
 
@@ -1910,8 +1913,6 @@ c64_test_spell_fail_level_sym:
 c64_test_spell_fail_known_sym:
     brk
 c64_test_spell_fail_validate_sym:
-    brk
-c64_test_spell_fail_roll_sym:
     brk
 c64_test_spell_fail_cancel_sym:
     brk
@@ -1945,8 +1946,6 @@ c64_test_spell_fail_known_sym:
     brk
 c64_test_spell_fail_validate_sym:
     brk
-c64_test_spell_fail_roll_sym:
-    brk
 c64_test_spell_fail_cancel_sym:
     brk
 c64_test_spell_fail_input_sym:
@@ -1962,8 +1961,6 @@ c64_test_spell_fail_level_sym:
 c64_test_spell_fail_known_sym:
     brk
 c64_test_spell_fail_validate_sym:
-    brk
-c64_test_spell_fail_roll_sym:
     brk
 c64_test_spell_fail_cancel_sym:
     brk
@@ -2067,7 +2064,7 @@ tramp_winner_royal:
     lda #hal_storage_modal_misc_name_len
     ldx #<hal_storage_modal_misc_name
     ldy #>hal_storage_modal_misc_name
-    jsr hal_asset_load_prg_header
+    jsr asset_load_retry
 #if PLUS4_TEST_SCRIPTED_RETIREMENT_PRODUCT
     bcc !retirement_loaded+
     jmp plus4_test_retirement_fail_sym
@@ -2220,17 +2217,23 @@ plus4_require_program_media:
 save_append_disk_detail_plus4:
     lda #$20
     jsr screen_put_char
-    lda disk_error_dos0
+    lda disk_error_dos0         // 0 or $ff: no DOS digits to show
+    beq !no_dos+
+    cmp #$ff                    // the drive never answered
     bne !dos+
+!no_dos:
     lda disk_error_phase
     ora disk_error_readst
     bne !status+
     rts
-!dos:
-    lda disk_error_dos0
+!dos:                           // A = disk_error_dos0
     jsr screen_put_char
     lda disk_error_dos1
+    cmp #$ff                    // only the first digit arrived
+    beq !no_dos1+
     jmp screen_put_char
+!no_dos1:
+    rts
 !status:
     lda #$24                    // $
     jsr screen_put_char

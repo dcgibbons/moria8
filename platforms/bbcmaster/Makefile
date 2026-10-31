@@ -136,12 +136,14 @@ $(BEEB_SSD): build ../../data/LICENSE ../../data/SOURCE-OFFER ../../tools/make_p
 	  "OVLCHS=$(OUTBEEB)/bin/OVL.CHEST:FFFFA800:FFFFA800" \
 	  "OVLSTO=$(OUTBEEB)/bin/OVL.STORAGE:FFFFA800:FFFFA800" \
 	  "OVLTTL=$(OUTBEEB)/bin/OVL.TITLE:FFFFA800:FFFFA800" \
+	  "MONDB1=$(OUTBEEB)/bin/MONSTER.DB.1:FFFFA800:FFFFA800" \
 	  "MONDB2=$(OUTBEEB)/bin/MONSTER.DB.2:FFFFA800:FFFFA800" \
 	  "MONDB3=$(OUTBEEB)/bin/MONSTER.DB.3:FFFFA800:FFFFA800" \
 	  "MONDB4=$(OUTBEEB)/bin/MONSTER.DB.4:FFFFA800:FFFFA800" \
 	  "TITLE=$(OUTBEEB)/bin/TITLE:FFFF8000:FFFF8000" \
 	  "LICENSE=$(OUTBEEB)/bin/LICENSE:FFFF0000:FFFFFFFF" \
 	  "SRCOFFR=$(OUTBEEB)/bin/SRCOFFR:FFFF0000:FFFFFFFF"
+	python3 check_memory_contract.py --disk "$(BEEB_SSD)" || { rm -f "$(BEEB_SSD)"; exit 1; }
 
 test-memory-contract-selftest:
 	python3 ../../tools/make_ssd.py --selftest

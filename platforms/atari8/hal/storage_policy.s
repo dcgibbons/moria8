@@ -36,4 +36,6 @@
 #define HAL_STORAGE_FRIENDLY_STATUS_MESSAGES
 #define HAL_STORAGE_STREAM_STATUS_HELPERS
 #define HAL_STORAGE_RETURN_LOCAL_STATUS
+// SIO retries each sector itself: one repeat of a failed asset load is enough.
+#define HAL_STORAGE_ASSET_LOAD_TWO_ATTEMPTS
 #define HAL_STORAGE_NO_UNIT_TEST_STUBS

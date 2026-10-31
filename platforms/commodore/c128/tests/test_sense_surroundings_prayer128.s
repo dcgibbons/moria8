@@ -102,20 +102,11 @@ test_spell_exec_calls: .byte 0
 test_last_spell_idx: .byte $ff
 test_progress: .byte 0
 test_rng_idx: .byte 0
-test_rng_script: .fill 255, 0
+test_rng_script: .fill 256, 0                 // one entry per 8-bit index
 
 walkable_table:
     .byte 1, 0, 0, 0, 0, 0, 0, 1
     .byte 0, 1, 1, 1, 0, 0, 1, 0
-
-.macro PatchJump(target, replacement) {
-    lda #$4c
-    sta target
-    lda #<replacement
-    sta target + 1
-    lda #>replacement
-    sta target + 2
-}
 
 screen_clear:
 .label hal_screen_clear = screen_clear
@@ -179,9 +170,11 @@ floor_item_remove:
 calc_spell_failure:
     clc
     rts
+    :PatchRoom(calc_spell_failure)
 
 tramp_spell_execute_selected:
     rts
+    :PatchRoom(tramp_spell_execute_selected)
 
 get_direction_target:
     lda zp_player_x
@@ -200,8 +193,9 @@ huff_print_msg:
 
 test_rng_range:
     ldx test_rng_idx
-    lda test_rng_script,x
     inc test_rng_idx
+    lda test_rng_script,x       // N/Z from A, as core/rng.s rng_range: the
+                                // caller's bne saw the inc's flags
     rts
 
 test_rng_fill_zeroes:
@@ -211,8 +205,7 @@ test_rng_fill_zeroes:
 !loop:
     sta test_rng_script,x
     inx
-    cpx #255
-    bne !loop-
+    bne !loop-                  // all 256 entries: the index wraps
     rts
 
 fill_map_rock_test:
@@ -227,7 +220,7 @@ fill_map_rock_test:
     ldy #0
     lda #TILE_WALL_H
 !col_loop:
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
     iny
     cpy #MAP_COLS
     bcc !col_loop-
@@ -248,7 +241,7 @@ fill_map_stairs_test:
     ldy #0
     lda #TILE_STAIRS_UP
 !col_loop:
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
     iny
     cpy #MAP_COLS
     bcc !col_loop-
@@ -267,7 +260,7 @@ test_write_tile:
     sta zp_ptr0_hi
     ldy zp_ptr1_hi
     pla
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
     rts
 
 test_read_tile:
@@ -278,7 +271,7 @@ test_read_tile:
     lda map_row_hi,x
     sta zp_ptr0_hi
     ldy zp_ptr1_hi
-    lda (zp_ptr0),y
+    :MapRead_ptr0_y()
     rts
 
 test_tramp_sense_surroundings_execute:
@@ -394,6 +387,7 @@ test_pass:
     jmp test_pass_loop
 
 test_start:
+    jsr init_common_mmu_helpers   // MapRead/MapWrite go through common RAM ($0C00)
     sei
     cld
     ldx #$ff
@@ -403,9 +397,6 @@ test_start:
     sta $ff00
     lda #0
     sta test_progress
-
-    :PatchJump(huff_print_msg, huff_print_msg)
-    :PatchJump(msg_print, msg_print)
     :PatchJump(rng_range, test_rng_range)
     :PatchJump(pm_select_book, test_pm_select_book)
     :PatchJump(pm_prompt_visible_spell_choice, test_pm_prompt_visible_spell_choice)

@@ -414,7 +414,9 @@ tramp_dig_ability:
 #import "hal/lifecycle_policy.s"
 #define REU_STASH_OVERLAYS_EXTERNAL
 #define REU_LOAD_ALL_TIERS_EXTERNAL
+#define REU_DETECT_EXTERNAL         // boot only: the init-only tail
 #import "../common/reu.s"
+#undef REU_DETECT_EXTERNAL
 #undef REU_LOAD_ALL_TIERS_EXTERNAL
 #undef REU_STASH_OVERLAYS_EXTERNAL
 #import "screen.s"
@@ -580,7 +582,30 @@ ol_target:        .byte 0
 #undef DISARM_COMMAND_EXTERNAL
 #import "hal/storage.s"
 
+// c64_storage_dos_code_status — HAL_STORAGE_STATUS_* for the DOS code
+// c64_storage_read_command_status leaves in disk_status (26, 72, 74).
+c64_storage_dos_code_status:
+    lda disk_status
+    beq !cdcs_done+             // HAL_STORAGE_STATUS_OK
+    ldx #HAL_STORAGE_STATUS_WRITE_PROTECTED
+    cmp #26
+    beq !cdcs_x+
+    ldx #HAL_STORAGE_STATUS_DISK_FULL
+    cmp #72
+    beq !cdcs_x+
+    ldx #HAL_STORAGE_STATUS_DEVICE_NOT_READY
+    cmp #74
+    beq !cdcs_x+
+    ldx #HAL_STORAGE_STATUS_UNKNOWN
+!cdcs_x:
+    txa
+!cdcs_done:
+    rts
+
 c64_storage_read_command_status:
+    // Start with no channel selected, as the Plus/4 reader must (after a write
+    // the drive refused, its JiffyDOS KERNAL never completed the CHKIN).
+    jsr c64_disk_clrchn
     lda #2
     sta disk_status
     lda #0
@@ -596,23 +621,19 @@ c64_storage_read_command_status:
     ldx #15
     jsr c64_disk_chkin
     bcs !cdrs_close+
+    // The DOS policy of core/storage_status.s, kept inline here until the
+    // drive-hang backlog item lets C64 share it (docs/BACKLOG.md).
     jsr c64_disk_chrin
     cmp #$30
-    beq !cdrs_check_0x+
-    cmp #$32
+    bcc !cdrs_close+
+    cmp #$32                    // 00-19 are informational (01 FILES SCRATCHED)
+    bcc !cdrs_ok+
     beq !cdrs_check_26+
     cmp #$36
     beq !cdrs_check_62+
     cmp #$37
     beq !cdrs_check_7x+
     jmp !cdrs_close+
-!cdrs_check_0x:
-    jsr c64_disk_chrin
-    cmp #$32
-    beq !cdrs_wrong_media+
-    lda #0
-    sta disk_status
-    beq !cdrs_close+
 !cdrs_check_26:
     jsr c64_disk_chrin
     cmp #$36
@@ -629,8 +650,8 @@ c64_storage_read_command_status:
     jsr c64_disk_chrin
     cmp #$32
     beq !cdrs_disk_full+
-    cmp #$33
-    beq !cdrs_wrong_media+
+    cmp #$33                    // 73, the DOS banner after a reset: no error
+    beq !cdrs_ok+
     cmp #$34
     bne !cdrs_close+
     lda #74
@@ -643,10 +664,15 @@ c64_storage_read_command_status:
 !cdrs_wrong_media:
     lda #1
     sta disk_status
+    bne !cdrs_close+
+!cdrs_ok:
+    lda #0
+    sta disk_status
 !cdrs_close:
     jsr c64_disk_clrchn
     lda #15
-    jmp c64_disk_close
+    jsr c64_disk_close
+    jmp c64_restore_vic_bank0_after_serial   // serial I/O moved the VIC bank
 // ============================================================
 // Entry point
 // ============================================================
@@ -1034,7 +1060,6 @@ c64_test_load_then_save_new_empty_before_save:
     bcs c64_test_load_then_save_new_empty_fail
     jsr save_game
     bcc c64_test_load_then_save_new_empty_fail
-c64_test_load_then_save_new_empty_before_program_prompt:
     jsr disk_prompt_game_required
 c64_test_load_then_save_new_empty_done:
     jmp c64_test_load_then_save_new_empty_done
@@ -1815,10 +1840,11 @@ test_expect_col: .byte 0
 
 .encoding "screencode_mixed"
 test_inventory_title_str: .text "Inventory" ; .byte 0
-test_beginner_book_str:   .text "Beginner's Spellbook" ; .byte 0
+test_beginner_book_str:   .text "Spellbook Beginners-Magick" ; .byte 0
 test_mage_book_title_str: .text "Mage Book" ; .byte 0
 test_magic_missile_str:   .text "Magic Missile" ; .byte 0
-test_phase_door_str:      .text "Phase Door" ; .byte 0
+// The cast list shows learned spells only (as Umoria); a new mage knows one.
+test_cast_one_spell_str:  .text "Cast which? (a-a, esc)" ; .byte 0
 #endif
 
 #if C64_TEST_SCRIPTED_BOOK_OVERLAY
@@ -1866,12 +1892,12 @@ test_assert_spell_list_overlay:
     jsr test_expect_screen_string
     bcc !list_fail+
 
-    lda #<test_phase_door_str
+    lda #<test_cast_one_spell_str
     sta zp_ptr0
-    lda #>test_phase_door_str
+    lda #>test_cast_one_spell_str
     sta zp_ptr0_hi
-    lda #4
-    ldx #4
+    lda #24
+    ldx #5
     jsr test_expect_screen_string
     bcc !list_fail+
 
@@ -1888,8 +1914,6 @@ c64_test_spell_fail_level_sym:
 c64_test_spell_fail_known_sym:
     brk
 c64_test_spell_fail_validate_sym:
-    brk
-c64_test_spell_fail_roll_sym:
     brk
 c64_test_spell_fail_cancel_sym:
     brk
@@ -1931,8 +1955,6 @@ c64_test_spell_fail_known_sym:
     brk
 c64_test_spell_fail_validate_sym:
     brk
-c64_test_spell_fail_roll_sym:
-    brk
 c64_test_spell_fail_cancel_sym:
     brk
 c64_test_spell_fail_input_sym:
@@ -1956,8 +1978,6 @@ c64_test_spell_fail_level_sym:
 c64_test_spell_fail_known_sym:
     brk
 c64_test_spell_fail_validate_sym:
-    brk
-c64_test_spell_fail_roll_sym:
     brk
 c64_test_spell_fail_cancel_sym:
     brk
@@ -2105,7 +2125,7 @@ tramp_winner_royal:
     lda #hal_storage_modal_misc_name_len
     ldx #<hal_storage_modal_misc_name
     ldy #>hal_storage_modal_misc_name
-    jsr hal_asset_load_prg_header
+    jsr asset_load_retry
 #if C64_TEST_SCRIPTED_RETIREMENT_PRODUCT
     bcc !retirement_loaded+
     jmp c64_test_retirement_fail_sym
@@ -2169,6 +2189,10 @@ program_end:
 // REU preload status is startup-only and is dead before MAP_BASE takes over
 // this init tail. Keeping it here leaves runtime-bank space for run setup.
 #import "../common/reu_loading_banked.s"
+
+// REU detection (restart_entry, once at boot) and its probes.
+#import "../common/reu_detect.s"
+.assert "REU detection lives in the init-only tail", reu_detect >= program_end && reu_probe_xfer >= program_end, true
 
 // One-shot platform-services installer (called once at boot, before the map
 // exists). Lives in the init-only tail so the resident runtime image keeps

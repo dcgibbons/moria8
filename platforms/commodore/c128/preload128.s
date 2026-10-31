@@ -37,8 +37,8 @@ c128_preload_asset_load:
     pla
     sta c128_preload_saved_p
 #if C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG
-    ldx #$11
     jsr c128_stack_guard_begin
+    .byte $11
 #endif
 
     lda #0
@@ -126,8 +126,8 @@ c128_preload_asset_load:
     lda c128_preload_status
     beq !c128_preload_ok+
 #if C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG
-    ldx #$12
     jsr c128_stack_guard_check
+    .byte $12
 #endif
     sec
     jmp c128_preload_finish
@@ -137,8 +137,8 @@ c128_preload_asset_load:
     jsr c128_stack_low_water_check
 #endif
 #if C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG
-    ldx #$13
     jsr c128_stack_guard_check
+    .byte $13
 #endif
     clc
 c128_preload_finish:

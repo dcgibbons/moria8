@@ -29,8 +29,9 @@ from .auditor import Auditor
 from .brain import Brain
 from .game import EmulatorUnresponsive, GameFault, Mode, Observation
 from .goals import (CHARACTERS, DEFAULT_CHARACTER, GOALS, QUALIFICATION_SEEDS, Goal, for_character,
-                    required)
-from .launch import PLAYTEST_OUT, ROOT, SHIPPING, Build, StaleDisk, build_identity, check_disk
+                    for_port, required)
+from .launch import PLAYTEST_OUT, ROOT, Build, StaleDisk, build_identity, check_disk
+from .ports import C64, PORTS
 from .recorder import CharacterLog, SessionLog, write_json
 from .vice import ViceError
 from .view import build_view
@@ -72,6 +73,8 @@ class Character:
         self.keys: list[int] = []      # keys fed since self.snapshot
         self.cited: set[Path] = set()  # snapshots a finding cites: kept for replay
         self.reported: set[tuple[str, str]] = set()
+        self.keep_worker = False   # leave the emulator running after play() (disk.py)
+        self.load_retries: int | None = None   # asset_load_retries at the last level entry
 
     # -- snapshots and findings ------------------------------------------------
 
@@ -80,7 +83,12 @@ class Character:
         state = {"seed": self.seed, "step": self.result.steps, "dlvl": obs.dlvl,
                  "brain": self.brain.state(), "auditor_command_sp": self.auditor.command_sp}
         previous = self.snapshot
-        self.snapshot = self.worker.snapshot(f"{self.goal.name}-{self.seed}-s{self.result.steps}-dl{obs.dlvl}", state)
+        snapshot = self.worker.snapshot(f"{self.goal.name}-{self.seed}-s{self.result.steps}-dl{obs.dlvl}", state)
+        if snapshot is None:   # a port without snapshots (MAME, mame.py)
+            self.session.event("level_entry", seed=self.seed, step=self.result.steps, dlvl=obs.dlvl,
+                               snapshot=None)
+            return
+        self.snapshot = snapshot
         if previous is not None and previous.path not in self.cited:
             # Only the restart point and the snapshots findings cite are kept:
             # one per level entry filled the disk (M4 round 55: a stair-bouncing
@@ -104,6 +112,20 @@ class Character:
             "snapshot": str(self.snapshot.path) if self.snapshot else None,
             "keys": list(self.keys), "screen": obs.rows if obs else None,
             "observation": obs.summary() if obs else None})
+
+    def check_load_retries(self, obs: Observation) -> None:
+        """A repeated disk load (asset_load_retry) is a load the drive failed
+        once: filed so it shows, without ending the character."""
+        game = self.worker.game
+        assert game is not None
+        symbol = game.abi.all_symbols.get("asset_load_retries")
+        if symbol is None:
+            return
+        count = game.mon.mem_get(symbol[0], 1, game.ram)[0]
+        if self.load_retries is not None and count != self.load_retries:
+            self.file_finding("load_retry", "game", f"a disk load was repeated by step {self.result.steps} "
+                              f"(asset_load_retries {self.load_retries} -> {count})", obs)
+        self.load_retries = count
 
     def audit(self, obs: Observation, tiles: bytes | None) -> None:
         """File the auditor's findings for this observation (a game finding
@@ -162,6 +184,7 @@ class Character:
                     dlvl_seen = obs.dlvl
                     self.result.max_dlvl = max(self.result.max_dlvl, obs.dlvl)
                     self.take_snapshot(obs)
+                    self.check_load_retries(obs)
                 self.audit(obs, tiles)
                 if self.result.outcome == "finding":
                     break
@@ -197,7 +220,8 @@ class Character:
             self.file_finding(fault.kind, "game", fault.detail, None, fault.pc)
         finally:
             self.log.close()
-            self.worker.stop()
+            if not self.keep_worker:
+                self.worker.stop()
         self.result.wall_s = round(time.monotonic() - started, 2)
         self.session.event("character_end", seed=self.seed, outcome=self.result.outcome,
                            steps=self.result.steps, dlvl=self.result.dlvl)
@@ -323,10 +347,13 @@ def session_until_reached(goal: Goal, seed_start: int, workers: int, session: Se
             return results
 
 
-def suite_path(goal: str, character: str = DEFAULT_CHARACTER) -> Path:
+def suite_path(goal: str, character: str = DEFAULT_CHARACTER, port: str = C64.name) -> Path:
     """The Half-Troll Warrior's suites are named by goal alone (M0-M4); other
-    characters' add the character (§16.4 item 1)."""
-    return SUITES / (f"{goal}.json" if character == DEFAULT_CHARACTER else f"{goal}-{character}.json")
+    characters' add the character (§16.4 item 1), and other ports' the port
+    (§21.2)."""
+    parts = [goal, *([character] if character != DEFAULT_CHARACTER else []),
+             *([port] if port != C64.name else [])]
+    return SUITES / f"{'-'.join(parts)}.json"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -341,6 +368,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--qualify", action="store_true")
     parser.add_argument("--freeze", action="store_true")
     parser.add_argument("--regress", action="store_true")
+    parser.add_argument("--port", default=C64.name, choices=sorted(PORTS),
+                        help="the port to play (§21); with --regress, only that port's suites")
     parser.add_argument("--build-out", type=Path, help="alternate build OUT directory")
     parser.add_argument("--name", help="session directory name")
     parser.add_argument("--step-budget", type=int,
@@ -348,7 +377,8 @@ def main(argv: list[str] | None = None) -> int:
                              "the goal's budget (quicker iteration rounds; not with --freeze)")
     args = parser.parse_args(argv)
 
-    build = Build.from_out(args.build_out) if args.build_out else SHIPPING
+    port = PORTS[args.port]
+    build = Build.from_out(args.build_out, port) if args.build_out else Build.shipping(port)
     try:
         check_disk(build)   # once, before any worker: not one boot error per seed
     except StaleDisk as exc:
@@ -356,10 +386,10 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     mode = "regress" if args.regress else "qualify" if args.qualify else "session"
     character = args.character or DEFAULT_CHARACTER
-    tag = args.goal if character == DEFAULT_CHARACTER else f"{args.goal}-{character}"
+    tag = suite_path(args.goal, character, port.name).stem
     name = args.name or f"{time.strftime('%Y%m%d-%H%M%S')}-{mode}-{tag}"
     session = SessionLog(PLAYTEST_OUT / "sessions" / name,
-                         {"mode": mode, "goal": args.goal, "character": character,
+                         {"mode": mode, "goal": args.goal, "character": character, "port": port.name,
                           "build": build_identity(build),
                           "started": time.strftime("%Y-%m-%dT%H:%M:%S")})
     print(f"session: {session.dir}", flush=True)
@@ -367,7 +397,9 @@ def main(argv: list[str] | None = None) -> int:
     ok = True
     if mode == "regress":
         suites = [path for path in sorted(SUITES.glob("*.json"))
-                  if args.character in (None, json.loads(path.read_text()).get("character", DEFAULT_CHARACTER))]
+                  for suite in (json.loads(path.read_text()),)
+                  if args.character in (None, suite.get("character", DEFAULT_CHARACTER))
+                  and suite.get("port", C64.name) == port.name]
         report = {}
         ok = bool(suites)   # no frozen suite is no evidence
         for path in suites:
@@ -382,7 +414,7 @@ def main(argv: list[str] | None = None) -> int:
         session.summary["regress"] = report
         print(json.dumps(report))
     elif mode == "qualify":
-        goal = for_character(GOALS[args.goal], character)
+        goal = for_port(for_character(GOALS[args.goal], character), port)
         if args.step_budget:
             if args.freeze:
                 parser.error("--step-budget is for iteration rounds; freeze with the goal's budget")
@@ -405,12 +437,15 @@ def main(argv: list[str] | None = None) -> int:
                      "step_budget": goal.step_budget}
             if character != DEFAULT_CHARACTER:
                 suite["character"] = character
-            write_json(suite_path(goal.name, character), {**suite,
+            if port is not C64:
+                suite["port"] = port.name
+            write_json(suite_path(goal.name, character, port.name), {**suite,
                                                "frozen": time.strftime("%Y-%m-%d"),
                                                "program_sha256": build_identity(build)["program_sha256"]})
-            print(f"froze {suite_path(goal.name, character).relative_to(ROOT)}")
+            print(f"froze {suite_path(goal.name, character, port.name).relative_to(ROOT)}")
     else:
-        results = session_until_reached(for_character(GOALS[args.goal], character), args.seed_start, args.workers, session, build)
+        results = session_until_reached(for_port(for_character(GOALS[args.goal], character), port),
+                                        args.seed_start, args.workers, session, build)
         reached = [r.seed for r in results if r.outcome == "reached"]
         print(f"goal {args.goal} reached by seed {reached[0]} after {len(results)} characters")
     session.summary["findings"] = session.findings

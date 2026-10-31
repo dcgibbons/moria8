@@ -160,13 +160,15 @@ c64_test_seed_scroll_selector_state:
     lda #0
     sta c64_test_scroll_selector_return_pending
     sta c64_test_scroll_selector_return_count
+    // Carried slot 3: the starting kit holds slots 0-2 (rations, book,
+    // torches).
     lda #34                 // Enchant Weapon scroll
-    sta inv_item_id + 2
+    sta inv_item_id + 3
     lda #1
-    sta inv_qty + 2
+    sta inv_qty + 3
     lda #0
-    sta inv_p1 + 2
-    sta inv_flags + 2
+    sta inv_p1 + 3
+    sta inv_flags + 3
     rts
 #endif
 
@@ -230,7 +232,16 @@ c64_test_seed_scripted_spell_state:
     sta player_data + PL_LEVEL
     lda #18
     sta player_data + PL_INT_CUR
-    lda #20
+    // A level-50 mage's hit points, so the scripted rests among monsters
+    // cannot end the game before the script does.
+    // Zero page only: nothing in this test reloads it from player_data.
+    lda #<500
+    sta zp_player_hp_lo
+    sta zp_player_mhp_lo
+    lda #>500
+    sta zp_player_hp_hi
+    sta zp_player_mhp_hi
+    lda #200                // one Magic Missile per active monster type
     sta zp_player_mp
     sta player_data + PL_MANA
     sta zp_player_mmp
@@ -245,11 +256,7 @@ c64_test_seed_scripted_spell_state:
     sta player_data + PL_SPELLS_WORKED_1
     sta player_data + PL_SPELLS_WORKED_2
     sta player_data + PL_SPELLS_WORKED_3
-    sta player_data + PL_SPELLS_FORGOTTEN_0
-    sta player_data + PL_SPELLS_FORGOTTEN_1
-    sta player_data + PL_SPELLS_FORGOTTEN_2
-    sta player_data + PL_SPELLS_FORGOTTEN_3
-    sta player_data + PL_NEW_SPELLS
+    sta player_data + PL_NEW_SPELLS     // forgotten: player_init zeroed it
     lda #99
     ldx #31
 !c64_test_dungeon_spell_order_clear:
@@ -269,11 +276,14 @@ c64_test_force_spell_target_monster:
     beq !ctstm_ready+
     rts
 !ctstm_ready:
-    lda c64_test_spell_success_count
-    cmp active_dungeon_count
-    bcc !ctstm_have_type+
+    jsr c64_test_dungeon_spell_goal
+    cmp c64_test_spell_success_count
+    beq !ctstm_goal_met+
+    bcs !ctstm_have_type_load+
+!ctstm_goal_met:
     rts
-!ctstm_have_type:
+!ctstm_have_type_load:
+    lda c64_test_spell_success_count
     sta c64_test_spell_target_type
     lda zp_player_y
     sta c64_test_spell_target_y
@@ -284,7 +294,6 @@ c64_test_force_spell_target_monster:
     clc
     adc c64_test_spell_path_offset
     sta c64_test_spell_target_x
-    lda c64_test_spell_target_x
     ldy c64_test_spell_target_y
     jsr monster_find_at
     bcc !ctstm_clear_tile+
@@ -317,10 +326,14 @@ c64_test_force_spell_target_monster:
     ldy #MX_HP_HI
     lda #0
     sta (zp_ptr0),y
+    // Asleep: the missile kills it (1 HP) before it acts. Awake, a type that
+    // casts teleport-level sent the player away first, and each new level
+    // spawned it again, forever.
     ldy #MX_SLEEP_CUR
+    lda #$ff
     sta (zp_ptr0),y
     ldy #MX_FLAGS
-    lda #MF_AWAKE
+    lda #0
     sta (zp_ptr0),y
 
     // Force the next hit-message name lookup down the stale-tier reload path.
@@ -331,6 +344,16 @@ c64_test_force_spell_target_monster:
     sta current_tier
     sta tier_loaded
 !ctstm_done:
+    rts
+
+// The pass needs one kill per monster type, up to the first 16 (54 types
+// took about 70 s of warp time, past the 30 s gate rule). A = the goal.
+c64_test_dungeon_spell_goal:
+    lda active_dungeon_count
+    cmp #16
+    bcc !ctdsg_done+
+    lda #16
+!ctdsg_done:
     rts
 
 c64_test_spell_target_x: .byte 0
@@ -344,62 +367,130 @@ c64_test_seed_scripted_spell_state:
     sta c64_test_spell_success_count
     sta c64_test_spell_return_pending
     sta c64_test_spell_return_count
-    sta c64_test_detect_evil_seen
+    lda #20                 // mana for prayers retried after a fizzle
+    sta zp_player_mp
+    sta player_data + PL_MANA
     rts
 
 c64_test_force_detect_evil_monster:
-    ldx #0
-!ctdem_spawn_loop:
+    // Five evil monsters on free floor near the player, wherever the level
+    // put them: a fixed row offset found only wall in corridor starts.
+    // A new game starts in town with no tier; this test starts on DL10.
+    // Runs once per test, so the counters start from their load-time zeros.
+    jsr tier_restore_after_overlay
+    // Rows y-4..y+4, columns x-12..x+12; cells off the map (including a
+    // wrapped start) are skipped.
     lda zp_player_y
+    sec
+    sbc #4
     sta c64_test_detect_row
-    ldy c64_test_detect_offsets,x
-    sty c64_test_detect_offset
+!ctdem_row_loop:
+    lda zp_player_x
+    sec
+    sbc #12
+    sta c64_test_detect_col
+    lda c64_test_detect_row
+    cmp #MAP_ROWS
+    bcs !ctdem_next_row+
+!ctdem_col_loop:
+    lda c64_test_detect_col
+    cmp #MAP_COLS
+    bcs !ctdem_next_col+
+    jsr c64_test_detect_try_cell
+    lda c64_test_detect_spawned
+    cmp #5
+    bcs !ctdem_done+
+!ctdem_next_col:
+    inc c64_test_detect_col
     lda zp_player_x
     clc
-    adc c64_test_detect_offset
-    sta c64_test_detect_col
+    adc #13
+    cmp c64_test_detect_col
+    bne !ctdem_col_loop-
+!ctdem_next_row:
+    inc c64_test_detect_row
+    lda zp_player_y
+    clc
+    adc #5
+    cmp c64_test_detect_row
+    bne !ctdem_row_loop-
+!ctdem_done:
+    rts
+
+c64_test_detect_try_cell:
+    lda c64_test_detect_col
+    cmp zp_player_x
+    bne !ctdtc_not_player+
+    lda c64_test_detect_row
+    cmp zp_player_y
+    beq !ctdtc_skip+
+!ctdtc_not_player:
+    lda c64_test_detect_col
+    ldy c64_test_detect_row
+    jsr monster_find_at         // clobbers zp_ptr0: before the row pointer
+    bcs !ctdtc_skip+
     ldy c64_test_detect_row
     jsr map_row_ptr0_y
     ldy c64_test_detect_col
     :MapRead_ptr0_y()
     and #TILE_TYPE_MASK
     cmp #TILE_FLOOR
-    bne !ctdem_next+
-    ldy c64_test_detect_col
-    :MapRead_ptr0_y()
+    bne !ctdtc_skip+
+    // Next evil type in the active dungeon table.
+    ldx c64_test_detect_type
+!ctdtc_type_loop:
+    cpx active_dungeon_count
+    bcs !ctdtc_skip+
+    lda cr_mflags,x
+    and #CF_EVIL
+    bne !ctdtc_type_found+
+    inx
+    bne !ctdtc_type_loop-
+!ctdtc_type_found:
+    :MapRead_ptr0_y()           // Y = column still; C64 map access keeps X and Y
     and #(TILE_TYPE_MASK | FLAG_LIT)
     :MapWrite_ptr0_y()
     lda c64_test_detect_col
     sta ms_spawn_x
     lda c64_test_detect_row
     sta ms_spawn_y
-    lda c64_test_detect_types,x
-    jsr monster_spawn_one
-!ctdem_next:
+    txa
     inx
-    cpx #5
-    bcc !ctdem_spawn_loop-
-!ctdem_done:
+    stx c64_test_detect_type
+    jsr monster_spawn_one
+    bcc !ctdtc_skip+
+    inc c64_test_detect_spawned
+!ctdtc_skip:
     rts
 
-c64_test_detect_evil_record_detected:
+// After every successful prayer: no evil monster marked fails the test here,
+// so the countdown (armed only by a success) runs after a detection.
+c64_test_detect_evil_assert_detected:
     jsr c64_test_detect_evil_any_detected
     bcs !ctderd_seen+
     jmp c64_test_spell_fail_validate_sym
 !ctderd_seen:
-    lda #1
-    sta c64_test_detect_evil_seen
     rts
 
 c64_test_detect_evil_assert_cleared:
-    lda c64_test_detect_evil_seen
-    bne !ctdeac_seen_ok+
-    jmp c64_test_spell_fail_validate_sym
-!ctdeac_seen_ok:
     jsr c64_test_detect_evil_any_detected
     bcc !ctdeac_clear_ok+
     jmp c64_test_spell_fail_validate_sym
 !ctdeac_clear_ok:
+    rts
+
+// Every main-loop pass: the test checks detection marks, not monster AI.
+// Awake, a DL10 monster killed the level-1 priest during the scripted rests.
+// Empty slots too: monster_spawn_one sets the sleep byte of a new monster.
+c64_test_detect_evil_keep_asleep:
+    ldx #MAX_MONSTERS - 1
+!ctdeka_loop:
+    jsr monster_get_ptr
+    ldy #MX_SLEEP_CUR
+    lda #$ff
+    sta (zp_ptr0),y
+    dex
+    bpl !ctdeka_loop-
     rts
 
 c64_test_detect_evil_any_detected:
@@ -432,12 +523,8 @@ c64_test_detect_evil_any_detected:
 
 c64_test_detect_row: .byte 0
 c64_test_detect_col: .byte 0
-c64_test_detect_offset: .byte 0
-c64_test_detect_evil_seen: .byte 0
-c64_test_detect_offsets:
-    .byte 6, 8, 10, 12, 14
-c64_test_detect_types:
-    .byte 0, 4, 8, 14, 22
+c64_test_detect_spawned: .byte 0
+c64_test_detect_type: .byte 0
 #endif
 
 // ============================================================
@@ -646,13 +733,13 @@ game_new_start:
     sta old_view_y
     lda #OVL_DUNGEON_GEN
 #if C128_REAL_BOOT_DIAG
-    ldx #$21
     jsr c128_stack_guard_begin
+    .byte $21
 #endif
     jsr overlay_load
 #if C128_REAL_BOOT_DIAG
-    ldx #$22
     jsr c128_stack_guard_check
+    .byte $22
 #endif
     bcc !gns_ovl_ok+
     jmp entry_main
@@ -664,24 +751,24 @@ game_new_start:
     jsr hal_platform_runtime_resync
 #endif
 #if C128_REAL_BOOT_DIAG
-    ldx #$23
     jsr c128_stack_guard_begin
+    .byte $23
 #endif
     jsr tramp_level_generate
 #if C128_REAL_BOOT_DIAG
-    ldx #$24
     jsr c128_stack_guard_check
+    .byte $24
 #endif
     jsr monster_spawn_level
     jsr item_spawn_level
 #if C128_REAL_BOOT_DIAG
-    ldx #$25
     jsr c128_stack_guard_begin
+    .byte $25
 #endif
     jsr update_visibility       // Reveal starting area
 #if C128_REAL_BOOT_DIAG
-    ldx #$26
     jsr c128_stack_guard_check
+    .byte $26
 #endif
 #if C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
     jsr c64_test_force_detect_evil_monster
@@ -704,13 +791,13 @@ game_new_start:
 	    jsr render_viewport
 	    jsr hal_screen_unblank
 #if C128_REAL_BOOT_DIAG || C128_STATUS_SP_CANARY_DIAG
-    ldx #$91
     jsr c128_stack_guard_begin
+    .byte $91
 #endif
     jsr status_draw
 #if C128_REAL_BOOT_DIAG || C128_STATUS_SP_CANARY_DIAG
-    ldx #$92
     jsr c128_stack_guard_check
+    .byte $92
 #endif
 
     // Loading/tier messages are transient. The screen redraw removed them
@@ -919,8 +1006,9 @@ c128_town_move_diag_loop_top:
     sta c128_test_force_death_pending
     lda #DEATH_CURSED
     sta zp_death_source
-    jsr player_sync_from_zp
-    jsr tramp_game_over
+    // The product death path, through game_over_prompt back to the title;
+    // calling tramp_game_over alone showed the screens and resumed play.
+    jmp player_died
 !test_force_death_done:
 #endif
 #if C128_TEST_SCRIPTED_SCROLL_SELECTOR
@@ -962,13 +1050,16 @@ c128_town_move_diag_loop_top:
     dec c64_test_spell_return_pending
     lda c64_test_spell_return_pending
     bne !c64_test_dungeon_spell_return_done+
-    lda c64_test_spell_success_count
-    cmp active_dungeon_count
-    bcc !c64_test_dungeon_spell_return_done+
+    jsr c64_test_dungeon_spell_goal
+    cmp c64_test_spell_success_count
+    beq !c64_test_dungeon_spell_goal_met+
+    bcs !c64_test_dungeon_spell_return_done+
+!c64_test_dungeon_spell_goal_met:
     jmp c64_test_spell_pass_sym
 !c64_test_dungeon_spell_return_done:
 #endif
 #if C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
+    jsr c64_test_detect_evil_keep_asleep
     lda c64_test_spell_return_pending
     beq !c64_test_detect_return_done+
     dec c64_test_spell_return_pending
@@ -1057,8 +1148,8 @@ c128_town_move_diag_loop_top:
     jmp !player_died+
 !not_dead:
 #if C128_REAL_BOOT_DIAG || C128_STATUS_SP_CANARY_DIAG
-    ldx #$93
     jsr c128_stack_guard_begin
+    .byte $93
 #endif
 #if C128_TEST_TOWN_SELF_DUMP
     lda #$1e
@@ -1066,8 +1157,8 @@ c128_town_move_diag_loop_top:
 #endif
     jsr status_draw
 #if C128_REAL_BOOT_DIAG || C128_STATUS_SP_CANARY_DIAG
-    ldx #$94
     jsr c128_stack_guard_check
+    .byte $94
 #endif
 #if C128_TEST_TOWN_SELF_DUMP
     lda #$1f
@@ -1210,7 +1301,17 @@ plus4_test_after_save_game:
     beq !quit_not_winner+
     jmp player_retired
 !quit_not_winner:
+    // Quit without saving asks first (Umoria "Do you really want to quit?").
+    ldx #HSTR_QUIT_CONFIRM
+    jsr huff_print_msg
+    jsr input_prepare_modal_dismiss_key  // a typed-ahead y (a move) must not answer
+    jsr hal_input_get_key
+    cmp #$59                // Y quits; any other key is no, as Umoria's get_check
+    bne !quit_confirm_no+
     jmp !quit+
+!quit_confirm_no:
+    jsr msg_clear           // the answered question goes
+    jmp main_loop           // no turn taken
 !not_quit:
 
     // Character info?
@@ -1454,13 +1555,13 @@ c128_town_move_diag_before_status_draw:
     jsr c128_town_dump_log
 #endif
 #if C128_REAL_BOOT_DIAG || C128_STATUS_SP_CANARY_DIAG
-    ldx #$95
     jsr c128_stack_guard_begin
+    .byte $95
 #endif
     jsr status_draw
 #if C128_REAL_BOOT_DIAG || C128_STATUS_SP_CANARY_DIAG
-    ldx #$96
     jsr c128_stack_guard_check
+    .byte $96
 #endif
 #if C128_TEST_TOWN_SELF_DUMP
     lda #$1f
@@ -1954,16 +2055,16 @@ level_change_generate_current:
 	    jsr render_viewport
 	    jsr hal_screen_unblank
 #if C128_REAL_BOOT_DIAG || C128_STATUS_SP_CANARY_DIAG
-    ldx #$97
     jsr c128_stack_guard_begin
+    .byte $97
 #endif
     jsr status_draw
 #if HAL_PLATFORM_TURBO_BURST_HOOKS
     jsr c64u_turbo_normal
 #endif
 #if C128_REAL_BOOT_DIAG || C128_STATUS_SP_CANARY_DIAG
-    ldx #$98
     jsr c128_stack_guard_check
+    .byte $98
 #endif
 #if C128_TEST_PERF_P1_TRACE_TRANSITION
     jmp c128_test_perf_p1_trace_capture_sym

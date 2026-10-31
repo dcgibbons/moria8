@@ -119,12 +119,12 @@ class CharacterLog:
         self.recent = (self.recent + [entry])[-30:]
 
     def status(self, game: Game, obs: Observation, steps: int, extra: dict[str, Any]) -> None:
-        colors = game.mon.mem_get(game.abi.COLOR_RAM, 1000, game.io)
+        colors = game.colors()
         elapsed = time.monotonic() - self.started
         write_json(self.session.dir / f"status-w{self.worker}.json", {
-            "worker": self.worker, "seed": self.seed, "goal": self.goal, "steps": steps,
+            "worker": self.worker, "seed": self.seed, "goal": self.goal, "port": game.port.name, "steps": steps,
             "steps_per_s": round(steps / elapsed, 1) if elapsed else 0, **obs.summary(), **extra,
-            "rows": obs.rows, "colors": bytes(c & 0x0F for c in colors).hex(),
+            "rows": obs.rows, "colors": colors.hex(),
             "decisions": self.recent, "updated": round(time.time(), 1)})
 
     def close(self) -> None:

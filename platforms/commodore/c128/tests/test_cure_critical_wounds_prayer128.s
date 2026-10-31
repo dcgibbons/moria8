@@ -106,15 +106,6 @@ walkable_table:
     .byte 1, 0, 0, 0, 0, 0, 0, 1
     .byte 0, 1, 1, 1, 0, 0, 1, 0
 
-.macro PatchJump(target, replacement) {
-    lda #$4c
-    sta target
-    lda #<replacement
-    sta target + 1
-    lda #>replacement
-    sta target + 2
-}
-
 screen_clear:
 .label hal_screen_clear = screen_clear
 ui_help_clear_all:
@@ -165,9 +156,11 @@ screen_flash_at:
 calc_spell_failure:
     clc
     rts
+    :PatchRoom(calc_spell_failure)
 
 tramp_spell_execute_selected:
     rts
+    :PatchRoom(tramp_spell_execute_selected)
 
 get_direction_target:
     lda zp_player_x
@@ -290,13 +283,12 @@ test_start:
     cld
     ldx #$ff
     txs
+    jsr init_common_mmu_helpers   // as boot does: common-RAM MMU helpers at $0C00
 
     lda #MMU_ALL_RAM
     sta $ff00
     lda #0
     sta test_progress
-
-    :PatchJump(huff_print_msg, huff_print_msg)
     :PatchJump(tramp_spell_execute_selected, test_tramp_cure_critical_wounds_prayer_execute)
     :PatchJump(pm_select_book, test_pm_select_book)
     :PatchJump(pm_prompt_visible_spell_choice, test_pm_prompt_visible_spell_choice)

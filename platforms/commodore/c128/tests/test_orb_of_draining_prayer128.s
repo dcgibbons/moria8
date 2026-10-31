@@ -124,15 +124,6 @@ walkable_table:
     .byte 1, 0, 0, 0, 0, 0, 0, 1
     .byte 0, 1, 1, 1, 0, 0, 1, 0
 
-.macro PatchJump(target, replacement) {
-    lda #$4c
-    sta target
-    lda #<replacement
-    sta target + 1
-    lda #>replacement
-    sta target + 2
-}
-
 screen_clear:
 .label hal_screen_clear = screen_clear
 ui_help_clear_all:
@@ -184,9 +175,11 @@ huff_print_msg:
 calc_spell_failure:
     clc
     rts
+    :PatchRoom(calc_spell_failure)
 
 tramp_spell_execute_selected:
     rts
+    :PatchRoom(tramp_spell_execute_selected)
 
 monster_get_ptr:
     lda test_mon_ptr_lo,x
@@ -196,7 +189,7 @@ monster_get_ptr:
     rts
 
 monster_find_at:
-    stx zp_temp0
+    sta zp_temp0                // A = x, Y = y, as core/monster.s monster_find_at
     sty zp_temp1
     ldx #0
 !mfa_loop:
@@ -320,7 +313,7 @@ test_write_tile:
     sta zp_ptr0_hi
     ldy zp_ptr1_hi
     pla
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
     rts
 
 fill_map_rock_test:
@@ -335,7 +328,7 @@ fill_map_rock_test:
     ldy #0
     lda #TILE_WALL_H
 !col_loop:
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
     iny
     cpy #MAP_COLS
     bcc !col_loop-
@@ -368,14 +361,21 @@ test_setup_dark_room:
     sta room_h
     sta dg_room_h
 
+    // Floor at columns 20-29 of rows 10-15, in the Bank 1 map the code under
+    // test reads. This wrote "sta MAP_BASE,x" (X = row): one Bank 0 byte a
+    // row, so the room stayed rock and the orb burst beside the caster.
     ldx #10
 !room_rows:
     cpx #16
     bcs !room_done+
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
     ldy #20
 !room_cols:
     lda #TILE_FLOOR
-    sta MAP_BASE,x
+    :MapWrite_ptr0_y()
     iny
     cpy #30
     bcc !room_cols-
@@ -458,6 +458,7 @@ test_pass:
     jmp test_pass_loop
 
 test_start:
+    jsr init_common_mmu_helpers   // MapRead/MapWrite go through common RAM ($0C00)
     sei
     cld
     ldx #$ff

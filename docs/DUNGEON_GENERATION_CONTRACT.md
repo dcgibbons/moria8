@@ -54,16 +54,16 @@ settled Moria8 rule or resolution of an open choice requires a ledger update.
 | Room capacity | C128 `MAX_ROOMS=21`; C64/Plus4 `MAX_ROOMS=8` |
 | Panel model | Shared 66x22 upstream-style panels and derived half-panel slots |
 | Tunnel tuning | A current valid direction is retained for rolls `<70`; on the remaining rolls, only `4` of `36` outcomes choose a random cardinal direction and the rest choose a direction toward the target. Unlike both pinned upstreams, the first tunnel step selects a correct direction without first consuming the per-step `rng(100)` draw. |
-| Doors | Room-wall penetration candidates are resolved during tunnel materialization; their adjacent temporary wall guards persist until `fill_cave_granite`; later junction candidates are resolved by `place_junction_doors`; both require a straight two-sided passage through opposing wall jambs. Room-wall doors use the exact VMS `randint(100) < 25` probability (`24` successful values). |
-| Stairs | Exactly one tracked up and two tracked down coordinates; thresholds 3..0 each get 20 attempts (80 total), then an unvalidated random floor fallback |
+| Doors | Room-wall penetration candidates are resolved during tunnel materialization; their adjacent temporary wall guards persist until `fill_cave_granite`; later junction candidates are resolved by `place_junction_doors`; both require a straight two-sided passage through opposing wall jambs; a room-wall door also needs both cells across the wall open, else the penetration becomes floor (DGN-017). Room-wall doors use the exact VMS `randint(100) < 25` probability (`24` successful values). |
+| Stairs | One tracked up and two tracked down coordinates, then untracked stairs, each in a `rng_range(room_count)` room: one down, a second down on `rng_range(2)=1`, one up on `rng_range(2)=1` (1..2 up, 3..4 down in all, unless an untracked stair's site is not floor and it is skipped); thresholds 3..0 each get 20 attempts (80 total), then an unvalidated random floor fallback, which an untracked stair skips unless it is floor |
 | Streamers | Placed after granite and before doors; density constant `5` |
 
 Settled topology invariants:
 
 - all passable room interiors belong to the player's legal movement component
   after generation
-- corridors are one tile wide except at legitimate intersections, room
-  interiors, or documented special structures
+- each tunnel is carved one tile wide (cardinal steps); separate tunnels may
+  run side by side, as upstream's do (DGN-017)
 - a door cannot be bypassed by an adjacent open route serving the same boundary
 - doors do not terminate in inaccessible rock or replace arbitrary interiors
 - rooms remain in bounds and retain wall/interior metadata
@@ -73,9 +73,9 @@ Settled topology invariants:
 Provenance: connectivity and room/tunnel/door topology derive from pinned VMS
 Moria `source/include/generate.inc` (`build_room`, tunnel construction, room-wall
 door placement, and junction-door placement) and are retained as explicit
-Moria8 correctness requirements by DGN-008. The one-tile corridor rule is the
-Moria8 representation of upstream cardinal tunnel carving; documented room
-interiors and true intersections are its exceptions.
+Moria8 correctness requirements by DGN-008. The one-tile rule describes each
+tunnel's cardinal carving, not the gap between tunnels: upstream digs through
+open rock without checking for a neighboring corridor (DGN-017).
 
 Legal, unique, reachable fallback stairs are desired but not yet a settled or
 enforced invariant because the current final fallback is unchecked (DGN-006).
@@ -111,7 +111,7 @@ work16 dungeon-generation design review; this ledger is their durable record.
 | ID | Status | Owner/date | Scope and selected rule | Evidence/enforcement | Supersedes |
 | --- | --- | --- | --- | --- | --- |
 | DGN-001 | Accepted | Project maintainer, 2026-07-09 | One shared generation algorithm; platforms vary only through named capacity/layout constants unless hardware forces otherwise | maintainer design decision; structural enforcement `NOT IMPLEMENTED` | earlier divergent C128 paths |
-| DGN-002 | Accepted | Project maintainer, 2026-07-09 | Production tracks one up and two down stairs rather than upstream variable object counts | `place_stairs_dungeon`; C64 dungeon test count | none |
+| DGN-002 | Superseded by DGN-016 | Project maintainer, 2026-07-09 | Production tracks one up and two down stairs rather than upstream variable object counts | `place_stairs_dungeon`; C64 dungeon test count | none |
 | DGN-003 | Open | Project maintainer, 2026-07-09 | Room-center distribution tolerance and canonical seed corpus | `NOT IMPLEMENTED` | none |
 | DGN-004 | Open | Project maintainer, 2026-07-09 | Area-normalized streamer density/shape tolerance | `NOT IMPLEMENTED` | none |
 | DGN-005 | Open | Project maintainer, 2026-07-09 | Platform generation-time budgets | `NOT IMPLEMENTED` | none |
@@ -125,6 +125,8 @@ work16 dungeon-generation design review; this ledger is their durable record.
 | DGN-013 | Open | Project maintainer, 2026-07-18 | Exact tunnel-state parity remains unresolved: production omits the first per-step `rng(100)` draw, clears the corridor-entry door latch after a staged room wall as well as after blank rock, and guards only represented lit room-wall tile types rather than an upstream `wall_set` abstraction | pinned VMS `generate.inc`; pinned Umoria `dungeon_generate.cpp`; no equivalence proof or canonical seed corpus | none |
 | DGN-014 | Accepted | Project maintainer, 2026-08-14 | The generation picker pool may grow with the item catalog: chest IDs 128-133 were inserted into `pit_sorted` buckets 2/4/7/9/11/12 (compressed levels from `docs/CHEST_DESIGN.md`; ruined chest 134 never generates), deliberately changing `pick_item_type` pool contents and downstream draw mapping | maintainer-approved `docs/CHEST_DESIGN.md` (catalog + picker steps); `pit_sorted`/bounds size asserts; picker completeness test in `test_store.s` | none |
 | DGN-015 | Accepted | Project maintainer, 2026-09-10 | Leftover closed doors after `place_secrets`' secret conversion receive per-door locked/stuck state from one `rng_range(120)` draw per door: `[0,20)` locked (magnitude 11+roll/2 in 11-20, each twice), `[60,70)` stuck (magnitude roll-49, sign bit set), else plain — the upstream VMS `place_door`/Umoria `dungeonPlaceDoor` 2/12-locked/1/12-stuck distribution. Draws append after all existing generation draws, preserving topology seeds. A separate full row-major map pass finds every leftover door; rolls stop only if the position-keyed `door_state_*` side table reaches `MAX_DOOR_STATES`=16. Bounded 16- and 32-door scans were rejected because the ~1/4 success rate could starve the table and bias state toward the top of the map | maintainer-approved doors design 2026-09-04; review-driven full-map fix 2026-09-10; `place_secrets` merged tail in `core/dungeon_features.s` and `core/dungeon_gen.s`; C64 `test_dungeon.s` t52 class/magnitude and t65 beyond-32-door fixtures; save round-trip coverage in `test_save.s` | none |
+| DGN-016 | Accepted | Project maintainer, 2026-10-28 | Levels carry upstream's stair counts: 1..2 up and 3..4 down (VMS `place_stairs(2, randint(2)+2, 3)` then `place_stairs(1, randint(2), 3)`; Umoria `dungeonPlaceStairs`). The first up and two down stay tracked in `stairs_up`/`dn1`/`dn2` (save block, level entry, connectivity start); the 1..2 extra down then 0..1 extra up are map tiles only, each in a random room and skipped when its site is not floor (only after the picker's 80 tries; upstream keeps trying), drawn after the tracked three and before traps. Detect-stairs marks every stair tile on the map instead of the tracked coordinates. Save format unchanged | maintainer direction 2026-10-28 ("I'd match", M6 playtest: two down stairs made 198x66 levels slow to leave); `place_stairs_dungeon`, `eff_find_stairs`; C64 `test_dungeon.s` t13 and C128 `test_soak128.s` stair counts; detect-stairs prayer tests mark an untracked stair | DGN-002 |
+| DGN-017 | Accepted | Project maintainer, 2026-10-28 | Separate tunnels may run side by side, forming two-wide stretches outside rooms: upstream carves through open rock with no adjacency check (VMS `tunnel`, the `fval = 0` branch; Umoria `dungeonBuildTunnel`, `TILE_NULL_WALL`), and the one-tile settled invariant describes each tunnel's carving only. Room-wall penetrations become doors only when both cells across the wall are open (tunnel, corridor, room floor, door, or another staged penetration), restoring the settled "doors do not terminate in inaccessible rock" invariant; upstream can leave a door onto rock when a tunnel steps into a wall and turns back. Such a penetration becomes floor and skips the door-type draw (as a failed jamb check does), shifting later draws on that level; levels without one generate identically | maintainer decision in the 2026-10-28 C128 test repair; `materialize_staged_tunnel` open-mode `jdg_cell_is_corridor`; `test_soak128.s` `audit_final_door_chokepoints128` | DGN-008's "cannot be bypassed by a parallel opening" for tunnel pairs (in part); the C128 soak's never-executed parallel-corridor audit; the soak's 180-tile streamer ceiling, now the streamer walk's worst-case bound (a runaway guard; DGN-004 sets no density) |
 
 ## Current Conditional Verification Matrix
 
@@ -159,7 +161,7 @@ must inspect generated map data.
 | --- | --- | --- |
 | C64 room/corridor/shuffle/connectivity/stairs/streamer/door fixtures | `platforms/commodore/c64/tests/test_dungeon.s` | `TEST_FILTER='dungeon' make test64` |
 | C64 full generated-map connectivity | same suite calls test-only `verify_connectivity` | implemented for tested seed/path only |
-| C128 focused generation-routine integration | `platforms/commodore/c128/tests/test_soak128.s` imports production generation with test-local startup/MMU wrappers | `TEST_FILTER='soak128' make test128`; shipping overlay/loader/dispatch coverage `NOT IMPLEMENTED` |
+| C128 focused generation-routine integration | `platforms/commodore/c128/tests/test_soak128.s` imports production generation with test-local startup/MMU wrappers | gate: `TEST_FILTER='^soak128$' make test128` (4 levels, under 30 s); full 4 seeds x 50 levels: `make test128-soak-long` (opt-in, not a gate); shipping overlay/loader/dispatch coverage `NOT IMPLEMENTED` |
 | C128 dungeon renderer color path | `platforms/commodore/c128/tests/test_dungeon128.s` | does not execute production generation |
 | Plus/4 generation entry | Plus/4 dungeon-entry smoke | `TEST_FILTER='^dungeon_entry_plus4$' make testplus4`; topology coverage incomplete |
 | Deferred chest-loot GEN overlay entry and return | C64 and Plus/4 scripted product smokes execute real Open dispatch, CHEST-to-GEN replacement, picker/ego path, placement, and runtime resync | `TEST_FILTER='chest_open_product_smoke' make test64`; `TEST_FILTER='chest_open_product_plus4' make testplus4` |

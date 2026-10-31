@@ -111,17 +111,8 @@ player_cast_spell:
 #endif
     bcc !pm_success+
     jsr pm_handle_fail_roll
-#if C128_TEST_SCRIPTED_SPELL
-    jmp c128_test_spell_fail_roll_sym
-#endif
 #if C128_TEST_SCRIPTED_SPELL_CANCEL
     jmp c128_test_spell_fail_roll_sym
-#endif
-#if C64_TEST_SCRIPTED_SPELL
-    jmp c64_test_spell_fail_roll_sym
-#endif
-#if C64_TEST_SCRIPTED_DUNGEON_SPELL
-    jmp c64_test_spell_fail_roll_sym
 #endif
     sec
     rts
@@ -231,18 +222,12 @@ player_pray:
 #endif
     bcc !pp_success+
     jsr pm_handle_fail_roll
-#if C128_TEST_SCRIPTED_PRAYER
-    jmp c128_test_spell_fail_roll_sym
-#endif
-#if C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
-    jmp c64_test_spell_fail_roll_sym
-#endif
     sec
     rts
 !pp_success:
     jsr tramp_spell_execute_selected
 #if C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
-    jsr c64_test_detect_evil_record_detected
+    jsr c64_test_detect_evil_assert_detected
 #endif
     jsr pm_finish_success_common
 #if C128_TEST_SCRIPTED_PRAYER

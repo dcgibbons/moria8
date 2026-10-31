@@ -40,8 +40,8 @@ overlap assertions are the executable authority; never edit this table alone.
 | `$3000-$3fff` | ITEMS overlay cache |
 | `$4000-$730b` | reserved 198x66 live map span |
 | `$730c-$73ff` | reserved unowned gap between map and DB regions |
-| `$7400-$7a0f` | DB/data region (item-name streams end at `$7a0a` since the three launchers, 2026-10-26) |
-| `$7a10-$9567` | tier cache, 7000 bytes, tiers packed back to back from its base (tiers 1-4 use 6873 since the 25 DL 1-5 creatures of 2026-10-25; the start moved from `$7f00` to `$7a00` then, and to `$7a10` for the launcher names) |
+| `$7400-$7a5f` | DB/data region: the `128.names` payload, item-name streams then `it_name_lo` and `it_unknown_idx`, which ends it at `$7a4f`, with 16 bytes to grow (`main.s` asserts the payload's true end; its segment max is `$7a5f`) |
+| `$7a60-$9567` | tier cache, 6920 bytes, tiers packed back to back from its base (`main.s` asserts tiers 1-4 fit; 55 bytes spare on 2026-10-27; the start moved from `$7f00` to `$7a00` on 2026-10-25, which put `it_unknown_idx` inside it until 2026-10-27) |
 | `$9568-$97ff` | title marker/data cache (663 data bytes; the title art needs 593-624) |
 | `$9800-$9cff` | MODAL small-overlay cache |
 | `$9d00-$9fff` | DISARM small-overlay cache |
@@ -60,7 +60,9 @@ exception to the post-boot runtime ownership table. The copy-to-Bank-0 process
 scrubs staged pages. Cache validity cannot be assumed until the relevant cache
 has been repopulated and marked valid.
 
-Important Bank 0 ownership includes floor items at `$1a00-$1aff`, runtime
+Important Bank 0 ownership includes the resident payloads (`128.world`
+`$6000-$8c4f`, `128.item` `$8c50-$a7ff`, `128.select` `$a800-$aaff`, each
+segment's max the next one's start), floor items at `$1a00-$1aff`, runtime
 scratch at `$1b00-$1bff`, the overlay window at `$e000-$efff`, and reloadable
 banked code at `$f000` below `$ff00`. `main.s` assertions are authoritative for
 resident segment starts and ends.
@@ -129,6 +131,7 @@ C128 memory contract.
 | --- | --- | --- |
 | Bank isolation, IRQ-state preservation, and CPU-memory row-copy helpers | `platforms/commodore/c128/tests/test_memory128.s` | `TEST_FILTER='memory128' make test128` |
 | Bank 1 ownership and resident/overlay bounds | `.assert` blocks in `memory128.s` and `main.s` | `make build` |
+| Built payloads: each PRG at its segment's start and within its max, resident Bank 0 windows and bytes pairwise disjoint, `128.names` inside the DB region and before the tier cache | `tools/check_c128_payloads.py` (the bytes emitted, not end labels: both 2026-10-26 overruns passed label asserts) | `make check128-payloads`; runs before `make test128` and `make test128-fast-smoke` |
 | Overlay/cache runtime behavior | `cache_survival_smoke`, `preload_partial_failure_smoke`, `overlay_partial_failure_smoke`, `overlay_data_transition_smoke` | `TEST_FILTER='cache' make test128`, then authoritative `make test128` for broad changes |
 | VDC copy/scroll physical behavior | `platforms/commodore/c128/tests/test_vdc_scroll_delta128.s` | `TEST_FILTER='vdc_scroll_delta128' make test128` |
 | Complete normal/no-I/O MMU and KERNAL transition matrix | none | `NOT IMPLEMENTED` |

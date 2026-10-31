@@ -190,43 +190,38 @@ test_read_tile:
     lda (zp_ptr0),y
     rts
 
-test_mark_stairs_at:
+test_eff_find_stairs:
+    // Production eff_find_stairs marks every stair tile, tracked or not
+    // (DGN-016).
+    lda #1
     sta zp_ptr1
-    sty zp_ptr1_hi
-    cpy #MAP_ROWS
+!row:
+    ldx zp_ptr1
+    cpx #MAP_ROWS - 1
     bcs !done+
-    lda zp_ptr1
-    cmp #MAP_COLS
-    bcs !done+
-    ldx zp_ptr1_hi
     lda map_row_lo,x
     sta zp_ptr0
     lda map_row_hi,x
     sta zp_ptr0_hi
-    ldy zp_ptr1
+    ldy #1
+!col:
     :MapRead_ptr0_y()
     and #TILE_TYPE_MASK
     cmp #TILE_STAIRS_DN
     beq !mark+
     cmp #TILE_STAIRS_UP
-    bne !done+
+    bne !next+
 !mark:
     :MapRead_ptr0_y()
     ora #FLAG_VISITED
     :MapWrite_ptr0_y()
+!next:
+    iny
+    cpy #MAP_COLS - 1
+    bcc !col-
+    inc zp_ptr1
+    bne !row-
 !done:
-    rts
-
-test_eff_find_stairs:
-    lda stairs_up_x
-    ldy stairs_up_y
-    jsr test_mark_stairs_at
-    lda stairs_dn1_x
-    ldy stairs_dn1_y
-    jsr test_mark_stairs_at
-    lda stairs_dn2_x
-    ldy stairs_dn2_y
-    jsr test_mark_stairs_at
     lda #1
     sta vis_room_revealed
     rts
@@ -296,6 +291,12 @@ test_setup_hidden_door_stairs_map:
     sta stairs_up_x
     lda #12
     sta stairs_up_y
+
+    // An untracked extra down stair (DGN-016).
+    lda #TILE_STAIRS_DN
+    ldx #14
+    ldy #30
+    jsr test_write_tile
     rts
 
 test_setup_empty_detect_map:
@@ -321,7 +322,7 @@ test_start:
     :PatchJump(pm_prompt_visible_spell_choice, test_pm_prompt_visible_spell_choice)
     :PatchJump(pm_validate_selected_spell, test_pm_validate_selected_spell)
 
-    // Test 1: successful prayer reveals secret doors and tracked stairs,
+    // Test 1: successful prayer reveals secret doors and every stair,
     // stays message-light, spends 3 mana, and marks prayer slot 6 worked.
     :PatchJump(calc_spell_failure, test_calc_spell_failure_success)
     jsr test_reset_detect_doors_stairs_state
@@ -361,6 +362,11 @@ test_start:
     beq !t1_fail+
     ldx #12
     ldy #22
+    jsr test_read_tile
+    and #FLAG_VISITED
+    beq !t1_fail+
+    ldx #14
+    ldy #30
     jsr test_read_tile
     and #FLAG_VISITED
     beq !t1_fail+
@@ -453,6 +459,11 @@ test_start:
     bne !t3_fail+
     ldx #12
     ldy #22
+    jsr test_read_tile
+    and #FLAG_VISITED
+    bne !t3_fail+
+    ldx #14
+    ldy #30
     jsr test_read_tile
     and #FLAG_VISITED
     bne !t3_fail+

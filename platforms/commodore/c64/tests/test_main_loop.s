@@ -20,7 +20,7 @@ bootstrap:
     jmp test_start
 
 test_finish:
-    ldx #48
+    ldx #49
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -322,7 +322,7 @@ random_floor_in_room:
 save_welcome_str:
     .text "WELCOME BACK" ; .byte 0
 
-tc_results: .fill 49, $ff
+tc_results: .fill 50, $ff
 
 test_cmd_idx: .byte 0
 test_cmd_len: .byte 0
@@ -370,6 +370,10 @@ test_tramp_game_over_run_calls: .byte 0
 test_tramp_game_over_calls: .byte 0
 test_delete_savefile_calls: .byte 0
 test_game_over_prompt_calls: .byte 0
+test_quit_msg_flags: .byte 0        // zp_msg_flags when the case's quit arrived
+test_quit_key_idx: .byte 0          // test_key_idx then
+test_quit_msg_clear_calls: .byte 0  // test_msg_clear_calls then
+test_quit_answer: .byte $59         // the next quit prompt's answer (one-shot; then Y)
 test_busy_begin_calls: .byte 0
 test_busy_tick_calls: .byte 0
 test_busy_end_calls: .byte 0
@@ -500,7 +504,10 @@ restore_real_trap_check:
     rts
 
 reset_state:
+    lda #$59                    // Y
+    sta test_quit_answer
     lda #0
+    sta zp_input_cmd            // CMD_NONE: no case inherits the last case's quit
     sta test_cmd_idx
     sta test_cmd_len
     sta test_case_idx
@@ -644,23 +651,50 @@ test_input_get_command:
     cpx test_cmd_len
     bcc !script_ok+
     lda #CMD_QUIT
-    sta zp_input_cmd
-    rts
+    jmp test_set_command
 !script_ok:
     lda test_cmd_script,x
     inx
     stx test_cmd_idx
+test_set_command:
     sta zp_input_cmd
+    cmp #CMD_QUIT
+    bne !done+
+    // The case's state as its quit arrives: the quit's own Y/N prompt
+    // prints a message (and may take a -more- key) after it.
+    lda zp_msg_flags
+    sta test_quit_msg_flags
+    lda test_key_idx
+    sta test_quit_key_idx
+    lda test_msg_clear_calls
+    sta test_quit_msg_clear_calls
+    lda zp_input_cmd            // A = the command, as input_get_command returns it
+!done:
     rts
 
 test_input_get_key:
     ldx test_key_idx
     cpx test_key_len
     bcc !script_ok+
+    lda zp_input_cmd            // the quit asks "Y/N": the case's answer
+    cmp #CMD_QUIT
+    bne !space+
+    lda #$59                    // later quits (the harness's own) say Y
+    ldx test_quit_answer
+    sta test_quit_answer
+    txa
+    rts
+!space:
     lda #$20
     rts
 
 test_input_wait_release:
+    lda zp_input_cmd            // the quit prompt's modal prepare empties the
+    cmp #CMD_QUIT               // keyboard buffer: script keys left are typed ahead
+    bne !done+
+    lda test_key_len
+    sta test_key_idx
+!done:
     rts
 
 test_input_run_key_held:
@@ -1688,9 +1722,9 @@ test_start:
     bne !t20_fail+
     lda zp_search_count
     bne !t20_fail+
-    lda test_key_idx
+    lda test_quit_key_idx
     bne !t20_fail+
-    lda zp_msg_flags
+    lda test_quit_msg_flags
     cmp #MSG_PENDING
     bne !t20_fail+
     lda #$01
@@ -1912,9 +1946,9 @@ test_start:
     bne !t25_fail+
     lda eff_detect_timer
     bne !t25_fail+
-    lda test_key_idx
+    lda test_quit_key_idx
     bne !t25_fail+
-    lda zp_msg_flags
+    lda test_quit_msg_flags
     cmp #MSG_PENDING
     bne !t25_fail+
     lda #$01
@@ -1993,10 +2027,10 @@ test_start:
     lda test_turn_calls
     cmp #1
     bne !t27_fail+
-    lda test_msg_clear_calls
+    lda test_quit_msg_clear_calls
     cmp #2
     bne !t27_fail+
-    lda zp_msg_flags
+    lda test_quit_msg_flags
     cmp #MSG_PENDING
     bne !t27_fail+
     jsr reset_state
@@ -2045,10 +2079,10 @@ test_start:
     lda #1
     sta test_cmd_len
     jsr run_case
-    lda test_msg_clear_calls
+    lda test_quit_msg_clear_calls
     cmp #1
     bne !t28_fail+
-    lda zp_msg_flags
+    lda test_quit_msg_flags
     bne !t28_fail+
     lda #$01
     sta tc_results + 27
@@ -2820,12 +2854,49 @@ test_start:
     sta trap_count
     lda #$01
     sta tc_results + 48
-    jmp test_finish
+    jmp !t50+
 !t49_fail:
     lda #0
     sta trap_count
     lda #$00
     sta tc_results + 48
+    jmp !t50+
+
+    // Test 50: SHIFT+Q answered N plays on: a typed-ahead Y is flushed, the
+    // N is read, no turn passes, the question leaves the message line, and
+    // only the harness's own quit afterwards reaches game_over_prompt.
+!t50:
+    jsr reset_state
+    lda #49
+    sta test_case_idx
+    lda #CMD_QUIT
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    lda #$59                    // Y, typed ahead of the prompt
+    sta test_key_script
+    lda #$4e                    // N, the answer
+    sta test_quit_answer
+    lda #1
+    sta test_key_len
+    sta test_msg_clear_clears_state
+    jsr run_case
+    lda test_quit_answer        // the N was read (then the harness's Y)
+    cmp #$59
+    bne !t50_fail+
+    lda test_turn_calls
+    bne !t50_fail+
+    lda test_game_over_prompt_calls
+    cmp #1
+    bne !t50_fail+
+    lda test_quit_msg_flags     // as the harness's quit arrived, after the N
+    bne !t50_fail+
+    lda #$01
+    sta tc_results + 49
+    jmp test_finish
+!t50_fail:
+    lda #$00
+    sta tc_results + 49
     jmp test_finish
 
 // A trap of type 0 at the player's reset position (10, 10).

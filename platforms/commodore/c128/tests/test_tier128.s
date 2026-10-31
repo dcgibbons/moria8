@@ -64,12 +64,14 @@ rng_range:
     rts
 
 #import "../../../../core/tier_manager.s"
+#import "../../common/asset_load_retry.s"   // the tier loads' loader
 
 test_start:
     sei
     cld
     ldx #$ff
     txs
+    jsr init_common_mmu_helpers   // as boot does: common-RAM MMU helpers at $0C00
 
     lda #MACHINE_C128
     sta zp_machine_type
@@ -87,9 +89,6 @@ test_start:
     sta tier_load + 4
     lda #$60
     sta tier_load + 5
-
-fail_now:
-    jmp test_fail
 
     // Check tier_invalidate_state clears all tracked fields.
     lda #$04

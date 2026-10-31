@@ -66,6 +66,7 @@ itok_detect_monsters:
 #import "../../../../core/spell_effects.s"
 #import "../../../../core/player_magic.s"
 #import "../../../../core/player_magic_feedback.s"
+#import "../../../../core/player_magic_find_stairs.s"
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_start)
@@ -99,19 +100,11 @@ test_spell_exec_calls: .byte 0
 test_last_spell_idx: .byte $ff
 test_progress: .byte 0
 vis_room_revealed: .byte 0
+pmx_work_y: .byte 0          // execute-overlay scratch for eff_find_stairs
 
 walkable_table:
     .byte 1, 0, 0, 0, 0, 0, 0, 1
     .byte 0, 1, 1, 1, 0, 0, 1, 0
-
-.macro PatchJump(target, replacement) {
-    lda #$4c
-    sta target
-    lda #<replacement
-    sta target + 1
-    lda #>replacement
-    sta target + 2
-}
 
 screen_clear:
 .label hal_screen_clear = screen_clear
@@ -163,9 +156,11 @@ screen_flash_at:
 calc_spell_failure:
     clc
     rts
+    :PatchRoom(calc_spell_failure)
 
 tramp_spell_execute_selected:
     rts
+    :PatchRoom(tramp_spell_execute_selected)
 
 get_direction_target:
     lda zp_player_x
@@ -187,7 +182,7 @@ test_tramp_spell_execute_selected:
     lda pm_spell_idx
     sta test_last_spell_idx
     jsr eff_find_doors
-    jsr test_eff_find_stairs
+    jsr eff_find_stairs
     rts
 
 test_pm_select_book:
@@ -230,7 +225,7 @@ test_write_tile:
     sta zp_ptr0_hi
     ldy zp_ptr1_hi
     pla
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
     rts
 
 test_read_tile:
@@ -241,48 +236,7 @@ test_read_tile:
     lda map_row_hi,x
     sta zp_ptr0_hi
     ldy zp_ptr1_hi
-    lda (zp_ptr0),y
-    rts
-
-test_mark_stairs_at:
-    sta zp_ptr1
-    sty zp_ptr1_hi
-    cpy #MAP_ROWS
-    bcs !done+
-    lda zp_ptr1
-    cmp #MAP_COLS
-    bcs !done+
-    ldx zp_ptr1_hi
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
-    ldy zp_ptr1
     :MapRead_ptr0_y()
-    and #TILE_TYPE_MASK
-    cmp #TILE_STAIRS_DN
-    beq !mark+
-    cmp #TILE_STAIRS_UP
-    bne !done+
-!mark:
-    :MapRead_ptr0_y()
-    ora #FLAG_VISITED
-    :MapWrite_ptr0_y()
-!done:
-    rts
-
-test_eff_find_stairs:
-    lda stairs_up_x
-    ldy stairs_up_y
-    jsr test_mark_stairs_at
-    lda stairs_dn1_x
-    ldy stairs_dn1_y
-    jsr test_mark_stairs_at
-    lda stairs_dn2_x
-    ldy stairs_dn2_y
-    jsr test_mark_stairs_at
-    lda #1
-    sta vis_room_revealed
     rts
 
 fill_map_rock_test:
@@ -297,7 +251,7 @@ fill_map_rock_test:
     ldy #0
     lda #TILE_WALL_H
 !col_loop:
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
     iny
     cpy #MAP_COLS
     bcc !col_loop-
@@ -369,6 +323,12 @@ test_setup_hidden_door_stairs_map:
     sta stairs_up_x
     lda #12
     sta stairs_up_y
+
+    // An untracked extra down stair (DGN-016).
+    lda #TILE_STAIRS_DN
+    ldx #14
+    ldy #30
+    jsr test_write_tile
     rts
 
 test_setup_empty_detect_map:
@@ -394,6 +354,7 @@ test_pass:
     jmp test_pass_loop
 
 test_start:
+    jsr init_common_mmu_helpers   // MapRead/MapWrite go through common RAM ($0C00)
     sei
     cld
     ldx #$ff
@@ -409,7 +370,7 @@ test_start:
     :PatchJump(pm_validate_selected_spell, test_pm_validate_selected_spell)
     :PatchJump(tramp_spell_execute_selected, test_tramp_spell_execute_selected)
 
-    // Test 1: successful prayer reveals secret doors and tracked stairs,
+    // Test 1: successful prayer reveals secret doors and every stair,
     // stays message-light, spends 3 mana, and marks prayer slot 6 worked.
     :PatchJump(calc_spell_failure, test_calc_spell_failure_success)
     jsr test_reset_detect_doors_stairs_state
@@ -449,6 +410,11 @@ test_start:
     beq !t1_fail+
     ldx #12
     ldy #22
+    jsr test_read_tile
+    and #FLAG_VISITED
+    beq !t1_fail+
+    ldx #14
+    ldy #30
     jsr test_read_tile
     and #FLAG_VISITED
     beq !t1_fail+
@@ -539,6 +505,11 @@ test_after_no_effect:
     bne !t3_fail+
     ldx #12
     ldy #22
+    jsr test_read_tile
+    and #FLAG_VISITED
+    bne !t3_fail+
+    ldx #14
+    ldy #30
     jsr test_read_tile
     and #FLAG_VISITED
     bne !t3_fail+

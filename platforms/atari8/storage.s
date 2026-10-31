@@ -609,10 +609,10 @@ hal_asset_load_title:
     lda #hal_storage_title_name_len
     ldx #<hal_storage_title_name
     ldy #>hal_storage_title_name
-    jmp hal_asset_load_prg_header
+    jmp asset_load_retry
 
 hal_asset_load:
-    jmp hal_asset_load_prg_header
+    jmp asset_load_retry
 
 hal_asset_close_channel:
     clc

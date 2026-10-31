@@ -387,6 +387,12 @@ class ViceMonitor:
     def registers(self) -> dict[int, int]:
         return parse_registers(self.call(CMD_REGISTERS_GET, bytes([MEMSPACE_MAIN])).body)
 
+    def send_registers_set(self, values: dict[int, int]) -> int:
+        """Set registers by id (``load_register_ids``); 16-bit values."""
+        body = struct.pack("<BH", MEMSPACE_MAIN, len(values)) + b"".join(
+            struct.pack("<BBH", 3, reg_id, value) for reg_id, value in values.items())
+        return self.send(CMD_REGISTERS_SET, body)
+
     def registers_named(self) -> dict[str, int]:
         if not self.register_ids:
             self.load_register_ids()
@@ -449,7 +455,9 @@ class ViceMonitor:
 
     def resource_set(self, name: str, value: str | int) -> None:
         raw_name = name.encode()
-        raw_value = str(value).encode()
+        # An integer goes little-endian, as resource_get reads it back: its
+        # decimal text set "0" as 48.
+        raw_value = value.to_bytes(4, "little") if isinstance(value, int) else value.encode()
         kind = 1 if isinstance(value, int) else 0
         body = (struct.pack("<BB", kind, len(raw_name)) + raw_name
                 + struct.pack("<B", len(raw_value)) + raw_value)

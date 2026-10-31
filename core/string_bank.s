@@ -42,4 +42,4 @@ bank_load_recall:
     lda #BANK_FN_RECALL_LEN
     ldx #<bank_fn_recall
     ldy #>bank_fn_recall
-    jmp hal_asset_load_prg_header
+    jmp asset_load_retry

@@ -136,7 +136,7 @@ a2_load_file_to_slot:
     lda #a2_play_file_name_len
     ldx #<a2_play_file_name
     ldy #>a2_play_file_name
-    jmp hal_asset_load_prg_header
+    jmp asset_load_retry
 
 a2_play_file_name:
     .text "A2.PLAY"

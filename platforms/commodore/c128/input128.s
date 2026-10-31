@@ -139,6 +139,8 @@ input_get_key:
     jmp c128_test_chest_open_pass_sym
 #elif C128_TEST_SCRIPTED_DISK_SETUP_SINGLE_DRIVE_RETURN_PRODUCT
     brk
+#elif C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_PRAYER
+    jmp c128_test_spell_script_exhausted_sym   // every retry fizzled
 #else
     brk                     // Script exhaustion is a hard test failure.
 #endif
@@ -148,16 +150,16 @@ input_get_key:
     rts
 #else
 #if C128_REAL_BOOT_DIAG
-    ldx #$81
     jsr c128_stack_guard_begin
+    .byte $81
 #endif
     // Re-assert game MMU mode and keep Screen Editor blink disabled.
     // If any prior KERNAL path leaked MMU/ROM state, waiting for a key here
     // must not run the Screen Editor IRQ path that can touch VDC RAM.
     jsr c128_restore_runtime_vectors
 #if C128_REAL_BOOT_DIAG
-    ldx #$82
     jsr c128_stack_guard_check
+    .byte $82
 #endif
 
     txa
@@ -170,6 +172,7 @@ input_get_key:
     jsr input_sound_update
     jsr cia_scan_petscii
     jsr input_process_sample_strict
+input_key_wait_strict:      // test key feed: the BEQ back to the poll
     beq !igk_wait-          // Wait for key-up -> key-down edge
 
 !igk_return:
@@ -197,15 +200,15 @@ input_wait_release:
     rts
 #else
 #if C128_REAL_BOOT_DIAG
-    ldx #$83
     jsr c128_stack_guard_begin
+    .byte $83
 #endif
     // Same guard as input_get_key: release waits are long-lived and must
     // stay in game MMU mode with Screen Editor blink suppressed.
     jsr c128_restore_runtime_vectors
 #if C128_REAL_BOOT_DIAG
-    ldx #$84
     jsr c128_stack_guard_check
+    .byte $84
 #endif
 !iwr_wait:
     inc zp_entropy
@@ -302,8 +305,10 @@ c128_test_input_idx: .byte 0
 c128_test_input_script:
 #if C128_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT
     .byte $4c              // L = load from title
-    .byte $59              // Y = accept Disk Setup drive-9 prompt if shown
+    .byte $33              // 3 = Disk Setup done (program 8, save 9)
+    .byte $20              // SPACE = acknowledge insert-save-disk prompt
     .byte $d3              // SHIFT+S = save in gameplay
+    .byte $59              // Y = overwrite; the write-protected disk fails the write
     .byte $20              // SPACE = dismiss disk-error prompt
     .byte $20              // SPACE = dismiss program-disk prompt on return
 #elif C128_TEST_SCRIPTED_CHANGE_SAVE_DRIVE_PRODUCT && !C128_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
@@ -479,6 +484,27 @@ c128_test_input_script:
     .byte $50              // P = pray
     .byte $41              // A = first visible prayer book
     .byte $43              // C = Bless
+    .byte $20              // SPACE = dismiss -MORE- / fizzle
+    .byte $50              // P = pray again
+    .byte $41              // A = first visible prayer book
+    .byte $43              // C = Bless
+    .byte $20              // SPACE = dismiss -MORE- / fizzle
+    .byte $50              // P = pray again
+    .byte $41              // A = first visible prayer book
+    .byte $43              // C = Bless
+    .byte $20              // SPACE = dismiss -MORE- / fizzle
+    .byte $50              // P = pray again
+    .byte $41              // A = first visible prayer book
+    .byte $43              // C = Bless
+    .byte $20              // SPACE = dismiss -MORE- / fizzle
+    .byte $50              // P = pray again
+    .byte $41              // A = first visible prayer book
+    .byte $43              // C = Bless
+    .byte $20              // SPACE = dismiss -MORE- / fizzle
+    .byte $50              // P = pray again
+    .byte $41              // A = first visible prayer book
+    .byte $43              // C = Bless
+    .byte $20              // SPACE = dismiss -MORE- / fizzle
 #elif C128_TEST_PERF_P1_TRACE_MODAL
     .byte $4e              // N = New
     .byte $41              // A = race
@@ -918,13 +944,13 @@ input_get_key_fast:
     jmp input_get_key
 #else
 #if C128_REAL_BOOT_DIAG
-    ldx #$81
     jsr c128_stack_guard_begin
+    .byte $81
 #endif
     jsr c128_restore_runtime_vectors
 #if C128_REAL_BOOT_DIAG
-    ldx #$82
     jsr c128_stack_guard_check
+    .byte $82
 #endif
 
     txa
@@ -935,6 +961,7 @@ input_get_key_fast:
 !igkf_wait:
     inc zp_entropy
     jsr input_poll_key_event
+input_key_wait_fast:        // test key feed: the BEQ back to the poll
     beq !igkf_wait-
 
     sta igk_key

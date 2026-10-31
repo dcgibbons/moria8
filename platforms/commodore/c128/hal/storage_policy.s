@@ -52,6 +52,9 @@
 #define HAL_STORAGE_PRESERVE_X_DURING_BYTE_STREAM
 #define HAL_STORAGE_RESTORE_VIC_BANK_AFTER_SAVE_PROBE
 #define HAL_STORAGE_SCORE_OPEN_RESTORES_RUNTIME
+// save_game reads the drive's command channel after the write: CBM DOS
+// reports a write-protected or full disk only there.
+#define HAL_STORAGE_SAVE_CHECKS_DOS_STATUS
 #define HAL_STORAGE_SCORE_IO_USES_RAM_THUNKS
 #define HAL_STORAGE_LEGACY_ROOM8_MIGRATION
 #define HAL_STORAGE_SAVE_SLOT_ASCII_CHARS

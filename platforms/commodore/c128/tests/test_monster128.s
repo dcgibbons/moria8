@@ -24,11 +24,17 @@
 test_map_row:
     .fill 80, 0
 
-.pc = $3000 "Test Code"
+// Above the map's Bank 0 shadow (MAP_BASE..MAP_END): the test poisons a
+// Bank 0 map address to prove reads come from Bank 1, so its own code must
+// not sit there (asserted at the end).
+.pc = $7400 "Test Code"
+monster128_code_begin:
 .const TEST_NAME_LO_TABLE  = $8100
 .const TEST_NAME_HI_TABLE  = $8120
-.const TEST_NAME_STR       = $8200
 .const TEST_NAME_PTR       = $e200
+// Where creature_get_name finds the name: the tier 1 cache slot plus the
+// pointer's offset into the $E000 payload.
+.label TEST_NAME_STR       = BANK1_TIER_CACHE_BASE + (TEST_NAME_PTR - $e000)
 .const TEST_TIER2_BASE     = $8400
 .const TEST2_NAME_LO_TABLE = TEST_TIER2_BASE + $0100
 .const TEST2_NAME_HI_TABLE = TEST_TIER2_BASE + $0120
@@ -67,7 +73,20 @@ mm_los_clear_to_target:
 
 #import "../../../../core/monster.s"
 #import "../../../../core/player_magic_detect_evil_effect.s"
+// Write one byte into Bank 1 through the common-RAM thunk: this code is not
+// in common RAM, so it cannot map Bank 1 and keep running.
+.macro Bank1Poke(addr, value) {
+    lda #<addr
+    sta zp_ptr0
+    lda #>addr
+    sta zp_ptr0_hi
+    ldy #0
+    lda #value
+    jsr mmu_safe_map_write_ptr0
+}
+
 test_start:
+    jsr init_common_mmu_helpers   // MapRead/MapWrite go through common RAM ($0C00)
     sei
     cld
     ldx #$ff
@@ -101,6 +120,7 @@ test_start:
     :MapWrite_ptr0_y()      // Properly writes to Bank 1 map array
 
     // Create a dummy monster in slot 0 to remove
+    ldx #0                  // monster_init_table left X at its loop end
     jsr monster_get_ptr     // Gets ptr for X=0
     ldy #MX_TYPE
     lda #1                  // Not empty
@@ -142,27 +162,16 @@ test_start:
     // C128 creature_get_name Bank1 tier path
     // ==========================================
     // Stage tier name pointer tables and target string in Bank 1.
-    jsr mmu_select_bank1
     // Tier cache encodes historical $E0xx payload pointers; C128 runtime
     // must translate these to the reclaimed high Bank 1 cache window before copy.
-    lda #<TEST_NAME_PTR
-    sta TEST_NAME_LO_TABLE
-    lda #>TEST_NAME_PTR
-    sta TEST_NAME_HI_TABLE
-    lda #18   // 'R' screen code
-    sta TEST_NAME_STR + 0
-    lda #15   // 'o' screen code
-    sta TEST_NAME_STR + 1
-    lda #7    // 'g' screen code
-    sta TEST_NAME_STR + 2
-    lda #21   // 'u' screen code
-    sta TEST_NAME_STR + 3
-    lda #5    // 'e' screen code
-    sta TEST_NAME_STR + 4
-    lda #0
-    sta TEST_NAME_STR + 5
-    jsr mmu_select_bank0
-
+    :Bank1Poke(TEST_NAME_LO_TABLE, <TEST_NAME_PTR)
+    :Bank1Poke(TEST_NAME_HI_TABLE, >TEST_NAME_PTR)
+    :Bank1Poke(TEST_NAME_STR + 0, 18)   // 'R' screen code
+    :Bank1Poke(TEST_NAME_STR + 1, 15)   // 'o' screen code
+    :Bank1Poke(TEST_NAME_STR + 2, 7)    // 'g' screen code
+    :Bank1Poke(TEST_NAME_STR + 3, 21)   // 'u' screen code
+    :Bank1Poke(TEST_NAME_STR + 4, 5)    // 'e' screen code
+    :Bank1Poke(TEST_NAME_STR + 5, 0)
     lda #1
     sta current_tier
     lda #1
@@ -200,27 +209,15 @@ test_start:
     // ==========================================
     // C128 creature_get_name Tier-2 cache-slot translation
     // ==========================================
-    jsr mmu_select_bank1
-    lda #<TEST2_NAME_PTR
-    sta TEST2_NAME_LO_TABLE
-    lda #>TEST2_NAME_PTR
-    sta TEST2_NAME_HI_TABLE
-    lda #4    // 'd'
-    sta TEST2_NAME_STR + 0
-    lda #18   // 'r'
-    sta TEST2_NAME_STR + 1
-    lda #1    // 'a'
-    sta TEST2_NAME_STR + 2
-    lda #7    // 'g'
-    sta TEST2_NAME_STR + 3
-    lda #15   // 'o'
-    sta TEST2_NAME_STR + 4
-    lda #14   // 'n'
-    sta TEST2_NAME_STR + 5
-    lda #0
-    sta TEST2_NAME_STR + 6
-    jsr mmu_select_bank0
-
+    :Bank1Poke(TEST2_NAME_LO_TABLE, <TEST2_NAME_PTR)
+    :Bank1Poke(TEST2_NAME_HI_TABLE, >TEST2_NAME_PTR)
+    :Bank1Poke(TEST2_NAME_STR + 0, 4)    // 'd'
+    :Bank1Poke(TEST2_NAME_STR + 1, 18)   // 'r'
+    :Bank1Poke(TEST2_NAME_STR + 2, 1)    // 'a'
+    :Bank1Poke(TEST2_NAME_STR + 3, 7)    // 'g'
+    :Bank1Poke(TEST2_NAME_STR + 4, 15)   // 'o'
+    :Bank1Poke(TEST2_NAME_STR + 5, 14)   // 'n'
+    :Bank1Poke(TEST2_NAME_STR + 6, 0)
     lda #2
     sta current_tier
     lda #1
@@ -574,7 +571,7 @@ test_expected_name2:
     .byte 4, 18, 1, 7, 15, 14, 0
 
 // Dummy stubs needed by monster.s that aren't imported
-.pc = $5000 "Stubs"
+.pc = $8c00 "Stubs"
 rng_range: rts
 rng_range_word: rts
 math_dice: rts
@@ -603,3 +600,6 @@ c128_tier_cache_slot_hi:
     .byte 0, >BANK1_TIER_CACHE_BASE, >TEST_TIER2_BASE, 0, 0
 dir_dx: .fill 8, 0
 dir_dy: .fill 8, 0
+monster128_code_end:
+.assert "monster128 code stays out of the map's Bank 0 shadow", monster128_code_begin > MAP_END, true
+.assert "monster128 test code ends before its stubs", monster128_code_end <= $9000, true

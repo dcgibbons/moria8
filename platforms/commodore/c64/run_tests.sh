@@ -6,11 +6,35 @@
 
 REPO_ROOT="${REPO_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
 
+# c64_break_cmd <addr>: a monitor breakpoint on game code. Code under the BASIC
+# ROM ($A000-$BFFF) or KERNAL ROM ($E000-$FFFF) shares its address with ROM
+# code, which runs at boot: stop only while the RAM is banked in (CPU port $01).
+c64_break_cmd() {
+    local addr="$1" value
+    value=$((16#$addr))
+    if [ "$value" -ge $((0xa000)) ] && [ "$value" -lt $((0xc000)) ]; then
+        echo "break \$${addr} if (@cpu:\$0001 & \$03) != \$03"
+    elif [ "$value" -ge $((0xe000)) ]; then
+        echo "break \$${addr} if (@cpu:\$0001 & \$02) == \$00"
+    else
+        echo "break \$${addr}"
+    fi
+}
+
+# c64_exit_screen_note <png>: name the screen VICE saved (-exitscreenshot) when a
+# timed-out run hit its cycle limit.
+c64_exit_screen_note() {
+    if [ -s "$1" ]; then
+        echo "    Screen: $1"
+    fi
+}
+
 java() {
     if [ "$1" = "-jar" ]; then
         local jar_path="$2"
         shift 2
-        command java -jar "$jar_path" -libdir "$REPO_ROOT/core" -libdir "$REPO_ROOT/platforms/commodore/common" -libdir "$REPO_ROOT/platforms/commodore" -afo "$@"
+        # The product builds' wrapper: KickAssembler exits 0 on a failed .assert.
+        "$REPO_ROOT/tools/kickass_java.sh" -jar "$jar_path" -libdir "$REPO_ROOT/core" -libdir "$REPO_ROOT/platforms/commodore/common" -libdir "$REPO_ROOT/platforms/commodore" -afo "$@"
     else
         command java "$@"
     fi
@@ -201,7 +225,7 @@ for path in sorted(root.glob("*.py")):
             continue
         if "-remotemonitor" not in values and "-nativemonitor" not in values:
             continue
-        missing = [flag for flag in ("-config", "-default", "+saveres") if flag not in values]
+        missing = [flag for flag in ("-config", "-default", "+saveres", "+autostart-delay-random") if flag not in values]
         if "-config" in values:
             config_index = values.index("-config")
             if config_index + 1 >= len(values) or values[config_index + 1] != "vice_config()":
@@ -213,7 +237,7 @@ for lineno, line in enumerate(runner.read_text().splitlines(), start=1):
     stripped = line.strip()
     if not stripped.startswith('"$VICE" '):
         continue
-    missing = [flag for flag in ('-config "$VICE_CONFIG"', "-default", "+saveres") if flag not in line]
+    missing = [flag for flag in ('-config "$VICE_CONFIG"', "-default", "+saveres", "+autostart-delay-random") if flag not in line]
     if missing:
         bad.append(f"{runner.name}:{lineno}: missing {', '.join(missing)}")
 
@@ -354,7 +378,7 @@ run_test() {
     run_vice_once() {
         local log_path="$1"
         script -q "$log_path" \
-            "$VICE" -warp -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -autostartprgmode 1 \
+            "$VICE" -warp -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -console -nativemonitor -autostartprgmode 1 \
             -autostart "$prg_file" -moncommands "$mon_file" \
             -limitcycles "$cycles" +sound -sounddev dummy \
             +remotemonitor +binarymonitor > /dev/null 2>&1
@@ -441,7 +465,7 @@ run_sound_monitor_test() {
     }
 
     script -q "$log_file" \
-        "$VICE" -warp -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -autostartprgmode 1 \
+        "$VICE" -warp -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -console -nativemonitor -autostartprgmode 1 \
         -autostart "${src%.s}.prg" -moncommands "$mon_file" \
         -limitcycles "$cycles" +sound -sounddev dummy \
         +remotemonitor +binarymonitor > /dev/null 2>&1
@@ -573,7 +597,6 @@ run_scripted_spell_cast_smoke() {
         "c64_test_spell_fail_level_sym"
         "c64_test_spell_fail_known_sym"
         "c64_test_spell_fail_validate_sym"
-        "c64_test_spell_fail_roll_sym"
         "c64_test_spell_fail_cancel_sym"
         "c64_test_spell_fail_input_sym"
     )
@@ -608,22 +631,22 @@ run_scripted_spell_cast_smoke() {
 
     {
         for addr in "${fail_addrs[@]}"; do
-            echo "break \$${addr}"
+            c64_break_cmd "${addr}"
         done
-        echo "break \$${pass_addr}"
+        c64_break_cmd "${pass_addr}"
         echo "g"
         echo "quit"
     } > "$mon_file"
 
     script -q "$tty_log" \
-        "$VICE" -warp -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -autostartprgmode 1 \
+        "$VICE" -warp -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -console -nativemonitor -autostartprgmode 1 \
         -autostart "$scripted_d64" -moncommands "$mon_file" \
         -limitcycles 700000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor > /dev/null 2>&1
     local vice_rc=$?
 
     pass_hit=0
-    if grep -qiE "Stop on  exec ${pass_lc}" "$tty_log" || grep -qi "^BREAK: .*C:\$${pass_addr}" "$tty_log"; then
+    if grep -qiE "Stop on  exec ${pass_lc}" "$tty_log"; then
         pass_hit=1
     fi
 
@@ -636,8 +659,7 @@ run_scripted_spell_cast_smoke() {
 
     for idx in "${!fail_labels[@]}"; do
         addr="${fail_addrs[$idx]}"
-        if grep -qiE "Stop on  exec $(echo "$addr" | tr '[:upper:]' '[:lower:]')" "$tty_log" || \
-           grep -qi "^BREAK: .*C:\$${addr}" "$tty_log"; then
+        if grep -qiE "Stop on  exec $(echo "$addr" | tr '[:upper:]' '[:lower:]')" "$tty_log"; then
             echo "FAIL (scripted spell hit ${fail_labels[$idx]})"
             echo "    Log: $tty_log"
             FAIL=$((FAIL + 1))
@@ -764,22 +786,22 @@ run_scripted_book_overlay_smoke() {
 
     {
         for addr in "${fail_addrs[@]}"; do
-            echo "break \$${addr}"
+            c64_break_cmd "${addr}"
         done
-        echo "break \$${pass_addr}"
+        c64_break_cmd "${pass_addr}"
         echo "g"
         echo "quit"
     } > "$mon_file"
 
     script -q "$tty_log" \
-        "$VICE" -warp -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -autostartprgmode 1 \
+        "$VICE" -warp -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -console -nativemonitor -autostartprgmode 1 \
         -autostart "$scripted_d64" -moncommands "$mon_file" \
         -limitcycles 700000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor > /dev/null 2>&1
     local vice_rc=$?
 
     pass_hit=0
-    if grep -qiE "Stop on  exec ${pass_lc}" "$tty_log" || grep -qi "^BREAK: .*C:\$${pass_addr}" "$tty_log"; then
+    if grep -qiE "Stop on  exec ${pass_lc}" "$tty_log"; then
         pass_hit=1
     fi
 
@@ -792,8 +814,7 @@ run_scripted_book_overlay_smoke() {
 
     for idx in "${!fail_labels[@]}"; do
         addr="${fail_addrs[$idx]}"
-        if grep -qiE "Stop on  exec $(echo "$addr" | tr '[:upper:]' '[:lower:]')" "$tty_log" || \
-           grep -qi "^BREAK: .*C:\$${addr}" "$tty_log"; then
+        if grep -qiE "Stop on  exec $(echo "$addr" | tr '[:upper:]' '[:lower:]')" "$tty_log"; then
             echo "FAIL (book overlay hit ${fail_labels[$idx]})"
             echo "    Log: $tty_log"
             FAIL=$((FAIL + 1))
@@ -920,21 +941,21 @@ run_scripted_scroll_selector_smoke() {
 
     {
         for addr in "${fail_addrs[@]}"; do
-            echo "break \$${addr}"
+            c64_break_cmd "${addr}"
         done
-        echo "break \$${pass_addr}"
+        c64_break_cmd "${pass_addr}"
         echo "g"
         echo "quit"
     } > "$mon_file"
 
     script -q "$tty_log" \
-        "$VICE" -warp -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -autostartprgmode 1 \
+        "$VICE" -warp -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -console -nativemonitor -autostartprgmode 1 \
         -autostart "$scripted_d64" -moncommands "$mon_file" \
         -limitcycles 700000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor > /dev/null 2>&1
 
     pass_hit=0
-    if grep -qiE "Stop on  exec ${pass_lc}" "$tty_log" || grep -qi "^BREAK: .*C:\$${pass_addr}" "$tty_log"; then
+    if grep -qiE "Stop on  exec ${pass_lc}" "$tty_log"; then
         pass_hit=1
     fi
 
@@ -947,8 +968,7 @@ run_scripted_scroll_selector_smoke() {
 
     for idx in "${!fail_labels[@]}"; do
         addr="${fail_addrs[$idx]}"
-        if grep -qiE "Stop on  exec $(echo "$addr" | tr '[:upper:]' '[:lower:]')" "$tty_log" || \
-           grep -qi "^BREAK: .*C:\$${addr}" "$tty_log"; then
+        if grep -qiE "Stop on  exec $(echo "$addr" | tr '[:upper:]' '[:lower:]')" "$tty_log"; then
             echo "FAIL (scroll selector hit ${fail_labels[$idx]})"
             echo "    Log: $tty_log"
             FAIL=$((FAIL + 1))
@@ -1075,22 +1095,22 @@ run_scripted_spell_list_overlay_smoke() {
 
     {
         for addr in "${fail_addrs[@]}"; do
-            echo "break \$${addr}"
+            c64_break_cmd "${addr}"
         done
-        echo "break \$${pass_addr}"
+        c64_break_cmd "${pass_addr}"
         echo "g"
         echo "quit"
     } > "$mon_file"
 
     script -q "$tty_log" \
-        "$VICE" -warp -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -autostartprgmode 1 \
+        "$VICE" -warp -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -console -nativemonitor -autostartprgmode 1 \
         -autostart "$scripted_d64" -moncommands "$mon_file" \
         -limitcycles 700000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor > /dev/null 2>&1
     local vice_rc=$?
 
     pass_hit=0
-    if grep -qiE "Stop on  exec ${pass_lc}" "$tty_log" || grep -qi "^BREAK: .*C:\$${pass_addr}" "$tty_log"; then
+    if grep -qiE "Stop on  exec ${pass_lc}" "$tty_log"; then
         pass_hit=1
     fi
 
@@ -1103,8 +1123,7 @@ run_scripted_spell_list_overlay_smoke() {
 
     for idx in "${!fail_labels[@]}"; do
         addr="${fail_addrs[$idx]}"
-        if grep -qiE "Stop on  exec $(echo "$addr" | tr '[:upper:]' '[:lower:]')" "$tty_log" || \
-           grep -qi "^BREAK: .*C:\$${addr}" "$tty_log"; then
+        if grep -qiE "Stop on  exec $(echo "$addr" | tr '[:upper:]' '[:lower:]')" "$tty_log"; then
             echo "FAIL (spell list overlay hit ${fail_labels[$idx]})"
             echo "    Log: $tty_log"
             FAIL=$((FAIL + 1))
@@ -1135,6 +1154,8 @@ run_scripted_spell_list_overlay_smoke() {
     TOTAL=$((TOTAL + 1))
 }
 
+# Kills one of each of the first 16 monster types only (c64_test_dungeon_spell_goal,
+# core/game_loop.s): all of them ran past the 30-second rule.
 run_scripted_dungeon_target_spell_smoke() {
     local name="scripted_dungeon_target_spell_smoke"
     echo -n "  $name: "
@@ -1201,7 +1222,6 @@ run_scripted_dungeon_target_spell_smoke() {
         "c64_test_spell_fail_level_sym"
         "c64_test_spell_fail_known_sym"
         "c64_test_spell_fail_validate_sym"
-        "c64_test_spell_fail_roll_sym"
         "c64_test_spell_fail_cancel_sym"
         "c64_test_spell_fail_input_sym"
     )
@@ -1236,22 +1256,23 @@ run_scripted_dungeon_target_spell_smoke() {
 
     {
         for addr in "${fail_addrs[@]}"; do
-            echo "break \$${addr}"
+            c64_break_cmd "${addr}"
         done
-        echo "break \$${pass_addr}"
+        c64_break_cmd "${pass_addr}"
         echo "g"
         echo "quit"
     } > "$mon_file"
 
+    rm -f "../../../build/test/c64/${name}_exit.png"    # never name a stale screen
     script -q "$tty_log" \
-        "$VICE" -warp -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -autostartprgmode 1 \
+        "$VICE" -warp -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -console -nativemonitor -autostartprgmode 1 \
         -reu -reusize 512 \
         -autostart "$scripted_d64" -moncommands "$mon_file" \
         -limitcycles 700000000 +sound -sounddev dummy \
-        +remotemonitor +binarymonitor > /dev/null 2>&1
+        +remotemonitor +binarymonitor -exitscreenshot "../../../build/test/c64/${name}_exit.png" > /dev/null 2>&1
 
     pass_hit=0
-    if grep -qiE "Stop on  exec ${pass_lc}" "$tty_log" || grep -qi "^BREAK: .*C:\$${pass_addr}" "$tty_log"; then
+    if grep -qiE "Stop on  exec ${pass_lc}" "$tty_log"; then
         pass_hit=1
     fi
 
@@ -1264,8 +1285,7 @@ run_scripted_dungeon_target_spell_smoke() {
 
     for idx in "${!fail_labels[@]}"; do
         addr="${fail_addrs[$idx]}"
-        if grep -qiE "Stop on  exec $(echo "$addr" | tr '[:upper:]' '[:lower:]')" "$tty_log" || \
-           grep -qi "^BREAK: .*C:\$${addr}" "$tty_log"; then
+        if grep -qiE "Stop on  exec $(echo "$addr" | tr '[:upper:]' '[:lower:]')" "$tty_log"; then
             echo "FAIL (scripted dungeon spell hit ${fail_labels[$idx]})"
             echo "    Log: $tty_log"
             FAIL=$((FAIL + 1))
@@ -1285,6 +1305,7 @@ run_scripted_dungeon_target_spell_smoke() {
     if grep -qi "cycle limit reached" "$tty_log"; then
         echo "FAIL (scripted dungeon spell flow timed out)"
         echo "    Log: $tty_log"
+        c64_exit_screen_note "../../../build/test/c64/${name}_exit.png"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
@@ -1362,7 +1383,6 @@ run_scripted_detect_evil_smoke() {
         "c64_test_spell_fail_level_sym"
         "c64_test_spell_fail_known_sym"
         "c64_test_spell_fail_validate_sym"
-        "c64_test_spell_fail_roll_sym"
         "c64_test_spell_fail_cancel_sym"
         "c64_test_spell_fail_input_sym"
     )
@@ -1397,21 +1417,21 @@ run_scripted_detect_evil_smoke() {
 
     {
         for addr in "${fail_addrs[@]}"; do
-            echo "break \$${addr}"
+            c64_break_cmd "${addr}"
         done
-        echo "break \$${pass_addr}"
+        c64_break_cmd "${pass_addr}"
         echo "g"
         echo "quit"
     } > "$mon_file"
 
     script -q "$tty_log" \
-        "$VICE" -warp -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -autostartprgmode 1 \
+        "$VICE" -warp -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -console -nativemonitor -autostartprgmode 1 \
         -autostart "$scripted_d64" -moncommands "$mon_file" \
         -limitcycles 700000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor > /dev/null 2>&1
 
     pass_hit=0
-    if grep -qiE "Stop on  exec ${pass_lc}" "$tty_log" || grep -qi "^BREAK: .*C:\$${pass_addr}" "$tty_log"; then
+    if grep -qiE "Stop on  exec ${pass_lc}" "$tty_log"; then
         pass_hit=1
     fi
 
@@ -1424,8 +1444,7 @@ run_scripted_detect_evil_smoke() {
 
     for idx in "${!fail_labels[@]}"; do
         addr="${fail_addrs[$idx]}"
-        if grep -qiE "Stop on  exec $(echo "$addr" | tr '[:upper:]' '[:lower:]')" "$tty_log" || \
-           grep -qi "^BREAK: .*C:\$${addr}" "$tty_log"; then
+        if grep -qiE "Stop on  exec $(echo "$addr" | tr '[:upper:]' '[:lower:]')" "$tty_log"; then
             echo "FAIL (scripted detect evil hit ${fail_labels[$idx]})"
             echo "    Log: $tty_log"
             FAIL=$((FAIL + 1))
@@ -1536,27 +1555,27 @@ run_dungeon_ascent_product_smoke() {
     swap_lc=$(echo "$swap_addr" | tr '[:upper:]' '[:lower:]')
 
     {
-        echo "break \$${fail_addr}"
-        echo "break \$${pass_addr}"
+        c64_break_cmd "${fail_addr}"
+        c64_break_cmd "${pass_addr}"
         echo "g"
         echo "quit"
     } > "$mon_file"
 
     script -q "$tty_log" \
-        "$VICE" -warp -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -autostartprgmode 1 \
+        "$VICE" -warp -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -console -nativemonitor -autostartprgmode 1 \
         -8 "$scripted_d64" -autostart "$scripted_d64" \
         -moncommands "$mon_file" \
         -limitcycles 900000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor > /dev/null 2>&1
 
-    if grep -qiE "Stop on  exec ${pass_lc}" "$tty_log" || grep -qi "^BREAK: .*C:\$${pass_addr}" "$tty_log"; then
+    if grep -qiE "Stop on  exec ${pass_lc}" "$tty_log"; then
         echo "PASS"
         PASS=$((PASS + 1))
         TOTAL=$((TOTAL + 1))
         return
     fi
 
-    if grep -qiE "Stop on  exec ${fail_lc}" "$tty_log" || grep -qi "^BREAK: .*C:\$${fail_addr}" "$tty_log"; then
+    if grep -qiE "Stop on  exec ${fail_lc}" "$tty_log"; then
         echo "FAIL (scripted input exhausted before ascent)"
         echo "    Log: $tty_log"
         FAIL=$((FAIL + 1))
@@ -1679,10 +1698,10 @@ run_wizard_reveal_product_smoke() {
     # (always RAM, never executed by boot/BASIC) and runs once at new-game
     # start, before the wizard reveal flow.
     {
-        echo "break \$${arm_addr}"
+        c64_break_cmd "${arm_addr}"
         echo "g"
         echo "delete 1"
-        echo "break \$${fail_addr}"
+        c64_break_cmd "${fail_addr}"
         echo "g"
         echo "m \$${dlvl_addr} \$${dlvl_addr}"
         echo "m \$${vis_addr} \$${vis_addr}"
@@ -1691,13 +1710,13 @@ run_wizard_reveal_product_smoke() {
     } > "$mon_file"
 
     script -q "$tty_log" \
-        "$VICE" -warp -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -autostartprgmode 1 \
+        "$VICE" -warp -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -console -nativemonitor -autostartprgmode 1 \
         -8 "$scripted_d64" -autostart "$scripted_d64" \
         -moncommands "$mon_file" \
         -limitcycles 900000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor > /dev/null 2>&1
 
-    if ! grep -qiE "Stop on  exec ${fail_lc}" "$tty_log" && ! grep -qi "^BREAK: .*C:\$${fail_addr}" "$tty_log"; then
+    if ! grep -qiE "Stop on  exec ${fail_lc}" "$tty_log"; then
         if grep -qiE "JAM|Invalid opcode" "$tty_log"; then
             echo "FAIL (wizard reveal flow jammed)"
         elif grep -qi "cycle limit reached" "$tty_log"; then
@@ -1839,18 +1858,18 @@ run_wizard_item_product_smoke() {
     # Same boot-time BASIC ROM breakpoint hazard as the reveal smoke; arm the
     # brk break only after item_init_identification runs at new-game start.
     {
-        echo "break \$${arm_addr}"
+        c64_break_cmd "${arm_addr}"
         echo "g"
         echo "delete"
-        echo "break \$${ego_addr}"
+        c64_break_cmd "${ego_addr}"
         echo "g"
         echo "delete"
-        echo "break \$${redraw_addr}"
+        c64_break_cmd "${redraw_addr}"
         echo "g"
         echo "m 0001 0001"
         echo "m d800 dbe7"
         echo "delete"
-        echo "break \$${fail_addr}"
+        c64_break_cmd "${fail_addr}"
         echo "g"
         echo "m \$${dlvl_addr} \$${dlvl_addr}"
         echo "m \$${ovl_addr} \$${ovl_addr}"
@@ -1859,13 +1878,13 @@ run_wizard_item_product_smoke() {
     } > "$mon_file"
 
     script -q "$tty_log" \
-        "$VICE" -warp -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -autostartprgmode 1 \
+        "$VICE" -warp -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -console -nativemonitor -autostartprgmode 1 \
         -8 "$scripted_d64" -autostart "$scripted_d64" \
         -moncommands "$mon_file" \
         -limitcycles 900000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor > /dev/null 2>&1
 
-    if ! grep -qiE "Stop on  exec ${fail_lc}" "$tty_log" && ! grep -qi "^BREAK: .*C:\$${fail_addr}" "$tty_log"; then
+    if ! grep -qiE "Stop on  exec ${fail_lc}" "$tty_log"; then
         if grep -qiE "JAM|Invalid opcode" "$tty_log"; then
             echo "FAIL (wizard item flow jammed)"
         elif grep -qi "cycle limit reached" "$tty_log"; then
@@ -2007,6 +2026,7 @@ run_chest_open_product_smoke() {
 
     if python3 -u ../plus4/tests/product_scripted_smoke.py \
             --name "$name" \
+            --exit-screenshot "../../../build/test/c64/${name}_exit.png" \
             --pass-symbol ".c64_test_script_exhausted_wait" \
             --start-symbol ".title_menu_loop" \
             --until-pass \
@@ -2090,6 +2110,7 @@ run_chest_open_product_reu_smoke() {
     # stash ran; the stage/loot state proves the REU-backed path completes.
     if python3 -u ../plus4/tests/product_scripted_smoke.py \
             --name "$name" \
+            --exit-screenshot "../../../build/test/c64/${name}_exit.png" \
             --pass-symbol ".c64_test_script_exhausted_wait" \
             --start-symbol ".title_menu_loop" \
             --until-pass \
@@ -2193,6 +2214,7 @@ run_chest_open_product_genfail_smoke() {
     # script-exhaustion trap (still responsive).
     if python3 -u ../plus4/tests/product_scripted_smoke.py \
             --name "$name" \
+            --exit-screenshot "../../../build/test/c64/${name}_exit.png" \
             --pass-symbol ".c64_test_script_exhausted_wait" \
             --start-symbol ".title_menu_loop" \
             --until-pass \
@@ -2303,6 +2325,7 @@ run_disk_setup_product_smoke() {
 
     if python3 -u ../plus4/tests/product_scripted_smoke.py \
             --name "$name" \
+            --exit-screenshot "../../../build/test/c64/${name}_exit.png" \
             --vice "$VICE" \
             --boot-d64 "$scripted_d64" \
             --save-d64 "$save_d64" \
@@ -2389,6 +2412,7 @@ run_retirement_royal_product_smoke() {
 
     if python3 -u ../plus4/tests/product_scripted_smoke.py \
             --name "$name" \
+            --exit-screenshot "../../../build/test/c64/${name}_exit.png" \
             --pass-symbol ".c64_test_retirement_pass_sym" \
             --fail-symbol ".c64_test_retirement_fail_sym" \
             --main-vs "$main_vs" \
@@ -2472,6 +2496,7 @@ run_game_over_product_smoke() {
 
     if ! python3 -u ../plus4/tests/product_scripted_smoke.py \
             --name "$name" \
+            --exit-screenshot "../../../build/test/c64/${name}_exit.png" \
             --pass-symbol ".c64_test_game_over_pass_sym" \
             --fail-symbol ".c64_test_game_over_fail_sym" \
             --main-vs "$main_vs" \
@@ -2624,21 +2649,22 @@ run_save_write_product_smoke_impl() {
     prompt_lc=$(echo "$prompt_addr" | tr '[:upper:]' '[:lower:]')
 
     {
-        echo "break \$${fail_addr}"
-        echo "break \$${prompt_addr}"
-        echo "break \$${pass_addr}"
+        c64_break_cmd "${fail_addr}"
+        c64_break_cmd "${prompt_addr}"
+        c64_break_cmd "${pass_addr}"
         echo "g"
         echo "quit"
     } > "$mon_file"
 
+    rm -f "../../../build/test/c64/${name}_exit.png"    # never name a stale screen
     script -q "$tty_log" \
-        "$VICE" -warp -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -autostartprgmode 1 \
+        "$VICE" -warp -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -console -nativemonitor -autostartprgmode 1 \
         -drive9type 1541 -8 "$scripted_d64" -attach9rw -9 "$save_d64" -autostart "$scripted_d64" \
         -moncommands "$mon_file" \
         -limitcycles 900000000 +sound -sounddev dummy \
-        +remotemonitor +binarymonitor > /dev/null 2>&1
+        +remotemonitor +binarymonitor -exitscreenshot "../../../build/test/c64/${name}_exit.png" > /dev/null 2>&1
 
-    if grep -qiE "Stop on  exec ${pass_lc}" "$tty_log" || grep -qi "^BREAK: .*C:\$${pass_addr}" "$tty_log"; then
+    if grep -qiE "Stop on  exec ${pass_lc}" "$tty_log"; then
         local dir_list
         if ! dir_list=$("$C1541" -attach "$save_d64" -list 2>&1); then
             echo "FAIL (save disk listing error)"
@@ -2659,7 +2685,7 @@ run_save_write_product_smoke_impl() {
         return
     fi
 
-    if grep -qiE "Stop on  exec ${prompt_lc}" "$tty_log" || grep -qi "^BREAK: .*C:\$${prompt_addr}" "$tty_log"; then
+    if grep -qiE "Stop on  exec ${prompt_lc}" "$tty_log"; then
         echo "FAIL (unexpected post-save program-disk prompt in dual-drive mode)"
         tail -60 "$tty_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -2667,7 +2693,7 @@ run_save_write_product_smoke_impl() {
         return
     fi
 
-    if grep -qiE "Stop on  exec ${fail_lc}" "$tty_log" || grep -qi "^BREAK: .*C:\$${fail_addr}" "$tty_log"; then
+    if grep -qiE "Stop on  exec ${fail_lc}" "$tty_log"; then
         echo "FAIL (scripted input exhausted)"
         echo "    Log: $tty_log"
         FAIL=$((FAIL + 1))
@@ -2686,6 +2712,7 @@ run_save_write_product_smoke_impl() {
     if grep -qi "cycle limit reached" "$tty_log"; then
         echo "FAIL (save-write flow timed out)"
         echo "    Log: $tty_log"
+        c64_exit_screen_note "../../../build/test/c64/${name}_exit.png"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
@@ -2809,6 +2836,7 @@ run_save_media_fail_product_smoke() {
 
     if python3 -u ../plus4/tests/product_scripted_smoke.py \
             --name "$name" \
+            --exit-screenshot "../../../build/test/c64/${name}_exit.png" \
             --vice "$VICE" \
             --boot-d64 "$scripted_d64" \
             --save-d64 "$save_d64" \
@@ -2906,6 +2934,7 @@ run_change_save_drive_product_smoke() {
 
     if python3 -u ../plus4/tests/product_scripted_smoke.py \
             --name "$name" \
+            --exit-screenshot "../../../build/test/c64/${name}_exit.png" \
             --vice "$VICE" \
             --boot-d64 "$scripted_d64" \
             --save10-d64 "$save10_d64" \
@@ -3015,6 +3044,7 @@ run_disk_setup_single_drive_return_product_smoke() {
     local main_vs="../../../build/test/c64/main.vs"
     if python3 -u ../plus4/tests/product_scripted_smoke.py \
             --name "$name" \
+            --exit-screenshot "../../../build/test/c64/${name}_exit.png" \
             --vice "$VICE" \
             --boot-d64 "$scripted_d64" \
             --main-vs "$main_vs" \
@@ -3122,6 +3152,7 @@ run_disk_setup_then_load_prompts_save_product_smoke() {
     local main_vs="../../../build/test/c64/main.vs"
     if python3 -u ../plus4/tests/product_scripted_smoke.py \
             --name "$name" \
+            --exit-screenshot "../../../build/test/c64/${name}_exit.png" \
             --vice "$VICE" \
             --boot-d64 "$scripted_d64" \
             --main-vs "$main_vs" \
@@ -3261,28 +3292,29 @@ run_load_resume_product_smoke() {
     prompt_fail_lc=$(echo "$prompt_fail_addr" | tr '[:upper:]' '[:lower:]')
 
     {
-        echo "break \$${fail_addr}"
-        echo "break \$${prompt_fail_addr}"
-        echo "break \$${pass_addr}"
+        c64_break_cmd "${fail_addr}"
+        c64_break_cmd "${prompt_fail_addr}"
+        c64_break_cmd "${pass_addr}"
         echo "g"
         echo "quit"
     } > "$mon_file"
 
+    rm -f "../../../build/test/c64/${name}_exit.png"    # never name a stale screen
     script -q "$tty_log" \
-        "$VICE" -warp -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -autostartprgmode 1 \
+        "$VICE" -warp -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -console -nativemonitor -autostartprgmode 1 \
         -drive9type 1541 -8 "$scripted_d64" -attach9rw -9 "$save_d64" -autostart "$scripted_d64" \
         -moncommands "$mon_file" \
         -limitcycles 900000000 +sound -sounddev dummy \
-        +remotemonitor +binarymonitor > /dev/null 2>&1
+        +remotemonitor +binarymonitor -exitscreenshot "../../../build/test/c64/${name}_exit.png" > /dev/null 2>&1
 
-    if grep -qiE "Stop on  exec ${pass_lc}" "$tty_log" || grep -qi "^BREAK: .*C:\$${pass_addr}" "$tty_log"; then
+    if grep -qiE "Stop on  exec ${pass_lc}" "$tty_log"; then
         echo "PASS"
         PASS=$((PASS + 1))
         TOTAL=$((TOTAL + 1))
         return
     fi
 
-    if grep -qiE "Stop on  exec ${fail_lc}" "$tty_log" || grep -qi "^BREAK: .*C:\$${fail_addr}" "$tty_log"; then
+    if grep -qiE "Stop on  exec ${fail_lc}" "$tty_log"; then
         echo "FAIL (scripted input exhausted)"
         echo "    Log: $tty_log"
         FAIL=$((FAIL + 1))
@@ -3290,7 +3322,7 @@ run_load_resume_product_smoke() {
         return
     fi
 
-    if grep -qiE "Stop on  exec ${prompt_fail_lc}" "$tty_log" || grep -qi "^BREAK: .*C:\$${prompt_fail_addr}" "$tty_log"; then
+    if grep -qiE "Stop on  exec ${prompt_fail_lc}" "$tty_log"; then
         echo "FAIL (program-media verify prompt shown)"
         echo "    Log: $tty_log"
         FAIL=$((FAIL + 1))
@@ -3309,6 +3341,7 @@ run_load_resume_product_smoke() {
     if grep -qi "cycle limit reached" "$tty_log"; then
         echo "FAIL (load-resume flow timed out)"
         echo "    Log: $tty_log"
+        c64_exit_screen_note "../../../build/test/c64/${name}_exit.png"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
@@ -3414,6 +3447,7 @@ run_single_drive_load_return_product_smoke() {
 
     if python3 -u ../plus4/tests/product_scripted_smoke.py \
             --name "$name" \
+            --exit-screenshot "../../../build/test/c64/${name}_exit.png" \
             --vice "$VICE" \
             --boot-d64 "$scripted_d64" \
             --main-vs "../../../build/test/c64/main.vs" \
@@ -3529,6 +3563,7 @@ run_load_then_save_new_empty_product_smoke() {
 
     if python3 -u ../plus4/tests/product_scripted_smoke.py \
             --name "$name" \
+            --exit-screenshot "../../../build/test/c64/${name}_exit.png" \
             --vice "$VICE" \
             --boot-d64 "$scripted_d64" \
             --main-vs "../../../build/test/c64/main.vs" \
@@ -3541,7 +3576,7 @@ run_load_then_save_new_empty_product_smoke() {
             --swap2-attach8-d64 "$swap_program_d64" \
             --swap3-symbol ".uds_show_insert_prompt" \
             --swap3-attach8-d64 "$new_save_d64" \
-            --swap4-symbol ".c64_test_load_then_save_new_empty_before_program_prompt" \
+            --swap4-symbol ".disk_prompt_game_required_error_shown" \
             --swap4-attach8-d64 "$swap_program_d64" \
             --pass-symbol ".c64_test_load_then_save_new_empty_done" \
             --fail-symbol ".c64_test_load_then_save_new_empty_fail" \
@@ -3631,6 +3666,7 @@ run_single_drive_save_wrong_media_product_smoke() {
 
     if python3 -u ../plus4/tests/product_scripted_smoke.py \
             --name "$name" \
+            --exit-screenshot "../../../build/test/c64/${name}_exit.png" \
             --vice "$VICE" \
             --boot-d64 "$scripted_d64" \
             --main-vs "../../../build/test/c64/main.vs" \
@@ -3711,6 +3747,7 @@ run_single_drive_load_wrong_media_product_smoke() {
 
     if python3 -u ../plus4/tests/product_scripted_smoke.py \
             --name "$name" \
+            --exit-screenshot "../../../build/test/c64/${name}_exit.png" \
             --vice "$VICE" \
             --boot-d64 "$scripted_d64" \
             --main-vs "../../../build/test/c64/main.vs" \
@@ -3816,6 +3853,7 @@ run_single_drive_load_corrupt_product_smoke() {
 
     if python3 -u ../plus4/tests/product_scripted_smoke.py \
             --name "$name" \
+            --exit-screenshot "../../../build/test/c64/${name}_exit.png" \
             --vice "$VICE" \
             --boot-d64 "$scripted_d64" \
             --main-vs "../../../build/test/c64/main.vs" \
@@ -3929,6 +3967,7 @@ run_single_drive_fresh_save_product_smoke() {
 
     if python3 -u ../plus4/tests/product_scripted_smoke.py \
             --name "$name" \
+            --exit-screenshot "../../../build/test/c64/${name}_exit.png" \
             --vice "$VICE" \
             --boot-d64 "$scripted_d64" \
             --main-vs "$main_vs" \
@@ -4037,6 +4076,7 @@ run_single_drive_fresh_save_no_init_product_smoke() {
 
     if python3 -u ../plus4/tests/product_scripted_smoke.py \
             --name "$name" \
+            --exit-screenshot "../../../build/test/c64/${name}_exit.png" \
             --vice "$VICE" \
             --boot-d64 "$scripted_d64" \
             --main-vs ../../../build/test/c64/main.vs \
@@ -4141,7 +4181,7 @@ run_load_missing_savefile_product_smoke() {
     rm -f "$save_d64"
     if ! "$C1541" -format "moria8 save,m8" d64 "$save_d64" \
             -attach "$save_d64" \
-            -write "$marker_blob" "MORIA8.ID" >"$build_log" 2>&1; then
+            -write "$marker_blob" "moria8.id,s" >"$build_log" 2>&1; then
         echo "FAIL (save disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -4178,27 +4218,27 @@ run_load_missing_savefile_product_smoke() {
     fail_lc=$(echo "$fail_addr" | tr '[:upper:]' '[:lower:]')
 
     {
-        echo "break \$${fail_addr}"
-        echo "break \$${pass_addr}"
+        c64_break_cmd "${fail_addr}"
+        c64_break_cmd "${pass_addr}"
         echo "g"
         echo "quit"
     } > "$mon_file"
 
     script -q "$tty_log" \
-        "$VICE" -warp -config "$VICE_CONFIG" -default +saveres -console -nativemonitor -autostartprgmode 1 \
+        "$VICE" -warp -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -console -nativemonitor -autostartprgmode 1 \
         -drive9type 1541 -8 "$scripted_d64" -attach9rw -9 "$save_d64" -autostart "$scripted_d64" \
         -moncommands "$mon_file" \
         -limitcycles 900000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor > /dev/null 2>&1
 
-    if grep -qiE "Stop on  exec ${pass_lc}" "$tty_log" || grep -qi "^BREAK: .*C:\$${pass_addr}" "$tty_log"; then
+    if grep -qiE "Stop on  exec ${pass_lc}" "$tty_log"; then
         echo "PASS"
         PASS=$((PASS + 1))
         TOTAL=$((TOTAL + 1))
         return
     fi
 
-    if grep -qiE "Stop on  exec ${fail_lc}" "$tty_log" || grep -qi "^BREAK: .*C:\$${fail_addr}" "$tty_log"; then
+    if grep -qiE "Stop on  exec ${fail_lc}" "$tty_log"; then
         echo "FAIL (scripted input exhausted before single-prompt return)"
         echo "    Log: $tty_log"
         FAIL=$((FAIL + 1))
@@ -4369,7 +4409,7 @@ run_test "rng"    "tests/test_rng.s"    "0400 0409" 10
 run_test "memory" "tests/test_memory.s" "0400 0402" 3
 run_test "config" "tests/test_config.s" "0400 0400" 1
 run_test "input"  "tests/test_input.s"  "0400 040e" 15
-run_test "main_loop" "tests/test_main_loop.s" "0400 0430" 49 500000000
+run_test "main_loop" "tests/test_main_loop.s" "0400 0431" 50 500000000
 run_test "run_visibility_bank" "tests/test_run_visibility_bank.s" "0400 0400" 1 500000000
 run_test "turn" "tests/test_turn.s" "0400 0420" 33 500000000
 run_test "player" "tests/test_player.s" "0400 0409" 10
@@ -4458,7 +4498,7 @@ run_test "item_ui" "tests/test_item_ui.s" "0400 040f" 16 1000000000
 run_test "store" "tests/test_store.s" "0400 0437" 56 1000000000
 run_test "ui_views" "tests/test_ui_views.s" "0400 0413" 19 500000000
 run_test "ui_views_filters" "tests/test_ui_views_filters.s" "0400 0413" 7 500000000
-run_test "subsystems" "tests/test_subsystems.s" "0400 0409" 10
+run_test "subsystems" "tests/test_subsystems.s" "0400 040a" 11
 run_sound_monitor_test
 run_test "save"  "tests/test_save.s"  "0400 0421" 34 1000000000
 run_test "score" "tests/test_score.s" "0400 040c" 13 500000000

@@ -1,10 +1,11 @@
-"""Hand-listed symbol and offset table for the C64 build (§6.2).
+"""Hand-listed symbol and offset table for a build (§6.2).
 
 Addresses resolve from the build's KickAss ``.vs`` file. ``.const`` values are
 not exported to the ``.vs``, so each one is listed with its expected value and
 checked against the single-line definition in its source file. ``check()``
 fails when a name disappears or a value no longer matches; a PR that changes a
-listed struct updates this table.
+listed struct updates this table. Each port (ports.py) adds its own rows:
+its screen, map and layout constants, and its input labels.
 """
 
 from __future__ import annotations
@@ -14,6 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .launch import C64_VS, ROOT
+from .ports import C64, Port
 
 # Labels resolved from main.vs, with the file that defines them.
 LABELS: dict[str, str] = {
@@ -37,8 +39,6 @@ LABELS: dict[str, str] = {
     "store_door_x": "core/dungeon_data.s",
     "store_door_y": "core/dungeon_data.s",
     "current_overlay": "platforms/commodore/common/overlay.s",
-    "input_get_key": "platforms/commodore/c64/input.s",
-    "input_get_command": "platforms/commodore/c64/input.s",
     "msg_show_more": "core/ui_messages.s",
     "get_direction_target": "core/dungeon_features.s",
     "rng_seed": "core/rng.s",
@@ -48,17 +48,6 @@ LABELS: dict[str, str] = {
 
 # (defining file, expected value)
 CONSTS: dict[str, tuple[str, int]] = {
-    "SCREEN_RAM": ("platforms/commodore/c64/memory.s", 0x0400),
-    "COLOR_RAM": ("platforms/commodore/c64/memory.s", 0xD800),
-    "MAP_BASE": ("platforms/commodore/c64/memory.s", 0xC000),
-    "hal_layout_map_cols": ("platforms/commodore/c64/hal/layout.s", 80),
-    "hal_layout_map_rows": ("platforms/commodore/c64/hal/layout.s", 48),
-    "hal_layout_viewport_x": ("platforms/commodore/c64/hal/layout.s", 1),
-    "hal_layout_viewport_y": ("platforms/commodore/c64/hal/layout.s", 2),
-    "hal_layout_viewport_w": ("platforms/commodore/c64/hal/layout.s", 38),
-    "hal_layout_viewport_h": ("platforms/commodore/c64/hal/layout.s", 19),
-    "hal_layout_status_row": ("platforms/commodore/c64/hal/layout.s", 21),
-    "KBDBUF_COUNT": ("platforms/commodore/c64/input.s", 0xC6),
     "GAME_FLAG_OVER": ("core/zeropage.s", 0x01),
     "STORE_COUNT": ("core/dungeon_data.s", 8),
     "GAME_FLAG_WIZARD": ("core/zeropage.s", 0x02),
@@ -74,6 +63,11 @@ CONSTS: dict[str, tuple[str, int]] = {
     "PL_MAP_X": ("core/player.s", 49),
     "PL_MAP_Y": ("core/player.s", 50),
     "PL_MAX_DLVL": ("core/player.s", 56),
+    "PL_MANA": ("core/player.s", 37),
+    "PL_MAX_MANA": ("core/player.s", 38),
+    "PL_AC": ("core/player.s", 39),
+    "PL_FOOD_LO": ("core/player.s", 51),
+    "PL_LIGHT_RAD": ("core/player.s", 55),
     "PL_STRUCT_SIZE": ("core/player.s", 111),
     "MAX_MONSTERS": ("core/monster.s", 32),
     "MAX_DUNGEON_CREATURES": ("core/monster.s", 57),
@@ -100,7 +94,12 @@ CONSTS: dict[str, tuple[str, int]] = {
 }
 
 # KERNAL keyboard buffer (fixed by the C64 KERNAL, not the game).
-KERNAL_KEYD = 0x0277
+KERNAL_KEYD = C64.kernal["KERNAL_KEYD"]
+
+
+def tables(port: Port = C64) -> tuple[dict[str, str], dict[str, tuple[str, int]]]:
+    """The labels and constants checked for ``port``: shared rows and its own."""
+    return {**LABELS, **port.labels}, {**CONSTS, **port.consts}
 
 
 def parse_value(text: str) -> int:
@@ -112,10 +111,20 @@ def parse_value(text: str) -> int:
     return int(text, 10)
 
 
+SYM_LABEL = re.compile(r"^\s*\.label\s+(\w+)\s*=\s*\$([0-9A-Fa-f]+)")
+
+
 def parse_vs(path: Path) -> dict[str, list[int]]:
-    """Multimap name -> addresses (overlay symbols can share addresses)."""
+    """Multimap name -> addresses (overlay symbols can share addresses), from
+    a VICE ``.vs`` file or, for a port that keeps none (the X16), KickAss's
+    ``.sym`` (``.label name=$addr``)."""
     symbols: dict[str, list[int]] = {}
     for line in path.read_text(encoding="utf-8").splitlines():
+        if path.suffix == ".sym":
+            match = SYM_LABEL.match(line)
+            if match:
+                symbols.setdefault(match.group(1), []).append(int(match.group(2), 16))
+            continue
         parts = line.split()
         if len(parts) != 3 or parts[0] != "al":
             continue
@@ -157,17 +166,18 @@ def const_value(root: Path, file: str, name: str) -> int | None:
     return None
 
 
-def check(vs_path: Path = C64_VS, root: Path = ROOT) -> list[str]:
+def check(vs_path: Path = C64_VS, root: Path = ROOT, port: Port = C64) -> list[str]:
     """Return every mismatch between this table and the build/sources."""
     errors: list[str] = []
     symbols = parse_vs(vs_path)
-    for name, file in LABELS.items():
+    labels, consts = tables(port)
+    for name, file in labels.items():
         addrs = symbols.get(name)
         if not addrs:
             errors.append(f"label {name} ({file}) missing from {vs_path.name}")
         elif len(set(addrs)) > 1:
             errors.append(f"label {name} is ambiguous in {vs_path.name}: {sorted(set(addrs))}")
-    for name, (file, expected) in CONSTS.items():
+    for name, (file, expected) in consts.items():
         actual = const_value(root, file, name)
         if actual is None:
             errors.append(f".const {name} not found as a single-line literal in {file}")
@@ -176,11 +186,12 @@ def check(vs_path: Path = C64_VS, root: Path = ROOT) -> list[str]:
     return errors
 
 
-def load(vs_path: Path = C64_VS, root: Path = ROOT) -> Abi:
-    errors = check(vs_path, root)
+def load(vs_path: Path = C64_VS, root: Path = ROOT, port: Port = C64) -> Abi:
+    errors = check(vs_path, root, port)
     if errors:
         raise RuntimeError("playtest ABI table is stale:\n  " + "\n  ".join(errors))
     symbols = parse_vs(vs_path)
-    labels = {name: symbols[name][0] for name in LABELS}
-    consts = {name: value for name, (_, value) in CONSTS.items()}
+    label_files, const_files = tables(port)
+    labels = {name: symbols[name][0] for name in label_files}
+    consts = {**{name: value for name, (_, value) in const_files.items()}, **port.kernal}
     return Abi(labels, consts, symbols)

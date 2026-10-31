@@ -487,6 +487,7 @@ screen_put_string:
     bcc !attr_loop-
 
 !sps_done:
+screen_put_string_irq_restore:  // end of the IRQ-masked body
     plp                     // Restore caller IRQ state
 
     lda sps_str_len

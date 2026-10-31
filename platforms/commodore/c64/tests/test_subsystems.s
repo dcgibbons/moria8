@@ -6,7 +6,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #9
+    ldx #10
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -79,6 +79,8 @@ sb_tier_invalidate_calls: .byte 0
 sb_load_arg_a: .byte 0
 sb_load_arg_x: .byte 0
 sb_load_arg_y: .byte 0
+sb_load_calls: .byte 0
+sb_load_fail_left: .byte $ff    // loads to fail before one succeeds; $ff = all
 tier_invalidate_state:
     inc sb_tier_invalidate_calls
     rts
@@ -87,7 +89,17 @@ kernal_load:
     sta sb_load_arg_a
     stx sb_load_arg_x
     sty sb_load_arg_y
+    inc sb_load_calls
+    lda sb_load_fail_left
+    beq !kl_ok+
+    cmp #$ff
+    beq !kl_fail+
+    dec sb_load_fail_left
+!kl_fail:
     sec
+    rts
+!kl_ok:
+    clc
     rts
 
 kernal_load_safe:
@@ -106,7 +118,8 @@ kernal_load_safe:
 #import "../../common/overlay.s"
 #import "../../../../core/string_bank.s"
 
-tc_results: .fill 10, $ff
+tc_results: .fill 11, $ff
+retries_before: .byte 0
 
 test_start:
     sei
@@ -114,7 +127,7 @@ test_start:
     ldx #$ff
     txs
 
-    ldx #9
+    ldx #10
     lda #$ff
 !clr:
     sta tc_results,x
@@ -131,6 +144,7 @@ test_start:
     jsr test_bank_load_recall_error_path
     jsr test_overlay_skip_loaded
     jsr test_overlay_disk_fail
+    jsr test_overlay_disk_retry
 
     jmp test_exit_trampoline
 
@@ -308,12 +322,21 @@ test_bank_load_recall_error_path:
     sta sb_load_arg_a
     sta sb_load_arg_x
     sta sb_load_arg_y
+    sta sb_load_calls
+    lda asset_load_retries
+    sta retries_before
     lda $dd00
     and #%11111100
     sta $dd00
 
     jsr bank_load_recall
     bcc !fail+
+    lda sb_load_calls           // every attempt made before failing
+    cmp #ASSET_LOAD_ATTEMPTS
+    bne !fail+
+    jsr retries_since_before
+    cmp #ASSET_LOAD_ATTEMPTS - 1
+    bne !fail+
     lda current_overlay
     cmp #OVL_NONE
     bne !fail+
@@ -371,6 +394,8 @@ test_overlay_disk_fail:
     sta sb_tier_invalidate_calls
     sta reu_overlays_stashed
 
+    sta sb_load_calls
+
     lda #OVL_DEATH
     jsr overlay_load
     bcc !fail+
@@ -379,12 +404,57 @@ test_overlay_disk_fail:
     bne !fail+
     lda sb_tier_invalidate_calls
     bne !fail+
+    lda sb_load_calls
+    cmp #ASSET_LOAD_ATTEMPTS
+    bne !fail+
     lda #$01
     bne !store+
 !fail:
     lda #$00
 !store:
     sta tc_results + 9
+    rts
+
+// One failed load (the Plus/4 drive missing a handshake) is repeated, and
+// the overlay is loaded: no restart, no skipped action.
+test_overlay_disk_retry:
+    lda #OVL_STARTUP
+    sta current_overlay
+    lda #0
+    sta reu_overlays_stashed
+    sta sb_load_calls
+    lda #1
+    sta sb_load_fail_left
+    lda asset_load_retries
+    sta retries_before
+
+    lda #OVL_DEATH
+    jsr overlay_load
+    bcs !fail+
+    lda current_overlay
+    cmp #OVL_DEATH
+    bne !fail+
+    lda sb_load_calls
+    cmp #2
+    bne !fail+
+    jsr retries_since_before
+    cmp #1
+    bne !fail+
+    lda #$01
+    bne !store+
+!fail:
+    lda #$00
+!store:
+    sta tc_results + 10
+    lda #$ff
+    sta sb_load_fail_left
+    rts
+
+// Output: A = asset_load_retries - retries_before
+retries_since_before:
+    lda asset_load_retries
+    sec
+    sbc retries_before
     rts
 
 // assert_decode_literal
@@ -483,6 +553,6 @@ test_bank_image:
     .byte 7, 0
     .byte 0, 0
     .byte 8, 0
-    .byte $cf, $f0, $1e, $24, $c6, $ce, $30, $c0
-    .byte $ce, $7c, $df, $77, $8e, $2f, $39, $60, $52, $b8, $4f, $56, $c4, $3b, $0c, $98, $e3, $0c
+    .byte $97, $60, $3c, $49, $8d, $9c, $b1, $80
+    .byte $ce, $6e, $5f, $77, $8e, $2f, $38, $e0, $51, $b8, $4f, $52, $c8, $32, $b4, $55, $e5, $8c
 .const TEST_BANK_IMAGE_LEN = * - test_bank_image

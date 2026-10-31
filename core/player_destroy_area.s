@@ -13,10 +13,9 @@
 // monster_remove (no XP, no winner flag, matching upstream delete_monster).
 // Tile FLAG_LIT and room_lit[] for intersecting rooms are cleared
 // (upstream perma_lit_room=false, room-granular in Moria8). Stairs are
-// destroyed like any other tile; pmx_mark_stairs_at already tile-validates
-// the stored stairs_* coords, so no sentinel handling is needed. In town
-// (zp_player_dlvl == 0) only the message and blindness apply. Blindness is
-// additive with an 8-bit 255 clamp (upstream += 10 + randint(10)).
+// destroyed like any other tile. In town (zp_player_dlvl == 0) only the
+// message and blindness apply. Blindness is additive with an 8-bit 255 clamp
+// (upstream += 10 + randint(10)).
 //
 // Placed per platform in an overlay with room (see platform main.s);
 // callers reach it through resident tramp_eff_destroy_area or directly via

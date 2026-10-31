@@ -126,12 +126,35 @@ monster_find_at:
     clc
     rts
 
+// Slot 0 is the test monster; every other slot is empty. render_viewport
+// scans the table by slot, so the entry is filled here, not only by
+// monster_find_at.
 monster_get_ptr:
+    cpx #0
+    bne !empty+
+    lda test_mon_active
+    beq !empty+
+    lda test_mon_type
+    sta monster_stub_entry + MX_TYPE
+    lda test_mon_flags
+    sta monster_stub_entry + MX_FLAGS
+    lda test_mon_x
+    sta monster_stub_entry + MX_X
+    lda test_mon_y
+    sta monster_stub_entry + MX_Y
     lda #<monster_stub_entry
     sta zp_ptr0
     lda #>monster_stub_entry
     sta zp_ptr0_hi
     rts
+!empty:
+    lda #<monster_empty_entry
+    sta zp_ptr0
+    lda #>monster_empty_entry
+    sta zp_ptr0_hi
+    rts
+monster_empty_entry:
+    .fill 12, EMPTY_SLOT
 
 glyph_find_at:
     ldx test_glyph_active
@@ -172,6 +195,7 @@ test_copy_col:     .byte 0
 test_src_row:      .byte 0
 
 test_start:
+    jsr init_common_mmu_helpers   // MapRead/MapWrite go through common RAM ($0C00)
     sei
     cld
     ldx #$ff
@@ -498,7 +522,12 @@ test_render_single_tile_monster_override:
     sta test_mon_color_vic
     ldx #21
     ldy #20
-    lda #((TILE_FLOOR << 4) | FLAG_VISITED | FLAG_LIT | FLAG_HAS_ITEM)
+    lda #MF_VISIBLE
+    sta test_mon_flags
+    // A visible creature on the square draws over its item. This set no
+    // FLAG_OCCUPIED or MF_VISIBLE and expected a blank square, which no
+    // render gives: the item showed, as in the item_override case above.
+    lda #((TILE_FLOOR << 4) | FLAG_VISITED | FLAG_LIT | FLAG_HAS_ITEM | FLAG_OCCUPIED)
     jsr map_set_tile
     lda #21
     sta zp_temp0
@@ -509,9 +538,9 @@ test_render_single_tile_monster_override:
     sta test_row_rel
     lda #11
     sta test_col_rel
-    lda #SC_SPACE
+    lda cr_display + 1
     sta test_expected_char
-    lda #VDC_BLACK
+    lda vic_to_vdc_color + COL_RED
     sta test_expected_attr
     jsr assert_vdc_cell
     rts
@@ -896,10 +925,12 @@ test_h_scroll_left_local_area_repairs_stale_monster:
     lda #1
     sta zp_light_radius
 
+    // The monster stands one tile past the player (who is drawn as '@'),
+    // inside the box render_local_area repairs.
     lda #1
     sta test_mon_active
     sta test_mon_type
-    lda #21
+    lda #22
     sta test_mon_x
     lda #20
     sta test_mon_y
@@ -907,7 +938,7 @@ test_h_scroll_left_local_area_repairs_stale_monster:
     sta test_mon_flags
     lda #COL_RED
     sta test_mon_color_vic
-    ldx #21
+    ldx #22
     ldy #20
     lda #((TILE_FLOOR << 4) | FLAG_VISITED | FLAG_LIT | FLAG_OCCUPIED)
     jsr map_set_tile
@@ -926,6 +957,7 @@ test_h_scroll_left_local_area_repairs_stale_monster:
 !scrolled:
     lda #10
     sta test_row_rel
+    lda #11
     sta test_col_rel
     lda cr_display + 1
     sta test_expected_char
@@ -936,6 +968,7 @@ test_h_scroll_left_local_area_repairs_stale_monster:
     jsr render_local_area
     lda #10
     sta test_row_rel
+    lda #11
     sta test_col_rel
     lda tile_screen_codes + TILE_FLOOR
     sta test_expected_char
@@ -1030,16 +1063,18 @@ test_v_scroll_up_local_area_repairs_stale_monster:
     lda #1
     sta test_mon_active
     sta test_mon_type
+    // The monster stands one tile past the player (who is drawn as '@'),
+    // inside the box render_local_area repairs.
     lda #20
     sta test_mon_x
-    lda #21
+    lda #22
     sta test_mon_y
     lda #MF_VISIBLE
     sta test_mon_flags
     lda #COL_RED
     sta test_mon_color_vic
     ldx #20
-    ldy #21
+    ldy #22
     lda #((TILE_FLOOR << 4) | FLAG_VISITED | FLAG_LIT | FLAG_OCCUPIED)
     jsr map_set_tile
 
@@ -1055,8 +1090,9 @@ test_v_scroll_up_local_area_repairs_stale_monster:
     bcs !scrolled+
     jmp test_fail
 !scrolled:
-    lda #10
+    lda #11
     sta test_row_rel
+    lda #10
     sta test_col_rel
     lda cr_display + 1
     sta test_expected_char
@@ -1065,8 +1101,9 @@ test_v_scroll_up_local_area_repairs_stale_monster:
     jsr assert_vdc_cell
 
     jsr render_local_area
-    lda #10
+    lda #11
     sta test_row_rel
+    lda #10
     sta test_col_rel
     lda tile_screen_codes + TILE_FLOOR
     sta test_expected_char

@@ -67,7 +67,8 @@ If the quote does not name the action, stop and ask.
    not try a sandboxed run first. See Memory And Verification Details for the
    full escalation list. Exception: AI playtest *sessions* and measurement
    runs (`make playtest-session`, `make playtest-qualify`, `make
-   playtest-regress`, `make playtest-m0-report`) are long-running operational
+   playtest-regress`, `make playtest-m0-report`, `make playtest-disk`) and the opt-in full C128
+   generation soak (`make test128-soak-long`) are long-running operational
    jobs, not runtime verification. They have no overall time limit and run until their goal is
    reached. Every emulator command and resume inside a session has a
    60-second response timeout, after which the emulator process is killed and
@@ -193,12 +194,12 @@ VICE/MAME/`x16emu` escalation list (these launch an emulator and need
 unsandboxed localhost access): commands that invoke `x64sc`, `x128`, `xplus4`,
 or `x16emu`; `make test64`; `make testplus4`; `make testplus4-runtime`;
 `make testapple2-runtime`; `make test128-fast`; `make test128-fast-smoke`;
-`make test128`; `make testcx16`; `make testcx16-runtime`;
+`make test128`; `make test128-soak-long`; `make testcx16`; `make testcx16-runtime`;
 `make testatari8-runtime`; `make testatari8-fast-smoke`;
 `make testbbcmaster-runtime`; `make testbbcmaster-fast-smoke`;
 `make playtest-smoke`; `make playtest-session`; `make playtest-repro`;
 `make playtest-m0-report`; `make playtest-qualify`; `make playtest-regress`;
-`make playtest-selftest`; direct `harness128.py`, `harness128_batch.py`,
+`make playtest-disk`; `make playtest-selftest`; direct `harness128.py`, `harness128_batch.py`,
 `harnessplus4.py`, or `harness_smoke.py` runs; and filtered runtime harness
 targets. Static/build-only checks stay sandboxed: `make build`, `make
 check-hal-boundaries`, Python static checkers, `git diff`, and similar commands
@@ -259,6 +260,21 @@ Operational rules:
   if no command was given. Loop until verified. Stop and ask the user when a
   gate action is needed, infrastructure is broken, or the 30-second timeout cap
   blocks verification (see Non-Negotiable Rules).
+
+## Code Review Personalities
+
+When asked for a multi-agent code review with "the standard personalities",
+spawn one reviewer for each, review-only (no edits), each reporting findings
+with file:line, severity and a concrete failure scenario:
+
+1. **Grumpy staff engineer, tired of AI slop.** Rejects unneeded code,
+   speculative abstraction, comment noise, untested claims, and changes that
+   go past the request.
+2. **Worried engineering manager.** Weighs reliability, maintainability and
+   cost: what breaks next, who can maintain it, what the gates and runtime
+   cost, and what is left unverified.
+3. **6502 performance guru.** Cycle counts, byte budgets, zero-page and stack
+   use, banking/MMU overhead, page-crossing penalties, and memory layout.
 
 ## Finishing A Task
 

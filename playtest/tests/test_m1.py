@@ -4,7 +4,7 @@ import unittest
 
 from moria_playtest import abi as abimod, knowledge
 from moria_playtest.auditor import Auditor
-from moria_playtest.brain import (KEY_BASH, STUCK_STEPS, FOOD_MAX, FOOD_PER_VISIT, KEY_AUTOREST, KEY_REFUEL, KEY_RETURN, KEY_SEARCH, KEY_WEAR,
+from moria_playtest.brain import (HUNT_HP, KEY_BASH, STUCK_STEPS, FOOD_MAX, FOOD_PER_VISIT, KEY_AUTOREST, KEY_REFUEL, KEY_RETURN, KEY_SEARCH, KEY_WEAR,
                                   LIGHT_RESERVE, DISARM_TRIES, KEY_DISARM, KEY_THROW, REFUEL_AT, RESTOCK_HOPS,
                                   Brain)
 from moria_playtest.game import KEY_RUNSTOP, KEY_SPACE, Mode, Observation
@@ -30,8 +30,10 @@ def command_obs(pos=(10, 5), hp=21, mhp=21, sp=0xF2, view=(0, 0), rows=None,
     table = bytearray([0xFF] * 384)
     for slot, (mx, my) in enumerate(monsters):
         table[slot * 12:slot * 12 + 3] = bytes([mx, my, 1])
-    # Search mode on, the bot's state while moving about (M5b).
-    screen_rows = {21: f"bot Half-Troll  Search*     LV:1  DL:{dlvl}",
+    # Search mode on, the bot's state while moving about (M5b); off when hurt,
+    # as the bot keeps it (M6).
+    search = "Search*" if hp >= HUNT_HP * mhp else "       "
+    screen_rows = {21: f"bot Half-Troll  {search}     LV:1  DL:{dlvl}",
                    23: f"HP:{hp}/{mhp}  MP:0/0   AC:4  AU:277   Full"}
     col, row = pos[0] - view[0] + 1, pos[1] - view[1] + 2
     screen_rows[row] = " " * col + "@"
@@ -1515,6 +1517,33 @@ class OscillationTest(unittest.TestCase):
         self.assertIn((5, 5), brain.level.bumped)
         self.assertNotEqual(decision.key, DIRS[(-1, 0)])
 
+    def test_a_longer_circuit_is_blocked_and_rechosen(self) -> None:
+        """M6, C128 seed 1002: an 8-square lap toward the up stairs, walked
+        2,300 times until the Warrior starved."""
+        from moria_playtest.brain import Decision
+        brain = Brain(GOALS["reach_dl2"])
+        lap = [(11, 6), (11, 7), (11, 8), (12, 9), (12, 10), (12, 9), (12, 8), (11, 7)]   # the lap, shifted
+        brain.track(command_obs(pos=lap[0], dlvl=2, clvl=3), town_view(lap[0], (30, 15), dlvl=2))
+        for i in range(4 * len(lap)):
+            here, there = lap[i % len(lap)], lap[(i + 1) % len(lap)]
+            on = Decision(DIRS[(there[0] - here[0], there[1] - here[1])], "resupply", "up stairs")
+            decision = brain.break_oscillation(command_obs(pos=here, dlvl=2, clvl=3),
+                                               town_view(here, (30, 15), dlvl=2), on)
+            if decision is not on:
+                break
+        self.assertGreaterEqual(i, len(lap))         # the first lap is walked as chosen
+        self.assertIsNot(decision, on)               # and the circuit is broken within four
+        self.assertIn(there, brain.level.bumped)     # by blocking the square it would enter again
+
+    def test_walking_on_through_a_room_is_not_a_circuit(self) -> None:
+        from moria_playtest.brain import Decision
+        brain = Brain(GOALS["reach_dl2"])
+        brain.track(command_obs(pos=(5, 5), dlvl=2, clvl=3), town_view((5, 5), (30, 15), dlvl=2))
+        east = Decision(DIRS[(1, 0)], "explore", "on")
+        for x in range(1, 39):   # moves east, every square new
+            self.assertIs(brain.break_oscillation(command_obs(pos=(x, 5), dlvl=2, clvl=3),
+                                                  town_view((x, 5), (30, 15), dlvl=2), east), east)
+
     def test_a_potion_between_the_flips_still_counts(self) -> None:
         """M5a round 7: a drink every few steps beside a Yellow Jelly put
         the same square in the trail twice and hid the oscillation."""
@@ -1558,6 +1587,29 @@ class PotionTest(unittest.TestCase):
         self.assertTrue(brain.food_low())
         brain.track(command_obs(pos=(5, 5), dlvl=0, clvl=5), town_view((5, 5), (40, 40), dlvl=0))
         self.assertEqual(brain.food_reserve(), 1)            # back to the shallow reserve (M5b round 35)
+
+    def test_a_bigger_map_keeps_more_food(self) -> None:
+        """M6: on the 80-column ports' 198x66 maps the walk home is longer;
+        the C64's reserve starved 53 of the C128's 66 deaths on DL1-2."""
+        brain = Brain(GOALS["reach_dl2"])
+        brain.track(command_obs(pos=(5, 5), dlvl=1, clvl=5), town_view((5, 5), (40, 40), dlvl=1))
+        self.assertEqual(brain.food_reserve(), 1)            # the C64's 80x48: unchanged
+        brain.clvl = 1
+        self.assertEqual(brain.food_max(), 8)
+        big = View(198, 66, [0] * (198 * 66), (5, 5), 1, {})
+        brain.track(command_obs(pos=(5, 5), dlvl=1, clvl=5), big)
+        self.assertEqual(brain.food_reserve(), 4)            # 3.4 times the area
+        brain.food = 3
+        self.assertTrue(brain.food_low())
+        big = View(198, 66, [0] * (198 * 66), (5, 5), 6, {})
+        brain.track(command_obs(pos=(5, 5), dlvl=6, clvl=5), big)
+        self.assertEqual(brain.food_reserve(), 14)           # (2 + 6 // 3) * 3.4, rounded up
+        brain.clvl = 1
+        self.assertEqual(brain.food_max(), 28)               # the early eight, 3.4 times
+        brain.lamp, brain.oil, brain.torches, brain.lamp_packed, brain.light_left = True, 0, 0, False, 5000
+        self.assertTrue(brain.light_low())                   # 2,000 turns of light home on the C64's map
+        brain.track(command_obs(pos=(5, 5), dlvl=1, clvl=5), town_view((5, 5), (40, 40), dlvl=1))
+        self.assertFalse(brain.light_low())
 
     def test_food_shopping_leaves_pack_room(self) -> None:
         """M4 round 54: items never stack, and 20 single foods filled the
@@ -2505,6 +2557,38 @@ class SearchModeTest(unittest.TestCase):
         on = command_obs(pos=(5, 5), dlvl=1, clvl=2)                        # "Search*" shown
         on.step = 200
         self.assertNotEqual(brain.decide(on, view).layer, "search-mode")
+
+    def test_not_on_the_way_home_for_food(self) -> None:
+        """M6: two turns of food a step, and Warriors on the 80-column ports'
+        big maps starved walking home searching."""
+        brain = Brain(GOALS["reach_dl2"])
+        view = town_view((5, 5), (40, 40), dlvl=1)
+        brain.track(command_obs(pos=(5, 5), dlvl=1, clvl=2), view)
+        off = command_obs(pos=(5, 5), dlvl=1, clvl=2, rows={21: "bot Half-Troll              LV:2  DL:1"})
+        off.step = 100
+        self.assertIsNotNone(brain.search_mode(off, view))
+        brain.search_mode_after = 0
+        brain.food = 0
+        self.assertIsNone(brain.search_mode(off, view))
+
+    def test_turns_it_off_when_hurt_or_attacked(self) -> None:
+        """M6: a spell does not end search mode (VMS), and a C128 Warrior fled
+        a Novice Priest at half speed; Mages rested from poison searching."""
+        brain = Brain(GOALS["reach_dl2"])
+        view = town_view((5, 5), (40, 40), dlvl=1)
+        on = {21: "bot Half-Troll  Search*     LV:2  DL:1"}
+        off = {21: "bot Half-Troll              LV:2  DL:1"}
+        decision = brain.search_mode(command_obs(pos=(5, 5), dlvl=1, clvl=2, hp=10, rows=on), view)
+        self.assertEqual((decision.key, decision.reason), (ord("#"), "hurt: search mode off"))
+        brain.unseen_attack = True
+        decision = brain.search_mode(command_obs(pos=(5, 5), dlvl=1, clvl=2, rows=on), view)
+        self.assertEqual((decision.key, decision.reason), (ord("#"), "under attack: search mode off"))
+        # and not back on while hurt: no toggling every step
+        brain.unseen_attack = False
+        hurt = command_obs(pos=(5, 5), dlvl=1, clvl=2, hp=10, rows=off)
+        hurt.step = 100
+        self.assertIsNone(brain.search_mode(hurt, view))
+        self.assertIsNone(brain.search_mode(command_obs(pos=(5, 5), dlvl=1, clvl=2, rows=on), view))   # well: left on
 
     def test_not_with_a_creature_in_view_or_in_town(self) -> None:
         brain = Brain(GOALS["reach_dl2"])
@@ -3746,6 +3830,21 @@ class CharacterTest(unittest.TestCase):
         self.assertEqual(len([name for name in goals.CHARACTERS if name.endswith("-warrior")]), 8)
         self.assertEqual(suite_path("clvl10"), SUITES / "clvl10.json")
         self.assertEqual(suite_path("clvl10", "gnome-warrior"), SUITES / "clvl10-gnome-warrior.json")
+        # §21.2: another port's suites add the port; the C64's are unchanged.
+        self.assertEqual(suite_path("clvl5", port="plus4"), SUITES / "clvl5-plus4.json")
+        self.assertEqual(suite_path("clvl5", "human-mage", "plus4"), SUITES / "clvl5-human-mage-plus4.json")
+        self.assertEqual(suite_path("clvl5", "human-mage", "c64"), SUITES / "clvl5-human-mage.json")
+
+    def test_a_port_with_bigger_maps_has_a_bigger_budget(self) -> None:
+        """M6: the 80-column ports' 198x66 levels are 3.4 times the C64's
+        80x48; their goals' budgets grow with the area (maintainer,
+        2026-10-27)."""
+        from moria_playtest import goals
+        from moria_playtest.ports import C128, C64, CX16, PLUS4
+        self.assertEqual(goals.for_port(GOALS["reach_dl5"], C64).step_budget, 20_000)
+        self.assertEqual(goals.for_port(GOALS["reach_dl5"], PLUS4).step_budget, 20_000)
+        self.assertEqual(goals.for_port(GOALS["reach_dl5"], C128).step_budget, 68_062)
+        self.assertEqual(goals.for_port(GOALS["clvl5"], CX16).step_budget, 102_094)
 
     def test_a_weak_combination_has_its_own_bar(self) -> None:
         """§16.1: Halfling and Gnome Warriors are frozen at their level."""
