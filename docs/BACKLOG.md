@@ -858,14 +858,24 @@ Acceptance target:
 
 ### CHKIN on a file the drive refused can hang the Commodore ports
 
-Six places OPEN a file that may not exist, then CHKIN it without asking the
-drive whether the OPEN worked: the save-slot probe
-(`common/save_slot_menu.s`), the C64 program-media read probe
-(`common/disk_setup_banked.s`), `load_game` and `save_file_exists`
-(`platforms/shared/save.s`), and the C128 and Plus/4 marker reads
-(`common/disk_swap.s`, `plus4/main.s`). If the drive has already failed the
-OPEN (`62 FILE NOT FOUND`) when CHKIN's TALK arrives, it stays idle and the
-KERNAL's talker turnaround waits for it forever (no timeout).
+Seven places OPENed a file that may not exist, then CHKIN it without asking
+the drive whether the OPEN worked. Five are fixed
+(`HAL_STORAGE_SAVE_PROBE_ASKS_DRIVE`): the save-slot probe
+(`common/save_slot_menu.s`) opens channel 15 first and reads the status
+before any CHKIN (asking again when the read times out before a digit
+comes: `status_retry_slot`); `save_file_exists`, now `storage_file_exists`
+for any name (`platforms/shared/save.s`), asks the drive instead of reading
+the file; and the save-disk marker reads ask it first on all three ports
+(2026-10-31: C64 `c64_disk_marker_present` and Plus/4
+`plus4_storage_marker_present` through `storage_file_exists`, C128
+`disk_marker_present` with channel 15 open, as the slot probe).
+`slot2_save_product_smoke` and `single_drive_fresh_save_no_init_product_smoke`,
+which hung as code moved, pass with 0-12 and 0-8 bytes of padding ahead of
+them. Two remain: the C64 program-media read probe
+(`common/disk_setup_banked.s`) and `load_game` (`platforms/shared/save.s`).
+If the drive has already failed the OPEN (`62 FILE NOT FOUND`) when CHKIN's
+TALK arrives, it stays idle and the KERNAL's talker turnaround waits for it
+forever (no timeout).
 
 Found 2026-10-29 in VICE true-drive emulation: `slot2_save_product_smoke` hung
 probing the empty slot 3 on drive 9 (C64 in the turnaround loop at
@@ -884,9 +894,11 @@ Required work:
 - Keep the command channel open around each such OPEN: open 15, OPEN the file,
   read the status on the open channel, CHKIN only on `00`-`19`, then close the
   file and 15. Split each port's status reader into open/read/close steps.
-- Fit the C64 detect-evil and dungeon-spell test builds (they end at `$BF72`
-  and `$BF71` on 2026-10-30: about 140 bytes free below `$C000`) and the C128
-  `C128ResidentDiskIo` segment (15 bytes free: it ends at `$AEF0`).
+- Fit the C64 detect-evil and dungeon-spell test builds (`$BFFA` and `$BFF9`
+  on 2026-10-31: six and seven bytes below `$C000`), the Plus/4
+  wand-selector and chest-open test builds (`$C7F7` and `$C7F3`: nine and
+  thirteen bytes below `MAP_BASE`), and the C128 `C128ResidentDiskIo`
+  segment.
 - Then move `c64_storage_read_command_status` onto the shared
   `storage_status_from_dos_digits`, as C128 and Plus/4 already are; it was
   reverted because the timing shift exposed this hang. Until then C64 keeps an
@@ -898,37 +910,6 @@ Acceptance target:
 - `slot2_save_product_smoke` passes when code ahead of the probe is padded by
   several different byte counts.
 - One DOS-status classifier on all three ports.
-
-### One handler for a disk load that never succeeds
-
-`asset_load_retry` repeats a failed overlay, tier, recall or payload load
-(three attempts, two on the Atari), which survives a drive that misses a
-handshake. A load that fails every attempt still ends the game in whatever
-way its caller chose:
-
-- `jmp entry_main`: `core/game_loop.s` (generation overlay, three sites),
-  `c128/main.s` (seven sites, including the store restock's cold chest
-  overlay), `plus4/main.s` and `atari8/main.s` (the spell overlay). The
-  restart loses the character. On the C64 it crashes into the KERNAL warm
-  start (`$FE66`, `make playtest-disk` `load_fail_town`), and `entry_main`
-  re-runs `save_zp`, overwriting the saved BASIC zero page with game state.
-- `brk`: the Apple IIe (`apple2/main.s` ~834).
-- A return into whatever is at `$E000`: `irs_p3_swap_exec`
-  (`core/wizard.s` ~66) and `wizard_reveal_level_from_overlay` (~246)
-  ignore a failed reload.
-- About 270 callers skip their action on `bcs`.
-
-Required work:
-
-- One shared fatal path for a required load: say which file failed, wait
-  for a key, and either retry or end the game deliberately (no silent
-  restart, no warm start, no stale `$E000`).
-- Point every site above at it.
-
-Acceptance target:
-
-- `make playtest-disk` `load_fail_town` passes on C64, Plus/4 and C128
-  (drop its `expect_fail`).
 
 ### Optional: drop the SHIFT+Q quit confirmation to recover memory
 
@@ -952,16 +933,23 @@ Removing it:
   `docs/AI_PLAYTEST_DESIGN.md` §22.
 - `docs/FEATURE_MAP.md`: say SHIFT+Q quits without confirmation.
 
-### A resident "insert program disk" prompt on every port
+### Loads the program-disk prompt does not cover yet
 
-A load that keeps failing should ask for the program disk and try again.
-No such prompt is resident and safe from every `overlay_load` context:
-the shared `disk_prompt` stays silent unless `disk_mode` is 1, the Apple IIe
-and BBC prompts live in `OVL_STORAGE` (loaded by `overlay_load` itself) and
-the Apple IIe play slot, the Atari's is in `RuntimeBanked`, and the X16's
-`disk_prompt_game` is `clc; rts`. Needs resident strings and per-port memory
-placement (the C64 product ends at `$BEEC` on 2026-10-30; its fullest scripted
-test builds end at `$BF72`).
+Since 2026-10-30 a required load that keeps failing asks for the program
+disk by name and tries again (`asset_load_required`, resident
+`asset_load_ask_for_disk`; `playtest-disk` `load_fail_town`). Still outside it:
+
+- The Atari's boot load of `ATARI.BNK` halts with a flashing border: the
+  prompt itself lives in the `RuntimeBanked` code that file brings.
+- The C128's runtime payloads (`c128_load_runtime_prg`, with its own inline
+  retry) have not been checked against a load that never succeeds.
+- Only the Commodore ports run the prompt in a test (`load_fail_town`). The
+  Apple IIe, Atari, BBC Master and X16 reach it too (the shared overlay,
+  tier and string loads); on the X16 a file missing from the bundle asks
+  for a disk there is none of.
+- Room: the C64's fullest scripted test builds (dungeon-spell, detect-evil)
+  end at `$BFF9`/`$BFFA`, six or seven bytes under `MAP_BASE`, and the
+  Plus/4's (wand-selector, chest-open) at `$C7F7`/`$C7F3` (2026-10-31).
 
 ### C128: the program-media prompt can retry silently forever
 
@@ -981,10 +969,19 @@ The same family hit a command-channel read on 2026-10-30
 (`playtest-disk` `save_overwrite`): the first byte came back `$58` with ST
 `$42` while drive 8 held "00, OK", and drive 8's CPU was in its
 disk-controller IRQ (`$F9D9`) as the transfer began. The stock ROMs passed;
-where it lands moves with code layout. `plus4_disk_read_command_status` now
-asks again on a read timeout (`status_retry_resume` covers it). Still open:
-whether JiffyDOS on real hardware loses these bytes too, and whether the C64
-and C128 readers need the same retry under JiffyDOS.
+where it lands moves with code layout. Rereading the command channel
+cannot recover the byte: the drive goes on mid-message ("6," for "26,WRITE
+PROTECT ON", and "1," for "21" would read as OK). So the status readers only
+flag a read that timed out before any digit came (C64, C128, Plus/4;
+2026-10-31), and only the probes that can OPEN their file again ask again,
+up to three times: the save-slot list, `save_file_exists`, and the Plus/4
+and C128 program-disk checks (`status_retry_resume`, `status_retry_slot`,
+`status_lost_save`). A lost status after a save reads as a disk error
+(`status_lost_save`, `status_lost_protected`). The C128 CLOSE wrapper and
+the Plus/4 KERNAL call wrapper now clear carry: with it set, CLOSE leaves a
+command channel open in the drive. Still open: whether JiffyDOS on real
+hardware loses these bytes too. `C128ResidentDiskIo` has 60 bytes free after
+`combat_append_blow_summary` moved to Default (2026-10-30).
 
 ### Promote `F8` to an in-game Version/System Info command
 
@@ -1093,31 +1090,6 @@ Acceptance target:
 
 ## Commander X16
 
-### The run-cancel key flush may write the wrong RAM bank
-
-`input_flush_run_cancel_buffer` (`core/input_ui_helpers.s`, called from
-`core/game_loop.s` when a run or auto-rest is cancelled) clears the
-keyboard queue count with a plain `sta hal_input_kbdbuf_count`. On the X16
-that is `$A80A`, in the banked RAM window: the KERNAL's variables are in
-RAM bank 0, but the store goes to whichever bank `$00` selects at the time,
-and the game runs overlays from banks 9-20. If another bank is active, the
-store corrupts a byte of it and the queue is not flushed. Not yet verified:
-found by reading the code on 2026-10-30.
-
-Required work:
-
-- Find which RAM bank is active at the two call sites.
-- If it can be other than bank 0, clear the count with RAM bank 0 selected
-  (`CX16_BANK_KERNAL_VARS`, as `input_wait_release` does), keeping the other
-  ports' flush unchanged. Not through `input_wait_release` itself: since
-  2026-10-30 it waits, up to about 0.25 s, for every key to come up, and the
-  cancel key is still down when a run is cancelled.
-
-Acceptance target:
-
-- Cancelling a run on the X16 empties the keyboard queue and writes no
-  banked RAM outside bank 0.
-
 ### Check the key-release waits on real Atari and X16 hardware
 
 The 2026-10-30 key-release waits (a prompt listens only once every key is up,
@@ -1170,39 +1142,6 @@ Acceptance target:
 - A fresh machine with only the documented packages installed and the ROM
   variables set builds every port and passes `make -j7 -O test` with no
   undocumented step.
-
-### C64 suites sometimes return no results under the parallel gate
-
-Twice on 2026-10-26, a C64 unit suite failed during `make -j7 -O test` with
-no result bytes at all (`identify_spell: FAIL (0/4 tests passed)`, then
-`effects_magic: FAIL (0/29 tests passed)`, each with an empty `Raw:` line
-after the monitor's autostart lines), and passed in full when run by itself
-with `TEST_FILTER`. Neither failure was tied to its test's code, and the
-other platforms' stages passed. The working guess, not yet diagnosed, is
-that the C64 runner (`platforms/commodore/c64/run_tests.sh`) loses the
-result read under load: a VICE startup or monitor timing race with seven
-emulator stages running at once.
-
-A lead: VICE seeds its power-on RAM randomly on every run
-(`RAMInitRandomChance`), so identical files can boot different RAM. The C128
-boot smokes' crash with the same "only under the parallel gate" shape was an
-uninitialized variable that about 0.6% of seeds broke (fixed 2026-10-30;
-`platforms/commodore/c128/vice_keep_inputs.py` records and replays the seed).
-
-Required work:
-
-- Reproduce: sweep `x64sc -seed <n>` over the suite, or rerun the C64 stage
-  under `-j7` load until a suite comes back empty, keeping its VICE log and
-  monitor transcript.
-- Find whether the test program never reached its exit BRK (a slow boot
-  against the cycle limit) or reached it and the result dump was missed.
-- Fix the race in the runner, or retry an empty-result suite once with a
-  clear "retried" note, without raising the 30-second timeout cap.
-
-Acceptance target:
-
-- Repeated `make -j7 -O test` runs on a loaded machine produce no
-  empty-result C64 failures, and a real 0/N failure still fails.
 
 ### The C128 PERF_P1 build does not assemble
 
