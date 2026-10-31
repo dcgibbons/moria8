@@ -602,6 +602,17 @@ c128_disk_payload_args() {
     fi
 }
 
+# c128_disk_payload_delete_args: a -delete for every file c128_disk_payload_args
+# writes (run it first), for a disk that replaces another build's payloads;
+# sets C128_DISK_PAYLOAD_DELETE_ARGS.
+c128_disk_payload_delete_args() {
+    local f
+    C128_DISK_PAYLOAD_DELETE_ARGS=()
+    for ((f = 2; f < ${#C128_DISK_PAYLOAD_ARGS[@]}; f += 3)); do
+        C128_DISK_PAYLOAD_DELETE_ARGS+=(-delete "${C128_DISK_PAYLOAD_ARGS[f]}")
+    done
+}
+
 # c128_disk_payload_files <dir>: the payload source files c128_disk_payload_args
 # writes, for freshness checks; sets C128_DISK_PAYLOAD_FILES.
 c128_disk_payload_files() {
@@ -2621,7 +2632,7 @@ build_title_load_missing_save_assets() {
 
     if ! "$c1541_bin" -format "moria128,m8" d64 "$missing_save_d64" \
             -attach "$missing_save_d64" \
-            -write "$marker_blob" "MORIA8.ID" >"$build_log" 2>&1; then
+            -write "$marker_blob" "moria8.id" >"$build_log" 2>&1; then
         echo "FAIL (missing-save disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -2654,7 +2665,7 @@ build_title_load_missing_save_assets() {
         return 1
     fi
 
-    if echo "$dir_list" | grep -q '"THE.GAME"'; then
+    if echo "$dir_list" | grep -qi '"THE.GAME"'; then
         echo "FAIL (missing-save disk unexpectedly contains THE.GAME)"
         echo "$dir_list" | tail -20 | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -2699,8 +2710,8 @@ build_title_load_mounted_save_assets() {
 
     if ! "$c1541_bin" -format "moria128,m8" d64 "$mounted_save_d64" \
             -attach "$mounted_save_d64" \
-            -write "$marker_blob" "MORIA8.ID" \
-            -write "$save_blob" "THE.GAME" >"$build_log" 2>&1; then
+            -write "$marker_blob" "moria8.id" \
+            -write "$save_blob" "the.game" >"$build_log" 2>&1; then
         echo "FAIL (mounted-save disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -2808,10 +2819,12 @@ build_save_write_product_assets() {
         return 1
     fi
 
+    # Lower case, as the game names them: c1541 stores "MORIA8.ID" as shifted
+    # PETSCII, a name the game never opens.
     if ! "$c1541_bin" -format "moria128,m8" d64 "$save_d64" \
             -attach "$save_d64" \
-            -write "$marker_blob" "MORIA8.ID" \
-            -write "$save_blob" "THE.GAME" >"$build_log" 2>&1; then
+            -write "$marker_blob" "moria8.id" \
+            -write "$save_blob" "the.game" >"$build_log" 2>&1; then
         echo "FAIL (save-write save disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -4870,7 +4883,7 @@ run_boot_title_change_save_drive_smoke() {
     rm -f "$save10_d64"
     if ! "$c1541_bin" -format "moria128 save,m8" d64 "$save10_d64" \
             -attach "$save10_d64" \
-            -write "$marker_blob" "MORIA8.ID" >>"$build_log" 2>&1; then
+            -write "$marker_blob" "moria8.id" >>"$build_log" 2>&1; then
         echo "FAIL (drive-10 save disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -5091,37 +5104,14 @@ run_boot_title_single_drive_load_corrupt_smoke() {
 
     rm -f "$boot_d64"
     cp ../../../build/test/c128/moria128.d71 "$boot_d64"
+    # This variant's own payloads and overlays: the base disk's were built
+    # against the base build's main, laid out differently.
+    c128_disk_payload_args "../../../build/test/c128"
+    c128_disk_payload_delete_args
     if ! "$c1541_bin" -attach "$boot_d64" \
-            -delete "moria128" \
-            -delete "128.runtime" \
-            -delete "128.input" \
-            -delete "128.proj" \
-            -delete "128.fdisk" \
-            -delete "128.diskio" \
-            -delete "128.world" \
-            -delete "128.item" \
-            -delete "128.names" \
-            -delete "128.huff" \
-            -delete "128.hvec" \
-            -delete "128.select" \
-            -delete "128.persist" \
-            -delete "128.play" \
-            -delete "128.bank" \
+            -delete "moria128" "${C128_DISK_PAYLOAD_DELETE_ARGS[@]}" \
             -write ../../../build/test/c128/moria128.prg "moria128" \
-            -write ../../../build/test/c128/128.runtime.prg "128.runtime" \
-            -write ../../../build/test/c128/128.input.prg "128.input" \
-            -write ../../../build/test/c128/128.proj.prg "128.proj" \
-            -write ../../../build/test/c128/128.fdisk.prg "128.fdisk" \
-            -write ../../../build/test/c128/128.diskio.prg "128.diskio" \
-            -write ../../../build/test/c128/128.world.prg "128.world" \
-            -write ../../../build/test/c128/128.item.prg "128.item" \
-            -write ../../../build/test/c128/128.names.prg "128.names" \
-            -write ../../../build/test/c128/128.huff.prg "128.huff" \
-            -write ../../../build/test/c128/128.hvec.prg "128.hvec" \
-            -write ../../../build/test/c128/128.select.prg "128.select" \
-            -write ../../../build/test/c128/128.persist.prg "128.persist" \
-            -write ../../../build/test/c128/128.play.prg "128.play" \
-            -write ../../../build/test/c128/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
+            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1; then
         echo "FAIL (single-drive load corrupt product disk patch failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -5148,8 +5138,8 @@ run_boot_title_single_drive_load_corrupt_smoke() {
     rm -f "$save_d64" "$program_d64"
     if ! "$c1541_bin" -format "moria8 save,m8" d64 "$save_d64" \
             -attach "$save_d64" \
-            -write "$marker_blob" "MORIA8.ID,s" \
-            -write "$save_blob" "THE.GAME,s" >>"$build_log" 2>&1; then
+            -write "$marker_blob" "moria8.id,s" \
+            -write "$save_blob" "the.game,s" >>"$build_log" 2>&1; then
         echo "FAIL (single-drive load corrupt save disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -5209,37 +5199,14 @@ run_boot_title_single_drive_load_return_smoke() {
 
     rm -f "$boot_d64"
     cp ../../../build/test/c128/moria128.d71 "$boot_d64"
+    # This variant's own payloads and overlays: the base disk's were built
+    # against the base build's main, laid out differently.
+    c128_disk_payload_args "../../../build/test/c128"
+    c128_disk_payload_delete_args
     if ! "$c1541_bin" -attach "$boot_d64" \
-            -delete "moria128" \
-            -delete "128.runtime" \
-            -delete "128.input" \
-            -delete "128.proj" \
-            -delete "128.fdisk" \
-            -delete "128.diskio" \
-            -delete "128.world" \
-            -delete "128.item" \
-            -delete "128.names" \
-            -delete "128.huff" \
-            -delete "128.hvec" \
-            -delete "128.select" \
-            -delete "128.persist" \
-            -delete "128.play" \
-            -delete "128.bank" \
+            -delete "moria128" "${C128_DISK_PAYLOAD_DELETE_ARGS[@]}" \
             -write ../../../build/test/c128/moria128.prg "moria128" \
-            -write ../../../build/test/c128/128.runtime.prg "128.runtime" \
-            -write ../../../build/test/c128/128.input.prg "128.input" \
-            -write ../../../build/test/c128/128.proj.prg "128.proj" \
-            -write ../../../build/test/c128/128.fdisk.prg "128.fdisk" \
-            -write ../../../build/test/c128/128.diskio.prg "128.diskio" \
-            -write ../../../build/test/c128/128.world.prg "128.world" \
-            -write ../../../build/test/c128/128.item.prg "128.item" \
-            -write ../../../build/test/c128/128.names.prg "128.names" \
-            -write ../../../build/test/c128/128.huff.prg "128.huff" \
-            -write ../../../build/test/c128/128.hvec.prg "128.hvec" \
-            -write ../../../build/test/c128/128.select.prg "128.select" \
-            -write ../../../build/test/c128/128.persist.prg "128.persist" \
-            -write ../../../build/test/c128/128.play.prg "128.play" \
-            -write ../../../build/test/c128/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
+            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1; then
         echo "FAIL (single-drive load return product disk patch failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -5259,8 +5226,8 @@ run_boot_title_single_drive_load_return_smoke() {
     rm -f "$save_d64"
     if ! "$c1541_bin" -format "moria8 save,m8" d64 "$save_d64" \
             -attach "$save_d64" \
-            -write "$marker_blob" "MORIA8.ID,s" \
-            -write "$save_blob" "THE.GAME,s" >>"$build_log" 2>&1; then
+            -write "$marker_blob" "moria8.id,s" \
+            -write "$save_blob" "the.game,s" >>"$build_log" 2>&1; then
         echo "FAIL (single-drive load return save disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -5319,37 +5286,14 @@ run_boot_title_load_then_save_new_empty_smoke() {
 
     rm -f "$boot_d64"
     cp ../../../build/test/c128/moria128.d71 "$boot_d64"
+    # This variant's own payloads and overlays: the base disk's were built
+    # against the base build's main, laid out differently.
+    c128_disk_payload_args "../../../build/test/c128"
+    c128_disk_payload_delete_args
     if ! "$c1541_bin" -attach "$boot_d64" \
-            -delete "moria128" \
-            -delete "128.runtime" \
-            -delete "128.input" \
-            -delete "128.proj" \
-            -delete "128.fdisk" \
-            -delete "128.diskio" \
-            -delete "128.world" \
-            -delete "128.item" \
-            -delete "128.names" \
-            -delete "128.huff" \
-            -delete "128.hvec" \
-            -delete "128.select" \
-            -delete "128.persist" \
-            -delete "128.play" \
-            -delete "128.bank" \
+            -delete "moria128" "${C128_DISK_PAYLOAD_DELETE_ARGS[@]}" \
             -write ../../../build/test/c128/moria128.prg "moria128" \
-            -write ../../../build/test/c128/128.runtime.prg "128.runtime" \
-            -write ../../../build/test/c128/128.input.prg "128.input" \
-            -write ../../../build/test/c128/128.proj.prg "128.proj" \
-            -write ../../../build/test/c128/128.fdisk.prg "128.fdisk" \
-            -write ../../../build/test/c128/128.diskio.prg "128.diskio" \
-            -write ../../../build/test/c128/128.world.prg "128.world" \
-            -write ../../../build/test/c128/128.item.prg "128.item" \
-            -write ../../../build/test/c128/128.names.prg "128.names" \
-            -write ../../../build/test/c128/128.huff.prg "128.huff" \
-            -write ../../../build/test/c128/128.hvec.prg "128.hvec" \
-            -write ../../../build/test/c128/128.select.prg "128.select" \
-            -write ../../../build/test/c128/128.persist.prg "128.persist" \
-            -write ../../../build/test/c128/128.play.prg "128.play" \
-            -write ../../../build/test/c128/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
+            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1; then
         echo "FAIL (load-then-save-new-empty product disk patch failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -5369,8 +5313,8 @@ run_boot_title_load_then_save_new_empty_smoke() {
     rm -f "$load_save_d64" "$new_save_d64" "$swap_program_d64"
     if ! "$c1541_bin" -format "moria8 save,m8" d64 "$load_save_d64" \
             -attach "$load_save_d64" \
-            -write "$marker_blob" "MORIA8.ID,s" \
-            -write "$save_blob" "THE.GAME,s" >>"$build_log" 2>&1; then
+            -write "$marker_blob" "moria8.id,s" \
+            -write "$save_blob" "the.game,s" >>"$build_log" 2>&1; then
         echo "FAIL (load save disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -5443,37 +5387,14 @@ run_boot_title_disk_setup_single_drive_return_smoke() {
 
     rm -f "$boot_d64"
     cp ../../../build/test/c128/moria128.d71 "$boot_d64"
+    # This variant's own payloads and overlays: the base disk's were built
+    # against the base build's main, laid out differently.
+    c128_disk_payload_args "../../../build/test/c128"
+    c128_disk_payload_delete_args
     if ! "$c1541_bin" -attach "$boot_d64" \
-            -delete "moria128" \
-            -delete "128.runtime" \
-            -delete "128.input" \
-            -delete "128.proj" \
-            -delete "128.fdisk" \
-            -delete "128.diskio" \
-            -delete "128.world" \
-            -delete "128.item" \
-            -delete "128.names" \
-            -delete "128.huff" \
-            -delete "128.hvec" \
-            -delete "128.select" \
-            -delete "128.persist" \
-            -delete "128.play" \
-            -delete "128.bank" \
+            -delete "moria128" "${C128_DISK_PAYLOAD_DELETE_ARGS[@]}" \
             -write ../../../build/test/c128/moria128.prg "moria128" \
-            -write ../../../build/test/c128/128.runtime.prg "128.runtime" \
-            -write ../../../build/test/c128/128.input.prg "128.input" \
-            -write ../../../build/test/c128/128.proj.prg "128.proj" \
-            -write ../../../build/test/c128/128.fdisk.prg "128.fdisk" \
-            -write ../../../build/test/c128/128.diskio.prg "128.diskio" \
-            -write ../../../build/test/c128/128.world.prg "128.world" \
-            -write ../../../build/test/c128/128.item.prg "128.item" \
-            -write ../../../build/test/c128/128.names.prg "128.names" \
-            -write ../../../build/test/c128/128.huff.prg "128.huff" \
-            -write ../../../build/test/c128/128.hvec.prg "128.hvec" \
-            -write ../../../build/test/c128/128.select.prg "128.select" \
-            -write ../../../build/test/c128/128.persist.prg "128.persist" \
-            -write ../../../build/test/c128/128.play.prg "128.play" \
-            -write ../../../build/test/c128/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
+            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1; then
         echo "FAIL (disk-setup single-drive return product disk patch failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -5490,7 +5411,7 @@ run_boot_title_disk_setup_single_drive_return_smoke() {
     rm -f "$save_d64" "$program_d64"
     if ! "$c1541_bin" -format "moria8 save,m8" d64 "$save_d64" \
             -attach "$save_d64" \
-            -write "$marker_blob" "MORIA8.ID,s" >>"$build_log" 2>&1; then
+            -write "$marker_blob" "moria8.id,s" >>"$build_log" 2>&1; then
         echo "FAIL (disk-setup single-drive return save disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))

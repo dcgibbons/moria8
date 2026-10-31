@@ -2139,6 +2139,13 @@ c128_test_after_disk_setup_single_drive_return:
     sta disk_setup_done
     lda #C128_MEDIA_PROGRAM
     sta c128_media_state
+    // The state names the payload the slot holds: load PERSIST (boot left
+    // PLAY there) while the Program Disk is still in the drive.
+    lda #10
+    sta c128_runtime_load_stage
+    jsr c128_load_resident_persist_prg
+    bcc *+5
+    jmp runtime_load_failed
     lda #2                  // C128_MODAL_PERSIST; const is declared later.
     sta c128_modal_slot_state
 c128_test_disk_setup_single_drive_return_wait_for_harness:
@@ -2164,6 +2171,13 @@ c128_test_disk_setup_single_drive_return_before_disk_setup:
     sta disk_setup_done
     lda #C128_MEDIA_PROGRAM
     sta c128_media_state
+    // The state names the payload the slot holds: load PERSIST (boot left
+    // PLAY there) while the Program Disk is still in the drive.
+    lda #10
+    sta c128_runtime_load_stage
+    jsr c128_load_resident_persist_prg
+    bcc *+5
+    jmp runtime_load_failed
     lda #2                  // C128_MODAL_PERSIST; const is declared later.
     sta c128_modal_slot_state
 c128_test_single_drive_save_wrong_media_wait_for_harness:
@@ -2183,6 +2197,13 @@ c128_test_single_drive_save_wrong_media_script_exhausted:
     sta disk_setup_done
     lda #C128_MEDIA_PROGRAM
     sta c128_media_state
+    // The state names the payload the slot holds: load PERSIST (boot left
+    // PLAY there) while the Program Disk is still in the drive.
+    lda #10
+    sta c128_runtime_load_stage
+    jsr c128_load_resident_persist_prg
+    bcc *+5
+    jmp runtime_load_failed
     lda #2                  // C128_MODAL_PERSIST; const is declared later.
     sta c128_modal_slot_state
 c128_test_single_drive_load_wrong_media_wait_for_harness:
@@ -2202,6 +2223,13 @@ c128_test_single_drive_load_wrong_media_script_exhausted:
     sta disk_setup_done
     lda #C128_MEDIA_PROGRAM
     sta c128_media_state
+    // The state names the payload the slot holds: load PERSIST (boot left
+    // PLAY there) while the Program Disk is still in the drive.
+    lda #10
+    sta c128_runtime_load_stage
+    jsr c128_load_resident_persist_prg
+    bcc *+5
+    jmp runtime_load_failed
     lda #2                  // C128_MODAL_PERSIST; const is declared later.
     sta c128_modal_slot_state
 c128_test_single_drive_load_corrupt_wait_for_harness:
@@ -3088,6 +3116,13 @@ c128_active_save_slot: .byte $ff
 #if C128_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
 c128_test_after_save_media_check_active: .byte 0
 c128_test_post_save_prompt_diag: .fill 4, 0
+// The save-write smoke stops here once the save returns. In the game code
+// (the PLAY payload, $C3xx) VICE's "until" also stopped where the
+// screen-editor ROM runs the same address at boot: a pass with no save.
+// Below $4000 no ROM code runs.
+c128_test_after_save_game:
+    rts
+.assert "save-write smoke stop is below every ROM", c128_test_after_save_game < $4000, true
 #endif
 #if C128_TEST_SCRIPTED_LOAD_THEN_SAVE_NEW_EMPTY_PRODUCT
 c128_test_load_then_save_new_empty_stage: .byte 0
