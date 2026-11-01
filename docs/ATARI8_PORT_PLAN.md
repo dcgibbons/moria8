@@ -444,9 +444,12 @@ across C64, C128, Plus/4, Apple IIe, and Commander X16:
      pass all assertions, while `storage.s` maps `"THE.GAME"` / `"THE.GAME2..4"`
      -> `SAVE0.SAV..SAVE3.SAV` and `"HALL.OF.FAME"` -> `HISCORE.DAT` internally
      at open time.
-   * `OLDEST_SAVE_VERSION` is pinned equal to `SAVE_VERSION` (`$15`) in
-     `platforms/atari8/hal/storage_policy.s` so no dead legacy save migration
-     code is carried.
+   * `OLDEST_SAVE_VERSION` is `$15` in `platforms/atari8/hal/storage_policy.s`
+     and every feature-version constant is pinned to it, so no dead legacy save
+     migration code is carried. The one exception is the 33-slot inventory
+     (reserved cloak + secondary weapon): `SAVE_VERSION` is `$16`, and `$15`
+     saves still load through the shared 31-slot inventory path
+     (`docs/X_WEAPON_SWAP_DESIGN.md` §6.2; asserted in the policy file).
    * At boot, `disk_setup_done = 1`, `disk_mode = 2` (no-swap mode),
      `program_device = 8` (`D1:`), and `save_device = 8` (`D1:`) are initialized
      so single-drive `D1:` saving works immediately without swap prompts, while
