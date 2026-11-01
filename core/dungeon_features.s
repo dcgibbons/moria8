@@ -77,15 +77,28 @@ disarm_bad_fail_str:
 
 // ============================================================
 // find_random_floor — Find a random walkable floor tile on the map
+// find_random_floor_near — The same within distance A (1-255) of the player:
+// VMS Moria teleport(dis) (moria.inc; Umoria player.cpp playerTeleport). A
+// random square farther than dis (VMS distance: max(dy,dx) + min(dy,dx)
+// div 2) moves halfway toward the player, truncating the step, until it is
+// within dis. Moria8 also refuses the player's own square (upstream accepts
+// it), so the player always moves when any other square qualifies.
+// Input (near): A = dis (1-255)
 // Output: carry set = found (df_target_x/y valid)
-//         carry clear = failed after 200 tries
-// Uses df_found as attempt counter (caller-save).
+//         carry clear = failed after 1,793-2,048 tries (the low count byte
+//         is not reset: whatever a previous search left, at most 256)
+// Clobbers: A, X, Y, zp_ptr0, zp_temp0-4
 // ============================================================
-frf_attempts: .byte 0
+frf_attempts:    .byte 0
+frf_attempts_hi: .byte 0
+frf_limit:       .byte 0    // dis; 0 = no distance limit
 
 find_random_floor:
-    lda #200
-    sta frf_attempts
+    lda #0                  // No distance limit
+find_random_floor_near:
+    sta frf_limit
+    lda #8                  // Up to 8 x 256 tries
+    sta frf_attempts_hi
 
 !frf_loop:
     // Random x in [1, MAP_COLS-2]
@@ -102,25 +115,70 @@ find_random_floor:
     adc #1                  // [1, 46]
     sta df_target_y
 
-    // Check if tile is unoccupied floor
+    lda frf_limit
+    beq !frf_check+         // No limit: any square
+!frf_pull:
+    // zp_temp1 = |dx|, zp_temp2 = |dy|
+    ldx #1
+!frf_abs:
+    lda df_target_x,x
+    sec
+    sbc zp_player_x,x
+    bcs !frf_abs_pos+
+    eor #$ff
+    adc #1                  // Carry clear: negate
+!frf_abs_pos:
+    sta zp_temp1,x
+    dex
+    bpl !frf_abs-
+    // Distance = max + min div 2 = |dx| + |dy| - ceil(min / 2); A = it - 1
+    lda zp_temp1
+    cmp zp_temp2
+    bcc !frf_min+           // |dx| < |dy|: |dx| is the min
+    lda zp_temp2
+!frf_min:
+    lsr
+    adc #0                  // ceil(min / 2) (<= 39); carry clear
+    sta zp_temp0
+    lda zp_temp1
+    adc zp_temp2            // <= 122: carry clear
+    sbc zp_temp0            // Carry clear: distance - 1
+    bmi !frf_next+          // Distance 0: the player's own square
+    cmp frf_limit
+    bcc !frf_check+         // Distance - 1 < dis: within dis
+    // Halfway toward the player, the step truncated: a square at t moves
+    // to (t + p + 1) div 2 when t >= p, else (t + p) div 2 (never onto p
+    // unless t = p).
+    ldx #1
+!frf_half:
+    lda df_target_x,x
+    cmp zp_player_x,x       // Carry = t >= p
+    adc zp_player_x,x       // <= 157: no carry out
+    lsr
+    sta df_target_x,x
+    dex
+    bpl !frf_half-
+    bmi !frf_pull-          // Always
+
+!frf_check:
+    // Unoccupied floor: TILE_FLOOR is type 0 and no creature flag
     jsr df_target_row_ptr
     :MapRead_ptr0_y()
-    sta zp_temp0
-    and #TILE_TYPE_MASK
-    cmp #TILE_FLOOR
-    bne !frf_next+
-    lda zp_temp0
-    and #FLAG_OCCUPIED
+    and #TILE_TYPE_MASK | FLAG_OCCUPIED
     bne !frf_next+
     sec
     rts
 !frf_next:
-
     dec frf_attempts
     bne !frf_loop-
-
+    dec frf_attempts_hi
+    bne !frf_loop-
     clc
     rts
+.assert "find_random_floor: TILE_FLOOR is tile type 0", TILE_FLOOR, 0
+.assert "find_random_floor: df_target_y follows df_target_x", df_target_y, df_target_x + 1
+.assert "find_random_floor: zp_player_y follows zp_player_x", zp_player_y, zp_player_x + 1
+.assert "find_random_floor: zp_temp2 follows zp_temp1", zp_temp2, zp_temp1 + 1
 
 // ============================================================
 // place_secrets — Convert 1-3 random closed doors to secret doors

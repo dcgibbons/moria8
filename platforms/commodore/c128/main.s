@@ -4255,6 +4255,8 @@ uinv_sep_str:
 #define ITEM_ACTIONS_OVERLAY_EXTERNAL
 #define PLAYER_RECALC_EQUIPMENT_EXTERNAL
 #define PLAYER_ITEM_COMMANDS_EXTERNAL
+// Potion heal/cure effects go to the banked runtime with the quaff code.
+#define EFF_POTION_CURE_EXTERNAL
 #import "../../../core/player_items.s"
 #undef PLAYER_ITEM_COMMANDS_EXTERNAL
 #undef PLAYER_RECALC_EQUIPMENT_EXTERNAL
@@ -5118,7 +5120,7 @@ tramp_staff_speed_items:
     lda #OVL_DEATH
     jsr overlay_load
     bcs !staff_speed_done+
-    jsr eff_haste_self
+    jsr eff_staff_speed
     lda #OVL_ITEMS
     jsr overlay_load
 !staff_speed_done:
@@ -5225,18 +5227,14 @@ c128_quaff_p3_dispatch:
     rts
 
 !iqp3_healing:
-    lda #200
-    jsr pmx_heal_and_report
-    rts
+    jmp eff_potion_healing          // 1000 HP + cures (eff_potion_cure.s)
 
 !iqp3_cure_critical:
-    lda #6
+    // 6d7 HP, cures blindness, confusion and poison
+    lda #EFF_CURE_ALL
     ldx #7
-    ldy #0
-    jsr math_dice
-    lda zp_math_a
-    jsr pmx_heal_and_report
-    rts
+    ldy #6
+    jmp eff_potion_heal_cure
 
 !iqp3_restoration:
     jsr player_calc_stats
@@ -5418,6 +5416,7 @@ first_banked_function:
     #import "../../../core/player_recalc_equipment.s"
     #undef PLAYER_RECALC_PFLAGS_EXTERNAL
     #import "../../../core/player_item_commands.s"
+    #import "../../../core/eff_potion_cure.s"
 
 banked_code_end:
 banked_payload_end:

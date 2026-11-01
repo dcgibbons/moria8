@@ -311,30 +311,36 @@ monster_cast_breath:
     lda (zp_ptr0),y
     sta zp_math_b
 
-    // Divide by 3
+    // HP div 3, then (this path models only fire breath) VMS Moria
+    // fire_dam (moria.inc; Umoria inventory.cpp damageFire): the Resist
+    // Fire ring divides by 3 and the Resist Heat timer by 3 again, so both
+    // together leave dam div 9. Resistance applies before the 8-bit damage
+    // cap. Resist Cold has no cold damage to reduce in Moria8.
+    lda player_pflags
+    and #PFLAG_RESIST_FIRE    // 1 with the ring
+    ldy zp_eff_resist
+    beq !mcb_no_timer+
+    clc
+    adc #1                    // +1 with the timer
+!mcb_no_timer:
+    tay
+    iny                       // Y = 1-3 divides by 3
+!mcb_div3:
     ldx #3
-    jsr math_div_16x8         // zp_math_a = quotient lo, zp_math_b = quotient hi
+    jsr math_div_16x8         // zp_math_a/b = quotient; preserves Y
+    dey
+    bne !mcb_div3-
 
     // Cap at 255 (if hi byte nonzero)
     lda zp_math_b
     beq !mcb_no_cap+
     lda #255
-    jmp !mcb_apply+
+    bne !mcb_apply+             // Always
 !mcb_no_cap:
-    // This path currently models only fire breath, so only the heat/fire
-    // half of Resist Heat and Cold (temp timer or Resist Fire ring) reduces it.
-    ldx zp_eff_resist
-    bne !mcb_resist+
-    lda player_pflags
-    and #PFLAG_RESIST_FIRE
-    beq !mcb_store+
-!mcb_resist:
-    ldx #3
-    jsr math_div_16x8
-!mcb_store:
     lda zp_math_a
 !mcb_apply:
-    jmp mm_apply_spell_damage
+    // Fall through
+.assert "monster_cast_breath counts PFLAG_RESIST_FIRE as 1", PFLAG_RESIST_FIRE, 1
 
 mm_apply_spell_damage:
     sta zp_combat_dmg
@@ -405,16 +411,23 @@ monster_cast_summon:
     rts
 
 // ============================================================
-// Spell handler 4: monster_cast_teleport
-// Teleport the player to a random floor tile
+// Spell handler 4: monster_cast_teleport — Teleport To (VMS spell 7)
+// "THE <name> casts a spell.", then the player lands on a free floor square
+// next to the caster (VMS spells.inc teleport_to; Umoria
+// spellTeleportPlayerTo). Upstream tries squares within 1 of the caster and
+// widens the ring after 10 misses; Moria8 tries the 8 neighbours
+// (find_adjacent_empty, never the player's own square) and leaves the
+// player in place when all are blocked.
 // ============================================================
 monster_cast_teleport:
-    // Print "THE <name> TELEPORTS YOU!"
-    ldx #HSTR_MM_TELEPORT
-    jsr huff_decode_to_ptr2
-    jsr mm_print_spell_msg
-
-    jmp eff_teleport_self
+    jsr mm_print_cast_msg
+    jsr find_adjacent_empty_mon // → ms_spawn_x/y
+    bcc !mct_done+
+    lda ms_spawn_x
+    ldy ms_spawn_y
+    jmp eff_teleport_apply_target
+!mct_done:
+    rts
 
 
 // Strings migrated to Huffman compression (HSTR_MM_* in huffman_data.s)

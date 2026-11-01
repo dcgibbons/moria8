@@ -144,6 +144,7 @@ combat_note_kill:
     rts
 
 find_random_floor:
+find_random_floor_near:
     clc
     rts
     :PatchRoom(find_random_floor)
@@ -369,7 +370,7 @@ test_start:
     :PatchJump(pm_validate_selected_spell, test_pm_validate_selected_spell)
 
     // Test 1: Phase Door applies the validated nearby target without a second roll.
-    :PatchJump(find_random_floor, test_find_random_floor_phase_door)
+    :PatchJump(find_random_floor_near, test_find_random_floor_phase_door)
     jsr test_setup_phase_door_map
     jsr eff_phase_door
     lda test_find_random_floor_calls

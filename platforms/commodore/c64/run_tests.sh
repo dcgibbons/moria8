@@ -4424,10 +4424,11 @@ run_test "turn" "tests/test_turn.s" "0400 0420" 33 500000000
 run_test "player" "tests/test_player.s" "0400 0409" 10
 run_test "dungeon" "tests/test_dungeon.s" "0400 0442" 67 500000000
 run_test "monster" "tests/test_monster.s" "0400 0417" 24 500000000
-run_test "monster_ai" "tests/test_monster_ai.s" "0400 0440" 65 500000000
+run_test "monster_ai" "tests/test_monster_ai.s" "0400 0443" 68 500000000
 run_test "combat" "tests/test_combat.s" "0400 0429" 42 500000000
 run_test "msg_long" "tests/test_msg_long.s" "0400 0400" 1 20000000
-run_test "monster_attack" "tests/test_monster_attack.s" "0400 0415" 22 500000000
+run_test "monster_attack" "tests/test_monster_attack.s" "0400 042d" 46 500000000
+run_test "monster_tier3" "tests/test_monster_tier3.s" "0400 0403" 4 20000000
 run_test "effects" "tests/test_effects.s" "0400 042d" 46 1000000000
 run_test "effects_magic" "tests/test_effects_magic.s" "0400 0433" 29 1000000000
 run_test "cure_light_wounds" "tests/test_cure_light_wounds.s" "0400 0402" 3 500000000
@@ -4462,7 +4463,7 @@ run_test "haste_self" "tests/test_haste_self.s" "0400 0402" 3 500000000
 run_test "fire_ball" "tests/test_fire_ball.s" "0400 0402" 3 500000000
 run_test "word_of_destruction" "tests/test_word_of_destruction.s" "0400 0406" 7 500000000
 run_test "light_area" "tests/test_light_area.s" "0400 0401" 2 500000000
-run_test "phase_door" "tests/test_phase_door.s" "0400 0403" 4 500000000
+run_test "phase_door" "tests/test_phase_door.s" "0400 0406" 7 500000000
 run_test "genocide" "tests/test_genocide.s" "0400 0401" 2 500000000
 run_test "directional_effects" "tests/test_directional_effects.s" "0400 0403" 4 500000000
 run_test "overcast_ordering" "tests/test_overcast_ordering.s" "0400 0400" 1 500000000
@@ -4501,9 +4502,11 @@ run_test "orb_of_draining_prayer" "tests/test_orb_of_draining_prayer.s" "0400 04
     run_test "prayer_feedback" "tests/test_prayer_feedback.s" "0400 040c" 13 500000000
 run_test "detect_feedback" "tests/test_detect_feedback.s" "0400 0403" 4 500000000
 run_test "item" "tests/test_item.s" "0400 043f" 64 1000000000
-run_test "scroll_p3" "tests/test_scroll_p3.s" "0400 040d" 14 1000000000
+run_test "scroll_p3" "tests/test_scroll_p3.s" "0400 040e" 15 1000000000
 run_test "item_desc" "tests/test_item_desc.s" "0400 040a" 11 500000000
 run_test "item_ui" "tests/test_item_ui.s" "0400 040f" 16 1000000000
+run_test "potion_cures" "tests/test_potion_cures.s" "0400 040b" 12 1000000000
+run_test "timed_buffs" "tests/test_timed_buffs.s" "0400 0409" 10 1000000000
 run_test "store" "tests/test_store.s" "0400 0437" 56 1000000000
 run_test "ui_views" "tests/test_ui_views.s" "0400 0413" 19 500000000
 run_test "ui_views_filters" "tests/test_ui_views_filters.s" "0400 0413" 7 500000000
@@ -4512,7 +4515,7 @@ run_sound_monitor_test
 run_test "save"  "tests/test_save.s"  "0400 0421" 34 1000000000
 run_test "score" "tests/test_score.s" "0400 040c" 13 500000000
 run_test "wands_staves" "tests/test_wands_staves.s" "0400 0407" 8 100000000
-run_test "monster_magic" "tests/test_monster_magic.s" "0400 0419" 26 500000000
+run_test "monster_magic" "tests/test_monster_magic.s" "0400 041c" 29 500000000
 run_test "tier" "tests/test_tier.s" "0400 0410" 17 500000000
 run_test "disk_swap" "tests/test_disk_swap.s" "0400 040e" 15 500000000
 run_test "render" "tests/test_render.s" "0400 0417" 24 500000000

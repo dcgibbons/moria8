@@ -23,8 +23,6 @@ pmx_heal_and_report:
     lda pmx_feedback_heal_amt
     jsr eff_heal
     lda pmx_feedback_heal_amt
-    jmp pmx_heal_report_message
-
 pmx_heal_report_message:
     cmp #5
     bcs !phrm_better+

@@ -1,9 +1,10 @@
 # Moria8 Monster Reference
 
 The current releases ship a selected monster roster, not the full Umoria
-creature catalog. The current shipped set contains 120 selected creatures from
-Umoria's 279-creature catalog, arranged into overlapping active tiers for the
-per-platform memory model.
+creature catalog. The current shipped set contains 150 selected creatures from
+Umoria's 279-creature catalog (120 originally, 30 more added 2026-10-25),
+arranged into overlapping active tiers for the per-platform memory model:
+8 town creatures and 54, 35, 39 and 57 creatures in tiers 1-4.
 
 The tier tables below list what can be loaded by the current game. Some
 creatures appear in more than one tier so transitions between depth bands can
@@ -21,13 +22,18 @@ Moria8 tracks these shipped monster fields:
   loads them from disk, and C128 caches them through its banked model.
 - DL: native dungeon level. Deeper monsters are generally more dangerous.
 - Speed: slow, normal, or fast. Fast monsters can act more often.
-- HD: hit dice. More and larger dice mean more hit points.
+- HD: hit dice. More and larger dice mean more hit points. Creatures with
+  upstream's maximum-HP flag (the Quylthulg, the mature and ancient dragons,
+  the greater undead, Evil Iggy, the Balrog and a few others; 27 in all)
+  always spawn with the full dice, e.g. the Balrog's 75d40 is 3000 HP.
 - AC: armor class. Higher AC is harder to hit.
 - Sleep: how asleep or alert the creature starts. Lower values wake more
   readily.
 - AAF: awareness radius. Higher values notice the player from farther away.
 - XP: experience award.
 - Attacks: up to two compact melee attacks in the current shipped table.
+  A creature with more upstream attacks keeps a paralysing attack first, then
+  its hardest-hitting blows (so dragons and trolls keep their bite).
 - Spells: spell chance and spell flags for casters, breathers, and special
   monsters.
 
@@ -57,21 +63,51 @@ Tier 1 covers DL 1-8.
 
 | DL | Creature |
 | ---: | -------- |
+| 1 | Grey Mushroom patch |
+| 1 | Giant Yellow Centipede |
+| 1 | Giant White Centipede |
+| 1 | White Icky-Thing |
+| 1 | Giant White Mouse |
+| 1 | Large Brown Snake |
+| 1 | Large White Snake |
 | 1 | Kobold |
 | 1 | White Worm mass |
 | 1 | Floating Eye |
+| 2 | Blubbering Icky-Thing |
+| 2 | Metallic Green Centipede |
+| 2 | Novice Warrior |
+| 2 | Novice Rogue |
 | 2 | Novice Priest |
 | 2 | Novice Mage |
+| 2 | Yellow Mushroom patch |
+| 2 | Giant Green Frog |
 | 2 | Giant Black Ant |
+| 2 | White Harpy |
+| 2 | Blue Yeek |
+| 2 | Large Black Snake |
 | 3 | Poltergeist |
+| 3 | Metallic Blue Centipede |
 | 3 | Black Naga |
 | 3 | Yellow Jelly |
+| 3 | Scruffy-Looking Hobbit |
+| 3 | Huge Brown Bat |
+| 3 | Giant White Ant |
+| 3 | Metallic Red Centipede |
+| 3 | Large Green Snake |
+| 3 | Radiation Eye |
+| 3 | Drooling Harpy |
 | 4 | Creeping Copper Coins |
+| 4 | Giant Black Centipede |
+| 4 | Giant Blue Centipede |
 | 4 | Blue Worm mass |
+| 4 | Large Grey Snake |
 | 4 | Jackal |
 | 5 | Green Naga |
 | 5 | White Mushroom patch |
 | 5 | Skeleton Kobold |
+| 5 | Giant Black Frog |
+| 5 | Grey Icky-Thing |
+| 5 | Black Yeek |
 | 6 | Brown Mold |
 | 6 | Orc |
 | 6 | Rattlesnake |
@@ -91,6 +127,9 @@ Tier 2 covers DL 5-15.
 | 5 | Green Naga |
 | 5 | White Mushroom patch |
 | 5 | Skeleton Kobold |
+| 5 | Giant Black Frog |
+| 5 | Grey Icky-Thing |
+| 5 | Black Yeek |
 | 6 | Brown Mold |
 | 6 | Orc |
 | 6 | Rattlesnake |
@@ -253,6 +292,9 @@ without memorizing every numeric field.
 
 These are exact shipped tier-4 values for the obvious breath/endgame threats.
 `Sp%` is the monster spell/breath chance field. `XP` is the experience award.
+Every creature here except the young blue and green dragons has the
+maximum-HP flag, so its HP is the full `HD` product (breath is a third of the
+current HP, at most 255).
 
 | DL | Creature | Speed | HD | AC | XP | Sp% |
 | ---: | -------- | ----- | --- | ---: | ---: | ---: |

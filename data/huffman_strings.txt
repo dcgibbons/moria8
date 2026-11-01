@@ -30,7 +30,6 @@ Sorry, what was that again?
 @MM_CAST  casts a spell.
 @MM_BREATH  breathes fire!
 @MM_SUMMON  summons help!
-@MM_TELEPORT  teleports you!
 @MM_BLIND  blinds you!
 @MM_CONFUSE  confuses you!
 @MM_RESIST You resist the effects of the spell.
@@ -273,3 +272,6 @@ Sorry, what was that again?
 # ===== Acid damage to worn armour (VMS moria.inc minus_ac) =====
 @MAT_YOUR Your ~
 @MAT_DAMAGED  is damaged!
+
+# ===== Protection from Evil (VMS creature.inc make_attack) =====
+@MAT_REPELLED  is repelled.

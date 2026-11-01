@@ -1052,6 +1052,8 @@ player_adjust_equipment_stat:
 #import "../../core/turn.s"
 #undef TURN_REST_DISTURBED_EXTERNAL
 #import "../../core/player_heal_feedback.s"
+// Potion heal/cure effects: reached from the items and spell overlays.
+#import "../../core/eff_potion_cure.s"
 #import "../../core/ui_restore.s"
 #import "../../core/ui_help_clear.s"
 #import "../../core/stat_display.s"
@@ -1366,16 +1368,14 @@ iq_dispatch_p3_spell:
     beq iqp3_neutralize
 
 iqp3_healing:
-    lda #200
-    jmp pmx_heal_and_report
+    jmp eff_potion_healing          // 1000 HP + cures (eff_potion_cure.s)
 
 iqp3_cure_critical:
-    lda #6
+    // 6d7 HP, cures blindness, confusion and poison
+    lda #EFF_CURE_ALL
     ldx #7
-    ldy #0
-    jsr math_dice
-    lda zp_math_a
-    jmp pmx_heal_and_report
+    ldy #6
+    jmp eff_potion_heal_cure
 
 iqp3_restoration:
     jsr player_calc_stats

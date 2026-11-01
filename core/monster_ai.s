@@ -332,13 +332,9 @@ monster_process_one:
     jsr rng_range               // sets Z for A
     bne !mpo_done+
     // Spawn clone adjacent
-    lda zp_mon_x
-    sta fae_cx
-    lda zp_mon_y
-    sta fae_cy
     lda zp_mon_idx
     pha                         // Save original monster index
-    jsr find_adjacent_empty
+    jsr find_adjacent_empty_mon
     bcc !breed_fail+
     lda zp_mon_type
     jsr monster_spawn_one

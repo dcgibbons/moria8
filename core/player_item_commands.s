@@ -527,31 +527,21 @@ item_quaff:
     jmp iq_effect_generic
 
 !iq_effect_healing:
-    // Heal 200 HP (upstream Healing; draft value)
-    lda #200
-    jsr pmx_heal_and_report
-    sec
-    rts
+    jmp eff_potion_healing          // 1000 HP + cures (eff_potion_cure.s)
 
 !iq_effect_cure_critical:
-    // Heal 6d7 HP (upstream Cure Critical Wounds)
-    lda #6
+    // 6d7 HP, cures blindness, confusion and poison
+    lda #EFF_CURE_ALL
     ldx #7
-    ldy #0
-    jsr math_dice
-    lda zp_math_a
-    jsr pmx_heal_and_report
-    sec
-    rts
+    ldy #6
+    jmp eff_potion_heal_cure
 
 !iq_effect_restoration:
     // Restore all stats: current stats are recomputed from base + modifiers,
     // which undoes stat drain (drain only lowers CUR, never BASE)
     jsr player_calc_stats
     ldx #HSTR_PIQ_RESTORED
-    jsr huff_print_msg
-    sec
-    rts
+    jmp iq_msg_turn
 
 !iq_effect_resist_heat:
     // Resist heat/fire for rng(10) + 10 turns
@@ -587,9 +577,7 @@ item_quaff:
 !iq_effect_neutralize:
     jsr eff_cure_poison
     ldx #HSTR_EFF_POISON_END
-    jsr huff_print_msg
-    sec
-    rts
+    jmp iq_msg_turn
 #endif
 
 
@@ -606,36 +594,30 @@ iq_dispatch_hi:
     .byte >iq_effect_confusion, >iq_effect_detect_mon, >iq_effect_infravision
 
 iq_effect_cure:
-    // Heal rng(8) + 4 HP
-    lda #8
-    jsr rng_range                   // [0, 7]
-    clc
-    adc #4                          // [4, 11]
-    sta piw_qty                     // Reuse as heal amount
-
-    lda piw_qty
-    jsr pmx_heal_and_report
-    sec
-    rts
+    // Cure Light Wounds: 2d7 HP, cures blindness (eff_potion_cure.s)
+    lda #EFF_CURE_BLIND
+    ldx #7
+    ldy #2
+    jmp eff_potion_heal_cure
 
 iq_effect_speed:
-    // Set speed effect timer: rng(20) + 10
-    lda #20
-    jsr rng_range                   // [0, 19]
-    clc
-    adc #10                         // [10, 29]
-    // Add to existing timer (stacks)
-    clc
+    // Potion of Speed: fast += randint(25) + 15 (VMS Moria potions.inc;
+    // Umoria player_quaff.cpp), 16-40 turns. zp_eff_speed is one signed
+    // timer (> 0 haste, < 0 slow): a signed add, so haste while slowed
+    // cancels slow turn for turn, and stacking stops at +127 instead of
+    // wrapping into slow (as pmx_add_speed_msg).
+    lda #25
+    jsr rng_range                   // [0, 24]
+    sec
+    adc #15                         // [16, 40]; carry clear
     adc zp_eff_speed
-    bcc !iq_speed_ok+
-    lda #255                        // Cap at 255
+    bvc !iq_speed_ok+
+    lda #$7f                        // Cap at +127
 !iq_speed_ok:
     sta zp_eff_speed
 
     ldx #HSTR_PIQ_SPEED
-    jsr huff_print_msg
-    sec
-    rts
+    jmp iq_msg_turn
 
 iq_effect_poison:
     // Deal rng(6) + 3 damage
@@ -689,21 +671,14 @@ iq_effect_poison:
     sta zp_eff_poison
 
     ldx #HSTR_PIQ_TERRIBLE
-    jsr huff_print_msg
-
-    sec
-    rts
+    jmp iq_msg_turn
 
 iq_effect_csw:
-    // Cure Serious Wounds: heal 5d8+5 = [10, 45]
-    lda #5                          // N = 5 dice
-    ldx #8                          // S = 8 sides
-    ldy #5                          // bonus = 5
-    jsr math_dice                   // Result in zp_math_a (max 45, fits 8 bits)
-    lda zp_math_a
-    jsr pmx_heal_and_report
-    sec
-    rts
+    // Cure Serious Wounds: 4d7 HP, cures blindness and confusion
+    lda #EFF_CURE_BLIND | EFF_CURE_CONFUSE
+    ldx #7
+    ldy #4
+    jmp eff_potion_heal_cure
 
 iq_effect_restore_mana:
     // Restore Mana: set MP = max MP
@@ -712,9 +687,7 @@ iq_effect_restore_mana:
     sta player_data + PL_MANA
 
     ldx #HSTR_PIQ_MIND_CLEAR
-    jsr huff_print_msg
-    sec
-    rts
+    jmp iq_msg_turn
 
 iq_effect_heroism:
     // Heroism: first activation grants +10 max/current HP and clears fear.
@@ -756,9 +729,7 @@ iq_effect_heroism:
     sta zp_eff_hero
 
     ldx #HSTR_PIQ_HEROIC
-    jsr huff_print_msg
-    sec
-    rts
+    jmp iq_msg_turn
 
 iq_effect_blindness:
     // Set zp_eff_blind timer (rng(100)+100)
@@ -774,9 +745,7 @@ iq_effect_blindness:
     sta zp_eff_blind
 
     ldx #HSTR_PIQ_CANT_SEE
-    jsr huff_print_msg
-    sec
-    rts
+    jmp iq_msg_turn
 
 iq_effect_confusion:
     // Set zp_eff_confuse timer (rng(15)+10)
@@ -792,16 +761,12 @@ iq_effect_confusion:
     sta zp_eff_confuse
 
     ldx #HSTR_PIQ_DIZZY
-    jsr huff_print_msg
-    sec
-    rts
+    jmp iq_msg_turn
 
 iq_effect_detect_mon:
     jsr eff_detect_monsters
     ldx #HSTR_PIQ_SENSE
-    jsr huff_print_msg
-    sec
-    rts
+    jmp iq_msg_turn
 
 iq_effect_infravision:
     // Set zp_eff_infra timer (rng(50)+50)
@@ -819,12 +784,12 @@ iq_effect_infravision:
     sta zp_eff_infra
 
     ldx #HSTR_PIQ_EYES_TINGLE
-    jsr huff_print_msg
-    sec
-    rts
+    jmp iq_msg_turn
 
 iq_effect_generic:
     ldx #HSTR_PIQ_NOTHING
+// iq_msg_turn — print Huffman message X, turn consumed (carry set)
+iq_msg_turn:
     jsr huff_print_msg
     sec
     rts

@@ -78,6 +78,12 @@
 .const ITEM_TYPE_POT_RESIST_HEAT    = 98
 .const ITEM_TYPE_POT_RESIST_COLD    = 99
 .const ITEM_TYPE_POT_CURE_CRITICAL  = 100
+// Status timers a cure-wounds/Healing potion cures (eff_potion_cure.s masks;
+// bit order follows zp_eff_poison, zp_eff_blind, zp_eff_confuse).
+.const EFF_CURE_POISON  = %001
+.const EFF_CURE_BLIND   = %010
+.const EFF_CURE_CONFUSE = %100
+.const EFF_CURE_ALL     = EFF_CURE_POISON | EFF_CURE_BLIND | EFF_CURE_CONFUSE
 .const ITEM_TYPE_SCR_TELEPORT_LEVEL = 101
 .const ITEM_TYPE_SCR_MAGIC_MAPPING  = 102
 .const ITEM_TYPE_SCR_OBJECT_DETECT  = 103

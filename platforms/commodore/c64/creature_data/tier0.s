@@ -24,7 +24,7 @@ tier0_cr_display:
 tier0_cr_color:
     .byte $0f, $0f, $0f, $0f, $03, $0f, $03, $02
 
-// Speed (bits 0-1: 0=slow, 1=normal, 2=fast) | random-move bits 3-5
+// Speed (bits 0-1: 0=slow, 1=normal, 2=fast) | random-move bits 3-5 | max HP bit 7
 tier0_cr_speed:
     .byte $09, $09, $09, $09, $01, $39, $09, $09
 

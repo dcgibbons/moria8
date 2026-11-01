@@ -81,31 +81,36 @@ eff_light_room:
     rts
 
 // ============================================================
-// eff_teleport_self — Teleport player to random floor tile
+// eff_phase_door — Phase Door: VMS Moria teleport(10) (moria.inc; Umoria
+// playerTeleport(10)): a random square pulled within distance 10.
+// eff_teleport_self — Teleport player to random floor tile (no limit)
 // Input: none (reads zp_player_x/y)
 // Output: player moved, vis_room_revealed set
-// Clobbers: A, X, Y, zp_ptr0
+// Clobbers: A, X, Y, zp_ptr0, zp_temp0-4
 // ============================================================
+eff_phase_door:
+    lda #10
+    .byte $2c                       // BIT abs: skip the lda #0 below
 eff_teleport_self:
-    jsr find_random_floor
+    lda #0                          // No distance limit
+    jsr find_random_floor_near
     bcc !ets_fail+
+    lda df_target_x
+    ldy df_target_y
 
-// eff_teleport_apply_target — Move player to df_target_x/y
-// Input: df_target_x/y = destination, zp_player_x/y = current position
+// eff_teleport_apply_target — Move player to (A, Y)
+// Input: A = destination x, Y = destination y (also monster Teleport To)
 // Output: player moved, vis_room_revealed set. FLAG_OCCUPIED marks creatures
 //         only (dungeon_data.s): the player's tiles are left as they are, as
 //         for a step or trap_teleport; setting it here left a stale creature
 //         flag wherever the player landed (M5b playtest round 12).
-// Clobbers: A, X, Y, zp_ptr0
+// Clobbers: A
 // ============================================================
 eff_teleport_apply_target:
-    jsr player_search_mode_off
-
     // Move player
-    lda df_target_x
     sta zp_player_x
-    lda df_target_y
-    sta zp_player_y
+    sty zp_player_y
+    jsr player_search_mode_off
 
     // Trigger full visibility update and redraw
     lda #1
@@ -287,57 +292,6 @@ eff_remove_curse:
     jmp !erc_loop-
 !erc_done:
     rts
-
-// ============================================================
-// eff_phase_door — Short-range teleport (up to 10 tiles away)
-// Picks a random floor tile; if > 10 distance, retries (max 20).
-// Clobbers: A, X, Y, zp_ptr0
-// ============================================================
-eff_pd_attempts: .byte 0
-
-eff_phase_door:
-    lda #20
-    sta eff_pd_attempts
-
-!epd_loop:
-    jsr find_random_floor
-    bcc !epd_retry+
-
-    // Check Chebyshev distance <= 10
-    lda df_target_x
-    sec
-    sbc zp_player_x
-    bpl !epd_dx_pos+
-    eor #$ff
-    clc
-    adc #1
-!epd_dx_pos:
-    sta zp_temp0                    // |dx|
-
-    lda df_target_y
-    sec
-    sbc zp_player_y
-    bpl !epd_dy_pos+
-    eor #$ff
-    clc
-    adc #1
-!epd_dy_pos:
-    // max(|dx|, |dy|) = Chebyshev distance
-    cmp zp_temp0
-    bcs !epd_use_dy+
-    lda zp_temp0
-!epd_use_dy:
-    cmp #11
-    bcc !epd_ok+
-
-!epd_retry:
-    dec eff_pd_attempts
-    bne !epd_loop-
-
-    rts
-!epd_ok:
-    // Move player (df_target_x/y already set by find_random_floor)
-    jmp eff_teleport_apply_target
 
 // ============================================================
 // eff_find_traps / eff_destroy_traps_doors live in

@@ -161,7 +161,7 @@ irs_re_id_tab:
     .byte ITEM_TYPE_WAND_FIRE_BALL, 49, <eff_ball, >eff_ball
     .byte ITEM_TYPE_WAND_COLD_BALL, 33, <eff_ball, >eff_ball
     .byte ITEM_TYPE_STAFF_DISPEL_EVIL, 0, <ped_s28, >ped_s28
-    .byte ITEM_TYPE_STAFF_SPEED, 0, <eff_haste_self, >eff_haste_self
+    .byte ITEM_TYPE_STAFF_SPEED, 0, <eff_staff_speed, >eff_staff_speed
     .byte $ff, 0, <eff_p3_nop, >eff_p3_nop
 #else
     cmp #ITEM_TYPE_SCR_RECHARGING
@@ -225,9 +225,9 @@ irs_re_id_tab:
     jmp !irs_re_done+
 !irs_re_speed:
 #if HAL_PLATFORM_COMPACT_PLAY_SLOT
-    :CompactReCall(eff_haste_self)
+    :CompactReCall(eff_staff_speed)
 #else
-    jsr eff_haste_self
+    jsr eff_staff_speed
     jmp !irs_re_done+
 #endif
 !irs_re_remove_curse:
@@ -341,32 +341,34 @@ irs_re_compact_call:
 #endif
 
 #if SCROLL_P3_NEW_OWNER
-// Teleport Level: dlvl += ±1 (upstream: -3 + 2*rng(2)), clamp >= 1, then
-// the stairs level-change machinery (which ends the turn in main_loop).
+// Teleport Level: VMS Moria scrolls.inc case 10 (Umoria scrolls.cpp
+// scrollTeleportLevel): dun_level := dun_level - 3 + 2*randint(2), one level
+// up or down, then at least 1, so from the town (level 0) it always goes to
+// level 1. Then the stairs level-change machinery (which ends the turn in
+// main_loop). Depths stay far below 127, so the level is a positive byte.
 irs_p3_teleport_level:
     lda #2
     jsr rng_range               // [0, 1]
-    beq !irs_tl_up+
-    inc zp_player_dlvl
-    lda zp_player_dlvl
-    cmp player_data + PL_MAX_DLVL
-    bcc !irs_tl_not_deeper+
-    sta player_data + PL_MAX_DLVL
-!irs_tl_not_deeper:
-    lda #0
-    sta level_entry_dir         // 0 = descended
-    jmp !irs_tl_go+
-!irs_tl_up:
-    dec zp_player_dlvl
-    bne !irs_tl_up_ok+
+    asl                         // 0 or 2; carry clear
+    adc zp_player_dlvl
+    sbc #0                      // Carry clear: dlvl - 1 or dlvl + 1
+    beq !irs_tl_floor+          // Level 0 (from level 1)
+    bpl !irs_tl_level_ok+       // $ff (from the town) falls through
+!irs_tl_floor:
     lda #1
+!irs_tl_level_ok:
+    ldx #1                      // 1 = ascended (not deeper)
+    cmp zp_player_dlvl
     sta zp_player_dlvl
-!irs_tl_up_ok:
-    lda #1
-    sta level_entry_dir         // 1 = ascended
-!irs_tl_go:
-    lda zp_player_dlvl
     sta player_data + PL_DLEVEL
+    beq !irs_tl_dir+            // Same level (clamped at level 1)
+    bcc !irs_tl_dir+            // Shallower
+    dex                         // 0 = descended
+    cmp player_data + PL_MAX_DLVL
+    bcc !irs_tl_dir+
+    sta player_data + PL_MAX_DLVL
+!irs_tl_dir:
+    stx level_entry_dir
     jmp scroll_teleport_level_exec
 
 // Magic Mapping: reveal the whole level map (wizard reveal effect).

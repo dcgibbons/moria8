@@ -2012,7 +2012,7 @@ if not has_ordered_chain(c128_main, [
     "tramp_staff_speed_items:",
     "lda #OVL_DEATH",
     "jsr overlay_load",
-    "jsr eff_haste_self",
+    "jsr eff_staff_speed",
     "lda #OVL_ITEMS",
     "jsr overlay_load",
 ]):

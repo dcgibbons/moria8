@@ -271,10 +271,15 @@ irs_effect_aggravate:
     jmp hpm_sec_rts
 
 irs_effect_protect:
+    // protevil += randint(25) + 3*lev (VMS Moria scrolls.inc case 28 ->
+    // spells.inc protect_evil; Umoria playerProtectEvil), saturating at 255.
+    // Levels up to 76 keep the amount below 256: no carry between the adds.
     lda #25
     jsr rng_range
-    clc
-    adc #25
+    sec
+    adc zp_player_lvl
+    adc zp_player_lvl
+    adc zp_player_lvl
     clc
     adc zp_eff_protect
     bcc !irs_prot_ok+

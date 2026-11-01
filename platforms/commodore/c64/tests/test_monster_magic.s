@@ -1,10 +1,11 @@
 // test_monster_magic.s — Runtime tests for monster_magic.s
 //
 // Tests: monster_can_cast (4 tests), wound/blind/confuse/fear spells against
-//        VMS Moria cast_spell (MON-011), monster_cast_breath, the shared
-//        player saving throw (player_save.s) and the paralysis touch save.
+//        VMS Moria cast_spell (MON-011), monster_cast_breath and its fire
+//        resistances (VMS fire_dam), the shared player saving throw
+//        (player_save.s) and the paralysis touch save.
 //
-// Results at $0400-$0419: $01 = pass, $00 = fail per test
+// Results at $0400-$041c: $01 = pass, $00 = fail per test
 // NOTE: msg_print writes to screen row 0 ($0400+), so we store results
 // in tc_results[] and copy to $0400 at the very end.
 .pc = $0801 "BASIC Stub"
@@ -15,7 +16,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #25
+    ldx #28
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -103,7 +104,7 @@ press_key_str:
 // Test scratch
 tc_loop:    .byte 0
 tc_ok:      .byte 0
-tc_results: .fill 26, $ff      // Result buffer (copied to $0400 at end)
+tc_results: .fill 29, $ff      // Result buffer (copied to $0400 at end)
 
 test_start:
     // Seed RNG deterministically
@@ -1164,6 +1165,178 @@ test_start:
     sta zp_eff_paralyze
     jsr tst_unpatch_save
 
+    // ==========================================
+    // Test 27: a summon through the full AI leaves both records true: the
+    // caster stays where it stood, and the summoned creature's record names
+    // the tile beside it that is flagged FLAG_OCCUPIED. monster_spawn_one
+    // kept the new slot in zp_mon_idx, so the caller's monster_write_back
+    // moved the new record onto the caster's tile (M7 queue, 2026-10-31:
+    // FLAG_OCCUPIED findings after "the Magic User summons help!" on DL11+).
+    // ==========================================
+!t27:
+    jsr tst_prep
+    jsr monster_init_table
+    lda #10                     // the player at (10,10), two squares off
+    sta zp_player_x
+    sta zp_player_y
+    ldx #9                      // floor from (9,9) to (13,11): the caster's
+!t27_row:                       // neighbours and its line to the player
+    stx tc_loop
+    jsr map_row_ptr0_x
+    ldy #9
+!t27_col:
+    lda #TILE_FLOOR
+    :MapWrite_ptr0_y()
+    iny
+    cpy #14
+    bne !t27_col-
+    ldx tc_loop
+    inx
+    cpx #12
+    bne !t27_row-
+
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_X
+    lda #12
+    sta (zp_ptr0),y
+    ldy #MX_Y
+    lda #10
+    sta (zp_ptr0),y
+    ldy #MX_TYPE
+    lda #22
+    sta (zp_ptr0),y
+    ldy #MX_HP_LO
+    lda #10
+    sta (zp_ptr0),y
+    ldy #MX_FLAGS
+    lda #MF_AWAKE | MF_VISIBLE  // in view: within reach to act (MON-017)
+    sta (zp_ptr0),y
+    lda #0
+    ldy #MX_HP_HI
+    sta (zp_ptr0),y
+    ldy #MX_SPEED_CNT
+    sta (zp_ptr0),y
+    ldy #MX_SLEEP_CUR
+    sta (zp_ptr0),y
+    ldy #MX_STUN
+    sta (zp_ptr0),y
+    ldy #MX_CONFUSE
+    sta (zp_ptr0),y
+    ldy #MX_FLEE_LO
+    sta (zp_ptr0),y
+    ldy #MX_FLEE_HI
+    sta (zp_ptr0),y
+
+    lda #0
+    sta zp_mon_idx
+    lda #22
+    sta zp_mon_type
+    lda #12
+    sta zp_mon_x
+    lda #10
+    sta zp_mon_y
+    lda #MF_AWAKE | MF_VISIBLE
+    sta zp_mon_flags
+
+    lda cr_spell_chance + 22
+    pha
+    lda cr_spell_flags + 22
+    pha
+    lda #100
+    sta cr_spell_chance + 22
+    lda #MSF_SUMMON
+    sta cr_spell_flags + 22
+
+    jsr monster_process_one
+
+    // Each check stores its own code on failure: 2 the caster moved, 3 no
+    // creature summoned, 4 the summoned record on the caster's tile, 5 its
+    // tile not flagged occupied.
+    ldx #0                      // the caster: still at (12,10)
+    jsr monster_get_ptr
+    lda #$02
+    sta tc_ok
+    ldy #MX_X
+    lda (zp_ptr0),y
+    cmp #12
+    bne !t27_fail+
+    ldy #MX_Y
+    lda (zp_ptr0),y
+    cmp #10
+    bne !t27_fail+
+    ldx #1                      // the summoned creature
+    jsr monster_get_ptr
+    inc tc_ok
+    ldy #MX_TYPE
+    lda (zp_ptr0),y
+    cmp #EMPTY_SLOT
+    beq !t27_fail+
+    inc tc_ok
+    ldy #MX_X
+    lda (zp_ptr0),y
+    sta tc_loop
+    ldy #MX_Y
+    lda (zp_ptr0),y
+    tax
+    cmp #10                     // not the caster's tile
+    bne !t27_moved+
+    lda tc_loop
+    cmp #12
+    beq !t27_fail+
+!t27_moved:
+    inc tc_ok
+    jsr map_row_ptr0_x          // and its tile is flagged occupied
+    ldy tc_loop
+    :MapRead_ptr0_y()
+    and #FLAG_OCCUPIED
+    beq !t27_fail+
+    lda #$01
+    sta tc_results + 26
+    jmp !t27_restore+
+!t27_fail:
+    lda tc_ok
+    sta tc_results + 26
+!t27_restore:
+    pla
+    sta cr_spell_flags + 22
+    pla
+    sta cr_spell_chance + 22
+
+    // ==========================================
+    // Tests 28-29: breath (Moria8: fire) takes VMS Moria fire_dam
+    // (moria.inc; Umoria inventory.cpp damageFire): dam div 3 with the
+    // Resist Fire ring, div 3 again with the Resist Heat timer, before
+    // take_hit. Moria8 caps the hit at 255 after that.
+    // Test 28: monster HP 270 -> breath 90; ring and timer -> 90/3/3 = 10
+    // (one divide before the fix: 30).
+    // ==========================================
+    lda #PFLAG_RESIST_FIRE
+    sta player_pflags
+    lda #3
+    sta zp_eff_resist
+    lda #<270
+    ldx #>270
+    jsr tst_breath
+    cmp #10
+    jsr tst_result_eq
+    sta tc_results + 27
+
+    // Test 29: monster HP 1200 -> breath 400, timer only -> 133 (before
+    // the fix the 255 cap came first and skipped the resistance).
+    lda #0
+    sta player_pflags
+    lda #3
+    sta zp_eff_resist
+    lda #<1200
+    ldx #>1200
+    jsr tst_breath
+    cmp #133
+    jsr tst_result_eq
+    sta tc_results + 28
+    lda #0
+    sta zp_eff_resist
+
 !tests_done:
     jmp test_exit_trampoline
 
@@ -1225,6 +1398,50 @@ tst_prep:
     sta $0277,x
     dex
     bpl !fill-
+    rts
+
+// tst_breath — Production monster_cast_breath from monster slot 0 (type
+// 24) with HP A (lo) / X (hi), the player at 500 HP and not invulnerable
+// (test 11 leaves the Holy Word timer set).
+// Output: A = damage taken (under 256).
+tst_breath:
+    pha
+    txa
+    pha
+    jsr tst_prep
+    lda #0
+    sta eff_invuln_timer
+    lda #<500
+    sta zp_player_hp_lo
+    sta player_data + PL_HP_LO
+    lda #>500
+    sta zp_player_hp_hi
+    sta player_data + PL_HP_HI
+    jsr monster_init_table
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda #24
+    sta (zp_ptr0),y
+    ldy #MX_X
+    lda #12
+    sta (zp_ptr0),y
+    ldy #MX_Y
+    sta (zp_ptr0),y
+    pla
+    ldy #MX_HP_HI
+    sta (zp_ptr0),y
+    pla
+    ldy #MX_HP_LO
+    sta (zp_ptr0),y
+    lda #24
+    sta zp_mon_type
+    lda #0
+    sta zp_mon_idx
+    jsr monster_cast_breath
+    lda #<500
+    sec
+    sbc zp_player_hp_lo
     rts
 
 // tst_result_eq — A = $01 when the preceding compare set Z, else $00.

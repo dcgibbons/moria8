@@ -131,6 +131,8 @@ cr_speed:
 // in bits 3-5 (MON-013): CM_20_RANDOM $08, CM_40_RANDOM $10, CM_75_RANDOM $20.
 .const CR_SPEED_MASK  = $03
 .const CM_RANDOM_MOVE = $38
+// cr_speed bit 7: upstream CD_MAX_HP (VMS cdefense $4000): spawns with N*S HP.
+.const CR_MAX_HP      = $80
 .const CF_INFRA       = $80   // Warm creature: visible to player infravision
 
 cr_mflags:
@@ -706,62 +708,70 @@ pick_creature_type:
 // Output: carry set = success, X = slot index
 //         carry clear = table full
 // Clobbers: A, X, Y, zp_ptr0, zp_math_a/b, zp_math_tmp0/1, zp_temp3, zp_temp4
+// Preserves zp_mon_idx: a monster's own turn spawns (summons) and then writes
+// that monster back through it; the new slot is kept on the stack instead
+// (M7 queue, 2026-10-31: a summoned record was moved onto its caster).
 monster_spawn_one:
     sta ms_type
 
     // Find free slot
     jsr monster_find_free_slot
-    bcs !mso_have_slot+
-    jmp !mso_fail+              // Table full
-!mso_have_slot:
+    bcc !mso_fail+              // Table full
 
     // X = slot index, zp_ptr0 = entry pointer (from find_free_slot)
-    // Set position
+    // Set position and type
     ldy #MX_X
     lda ms_spawn_x
     sta (zp_ptr0),y
-    ldy #MX_Y
+    iny                         // MX_Y
     lda ms_spawn_y
     sta (zp_ptr0),y
-
-    // Set type
-    ldy #MX_TYPE
+    iny                         // MX_TYPE
     lda ms_type
     sta (zp_ptr0),y
+.assert "monster_spawn_one: MX_X, MX_Y, MX_TYPE are consecutive", MX_TYPE, MX_X + 2
+.assert "monster_spawn_one: MX_Y follows MX_X", MX_Y, MX_X + 1
 
-    // Roll HP: cr_hd_num[type] d cr_hd_sides[type]
-    stx zp_mon_idx              // Save slot index
-    ldx ms_type
-    lda cr_hd_num,x             // N dice
-    pha                         // Save on stack
-    ldy cr_hd_sides,x           // S sides
-    pla                         // A = N
-    // math_dice(A=N, X=S, Y=bonus=0)
-    sty zp_temp0                // Save sides
-    ldx zp_temp0                // X = sides
+    // HP: cr_hd_num[type] d cr_hd_sides[type], or the full N * S for a
+    // CR_MAX_HP creature (VMS misc.inc place_monster: cdefense $4000 takes
+    // max_hp; Umoria monster_manager.cpp maxDiceRoll). N * S <= 255 * 255
+    // fits the 16-bit HP (Balrog 75d40 = 3000).
+    txa                         // Save slot index
+    pha
+    ldy ms_type
+    ldx cr_hd_sides,y           // X = S sides
+    lda cr_speed,y
+    asl                         // Carry = CR_MAX_HP (bit 7)
+    lda cr_hd_num,y             // A = N dice
+    bcs !mso_max_hp+
     ldy #0                      // No bonus
     jsr math_dice               // Result in zp_math_a (lo), zp_math_b (hi)
+    jmp !mso_have_hp+
+!mso_max_hp:
+    jsr math_multiply           // zp_math_a/b = N * S
+!mso_have_hp:
+.assert "monster_spawn_one: CR_MAX_HP is cr_speed bit 7 (asl into carry)", CR_MAX_HP, $80
 
-    // Restore slot pointer (math_dice does NOT clobber zp_ptr0)
-    ldx zp_mon_idx
-    jsr monster_get_ptr         // Restore zp_ptr0 (safe to re-derive)
-
+    // zp_ptr0 still names the slot: math_dice, math_multiply, rng_range and
+    // monster_initial_sleep never write it.
     ldy #MX_HP_LO
     lda zp_math_a
     sta (zp_ptr0),y
-    ldy #MX_HP_HI
+    iny                         // MX_HP_HI
     lda zp_math_b
     sta (zp_ptr0),y
 
-    // Set flags (start asleep)
-    ldy #MX_FLAGS
+    // Clear flags (start asleep), speed counter, sleep, stun and confuse;
+    // the initial sleep is then written over its zero.
     lda #0
+    ldy #MX_CONFUSE
+!mso_clear:
     sta (zp_ptr0),y
-
-    // Set speed counter = 0
-    ldy #MX_SPEED_CNT
-    lda #0
-    sta (zp_ptr0),y
+    dey
+    cpy #MX_HP_HI
+    bne !mso_clear-
+.assert "monster_spawn_one: MX_HP_HI follows MX_HP_LO", MX_HP_HI, MX_HP_LO + 1
+.assert "monster_spawn_one: MX_FLAGS..MX_CONFUSE follow MX_HP_HI", MX_FLAGS == MX_HP_HI + 1 && MX_SPEED_CNT == MX_FLAGS + 1 && MX_SLEEP_CUR == MX_SPEED_CNT + 1 && MX_STUN == MX_SLEEP_CUR + 1 && MX_CONFUSE == MX_STUN + 1, true
 
     // Set initial sleep from creature sleep value. Upstream randomizes
     // starting sleep; approximate VMS sleep/5 + randint(sleep) as
@@ -769,31 +779,22 @@ monster_spawn_one:
     ldx ms_type
     lda cr_sleep,x
     jsr monster_initial_sleep
-!mso_store_sleep:
     ldy #MX_SLEEP_CUR
     sta (zp_ptr0),y
 
-    // Set stun/confuse to 0
-    ldy #MX_STUN
-    lda #0
-    sta (zp_ptr0),y
-    ldy #MX_CONFUSE
-    sta (zp_ptr0),y
-
-    // Compute flee threshold = rolled_HP / 4
-    // zp_math_a/b still hold HP from math_dice
-    lda zp_math_b           // HP hi byte
-    lsr                     // /2 hi
-    sta zp_mon_scratch0     // temp hi
-    lda zp_math_a           // HP lo byte
-    ror                     // /2 lo (carry from hi)
-    lsr zp_mon_scratch0     // /4 hi
-    ror                     // /4 lo (carry from hi)
+    // Compute flee threshold = HP / 4
+    // zp_math_a/b still hold the HP
+    lsr zp_math_b
+    ror zp_math_a
+    lsr zp_math_b
+    ror zp_math_a
     ldy #MX_FLEE_LO
+    lda zp_math_a
     sta (zp_ptr0),y
-    lda zp_mon_scratch0
-    ldy #MX_FLEE_HI
+    iny                         // MX_FLEE_HI
+    lda zp_math_b
     sta (zp_ptr0),y
+.assert "monster_spawn_one: MX_FLEE_HI follows MX_FLEE_LO", MX_FLEE_HI, MX_FLEE_LO + 1
 
     // Set FLAG_OCCUPIED on map tile
     ldx ms_spawn_y
@@ -806,12 +807,10 @@ monster_spawn_one:
     // Increment monster count
     inc zp_mon_count
 
-    ldx zp_mon_idx              // Return slot index in X
+    pla                         // Return slot index in X
+    tax
     sec                         // Success
-    rts
-
-!mso_fail:
-    clc
+!mso_fail:                      // Reached by bcc: carry already clear
     rts
 
 // find_adjacent_empty — Find adjacent empty floor tile
@@ -819,6 +818,13 @@ monster_spawn_one:
 // Output: carry set = found (ms_spawn_x/y set), carry clear = none
 // Tries 8 adjacent tiles starting at random direction
 // Clobbers: A, X, Y, zp_ptr0, zp_temp3, zp_temp4
+// find_adjacent_empty_mon — The same around the current monster (zp_mon_x/y):
+// a breeder's clone, a Teleport To landing square.
+find_adjacent_empty_mon:
+    lda zp_mon_x
+    sta fae_cx
+    lda zp_mon_y
+    sta fae_cy
 find_adjacent_empty:
     lda #8
     jsr rng_range               // Random start [0,7]

@@ -157,6 +157,7 @@ combat_append_str:
 cmb_term_and_print:
 huff_decode_to_ptr2:
 find_random_floor:
+find_random_floor_near:
 piw_prompt_filtered_inv:
 piw_pick_filtered_inv_key:
 piw_print_prompt_with_count:

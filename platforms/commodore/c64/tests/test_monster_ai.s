@@ -1,9 +1,9 @@
 // test_monster_ai.s — Runtime tests for monster_ai.s
 //
 // Tests: monster_ai_tick, wake check, movement, speed, FLAG_OCCUPIED,
-//        confused movement.
+//        confused movement, a never-moving creature, Teleport To.
 //
-// Results at $0400-$042D: $01 = pass, $00 = fail per test
+// Results at $0400-$0443: $01 = pass, $00 = fail per test
 // NOTE: msg_print writes to screen row 0 ($0400+), so we store results
 // in tc_results[] and copy to $0400 at the very end.
 
@@ -26,7 +26,7 @@ bootstrap:
 
 // test_finish — Copy results to $0400 and halt.
 test_finish:
-    ldx #64
+    ldx #67
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -170,7 +170,7 @@ tai_rng_values:   .fill 4, 0
 tai_rng_idx:      .byte 0
 tai_distance:     .byte 0
 auto_rest_active: .byte 0
-tc_results: .fill 65, $ff      // Result buffer (copied to $0400 at end)
+tc_results: .fill 68, $ff      // Result buffer (copied to $0400 at end)
 t59_toward: .byte 0
 t59_left:   .byte 0
 t60_n:      .byte 0             // neighbours around the breeder (MON-016)
@@ -3833,8 +3833,141 @@ test_start:
     lda #$00
     sta tc_results + 64
 
+    // ==========================================
+    // Test 66: the Quylthulg never moves (Umoria monster.cpp monsterMove: no
+    // CM_MOVE_NORMAL or random bit, CMOVE $00010004). Test 65's case with
+    // the shipped Quylthulg cr_mflags ($01 = CF_ATTACK_ONLY; tier3.s/tier4.s,
+    // checked by test_monster_attack.s t42): the seen, awake creature stays
+    // at x 20. Its pre-2026-11-01 flags ($00) behave as test 65 (x 21).
+    // ==========================================
+    lda cr_mflags + 4
+    pha
+    lda #CF_ATTACK_ONLY
+    sta cr_mflags + 4
+    lda #MF_VISIBLE
+    jsr t64_case
+    tax
+    pla
+    sta cr_mflags + 4
+    cpx #20
+    bne !t66_fail+
+    lda #$01
+    .byte $2c
+!t66_fail:
+    lda #$00
+    sta tc_results + 65
+
+    // ==========================================
+    // Tests 67-68: Teleport To (VMS creature.inc cast_spell 7 ->
+    // spells.inc teleport_to; Umoria spellTeleportPlayerTo) through
+    // production monster_pick_spell: the player lands on a free floor square
+    // next to the caster, 8 casts from 25 squares away (before 2026-11-01
+    // a random square anywhere). With all 8 neighbours walled the player
+    // stays put (Moria8 tries only the neighbours; upstream widens the ring).
+    // ==========================================
+    lda #8
+    sta t60_left
+!t67_loop:
+    lda #TILE_FLOOR | FLAG_LIT
+    jsr t67_cast
+    lda vis_room_revealed       // the teleport's redraw request
+    beq !t67_fail+
+    lda zp_player_x
+    sec
+    sbc #19
+    cmp #3
+    bcs !t67_fail+              // x outside 19-21
+    lda zp_player_y
+    sec
+    sbc #14
+    cmp #3
+    bcs !t67_fail+              // y outside 14-16
+    lda zp_player_x
+    cmp #20
+    bne !t67_next+
+    lda zp_player_y
+    cmp #15
+    beq !t67_fail+              // the caster's own square
+!t67_next:
+    dec t60_left
+    bne !t67_loop-
+    lda #$01
+    .byte $2c
+!t67_fail:
+    lda #$00
+    sta tc_results + 66
+
+    lda #TILE_WALL_V | FLAG_LIT
+    jsr t67_cast
+    lda zp_player_x
+    cmp #45
+    bne !t68_fail+
+    lda zp_player_y
+    cmp #15
+    bne !t68_fail+
+    lda #$01
+    .byte $2c
+!t68_fail:
+    lda #$00
+    sta tc_results + 67
+
 !tests_done:
     jmp test_finish
+
+// t67_cast — Tile A on the 8 squares around (20,15), floor under an awake
+// Kobold there that casts Teleport To (MSF_TELEPORT through production
+// monster_pick_spell) at the player on (45,15). Output: zp_player_x/y.
+t67_cast:
+    sta t60_i
+    ldx #14
+!t67c_row:
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #19
+    lda t60_i
+!t67c_col:
+    sta (zp_ptr0),y
+    iny
+    cpy #22
+    bne !t67c_col-
+    inx
+    cpx #17
+    bne !t67c_row-
+    ldy #20                     // the caster's square (20,15) stays floor
+    ldx #15
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    lda #TILE_FLOOR | FLAG_LIT
+    sta (zp_ptr0),y
+    jsr monster_init_table
+    lda #20
+    sta ms_spawn_x
+    sta zp_mon_x
+    lda #15
+    sta ms_spawn_y
+    sta zp_mon_y
+    sta zp_player_y
+    lda #4                      // Kobold
+    sta zp_mon_type
+    jsr monster_spawn_one
+    lda #45
+    sta zp_player_x
+    lda #0
+    sta zp_mon_idx
+    sta zp_msg_flags
+    sta vis_room_revealed
+    lda cr_spell_flags + 4
+    pha
+    lda #MSF_TELEPORT
+    sta cr_spell_flags + 4
+    jsr monster_pick_spell
+    pla
+    sta cr_spell_flags + 4
+    rts
 
 // tai_restore_rng — Undo the door tests' PatchJump on both generators.
 tai_restore_rng:

@@ -69,21 +69,63 @@ UMORIA_TO_C64_ATK = {
     9:  ATK_CORRODE,    # Corrosion
     10: ATK_NORMAL,     # Blindness → normal (no C64 handler)
     11: ATK_PARALYZE,   # Paralysis
-    12: ATK_NORMAL,     # Steal Money → normal (no C64 handler)
-    13: ATK_NORMAL,     # Steal Object → normal (no C64 handler)
+    12: ATK_NORMAL,     # Steal Money → 0d0 touch (no-HP; no handler)
+    13: ATK_NORMAL,     # Steal Object → 0d0 touch (no-HP; no handler)
     14: ATK_POISON,     # Poison
     15: ATK_POISON,     # Lose DEX → poison (simplified)
     16: ATK_POISON,     # Lose CON → poison (simplified)
     17: ATK_NORMAL,     # Lose INT → normal (simplified)
     18: ATK_NORMAL,     # Lose WIS → normal (simplified)
-    19: ATK_NORMAL,     # Lose experience → normal (no C64 handler)
-    20: ATK_AGGRAVATE,  # Aggravation
-    21: ATK_NORMAL,     # Disenchant → normal (simplified)
-    22: ATK_NORMAL,     # Eat food → normal (simplified)
-    23: ATK_NORMAL,     # Eat light → normal (simplified)
-    24: ATK_NORMAL,     # Eat charges → normal (simplified)
+    19: ATK_NORMAL,     # Lose experience → 0d0 touch (no-HP; no handler)
+    20: ATK_AGGRAVATE,  # Aggravation (no-HP; dice dropped)
+    21: ATK_NORMAL,     # Disenchant → 0d0 touch (no-HP; no handler)
+    22: ATK_NORMAL,     # Eat food → 0d0 touch (no-HP; no handler)
+    23: ATK_NORMAL,     # Eat light → 0d0 touch (no-HP; no handler)
+    24: ATK_NORMAL,     # Eat charges → 0d0 touch (no-HP; no handler)
     99: ATK_NONE,       # Blank → no attack
 }
+
+# Upstream attack types that never deal HP damage: pinned VMS Moria
+# creature.inc make_attack (cases 12, 13, 19-24 call no take_hit) and Umoria
+# monster.cpp executeAttackOnPlayer (no playerTakesHit). Their dice measure
+# something else (Lose experience: the experience drained, VMS lose_exp /
+# Umoria spellLoseEXP), so the generator drops them to 0d0: Moria8 has no
+# steal, drain-experience, disenchant or eat effects, and a 0d0 ATK_NORMAL
+# keeps the to-hit roll as a touch with no damage. ATK_AGGRAVATE keeps its
+# handler (its slot-0 path rolls no damage) and loses its dice too.
+NO_HP_ATTACK_TYPES = {12, 13, 19, 20, 21, 22, 23, 24}
+
+# Moria8 keeps two attack slots (cr_atk0_*, cr_atk1_*); upstream creatures
+# have up to four (VMS values.inc c_list damage strings, Umoria
+# data_creatures.cpp). A creature with three or four keeps the two that
+# matter most, after the type mapping above and NO_HP_ATTACK_TYPES, ranked by:
+#   1. a paralysis attack first: upstream it costs randint(level) + 3
+#      helpless turns (VMS creature.inc make_attack case 11; Umoria
+#      monster.cpp identical) in which the creature's other blows land
+#      freely, so it outweighs any one blow (Iridescent Beetle: its 4d6
+#      bite and paralysing gaze, not the 1d12);
+#   2. then expected HP damage, dice * (sides + 1) / 2 (a 0d0 touch is 0);
+#   3. then an attack with a Moria8 effect (fear, confusion, poison, acid,
+#      corrode, aggravate) over a plain hit of equal damage;
+#   4. then the earlier upstream slot.
+# The two kept stay in their upstream order (slot 0 keeps its meaning, e.g.
+# ATK_AGGRAVATE). A creature with two or fewer is unchanged. Before
+# 2026-11-01 the first two were kept, which dropped the dragons' and trolls'
+# bites, the Umber Hulk's 2d6 and the Ghost's 1d10 claw.
+def select_attack_slots(atks):
+    """Pick the two attack slots Moria8 keeps from up to four mapped ones."""
+    live = [(i, a) for i, a in enumerate(atks) if a['type'] != ATK_NONE]
+    if len(live) > 2:
+        ranked = sorted(live, key=lambda ia: (
+            ia[1]['type'] == ATK_PARALYZE,
+            ia[1]['dice'] * (ia[1]['sides'] + 1),
+            ia[1]['type'] != ATK_NORMAL,
+            -ia[0]), reverse=True)
+        live = sorted(ranked[:2])
+    kept = [a for _, a in live]
+    while len(kept) < 2:
+        kept.append({'type': ATK_NONE, 'dice': 0, 'sides': 0})
+    return kept
 
 # ============================================================
 # Umoria speed mapping → our C64 speed (0=slow, 1=normal, 2=fast)
@@ -103,6 +145,14 @@ def map_speed(umoria_speed):
 CM_RANDOM_MOVE = 0x38
 
 SPEED_MASK = 0x03
+
+# Umoria CDEFENSE CD_MAX_HP (VMS cdefense %X'4000'): the creature spawns with
+# its full hit dice, N * S, not a roll (VMS misc.inc place_monster max_hp;
+# Umoria monster_manager.cpp maxDiceRoll). Kept in cr_speed bit 7, which the
+# speed (CR_SPEED_MASK) and random-move (CM_RANDOM_MOVE) readers mask out;
+# monster_spawn_one (core/monster.s) tests it.
+CD_MAX_HP = 0x4000
+CR_MAX_HP = 0x80
 
 # Umoria CMOVE treasure bits 24-30, shifted down to cr_treasure bits 0-6
 # (MON-014): carry object, carry gold, 60%, 90%, 1d2, 2d2 and 4d2 drops (VMS
@@ -208,6 +258,7 @@ CF_BREEDER     = 0x40  # Multiplying creature (core/monster.s)
 CF_INFRA      = 0x80  # Warm creature visible to infravision
 
 # Umoria config.cpp flag bits (pinned revision 2a2a6b79).
+CM_MOVE_NORMAL = 0x00000002
 CM_MULTIPLY = 0x00200000
 CD_DRAGON   = 0x0001
 CD_ANIMAL   = 0x0002
@@ -228,9 +279,15 @@ def map_doorflags(cmove):
 def map_mflags(cmove, cdefense, name):
     """Map umoria CMOVE/CDEFENSE flags to our cr_mflags byte."""
     flags = 0
-    # Attack only = CMOVE bit 0 set (0x01) and bit 1 clear (0x02)
-    move_bits = cmove & 0x3F
-    if move_bits == 0x01:  # Move only to attack (stationary)
+    # Never moves: neither CM_MOVE_NORMAL (0x02) nor a random-move bit
+    # (0x08/0x10/0x20). Pinned VMS creature.inc mon_move and Umoria
+    # monster.cpp monsterMove move a creature only through those bits:
+    # CM_ATTACK_ONLY (0x01) creatures attack an adjacent player in place, and
+    # CM_ONLY_MAGIC (0x04, Quylthulg; VMS encodes Rotting Quylthulg as 0) or
+    # no bits at all never move. Moria8's CF_ATTACK_ONLY keeps both in place.
+    # Until 2026-11-01 only exactly 0x01 was recognised, so the Quylthulg
+    # walked.
+    if (cmove & (CM_MOVE_NORMAL | CM_RANDOM_MOVE)) == 0:
         flags |= CF_ATTACK_ONLY
     # Multiplies: Umoria CM_MULTIPLY (worm masses, lice, ...). Umoria has no
     # pack flag, so CF_GROUP stays unset, as upstream has no packs.
@@ -302,6 +359,12 @@ def map_spells(spell_word):
     breath_bits = (spell_word >> 19) & 0x1F
     if breath_bits:
         flags |= MSF_BREATH
+
+    # None of the creature's spells exists in Moria8 (blink, teleport self,
+    # hold person, slow, drain mana): no chance either, or monster_can_cast
+    # would spend the turn on a pick with nothing to cast.
+    if flags == 0:
+        return 0, 0
 
     return chance, flags
 
@@ -730,13 +793,15 @@ def main():
                 decoded_atks.append({'type': 0, 'dice': 0, 'sides': 0})
             else:
                 atk = attacks[dmg_idx]
+                no_hp = atk['type'] in NO_HP_ATTACK_TYPES
                 decoded_atks.append({
                     'type': UMORIA_TO_C64_ATK.get(atk['type'], ATK_NORMAL),
-                    'dice': atk['dice'],
-                    'sides': atk['sides'],
+                    'dice': 0 if no_hp else atk['dice'],
+                    'sides': 0 if no_hp else atk['sides'],
                 })
-        cr['attacks'] = decoded_atks
-        cr['c64_speed'] = map_speed(cr['speed']) | (cr['cmove'] & CM_RANDOM_MOVE)
+        cr['attacks'] = select_attack_slots(decoded_atks)
+        cr['c64_speed'] = (map_speed(cr['speed']) | (cr['cmove'] & CM_RANDOM_MOVE)
+                           | (CR_MAX_HP if cr['cdefense'] & CD_MAX_HP else 0))
         cr['c64_color'] = assign_color(cr['name'])
         cr['c64_display'] = char_to_screencode(cr['sprite'])
         cr['c64_mflags'] = map_mflags(cr['cmove'], cr['cdefense'], cr['name'])
@@ -931,7 +996,7 @@ def print_stats(creatures, selected_indices):
 SOA_FIELDS = [
     ("cr_display",      "c64_display",      "Display character (screen code)"),
     ("cr_color",        "c64_color",        "Color code"),
-    ("cr_speed",        "c64_speed",        "Speed (bits 0-1: 0=slow, 1=normal, 2=fast) | random-move bits 3-5"),
+    ("cr_speed",        "c64_speed",        "Speed (bits 0-1: 0=slow, 1=normal, 2=fast) | random-move bits 3-5 | max HP bit 7"),
     ("cr_mflags",       "c64_mflags",       "Monster flags"),
     ("cr_level",        "dlvl",             "Dungeon level"),
     ("cr_hd_num",       "hd_num",           "Hit dice count"),
