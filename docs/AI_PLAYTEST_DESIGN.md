@@ -2959,6 +2959,7 @@ removes `build/` and the run records are kept for good:
 | `state-balrog.json` | the Balrog queue (§23.9): its graduates, their turn order, runs, wins and best run |
 | `balrog/<run>/` | a Balrog start: the M7 success's DL30 snapshot and saved brain; removed once no graduate or run uses it |
 | `service.json` | the service's heartbeat, config, build state and recent log |
+| `strategy-evidence.md` | `make playtest-strategy-evidence`'s report: the evidence behind the strategy guide (§23.7), regenerated from the records |
 
 **Run records.** The service appends each finished run's record to
 `runs.jsonl` and then inserts it into `queue.db` (`records.py`): one table,

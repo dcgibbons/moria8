@@ -194,7 +194,7 @@ playtest-subqueue:
 		$(if $(SEEDS),--seeds $(SEEDS)) $(if $(RANDOM_SEEDS),--random-seeds $(RANDOM_SEEDS)) \
 		$(if $(QUEUE_BUILD),--build $(QUEUE_BUILD)) --platforms $(PORT) $(PLAYTEST_QUEUE_ARGS)
 
-# The evidence behind the strategy guide (§23.7): docs/STRATEGY_EVIDENCE.md
+# The evidence behind the strategy guide (§23.7): var/playtest-queue/strategy-evidence.md
 # from the queue's run records. Reads files only.
 playtest-strategy-evidence:
 	$(PLAYTEST_PY) -m moria_playtest.strategy

@@ -3,7 +3,8 @@ strategy guide, from the queue's run records.
 
 For each race and class on the main queue's goal: runs, successes, how deep
 and how far they get, what kills them at each stage, and what the successes
-carried. Written as Markdown to ``docs/STRATEGY_EVIDENCE.md`` for the
+carried. Written as Markdown to ``var/playtest-queue/strategy-evidence.md``,
+beside the records it comes from (generated: never committed), for the
 design doc's summary and the guide's author; it reads files only.
 """
 
@@ -19,10 +20,9 @@ from typing import Any
 
 from . import records
 from .goals import CHARACTERS
-from .launch import ROOT
 from .queue import COUNTED, HOME, load_config
 
-OUT = ROOT / "docs" / "STRATEGY_EVIDENCE.md"
+OUT = HOME / "strategy-evidence.md"
 STAGES = ((1, 5, "DL1-5"), (6, 14, "DL6-14"), (15, 24, "DL15-24"), (25, 99, "DL25+"))
 
 
