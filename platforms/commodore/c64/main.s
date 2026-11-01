@@ -1318,15 +1318,20 @@ c64_test_wizard_ego_bank_restored_sym:
 // tramp_ego_append_suffix — Append ego suffix to combat_msg_buf
 // Input: A = ego type
 // Copies suffix string from $F000 region to combat_msg_buf while banked out.
+// Restores the caller's $01 and I flag: an $E000 overlay caller (the Chest
+// overlay's item_exchange) must not return with KERNAL ROM mapped over it.
 // Clobbers: A, X, Y, zp_ptr0, zp_ptr1
 tramp_ego_append_suffix:
     cmp #0
     beq !teas_done+             // No ego → nothing to append
-    pha
+    php
     sei
+    tay
+    lda $01
+    pha
     lda #BANK_NO_ROMS
     sta $01
-    pla
+    tya
     jsr ego_get_suffix_ptr      // zp_ptr0 = suffix string (in $F000)
     // Copy string to combat_msg_buf (while banked out so we can read $F000)
     ldx cmb_buf_idx
@@ -1342,9 +1347,9 @@ tramp_ego_append_suffix:
     jmp !teas_loop-
 !teas_end:
     stx cmb_buf_idx
-    lda #BANK_NO_BASIC
+    pla
     sta $01
-    cli
+    plp
 !teas_done:
     rts
 
@@ -1370,17 +1375,20 @@ tramp_ego_apply_damage:
 // Output: A = AC bonus (0 if none)
 // Clobbers: X
 tramp_ego_get_ac_bonus:
+    php                         // caller's I flag and $01 come back as they
+    sei                         // were (an $E000 overlay caller needs its RAM)
+    tay
+    lda $01
     pha
-    sei
     lda #BANK_NO_ROMS
     sta $01
+    tya
+    jsr ego_get_ac_bonus        // preserves Y
+    tay
     pla
-    jsr ego_get_ac_bonus
-    pha
-    lda #BANK_NO_BASIC
     sta $01
-    cli
-    pla
+    plp
+    tya                         // Z/N from the bonus, as callers expect
     rts
 
 
@@ -1620,6 +1628,14 @@ tramp_item_refuel:
     bcs !done+
     jsr item_refuel
 !done:
+    jmp tramp_sr_epilogue
+
+// item_exchange lives in the Chest overlay (the Items overlay is full); a
+// failed load returns carry set, like the Items trampolines.
+tramp_item_exchange:
+    lda #<item_exchange
+    ldy #>item_exchange
+    jsr chest_dispatch
     jmp tramp_sr_epilogue
 
 tramp_ranged_fire:
@@ -2911,6 +2927,7 @@ ovl_gen_end:
 // ============================================================
 .segment ChestOverlay
     #import "../../../core/chest.s"
+    #import "../../../core/item_exchange.s"   // SHIFT+X: the Items overlay is full
 ovl_chest_end:
 .print "Chest overlay: " + (ovl_chest_end - $e000) + " bytes at $E000-$" + toHexString(ovl_chest_end)
 .assert "Chest overlay fits in $E000-$EFFF", ovl_chest_end <= $F000, true

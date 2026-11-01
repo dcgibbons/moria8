@@ -33,7 +33,7 @@
 .const CMD_CAST      = $1a
 .const CMD_PRAY      = $1b
 .const CMD_CHAR_INFO = $1c
-.const CMD_MAP       = $1d
+.const CMD_EXCHANGE  = $1d   // SHIFT+X: swap primary and secondary weapons
 .const CMD_RECALL    = $1e
 .const CMD_LOOK      = $1f
 .const CMD_RUN       = $20

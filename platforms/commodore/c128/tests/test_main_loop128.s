@@ -429,6 +429,15 @@ item_refuel:
 .label tramp_item_use_staff = item_use_staff
 .label tramp_item_refuel = item_refuel
 
+// SHIFT+X spy. item_exchange is never imported here: its array asserts
+// would fail against this file's own inventory arrays. Carry set (a turn)
+// iff test_exchange_carry is nonzero.
+tramp_item_exchange:
+    inc test_exchange_calls
+    lda test_exchange_carry
+    cmp #1
+    rts
+
 player_tunnel:
     rts
 
@@ -699,7 +708,7 @@ ovl_ready_mask:
 .const SPELL_MAGE = 1
 .const OVL_DUNGEON_GEN = 4
 .const FI_EMPTY = $ff
-.const TOTAL_INV_SLOTS = 31
+.const TOTAL_INV_SLOTS = 33
 .const EQUIP_WEAPON = 22
 .const EQUIP_BODY = 23
 .const EQUIP_LIGHT = 28
@@ -850,6 +859,8 @@ test_cast_spell_calls: .byte 0
 test_pray_calls: .byte 0
 test_gain_calls: .byte 0
 test_fire_calls: .byte 0
+test_exchange_calls: .byte 0
+test_exchange_carry: .byte 0
 test_search_scan_calls: .byte 0
 test_wizard_calls: .byte 0
 test_save_game_calls: .byte 0
@@ -955,6 +966,8 @@ reset_state:
     sta test_pray_calls
     sta test_gain_calls
     sta test_fire_calls
+    sta test_exchange_calls
+    sta test_exchange_carry
     sta test_search_scan_calls
     sta test_wizard_calls
     sta test_save_game_calls
@@ -2261,6 +2274,82 @@ test_entry:
     jsr run_case
     lda test_pray_calls
     cmp #1
+    beq *+5
+    jmp test_fail
+
+    // Test 35: real input_get_command maps SHIFT+X ($D8) to CMD_EXCHANGE;
+    // a swap (carry set) consumes one turn and Look is not run.
+    lda #35
+    sta test_case_id
+    jsr reset_state
+    lda #1
+    sta test_exchange_carry
+    lda #$d8
+    sta test_key_script + 0
+    lda #$d1
+    sta test_key_script + 1
+    lda #2
+    sta test_key_len
+    jsr run_case
+    lda test_exchange_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda test_turn_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda test_do_look_calls
+    beq *+5
+    jmp test_fail
+
+    // Test 36: plain X ($58) is still Look; a refused exchange (carry
+    // clear) consumes no turn.
+    lda #36
+    sta test_case_id
+    jsr reset_state
+    lda #$58
+    sta test_key_script + 0
+    lda #$d8
+    sta test_key_script + 1
+    lda #$d1
+    sta test_key_script + 2
+    lda #3
+    sta test_key_len
+    jsr run_case
+    lda test_do_look_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda test_exchange_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda test_turn_calls
+    beq *+5
+    jmp test_fail
+
+    // Test 37: a swap in search mode consumes two turns (TRN-002).
+    lda #37
+    sta test_case_id
+    jsr reset_state
+    lda #1
+    sta test_exchange_carry
+    lda #PLF_SEARCHING
+    sta player_data + PL_FLAGS
+    lda #$d8
+    sta test_key_script + 0
+    lda #$d1
+    sta test_key_script + 1
+    lda #2
+    sta test_key_len
+    jsr run_case
+    lda test_exchange_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda test_turn_calls
+    cmp #2
     beq *+5
     jmp test_fail
 

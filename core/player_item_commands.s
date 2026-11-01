@@ -30,6 +30,16 @@ item_wear:
     lda equip_slot_for_cat,x
     sta piw_equip
 
+    // VMS wear (moria.inc:539-552): a cursed item in the target slot stays on.
+    // Checked before the swap and the stack paths; empty slots hold flags 0.
+    tax
+    lda inv_flags,x
+    and #IF_CURSED
+    beq !iw_not_cursed+
+    ldx #HSTR_PIW_CURSED
+    jmp piw_msg_no_turn         // no turn, nothing moved
+!iw_not_cursed:
+
     // A stack (wooden torches, VMS/Umoria): one goes on, the rest stay, and
     // what was worn goes back through inv_add_item.
     ldy piw_slot
@@ -160,9 +170,7 @@ item_takeoff:
     jsr piw_count_visible_equip
     bne !ito_have_choices+
     ldx #HSTR_PIW_NOTHING
-    jsr huff_print_msg
-    clc
-    rts
+    jmp piw_msg_no_turn
 !ito_have_choices:
     ldx #HSTR_PIW_TAKEOFF_PROMPT
     jsr piw_print_prompt_with_count
@@ -200,9 +208,7 @@ item_takeoff:
     beq !ito_not_cursed+
 
     ldx #HSTR_PIW_CURSED
-    jsr huff_print_msg
-    clc
-    rts
+    jmp piw_msg_no_turn
 
 !ito_not_cursed:
     // Save equipped item's fields before inv_add_item
@@ -222,6 +228,8 @@ item_takeoff:
     // Pack full
 piw_pack_full:
     ldx #HSTR_UIS_PACK_FULL
+// piw_msg_no_turn — print Huffman message X, no turn consumed (carry clear)
+piw_msg_no_turn:
     jsr huff_print_msg
     clc
     rts
@@ -268,9 +276,7 @@ piw_pack_full:
 
 !ito_cancel:
     ldx #HSTR_PIW_NEVERMIND
-    jsr huff_print_msg
-    clc
-    rts
+    jmp piw_msg_no_turn
 
 // item_eat — Eat a food item from inventory
 // Scans carried slots for ICAT_FOOD, eats first found.
@@ -303,9 +309,7 @@ item_eat:
 
 !ie_no_food:
     ldx #HSTR_PIW_NO_FOOD
-    jsr huff_print_msg
-    clc
-    rts
+    jmp piw_msg_no_turn
 
 !ie_found:
     // piw_slot = inventory slot, piw_item_id = item type

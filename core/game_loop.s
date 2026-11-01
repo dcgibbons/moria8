@@ -1229,6 +1229,9 @@ c128_town_move_diag_after_input_get_command:
     beq !save_return_view+
 !save_setup_ready:
 #if HAL_PLATFORM_GAME_LOOP_MODAL_PERSIST
+#if C128_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
+    jsr save_product_seed_secondary
+#endif
     jsr c128_modal_save_game
 #if C128_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
     bcc !save_not_written+      // C = 1: the save was written
@@ -1254,6 +1257,9 @@ c128_town_move_diag_after_input_get_command:
     beq !slot2_save_selected+
     jmp c64_test_save_write_fail_input_sym
 !slot2_save_selected:
+#endif
+#if C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || C64_TEST_SCRIPTED_SLOT2_SAVE_PRODUCT || PLUS4_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
+    jsr save_product_seed_secondary
 #endif
     jsr save_game
 #if C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || C64_TEST_SCRIPTED_SLOT2_SAVE_PRODUCT || C64_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT
@@ -1665,8 +1671,8 @@ command_dispatch_lo_pray:
     .byte <cmd_pray
 command_dispatch_lo_char_info:
     .byte <cmd_dispatch_ignore    // CMD_CHAR_INFO handled above
-command_dispatch_lo_map:
-    .byte <cmd_dispatch_ignore    // CMD_MAP unused
+command_dispatch_lo_exchange:
+    .byte <cmd_exchange
 command_dispatch_lo_recall:
     .byte <cmd_dispatch_ignore    // CMD_RECALL handled above
 command_dispatch_lo_look:
@@ -1761,8 +1767,8 @@ command_dispatch_hi_pray:
     .byte >cmd_pray
 command_dispatch_hi_char_info:
     .byte >cmd_dispatch_ignore
-command_dispatch_hi_map:
-    .byte >cmd_dispatch_ignore
+command_dispatch_hi_exchange:
+    .byte >cmd_exchange
 command_dispatch_hi_recall:
     .byte >cmd_dispatch_ignore
 command_dispatch_hi_look:
@@ -1839,7 +1845,7 @@ command_dispatch_hi_end:
 .assert "CMD_CAST dispatch index", command_dispatch_lo_cast - command_dispatch_lo, CMD_CAST - CMD_STAIRS_DN
 .assert "CMD_PRAY dispatch index", command_dispatch_lo_pray - command_dispatch_lo, CMD_PRAY - CMD_STAIRS_DN
 .assert "CMD_CHAR_INFO dispatch index", command_dispatch_lo_char_info - command_dispatch_lo, CMD_CHAR_INFO - CMD_STAIRS_DN
-.assert "CMD_MAP dispatch index", command_dispatch_lo_map - command_dispatch_lo, CMD_MAP - CMD_STAIRS_DN
+.assert "CMD_EXCHANGE dispatch index", command_dispatch_lo_exchange - command_dispatch_lo, CMD_EXCHANGE - CMD_STAIRS_DN
 .assert "CMD_RECALL dispatch index", command_dispatch_lo_recall - command_dispatch_lo, CMD_RECALL - CMD_STAIRS_DN
 .assert "CMD_LOOK dispatch index", command_dispatch_lo_look - command_dispatch_lo, CMD_LOOK - CMD_STAIRS_DN
 .assert "CMD_RUN dispatch index", command_dispatch_lo_run - command_dispatch_lo, CMD_RUN - CMD_STAIRS_DN
@@ -1886,7 +1892,7 @@ command_dispatch_hi_end:
 .assert "CMD_CAST hi dispatch index", command_dispatch_hi_cast - command_dispatch_hi, CMD_CAST - CMD_STAIRS_DN
 .assert "CMD_PRAY hi dispatch index", command_dispatch_hi_pray - command_dispatch_hi, CMD_PRAY - CMD_STAIRS_DN
 .assert "CMD_CHAR_INFO hi dispatch index", command_dispatch_hi_char_info - command_dispatch_hi, CMD_CHAR_INFO - CMD_STAIRS_DN
-.assert "CMD_MAP hi dispatch index", command_dispatch_hi_map - command_dispatch_hi, CMD_MAP - CMD_STAIRS_DN
+.assert "CMD_EXCHANGE hi dispatch index", command_dispatch_hi_exchange - command_dispatch_hi, CMD_EXCHANGE - CMD_STAIRS_DN
 .assert "CMD_RECALL hi dispatch index", command_dispatch_hi_recall - command_dispatch_hi, CMD_RECALL - CMD_STAIRS_DN
 .assert "CMD_LOOK hi dispatch index", command_dispatch_hi_look - command_dispatch_hi, CMD_LOOK - CMD_STAIRS_DN
 .assert "CMD_RUN hi dispatch index", command_dispatch_hi_run - command_dispatch_hi, CMD_RUN - CMD_STAIRS_DN
@@ -2287,6 +2293,105 @@ cmd_refuel:
     jsr msg_clear
     jsr tramp_item_refuel
     jmp command_result_main_or_status_only
+
+// cmd_exchange — SHIFT+X: swap the primary and secondary weapons (VMS `x`).
+// Carry set from item_exchange = a turn was taken; refusals are free.
+cmd_exchange:
+#if C64_TEST_SCRIPTED_EXCHANGE_PRODUCT || PLUS4_TEST_SCRIPTED_EXCHANGE_PRODUCT || C128_TEST_SCRIPTED_EXCHANGE_PRODUCT
+    jsr exchange_product_stage
+#endif
+    jsr msg_clear
+    jsr tramp_item_exchange
+    jmp command_result_main_or_status_only
+
+#if C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || C64_TEST_SCRIPTED_SLOT2_SAVE_PRODUCT || PLUS4_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || C128_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
+// Save round-trip fixture (test builds only): the game is saved with a
+// Dagger (+3,+4) (Defender) as the secondary weapon; slot 31 stays empty.
+// tests/check_save_secondary.py finds it in the written file.
+save_product_seed_secondary:
+    ldx #0
+    ldy #0
+!spss_loop:
+    lda spss_fields,y
+    sta inv_item_id + EQUIP_SECONDARY,x
+    txa
+    clc
+    adc #TOTAL_INV_SLOTS
+    tax
+    iny
+    bcc !spss_loop-
+    rts
+spss_fields: .byte 2, 1, 0, 3, 4, 0, IF_IDENTIFIED, 6   // 6 = EGO_DEFENDER
+#endif
+#if C64_TEST_SCRIPTED_SLOT2_LOAD_PRODUCT || PLUS4_TEST_SCRIPTED_LOAD_RESUME_PRODUCT
+// Inventory cells the load smokes read after a resume (no bytes).
+.label save_product_secondary_id    = inv_item_id + EQUIP_SECONDARY
+.label save_product_secondary_hit   = inv_to_hit + EQUIP_SECONDARY
+.label save_product_secondary_dam   = inv_to_dam + EQUIP_SECONDARY
+.label save_product_secondary_flags = inv_flags + EQUIP_SECONDARY
+.label save_product_secondary_ego   = inv_ego + EQUIP_SECONDARY
+.label save_product_cloak_id        = inv_item_id + EQUIP_CLOAK
+#endif
+
+#if C64_TEST_SCRIPTED_EXCHANGE_PRODUCT || PLUS4_TEST_SCRIPTED_EXCHANGE_PRODUCT || C128_TEST_SCRIPTED_EXCHANGE_PRODUCT
+// Product-path fixture for SHIFT+X (test builds only). Press 1 wields a
+// cursed Mace (+1,+0) with a Dagger (+3,+4) (Defender) as the secondary and
+// zeroes the turn counter: VMS refuses it with no turn. Press 2 records that
+// refusal, then lifts the curse: the swap takes one turn.
+exchange_product_stage:
+    ldx exchange_product_presses
+    inc exchange_product_presses
+    txa
+    bne !xps_second+
+    stx zp_turn_lo
+    stx zp_turn_hi
+    tay
+!xps_seed:                              // the 8 fields of slots 22 and 32
+    lda xps_primary,y
+    sta inv_item_id + EQUIP_WEAPON,x
+    lda xps_secondary,y
+    sta inv_item_id + EQUIP_SECONDARY,x
+    txa
+    clc
+    adc #TOTAL_INV_SLOTS
+    tax
+    iny
+    bcc !xps_seed-
+    rts
+!xps_second:
+    lda zp_turn_lo
+    sta exchange_product_refused_turns
+    lda inv_item_id + EQUIP_WEAPON
+    sta exchange_product_refused_primary
+    lda #IF_IDENTIFIED
+    sta inv_flags + EQUIP_WEAPON
+    rts
+exchange_product_presses:         .byte 0
+exchange_product_refused_turns:   .byte $ff
+exchange_product_refused_primary: .byte $ff
+// id, qty, p1, to_hit, to_dam, to_ac, flags, ego
+xps_primary:   .byte 5, 1, 0, 1, 0, 0, IF_IDENTIFIED | IF_CURSED, 0
+xps_secondary: .byte 2, 1, 0, 3, 4, 0, IF_IDENTIFIED, 6   // 6 = EGO_DEFENDER
+.label exchange_product_primary_id   = inv_item_id + EQUIP_WEAPON
+.label exchange_product_primary_ego  = inv_ego + EQUIP_WEAPON
+.label exchange_product_secondary_id = inv_item_id + EQUIP_SECONDARY
+.label exchange_product_secondary_hit = inv_to_hit + EQUIP_SECONDARY
+.label exchange_product_cloak_id     = inv_item_id + EQUIP_CLOAK
+#if PLUS4_TEST_SCRIPTED_EXCHANGE_PRODUCT
+// Screen cells the smoke reads (no bytes): "Primary: Dagger" on row 0,
+// "Secondary: Mace" on row 1.
+.label exchange_product_r0c0  = SCREEN_RAM + 0
+.label exchange_product_r0c9  = SCREEN_RAM + 9
+.label exchange_product_r1c0  = SCREEN_RAM + SCREEN_COLS
+.label exchange_product_r1c11 = SCREEN_RAM + SCREEN_COLS + 11
+#endif
+#if C64_TEST_SCRIPTED_EXCHANGE_PRODUCT
+// Hand-written expectations for the two report lines (VMS order: Primary,
+// then Secondary; the ego suffix follows the name, then the bonuses).
+exchange_product_expect_row0: .text "Primary: Dagger (Defender) (+3,+4)" ; .byte 0
+exchange_product_expect_row1: .text "Secondary: Mace (+1,+0)" ; .byte 0
+#endif
+#endif
 
 cmd_bash:
     jsr msg_clear

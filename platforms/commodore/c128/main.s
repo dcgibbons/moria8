@@ -1312,6 +1312,9 @@ c128_test_scroll_selector_pass_sym:
 #elif C128_TEST_SCRIPTED_CHEST_OPEN_PRODUCT
 c128_test_chest_open_pass_sym:
     jmp c128_test_chest_open_pass_sym   // Spin: the socket harness polls PC
+#elif C128_TEST_SCRIPTED_EXCHANGE_PRODUCT
+c128_test_exchange_pass_sym:
+    jmp c128_test_exchange_pass_sym     // Spin: the socket harness polls PC
 #elif C128_TEST_CACHE_SURVIVAL
 c128_test_town_fail_sym:
     brk
@@ -1561,6 +1564,9 @@ tramp_eff_destroy_area:
 
 tramp_item_refuel:
     :C128OverlayComputeTrampoline(C128_ITEMS_OVERLAY_ID, item_refuel)
+
+tramp_item_exchange:
+    :C128OverlayComputeTrampoline(C128_ITEMS_OVERLAY_ID, item_exchange)
 
 tramp_title_load_and_draw:
     lda #C128_UI_OVERLAY_ID
@@ -3923,8 +3929,6 @@ c128_cache_state_end:
 #import "../../../core/dungeon_room_center_helpers.s"
 
 .segment C128ResidentItems
-slain_str:
-    .text "You have been slain." ; .byte 0
 death_source_saved:
     .byte 0
 recall_query_sc:   .byte 0
@@ -5114,6 +5118,12 @@ press_key_str:
     .text "Press any key" ; .byte 0
 press_key_str_end:
 
+// The death message (core/game_loop.s, Bank 0 code) is read-only data. It
+// moved here from 128.item, which the 33-slot inventory arrays filled.
+slain_str:
+    .text "You have been slain." ; .byte 0
+slain_str_end:
+
 // Always-resident Staff of Speed trampoline: the items overlay calls this
 // while either PLAY or PERSIST owns the $AF00 modal slot.
 tramp_staff_speed_items:
@@ -5453,6 +5463,7 @@ program_end:
 .assert "C128 Disk Setup lives in dedicated disk-I/O runtime", disk_marker_init >= c128_resident_diskio_start && disk_setup_run < c128_resident_diskio_end, true
 .assert "C128 press-key footer lives in resident disk-I/O payload", press_key_str >= c128_resident_diskio_start && press_key_str_end <= c128_resident_diskio_end, true
 .assert "C128 press-key footer stays below modal payload window", press_key_str_end <= $AF00, true
+.assert "C128 death message lives in resident disk-I/O payload", slain_str >= c128_resident_diskio_start && slain_str_end <= c128_resident_diskio_end, true
 .assert "C128 modal persist starts at $AF00", c128_resident_persist_start == $AF00, true
 .assert "C128 save staging buffer is 128 bytes", save_stage_buf_end - save_stage_buf == 128, true
 .assert "C128 save staging buffer lives in persist payload", save_stage_buf >= c128_resident_persist_start && save_stage_buf_end <= c128_resident_persist_end, true
@@ -5696,6 +5707,7 @@ ovl_ui_end:
     #define ITEM_ACTIONS_MAP_AREA_OWNER
     #define SCROLL_P3_ROUTER_ENABLED
     #import "../../../core/item_actions_overlay.s"
+    #import "../../../core/item_exchange.s"
     #import "../../../core/ranged_fire.s"
     #import "../../../core/tunnel.s"
     #import "../../../core/throw.s"

@@ -20,7 +20,7 @@ bootstrap:
     jmp test_start
 
 test_finish:
-    ldx #49
+    ldx #52
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -183,6 +183,14 @@ tramp_store_enter:
 .label tramp_item_refuel = item_refuel
 .label tramp_ranged_fire = test_ranged_fire
 
+// SHIFT+X spy: counts dispatches; carry set (a turn) iff test_exchange_carry
+// is nonzero. item_exchange itself is not imported here.
+tramp_item_exchange:
+    inc test_exchange_calls
+    lda test_exchange_carry
+    cmp #1
+    rts
+
 tramp_throw_item:
 tramp_bash_command:
 tramp_player_tunnel:
@@ -322,7 +330,7 @@ random_floor_in_room:
 save_welcome_str:
     .text "WELCOME BACK" ; .byte 0
 
-tc_results: .fill 50, $ff
+tc_results: .fill 53, $ff
 
 test_cmd_idx: .byte 0
 test_cmd_len: .byte 0
@@ -349,6 +357,8 @@ test_last_move_cmd: .byte 0
 test_get_dir_calls: .byte 0
 test_door_open_calls: .byte 0
 test_chest_open_calls: .byte 0
+test_exchange_calls: .byte 0
+test_exchange_carry: .byte 0   // nonzero: the stub swap takes a turn
 test_read_scroll_calls: .byte 0
 test_cast_spell_calls: .byte 0
 test_pray_calls: .byte 0
@@ -530,6 +540,8 @@ reset_state:
     sta test_get_dir_calls
     sta test_door_open_calls
     sta test_chest_open_calls
+    sta test_exchange_calls
+    sta test_exchange_carry
     sta test_read_scroll_calls
     sta test_cast_spell_calls
     sta test_pray_calls
@@ -2893,10 +2905,103 @@ test_start:
     bne !t50_fail+
     lda #$01
     sta tc_results + 49
-    jmp test_finish
+    jmp !t51+
 !t50_fail:
     lda #$00
     sta tc_results + 49
+    jmp !t51+
+
+    // Test 51: real input_get_command maps SHIFT+X ($D8) to CMD_EXCHANGE;
+    // a swap (carry set) consumes one turn and Look is not run.
+!t51:
+    jsr restore_real_input_get_command  // tests 51-53 type real keys
+    jsr reset_state
+    lda #50
+    sta test_case_idx
+    lda #1
+    sta test_exchange_carry
+    lda #$d8
+    sta test_key_script + 0
+    lda #$d1
+    sta test_key_script + 1
+    lda #2
+    sta test_key_len
+    jsr run_case
+    lda test_exchange_calls
+    cmp #1
+    bne !t51_fail+
+    lda test_turn_calls
+    cmp #1
+    bne !t51_fail+
+    lda test_do_look_calls
+    bne !t51_fail+
+    lda #$01
+    sta tc_results + 50
+    jmp !t52+
+!t51_fail:
+    lda #$00
+    sta tc_results + 50
+    jmp !t52+
+
+    // Test 52: plain X ($58) is still Look; a refused exchange (carry
+    // clear) consumes no turn.
+!t52:
+    jsr reset_state
+    lda #51
+    sta test_case_idx
+    lda #$58
+    sta test_key_script + 0
+    lda #$d8
+    sta test_key_script + 1
+    lda #$d1
+    sta test_key_script + 2
+    lda #3
+    sta test_key_len
+    jsr run_case
+    lda test_do_look_calls
+    cmp #1
+    bne !t52_fail+
+    lda test_exchange_calls
+    cmp #1
+    bne !t52_fail+
+    lda test_turn_calls
+    bne !t52_fail+
+    lda #$01
+    sta tc_results + 51
+    jmp !t53+
+!t52_fail:
+    lda #$00
+    sta tc_results + 51
+    jmp !t53+
+
+    // Test 53: a swap in search mode consumes two turns (TRN-002).
+!t53:
+    jsr reset_state
+    lda #52
+    sta test_case_idx
+    lda #1
+    sta test_exchange_carry
+    lda #PLF_SEARCHING
+    sta player_data + PL_FLAGS
+    lda #$d8
+    sta test_key_script + 0
+    lda #$d1
+    sta test_key_script + 1
+    lda #2
+    sta test_key_len
+    jsr run_case
+    lda test_exchange_calls
+    cmp #1
+    bne !t53_fail+
+    lda test_turn_calls
+    cmp #2
+    bne !t53_fail+
+    lda #$01
+    sta tc_results + 52
+    jmp test_finish
+!t53_fail:
+    lda #$00
+    sta tc_results + 52
     jmp test_finish
 
 // A trap of type 0 at the player's reset position (10, 10).

@@ -4,7 +4,7 @@
 // recount_monsters, recount_floor_items, save-version compatibility helpers,
 // split item stat save/load persistence, invalid item-ID load hardening.
 //
-// Results at $0400-$0421: $01 = pass, $00 = fail per test (34 tests)
+// Results at $0400-$0425: $01 = pass, $00 = fail per test (38 tests)
 
 #define C64_TEST_NAME_STREAMS_A000
 
@@ -27,7 +27,7 @@ bootstrap:
 // Must be in low memory (before imports) so BRK address is below $A000.
 // VICE breakpoint on $A000+ can false-trigger during BASIC ROM execution.
 test_finish:
-    ldx #33
+    ldx #37
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -146,6 +146,7 @@ random_floor_in_room:
 .const hal_storage_save_known96_version = $10
 .const hal_storage_save_version = $12
 .const hal_storage_save_inv31_version = $11
+.const hal_storage_save_inv33_version = $12
 .const hal_storage_save_baked_stats_version = $11
 .const hal_storage_save_known_bits_version = $11
 .const hal_storage_save_known160_version = $12
@@ -322,7 +323,7 @@ rle_decompress_map:
 !:  rts
 
 // Test result buffer — copy to $0400 at end (msg_print clobbers $0400)
-tc_results: .fill 34, $ff
+tc_results: .fill 38, $ff
 
 test_t31_ptr_lo: .byte 0
 test_t31_ptr_hi: .byte 0
@@ -511,7 +512,7 @@ test_clear_store_items:
     rts
 
 test_save_item_state_blocks:
-    jsr save_write_inventory_state
+    :save_block(inv_item_id, 8 * TOTAL_INV_SLOTS)
     :save_block(si_item_id, STORE_TOTAL_SLOTS)
     :save_block(si_qty, STORE_TOTAL_SLOTS)
     :save_block(si_p1, STORE_TOTAL_SLOTS)
@@ -536,12 +537,89 @@ test_load_item_state_blocks:
     jsr load_read_floor_items
     rts
 
+// A pre-amulet save: 8 per-array blocks of 30 slots each.
 test_save_legacy_inventory_state_blocks:
-    lda #<save_block_table_inventory_legacy
+    :save_block(inv_item_id, LEGACY_INV30_SLOTS)
+    :save_block(inv_qty, LEGACY_INV30_SLOTS)
+    :save_block(inv_p1, LEGACY_INV30_SLOTS)
+    :save_block(inv_to_hit, LEGACY_INV30_SLOTS)
+    :save_block(inv_to_dam, LEGACY_INV30_SLOTS)
+    :save_block(inv_to_ac, LEGACY_INV30_SLOTS)
+    :save_block(inv_flags, LEGACY_INV30_SLOTS)
+    :save_block(inv_ego, LEGACY_INV30_SLOTS)
+    rts
+
+// A pre-secondary-weapon save: 8 per-array blocks of 31 slots each.
+test_save_inv31_inventory_state_blocks:
+    :save_block(inv_item_id, LEGACY_INV31_SLOTS)
+    :save_block(inv_qty, LEGACY_INV31_SLOTS)
+    :save_block(inv_p1, LEGACY_INV31_SLOTS)
+    :save_block(inv_to_hit, LEGACY_INV31_SLOTS)
+    :save_block(inv_to_dam, LEGACY_INV31_SLOTS)
+    :save_block(inv_to_ac, LEGACY_INV31_SLOTS)
+    :save_block(inv_flags, LEGACY_INV31_SLOTS)
+    :save_block(inv_ego, LEGACY_INV31_SLOTS)
+    rts
+
+// One sentinel byte after an inventory section (the next block's start).
+test_save_sentinel_value: .byte $5a
+test_load_sentinel_value: .byte 0
+test_save_sentinel:
+    :save_block(test_save_sentinel_value, 1)
+    rts
+test_load_sentinel:
+    lda #0
+    sta test_load_sentinel_value
+    :load_block(test_load_sentinel_value, 1)
+    lda test_load_sentinel_value
+    cmp #$5a
+    rts
+
+// ts_fill_inventory_pattern — a distinct byte in every slot of all 8 arrays.
+// Slot 2: id 2, qty $42, p1 $82, to_hit $83, to_dam $81, to_ac $04,
+// flags 3, ego $41. Slot 32: id 32, qty $60, p1 $a0, ego $50.
+ts_fill_inventory_pattern:
+    ldx #TOTAL_INV_SLOTS - 1
+!fill:
+    txa
+    sta inv_item_id,x
+    sta inv_flags,x
+    inc inv_flags,x
+    ora #$40
+    sta inv_qty,x
+    eor #$c0
+    sta inv_p1,x
+    sta inv_to_hit,x
+    inc inv_to_hit,x
+    sta inv_to_dam,x
+    dec inv_to_dam,x
+    sta inv_to_ac,x
+    asl inv_to_ac,x
+    sta inv_ego,x
+    lsr inv_ego,x
+    dex
+    bpl !fill-
+    rts
+
+// The pre-single-block writer: 8 per-array blocks of TOTAL_INV_SLOTS.
+test_save_per_array_inventory_blocks:
+    :save_block(inv_item_id, TOTAL_INV_SLOTS)
+    :save_block(inv_qty, TOTAL_INV_SLOTS)
+    :save_block(inv_p1, TOTAL_INV_SLOTS)
+    :save_block(inv_to_hit, TOTAL_INV_SLOTS)
+    :save_block(inv_to_dam, TOTAL_INV_SLOTS)
+    :save_block(inv_to_ac, TOTAL_INV_SLOTS)
+    :save_block(inv_flags, TOTAL_INV_SLOTS)
+    :save_block(inv_ego, TOTAL_INV_SLOTS)
+    rts
+
+// The product's inventory descriptor (last pre-inventory table entry).
+test_save_product_inventory_desc:
+    lda #<save_block_desc_inventory
     sta zp_ptr1
-    lda #>save_block_table_inventory_legacy
+    lda #>save_block_desc_inventory
     sta zp_ptr1_hi
-    lda #SAVE_BLOCK_INVENTORY_LEGACY_COUNT
+    lda #1
     jmp save_write_block_table
 
 .macro t13_expect(value) {
@@ -2233,6 +2311,7 @@ t23_fail_code:
     sta inv_p1 + 2
     jsr test_stream_reset_write
     jsr test_save_legacy_inventory_state_blocks
+    jsr test_save_sentinel
 
     jsr item_init_inventory
     lda #24
@@ -2275,6 +2354,11 @@ t23_fail_code:
     lda #6
     jmp t24_fail_code
 !t24_amulet_p1_ok:
+    jsr test_load_sentinel          // 30 x 8 bytes read: the next block lines up
+    beq !t24_sentinel_ok+
+    lda #7
+    jmp t24_fail_code
+!t24_sentinel_ok:
     lda #$01
     bne !t24_store+
 t24_fail_code:
@@ -2398,7 +2482,7 @@ t26_fail_code:
     lda #ITEM_TYPE_CHEST_SMALL_WOOD
     sta inv_item_id + 3
     jsr test_stream_reset_write
-    jsr save_write_inventory_state
+    :save_block(inv_item_id, 8 * TOTAL_INV_SLOTS)
 
     jsr item_init_inventory
     lda #SAVE_VERSION
@@ -2641,6 +2725,219 @@ t29_fail_code:
     lda #$00
 !t34_store:
     sta tc_results + 33
+
+    // ============================================================
+    // Test 35: the product inventory descriptor writes exactly the
+    // stream the old writer did: 8 per-array blocks of TOTAL_INV_SLOTS,
+    // inv_item_id first and inv_ego last.
+    // ============================================================
+    jsr ts_reset_io_state
+    sta test_save_sink_writes
+    jsr ts_fill_inventory_pattern
+    lda #<(SAVE_STREAM_BUF + $200)
+    sta zp_ptr2
+    lda #>(SAVE_STREAM_BUF + $200)
+    sta zp_ptr2_hi
+    jsr test_save_per_array_inventory_blocks
+    jsr test_stream_reset_write
+    jsr test_save_product_inventory_desc
+    lda zp_ptr2                     // stream length is exactly 8 * T
+    cmp #<(SAVE_STREAM_BUF + 8 * TOTAL_INV_SLOTS)
+    bne !t35_fail+
+    lda zp_ptr2_hi
+    cmp #>(SAVE_STREAM_BUF + 8 * TOTAL_INV_SLOTS)
+    bne !t35_fail+
+    ldx #0
+!t35_cmp:                           // first min(8 * T, 256) bytes
+    lda SAVE_STREAM_BUF,x
+    cmp SAVE_STREAM_BUF + $200,x
+    bne !t35_fail+
+    inx
+    cpx #<min(8 * TOTAL_INV_SLOTS, 256)
+    bne !t35_cmp-
+.if (8 * TOTAL_INV_SLOTS > 256) {
+    ldx #0
+!t35_cmp_hi:                        // the rest of the 8 * T bytes
+    lda SAVE_STREAM_BUF + $100,x
+    cmp SAVE_STREAM_BUF + $300,x
+    bne !t35_fail+
+    inx
+    cpx #8 * TOTAL_INV_SLOTS - 256
+    bne !t35_cmp_hi-
+}
+    lda SAVE_STREAM_BUF + 2                         // inv_item_id[2]
+    cmp #2
+    bne !t35_fail+
+    lda SAVE_STREAM_BUF + TOTAL_INV_SLOTS + 2       // inv_qty[2]
+    cmp #$42
+    bne !t35_fail+
+    lda SAVE_STREAM_BUF + 7 * TOTAL_INV_SLOTS + 2   // inv_ego[2] = ($42 ^ $c0) >> 1
+    cmp #$41
+    bne !t35_fail+
+    lda SAVE_STREAM_BUF + 32                        // inv_item_id[32], the secondary
+    cmp #32
+    bne !t35_fail+
+    lda SAVE_STREAM_BUF + 263                       // inv_ego[32], the last byte of 264
+    cmp #$50
+    bne !t35_fail+
+    lda save_io_error
+    bne !t35_fail+
+    lda #$01
+    bne !t35_store+
+!t35_fail:
+    lda #$00
+!t35_store:
+    sta tc_results + 34
+
+    // ============================================================
+    // Test 36: a current-version inventory section round-trips all
+    // 8 x 33 = 264 bytes (slot 32 = the secondary weapon populated,
+    // reserved slot 31 empty), and the loader reads exactly 264.
+    // ============================================================
+    jsr ts_reset_io_state
+    sta test_save_sink_writes
+    jsr ts_fill_inventory_pattern
+    lda #FI_EMPTY                   // reserved cloak slot: empty, fields 0
+    sta inv_item_id + EQUIP_CLOAK
+    lda #0
+    sta inv_qty + EQUIP_CLOAK
+    sta inv_p1 + EQUIP_CLOAK
+    sta inv_to_hit + EQUIP_CLOAK
+    sta inv_to_dam + EQUIP_CLOAK
+    sta inv_to_ac + EQUIP_CLOAK
+    sta inv_flags + EQUIP_CLOAK
+    sta inv_ego + EQUIP_CLOAK
+    ldx #0
+!t36_snap:                          // snapshot all 264 bytes
+    lda inv_item_id,x
+    sta SAVE_STREAM_BUF + $200,x
+    lda inv_item_id + 8,x
+    sta SAVE_STREAM_BUF + $208,x
+    inx
+    bne !t36_snap-
+    jsr test_stream_reset_write
+    jsr test_save_product_inventory_desc
+    jsr item_init_inventory
+    lda #SAVE_VERSION
+    sta load_save_version
+    jsr test_stream_reset_read
+    jsr ts_reset_io_state
+    jsr load_read_inventory_state
+    lda zp_ptr2                     // the reader consumed exactly 264 bytes
+    cmp #<(SAVE_STREAM_BUF + 264)
+    bne !t36_fail+
+    lda zp_ptr2_hi
+    cmp #>(SAVE_STREAM_BUF + 264)
+    bne !t36_fail+
+    ldx #0
+!t36_cmp:
+    lda inv_item_id,x
+    cmp SAVE_STREAM_BUF + $200,x
+    bne !t36_fail+
+    lda inv_item_id + 8,x
+    cmp SAVE_STREAM_BUF + $208,x
+    bne !t36_fail+
+    inx
+    bne !t36_cmp-
+    lda inv_item_id + EQUIP_SECONDARY   // hand values for the secondary
+    cmp #32
+    bne !t36_fail+
+    lda inv_p1 + EQUIP_SECONDARY
+    cmp #$a0
+    bne !t36_fail+
+    lda inv_ego + EQUIP_SECONDARY
+    cmp #$50
+    bne !t36_fail+
+    lda inv_item_id + EQUIP_CLOAK
+    cmp #FI_EMPTY
+    bne !t36_fail+
+    lda save_io_error
+    bne !t36_fail+
+    lda #$01
+    bne !t36_store+
+!t36_fail:
+    lda #$00
+!t36_store:
+    sta tc_results + 35
+
+    // ============================================================
+    // Test 37: a 31-slot save (SAVE_INV31_VERSION..SAVE_INV33_VERSION-1)
+    // restores slots 0-30, leaves the reserved cloak and secondary slots
+    // empty even when they held items before the load, and leaves the
+    // stream aligned on the next block.
+    // ============================================================
+    jsr ts_reset_io_state
+    sta test_save_sink_writes
+    jsr item_init_inventory
+    lda #2
+    sta inv_item_id + 2
+    lda #$44
+    sta inv_p1 + 2
+    lda #24
+    sta inv_item_id + EQUIP_AMULET
+    lda #$7f
+    sta inv_p1 + EQUIP_AMULET
+    jsr test_stream_reset_write
+    jsr test_save_inv31_inventory_state_blocks
+    jsr test_save_sentinel
+    jsr item_init_inventory
+    lda #2                          // stale secondary/cloak before the load
+    sta inv_item_id + EQUIP_SECONDARY
+    sta inv_item_id + EQUIP_CLOAK
+    lda #9
+    sta inv_qty + EQUIP_SECONDARY
+    lda #SAVE_INV31_VERSION
+    sta load_save_version
+    jsr test_stream_reset_read
+    jsr ts_reset_io_state
+    jsr load_read_inventory_state
+    lda inv_item_id + 2
+    cmp #2
+    bne !t37_fail+
+    lda inv_p1 + 2
+    cmp #$44
+    bne !t37_fail+
+    lda inv_item_id + EQUIP_AMULET
+    cmp #24
+    bne !t37_fail+
+    lda inv_p1 + EQUIP_AMULET
+    cmp #$7f
+    bne !t37_fail+
+    lda inv_item_id + EQUIP_CLOAK
+    cmp #FI_EMPTY
+    bne !t37_fail+
+    lda inv_item_id + EQUIP_SECONDARY
+    cmp #FI_EMPTY
+    bne !t37_fail+
+    lda inv_qty + EQUIP_SECONDARY
+    bne !t37_fail+
+    jsr test_load_sentinel          // 31 x 8 bytes read: the next block lines up
+    bne !t37_fail+
+    lda save_io_error
+    bne !t37_fail+
+    lda #$01
+    bne !t37_store+
+!t37_fail:
+    lda #$00
+!t37_store:
+    sta tc_results + 36
+
+    // ============================================================
+    // Test 38: the version gate accepts the 33-slot version (the current
+    // one) and rejects the next.
+    // ============================================================
+    lda #SAVE_INV33_VERSION
+    jsr save_version_supported
+    bcc !t38_fail+
+    lda #SAVE_INV33_VERSION + 1
+    jsr save_version_supported
+    bcs !t38_fail+
+    lda #$01
+    bne !t38_store+
+!t38_fail:
+    lda #$00
+!t38_store:
+    sta tc_results + 37
 
     jmp test_finish
 

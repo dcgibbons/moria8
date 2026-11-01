@@ -115,6 +115,7 @@ SCRIPTED_INPUT_BOOT_ASSETS_BUILT=0
 PERF_P1_TRACE_BOOT_ASSETS_BUILT=0
 SCRIPTED_SPELL_BOOT_ASSETS_BUILT=0
 SCRIPTED_CHEST_OPEN_BOOT_ASSETS_BUILT=0
+SCRIPTED_EXCHANGE_BOOT_ASSETS_BUILT=0
 SCRIPTED_SPELL_CANCEL_BOOT_ASSETS_BUILT=0
 SCRIPTED_BOOK_OVERLAY_BOOT_ASSETS_BUILT=0
 SCRIPTED_SPELL_LIST_OVERLAY_BOOT_ASSETS_BUILT=0
@@ -644,13 +645,13 @@ describe_phase_token() {
             printf 'units\tminimal128,config128,memory128,db128,tier128,input128,disk_swap128,main_loop128,msg_prompt128,vdc_attr128,item_desc128,speed_equipment128,vdc_scroll_delta128,status_coherence128,dungeon128,look_trampoline128,soak128,monster128,detect_monsters128,detect_evil128,cure_light_wounds128,cure_poison128,cure_light_wounds_prayer128,bless_prayer128,remove_fear_prayer128,call_light_prayer128,find_traps_prayer128,detect_doors_stairs_prayer128,slow_poison_prayer128,blind_creature_prayer128,portal_prayer128,cure_medium_wounds_prayer128,cure_serious_wounds_prayer128,sense_invisible_prayer128,protection_from_evil_prayer128,earthquake_prayer128,sense_surroundings_prayer128,cure_critical_wounds_prayer128,turn_undead_prayer128,prayer_prayer128,dispel_undead_prayer128,dispel_evil_prayer128,glyph_of_warding_prayer128,holy_word_prayer128,heal_prayer128,chant_prayer128,sanctuary_prayer128,neutralize_poison_prayer128,create_food_prayer128,remove_curse_prayer128,resist_heat_cold_prayer128,orb_of_draining_prayer128,find_hidden_traps_doors128,stinking_cloud128,frost_ball128,teleport_other128,haste_self128,fire_ball128,word_of_destruction128,genocide128,confusion128,lightning_bolt128,trap_door_destruction128,sleep_i128,sleep_ii128,sleep_iii128,fire_bolt128,slow_monster128,polymorph_other128,identify128,teleport_self128,recharge_item_ii128\n'
             ;;
         smokes)
-            printf 'smokes\tboot_d64_smoke,boot_title_idle_smoke,title_art_smoke,marker_init_d64_smoke,boot_title_load_missing_savefile_smoke,boot_title_load_mounted_save_smoke,boot_title_save_write_product_smoke,boot_title_save_media_fail_product_smoke,boot_title_single_drive_save_wrong_media_smoke,boot_title_single_drive_load_wrong_media_smoke,boot_title_single_drive_load_corrupt_smoke,boot_title_single_drive_load_return_smoke,boot_title_single_drive_fresh_save_smoke,vic40_blanked_boot_smoke,new_key_stability_smoke,boot_title_newgame_smoke,boot_title_load_resume_smoke,boot_tier_transition_smoke,town_overlay_smoke,town_overlay_female_smoke,town_overlay_state_smoke,scripted_summary_to_town_smoke,scripted_spell_cast_smoke,chest_open_product_smoke128,scripted_book_overlay_smoke,scripted_spell_list_overlay_smoke,scripted_spell_list_cancel_smoke,scripted_prayer_cast_smoke,cache_survival_smoke,dungeon_attack_stability_smoke,death_overlay_smoke,restart_to_title_smoke,preload_partial_failure_smoke,overlay_partial_failure_smoke\n'
+            printf 'smokes\tboot_d64_smoke,boot_title_idle_smoke,title_art_smoke,marker_init_d64_smoke,boot_title_load_missing_savefile_smoke,boot_title_load_mounted_save_smoke,boot_title_save_write_product_smoke,boot_title_save_media_fail_product_smoke,boot_title_single_drive_save_wrong_media_smoke,boot_title_single_drive_load_wrong_media_smoke,boot_title_single_drive_load_corrupt_smoke,boot_title_single_drive_load_return_smoke,boot_title_single_drive_fresh_save_smoke,vic40_blanked_boot_smoke,new_key_stability_smoke,boot_title_newgame_smoke,boot_title_load_resume_smoke,boot_tier_transition_smoke,town_overlay_smoke,town_overlay_female_smoke,town_overlay_state_smoke,scripted_summary_to_town_smoke,scripted_spell_cast_smoke,chest_open_product_smoke128,exchange_product_smoke128,scripted_book_overlay_smoke,scripted_spell_list_overlay_smoke,scripted_spell_list_cancel_smoke,scripted_prayer_cast_smoke,cache_survival_smoke,dungeon_attack_stability_smoke,death_overlay_smoke,restart_to_title_smoke,preload_partial_failure_smoke,overlay_partial_failure_smoke\n'
             ;;
         boot)
             printf 'boot\tboot_d64_smoke,boot_title_idle_smoke,title_art_smoke,boot_title_load_missing_savefile_smoke,boot_title_load_mounted_save_smoke,boot_title_save_write_product_smoke,boot_title_save_media_fail_product_smoke,vic40_blanked_boot_smoke,new_key_stability_smoke,boot_title_newgame_smoke,boot_title_load_resume_smoke,boot_tier_transition_smoke,boot_diag_copy\n'
             ;;
         town)
-            printf 'town\ttown_overlay_smoke,town_overlay_female_smoke,town_overlay_state_smoke,scripted_summary_to_town_smoke,scripted_spell_cast_smoke,chest_open_product_smoke128,scripted_book_overlay_smoke,scripted_spell_list_overlay_smoke,scripted_spell_list_cancel_smoke,scripted_prayer_cast_smoke,real_input_town_move_diag,real_boot_crash_harness\n'
+            printf 'town\ttown_overlay_smoke,town_overlay_female_smoke,town_overlay_state_smoke,scripted_summary_to_town_smoke,scripted_spell_cast_smoke,chest_open_product_smoke128,exchange_product_smoke128,scripted_book_overlay_smoke,scripted_spell_list_overlay_smoke,scripted_spell_list_cancel_smoke,scripted_prayer_cast_smoke,real_input_town_move_diag,real_boot_crash_harness\n'
             ;;
         cache)
             printf 'cache\tcache_survival_smoke,preload_partial_failure_smoke,overlay_partial_failure_smoke,overlay_data_transition_smoke\n'
@@ -688,7 +689,7 @@ suite_matches_phase_token() {
             ;;
         smokes)
             case "$suite_name" in
-                boot_d64_smoke|boot_title_idle_smoke|title_art_smoke|marker_init_d64_smoke|boot_title_load_missing_savefile_smoke|boot_title_load_mounted_save_smoke|boot_title_save_write_product_smoke|boot_title_save_media_fail_product_smoke|boot_title_single_drive_save_wrong_media_smoke|boot_title_single_drive_load_wrong_media_smoke|boot_title_single_drive_load_corrupt_smoke|boot_title_single_drive_load_return_smoke|boot_title_single_drive_fresh_save_smoke|vic40_blanked_boot_smoke|new_key_stability_smoke|boot_title_newgame_smoke|boot_title_load_resume_smoke|boot_tier_transition_smoke|town_overlay_smoke|town_overlay_female_smoke|town_overlay_state_smoke|scripted_summary_to_town_smoke|scripted_spell_cast_smoke|chest_open_product_smoke128|scripted_book_overlay_smoke|scripted_spell_list_overlay_smoke|scripted_spell_list_cancel_smoke|scripted_prayer_cast_smoke|cache_survival_smoke|dungeon_attack_stability_smoke|death_overlay_smoke|restart_to_title_smoke|preload_partial_failure_smoke|overlay_partial_failure_smoke) return 0 ;;
+                boot_d64_smoke|boot_title_idle_smoke|title_art_smoke|marker_init_d64_smoke|boot_title_load_missing_savefile_smoke|boot_title_load_mounted_save_smoke|boot_title_save_write_product_smoke|boot_title_save_media_fail_product_smoke|boot_title_single_drive_save_wrong_media_smoke|boot_title_single_drive_load_wrong_media_smoke|boot_title_single_drive_load_corrupt_smoke|boot_title_single_drive_load_return_smoke|boot_title_single_drive_fresh_save_smoke|vic40_blanked_boot_smoke|new_key_stability_smoke|boot_title_newgame_smoke|boot_title_load_resume_smoke|boot_tier_transition_smoke|town_overlay_smoke|town_overlay_female_smoke|town_overlay_state_smoke|scripted_summary_to_town_smoke|scripted_spell_cast_smoke|chest_open_product_smoke128|exchange_product_smoke128|scripted_book_overlay_smoke|scripted_spell_list_overlay_smoke|scripted_spell_list_cancel_smoke|scripted_prayer_cast_smoke|cache_survival_smoke|dungeon_attack_stability_smoke|death_overlay_smoke|restart_to_title_smoke|preload_partial_failure_smoke|overlay_partial_failure_smoke) return 0 ;;
             esac
             ;;
         boot)
@@ -698,7 +699,7 @@ suite_matches_phase_token() {
             ;;
         town)
             case "$suite_name" in
-                town_overlay_smoke|town_overlay_female_smoke|town_overlay_state_smoke|scripted_summary_to_town_smoke|scripted_spell_cast_smoke|chest_open_product_smoke128|scripted_book_overlay_smoke|scripted_spell_list_overlay_smoke|scripted_spell_list_cancel_smoke|scripted_prayer_cast_smoke|real_input_town_move_diag|real_boot_crash_harness) return 0 ;;
+                town_overlay_smoke|town_overlay_female_smoke|town_overlay_state_smoke|scripted_summary_to_town_smoke|scripted_spell_cast_smoke|chest_open_product_smoke128|exchange_product_smoke128|scripted_book_overlay_smoke|scripted_spell_list_overlay_smoke|scripted_spell_list_cancel_smoke|scripted_prayer_cast_smoke|real_input_town_move_diag|real_boot_crash_harness) return 0 ;;
             esac
             ;;
         cache)
@@ -4661,6 +4662,38 @@ run_boot_title_save_write_product_smoke() {
         return
     fi
 
+    # The written save carries the 33-slot inventory, written through
+    # c128_save_stream_chunk, with the seeded secondary weapon
+    # (save_product_seed_secondary).
+    local save_seq check_log
+    save_seq="$(test128_tmp_file "test128_${name}_the_game.seq")"
+    check_log="$(test128_tmp_file "test128_${name}_check.log")"
+    rm -f "$save_seq"
+    if ! "$c1541_bin" -attach "$abs_save_d64" -read "the.game,s" "$save_seq" >"$check_log" 2>&1 \
+            || ! python3 ../c64/tests/check_save_secondary.py "$save_seq" 0x18 >>"$check_log" 2>&1; then
+        echo "FAIL (secondary weapon not in the written save)"
+        tail -3 "$check_log" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    # Read side: the shipping build resumes that save from the title through
+    # c128_load_stream_chunk (a misread inventory section misaligns every
+    # later block and fails the load).
+    build_boot_assets || return
+    if ! python3 -u tests/title_load_mounted_save_smoke.py \
+            --vice "$VICE" \
+            --boot-d64 "$(cd ../../../build/test/c128 && pwd)/moria128.d71" \
+            --save-d64 "$abs_save_d64" \
+            --main-vs "$(cd ../../../build/test/c128 && pwd)/main.vs" >>"$check_log" 2>&1; then
+        echo "FAIL (written save did not load back)"
+        tail -10 "$check_log" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
     echo "PASS"
     PASS=$((PASS + 1))
     TOTAL=$((TOTAL + 1))
@@ -6386,6 +6419,81 @@ run_chest_open_product_smoke128() {
     TOTAL=$((TOTAL + 1))
 }
 
+build_scripted_exchange_boot_assets() {
+    if [ "$SCRIPTED_EXCHANGE_BOOT_ASSETS_BUILT" -eq 1 ] && c128_active_variant_is "scripted_exchange"; then
+        return
+    fi
+
+    build_boot_assets || return 1
+
+    local build_log
+    build_log="$(test128_tmp_file test128_boot_scripted_exchange_build.log)"
+    local scripted_d71="../../../build/test/c128/moria128_scriptedexchange.d71"
+
+    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 -define C128 :OVL_OUT=../../../build/test/c128 -define C128_TEST_SCRIPTED_EXCHANGE_PRODUCT -o ../../../build/test/c128/moria128.prg >"$build_log" 2>&1; then
+        echo "FAIL (scripted-exchange main assembly failed)"
+        tail -20 "$build_log" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return 1
+    fi
+
+    if ! c128_patch_scripted_boot_d71 "$scripted_d71" "$build_log"; then
+        echo "FAIL (scripted-exchange D71 patch failed)"
+        tail -20 "$build_log" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return 1
+    fi
+
+    BOOT_ASSETS_BUILT=0
+    SCRIPTED_EXCHANGE_BOOT_ASSETS_BUILT=1
+    c128_set_active_variant "scripted_exchange"
+    return 0
+}
+
+# SHIFT+X through the real key map, dispatch, Items-overlay trampoline and
+# message path: a cursed primary is refused with no turn, then the swap takes
+# one turn and moves all 8 fields (fixture: core/game_loop.s cmd_exchange).
+run_exchange_product_smoke128() {
+    local name="exchange_product_smoke128"
+    echo -n "  $name: "
+
+    build_scripted_exchange_boot_assets || return
+
+    local abs_d71
+    abs_d71="$(cd ../../../build/test/c128 && pwd)/moria128_scriptedexchange.d71"
+
+    if python3 -u ../plus4/tests/product_scripted_smoke.py \
+        --name "$name" \
+        --pass-symbol ".c128_test_exchange_pass_sym" \
+        --start-symbol ".title_menu_loop" \
+        --until-pass \
+        --main-vs "../../../build/test/c128/main.vs" \
+        "${C128_OVERLAY_COND_ARGS[@]}" \
+        --boot-d64 "$abs_d71" \
+        --drive8-type 1571 \
+        --autostart-only-drive8 \
+        --expect-byte-symbol ".exchange_product_presses=0x02" \
+        --expect-byte-symbol ".exchange_product_refused_turns=0x00" \
+        --expect-byte-symbol ".exchange_product_refused_primary=0x05" \
+        --expect-byte-symbol ".exchange_product_primary_id=0x02" \
+        --expect-byte-symbol ".exchange_product_primary_ego=0x06" \
+        --expect-byte-symbol ".exchange_product_secondary_id=0x05" \
+        --expect-byte-symbol ".exchange_product_secondary_hit=0x01" \
+        --expect-byte-symbol ".exchange_product_cloak_id=0xff" \
+        --expect-byte-symbol ".zp_turn_lo=0x01" \
+        --expect-byte-symbol ".current_overlay=0x07" \
+        --timeout 30 \
+        --retry-timeouts 0 \
+        --vice "$VICE"; then
+        PASS=$((PASS + 1))
+    else
+        FAIL=$((FAIL + 1))
+    fi
+    TOTAL=$((TOTAL + 1))
+}
+
 run_scripted_book_overlay_smoke() {
     local name="scripted_book_overlay_smoke"
     echo -n "  $name: "
@@ -7553,6 +7661,7 @@ run_selected_suites() {
     run_named_suite scripted_spell_list_cancel_smoke run_scripted_spell_list_cancel_smoke || return 1
     run_named_suite scripted_prayer_cast_smoke run_scripted_prayer_cast_smoke || return 1
     run_named_suite chest_open_product_smoke128 run_chest_open_product_smoke128 || return 1
+    run_named_suite exchange_product_smoke128 run_exchange_product_smoke128 || return 1
     run_named_suite real_input_town_move_diag run_real_input_town_move_diag || return 1
     run_named_suite real_boot_crash_harness run_real_boot_crash_harness || return 1
     run_named_suite overlay_data_transition_smoke run_overlay_data_transition_smoke || return 1
