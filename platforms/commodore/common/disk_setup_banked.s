@@ -385,6 +385,21 @@ c128_test_load_then_save_new_empty_prepare_init_prompt:
 // Detect program media on the selected save drive.
 // Output: carry clear = program media present, carry set = not program media
 disk_program_media_present:
+#if HAL_STORAGE_PROGRAM_MEDIA_ASKS_DRIVE
+    // Ask the drive whether it opened a file only the Program Disk holds. No
+    // CHKIN: on a file the drive refused (a save disk), one can wait forever
+    // in the KERNAL's talker turnaround (docs/BACKLOG.md).
+    lda #hal_storage_title_name_len
+    ldx #<hal_storage_title_name
+    ldy #>hal_storage_title_name
+    jsr storage_file_exists     // C set: the drive opened it
+    bcc !dpmp_absent+
+    clc
+    rts
+!dpmp_absent:
+    sec
+    rts
+#else
 #if HAL_STORAGE_KERNAL_ENTER_REQUIRED
     jsr disk_kernal_enter
 #endif
@@ -407,21 +422,6 @@ disk_program_media_present:
     sec
     rts
 !dpmp_open_ok:
-#if HAL_STORAGE_PROGRAM_MEDIA_READ_PROBE
-    ldx #hal_storage_program_file_num
-    jsr FEAT_CHKIN
-    bcs !dpmp_fail+
-    jsr FEAT_CHRIN
-    jsr FEAT_READST
-    and #$bf
-    bne !dpmp_fail+
-    clc
-    bcc !dpmp_close+
-!dpmp_fail:
-    sec
-!dpmp_close:
-    php
-#else
     jsr hal_storage_read_command_status
 #if HAL_STORAGE_COMMAND_STATUS_FROM_DISK_DIAG || HAL_STORAGE_COMMAND_STATUS_FROM_ERROR_DIAG
     jsr hal_storage_command_status
@@ -429,18 +429,14 @@ disk_program_media_present:
     lda disk_status
 #endif
     pha
-#endif
     lda #hal_storage_program_file_num
     jsr FEAT_CLOSE
     jsr FEAT_CLRCHN
     jsr disk_kernal_exit
-#if HAL_STORAGE_PROGRAM_MEDIA_READ_PROBE
-    plp
-#else
     pla
     cmp #1
-#endif
     rts
+#endif
 #endif
 
 #if HAL_STORAGE_DISK_SETUP_MARKER_PROBE_DOS
