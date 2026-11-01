@@ -19,6 +19,13 @@ PLUS4_DIR="${PLUS4_DIR:-$REPO_ROOT/platforms/commodore/plus4}"
 cd "$PLUS4_DIR"
 PLUS4_TEST_OUT="${PLUS4_TEST_OUT:-../../../build/test/plus4}"
 mkdir -p "$PLUS4_TEST_OUT"
+# Temp files under build/, never the shared /tmp (AGENTS.md rule 9): each run
+# gets its own directory, and runs older than six hours are cleared here, so
+# leftovers cannot pile up (2026-11-01: /tmp held thousands of test images).
+mkdir -p ../../../build/test/plus4/tmp
+find ../../../build/test/plus4/tmp -mindepth 1 -maxdepth 1 -mmin +360 -exec rm -rf {} +
+TMPDIR=$(cd ../../../build/test/plus4/tmp && mktemp -d "$(pwd)/run.XXXXXX")
+export TMPDIR
 cleanup() {
     rm -f ./*.prg ./*.sym ./*.vs tests/*.prg tests/*.sym tests/*.vs
     rm -f "$REPO_ROOT"/platforms/commodore/c64/creature_data/*.sym "$REPO_ROOT"/platforms/commodore/c64/creature_data/*.vs
@@ -163,7 +170,7 @@ PY
 }
 
 make_product_out() {
-    mktemp -d "${TMPDIR:-/tmp}/moria8-plus4-$1.XXXXXX"
+    mktemp -d "$TMPDIR/moria8-plus4-$1.XXXXXX"
 }
 
 run_test() {
@@ -583,6 +590,95 @@ run_dungeon_entry_smoke() {
         --until-pass \
         --main-vs "$main_vs" \
         --boot-d64 "$boot_d64" \
+        --vice "$VICE"; then
+        PASS=$((PASS + 1))
+    else
+        FAIL=$((FAIL + 1))
+    fi
+}
+
+run_exchange_product_smoke() {
+    local name="exchange_product_plus4"
+    local out_dir="$PLUS4_TEST_OUT"
+    local smoke_out
+    smoke_out="$(make_product_out "$name")"
+    local smoke_out_rel="$smoke_out"
+    local smoke_plus4="$smoke_out/plus4"
+    local main_vs="$smoke_out/plus4/main.vs"
+    local boot_d64="$smoke_out/moria8-plus4.d64"
+    local build_log="$out_dir/$name.build.log"
+
+    if ! suite_selected "$name"; then
+        return
+    fi
+
+    TOTAL=$((TOTAL + 1))
+    mkdir -p "$out_dir"
+
+    if ! make -s -B -C "$REPO_ROOT/platforms/commodore" \
+        KICKASS="$KICKASS" \
+        OUT="$smoke_out_rel" \
+        KA_FLAGSPLUS4="-showmem -vicesymbols -libdir c64 -define PLUS4 -define PLUS4_TEST_SCRIPTED_EXCHANGE_PRODUCT" \
+        "$smoke_out_rel/plus4/moria4.prg" \
+        "$smoke_out_rel/plus4/title" \
+        "$smoke_out_rel/plus4/monster.db.1" \
+        "$smoke_out_rel/plus4/monster.db.2" \
+        "$smoke_out_rel/plus4/monster.db.3" \
+        "$smoke_out_rel/plus4/monster.db.4" >"$build_log" 2>&1; then
+        echo "FAIL: $name (product disk build)"
+        tail -80 "$build_log"
+        FAIL=$((FAIL + 1))
+        return
+    fi
+
+    rm -f "$boot_d64"
+    if ! "$C1541" -format "moria8 plus4,m8" d64 "$boot_d64" \
+        -attach "$boot_d64" \
+        -write "$smoke_plus4/moria4.prg" "moria8" \
+        -write "$smoke_plus4/moria4.prg" "moria4" \
+        -write "$smoke_plus4/title" "t64" \
+        -write "$smoke_plus4/monster.db.1" "monster.db.1" \
+        -write "$smoke_plus4/monster.db.2" "monster.db.2" \
+        -write "$smoke_plus4/monster.db.3" "monster.db.3" \
+        -write "$smoke_plus4/monster.db.4" "monster.db.4" \
+        -write "$smoke_plus4/ovl.start" "4.start" \
+        -write "$smoke_plus4/ovl.town" "4.town" \
+        -write "$smoke_plus4/ovl.death" "4.death" \
+        -write "$smoke_plus4/ovl.gen" "4.gen" \
+        -write "$smoke_plus4/ovl.help" "4.help" \
+        -write "$smoke_plus4/ovl.ui" "4.ui" \
+        -write "$smoke_plus4/ovl.items" "4.items" \
+        -write "$smoke_plus4/ovl.spell" "4.spell" \
+        -write "$smoke_plus4/ovl.chest" "4.chest" \
+        -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
+        echo "FAIL: $name (product disk image)"
+        FAIL=$((FAIL + 1))
+        return
+    fi
+
+    if python3 -u tests/product_scripted_smoke.py \
+        --name "$name" \
+        --pass-symbol ".plus4_test_script_exhausted_wait" \
+        --start-symbol ".title_menu_loop" \
+        --until-pass \
+        --main-vs "$main_vs" \
+        --boot-d64 "$boot_d64" \
+        --expect-byte-symbol ".exchange_product_presses=0x02" \
+        --expect-byte-symbol ".exchange_product_refused_turns=0x00" \
+        --expect-byte-symbol ".exchange_product_refused_primary=0x05" \
+        --expect-byte-symbol ".exchange_product_primary_id=0x02" \
+        --expect-byte-symbol ".exchange_product_primary_ego=0x06" \
+        --expect-byte-symbol ".exchange_product_secondary_id=0x05" \
+        --expect-byte-symbol ".exchange_product_secondary_hit=0x01" \
+        --expect-byte-symbol ".exchange_product_cloak_id=0xff" \
+        --expect-byte-symbol ".zp_turn_lo=0x01" \
+        --expect-byte-symbol ".current_overlay=0x07" \
+        --expect-byte-symbol ".exchange_product_r0c0=0x50" \
+        --expect-byte-symbol ".exchange_product_r0c9=0x44" \
+        --expect-byte-symbol ".exchange_product_r1c0=0x53" \
+        --expect-byte-symbol ".exchange_product_r1c11=0x4d" \
+        --timeout 30 \
+        --retry-timeouts 0 \
         --vice "$VICE"; then
         PASS=$((PASS + 1))
     else
@@ -1347,6 +1443,78 @@ run_disk_setup_missing_save_smoke() {
     fi
 }
 
+# plus4_load_written_save_check <name> <save_d64>: boot the load-resume build
+# against a product-written save and check the secondary weapon came back
+# through the 33-slot loader (load_read_inventory_state).
+plus4_load_written_save_check() {
+    local name="$1" save_d64="$2"
+    local load_name="${name}_load"
+    local out_dir="$PLUS4_TEST_OUT"
+    local smoke_out
+    smoke_out="$(make_product_out "$load_name")"
+    local smoke_plus4="$smoke_out/plus4"
+    local boot_d64="$smoke_out/moria8-plus4.d64"
+    local build_log="$out_dir/$load_name.build.log"
+
+    if ! make -s -B -C "$REPO_ROOT/platforms/commodore" \
+        KICKASS="$KICKASS" \
+        OUT="$smoke_out" \
+        KA_FLAGSPLUS4="-showmem -vicesymbols -libdir c64 -define PLUS4 -define PLUS4_TEST_SCRIPTED_LOAD_RESUME_PRODUCT" \
+        "$smoke_out/plus4/moria4.prg" \
+        "$smoke_out/plus4/title" \
+        "$smoke_out/plus4/monster.db.1" \
+        "$smoke_out/plus4/monster.db.2" \
+        "$smoke_out/plus4/monster.db.3" \
+        "$smoke_out/plus4/monster.db.4" >"$build_log" 2>&1; then
+        echo "FAIL: $load_name (product disk build)"
+        tail -40 "$build_log"
+        return 1
+    fi
+    rm -f "$boot_d64"
+    if ! "$C1541" -format "moria8 plus4,m8" d64 "$boot_d64" \
+        -attach "$boot_d64" \
+        -write "$smoke_plus4/moria4.prg" "moria8" \
+        -write "$smoke_plus4/moria4.prg" "moria4" \
+        -write "$smoke_plus4/title" "t64" \
+        -write "$smoke_plus4/monster.db.1" "monster.db.1" \
+        -write "$smoke_plus4/monster.db.2" "monster.db.2" \
+        -write "$smoke_plus4/monster.db.3" "monster.db.3" \
+        -write "$smoke_plus4/monster.db.4" "monster.db.4" \
+        -write "$smoke_plus4/ovl.start" "4.start" \
+        -write "$smoke_plus4/ovl.town" "4.town" \
+        -write "$smoke_plus4/ovl.death" "4.death" \
+        -write "$smoke_plus4/ovl.gen" "4.gen" \
+        -write "$smoke_plus4/ovl.help" "4.help" \
+        -write "$smoke_plus4/ovl.ui" "4.ui" \
+        -write "$smoke_plus4/ovl.items" "4.items" \
+        -write "$smoke_plus4/ovl.spell" "4.spell" \
+        -write "$smoke_plus4/ovl.chest" "4.chest" \
+        -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
+        echo "FAIL: $load_name (product disk image)"
+        return 1
+    fi
+    if ! python3 -u tests/product_scripted_smoke.py \
+        --name "$load_name" \
+        --pass-symbol ".main_loop" \
+        --main-vs "$smoke_plus4/main.vs" \
+        --boot-d64 "$boot_d64" \
+        --save-d64 "$save_d64" \
+        --enable-drive9-bus \
+        --expect-byte-symbol ".save_product_secondary_id=0x02" \
+        --expect-byte-symbol ".save_product_secondary_hit=0x03" \
+        --expect-byte-symbol ".save_product_secondary_dam=0x04" \
+        --expect-byte-symbol ".save_product_secondary_flags=0x02" \
+        --expect-byte-symbol ".save_product_secondary_ego=0x06" \
+        --expect-byte-symbol ".save_product_cloak_id=0xff" \
+        --timeout 20 \
+        --retry-timeouts 0 \
+        --vice "$VICE"; then
+        echo "FAIL: $load_name (written save did not load back with the secondary weapon)"
+        return 1
+    fi
+    return 0
+}
+
 run_save_write_product_smoke() {
     local name="save_write_product_plus4"
     local out_dir="$PLUS4_TEST_OUT"
@@ -1440,7 +1608,20 @@ run_save_write_product_smoke() {
         --retry-timeouts 0 \
         --vice "$VICE"; then
         if "$C1541" -attach "$save_d64" -list 2>/dev/null | grep -qi '"THE.GAME".*SEQ'; then
-            PASS=$((PASS + 1))
+            # The written save carries the 33-slot inventory with the seeded
+            # secondary weapon (save_product_seed_secondary); load it back.
+            local save_seq="$out_dir/$name.the_game.seq"
+            rm -f "$save_seq"
+            if ! "$C1541" -attach "$save_d64" -read "the.game,s" "$save_seq" >>"$build_log" 2>&1 \
+                    || ! python3 ../c64/tests/check_save_secondary.py "$save_seq" 0x08 >>"$build_log" 2>&1; then
+                echo "FAIL: $name (secondary weapon not in the written save)"
+                tail -3 "$build_log"
+                FAIL=$((FAIL + 1))
+            elif ! plus4_load_written_save_check "$name" "$save_d64"; then
+                FAIL=$((FAIL + 1))
+            else
+                PASS=$((PASS + 1))
+            fi
         else
             echo "FAIL: $name (save file not present)"
             FAIL=$((FAIL + 1))
@@ -1775,8 +1956,8 @@ run_single_drive_fresh_save_product_smoke() {
     local smoke_plus4="$smoke_out/plus4"
     local main_vs="$smoke_out/plus4/main.vs"
     local boot_d64="$smoke_out/moria8-plus4.d64"
-    local save_d64="/tmp/moria8-plus4-single-drive-fresh-save-$$.d64"
-    local swap_program_d64="/tmp/moria8-plus4-single-drive-fresh-program-$$.d64"
+    local save_d64="$PLUS4_TEST_OUT/moria8-plus4-single-drive-fresh-save.d64"
+    local swap_program_d64="$PLUS4_TEST_OUT/moria8-plus4-single-drive-fresh-program.d64"
     local build_log="$out_dir/$name.build.log"
 
     if ! suite_selected "$name" "new_save_empty_init_writes"; then
@@ -1880,7 +2061,7 @@ run_single_drive_fresh_save_no_init_product_smoke() {
     local smoke_plus4="$smoke_out/plus4"
     local main_vs="$smoke_out/plus4/main.vs"
     local boot_d64="$smoke_out/moria8-plus4.d64"
-    local save_d64="/tmp/moria8-plus4-single-drive-fresh-save-no-init-$$.d64"
+    local save_d64="$PLUS4_TEST_OUT/moria8-plus4-single-drive-fresh-save-no-init.d64"
     local build_log="$out_dir/$name.build.log"
 
     if ! suite_selected "$name" "new_save_empty_no_init_returns_setup" "cancel_supported_prompts"; then
@@ -2946,6 +3127,7 @@ run_media_drive10_11_device_probe
 run_boot_title_smoke
 run_new_game_to_town_smoke
 run_dungeon_entry_smoke
+run_exchange_product_smoke
 run_chest_open_product_smoke
 run_balrog_product_smoke
 run_dungeon_ascent_smoke

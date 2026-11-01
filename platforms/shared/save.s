@@ -26,6 +26,9 @@
 // Pinned: first version writing the 20-byte (160-ID) known bitset.
 .const SAVE_KNOWN160_VERSION = hal_storage_save_known160_version
 .const SAVE_INV31_VERSION = hal_storage_save_inv31_version
+// First version writing 33 inventory slots (reserved cloak + secondary weapon).
+.const SAVE_INV33_VERSION = hal_storage_save_inv33_version
+.assert "Inventory slot-count versions are ordered", SAVE_INV31_VERSION < SAVE_INV33_VERSION && SAVE_INV33_VERSION <= SAVE_VERSION, true
 // Saves at or above this version store stat bases with race/class modifiers
 // already baked in; older saves get an exact one-time migration at load.
 .const SAVE_STATS_BAKED_VERSION = hal_storage_save_baked_stats_version
@@ -318,29 +321,13 @@ save_block_table_pre_inventory:
     :save_block_desc(ZP_STATE_START, ZP_STATE_SIZE)
     :save_block_desc(eff_fear_timer, 1)
     :save_block_desc(ZP_RNG_START, ZP_RNG_SIZE)
+    // Inventory/equipment: the 8 inventory arrays as one block. They are
+    // contiguous in stream order, so this is byte-identical to 8 per-array
+    // blocks of TOTAL_INV_SLOTS. It must stay the last entry: the loader
+    // reads every entry before it, then load_read_inventory_state.
+save_block_desc_inventory:
+    :save_block_desc(inv_item_id, 8 * TOTAL_INV_SLOTS)
 save_block_table_pre_inventory_end:
-
-save_block_table_inventory_current:
-    :save_block_desc(inv_item_id, TOTAL_INV_SLOTS)
-    :save_block_desc(inv_qty, TOTAL_INV_SLOTS)
-    :save_block_desc(inv_p1, TOTAL_INV_SLOTS)
-    :save_block_desc(inv_to_hit, TOTAL_INV_SLOTS)
-    :save_block_desc(inv_to_dam, TOTAL_INV_SLOTS)
-    :save_block_desc(inv_to_ac, TOTAL_INV_SLOTS)
-    :save_block_desc(inv_flags, TOTAL_INV_SLOTS)
-    :save_block_desc(inv_ego, TOTAL_INV_SLOTS)
-save_block_table_inventory_current_end:
-
-save_block_table_inventory_legacy:
-    :save_block_desc(inv_item_id, LEGACY_TOTAL_INV_SLOTS)
-    :save_block_desc(inv_qty, LEGACY_TOTAL_INV_SLOTS)
-    :save_block_desc(inv_p1, LEGACY_TOTAL_INV_SLOTS)
-    :save_block_desc(inv_to_hit, LEGACY_TOTAL_INV_SLOTS)
-    :save_block_desc(inv_to_dam, LEGACY_TOTAL_INV_SLOTS)
-    :save_block_desc(inv_to_ac, LEGACY_TOTAL_INV_SLOTS)
-    :save_block_desc(inv_flags, LEGACY_TOTAL_INV_SLOTS)
-    :save_block_desc(inv_ego, LEGACY_TOTAL_INV_SLOTS)
-save_block_table_inventory_legacy_end:
 
 save_block_table_post_known:
     :save_block_desc(potion_shuffle, 12)
@@ -414,8 +401,6 @@ save_block_table_floor_items_direct:
 save_block_table_floor_items_direct_end:
 
 .const SAVE_BLOCK_PRE_INVENTORY_COUNT = (save_block_table_pre_inventory_end - save_block_table_pre_inventory) / SAVE_BLOCK_DESC_SIZE
-.const SAVE_BLOCK_INVENTORY_CURRENT_COUNT = (save_block_table_inventory_current_end - save_block_table_inventory_current) / SAVE_BLOCK_DESC_SIZE
-.const SAVE_BLOCK_INVENTORY_LEGACY_COUNT = (save_block_table_inventory_legacy_end - save_block_table_inventory_legacy) / SAVE_BLOCK_DESC_SIZE
 .const SAVE_BLOCK_POST_KNOWN_COUNT = (save_block_table_post_known_end - save_block_table_post_known) / SAVE_BLOCK_DESC_SIZE
 .const SAVE_BLOCK_DOOR_STATE_COUNT = (save_block_table_door_state_end - save_block_table_door_state) / SAVE_BLOCK_DESC_SIZE
 #if HAL_STORAGE_LEGACY_ROOM8_MIGRATION
@@ -427,8 +412,9 @@ save_block_table_floor_items_direct_end:
 .const SAVE_BLOCK_FLOOR_ITEMS_STAT_COUNT = 3
 .const SAVE_BLOCK_FLOOR_ITEMS_STAT_TABLE = save_block_table_floor_items_direct + (SAVE_BLOCK_FLOOR_ITEMS_HEAD_COUNT * SAVE_BLOCK_DESC_SIZE)
 .assert "Pre-inventory save block table entries are 4 bytes", SAVE_BLOCK_PRE_INVENTORY_COUNT * SAVE_BLOCK_DESC_SIZE, save_block_table_pre_inventory_end - save_block_table_pre_inventory
-.assert "Current inventory save block table entries are 4 bytes", SAVE_BLOCK_INVENTORY_CURRENT_COUNT * SAVE_BLOCK_DESC_SIZE, save_block_table_inventory_current_end - save_block_table_inventory_current
-.assert "Legacy inventory save block table entries are 4 bytes", SAVE_BLOCK_INVENTORY_LEGACY_COUNT * SAVE_BLOCK_DESC_SIZE, save_block_table_inventory_legacy_end - save_block_table_inventory_legacy
+.assert "Inventory descriptor is the last pre-inventory entry", save_block_table_pre_inventory_end - save_block_desc_inventory, SAVE_BLOCK_DESC_SIZE
+.assert "Inventory arrays contiguous in save stream order", inv_qty == inv_item_id + TOTAL_INV_SLOTS && inv_p1 == inv_item_id + 2 * TOTAL_INV_SLOTS && inv_to_hit == inv_item_id + 3 * TOTAL_INV_SLOTS && inv_to_dam == inv_item_id + 4 * TOTAL_INV_SLOTS && inv_to_ac == inv_item_id + 5 * TOTAL_INV_SLOTS && inv_flags == inv_item_id + 6 * TOTAL_INV_SLOTS && inv_ego == inv_item_id + 7 * TOTAL_INV_SLOTS, true
+.assert "Inventory array offsets fit the 8-bit load offset", 7 * TOTAL_INV_SLOTS < 256, true
 .assert "Post-known save block table entries are 4 bytes", SAVE_BLOCK_POST_KNOWN_COUNT * SAVE_BLOCK_DESC_SIZE, save_block_table_post_known_end - save_block_table_post_known
 #if HAL_STORAGE_LEGACY_ROOM8_MIGRATION
 .assert "C128 legacy room8 post-known save block table entries are 4 bytes", SAVE_BLOCK_POST_KNOWN_ROOM8_COUNT * SAVE_BLOCK_DESC_SIZE, save_block_table_post_known_room8_end - save_block_table_post_known_room8
@@ -441,8 +427,6 @@ save_block_table_floor_items_direct_end:
 .assert "Door-state save arrays stay contiguous", door_state_val - door_state_count + MAX_DOOR_STATES, 1 + (MAX_DOOR_STATES * 3)
 .assert "Floor-item direct save block table count is stable", SAVE_BLOCK_FLOOR_ITEMS_DIRECT_COUNT, SAVE_BLOCK_FLOOR_ITEMS_HEAD_COUNT + SAVE_BLOCK_FLOOR_ITEMS_STAT_COUNT
 .assert "Pre-inventory save block table count fits in one page", SAVE_BLOCK_PRE_INVENTORY_COUNT < 64, true
-.assert "Current inventory save block table count fits in one page", SAVE_BLOCK_INVENTORY_CURRENT_COUNT < 64, true
-.assert "Legacy inventory save block table count fits in one page", SAVE_BLOCK_INVENTORY_LEGACY_COUNT < 64, true
 .assert "Post-known save block table count fits in one page", SAVE_BLOCK_POST_KNOWN_COUNT < 64, true
 .assert "Post-floor save block table count fits in one page", SAVE_BLOCK_POST_FLOOR_COUNT < 64, true
 
@@ -684,16 +668,13 @@ save_open_write_len:
     // 1. Magic header (8 bytes)
     :save_block(save_magic, SAVE_MAGIC_SIZE)
 
-    // 2. Regular resident state before inventory/equipment.
+    // 2. Regular resident state, then inventory/equipment (last entry).
     lda #<save_block_table_pre_inventory
     sta zp_ptr1
     lda #>save_block_table_pre_inventory
     sta zp_ptr1_hi
     lda #SAVE_BLOCK_PRE_INVENTORY_COUNT
     jsr save_write_block_table
-
-    // 2b. Current inventory/equipment layout.
-    jsr save_write_inventory_state
 
     // 3. Known-item state uses the V2 96-byte runway.
     jsr save_write_known_items
@@ -988,10 +969,10 @@ plus4_test_after_load_magic:
     sta zp_ptr1
     lda #>save_block_table_pre_inventory
     sta zp_ptr1_hi
-    lda #SAVE_BLOCK_PRE_INVENTORY_COUNT
+    lda #SAVE_BLOCK_PRE_INVENTORY_COUNT - 1
     jsr load_read_block_table
 
-    // 2b. Inventory/equipment state is 30 slots before V3, 31 slots in V3.
+    // 2b. Inventory/equipment state; its slot count depends on the version.
     jsr load_read_inventory_state
 
     // 3. Known-item state is 64 bytes in V1, 96 bytes in V2.
@@ -1498,43 +1479,55 @@ save_write_byte_raw:
     rts
 
 // ============================================================
-// save_write_inventory_state / load_read_inventory_state
+// load_read_inventory_state
 //
-// Save V3 expands the unified carried/equipped item table from 30 to 31 slots
-// by adding EQUIP_AMULET. Older supported saves read only 30 slots and leave
-// the new amulet slot empty via item_init_inventory.
+// The inventory section is the 8 inventory arrays in declaration order
+// (inv_item_id..inv_ego), each as many bytes as the save version's slot
+// count: 30 before SAVE_INV31_VERSION (no amulet slot), 31 before
+// SAVE_INV33_VERSION (no reserved cloak or secondary weapon slot), then
+// TOTAL_INV_SLOTS. Each array is read to its own base, so a shorter stream
+// leaves the slots it does not cover empty (item_init_inventory runs first).
+// Clobbers: A, X, Y, zp_temp2, zp_ptr0/hi
 // ============================================================
-save_write_inventory_state:
-    lda #<save_block_table_inventory_current
-    sta zp_ptr1
-    lda #>save_block_table_inventory_current
-    sta zp_ptr1_hi
-    lda #SAVE_BLOCK_INVENTORY_CURRENT_COUNT
-    jmp save_write_block_table
-
+load_inv_slots: .byte 0             // slots per array in this save's stream
 load_read_inventory_state:
     jsr item_init_inventory
+    ldx #TOTAL_INV_SLOTS
     lda load_save_version
+    cmp #SAVE_INV33_VERSION
+    bcs !lris_slots+
+    ldx #LEGACY_INV31_SLOTS
+.if (SAVE_INV31_VERSION > OLDEST_SAVE_VERSION) {   // false on Atari: compiled out
     cmp #SAVE_INV31_VERSION
-    bcs !lris_current+
-    lda #<save_block_table_inventory_legacy
-    sta zp_ptr1
-    lda #>save_block_table_inventory_legacy
-    sta zp_ptr1_hi
-    lda #SAVE_BLOCK_INVENTORY_LEGACY_COUNT
-    jmp !lris_read+
-!lris_current:
-    lda #<save_block_table_inventory_current
-    sta zp_ptr1
-    lda #>save_block_table_inventory_current
-    sta zp_ptr1_hi
-    lda #SAVE_BLOCK_INVENTORY_CURRENT_COUNT
-!lris_read:
-    jsr load_read_block_table
+    bcs !lris_slots+
+    dex                             // LEGACY_INV30_SLOTS
+}
+!lris_slots:
+    stx load_inv_slots
+    lda #0
+    sta save_count_hi
+    sta zp_temp2                    // array offset; load_read_block keeps it
+!lris_loop:
+    clc
+    adc #<inv_item_id               // pointer recomputed for every array
+    sta zp_ptr0
+    lda #>inv_item_id
+    adc #0
+    sta zp_ptr0_hi
+    lda load_inv_slots
+    sta save_count_lo
+    jsr load_read_block
+    lda zp_temp2
+    clc
+    adc #TOTAL_INV_SLOTS
+    sta zp_temp2
+    cmp #<(8 * TOTAL_INV_SLOTS)     // exactly 8 passes for any 7*T < 256
+    bne !lris_loop-
     ldx #TOTAL_INV_SLOTS
     lda #<inv_item_id
     ldy #>inv_item_id
     jmp save_sanitize_id_table
+.assert "Pre-amulet inventory saves hold one slot fewer than 31-slot saves", LEGACY_INV31_SLOTS - 1, LEGACY_INV30_SLOTS
 
 // ============================================================
 // save_write_known_items / load_read_known_items

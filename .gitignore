@@ -1,5 +1,8 @@
 # Build output
 build/
+
+# The playtest queue's runs, builds and records (playtest/moria_playtest/queue.py)
+/var/
 /platforms/commodore/c128/out/
 
 # Assembly artifacts (outside build dir)

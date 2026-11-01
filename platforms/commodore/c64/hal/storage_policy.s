@@ -28,7 +28,8 @@
 .const hal_storage_save_baked_stats_version = $12
 .const hal_storage_save_known160_version = $14
 .const hal_storage_save_door_state_version = $15
-.const hal_storage_save_version = $15
+.const hal_storage_save_inv33_version = $16
+.const hal_storage_save_version = $16
 
 #define HAL_STORAGE_SAVE_MEDIA_STATUS_LEGACY
 #define HAL_STORAGE_SWAP_PROMPT_LEGACY_SETUP_SKIP
@@ -37,7 +38,8 @@
 #define HAL_STORAGE_SWAP_PROMPT_CPU_PORT_RESTORE
 #define HAL_STORAGE_MARKER_PRESENT_DIRECT
 #define HAL_STORAGE_MARKER_INIT_SKIP_SCRATCH
-#define HAL_STORAGE_PROGRAM_MEDIA_READ_PROBE
+// The program-media probe asks the drive (storage_file_exists): no CHKIN.
+#define HAL_STORAGE_PROGRAM_MEDIA_ASKS_DRIVE
 #define HAL_STORAGE_DISK_SETUP_OTHER_DRIVE
 #define HAL_STORAGE_DISK_SETUP_UI_CPU_PORT
 #define HAL_STORAGE_SAVE_SELECT_OUTPUT_NAME_LEGACY

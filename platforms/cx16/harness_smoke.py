@@ -915,8 +915,60 @@ def _finish_save_to_title(tb: X16Bench) -> bool:
     return tb.on_title()
 
 
+# Inventory fields of one slot (id, qty, p1, to_hit, to_dam, to_ac, flags,
+# ego); the arrays are contiguous with a stride of TOTAL_INV_SLOTS (33).
+def _inv_seed(tb: X16Bench, slot: int, fields: list[int]) -> None:
+    base = tb.syms["inv_item_id"]
+    stride = tb.syms["inv_qty"] - base
+    for k, value in enumerate(fields):
+        tb.write_u8(base + k * stride + slot, value)
+
+
+def _inv_field(tb: X16Bench, slot: int, k: int) -> int:
+    base = tb.syms["inv_item_id"]
+    return tb.read_u8(base + k * (tb.syms["inv_qty"] - base) + slot)
+
+
+# SHIFT+X (VMS `x`, moria.inc switch_weapon): a cursed primary is refused
+# with no turn; uncursed, the swap takes one turn, moves all 8 fields and
+# reports both slots.
+def scenario_weapon_exchange(tb: X16Bench) -> None:
+    tb.chargen("A")
+    turn = tb.syms["zp_turn_lo"]
+    _inv_seed(tb, 22, [5, 1, 0, 1, 0, 0, 3, 0])   # Mace (+1,+0), cursed
+    _inv_seed(tb, 32, [2, 1, 0, 3, 4, 0, 2, 6])   # Dagger (+3,+4) (Defender)
+    turn0 = tb.read_u8(turn)
+    tb.shift("X")
+    tb.assert_line(
+        "exchange_cursed_refused",
+        tb.screen_has("You cannot remove it, it is cursed!")
+        and _inv_field(tb, 22, 0) == 5 and _inv_field(tb, 32, 0) == 2
+        and tb.read_u8(turn) == turn0,
+        f"primary={_inv_field(tb, 22, 0)} secondary={_inv_field(tb, 32, 0)} turn={tb.read_u8(turn)}/{turn0}",
+    )
+    _inv_seed(tb, 22, [5, 1, 0, 1, 0, 0, 2, 0])   # the curse lifted
+    tb.shift("X")
+    tb.assert_line(
+        "exchange_report",
+        tb.screen_has("Primary: Dagger (Defender) (+3,+4)") and tb.screen_has("Secondary: Mace (+1,+0)"),
+        f"row0={tb.rowtext(0)!r} row1={tb.rowtext(1)!r}",
+    )
+    tb.assert_line(
+        "exchange_swapped",
+        _inv_field(tb, 22, 0) == 2 and _inv_field(tb, 22, 3) == 3 and _inv_field(tb, 22, 7) == 6
+        and _inv_field(tb, 32, 0) == 5 and _inv_field(tb, 32, 3) == 1 and _inv_field(tb, 32, 6) == 2
+        and _inv_field(tb, 31, 0) == 0xFF,
+        "records not exchanged",
+    )
+    tb.assert_line("exchange_one_turn", tb.read_u8(turn) == (turn0 + 1) & 0xFF,
+                   f"turn={tb.read_u8(turn)} turn0={turn0}")
+    tb.dump("after_exchange")
+    tb.log("SCENARIO DONE")
+
+
 def scenario_save_load(tb: X16Bench) -> None:
     tb.chargen("A")
+    _inv_seed(tb, 32, [2, 1, 0, 3, 4, 0, 2, 6])   # secondary: Dagger (+3,+4) (Defender)
     tb.shift("S")
     tb.assert_line("save_slot_prompt", tb.screen_has("Select Slot 1-4"), "save slot prompt did not appear")
     tb.press("1")
@@ -928,6 +980,7 @@ def scenario_save_load(tb: X16Bench) -> None:
         (tb.workdir / "THE.GAME").is_file(),
         "THE.GAME not written to HostFS working directory",
     )
+    _inv_seed(tb, 32, [0xFF, 0, 0, 0, 0, 0, 0, 0])   # only the load can bring it back
     tb.press("L")
     tb.assert_line("load_slots", tb.screen_has("Save Slots:"), "load did not show the slot list")
     tb.assert_line(
@@ -948,6 +1001,11 @@ def scenario_save_load(tb: X16Bench) -> None:
         "invuln_cleared",
         tb.read_u8(0x6F) == 0,
         f"eff_invuln_timer not cleared on load: {tb.read_u8(0x6F)}",
+    )
+    tb.assert_line(
+        "secondary_restored",
+        [_inv_field(tb, 32, k) for k in range(8)] == [2, 1, 0, 3, 4, 0, 2, 6] and _inv_field(tb, 31, 0) == 0xFF,
+        f"slot32={[_inv_field(tb, 32, k) for k in range(8)]} slot31_id={_inv_field(tb, 31, 0)}",
     )
     tb.dump("after_load")
     tb.log("SCENARIO DONE")
@@ -1123,6 +1181,7 @@ SCENARIO_FUNCS = {
     "dungeon_descend": scenario_dungeon_descend,
     "death_flow": scenario_death_flow,
     "save_load": scenario_save_load,
+    "weapon_exchange": scenario_weapon_exchange,
     "mage_list": scenario_mage_list,
     "scroll_delta": scenario_scroll_delta,
     "save_slot_tracking": scenario_save_slot_tracking,

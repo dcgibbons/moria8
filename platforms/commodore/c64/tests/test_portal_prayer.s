@@ -267,7 +267,7 @@ test_start:
     :PatchJump(pm_select_book, test_pm_select_book)
     :PatchJump(pm_prompt_visible_spell_choice, test_pm_pick_visible_prayer)
     :PatchJump(pm_validate_selected_spell, test_pm_validate_selected_prayer)
-    :PatchJump(find_random_floor, test_find_random_floor_portal)
+    :PatchJump(find_random_floor_near, test_find_random_floor_portal)  // eff_teleport_self's search entry
 
     // Test 1: successful prayer relocates to the random floor target, updates
     // occupancy + redraw state, stays message-light, spends 4 mana, and marks

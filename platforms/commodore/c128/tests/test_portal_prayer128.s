@@ -144,6 +144,7 @@ combat_note_kill:
     rts
 
 find_random_floor:
+find_random_floor_near:
     clc
     rts
     :PatchRoom(find_random_floor)

@@ -814,6 +814,14 @@ tramp_item_refuel:
 !done:
     jmp tramp_sr_epilogue
 
+tramp_item_exchange:
+    lda #OVL_ITEMS
+    jsr overlay_load_no_kernal
+    bcs !done+
+    jsr item_exchange
+!done:
+    jmp tramp_sr_epilogue
+
 tramp_ranged_fire:
     lda #OVL_ITEMS
     jsr overlay_load_no_kernal
@@ -1269,6 +1277,7 @@ ovl_ui_end:
 .segment ItemActionsOverlay
     #define SCROLL_P3_ROUTER_ENABLED
     #import "../../core/item_actions_overlay.s"
+    #import "../../core/item_exchange.s"
     #import "../../core/ranged_fire.s"
     #import "../../core/throw.s"
     #import "../../core/bash.s"

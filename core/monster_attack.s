@@ -37,11 +37,9 @@ mon_atk_base_tohit:
 // ============================================================
 // Scratch variables (static RAM, safe across subroutine calls)
 // ============================================================
-mat_slot2:        .byte 0   // Monster slot (from zp_mon_idx)
 mat_type2:        .byte 0   // Creature type index
 mat_atk_type:     .byte 0   // Current attack's type ID
-mat_any_hit:      .byte 0   // Any attack connected this round
-mat_total_dmg:    .byte 0   // Total damage accumulated this round
+mat_any_hit:      .byte 0   // Nonzero: an attack did damage this round
 
 // Strings migrated to Huffman compression (HSTR_MAT_* in huffman_data.s)
 
@@ -56,61 +54,53 @@ mat_total_dmg:    .byte 0   // Total damage accumulated this round
 monster_attack_player:
     jsr player_search_mode_off
 
-    lda zp_mon_idx
-    sta mat_slot2
     lda zp_mon_type
     sta mat_type2
     sta cmb_type                // For combat_append_monster_name reuse
 
     lda #0
     sta mat_any_hit
-    sta mat_total_dmg
 
     // --- Attack slot 0 ---
     ldx mat_type2
     lda cr_atk0_type,x
     bne !map_has_atk0+
-    jmp !map_done+              // ATK_NONE → no attacks
+    // ATK_NONE: no physical attacks (Quylthulg). Upstream attacks nothing,
+    // so no round, miss message or recall count (VMS creature.inc
+    // make_attack loops over the creature's attacks; Umoria
+    // monsterAttackPlayer the same).
+    rts
 !map_has_atk0:
     sta mat_atk_type
 
+    // Protection from Evil (VMS Moria creature.inc make_attack; Umoria
+    // monster.cpp monsterAttackPlayer): while it lasts, every attack of an
+    // evil creature whose level is at most the player's (lev + 1 > level)
+    // is repelled: no to-hit roll, no damage, no effect.
+    lda zp_eff_protect
+    beq !map_unprotected+
+    lda #CF_EVIL
+    and cr_mflags,x
+    beq !map_unprotected+
+    lda zp_player_lvl
+    cmp cr_level,x
+    bcs !map_repelled+          // Player level >= creature level
+!map_unprotected:
+
     // Check for aggravation (always hits, no roll)
+    lda mat_atk_type
     cmp #ATK_AGGRAVATE
     bne !map_not_aggro+
     jmp !map_do_aggravate+
 !map_not_aggro:
 
-    jsr mon_atk_calc_tohit      // → zp_combat_tohit
-    jsr mon_atk_roll_tohit      // carry set = hit
+    jsr mon_atk_calc_tohit      // → zp_combat_tohit, then the roll
     bcc !map_slot1+             // miss → try slot 1
 
-    // Roll damage for slot 0
     ldx mat_type2
-    lda cr_atk0_dice,x
-    sta zp_temp0
     lda cr_atk0_sides,x
-    tax                         // X = sides
-    lda zp_temp0                // A = dice count
-    ldy #0                      // No bonus
-    jsr math_dice               // → zp_math_a
-
-    lda zp_math_a
-    sta zp_combat_dmg
-
-    // Apply effects and AC reduction based on attack type
-    jsr mon_atk_effect_dispatch
-    // zp_combat_dmg may be modified (AC reduction for normal)
-
-    lda zp_combat_dmg
-    beq !map_slot1+             // 0 damage after AC reduce → skip
-    clc
-    adc mat_total_dmg
-    sta mat_total_dmg
-    lda #1
-    sta mat_any_hit
-
-    // Apply damage to player
-    jsr mon_atk_apply_damage
+    ldy cr_atk0_dice,x
+    jsr mon_atk_hit
     bcs !map_player_dead+
 
 !map_slot1:
@@ -120,34 +110,13 @@ monster_attack_player:
     beq !map_done+              // No second attack
     sta mat_atk_type
 
-    jsr mon_atk_calc_tohit
-    jsr mon_atk_roll_tohit
+    jsr mon_atk_calc_tohit      // and the roll
     bcc !map_done+              // miss
 
-    // Roll damage for slot 1
     ldx mat_type2
-    lda cr_atk1_dice,x
-    sta zp_temp0
     lda cr_atk1_sides,x
-    tax
-    lda zp_temp0
-    ldy #0
-    jsr math_dice
-
-    lda zp_math_a
-    sta zp_combat_dmg
-
-    jsr mon_atk_effect_dispatch
-
-    lda zp_combat_dmg
-    beq !map_done+
-    clc
-    adc mat_total_dmg
-    sta mat_total_dmg
-    lda #1
-    sta mat_any_hit
-
-    jsr mon_atk_apply_damage
+    ldy cr_atk1_dice,x
+    jsr mon_atk_hit
     bcs !map_player_dead+
 
 !map_done:
@@ -174,6 +143,13 @@ monster_attack_player:
     lda #SFX_MISS
     jmp hal_sound_play
 
+!map_repelled:
+    // "The <name> is repelled." Moria8 prints one summary line per round
+    // (upstream prints it per attack, as it does hits and misses).
+    ldx #HSTR_MAT_REPELLED
+    jsr huff_decode_to_ptr2
+    jmp mon_atk_build_effect_msg
+
 !map_do_aggravate:
     jsr mon_atk_effect_aggravate
     // Print shriek message
@@ -186,10 +162,33 @@ monster_attack_player:
     stx zp_death_source
     jmp player_death_check
 
-// mon_atk_calc_tohit — Compute monster's hit chance
+// mon_atk_hit — An attack that connected: roll Y dice of A sides, apply the
+// attack type's effect, then the damage (none once AC reduces it to 0).
+// Output: carry set = player dead
+// Clobbers: everything
+mon_atk_hit:
+    tax                         // X = sides
+    tya                         // A = dice count
+    ldy #0                      // No bonus
+    jsr math_dice               // → zp_math_a
+    lda zp_math_a
+    sta zp_combat_dmg
+
+    // Apply effects and AC reduction based on attack type
+    jsr mon_atk_effect_dispatch // zp_combat_dmg may be modified
+
+    lda zp_combat_dmg
+    beq !mah_none+              // 0 damage after AC reduce
+    inc mat_any_hit
+    jmp mon_atk_apply_damage
+!mah_none:
+    clc
+    rts
+
+// mon_atk_calc_tohit — Compute monster's hit chance, then roll it
 // hit_chance = base_to_hit[atk_type] + cr_level * 3
-// Output: zp_combat_tohit
-// Clobbers: A, X
+// Output: zp_combat_tohit; carry set = hit (mon_atk_roll_tohit)
+// Clobbers: A, X, zp_temp0, zp_temp3, zp_temp4
 mon_atk_calc_tohit:
     ldx mat_atk_type
     lda mon_atk_base_tohit,x    // Base to-hit for this attack type
@@ -208,7 +207,7 @@ mon_atk_calc_tohit:
     lda #255                    // Cap at 255
 !mact_no_cap:
     sta zp_combat_tohit
-    rts
+    // Fall through: roll the hit
 
 // mon_atk_roll_tohit — d20 roll with natural 1/20 rules
 // Input: zp_combat_tohit = hit chance
@@ -375,8 +374,10 @@ mon_atk_effect_dispatch:
     // Corrode: full damage, no AC reduce. Equipment corrosion deferred.
     rts
 
-// mon_atk_effect_poison — Set/stack poison timer (umoria stacking)
-// Always adds rng_range(cr_level) + 5 to poison timer.
+// mon_atk_effect_poison — Set/stack poison timer
+// Always adds randint(level) + 5 = rng_range(cr_level) + 6 to the poison
+// timer (VMS creature.inc:526 poisoned := poisoned+randint(level)+5;
+// Umoria monster.cpp:1668 identical).
 // Message only printed on first poisoning.
 // Clobbers: A, X, zp_temp3, zp_temp4
 mep_was_poisoned: .byte 0
@@ -385,7 +386,7 @@ mon_atk_effect_poison:
     lda zp_eff_poison
     sta mep_was_poisoned        // Save whether already poisoned
 
-    // Compute addition: rng_range(cr_level) + 5
+    // Compute addition: rng_range(cr_level) + 6 = randint(level) + 5
     ldx mat_type2
     lda cr_level,x
     cmp #1
@@ -396,7 +397,7 @@ mon_atk_effect_poison:
 !mep_roll:
     jsr rng_range               // [0, level-1]
     clc
-    adc #5
+    adc #6                      // [6, level+5]
 !mep_add:
     // Add to existing poison timer
     clc
@@ -417,14 +418,15 @@ mon_atk_effect_poison:
 !mep_done:
     rts
 
-// mon_atk_effect_confuse — Set/stack confusion timer (umoria stacking)
-// First: timer = rng_range(cr_level) + 3. Stacking: timer += 3.
+// mon_atk_effect_confuse — Set/stack confusion timer
+// First: timer = randint(level) + 3 = rng_range(cr_level) + 4.
+// Stacking: timer += 3. (VMS creature.inc:409-414; Umoria monster.cpp:1566-1572)
 // Clobbers: A, X, zp_temp3, zp_temp4
 mon_atk_effect_confuse:
     lda zp_eff_confuse
     bne !mec_stack+
 
-    // First confusion: rng_range(cr_level) + 3
+    // First confusion: rng_range(cr_level) + 4 = randint(level) + 3
     ldx mat_type2
     lda cr_level,x
     cmp #1
@@ -435,7 +437,7 @@ mon_atk_effect_confuse:
 !mec_roll:
     jsr rng_range               // [0, level-1]
     clc
-    adc #3
+    adc #4                      // [4, level+3]
     sta zp_eff_confuse
 !mec_msg:
     // Print "THE <name> CONFUSES YOU."

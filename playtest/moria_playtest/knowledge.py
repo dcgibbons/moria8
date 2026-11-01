@@ -376,3 +376,31 @@ def stat_adjustments() -> tuple[list[tuple[int, ...]], list[tuple[int, ...]]]:
     race and class table order: the manual's tables, from core/tables.s."""
     text = GAME_TABLES.read_text()
     return _signed_rows(text, "race_stat_adj"), _signed_rows(text, "class_stat_adj")
+
+
+SPELL_NAMES = ROOT / "core/spell_names.s"
+SPELL_CLASS_DATA = ROOT / "core/spell_class_data.s"
+NAME_LINE = re.compile(r'^(msn|psn)_(\d+):\s*\.text "([^"]+)"', re.M)
+NAME_ALIAS = re.compile(r"^\.label (msn|psn)_(\d+) = (\w+)", re.M)
+LABEL_TEXT = re.compile(r'^(\w+):\s*\n?\s*\.text "([^"]+)"', re.M)
+SPELL_LIST = {"mage": "msn", "rogue": "msn", "ranger": "msn", "priest": "psn", "paladin": "psn"}
+
+
+@lru_cache(maxsize=None)
+def spells(klass: str) -> dict[str, int]:
+    """Spell or prayer name -> the character level ``klass`` learns it at,
+    for every one the class can learn (core/spell_names.s,
+    core/spell_class_data.s; 99 marks one it cannot)."""
+    if klass not in SPELL_LIST:
+        return {}
+    text = SPELL_NAMES.read_text()
+    labels = dict(LABEL_TEXT.findall(text))
+    names: dict[int, str] = {}
+    for kind, index, name in NAME_LINE.findall(text):
+        if kind == SPELL_LIST[klass]:
+            names.setdefault(int(index), name)
+    for kind, index, label in NAME_ALIAS.findall(text):
+        if kind == SPELL_LIST[klass] and label in labels:
+            names.setdefault(int(index), labels[label])
+    levels = [v for row in _signed_rows(SPELL_CLASS_DATA.read_text(), f"{klass}_spell_level") for v in row]
+    return {names[i]: level for i, level in enumerate(levels) if level < 99 and i in names}

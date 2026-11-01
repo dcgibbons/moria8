@@ -191,6 +191,7 @@ combat_award_xp:
 combat_check_levelup:
 combat_note_kill:
 find_random_floor:
+find_random_floor_near:
 piw_build_visible_inv_cache:
 piw_prompt_filtered_inv:
 piw_pick_filtered_inv_key:

@@ -2,8 +2,10 @@
 // Atari 8-bit platform-owned storage logical file numbers, secondary addresses,
 // and save-format version policy.
 //
-// OLDEST_SAVE_VERSION is pinned equal to SAVE_VERSION ($15) on Atari 8-bit so
-// no legacy save migration code is carried.
+// Every feature-version constant is pinned to the oldest supported save
+// version ($15), so no legacy save migration code is carried. The one
+// exception is the 33-slot inventory ($16, reserved cloak + secondary
+// weapon): $15 saves still load, through the shared 31-slot inventory path.
 
 .const hal_storage_save_file_num = 2
 .const hal_storage_check_file_num = 3
@@ -29,7 +31,10 @@
 .const hal_storage_save_baked_stats_version = $15
 .const hal_storage_save_known160_version = $15
 .const hal_storage_save_door_state_version = $15
-.const hal_storage_save_version = $15
+.const hal_storage_save_inv33_version = $16
+.const hal_storage_save_version = $16
+.assert "Atari $15 saves are 31-slot saves (no 30-slot loader)", hal_storage_save_inv31_version == hal_storage_save_v1_version, true
+.assert "Atari 33-slot saves are the one version past the oldest", hal_storage_save_inv33_version == hal_storage_save_version && hal_storage_save_version == hal_storage_save_v1_version + 1, true
 
 #define HAL_STORAGE_MARKER_PRESENT_DIRECT
 #define HAL_STORAGE_SAVE_CONFIRM_OVERWRITE_PROBE

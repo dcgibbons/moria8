@@ -1,9 +1,17 @@
 // test_phase_door.s — Focused runtime tests for the Phase Door spell row
+//
+// Tests 5-7 run the production eff_phase_door / find_random_floor_near
+// against VMS Moria moria.inc teleport(10) (Umoria player.cpp
+// playerTeleport(10)): a random map square is moved halfway toward the
+// player, truncating the step, while its distance (VMS distance.mar:
+// max(dy,dx) + min(dy,dx) div 2) exceeds 10, until an open floor square
+// without a creature is found; it never gives up. Moria8 refuses the
+// player's own square and stops after about 2,000 tries (1,793-2,048).
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_bootstrap)
 
 .pc = $E000 "Result Buffer"
-tc_results: .fill 4, $ff
+tc_results: .fill 7, $ff
 
 .pc = $080E "Test Code"
 
@@ -17,7 +25,7 @@ test_finish:
     sei
     :BankOutBasic()
     :BankOutKernal()
-    ldx #3
+    ldx #6
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -218,6 +226,44 @@ test_read_tile:
     lda (zp_ptr0),y
     rts
 
+tpd_frfn_orig: .fill 3, 0
+tpd_ok:   .byte 0
+tpd_loop: .byte 0
+tpd_row:  .byte 0
+tpd_dx:   .byte 0
+tpd_max:  .byte 0
+tpd_end:  .byte 0
+
+// tpd_floor_row — TILE_FLOOR on row Y from column A to column X
+tpd_floor_row:
+    sty tpd_row_arg
+    stx tpd_end
+    tax
+!tfr_loop:
+    stx tpd_dx
+    txa
+    tay
+    ldx tpd_row_arg
+    lda #TILE_FLOOR
+    jsr test_write_tile
+    ldx tpd_dx
+    inx
+    cpx tpd_end
+    bcc !tfr_loop-
+    beq !tfr_loop-
+    rts
+tpd_row_arg: .byte 0
+
+// tpd_cast_at_22_12 — Production eff_phase_door from (22,12)
+tpd_cast_at_22_12:
+    lda #22
+    sta zp_player_x
+    lda #12
+    sta zp_player_y
+    lda #0
+    sta vis_room_revealed
+    jmp eff_phase_door
+
 test_setup_phase_door_room:
     jsr fill_map_rock
     lda #0
@@ -312,7 +358,13 @@ test_start:
     sta zp_game_flags
 
     // Test 1: Phase Door uses the validated nearby tile exactly once.
-    :PatchJump(find_random_floor, test_find_random_floor_phase_door)
+    ldx #2
+!save_frfn:
+    lda find_random_floor_near,x
+    sta tpd_frfn_orig,x
+    dex
+    bpl !save_frfn-
+    :PatchJump(find_random_floor_near, test_find_random_floor_phase_door)
     jsr test_setup_phase_door_room
     jsr eff_phase_door
     lda tpd_find_random_floor_calls
@@ -456,10 +508,141 @@ test_start:
     beq !t4_fail+
     lda #$01
     sta tc_results + 3
-    jmp !tests_done+
+    jmp !t5+
 !t4_fail:
     lda #$00
     sta tc_results + 3
+
+    // Tests 5-7: the production search (find_random_floor_near restored).
+!t5:
+    ldx #2
+!restore_frfn:
+    lda tpd_frfn_orig,x
+    sta find_random_floor_near,x
+    dex
+    bpl !restore_frfn-
+
+    // Test 5: the west end of an east-west corridor (floor x 22-60 on row
+    // 12, rock elsewhere). Every one of 30 casts moves the player along the
+    // corridor, 1-10 squares east. Before the fix 20 whole-map tries mostly
+    // found nothing and the player stayed.
+    jsr fill_map_rock
+    lda #22
+    ldx #60
+    ldy #12
+    jsr tpd_floor_row
+    lda #1
+    sta tpd_ok
+    lda #30
+    sta tpd_loop
+!t5_loop:
+    jsr tpd_cast_at_22_12
+    lda zp_player_y
+    cmp #12
+    bne !t5_bad+
+    lda zp_player_x
+    cmp #23
+    bcc !t5_bad+
+    cmp #33
+    bcc !t5_next+
+!t5_bad:
+    lda #0
+    sta tpd_ok
+!t5_next:
+    dec tpd_loop
+    bne !t5_loop-
+    lda tpd_ok
+    sta tc_results + 4
+
+    // Test 6: open floor x 10-34, rows 2-22 around the player at (22,12).
+    // Over 40 casts every landing is 1-10 by VMS distance (the old
+    // Chebyshev <= 10 test also allowed e.g. (8,8): VMS distance 12).
+    jsr fill_map_rock
+    lda #2
+    sta tpd_row
+!t6_rows:
+    lda #10
+    ldx #34
+    ldy tpd_row
+    jsr tpd_floor_row
+    inc tpd_row
+    lda tpd_row
+    cmp #23
+    bne !t6_rows-
+    lda #1
+    sta tpd_ok
+    lda #40
+    sta tpd_loop
+!t6_loop:
+    jsr tpd_cast_at_22_12
+    lda zp_player_x
+    sec
+    sbc #22
+    bcs !t6_dx+
+    eor #$ff
+    adc #1
+!t6_dx:
+    sta tpd_dx
+    lda zp_player_y
+    sec
+    sbc #12
+    bcs !t6_dy+
+    eor #$ff
+    adc #1
+!t6_dy:
+    // VMS distance: (2 * max + min) div 2
+    cmp tpd_dx
+    bcs !t6_dy_max+
+    ldx tpd_dx                  // max = |dx|, min = |dy| (A)
+    stx tpd_max
+    bcc !t6_dist+               // Always
+!t6_dy_max:
+    sta tpd_max                 // max = |dy|, min = |dx|
+    lda tpd_dx
+!t6_dist:
+    lsr
+    clc
+    adc tpd_max
+    beq !t6_bad+                // Did not move
+    cmp #11
+    bcc !t6_next+
+!t6_bad:
+    lda #0
+    sta tpd_ok
+!t6_next:
+    dec tpd_loop
+    bne !t6_loop-
+    lda tpd_ok
+    sta tc_results + 5
+
+    // Test 7: the only other floor squares in reach hold creatures: the
+    // search ends (about 2,000 tries) and the player stays put.
+    jsr fill_map_rock
+    lda #22
+    ldx #24
+    ldy #12
+    jsr tpd_floor_row
+    lda #TILE_FLOOR | FLAG_OCCUPIED
+    ldx #12
+    ldy #23
+    jsr test_write_tile
+    lda #TILE_FLOOR | FLAG_OCCUPIED
+    ldx #12
+    ldy #24
+    jsr test_write_tile
+    jsr tpd_cast_at_22_12
+    lda #$00
+    sta tc_results + 6
+    lda zp_player_x
+    cmp #22
+    bne !tests_done+
+    lda zp_player_y
+    cmp #12
+    bne !tests_done+
+    lda vis_room_revealed
+    bne !tests_done+
+    lda #$01
+    sta tc_results + 6
 
 !tests_done:
     jmp test_finish

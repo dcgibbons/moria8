@@ -79,12 +79,17 @@ help_more_lines:
     .text "then symbol"
     .byte 0
 
-// Row 11: wizard mode (only listed on this page)
+// Row 11: wizard mode (only listed on this page), weapon exchange
     .byte 0
     .byte $fe
     .text "CTRL+W"
     .byte $ff
     .text " Wizard"
+    .byte $fc, 20
+    .byte $fe
+    .text "SHIFT+X"
+    .byte $ff
+    .text " Exchange"
     .byte 0
 
 // Rows 12-23: reserved blank lines to keep the frame layout fixed

@@ -126,6 +126,7 @@ pm_setup_active_tables:
     rts
 
 eff_teleport_self:
+eff_teleport_apply_target:
     rts
 
 eff_kill_monster:

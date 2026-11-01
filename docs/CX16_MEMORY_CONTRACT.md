@@ -79,4 +79,4 @@ freely read and write the Map, `Cx16AuxData`, and `Cx16HuffData`.
 
 * Static memory contract self-test: `make testcx16-memory-contract-selftest`
 * Static linked-symbol & PRG extent gate: `make testcx16-memory-contract`
-* Runtime TestBench suite: `make testcx16-runtime` (20 scenarios in `platforms/cx16/harness_smoke.py`)
+* Runtime TestBench suite: `make testcx16-runtime` (21 scenarios in `platforms/cx16/harness_smoke.py`)

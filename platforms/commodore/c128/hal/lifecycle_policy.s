@@ -4,9 +4,6 @@
 .const hal_platform_reassert_before_message_render = 1
 .const hal_platform_restore_tier_after_overlay = 0
 .const hal_platform_string_bank_load_invalidates_tier = 0
-.const hal_platform_mark_modal_restore_perf = 1
-.const hal_platform_perf_p1_command_instrumentation = 1
-.const hal_platform_render_ball_effect_direct_perf = 1
 .const hal_platform_character_sheet_begin_enabled = 1
 .const hal_platform_character_background_resync = 1
 .const hal_platform_player_magic_helpers_external = 1
@@ -82,8 +79,6 @@
 #define HAL_PLATFORM_DESCRIBE_LOOK_MASKS_IRQ
 #define HAL_PLATFORM_ITEM_ACTION_KEY_RESTORES_BANK
 #define HAL_PLATFORM_REASSERT_BEFORE_MESSAGE_RENDER
-#define HAL_PLATFORM_MARK_MODAL_RESTORE_PERF
-#define HAL_PLATFORM_RENDER_BALL_EFFECT_DIRECT_PERF
 #define HAL_PLATFORM_GAME_LOOP_RUNTIME_RESYNC
 #define HAL_PLATFORM_GAME_LOOP_MAIN_LOOP_BEGIN
 #define HAL_PLATFORM_GAME_LOOP_RESTORE_GENERATION_OVERLAY
@@ -91,7 +86,6 @@
 #define HAL_PLATFORM_GAME_LOOP_RUN_STOP_RESET_INPUT
 #define HAL_PLATFORM_GAME_LOOP_SCROLL_DELTA_RENDER
 #define HAL_PLATFORM_GAME_LOOP_ITEM_ACTIONS_TRAMPOLINED
-#define HAL_PLATFORM_GAME_LOOP_PERF_P1_INSTRUMENTATION
 #define HAL_PLATFORM_GAME_LOOP_PLAYER_MOVE_DIAG_LABELS
 #define HAL_PLATFORM_GAME_LOOP_VISIBILITY_PRESERVE_REVEAL_EXTERNAL
 #define HAL_PLATFORM_OVERLAY_CACHE_ENABLED

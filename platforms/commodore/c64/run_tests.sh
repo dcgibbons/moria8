@@ -68,6 +68,13 @@ cd "$RUN_TESTS64_DIR"
 C64_TEST_OUT="${C64_TEST_OUT:-../../../build/test/c64}"
 C64_BUILD_OUT="${C64_BUILD_OUT:-../../../build/c64}"
 mkdir -p "$C64_TEST_OUT"
+# Temp files under build/, never the shared /tmp (AGENTS.md rule 9): each run
+# gets its own directory, and runs older than six hours are cleared here, so
+# leftovers cannot pile up (2026-11-01: /tmp held thousands of test images).
+mkdir -p ../../../build/test/c64/tmp
+find ../../../build/test/c64/tmp -mindepth 1 -maxdepth 1 -mmin +360 -exec rm -rf {} +
+TMPDIR=$(cd ../../../build/test/c64/tmp && mktemp -d "$(pwd)/run.XXXXXX")
+export TMPDIR
 if [ -d "$C64_BUILD_OUT" ]; then
     cp -p "$C64_BUILD_OUT"/* "$C64_TEST_OUT"/ 2>/dev/null || true
 fi
@@ -1981,12 +1988,94 @@ PY
     TOTAL=$((TOTAL + 1))
 }
 
+run_exchange_product_smoke() {
+    local name="exchange_product_smoke"
+    echo -n "  $name: "
+
+    local smoke_out build_log smoke_c64 boot_d64 main_vs
+    smoke_out=$(mktemp -d "$TMPDIR/moria8-c64-exchange.XXXXXX")
+    smoke_c64="$smoke_out/c64"
+    boot_d64="$smoke_out/moria8-c64.d64"
+    main_vs="$smoke_c64/main.vs"
+    build_log=$(mktemp -t "build_${name}_log")
+
+    if ! make -s -B -C "$REPO_ROOT/platforms/commodore" \
+            KICKASS="$KICKASS" \
+            OUT="$smoke_out" \
+            KA_FLAGS64="-showmem -vicesymbols -libdir ../../core -libdir common -afo -libdir c64 -define DEBUG_FEAT_DISK_TRACE=0 -define C64_TEST_SCRIPTED_EXCHANGE_PRODUCT" \
+            build64 >"$build_log" 2>&1; then
+        echo "FAIL (product build)"
+        tail -80 "$build_log"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    if ! "$C1541" -format "moria8 c64,m8" d64 "$boot_d64" \
+            -attach "$boot_d64" \
+            -write "$smoke_c64/boot.prg" "moria8" \
+            -write "$smoke_c64/boot.prg" "boot64" \
+            -write "$smoke_c64/bootart64.prg" "bootart64" \
+            -write "$smoke_c64/moria8.prg" "moria64" \
+            -write "$smoke_c64/64.bank" "64.bank" \
+            -write "$smoke_c64/title" "t64" \
+            -write "$smoke_c64/monster.db.1" "monster.db.1" \
+            -write "$smoke_c64/monster.db.2" "monster.db.2" \
+            -write "$smoke_c64/monster.db.3" "monster.db.3" \
+            -write "$smoke_c64/monster.db.4" "monster.db.4" \
+            -write "$smoke_c64/ovl.start" "64.start" \
+            -write "$smoke_c64/ovl.town" "64.town" \
+            -write "$smoke_c64/ovl.death" "64.death" \
+            -write "$smoke_c64/ovl.modal" "64.modal" \
+            -write "$smoke_c64/ovl.gen" "64.gen" \
+            -write "$smoke_c64/ovl.help" "64.help" \
+            -write "$smoke_c64/ovl.ui" "64.ui" \
+            -write "$smoke_c64/ovl.items" "64.items" \
+            -write "$smoke_c64/ovl.spell" "64.spell" \
+            -write "$smoke_c64/ovl.chest" "64.chest" >"$build_log" 2>&1; then
+        echo "FAIL (product disk image)"
+        tail -20 "$build_log"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    if python3 -u ../plus4/tests/product_scripted_smoke.py \
+            --name "$name" \
+            --exit-screenshot "../../../build/test/c64/${name}_exit.png" \
+            --pass-symbol ".c64_test_script_exhausted_wait" \
+            --start-symbol ".title_menu_loop" \
+            --until-pass \
+            --main-vs "$main_vs" \
+            --boot-d64 "$boot_d64" \
+            --expect-byte-symbol ".exchange_product_presses=0x02" \
+            --expect-byte-symbol ".exchange_product_refused_turns=0x00" \
+            --expect-byte-symbol ".exchange_product_refused_primary=0x05" \
+            --expect-byte-symbol ".exchange_product_primary_id=0x02" \
+            --expect-byte-symbol ".exchange_product_primary_ego=0x06" \
+            --expect-byte-symbol ".exchange_product_secondary_id=0x05" \
+            --expect-byte-symbol ".exchange_product_secondary_hit=0x01" \
+            --expect-byte-symbol ".exchange_product_cloak_id=0xff" \
+            --expect-byte-symbol ".zp_turn_lo=0x01" \
+            --expect-byte-symbol ".current_overlay=0x0a" \
+            --expect-screen-symbol ".exchange_product_expect_row0:0:0" \
+            --expect-screen-symbol ".exchange_product_expect_row1:1:0" \
+            --timeout 30 \
+            --retry-timeouts 0 \
+            --vice "$VICE" \
+            --screen-base 0x0400; then
+        PASS=$((PASS + 1))
+    else
+        FAIL=$((FAIL + 1))
+    fi
+    TOTAL=$((TOTAL + 1))
+}
 run_chest_open_product_smoke() {
     local name="chest_open_product_smoke"
     echo -n "  $name: "
 
     local smoke_out build_log smoke_c64 boot_d64 main_vs
-    smoke_out=$(mktemp -d "${TMPDIR:-/tmp}/moria8-c64-chest-open.XXXXXX")
+    smoke_out=$(mktemp -d "$TMPDIR/moria8-c64-chest-open.XXXXXX")
     smoke_c64="$smoke_out/c64"
     boot_d64="$smoke_out/moria8-c64.d64"
     main_vs="$smoke_c64/main.vs"
@@ -2067,7 +2156,7 @@ run_chest_open_product_reu_smoke() {
     echo -n "  $name: "
 
     local smoke_out build_log boot_d64 main_vs
-    smoke_out=$(mktemp -d "${TMPDIR:-/tmp}/moria8-c64-chest-open-reu.XXXXXX")
+    smoke_out=$(mktemp -d "$TMPDIR/moria8-c64-chest-open-reu.XXXXXX")
     boot_d64="$smoke_out/moria8-c64.d64"
     main_vs="$smoke_out/c64/main.vs"
     build_log=$(mktemp -t "build_${name}_log")
@@ -2156,7 +2245,7 @@ run_chest_open_product_genfail_smoke() {
     echo -n "  $name: "
 
     local smoke_out build_log boot_d64 nogen_d64 main_vs
-    smoke_out=$(mktemp -d "${TMPDIR:-/tmp}/moria8-c64-chest-open-genfail.XXXXXX")
+    smoke_out=$(mktemp -d "$TMPDIR/moria8-c64-chest-open-genfail.XXXXXX")
     boot_d64="$smoke_out/moria8-c64.d64"
     nogen_d64="$smoke_out/moria8-c64-nogen.d64"
     main_vs="$smoke_out/c64/main.vs"
@@ -2372,7 +2461,7 @@ run_retirement_royal_product_smoke() {
     echo -n "  $name: "
 
     local smoke_out build_log smoke_c64 boot_d64 main_vs
-    smoke_out=$(mktemp -d "${TMPDIR:-/tmp}/moria8-c64-retirement.XXXXXX")
+    smoke_out=$(mktemp -d "$TMPDIR/moria8-c64-retirement.XXXXXX")
     smoke_c64="$smoke_out/c64"
     boot_d64="$smoke_out/moria8-c64.d64"
     main_vs="$smoke_c64/main.vs"
@@ -2443,7 +2532,7 @@ run_game_over_product_smoke() {
     echo -n "  $name: "
 
     local smoke_out build_log smoke_c64 boot_d64 save_d64 main_vs
-    smoke_out=$(mktemp -d "${TMPDIR:-/tmp}/moria8-c64-game-over.XXXXXX")
+    smoke_out=$(mktemp -d "$TMPDIR/moria8-c64-game-over.XXXXXX")
     smoke_c64="$smoke_out/c64"
     boot_d64="$smoke_out/moria8-c64.d64"
     save_d64="$smoke_out/moria8-save.d64"
@@ -2540,6 +2629,75 @@ run_slot2_save_product_smoke() {
         "C64_TEST_SCRIPTED_SLOT2_SAVE_PRODUCT" \
         "the.game2,s" \
         '"THE.GAME2".*SEQ'
+}
+
+# c64_load_written_save_check <name> <save_d64>: boot the slot-2 load build
+# against a product-written save and check the secondary weapon came back
+# through the 33-slot loader (load_read_inventory_state).
+c64_load_written_save_check() {
+    local name="$1" save_d64="$2"
+    local build_log
+    build_log=$(mktemp -t "build_${name}_load_log")
+    local load_ovl="../../../build/test/c64/${name}_load"
+    local load_prg="$load_ovl/main.prg"     # main.vs lands beside it
+    local load_d64="../../../build/test/c64/${name}_load.d64"
+    mkdir -p "$load_ovl"
+    if ! java -jar "$KICKASS" "${KICKASS_TRACE_DEFINE[@]}" main.s ":OVL_OUT=$load_ovl" -showmem -vicesymbols \
+            -define C64_TEST_SCRIPTED_SLOT2_LOAD_PRODUCT -symbolfiledir "$load_ovl" \
+            -o "$load_prg" >"$build_log" 2>&1; then
+        echo "FAIL (load build assembly error)"
+        grep -i error "$build_log" | head -5
+        return 1
+    fi
+    rm -f "$load_d64"
+    if ! "$C1541" -format "moria8 c64,m8" d64 "$load_d64" \
+            -attach "$load_d64" \
+            -write ../../../build/test/c64/boot.prg "moria8" \
+            -write ../../../build/test/c64/boot.prg "boot64" \
+            -write ../../../build/test/c64/bootart64.prg "bootart64" \
+            -write "$load_prg" "moria64" \
+            -write "$load_ovl/64.bank" "64.bank" \
+            -write ../../../build/test/c64/title "t64" \
+            -write ../../../build/test/c64/monster.db.1 "monster.db.1" \
+            -write ../../../build/test/c64/monster.db.2 "monster.db.2" \
+            -write ../../../build/test/c64/monster.db.3 "monster.db.3" \
+            -write ../../../build/test/c64/monster.db.4 "monster.db.4" \
+            -write "$load_ovl/ovl.start" "64.start" \
+            -write "$load_ovl/ovl.town" "64.town" \
+            -write "$load_ovl/ovl.death" "64.death" \
+            -write "$load_ovl/ovl.modal" "64.modal" \
+            -write "$load_ovl/ovl.gen" "64.gen" \
+            -write "$load_ovl/ovl.help" "64.help" \
+            -write "$load_ovl/ovl.ui" "64.ui" \
+            -write "$load_ovl/ovl.items" "64.items" \
+            -write "$load_ovl/ovl.spell" "64.spell" \
+            -write "$load_ovl/ovl.chest" "64.chest" >>"$build_log" 2>&1; then
+        echo "FAIL (load disk build error)"
+        tail -20 "$build_log"
+        return 1
+    fi
+    if ! python3 -u ../plus4/tests/product_scripted_smoke.py \
+            --name "${name}_load" \
+            --pass-symbol ".c64_test_after_load_resume_game" \
+            --fail-symbol ".c64_test_load_resume_fail_input_sym" \
+            --main-vs "$load_ovl/main.vs" \
+            --boot-d64 "$load_d64" \
+            --save-d64 "$save_d64" \
+            --expect-byte-symbol ".save_product_secondary_id=0x02" \
+            --expect-byte-symbol ".save_product_secondary_hit=0x03" \
+            --expect-byte-symbol ".save_product_secondary_dam=0x04" \
+            --expect-byte-symbol ".save_product_secondary_flags=0x02" \
+            --expect-byte-symbol ".save_product_secondary_ego=0x06" \
+            --expect-byte-symbol ".save_product_cloak_id=0xff" \
+            --timeout 30 \
+            --retry-timeouts 0 \
+            --vice "$VICE" \
+            --screen-base 0x0400 >>"$build_log" 2>&1; then
+        echo "FAIL (written save did not load back with the secondary weapon)"
+        tail -8 "$build_log" | sed 's/^/    /'
+        return 1
+    fi
+    return 0
 }
 
 run_save_write_product_smoke_impl() {
@@ -2683,6 +2841,24 @@ run_save_write_product_smoke_impl() {
             return
         fi
         if echo "$dir_list" | grep -qi "$expected_save_re"; then
+            # The written save carries the 33-slot inventory with the seeded
+            # secondary weapon (save_product_seed_secondary); slot 2's save is
+            # then loaded back by the product loader.
+            local save_seq="../../../build/test/c64/${name}_the_game.seq"
+            rm -f "$save_seq"
+            if ! "$C1541" -attach "$save_d64" -read "$save_filename" "$save_seq" >>"$build_log" 2>&1 \
+                    || ! python3 tests/check_save_secondary.py "$save_seq" 0x16 >>"$build_log" 2>&1; then
+                echo "FAIL (secondary weapon not in the written save)"
+                tail -5 "$build_log" | sed 's/^/    /'
+                FAIL=$((FAIL + 1))
+                TOTAL=$((TOTAL + 1))
+                return
+            fi
+            if [ "$test_define" = "C64_TEST_SCRIPTED_SLOT2_SAVE_PRODUCT" ] && ! c64_load_written_save_check "$name" "$save_d64"; then
+                FAIL=$((FAIL + 1))
+                TOTAL=$((TOTAL + 1))
+                return
+            fi
             echo "PASS"
             PASS=$((PASS + 1))
         else
@@ -3533,9 +3709,9 @@ run_load_then_save_new_empty_product_smoke() {
 
     local save_blob="../../../build/test/c64/THE.GAME"
     local marker_blob="../../../build/test/c64/MORIA8.ID"
-    local load_save_d64="/tmp/moria_load_then_save_new_empty_load_$$.d64"
-    local new_save_d64="/tmp/moria_load_then_save_new_empty_$$.d64"
-    local swap_program_d64="/tmp/moria_load_then_save_new_empty_program_$$.d64"
+    local load_save_d64="$C64_TEST_OUT/lts_load.d64"
+    local new_save_d64="$C64_TEST_OUT/lts_new.d64"
+    local swap_program_d64="$C64_TEST_OUT/lts_prog.d64"
     if ! python3 tests/make_load_resume_save64.py "$save_blob" "$marker_blob" >"$build_log" 2>&1; then
         echo "FAIL (save generation error)"
         tail -20 "$build_log"
@@ -3942,8 +4118,8 @@ run_single_drive_fresh_save_product_smoke() {
         return
     fi
 
-    local save_d64="/tmp/moria_single_drive_fresh_save_$$.d64"
-    local swap_program_d64="/tmp/moria_single_drive_fresh_program_$$.d64"
+    local save_d64="$C64_TEST_OUT/moria_single_drive_fresh_save.d64"
+    local swap_program_d64="$C64_TEST_OUT/moria_single_drive_fresh_program.d64"
     rm -f "$save_d64"
     if ! "$C1541" -format "moria8 save,m8" d64 "$save_d64" >"$build_log" 2>&1; then
         echo "FAIL (save disk build error)"
@@ -4073,7 +4249,7 @@ run_single_drive_fresh_save_no_init_product_smoke() {
         return
     fi
 
-    local save_d64="/tmp/moria_single_drive_fresh_save_no_init_$$.d64"
+    local save_d64="$C64_TEST_OUT/moria_single_drive_fresh_save_no_init.d64"
     rm -f "$save_d64"
     if ! "$C1541" -format "moria8 save,m8" d64 "$save_d64" >"$build_log" 2>&1; then
         echo "FAIL (save disk build error)"
@@ -4346,7 +4522,7 @@ check_static_contract "identify_scroll_resident_completion_contract" "../../../c
 check_static_contract "itemdesc_armor_brackets_screen_code_contract" "../../../core/item_desc_banked.s" \
     "!idps_armor:|||lda #\$1b                    // '[' screen code|||lda #\$1d                    // ']' screen code|||!idps_ring:|||lda #\$1b                    // '[' screen code|||lda #\$1d                    // ']' screen code"
 check_static_contract "save_split_item_stats_contract" "../../shared/save.s" \
-    "save_block_table_inventory_current:|||:save_block_desc(inv_p1, TOTAL_INV_SLOTS)|||:save_block_desc(inv_to_hit, TOTAL_INV_SLOTS)|||:save_block_desc(inv_to_dam, TOTAL_INV_SLOTS)|||:save_block_desc(inv_to_ac, TOTAL_INV_SLOTS)|||save_block_table_inventory_legacy:|||:save_block_desc(inv_p1, LEGACY_TOTAL_INV_SLOTS)|||:save_block_desc(si_p1, STORE_TOTAL_SLOTS)|||:save_block_desc(si_to_hit, STORE_TOTAL_SLOTS)|||:save_block_desc(si_to_dam, STORE_TOTAL_SLOTS)|||:save_block_desc(si_to_ac, STORE_TOTAL_SLOTS)|||save_block_table_floor_items_direct:|||:save_block_desc(fi_qty, MAX_FLOOR_ITEMS)|||:save_block_desc(fi_to_hit, MAX_FLOOR_ITEMS)|||:save_block_desc(fi_to_dam, MAX_FLOOR_ITEMS)|||:save_block_desc(fi_to_ac, MAX_FLOOR_ITEMS)|||load_read_floor_block_table:|||lda load_floor_item_count|||jsr load_read_block|||save_write_floor_items:|||lda #<save_block_table_floor_items_direct|||jsr save_write_block_table|||lda #<SAVE_BLOCK_FLOOR_ITEMS_STAT_TABLE|||jsr save_write_block_table|||load_read_floor_items:|||lda #<save_block_table_floor_items_direct|||jsr load_read_floor_block_table|||lda #<SAVE_BLOCK_FLOOR_ITEMS_STAT_TABLE|||jsr load_read_floor_block_table"
+    "save_block_table_pre_inventory:|||save_block_desc_inventory:|||:save_block_desc(inv_item_id, 8 * TOTAL_INV_SLOTS)|||save_block_table_pre_inventory_end:|||:save_block_desc(si_p1, STORE_TOTAL_SLOTS)|||:save_block_desc(si_to_hit, STORE_TOTAL_SLOTS)|||:save_block_desc(si_to_dam, STORE_TOTAL_SLOTS)|||:save_block_desc(si_to_ac, STORE_TOTAL_SLOTS)|||save_block_table_floor_items_direct:|||:save_block_desc(fi_qty, MAX_FLOOR_ITEMS)|||:save_block_desc(fi_to_hit, MAX_FLOOR_ITEMS)|||:save_block_desc(fi_to_dam, MAX_FLOOR_ITEMS)|||:save_block_desc(fi_to_ac, MAX_FLOOR_ITEMS)|||load_read_floor_block_table:|||lda load_floor_item_count|||jsr load_read_block|||load_read_inventory_state:|||lda load_inv_slots|||sta save_count_lo|||jsr load_read_block|||adc #TOTAL_INV_SLOTS|||cmp #<(8 * TOTAL_INV_SLOTS)|||save_write_floor_items:|||lda #<save_block_table_floor_items_direct|||jsr save_write_block_table|||lda #<SAVE_BLOCK_FLOOR_ITEMS_STAT_TABLE|||jsr save_write_block_table|||load_read_floor_items:|||lda #<save_block_table_floor_items_direct|||jsr load_read_floor_block_table|||lda #<SAVE_BLOCK_FLOOR_ITEMS_STAT_TABLE|||jsr load_read_floor_block_table"
 check_static_contract "item_action_messages_stat_desc_contract" "../../../core/item.s" \
     "Build message: \"You picked up a <name>.\"|||lda fi_add_id|||jsr item_append_desc|||Build message: \"You drop a <name>.\"|||lda fi_add_id|||jsr item_append_desc|||item_append_desc:|||jsr item_append_name|||and #IF_IDENTIFIED"
 check_static_contract "equip_action_messages_stat_desc_contract" "../../../core/player_item_commands.s" \
@@ -4418,16 +4594,17 @@ run_test "rng"    "tests/test_rng.s"    "0400 0409" 10
 run_test "memory" "tests/test_memory.s" "0400 0402" 3
 run_test "config" "tests/test_config.s" "0400 0400" 1
 run_test "input"  "tests/test_input.s"  "0400 040e" 15
-run_test "main_loop" "tests/test_main_loop.s" "0400 0431" 50 500000000
+run_test "main_loop" "tests/test_main_loop.s" "0400 0434" 53 500000000
 run_test "run_visibility_bank" "tests/test_run_visibility_bank.s" "0400 0400" 1 500000000
 run_test "turn" "tests/test_turn.s" "0400 0420" 33 500000000
 run_test "player" "tests/test_player.s" "0400 0409" 10
 run_test "dungeon" "tests/test_dungeon.s" "0400 0442" 67 500000000
 run_test "monster" "tests/test_monster.s" "0400 0417" 24 500000000
-run_test "monster_ai" "tests/test_monster_ai.s" "0400 0440" 65 500000000
+run_test "monster_ai" "tests/test_monster_ai.s" "0400 0443" 68 500000000
 run_test "combat" "tests/test_combat.s" "0400 0429" 42 500000000
 run_test "msg_long" "tests/test_msg_long.s" "0400 0400" 1 20000000
-run_test "monster_attack" "tests/test_monster_attack.s" "0400 0415" 22 500000000
+run_test "monster_attack" "tests/test_monster_attack.s" "0400 042d" 46 500000000
+run_test "monster_tier3" "tests/test_monster_tier3.s" "0400 0403" 4 20000000
 run_test "effects" "tests/test_effects.s" "0400 042d" 46 1000000000
 run_test "effects_magic" "tests/test_effects_magic.s" "0400 0433" 29 1000000000
 run_test "cure_light_wounds" "tests/test_cure_light_wounds.s" "0400 0402" 3 500000000
@@ -4462,7 +4639,7 @@ run_test "haste_self" "tests/test_haste_self.s" "0400 0402" 3 500000000
 run_test "fire_ball" "tests/test_fire_ball.s" "0400 0402" 3 500000000
 run_test "word_of_destruction" "tests/test_word_of_destruction.s" "0400 0406" 7 500000000
 run_test "light_area" "tests/test_light_area.s" "0400 0401" 2 500000000
-run_test "phase_door" "tests/test_phase_door.s" "0400 0403" 4 500000000
+run_test "phase_door" "tests/test_phase_door.s" "0400 0406" 7 500000000
 run_test "genocide" "tests/test_genocide.s" "0400 0401" 2 500000000
 run_test "directional_effects" "tests/test_directional_effects.s" "0400 0403" 4 500000000
 run_test "overcast_ordering" "tests/test_overcast_ordering.s" "0400 0400" 1 500000000
@@ -4501,18 +4678,21 @@ run_test "orb_of_draining_prayer" "tests/test_orb_of_draining_prayer.s" "0400 04
     run_test "prayer_feedback" "tests/test_prayer_feedback.s" "0400 040c" 13 500000000
 run_test "detect_feedback" "tests/test_detect_feedback.s" "0400 0403" 4 500000000
 run_test "item" "tests/test_item.s" "0400 043f" 64 1000000000
-run_test "scroll_p3" "tests/test_scroll_p3.s" "0400 040d" 14 1000000000
+run_test "item_exchange" "tests/test_item_exchange.s" "0400 040d" 14 1000000000
+run_test "scroll_p3" "tests/test_scroll_p3.s" "0400 040e" 15 1000000000
 run_test "item_desc" "tests/test_item_desc.s" "0400 040a" 11 500000000
 run_test "item_ui" "tests/test_item_ui.s" "0400 040f" 16 1000000000
+run_test "potion_cures" "tests/test_potion_cures.s" "0400 040b" 12 1000000000
+run_test "timed_buffs" "tests/test_timed_buffs.s" "0400 0409" 10 1000000000
 run_test "store" "tests/test_store.s" "0400 0437" 56 1000000000
 run_test "ui_views" "tests/test_ui_views.s" "0400 0413" 19 500000000
 run_test "ui_views_filters" "tests/test_ui_views_filters.s" "0400 0413" 7 500000000
 run_test "subsystems" "tests/test_subsystems.s" "0400 040a" 11
 run_sound_monitor_test
-run_test "save"  "tests/test_save.s"  "0400 0421" 34 1000000000
+run_test "save"  "tests/test_save.s"  "0400 0425" 38 1000000000
 run_test "score" "tests/test_score.s" "0400 040c" 13 500000000
 run_test "wands_staves" "tests/test_wands_staves.s" "0400 0407" 8 100000000
-run_test "monster_magic" "tests/test_monster_magic.s" "0400 0419" 26 500000000
+run_test "monster_magic" "tests/test_monster_magic.s" "0400 041c" 29 500000000
 run_test "tier" "tests/test_tier.s" "0400 0410" 17 500000000
 run_test "disk_swap" "tests/test_disk_swap.s" "0400 040e" 15 500000000
 run_test "render" "tests/test_render.s" "0400 0417" 24 500000000
@@ -4535,6 +4715,7 @@ run_suite_function "scripted_detect_evil_smoke" run_scripted_detect_evil_smoke
 run_suite_function "dungeon_ascent_product_smoke" run_dungeon_ascent_product_smoke
 run_suite_function "wizard_reveal_product_smoke" run_wizard_reveal_product_smoke
 run_suite_function "wizard_item_product_smoke" run_wizard_item_product_smoke
+run_suite_function "exchange_product_smoke" run_exchange_product_smoke
 run_suite_function "chest_open_product_smoke" run_chest_open_product_smoke
 run_suite_function "chest_open_product_reu_smoke" run_chest_open_product_reu_smoke
 run_suite_function "chest_open_product_genfail_smoke" run_chest_open_product_genfail_smoke

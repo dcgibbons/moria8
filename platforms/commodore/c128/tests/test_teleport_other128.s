@@ -197,6 +197,7 @@ monster_get_ptr:
     rts
 
 find_random_floor:
+find_random_floor_near:
     inc test_find_random_floor_calls
     lda #80
     sta df_target_x

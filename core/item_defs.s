@@ -20,7 +20,7 @@
 .const MAX_GLYPHS      = 4
 .const FI_EMPTY        = $ff
 
-// Equipment Slot Constants (indices 22-30 in unified table)
+// Equipment Slot Constants (indices 22-32 in unified table)
 .const EQUIP_WEAPON = 22
 .const EQUIP_BODY   = 23
 .const EQUIP_SHIELD = 24
@@ -30,17 +30,23 @@
 .const EQUIP_LIGHT  = 28
 .const EQUIP_RING   = 29
 .const EQUIP_AMULET = 30
-.const EQUIP_LAST   = EQUIP_AMULET
-.const EQUIP_END    = EQUIP_LAST + 1
-.const VISIBLE_EQUIP_LAST = EQUIP_AMULET
+.const EQUIP_CLOAK  = 31               // RESERVED: always empty until the cloak slot lands
+.const EQUIP_SECONDARY = 32            // VMS inventory[34]: SHIFT+X swaps it with EQUIP_WEAPON
+.const EQUIP_LAST   = EQUIP_AMULET     // becomes EQUIP_CLOAK with the cloak
+.const EQUIP_END    = EQUIP_LAST + 1   // AC sum / pseudo-ID: never the secondary
+.const VISIBLE_EQUIP_LAST = EQUIP_SECONDARY   // equipment screen and take-off
 .const VISIBLE_EQUIP_END  = VISIBLE_EQUIP_LAST + 1
 
 // Inventory Constants
 .const MAX_INV_SLOTS   = 22
-.const MAX_EQUIP_SLOTS = 9
 .const VISIBLE_EQUIP_SLOTS = VISIBLE_EQUIP_END - EQUIP_WEAPON
-.const TOTAL_INV_SLOTS = 31
-.const LEGACY_TOTAL_INV_SLOTS = 30
+.const TOTAL_INV_SLOTS = 33
+.const MAX_EQUIP_SLOTS = TOTAL_INV_SLOTS - MAX_INV_SLOTS
+.const LEGACY_INV30_SLOTS = 30         // saves before the amulet slot
+.const LEGACY_INV31_SLOTS = 31         // saves before the reserved cloak and secondary slots
+.assert "Reserved cloak slot follows the AC range", EQUIP_CLOAK, EQUIP_END
+.assert "Secondary weapon is the last inventory slot", EQUIP_SECONDARY == EQUIP_CLOAK + 1 && EQUIP_SECONDARY == TOTAL_INV_SLOTS - 1, true
+.assert "Visible equipment covers every equipment slot", VISIBLE_EQUIP_END, TOTAL_INV_SLOTS
 
 // Item Category for Digging Tools
 .const ICAT_DIGGING = 0
@@ -78,6 +84,12 @@
 .const ITEM_TYPE_POT_RESIST_HEAT    = 98
 .const ITEM_TYPE_POT_RESIST_COLD    = 99
 .const ITEM_TYPE_POT_CURE_CRITICAL  = 100
+// Status timers a cure-wounds/Healing potion cures (eff_potion_cure.s masks;
+// bit order follows zp_eff_poison, zp_eff_blind, zp_eff_confuse).
+.const EFF_CURE_POISON  = %001
+.const EFF_CURE_BLIND   = %010
+.const EFF_CURE_CONFUSE = %100
+.const EFF_CURE_ALL     = EFF_CURE_POISON | EFF_CURE_BLIND | EFF_CURE_CONFUSE
 .const ITEM_TYPE_SCR_TELEPORT_LEVEL = 101
 .const ITEM_TYPE_SCR_MAGIC_MAPPING  = 102
 .const ITEM_TYPE_SCR_OBJECT_DETECT  = 103

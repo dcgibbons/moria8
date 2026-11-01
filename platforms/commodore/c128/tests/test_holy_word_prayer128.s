@@ -194,6 +194,7 @@ combat_append_str:
 cmb_term_and_print:
 tunnel_spawn_gold:
 find_random_floor:
+find_random_floor_near:
 piw_prompt_filtered_inv:
 piw_pick_filtered_inv_key:
 piw_print_prompt_with_count:

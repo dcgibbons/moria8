@@ -14,12 +14,14 @@ pmx_feedback_x:          .byte 0
 pmx_feedback_y:          .byte 0
 pmx_feedback_mon_slot:   .byte 0
 
+// pmx_add_speed_msg — Haste for A more turns (A = 1-127). zp_eff_speed is
+// one signed timer (> 0 haste, < 0 slow): a signed add, so haste while slowed
+// cancels slow turn for turn, and stacking haste stops at +127 instead of
+// wrapping into slow.
 pmx_add_speed_msg:
-    tax
-    txa
     clc
     adc zp_eff_speed
-    bcc !pasm_store+
+    bvc !pasm_store+
     lda #$7f
 !pasm_store:
     sta zp_eff_speed

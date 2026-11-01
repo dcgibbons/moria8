@@ -1464,7 +1464,8 @@ Activations (policy const already declared intent; define now realizes it):
   HAL_PLATFORM_ITEM_ACTION_KEY_RESTORES_BANK,
   HAL_PLATFORM_REASSERT_BEFORE_MESSAGE_RENDER,
   HAL_PLATFORM_{MARK_MODAL_RESTORE,RENDER_BALL_EFFECT_DIRECT,GAME_LOOP_PERF_P1}_PERF
-  (PERF_P1=1 builds only), HAL_SCREEN_FULL_CLEAR_USES_BULK,
+  (PERF_P1=1 builds only; removed with the PERF_P1 instrumentation,
+  2026-11-01), HAL_SCREEN_FULL_CLEAR_USES_BULK,
   C128_REAL_BOOT_DIAG (test builds only, via #define under the existing
   test-conditional).
 - C64/Plus4: HAL_INPUT_FLUSH_RUN_CANCEL_BUFFER, HAL_LAYOUT_WIZARD_40COL_MENU.

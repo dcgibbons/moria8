@@ -25,7 +25,8 @@
 .const hal_storage_save_baked_stats_version = $12
 .const hal_storage_save_known160_version = $14
 .const hal_storage_save_door_state_version = $15
-.const hal_storage_save_version = $15
+.const hal_storage_save_inv33_version = $16
+.const hal_storage_save_version = $16
 
 // Disk mode values matching Atari/Commodore convention:
 //   1 = one-drive swap mode (:0 shared with Program Disk)

@@ -50,9 +50,6 @@ REQUIRED_POLICY_CONSTANTS = (
     "hal_platform_reassert_before_message_render",
     "hal_platform_restore_tier_after_overlay",
     "hal_platform_string_bank_load_invalidates_tier",
-    "hal_platform_mark_modal_restore_perf",
-    "hal_platform_perf_p1_command_instrumentation",
-    "hal_platform_render_ball_effect_direct_perf",
     "hal_platform_character_sheet_begin_enabled",
     "hal_platform_character_background_resync",
     "hal_platform_player_magic_helpers_external",
@@ -136,9 +133,6 @@ CONST_DEFINE_PARITY = {
     "hal_platform_reassert_before_message_render": "HAL_PLATFORM_REASSERT_BEFORE_MESSAGE_RENDER",
     "hal_platform_restore_tier_after_overlay": "HAL_PLATFORM_RESTORE_TIER_AFTER_OVERLAY",
     "hal_platform_string_bank_load_invalidates_tier": "HAL_PLATFORM_STRING_BANK_LOAD_INVALIDATES_TIER",
-    "hal_platform_mark_modal_restore_perf": "HAL_PLATFORM_MARK_MODAL_RESTORE_PERF",
-    "hal_platform_perf_p1_command_instrumentation": "HAL_PLATFORM_GAME_LOOP_PERF_P1_INSTRUMENTATION",
-    "hal_platform_render_ball_effect_direct_perf": "HAL_PLATFORM_RENDER_BALL_EFFECT_DIRECT_PERF",
     "hal_platform_character_sheet_begin_enabled": "HAL_PLATFORM_CHARACTER_SHEET_BEGIN_ENABLED",
     "hal_platform_character_background_resync": "HAL_PLATFORM_CHARACTER_BACKGROUND_RESYNC",
     "hal_platform_player_magic_helpers_external": "HAL_PLATFORM_PLAYER_MAGIC_HELPERS_EXTERNAL",
@@ -220,18 +214,6 @@ def main() -> int:
         "hal_platform_string_bank_load_invalidates_tier": (
             COMMON_DIR / "string_bank.s",
             "HAL_PLATFORM_STRING_BANK_LOAD_INVALIDATES_TIER",
-        ),
-        "hal_platform_mark_modal_restore_perf": (
-            COMMON_DIR / "ui_restore.s",
-            "HAL_PLATFORM_MARK_MODAL_RESTORE_PERF",
-        ),
-        "hal_platform_perf_p1_command_instrumentation": (
-            COMMON_DIR / "game_loop_helpers.s",
-            "HAL_PLATFORM_GAME_LOOP_PERF_P1_INSTRUMENTATION",
-        ),
-        "hal_platform_render_ball_effect_direct_perf": (
-            COMMON_DIR / "player_magic_ball.s",
-            "HAL_PLATFORM_RENDER_BALL_EFFECT_DIRECT_PERF",
         ),
         "hal_platform_levelup_magic_uses_trampoline": (
             COMMON_DIR / "combat.s",

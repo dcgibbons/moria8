@@ -53,6 +53,25 @@ Required work:
 - Optionally retry a timed-out test once and report a hang that recurs.
 - Check the C64 and Plus/4 runners for the same gap.
 
+### Synchronise the C64 disk-swap smoke's image swaps
+
+`load_then_save_new_empty_product_smoke` (`platforms/commodore/c64/run_tests.sh`)
+swaps drive 8's image five times from the harness
+(`platforms/commodore/plus4/tests/product_scripted_smoke.py` `attach_drive8`)
+on a timing basis, not at a known program stop: anything that changes how long
+an attach takes moves a swap relative to the C64. With the images under
+`build/test/c64` under their long names the smoke timed out every time; under
+short names (`lts_*.d64`) or the old `/tmp` names it passes (2026-11-01). The
+root-cause pass for the C64 program-media hang also saw a swap breakpoint used
+at the wrong point.
+
+Required work:
+
+- Make each swap wait for the program stop it belongs to (a checkpoint the
+  scripted test reaches) before attaching, as the other disk smokes do.
+- Then the image names and paths no longer matter; keep a regression that
+  runs the smoke with long paths.
+
 ### Add the VMS `x` weapon swap (secondary weapon slot)
 
 VMS Moria keeps a secondary weapon in its own equipment slot
@@ -304,12 +323,97 @@ Mace case and the longer Two-Handed Sword case (ego parenthetical wraps as a
 unit); harness count 17→19. Gates: make test exit 0 (all four platforms),
 make test128 137/137.
 
+### Monster data design decisions from the creature audit
+
+The 2026-11-01 audit of all 150 shipped creatures against VMS 4.8 and Umoria
+5.7.15 (`tools/parse_creatures.py` reads Umoria only) found differences that
+need a design decision before any fix (maintainer: backlog them). Each makes
+deep monsters weaker or different than upstream:
+
+- Breath: a 255 cap on breath damage (`core/monster_magic.s` ~336), so an
+  Ancient Multi-Hued Dragon breathes at most 255 (upstream 693), and one
+  BREATH bit where upstream has up to five, so multi-breathers breathe half
+  as often. (The element itself is "Element-correct monster breath".)
+- Speed: capped at two moves a turn (`map_speed`); the Balrog, Invisible
+  Stalker, Poltergeist and Huge Brown Bat lose a third of their actions, the
+  Iron Golem (upstream 1/3) moves 1/2. Speed code 3 is unused.
+- Lost monster spells: Hold Person, Slow, Blink, Teleport (self) and Drain
+  Mana are dropped, so the kept spells are cast more often; summons appear
+  beside the caster, not the player (VMS `creature.inc` ~991).
+- Elemental resistance and weakness: bolts ignore a creature's matching
+  breath bit (÷4) and hurt-by flags (×2) (VMS `spells.inc` fire_bolt;
+  Umoria `spells.cpp` ~781-789); hurt-by-light/rock are dropped; no Slay
+  Dragon ego reads CF_DRAGON.
+- Fleeing: every monster flees below 25% HP (`core/monster_ai.s` ~272), a
+  rule neither upstream has.
+- Town creatures: `core/monster.s` ~120 sets every town speed to 1, dropping
+  their random-move bits.
+- Oracle: the generator follows Umoria where VMS (the default oracle)
+  differs (sleep, aaf, treasure, evil flags on several creatures; three
+  shipped creatures have no VMS row).
+
+Each: decide faithful vs deliberate 8-bit choice, then implement with tests
+and the byte budget, or record it in `docs/FEATURE_MAP.md` as intentional.
+
+### Armour reduction above AC 200
+
+`mon_atk_ac_reduce` (`core/monster_attack.s` ~281-304) computes damage −
+AC × damage / 200 but keeps only the low byte of the quotient, so with AC
+over 200 the reduction can come out wrong (found 2026-11-01). Normal play may
+never reach AC 200; check how high Moria8's AC can go, then either clamp AC to
+200 there (VMS reduces at most all of the damage) or keep the full quotient,
+with a test at the boundary. Moria8 truncates like Umoria; VMS rounds to
+nearest (maintainer, 2026-11-01: leave the rounding as it is).
+
+### Blinding monster touches and Free Action
+
+Two upstream mechanics Moria8 lacks (`docs/FEATURE_MAP.md` §6.4-§6.5 audit,
+2026-11-01; maintainer: "backlog 4"):
+
+- Blindness touch (upstream attack type 10): `tools/parse_creatures.py` maps
+  it to a normal hit (to-hit 60, upstream 2) that never blinds, although
+  player blindness (`zp_eff_blind`, the Blindness potion) exists. Give it a
+  handler: upstream damage, then blindness unless saved, as VMS
+  `creature.inc` `make_attack` case 10.
+- Free Action: the paralysis touch never reads `PLF_FREE_ACT`, and nothing in
+  Moria8 sets it (no ring or ego item grants it). Add the upstream source
+  (Ring of Free Action, the ego "of Free Action") and the check in the
+  paralysis handler.
+
+Required work: the handlers per VMS, generator mapping, per-effect tests
+through `monster_attack_player`, FEATURE_MAP rows, and the byte budgets on
+every port.
+
+### Make 0d0 monster attacks explicit, and aggravate work in any slot
+
+Two follow-ups from the no-HP attack fix (2026-11-01):
+
+- `mon_atk_hit` passes the attack's dice count to `math_dice`, documented for
+  1-255 dice. A 0d0 attack (fear wails, thieves, and since 2026-11-01 the
+  Banshee, Ghost and Liches' drain touches) deals no damage only because 0
+  loops 256 times, each `rng_range(0)` returning 0, and only the low byte of
+  the $0100 sum is used. Add an explicit `cpy #0` skip so that no longer
+  rests on the wrap (a few bytes on every port; `test_monster_attack` t29-t30
+  cover the behavior today).
+- `ATK_AGGRAVATE` is handled only in attack slot 0; in slot 1 it falls
+  through to a normal hit. No shipped creature has it there today, so this
+  only matters once the special attacks are expanded.
+
 ### Expand unsupported monster special attacks
 
 Moria8 maps several Umoria monster attack effects into compact substitutes.
 For example, fire/cold/lightning, blindness, stealing, disenchant, eating food,
 eating light, eating charges, stat drains, and experience drain are not all
 implemented as distinct effects.
+
+Until 2026-11-01 the no-HP effects were worse than missing: the generator
+mapped Lose experience (19), Steal Money/Object (12/13), Aggravate (20),
+Disenchant (21) and Eat food/light/charges (22-24) to normal hits that dealt
+their dice as HP damage (Umoria `monster.cpp` ~1540-1800 applies none of them
+as HP damage). A Banshee's 14d8 experience drain hit for ~63 HP and killed 70
+of 102 queue characters past DL23. They now do no HP damage; the effects
+themselves remain to be added here, experience drain first (Banshees, wights,
+wraiths, vampires), then stealing (maintainer, 2026-11-01: "backlog it").
 
 Required work:
 
@@ -325,6 +429,27 @@ Acceptance target:
 
 - Shipped monsters no longer silently collapse high-impact upstream attacks
   into misleading normal attacks.
+
+### Add player slowness (sources and a separate slow counter)
+
+Nothing in Moria8 can slow the player today: there is no Potion or Staff of
+Slowness, no slowing monster spell and no slowing trap; only the wizard menu
+sets slowness (scroll/potion audit, 2026-10-31). VMS Moria keeps separate
+`fast` and `slow` counters that run at once and net each turn
+(`potions.inc`); Moria8 nets haste and slow into one signed timer, haste
+capped at +127, which is equivalent while nothing slows the player
+(maintainer decision 2026-10-31: keep the single timer until a slowness
+source exists).
+
+Required work:
+
+- Add the upstream slowness sources Moria8 omits (`docs/FEATURE_MAP.md`
+  Potion of Slowness, Staff of Slowness, the slowing monster spell), each
+  per VMS.
+- With them, split haste and slow into separate saved counters as VMS does:
+  a byte in the saved effect block (`$50-$5F` has none free, so a zero-page
+  reallocation the maintainer approves) and a save-format change.
+- Tests: stacking, haste while slowed, expiry messages, save/load.
 
 ### Element-correct monster breath
 
@@ -1142,30 +1267,6 @@ Acceptance target:
 - A fresh machine with only the documented packages installed and the ROM
   variables set builds every port and passes `make -j7 -O test` with no
   undocumented step.
-
-### The C128 PERF_P1 build does not assemble
-
-`PERF_P1=1` (the C128 timing instrumentation behind
-`make test128 PERF_P1=1`, `perf_p1` and `perf_p1_trace_smoke`) fails to
-assemble: `relative address is illegal (jump distance is too far: 142)` at
-the `bcs !run_trap_stop+` in `core/game_loop.s` `run_step`. The
-`jsr perf_p1_move_start` that PERF adds to `run_step` puts the branch past
-its 127-byte reach. HEAD fails the same way (found 2026-10-29), so the timing
-suites cannot run at all; normal builds are unaffected.
-
-Required work:
-
-- Make the branch reach in every build, for example `bcc` past a
-  `jmp !run_trap_stop+`, keeping the normal builds' byte budgets.
-- Run `make test128 PERF_P1=1` (`TEST_FILTER='^perf_p1'`) and fix what the
-  timing suites then report; `perf_p1_trace_run_assert` in
-  `platforms/commodore/c128/run_tests128.sh` has not run since its four copies
-  were folded into it.
-
-Acceptance target:
-
-- `make test128 PERF_P1=1` assembles and its `perf_p1` and
-  `perf_p1_trace_smoke` suites pass.
 
 ### Run the C64 suite in parallel
 

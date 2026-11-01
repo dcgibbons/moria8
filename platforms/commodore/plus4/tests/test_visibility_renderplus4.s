@@ -60,6 +60,7 @@ rng_range:
     lda #0
     rts
 
+math_multiply:                  // monster_spawn_one's CR_MAX_HP path
 math_dice:
     lda #1
     sta zp_math_a

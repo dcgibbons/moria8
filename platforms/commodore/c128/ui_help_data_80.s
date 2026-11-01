@@ -122,6 +122,8 @@ help_lines:
 
     .byte 0
     .byte $fe ; .text "Q" ; .byte $ff ; .text " Quaff Potion"
+    .byte $fc, HELP80_COL2
+    .byte $fe ; .text "SHIFT+X" ; .byte $ff ; .text " Exchange Weapons"
     .byte 0
 
     .byte 0

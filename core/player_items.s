@@ -13,6 +13,12 @@
 #endif
 #if !SMALL_PLAY_EXTERNAL
 #import "player_heal_feedback.s"
+// Cure-wounds/Healing potion effects, beside the heal feedback they use. C128
+// places them in its banked runtime with the quaff code instead
+// (EFF_POTION_CURE_EXTERNAL): its resident selector payload has no room.
+#if !EFF_POTION_CURE_EXTERNAL
+#import "eff_potion_cure.s"
+#endif
 #endif
 #if !PLAYER_ITEM_SELECT_EXTERNAL
 #import "player_item_select.s"

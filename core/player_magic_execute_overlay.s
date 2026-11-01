@@ -422,11 +422,22 @@ eff_sleep_all:
     lda pmx_work_flag
     jmp pmx_report_sleep_result
 
+// eff_haste_self — Mage Haste Self: fast += randint(20) + lev (VMS Moria
+// magic.inc; Umoria mage_spells.cpp). sec makes rng_range's 0-19 a 1-20.
 eff_haste_self:
     lda #20
     jsr rng_range
-    clc
+    sec
     adc zp_player_lvl
+    jmp pmx_add_speed_msg
+
+// eff_staff_speed — Staff of Speed: fast += randint(30) + 15 (VMS Moria
+// staffs.inc; Umoria staves.cpp), 16-45 turns.
+eff_staff_speed:
+    lda #30
+    jsr rng_range
+    sec
+    adc #15
     jmp pmx_add_speed_msg
 
 eff_resist_heat_cold:
@@ -439,11 +450,16 @@ eff_resist_heat_cold:
 eff_sense_invisible:
     jmp pmx_set_see_invisible_msg
 
+// eff_protect_from_evil — protevil += randint(25) + 3*lev (VMS Moria
+// spells.inc protect_evil; Umoria playerProtectEvil). Levels up to 76 keep
+// the sum below 256, so no carry arises between the adds.
 eff_protect_from_evil:
     lda #25
     jsr rng_range
-    clc
-    adc #25
+    sec
+    adc zp_player_lvl
+    adc zp_player_lvl
+    adc zp_player_lvl
     jmp pmx_add_protect_msg
 
 eff_create_food:

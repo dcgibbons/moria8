@@ -1326,9 +1326,53 @@ assert_line("ad_quit", home, "did not return to title after Q")
 dump("after_ds_adopt")
 print("SCENARIO DONE")
 """
+# inv_seed(slot, fields) / inv_field(slot, k): the 8 inventory fields of one
+# slot (id, qty, p1, to_hit, to_dam, to_ac, flags, ego). The arrays are
+# contiguous with a stride of TOTAL_INV_SLOTS (33); main RAM, as the CPU
+# sees it between commands.
+LUA_INV_HELPERS = r"""
+local INV = INV_ITEM_ID_ADDR
+local INV_STRIDE = INV_QTY_ADDR - INV_ITEM_ID_ADDR
+local function inv_seed(slot, f)
+    for k = 0, 7 do prog:write_u8(INV + k * INV_STRIDE + slot, f[k + 1]) end
+end
+local function inv_field(slot, k)
+    return prog:read_u8(INV + k * INV_STRIDE + slot)
+end
+"""
+
+LUA_WEAPON_EXCHANGE_BODY = r"""
+-- SHIFT+X (VMS `x`, moria.inc switch_weapon): a cursed primary is refused
+-- with no turn; uncursed, the swap takes one turn, moves all 8 fields and
+-- reports both slots.
+inv_seed(22, {5, 1, 0, 1, 0, 0, 3, 0})   -- Mace (+1,+0), cursed
+inv_seed(32, {2, 1, 0, 3, 4, 0, 2, 6})   -- Dagger (+3,+4) (Defender)
+local turn0 = prog:read_u8(TURN_LO_ADDR)
+shift("X")
+local refused = wait_screen("You cannot remove it, it is cursed!", 20)
+assert_line("exchange_cursed_refused", refused and inv_field(22, 0) == 5
+            and inv_field(32, 0) == 2 and prog:read_u8(TURN_LO_ADDR) == turn0,
+            "refusal message, records or turn wrong")
+prog:write_u8(INV + 6 * INV_STRIDE + 22, 2) -- lift the curse
+shift("X")
+local reported = wait_screen("Primary: Dagger (Defender) (+3,+4)", 20)
+assert_line("exchange_report", reported and screen_has("Secondary: Mace (+1,+0)"),
+            "report lines missing: " .. rowtext(0) .. " / " .. rowtext(1))
+assert_line("exchange_swapped",
+            inv_field(22, 0) == 2 and inv_field(22, 3) == 3 and inv_field(22, 7) == 6
+            and inv_field(32, 0) == 5 and inv_field(32, 3) == 1 and inv_field(32, 6) == 2
+            and inv_field(31, 0) == 0xFF, "records not exchanged")
+assert_line("exchange_one_turn", prog:read_u8(TURN_LO_ADDR) == (turn0 + 1) % 256,
+            "turn " .. prog:read_u8(TURN_LO_ADDR) .. " from " .. turn0)
+dump("after_exchange")
+print("SCENARIO DONE")
+"""
+
 LUA_REBOOT_SAVE_BODY = r"""
 -- Session A of save_reboot_load: chargen, then save slot 1 to the SAVE1
--- volume in drive 2 (same setup flow as save_load).
+-- volume in drive 2 (same setup flow as save_load). The secondary weapon
+-- slot (32) holds a Dagger (+3,+4) (Defender); slot 31 stays empty.
+inv_seed(32, {2, 1, 0, 3, 4, 0, 2, 6})
 local s = keymap["Left Shift"]
 local f = findkey("S")
 s:set_value(1) emu.wait(0.02)
@@ -1406,6 +1450,12 @@ end
 assert_line("loaded", loaded, "reboot load did not resume the saved game")
 assert_line("stats_restored", screen_has("test") and screen_has("Human"),
             "status line does not show the restored character")
+local sec_ok = inv_field(31, 0) == 0xFF
+local expect = {2, 1, 0, 3, 4, 0, 2, 6}
+for k = 0, 7 do
+    if inv_field(32, k) ~= expect[k + 1] then sec_ok = false end
+end
+assert_line("secondary_restored", sec_ok, "slot 32/31 not restored from the save")
 dump("after_load")
 print("SCENARIO DONE")
 """
@@ -1590,6 +1640,17 @@ def death_flow_lua() -> str:
     return _chargen_body("A") + LUA_DEATH_BODY
 
 
+def _inv_helpers() -> str:
+    return (LUA_INV_HELPERS
+            .replace("INV_ITEM_ID_ADDR", hex(_sym_addr("inv_item_id")))
+            .replace("INV_QTY_ADDR", hex(_sym_addr("inv_qty"))))
+
+
+def weapon_exchange_lua() -> str:
+    return (_chargen_body("A") + _inv_helpers() + LUA_WEAPON_EXCHANGE_BODY
+            ).replace("TURN_LO_ADDR", hex(_sym_addr("zp_turn_lo")))
+
+
 def save_load_lua() -> str:
     return _chargen_body("A") + LUA_SAVE_LOAD_BODY
 
@@ -1639,6 +1700,7 @@ SCENARIO_LUA = {
     "disk_setup_swap": disk_setup_swap_lua,
     "disk_setup_adopt": disk_setup_adopt_lua,
     "save_slot_tracking": save_slot_tracking_lua,
+    "weapon_exchange": weapon_exchange_lua,
 }
 
 # Scenarios that exercise a separate save disk (blank ProDOS image, volume
@@ -1780,8 +1842,8 @@ def main() -> int:
 
     if args.scenario == "save_reboot_load":
         # Session A: save to SAVE1. Session B: cold boot, load it back.
-        lua_a = _chargen_body("A") + LUA_REBOOT_SAVE_BODY
-        lua_b = LUA_HELPERS + LUA_REBOOT_LOAD_BODY
+        lua_a = _chargen_body("A") + _inv_helpers() + LUA_REBOOT_SAVE_BODY
+        lua_b = LUA_HELPERS + _inv_helpers() + LUA_REBOOT_LOAD_BODY
         out = _run_mame(args, lua_a, True)
         out += _run_mame(args, lua_b, True)
     else:

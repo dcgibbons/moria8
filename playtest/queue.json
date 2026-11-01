@@ -1,0 +1,21 @@
+{
+ "workers": 24,
+ "min_per_platform": 1,
+ "platforms": [
+  "c64"
+ ],
+ "goal": "deep",
+ "retry_cap": 3,
+ "start_budget": 2000000,
+ "budget_factor": 3,
+ "budget_floor": 750000,
+ "retention_days": 14,
+ "fetch_every_s": 600,
+ "remote": "origin",
+ "branch": "main",
+ "fetch_url": "https://github.com/dcgibbons/moria8.git",
+ "paused": false,
+ "epoch": "2026-11-01-monster-data",
+ "balrog_workers": 2,
+ "balrog_budget": 3000000
+}

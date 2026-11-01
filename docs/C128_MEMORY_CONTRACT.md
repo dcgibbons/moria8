@@ -62,7 +62,8 @@ has been repopulated and marked valid.
 
 Important Bank 0 ownership includes the resident payloads (`128.world`
 `$6000-$8c4f`, `128.item` `$8c50-$a7ff`, `128.select` `$a800-$aaff`, each
-segment's max the next one's start), floor items at `$1a00-$1aff`, runtime
+segment's max the next one's start; the always-resident `128.diskio` holds the
+modal footer `press_key_str` and the death message `slain_str`, C128M-006), floor items at `$1a00-$1aff`, runtime
 scratch at `$1b00-$1bff`, the overlay window at `$e000-$efff`, and reloadable
 banked code at `$f000` below `$ff00`. `main.s` assertions are authoritative for
 resident segment starts and ends.
@@ -148,3 +149,4 @@ work16 C128 memory review; this ledger is their durable approval provenance.
 | C128M-003 | Accepted | Project maintainer, 2026-07-09 | New cache/map/common-RAM use requires a separate layout design and overlap assertions | build assertions and authoritative `make test128` | none |
 | C128M-004 | Accepted | Project maintainer, 2026-08-12 | Modal-misc overlay gets a Bank 1 cache slot at `$9800-$9CFF`, carved from title-cache slack (title art needs 593-624 B of the former 1928 B cache); overlay cache covers IDs 1-9 with a second ready-bit byte | maintainer direction this session; `memory128.s` overlap asserts; `cache_survival_smoke` and partial-failure smokes | none |
 | C128M-005 | Accepted | Project maintainer, 2026-10-25 | Store init/restock (`store_restock_overlay.s`) moves from the items overlay (ID 7, full after store stacking) to the cold chest overlay (ID 10); `tramp_store_init_all`/`tramp_store_restock_all` load ID 10, a disk load at new game and town re-entry. Bank 1 has no free slot to cache ID 10 (largest free span: 244 B at `$730C`). Maintainer: "I don't want the load, but let's do it for now." | `main.s` ID assert and overlay-fit asserts; `make test128` | cache ID 10 if Bank 1 space is found |
+| C128M-006 | Accepted | Project maintainer, 2026-10-31 | `slain_str` ("You have been slain.", 21 B, read-only, read only by Bank 0 `core/game_loop.s`) moves from `128.item` to the always-resident `128.diskio`, beside `press_key_str`, because the 33-slot inventory arrays (+16 B) would overflow `128.item` by 3 B. `128.item` keeps 18 B free; `128.diskio` 30 B (21 B in the tightest test variant) | `docs/X_WEAPON_SWAP_DESIGN.md` §3.5 and §14 answer 1; `main.s` asserts `slain_str` lies inside the disk-I/O payload; `make check128-payloads`; `make test128` | none |

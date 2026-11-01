@@ -104,7 +104,7 @@ def build_lua_script(scenario: str, syms: dict[str, int]) -> str:
     zp_turn = syms.get("zp_turn_lo", 0x0040)
     player_data = syms.get("player_data", 0x2400)
     inv_item_id = syms.get("inv_item_id", 0x2500)
-    inv_qty = syms.get("inv_qty", 0x2520)
+    inv_qty = syms.get("inv_qty", 0x2521)
     monster_table = syms.get("monster_table", 0x2600)
     cr_level = syms.get("cr_level", 0x2700)
     save_device = syms.get("save_device", 0x0E20)
@@ -132,6 +132,7 @@ local CURRENT_TIER_ADDR = 0x{current_tier:04X}
 local PLAYER_DATA_ADDR = 0x{player_data:04X}
 local INV_ITEM_ID_ADDR = 0x{inv_item_id:04X}
 local INV_QTY_ADDR = 0x{inv_qty:04X}
+local INV_STRIDE = INV_QTY_ADDR - INV_ITEM_ID_ADDR   -- TOTAL_INV_SLOTS (33)
 local MONSTER_TABLE_ADDR = 0x{monster_table:04X}
 local CR_LEVEL_ADDR = 0x{cr_level:04X}
 local SAVE_DEV_ADDR = 0x{save_device:04X}
@@ -336,6 +337,15 @@ local function wizard_menu_open(tries)
     return false
 end
 
+-- inv_seed(slot, fields): the 8 inventory fields of one slot
+-- (id, qty, p1, to_hit, to_dam, to_ac, flags, ego).
+local function inv_seed(slot, f)
+    for k = 0, 7 do prog:write_u8(INV_ITEM_ID_ADDR + k * INV_STRIDE + slot, f[k + 1]) end
+end
+local function inv_field(slot, k)
+    return prog:read_u8(INV_ITEM_ID_ADDR + k * INV_STRIDE + slot)
+end
+
 local function descend_to_dl1()
     for _ = 1, 12 do
         send_key(0x4C) -- 'L'
@@ -387,6 +397,8 @@ end
 function run()
     local ok = start_new_game("A")
     assert_line("chargen_town_ready", ok)
+    -- Secondary weapon (slot 32): Dagger (+3,+4) (Defender); slot 31 stays empty.
+    inv_seed(32, {2, 1, 0, 3, 4, 0, 2, 6})
     send_key(0xD3) -- SHIFT+S (save & quit) -> prompts Disk Setup on first save
     assert_line("save_disk_setup_prompt", wait_screen("DISK SETUP", 80))
     send_key(0x32) -- 2) Pick save drive
@@ -405,6 +417,7 @@ function run()
         if screen_has("N)ew") and screen_has("L)oad") then break end
     end
     assert_line("title_after_save", screen_has("N)ew") and screen_has("L)oad"))
+    inv_seed(32, {0xFF, 0, 0, 0, 0, 0, 0, 0}) -- only the load can bring it back
     send_key(0x4C) -- 'L' (load game)
     assert_line("load_slots_shown", wait_screen("Select Slot 1-4", 80))
     send_key(0x31) -- Slot 1
@@ -413,6 +426,9 @@ function run()
         if prog:read_u8(PLAYER_X_ADDR) > 0 and screen_has("Welcome back") then break end
     end
     assert_line("save_load_resumed", prog:read_u8(PLAYER_X_ADDR) > 0)
+    assert_line("save_load_secondary_restored",
+        inv_field(32, 0) == 2 and inv_field(32, 3) == 3 and inv_field(32, 4) == 4
+        and inv_field(32, 6) == 2 and inv_field(32, 7) == 6 and inv_field(31, 0) == 0xFF)
     manager.machine:exit()
 end
 """
@@ -528,6 +544,28 @@ function run()
     assert_line("quaff_prompt", wait_screen("Quaff which potion", 80))
     send_key(0x41) -- 'A'
     assert_line("quaff_effect", wait_screen("strength return", 80))
+    -- SHIFT+X ($D8): a cursed primary is refused with no turn; uncursed, the
+    -- swap takes one turn and reports both slots (VMS switch_weapon).
+    drain_more(4)
+    wait_frames(60)                          -- the quaff's own turn ends first
+    inv_seed(22, {5, 1, 0, 1, 0, 0, 3, 0})   -- Mace (+1,+0), cursed
+    inv_seed(32, {2, 1, 0, 3, 4, 0, 2, 6})   -- Dagger (+3,+4) (Defender)
+    local turn0 = prog:read_u8(TURN_ADDR)
+    send_key(0xD8)
+    assert_line("exchange_cursed_refused",
+        wait_screen("You cannot remove it, it is cursed!", 60)
+        and inv_field(22, 0) == 5 and inv_field(32, 0) == 2
+        and prog:read_u8(TURN_ADDR) == turn0)
+    prog:write_u8(INV_ITEM_ID_ADDR + 6 * INV_STRIDE + 22, 2) -- lift the curse
+    send_key(0xD8)
+    assert_line("exchange_report",
+        wait_screen("Primary: Dagger (Defender) (+3,+4)", 60)
+        and screen_has("Secondary: Mace (+1,+0)"))
+    assert_line("exchange_swapped",
+        inv_field(22, 0) == 2 and inv_field(22, 3) == 3 and inv_field(22, 7) == 6
+        and inv_field(32, 0) == 5 and inv_field(32, 3) == 1 and inv_field(32, 6) == 2
+        and inv_field(31, 0) == 0xFF)
+    assert_line("exchange_one_turn", prog:read_u8(TURN_ADDR) == (turn0 + 1) % 256)
     manager.machine:exit()
 end
 """

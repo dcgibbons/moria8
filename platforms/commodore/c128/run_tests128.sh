@@ -27,6 +27,13 @@ java() {
 }
 RUN_TESTS128_DIR="${RUN_TESTS128_DIR:-$REPO_ROOT/platforms/commodore/c128}"
 cd "$RUN_TESTS128_DIR"
+# Temp files under build/, never the shared /tmp (AGENTS.md rule 9): each run
+# gets its own directory, and runs older than six hours are cleared here, so
+# leftovers cannot pile up (2026-11-01: /tmp held thousands of test images).
+mkdir -p ../../../build/test/c128/tmp
+find ../../../build/test/c128/tmp -mindepth 1 -maxdepth 1 -mmin +360 -exec rm -rf {} +
+TMPDIR=$(cd ../../../build/test/c128/tmp && mktemp -d "$(pwd)/run.XXXXXX")
+export TMPDIR
 C128_TEST_OUT="${C128_TEST_OUT:-../../../build/test/c128}"
 C128_BUILD_OUT="${C128_BUILD_OUT:-../../../build/c128}"
 mkdir -p "$C128_TEST_OUT"
@@ -71,7 +78,6 @@ C128_KEEP_TOOL="$(pwd)/vice_keep_inputs.py"
 VICE="$C128_KEEP_TOOL"
 export C128_VICE_REAL
 C1541="${C1541:-c1541}"
-PERF_P1_MODE="${PERF_P1:-0}"
 TEST_JOBS="${TEST_JOBS:-8}"
 TEST_PHASE="${TEST_PHASE:-}"
 TEST_FILTER="${TEST_FILTER:-}"
@@ -97,7 +103,7 @@ TEST_SUMMARY_FILE="${TEST_SUMMARY_FILE:-}"
 PASS=0
 FAIL=0
 TOTAL=0
-TEST128_TMP_PARENT="${TEST128_TMP_PARENT:-/tmp}"
+TEST128_TMP_PARENT="${TEST128_TMP_PARENT:-$TMPDIR}"
 TEST128_TMP_DIR="${TEST128_TMP_DIR:-$(mktemp -d "${TEST128_TMP_PARENT%/}/test128.$$.XXXXXX")}"
 TEST128_TIMINGS_FILE="${TEST128_TMP_DIR}/timings.tsv"
 TEST128_RESULTS_FILE="${TEST128_TMP_DIR}/results.tsv"
@@ -112,9 +118,9 @@ OVERLAY_PARTIAL_BOOT_ASSETS_BUILT=0
 DEATH_BOOT_ASSETS_BUILT=0
 OVERLAY_STATE_BOOT_ASSETS_BUILT=0
 SCRIPTED_INPUT_BOOT_ASSETS_BUILT=0
-PERF_P1_TRACE_BOOT_ASSETS_BUILT=0
 SCRIPTED_SPELL_BOOT_ASSETS_BUILT=0
 SCRIPTED_CHEST_OPEN_BOOT_ASSETS_BUILT=0
+SCRIPTED_EXCHANGE_BOOT_ASSETS_BUILT=0
 SCRIPTED_SPELL_CANCEL_BOOT_ASSETS_BUILT=0
 SCRIPTED_BOOK_OVERLAY_BOOT_ASSETS_BUILT=0
 SCRIPTED_SPELL_LIST_OVERLAY_BOOT_ASSETS_BUILT=0
@@ -129,9 +135,6 @@ TITLE_LOAD_MOUNTED_SAVE_ASSETS_BUILT=0
 OVERLAY_TRANSITION_DIAG_ASSETS_BUILT=0
 
 KA_DEFINES=(-define C128 :OVL_OUT=../../../build/test/c128)
-if [ "$PERF_P1_MODE" = "1" ]; then
-    KA_DEFINES+=(-define PERF_P1)
-fi
 
 cleanup_test128_tmp() {
     rm -f ./*.prg ./*.sym ./*.vs tests/*.prg tests/*.sym tests/*.vs
@@ -644,22 +647,19 @@ describe_phase_token() {
             printf 'units\tminimal128,config128,memory128,db128,tier128,input128,disk_swap128,main_loop128,msg_prompt128,vdc_attr128,item_desc128,speed_equipment128,vdc_scroll_delta128,status_coherence128,dungeon128,look_trampoline128,soak128,monster128,detect_monsters128,detect_evil128,cure_light_wounds128,cure_poison128,cure_light_wounds_prayer128,bless_prayer128,remove_fear_prayer128,call_light_prayer128,find_traps_prayer128,detect_doors_stairs_prayer128,slow_poison_prayer128,blind_creature_prayer128,portal_prayer128,cure_medium_wounds_prayer128,cure_serious_wounds_prayer128,sense_invisible_prayer128,protection_from_evil_prayer128,earthquake_prayer128,sense_surroundings_prayer128,cure_critical_wounds_prayer128,turn_undead_prayer128,prayer_prayer128,dispel_undead_prayer128,dispel_evil_prayer128,glyph_of_warding_prayer128,holy_word_prayer128,heal_prayer128,chant_prayer128,sanctuary_prayer128,neutralize_poison_prayer128,create_food_prayer128,remove_curse_prayer128,resist_heat_cold_prayer128,orb_of_draining_prayer128,find_hidden_traps_doors128,stinking_cloud128,frost_ball128,teleport_other128,haste_self128,fire_ball128,word_of_destruction128,genocide128,confusion128,lightning_bolt128,trap_door_destruction128,sleep_i128,sleep_ii128,sleep_iii128,fire_bolt128,slow_monster128,polymorph_other128,identify128,teleport_self128,recharge_item_ii128\n'
             ;;
         smokes)
-            printf 'smokes\tboot_d64_smoke,boot_title_idle_smoke,title_art_smoke,marker_init_d64_smoke,boot_title_load_missing_savefile_smoke,boot_title_load_mounted_save_smoke,boot_title_save_write_product_smoke,boot_title_save_media_fail_product_smoke,boot_title_single_drive_save_wrong_media_smoke,boot_title_single_drive_load_wrong_media_smoke,boot_title_single_drive_load_corrupt_smoke,boot_title_single_drive_load_return_smoke,boot_title_single_drive_fresh_save_smoke,vic40_blanked_boot_smoke,new_key_stability_smoke,boot_title_newgame_smoke,boot_title_load_resume_smoke,boot_tier_transition_smoke,town_overlay_smoke,town_overlay_female_smoke,town_overlay_state_smoke,scripted_summary_to_town_smoke,scripted_spell_cast_smoke,chest_open_product_smoke128,scripted_book_overlay_smoke,scripted_spell_list_overlay_smoke,scripted_spell_list_cancel_smoke,scripted_prayer_cast_smoke,cache_survival_smoke,dungeon_attack_stability_smoke,death_overlay_smoke,restart_to_title_smoke,preload_partial_failure_smoke,overlay_partial_failure_smoke\n'
+            printf 'smokes\tboot_d64_smoke,boot_title_idle_smoke,title_art_smoke,marker_init_d64_smoke,boot_title_load_missing_savefile_smoke,boot_title_load_mounted_save_smoke,boot_title_save_write_product_smoke,boot_title_save_media_fail_product_smoke,boot_title_single_drive_save_wrong_media_smoke,boot_title_single_drive_load_wrong_media_smoke,boot_title_single_drive_load_corrupt_smoke,boot_title_single_drive_load_return_smoke,boot_title_single_drive_fresh_save_smoke,vic40_blanked_boot_smoke,new_key_stability_smoke,boot_title_newgame_smoke,boot_title_load_resume_smoke,boot_tier_transition_smoke,town_overlay_smoke,town_overlay_female_smoke,town_overlay_state_smoke,scripted_summary_to_town_smoke,scripted_spell_cast_smoke,chest_open_product_smoke128,exchange_product_smoke128,scripted_book_overlay_smoke,scripted_spell_list_overlay_smoke,scripted_spell_list_cancel_smoke,scripted_prayer_cast_smoke,cache_survival_smoke,dungeon_attack_stability_smoke,death_overlay_smoke,restart_to_title_smoke,preload_partial_failure_smoke,overlay_partial_failure_smoke\n'
             ;;
         boot)
             printf 'boot\tboot_d64_smoke,boot_title_idle_smoke,title_art_smoke,boot_title_load_missing_savefile_smoke,boot_title_load_mounted_save_smoke,boot_title_save_write_product_smoke,boot_title_save_media_fail_product_smoke,vic40_blanked_boot_smoke,new_key_stability_smoke,boot_title_newgame_smoke,boot_title_load_resume_smoke,boot_tier_transition_smoke,boot_diag_copy\n'
             ;;
         town)
-            printf 'town\ttown_overlay_smoke,town_overlay_female_smoke,town_overlay_state_smoke,scripted_summary_to_town_smoke,scripted_spell_cast_smoke,chest_open_product_smoke128,scripted_book_overlay_smoke,scripted_spell_list_overlay_smoke,scripted_spell_list_cancel_smoke,scripted_prayer_cast_smoke,real_input_town_move_diag,real_boot_crash_harness\n'
+            printf 'town\ttown_overlay_smoke,town_overlay_female_smoke,town_overlay_state_smoke,scripted_summary_to_town_smoke,scripted_spell_cast_smoke,chest_open_product_smoke128,exchange_product_smoke128,scripted_book_overlay_smoke,scripted_spell_list_overlay_smoke,scripted_spell_list_cancel_smoke,scripted_prayer_cast_smoke,real_input_town_move_diag,real_boot_crash_harness\n'
             ;;
         cache)
             printf 'cache\tcache_survival_smoke,preload_partial_failure_smoke,overlay_partial_failure_smoke,overlay_data_transition_smoke\n'
             ;;
         diag)
             printf 'diag\treal_input_town_move_diag,real_boot_crash_harness,overlay_data_transition_smoke,boot_diag_copy\n'
-            ;;
-        perf)
-            printf 'perf\tperf_p1,perf_p1_trace_smoke\n'
             ;;
         *)
             printf '%s\t<unknown>\n' "$phase"
@@ -688,7 +688,7 @@ suite_matches_phase_token() {
             ;;
         smokes)
             case "$suite_name" in
-                boot_d64_smoke|boot_title_idle_smoke|title_art_smoke|marker_init_d64_smoke|boot_title_load_missing_savefile_smoke|boot_title_load_mounted_save_smoke|boot_title_save_write_product_smoke|boot_title_save_media_fail_product_smoke|boot_title_single_drive_save_wrong_media_smoke|boot_title_single_drive_load_wrong_media_smoke|boot_title_single_drive_load_corrupt_smoke|boot_title_single_drive_load_return_smoke|boot_title_single_drive_fresh_save_smoke|vic40_blanked_boot_smoke|new_key_stability_smoke|boot_title_newgame_smoke|boot_title_load_resume_smoke|boot_tier_transition_smoke|town_overlay_smoke|town_overlay_female_smoke|town_overlay_state_smoke|scripted_summary_to_town_smoke|scripted_spell_cast_smoke|chest_open_product_smoke128|scripted_book_overlay_smoke|scripted_spell_list_overlay_smoke|scripted_spell_list_cancel_smoke|scripted_prayer_cast_smoke|cache_survival_smoke|dungeon_attack_stability_smoke|death_overlay_smoke|restart_to_title_smoke|preload_partial_failure_smoke|overlay_partial_failure_smoke) return 0 ;;
+                boot_d64_smoke|boot_title_idle_smoke|title_art_smoke|marker_init_d64_smoke|boot_title_load_missing_savefile_smoke|boot_title_load_mounted_save_smoke|boot_title_save_write_product_smoke|boot_title_save_media_fail_product_smoke|boot_title_single_drive_save_wrong_media_smoke|boot_title_single_drive_load_wrong_media_smoke|boot_title_single_drive_load_corrupt_smoke|boot_title_single_drive_load_return_smoke|boot_title_single_drive_fresh_save_smoke|vic40_blanked_boot_smoke|new_key_stability_smoke|boot_title_newgame_smoke|boot_title_load_resume_smoke|boot_tier_transition_smoke|town_overlay_smoke|town_overlay_female_smoke|town_overlay_state_smoke|scripted_summary_to_town_smoke|scripted_spell_cast_smoke|chest_open_product_smoke128|exchange_product_smoke128|scripted_book_overlay_smoke|scripted_spell_list_overlay_smoke|scripted_spell_list_cancel_smoke|scripted_prayer_cast_smoke|cache_survival_smoke|dungeon_attack_stability_smoke|death_overlay_smoke|restart_to_title_smoke|preload_partial_failure_smoke|overlay_partial_failure_smoke) return 0 ;;
             esac
             ;;
         boot)
@@ -698,7 +698,7 @@ suite_matches_phase_token() {
             ;;
         town)
             case "$suite_name" in
-                town_overlay_smoke|town_overlay_female_smoke|town_overlay_state_smoke|scripted_summary_to_town_smoke|scripted_spell_cast_smoke|chest_open_product_smoke128|scripted_book_overlay_smoke|scripted_spell_list_overlay_smoke|scripted_spell_list_cancel_smoke|scripted_prayer_cast_smoke|real_input_town_move_diag|real_boot_crash_harness) return 0 ;;
+                town_overlay_smoke|town_overlay_female_smoke|town_overlay_state_smoke|scripted_summary_to_town_smoke|scripted_spell_cast_smoke|chest_open_product_smoke128|exchange_product_smoke128|scripted_book_overlay_smoke|scripted_spell_list_overlay_smoke|scripted_spell_list_cancel_smoke|scripted_prayer_cast_smoke|real_input_town_move_diag|real_boot_crash_harness) return 0 ;;
             esac
             ;;
         cache)
@@ -711,11 +711,6 @@ suite_matches_phase_token() {
                 real_input_town_move_diag|real_boot_crash_harness|overlay_data_transition_smoke|boot_diag_copy) return 0 ;;
             esac
             ;;
-        perf)
-            case "$suite_name" in
-                perf_p1|perf_p1_trace_smoke) return 0 ;;
-            esac
-            ;;
     esac
     return 1
 }
@@ -725,7 +720,7 @@ describe_phases() {
     if [ -n "$TEST_PHASE" ]; then
         IFS=',' read -r -a phase_list <<< "$TEST_PHASE"
     else
-        phase_list=(all guards units smokes boot town cache diag perf)
+        phase_list=(all guards units smokes boot town cache diag)
     fi
 
     echo "=== C128 Harness Phases ==="
@@ -2012,7 +2007,7 @@ if not has_ordered_chain(c128_main, [
     "tramp_staff_speed_items:",
     "lda #OVL_DEATH",
     "jsr overlay_load",
-    "jsr eff_haste_self",
+    "jsr eff_staff_speed",
     "lda #OVL_ITEMS",
     "jsr overlay_load",
 ]):
@@ -2300,12 +2295,9 @@ build_boot_assets() {
     if ! c128_active_variant_is "base"; then
         force_base_rebuild=1
     fi
-    if [ "$PERF_P1_MODE" = "1" ]; then
-        force_base_rebuild=1
-    fi
 
     c128_disk_payload_files "../../../build/test/c128"
-    if [ "$PERF_P1_MODE" != "1" ] && c128_active_variant_is "base" && ! c128_outputs_need_refresh \
+    if c128_active_variant_is "base" && ! c128_outputs_need_refresh \
             ../../../build/test/c128/boot128.prg ../../../build/test/c128/boot128.chain.prg ../../../build/test/c128/bootsect128.prg ../../../build/test/c128/bootart128.prg ../../../build/test/c128/moria128.prg ../../../build/test/c128/moria128.d71 "${C128_DISK_PAYLOAD_FILES[@]}" ../../../build/test/c128/main.vs -- \
             main.s boot128.s bootart128.s bootsect128.s Makefile ../version.json ../artwork/moria8_C128loadingart_tile_native.png ../tools/png_to_ppm.py ../tools/make_version_include.py ../tools/ppm_to_c128_bootart.py ../common/*.s ../c64/*.s; then
         BOOT_ASSETS_BUILT=1
@@ -2315,14 +2307,14 @@ build_boot_assets() {
     local build_log
     build_log="$(test128_tmp_file test128_boot_build.log)"
     if [ "$force_base_rebuild" -eq 1 ]; then
-        if ! "${COMMODORE_MAKE[@]}" -W c128/main.s -W c128/boot128.s KICKASS="$KICKASS" PERF_P1="$PERF_P1_MODE" build128 disk128 >"$build_log" 2>&1 || grep -q "FAILED!" "$build_log"; then
+        if ! "${COMMODORE_MAKE[@]}" -W c128/main.s -W c128/boot128.s KICKASS="$KICKASS" build128 disk128 >"$build_log" 2>&1 || grep -q "FAILED!" "$build_log"; then
             echo "FAIL (build128/disk128 failed)"
             tail -20 "$build_log" | sed 's/^/    /'
             FAIL=$((FAIL + 1))
             TOTAL=$((TOTAL + 1))
             return 1
         fi
-    elif ! "${COMMODORE_MAKE[@]}" KICKASS="$KICKASS" PERF_P1="$PERF_P1_MODE" build128 disk128 >"$build_log" 2>&1 || grep -q "FAILED!" "$build_log"; then
+    elif ! "${COMMODORE_MAKE[@]}" KICKASS="$KICKASS" build128 disk128 >"$build_log" 2>&1 || grep -q "FAILED!" "$build_log"; then
         echo "FAIL (build128/disk128 failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -3205,7 +3197,7 @@ build_scripted_input_boot_assets() {
     build_boot_assets || return 1
 
     c128_disk_payload_files "../../../build/test/c128"
-    if [ "$PERF_P1_MODE" != "1" ] && c128_active_variant_is "scripted_input" && ! c128_outputs_need_refresh \
+    if c128_active_variant_is "scripted_input" && ! c128_outputs_need_refresh \
             ../../../build/test/c128/moria128.prg ../../../build/test/c128/moria128_scriptedinput.d71 ../../../build/test/c128/main.vs -- \
             main.s ../../../build/test/c128/boot128.prg "${C128_DISK_PAYLOAD_FILES[@]}"; then
         SCRIPTED_INPUT_BOOT_ASSETS_BUILT=1
@@ -3215,14 +3207,10 @@ build_scripted_input_boot_assets() {
     local build_log
     build_log="$(test128_tmp_file test128_boot_scripted_input_build.log)"
     local scripted_d71="../../../build/test/c128/moria128_scriptedinput.d71"
-    local perf_define=()
-    if [ "$PERF_P1_MODE" = "1" ]; then
-        perf_define=(-define PERF_P1)
-    fi
 
     # Compile to the standard ../../../build/test/c128/moria128.prg target so KickAssembler also
     # refreshes the companion ../../../build/test/c128/ovl.* overlay PRGs for this special build.
-    if ! java -jar "$KICKASS" main.s :OVL_OUT=../../../build/test/c128 -showmem -vicesymbols -libdir ../c64 -define C128 ${perf_define[@]+"${perf_define[@]}"} -define C128_TEST_SCRIPTED_INPUT -o ../../../build/test/c128/moria128.prg >"$build_log" 2>&1; then
+    if ! java -jar "$KICKASS" main.s :OVL_OUT=../../../build/test/c128 -showmem -vicesymbols -libdir ../c64 -define C128 -define C128_TEST_SCRIPTED_INPUT -o ../../../build/test/c128/moria128.prg >"$build_log" 2>&1; then
         echo "FAIL (scripted-input main assembly failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -3243,165 +3231,6 @@ build_scripted_input_boot_assets() {
     BOOT_ASSETS_BUILT=0
     SCRIPTED_INPUT_BOOT_ASSETS_BUILT=1
     c128_set_active_variant "scripted_input"
-    return 0
-}
-
-validate_perf_p1_trace_variant() {
-    local suffix="$1"
-    local build_log="$2"
-    local expected_kind="$3"
-    if ! python3 - "$suffix" "$expected_kind" ../../../build/test/c128/main.vs ../../../build/test/c128/128.play.prg ../../../build/test/c128/moria128.prg >>"$build_log" 2>&1 <<'PY'
-from pathlib import Path
-import sys
-
-suffix, expected_kind, vs_path, play_prg_path, main_prg_path = sys.argv[1:]
-symbols = {}
-for raw in Path(vs_path).read_text(encoding="utf-8").splitlines():
-    parts = raw.strip().split()
-    if len(parts) < 3 or ":" not in parts[1] or not parts[2].startswith("."):
-        continue
-    symbols[parts[2][1:]] = int(parts[1].split(":", 1)[1], 16)
-
-required = [
-    "c128_test_perf_p1_trace_pass_sym",
-    "c128_test_perf_p1_trace_capture_sym",
-    "c128_test_perf_p1_trace_export_sym",
-    "perf_p1_moves",
-    "perf_p1_decision",
-    "perf_p1_full_lo",
-    "perf_p1_local_lo",
-    "perf_p1_reason_lo",
-]
-missing = [name for name in required if name not in symbols]
-if missing:
-    raise SystemExit(f"missing symbols for PERF trace validation: {', '.join(missing)}")
-
-reason = symbols["perf_p1_reason_lo"]
-expected_symbols = {
-    "summary": [
-        symbols["perf_p1_decision"],
-        symbols["perf_p1_decision"],
-        symbols["perf_p1_decision"],
-    ],
-    "reasons_0_2": [reason + 0, reason + 1, reason + 2],
-    "reasons_3_5": [reason + 3, reason + 4, reason + 5],
-    "reasons_6_7": [symbols["perf_p1_moves"], reason + 6, reason + 7],
-}
-if expected_kind not in {"assert", "modal_assert", "command_assert", "transition_assert"} and expected_kind not in expected_symbols:
-    raise SystemExit(f"unknown PERF trace variant kind: {expected_kind}")
-
-play_prg = Path(play_prg_path).read_bytes()
-if len(play_prg) < 2:
-    raise SystemExit(f"{play_prg_path} is too small")
-play_load_addr = play_prg[0] | (play_prg[1] << 8)
-pass_addr = symbols["c128_test_perf_p1_trace_pass_sym"]
-capture_addr = symbols["c128_test_perf_p1_trace_capture_sym"]
-export_addr = symbols["c128_test_perf_p1_trace_export_sym"]
-export_start = export_addr - play_load_addr + 2
-export_end = export_addr + 3 - play_load_addr + 2
-if export_start < 2 or export_end > len(play_prg):
-    raise SystemExit(f"PERF trace export ${export_addr:04x} is outside {play_prg_path}")
-actual_export = play_prg[export_start:export_end]
-expected_export = bytes((0x4C, capture_addr & 0xFF, capture_addr >> 8))
-if actual_export != expected_export:
-    got = " ".join(f"{b:02x}" for b in actual_export)
-    want = " ".join(f"{b:02x}" for b in expected_export)
-    raise SystemExit(
-        f"PERF trace {suffix} export should jump to test-owned capture at ${capture_addr:04x}: "
-        f"got [{got}], expected [{want}]"
-    )
-
-if expected_kind in {"assert", "modal_assert", "command_assert", "transition_assert"}:
-    if "c128_test_perf_p1_trace_fail_sym" not in symbols:
-        raise SystemExit("missing c128_test_perf_p1_trace_fail_sym for PERF trace assert validation")
-    print(f"PERF trace {suffix}: validated resident jump to product-path assert capture")
-    raise SystemExit(0)
-
-main_prg = Path(main_prg_path).read_bytes()
-if len(main_prg) < 2:
-    raise SystemExit(f"{main_prg_path} is too small")
-main_load_addr = main_prg[0] | (main_prg[1] << 8)
-capture_start = capture_addr - main_load_addr + 2
-capture_end = capture_addr + 12 - main_load_addr + 2
-if capture_start < 2 or capture_end > len(main_prg):
-    raise SystemExit(f"PERF trace capture ${capture_addr:04x} is outside {main_prg_path}")
-
-actual = main_prg[capture_start:capture_end]
-expected = bytearray()
-for opcode, addr in zip((0xAD, 0xAE, 0xAC), expected_symbols[expected_kind]):
-    expected.extend((opcode, addr & 0xFF, addr >> 8))
-expected.extend((0x4C, pass_addr & 0xFF, pass_addr >> 8))
-
-if actual != expected:
-    got = " ".join(f"{b:02x}" for b in actual)
-    want = " ".join(f"{b:02x}" for b in expected)
-    raise SystemExit(
-        f"PERF trace {suffix} loads wrong symbols near capture ${capture_addr:04x}: "
-        f"got [{got}], expected [{want}]"
-    )
-
-print(f"PERF trace {suffix}: validated {expected_kind} resident jump and test-owned capture at ${capture_addr:04x}")
-PY
-    then
-        return 1
-    fi
-    return 0
-}
-
-build_perf_p1_trace_boot_assets() {
-    local suffix="${1:-summary}"
-    shift || true
-    local variant="perf_p1_trace_${suffix}"
-    if [ "$PERF_P1_TRACE_BOOT_ASSETS_BUILT" -eq 1 ] && c128_active_variant_is "$variant"; then
-        PERF_P1_TRACE_D64="../../../build/test/c128/moria128_${variant}.d64"
-        return
-    fi
-
-    build_boot_assets || return 1
-
-    local build_log
-    build_log="$(test128_tmp_file test128_perf_p1_trace_build.log)"
-    local c1541_bin="${C1541:-c1541}"
-    local trace_d64="../../../build/test/c128/moria128_${variant}.d64"
-    local -a extra_defines=()
-    local define_name
-    for define_name in "$@"; do
-        extra_defines+=(-define "$define_name")
-    done
-
-    if ! java -jar "$KICKASS" main.s :OVL_OUT=../../../build/test/c128 -showmem -vicesymbols -libdir ../c64 -define C128 -define PERF_P1 -define C128_TEST_SCRIPTED_INPUT -define C128_TEST_PERF_P1_TRACE ${extra_defines[@]+"${extra_defines[@]}"} -o ../../../build/test/c128/moria128.prg >"$build_log" 2>&1; then
-        echo "FAIL (PERF P1 trace main assembly failed)"
-        tail -20 "$build_log" | sed 's/^/    /'
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return 1
-    fi
-    if [ "$suffix" = "assert" ] || [ "$suffix" = "modal_assert" ] || [ "$suffix" = "command_assert" ] || [ "$suffix" = "transition_assert" ]; then
-        c128_disk_payload_args "../../../build/test/c128"
-        if ! "$c1541_bin" -format "moria128,m8" d64 "$trace_d64" \
-                -attach "$trace_d64" \
-                -write ../../../build/test/c128/boot128.prg "moria8.128" \
-                -write ../../../build/test/c128/moria128.prg "moria128" \
-                "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1; then
-            echo "FAIL (PERF P1 trace assert disk build failed)"
-            tail -20 "$build_log" | sed 's/^/    /'
-            FAIL=$((FAIL + 1))
-            TOTAL=$((TOTAL + 1))
-            return 1
-        fi
-    fi
-    if ! validate_perf_p1_trace_variant "$suffix" "$build_log" "$suffix"; then
-        echo "FAIL (PERF P1 trace register-export validation failed)"
-        tail -20 "$build_log" | sed 's/^/    /'
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return 1
-    fi
-
-    BOOT_ASSETS_BUILT=0
-    PERF_P1_TRACE_BOOT_ASSETS_BUILT=1
-    PERF_P1_TRACE_D64="$trace_d64"
-    c128_set_active_variant "$variant"
     return 0
 }
 
@@ -4661,6 +4490,38 @@ run_boot_title_save_write_product_smoke() {
         return
     fi
 
+    # The written save carries the 33-slot inventory, written through
+    # c128_save_stream_chunk, with the seeded secondary weapon
+    # (save_product_seed_secondary).
+    local save_seq check_log
+    save_seq="$(test128_tmp_file "test128_${name}_the_game.seq")"
+    check_log="$(test128_tmp_file "test128_${name}_check.log")"
+    rm -f "$save_seq"
+    if ! "$c1541_bin" -attach "$abs_save_d64" -read "the.game,s" "$save_seq" >"$check_log" 2>&1 \
+            || ! python3 ../c64/tests/check_save_secondary.py "$save_seq" 0x18 >>"$check_log" 2>&1; then
+        echo "FAIL (secondary weapon not in the written save)"
+        tail -3 "$check_log" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    # Read side: the shipping build resumes that save from the title through
+    # c128_load_stream_chunk (a misread inventory section misaligns every
+    # later block and fails the load).
+    build_boot_assets || return
+    if ! python3 -u tests/title_load_mounted_save_smoke.py \
+            --vice "$VICE" \
+            --boot-d64 "$(cd ../../../build/test/c128 && pwd)/moria128.d71" \
+            --save-d64 "$abs_save_d64" \
+            --main-vs "$(cd ../../../build/test/c128 && pwd)/main.vs" >>"$check_log" 2>&1; then
+        echo "FAIL (written save did not load back)"
+        tail -10 "$check_log" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
     echo "PASS"
     PASS=$((PASS + 1))
     TOTAL=$((TOTAL + 1))
@@ -4671,7 +4532,7 @@ run_retirement_royal_smoke() {
     echo -n "  $name: "
 
     local smoke_out smoke_c128 boot_d64 main_vs build_log
-    smoke_out=$(mktemp -d "${TMPDIR:-/tmp}/moria8-c128-retirement.XXXXXX")
+    smoke_out=$(mktemp -d "$TMPDIR/moria8-c128-retirement.XXXXXX")
     smoke_c128="$smoke_out/c128"
     boot_d64="$smoke_out/moria8-c128.d64"
     main_vs="$smoke_c128/main.vs"
@@ -6088,125 +5949,6 @@ run_scripted_summary_to_town_smoke() {
     TOTAL=$((TOTAL + 1))
 }
 
-PERF_P1_TRACE_FAIL_REASON=""
-PERF_P1_TRACE_VALUES=""
-PERF_P1_TRACE_D64=""
-perf_p1_trace_collect_variant() {
-    local suffix="$1"
-    shift
-    PERF_P1_TRACE_FAIL_REASON=""
-    PERF_P1_TRACE_D64=""
-
-    build_perf_p1_trace_boot_assets "$suffix" "$@" || return 2
-    return 0
-}
-
-# perf_p1_trace_run_assert <variant> <label> <values> <define...>: build the
-# PERF trace variant, run it to its pass trap, and record <values>.
-perf_p1_trace_run_assert() {
-    local variant="$1" label="$2" values="$3"
-    shift 3
-    perf_p1_trace_collect_variant "$variant" "$@" || return 2
-
-    local main_vs="../../../build/test/c128/main.vs"
-    local pass_addr
-    pass_addr=$(awk '/\.c128_test_perf_p1_trace_pass_sym$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
-    if [ -z "${pass_addr:-}" ]; then
-        PERF_P1_TRACE_FAIL_REASON="missing PERF trace ${label} pass symbol in ../../../build/test/c128/main.vs"
-        return 1
-    fi
-
-    local abs_d64
-    abs_d64="$(cd "$(dirname "$PERF_P1_TRACE_D64")" && pwd)/$(basename "$PERF_P1_TRACE_D64")"
-    local mon_file
-    mon_file="$(test128_tmp_file "test128_perf_p1_trace_${variant}.mon")"
-    local log_file
-    log_file="$(test128_tmp_file "test128_perf_p1_trace_${variant}.log")"
-    : > "$log_file"
-
-    {
-        echo "until \$${pass_addr}"
-        echo "quit"
-    } > "$mon_file"
-
-    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -8 "$abs_d64" -9 "$abs_d64" -autostart "$abs_d64" \
-        -moncommands "$mon_file" -monlogname "$log_file" -monlog \
-        -limitcycles 700000000 +sound -sounddev dummy \
-        +remotemonitor +binarymonitor >/dev/null 2>&1
-    local vice_rc=$?
-
-    if grep -qi "JAM\\|Invalid opcode" "$log_file"; then
-        PERF_P1_TRACE_FAIL_REASON="jam during PERF trace ${label}"
-        return 1
-    fi
-
-    if ! boot_log_has_stop_at "$log_file" "$pass_addr"; then
-        PERF_P1_TRACE_FAIL_REASON="did not reach PERF trace ${label} pass trap (vice rc ${vice_rc})"
-        return 1
-    fi
-
-    PERF_P1_TRACE_VALUES="${PERF_P1_TRACE_VALUES}${values}; "
-    return 0
-}
-
-run_perf_p1_trace_smoke() {
-    local name="perf_p1_trace_smoke"
-    echo -n "  $name: "
-    PERF_P1_TRACE_VALUES=""
-
-    if ! perf_p1_trace_run_assert assert "product assert" "product first move local=1 full=0" C128_TEST_PERF_P1_TRACE_ASSERT; then
-        [ -n "$PERF_P1_TRACE_FAIL_REASON" ] && echo "FAIL (${PERF_P1_TRACE_FAIL_REASON})"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-    if ! perf_p1_trace_run_assert modal_assert "modal assert" "modal restore full=1 reason=1" C128_TEST_PERF_P1_TRACE_MODAL C128_TEST_PERF_P1_TRACE_MODAL_ASSERT; then
-        [ -n "$PERF_P1_TRACE_FAIL_REASON" ] && echo "FAIL (${PERF_P1_TRACE_FAIL_REASON})"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-    if ! perf_p1_trace_run_assert command_assert "command assert" "command forced full=1 reason=1" C128_TEST_PERF_P1_TRACE_COMMAND C128_TEST_PERF_P1_TRACE_COMMAND_ASSERT; then
-        [ -n "$PERF_P1_TRACE_FAIL_REASON" ] && echo "FAIL (${PERF_P1_TRACE_FAIL_REASON})"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-    if ! perf_p1_trace_run_assert transition_assert "transition assert" "transition full=1 reason=1" C128_TEST_PERF_P1_TRACE_TRANSITION C128_TEST_PERF_P1_TRACE_TRANSITION_ASSERT; then
-        [ -n "$PERF_P1_TRACE_FAIL_REASON" ] && echo "FAIL (${PERF_P1_TRACE_FAIL_REASON})"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-    if ! perf_p1_trace_collect_variant "summary"; then
-        [ -n "$PERF_P1_TRACE_FAIL_REASON" ] && echo "FAIL (${PERF_P1_TRACE_FAIL_REASON})"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-    if ! perf_p1_trace_collect_variant "reasons_0_2" C128_TEST_PERF_P1_TRACE_REASONS_0_2; then
-        [ -n "$PERF_P1_TRACE_FAIL_REASON" ] && echo "FAIL (${PERF_P1_TRACE_FAIL_REASON})"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-    if ! perf_p1_trace_collect_variant "reasons_3_5" C128_TEST_PERF_P1_TRACE_REASONS_3_5; then
-        [ -n "$PERF_P1_TRACE_FAIL_REASON" ] && echo "FAIL (${PERF_P1_TRACE_FAIL_REASON})"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-    if ! perf_p1_trace_collect_variant "reasons_6_7" C128_TEST_PERF_P1_TRACE_REASONS_6_7; then
-        [ -n "$PERF_P1_TRACE_FAIL_REASON" ] && echo "FAIL (${PERF_P1_TRACE_FAIL_REASON})"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-    echo "PASS (${PERF_P1_TRACE_VALUES}resident export variants validated)"
-    PASS=$((PASS + 1))
-    TOTAL=$((TOTAL + 1))
-}
-
 run_scripted_spell_cast_smoke() {
     local name="scripted_spell_cast_smoke"
     echo -n "  $name: "
@@ -6376,6 +6118,81 @@ run_chest_open_product_smoke128() {
         --expect-byte-symbol ".fi_item_id=0x81" \
         --expect-byte-symbol ".fi_p1=0x80" \
         --expect-byte-symbol ".zp_player_dlvl=0x01" \
+        --timeout 30 \
+        --retry-timeouts 0 \
+        --vice "$VICE"; then
+        PASS=$((PASS + 1))
+    else
+        FAIL=$((FAIL + 1))
+    fi
+    TOTAL=$((TOTAL + 1))
+}
+
+build_scripted_exchange_boot_assets() {
+    if [ "$SCRIPTED_EXCHANGE_BOOT_ASSETS_BUILT" -eq 1 ] && c128_active_variant_is "scripted_exchange"; then
+        return
+    fi
+
+    build_boot_assets || return 1
+
+    local build_log
+    build_log="$(test128_tmp_file test128_boot_scripted_exchange_build.log)"
+    local scripted_d71="../../../build/test/c128/moria128_scriptedexchange.d71"
+
+    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 -define C128 :OVL_OUT=../../../build/test/c128 -define C128_TEST_SCRIPTED_EXCHANGE_PRODUCT -o ../../../build/test/c128/moria128.prg >"$build_log" 2>&1; then
+        echo "FAIL (scripted-exchange main assembly failed)"
+        tail -20 "$build_log" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return 1
+    fi
+
+    if ! c128_patch_scripted_boot_d71 "$scripted_d71" "$build_log"; then
+        echo "FAIL (scripted-exchange D71 patch failed)"
+        tail -20 "$build_log" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return 1
+    fi
+
+    BOOT_ASSETS_BUILT=0
+    SCRIPTED_EXCHANGE_BOOT_ASSETS_BUILT=1
+    c128_set_active_variant "scripted_exchange"
+    return 0
+}
+
+# SHIFT+X through the real key map, dispatch, Items-overlay trampoline and
+# message path: a cursed primary is refused with no turn, then the swap takes
+# one turn and moves all 8 fields (fixture: core/game_loop.s cmd_exchange).
+run_exchange_product_smoke128() {
+    local name="exchange_product_smoke128"
+    echo -n "  $name: "
+
+    build_scripted_exchange_boot_assets || return
+
+    local abs_d71
+    abs_d71="$(cd ../../../build/test/c128 && pwd)/moria128_scriptedexchange.d71"
+
+    if python3 -u ../plus4/tests/product_scripted_smoke.py \
+        --name "$name" \
+        --pass-symbol ".c128_test_exchange_pass_sym" \
+        --start-symbol ".title_menu_loop" \
+        --until-pass \
+        --main-vs "../../../build/test/c128/main.vs" \
+        "${C128_OVERLAY_COND_ARGS[@]}" \
+        --boot-d64 "$abs_d71" \
+        --drive8-type 1571 \
+        --autostart-only-drive8 \
+        --expect-byte-symbol ".exchange_product_presses=0x02" \
+        --expect-byte-symbol ".exchange_product_refused_turns=0x00" \
+        --expect-byte-symbol ".exchange_product_refused_primary=0x05" \
+        --expect-byte-symbol ".exchange_product_primary_id=0x02" \
+        --expect-byte-symbol ".exchange_product_primary_ego=0x06" \
+        --expect-byte-symbol ".exchange_product_secondary_id=0x05" \
+        --expect-byte-symbol ".exchange_product_secondary_hit=0x01" \
+        --expect-byte-symbol ".exchange_product_cloak_id=0xff" \
+        --expect-byte-symbol ".zp_turn_lo=0x01" \
+        --expect-byte-symbol ".current_overlay=0x07" \
         --timeout 30 \
         --retry-timeouts 0 \
         --vice "$VICE"; then
@@ -7553,6 +7370,7 @@ run_selected_suites() {
     run_named_suite scripted_spell_list_cancel_smoke run_scripted_spell_list_cancel_smoke || return 1
     run_named_suite scripted_prayer_cast_smoke run_scripted_prayer_cast_smoke || return 1
     run_named_suite chest_open_product_smoke128 run_chest_open_product_smoke128 || return 1
+    run_named_suite exchange_product_smoke128 run_exchange_product_smoke128 || return 1
     run_named_suite real_input_town_move_diag run_real_input_town_move_diag || return 1
     run_named_suite real_boot_crash_harness run_real_boot_crash_harness || return 1
     run_named_suite overlay_data_transition_smoke run_overlay_data_transition_smoke || return 1
@@ -7563,19 +7381,9 @@ run_selected_suites() {
     run_named_suite preload_partial_failure_smoke run_preload_partial_failure_smoke || return 1
     run_named_suite overlay_partial_failure_smoke run_overlay_partial_failure_smoke || return 1
     run_named_suite boot_diag_copy run_boot_diag_copy || return 1
-
-    if [ "$PERF_P1_MODE" = "1" ]; then
-        run_test "perf_p1" "tests/test_perf_p1.s" || return 1
-        run_named_suite perf_p1_trace_smoke run_perf_p1_trace_smoke || return 1
-    fi
 }
 
 echo "=== Moria C128 Tests ==="
-if [ "$PERF_P1_MODE" = "1" ]; then
-    echo "  mode: PERF_P1 instrumentation ON"
-else
-    echo "  mode: PERF_P1 instrumentation OFF"
-fi
 if [ -n "$TEST_PHASE" ]; then
     echo "  phase: $TEST_PHASE"
 fi

@@ -246,7 +246,7 @@ slots/bank = 64 KB`) are assigned as follows and tracked via a 16-byte
    * `banked_code_end <= $FFFA` (below hardware vectors `$FFFA-$FFFF`)
    * `ATARI_DISPLAY_LIST` does not cross a 1 KB boundary (`((>ATARI_DISPLAY_LIST) & $fc) == ((>ATARI_DISPLAY_LIST_END) & $fc)`)
    * `ATARI_CHARSET_BASE` is 1 KB aligned (`(<ATARI_CHARSET_BASE) == 0 && ((>ATARI_CHARSET_BASE) & 3) == 0`)
-   * Serialized save size (`6,616` B) fits within `ATARI_SAVE_SLOT_SECTORS * 125` (`56 * 125 = 7,000` B)
+   * Serialized save size (`ATARI_SAVE_SERIALIZED_MAX` = `6,616` B, a conservative bound; the stream is `6,412` B with the 33-slot inventory, `8 x 33 = 264` B) fits within `ATARI_SAVE_SLOT_SECTORS * 125` (`56 * 125 = 7,000` B); save version `$16`, oldest loadable `$15` (31-slot inventory)
 2. **Static Contract Checker (`platforms/atari8/check_memory_contract.py`):**
    * `make testatari8-memory-contract` and `make testatari8-memory-contract-selftest`
    * Verifies symbol extents from `build/atari8/main.sym`, rejects any symbol or segment overlap with `$0200-$031A` (OS Page 2 / DCB), `$C100-$CFFF` (`MAP_BASE`), or `$D000-$D7FF` (Hardware I/O), verifies `< $4000` residency of all banking/SIO/130XE/interrupt/exit/font helpers, and checks all PRG payload spans.

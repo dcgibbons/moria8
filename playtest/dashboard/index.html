@@ -144,19 +144,96 @@
   svg { width: 100%; height: auto; display: block; }
   svg text { fill: var(--muted); font: 10px var(--mono); }
   .axis { stroke: #3a3020; }
+  /* Tabs and the continuous queue (§23.6) */
+  main[hidden] { display: none; }
+  /* Collapsible sections: click a heading to fold it (remembered per viewer). */
+  section > h2 { cursor: pointer; user-select: none; }
+  section > h2 span::before { content: "▾ "; }
+  section.collapsed > h2 span::before { content: "▸ "; }
+  section.collapsed > :not(h2) { display: none; }
+  section.collapsed > h2 { margin-bottom: 0; }
+  .tabs button { border-radius: 3px 3px 0 0; } .tabs button.on { color: var(--black); background: var(--gold); }
+  #qmain { grid-template-areas: "qgrid qgrid" "balrog balrog" "subs subs" "qwall qwall" "ratings features" "recent qlog"; }
+  @media (max-width: 1100px) { #qmain { grid-template-areas: "qgrid" "balrog" "subs" "qwall" "ratings" "features" "recent" "qlog"; } }
+  .qgrid { display: grid; grid-template-columns: 6.5rem repeat(6, minmax(0, 1fr)); gap: 3px; font-size: 11px; min-width: 44rem; }
+  .qgrid .h { color: var(--dim); text-align: center; text-transform: capitalize; padding-bottom: 2px; }
+  .qgrid .r { color: var(--muted); text-transform: capitalize; align-self: center; }
+  .qcell { min-height: 46px; border-radius: 2px; padding: 2px 4px; background: var(--black-soft);
+           border: 1px solid #241e12; font-size: 10.5px; line-height: 1.3; overflow: hidden; }
+  .qcell.none { background: transparent; border-color: transparent; }
+  .qcell.won { background: rgba(154, 210, 132, .32); border: 2px solid var(--green); }
+  .qcell.won .top span:last-child { color: var(--black); background: var(--green); border-radius: 2px; padding: 0 3px; font-weight: 700; }
+  .qwon { margin: 0 0 8px; font-size: 12px; color: var(--muted); }
+  .qwon b { color: var(--green); }
+  .qcell.struggling { background: rgba(224, 96, 60, .14); border-color: rgba(224, 96, 60, .45); }
+  .qcell.playing { background-image: repeating-linear-gradient(45deg, rgba(255,217,61,.07) 0 3px, transparent 3px 7px); }
+  .qcell .top { display: flex; justify-content: space-between; color: var(--gold); }
+  .qcell .sub { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .qline { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-bottom: 8px; font-size: 12px; color: var(--muted); }
+  .qline b { color: var(--gold); font-weight: normal; }
+  .subq { display: grid; grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr)); gap: 6px; }
+  .subq .stat .v { font-size: 13px; }
+  .ftable td, .ftable th { font-size: 11px; }
+  .log { font-size: 11px; color: var(--muted); white-space: pre-wrap; max-height: 16rem; overflow: auto; margin: 0; }
 </style>
 </head>
 <body>
 <header>
   <div class="brand"><a href="https://moria8.org/" title="Back to moria8.org">Moria8</a> <span>// playtest</span></div>
-  <label class="muted">round <select id="round"></select></label>
+  <span class="tabs"><button id="tabq" class="on">Queue</button> <button id="tabh">History</button></span>
+  <label class="muted" id="roundlabel" hidden>round <select id="round"></select></label>
   <span class="grow"></span>
   <span class="pill">workers <b id="hworkers">–</b></span>
   <span class="pill">steps/s <b id="hrate">–</b></span>
   <span class="dim" id="updated">loading…</span>
 </header>
 <div class="nowline" id="nowline" hidden></div>
-<main>
+<main id="qmain">
+  <section style="grid-area: qgrid">
+    <h2><span>M7 · the continuous queue</span><small id="qcount"></small></h2>
+    <div class="qline" id="qline"></div>
+    <div class="qwon" id="qwon"></div>
+    <div id="qgrids" class="tablewrap"></div>
+    <div class="mlegend">
+      <span><i style="background:var(--green)"></i>★ GOAL: reached the goal at least once</span>
+      <span><i style="background:rgba(224,96,60,.35)"></i>struggling: failed more than the retry cap in a row</span>
+      <span><i style="background:repeating-linear-gradient(45deg,#4a3c20 0 2px,var(--track) 2px 4px)"></i>playing now</span>
+      <span class="dim">each cell: best clvl and depth, runs and streak, last outcome</span>
+    </div>
+  </section>
+  <section style="grid-area: balrog">
+    <h2><span>M8 · the Balrog queue</span><small id="bcount"></small></h2>
+    <div class="qline" id="bline"></div>
+    <div class="subq" id="balrog"></div>
+  </section>
+  <section style="grid-area: subs">
+    <h2><span>Subqueues</span><small>side sessions: make playtest-subqueue</small></h2>
+    <div class="subq" id="subq"></div>
+  </section>
+  <section style="grid-area: qwall">
+    <h2><span>Live runs</span><small>click one to watch it</small></h2>
+    <div class="wall" id="qwall"></div>
+  </section>
+  <section style="grid-area: ratings">
+    <h2><span>Difficulty ratings</span><small id="rnote"></small></h2>
+    <div class="tablewrap"><table class="ftable"><thead><tr><th>character</th><th>runs</th><th>survival</th><th>median death clvl</th><th>early deaths</th></tr></thead>
+      <tbody id="ratings"></tbody></table></div>
+  </section>
+  <section style="grid-area: features">
+    <h2><span>Feature grid</span><small>per class, from every counted run</small></h2>
+    <div class="tablewrap" id="features"></div>
+  </section>
+  <section style="grid-area: recent">
+    <h2><span>Recent runs</span><small id="nruns"></small></h2>
+    <div class="tablewrap"><table class="ftable"><thead><tr><th>run</th><th>outcome</th><th>clvl</th><th>DL</th><th>steps</th><th>cause</th></tr></thead>
+      <tbody id="recent"></tbody></table></div>
+  </section>
+  <section style="grid-area: qlog">
+    <h2><span>Service</span><small id="svc"></small></h2>
+    <pre class="log" id="qlog"></pre>
+  </section>
+</main>
+<main id="hmain" hidden>
   <section style="grid-area: milestone">
     <h2><span>M5 (met 2026-10-27) · every race and class on the C64</span><small id="mcount"></small></h2>
     <div class="mgrid" id="mgrid"></div>
@@ -234,12 +311,16 @@ const URLS = STATIC ? {
   milestone: () => `data/milestone.json${bust()}`,
   ports: () => `data/ports.json${bust()}`,
   disk: () => `data/disk.json${bust()}`,
+  queue: () => `data/queue.json${bust()}`,
+  queueRun: id => `data/workers/queue--${encodeURIComponent(id)}.json${bust()}`,
   worker: (session, n) => `data/workers/${encodeURIComponent(session)}--w${n}.json${bust()}`,
 } : {
   overview: () => `/api/overview${current ? `?round=${encodeURIComponent(current)}` : ""}`,
   milestone: () => "/api/milestone",
   ports: () => "/api/ports",
   disk: () => "/api/disk",
+  queue: () => "/api/queue",
+  queueRun: id => `/api/queue_run?id=${encodeURIComponent(id)}`,
   worker: (session, n) => `/api/worker?session=${encodeURIComponent(session)}&worker=${n}`,
 };
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
@@ -550,7 +631,7 @@ function meter(k, v, max, color) {
 
 async function renderFocus() {
   if (!watching || !$("dlg").open) return;
-  const r = await fetch(URLS.worker(watching.session, watching.worker));
+  const r = await fetch(watching.run ? URLS.queueRun(watching.run) : URLS.worker(watching.session, watching.worker));
   if (!r.ok) { $("dlgbody").innerHTML = `<span class="muted">this worker is no longer live</span>`; return; }
   const w = await r.json();
   if (!w) return;
@@ -578,6 +659,191 @@ function watch(session, worker) {
 $("close").onclick = () => { $("dlg").close(); watching = null; history.replaceState(null, "", location.pathname); };
 $("dlg").addEventListener("close", () => { watching = null; });
 
+// -- the continuous queue (§23.6) --------------------------------------------
+let qdata = null;
+const OUTCOME_CLASS = {reached: "ok", died: "bad", budget: "warn", finding: "gold", error: "gold"};
+function ago(t) {
+  if (!t) return "–";
+  const s = Math.max(0, Date.now() / 1000 - t);
+  return s < 90 ? `${Math.round(s)} s` : s < 5400 ? `${Math.round(s / 60)} min` : s < 172800 ? `${Math.round(s / 3600)} h` : `${Math.round(s / 86400)} d`;
+}
+function renderQueue() {
+  const q = qdata; if (!q) return;
+  const b = q.service.build_state || {}, playing = b.playing || {};
+  const behind = b.behind ? `<span class="warn">${b.behind} behind ${esc(b.upstream)}</span>` : "";
+  const ahead = b.ahead ? `<span class="dim">${b.ahead} ahead${b.contained === false ? ", not contained" : ""}</span>` : "";
+  $("qline").innerHTML = [
+    `goal <b>${esc(q.goal.name)}</b> <span class="dim">${esc(q.goal.what)}</span>` +
+      (q.config.epoch ? ` · epoch <b>${esc(q.config.epoch)}</b>` : ""),
+    `budget <b>${Number(q.budget).toLocaleString()}</b> steps`,
+    `build <b>${esc((playing.commit || "").slice(0, 8) || "–")}</b>${playing.dirty ? ' <span class="warn">dirty tree</span>' : ""}`,
+    `tree <b>${esc((b.head || "").slice(0, 8))}</b>${b.dirty ? " (edited)" : ""} ${behind} ${ahead}`,
+    `workers <b>${q.live.filter(r => !r.paused).length}</b>/${q.config.workers}` + (q.live.some(r => r.paused) ? ` · ${q.live.filter(r => r.paused).length} paused` : ""),
+    q.service.up ? `<span class="ok">service up</span>` : `<span class="bad">service down</span>`,
+  ].join(" · ");
+  const live = new Map(q.live.map(r => [`${r.platform} ${r.character}`, r]));
+  let won = 0, total = 0, html = "";
+  Object.entries(q.platforms).forEach(([platform, entry]) => {
+    const allowed = new Set(Object.keys(entry.items));
+    html += `<h3 class="muted" style="margin:4px 0;font-size:11px">${esc(PORT_NAMES[platform] || platform)} · cycle ${entry.cycle}
+      (${entry.cycle_done.length}/${allowed.size} this cycle) · next: ${esc(entry.order.slice(0, 4).map(cap).join(", "))}</h3>`;
+    html += `<div class="qgrid"><div></div>` + q.classes.map(c => `<div class="h">${c}</div>`).join("");
+    q.races.forEach(r => {
+      html += `<div class="r">${r}</div>`;
+      q.classes.forEach(c => {
+        const ch = `${r}-${c}`, it = entry.items[ch];
+        if (!allowed.has(ch)) { html += `<div class="qcell none"></div>`; return; }
+        total++; if (it.success) won++;
+        const run = live.get(`${platform} ${ch}`), best = it.best || {}, last = it.last || {};
+        const cls = [it.success ? "won" : it.struggling ? "struggling" : "", it.in_flight ? "playing" : ""].join(" ");
+        const now = run && run.status && run.status.clvl != null ? `now L${run.status.clvl} DL${run.status.dlvl}${run.paused ? " (paused)" : ""}` : "";
+        const tip = `${cap(ch)}: ${it.runs} runs, ${it.successes} reached, streak ${it.streak}` +
+          (it.best ? `; best clvl ${best.clvl} DL ${best.max_dlvl} (${best.deepest || "no milestone"})` : "") +
+          (it.last ? `; last ${last.outcome} at clvl ${last.clvl} DL ${last.max_dlvl}${last.cause ? `, ${last.cause}` : ""}` : "") +
+          (it.success ? `; first success on ${String(it.success.commit || "").slice(0, 8)}` : "");
+        html += `<div class="qcell ${cls}" title="${esc(tip)}">
+          <div class="top"><span>${it.best ? `L${best.clvl} DL${best.max_dlvl}` : "–"}</span><span>${it.success ? "★ GOAL" : it.struggling ? "!" : ""}</span></div>
+          <div class="sub">${it.runs} runs · ${it.streak > 0 ? "+" : ""}${it.streak}${it.last ? ` · <span class="${OUTCOME_CLASS[last.outcome] || ""}">${esc(last.outcome)}</span>` : ""}</div>
+          <div class="sub">${esc(now || (last.cause || ""))}</div></div>`;
+      });
+    });
+    html += `</div>`;
+  });
+  $("qgrids").innerHTML = html || `<span class="muted">the queue has not started</span>`;
+  // Who has reached the goal: the M7 exit criterion 1 list, in the order reached.
+  const winners = [];
+  Object.entries(q.platforms).forEach(([platform, entry]) => Object.entries(entry.items).forEach(([ch, it]) => {
+    if (it.success) winners.push({ch, platform, ended: it.success.ended || 0, steps: it.success.steps, best: it.best || {}});
+  }));
+  winners.sort((a, b) => a.ended - b.ended);
+  $("qwon").innerHTML = winners.length
+    ? `<b>★ Reached the goal (${winners.length}):</b> ` + winners.map(w => `${esc(cap(w.ch))}` +
+        `${Object.keys(q.platforms).length > 1 ? ` (${esc(PORT_NAMES[w.platform] || w.platform)})` : ""}` +
+        ` <span class="dim">${w.steps ? Number(w.steps).toLocaleString() + " steps" : ""}</span>`).join(" · ")
+    : `<span class="dim">no combination has reached the goal yet</span>`;
+  $("qcount").textContent = `${won} of ${total} combinations reached the goal`;
+  // The Balrog queue (§23.9): every combination past the M7 bar, for good.
+  const bq = q.balrog || {items: {}, order: []}, bitems = Object.values(bq.items);
+  const blive = q.live.filter(r => r.queue === "balrog");
+  $("bline").innerHTML = `goal <b>balrog</b> <span class="dim">kill the Balrog (from DL100) and win</span> · ` +
+    `budget <b>${Number(q.config.balrog_budget).toLocaleString()}</b> steps · ` +
+    `workers <b>${blive.length}</b>/${q.config.balrog_workers} · next: ${esc(bq.order.slice(0, 3).map(k => cap(k.split("/")[1])).join(", ") || "–")}`;
+  $("bcount").textContent = `${bitems.length} of ${total} combinations past the M7 bar · ` +
+    `${bitems.reduce((n, it) => n + it.won, 0)} wins in ${bitems.reduce((n, it) => n + it.runs, 0)} runs`;
+  $("balrog").innerHTML = bitems.map(it => {
+    const best = it.best || {}, last = it.last || {};
+    const now = blive.filter(r => r.character === it.character && r.platform === it.platform)
+      .map(r => r.status && r.status.clvl != null ? `L${r.status.clvl} DL${r.status.dlvl}${r.paused ? " (paused)" : ""}` : "starting");
+    return `<div class="stat"><div class="k">${esc(cap(it.character))}${Object.keys(q.platforms).length > 1 ? ` · ${esc(PORT_NAMES[it.platform] || it.platform)}` : ""}
+        <span class="dim">· joined ${ago(it.graduated.ended)} ago</span></div>
+      <div class="v">${it.won ? `<span class="ok">★ ${it.won} won</span> · ` : ""}${it.runs} runs · best ${it.best ? `L${best.clvl} DL${best.max_dlvl}` : "–"}</div>
+      <div class="dim">${it.start ? `starts on DL${it.start.dlvl} at step ${Number(it.start.step).toLocaleString()} (M7 run, ${ago(it.start.set)} ago)` : "plays from the title (no saved start yet)"}</div>
+      ${it.last ? `<div class="dim">last: <span class="${OUTCOME_CLASS[last.outcome] || ""}">${esc(last.outcome)}</span> at L${last.clvl} DL${last.max_dlvl}${last.cause ? ` · ${esc(last.cause)}` : ""}</div>` : ""}
+      ${now.length ? `<div class="dim">playing now: ${esc(now.join(", "))}</div>` : ""}</div>`;
+  }).join("") || `<span class="muted">no combination has met the M7 bar yet</span>`;
+  $("subq").innerHTML = q.subqueues.map(s => {
+    const state = s.done ? (s.cancelled ? "cancelled" : "drained") : s.cancelled ? "cancelling" : "running";
+    const groups = Object.entries(s.report || s.progress || {}).map(([k, g]) =>
+      `<div class="dim">${esc(k)}: <span class="${g.passed === false ? "bad" : g.passed ? "ok" : ""}">${g.reached}/${g.done}</span>${g.total !== g.done ? ` of ${g.total}` : ""}${g.required != null ? ` (bar ${g.required})` : ""}</div>`).join("");
+    const ab = s.ab_report, pr = ab && ab.paired;
+    const arms = ab ? Object.entries(ab.arms).map(([arm, a]) =>
+      `<div class="dim">${esc(arm)} [${esc(a.variant || "as defined")}]: ${a.reached}/${a.done} reached · median DL ${a.median_max_dlvl ?? "–"} · clvl ${a.median_clvl ?? "–"}${Object.keys(a.deaths).length ? " · died: " + esc(Object.entries(a.deaths).map(([c, n]) => `${c} ${n}`).join(", ")) : ""}</div>`).join("") +
+      `<div class="dim">paired ${pr.pairs}: only A reached ${pr.only_a_reached.length}, only B ${pr.only_b_reached.length} · A deeper ${pr.a_deeper.length}, B deeper ${pr.b_deeper.length}, same ${pr.same_depth}</div>` : "";
+    return `<div class="stat"><div class="k">${esc(s.name)} · ${state}</div>
+      <div class="v">${s.reached}/${s.results} reached · ${s.results}/${s.items} run</div>${s.note ? `<div class="dim">${esc(s.note)}</div>` : ""}${s.variant ? `<div class="dim">variant ${esc(s.variant)}</div>` : ""}${arms}${groups}</div>`;
+  }).join("") || `<span class="muted">none</span>`;
+  $("qwall").innerHTML = q.live.map(r => {
+    const w = r.status || {}, ms = Object.keys(r.milestones || {});
+    return `<div class="tile" data-run="${esc(r.id)}">
+      <div class="badge"><span>${esc(cap(r.character))} <b>L${w.clvl ?? "–"}</b> DL${w.dlvl ?? "–"}</span><span>${r.paused ? "paused" : r.queue === "main" ? `${Math.round((w.steps || 0) / 1000)}k` : esc(r.queue)}</span></div>
+      <div class="hpbar"><i style="width:${Math.max(0, Math.min(100, (w.hp || 0) / Math.max(1, w.mhp || 1) * 100))}%"></i></div>
+      <pre class="scr">${w.rows ? screenHtml(w) : ""}</pre>
+      <div class="badge"><span>${esc(ms.slice(-3).join(" ") || "no milestone yet")}</span></div></div>`;
+  }).join("") || `<span class="muted">no live runs</span>`;
+  document.querySelectorAll("#qwall .tile").forEach(t => t.onclick = () => watchRun(t.dataset.run));
+  const rated = Object.entries(q.ratings).sort((a, b) => a[0].localeCompare(b[0]));
+  const rcls = {"Easy": "ok", "Medium": "gold", "Hard": "warn", "Very Hard": "bad"};
+  const rcell = (v, r) => `<td>${esc(v ?? "–")}${r ? ` <span class="${rcls[r]}">${esc(r)}</span>` : ""}</td>`;
+  $("ratings").innerHTML = rated.map(([ch, e]) => `<tr><td class="name">${esc(cap(ch))}</td><td>${e.runs}</td>` +
+    rcell(Math.round(e.survival * 100) + "%", e.ratings && e.ratings.survival) +
+    rcell(e.median_death_clvl, e.ratings && e.ratings.median_death_clvl) +
+    rcell(Math.round(e.early_deaths * 100) + "%", e.ratings && e.ratings.early_deaths) + `</tr>`).join("") ||
+    `<tr><td class="muted" colspan="5">no counted runs yet</td></tr>`;
+  $("rnote").textContent = "rated from 5 counted runs";
+  const classes = Object.keys(q.features);
+  const layers = [...new Set(classes.flatMap(c => Object.keys(q.features[c].layers)))].sort();
+  const mstones = ["clvl5", "clvl10", "clvl15", "clvl20", "clvl25", "dl5", "dl10", "dl15", "dl20", "dl25", "dl30", "recall"];
+  $("features").innerHTML = classes.length ? `<table class="ftable"><thead><tr><th></th>${classes.map(c => `<th>${esc(c)}</th>`).join("")}</tr></thead><tbody>
+    <tr><td>runs</td>${classes.map(c => `<td>${q.features[c].runs}</td>`).join("")}</tr>
+    <tr><td>launcher shots</td>${classes.map(c => `<td>${((q.features[c].missiles || {}).shots || 0).toLocaleString()}</td>`).join("")}</tr>
+    <tr><td>... kills</td>${classes.map(c => `<td>${((q.features[c].missiles || {}).kills || 0).toLocaleString()}</td>`).join("")}</tr>
+    ${mstones.map(m => `<tr><td>${m}</td>${classes.map(c => `<td>${q.features[c].milestones[m] || "·"}</td>`).join("")}</tr>`).join("")}
+    ${layers.map(l => `<tr><td class="dim">${esc(l)}</td>${classes.map(c => `<td>${(q.features[c].layers[l] || 0).toLocaleString()}</td>`).join("")}</tr>`).join("")}
+    </tbody></table>` + spellCoverage(q.features) : `<span class="muted">no counted runs yet</span>`;
+  $("recent").innerHTML = q.recent.map(r => `<tr><td>${esc(r.queue === "main" ? cap(r.character) : `${r.queue}: ${cap(r.character)}`)} <span class="dim">${ago(r.ended)}</span></td>
+    <td class="${OUTCOME_CLASS[r.outcome] || ""}">${esc(r.outcome)}</td><td>${r.clvl ?? "–"}</td><td>${r.max_dlvl ?? "–"}</td>
+    <td>${(r.steps || 0).toLocaleString()}</td><td>${esc(r.cause || "")}</td></tr>`).join("");
+  $("nruns").textContent = `${q.runs} runs recorded`;
+  $("svc").textContent = q.service.up ? `heartbeat ${ago(q.service.updated)} ago` : "no heartbeat";
+  $("qlog").textContent = (q.service.log || []).join("\n");
+  renderUpdated();
+}
+function spellCoverage(features) {
+  // Criterion 2 (§23.2): each class's spells and prayers to level 25, seen working (✓) or not.
+  return Object.entries(features).filter(([, f]) => Object.keys(f.spells || {}).length).map(([c, f]) => {
+    const spells = Object.entries(f.spells).filter(([, s]) => s.level != null).sort((a, b) => a[1].level - b[1].level);
+    const done = spells.filter(([, s]) => s.effect > 0).length;
+    return `<h3 class="muted" style="margin:10px 0 4px;font-size:11px;text-transform:capitalize">${esc(c)} spells to level 25:
+      <span class="${done === spells.length ? "ok" : "gold"}">${done}/${spells.length}</span> seen working</h3>
+      <div class="mlegend">${spells.map(([n, s]) => `<span class="${s.effect ? "ok" : s.cast ? "warn" : "dim"}"
+        title="${esc(`${n} (level ${s.level}): cast ${s.cast}, effect seen ${s.effect}${s.evidence ? `: ${s.evidence}` : ""}`)}">${s.effect ? "✓" : s.cast ? "·" : "○"} ${esc(n)}</span>`).join("")}</div>`;
+  }).join("");
+}
+async function refreshQueue() {
+  try {
+    const r = await fetch(URLS.queue());
+    if (!r.ok) { $("qgrids").innerHTML = `<div class="warn">no queue data (HTTP ${r.status})</div>`; return; }
+    qdata = await r.json(); renderQueue();
+  } catch (e) {
+    $("qgrids").innerHTML = `<div class="warn">queue: ${esc(e)}</div>`;
+  }
+}
+function watchRun(id) {
+  const r = (qdata && qdata.live || []).find(x => x.id === id);
+  watching = {run: id, name: r ? `${cap(r.character)} · ${r.goal} · ${r.queue}` : id};
+  history.replaceState(null, "", `#run=${encodeURIComponent(id)}`);
+  if (!$("dlg").open) $("dlg").showModal();
+  renderFocus();
+}
+function showTab(tab) {
+  $("qmain").hidden = tab !== "queue"; $("hmain").hidden = tab === "queue";
+  $("tabq").classList.toggle("on", tab === "queue"); $("tabh").classList.toggle("on", tab !== "queue");
+  $("roundlabel").hidden = tab === "queue" || STATIC;
+  try { localStorage.setItem("tab", tab); } catch (e) { /* storage unavailable */ }
+}
+// Collapsible sections, keyed by heading text; Subqueues starts folded.
+const FOLDED_BY_DEFAULT = new Set(["Subqueues"]);
+function foldState() {
+  try { return JSON.parse(localStorage.getItem("folded") || "null"); } catch (e) { return null; }
+}
+function setupFolding() {
+  const saved = foldState();
+  document.querySelectorAll("section > h2").forEach(h => {
+    const key = (h.querySelector("span") || h).textContent.trim();
+    const section = h.parentElement;
+    if (saved ? saved[key] : FOLDED_BY_DEFAULT.has(key)) section.classList.add("collapsed");
+    h.addEventListener("click", () => {
+      section.classList.toggle("collapsed");
+      const state = foldState() || Object.fromEntries([...FOLDED_BY_DEFAULT].map(k => [k, true]));
+      state[key] = section.classList.contains("collapsed");
+      try { localStorage.setItem("folded", JSON.stringify(state)); } catch (e) { /* storage unavailable */ }
+    });
+  });
+}
+setupFolding();
+$("tabq").onclick = () => showTab("queue");
+$("tabh").onclick = () => showTab("history");
+
 async function refresh() {
   try {
     const r = await fetch(URLS.overview());
@@ -598,8 +864,9 @@ async function refresh() {
 function renderUpdated() {
   // When the data was made (the snapshot's own time, in the viewer's zone),
   // not when this page fetched it: a stopped publisher shows as stale.
-  if (!data || !data.now) return;
-  const made = new Date(data.now * 1000), age = Math.max(0, Date.now() / 1000 - data.now);
+  const now = Math.max(data && data.now || 0, qdata && qdata.now || 0);
+  if (!now) return;
+  const made = new Date(now * 1000), age = Math.max(0, Date.now() / 1000 - now);
   const when = made.toLocaleTimeString([], {hour: "numeric", minute: "2-digit", second: "2-digit", timeZoneName: "short"});
   const ago = age < 90 ? `${Math.round(age)} s ago` : age < 5400 ? `${Math.round(age / 60)} min ago` : `${Math.round(age / 3600)} h ago`;
   const stale = age > 120;
@@ -623,12 +890,19 @@ async function refreshMilestone() {
 $("round").onchange = e => { current = e.target.value; refresh(); };
 refresh().then(() => {
   const m = /^#watch=([^/]+)\/(\d+)$/.exec(location.hash);
-  if (m) watch(decodeURIComponent(m[1]), +m[2]);
+  if (m) { showTab("history"); watch(decodeURIComponent(m[1]), +m[2]); }
 });
+refreshQueue().then(() => {
+  const m = /^#run=(.+)$/.exec(location.hash);
+  if (m) watchRun(decodeURIComponent(m[1]));
+});
+let savedTab = "queue";
+try { savedTab = localStorage.getItem("tab") || "queue"; } catch (e) { /* storage unavailable */ }
+showTab(location.hash.startsWith("#watch=") ? "history" : savedTab);
+setInterval(() => { if (!$("dlg").open) refreshQueue(); }, STATIC ? 30000 : 5000);
 refreshMilestone();
 refreshPorts();
 refreshDisk();
-if (STATIC) $("round").parentElement.style.display = "none";
 setInterval(() => { if (!$("dlg").open) refresh(); }, STATIC ? 30000 : 5000);
 setInterval(refreshMilestone, 30000);
 setInterval(refreshPorts, 30000);

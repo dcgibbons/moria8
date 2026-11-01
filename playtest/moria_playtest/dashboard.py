@@ -18,6 +18,10 @@ and the scores of earlier rounds of the same project.
   port's goals, frozen or not, the latest full result and when it ran.
 - ``/api/disk``: the disk scenarios (§22, ``make playtest-disk``): each
   port's latest run, scenario by scenario, live while it runs.
+- ``/api/queue``: the continuous queue (§23.6): the service and the build it
+  plays, each platform's cycle grid, live runs, subqueues, the feature
+  counts and difficulty ratings from every run's record.
+- ``/api/queue_run?id=R``: one live queue run's focus view.
 """
 
 from __future__ import annotations
@@ -28,11 +32,13 @@ import json
 import re
 import sys
 import time
+from contextlib import closing
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
+from . import records as run_records
 from .goals import (CHARACTER_BARS, CHARACTERS, CLASS_BARS, CLASSES, GOALS, QUALIFICATION_SEEDS, RACE_KEYS,
                     for_character, required)
 from .launch import PLAYTEST_OUT, ROOT
@@ -50,8 +56,11 @@ DEFAULT_CHARACTER = "half-troll-warrior"     # suites named by goal alone (sessi
 TIMELINE = 400                               # steps of HP and mana the focus view draws
 NOW = PLAYTEST_OUT / "now.json"              # {"text": ...}: what the current runs are for
 STATUS = re.compile(r"HP:\s*(-?\d+)/(\d+)\s+MP:\s*(\d+)/(\d+)")
-KILLER = re.compile(r"[Tt]he ([A-Z][a-z]+(?: [A-Z][a-z]+)*?) "
-                    r"(?:hits|bites|touches|stings|claws|crushes|kicks|casts|breathes|gazes|spits|butts|crawls)")
+# Names may hold lowercase words ("White Worm mass"), never "the" (a name
+# clipped at the line end, "the Ko | the Kobold hits you").
+KILLER = re.compile(r"[Tt]he ([A-Z][\w'-]*(?:,? (?!the\b)[\w'-]+)*?) "
+                    r"(?:hits|bites|touches|stings|claws|crushes|kicks|casts|breathes|gazes|spits|butts|crawls"
+                    r"|poisons|confuses|paralyzes|frightens)")
 _cache: dict[tuple[str, float], Any] = {}
 
 
@@ -69,6 +78,10 @@ def cached(path: Path, build):
     except OSError:
         return None
     if key not in _cache:
+        # One entry per file: every change used to add one, and the publisher,
+        # which runs for days, grew to 7.8 GB (2026-10-31).
+        for stale in [k for k in _cache if k[0] == key[0]]:
+            del _cache[stale]
         _cache[key] = build(path)
     return _cache[key]
 
@@ -179,16 +192,22 @@ def death(trace: Path) -> dict[str, Any]:
     commands = [r for r in rows if r.get("mode") == "COMMAND"]
     last = commands[-1] if commands else rows[-1]
     found = KILLER.findall(" ".join(r.get("msg") or "" for r in rows[-15:]))
+    slain = next((r for r in reversed(rows) if "have been slain" in (r.get("msg") or "")), {})
+    before = next((r.get("hp") for r in reversed(rows[:rows.index(slain)]) if r.get("hp") is not None), 0) \
+        if slain else 0
     if "falling rock" in text or "Rocks fall" in text:
         cause = "trap: falling rock"
-    elif "pit" in text:
+    elif re.search(r"\bpit\b", text):   # not "the Green Naga spits acid" (M7 queue)
         cause = "trap: pit"
     elif "arrow" in text.lower():
         cause = "trap: arrow"
     elif "casts a spell" in text:
         cause = "caster's spell"
-    elif any("poison" in (r.get("msg") or "").lower() for r in rows) and \
-            all(r.get("layer") in ("rest", "search-mode", "explore", "look") for r in commands[-3:]):
+    elif any("poison" in (r.get("msg") or "").lower() for r in rows) and (
+            all(r.get("layer") in ("rest", "search-mode", "explore", "look") for r in commands[-3:])
+            or (slain.get("hp") == 0 and 0 < before <= 4 and not KILLER.search(slain.get("msg") or ""))):
+        # The poison tick (at most 4 HP) stops at 0 HP; a killing blow usually
+        # leaves HP below 0 and prints no "hits you" (M7 queue).
         cause = "poison"
     else:
         cause = found[-1] if found else "unknown"
@@ -438,6 +457,186 @@ def disk() -> dict[str, Any]:
                      for r in runs[:20]], "now": time.time()}
 
 
+# -- the continuous queue (§23.6) ------------------------------------------------
+
+RATINGS = ("Easy", "Medium", "Hard", "Very Hard")
+RATING_MIN_RUNS = 5   # counted runs before a combination is rated
+SPELL_COVERAGE_LEVEL = 25   # criterion 2: the spells a class learns by this level
+
+
+def rate(value: float, bounds: tuple[float, float, float], higher_is_easier: bool = True) -> str:
+    """``value`` against three bounds, Easy to Very Hard."""
+    for rating, bound in zip(RATINGS, bounds):
+        if (value >= bound) if higher_is_easier else (value <= bound):
+            return rating
+    return RATINGS[-1]
+
+
+def queue_records(path: Path) -> list[dict[str, Any]]:
+    records = []
+    try:
+        lines = path.read_text().splitlines()
+    except OSError:
+        return records
+    for line in lines:
+        try:
+            records.append(json.loads(line))
+        except ValueError:
+            continue
+    return records
+
+
+def queue_runs(home: Path, goal: str, counted: tuple[str, ...], epoch: str = "") -> dict[str, Any]:
+    """The run records' part of /api/queue: ratings and feature counts over
+    the main queue's counted runs on ``goal``, the number of runs and the
+    newest 30. From queue.db, the derived counts remembered until a row is
+    written (the database file's mtime lags its WAL); from runs.jsonl before
+    the service has made the database."""
+    db = run_records.open_ro(home)
+    if db is None:
+        records = cached(home / "runs.jsonl", queue_records) or []
+        main = [r for r in records if r.get("queue") == "main" and r.get("goal") == goal and r["outcome"] in counted
+                and r.get("epoch", "") == epoch]
+        return {"ratings": ratings(main), "features": queue_features(main), "runs": len(records),
+                "recent": records[-30:][::-1]}
+    with closing(db):
+        # Every insert takes a new rowid, so the count and the last rowid change with each.
+        version = db.execute("SELECT count(*), max(rowid) FROM runs").fetchone()
+        key = (f"{run_records.path(home)}:{goal}:{epoch}", version)
+        if key not in _cache:
+            for stale in [k for k in _cache if k[0] == key[0]]:
+                del _cache[stale]
+            main = run_records.records(db, f"queue = 'main' AND goal = ? AND outcome IN "
+                                           f"({', '.join('?' * len(counted))})", (goal, *counted))
+            main = [r for r in main if r.get("epoch", "") == epoch]   # the current epoch's runs only
+            _cache[key] = {"ratings": ratings(main), "features": queue_features(main)}
+        return {**_cache[key], "runs": version[0], "recent": run_records.records(db, newest=30)}
+
+
+def ratings(records: list[dict[str, Any]]) -> dict[str, Any]:
+    """Per combination (§23.7): survival (runs not ended by death), the
+    median character level at death, and the share of deaths at level 5 or
+    below, each rated Easy to Very Hard once it has RATING_MIN_RUNS runs."""
+    by_combo: dict[str, list[dict[str, Any]]] = {}
+    for record in records:
+        by_combo.setdefault(record["character"], []).append(record)
+    out = {}
+    for combo, runs in by_combo.items():
+        deaths = sorted(r.get("clvl") or 0 for r in runs if r["outcome"] == "died")
+        survival = 1 - len(deaths) / len(runs)
+        median = deaths[len(deaths) // 2] if deaths else None
+        early = sum(level <= 5 for level in deaths) / len(runs)
+        entry: dict[str, Any] = {"runs": len(runs), "survival": round(survival, 2), "median_death_clvl": median,
+                                 "early_deaths": round(early, 2)}
+        if len(runs) >= RATING_MIN_RUNS:
+            entry["ratings"] = {"survival": rate(survival, (0.75, 0.5, 0.25)),
+                                "median_death_clvl": rate(median, (20, 12, 6)) if median is not None else "Easy",
+                                "early_deaths": rate(early, (0.1, 0.25, 0.5), higher_is_easier=False)}
+        out[combo] = entry
+    return out
+
+
+def queue_features(records: list[dict[str, Any]]) -> dict[str, Any]:
+    """The feature grid's counts (§23.6), per class: decisions by brain
+    layer, milestones reached, recall trips and causes of death."""
+    from . import knowledge
+    classes: dict[str, dict[str, Any]] = {}
+    for record in records:
+        klass = record["character"].rsplit("-", 1)[1]
+        entry = classes.get(klass)
+        if entry is None:
+            # Criterion 2 (§23.2): every spell or prayer the class learns by
+            # level 25, with how often it was cast and its effect seen.
+            entry = classes[klass] = {"runs": 0, "layers": {}, "milestones": {}, "causes": {}, "spells": {
+                name: {"level": level, "cast": 0, "effect": 0, "evidence": ""}
+                for name, level in knowledge.spells(klass).items() if level <= SPELL_COVERAGE_LEVEL}}
+        entry["runs"] += 1
+        for key, count in ((record.get("features") or {}).get("missiles") or {}).items():
+            entry.setdefault("missiles", {"shots": 0, "kills": 0})[key] += count
+        for name, cast in ((record.get("features") or {}).get("casts") or {}).items():
+            spell = entry["spells"].setdefault(name, {"level": None, "cast": 0, "effect": 0, "evidence": ""})
+            spell["cast"] += cast.get("cast", 0)
+            spell["effect"] += cast.get("effect", 0)
+            spell["evidence"] = spell["evidence"] or cast.get("evidence", "")
+        for layer, count in ((record.get("features") or {}).get("layers") or {}).items():
+            entry["layers"][layer] = entry["layers"].get(layer, 0) + count
+        for name in record.get("milestones") or {}:
+            entry["milestones"][name] = entry["milestones"].get(name, 0) + 1
+        cause = (record.get("death") or {}).get("cause")
+        if cause:
+            entry["causes"][cause] = entry["causes"].get(cause, 0) + 1
+    return classes
+
+
+def queue_live(home: Path, run_id: str, job: dict[str, Any], full: bool = False) -> dict[str, Any]:
+    run_dir = home / "runs" / run_id
+    status = next((read_json(p) for p in sorted(run_dir.glob("status-w*.json"))), None) or {}
+    if not full:
+        status.pop("decisions", None)
+    progress = read_json(run_dir / "progress.json") or {}
+    return {"id": run_id, **{k: job.get(k) for k in ("queue", "platform", "character", "goal", "seed", "step_budget",
+                                                     "paused", "started", "commit", "dirty", "build")},
+            "milestones": progress.get("milestones", {}), "status": status}
+
+
+def queue() -> dict[str, Any]:
+    from . import queue as q
+    home = q.HOME
+    config = q.load_config()
+    service = read_json(home / "service.json") or {}
+    state = read_json(q.state_path(home, config["goal"], config.get("epoch", ""))) or {}
+    running = read_json(home / "running.json") or {}
+    runs = queue_runs(home, config["goal"], q.COUNTED, config.get("epoch", ""))
+    subs = []
+    for path in sorted((home / "subqueues").glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True)[:12]:
+        sub = cached(path, read_json) or {}
+        subs.append({k: sub.get(k) for k in ("name", "created", "finished", "build", "note", "done", "cancelled",
+                                              "report", "variant", "ab")} |
+                    {"items": len(sub.get("items", [])), "results": len(sub.get("results", [])),
+                     "reached": sum(r["outcome"] == "reached" for r in sub.get("results", [])),
+                     "progress": q.subqueue_report(sub) if not sub.get("done") and sub.get("items") else None,
+                     "ab_report": (sub.get("ab_report") or q.ab_report(sub)) if sub.get("ab") else None})
+    return {"now": time.time(), "service": {"up": time.time() - service.get("updated", 0) < 60,
+                                            "updated": service.get("updated"), "build": service.get("build"),
+                                            "build_state": service.get("build_state", {}), "log": service.get("log", [])[-12:]},
+            "config": config, "races": list(RACE_KEYS), "classes": list(CLASSES), "characters": sorted(CHARACTERS),
+            "goal": {"name": config["goal"], "what": GOALS[config["goal"]].description.split(". ")[0].rstrip(".") + "."
+                     if config["goal"] in GOALS else ""},
+            "slowest_success": state.get("slowest_success"),
+            "budget": max(int(state["slowest_success"] * config["budget_factor"]), int(config["budget_floor"]))
+            if state.get("slowest_success") else config["start_budget"],
+            "platforms": state.get("platforms", {}),
+            "live": [queue_live(home, run_id, job) for run_id, job in running.items()],
+            "subqueues": subs, "balrog": read_json(home / "state-balrog.json") or {"items": {}, "order": []},
+            "ratings": runs["ratings"], "features": runs["features"],
+            "runs": runs["runs"], "recent": [{k: r.get(k) for k in ("id", "queue", "character", "platform", "outcome",
+                                                                    "clvl", "max_dlvl", "steps", "ended")}
+                                             | {"cause": (r.get("death") or {}).get("cause")}
+                                             for r in runs["recent"]]}
+
+
+def queue_run(run_id: str) -> dict[str, Any] | None:
+    from . import queue as q
+    running = read_json(q.HOME / "running.json") or {}
+    job = running.get(Path(run_id).name)
+    if job is None:
+        return None
+    live = queue_live(q.HOME, Path(run_id).name, job, full=True)
+    status = live["status"]
+    traces = sorted((q.HOME / "runs" / live["id"]).glob("w*/*/*/trace.jsonl.gz"))
+    timeline = []
+    for row in trace_tail(traces[0], TIMELINE * 2) if traces else []:
+        match = STATUS.search(row.get("status") or "")
+        if row.get("mode") == "COMMAND" and match:
+            timeline.append([row["step"], int(match.group(1)), int(match.group(2)),
+                             int(match.group(3)), int(match.group(4)), row.get("layer") or ""])
+    status["timeline"] = timeline[-TIMELINE:]
+    if traces:
+        last = trace_tail(traces[0], 1)
+        status["kit"] = {"clw": last[0].get("clw"), "oil": last[0].get("oil")} if last else {}
+    return {**status, "run": live}
+
+
 def legend() -> dict[str, Any]:
     """What the page's bars and goals mean, from the code that sets them
     (goals.py), so the explanation cannot drift from the numbers."""
@@ -461,6 +660,12 @@ def make_handler() -> type[BaseHTTPRequestHandler]:
                 kind = "application/json"
             elif url.path == "/api/ports":
                 body = json.dumps(ports(), default=str).encode()
+                kind = "application/json"
+            elif url.path == "/api/queue":
+                body = json.dumps(queue(), default=str).encode()
+                kind = "application/json"
+            elif url.path == "/api/queue_run":
+                body = json.dumps(queue_run(query.get("id", "")), default=str).encode()
                 kind = "application/json"
             elif url.path == "/api/disk":
                 body = json.dumps(disk(), default=str).encode()

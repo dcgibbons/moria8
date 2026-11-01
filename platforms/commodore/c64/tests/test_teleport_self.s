@@ -266,7 +266,7 @@ test_start:
     :PatchJump(pm_select_book, test_pm_select_book)
     :PatchJump(pm_prompt_visible_spell_choice, test_pm_pick_visible_spell_e)
     :PatchJump(pm_validate_selected_spell, test_pm_validate_selected_spell)
-    :PatchJump(find_random_floor, test_find_random_floor_teleport_self)
+    :PatchJump(find_random_floor_near, test_find_random_floor_teleport_self)  // eff_teleport_self's search entry
 
     // Test 1: successful cast relocates to the random floor target, updates
     // occupancy + redraw state, stays message-light, spends 6 mana, and marks

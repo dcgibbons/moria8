@@ -54,10 +54,41 @@ FIRE_BOLT, FROST_BALL, FIRE_BALL = "Fire Bolt", "Frost Ball", "Fire Ball"   # Ma
 MAGE_ATTACKS = {MAGIC_MISSILE: 7.0, STINKING_CLOUD: 9.0, LIGHTNING_BOLT: 13.5, FROST_BOLT: 18.0,
                 FIRE_BOLT: 27.0, FROST_BALL: 33.0, FIRE_BALL: 49.0}
 
+# How each spell is cast (core/player_magic_execute_overlay.s, the dispatch
+# tables): at a direction, on a pack item, or on the caster and what is
+# around it. M7 criterion 2 asks for every spell and prayer a class learns
+# by level 25 cast with its effect seen (§23.2).
+AIMED = frozenset({MAGIC_MISSILE, STINKING_CLOUD, "Confusion", LIGHTNING_BOLT, SLEEP_I, FROST_BOLT,
+                   "Turn Stone to Mud", "Polymorph Other", FIRE_BOLT, "Slow Monster", FROST_BALL,
+                   "Teleport Other", FIRE_BALL, BLIND, ORB})
+ON_ITEM = frozenset({"Identify", "Recharge Item I", "Recharge Item II"})
+# Self-cast spells whose effect needs creatures in view.
+AT_CREATURES = frozenset({"Sleep II", "Sleep III", "Turn Undead", "Dispel Undead", "Dispel Evil", "Holy Word"})
+# Never cast to see them work: they wreck the level or ask for a monster letter.
+# Earthquake only reshapes the walls nearby (VMS) and is a prayer criterion 2
+# needs (Priests and Paladins lacked only it, 2026-11-01).
+NOT_EXERCISED = frozenset({"Word of Destruction", "Genocide"})
+# A cast that did nothing to see: failure, a bolt that hit nothing, a refusal.
+NO_EFFECT = ("Your spell fails.", "fizzles out", "You faint from fatigue.", "You're not experienced enough.",
+             "You don't know that spell.", "You have nothing there.")
+# A creature's own doing in the same messages is not the spell's effect (a
+# Magic Missile's "evidence" was "the White Icky-Thing hits you", M7).
+CREATURE_ACT = re.compile(r"[Tt]he [^.!|]*? (?:hits|misses|bites|touches|stings|claws|crushes|kicks|casts|"
+                          r"breathes|gazes|spits|butts|crawls|frightens|confuses|teleports|tries|shrieks)"
+                          r"[^.!|]*[.!]?")
+# Screen text that is the cast's own prompts, not its effect.
+PROMPT_TEXT = re.compile(r"(Spell|Prayer) book \(a-.\)\?|Cast which\?.*|Pray which\?.*|Direction\?.*|"
+                         r"-more-|\(a-., ESC\)|ESC")
+
 # The prayer books in order (core/item_tables.s itn_48, itn_58-60), and the
 # character level of each book's first prayer for a Priest and a Paladin
 # (docs/FEATURE_MAP.md §7.3): a book is worth buying from then on.
 PRAYER_BOOKS = ("Beginners Handbook", "Words of Wisdom", "Chants and Blessings", "Exorcism")
+# Rogues and Rangers cast from the Mage books too; the first spell of each
+# book at their levels (core/spell_class_data.s; 99: none to learn there).
+# Without them they never bought past Beginners-Magick: 5 of 11 Rogue and 7 of
+# 24 Ranger spells seen in the M7 queue (2026-11-01). Tactic "class_books".
+CASTER_BOOK_LEVELS = {"rogue": (5, 15, 25, 99), "ranger": (3, 7, 17, 27)}
 BOOK_LEVELS = {"priest": (1, 5, 9, 15), "paladin": (1, 9, 15, 29),
                # A Mage's first spell in each book (core/spell_class_data.s
                # mage_spell_level: spells 7, 16 and 24; M5f)
@@ -140,6 +171,11 @@ class Magic:
         self.study_book: str | None = None    # the book the open F flow chose
         self.study_done: set[str] = set()     # books with nothing to learn until the next level
         self.last: str | None = None          # the prayer last prayed, for the game's answer
+        # Every cast and what came of it (M7 criterion 2): name -> cast,
+        # failed, effect (something seen), and the first evidence seen.
+        self.ledger: dict[str, dict[str, object]] = {}
+        self.casting: dict[str, object] | None = None   # the cast whose effect is awaited
+        self.signature: tuple[int, ...] = ()   # traps, doors and stairs in view at the last command screen
         self.refused: set[str] = set()        # refused without a turn: not again until the next level
 
     @staticmethod
@@ -320,7 +356,58 @@ class Magic:
         if prayer is None or not wanted or prayer.book != book:
             return KEY_ESC, "prompt", "the prayer list is read" if book in self.listed_books else "prayer not known: cancel"
         self.last = wanted
+        entry = self.ledger.setdefault(wanted, {"cast": 0, "failed": 0, "effect": 0, "evidence": ""})
+        entry["cast"] = int(entry["cast"]) + 1   # type: ignore[call-overload]
+        self.casting = {"name": wanted, "hp": obs.hp, "pos": list(obs.pos), "messages": "",
+                        "signature": self.signature}
         return ord(prayer.letter.upper()), "prompt", f"pray {wanted}"
+
+    def watch_cast(self, obs: Observation, signature: tuple[int, ...] | None = None) -> None:
+        """Every screen after a cast: gather its messages; at the next command
+        screen, given the traps, doors and stairs now in view, decide whether
+        it failed or showed its effect: a message of its own, the caster moved
+        (Phase Door, Teleport Self, Portal) or healed, or more of the level
+        shown (Find Traps, Detect Doors/Stairs)."""
+        if signature is not None:
+            self.signature = signature
+        if self.casting is None:
+            return
+        # Row by row: "Direction? -more-" above "Your spell hits the Kobold."
+        text = CREATURE_ACT.sub("", " ".join(PROMPT_TEXT.sub("", row).strip() for row in obs.rows[:2])).strip()
+        if text and text not in str(self.casting["messages"]):
+            self.casting["messages"] = f"{self.casting['messages']} | {text}".strip(" |")
+        if obs.mode != Mode.COMMAND or signature is None:
+            return
+        cast, self.casting = self.casting, None
+        entry = self.ledger[str(cast["name"])]
+        messages = str(cast["messages"])
+        if any(text in messages for text in NO_EFFECT):
+            entry["failed"] = int(entry["failed"]) + 1   # type: ignore[call-overload]
+            return
+        moved = list(obs.pos) != cast["pos"]
+        healed = obs.hp > int(cast["hp"])   # type: ignore[call-overload]
+        shown = self.casting_shown(cast, signature)
+        evidence = messages or ("moved" if moved else "healed" if healed else shown)
+        if evidence:
+            entry["effect"] = int(entry["effect"]) + 1   # type: ignore[call-overload]
+            entry["evidence"] = entry["evidence"] or evidence[:80]
+
+    @staticmethod
+    def casting_shown(cast: dict[str, object], signature: tuple[int, ...]) -> str:
+        before = cast["signature"]
+        if not before or len(before) != len(signature):   # type: ignore[arg-type]
+            return ""
+        grew = [kind for kind, a, b in zip(("traps", "doors", "stairs"), before, signature) if b > a]   # type: ignore[call-overload]
+        return f"{' and '.join(grew)} shown" if grew else ""
+
+    def confirmed(self, name: str) -> bool:
+        return int(self.ledger.get(name, {}).get("effect", 0)) > 0   # type: ignore[call-overload]
+
+    def unconfirmed(self, obs: Observation, names) -> list[str]:   # type: ignore[no-untyped-def]
+        """Known spells among ``names`` castable now with the mana to spare
+        whose effect this character has not seen, cheapest first."""
+        return sorted((n for n in names if n in self.known and not self.confirmed(n) and n not in NOT_EXERCISED
+                       and self.spare(obs, n)), key=lambda n: self.known[n].mana)
 
 
     def learn(self, obs: Observation) -> tuple[int, str, str]:

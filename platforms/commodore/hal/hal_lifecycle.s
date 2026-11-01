@@ -38,10 +38,6 @@
 //   platform must reassert runtime vectors/state before message rendering.
 // - hal_platform_restore_tier_after_overlay: boolean; true when modal overlay
 //   dismissal must restore the live dungeon tier before gameplay redraw.
-// - hal_platform_mark_modal_restore_perf: boolean; true when modal restore
-//   should mark the PERF_P1 modal-restore reason before viewport rendering.
-// - hal_platform_render_ball_effect_direct_perf: boolean; true when PERF_P1
-//   ball-spell effect rendering should use the platform's direct effect tail.
 // - hal_platform_character_sheet_begin_enabled: boolean; true when the
 //   platform exports and requires hal_platform_character_sheet_begin before
 //   character-sheet rendering.

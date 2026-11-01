@@ -266,8 +266,10 @@ cmb_in_way_str:
 // room (#importonce: turn.s's own import is then a no-op).
 #import "../../core/turn_data.s"
 // Heal feedback (spell/potion heal + message) in resident main RAM too: the
-// play slot has no room.
+// play slot has no room. The potion heal/cure effects sit beside it, where
+// both the items overlay (#17, #25) and the spell overlay (#96, #100) reach.
 #import "../../core/player_heal_feedback.s"
+#import "../../core/eff_potion_cure.s"
 
 // Constants are needed by resident consumers before the data/code placement
 // later in A2PlaySlot and A2AuxData. These imports emit no bytes.
@@ -622,6 +624,11 @@ tramp_eff_map_area:
 tramp_item_refuel:
     lda #<item_refuel
     ldy #>item_refuel
+    jmp tramp_items_dispatch
+
+tramp_item_exchange:
+    lda #<item_exchange
+    ldy #>item_exchange
     jmp tramp_items_dispatch
 
 tramp_ranged_fire:
@@ -1482,6 +1489,7 @@ ovl_ui_end:
 .segment ItemActionsOverlay
 #define SCROLL_P3_ROUTER_ENABLED
     #import "../../core/item_actions_overlay.s"
+    #import "../../core/item_exchange.s"
 
 player_adjust_equipment_stat_prepare:
     lda inv_p1,x
@@ -1556,16 +1564,14 @@ iq_dispatch_p3_spell:
     // Fall through: caller constrains A to {96-100, 126}
 
 iqp3_healing:
-    lda #200
-    jmp pmx_heal_and_report
+    jmp eff_potion_healing          // 1000 HP + cures (eff_potion_cure.s)
 
 iqp3_cure_critical:
-    lda #6
+    // 6d7 HP, cures blindness, confusion and poison
+    lda #EFF_CURE_ALL
     ldx #7
-    ldy #0
-    jsr math_dice
-    lda zp_math_a
-    jmp pmx_heal_and_report
+    ldy #6
+    jmp eff_potion_heal_cure
 
 iqp3_restoration:
     jsr player_calc_stats

@@ -552,12 +552,6 @@ game_new_start:
     // Initialize message system
     jsr msg_init
 
-#if HAL_PLATFORM_GAME_LOOP_PERF_P1_INSTRUMENTATION
-#if PERF_P1
-    // Reset movement responsiveness counters for new sessions.
-    jsr perf_p1_reset
-#endif
-#endif
 
     lda #0
     sta zp_game_flags
@@ -783,11 +777,6 @@ game_new_start:
 	    // Clear screen and do initial render
 	    jsr hal_screen_clear
 	    jsr viewport_update
-#if HAL_PLATFORM_GAME_LOOP_PERF_P1_INSTRUMENTATION
-#if PERF_P1
-    jsr perf_p1_mark_full_reason_transition
-#endif
-#endif
 	    jsr render_viewport
 	    jsr hal_screen_unblank
 #if C128_REAL_BOOT_DIAG || C128_STATUS_SP_CANARY_DIAG
@@ -818,13 +807,11 @@ game_new_start:
 #endif
 
 #if C128_TEST_SCRIPTED_INPUT
-#if !C128_TEST_PERF_P1_TRACE
 #if C128_TEST_CACHE_SURVIVAL
     jmp c128_test_cache_survival_town_entry
 #else
 c128_test_town_pass_sym:
     brk
-#endif
 #endif
 
 #elif C128_TEST_CACHE_SURVIVAL
@@ -920,12 +907,6 @@ c64_test_single_drive_load_return_resume_entry:
     // Re-init SID
     jsr hal_sound_init
 
-#if HAL_PLATFORM_GAME_LOOP_PERF_P1_INSTRUMENTATION
-#if PERF_P1
-    // Reset movement responsiveness counters after restore.
-    jsr perf_p1_reset
-#endif
-#endif
 
     // Viewport coords are transient and not restored from saves. Seed a
     // neutral origin before the first post-load deadband update so stale
@@ -938,11 +919,6 @@ c64_test_single_drive_load_return_resume_entry:
 	    jsr hal_screen_clear
 	    jsr update_visibility
 	    jsr viewport_update
-#if HAL_PLATFORM_GAME_LOOP_PERF_P1_INSTRUMENTATION
-#if PERF_P1
-    jsr perf_p1_mark_full_reason_transition
-#endif
-#endif
 	    jsr render_viewport
 	    jsr status_draw
 
@@ -1229,6 +1205,9 @@ c128_town_move_diag_after_input_get_command:
     beq !save_return_view+
 !save_setup_ready:
 #if HAL_PLATFORM_GAME_LOOP_MODAL_PERSIST
+#if C128_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
+    jsr save_product_seed_secondary
+#endif
     jsr c128_modal_save_game
 #if C128_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
     bcc !save_not_written+      // C = 1: the save was written
@@ -1254,6 +1233,9 @@ c128_town_move_diag_after_input_get_command:
     beq !slot2_save_selected+
     jmp c64_test_save_write_fail_input_sym
 !slot2_save_selected:
+#endif
+#if C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || C64_TEST_SCRIPTED_SLOT2_SAVE_PRODUCT || PLUS4_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
+    jsr save_product_seed_secondary
 #endif
     jsr save_game
 #if C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || C64_TEST_SCRIPTED_SLOT2_SAVE_PRODUCT || C64_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT
@@ -1347,11 +1329,6 @@ plus4_test_after_save_game:
     jmp !not_move+
 !mv_cmd_ok:
 
-#if HAL_PLATFORM_GAME_LOOP_PERF_P1_INSTRUMENTATION
-#if PERF_P1
-    jsr perf_p1_move_start
-#endif
-#endif
 
     // Clear message before move so combat messages survive
     pha                         // Save command ID (A) — msg_clear clobbers A
@@ -1419,61 +1396,26 @@ c128_town_move_diag_after_turn_post_action:
     lda #$19
     jsr c128_town_dump_log
 #endif
-#if C128_TEST_PERF_P1_TRACE
-    jsr perf_p1_trace_reset_move_start
-#endif
     jsr game_loop_update_visibility_preserve_reveal
     jsr viewport_update
 
     // Did viewport scroll?
     lda zp_view_x
     cmp old_view_x
-#if HAL_PLATFORM_GAME_LOOP_PERF_P1_INSTRUMENTATION
-#if PERF_P1
-	    beq !mv_chk_y+
-    jsr perf_p1_mark_scroll_reason_fallback
-	    jmp !full_redraw+
-!mv_chk_y:
-#else
     bne !full_redraw+
-#endif
-#else
-    bne !full_redraw+
-#endif
     lda zp_view_y
     cmp old_view_y
-#if HAL_PLATFORM_GAME_LOOP_PERF_P1_INSTRUMENTATION
-#if PERF_P1
-	    beq !mv_chk_reveal+
-    jsr perf_p1_mark_scroll_reason_fallback
-	    jmp !full_redraw+
-!mv_chk_reveal:
-#else
     bne !full_redraw+
-#endif
-#else
-    bne !full_redraw+
-#endif
 
 	    // Did a room get revealed?
 	    lda vis_room_revealed
     beq !no_room_reveal+
-#if HAL_PLATFORM_GAME_LOOP_PERF_P1_INSTRUMENTATION
-#if PERF_P1
-    jsr perf_p1_set_reason_room_reveal
-#endif
-#endif
 	    jmp !full_redraw+
 !no_room_reveal:
 
 	    // Did monsters or other scene elements move this turn?
 	    lda turn_scene_dirty
     beq !no_scene_dirty+
-#if HAL_PLATFORM_GAME_LOOP_PERF_P1_INSTRUMENTATION
-#if PERF_P1
-    jsr perf_p1_set_reason_scene_dirty
-#endif
-#endif
 	    jmp !scene_dirty_redraw+
 !no_scene_dirty:
 
@@ -1483,12 +1425,6 @@ c128_town_move_diag_after_turn_post_action:
     jsr c128_town_dump_log
 #endif
     jsr render_local_area
-#if HAL_PLATFORM_GAME_LOOP_PERF_P1_INSTRUMENTATION
-#if PERF_P1
-    jsr perf_p1_mark_local
-    jsr perf_p1_move_end
-#endif
-#endif
     jmp !post_move+
 
 !scene_dirty_redraw:
@@ -1507,9 +1443,6 @@ c128_town_move_diag_after_turn_post_action:
 #if HAL_PLATFORM_GAME_LOOP_SCROLL_DELTA_RENDER
 	    lda turn_scene_dirty
     beq !full_not_scene_dirty+
-#if PERF_P1
-    jsr perf_p1_set_reason_scene_dirty
-#endif
 	    jmp !full_draw_fallback+
 !full_not_scene_dirty:
 #if C128_TEST_TOWN_SELF_DUMP
@@ -1524,12 +1457,6 @@ c128_town_move_diag_after_turn_post_action:
     jsr c128_town_dump_log
 #endif
     jsr render_local_area
-#if HAL_PLATFORM_GAME_LOOP_PERF_P1_INSTRUMENTATION
-#if PERF_P1
-    jsr perf_p1_mark_scroll_delta
-    jsr perf_p1_move_end
-#endif
-#endif
     jmp !post_move+
 !full_draw_fallback:
 #endif
@@ -1539,12 +1466,6 @@ scene_full_fallback:
     jsr c128_town_dump_log
 #endif
 	    jsr render_viewport
-#if HAL_PLATFORM_GAME_LOOP_PERF_P1_INSTRUMENTATION
-#if PERF_P1
-	    jsr perf_p1_mark_full_scroll_fallback_current_reason
-	    jsr perf_p1_move_end
-#endif
-#endif
 
 !post_move:
 scene_post_move:
@@ -1571,13 +1492,6 @@ c128_town_move_diag_before_status_draw:
 #endif
 #if HAL_PLATFORM_GAME_LOOP_PLAYER_MOVE_DIAG_LABELS
 c128_town_move_diag_after_status_draw:
-#endif
-#if C128_TEST_PERF_P1_TRACE
-    lda perf_p1_moves
-    beq !perf_trace_continue+
-c128_test_perf_p1_trace_export_sym:
-    jmp c128_test_perf_p1_trace_capture_sym
-!perf_trace_continue:
 #endif
     jmp main_loop
 
@@ -1665,8 +1579,8 @@ command_dispatch_lo_pray:
     .byte <cmd_pray
 command_dispatch_lo_char_info:
     .byte <cmd_dispatch_ignore    // CMD_CHAR_INFO handled above
-command_dispatch_lo_map:
-    .byte <cmd_dispatch_ignore    // CMD_MAP unused
+command_dispatch_lo_exchange:
+    .byte <cmd_exchange
 command_dispatch_lo_recall:
     .byte <cmd_dispatch_ignore    // CMD_RECALL handled above
 command_dispatch_lo_look:
@@ -1761,8 +1675,8 @@ command_dispatch_hi_pray:
     .byte >cmd_pray
 command_dispatch_hi_char_info:
     .byte >cmd_dispatch_ignore
-command_dispatch_hi_map:
-    .byte >cmd_dispatch_ignore
+command_dispatch_hi_exchange:
+    .byte >cmd_exchange
 command_dispatch_hi_recall:
     .byte >cmd_dispatch_ignore
 command_dispatch_hi_look:
@@ -1839,7 +1753,7 @@ command_dispatch_hi_end:
 .assert "CMD_CAST dispatch index", command_dispatch_lo_cast - command_dispatch_lo, CMD_CAST - CMD_STAIRS_DN
 .assert "CMD_PRAY dispatch index", command_dispatch_lo_pray - command_dispatch_lo, CMD_PRAY - CMD_STAIRS_DN
 .assert "CMD_CHAR_INFO dispatch index", command_dispatch_lo_char_info - command_dispatch_lo, CMD_CHAR_INFO - CMD_STAIRS_DN
-.assert "CMD_MAP dispatch index", command_dispatch_lo_map - command_dispatch_lo, CMD_MAP - CMD_STAIRS_DN
+.assert "CMD_EXCHANGE dispatch index", command_dispatch_lo_exchange - command_dispatch_lo, CMD_EXCHANGE - CMD_STAIRS_DN
 .assert "CMD_RECALL dispatch index", command_dispatch_lo_recall - command_dispatch_lo, CMD_RECALL - CMD_STAIRS_DN
 .assert "CMD_LOOK dispatch index", command_dispatch_lo_look - command_dispatch_lo, CMD_LOOK - CMD_STAIRS_DN
 .assert "CMD_RUN dispatch index", command_dispatch_lo_run - command_dispatch_lo, CMD_RUN - CMD_STAIRS_DN
@@ -1886,7 +1800,7 @@ command_dispatch_hi_end:
 .assert "CMD_CAST hi dispatch index", command_dispatch_hi_cast - command_dispatch_hi, CMD_CAST - CMD_STAIRS_DN
 .assert "CMD_PRAY hi dispatch index", command_dispatch_hi_pray - command_dispatch_hi, CMD_PRAY - CMD_STAIRS_DN
 .assert "CMD_CHAR_INFO hi dispatch index", command_dispatch_hi_char_info - command_dispatch_hi, CMD_CHAR_INFO - CMD_STAIRS_DN
-.assert "CMD_MAP hi dispatch index", command_dispatch_hi_map - command_dispatch_hi, CMD_MAP - CMD_STAIRS_DN
+.assert "CMD_EXCHANGE hi dispatch index", command_dispatch_hi_exchange - command_dispatch_hi, CMD_EXCHANGE - CMD_STAIRS_DN
 .assert "CMD_RECALL hi dispatch index", command_dispatch_hi_recall - command_dispatch_hi, CMD_RECALL - CMD_STAIRS_DN
 .assert "CMD_LOOK hi dispatch index", command_dispatch_hi_look - command_dispatch_hi, CMD_LOOK - CMD_STAIRS_DN
 .assert "CMD_RUN hi dispatch index", command_dispatch_hi_run - command_dispatch_hi, CMD_RUN - CMD_STAIRS_DN
@@ -2049,11 +1963,6 @@ level_change_generate_current:
 	    sta zp_view_x
 	    sta zp_view_y
 	    jsr viewport_update
-#if HAL_PLATFORM_GAME_LOOP_PERF_P1_INSTRUMENTATION
-#if PERF_P1
-    jsr perf_p1_mark_full_reason_transition
-#endif
-#endif
 	    jsr render_viewport
 	    jsr hal_screen_unblank
 #if C128_REAL_BOOT_DIAG || C128_STATUS_SP_CANARY_DIAG
@@ -2067,9 +1976,6 @@ level_change_generate_current:
 #if C128_REAL_BOOT_DIAG || C128_STATUS_SP_CANARY_DIAG
     jsr c128_stack_guard_check
     .byte $98
-#endif
-#if C128_TEST_PERF_P1_TRACE_TRANSITION
-    jmp c128_test_perf_p1_trace_capture_sym
 #endif
 #if !HAL_PLATFORM_WIZARD_JUMP_INLINE_PLAY
     lda wizard_level_jump_active
@@ -2288,6 +2194,105 @@ cmd_refuel:
     jsr tramp_item_refuel
     jmp command_result_main_or_status_only
 
+// cmd_exchange — SHIFT+X: swap the primary and secondary weapons (VMS `x`).
+// Carry set from item_exchange = a turn was taken; refusals are free.
+cmd_exchange:
+#if C64_TEST_SCRIPTED_EXCHANGE_PRODUCT || PLUS4_TEST_SCRIPTED_EXCHANGE_PRODUCT || C128_TEST_SCRIPTED_EXCHANGE_PRODUCT
+    jsr exchange_product_stage
+#endif
+    jsr msg_clear
+    jsr tramp_item_exchange
+    jmp command_result_main_or_status_only
+
+#if C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || C64_TEST_SCRIPTED_SLOT2_SAVE_PRODUCT || PLUS4_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || C128_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
+// Save round-trip fixture (test builds only): the game is saved with a
+// Dagger (+3,+4) (Defender) as the secondary weapon; slot 31 stays empty.
+// tests/check_save_secondary.py finds it in the written file.
+save_product_seed_secondary:
+    ldx #0
+    ldy #0
+!spss_loop:
+    lda spss_fields,y
+    sta inv_item_id + EQUIP_SECONDARY,x
+    txa
+    clc
+    adc #TOTAL_INV_SLOTS
+    tax
+    iny
+    bcc !spss_loop-
+    rts
+spss_fields: .byte 2, 1, 0, 3, 4, 0, IF_IDENTIFIED, 6   // 6 = EGO_DEFENDER
+#endif
+#if C64_TEST_SCRIPTED_SLOT2_LOAD_PRODUCT || PLUS4_TEST_SCRIPTED_LOAD_RESUME_PRODUCT
+// Inventory cells the load smokes read after a resume (no bytes).
+.label save_product_secondary_id    = inv_item_id + EQUIP_SECONDARY
+.label save_product_secondary_hit   = inv_to_hit + EQUIP_SECONDARY
+.label save_product_secondary_dam   = inv_to_dam + EQUIP_SECONDARY
+.label save_product_secondary_flags = inv_flags + EQUIP_SECONDARY
+.label save_product_secondary_ego   = inv_ego + EQUIP_SECONDARY
+.label save_product_cloak_id        = inv_item_id + EQUIP_CLOAK
+#endif
+
+#if C64_TEST_SCRIPTED_EXCHANGE_PRODUCT || PLUS4_TEST_SCRIPTED_EXCHANGE_PRODUCT || C128_TEST_SCRIPTED_EXCHANGE_PRODUCT
+// Product-path fixture for SHIFT+X (test builds only). Press 1 wields a
+// cursed Mace (+1,+0) with a Dagger (+3,+4) (Defender) as the secondary and
+// zeroes the turn counter: VMS refuses it with no turn. Press 2 records that
+// refusal, then lifts the curse: the swap takes one turn.
+exchange_product_stage:
+    ldx exchange_product_presses
+    inc exchange_product_presses
+    txa
+    bne !xps_second+
+    stx zp_turn_lo
+    stx zp_turn_hi
+    tay
+!xps_seed:                              // the 8 fields of slots 22 and 32
+    lda xps_primary,y
+    sta inv_item_id + EQUIP_WEAPON,x
+    lda xps_secondary,y
+    sta inv_item_id + EQUIP_SECONDARY,x
+    txa
+    clc
+    adc #TOTAL_INV_SLOTS
+    tax
+    iny
+    bcc !xps_seed-
+    rts
+!xps_second:
+    lda zp_turn_lo
+    sta exchange_product_refused_turns
+    lda inv_item_id + EQUIP_WEAPON
+    sta exchange_product_refused_primary
+    lda #IF_IDENTIFIED
+    sta inv_flags + EQUIP_WEAPON
+    rts
+exchange_product_presses:         .byte 0
+exchange_product_refused_turns:   .byte $ff
+exchange_product_refused_primary: .byte $ff
+// id, qty, p1, to_hit, to_dam, to_ac, flags, ego
+xps_primary:   .byte 5, 1, 0, 1, 0, 0, IF_IDENTIFIED | IF_CURSED, 0
+xps_secondary: .byte 2, 1, 0, 3, 4, 0, IF_IDENTIFIED, 6   // 6 = EGO_DEFENDER
+.label exchange_product_primary_id   = inv_item_id + EQUIP_WEAPON
+.label exchange_product_primary_ego  = inv_ego + EQUIP_WEAPON
+.label exchange_product_secondary_id = inv_item_id + EQUIP_SECONDARY
+.label exchange_product_secondary_hit = inv_to_hit + EQUIP_SECONDARY
+.label exchange_product_cloak_id     = inv_item_id + EQUIP_CLOAK
+#if PLUS4_TEST_SCRIPTED_EXCHANGE_PRODUCT
+// Screen cells the smoke reads (no bytes): "Primary: Dagger" on row 0,
+// "Secondary: Mace" on row 1.
+.label exchange_product_r0c0  = SCREEN_RAM + 0
+.label exchange_product_r0c9  = SCREEN_RAM + 9
+.label exchange_product_r1c0  = SCREEN_RAM + SCREEN_COLS
+.label exchange_product_r1c11 = SCREEN_RAM + SCREEN_COLS + 11
+#endif
+#if C64_TEST_SCRIPTED_EXCHANGE_PRODUCT
+// Hand-written expectations for the two report lines (VMS order: Primary,
+// then Secondary; the ego suffix follows the name, then the bonuses).
+exchange_product_expect_row0: .text "Primary: Dagger (Defender) (+3,+4)" ; .byte 0
+exchange_product_expect_row1: .text "Secondary: Mace (+1,+0)" ; .byte 0
+#endif
+#endif
+
 cmd_bash:
     jsr msg_clear
     jsr tramp_bash_command
@@ -2406,11 +2411,6 @@ run_step:
     stx old_view_x
 	    ldx zp_view_y
 	    stx old_view_y
-#if HAL_PLATFORM_GAME_LOOP_PERF_P1_INSTRUMENTATION
-#if PERF_P1
-    jsr perf_p1_move_start
-#endif
-#endif
 
     // Convert running direction to movement command
     ldx zp_run_dir
@@ -2459,41 +2459,20 @@ run_step:
 	    lda zp_view_x
 	    cmp old_view_x
     beq !run_chk_y+
-#if HAL_PLATFORM_GAME_LOOP_PERF_P1_INSTRUMENTATION
-#if PERF_P1
-    jsr perf_p1_mark_scroll_reason_fallback
-#endif
-#endif
 	    jmp !run_full_redraw+
 !run_chk_y:
 	    lda zp_view_y
 	    cmp old_view_y
     beq !run_chk_reveal+
-#if HAL_PLATFORM_GAME_LOOP_PERF_P1_INSTRUMENTATION
-#if PERF_P1
-    jsr perf_p1_mark_scroll_reason_fallback
-#endif
-#endif
 	    jmp !run_full_redraw+
 !run_chk_reveal:
 	    lda vis_room_revealed
     ora turn_scene_dirty
     beq !run_local+
-#if HAL_PLATFORM_GAME_LOOP_PERF_P1_INSTRUMENTATION
-#if PERF_P1
-    jsr perf_p1_set_reason_room_reveal
-#endif
-#endif
 	    jmp !run_full_redraw+
 
 !run_local:
 	    jsr render_local_area
-#if HAL_PLATFORM_GAME_LOOP_PERF_P1_INSTRUMENTATION
-#if PERF_P1
-    jsr perf_p1_mark_local
-    jsr perf_p1_move_end
-#endif
-#endif
 	    jmp !run_post+
 
 !run_full_redraw:
@@ -2503,20 +2482,10 @@ run_step:
 	    jsr render_viewport_scroll_delta
 	    bcc !run_full_fallback+
 	    jsr render_local_area
-#if PERF_P1
-    jsr perf_p1_mark_scroll_delta
-    jsr perf_p1_move_end
-#endif
 	    jmp !run_post+
 !run_full_fallback:
 #endif
 	    jsr render_viewport
-#if HAL_PLATFORM_GAME_LOOP_PERF_P1_INSTRUMENTATION
-#if PERF_P1
-    jsr perf_p1_mark_full_scroll_fallback_current_reason
-    jsr perf_p1_move_end
-#endif
-#endif
 
 !run_post:
     jsr status_draw
@@ -2554,58 +2523,26 @@ run_step:
 	    lda zp_view_x
 	    cmp old_view_x
     beq !rsm_chk_y+
-#if HAL_PLATFORM_GAME_LOOP_PERF_P1_INSTRUMENTATION
-#if PERF_P1
-    jsr perf_p1_mark_scroll_reason_fallback
-#endif
-#endif
 	    jmp !rsm_full+
 !rsm_chk_y:
 	    lda zp_view_y
 	    cmp old_view_y
     beq !rsm_chk_reveal+
-#if HAL_PLATFORM_GAME_LOOP_PERF_P1_INSTRUMENTATION
-#if PERF_P1
-    jsr perf_p1_mark_scroll_reason_fallback
-#endif
-#endif
 	    jmp !rsm_full+
 !rsm_chk_reveal:
 	    lda vis_room_revealed
     beq !rsm_chk_scene+
-#if HAL_PLATFORM_GAME_LOOP_PERF_P1_INSTRUMENTATION
-#if PERF_P1
-    jsr perf_p1_set_reason_room_reveal
-#endif
-#endif
 	    jmp !rsm_full+
 !rsm_chk_scene:
 	    lda turn_scene_dirty
     beq !rsm_local+
-#if HAL_PLATFORM_GAME_LOOP_PERF_P1_INSTRUMENTATION
-#if PERF_P1
-    jsr perf_p1_set_reason_scene_dirty
-#endif
-#endif
 	    jmp !rsm_scene_full+
 
 !rsm_local:
 	    jsr render_local_area
-#if HAL_PLATFORM_GAME_LOOP_PERF_P1_INSTRUMENTATION
-#if PERF_P1
-    jsr perf_p1_mark_local
-    jsr perf_p1_move_end
-#endif
-#endif
 	    jmp !rsm_post+
 !rsm_scene_full:
 	    jsr render_viewport
-#if HAL_PLATFORM_GAME_LOOP_PERF_P1_INSTRUMENTATION
-#if PERF_P1
-    jsr perf_p1_mark_full_current_reason
-    jsr perf_p1_move_end
-#endif
-#endif
 	    jmp !rsm_post+
 !rsm_full:
 #if HAL_PLATFORM_GAME_LOOP_SCROLL_DELTA_RENDER
@@ -2614,20 +2551,10 @@ run_step:
 	    jsr render_viewport_scroll_delta
 	    bcc !rsm_full_fallback+
 	    jsr render_local_area
-#if PERF_P1
-    jsr perf_p1_mark_scroll_delta
-    jsr perf_p1_move_end
-#endif
 	    jmp !rsm_post+
 !rsm_full_fallback:
 #endif
 	    jsr render_viewport
-#if HAL_PLATFORM_GAME_LOOP_PERF_P1_INSTRUMENTATION
-#if PERF_P1
-    jsr perf_p1_mark_full_scroll_fallback_current_reason
-    jsr perf_p1_move_end
-#endif
-#endif
 !rsm_post:
     jsr try_store_entry
     jsr status_draw
@@ -2641,11 +2568,6 @@ try_store_entry:
     sta zp_store_idx
     jsr tramp_store_enter
     jsr viewport_update
-#if HAL_PLATFORM_GAME_LOOP_PERF_P1_INSTRUMENTATION
-#if PERF_P1
-    jsr perf_p1_mark_full_reason_modal_restore
-#endif
-#endif
     jmp render_viewport
 !no_store:
     rts
@@ -2663,11 +2585,6 @@ player_died:
     // All death paths skip the normal post-AI render, leaving stale monster
 	    // positions on screen. Render now so the killing blow is visible.
 	    jsr viewport_update
-#if HAL_PLATFORM_GAME_LOOP_PERF_P1_INSTRUMENTATION
-#if PERF_P1
-    jsr perf_p1_mark_full_reason_transition
-#endif
-#endif
 	    jsr render_viewport
 
     // Show "YOU HAVE BEEN SLAIN." with -more- BEFORE disk I/O

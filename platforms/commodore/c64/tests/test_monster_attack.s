@@ -2,9 +2,14 @@
 //
 // Tests: mon_atk_calc_tohit, mon_atk_roll_tohit, mon_atk_ac_reduce,
 //        mon_atk_apply_damage, player_death_check, poison effect,
-//        paralysis effect, aggravation effect, fear, acid armour damage.
+//        paralysis effect, aggravation effect, fear, acid armour damage,
+//        Protection from Evil repelling evil attackers, no-HP upstream
+//        attack types in the shipped tier data (Banshee, Lich), confusion
+//        and poison durations through mon_atk_effect_dispatch, the two
+//        attacks the shipped rows keep, no-spell casters, the Quylthulg,
+//        and full hit dice for CD_MAX_HP creatures (monster_spawn_one).
 //
-// Results at $0400-$0415: $01 = pass, $00 = fail per test
+// Results at $0400-$042d: $01 = pass, $00 = fail per test
 // NOTE: msg_print writes to screen row 0 ($0400+), so we store results
 // in tc_results[] and copy to $0400 at the very end.
 
@@ -18,7 +23,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #21
+    ldx #45
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -63,7 +68,6 @@ render_local_area:
 
 combat_append_str:
 combat_append_monster_name:
-mon_atk_build_effect_msg:
 cmb_term_and_print:
 combat_msg_monster_in_way:
 inv_remove_item:
@@ -129,7 +133,37 @@ press_key_str:
 // Test scratch
 tc_loop:    .byte 0
 tc_ok:      .byte 0
-tc_results: .fill 22, $ff      // Result buffer (copied to $0400 at end)
+tc_results: .fill 46, $ff      // Result buffer (copied to $0400 at end)
+tc_repels:  .byte 0             // " is repelled." summaries seen
+tc_hurt:    .byte 0             // Rounds that did damage or poisoned
+.const NA_BANSHEE = 11          // tier4.s index map: [196] DL24 Banshee
+.const NA_LICH    = 36          // tier4.s index map: [239] DL34 Lich
+.const NA_QUYLTHULG   = 0       // [174] DL20 Quylthulg
+.const NA_GIANT_TROLL = 12      // [197] DL25 Giant Troll
+.const NA_GHOST       = 28      // [227] DL31 Ghost
+.const NA_IRIDESCENT  = 44      // [256] DL37 Iridescent Beetle
+.const NA_ANCIENT_RED = 52      // [273] DL40 Ancient Red Dragon
+.const NA_BALROG      = 56      // [278] DL100 Balrog
+tc_msgs:    .byte 0             // Effect/summary messages seen (spy)
+tc_rec:     .word 0             // na_row_check record pointer
+tc_hp_lo:   .byte 0             // mh_spawn: the spawned HP
+tc_hp_hi:   .byte 0
+
+// Effect-message spy: counts the " is repelled." summary (zp_ptr2).
+mon_atk_build_effect_msg:
+    inc tc_msgs
+    ldy #0
+!mabm_cmp:
+    lda (zp_ptr2),y
+    cmp tc_repelled_text,y
+    bne !mabm_other+
+    iny
+    cmp #0
+    bne !mabm_cmp-
+    inc tc_repels
+!mabm_other:
+    rts
+tc_repelled_text: .text " is repelled." ; .byte 0
 tc_fear_start: .byte 0          // fear_attempt: timer before each attempt
 tc_saved:   .byte 0
 tc_afraid:  .byte 0
@@ -831,13 +865,485 @@ test_start:
     beq !t23_fail+
     lda #$01
     sta tc_results + 21
-    jmp !tests_done+
+    jmp !t24+
 !t23_fail:
     lda #$00
     sta tc_results + 21
 
+    // ==========================================
+    // Tests 23-26: Protection from Evil through production
+    // monster_attack_player. VMS Moria creature.inc make_attack: while
+    // protevil > 0, an attack of a creature with the evil defence bit whose
+    // level satisfies (py.misc.lev + 1) > level becomes type 99, which
+    // always "hits" and only prints "<name> is repelled." (no damage, no
+    // effect); Umoria monster.cpp monsterAttackPlayer is identical. Test
+    // creature (row 26): 4d4 normal hit, then 1d1 poison; player level 5,
+    // AC 0, so an unprotected round almost always hurts.
+    // ==========================================
+!t24:
+    lda #ATK_NORMAL
+    sta cr_atk0_type + 26
+    lda #4
+    sta cr_atk0_dice + 26
+    sta cr_atk0_sides + 26
+    lda #ATK_POISON
+    sta cr_atk1_type + 26
+    lda #1
+    sta cr_atk1_dice + 26
+    sta cr_atk1_sides + 26
+    lda #5
+    sta zp_player_lvl
+    lda #0
+    sta zp_player_ac
+    sta zp_eff_bless
+    sta eff_invuln_timer
+
+    // Test 23: evil, creature level 5 = player level 5 (the boundary),
+    // protected: 12 rounds, every one repelled, none hurts, the timer is
+    // not consumed by the repel.
+    lda #CF_EVIL
+    ldx #5
+    ldy #9
+    jsr rp_rounds
+    lda tc_hurt
+    bne !t24_fail+
+    lda tc_repels
+    cmp #12
+    bne !t24_fail+
+    lda zp_eff_protect
+    cmp #9
+    bne !t24_fail+
+    lda #$01
+    sta tc_results + 22
+    jmp !t25+
+!t24_fail:
+    lda #$00
+    sta tc_results + 22
+
+    // Test 24: evil but level 6 > player level 5: not repelled
+!t25:
+    lda #CF_EVIL
+    ldx #6
+    ldy #9
+    jsr rp_rounds
+    jsr rp_expect_hurt
+    sta tc_results + 23
+
+    // Test 25: not evil (animal), level 5: not repelled
+    lda #CF_ANIMAL
+    ldx #5
+    ldy #9
+    jsr rp_rounds
+    jsr rp_expect_hurt
+    sta tc_results + 24
+
+    // Test 26: evil, level 5, protection 0: not repelled
+    lda #CF_EVIL
+    ldx #5
+    ldy #0
+    jsr rp_rounds
+    jsr rp_expect_hurt
+    sta tc_results + 25
+
+    // ==========================================
+    // Tests 27-30: upstream attack types that deal no HP damage, in the
+    // shipped tier data (tools/parse_creatures.py -> tier4.s) and through
+    // production monster_attack_player. Pinned VMS Moria creature.inc
+    // make_attack: types 12, 13 and 19-24 never call take_hit (Lose
+    // experience, 19, feeds its dice to lose_exp as experience); Umoria
+    // monster.cpp executeAttackOnPlayer is identical (no playerTakesHit).
+    // Moria8 has no such effects, so the generator keeps the attack as a 0d0
+    // ATK_NORMAL touch.
+    // Banshee: VMS values.inc:2514-2515 '4 10 0d0|19 5 14d8' (Umoria
+    // data_creatures.cpp:342 attacks 99, 188 = {4,10,{0,0}}, {19,5,{14,8}}).
+    // Lich: VMS values.inc:2605-2606 '15 5 2d8|19 5 30d8|24 5 0d0' (Umoria
+    // identical); its Lose DEX 2d8 does hurt (take_hit), Moria8 poison.
+    // ==========================================
+
+    // Test 27: tier4 #11 is the Banshee: fear 0d0, then a 0d0 touch
+    ldx #NA_BANSHEE
+    lda #<tc_banshee_name
+    ldy #>tc_banshee_name
+    jsr na_name_is
+    bne !t27_fail+
+    lda #<tc_banshee_atks
+    ldy #>tc_banshee_atks
+    jsr na_atks_are
+    bne !t27_fail+
+    lda #$01
+    sta tc_results + 26
+    jmp !t28+
+!t27_fail:
+    lda #$00
+    sta tc_results + 26
+
+    // Test 28: tier4 #36 is the Lich: 2d8 poison (Lose DEX), then a 0d0 touch
+!t28:
+    ldx #NA_LICH
+    lda #<tc_lich_name
+    ldy #>tc_lich_name
+    jsr na_name_is
+    bne !t28_fail+
+    lda #<tc_lich_atks
+    ldy #>tc_lich_atks
+    jsr na_atks_are
+    bne !t28_fail+
+    lda #$01
+    sta tc_results + 27
+    jmp !t29+
+!t28_fail:
+    lda #$00
+    sta tc_results + 27
+
+    // Test 29: 12 production rounds by the shipped Banshee cost no HP
+    // (before the fix its 14d8 touch took 14-112 a hit)
+!t29:
+    ldx #NA_BANSHEE
+    jsr na_rounds
+    lda tc_hurt
+    ora tc_big
+    bne !t29_fail+
+    lda #$01
+    sta tc_results + 28
+    jmp !t30+
+!t29_fail:
+    lda #$00
+    sta tc_results + 28
+
+    // Test 30: 12 production rounds by the shipped Lich: some cost HP (its
+    // 2d8), none more than 16 (its 30d8 touch is gone)
+!t30:
+    ldx #NA_LICH
+    jsr na_rounds
+    lda tc_big
+    bne !t30_fail+
+    lda tc_hurt
+    beq !t30_fail+
+    lda tc_maxloss
+    cmp #16 + 1
+    bcs !t30_fail+
+    lda #$01
+    sta tc_results + 29
+    jmp !t31+
+!t30_fail:
+    lda #$00
+    sta tc_results + 29
+
+    // ==========================================
+    // Tests 31-35: confusion and poison durations, 128 production
+    // mon_atk_effect_dispatch calls each (eff_sweep). randint(N) is 1..N
+    // (VMS source/macro/randint.mar; Umoria game.cpp randomNumber).
+    // Confusion (VMS creature.inc:404-417; Umoria monster.cpp:1563-1576):
+    // 50% (randint(2) = 1); if not confused, confused += randint(level);
+    // then confused += 3. Poison (VMS creature.inc:521-527; Umoria
+    // monster.cpp:1665-1669): poisoned += randint(level) + 5.
+    // ==========================================
+
+    // Test 31: a new confusion by a level-4 creature lasts 4-7 turns, and
+    // both ends occur (randint(4) + 3)
+!t31:
+    lda #ATK_CONFUSE
+    ldx #0
+    ldy #4
+    jsr eff_sweep
+    lda #4
+    ldx #7
+    jsr eff_range_is
+    sta tc_results + 30
+
+    // Test 32: an existing confusion gains exactly 3 (10 -> 13)
+    lda #ATK_CONFUSE
+    ldx #10
+    ldy #4
+    jsr eff_sweep
+    lda #13
+    ldx #13
+    jsr eff_range_is
+    sta tc_results + 31
+
+    // Test 33: a level-4 poisoning from none lasts 6-9 turns, and both ends
+    // occur (randint(4) + 5)
+    lda #ATK_POISON
+    ldx #0
+    ldy #4
+    jsr eff_sweep
+    lda #6
+    ldx #9
+    jsr eff_range_is
+    sta tc_results + 32
+
+    // Test 34: poison stacks: from 20, a level-4 poisoning gives 26-29
+    lda #ATK_POISON
+    ldx #20
+    ldy #4
+    jsr eff_sweep
+    lda #26
+    ldx #29
+    jsr eff_range_is
+    sta tc_results + 33
+
+    // Test 35: level 1 (randint(1) = 1): a new confusion lasts exactly 4
+    // and a new poisoning exactly 6
+    lda #ATK_CONFUSE
+    ldx #0
+    ldy #1
+    jsr eff_sweep
+    lda #4
+    ldx #4
+    jsr eff_range_is
+    sta tc_ok
+    lda #ATK_POISON
+    ldx #0
+    ldy #1
+    jsr eff_sweep
+    lda #6
+    ldx #6
+    jsr eff_range_is
+    and tc_ok
+    sta tc_results + 34
+
+    // ==========================================
+    // Tests 36-40: which two of up to four upstream attacks the shipped tier4
+    // rows keep (tools/parse_creatures.py select_attack_slots: paralysis
+    // first, then expected damage, then a Moria8 effect, then the earlier
+    // slot; kept in upstream order). Rows from pinned VMS values.inc c_list
+    // (Umoria data_creatures.cpp identical), type mapping as the generator's
+    // table: fire/cold/blind/lose INT -> ATK_NORMAL, no-HP types -> 0d0.
+    // Before 2026-11-01 the first two were kept.
+    // ==========================================
+
+    // Test 36: Ancient Red Dragon, values.inc:2671 '1 3 1d10|1 3 1d10|1 2
+    // 2d14': its 2d14 bite (was 1d10, 1d10)
+    ldx #NA_ANCIENT_RED
+    lda #<tc_ard_row
+    ldy #>tc_ard_row
+    jsr na_row_check
+    sta tc_results + 35
+
+    // Test 37: Giant Troll, values.inc:2516 '1 1 1d6|1 1 1d6|1 2 3d4': its
+    // 3d4 bite (was 1d6, 1d6)
+    ldx #NA_GIANT_TROLL
+    lda #<tc_gtroll_row
+    ldy #>tc_gtroll_row
+    jsr na_row_check
+    sta tc_results + 36
+
+    // Test 38: Ghost, values.inc:2579 '4 7 0d0|19 5 22d8|17 3 1d10': the
+    // fear wail and the 1d10 lose-INT claw (ATK_NORMAL), not the 0d0
+    // drain-experience touch (was FEAR 0d0, NORMAL 0d0)
+    ldx #NA_GHOST
+    lda #<tc_ghost_row
+    ldy #>tc_ghost_row
+    jsr na_row_check
+    sta tc_results + 37
+
+    // Test 39: Iridescent Beetle, values.inc:2639 '1 2 4d6|1 1 1d12|11 7
+    // 0d0': the 4d6 bite and the paralysing gaze (was 4d6, 1d12)
+    ldx #NA_IRIDESCENT
+    lda #<tc_irid_row
+    ldy #>tc_irid_row
+    jsr na_row_check
+    sta tc_results + 38
+
+    // Test 40: 12 production monster_attack_player rounds by the shipped
+    // Ancient Red Dragon: some round costs more than 20 HP (two 1d10 blows
+    // could not), none more than 38 (1d10 + 2d14)
+    ldx #NA_ANCIENT_RED
+    jsr na_rounds
+    lda tc_big
+    bne !t40_fail+
+    lda tc_maxloss
+    cmp #20 + 1
+    bcc !t40_fail+
+    cmp #38 + 1
+    bcs !t40_fail+
+    lda #$01
+    .byte $2c
+!t40_fail:
+    lda #$00
+    sta tc_results + 39
+
+    // Test 41: no shipped tier4 creature has a spell chance without a spell
+    // (tools/parse_creatures.py map_spells: none of the upstream spells maps,
+    // e.g. the Banshee and Ghost, VMS spells %X'0001002F' = teleport self and
+    // drain mana, so chance 0; monster_can_cast then never spends a turn)
+    ldx #tier4_cr_spell_flags - tier4_cr_spell_chance - 1   // TIER_COUNT - 1
+!t41_loop:
+    lda tier4_cr_spell_chance,x
+    beq !t41_next+
+    lda tier4_cr_spell_flags,x
+    beq !t41_fail+
+!t41_next:
+    dex
+    bpl !t41_loop-
+    lda tier4_cr_spell_chance + NA_GHOST
+    ora tier4_cr_spell_chance + NA_BANSHEE
+    bne !t41_fail+
+    lda #$01
+    .byte $2c
+!t41_fail:
+    lda #$00
+    sta tc_results + 40
+
+    // Test 42: the Quylthulg (Umoria data_creatures.cpp:320: CMOVE
+    // $00010004, CM_ONLY_MAGIC; attacks {0,0,0,0}; not in VMS) never moves
+    // upstream (Umoria monster.cpp monsterMove moves only with
+    // CM_MOVE_NORMAL or a random bit): CF_ATTACK_ONLY, no attack slot
+    ldx #NA_QUYLTHULG
+    lda tier4_cr_mflags,x
+    and #CF_ATTACK_ONLY
+    beq !t42_fail+
+    lda tier4_cr_atk0_type,x
+    ora tier4_cr_atk1_type,x
+    bne !t42_fail+
+    lda #$01
+    .byte $2c
+!t42_fail:
+    lda #$00
+    sta tc_results + 41
+
+    // Test 43: 12 production rounds by the shipped Quylthulg next to the
+    // player: no physical attack, so no HP lost, no hit/miss line and no
+    // recall attack count (before: 12 "misses you." lines and counts)
+    lda #0
+    sta tc_msgs
+    lda recall_attacks + 26
+    sta tc_ok
+    ldx #NA_QUYLTHULG
+    jsr na_rounds
+    lda tc_hurt
+    ora tc_big
+    ora tc_msgs
+    bne !t43_fail+
+    lda recall_attacks + 26
+    cmp tc_ok
+    bne !t43_fail+
+    lda #$01
+    .byte $2c
+!t43_fail:
+    lda #$00
+    sta tc_results + 42
+
+    // Test 44: CD_MAX_HP (Umoria cdefense $4000, VMS %X'4000') lands in
+    // cr_speed bit 7: set for the Balrog (VMS values.inc:2685 %X'5004') and
+    // Quylthulg (Umoria :320 $5000), clear for the Giant Troll (VMS :2516
+    // %X'2026')
+    lda tier4_cr_speed + NA_BALROG
+    and tier4_cr_speed + NA_QUYLTHULG
+    bpl !t44_fail+
+    lda tier4_cr_speed + NA_GIANT_TROLL
+    bmi !t44_fail+
+    lda #$01
+    .byte $2c
+!t44_fail:
+    lda #$00
+    sta tc_results + 43
+
+    // Test 45: production monster_spawn_one gives the shipped Balrog its full
+    // hit dice every time: VMS misc.inc place_monster (cdefense $4000 ->
+    // max_hp('375d8') = 3000; Umoria 75d40 = 3000), 4 spawns (was a roll,
+    // about 1537)
+    lda #4
+    sta tc_loop
+!t45_loop:
+    ldx #NA_BALROG
+    jsr mh_spawn
+    lda tc_hp_lo
+    cmp #<3000
+    bne !t45_fail+
+    lda tc_hp_hi
+    cmp #>3000
+    bne !t45_fail+
+    dec tc_loop
+    bne !t45_loop-
+    lda #$01
+    .byte $2c
+!t45_fail:
+    lda #$00
+    sta tc_results + 44
+
+    // Test 46: a creature without CD_MAX_HP still rolls: 8 shipped Giant
+    // Trolls (19d8) each have 19-152 HP and not all 152
+    lda #8
+    sta tc_loop
+    lda #0
+    sta tc_ok
+!t46_loop:
+    ldx #NA_GIANT_TROLL
+    jsr mh_spawn
+    lda tc_hp_hi
+    bne !t46_fail+
+    lda tc_hp_lo
+    cmp #19
+    bcc !t46_fail+
+    cmp #152 + 1
+    bcs !t46_fail+
+    cmp #152
+    beq !t46_next+
+    inc tc_ok
+!t46_next:
+    dec tc_loop
+    bne !t46_loop-
+    lda tc_ok
+    beq !t46_fail+
+    lda #$01
+    .byte $2c
+!t46_fail:
+    lda #$00
+    sta tc_results + 45
+
 !tests_done:
     jmp test_exit_trampoline
+
+// na_row_check — A = $01 when tier4 creature X has the six attack bytes
+// and then the zero-terminated name at A/Y (lo/hi), else $00.
+na_row_check:
+    sta tc_rec
+    sty tc_rec + 1
+    jsr na_atks_are             // Preserves X
+    bne !nrc_fail+
+    lda tc_rec
+    clc
+    adc #6
+    pha
+    lda tc_rec + 1
+    adc #0
+    tay
+    pla
+    jsr na_name_is
+    bne !nrc_fail+
+    lda #$01
+    rts
+!nrc_fail:
+    lda #$00
+    rts
+
+// mh_spawn — Copy tier4 creature X's hit dice, cr_speed and sleep into
+// roster row 26 and spawn one through production monster_spawn_one at
+// (10,10) on an empty table. Output: tc_hp_lo/hi = its HP.
+mh_spawn:
+    lda tier4_cr_hd_num,x
+    sta cr_hd_num + 26
+    lda tier4_cr_hd_sides,x
+    sta cr_hd_sides + 26
+    lda tier4_cr_speed,x
+    sta cr_speed + 26
+    lda tier4_cr_sleep,x
+    sta cr_sleep + 26
+    jsr monster_init_table
+    lda #10
+    sta ms_spawn_x
+    sta ms_spawn_y
+    lda #26
+    jsr monster_spawn_one
+    jsr monster_get_ptr
+    ldy #MX_HP_LO
+    lda (zp_ptr0),y
+    sta tc_hp_lo
+    ldy #MX_HP_HI
+    lda (zp_ptr0),y
+    sta tc_hp_hi
+    rts
 
 // acid_clear_armour — Empty the body..hands slots and zero their to-AC.
 acid_clear_armour:
@@ -863,6 +1369,68 @@ acid_hit:
     lda zp_combat_dmg
     rts
 
+// eff_sweep — 128 production mon_atk_effect_dispatch calls with attack type
+// A by roster row 26 at level Y, each from timer X (zp_eff_confuse for
+// ATK_CONFUSE, else zp_eff_poison). Output: tc_min/tc_max = smallest and
+// largest timer that changed ($ff/$00 when none did).
+eff_sweep:
+    sta mat_atk_type
+    stx tc_eff_start
+    sty cr_level + 26
+    lda #26
+    sta mat_type2
+    lda #$ff
+    sta tc_min
+    lda #0
+    sta tc_max
+    lda #128
+    sta tc_loop
+!es_loop:
+    lda tc_eff_start
+    sta zp_eff_confuse
+    sta zp_eff_poison
+    lda #0
+    sta zp_combat_dmg
+    jsr mon_atk_effect_dispatch
+    lda zp_eff_poison
+    ldx mat_atk_type
+    cpx #ATK_CONFUSE
+    bne !es_got+
+    lda zp_eff_confuse
+!es_got:
+    cmp tc_eff_start
+    beq !es_next+
+    cmp tc_min
+    bcs !es_not_min+
+    sta tc_min
+!es_not_min:
+    cmp tc_max
+    bcc !es_next+
+    sta tc_max
+!es_next:
+    dec tc_loop
+    bne !es_loop-
+    lda #0
+    sta zp_eff_confuse
+    sta zp_eff_poison
+    rts
+
+// eff_range_is — A = $01 when tc_min = A and tc_max = X, else $00.
+eff_range_is:
+    cmp tc_min
+    bne !eri_fail+
+    cpx tc_max
+    bne !eri_fail+
+    lda #$01
+    rts
+!eri_fail:
+    lda #$00
+    rts
+
+tc_eff_start: .byte 0
+tc_min:     .byte 0
+tc_max:     .byte 0
+
 // fear_until_afraid — Attack with fear (mat_type2) from fear timer A until
 // a save fails (the timer changes), at most 30 tries.
 // Output: carry set and A = new timer, or carry clear if every try resisted.
@@ -884,6 +1452,205 @@ fear_until_afraid:
 !fua_changed:
     sec
     rts
+
+// rp_rounds — 12 rounds of production monster_attack_player by row 26 with
+// cr_mflags A, cr_level X and protection timer Y, each from 100 HP and no
+// poison. Output: tc_hurt = rounds that cost HP or poisoned, tc_repels =
+// " is repelled." summaries.
+rp_rounds:
+    sta cr_mflags + 26
+    stx cr_level + 26
+    sty zp_eff_protect
+    lda #0
+    sta tc_hurt
+    sta tc_repels
+    lda #12
+    sta tc_loop
+!rpr_loop:
+    lda #100
+    sta zp_player_hp_lo
+    sta player_data + PL_HP_LO
+    lda #0
+    sta zp_player_hp_hi
+    sta player_data + PL_HP_HI
+    sta zp_eff_poison
+    sta zp_game_flags
+    lda #26
+    sta zp_mon_type
+    lda #0
+    sta zp_mon_idx
+    jsr monster_attack_player
+    lda zp_player_hp_lo
+    cmp #100
+    bne !rpr_hurt+
+    lda zp_eff_poison
+    beq !rpr_next+
+!rpr_hurt:
+    inc tc_hurt
+!rpr_next:
+    dec tc_loop
+    bne !rpr_loop-
+    rts
+
+// rp_expect_hurt — A = $01 when no round was repelled and at least one hurt
+rp_expect_hurt:
+    lda tc_repels
+    bne !rpe_fail+
+    lda tc_hurt
+    beq !rpe_fail+
+    lda #$01
+    rts
+!rpe_fail:
+    lda #$00
+    rts
+
+// ============================================================
+// No-HP attack types (tests 27-30): the shipped tier4 data
+// ============================================================
+tc_maxloss: .byte 0             // Largest HP loss in one round
+tc_big:     .byte 0             // Nonzero: a round lost 256 HP or more
+tc_banshee_name: .text "Banshee" ; .byte 0
+tc_lich_name:    .text "Lich" ; .byte 0
+// atk0 type/dice/sides, atk1 type/dice/sides
+tc_banshee_atks: .byte ATK_FEAR, 0, 0, ATK_NORMAL, 0, 0
+tc_lich_atks:    .byte ATK_POISON, 2, 8, ATK_NORMAL, 0, 0
+// Tests 36-39: atk0 type/dice/sides, atk1 type/dice/sides, then the name
+tc_ard_row:    .byte ATK_NORMAL, 1, 10, ATK_NORMAL, 2, 14
+               .text "Ancient Red Dragon" ; .byte 0
+tc_gtroll_row: .byte ATK_NORMAL, 1, 6, ATK_NORMAL, 3, 4
+               .text "Giant Troll" ; .byte 0
+tc_ghost_row:  .byte ATK_FEAR, 0, 0, ATK_NORMAL, 1, 10
+               .text "Ghost" ; .byte 0
+tc_irid_row:   .byte ATK_NORMAL, 4, 6, ATK_PARALYZE, 0, 0
+               .text "Iridescent Beetle" ; .byte 0
+
+// na_name_is — Z set when tier4 creature X is named as the zero-terminated
+// string at A/Y (lo/hi). Preserves X.
+na_name_is:
+    sta zp_ptr1
+    sty zp_ptr1 + 1
+    lda tier4_cr_name_lo,x
+    sta zp_ptr2
+    lda tier4_cr_name_hi,x
+    sta zp_ptr2 + 1
+    ldy #0
+!nni_loop:
+    lda (zp_ptr2),y
+    cmp (zp_ptr1),y
+    bne !nni_done+
+    iny
+    cmp #0
+    bne !nni_loop-
+!nni_done:
+    rts
+
+// na_atks_are — Z set when tier4 creature X's two attacks match the six
+// bytes at A/Y (lo/hi): atk0 type, dice, sides, atk1 type, dice, sides.
+na_atks_are:
+    sta zp_ptr1
+    sty zp_ptr1 + 1
+    ldy #0
+    lda tier4_cr_atk0_type,x
+    cmp (zp_ptr1),y
+    bne !naa_done+
+    iny
+    lda tier4_cr_atk0_dice,x
+    cmp (zp_ptr1),y
+    bne !naa_done+
+    iny
+    lda tier4_cr_atk0_sides,x
+    cmp (zp_ptr1),y
+    bne !naa_done+
+    iny
+    lda tier4_cr_atk1_type,x
+    cmp (zp_ptr1),y
+    bne !naa_done+
+    iny
+    lda tier4_cr_atk1_dice,x
+    cmp (zp_ptr1),y
+    bne !naa_done+
+    iny
+    lda tier4_cr_atk1_sides,x
+    cmp (zp_ptr1),y
+!naa_done:
+    rts
+
+// na_rounds — Copy tier4 creature X's attacks, level and flags into roster
+// row 26, then run 12 rounds of production monster_attack_player, each from
+// 512 HP (player level 5, AC 0, no protection, bless or heroism).
+// Output: tc_hurt = rounds that cost HP, tc_maxloss = largest loss below
+// 256, tc_big = nonzero if a round cost 256 or more.
+na_rounds:
+    lda tier4_cr_atk0_type,x
+    sta cr_atk0_type + 26
+    lda tier4_cr_atk0_dice,x
+    sta cr_atk0_dice + 26
+    lda tier4_cr_atk0_sides,x
+    sta cr_atk0_sides + 26
+    lda tier4_cr_atk1_type,x
+    sta cr_atk1_type + 26
+    lda tier4_cr_atk1_dice,x
+    sta cr_atk1_dice + 26
+    lda tier4_cr_atk1_sides,x
+    sta cr_atk1_sides + 26
+    lda tier4_cr_level,x
+    sta cr_level + 26
+    lda tier4_cr_mflags,x
+    sta cr_mflags + 26
+    lda #5
+    sta zp_player_lvl
+    lda #0
+    sta zp_player_ac
+    sta zp_eff_bless
+    sta zp_eff_protect
+    sta zp_eff_hero
+    sta eff_invuln_timer
+    sta tc_hurt
+    sta tc_maxloss
+    sta tc_big
+    lda #12
+    sta tc_loop
+!nar_loop:
+    lda #0
+    sta zp_player_hp_lo
+    sta player_data + PL_HP_LO
+    sta zp_eff_poison
+    sta zp_eff_paralyze
+    sta zp_eff_confuse
+    sta eff_fear_timer
+    sta zp_game_flags
+    lda #2
+    sta zp_player_hp_hi
+    sta player_data + PL_HP_HI
+    lda #26
+    sta zp_mon_type
+    lda #0
+    sta zp_mon_idx
+    jsr monster_attack_player
+    // loss = $0200 - HP
+    sec
+    lda #0
+    sbc zp_player_hp_lo
+    tax
+    lda #2
+    sbc zp_player_hp_hi
+    beq !nar_small+
+    inc tc_big
+    bne !nar_hurt+              // Always taken
+!nar_small:
+    txa
+    beq !nar_next+
+    cmp tc_maxloss
+    bcc !nar_hurt+
+    sta tc_maxloss
+!nar_hurt:
+    inc tc_hurt
+!nar_next:
+    dec tc_loop
+    bne !nar_loop-
+    rts
+
+#import "../creature_data/tier4.s"
 
 monster_attack_test_end:
 .assert "Monster attack test stays below MAP_BASE", monster_attack_test_end <= MAP_BASE, true

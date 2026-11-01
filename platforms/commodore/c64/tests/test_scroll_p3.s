@@ -1,9 +1,9 @@
 // test_scroll_p3.s — Runtime tests for Phase 3 scroll effects
 //
 // Tests: dispatch routing, object detection reveal, mass genocide LOS filter,
-// teleport level depth change.
+// teleport level depth change (VMS Moria scrolls.inc case 10).
 //
-// Results at $0400-$040b: $01 = pass, $00 = fail per test
+// Results at $0400-$040e: $01 = pass, $00 = fail per test
 
 #define C64_TEST_NAME_STREAMS_A000
 
@@ -15,7 +15,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #13
+    ldx #14
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -107,7 +107,7 @@ eff_teleport_other:
     lda #ITEM_TYPE_WAND_TELEPORT_AWAY
     sta spy_last
     rts
-eff_haste_self:
+eff_staff_speed:
     lda #ITEM_TYPE_STAFF_SPEED
     sta spy_last
     rts
@@ -130,8 +130,9 @@ press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
 // Test result buffer
-tc_results: .fill 14, $ff
+tc_results: .fill 15, $ff
 tc_loop_ctr: .byte 0
+tl_ok: .byte 0
 t7_slot_a: .byte 0
 t7_slot_b: .byte 0
 
@@ -167,7 +168,7 @@ status_mark_dirty:
     rts
 
 test_start:
-    ldx #13
+    ldx #14
     lda #$ff
 !clr:
     sta tc_results,x
@@ -579,10 +580,89 @@ test_start:
     bne !t15_fail+
     lda #$01
     sta tc_results + 13
-    jmp !tests_done+
+    jmp !t16+
 !t15_fail:
     lda #$00
     sta tc_results + 13
+
+    // ==========================================
+    // Test 16: Teleport Level from the town (level 0) always arrives on
+    // level 1, descending: VMS Moria scrolls.inc case 10 (dun_level :=
+    // dun_level - 3 + 2*randint(2); if dun_level < 1 then dun_level := 1;
+    // Umoria scrolls.cpp scrollTeleportLevel). 24 reads, each from the
+    // town with max depth 0: level 1, PL_DLEVEL 1, entry 0 (descended),
+    // max depth 1. Before the fix the "up" roll wrapped the town to 255.
+    // From level 1 it stays on level 1 (ascended) or goes to level 2
+    // (descended), never the town.
+    // ==========================================
+!t16:
+    lda #1
+    sta tl_ok
+    lda #24
+    sta tc_loop_ctr
+!t16_town:
+    lda #0
+    sta zp_player_dlvl
+    sta player_data + PL_DLEVEL
+    sta player_data + PL_MAX_DLVL
+    lda #$5a
+    sta level_entry_dir
+    lda #ITEM_TYPE_SCR_TELEPORT_LEVEL
+    jsr irs_dispatch_p3_overlay
+    lda zp_player_dlvl
+    cmp #1
+    bne !t16_bad+
+    lda player_data + PL_DLEVEL
+    cmp #1
+    bne !t16_bad+
+    lda player_data + PL_MAX_DLVL
+    cmp #1
+    bne !t16_bad+
+    lda level_entry_dir
+    beq !t16_town_next+
+!t16_bad:
+    lda #0
+    sta tl_ok
+!t16_town_next:
+    dec tc_loop_ctr
+    bne !t16_town-
+    lda #24
+    sta tc_loop_ctr
+!t16_one:
+    lda #1
+    sta zp_player_dlvl
+    sta player_data + PL_DLEVEL
+    lda #5
+    sta player_data + PL_MAX_DLVL
+    lda #$5a
+    sta level_entry_dir
+    lda #ITEM_TYPE_SCR_TELEPORT_LEVEL
+    jsr irs_dispatch_p3_overlay
+    lda zp_player_dlvl
+    cmp player_data + PL_DLEVEL
+    bne !t16_bad2+
+    cmp #1
+    bne !t16_two+
+    lda level_entry_dir         // Same level 1: ascended
+    cmp #1
+    beq !t16_one_next+
+    bne !t16_bad2+
+!t16_two:
+    cmp #2
+    bne !t16_bad2+
+    lda level_entry_dir         // Level 2: descended
+    bne !t16_bad2+
+    lda player_data + PL_MAX_DLVL
+    cmp #5                      // Shallower than the max: unchanged
+    beq !t16_one_next+
+!t16_bad2:
+    lda #0
+    sta tl_ok
+!t16_one_next:
+    dec tc_loop_ctr
+    bne !t16_one-
+    lda tl_ok
+    sta tc_results + 14
 
 !tests_done:
     jmp test_exit_trampoline

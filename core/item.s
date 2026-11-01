@@ -39,7 +39,8 @@
 .const FI_META_FLAGS_MASK  = $78
 
 // ============================================================
-// Inventory Table — 30 slots (22 carried + 8 equipped)
+// Inventory Table — TOTAL_INV_SLOTS slots: 22 carried, then equipment
+// (EQUIP_WEAPON..EQUIP_AMULET, reserved EQUIP_CLOAK, EQUIP_SECONDARY)
 // ============================================================
 inv_item_id: .fill TOTAL_INV_SLOTS, FI_EMPTY
 inv_qty:     .fill TOTAL_INV_SLOTS, 0
@@ -449,7 +450,7 @@ inv_consume_one:
 
 // inv_remove_item — Remove item from inventory slot X
 // Carried slots compact after removal; equipment clears in place.
-// Input: X = slot index (0-29)
+// Input: X = slot index (0..TOTAL_INV_SLOTS-1)
 // Clobbers: A, X
 inv_remove_item:
     cpx #MAX_INV_SLOTS - 1
@@ -1884,4 +1885,4 @@ re_negate_a:
 .assert "pick_item_type overlay impl lives in the $E000 overlay window", pick_item_type_overlay >= BANKED_DATA_BASE && pick_item_type_overlay <= BANKED_DATA_END, true
 #endif
 // Hardcoded assertion removed for cross-platform compatibility
-.assert "Inventory total slots", TOTAL_INV_SLOTS, 31
+.assert "Inventory total slots", TOTAL_INV_SLOTS, 33

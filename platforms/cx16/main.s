@@ -558,6 +558,11 @@ tramp_item_refuel:
     ldy #>item_refuel
     jmp tramp_items_dispatch
 
+tramp_item_exchange:
+    lda #<item_exchange
+    ldy #>item_exchange
+    jmp tramp_items_dispatch
+
 tramp_ranged_fire:
     lda #<ranged_fire
     ldy #>ranged_fire
@@ -1211,6 +1216,7 @@ ovl_ui_end:
 .segment ItemActionsOverlay
 #define SCROLL_P3_ROUTER_ENABLED
     #import "../../core/item_actions_overlay.s"
+    #import "../../core/item_exchange.s"
 #import "../../core/player_item_commands.s"
 #import "../../core/ego_items.s"
 #import "../../core/ranged_fire.s"
