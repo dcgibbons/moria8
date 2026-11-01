@@ -27,6 +27,13 @@ java() {
 }
 RUN_TESTS128_DIR="${RUN_TESTS128_DIR:-$REPO_ROOT/platforms/commodore/c128}"
 cd "$RUN_TESTS128_DIR"
+# Temp files under build/, never the shared /tmp (AGENTS.md rule 9): each run
+# gets its own directory, and runs older than six hours are cleared here, so
+# leftovers cannot pile up (2026-11-01: /tmp held thousands of test images).
+mkdir -p ../../../build/test/c128/tmp
+find ../../../build/test/c128/tmp -mindepth 1 -maxdepth 1 -mmin +360 -exec rm -rf {} +
+TMPDIR=$(cd ../../../build/test/c128/tmp && mktemp -d "$(pwd)/run.XXXXXX")
+export TMPDIR
 C128_TEST_OUT="${C128_TEST_OUT:-../../../build/test/c128}"
 C128_BUILD_OUT="${C128_BUILD_OUT:-../../../build/c128}"
 mkdir -p "$C128_TEST_OUT"
@@ -97,7 +104,7 @@ TEST_SUMMARY_FILE="${TEST_SUMMARY_FILE:-}"
 PASS=0
 FAIL=0
 TOTAL=0
-TEST128_TMP_PARENT="${TEST128_TMP_PARENT:-/tmp}"
+TEST128_TMP_PARENT="${TEST128_TMP_PARENT:-$TMPDIR}"
 TEST128_TMP_DIR="${TEST128_TMP_DIR:-$(mktemp -d "${TEST128_TMP_PARENT%/}/test128.$$.XXXXXX")}"
 TEST128_TIMINGS_FILE="${TEST128_TMP_DIR}/timings.tsv"
 TEST128_RESULTS_FILE="${TEST128_TMP_DIR}/results.tsv"
@@ -4704,7 +4711,7 @@ run_retirement_royal_smoke() {
     echo -n "  $name: "
 
     local smoke_out smoke_c128 boot_d64 main_vs build_log
-    smoke_out=$(mktemp -d "${TMPDIR:-/tmp}/moria8-c128-retirement.XXXXXX")
+    smoke_out=$(mktemp -d "$TMPDIR/moria8-c128-retirement.XXXXXX")
     smoke_c128="$smoke_out/c128"
     boot_d64="$smoke_out/moria8-c128.d64"
     main_vs="$smoke_c128/main.vs"

@@ -68,6 +68,13 @@ cd "$RUN_TESTS64_DIR"
 C64_TEST_OUT="${C64_TEST_OUT:-../../../build/test/c64}"
 C64_BUILD_OUT="${C64_BUILD_OUT:-../../../build/c64}"
 mkdir -p "$C64_TEST_OUT"
+# Temp files under build/, never the shared /tmp (AGENTS.md rule 9): each run
+# gets its own directory, and runs older than six hours are cleared here, so
+# leftovers cannot pile up (2026-11-01: /tmp held thousands of test images).
+mkdir -p ../../../build/test/c64/tmp
+find ../../../build/test/c64/tmp -mindepth 1 -maxdepth 1 -mmin +360 -exec rm -rf {} +
+TMPDIR=$(cd ../../../build/test/c64/tmp && mktemp -d "$(pwd)/run.XXXXXX")
+export TMPDIR
 if [ -d "$C64_BUILD_OUT" ]; then
     cp -p "$C64_BUILD_OUT"/* "$C64_TEST_OUT"/ 2>/dev/null || true
 fi
@@ -2068,7 +2075,7 @@ run_chest_open_product_smoke() {
     echo -n "  $name: "
 
     local smoke_out build_log smoke_c64 boot_d64 main_vs
-    smoke_out=$(mktemp -d "${TMPDIR:-/tmp}/moria8-c64-chest-open.XXXXXX")
+    smoke_out=$(mktemp -d "$TMPDIR/moria8-c64-chest-open.XXXXXX")
     smoke_c64="$smoke_out/c64"
     boot_d64="$smoke_out/moria8-c64.d64"
     main_vs="$smoke_c64/main.vs"
@@ -2149,7 +2156,7 @@ run_chest_open_product_reu_smoke() {
     echo -n "  $name: "
 
     local smoke_out build_log boot_d64 main_vs
-    smoke_out=$(mktemp -d "${TMPDIR:-/tmp}/moria8-c64-chest-open-reu.XXXXXX")
+    smoke_out=$(mktemp -d "$TMPDIR/moria8-c64-chest-open-reu.XXXXXX")
     boot_d64="$smoke_out/moria8-c64.d64"
     main_vs="$smoke_out/c64/main.vs"
     build_log=$(mktemp -t "build_${name}_log")
@@ -2238,7 +2245,7 @@ run_chest_open_product_genfail_smoke() {
     echo -n "  $name: "
 
     local smoke_out build_log boot_d64 nogen_d64 main_vs
-    smoke_out=$(mktemp -d "${TMPDIR:-/tmp}/moria8-c64-chest-open-genfail.XXXXXX")
+    smoke_out=$(mktemp -d "$TMPDIR/moria8-c64-chest-open-genfail.XXXXXX")
     boot_d64="$smoke_out/moria8-c64.d64"
     nogen_d64="$smoke_out/moria8-c64-nogen.d64"
     main_vs="$smoke_out/c64/main.vs"
@@ -2454,7 +2461,7 @@ run_retirement_royal_product_smoke() {
     echo -n "  $name: "
 
     local smoke_out build_log smoke_c64 boot_d64 main_vs
-    smoke_out=$(mktemp -d "${TMPDIR:-/tmp}/moria8-c64-retirement.XXXXXX")
+    smoke_out=$(mktemp -d "$TMPDIR/moria8-c64-retirement.XXXXXX")
     smoke_c64="$smoke_out/c64"
     boot_d64="$smoke_out/moria8-c64.d64"
     main_vs="$smoke_c64/main.vs"
@@ -2525,7 +2532,7 @@ run_game_over_product_smoke() {
     echo -n "  $name: "
 
     local smoke_out build_log smoke_c64 boot_d64 save_d64 main_vs
-    smoke_out=$(mktemp -d "${TMPDIR:-/tmp}/moria8-c64-game-over.XXXXXX")
+    smoke_out=$(mktemp -d "$TMPDIR/moria8-c64-game-over.XXXXXX")
     smoke_c64="$smoke_out/c64"
     boot_d64="$smoke_out/moria8-c64.d64"
     save_d64="$smoke_out/moria8-save.d64"
@@ -3702,9 +3709,9 @@ run_load_then_save_new_empty_product_smoke() {
 
     local save_blob="../../../build/test/c64/THE.GAME"
     local marker_blob="../../../build/test/c64/MORIA8.ID"
-    local load_save_d64="/tmp/moria_load_then_save_new_empty_load_$$.d64"
-    local new_save_d64="/tmp/moria_load_then_save_new_empty_$$.d64"
-    local swap_program_d64="/tmp/moria_load_then_save_new_empty_program_$$.d64"
+    local load_save_d64="$C64_TEST_OUT/lts_load.d64"
+    local new_save_d64="$C64_TEST_OUT/lts_new.d64"
+    local swap_program_d64="$C64_TEST_OUT/lts_prog.d64"
     if ! python3 tests/make_load_resume_save64.py "$save_blob" "$marker_blob" >"$build_log" 2>&1; then
         echo "FAIL (save generation error)"
         tail -20 "$build_log"
@@ -4111,8 +4118,8 @@ run_single_drive_fresh_save_product_smoke() {
         return
     fi
 
-    local save_d64="/tmp/moria_single_drive_fresh_save_$$.d64"
-    local swap_program_d64="/tmp/moria_single_drive_fresh_program_$$.d64"
+    local save_d64="$C64_TEST_OUT/moria_single_drive_fresh_save.d64"
+    local swap_program_d64="$C64_TEST_OUT/moria_single_drive_fresh_program.d64"
     rm -f "$save_d64"
     if ! "$C1541" -format "moria8 save,m8" d64 "$save_d64" >"$build_log" 2>&1; then
         echo "FAIL (save disk build error)"
@@ -4242,7 +4249,7 @@ run_single_drive_fresh_save_no_init_product_smoke() {
         return
     fi
 
-    local save_d64="/tmp/moria_single_drive_fresh_save_no_init_$$.d64"
+    local save_d64="$C64_TEST_OUT/moria_single_drive_fresh_save_no_init.d64"
     rm -f "$save_d64"
     if ! "$C1541" -format "moria8 save,m8" d64 "$save_d64" >"$build_log" 2>&1; then
         echo "FAIL (save disk build error)"

@@ -19,6 +19,13 @@ PLUS4_DIR="${PLUS4_DIR:-$REPO_ROOT/platforms/commodore/plus4}"
 cd "$PLUS4_DIR"
 PLUS4_TEST_OUT="${PLUS4_TEST_OUT:-../../../build/test/plus4}"
 mkdir -p "$PLUS4_TEST_OUT"
+# Temp files under build/, never the shared /tmp (AGENTS.md rule 9): each run
+# gets its own directory, and runs older than six hours are cleared here, so
+# leftovers cannot pile up (2026-11-01: /tmp held thousands of test images).
+mkdir -p ../../../build/test/plus4/tmp
+find ../../../build/test/plus4/tmp -mindepth 1 -maxdepth 1 -mmin +360 -exec rm -rf {} +
+TMPDIR=$(cd ../../../build/test/plus4/tmp && mktemp -d "$(pwd)/run.XXXXXX")
+export TMPDIR
 cleanup() {
     rm -f ./*.prg ./*.sym ./*.vs tests/*.prg tests/*.sym tests/*.vs
     rm -f "$REPO_ROOT"/platforms/commodore/c64/creature_data/*.sym "$REPO_ROOT"/platforms/commodore/c64/creature_data/*.vs
@@ -163,7 +170,7 @@ PY
 }
 
 make_product_out() {
-    mktemp -d "${TMPDIR:-/tmp}/moria8-plus4-$1.XXXXXX"
+    mktemp -d "$TMPDIR/moria8-plus4-$1.XXXXXX"
 }
 
 run_test() {
@@ -1949,8 +1956,8 @@ run_single_drive_fresh_save_product_smoke() {
     local smoke_plus4="$smoke_out/plus4"
     local main_vs="$smoke_out/plus4/main.vs"
     local boot_d64="$smoke_out/moria8-plus4.d64"
-    local save_d64="/tmp/moria8-plus4-single-drive-fresh-save-$$.d64"
-    local swap_program_d64="/tmp/moria8-plus4-single-drive-fresh-program-$$.d64"
+    local save_d64="$PLUS4_TEST_OUT/moria8-plus4-single-drive-fresh-save.d64"
+    local swap_program_d64="$PLUS4_TEST_OUT/moria8-plus4-single-drive-fresh-program.d64"
     local build_log="$out_dir/$name.build.log"
 
     if ! suite_selected "$name" "new_save_empty_init_writes"; then
@@ -2054,7 +2061,7 @@ run_single_drive_fresh_save_no_init_product_smoke() {
     local smoke_plus4="$smoke_out/plus4"
     local main_vs="$smoke_out/plus4/main.vs"
     local boot_d64="$smoke_out/moria8-plus4.d64"
-    local save_d64="/tmp/moria8-plus4-single-drive-fresh-save-no-init-$$.d64"
+    local save_d64="$PLUS4_TEST_OUT/moria8-plus4-single-drive-fresh-save-no-init.d64"
     local build_log="$out_dir/$name.build.log"
 
     if ! suite_selected "$name" "new_save_empty_no_init_returns_setup" "cancel_supported_prompts"; then
