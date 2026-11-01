@@ -7,7 +7,7 @@
 	buildatari8 diskatari8 runatari8 runatari8-130xe testatari8 testatari8-smoke testatari8-fast-smoke testatari8-runtime testatari8-memory-contract testatari8-memory-contract-selftest \
 	buildbbcmaster diskbbcmaster runbbcmaster testbbcmaster testbbcmaster-smoke testbbcmaster-fast-smoke testbbcmaster-runtime testbbcmaster-memory-contract testbbcmaster-memory-contract-selftest \
 	artifact artifact-checksums artifacts \
-	playtest-check playtest-smoke playtest-m0-report playtest-session playtest-qualify playtest-disk \
+	playtest-check playtest-queue playtest-queue-status playtest-queue-rebuild playtest-queue-records-rebuild playtest-subqueue playtest-subqueue-cancel playtest-strategy-evidence playtest-ab playtest-smoke playtest-m0-report playtest-session playtest-qualify playtest-disk \
 	playtest-regress playtest-repro playtest-dashboard playtest-publish playtest-selftest
 
 # Python tools and harnesses must not leave __pycache__ in source directories.
@@ -169,6 +169,49 @@ playtest-dashboard:
 # the caller's environment. PLAYTEST_PUBLISH_ARGS: --once, --no-push, --every N.
 playtest-publish:
 	$(PLAYTEST_PY) -m moria_playtest.publish $(PLAYTEST_PUBLISH_ARGS)
+
+# The continuous queue (§23.4): the service (a systemd user unit runs
+# `make -s playtest-queue`; it fetches, so it runs outside the network
+# namespace and starts each run inside one), its status, and subqueues
+# (§23.5): NAME=..., GOAL=... or REGRESS=1, CHARACTERS=all|a,b, SEEDS=...,
+# RANDOM_SEEDS=N, QUEUE_BUILD=tree|commit|main; PLAYTEST_QUEUE_ARGS passes more.
+playtest-queue:
+	$(PLAYTEST_PY) -m moria_playtest.queue serve
+
+playtest-queue-status:
+	$(PLAYTEST_PY) -m moria_playtest.queue status
+
+playtest-queue-rebuild:
+	$(PLAYTEST_PY) -m moria_playtest.queue rebuild
+
+# Re-creates var/playtest-queue/queue.db from runs.jsonl (§23.10).
+playtest-queue-records-rebuild:
+	$(PLAYTEST_PY) -m moria_playtest.records rebuild
+
+playtest-subqueue:
+	$(PLAYTEST_PY) -m moria_playtest.queue submit --name $(NAME) $(if $(filter-out file,$(origin GOAL)),--goal $(GOAL)) \
+		$(if $(REGRESS),--regress) $(if $(CHARACTERS),--characters $(CHARACTERS)) \
+		$(if $(SEEDS),--seeds $(SEEDS)) $(if $(RANDOM_SEEDS),--random-seeds $(RANDOM_SEEDS)) \
+		$(if $(QUEUE_BUILD),--build $(QUEUE_BUILD)) --platforms $(PORT) $(PLAYTEST_QUEUE_ARGS)
+
+# The evidence behind the strategy guide (§23.7): docs/STRATEGY_EVIDENCE.md
+# from the queue's run records. Reads files only.
+playtest-strategy-evidence:
+	$(PLAYTEST_PY) -m moria_playtest.strategy
+
+playtest-subqueue-cancel:
+	$(PLAYTEST_PY) -m moria_playtest.queue cancel --name $(NAME)
+
+# An A/B subqueue (§23.10): NAME=..., GOAL=... (default deep), CHARACTERS=a,b,
+# SEEDS=... or RANDOM_SEEDS=N (drawn once, both arms play them), VARIANT_A=...
+# and VARIANT_B=... (e.g. tactics=-dangerous; empty: the goal as defined).
+# `python3 -m moria_playtest.queue report --name NAME` prints the comparison.
+playtest-ab:
+	$(PLAYTEST_PY) -m moria_playtest.queue ab --name $(NAME) --goal $(if $(filter-out file,$(origin GOAL)),$(GOAL),deep) \
+		$(if $(CHARACTERS),--characters $(CHARACTERS)) \
+		$(if $(SEEDS),--seeds $(SEEDS)) $(if $(RANDOM_SEEDS),--random-seeds $(RANDOM_SEEDS)) \
+		--variant-a '$(VARIANT_A)' --variant-b '$(VARIANT_B)' \
+		$(if $(QUEUE_BUILD),--build $(QUEUE_BUILD)) --platforms $(PORT) $(PLAYTEST_QUEUE_ARGS)
 
 playtest-selftest:
 	$(PLAYTEST_RUN) -m moria_playtest.selftest

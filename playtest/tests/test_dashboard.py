@@ -48,7 +48,8 @@ class PublishTest(unittest.TestCase):
         from moria_playtest import publish
         with tempfile.TemporaryDirectory() as tmp, \
                 mock.patch.object(publish.dashboard, "overview", return_value={"round": "r1", "rounds": ["r1", "r0"], "suites": []}), \
-                mock.patch.object(publish.dashboard, "milestone", return_value={"cells": {}}):
+                mock.patch.object(publish.dashboard, "milestone", return_value={"cells": {}}), \
+                mock.patch.object(publish.dashboard, "queue", return_value={"live": []}):
             counts = publish.snapshot(Path(tmp))
             page = (Path(tmp) / "index.html").read_text()
             self.assertIn(publish.STATIC_META, page)
@@ -184,3 +185,41 @@ class DiskRunsTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DeathCauseTest(unittest.TestCase):
+    """M7 queue: a Warrior slain beside a Green Naga that "spits acid" was
+    recorded as killed by a pit trap."""
+
+    def cause(self, *messages: str, hp: int = 0, before: int = 2) -> str:
+        """The cause for a trace of these messages, the last at `hp` and the
+        others at `before`."""
+        import gzip
+        with tempfile.TemporaryDirectory() as tmp:
+            trace = Path(tmp) / "trace.jsonl.gz"
+            with gzip.open(trace, "wt") as fh:
+                for i, msg in enumerate(messages):
+                    fh.write(json.dumps({"step": i, "mode": "COMMAND", "msg": msg, "status": "",
+                                         "hp": hp if i == len(messages) - 1 else before}) + "\n")
+            return dashboard.death(trace)["cause"]
+
+    def test_spits_is_not_a_pit(self) -> None:
+        self.assertEqual(self.cause("the Green Naga spits acid on you.", "You have been slain."), "Green Naga")
+        self.assertEqual(self.cause("You fall into a pit!", "You have been slain."), "trap: pit")
+
+    def test_lowercase_name_words_and_poison_tick(self) -> None:
+        """M7 queue: a Human Ranger poisoned by a White Worm mass died to the
+        poison tick and was recorded as "unknown"."""
+        self.assertEqual(self.cause("the White Worm mass hits you. | You have been slain."), "White Worm mass")
+        self.assertEqual(self.cause("the White Worm mass poisons you. | the White Worm mass hits you.",
+                                    "You have been slain. | -more-"), "poison")
+        self.assertEqual(self.cause("the White Worm mass poisons you.",
+                                    "the Kobold hits you. | You have been slain."), "Kobold")
+        # The killing blow prints no "hits you": HP below 0 is that blow.
+        self.assertEqual(self.cause("the Black Mamba poisons you.", "the Black Mamba hits you.",
+                                    "You hit the Black Mamba. | You have been slain.", hp=-7), "Black Mamba")
+        # From 9 HP to 0 is a blow, not a poison tick.
+        self.assertEqual(self.cause("the Black Mamba poisons you.", "You hit the Black Mamba.",
+                                    "You have been slain.", hp=0, before=9), "Black Mamba")
+        self.assertEqual(self.cause("the Flask of Oil hits the Ko", "the Kobold hits you.",
+                                    "You have been slain.", hp=-2), "Kobold")

@@ -3998,12 +3998,12 @@ class RecorderPathTest(unittest.TestCase):
         from moria_playtest.session import Character
 
         names: list[str] = []
-        def snapshot(name: str, state: dict) -> SimpleNamespace:
-            names.append(name)
-            return SimpleNamespace(path=Path(name))
-
-        worker = SimpleNamespace(worker_id=0, snapshot=snapshot)
         with tempfile.TemporaryDirectory() as tmp:
+            def snapshot(name: str, state: dict) -> SimpleNamespace:
+                names.append(name)
+                return SimpleNamespace(path=Path(tmp) / name)   # the brain is saved beside it
+
+            worker = SimpleNamespace(worker_id=0, snapshot=snapshot)
             log = SessionLog(Path(tmp), {"mode": "regress"})
             dirs = []
             for goal in ("enter_dungeon", "reach_dl2"):

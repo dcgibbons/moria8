@@ -13,9 +13,11 @@ from __future__ import annotations
 
 import argparse
 import dataclasses
+import io
 import json
 import multiprocessing
 import multiprocessing.connection
+import pickle
 import signal
 import sys
 import time
@@ -41,6 +43,45 @@ SUITES = ROOT / "playtest" / "suites"
 PLATEAU_CHARACTERS = 10
 WIND_DOWN_SECONDS = 5   # a failed run waits this long per worker before SIGTERM
 MAX_RESTARTS_PER_STEP = 2
+
+
+class _BrainPickler(pickle.Pickler):
+    """The goal (its predicate is a lambda) is left out, wherever the brain
+    holds it; loading puts the goal given back in its place."""
+
+    def persistent_id(self, obj: Any) -> str | None:
+        return "goal" if isinstance(obj, Goal) else None
+
+
+class _BrainUnpickler(pickle.Unpickler):
+    def __init__(self, data: bytes, goal: Goal) -> None:
+        super().__init__(io.BytesIO(data))
+        self.goal = goal
+
+    def persistent_load(self, pid: Any) -> Goal:
+        assert pid == "goal"
+        return self.goal
+
+
+def brain_pickle_path(snapshot: Path) -> Path:
+    """The whole brain beside a snapshot, so a game can go on from it (the
+    Balrog queue's DL30 start, §23.9); the JSON beside it holds only the
+    replay state. Loadable only by the same bot code: the build's."""
+    return snapshot.with_suffix(".brain.pickle")
+
+
+def save_brain(brain: Brain, snapshot: Path) -> bool:
+    buf = io.BytesIO()
+    try:
+        _BrainPickler(buf).dump(brain)
+    except (pickle.PicklingError, TypeError, AttributeError):
+        return False
+    brain_pickle_path(snapshot).write_bytes(buf.getvalue())
+    return True
+
+
+def load_brain(snapshot: Path, goal: Goal) -> Brain:
+    return _BrainUnpickler(brain_pickle_path(snapshot).read_bytes(), goal).load()
 
 
 @dataclass
@@ -89,6 +130,8 @@ class Character:
                                snapshot=None)
             return
         self.snapshot = snapshot
+        if not save_brain(self.brain, snapshot.path):
+            self.session.event("brain_not_saved", seed=self.seed, step=self.result.steps)
         if previous is not None and previous.path not in self.cited:
             # Only the restart point and the snapshots findings cite are kept:
             # one per level entry filled the disk (M4 round 55: a stair-bouncing
@@ -140,6 +183,12 @@ class Character:
 
     # -- play -------------------------------------------------------------------
 
+    def observe(self, obs: Observation) -> None:
+        """Each command stop, before the goal is checked (queue.QueueCharacter)."""
+
+    def reached(self, obs: Observation) -> bool:
+        return self.goal.reached(obs)
+
     def start(self) -> Observation:
         obs = self.worker.start_at_title()
         game = self.worker.game
@@ -188,7 +237,9 @@ class Character:
                 self.audit(obs, tiles)
                 if self.result.outcome == "finding":
                     break
-                if obs.mode == Mode.COMMAND and self.goal.reached(obs):
+                if obs.mode == Mode.COMMAND:
+                    self.observe(obs)
+                if obs.mode == Mode.COMMAND and self.reached(obs):
                     self.result.outcome = "reached"
                     break
                 if obs.mode == Mode.DEATH:

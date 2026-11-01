@@ -2744,8 +2744,11 @@ M7 is met when all of these hold, on the C64:
 
 1. **The deep goal, every combination.** Each of the 31 race/class
    combinations (§12.6) has at least one character, played by the queue, that
-   reached clvl 25 and DL 30 in the same game. A success on any build since
-   M7 started counts; the grid shows the commit it was reached on.
+   reached clvl 25 and DL 30 in the same game. A success counts within the
+   current epoch (§23.10): when game fixes change what a run means, the
+   maintainer starts a new epoch and the count restarts (2026-11-01: the
+   five successes before the monster-data fixes do not count); the grid
+   shows the commit each success was reached on.
    (Not a 16/20 bar: once is enough, as one character this deep is rare at
    first.)
 2. **Spell and prayer coverage, pooled per class.** For each casting class
@@ -2780,7 +2783,10 @@ and their frozen suites stay as they are, one game per goal.
   or hang (emulator crash, timeout, exception); or a game finding (a stack,
   invariant or `unknown_prompt` finding, also filed as a finding).
 - **Step budget:** 2,000,000 steps to start. Once successes exist it
-  becomes 3× the steps of the slowest success.
+  becomes 3× the steps of the slowest success, never below 750,000
+  (`budget_floor` in `playtest/queue.json`; the maintainer, 2026-10-31: 3×
+  the first success, 502,428 steps, cut off slow characters still surviving
+  on DL17-19).
 
 ### 23.4 The continuous queue
 
@@ -2896,3 +2902,242 @@ once on the C64. The game's victory and retirement flow exists
 side is the deep ladder (§12.4), the danger model and readiness checklists
 (§12.3) and the assisted track (§12.1). The rest of M8 is defined when it
 starts.
+
+**The Balrog queue (from 2026-11-01).** It runs beside the M7 queue for good
+(maintainer, 2026-11-01), to gather data on the deep game's harder problems;
+a win is unlikely until the bot plays much better.
+
+- **Who plays.** Every combination with an M7 success joins it, for good:
+  a later epoch does not take it out. The service adds them each tick
+  (`Service.graduate`).
+- **Workers.** `balrog_workers` in `playtest/queue.json` (2 to start) come
+  out of `workers`, as a subqueue's do; the main queue pauses its newest runs
+  to make room. The graduates take turns, a new random seed each run, so one
+  graduate fills both workers with two games.
+- **Goal.** `balrog` (`goals.py`): the game's winner flag, which the Balrog's
+  death sets (`core/combat.s`). It plays as `deep`, with every tactic, down to
+  DL100, where the Balrog appears; the readiness taper carries on past DL30
+  and tops out at level 40 (`brain.ready_level`).
+- **Start (maintainer, 2026-11-01).** A run goes on from its graduate's M7
+  success, not from the title: each run saves its whole brain beside every
+  level-entry snapshot (`session.save_brain`, a pickle without the goal), and
+  an M7 success's last snapshot, taken on DL30, is copied to
+  `var/playtest-queue/balrog/<run>/` as its combination's start; a newer
+  success replaces it. The run restores the snapshot, loads the brain with
+  the `balrog` goal and reseeds the game's RNG from its own seed, so runs from
+  one start go their own ways. It plays in the start's build, bot included,
+  because a brain loads only into the bot code that saved it: bot changes
+  reach these runs as graduates succeed again on newer builds. A graduate
+  with no start (a success from before brains were saved) plays from the title
+  in the current build.
+- **Budget.** `balrog_budget`, 3,000,000 steps a run, counted from the
+  graduate's first step (DL30 took the first graduate 125,346).
+- **Records.** Its runs are recorded as `queue` and `goal` `balrog`, apart
+  from the M7 counts. The milestones run on to DL100 and level 40. The
+  dashboard's Queue tab has an M8 section: each graduate's runs, wins, best
+  and last run.
+
+### 23.10 The queue as built (from 2026-10-31)
+
+Step 1 of §23.8. The code is `playtest/moria_playtest/queue.py`; the config
+is `playtest/queue.json`, read every five seconds, so a change to the worker
+count, the goal, the retry cap or `paused` takes effect without a restart.
+
+**Where things live.** Everything the queue writes is under
+`var/playtest-queue/` (gitignored), not `build/`, because `make clean`
+removes `build/` and the run records are kept for good:
+
+| Path | What |
+| --- | --- |
+| `state-<goal>.json` | the main queue for a goal: each platform's order, every item's runs, streak, struggling mark, best run, first success; the cycle |
+| `running.json` | the runs in flight, with their process ids |
+| `runs.jsonl` | one compact record per finished run, kept for good: the audit log |
+| `queue.db` | the same records in SQLite, which the dashboard queries; rebuilt from `runs.jsonl` |
+| `runs/<id>/` | a run's `job.json`, `result.json`, `progress.json` (milestones), trace, snapshots, findings and live status; removed `retention_days` after the run ends |
+| `builds/<id>/` | a build snapshot (below); removed once no kept run or open subqueue uses it |
+| `subqueues/<name>.json` | a subqueue, its items, results and report; `<name>.cancel` cancels it |
+| `state-balrog.json` | the Balrog queue (§23.9): its graduates, their turn order, runs, wins and best run |
+| `balrog/<run>/` | a Balrog start: the M7 success's DL30 snapshot and saved brain; removed once no graduate or run uses it |
+| `service.json` | the service's heartbeat, config, build state and recent log |
+
+**Run records.** The service appends each finished run's record to
+`runs.jsonl` and then inserts it into `queue.db` (`records.py`): one table,
+`runs`, with the columns the dashboard selects on (id, queue, platform,
+character, goal, outcome, build, commit, dirty, seed, steps, clvl, max_dlvl,
+started, ended, suite) and the whole record as JSON. The dashboard reads the
+main queue's counted runs from it with a query instead of parsing the whole
+log on every change; it reads `runs.jsonl` only while there is no database.
+The log stays the durable copy: an insert that fails is logged and skipped,
+the service imports the log on start when the database is missing or has
+fewer rows than the log has lines, and
+`make playtest-queue-records-rebuild` (`python -m moria_playtest.records
+rebuild`) re-creates the database from it.
+
+**Builds.** A run plays a build snapshot, never this working tree directly:
+`builds/<id>/` is a `git archive` of a commit (or, for a subqueue testing a
+change, a copy of the tree as it stands) with its own `build/`, made there by
+`make disk64` with the tree's Kick Assembler. The game, the bot and the
+sources the bot reads (`knowledge.py`, `abi.py`) all come from the snapshot,
+so editing or rebuilding this tree never changes a run in flight or the
+main queue's build. Every ten minutes the service fetches `origin/main`
+(over HTTPS, `fetch_url`, so it needs no SSH agent), and when the tree is
+clean and contained in it, fast-forwards, snapshots the new commit and plays
+it from the next run on. When there is no build yet, or after
+`make playtest-queue-rebuild`, it snapshots the tree as it stands; such a
+build and its runs are marked dirty.
+
+**Runs.** Each run is its own process (`queue.py run`) under
+`tools/isolated.sh`, started from its build's code, in its own session: a
+restarted service adopts the runs still playing and marks those that ended
+while it was down as abandoned (not counted; the item goes back to the
+head). A run that dies under a live service is an error and counts. A stale
+build (the disk does not match its program) is not counted either; the
+platform waits a minute. Seeds come from the system's random source.
+
+**Subqueues borrow workers by pausing.** A main-queue run lasts hours, so the
+service does not wait for one to end: it pauses the newest main runs (a
+`pause` file the run checks every 20 steps; it holds between steps, its
+emulator stopped at the input stop) until the main queue is down to its
+minimum, and resumes them as the subqueue drains. Nothing is lost.
+
+**Success on the deep goal** is clvl ≥ 25 with DL 30 stood on earlier in the
+same game (the run's deepest level). The goal's readiness keeps the
+character three levels over each depth to DL12, then tapers in a straight
+line to level 25 on DL30 (`brain.ready_level`'s `taper`); a plain margin
+would ask for level 33 on DL30. This is the first policy, for the baseline;
+step 3 tunes it.
+
+**Ratings** (`dashboard.ratings`), per combination once it has 5 counted
+runs: survival (runs not ended by death) Easy ≥ 75%, Medium ≥ 50%, Hard ≥
+25%; median character level at death Easy ≥ 20, Medium ≥ 12, Hard ≥ 6;
+deaths at level 5 or below, as a share of runs, Easy ≤ 10%, Medium ≤ 25%,
+Hard ≤ 50%; otherwise Very Hard. The bounds are a first cut, to be revisited
+with data (step 4). The feature grid counts, per class, decisions by brain
+layer, milestones and causes of death; the per-spell coverage of criterion 2
+needs the bot to record each cast and its effect (step 3).
+
+**Commands.**
+
+- `make playtest-queue`: the service, in the foreground (the unit's command
+  is the same module, run by `python3` directly so that systemd signals the
+  service and not `make`).
+- `make playtest-queue-status`: the main queue and subqueues in the terminal.
+- `make playtest-queue-rebuild`: play this working tree as it stands from
+  the next run on.
+- `make playtest-queue-records-rebuild`: re-create `queue.db` from
+  `runs.jsonl`.
+- `make playtest-subqueue NAME=ab1 GOAL=clvl10 CHARACTERS=human-mage,elf-mage
+  [SEEDS=1001-1020 | RANDOM_SEEDS=N] [QUEUE_BUILD=tree|commit|main]`: a
+  subqueue; `REGRESS=1` (with `CHARACTERS=<one>` or all) submits the frozen
+  suites, and its report gives each suite's score against its bar.
+  `QUEUE_BUILD` defaults to `tree`: the change being tested.
+- `make playtest-subqueue-cancel NAME=ab1`.
+- The dashboard's Queue tab (first) shows §23.6; the History tab holds the
+  M5 and M6 grids, the disk scenarios and the earlier rounds.
+
+**Tactics and A/B subqueues (from 2026-11-01).** A single death says little
+about a tactic, so the deep goal's tactics are named and a subqueue can play
+with any of them off. `Goal.tactics` (`goals.TACTICS`) is a set of names; the
+deep goal has all of them, every other goal none, so the frozen suites play
+as they were frozen:
+
+| Name | What it does (brain) |
+| --- | --- |
+| `group_casters` | `leave_caster` adds up every caster in view, not only the strongest |
+| `heal_first` | a heal comes before a poison cure while a creature beside is hitting |
+| `fight_fast` | a fast creature close is fought, not run from |
+| `strong_potions` | Cure Serious and Critical Wounds counted, bought (five, from level 10) and drunk |
+| `restock` | a town trip when out of strong potions or Phase Door with the gold for more (needs `strong_potions`) |
+| `dangerous` | below DL10, a creature the lore says wins is dangerous: the level is left on sight, it is fled and phased from at any HP |
+| `drain` | rests that lose HP with nothing attacking mean poison: Word of Recall, or Cure Critical Wounds |
+| `summoner` | "summons help!" marks the level summoned: it is left, by Word of Recall with no stairs known |
+| `ghost` | a ghost's strike marks the level summoned, as a summoner does |
+| `swat_yield` | badly hurt with potions, swatting a fragile creature beside yields to drinking |
+| `summon_phase` | just after a summoning (`summoner` or `ghost`), anything in contact means Phase Door |
+
+A **variant** changes goal fields for a subqueue's runs: `field=value` terms
+separated by commas, semicolons or spaces, a bare word after a term being
+another value of it. `tactics` takes `-name` (remove), `+name` (add), bare
+names (exactly these), `all` and `none`, applied in order:
+`tactics=-dangerous,-summoner`. `missile_classes` takes class names the same
+way. `ready_margin`, `step_budget` and `target_dlvl` take a number;
+`exercise` and `want_xp` take `true` or `false`; `ready_taper` takes
+`none` or `knee/deepest/level` (`12/30/25`). A bad spec is refused at submit.
+`queue.py submit --variant SPEC` applies one variant to every run; the run
+applies it after the port's and character's changes and records `variant`,
+`arm` and the `tactics` it played in its run record.
+
+`make playtest-ab NAME=ab1 [GOAL=deep] CHARACTERS=a,b [SEEDS=... |
+RANDOM_SEEDS=N] VARIANT_A=... VARIANT_B=... [PLAYTEST_QUEUE_ARGS=--step-budget
+N]` (`queue.py ab`) submits one subqueue whose items are every character on
+the same seeds under both arms, A then B seed by seed, so both arms progress
+together. Random seeds are drawn once per character and shared by both arms.
+A fixed seed plays the same map under the same build, so the arms differ
+only by the variant until the bot's choices diverge. An empty variant is the
+goal as defined. The report (`queue.py report --name NAME`, `make
+playtest-queue-status`, the dashboard's subqueue strip) gives each arm's
+reached count, median deepest level, median character level and deaths by
+cause; the same per character; and the pairs both arms finished: seeds only A
+or only B reached, and seeds where one went deeper (deepest level, then
+character level). Other seeds play other maps: 40-seed rounds have swung ±7
+from that alone, so a difference of a few seeds is no verdict.
+
+**The service runs as a systemd user unit**, beside the publisher, in
+`~/.config/systemd/user/moria8-playtest-queue.service`:
+
+```ini
+[Unit]
+Description=Moria8 continuous playtest queue (docs/AI_PLAYTEST_DESIGN.md §23.4)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=<this working tree>
+Environment=PYTHONPATH=playtest
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/python3 -m moria_playtest.queue serve
+# Runs play on in their own sessions across a restart; the new service adopts them.
+KillMode=process
+Restart=always
+RestartSec=30
+
+[Install]
+WantedBy=default.target
+```
+
+`systemctl --user restart moria8-playtest-queue` after changing `queue.py`
+(runs in flight carry on); `journalctl --user -u moria8-playtest-queue -f`
+for its log; `"paused": true` in the config holds every run; `systemctl
+--user kill moria8-playtest-queue` ends the service and every run. The
+publisher needs a restart after a change to `dashboard.py` or `publish.py`,
+as before.
+
+**Epochs.** `"epoch"` in `playtest/queue.json` names the current era of
+the main queue. A new epoch starts the queue's state afresh (items, streaks,
+struggling marks, best runs, successes and the step budget, in
+`state-<goal>-<epoch>.json`; the earlier state file is kept), tags every run
+record with it, and the dashboard, the ratings, the feature grid and
+`make playtest-strategy-evidence` count only its runs. Nothing is deleted:
+`runs.jsonl` and `queue.db` keep every run of every epoch. The first named
+epoch, `2026-11-01-monster-data`, starts with the creature-data fixes (no-HP
+attacks, attack selection, maximum HP, teleport-to); runs before it had
+Banshees hitting for 14d8 and deep monsters at half strength.
+
+### 23.11 A/B results
+
+Paired subqueues (`make playtest-ab`, same seeds per arm, one build):
+
+| Round | Arms | Characters × seeds, budget | Result |
+| --- | --- | --- | --- |
+| ab1 (2026-11-01) | all tactics vs none | 8 × 5, 300k | invalid: both arms of a pair shared one run id (fixed in `Service.new_job`) |
+| ab2 (2026-11-01) | all tactics vs none | 8 × 5, 300k | kept: median max DL 19 vs 15.5, clvl 19 vs 17.5; A deeper on 21 seeds, B on 12, 7 tied (sign test ~16%); none reached the goal |
+| ab3 (2026-11-01) | frail casters: Cure Light Wounds before gear vs not | 5 frail × 8, 40k | dropped: 18 vs 18 seeds deeper, medians slightly worse (DL 2/clvl 4 vs DL 3/clvl 6) |
+| ab4 (2026-11-01) | frail casters: ready_margin 3 vs 5 | 5 frail × 8, 60k | not adopted: same deaths (Kobolds 7 vs 6, traps alike); margin 5 only stays shallower (A deeper on 16 seeds, B on 5, 19 tied) |
+| ab5 (2026-11-01) | frail casters: search mode back on at once vs after 20 steps | 5 frail × 8, 60k | dropped: rockfall 2 vs 2, A deeper on 15 seeds, B on 18, 7 tied |
+
+Frail casters (Gnome and Halfling Mages, Gnome Priests) die on DL1-3 at
+clvl 1-4 in both ab3 arms: Kobolds, small vermin and traps (a 2d6 pit or
+rockfall kills a 6-9 HP character at full HP). That is the long tail of
+criterion 1.

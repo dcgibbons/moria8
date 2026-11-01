@@ -1,8 +1,8 @@
 """``make playtest-publish``: the dashboard, published as static files.
 
 Every ``--every`` seconds, writes the dashboard page and a snapshot of its data
-(the newest round's overview, the M5 milestone grid, M6's port coverage, and
-each live worker's focus view) under ``build/playtest/publish/``, then copies
+(the newest round's overview, the M5 milestone grid, M6's port coverage, the
+continuous queue, and each live worker's focus view) under ``build/playtest/publish/``, then copies
 it with ``rsync`` over SSH to ``PLAYTEST_PUBLISH_TARGET`` (for example
 ``deploy@host:/var/www/playtest/``), using ``PLAYTEST_PUBLISH_KEY`` if set.
 Both come from the caller's environment only (AGENTS.md rule 9). The page
@@ -59,13 +59,23 @@ def snapshot(out: Path = OUT) -> dict[str, int]:
     data = out / "data"
     workers = data / "workers"
     workers.mkdir(parents=True, exist_ok=True)
+    live: set[str] = set()
     overview = dashboard.overview(None)
     overview["rounds"] = [overview["round"]] if overview.get("round") else []
     write_json(data / "overview.json", overview)
     write_json(data / "milestone.json", dashboard.milestone())
     write_json(data / "ports.json", dashboard.ports())
     write_json(data / "disk.json", dashboard.disk())
-    live = set()
+    queue = dashboard.queue()
+    write_json(data / "queue.json", queue)
+    for run in queue["live"]:
+        if run.get("paused"):
+            continue
+        detail = dashboard.queue_run(run["id"])
+        if detail:
+            name = f"queue--{run['id']}.json"
+            write_json(workers / name, detail)
+            live.add(name)
     for suite in overview.get("suites", []):
         for status in suite.get("workers", []):
             if status.get("outcome"):

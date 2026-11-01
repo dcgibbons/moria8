@@ -17,9 +17,10 @@ from . import knowledge
 from .magic import BLIND, BOOK_LEVELS, book_of, store_name, CHANT, CREATE_FOOD, ORB, PORTAL, SANCTUARY, FIRST_BOOK, PRAYER_BOOKS, CURE_LIGHT, CURE_MEDIUM, DETECT_DOORS, HEALS, REMOVE_FEAR, Magic
 from .magic import MAGIC_MISSILE, PHASE_DOOR, FIND_TRAPS, CURE_POISON, TELEPORT_SELF, MAGE_ATTACKS, MAGE_BOOKS, books_for
 from .magic import BLESS, PRIEST_FIND_TRAPS, SLOW_POISON, NEUTRALIZE_POISON
+from .magic import AIMED, AT_CREATURES, ON_ITEM, CASTER_BOOK_LEVELS
 from .game import ITEM_PROMPT, KEY_RUNSTOP, KEY_SPACE, Game, Mode, Observation
 from .goals import CLASSES, RACE_KEYS, Goal
-from .view import (DIRS, TYPE_DOOR_CLOSED, TYPE_STAIRS_DN, TYPE_STAIRS_UP, TYPE_TRAP, UNKNOWN, WALKABLE_TYPES,
+from .view import (DIRS, WALL, TYPE_DOOR_CLOSED, TYPE_DOOR_OPEN, TYPE_STAIRS_DN, TYPE_STAIRS_UP, TYPE_TRAP, UNKNOWN, WALKABLE_TYPES,
                    Creature, Pos, View, sealed_search_spots)
 
 KEY_BASH = 0x02          # CTRL+B
@@ -120,7 +121,6 @@ STARTING_WEAPON = ("Dagger", 0)               # core/game_loop.s starting equipm
 LAUNCHERS = {"Heavy Crossbow": ("Bolt", 4, 35), "Composite Bow": ("Arrow", 4, 35), "Long Bow": ("Arrow", 3, 30),
              "Light Crossbow": ("Bolt", 3, 25), "Short Bow": ("Arrow", 2, 25), "Sling": ("Rock", 2, 20)}
 AMMO_AVERAGE = {"Bolt": 3.0, "Arrow": 2.5, "Rock": 1.5}
-MISSILE_CLASSES = ("rogue", "ranger")   # the best missile skills (core/tables.s: 66, 72)
 AMMO_RESERVE = 20        # shots carried
 FIRE_RANGE = 8           # farthest in-line creature fired at
 LAUNCHER_KEEP = 20       # gold kept back from the first launcher (later ones: the gear reserve)
@@ -153,6 +153,21 @@ CLW = "Potion of Cure Light"   # Cure Light Wounds (the store line may cut the n
 CLW_SAVING = 2           # ... while saving for a prayer book (M5b)
 CLW_RESERVE = 5          # potions to carry for a fight gone wrong (M4; 3 until round 56, when
                          # most deaths came after drinking all three and gold was plentiful)
+# Stronger potions from the Temple for the deep goal (M7): a level-14 Warrior
+# with 136 HP drank five Cure Light Wounds beside three creatures and died
+# holding 17,000 gold. Best first; VMS prices.
+CCW, CSW = "Potion of Cure Critical", "Potion of Cure Serious"
+STRONG_GOLD = {CCW: 100, CSW: 40}
+GHOST_GLYPH = "G"        # ghosts pass through walls (VMS Moria)
+SUMMON_MEMORY = 50       # steps a summoning heard still sends the deep goal home with no stairs known
+BLIND_READ_WAIT = 20     # steps after "You can't see to read!" before a scroll is tried again
+DRAIN_RESTS = 3          # rests in a row losing HP that mean unseen poison (deep goal)
+DRAIN_RECALL_HP = 0.6    # ... and the HP share below which it recalls to town for a cure
+DEEP_DLVL = 10           # from here the deep goal leaves a level holding a creature it would lose to
+MISSILE_FIRST = ("rogue", "ranger")   # classes whose launcher comes before a better melee weapon (M5d)
+STRONG_RESERVE = 10      # strong potions to carry from STRONG_LEVEL (5 until an Elf Priest died on DL23 with 33,687 gold)
+STRONG_LEVEL = 10
+STRONG_DEFICIT = 25      # HP short of max that a Cure Light Wounds (2d7, VMS) would not answer
 PHASE = "Scroll of Phase Door"   # a short teleport (VMS teleport(10)), at the Alchemist
 PHASE_RESERVE = 3        # scrolls to carry for a fight with no step out (M5b)
 PHASE_GOLD = 20          # gold worth an Alchemist trip for one (base 15 gp)
@@ -185,6 +200,9 @@ OIL_RESERVE = 3          # flasks to carry: each refills the lantern (§14.3 rou
 EARLY_LANTERN_OIL = 1    # ... of which only one is kept from throwing while early (EARLY_LEVELS)
 FLASK_DAMAGE = 7         # 2d6 average, thrown
                          # or is thrown when fear blocks melee (round 22)
+EXERCISE_EVERY = 100     # steps between spells tried for their effect on one level (M7 criterion 2)
+EXERCISE_HP = 0.7        # ... and the HP share an aimed trial needs
+EXERCISE_MANA = 0.75     # ... and the mana share a quiet trial needs
 ORB_RANGE = 6            # farthest in-line creature Orb of Draining is aimed at (M5b)
 BLIND_TURNS = 10         # Blind Creature confuses for 10 turns (MX_CONFUSE): not again before
 CHANT_ODDS = 0.4         # fight odds from which a coming fight is worth a Chant
@@ -232,19 +250,31 @@ def roll_good(rows: list[str], race: str, klass: str) -> bool:
             and shown["CON"] + class_adj[c][con] >= 13 + race_adj[r][con] + class_adj[c][con])
 
 
+MAX_CLVL = 40   # MAX_PLAYER_LEVEL (docs/FEATURE_MAP.md)
 STORE_ITEM = re.compile(r"^\s*([a-l])\) (?:\d+ )?(\S.*?)\s+(\d+) GP")   # a stack shows its count first
 PACK_ITEM = re.compile(r"^\s*([a-v])\) (?:\d+ )?(\S.*)")   # a stack shows its count first
 
 
-def ready_level(dlvl: int, margin: int = 2) -> int:
+def ready_level(dlvl: int, margin: int = 2, taper: tuple[int, int, int] | None = None) -> int:
     """Character level a player wants before entering ``dlvl``. Deaths kept
     clustering at the minimum: level n on DL n through round 17, so DL2 needs
     level 3 (round 18); then level 4 on DL3, so DL n >= 3 needs n + 2
     (round 24). DL1 is where a new character starts. A goal's ``margin``
-    lowers that: depth goals do not need the XP (M4 round 60)."""
+    lowers that: depth goals do not need the XP (M4 round 60).
+
+    ``taper`` (knee, deepest, level there): past the knee the wanted level
+    rises in a straight line to ``level`` at ``deepest`` (M7, §23.3: clvl 25
+    on DL30, where a margin would ask for level 30 and more). Past
+    ``deepest`` the line carries on, up to the game's top level, 40
+    (MAX_CLVL): the Balrog goal on DL57-100."""
     if dlvl <= 1:
         return 1
-    return dlvl + margin - (1 if dlvl == 2 and margin else 0)
+    level = min(dlvl + margin - (1 if dlvl == 2 and margin else 0), MAX_CLVL)
+    if taper is None or dlvl <= taper[0]:
+        return level
+    knee, deepest, top = taper
+    base = ready_level(knee, margin)
+    return min(level, base + -(-(dlvl - knee) * (top - base) // (deepest - knee)))
 
 
 @dataclass(frozen=True)
@@ -292,6 +322,8 @@ class LevelMemory:
     slow_seen: dict[Pos, int] = field(default_factory=dict)   # slow creature tile -> step last seen
     casters: dict[tuple[str, int], int] = field(default_factory=dict)   # caster kind -> step last seen or heard
     find_traps_after: int = 0       # step before which Find Hidden Traps/Doors is not cast again (M5f)
+    exercise_after: int = 0         # step before which no spell is tried for its effect again (M7)
+    summoned: int | None = None     # step a creature on this level was last heard summoning help (M7)
     last_threat: Pos | None = None   # where the nearest creature that could reach the player was last seen
     seen: list[int] | None = None    # tile types as last seen: the game forgets unlit floor
 
@@ -323,6 +355,8 @@ class Brain:
         self.weapons_done = False              # done at the Weaponsmith on this town visit
         self.weapon = STARTING_WEAPON          # (kind, to-dam) wielded or bought to wield
         self.launcher: str | None = None       # the launcher carried (M5d)
+        self.missiles = {"shots": 0, "kills": 0}   # launcher shots and the kills they made (M7, §23.7)
+        self.fired = False                     # the last command was a shot: its news is on this screen
         self.wielding_launcher = False         # ... and wielded, the melee weapon in the pack
         self.ammo = 0                          # shots for it carried
         self.magic = Magic(goal.klass)         # spells known and the cast in progress (M5b; Mage books M5d)
@@ -338,6 +372,7 @@ class Brain:
         self.map_scale = 1.0                   # the level's area against the C64's (food_reserve)
         self.at_store: int | None = None       # store the last walk into town led to
         self.clw = 0                           # Cure Light Wounds potions carried
+        self.strong = {CCW: 0, CSW: 0}         # stronger healing potions carried (tactic strong_potions)
         self.phase = 0                         # Phase Door scrolls carried
         self.shop_buys = 0                     # purchases started on this town visit
         self.store_letter: str | None = None   # item letter for the next "Buy which item?"
@@ -362,7 +397,7 @@ class Brain:
         self.recall_trip_after = 0             # ... for Word of Recall alone (the Alchemist may have none)
         self.gear_trip_after = 0               # ... for armour and weapons alone
         self.book_trip_after = 0               # ... for a prayer book alone
-        self.books_owned = {books_for(goal.klass)[0]} if goal.klass in BOOK_LEVELS else set()
+        self.books_owned = {books_for(goal.klass)[0]} if self.book_levels() is not None else set()
         self.book_next: str | None = None      # the book wanted at the Temple this visit
         self.chant_until = 0                   # step until which Chant is counted on
         self.search_mode_after = 0             # step before which search mode is not turned on again
@@ -378,6 +413,9 @@ class Brain:
         self.items_seen: dict[Pos, tuple[str, str]] = {}   # identified items on screen: (glyph, name)
         self.recent_attacker: str | None = None   # attacker named since the last command screen
         self.last_hp: int | None = None        # HP on the previous command screen
+        self.rest_hp: int | None = None        # HP when the last decision was to rest (tactic drain)
+        self.draining = 0                      # rests in a row that lost HP with nothing attacking
+        self.blind_until = 0                   # step before which no scroll is read: the game refused one, blind
         self.fight_loss: dict[str, int] = {}   # creature name -> HP lost to it, not yet slain
         self.tough: dict[str, int] = {}        # creature name -> character level it beat the bot at
         self.collect_to: Pos | None = None     # the item tile being walked to
@@ -400,6 +438,7 @@ class Brain:
             elif self.magic.last == BLIND:
                 self.level.blind_until = 0
         self.magic.note(messages)
+        self.magic.watch_cast(obs)
         if "You feel poisoned." in messages or "poisons you." in messages:
             self.poisoned = True
         elif "You feel better." in messages:
@@ -424,6 +463,12 @@ class Brain:
             return self.prompt(obs)
         assert view is not None
         self.pending = self.pending_item = self.picking = None   # their prompts are past
+        self.magic.watch_cast(obs, (len(view.tiles_of(TYPE_TRAP)),
+                                    len(view.tiles_of(TYPE_DOOR_CLOSED) | view.tiles_of(TYPE_DOOR_OPEN)),
+                                    len(view.stairs_up() | view.stairs_down())))
+        if self.fired and re.search(r"dies|destroyed|slain", messages):
+            self.missiles["kills"] += 1
+        self.fired = False
         if self.aimed is not None:
             # A bolt that reached nothing says nothing, a flask "flies away":
             # no creature stood there, whatever the glyph was taken for. A
@@ -467,7 +512,7 @@ class Brain:
                if (kind := knowledge.kinds_by_name().get(name)) is not None and burst.get(kind)], obs.step))
         view.hazards = set(self.level.stationary) | {
             p for p, seen in self.level.slow_seen.items() if obs.step - seen < SLOW_MEMORY}
-        if any(self.outmatched(c, obs) for c in view.creatures.values()):
+        if any(self.dangerous(c, obs) for c in view.creatures.values()):
             self.level.scum = True
         if sum((c.glyph, c.level) in knowledge.breeder_kinds() for c in view.creatures.values()) >= BREEDERS_LEAVE:
             # A swarm only grows: leave the level (M5b round 1: a Paladin
@@ -496,13 +541,45 @@ class Brain:
         if threats:
             self.level.last_threat = min(threats, key=lambda p: chebyshev(p, view.pos))
         self.adjacent = [c for p, c in view.creatures.items() if chebyshev(p, view.pos) == 1]
+        self.note_drain(obs)
+        if "You can't see to read!" in messages:
+            # Blind: the refusal takes no turn, so reading again repeats it
+            # forever while the blindness (a turn timer) never runs down.
+            # Five deep runs spent 1.9M of 2M steps re-reading Word of
+            # Recall (M7 queue, 2026-11-01). Do something that takes turns.
+            self.blind_until = obs.step + BLIND_READ_WAIT
+        ghost = attacker is not None and GHOST_GLYPH in knowledge.glyphs_of().get(attacker, frozenset())
+        tactics = self.goal.tactics
+        if ("summoner" in tactics and "summons help!" in messages) or ("ghost" in tactics and ghost):
+            # A ghost strikes from inside the walls, out of reach, and runs
+            # down a runner: five characters on DL22-26 died to Banshees
+            # holding their potions (same queue). Leave as from a summoner.
+            # A summoner out of reach only adds to the fight: three deep
+            # deaths on DL19-26 came beside a Magic User summoning again and
+            # again (M7 queue, 2026-10-31). Leave the level.
+            self.level.summoned, self.level.scum = obs.step, True
         decision = self.choose(obs, view)
+        self.rest_hp = obs.hp if decision.layer == "rest" else None
         decision = self.shun_stationary(obs, view, decision)
         decision = self.break_oscillation(obs, view, decision)
         if decision.key in DIRS.values() and decision.layer not in ("fight", "look", "prompt"):
             step = next(d for d, k in DIRS.items() if k == decision.key)
             self.last_move = (view.pos, (view.pos[0] + step[0], view.pos[1] + step[1]))
         return decision
+
+    def note_drain(self, obs: Observation) -> None:
+        """Deep goal: HP lost while resting with nothing attacking is poison
+        the messages did not show (a hit while away, behind -more-): two
+        level-15 characters rested from 14 HP to death one point a turn
+        (M7 queue, 2026-10-31). Three such rests in a row mark it."""
+        if "drain" not in self.goal.tactics:
+            return
+        if self.rest_hp is not None and obs.hp < self.rest_hp and not self.attacked:
+            self.draining += 1
+            if self.draining >= DRAIN_RESTS:
+                self.poisoned = True
+        elif self.rest_hp is not None or obs.hp > (self.last_hp or 0):
+            self.draining = 0
 
     def remember_tiles(self, view: View) -> None:
         """A player remembers the floor of a dark room after the torch has
@@ -542,7 +619,7 @@ class Brain:
                       self.wear,
                       self.recall_trip, self.resupply,
                       self.rest, self.collect,
-                      self.shop, self.find_traps, self.descend, self.hunt, self.explore, self.clear_way, *last):
+                      self.shop, self.find_traps, self.exercise, self.descend, self.hunt, self.explore, self.clear_way, *last):
             decision = layer(obs, view)
             if decision is not None:
                 return decision
@@ -648,8 +725,14 @@ class Brain:
                 WEAPONSMITH: self.weapons_done, ALCHEMIST: self.alchemist_done,
                 MAGIC_SHOP: self.magic_done}.get(self.at_store, self.shopped)
         if obs.stage == "menu" and not done and self.at_store in (ARMOURY, WEAPONSMITH):
-            pick = self.missile_pick(obs) if self.at_store == WEAPONSMITH else None
-            pick = pick or self.gear_pick(obs)
+            missiles = self.missile_pick(obs) if self.at_store == WEAPONSMITH else None
+            if self.goal.klass in MISSILE_FIRST:
+                pick = missiles or self.gear_pick(obs)
+            else:
+                # A Warrior's melee weapon first, a launcher from what is left:
+                # buying the crossbow first left a level-15 Half-Troll Warrior
+                # wielding its starting Dagger (M7 queue, 2026-10-31).
+                pick = self.gear_pick(obs) or missiles
             if pick is not None:
                 self.store_letter, self.buying = pick
                 return Decision(ord("B"), "shop", f"buy {pick[1]}")
@@ -740,6 +823,8 @@ class Brain:
             wants.append(OIL)
         if self.clw < self.clw_reserve():
             wants.append(CLW)
+        if self.strong_wanted():
+            wants += [CCW, CSW]   # the best the Temple has and the gold allows
         if self.recall < self.recall_reserve():
             wants.append(RECALL)
         if self.phase < PHASE_RESERVE:
@@ -910,6 +995,9 @@ class Brain:
             self.torches += n
         elif item.startswith(CLW):
             self.clw += n
+        elif "strong_potions" in self.goal.tactics and item.startswith(tuple(self.strong)):
+            kind = next(k for k in self.strong if item.startswith(k))
+            self.strong[kind] = max(0, self.strong[kind] + n)
         elif item.startswith(RECALL):
             self.recall += n
         elif item.startswith(PHASE):
@@ -970,6 +1058,8 @@ class Brain:
                     self.oil = max(0, self.oil - 1)   # thrown: counted once actually picked
                 elif self.picking == CLW:
                     self.clw = max(0, self.clw - 1)
+                elif self.picking in self.strong:
+                    self.strong[self.picking] = max(0, self.strong[self.picking] - 1)
                 elif self.picking == PHASE:
                     self.phase = max(0, self.phase - 1)
                 elif self.picking == RECALL:
@@ -995,6 +1085,8 @@ class Brain:
             self.torches = 0
         elif self.picking == CLW:
             self.clw = 0
+        elif self.picking in self.strong:
+            self.strong[self.picking] = 0
         elif self.picking == PHASE:
             self.phase = 0
         elif self.picking == RECALL:
@@ -1227,8 +1319,23 @@ class Brain:
         Word of Recall and can now afford one."""
         # A caster who can pray Create Food does not climb for food.
         low = self.light_low() or (self.food_low() and not self.magic.feeds(obs))
+        # Deep goal: out of the strong potions with the gold for more: every
+        # level-16-21 death on the first potion builds had drunk all five
+        # and never went back for more (M7 queue, 2026-10-31).
+        # Phase Door too: a level-19 Dwarf Warrior with neither met a Stone
+        # Giant in the dark and fought it to the end (same queue).
+        restock = ("restock" in self.goal.tactics and self.strong_wanted()
+                   and (not any(self.strong.values()) or not self.phase)
+                   and self.gold(obs) >= STRONG_RESERVE * STRONG_GOLD[CSW])
         return ((low and obs.step >= self.resupply_after) or self.wants_recall(obs)
-                or self.wants_gear(obs) or self.wants_book_trip(obs))
+                or self.wants_gear(obs) or self.wants_book_trip(obs) or restock)
+
+    def book_levels(self) -> tuple[int, ...] | None:
+        """The level of each book's first spell for this class, if it buys books."""
+        levels = BOOK_LEVELS.get(self.goal.klass)
+        if levels is None and "class_books" in self.goal.tactics:
+            levels = CASTER_BOOK_LEVELS.get(self.goal.klass)
+        return levels
 
     def book_wanted(self, obs: Observation) -> str | None:
         """The next prayer book not carried whose first prayer the character's
@@ -1236,7 +1343,7 @@ class Brain:
         from its book, so without Words of Wisdom a Priest past level 5 learned
         nothing (M5b round 18: 239 studies found "No new spells to learn", no
         book bought; maintainer, 2026-10-25)."""
-        levels = BOOK_LEVELS.get(self.goal.klass)
+        levels = self.book_levels()
         if levels is None:
             return None
         owned = self.books_owned | set(self.magic.books or ())   # bought, or picked up and listed
@@ -1371,7 +1478,7 @@ class Brain:
         HP bar, two of a depth's strongest spells, held level-4 Priests on DL1
         until level 6-7 and was removed in M5b round 36: maintainer, "that's
         your made up rule, doesn't make sense".)"""
-        return obs.clvl < ready_level(obs.dlvl + 1, self.goal.ready_margin)
+        return obs.clvl < ready_level(obs.dlvl + 1, self.goal.ready_margin, self.goal.ready_taper)
 
     def too_strong(self, creature: Creature, obs: Observation) -> bool:
         """Monster lore, before any fight: far more HP or armour than the
@@ -1462,6 +1569,17 @@ class Brain:
         return (creature.glyph in knowledge.outpaced_glyphs() and creature.glyph not in knowledge.slow_glyphs()
                 and not knowledge.casts(creature.glyph, creature.level) and self.lore_strong(creature, obs))
 
+    def dangerous(self, creature: Creature, obs: Observation) -> bool:
+        """``outmatched``; and on the deep goal below ``DEEP_DLVL``, any creature
+        the lore says kills the character first (``fight_odds`` over 1), even
+        one as fast as a walk: a level is left on sight of it, and it is fled
+        and phased from at any HP. Giants at walking speed killed nine
+        characters on DL15-20, fought to the end with Cure Light Wounds
+        (M7 queue, 2026-10-31)."""
+        return self.outmatched(creature, obs) or (
+            "dangerous" in self.goal.tactics and obs.dlvl >= DEEP_DLVL and not self.stationary(creature)
+            and self.fight_odds(creature, obs) > 1.0)
+
     def engageable(self, creature: Creature, obs: Observation) -> bool:
         return (creature.glyph not in AVOID_GLYPHS and not self.stationary(creature)
                 and creature.glyph not in self.tough_glyphs(obs) and not self.too_strong(creature, obs)
@@ -1526,7 +1644,7 @@ class Brain:
         close = unseen or any(chebyshev(p, view.pos) <= 2 for p in threats)
         tough = self.tough_glyphs(obs)
         near = [view.creatures[p] for p in threats if chebyshev(p, view.pos) <= 2]
-        flee_hp = 2.0 if any(self.outmatched(c, obs) for c in near) else \
+        flee_hp = 2.0 if any(self.dangerous(c, obs) for c in near) else \
             HUNT_HP if any(c.glyph in tough or self.too_strong(c, obs) for c in near) else RETREAT_HP
         badly_hurt = close and obs.hp < flee_hp * obs.mhp
         if obs.dlvl == 0 or not (threats or unseen) or (
@@ -1545,7 +1663,13 @@ class Brain:
             return Decision(ord("<"), "retreat", "hurt with a creature close: take the up stairs")
         if here == TYPE_STAIRS_DN and down_ok:
             return Decision(ord(">"), "retreat", "hurt with a creature close: take the down stairs")
-        if ((self.chased and not self.unseen_attack) or self.level.retreat_failed) and not self.afraid:
+        names = knowledge.kinds_by_name()
+        fast_near = "fight_fast" in self.goal.tactics and any(
+            names.get(name) in {(c.glyph, c.level) for c in near} for name in knowledge.fast_creatures())
+        if ((self.chased or fast_near) and not self.unseen_attack or self.level.retreat_failed) and not self.afraid:
+            # A fast creature close follows a runner whether or not it struck
+            # this turn: a level-16 Gnome Rogue ran from a Black Mamba on the
+            # turns it missed, and drank five potions dying on the way (M7).
             # A visible faster attacker, or running did not work: fight
             # (rounds 14, 16). An unseen one cannot be fought: run (round 21).
             return None
@@ -1718,6 +1842,11 @@ class Brain:
         Creeping Coins beside an eye until dead)."""
         if obs.dlvl == 0 or self.afraid:
             return None
+        if "swat_yield" in self.goal.tactics and obs.hp < QUAFF_HP * obs.mhp and (
+                self.clw or any(self.strong.values())):
+            # ``quaff`` first: a level-15 Half-Elf Mage swatted a Bloodshot Eye
+            # from 56 HP to death holding fifteen potions (M7 queue, 2026-10-31).
+            return None
         bound = STRONG_HP_BASE + STRONG_HP_PER_LEVEL * obs.clvl
         for pos, creature in sorted(view.creatures.items()):
             if chebyshev(pos, view.pos) != 1:
@@ -1774,7 +1903,7 @@ class Brain:
         ammunition's average), then its ammunition. The first launcher from
         all but ``LAUNCHER_KEEP`` gold; a better one from the gold the gear
         reserve leaves."""
-        if self.goal.klass not in MISSILE_CLASSES:
+        if self.goal.klass not in self.goal.missile_classes:
             return None
         gold = re.search(r"Gold: (\d+)", obs.rows[16])
         gold = int(gold.group(1)) if gold else 0
@@ -1841,6 +1970,8 @@ class Brain:
             self.pending = DIRS[step]
             self.aimed = (pos, creature.glyph)
             self.ammo -= 1
+            self.missiles["shots"] += 1
+            self.fired = True
             return Decision(KEY_FIRE, "shoot", f"fire the {self.launcher} at '{creature.glyph}'")
         return None
 
@@ -2019,8 +2150,8 @@ class Brain:
     def resupply(self, obs: Observation, view: View) -> Decision | None:
         """Head up: toward town below the food reserve, or out of a level that
         is deeper than the character is ready for (``underleveled``)."""
-        too_deep = obs.clvl < ready_level(obs.dlvl, self.goal.ready_margin) - 1
-        if view.type_at(*view.pos) == TYPE_STAIRS_UP and obs.clvl < ready_level(obs.dlvl, self.goal.ready_margin):
+        too_deep = obs.clvl < ready_level(obs.dlvl, self.goal.ready_margin, self.goal.ready_taper) - 1
+        if view.type_at(*view.pos) == TYPE_STAIRS_UP and obs.clvl < ready_level(obs.dlvl, self.goal.ready_margin, self.goal.ready_taper):
             # Standing on the way back, not ready for this depth: a crowd
             # escape down arrives on an up staircase, and a level-3 Paladin
             # stayed on DL2 and died to a Novice Priest (M5b round 20, seed
@@ -2137,10 +2268,19 @@ class Brain:
                 # The last scroll is the way home, not the way down (M5a).
                 return None
         elif not (self.food_low() and self.sealed(view)) and not self.stuck(view) and not self.lightless() and (
-                obs.dlvl < RECALL_FROM or not self.needs_resupply(obs)):
+                obs.dlvl < RECALL_FROM or not self.needs_resupply(obs)) and not (
+                self.draining >= DRAIN_RESTS and obs.hp < DRAIN_RECALL_HP * obs.mhp) and not (
+                self.level.summoned is not None and obs.step - self.level.summoned <= SUMMON_MEMORY
+                and not (view.stairs_up() | view.stairs_down())):
+            # A summoner on a level with no staircase known: Word of Recall is
+            # the way out (deep goal).
+            # Draining away with nothing to cure it: the Temple is a recall
+            # away, 15-35 turns at a point a turn (deep goal).
             # Sealed in and short of food, any depth: the only other way out
             # is a secret door the searches have not found (M4 round 53: 4
             # of 11 reach_dl10 deaths starved searching).
+            return None
+        if obs.step < self.blind_until:
             return None
         self.picking, self.listed = RECALL, False
         return Decision(ord("R"), "recall", "read Word of Recall")
@@ -2181,6 +2321,7 @@ class Brain:
         gold = int(match.group(1)) if match else 0
         book = self.book_wanted(obs)
         return (self.clw < self.clw_reserve() and gold >= CLW_GOLD) or \
+            (self.strong_wanted() and gold >= STRONG_GOLD[CSW]) or \
             (self.recall < self.recall_reserve() and gold >= RECALL_GOLD) or \
             (book is not None and book not in MAGE_BOOKS and gold >= BOOK_GOLD.get(book, 0))
 
@@ -2198,7 +2339,19 @@ class Brain:
         A known Cure Light Wounds is prayed before the potion even one blow
         from death: drinking first at low levels (the prayer can fail) cost
         Gnome and Elf Priests 5 of 40 on reach_dl8 (M5f round 7 A/B)."""
-        if not self.clw or (obs.hp >= QUAFF_HP * obs.mhp and not (
+        strong = next((k for k in self.strong if self.strong[k]), None)
+        if obs.step < self.blind_until and self.clw:
+            # Cure Light Wounds cures blindness (VMS potions.inc case 13; Moria8
+            # since 2026-10-31): the scroll can then be read.
+            self.picking, self.listed = CLW, False
+            return Decision(ord("Q"), "quaff", "blind: drink Cure Light Wounds")
+        if self.strong[CCW] and self.draining >= DRAIN_RESTS and obs.hp < DRAIN_RECALL_HP * obs.mhp:
+            # Cure Critical Wounds also cures poison; Serious does not (VMS
+            # potions.inc cases 14-15).
+            strong = CCW
+            self.picking, self.listed = strong, False
+            return Decision(ord("Q"), "quaff", f"HP {obs.hp}/{obs.mhp} draining: drink {strong[len('Potion of '):]} Wounds")
+        if not (self.clw or strong) or (obs.hp >= QUAFF_HP * obs.mhp and not (
                 (self.under_spell(obs, view) or self.under_blow(obs, view)) and not self.magic.can(obs, CURE_LIGHT))):
             return None
         beside = {p for p, c in view.creatures.items() if chebyshev(p, view.pos) == 1 and not self.stationary(c)}
@@ -2206,8 +2359,16 @@ class Brain:
             away = self.walk_away(view, beside)
             if away is not None:
                 return Decision(away.key, "retreat", "hurt beside slow creatures: step away before drinking")
+        if strong is not None and (not self.clw or obs.mhp - obs.hp > STRONG_DEFICIT):
+            self.picking, self.listed = strong, False
+            return Decision(ord("Q"), "quaff", f"HP {obs.hp}/{obs.mhp}: drink {strong[len('Potion of '):]} Wounds")
         self.picking, self.listed = CLW, False
         return Decision(ord("Q"), "quaff", f"HP {obs.hp}/{obs.mhp}: drink Cure Light Wounds")
+
+    def strong_wanted(self) -> bool:
+        """Fewer than STRONG_RESERVE stronger potions from STRONG_LEVEL (M7)."""
+        return ("strong_potions" in self.goal.tactics and self.clvl >= STRONG_LEVEL
+                and sum(self.strong.values()) < STRONG_RESERVE)
 
     def phase_door(self, obs: Observation, view: View) -> Decision | None:
         """Badly hurt in contact with no retreat (``retreat`` came first and
@@ -2224,6 +2385,8 @@ class Brain:
             # Sleeps every adjacent creature: the retreat then walks off.
             return Decision(*magic.pray(SANCTUARY, f"HP {obs.hp}/{obs.mhp}, {len(beside)} beside: pray Sanctuary"))
         if self.phase:
+            if obs.step < self.blind_until:
+                return None
             self.picking, self.listed = PHASE, False
             return Decision(ord("R"), "phase", f"HP {obs.hp}/{obs.mhp}, no way out: read Phase Door")
         if magic.can(obs, PORTAL):
@@ -2244,7 +2407,13 @@ class Brain:
         step to the stairs past them, and fought them to the end (M5b round
         53)."""
         beside = [c for c in self.adjacent if not self.stationary(c)]
-        outmatched = any(self.outmatched(c, obs) for c in beside)
+        # Deep goal: just after a summoning or a ghost's strike, anything in
+        # contact is escaped at once: characters at clvl 23 on DL26 went from
+        # 146 HP to dead in three turns beside a Quylthulg's Banshee (M7
+        # queue, 2026-10-31), the stairs and Word of Recall too slow.
+        summoned = ("summon_phase" in self.goal.tactics and self.level.summoned is not None
+                    and obs.step - self.level.summoned <= SUMMON_MEMORY)
+        outmatched = summoned or any(self.dangerous(c, obs) for c in beside)
         if obs.dlvl == 0 or not beside or (obs.hp >= RETREAT_HP * obs.mhp and not outmatched) or not (
                 self.can_phase(obs) or self.magic.can(obs, SANCTUARY)):
             return False
@@ -2354,6 +2523,11 @@ class Brain:
             if step is None or chebyshev(pos, view.pos) > ORB_RANGE:
                 continue
             worth = knowledge.strength().get((creature.glyph, creature.level), (0.0, 0))[0] >= OIL_WORTH_HP
+            trial = self.trial_at(obs, creature, pos)
+            if trial is not None:
+                self.pending = DIRS[step]
+                self.aimed = (pos, creature.glyph)
+                return Decision(*magic.pray(trial, f"try {trial} at '{creature.glyph}': its effect not seen yet"))
             if magic.spare(obs, ORB) and worth:
                 self.pending = DIRS[step]
                 self.aimed = (pos, creature.glyph)
@@ -2410,6 +2584,11 @@ class Brain:
         if self.afraid and magic.can(obs, REMOVE_FEAR):
             return Decision(*magic.pray(REMOVE_FEAR, "afraid: pray Remove Fear"))
         cure = next((name for name in (CURE_POISON, NEUTRALIZE_POISON, SLOW_POISON) if magic.can(obs, name)), None)
+        if "heal_first" in self.goal.tactics and self.adjacent and obs.hp < PRAY_HEAL_HP * obs.mhp:
+            # Poison drains a point a turn; the creature beside does more: a
+            # Gnome Priest prayed Neutralize Poison twice beside a Black Mamba
+            # from 29 HP and died (M7 queue, 2026-10-31). Heal first.
+            cure = None
         if self.poisoned and cure is not None:
             # Poison drains a 6-12 HP Mage or Priest a point a turn for 11-20
             # turns: a gas trap killed them resting (M5f).
@@ -2442,6 +2621,44 @@ class Brain:
             for heal in HEALS:
                 if magic.can(obs, heal) and (MAGE_HEAL_AVERAGE if magic.mage else HEAL_AVERAGE)[heal] > hitting:
                     return Decision(*magic.pray(heal, f"HP {obs.hp}/{obs.mhp}: pray {heal}"))
+        return None
+
+    def trial_at(self, obs: Observation, creature: Creature, pos: Pos) -> str | None:
+        """M7 criterion 2 (§23.2): an aimed spell, or one that works on the
+        creatures around, whose effect this character has not seen, tried on
+        a creature it would fight anyway, while healthy. Sleep II works only
+        on creatures beside the caster."""
+        if not self.goal.exercise or obs.hp < EXERCISE_HP * obs.mhp or self.fight_odds(creature, obs) > FIGHT_ODDS:
+            return None
+        near = chebyshev(pos, obs.pos) == 1
+        names = [n for n in self.magic.unconfirmed(obs, self.magic.known)
+                 if (n in AIMED and n != "Turn Stone to Mud") or (n in AT_CREATURES and (near or n != "Sleep II"))]
+        return names[0] if names else None
+
+    def exercise(self, obs: Observation, view: View) -> Decision | None:
+        """M7 criterion 2 (§23.2): a spell or prayer whose effect this
+        character has not seen yet, cast when things are quiet: in the
+        dungeon, nothing in view, HP full and most of the mana there. Turn
+        Stone to Mud at a wall beside it; Identify and Recharge on the
+        first pack item. Aimed spells are tried at a creature in ``invoke``."""
+        magic = self.magic
+        if not self.goal.exercise or obs.dlvl == 0 or not magic.caster(obs) or not magic.listed:
+            return None
+        mana, top = magic.mana(obs)
+        if view.creatures or obs.hp < obs.mhp or mana < EXERCISE_MANA * top or obs.step < self.level.exercise_after:
+            return None
+        for name in magic.unconfirmed(obs, magic.known):
+            if name in AT_CREATURES or (name in AIMED and name != "Turn Stone to Mud"):
+                continue
+            if name == "Turn Stone to Mud":
+                wall = next((d for d in DIRS if view.type_at(view.pos[0] + d[0], view.pos[1] + d[1]) == WALL), None)
+                if wall is None:
+                    continue
+                self.pending = DIRS[wall]
+            if name in ON_ITEM:
+                self.pending_item = ord("A")
+            self.level.exercise_after = obs.step + EXERCISE_EVERY
+            return Decision(*magic.pray(name, f"try {name}: its effect not seen yet"))
         return None
 
     def find_traps(self, obs: Observation, view: View) -> Decision | None:
@@ -2482,6 +2699,12 @@ class Brain:
             return None
         burst = max((knowledge.spell_burst().get(kind, 0) for kind, seen in self.level.casters.items()
                      if obs.step - seen <= CASTER_MEMORY), default=0)
+        if "group_casters" in self.goal.tactics:
+            # Every caster in view casts: a pack of Orc Shamans took a 56-HP
+            # level-13 Elf Mage from 24 to dead in two turns while each
+            # alone looked harmless (M7 queue, 2026-10-31).
+            burst = max(burst, sum(knowledge.spell_burst().get((c.glyph, c.level), 0)
+                                   for c in view.creatures.values()))
         if not burst or obs.hp > CASTER_BURSTS * burst:
             return None
         why = f"a caster's spell ({burst}) could kill at HP {obs.hp}"
