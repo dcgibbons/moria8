@@ -1,6 +1,5 @@
 #importonce
 #import "../../../core/zeropage.s"
-#import "../common/perf_p1_defs.s"
 // C128 operational layout:
 //   - Bank 0 main code = $1C01-$BFFF
 //   - Bank 1 map = $4000-$4EFF
@@ -845,7 +844,7 @@ c128_return_to_runtime_after_kernal:
 
 hal_platform_character_sheet_begin:
     jsr c128_restore_runtime_guards
-#if C128_TEST_SCRIPTED_INPUT || C128_TEST_PERF_P1_TRACE
+#if C128_TEST_SCRIPTED_INPUT
     lda #1
     sta c128_test_summary_seen
     inc c128_test_summary_count
@@ -3981,7 +3980,7 @@ tool_ego_prefix_hi:
 // the play payload has no headroom for the chest summon hooks. Scripted/diag
 // builds omit wizard.s and provide their own stub below, so only assemble the
 // real one in normal builds (else it double-defines against the stub).
-#if !C128_REAL_BOOT_DIAG && !C128_TEST_SCRIPTED_INPUT && !C128_TEST_CACHE_SURVIVAL && !C128_TEST_PERF_P1_TRACE && !C128_TEST_SCRIPTED_SPELL && !C128_TEST_SCRIPTED_SPELL_CANCEL && !C128_TEST_SCRIPTED_BOOK_OVERLAY && !C128_TEST_SCRIPTED_STUDY_BOOK_OVERLAY && !C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY && !C128_TEST_SCRIPTED_SCROLL_SELECTOR && !C128_TEST_SCRIPTED_PRAYER
+#if !C128_REAL_BOOT_DIAG && !C128_TEST_SCRIPTED_INPUT && !C128_TEST_CACHE_SURVIVAL && !C128_TEST_SCRIPTED_SPELL && !C128_TEST_SCRIPTED_SPELL_CANCEL && !C128_TEST_SCRIPTED_BOOK_OVERLAY && !C128_TEST_SCRIPTED_STUDY_BOOK_OVERLAY && !C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY && !C128_TEST_SCRIPTED_SCROLL_SELECTOR && !C128_TEST_SCRIPTED_PRAYER
 wizard_wall_walk_active:
     lda zp_game_flags
     and #GAME_FLAG_WIZARD
@@ -4289,9 +4288,6 @@ c128_resident_play_sig1:
 c128_resident_play_sig2:
     .byte C128_RESIDENT_PLAY_SIG2
 c128_resident_play_body:
-#if PERF_P1
-#import "../common/perf_p1_data.s"
-#endif
 #define C128_PRODUCT_PLAY_SEGMENT
 #import "../../../core/dungeon_los.s"
 #undef C128_PRODUCT_PLAY_SEGMENT
@@ -4320,7 +4316,7 @@ c128_resident_play_body:
 // player_run uses pm_live_occ_x/y defined by the preceding player_move import.
 #import "../../../core/player_run.s"
 #import "../../../core/ui_help_clear.s"
-#if C128_REAL_BOOT_DIAG || C128_TEST_SCRIPTED_INPUT || C128_TEST_CACHE_SURVIVAL || C128_TEST_PERF_P1_TRACE || C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_SPELL_CANCEL || C128_TEST_SCRIPTED_BOOK_OVERLAY || C128_TEST_SCRIPTED_STUDY_BOOK_OVERLAY || C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY || C128_TEST_SCRIPTED_SCROLL_SELECTOR || C128_TEST_SCRIPTED_PRAYER
+#if C128_REAL_BOOT_DIAG || C128_TEST_SCRIPTED_INPUT || C128_TEST_CACHE_SURVIVAL || C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_SPELL_CANCEL || C128_TEST_SCRIPTED_BOOK_OVERLAY || C128_TEST_SCRIPTED_STUDY_BOOK_OVERLAY || C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY || C128_TEST_SCRIPTED_SCROLL_SELECTOR || C128_TEST_SCRIPTED_PRAYER
 // Scripted/diag test variants exclude wizard mode: those scenarios never enter
 // wizard commands, and the test instrumentation needs the Play payload bytes.
 // Stubs keep the command-dispatch and game-loop references linkable.
@@ -4357,135 +4353,10 @@ c128_resident_world_end:
 .segment C128ResidentPlay
 #import "../../../core/turn.s"
 #import "../../../core/player_magic_state.s"
-#if C128_TEST_PERF_P1_TRACE
-perf_p1_decision:
-    .byte PERF_P1_DECISION_NONE
-c128_test_perf_p1_trace_fail_sym:
-    jmp c128_test_perf_p1_trace_fail_sym
-c128_test_perf_p1_trace_pass_sym:
-    jmp c128_test_perf_p1_trace_pass_sym
-#endif
 c128_resident_play_end:
 
 .segment Default
 
-#if C128_TEST_PERF_P1_TRACE
-c128_test_perf_p1_trace_capture_sym:
-#if C128_TEST_PERF_P1_TRACE_TRANSITION_ASSERT
-    lda perf_p1_moves
-    bne !perf_trace_assert_fail+
-    lda perf_p1_local_lo
-    ora perf_p1_local_hi
-    bne !perf_trace_assert_fail+
-    lda perf_p1_full_lo
-    cmp #1
-    bne !perf_trace_assert_fail+
-    lda perf_p1_full_hi
-    bne !perf_trace_assert_fail+
-    lda perf_p1_reason_lo + PERF_P1_REASON_TRANSITION
-    cmp #1
-    bne !perf_trace_assert_fail+
-    lda perf_p1_decision
-    cmp #PERF_P1_DECISION_TRANSITION
-    bne !perf_trace_assert_fail+
-    jmp c128_test_perf_p1_trace_pass_sym
-!perf_trace_assert_fail:
-    jmp c128_test_perf_p1_trace_fail_sym
-#else
-#if C128_TEST_PERF_P1_TRACE_COMMAND_ASSERT
-    lda perf_p1_moves
-    bne !perf_trace_assert_fail+
-    lda perf_p1_local_lo
-    ora perf_p1_local_hi
-    bne !perf_trace_assert_fail+
-    lda perf_p1_full_lo
-    cmp #1
-    bne !perf_trace_assert_fail+
-    lda perf_p1_full_hi
-    bne !perf_trace_assert_fail+
-    lda perf_p1_reason_lo + PERF_P1_REASON_COMMAND_FORCED
-    cmp #1
-    bne !perf_trace_assert_fail+
-    lda perf_p1_decision
-    cmp #PERF_P1_DECISION_COMMAND_FORCED
-    bne !perf_trace_assert_fail+
-    jmp c128_test_perf_p1_trace_pass_sym
-!perf_trace_assert_fail:
-    jmp c128_test_perf_p1_trace_fail_sym
-#else
-#if C128_TEST_PERF_P1_TRACE_MODAL_ASSERT
-    lda perf_p1_moves
-    bne !perf_trace_assert_fail+
-    lda perf_p1_local_lo
-    ora perf_p1_local_hi
-    bne !perf_trace_assert_fail+
-    lda perf_p1_full_lo
-    cmp #1
-    bne !perf_trace_assert_fail+
-    lda perf_p1_full_hi
-    bne !perf_trace_assert_fail+
-    lda perf_p1_reason_lo + PERF_P1_REASON_MODAL_RESTORE
-    cmp #1
-    bne !perf_trace_assert_fail+
-    lda perf_p1_decision
-    cmp #PERF_P1_DECISION_MODAL_RESTORE
-    bne !perf_trace_assert_fail+
-    jmp c128_test_perf_p1_trace_pass_sym
-!perf_trace_assert_fail:
-    jmp c128_test_perf_p1_trace_fail_sym
-#else
-#if C128_TEST_PERF_P1_TRACE_ASSERT
-    lda perf_p1_moves
-    cmp #1
-    bne !perf_trace_assert_fail+
-    lda perf_p1_decision
-    cmp #PERF_P1_DECISION_LOCAL
-    bne !perf_trace_assert_fail+
-    lda perf_p1_local_lo
-    cmp #1
-    bne !perf_trace_assert_fail+
-    lda perf_p1_local_hi
-    bne !perf_trace_assert_fail+
-    lda perf_p1_full_lo
-    ora perf_p1_full_hi
-    ora perf_p1_scroll_lo
-    ora perf_p1_scroll_hi
-    ora perf_p1_scroll_delta_lo
-    ora perf_p1_scroll_delta_hi
-    ora perf_p1_scroll_fallback_lo
-    ora perf_p1_scroll_fallback_hi
-    bne !perf_trace_assert_fail+
-    jmp c128_test_perf_p1_trace_pass_sym
-!perf_trace_assert_fail:
-    jmp c128_test_perf_p1_trace_fail_sym
-#else
-#if C128_TEST_PERF_P1_TRACE_REASONS_0_2
-    lda perf_p1_reason_lo + PERF_P1_REASON_SCROLL_FALLBACK
-    ldx perf_p1_reason_lo + PERF_P1_REASON_ROOM_REVEAL
-    ldy perf_p1_reason_lo + PERF_P1_REASON_SCENE_DIRTY
-#else
-#if C128_TEST_PERF_P1_TRACE_REASONS_3_5
-    lda perf_p1_reason_lo + PERF_P1_REASON_COMMAND_FORCED
-    ldx perf_p1_reason_lo + PERF_P1_REASON_UPDATE_VISIBILITY
-    ldy perf_p1_reason_lo + PERF_P1_REASON_MODAL_RESTORE
-#else
-#if C128_TEST_PERF_P1_TRACE_REASONS_6_7
-    lda perf_p1_moves
-    ldx perf_p1_reason_lo + PERF_P1_REASON_TRANSITION
-    ldy perf_p1_reason_lo + PERF_P1_REASON_EFFECT_DIRECT
-#else
-    lda perf_p1_decision
-    ldx perf_p1_decision
-    ldy perf_p1_decision
-#endif
-#endif
-#endif
-#endif
-#endif
-    jmp c128_test_perf_p1_trace_pass_sym
-#endif
-#endif
-#endif
 
 #if C128_TEST_TITLE_ART_CONTENT
 c128_test_title_art_assert:
@@ -4552,7 +4423,7 @@ c128_test_title_art_assert:
 title_key_trap_base:
     .fill 256, $00
 #endif
-#if C128_TEST_SCRIPTED_INPUT || C128_TEST_CACHE_SURVIVAL || C128_TEST_PERF_P1_TRACE
+#if C128_TEST_SCRIPTED_INPUT || C128_TEST_CACHE_SURVIVAL
 c128_test_summary_seen:
     .byte 0
 c128_test_summary_count:
@@ -5098,7 +4969,6 @@ player_con_hp_adj:
     bcc player_adj2_3
     bcs player_adj2_4
 
-    #import "../common/perf_p1.s"
 runtime_common_data_end:
 }
 .segment Default
@@ -5678,7 +5548,7 @@ title_str:
 .segment UiOverlay
     #import "../../../core/ui_character.s"
     #import "../../../core/ui_recall.s"
-#if C128_REAL_BOOT_DIAG || C128_TEST_SCRIPTED_INPUT || C128_TEST_CACHE_SURVIVAL || C128_TEST_PERF_P1_TRACE || C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_SPELL_CANCEL || C128_TEST_SCRIPTED_BOOK_OVERLAY || C128_TEST_SCRIPTED_STUDY_BOOK_OVERLAY || C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY || C128_TEST_SCRIPTED_SCROLL_SELECTOR || C128_TEST_SCRIPTED_PRAYER
+#if C128_REAL_BOOT_DIAG || C128_TEST_SCRIPTED_INPUT || C128_TEST_CACHE_SURVIVAL || C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_SPELL_CANCEL || C128_TEST_SCRIPTED_BOOK_OVERLAY || C128_TEST_SCRIPTED_STUDY_BOOK_OVERLAY || C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY || C128_TEST_SCRIPTED_SCROLL_SELECTOR || C128_TEST_SCRIPTED_PRAYER
 // Scripted/diag test variants exclude the wizard UI with wizard mode (see
 // Play payload).
 ui_wizard_display:

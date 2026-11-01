@@ -530,27 +530,6 @@ c128_test_input_script:
     .byte $41              // A = first visible prayer book
     .byte $43              // C = Bless
     .byte $20              // SPACE = dismiss -MORE- / fizzle
-#elif C128_TEST_PERF_P1_TRACE_MODAL
-    .byte $4e              // N = New
-    .byte $41              // A = race
-    .byte $0d              // RETURN = accept stats
-    .byte $41              // A = class
-    .byte $41              // A = first name character
-    .byte $0d              // RETURN = finish name
-    .byte $42              // B = female
-    .byte $20              // SPACE = dismiss summary
-    .byte $49              // I = inventory modal
-    .byte $20              // SPACE = dismiss inventory
-#elif C128_TEST_PERF_P1_TRACE_COMMAND
-    .byte $4e              // N = New
-    .byte $41              // A = race
-    .byte $0d              // RETURN = accept stats
-    .byte $41              // A = class
-    .byte $41              // A = first name character
-    .byte $0d              // RETURN = finish name
-    .byte $42              // B = female
-    .byte $20              // SPACE = dismiss summary
-    .byte $53              // S = search; consumes a turn and forces redraw
 #else
     .byte $4e              // N = New
     .byte $41              // A = race

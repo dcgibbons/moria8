@@ -83,9 +83,6 @@ else
 KA_FLAGS64   += -define DEBUG_FEAT_DISK_TRACE=0
 endif
 KA_FLAGS128  = $(KA_FLAGS) -libdir c64 -define C128
-ifeq ($(PERF_P1),1)
-KA_FLAGS128  += -define PERF_P1
-endif
 
 # ── Source roots ──────────────────────────────────────────
 C64_MAIN_SRC       = c64/main.s

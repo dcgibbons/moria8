@@ -22,9 +22,6 @@ cmd_show_character_view:
     jsr tier_restore_after_overlay
 #endif
 	    jsr hal_screen_clear
-#if HAL_PLATFORM_MARK_MODAL_RESTORE_PERF && PERF_P1
-    jsr perf_p1_set_reason_modal_restore
-#endif
 	    jmp vp_render_status_loop
 
 cmd_show_help_view:
@@ -97,9 +94,6 @@ recall_view_body:
     jsr recall_show_matching_entry
 !recall_done:
 	    jsr hal_screen_clear
-#if HAL_PLATFORM_MARK_MODAL_RESTORE_PERF && PERF_P1
-    jsr perf_p1_set_reason_modal_restore
-#endif
 	    jmp vp_render_status_loop
 
 recall_key_to_screen_code:
@@ -195,9 +189,6 @@ recall_show_matching_entry:
 // ============================================================
 command_result_main_or_redraw_full:
 	    bcc !crrf_no_turn+
-#if HAL_PLATFORM_GAME_LOOP_PERF_P1_INSTRUMENTATION && PERF_P1
-    jsr perf_p1_set_reason_command_forced
-#endif
     jsr turn_post_action_searchable_or_die
     bcc !alive+
     jmp player_died
@@ -273,45 +264,27 @@ post_turn_update_visibility_after_action:
 	    lda zp_view_x
 	    cmp old_view_x
     beq !ptuvs_chk_y+
-#if HAL_PLATFORM_GAME_LOOP_PERF_P1_INSTRUMENTATION && PERF_P1
-    jsr perf_p1_set_reason_scroll_fallback
-#endif
 	    jmp !ptuvs_full+
 !ptuvs_chk_y:
 	    lda zp_view_y
 	    cmp old_view_y
     beq !ptuvs_chk_reveal+
-#if HAL_PLATFORM_GAME_LOOP_PERF_P1_INSTRUMENTATION && PERF_P1
-    jsr perf_p1_set_reason_scroll_fallback
-#endif
 	    jmp !ptuvs_full+
 !ptuvs_chk_reveal:
 	    lda vis_room_revealed
     beq !ptuvs_chk_scene+
-#if HAL_PLATFORM_GAME_LOOP_PERF_P1_INSTRUMENTATION && PERF_P1
-    jsr perf_p1_set_reason_room_reveal
-#endif
 	    jmp !ptuvs_full+
 !ptuvs_chk_scene:
 	    lda turn_scene_dirty
     beq !ptuvs_local+
-#if HAL_PLATFORM_GAME_LOOP_PERF_P1_INSTRUMENTATION && PERF_P1
-    jsr perf_p1_set_reason_scene_dirty
-#endif
 	    jmp !ptuvs_full+
 !ptuvs_local:
 	    jsr render_local_area
-#if HAL_PLATFORM_GAME_LOOP_PERF_P1_INSTRUMENTATION && PERF_P1
-    jsr perf_p1_mark_local
-#endif
 	    jsr status_draw
 	    jmp main_loop
 !ptuvs_full:
 	    lda #INPUT_ROW
 	    jsr hal_screen_clear_row
-#if HAL_PLATFORM_GAME_LOOP_PERF_P1_INSTRUMENTATION && PERF_P1
-    jsr perf_p1_mark_full_reason_update_visibility
-#endif
 	    jsr render_viewport
 	    jsr detect_evil_clear_reveal
 	    jsr status_draw
@@ -330,16 +303,10 @@ vp_render_status_loop:
 	    lda #INPUT_ROW
 	    jsr hal_screen_clear_row
 	    jsr viewport_update
-#if HAL_PLATFORM_GAME_LOOP_PERF_P1_INSTRUMENTATION && PERF_P1
-    jsr perf_p1_mark_full_default_transition
-#endif
 	    jsr render_viewport
 #if HAL_LAYOUT_VISIBILITY_FORCE_REDRAW
 	    jsr detect_evil_clear_reveal
 #endif
 	    jsr status_draw
-#if C128_TEST_PERF_P1_TRACE_COMMAND
-    jmp c128_test_perf_p1_trace_capture_sym
-#endif
     jmp main_loop
 ghl_saved_scene_dirty: .byte 0
