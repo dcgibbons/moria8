@@ -3,7 +3,7 @@
 A long-running service keeps every active platform's race/class items
 cycling through the queue's goal, one character per run, on a fixed worker
 budget, and runs subqueues (§23.5) beside them. Everything lives under
-``var/playtest-queue/`` (outside ``build/``, which ``make clean`` removes,
+``var/moria8/`` (outside ``build/``, which ``make clean`` removes,
 because run records are kept for good):
 
 - ``state-<goal>.json``: the main queue for that goal: each platform's order,
@@ -56,7 +56,7 @@ from .goals import (CHARACTERS, GOALS, QUALIFICATION_SEEDS, apply_variant, for_c
 from .launch import ROOT
 from .ports import PORTS
 
-HOME = ROOT / "var" / "playtest-queue"
+HOME = ROOT / "var" / "moria8"
 CONFIG = ROOT / "playtest" / "queue.json"
 SUITES = ROOT / "playtest" / "suites"
 TICK_SECONDS = 5.0
@@ -705,12 +705,14 @@ def format_ab(report: dict[str, Any]) -> str:
 # -- the service --------------------------------------------------------------------
 
 def proc_alive(pid: int, run_dir: str) -> bool:
-    """``pid`` is still the run process for ``run_dir`` (not a reused pid)."""
+    """``pid`` is still the run process for ``run_dir`` (not a reused pid).
+    By the run id, which is unique: a run started before ``HOME`` moved
+    (2026-11-01, var/playtest-queue to var/moria8) has the old path."""
     try:
         cmdline = Path(f"/proc/{pid}/cmdline").read_bytes().decode(errors="replace")
     except OSError:
         return False
-    return run_dir in cmdline
+    return f"/{Path(run_dir).name}\0" in cmdline + "\0"
 
 
 class Service:

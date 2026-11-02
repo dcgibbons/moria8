@@ -3,7 +3,7 @@ strategy guide, from the queue's run records.
 
 For each race and class on the main queue's goal: runs, successes, how deep
 and how far they get, what kills them at each stage, and what the successes
-carried. Written as Markdown to ``var/playtest-queue/strategy-evidence.md``,
+carried. Written as Markdown to ``var/moria8/strategy-evidence.md``,
 beside the records it comes from (generated: never committed), for the
 design doc's summary and the guide's author; it reads files only.
 """
@@ -53,7 +53,7 @@ def summary(runs: list[dict[str, Any]]) -> dict[str, Any]:
 def render(goal: str, rows: dict[str, dict[str, Any]], total: int) -> str:
     lines = [f"# Strategy evidence ({goal})", "",
              f"Generated {time.strftime('%Y-%m-%d %H:%M')} by `make playtest-strategy-evidence` from "
-             f"{total} counted main-queue runs (`var/playtest-queue/queue.db`). Raw evidence for the "
+             f"{total} counted main-queue runs (`var/moria8/queue.db`). Raw evidence for the "
              "strategy guide (docs/AI_PLAYTEST_DESIGN.md §23.7), not the guide.", "",
              "| Combination | Runs | Reached | Median DL / clvl | Best DL / clvl | Died by DL5 |",
              "| --- | --- | --- | --- | --- | --- |"]

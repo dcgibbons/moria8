@@ -317,6 +317,26 @@ class BalrogQueueTest(unittest.TestCase):
         self.assertEqual(max(levels), 40)
 
 
+class ProcAliveTest(unittest.TestCase):
+    def test_a_run_is_known_by_its_id_wherever_home_lives(self) -> None:
+        """A run started before HOME moved (var/playtest-queue to var/moria8)
+        is still alive; a suffixed id is another run."""
+        import subprocess
+        import sys
+        proc = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)",
+                                 "/x/var/playtest-queue/runs/20261101-1-main-c64-elf-priest-5"])
+        self.addCleanup(proc.wait)
+        self.addCleanup(proc.kill)
+        cmdline = Path(f"/proc/{proc.pid}/cmdline")
+        for _ in range(500):   # until the child has exec'd (until then it shows the parent's)
+            if b"time.sleep" in cmdline.read_bytes():
+                break
+            queue.time.sleep(0.01)
+        self.assertTrue(queue.proc_alive(proc.pid, "/x/var/moria8/runs/20261101-1-main-c64-elf-priest-5"))
+        self.assertFalse(queue.proc_alive(proc.pid, "/x/var/moria8/runs/20261101-1-main-c64-elf-priest-5-2"))
+        self.assertFalse(queue.proc_alive(proc.pid, "/x/var/moria8/runs/20261101-1-main-c64-elf-priest"))
+
+
 class AdoptTest(unittest.TestCase):
     def test_a_run_gone_before_the_service_started_is_not_counted(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

@@ -2922,7 +2922,7 @@ a win is unlikely until the bot plays much better.
   success, not from the title: each run saves its whole brain beside every
   level-entry snapshot (`session.save_brain`, a pickle without the goal), and
   an M7 success's last snapshot, taken on DL30, is copied to
-  `var/playtest-queue/balrog/<run>/` as its combination's start; a newer
+  `var/moria8/balrog/<run>/` as its combination's start; a newer
   success replaces it. The run restores the snapshot, loads the brain with
   the `balrog` goal and reseeds the game's RNG from its own seed, so runs from
   one start go their own ways. It plays in the start's build, bot included,
@@ -2944,7 +2944,7 @@ is `playtest/queue.json`, read every five seconds, so a change to the worker
 count, the goal, the retry cap or `paused` takes effect without a restart.
 
 **Where things live.** Everything the queue writes is under
-`var/playtest-queue/` (gitignored), not `build/`, because `make clean`
+`var/moria8/` (gitignored; `var/playtest-queue/` until 2026-11-01), not `build/`, because `make clean`
 removes `build/` and the run records are kept for good:
 
 | Path | What |

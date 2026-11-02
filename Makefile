@@ -184,7 +184,7 @@ playtest-queue-status:
 playtest-queue-rebuild:
 	$(PLAYTEST_PY) -m moria_playtest.queue rebuild
 
-# Re-creates var/playtest-queue/queue.db from runs.jsonl (§23.10).
+# Re-creates var/moria8/queue.db from runs.jsonl (§23.10).
 playtest-queue-records-rebuild:
 	$(PLAYTEST_PY) -m moria_playtest.records rebuild
 
@@ -194,7 +194,7 @@ playtest-subqueue:
 		$(if $(SEEDS),--seeds $(SEEDS)) $(if $(RANDOM_SEEDS),--random-seeds $(RANDOM_SEEDS)) \
 		$(if $(QUEUE_BUILD),--build $(QUEUE_BUILD)) --platforms $(PORT) $(PLAYTEST_QUEUE_ARGS)
 
-# The evidence behind the strategy guide (§23.7): var/playtest-queue/strategy-evidence.md
+# The evidence behind the strategy guide (§23.7): var/moria8/strategy-evidence.md
 # from the queue's run records. Reads files only.
 playtest-strategy-evidence:
 	$(PLAYTEST_PY) -m moria_playtest.strategy
