@@ -399,12 +399,15 @@ Two follow-ups from the no-HP attack fix (2026-11-01):
   through to a normal hit. No shipped creature has it there today, so this
   only matters once the special attacks are expanded.
 
-### Expand unsupported monster special attacks
+### High priority: the monster abilities Moria8 lacks
 
-Moria8 maps several Umoria monster attack effects into compact substitutes.
-For example, fire/cold/lightning, blindness, stealing, disenchant, eating food,
-eating light, eating charges, stat drains, and experience drain are not all
-implemented as distinct effects.
+**High priority (maintainer, 2026-11-02).** The monster catalog
+(`docs/MONSTER_CATALOG_DESIGN.md`) adds every VMS creature unless most of its
+abilities are missing; the rest play with the missing ones degraded. Every
+missing ability is high-priority work, because each one either degrades a
+creature in play or keeps one out. `tools/build_catalog.py` lists them
+(`catalog.json`: `backlog_abilities`, `degraded`, `ask_maintainer`,
+`skipped_not_in_todays_roster`).
 
 Until 2026-11-01 the no-HP effects were worse than missing: the generator
 mapped Lose experience (19), Steal Money/Object (12/13), Aggravate (20),
@@ -412,23 +415,53 @@ Disenchant (21) and Eat food/light/charges (22-24) to normal hits that dealt
 their dice as HP damage (Umoria `monster.cpp` ~1540-1800 applies none of them
 as HP damage). A Banshee's 14d8 experience drain hit for ~63 HP and killed 70
 of 102 queue characters past DL23. They now do no HP damage; the effects
-themselves remain to be added here, experience drain first (Banshees, wights,
-wraiths, vampires), then stealing (maintainer, 2026-11-01: "backlog it").
+themselves remain.
+
+Missing abilities, by the number of VMS creatures that have them (2026-11-02,
+in play degraded, asked about, or kept out):
+
+| Ability | Kind | Creatures |
+| --- | --- | --- |
+| Picks up objects | movement (`cmove` `0x100000`) | 29 |
+| Hold person | spell (`0x200`) | 24 |
+| Invisible | movement (`0x10000`) | 22 |
+| Drain mana | spell (`0x10000`) | 20 |
+| Blink | spell (`0x10`) | 18 |
+| Lose experience | touch (attack 19) | 17 |
+| Eats weaker creatures | movement (`0x80000`) | 15 |
+| Teleport self | spell (`0x20`) | 14 |
+| Fire touch | attack 5 | 11 |
+| Cold touch, slow, passes through walls | attack 7, spell `0x8000`, movement `0x40000` | 10 each |
+| Lose strength | touch (attack 2) | 9 |
+| Gas, acid, lightning and frost breath | spells `0x100000`, `0x200000`, `0x80000`, `0x400000` (all breath is fire today) | 8 each |
+| Lose dexterity | touch (attack 15) | 7 |
+| Lightning touch | attack 8 | 6 |
+| Disenchant | touch (attack 21) | 5 |
+| Steal gold, steal object, blinding touch, eat charges | attacks 12, 13, 10, 24 | 4 each |
+| Eat food, eat light | attacks 22, 23 | 3, 2 |
+| Lose constitution, wisdom, intelligence | attacks 16, 18, 17 | 1 each |
+
+The Balrog needs fire touch, eat charges, hold person, slow, drain mana,
+invisible, passing walls, eating weaker creatures and picking up objects:
+M8 depends on these.
+
+Separate player-side feature: creatures' reactions to the player's fire,
+frost, acid, light and sleep attacks (`cdefense` `0x10`-`0x200`, `0x1000`),
+on most of the catalog.
 
 Required work:
 
-- Prioritize high-impact special attacks from the shipped monster roster before
-  expanding the full monster catalog.
-- Add compact effect handlers for each accepted attack type.
-- Update `tools/parse_creatures.py` so imported data maps to real handlers
-  instead of normal/poison approximations when support exists.
-- Add per-effect tests for damage/status, messages, inventory/light/resource
-  mutation, and save/load impact where relevant.
+- Each ability as a compact engine handler, in the order above (most
+  creatures first), the Balrog's ahead of equals.
+- Add each to `SUPPORTED_ATTACKS`, `SUPPORTED_SPELLS` or `SUPPORTED_CMOVE` in
+  `tools/build_catalog.py`, so the creatures waiting on it stop degrading or
+  join the catalog.
+- Per-effect tests for damage and status, messages, inventory, light and
+  resource changes, and save/load where relevant.
 
 Acceptance target:
 
-- Shipped monsters no longer silently collapse high-impact upstream attacks
-  into misleading normal attacks.
+- No creature in play has a degraded ability.
 
 ### Add player slowness (sources and a separate slow counter)
 
