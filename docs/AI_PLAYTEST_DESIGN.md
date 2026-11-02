@@ -3137,6 +3137,8 @@ Paired subqueues (`make playtest-ab`, same seeds per arm, one build):
 | ab3 (2026-11-01) | frail casters: Cure Light Wounds before gear vs not | 5 frail × 8, 40k | dropped: 18 vs 18 seeds deeper, medians slightly worse (DL 2/clvl 4 vs DL 3/clvl 6) |
 | ab4 (2026-11-01) | frail casters: ready_margin 3 vs 5 | 5 frail × 8, 60k | not adopted: same deaths (Kobolds 7 vs 6, traps alike); margin 5 only stays shallower (A deeper on 16 seeds, B on 5, 19 tied) |
 | ab5 (2026-11-01) | frail casters: search mode back on at once vs after 20 steps | 5 frail × 8, 60k | dropped: rockfall 2 vs 2, A deeper on 15 seeds, B on 18, 7 tied |
+| ab6 (2026-11-01) | frail casters (Gnome, Halfling, Elf and Half-Elf Mages, Gnome Priest): to clvl 3, a creature the character loses to in melee and cannot kill with spells and spare flasks before contact counts as dangerous (leave the level, flee, phase) vs not | 5 × 8, 60k | dropped: worse with it: died on DL1-2 22 vs 18, reached DL5 16 vs 20, median DL 1 vs 5 (Kobold deaths 11 vs 7: fleeing an equal-speed creature is hit on the way); A deeper on 18 seeds, B on 15, 7 tied |
+| ab7 (2026-11-01) | deep Mages (Human, Elf, Half-Elf): below DL10, no attack spell at a dangerous creature the mana left cannot kill, unless cornered (retreat and Phase Door act instead) vs not | 3 × 8, 300k | dropped: no gain: median clvl 18 vs 19, clvl 20+ 5 vs 5, clvl 22+ 1 vs 2, none reached 25; higher clvl on 5 seeds vs 7, 12 tied |
 
 Frail casters (Gnome and Halfling Mages, Gnome Priests) die on DL1-3 at
 clvl 1-4 in both ab3 arms: Kobolds, small vermin and traps (a 2d6 pit or
