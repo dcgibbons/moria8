@@ -19,6 +19,10 @@ catalog_bank_end:
 .const CATALOG_NAME_POOL_BASE = PLATFORM_TIER_NAME_POOL_BASE
 .const CATALOG_NAME_POOL_END  = PLATFORM_TIER_NAME_POOL_END
 
+.macro CatalogWinBegin() {
+}
+.macro CatalogWinEnd() {
+}
 .macro CatalogMap() {
     jsr cx16_catalog_map
 }

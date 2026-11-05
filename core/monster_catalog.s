@@ -24,8 +24,12 @@
 // - catalog_fields.s read by :CatalogFieldRead() = A <- (zp_ptr0),y;
 // - catalog_names.s read through the Huffman reads (:HuffDbReadPtr1());
 // - the name pool CATALOG_NAME_POOL_BASE, written by :CatalogPoolWrite()
-//   = A -> (zp_ptr1),y (A, X, Y kept);
+//   = A -> (zp_ptr1),y (A, X, Y and flags kept);
 // - :CatalogMap() / :CatalogUnmap() around each pick, fetch or refetch.
+// Disk-record ports (HAL_PLATFORM_CATALOG_RECORDS: C64, Plus/4) instead
+// provide catalog_fetch_record, which reads creature cat_id's whole record
+// (platforms/commodore/common/catalog_records.s) into cat_record from the
+// REU or the drive, called unmapped; the names are plain screen codes.
 
 .const CAT_SLOTS     = MAX_MONSTERS
 .const CAT_NAME_SIZE = 32            // A pool entry: the name and its 0
@@ -33,6 +37,7 @@
 .const CAT_WIN_LEVEL = 50            // VMS win_mon_appear
 .const CAT_MAX_SIGHT = 20            // VMS max_sight
 .const CAT_LEVELS    = CATALOG_MAX_MONS_LEVEL + 1
+.const CAT_AREA_SCALE = round(256 * MAP_COLS * MAP_ROWS / (198 * 66))   // Population scale, /256
 
 .assert "Catalog slots fit the dungeon creature rows", CAT_SLOTS <= MAX_DUNGEON_CREATURES, true
 .assert "Catalog slots cover every live monster", CAT_SLOTS >= MAX_MONSTERS, true
@@ -242,6 +247,34 @@ cat_fetch:
     bcc !cf_count_ok+
     stx active_dungeon_count
 !cf_count_ok:
+#if HAL_PLATFORM_CATALOG_RECORDS
+    // The whole record at once: the drive reads by sector, not by field.
+    :CatalogUnmap()
+    jsr catalog_fetch_record
+    :CatalogMap()
+    ldx #0
+!cf_field:
+    lda ltb_dst_lo,x
+    sta zp_ptr1
+    lda ltb_dst_hi,x
+    sta zp_ptr1_hi
+    lda cat_record + 2,x        // After the record's id
+    ldy cat_slot
+    sta (zp_ptr1),y
+    inx
+    cpx #CATALOG_SOA_FIELDS
+    bne !cf_field-
+    jsr cat_pool_entry
+    ldy #$ff
+!cf_name:
+    iny
+    lda cat_record + CATALOG_RECORD_NAME,y
+    :CatalogPoolWrite()
+    bne !cf_name-
+    rts
+.assert "Catalog records hold the engine fields after the id", CATALOG_RECORD_NAME, 2 + CATALOG_SOA_FIELDS
+.assert "Catalog record names fit a pool entry", CATALOG_RECORD_SIZE - CATALOG_RECORD_NAME <= CAT_NAME_SIZE, true
+#else
     clc                         // Field 0 of creature cat_id
     lda #<catalog_fields
     adc cat_id_lo
@@ -305,8 +338,26 @@ cat_fetch:
     sta hd_tree_left_ptr,x
     dex
     bpl !cf_corpus-
+    jsr cat_pool_entry
+    ldy #$ff
+!cf_name:
+    iny
+    lda hd_decode_buf,y
+    :CatalogPoolWrite()
+    lda hd_decode_buf,y
+    bne !cf_name-
+    rts
+.assert "hd_tree_right_ptr follows hd_tree_left_ptr", hd_tree_right_ptr, hd_tree_left_ptr + 2
 
-    // Pool entry: CATALOG_NAME_POOL_BASE + slot * 32.
+// The decoder's tree pointers: the names' tree, then the corpus's back.
+cat_names_tree:  .word catn_tree_left, catn_tree_right
+cat_corpus_tree: .word huff_tree_left, huff_tree_right
+#endif
+
+// cat_pool_entry — zp_ptr1 = slot cat_slot's name pool entry,
+// CATALOG_NAME_POOL_BASE + slot * 32, and cr_name_lo/hi point there.
+// Clobbers: A, X
+cat_pool_entry:
     lda cat_slot
     lsr
     lsr
@@ -327,20 +378,8 @@ cat_fetch:
     adc #>CATALOG_NAME_POOL_BASE
     sta zp_ptr1_hi
     sta cr_name_hi,x
-    ldy #$ff
-!cf_name:
-    iny
-    lda hd_decode_buf,y
-    :CatalogPoolWrite()
-    lda hd_decode_buf,y
-    bne !cf_name-
     rts
 .assert "Catalog slot name entries are 32 bytes", CAT_NAME_SIZE, 32
-.assert "hd_tree_right_ptr follows hd_tree_left_ptr", hd_tree_right_ptr, hd_tree_left_ptr + 2
-
-// The decoder's tree pointers: the names' tree, then the corpus's back.
-cat_names_tree:  .word catn_tree_left, catn_tree_right
-cat_corpus_tree: .word huff_tree_left, huff_tree_right
 
 // cat_pick_id — VMS alloc_monster's creature for zp_player_dlvl > 0.
 // Fields bank mapped. Output: cat_id_lo/hi
@@ -480,8 +519,8 @@ cat_sum_levels:
     rts
 
 // catalog_population — VMS's monster count for a new level:
-// randint(8) + 14 + alloc_level, alloc_level = dlvl / 3 within 2..10.
-// VMS's map is this port's 198x66, so no area scale applies.
+// randint(8) + 14 + alloc_level, alloc_level = dlvl / 3 within 2..10,
+// scaled by map area on ports smaller than VMS's 198x66.
 // Output: A = count
 // Clobbers: X, Y, zp_temp3, zp_temp4, zp_math_a/b
 catalog_population:
@@ -506,13 +545,25 @@ catalog_population:
     sec                         // randint(8) = rng_range(8) + 1
     adc #14
     adc cat_tmp
+.if (MAP_COLS * MAP_ROWS != 198 * 66) {
+    // Scaled by map area against VMS's 198x66 (maintainer, 2026-11-02):
+    // count * CAT_AREA_SCALE / 256, rounded; 5-9 on 80x48.
+    ldx #CAT_AREA_SCALE
+    jsr math_multiply           // zp_math_a/b = count * scale
+    cmp #$80                    // A = lo: C = round up
+    lda zp_math_b
+    adc #0
+}
     rts
-.assert "Catalog population matches VMS's map size", MAP_COLS * MAP_ROWS, 198 * 66
+.assert "Catalog area scale is a fraction", CAT_AREA_SCALE > 0 && CAT_AREA_SCALE <= 256, true
 
 // catalog_place_win_creature — From VMS win_mon_appear on, until the game is
 // won, an awake Evil Iggy or Balrog lands beyond sight of the player (VMS
-// misc.inc place_win_monster).
+// misc.inc place_win_monster). Generation-time only: a port short of resident
+// room places it with :CatalogWinBegin()/:CatalogWinEnd() (the C64's $F000
+// runtime) and calls it through tramp_catalog_place_win.
 // Clobbers: everything
+    :CatalogWinBegin()
 catalog_place_win_creature:
     lda zp_player_dlvl
     cmp #CAT_WIN_LEVEL
@@ -560,6 +611,7 @@ catalog_place_win_creature:
     jsr monster_spawn_one
     bcc !cpw_done-
     jmp monster_wake
+    :CatalogWinEnd()
 .assert "Catalog win creatures are adjacent", CATALOG_BALROG_ID, CATALOG_IGGY_ID + 1
 .assert "Catalog win ids share a high byte", >CATALOG_IGGY_ID, >CATALOG_BALROG_ID
 

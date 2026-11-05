@@ -149,6 +149,7 @@ hal_storage_score_scratch_name:
     .byte $48, $41, $4c, $4c, $2e, $4f, $46, $2e, $46, $41, $4d, $45 // "HALL.OF.FAME"
 .label hal_storage_score_scratch_name_len = * - hal_storage_score_scratch_name
 
+#if !HAL_PLATFORM_MONSTER_CATALOG    // The catalog has no tier files
 // Platform-owned tier data filenames. PETSCII bytes for KERNAL LOAD.
 // Lengths exclude the trailing zero; REU preload display uses the same labels
 // as zero-terminated strings.
@@ -175,6 +176,7 @@ hal_storage_tier_name_hi:
     .byte >hal_storage_tier_1_name, >hal_storage_tier_2_name, >hal_storage_tier_3_name, >hal_storage_tier_4_name
 hal_storage_tier_name_len:
     .byte hal_storage_tier_1_name_len, hal_storage_tier_2_name_len, hal_storage_tier_3_name_len, hal_storage_tier_4_name_len
+#endif
 
 // Platform-owned overlay asset filenames. PETSCII bytes for KERNAL LOAD.
 hal_storage_overlay_start_name:

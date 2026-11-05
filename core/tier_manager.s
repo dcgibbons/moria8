@@ -83,6 +83,9 @@ platform_tier_name_src_hi: .byte 0
 // tier_invalidate_state — Clear active tier state + derived metadata
 // Safe to call from any module before loading an overlay/string bank.
 // Clobbers: A
+#if HAL_PLATFORM_MONSTER_CATALOG
+.label tier_invalidate_state = tier_check_transition   // The catalog has no tier state: rts
+#else
 tier_invalidate_state:
     lda #0
     sta current_tier
@@ -101,6 +104,7 @@ tier_invalidate_state:
     sta platform_tier_name_src_hi
 #endif
     rts
+#endif
 
 #if !HAL_PLATFORM_MONSTER_CATALOG
 // ============================================================
@@ -188,6 +192,9 @@ tier_init:
     rts
 #endif
 
+#if HAL_PLATFORM_CATALOG_RECORDS
+    jsr catalog_boot_load       // The level index and record places, REU or not
+#endif
     lda reu_present
     beq !ti_done+
 
@@ -201,8 +208,14 @@ tier_init:
     sta reu_loading_count
     jsr reu_render_progress
 
+#if HAL_PLATFORM_CATALOG_RECORDS
+#if CATALOG_REU
+    jsr catalog_reu_preload     // The catalog's records in place of the tiers
+#endif
+#else
     // REU present: load all 4 tier files from disk into REU
     jsr reu_load_all_tiers
+#endif
 #if HAL_PLATFORM_OVERLAY_REU_STASH_ENABLED
     jsr reu_stash_overlays
 #endif
@@ -280,6 +293,9 @@ tier_check_transition:
 // tier_restore_after_overlay — re-establish current tier data after an overlay
 // or modal UI action without surfacing the transient "Loading..." message.
 // Clobbers: A, X, Y, zp_ptr0, zp_ptr1, zp_temp0, zp_temp1
+#if HAL_PLATFORM_MONSTER_CATALOG
+.label tier_restore_after_overlay = tier_check_transition   // No tiers to restore: rts
+#else
 tier_restore_after_overlay:
     lda #1
     sta tier_silent_restore
@@ -287,6 +303,7 @@ tier_restore_after_overlay:
     lda #0
     sta tier_silent_restore
     rts
+#endif
 
 #if !HAL_PLATFORM_MONSTER_CATALOG
 // ============================================================

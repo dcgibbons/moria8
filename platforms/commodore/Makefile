@@ -62,6 +62,14 @@ OVL_OUTPLUS4 = $(abspath $(OUTPLUS4))
 
 # ── Shared tooling ────────────────────────────────────────
 DISKART      = ../../tools/diskart.py
+# The monster catalog's disk records (C64, Plus/4): tools/catalog_disk.py
+# writes MONSTER.CAT1-4 from the committed catalog sources, and MONSTER.IDX
+# from where they landed on a built image (loading at each port's
+# CATALOG_IDX_LOAD, memory.s).
+CATALOG_DISK    = ../../tools/catalog_disk.py
+CATALOG_SOURCES = $(wildcard ../shared/catalog/*.s) common/catalog_records.s
+C64_CATALOG_IDX_LOAD   = 0xce00
+PLUS4_CATALOG_IDX_LOAD = 0xd600
 PATCH_D64    = ../../tools/patch_d64_sector.py
 RESERVE_SECTOR = ../../tools/reserve_cbm_sector.py
 VERSION_FILE = ../../version.json
@@ -118,6 +126,7 @@ C64_BOOT_PRG       = $(OUT64)/boot.prg
 C64_BOOTART_PRG    = $(OUT64)/bootart64.prg
 C64_TITLE_PRG      = $(OUT64)/title
 C64_TIER_PRGS      = $(OUT64)/monster.db.1 $(OUT64)/monster.db.2 $(OUT64)/monster.db.3 $(OUT64)/monster.db.4
+C64_CATALOG_STAMP  = $(OUT64)/monster.cat.stamp
 C64_OVL_START      = $(OUT64)/ovl.start
 C64_OVL_TOWN       = $(OUT64)/ovl.town
 C64_OVL_DEATH      = $(OUT64)/ovl.death
@@ -135,6 +144,7 @@ PLUS4_MAIN_PRG       = $(OUTPLUS4)/moria4.prg
 PLUS4_BOOT_PRG       = $(OUTPLUS4)/boot4.prg
 PLUS4_TITLE_PRG      = $(OUTPLUS4)/title
 PLUS4_TIER_PRGS      = $(OUTPLUS4)/monster.db.1 $(OUTPLUS4)/monster.db.2 $(OUTPLUS4)/monster.db.3 $(OUTPLUS4)/monster.db.4
+PLUS4_CATALOG_STAMP  = $(OUTPLUS4)/monster.cat.stamp
 PLUS4_OVL_START      = $(OUTPLUS4)/ovl.start
 PLUS4_OVL_TOWN       = $(OUTPLUS4)/ovl.town
 PLUS4_OVL_DEATH      = $(OUTPLUS4)/ovl.death
@@ -207,10 +217,10 @@ DISK128_LABEL      = "moria8 c128,m8"
 DISKPLUS4_LABEL    = "moria8 plus4,m8"
 
 # ── Aggregate groups ──────────────────────────────────────
-C64_BUILD_ARTIFACTS  = $(C64_MAIN_PRG) $(C64_BOOT_PRG) $(C64_BOOTART_PRG) $(C64_TITLE_PRG) $(C64_TIER_PRGS) \
+C64_BUILD_ARTIFACTS  = $(C64_MAIN_PRG) $(C64_BOOT_PRG) $(C64_BOOTART_PRG) $(C64_TITLE_PRG) $(C64_TIER_PRGS) $(C64_CATALOG_STAMP) \
 	$(C64_OVL_START) $(C64_OVL_TOWN) $(C64_OVL_DEATH) $(C64_OVL_MODAL_MISC) $(C64_OVL_GEN) $(C64_OVL_HELP) $(C64_OVL_UI) $(C64_OVL_ITEMS) $(C64_OVL_SPELL) $(C64_OVL_CHEST) \
 	$(C64_RUNTIME_BANKED)
-PLUS4_BUILD_ARTIFACTS  = $(PLUS4_MAIN_PRG) $(PLUS4_BOOT_PRG) $(PLUS4_TITLE_PRG) $(PLUS4_TIER_PRGS) \
+PLUS4_BUILD_ARTIFACTS  = $(PLUS4_MAIN_PRG) $(PLUS4_BOOT_PRG) $(PLUS4_TITLE_PRG) $(PLUS4_TIER_PRGS) $(PLUS4_CATALOG_STAMP) \
 	$(PLUS4_OVL_START) $(PLUS4_OVL_TOWN) $(PLUS4_OVL_DEATH) $(PLUS4_OVL_MODAL_MISC) $(PLUS4_OVL_GEN) $(PLUS4_OVL_HELP) $(PLUS4_OVL_UI) $(PLUS4_OVL_ITEMS) $(PLUS4_OVL_SPELL) $(PLUS4_OVL_CHEST) \
 	$(PLUS4_RUNTIME_BANKED)
 C128_BUILD_ARTIFACTS = $(C128_MAIN_PRG) $(C128_BOOT_PRG) $(C128_BOOT_CHAIN_PRG) $(C128_BOOTSECT_PRG) \
@@ -386,6 +396,14 @@ $(C64_BOOTART_PRG): $(C64_BOOTART_PPM) $(C64_BOOTART_TOOL) | $(OUT64)
 $(C64_TITLE_PRG): $(TITLE_SRC) $(VERSION_INC) | ensure-kickass $(OUT64)
 	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(TITLE_SRC)" -define TITLE_PLATFORM_64 -symbolfiledir "$(OVL_OUT64)" -o "$(C64_TITLE_PRG)"
 
+$(C64_CATALOG_STAMP): $(CATALOG_SOURCES) $(CATALOG_DISK) | $(OUT64)
+	python3 "$(CATALOG_DISK)" records "$(OUT64)" $(C64_CATALOG_IDX_LOAD)
+	touch "$@"
+
+$(PLUS4_CATALOG_STAMP): $(CATALOG_SOURCES) $(CATALOG_DISK) | $(OUTPLUS4)
+	python3 "$(CATALOG_DISK)" records "$(OUTPLUS4)" $(PLUS4_CATALOG_IDX_LOAD)
+	touch "$@"
+
 $(OUT64)/monster.db.1: $(C64_TIER_DIR)/tier1_prg.s $(C64_TIER_DIR)/tier1.s | ensure-kickass $(OUT64)
 	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(C64_TIER_DIR)/tier1_prg.s" -symbolfiledir "$(OVL_OUT64)" -o "$@"
 
@@ -489,7 +507,7 @@ $(LICENSE_DISK_FILE): $(LICENSE_FILE) | $(OUT)
 $(SOURCE_OFFER_DISK_FILE): $(SOURCE_OFFER) | $(OUT)
 	LC_ALL=C tr '\012' '\015' < "$<" > "$@"
 
-$(C64_DIST_STAMP): $(C64_BUILD_ARTIFACTS) $(LICENSE_DISK_FILE) $(SOURCE_OFFER_DISK_FILE) $(EMPTY_PRG) | $(OUT)
+$(C64_DIST_STAMP): $(C64_BUILD_ARTIFACTS) $(DISK64_IMAGE) $(LICENSE_DISK_FILE) $(SOURCE_OFFER_DISK_FILE) $(EMPTY_PRG) | $(OUT)
 	rm -rf "$(C64_DIST_DIR)"
 	mkdir -p "$(C64_DIST_DIR)"
 	cp -f "$(EMPTY_PRG)" "$(C64_DIST_DIR)/art1"
@@ -502,10 +520,11 @@ $(C64_DIST_STAMP): $(C64_BUILD_ARTIFACTS) $(LICENSE_DISK_FILE) $(SOURCE_OFFER_DI
 	cp -f "$(C64_BOOTART_PRG)" "$(C64_DIST_DIR)/bootart64"
 	cp -f "$(C64_MAIN_PRG)" "$(C64_DIST_DIR)/moria64"
 	cp -f "$(C64_TITLE_PRG)" "$(C64_DIST_DIR)/t64"
-	cp -f "$(OUT64)/monster.db.1" "$(C64_DIST_DIR)/monster.db.1"
-	cp -f "$(OUT64)/monster.db.2" "$(C64_DIST_DIR)/monster.db.2"
-	cp -f "$(OUT64)/monster.db.3" "$(C64_DIST_DIR)/monster.db.3"
-	cp -f "$(OUT64)/monster.db.4" "$(C64_DIST_DIR)/monster.db.4"
+	cp -f "$(OUT64)/monster.cat1" "$(C64_DIST_DIR)/monster.cat1"
+	cp -f "$(OUT64)/monster.cat2" "$(C64_DIST_DIR)/monster.cat2"
+	cp -f "$(OUT64)/monster.cat3" "$(C64_DIST_DIR)/monster.cat3"
+	cp -f "$(OUT64)/monster.cat4" "$(C64_DIST_DIR)/monster.cat4"
+	cp -f "$(OUT64)/monster.idx" "$(C64_DIST_DIR)/monster.idx"
 	cp -f "$(C64_OVL_START)" "$(C64_DIST_DIR)/64.start"
 	cp -f "$(C64_OVL_TOWN)" "$(C64_DIST_DIR)/64.town"
 	cp -f "$(C64_OVL_DEATH)" "$(C64_DIST_DIR)/64.death"
@@ -539,10 +558,10 @@ $(DISK64_IMAGE): $(C64_BUILD_ARTIFACTS) $(DISKART) $(VERSION_FILE) $(LICENSE_DIS
 		-write "$(C64_BOOTART_PRG)" "bootart64" \
 		-write "$(C64_MAIN_PRG)" "moria64" \
 		-write "$(C64_TITLE_PRG)" "t64" \
-		-write "$(OUT64)/monster.db.1" "monster.db.1" \
-		-write "$(OUT64)/monster.db.2" "monster.db.2" \
-		-write "$(OUT64)/monster.db.3" "monster.db.3" \
-		-write "$(OUT64)/monster.db.4" "monster.db.4" \
+		-write "$(OUT64)/monster.cat1" "monster.cat1" \
+		-write "$(OUT64)/monster.cat2" "monster.cat2" \
+		-write "$(OUT64)/monster.cat3" "monster.cat3" \
+		-write "$(OUT64)/monster.cat4" "monster.cat4" \
 		-write "$(C64_OVL_START)" "64.start" \
 		-write "$(C64_OVL_TOWN)" "64.town" \
 		-write "$(C64_OVL_DEATH)" "64.death" \
@@ -557,6 +576,8 @@ $(DISK64_IMAGE): $(C64_BUILD_ARTIFACTS) $(DISKART) $(VERSION_FILE) $(LICENSE_DIS
 			-write "$(LICENSE_DISK_FILE)" "license,s" \
 			-write "$(SOURCE_OFFER_DISK_FILE)" "source-offer,s"
 	python3 "$(DISKART)" "$(DISK64_IMAGE)" c64
+	python3 "$(CATALOG_DISK)" index "$(DISK64_IMAGE)" "$(OUT64)/monster.idx" $(C64_CATALOG_IDX_LOAD)
+	$(C1541) -attach "$(DISK64_IMAGE)" -write "$(OUT64)/monster.idx" "monster.idx" >/dev/null
 	@mkdir -p "$(OUT64)"
 	cp -f "$(DISK64_IMAGE)" "$(OUT64)/moria8-c64.d64"
 
@@ -573,10 +594,10 @@ $(DISKPLUS4_IMAGE): $(PLUS4_BUILD_ARTIFACTS) $(DISKART) $(VERSION_FILE) $(LICENS
 		-write "$(PLUS4_BOOT_PRG)" "boot4" \
 		-write "$(PLUS4_MAIN_PRG)" "moria4" \
 		-write "$(PLUS4_TITLE_PRG)" "t64" \
-		-write "$(OUTPLUS4)/monster.db.1" "monster.db.1" \
-		-write "$(OUTPLUS4)/monster.db.2" "monster.db.2" \
-		-write "$(OUTPLUS4)/monster.db.3" "monster.db.3" \
-		-write "$(OUTPLUS4)/monster.db.4" "monster.db.4" \
+		-write "$(OUTPLUS4)/monster.cat1" "monster.cat1" \
+		-write "$(OUTPLUS4)/monster.cat2" "monster.cat2" \
+		-write "$(OUTPLUS4)/monster.cat3" "monster.cat3" \
+		-write "$(OUTPLUS4)/monster.cat4" "monster.cat4" \
 		-write "$(PLUS4_OVL_START)" "4.start" \
 		-write "$(PLUS4_OVL_TOWN)" "4.town" \
 		-write "$(PLUS4_OVL_DEATH)" "4.death" \
@@ -591,6 +612,8 @@ $(DISKPLUS4_IMAGE): $(PLUS4_BUILD_ARTIFACTS) $(DISKART) $(VERSION_FILE) $(LICENS
 		-write "$(LICENSE_DISK_FILE)" "license,s" \
 		-write "$(SOURCE_OFFER_DISK_FILE)" "source-offer,s"
 	python3 "$(DISKART)" "$(DISKPLUS4_IMAGE)" plus4
+	python3 "$(CATALOG_DISK)" index "$(DISKPLUS4_IMAGE)" "$(OUTPLUS4)/monster.idx" $(PLUS4_CATALOG_IDX_LOAD)
+	$(C1541) -attach "$(DISKPLUS4_IMAGE)" -write "$(OUTPLUS4)/monster.idx" "monster.idx" >/dev/null
 	@mkdir -p "$(OUTPLUS4)"
 	cp -f "$(DISKPLUS4_IMAGE)" "$(OUTPLUS4)/moria8-plus4.d64"
 

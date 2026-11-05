@@ -9,7 +9,10 @@ species slot is loaded, that each slot's level is the catalog's, and that
 its name in the Bank 1 pool, decoded at fetch from the Huffman-coded names,
 is the catalog's (platforms/shared/catalog; docs/MONSTER_CATALOG_DESIGN.md).
 
-usage: check_catalog128.py <monitor-log> <pool-base-hex>
+usage: check_catalog128.py <monitor-log> <pool-base-hex> [min-monsters]
+
+The C64 and Plus/4 catalog smokes use it too, with the population VMS's
+count scales to on their 80x48 maps (5-7 on DL1) and the hidden name pool.
 """
 from __future__ import annotations
 
@@ -57,9 +60,10 @@ def catalog_names() -> dict[int, list[int]]:
 
 
 def main() -> int:
-    if len(sys.argv) != 3:
+    if len(sys.argv) not in (3, 4):
         print(__doc__, file=sys.stderr)
         return 2
+    min_live = int(sys.argv[3]) if len(sys.argv) == 4 else 15
     dumps = memory(Path(sys.argv[1]).read_text(errors="replace"))
     if len(dumps) < 6:
         print(f"FAIL: {len(dumps)} memory dumps in the log, 6 expected")
@@ -71,8 +75,8 @@ def main() -> int:
     want_levels, want_names = catalog_levels(), catalog_names()
     live = [table[i * ENTRY + 2] for i in range(SLOTS) if table[i * ENTRY + 2] != 0xFF]
     errors = []
-    if len(live) < 15:
-        errors.append(f"{len(live)} monsters (VMS places 17-24 on DL1)")
+    if len(live) < min_live:
+        errors.append(f"{len(live)} monsters, at least {min_live} expected on DL1")
     for kind in sorted(set(live)):
         if kind >= SLOTS or ids[SLOTS + kind] == 0xFF:
             errors.append(f"monster of type {kind}: no catalog species loaded")

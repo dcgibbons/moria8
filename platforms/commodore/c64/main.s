@@ -10,6 +10,12 @@
 // Overlay segments: produce separate PRGs at $E000.
 // Assembled in same pass as main program — full symbol access.
 // Only ONE overlay is active at a time (they share $E000-$EFFF).
+// The monster catalog (docs/MONSTER_CATALOG_DESIGN.md) replaces the tiers in
+// the product build, its records read from the REU or the drive. The unit
+// tests (tests/*.s) do not import main.s and keep the tier roster.
+#define HAL_PLATFORM_MONSTER_CATALOG
+#define HAL_PLATFORM_CATALOG_RECORDS
+#define CATALOG_REU
 #define C64_PRODUCT_OVERLAY_RUNTIME
 #define PLATFORM_PRODUCT_OVERLAY_RUNTIME
 #define C64_PRODUCT_IRQ_VECTOR_RUNTIME
@@ -473,6 +479,10 @@ tramp_dig_ability:
 #undef DISARM_HELPERS_EXTERNAL
 #undef DISARM_COMMAND_EXTERNAL
 #import "../../../core/monster.s"
+#if HAL_PLATFORM_MONSTER_CATALOG
+#import "monster_catalog64.s"
+#import "../../../core/monster_catalog.s"
+#endif
 #import "../../../core/tier_manager.s"
 
 // Overlay state is platform-owned so product/test variant layout changes
@@ -2210,6 +2220,12 @@ program_end:
 // this init tail. Keeping it here leaves runtime-bank space for run setup.
 #import "../common/reu_loading_banked.s"
 
+#if HAL_PLATFORM_CATALOG_RECORDS
+// The monster catalog's boot loads (tier_init, once, before the title).
+#import "../common/catalog_boot.s"
+.assert "Catalog boot loads live in the init-only tail", catalog_boot_load >= program_end, true
+#endif
+
 // REU detection (restart_entry, once at boot) and its probes.
 #import "../common/reu_detect.s"
 .assert "REU detection lives in the init-only tail", reu_detect >= program_end && reu_probe_xfer >= program_end, true
@@ -2272,6 +2288,7 @@ generation_busy_install:
 // present, before the map exists; the core copies are skipped via
 // REU_LOAD_ALL_TIERS_EXTERNAL / REU_STASH_OVERLAYS_EXTERNAL). Same
 // init-tail treatment: frees resident room for chest search/trap discovery.
+#if !HAL_PLATFORM_MONSTER_CATALOG    // The catalog stashes its records instead (catalog_boot.s)
 reu_load_all_tiers:
     lda #0
     sta reu_tier_offset_lo
@@ -2355,6 +2372,8 @@ reu_load_all_tiers:
     lda #0
     sta current_tier
     rts
+
+#endif
 
 reu_stash_overlays:
     ldx #1                      // Start with overlay 1 (OVL_STARTUP)
@@ -2640,6 +2659,12 @@ init_load_banked:
 c64_banked_fname:
     .byte $36,$34,$2e,$42,$41,$4e,$4b  // "64.BANK" in PETSCII/ASCII bytes
 .label c64_banked_fname_len = * - c64_banked_fname
+
+#if HAL_PLATFORM_CATALOG_RECORDS
+// MONSTER.IDX loads past the init-only tail at boot (catalog_boot_load).
+catalog_init_tail_end:
+.assert "MONSTER.IDX's boot buffer is past the init-only tail", catalog_init_tail_end <= CATALOG_IDX_LOAD, true
+#endif
 
 // ============================================================
 // Banked runtime payload — loadable PRG at $F000.

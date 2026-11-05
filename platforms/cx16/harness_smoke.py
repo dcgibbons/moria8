@@ -566,7 +566,9 @@ def scenario_wizard_summon_town(tb: X16Bench) -> None:
             if abs(mx - px) <= 1 and abs(my - py) <= 1:
                 adjacent = True
     tb.assert_line("summon_spawned", found, "no new live monster slot after summon")
-    tb.assert_line("summon_town_roster", 57 <= new_type <= 64, f"summoned type {new_type} outside town roster")
+    # The catalog build keeps 32 dungeon rows, so the town roster is rows 32-39
+    # (core/monster.s TOWN_CREATURE_BASE).
+    tb.assert_line("summon_town_roster", 32 <= new_type <= 39, f"summoned type {new_type} outside town roster")
     tb.assert_line(
         "summon_glyph",
         new_type != 0xFF and tb.read_u8(crd + new_type) != 0,

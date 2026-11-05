@@ -378,6 +378,15 @@ c64_test_force_detect_evil_monster:
     // A new game starts in town with no tier; this test starts on DL10.
     // Runs once per test, so the counters start from their load-time zeros.
     jsr tier_restore_after_overlay
+#if HAL_PLATFORM_MONSTER_CATALOG
+    // A catalog level may hold no evil species (5-9 monsters on 80x48):
+    // load the Orc (catalog id 77, level 6, evil) for the scan below.
+    lda #77
+    sta cat_id_lo
+    lda #0
+    sta cat_id_hi
+    jsr catalog_slot_for_id
+#endif
     // Rows y-4..y+4, columns x-12..x+12; cells off the map (including a
     // wrapped start) are skipped.
     lda zp_player_y

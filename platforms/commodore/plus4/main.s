@@ -10,6 +10,11 @@
 // Overlay segments: produce separate PRGs at $E000.
 // Assembled in same pass as main program — full symbol access.
 // Only ONE overlay is active at a time (they share $E000-$EFFF).
+// The monster catalog (docs/MONSTER_CATALOG_DESIGN.md) replaces the tiers in
+// the product build, its records read from the drive. The unit tests
+// (tests/*.s) do not import main.s and keep the tier roster.
+#define HAL_PLATFORM_MONSTER_CATALOG
+#define HAL_PLATFORM_CATALOG_RECORDS
 #define PLUS4_PRODUCT_OVERLAY_RUNTIME
 #define PLATFORM_PRODUCT_OVERLAY_RUNTIME
 #define STORAGE_STATUS_HELPER
@@ -429,6 +434,10 @@ tramp_dig_ability:
 #undef DISARM_HELPERS_EXTERNAL
 #undef DISARM_COMMAND_EXTERNAL
 #import "../../../core/monster.s"
+#if HAL_PLATFORM_MONSTER_CATALOG
+#import "monster_catalog4.s"
+#import "../../../core/monster_catalog.s"
+#endif
 #import "../../../core/tier_manager.s"
 
 // Overlay state is platform-owned so product/test variant layout changes
@@ -2108,6 +2117,12 @@ program_end:
 // are used. Overwritten during normal gameplay.
 // ============================================================
 
+#if HAL_PLATFORM_CATALOG_RECORDS
+// The monster catalog's boot load (tier_init, once, before the title).
+#import "../common/catalog_boot.s"
+.assert "Catalog boot loads live in the init-only tail", catalog_boot_load >= program_end, true
+#endif
+
 // init_load_banked — Load banked runtime payload to $F000.
 // Called once at startup before any $F000 trampoline is used.
 // Clobbers: A, X, Y
@@ -2135,6 +2150,12 @@ init_load_banked:
     lda plus4_color_attr + COL_RED
     sta TED_BORDER
     jmp !load_failed-
+
+#if HAL_PLATFORM_CATALOG_RECORDS
+// MONSTER.IDX loads past the init-only tail at boot (catalog_boot_load).
+catalog_init_tail_end:
+.assert "MONSTER.IDX's boot buffer is past the init-only tail", catalog_init_tail_end <= CATALOG_IDX_LOAD, true
+#endif
 
 // ============================================================
 // Banked runtime payload — loadable PRG at $F000.

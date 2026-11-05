@@ -23,6 +23,22 @@
 .const hal_storage_disk_setup_marker_write_status_required = 1
 .const hal_storage_disk_setup_done_value = 2
 .const hal_storage_disk_setup_commit_sets_ui_ok = 0
+#if HAL_PLATFORM_MONSTER_CATALOG
+// $09: the monster catalog: the species table in the door-state block and 40
+// creature rows (a 160-byte recall block). Older saves name tier creatures,
+// so $09 is the oldest the loader takes and the legacy feature versions are
+// pinned at it (the 31-slot inventory version just below it, so its loader
+// compiles out).
+.const hal_storage_save_v1_version = $09
+.const hal_storage_save_known96_version = $09
+.const hal_storage_save_inv31_version = $08
+.const hal_storage_save_known_bits_version = $09
+.const hal_storage_save_baked_stats_version = $09
+.const hal_storage_save_known160_version = $09
+.const hal_storage_save_door_state_version = $09
+.const hal_storage_save_inv33_version = $09
+.const hal_storage_save_version = $09
+#else
 .const hal_storage_save_v1_version = $01
 .const hal_storage_save_known96_version = $02
 .const hal_storage_save_inv31_version = $03
@@ -32,6 +48,7 @@
 .const hal_storage_save_door_state_version = $07
 .const hal_storage_save_inv33_version = $08
 .const hal_storage_save_version = $08
+#endif
 
 #define HAL_STORAGE_DISK_SETUP_MARKER_PROBE_DOS
 #define HAL_STORAGE_DISK_SETUP_MARKER_WRITE_STATUS_REQUIRED

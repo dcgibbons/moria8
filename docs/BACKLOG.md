@@ -399,6 +399,26 @@ Two follow-ups from the no-HP attack fix (2026-11-01):
   through to a normal hit. No shipped creature has it there today, so this
   only matters once the special attacks are expanded.
 
+### Raise `MAX_MONSTERS` on the large-map ports, up to VMS's limit
+
+**Maintainer, 2026-11-05.** Every port holds 32 live monsters
+(`core/monster.s` `MAX_MONSTERS`). With the monster catalog a level can hold
+no more species than live monsters, so the creature rows are 32 dungeon
+species plus the 8 town creatures (40) on every catalog port. The 198x66
+ports (C128, CX16, and the Apple IIe and BBC Master once they take the
+catalog) have the room for more, and VMS's population on that map size
+reaches the 32-slot cap from about DL25 (`docs/MONSTER_CATALOG_DESIGN.md`,
+"Population on Moria8's maps").
+
+Raise `MAX_MONSTERS` on those ports, never above VMS's limit: `max_malloc =
+100 + 1` (VMS `constants.inc:107`; slot 0 unused, so 100 live monsters).
+Umoria's `MON_TOTAL_ALLOCATIONS` is 125 (`monster.h:57`); stay at VMS's 100.
+The species rows grow with it (`CAT_SLOTS = MAX_MONSTERS`), the 12-byte
+monster records, the save blocks and every table scan (`cat_slot_in_use`,
+the AI loop) grow too, and the generation cap of 26 (6 slots kept for
+summons, breeders, new arrivals and pits) is revisited with it. About 200
+resident bytes for 48 monsters, per the design doc's estimate.
+
 ### High priority: the monster abilities Moria8 lacks
 
 **High priority (maintainer, 2026-11-02).** The monster catalog

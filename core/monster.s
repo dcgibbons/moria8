@@ -13,10 +13,18 @@
 .const MAX_MONSTERS      = 32
 .const MON_MULT_ADJ      = 7    // VMS mon_mult_adj: high value slows multiplication
 .const MONSTER_ENTRY_SIZE = 12
-.const MAX_DUNGEON_CREATURES = 57 // Largest tier (tier 4)
+.const TIER_DUNGEON_CREATURES    = 57 // Largest tier (tier 4)
+.const CATALOG_DUNGEON_CREATURES = 32 // Catalog species slots: one per live monster (MAX_MONSTERS)
+#if HAL_PLATFORM_MONSTER_CATALOG
+// A level holds at most MAX_MONSTERS live monsters, so at most that many
+// species: the catalog needs no more dungeon rows (maintainer, 2026-11-05).
+.const MAX_DUNGEON_CREATURES = CATALOG_DUNGEON_CREATURES
+#else
+.const MAX_DUNGEON_CREATURES = TIER_DUNGEON_CREATURES
+#endif
 .const MAX_TOWN_CREATURES    = 8  // Town creature slots
-.const MAX_CREATURES         = MAX_DUNGEON_CREATURES + MAX_TOWN_CREATURES  // 65
-.const TOWN_CREATURE_BASE    = MAX_DUNGEON_CREATURES  // First town index = 57
+.const MAX_CREATURES         = MAX_DUNGEON_CREATURES + MAX_TOWN_CREATURES  // 65 (catalog: 40)
+.const TOWN_CREATURE_BASE    = MAX_DUNGEON_CREATURES  // First town index = 57 (catalog: 32)
 .const TOWN_CREATURE_COUNT   = 8  // All 8 umoria town creatures
 .const NUM_SOA_FIELDS        = 23 // Number of SoA arrays for tier loading
 .const EMPTY_SLOT        = $ff
@@ -984,7 +992,9 @@ monster_spawn_level:
     jmp !msl_loop-
 
 !msl_done:
-#if HAL_PLATFORM_MONSTER_CATALOG
+#if HAL_PLATFORM_MONSTER_CATALOG && HAL_PLATFORM_CATALOG_WIN_TRAMPOLINE
+    jsr tramp_catalog_place_win
+#elif HAL_PLATFORM_MONSTER_CATALOG
     jsr catalog_place_win_creature
 #endif
     jmp tramp_spawn_special_room_monsters
@@ -1352,8 +1362,14 @@ monster_remove:
 // ============================================================
 .assert "Monster table size", MAX_MONSTERS * MONSTER_ENTRY_SIZE, 384
 .assert "Monster table >256 bytes", MAX_MONSTERS * MONSTER_ENTRY_SIZE > 256, true
+#if HAL_PLATFORM_MONSTER_CATALOG
+.assert "Catalog dungeon rows are the live monster slots", CATALOG_DUNGEON_CREATURES, MAX_MONSTERS
+.assert "Max creatures", MAX_CREATURES, 40
+.assert "Town creature base", TOWN_CREATURE_BASE, 32
+#else
 .assert "Max creatures", MAX_CREATURES, 65
 .assert "Town creature base", TOWN_CREATURE_BASE, 57
+#endif
 .assert "Town creature base follows dungeon rows", TOWN_CREATURE_BASE, MAX_DUNGEON_CREATURES
 .assert "Town creature count", MAX_TOWN_CREATURES, TOWN_CREATURE_COUNT
 .assert "cr_display size", cr_color - cr_display, MAX_CREATURES

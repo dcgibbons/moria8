@@ -1,7 +1,9 @@
 # Monster Catalog Design: the Whole Catalog, Picked as VMS Picks
 
-Status: design (2026-11-02), not implemented. It replaces the depth-tier
-monster model. The maintainer's decisions are at the end.
+Status: implemented on the Commander X16 and C128 (2026-11-02) and the C64
+and Plus/4 (2026-11-05); the Apple IIe, Atari 8-bit and BBC Master keep the
+tiers. It replaces the depth-tier monster model. The maintainer's decisions
+are at the end.
 
 ## Why
 
@@ -447,6 +449,112 @@ Unresolved uncertainty and risk: the population and level mix change game
   balance; the X16 cycle (one success of 31) has no tier baseline to compare.
 ```
 
+## C64 and Plus/4 (2026-11-05)
+
+The disk ports (maintainer, 2026-11-05: "do most of the loading at dungeon
+generation time, but i do not want to limit the surprise monsters. so if we
+need to ad-hoc load a couple of monsters during the gameplay on non-REU
+systems, I think that is OK"). `main.s` defines the flag and
+`HAL_PLATFORM_CATALOG_RECORDS` for the product build; the unit tests keep the
+tier roster.
+
+- **Records** (`platforms/commodore/common/catalog_records.s`,
+  `tools/catalog_disk.py`): 49 bytes each, the catalog id, the 21 engine
+  fields and the name as plain screen codes (maintainer: "plain names in the
+  records"; Huffman names stay on the C128 and X16), five to a 254-byte
+  sector so none crosses one: 56 sectors in `MONSTER.CAT1-4` (16, 16, 16 and
+  8 blocks), each a PRG loading at `$E000`.
+- **Index and sector table** (maintainer: "the spare half of the name pool"):
+  `MONSTER.IDX` holds the level index and the track and sector of each record
+  sector, written by the disk build from where the records landed (the test
+  runners' images through `catalog_disk.py fix`). At boot (`tier_init`,
+  `catalog_boot_load` in the init-only tail) it loads into the map's last
+  page (`CATALOG_IDX_LOAD`; the `$E000` window holds the title's overlay, and
+  a game loaded from a save disk left in the drive must not need the program
+  disk) and is copied into hidden RAM:
+  the C64's `$D400-$D4E4` under I/O, the Plus/4's `$DC00-$DCE4`; the name
+  pool is `$D000-$D3FF` / `$D800-$DBFF` (`memory.s`, with asserts). The picker
+  reads the index there: the C64 maps all RAM with interrupts off
+  (`c64_catalog_map`), the Plus/4 runs with that RAM visible.
+- **Fetch** (`common/catalog_fetch.s` `catalog_fetch_record`): the KERNAL and
+  I/O in for the transfer (a pick can come from the C64's `$F000` code, which
+  runs with every ROM and I/O out), then:
+  - with an REU (C64): the four files were stashed at REU `$0000-$3FFF` at
+    boot (`catalog_reu_preload`), and a record is one 49-byte DMA;
+  - else the drive: `U1` reads the record's sector into a buffer channel and
+    `B-P` points at the record. A record that names another creature (files
+    copied one by one, an SD drive without block commands, a read error) is
+    read again from `MONSTER.CATn` by name, skipping to it; only when that
+    fails too does the game ask for the program disk and read again (the
+    screen is redrawn at the next render).
+  Timings on a true-drive 1541 (stock / JiffyDOS, measured 2026-11-05): a
+  direct read about 0.42 / 0.24 s (0.7 / 0.46 s after an overlay load), a
+  DL1's 5-9 species 2-4 s / 1-2 s; the REU is instant.
+- **Population**: VMS's count scaled by map area (`CAT_AREA_SCALE`,
+  75/256 on 80x48): 5-9.
+- **Resident room**: the tier code, the tier file names and 25 unused
+  creature rows paid for the catalog; the C64's win-creature placement runs
+  from its `$F000` runtime (`tramp_catalog_place_win`). C64 `program_end`
+  `$BF5F` (161 B free), Plus/4 `$C797` (104 B free).
+- **Saves**: C64 `$17`, Plus/4 `$09`, the oldest each loads; the test
+  fixtures write that layout. Loading a game re-reads its species.
+- **Tests**: C64 `catalog_spawn_product_smoke` (the drive) and
+  `catalog_spawn_product_reu_smoke` (the REU), Plus/4 `catalog_spawn_plus4`:
+  a scripted new game to DL1, then the monster table, species table, levels
+  and the hidden pool's names checked against the catalog
+  (`c128/tests/check_catalog128.py`, at least 5 monsters).
+
+**40 creature rows on every catalog port** (maintainer, 2026-11-05: "let's
+not be wasteful if it isn't being fucking used. let's go with 40
+everywhere"): a level holds at most `MAX_MONSTERS` live monsters, so at most
+that many species, and the tier-era 57 dungeon rows left rows 32-56 unused on
+the C128 and X16. `MAX_DUNGEON_CREATURES` is `CATALOG_DUNGEON_CREATURES` (32)
+with the catalog; the recall block is 160 bytes, so the C128 saves are `$1A`
+and the X16's `$18`, each the oldest it loads. Raising `MAX_MONSTERS` on the
+large-map ports, never above VMS's 100, is backlog work.
+
+Change record (`docs/BEHAVIOR_CHANGE_PROTOCOL.md`):
+
+```text
+Problem and success criteria: C64 and Plus/4 monsters follow the VMS catalog
+  as the C128 and X16 do, read from disk (or the C64's REU) a species at a
+  time; make test passes on every port.
+State being changed: cr_* rows 0-31 and the hidden name pool on the C64 and
+  Plus/4; creature row count 65 -> 40 on every catalog port; save versions.
+Search scope and terms: pick_creature_type, catalog_*, tier_*, MAX_CREATURES,
+  MAX_DUNGEON_CREATURES, TOWN_CREATURE_BASE, RECALL_DATA_SIZE, monster.db,
+  PLATFORM_TIER_NAME_POOL, hal_storage_tier_*, reu_fetch_tier (core/,
+  platforms/commodore/, platforms/cx16/, playtest/, tools/).
+Relevant readers/writers found and known exclusions: as the C128 record;
+  creature_get_name reads the hidden pool through its existing path; the
+  playtest bot reads 32 or 57 dungeon rows by port (knowledge.uses_catalog).
+Initialization, reset and persistence points: MONSTER.IDX at boot;
+  catalog_reset_slots each level; the species table saved and re-read.
+Affected production sequence through the changed transition: level generate
+  -> monster_spawn_level -> catalog_population -> pick_creature_type ->
+  cat_fetch -> catalog_fetch_record (REU or drive) -> monster_spawn_one;
+  mid-level arrivals and summons the same way.
+Contract decision or selected upstream oracle with source locations: as the
+  C128 record (VMS misc.inc, generate.inc).
+Intentional Moria8 deviations: population scaled by map area; plain names on
+  disk; a copied disk reads by name, slower.
+Input/intermediate widths, signedness, carry, range and overflow policy: ids
+  9-bit; sector = id / 5 (<= 55), offset 2 + (id % 5) * 49 (<= 198); REU
+  address (sector / 16) * $1000 + (sector % 16) * 254 + (offset - 2), 16-bit.
+RNG reduction and bias, if applicable: unchanged pick; the scale is a
+  rounded multiply, no RNG.
+Affected platforms, overlays, banks and owners: C64 (hidden $D000-$D7FF,
+  REU $0000-$3FFF, $F000 runtime), Plus/4 (hidden $D800-$DFFF), C128 and X16
+  (row count, save version).
+Required production-path tests: catalog_spawn_product_smoke,
+  catalog_spawn_product_reu_smoke, catalog_spawn_plus4, the save and load
+  smokes, make test.
+Known behavior explicitly out of scope: Apple IIe, Atari 8-bit, BBC Master;
+  recall by catalog id; raising MAX_MONSTERS.
+Unresolved uncertainty and risk: real-hardware drive timing beyond VICE's
+  deterministic rotation; a mid-play read is a visible pause on a stock 1541.
+```
+
 ## Decisions (maintainer, 2026-11-02)
 
 1. **Source of truth:** VMS Moria 4.8, with Umoria 5.7.15 as the cross-check.
@@ -464,3 +572,14 @@ Unresolved uncertainty and risk: the population and level mix change game
 7. **Out-of-depth picks:** VMS exactly, its off-by-8 quirk included.
 8. **Population:** VMS's count scaled by map area, generation capped at 26 of
    the 32 slots; `MAX_MONSTERS` revisited after the CX16 prototype.
+
+Decisions (maintainer, 2026-11-05):
+
+9. **Disk ports:** most species read while a level is generated; a new
+   arrival or summon may read during play on machines without an REU (the
+   C64 uses its REU when present).
+10. **C64 and Plus/4 storage:** plain names in the records; the index and
+    sector table in the spare half of the hidden name pool; the sector table
+    written when the disk is built.
+11. **Creature rows:** 40 on every catalog port; raising `MAX_MONSTERS` on
+    the large-map ports, never above VMS's 100, is backlog.

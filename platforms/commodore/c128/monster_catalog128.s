@@ -56,6 +56,10 @@ c128_load_catalog_names_prg:
 .const CATALOG_NAME_POOL_BASE = BANK1_CATALOG_POOL_BASE
 .const CATALOG_NAME_POOL_END  = BANK1_CATALOG_POOL_END
 
+.macro CatalogWinBegin() {
+}
+.macro CatalogWinEnd() {
+}
 .macro CatalogMap() {
 }
 .macro CatalogUnmap() {

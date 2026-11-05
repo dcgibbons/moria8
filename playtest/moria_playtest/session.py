@@ -27,7 +27,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from . import nav
+from . import knowledge, nav
 from .auditor import Auditor
 from .brain import Brain
 from .game import EmulatorUnresponsive, GameFault, Mode, Observation
@@ -335,8 +335,10 @@ class Character:
                         break   # a budget-out, as the step budget would have ended it
                 view = None
                 if tiles is not None:
-                    levels = game.mon.mem_get(game.abi.cr_level, game.abi.MAX_DUNGEON_CREATURES
-                                              + game.abi.MAX_TOWN_CREATURES, game.ram)
+                    # Catalog builds keep 32 dungeon rows, tier builds 57 (core/monster.s).
+                    rows = (game.abi.CATALOG_DUNGEON_CREATURES if knowledge.uses_catalog()
+                            else game.abi.TIER_DUNGEON_CREATURES)
+                    levels = game.mon.mem_get(game.abi.cr_level, rows + game.abi.MAX_TOWN_CREATURES, game.ram)
                     view = build_view(game, obs, tiles, levels)
                 decision = self.brain.decide(obs, view)
                 for event in self.brain.events:

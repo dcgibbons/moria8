@@ -19,7 +19,9 @@ TIER_DIR = ROOT / "platforms/commodore/c64/creature_data"
 # Ports built with the monster catalog (docs/MONSTER_CATALOG_DESIGN.md) meet
 # the catalog's creatures, not the tiers': the HAL flag in their policy file.
 CATALOG_PORTS = {"cx16": ROOT / "platforms/cx16/hal/lifecycle_policy.s",
-                 "c128": ROOT / "platforms/commodore/c128/main.s"}
+                 "c128": ROOT / "platforms/commodore/c128/main.s",
+                 "c64": ROOT / "platforms/commodore/c64/main.s",
+                 "plus4": ROOT / "platforms/commodore/plus4/main.s"}
 CATALOG_DIR = ROOT / "platforms/shared/catalog"
 CATALOG_FLAG = "#define HAL_PLATFORM_MONSTER_CATALOG"
 _catalog_dir: Path | None = None
@@ -46,6 +48,11 @@ def use_port(name: str) -> None:
         for value in list(globals().values()):
             if hasattr(value, "cache_clear"):
                 value.cache_clear()
+
+
+def uses_catalog() -> bool:
+    """The port named in ``use_port`` is built with the monster catalog."""
+    return _catalog_dir is not None
 
 
 def _catalog() -> tuple[list[str], dict[str, list[int]]]:

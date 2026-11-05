@@ -85,7 +85,7 @@ C64 = Port(
     disk_files={
         "moria8": "boot.prg", "boot64": "boot.prg", "bootart64": "bootart64.prg",
         "moria64": "moria8.prg", "t64": "title",
-        **{f"monster.db.{tier}": f"monster.db.{tier}" for tier in range(1, 5)},
+        **{f"monster.cat{n}": f"monster.cat{n}" for n in range(1, 5)}, "monster.idx": "monster.idx",
         **{f"64.{name}": f"ovl.{name}" for name in
            ("start", "town", "death", "modal", "gen", "help", "ui", "items", "spell", "chest")},
         "64.bank": "64.bank",
@@ -137,7 +137,7 @@ PLUS4 = Port(
     disk_target="diskplus4",
     disk_files={
         "moria8": "boot4.prg", "boot4": "boot4.prg", "moria4": "moria4.prg", "t64": "title",
-        **{f"monster.db.{tier}": f"monster.db.{tier}" for tier in range(1, 5)},
+        **{f"monster.cat{n}": f"monster.cat{n}" for n in range(1, 5)}, "monster.idx": "monster.idx",
         **{f"4.{name}": f"ovl.{name}" for name in
            ("start", "town", "death", "modal", "gen", "help", "ui", "items", "spell", "chest")},
         "4.bank": "4.bank",

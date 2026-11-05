@@ -8,7 +8,7 @@ import sys
 # $19 and older ones are refused (hal/storage_policy.s), so the fixture is
 # written in that format: 33 inventory slots, the 20-byte known-item bitset,
 # and the door-state block followed by the species table (save.s).
-SAVE_VERSION = 0x19
+SAVE_VERSION = 0x1A
 LEGACY_ROOM8_SAVE_VERSION = 0x12
 LEGACY_TOTAL_INV_SLOTS = 31
 ID_KNOWN_BYTES = 20
@@ -25,7 +25,7 @@ MAX_TRAPS = 16
 MAX_MONSTERS = 32
 MONSTER_ENTRY_SIZE = 12
 MAX_FLOOR_ITEMS = 42
-RECALL_DATA_SIZE = 260
+RECALL_DATA_SIZE = 160   # 40 creature rows x 4 (core/recall_defs.s)
 MAP_SIZE = 13068
 TOTAL_INV_SLOTS = 33
 

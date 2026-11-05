@@ -14,7 +14,7 @@
 // ============================================================
 hd_cur_byte:   .byte 0        // Current byte being read
 hd_bit_mask:   .byte 0        // Bits remaining in current byte (counter)
-#if HAL_PLATFORM_MONSTER_CATALOG
+#if HAL_PLATFORM_MONSTER_CATALOG && !HAL_PLATFORM_CATALOG_RECORDS
 #if !HAL_PLATFORM_HUFFMAN_DATA_AUX
 .error "The monster catalog's names tree is read through the banked Huffman reads"
 #endif
@@ -86,7 +86,7 @@ hd_tree_right_ptr: .word huff_tree_right
 }
 
 .macro HuffRead_tree_left_y() {
-#if HAL_PLATFORM_MONSTER_CATALOG
+#if HAL_PLATFORM_MONSTER_CATALOG && !HAL_PLATFORM_CATALOG_RECORDS
     lda hd_tree_left_ptr
     sta zp_ptr1
     lda hd_tree_left_ptr + 1
@@ -100,7 +100,7 @@ hd_tree_right_ptr: .word huff_tree_right
 }
 
 .macro HuffRead_tree_right_y() {
-#if HAL_PLATFORM_MONSTER_CATALOG
+#if HAL_PLATFORM_MONSTER_CATALOG && !HAL_PLATFORM_CATALOG_RECORDS
     lda hd_tree_right_ptr
     sta zp_ptr1
     lda hd_tree_right_ptr + 1

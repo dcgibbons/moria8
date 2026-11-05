@@ -4451,7 +4451,7 @@ run_boot_title_save_write_product_smoke() {
     check_log="$(test128_tmp_file "test128_${name}_check.log")"
     rm -f "$save_seq"
     if ! "$c1541_bin" -attach "$abs_save_d64" -read "the.game,s" "$save_seq" >"$check_log" 2>&1 \
-            || ! python3 ../c64/tests/check_save_secondary.py "$save_seq" 0x19 >>"$check_log" 2>&1; then
+            || ! python3 ../c64/tests/check_save_secondary.py "$save_seq" 0x1A >>"$check_log" 2>&1; then
         echo "FAIL (secondary weapon not in the written save)"
         tail -3 "$check_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
