@@ -6,7 +6,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #19
+    ldx #20
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -216,7 +216,7 @@ tramp_ego_put_suffix:
     rts
 teps_save_y: .byte 0
 
-tc_results: .fill 20, $ff
+tc_results: .fill 21, $ff
 
 .macro PatchJump(target, replacement) {
     lda #$4c
@@ -266,6 +266,8 @@ test_start:
     jsr test_equipment_select_view
     jsr test_equipment_wrap_long
     jsr test_equipment_wrap_longer
+    jsr test_status_gold_24bit
+    jsr test_character_gold_xp_24bit
 
     jmp test_exit_trampoline
 
@@ -292,8 +294,10 @@ reset_shared_state:
     sta player_data + PL_MAX_MANA
     sta player_data + PL_GOLD_0
     sta player_data + PL_GOLD_1
+    sta player_data + PL_GOLD_2
     sta player_data + PL_XP_0
     sta player_data + PL_XP_1
+    sta player_data + PL_XP_2
     sta player_data + PL_SPELL_TYPE
     sta player_data + PL_SPELLS_KNOWN
     sta player_data + PL_SPELLS_KNOWN_HI
@@ -1357,6 +1361,137 @@ test_screen_put_string_clamps_to_row:
     sta tc_results + 14
     rts
 
+// Gold is 24-bit (PL_GOLD_0-2): the status line printed the low 16 bits,
+// so 65,547 gold showed as 11 (C128 Balrog queue, 2026-11-05). Production
+// status_draw: exact up to the 40-column field's five digits, thousands with
+// a "K" beyond, and a change in the top byte alone redraws the row.
+test_status_gold_24bit:
+    jsr reset_shared_state
+    lda #0
+    sta status_cache_valid
+    sta zp_player_hp_hi
+    sta zp_player_mhp_hi
+    sta zp_player_mp
+    sta zp_player_mmp
+    sta zp_player_ac
+    sta zp_hunger_state
+    lda #1
+    sta zp_player_dlvl
+
+    lda #$0b                    // 65,547 = $01000B
+    ldx #$00
+    ldy #$01
+    jsr set_gold_and_draw
+    lda #<expected_gold_65547
+    ldx #>expected_gold_65547
+    jsr assert_gold_field
+    bcc !fail+
+
+    lda #$9f                    // 99,999 = $01869F: the widest exact value
+    ldx #$86
+    ldy #$01
+    jsr set_gold_and_draw
+    lda #<expected_gold_99999
+    ldx #>expected_gold_99999
+    jsr assert_gold_field
+    bcc !fail+
+
+    lda #$a0                    // 100,000 = $0186A0: thousands and a K
+    ldx #$86
+    ldy #$01
+    jsr set_gold_and_draw
+    lda #<expected_gold_100k
+    ldx #>expected_gold_100k
+    jsr assert_gold_field
+    bcc !fail+
+
+    lda #$00                    // 4,096 = $001000, then 69,632 = $011000:
+    ldx #$10                    // only the top byte changes
+    ldy #$00
+    jsr set_gold_and_draw
+    lda #$00
+    ldx #$10
+    ldy #$01
+    jsr set_gold_and_draw
+    lda #<expected_gold_69632
+    ldx #>expected_gold_69632
+    jsr assert_gold_field
+    bcc !fail+
+
+    lda #$01
+    bne !store+
+!fail:
+    lda #$00
+!store:
+    sta tc_results + 19
+    rts
+
+// A = lo, X = mid, Y = top byte of the gold; then status_draw.
+set_gold_and_draw:
+    sta player_data + PL_GOLD_0
+    stx player_data + PL_GOLD_1
+    sty player_data + PL_GOLD_2
+    jmp status_draw
+
+// A/X = expected text at the status row's "AU:" column; C set on a match.
+assert_gold_field:
+    sta zp_ptr0
+    stx zp_ptr0_hi
+    lda #23
+    ldx #hal_layout_status_row23_au_col
+    jmp assert_screen_string
+
+// The character sheet prints 24-bit gold and experience in full.
+test_character_gold_xp_24bit:
+    jsr reset_shared_state
+    lda #<test_player_name
+    sta zp_ptr0
+    lda #>test_player_name
+    sta zp_ptr0_hi
+    lda #<(player_data + PL_NAME)
+    sta zp_ptr1
+    lda #>(player_data + PL_NAME)
+    sta zp_ptr1_hi
+    jsr copy_string_zp
+    lda #$0b                    // gold 65,547 = $01000B
+    sta player_data + PL_GOLD_0
+    lda #$00
+    sta player_data + PL_GOLD_1
+    lda #$01
+    sta player_data + PL_GOLD_2
+    lda #$70                    // experience 70,000 = $011170
+    sta player_data + PL_XP_0
+    lda #$11
+    sta player_data + PL_XP_1
+    lda #$01
+    sta player_data + PL_XP_2
+    jsr ui_char_display
+
+    lda #<expected_char_gold_65547
+    sta zp_ptr0
+    lda #>expected_char_gold_65547
+    sta zp_ptr0_hi
+    lda #10
+    ldx #hal_layout_character_col_l
+    jsr assert_screen_string
+    bcc !fail+
+    lda #<expected_char_exp_70000
+    sta zp_ptr0
+    lda #>expected_char_exp_70000
+    sta zp_ptr0_hi
+    lda #10
+    ldx #hal_layout_character_col_mid
+    jsr assert_screen_string
+    bcc !fail+
+
+    lda #$01
+    bne !store+
+!fail:
+    lda #$00
+!store:
+    sta tc_results + 20
+    rts
+
 assert_screen_string:
     sta zp_cursor_row
     stx zp_cursor_col
@@ -1499,6 +1634,18 @@ expected_status_hp_after_modal_clear:
     .text "HP:21/34" ; .byte 0
 expected_status_search:
     .text "Search*" ; .byte 0
+expected_gold_65547:
+    .text "AU:65547 " ; .byte 0
+expected_gold_99999:
+    .text "AU:99999 " ; .byte 0
+expected_gold_100k:
+    .text "AU:100K  " ; .byte 0
+expected_gold_69632:
+    .text "AU:69632 " ; .byte 0
+expected_char_gold_65547:
+    .text "Gold: 65547 " ; .byte 0
+expected_char_exp_70000:
+    .text "EXP:70000" ; .byte 0
 long_row_string:
     .text "1234567890123456789012345678901234567890" ; .byte 0
 

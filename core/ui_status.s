@@ -24,6 +24,9 @@
 .const STS_ROW23_AU_COL = hal_layout_status_row23_au_col
 .const STS_ROW23_HUNGER_COL = hal_layout_status_row23_hunger_col
 .const STS_ROW23_STATE_COL = hal_layout_status_row23_state_col
+// Gold digits that fit between "AU:" and the hunger word with a space before it
+.const STS_AU_DIGITS = STS_ROW23_HUNGER_COL - STS_ROW23_AU_COL - 4
+.assert "status gold field holds 16-bit gold", STS_AU_DIGITS >= 5, true
 
 // ============================================================
 // Subroutines
@@ -129,6 +132,9 @@ status_draw:
     bne !sd_row23_dirty+
     lda player_data + PL_GOLD_1
     cmp status_prev_gold_hi
+    bne !sd_row23_dirty+
+    lda player_data + PL_GOLD_2
+    cmp status_prev_gold_bank
     bne !sd_row23_dirty+
 
     lda zp_hunger_state
@@ -441,7 +447,27 @@ status_draw:
     sta zp_temp0
     lda player_data + PL_GOLD_1
     sta zp_temp1
-    jsr screen_put_decimal_16
+    lda player_data + PL_GOLD_2
+    sta nf_value_2
+.if (STS_AU_DIGITS < 8) {
+    // More digits than the field holds (40 columns: 100,000 and up):
+    // thousands and a "K", 123,456 as 123K.
+    jsr numeric_format_u24
+    lda zp_temp2
+    cmp #STS_AU_DIGITS + 1
+    bcc !sd_gold_emit+
+    sbc #3
+    sta zp_temp2
+    jsr numeric_format_emit_screen
+    lda #$4b                    // "K" (screencode_mixed)
+    jsr hal_screen_put_char
+    jmp !sd_gold_done+
+!sd_gold_emit:
+    jsr numeric_format_emit_screen
+!sd_gold_done:
+} else {
+    jsr screen_put_decimal_u24
+}
 
     lda #STS_ROW23_HUNGER_COL
     sta zp_cursor_col
@@ -525,6 +551,8 @@ status_draw:
     sta status_prev_gold_lo
     lda player_data + PL_GOLD_1
     sta status_prev_gold_hi
+    lda player_data + PL_GOLD_2
+    sta status_prev_gold_bank
 
     lda zp_hunger_state
     sta status_prev_hunger
@@ -681,6 +709,7 @@ status_prev_mmp:    .byte 0
 status_prev_ac:     .byte 0
 status_prev_gold_lo:.byte 0
 status_prev_gold_hi:.byte 0
+status_prev_gold_bank:.byte 0
 status_prev_hunger: .byte 0
 status_prev_searching: .byte 0
 status_dirty_rows:  .byte 0

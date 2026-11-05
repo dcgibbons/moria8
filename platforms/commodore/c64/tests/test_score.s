@@ -2,12 +2,13 @@
 //
 // Tests: math_add_24 basic, math_add_24 carry, math_cmp_24 equal/lt/gt,
 //        score_calculate, screen_put_decimal_24, screen_put_decimal_lz2,
-//        screen_put_decimal_16, hiscore_insert empty/ordering/overflow
+//        screen_put_decimal_16, hiscore_insert empty/ordering/overflow,
+//        screen_put_decimal_24 past 16 bits (65,547) and at 24 bits (16,777,215)
 // NOTE: score_io.s is NOT imported — hiscore_table aliases CREATURE_BASE
 //       ($C020) which overlaps test code. Local definitions redirect
 //       hiscore_table to a safe buffer within the test body.
 //
-// Results at $0400-$040b: $01 = pass, $00 = fail per test (12 tests)
+// Results at $0400-$040e: $01 = pass, $00 = fail per test (15 tests)
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(bootstrap)
@@ -25,7 +26,7 @@ bootstrap:
 
 // test_finish — Copy results to $0400 and halt.
 test_finish:
-    ldx #12
+    ldx #14
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -732,7 +733,81 @@ test_start:
 !t12_store:
     sta tc_results + 12
 
+    // ============================================================
+    // Test 13: screen_put_decimal_24 past 16 bits: 65,547 ($01000B) as
+    // "65547", not the low 16 bits' "11" (C128 Balrog queue, 2026-11-05)
+    // ============================================================
+    lda #$0b
+    sta score_accum_0
+    lda #$00
+    sta score_accum_1
+    lda #$01
+    sta score_accum_2
+    jsr t24_print
+    lda #<t13_expect
+    ldx #>t13_expect
+    jsr t24_check
+    lda #0
+    rol
+    sta tc_results + 13
+
+    // ============================================================
+    // Test 14: screen_put_decimal_24 at the 24-bit maximum: 16,777,215
+    // ============================================================
+    lda #$ff
+    sta score_accum_0
+    sta score_accum_1
+    sta score_accum_2
+    jsr t24_print
+    lda #<t14_expect
+    ldx #>t14_expect
+    jsr t24_check
+    lda #0
+    rol
+    sta tc_results + 14
+
     jmp test_finish
+
+// Clear row 0 and print score_accum_0-2 at row 0, col 0.
+t24_print:
+    lda #$20
+    ldx #39
+!clr:
+    sta $0400,x
+    dex
+    bpl !clr-
+    lda #0
+    sta zp_cursor_row
+    sta zp_cursor_col
+    lda #COL_WHITE
+    sta zp_text_color
+    jmp screen_put_decimal_24
+
+// Compare $0400.. with the zero-terminated text at A/X (lo/hi), then a space
+// after it; C set on a match.
+t24_check:
+    sta zp_ptr0
+    stx zp_ptr0_hi
+    ldy #0
+!loop:
+    lda (zp_ptr0),y
+    beq !end+
+    cmp $0400,y
+    bne !bad+
+    iny
+    bne !loop-
+!end:
+    lda $0400,y
+    cmp #$20
+    bne !bad+
+    sec
+    rts
+!bad:
+    clc
+    rts
+
+t13_expect: .text "65547" ; .byte 0
+t14_expect: .text "16777215" ; .byte 0
 
 test_body_end:
 .assert "Score test body stays below overlay boundary", test_body_end < $d000, true

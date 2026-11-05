@@ -4685,12 +4685,12 @@ run_test "item_ui" "tests/test_item_ui.s" "0400 040f" 16 1000000000
 run_test "potion_cures" "tests/test_potion_cures.s" "0400 040b" 12 1000000000
 run_test "timed_buffs" "tests/test_timed_buffs.s" "0400 0409" 10 1000000000
 run_test "store" "tests/test_store.s" "0400 0437" 56 1000000000
-run_test "ui_views" "tests/test_ui_views.s" "0400 0413" 19 500000000
+run_test "ui_views" "tests/test_ui_views.s" "0400 0414" 21 500000000
 run_test "ui_views_filters" "tests/test_ui_views_filters.s" "0400 0413" 7 500000000
 run_test "subsystems" "tests/test_subsystems.s" "0400 040a" 11
 run_sound_monitor_test
 run_test "save"  "tests/test_save.s"  "0400 0425" 38 1000000000
-run_test "score" "tests/test_score.s" "0400 040c" 13 500000000
+run_test "score" "tests/test_score.s" "0400 040e" 15 500000000
 run_test "wands_staves" "tests/test_wands_staves.s" "0400 0407" 8 100000000
 run_test "monster_magic" "tests/test_monster_magic.s" "0400 041c" 29 500000000
 run_test "tier" "tests/test_tier.s" "0400 0410" 17 500000000

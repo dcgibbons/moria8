@@ -218,7 +218,9 @@ ui_char_display:
     sta zp_temp0
     lda player_data + PL_GOLD_1
     sta zp_temp1
-    jsr screen_put_decimal_16
+    lda player_data + PL_GOLD_2
+    sta nf_value_2
+    jsr screen_put_decimal_u24
 
     lda #COL_LGREY
     sta zp_text_color
@@ -234,7 +236,9 @@ ui_char_display:
     sta zp_temp0
     lda player_data + PL_XP_1
     sta zp_temp1
-    jsr screen_put_decimal_16
+    lda player_data + PL_XP_2
+    sta nf_value_2
+    jsr screen_put_decimal_u24
 
     // --- Spells Known (row 11, spell-casters only) ---
     lda player_data + PL_SPELL_TYPE

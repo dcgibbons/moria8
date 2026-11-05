@@ -246,24 +246,14 @@ store_draw_screen:
     ldx #MSG_GOLD
     jsr show_msg
 
-    // Check for >65535 gold
-    lda player_data + PL_GOLD_2
-    bne !sds_big_gold+
-
-    // Normal display
     lda player_data + PL_GOLD_0
     sta zp_temp0
     lda player_data + PL_GOLD_1
     sta zp_temp1
-    jsr screen_put_decimal_16
-    jmp !sds_gold_done+
+    lda player_data + PL_GOLD_2
+    sta nf_value_2
+    jsr screen_put_decimal_u24
 
-!sds_big_gold:
-    lda #<uis_big_gold_str
-    ldy #>uis_big_gold_str
-    jsr uis_screen_put_inline
-
-!sds_gold_done:
     // Row 18: Menu
     ldx #MSG_MENU
     jmp show_msg
@@ -1592,8 +1582,6 @@ hg_retry_str:
     .text "WHAT WAS THAT?" ; .byte 0
 uis_gold_str:
     .text "Gold: " ; .byte 0
-uis_big_gold_str:
-    .text ">65535" ; .byte 0
 uis_store_gp_pad_str:
     .text " GP    " ; .byte 0
 uis_menu_str:

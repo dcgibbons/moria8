@@ -113,76 +113,16 @@ score_calculate:
 // Input:  score_accum_0/1/2 = 24-bit value
 //         zp_cursor_row, zp_cursor_col = position
 // Preserves: nothing
-// Uses:   sd24_work_0/1/2 (working copy), zp_temp2 (leading zero flag)
+// The shared resident formatter does the work (core/numeric_format.s).
 // ============================================================
-sd24_work_0: .byte 0
-sd24_work_1: .byte 0
-sd24_work_2: .byte 0
-
 screen_put_decimal_24:
-    // Copy value to working area
     lda score_accum_0
-    sta sd24_work_0
+    sta zp_temp0
     lda score_accum_1
-    sta sd24_work_1
+    sta zp_temp1
     lda score_accum_2
-    sta sd24_work_2
-
-    lda #0
-    sta zp_temp2                // Leading zero flag
-
-    ldx #7                      // 8 digits (10M, 1M, 100K, 10K, 1K, 100, 10, 1), index 7..0
-!sd24_digit_loop:
-    lda #0
-    sta zp_temp3                // Digit counter
-!sd24_sub_loop:
-    // Subtract power of 10 from working value
-    lda sd24_work_0
-    sec
-    sbc dec24_pow10_0,x
-    tay                         // Save lo result
-    lda sd24_work_1
-    sbc dec24_pow10_1,x
-    sta zp_temp4                // Save mid result
-    lda sd24_work_2
-    sbc dec24_pow10_2,x
-    bcc !sd24_digit_done+       // Underflow — done with this digit
-    sta sd24_work_2
-    lda zp_temp4
-    sta sd24_work_1
-    sty sd24_work_0
-    inc zp_temp3
-    jmp !sd24_sub_loop-
-!sd24_digit_done:
-    lda zp_temp3
-    bne !sd24_print_digit+
-    // Check if leading zero
-    lda zp_temp2
-    beq !sd24_next_digit+       // Still leading zeros, skip
-!sd24_print_digit:
-    lda #1
-    sta zp_temp2                // No more leading zeros
-    lda zp_temp3
-    ora #$30                    // Digit → screen code
-    jsr hal_screen_put_char
-!sd24_next_digit:
-    dex
-    bne !sd24_digit_loop-
-    // Always print ones digit
-    lda sd24_work_0
-    ora #$30
-    jmp hal_screen_put_char
-
-// Powers of 10 for 24-bit decimal (8 entries × 3 bytes)
-// Index: 0=1, 1=10, 2=100, 3=1000, 4=10000, 5=100000, 6=1000000, 7=10000000
-dec24_pow10_0:
-    .byte <1, <10, <100, <1000, <10000, <100000, <1000000, <10000000
-dec24_pow10_1:
-    .byte >1, >10, >100, >1000, >10000, >100000, >1000000, >10000000
-dec24_pow10_2:
-    .byte 0, 0, 0, 0, 0, 1, 15, 152
-    // $000001=1, $00000A=10, $000064=100, $0003E8=1000, $002710=10000
-    // $0186A0=100000 (byte2=1), $0F4240=1000000 (byte2=15), $989680=10000000 (byte2=152)
+    sta nf_value_2
+    jmp screen_put_decimal_u24
 
 // ============================================================
 // score_death_screen — Display the full death screen
