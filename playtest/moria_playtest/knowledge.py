@@ -10,11 +10,19 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from functools import lru_cache
+from pathlib import Path
 
 from .launch import ROOT
 from .screen import screen_code_to_char
 
 TIER_DIR = ROOT / "platforms/commodore/c64/creature_data"
+# Ports built with the monster catalog (docs/MONSTER_CATALOG_DESIGN.md) meet
+# the catalog's creatures, not the tiers': the HAL flag in their policy file.
+CATALOG_PORTS = {"cx16": ROOT / "platforms/cx16/hal/lifecycle_policy.s",
+                 "c128": ROOT / "platforms/commodore/c128/main.s"}
+CATALOG_DIR = ROOT / "platforms/shared/catalog"
+CATALOG_FLAG = "#define HAL_PLATFORM_MONSTER_CATALOG"
+_catalog_dir: Path | None = None
 MONSTER_ATTACK = ROOT / "core/monster_attack.s"
 TIER_LINE = re.compile(r"^//\s+\d+: \[\s*\d+\] DL\s*(\d+) (.+?)\s*$")
 TIER_TABLE = re.compile(r"^tier\d+_cr_(\w+):\n((?:[ \t]*\.byte[^\n]*\n)+)", re.M)
@@ -26,11 +34,53 @@ SPEED_MASK = 0x03         # cr_speed bits 3-5 hold random-move flags (MON-013)
 RANDOM_MASK = 0x38
 
 
+def use_port(name: str) -> None:
+    """Know the creatures of port ``name``'s build: the catalog's playable
+    creatures and the town roster when it is built with the catalog, else
+    the tiers."""
+    global _catalog_dir
+    policy = CATALOG_PORTS.get(name)
+    catalog = CATALOG_DIR if policy and CATALOG_FLAG in policy.read_text() else None
+    if catalog != _catalog_dir:
+        _catalog_dir = catalog
+        for value in list(globals().values()):
+            if hasattr(value, "cache_clear"):
+                value.cache_clear()
+
+
+def _catalog() -> tuple[list[str], dict[str, list[int]]]:
+    """(names, byte tables by field) of the catalog's playable dungeon
+    creatures (platforms/shared/catalog: fields, index and names)."""
+    assert _catalog_dir is not None
+    data = _catalog_dir
+    bank = (data / "catalog_fields.s").read_text() + (data / "catalog_index.s").read_text()
+    town = int(re.search(r"^\.const CATALOG_TOWN_COUNT = (\d+)", bank, re.M).group(1))
+    names = re.findall(r"^catn_\d+:.*// (.+?)\s*$", (data / "catalog_names.s").read_text(), re.M)
+    def values(label: str) -> list[int]:   # the .byte lines after the label
+        body = re.search(rf"^{label}:[^\n]*\n((?:[ \t]*\.byte[^\n]*\n)+)", bank, re.M).group(1)
+        return [int(v, 16) for v in re.findall(r"\$([0-9a-fA-F]{2})", body)]
+
+    bitmap = values("cat_available")
+    keep = [i for i in range(town, len(names)) if bitmap[i // 8] >> (i % 8) & 1]
+    tables = {label: [v for i, v in enumerate(values(f"cat_cr_{label}")) if i in keep]
+              for label in re.findall(r"^cat_cr_(\w+):$", bank, re.M)}
+    return [names[i] for i in keep], tables
+
+
+def _tier_files() -> list[Path]:
+    """The tier files whose creatures the port meets: the town roster alone
+    beside the catalog."""
+    return sorted(TIER_DIR.glob("tier0.s" if _catalog_dir is not None else "tier[0-9].s"))
+
+
 @lru_cache(maxsize=1)
 def creature_levels() -> dict[str, int]:
     """Creature name -> native dungeon level, for every shipped creature."""
     levels: dict[str, int] = {}
-    for path in sorted(TIER_DIR.glob("tier[0-9].s")):
+    if _catalog_dir is not None:
+        names, tables = _catalog()
+        levels.update(zip(names, tables["level"]))
+    for path in _tier_files():
         for line in path.read_text().splitlines():
             match = TIER_LINE.match(line)
             if match:
@@ -48,8 +98,8 @@ def kinds_by_name() -> dict[str, tuple[str, int]]:
 @lru_cache(maxsize=1)
 def _tiers() -> list[tuple[list[str], dict[str, list[int]]]]:
     """(creature names, byte tables by label) for each shipped tier file."""
-    tiers = []
-    for path in sorted(TIER_DIR.glob("tier[0-9].s")):
+    tiers = [_catalog()] if _catalog_dir is not None else []
+    for path in _tier_files():
         text = path.read_text()
         names = [m.group(2) for m in map(TIER_LINE.match, text.splitlines()) if m]
         tables = {label: [int(v, 16) for v in re.findall(r"\$([0-9a-fA-F]{2})", body)]
@@ -125,6 +175,19 @@ def spell_burst() -> dict[tuple[str, int], int]:
                 most = max(24 if flags & SPELL_WOUND_LIGHT else 0, 64 if flags & SPELL_WOUND_SERIOUS else 0,
                            num * sides // 3 if flags & SPELL_BREATH else 0)
                 out[key] = max(out.get(key, 0), most)
+    return out
+
+
+@lru_cache(maxsize=1)
+def spell_rate() -> dict[tuple[str, int], float]:
+    """(screen glyph, creature level) -> the largest share of its turns the
+    shipped casters drawn that way spend casting (``spell_chance``, a percent)."""
+    out: dict[tuple[str, int], float] = {}
+    for _, tables in _tiers():
+        for code, level, chance in zip(tables["display"], tables["level"], tables["spell_chance"]):
+            if chance:
+                key = (screen_code_to_char(code), level)
+                out[key] = max(out.get(key, 0.0), chance / 100)
     return out
 
 
@@ -254,6 +317,22 @@ def breeder_kinds() -> frozenset[tuple[str, int]]:
     return frozenset((screen_code_to_char(code), level) for _, tables in _tiers()
                      for code, level, flags in zip(tables["display"], tables["level"], tables["mflags"])
                      if flags & CF_BREEDER)
+
+
+MOVES = {SPEED_SLOW: 0.5, SPEED_NORMAL: 1.0, SPEED_FAST: 2.0}   # a turn's moves by speed code (core/monster_ai.s)
+
+
+@lru_cache(maxsize=1)
+def moves() -> dict[tuple[str, int], float]:
+    """(screen glyph, creature level) -> moves (so rounds of attacks) a
+    player turn, of the fastest shipped creature drawn that way at that
+    level: a fast one acts twice (core/monster_ai.s)."""
+    out: dict[tuple[str, int], float] = {}
+    for _, tables in _tiers():
+        for code, level, speed in zip(tables["display"], tables["level"], tables["speed"]):
+            key = (screen_code_to_char(code), level)
+            out[key] = max(out.get(key, 0.0), MOVES.get(speed & SPEED_MASK, 1.0))
+    return out
 
 
 @lru_cache(maxsize=1)

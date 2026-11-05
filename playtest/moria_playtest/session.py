@@ -12,6 +12,7 @@ Modes:
 from __future__ import annotations
 
 import argparse
+import collections
 import dataclasses
 import io
 import json
@@ -45,6 +46,73 @@ WIND_DOWN_SECONDS = 5   # a failed run waits this long per worker before SIGTERM
 MAX_RESTARTS_PER_STEP = 2
 
 
+LOOP_STAY = 300         # one square entered this often in one stay on a level is a loop ...
+LOOP_RECENT = 100       # ... or this often within the last LOOP_WINDOW steps (65 of 186 A/B games)
+LOOP_WINDOW = 1000
+LOOP_REASONS = 200      # decisions whose reasons the loop finding names
+
+
+class LevelWatch:
+    """A game that stopped gaining character levels ends at once, not at the
+    step budget (maintainer, 2026-11-04: "i need a faster computer"): run K's
+    six budget-outs played 170,000-760,000 steps after their last level, while
+    no game that reached clvl 25 went more than 97,318 steps between two."""
+
+    def __init__(self) -> None:
+        self.clvl: int | None = None
+        self.since = 0
+
+    def note(self, step: int, clvl: int, dlvl: int, limit: int) -> str | None:
+        """The finding's text once ``limit`` steps pass without a level, else None."""
+        if clvl != self.clvl:
+            self.clvl, self.since = clvl, step
+        elif limit and step - self.since >= limit:
+            return f"no character level for {step - self.since} steps: clvl {clvl} on DL{dlvl}"
+        return None
+
+
+class LoopWatch:
+    """Loops made obvious (maintainer, 2026-11-03: "we keep finding these
+    stupid game loop bugs ... it should be obvious"): counts how often the
+    player steps onto each square during one stay on a dungeon level, and
+    names the first square entered LOOP_STAY times in the stay, or
+    LOOP_RECENT times within LOOP_WINDOW steps, with the decisions that kept
+    coming back. Ten characters of the 2026-11-03 A/B spent their whole
+    1,000,000-step budget so, one square entered up to 148,599 times."""
+
+    def __init__(self) -> None:
+        self.reset(None, 0)
+
+    def reset(self, dlvl: int | None, step: int) -> None:
+        self.dlvl, self.start, self.prev, self.reported = dlvl, step, None, False
+        self.arrivals: collections.Counter[tuple[int, int]] = collections.Counter()
+        self.recent: collections.deque[tuple[int, tuple[int, int]]] = collections.deque()
+        self.recent_count: collections.Counter[tuple[int, int]] = collections.Counter()
+        self.reasons: collections.deque[str] = collections.deque(maxlen=LOOP_REASONS)
+
+    def note(self, step: int, dlvl: int, pos: tuple[int, int], layer: str, reason: str) -> str | None:
+        """The loop's description the first time this stay looks like one, else None."""
+        if dlvl != self.dlvl:
+            self.reset(dlvl, step)
+        self.reasons.append(f"{layer}: {reason}")
+        if pos != self.prev:
+            self.arrivals[pos] += 1
+            self.recent.append((step, pos))
+            self.recent_count[pos] += 1
+        self.prev = pos
+        while self.recent and self.recent[0][0] <= step - LOOP_WINDOW:
+            self.recent_count[self.recent.popleft()[1]] -= 1
+        if self.reported or not dlvl:
+            return None
+        total, recent = self.arrivals[pos], self.recent_count[pos]
+        if total < LOOP_STAY and recent < LOOP_RECENT:
+            return None
+        self.reported = True
+        top = "; ".join(f"{r} x{n}" for r, n in collections.Counter(self.reasons).most_common(3))
+        return (f"square {pos} entered {total} times ({recent} in the last {LOOP_WINDOW} steps) "
+                f"in {step - self.start} steps on DL{dlvl}: {top}")
+
+
 class _BrainPickler(pickle.Pickler):
     """The goal (its predicate is a lambda) is left out, wherever the brain
     holds it; loading puts the goal given back in its place."""
@@ -65,7 +133,7 @@ class _BrainUnpickler(pickle.Unpickler):
 
 def brain_pickle_path(snapshot: Path) -> Path:
     """The whole brain beside a snapshot, so a game can go on from it (the
-    Balrog queue's DL30 start, §23.9); the JSON beside it holds only the
+    Balrog queue's clvl-25 start, §23.9); the JSON beside it holds only the
     replay state. Loadable only by the same bot code: the build's."""
     return snapshot.with_suffix(".brain.pickle")
 
@@ -80,8 +148,21 @@ def save_brain(brain: Brain, snapshot: Path) -> bool:
     return True
 
 
+FILLED_ON_LOAD = ("Brain", "Magic", "LevelMemory")   # classes load_brain completes from a fresh brain
+
+
 def load_brain(snapshot: Path, goal: Goal) -> Brain:
-    return _BrainUnpickler(brain_pickle_path(snapshot).read_bytes(), goal).load()
+    """The saved brain, with any attribute newer bot code gives a brain,
+    its Magic or its LevelMemory and the save lacks taken from a fresh one:
+    a Balrog start then plays the current bot (queue.same_game_and_brain)."""
+    brain = _BrainUnpickler(brain_pickle_path(snapshot).read_bytes(), goal).load()
+    fresh = Brain(goal)
+    for obj, new in ((brain, fresh), (brain.magic, fresh.magic), (brain.level, fresh.level)):
+        assert type(obj).__name__ in FILLED_ON_LOAD
+        for name, value in vars(new).items():
+            if name not in vars(obj):
+                setattr(obj, name, value)
+    return brain
 
 
 @dataclass
@@ -116,6 +197,7 @@ class Character:
         self.reported: set[tuple[str, str]] = set()
         self.keep_worker = False   # leave the emulator running after play() (disk.py)
         self.load_retries: int | None = None   # asset_load_retries at the last level entry
+        self.loops = LoopWatch()
 
     # -- snapshots and findings ------------------------------------------------
 
@@ -225,6 +307,7 @@ class Character:
         try:
             obs = self.start()
             dlvl_seen: int | None = None
+            levels_seen = LevelWatch()
             while self.result.steps < self.goal.step_budget:
                 game = self.worker.game
                 assert game is not None
@@ -245,6 +328,11 @@ class Character:
                 if obs.mode == Mode.DEATH:
                     self.result.outcome = "died"
                     break
+                if obs.mode == Mode.COMMAND:
+                    stuck = levels_seen.note(self.result.steps, obs.clvl, obs.dlvl, self.goal.level_steps)
+                    if stuck is not None:
+                        self.file_finding("no_level", "bot", stuck, obs)
+                        break   # a budget-out, as the step budget would have ended it
                 view = None
                 if tiles is not None:
                     levels = game.mon.mem_get(game.abi.cr_level, game.abi.MAX_DUNGEON_CREATURES
@@ -254,6 +342,10 @@ class Character:
                 for event in self.brain.events:
                     self.file_finding("stall", "bot", event, obs)
                 self.brain.events.clear()
+                if obs.mode == Mode.COMMAND:
+                    loop = self.loops.note(self.result.steps, obs.dlvl, obs.pos, decision.layer, decision.reason)
+                    if loop is not None:
+                        self.file_finding("loop", "bot", loop, obs)
                 # The brain's kit beside each decision: whether a death came
                 # with potions or oil left (M5f).
                 self.log.decision(obs, {**decision.as_dict(), "clw": self.brain.clw, "oil": self.brain.oil})

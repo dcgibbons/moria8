@@ -49,8 +49,8 @@
   .ok { color: var(--green); } .bad { color: var(--red); } .warn { color: var(--amber); } .gold { color: var(--gold); }
   main { padding: 12px 16px; display: grid; gap: 12px; max-width: 120rem; margin: 0 auto;
          grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-         grid-template-areas: "ports round" "disk disk" "causes kit" "wall wall" "milestone legend"; }
-  @media (max-width: 1100px) { main { grid-template-columns: 1fr; grid-template-areas: "ports" "round" "disk" "causes" "kit" "wall" "milestone" "legend"; } }
+         grid-template-areas: "ports round" "disk disk" "archive archive" "causes kit" "wall wall" "milestone legend"; }
+  @media (max-width: 1100px) { main { grid-template-columns: 1fr; grid-template-areas: "ports" "round" "disk" "archive" "causes" "kit" "wall" "milestone" "legend"; } }
   .legend-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(22rem, 1fr)); gap: 12px 22px; font-size: 12px; }
   .legend-grid h3 { margin: 0 0 4px; font-size: 11px; color: var(--gold); letter-spacing: .1em; text-transform: uppercase; font-weight: normal; }
   .legend-grid p { margin: 0 0 6px; color: var(--muted); }
@@ -265,6 +265,10 @@
       <span><i style="background:rgba(224,96,60,.35)"></i>✗ failed · ! error or a known defect that passed</span>
       <span class="dim">each port's latest full run; hover a cell for its detail</span>
     </div>
+  </section>
+  <section style="grid-area: archive">
+    <h2><span>Archived subqueues</span><small id="acount"></small></h2>
+    <div class="subq" id="archq"></div>
   </section>
   <section style="grid-area: round">
     <h2><span>This round</span><small id="rverdict"></small></h2>
@@ -667,8 +671,39 @@ function ago(t) {
   const s = Math.max(0, Date.now() / 1000 - t);
   return s < 90 ? `${Math.round(s)} s` : s < 5400 ? `${Math.round(s / 60)} min` : s < 172800 ? `${Math.round(s / 3600)} h` : `${Math.round(s / 86400)} d`;
 }
+function subCard(q, s) {
+  const state = s.done ? (s.cancelled ? "cancelled" : "drained") : s.cancelled ? "cancelling" : "running";
+  const groups = Object.entries(s.report || s.progress || {}).map(([k, g]) =>
+    `<div class="dim">${esc(k)}: <span class="${g.passed === false ? "bad" : g.passed ? "ok" : ""}">${g.reached}/${g.done}</span>${g.total !== g.done ? ` of ${g.total}` : ""}${g.required != null ? ` (bar ${g.required})` : ""}</div>`).join("");
+  const ab = s.ab_report, pr = ab && ab.paired;
+  const arms = ab ? Object.entries(ab.arms).map(([arm, a]) =>
+    `<div class="dim">${esc(arm)} [${esc(a.variant || "as defined")}]: ${a.reached}/${a.done} reached · median DL ${a.median_max_dlvl ?? "–"} · clvl ${a.median_clvl ?? "–"}${Object.keys(a.deaths).length ? " · died: " + esc(Object.entries(a.deaths).map(([c, n]) => `${c} ${n}`).join(", ")) : ""}</div>`).join("") +
+    `<div class="dim">paired ${pr.pairs}: only A reached ${pr.only_a_reached.length}, only B ${pr.only_b_reached.length} · A deeper ${pr.a_deeper.length}, B deeper ${pr.b_deeper.length}, same ${pr.same_depth}</div>` : "";
+  const g = s.goal;
+  // The goal as the M7 grid shows it (maintainer, 2026-11-03), for goal runs, not suites.
+  const goal = g && g.combos && !s.report && !Object.keys(s.progress || {}).some(k => !k.startsWith("deep ")) ? `
+    <div class="v">★ ${g.reached} of ${g.games} games reached the goal · ${g.combos_reached} of ${g.combos} combinations</div>
+    <div class="dim">median clvl ${g.median_clvl ?? "–"} · clvl 15+ ${g.clvl15} · clvl 20+ ${g.clvl20} · died at clvl ≤5: ${g.early}${g.loops != null ? ` · <span class="${g.loops ? "bad" : "ok"}">⟳ loops in ${g.loops} games</span>` : ""}</div>
+    <div class="qgrid"><div></div>` + q.classes.map(c => `<div class="h">${c}</div>`).join("") + q.races.map(r =>
+      `<div class="r">${r}</div>` + q.classes.map(c => {
+        const it = g.grid[`${r}-${c}`];
+        if (!it) return `<div class="qcell none"></div>`;
+        const last = it.last || {};
+        return `<div class="qcell ${it.reached ? "won" : ""}" title="${esc(`${cap(r + "-" + c)}: ${it.runs}/${it.total} run, ${it.reached} reached, best clvl ${it.best ?? "–"}`)}">
+          <div class="top"><span>${it.best != null ? `L${it.best}` : "–"}</span><span>${it.loops ? `<span class="bad">⟳${it.loops}</span> ` : ""}${it.reached ? `★ ${it.reached}` : ""}</span></div>
+          <div class="sub">${it.runs}/${it.total} run${it.last ? ` · <span class="${OUTCOME_CLASS[last.outcome] || ""}">${esc(last.outcome)}</span>` : ""}</div>
+          <div class="sub">${esc(last.cause || "")}</div></div>`;
+      }).join("")).join("") + `</div>` : "";
+  return `<div class="stat"><div class="k">${esc(s.name)} · ${state}${s.archive ? `<span class="dim"> · ${esc(s.archive)}</span>` : ""}</div>
+    <div class="v">${s.reached}/${s.results} reached · ${s.results}/${s.items} run</div>${goal}${s.note ? `<div class="dim">${esc(s.note)}</div>` : ""}${s.variant ? `<div class="dim">variant ${esc(s.variant)}</div>` : ""}${arms}${groups}</div>`;
+}
+
 function renderQueue() {
   const q = qdata; if (!q) return;
+  // Subqueues are the work while the main queue plays nothing: open them,
+  // unless the viewer folded them.
+  const saved = foldState(), subqSection = $("subq").closest("section");
+  if (!(q.config.platforms || []).length && !(saved && "Subqueues" in saved)) subqSection.classList.remove("collapsed");
   const b = q.service.build_state || {}, playing = b.playing || {};
   const behind = b.behind ? `<span class="warn">${b.behind} behind ${esc(b.upstream)}</span>` : "";
   const ahead = b.ahead ? `<span class="dim">${b.ahead} ahead${b.contained === false ? ", not contained" : ""}</span>` : "";
@@ -741,17 +776,9 @@ function renderQueue() {
       ${it.last ? `<div class="dim">last: <span class="${OUTCOME_CLASS[last.outcome] || ""}">${esc(last.outcome)}</span> at L${last.clvl} DL${last.max_dlvl}${last.cause ? ` · ${esc(last.cause)}` : ""}</div>` : ""}
       ${now.length ? `<div class="dim">playing now: ${esc(now.join(", "))}</div>` : ""}</div>`;
   }).join("") || `<span class="muted">no combination has met the M7 bar yet</span>`;
-  $("subq").innerHTML = q.subqueues.map(s => {
-    const state = s.done ? (s.cancelled ? "cancelled" : "drained") : s.cancelled ? "cancelling" : "running";
-    const groups = Object.entries(s.report || s.progress || {}).map(([k, g]) =>
-      `<div class="dim">${esc(k)}: <span class="${g.passed === false ? "bad" : g.passed ? "ok" : ""}">${g.reached}/${g.done}</span>${g.total !== g.done ? ` of ${g.total}` : ""}${g.required != null ? ` (bar ${g.required})` : ""}</div>`).join("");
-    const ab = s.ab_report, pr = ab && ab.paired;
-    const arms = ab ? Object.entries(ab.arms).map(([arm, a]) =>
-      `<div class="dim">${esc(arm)} [${esc(a.variant || "as defined")}]: ${a.reached}/${a.done} reached · median DL ${a.median_max_dlvl ?? "–"} · clvl ${a.median_clvl ?? "–"}${Object.keys(a.deaths).length ? " · died: " + esc(Object.entries(a.deaths).map(([c, n]) => `${c} ${n}`).join(", ")) : ""}</div>`).join("") +
-      `<div class="dim">paired ${pr.pairs}: only A reached ${pr.only_a_reached.length}, only B ${pr.only_b_reached.length} · A deeper ${pr.a_deeper.length}, B deeper ${pr.b_deeper.length}, same ${pr.same_depth}</div>` : "";
-    return `<div class="stat"><div class="k">${esc(s.name)} · ${state}</div>
-      <div class="v">${s.reached}/${s.results} reached · ${s.results}/${s.items} run</div>${s.note ? `<div class="dim">${esc(s.note)}</div>` : ""}${s.variant ? `<div class="dim">variant ${esc(s.variant)}</div>` : ""}${arms}${groups}</div>`;
-  }).join("") || `<span class="muted">none</span>`;
+  $("subq").innerHTML = q.subqueues.map(s => subCard(q, s)).join("") || `<span class="muted">none</span>`;
+  $("archq").innerHTML = (q.archived || []).map(s => subCard(q, s)).join("") || `<span class="muted">none</span>`;
+  $("acount").textContent = (q.archived || []).length ? `${q.archived.length} · newest first` : "";
   $("qwall").innerHTML = q.live.map(r => {
     const w = r.status || {}, ms = Object.keys(r.milestones || {});
     return `<div class="tile" data-run="${esc(r.id)}">

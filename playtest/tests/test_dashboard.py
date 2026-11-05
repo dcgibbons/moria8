@@ -223,3 +223,47 @@ class DeathCauseTest(unittest.TestCase):
                                     "You have been slain.", hp=0, before=9), "Black Mamba")
         self.assertEqual(self.cause("the Flask of Oil hits the Ko", "the Kobold hits you.",
                                     "You have been slain.", hp=-2), "Kobold")
+
+
+class GoalSummaryTest(unittest.TestCase):
+    """Maintainer, 2026-11-03: with the main queue idle, the dashboard showed
+    no goal counts for the A/B subqueues."""
+
+    def test_a_subqueue_counts_games_and_combinations_that_reached_the_goal(self) -> None:
+        from moria_playtest.queue import COUNTED
+        items = [{"character": c, "seed": n} for c in ("human-warrior", "elf-mage") for n in (1, 2)]
+        results = [{"character": "human-warrior", "outcome": "reached", "clvl": 25, "loops": 1},
+                   {"character": "human-warrior", "outcome": "died", "clvl": 18, "cause": "Orc"},
+                   {"character": "elf-mage", "outcome": "died", "clvl": 3, "cause": "Kobold"},
+                   {"character": "elf-mage", "outcome": "abandoned", "clvl": None}]
+        g = dashboard.goal_summary({"items": items, "results": results}, COUNTED)
+        self.assertEqual((g["games"], g["reached"], g["combos"], g["combos_reached"]), (3, 1, 2, 1))
+        self.assertEqual((g["median_clvl"], g["clvl15"], g["clvl20"], g["early"], g["loops"]), (18, 2, 1, 1, 1))
+        self.assertEqual(g["grid"]["elf-mage"], {"runs": 1, "total": 2, "loops": 0, "reached": 0, "best": 3,
+                                                 "last": {"outcome": "died", "clvl": 3, "max_dlvl": None,
+                                                          "cause": "Kobold"}})
+
+
+class ArchivedSubqueuesTest(unittest.TestCase):
+    """Maintainer, 2026-11-04: "clean up the old queues and move them to
+    history": a subqueue moved to archive/<date>-subqueues/ leaves the Queue
+    tab's list and is listed for the History tab."""
+
+    def test_an_archived_subqueue_is_listed_apart(self) -> None:
+        from unittest import mock
+        from moria_playtest import queue as q
+        sub = {"name": "", "build": "b", "done": True, "items": [{"character": "human-warrior", "seed": 1}],
+               "results": [{"character": "human-warrior", "outcome": "reached", "clvl": 25}]}
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            for path, name in ((home / "subqueues" / "live.json", "live"),
+                               (home / "archive" / "2026-11-04-subqueues" / "old.json", "old")):
+                path.parent.mkdir(parents=True)
+                path.write_text(json.dumps({**sub, "name": name}))
+            with mock.patch.object(q, "HOME", home), \
+                    mock.patch.object(q, "load_config", return_value={**q.DEFAULTS, "platforms": [], "epoch": "e"}):
+                data = dashboard.queue()
+        self.assertEqual([s["name"] for s in data["subqueues"]], ["live"])
+        self.assertEqual([(s["name"], s["archive"], s["reached"]) for s in data["archived"]],
+                         [("old", "2026-11-04-subqueues", 1)])
+

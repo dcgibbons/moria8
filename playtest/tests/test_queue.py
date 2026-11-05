@@ -53,6 +53,37 @@ class QueueOrderTest(unittest.TestCase):
         self.assertEqual(self.entry["order"][-1], first)
         self.assertEqual(item["streak"], -4)
 
+    def test_a_struggling_item_waits_ahead_of_the_successes(self) -> None:
+        succeeded = self.play("reached")                 # now last
+        first = self.queue.head("c64")
+        for _ in range(4):
+            self.play("died")
+        order = self.entry["order"]
+        self.assertTrue(self.entry["items"][first]["struggling"])
+        self.assertEqual(order.index(first), order.index(succeeded) - 1)
+
+    def test_open_items_get_parallel_runs_once_the_head_has_succeeded(self) -> None:
+        import collections
+        items = self.entry["items"]
+        for combo in list(items)[:-1]:                   # all but one have succeeded
+            items[combo]["success"] = {"run": "r"}
+        open_ = list(items)[-1]
+        self.entry["order"] = [c for c in self.entry["order"] if c != open_]
+        self.queue.take("c64", "primary") if self.queue.head("c64") == open_ else None
+        playing = collections.Counter({open_: 1})
+        self.assertEqual(self.queue.parallel_pick("c64", playing, 3), open_)
+        self.assertIsNone(self.queue.parallel_pick("c64", collections.Counter({open_: 3}), 3))   # the cap
+        items[open_]["in_flight"] = "primary"
+        order = list(self.entry["order"])
+        self.queue.finish(record(open_, "reached"), retry_cap=3, parallel=True)
+        self.assertEqual((items[open_]["runs"], items[open_]["in_flight"]), (1, "primary"))
+        self.assertIsNotNone(items[open_]["success"])
+        self.assertEqual(self.entry["order"], order)      # its place is its own run's
+
+    def test_no_parallel_run_while_an_open_item_waits(self) -> None:
+        import collections
+        self.assertIsNone(self.queue.parallel_pick("c64", collections.Counter(), 3))
+
     def test_a_success_clears_struggling(self) -> None:
         first = self.queue.head("c64")
         for _ in range(4):
@@ -279,6 +310,39 @@ class BalrogQueueTest(unittest.TestCase):
         job = next(iter(service.running.values()))
         self.assertEqual((job["build"], job["resume"]["run"]), ("b0", "m7"))   # the start's build: its bot
 
+    def test_a_start_plays_the_current_bot_when_its_brain_loads_there(self) -> None:
+        """Maintainer, 2026-11-02: graduates of the build before the level-40
+        Balrog goal still dove to DL30. A saved brain names only classes in
+        brain.py, magic.py and view.py (the goal is not in it): a build with
+        the same game and no attribute the saved brain lacks plays the
+        start, with its own goals and bot."""
+        service = self.service(4, 2)
+        service.balrog_start(self.success_run(service))
+        same = "class Brain:\n    def __init__(self):\n        self.food = 0\n"
+        same += "class Creature:\n    def __init__(self):\n        self.glyph = ''\n"
+        reworded = same + "    def eat(self):\n        return self.food - 1\n"   # new code, no new state
+        reworded = reworded.replace("self.food = 0", "self.food = 0\n        self.restock_wait = 0")   # filled on load
+        grown = same.replace("self.glyph = ''", "self.glyph = ''\n        self.level = 0")   # not filled
+        for build, goals, brain in (("b0", "old", same), ("b1", "new", reworded), ("b2", "new", grown)):
+            root = service.home / "builds" / build
+            queue.write_json(root / "build.json", {"id": build})
+            (root / "build").mkdir(parents=True)
+            (root / "build" / "moria8-c64.d64").write_bytes(b"disk")
+            bot = root / "playtest" / "moria_playtest"
+            bot.mkdir(parents=True)
+            (bot / "goals.py").write_text(goals)
+            (bot / "brain.py").write_text(brain)
+            (bot / "magic.py").write_text("")
+            (bot / "view.py").write_text("")
+        self.assertTrue(queue.same_game_and_brain("b0", "b1", service.home))
+        self.assertFalse(queue.same_game_and_brain("b0", "b2", service.home))
+        service.start_balrog()
+        self.assertEqual(next(iter(service.running.values()))["build"], "b1")
+        service.running.clear()
+        service.build_id = "b2"
+        service.start_balrog()
+        self.assertEqual(next(iter(service.running.values()))["build"], "b0")   # an attribute the old brain lacks
+
     def test_a_success_without_a_saved_brain_plays_from_the_title(self) -> None:
         service = self.service(4, 2)
         service.balrog_start(self.success_run(service, with_brain=False))
@@ -287,6 +351,60 @@ class BalrogQueueTest(unittest.TestCase):
         job = next(iter(service.running.values()))
         self.assertEqual(job["build"], "b1")
         self.assertNotIn("resume", job)
+
+    def c128_saved_game(self, service: queue.Service, rec: dict) -> None:
+        """The run's graduate/ directory: a save disk and the brain (graduate.py)."""
+        from moria_playtest.brain import Brain
+        from moria_playtest.goals import GOALS, for_character
+        from moria_playtest.session import save_brain
+        grad = service.home / "runs" / rec["id"] / "graduate"
+        grad.mkdir(parents=True)
+        (grad / "save.d64").write_bytes(b"D64")
+        queue.write_json(grad / "graduate.brain.json", {"seed": 9, "step": 270563, "dlvl": 28})
+        save_brain(Brain(for_character(GOALS["deep"], "elf-priest")), grad / "graduate.vsf")
+
+    def test_a_c128_success_starts_the_balrog_queue_from_its_saved_game(self) -> None:
+        """VICE's C128 snapshot leaves out the VDC: a restore stalled past the
+        60 s limit, so a C128 graduate saves its game instead (2026-11-02)."""
+        service = self.service(4, 2)
+        rec = {**self.success_run(service), "platform": "c128"}   # a snapshot too: the saved game wins
+        self.c128_saved_game(service, rec)
+        service.balrog_start(rec)
+        start = service.balrog.state["items"]["c128/elf-priest"]["start"]
+        self.assertEqual((start["save"], start["step"], start["dlvl"]), (str(service.home / "balrog" / "m7"), 270563, 28))
+        self.assertNotIn("snapshot", start)
+        self.assertTrue((Path(start["save"]) / "save.d64").exists())
+        self.assertTrue(service.start_balrog())
+        job = next(iter(service.running.values()))
+        self.assertEqual((job["build"], job["resume"]["save"]), ("b0", start["save"]))
+
+    def test_a_c128_success_without_a_saved_game_gets_no_start(self) -> None:
+        service = self.service(4, 2)
+        service.balrog_start({**self.success_run(service), "platform": "c128"})
+        service.balrog.graduate("c128", "elf-priest", {})
+        self.assertIsNone(service.balrog.state["items"]["c128/elf-priest"].get("start"))
+        self.assertFalse(service.start_balrog())   # nothing to play from: no run
+        self.assertEqual(service.running, {})
+
+    def test_c128_graduates_without_a_saved_game_are_skipped(self) -> None:
+        balrog = self.balrog()
+        balrog.graduate("c128", "elf-priest", {})
+        balrog.graduate("c64", "human-priest", {})
+        balrog.state["items"]["c128/elf-priest"]["start"] = {"run": "r", "snapshot": "deep.vsf"}
+        self.assertEqual([balrog.take()["character"] for _ in range(3)], ["human-priest"] * 3)
+        balrog.state["items"]["c128/elf-priest"]["start"] = {"run": "r", "save": "balrog/r"}
+        self.assertEqual({balrog.take()["character"] for _ in range(2)}, {"elf-priest", "human-priest"})
+
+    def test_unplayable_graduates_leave_the_main_queue_every_worker(self) -> None:
+        service = self.service(4, 2)
+        service.config["platforms"] = ["c128"]
+        q = queue.Queue("deep", service.home)
+        q.platform("c128")
+        service.balrog.graduate("c128", "elf-priest", {"run": "r"})
+        service.balrog.state["items"]["c128/elf-priest"]["start"] = {"run": "r", "snapshot": "deep.vsf"}
+        service.schedule(q, {})
+        self.assertEqual([j["queue"] for j in service.running.values()], ["main"] * 4)
+        self.assertFalse(any(j["paused"] for j in service.running.values()))
 
     def test_a_saved_brain_loads_with_the_balrog_goal(self) -> None:
         from moria_playtest.brain import Brain
@@ -301,6 +419,80 @@ class BalrogQueueTest(unittest.TestCase):
             loaded = load_brain(snap, balrog)
         self.assertIs(loaded.goal, balrog)
         self.assertEqual((loaded.clw, loaded.oil), (5, 10))
+
+    def test_level_40_before_the_balrog(self) -> None:
+        """Maintainer, 2026-11-02: character level 38-40 (really 40), then
+        the Balrog. A graduate at level 25 does not go below DL22."""
+        from moria_playtest.brain import ready_level
+        from moria_playtest.goals import GOALS
+        goal = GOALS["balrog"]
+        def ready(dlvl: int) -> int:
+            return ready_level(dlvl, goal.ready_margin, goal.ready_taper)
+        self.assertEqual(max(d for d in range(1, 101) if ready(d) <= 25), 22)
+        self.assertEqual(max(d for d in range(1, 101) if ready(d) <= 39), 36)
+        self.assertEqual(ready(50), 40)
+
+    def test_a_saved_brain_gains_the_attributes_newer_code_adds(self) -> None:
+        from moria_playtest.brain import Brain
+        from moria_playtest.goals import GOALS, for_character
+        from moria_playtest.session import load_brain, save_brain
+        with tempfile.TemporaryDirectory() as tmp:
+            snap = Path(tmp) / "s.vsf"
+            brain = Brain(for_character(GOALS["deep"], "elf-priest"))
+            del brain.restock_wait, brain.magic.known, brain.level.bumped   # as an older bot saved it
+            brain.clw = 5
+            self.assertTrue(save_brain(brain, snap))
+            loaded = load_brain(snap, for_character(GOALS["balrog"], "elf-priest"))
+        self.assertEqual(loaded.clw, 5)
+        self.assertEqual((loaded.restock_wait, loaded.magic.known, loaded.level.bumped),
+                         (Brain(GOALS["deep"]).restock_wait, {}, {}))
+
+    def test_a_game_without_a_level_for_level_steps_ends(self) -> None:
+        from moria_playtest.goals import GOALS
+        from moria_playtest.session import LevelWatch
+        watch = LevelWatch()
+        self.assertIsNone(watch.note(0, 18, 2, 150_000))
+        self.assertIsNone(watch.note(149_999, 18, 2, 150_000))
+        self.assertIsNone(watch.note(149_999, 19, 2, 150_000))          # a level restarts the count
+        self.assertIsNone(watch.note(299_998, 19, 2, 150_000))
+        self.assertIn("clvl 19 on DL2", watch.note(299_999, 19, 2, 150_000))
+        self.assertIsNone(LevelWatch().note(10**7, 18, 2, 0))           # 0: never
+        self.assertEqual(GOALS["deep"].level_steps, 150_000)
+        self.assertEqual(GOALS["balrog"].level_steps, 0)
+
+    def test_a_loop_is_named_once_a_stay(self) -> None:
+        """Maintainer, 2026-11-03: loops should be obvious. One square entered
+        LOOP_RECENT times within LOOP_WINDOW steps is named once a stay on a
+        level, with the decisions that kept coming back; exploring is not."""
+        from moria_playtest.session import LOOP_RECENT, LoopWatch
+        watch = LoopWatch()
+        named = [watch.note(step, 2, (5, 5) if step % 2 else (6, 5), "rest", "hurt: back away")
+                 for step in range(1, 2 * LOOP_RECENT + 10)]
+        found = [n for n in named if n]
+        self.assertEqual(len(found), 1)
+        self.assertIn("on DL2: rest: hurt: back away", found[0])
+        walk = LoopWatch()
+        self.assertFalse(any(walk.note(step, 3, (step, 5), "explore", "edge") for step in range(5000)))
+        self.assertIsNotNone(next(n for n in (watch.note(9000 + k, 3, (5, 5) if k % 2 else (6, 5), "rest", "x")
+                                              for k in range(2 * LOOP_RECENT + 10)) if n))   # a new stay: named again
+
+    def test_a_restored_game_goes_on_counting_its_steps(self) -> None:
+        """M8, 2026-11-02: a new emulator counted game steps from 0, so the
+        brain's town-trip timers, set at the graduate's steps, were hundreds
+        of thousands of steps away."""
+        from moria_playtest.worker import Snapshot, Worker
+
+        class Fake:
+            step = 0
+            seed = 0
+
+            def undump(self, path: Path) -> str:
+                return f"step {self.step}"
+        worker = Worker.__new__(Worker)
+        worker.restarts, game = 0, Fake()
+        worker._spawn = lambda autostart: game   # type: ignore[method-assign]
+        obs = worker.restore(Snapshot(Path("s.vsf"), {"seed": 7, "step": 251110}))
+        self.assertEqual((obs, game.step, game.seed), ("step 251110", 251110, 7))
 
     def test_the_goal_is_the_winner_flag(self) -> None:
         from moria_playtest.goals import GOALS
@@ -456,7 +648,7 @@ class HealBeforeCureTest(unittest.TestCase):
     """M7 queue (tactic heal_first): a Gnome Priest prayed Neutralize Poison twice
     beside a Black Mamba from 29 HP and died; the heal comes first."""
 
-    def decide(self, goal: str, hp: int) -> str:
+    def decide(self, goal: str, hp: int, creature: tuple[str, int] = ("R", 9)) -> str:
         from moria_playtest.brain import Brain
         from moria_playtest.goals import GOALS
         from moria_playtest.magic import Prayer
@@ -468,15 +660,23 @@ class HealBeforeCureTest(unittest.TestCase):
         brain.magic.study_due, brain.magic.listed = False, True
         brain.poisoned = True
         view = town_view((5, 5), (12, 5), dlvl=12, stairs_type=0xA)
-        view.creatures = {(6, 5): Creature("R", 12)}
+        view.creatures = {(6, 5): Creature(*creature)}
         obs = command_obs(pos=(5, 5), dlvl=12, clvl=15, hp=hp, mhp=60,
                           rows={23: f"HP:{hp}/60  MP:20/20 AC:20  AU:100"})
         return brain.decide(obs, view).reason
 
     def test_hurt_beside_a_creature_the_heal_comes_first(self) -> None:
+        # A King Cobra (normal speed; VMS: 1d2 spit, 3d4 poison bite, against
+        # AC 20 about 4 a turn) is one the heal outruns.
         self.assertIn("Cure Light Wounds", self.decide("deep", 25))
         self.assertIn("Neutralize Poison", self.decide("deep", 50))   # not hurt: cure the poison
         self.assertIn("Neutralize Poison", self.decide("clvl10", 25))   # the frozen goals keep their order
+
+    def test_no_heal_that_a_black_mamba_outruns(self) -> None:
+        """M7 queue, 2026-11-02: a Black Mamba bites twice a turn (fast),
+        more than Cure Light Wounds (3d3) heals; 45 characters healed beside
+        one until they died. Fighting on at least hurts it."""
+        self.assertEqual(self.decide("deep", 25, ("R", 12)), "attack adjacent 'R'")
 
 
 class FastCreatureTest(unittest.TestCase):
@@ -501,6 +701,378 @@ class FastCreatureTest(unittest.TestCase):
         self.assertEqual(layers["clvl10"], "retreat")
 
 
+class SlowKindTest(unittest.TestCase):
+    """M8, 2026-11-02: a level-25 Halfling fought an Iron Golem (slow, 80d8,
+    AC 99) to the death with no stairs known: walking away judged 'g' by
+    glyph, and a Ghoul drawn the same is not slow."""
+
+    def test_walks_away_from_a_slow_kind_whose_glyph_is_shared(self) -> None:
+        from moria_playtest import knowledge
+        from moria_playtest.brain import Brain
+        from moria_playtest.goals import GOALS, for_character
+        from moria_playtest.view import Creature
+        from test_m1 import command_obs, town_view
+        golem = knowledge.kinds_by_name()["Iron Golem"]
+        self.assertIn(golem, knowledge.slow_kinds())
+        self.assertNotIn("g", knowledge.slow_glyphs())
+        brain = Brain(for_character(GOALS["balrog"], "halfling-warrior"))
+        brain.food = 20
+        view = town_view((10, 10), (40, 40), dlvl=22)   # no stairs known
+        view.creatures = {(11, 10): Creature(*golem)}
+        obs = command_obs(pos=(10, 10), dlvl=22, clvl=25, hp=100, mhp=207,
+                          rows={23: "HP:100/207  MP:0/0  AC:40  AU:100"})
+        brain.track(obs, view)
+        decision = brain.decide(obs, view)
+        self.assertEqual((decision.layer, decision.reason), ("retreat", "walk away from a slower creature"))
+
+
+class CautionReadinessTest(unittest.TestCase):
+    """The danger, caution, readiness and memory rules (maintainer,
+    2026-11-03). Expected values come from the rules as decided, not from
+    the bot's code."""
+
+    def setUp(self) -> None:
+        from moria_playtest import knowledge
+        from moria_playtest.view import Creature
+        self.kobold = Creature("k", 1)                                  # VMS Kobold: 1d6 bite, normal speed
+        self.mamba = Creature(*knowledge.kinds_by_name()["Black Mamba"])   # fast, 4d4 bite
+
+    def brain(self, character: str = "human-warrior"):  # type: ignore[no-untyped-def]
+        from moria_playtest.brain import Brain
+        from moria_playtest.goals import GOALS, for_character
+        brain = Brain(for_character(GOALS["deep"], character))
+        brain.food = 10
+        return brain
+
+    def test_with_no_way_out_a_potion_that_outlasts_the_turn_is_drunk(self) -> None:
+        # 2026-11-04: Mages at clvl 17-22 spent their mana, then fought to the
+        # death holding five Cure Light Wounds.
+        from test_m1 import command_obs, town_view
+        mage = self.brain("elf-mage")
+        mage.clw, mage.phase = 5, 0
+        view = town_view((5, 5), (30, 30), dlvl=15)
+        view.creatures = {(6, 5): self.mamba}                           # danger 32: 8 heals under a third
+        mage.adjacent = [self.mamba]
+        hurt = command_obs(pos=(5, 5), dlvl=15, clvl=20, hp=30, mhp=90, rows={23: "HP:30/90  MP:0/30 AU:100"})
+        self.assertEqual(mage.quaff(hurt, view).layer, "quaff")
+        mage.phase = 1                                                   # a way out: phase, not this potion
+        self.assertIsNone(mage.quaff(hurt, view))
+
+    def test_early_and_out_of_potions_goes_back_to_town(self) -> None:
+        # 2026-11-04: eleven of twelve Kobold deaths at level 1-4 had drunk
+        # their Cure Light Wounds and explored on.
+        from test_m1 import command_obs
+        priest = self.brain("elf-priest")
+        broke = command_obs(dlvl=1, clvl=2, rows={23: "HP:10/10  MP:2/2 AC:10 AU:30"})
+        rich = command_obs(dlvl=1, clvl=2, rows={23: "HP:10/10  MP:2/2 AC:10 AU:100"})
+        self.assertFalse(priest.out_of_cures(broke))                       # not the gold for two
+        self.assertTrue(priest.out_of_cures(rich))
+        self.assertTrue(priest.needs_resupply(rich))
+        priest.end_visit(rich)                                             # town had none: not straight back
+        self.assertFalse(priest.needs_resupply(rich))
+        priest.clw = 1
+        self.assertFalse(priest.out_of_cures(rich))
+        self.assertFalse(priest.out_of_cures(command_obs(dlvl=1, clvl=5, rows={23: "AU:100"})))
+
+    def test_an_early_caster_keeps_potion_gold_before_word_of_recall(self) -> None:
+        # 2026-11-04: Elf Priests paid 160 of 238 gold for Word of Recall at
+        # level 1 and died at level 1-4 holding no potions.
+        from moria_playtest.brain import CLW_GOLD, CLW_RESERVE
+        from test_m1 import command_obs
+        priest, warrior = self.brain("elf-priest"), self.brain("human-warrior")
+        early, later = command_obs(dlvl=0, clvl=1), command_obs(dlvl=0, clvl=5)
+        self.assertEqual(priest.early_potion_gold(early), CLW_RESERVE * CLW_GOLD)
+        self.assertEqual(priest.early_potion_gold(later), 0)
+        self.assertEqual(warrior.early_potion_gold(early), 0)
+        priest.clw = CLW_RESERVE
+        self.assertEqual(priest.early_potion_gold(early), 0)
+
+    def test_after_a_phase_the_bot_makes_for_the_stairs(self) -> None:
+        # 2026-11-04: a level-4 Elf Priest phased from an Orc at 5 HP, saw
+        # nothing and explored straight back to it.
+        from moria_playtest.view import Creature
+        from test_m1 import command_obs, town_view
+        priest = self.brain("elf-priest")
+        priest.phase = 1
+        orc = Creature("o", 3)
+        view = town_view((5, 5), (20, 5), dlvl=2, stairs_type=0xA)
+        view.creatures = {(6, 5): orc}
+        priest.adjacent = [orc]
+        hurt = command_obs(pos=(5, 5), dlvl=2, clvl=4, hp=5, mhp=25)
+        self.assertEqual(priest.phase_door(hurt, view).layer, "phase")
+        after = town_view((12, 5), (20, 5), dlvl=2, stairs_type=0xA)   # landed, nothing in view
+        priest.adjacent = []
+        decision = priest.retreat(command_obs(pos=(12, 5), dlvl=2, clvl=4, hp=6, mhp=25), after)
+        self.assertEqual((decision.layer, priest.level.retreat_to), ("retreat", (20, 5)))
+
+    def test_danger_counts_reach_speed_and_breeders(self) -> None:
+        from moria_playtest.brain import Brain
+        from test_m1 import command_obs, town_view
+        obs = command_obs(pos=(5, 5), dlvl=3, clvl=5, hp=40, mhp=40)
+        view = town_view((5, 5), (40, 40), dlvl=3)
+        view.creatures = {(6, 5): self.kobold}
+        self.assertEqual(Brain.danger((5, 5), view, obs), 6)          # beside: 1d6 at its most
+        self.assertEqual(Brain.danger((4, 5), view, obs), 0)          # two off, normal speed: cannot reach
+        view.creatures = {(7, 5): self.mamba}
+        self.assertEqual(Brain.danger((5, 5), view, obs), 16)         # two off, fast: steps in, strikes once
+        view.creatures = {(6, 5): self.mamba}
+        self.assertEqual(Brain.danger((5, 5), view, obs), 32)         # beside: strikes twice
+
+    def test_back_away_only_from_a_slower_creature(self) -> None:
+        """2026-11-03: backing away from a Kobold (as fast as the player) gave
+        up every attack while it followed and bit; half the early deaths of a
+        run without the leash had done so. Only a slower creature is backed
+        away from, to a square out of its reach."""
+        from moria_playtest.brain import Brain
+        from moria_playtest.view import DIRS, Creature
+        from test_m1 import command_obs, town_view
+        brain = self.brain()
+        view = town_view((5, 5), (40, 40), dlvl=2)
+        view.creatures = {(6, 5): self.kobold}
+        obs = command_obs(pos=(5, 5), dlvl=2, clvl=3, hp=12, mhp=30)        # danger 6 > 0.4 x 12
+        self.assertIsNone(brain.caution(obs, view))                         # as fast: no backing away
+        snake = Creature("R", 2)                                            # Large Black Snake: slow
+        view.creatures = {(6, 5): snake}
+        hp = int(Brain.danger((5, 5), view, obs) / 0.4) - 1                 # just over CAUTION_BACK
+        obs = command_obs(pos=(5, 5), dlvl=2, clvl=3, hp=hp, mhp=30)
+        decision = brain.caution(obs, view)
+        self.assertEqual(decision.layer, "caution")
+        step = next(d for d, k in DIRS.items() if k == decision.key)
+        self.assertGreater(abs((5 + step[0]) - 6), 1)                       # out of its reach
+
+    def test_readiness_wants_hp_and_supplies_by_class(self) -> None:
+        from test_m1 import command_obs
+        mage, warrior = self.brain("human-mage"), self.brain("human-warrior")
+        for b in (mage, warrior):
+            b.clw, b.recall = 2, 1
+        self.assertFalse(warrior.prepared(command_obs(dlvl=1, clvl=2, hp=20, mhp=20), 2))   # DL2: 30 HP
+        self.assertTrue(warrior.prepared(command_obs(dlvl=2, clvl=4, hp=50, mhp=50), 3))
+        self.assertFalse(mage.prepared(command_obs(dlvl=2, clvl=4, hp=50, mhp=50), 3))      # Mage: clvl 11
+        self.assertTrue(mage.prepared(command_obs(dlvl=2, clvl=11, hp=40, mhp=40), 3))
+        self.assertTrue(mage.prepared(command_obs(dlvl=4, clvl=18, hp=57, mhp=57), 5))      # no HP floor past DL2
+        self.assertFalse(mage.prepared(command_obs(dlvl=13, clvl=18, hp=90, mhp=90), 14))   # a Mage: five over from DL10
+        self.assertTrue(mage.prepared(command_obs(dlvl=13, clvl=19, hp=90, mhp=90), 14))
+        self.assertTrue(warrior.prepared(command_obs(dlvl=13, clvl=17, hp=150, mhp=150), 14))   # others: three
+        warrior.clw = 1
+        self.assertFalse(warrior.prepared(command_obs(dlvl=2, clvl=4, hp=50, mhp=50), 3))   # two cure potions
+        warrior.clw, warrior.recall = 2, 0
+        self.assertFalse(warrior.prepared(command_obs(dlvl=4, clvl=6, hp=60, mhp=60), 5))   # Word of Recall
+
+    def test_a_weak_character_leaves_a_breeding_level_and_never_rests_near_one(self) -> None:
+        from moria_playtest.view import Creature
+        from test_m1 import command_obs, town_view
+        brain = self.brain()
+        obs = command_obs(pos=(5, 5), dlvl=2, clvl=5, hp=20, mhp=40)
+        view = town_view((5, 5), (40, 40), dlvl=2)
+        view.creatures = {(20, 20): Creature("w", 1)}                  # a White Worm mass, far off
+        brain.decide(obs, view)
+        self.assertFalse(brain.level.scum)
+        brain.level.breeders_seen.update({(21, 20): obs.step, (22, 20): obs.step})
+        brain.decide(obs, view)
+        self.assertTrue(brain.level.scum)                              # three seen below clvl 15
+        near = town_view((5, 5), (40, 40), dlvl=2)
+        brain.level.breeders_seen = {(12, 5): obs.step}                # 7 squares off, out of sight
+        self.assertIsNone(brain.rest(obs, near))
+
+    def test_a_mage_walks_to_melee_nothing(self) -> None:
+        from test_m1 import command_obs, town_view
+        obs = command_obs(pos=(5, 5), dlvl=1, clvl=5, hp=30, mhp=30)
+        view = town_view((5, 5), (40, 40), dlvl=1)
+        view.types[5 * 80 + 2] = 0xA
+        view.creatures = {(8, 5): self.kobold}
+        self.assertIsNone(self.brain("human-mage").hunt(obs, view))
+        self.assertIsNotNone(self.brain("human-warrior").hunt(obs, view))
+
+    def test_paths_go_round_squares_a_creature_could_hurt_badly(self) -> None:
+        from test_m1 import command_obs, town_view
+        brain = self.brain()
+        obs = command_obs(pos=(5, 5), dlvl=2, clvl=3, hp=10, mhp=30)
+        view = town_view((5, 5), (9, 5), dlvl=2)
+        view.creatures = {(7, 4): self.kobold}                         # 6 at most beside it: over 0.3 x 10
+        brain.decide(obs, view)
+        self.assertIn((6, 5), view.perilous)
+        step = view.step_toward({(9, 5)}, avoid_monsters=True)
+        self.assertGreater(chebyshev_from((5 + step[0], 5 + step[1]), (7, 4)), 1)
+
+    def test_no_progress_for_long_forgets_what_was_remembered(self) -> None:
+        from moria_playtest.brain import FORGET_STEPS
+        from test_m1 import command_obs, town_view
+        brain = self.brain()
+        obs = command_obs(pos=(5, 5), dlvl=2, clvl=5, hp=40, mhp=40)
+        brain.track(obs, town_view((5, 5), (40, 40), dlvl=2))
+        brain.level.slow_seen[(20, 20)] = obs.step
+        brain.level.loop_blocks[(6, 5)] = 3
+        brain.level.bumped[(6, 5)] = obs.step + 100
+        brain.level.since_progress = FORGET_STEPS - 1                  # this step makes 500
+        brain.decide(obs, town_view((5, 5), (40, 40), dlvl=2))
+        self.assertEqual((brain.level.slow_seen, brain.level.bumped), ({}, {}))
+        self.assertEqual(brain.level.loop_blocks, {(6, 5): 3})          # a loop that returns is blocked longer
+        # Once per 500 steps, not every step after: a block set now holds.
+        brain.level.bumped[(7, 5)] = obs.step + 100
+        brain.decide(obs, town_view((5, 5), (40, 40), dlvl=2))
+        self.assertIn((7, 5), brain.level.bumped)
+
+    def test_a_walk_up_keeps_its_staircase(self) -> None:
+        from test_m1 import command_obs, town_view
+        brain = self.brain()
+        brain.food = 0.5                                               # short of food: heads up
+        view = town_view((10, 5), (2, 5), dlvl=2, stairs_type=0xA)
+        view.types[5 * 80 + 20] = 0xA                                   # a second up staircase, east
+        obs = command_obs(pos=(10, 5), dlvl=2, clvl=5, hp=40, mhp=40)
+        brain.level.up_target = (20, 5)                                # committed east earlier
+        decision = brain.resupply(obs, view)
+        self.assertEqual(decision.key, __import__("moria_playtest.view", fromlist=["DIRS"]).DIRS[(1, 0)])
+
+
+def chebyshev_from(a: tuple[int, int], b: tuple[int, int]) -> int:
+    return max(abs(a[0] - b[0]), abs(a[1] - b[1]))
+
+
+class WandTest(unittest.TestCase):
+    """Wands and staffs (maintainer, 2026-11-04: "this is a big gap"): kept,
+    bought, aimed, and the Staff of Teleportation as the far escape."""
+
+    def brain(self, character: str):  # type: ignore[no-untyped-def]
+        from moria_playtest.brain import Brain
+        from moria_playtest.goals import GOALS, for_character
+        brain = Brain(for_character(GOALS["deep"], character))
+        brain.food = 10
+        return brain
+
+    def test_charges_are_counted_from_buying_picking_up_and_the_pack(self) -> None:
+        from moria_playtest.game import Mode
+        from test_m1 import command_obs, town_view
+        brain = self.brain("human-mage")
+        brain.credit("Wand of Frost (7 charges)", 1)
+        self.assertEqual(brain.wands, {"Wand of Frost": 7})
+        brain.track_light("You picked up a Wand of Lightning (5 charges).")
+        self.assertEqual(brain.wands["Wand of Lightning"], 5)
+        brain.track_light("You picked up a Wand of Cold Balls (magik).")   # sensed: charges not shown
+        self.assertEqual(brain.wands["Wand of Cold Balls"], 1)
+        brain.picking, brain.listed = "Wand of Frost", True
+        pick = command_obs(dlvl=3, clvl=12, rows={0: "Aim which wand (a-b)?", 2: " a) Wand of Lightning (5 charges)",
+                                                  3: " b) Wand of Frost (4 charges)"})
+        pick.mode = Mode.ITEM
+        self.assertEqual(brain.pick_item(pick).key, ord("B"))
+        self.assertEqual(brain.wands["Wand of Frost"], 3)                 # the pack's count, less this one
+        brain.last_aimed = "Wand of Lightning"
+        brain.decide(command_obs(pos=(5, 5), dlvl=3, clvl=12, rows={0: "No charges left."}),
+                     town_view((5, 5), (30, 30), dlvl=3))
+        self.assertEqual(brain.wands["Wand of Lightning"], 0)
+
+    def test_a_wand_is_aimed_when_spells_or_melee_will_not_do(self) -> None:
+        from moria_playtest.brain import KEY_AIM
+        from moria_playtest.view import Creature
+        from test_m1 import command_obs, town_view
+        mage = self.brain("human-mage")
+        mage.wands = {"Wand of Frost": 5, "Wand of Stinking Cloud": 5}
+        view = town_view((5, 5), (30, 30), dlvl=10)
+        view.creatures = {(9, 5): Creature("k", 1)}                     # in line, four east
+        out = command_obs(pos=(5, 5), dlvl=10, clvl=15, hp=60, mhp=60, rows={23: "HP:60/60  MP:0/30 AU:100"})
+        decision = mage.aim(out, view)
+        self.assertEqual((decision.key, decision.reason), (KEY_AIM, "aim the Wand of Stinking Cloud at 'k'"))
+        warrior = self.brain("human-warrior")
+        warrior.wands = {"Wand of Frost": 5}
+        well = command_obs(pos=(5, 5), dlvl=10, clvl=15, hp=150, mhp=150)
+        self.assertIsNone(warrior.aim(well, view))                      # a Kobold at full HP: melee
+        hurt = command_obs(pos=(5, 5), dlvl=10, clvl=15, hp=50, mhp=150)
+        self.assertEqual(warrior.aim(hurt, view).reason, "aim the Wand of Frost at 'k'")
+        from moria_playtest import knowledge
+        worm = Creature(*sorted(knowledge.breeder_kinds())[0])
+        view.creatures = {(9, 5): worm}
+        self.assertIsNone(warrior.aim(hurt, view))                       # a bolt is not worth a breeder
+        warrior.wands["Wand of Stinking Cloud"] = 5
+        self.assertIsNone(warrior.aim(hurt, view))                       # nor a ball on one alone
+        view.creatures = {(9, 5): worm, (10, 5): worm, (9, 6): worm}
+        self.assertEqual(warrior.aim(hurt, view).reason, f"aim the Wand of Stinking Cloud at 3 '{worm.glyph}'")
+
+    def test_the_staff_of_teleportation_is_the_far_escape(self) -> None:
+        from moria_playtest.brain import KEY_USE, TELEPORT_STAFF
+        from moria_playtest.view import Creature
+        from test_m1 import command_obs, town_view
+        mage = self.brain("human-mage")
+        mage.wands = {TELEPORT_STAFF: 4}
+        kobold = Creature("k", 1)
+        view = town_view((5, 5), (30, 30), dlvl=10)
+        view.creatures, mage.adjacent = {(6, 5): kobold}, [kobold]
+        dying = command_obs(pos=(5, 5), dlvl=10, clvl=15, hp=10, mhp=60)
+        self.assertTrue(mage.can_phase(dying))
+        decision = mage.phase_door(dying, view)
+        self.assertEqual((decision.key, decision.layer), (KEY_USE, "phase"))
+
+    def test_the_magic_shop_sells_the_wands_and_staff_wanted(self) -> None:
+        from moria_playtest.brain import TELEPORT_STAFF, WAND_BUYS
+        brain = self.brain("human-warrior")
+        self.assertEqual(brain.wands_wanted(), [*WAND_BUYS, TELEPORT_STAFF])
+        brain.wands = {"Wand of Lightning": 6}
+        self.assertEqual(brain.wands_wanted(), [TELEPORT_STAFF])
+        brain.wands[TELEPORT_STAFF] = 3
+        self.assertEqual(brain.wands_wanted(), [])
+
+
+class UnknownItemTest(unittest.TestCase):
+    """Identification (maintainer, 2026-11-04): found potions and scrolls are
+    kept and tried when safe; unknown wands and staffs are identified."""
+
+    def brain(self, character: str):  # type: ignore[no-untyped-def]
+        from moria_playtest.brain import Brain
+        from moria_playtest.goals import GOALS, for_character
+        brain = Brain(for_character(GOALS["deep"], character))
+        brain.food = 10
+        return brain
+
+    def test_flavours_are_told_from_known_names(self) -> None:
+        from moria_playtest.brain import unknown_kind
+        self.assertEqual([unknown_kind(n) for n in ("Blue Potion", "an Azure Potion", "White Scroll", "Scroll of Lumen",
+                                                    "Iron Wand", "Birch Staff", "Bronze Ring")],
+                         ["potion", "potion", "scroll", "scroll", "wand", "staff", "ring"])
+        self.assertEqual({unknown_kind(n) for n in ("Potion of Cure Light Wounds", "Scroll of Light", "Wand of Frost",
+                                                    "Ration of Food", "Spellbook Magick I")}, {None})
+
+    def test_found_items_are_counted_and_unknown_ones_kept(self) -> None:
+        brain = self.brain("human-warrior")
+        brain.track_light("You picked up a Potion of Cure Light Wounds.")
+        brain.track_light("You picked up a Blue Potion.")
+        self.assertEqual((brain.clw, brain.unknown["Blue Potion"]), (1, 1))
+
+    def test_an_unknown_potion_is_tried_only_when_safe(self) -> None:
+        from moria_playtest.view import Creature
+        from test_m1 import command_obs, town_view
+        brain = self.brain("human-warrior")
+        brain.unknown["Blue Potion"] = 1
+        view = town_view((5, 5), (30, 30), dlvl=3)
+        hurt = command_obs(pos=(5, 5), dlvl=3, clvl=5, hp=20, mhp=40)
+        self.assertIsNone(brain.try_unknown(hurt, view))
+        view.creatures = {(9, 5): Creature("k", 1)}
+        well = command_obs(pos=(5, 5), dlvl=3, clvl=5, hp=40, mhp=40)
+        self.assertIsNone(brain.try_unknown(well, view))                 # something in view
+        view.creatures = {}
+        decision = brain.try_unknown(well, view)
+        self.assertEqual((decision.key, decision.layer, brain.picking), (ord("Q"), "try", "Blue Potion"))
+
+    def test_the_pack_lists_a_flavour_with_its_article(self) -> None:
+        # 2026-11-04: "try the Blue Potion" found "a Blue Potion" in the list
+        # and cancelled ("item to pick not listed").
+        from moria_playtest.game import Mode
+        from test_m1 import command_obs
+        brain = self.brain("human-warrior")
+        brain.picking, brain.listed = "Blue Potion", True
+        pick = command_obs(dlvl=3, rows={0: "Quaff which potion (a-b)?", 2: " a) Potion of Cure Light Wounds",
+                                         3: " b) a Blue Potion"})
+        pick.mode = Mode.ITEM
+        self.assertEqual(brain.pick_item(pick).key, ord("B"))
+
+    def test_an_unknown_wand_is_identified_then_counted(self) -> None:
+        from test_m1 import command_obs, town_view
+        brain = self.brain("human-warrior")
+        brain.unknown["Iron Wand"] = 1
+        brain.identify_scrolls = 1
+        decision = brain.identify_items(command_obs(pos=(5, 5), dlvl=3, clvl=8), town_view((5, 5), (30, 30), dlvl=3))
+        self.assertEqual((decision.key, brain.picking, brain.picking_next), (ord("R"), "Scroll of Identify", "Iron Wand"))
+        brain.track_light("This is a Wand of Frost (6 charges).")
+        self.assertEqual((brain.wands.get("Wand of Frost"), brain.unknown["Iron Wand"]), (6, 0))
+
+
 class StrongPotionTest(unittest.TestCase):
     """M7 queue (tactic strong_potions): a level-14 Warrior with 136 HP drank five Cure
     Light Wounds beside three creatures and died holding 17,000 gold."""
@@ -513,16 +1085,64 @@ class StrongPotionTest(unittest.TestCase):
         return brain, CCW
 
     def test_badly_hurt_it_drinks_the_strongest_carried(self) -> None:
+        from moria_playtest.view import Creature
         from test_m1 import command_obs, town_view
         brain, ccw = self.brain()
         brain.strong[ccw] = 2
         view = town_view((5, 5), (12, 5), dlvl=11, stairs_type=0xA)
-        decision = brain.decide(command_obs(pos=(5, 5), dlvl=11, clvl=14, hp=30, mhp=136), view)
-        self.assertEqual(decision.reason, "HP 30/136: drink Cure Critical Wounds")
+        view.creatures = {(6, 5): Creature("k", 1)}                  # something that can hurt it
+        obs = command_obs(pos=(5, 5), dlvl=11, clvl=14, hp=30, mhp=136)
+        self.assertEqual(brain.quaff(obs, view).reason, "HP 30/136: drink Cure Critical Wounds")
+        view.creatures = {}                                           # nothing: rest instead
+        self.assertIsNone(brain.quaff(obs, view))
+
+    def test_no_potion_that_the_creatures_beside_outrun(self) -> None:
+        """M8, 2026-11-02: a level-25 Half-Troll drank seven beside a
+        Swordsman and a Stone Giant that took more back each turn, and died
+        with none left."""
+        from moria_playtest import knowledge
+        from moria_playtest.view import Creature
+        from test_m1 import command_obs, town_view
+        mamba = Creature(*knowledge.kinds_by_name()["Black Mamba"])
+        self.assertEqual(knowledge.moves()[(mamba.glyph, mamba.level)], 2.0)   # fast: two moves a turn
+        reasons = {}
+        for beside in ((), (mamba,), (mamba,) * 3):
+            brain, ccw = self.brain()
+            brain.strong[ccw] = 2
+            brain.adjacent = list(beside)
+            view = town_view((5, 5), (12, 5), dlvl=11, stairs_type=0xA)
+            view.creatures = dict(zip(((6, 5), (6, 6), (6, 4)), beside))
+            obs = command_obs(pos=(5, 5), dlvl=11, clvl=14, hp=30, mhp=136,
+                              rows={23: "HP:30/136  MP:0/0   AC:20  AU:100"})
+            decision = brain.quaff(obs, view)
+            reasons[len(beside)] = decision.reason if decision else None
+        self.assertIsNone(reasons[0])                                           # nothing can hurt it: rest
+        self.assertEqual(reasons[1], "HP 30/136: drink Cure Critical Wounds")   # 32 at most: survives, 24 > 32/3
+        self.assertIsNone(reasons[3])                                           # 96 at most: drinking cannot save it
 
     def test_it_wants_them_from_level_ten_on_the_deep_goal_only(self) -> None:
         self.assertTrue(self.brain()[0].strong_wanted())
         self.assertFalse(self.brain("clvl10")[0].strong_wanted())
+
+    def test_neutralize_poison_is_bought_and_drunk_out_of_the_fight(self) -> None:
+        """2026-11-05: Gnome Mages at 1 mana drained to death from a Black
+        Mamba's stacked poison, Cure Poison known but no mana to cast it."""
+        from moria_playtest.brain import NEUTRALIZE
+        from moria_playtest.view import Creature
+        from test_m1 import command_obs, town_view
+        brain, _ = self.brain()
+        self.assertIn(NEUTRALIZE, brain.shopping_list(10_000))
+        self.assertNotIn(NEUTRALIZE, self.brain("clvl10")[0].shopping_list(10_000))
+        brain.credit(NEUTRALIZE + " Poison", 2)
+        self.assertNotIn(NEUTRALIZE, brain.shopping_list(10_000))
+        brain.poisoned = True
+        view = town_view((5, 5), (12, 5), dlvl=13, stairs_type=0xA)
+        obs = command_obs(pos=(5, 5), dlvl=13, clvl=19, hp=30, mhp=61, rows={23: "HP:30/61  MP:1/29  AC:20  AU:100"})
+        self.assertEqual(brain.quaff(obs, view).reason, "HP 30/61 poisoned: drink Neutralize Poison")
+        mamba = Creature("R", 12)
+        brain.adjacent, view.creatures = [mamba], {(6, 5): mamba}
+        decision = brain.quaff(obs, view)
+        self.assertNotIn("Neutralize", decision.reason if decision else "")   # beside it: the next bite poisons again
 
 
 class DangerousTest(unittest.TestCase):
@@ -676,6 +1296,27 @@ class CancelTest(unittest.TestCase):
                 service.reap(queue.Queue("deep", home), subs)
             self.assertEqual(queue.read_json(home / "runs" / "r1" / "result.json")["outcome"], "cancelled")
             self.assertEqual(subs["s"]["results"], [])
+
+    def test_a_partial_cancel_stops_and_skips_only_its_characters(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            (home / "queue.json").write_text("{}")
+            items = [{"goal": "deep", "character": c, "platform": "c128", "seed": s, "step_budget": 10}
+                     for s in (1, 2) for c in ("human-mage", "human-warrior")]
+            queue.write_json(home / "subqueues" / "s.json",
+                             {"name": "s", "build": "b", "items": items, "next": 2, "results": [], "suites": {}})
+            queue.write_json(home / "subqueues" / "s.cancel", ["human-warrior"])
+            job = {"id": "r1", "queue": "s", "platform": "c128", "character": "human-warrior", "goal": "deep",
+                   "seed": 1, "pid": 999_999_999, "slot": 0, "paused": False, "started": 1, "build": "b", "item": 1}
+            queue.write_json(home / "running.json", {"r1": job})
+            service = queue.Service(home, home / "queue.json")
+            sub = service.load_subs()["s"]
+            self.assertTrue(service.running["r1"]["cancelled"])
+            self.assertFalse(sub.get("cancelled"))
+            self.assertFalse((home / "subqueues" / "s.cancel").exists())
+            self.assertEqual(service.sub_pending(sub), 1)            # only seed 2's mage is left
+            self.assertEqual(service.next_sub_item(sub), 2)
+            self.assertEqual(service.sub_pending(sub), 0)
 
 
 class RestartBuildTest(unittest.TestCase):

@@ -52,6 +52,9 @@ class Port:
     color_table: str = ""     # empty: colour memory holds C64 indexes
     color_mask: int = 0x0F
     snapshots: bool = True    # the emulator can save and restore a machine mid-game
+    # A Balrog start is a saved game, not a mid-game snapshot (graduate.py):
+    # VICE's C128 snapshot leaves the VDC out, and a restore stalls minutes.
+    graduate_save: bool = False
     # MAME ports (mame.py): the machine, the disk option, RAM the bridge reads
     # by name (MORIA8_BRIDGE_ITEMS) and the driver's banks in it, the key
     # wait's read taps (kind, address, buffer label: mame_bridge.lua), the
@@ -179,7 +182,7 @@ C128 = Port(
     disk_files={
         "moria8": "boot128.prg", "boot128": "boot128.chain.prg", "bootart128": "bootart128.prg",
         "moria128": "moria128.prg", "t128": "title",
-        **{f"monster.db.{tier}": f"monster.db.{tier}" for tier in range(1, 5)},
+        "128.cat": "128.cat.prg", "128.cnm": "128.cnm.prg",   # the monster catalog (no tiers)
         **{f"128.{name}": f"ovl.{name}" for name in
            ("start", "town", "death", "modal", "gen", "help", "ui", "items", "disarm", "chest")},
         **{f"128.{name}": f"128.{name}.prg" for name in
@@ -226,6 +229,7 @@ C128 = Port(
     key_entries=("input_get_key", "input_get_key_fast"),
     key_wait_pushes=2,   # X and Y, pushed before the wait loop where the driver stops
     snapshot_banks=("vdc",),
+    graduate_save=True,
     color_bank="vdc", color_const="VDC_ATTRIB_BASE", color_table="vic_to_vdc_color",   # RGBI
 )
 

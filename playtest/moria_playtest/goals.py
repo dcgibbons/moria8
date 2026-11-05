@@ -97,6 +97,7 @@ class Goal:
     race: str = "half-troll"   # names for the brain's own estimates (melee skill)
     klass: str = "warrior"
     step_budget: int = 2_000
+    level_steps: int = 0   # end the game after this many steps without a character level (0: never)
     target_dlvl: int = 0   # the brain walks down until this depth
     want_xp: bool = False  # M2: seek monsters for XP
     qualify_bar: int = 16  # of the 20 qualification seeds, how many must reach it (§7.2)
@@ -145,22 +146,30 @@ GOALS: dict[str, Goal] = {
     # depth stood on earlier (queue.QueueCharacter); the budget is the
     # queue's (playtest/queue.json), 2,000,000 steps until successes set it.
     "deep": Goal(
-        "deep", "Reach character level 25 and stand on DL30 in the same game. Readiness keeps it three "
-        "levels over each depth to DL12, then tapers to level 25 on DL30.",
-        lambda o: o.clvl >= 25 and o.dlvl >= 30, step_budget=2_000_000, target_dlvl=30, want_xp=True,
-        ready_margin=3, ready_taper=(12, 30, 25), exercise=True,
+        "deep", "Reach character level 25, at any depth (the maintainer, 2026-11-02: the depth goal is "
+        "irrelevant, character level is the goal). It goes down only as its level allows: three levels "
+        "over each depth, no taper (a level-25 character plays to DL22).",
+        lambda o: o.clvl >= 25, step_budget=2_000_000, target_dlvl=30, want_xp=True,
+        ready_margin=3, exercise=True, level_steps=150_000,
         # §23.7, by bow skill: the Warrior's 55 rises 4 a level as the
         # Rogue's and Ranger's do; Paladin 40, Priest 35 and Mage 20 do not.
         missile_classes=("rogue", "ranger", "warrior"), tactics=frozenset(TACTICS)),
     # M8 (§23.9): the Balrog queue plays every combination that has met the
-    # M7 bar (queue.Balrog). The game sets GAME_FLAG_WINNER on the kill
-    # (core/combat.s); the Balrog appears from DL100. Played as deep, the
-    # readiness taper carried on past DL30 (brain.ready_level caps it at 40).
+    # M7 bar (queue.Balrog), from where it met it. The game sets
+    # GAME_FLAG_WINNER on the kill (core/combat.s); the Balrog appears from
+    # DL100 with the tiers, from DL50 with the monster catalog (VMS
+    # win_mon_appear, core/monster_catalog.s). Character level first
+    # (maintainer, 2026-11-02: "the goal is to get to clevel 38 thru 40
+    # (really 40) and THEN go tackle the balrog"): three levels over each
+    # depth, no taper, up to the game's top level, 40 (brain.ready_level),
+    # so only level 40 goes below DL36. Played with deep's taper, graduates
+    # went from DL28 to DL30 at once and died there at level 25-26.
     "balrog": Goal(
-        "balrog", "Kill the Balrog and win the game. Plays as deep to DL30, then on down to DL100, where the "
-        "Balrog appears.",
+        "balrog", "Kill the Balrog and win the game. Builds up to character level 40 first, three levels over "
+        "each depth, then goes down to where the Balrog appears: DL100 with the tiers, DL50 with the "
+        "monster catalog.",
         lambda o: bool(o.game_flags & CONSTS["GAME_FLAG_WINNER"][1]), step_budget=3_000_000, target_dlvl=100,
-        want_xp=True, ready_margin=3, ready_taper=(12, 30, 25), exercise=True,
+        want_xp=True, ready_margin=3, exercise=True,
         missile_classes=("rogue", "ranger", "warrior"), tactics=frozenset(TACTICS)),
 }
 

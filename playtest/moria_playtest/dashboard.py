@@ -29,6 +29,7 @@ from __future__ import annotations
 import argparse
 import gzip
 import json
+import statistics
 import re
 import sys
 import time
@@ -461,7 +462,7 @@ def disk() -> dict[str, Any]:
 
 RATINGS = ("Easy", "Medium", "Hard", "Very Hard")
 RATING_MIN_RUNS = 5   # counted runs before a combination is rated
-SPELL_COVERAGE_LEVEL = 25   # criterion 2: the spells a class learns by this level
+SPELL_COVERAGE_LEVEL = 25   # criterion 2: the spells a class learns below this level, castable before it
 
 
 def rate(value: float, bounds: tuple[float, float, float], higher_is_easier: bool = True) -> str:
@@ -545,11 +546,12 @@ def queue_features(records: list[dict[str, Any]]) -> dict[str, Any]:
         klass = record["character"].rsplit("-", 1)[1]
         entry = classes.get(klass)
         if entry is None:
-            # Criterion 2 (§23.2): every spell or prayer the class learns by
-            # level 25, with how often it was cast and its effect seen.
+            # Criterion 2 (§23.2): every spell or prayer the class learns
+            # below level 25 (one learned at 25 comes as the game ends), with
+            # how often it was cast and its effect seen.
             entry = classes[klass] = {"runs": 0, "layers": {}, "milestones": {}, "causes": {}, "spells": {
                 name: {"level": level, "cast": 0, "effect": 0, "evidence": ""}
-                for name, level in knowledge.spells(klass).items() if level <= SPELL_COVERAGE_LEVEL}}
+                for name, level in knowledge.spells(klass).items() if level < SPELL_COVERAGE_LEVEL}}
         entry["runs"] += 1
         for key, count in ((record.get("features") or {}).get("missiles") or {}).items():
             entry.setdefault("missiles", {"shots": 0, "kills": 0})[key] += count
@@ -579,6 +581,31 @@ def queue_live(home: Path, run_id: str, job: dict[str, Any], full: bool = False)
             "milestones": progress.get("milestones", {}), "status": status}
 
 
+def goal_summary(sub: dict[str, Any], counted: frozenset[str] | set[str]) -> dict[str, Any]:
+    """A subqueue's results as the M7 grid shows the main queue's: games and
+    combinations that reached the goal, character levels, and each
+    combination's runs (maintainer, 2026-11-03: with the main queue idle the
+    dashboard showed no goal counts for the A/B runs)."""
+    results = [r for r in sub.get("results", []) if r.get("outcome") in counted]
+    names = sorted({item["character"] for item in sub.get("items", [])})
+    clvls = sorted(r.get("clvl") or 0 for r in results)
+    grid = {}
+    for name in names:
+        mine = [r for r in results if r.get("character") == name]
+        grid[name] = {"runs": len(mine), "total": sum(i["character"] == name for i in sub.get("items", [])),
+                      "loops": sum(bool(r.get("loops")) for r in mine),
+                      "reached": sum(r["outcome"] == "reached" for r in mine),
+                      "best": max((r.get("clvl") or 0 for r in mine), default=None),
+                      "last": ({k: mine[-1].get(k) for k in ("outcome", "clvl", "max_dlvl", "cause")} if mine else None)}
+    return {"games": len(results), "reached": sum(r["outcome"] == "reached" for r in results),
+            "combos": len(names), "combos_reached": sum(g["reached"] > 0 for g in grid.values()),
+            "median_clvl": statistics.median(clvls) if clvls else None,
+            "clvl15": sum(c >= 15 for c in clvls), "clvl20": sum(c >= 20 for c in clvls),
+            "early": sum(r["outcome"] == "died" and (r.get("clvl") or 0) <= 5 for r in results),
+            "loops": sum(bool(r.get("loops")) for r in results),   # games with a loop finding (session.LoopWatch)
+            "grid": grid}
+
+
 def queue() -> dict[str, Any]:
     from . import queue as q
     home = q.HOME
@@ -587,15 +614,22 @@ def queue() -> dict[str, Any]:
     state = read_json(q.state_path(home, config["goal"], config.get("epoch", ""))) or {}
     running = read_json(home / "running.json") or {}
     runs = queue_runs(home, config["goal"], q.COUNTED, config.get("epoch", ""))
-    subs = []
-    for path in sorted((home / "subqueues").glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True)[:12]:
+    def summary(path: Path) -> dict[str, Any]:
         sub = cached(path, read_json) or {}
-        subs.append({k: sub.get(k) for k in ("name", "created", "finished", "build", "note", "done", "cancelled",
-                                              "report", "variant", "ab")} |
-                    {"items": len(sub.get("items", [])), "results": len(sub.get("results", [])),
-                     "reached": sum(r["outcome"] == "reached" for r in sub.get("results", [])),
-                     "progress": q.subqueue_report(sub) if not sub.get("done") and sub.get("items") else None,
-                     "ab_report": (sub.get("ab_report") or q.ab_report(sub)) if sub.get("ab") else None})
+        return ({k: sub.get(k) for k in ("name", "created", "finished", "build", "note", "done", "cancelled",
+                                          "report", "variant", "ab")} |
+                {"items": len(sub.get("items", [])), "results": len(sub.get("results", [])),
+                 "reached": sum(r["outcome"] == "reached" for r in sub.get("results", [])),
+                 "progress": q.subqueue_report(sub) if not sub.get("done") and sub.get("items") else None,
+                 "ab_report": (sub.get("ab_report") or q.ab_report(sub)) if sub.get("ab") else None,
+                 "goal": goal_summary(sub, q.COUNTED)})
+
+    newest = {"key": lambda p: p.stat().st_mtime, "reverse": True}
+    subs = [summary(path) for path in sorted((home / "subqueues").glob("*.json"), **newest)[:12]]
+    # Moved out of subqueues/ when done (maintainer, 2026-11-04: "clean up the
+    # old queues and move them to history"): the History tab lists them.
+    archived = [summary(path) | {"archive": path.parent.name}
+                for path in sorted(home.glob("archive/*-subqueues/*.json"), **newest)]
     return {"now": time.time(), "service": {"up": time.time() - service.get("updated", 0) < 60,
                                             "updated": service.get("updated"), "build": service.get("build"),
                                             "build_state": service.get("build_state", {}), "log": service.get("log", [])[-12:]},
@@ -607,12 +641,14 @@ def queue() -> dict[str, Any]:
             if state.get("slowest_success") else config["start_budget"],
             "platforms": state.get("platforms", {}),
             "live": [queue_live(home, run_id, job) for run_id, job in running.items()],
-            "subqueues": subs, "balrog": read_json(home / "state-balrog.json") or {"items": {}, "order": []},
+            "subqueues": subs, "archived": archived, "balrog": read_json(home / "state-balrog.json") or {"items": {}, "order": []},
             "ratings": runs["ratings"], "features": runs["features"],
             "runs": runs["runs"], "recent": [{k: r.get(k) for k in ("id", "queue", "character", "platform", "outcome",
                                                                     "clvl", "max_dlvl", "steps", "ended")}
                                              | {"cause": (r.get("death") or {}).get("cause")}
-                                             for r in runs["recent"]]}
+                                             for r in runs["recent"]
+                                             # Only queues still shown: an archived subqueue's runs leave too
+                                             if r.get("queue") in {"main", "balrog"} | {s["name"] for s in subs}]}
 
 
 def queue_run(run_id: str) -> dict[str, Any] | None:

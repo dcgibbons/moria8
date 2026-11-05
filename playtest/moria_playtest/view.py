@@ -15,6 +15,8 @@ The brain sees only this view. Privileged state stays with the auditor.
 from __future__ import annotations
 
 import heapq
+import re
+from array import array
 from functools import lru_cache
 from dataclasses import dataclass, field
 
@@ -25,6 +27,11 @@ WALL = 0x1   # TILE_WALL_H type nibble; stands in for every blocking type
 WALKABLE_TYPES = {0x0, 0x7, 0x9, 0xA, 0xB, 0xE}   # walkable_table, core/player_move.s
 TYPE_DOOR_OPEN, TYPE_DOOR_CLOSED = 0x7, 0x8
 TYPE_STAIRS_DN, TYPE_STAIRS_UP, TYPE_RUBBLE, TYPE_TRAP, TYPE_SECRET = 0x9, 0xA, 0xB, 0xE, 0xF
+# terrain_frontier's byte masks over tile types as signed bytes (UNKNOWN is 0xFF):
+# unknown tiles, and the tiles a frontier holds without and with known traps.
+_UNKNOWN_MASK = bytes(int(b == UNKNOWN & 0xFF) for b in range(256))
+_FRONTIER_MASK = {traps: bytes(int(b in WALKABLE_TYPES | {TYPE_DOOR_CLOSED} and (traps or b != TYPE_TRAP))
+                               for b in range(256)) for traps in (False, True)}
 
 DIRS = {(0, -1): ord("K"), (0, 1): ord("J"), (-1, 0): ord("H"), (1, 0): ord("L"),
         (-1, -1): ord("Y"), (1, -1): ord("U"), (-1, 1): ord("B"), (1, 1): ord("N")}
@@ -37,6 +44,11 @@ HAZARD_COST = 150   # ... or past a hazard: a Yellow Jelly's poison touch stacke
 # Screen characters that are terrain, not things (core/color.s tile_screen_codes;
 # the trap/rune glyph decodes as '·'; town store entrances are digits).
 TERRAIN_GLYPHS = set(".#'+><:%· ") | set("12345678")
+
+
+# Screen characters build_view must look at: creatures (letters) and unknown
+# glyphs, i.e. everything but terrain and the player.
+NOTABLE_GLYPH = re.compile("[^" + re.escape("".join(sorted(TERRAIN_GLYPHS)) + "@") + "]")
 
 
 def is_unknown_glyph(char: str) -> bool:
@@ -63,6 +75,8 @@ class View:
     stores: list[Pos] = field(default_factory=list)  # town only: entrance of store N+1
     unknown: dict[Pos, str] = field(default_factory=dict)  # unidentified glyphs on screen
     hazards: set[Pos] = field(default_factory=set)   # brain: creatures to keep away from
+    remembered: set[Pos] = field(default_factory=set)   # brain: slow creatures out of sight, avoided like seen ones
+    perilous: set[Pos] = field(default_factory=set)     # brain: squares a creature in view could hurt badly (danger)
     screen: tuple[int, int, int, int] = (0, 0, 0, 0)  # map x, y, width, height on screen
 
     def on_screen(self, pos: Pos) -> bool:
@@ -81,7 +95,14 @@ class View:
         return self.types[y * self.cols + x]
 
     def tiles_of(self, tile_type: int) -> set[Pos]:
-        return {(i % self.cols, i // self.cols) for i, t in enumerate(self.types) if t == tile_type}
+        # list.index scans in C: the bot's largest cost per step (2026-11-04 profile) as a Python loop.
+        found, types, i = set(), self.types, -1
+        try:
+            while True:
+                i = types.index(tile_type, i + 1)
+                found.add((i % self.cols, i // self.cols))
+        except ValueError:
+            return found
 
     def stairs_down(self) -> set[Pos]:
         return self.tiles_of(TYPE_STAIRS_DN)
@@ -121,7 +142,24 @@ class View:
         near_unknown, near_hazard = self.near_costly()
         if start in goals:
             return (0, 0)
-        found = self.route(goals, start, danger, near_unknown, near_hazard, avoid_monsters, doors)
+        found = None
+        soft = (self.remembered | self.perilous) - goals if avoid_monsters else set()
+        if soft:
+            # A slow creature gone out of sight is still there: avoided only
+            # while it was in view, the cheapest way flipped between two
+            # staircases each time it showed, and a level-4 Warrior circled
+            # one DL1 level 18,000 steps until it starved (2026-11-03). Only
+            # when that leaves no way at all does the path go past it.
+            # So are squares a creature in view could hurt badly (danger-gated
+            # paths, maintainer 2026-11-03).
+            blocked = self.blocked
+            self.blocked = blocked | soft
+            try:
+                found = self.route(goals, start, danger, near_unknown, near_hazard, avoid_monsters, doors)
+            finally:
+                self.blocked = blocked
+        if found is None:
+            found = self.route(goals, start, danger, near_unknown, near_hazard, avoid_monsters, doors)
         return None if found is None else found[0]
 
     def path_steps(self, goals: set[Pos], *, avoid_monsters: bool, doors: bool = True) -> int | None:
@@ -215,21 +253,31 @@ class View:
         """Walkable tiles (or closed doors) touching an unknown tile, with their
         type: the part of ``frontier`` that depends on the map alone, cached
         per map contents (several layers ask each step)."""
-        key = (traps, hash(tuple(self.types)))
+        cols, types = self.cols, self.types
+        cells = array("b", types).tobytes()   # UNKNOWN (-1) is 0xFF
+        key = (traps, cells)
         cache = self.__dict__.setdefault("_frontier_cache", {})
         if key in cache:
             return cache[key]
-        cols, rows, types = self.cols, self.rows, self.types
-        out = []
-        for i, t in enumerate(types):
-            if (t not in WALKABLE_TYPES and t != TYPE_DOOR_CLOSED) or (t == TYPE_TRAP and not traps):
-                continue
-            x, y = i % cols, i // cols
-            for dx, dy in DIRS:
-                nx, ny = x + dx, y + dy
-                if 0 <= nx < cols and 0 <= ny < rows and types[ny * cols + nx] == UNKNOWN:
-                    out.append(((x, y), t))
-                    break
+        # One byte per tile, 0 or 1, on rows padded by a never-set column so
+        # no neighbour wraps a row; as integers, the eight neighbour shifts
+        # and the masks run in C (the bot's largest cost per step as a loop).
+        stride = cols + 1
+        pad = b"\0"
+        unknown = cells.translate(_UNKNOWN_MASK)
+        open_ = cells.translate(_FRONTIER_MASK[traps])
+        rows = range(0, len(cells), cols)
+        unknown_bits = int.from_bytes(b"".join(unknown[r:r + cols] + pad for r in rows), "little")
+        near = 0
+        for shift in (1, stride - 1, stride, stride + 1):
+            near |= unknown_bits << 8 * shift | unknown_bits >> 8 * shift
+        hits = (near & int.from_bytes(b"".join(open_[r:r + cols] + pad for r in rows), "little"))
+        found = hits.to_bytes(stride * self.rows, "little")
+        out, j = [], found.find(1)
+        while j >= 0:
+            x, y = j % stride, j // stride
+            out.append(((x, y), types[y * cols + x]))
+            j = found.find(1, j + 1)
         cache[key] = out
         return out
 
@@ -315,13 +363,14 @@ def build_view(game: Game, obs: Observation, tiles: bytes, levels: bytes | None 
     vx, vy = abi.hal_layout_viewport_x, abi.hal_layout_viewport_y
     for row in range(vy, vy + abi.hal_layout_viewport_h):
         line = obs.rows[row]
-        for col in range(vx, vx + abi.hal_layout_viewport_w):
+        for match in NOTABLE_GLYPH.finditer(line, vx, vx + abi.hal_layout_viewport_w):
+            col = match.start()
             if line[col].isalpha():
                 pos = screen_to_map(game, obs, col, row)
                 kind = by_pos.get(pos)
                 level = levels[kind] if levels is not None and kind is not None and kind < len(levels) else 0
                 creatures[pos] = Creature(line[col], level)
-            elif is_unknown_glyph(line[col]):
+            else:
                 unknown[screen_to_map(game, obs, col, row)] = line[col]
     stores = []
     if obs.dlvl == 0:

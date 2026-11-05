@@ -200,7 +200,7 @@ playtest-strategy-evidence:
 	$(PLAYTEST_PY) -m moria_playtest.strategy
 
 playtest-subqueue-cancel:
-	$(PLAYTEST_PY) -m moria_playtest.queue cancel --name $(NAME)
+	$(PLAYTEST_PY) -m moria_playtest.queue cancel --name $(NAME) $(if $(CHARACTERS),--characters $(CHARACTERS))
 
 # An A/B subqueue (§23.10): NAME=..., GOAL=... (default deep), CHARACTERS=a,b,
 # SEEDS=... or RANDOM_SEEDS=N (drawn once, both arms play them), VARIANT_A=...

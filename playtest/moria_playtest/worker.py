@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from . import abi as abimod
+from . import knowledge
 from .game import Game, Observation
 from .launch import (PLAYTEST_OUT, SHIPPING, Build, ViceProcess, allocate_port, check_disk,
                      prepare_worker, rom_args, sha256)
@@ -71,6 +72,7 @@ class Worker:
         check_disk(build)
         self.workdir, self.disk = prepare_worker(run_dir, worker_id, build.disk)
         self.abi = abimod.load(build.vs, port=build.target)
+        knowledge.use_port(build.target.name)
         self.vp: ViceProcess | MameProcess | None = None
         self.game: Game | None = None
         self.restarts = 0
@@ -136,6 +138,12 @@ class Worker:
         """Kill-and-restart path: new VICE process, then undump the snapshot."""
         self.restarts += 1
         game = self._spawn(autostart=False)
+        step = snapshot.brain.get("step")
+        if isinstance(step, int):
+            # The brain's timers (town trips, waits) count game steps: a new
+            # emulator counting from 0 put them hundreds of thousands of
+            # steps ahead (M8, 2026-11-02).
+            game.step = step
         obs = game.undump(snapshot.path)
         seed = snapshot.brain.get("seed")
         if isinstance(seed, int):

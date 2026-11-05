@@ -19,10 +19,11 @@ because run records are kept for good):
   its build's game with its build's bot, so editing this tree never changes
   a run in flight or the main queue's build.
 - ``subqueues/<name>.json``: a submitted subqueue, its items and results;
-  ``<name>.cancel`` cancels it.
+  ``<name>.cancel`` cancels it, or, holding a JSON list of characters,
+  only their runs (in flight and pending).
 - ``state-balrog.json``: the Balrog queue (§23.9): every combination past
   the M7 bar, its turn order, runs, wins and best run.
-- ``balrog/<run>/``: a Balrog start, an M7 success's DL30 snapshot with
+- ``balrog/<run>/``: a Balrog start, an M7 success's clvl-25 snapshot with
   its whole brain.
 - ``service.json``: the service's heartbeat and what it is doing.
 
@@ -31,8 +32,10 @@ The config is ``playtest/queue.json``, read every tick.
 
 from __future__ import annotations
 
+import collections
 import argparse
 import dataclasses
+import filecmp
 import gzip
 import hashlib
 import json
@@ -61,11 +64,12 @@ CONFIG = ROOT / "playtest" / "queue.json"
 SUITES = ROOT / "playtest" / "suites"
 TICK_SECONDS = 5.0
 PAUSE_POLL_STEPS = 20       # a run looks for its pause file this often
-# Past the M7 goal's clvl 25 and DL30, for the Balrog queue's deep game.
+# Past the M7 goal's clvl 25, for the Balrog queue's deep game.
 CLVL_MILESTONES = (5, 10, 15, 20, 25, 30, 35, 40)
 DLVL_MILESTONES = (5, 8, 10, 15, 20, 25, 30, 35, 40, 45, 50, 60, 70, 80, 90, 100)
 RECALL_TEXT = "yanked"      # "You feel yourself yanked away!" (Word of Recall)
 COUNTED = ("reached", "died", "budget", "finding", "error")   # outcomes that move an item
+PARALLEL_CAP = 3         # runs at once of a combination without a success (``parallel_cap``)
 DEFAULTS: dict[str, Any] = {
     "workers": 24, "min_per_platform": 1, "platforms": ["c64"], "goal": "deep", "retry_cap": 3,
     "start_budget": 2_000_000, "budget_factor": 3, "budget_floor": 750_000, "retention_days": 14, "fetch_every_s": 600,
@@ -186,8 +190,63 @@ def snapshot_build(platforms: list[str], source: str = "commit", home: Path = HO
     return build_id
 
 
+BRAIN_MODULES = ("brain.py", "magic.py", "view.py")   # the modules a saved brain's pickle names
+
+
 def build_meta(build_id: str, home: Path = HOME) -> dict[str, Any]:
     return read_json(home / "builds" / build_id / "build.json") or {}
+
+
+def brain_shape(root: Path) -> dict[str, set[str]] | None:
+    """Each class in the modules a saved brain is made of, with the
+    attributes its code gives an instance: annotated fields and every
+    ``self.<name> =``. None when a module is missing."""
+    import ast
+    shape: dict[str, set[str]] = {}
+    for name in BRAIN_MODULES:
+        path = root / "playtest" / "moria_playtest" / name
+        if not path.is_file():
+            return None
+        for node in ast.walk(ast.parse(path.read_text())):
+            if not isinstance(node, ast.ClassDef):
+                continue
+            attrs = shape.setdefault(f"{name}:{node.name}", set())
+            for item in node.body:
+                if isinstance(item, ast.AnnAssign) and isinstance(item.target, ast.Name):
+                    attrs.add(item.target.id)
+            for sub in ast.walk(node):
+                targets = sub.targets if isinstance(sub, ast.Assign) else [sub.target] if isinstance(
+                    sub, (ast.AnnAssign, ast.AugAssign)) else []
+                for target in targets:
+                    for t in ast.walk(target):
+                        if isinstance(t, ast.Attribute) and isinstance(t.value, ast.Name) and t.value.id == "self":
+                            attrs.add(t.attr)
+    return shape
+
+
+def same_game_and_brain(a: str, b: str, home: Path = HOME) -> bool:
+    """A brain saved under build ``a`` loads into build ``b``'s bot, for the
+    same game: the disks are the same, and every class the pickle can name
+    (brain.py, magic.py, view.py; the goal is left out, session.save_brain)
+    is still there with no attribute ``a``'s code never gave it, but for
+    those session.load_brain completes from a fresh brain. A Balrog
+    start then plays the current goals and bot (maintainer, 2026-11-02: the
+    graduates of the build before the level-40 goal still dove to DL30)."""
+    def same(x: Path, y: Path) -> bool:
+        if not (x.is_dir() and y.is_dir()):
+            return False
+        cmp = filecmp.dircmp(x, y, ignore=["__pycache__"])
+        if cmp.left_only or cmp.right_only or cmp.funny_files:
+            return False
+        _, differ, errors = filecmp.cmpfiles(x, y, cmp.common_files, shallow=False)
+        return not (differ or errors) and all(same(x / d, y / d) for d in cmp.common_dirs)
+    root_a, root_b = home / "builds" / a, home / "builds" / b
+    if not same(root_a / "build", root_b / "build"):
+        return False
+    from .session import FILLED_ON_LOAD
+    old, new = brain_shape(root_a), brain_shape(root_b)
+    return old is not None and new is not None and all(
+        cls in old and (attrs <= old[cls] or cls.split(":")[1] in FILLED_ON_LOAD) for cls, attrs in new.items())
 
 
 # -- one run ------------------------------------------------------------------------
@@ -199,6 +258,8 @@ def run_one(run_dir: Path) -> int:
     from .game import derive_rng
     from .launch import Build, StaleDisk, build_identity, check_disk
     from .recorder import SessionLog
+    from . import graduate
+    from .launch import allocate_port
     from .session import Character, Result, load_brain
     from .worker import Snapshot, Worker
 
@@ -240,8 +301,6 @@ def run_one(run_dir: Path) -> int:
                 (run_dir / "paused.json").unlink(missing_ok=True)
 
         def reached(self, obs) -> bool:   # type: ignore[no-untyped-def]
-            if self.goal.name == "deep":
-                return obs.clvl >= 25 and self.result.max_dlvl >= 30
             return self.goal.reached(obs)
 
         def start(self):   # type: ignore[no-untyped-def]
@@ -251,6 +310,8 @@ def run_one(run_dir: Path) -> int:
             resume = job.get("resume")
             if not resume:
                 return super().start()
+            if resume.get("save"):
+                return self.start_from_save(resume)
             source = Path(resume["snapshot"])
             local = run_dir / "start" / source.name   # take_snapshot deletes it later: a copy
             local.parent.mkdir(parents=True, exist_ok=True)
@@ -267,6 +328,27 @@ def run_one(run_dir: Path) -> int:
             self.result.steps = int(resume["step"])
             self.result.max_dlvl = int(resume["dlvl"])
             self.snapshot = snapshot
+            self.session.event("character_start", seed=self.seed, worker=self.worker.worker_id,
+                               goal=self.goal.name, resumed_from=resume["run"], step=resume["step"])
+            return obs
+
+        def start_from_save(self, resume):   # type: ignore[no-untyped-def]
+            """A graduate's saved game (graduate.py): boot, load slot 1 from
+            the title, then the graduate's brain and new dice, as above."""
+            assert text is not None
+            self.worker.start_at_title()
+            game = self.worker.game
+            assert game is not None
+            game.step = int(resume["step"])   # the brain's timers go on from the graduate's steps
+            obs = graduate.load(game, text)
+            game.seed = self.seed
+            game.mon.mem_set(game.abi.zp_rng_0, derive_rng(self.seed, 1), game.ram)
+            start = run_dir / "start" / graduate.BRAIN
+            self.brain = load_brain(start, self.goal)
+            saved = read_json(start.with_suffix(".brain.json")) or {}
+            self.auditor.command_sp = saved.get("auditor_command_sp")
+            self.result.steps = int(resume["step"])
+            self.result.max_dlvl = int(resume["dlvl"])
             self.session.event("character_start", seed=self.seed, worker=self.worker.worker_id,
                                goal=self.goal.name, resumed_from=resume["run"], step=resume["step"])
             return obs
@@ -292,10 +374,41 @@ def run_one(run_dir: Path) -> int:
                                    "port": port.name, "build": build_identity(build), "job": job,
                                    "started": time.strftime("%Y-%m-%dT%H:%M:%S")})
     character: QueueCharacter | None = None
+    text: Any = None
+    extra: tuple[str, ...] = ()
+    save_disk: Path | None = None
+    if port.graduate_save:
+        # Drive 9 holds the save disk a graduate saves to, or the start a
+        # Balrog run loads (graduate.py).
+        start = (job.get("resume") or {}).get("save")
+        if start:
+            shutil.copytree(start, run_dir / "start", dirs_exist_ok=True)
+            save_disk = run_dir / "start" / graduate.SAVE_DISK
+        else:
+            save_disk = graduate.fresh_disk(run_dir)
+        text_port = allocate_port(graduate.TEXT_MONITOR_WORKER)
+        text = graduate.TextMonitor(text_port)
+        extra = graduate.drive9_args(save_disk, text_port)
     try:
-        worker = Worker(run_dir, job.get("slot", 0), build=build)
+        worker = Worker(run_dir, job.get("slot", 0), build=build, extra_args=extra)
         character = QueueCharacter(worker, goal, job["seed"], session)
+        character.keep_worker = port.graduate_save
         result = character.play()
+        if port.graduate_save and result.outcome == "reached" and goal.name == "deep" and save_disk is not None:
+            try:
+                game = worker.game
+                assert game is not None and text is not None
+                state = {"seed": job["seed"], "step": result.steps, "dlvl": game.last.dlvl,
+                         "auditor_command_sp": character.auditor.command_sp}
+                graduate.save(game, text, save_disk)
+                graduate.keep(run_dir, save_disk, state, character.brain)
+                session.event("graduate_saved", seed=job["seed"], step=result.steps)
+            except Exception as exc:   # the success stands; the Balrog queue has no start from it
+                session.event("graduate_save_failed", seed=job["seed"], error=repr(exc))
+        if port.graduate_save:
+            if text is not None:
+                text.close()
+            worker.stop()
     except Exception as exc:   # anything but a GameFault: a harness error
         session.event("worker_error", seed=job["seed"], error=repr(exc), traceback=traceback.format_exc())
         result = Result(job["seed"], outcome="error", findings=[f"error: {exc!r}"])
@@ -411,6 +524,18 @@ class Queue:
         entry["items"][combo]["in_flight"] = run_id
         return combo
 
+    def parallel_pick(self, platform: str, playing: collections.Counter[str], cap: int) -> str | None:
+        """When the head of the queue has succeeded, every item without a
+        success is in flight already: another run for the one of them with the
+        fewest runs playing, up to ``cap`` each (M7 needs each combination
+        once; workers otherwise replayed successes, 2026-11-04: 14 of 24)."""
+        entry = self.platform(platform)
+        head = self.head(platform)
+        if head is not None and entry["items"][head]["success"] is None:
+            return None
+        open_ = [c for c, item in entry["items"].items() if item["success"] is None and playing[c] < cap]
+        return min(open_, key=lambda c: (playing[c], c)) if open_ else None
+
     def give_back(self, platform: str, combo: str) -> None:
         """A run that did not count (stale build, service restart, cancel):
         the item goes back to the head, its streak untouched."""
@@ -419,17 +544,21 @@ class Queue:
         if combo not in entry["order"]:
             entry["order"].insert(0, combo)
 
-    def finish(self, record: dict[str, Any], retry_cap: int) -> None:
+    def finish(self, record: dict[str, Any], retry_cap: int, parallel: bool = False) -> None:
         """Move an item by its run's outcome (§23.4): a success to the back; a
-        failure to the head, up to ``retry_cap`` in a row, then to the back
-        marked struggling."""
+        failure to the head, up to ``retry_cap`` in a row, then marked
+        struggling behind the other items without a success. A ``parallel``
+        run (``parallel_pick``) counts, but its item's place and in-flight
+        run are the item's own run's."""
         platform, combo = record["platform"], record["character"]
         if record["outcome"] not in COUNTED:
-            self.give_back(platform, combo)
+            if not parallel:
+                self.give_back(platform, combo)
             return
         entry = self.platform(platform)
         item = entry["items"][combo]
-        item["in_flight"] = None
+        if not parallel:
+            item["in_flight"] = None
         item["runs"] += 1
         item["last"] = {k: record.get(k) for k in ("id", "outcome", "steps", "clvl", "max_dlvl", "ended",
                                                    "commit", "seed")}
@@ -450,14 +579,21 @@ class Queue:
                                    "steps": record.get("steps")}
             slowest = self.state.get("slowest_success") or 0
             self.state["slowest_success"] = max(slowest, record.get("steps", 0))
-            entry["order"].append(combo)
+            if not parallel:
+                entry["order"].append(combo)
+        elif parallel:
+            item["streak"] = min(item["streak"], 0) - 1
         else:
             item["streak"] = min(item["streak"], 0) - 1
             item["fails_in_row"] += 1
             if item["fails_in_row"] > retry_cap:
                 item["struggling"] = True
                 item["fails_in_row"] = 0
-                entry["order"].append(combo)
+                # Behind the other combinations still without a success, ahead
+                # of those with one: M7 needs each once, and a struggling one
+                # behind nine successes waited on their replays (2026-11-04).
+                done = [i for i, c in enumerate(entry["order"]) if entry["items"][c]["success"] is not None]
+                entry["order"].insert(done[0] if done else len(entry["order"]), combo)
             else:
                 entry["order"].insert(0, combo)
         if combo not in entry["cycle_done"]:
@@ -465,6 +601,11 @@ class Queue:
         if len(entry["cycle_done"]) >= len(entry["items"]):
             entry["cycle"] += 1
             entry["cycle_done"] = []
+
+
+def playable(item: dict[str, Any]) -> bool:
+    """A Balrog item can play: on a ``graduate_save`` port only from a saved game."""
+    return not PORTS[item["platform"]].graduate_save or bool((item.get("start") or {}).get("save"))
 
 
 class Balrog:
@@ -499,11 +640,22 @@ class Balrog:
                        "steps": record.get("steps"), "epoch": record.get("epoch", "")})
         self.state["items"][f"{record['platform']}/{record['character']}"]["start"] = start
 
-    def take(self) -> dict[str, Any]:
-        """The next graduate, which goes to the back."""
-        key = self.state["order"].pop(0)
-        self.state["order"].append(key)
-        return self.state["items"][key]
+    def take(self) -> dict[str, Any] | None:
+        """The next graduate that can play, which goes to the back. On a
+        ``graduate_save`` port only a saved-game start plays (graduate.py);
+        a snapshot start there is skipped until it graduates again. None
+        when no graduate can play."""
+        for _ in range(len(self.state["order"])):
+            key = self.state["order"].pop(0)
+            self.state["order"].append(key)
+            item = self.state["items"][key]
+            if playable(item):
+                return item
+        return None
+
+    def ready(self) -> bool:
+        """Whether take would find a graduate that can play."""
+        return any(playable(item) for item in self.state["items"].values())
 
     def finish(self, record: dict[str, Any]) -> None:
         item = self.state["items"].get(f"{record['platform']}/{record['character']}")
@@ -881,7 +1033,7 @@ class Service:
                      f"max DL {record.get('max_dlvl')} steps {record.get('steps')}")
             if job["queue"] == "main":
                 if job["goal"] == queue.goal and job.get("epoch", "") == queue.epoch:
-                    queue.finish(record, self.config["retry_cap"])
+                    queue.finish(record, self.config["retry_cap"], parallel=bool(job.get("parallel")))
                     queue.save()
                 if job["goal"] == "deep" and record["outcome"] == "reached":
                     self.balrog_start(record)
@@ -898,7 +1050,8 @@ class Service:
             elif record["outcome"] != "cancelled":   # a cancelled run is no result
                 sub["results"].append({**sub["items"][job["item"]],
                                        **{k: record.get(k) for k in ("id", "outcome", "steps", "clvl", "max_dlvl")},
-                                       "cause": (record.get("death") or {}).get("cause")})
+                                       "cause": (record.get("death") or {}).get("cause"),
+                                       "loops": sum(f.startswith("loop:") for f in record.get("findings") or [])})
             self.save_sub(sub)
 
     def sync_records(self) -> None:
@@ -946,7 +1099,17 @@ class Service:
             sub = read_json(path)
             if not sub or sub.get("done"):
                 continue
-            if path.with_suffix(".cancel").exists() and not sub.get("cancelled"):
+            cancel = path.with_suffix(".cancel")
+            characters = (read_json(cancel) or []) if cancel.exists() else []
+            if characters and not sub.get("cancelled"):
+                sub["dropped"] = sorted(set(sub.get("dropped", [])) | set(characters))
+                for run_id, job in self.running.items():
+                    if job["queue"] == sub["name"] and job["character"] in characters:
+                        self.stop_run(run_id)
+                self.save_sub(sub)
+                cancel.unlink()
+                self.log(f"cancel subqueue {sub['name']} for {', '.join(characters)}")
+            elif cancel.exists() and not sub.get("cancelled"):
                 sub["cancelled"] = True
                 for run_id, job in self.running.items():
                     if job["queue"] == sub["name"]:
@@ -961,11 +1124,20 @@ class Service:
     def sub_pending(self, sub: dict[str, Any]) -> int:
         if sub.get("cancelled"):
             return 0
-        return len(sub["items"]) - sub["next"] + len(sub.get("requeue", []))
+        dropped = set(sub.get("dropped", []))
+        indices = list(range(sub["next"], len(sub["items"]))) + sub.get("requeue", [])
+        return sum(sub["items"][i]["character"] not in dropped for i in indices)
 
     def next_sub_item(self, sub: dict[str, Any]) -> int:
-        if sub.get("requeue"):
-            return sub["requeue"].pop(0)
+        """The next item to play, skipping characters a partial cancel dropped
+        (only called while ``sub_pending``)."""
+        dropped = set(sub.get("dropped", []))
+        while sub.get("requeue"):
+            index = sub["requeue"].pop(0)
+            if sub["items"][index]["character"] not in dropped:
+                return index
+        while sub["items"][sub["next"]]["character"] in dropped:
+            sub["next"] += 1
         sub["next"] += 1
         return sub["next"] - 1
 
@@ -983,10 +1155,25 @@ class Service:
                          f"{json.dumps(sub['report'])}")
 
     def balrog_start(self, record: dict[str, Any]) -> None:
-        """Keep an M7 success's last snapshot, taken on DL30 with the whole
+        """Keep an M7 success's last snapshot, taken at clvl 25 with the whole
         brain beside it, as its combination's Balrog start (§23.9). Runs
         keep snapshots for ``retention_days``; a start is kept while used."""
         from .session import brain_pickle_path
+        from .graduate import BRAIN
+        saved_game = self.home / "runs" / record["id"] / "graduate"
+        if (saved_game / BRAIN).with_suffix(".brain.pickle").exists():
+            dest = self.home / "balrog" / record["id"]
+            shutil.copytree(saved_game, dest, dirs_exist_ok=True)
+            saved = read_json((dest / BRAIN).with_suffix(".brain.json")) or {}
+            self.balrog.set_start(record, {"run": record["id"], "build": record["build"], "save": str(dest),
+                                           "step": saved.get("step", 0), "dlvl": saved.get("dlvl", 0),
+                                           "set": now()})
+            self.balrog.save()
+            self.log(f"balrog queue: {record['character']} starts from its saved game (run {record['id']})")
+            return
+        if PORTS[record["platform"]].graduate_save:
+            self.log(f"balrog queue: {record['character']} left no saved game (run {record['id']}): no start")
+            return
         snaps = [p for p in (self.home / "runs" / record["id"]).glob("w*/snapshots/*.vsf")
                  if brain_pickle_path(p).exists()]
         if not snaps:
@@ -1040,7 +1227,7 @@ class Service:
         # The Balrog queue's workers come out of the total, as a subqueue's do.
         balrog_running = sum(1 for j in self.running.values() if j["queue"] == "balrog")
         balrog_pending = 0
-        if self.balrog.state["order"] and self.build_id and max(self.backoff.values(), default=0) < time.time():
+        if self.balrog.ready() and self.build_id and max(self.backoff.values(), default=0) < time.time():
             balrog_pending = max(0, int(config["balrog_workers"]) - balrog_running)
         pending = sum(self.sub_pending(sub) for sub in subs.values()) + balrog_pending
         target = max(minimum, total - sub_running - pending)
@@ -1060,7 +1247,10 @@ class Service:
             if ready and len(main_active) < minimum and self.build_id:
                 run_id = self.start_main(queue, ready[0])
             elif balrog_pending:
-                self.start_balrog()
+                if not self.start_balrog():   # no graduate can play: the main queue keeps the workers
+                    pending -= balrog_pending
+                    balrog_pending = 0
+                    continue
                 balrog_pending -= 1
                 pending -= 1
                 active += 1
@@ -1084,29 +1274,39 @@ class Service:
             main_active.append(run_id)
             active += 1
 
-    def start_balrog(self) -> None:
+    def start_balrog(self) -> bool:
         """A graduate with a start goes on from it, in the start's build (its
         brain loads only into the same bot code); one without plays from the
-        title in the current build."""
+        title in the current build. False when no graduate can play."""
         assert self.build_id is not None
         item = self.balrog.take()
+        if item is None:
+            return False
         start = item.get("start")
         if start and not build_meta(start["build"], self.home):
             start = None
+        if start and start["build"] != self.build_id and same_game_and_brain(start["build"], self.build_id, self.home):
+            start = {**start, "build": self.build_id}
         seed = random.SystemRandom().randrange(1, 2**31)
         job = self.new_job("balrog", item["platform"], item["character"], "balrog", seed,
                            int(self.config["balrog_budget"]), start["build"] if start else self.build_id,
                            **({"resume": start} if start else {}))
         self.balrog.save()
         self.start(job)
+        return True
 
     def start_main(self, queue: Queue, platform: str) -> str:
         assert self.build_id is not None
-        combo = queue.head(platform)
+        playing = collections.Counter(job["character"] for job in self.running.values()
+                                      if job["queue"] == "main" and job["platform"] == platform)
+        parallel = queue.parallel_pick(platform, playing, int(self.config.get("parallel_cap", PARALLEL_CAP)))
+        combo = parallel or queue.head(platform)
         assert combo is not None
         seed = random.SystemRandom().randrange(1, 2**31)
-        job = self.new_job("main", platform, combo, queue.goal, seed, queue.budget(self.config), self.build_id)
-        queue.take(platform, job["id"])
+        job = self.new_job("main", platform, combo, queue.goal, seed, queue.budget(self.config), self.build_id,
+                           **({"parallel": True} if parallel else {}))
+        if not parallel:
+            queue.take(platform, job["id"])
         queue.save()
         self.start(job)
         return job["id"]
@@ -1137,7 +1337,7 @@ class Service:
                 kept_builds.add(data.get("build"))
         starts = [item["start"] for item in self.balrog.state["items"].values() if item.get("start")]
         kept_builds |= {start["build"] for start in starts}
-        kept_starts = {Path(start["snapshot"]).parent.name for start in starts} | {
+        kept_starts = {start["run"] for start in starts} | {
             job["resume"]["run"] for job in self.running.values() if job.get("resume")}
         for start_dir in (self.home / "balrog").glob("*"):
             if start_dir.name not in kept_starts:
@@ -1182,7 +1382,8 @@ class Service:
         # Runs from before a restart: keep those still playing, mark the rest.
         self.reap(queue, self.load_subs(), adopting=True)
         for job in self.running.values():
-            if job["queue"] == "main" and job["goal"] == queue.goal and job.get("epoch", "") == queue.epoch:
+            if job["queue"] == "main" and job["goal"] == queue.goal and job.get("epoch", "") == queue.epoch \
+                    and not job.get("parallel"):
                 entry = queue.platform(job["platform"])
                 entry["items"][job["character"]]["in_flight"] = job["id"]
                 if job["character"] in entry["order"]:
@@ -1257,8 +1458,9 @@ def main(argv: list[str] | None = None) -> int:
     ab.add_argument("--goal", default="deep", choices=sorted(GOALS))
     ab.add_argument("--variant-a", default="", help="arm A's variant (empty: the goal as defined)")
     ab.add_argument("--variant-b", default="", help="arm B's variant")
-    cancel = sub.add_parser("cancel", help="cancel a subqueue")
+    cancel = sub.add_parser("cancel", help="cancel a subqueue, or only some characters' runs")
     cancel.add_argument("--name", required=True)
+    cancel.add_argument("--characters", default="", help="comma-separated: cancel only these characters' runs")
     report = sub.add_parser("report", help="print a subqueue's report (an A/B subqueue's comparison)")
     report.add_argument("--name", required=True)
     sub.add_parser("status", help="print the main queue and subqueues")
@@ -1273,8 +1475,13 @@ def main(argv: list[str] | None = None) -> int:
         path = HOME / "subqueues" / f"{args.name}.json"
         if not path.exists():
             parser.error(f"no subqueue {args.name}")
-        path.with_suffix(".cancel").touch()
-        print(f"cancelled {args.name}")
+        characters = [c for c in args.characters.split(",") if c]
+        if characters:
+            write_json(path.with_suffix(".cancel"), characters)
+            print(f"cancelled {', '.join(characters)} in {args.name}")
+        else:
+            path.with_suffix(".cancel").touch()
+            print(f"cancelled {args.name}")
         return 0
     if args.command == "report":
         data = read_json(HOME / "subqueues" / f"{args.name}.json")
