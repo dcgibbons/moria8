@@ -20,15 +20,19 @@
 .const hal_storage_disk_setup_marker_write_status_required = 0
 .const hal_storage_disk_setup_done_value = 1
 .const hal_storage_disk_setup_commit_sets_ui_ok = 0
-.const hal_storage_save_v1_version = $0f
-.const hal_storage_save_known96_version = $10
-.const hal_storage_save_inv31_version = $11
-.const hal_storage_save_known_bits_version = $12
-.const hal_storage_save_baked_stats_version = $12
-.const hal_storage_save_known160_version = $14
-.const hal_storage_save_door_state_version = $15
-.const hal_storage_save_inv33_version = $16
-.const hal_storage_save_version = $16
+// $17: the monster catalog prototype adds the species table to the door-state
+// block. Older saves name tier creatures, so $17 is the oldest the loader
+// takes and the legacy feature versions are pinned at it (the 31-slot
+// inventory version just below it, so its loader compiles out).
+.const hal_storage_save_v1_version = $17
+.const hal_storage_save_known96_version = $17
+.const hal_storage_save_inv31_version = $16
+.const hal_storage_save_known_bits_version = $17
+.const hal_storage_save_baked_stats_version = $17
+.const hal_storage_save_known160_version = $17
+.const hal_storage_save_door_state_version = $17
+.const hal_storage_save_inv33_version = $17
+.const hal_storage_save_version = $17
 
 #define HAL_STORAGE_MARKER_PRESENT_DIRECT
 #define HAL_STORAGE_SAVE_CONFIRM_OVERWRITE_PROBE

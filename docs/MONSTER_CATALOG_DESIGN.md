@@ -313,6 +313,140 @@ membership in `tools/parse_creatures.py`.
 6. **Abilities:** the unsupported attacks and spells, or their documented
    degradations.
 
+## CX16 prototype (2026-11-02)
+
+Plan step 3 runs on the Commander X16 behind `HAL_PLATFORM_MONSTER_CATALOG`
+(`platforms/cx16/hal/lifecycle_policy.s`). Every other port builds
+byte-identical to the tier build and keeps the tiers.
+
+- **Data:** `tools/build_catalog.py --engine-out platforms/shared/catalog`
+  writes three files each port places: `catalog_fields.s`, the 21 engine
+  fields of the tier rows, 279 bytes each (5,859 B); `catalog_index.s`, the
+  raw and playable counts per level 0-40 and the availability bitmap
+  (117 B); `catalog_names.s`, the names Huffman-coded with their own tree in
+  the game decoder's format, with pointer tables (3,380 B; plain they were
+  4,869 B). The X16 puts fields and index in Bank 22 (`MONSTER.CAT`) and the
+  names in Bank 4 after the corpus. VMS values go through
+  `parse_creatures.py`'s tier encoding: speed + 10,
+  sleep / 10, attacks through the tier attack map, and hit dice over 255
+  as fewer, larger dice with the same maximum (Balrog 375d8 is 75d40).
+- **Species table:** `core/monster_catalog.s`. Dungeon rows 0-31 of the
+  resident `cr_*` arrays hold this level's species, and `cat_slot_id_lo/hi`
+  holds their catalog ids. A pick of a species that is not loaded fetches it
+  into an empty slot, or one no live monster uses. Its name is decoded, with
+  the names' tree swapped into the game's decoder (`hd_tree_left_ptr`), into
+  the pool at slot × 32 (the X16's `$9B00`), and the slot's recall counters
+  are cleared.
+  `monster_spawn_level` empties the table.
+- **Picks:** as in "The VMS rules to reproduce": 1 in 50 out of depth with
+  VMS's base; the normal pick is uniform over the playable creatures of
+  levels 1..min(dlvl, 40). `randnor(0,4)` is approximated by the sum of four
+  rolls of 0-6, less 12 (mean 0, standard deviation 4).
+- **Population:** `randint(8) + 14 + alloc_level`; generation stops at 26
+  live monsters. The X16 map is VMS's 198×66, so no area scale applies (an
+  assert holds the map size). From DL50, until the game is won, an awake
+  Evil Iggy or Balrog lands more than 20 squares away. Only the Balrog wins.
+- **Tiers:** `tier_check_transition` returns at once, and `current_tier`
+  stays 0, so `creature_get_name` takes the `cr_name` pointers. The tier
+  loader, tier tables and the X16 tier bank preload compile out. Banks 5-8
+  are free; the tier rules stay in the Makefile for builds without the flag.
+- **Saves:** the species table (64 B) rides in the door-state block, and
+  load refetches each occupied slot. The X16 save version is `$17`, and the
+  oldest it loads; the legacy feature versions are pinned to it.
+- **Resident:** the image ends at `$9AD4` (43 B free). The catalog code is
+  about 870 B, paid for by the tier code it replaces.
+- **Tests:** `make testcx16`, 23 scenarios. The new scenario,
+  `monster_catalog`, jumps to DL16 and checks for at least 15 monsters, the
+  live species loaded, their levels and decoded names against the catalog,
+  and a creature below level 8; then DL50 for one awake win creature.
+  `balrog_victory` now marks a catalog slot as the
+  Balrog. `scroll_delta` clears the monsters before measuring, because more
+  monsters put breeding worms in view.
+
+Deviation from these decisions, for now:
+
+- **Recall** is per species slot and lives for one level, until recall moves
+  to catalog ids ("Saves and recall").
+
+## C128 (2026-11-02)
+
+The second port (maintainer: "let's not cache the start overlay. and then
+huffman-code the names, but avoid #2 unless we need to"; #2 was names on
+disk). `platforms/commodore/c128/main.s` defines the flag for the product
+build; the unit tests do not import `main.s` and keep the tier roster.
+
+- **Bank 1** (`memory128.s`, C128M-007): the tier cache window holds the
+  name pool (`$7A60-$7E5F`) and `128.cat`, the fields (`$7E60-$9542`, 37 B
+  spare); the STARTUP overlay slot holds `128.cnm`, the names (`$A000-$AD33`).
+  Both files load at boot through the Bank 1 loader
+  (`c128_load_core_residents`). STARTUP is no longer cached: New Game loads
+  it from disk. The progress count is 23 files (13 startup, the two catalog
+  files and 8 overlays).
+- **Resident:** the index sits in `128.world` with the catalog code, which
+  ends at `$8BC9` (134 B free; 43 before, the tier code compiled out). The
+  catalog loaders live there too: the main image ends at `$5E48`.
+- **Fetch:** fields through `mmu_safe_db_read_ptr0`, names through the
+  Huffman Bank 1 reads, the decoded name into the Bank 1 pool through
+  `mmu_safe_db_write_ptr1`; `creature_get_name` copies a slot's name back
+  from Bank 1. The stale-tier name reload compiles out.
+- **Saves:** version `$19`, the oldest it loads; the room8 migration
+  compiles out. The test fixture (`tests/make_load_resume_save.py`) writes
+  the `$19` layout.
+- **Tests** (`run_tests128.sh`): the new `catalog_spawn_smoke` descends to
+  DL1 and checks the population, the species, their levels and their Bank 1
+  pool names against the catalog (`tests/check_catalog128.py`).
+  `cache_survival_smoke` probes the catalog's Bank 1 data where it probed the
+  tier cache and the STARTUP slot, and expects no tier bits and no STARTUP
+  bit. `preload_partial_failure_smoke` is retired: it proved a skipped tier
+  preload fell back to disk, and there are no tiers; the catalog files are
+  required at boot like the other residents.
+
+Change record (`docs/BEHAVIOR_CHANGE_PROTOCOL.md`):
+
+```text
+Problem and success criteria: X16 and C128 monsters follow VMS 4.8's
+  catalog, pick and population; make testcx16 and make test128 pass; other
+  ports unchanged (byte-identical).
+State being changed: cr_* dungeon rows 0-31, name pool, active_dungeon_count,
+  cat_slot_id_lo/hi, monster population per level, X16 save format.
+Search scope and terms: pick_creature_type, tier_check_transition, tier_load,
+  current_tier, active_dungeon_count, CREATURE_BALROG, CREATE_BALROG,
+  MAX_DUNGEON_CREATURES, recall_*, save block tables (core/, platforms/cx16/,
+  platforms/shared/save.s).
+Relevant readers/writers found and known exclusions: pickers (spawn level,
+  summons, chest summons, special rooms, spell summons, wizard summon), the
+  combat win check, creature_get_name; C64 test-only scripted paths in
+  game_loop.s are not built for X16.
+Initialization, reset and persistence points: cat_slot_id_hi = $FF at load;
+  catalog_reset_slots at each monster_spawn_level; saved in the door-state
+  block and refetched on load.
+Affected production sequence through the changed transition: level generate
+  -> monster_spawn_level -> catalog_population -> pick_creature_type ->
+  catalog fetch -> monster_spawn_one; mid-level summons pick the same way.
+Contract decision or selected upstream oracle with source locations: VMS
+  misc.inc alloc_monster (597-602), place_win_monster (540-575),
+  init_m_level (184-200); generate.inc 855-867; constants.inc 110-119;
+  values.inc c_list.
+Intentional Moria8 deviations: generation cap 26 of 32; picks skip creatures
+  this port leaves out; randnor approximation; names and recall as above.
+Input/intermediate widths, signedness, carry, range and overflow policy: ids
+  are 9-bit (<= 278), sums of level counts 16-bit; the out-of-depth level is
+  signed 8-bit before abs, at most 40.
+RNG reduction and bias, if applicable: rng_range and rng_range_word reject,
+  so the picks are unbiased.
+Affected platforms, overlays, banks and owners: Commander X16 (Bank 22 new,
+  names in Bank 4, Banks 5-8 freed) and C128 (Bank 1 tier window and STARTUP
+  slot, C128M-007); the pick runs from resident code under any overlay.
+Required production-path tests: X16 monster_catalog, balrog_victory,
+  save_load, save_reboot_load, wizard_summon_town (harness_smoke.py); C128
+  catalog_spawn_smoke, cache_survival_smoke, the save and load smokes
+  (run_tests128.sh).
+Known behavior explicitly out of scope: other ports, MAX_MONSTERS, recall
+  by catalog id.
+Unresolved uncertainty and risk: the population and level mix change game
+  balance; the X16 cycle (one success of 31) has no tier baseline to compare.
+```
+
 ## Decisions (maintainer, 2026-11-02)
 
 1. **Source of truth:** VMS Moria 4.8, with Umoria 5.7.15 as the cross-check.

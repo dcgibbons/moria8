@@ -117,25 +117,27 @@ iuk_read_y_bank1:
     jmp mmu_safe_db_read_ptr1
 #endif
 
-// Unidentified name strings (screen codes, null-terminated)
-pn_0:  .byte ITOK_A_SPACE ; .text "Blue" ; .byte ITOK_POTION_SUFFIX ; .byte 0
-pn_1:  .byte ITOK_A_SPACE ; .text "Red" ; .byte ITOK_POTION_SUFFIX ; .byte 0
-pn_2:  .byte ITOK_A_SPACE ; .text "Green" ; .byte ITOK_POTION_SUFFIX ; .byte 0
-pn_3:  .byte ITOK_A_SPACE ; .text "Yellow" ; .byte ITOK_POTION_SUFFIX ; .byte 0
-pn_4:  .byte ITOK_A_SPACE ; .text "Clear" ; .byte ITOK_POTION_SUFFIX ; .byte 0
-pn_5:  .byte ITOK_AN_SPACE ; .text "Azure" ; .byte ITOK_POTION_SUFFIX ; .byte 0
-pn_6:  .byte ITOK_A_SPACE ; .text "Smoky" ; .byte ITOK_POTION_SUFFIX ; .byte 0
-pn_7:  .byte ITOK_A_SPACE ; .text "Brown" ; .byte ITOK_POTION_SUFFIX ; .byte 0
+// Unidentified name strings (screen codes, null-terminated). No article, as
+// identified names have none ("Potion of Cure Light Wounds"): with one, the
+// game said "You see a a Blue Potion." (maintainer, 2026-11-05: drop them).
+pn_0:  .text "Blue" ; .byte ITOK_POTION_SUFFIX ; .byte 0
+pn_1:  .text "Red" ; .byte ITOK_POTION_SUFFIX ; .byte 0
+pn_2:  .text "Green" ; .byte ITOK_POTION_SUFFIX ; .byte 0
+pn_3:  .text "Yellow" ; .byte ITOK_POTION_SUFFIX ; .byte 0
+pn_4:  .text "Clear" ; .byte ITOK_POTION_SUFFIX ; .byte 0
+pn_5:  .text "Azure" ; .byte ITOK_POTION_SUFFIX ; .byte 0
+pn_6:  .text "Smoky" ; .byte ITOK_POTION_SUFFIX ; .byte 0
+pn_7:  .text "Brown" ; .byte ITOK_POTION_SUFFIX ; .byte 0
 pn_8:  .byte ITOK_A_SILVER ; .byte ITOK_POTION_SUFFIX ; .byte 0
-pn_9:  .byte ITOK_A_SPACE ; .text "Pink" ; .byte ITOK_POTION_SUFFIX ; .byte 0
-pn_10: .text "a" ; .byte ITOK_CLOUD_SUFFIX ; .text "y" ; .byte ITOK_POTION_SUFFIX ; .byte 0
-pn_11: .byte ITOK_A_SPACE ; .byte ITOK_GOLD ; .text "en" ; .byte ITOK_POTION_SUFFIX ; .byte 0
+pn_9:  .text "Pink" ; .byte ITOK_POTION_SUFFIX ; .byte 0
+pn_10: .text "Cloudy" ; .byte ITOK_POTION_SUFFIX ; .byte 0
+pn_11: .byte ITOK_GOLD ; .text "en" ; .byte ITOK_POTION_SUFFIX ; .byte 0
 
-sn_0:  .byte ITOK_A_SPACE ; .text "White " ; .byte ITOK_SCROLL ; .byte 0
-sn_1:  .byte ITOK_A_SPACE ; .text "Brown " ; .byte ITOK_SCROLL ; .byte 0
-sn_2:  .byte ITOK_A_SPACE ; .text "Grey " ; .byte ITOK_SCROLL ; .byte 0
-sn_3:  .byte ITOK_A_SPACE ; .text "Faded " ; .byte ITOK_SCROLL ; .byte 0
-sn_4:  .byte ITOK_A_SPACE ; .text "Glowing " ; .byte ITOK_SCROLL ; .byte 0
+sn_0:  .text "White " ; .byte ITOK_SCROLL ; .byte 0
+sn_1:  .text "Brown " ; .byte ITOK_SCROLL ; .byte 0
+sn_2:  .text "Grey " ; .byte ITOK_SCROLL ; .byte 0
+sn_3:  .text "Faded " ; .byte ITOK_SCROLL ; .byte 0
+sn_4:  .text "Glowing " ; .byte ITOK_SCROLL ; .byte 0
 sn_5:  .byte ITOK_SCROLL_OF_ART ; .text "Lumen" ; .byte 0
 sn_6:  .byte ITOK_SCROLL_OF_ART ; .text "Veritas" ; .byte 0
 sn_7:  .byte ITOK_SCROLL_OF_ART ; .text "Dura" ; .byte 0
@@ -144,9 +146,9 @@ sn_9:  .byte ITOK_SCROLL_OF_ART ; .text "Acuta" ; .byte 0
 sn_10: .byte ITOK_SCROLL_OF_ART ; .text "Ferox" ; .byte 0
 sn_11: .byte ITOK_SCROLL_OF_ART ; .text "Tutela" ; .byte 0
 
-rn_0: .byte ITOK_A_SPACE ; .byte ITOK_GOLD ; .byte ITOK_RING_SUFFIX ; .byte 0
+rn_0: .byte ITOK_GOLD ; .byte ITOK_RING_SUFFIX ; .byte 0
 rn_1: .byte ITOK_A_SILVER ; .byte ITOK_RING_SUFFIX ; .byte 0
-rn_2: .text "a Bronze" ; .byte ITOK_RING_SUFFIX ; .byte 0
+rn_2: .text "Bronze" ; .byte ITOK_RING_SUFFIX ; .byte 0
 rn_3: .byte ITOK_A_COPPER ; .byte ITOK_RING_SUFFIX ; .byte 0
 
 // Pointer tables for unidentified names
@@ -176,22 +178,22 @@ scroll_colors:
 ring_colors:   .byte COL_YELLOW, COL_LGREY, COL_BROWN, COL_ORANGE
 
 // Wand identification
-wn_0: .byte ITOK_AN_SPACE ; .text "Iron " ; .byte ITOK_WAND ; .byte 0
+wn_0: .text "Iron " ; .byte ITOK_WAND ; .byte 0
 wn_1: .byte ITOK_A_COPPER ; .text " " ; .byte ITOK_WAND ; .byte 0
 wn_2: .byte ITOK_A_SILVER ; .text " " ; .byte ITOK_WAND ; .byte 0
-wn_3: .byte ITOK_A_SPACE ; .text "Bone " ; .byte ITOK_WAND ; .byte 0
-wn_4: .byte ITOK_AN_SPACE ; .text "Oak " ; .byte ITOK_WAND ; .byte 0
+wn_3: .text "Bone " ; .byte ITOK_WAND ; .byte 0
+wn_4: .text "Oak " ; .byte ITOK_WAND ; .byte 0
 
 wand_name_lo: .byte <wn_0, <wn_1, <wn_2, <wn_3, <wn_4
 wand_name_hi: .byte >wn_0, >wn_1, >wn_2, >wn_3, >wn_4
 wand_colors:  .byte COL_LGREY, COL_ORANGE, COL_WHITE, COL_LGREY, COL_BROWN
 
 // Staff identification
-sfn_0: .byte ITOK_A_SPACE ; .text "Birch " ; .byte ITOK_STAFF ; .byte 0
-sfn_1: .byte ITOK_A_SPACE ; .text "Pine " ; .byte ITOK_STAFF ; .byte 0
-sfn_2: .byte ITOK_A_SPACE ; .text "Maple " ; .byte ITOK_STAFF ; .byte 0
-sfn_3: .byte ITOK_A_SPACE ; .text "Willow " ; .byte ITOK_STAFF ; .byte 0
-sfn_4: .byte ITOK_AN_SPACE ; .text "Ash " ; .byte ITOK_STAFF ; .byte 0
+sfn_0: .text "Birch " ; .byte ITOK_STAFF ; .byte 0
+sfn_1: .text "Pine " ; .byte ITOK_STAFF ; .byte 0
+sfn_2: .text "Maple " ; .byte ITOK_STAFF ; .byte 0
+sfn_3: .text "Willow " ; .byte ITOK_STAFF ; .byte 0
+sfn_4: .text "Ash " ; .byte ITOK_STAFF ; .byte 0
 
 staff_name_lo: .byte <sfn_0, <sfn_1, <sfn_2, <sfn_3, <sfn_4
 staff_name_hi: .byte >sfn_0, >sfn_1, >sfn_2, >sfn_3, >sfn_4

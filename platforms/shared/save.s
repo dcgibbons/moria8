@@ -354,6 +354,11 @@ save_block_table_post_known_end:
 // aligned).
 save_block_table_door_state:
     :save_block_desc(door_state_count, 1 + (MAX_DOOR_STATES * 3))
+#if HAL_PLATFORM_MONSTER_CATALOG
+    // The species in each dungeon creature slot (monster_catalog.s); every
+    // loadable save carries it (OLDEST_SAVE_VERSION = SAVE_DOOR_STATE_VERSION).
+    :save_block_desc(cat_slot_id_lo, cat_slot_id_end - cat_slot_id_lo)
+#endif
 save_block_table_door_state_end:
 
 #if HAL_STORAGE_LEGACY_ROOM8_MIGRATION
@@ -425,6 +430,9 @@ save_block_table_floor_items_direct_end:
 .assert "Room save arrays stay contiguous", room_type - room_x + MAX_ROOMS, MAX_ROOMS * 6
 .assert "Trap save arrays stay contiguous", trap_type - trap_count + MAX_TRAPS, 1 + (MAX_TRAPS * 3)
 .assert "Door-state save arrays stay contiguous", door_state_val - door_state_count + MAX_DOOR_STATES, 1 + (MAX_DOOR_STATES * 3)
+#if HAL_PLATFORM_MONSTER_CATALOG
+.assert "Catalog saves always carry the species table", SAVE_DOOR_STATE_VERSION, OLDEST_SAVE_VERSION
+#endif
 .assert "Floor-item direct save block table count is stable", SAVE_BLOCK_FLOOR_ITEMS_DIRECT_COUNT, SAVE_BLOCK_FLOOR_ITEMS_HEAD_COUNT + SAVE_BLOCK_FLOOR_ITEMS_STAT_COUNT
 .assert "Pre-inventory save block table count fits in one page", SAVE_BLOCK_PRE_INVENTORY_COUNT < 64, true
 .assert "Post-known save block table count fits in one page", SAVE_BLOCK_POST_KNOWN_COUNT < 64, true
@@ -1712,6 +1720,9 @@ load_read_door_state:
     sta zp_ptr1_hi
     lda #SAVE_BLOCK_DOOR_STATE_COUNT
     jsr load_read_block_table
+#if HAL_PLATFORM_MONSTER_CATALOG
+    jsr catalog_refetch_slots
+#endif
     lda door_state_count
     cmp #MAX_DOOR_STATES + 1
     bcc !lrds_done+

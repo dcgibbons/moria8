@@ -582,6 +582,57 @@ def scenario_wizard_summon_town(tb: X16Bench) -> None:
     tb.log("SCENARIO DONE")
 
 
+CATALOG_DIR = ROOT / "platforms" / "shared" / "catalog"
+
+
+def _catalog_const(name: str) -> int:
+    """A .const from the generated monster catalog (platforms/shared/catalog)."""
+    for line in (CATALOG_DIR / "catalog_index.s").read_text().splitlines():
+        if line.startswith(f".const {name} = "):
+            return int(line.split("=")[1])
+    raise KeyError(name)
+
+
+def _catalog_name(cid: int) -> list[int]:
+    """Catalog creature ``cid``'s name in screen codes, from the generated names' comments."""
+    for line in (CATALOG_DIR / "catalog_names.s").read_text().splitlines():
+        if line.startswith(f"catn_{cid}:"):
+            return [ord(ch) - 0x60 if "a" <= ch <= "z" else ord(ch) for ch in line.split("// ", 1)[1].rstrip()]
+    raise KeyError(cid)
+
+
+def _catalog_bytes(filename: str, label: str) -> list[int]:
+    """The .byte values after a label in a generated catalog file, to the next label."""
+    out: list[int] = []
+    found = False
+    for line in (CATALOG_DIR / filename).read_text().splitlines():
+        text = line.split("//")[0].strip()
+        if not found:
+            if not text.startswith(f"{label}:"):
+                continue
+            found = True
+            text = text[len(label) + 1:].strip()
+        elif not text.startswith(".byte"):
+            break
+        if text:
+            out += [int(v.strip().lstrip("$"), 16) for v in text[5:].split(",")]
+    if not found:
+        raise KeyError(label)
+    return out
+
+
+def _clear_monsters(tb: X16Bench) -> None:
+    """Remove every live monster, so the view only changes when it scrolls."""
+    mt = tb.syms["monster_table"]
+    for i in range(32):
+        b = mt + i * 12
+        if tb.read_u8(b + 2) != 0xFF:
+            x, y = tb.read_u8(b + 0), tb.read_u8(b + 1)
+            tb.map_write(x, y, tb.map_read(x, y) & 0xFE)
+            tb.write_u8(b + 2, 0xFF)
+    tb.write_u8(tb.syms["zp_mon_count"], 0)
+
+
 def _descend_to_dl1(tb: X16Bench) -> bool:
     dlvl_addr = tb.syms["zp_player_dlvl"]
     for _ in range(10):
@@ -632,13 +683,21 @@ def scenario_balrog_victory(tb: X16Bench) -> None:
     tb.map_write(mx, my, tb.map_read(mx, my) | 0x01)
     tb.assert_line("flag_set", (tb.map_read(mx, my) & 0x01) == 1, f"map byte={tb.map_read(mx, my):#x}")
 
-    tb.write_u8(base + 2, 56)
+    if "cat_slot_id_lo" in tb.syms:
+        # Monster catalog: the monster's species slot becomes the Balrog's.
+        btype = tb.read_u8(base + 2)
+        balrog_id = _catalog_const("CATALOG_BALROG_ID")
+        tb.write_u8(tb.syms["cat_slot_id_lo"] + btype, balrog_id & 0xFF)
+        tb.write_u8(tb.syms["cat_slot_id_hi"] + btype, balrog_id >> 8)
+    else:
+        btype = 56
+        tb.write_u8(base + 2, btype)
+        tb.write_u8(cr_lvl + btype, 100)
     tb.write_u8(base + 3, 1)
     tb.write_u8(base + 4, 0)
     tb.write_u8(base + 8, 0xFF)
-    tb.write_u8(cr_lvl + 56, 100)
     tb.write_u8(pd + 40, 127)
-    tb.assert_line("poke_landed", tb.read_u8(base + 2) == 56, f"readback={tb.read_u8(base + 2)}")
+    tb.assert_line("poke_landed", tb.read_u8(base + 2) == btype, f"readback={tb.read_u8(base + 2)}")
 
     def dirkey(dx: int, dy: int) -> str:
         if dx > 0 and dy > 0:
@@ -660,7 +719,7 @@ def scenario_balrog_victory(tb: X16Bench) -> None:
     def find_balrog() -> int | None:
         for i in range(32):
             b = mt + i * 12
-            if tb.read_u8(b + 2) == 56:
+            if tb.read_u8(b + 2) == btype:
                 return b
         return None
 
@@ -815,6 +874,114 @@ def scenario_dungeon_descend(tb: X16Bench) -> None:
     tb.drain_more()
     tb.assert_line("move_ok", tb.screen_has("DL:1"), "dungeon view lost after movement")
     tb.dump("after_descend")
+    tb.log("SCENARIO DONE")
+
+
+def scenario_monster_catalog(tb: X16Bench) -> None:
+    """DL16 holds VMS's population and level mix, fetched from the catalog."""
+    tb.chargen("A")
+    _descend_to_dl1(tb)
+    tb.wizard_menu_open()
+    tb.press_until("DLVL", "L")
+    tb.press("1")
+    tb.press("6")
+    tb.press("\r")
+    tb.drain_more()
+    tb.assert_line("cat_dl16", tb.read_u8(tb.syms["zp_player_dlvl"]) == 16, "wizard jump missed DL16")
+
+    levels = _catalog_bytes("catalog_fields.s", "cat_cr_level")
+    mt = tb.syms["monster_table"]
+    live = [tb.read_u8(mt + i * 12 + 2) for i in range(32)]
+    live = [t for t in live if t != 0xFF]
+    tb.assert_line("cat_population", len(live) >= 15, f"{len(live)} monsters (VMS 20-27 at DL16)")
+    loaded = all(t < 32 and tb.read_u8(tb.syms["cat_slot_id_hi"] + t) != 0xFF for t in live)
+    tb.assert_line("cat_slots_loaded", loaded, f"types {sorted(set(live))}")
+
+    fields_ok = names_ok = True
+    detail = ""
+    ids = set()
+    for t in sorted(set(live)):
+        cid = tb.read_u8(tb.syms["cat_slot_id_lo"] + t) | (tb.read_u8(tb.syms["cat_slot_id_hi"] + t) << 8)
+        ids.add(cid)
+        if tb.read_u8(tb.syms["cr_level"] + t) != levels[cid]:
+            fields_ok = False
+            detail = f"slot {t} id {cid} level {tb.read_u8(tb.syms['cr_level'] + t)} != {levels[cid]}"
+        want = _catalog_name(cid) + [0]
+        ptr = tb.read_u8(tb.syms["cr_name_lo"] + t) | (tb.read_u8(tb.syms["cr_name_hi"] + t) << 8)
+        got = [tb.read_u8(ptr + k) for k in range(len(want))]
+        if got != want:
+            names_ok = False
+            detail = f"slot {t} id {cid} name {got} != {want}"
+    tb.assert_line("cat_fields", fields_ok, detail)
+    tb.assert_line("cat_names", names_ok, detail)
+    low = sum(1 for cid in ids if levels[cid] < 8)
+    tb.assert_line("cat_low_levels", low > 0, f"no creature below level 8 among {sorted(ids)}")
+
+    # From DL50 an awake Evil Iggy or Balrog joins the level (VMS place_win_monster).
+    tb.wizard_menu_open()
+    tb.press_until("DLVL", "L")
+    tb.press("5")
+    tb.press("0")
+    tb.press("\r")
+    tb.drain_more()
+    tb.assert_line("cat_dl50", tb.read_u8(tb.syms["zp_player_dlvl"]) == 50, "wizard jump missed DL50")
+    win_ids = {_catalog_const("CATALOG_IGGY_ID"), _catalog_const("CATALOG_BALROG_ID")}
+    winners = []
+    for i in range(32):
+        b = mt + i * 12
+        t = tb.read_u8(b + 2)
+        if t < 32:
+            cid = tb.read_u8(tb.syms["cat_slot_id_lo"] + t) | (tb.read_u8(tb.syms["cat_slot_id_hi"] + t) << 8)
+            if cid in win_ids:
+                winners.append((tb.read_u8(b + 5) & 0x01, tb.read_u8(b + 7)))
+    tb.assert_line("cat_win_creature", len(winners) == 1, f"win creatures {winners}")
+    tb.assert_line("cat_win_awake", winners[:1] == [(1, 0)], f"flags/sleep {winners}")
+    tb.log("SCENARIO DONE")
+
+
+def scenario_acid_armour(tb: X16Bench) -> None:
+    """A monster's acid damages worn armour and recalculates AC through the
+    items overlay; play goes on where it was (MON-015; X16 M7 queue,
+    2026-11-02: a direct call ran the wrong overlay and dropped the player
+    into the town at (31, 18))."""
+    tb.chargen("A")
+    _descend_to_dl1(tb)
+    mt = tb.syms["monster_table"]
+    px, py = tb.read_u8(tb.syms["zp_player_x"]), tb.read_u8(tb.syms["zp_player_y"])
+    body = tb.syms["inv_to_ac"] + 23                     # EQUIP_BODY: the warrior's only armour
+    to_ac0 = tb.read_u8(body)
+    ac0 = tb.read_u8(tb.syms["zp_player_ac"])
+    base = next(mt + i * 12 for i in range(32) if tb.read_u8(mt + i * 12 + 2) != 0xFF)
+    kind = tb.read_u8(base + 2)
+    spot = next(((x, y) for x, y in ((px + 1, py), (px - 1, py), (px, py + 1), (px, py - 1))
+                 if (tb.map_read(x, y) & 0xF1) == 0), None)
+    tb.assert_line("acid_spot", spot is not None, "no free square next to the player")
+    ox, oy = tb.read_u8(base), tb.read_u8(base + 1)
+    tb.map_write(ox, oy, tb.map_read(ox, oy) & 0xFE)
+    tb.write_u8(base, spot[0])
+    tb.write_u8(base + 1, spot[1])
+    tb.map_write(spot[0], spot[1], tb.map_read(spot[0], spot[1]) | 0x01)
+    tb.write_u8(base + 3, 200)                           # HP: it outlasts the test
+    tb.write_u8(base + 4, 0)
+    tb.write_u8(base + 5, 0x01)                          # MF_AWAKE
+    tb.write_u8(base + 7, 0)
+    for field, value in (("cr_atk0_type", 6), ("cr_atk0_dice", 1), ("cr_atk0_sides", 2),   # ATK_ACID 1d2
+                         ("cr_atk1_type", 0), ("cr_spell_chance", 0), ("cr_speed", 1),
+                         ("cr_level", 40)):                                        # its blows land
+        tb.write_u8(tb.syms[field] + kind, value)
+    tb.write_u8(tb.syms["player_data"] + 40, 127)
+    for _ in range(40):
+        tb.press("s")
+        tb.drain_more()
+        if tb.read_u8(body) != to_ac0:
+            break
+    drop = (to_ac0 - tb.read_u8(body)) & 0xFF
+    tb.assert_line("acid_damaged", 1 <= drop <= 3, f"to-AC {to_ac0} -> {tb.read_u8(body)}")
+    tb.assert_line("acid_ac_recalc", tb.read_u8(tb.syms["zp_player_ac"]) == (ac0 - drop) & 0xFF,
+                   f"AC {ac0} -> {tb.read_u8(tb.syms['zp_player_ac'])} after to-AC -{drop}")
+    here = (tb.read_u8(tb.syms["zp_player_x"]), tb.read_u8(tb.syms["zp_player_y"]))
+    tb.assert_line("acid_in_place", here == (px, py) and tb.read_u8(tb.syms["zp_player_dlvl"]) == 1,
+                   f"player at {here} DL {tb.read_u8(tb.syms['zp_player_dlvl'])}, was {(px, py)} DL 1")
     tb.log("SCENARIO DONE")
 
 
@@ -1051,6 +1218,9 @@ def scenario_scroll_delta(tb: X16Bench) -> None:
     tb.write_u8(0x1D, 0xEF)
     descended = _descend_to_dl1(tb)
     tb.assert_line("descended", descended, "status does not show DL:1")
+    # A static scene: moving or breeding monsters would change cells between
+    # the before and after frames. The teleports below redraw the view.
+    _clear_monsters(tb)
 
     px_addr = tb.syms["zp_player_x"]
     py_addr = tb.syms["zp_player_y"]
@@ -1177,6 +1347,8 @@ SCENARIO_FUNCS = {
     "quaff_p3": scenario_quaff_p3,
     "scroll_objdet": scenario_scroll_objdet,
     "deep_objdet": scenario_deep_objdet,
+    "monster_catalog": scenario_monster_catalog,
+    "acid_armour": scenario_acid_armour,
     "scroll_map": scenario_scroll_map,
     "dungeon_descend": scenario_dungeon_descend,
     "death_flow": scenario_death_flow,

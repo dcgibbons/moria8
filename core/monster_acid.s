@@ -80,7 +80,18 @@ mon_atk_effect_acid:
 
     ldx mat_acid_slot
     dec inv_to_ac,x             // > -16 here: cannot wrap
+#if HAL_PLATFORM_CHARGEN_ITEM_RECALC_TRAMPOLINE
+    // player_recalc_equipment lives in OVL_ITEMS on this port: a direct jsr
+    // ran whatever overlay was loaded (X16 M7 queue, 2026-11-02). The
+    // overlay load may touch $80-$8F, so the damage rides the stack.
+    lda zp_combat_dmg
+    pha
+    jsr tramp_item_recalc
+    pla
+    sta zp_combat_dmg
+#else
     jsr player_recalc_equipment
+#endif
     lsr zp_combat_dmg           // dam div 2
 !maea_done:
     rts

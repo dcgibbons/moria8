@@ -399,6 +399,12 @@ hal_storage_title_name:
 .label hal_storage_title_name_len = * - hal_storage_title_name
     .byte 0
 
+#if HAL_PLATFORM_MONSTER_CATALOG
+// Monster catalog filename (Bank 22)
+cx16_catalog_name:
+    .byte $4d,$4f,$4e,$53,$54,$45,$52,$2e,$43,$41,$54 // "MONSTER.CAT"
+.label cx16_catalog_name_len = * - cx16_catalog_name
+#else
 // Tier data filenames
 hal_storage_tier_1_name:
     .byte $4d,$4f,$4e,$53,$54,$45,$52,$2e,$44,$42,$2e,$31 // "MONSTER.DB.1"
@@ -423,6 +429,7 @@ hal_storage_tier_name_hi:
     .byte >hal_storage_tier_1_name, >hal_storage_tier_2_name, >hal_storage_tier_3_name, >hal_storage_tier_4_name
 hal_storage_tier_name_len:
     .byte hal_storage_tier_1_name_len, hal_storage_tier_2_name_len, hal_storage_tier_3_name_len, hal_storage_tier_4_name_len
+#endif
 
 // Overlay asset filenames (indexed by overlay ID - 1; IDs 1..12 -> Banks 9..20)
 hal_storage_overlay_start_name:

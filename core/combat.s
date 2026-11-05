@@ -1309,12 +1309,18 @@ combat_note_kill:
     lda zp_game_flags
     and #GAME_FLAG_WINNER
     bne !no_win+
+#if HAL_PLATFORM_MONSTER_CATALOG
+    ldx cmb_type
+    jsr catalog_slot_is_balrog
+    bne !no_win+
+#else
     lda cmb_type
     cmp #CREATURE_BALROG
     bne !no_win+
     lda cr_level + CREATURE_BALROG
     cmp #100
     bne !no_win+
+#endif
     lda zp_game_flags
     ora #GAME_FLAG_WINNER
     sta zp_game_flags

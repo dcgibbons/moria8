@@ -25,6 +25,7 @@
 //   Banks 5-8:   MONSTER.DB.1..4
 //   Banks 9-20:  12 code overlays (OVL_STARTUP..OVL_TITLE = IDs 1..12)
 //   Bank 21:     TITLE art stream
+//   Bank 22:     MONSTER.CAT monster catalog fields + level index (names in Bank 4)
 
 #import "hal/memory_bank_consts.s"
 #import "hal/entropy_consts.s"
@@ -46,6 +47,7 @@
 .const CX16_BANK_OVERLAY_BASE   = 9
 .const CX16_BANK_OVERLAY_END    = 20
 .const CX16_BANK_TITLE_ART      = 21
+.const CX16_BANK_CATALOG        = 22
 
 // ============================================================
 // Virtual & Physical Memory Map Constants

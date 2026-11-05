@@ -74,6 +74,7 @@ SCENARIOS = (
     "death_flow",
     "save_load",
     "disk_setup",
+    "acid_armour",
 )
 
 
@@ -114,6 +115,9 @@ def build_lua_script(scenario: str, syms: dict[str, int]) -> str:
     mos_err = syms.get("beeb_last_mos_error", 0x22AC)
     busy_addr = syms.get("generation_busy_active_api", 0x0E30)
     acccon_shadow = syms.get("beeb_acccon_shadow", 0x009D)
+    acid_syms = "\n".join(f"local {name.upper()}_ADDR = 0x{syms.get(name, 0):04X}" for name in (
+        "cr_atk0_type", "cr_atk0_dice", "cr_atk0_sides", "cr_atk1_type", "cr_spell_chance", "cr_speed",
+        "inv_to_ac", "zp_player_ac"))
 
     header = f"""
 local prog = manager.machine.devices[":maincpu"].spaces["program"]
@@ -147,6 +151,7 @@ local MAP_BASE = 0x{MAP_BASE_ADDR:04X}
 local MAP_COLS = {MAP_COLS}
 local MAP_ROWS = {MAP_ROWS}
 local MAP_BANK = 0x{MAP_SWR_BANK:02X}
+{acid_syms}
 
 local function wait_frames(n)
     for _ = 1, n do emu.wait(1/60) end
@@ -744,6 +749,67 @@ function run()
     manager.machine:exit()
 end
 """
+    elif scenario == "acid_armour":
+        # A monster's acid damages worn armour and recalculates AC through the
+        # items overlay (MON-015): player_recalc_equipment lives in OVL_ITEMS
+        # here, and a direct call ran whatever overlay was loaded (the X16
+        # dropped the player into the town at (31, 18), M7 queue 2026-11-02).
+        body = """
+function run()
+    local ok = start_new_game("A")
+    assert_line("chargen_town_ready", ok)
+    local dl1 = descend_to_dl1()
+    assert_line("descended_dl1", dl1)
+    drain_more(4)
+    local mt = MONSTER_TABLE_ADDR
+    local base = nil
+    for i = 0, 31 do
+        if prog:read_u8(mt + i * 12 + 2) ~= 0xFF then base = mt + i * 12 break end
+    end
+    assert_line("monster_found", base ~= nil)
+    local kind = prog:read_u8(base + 2)
+    local px0 = prog:read_u8(PLAYER_X_ADDR)
+    local py0 = prog:read_u8(PLAYER_Y_ADDR)
+    local mx, my = nil, nil
+    for _, c in ipairs({{px0 + 1, py0}, {px0 - 1, py0}, {px0, py0 + 1}, {px0, py0 - 1}}) do
+        if (read_map_u8(c[1], c[2]) & 0xF1) == 0 then mx, my = c[1], c[2] break end
+    end
+    assert_line("acid_spot", mx ~= nil)
+    local ox, oy = prog:read_u8(base + 0), prog:read_u8(base + 1)
+    write_map_u8(ox, oy, read_map_u8(ox, oy) & 0xFE)
+    prog:write_u8(base + 0, mx)
+    prog:write_u8(base + 1, my)
+    write_map_u8(mx, my, read_map_u8(mx, my) | 0x01)
+    prog:write_u8(base + 3, 200)                -- HP: it outlasts the test
+    prog:write_u8(base + 4, 0)
+    prog:write_u8(base + 5, 0x01)               -- MF_AWAKE
+    prog:write_u8(base + 7, 0)
+    prog:write_u8(CR_ATK0_TYPE_ADDR + kind, 6)  -- ATK_ACID 1d2
+    prog:write_u8(CR_ATK0_DICE_ADDR + kind, 1)
+    prog:write_u8(CR_ATK0_SIDES_ADDR + kind, 2)
+    prog:write_u8(CR_ATK1_TYPE_ADDR + kind, 0)
+    prog:write_u8(CR_SPELL_CHANCE_ADDR + kind, 0)
+    prog:write_u8(CR_SPEED_ADDR + kind, 1)
+    prog:write_u8(CR_LEVEL_ADDR + kind, 40)     -- its blows land
+    prog:write_u8(PLAYER_DATA_ADDR + 40, 127)
+    local body = INV_TO_AC_ADDR + 23            -- EQUIP_BODY: the warrior's only armour
+    local to_ac0 = prog:read_u8(body)
+    local ac0 = prog:read_u8(ZP_PLAYER_AC_ADDR)
+    for _ = 1, 40 do
+        drain_more(4)
+        send_key(0x53)                          -- 's' search (PETSCII): a turn passes
+        wait_frames(20)
+        if prog:read_u8(body) ~= to_ac0 then break end
+    end
+    drain_more(4)
+    local drop = (to_ac0 - prog:read_u8(body)) & 0xFF
+    assert_line("acid_damaged", drop >= 1 and drop <= 3)
+    assert_line("acid_ac_recalc", prog:read_u8(ZP_PLAYER_AC_ADDR) == ((ac0 - drop) & 0xFF))
+    assert_line("acid_in_place", prog:read_u8(PLAYER_X_ADDR) == px0 and prog:read_u8(PLAYER_Y_ADDR) == py0
+                and prog:read_u8(DLVL_ADDR) == 1)
+    manager.machine:exit()
+end
+"""
     elif scenario == "death_flow":
         body = """
 function run()
@@ -937,7 +1003,7 @@ def run_scenario(
 
 def selftest() -> int:
     assert HOST_TIMEOUT_SECONDS <= 30, "AGENTS.md Rule 8 requires timeout <= 30s"
-    assert len(SCENARIOS) == 15, f"Expected 15 bbcm scenarios, got {len(SCENARIOS)}"
+    assert len(SCENARIOS) == 16, f"Expected 16 bbcm scenarios, got {len(SCENARIOS)}"
     syms = parse_symbols(SYM_PATH)
     if syms:
         assert syms.get("zp_player_x") == 0x002B, f"zp_player_x != $002B: {syms.get('zp_player_x')}"

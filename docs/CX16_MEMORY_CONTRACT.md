@@ -24,7 +24,7 @@ VRAM `$1B000`). Switching the active RAM bank via ZP `$00` affects **only**
 | `$0600-$06FF` | 256 B | `PLATFORM_HD_DECODE_BUF_BASE` / `DUNGEON_GEN_DOOR_SCAN_BASE` | Shared Huffman decode & dungeon-gen door-scan scratch |
 | `$0700-$07FF` | 256 B | `CX16_ROW_STAGE_BASE` (`rv_row_map_buf`, `rv_row_color_buf`) | Shared VERA row staging & page-burst file I/O staging buffer |
 | `$0801-$9AFF` | 37,631 B | Unified Resident + Play Image (`MORIA8.PRG`) | BASIC stub at `$0801`, entry at `$080D`, all resident + gameplay modules |
-| `$9B00-$9EFF` | 1,024 B | `PLATFORM_TIER_NAME_POOL_BASE` | Active monster tier name pool (core raw-addressed) |
+| `$9B00-$9EFF` | 1,024 B | `PLATFORM_TIER_NAME_POOL_BASE` | Monster name pool: 32 entries of 32 B, one per catalog species slot (`core/monster_catalog.s`) |
 | `$9F00-$9FFF` | 256 B | Hardware I/O (`VIA1`/`VIA2` `$9F00-$9F1F`, `VERA` `$9F20-$9F3F`) | Forbidden to code/data |
 
 ## 2. Banked RAM Window (`$A000-$BFFF`, 8 KB × 64 Banks)
@@ -37,11 +37,8 @@ Each 8 KB RAM bank (`$A000-$BFFF`) has a dedicated, non-overlapping owner:
 | `1` | `$2000-$3FFF` | Live Map Low Half (8,192 B) | First 8,192 B of the 198×66 dungeon map (`MAP_BASE = $2000`) |
 | `2` | `$4000-$530B` | Live Map High Half (4,876 B) | Remaining 4,876 B of the 198×66 dungeon map (`MAP_END = $530B`) |
 | `3` | `$6000-$7FFF` | `CX16.AUXDATA` (`Cx16AuxData`) | Preloaded at boot: item name streams, `it_unknown_idx`, store inventory/runtime, recall arrays, spell tables/names, ego suffix slots |
-| `4` | `$8000-$9FFF` | `CX16.HUFFDATA` (`Cx16HuffData`) | Preloaded at boot: Huffman tree and compressed string corpus |
-| `5` | `$A000-$BFFF` | `MONSTER.DB.1` | Preloaded at boot: Tier 1 monster database |
-| `6` | `$A000-$BFFF` | `MONSTER.DB.2` | Preloaded at boot: Tier 2 monster database |
-| `7` | `$A000-$BFFF` | `MONSTER.DB.3` | Preloaded at boot: Tier 3 monster database |
-| `8` | `$A000-$BFFF` | `MONSTER.DB.4` | Preloaded at boot: Tier 4 monster database |
+| `4` | `$8000-$9FFF` | `CX16.HUFFDATA` (`Cx16HuffData`) | Preloaded at boot: Huffman tree and compressed string corpus, then the monster catalog's Huffman-coded names |
+| `5-8` | `$A000-$BFFF` | (unused) | Held the monster tiers `MONSTER.DB.1-4`; free while `HAL_PLATFORM_MONSTER_CATALOG` is set |
 | `9` | `$A000-$BFFF` | `OVL.START` (`OVL_STARTUP = 1`) | Preloaded at boot: character creation & item ID init |
 | `10` | `$A000-$BFFF` | `OVL.TOWN` (`OVL_TOWN = 2`) | Preloaded at boot: town stores & home UI |
 | `11` | `$A000-$BFFF` | `OVL.DEATH` (`OVL_DEATH = 3`) | Preloaded at boot: death/retirement/score & heavy area spells |
@@ -55,6 +52,15 @@ Each 8 KB RAM bank (`$A000-$BFFF`) has a dedicated, non-overlapping owner:
 | `19` | `$A000-$BFFF` | `OVL.STORAGE` (`OVL_STORAGE = 11`) | Preloaded at boot: shared save/load engine & slot menu |
 | `20` | `$A000-$BFFF` | `OVL.TITLE` (`OVL_TITLE = 12`) | Preloaded at boot: title screen renderer & system info |
 | `21` | `$A000-$BFFF` | `TITLE` | Preloaded at boot: title screen artwork stream |
+| `22` | `$A000-$BFFF` | `MONSTER.CAT` (`Cx16Catalog`) | Preloaded at boot: monster catalog, 21 engine fields x 279 creatures, level counts, availability bitmap |
+
+Bank 22 is mapped only by `cx16_catalog_map` and `cx16_catalog_unmap`
+(`platforms/cx16/monster_catalog_bank.s`), resident code that saves the
+caller's bank (an overlay in Banks 9-20) and interrupt state and restores both.
+The catalog's Huffman-coded names ride in Bank 4 after the corpus
+(`Cx16HuffData`, virtual `$8DF6-$9B29`), read like the corpus.
+`core/monster_catalog.s` copies a species' fields into resident `cr_*` rows
+and decodes its name into the `$9B00` pool. Banks 23-63 are free.
 
 ## 3. Virtual-to-Banked Address Translation (`$2000-$9FFF`)
 
@@ -79,4 +85,4 @@ freely read and write the Map, `Cx16AuxData`, and `Cx16HuffData`.
 
 * Static memory contract self-test: `make testcx16-memory-contract-selftest`
 * Static linked-symbol & PRG extent gate: `make testcx16-memory-contract`
-* Runtime TestBench suite: `make testcx16-runtime` (21 scenarios in `platforms/cx16/harness_smoke.py`)
+* Runtime TestBench suite: `make testcx16-runtime` (22 scenarios in `platforms/cx16/harness_smoke.py`)

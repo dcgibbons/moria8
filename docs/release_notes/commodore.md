@@ -93,7 +93,7 @@ against VMS Moria or Umoria.
 | Bootable disk image | Yes | Yes | C64 ships as `.d64`; C128 ships as `.d71`. |
 | Character creation | Yes | Yes | Shared race, class, stat, history, and starting-equipment flow. |
 | Town and ordinary stores | Yes | Yes | Includes the six classic Moria/Umoria stores: General Store, Armory, Weaponsmith, Temple, Alchemy Shop, and Magic Shop. |
-| Black Market and Home | Yes | Yes | Included as Moria-family/Angband-style extensions, not standard six-store Umoria town features. |
+| Black Market and Home | Yes | Yes | Included as later Moria-family extensions, not standard six-store Umoria town features. |
 | Dungeon generation | Yes | Yes | C64 uses a compact map; C128 uses a larger banked map/data model. |
 | Dungeon exploration | Yes | Yes | Movement, light, doors, traps, stairs, searching, tunneling, and related core dungeon interactions are present. |
 | Combat | Yes | Yes | Shared melee, ranged, thrown, damage, experience, and level-up systems. |

@@ -34,6 +34,7 @@
 .segmentdef StorageOverlay     [outPrg=OVL_OUT + "/OVL.STORAGE",   start=$a000, min=$a000, max=$bfff]
 .segmentdef TitleOverlay       [outPrg=OVL_OUT + "/OVL.TITLE",     start=$a000, min=$a000, max=$bfff]
 .segmentdef ChestOverlay       [outPrg=OVL_OUT + "/OVL.CHEST",     start=$a000, min=$a000, max=$bfff]
+.segmentdef Cx16Catalog        [outPrg=OVL_OUT + "/MONSTER.CAT",   start=$a000, min=$a000, max=$bfff]
 .segmentdef Cx16AuxData        [outPrg=OVL_OUT + "/CX16.AUXDATA",  start=$6000, min=$6000, max=$7fff]
 .segmentdef Cx16HuffData       [outPrg=OVL_OUT + "/CX16.HUFFDATA", start=$8000, min=$8000, max=$9fff]
 
@@ -142,6 +143,9 @@ tramp_dig_ability:
 #import "../../core/stat_display.s"
 #import "../../core/huffman.s"
 .segment Cx16HuffData
+#if HAL_PLATFORM_MONSTER_CATALOG
+#import "../shared/catalog/catalog_names.s"    // The catalog's names, read like the corpus
+#endif
 ovl_huffdata_end:
 .segment Default
 #import "../../core/dungeon_data.s"
@@ -192,6 +196,8 @@ combat_msg_monster_in_way:
     jmp combat_msg_monster_suffix
 cmb_in_way_str:
     .text " is in your way!" ; .byte 0
+#import "monster_catalog_bank.s"
+#import "../../core/monster_catalog.s"
 #import "../../core/tier_manager.s"
 #import "../../core/monster_ai.s"
 #import "../../core/scene_dirty.s"

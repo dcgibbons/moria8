@@ -1679,6 +1679,102 @@ def scroll_delta_lua() -> str:
     return _chargen_body("A") + LUA_SCROLL_DELTA_BODY
 
 
+LUA_ACID_BODY = r"""
+-- A monster's acid damages worn armour and recalculates AC through the items
+-- overlay (MON-015). player_recalc_equipment lives in OVL_ITEMS here: a
+-- direct call from the resident acid code ran whatever overlay was loaded
+-- (the X16 dropped the player into the town at (31, 18), M7 queue 2026-11-02).
+local descended = false
+for i = 1, 12 do
+    press("L")
+    emu.wait(1)
+    shift(".")
+    emu.wait(2)
+    if prog:read_u8(DLVL_ADDR) == 1 then descended = true break end
+end
+assert_line("descended", descended, "zp_player_dlvl never reached 1")
+local settled = false
+for i = 1, 120 do
+    emu.wait(0.5)
+    if prog:read_u8(DLVL_ADDR) == 1 and prog:read_u8(BUSY_ADDR) == 0
+       and not screen_has("GENERATING") then
+        settled = true break
+    end
+end
+emu.wait(1)
+assert_line("gen_settled", settled, "dlvl=" .. prog:read_u8(DLVL_ADDR))
+prog:write_u8(0xc002, 0)
+prog:write_u8(0xc004, 0)
+
+local mt = MONSTER_TABLE_ADDR
+local base = 0
+for i = 0, 31 do
+    local b = mt + i * 12
+    if prog:read_u8(b + 2) ~= 0xff then base = b break end
+end
+assert_line("monster_found", base ~= 0, "no live monster on DL:1")
+local kind = prog:read_u8(base + 2)
+local px0 = prog:read_u8(PLAYER_X_ADDR)
+local py0 = prog:read_u8(PLAYER_Y_ADDR)
+local mx, my = nil, nil
+for _, c in ipairs({{px0+1, py0}, {px0-1, py0}, {px0, py0+1}, {px0, py0-1}}) do
+    if aux:read(0x0800 + c[2]*198 + c[1]) & 0xf1 == 0 then mx, my = c[1], c[2] break end
+end
+assert_line("acid_spot", mx ~= nil, "no free square next to the player")
+local oa = 0x0800 + prog:read_u8(base + 1)*198 + prog:read_u8(base + 0)
+aux:write(oa, aux:read(oa) & 0xfe)
+prog:write_u8(base + 0, mx)
+prog:write_u8(base + 1, my)
+local ma = 0x0800 + my*198 + mx
+aux:write(ma, aux:read(ma) | 0x01)
+prog:write_u8(base + 3, 200)               -- HP: it outlasts the test
+prog:write_u8(base + 4, 0)
+prog:write_u8(base + 5, 0x01)              -- MF_AWAKE
+prog:write_u8(base + 7, 0)
+prog:write_u8(CR_ATK0_TYPE_ADDR + kind, 6) -- ATK_ACID 1d2
+prog:write_u8(CR_ATK0_DICE_ADDR + kind, 1)
+prog:write_u8(CR_ATK0_SIDES_ADDR + kind, 2)
+prog:write_u8(CR_ATK1_TYPE_ADDR + kind, 0)
+prog:write_u8(CR_SPELL_CHANCE_ADDR + kind, 0)
+prog:write_u8(CR_SPEED_ADDR + kind, 1)
+prog:write_u8(CR_LEVEL_ADDR + kind, 40)    -- its blows land
+prog:write_u8(PLAYER_DATA_ADDR + 40, 127)
+
+local body = INV_TO_AC_ADDR + 23           -- EQUIP_BODY: the warrior's only armour
+local to_ac0 = prog:read_u8(body)
+local ac0 = prog:read_u8(PLAYER_AC_ADDR)
+for i = 1, 40 do
+    if screen_has("-more-") then press(" ") emu.wait(0.4) end
+    press("s")
+    emu.wait(0.5)
+    prog:write_u8(0xc002, 0)
+    prog:write_u8(0xc004, 0)
+    if prog:read_u8(body) ~= to_ac0 then break end
+end
+emu.wait(1)
+local drop = (to_ac0 - prog:read_u8(body)) & 0xff
+assert_line("acid_damaged", drop >= 1 and drop <= 3, "to-AC " .. to_ac0 .. " -> " .. prog:read_u8(body))
+assert_line("acid_ac_recalc", prog:read_u8(PLAYER_AC_ADDR) == (ac0 - drop) & 0xff,
+            "AC " .. ac0 .. " -> " .. prog:read_u8(PLAYER_AC_ADDR))
+local px, py = prog:read_u8(PLAYER_X_ADDR), prog:read_u8(PLAYER_Y_ADDR)
+assert_line("acid_in_place", px == px0 and py == py0 and prog:read_u8(DLVL_ADDR) == 1,
+            "player at (" .. px .. ", " .. py .. ") DL " .. prog:read_u8(DLVL_ADDR) ..
+            ", was (" .. px0 .. ", " .. py0 .. ") DL 1")
+dump("after_acid")
+print("SCENARIO DONE")
+"""
+
+
+def acid_armour_lua() -> str:
+    body = _balrog_symbols(LUA_ACID_BODY)
+    for placeholder, name in (("CR_ATK0_TYPE_ADDR", "cr_atk0_type"), ("CR_ATK0_DICE_ADDR", "cr_atk0_dice"),
+                              ("CR_ATK0_SIDES_ADDR", "cr_atk0_sides"), ("CR_ATK1_TYPE_ADDR", "cr_atk1_type"),
+                              ("CR_SPELL_CHANCE_ADDR", "cr_spell_chance"), ("CR_SPEED_ADDR", "cr_speed"),
+                              ("INV_TO_AC_ADDR", "inv_to_ac"), ("PLAYER_AC_ADDR", "zp_player_ac")):
+        body = body.replace(placeholder, hex(_sym_addr(name)))
+    return _chargen_body("A") + body
+
+
 SCENARIO_LUA = {
     "priest_pray": priest_pray_lua,
     "priest_map_area": priest_map_area_lua,
@@ -1701,6 +1797,7 @@ SCENARIO_LUA = {
     "disk_setup_adopt": disk_setup_adopt_lua,
     "save_slot_tracking": save_slot_tracking_lua,
     "weapon_exchange": weapon_exchange_lua,
+    "acid_armour": acid_armour_lua,
 }
 
 # Scenarios that exercise a separate save disk (blank ProDOS image, volume

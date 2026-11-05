@@ -89,8 +89,8 @@ overlay_load:
     // C64 active tier names are copied to hidden RAM at activation time, so an
     // overlay load no longer invalidates the logical tier. C128 keeps the
     // existing cache-backed guard because its tier pointers may resolve through
-    // Bank 1 overlay/tier ownership.
-#if HAL_PLATFORM_OVERLAY_TIER_CACHE_GUARD
+    // Bank 1 overlay/tier ownership. The monster catalog has no tiers.
+#if HAL_PLATFORM_OVERLAY_TIER_CACHE_GUARD && !HAL_PLATFORM_MONSTER_CATALOG
     lda current_tier
     beq !ol_invalidate_tier+
     tax
@@ -412,6 +412,12 @@ c128_preload_all_overlays:
     // ready-mask bits stay clear and overlay_load falls through to disk.
     cpx #OVL_CHEST
     beq cpao_next
+#if HAL_PLATFORM_MONSTER_CATALOG
+    // STARTUP is not cached either: its slot holds the monster catalog's
+    // names (memory128.s, C128M-007). New Game loads it from disk.
+    cpx #OVL_STARTUP
+    beq cpao_next
+#endif
 
 #if C128_CACHE_TEST_SKIP_OVERLAY
     txa
@@ -462,6 +468,12 @@ cpao_next:
 
     lda #1
     sta c128_cache_overlays_ready
+#if HAL_PLATFORM_MONSTER_CATALOG
+    // The window holds the last overlay staged, not a loaded one.
+    lda #OVL_NONE
+    sta current_overlay
+    rts
+#endif
     // Leave the startup overlay resident at $E000 for the title -> New Game
     // path. This avoids an immediate redundant reload of OVL.START after
     // preload has already cached and validated it.

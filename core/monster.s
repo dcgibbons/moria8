@@ -649,6 +649,7 @@ find_monster_floor:
     clc                         // Failed
     rts
 
+#if !HAL_PLATFORM_MONSTER_CATALOG
 // pick_creature_type — Pick random creature type for current dungeon level
 // Uses the loaded dungeon roster and chooses uniformly from all creatures with
 // cr_level <= current dungeon depth. Unlike the old narrow-band picker, this
@@ -701,6 +702,7 @@ pick_creature_type:
 !pct_found:
     txa
     rts
+#endif
 
 // monster_spawn_one — Create one monster at ms_spawn_x/y
 // Input:  A = creature type index
@@ -911,6 +913,11 @@ monster_spawn_level:
     jmp monster_spawn_town
 
 !msl_dungeon:
+#if HAL_PLATFORM_MONSTER_CATALOG
+    jsr catalog_reset_slots
+    jsr catalog_population
+    sta msl_target
+#else
     // Base count = 2
     lda #2
     sta msl_target
@@ -940,6 +947,7 @@ monster_spawn_level:
     lda #14
     sta msl_target
 !msl_capped:
+#endif
 
     lda #0
     sta msl_idx
@@ -948,6 +956,11 @@ monster_spawn_level:
     lda msl_idx
     cmp msl_target
     bcs !msl_done+
+#if HAL_PLATFORM_MONSTER_CATALOG
+    lda zp_mon_count
+    cmp #MAX_MONSTERS - 6       // Generation leaves 6 rows for breeders and summons
+    bcs !msl_done+
+#endif
 
     // Find floor tile
     jsr find_monster_floor
@@ -971,6 +984,9 @@ monster_spawn_level:
     jmp !msl_loop-
 
 !msl_done:
+#if HAL_PLATFORM_MONSTER_CATALOG
+    jsr catalog_place_win_creature
+#endif
     jmp tramp_spawn_special_room_monsters
 
 msl_target: .byte 0
@@ -1375,6 +1391,7 @@ monster_remove:
 //   name_lo, name_hi
 // Each array is `count` bytes long.
 // Clobbers: A, X, Y, zp_ptr0, zp_ptr1
+#if !HAL_PLATFORM_MONSTER_CATALOG
 load_tier_to_buffer:
     sta active_dungeon_count
     sta ltb_count
@@ -1412,6 +1429,7 @@ load_tier_to_buffer:
     bne !ltb_array-
 
     rts
+#endif
 
 #if PLATFORM_SCRATCH_BUFS_IN_PAGE2
 .label ltb_count     = PLATFORM_LTB_SCRATCH_BASE   // set on every call
@@ -1460,6 +1478,7 @@ creature_get_name:
     sta cgn_src_banked
 #endif
 
+#if !HAL_PLATFORM_MONSTER_CATALOG    // Catalog: current_tier stays 0
     lda current_tier
     bne !cgn_has_tier+
     jmp !cgn_no_tier+           // No tier → use cr_name tables (no banking)
@@ -1582,8 +1601,25 @@ creature_get_name:
     :BankOutKernal()
     jmp !cgn_copy+
 #endif
+#endif
 
 !cgn_no_tier:
+#if HAL_PLATFORM_MONSTER_CATALOG && HAL_PLATFORM_MONSTER_BANK1_TIER_NAMES
+    // Catalog species slots (0..MAX_MONSTERS-1): their names are in the
+    // Bank 1 name pool.
+    cpx #MAX_MONSTERS
+    bcs !cgn_not_slot+
+    lda cr_name_hi,x
+    bne !+
+    jmp !cgn_stale+
+!:  sta zp_ptr1_hi
+    lda cr_name_lo,x
+    sta zp_ptr1
+    lda #1
+    sta cgn_src_banked
+    jmp !cgn_copy+
+!cgn_not_slot:
+#endif
     // No tier loaded — cr_name tables only (can't resolve $E0xx)
     lda cr_name_hi,x
     bne !cgn_hi_ok+
@@ -1602,7 +1638,7 @@ creature_get_name:
     jmp !cgn_overlay_name+
 !cgn_reload_allowed:
 #endif
-#if !HAL_PLATFORM_MONSTER_STALE_TIER_RELOAD
+#if !HAL_PLATFORM_MONSTER_STALE_TIER_RELOAD || HAL_PLATFORM_MONSTER_CATALOG
     // C64 active tier names are no longer owned by $E000. A stale $E0xx
     // pointer means old state, not a recoverable gameplay owner.
     jmp !cgn_stale+

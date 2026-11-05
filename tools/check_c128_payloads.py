@@ -32,7 +32,8 @@ SEGMENTDEF = re.compile(r'^\.segmentdef\s+(\w+)\s+\[outPrg=OVL_OUT \+ "/([\w.]+)
                         r'\s*min=\$[0-9a-fA-F]+,\s*max=\$([0-9a-fA-F]+)\]')
 CONST = re.compile(r"^\.const\s+(\w+)\s*=\s*\$([0-9a-fA-F]+)\b")
 
-BANK1 = {"C128ResidentItemNames", "C128Bank1Huffman", "C128Bank1HuffmanVector"}
+BANK1 = {"C128ResidentItemNames", "C128Bank1Huffman", "C128Bank1HuffmanVector", "C128Bank1Catalog",
+         "C128Bank1CatalogNames"}
 ALTERNATES = [{"C128ResidentPersist", "C128ResidentPlay"}]   # one or the other at $AF00
 OVERLAY_START = 0xE000                                        # every overlay shares $E000-$EFFF
 

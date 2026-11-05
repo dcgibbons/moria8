@@ -775,13 +775,15 @@ item_name_token_hi:
     .byte >itok_steel, >itok_chest_suffix
 #endif
 
-itok_scroll_of_art:   .text "a Scroll of " ; .byte 0
+// The flavour names carry no article since 2026-11-05 ("You see a a Blue
+// Potion."): ITOK_A_SILVER and ITOK_A_COPPER keep their names, not the "a ".
+itok_scroll_of_art:   .text "Scroll of " ; .byte 0
 itok_potion_suffix:   .text " Potion" ; .byte 0
 itok_of:              .text " of " ; .byte 0
 itok_scroll:          .text "Scroll" ; .byte 0
 itok_light:           .text "Light" ; .byte 0
 itok_wand:            .text "Wand" ; .byte 0
-itok_a_silver:        .text "a Silver" ; .byte 0
+itok_a_silver:        .text "Silver" ; .byte 0
 itok_leather:         .text "Leather " ; .byte 0
 itok_detect_monsters: .text "Detect Monsters" ; .byte 0
 itok_staff:           .text "Staff" ; .byte 0
@@ -794,7 +796,7 @@ itok_confusion:       .text "Confusion" ; .byte 0
 itok_cure:            .text "Cure " ; .byte 0
 itok_beginners:       .text "Beginners" ; .byte 0
 itok_enchant:         .text "Enchant " ; .byte 0
-itok_a_copper:        .text "a Copper" ; .byte 0
+itok_a_copper:        .text "Copper" ; .byte 0
 itok_cloud_suffix:    .text " Cloud" ; .byte 0
 itok_sword_suffix:    .text " Sword" ; .byte 0
 itok_a_space:         .text "a " ; .byte 0

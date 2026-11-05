@@ -40,8 +40,16 @@ pick_wizard_summon_creature_type:
     beq !town+
     cmp #100
     bcc !normal+
+#if HAL_PLATFORM_MONSTER_CATALOG
+    lda #<CATALOG_BALROG_ID
+    sta cat_id_lo
+    lda #>CATALOG_BALROG_ID
+    sta cat_id_hi
+    jmp catalog_slot_for_id
+#else
     lda #CREATE_BALROG
     rts
+#endif
 !town:
     lda #TOWN_CREATURE_COUNT
     jsr rng_range               // [0, TOWN_CREATURE_COUNT-1]
@@ -94,6 +102,7 @@ tier_invalidate_state:
 #endif
     rts
 
+#if !HAL_PLATFORM_MONSTER_CATALOG
 // ============================================================
 // Tier boundary tables (indexed by tier 1-4; index 0 unused)
 // ============================================================
@@ -125,6 +134,7 @@ tier_size_lo:
 tier_size_hi:
     .byte 0
     .byte >TIER1_SIZE, >TIER2_SIZE, >TIER3_SIZE, >TIER4_SIZE
+#endif
 
 #if HAL_PLATFORM_OVERLAY_CACHE_ENABLED
 .const C128_TIER1_CACHE_BASE = BANK1_TIER_CACHE_BASE
@@ -168,7 +178,9 @@ tier_init:
     beq !ti_done+
 
     jsr c128_prepare_cache_loading_screen
+#if !HAL_PLATFORM_MONSTER_CATALOG
     jsr c128_preload_all_tiers
+#endif
     jsr c128_preload_all_overlays
 #if C128_TEST_CACHE_SURVIVAL
     jsr c128_test_snapshot_cache_probes
@@ -212,6 +224,9 @@ tier_init:
 // loads the appropriate tier.
 // Clobbers: A, X, Y, zp_ptr0, zp_ptr1, zp_temp0, zp_temp1
 tier_check_transition:
+#if HAL_PLATFORM_MONSTER_CATALOG
+    rts                         // The catalog has no tiers (current_tier stays 0)
+#else
     lda zp_player_dlvl
     beq !tct_done+              // Town = no tier needed
 
@@ -260,6 +275,7 @@ tier_check_transition:
 !tct_do_load:
     sta current_tier
     jmp tier_load
+#endif
 
 // tier_restore_after_overlay — re-establish current tier data after an overlay
 // or modal UI action without surfacing the transient "Loading..." message.
@@ -272,6 +288,7 @@ tier_restore_after_overlay:
     sta tier_silent_restore
     rts
 
+#if !HAL_PLATFORM_MONSTER_CATALOG
 // ============================================================
 // tier_load — Load a specific tier into the active creature buffer
 // ============================================================
@@ -643,8 +660,9 @@ tier_load_disk:
 
 tier_loading_str:
     .text "Loading..." ; .byte 0
+#endif
 
-#if HAL_PLATFORM_OVERLAY_CACHE_ENABLED
+#if HAL_PLATFORM_OVERLAY_CACHE_ENABLED && !HAL_PLATFORM_MONSTER_CATALOG
 // ============================================================
 // c128_stage_tier_to_bank1 — Legacy entry name, now writes to the high Bank 1 cache slot
 // ============================================================
@@ -832,7 +850,9 @@ c128_fetch_tier_from_cache:
 
 c128_tier_ready_mask_minus1:
     .byte 0, %00000001, %00000010, %00000100, %00001000
+#endif
 
+#if HAL_PLATFORM_OVERLAY_CACHE_ENABLED
 c128_cache_loading_hdr:
     .text "Loading:" ; .byte 0
 #endif

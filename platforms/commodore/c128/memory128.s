@@ -161,6 +161,20 @@
 .const BANK1_HUFFMAN_END          = BANK1_RESERVED_TOP_END
 .const BANK1_HUFFMAN_NMI_VECTOR_BASE = $fffa
 .const BANK1_HUFFMAN_NMI_VECTOR_END  = $fffb
+#if HAL_PLATFORM_MONSTER_CATALOG
+// The monster catalog (docs/MONSTER_CATALOG_DESIGN.md, C128M-007) takes the
+// tier cache window and the STARTUP overlay slot, which is no longer cached
+// (New Game loads OVL_STARTUP from disk):
+//   $7A60-$7E5F  name pool, 32 species slots x 32 B, written at species fetch
+//   $7E60-$9567  128.CAT: the catalog's 21 fields x 279 creatures, at boot
+//   $A000-$AFFF  128.CNM: the catalog's Huffman-coded names, at boot
+.const BANK1_CATALOG_POOL_BASE   = BANK1_TIER_CACHE_BASE
+.const BANK1_CATALOG_POOL_END    = BANK1_CATALOG_POOL_BASE + 32 * 32 - 1
+.const BANK1_CATALOG_FIELDS_BASE = BANK1_CATALOG_POOL_END + 1
+.const BANK1_CATALOG_FIELDS_END  = BANK1_TIER_CACHE_END
+.const BANK1_CATALOG_NAMES_BASE  = BANK1_OVERLAY_STARTUP_BASE
+.const BANK1_CATALOG_NAMES_END   = BANK1_OVERLAY_STARTUP_END
+#endif
 .const BANK1_CACHE_OWNED_BASE     = BANK1_TIER_CACHE_BASE
 .const BANK1_CACHE_OWNED_END      = BANK1_OVERLAY_DUNGEON_END
 
@@ -893,6 +907,15 @@ mmu_common_helpers_blob_end:
 .assert "Tier cache window matches required preload footprint", BANK1_TIER_CACHE_SIZE, TIER_PRELOAD_REQUIRED
 .assert "Cache-owned Bank1 span stays below top common RAM", BANK1_CACHE_OWNED_END < BANK1_RESERVED_TOP_BASE, true
 .assert "Tier cache stays below overlay cache", BANK1_TIER_CACHE_END < BANK1_OVERLAY_STARTUP_BASE, true
+#if HAL_PLATFORM_MONSTER_CATALOG
+:AssertRegionBefore("Bank1 DB ends before the catalog name pool", BANK1_DB_END, BANK1_CATALOG_POOL_BASE)
+:AssertRegionBefore("Catalog name pool ends before the catalog fields", BANK1_CATALOG_POOL_END, BANK1_CATALOG_FIELDS_BASE)
+:AssertRegionBefore("Catalog fields end before reserved gap 0", BANK1_CATALOG_FIELDS_END, BANK1_RESERVED_GAP0_BASE)
+:AssertRegionBefore("DISARM small-overlay cache ends before the catalog names", BANK1_OVERLAY_DISARM_END, BANK1_CATALOG_NAMES_BASE)
+:AssertRegionBefore("Catalog names end before TOWN overlay slot", BANK1_CATALOG_NAMES_END, BANK1_OVERLAY_TOWN_BASE)
+.assert "Catalog field segment starts at its Bank1 span", BANK1_CATALOG_FIELDS_BASE, $7e60
+.assert "Catalog names segment starts at its Bank1 span", BANK1_CATALOG_NAMES_BASE, $a000
+#endif
 .assert "Overlay cache avoids $D000-$DFFF", BANK1_OVERLAY_DEATH_END < BANK1_RESERVED_IO_BASE, true
 .assert "DUNGEON overlay slot starts after $DFFF", BANK1_OVERLAY_DUNGEON_BASE > BANK1_RESERVED_IO_END, true
 .assert "Overlay cache fits in named owned Bank1 span", OVERLAY_CACHE_DISARM_END <= BANK1_CACHE_OWNED_END, true
