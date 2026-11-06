@@ -912,6 +912,53 @@ class UnstuckTest(unittest.TestCase):
         self.assertEqual(decision.key, ord("B"))
         self.assertFalse(brain.shopped)
 
+    def test_a_full_pack_refusing_recall_drops_in_town_and_tries_again(self) -> None:
+        """2026-11-06: a level-19 Paladin's Word of Recall was refused for a
+        full pack 170 times: with townspeople in view nothing was dropped in
+        town, and the Alchemist stayed done for the visit."""
+        from moria_playtest.brain import ALCHEMIST
+        brain = Brain(GOALS["deep"])
+        brain.at_store, brain.alchemist_done = ALCHEMIST, False
+        refused = command_obs(pos=(5, 5), dlvl=0, clvl=19, rows={0: "Your pack is full."})
+        refused.stage = "message"
+        brain.store(refused)
+        self.assertTrue(brain.pack_full and brain.alchemist_done)
+        view = town_view((5, 5), (40, 40), dlvl=0)
+        view.creatures = {(15, 5): Creature("t", 0)}             # a townsperson across the street
+        o = command_obs(pos=(5, 5), dlvl=0, clvl=19)
+        self.assertEqual(brain.drop_junk(o, view).layer, "drop")
+        view.creatures = {(6, 5): Creature("t", 0)}              # one beside the player: not now
+        self.assertIsNone(brain.drop_junk(o, view))
+        brain.dropping, brain.listed = True, True
+        pack = command_obs(pos=(5, 5), dlvl=0, clvl=19,
+                           rows={0: "Inventory", 2: " a) Ration of Food", 3: " b) Wooden Torch (0 turns)"})
+        pack.stage = "list"
+        self.assertEqual(brain.drop_prompt(pack).key, ord("B"))
+        self.assertFalse(brain.alchemist_done)                  # the Alchemist again, with room now
+
+    def test_word_of_recall_trips_back_off_while_none_is_bought(self) -> None:
+        """2026-11-06: one trip for it every 1,500 steps while none came; now
+        1,500, then 3,000, then 6,000, and back to 1,500 once one is carried."""
+        from moria_playtest.brain import RESTOCK_WAIT
+        brain = Brain(GOALS["deep"])
+        view = town_view((5, 5), (40, 40), dlvl=0)
+
+        def at(dlvl: int, step: int):
+            o = command_obs(pos=(5, 5), dlvl=dlvl, clvl=19)
+            o.step = step
+            return o
+        step, waits = 1000, []
+        for _ in range(3):
+            brain.track(at(0, step), view)
+            step += 100
+            brain.track(at(1, step), view)                     # left without one
+            waits.append(brain.recall_trip_after - step)
+        self.assertEqual(waits, [RESTOCK_WAIT, 2 * RESTOCK_WAIT, 4 * RESTOCK_WAIT])
+        brain.recall = 1
+        brain.track(at(0, step + 50), view)
+        brain.track(at(1, step + 100), view)
+        self.assertEqual(brain.recall_wait, RESTOCK_WAIT)
+
     def test_explore_ping_pong_drops_that_frontier(self) -> None:
         # M5b round 46, seed 1015: 5,000 steps between two corridor squares.
         brain = Brain(GOALS["reach_dl2"])

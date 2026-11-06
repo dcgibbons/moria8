@@ -516,6 +516,7 @@ class Brain:
         self.listed = False                    # the wear prompt's item list is showing
         self.resupply_after = 0                # step before which town is not worth a trip
         self.recall_trip_after = 0             # ... for Word of Recall alone (the Alchemist may have none)
+        self.recall_wait = RESTOCK_WAIT        # doubled each time a visit leaves without one
         self.gear_trip_after = 0               # ... for armour and weapons alone
         self.gear_trip_gold = GEAR_TRIP_GOLD   # gold that makes a trip for armour and weapons worth it
         self.restock_trip_after = 0            # ... for strong potions and Phase Door alone
@@ -528,6 +529,7 @@ class Brain:
         self.chant_until = 0                   # step until which Chant is counted on
         self.search_mode_after = 0             # step before which search mode is not turned on again
         self.pack_full = False                 # the game said "Your pack is full."
+        self.refused_at: str | None = None     # the store whose sale the full pack refused
         self.dropping = False                  # a drop prompt is open for junk
         self.drop_after = 0                    # step before which no junk is looked for again
         self.hops = 0                          # restock hops since supplies were last found
@@ -911,6 +913,7 @@ class Brain:
         if obs.stage == "message":
             if any("Your pack is full." in row for row in obs.rows):
                 self.pack_full = True          # drop something, then shop again (drop_prompt)
+                self.refused_at = self.at_store
             if self.bought is not None:
                 self.credit(self.bought, -1)   # the counted purchase did not happen
             self.bought = None
@@ -986,6 +989,22 @@ class Brain:
             self.general_gold = -1 if self.general_bought else self.gold(obs)
             self.general_bought = False
             self.end_visit(obs)
+
+    def reopen_refused(self) -> None:
+        """The store whose sale a full pack refused is open again this visit."""
+        store, self.refused_at = self.refused_at, None
+        if store == TEMPLE:
+            self.potions_done = False
+        elif store == BLACK_MARKET:
+            self.market_done = False
+        elif store == ALCHEMIST:
+            self.alchemist_done = False
+        elif store == MAGIC_SHOP:
+            self.magic_done = False
+        elif store == ARMOURY:
+            self.armoury_done = False
+        elif store == WEAPONSMITH:
+            self.weapons_done = False
 
     def end_visit(self, obs: Observation) -> None:
         """Shopping is over for this visit, however it ended (round 20: a
@@ -1548,6 +1567,16 @@ class Brain:
                     2 * self.gear_wait, RESTOCK_BACKOFF_MAX * GEAR_TRIP_WAIT)
                 self.gear_trip_after = obs.step + self.gear_wait
             if self.last_dlvl == 0:
+                # Leaving town without Word of Recall: the next trip for it
+                # waits twice as long each time (as restocking does). A
+                # level-19 Paladin whose pack was full went up for one every
+                # 1,500 steps, 170 refusals, down from town and back up into
+                # a DL2 pocket it could not leave (C128, 2026-11-06).
+                if self.recall:
+                    self.recall_wait = RESTOCK_WAIT
+                else:
+                    self.recall_trip_after = obs.step + self.recall_wait
+                    self.recall_wait = min(2 * self.recall_wait, RESTOCK_BACKOFF_MAX * RESTOCK_WAIT)
                 # Leaving town still short of strong potions or Phase Door:
                 # the stores seldom stock them, so wait twice as long before
                 # the next try. A level-25 Half-Troll on the Balrog goal
@@ -3154,7 +3183,13 @@ class Brain:
         Dwarf Priests hopped between town and DL 1 for 4,000 steps unable to
         buy food (M5b round 29). Drop one thing the bot has no use for,
         with nothing in view."""
-        if not (self.pack_full or self.more_junk) or obs.step < self.drop_after or self.threats(view):
+        threats = self.threats(view)
+        if obs.dlvl == 0:
+            # Townspeople are nearly always in view: only one close stops it,
+            # or nothing was ever dropped in town and every visit's purchases
+            # were refused (2026-11-06: 70 and 170 Word of Recall refusals).
+            threats = {p for p in threats if chebyshev(p, view.pos) <= 2}
+        if not (self.pack_full or self.more_junk) or obs.step < self.drop_after or threats:
             return None
         self.dropping, self.listed = True, False
         return Decision(KEY_DROP, "drop", "pack full: drop what is not needed")
@@ -3224,8 +3259,10 @@ class Brain:
                     if obs.dlvl == 0:
                         # Room made in town: back to the General Store, whose
                         # refused ration ended the visit (M5b round 47, seed
-                        # 1014: a level-9 Dwarf starved walking between shops).
+                        # 1014: a level-9 Dwarf starved walking between shops),
+                        # and to the store that refused for a full pack.
                         self.shopped = False
+                        self.reopen_refused()
                     return Decision(ord(match.group(1).upper()), "prompt", f"drop {match.group(2).strip()}")
             # Nothing else spare: an unknown flavour goes before the food and
             # light a refused purchase was for (2026-11-05: a level-15 Mage with
@@ -3236,6 +3273,8 @@ class Brain:
                 self.unknown[re.sub(r"^an? ", "", spare.group(2).strip())] = 0
                 self.dropping = self.pack_full = False
                 self.shopped = self.shopped and obs.dlvl != 0
+                if obs.dlvl == 0:
+                    self.reopen_refused()
                 return Decision(ord(spare.group(1).upper()), "prompt", f"drop {spare.group(2).strip()}: nothing else to spare")
         self.dropping = self.pack_full = self.more_junk = False
         self.drop_after = obs.step + DROP_RETRY   # nothing to spare: not again for a while
