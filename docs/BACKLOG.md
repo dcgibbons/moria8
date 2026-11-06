@@ -645,6 +645,45 @@ with a scripted level-jump-to-20 + teleport product build: previously
 JAMmed, now completes with the dungeon correctly repainted. Gates:
 make test exit 0, make test128 137/137.
 
+### Rubble blocks movement, and tunnelling needs no tool
+
+Found 2026-11-05 (C64 play): the player walks over rubble. Since the first
+movement code, `core/player_move.s` `walkable_table` marks rubble (tile 11)
+walkable. VMS Moria blocks it: `place_rubble` sets `fopen := false`
+(`misc.inc:1502`), and a move into it prints "There is rubble blocking your
+way." (`moria.inc:2588`); Umoria's rubble is `TILE_BLOCKED_FLOOR`, which
+`MAX_OPEN_SPACE` excludes. In both, rubble does not block sight
+(`MAX_CAVE_FLOOR` includes it); `docs/FEATURE_MAP.md`'s rubble row wrongly
+says it blocks LOS.
+
+It cannot be flipped alone. VMS tunnels with any weapon or bare hands: the
+digging ability is the player's strength plus a digging tool's bonus
+(`tabil := py.stat.cstr`, plus `25 + p1 * 50` for a digger; rubble falls when
+`tabil > randint(180)`, `moria.inc:2868-2935`). Moria8's `core/tunnel.s`
+refuses without a digging tool ("You have no tool to dig with."). VMS places
+rubble in corridors, so blocking rubble with Moria8's tunnelling could shut a
+character without a shovel off from the stairs.
+
+Required work:
+
+- Rubble blocks the player, with VMS's message, and blocks monsters (VMS:
+  only wall-passing kinds cross it); keep it see-through for the player's
+  and the monsters' line of sight (`los_trace.s` `mlos_tile_open` reads the
+  walkable table today).
+- Tunnelling with no digging tool uses the VMS strength-based ability, for
+  rubble and walls alike, scaled as `core/tunnel.s` scales the resistances.
+- Generation's connectivity check and stair reachability treat rubble as
+  passable only by tunnelling, or place it where VMS does.
+- The playtest bot tunnels through rubble that blocks its path.
+- Correct the FEATURE_MAP rubble and tunnelling rows.
+
+Acceptance target:
+
+- Walking into rubble prints the VMS message and does not move; tunnelling
+  rubble bare-handed clears it within a few turns at ordinary strength; no
+  generated level strands a character without a digging tool; the bot's
+  frozen suites hold.
+
 ### Locked/stuck/spiked doors
 
 DONE 2026-09-06 (design approved 2026-09-04). All four steps shipped on
