@@ -1358,7 +1358,12 @@ class Brain:
             self.recall = 0
         elif self.picking is not None and self.picking.startswith(("Wand of", "Staff of")):
             self.wands[self.picking] = 0
-        self.picking = None
+        elif self.picking is not None and self.picking.startswith(IDENTIFY_SCROLL):
+            # 2026-11-06: a count left above the pack's read Identify for an
+            # unknown wand, found none, cancelled and asked again, 30,000
+            # steps (a C128 main-queue game, no level for 150,000 steps).
+            self.identify_scrolls = 0
+        self.picking, self.picking_next = None, None
         return Decision(KEY_RUNSTOP, "prompt", "item to pick not listed: cancel")
 
     # -- bookkeeping ----------------------------------------------------------------

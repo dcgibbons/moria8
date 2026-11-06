@@ -1346,6 +1346,23 @@ class UnknownItemTest(unittest.TestCase):
         brain.track_light("This is a Wand of Frost (6 charges).")
         self.assertEqual((brain.wands.get("Wand of Frost"), brain.unknown["Iron Wand"]), (6, 0))
 
+    def test_an_identify_scroll_not_listed_is_not_asked_for_again(self) -> None:
+        """2026-11-06: a count above the pack's read Identify, found none on
+        the list, cancelled and asked again for 30,000 steps."""
+        from moria_playtest.game import Mode
+        from test_m1 import command_obs, town_view
+        brain = self.brain("human-warrior")
+        brain.unknown["Silver Wand"] = 1
+        brain.identify_scrolls = 1
+        brain.identify_items(command_obs(pos=(5, 5), dlvl=1, clvl=14), town_view((5, 5), (30, 30), dlvl=1))
+        brain.listed = True
+        listing = command_obs(dlvl=1, rows={0: "Read which scroll (a-a)?", 2: " a) Scroll of Light"})
+        listing.mode = Mode.ITEM
+        self.assertEqual(brain.pick_item(listing).reason, "item to pick not listed: cancel")
+        self.assertEqual((brain.identify_scrolls, brain.picking, brain.picking_next), (0, None, None))
+        self.assertIsNone(brain.identify_items(command_obs(pos=(5, 5), dlvl=1, clvl=14),
+                                               town_view((5, 5), (30, 30), dlvl=1)))
+
 
 class StrongPotionTest(unittest.TestCase):
     """M7 queue (tactic strong_potions): a level-14 Warrior with 136 HP drank five Cure
