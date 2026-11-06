@@ -1,11 +1,12 @@
 # Moria8 Acorn BBC Master 128 Platform Makefile
 
-KICKASS_VERSION = 5.25
 KICKASS_DIR     ?= ../../tools/kickass
-KICKASS_JAR     ?= $(KICKASS_DIR)/KickAss.jar
-KICKASS_URL     = https://theweb.dk/KickAssembler/KickAssembler$(KICKASS_VERSION).zip
+# KICKASS names the jar, as on every port (README: KICKASS=/path/to/KickAss.jar)
+KICKASS         ?= $(KICKASS_DIR)/KickAss.jar
+KICKASS_JAR     = $(KICKASS)
+KICKASS_URL     = https://theweb.dk/KickAssembler/KickAssembler.zip
 # kickass_java.sh fails the build on a failed .assert (KickAssembler itself exits 0)
-KA              = $(if $(KICKASS),$(KICKASS),../../tools/kickass_java.sh -jar $(KICKASS_JAR))
+KA              = ../../tools/kickass_java.sh -jar $(KICKASS_JAR)
 
 # Python tools and harnesses must not leave __pycache__ in source directories.
 export PYTHONDONTWRITEBYTECODE := 1
@@ -65,7 +66,7 @@ build: $(BEEB_MAIN_PRG) $(BEEB_PLAY_PRG) $(BEEB_AUX_PRG) $(BEEB_HUFF_PRG) $(BEEB
 
 kickass: $(KICKASS_JAR)
 $(KICKASS_JAR):
-	@echo "Downloading KickAssembler $(KICKASS_VERSION)..."
+	@echo "Downloading KickAssembler..."
 	@mkdir -p $(KICKASS_DIR)
 	@curl -sL "$(KICKASS_URL)" -o $(KICKASS_DIR)/kickass.zip
 	@unzip -qo $(KICKASS_DIR)/kickass.zip -d $(KICKASS_DIR)
