@@ -4809,3 +4809,36 @@ class ShunTest(unittest.TestCase):
         self.assertIsNone(brain.shun(command_obs(pos=(5, 5), dlvl=1, clvl=1, hp=12, mhp=12), far_stairs))
         on_stairs = town_view((5, 5), (5, 5), monsters={(5, 11)}, dlvl=1, stairs_type=0xA)
         self.assertIsNone(brain.shun(command_obs(pos=(5, 5), dlvl=1, clvl=5, hp=40, mhp=40), on_stairs))
+
+
+class GenocideTest(unittest.TestCase):
+    """Genocide's "Type?" (maintainer, 2026-11-05: answer it, don't escape
+    out): the letter of the kind seen on this level that could do the most
+    damage in a turn, else 'p'."""
+
+    def test_the_most_dangerous_kind_seen_on_the_level(self) -> None:
+        brain = Brain(GOALS["deep"])
+        self.assertEqual(brain.genocide_key(), (ord("P"), "p"))   # nothing seen yet
+        brain.level.kinds.update({"k": 6.0, "D": 40.0, "p": 12.0, "$": 90.0})   # '$' is no letter
+        self.assertEqual(brain.genocide_key(), (0xC1 + 3, "D"))    # shifted: recall_key_to_screen_code
+        brain.level.kinds["D"] = 0.0
+        self.assertEqual(brain.genocide_key(), (ord("P"), "p"))
+
+    def test_the_prompt_is_answered(self) -> None:
+        brain = Brain(GOALS["deep"])
+        brain.level.kinds["o"] = 8.0
+        prompt = command_obs(rows={0: "Type?"})
+        prompt.mode, prompt.stage = Mode.GENOCIDE, "type"
+        decision = brain.decide(prompt, None)
+        self.assertEqual((decision.key, decision.reason), (ord("O"), "genocide o"))
+
+    def test_kinds_seen_are_remembered_by_their_worst(self) -> None:
+        """creature_danger beside the character: what danger() sums."""
+        kind = next(k for k, a in knowledge.attacks().items() if a and k[0].isalpha())
+        brain = Brain(GOALS["deep"])
+        obs = command_obs(pos=(5, 5), dlvl=3, clvl=10, hp=60, mhp=60)
+        view = town_view((5, 5), (20, 10), dlvl=3)
+        view.creatures = {(6, 5): Creature(*kind)}
+        brain.decide(obs, view)
+        self.assertGreater(brain.level.kinds[kind[0]], 0.0)
+        self.assertEqual(brain.level.kinds[kind[0]], Brain.creature_danger(Creature(*kind), 1, obs))

@@ -53,6 +53,18 @@ class ClassifyTest(unittest.TestCase):
         self.assertEqual(self.mode(obs(STATUS, ret=COMMAND_RET)), (Mode.COMMAND, "command"))
         self.assertEqual(self.mode(obs({}, ret=COMMAND_RET))[0], Mode.UNKNOWN)
 
+    def test_genocides_type_prompt(self) -> None:
+        """eff_genocide's "Type?" is answered with a creature letter, not
+        cancelled as an unknown prompt (2026-11-05)."""
+        self.assertEqual(self.mode(obs({0: "Type?"})), (Mode.GENOCIDE, "type"))   # no eff_genocide symbol
+        lore = abimod.Abi(ABI.labels, ABI.consts, {"eff_genocide": [0xEE59]})
+        c128 = obs({0: "Read which scroll (a-a)?", 1: "Type?"}, ret=0xEE63)   # the C128's screen, live
+        c128.abi = lore
+        self.assertEqual(classify(c128, lore, COMMAND_RET), (Mode.GENOCIDE, "type"))
+        stale = obs({0: "Read which scroll (a-c)?", 1: "Type?"}, ret=0xE31E)   # the next read, not Genocide
+        stale.abi = lore
+        self.assertEqual(classify(stale, lore, COMMAND_RET), (Mode.ITEM, "which"))
+
     def test_spell_list_prompt_is_on_the_last_screen_row(self) -> None:
         """player_magic_select_overlay.s draws the list's prompt on
         SCREEN_ROWS - 1: row 24 on the C64, row 23 on the 24-row ports (the

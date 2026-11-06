@@ -423,6 +423,7 @@ class LevelMemory:
     slow_seen: dict[Pos, int] = field(default_factory=dict)   # slow creature tile -> step last seen
     loop_blocks: dict[Pos, int] = field(default_factory=dict)   # tile -> times it ended an oscillation here
     breeders_seen: dict[Pos, int] = field(default_factory=dict)   # breeding creature tile -> step last seen
+    kinds: dict[str, float] = field(default_factory=dict)   # glyph -> worst creature_danger seen beside (Genocide)
     up_target: Pos | None = None   # the up staircase a walk up is committed to
     casters: dict[tuple[str, int], int] = field(default_factory=dict)   # caster kind -> step last seen or heard
     find_traps_after: int = 0       # step before which Find Hidden Traps/Doors is not cast again (M5f)
@@ -653,6 +654,8 @@ class Brain:
         breeders = knowledge.breeder_kinds()
         self.level.breeders_seen.update(dict.fromkeys(
             [p for p, c in view.creatures.items() if (c.glyph, c.level) in breeders], obs.step))
+        for c in view.creatures.values():   # what Genocide would wipe out (genocide_key)
+            self.level.kinds[c.glyph] = max(self.level.kinds.get(c.glyph, 0.0), self.creature_danger(c, 1, obs))
         if obs.clvl < BREEDER_LEVEL and len(self.level.breeders_seen) >= BREEDERS_LEAVE:
             # A weak character (below clvl 15) leaves a breeding level.
             self.level.scum = True
@@ -870,6 +873,9 @@ class Brain:
             return self.store(obs)
         if obs.mode == Mode.SPELL:
             return Decision(*self.magic.prompt(obs))
+        if obs.mode == Mode.GENOCIDE:
+            key, letter = self.genocide_key()
+            return Decision(key, "prompt", f"genocide {letter}")
         if obs.mode == Mode.DIRECTION and self.pending is not None:
             key, self.pending = self.pending, None
             return Decision(key, "prompt", "direction for the pending action")
@@ -879,6 +885,16 @@ class Brain:
         if obs.mode == Mode.ITEM:
             return Decision(KEY_RUNSTOP, "prompt", f"cancel item prompt ({obs.stage})")
         return Decision(KEY_RUNSTOP, "prompt", f"cancel unknown prompt {obs.stage}".strip())
+
+    def genocide_key(self) -> tuple[int, str]:
+        """Genocide's letter (2026-11-05: answered, not cancelled): the kind
+        seen on this level that could do the most damage in a turn, as a
+        player names what threatens them; 'p' when none was seen. The key is
+        the one core/game_loop_helpers.s recall_key_to_screen_code reads:
+        a-z unshifted ($41-$5A), A-Z shifted ($C1-$DA)."""
+        letters = {g: t for g, t in self.level.kinds.items() if g.isascii() and g.isalpha() and t > 0}
+        letter = max(letters, key=lambda g: (letters[g], g)) if letters else "p"
+        return (ord(letter.upper()) if letter.islower() else 0xC1 + ord(letter) - ord("A")), letter
 
     def store(self, obs: Observation) -> Decision:
         """Buy food, then a lantern and oil, at the General Store. Never haggle:
@@ -1818,24 +1834,24 @@ class Brain:
         in and still strike. Below clvl 20 a breeder's counts 2.5 times. Each
         caster's biggest spell, scaled by how often it casts: x0.4 under
         11%, x0.6 under 26%, x0.8 under 51%."""
-        attacks, moves, breeders = knowledge.attacks(), knowledge.moves(), knowledge.breeder_kinds()
-        burst, rate = knowledge.spell_burst(), knowledge.spell_rate()
-        total = 0.0
-        for at, c in view.creatures.items():
-            d = chebyshev(at, pos)
-            if d > DANGER_RANGE:
-                continue
-            key = (c.glyph, c.level)
-            m = moves.get(key, 1.0)
-            melee = sum(n * sides for _, n, sides in attacks.get(key, ()))
-            hit = melee * max(1.0, m) if d <= 1 else melee * (m - 1) if d == 2 and m >= 2 else 0.0
-            if obs.clvl < 20 and key in breeders:
-                hit *= 2.5
-            total += hit
-            if spells and d >= 1 and key in burst:
-                r = rate.get(key, 1.0)
-                total += burst[key] * (0.4 if r < 0.11 else 0.6 if r < 0.26 else 0.8 if r < 0.51 else 1.0)
+        total = sum(Brain.creature_danger(c, chebyshev(at, pos), obs, spells=spells)
+                    for at, c in view.creatures.items() if chebyshev(at, pos) <= DANGER_RANGE)
         return min(total, DANGER_CAP)
+
+    @staticmethod
+    def creature_danger(c: Creature, d: int, obs: Observation, *, spells: bool = True) -> float:
+        """One creature's part of ``danger``, ``d`` squares from the square."""
+        key = (c.glyph, c.level)
+        m = knowledge.moves().get(key, 1.0)
+        melee = sum(n * sides for _, n, sides in knowledge.attacks().get(key, ()))
+        hit = melee * max(1.0, m) if d <= 1 else melee * (m - 1) if d == 2 and m >= 2 else 0.0
+        if obs.clvl < 20 and key in knowledge.breeder_kinds():
+            hit *= 2.5
+        burst = knowledge.spell_burst()
+        if spells and d >= 1 and key in burst:
+            r = knowledge.spell_rate().get(key, 1.0)
+            hit += burst[key] * (0.4 if r < 0.11 else 0.6 if r < 0.26 else 0.8 if r < 0.51 else 1.0)
+        return hit
 
     def perilous(self, view: View, obs: Observation) -> set[Pos]:
         """Squares beside or one step from a creature in view whose melee

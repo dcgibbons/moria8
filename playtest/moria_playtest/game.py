@@ -40,6 +40,7 @@ SPELL_LIST_TITLES = ("Prayer Book", "Mage Book")   # core/player_magic_select_ov
 SPELL_LEARN_TITLE, SPELL_LEARN_PROMPT = "Study", "Learn which? (a-"   # the Mage-book Study list (M5d)
 KEY_SPACE = 0x20
 KEY_RUNSTOP = 0x03
+GENOCIDE_PROMPT = "Type?"   # eff_genocide (core/player_magic_execute_overlay.s): the letter to wipe out
 
 
 class Mode(str, Enum):
@@ -51,6 +52,7 @@ class Mode(str, Enum):
     STORE = "STORE"           # store screen (ui_store.s): menu and buy prompts
     ITEM = "ITEM"             # "Wear which item (a-v)?" and its "?" item list (M3 round 13)
     SPELL = "SPELL"           # book prompt, "Pray which?" and its "?" list (core/player_magic.s, M5b)
+    GENOCIDE = "GENOCIDE"     # Genocide's "Type?": a creature letter, removed from the level (2026-11-05)
     UNKNOWN = "UNKNOWN"
 
 
@@ -165,6 +167,19 @@ class Observation:
                 "sp": self.sp, "jiffies": self.jiffies}
 
 
+def genocide_prompt(obs: Observation, abi: Abi) -> bool:
+    """Genocide's "Type?" (eff_genocide): on row 0, or on the C128 on row 1
+    under the read prompt it came from. Its key wait is eff_genocide's own
+    (the return is its ``jsr hal_input_get_key``, +10), so a "Type?" left on
+    the screen under a later prompt is not taken for it."""
+    if GENOCIDE_PROMPT not in (obs.rows[0].strip(), obs.rows[1].strip()):
+        return False
+    starts = abi.all_symbols.get("eff_genocide") or []
+    if not starts:
+        return obs.rows[0].strip() == GENOCIDE_PROMPT
+    return any(0 <= obs.ret - start < 16 for start in starts)
+
+
 def classify(obs: Observation, abi: Abi, command_ret: int,
              resident_prompts: dict[int, str] | None = None) -> tuple[Mode, str]:
     """Screen text and game state first; the call stack only as a resident-code hint.
@@ -204,6 +219,8 @@ def classify(obs: Observation, abi: Abi, command_ret: int,
         return Mode.SPELL, "list"
     if obs.rows[0].strip() == SPELL_LEARN_TITLE and bottom.strip().startswith(SPELL_LEARN_PROMPT):
         return Mode.SPELL, "learn"
+    if genocide_prompt(obs, abi):
+        return Mode.GENOCIDE, "type"
     if ITEM_PROMPT.search(obs.rows[0]):
         return Mode.ITEM, "which"
     if obs.rows[0].strip() == "Inventory":
