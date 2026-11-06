@@ -4712,7 +4712,7 @@ run_test "main_loop" "tests/test_main_loop.s" "0400 0434" 53 500000000
 run_test "run_visibility_bank" "tests/test_run_visibility_bank.s" "0400 0400" 1 500000000
 run_test "turn" "tests/test_turn.s" "0400 0420" 33 500000000
 run_test "player" "tests/test_player.s" "0400 0409" 10
-run_test "dungeon" "tests/test_dungeon.s" "0400 0442" 67 500000000
+run_test "dungeon" "tests/test_dungeon.s" "0400 0443" 68 500000000
 run_test "monster" "tests/test_monster.s" "0400 0417" 24 500000000
 run_test "monster_ai" "tests/test_monster_ai.s" "0400 0443" 68 500000000
 run_test "combat" "tests/test_combat.s" "0400 0429" 42 500000000

@@ -22,7 +22,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #66
+    ldx #67
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -322,6 +322,13 @@ t9_sum_before: .byte 0
 t9_sig_before: .byte 0
 t14_magma:     .byte 0
 t14_quartz:    .byte 0
+t13_room:      .byte 0
+t13_in_room:   .byte 0
+t13_x:         .byte 0
+t13_y:         .byte 0
+t13_x_end:     .byte 0
+t13_y_end:     .byte 0
+t68_trials:    .byte 0
 t16_counter:   .byte 0
 t19_found:     .byte 0
 t19_save_row:  .byte 0
@@ -336,7 +343,7 @@ audit_door_y:  .byte 0
 audit_check_x: .byte 0
 audit_check_y: .byte 0
 audit_pair_count: .byte 0
-tc_results: .fill 67, $ff              // Test results buffer (copied to $0400 before brk)
+tc_results: .fill 68, $ff              // Test results buffer (copied to $0400 before brk)
 t38_rockfall_name: .text "falling rock." ; .byte 0
 t67_trials: .byte 0
 run_cycle_expected:
@@ -1077,7 +1084,7 @@ test_start:
     lda (zp_ptr0),y
     and #TILE_TYPE_MASK
     cmp #TILE_STAIRS_UP
-    bne !t13_fail+
+    bne !t13_fail_near+
 
     // Check stairs_dn1 tile
     lda stairs_dn1_x
@@ -1086,7 +1093,7 @@ test_start:
     lda (zp_ptr0),y
     and #TILE_TYPE_MASK
     cmp #TILE_STAIRS_DN
-    bne !t13_fail+
+    bne !t13_fail_near+
 
     // Check stairs_dn2 tile
     lda stairs_dn2_x
@@ -1095,7 +1102,7 @@ test_start:
     lda (zp_ptr0),y
     and #TILE_TYPE_MASK
     cmp #TILE_STAIRS_DN
-    bne !t13_fail+
+    bne !t13_fail_near+
 
     // Upstream counts: randint(2) up and randint(2)+2 down (DGN-016).
     lda #0
@@ -1128,12 +1135,30 @@ test_start:
     sec
     sbc #1
     cmp #2                        // up 1..2
-    bcs !t13_fail+
+    bcs !t13_fail_near+
     lda t14_quartz
     sec
     sbc #3
     cmp #2                        // down 3..4
-    bcs !t13_fail+
+    bcs !t13_fail_near+
+
+    jmp !t13_rooms_check+
+!t13_fail_near:
+    jmp !t13_fail+                // The room check below puts !t13_fail out of branch range
+!t13_rooms_check:
+    // One stair to a room while there are rooms enough (maintainer,
+    // 2026-11-05: two down staircases shared a C64 room).
+    lda t14_magma
+    clc
+    adc t14_quartz
+    cmp room_count
+    beq !t13_rooms+
+    bcs !t13_rooms_ok+            // More stairs than rooms: they must share
+!t13_rooms:
+    jsr td_one_stair_per_room
+    bcc !t13_rooms_ok+
+    jmp !t13_fail+
+!t13_rooms_ok:
 
     lda #$01
     sta tc_results+12
@@ -4830,8 +4855,107 @@ test_start:
     sta tc_results + 66
 !t67_done:
 
+    // ==========================================
+    // Test 68: one staircase to a room (maintainer, 2026-11-05: two down
+    // staircases shared a C64 room). Six rooms, the stairs placed 20 times
+    // with the RNG running on: the extras take rooms 3-5, after the tracked
+    // three's 0-2. A random room each, as before, shares one about half the
+    // time.
+    // ==========================================
+    lda #20
+    sta t68_trials
+!t68_loop:
+    jsr fill_map_rock
+    lda #6
+    sta room_count
+    ldx #0
+!t68_room:
+    stx t13_room
+    lda t68_room_x,x
+    sta room_x,x
+    sta dg_room_x
+    lda #10
+    sta room_y,x
+    sta dg_room_y
+    lda #5
+    sta room_w,x
+    sta dg_room_w
+    lda #3
+    sta room_h,x
+    sta dg_room_h
+    jsr draw_dungeon_room
+    ldx t13_room
+    inx
+    cpx #6
+    bne !t68_room-
+    jsr place_stairs_dungeon
+    jsr td_one_stair_per_room
+    bcs !t68_fail+
+    dec t68_trials
+    bne !t68_loop-
+    lda #$01
+    sta tc_results + 67
+    jmp !t68_done+
+!t68_fail:
+    lda #$00
+    sta tc_results + 67
+!t68_done:
+
     // Done — jump to exit trampoline (copies tc_results to $0400, then brk)
     jmp test_exit_trampoline
+
+// td_one_stair_per_room — C = 0 when no room's interior holds two stairs.
+// t68_room_x: test 68's six rooms, 5 wide and apart.
+t68_room_x: .byte 4, 13, 22, 31, 40, 49
+td_one_stair_per_room:
+    ldx #0
+!tos_room:
+    stx t13_room
+    lda #0
+    sta t13_in_room
+    lda room_y,x
+    sta t13_y
+    clc
+    adc room_h,x
+    sta t13_y_end
+!tos_row:
+    ldx t13_room
+    lda room_x,x
+    sta t13_x
+    clc
+    adc room_w,x
+    sta t13_x_end
+!tos_col:
+    lda t13_x
+    ldy t13_y
+    jsr write_tile_at_xy
+    lda (zp_ptr0),y
+    and #TILE_TYPE_MASK
+    cmp #TILE_STAIRS_UP
+    beq !tos_in+
+    cmp #TILE_STAIRS_DN
+    bne !tos_not+
+!tos_in:
+    inc t13_in_room
+!tos_not:
+    inc t13_x
+    lda t13_x
+    cmp t13_x_end
+    bne !tos_col-
+    inc t13_y
+    lda t13_y
+    cmp t13_y_end
+    bne !tos_row-
+    lda t13_in_room
+    cmp #2
+    bcs !tos_done+              // C = 1: two in one room
+    ldx t13_room
+    inx
+    cpx room_count
+    bne !tos_room-
+    clc
+!tos_done:
+    rts
 
 // td_spawn0 — Place a live type-1 monster in slot 0 at (A=x, Y=y)
 td_spawn0:

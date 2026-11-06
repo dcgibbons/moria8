@@ -2195,14 +2195,21 @@ maybe_extra_stair:
 !mes_place:
     pla
                                           // fall through
-// place_extra_stair — Put an untracked stair tile A in a random room.
-// Skipped when the site is not floor: the picker's unvalidated fallback
-// must not overwrite a tracked stair.
+// place_extra_stair — Put an untracked stair tile A in the room after the
+// last stair's (stair_room_idx: the tracked three take rooms 0-2), so no
+// two share one; past the last room, room 0 on. Rooms lie at random, so the
+// order is a random pick; a random room for each (2026-10-28) often put two
+// down staircases in one room on the C64's 8-room levels (maintainer,
+// 2026-11-05: one to a room, the better play). Skipped when the site is not
+// floor: the picker's unvalidated fallback must not overwrite a tracked stair.
 place_extra_stair:
     pha
-    lda room_count
-    jsr rng_range
-    tax
+    ldx stair_room_idx
+    inx
+    cpx room_count
+    bcc !pes_room+
+    ldx #0
+!pes_room:
     jsr random_wall_adj_stair_floor
     jsr write_tile_at_xy
     :MapRead_ptr0_y()
