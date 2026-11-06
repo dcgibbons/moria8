@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The monster catalog's disk files for the C64 and Plus/4.
+"""The monster catalog's disk files for the C64, Plus/4 and Atari 8-bit.
 
 records OUTDIR IDX_LOAD_ADDRESS
     Write MONSTER.CAT1-4 (PRG files) from the committed catalog sources
@@ -20,7 +20,13 @@ fix D64
     sector table in place for where the records landed on it (the test
     runners' images). An image without them is left alone.
 
-docs/MONSTER_CATALOG_DESIGN.md, "C64 and Plus/4".
+atari OUTFILE
+    Write MONSTER.CAT for the Atari 8-bit: the same records,
+    A8_CATALOG_RECORDS_PER_SECTOR to each DOS 2.5 sector's data
+    (platforms/atari8/monster_catalog_a8.s), no load header. tools/make_atr.py
+    writes it contiguous, so record n is in file sector n / 2.
+
+docs/MONSTER_CATALOG_DESIGN.md, "C64 and Plus/4" and "Atari 8-bit".
 """
 from __future__ import annotations
 
@@ -34,6 +40,7 @@ import huff_encoder as huff  # noqa: E402
 
 CATALOG = ROOT / "platforms/shared/catalog"
 LAYOUT = ROOT / "platforms/commodore/common/catalog_records.s"
+ATARI_LAYOUT = ROOT / "platforms/atari8/monster_catalog_a8.s"
 FILES = [f"monster.cat{i}" for i in range(1, 5)]
 INDEX_FILE = "monster.idx"
 SECTORS_PER_TRACK = [0, *([21] * 17), *([19] * 7), *([18] * 6), *([17] * 5)]
@@ -108,6 +115,21 @@ def write_records(outdir: Path, idx_load: int) -> None:
         data[0:2] = bytes([load & 0xFF, load >> 8])   # the first header is the load address
         (outdir / name).write_bytes(bytes(data))
     (outdir / INDEX_FILE).write_bytes(index_bytes(None, idx_load))
+
+
+def atari_records() -> bytes:
+    """MONSTER.CAT's data for the Atari: per DOS 2.5 sector (its data bytes),
+    the records in turn, then padding; the last sector holds what is left."""
+    a8 = consts(ATARI_LAYOUT)
+    per, data = a8["A8_CATALOG_RECORDS_PER_SECTOR"], a8["A8_CATALOG_SECTOR_DATA"]
+    recs = records()
+    sectors = -(-len(recs) // per)
+    assert sectors == a8["A8_CATALOG_SECTORS"], (sectors, a8["A8_CATALOG_SECTORS"])
+    out = bytearray()
+    for s in range(sectors):
+        body = b"".join(recs[s * per:(s + 1) * per])
+        out += body + bytes(data - len(body)) if s < sectors - 1 else body
+    return bytes(out)
 
 
 def index_bytes(image: bytes | None, load: int) -> bytes:
@@ -191,6 +213,9 @@ def main() -> int:
         return 0
     if len(sys.argv) == 3 and sys.argv[1] == "fix":
         fix_index(Path(sys.argv[2]))
+        return 0
+    if len(sys.argv) == 3 and sys.argv[1] == "atari":
+        Path(sys.argv[2]).write_bytes(atari_records())
         return 0
     if len(sys.argv) == 5 and sys.argv[1] == "index":
         write_index(Path(sys.argv[2]), Path(sys.argv[3]), int(sys.argv[4], 0))

@@ -27,6 +27,8 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "tools"))
+import catalog_lore  # noqa: E402  (the generated monster catalog's data)
 PO_IMAGE = ROOT / "build" / "moria8-apple2.po"
 MAME_OUTPUT_ROOT = ROOT / "build" / "apple2" / "mame"
 MAME_OUTPUT_DIRS = {
@@ -570,7 +572,7 @@ print("SCENARIO DONE")
 
 LUA_WIZARD_SUMMON_TOWN_BODY = r"""
 -- Wizard summon in town must draw from the always-resident town roster
--- (types 57-64). Regression: the picker fell back to dungeon index 0 while
+-- (types 32-39: the catalog build keeps 32 dungeon rows). Regression: the picker fell back to dungeon index 0 while
 -- no tier was loaded, whose zeroed rows render as '@' with a '?' name.
 local mt = MONSTER_TABLE_ADDR
 local crd = CR_DISPLAY_ADDR
@@ -601,7 +603,7 @@ for i = 0, 31 do
     end
 end
 assert_line("summon_spawned", found, "no new live monster slot after summon")
-assert_line("summon_town_roster", new_type >= 57 and new_type <= 64,
+assert_line("summon_town_roster", new_type >= 32 and new_type <= 39,
             "summoned type " .. new_type .. " outside town roster")
 assert_line("summon_glyph", new_type ~= 0xff and prog:read_u8(crd + new_type) ~= 0,
             "summoned creature has zero glyph (renders '@')")
@@ -678,15 +680,17 @@ local ma = 0x0800 + my*198 + mx
 aux:write(ma, aux:read(ma) | 0x01)
 assert_line("flag_set", aux:read(ma) & 0x01 == 1, "aux byte=" .. aux:read(ma))
 
-prog:write_u8(base + 2, 56)       -- MX_TYPE = Balrog (CREATURE_BALROG)
+-- Monster catalog: the monster's species slot becomes the Balrog's.
+local btype = prog:read_u8(base + 2)
+prog:write_u8(CAT_SLOT_ID_LO_ADDR + btype, BALROG_ID_LO)
+prog:write_u8(CAT_SLOT_ID_HI_ADDR + btype, BALROG_ID_HI)
 prog:write_u8(base + 3, 1)        -- MX_HP_LO
 prog:write_u8(base + 4, 0)        -- MX_HP_HI
 prog:write_u8(base + 8, 0xff)     -- MX_STUN: never acts
-prog:write_u8(CR_LEVEL_ADDR + 56, 100) -- cr_level[Balrog] = 100 (win guard)
 -- A level-1 warrior cannot hit a Balrog's AC; boost to-hit only (a level
 -- poke desyncs the level-up thresholds against the Balrog XP award).
 prog:write_u8(PLAYER_DATA_ADDR + 40, 127)  -- PL_TOHIT
-assert_line("poke_landed", prog:read_u8(base + 2) == 56,
+assert_line("poke_landed", prog:read_u8(CAT_SLOT_ID_LO_ADDR + btype) == BALROG_ID_LO,
             "immediate readback=" .. prog:read_u8(base + 2) ..
             " hp=" .. prog:read_u8(base + 3) ..
             " stun=" .. prog:read_u8(base + 8))
@@ -708,7 +712,7 @@ end
 local find_balrog = function()
     for i = 0, 31 do
         local b = mt + i * 12
-        if prog:read_u8(b + 2) == 56 then return b end
+        if prog:read_u8(b + 2) == btype then return b end
     end
     return nil
 end
@@ -1586,6 +1590,10 @@ def _balrog_symbols(body: str) -> str:
     return (body
             .replace("MONSTER_TABLE_ADDR", hex(_sym_addr("monster_table")))
             .replace("CR_LEVEL_ADDR", hex(_sym_addr("cr_level")))
+            .replace("CAT_SLOT_ID_LO_ADDR", hex(_sym_addr("cat_slot_id_lo")))
+            .replace("CAT_SLOT_ID_HI_ADDR", hex(_sym_addr("cat_slot_id_hi")))
+            .replace("BALROG_ID_LO", str(_catalog_const("CATALOG_BALROG_ID") & 0xFF))
+            .replace("BALROG_ID_HI", str(_catalog_const("CATALOG_BALROG_ID") >> 8))
             .replace("PLAYER_X_ADDR", hex(_sym_addr("zp_player_x")))
             .replace("PLAYER_Y_ADDR", hex(_sym_addr("zp_player_y")))
             .replace("GAME_FLAGS_ADDR", hex(_sym_addr("zp_game_flags")))
@@ -1605,6 +1613,112 @@ def balrog_victory_lua() -> str:
 
 def quaff_p3_lua() -> str:
     return _chargen_body("A") + LUA_QUAFF_P3_BODY
+
+
+def _catalog_const(name: str) -> int:
+    return catalog_lore.const(name)
+
+
+LUA_CATALOG_SPAWN_BODY = r"""
+-- The monster catalog (2026-11-05): DL1 holds VMS's population (198x66, no
+-- area scale), every live monster's species slot is loaded from the catalog
+-- (its level and its name in the main-RAM pool match the catalog's), and from
+-- DL50 one awake Evil Iggy or Balrog joins the level (VMS place_win_monster).
+local descended = false
+for i = 1, 12 do
+    press("L")
+    emu.wait(1)
+    shift(".")
+    emu.wait(2)
+    if prog:read_u8(DLVL_ADDR) == 1 then descended = true break end
+end
+assert_line("descended", descended, "zp_player_dlvl never reached 1")
+assert_line("gen_settled", wait_generation(120), "DL1 generation never settled")
+prog:write_u8(0xc002, 0)
+prog:write_u8(0xc004, 0)
+
+local LEVELS = {CAT_LEVELS}
+local NAMES = {CAT_NAMES}
+local mt = MONSTER_TABLE_ADDR
+local function slot_id(t)
+    return prog:read_u8(CAT_SLOT_ID_LO_ADDR + t) + prog:read_u8(CAT_SLOT_ID_HI_ADDR + t) * 256
+end
+local count, types = 0, {}
+for i = 0, 31 do
+    local t = prog:read_u8(mt + i * 12 + 2)
+    if t ~= 0xff then count = count + 1 types[t] = true end
+end
+assert_line("cat_population", count >= 15, count .. " monsters (VMS 17-24 at DL1)")
+local loaded, fields, names, low, detail = true, true, true, false, ""
+for t, _ in pairs(types) do
+    if t >= 32 or prog:read_u8(CAT_SLOT_ID_HI_ADDR + t) == 0xff then
+        loaded = false
+        detail = "type " .. t .. " has no catalog species"
+    else
+        local cid = slot_id(t)
+        if LEVELS[cid + 1] < 8 then low = true end
+        if prog:read_u8(CR_LEVEL_ADDR + t) ~= LEVELS[cid + 1] then
+            fields = false
+            detail = "slot " .. t .. " id " .. cid .. " level " .. prog:read_u8(CR_LEVEL_ADDR + t)
+        end
+        local ptr = prog:read_u8(CR_NAME_LO_ADDR + t) + prog:read_u8(CR_NAME_HI_ADDR + t) * 256
+        local want = NAMES[cid + 1]
+        for k = 1, #want do
+            if prog:read_u8(ptr + k - 1) ~= want[k] then
+                names = false
+                detail = "slot " .. t .. " id " .. cid .. " name byte " .. k
+            end
+        end
+    end
+end
+assert_line("cat_slots_loaded", loaded, detail)
+assert_line("cat_fields", fields, detail)
+assert_line("cat_names", names, detail)
+assert_line("cat_low_levels", low, "no creature below level 8 on DL1")
+
+wizard_menu_open()
+press_until("DLVL", "L")
+press("5") press("0") press("\r")
+wait_generation(120)
+prog:write_u8(0xc002, 0)
+prog:write_u8(0xc004, 0)
+assert_line("cat_dl50", prog:read_u8(DLVL_ADDR) == 50, "wizard jump missed DL50")
+local winners, awake = 0, false
+for i = 0, 31 do
+    local b = mt + i * 12
+    local t = prog:read_u8(b + 2)
+    if t < 32 then
+        local cid = slot_id(t)
+        if cid == IGGY_ID or cid == BALROG_ID then
+            winners = winners + 1
+            awake = (prog:read_u8(b + 5) & 0x01) == 1 and prog:read_u8(b + 7) == 0
+        end
+    end
+end
+assert_line("cat_win_creature", winners == 1, winners .. " win creatures on DL50")
+assert_line("cat_win_awake", awake, "the win creature is asleep or unaware")
+dump("after_catalog")
+print("SCENARIO DONE")
+"""
+
+
+def catalog_spawn_lua() -> str:
+    count = catalog_lore.const("CATALOG_COUNT")
+    levels = catalog_lore.field("cat_cr_level")
+    names = [catalog_lore.name(cid) + [0] for cid in range(count)]
+    body = (LUA_CATALOG_SPAWN_BODY
+            .replace("{CAT_LEVELS}", "{" + ",".join(map(str, levels)) + "}")
+            .replace("{CAT_NAMES}", "{" + ",".join("{" + ",".join(map(str, n)) + "}" for n in names) + "}")
+            .replace("MONSTER_TABLE_ADDR", hex(_sym_addr("monster_table")))
+            .replace("CAT_SLOT_ID_LO_ADDR", hex(_sym_addr("cat_slot_id_lo")))
+            .replace("CAT_SLOT_ID_HI_ADDR", hex(_sym_addr("cat_slot_id_hi")))
+            .replace("CR_LEVEL_ADDR", hex(_sym_addr("cr_level")))
+            .replace("CR_NAME_LO_ADDR", hex(_sym_addr("cr_name_lo")))
+            .replace("CR_NAME_HI_ADDR", hex(_sym_addr("cr_name_hi")))
+            .replace("DLVL_ADDR", hex(_sym_addr("zp_player_dlvl")))
+            .replace("IGGY_ID", str(catalog_lore.const("CATALOG_IGGY_ID")))
+            .replace("BALROG_ID", str(catalog_lore.const("CATALOG_BALROG_ID"))))
+    return _chargen_body("A") + body
 
 
 def _sym_addr(name: str) -> int:
@@ -1788,6 +1902,7 @@ SCENARIO_LUA = {
     "deep_objdet": deep_objdet_lua,
     "scroll_map": scroll_map_lua,
     "dungeon_descend": dungeon_descend_lua,
+    "catalog_spawn": catalog_spawn_lua,
     "death_flow": death_flow_lua,
     "save_load": save_load_lua,
     "mage_list": mage_list_lua,

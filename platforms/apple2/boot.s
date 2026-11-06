@@ -8,13 +8,14 @@
 // Boot payload container (docs/APPLE2_MEMORY_POLICY.md boot file list):
 //   MORIA8.PAK — one OPEN, one sequential pass:
 //     header (512 B): count byte, pad, then count 16-bit lengths
-//     entries (in table order): RES, AUXDATA, TOWN, UI, ITEMS, SPELL, MODAL,
-//     GEN
+//     entries (in table order): RES, AUXDATA, CATALOG (the monster
+//     catalog's fields), UI, ITEMS, SPELL, MODAL, HUFFDATA (the Huffman
+//     corpus and the catalog's names)
 //   A single open sequential read keeps the drive stepping forward; the
 //   previous per-file OPEN/GFI/READ/CLOSE cycle seek-thrashed the directory
 //   and ProDOS 2.4.3's driver could lose the head after several files.
-//   Cold payloads (A2.PLAY, OVL.START, OVL.DEATH, OVL.HELP,
-//   OVL.STORAGE, OVL.TITLE, MONSTER.DB.1-4, TITLE) are loaded on demand.
+//   Cold payloads (A2.PLAY, OVL.START, OVL.TOWN, OVL.DEATH, OVL.GEN,
+//   OVL.HELP, OVL.CHEST, OVL.STORAGE, OVL.TITLE, TITLE) are loaded on demand.
 //
 // Assembled standalone (no core imports); Kick emits a PRG with the $2000
 // header, tools/prg_to_bin.py strips it and AppleCommander inserts it as
@@ -334,13 +335,13 @@ pak_name:
 // Aux destinations use the shared cache manifest in cache_layout.s.
 file_table:
     .word $0a00, $0000        // MORIA8.RES -> main resident
-    .word STAGE, $3b0c        // A2.AUXDATA -> aux data region
-    .word STAGE, A2_AUX_CACHE_TOWN
+    .word STAGE, A2_AUX_DATA_BASE   // A2.AUXDATA -> aux data region
+    .word STAGE, A2_AUX_CATALOG     // A2.CATALOG -> the monster catalog's fields
     .word STAGE, A2_AUX_CACHE_UI
     .word STAGE, A2_AUX_CACHE_ITEMS
     .word STAGE, A2_AUX_CACHE_SPELL
     .word STAGE, A2_AUX_CACHE_MODAL
-    .word STAGE, $9900        // A2.HUFFDATA -> aux Huffman region
+    .word STAGE, A2_AUX_CACHE_HUFF  // A2.HUFFDATA -> the corpus and the catalog's names
 }
 loader_end:
 

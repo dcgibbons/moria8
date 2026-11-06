@@ -6,10 +6,11 @@
 // Memory authority: docs/BBCMASTER_MEMORY_CONTRACT.md.
 //   Default (resident): $0E00-$7FFF (low helpers < $3000, resident <= $8000)
 //   BeebPlaySlot:       Bank 4 ($04) $8000-$A3FF (play payload, boot-preloaded)
-//   Tier-name pool:     Bank 4 ($04) $A400-$A7FF
+//   Name pool:          Bank 4 ($04) $A400-$A7FF (the catalog's species names)
 //   Overlay window:     Bank 4 ($04) $A800-$BFFF (6,144 B)
-//   Live 198x66 Map:    Bank 5 ($05) $8000-$B30B + cached OVL.UI ($B400-$BDFF)
-//   BeebAuxData:        Bank 6 ($06) $8000-$96FF (virt $6000-$76FF) + cached TOWN/MODAL
+//   Live 198x66 Map:    Bank 5 ($05) $8000-$B30B + cached OVL.MODAL ($B400-$BFFF)
+//   BeebAuxData:        Bank 6 ($06) $8000-$94FF (virt $6000-$74FF), the monster
+//                       catalog ($9500-$B9FF) and cached OVL.UI ($BA00-$BFFF)
 //   Hot Cache Bank 7:   Bank 7 ($07) cached SPELL/ITEMS/GEN
 //   BeebHuffData:       ANDY ($84) $8000-$8D93 (4 KB private RAM)
 //   LYNNE Shadow RAM:   ACCCON=$05 $3000-$7FFF (1KB font, 1KB gen scratch, char shadow, Mode 0)
@@ -17,6 +18,10 @@
 .cpu _65c02
 
 #define BBCMASTER
+// The VMS monster catalog (2026-11-05): fields and Huffman names in
+// sideways Bank 6 (monster_catalog_beeb.s, cache_layout.s), replacing the
+// four tier files.
+#define HAL_PLATFORM_MONSTER_CATALOG
 #define BBCMASTER_PRODUCT_OVERLAY_RUNTIME
 #define PLATFORM_PRODUCT_OVERLAY_RUNTIME
 #define BBCMASTER_PRODUCT_IRQ_VECTOR_RUNTIME
@@ -42,7 +47,8 @@
 .segmentdef TitleOverlay       [outPrg=OVL_OUT + "/ovl.title",    start=$a800, min=$a800, max=$bfff]
 .segmentdef ChestOverlay       [outPrg=OVL_OUT + "/ovl.chest",    start=$a800, min=$a800, max=$bfff]
 .segmentdef BeebPlaySlot       [outPrg=OVL_OUT + "/beeb.play",    start=$8000, min=$8000, max=$a3ff]
-.segmentdef BeebAuxData        [outPrg=OVL_OUT + "/beeb.auxdata", start=$6000, min=$6000, max=$76ff]
+.segmentdef BeebAuxData        [outPrg=OVL_OUT + "/beeb.auxdata", start=$6000, min=$6000, max=$74ff]
+.segmentdef BeebCatalog        [outPrg=OVL_OUT + "/beeb.catalog", start=$9500, min=$9500, max=$b9ff]
 .segmentdef BeebHuffData       [outPrg=OVL_OUT + "/beeb.huffdata",start=$8000, min=$8000, max=$8fff]
 
 // Segment placement macros
@@ -202,6 +208,8 @@ combat_msg_monster_in_way:
 cmb_in_way_str:
     .text " is in your way!" ; .byte 0
 
+#import "monster_catalog_beeb.s"
+#import "../../core/monster_catalog.s"
 #import "../../core/tier_manager.s"
 #import "../../core/monster_ai.s"
 #import "../../core/scene_dirty.s"
@@ -1075,7 +1083,7 @@ tramp_do_look:
 .assert "Play payload starts with 3-byte signature", beeb_play_body - beeb_play_start, 3
 
 // ============================================================
-// BeebAuxData segment — Virtual $6000-$76FF -> Bank 6 Physical $8000-$96FF
+// BeebAuxData segment — Virtual $6000-$74FF -> Bank 6 Physical $8000-$94FF
 // ============================================================
 .segment BeebAuxData
 #import "../../core/store_inventory_data.s"
@@ -1128,7 +1136,7 @@ cmb_winner_str:
     .text "You have won! Shift+Q to claim victory." ; .byte 0
 ovl_auxdata_end:
 .print "BeebAuxData: " + (ovl_auxdata_end - $6000) + " bytes"
-.assert "BeebAuxData fits $6000-$76FF", ovl_auxdata_end <= $7700, true
+.assert "BeebAuxData fits $6000-$74FF (21 pages: the catalog follows it in Bank 6)", ovl_auxdata_end <= $6000 + BEEB_CACHE_AUX_PAGES * $100, true
 
 .segment Default
 turn_rest_disturbed: .byte 0
@@ -1440,7 +1448,6 @@ ovl_gen_end:
 
 // Sideways RAM cache slot fit assertions
 .assert "Beeb SWR UI slot fits payload", ovl_ui_end - BANKED_DATA_BASE <= BEEB_SWR_PAGES_UI * 256, true
-.assert "Beeb SWR TOWN slot fits payload", ovl_town_end - BANKED_DATA_BASE <= BEEB_SWR_PAGES_TOWN * 256, true
 .assert "Beeb SWR MODAL slot fits payload", ovl_modal_misc_end - BANKED_DATA_BASE <= BEEB_SWR_PAGES_MODAL * 256, true
 .assert "Beeb SWR SPELL slot fits payload", ovl_spell_end - BANKED_DATA_BASE <= BEEB_SWR_PAGES_SPELL * 256, true
 .assert "Beeb SWR ITEMS slot fits payload", ovl_items_end - BANKED_DATA_BASE <= BEEB_SWR_PAGES_ITEMS * 256, true

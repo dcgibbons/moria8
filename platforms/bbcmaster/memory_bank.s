@@ -59,11 +59,19 @@ beeb_boot_romsel: .byte $00
 // ============================================================
 // Setting ROMSEL = $84 maps 4 KB ANDY at $8000-$8FFF while keeping Bank 4's
 // upper 12 KB ($9000-$BFFF, including overlays at $A800-$BFFF) visible!
+// A pointer at BEEB_HUFFDATA_LIMIT ($9000) and up reads sideways Bank 6
+// instead: the monster catalog's fields and Huffman names (cache_layout.s,
+// 2026-11-05), whose name decode shares these readers with the corpus.
 // Zero address arithmetic; preserves X, Y, C, I, D, V and sets N/Z from A.
 mmu_safe_huff_read_ptr0:
     php
     sei
+    lda zp_ptr0_hi
+    cmp #>BEEB_HUFFDATA_LIMIT
     lda #ROMSEL_ANDY
+    bcc !hr0+
+    lda #ROMSEL_BANK6
+!hr0:
     sta SHEILA_ROMSEL
     lda (zp_ptr0),y
     sta beeb_mmu_byte
@@ -76,7 +84,12 @@ mmu_safe_huff_read_ptr0:
 mmu_safe_huff_read_ptr1:
     php
     sei
+    lda zp_ptr1_hi
+    cmp #>BEEB_HUFFDATA_LIMIT
     lda #ROMSEL_ANDY
+    bcc !hr1+
+    lda #ROMSEL_BANK6
+!hr1:
     sta SHEILA_ROMSEL
     lda (zp_ptr1),y
     sta beeb_mmu_byte

@@ -73,7 +73,6 @@ VERSION_INC = $(BUILD)/version_strings.inc
 A2_MAIN_SRC  = main.s
 A2_BOOT_SRC  = boot.s
 TITLE_SRC    = ../../core/title_data.s
-A2_TIER_DIR  = creature_data
 A2_SOURCES   := $(shell find . ../../core ../../platforms/shared ../../platforms/commodore/common -type f -name '*.s' -print)
 
 # Payloads (PRG with 2-byte header, straight from Kick)
@@ -81,10 +80,10 @@ A2_MAIN_PRG  = $(OUTA2)/moria8a2.prg
 A2_PLAY_PRG  = $(OUTA2)/a2.play
 A2_AUX_PRG   = $(OUTA2)/a2.auxdata
 A2_HUFF_PRG  = $(OUTA2)/a2.huffdata
+A2_CAT_PRG   = $(OUTA2)/a2.catalog
 A2_OVL_PRGS  = $(OUTA2)/ovl.start $(OUTA2)/ovl.town $(OUTA2)/ovl.death $(OUTA2)/ovl.modal \
                $(OUTA2)/ovl.gen $(OUTA2)/ovl.help $(OUTA2)/ovl.ui $(OUTA2)/ovl.items \
                $(OUTA2)/ovl.spell $(OUTA2)/ovl.chest $(OUTA2)/ovl.storage $(OUTA2)/ovl.title
-A2_TIER_PRGS = $(OUTA2)/monster.db.1 $(OUTA2)/monster.db.2 $(OUTA2)/monster.db.3 $(OUTA2)/monster.db.4
 A2_TITLE_PRG = $(OUTA2)/title.prg
 A2_BOOT_PRG  = $(OUTA2)/moria8.system.prg
 
@@ -97,7 +96,7 @@ MAME_OUTPUT_ROOT = $(abspath $(OUTA2)/mame)
 
 all: build
 
-build: $(A2_MAIN_PRG) $(A2_PLAY_PRG) $(A2_AUX_PRG) $(A2_OVL_PRGS) $(A2_TIER_PRGS) $(A2_TITLE_PRG) $(A2_BOOT_PRG)
+build: $(A2_MAIN_PRG) $(A2_PLAY_PRG) $(A2_AUX_PRG) $(A2_CAT_PRG) $(A2_OVL_PRGS) $(A2_TITLE_PRG) $(A2_BOOT_PRG)
 	@mkdir -p "$(OUTA2)"
 
 disk: $(A2_DISK_IMAGE)
@@ -198,21 +197,9 @@ $(A2_MAIN_STAMP): $(A2_SOURCES) $(VERSION_INC) | ensure-kickass $(OUTA2)
 	$(JAVA) -jar "$(KICKASS_RESOLVED)" ":OVL_OUT=$(OVL_OUTA2)" "$(A2_MAIN_SRC)" $(KA_FLAGS) -symbolfile -symbolfiledir "$(OVL_OUTA2)" -o "$(A2_MAIN_PRG)"
 	touch "$(A2_MAIN_STAMP)"
 
-$(A2_MAIN_PRG) $(A2_PLAY_PRG) $(A2_AUX_PRG) $(A2_HUFF_PRG) $(A2_OVL_PRGS) $(OUTA2)/main.sym: $(A2_MAIN_STAMP)
+$(A2_MAIN_PRG) $(A2_PLAY_PRG) $(A2_AUX_PRG) $(A2_HUFF_PRG) $(A2_CAT_PRG) $(A2_OVL_PRGS) $(OUTA2)/main.sym: $(A2_MAIN_STAMP)
 	@test -f "$@" || { rm -f "$(A2_MAIN_STAMP)"; $(MAKE) "$(A2_MAIN_STAMP)"; }
 	@test -f "$@"
-
-$(OUTA2)/monster.db.1: $(A2_TIER_DIR)/tier1_prg.s ../commodore/c64/creature_data/tier1.s | ensure-kickass $(OUTA2)
-	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(A2_TIER_DIR)/tier1_prg.s" -symbolfiledir "$(OVL_OUTA2)" -o "$@"
-
-$(OUTA2)/monster.db.2: $(A2_TIER_DIR)/tier2_prg.s ../commodore/c64/creature_data/tier2.s | ensure-kickass $(OUTA2)
-	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(A2_TIER_DIR)/tier2_prg.s" -symbolfiledir "$(OVL_OUTA2)" -o "$@"
-
-$(OUTA2)/monster.db.3: $(A2_TIER_DIR)/tier3_prg.s ../commodore/c64/creature_data/tier3.s | ensure-kickass $(OUTA2)
-	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(A2_TIER_DIR)/tier3_prg.s" -symbolfiledir "$(OVL_OUTA2)" -o "$@"
-
-$(OUTA2)/monster.db.4: $(A2_TIER_DIR)/tier4_prg.s ../commodore/c64/creature_data/tier4.s | ensure-kickass $(OUTA2)
-	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(A2_TIER_DIR)/tier4_prg.s" -symbolfiledir "$(OVL_OUTA2)" -o "$@"
 
 $(A2_TITLE_PRG): $(TITLE_SRC) $(VERSION_INC) | ensure-kickass $(OUTA2)
 	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(TITLE_SRC)" -define TITLE_PLATFORM_A2 -symbolfiledir "$(OVL_OUTA2)" -o "$@"
@@ -231,7 +218,7 @@ $(LICENSE_DISK_FILE): $(LICENSE_FILE) | $(OUTA2)
 $(SOURCE_OFFER_DISK_FILE): $(SOURCE_OFFER) | $(OUTA2)
 	LC_ALL=C tr '\012' '\015' < "$<" > "$@"
 
-$(A2_DISK_IMAGE): ensure-ac ensure-prodos $(A2_MAIN_PRG) $(A2_PLAY_PRG) $(A2_AUX_PRG) $(A2_OVL_PRGS) $(A2_TIER_PRGS) $(A2_TITLE_PRG) $(A2_BOOT_PRG) $(LICENSE_DISK_FILE) $(SOURCE_OFFER_DISK_FILE)
+$(A2_DISK_IMAGE): ensure-ac ensure-prodos $(A2_MAIN_PRG) $(A2_PLAY_PRG) $(A2_AUX_PRG) $(A2_CAT_PRG) $(A2_OVL_PRGS) $(A2_TITLE_PRG) $(A2_BOOT_PRG) $(LICENSE_DISK_FILE) $(SOURCE_OFFER_DISK_FILE)
 	@mkdir -p "$(OUTA2)/bin"
 	$(PRG2BIN) "$(A2_BOOT_PRG)" "$(OUTA2)/bin/MORIA8.SYSTEM" --expect-addr 0x2000
 	$(PRG2BIN) "$(A2_MAIN_PRG)" "$(OUTA2)/bin/MORIA8.RES" --expect-addr 0x0A00
@@ -241,10 +228,8 @@ $(A2_DISK_IMAGE): ensure-ac ensure-prodos $(A2_MAIN_PRG) $(A2_PLAY_PRG) $(A2_AUX
 	  $(PRG2BIN) "$(OUTA2)/ovl.$$lower" "$(OUTA2)/bin/OVL.$$f" --expect-addr 0xA400 || exit 1; \
 	done
 	$(PRG2BIN) "$(OUTA2)/a2.auxdata" "$(OUTA2)/bin/A2.AUXDATA" --expect-addr 0x3B0C
-	$(PRG2BIN) "$(OUTA2)/a2.huffdata" "$(OUTA2)/bin/A2.HUFFDATA" --expect-addr 0x9900
-	@for n in 1 2 3 4; do \
-	  $(PRG2BIN) "$(OUTA2)/monster.db.$$n" "$(OUTA2)/bin/MONSTER.DB.$$n" --expect-addr 0xA400 || exit 1; \
-	done
+	$(PRG2BIN) "$(OUTA2)/a2.catalog" "$(OUTA2)/bin/A2.CATALOG" --expect-addr 0x5000
+	$(PRG2BIN) "$(OUTA2)/a2.huffdata" "$(OUTA2)/bin/A2.HUFFDATA" --expect-addr 0x8D00
 	$(PRG2BIN) "$(A2_TITLE_PRG)" "$(OUTA2)/bin/TITLE" --expect-addr 0x4000
 	rm -f "$@"
 	"$(AC_BIN)" -pro140 "$@" MORIA8
@@ -252,15 +237,12 @@ $(A2_DISK_IMAGE): ensure-ac ensure-prodos $(A2_MAIN_PRG) $(A2_PLAY_PRG) $(A2_AUX
 	"$(AC_BIN)" -p "$@" MORIA8.SYSTEM sys 0x2000 < "$(OUTA2)/bin/MORIA8.SYSTEM"
 	python3 ../../tools/make_pak.py "$(OUTA2)/bin/MORIA8.PAK" \
 	  "$(OUTA2)/bin/MORIA8.RES" "$(OUTA2)/bin/A2.AUXDATA" \
-	  "$(OUTA2)/bin/OVL.TOWN" "$(OUTA2)/bin/OVL.UI" "$(OUTA2)/bin/OVL.ITEMS" \
+	  "$(OUTA2)/bin/A2.CATALOG" "$(OUTA2)/bin/OVL.UI" "$(OUTA2)/bin/OVL.ITEMS" \
 	  "$(OUTA2)/bin/OVL.SPELL" "$(OUTA2)/bin/OVL.MODAL" "$(OUTA2)/bin/A2.HUFFDATA"
 	"$(AC_BIN)" -p "$@" MORIA8.PAK bin 0x0000 < "$(OUTA2)/bin/MORIA8.PAK"
 	"$(AC_BIN)" -p "$@" A2.PLAY bin 0x7C00 < "$(OUTA2)/bin/A2.PLAY"
-	@for f in START DEATH GEN HELP CHEST STORAGE TITLE; do \
+	@for f in START TOWN DEATH GEN HELP CHEST STORAGE TITLE; do \
 	  "$(AC_BIN)" -p "$@" OVL.$$f bin 0xA400 < "$(OUTA2)/bin/OVL.$$f" || exit 1; \
-	done
-	@for n in 1 2 3 4; do \
-	  "$(AC_BIN)" -p "$@" MONSTER.DB.$$n bin 0xA400 < "$(OUTA2)/bin/MONSTER.DB.$$n" || exit 1; \
 	done
 	"$(AC_BIN)" -p "$@" TITLE bin 0x4000 < "$(OUTA2)/bin/TITLE"
 	"$(AC_BIN)" -p "$@" LICENSE txt < "$(LICENSE_DISK_FILE)"

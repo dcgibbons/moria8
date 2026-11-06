@@ -14,6 +14,9 @@
 // payload is loaded once per session by a2_require_play (overlay_storage.s)
 // with signature validation and disk-reload fallback.
 
+// The VMS monster catalog (2026-11-05): fields and Huffman names in aux RAM
+// (monster_catalog_a2.s, cache_layout.s), replacing the four tier files.
+#define HAL_PLATFORM_MONSTER_CATALOG
 #define APPLE2_PRODUCT_OVERLAY_RUNTIME
 #define PLATFORM_PRODUCT_OVERLAY_RUNTIME
 #define APPLE2_PRODUCT_IRQ_VECTOR_RUNTIME
@@ -39,9 +42,10 @@
 .segmentdef TitleOverlay      [outPrg=OVL_OUT + "/ovl.title",   start=$a400, min=$a400, max=$b9ff]
 .segmentdef ChestOverlay      [outPrg=OVL_OUT + "/ovl.chest",   start=$a400, min=$a400, max=$b9ff]
 .segmentdef A2PlaySlot        [outPrg=OVL_OUT + "/a2.play",     start=$7c00, min=$7c00, max=$9fff]
-.segmentdef A2AuxData         [outPrg=OVL_OUT + "/a2.auxdata",  start=$3b0c, min=$3b0c, max=$59ff]
-.segmentdef A2HuffData        [outPrg=OVL_OUT + "/a2.huffdata", start=$9900, min=$9900, max=$a9ff]
-.const A2_HUFFDATA_BASE = $9900
+.segmentdef A2AuxData         [outPrg=OVL_OUT + "/a2.auxdata",  start=$3b0c, min=$3b0c, max=$4fff]
+.segmentdef A2Catalog         [outPrg=OVL_OUT + "/a2.catalog",  start=$5000, min=$5000, max=$66ff]
+.segmentdef A2HuffData        [outPrg=OVL_OUT + "/a2.huffdata", start=$8d00, min=$8d00, max=$a9ff]
+.const A2_HUFFDATA_BASE = $8d00
 
 // Huffman data placement: aux RAM at $3B0C (boot-preloaded).
 .macro HuffmanDataSegment() {
@@ -126,6 +130,7 @@ tramp_dig_ability:
 #import "../../core/zeropage.s"
 #import "hal/layout.s"
 #import "memory.s"
+#import "cache_layout.s"   // the aux spans: aux data, catalog fields, overlay cache
 #import "bank_port_consts.s"
 #import "hal/lifecycle_policy.s"
 #import "overlay.s"
@@ -168,6 +173,7 @@ press_key_str:
 #import "../../core/stat_display.s"
 #import "../../core/huffman.s"
 .segment A2HuffData
+#import "../shared/catalog/catalog_names.s"    // The catalog's names, read like the corpus
 ovl_huffdata_end:
 .segment Default
 #import "../../core/dungeon_data.s"
@@ -231,6 +237,8 @@ combat_msg_monster_in_way:
     jmp combat_msg_monster_suffix
 cmb_in_way_str:
     .text " is in your way!" ; .byte 0
+#import "monster_catalog_a2.s"
+#import "../../core/monster_catalog.s"
 #import "../../core/tier_manager.s"
 #import "../../core/monster_ai.s"
 #import "../../core/scene_dirty.s"
@@ -1623,10 +1631,9 @@ ovl_spell_end:
 
 // Boot copies cached payloads in PAK order. These guards couple current
 // linked sizes to the shared boot/runtime aux-cache manifest.
-.assert "A2 cache TOWN slot fits payload", ovl_town_end - BANKED_DATA_BASE <= A2_AUX_CACHE_UI - A2_AUX_CACHE_TOWN, true
 .assert "A2 cache UI slot fits payload", ovl_ui_end - BANKED_DATA_BASE <= A2_AUX_CACHE_SPELL - A2_AUX_CACHE_UI, true
 .assert "A2 cache SPELL slot fits payload", ovl_spell_end - BANKED_DATA_BASE <= A2_AUX_CACHE_MODAL - A2_AUX_CACHE_SPELL, true
-.assert "A2 cache MODAL slot fits payload", ovl_modal_misc_end - BANKED_DATA_BASE <= A2_AUX_CACHE_GEN - A2_AUX_CACHE_MODAL, true
+.assert "A2 cache MODAL slot fits payload", ovl_modal_misc_end - BANKED_DATA_BASE <= A2_AUX_CACHE_HUFF - A2_AUX_CACHE_MODAL, true
 
 .segment DungeonGenOverlay
 #import "../../core/special_rooms.s"
@@ -1635,7 +1642,8 @@ ovl_spell_end:
 ovl_gen_end:
 .print "Dungeon gen overlay: " + (ovl_gen_end - $a400) + " bytes"
 .assert "Dungeon gen overlay fits", ovl_gen_end <= $ba00, true
-.assert "Huffman corpus fits the old GEN cache slot", ovl_huffdata_end - A2_HUFFDATA_BASE <= A2_AUX_CACHE_ITEMS - A2_HUFFDATA_BASE, true
+.assert "Huffman segment is linked at its cache slot", A2_HUFFDATA_BASE, A2_AUX_CACHE_HUFF
+.assert "Huffman corpus and catalog names fit their cache slot", ovl_huffdata_end <= A2_AUX_CACHE_ITEMS, true
 .assert "A2 cache ITEMS slot fits payload", ovl_items_end - BANKED_DATA_BASE <= A2_AUX_CACHE_END - A2_AUX_CACHE_ITEMS, true
 .assert "A2 cache full-window read stays in aux RAM", A2_AUX_CACHE_ITEMS + $1600 <= A2_AUX_CACHE_LIMIT, true
 

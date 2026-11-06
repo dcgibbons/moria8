@@ -1,8 +1,8 @@
 # Monster Catalog Design: the Whole Catalog, Picked as VMS Picks
 
-Status: implemented on the Commander X16 and C128 (2026-11-02) and the C64
-and Plus/4 (2026-11-05); the Apple IIe, Atari 8-bit and BBC Master keep the
-tiers. It replaces the depth-tier monster model. The maintainer's decisions
+Status: implemented on the Commander X16 and C128 (2026-11-02), the C64
+and Plus/4 (2026-11-05) and the Apple IIe, BBC Master and Atari 8-bit
+(2026-11-05): every port. It replaces the depth-tier monster model. The maintainer's decisions
 are at the end.
 
 ## Why
@@ -555,6 +555,201 @@ Unresolved uncertainty and risk: real-hardware drive timing beyond VICE's
   deterministic rotation; a mid-play read is a visible pause on a stock 1541.
 ```
 
+## Apple IIe (2026-11-05)
+
+The catalog lives in aux RAM, as the C128's lives in Bank 1: no disk reads
+during play, no record format. `main.s` defines the flag; the Apple IIe has
+no tier build left (its tests are the MAME product scenarios).
+
+- **Fields** (`A2.CATALOG`, 5,859 B): a boot-pack entry copied to aux
+  `$5000-$66E2`, read a byte at a time through the zero-page aux-read thunk
+  (`mmu_safe_map_read_ptr0`; `monster_catalog_a2.s`).
+- **Names** (3,380 B Huffman): appended to the Huffman corpus in
+  `A2.HUFFDATA`, now at aux `$8D00` (corpus and names end `$A829`, 470 B
+  before ITEMS), decoded through the corpus's aux reads, as the X16 keeps
+  them after its corpus in Bank 4.
+- **Room** (maintainer: "only the town overlay, but we can come back to
+  look/recall later"): OVL.TOWN left the aux cache and loads from disk on
+  each town visit; aux data is capped at `$4FFF` (130 B to grow; the 40-row
+  recall block freed 256 B); the cache is UI `$6700`, SPELL `$6D00`, MODAL
+  `$8100`, the corpus and names `$8D00`, ITEMS `$AA00` (`cache_layout.s`,
+  manifest v8). The auxiliary language card (16 KB of aux `$D000-$FFFF`) is
+  the room if this margin runs out: a later experiment.
+- **Index** resident; the species' names go to the old tier name pool at
+  main `$A000-$A3FF`, read by `creature_get_name`'s existing path.
+- **Resident image** ends `$7A0A` (502 B free, from 389); the play slot has
+  141 B. Save version `$17`, the oldest it loads.
+- **Test:** the MAME scenario `catalog_spawn` (DL1's population, species,
+  levels and names against the catalog; one awake win creature on DL50);
+  `wizard_summon_town` expects the town rows 32-39 and `balrog_victory`
+  marks a species slot as the Balrog by catalog id, as the X16's do.
+
+```text
+Problem and success criteria: the Apple IIe draws its monsters from the VMS
+  catalog as the other catalog ports do; testapple2-runtime and make test pass.
+State being changed: aux RAM layout above the map (aux data cap, catalog
+  fields, cache slots, corpus base); cr_* rows 0-31 and the $A000 name pool;
+  the creature row count 65 -> 40; the Apple save version $16 -> $17.
+Search scope and terms: A2_AUX_CACHE_*, A2_HUFFDATA_BASE, file_table,
+  a2_ovl_cache_*, hal_storage_tier_*, monster.db, creature_data, PAK
+  (platforms/apple2, playtest/, tools/).
+Relevant readers/writers found and known exclusions: boot.s copies the pack
+  to the cache manifest; a2_overlay_try_cache reads it (TOWN now cold);
+  creature_get_name reads the pool; the bot reads 32 dungeon rows
+  (knowledge.CATALOG_PORTS).
+Initialization, reset and persistence points: the boot pack at startup;
+  catalog_reset_slots each level; the species table saved and re-read.
+Affected production sequence through the changed transition: level generate
+  -> monster_spawn_level -> catalog_population -> pick_creature_type ->
+  cat_fetch (aux field reads, Huffman name decode) -> monster_spawn_one.
+Contract decision or selected upstream oracle with source locations: as the
+  C128 record (VMS misc.inc, generate.inc).
+Intentional Moria8 deviations: none beyond the shared catalog's; the town
+  overlay is a disk load.
+Input/intermediate widths, signedness, carry, range and overflow policy:
+  unchanged shared code; field addresses 16-bit below $C000.
+RNG reduction and bias, if applicable: unchanged.
+Affected platforms, overlays, banks and owners: Apple IIe aux $3B0C-$BFFF,
+  main $A000-$A3FF; OVL.TOWN cold.
+Required production-path tests: catalog_spawn, the full testapple2-runtime
+  suite (town, summon, Balrog, saves), make test.
+Known behavior explicitly out of scope: Atari 8-bit, BBC Master; caching
+  OVL.TOWN again (the language card).
+Unresolved uncertainty and risk: aux data has 130 B to grow; real-drive
+  timing of the town overlay load.
+```
+
+## BBC Master 128 (2026-11-05)
+
+The catalog lives in sideways RAM Bank 6, as on the C128: no disk reads during
+play. `main.s` defines the flag; like the Apple IIe, the BBC has no tier build
+left (its tests are the MAME product scenarios).
+
+- **Fields and names** (`BEEB.CATALOG`, 9,239 B: the fields, then the
+  Huffman names) load into Bank 6 at `$9500-$B916` with the boot pack
+  (`monster_catalog_beeb.s`). The Huffman readers (`memory_bank.s`
+  `mmu_safe_huff_read_ptr0/1`, below `$3000`) select Bank 6 for a pointer at
+  `$9000` and up and ANDY below it, so the names decode like the corpus and
+  the fields read through the same helper; interrupts stay masked and
+  `ROMSEL` returns to Bank 4, as the contract requires.
+- **Room** (maintainer: the town overlay only): OVL.TOWN loads from DFS
+  (`OVLTWN`); OVL.MODAL moved to Bank 5 after the map (`$B400-$BFFF`, 93 B
+  spare), OVL.UI to Bank 6's tail (`$BA00`), and the aux-data reservation
+  shrank from 23 to 21 pages (`$6000-$74FF` virtual, 418 B to grow)
+  (`cache_layout.s`).
+- **Index** resident; names go to the Bank 4 pool at `$A400-$A7FF`.
+- **Resident image** ends `$7E93` (365 B free); the low helpers end `$23D3`.
+  Save version `$17`.
+- **Checker:** `check_memory_contract.py` checks the catalog's span and the
+  bank sums, and lets the catalog's Bank 6 labels sit at addresses that
+  Bank 4's pool and window also use.
+- **Test:** the MAME scenario `catalog_spawn` (DL1's population, species,
+  levels and names; one awake win creature on DL50); `dungeon_descend`
+  checks DL1's species came from the catalog, and `balrog_victory` marks a
+  species slot as the Balrog by catalog id.
+
+```text
+Problem and success criteria: the BBC Master draws its monsters from the VMS
+  catalog; testbbcmaster-runtime and make test pass.
+State being changed: Bank 5 and 6 layout (MODAL, aux data, catalog, UI);
+  the Huffman readers' bank choice; cr_* rows 0-31 and the $A400 pool; the
+  creature row count 65 -> 40; the BBC save version $16 -> $17.
+Search scope and terms: BEEB_CACHE_*, BEEB_SWR_*, file_bank_table,
+  beeb_ovl_cache_*, mmu_safe_huff_read_*, hal_storage_tier_*, MONDB,
+  creature_data (platforms/bbcmaster, playtest/, tools/).
+Relevant readers/writers found and known exclusions: every Huffman read
+  (corpus in ANDY, catalog in Bank 6) goes through the two readers; the map
+  and aux data readers are unchanged.
+Initialization, reset and persistence points: the boot pack; per-level slot
+  reset; the species table in saves.
+Affected production sequence through the changed transition: as the Apple
+  IIe record, with Bank 6 reads.
+Contract decision or selected upstream oracle with source locations: as the
+  C128 record.
+Intentional Moria8 deviations: none beyond the shared catalog's; the town
+  overlay is a disk load.
+Input/intermediate widths, signedness, carry, range and overflow policy: the
+  readers keep X, Y and the caller's flags (php/plp).
+RNG reduction and bias, if applicable: unchanged.
+Affected platforms, overlays, banks and owners: BBC Banks 5 and 6, ANDY
+  readers, main pool $A400-$A7FF; OVL.TOWN cold.
+Required production-path tests: catalog_spawn, testbbcmaster-runtime, make
+  test.
+Known behavior explicitly out of scope: the Atari 8-bit; caching OVL.TOWN
+  again.
+Unresolved uncertainty and risk: MODAL has 93 B to grow in Bank 5.
+```
+
+## Atari 8-bit (2026-11-05)
+
+Disk records, as on the C64 (maintainer: one contiguous `MONSTER.CAT`, its
+start sector found at boot, each record's id checked, the sector chain walked
+if not, then the disk prompt; the 130XE preloads every record; the 800XL's
+mid-play reads may turn the screen monochrome for a moment). `main.s` defines
+the flag and `HAL_PLATFORM_CATALOG_RECORDS`; the Atari has no tier build left.
+
+- **File** (`tools/catalog_disk.py atari`): the C64's 49-byte records
+  (`common/catalog_records.s`), two to each DOS 2.5 sector's 125 data bytes,
+  no load header: 140 sectors, written contiguous by `tools/make_atr.py`.
+  Record n is in file sector n / 2 at byte (n % 2) * 49.
+- **Fetch** (`monster_catalog_a8.s`, in the low helpers below `$4000`):
+  `catalog_boot_load` finds the file's first sector in the directory at each
+  title; a record is one SIOV read of start + n / 2 into `sio_sector_buf`. A
+  record that names another creature (a copy written by DOS, not contiguous)
+  is read down the sector chain from the start; then the disk prompt, and the
+  file is looked up again.
+- **130XE**: at boot `a8_catalog_xe_preload` reads every record sector, 32 at
+  a 128-byte stride through the `$E000` window, and stashes each 4 KB into
+  the tiers' old slots 10-13 and the spare slot 15 (the slot tables now cover
+  slots 0-15); a record is a 49-byte copy from the bank with interrupts and
+  NMIs off, falling back to the disk if its id is wrong.
+- **Index** in the `$F000` runtime (`ATARI.BNK`): Default had no room; the
+  name pool is the old tier pool at `$D800`. Default ends `$C09E` (98 B
+  free), the runtime `$FF4F` (170 B).
+- **Save version** `$17`, the oldest it loads; the version asserts now state
+  the catalog's chain.
+- **Test:** `catalog_spawn` (800XL, sector reads) and `catalog_spawn_130xe`
+  (the preloaded copy): DL1's population (5-7 on 80x48), species, levels and
+  names against the catalog, one awake win creature on DL50;
+  `xe_cache_verify` expects all 16 slots filled; `balrog_victory` marks a
+  species slot by catalog id. With disk fetches broken on purpose the 130XE
+  scenario still passed and the 800XL's failed: the 130XE reads its copy.
+
+```text
+Problem and success criteria: the Atari draws its monsters from the VMS
+  catalog; testatari8 (both machines) and make test pass.
+State being changed: the tiers' 130XE slots (now the catalog's, plus slot
+  15); cr_* rows 0-31 and the $D800 pool; creature rows 65 -> 40; the Atari
+  save version $16 -> $17; the disk's files.
+Search scope and terms: MONSTER.DB, tier_load_disk, current_tier,
+  xe_slot_*, hal_storage_tier_*, TIER_FILES (platforms/atari8, tools/,
+  playtest/).
+Relevant readers/writers found and known exclusions: atari_match_cache_slot
+  still maps MONSTER.DBn names (none are loaded now); EnterSio/ExitSio keep
+  the SIOV contract; the bot reads 32 dungeon rows (knowledge.CATALOG_PORTS).
+Initialization, reset and persistence points: the 130XE preload at boot, the
+  directory lookup at each title, after a disk prompt; species table in saves.
+Affected production sequence through the changed transition: level generate
+  -> monster_spawn_level -> catalog_population -> pick_creature_type ->
+  cat_fetch -> catalog_fetch_record (130XE copy, sector, chain, prompt).
+Contract decision or selected upstream oracle with source locations: as the
+  C128 record.
+Intentional Moria8 deviations: population scaled by map area; plain names on
+  disk.
+Input/intermediate widths, signedness, carry, range and overflow policy: id
+  9-bit, id / 2 <= 139 fits a byte; sector = start + id / 2, 16-bit; the XE
+  offset (sector % 32) * 128 + (id % 2) * 49 within a 4 KB slot.
+RNG reduction and bias, if applicable: unchanged.
+Affected platforms, overlays, banks and owners: Atari low helpers (< $4000),
+  $F000 runtime, $D800 pool, $E000 window at boot, 130XE slots 10-13, 15.
+Required production-path tests: catalog_spawn, catalog_spawn_130xe,
+  xe_cache_verify, testatari8, make test.
+Known behavior explicitly out of scope: a mid-play read's pause on real
+  drives (MAME times SIO, not a real 1050's seeks).
+Unresolved uncertainty and risk: real-drive timing; the chain walk is slow
+  (up to 139 reads) and only for a non-contiguous copy.
+```
+
 ## Decisions (maintainer, 2026-11-02)
 
 1. **Source of truth:** VMS Moria 4.8, with Umoria 5.7.15 as the cross-check.
@@ -583,3 +778,10 @@ Decisions (maintainer, 2026-11-05):
     written when the disk is built.
 11. **Creature rows:** 40 on every catalog port; raising `MAX_MONSTERS` on
     the large-map ports, never above VMS's 100, is backlog.
+12. **Apple IIe, BBC Master and Atari** (2026-11-05): the Apple IIe in aux RAM
+    with only OVL.TOWN out of the cache (look/recall stays cached; the
+    auxiliary language card is a later experiment); the BBC in sideways RAM;
+    the Atari as disk records in one contiguous `MONSTER.CAT`, its start
+    sector found at boot, each record's id checked, the sector chain walked
+    if not, then the disk prompt; the 130XE preloads every record at boot;
+    the 800XL's mid-play reads may flash the screen; save versions `$17`.

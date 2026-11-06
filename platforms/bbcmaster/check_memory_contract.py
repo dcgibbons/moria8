@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_BUILD_DIR = ROOT / "build" / "bbcmaster"
 STORAGE_SRC = Path(__file__).resolve().parent / "hal" / "storage.s"
 OVERLAY_STORAGE_SRC = Path(__file__).resolve().parent / "overlay_storage.s"
+MAIN_SRC = Path(__file__).resolve().parent / "main.s"
 
 MOS_WORKSPACE_BASE = 0x0800
 MOS_WORKSPACE_END = 0x0DFF
@@ -32,14 +33,15 @@ MOS_ROM_BASE = 0xC000
 MOS_ROM_END = 0xFDFF
 
 AUXDATA_VIRT_BASE = 0x6000
-AUXDATA_VIRT_LIMIT = 0x7700
+AUXDATA_VIRT_LIMIT = 0x7500   # 21 pages: the monster catalog follows in Bank 6
 HUFFDATA_BASE = 0x8000
 HUFFDATA_LIMIT = 0x9000
+CATALOG_BASE = 0x9500         # the monster catalog's fields and names, Bank 6
+CATALOG_LIMIT = 0xBA00        # cached OVL.UI follows
 
 SWR_CACHE_CAPS = {
-    "ovl.ui": 10 * 256,
-    "ovl.town": 22 * 256,
-    "ovl.modal": 13 * 256,
+    "ovl.ui": 6 * 256,
+    "ovl.modal": 12 * 256,
     "ovl.spell": 21 * 256,
     "ovl.items": 21 * 256,
     "ovl.gen": 21 * 256,
@@ -102,13 +104,6 @@ OVERLAY_FILES = (
     "ovl.title",
 )
 
-TIER_FILES = (
-    "monster.db.1",
-    "monster.db.2",
-    "monster.db.3",
-    "monster.db.4",
-)
-
 LABEL_RE = re.compile(r"^\.label\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*\$([0-9A-Fa-f]+)\b")
 
 
@@ -161,7 +156,13 @@ def validate_build(build_dir: Path) -> list[str]:
 
     # Check symbol overlap with protected windows ($0800-$0DFF MOS workspace, $A400-$A7FF tier pool, $C000-$FDFF MOS ROM)
     allowed_tier_pool = {"PLATFORM_TIER_NAME_POOL_BASE", "PLATFORM_TIER_NAME_POOL_END", "tier_name_pool"}
+    # The monster catalog's labels are Sideways Bank 6 addresses
+    # (catalog_fields..beeb_catalog_end, read only with Bank 6 selected):
+    # their numbers fall in Bank 4's windows without sharing their RAM.
+    catalog_span = range(symbols.get("catalog_fields", 0), symbols.get("beeb_catalog_end", 0))
     for sym, addr in symbols.items():
+        if addr in catalog_span and sym.startswith(("cat_", "catn_", "catalog_")):
+            continue
         if MOS_WORKSPACE_BASE <= addr <= MOS_WORKSPACE_END:
             errors.append(
                 f"symbol {sym} at ${addr:04X} overlaps untouched MOS/DFS workspace ($0800-$0DFF)"
@@ -211,6 +212,17 @@ def validate_build(build_dir: Path) -> list[str]:
         if end_excl > AUXDATA_VIRT_LIMIT:
             errors.append(f"beeb.auxdata end ${end_excl:04X} exceeds ${AUXDATA_VIRT_LIMIT:04X}")
 
+    # Check beeb.catalog ($9500-$B9FF in Bank 6)
+    cat_prg = build_dir / "beeb.catalog"
+    if not cat_prg.exists():
+        errors.append("missing beeb.catalog")
+    else:
+        start, end_excl = prg_span(cat_prg)
+        if start != CATALOG_BASE:
+            errors.append(f"beeb.catalog load address ${start:04X} != ${CATALOG_BASE:04X}")
+        if end_excl > CATALOG_LIMIT:
+            errors.append(f"beeb.catalog end ${end_excl:04X} exceeds ${CATALOG_LIMIT:04X}")
+
     # Check beeb.huffdata ($8000-$8FFF in 4 KB ANDY)
     huff_prg = build_dir / "beeb.huffdata"
     if not huff_prg.exists():
@@ -222,12 +234,15 @@ def validate_build(build_dir: Path) -> list[str]:
         if end_excl > HUFFDATA_LIMIT:
             errors.append(f"beeb.huffdata end ${end_excl:04X} exceeds 4 KB ANDY limit (${HUFFDATA_LIMIT:04X})")
 
-    # Check overlays and monster tiers ($A800-$BFFF) and Sideways RAM cache caps
+    # Check overlays ($A800-$BFFF) and Sideways RAM cache caps
     sizes: dict[str, int] = {}
     if aux_prg.exists():
         aux_start, aux_end = prg_span(aux_prg)
         sizes["beeb.auxdata"] = aux_end - aux_start
-    for name in OVERLAY_FILES + TIER_FILES:
+    if cat_prg.exists():
+        cat_start, cat_end = prg_span(cat_prg)
+        sizes["beeb.catalog"] = cat_end - cat_start
+    for name in OVERLAY_FILES:
         p = build_dir / name
         if not p.exists():
             errors.append(f"missing {name}")
@@ -243,7 +258,13 @@ def validate_build(build_dir: Path) -> list[str]:
             errors.append(f"{name} size {size} B exceeds Sideways RAM cache cap {SWR_CACHE_CAPS[name]} B")
 
     # Verify aggregate Sideways RAM bank page sums (<= 64 pages = 16,384 B per 16 KB bank)
-    bank6_items = ("beeb.auxdata", "ovl.town", "ovl.modal")
+    bank5_items = ("ovl.modal",)   # after the 52 pages of map and guard
+    if all(k in sizes for k in bank5_items):
+        bank5_pages = 52 + sum((sizes[k] + 255) // 256 for k in bank5_items)
+        if bank5_pages > 64:
+            errors.append(f"Sideways Bank 5 aggregate pages ({bank5_pages}) exceed 64-page (16 KB) bank limit")
+
+    bank6_items = ("beeb.auxdata", "beeb.catalog", "ovl.ui")
     if all(k in sizes for k in bank6_items):
         bank6_pages = sum((sizes[k] + 255) // 256 for k in bank6_items)
         if bank6_pages > 64:
@@ -278,9 +299,9 @@ def validate_build(build_dir: Path) -> list[str]:
 def loader_disk_names(storage: Path = STORAGE_SRC,
                       overlay_storage: Path = OVERLAY_STORAGE_SRC) -> dict[str, str]:
     """What -> DFS name for every file the game loads from the disk: each
-    monster tier, and each overlay the boot pack does not preload into
-    Sideways RAM (beeb_ovl_cache_bank $00). Names come from the .byte data of
-    the loader's own table in hal/storage.s."""
+    monster tier (none with the monster catalog), and each overlay the boot
+    pack does not preload into Sideways RAM (beeb_ovl_cache_bank $00). Names
+    come from the .byte data of the loader's own table in hal/storage.s."""
     names = {}
     for match in re.finditer(r"^hal_storage_(tier_\d|overlay_\w+?)_name:\s*\n\s*\.byte\s+([^/\n]+)",
                              storage.read_text(), re.M):
@@ -304,7 +325,10 @@ def loader_disk_names(storage: Path = STORAGE_SRC,
             raise ValueError(f"hal/storage.s has no filename for overlay {cls.upper()}")
         if is_cached:
             del names[key]
-    if sum(k.startswith("tier_") for k in names) != 4:
+    if "#define HAL_PLATFORM_MONSTER_CATALOG" in MAIN_SRC.read_text():
+        # The tier filenames compile out (#if !HAL_PLATFORM_MONSTER_CATALOG).
+        names = {k: v for k, v in names.items() if not k.startswith("tier_")}
+    elif sum(k.startswith("tier_") for k in names) != 4:
         raise ValueError("hal/storage.s: expected the four monster tier filenames")
     return names
 
@@ -346,9 +370,10 @@ def run_selftest() -> int:
         write_synthetic_prg(bdir / "beeb.play", PLAY_SLOT_BASE, 0x2000, prefix=b"M8P")
         write_synthetic_prg(bdir / "beeb.auxdata", AUXDATA_VIRT_BASE, 0x1500)
         write_synthetic_prg(bdir / "beeb.huffdata", HUFFDATA_BASE, 0x0D94)
+        write_synthetic_prg(bdir / "beeb.catalog", CATALOG_BASE, 0x2417)
         write_synthetic_prg(bdir / "title.prg", 0x8000, 620)
         write_synthetic_prg(bdir / "boot.prg", 0x1900, 320)
-        for name in OVERLAY_FILES + TIER_FILES:
+        for name in OVERLAY_FILES:
             write_synthetic_prg(bdir / name, OVERLAY_BASE, 0x0400)
 
         errs = validate_build(bdir)
@@ -399,23 +424,23 @@ def run_selftest() -> int:
         sys.path.insert(0, str(ROOT / "tools"))
         from make_ssd import DfsFileSpec, build_ssd_image
         wanted = loader_disk_names()
-        if wanted.get("tier_1") != "MONDB1" or "overlay_town" in wanted:
+        if wanted.get("overlay_town") != "OVLTWN" or any(k.startswith("tier_") for k in wanted):
             print(f"FAIL: loader names misread: {wanted}", file=sys.stderr)
             return 1
         def spec(n: str, d: str = "$", lk: bool = False) -> DfsFileSpec:
             return DfsFileSpec(name=n, directory=d, locked=lk, load_addr=0, exec_addr=0, data=b"x")
 
-        full = build_ssd_image([spec(n, lk=(n == "MONDB1")) for n in wanted.values()])
+        full = build_ssd_image([spec(n, lk=(n == "OVLTWN")) for n in wanted.values()])
         if validate_disk(full, wanted):
             print("FAIL: a disk with every loaded file rejected", file=sys.stderr)
             return 1
-        short = build_ssd_image([spec(n) for n in wanted.values() if n != "MONDB1"])
+        short = build_ssd_image([spec(n) for n in wanted.values() if n != "OVLTWN"])
         if not validate_disk(short, wanted):
-            print("FAIL: failed to catch MONDB1 missing from the disk", file=sys.stderr)
+            print("FAIL: failed to catch OVLTWN missing from the disk", file=sys.stderr)
             return 1
-        elsewhere = build_ssd_image([spec(n, "A" if n == "MONDB1" else "$") for n in wanted.values()])
+        elsewhere = build_ssd_image([spec(n, "A" if n == "OVLTWN" else "$") for n in wanted.values()])
         if not validate_disk(elsewhere, wanted):
-            print("FAIL: failed to catch MONDB1 outside the default directory", file=sys.stderr)
+            print("FAIL: failed to catch OVLTWN outside the default directory", file=sys.stderr)
             return 1
 
     print("BBC Master 128 memory contract self-test: PASS")

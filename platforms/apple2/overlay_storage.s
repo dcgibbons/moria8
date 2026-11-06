@@ -1,11 +1,11 @@
 // overlay_storage.s — Apple IIe overlay aux cache + play-slot loader.
 //
-// 1. Aux overlay cache (docs/APPLE2_MEMORY_POLICY.md aux manifest, v7).
-//    Six hot/runtime-critical classes are preloaded into aux RAM at boot;
+// 1. Aux overlay cache (docs/APPLE2_MEMORY_POLICY.md aux manifest, v8).
+//    Four hot/runtime-critical classes are preloaded into aux RAM at boot;
 //    hal_asset_load_prg_header (storage_mli.s) calls a2_overlay_try_cache
 //    first for overlay-class filenames. Cache hit = AUXMOVE into the $A400
-//    window (~ms). Cold classes (START, DEATH, HELP, STORAGE, TITLE)
-//    always fall through to MLI.
+//    window (~ms). Cold classes (START, TOWN, DEATH, GEN, HELP, CHEST,
+//    STORAGE, TITLE) always fall through to MLI.
 //
 // 2. Play-slot loader ($7C00-$9FFF). All 11 overlay classes fit the window,
 //    so there is no runtime slot swap: a2_require_play loads the play payload
@@ -17,13 +17,13 @@
 #import "cache_layout.s"
 
 // ============================================================
-// Aux cache manifest v7 (page-aligned slots sized to current overlays;
+// Aux cache manifest v8 (page-aligned slots sized to current overlays;
 // the boot loader copies exact byte lengths from the pak header, so a
-// slot only needs the payload rounded up to a page). Six classes
-// are cached; DEATH, HELP, and STORAGE are cold (disk loads on rare
-// flows) because the current overlay set no longer fits the region.
-// Layout: auxdata $3B0C-$59FF, unused slack (varies), overlay cache
-// payloads $5A00-$BFFF.
+// slot only needs the payload rounded up to a page). UI, SPELL, MODAL and
+// ITEMS are cached; TOWN went cold for the monster catalog (2026-11-05),
+// whose fields and names took its room (cache_layout.s).
+// Layout: auxdata $3B0C-$4FFF, catalog fields $5000, overlay cache and the
+// Huffman corpus with the catalog's names $6700-$BFFF.
 // Cache hits read a full $1600-byte window; ITEMS is deliberately last at
 // $AA00 so the final full-window read ends exactly at $C000. Bytes after a
 // payload are irrelevant because no overlay can execute beyond its end.
@@ -34,9 +34,9 @@
 // (index = overlay ID - 1; START=1 .. CHEST=10, STORAGE=11, TITLE=12).
 // $0000 = cold (not cached).
 a2_ovl_cache_lo:
-    .byte $00, <A2_AUX_CACHE_TOWN, $00, $00, $00, <A2_AUX_CACHE_UI, <A2_AUX_CACHE_ITEMS, <A2_AUX_CACHE_SPELL, <A2_AUX_CACHE_MODAL, $00, $00, $00
+    .byte $00, $00, $00, $00, $00, <A2_AUX_CACHE_UI, <A2_AUX_CACHE_ITEMS, <A2_AUX_CACHE_SPELL, <A2_AUX_CACHE_MODAL, $00, $00, $00
 a2_ovl_cache_hi:
-    .byte $00, >A2_AUX_CACHE_TOWN, $00, $00, $00, >A2_AUX_CACHE_UI, >A2_AUX_CACHE_ITEMS, >A2_AUX_CACHE_SPELL, >A2_AUX_CACHE_MODAL, $00, $00, $00
+    .byte $00, $00, $00, $00, $00, >A2_AUX_CACHE_UI, >A2_AUX_CACHE_ITEMS, >A2_AUX_CACHE_SPELL, >A2_AUX_CACHE_MODAL, $00, $00, $00
 
 // ============================================================
 // a2_overlay_try_cache — Aux-cache front end for overlay loads.

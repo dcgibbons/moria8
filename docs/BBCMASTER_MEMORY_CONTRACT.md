@@ -165,32 +165,35 @@ the font, character shadow, and screen bitmap in a single unified address space:
 | Bank | Physical Range | Pages / Size | Virtual / Link Address | Owner & Headroom |
 | ---: | --- | ---: | --- | --- |
 | **Bank 4** (`$04`) | `$8000-$A3FF` | 36p (`9,216` B) | `$8000-$A3FF` | **`BeebPlaySlot` (`BEEB.PLAY`)** — Preloaded at boot; permanently resident in Bank 4 (`~8,500` B used, **`~700` B slack**). |
-| **Bank 4** (`$04`) | `$A400-$A7FF` | 4p (`1,024` B) | `$A400-$A7FF` | **`PLATFORM_TIER_NAME_POOL_BASE`** — Active monster tier name pool (`808` B max used, **`216` B slack**). |
+| **Bank 4** (`$04`) | `$A400-$A7FF` | 4p (`1,024` B) | `$A400-$A7FF` | **`PLATFORM_TIER_NAME_POOL_BASE`** — The monster catalog's 32 species names (32 B each, 2026-11-05). |
 | **Bank 4** (`$04`) | `$A800-$BFFF` | 24p (`6,144` B) | `$A800-$BFFF` | **Active Overlay & Monster Tier Window (`BANKED_DATA_BASE = $A800`, `BANKED_DATA_END = $BFFF`)** — All 12 overlays (`<= 5,337` B) and 4 tiers (`<= 2,062` B) link at `$A800` (**`807` B slack** over largest overlay). |
 | **Bank 5** (`$05`) | `$8000-$B30B` | 52p (`13,068` B) | `$8000-$B30B` | **Live 198×66 Dungeon Map (`MAP_BASE = $8000`, `MAP_END = $B30B`)** — Direct 1:1 addressing inside Bank 5 (`$B30C-$B3FF` = `244` B map guard). |
-| **Bank 5** (`$05`) | `$B400-$BDFF` | 10p (`2,560` B) | Cache Slot | **Cached `OVL.UI`** (`1,387` B used — Character Sheet, Inventory, Equipment; **`1,173` B slack**) + **`$BE00-$BFFF` (`2` pages = `512` B) free Bank 5 slack**. |
-| **Bank 6** (`$06`) | `$8000-$96FF` | 23p (`5,888` B) | `$6000-$76FF` | **`BeebAuxData` (`BEEB.AUX`)** — Preloaded at boot: `hal_ego_suffix_slots` (page-aligned at `$6000`), item-name streams, store inventory/runtime, recall arrays, spell tables/names, `msg_history` (`~5,170` B used, **`718` B free slack**). |
-| **Bank 6** (`$06`) | `$9700-$ACFF` | 22p (`5,632` B) | Cache Slot | **Cached `OVL.TOWN`** (`5,328` B used, **`304` B slack**). |
-| **Bank 6** (`$06`) | `$AD00-$B9FF` | 13p (`3,328` B) | Cache Slot | **Cached `OVL.MODAL`** (`3,072` B used, **`256` B slack**). |
-| **Bank 6** (`$06`) | `$BA00-$BFFF` | 6p (`1,536` B) | free | **Free Bank 6 slack.** `MONSTER.DB1` was cached here until 2026-10-25, when tier 1 gained 30 DL 1-5 creatures (about 2,000 B, past bank 6's free pages): all four monster tiers now load from DFS into the Bank 4 window. |
+| **Bank 5** (`$05`) | `$B400-$BFFF` | 12p (`3,072` B) | Cache Slot | **Cached `OVL.MODAL`** (`2,979` B used, **`93` B slack**; moved from Bank 6 for the monster catalog, 2026-11-05). |
+| **Bank 6** (`$06`) | `$8000-$94FF` | 21p (`5,376` B) | `$6000-$74FF` | **`BeebAuxData` (`BEEB.AUX`)** — Preloaded at boot: `hal_ego_suffix_slots` (page-aligned at `$6000`), item-name streams, store inventory/runtime, recall arrays, spell tables/names, `msg_history` (`4,958` B used, **`418` B free slack**; 23 pages until the monster catalog, 2026-11-05). |
+| **Bank 6** (`$06`) | `$9500-$B9FF` | 37p (`9,472` B) | `$9500-$B916` | **The monster catalog (`BEEB.CATALOG`)** — its fields, then its Huffman names (`9,239` B, **`233` B slack**); read through `mmu_safe_huff_read_ptr0/1`, which select Bank 6 for a pointer at `$9000` and up. Took cached `OVL.TOWN`'s pages (2026-11-05). |
+| **Bank 6** (`$06`) | `$BA00-$BFFF` | 6p (`1,536` B) | Cache Slot | **Cached `OVL.UI`** (`1,342` B used, **`194` B slack**; moved from Bank 5, 2026-11-05). |
 | **Bank 7** (`$07`) | `$8000-$94FF` | 21p (`5,376` B) | Cache Slot | **Cached `OVL.SPELL`** (`5,112` B used, **`264` B slack**). |
 | **Bank 7** (`$07`) | `$9500-$A9FF` | 21p (`5,376` B) | Cache Slot | **Cached `OVL.ITEMS`** (`5,106` B used, **`270` B slack**). |
 | **Bank 7** (`$07`) | `$AA00-$BEFF` | 21p (`5,376` B) | Cache Slot | **Cached `OVL.GEN`** (`5,320` B used, **`56` B slack**; holds `item_spawn_level` since item stacking left the resident image no room) + **`$BF00-$BFFF` (`1` page = `256` B) free Bank 7 slack**. |
 
 * **Disk-Backed Cold Assets (Loaded on Demand via `OSFILE`):**
-  `OVL.START` (`OVLSTA`), `OVL.DEATH` (`OVLDTH`), `OVL.HELP` (`OVLHLP`),
+  `OVL.START` (`OVLSTA`), `OVL.TOWN` (`OVLTWN`, since the monster catalog,
+  2026-11-05), `OVL.DEATH` (`OVLDTH`), `OVL.HELP` (`OVLHLP`),
   `OVL.CHEST` (`OVLCHS`), `OVL.STORAGE` (`OVLSTO`), `OVL.TITLE` (`OVLTTL`),
-  `MONSTER.DB.1..4` (`MONDB1`..`MONDB4`; `MONDB1` was left off the disk from 2026-10-25 to 2026-10-28, so every tier-1 creature was a nameless `?`), and `TITLE` (`TITLE`) load on demand
+  and `TITLE` (`TITLE`) load on demand (the monster tiers `MONDB1`..`MONDB4` left
+  the disk for the catalog, 2026-11-05)
   from the DFS disk into `$A800-$BFFF` (or `MAP_BASE` `$8000` in Bank 5 for
-  `TITLE`), matching the proven Apple IIe partial-cache architecture while
-  leaving **`512`–`880` bytes of free growth slack in every single RAM bank**.
+  `TITLE`), matching the proven Apple IIe partial-cache architecture. Since
+  the monster catalog the banks are tight: Bank 5's MODAL slot has `93` B
+  spare and Bank 6's catalog span `233` B (the table above).
 
 ---
 
 ## 4. Two-Way Banked Data Dispatch & Fast Row Helpers (`< $3000`)
 
 Because `BeebHuffData` is accessed at `$8000-$8D93` in `ANDY` (`ROMSEL = $84`)
-via `mmu_safe_huff_read_ptr0/1`, `mmu_safe_map_read_ptr0/1` and
+via `mmu_safe_huff_read_ptr0/1` (which select Bank 6 instead for a pointer at
+`$9000` and up: the monster catalog's fields and names, 2026-11-05), `mmu_safe_map_read_ptr0/1` and
 `mmu_safe_map_write_ptr0/1` only ever service two banked regions:
 
 1. **Fast Path — Live 198×66 Map (`zp_ptr_hi >= $80`, tested via `LDA zp_ptr_hi : BPL`):**

@@ -9,7 +9,7 @@ port (`platforms/atari8/`). Enforced at link time by `.assert` guards in
 
 The Atari 8-bit port targets the stock **64 KB Atari 800XL / 65XE** as its
 mandatory baseline and automatically detects **128 KB Atari 130XE** extended
-RAM at boot to cache overlays, monster tiers, and title artwork.
+RAM at boot to cache overlays, the monster catalog's records, and title artwork.
 
 Memory visibility is controlled through PIA `PORTB` (`$D301`):
 
@@ -170,13 +170,13 @@ Memory visibility is controlled through PIA `PORTB` (`$D301`):
 | `$1FA2-$C0FF` | 41,310 B | Resident `Default` Segment (`program_end <= $C100`) | Core gameplay, UI, item catalog, town roster, and shared save engine (`46,336` B total span in `$0C00-$C0FF`, `~365` sectors on disk). Ends strictly at or below `$C100`. |
 | `$C100-$CFFF` | 3,840 B | `MAP_BASE` (`$C100-$CFFF`) | Live 80×48 dungeon map (`15` pages = `3,840` B = `$0F00` B), ending immediately below the `$D000` hardware I/O window. `CREATURE_BASE` (`$C120-$C1FF`) aliases map scratch during save/game-over, matching C64/Plus/4. `TITLE.DAT` links at `.pc = $C100` (`platforms/atari8/title_data.s`) and copies `3` pages (`768` B) into `$C100-$C3FF`. No executable code is ever linked into `$C100-$CFFF`. |
 | `$D000-$D7FF` | 2,048 B | **Hardware I/O Hole (Forbidden to Code/Data)** | `GTIA` (`$D000-$D0FF`), `POKEY` (`$D200-$D2FF`), `PIA` (`$D300-$D3FF`), `ANTIC` (`$D400-$D4FF`). |
-| `$D800-$DBFF` | 1,024 B | `PLATFORM_TIER_NAME_POOL_BASE` | Active monster tier name pool in RAM under OS ROM (`808` B max tier-4 name blob; `216` B margin). |
+| `$D800-$DBFF` | 1,024 B | `PLATFORM_TIER_NAME_POOL_BASE` | The level's monster catalog names, 32 B per species slot (asserted in `core/monster_catalog.s`), in RAM under OS ROM. |
 | `$DC00-$DCFF` | 256 B | `FLOOR_ITEM_BASE` | Active level floor-item table (`256` B). |
 | `$DD00-$DD3F` | 64 B | `PLATFORM_HD_DECODE_BUF_BASE` | Huffman decode buffer (`HD_DECODE_BUF_SIZE = 64` B in `core/huffman.s`). |
 | `$DD40-$DDCD` | 142 B | `zp_save_buf` | Saved game ZP (`$02-$8F`) accessed only while `PORTB = $FE`. |
 | `$DDCE-$DF0D` | 320 B | `msg_history` (`HighResident` `virtual` BSS) | 8-message × 40-byte ring buffer (`core/ui_messages.s`, cleared at startup by `msg_log_clear`), funding resident headroom below `$C100`. |
 | `$DF0E-$DFFF` | 242 B | `HighResident` Uninitialized BSS Spare | Uninitialized RAM under OS ROM (`PORTB = $FE`; `virtual` segment, never emitted to `MORIA8.RES`). |
-| `$E000-$EFFF` | 4,096 B | `BANKED_DATA_BASE` (Overlay & Tier Window) | Shared 4 KB execution/staging window for the 10 code overlays (`OVL.STA`..`OVL.GEN`) and 4 monster tiers (`MONSTER.DB1..4`), identical to C64 and Plus/4. |
+| `$E000-$EFFF` | 4,096 B | `BANKED_DATA_BASE` (Overlay & Tier Window) | Shared 4 KB execution/staging window for the 10 code overlays (`OVL.STA`..`OVL.GEN`) and, at 130XE boot only, the staging of `MONSTER.CAT`'s record sectors (`a8_catalog_xe_preload`), identical to C64 and Plus/4. |
 | `$F000-$FFF9` | 4,090 B | `RuntimeBanked` Segment | Load-once banked runtime (`generation_busy.s`, `run_initialize_impl`, `store_data.s`, `runtime_ui_strings.s`, `special_rooms.s`, `ego_items.s`, `ui_home.s`, `item_desc_banked.s`, `ui_help_clear.s`, `stat_display.s`, `disk_prompt_save`/`disk_prompt_game`/`disk_prompt_game_required`, and `player_magic_learn_op.s`; `ui_recall.s` lives in `DeathOverlay`, and `disk_setup_atari.s` + `save_slot_menu.s` live in `HelpOverlay` `OVL.HLP`). Any storage call from `RuntimeBanked` vectors through `< $4000` helpers in `Default` so `PORTB = $FE` is restored before `RTS`. |
 | `$FFFA-$FFFF` | 6 B | Hardware CPU Vectors (`NMI`, `RESET`, `IRQ`) | Installed in RAM under OS ROM (`$FFFA` -> `atari_nmi_handler`, `$FFFC` -> `exit_trampoline` in `< $4000`, `$FFFE` -> `atari_irq_handler`) for execution while `PORTB = $FE`. |
 
@@ -193,22 +193,22 @@ slots/bank = 64 KB`) are assigned as follows and tracked via a 16-byte
 
 | Slot ID | 130XE Bank (`0..3`) | `PORTB` Value | Window Address | Cached Payload | Copy Span | Boot Policy |
 | ---: | ---: | --- | --- | --- | ---: | --- |
-| `0` | Bank 0 | `$E2` | `$4000-$4FFF` | `OVL.STA` (`OVL_STARTUP = 1`) | 16 pages (`4,096` B) to `$E000` | Preloaded at boot (`5/14`) |
-| `1` | Bank 0 | `$E2` | `$5000-$5FFF` | `OVL.TWN` (`OVL_TOWN = 2`) | 16 pages (`4,096` B) to `$E000` | Preloaded at boot (`6/14`) |
-| `2` | Bank 0 | `$E2` | `$6000-$6FFF` | `OVL.DTH` (`OVL_DEATH = 3`) | 16 pages (`4,096` B) to `$E000` | Preloaded at boot (`7/14`) |
-| `3` | Bank 0 | `$E2` | `$7000-$7FFF` | `OVL.GEN` (`OVL_DUNGEON_GEN = 4`) | 16 pages (`4,096` B) to `$E000` | Preloaded at boot (`8/14`) |
-| `4` | Bank 1 | `$E6` | `$4000-$4FFF` | `OVL.HLP` (`OVL_HELP = 5`) | 16 pages (`4,096` B) to `$E000` | Preloaded at boot (`9/14`) |
-| `5` | Bank 1 | `$E6` | `$5000-$5FFF` | `OVL.UI` (`OVL_UI = 6`) | 16 pages (`4,096` B) to `$E000` | Preloaded at boot (`10/14`) |
-| `6` | Bank 1 | `$E6` | `$6000-$6FFF` | `OVL.ITM` (`OVL_ITEMS = 7`) | 16 pages (`4,096` B) to `$E000` | Preloaded at boot (`11/14`) |
-| `7` | Bank 1 | `$E6` | `$7000-$7FFF` | `OVL.SPL` (`OVL_SPELL = 8`) | 16 pages (`4,096` B) to `$E000` | Preloaded at boot (`12/14`) |
-| `8` | Bank 2 | `$EA` | `$4000-$4FFF` | `OVL.MDL` (`OVL_MODAL_MISC = 9`) | 16 pages (`4,096` B) to `$E000` | Preloaded at boot (`13/14`) |
-| `9` | Bank 2 | `$EA` | `$5000-$5FFF` | `OVL.CHS` (`OVL_CHEST = 10`) | 16 pages (`4,096` B) to `$E000` | Preloaded at boot (`14/14`) |
-| `10` | Bank 2 | `$EA` | `$6000-$6FFF` | `MONSTER.DB1` (Tier 1) | 16 pages (`4,096` B) to `$E000` | Preloaded at boot (`1/14`) |
-| `11` | Bank 2 | `$EA` | `$7000-$7FFF` | `MONSTER.DB2` (Tier 2) | 16 pages (`4,096` B) to `$E000` | Preloaded at boot (`2/14`) |
-| `12` | Bank 3 | `$EE` | `$4000-$4FFF` | `MONSTER.DB3` (Tier 3) | 16 pages (`4,096` B) to `$E000` | Preloaded at boot (`3/14`) |
-| `13` | Bank 3 | `$EE` | `$5000-$5FFF` | `MONSTER.DB4` (Tier 4) | 16 pages (`4,096` B) to `$E000` | Preloaded at boot (`4/14`) |
+| `0` | Bank 0 | `$E2` | `$4000-$4FFF` | `OVL.STA` (`OVL_STARTUP = 1`) | 16 pages (`4,096` B) to `$E000` | Preloaded at boot (`6/15`) |
+| `1` | Bank 0 | `$E2` | `$5000-$5FFF` | `OVL.TWN` (`OVL_TOWN = 2`) | 16 pages (`4,096` B) to `$E000` | Preloaded at boot (`7/15`) |
+| `2` | Bank 0 | `$E2` | `$6000-$6FFF` | `OVL.DTH` (`OVL_DEATH = 3`) | 16 pages (`4,096` B) to `$E000` | Preloaded at boot (`8/15`) |
+| `3` | Bank 0 | `$E2` | `$7000-$7FFF` | `OVL.GEN` (`OVL_DUNGEON_GEN = 4`) | 16 pages (`4,096` B) to `$E000` | Preloaded at boot (`9/15`) |
+| `4` | Bank 1 | `$E6` | `$4000-$4FFF` | `OVL.HLP` (`OVL_HELP = 5`) | 16 pages (`4,096` B) to `$E000` | Preloaded at boot (`10/15`) |
+| `5` | Bank 1 | `$E6` | `$5000-$5FFF` | `OVL.UI` (`OVL_UI = 6`) | 16 pages (`4,096` B) to `$E000` | Preloaded at boot (`11/15`) |
+| `6` | Bank 1 | `$E6` | `$6000-$6FFF` | `OVL.ITM` (`OVL_ITEMS = 7`) | 16 pages (`4,096` B) to `$E000` | Preloaded at boot (`12/15`) |
+| `7` | Bank 1 | `$E6` | `$7000-$7FFF` | `OVL.SPL` (`OVL_SPELL = 8`) | 16 pages (`4,096` B) to `$E000` | Preloaded at boot (`13/15`) |
+| `8` | Bank 2 | `$EA` | `$4000-$4FFF` | `OVL.MDL` (`OVL_MODAL_MISC = 9`) | 16 pages (`4,096` B) to `$E000` | Preloaded at boot (`14/15`) |
+| `9` | Bank 2 | `$EA` | `$5000-$5FFF` | `OVL.CHS` (`OVL_CHEST = 10`) | 16 pages (`4,096` B) to `$E000` | Preloaded at boot (`15/15`) |
+| `10` | Bank 2 | `$EA` | `$6000-$6FFF` | `MONSTER.CAT` sectors 0-31 (catalog slot 0) | 32 x 128-byte sectors, 49-byte record copies to `cat_record` | Preloaded at boot (`1/15`) |
+| `11` | Bank 2 | `$EA` | `$7000-$7FFF` | `MONSTER.CAT` sectors 32-63 (catalog slot 1) | 32 x 128-byte sectors, 49-byte record copies to `cat_record` | Preloaded at boot (`2/15`) |
+| `12` | Bank 3 | `$EE` | `$4000-$4FFF` | `MONSTER.CAT` sectors 64-95 (catalog slot 2) | 32 x 128-byte sectors, 49-byte record copies to `cat_record` | Preloaded at boot (`3/15`) |
+| `13` | Bank 3 | `$EE` | `$5000-$5FFF` | `MONSTER.CAT` sectors 96-127 (catalog slot 3) | 32 x 128-byte sectors, 49-byte record copies to `cat_record` | Preloaded at boot (`4/15`) |
 | `14` | Bank 3 | `$EE` | `$6000-$6FFF` | `TITLE.DAT` (Title Artwork) | **3 pages (`768` B) to `MAP_BASE` (`$C100`)** | Loaded & cached on title draw |
-| `15` | Bank 3 | `$EE` | `$7000-$7FFF` | Unused / Free (`4 KB` spare) | — | Unused |
+| `15` | Bank 3 | `$EE` | `$7000-$7FFF` | `MONSTER.CAT` sectors 128-139 (catalog slot 4) | 12 x 128-byte sectors, 49-byte record copies to `cat_record` | Preloaded at boot (`5/15`) |
 
 ### 130XE Cache Execution Rules
 
@@ -246,7 +246,7 @@ slots/bank = 64 KB`) are assigned as follows and tracked via a 16-byte
    * `banked_code_end <= $FFFA` (below hardware vectors `$FFFA-$FFFF`)
    * `ATARI_DISPLAY_LIST` does not cross a 1 KB boundary (`((>ATARI_DISPLAY_LIST) & $fc) == ((>ATARI_DISPLAY_LIST_END) & $fc)`)
    * `ATARI_CHARSET_BASE` is 1 KB aligned (`(<ATARI_CHARSET_BASE) == 0 && ((>ATARI_CHARSET_BASE) & 3) == 0`)
-   * Serialized save size (`ATARI_SAVE_SERIALIZED_MAX` = `6,616` B, a conservative bound; the stream is `6,412` B with the 33-slot inventory, `8 x 33 = 264` B) fits within `ATARI_SAVE_SLOT_SECTORS * 125` (`56 * 125 = 7,000` B); save version `$16`, oldest loadable `$15` (31-slot inventory)
+   * Serialized save size (`ATARI_SAVE_SERIALIZED_MAX` = `6,616` B, a conservative bound; the stream is `6,412` B with the 33-slot inventory, `8 x 33 = 264` B) fits within `ATARI_SAVE_SLOT_SECTORS * 125` (`56 * 125 = 7,000` B); save version `$17` (the monster catalog's species table), oldest loadable `$17`
 2. **Static Contract Checker (`platforms/atari8/check_memory_contract.py`):**
    * `make testatari8-memory-contract` and `make testatari8-memory-contract-selftest`
    * Verifies symbol extents from `build/atari8/main.sym`, rejects any symbol or segment overlap with `$0200-$031A` (OS Page 2 / DCB), `$C100-$CFFF` (`MAP_BASE`), or `$D000-$D7FF` (Hardware I/O), verifies `< $4000` residency of all banking/SIO/130XE/interrupt/exit/font helpers, and checks all PRG payload spans.

@@ -29,33 +29,36 @@ xe_slot_populated:
     .fill 16, 0
 
 // ============================================================
-// 130XE Slot Geometry Tables (Slots 0..14)
+// 130XE Slot Geometry Tables (Slots 0..15)
 // ============================================================
 // Slots 0..9:  OVL.STA, OVL.TWN, OVL.DTH, OVL.GEN, OVL.HLP,
 //              OVL.UI,  OVL.ITM, OVL.SPL, OVL.MDL, OVL.CHS  (16 pages @ $E000)
-// Slots 10..13: MONSTER.DB1..MONSTER.DB4                     (16 pages @ $E000)
+// Slots 10..13, 15: the monster catalog's record sectors, staged at $E000
+//              (monster_catalog_a8.s; the tiers' MONSTER.DB1..4 until 2026-11-05)
 // Slot 14:     TITLE.DAT                                     (3 pages @ $C100)
 xe_slot_portb:
     .byte PORTB_XE_BANK0, PORTB_XE_BANK0, PORTB_XE_BANK0, PORTB_XE_BANK0
     .byte PORTB_XE_BANK1, PORTB_XE_BANK1, PORTB_XE_BANK1, PORTB_XE_BANK1
     .byte PORTB_XE_BANK2, PORTB_XE_BANK2, PORTB_XE_BANK2, PORTB_XE_BANK2
-    .byte PORTB_XE_BANK3, PORTB_XE_BANK3, PORTB_XE_BANK3
+    .byte PORTB_XE_BANK3, PORTB_XE_BANK3, PORTB_XE_BANK3, PORTB_XE_BANK3
 
 xe_slot_win_hi:
     .byte $40, $50, $60, $70
     .byte $40, $50, $60, $70
     .byte $40, $50, $60, $70
-    .byte $40, $50, $60
+    .byte $40, $50, $60, $70
 
 xe_slot_ram_hi:
     .byte $e0, $e0, $e0, $e0, $e0, $e0, $e0, $e0, $e0, $e0
     .byte $e0, $e0, $e0, $e0
     .byte >MAP_BASE
+    .byte $e0
 
 xe_slot_pages:
     .byte 16, 16, 16, 16, 16, 16, 16, 16, 16, 16
     .byte 16, 16, 16, 16
     .byte 3
+    .byte 16
 
 // 3-char overlay extension lookup table for slots 0..9
 atari_ovl_ext_c0:
@@ -248,9 +251,9 @@ xe_detect:
 xe_bank_table:
     .byte PORTB_XE_BANK0, PORTB_XE_BANK1, PORTB_XE_BANK2, PORTB_XE_BANK3
 
-// xe_cache_stash — Copy slot X (0..14) from Main/High RAM to 130XE bank
+// xe_cache_stash — Copy slot X (0..15) from Main/High RAM to 130XE bank
 xe_cache_stash:
-    cpx #15
+    cpx #16
     bcs !done+
     php
     sei
@@ -288,7 +291,7 @@ xe_cache_stash:
 !done:
     rts
 
-// xe_cache_fetch — Copy slot X (0..14) from 130XE bank to Main/High RAM
+// xe_cache_fetch — Copy slot X (0..15) from 130XE bank to Main/High RAM
 xe_cache_fetch:
     php
     sei
@@ -617,3 +620,5 @@ hal_asset_load:
 hal_asset_close_channel:
     clc
     rts
+
+.assert "130XE slot tables cover slots 0..15", xe_slot_win_hi - xe_slot_portb == 16 && xe_slot_ram_hi - xe_slot_win_hi == 16 && xe_slot_pages - xe_slot_ram_hi == 16, true

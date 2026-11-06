@@ -18,6 +18,22 @@
 .const hal_storage_disk_setup_marker_write_status_required = 0
 .const hal_storage_disk_setup_done_value = 2
 .const hal_storage_disk_setup_commit_sets_ui_ok = 0
+#if HAL_PLATFORM_MONSTER_CATALOG
+// $17: the monster catalog: the species table in the door-state block and 40
+// creature rows (a 160-byte recall block). Older saves name tier creatures,
+// so $17 is the oldest the loader takes and the legacy feature versions are
+// pinned at it (the 31-slot inventory version just below it, so its loader
+// compiles out).
+.const hal_storage_save_v1_version = $17
+.const hal_storage_save_known96_version = $17
+.const hal_storage_save_inv31_version = $16
+.const hal_storage_save_known_bits_version = $17
+.const hal_storage_save_baked_stats_version = $17
+.const hal_storage_save_known160_version = $17
+.const hal_storage_save_door_state_version = $17
+.const hal_storage_save_inv33_version = $17
+.const hal_storage_save_version = $17
+#else
 .const hal_storage_save_v1_version = $0f
 .const hal_storage_save_known96_version = $10
 .const hal_storage_save_inv31_version = $11
@@ -27,6 +43,7 @@
 .const hal_storage_save_door_state_version = $15
 .const hal_storage_save_inv33_version = $16
 .const hal_storage_save_version = $16
+#endif
 
 // Disk mode values matching Atari/Commodore convention:
 //   1 = one-drive swap mode (:0 shared with Program Disk)

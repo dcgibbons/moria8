@@ -10,14 +10,13 @@
 //   1: BEEB.PLAY     -> Sideways Bank 4 ($04) $8000
 //   2: BEEB.HUFFDATA -> Private RAM ANDY ($84) $8000
 //   3: BEEB.AUXDATA  -> Sideways Bank 6 ($06) $8000
-//   4: OVL.UI        -> Sideways Bank 5 ($05) $B400
-//   5: OVL.TOWN      -> Sideways Bank 6 ($06) $9700
-//   6: OVL.MODAL     -> Sideways Bank 6 ($06) $AD00
+//   4: OVL.UI        -> Sideways Bank 6 ($06) $BA00
+//   5: BEEB.CATALOG  -> Sideways Bank 6 ($06) $9500 (the monster catalog)
+//   6: OVL.MODAL     -> Sideways Bank 5 ($05) $B400
 //   7: OVL.SPELL     -> Sideways Bank 7 ($07) $8000
 //   8: OVL.ITEMS     -> Sideways Bank 7 ($07) $9500
 //   9: OVL.GEN       -> Sideways Bank 7 ($07) $AA00
-// MONSTER.DB1 is no longer cached: tier 1 grew past bank 6's free pages
-// (30 creatures added, 2026-10-25) and loads from DFS like tiers 2-4.
+// OVL.TOWN loads from DFS: the monster catalog took its pages (2026-11-05).
 
 .cpu _65c02
 .pc = $1900 "Boot"
@@ -296,9 +295,9 @@ pak_name:
 //   1: BEEB.PLAY     ($04, $8000)
 //   2: BEEB.HUFFDATA ($84, $8000)
 //   3: BEEB.AUXDATA  ($06, $8000)
-//   4: OVL.UI        ($05, $B400)
-//   5: OVL.TOWN      ($06, $9700)
-//   6: OVL.MODAL     ($06, $AD00)
+//   4: OVL.UI        ($06, $BA00)
+//   5: BEEB.CATALOG  ($06, $9500)
+//   6: OVL.MODAL     ($05, $B400)
 //   8: OVL.SPELL     ($07, $8000)
 //   9: OVL.ITEMS     ($07, $9500)
 //  10: OVL.GEN       ($07, $AA00)
@@ -308,7 +307,7 @@ file_bank_table:
     .byte $84
     .byte $06
     .byte BEEB_SWR_BANK_UI
-    .byte BEEB_SWR_BANK_TOWN
+    .byte BEEB_CATALOG_BANK
     .byte BEEB_SWR_BANK_MODAL
     .byte BEEB_SWR_BANK_SPELL
     .byte BEEB_SWR_BANK_ITEMS
@@ -320,7 +319,7 @@ file_hi_table:
     .byte $80
     .byte $80
     .byte >BEEB_SWR_ADDR_UI
-    .byte >BEEB_SWR_ADDR_TOWN
+    .byte >BEEB_CATALOG_ADDR
     .byte >BEEB_SWR_ADDR_MODAL
     .byte >BEEB_SWR_ADDR_SPELL
     .byte >BEEB_SWR_ADDR_ITEMS

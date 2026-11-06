@@ -25,6 +25,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools"))
+import catalog_lore  # noqa: E402  (the generated monster catalog's data)
+sys.path.insert(0, str(ROOT / "tools"))
 from make_ssd import build_blank_ssd  # noqa: E402
 
 SSD_IMAGE = ROOT / "build" / "moria8-bbcmaster.ssd"
@@ -75,6 +77,7 @@ SCENARIOS = (
     "save_load",
     "disk_setup",
     "acid_armour",
+    "catalog_spawn",
 )
 
 
@@ -108,6 +111,8 @@ def build_lua_script(scenario: str, syms: dict[str, int]) -> str:
     inv_qty = syms.get("inv_qty", 0x2521)
     monster_table = syms.get("monster_table", 0x2600)
     cr_level = syms.get("cr_level", 0x2700)
+    cat_ids = "\n".join(f"local {name.upper()}_ADDR = 0x{syms.get(name, 0):04X}" for name in (
+        "cat_slot_id_lo", "cat_slot_id_hi", "cr_name_lo", "cr_name_hi"))
     save_device = syms.get("save_device", 0x0E20)
     disk_setup_done = syms.get("disk_setup_done", 0x0E21)
     disk_status = syms.get("disk_status", 0x1D6E)
@@ -152,6 +157,9 @@ local MAP_COLS = {MAP_COLS}
 local MAP_ROWS = {MAP_ROWS}
 local MAP_BANK = 0x{MAP_SWR_BANK:02X}
 {acid_syms}
+{cat_ids}
+local BALROG_ID = {catalog_lore.const("CATALOG_BALROG_ID")}
+local IGGY_ID = {catalog_lore.const("CATALOG_IGGY_ID")}
 
 local function wait_frames(n)
     for _ = 1, n do emu.wait(1/60) end
@@ -461,9 +469,16 @@ function run()
     local dl1 = descend_to_dl1()
     assert_line("dlvl_1_reached", dl1 and prog:read_u8(DLVL_ADDR) == 1)
     assert_line("not_in_town", not in_town())
-    -- DL1's creatures come from tier 1, loaded from MONDB1 (it was missing
-    -- from the disk and every creature was named "?").
-    assert_line("tier_1_loaded", prog:read_u8(CURRENT_TIER_ADDR) == 1)
+    -- DL1's creatures come from the monster catalog (Bank 6): the first
+    -- live monster's species slot holds a catalog id (2026-11-05; the tier
+    -- era checked MONDB1 had loaded, after a disk without it named every
+    -- creature "?").
+    local species = false
+    for i = 0, 31 do
+        local t = prog:read_u8(MONSTER_TABLE_ADDR + i * 12 + 2)
+        if t < 32 then species = prog:read_u8(CAT_SLOT_ID_HI_ADDR + t) ~= 0xFF break end
+    end
+    assert_line("catalog_species_loaded", species)
     -- Hurt, Ctrl+R auto-rests for many turns: the held-key probe's flags
     -- once cancelled it at once (M6 playtest, input_run_key_held).
     prog:write_u8(PLAYER_HP_ADDR, 1)
@@ -715,13 +730,14 @@ function run()
                 end
                 prog:write_u8(base + 0, cx)
                 prog:write_u8(base + 1, cy)
-                prog:write_u8(base + 2, 56) -- CREATURE_BALROG
+                prog:write_u8(base + 2, 0)  -- species slot 0, made the Balrog's:
+                prog:write_u8(CAT_SLOT_ID_LO_ADDR, BALROG_ID & 0xFF)
+                prog:write_u8(CAT_SLOT_ID_HI_ADDR, BALROG_ID >> 8)
                 prog:write_u8(base + 3, 1)  -- 1 HP
                 prog:write_u8(base + 4, 0)
                 prog:write_u8(base + 8, 0xFF)
                 prog:write_u8(base + 10, 0) -- MX_FLEE_LO = 0
                 prog:write_u8(base + 11, 0) -- MX_FLEE_HI = 0
-                prog:write_u8(CR_LEVEL_ADDR + 56, 100)
                 prog:write_u8(PLAYER_DATA_ADDR + 40, 127)
                 write_map_u8(cx, cy, read_map_u8(cx, cy) | 0x01)
                 atk_key = k
@@ -887,6 +903,97 @@ function run()
     manager.machine:exit()
 end
 """
+    elif scenario == "catalog_spawn":
+        # The monster catalog (2026-11-05): DL1 holds VMS's population (198x66,
+        # no area scale), every live species was fetched from Bank 6 (its level
+        # and its name in the Bank 4 pool match the catalog's), and from DL50 one
+        # awake Evil Iggy or Balrog joins the level (VMS place_win_monster).
+        count = catalog_lore.const("CATALOG_COUNT")
+        levels = catalog_lore.field("cat_cr_level")
+        names = [catalog_lore.name(cid) + [0] for cid in range(count)]
+        body = """
+local LEVELS = {CAT_LEVELS}
+local NAMES = {CAT_NAMES}
+local function slot_id(t)
+    return prog:read_u8(CAT_SLOT_ID_LO_ADDR + t) + prog:read_u8(CAT_SLOT_ID_HI_ADDR + t) * 256
+end
+function run()
+    local ok = start_new_game("A")
+    assert_line("chargen_town_ready", ok)
+    assert_line("dlvl_1_reached", descend_to_dl1())
+    local mt = MONSTER_TABLE_ADDR
+    local count, types = 0, {}
+    for i = 0, 31 do
+        local t = prog:read_u8(mt + i * 12 + 2)
+        if t ~= 0xFF then count = count + 1 types[t] = true end
+    end
+    print("DIAG DL1 monsters: " .. count)
+    assert_line("cat_population", count >= 15)
+    local loaded, fields, names, low = true, true, true, false
+    for t, _ in pairs(types) do
+        if t >= 32 or prog:read_u8(CAT_SLOT_ID_HI_ADDR + t) == 0xFF then
+            loaded = false
+        else
+            local cid = slot_id(t)
+            if LEVELS[cid + 1] < 8 then low = true end
+            if prog:read_u8(CR_LEVEL_ADDR + t) ~= LEVELS[cid + 1] then
+                fields = false
+                print("DIAG slot " .. t .. " id " .. cid .. " level " .. prog:read_u8(CR_LEVEL_ADDR + t))
+            end
+            local ptr = prog:read_u8(CR_NAME_LO_ADDR + t) + prog:read_u8(CR_NAME_HI_ADDR + t) * 256
+            local want = NAMES[cid + 1]
+            for k = 1, #want do
+                if prog:read_u8(ptr + k - 1) ~= want[k] then
+                    names = false
+                    print("DIAG slot " .. t .. " id " .. cid .. " name byte " .. k)
+                    break
+                end
+            end
+        end
+    end
+    assert_line("cat_slots_loaded", loaded)
+    assert_line("cat_fields", fields)
+    assert_line("cat_names", names)
+    assert_line("cat_low_levels", low)
+    assert_line("wizard_open", wizard_menu_open())
+    assert_line("wizard_dlvl_prompt", press_until("DLVL", 0x4C))
+    send_key(0x35) -- '5'
+    send_key(0x30) -- '0'
+    send_key(0x0D)
+    -- Settled: DL50, generation not busy and its screen gone, three checks
+    -- in a row (the level number changes before generation starts).
+    local settled = 0
+    for _ = 1, 200 do
+        wait_frames(10)
+        drain_more(2)
+        if prog:read_u8(DLVL_ADDR) == 50 and prog:read_u8(BUSY_ADDR) == 0 and not screen_has("GENERATING") then
+            settled = settled + 1
+            if settled >= 3 then break end
+        else
+            settled = 0
+        end
+    end
+    assert_line("cat_dl50", prog:read_u8(DLVL_ADDR) == 50)
+    local winners, awake, seen = 0, false, ""
+    for i = 0, 31 do
+        local b = mt + i * 12
+        local t = prog:read_u8(b + 2)
+        if t < 32 then
+            local cid = slot_id(t)
+            seen = seen .. " " .. cid
+            if cid == IGGY_ID or cid == BALROG_ID then
+                winners = winners + 1
+                awake = (prog:read_u8(b + 5) & 0x01) == 1 and prog:read_u8(b + 7) == 0
+            end
+        end
+    end
+    print("DIAG DL50 win creatures: " .. winners .. " ids:" .. seen)
+    assert_line("cat_win_creature", winners == 1)
+    assert_line("cat_win_awake", awake)
+    manager.machine:exit()
+end
+""".replace("{CAT_LEVELS}", "{" + ",".join(map(str, levels)) + "}").replace(
+            "{CAT_NAMES}", "{" + ",".join("{" + ",".join(map(str, n)) + "}" for n in names) + "}")
     else:
         raise ValueError(f"Unknown scenario: {scenario}")
 
@@ -1003,7 +1110,7 @@ def run_scenario(
 
 def selftest() -> int:
     assert HOST_TIMEOUT_SECONDS <= 30, "AGENTS.md Rule 8 requires timeout <= 30s"
-    assert len(SCENARIOS) == 16, f"Expected 16 bbcm scenarios, got {len(SCENARIOS)}"
+    assert len(SCENARIOS) == 17, f"Expected 17 bbcm scenarios, got {len(SCENARIOS)}"
     syms = parse_symbols(SYM_PATH)
     if syms:
         assert syms.get("zp_player_x") == 0x002B, f"zp_player_x != $002B: {syms.get('zp_player_x')}"

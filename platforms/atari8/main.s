@@ -7,6 +7,10 @@
 .encoding "screencode_mixed"
 
 #define ATARI8
+// The VMS monster catalog as disk records (2026-11-05, monster_catalog_a8.s):
+// MONSTER.CAT read a sector per species, or preloaded on a 130XE.
+#define HAL_PLATFORM_MONSTER_CATALOG
+#define HAL_PLATFORM_CATALOG_RECORDS
 #define ATARI8_PRODUCT_OVERLAY_RUNTIME
 #define PLATFORM_PRODUCT_OVERLAY_RUNTIME
 #define PLATFORM_REQUIRES_MEDIA_PROBE
@@ -184,6 +188,7 @@ tramp_dig_ability:
 #import "input.s"
 #import "storage.s"
 #import "save_stream.s"
+#import "monster_catalog_a8.s"
 
 // ============================================================
 // atari_install_vectors & exit_trampoline (< $4000)
@@ -292,6 +297,7 @@ high_resident_end:
 #undef DISARM_HELPERS_EXTERNAL
 #undef DISARM_COMMAND_EXTERNAL
 #import "../../core/monster.s"
+#import "../../core/monster_catalog.s"
 #import "../../core/tier_manager.s"
 #define ASSET_LOAD_PROMPT_EXTERNAL  // in RuntimeBanked below: Default is full
 #import "../commodore/common/overlay.s"
@@ -486,17 +492,8 @@ init_xe_preload:
     lda #0
     sta xe_loading_count
 
-    // Preload all 4 monster tiers (populates 130XE slots 10..13)
-    ldx #1
-!tier_loop:
-    stx current_tier
-    jsr xe_show_progress
-    jsr tier_load_disk
-    ldx current_tier
-    inx
-    cpx #5
-    bcc !tier_loop-
-    jsr tier_invalidate_state
+    // Preload the monster catalog's records (130XE slots 10..13 and 15)
+    jsr a8_catalog_xe_preload
 
     // Preload all 10 phase overlays (populates 130XE slots 0..9;
     // TITLE.DAT populates slot 14 on title draw)
@@ -533,7 +530,7 @@ xe_show_progress:
     jsr screen_put_decimal
     lda #$2f
     jsr hal_screen_put_char
-    lda #14
+    lda #A8_CATALOG_SLOT_COUNT + 10     // The catalog's slots and the 10 overlays
     jsr screen_put_decimal
     lda #<xe_loading_suffix
     sta zp_ptr0

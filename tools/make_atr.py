@@ -173,7 +173,7 @@ def build_release_atr(build_dir: Path, root_dir: Path, out_atr: Path) -> None:
     builder.add_file("LICENSE.TXT", convert_lf_to_atascii((root_dir / "data" / "LICENSE").read_bytes()))
     builder.add_file("SRCOFFER.TXT", convert_lf_to_atascii((root_dir / "data" / "SOURCE-OFFER").read_bytes()))
 
-    # Resident, RuntimeBanked, Overlays, Tiers, and Title Art
+    # Resident, RuntimeBanked, Overlays, Title Art and the monster catalog
     # (Program disk never carries MORIA8.ID or save slots; saves require a
     # separate Save Disk initialized via Disk Setup.)
     asset_files = [
@@ -189,14 +189,13 @@ def build_release_atr(build_dir: Path, root_dir: Path, out_atr: Path) -> None:
         ("OVL.SPL", build_dir / "OVL.SPL"),
         ("OVL.CHS", build_dir / "OVL.CHS"),
         ("OVL.GEN", build_dir / "OVL.GEN"),
-        ("MONSTER.DB1", build_dir / "MONSTER.DB1"),
-        ("MONSTER.DB2", build_dir / "MONSTER.DB2"),
-        ("MONSTER.DB3", build_dir / "MONSTER.DB3"),
-        ("MONSTER.DB4", build_dir / "MONSTER.DB4"),
         ("TITLE.DAT", build_dir / "TITLE.DAT"),
     ]
     for dos_name, path in asset_files:
         builder.add_file(dos_name, path.read_bytes())
+    # The monster catalog's records, contiguous: the game reads record n at
+    # the file's first sector + n / 2 (platforms/atari8/monster_catalog_a8.s).
+    builder.add_file("MONSTER.CAT", (build_dir / "MONSTER.CAT").read_bytes(), contiguous=True)
 
     out_atr.parent.mkdir(parents=True, exist_ok=True)
     out_atr.write_bytes(builder.to_bytes())

@@ -21,7 +21,10 @@ TIER_DIR = ROOT / "platforms/commodore/c64/creature_data"
 CATALOG_PORTS = {"cx16": ROOT / "platforms/cx16/hal/lifecycle_policy.s",
                  "c128": ROOT / "platforms/commodore/c128/main.s",
                  "c64": ROOT / "platforms/commodore/c64/main.s",
-                 "plus4": ROOT / "platforms/commodore/plus4/main.s"}
+                 "plus4": ROOT / "platforms/commodore/plus4/main.s",
+                 "apple2": ROOT / "platforms/apple2/main.s",
+                 "bbcmaster": ROOT / "platforms/bbcmaster/main.s",
+                 "atari8": ROOT / "platforms/atari8/main.s"}
 CATALOG_DIR = ROOT / "platforms/shared/catalog"
 CATALOG_FLAG = "#define HAL_PLATFORM_MONSTER_CATALOG"
 _catalog_dir: Path | None = None

@@ -2,11 +2,12 @@
 // overlay_storage.s — BBC Master 128 Sideways RAM overlay/tier cache + play-slot check (< $3000).
 //
 // Authority: docs/BBCMASTER_MEMORY_CONTRACT.md & cache_layout.s.
-// Six hot overlay classes (TOWN, GEN, UI, ITEMS, SPELL, MODAL) are preloaded
+// Five hot overlay classes (GEN, UI, ITEMS, SPELL, MODAL) are preloaded
 // into Sideways RAM Banks 5, 6, and 7 at boot by MORIA8P.
 // Cache hits copy the payload pages via beeb_swr_copy_to_window into Bank 4's
-// $A800-$BFFF window with zero disk I/O. Cold overlays (OVLSTA, OVLDTH, OVLHLP,
-// OVLCHS, OVLSTO, OVLTTL) and MONDB1..4 fall through to DFS.
+// $A800-$BFFF window with zero disk I/O. Cold overlays (OVLSTA, OVLTWN,
+// OVLDTH, OVLHLP, OVLCHS, OVLSTO, OVLTTL) fall through to DFS; OVLTWN went
+// cold for the monster catalog (2026-11-05, cache_layout.s).
 
 #import "hal/storage_policy.s"
 #import "cache_layout.s"
@@ -19,15 +20,15 @@
 // (check_memory_contract.py --disk reads this Order list; keep its form.)
 // ============================================================
 beeb_ovl_cache_bank:
-    .byte $00, BEEB_SWR_BANK_TOWN, $00, BEEB_SWR_BANK_GEN, $00, BEEB_SWR_BANK_UI
+    .byte $00, $00, $00, BEEB_SWR_BANK_GEN, $00, BEEB_SWR_BANK_UI
     .byte BEEB_SWR_BANK_ITEMS, BEEB_SWR_BANK_SPELL, BEEB_SWR_BANK_MODAL, $00, $00, $00
 
 beeb_ovl_cache_hi:
-    .byte $00, >BEEB_SWR_ADDR_TOWN, $00, >BEEB_SWR_ADDR_GEN, $00, >BEEB_SWR_ADDR_UI
+    .byte $00, $00, $00, >BEEB_SWR_ADDR_GEN, $00, >BEEB_SWR_ADDR_UI
     .byte >BEEB_SWR_ADDR_ITEMS, >BEEB_SWR_ADDR_SPELL, >BEEB_SWR_ADDR_MODAL, $00, $00, $00
 
 beeb_ovl_cache_pages:
-    .byte $00, BEEB_SWR_PAGES_TOWN, $00, BEEB_SWR_PAGES_GEN, $00, BEEB_SWR_PAGES_UI
+    .byte $00, $00, $00, BEEB_SWR_PAGES_GEN, $00, BEEB_SWR_PAGES_UI
     .byte BEEB_SWR_PAGES_ITEMS, BEEB_SWR_PAGES_SPELL, BEEB_SWR_PAGES_MODAL, $00, $00, $00
 
 // ============================================================

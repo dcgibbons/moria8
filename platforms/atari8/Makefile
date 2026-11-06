@@ -26,14 +26,13 @@ VERSION_INC      = $(OUT)/version_strings.inc
 MAIN_SRC         = main.s
 BOOT_SRC         = boot.s
 TITLE_SRC        = title_data.s
-TIER_DIR         = creature_data
 
 ATARI8_SOURCES := $(shell find . ../commodore/common ../shared ../../core -type f \( -name '*.s' -o -name '*.inc' \) -print)
 
 ATARI8_MAIN_PRG   = $(OUTATARI8)/MORIA8.RES
 ATARI8_BOOT_PRG   = $(OUTATARI8)/boot.prg
 ATARI8_TITLE_PRG  = $(OUTATARI8)/TITLE.DAT
-ATARI8_TIER_PRGS  = $(OUTATARI8)/MONSTER.DB1 $(OUTATARI8)/MONSTER.DB2 $(OUTATARI8)/MONSTER.DB3 $(OUTATARI8)/MONSTER.DB4
+ATARI8_CATALOG    = $(OUTATARI8)/MONSTER.CAT
 ATARI8_BANK_PRG   = $(OUTATARI8)/ATARI.BNK
 ATARI8_OVL_PRGS   = $(OUTATARI8)/OVL.STA $(OUTATARI8)/OVL.TWN $(OUTATARI8)/OVL.DTH $(OUTATARI8)/OVL.MDL $(OUTATARI8)/OVL.HLP $(OUTATARI8)/OVL.UI $(OUTATARI8)/OVL.ITM $(OUTATARI8)/OVL.SPL $(OUTATARI8)/OVL.CHS $(OUTATARI8)/OVL.GEN
 ATARI8_MAIN_STAMP = $(OUTATARI8)/.main.stamp
@@ -57,7 +56,7 @@ MAME_DIR_FLAGS = -cfg_directory "$(MAME_DIR)/cfg" \
 
 all: build
 
-build: $(ATARI8_MAIN_PRG) $(ATARI8_BANK_PRG) $(ATARI8_OVL_PRGS) $(ATARI8_BOOT_PRG) $(ATARI8_TITLE_PRG) $(ATARI8_TIER_PRGS)
+build: $(ATARI8_MAIN_PRG) $(ATARI8_BANK_PRG) $(ATARI8_OVL_PRGS) $(ATARI8_BOOT_PRG) $(ATARI8_TITLE_PRG) $(ATARI8_CATALOG)
 
 kickass: $(KICKASS_JAR)
 $(KICKASS_JAR):
@@ -88,9 +87,11 @@ $(ATARI8_TITLE_PRG): $(TITLE_SRC) $(VERSION_INC) $(KICKASS_JAR)
 	@mkdir -p $(OUTATARI8)
 	$(KA) $(KA_FLAGS) $(TITLE_SRC) -o $(ATARI8_TITLE_PRG)
 
-$(OUTATARI8)/MONSTER.DB%: $(TIER_DIR)/tier%_prg.s ../commodore/c64/creature_data/tier%.s $(KICKASS_JAR)
+# The monster catalog's records (monster_catalog_a8.s), from the committed
+# catalog sources.
+$(ATARI8_CATALOG): ../../tools/catalog_disk.py monster_catalog_a8.s ../commodore/common/catalog_records.s $(wildcard ../shared/catalog/*.s)
 	@mkdir -p $(OUTATARI8)
-	$(KA) $(KA_FLAGS) $< -o $@
+	python3 ../../tools/catalog_disk.py atari "$@"
 
 disk: $(ATARI8_ATR)
 
