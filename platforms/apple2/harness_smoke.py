@@ -1368,6 +1368,27 @@ assert_line("exchange_swapped",
             and inv_field(31, 0) == 0xFF, "records not exchanged")
 assert_line("exchange_one_turn", prog:read_u8(TURN_LO_ADDR) == (turn0 + 1) % 256,
             "turn " .. prog:read_u8(TURN_LO_ADDR) .. " from " .. turn0)
+-- A Wand of Stinking Cloud aimed at nothing: the Phase 3 router runs it in
+-- the death overlay and must return to the resident caller with no OVL.ITEMS
+-- load first (2026-11-06: the BBC build queue's panic; the Apple IIe shares
+-- the path). The game goes on: a search takes its turn.
+for _ = 1, 4 do if screen_has("-more-") then press(" ") emu.wait(0.3) end end
+inv_seed(0, {42, 1, 5, 0, 0, 0, 0, 0})
+press("A")
+assert_line("aim_prompt", wait_screen("Aim which wand"), "aim prompt missing")
+press("A")
+assert_line("aim_direction", wait_screen("Direction?"), "direction prompt missing")
+press("L")
+emu.wait(0.5)
+if screen_has("-more-") then press(" ") emu.wait(0.5) end
+assert_line("cloud_dissipates", wait_screen("The cloud dissipates."),
+            "no miss message: " .. rowtext(0) .. " / " .. rowtext(1))
+for _ = 1, 4 do if screen_has("-more-") then press(" ") emu.wait(0.3) end end
+local turn1 = prog:read_u8(TURN_LO_ADDR)
+press("S")
+emu.wait(1.0)
+assert_line("play_goes_on", in_town() and prog:read_u8(TURN_LO_ADDR) ~= turn1,
+            "no turn after the aim: " .. rowtext(0))
 dump("after_exchange")
 print("SCENARIO DONE")
 """

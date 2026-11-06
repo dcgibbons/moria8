@@ -586,6 +586,29 @@ function run()
         and inv_field(32, 0) == 5 and inv_field(32, 3) == 1 and inv_field(32, 6) == 2
         and inv_field(31, 0) == 0xFF)
     assert_line("exchange_one_turn", prog:read_u8(TURN_ADDR) == (turn0 + 1) % 256)
+    -- A Wand of Stinking Cloud aimed at nothing: the Phase 3 router runs it
+    -- in the death overlay and must return to the resident caller with no
+    -- OVL.ITEMS load first (2026-11-06: the build queue's panic, the load
+    -- evicting the router before its rts). The game goes on: a search takes
+    -- its turn.
+    drain_more(4)
+    inv_seed(0, {42, 1, 5, 0, 0, 0, 0, 0})
+    send_key(0x41) -- 'A' (aim)
+    assert_line("aim_prompt", wait_screen("Aim which wand", 80))
+    send_key(0x41) -- 'A'
+    assert_line("aim_direction", wait_screen("Direction?", 80))
+    send_key(0x4C) -- 'L'
+    wait_frames(30)
+    drain_more(1)                            -- "Direction? -more-"
+    assert_line("cloud_dissipates", wait_screen("The cloud dissipates.", 80))
+    if not screen_has("The cloud dissipates.") then
+        for r = 0, 3 do print("DIAG row " .. r .. ": " .. rowtext(r)) end
+    end
+    drain_more(4)
+    local turn1 = prog:read_u8(TURN_ADDR)
+    send_key(0x53) -- 'S' (search)
+    wait_frames(60)
+    assert_line("play_goes_on", in_town() and prog:read_u8(TURN_ADDR) ~= turn1)
     manager.machine:exit()
 end
 """

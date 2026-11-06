@@ -321,11 +321,12 @@ irs_re_id_tab:
     jsr ped_s28
     jmp !irs_re_done+
 #endif
+// Do NOT load OVL.ITEMS here on the compact ports: this code runs in the
+// death overlay, in the same window, so the load evicts it before the rts,
+// which then runs items-overlay bytes (2026-11-06: the BBC build queue's
+// panic aiming a Wand of Stinking Cloud). The resident irs_p3_swap_exec
+// that called the router restores OVL.ITEMS.
 !irs_re_done:
-#if HAL_PLATFORM_COMPACT_PLAY_SLOT
-    lda #OVL_ITEMS
-    jsr overlay_load
-#endif
     rts
 #endif
 
