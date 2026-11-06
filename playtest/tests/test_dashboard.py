@@ -267,3 +267,24 @@ class ArchivedSubqueuesTest(unittest.TestCase):
         self.assertEqual([(s["name"], s["archive"], s["reached"]) for s in data["archived"]],
                          [("old", "2026-11-04-subqueues", 1)])
 
+
+
+class DifficultyTest(unittest.TestCase):
+    """The Difficulty charts' counts (§23.6): levels reached per class, the
+    level each game ended at, and each combination's median."""
+
+    def test_counts(self) -> None:
+        def run(combo: str, outcome: str, clvl: int | None) -> dict:
+            return {"character": combo, "outcome": outcome, "clvl": clvl}
+        records = [run("human-mage", "died", 1), run("human-mage", "died", 3), run("elf-mage", "budget", 12),
+                   run("human-warrior", "reached", 25), run("human-warrior", "died", None),
+                   run("human-warrior", "finding", 30)]   # past the goal level: counted at 25
+        d = dashboard.difficulty(records)
+        self.assertEqual((d["levels"], d["runs"]), (25, 6))
+        self.assertEqual(d["classes"]["mage"]["reach"][:4], [3, 2, 2, 1])   # clvl 1, 2, 3, 4
+        self.assertEqual(d["classes"]["warrior"]["reach"][0], 2)            # the clvl-0 game reached none
+        self.assertEqual(d["all"][24], 2)                                   # clvl 25
+        self.assertEqual((d["ends"]["died"][0], d["ends"]["died"][1], d["ends"]["died"][3]), (1, 1, 1))
+        self.assertEqual((d["ends"]["other"][12], d["ends"]["other"][25]), (1, 2))
+        self.assertEqual(d["grid"]["human-warrior"], {"runs": 3, "median": 25, "reached": 1, "reach10": 2})
+        self.assertEqual(d["grid"]["human-mage"]["median"], 3)

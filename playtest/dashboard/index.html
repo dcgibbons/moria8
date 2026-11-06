@@ -153,8 +153,28 @@
   section.collapsed > :not(h2) { display: none; }
   section.collapsed > h2 { margin-bottom: 0; }
   .tabs button { border-radius: 3px 3px 0 0; } .tabs button.on { color: var(--black); background: var(--gold); }
-  #qmain { grid-template-areas: "qgrid qgrid" "balrog balrog" "subs subs" "qwall qwall" "ratings features" "recent qlog"; }
-  @media (max-width: 1100px) { #qmain { grid-template-areas: "qgrid" "balrog" "subs" "qwall" "ratings" "features" "recent" "qlog"; } }
+  #qmain { grid-template-areas: "qgrid qgrid" "balrog balrog" "subs subs" "qwall qwall" "diff diff" "ratings features" "recent qlog"; }
+  @media (max-width: 1100px) { #qmain { grid-template-areas: "qgrid" "balrog" "subs" "qwall" "diff" "ratings" "features" "recent" "qlog"; } }
+  /* Difficulty charts (§23.6): amber and blue are the page's own tokens,
+     validated as a pair on the panel (dataviz validate_palette, dark). */
+  .diff h3 { margin: 0 0 6px; font-size: 11px; color: var(--muted); font-weight: normal; }
+  .smalls { display: grid; grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr)); gap: 10px 14px; margin-bottom: 14px; }
+  .smalls .t { display: flex; justify-content: space-between; font-size: 11px; color: var(--paper); text-transform: capitalize; }
+  .smalls .t span { color: var(--dim); text-transform: none; }
+  .diffrow { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 14px; align-items: start; }
+  @media (max-width: 1100px) { .diffrow { grid-template-columns: 1fr; } }
+  .diff svg .grid { stroke: #2a2416; } .diff svg .base { stroke: #3a3020; }
+  .diff .hit .guide, .diff .hit .hdot { opacity: 0; } .diff .hit:hover .guide, .diff .hit:hover .hdot { opacity: 1; }
+  .diff .hit:hover .col { opacity: .82; }
+  .dmap { display: grid; grid-template-columns: 6rem repeat(6, minmax(0, 1fr)); gap: 3px; font-size: 11px; }
+  .dmap .h { color: var(--dim); text-align: center; text-transform: capitalize; }
+  .dmap .r { color: var(--muted); text-transform: capitalize; align-self: center; }
+  .dmap .c { height: 34px; border-radius: 2px; display: grid; place-items: center; line-height: 1.1; cursor: default; }
+  .dmap .c b { font-size: 13px; font-weight: normal; } .dmap .c small { font-size: 9.5px; opacity: .8; }
+  .dmap .c.none { background: transparent; }
+  .dramp { height: 8px; border-radius: 4px; margin: 6px 0 2px; background: linear-gradient(to right, #2a2416, #ffd93d); }
+  .tip { position: fixed; z-index: 30; pointer-events: none; background: var(--black); border: 1px solid var(--gold);
+         border-radius: 3px; padding: 4px 8px; font-size: 11px; color: var(--paper); white-space: pre; }
   .qgrid { display: grid; grid-template-columns: 6.5rem repeat(6, minmax(0, 1fr)); gap: 3px; font-size: 11px; min-width: 44rem; }
   .qgrid .h { color: var(--dim); text-align: center; text-transform: capitalize; padding-bottom: 2px; }
   .qgrid .r { color: var(--muted); text-transform: capitalize; align-self: center; }
@@ -188,6 +208,7 @@
   <span class="dim" id="updated">loading…</span>
 </header>
 <div class="nowline" id="nowline" hidden></div>
+<div class="tip" id="tip" hidden></div>
 <main id="qmain">
   <section style="grid-area: qgrid">
     <h2><span>M7 · the continuous queue</span><small id="qcount"></small></h2>
@@ -213,6 +234,16 @@
   <section style="grid-area: qwall">
     <h2><span>Live runs</span><small>click one to watch it</small></h2>
     <div class="wall" id="qwall"></div>
+  </section>
+  <section style="grid-area: diff" class="diff">
+    <h2><span>Difficulty · how far games get</span><small id="dnote"></small></h2>
+    <h3>Games still going at each character level, by class <span class="dim">(gray: every class)</span></h3>
+    <div class="smalls" id="dcurves"></div>
+    <div class="diffrow">
+      <div><h3>The level each game ended at</h3><div class="tablewrap"><div id="dends" style="min-width:34rem"></div></div></div>
+      <div><h3>Median level reached, by race and class</h3><div id="dmap"></div></div>
+    </div>
+    <details style="margin-top:10px"><summary class="muted">as a table</summary><div class="tablewrap" id="dtable"></div></details>
   </section>
   <section style="grid-area: ratings">
     <h2><span>Difficulty ratings</span><small id="rnote"></small></h2>
@@ -807,6 +838,7 @@ function renderQueue() {
     ${mstones.map(m => `<tr><td>${m}</td>${classes.map(c => `<td>${q.features[c].milestones[m] || "·"}</td>`).join("")}</tr>`).join("")}
     ${layers.map(l => `<tr><td class="dim">${esc(l)}</td>${classes.map(c => `<td>${(q.features[c].layers[l] || 0).toLocaleString()}</td>`).join("")}</tr>`).join("")}
     </tbody></table>` + spellCoverage(q.features) : `<span class="muted">no counted runs yet</span>`;
+  renderDifficulty(q.difficulty, q.races, q.classes);
   $("recent").innerHTML = q.recent.map(r => `<tr><td>${esc(r.queue === "main" ? cap(r.character) : `${r.queue}: ${cap(r.character)}`)} <span class="dim">${ago(r.ended)}</span></td>
     <td class="${OUTCOME_CLASS[r.outcome] || ""}">${esc(r.outcome)}</td><td>${r.clvl ?? "–"}</td><td>${r.max_dlvl ?? "–"}</td>
     <td>${(r.steps || 0).toLocaleString()}</td><td>${esc(r.cause || "")}</td></tr>`).join("");
@@ -815,6 +847,110 @@ function renderQueue() {
   $("qlog").textContent = (q.service.log || []).join("\n");
   renderUpdated();
 }
+// Difficulty charts (§23.6): the main queue's counted games this epoch.
+// Survival small multiples (one class in amber over every class in gray), the
+// level each game ended at, and a race x class map of the median level reached.
+const D_AMBER = "#c57900", D_BLUE = "#7779dc", D_GRAY = "#9a9172";
+const pct = (n, d) => d ? Math.round(n / d * 100) : 0;
+function halfGone(reach, runs) {   // the first level fewer than half the games reached
+  const i = reach.findIndex(n => n < runs / 2);
+  return i < 0 ? null : i + 1;
+}
+function survivalPanel(name, entry, all, allRuns, top) {
+  const W = 260, H = 118, L = 30, R = 10, T = 8, B = 18;
+  const X = lv => L + (lv - 1) / (top - 1) * (W - L - R), Y = f => T + (1 - f) * (H - T - B);
+  const path = (reach, runs) => reach.map((n, i) => `${i ? "L" : "M"}${X(i + 1).toFixed(1)},${Y(n / runs).toFixed(1)}`).join("");
+  let svg = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(cap(name))}: share of games reaching each level">`;
+  [0, 0.5, 1].forEach(f => svg += `<line class="${f ? "grid" : "base"}" x1="${L}" x2="${W - R}" y1="${Y(f)}" y2="${Y(f)}"/>` +
+    `<text x="${L - 4}" y="${Y(f) + 3}" text-anchor="end">${f * 100}%</text>`);
+  [1, 5, 10, 15, 20, 25].filter(lv => lv <= top).forEach(lv => svg += `<text x="${X(lv)}" y="${H - 5}" text-anchor="middle">${lv}</text>`);
+  svg += `<path d="${path(all, allRuns)}" fill="none" stroke="${D_GRAY}" stroke-width="2" stroke-opacity=".55" stroke-linejoin="round" stroke-linecap="round"/>`;
+  svg += `<path d="${path(entry.reach, entry.runs)}" fill="none" stroke="${D_AMBER}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
+  const half = halfGone(entry.reach, entry.runs);
+  if (half) {   // the label sits on the side of the tick with room for it
+    const right = half <= top * 0.6;
+    svg += `<line x1="${X(half)}" x2="${X(half)}" y1="${Y(0.5) - 4}" y2="${Y(0.5) + 4}" stroke="var(--paper)" stroke-width="1"/>` +
+      `<text x="${X(half) + (right ? 5 : -5)}" y="${Y(0.5) + (right ? -5 : 12)}" text-anchor="${right ? "start" : "end"}" style="fill:var(--paper)">half gone by ${half}</text>`;
+  }
+  const endN = entry.reach[top - 1], end = endN / entry.runs;
+  svg += `<circle cx="${X(top)}" cy="${Y(end)}" r="4" fill="${D_AMBER}" stroke="var(--panel)" stroke-width="2"/>`;
+  const step = (W - L - R) / (top - 1);
+  entry.reach.forEach((n, i) => {
+    const lv = i + 1, tip = `${cap(name)} · clvl ${lv}\n${pct(n, entry.runs)}% of games (${n} of ${entry.runs})\nevery class ${pct(all[i], allRuns)}%`;
+    svg += `<g class="hit" data-tip="${esc(tip)}"><rect x="${X(lv) - step / 2}" y="${T}" width="${step}" height="${H - T - B}" fill="transparent"/>` +
+      `<line class="guide" x1="${X(lv)}" x2="${X(lv)}" y1="${T}" y2="${H - B}" stroke="var(--dim)" stroke-width="1"/>` +
+      `<circle class="hdot" cx="${X(lv)}" cy="${Y(n / entry.runs)}" r="4" fill="${D_AMBER}" stroke="var(--panel)" stroke-width="2"/></g>`;
+  });
+  return `<div><div class="t">${esc(name)} <span><b class="gold" style="font-weight:normal">${pct(endN, entry.runs)}% reach ${top}</b> · ${entry.runs.toLocaleString()} games</span></div>${svg}</svg></div>`;
+}
+function endsChart(ends, top) {
+  const W = 860, H = 220, L = 38, R = 6, T = 14, B = 20, n = top + 1;
+  const totals = ends.died.map((d, i) => d + ends.other[i]);
+  const raw = Math.max(1, ...totals), stepY = [10, 20, 50, 100, 200, 250, 500, 1000].find(s => raw / s <= 5) || 2000;
+  const yMax = Math.ceil(raw / stepY) * stepY;
+  const band = (W - L - R) / n, bw = Math.min(24, band - 4), Y = v => H - B - v / yMax * (H - T - B);
+  let svg = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Games by the character level they ended at">`;
+  for (let v = 0; v <= yMax; v += stepY) svg += `<line class="${v ? "grid" : "base"}" x1="${L}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}"/>` +
+    `<text x="${L - 4}" y="${Y(v) + 3}" text-anchor="end">${v.toLocaleString()}</text>`;
+  const top4 = (x, y, w, h) => h <= 0 ? "" : h < 4 ? `M${x},${y + h}V${y}H${x + w}V${y + h}Z` :
+    `M${x},${y + h}V${y + 4}Q${x},${y} ${x + 4},${y}H${x + w - 4}Q${x + w},${y} ${x + w},${y + 4}V${y + h}Z`;
+  totals.forEach((t, lv) => {
+    const x = L + lv * band + (band - bw) / 2, d = ends.died[lv], o = ends.other[lv];
+    const yd = Y(d), yt = Y(t), gap = d && o ? 2 : 0;
+    let marks = "";
+    if (d) marks += o ? `<rect class="col" x="${x}" y="${yd}" width="${bw}" height="${H - B - yd}" fill="${D_AMBER}"/>`
+                      : `<path class="col" d="${top4(x, yd, bw, H - B - yd)}" fill="${D_AMBER}"/>`;
+    if (o) marks += `<path class="col" d="${top4(x, yt, bw, yd - yt - gap)}" fill="${D_BLUE}"/>`;
+    const tip = `clvl ${lv}: ${t.toLocaleString()} games\n${d.toLocaleString()} died · ${o.toLocaleString()} ended otherwise` +
+      (lv === top ? " (the goal)" : "");
+    svg += `<g class="hit" data-tip="${esc(tip)}"><rect x="${L + lv * band}" y="${T}" width="${band}" height="${H - T - B}" fill="transparent"/>${marks}</g>`;
+    if (lv % 5 === 0 || lv === 1) svg += `<text x="${x + bw / 2}" y="${H - 6}" text-anchor="middle">${lv}</text>`;
+  });
+  const peak = totals.indexOf(raw);
+  svg += `<text x="${L + peak * band + band / 2 + bw / 2 + 4}" y="${Y(raw) + 9}" style="fill:var(--paper)">${raw.toLocaleString()} at clvl ${peak}</text>`;
+  return svg + `</svg><div class="mlegend"><span><i style="background:${D_AMBER}"></i>died</span>` +
+    `<span><i style="background:${D_BLUE}"></i>ended otherwise: the goal (clvl ${top}), the step budget or a finding</span></div>`;
+}
+function rampColor(f) {   // the page's track color to its gold, one hue light-ward
+  const a = [0x2a, 0x24, 0x16], b = [0xff, 0xd9, 0x3d];
+  return "#" + a.map((v, i) => Math.round(v + (b[i] - v) * f).toString(16).padStart(2, "0")).join("");
+}
+function diffMap(grid, races, classes, top) {
+  let html = `<div class="dmap"><div></div>${classes.map(c => `<div class="h">${esc(c)}</div>`).join("")}`;
+  races.forEach(race => {
+    html += `<div class="r">${esc(cap(race))}</div>`;
+    classes.forEach(klass => {
+      const e = grid[`${race}-${klass}`];
+      if (!e) { html += `<div class="c none"></div>`; return; }
+      const f = e.median / top, ink = f > 0.55 ? "var(--black)" : "var(--paper)";
+      const tip = `${cap(race + "-" + klass)}: ${e.runs.toLocaleString()} games\nmedian clvl ${e.median}\n` +
+        `reached clvl 10 in ${pct(e.reach10, e.runs)}% · the goal ${e.reached}×`;
+      html += `<div class="c" style="background:${rampColor(f)};color:${ink}" data-tip="${esc(tip)}"><b>${e.median}</b><small>${e.runs}</small></div>`;
+    });
+  });
+  return html + `</div><div class="dramp"></div><div class="mlegend" style="justify-content:space-between;margin-top:0">` +
+    `<span>clvl 0</span><span class="dim">each cell: median level, games below it</span><span>clvl ${top}</span></div>`;
+}
+function renderDifficulty(d, races, classes) {
+  if (!d || !d.runs) { $("dcurves").innerHTML = `<span class="muted">no counted runs yet</span>`; return; }
+  const top = d.levels, order = classes.filter(c => d.classes[c]);
+  $("dnote").textContent = `${d.runs.toLocaleString()} counted games this epoch · hover for numbers`;
+  $("dcurves").innerHTML = order.map(c => survivalPanel(c, d.classes[c], d.all, d.runs, top)).join("");
+  $("dends").innerHTML = endsChart(d.ends, top);
+  $("dmap").innerHTML = diffMap(d.grid, races, classes, top);
+  const cols = [5, 10, 15, 20, 25].filter(lv => lv <= top);
+  $("dtable").innerHTML = `<table class="ftable"><thead><tr><th>class</th><th>games</th>${cols.map(lv => `<th>clvl ${lv}</th>`).join("")}<th>half gone by</th></tr></thead><tbody>` +
+    [...order.map(c => [c, d.classes[c]]), ["every class", {runs: d.runs, reach: d.all}]].map(([c, e]) =>
+      `<tr><td class="name">${esc(c)}</td><td>${e.runs.toLocaleString()}</td>${cols.map(lv => `<td>${pct(e.reach[lv - 1], e.runs)}%</td>`).join("")}` +
+      `<td>${halfGone(e.reach, e.runs) ?? "–"}</td></tr>`).join("") + `</tbody></table>`;
+}
+document.addEventListener("mousemove", ev => {
+  const tip = $("tip"), el = ev.target.closest && ev.target.closest("[data-tip]");
+  if (!el) { tip.hidden = true; return; }
+  tip.textContent = el.dataset.tip; tip.hidden = false;
+  const x = Math.min(ev.clientX + 14, window.innerWidth - tip.offsetWidth - 8);
+  tip.style.left = `${x}px`; tip.style.top = `${ev.clientY + 14}px`;
+});
 function spellCoverage(features) {
   // Criterion 2 (§23.2): each class's spells and prayers to level 25, seen working (✓) or not.
   return Object.entries(features).filter(([, f]) => Object.keys(f.spells || {}).length).map(([c, f]) => {

@@ -498,7 +498,8 @@ def queue_runs(home: Path, goal: str, counted: tuple[str, ...], epoch: str = "")
         records = cached(home / "runs.jsonl", queue_records) or []
         main = [r for r in records if r.get("queue") == "main" and r.get("goal") == goal and r["outcome"] in counted
                 and r.get("epoch", "") == epoch]
-        return {"ratings": ratings(main), "features": queue_features(main), "runs": len(records),
+        return {"ratings": ratings(main), "features": queue_features(main), "difficulty": difficulty(main),
+                "runs": len(records),
                 "recent": records[-30:][::-1]}
     with closing(db):
         # Every insert takes a new rowid, so the count and the last rowid change with each.
@@ -510,8 +511,43 @@ def queue_runs(home: Path, goal: str, counted: tuple[str, ...], epoch: str = "")
             main = run_records.records(db, f"queue = 'main' AND goal = ? AND outcome IN "
                                            f"({', '.join('?' * len(counted))})", (goal, *counted))
             main = [r for r in main if r.get("epoch", "") == epoch]   # the current epoch's runs only
-            _cache[key] = {"ratings": ratings(main), "features": queue_features(main)}
+            _cache[key] = {"ratings": ratings(main), "features": queue_features(main), "difficulty": difficulty(main)}
         return {**_cache[key], "runs": version[0], "recent": run_records.records(db, newest=30)}
+
+
+DIFFICULTY_LEVELS = 25   # the main queue's goal level: the charts' x axis (§23.6)
+
+
+def difficulty(records: list[dict[str, Any]]) -> dict[str, Any]:
+    """The Difficulty charts' counts (§23.6): per class and in all, how many
+    games reached each character level 1..DIFFICULTY_LEVELS (their last
+    level, capped there); how many ended at each level, by death or not;
+    and per combination its games, median last level and goals reached."""
+    top = DIFFICULTY_LEVELS
+
+    def last(record: dict[str, Any]) -> int:
+        return max(0, min(top, record.get("clvl") or 0))
+
+    def reach(runs: list[dict[str, Any]]) -> list[int]:
+        levels = [last(r) for r in runs]
+        return [sum(level >= n for level in levels) for n in range(1, top + 1)]
+
+    by_class: dict[str, list[dict[str, Any]]] = {}
+    by_combo: dict[str, list[dict[str, Any]]] = {}
+    died, other = [0] * (top + 1), [0] * (top + 1)
+    for record in records:
+        by_class.setdefault(record["character"].rsplit("-", 1)[1], []).append(record)
+        by_combo.setdefault(record["character"], []).append(record)
+        (died if record["outcome"] == "died" else other)[last(record)] += 1
+    grid = {}
+    for combo, runs in by_combo.items():
+        levels = sorted(last(r) for r in runs)
+        grid[combo] = {"runs": len(runs), "median": levels[len(levels) // 2],
+                       "reached": sum(r["outcome"] == "reached" for r in runs),
+                       "reach10": sum(level >= 10 for level in levels)}
+    return {"levels": top, "runs": len(records), "all": reach(records),
+            "classes": {k: {"runs": len(v), "reach": reach(v)} for k, v in by_class.items()},
+            "ends": {"died": died, "other": other}, "grid": grid}
 
 
 def ratings(records: list[dict[str, Any]]) -> dict[str, Any]:
@@ -642,7 +678,7 @@ def queue() -> dict[str, Any]:
             "platforms": state.get("platforms", {}),
             "live": [queue_live(home, run_id, job) for run_id, job in running.items()],
             "subqueues": subs, "archived": archived, "balrog": read_json(home / "state-balrog.json") or {"items": {}, "order": []},
-            "ratings": runs["ratings"], "features": runs["features"],
+            "ratings": runs["ratings"], "features": runs["features"], "difficulty": runs["difficulty"],
             "runs": runs["runs"], "recent": [{k: r.get(k) for k in ("id", "queue", "character", "platform", "outcome",
                                                                     "clvl", "max_dlvl", "steps", "ended")}
                                              | {"cause": (r.get("death") or {}).get("cause")}
