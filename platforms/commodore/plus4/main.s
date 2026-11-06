@@ -126,8 +126,14 @@ basic_stub_end:
 
 // Bootstrap — MUST live below $A000 so BASIC's SYS can reach it
 // before BASIC ROM is banked out.
+.const KERNAL_SETMSG = $ff90
 entry:
     sei
+    // KERNAL messages off while the ROM is still visible: with them on, every
+    // LOAD printed "searching for <file>" over the game screen (2026-11-05,
+    // seen on the C64; the C128 boot does the same, boot128.s).
+    lda #0
+    jsr KERNAL_SETMSG
     jsr plus4_bank_ram
     jmp entry_main
 

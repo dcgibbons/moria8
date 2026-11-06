@@ -100,9 +100,16 @@
 
 // Bootstrap — MUST live below $A000 so BASIC's SYS can reach it
 // before BASIC ROM is banked out.
+.const KERNAL_SETMSG = $ff90
 entry:
     lda #$36                // Bank out BASIC ROM (keep KERNAL + I/O)
     sta $01
+    // KERNAL messages off: with them on (a boot that leaves BASIC's direct-
+    // mode flag), every LOAD printed "searching for <file>" in light blue at
+    // the KERNAL's own cursor, over the game screen (2026-11-05: seen during
+    // dungeon generation). The C128 boot does the same (boot128.s).
+    lda #0
+    jsr KERNAL_SETMSG
     jmp entry_main          // Now code past $A000 is accessible
 
 // Exit trampoline — MUST live below $A000 because it banks BASIC
