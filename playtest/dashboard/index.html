@@ -187,7 +187,8 @@
   .qwon { margin: 0 0 8px; font-size: 12px; color: var(--muted); }
   .qwon b { color: var(--green); }
   .qcell.struggling { background: rgba(224, 96, 60, .14); border-color: rgba(224, 96, 60, .45); }
-  .qcell.waiting { opacity: .45; }
+  .qcell.live { border: 2px solid var(--gold); background-color: rgba(197, 121, 0, .16); }
+  .qcell.live .now { color: var(--gold); font-weight: 700; }
   .qcell.playing { background-image: repeating-linear-gradient(45deg, rgba(255,217,61,.07) 0 3px, transparent 3px 7px); }
   .qcell .top { display: flex; justify-content: space-between; color: var(--gold); }
   .qcell .sub { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -218,10 +219,9 @@
     <div id="balrog" class="tablewrap"></div>
     <div class="mlegend">
       <span><i style="background:rgba(154,210,132,.4)"></i>★ won: killed the Balrog</span>
-      <span><i style="background:repeating-linear-gradient(45deg,#4a3c20 0 2px,var(--track) 2px 4px)"></i>playing now</span>
-      <span><i style="background:var(--black-soft)"></i>waiting for its turn</span>
-      <span><i style="background:var(--black-soft);opacity:.45"></i>no saved start yet</span>
-      <span class="dim">each cell: best clvl and depth; its start (an M7 run or a checkpoint) and runs; now, or the last run's end</span>
+      <span><i style="background:rgba(197,121,0,.35);outline:2px solid var(--gold)"></i>▶ playing now</span>
+      <span><i style="background:var(--black-soft)"></i>waiting for its turn (last game shown)</span>
+      <span class="dim">each cell: best clvl and depth; where the next game starts (a save, or L1) and runs; now, or the last game's end</span>
     </div>
   </section>
   <section style="grid-area: buildq">
@@ -810,13 +810,17 @@ function renderQueue() {
         ` <span class="dim">${w.steps ? Number(w.steps).toLocaleString() + " steps" : ""}</span>`).join(" · ")
     : `<span class="dim">no combination has reached the goal yet</span>`;
   $("qcount").textContent = `${won} of ${total} combinations reached the goal`;
-  // The Balrog queue (§23.9): every combination past the M7 bar, for good.
+  // The Balrog queue (§23.9): every combination of balrog_platforms, from
+  // level 1 or its latest save, on the newest build (maintainer, 2026-11-06).
   const bq = q.balrog || {items: {}, order: []}, bitems = Object.values(bq.items);
   const blive = q.live.filter(r => r.queue === "balrog");
-  $("bline").innerHTML = `goal <b>balrog</b> <span class="dim">kill the Balrog (from DL100) and win</span> · ` +
+  const bnames = [...new Set(bitems.map(it => PORT_NAMES[it.platform] || it.platform))].join(", ") || "–";
+  const bbest = Math.max(0, ...bitems.map(it => (it.best && it.best.clvl) || 0));
+  $("bline").innerHTML = `goal <b>balrog</b> <span class="dim">build to level 40, then kill the Balrog (from DL50) and win</span> · ` +
+    `on <b>${esc(bnames)}</b>, from level 1 or the latest save, newest build · ` +
     `budget <b>${Number(q.config.balrog_budget).toLocaleString()}</b> steps · ` +
     `workers <b>${blive.length}</b>/${q.config.balrog_workers} · next: ${esc(bq.order.slice(0, 3).map(k => cap(k.split("/")[1])).join(", ") || "–")}`;
-  $("bcount").textContent = `${bitems.length} of ${total} combinations past the M7 bar · ` +
+  $("bcount").textContent = `${bitems.length} combinations · best L${bbest || "–"} · ` +
     `${bitems.reduce((n, it) => n + it.won, 0)} wins in ${bitems.reduce((n, it) => n + it.runs, 0)} runs`;
   // A race x class grid, as M7's (maintainer, 2026-11-06), per port.
   const bports = [...new Set(bitems.map(it => it.platform))];
@@ -831,12 +835,12 @@ function renderQueue() {
         const best = it.best || {}, last = it.last || {}, st = it.start || {};
         const run = blive.find(x => x.character === it.character && x.platform === platform);
         const w = (run && run.status) || {};
-        const from = it.start ? `from L${st.clvl || 25} DL${st.dlvl}` : "no start yet";
-        const now = run ? `▸ L${w.clvl ?? "–"} DL${w.dlvl ?? "–"}${run.paused ? " (paused)" : ""}`
-          : it.last ? `<span class="${OUTCOME_CLASS[last.outcome] || ""}">${esc(last.outcome)}</span>${last.cause ? ` · ${esc(last.cause)}` : ""}` : "";
-        const cls = [it.won ? "won" : "", run ? "playing" : "", it.start ? "" : "waiting"].join(" ");
+        const from = it.start ? `from L${st.clvl || 25} DL${st.dlvl}` : "from L1";
+        const now = run ? `<span class="now">▶ playing L${w.clvl ?? "–"} DL${w.dlvl ?? "–"}${run.paused ? " (paused)" : ""}</span>`
+          : it.last ? `last: <span class="${OUTCOME_CLASS[last.outcome] || ""}">${esc(last.outcome)}</span> ${ago(last.ended)} ago${last.cause ? ` · ${esc(last.cause)}` : ""}` : "not played yet";
+        const cls = [it.won ? "won" : "", run ? "live" : ""].join(" ");
         const tip = `${cap(it.character)}: ${it.runs} runs, ${it.won} won` +
-          (it.start ? `; starts on DL${st.dlvl} at step ${Number(st.step).toLocaleString()} (${st.checkpoint ? `clvl ${st.clvl} checkpoint, ${st.restores || 0} restores` : "M7 run"}, ${ago(st.set)} ago)` : "; plays from the title (no saved start yet)") +
+          (it.start ? `; starts on DL${st.dlvl} at step ${Number(st.step).toLocaleString()} (${st.checkpoint ? `clvl ${st.clvl} checkpoint, ${st.restores || 0} restores` : "M7 run"}, ${ago(st.set)} ago)` : "; a new character from level 1 (no save that loads in the newest build)") +
           (it.best ? `; best clvl ${best.clvl} DL ${best.max_dlvl}` : "") +
           (it.last ? `; last ${last.outcome} at clvl ${last.clvl} DL ${last.max_dlvl}${last.cause ? `, ${last.cause}` : ""}` : "") +
           `; joined ${ago(it.graduated.ended)} ago`;
@@ -847,7 +851,7 @@ function renderQueue() {
       });
     });
     return g + `</div>`;
-  }).join("") || `<span class="muted">no combination has met the M7 bar yet</span>`;
+  }).join("") || `<span class="muted">no combinations yet: set balrog_platforms</span>`;
   // The build queue (§23.4): one run per port, of the branch's newest
   // commit, cycling every race/class combination.
   const ci = (q.build_queue || {}).platforms || {}, cports = q.config.build_platforms || [];
