@@ -66,6 +66,7 @@ HOME = ROOT / "var" / "moria8"
 CONFIG = ROOT / "playtest" / "queue.json"
 SUITES = ROOT / "playtest" / "suites"
 TICK_SECONDS = 5.0
+TEXT_DRAIN_STEPS = 100     # a graduate_save run empties the text monitor this often
 PAUSE_POLL_STEPS = 20       # a run looks for its pause file this often
 # Past the M7 goal's clvl 25, for the Balrog queue's deep game.
 CLVL_MILESTONES = (5, 10, 15, 20, 25, 30, 35, 40)
@@ -367,6 +368,8 @@ def run_one(run_dir: Path) -> int:
             if self.checkpoint_due and game is not None and game.last is not None and game.last.mode == Mode.COMMAND:
                 self.checkpoint_due = False
                 self.save_checkpoint()
+            if text is not None and self.result.steps % TEXT_DRAIN_STEPS == 0:
+                text.drain()   # VICE's prompt at every stop: unread, it filled the socket between saves
             return super().press(key)
 
         def save_checkpoint(self) -> None:

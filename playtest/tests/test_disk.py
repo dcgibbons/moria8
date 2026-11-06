@@ -53,3 +53,29 @@ class LoadRetryFindingTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TextMonitorTest(unittest.TestCase):
+    """2026-11-06: a C64 Balrog save after 1.18 million steps found the text
+    monitor's connection reset; the next command opens a new one."""
+
+    def test_a_dropped_connection_is_reopened(self) -> None:
+        import socket
+        server = socket.socket()
+        server.bind(("127.0.0.1", 0))
+        server.listen(2)
+        monitor = disk.TextMonitor(server.getsockname()[1])
+        try:
+            monitor.command("first", settle=0.05)
+            peer, _ = server.accept()
+            peer.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, b"\x01\x00\x00\x00\x00\x00\x00\x00")
+            peer.close()   # a reset, as VICE's was
+            monitor.drain()
+            self.assertIsNone(monitor.sock)
+            monitor.command("again", settle=0.05)
+            second, _ = server.accept()
+            self.assertEqual(second.recv(16), b"again\n")
+            second.close()
+        finally:
+            monitor.close()
+            server.close()
