@@ -130,6 +130,11 @@ C64 = Port(
     # is visible ($01 bit 1, HIRAM, set).
     crash_entries=(0xFCE2, 0xFE66),
     rom_status="port01",
+    # A Balrog start or checkpoint is a saved game (graduate.py), not a
+    # snapshot: it goes on in any newer build whose loader takes its save
+    # version, where a snapshot only restores into the same game (maintainer,
+    # 2026-11-06: the Balrog queue on the C64, always the newest build).
+    graduate_save=True,
 )
 
 PLUS4 = Port(

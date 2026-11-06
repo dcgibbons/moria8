@@ -36,5 +36,8 @@
   "bbcmaster",
   "cx16"
  ],
- "build_goal": "clvl10"
+ "build_goal": "clvl10",
+ "balrog_platforms": [
+  "c64"
+ ]
 }

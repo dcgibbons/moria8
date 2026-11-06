@@ -42,6 +42,7 @@ import hashlib
 import json
 import os
 import random
+import re
 import shutil
 import statistics
 import signal
@@ -75,6 +76,7 @@ COUNTED = ("reached", "died", "budget", "finding", "error")   # outcomes that mo
 # each new character level, at a level entry with this share of its HP;
 # after CHECKPOINT_RETRIES runs from a checkpoint end without a new level,
 # the combination steps back to the start before it.
+M7_CLVL = 25             # the deep goal's level: an M7 success's start
 CHECKPOINT_HP = 0.75
 CHECKPOINT_RETRIES = 3
 CHECKPOINTS = "checkpoints"   # in a run's directory: clvl<N>/ each
@@ -87,6 +89,10 @@ DEFAULTS: dict[str, Any] = {
     "main_characters": [],   # non-empty: the main queue plays only these (2026-11-05: the Balrog starts it lacks)
     # The build queue (BuildQueue): one run per port, of HEAD's commit
     "build_platforms": [], "build_goal": "clvl10",
+    # Non-empty: the Balrog queue plays every combination of these ports,
+    # from level 1 when it has no start, and takes no other port's
+    # graduates (maintainer, 2026-11-06: the C64)
+    "balrog_platforms": [],
 }
 
 
@@ -257,12 +263,47 @@ def same_game_and_brain(a: str, b: str, home: Path = HOME) -> bool:
         _, differ, errors = filecmp.cmpfiles(x, y, cmp.common_files, shallow=False)
         return not (differ or errors) and all(same(x / d, y / d) for d in cmp.common_dirs)
     root_a, root_b = home / "builds" / a, home / "builds" / b
-    if not same(root_a / "build", root_b / "build"):
-        return False
+    return same(root_a / "build", root_b / "build") and same_brain(a, b, home)
+
+
+def same_brain(a: str, b: str, home: Path = HOME) -> bool:
+    """A brain saved under build ``a`` loads into build ``b``'s bot (above)."""
     from .session import FILLED_ON_LOAD
-    old, new = brain_shape(root_a), brain_shape(root_b)
+    old, new = brain_shape(home / "builds" / a), brain_shape(home / "builds" / b)
     return old is not None and new is not None and all(
         cls in old and (attrs <= old[cls] or cls.split(":")[1] in FILLED_ON_LOAD) for cls, attrs in new.items())
+
+
+def save_versions(build_id: str, platform: str, home: Path = HOME) -> tuple[int, int] | None:
+    """(oldest loadable, current) save versions of ``platform`` in a build,
+    from its storage policy's first branch (the monster catalog's); None
+    when the build or the constants are missing."""
+    root = home / "builds" / build_id / "platforms"
+    root = root / "commodore" / platform if platform in ("c64", "c128", "plus4") else root / platform
+    try:
+        text = (root / "hal" / "storage_policy.s").read_text()
+    except OSError:
+        return None
+    found = [re.search(rf"^\.const {name}\s*=\s*\$([0-9A-Fa-f]+)", text, re.M)
+             for name in ("hal_storage_save_v1_version", "hal_storage_save_version")]
+    return (int(found[0].group(1), 16), int(found[1].group(1), 16)) if all(found) else None
+
+
+def start_loads(start: dict[str, Any], build_id: str, platform: str, home: Path = HOME) -> bool:
+    """Whether a Balrog start goes on in build ``build_id`` (maintainer,
+    2026-11-06: the newest build, else a new character from level 1): a
+    saved game whose version that build's loader takes, with a brain its
+    bot loads; a snapshot only into the same game, and never on a
+    ``graduate_save`` port (graduate.py)."""
+    if not build_meta(start.get("build") or "", home):
+        return False
+    if not start.get("save"):
+        return not PORTS[platform].graduate_save and (
+            start["build"] == build_id or same_game_and_brain(start["build"], build_id, home))
+    if start["build"] == build_id:
+        return True
+    saved, loads = save_versions(start["build"], platform, home), save_versions(build_id, platform, home)
+    return bool(saved and loads and loads[0] <= saved[1] <= loads[1] and same_brain(start["build"], build_id, home))
 
 
 # -- one run ------------------------------------------------------------------------
@@ -382,7 +423,10 @@ def run_one(run_dir: Path) -> int:
             reseeded from this run's seed, so each run goes its own way."""
             resume = job.get("resume")
             if not resume:
-                return super().start()
+                obs = super().start()
+                if job["queue"] == "balrog":   # a new character: a checkpoint at each level past 1
+                    self.checkpoint_clvl = max(obs.clvl, 1)   # chargen's screen reads level 0
+                return obs
             if resume.get("save"):
                 return self.start_from_save(resume)
             source = Path(resume["snapshot"])
@@ -684,11 +728,6 @@ class Queue:
             entry["cycle_done"] = []
 
 
-def playable(item: dict[str, Any]) -> bool:
-    """A Balrog item can play: on a ``graduate_save`` port only from a saved game."""
-    return not PORTS[item["platform"]].graduate_save or bool((item.get("start") or {}).get("save"))
-
-
 class Balrog:
     """The Balrog queue (M8, §23.9; maintainer 2026-11-01): a combination
     that meets the M7 bar joins it for good, whatever the epoch, and up to
@@ -702,6 +741,11 @@ class Balrog:
 
     def save(self) -> None:
         write_json(self.path, self.state)
+
+    def join(self, platform: str) -> int:
+        """Every combination of ``platform`` joins, to play from level 1
+        until it has a start. Returns how many joined."""
+        return sum(self.graduate(platform, combo, {"ended": now(), "level1": True}) for combo in combos(platform))
 
     def graduate(self, platform: str, combo: str, success: dict[str, Any]) -> bool:
         """Add a combination; False if it is in already."""
@@ -722,7 +766,13 @@ class Balrog:
                       {"run": record["id"], "commit": record.get("commit"), "ended": record.get("ended"),
                        "steps": record.get("steps"), "epoch": record.get("epoch", "")})
         item = self.state["items"][f"{record['platform']}/{record['character']}"]
-        if (item.get("start") or {}).get("checkpoint"):
+        current = item.get("start") or {}
+        if current.get("checkpoint") and current.get("clvl", 0) < M7_CLVL:
+            # A chain from level 1 still below the M7 level: the success leads.
+            item.setdefault("start_history", []).append(current)
+            item["start"] = start
+            return
+        if current.get("checkpoint"):
             history = item.setdefault("start_history", [])
             if history and not history[0].get("checkpoint"):
                 history[0] = start
@@ -769,21 +819,24 @@ class Balrog:
         return False
 
     def take(self) -> dict[str, Any] | None:
-        """The next graduate that can play, which goes to the back. On a
-        ``graduate_save`` port only a saved-game start plays (graduate.py);
-        a snapshot start there is skipped until it graduates again. None
-        when no graduate can play."""
-        for _ in range(len(self.state["order"])):
-            key = self.state["order"].pop(0)
-            self.state["order"].append(key)
-            item = self.state["items"][key]
-            if playable(item):
-                return item
-        return None
+        """The next graduate, which goes to the back; None when there is
+        none. One whose start cannot go on plays a new character
+        (Service.start_balrog)."""
+        if not self.state["order"]:
+            return None
+        key = self.state["order"].pop(0)
+        self.state["order"].append(key)
+        return self.state["items"][key]
 
     def ready(self) -> bool:
-        """Whether take would find a graduate that can play."""
-        return any(playable(item) for item in self.state["items"].values())
+        return bool(self.state["order"])
+
+    def retire_start(self, item: dict[str, Any]) -> None:
+        """A start the newest build cannot go on from, with its chain, is
+        kept for the record only; the combination plays from level 1."""
+        item.setdefault("retired_starts", []).extend(
+            s for s in [item.get("start"), *item.get("start_history", [])] if s)
+        item["start"], item["start_history"] = None, []
 
     def finish(self, record: dict[str, Any]) -> None:
         item = self.state["items"].get(f"{record['platform']}/{record['character']}")
@@ -1127,14 +1180,15 @@ class Service:
                 state.update({"head": git("rev-parse", "HEAD"), "behind": 0})
                 tree = tree_state()
             current = build_meta(self.build_id, self.home) if self.build_id else {}
-            wanted = current.get("commit") != tree["commit"] or not set(self.config["platforms"]) <= set(
-                current.get("platforms", []))
+            # The Balrog queue's ports too: it plays this build when newest.
+            ports = sorted(set(self.config["platforms"]) | set(self.config.get("balrog_platforms") or []))
+            wanted = current.get("commit") != tree["commit"] or not set(ports) <= set(current.get("platforms", []))
             rebuild = (self.home / "rebuild").exists()   # make playtest-queue-rebuild
             if self.build_id is None or rebuild or (wanted and contained and not tree["dirty"]):
                 source = "tree" if tree["dirty"] or rebuild else "commit"
                 (self.home / "rebuild").unlink(missing_ok=True)
-                self.log(f"building {tree['commit'][:12]} ({source}) for {', '.join(self.config['platforms'])}")
-                self.build_id = snapshot_build(self.config["platforms"], source, self.home)
+                self.log(f"building {tree['commit'][:12]} ({source}) for {', '.join(ports)}")
+                self.build_id = snapshot_build(ports, source, self.home)
                 self.log(f"playing build {self.build_id}")
         except (RuntimeError, OSError, subprocess.SubprocessError) as exc:
             state["error"] = str(exc)[-2000:]
@@ -1380,6 +1434,8 @@ class Service:
         keep snapshots for ``retention_days``; a start is kept while used."""
         from .session import brain_pickle_path
         from .graduate import BRAIN
+        if not self.balrog_takes(record["platform"]):
+            return
         saved_game = self.home / "runs" / record["id"] / "graduate"
         if (saved_game / BRAIN).with_suffix(".brain.pickle").exists():
             dest = self.home / "balrog" / record["id"]
@@ -1439,11 +1495,22 @@ class Service:
                  f"{start['restores']} restores)")
         return True
 
+    def balrog_takes(self, platform: str) -> bool:
+        ports = self.config.get("balrog_platforms") or []
+        return not ports or platform in ports
+
     def graduate(self, queue: Queue) -> None:
-        """Every combination with an M7 success joins the Balrog queue."""
+        """Every combination with an M7 success joins the Balrog queue; with
+        ``balrog_platforms``, every combination of those ports, and only them."""
+        for platform in self.config.get("balrog_platforms") or []:
+            if self.balrog.join(platform):
+                self.balrog.save()
+                self.log(f"balrog queue: every combination on {platform} joins, from level 1")
         if queue.goal != "deep":
             return
         for platform, entry in queue.state["platforms"].items():
+            if not self.balrog_takes(platform):
+                continue
             for combo, item in entry["items"].items():
                 if item["success"] and self.balrog.graduate(platform, combo, {**item["success"],
                                                                               "epoch": queue.epoch}):
@@ -1534,26 +1601,36 @@ class Service:
             main_active.append(run_id)
             active += 1
 
+    def newest_build(self, platform: str) -> str | None:
+        """The newest build with ``platform``: the main queue's or the build
+        queue's (HEAD's commit), by when it was made."""
+        builds = [(build_meta(b, self.home), b) for b in (self.build_id, self.ci_build) if b]
+        made = [(meta.get("built") or 0, b) for meta, b in builds if platform in meta.get("platforms", [])]
+        return max(made)[1] if made else None
+
     def start_balrog(self) -> bool:
-        """A graduate with a start goes on from it, in the start's build (its
-        brain loads only into the same bot code); one without plays from the
-        title in the current build. False when no graduate can play."""
-        assert self.build_id is not None
+        """The next graduate plays the newest build (maintainer, 2026-11-06):
+        from its start when that start's save loads there, else a new
+        character from level 1, the start retired. Its checkpoints at each
+        new level become its starts (§23.9). False when nothing can play."""
         item = self.balrog.take()
         if item is None:
             return False
+        build = self.newest_build(item["platform"])
+        if build is None:
+            return False
         start = item.get("start")
-        if start and not build_meta(start["build"], self.home):
+        if start and not start_loads(start, build, item["platform"], self.home):
+            self.log(f"balrog queue: {item['character']}'s start (run {start.get('run')}, build "
+                     f"{start.get('build')}) does not load in {build}: a new character from level 1")
+            self.balrog.retire_start(item)
             start = None
-        if start and start["build"] != self.build_id and same_game_and_brain(start["build"], self.build_id, self.home):
-            start = {**start, "build": self.build_id}
         seed = random.SystemRandom().randrange(1, 2**31)
         budget = int(self.config["balrog_budget"])
         if start and start.get("checkpoint"):
             budget += int(start.get("step", 0))   # a checkpoint's run: counted from its start
-        job = self.new_job("balrog", item["platform"], item["character"], "balrog", seed,
-                           budget, start["build"] if start else self.build_id,
-                           **({"resume": start} if start else {}))
+        job = self.new_job("balrog", item["platform"], item["character"], "balrog", seed, budget, build,
+                           **({"resume": {**start, "build": build}} if start else {}))
         self.balrog.save()
         self.start(job)
         return True

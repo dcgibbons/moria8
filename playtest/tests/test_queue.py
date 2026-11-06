@@ -317,7 +317,15 @@ class BalrogQueueTest(unittest.TestCase):
     def service(self, workers: int, balrog_workers: int) -> queue.Service:
         service = ScheduleTest.service(self, workers)   # type: ignore[arg-type]
         service.config.update(balrog_workers=balrog_workers)
+        service.build_id = "b0"
+        self.make_build(service, "b0")
         return service
+
+    @staticmethod
+    def make_build(service: queue.Service, build: str, built: float = 1.0) -> Path:
+        root = service.home / "builds" / build
+        queue.write_json(root / "build.json", {"id": build, "platforms": sorted(queue.PORTS), "built": built})
+        return root
 
     def test_an_m7_success_joins_once_and_stays_across_epochs(self) -> None:
         service = self.service(4, 2)
@@ -381,13 +389,13 @@ class BalrogQueueTest(unittest.TestCase):
         queue.write_json(vsf.with_suffix(".brain.json"), {"seed": 9, "step": 125346, "dlvl": 30})
         if with_brain:
             save_brain(Brain(for_character(GOALS["deep"], "elf-priest")), vsf)
-        queue.write_json(service.home / "builds" / "b0" / "build.json", {"id": "b0"})
+        self.make_build(service, "b0")
         return rec
 
     def test_an_m7_success_keeps_its_dl30_snapshot_as_the_start(self) -> None:
         service = self.service(4, 2)
-        service.balrog_start(self.success_run(service))
-        item = service.balrog.state["items"]["c64/elf-priest"]
+        service.balrog_start({**self.success_run(service), "platform": "plus4"})   # a snapshot port
+        item = service.balrog.state["items"]["plus4/elf-priest"]
         start = item["start"]
         self.assertEqual((start["run"], start["build"], start["step"], start["dlvl"]), ("m7", "b0", 125346, 30))
         kept = Path(start["snapshot"])
@@ -404,15 +412,14 @@ class BalrogQueueTest(unittest.TestCase):
         the same game and no attribute the saved brain lacks plays the
         start, with its own goals and bot."""
         service = self.service(4, 2)
-        service.balrog_start(self.success_run(service))
+        service.balrog_start({**self.success_run(service), "platform": "plus4"})   # a snapshot port
         same = "class Brain:\n    def __init__(self):\n        self.food = 0\n"
         same += "class Creature:\n    def __init__(self):\n        self.glyph = ''\n"
         reworded = same + "    def eat(self):\n        return self.food - 1\n"   # new code, no new state
         reworded = reworded.replace("self.food = 0", "self.food = 0\n        self.restock_wait = 0")   # filled on load
         grown = same.replace("self.glyph = ''", "self.glyph = ''\n        self.level = 0")   # not filled
-        for build, goals, brain in (("b0", "old", same), ("b1", "new", reworded), ("b2", "new", grown)):
-            root = service.home / "builds" / build
-            queue.write_json(root / "build.json", {"id": build})
+        for n, (build, goals, brain) in enumerate((("b0", "old", same), ("b1", "new", reworded), ("b2", "new", grown))):
+            root = self.make_build(service, build, built=n)
             (root / "build").mkdir(parents=True)
             (root / "build" / "moria8-c64.d64").write_bytes(b"disk")
             bot = root / "playtest" / "moria_playtest"
@@ -423,12 +430,19 @@ class BalrogQueueTest(unittest.TestCase):
             (bot / "view.py").write_text("")
         self.assertTrue(queue.same_game_and_brain("b0", "b1", service.home))
         self.assertFalse(queue.same_game_and_brain("b0", "b2", service.home))
+        service.build_id = "b1"
         service.start_balrog()
-        self.assertEqual(next(iter(service.running.values()))["build"], "b1")
+        job = next(iter(service.running.values()))
+        self.assertEqual((job["build"], job["resume"]["run"]), ("b1", "m7"))
         service.running.clear()
-        service.build_id = "b2"
+        service.build_id = "b2"   # an attribute the old brain lacks: a new character, in the newest build
         service.start_balrog()
-        self.assertEqual(next(iter(service.running.values()))["build"], "b0")   # an attribute the old brain lacks
+        job = next(iter(service.running.values()))
+        self.assertEqual(job["build"], "b2")
+        self.assertNotIn("resume", job)
+        item = service.balrog.state["items"]["plus4/elf-priest"]
+        self.assertIsNone(item["start"])
+        self.assertEqual([s["run"] for s in item["retired_starts"]], ["m7"])
 
     def test_a_success_without_a_saved_brain_plays_from_the_title(self) -> None:
         service = self.service(4, 2)
@@ -436,7 +450,7 @@ class BalrogQueueTest(unittest.TestCase):
         service.balrog.graduate("c64", "elf-priest", {})
         service.start_balrog()
         job = next(iter(service.running.values()))
-        self.assertEqual(job["build"], "b1")
+        self.assertEqual(job["build"], "b0")
         self.assertNotIn("resume", job)
 
     def c128_saved_game(self, service: queue.Service, rec: dict) -> None:
@@ -470,28 +484,84 @@ class BalrogQueueTest(unittest.TestCase):
         service.balrog_start({**self.success_run(service), "platform": "c128"})
         service.balrog.graduate("c128", "elf-priest", {})
         self.assertIsNone(service.balrog.state["items"]["c128/elf-priest"].get("start"))
-        self.assertFalse(service.start_balrog())   # nothing to play from: no run
-        self.assertEqual(service.running, {})
+        self.assertTrue(service.start_balrog())   # no start: a new character from level 1
+        self.assertNotIn("resume", next(iter(service.running.values())))
 
-    def test_c128_graduates_without_a_saved_game_are_skipped(self) -> None:
+    def test_a_c128_snapshot_start_is_retired_for_a_new_character(self) -> None:
+        """VICE's C128 snapshot leaves out the VDC: only a saved game goes on
+        there, so a snapshot start retires and the combination plays from
+        level 1 (maintainer, 2026-11-06)."""
+        service = self.service(4, 2)
+        service.balrog.graduate("c128", "elf-priest", {"run": "r"})
+        item = service.balrog.state["items"]["c128/elf-priest"]
+        item["start"] = {"run": "r", "build": "b0", "snapshot": "deep.vsf"}
+        self.assertTrue(service.start_balrog())
+        self.assertNotIn("resume", next(iter(service.running.values())))
+        self.assertIsNone(item["start"])
+        self.assertEqual([s["run"] for s in item["retired_starts"]], ["r"])
+
+    def policy_build(self, service: queue.Service, build: str, oldest: int, current: int, built: float) -> None:
+        """A build whose C128 loader takes saves ``oldest``..``current``, with a bot."""
+        root = self.make_build(service, build, built)
+        policy = root / "platforms" / "commodore" / "c128" / "hal" / "storage_policy.s"
+        policy.parent.mkdir(parents=True)
+        policy.write_text(f"#if HAL_PLATFORM_MONSTER_CATALOG\n.const hal_storage_save_v1_version = ${oldest:02X}\n"
+                          f".const hal_storage_save_version = ${current:02X}\n#else\n"
+                          f".const hal_storage_save_v1_version = $10\n.const hal_storage_save_version = $18\n#endif\n")
+        bot = root / "playtest" / "moria_playtest"
+        bot.mkdir(parents=True)
+        for name in queue.BRAIN_MODULES:
+            (bot / name).write_text("class Brain:\n    def __init__(self):\n        self.food = 0\n")
+
+    def test_a_saved_game_goes_on_in_the_newest_build_that_loads_it(self) -> None:
+        """Maintainer, 2026-11-06: the newest build always; a start whose
+        save that build's loader takes goes on there, else a new character."""
+        service = self.service(4, 2)
+        self.policy_build(service, "old", 0x19, 0x19, 1)
+        self.policy_build(service, "mid", 0x1A, 0x1A, 2)
+        self.policy_build(service, "new", 0x1A, 0x1A, 3)
+        self.assertEqual(queue.save_versions("old", "c128", service.home), (0x19, 0x19))
+        service.build_id, service.ci_build = "mid", "new"
+        self.assertEqual(service.newest_build("c128"), "new")
+        for combo, build in (("elf-priest", "mid"), ("human-priest", "old")):
+            service.balrog.graduate("c128", combo, {"run": combo})
+            service.balrog.state["items"][f"c128/{combo}"]["start"] = {"run": combo, "build": build, "save": "s"}
+        self.assertTrue(service.start_balrog())
+        self.assertTrue(service.start_balrog())
+        jobs = {j["character"]: j for j in service.running.values()}
+        self.assertEqual({c: j["build"] for c, j in jobs.items()}, {"elf-priest": "new", "human-priest": "new"})
+        self.assertEqual(jobs["elf-priest"]["resume"]["run"], "elf-priest")   # $1A loads in $1A
+        self.assertNotIn("resume", jobs["human-priest"])                     # $19 does not
+        self.assertIsNone(service.balrog.state["items"]["c128/human-priest"]["start"])
+
+    def test_balrog_platforms_join_from_level_1_and_take_no_other_port(self) -> None:
+        """Maintainer, 2026-11-06: the Balrog queue on the C64, every
+        combination from level 1; the C128's M7 successes do not join."""
+        service = self.service(4, 2)
+        service.config["balrog_platforms"] = ["c64"]
+        q = queue.Queue("deep", service.home)
+        entry = q.platform("c128")
+        entry["items"]["elf-priest"]["success"] = {"run": "m7"}
+        service.graduate(q)
+        items = service.balrog.state["items"]
+        self.assertEqual(sorted(items), sorted(f"c64/{c}" for c in queue.combos("c64")))
+        service.graduate(q)   # joined once
+        self.assertEqual(len(service.balrog.state["order"]), len(queue.combos("c64")))
+        service.balrog_start({**self.success_run(service), "platform": "c128"})
+        self.assertNotIn("c128/elf-priest", items)
+        self.assertTrue(service.start_balrog())
+        job = next(iter(service.running.values()))
+        self.assertEqual((job["platform"], job["build"]), ("c64", "b0"))
+        self.assertNotIn("resume", job)
+
+    def test_an_m7_success_leads_a_chain_still_below_its_level(self) -> None:
         balrog = self.balrog()
         balrog.graduate("c128", "elf-priest", {})
-        balrog.graduate("c64", "human-priest", {})
-        balrog.state["items"]["c128/elf-priest"]["start"] = {"run": "r", "snapshot": "deep.vsf"}
-        self.assertEqual([balrog.take()["character"] for _ in range(3)], ["human-priest"] * 3)
-        balrog.state["items"]["c128/elf-priest"]["start"] = {"run": "r", "save": "balrog/r"}
-        self.assertEqual({balrog.take()["character"] for _ in range(2)}, {"elf-priest", "human-priest"})
-
-    def test_unplayable_graduates_leave_the_main_queue_every_worker(self) -> None:
-        service = self.service(4, 2)
-        service.config["platforms"] = ["c128"]
-        q = queue.Queue("deep", service.home)
-        q.platform("c128")
-        service.balrog.graduate("c128", "elf-priest", {"run": "r"})
-        service.balrog.state["items"]["c128/elf-priest"]["start"] = {"run": "r", "snapshot": "deep.vsf"}
-        service.schedule(q, {})
-        self.assertEqual([j["queue"] for j in service.running.values()], ["main"] * 4)
-        self.assertFalse(any(j["paused"] for j in service.running.values()))
+        item = balrog.state["items"]["c128/elf-priest"]
+        item["start"] = {"run": "r1-clvl12", "clvl": 12, "checkpoint": True, "save": "balrog/r1-clvl12"}
+        balrog.set_start(self.balrog_record("m7", "reached"), {"run": "m7", "save": "balrog/m7"})
+        self.assertEqual(item["start"]["run"], "m7")
+        self.assertEqual([s["run"] for s in item["start_history"]], ["r1-clvl12"])
 
     def test_a_saved_brain_loads_with_the_balrog_goal(self) -> None:
         from moria_playtest.brain import Brain
@@ -556,10 +626,10 @@ class BalrogQueueTest(unittest.TestCase):
 
     def test_a_snapshot_port_checkpoint_is_its_level_entry_snapshot(self) -> None:
         service = self.service(4, 2)
-        service.balrog_start(self.success_run(service))
-        item = service.balrog.state["items"]["c64/elf-priest"]
+        service.balrog_start({**self.success_run(service), "platform": "plus4"})
+        item = service.balrog.state["items"]["plus4/elf-priest"]
         self.checkpoint_run(service, "b1", 26, 300_000, snapshot=True)
-        rec = {**self.balrog_record("b1"), "platform": "c64"}
+        rec = {**self.balrog_record("b1"), "platform": "plus4"}
         self.assertTrue(service.balrog_checkpoint(rec, {"build": "b0", "resume": item["start"]}))
         self.assertEqual(Path(item["start"]["snapshot"]), service.home / "balrog" / "b1-clvl26" / "balrog-1-s1-dl20.vsf")
         self.assertTrue(Path(item["start"]["snapshot"]).exists())

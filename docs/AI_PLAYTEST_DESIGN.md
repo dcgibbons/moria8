@@ -3048,6 +3048,29 @@ a win is unlikely until the bot plays much better.
   through checkpoints counts for M8 (maintainer: "it should count"), with
   its restores in the item's `wins`. Later, once the gameplay tweaks are
   done, a final Balrog queue plays from level 1 on an ongoing basis.
+- **The newest build, else level 1 (maintainer, 2026-11-06).** Until then a
+  start played the build that saved it unless the game was byte-identical
+  (`same_game_and_brain`), so as the C128 game changed every start stayed
+  on its old build: 23 of 31 on builds from before the checkpoint code,
+  with no checkpoint ever kept. Now every Balrog game plays the newest
+  build with its port (`Service.newest_build`: the main queue's or the
+  build queue's, by when made). A start goes on there when its save loads
+  (`start_loads`: the save's version within that build's loader's range,
+  `save_versions`, and a brain its bot loads) or, for a snapshot, the game
+  is the same (never on a `graduate_save` port). Otherwise the start and
+  its chain move to the item's `retired_starts` and the game is a new
+  character from level 1, which keeps a checkpoint at every new level
+  from 1, so the chain climbs from there. An M7 success leads a chain still
+  below level 25.
+- **On the C64, from level 1 (maintainer, 2026-11-06).** `balrog_platforms`
+  in `playtest/queue.json` names the ports the Balrog queue plays: every
+  combination of each joins (`Balrog.join`) and plays from level 1 until it
+  has a start, and no other port's M7 success joins. Set to the C64; the
+  C128's Balrog state moved to `archive/2026-11-06-state-balrog-c128.json`.
+  The main queue's build includes those ports. The C64 keeps its starts and
+  checkpoints as saved games, as the C128 does (`Port.graduate_save`), so
+  they go on in any newer build whose loader takes their save version; a
+  snapshot would restore only into the same game.
 - **Budget.** `balrog_budget`, 3,000,000 steps a run, counted from the
   graduate's first step (DL30 took the first graduate 125,346); a
   checkpoint's run counts it from the checkpoint's step.
