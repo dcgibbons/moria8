@@ -79,8 +79,8 @@ wizard_level_jump_generate:
     sta wizard_level_jump_active
     // The generation overlay replaces the current UI overlay. Abandon the
     // wizard call frames before generation so its deep stack use cannot wrap
-    // into stale modal return addresses.
-    ldx #$ff
+    // into stale modal return addresses: back to the main loop's level.
+    ldx main_loop_sp
     txs
     jsr level_change_generate_current
     jmp main_loop
@@ -95,9 +95,10 @@ wizard_level_jump_generate:
 // flow's frames are abandonable, so reset the stack first: dungeon
 // generation pushes ~250 bytes deep, which on top of the read flow's frames
 // wraps the 256-byte stack page and overwrites them; later returns would
-// then consume generation leftovers as return addresses.
+// then consume generation leftovers as return addresses. The reset goes
+// back to the main loop's level (main_loop_sp), not $FF.
 scroll_teleport_level_exec:
-    ldx #$ff
+    ldx main_loop_sp
     txs
     jsr level_change_generate_current
     jmp main_loop

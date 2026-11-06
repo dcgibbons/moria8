@@ -829,6 +829,13 @@ c128_test_town_pass_sym:
 
     jmp main_loop
 
+// main_loop_sp — The main loop's own stack level, kept each pass. A level
+// change that abandons its caller's frames (Teleport Level, a Wizard jump)
+// restores it, not $FF: the frames below the loop stay, and the command
+// prompt keeps its stack level (2026-11-06: $FB against $F2 on the Plus/4
+// and $ED on the CX16 after Teleport Level, the queue's stack findings).
+main_loop_sp: .byte $ff
+
 #if !HAL_PLATFORM_GAME_LOOP_MODAL_PERSIST
 .const DPGR_GAME_ERROR_COL = (SCREEN_COLS - 22) / 2
 .const DPGR_PROMPT_COL = (SCREEN_COLS - 19) / 2
@@ -948,6 +955,8 @@ c64_test_single_drive_load_return_resume_entry:
 c64_test_after_load_resume_game:
 #endif
 main_loop:
+    tsx
+    stx main_loop_sp
 #if PLAYTEST_FAULT_STACK_LEAK
     // Playtester self-test only (`make playtest-selftest`): once the first
     // turn has passed, leak one stack byte per main-loop pass so the auditor's
@@ -1961,7 +1970,7 @@ level_change_generate_current:
 #if !HAL_PLATFORM_WIZARD_JUMP_INLINE_PLAY
     lda wizard_level_jump_active
     beq !lcgc_keep_stack+
-    ldx #$ff
+    ldx main_loop_sp
     txs
 !lcgc_keep_stack:
 #endif

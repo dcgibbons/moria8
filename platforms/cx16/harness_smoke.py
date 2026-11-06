@@ -865,6 +865,35 @@ def scenario_scroll_rune(tb: X16Bench) -> None:
     tb.log("SCENARIO DONE")
 
 
+def scenario_scroll_teleport_level(tb: X16Bench) -> None:
+    """Teleport Level abandons the read flow's frames before generating the
+    new level: back to the main loop's own stack level (main_loop_sp), not
+    $FF, so the command prompt keeps its stack level (2026-11-06: the build
+    queue's stack findings, $FB against $ED after the scroll)."""
+    tb.chargen("A")
+    tb.assert_line("wizard_menu", tb.wizard_menu_open(), "wizard menu did not open")
+    tb.press_until("ITEM", "G")
+    tb.press("1")
+    tb.press("0")
+    tb.press("1")
+    tb.press("\r")
+    tb.assert_line("wizard_gain", tb.screen_has("OK"), "item generation did not report OK")
+    sp_addr = tb.syms["main_loop_sp"]
+    tb.press("L")                    # a main-loop pass at the command level
+    tb.drain_more()
+    before = tb.read_u8(sp_addr)
+    tb.press("r")
+    tb.assert_line("read_prompt", tb.screen_has("Read which scroll"), "read prompt did not open")
+    tb.press("a")
+    tb.drain_more()
+    tb.assert_line("teleported", tb.read_u8(tb.syms["zp_player_dlvl"]) == 1, "the scroll did not reach DL1 from the town")
+    tb.press("L")
+    tb.drain_more()
+    after = tb.read_u8(sp_addr)
+    tb.assert_line("loop_sp_kept", after == before, f"main loop SP ${after:02X} after the scroll, ${before:02X} before")
+    tb.log("SCENARIO DONE")
+
+
 def scenario_dungeon_descend(tb: X16Bench) -> None:
     tb.chargen("A")
     descended = _descend_to_dl1(tb)
@@ -1345,6 +1374,7 @@ SCENARIO_FUNCS = {
     "wizard_flow": scenario_wizard_flow,
     "wizard_summon_town": scenario_wizard_summon_town,
     "scroll_rune": scenario_scroll_rune,
+    "scroll_teleport_level": scenario_scroll_teleport_level,
     "balrog_victory": scenario_balrog_victory,
     "quaff_p3": scenario_quaff_p3,
     "scroll_objdet": scenario_scroll_objdet,
