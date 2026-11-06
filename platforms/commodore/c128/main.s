@@ -4136,6 +4136,7 @@ tramp_p3_dispatch_items:
     bcs !failed+
     pla
     jsr irs_dispatch_p3_overlay
+tramp_p3_dispatch_items_return:     // the modal handlers return here (scroll_p3_return_smoke)
     lda #OVL_ITEMS
     jsr overlay_load
     sec

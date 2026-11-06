@@ -480,27 +480,23 @@ irs_p3_mass_genocide:
     jmp irs_p3_report
 
 // irs_p3_report — Shared message + exit tail for the new Phase 3 effects.
-// On Apple IIe the death overlay owns the handlers; on C128 the modal-misc
-// overlay owns them, so the items overlay must be restored before returning
-// to the read-scroll flow.
+// A/Y = the message, in this overlay. On Apple IIe the death overlay owns
+// the handlers; on C128 the modal-misc overlay owns them.
+// Do NOT load OVL.ITEMS here: that evicts this overlay before its rts, which
+// then runs items-overlay bytes (2026-11-05: the C128 queue's $208C JAMs,
+// after ASL $2086 from those bytes). The resident caller (irs_p3_swap_exec;
+// C128 tramp_p3_dispatch_items) restores OVL.ITEMS.
 irs_p3_report:
-#if HAL_PLATFORM_COMPACT_PLAY_SLOT
-    // pmx_print_inline lives in OVL.SPELL on this platform, which is not
-    // loaded here (the router runs from OVL.DEATH). Inline its body:
-    // msg_print is resident and the message string is in this overlay.
-    // Do NOT load OVL.ITEMS here — that would evict this overlay before the
-    // rts fetches, executing items-overlay bytes at this address. The
-    // resident router (irs_p3_swap_exec) restores OVL.ITEMS after we return.
+#if HAL_PLATFORM_COMPACT_PLAY_SLOT || HAL_PLATFORM_SCROLL_P3_MODAL_DEATH_TRAMP
+    // pmx_print_inline's body, inlined: it lives in OVL.SPELL on the compact
+    // ports and in OVL.DEATH on the C128, neither loaded here (the C128's
+    // call ran the items overlay's leftover bytes at its address).
+    // msg_print is resident.
     sta zp_ptr0
     sty zp_ptr0_hi
     jmp msg_print              // tail call
 #else
-    jsr pmx_print_inline
-#if HAL_PLATFORM_SCROLL_P3_MODAL_DEATH_TRAMP
-    lda #OVL_ITEMS
-    jsr overlay_load
-#endif
-    rts
+    jmp pmx_print_inline       // tail call
 #endif
 
 irs_od_slot: .byte 0
