@@ -1,5 +1,5 @@
 {
- "workers": 13,
+ "workers": 24,
  "min_per_platform": 1,
  "platforms": [
   "c128"
@@ -16,7 +16,7 @@
  "fetch_url": "https://github.com/dcgibbons/moria8.git",
  "paused": false,
  "epoch": "2026-11-04-c128-catalog",
- "balrog_workers": 7,
+ "balrog_workers": 11,
  "balrog_budget": 3000000,
  "parallel_cap": 12,
  "main_characters": [
@@ -26,5 +26,15 @@
   "halfling-warrior",
   "elf-warrior",
   "half-elf-paladin"
- ]
+ ],
+ "build_platforms": [
+  "c64",
+  "plus4",
+  "c128",
+  "apple2",
+  "atari8",
+  "bbcmaster",
+  "cx16"
+ ],
+ "build_goal": "clvl10"
 }

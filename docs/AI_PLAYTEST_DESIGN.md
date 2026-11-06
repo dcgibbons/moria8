@@ -2819,6 +2819,13 @@ and their frozen suites stay as they are, one game per goal.
   run counts like any other (runs, best, success) but leaves the item's
   place in the order to the item's own run. With ten combinations left,
   14 of 24 workers had been replaying successes.
+- **The build queue (maintainer, 2026-11-05).** Beside the main queue, one
+  run at a time on every port, of the branch's newest commit, so each port
+  is played as it changes. Each port cycles through all 31 combinations in
+  table order, whatever each run's outcome, at a short goal (`clvl10`, its
+  budget scaled by the port's map area) so a cycle takes days, not weeks.
+  Its runs count only in its own state; they move nothing in the main or
+  Balrog queues and are not rated.
 - **Seeds.** Every run draws a new seed, recorded with the run (with the
   commit and build) so that any run can be replayed exactly. A retry tests
   the combination again, not the same dungeon.
@@ -3069,6 +3076,7 @@ removes `build/` and the run records are kept for good:
 | `builds/<id>/` | a build snapshot (below); removed once no kept run or open subqueue uses it |
 | `subqueues/<name>.json` | a subqueue, its items, results and report; `<name>.cancel` cancels it, or only the characters it lists |
 | `state-balrog.json` | the Balrog queue (§23.9): its graduates, their turn order, runs, wins and best run |
+| `state-build.json` | the build queue: each port's place in its cycle, and every combination's runs, goals reached, last and best run |
 | `balrog/<run>/` | a Balrog start: the M7 success's clvl-25 snapshot and saved brain; removed once no graduate or run uses it |
 | `service.json` | the service's heartbeat, config, build state and recent log |
 | `strategy-evidence.md` | `make playtest-strategy-evidence`'s report: the evidence behind the strategy guide (§23.7), regenerated from the records |
@@ -3106,6 +3114,21 @@ while it was down as abandoned (not counted; the item goes back to the
 head). A run that dies under a live service is an error and counts. A stale
 build (the disk does not match its program) is not counted either; the
 platform waits a minute. Seeds come from the system's random source.
+
+**The build queue** (`queue.BuildQueue`, `Service.refresh_ci`,
+`Service.start_build`; config `build_platforms`, `build_goal`). Every
+`fetch_every_s` the service compares HEAD with the build queue's build and,
+when HEAD has moved, snapshots HEAD's commit (`git archive`, never the
+working tree's edits) for every port in `build_platforms`; a failed build
+keeps the one before and shows its error. Each port with no build-queue run
+playing starts one: the combination after the last, or again one whose run
+did not count (stale, abandoned). Its workers come out of the total, as the
+Balrog queue's do. The MAME and Plus/4 ports need their ROMs in the
+service's environment (a drop-in beside `x16.conf`: `A2ROMS`,
+`ATARI8ROMS`, `BBCMROMS`, and JiffyDOS for the Plus/4 and so the C64). The
+dashboard's Build queue panel is a grid like M6's "every port plays" (the
+maintainer, 2026-11-06): a row per combination, a cell per port with its
+last game's character level coloured by outcome, or the game playing now; `make playtest-queue-status` prints each port's line.
 
 **Subqueues borrow workers by pausing.** A main-queue run lasts hours, so the
 service does not wait for one to end: it pauses the newest main runs (a

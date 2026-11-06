@@ -85,6 +85,8 @@ DEFAULTS: dict[str, Any] = {
     "remote": "origin", "branch": "main", "fetch_url": "", "paused": False, "epoch": "",
     "balrog_workers": 0, "balrog_budget": 3_000_000,
     "main_characters": [],   # non-empty: the main queue plays only these (2026-11-05: the Balrog starts it lacks)
+    # The build queue (BuildQueue): one run per port, of HEAD's commit
+    "build_platforms": [], "build_goal": "clvl10",
 }
 
 
@@ -132,13 +134,16 @@ def tree_state() -> dict[str, Any]:
     return {"commit": git("rev-parse", "HEAD"), "dirty": bool(git("status", "--porcelain"))}
 
 
-def build_env() -> dict[str, str]:
-    """The tree's Kick Assembler for a snapshot's make (downloads stay here)."""
-    env = dict(os.environ)
-    jar = ROOT / "tools" / "kickass" / "KickAss.jar"
-    if "KICKASS" not in env and jar.exists():
-        env["KICKASS"] = str(jar)
-    return env
+def link_kickass(src: Path) -> None:
+    """The tree's Kick Assembler in a snapshot (downloads stay here), where
+    every port's Makefile finds it by default. Not by KICKASS: commits
+    before 2026-11-06 have Atari and BBC Makefiles that read it as a
+    command, not the jar, and their Atari build tried to download it."""
+    tools = ROOT / "tools" / "kickass"
+    dest = src / "tools" / "kickass"
+    if (tools / "KickAss.jar").exists() and not dest.exists():
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.symlink_to(tools, target_is_directory=True)
 
 
 def snapshot_build(platforms: list[str], source: str = "commit", home: Path = HOME) -> str:
@@ -182,11 +187,12 @@ def snapshot_build(platforms: list[str], source: str = "commit", home: Path = HO
                     shutil.copy2(path, src / name)
     else:
         src = out
+    link_kickass(src)
     for platform in platforms:
         if platform in meta.get("platforms", []):
             continue
         target = PORTS[platform].disk_target
-        made = subprocess.run(["make", "-s", target], cwd=src, env=build_env(), capture_output=True,
+        made = subprocess.run(["make", "-s", target], cwd=src, capture_output=True,
                               text=True, timeout=1800)
         if made.returncode:
             raise RuntimeError(f"make {target} failed in build {build_id}: "
@@ -797,6 +803,58 @@ class Balrog:
                             "deepest": deepest(record)}
 
 
+class BuildQueue:
+    """The continuous build queue (§23.4; maintainer 2026-11-05): one run at
+    a time on each port in ``build_platforms``, of the branch's newest
+    commit, cycling through every race/class combination in table order
+    whatever each run's outcome, at ``build_goal``. It shows each port
+    playing as it changes; it moves nothing in the main or Balrog queues."""
+
+    def __init__(self, home: Path = HOME) -> None:
+        self.path = home / "state-build.json"
+        self.state: dict[str, Any] = read_json(self.path) or {"created": now(), "platforms": {}}
+
+    def save(self) -> None:
+        write_json(self.path, self.state)
+
+    def platform(self, name: str) -> dict[str, Any]:
+        entry = self.state["platforms"].setdefault(name, {"next": 0, "cycle": 1, "retry": None, "items": {}})
+        for combo in combos(name):
+            entry["items"].setdefault(combo, {"runs": 0, "reached": 0, "last": None, "best": None})
+        return entry
+
+    def take(self, name: str) -> str:
+        """The next combination: one whose run did not count (stale,
+        abandoned, cancelled) first, else the cycle's next."""
+        entry = self.platform(name)
+        if entry["retry"]:
+            combo, entry["retry"] = entry["retry"], None
+            return combo
+        order = combos(name)
+        combo = order[entry["next"] % len(order)]
+        entry["next"] += 1
+        if entry["next"] >= len(order):
+            entry["next"], entry["cycle"] = 0, entry["cycle"] + 1
+        return combo
+
+    def finish(self, record: dict[str, Any]) -> None:
+        entry = self.platform(record["platform"])
+        if record["outcome"] not in COUNTED:
+            entry["retry"] = record["character"]
+            return
+        item = entry["items"][record["character"]]
+        item["runs"] += 1
+        item["reached"] += record["outcome"] == "reached"
+        item["last"] = {k: record.get(k) for k in ("id", "outcome", "steps", "clvl", "max_dlvl", "ended", "seed",
+                                                   "commit")}
+        item["last"]["cause"] = (record.get("death") or {}).get("cause")
+        best = item["best"]
+        progress = (record.get("clvl") or 0, record.get("max_dlvl") or 0)
+        if best is None or progress > (best["clvl"], best["max_dlvl"]):
+            item["best"] = {"clvl": progress[0], "max_dlvl": progress[1], "run": record["id"],
+                            "commit": record.get("commit")}
+
+
 # -- subqueues ---------------------------------------------------------------------
 
 def parse_seeds(text: str) -> list[int]:
@@ -1010,8 +1068,13 @@ class Service:
         self.last_sweep = 0.0
         self.stopping = False
         self.log_lines: list[str] = []
-        self.backoff: dict[str, float] = {}   # platform -> time a stale build may be retried
+        self.backoff: dict[str, float] = {}   # platform (build/<platform>) -> time a stale build may be retried
         self.balrog = Balrog(home)
+        self.buildq = BuildQueue(home)
+        built = (read_json(home / "service.json") or {}).get("build_queue_build")
+        self.ci_build: str | None = built if built and build_meta(built, home) else None
+        self.ci_state: dict[str, Any] = {}
+        self.last_ci = 0.0
 
     # -- bookkeeping
 
@@ -1026,7 +1089,8 @@ class Service:
     def heartbeat(self) -> None:
         write_json(self.home / "service.json", {
             "pid": os.getpid(), "updated": now(), "config": self.config, "build": self.build_id,
-            "build_state": self.build_state, "log": self.log_lines})
+            "build_state": self.build_state, "build_queue_build": self.ci_build, "build_queue_state": self.ci_state,
+            "log": self.log_lines})
 
     # -- builds and origin
 
@@ -1079,6 +1143,30 @@ class Service:
         state["playing"] = meta
         state["stale_build"] = bool(meta) and meta.get("commit") != state.get("head")
         self.build_state = state
+
+    def refresh_ci(self) -> None:
+        """The build queue's build: HEAD's commit for every port in
+        ``build_platforms``, snapshotted when HEAD moves (checked every
+        ``fetch_every_s``). The main queue's fetch and fast-forward, if any,
+        move HEAD first. A failed build keeps the one before."""
+        platforms = list(self.config.get("build_platforms") or [])
+        if not platforms or time.time() - self.last_ci < self.config["fetch_every_s"]:
+            return
+        self.last_ci = time.time()
+        state: dict[str, Any] = {"checked": now()}
+        try:
+            head = git("rev-parse", "HEAD")
+            state["head"] = head
+            current = build_meta(self.ci_build, self.home) if self.ci_build else {}
+            if current.get("commit") != head or not set(platforms) <= set(current.get("platforms", [])):
+                self.log(f"build queue: building {head[:12]} for {', '.join(platforms)}")
+                self.ci_build = snapshot_build(platforms, "commit", self.home)
+                self.log(f"build queue: playing build {self.ci_build}")
+        except (RuntimeError, OSError, subprocess.SubprocessError) as exc:
+            state["error"] = str(exc)[-2000:]
+            self.log(f"build queue: build failed: {str(exc)[:300]}")
+        state["playing"] = build_meta(self.ci_build, self.home) if self.ci_build else {}
+        self.ci_state = state
 
     # -- runs
 
@@ -1145,7 +1233,7 @@ class Service:
             del self.running[run_id]
             self.save_running()
             if record["outcome"] == "stale":
-                self.backoff[job["platform"]] = time.time() + 60
+                self.backoff[("build/" if job["queue"] == "build" else "") + job["platform"]] = time.time() + 60
             if job.get("suite"):
                 record["suite"] = job["suite"]
             with (self.home / "runs.jsonl").open("a") as fh:
@@ -1162,6 +1250,10 @@ class Service:
                     queue.save()
                 if job["goal"] == "deep" and record["outcome"] == "reached":
                     self.balrog_start(record)
+                continue
+            if job["queue"] == "build":
+                self.buildq.finish(record)
+                self.buildq.save()
                 continue
             if job["queue"] == "balrog":
                 if not self.balrog_checkpoint(record, job) and self.balrog.fell_short(record, job):
@@ -1384,9 +1476,14 @@ class Service:
         # The Balrog queue's workers come out of the total, as a subqueue's do.
         balrog_running = sum(1 for j in self.running.values() if j["queue"] == "balrog")
         balrog_pending = 0
-        if self.balrog.ready() and self.build_id and max(self.backoff.values(), default=0) < time.time():
+        main_backoff = max((t for p, t in self.backoff.items() if not p.startswith("build/")), default=0)
+        if self.balrog.ready() and self.build_id and main_backoff < time.time():
             balrog_pending = max(0, int(config["balrog_workers"]) - balrog_running)
-        pending = sum(self.sub_pending(sub) for sub in subs.values()) + balrog_pending
+        # The build queue: one run per port, out of the total as the Balrog queue's are.
+        build_playing = {j["platform"] for j in self.running.values() if j["queue"] == "build"}
+        build_ready = [p for p in config.get("build_platforms") or [] if p not in build_playing
+                       and self.backoff.get(f"build/{p}", 0) < time.time()] if self.ci_build else []
+        pending = sum(self.sub_pending(sub) for sub in subs.values()) + balrog_pending + len(build_ready)
         target = max(minimum, total - sub_running - pending)
         if len(main_active) > target:
             for run_id in sorted(main_active, key=lambda r: self.running[r]["started"])[target:]:
@@ -1404,6 +1501,11 @@ class Service:
             ready.sort(key=lambda p: per_platform[p])
             if ready and len(main_active) < minimum and self.build_id:
                 run_id = self.start_main(queue, ready[0])
+            elif build_ready:
+                self.start_build(build_ready.pop(0))
+                pending -= 1
+                active += 1
+                continue
             elif balrog_pending:
                 if not self.start_balrog():   # no graduate can play: the main queue keeps the workers
                     pending -= balrog_pending
@@ -1456,6 +1558,17 @@ class Service:
         self.start(job)
         return True
 
+    def start_build(self, platform: str) -> None:
+        """The build queue's next combination on ``platform``, at the goal's
+        own budget for the port."""
+        assert self.ci_build is not None
+        goal = str(self.config.get("build_goal") or "clvl10")
+        combo = self.buildq.take(platform)
+        self.buildq.save()
+        seed = random.SystemRandom().randrange(1, 2**31)
+        budget = for_port(GOALS[goal], PORTS[platform]).step_budget
+        self.start(self.new_job("build", platform, combo, goal, seed, budget, self.ci_build))
+
     def start_main(self, queue: Queue, platform: str) -> str:
         assert self.build_id is not None
         playing = collections.Counter(job["character"] for job in self.running.values()
@@ -1482,7 +1595,7 @@ class Service:
             return
         self.last_sweep = time.time()
         cutoff = time.time() - float(self.config["retention_days"]) * 86400
-        kept_builds = {self.build_id} | {job["build"] for job in self.running.values()}
+        kept_builds = {self.build_id, self.ci_build} | {job["build"] for job in self.running.values()}
         for run_dir in (self.home / "runs").glob("*"):
             if run_dir.name in self.running:
                 continue
@@ -1518,7 +1631,7 @@ class Service:
         if config != self.config:
             self.log(f"config: {json.dumps(config)}")
             self.config = config
-            self.last_fetch = 0.0
+            self.last_fetch = self.last_ci = 0.0
         if config["goal"] != queue.goal or config.get("epoch", "") != queue.epoch:
             queue = Queue(config["goal"], self.home, config.get("epoch", ""))
         for platform in config["platforms"]:
@@ -1527,6 +1640,7 @@ class Service:
         self.reap(queue, subs)
         self.graduate(queue)
         self.refresh_build()
+        self.refresh_ci()
         self.finish_subs(subs)
         subs = {name: sub for name, sub in subs.items() if not sub.get("done")}
         if not self.stopping:
@@ -1750,6 +1864,17 @@ def status() -> int:
             print(f"  {combo:22} runs {item['runs']:3} ok {item['successes']:2} streak {item['streak']:+3}"
                   f"{' STRUGGLING' if item['struggling'] else ''}{' (playing)' if item['in_flight'] else ''}"
                   f"  last {last.get('outcome', '-')} clvl {last.get('clvl', '-')} DL {last.get('max_dlvl', '-')}")
+    if config.get("build_platforms"):
+        ci = service.get("build_queue_state") or {}
+        print(f"build queue: goal {config['build_goal']}, build {service.get('build_queue_build')}"
+              f"{' (build failed: ' + ci['error'][:200] + ')' if ci.get('error') else ''}")
+        buildq = BuildQueue()
+        for name in config["build_platforms"]:
+            entry = buildq.platform(name)
+            items = entry["items"]
+            runs = sum(i["runs"] for i in items.values())
+            print(f"  {name}: cycle {entry['cycle']} ({entry['next']}/{len(items)}), {runs} runs, "
+                  f"{sum(i['reached'] for i in items.values())} reached")
     for path in sorted((HOME / "subqueues").glob("*.json")):
         sub = read_json(path) or {}
         state = "done" if sub.get("done") else "cancelled" if sub.get("cancelled") else "running"

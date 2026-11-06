@@ -166,6 +166,34 @@ class ScheduleTest(unittest.TestCase):
         self.assertEqual(entry["order"], [c for c in queue.combos("c64")
                                           if c not in ("human-warrior", "elf-warrior")])   # the others keep their places
 
+    def test_the_build_queue_plays_one_run_per_port(self) -> None:
+        """2026-11-05: one run per port in build_platforms, of the build
+        queue's own build, out of the total; the main queue keeps the rest."""
+        service = self.service(6)
+        service.config.update(build_platforms=["c64", "atari8", "apple2"], build_goal="clvl10")
+        service.ci_build = "head1"
+        q = queue.Queue("deep", service.home)
+        q.platform("c64")
+        service.schedule(q, {})
+        build = [j for j in service.running.values() if j["queue"] == "build"]
+        self.assertEqual(sorted(j["platform"] for j in build), ["apple2", "atari8", "c64"])
+        self.assertTrue(all(j["build"] == "head1" and j["goal"] == "clvl10" for j in build))
+        self.assertEqual({j["character"] for j in build}, {queue.combos("c64")[0]})
+        by_port = {j["platform"]: j["step_budget"] for j in build}
+        self.assertEqual(by_port["c64"], 100_000)
+        self.assertEqual(by_port["apple2"], round(100_000 * queue.PORTS["apple2"].map_scale))   # 80-column map
+        self.assertEqual(sum(j["queue"] == "main" for j in service.running.values()), 3)
+        service.schedule(q, {})   # one each: nothing more starts
+        self.assertEqual(sum(j["queue"] == "build" for j in service.running.values()), 3)
+
+    def test_no_build_queue_run_without_its_build(self) -> None:
+        service = self.service(3)
+        service.config["build_platforms"] = ["c64"]
+        q = queue.Queue("deep", service.home)
+        q.platform("c64")
+        service.schedule(q, {})
+        self.assertFalse(any(j["queue"] == "build" for j in service.running.values()))
+
     def sub(self, count: int) -> dict:
         items = [{"goal": "clvl5", "character": "human-mage", "platform": "c64", "seed": n, "step_budget": 10}
                  for n in range(count)]
@@ -206,6 +234,51 @@ class ScheduleTest(unittest.TestCase):
         service.config["paused"] = True
         service.schedule(q, {})
         self.assertTrue(all(j["paused"] for j in service.running.values()))
+
+
+class BuildQueueTest(unittest.TestCase):
+    """The build queue cycles every combination in table order whatever
+    the outcome; a run that did not count plays again first."""
+
+    def setUp(self) -> None:
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.home = Path(tmp.name)
+        self.buildq = queue.BuildQueue(self.home)
+
+    def test_cycles_in_table_order(self) -> None:
+        order = queue.combos("bbcmaster")
+        taken = [self.buildq.take("bbcmaster") for _ in range(len(order) + 2)]
+        self.assertEqual(taken, order + order[:2])
+        self.assertEqual(self.buildq.platform("bbcmaster")["cycle"], 2)
+
+    def test_a_death_moves_on_and_an_abandoned_run_plays_again(self) -> None:
+        first = self.buildq.take("c64")
+        self.buildq.finish({**record(first, "died", clvl=7), "commit": "abc"})
+        second = self.buildq.take("c64")
+        self.assertNotEqual(second, first)
+        self.buildq.finish(record(second, "abandoned"))
+        self.assertEqual(self.buildq.take("c64"), second)
+        item = self.buildq.platform("c64")["items"][first]
+        self.assertEqual((item["runs"], item["reached"], item["best"]["clvl"], item["last"]["commit"]),
+                         (1, 0, 7, "abc"))
+        self.assertEqual(self.buildq.platform("c64")["items"][second]["runs"], 0)
+
+    def test_its_runs_move_nothing_in_the_main_queue(self) -> None:
+        service = queue.Service(self.home, self.home / "queue.json")
+        q = queue.Queue("deep", self.home)
+        q.platform("c64")
+        before = json.dumps(q.state, sort_keys=True)
+        combo = service.buildq.take("c64")
+        run_dir = self.home / "runs" / "b1"
+        queue.write_json(run_dir / "result.json", {**record(combo, "reached", clvl=10), "id": "b1", "queue": "build",
+                                                    "goal": "deep"})
+        service.running["b1"] = {"id": "b1", "queue": "build", "platform": "c64", "character": combo,
+                                 "goal": "deep", "pid": 0, "started": 0}
+        service.reap(q, {})
+        self.assertEqual(json.dumps(q.state, sort_keys=True), before)
+        self.assertEqual(queue.BuildQueue(self.home).platform("c64")["items"][combo]["reached"], 1)
+        self.assertEqual(queue.Balrog(self.home).state["items"], {})
 
 
 class SubqueueReportTest(unittest.TestCase):
@@ -1461,6 +1534,21 @@ class RestartBuildTest(unittest.TestCase):
             self.assertEqual(queue.Service(home, home / "q.json").build_id, "b7")
             queue.write_json(home / "service.json", {"build": "gone"})
             self.assertIsNone(queue.Service(home, home / "q.json").build_id)
+
+    def test_the_build_queue_build_is_kept(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            queue.write_json(home / "builds" / "h1" / "build.json", {"id": "h1", "commit": "c", "platforms": ["c64"]})
+            queue.write_json(home / "service.json", {"build_queue_build": "h1"})
+            self.assertEqual(queue.Service(home, home / "q.json").ci_build, "h1")
+
+    def test_a_snapshot_finds_the_trees_kick_assembler(self) -> None:
+        """Every port's Makefile finds it at its default path (2026-11-05:
+        KICKASS set to the jar sent the Atari build to download it)."""
+        with tempfile.TemporaryDirectory() as tmp:
+            queue.link_kickass(Path(tmp))
+            jar = Path(tmp) / "tools" / "kickass" / "KickAss.jar"
+            self.assertEqual(jar.exists(), (queue.ROOT / "tools" / "kickass" / "KickAss.jar").exists())
 
 
 class SummonPhaseTest(unittest.TestCase):
