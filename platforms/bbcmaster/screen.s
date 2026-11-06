@@ -173,11 +173,49 @@ beeb_font_init:
     plp
     rts
 
+// The ANDY bytes the MOS mode change writes (screen_init), and their keep.
+.const BEEB_ANDY_MOS_BASE = $8800
+.const BEEB_ANDY_MOS_LEN  = $30
+beeb_andy_mos_keep: .fill BEEB_ANDY_MOS_LEN, 0
+
+// beeb_andy_on / beeb_andy_off — ANDY at $8000-$8FFF, then the MOS's
+// ROMSEL back. Preserve A, X, Y.
+beeb_andy_on:
+    pha
+    lda #ROMSEL_ANDY
+    sta SHEILA_ROMSEL
+    pla
+    rts
+beeb_andy_off:
+    pha
+    lda zp_mos_romsel_shadow
+    sta SHEILA_ROMSEL
+    pla
+    rts
+
 // ============================================================
 // screen_init — Disable MOS VDU cursor, silence WRCHV, and program
 // Video ULA & 6845 CRTC for 80x24 Mode 0 in LYNNE
 // ============================================================
 screen_init:
+    // MOS 3.20 keeps VDU workspace in ANDY: the mode change below writes its
+    // default ECF patterns (VDU 23,2-5) at $8800-$882F, inside the Huffman
+    // corpus boot loaded there, so those strings decoded wrong (2026-11-06:
+    // "Identify which item" came out empty). Keep the corpus bytes across
+    // the MOS calls; WRCHV is silenced after them, so no later VDU call
+    // reaches ANDY.
+    php
+    sei                     // a MOS IRQ restores ROMSEL from its shadow
+    ldx #BEEB_ANDY_MOS_LEN - 1
+!andy_keep:
+    jsr beeb_andy_on
+    lda BEEB_ANDY_MOS_BASE,x
+    jsr beeb_andy_off
+    sta beeb_andy_mos_keep,x
+    dex
+    bpl !andy_keep-
+    plp
+
     // Switch MOS VDU driver to Shadow Mode 0 (VDU 22, 128) BEFORE silencing WRCHV.
     // This updates MOS's Video ULA shadow ($0248 = $9C so the 50 Hz VSYNC IRQ
     // never reverts $FE20 to Mode 7 Teletext) and programs the System VIA IC32
@@ -199,6 +237,18 @@ screen_init:
     jsr MOS_OSWRCH
     dex
     bne !vdu_z-
+
+    php
+    sei
+    ldx #BEEB_ANDY_MOS_LEN - 1
+!andy_back:
+    lda beeb_andy_mos_keep,x
+    jsr beeb_andy_on
+    sta BEEB_ANDY_MOS_BASE,x
+    jsr beeb_andy_off
+    dex
+    bpl !andy_back-
+    plp
 
     // Redirect WRCHV ($020E-$020F) to beeb_wrch_noop so no stray OSWRCH call
     // from MOS or DFS can ever write into Main RAM $3000-$7FFF

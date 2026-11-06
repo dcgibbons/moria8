@@ -93,6 +93,14 @@ def parse_symbols(sym_path: Path) -> dict[str, int]:
     return syms
 
 
+def andy_mos_bytes() -> str:
+    """The corpus bytes at ANDY $8800-$882F, where the MOS mode change keeps
+    its ECF patterns (screen.s screen_init), as a Lua table."""
+    data = (ROOT / "build" / "bbcmaster" / "beeb.huffdata").read_bytes()
+    load = data[0] | data[1] << 8
+    return "{" + ",".join(str(b) for b in data[2 + 0x8800 - load:2 + 0x8830 - load]) + "}"
+
+
 def build_lua_script(scenario: str, syms: dict[str, int]) -> str:
     kbdbuf = syms.get("beeb_kbdbuf", 0x1000)
     kbdbuf_len = syms.get("beeb_kbdbuf_len", 0x1001)
@@ -554,6 +562,16 @@ end
 function run()
     local ok = start_new_game("A")
     assert_line("chargen_town_ready", ok)
+    -- The Huffman corpus in ANDY survives the MOS mode change, whose VDU
+    -- workspace (ECF patterns) is $8800-$882F (screen_init, 2026-11-06).
+    local rom = prog:read_u8(0x00F4)
+    prog:write_u8(0xFE30, 0x84)
+    local intact = true
+    for i, b in ipairs(ANDY_MOS_BYTES) do
+        if prog:read_u8(0x8800 + i - 1) ~= b then intact = false end
+    end
+    prog:write_u8(0xFE30, rom)
+    assert_line("andy_corpus_intact", intact)
     assert_line("wizard_open", wizard_menu_open())
     press_until("ITEM", 0x47) -- 'G'
     send_key(0x39) -- '9'
@@ -611,9 +629,18 @@ function run()
     send_key(0x53) -- 'S' (search)
     wait_frames(60)
     assert_line("play_goes_on", in_town() and prog:read_u8(TURN_ADDR) ~= turn1)
+    -- A Scroll of Identify asks which item (2026-11-06: the BBC build
+    -- queue's two Identify reads showed a blank prompt).
+    drain_more(4)
+    inv_seed(1, {21, 1, 0, 0, 0, 0, 0, 0})
+    send_key(0x52) -- 'R' (read)
+    assert_line("read_prompt", wait_screen("Read which scroll", 80))
+    send_key(0x41) -- 'A'
+    local identify = wait_screen("Identify which item", 80)
+    assert_line("identify_prompt", identify)
     manager.machine:exit()
 end
-"""
+""".replace("ANDY_MOS_BYTES", andy_mos_bytes())
     elif scenario == "mage_list":
         body = """
 function run()

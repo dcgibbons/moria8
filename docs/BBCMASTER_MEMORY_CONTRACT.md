@@ -160,6 +160,14 @@ the font, character shadow, and screen bitmap in a single unified address space:
 | `$8000-$8D93` | 3,476 B | `$8000-$8D93` | **`BeebHuffData` (`beeb.huffdata`)** — Preloaded at boot: Huffman trees and compressed string corpus. Linked directly at physical `$8000-$8D93` (`620` B slack below `$9000`) and read via `mmu_safe_huff_read_ptr0/1` (`ROMSEL = $84`) with zero address arithmetic while keeping Bank 4 upper 12 KB (`$9000-$BFFF`) mapped. |
 | `$8D94-$8FFF` | 620 B | N/A | **Free `ANDY` Slack** (`620` B headroom for Huffman corpus expansion). |
 
+MOS 3.20 keeps VDU workspace in `ANDY` too: a mode change (`VDU 22`) writes
+its default ECF patterns (`VDU 23,2-5`) at `$8800-$882F`, inside the corpus.
+`screen_init` (`screen.s`) issues the game's only mode change after boot has
+loaded the corpus, so it keeps those 48 bytes across its MOS calls
+(`beeb_andy_mos_keep`) and then silences `WRCHV`, so no later VDU call reaches
+`ANDY` (2026-11-06: strings there, "Identify which item" among them, decoded
+wrong). `item_actions` checks the bytes against `beeb.huffdata` in town.
+
 ### 3.4 Sideways RAM Banks 4–7 (`$8000-$BFFF`, 4 × 16 KB = 64 KB — `ROMSEL = $04..$07`)
 
 | Bank | Physical Range | Pages / Size | Virtual / Link Address | Owner & Headroom |
