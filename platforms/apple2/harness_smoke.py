@@ -1381,7 +1381,8 @@ assert_line("aim_direction", wait_screen("Direction?"), "direction prompt missin
 press("L")
 emu.wait(0.5)
 if screen_has("-more-") then press(" ") emu.wait(0.5) end
-assert_line("cloud_dissipates", wait_screen("The cloud dissipates."),
+-- Missed, or a townsperson was in its path: either way the wand worked.
+assert_line("cloud_dissipates", wait_screen("The cloud dissipates.") or screen_has("looks confused"),
             "no miss message: " .. rowtext(0) .. " / " .. rowtext(1))
 for _ = 1, 4 do if screen_has("-more-") then press(" ") emu.wait(0.3) end end
 local turn1 = prog:read_u8(TURN_LO_ADDR)

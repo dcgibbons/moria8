@@ -600,10 +600,12 @@ function run()
     send_key(0x4C) -- 'L'
     wait_frames(30)
     drain_more(1)                            -- "Direction? -more-"
-    assert_line("cloud_dissipates", wait_screen("The cloud dissipates.", 80))
-    if not screen_has("The cloud dissipates.") then
+    -- Missed, or a townsperson was in its path: either way the wand worked.
+    local cloud = wait_screen("The cloud dissipates.", 80) or screen_has("looks confused")
+    if not cloud then
         for r = 0, 3 do print("DIAG row " .. r .. ": " .. rowtext(r)) end
     end
+    assert_line("cloud_dissipates", cloud)
     drain_more(4)
     local turn1 = prog:read_u8(TURN_ADDR)
     send_key(0x53) -- 'S' (search)
