@@ -3023,8 +3023,27 @@ a win is unlikely until the bot plays much better.
   game (an older build's) gets no start, and the Balrog queue skips that
   graduate until it succeeds again. Main-queue hang recovery on the C128
   still restores a snapshot, and would stall the same way.
+- **Checkpoints (maintainer, 2026-11-05).** Every Balrog death had thrown
+  its levels away: the first 8 games all died at level 25-28, a median
+  478,554 steps past their start, and the next run began at level 25 again.
+  Now a run keeps a checkpoint at each new character level, at the first
+  level entry after it with three quarters of its HP (`CHECKPOINT_HP`):
+  the level-entry snapshot, or on a `graduate_save` port its game saved
+  over slot 1 (`graduate.save` follows either save's screens) and loaded
+  back. When the run ends, its highest checkpoint past the combination's
+  start becomes the start (`balrog/<run>-clvl<N>/`, `Service.balrog_checkpoint`),
+  played in the run's build like any start; the start before it goes on the
+  item's `start_history`. After `CHECKPOINT_RETRIES` (3) runs from a
+  checkpoint end without a new level, the combination steps back to the
+  start before it (a dead end: too deep, drained, cursed). A newer M7
+  success becomes the chain's base instead of replacing it. Each start
+  records `restores`, the chain's runs that ended before it, and a win
+  through checkpoints counts for M8 (maintainer: "it should count"), with
+  its restores in the item's `wins`. Later, once the gameplay tweaks are
+  done, a final Balrog queue plays from level 1 on an ongoing basis.
 - **Budget.** `balrog_budget`, 3,000,000 steps a run, counted from the
-  graduate's first step (DL30 took the first graduate 125,346).
+  graduate's first step (DL30 took the first graduate 125,346); a
+  checkpoint's run counts it from the checkpoint's step.
 - **Records.** Its runs are recorded as `queue` and `goal` `balrog`, apart
   from the M7 counts. The milestones run on to DL100 and level 40. The
   dashboard's Queue tab has an M8 section: each graduate's runs, wins, best

@@ -152,6 +152,20 @@ class ScheduleTest(unittest.TestCase):
         service.pause = lambda run_id, paused: service.running[run_id].update(paused=paused)   # type: ignore[method-assign]
         return service
 
+    def test_main_characters_limit_the_main_queue(self) -> None:
+        """2026-11-05: after M7 the main queue plays only the combinations
+        the Balrog queue has no start for, one run each."""
+        service = self.service(4)
+        service.config["main_characters"] = ["human-warrior", "elf-warrior"]
+        q = queue.Queue("deep", service.home)
+        entry = q.platform("c64")
+        for combo in entry["items"]:
+            entry["items"][combo]["success"] = {"run": "m7"}   # M7 met: no parallel runs
+        service.schedule(q, {})
+        self.assertEqual(sorted(j["character"] for j in service.running.values()), ["elf-warrior", "human-warrior"])
+        self.assertEqual(entry["order"], [c for c in queue.combos("c64")
+                                          if c not in ("human-warrior", "elf-warrior")])   # the others keep their places
+
     def sub(self, count: int) -> dict:
         items = [{"goal": "clvl5", "character": "human-mage", "platform": "c64", "seed": n, "step_budget": 10}
                  for n in range(count)]
@@ -419,6 +433,123 @@ class BalrogQueueTest(unittest.TestCase):
             loaded = load_brain(snap, balrog)
         self.assertIs(loaded.goal, balrog)
         self.assertEqual((loaded.clw, loaded.oil), (5, 10))
+
+    # -- checkpoints (maintainer, 2026-11-05: a save at each new character
+    # level, so a death goes on from the latest; a win through them counts)
+
+    def checkpoint_run(self, service: queue.Service, run_id: str, clvl: int, step: int,
+                       snapshot: bool = False) -> None:
+        """A Balrog run's checkpoint directory, as run_one's QueueCharacter keeps it."""
+        from moria_playtest.brain import Brain
+        from moria_playtest.goals import GOALS, for_character
+        from moria_playtest.session import save_brain
+        ckpt = service.home / "runs" / run_id / queue.CHECKPOINTS / f"clvl{clvl:02d}"
+        ckpt.mkdir(parents=True)
+        state: dict = {"clvl": clvl, "step": step, "dlvl": 20}
+        if snapshot:
+            brain_file = ckpt / "balrog-1-s1-dl20.vsf"
+            brain_file.write_bytes(b"VICE")
+            state["snapshot"] = brain_file.name
+        else:
+            brain_file = ckpt / "graduate.vsf"
+            (ckpt / "save.d64").write_bytes(b"D64")
+        save_brain(Brain(for_character(GOALS["deep"], "elf-priest")), brain_file)
+        queue.write_json(ckpt / "checkpoint.json", state)
+
+    def c128_graduate(self, service: queue.Service) -> dict:
+        rec = {**self.success_run(service), "platform": "c128"}
+        self.c128_saved_game(service, rec)
+        service.balrog_start(rec)
+        return service.balrog.state["items"]["c128/elf-priest"]
+
+    def balrog_record(self, run_id: str, outcome: str = "died", **extra) -> dict:
+        return {**record("elf-priest", outcome, id=run_id, **extra), "platform": "c128"}
+
+    def test_a_balrog_run_goes_on_from_its_highest_checkpoint(self) -> None:
+        service = self.service(4, 2)
+        item = self.c128_graduate(service)
+        job = {"id": "b1", "build": "b0", "resume": item["start"]}
+        self.checkpoint_run(service, "b1", 26, 300_000)
+        self.checkpoint_run(service, "b1", 27, 350_000)
+        self.assertTrue(service.balrog_checkpoint(self.balrog_record("b1", clvl=27), job))
+        start = item["start"]
+        self.assertEqual((start["run"], start["clvl"], start["step"], start["build"], start["graduate"], start["restores"]),
+                         ("b1-clvl27", 27, 350_000, "b0", "m7", 1))
+        self.assertTrue((Path(start["save"]) / "save.d64").exists())
+        self.assertEqual([s["run"] for s in item["start_history"]], ["m7"])
+        self.assertTrue(service.start_balrog())
+        run = next(iter(service.running.values()))
+        self.assertEqual((run["resume"]["run"], run["step_budget"]), ("b1-clvl27", 3_000_000 + 350_000))
+
+    def test_a_snapshot_port_checkpoint_is_its_level_entry_snapshot(self) -> None:
+        service = self.service(4, 2)
+        service.balrog_start(self.success_run(service))
+        item = service.balrog.state["items"]["c64/elf-priest"]
+        self.checkpoint_run(service, "b1", 26, 300_000, snapshot=True)
+        rec = {**self.balrog_record("b1"), "platform": "c64"}
+        self.assertTrue(service.balrog_checkpoint(rec, {"build": "b0", "resume": item["start"]}))
+        self.assertEqual(Path(item["start"]["snapshot"]), service.home / "balrog" / "b1-clvl26" / "balrog-1-s1-dl20.vsf")
+        self.assertTrue(Path(item["start"]["snapshot"]).exists())
+
+    def test_a_checkpoint_no_higher_than_the_start_is_not_taken(self) -> None:
+        """Two runs from one start: the second's lower level does not undo the first's."""
+        service = self.service(4, 2)
+        item = self.c128_graduate(service)
+        graduate_start = dict(item["start"])
+        self.checkpoint_run(service, "b1", 27, 350_000)
+        self.checkpoint_run(service, "b2", 26, 320_000)
+        self.assertTrue(service.balrog_checkpoint(self.balrog_record("b1"), {"build": "b0", "resume": graduate_start}))
+        self.assertFalse(service.balrog_checkpoint(self.balrog_record("b2"), {"build": "b0", "resume": graduate_start}))
+        self.assertEqual(item["start"]["run"], "b1-clvl27")
+        self.assertFalse(service.balrog.fell_short(self.balrog_record("b2"), {"resume": graduate_start}))   # not the start now
+        self.assertNotIn("fails", item["start"])
+
+    def test_a_dead_end_checkpoint_steps_back(self) -> None:
+        balrog = self.balrog()
+        balrog.graduate("c128", "elf-priest", {})
+        item = balrog.state["items"]["c128/elf-priest"]
+        base = {"run": "m7", "save": "balrog/m7", "step": 1, "dlvl": 20}
+        item["start"] = base
+        self.assertTrue(balrog.checkpoint(self.balrog_record("r1"), {"resume": base},
+                                          {"run": "r1-clvl28", "clvl": 28, "save": "balrog/r1-clvl28"}))
+        checkpoint = item["start"]
+        steps = [balrog.fell_short(self.balrog_record(f"f{n}"), {"resume": checkpoint})
+                 for n in range(queue.CHECKPOINT_RETRIES)]
+        self.assertEqual(steps, [False] * (queue.CHECKPOINT_RETRIES - 1) + [True])
+        self.assertEqual(item["start"]["run"], "m7")
+        self.assertEqual(item["start"]["restores"], 1 + queue.CHECKPOINT_RETRIES)
+        self.assertEqual(item["start_history"], [])
+        self.assertFalse(balrog.fell_short(self.balrog_record("w", "reached"), {"resume": item["start"]}))   # a win
+        for n in range(queue.CHECKPOINT_RETRIES):   # the graduate's own start never steps back
+            self.assertFalse(balrog.fell_short(self.balrog_record(f"g{n}"), {"resume": item["start"]}))
+
+    def test_a_win_through_checkpoints_counts(self) -> None:
+        balrog = self.balrog()
+        balrog.graduate("c128", "elf-priest", {})
+        balrog.finish(self.balrog_record("w", "reached", clvl=40, max_dlvl=50,
+                                         resumed_from={"run": "r1-clvl39", "restores": 7}))
+        item = balrog.state["items"]["c128/elf-priest"]
+        self.assertEqual(item["won"], 1)
+        self.assertEqual([(w["id"], w["restores"]) for w in item["wins"]], [("w", 7)])
+
+    def test_a_newer_graduate_keeps_the_chain(self) -> None:
+        service = self.service(4, 2)
+        item = self.c128_graduate(service)
+        self.checkpoint_run(service, "b1", 27, 350_000)
+        service.balrog_checkpoint(self.balrog_record("b1"), {"build": "b0", "resume": item["start"]})
+        service.balrog.set_start({**self.balrog_record("m7b", "reached"), "id": "m7b"}, {"run": "m7b", "save": "x"})
+        self.assertEqual(item["start"]["run"], "b1-clvl27")
+        self.assertEqual([s["run"] for s in item["start_history"]], ["m7b"])   # the base a step back reaches
+
+    def test_retention_keeps_the_chains_starts(self) -> None:
+        service = self.service(4, 2)
+        item = self.c128_graduate(service)
+        self.checkpoint_run(service, "b1", 27, 350_000)
+        service.balrog_checkpoint(self.balrog_record("b1"), {"build": "b0", "resume": item["start"]})
+        (service.home / "balrog" / "gone").mkdir()
+        service.last_sweep = 0.0
+        service.sweep()
+        self.assertEqual(sorted(p.name for p in (service.home / "balrog").iterdir()), ["b1-clvl27", "m7"])
 
     def test_level_40_before_the_balrog(self) -> None:
         """Maintainer, 2026-11-02: character level 38-40 (really 40), then
@@ -1674,3 +1805,46 @@ class EpochTest(unittest.TestCase):
             (home / "runs.jsonl").write_text("".join(json.dumps(l) + "\n" for l in lines))
             self.assertEqual(dashboard.queue_runs(home, "deep", queue.COUNTED, "e2")["ratings"]["human-mage"]["runs"], 1)
             self.assertEqual(dashboard.queue_runs(home, "deep", queue.COUNTED, "")["ratings"]["human-mage"]["runs"], 2)
+
+
+class GraduateSaveTest(unittest.TestCase):
+    """graduate.save follows the screens: a first save through Disk Setup,
+    and a loaded game's, which overwrites slot 1 (a Balrog checkpoint,
+    2026-11-05; screens from a C128 probe of a Balrog start)."""
+
+    class Game:
+        def __init__(self, screens: list[tuple[str, str]]) -> None:
+            self.screens = screens   # (the key it expects, the screen after it)
+            self.keys: list[str] = []
+
+        def press(self, key: int):   # type: ignore[no-untyped-def]
+            want, screen = self.screens.pop(0)
+            self.keys.append(chr(key) if key < 0x80 else "S+")
+            assert self.keys[-1] == want, (self.keys, want)
+            return mock.Mock(rows=screen.split("\n"))
+
+    def save(self, screens: list[tuple[str, str]]) -> list[str]:
+        from moria_playtest import graduate
+        game = self.Game(screens)
+        text = mock.Mock(command=mock.Mock(return_value=""))
+        graduate.save(game, text, Path("save.d64"))
+        text.command.assert_called_once_with('attach "save.d64" 9')
+        self.assertEqual(game.screens, [])
+        return game.keys
+
+    def test_a_first_save(self) -> None:
+        slots = "Save Slots:\n1)  Empty\nSelect Slot 1-4"
+        self.assertEqual(self.save([("S+", "Disk Setup\n3) Done"), ("3", "Insert a Save Disk"),
+                                    (" ", "Initialize this disk? Y/N"), ("Y", slots), ("1", "N)ew  L)oad")]),
+                         ["S+", "3", " ", "Y", "1"])
+
+    def test_a_loaded_games_save_overwrites_slot_1(self) -> None:
+        slots = "Save Slots:\n1) *bot\n2)  Empty\nSelect Slot 1-4"
+        self.assertEqual(self.save([("S+", slots), ("1", "Overwrite? Y/N"),
+                                    ("Y", "Overwrite? Y/N\nSaving game... -more-"), (" ", "N)ew  L)oad")]),
+                         ["S+", "1", "Y", " "])
+
+    def test_an_unknown_screen_fails(self) -> None:
+        from moria_playtest import graduate
+        with self.assertRaises(graduate.GraduateError):
+            self.save([("S+", "Disk error")])

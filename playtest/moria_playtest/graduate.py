@@ -55,16 +55,29 @@ def _expect(obs: Observation, want: str) -> None:
         raise GraduateError(f"expected {want!r} on screen:\n{_screen(obs)}")
 
 
+# The save's screens and their keys: a first save goes through Disk Setup
+# (Done with the shown save drive 9), takes the disk and initializes it; a
+# game loaded from the save disk goes straight to the slots and overwrites
+# slot 1 (a Balrog checkpoint, 2026-11-05).
+SAVE_SCREENS = (("Disk Setup", "3"), ("Insert a Save Disk", " "), ("Initialize this disk?", "Y"),
+                ("Select Slot", "1"), ("Overwrite?", "Y"), ("-more-", " "))
+
+
 def save(game: Any, text: TextMonitor, image: Path) -> None:
-    """At the command prompt, SHIFT+S with no Disk Setup yet: Done with the
-    shown save drive (9), take the disk, initialize it, slot 1; the save ends
-    at the title. Then reattach ``image``: true drive emulation writes its
-    tracks to the file only then (disk.save_first_time, Rig.flush)."""
+    """At the command prompt, SHIFT+S, then slot 1 through the screens
+    SAVE_SCREENS names; the save ends at the title. Then reattach ``image``:
+    true drive emulation writes its tracks to the file only then
+    (disk.save_first_time, Rig.flush)."""
     obs = _press(game, text, KEY_SAVE)
-    for key, want in (("3", "Disk Setup"), (" ", "Insert a Save Disk"), ("Y", "Initialize this disk?"),
-                      ("1", "Select Slot")):
-        _expect(obs, want)
-        obs = _press(game, text, key)
+    for _ in range(12):
+        screen = _screen(obs).lower()
+        if "n)ew  l)oad" in screen:
+            break
+        # The last match: "Overwrite?" and "-more-" show below the slot list.
+        keys = [(screen.rfind(want.lower()), key) for want, key in SAVE_SCREENS if want.lower() in screen]
+        if not keys:
+            raise GraduateError(f"unexpected screen saving the game:\n{_screen(obs)}")
+        obs = _press(game, text, max(keys)[1])
     _expect(obs, "N)ew  L)oad")
     out = text.command(f'attach "{image}" 9')
     if "error" in out.lower():
@@ -90,10 +103,11 @@ def load(game: Any, text: TextMonitor) -> Observation:
     raise GraduateError(f"the load never reached the command prompt:\n{_screen(obs)}")
 
 
-def keep(run_dir: Path, image: Path, state: dict[str, Any], brain: Any) -> Path:
-    """The graduate's start: its save disk, brain and state, in run_dir/graduate."""
+def keep(run_dir: Path, image: Path, state: dict[str, Any], brain: Any, name: str = "graduate") -> Path:
+    """A start: the save disk, brain and state, in run_dir/``name`` (the
+    graduate's, or a Balrog run's checkpoint)."""
     from .session import save_brain
-    dest = run_dir / "graduate"
+    dest = run_dir / name
     dest.mkdir(parents=True, exist_ok=True)
     shutil.copy2(image, dest / SAVE_DISK)
     (dest / BRAIN).with_suffix(".brain.json").write_text(json.dumps(state, indent=1))
