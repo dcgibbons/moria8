@@ -267,6 +267,25 @@ class ArchivedSubqueuesTest(unittest.TestCase):
         self.assertEqual([(s["name"], s["archive"], s["reached"]) for s in data["archived"]],
                          [("old", "2026-11-04-subqueues", 1)])
 
+    def test_the_build_queue_is_shown(self) -> None:
+        from unittest import mock
+        from moria_playtest import queue as q
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            buildq = q.BuildQueue(home)
+            combo = buildq.take("atari8")
+            buildq.finish({"id": "b1", "platform": "atari8", "character": combo, "outcome": "died", "clvl": 4})
+            buildq.save()
+            (home / "runs.jsonl").write_text(json.dumps({"id": "b1", "queue": "build", "platform": "atari8",
+                                                         "character": combo, "goal": "clvl10", "outcome": "died",
+                                                         "clvl": 4, "ended": 1.0}) + "\n")
+            with mock.patch.object(q, "HOME", home), \
+                    mock.patch.object(q, "load_config", return_value={**q.DEFAULTS, "platforms": [], "epoch": "e",
+                                                                      "build_platforms": ["atari8"]}):
+                data = dashboard.queue()
+        self.assertEqual(data["build_queue"]["platforms"]["atari8"]["items"][combo]["runs"], 1)
+        self.assertEqual([r["id"] for r in data["recent"]], ["b1"])
+
 
 
 class DifficultyTest(unittest.TestCase):

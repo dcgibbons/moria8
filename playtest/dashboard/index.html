@@ -49,8 +49,8 @@
   .ok { color: var(--green); } .bad { color: var(--red); } .warn { color: var(--amber); } .gold { color: var(--gold); }
   main { padding: 12px 16px; display: grid; gap: 12px; max-width: 120rem; margin: 0 auto;
          grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-         grid-template-areas: "ports round" "disk disk" "archive archive" "causes kit" "wall wall" "milestone legend"; }
-  @media (max-width: 1100px) { main { grid-template-columns: 1fr; grid-template-areas: "ports" "round" "disk" "archive" "causes" "kit" "wall" "milestone" "legend"; } }
+         grid-template-areas: "qgrid qgrid" "ports round" "disk disk" "archive archive" "causes kit" "wall wall" "milestone legend"; }
+  @media (max-width: 1100px) { main { grid-template-columns: 1fr; grid-template-areas: "qgrid" "ports" "round" "disk" "archive" "causes" "kit" "wall" "milestone" "legend"; } }
   .legend-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(22rem, 1fr)); gap: 12px 22px; font-size: 12px; }
   .legend-grid h3 { margin: 0 0 4px; font-size: 11px; color: var(--gold); letter-spacing: .1em; text-transform: uppercase; font-weight: normal; }
   .legend-grid p { margin: 0 0 6px; color: var(--muted); }
@@ -72,6 +72,7 @@
   .box.near { background: rgba(197, 121, 0, .18); color: var(--gold); border-color: rgba(197, 121, 0, .45); }
   .box.short { background: rgba(224, 96, 60, .14); color: var(--red); border-color: rgba(224, 96, 60, .35); }
   .box.none { background: transparent; }
+  .box.playing { background: repeating-linear-gradient(45deg, #4a3c20 0 2px, var(--track) 2px 4px); color: var(--text); }
   /* Port coverage (M6): primary characters down, the seven ports across. */
   .pgrid { display: grid; grid-template-columns: 8rem repeat(7, minmax(0, 1fr)); gap: 3px; font-size: 11px; }
   .pgrid .h { color: var(--dim); text-align: center; padding-bottom: 2px; }
@@ -153,8 +154,8 @@
   section.collapsed > :not(h2) { display: none; }
   section.collapsed > h2 { margin-bottom: 0; }
   .tabs button { border-radius: 3px 3px 0 0; } .tabs button.on { color: var(--black); background: var(--gold); }
-  #qmain { grid-template-areas: "qgrid qgrid" "balrog balrog" "subs subs" "qwall qwall" "diff diff" "ratings features" "recent qlog"; }
-  @media (max-width: 1100px) { #qmain { grid-template-areas: "qgrid" "balrog" "subs" "qwall" "diff" "ratings" "features" "recent" "qlog"; } }
+  #qmain { grid-template-areas: "balrog balrog" "buildq buildq" "subs subs" "qwall qwall" "diff diff" "ratings features" "recent qlog"; }
+  @media (max-width: 1100px) { #qmain { grid-template-areas: "balrog" "buildq" "subs" "qwall" "diff" "ratings" "features" "recent" "qlog"; } }
   /* Difficulty charts (§23.6): amber and blue are the page's own tokens,
      validated as a pair on the panel (dataviz validate_palette, dark). */
   .diff h3 { margin: 0 0 6px; font-size: 11px; color: var(--muted); font-weight: normal; }
@@ -186,6 +187,7 @@
   .qwon { margin: 0 0 8px; font-size: 12px; color: var(--muted); }
   .qwon b { color: var(--green); }
   .qcell.struggling { background: rgba(224, 96, 60, .14); border-color: rgba(224, 96, 60, .45); }
+  .qcell.waiting { opacity: .45; }
   .qcell.playing { background-image: repeating-linear-gradient(45deg, rgba(255,217,61,.07) 0 3px, transparent 3px 7px); }
   .qcell .top { display: flex; justify-content: space-between; color: var(--gold); }
   .qcell .sub { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -210,22 +212,30 @@
 <div class="nowline" id="nowline" hidden></div>
 <div class="tip" id="tip" hidden></div>
 <main id="qmain">
-  <section style="grid-area: qgrid">
-    <h2><span>M7 · the continuous queue</span><small id="qcount"></small></h2>
-    <div class="qline" id="qline"></div>
-    <div class="qwon" id="qwon"></div>
-    <div id="qgrids" class="tablewrap"></div>
-    <div class="mlegend">
-      <span><i style="background:var(--green)"></i>★ GOAL: reached the goal at least once</span>
-      <span><i style="background:rgba(224,96,60,.35)"></i>struggling: failed more than the retry cap in a row</span>
-      <span><i style="background:repeating-linear-gradient(45deg,#4a3c20 0 2px,var(--track) 2px 4px)"></i>playing now</span>
-      <span class="dim">each cell: best clvl and depth, runs and streak, last outcome</span>
-    </div>
-  </section>
   <section style="grid-area: balrog">
     <h2><span>M8 · the Balrog queue</span><small id="bcount"></small></h2>
     <div class="qline" id="bline"></div>
-    <div class="subq" id="balrog"></div>
+    <div id="balrog" class="tablewrap"></div>
+    <div class="mlegend">
+      <span><i style="background:rgba(154,210,132,.4)"></i>★ won: killed the Balrog</span>
+      <span><i style="background:repeating-linear-gradient(45deg,#4a3c20 0 2px,var(--track) 2px 4px)"></i>playing now</span>
+      <span><i style="background:var(--black-soft)"></i>waiting for its turn</span>
+      <span><i style="background:var(--black-soft);opacity:.45"></i>no saved start yet</span>
+      <span class="dim">each cell: best clvl and depth; its start (an M7 run or a checkpoint) and runs; now, or the last run's end</span>
+    </div>
+  </section>
+  <section style="grid-area: buildq">
+    <h2><span>The build queue</span><small id="cicount"></small></h2>
+    <div class="qline" id="ciline"></div>
+    <div class="pgrid" id="buildq"></div>
+    <div class="mlegend">
+      <span><i style="background:rgba(154,210,132,.4)"></i>reached the goal</span>
+      <span><i style="background:rgba(224,96,60,.35)"></i>died</span>
+      <span><i style="background:rgba(197,121,0,.45)"></i>ended short: budget, finding or error</span>
+      <span><i style="background:repeating-linear-gradient(45deg,#4a3c20 0 2px,var(--track) 2px 4px)"></i>playing now</span>
+      <span><i style="background:var(--black-soft)"></i>not played yet</span>
+      <span class="dim">each cell: the last game's character level</span>
+    </div>
   </section>
   <section style="grid-area: subs">
     <h2><span>Subqueues</span><small>side sessions: make playtest-subqueue</small></h2>
@@ -265,6 +275,18 @@
   </section>
 </main>
 <main id="hmain" hidden>
+  <section style="grid-area: qgrid">
+    <h2><span>M7 · the continuous queue</span><small id="qcount"></small></h2>
+    <div class="qline" id="qline"></div>
+    <div class="qwon" id="qwon"></div>
+    <div id="qgrids" class="tablewrap"></div>
+    <div class="mlegend">
+      <span><i style="background:var(--green)"></i>★ GOAL: reached the goal at least once</span>
+      <span><i style="background:rgba(224,96,60,.35)"></i>struggling: failed more than the retry cap in a row</span>
+      <span><i style="background:repeating-linear-gradient(45deg,#4a3c20 0 2px,var(--track) 2px 4px)"></i>playing now</span>
+      <span class="dim">each cell: best clvl and depth, runs and streak, last outcome</span>
+    </div>
+  </section>
   <section style="grid-area: milestone">
     <h2><span>M5 (met 2026-10-27) · every race and class on the C64</span><small id="mcount"></small></h2>
     <div class="mgrid" id="mgrid"></div>
@@ -796,24 +818,80 @@ function renderQueue() {
     `workers <b>${blive.length}</b>/${q.config.balrog_workers} · next: ${esc(bq.order.slice(0, 3).map(k => cap(k.split("/")[1])).join(", ") || "–")}`;
   $("bcount").textContent = `${bitems.length} of ${total} combinations past the M7 bar · ` +
     `${bitems.reduce((n, it) => n + it.won, 0)} wins in ${bitems.reduce((n, it) => n + it.runs, 0)} runs`;
-  $("balrog").innerHTML = bitems.map(it => {
-    const best = it.best || {}, last = it.last || {};
-    const now = blive.filter(r => r.character === it.character && r.platform === it.platform)
-      .map(r => r.status && r.status.clvl != null ? `L${r.status.clvl} DL${r.status.dlvl}${r.paused ? " (paused)" : ""}` : "starting");
-    return `<div class="stat"><div class="k">${esc(cap(it.character))}${Object.keys(q.platforms).length > 1 ? ` · ${esc(PORT_NAMES[it.platform] || it.platform)}` : ""}
-        <span class="dim">· joined ${ago(it.graduated.ended)} ago</span></div>
-      <div class="v">${it.won ? `<span class="ok">★ ${it.won} won</span> · ` : ""}${it.runs} runs · best ${it.best ? `L${best.clvl} DL${best.max_dlvl}` : "–"}</div>
-      <div class="dim">${it.start ? `starts on DL${it.start.dlvl} at step ${Number(it.start.step).toLocaleString()} (M7 run, ${ago(it.start.set)} ago)` : "plays from the title (no saved start yet)"}</div>
-      ${it.last ? `<div class="dim">last: <span class="${OUTCOME_CLASS[last.outcome] || ""}">${esc(last.outcome)}</span> at L${last.clvl} DL${last.max_dlvl}${last.cause ? ` · ${esc(last.cause)}` : ""}</div>` : ""}
-      ${now.length ? `<div class="dim">playing now: ${esc(now.join(", "))}</div>` : ""}</div>`;
+  // A race x class grid, as M7's (maintainer, 2026-11-06), per port.
+  const bports = [...new Set(bitems.map(it => it.platform))];
+  $("balrog").innerHTML = bports.map(platform => {
+    let g = (bports.length > 1 ? `<h3 class="muted" style="margin:4px 0;font-size:11px">${esc(PORT_NAMES[platform] || platform)}</h3>` : "") +
+      `<div class="qgrid"><div></div>` + q.classes.map(c => `<div class="h">${c}</div>`).join("");
+    q.races.forEach(r => {
+      g += `<div class="r">${r}</div>`;
+      q.classes.forEach(c => {
+        const it = bq.items[`${platform}/${r}-${c}`];
+        if (!it) { g += `<div class="qcell none"></div>`; return; }
+        const best = it.best || {}, last = it.last || {}, st = it.start || {};
+        const run = blive.find(x => x.character === it.character && x.platform === platform);
+        const w = (run && run.status) || {};
+        const from = it.start ? `from L${st.clvl || 25} DL${st.dlvl}` : "no start yet";
+        const now = run ? `▸ L${w.clvl ?? "–"} DL${w.dlvl ?? "–"}${run.paused ? " (paused)" : ""}`
+          : it.last ? `<span class="${OUTCOME_CLASS[last.outcome] || ""}">${esc(last.outcome)}</span>${last.cause ? ` · ${esc(last.cause)}` : ""}` : "";
+        const cls = [it.won ? "won" : "", run ? "playing" : "", it.start ? "" : "waiting"].join(" ");
+        const tip = `${cap(it.character)}: ${it.runs} runs, ${it.won} won` +
+          (it.start ? `; starts on DL${st.dlvl} at step ${Number(st.step).toLocaleString()} (${st.checkpoint ? `clvl ${st.clvl} checkpoint, ${st.restores || 0} restores` : "M7 run"}, ${ago(st.set)} ago)` : "; plays from the title (no saved start yet)") +
+          (it.best ? `; best clvl ${best.clvl} DL ${best.max_dlvl}` : "") +
+          (it.last ? `; last ${last.outcome} at clvl ${last.clvl} DL ${last.max_dlvl}${last.cause ? `, ${last.cause}` : ""}` : "") +
+          `; joined ${ago(it.graduated.ended)} ago`;
+        g += `<div class="qcell ${cls}" title="${esc(tip)}">
+          <div class="top"><span>${it.best ? `L${best.clvl} DL${best.max_dlvl}` : "–"}</span><span>${it.won ? `★ ${it.won}` : ""}</span></div>
+          <div class="sub">${esc(from)} · ${it.runs} run${it.runs === 1 ? "" : "s"}</div>
+          <div class="sub">${now}</div></div>`;
+      });
+    });
+    return g + `</div>`;
   }).join("") || `<span class="muted">no combination has met the M7 bar yet</span>`;
+  // The build queue (§23.4): one run per port, of the branch's newest
+  // commit, cycling every race/class combination.
+  const ci = (q.build_queue || {}).platforms || {}, cports = q.config.build_platforms || [];
+  const cstate = q.service.build_queue_state || {}, cbuild = (cstate.playing || {}).commit;
+  $("ciline").innerHTML = `goal <b>${esc(q.config.build_goal)}</b> · one run per port, every combination in turn · ` +
+    `build <b>${esc(cbuild ? cbuild.slice(0, 12) : q.service.build_queue_build || "–")}</b>` +
+    (cstate.error ? ` · <span class="bad">build failed: ${esc(cstate.error.slice(-160))}</span>` : "");
+  const citems = cports.flatMap(p => Object.values((ci[p] || {}).items || {}));
+  $("cicount").textContent = cports.length ? `${cports.length} ports · ${citems.reduce((n, it) => n + it.runs, 0)} runs · ` +
+    `${citems.reduce((n, it) => n + it.reached, 0)} reached` : "";
+  // Every port plays (as M6's grid): a row per combination in cycle order,
+  // a cell per port with its last game, or the one playing now.
+  const crows = Object.keys((ci[cports[0]] || {}).items || {}).length ? Object.keys(ci[cports[0]].items) : q.characters;
+  const CI_CLASS = {reached: "frozen", died: "short"};
+  let cgrid = `<div></div>` + cports.map(p => {
+    const entry = ci[p] || {items: {}, cycle: 1, next: 0}, its = Object.values(entry.items);
+    return `<div class="h">${esc(PORT_NAMES[p] || p)}<b>${its.reduce((n, it) => n + it.reached, 0)} of ${its.reduce((n, it) => n + it.runs, 0)} reached · cycle ${entry.cycle}</b></div>`;
+  }).join("");
+  crows.forEach(ch => {
+    cgrid += `<div class="r">${esc(cap(ch))}</div>`;
+    cports.forEach(p => {
+      const it = ((ci[p] || {}).items || {})[ch], last = it && it.last;
+      const live = q.live.find(r => r.queue === "build" && r.platform === p && r.character === ch);
+      let cls = "none", label = "·", tip = `${cap(ch)} on ${PORT_NAMES[p] || p}: `;
+      if (live) {
+        const w = live.status || {};
+        cls = "playing"; label = w.clvl != null ? `▸${w.clvl}` : "▸";
+        tip += `playing now${w.clvl != null ? `, L${w.clvl} DL${w.dlvl}` : ""}${live.paused ? " (paused)" : ""}`;
+      } else if (last) {
+        cls = CI_CLASS[last.outcome] || "near"; label = last.clvl ?? "–";
+        tip += `${last.outcome} at L${last.clvl ?? "–"} DL${last.max_dlvl ?? "–"}${last.cause ? ` (${last.cause})` : ""}, ${ago(last.ended)} ago, ${String(last.commit || "").slice(0, 7)}`;
+      } else tip += "not played yet";
+      if (it && it.runs) tip += ` · ${it.reached}/${it.runs} reached, best L${it.best.clvl} DL${it.best.max_dlvl}`;
+      cgrid += `<div class="box ${cls}" title="${esc(tip)}">${esc(label)}</div>`;
+    });
+  });
+  $("buildq").innerHTML = cports.length ? cgrid : `<span class="muted">no ports in build_platforms</span>`;
   $("subq").innerHTML = q.subqueues.map(s => subCard(q, s)).join("") || `<span class="muted">none</span>`;
   $("archq").innerHTML = (q.archived || []).map(s => subCard(q, s)).join("") || `<span class="muted">none</span>`;
   $("acount").textContent = (q.archived || []).length ? `${q.archived.length} · newest first` : "";
   $("qwall").innerHTML = q.live.map(r => {
     const w = r.status || {}, ms = Object.keys(r.milestones || {});
     return `<div class="tile" data-run="${esc(r.id)}">
-      <div class="badge"><span>${esc(cap(r.character))} <b>L${w.clvl ?? "–"}</b> DL${w.dlvl ?? "–"}</span><span>${r.paused ? "paused" : r.queue === "main" ? `${Math.round((w.steps || 0) / 1000)}k` : esc(r.queue)}</span></div>
+      <div class="badge"><span>${esc(cap(r.character))} <b>L${w.clvl ?? "–"}</b> DL${w.dlvl ?? "–"}</span><span>${r.paused ? "paused" : r.queue === "main" ? `${Math.round((w.steps || 0) / 1000)}k` : esc(r.queue === "build" ? `build · ${PORT_NAMES[r.platform] || r.platform}` : r.queue)}</span></div>
       <div class="hpbar"><i style="width:${Math.max(0, Math.min(100, (w.hp || 0) / Math.max(1, w.mhp || 1) * 100))}%"></i></div>
       <pre class="scr">${w.rows ? screenHtml(w) : ""}</pre>
       <div class="badge"><span>${esc(ms.slice(-3).join(" ") || "no milestone yet")}</span></div></div>`;

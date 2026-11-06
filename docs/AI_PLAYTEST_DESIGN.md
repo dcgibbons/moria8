@@ -3172,7 +3172,8 @@ needs the bot to record each cast and its effect (step 3).
 - `make playtest-subqueue-cancel NAME=ab1`; with `CHARACTERS=a,b`, only those
   characters' runs (to stop replaying games a change cannot affect).
 - The dashboard's Queue tab (first) shows §23.6; the History tab holds the
-  M5 and M6 grids, the disk scenarios, the earlier rounds and the archived
+  M7 grid (moved there once M7 was met; maintainer, 2026-11-06), the M5 and
+  M6 grids, the disk scenarios, the earlier rounds and the archived
   subqueues: a finished subqueue moved from `subqueues/` to
   `archive/<date>-subqueues/` leaves the Queue tab and is listed there,
   newest first, as it was shown (2026-11-04).

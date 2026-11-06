@@ -668,7 +668,9 @@ def queue() -> dict[str, Any]:
                 for path in sorted(home.glob("archive/*-subqueues/*.json"), **newest)]
     return {"now": time.time(), "service": {"up": time.time() - service.get("updated", 0) < 60,
                                             "updated": service.get("updated"), "build": service.get("build"),
-                                            "build_state": service.get("build_state", {}), "log": service.get("log", [])[-12:]},
+                                            "build_state": service.get("build_state", {}), "log": service.get("log", [])[-12:],
+                                            "build_queue_build": service.get("build_queue_build"),
+                                            "build_queue_state": service.get("build_queue_state", {})},
             "config": config, "races": list(RACE_KEYS), "classes": list(CLASSES), "characters": sorted(CHARACTERS),
             "goal": {"name": config["goal"], "what": GOALS[config["goal"]].description.split(". ")[0].rstrip(".") + "."
                      if config["goal"] in GOALS else ""},
@@ -678,13 +680,14 @@ def queue() -> dict[str, Any]:
             "platforms": state.get("platforms", {}),
             "live": [queue_live(home, run_id, job) for run_id, job in running.items()],
             "subqueues": subs, "archived": archived, "balrog": read_json(home / "state-balrog.json") or {"items": {}, "order": []},
+            "build_queue": read_json(home / "state-build.json") or {"platforms": {}},
             "ratings": runs["ratings"], "features": runs["features"], "difficulty": runs["difficulty"],
             "runs": runs["runs"], "recent": [{k: r.get(k) for k in ("id", "queue", "character", "platform", "outcome",
                                                                     "clvl", "max_dlvl", "steps", "ended")}
                                              | {"cause": (r.get("death") or {}).get("cause")}
                                              for r in runs["recent"]
                                              # Only queues still shown: an archived subqueue's runs leave too
-                                             if r.get("queue") in {"main", "balrog"} | {s["name"] for s in subs}]}
+                                             if r.get("queue") in {"main", "balrog", "build"} | {s["name"] for s in subs}]}
 
 
 def queue_run(run_id: str) -> dict[str, Any] | None:
