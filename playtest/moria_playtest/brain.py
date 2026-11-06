@@ -425,6 +425,7 @@ class LevelMemory:
     breeders_seen: dict[Pos, int] = field(default_factory=dict)   # breeding creature tile -> step last seen
     kinds: dict[str, float] = field(default_factory=dict)   # glyph -> worst creature_danger seen beside (Genocide)
     up_target: Pos | None = None   # the up staircase a walk up is committed to
+    clear_target: Pos | None = None   # the blocker clear_way is walking to
     casters: dict[tuple[str, int], int] = field(default_factory=dict)   # caster kind -> step last seen or heard
     find_traps_after: int = 0       # step before which Find Hidden Traps/Doors is not cast again (M5f)
     exercise_after: int = 0         # step before which no spell is tried for its effect again (M7)
@@ -2135,7 +2136,9 @@ class Brain:
             # Out of food, walking away from a slow creature only meets it
             # again on the way to the stairs: fight through (M5a round 2: 7
             # characters starved stepping between the two).
-            return None if self.out_of_food() else self.walk_away(view, threats)
+            # Never away from the blocker clear_way went to kill: it undid
+            # each step toward it (2026-11-06: two C128 games, a ',').
+            return None if self.out_of_food() else self.walk_away(view, threats - {self.level.clear_target})
         ranged = any(knowledge.casts(c.glyph, c.level) for c in view.creatures.values())
         if not (self.afraid or self.unseen_attack) and ranged:
             far = view.path_steps({self.level.retreat_to}, avoid_monsters=True, doors=False)
@@ -2579,7 +2582,8 @@ class Brain:
             back = (len(self.trail) >= 4 and len(set(self.trail[-4:])) == 2
                     and all(view.creatures[p].glyph != "$" and self.fight_odds(view.creatures[p], obs) < FIGHT_ODDS
                             for _, p in adjacent))
-            away = None if back else self.walk_away(view, {p for _, p in adjacent}, known_slow=True)
+            away = None if back else self.walk_away(view, {p for _, p in adjacent} - {self.level.clear_target},
+                                                    known_slow=True)
             if away is not None:
                 return away
         _, (x, y) = adjacent[0]
@@ -3647,7 +3651,18 @@ class Brain:
 
         def exits() -> set[Pos]:
             return (view.frontier() - self.level.dead_frontier) | view.stairs_up() | view.stairs_down()
-        if view.step_toward(exits(), avoid_monsters=True) is not None:
+        # Kept once chosen, until it is gone: a step toward it stands next to
+        # the square beside it, from where a path past it counts (the start
+        # may be beside a monster, no later square may), so the next step
+        # walked back to search and the next came again (2026-11-06: four
+        # games, 'e' and ',', 100 entries of one square in 550-830 steps).
+        # A creature that never moves is remembered out of the light, so the
+        # commitment holds there too (2026-11-06: a ',' in a dark corridor,
+        # seen every other step, 100 approaches between 100 stair walks).
+        known = {**self.level.stationary, **view.creatures}
+        committed = self.level.clear_target if self.level.clear_target in known else None
+        self.level.clear_target = committed
+        if committed is None and view.step_toward(exits(), avoid_monsters=True) is not None:
             return None
         if any(chebyshev(p, view.pos) <= CLEAR_WAY_CALM and not self.stationary(c)
                and c.glyph not in AVOID_GLYPHS for p, c in view.creatures.items()):
@@ -3657,6 +3672,17 @@ class Brain:
             return None
         bound = STRONG_HP_BASE + STRONG_HP_PER_LEVEL * obs.clvl
         creatures, hazards = view.creatures, view.hazards
+        if committed is not None:
+            creature = known[committed]
+            if chebyshev(committed, view.pos) == 1:
+                self.last_attack = (committed, creature.glyph)
+                return Decision(DIRS[(committed[0] - view.pos[0], committed[1] - view.pos[1])], "fight",
+                                f"the '{creature.glyph}' blocks the only way on: attack it")
+            step = view.step_toward({(committed[0] + dx, committed[1] + dy) for dx, dy in DIRS}, avoid_monsters=True)
+            decision = self.move(view, step, "fight", f"the '{creature.glyph}' blocks the only way on: approach it")
+            if decision is not None:
+                return decision
+            self.level.clear_target = None
         for pos in sorted(creatures, key=lambda p: chebyshev(p, view.pos)):
             creature = creatures[pos]
             if not (self.stationary(creature) or creature.glyph in AVOID_GLYPHS) or \
@@ -3680,7 +3706,10 @@ class Brain:
                 self.last_attack = (pos, creature.glyph)
                 return Decision(DIRS[(pos[0] - view.pos[0], pos[1] - view.pos[1])], "fight",
                                 f"the '{creature.glyph}' blocks the only way on: attack it")
-            return self.move(view, step, "fight", f"the '{creature.glyph}' blocks the only way on: approach it")
+            decision = self.move(view, step, "fight", f"the '{creature.glyph}' blocks the only way on: approach it")
+            if decision is not None:
+                self.level.clear_target = pos
+            return decision
         # Sealed in: no search spot is next to a creature that never moves,
         # so a weak one, seen or remembered, may hide the secret door: kill it
         # (M4 round 91: seed 1006 searched 21,700 turns, a remembered
@@ -3700,6 +3729,7 @@ class Brain:
             step = view.step_toward({(pos[0] + dx, pos[1] + dy) for dx, dy in DIRS}, avoid_monsters=True)
             decision = self.move(view, step, "fight", f"sealed in: approach the '{creature.glyph}' to kill it")
             if decision is not None:
+                self.level.clear_target = pos   # kept while it is in view (above)
                 return decision
         return None
 

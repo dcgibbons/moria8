@@ -3541,6 +3541,30 @@ class StationaryMemoryTest(unittest.TestCase):
         decision = brain.decide(command_obs(pos=(5, 5), dlvl=2, clvl=4, hp=40, mhp=40), view)
         self.assertEqual((decision.layer, decision.key), ("fight", DIRS[(1, 1)]))
 
+    def test_the_blocker_chosen_is_kept_until_it_is_gone(self) -> None:
+        """2026-11-06: a step toward the blocker stood where a path past it
+        counted (the start may be beside a monster), so clear_way stood down,
+        a search walked back, and the next step came again: four games
+        entered one square 100 times in 550-830 steps."""
+        brain = Brain(GOALS["reach_dl5"])
+        brain.food = 3
+        view = self.corridor({(8, 5): Creature("e", 1)})
+        view.pos = (5, 5)
+        first = brain.clear_way(command_obs(pos=(5, 5), dlvl=2, clvl=3, hp=40, mhp=40), view)
+        self.assertEqual((first.layer, brain.level.clear_target), ("fight", (8, 5)))
+        view.pos = (6, 5)
+        view.types[5 * COLS + 4] = 0xA                       # stairs up behind: a way out now counts
+        nxt = brain.clear_way(command_obs(pos=(6, 5), dlvl=2, clvl=3, hp=40, mhp=40), view)
+        self.assertEqual((nxt.layer, nxt.reason), ("fight", "the 'e' blocks the only way on: approach it"))
+        eye = view.creatures[(8, 5)]
+        view.creatures = {}                                  # out of the light, but remembered
+        brain.level.stationary[(8, 5)] = eye
+        held = brain.clear_way(command_obs(pos=(6, 5), dlvl=2, clvl=3, hp=40, mhp=40), view)
+        self.assertEqual((held.layer, brain.level.clear_target), ("fight", (8, 5)))
+        brain.level.stationary.clear()                       # killed: the commitment goes
+        self.assertIsNone(brain.clear_way(command_obs(pos=(6, 5), dlvl=2, clvl=3, hp=40, mhp=40), view))
+        self.assertIsNone(brain.level.clear_target)
+
     def test_a_strong_one_blocking_the_only_way_on_is_left(self) -> None:
         brain = Brain(GOALS["reach_dl5"])
         brain.food = 3

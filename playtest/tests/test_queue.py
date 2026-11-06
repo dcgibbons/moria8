@@ -998,6 +998,10 @@ class SlowKindTest(unittest.TestCase):
         brain.track(obs, view)
         decision = brain.decide(obs, view)
         self.assertEqual((decision.layer, decision.reason), ("retreat", "walk away from a slower creature"))
+        # The blocker clear_way went to kill is no threat to walk from
+        # (2026-11-06: two C128 games stepped between the two, a ',').
+        brain.level.clear_target = (11, 10)
+        self.assertNotEqual(getattr(brain.retreat(obs, view), "reason", None), "walk away from a slower creature")
 
 
 class CautionReadinessTest(unittest.TestCase):
