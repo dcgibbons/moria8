@@ -247,7 +247,7 @@ def brain_shape(root: Path) -> dict[str, set[str]] | None:
     return shape
 
 
-def same_game_and_brain(a: str, b: str, home: Path = HOME) -> bool:
+def same_game_and_brain(a: str, b: str, home: Path = HOME, named: set[str] | None = None) -> bool:
     """A brain saved under build ``a`` loads into build ``b``'s bot, for the
     same game: the disks are the same, and every class the pickle can name
     (brain.py, magic.py, view.py; the goal is left out, session.save_brain)
@@ -264,15 +264,53 @@ def same_game_and_brain(a: str, b: str, home: Path = HOME) -> bool:
         _, differ, errors = filecmp.cmpfiles(x, y, cmp.common_files, shallow=False)
         return not (differ or errors) and all(same(x / d, y / d) for d in cmp.common_dirs)
     root_a, root_b = home / "builds" / a, home / "builds" / b
-    return same(root_a / "build", root_b / "build") and same_brain(a, b, home)
+    return same(root_a / "build", root_b / "build") and same_brain(a, b, home, named)
 
 
-def same_brain(a: str, b: str, home: Path = HOME) -> bool:
-    """A brain saved under build ``a`` loads into build ``b``'s bot (above)."""
+def same_brain(a: str, b: str, home: Path = HOME, named: set[str] | None = None) -> bool:
+    """A brain saved under build ``a`` loads into build ``b``'s bot (above):
+    of the classes its pickle names (``pickled_classes``), when known."""
     from .session import FILLED_ON_LOAD
     old, new = brain_shape(home / "builds" / a), brain_shape(home / "builds" / b)
     return old is not None and new is not None and all(
-        cls in old and (attrs <= old[cls] or cls.split(":")[1] in FILLED_ON_LOAD) for cls, attrs in new.items())
+        cls in old and (attrs <= old[cls] or cls.split(":")[1] in FILLED_ON_LOAD)
+        for cls, attrs in new.items() if named is None or cls in named)
+
+
+def pickled_classes(path: Path) -> set[str] | None:
+    """The classes a saved brain's pickle names, as ``brain_shape`` keys
+    ("view.py:Creature"); None when it cannot be read. A View is built
+    anew each step and never saved: a field added to it left every Balrog
+    start unloadable, and nine level-17-24 characters began again from
+    level 1 (2026-11-06)."""
+    import pickletools
+    try:
+        ops = list(pickletools.genops(path.read_bytes()))
+    except (OSError, ValueError):
+        return None
+    memo: list[Any] = []
+    pushed: list[Any] = []   # the values pushed, a string's or None, for STACK_GLOBAL's two
+    names: set[str] = set()
+    for op, arg, _ in ops:
+        if op.name == "MEMOIZE":
+            memo.append(pushed[-1] if pushed else None)
+            continue
+        if op.name in ("GLOBAL", "STACK_GLOBAL"):
+            module, cls = arg.split(" ", 1) if op.name == "GLOBAL" else pushed[-2:]
+            if isinstance(module, str) and isinstance(cls, str) and module.startswith("moria_playtest."):
+                names.add(f"{module.split('.', 1)[1]}.py:{cls}")
+        pushed.append(arg if isinstance(arg, str) and op.name.endswith("UNICODE") else
+                      memo[arg] if op.name in ("BINGET", "LONG_BINGET", "GET") and arg < len(memo) else None)
+    return names
+
+
+def start_pickle(start: dict[str, Any]) -> Path | None:
+    """The brain pickle beside a Balrog start's saved game or snapshot."""
+    from .graduate import BRAIN
+    from .session import brain_pickle_path
+    if start.get("save"):
+        return brain_pickle_path(Path(start["save"]) / BRAIN)
+    return brain_pickle_path(Path(start["snapshot"])) if start.get("snapshot") else None
 
 
 def save_versions(build_id: str, platform: str, home: Path = HOME) -> tuple[int, int] | None:
@@ -298,13 +336,16 @@ def start_loads(start: dict[str, Any], build_id: str, platform: str, home: Path 
     ``graduate_save`` port (graduate.py)."""
     if not build_meta(start.get("build") or "", home):
         return False
+    pickle = start_pickle(start)
+    named = None if pickle is None else pickled_classes(pickle)
     if not start.get("save"):
         return not PORTS[platform].graduate_save and (
-            start["build"] == build_id or same_game_and_brain(start["build"], build_id, home))
+            start["build"] == build_id or same_game_and_brain(start["build"], build_id, home, named))
     if start["build"] == build_id:
         return True
     saved, loads = save_versions(start["build"], platform, home), save_versions(build_id, platform, home)
-    return bool(saved and loads and loads[0] <= saved[1] <= loads[1] and same_brain(start["build"], build_id, home))
+    return bool(saved and loads and loads[0] <= saved[1] <= loads[1]
+                and same_brain(start["build"], build_id, home, named))
 
 
 # -- one run ------------------------------------------------------------------------
@@ -743,6 +784,7 @@ class Balrog:
         self.state: dict[str, Any] = read_json(self.path) or {"created": now(), "items": {}, "order": []}
 
     def save(self) -> None:
+        self.rank()   # a new start's level shows in the order at once (the dashboard's "next")
         write_json(self.path, self.state)
 
     def join(self, platform: str) -> int:
@@ -821,15 +863,33 @@ class Balrog:
             return True
         return False
 
-    def take(self) -> dict[str, Any] | None:
-        """The next graduate, which goes to the back; None when there is
-        none. One whose start cannot go on plays a new character
-        (Service.start_balrog)."""
+    def take(self, busy: Collection[str] = ()) -> dict[str, Any] | None:
+        """The next graduate, the highest start first (``rank``), which goes
+        to the back; None when there is none. One not playing already
+        (``busy``) first: a long game was
+        lapped by the rotation, and two games of one combination played from
+        one start while others waited (2026-11-06). One whose start cannot
+        go on plays a new character (Service.start_balrog)."""
         if not self.state["order"]:
             return None
-        key = self.state["order"].pop(0)
+        self.rank()
+        key = next((k for k in self.state["order"] if k not in busy), self.state["order"][0])
+        self.state["order"].remove(key)
         self.state["order"].append(key)
+        self.rank()   # to the back of its level: equal levels take turns
         return self.state["items"][key]
+
+    def start_level(self, key: str) -> int:
+        """The character level a combination's next game starts at: its
+        start's (an M7 success's is M7_CLVL), else 1."""
+        start = self.state["items"][key].get("start") or {}
+        return int(start.get("clvl") or (M7_CLVL if start else 1))
+
+    def rank(self) -> None:
+        """Highest start first (maintainer, 2026-11-06: the highest-level save
+        is likeliest to go further and find something new), the rotation
+        order among equals."""
+        self.state["order"].sort(key=lambda k: -self.start_level(k))
 
     def ready(self) -> bool:
         return bool(self.state["order"])
@@ -852,10 +912,12 @@ class Balrog:
         item["last"].update(deepest=deepest(record), cause=(record.get("death") or {}).get("cause"), restores=restores)
         if record["outcome"] == "reached":   # a win through checkpoints counts (maintainer, 2026-11-05)
             item.setdefault("wins", []).append({"id": record["id"], "restores": restores, "ended": record.get("ended")})
+        # Best by character level, then depth (maintainer: clvl over depth;
+        # 2026-11-06: an L27 game ranked below an L24 one that went deeper).
         best = item["best"]
-        progress = (record.get("max_dlvl") or 0, record.get("clvl") or 0)
-        if best is None or progress > (best["max_dlvl"], best["clvl"]):
-            item["best"] = {"max_dlvl": progress[0], "clvl": progress[1], "run": record["id"],
+        progress = (record.get("clvl") or 0, record.get("max_dlvl") or 0)
+        if best is None or progress > (best["clvl"], best["max_dlvl"]):
+            item["best"] = {"clvl": progress[0], "max_dlvl": progress[1], "run": record["id"],
                             "deepest": deepest(record)}
 
 
@@ -1616,7 +1678,8 @@ class Service:
         from its start when that start's save loads there, else a new
         character from level 1, the start retired. Its checkpoints at each
         new level become its starts (§23.9). False when nothing can play."""
-        item = self.balrog.take()
+        item = self.balrog.take({f"{job['platform']}/{job['character']}" for job in self.running.values()
+                                 if job["queue"] == "balrog"})
         if item is None:
             return False
         build = self.newest_build(item["platform"])

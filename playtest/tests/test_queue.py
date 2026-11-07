@@ -366,6 +366,35 @@ class BalrogQueueTest(unittest.TestCase):
             balrog.graduate("c64", combo, {})
         self.assertEqual([balrog.take()["character"] for _ in range(3)], ["elf-priest", "human-priest", "elf-priest"])
 
+    def test_the_highest_start_goes_first(self) -> None:
+        """Maintainer, 2026-11-06: the highest-level save first, as the likeliest
+        to go further and find something new; equal levels take turns."""
+        balrog = self.balrog()
+        for combo in ("elf-priest", "human-priest", "dwarf-priest", "gnome-mage"):
+            balrog.graduate("c64", combo, {})
+        items = balrog.state["items"]
+        items["c64/human-priest"]["start"] = {"run": "h", "clvl": 29, "checkpoint": True}
+        items["c64/dwarf-priest"]["start"] = {"run": "d", "clvl": 30, "checkpoint": True}
+        items["c64/gnome-mage"]["start"] = {"run": "g", "clvl": 29, "checkpoint": True}
+        taken = [balrog.take()["character"] for _ in range(5)]
+        self.assertEqual(taken, ["dwarf-priest", "dwarf-priest", "dwarf-priest", "dwarf-priest", "dwarf-priest"])
+        self.assertEqual(balrog.take({"c64/dwarf-priest"})["character"], "human-priest")
+        self.assertEqual(balrog.take({"c64/dwarf-priest"})["character"], "gnome-mage")   # 29s take turns
+        self.assertEqual(balrog.take({"c64/dwarf-priest", "c64/human-priest", "c64/gnome-mage"})["character"],
+                         "elf-priest")                                                   # level 1, last
+        self.assertEqual(balrog.state["order"][0], "c64/dwarf-priest")                    # the order shows it
+
+    def test_a_graduate_playing_already_is_not_taken_again(self) -> None:
+        """2026-11-06: the rotation lapped a long game, and two games of one
+        combination played from one start while others waited."""
+        balrog = self.balrog()
+        for combo in ("elf-priest", "human-priest"):
+            balrog.graduate("c64", combo, {})
+        self.assertEqual(balrog.take({"c64/elf-priest"})["character"], "human-priest")
+        self.assertEqual(balrog.take({"c64/human-priest"})["character"], "elf-priest")
+        self.assertEqual(balrog.take({"c64/elf-priest", "c64/human-priest"})["character"],
+                         "human-priest")   # all playing: a second seed, as before
+
     def test_a_finished_run_counts_for_its_graduate(self) -> None:
         balrog = self.balrog()
         balrog.graduate("c64", "elf-priest", {})
@@ -376,11 +405,23 @@ class BalrogQueueTest(unittest.TestCase):
         self.assertEqual((item["runs"], item["won"]), (2, 1))
         self.assertEqual((item["best"]["max_dlvl"], item["best"]["clvl"]), (100, 40))
 
+    def test_the_best_run_is_the_highest_level_then_the_deepest(self) -> None:
+        """Maintainer: character level over depth (2026-11-06: an L27 game
+        ranked below an L24 one that had gone deeper)."""
+        balrog = self.balrog()
+        balrog.graduate("c64", "elf-priest", {})
+        balrog.finish(record("elf-priest", "died", max_dlvl=20, clvl=24))
+        balrog.finish(record("elf-priest", "budget", max_dlvl=19, clvl=27))
+        best = balrog.state["items"]["c64/elf-priest"]["best"]
+        self.assertEqual((best["clvl"], best["max_dlvl"]), (27, 19))
+
     def success_run(self, service: queue.Service, with_brain: bool = True) -> dict:
-        """An M7 success whose run kept a DL30 snapshot (with its brain)."""
+        """An M7 success whose run kept a DL30 snapshot (with its brain, one
+        stationary creature in its level memory)."""
         from moria_playtest.brain import Brain
         from moria_playtest.goals import GOALS, for_character
         from moria_playtest.session import save_brain
+        from moria_playtest.view import Creature
         rec = record("elf-priest", "reached", id="m7", build="b0", goal="deep", clvl=25, max_dlvl=30)
         snaps = service.home / "runs" / "m7" / "w3" / "snapshots"
         snaps.mkdir(parents=True)
@@ -388,7 +429,9 @@ class BalrogQueueTest(unittest.TestCase):
         vsf.write_bytes(b"VICE")
         queue.write_json(vsf.with_suffix(".brain.json"), {"seed": 9, "step": 125346, "dlvl": 30})
         if with_brain:
-            save_brain(Brain(for_character(GOALS["deep"], "elf-priest")), vsf)
+            brain = Brain(for_character(GOALS["deep"], "elf-priest"))
+            brain.level.stationary[(3, 4)] = Creature("e", 1)
+            save_brain(brain, vsf)
         self.make_build(service, "b0")
         return rec
 
@@ -414,11 +457,12 @@ class BalrogQueueTest(unittest.TestCase):
         service = self.service(4, 2)
         service.balrog_start({**self.success_run(service), "platform": "plus4"})   # a snapshot port
         same = "class Brain:\n    def __init__(self):\n        self.food = 0\n"
-        same += "class Creature:\n    def __init__(self):\n        self.glyph = ''\n"
+        creature = "class Creature:\n    def __init__(self):\n        self.glyph = ''\n"
         reworded = same + "    def eat(self):\n        return self.food - 1\n"   # new code, no new state
         reworded = reworded.replace("self.food = 0", "self.food = 0\n        self.restock_wait = 0")   # filled on load
-        grown = same.replace("self.glyph = ''", "self.glyph = ''\n        self.level = 0")   # not filled
-        for n, (build, goals, brain) in enumerate((("b0", "old", same), ("b1", "new", reworded), ("b2", "new", grown))):
+        grown = creature.replace("self.glyph = ''", "self.glyph = ''\n        self.level = 0")   # not filled
+        for n, (build, goals, brain, view) in enumerate((("b0", "old", same, creature), ("b1", "new", reworded, creature),
+                                                         ("b2", "new", same, grown))):
             root = self.make_build(service, build, built=n)
             (root / "build").mkdir(parents=True)
             (root / "build" / "moria8-c64.d64").write_bytes(b"disk")
@@ -427,7 +471,7 @@ class BalrogQueueTest(unittest.TestCase):
             (bot / "goals.py").write_text(goals)
             (bot / "brain.py").write_text(brain)
             (bot / "magic.py").write_text("")
-            (bot / "view.py").write_text("")
+            (bot / "view.py").write_text(view)
         self.assertTrue(queue.same_game_and_brain("b0", "b1", service.home))
         self.assertFalse(queue.same_game_and_brain("b0", "b2", service.home))
         service.build_id = "b1"
@@ -533,6 +577,30 @@ class BalrogQueueTest(unittest.TestCase):
         self.assertEqual(jobs["elf-priest"]["resume"]["run"], "elf-priest")   # $1A loads in $1A
         self.assertNotIn("resume", jobs["human-priest"])                     # $19 does not
         self.assertIsNone(service.balrog.state["items"]["c128/human-priest"]["start"])
+
+    def test_a_field_on_a_class_no_save_holds_keeps_the_start(self) -> None:
+        """2026-11-06: a field added to View, built anew each step and never
+        pickled, retired nine level-17-24 starts to level 1. Only the
+        classes the start's pickle names count."""
+        import pickle
+        from moria_playtest.magic import Prayer
+        from moria_playtest.view import Creature
+        service = self.service(4, 2)
+        self.policy_build(service, "old", 0x17, 0x17, 1)
+        self.policy_build(service, "new", 0x17, 0x17, 2)
+        view = service.home / "builds" / "new" / "playtest" / "moria_playtest" / "view.py"
+        view.write_text(view.read_text() + "class View:\n    last_path: list = []\n")
+        save = service.home / "balrog" / "s"
+        save.mkdir(parents=True)
+        brain = {"stationary": {(1, 2): Creature("o", 3), (4, 5): Creature("k", 2)}, "known": [Prayer("a", 1, 1)]}
+        (save / "graduate.brain.pickle").write_bytes(pickle.dumps(brain))
+        self.assertEqual(queue.pickled_classes(save / "graduate.brain.pickle"),
+                         {"view.py:Creature", "magic.py:Prayer"})
+        start = {"run": "s", "build": "old", "save": str(save)}
+        self.assertTrue(queue.start_loads(start, "new", "c128", service.home))
+        self.assertFalse(queue.same_brain("old", "new", service.home))   # every class: View counted
+        view.write_text(view.read_text() + "class Creature:\n    glyph: str\n")   # a class it holds grew
+        self.assertFalse(queue.start_loads(start, "new", "c128", service.home))
 
     def test_balrog_platforms_join_from_level_1_and_take_no_other_port(self) -> None:
         """Maintainer, 2026-11-06: the Balrog queue on the C64, every

@@ -2984,7 +2984,11 @@ a win is unlikely until the bot plays much better.
 - **Workers.** `balrog_workers` in `playtest/queue.json` (2 to start) come
   out of `workers`, as a subqueue's do; the main queue pauses its newest runs
   to make room. The graduates take turns, a new random seed each run, so one
-  graduate fills both workers with two games.
+  graduate fills both workers with two games. From 2026-11-06 the highest
+  start goes first (maintainer: the highest-level save is likeliest to go
+  further and find something new; `Balrog.rank`): a combination already
+  playing is passed over while another can start, and equal levels take
+  turns.
 - **Goal.** `balrog` (`goals.py`): the game's winner flag, which the Balrog's
   death sets (`core/combat.s`). It plays as `deep`, with every tactic, down to
   where the Balrog appears: DL100 with the tiers, DL50 with the monster
@@ -2996,10 +3000,13 @@ a win is unlikely until the bot plays much better.
   on DL30): the first saved-game graduates went straight from DL28 to
   DL30-31, and seven runs died there at level 25-26. A start plays in the
   current build, with its goals and the rest of its bot, when the game disks
-  are the same and its brain loads there: every class the pickle can name
-  (`brain.py`, `magic.py`, `view.py`) is still there with no attribute the
-  start's code never set (`queue.same_game_and_brain`, by the source's
-  `self.<name> =` assignments). Otherwise it plays in its own build. In
+  are the same and its brain loads there: every class the start's pickle
+  names (`queue.pickled_classes`, from `brain.py`, `magic.py` and `view.py`)
+  is still there with no attribute the start's code never set
+  (`queue.same_game_and_brain`, by the source's `self.<name> =`
+  assignments). A View is built anew each step and never saved: on
+  2026-11-06 a field added to it retired eleven level-17-24 starts to level
+  1 until only the named classes counted. Otherwise it plays in its own build. In
   town, Word of Recall no longer goes down to a deepest level too deep to
   stay on: a level-25 graduate climbed from DL28, recalled up and recalled
   back to DL28 over and over.
