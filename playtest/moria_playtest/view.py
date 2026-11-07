@@ -77,6 +77,7 @@ class View:
     hazards: set[Pos] = field(default_factory=set)   # brain: creatures to keep away from
     remembered: set[Pos] = field(default_factory=set)   # brain: slow creatures out of sight, avoided like seen ones
     perilous: set[Pos] = field(default_factory=set)     # brain: squares a creature in view could hurt badly (danger)
+    last_path: list[Pos] = field(default_factory=list)  # step_toward's whole path, for a walk kept to it
     screen: tuple[int, int, int, int] = (0, 0, 0, 0)  # map x, y, width, height on screen
 
     def on_screen(self, pos: Pos) -> bool:
@@ -136,6 +137,7 @@ class View:
         ``keep_clear`` also refuses tiles next to a visible creature (fleeing).
         """
         start = self.pos
+        self.last_path = []
         goals = goals - self.blocked   # a blocked tile is no goal either (round 17)
         danger = ({(x + dx, y + dy) for x, y in self.creatures for dx in (-1, 0, 1) for dy in (-1, 0, 1)}
                   if keep_clear else set())
@@ -199,11 +201,12 @@ class View:
             if here_cost > cost[here]:
                 continue
             if here in goals:
-                steps = 1
+                path = [here]
                 while previous[here] != start:
                     here = previous[here]
-                    steps += 1
-                return (here[0] - start[0], here[1] - start[1]), steps
+                    path.append(here)
+                self.last_path = path[::-1]   # the squares to the goal, first step first
+                return (here[0] - start[0], here[1] - start[1]), len(path)
             hx, hy = here
             for dx, dy in DIRS:
                 x, y = hx + dx, hy + dy

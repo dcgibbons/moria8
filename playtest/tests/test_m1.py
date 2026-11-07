@@ -912,6 +912,89 @@ class UnstuckTest(unittest.TestCase):
         self.assertEqual(decision.key, ord("B"))
         self.assertFalse(brain.shopped)
 
+    def test_a_listing_corrects_the_counts(self) -> None:
+        """2026-11-06: a level-27 Priest's count said no Word of Recall with
+        two in the pack; it walked for supplies and stood in the dark 2.4
+        million steps. The drop listing is the whole pack, the read list
+        every scroll; a wear list says nothing of scrolls."""
+        brain = Brain(GOALS["deep"])
+        brain.recall, brain.phase, brain.clw = 0, 3, 5
+        brain.dropping, brain.listed = True, True
+        pack = command_obs(pos=(5, 5), dlvl=3, clvl=27, rows={
+            0: "Inventory", 2: " a) 2 Scroll of Word of Recall", 3: " b) Potion of Cure Light Wounds",
+            4: " c) Wooden Torch (0 turns)"})
+        pack.stage = "list"
+        brain.drop_prompt(pack)
+        self.assertEqual((brain.recall, brain.phase, brain.clw), (2, 0, 1))
+        brain.picking, brain.listed = "Wooden Torch", True
+        wear = command_obs(rows={0: "Inventory", 2: " a) Wooden Torch (900 turns)"})
+        wear.mode, wear.stage = Mode.ITEM, "list"
+        brain.pick_item(wear)
+        self.assertEqual(brain.recall, 2)                      # a wear list says nothing of scrolls
+        brain.picking, brain.listed = "Scroll of Phase Door", True
+        read = command_obs(rows={0: "Inventory", 2: " a) Scroll of Phase Door"})
+        read.mode, read.stage = Mode.ITEM, "list"
+        brain.pick_item(read)
+        self.assertEqual((brain.recall, brain.phase), (0, 0))   # the read list holds every scroll; one read
+
+    def test_stuck_with_no_recall_counted_looks_anyway(self) -> None:
+        """2026-11-06: five Balrog characters searched sealed pockets to their
+        budgets, four with Word of Recall their counts had lost."""
+        from moria_playtest.brain import STUCK_STEPS
+        brain = Brain(GOALS["deep"])
+        brain.recall, brain.food = 0, 20
+        view = town_view((5, 5), (40, 40), dlvl=3)
+        o = command_obs(pos=(5, 5), dlvl=3, clvl=22, hp=200, mhp=200)
+        self.assertIsNone(brain.recall_trip(o, view))                 # not stuck: no
+        brain.level.since_progress = STUCK_STEPS
+        self.assertEqual(brain.recall_trip(o, view).reason, "read Word of Recall")
+        brain.picking = None
+        self.assertIsNone(brain.recall_trip(o, view))                 # once a while, not every step
+
+    def test_climb_back_hops_give_way_to_recall(self) -> None:
+        """Arriving by up stairs is on a down staircase: hopping down and back
+        up never got higher (2026-11-06: a level-27 Priest, DL3-DL4)."""
+        from moria_playtest.brain import CLIMB_HOPS
+        brain = Brain(GOALS["deep"])
+        brain.recall, brain.food = 2, 20
+        view = town_view((5, 5), (5, 5), dlvl=3)               # standing on a down staircase
+        for _ in range(CLIMB_HOPS):
+            self.assertEqual(brain.down_to_climb_back(view).key, ord(">"))
+        self.assertIsNone(brain.down_to_climb_back(view))
+        o = command_obs(pos=(5, 5), dlvl=3, clvl=27, hp=200, mhp=200)
+        self.assertEqual(brain.recall_trip(o, view).reason, "read Word of Recall")
+        brain.last_dlvl = 3
+        brain.track(command_obs(pos=(5, 5), dlvl=2, clvl=27), view)   # higher than the hops began
+        self.assertEqual(brain.climb_hops, 0)
+
+    def test_stuck_after_hopping_with_no_recall_hops_again(self) -> None:
+        """C128, 2026-11-06: hopped out with no Word of Recall, a level-12
+        Warrior walked to a down staircase it would not take and searched
+        dead ends, 27,000 steps on one DL3."""
+        from moria_playtest.brain import CLIMB_HOPS, STUCK_STEPS
+        brain = Brain(GOALS["deep"])
+        brain.recall, brain.food = 0, 20
+        view = town_view((5, 5), (5, 5), dlvl=3)               # standing on a down staircase
+        for _ in range(CLIMB_HOPS):
+            brain.down_to_climb_back(view)
+        self.assertIsNone(brain.down_to_climb_back(view))      # explore for the way up first
+        brain.level.since_progress = STUCK_STEPS
+        self.assertEqual(brain.down_to_climb_back(view).key, ord(">"))
+
+    def test_stuck_on_an_exhausted_level_hops_before_searching_walls(self) -> None:
+        """2026-11-06: a level-21 Paladin with no way up searched the walls of
+        one DL1 74,000 steps, a down staircase in view (C128 main queue)."""
+        from moria_playtest.brain import STUCK_STEPS
+        brain = Brain(GOALS["deep"])
+        brain.recall, brain.food = 0, 20
+        view = town_view((5, 5), (5, 5), walls=[(6, 5)], dlvl=1)   # on a down staircase, a wall beside it
+        view.types[5 * COLS + 7] = UNKNOWN                         # and unknown space behind the wall
+        o = command_obs(pos=(5, 5), dlvl=1, clvl=21, hp=155, mhp=155,
+                        rows={23: "HP:155/155 MP:22/22 AC:27 AU:2627"})   # up for Word of Recall
+        self.assertEqual(brain.stair_scum(o, view).layer, "search")
+        brain.level.since_progress = STUCK_STEPS
+        self.assertEqual(brain.stair_scum(o, view).key, ord(">"))
+
     def test_a_full_pack_refusing_recall_drops_in_town_and_tries_again(self) -> None:
         """2026-11-06: a level-19 Paladin's Word of Recall was refused for a
         full pack 170 times: with townspeople in view nothing was dropped in
@@ -1216,6 +1299,35 @@ class StationaryTest(unittest.TestCase):
         brain.last_move = None
         brain.decide(at((7, 5), 1101), view)
         self.assertEqual(view.remembered, set())
+
+    def test_a_breeding_nest_out_of_sight_is_still_avoided(self) -> None:
+        """C128, 2026-11-06: rats steered the path only while in view, and a
+        level-19 Warrior walked east and back west along one DL1 corridor,
+        79 times in 1,000 steps."""
+        walls = [(x, y) for x in range(0, 40) for y in (4, 6)]
+        def corridor() -> View:
+            view = town_view((10, 5), (2, 5), walls=walls, dlvl=1, stairs_type=0xA)
+            view.types[5 * COLS + 30] = 0xA                       # a farther up staircase, east
+            return view
+        def at(pos, step):  # type: ignore[no-untyped-def]
+            o = command_obs(pos=pos, dlvl=1, clvl=19, hp=180, mhp=180)
+            o.step = step
+            return o
+        brain = Brain(GOALS["reach_dl2"])
+        view = corridor()
+        view.creatures = {(6, 5): Creature("r", 1)}
+        brain.decide(at((10, 5), 1000), view)
+        view = corridor()                                     # out of sight
+        brain.last_move = None
+        brain.decide(at((10, 5), 1100), view)
+        self.assertEqual(view.remembered, {(6, 5)})
+        self.assertEqual(view.step_toward(view.stairs_up(), avoid_monsters=True), (1, 0))   # east, not past it
+        view = corridor()
+        brain.last_move = None
+        from moria_playtest.brain import SLOW_AVOID
+        brain.decide(at((10, 5), 1000 + SLOW_AVOID), view)
+        self.assertEqual(view.remembered, set())              # long gone
+
 
 class FleeTest(unittest.TestCase):
     """2026-11-03 traces: three runs for the stairs in four were broken off,
@@ -1547,6 +1659,22 @@ class MemoryTest(unittest.TestCase):
         decision = brain.decide(command_obs(pos=(8, 5), dlvl=4, clvl=8, hp=60, mhp=60), view)
         self.assertEqual((decision.layer, decision.key), ("collect", ord("G")))
         self.assertIn((8, 5), brain.level.collected)
+
+    def test_gold_is_collected_past_one_asleep_a_way_off(self) -> None:
+        """C64 Balrog replay, 2026-11-06: a giant seen only from inside a room
+        sent a level-23 Gnome in for its gold and out again."""
+        from moria_playtest.brain import STILL_STEPS
+        brain = prepared(Brain(GOALS["reach_dl2"]))
+        brain.food = 3
+        view = town_view((5, 5), (40, 40), dlvl=4)
+        view.screen = (0, 0, COLS, ROWS)
+        brain.items_seen[(8, 5)] = ("$", "Copper")              # gold seen
+        view.creatures = {(12, 9): Creature("P", 20)}
+        o = command_obs(pos=(5, 5), dlvl=4, clvl=23, hp=200, mhp=200)
+        self.assertIsNone(brain.collect(o, view))              # just seen: it may be coming
+        brain.level.still[(12, 9)] = ("P", 0)
+        o.step = STILL_STEPS
+        self.assertEqual(brain.collect(o, view).key, ord("L"))  # asleep: go on
 
     def test_identified_coins_stay_identified_when_they_move(self) -> None:
         """M4 round 46b: a looked-at Creeping Copper Coins read as an unknown
@@ -2022,10 +2150,10 @@ class PotionTest(unittest.TestCase):
         prompt = command_obs(pos=(5, 5), rows={0: "Quaff which potion (a-a)?"})   # round 40: not "item"
         prompt.mode, prompt.stage = Mode.ITEM, "which"
         self.assertEqual(brain.decide(prompt, None).key, ord("?"))
-        listed = command_obs(pos=(5, 5), rows={1: " a) Ration of Food", 2: " b) Potion of Cure Light Wounds"})
+        listed = command_obs(pos=(5, 5), rows={1: " a) Ration of Food", 2: " b) 2 Potion of Cure Light Wounds"})
         listed.mode, listed.stage = Mode.ITEM, "list"
         self.assertEqual(brain.decide(listed, None).key, ord("B"))
-        self.assertEqual(brain.clw, 1)
+        self.assertEqual(brain.clw, 1)   # the two listed, one drunk
 
 
 class GropeTest(unittest.TestCase):
@@ -3612,6 +3740,60 @@ class StationaryMemoryTest(unittest.TestCase):
         self.assertIsNone(brain.clear_way(command_obs(pos=(6, 5), dlvl=2, clvl=3, hp=40, mhp=40), view))
         self.assertIsNone(brain.level.clear_target)
 
+    def test_a_chosen_blocker_comes_before_other_walks(self) -> None:
+        """2026-11-06: from beside a ',' a path past it counted, explore (or
+        the walk for light) stepped away, and clear_way walked back: 91
+        approaches on DL19, 92 on DL1."""
+        brain = Brain(GOALS["reach_dl5"])
+        brain.food = 3
+        view = self.corridor({(8, 5): Creature("e", 1)})
+        view.pos = (5, 5)
+        o = command_obs(pos=(5, 5), dlvl=2, clvl=3, hp=40, mhp=40)
+        view.types[5 * COLS + 3] = UNKNOWN                   # an edge behind the player
+        self.assertEqual(brain.decide(o, view).layer, "explore")    # a walk away there is
+        self.assertIsNone(brain.chosen_blocker(o, view))            # nothing chosen
+        brain.level.clear_target = (8, 5)
+        decision = brain.decide(o, view)                            # chosen: before explore
+        self.assertEqual((decision.layer, decision.reason), ("fight", "the 'e' blocks the only way on: approach it"))
+        brain.level.clear_target = (9, 9)                           # gone
+        self.assertIsNone(brain.chosen_blocker(o, view))
+
+    def test_the_last_step_to_a_chosen_blocker_is_taken(self) -> None:
+        """2026-11-06: one step short of the squares beside a ',', a path
+        that avoids monsters found none, the commitment went and a search
+        walked back: 95 times."""
+        from unittest import mock
+        brain = Brain(GOALS["reach_dl5"])
+        brain.food = 3
+        view = self.corridor({(8, 5): Creature("e", 1)})
+        view.pos = (6, 5)
+        brain.level.clear_target = (8, 5)
+        real = view.step_toward
+
+        def refusing(goals, *, avoid_monsters, **kw):
+            return None if avoid_monsters else real(goals, avoid_monsters=False, **kw)
+        with mock.patch.object(view, "step_toward", side_effect=refusing):
+            decision = brain.clear_way(command_obs(pos=(6, 5), dlvl=2, clvl=3, hp=40, mhp=40), view)
+        self.assertEqual((decision.layer, decision.key), ("fight", DIRS[(1, 0)]))
+        self.assertEqual(brain.level.clear_target, (8, 5))
+
+    def test_a_walk_to_a_staircase_keeps_its_path(self) -> None:
+        """2026-11-06: replanned each step, the way to the up stairs flipped
+        as remembered and perilous squares came and went: a level-15
+        Halfling walked between x=109 and x=120 300 times on DL4."""
+        from unittest import mock
+        brain = Brain(GOALS["reach_dl5"])
+        view = town_view((5, 5), (1, 5), dlvl=2, stairs_type=0xA)
+        self.assertEqual(brain.committed_step(view, {(1, 5)}), (-1, 0))
+        self.assertEqual(brain.level.route[-1], (1, 5))
+        view.pos = (4, 5)
+        with mock.patch.object(view, "step_toward", return_value=(1, 0)) as replan:   # the way flips
+            self.assertEqual(brain.committed_step(view, {(1, 5)}), (-1, 0))         # the kept path goes on
+            replan.assert_not_called()
+            view.creatures = {(3, 5): Creature("k", 1)}                            # its next square taken
+            self.assertEqual(brain.committed_step(view, {(1, 5)}), (1, 0))
+            replan.assert_called_once()
+
     def test_a_strong_one_blocking_the_only_way_on_is_left(self) -> None:
         brain = Brain(GOALS["reach_dl5"])
         brain.food = 3
@@ -3678,6 +3860,85 @@ class StationaryMemoryTest(unittest.TestCase):
         coming = self.corridor({(9, 5): Creature("e", 1), (4, 5): Creature("k", 1)})
         coming.pos = (7, 5)
         self.assertIsNone(brain.clear_way(o, coming))
+
+    def test_a_committed_blocker_is_judged_calm_from_where_it_stands(self) -> None:
+        """2026-11-06: calm measured from the player, each step toward the
+        ',' brought a mover into range and a search walked back out."""
+        brain = Brain(GOALS["reach_dl5"])
+        brain.food = 3
+        view = self.corridor({(9, 5): Creature("e", 1), (1, 5): Creature("k", 1)})
+        view.pos = (6, 5)                                     # the 'k' is 5 from here, 8 from the eye
+        brain.level.clear_target = (9, 5)
+        decision = brain.clear_way(command_obs(pos=(6, 5), dlvl=2, clvl=3, hp=40, mhp=40), view)
+        self.assertEqual((decision.layer, decision.reason), ("fight", "the 'e' blocks the only way on: approach it"))
+        view.creatures[(5, 5)] = Creature("k", 1)             # one close to the eye: not now
+        self.assertIsNone(brain.clear_way(command_obs(pos=(6, 5), dlvl=2, clvl=3, hp=40, mhp=40), view))
+
+    def test_a_blocker_is_approached_by_squares_that_can_be_stood_on(self) -> None:
+        """2026-11-06: a path takes a goal square as reached whatever it is:
+        a level-1 Warrior walked into the wall beside a ',' 200 times in 825
+        steps, the ',' in a corridor below it."""
+        brain = Brain(GOALS["reach_dl5"])
+        brain.food = 3
+        view = town_view((5, 3), (40, 40), dlvl=2)
+        view.types = [WALL] * (COLS * ROWS)
+        for x in range(2, 12):
+            view.types[3 * COLS + x] = 0x0                    # the upper corridor, the player in it
+            view.types[5 * COLS + x] = 0x0                    # the lower one, the ',' in it
+        view.types[5 * COLS + 1] = 0x0
+        view.types[4 * COLS + 1] = 0x0                        # joined at the west end
+        view.types[3 * COLS + 1] = 0x0
+        view.creatures = {(4, 5): Creature(",", 1)}
+        view.pos = (5, 3)
+        brain.level.clear_target = (4, 5)
+        decision = brain.clear_way(command_obs(pos=(5, 3), dlvl=2, clvl=1, hp=19, mhp=19), view)
+        self.assertEqual(decision.key, DIRS[(-1, 0)])         # west along it, not into the wall at (4, 4)
+
+    def test_a_slow_creature_near_a_blocker_matters_only_beside_a_gaze(self) -> None:
+        """2026-11-06: worm masses wandering near a ',' turned characters back
+        from it 100 times in 400-1,200 steps; the calm rule is for a
+        paralysing eye (M4 round 78: Creeping Coins ate a paralysed bot)."""
+        brain = Brain(GOALS["reach_dl5"])
+        brain.food = 3
+        o = command_obs(pos=(6, 5), dlvl=2, clvl=3, hp=40, mhp=40)
+        view = self.corridor({(9, 5): Creature(",", 1), (5, 5): Creature("w", 1)})   # a White Worm mass
+        view.pos = (6, 5)
+        brain.level.clear_target = (9, 5)
+        decision = brain.clear_way(o, view)
+        self.assertEqual((decision.layer, decision.reason), ("fight", "the ',' blocks the only way on: approach it"))
+        view.creatures[(9, 5)] = Creature("e", 1)                      # an eye: the worm matters
+        self.assertIsNone(brain.clear_way(o, view))
+
+    def test_one_standing_still_near_a_blocker_is_not_coming(self) -> None:
+        """C64 Balrog, 2026-11-06: a giant on one square, seen only from
+        inside the room, turned a level-23 Gnome back from an eye 100 times
+        in 850 steps."""
+        from moria_playtest.brain import STILL_STEPS
+        brain = Brain(GOALS["reach_dl5"])
+        brain.food = 3
+        view = self.corridor({(9, 5): Creature("e", 1), (5, 5): Creature("k", 1)})
+        view.pos = (6, 5)
+        brain.level.clear_target = (9, 5)
+        o = command_obs(pos=(6, 5), dlvl=2, clvl=3, hp=40, mhp=40)
+        brain.level.still[(5, 5)] = ("k", 0)
+        o.step = STILL_STEPS - 1
+        self.assertIsNone(brain.clear_way(o, view))           # not long enough
+        o.step = STILL_STEPS
+        decision = brain.clear_way(o, view)                    # asleep: not coming
+        self.assertEqual((decision.layer, decision.reason), ("fight", "the 'e' blocks the only way on: approach it"))
+
+    def test_a_creature_seen_elsewhere_has_moved(self) -> None:
+        brain = Brain(GOALS["reach_dl5"])
+        brain.food = 3
+        view = self.corridor({(5, 5): Creature("k", 1)})
+        view.pos = (2, 5)
+        o = command_obs(pos=(2, 5), dlvl=2, clvl=3, hp=40, mhp=40)
+        brain.decide(o, view)
+        self.assertEqual(brain.level.still, {(5, 5): ("k", o.step)})
+        view.creatures = {(4, 5): Creature("k", 1)}
+        o.step += 5
+        brain.decide(o, view)
+        self.assertEqual(brain.level.still, {(4, 5): ("k", o.step)})
 
     def test_hurt_rests_and_does_not_flee_from_a_distant_stationary_creature(self) -> None:
         brain = Brain(GOALS["reach_dl2"])
@@ -4344,6 +4605,94 @@ class PrayerTest(unittest.TestCase):
         self.assertEqual(brain.pray(o, view).reason, "food low: pray Create Food")
         brain.food = 5
         self.assertEqual(brain.pray(o, view).reason, "HP 20/50: pray Cure Light Wounds")
+
+    def test_with_no_recall_the_light_reserve_covers_the_climb(self) -> None:
+        """C128, 2026-11-06: a level-23 Warrior went dark on DL20 with no Word
+        of Recall and died groping DL1 49,000 steps later."""
+        from moria_playtest.brain import CLIMB_LIGHT, LIGHT_RESERVE
+        brain = Brain(GOALS["deep"])
+        brain.lamp, brain.oil, brain.torches, brain.map_scale = True, 0, 0, 1.0
+        brain.last_dlvl, brain.light_left = 20, LIGHT_RESERVE + 1000
+        brain.recall = 1
+        self.assertFalse(brain.light_low())                   # Recall home: the flat reserve
+        brain.recall = 0
+        self.assertTrue(brain.light_low())                    # twenty staircases up
+        brain.light_left = LIGHT_RESERVE + 20 * CLIMB_LIGHT + 1
+        self.assertFalse(brain.light_low())
+
+    def test_a_swarm_of_fast_breeders_reads_word_of_recall_at_once(self) -> None:
+        """2026-11-06: Huge White Bats, Giant Fleas, Lice and Gnats killed 51
+        characters, nearly all with Word of Recall unread."""
+        from moria_playtest import knowledge
+        knowledge.use_port("c64")                               # the catalog's creatures
+        self.addCleanup(knowledge.use_port, "")
+        brain = Brain(GOALS["deep"])
+        brain.recall, brain.food = 1, 20
+        view = town_view((5, 5), (40, 40), dlvl=20)
+        fleas = {(6, 5): Creature("F", 14), (6, 6): Creature("F", 14), (4, 4): Creature("F", 14)}
+        view.creatures = dict(fleas)
+        o = command_obs(pos=(5, 5), dlvl=20, clvl=22, hp=200, mhp=200)
+        self.assertIsNone(brain.swarm_recall(o, view))            # three: not yet
+        view.creatures[(7, 7)] = Creature("F", 14)
+        self.assertEqual(brain.swarm_recall(o, view).reason, "4 breeders in view: read Word of Recall")
+        view.creatures = {p: Creature("w", 1) for p in [(6, 5), (6, 6), (4, 4), (7, 7)]}   # slow worm masses
+        self.assertIsNone(brain.swarm_recall(o, view))
+        brain.recall = 0                                          # none to read (2026-11-06: a Dwarf
+        view.creatures = {**fleas, (7, 7): Creature("F", 14)}     # stood 700 steps among lice and died)
+        decision = brain.swarm_recall(o, view)
+        self.assertEqual((decision.key, decision.reason), (DIRS[(1, 1)], "4 breeders in view: fight through to the stairs"))
+        view.pos = (40, 40)                                       # on the down staircase
+        self.assertEqual(brain.swarm_recall(o, view).key, ord(">"))
+
+    def test_lightless_with_no_way_up_known_prays_detect_doors_stairs(self) -> None:
+        """2026-11-06: a level-19 Paladin with no light hopped DL3-DL4 150,000
+        steps, Detect Doors/Stairs known."""
+        from moria_playtest.magic import Prayer
+        brain = Brain(GOALS["deep"])
+        brain.food, brain.magic.study_due, brain.magic.listed = 20, False, True
+        brain.magic.known = {"Detect Doors/Stairs": Prayer("g", 11, 3, "Words of Wisdom")}
+        brain.dark, brain.torches, brain.lamp = True, 0, False
+        view = town_view((5, 5), (5, 5), dlvl=3)                # on a down staircase, none up known
+        o = command_obs(pos=(5, 5), dlvl=3, clvl=19, hp=140, mhp=140, rows={23: "HP:140/140 MP:20/20 AC:15 AU:8557"})
+        self.assertEqual(brain.pray(o, view).reason, "no way out known: pray Detect Doors/Stairs")
+        self.assertIsNone(brain.pray(o, view))                   # once a while, not every step
+
+    def test_lightless_feels_its_way_to_a_known_up_staircase(self) -> None:
+        brain = Brain(GOALS["deep"])
+        brain.food = 20
+        brain.dark, brain.torches, brain.lamp = True, 0, False
+        view = town_view((5, 5), (12, 5), dlvl=3, stairs_type=0xA)
+        view.types = [UNKNOWN] * (COLS * ROWS)
+        view.types[5 * COLS + 5] = 0x0                          # where the player stands
+        view.types[5 * COLS + 12] = 0xA                         # an up staircase, detected
+        o = command_obs(pos=(5, 5), dlvl=3, clvl=19, hp=140, mhp=140, rows={23: "HP:140/140 MP:0/0 AC:15 AU:8557"})
+        decision = brain.resupply(o, view)
+        self.assertEqual((decision.key, decision.reason[-29:]), (DIRS[(1, 0)], "feel the way to the up stairs"))
+        brain.level.felt.add((6, 5))                             # that way was a wall
+        self.assertIn(brain.dark_step(view, view.stairs_up()), {(1, -1), (1, 1)})
+
+    def test_a_move_into_the_dark_that_went_nowhere_is_a_wall(self) -> None:
+        brain = Brain(GOALS["deep"])
+        view = town_view((5, 5), (40, 40), dlvl=3)
+        view.types[5 * COLS + 6] = UNKNOWN
+        brain.last_move = ((5, 5), (6, 5))
+        brain.note_bump(command_obs(pos=(5, 5), dlvl=3), view)
+        self.assertEqual(brain.level.felt, {(6, 5)})
+
+    def test_full_pack_creates_food_only_when_hungry(self) -> None:
+        """C64 Balrog queue, 2026-11-06: with a full pack the ration stayed on
+        the floor, and a level-18 Ranger prayed Create Food every time its
+        mana came back, 2.8 million steps on DL1."""
+        from moria_playtest.magic import Prayer
+        brain = Brain(GOALS["reach_dl2"])
+        brain.food, brain.magic.study_due, brain.magic.listed = 0, False, True
+        brain.magic.known = {"Create Food": Prayer("f", 5, 7, "Words of Wisdom")}
+        brain.pack_full = True
+        view = town_view((5, 5), (40, 40), dlvl=2)
+        o = command_obs(pos=(5, 5), dlvl=2, clvl=8, hp=50, mhp=50, rows={23: "HP:50/50  MP:20/20 AC:10 AU:32 Full"})
+        self.assertIsNone(brain.pray(o, view))
+        o = command_obs(pos=(5, 5), dlvl=2, clvl=8, hp=50, mhp=50, rows={23: "HP:50/50  MP:20/20 AC:10 AU:32 Hungry"})
+        self.assertEqual(brain.pray(o, view).reason, "food low: pray Create Food")
 
     def test_created_food_is_picked_up_before_casting_again(self) -> None:
         """M7 queue, 2026-11-02: the ration Create Food leaves underfoot was

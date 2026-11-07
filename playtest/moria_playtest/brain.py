@@ -127,6 +127,7 @@ STRONG_HP_BASE, STRONG_HP_PER_LEVEL = 20, 4   # more average HP than base + this
 STRONG_AC_BASE, STRONG_AC_PER_LEVEL = 20, 3   # ... or more AC than base + this x character level
 DETECT_EVERY = 2000      # steps between Detect Doors/Stairs prayers on one level (M5b)
 BREEDERS_LEAVE = 3       # breeding creatures in view at which the level is left (M5b)
+SWARM_RECALL = 4         # fast breeders in view at which Word of Recall is read at once
 EAT_CLEAR = 5            # a creature this close puts off a meal while only Hungry (M5a)
 COINS_ODDS = 0.5         # fight odds under which Creeping Coins are fought, not walked away from (M5a)
 FIGHT_ODDS = 0.6         # ... or more than this share of the turns it needs to kill the character: at
@@ -146,6 +147,7 @@ TOUGH_LOSS = 0.5         # HP share lost to one kind of creature, still alive, t
 TOUGH_LEVELS = 3         # character levels until a tough kind is worth fighting again
 CROWD_RANGE, CROWD_COUNT = 3, 2   # this many creatures this close to a staircase: take it (M4 round 88)
 CLEAR_WAY_CALM = 6       # no other creature this close before going to kill a blocker (M4 round 78)
+STILL_STEPS = 20         # steps a creature stays on one square before it counts as not coming (asleep)
 SLOW_MEMORY = 30         # steps a slow creature out of sight still counts as a hazard (M4 round 47)
 SLOW_AVOID = 300         # ... and is avoided as if seen, unless the player stands beside its empty tile
 FIRST_STRIKE_WAITS = 2   # turns to wait for an approaching creature to step into contact
@@ -319,6 +321,7 @@ EXPLORE_PINGPONG = 8     # explore steps spent between two squares that mark the
 TORCH_TURNS = 4000       # a torch burns ~4,000 turns, a lantern or flask ~7,500: the
 LAMP_TURNS = 7500        # screens show no torch charges, so a player keeps rough time
 LIGHT_RESERVE = 2000     # turns of light left, with no refill, that send the player to town
+CLIMB_LIGHT = 500        # more per level below town with no Word of Recall: the stairs are the way home
 REFUEL_AT = 300          # turns of light left at which a flask goes into the lantern
 # Stat rolls (maintainer, 2026-10-25: "I like the general policy - but make
 # sure that would work"): reroll, as a player does, until the class's main
@@ -354,6 +357,8 @@ def roll_good(rows: list[str], race: str, klass: str) -> bool:
 MAX_CLVL = 40   # MAX_PLAYER_LEVEL (docs/FEATURE_MAP.md)
 STORE_ITEM = re.compile(r"^\s*([a-l])\) (?:\d+ )?(\S.*?)\s+(\d+) GP")   # a stack shows its count first
 PACK_ITEM = re.compile(r"^\s*([a-v])\) (?:\d+ )?(\S.*)")   # a stack shows its count first
+PACK_COUNT = re.compile(r"^\s*[a-v]\) (\d+) ")
+CLIMB_HOPS = 6           # down-and-back hops without getting higher before Recall or exploring
 
 
 def ready_level(dlvl: int, margin: int = 2, taper: tuple[int, int, int] | None = None) -> int:
@@ -414,6 +419,7 @@ class LevelMemory:
     unseen_until: int = 0           # step before which an unseen attacker may still be there
     near_until: int = 0             # step before which a creature seen close may still follow
     groped: set[Pos] = field(default_factory=set)   # unknown squares already stepped into
+    felt: set[Pos] = field(default_factory=set)   # unknown squares a move into went nowhere: walls in the dark
     glyphs: dict[Pos, str] = field(default_factory=dict)   # unidentified glyphs seen, on screen or not
     retreat_path: set[Pos] = field(default_factory=set)   # tiles the current retreat crossed
     retreat_failed: bool = False    # it doubled back: stand and fight until it ends
@@ -423,8 +429,10 @@ class LevelMemory:
     slow_seen: dict[Pos, int] = field(default_factory=dict)   # slow creature tile -> step last seen
     loop_blocks: dict[Pos, int] = field(default_factory=dict)   # tile -> times it ended an oscillation here
     breeders_seen: dict[Pos, int] = field(default_factory=dict)   # breeding creature tile -> step last seen
+    still: dict[Pos, tuple[str, int]] = field(default_factory=dict)   # creature tile -> (glyph, step first seen there)
     kinds: dict[str, float] = field(default_factory=dict)   # glyph -> worst creature_danger seen beside (Genocide)
     up_target: Pos | None = None   # the up staircase a walk up is committed to
+    route: list[Pos] = field(default_factory=list)   # the path a walk to a staircase keeps (committed_step)
     clear_target: Pos | None = None   # the blocker clear_way is walking to
     casters: dict[tuple[str, int], int] = field(default_factory=dict)   # caster kind -> step last seen or heard
     find_traps_after: int = 0       # step before which Find Hidden Traps/Doors is not cast again (M5f)
@@ -517,6 +525,9 @@ class Brain:
         self.resupply_after = 0                # step before which town is not worth a trip
         self.recall_trip_after = 0             # ... for Word of Recall alone (the Alchemist may have none)
         self.recall_wait = RESTOCK_WAIT        # doubled each time a visit leaves without one
+        self.climb_hops = 0                    # down-to-climb-back hops since it last got higher
+        self.recall_look_after = 0             # stuck with no Recall counted: when to look in the pack again
+        self.climb_from: int | None = None     # the level those hops began on
         self.gear_trip_after = 0               # ... for armour and weapons alone
         self.gear_trip_gold = GEAR_TRIP_GOLD   # gold that makes a trip for armour and weapons worth it
         self.restock_trip_after = 0            # ... for strong potions and Phase Door alone
@@ -654,9 +665,22 @@ class Brain:
             del self.level.slow_seen[pos]   # beside it and nothing there: gone
         view.remembered = {p for p, seen in self.level.slow_seen.items()
                            if obs.step - seen < SLOW_AVOID and p not in view.creatures}
+        # How long each creature has stood where it is: one seen on a square
+        # not recorded for its kind moved, and so may every one of its kind.
+        moved = {c.glyph for p, c in view.creatures.items() if self.level.still.get(p, ("",))[0] != c.glyph}
+        for pos in [p for p, (glyph, _) in self.level.still.items() if glyph in moved]:
+            del self.level.still[pos]
+        for p, c in view.creatures.items():
+            self.level.still.setdefault(p, (c.glyph, obs.step))
         breeders = knowledge.breeder_kinds()
         self.level.breeders_seen.update(dict.fromkeys(
             [p for p, c in view.creatures.items() if (c.glyph, c.level) in breeders], obs.step))
+        # A nest out of sight is still there, avoided as a slow creature is:
+        # steering the path only while in view, rats sent a level-19 Warrior
+        # east and back west along one DL1 corridor, 79 times in 1,000 steps
+        # (C128, 2026-11-06).
+        view.remembered |= {p for p, seen in self.level.breeders_seen.items()
+                            if obs.step - seen < SLOW_AVOID and p not in view.creatures and chebyshev(p, view.pos) > 1}
         for c in view.creatures.values():   # what Genocide would wipe out (genocide_key)
             self.level.kinds[c.glyph] = max(self.level.kinds.get(c.glyph, 0.0), self.creature_danger(c, 1, obs))
         if obs.clvl < BREEDER_LEVEL and len(self.level.breeders_seen) >= BREEDERS_LEAVE:
@@ -783,6 +807,8 @@ class Brain:
         tile (an invisible creature): keep off it for a while (round 17)."""
         if self.last_move is not None and self.last_move[0] == view.pos:
             self.level.bumped[self.last_move[1]] = obs.step + BUMP_STEPS
+            if view.type_at(*self.last_move[1]) == UNKNOWN:
+                self.level.felt.add(self.last_move[1])   # a wall in the dark: the game shows none
         self.last_move = None
 
     def choose(self, obs: Observation, view: View) -> Decision:
@@ -798,11 +824,11 @@ class Brain:
             self.level.blocked.clear()
             self.level.door_attempts.clear()
         last = (self.stair_scum, self.search) if self.food_low() else (self.search, self.stair_scum)
-        for layer in (self.search_mode, self.drop_junk, self.swat, self.quaff, self.take_created_food, self.pray, self.invoke, self.aim, self.shoot, self.throw, self.crowded, self.shun, self.retreat, self.phase_door, self.caution, self.look,
+        for layer in (self.search_mode, self.drop_junk, self.swat, self.quaff, self.take_created_food, self.pray, self.invoke, self.aim, self.shoot, self.throw, self.crowded, self.shun, self.retreat, self.phase_door, self.swarm_recall, self.caution, self.look,
                       self.cornered_cast, self.fight, self.leave_caster, self.eat,
                       self.light,
                       self.wear,
-                      self.recall_trip, self.resupply,
+                      self.recall_trip, self.chosen_blocker, self.resupply,
                       self.rest, self.collect,
                       self.shop, self.find_traps, self.identify_items, self.try_unknown, self.exercise, self.descend, self.hunt, self.explore, self.clear_way, *last):
             decision = layer(obs, view)
@@ -831,6 +857,18 @@ class Brain:
             # (M4 round 70: seed 1029 rested 5,800 turns beside one).
             return Decision(KEY_SEARCH, "fallback", "nothing to do: search here")
         return Decision(ord("5"), "fallback", "nothing to do: rest a turn")
+
+    def dark_step(self, view: View, goals: set[Pos]) -> tuple[int, int] | None:
+        """First step of a path that takes unknown squares for floor, but
+        those a move into went nowhere (``LevelMemory.felt``)."""
+        known = view.types
+        view.types = [0 if t == UNKNOWN else t for t in known]
+        for x, y in self.level.felt:
+            view.types[y * view.cols + x] = WALL
+        try:
+            return view.step_toward(goals, avoid_monsters=True)
+        finally:
+            view.types = known
 
     def grope(self, view: View) -> Decision | None:
         """Nothing left but frontier squares that revealed nothing (light
@@ -1300,9 +1338,39 @@ class Brain:
         return self.picking is not None or self.pending_item is not None or self.dropping \
             or self.magic.listing_books
 
+    def sync_counts(self, rows: list[str], scope: str) -> None:
+        """Counts kept from messages drift (a scroll burnt, a potion
+        shattered); a listing is the truth. ``scope`` is what the listing
+        holds, by the command that showed it: "scrolls" (read), "potions"
+        (quaff) or "all" (drop). A level-27 Priest walked for supplies and
+        stood in the dark 2.4 million steps with two Words of Recall its
+        count said it lacked (C64 Balrog, 2026-11-06)."""
+        listed: list[tuple[str, int]] = []
+        for row in rows:
+            match = PACK_ITEM.match(row)
+            if match:
+                count = PACK_COUNT.match(row)
+                listed.append((re.sub(r"^an? ", "", match.group(2).strip()), int(count.group(1)) if count else 1))
+        if not listed:
+            return
+
+        def held(prefix: str) -> int:
+            return sum(n for name, n in listed if name.startswith(prefix))
+        if scope in ("scrolls", "all"):
+            self.recall, self.phase, self.identify_scrolls = held(RECALL), held(PHASE), held(IDENTIFY_SCROLL)
+        if scope in ("potions", "all"):
+            self.clw, self.neutralize = held(CLW), held(NEUTRALIZE)
+            for kind in self.strong:
+                self.strong[kind] = held(kind)
+
     def pick_item(self, obs: Observation) -> Decision:
         """Answer an item prompt (wear, throw): list the items, then pick by name."""
         rows = obs.rows[1:]
+        kind = None if self.picking is None else "scrolls" if (
+            self.picking.startswith("Scroll") or unknown_kind(self.picking) == "scroll") else "potions" if (
+            self.picking.startswith("Potion") or unknown_kind(self.picking) == "potion") else None
+        if kind is not None and obs.stage == "list":
+            self.sync_counts(rows, kind)   # the read or quaff list: every scroll or potion carried
         if self.picking in (TORCH, LANTERN) and any(PACK_ITEM.match(row) for row in rows):
             # The light with the most turns left: a burnt-out one stays in
             # the pack, and wearing it left the bot blind with no "gone out"
@@ -1553,6 +1621,8 @@ class Brain:
     def track(self, obs: Observation, view: View) -> None:
         self.map_scale = view.cols * view.rows / C64_MAP_AREA
         if obs.dlvl != self.last_dlvl:
+            if obs.dlvl == 0 or (self.climb_from is not None and obs.dlvl < self.climb_from):
+                self.climb_hops, self.climb_from = 0, None   # higher than the hops began: real progress
             if self.last_dlvl == 0 and self.armoury_done and self.weapons_done:
                 # Leaving town: both gear stores visited and nothing bought
                 # means nothing better at this gold; gold alone is no reason
@@ -1725,7 +1795,11 @@ class Brain:
         # mode spends two turns a step, an auto-rest many), and characters went
         # dark far from town with no Word of Recall (M5b round 45: five runs).
         # The way home grows with the level's area, as food_reserve's (M6).
-        return ((self.light_left < LIGHT_RESERVE * self.map_scale or not self.lamp)
+        # Without Word of Recall the way home is every staircase up: a
+        # level-23 Warrior went dark on DL20 with none and died groping DL1
+        # 49,000 steps later (C128, 2026-11-06).
+        climb = 0 if self.recall else CLIMB_LIGHT * (self.last_dlvl or 0)
+        return ((self.light_left < (LIGHT_RESERVE + climb) * self.map_scale or not self.lamp)
                 and not refill and not self.lamp_packed)
 
     def final_step(self, obs: Observation) -> bool:
@@ -2714,7 +2788,11 @@ class Brain:
             self.collect_to = None
             self.level.collected.add(view.pos)
             return Decision(KEY_PICKUP, "collect", "pick up what lies here")
-        if obs.dlvl == 0 or self.threats(view) or self.unseen_attack:
+        # One asleep a way off does not stop it: a giant seen only from inside
+        # a room sent a level-23 Gnome in for its gold and out again (C64
+        # Balrog replay, 2026-11-06).
+        awake = {p for p in self.threats(view) if not (self.still_there(p, obs) and chebyshev(p, view.pos) > 2)}
+        if obs.dlvl == 0 or awake or self.unseen_attack:
             self.collect_to = None
             return None
         keep_off = view.hazards | self.hazards(view)
@@ -2817,7 +2895,13 @@ class Brain:
                     target = up
                     break
             self.level.up_target = target
-        step = view.step_toward({target} if target else view.stairs_up(), avoid_monsters=True)
+        step = self.committed_step(view, {target} if target else view.stairs_up())
+        if step is None and self.lightless() and view.stairs_up():
+            # Known (Detect Doors/Stairs) but no known way there: feel the way
+            # through the dark, as a player does.
+            step = self.dark_step(view, view.stairs_up())
+            if step is not None:
+                return self.move(view, step, "resupply", f"{why}: feel the way to the up stairs")
         if not self.lightless():
             self.dark_hops = 0
         dark = self.lightless() and self.dark_hops < DARK_HOPS
@@ -2830,13 +2914,34 @@ class Brain:
             # Only DARK_HOPS times: a fresh level is as dark, and a level-16
             # Mage hopped DL1-DL2 15,000 steps arriving by down stairs each
             # time; then it gropes for the way up (same day).
-            if view.type_at(*view.pos) == TYPE_STAIRS_DN:
+            if view.type_at(*view.pos) == TYPE_STAIRS_DN and not self.hopping_out():
                 if dark:
                     self.dark_hops += 1
-                return Decision(ord(">"), "resupply", f"{why}: no way up, down to climb back")
+                return self.climb_hop(view, f"{why}: no way up, down to climb back")
             return self.move(view, view.step_toward(view.stairs_down(), avoid_monsters=True), "resupply",
                              f"{why}: no way up, path to the down stairs")
         return self.move(view, step, "resupply", f"{why}: path to the up stairs")
+
+    def committed_step(self, view: View, goals: set[Pos]) -> tuple[int, int] | None:
+        """The next step of the path kept to ``goals``, while its next square
+        is beside the player, open and safe; else a new path, kept from here.
+        Replanned at each step, the cheapest way flipped as remembered and
+        perilous squares came and went: a level-15 Halfling walked toward the
+        up stairs and back between x=109 and x=120 300 times on DL4, and a
+        CX16 Mage did the same toward the nearest staircase (2026-11-06)."""
+        route = self.level.route
+        if route and route[-1] in goals:
+            if view.pos in route:
+                route = route[route.index(view.pos) + 1:]
+            if route:
+                nxt = route[0]
+                if chebyshev(nxt, view.pos) == 1 and nxt not in view.perilous \
+                        and view.passable(*nxt, avoid_monsters=True, doors=True):
+                    self.level.route = route
+                    return (nxt[0] - view.pos[0], nxt[1] - view.pos[1])
+        step = view.step_toward(goals, avoid_monsters=True)
+        self.level.route = list(view.last_path) if step not in (None, (0, 0)) else []
+        return step
 
     def recall_reserve(self) -> int:
         """Word of Recall scrolls to carry. Early, one: a level-1 Paladin spent
@@ -2925,7 +3030,14 @@ class Brain:
         if self.recalling:
             return Decision(ord("5"), "recall", "Word of Recall read: wait for it")
         if not self.recall:
-            return None
+            # The count says none, but counts drift: stuck, look anyway, once
+            # a while (the read list corrects the counts, sync_counts). Five
+            # C64 Balrog characters at level 18-26 searched sealed DL1-3
+            # pockets to their budgets, four with Word of Recall in the pack
+            # by its listings (2026-11-06).
+            if obs.dlvl == 0 or not (self.stuck(view) or self.hopping_out()) or obs.step < self.recall_look_after:
+                return None
+            self.recall_look_after = obs.step + STUCK_STEPS
         if obs.dlvl == 0:
             spare = self.gold(obs) > self.gear_reserve(obs)
             # The Temple only when it was worth a visit, as the Black Market:
@@ -2948,7 +3060,8 @@ class Brain:
                 # DL28-27-26-town-DL28 over and over (M8, 2026-11-02). The
                 # stairs go down a level at a time instead.
                 return None
-        elif not (self.food_low() and self.sealed(view)) and not self.stuck(view) and not self.lightless() and (
+        elif not (self.food_low() and self.sealed(view)) and not self.stuck(view) and not self.lightless() \
+                and not self.hopping_out() and (
                 obs.dlvl < RECALL_FROM or not self.needs_resupply(obs)) and not (
                 self.draining >= DRAIN_RESTS and obs.hp < DRAIN_RECALL_HP * obs.mhp) and not (
                 self.level.summoned is not None and obs.step - self.level.summoned <= SUMMON_MEMORY
@@ -2965,6 +3078,11 @@ class Brain:
             return None
         self.picking, self.listed = RECALL, False
         return Decision(ord("R"), "recall", "read Word of Recall")
+
+    def still_there(self, pos: Pos, obs: Observation) -> bool:
+        """The creature at ``pos`` has stood there STILL_STEPS or more."""
+        since = self.level.still.get(pos)
+        return since is not None and obs.step - since[1] >= STILL_STEPS
 
     def lightless(self) -> bool:
         """Dark with nothing to light: no torch, and no lantern with oil. The
@@ -3143,6 +3261,35 @@ class Brain:
             return Decision(*magic.pray(TELEPORT_SELF, f"HP {obs.hp}/{obs.mhp}, no way out: cast Teleport Self"))
         return None   # Sanctuary known, one beside: nothing that helps (M5b round 24: Portal asked 1,666 times)
 
+    def swarm_recall(self, obs: Observation, view: View) -> Decision | None:
+        """A swarm of fast breeders: read Word of Recall at once and fight on
+        while it comes. Too fast to walk away from and breeding faster than
+        they die, Huge White Bats, Giant Fleas, Lice and Gnats killed 51
+        characters on 2026-11-06, nearly all with Word of Recall and potions
+        unused (levels 19-30 on the Balrog queue)."""
+        if obs.dlvl == 0:
+            return None
+        breeders, moves = knowledge.breeder_kinds(), knowledge.moves()
+        swarm = sum((c.glyph, c.level) in breeders and moves.get((c.glyph, c.level), 1.0) > 1
+                    and not self.stationary(c) for c in view.creatures.values())
+        if swarm < SWARM_RECALL:
+            return None
+        if self.recall and not self.recalling and obs.step >= self.blind_until:
+            self.picking, self.listed = RECALL, False
+            return Decision(ord("R"), "recall", f"{swarm} breeders in view: read Word of Recall")
+        # No Recall (or waiting for it): fight through to a staircase, any
+        # way. A level-25 Dwarf with none stood on one DL4 square 700 steps
+        # among 18 Giant White Lice, drank 23 strong potions and 9 Cure Light
+        # Wounds, and died there (C64 Balrog, 2026-11-06).
+        here = view.type_at(*view.pos)
+        if here in (TYPE_STAIRS_UP, TYPE_STAIRS_DN):
+            return Decision(ord("<") if here == TYPE_STAIRS_UP else ord(">"), "retreat",
+                            f"{swarm} breeders in view: take the stairs")
+        step = view.step_toward(view.stairs_up() | view.stairs_down(), avoid_monsters=False)
+        if step is None or step == (0, 0):
+            return None
+        return Decision(DIRS[step], "retreat", f"{swarm} breeders in view: fight through to the stairs")
+
     def phase_due(self, obs: Observation) -> bool:
         """``phase_door`` will act now: an escape at hand, and badly hurt in
         contact beside a breeder, two or more, or near death, or beside an
@@ -3201,6 +3348,7 @@ class Brain:
                 self.listed = True
                 return Decision(ord("?"), "prompt", "list the pack")
         else:
+            self.sync_counts(obs.rows[1:], "all")   # the whole pack: every count it can check
             # The launcher carried and its ammunition only: a level-25 Dwarf
             # kept three launchers, seven stacks of arrows and bolts, three
             # empty lanterns and three burnt-out torches, dropped one item a
@@ -3441,14 +3589,23 @@ class Brain:
         # close: starving in a sealed pocket kept HP under half, so the heal
         # always came first and the way out was never looked for (M5b round
         # 8: a Paladin, 34,000 steps on one DL2 level).
-        if obs.dlvl and not near and (self.stuck(view) or self.sealed(view)) and obs.step >= self.level.detect_after \
-                and magic.can(obs, DETECT_DOORS):
+        # Lightless, at once: nothing explored shows the way up (2026-11-06:
+        # a level-19 Paladin with no light hopped DL3-DL4 150,000 steps, the
+        # prayer known).
+        lost = self.lightless() and not view.stairs_up()
+        if obs.dlvl and not near and (self.stuck(view) or self.sealed(view) or lost) \
+                and obs.step >= self.level.detect_after and magic.can(obs, DETECT_DOORS):
             self.level.detect_after = obs.step + DETECT_EVERY
             return Decision(*magic.pray(DETECT_DOORS, "no way out known: pray Detect Doors/Stairs"))
-        if obs.dlvl and not near and self.food_low() and magic.can(obs, CREATE_FOOD):
+        hungry = any(word in obs.rows[23] for word in ("Hungry", "Weak", "Faint"))
+        if obs.dlvl and not near and self.food_low() and (hungry or not self.pack_full) \
+                and magic.can(obs, CREATE_FOOD):
             # Before a heal: starving drains HP back as fast as Cure Light
             # Wounds restores it, and a Dwarf Priest sealed on DL2 healed
             # 1,166 times while it starved (M5b round 29, seed 1001).
+            # A full pack leaves the ration on the floor: not again until
+            # hungry, or a level-18 Ranger prayed every time its mana came
+            # back, 2.8 million steps on DL1 (C64 Balrog queue, 2026-11-06).
             return Decision(*magic.pray(CREATE_FOOD, "food low: pray Create Food"))
         if (obs.hp < PRAY_HEAL_HP * obs.mhp or self.under_spell(obs, view) or self.under_blow(obs, view)) \
                 and not ((self.adjacent or self.attacked) and self.phase_due(obs)):
@@ -3679,6 +3836,23 @@ class Brain:
                 return None
         return self.move(view, step, "explore", "path to the nearest unexplored edge")
 
+    @staticmethod
+    def beside(view: View, pos: Pos) -> set[Pos]:
+        """The squares next to ``pos`` the player can stand on: a path takes a
+        goal square as reached whatever it is, and a level-1 Warrior walked
+        into the wall beside a ',' 200 times in 825 steps (2026-11-06)."""
+        return {(pos[0] + dx, pos[1] + dy) for dx, dy in DIRS
+                if view.passable(pos[0] + dx, pos[1] + dy, avoid_monsters=False, doors=True)}
+
+    def chosen_blocker(self, obs: Observation, view: View) -> Decision | None:
+        """A blocker clear_way chose, still there, before any other walk: from
+        beside it a path past it counts, so a walk stepped away and the next
+        step came back (2026-11-06: a ',' on DL19 with explore, 91 approaches
+        in 1,800 steps; a ',' on DL1 with the walk for light, 92 in 278)."""
+        if self.level.clear_target not in {**self.level.stationary, **view.creatures}:
+            return None
+        return self.clear_way(obs, view)
+
     def clear_way(self, obs: Observation, view: View) -> Decision | None:
         """A creature that never moves (or is never meleed) stands in the only
         way to any exit or unexplored edge: kill it when the monster lore says
@@ -3703,11 +3877,25 @@ class Brain:
         self.level.clear_target = committed
         if committed is None and view.step_toward(exits(), avoid_monsters=True) is not None:
             return None
-        if any(chebyshev(p, view.pos) <= CLEAR_WAY_CALM and not self.stationary(c)
-               and c.glyph not in AVOID_GLYPHS for p, c in view.creatures.items()):
+        # Measured from where the fight will be: from the player, each step
+        # toward a committed blocker brought a mover into range and the next
+        # walked back out (2026-11-06: a ',' on DL19, 94 approaches).
+        calm_from = committed if committed is not None else view.pos
+        # A slow one only matters beside a paralysing gaze (below); else it
+        # is fought or outwalked: worm masses wandering near a ',' turned
+        # characters back from it 100 times in 400-1,200 steps (2026-11-06).
+        slow = knowledge.slow_kinds()
+        gaze = (known[committed].glyph in AVOID_GLYPHS if committed is not None
+                else any(c.glyph in AVOID_GLYPHS for c in view.creatures.values()))
+        if any(chebyshev(p, calm_from) <= CLEAR_WAY_CALM and not self.stationary(c)
+               and c.glyph not in AVOID_GLYPHS and not self.still_there(p, obs)
+               and (gaze or (c.glyph, c.level) not in slow) for p, c in view.creatures.items()):
             # Not while something else is coming: paralysed beside an eye,
             # the bot was eaten by the Creeping Coins it had walked away from
-            # (M4 round 78, seed 1040).
+            # (M4 round 78, seed 1040). One asleep is not coming: a giant on
+            # one square, seen only from inside the room, turned a level-23
+            # Gnome back from an eye 100 times in 850 steps (C64 Balrog,
+            # 2026-11-06).
             return None
         bound = STRONG_HP_BASE + STRONG_HP_PER_LEVEL * obs.clvl
         creatures, hazards = view.creatures, view.hazards
@@ -3717,7 +3905,13 @@ class Brain:
                 self.last_attack = (committed, creature.glyph)
                 return Decision(DIRS[(committed[0] - view.pos[0], committed[1] - view.pos[1])], "fight",
                                 f"the '{creature.glyph}' blocks the only way on: attack it")
-            step = view.step_toward({(committed[0] + dx, committed[1] + dy) for dx, dy in DIRS}, avoid_monsters=True)
+            beside = self.beside(view, committed)
+            # The squares beside it are next to a monster, which an avoiding
+            # path may refuse one step short of them (2026-11-06: a C128 game
+            # stepped up toward a ',' and back down 95 times). Nothing else
+            # moves close (CLEAR_WAY_CALM above): go on past the rule.
+            step = (view.step_toward(beside, avoid_monsters=True)
+                    or view.step_toward(beside, avoid_monsters=False))
             decision = self.move(view, step, "fight", f"the '{creature.glyph}' blocks the only way on: approach it")
             if decision is not None:
                 return decision
@@ -3736,7 +3930,7 @@ class Brain:
             try:
                 cut = view.step_toward(exits(), avoid_monsters=True) is not None
                 step = None if not cut or chebyshev(pos, view.pos) == 1 else view.step_toward(
-                    {(pos[0] + dx, pos[1] + dy) for dx, dy in DIRS}, avoid_monsters=True)
+                    self.beside(view, pos), avoid_monsters=True)
             finally:
                 view.creatures, view.hazards = creatures, hazards
             if not cut:
@@ -3765,7 +3959,7 @@ class Brain:
                 self.last_attack = (pos, creature.glyph)
                 return Decision(DIRS[(pos[0] - view.pos[0], pos[1] - view.pos[1])], "fight",
                                 f"sealed in: kill the '{creature.glyph}' beside the walls to search")
-            step = view.step_toward({(pos[0] + dx, pos[1] + dy) for dx, dy in DIRS}, avoid_monsters=True)
+            step = view.step_toward(self.beside(view, pos), avoid_monsters=True)
             decision = self.move(view, step, "fight", f"sealed in: approach the '{creature.glyph}' to kill it")
             if decision is not None:
                 self.level.clear_target = pos   # kept while it is in view (above)
@@ -3827,13 +4021,16 @@ class Brain:
                             "level exhausted: take the stairs to a fresh level")
         for exits in (down, view.stairs_up()):   # down when ready, else (or unreachable) up
             if exits:
-                decision = self.move(view, view.step_toward(exits, avoid_monsters=True), "stair-scum",
+                decision = self.move(view, self.committed_step(view, exits), "stair-scum",
                                      "level exhausted: path to the nearest staircase")
                 if decision is not None:
                     return decision
-        if self.food_low():
+        if self.food_low() or self.stuck(view):
             # No way up and short of food (M4 round 39: seeds 1002, 1004, 1019,
             # 1020 searched sealed pockets until they starved): down first.
+            # Stuck too: the walls of a big level are never all searched, and
+            # a level-21 Paladin searched one DL1 74,000 steps with a down
+            # staircase in view (C128, 2026-11-06).
             decision = self.down_to_climb_back(view)
             if decision is not None:
                 return decision
@@ -3845,8 +4042,28 @@ class Brain:
         # not ready, then climb straight back to a fresh level (``resupply``).
         return self.down_to_climb_back(view)
 
+    def hopping_out(self) -> bool:
+        """Down-and-back hops that never got higher: arriving by up stairs is
+        on a down staircase, so the next level up is no nearer. A level-27
+        Priest hopped DL3-DL4 and then stood in the dark 2.4 million steps,
+        two Words of Recall in its pack (C64 Balrog, 2026-11-06). Stuck
+        then with no Recall to read: hop again, or a level-12 Warrior
+        walked to a down staircase it would not take and searched dead ends,
+        27,000 steps on one DL3 (C128, same day)."""
+        if self.climb_hops >= CLIMB_HOPS and self.level.since_progress >= STUCK_STEPS and not self.recall:
+            self.climb_hops = 0
+        return self.climb_hops >= CLIMB_HOPS
+
+    def climb_hop(self, view: View, why: str) -> Decision:
+        if self.climb_from is None:
+            self.climb_from = view.dlvl
+        self.climb_hops += 1
+        return Decision(ord(">"), "stair-scum" if why.startswith("no way up") else "resupply", why)
+
     def down_to_climb_back(self, view: View) -> Decision | None:
+        if self.hopping_out():
+            return None   # Word of Recall (recall_trip), or explore for the way up
         if view.type_at(*view.pos) == TYPE_STAIRS_DN:
-            return Decision(ord(">"), "stair-scum", "no way up: take the down stairs to climb back")
+            return self.climb_hop(view, "no way up: take the down stairs to climb back")
         return self.move(view, view.step_toward(view.stairs_down(), avoid_monsters=True), "stair-scum",
                          "no way up: path to the down stairs")
