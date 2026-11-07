@@ -366,18 +366,8 @@ sbuy_execute:
     jmp sbuy_no_gold
 !sb_can_afford:
 
-    // Check inventory room
-    jsr inv_count_items
-    cmp #MAX_INV_SLOTS
-    bcc !sb_has_room+
-    jmp sbuy_full
-!sb_has_room:
-    jsr hg_decrease_insults
-
-    // --- Execute purchase ---
-    jsr gold_subtract_price
-
-    // Copy item from store to inventory
+    // Copy item from store to inventory: a full pack still takes one that
+    // stacks (VMS inven_check_num, Umoria inventoryCanCarryItemCount)
     ldx sb_abs_slot
     :AuxReadX(si_item_id)
     sta fi_add_id
@@ -396,6 +386,13 @@ sbuy_execute:
     :LoadStoreEgoX()
     sta fi_add_ego
     jsr inv_add_item
+    bcs !sb_has_room+
+    jmp sbuy_full
+!sb_has_room:
+    jsr hg_decrease_insults
+
+    // --- Execute purchase ---
+    jsr gold_subtract_price
 
     // Remove one from the store stack. An emptied slot clears only its
     // item id: every path that fills a slot writes all of its fields.

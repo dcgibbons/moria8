@@ -16,7 +16,7 @@ test_bootstrap:
 test_exit_trampoline:
     sei                         // Disable IRQs during copy
     :BankOutBasic()             // Ensure BASIC ROM off (tc_results in $A000+)
-    ldx #64-1
+    ldx #65-1
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -134,7 +134,7 @@ press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
 // Test result buffer — copy to $0400 at end (msg_print clobbers $0400)
-tc_results: .fill 64, $ff
+tc_results: .fill 65, $ff
 tc_loop_ctr: .byte 0          // Loop counter (safe from ZP clobber)
 tc_valid_ctr: .byte 0         // Valid item counter for test 22
 t16_base_ac: .byte 0          // Stable scratch for Test 16 across item_wear
@@ -3167,10 +3167,57 @@ test_start:
     bne !t64_fail+
     lda #$01
     sta tc_results + 63
-    jmp !tests_done+
+    jmp !t65+
 !t64_fail:
     lda #$00
     sta tc_results + 63
+
+    // Test 65: a full pack still takes a ration that stacks with one carried
+    // (VMS inven_check_num, Umoria inventoryCanCarryItemCount), and still
+    // refuses a dagger. Every pickup was "Your pack is full." until
+    // 2026-11-06: a Ranger's Create Food fell to the floor for good.
+!t65:
+    jsr item_init_inventory
+    lda #15                     // a Ration of Food in slot 0
+    jsr t59_add_one
+    ldx #1
+!t65_fill:
+    lda #2                      // daggers fill slots 1..21
+    sta inv_item_id,x
+    lda #1
+    sta inv_qty,x
+    inx
+    cpx #MAX_INV_SLOTS
+    bcc !t65_fill-
+    jsr t58_gold_setup
+    lda #15
+    jsr t59_add_one_setup
+    jsr floor_item_add          // a ration underfoot
+    jsr item_pickup
+    bcc !t65_fail+
+    lda inv_qty + 0
+    cmp #2                      // stacked
+    bne !t65_fail+
+    lda #20
+    ldy #12
+    jsr floor_item_find_at
+    bcs !t65_fail+              // gone from the floor
+    jsr t58_gold_setup
+    lda #2
+    jsr t59_add_one_setup
+    jsr floor_item_add          // a dagger underfoot
+    jsr item_pickup
+    bcs !t65_fail+              // no room: refused
+    lda #20
+    ldy #12
+    jsr floor_item_find_at
+    bcc !t65_fail+              // still on the floor
+    lda #$01
+    sta tc_results + 64
+    jmp !tests_done+
+!t65_fail:
+    lda #$00
+    sta tc_results + 64
 
 !tests_done:
     // Jump to trampoline at $033C (below $A000) to copy results + BRK

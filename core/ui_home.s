@@ -136,22 +136,8 @@ home_retrieve:
     rts                         // Empty slot
 !hr_slot_occupied:
 
-    // Check inventory room
-    jsr inv_count_items
-    cmp #MAX_INV_SLOTS
-    bcc !hr_has_room+
-
-    // Inventory full
-    lda #COL_RED
-    sta zp_text_color
-    lda #22
-    ldx #<hm_inv_full_str
-    ldy #>hm_inv_full_str
-    jsr home_put_col1_string
-    jmp hal_input_get_key           // Wait, tail call
-
-!hr_has_room:
-    // Copy item from store to inventory
+    // Copy item from store to inventory: a full pack still takes one that
+    // stacks (VMS inven_check_num, Umoria inventoryCanCarryItemCount)
     ldx hm_store_slot
     :AuxReadX(si_item_id)
     sta fi_add_id
@@ -170,7 +156,18 @@ home_retrieve:
     :LoadStoreEgoX()
     sta fi_add_ego
     jsr inv_add_item
+    bcs !hr_has_room+
 
+    // Inventory full
+    lda #COL_RED
+    sta zp_text_color
+    lda #22
+    ldx #<hm_inv_full_str
+    ldy #>hm_inv_full_str
+    jsr home_put_col1_string
+    jmp hal_input_get_key           // Wait, tail call
+
+!hr_has_room:
     // Clear store slot
     ldx hm_store_slot
     lda #FI_EMPTY

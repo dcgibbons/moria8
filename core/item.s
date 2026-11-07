@@ -923,19 +923,8 @@ item_pickup:
 
 !ipu_not_gold:
     // --- Non-gold item pickup ---
-    // Check if inventory full
-    jsr inv_count_items
-    cmp #MAX_INV_SLOTS
-    bcc !ipu_has_room+
-
-    // Pack full
-    ldx #HSTR_UIS_PACK_FULL
-    jsr huff_print_msg
-    clc
-    rts
-
-!ipu_has_room:
-    // Copy item to inventory
+    // Copy item to inventory: a full pack still takes one that stacks (VMS
+    // inven_check_num, Umoria inventoryCanCarryItemCount)
     ldx ipu_slot
     lda fi_item_id,x
     sta fi_add_id
@@ -954,7 +943,15 @@ item_pickup:
     jsr floor_item_get_ego_x
     sta fi_add_ego
     jsr inv_add_item
-    // carry set = success (should always succeed since we checked)
+    bcs !ipu_added+
+
+    // Pack full
+    ldx #HSTR_UIS_PACK_FULL
+    jsr huff_print_msg
+    clc
+    rts
+
+!ipu_added:
 
     // Build message: "You picked up a <name>."
     lda #0

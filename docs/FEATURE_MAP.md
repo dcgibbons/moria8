@@ -355,7 +355,7 @@ VMS Moria 4.8 (`dungeon.inc`) used its original keypad/letter layout; Umoria 5.7
 | **Bash Door, Chest or Monster** | `B` | `B` / `f` | **`CTRL+B`** (`$02`, `CMD_BASH`) | None | **`Implemented`** |
 | **Jam Door with Iron Spike** | `j` | `j` / `S` | **`CTRL+D`** (`$04`, `CMD_JAM`) | Mapped to `CTRL+D` instead of `CTRL+J` because Apple IIe hardware emits `$0A` (`CTRL+J`) for the physical Down-Arrow key | **`Implemented`** |
 | **Tunnel / Dig Wall or Rubble** | `T` | `T` / `CTRL+T` | **`+`** (`$2B`, `CMD_TUNNEL`) | None | **`Implemented`** |
-| **Pick Up Item** | `g` (automatic on step in VMS unless `^M` move) | `g` (or auto-pickup option) | **`g`** or **`,`** (`CMD_PICKUP`) | None | **`Implemented`** |
+| **Pick Up Item** | `g` (automatic on step in VMS unless `^M` move) | `g` (or auto-pickup option) | **`g`** or **`,`** (`CMD_PICKUP`). A full pack (22 slots) still takes an item that stacks with one carried, from the floor, a store or the home (`inv_add_item` decides; VMS `inven_check_num`, Umoria `inventoryCanCarryItemCount`).<br>**Fixed 2026-11-06 (playtest queue):** all three refused any item at 22 slots, and a level-18 Ranger's Create Food ration stayed on the floor 2.8 million steps | None | **`Implemented`** |
 | **Drop Item** | `d` | `d` | **`d`** (`CMD_DROP`) | None | **`Implemented`** |
 | **Inventory List** | `i` | `i` | **`i`** (`CMD_INVENTORY`) | None | **`Implemented`** |
 | **Equipment List** | `e` | `e` | **`e`** (`CMD_EQUIPMENT`) | None | **`Implemented`** |
