@@ -3158,7 +3158,13 @@ service's environment (a drop-in beside `x16.conf`: `A2ROMS`,
 `ATARI8ROMS`, `BBCMROMS`, and JiffyDOS for the Plus/4 and so the C64). The
 dashboard's Build queue panel is a grid like M6's "every port plays" (the
 maintainer, 2026-11-06): a row per combination, a cell per port with its
-last game's character level coloured by outcome, or the game playing now; `make playtest-queue-status` prints each port's line.
+last game's character level coloured by outcome, or the game playing now; the
+Builds over time card below it (`dashboard.build_history`, maintainer
+2026-11-06) draws each build's live span (its first game to the next build's)
+as a band labelled with the short hash, the share of its counted games that
+reached the goal as a step over a 95% Wilson range, all ports or one, with
+the commit subject, median level and findings on hover and in a table; a
+build with fewer than 10 games is dimmed; `make playtest-queue-status` prints each port's line.
 
 **Subqueues borrow workers by pausing.** A main-queue run lasts hours, so the
 service does not wait for one to end: it pauses the newest main runs (a

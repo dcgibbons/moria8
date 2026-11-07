@@ -307,3 +307,29 @@ class DifficultyTest(unittest.TestCase):
         self.assertEqual((d["ends"]["other"][12], d["ends"]["other"][25]), (1, 2))
         self.assertEqual(d["grid"]["human-warrior"], {"runs": 3, "median": 25, "reached": 1, "reach10": 2})
         self.assertEqual(d["grid"]["human-mage"]["median"], 3)
+
+
+class BuildHistoryTest(unittest.TestCase):
+    """The Builds card (§23.4): the build queue's builds in the order they
+    started, each live until the next one's first game, with its counted
+    games, goals reached and a 95% range, overall and by port."""
+
+    def test_spans_counts_and_ranges(self) -> None:
+        from unittest import mock
+
+        def run(build, started, port, outcome, clvl=10, findings=()):
+            return {"queue": "build", "build": build, "commit": build * 4, "started": started, "platform": port,
+                    "outcome": outcome, "clvl": clvl, "findings": list(findings)}
+        records = [run("bbb", 200, "c64", "reached"), run("aaa", 100, "c64", "reached"),
+                   run("aaa", 110, "bbcmaster", "died", 4, ["stall: x", "hang: y"]),
+                   run("aaa", 120, "c64", "abandoned"), {"queue": "main", "build": "zzz", "started": 1, "outcome": "died"}]
+        with mock.patch.object(dashboard, "commit_subject", lambda c: f"subject {c[:3]}"):
+            builds = dashboard.build_history(records, ("reached", "died", "budget", "finding", "error"))
+        self.assertEqual([(b["build"], b["start"], b["end"]) for b in builds], [("aaa", 100, 200), ("bbb", 200, None)])
+        aaa = builds[0]
+        self.assertEqual((aaa["games"], aaa["reached"], aaa["median_clvl"], aaa["findings"]), (2, 1, 10, 1))
+        self.assertEqual(aaa["ports"], {"c64": [1, 1], "bbcmaster": [1, 0]})
+        self.assertEqual(aaa["subject"], "subject aaa")
+        self.assertLess(aaa["lo"], 0.5)
+        self.assertGreater(aaa["hi"], 0.5)
+        self.assertEqual(dashboard.wilson(0, 0), (0.0, 1.0))

@@ -29,8 +29,10 @@ from __future__ import annotations
 import argparse
 import gzip
 import json
+import math
 import statistics
 import re
+import subprocess
 import sys
 import time
 from contextlib import closing
@@ -499,7 +501,7 @@ def queue_runs(home: Path, goal: str, counted: tuple[str, ...], epoch: str = "")
         main = [r for r in records if r.get("queue") == "main" and r.get("goal") == goal and r["outcome"] in counted
                 and r.get("epoch", "") == epoch]
         return {"ratings": ratings(main), "features": queue_features(main), "difficulty": difficulty(main),
-                "runs": len(records),
+                "builds": build_history(records, counted), "runs": len(records),
                 "recent": records[-30:][::-1]}
     with closing(db):
         # Every insert takes a new rowid, so the count and the last rowid change with each.
@@ -511,8 +513,73 @@ def queue_runs(home: Path, goal: str, counted: tuple[str, ...], epoch: str = "")
             main = run_records.records(db, f"queue = 'main' AND goal = ? AND outcome IN "
                                            f"({', '.join('?' * len(counted))})", (goal, *counted))
             main = [r for r in main if r.get("epoch", "") == epoch]   # the current epoch's runs only
-            _cache[key] = {"ratings": ratings(main), "features": queue_features(main), "difficulty": difficulty(main)}
+            _cache[key] = {"ratings": ratings(main), "features": queue_features(main), "difficulty": difficulty(main),
+                           "builds": build_history(run_records.records(db, "queue = 'build'"), counted)}
         return {**_cache[key], "runs": version[0], "recent": run_records.records(db, newest=30)}
+
+
+BUILD_HISTORY = 40      # builds the Builds card shows, newest last
+NOISE_FINDINGS = ("stall:", "load_retry:")   # findings that are no defect (watch.py does the same)
+
+
+def wilson(k: int, n: int, z: float = 1.96) -> tuple[float, float]:
+    """The 95% Wilson score interval of k successes in n."""
+    if not n:
+        return 0.0, 1.0
+    p, d = k / n, 1 + z * z / n
+    mid, half = (p + z * z / (2 * n)) / d, z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / d
+    return max(0.0, mid - half), min(1.0, mid + half)
+
+
+_subjects: dict[str, str] = {}
+
+
+def commit_subject(commit: str) -> str:
+    """A commit's subject line, from this tree's git; "" when unknown."""
+    if commit and commit not in _subjects:
+        try:
+            done = subprocess.run(["git", "log", "-1", "--format=%s", commit], cwd=ROOT, capture_output=True,
+                                  text=True, timeout=10)
+            _subjects[commit] = done.stdout.strip() if done.returncode == 0 else ""
+        except (OSError, subprocess.SubprocessError):
+            _subjects[commit] = ""
+    return _subjects.get(commit, "")
+
+
+def build_history(records: list[dict[str, Any]], counted: tuple[str, ...]) -> list[dict[str, Any]]:
+    """The build queue's builds in the order they started playing (§23.4
+    Builds card): each one's live span (its first game's start to the next
+    build's), its counted games and goals reached, a 95% range on the rate,
+    the median last level, its findings, and the same counts by port."""
+    by: dict[str, list[dict[str, Any]]] = {}
+    for r in records:
+        if r.get("queue") == "build" and r.get("build"):
+            by.setdefault(r["build"], []).append(r)
+    ordered = sorted(by.items(), key=lambda kv: min(r.get("started") or 0 for r in kv[1]))
+    first = len(ordered) - len(ordered[-BUILD_HISTORY:])
+    builds = ordered[first:]
+    out = []
+    for i, (build, runs) in enumerate(builds):
+        games = [r for r in runs if r.get("outcome") in counted]
+        reached = sum(r["outcome"] == "reached" for r in games)
+        levels = sorted(r.get("clvl") or 0 for r in games)
+        ports: dict[str, list[int]] = {}
+        for r in games:
+            entry = ports.setdefault(r.get("platform") or "?", [0, 0])
+            entry[0] += 1
+            entry[1] += r["outcome"] == "reached"
+        lo, hi = wilson(reached, len(games))
+        commit = runs[0].get("commit") or ""
+        out.append({"build": build, "ordinal": first + i,   # its place in the whole history: its colour
+                    "commit": commit[:12], "subject": commit_subject(commit),
+                    "start": min(r.get("started") or 0 for r in runs),
+                    "end": min(r.get("started") or 0 for r in builds[i + 1][1]) if i + 1 < len(builds) else None,
+                    "games": len(games), "reached": reached, "lo": round(lo, 3), "hi": round(hi, 3),
+                    "median_clvl": levels[len(levels) // 2] if levels else None,
+                    "findings": sum(any(not f.startswith(NOISE_FINDINGS) for f in r.get("findings") or [])
+                                    for r in runs),
+                    "ports": ports})
+    return out
 
 
 DIFFICULTY_LEVELS = 25   # the main queue's goal level: the charts' x axis (§23.6)
@@ -682,6 +749,7 @@ def queue() -> dict[str, Any]:
             "subqueues": subs, "archived": archived, "balrog": read_json(home / "state-balrog.json") or {"items": {}, "order": []},
             "build_queue": read_json(home / "state-build.json") or {"platforms": {}},
             "ratings": runs["ratings"], "features": runs["features"], "difficulty": runs["difficulty"],
+            "builds": runs["builds"],
             "runs": runs["runs"], "recent": [{k: r.get(k) for k in ("id", "queue", "character", "platform", "outcome",
                                                                     "clvl", "max_dlvl", "steps", "ended")}
                                              | {"cause": (r.get("death") or {}).get("cause")}
