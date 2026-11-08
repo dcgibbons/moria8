@@ -1151,7 +1151,14 @@ or more is decided from the M0 item 8 contention measurements.
 ## 13. Maintainer decisions (2026-10-20)
 
 1. **Time limits.** Sessions are unlimited and run until the goal is reached,
-   with a 60 s timeout on every emulator response.
+   with a 60 s timeout on every emulator response. One exception since
+   2026-11-07 (maintainer: "address 1-5", item 4): the first key after a C128
+   snapshot restore gets 8 s more per 10^9 of the snapshot's CPU cycles
+   (`Port.undump_catch_up`, `Game.catch_up`). VICE 3.10 has no VDC snapshot
+   module, so x128's VDC raster alarm replays every line from the new
+   process's clock to the snapshot's before the monitor answers: measured
+   4.8-5.8 s per 10^9 cycles, 822 s for a 107,155-step main-queue game
+   (141.5 x 10^9 cycles), which the 60 s rule had killed every time.
    - **1a.** Goals are defined by the test system. The initial batch is
      `enter_dungeon`, `reach_dl2`, and `reach_clvl2`. No more goals until
      these work. The DL-before-clvl order is the author's choice.
@@ -3047,9 +3054,15 @@ a win is unlikely until the bot plays much better.
   back. When the run ends, its highest checkpoint past the combination's
   start becomes the start (`balrog/<run>-clvl<N>/`, `Service.balrog_checkpoint`),
   played in the run's build like any start; the start before it goes on the
-  item's `start_history`. After `CHECKPOINT_RETRIES` (3) runs from a
-  checkpoint end without a new level, the combination steps back to the
-  start before it (a dead end: too deep, drained, cursed). A newer M7
+  item's `start_history`. A combination never steps back from its highest
+  start (maintainer, 2026-11-06): until then three runs from a checkpoint
+  without a new level stepped back to the start before it, a dwarf-priest
+  from level 30 to 16. Since 2026-11-07 a run also keeps a checkpoint at
+  its start's level when a level entry shows `ARMOUR_CHECKPOINT_AC` (5) more
+  AC than its latest start or checkpoint (`checkpoint_wanted`,
+  `clvl<N>-ac<AC>/`): a town visit's Enchant Armor and Black Market armour
+  had been lost with each death. It becomes the start when its AC is 5 past
+  the start's (a start from before then: past the run's own AC at it). A newer M7
   success becomes the chain's base instead of replacing it. Each start
   records `restores`, the chain's runs that ended before it, and a win
   through checkpoints counts for M8 (maintainer: "it should count"), with

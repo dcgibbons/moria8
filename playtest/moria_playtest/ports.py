@@ -55,6 +55,11 @@ class Port:
     # A Balrog start is a saved game, not a mid-game snapshot (graduate.py):
     # VICE's C128 snapshot leaves the VDC out, and a restore stalls minutes.
     graduate_save: bool = False
+    # Wall seconds per 10^9 snapshot CPU cycles the first resume after an
+    # undump may take: x128's VDC raster alarm stays at the new process's
+    # clock and replays every line up to the snapshot's (VICE 3.10 has no
+    # VDC snapshot module); measured 4.8-5.2 s, 2026-11-07.
+    undump_catch_up: float = 0.0
     # MAME ports (mame.py): the machine, the disk option, RAM the bridge reads
     # by name (MORIA8_BRIDGE_ITEMS) and the driver's banks in it, the key
     # wait's read taps (kind, address, buffer label: mame_bridge.lua), the
@@ -235,6 +240,7 @@ C128 = Port(
     key_wait_pushes=2,   # X and Y, pushed before the wait loop where the driver stops
     snapshot_banks=("vdc",),
     graduate_save=True,
+    undump_catch_up=8.0,
     color_bank="vdc", color_const="VDC_ATTRIB_BASE", color_table="vic_to_vdc_color",   # RGBI
 )
 

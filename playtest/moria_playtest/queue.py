@@ -74,12 +74,14 @@ DLVL_MILESTONES = (5, 8, 10, 15, 20, 25, 30, 35, 40, 45, 50, 60, 70, 80, 90, 100
 RECALL_TEXT = "yanked"      # "You feel yourself yanked away!" (Word of Recall)
 COUNTED = ("reached", "died", "budget", "finding", "error")   # outcomes that move an item
 # Balrog checkpoints (§23.9, maintainer 2026-11-05): a run saves a start at
-# each new character level, at a level entry with this share of its HP;
-# after CHECKPOINT_RETRIES runs from a checkpoint end without a new level,
-# the combination steps back to the start before it.
+# each new character level, at a level entry with this share of its HP.
+# A combination never steps back from its highest (maintainer, 2026-11-06).
 M7_CLVL = 25             # the deep goal's level: an M7 success's start
 CHECKPOINT_HP = 0.75
-CHECKPOINT_RETRIES = 3
+# ... and at the same level, at a level entry with this much more AC than the
+# last start: a town visit's armour (Enchant Armor, the Black Market) kept
+# for the retries (2026-11-07).
+ARMOUR_CHECKPOINT_AC = 5
 CHECKPOINTS = "checkpoints"   # in a run's directory: clvl<N>/ each
 PARALLEL_CAP = 3         # runs at once of a combination without a success (``parallel_cap``)
 DEFAULTS: dict[str, Any] = {
@@ -94,7 +96,30 @@ DEFAULTS: dict[str, Any] = {
     # from level 1 when it has no start, and takes no other port's
     # graduates (maintainer, 2026-11-06: the C64)
     "balrog_platforms": [],
+    # Focus (maintainer, 2026-11-07: "hyperfocus on this half-troll priest,
+    # run multiple copies of it"): non-empty, the Balrog queue plays only
+    # these characters, ``balrog_copies`` games of each at once (each with
+    # its own dice), and the service stops every other run.
+    "balrog_characters": [], "balrog_copies": 1,
 }
+
+
+def checkpoint_wanted(clvl: int, ac: int | None, last_clvl: int | None, last_ac: int | None) -> bool:
+    """A Balrog run's level entry is a checkpoint past its latest start's
+    character level, or at it with ARMOUR_CHECKPOINT_AC more AC."""
+    if last_clvl is None or clvl < last_clvl:
+        return False
+    if clvl > last_clvl:
+        return True
+    return ac is not None and last_ac is not None and ac >= last_ac + ARMOUR_CHECKPOINT_AC
+
+
+def checkpoint_name(clvl: int, last_clvl: int | None, ac: int | None) -> str:
+    """A checkpoint's directory: ``clvl<N>`` at a new level, ``clvl<N>-ac<AC>``
+    for better armour at the same one."""
+    if last_clvl is not None and clvl <= last_clvl and ac is not None:
+        return f"clvl{clvl:02d}-ac{ac:03d}"
+    return f"clvl{clvl:02d}"
 
 
 def now() -> float:
@@ -355,6 +380,11 @@ def run_one(run_dir: Path) -> int:
     whose code this is; write ``result.json``. Runs under tools/isolated.sh."""
     from .dashboard import death
     from .game import Mode, derive_rng
+    from .brain import STATUS_AC
+
+    def status_ac(obs) -> int | None:   # type: ignore[no-untyped-def]
+        match = STATUS_AC.search(obs.rows[23])
+        return int(match.group(1)) if match else None
     from .launch import Build, StaleDisk, build_identity, check_disk
     from .recorder import SessionLog
     from . import graduate
@@ -377,16 +407,24 @@ def run_one(run_dir: Path) -> int:
             self.milestones: dict[str, int] = {}
             self.checkpoint_clvl: int | None = None   # a Balrog run's latest start level (start())
             self.checkpoint_due = False               # a saved-game checkpoint at the next command
+            self.checkpoint_ac: int | None = None     # the AC at the latest start or checkpoint
+            self.start_ac: int | None = None          # ... at this run's start
+
+        def mark_start(self, obs) -> None:   # type: ignore[no-untyped-def]
+            self.checkpoint_clvl = max(obs.clvl, 1)   # chargen's screen reads level 0
+            self.checkpoint_ac = self.start_ac = status_ac(obs)
 
         # -- Balrog checkpoints (§23.9)
 
         def take_snapshot(self, obs) -> None:   # type: ignore[no-untyped-def]
-            """Each level entry: past the start's character level with
-            CHECKPOINT_HP of its HP, a Balrog run keeps a checkpoint, the
-            level-entry snapshot itself or, on a ``graduate_save`` port, a
-            saved game at the next command (press)."""
+            """Each level entry: past the start's character level, or at it
+            with ARMOUR_CHECKPOINT_AC more AC, with CHECKPOINT_HP of its HP, a
+            Balrog run keeps a checkpoint, the level-entry snapshot itself or,
+            on a ``graduate_save`` port, a saved game at the next command
+            (press)."""
             super().take_snapshot(obs)
-            if self.checkpoint_clvl is None or obs.clvl <= self.checkpoint_clvl:
+            ac = status_ac(obs)
+            if not checkpoint_wanted(obs.clvl, ac, self.checkpoint_clvl, self.checkpoint_ac):
                 return
             if obs.hp < CHECKPOINT_HP * obs.mhp:
                 return
@@ -395,13 +433,14 @@ def run_one(run_dir: Path) -> int:
                 return
             if self.snapshot is None:
                 return
-            dest = run_dir / CHECKPOINTS / f"clvl{obs.clvl:02d}"
+            dest = run_dir / CHECKPOINTS / checkpoint_name(obs.clvl, self.checkpoint_clvl, ac)
             dest.mkdir(parents=True, exist_ok=True)
             for side in self.snapshot.path.parent.glob(f"{self.snapshot.path.stem}.*"):
                 shutil.copy2(side, dest / side.name)
             write_json(dest / "checkpoint.json", {"clvl": obs.clvl, "step": self.result.steps, "dlvl": obs.dlvl,
+                                                  "ac": ac, "base_ac": self.start_ac,
                                                   "snapshot": self.snapshot.path.name})
-            self.checkpoint_clvl = obs.clvl
+            self.checkpoint_clvl, self.checkpoint_ac = obs.clvl, ac
             self.session.event("checkpoint", seed=self.seed, step=self.result.steps, clvl=obs.clvl, dlvl=obs.dlvl)
 
         def press(self, key: int):   # type: ignore[no-untyped-def]
@@ -419,13 +458,14 @@ def run_one(run_dir: Path) -> int:
             game = self.worker.game
             assert game is not None and text is not None and save_disk is not None
             obs = game.last
-            clvl = obs.clvl
+            clvl, ac = obs.clvl, status_ac(obs)
             state = {"seed": self.seed, "step": self.result.steps, "dlvl": obs.dlvl, "clvl": clvl,
-                     "auditor_command_sp": self.auditor.command_sp}
-            self.checkpoint_clvl = clvl   # a failed save waits for the next level
+                     "ac": ac, "base_ac": self.start_ac, "auditor_command_sp": self.auditor.command_sp}
+            name = checkpoint_name(clvl, self.checkpoint_clvl, ac)
+            self.checkpoint_clvl, self.checkpoint_ac = clvl, ac   # a failed save waits for the next one
             try:
                 graduate.save(game, text, save_disk)
-                dest = graduate.keep(run_dir, save_disk, state, self.brain, f"{CHECKPOINTS}/clvl{clvl:02d}")
+                dest = graduate.keep(run_dir, save_disk, state, self.brain, f"{CHECKPOINTS}/{name}")
                 write_json(dest / "checkpoint.json", state)
                 self.session.event("checkpoint", seed=self.seed, step=self.result.steps, clvl=clvl, dlvl=obs.dlvl)
             except graduate.GraduateError as exc:
@@ -469,7 +509,7 @@ def run_one(run_dir: Path) -> int:
             if not resume:
                 obs = super().start()
                 if job["queue"] == "balrog":   # a new character: a checkpoint at each level past 1
-                    self.checkpoint_clvl = max(obs.clvl, 1)   # chargen's screen reads level 0
+                    self.mark_start(obs)
                 return obs
             if resume.get("save"):
                 return self.start_from_save(resume)
@@ -489,7 +529,7 @@ def run_one(run_dir: Path) -> int:
             self.result.steps = int(resume["step"])
             self.result.max_dlvl = int(resume["dlvl"])
             self.snapshot = snapshot
-            self.checkpoint_clvl = obs.clvl
+            self.mark_start(obs)
             self.session.event("character_start", seed=self.seed, worker=self.worker.worker_id,
                                goal=self.goal.name, resumed_from=resume["run"], step=resume["step"])
             return obs
@@ -511,7 +551,7 @@ def run_one(run_dir: Path) -> int:
             self.auditor.command_sp = saved.get("auditor_command_sp")
             self.result.steps = int(resume["step"])
             self.result.max_dlvl = int(resume["dlvl"])
-            self.checkpoint_clvl = obs.clvl
+            self.mark_start(obs)
             self.session.event("character_start", seed=self.seed, worker=self.worker.worker_id,
                                goal=self.goal.name, resumed_from=resume["run"], step=resume["step"])
             return obs
@@ -828,15 +868,22 @@ class Balrog:
 
     def checkpoint(self, record: dict[str, Any], job: dict[str, Any], start: dict[str, Any]) -> bool:
         """A Balrog run's checkpoint becomes its combination's start when its
-        character level is past the start's (§23.9): the start before it
-        goes on the history, a step back's target. ``restores``: the runs of
-        the chain that ended before this start."""
+        character level is past the start's, or at it with
+        ARMOUR_CHECKPOINT_AC more AC (§23.9): the start before it goes on the
+        history. ``restores``: the runs of the chain that ended before this
+        start."""
         item = self.state["items"].get(f"{record['platform']}/{record['character']}")
         if item is None:
             return False
         current = item.get("start") or {}
-        if start["clvl"] <= current.get("clvl", 0):
+        if start["clvl"] < current.get("clvl", 0):
             return False
+        if start["clvl"] == current.get("clvl", 0):
+            base = current.get("ac")
+            if base is None and (job.get("resume") or {}).get("run") == current.get("run"):
+                base = start.get("base_ac")   # a start from before 2026-11-07: the run's own AC at it
+            if base is None or start.get("ac") is None or start["ac"] < base + ARMOUR_CHECKPOINT_AC:
+                return False
         resume = job.get("resume") or {}
         start.update(checkpoint=True, graduate=resume.get("graduate") or resume.get("run"),
                      restores=current.get("restores", 0) + current.get("fails", 0) + 1)
@@ -845,35 +892,36 @@ class Balrog:
         item["start"] = start
         return True
 
-    def fell_short(self, record: dict[str, Any], job: dict[str, Any]) -> bool:
-        """A run from the current checkpoint ended without a new level: after
-        CHECKPOINT_RETRIES such runs the combination steps back to the start
-        before it (a dead end: too deep, drained, cursed). True on a step back."""
+    def fell_short(self, record: dict[str, Any], job: dict[str, Any]) -> None:
+        """A run from the current start ended without a new level: counted on
+        the start, which stays. Stepping back to the start before it after
+        three (until 2026-11-06) took a dwarf-priest from level 30 to 16 and
+        a human-paladin from 28 to 22; the maintainer: never step back, the
+        highest save first."""
         item = self.state["items"].get(f"{record['platform']}/{record['character']}")
         current = (item or {}).get("start")
         if (not current or record["outcome"] not in COUNTED or record["outcome"] == "reached"
                 or (job.get("resume") or {}).get("run") != current.get("run")):
-            return False
+            return
         current["fails"] = current.get("fails", 0) + 1
-        history = item.get("start_history") or []
-        if current.get("checkpoint") and current["fails"] >= CHECKPOINT_RETRIES and history:
-            back = history.pop()
-            back["restores"] = max(back.get("restores", 0), current.get("restores", 0) + current["fails"])
-            item["start"] = back
-            return True
-        return False
+        current["restores"] = current.get("restores", 0) + 1
 
-    def take(self, busy: Collection[str] = ()) -> dict[str, Any] | None:
+    def take(self, busy: Collection[str] = (), only: Collection[str] = ()) -> dict[str, Any] | None:
         """The next graduate, the highest start first (``rank``), which goes
         to the back; None when there is none. One not playing already
         (``busy``) first: a long game was
         lapped by the rotation, and two games of one combination played from
         one start while others waited (2026-11-06). One whose start cannot
-        go on plays a new character (Service.start_balrog)."""
-        if not self.state["order"]:
+        go on plays a new character (Service.start_balrog). ``only``
+        (characters, focus): those alone, and None when all are busy."""
+        order = [k for k in self.state["order"] if not only or k.split("/", 1)[-1] in only]
+        if not order:
             return None
         self.rank()
-        key = next((k for k in self.state["order"] if k not in busy), self.state["order"][0])
+        order = [k for k in self.state["order"] if not only or k.split("/", 1)[-1] in only]
+        key = next((k for k in order if k not in busy), None if only else order[0])
+        if key is None:
+            return None
         self.state["order"].remove(key)
         self.state["order"].append(key)
         self.rank()   # to the back of its level: equal levels take turns
@@ -1375,9 +1423,8 @@ class Service:
                 self.buildq.save()
                 continue
             if job["queue"] == "balrog":
-                if not self.balrog_checkpoint(record, job) and self.balrog.fell_short(record, job):
-                    self.log(f"balrog queue: {job['character']} steps back to start "
-                             f"{self.balrog.state['items'][job['platform'] + '/' + job['character']]['start']['run']}")
+                if not self.balrog_checkpoint(record, job):
+                    self.balrog.fell_short(record, job)
                 self.balrog.finish(record)
                 self.balrog.save()
                 continue
@@ -1541,14 +1588,17 @@ class Service:
         for ckpt in root.glob("clvl*"):
             state = read_json(ckpt / "checkpoint.json") or {}
             if state.get("clvl") and list(ckpt.glob("*.brain.pickle")):
-                found.append((int(state["clvl"]), ckpt, state))
+                found.append((int(state["clvl"]), state.get("ac") or 0, ckpt, state))
         if not found:
             return False
-        clvl, ckpt, state = max(found, key=lambda f: f[0])
-        name = f"{record['id']}-clvl{clvl:02d}"
+        clvl, _, ckpt, state = max(found, key=lambda f: f[:2])
+        name = f"{record['id']}-{ckpt.name}"
         dest = self.home / "balrog" / name
         start: dict[str, Any] = {"run": name, "build": job["build"], "step": state.get("step", 0),
                                  "dlvl": state.get("dlvl", 0), "clvl": clvl, "set": now()}
+        for key in ("ac", "base_ac"):
+            if state.get(key) is not None:
+                start[key] = state[key]
         if state.get("snapshot"):
             start["snapshot"] = str(dest / state["snapshot"])
         else:
@@ -1556,7 +1606,7 @@ class Service:
         if not self.balrog.checkpoint(record, job, start):
             return False
         shutil.copytree(ckpt, dest, dirs_exist_ok=True)
-        self.log(f"balrog queue: {record['character']} goes on from its clvl {clvl} checkpoint (run {record['id']}, "
+        self.log(f"balrog queue: {record['character']} goes on from its {ckpt.name} checkpoint (run {record['id']}, "
                  f"{start['restores']} restores)")
         return True
 
@@ -1600,6 +1650,15 @@ class Service:
         for run_id, job in list(self.running.items()):
             if job["queue"] != "main" and job["paused"]:
                 self.pause(run_id, False)
+        focus = config.get("balrog_characters") or ()
+        if focus:
+            # Every run but the focused characters' Balrog games ends: their
+            # workers are the focus's.
+            for run_id, job in list(self.running.items()):
+                if not job.get("cancelled") and not (job["queue"] == "balrog" and job["character"] in focus):
+                    self.log(f"focus on {', '.join(focus)}: stop {run_id}")
+                    self.stop_run(run_id)
+            platforms, minimum = [], 0
         main = [r for r, j in self.running.items() if j["queue"] == "main"]
         main_active = [r for r in main if not self.running[r]["paused"]]
         main_paused = sorted((r for r in main if self.running[r]["paused"]),
@@ -1614,7 +1673,7 @@ class Service:
         # The build queue: one run per port, out of the total as the Balrog queue's are.
         build_playing = {j["platform"] for j in self.running.values() if j["queue"] == "build"}
         build_ready = [p for p in config.get("build_platforms") or [] if p not in build_playing
-                       and self.backoff.get(f"build/{p}", 0) < time.time()] if self.ci_build else []
+                       and self.backoff.get(f"build/{p}", 0) < time.time()] if self.ci_build and not focus else []
         pending = sum(self.sub_pending(sub) for sub in subs.values()) + balrog_pending + len(build_ready)
         target = max(minimum, total - sub_running - pending)
         if len(main_active) > target:
@@ -1678,8 +1737,11 @@ class Service:
         from its start when that start's save loads there, else a new
         character from level 1, the start retired. Its checkpoints at each
         new level become its starts (§23.9). False when nothing can play."""
-        item = self.balrog.take({f"{job['platform']}/{job['character']}" for job in self.running.values()
-                                 if job["queue"] == "balrog"})
+        playing = collections.Counter(f"{job['platform']}/{job['character']}" for job in self.running.values()
+                                      if job["queue"] == "balrog")
+        copies = max(1, int(self.config.get("balrog_copies") or 1))
+        item = self.balrog.take({k for k, n in playing.items() if n >= copies},
+                                self.config.get("balrog_characters") or ())
         if item is None:
             return False
         build = self.newest_build(item["platform"])

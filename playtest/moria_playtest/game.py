@@ -292,6 +292,7 @@ class Game:
         self.screen_bank = 0
         self.map_bank = 0
         self.last: Observation | None = None
+        self.catch_up = 0.0   # wall seconds the next press may add (undump, Port.undump_catch_up)
         self.stats = {"resumes": 0, "interrupts": 0, "false_crash_hits": 0,
                       "max_resume_wall": 0.0, "max_resume_jiffies": 0}
 
@@ -530,6 +531,17 @@ class Game:
 
     def press(self, key: int) -> Observation:
         """Feed exactly one key at the current input stop and run to the next one."""
+        if not self.catch_up:
+            return self._press(key)
+        extra, self.catch_up = self.catch_up, 0.0
+        saved = self.mon.response_timeout, self.resume_budget
+        self.mon.response_timeout, self.resume_budget = saved[0] + extra, saved[1] + extra
+        try:
+            return self._press(key)
+        finally:
+            self.mon.response_timeout, self.resume_budget = saved
+
+    def _press(self, key: int) -> Observation:
         mon = self.mon
         if self.port.key_feed == "return":
             assert self.last is not None   # stopped at a key entry
@@ -579,6 +591,7 @@ class Game:
         """Load a snapshot taken at an input stop and re-observe without resuming."""
         pc = self.mon.undump(str(path.resolve()))
         self.mon.drain_events()
+        self.catch_up = snapshot_cpu_clock(path) / 1e9 * self.port.undump_catch_up
         for bank in self.port.snapshot_banks:
             data = path.with_suffix(f".{bank}").read_bytes()
             self.mon.mem_set(0x0000, data[:0x8000], self.mon.bank(bank))

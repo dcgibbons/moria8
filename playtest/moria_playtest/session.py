@@ -289,11 +289,18 @@ class Character:
                 obs = game.press(key)
                 self.keys.append(key)
                 return obs
+            except GameFault:
+                # The finding's keys end with the one that faulted: without
+                # it no replay reached the fault (2026-11-07: BBC hangs
+                # replayed 50,640 keys from boot without one).
+                self.keys.append(key)
+                raise
             except (EmulatorUnresponsive, ViceError) as exc:
                 self.result.restarts += 1
                 self.session.event("emulator_restart", seed=self.seed, step=self.result.steps,
                                    attempt=attempt, error=str(exc))
                 if self.snapshot is None or attempt == MAX_RESTARTS_PER_STEP:
+                    self.keys.append(key)
                     raise GameFault("hang", f"emulator unresponsive at the same step after "
                                     f"{attempt + 1} attempts: {exc}") from exc
                 self.worker.restore(self.snapshot)

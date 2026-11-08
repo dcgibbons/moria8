@@ -8,7 +8,7 @@ from moria_playtest import launch
 from moria_playtest import nav
 from moria_playtest.game import (Mode, Observation, classify, derive_rng, find_jsr,
                                  snapshot_cpu_clock)
-from moria_playtest.ports import C128, PLUS4
+from moria_playtest.ports import C64, C128, PLUS4
 from moria_playtest.screen import decode_rows, screen_code_to_char
 
 ABI = abimod.Abi(labels={"zp_player_x": 0x2B, "zp_player_y": 0x2C, "zp_player_hp_lo": 0x2D,
@@ -192,6 +192,39 @@ class HelpersTest(unittest.TestCase):
         self.assertEqual(game.press(0x4E), "next")
         self.assertEqual(mon.sent, [("mem", (0x270B, b"\x4e")), ("regs", {0: 0x4E, 3: 0x29C0})])
         self.assertEqual(game.keylog, [0x4E])
+
+    def test_the_first_press_after_a_c128_undump_waits_for_the_vdc(self) -> None:
+        """x128's VDC replays every raster line up to a restored snapshot's
+        clock on the first resume (2026-11-07: 256 s for 49.6e9 cycles): that
+        press alone gets the time, by the snapshot's clock."""
+        from moria_playtest.game import Game
+
+        class Mon:
+            response_timeout = 60.0
+            def send_mem_set(self, start: int, data: bytes, bank: int = 0) -> int:
+                return 1
+            def send_registers_set(self, values: dict[int, int]) -> int:
+                return 2
+            def send_resume(self) -> int:
+                return 3
+            def wait(self, request_id: int, command: int) -> None:
+                pass
+            def finish_resume(self, request_id: int) -> None:
+                pass
+
+        abi = abimod.Abi(labels={**ABI.labels, "igk_key": 0x270B}, consts=ABI.consts, all_symbols={})
+        mon = Mon()
+        game = Game(mon, abi, Path("."), port=C128)   # type: ignore[arg-type]
+        game.reg_ids = {"A": 0, "PC": 3}
+        game.key_exits = {0x2990: 0x29C0}
+        game.last = Observation(1, 0x2990, 0xF0, 0, 0, 0, bytes(256), b"", b"", b"", [])
+        budgets: list[tuple[float, float]] = []
+        game._run_to_input = lambda wall0: budgets.append((mon.response_timeout, game.resume_budget))   # type: ignore
+        game.catch_up = 50e9 / 1e9 * C128.undump_catch_up
+        game.press(0x4E)
+        game.press(0x4E)
+        self.assertEqual(budgets, [(60.0 + 400.0, 60.0 + 400.0), (60.0, 60.0)])
+        self.assertEqual(C64.undump_catch_up, 0.0)
 
     def test_snapshot_cpu_clock(self) -> None:
         module = b"MAINCPU" + bytes(9) + bytes([1, 4]) + struct.pack("<I", 125) + struct.pack("<Q", 286899223)
