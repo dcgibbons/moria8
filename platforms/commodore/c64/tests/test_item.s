@@ -2488,6 +2488,7 @@ test_start:
     lda #0
     sta inv_p1
     sta inv_flags
+    sta zp_eff_resist                  // from zero: the roll alone
 
     lda #2
     sta $c6
@@ -2498,8 +2499,12 @@ test_start:
 
     jsr item_quaff
 
-    lda zp_eff_resist
-    bne !t48_rh_ok+
+    lda zp_eff_resist               // randint(10) + 10: 11-20
+    cmp #11
+    bcc !t48_rh_bad+
+    cmp #21
+    bcc !t48_rh_ok+
+!t48_rh_bad:
     jmp !t48_fail+
 !t48_rh_ok:
 
@@ -2515,6 +2520,7 @@ test_start:
     lda #0
     sta inv_p1
     sta inv_flags
+    sta eff_resist_cold_timer                  // from zero: the roll alone
 
     lda #2
     sta $c6
@@ -2525,8 +2531,12 @@ test_start:
 
     jsr item_quaff
 
-    lda eff_resist_cold_timer
-    bne !t48_rc_ok+
+    lda eff_resist_cold_timer       // randint(10) + 10: 11-20
+    cmp #11
+    bcc !t48_rc_bad+
+    cmp #21
+    bcc !t48_rc_ok+
+!t48_rc_bad:
     jmp !t48_fail+
 !t48_rc_ok:
 

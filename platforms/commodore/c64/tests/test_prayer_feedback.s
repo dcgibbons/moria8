@@ -314,14 +314,16 @@ test_start:
     lda #$00
     sta tc_results + 6
 
-    // Test 8: Resist onset shows a message and sets the resist timer.
+    // Test 8: Resist onset shows a message and sets each timer to its own
+    // randint(10) + 10 roll (rng 6: 17).
 !t8:
     lda #0
     sta test_msg_calls
     sta test_huff_calls
     sta zp_eff_resist
     sta eff_resist_cold_timer
-    lda #17
+    lda #6
+    sta test_rng_result
     jsr pmx_add_resist_heat_cold_msg
     lda zp_eff_resist
     cmp #17
@@ -353,13 +355,14 @@ test_start:
     sta zp_eff_resist
     lda #7
     sta eff_resist_cold_timer
-    lda #17
+    lda #6
+    sta test_rng_result
     jsr pmx_add_resist_heat_cold_msg
     lda zp_eff_resist
     cmp #22
     bne !t9_fail+
-    lda eff_resist_cold_timer
-    cmp #22
+    lda eff_resist_cold_timer           // each timer extended on its own
+    cmp #24
     bne !t9_fail+
     lda test_msg_calls
     cmp #1

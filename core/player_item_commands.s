@@ -557,10 +557,10 @@ item_quaff:
     jmp iq_msg_turn
 
 !iq_effect_resist_heat:
-    // Resist heat/fire for rng(10) + 10 turns
+    // Resist heat/fire for randint(10) + 10 turns
     lda #10
     jsr rng_range
-    clc
+    sec                             // + 1: VMS randint(10) + 10, 11-20
     adc #10
     clc
     adc zp_eff_resist
@@ -572,11 +572,10 @@ item_quaff:
     rts
 
 !iq_effect_resist_cold:
-    // Resist cold for rng(10) + 10 turns (timer only; no cold-breath
-    // consumer exists yet)
+    // Resist cold for randint(10) + 10 turns (frost breath divides by it)
     lda #10
     jsr rng_range
-    clc
+    sec                             // + 1: VMS randint(10) + 10, 11-20
     adc #10
     clc
     adc eff_resist_cold_timer

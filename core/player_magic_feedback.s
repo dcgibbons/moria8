@@ -65,17 +65,33 @@ pmx_add_protect_msg:
 !papm_done:
     rts
 
+// pmx_add_resist_heat_cold_msg — Resist Heat and Cold: VMS
+// resist_heat += randint(10) + 10; resist_cold += randint(10) + 10, a roll
+// each (11-20 turns; until 2026-11-08 one 10-19 roll, copied to both).
 pmx_add_resist_heat_cold_msg:
-    clc
-    adc zp_eff_resist
-    bcc !parhcm_store+
-    lda #255
-!parhcm_store:
-    sta zp_eff_resist
-    sta eff_resist_cold_timer
+    ldy #zp_eff_resist
+    jsr pmx_resist_add
+    ldy #eff_resist_cold_timer
+    jsr pmx_resist_add
     lda #<pmx_resist_on_msg
     ldy #>pmx_resist_on_msg
     jmp pmx_print_inline
+
+// pmx_resist_add — The zero-page timer at Y += randint(10) + 10, saturating
+// at 255. Preserves: Y (rng_range preserves Y)
+pmx_resist_add:
+    lda #10
+    jsr rng_range               // 0-9
+    sec                         // + 1: randint(10)
+    adc #10
+    clc
+    adc $0000,y
+    bcc !pra_store+
+    lda #255
+!pra_store:
+    sta $0000,y
+    rts
+.assert "Resist timers are zero-page (pmx_resist_add)", zp_eff_resist < $100 && eff_resist_cold_timer < $100, true
 
 pmx_slow_poison_msg:
     lda zp_eff_poison

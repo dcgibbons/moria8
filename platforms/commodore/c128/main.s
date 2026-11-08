@@ -5165,7 +5165,7 @@ c128_quaff_p3_dispatch:
 !iqp3_resist_heat:
     lda #10
     jsr rng_range
-    clc
+    sec                             // + 1: VMS randint(10) + 10, 11-20
     adc #10
     clc
     adc zp_eff_resist
@@ -5178,7 +5178,7 @@ c128_quaff_p3_dispatch:
 !iqp3_resist_cold:
     lda #10
     jsr rng_range
-    clc
+    sec                             // + 1: VMS randint(10) + 10, 11-20
     adc #10
     clc
     adc eff_resist_cold_timer
