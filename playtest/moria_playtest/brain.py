@@ -76,7 +76,8 @@ DARK_HOPS = 10           # down-and-back hops a lightless character tries for a 
 # kept kind: spare torches (a slot each by fuel), lanterns and other classes'
 # books filled packs until the stores refused even food (2026-11-05: refusals
 # 1 per 100,000 steps before, hundreds after).
-PICKUPS = ("Potion of Cure", "Potion of Neutralize", "Scroll of Phase Door", "Scroll of Word of Rec", "Scroll of Identify",
+PICKUPS = ("Potion of Cure", "Potion of Neutralize", "Scroll of Phase Door", "Scroll of Teleportation",
+           "Scroll of Word of Rec", "Scroll of Identify",
            "Wand of Fire Balls", "Wand of Cold Balls", "Wand of Frost", "Wand of Lightning",
            "Wand of Stinking Cloud", "Wand of Teleport Away", "Staff of Teleportation")
 TRY_HP = 0.9             # unknown potions and scrolls are tried at this share of max HP or more
@@ -103,7 +104,7 @@ PICKED_WAND = re.compile(r"You picked up (?:an? )?((?:Wand|Staff) of [A-Za-z' -]
 RECHARGE_SPELLS = ("Recharge Item I", "Recharge Item II")
 RECHARGEABLE_GOLD = 300  # the dearest of them with the shop's markup
 KEEP_PREFIXES = ("Ration", "Slime Mold", "Flask of Oil", "Wooden Torch", "Brass Lantern", "Potion of Cure", "Potion of Neutralize",
-                 "Scroll of Word of Rec", "Scroll of Phase Door", "Holy Book", "Spellbook")
+                 "Scroll of Word of Rec", "Scroll of Phase Door", "Scroll of Teleportation", "Holy Book", "Spellbook")
 DROP_RETRY = 500         # steps before looking for junk again after finding none
 KEY_RETURN = 0x0D
 LOOK_RESULT = re.compile(r"You see an? (.+?)\.")
@@ -330,6 +331,9 @@ PHASE_RESERVE = 3        # scrolls to carry for a fight with no step out (M5b)
 PHASE_PER_DLVL = 3       # ... and one more per this many levels of the deepest (10 by DL30)
 PHASE_RESERVE_RICH = 20  # ... and once rich (MARKET_GEAR_GOLD): 15 gp each, and a level-34 Priest
                          # with millions read its last two to a dragon and died (2026-11-07)
+TELEPORT_SCROLL = "Scroll of Teleportation"   # VMS teleport(100), at the Alchemist (40 gp): the staff's long jump
+TELEPORT_RESERVE = 5     # scrolls to carry from TELEPORT_FROM deep: a level-37 Priest out of Phase Door, its
+TELEPORT_FROM = 20       # staff spent, met an Earth Elemental with 10,000K gold and none (C64 Balrog, 2026-11-08)
 STRONG_PER_DLVL = 2      # strong potions: 5 + one per this many levels of the deepest, past STRONG_RESERVE
 RECALL_RESERVE_RICH = 6  # Word of Recall to carry once rich: two a round trip, and a level-34 Priest
                          # with 4,000K gold recalled up every ~2,500 steps for more (2026-11-07)
@@ -342,9 +346,11 @@ LEAVE_WALK_STEPS = 10    # stairs farther than this on a deadly level: Word of R
 TELEPORT_JUMP = 10       # a move farther than this within a level: teleported, the unseen breath behind
 DEEP_HEAL_HP = 0.75      # from SCOUT_FROM deep, below this share of HP: heal (potions, prayers) before walking on
 BREATHES = re.compile(r"\bbreathes\b")
+BREATH_ELEMENT = re.compile(r"\bbreathes (lightning|gas|acid|frost|fire)\b")   # monster_cast_breath
 PARALYZES = re.compile(r"[Tt]he (.+?) paralyzes you")
 GRAVE_DANGER = 0.5       # the next turn's expected damage, as a share of HP, that no prayer but an escape answers
 PHASE_GOLD = 20          # gold worth an Alchemist trip for one (base 15 gp)
+TELEPORT_GOLD = 60       # ... and for a Scroll of Teleportation (base 40 gp)
 HEAL_AVERAGE = {CURE_MEDIUM: 10.0, CURE_LIGHT: 6.0}   # 4d4 and 3d3 (Umoria player_pray.cpp)
 MAGE_HEAL_AVERAGE = {CURE_LIGHT: 10.0}                 # the Mage book's is 4d4 (Umoria player_magic.cpp)
 PRAY_HEAL_HP = 0.5       # below this share of max HP a known heal is prayed (M5b; potions below QUAFF_HP)
@@ -517,6 +523,7 @@ class LevelMemory:
     deadly: Pos | None = None         # where a creature that could kill from full HP in one breath was seen
     breath: tuple[int, int] | None = None   # (step, HP lost) of the last breath taken
     breather: tuple[int, int] | None = None # (step last seen, biggest breath) of the breathers seen
+    breather_elements: frozenset[str] = frozenset()   # the elements they breathe (none known: unresisted)
     find_traps_after: int = 0       # step before which Find Hidden Traps/Doors is not cast again (M5f)
     exercise_after: int = 0         # step before which no spell is tried for its effect again (M7)
     summoned: int | None = None     # step a creature on this level was last heard summoning help (M7)
@@ -586,6 +593,7 @@ class Brain:
         self.resist_heat = 0                   # Potions of Resist Heat carried
         self.strong = {CCW: 0, CSW: 0}         # stronger healing potions carried (tactic strong_potions)
         self.phase = 0                         # Phase Door scrolls carried
+        self.teleports = 0                     # Scrolls of Teleportation carried
         self.neutralize = 0                    # Neutralize Poison potions carried
         self.shop_buys = 0                     # purchases started on this town visit
         self.store_letter: str | None = None   # item letter for the next "Buy which item?"
@@ -757,7 +765,8 @@ class Brain:
         attacker, self.recent_attacker = self.recent_attacker, None
         self.chased = attacker in knowledge.fast_creatures()
         if BREATHES.search(messages) and self.last_hp is not None and self.last_hp > obs.hp and obs.dlvl:
-            self.note_breath(obs, view, self.last_hp - obs.hp)
+            element = BREATH_ELEMENT.search(messages)
+            self.note_breath(obs, view, self.last_hp - obs.hp, element.group(1) if element else None)
         self.note_toughness(obs, attacker, messages)
         if self.last_attack is not None and self.last_attack[0] == view.pos:
             # The attack walked onto the tile: nothing was there (round 20).
@@ -1150,22 +1159,41 @@ class Brain:
                     return False
         return True
 
-    def fire_divisor(self, obs: Observation, lasting: bool = False) -> int:
-        """What breath is divided by now: every Moria8 breath is fire
-        (monster_cast_breath), a third with the Ring of Resist Fire, a third
-        again with the Resist Heat timer (VMS fire_dam). ``lasting``: the ring
-        only, for what holds past the next turns (leave the level, rest first):
-        the timer runs 10-19 turns. A level-34 Priest resisted on sight of an
-        Ancient White Dragon (234 as 78), so the level never read deadly; it
-        teleported, explored on, and died to the next breath at 230/245 (C64
-        Balrog, 2026-11-07)."""
-        ring = "Resist Fire" in self.jewel_names.get("Ring", "")
-        return 3 ** (int(ring) + int(self.resisting(obs) and not lasting))
+    def resist_div(self, obs: Observation, element: str, lasting: bool = False,
+                   assume: frozenset[str] = frozenset()) -> int:
+        """What a breath of ``element`` is divided by now (monster_cast_breath,
+        VMS fire_dam / cold_dam): a third with the Ring of Resist Fire (Cold),
+        a third again with the Resist Heat (Cold) timer; lightning, gas and
+        acid by nothing here. ``lasting``: the ring only, for what holds past
+        the next turns (leave the level, rest first): the timer runs 10-19
+        turns. A level-34 Priest resisted on sight of an Ancient White
+        Dragon (234 as 78), so the level never read deadly; it teleported,
+        explored on, and died to the next breath at 230/245 (C64 Balrog,
+        2026-11-07). ``assume``: the elements whose timer is taken as running
+        (a prayer or potion being weighed)."""
+        rings = {"fire": ("Resist Fire", "zp_eff_resist"), "frost": ("Resist Cold", "eff_resist_cold_timer")}
+        if element not in rings:
+            return 1
+        ring, timer = rings[element]
+        held = ring in self.jewel_names.get("Ring", "")
+        on = element in assume or (not lasting and obs.abi is not None and hasattr(obs.abi, timer)
+                                   and obs.zp8(timer) > 0)
+        return 3 ** (int(held) + int(on))
 
-    @staticmethod
-    def resisting(obs: Observation) -> bool:
-        """The Resist Heat timer (zp_eff_resist) is running."""
-        return obs.abi is not None and hasattr(obs.abi, "zp_eff_resist") and obs.zp8("zp_eff_resist") > 0
+    def elements_div(self, obs: Observation, elements: frozenset[str], lasting: bool = False,
+                     assume: frozenset[str] = frozenset()) -> int:
+        """The divisor of the worst breath of ``elements`` (none known: 1)."""
+        return min((self.resist_div(obs, e, lasting, assume) for e in elements), default=1)
+
+    def burst_now(self, key: tuple[str, int], obs: Observation, lasting: bool = False,
+                  assume: frozenset[str] = frozenset()) -> int:
+        """The most one spell or breath of kind ``key`` does now, its breath
+        divided by the resistance to its element (all five: the worst)."""
+        info = knowledge.breath_info().get(key)
+        if info is None:
+            return knowledge.spell_burst().get(key, 0)
+        breath, elements, other = info
+        return max(other, breath // self.elements_div(obs, elements, lasting, assume))
 
     def resist_fire(self, obs: Observation, view: View) -> Decision | None:
         """A breather in view whose breath, resisted as now, is RESIST_WORTH
@@ -1173,30 +1201,40 @@ class Brain:
         Heat, before anything else answers it. Six of a level-34 Priest's
         first seven copies died to dragon breath, all of it fire in Moria8,
         the prayer known (2026-11-07)."""
-        if obs.dlvl == 0 or self.resisting(obs):
+        if obs.dlvl == 0:
             return None
-        burst = knowledge.spell_burst()
-        worst = max((burst.get((c.glyph, c.level), 0) for c in view.creatures.values()), default=0)
-        breather = self.level.breather
-        if self.level.deadly is not None and breather is not None and obs.step - breather[0] < BREATHER_MEMORY:
-            # Out of sight too, on a level with a breath that could kill: the
-            # timer runs 10-19 turns, and a level-36 Priest walking to the
-            # stairs from an Ancient White Dragon met it again unresisted
-            # (C64 Balrog, 2026-11-08).
-            worst = max(worst, breather[1])
-        if worst / self.fire_divisor(obs) < RESIST_WORTH * obs.hp:
+        both, heat = frozenset({"fire", "frost"}), frozenset({"fire"})
+
+        def worst(assume: frozenset[str]) -> int:
+            # A turn's worth, each breath resisted: a fast breather acts twice
+            # before the next turn, and two resisted breaths of an Ancient
+            # White Dragon (78 each) kill at 100 HP, where one does not (the
+            # 2026-11-08 review).
+            most = max((self.turn_burst(c, obs, assume=assume) for c in view.creatures.values()), default=0)
+            breather = self.level.breather
+            if self.level.deadly is not None and breather is not None and obs.step - breather[0] < BREATHER_MEMORY:
+                # Out of sight too, on a level with a breath that could kill:
+                # the timer runs 10-19 turns, and a level-36 Priest walking to
+                # the stairs from an Ancient White Dragon met it again
+                # unresisted (C64 Balrog, 2026-11-08).
+                most = max(most, breather[1] // self.elements_div(obs, self.level.breather_elements, assume=assume))
+            return most
+        now, resisted = worst(frozenset()), worst(both)
+        # Only fire and frost are resisted (monster_cast_breath): nothing to
+        # gain against lightning, gas, acid or all five.
+        if resisted >= now or now < RESIST_WORTH * obs.hp:
             return None
-        if worst / (3 * self.fire_divisor(obs)) >= BREATH_LETHAL * obs.hp:
+        if resisted >= BREATH_LETHAL * obs.hp:
             # Lethal even resisted: a turn to get away (breath_guard), not to
             # resist. A level-34 Priest at 38/245 prayed Resist Heat and Cold
             # in an Ancient White Dragon's sight; its breath, a third of 234,
             # still killed it (C64 Balrog, 2026-11-07).
             return None
         if self.magic.can(obs, RESIST_HEAT_COLD):
-            return Decision(*self.magic.pray(RESIST_HEAT_COLD, f"a breath of {worst} in view: pray {RESIST_HEAT_COLD}"))
-        if self.resist_heat and obs.step >= self.blind_until:
+            return Decision(*self.magic.pray(RESIST_HEAT_COLD, f"a breath of {now} in view: pray {RESIST_HEAT_COLD}"))
+        if self.resist_heat and obs.step >= self.blind_until and worst(heat) < now:
             self.picking, self.listed = RESIST_HEAT, False
-            return Decision(ord("Q"), "quaff", f"a breath of {worst} in view: drink Resist Heat")
+            return Decision(ord("Q"), "quaff", f"a breath of {now} in view: drink Resist Heat")
         return None
 
     def shake_paralyzer(self, obs: Observation, view: View) -> None | Decision:
@@ -1216,9 +1254,9 @@ class Brain:
             return None
         why = f"beside the '{view.creatures[near[0]].glyph}' that paralyses"
         magic = self.magic
-        if self.wands.get(TELEPORT_STAFF, 0) > 0 and obs.step >= self.blind_until:
-            self.picking, self.listed, self.last_aimed = TELEPORT_STAFF, False, TELEPORT_STAFF
-            return Decision(KEY_USE, "phase", f"{why}: use the {TELEPORT_STAFF}")
+        far = self.far_escape(obs, why)
+        if far is not None:
+            return far
         for spell in (TELEPORT_SELF, PORTAL):
             if magic.can(obs, spell):
                 return Decision(*magic.pray(spell, f"{why}: cast {spell}"))
@@ -1243,8 +1281,11 @@ class Brain:
         if worst and obs.dlvl:
             held = self.level.breather
             self.level.breather = (obs.step, max(worst, held[1] if held else 0))
+            infos = knowledge.breath_info()
+            self.level.breather_elements = self.level.breather_elements.union(
+                *(infos[(c.glyph, c.level)][1] for c in view.creatures.values() if (c.glyph, c.level) in infos))
 
-    def note_breath(self, obs: Observation, view: View, loss: int) -> None:
+    def note_breath(self, obs: Observation, view: View, loss: int, element: str | None = None) -> None:
         """A breath just taken, ``loss`` HP: the next is as big
         (``breath_guard``), and one that could kill from full HP makes the
         level one to leave (``leave_deadly``), seen or not. A level-34
@@ -1256,8 +1297,12 @@ class Brain:
         # Dragon, explored on at 121/264, and its next breath did 153 (C64
         # Balrog, 2026-11-08). Kept as the lasting resistance leaves it, and as
         # a breather about (rest heals first).
-        raw = loss * self.fire_divisor(obs)
-        loss = raw // self.fire_divisor(obs, lasting=True)
+        # Resistance is by element (monster_cast_breath): an element not known
+        # was not resisted.
+        raw = loss * (self.resist_div(obs, element) if element else 1)
+        loss = raw // (self.resist_div(obs, element, lasting=True) if element else 1)
+        if element:
+            self.level.breather_elements = self.level.breather_elements | {element}
         self.level.breath = (obs.step, loss)
         held = self.level.breather
         self.level.breather = (obs.step, max(raw, held[1] if held else 0))
@@ -1275,9 +1320,8 @@ class Brain:
         escape at hand, else a step out of its line of sight."""
         if obs.dlvl == 0:
             return None
-        burst, div = knowledge.spell_burst(), self.fire_divisor(obs)
-        lethal = {p: burst.get((c.glyph, c.level), 0) // div for p, c in view.creatures.items()
-                  if not self.stationary(c) and burst.get((c.glyph, c.level), 0) // div >= BREATH_LETHAL * obs.hp
+        lethal = {p: self.turn_burst(c, obs) for p, c in view.creatures.items()
+                  if not self.stationary(c) and self.turn_burst(c, obs) >= BREATH_LETHAL * obs.hp
                   and self.sees(view, view.pos, p)}
         breath = self.level.breath
         if lethal:
@@ -1294,9 +1338,9 @@ class Brain:
                 self.picking, self.listed = potion, False
                 return Decision(ord("Q"), "quaff", f"{who} could breathe {worst}: drink {potion[len('Potion of '):]} Wounds")
         magic = self.magic
-        if self.wands.get(TELEPORT_STAFF, 0) > 0 and obs.step >= self.blind_until:
-            self.picking, self.listed, self.last_aimed = TELEPORT_STAFF, False, TELEPORT_STAFF
-            return Decision(KEY_USE, "phase", f"{who} could breathe {worst}: use the {TELEPORT_STAFF}")
+        far = self.far_escape(obs, f"{who} could breathe {worst}")
+        if far is not None:
+            return far
         for spell in (TELEPORT_SELF, PORTAL):
             if magic.can(obs, spell):
                 return Decision(*magic.pray(spell, f"{who} could breathe {worst}: cast {spell}"))
@@ -1333,6 +1377,17 @@ class Brain:
         self.level.scouted_at = obs.step
         return Decision(*magic.pray(spell, f"scout the level: {spell}"))
 
+    def turn_burst(self, c: Creature, obs: Observation, lasting: bool = False,
+                   assume: frozenset[str] = frozenset()) -> int:
+        """The most a creature's spells or breath can do before the bot's
+        next turn: one burst (``knowledge.spell_burst``, resistance divided
+        out) for each move it makes a turn. Ancient dragons are fast: a
+        level-37 Priest at 186/296 HP fought an Ancient White Dragon whose
+        234-HP breath looked survivable and was breathed on twice, 468, in
+        one turn (C64 Balrog, 2026-11-08)."""
+        one = self.burst_now((c.glyph, c.level), obs, lasting, assume)
+        return int(one * max(1.0, knowledge.moves().get((c.glyph, c.level), 1.0)))
+
     def leave_deadly(self, obs: Observation, view: View) -> Decision | None:
         """A creature seen or detected that could kill from full HP with one
         breath or spell (BREATH_LETHAL of max HP): leave the level, by the
@@ -1340,9 +1395,8 @@ class Brain:
         dragons breathed 200-230 at a 245-HP Priest (2026-11-07)."""
         if obs.dlvl == 0:
             return None
-        burst, div = knowledge.spell_burst(), self.fire_divisor(obs, lasting=True)
         for p, c in view.creatures.items():
-            if burst.get((c.glyph, c.level), 0) // div >= BREATH_LETHAL * obs.mhp:
+            if self.turn_burst(c, obs, lasting=True) >= BREATH_LETHAL * obs.mhp:
                 self.level.deadly = p
         if self.level.deadly is None:
             return None
@@ -1682,6 +1736,8 @@ class Brain:
             wants.append(RECALL)
         if self.phase < self.phase_reserve():
             wants.append(PHASE)
+        if self.teleports < self.teleport_reserve():
+            wants.append(TELEPORT_SCROLL)
         if self.launcher is not None and self.ammo < AMMO_RESERVE:
             wants.append(LAUNCHERS[self.launcher][0])   # 1-2 gp a shot
         if self.at_store == TEMPLE and self.book_next is not None and self.book_next not in MAGE_BOOKS:
@@ -1698,7 +1754,7 @@ class Brain:
             # the other stores seldom stock too: strong potions, Phase Door,
             # Enchant Armor, Resist Heat.
             rich = gold is not None and gold >= MARKET_GEAR_GOLD
-            keep = (RECALL, PHASE, CCW, CSW, ENCHANT_ARMOR, RESIST_HEAT) if rich else (RECALL,)
+            keep = (RECALL, PHASE, TELEPORT_SCROLL, CCW, CSW, ENCHANT_ARMOR, RESIST_HEAT) if rich else (RECALL,)
             wants = [w for w in wants if w in keep]
             if rich:
                 # Every stat short of 18/100, Constitution and the fighting
@@ -1706,7 +1762,7 @@ class Brain:
                 order = sorted(GAIN_POTIONS, key=lambda k: GAIN_POTIONS[k] not in ("CO", "ST", "DX"))
                 wants += [k for k in order if self.stat_now.get(GAIN_POTIONS[k], 0) < STAT_MAXED]
         elif self.at_store == ALCHEMIST:
-            wants = [w for w in wants if w in (RECALL, PHASE, RESTORATION, ENCHANT_ARMOR)]
+            wants = [w for w in wants if w in (RECALL, PHASE, TELEPORT_SCROLL, RESTORATION, ENCHANT_ARMOR)]
         return wants
 
     def stats(self, obs: Observation) -> tuple[int, int]:
@@ -1905,6 +1961,8 @@ class Brain:
             self.identify_scrolls = max(0, self.identify_scrolls + n)
         elif item.startswith(PHASE):
             self.phase += n
+        elif item.startswith(TELEPORT_SCROLL):
+            self.teleports = max(0, self.teleports + n)
         elif item.startswith(tuple(LAUNCHERS)):
             if n > 0:
                 self.launcher = next(name for name in LAUNCHERS if item.startswith(name))
@@ -1952,6 +2010,7 @@ class Brain:
             return sum(n for name, n in listed if name.startswith(prefix))
         if scope in ("scrolls", "all"):
             self.recall, self.phase, self.identify_scrolls = held(RECALL), held(PHASE), held(IDENTIFY_SCROLL)
+            self.teleports = held(TELEPORT_SCROLL)
             self.enchant_scrolls = held(ENCHANT_ARMOR)
         if scope in ("potions", "all"):
             self.clw, self.neutralize, self.restoration = held(CLW), held(NEUTRALIZE), held(RESTORATION)
@@ -1998,6 +2057,8 @@ class Brain:
                     self.strong[self.picking] = max(0, self.strong[self.picking] - 1)
                 elif self.picking == PHASE:
                     self.phase = max(0, self.phase - 1)
+                elif self.picking == TELEPORT_SCROLL:
+                    self.teleports = max(0, self.teleports - 1)
                 elif self.picking == NEUTRALIZE:
                     self.neutralize = max(0, self.neutralize - 1)
                 elif self.picking == RESIST_HEAT:
@@ -2058,7 +2119,7 @@ class Brain:
         steps for a million steps on DL1, lightless (C64 Balrog, 2026-11-07)."""
         kind = self.picking_kind()
         if kind == "scrolls":
-            self.recall = self.phase = self.identify_scrolls = self.enchant_scrolls = 0
+            self.recall = self.phase = self.teleports = self.identify_scrolls = self.enchant_scrolls = 0
         elif kind == "potions":
             self.clw = self.neutralize = self.restoration = self.resist_heat = 0
             self.gains = {}
@@ -2078,6 +2139,8 @@ class Brain:
             self.strong[self.picking] = 0
         elif self.picking == PHASE:
             self.phase = 0
+        elif self.picking == TELEPORT_SCROLL:
+            self.teleports = 0
         elif self.picking == NEUTRALIZE:
             self.neutralize = 0
         elif self.picking == RESIST_HEAT:
@@ -3392,7 +3455,7 @@ class Brain:
             return None   # not with danger, nor near a breeder
         breather = self.level.breather
         if breather is not None and obs.step - breather[0] < BREATHER_MEMORY and not self.no_food \
-                and not view.creatures and breather[1] // self.fire_divisor(obs, lasting=True) >= BREATH_LETHAL * obs.hp:
+                and not view.creatures and breather[1] // self.elements_div(obs, self.level.breather_elements, lasting=True) >= BREATH_LETHAL * obs.hp:
             # A breath about that could kill now: rest out of its sight first,
             # which stops when it comes back into view (breath_guard then).
             # A level-35 Priest phased from a Mature Black Dragon (160),
@@ -3733,6 +3796,9 @@ class Brain:
         elif not self.alchemist_done and len(view.stores) > ALCHEMIST and self.phase < self.phase_reserve() \
                 and self.gold(obs) >= PHASE_GOLD:
             store, why = ALCHEMIST, "walk to the Alchemy shop for Phase Door"
+        elif not self.alchemist_done and len(view.stores) > ALCHEMIST and self.teleports < self.teleport_reserve() \
+                and self.gold(obs) >= TELEPORT_GOLD:
+            store, why = ALCHEMIST, "walk to the Alchemy shop for Teleportation"
         elif not self.market_done and len(view.stores) > BLACK_MARKET and self.market_worth_it(obs):
             store, why = BLACK_MARKET, "walk to the Black Market for Word of Recall"
         elif not self.magic_done and self.jewels_wanted(obs) and len(view.stores) > MAGIC_SHOP:
@@ -3956,6 +4022,10 @@ class Brain:
         245 HP met DL31 with one Cure Serious Wounds at a time (2026-11-07)."""
         return max(STRONG_RESERVE, 5 + self.max_dlvl // STRONG_PER_DLVL)
 
+    def teleport_reserve(self) -> int:
+        """TELEPORT_RESERVE once it has been TELEPORT_FROM deep, else none."""
+        return TELEPORT_RESERVE if self.max_dlvl >= TELEPORT_FROM else 0
+
     def phase_reserve(self) -> int:
         """PHASE_RESERVE, more the deeper it has been (an escape a fight)."""
         rich = PHASE_RESERVE_RICH if self.gold_seen >= MARKET_GEAR_GOLD else 0
@@ -3983,10 +4053,10 @@ class Brain:
         other_way = self.phase or magic.can(obs, PORTAL) or magic.can(obs, PHASE_DOOR) or magic.can(obs, TELEPORT_SELF)
         grave = (obs.hp < QUAFF_HP * obs.mhp or obs.step < self.heals_losing_until
                  or any(self.dangerous(c, obs) for c in beside))
-        if self.wands.get(TELEPORT_STAFF, 0) > 0 and (grave or not other_way):
+        far = self.far_escape(obs, f"HP {obs.hp}/{obs.mhp}, no way out") if grave or not other_way else None
+        if far is not None:
             # Far, not a few squares: a fast creature caught every Phase Door.
-            self.picking, self.listed, self.last_aimed = TELEPORT_STAFF, False, TELEPORT_STAFF
-            return Decision(KEY_USE, "phase", f"HP {obs.hp}/{obs.mhp}, no way out: use the {TELEPORT_STAFF}")
+            return far
         close = [p for p, c in view.creatures.items() if chebyshev(p, view.pos) == 1 and not self.stationary(c)]
         if self.wands.get(TELEPORT_AWAY, 0) > 0 and len(close) == 1 and (grave or not other_way):
             step = (close[0][0] - view.pos[0], close[0][1] - view.pos[1])
@@ -4073,10 +4143,24 @@ class Brain:
         return (len(beside) >= 2 or any((c.glyph, c.level) in breeders for c in beside)
                 or obs.hp < QUAFF_HP * obs.mhp or outmatched)
 
+    def far_escape(self, obs: Observation, why: str) -> Decision | None:
+        """A long jump across the level, not a few squares: the Staff of
+        Teleportation while it has charges, else a Scroll of Teleportation.
+        None while blind (neither can be used) or with neither held."""
+        if obs.step < self.blind_until:
+            return None
+        if self.wands.get(TELEPORT_STAFF, 0) > 0:
+            self.picking, self.listed, self.last_aimed = TELEPORT_STAFF, False, TELEPORT_STAFF
+            return Decision(KEY_USE, "phase", f"{why}: use the {TELEPORT_STAFF}")
+        if self.teleports:
+            self.picking, self.listed = TELEPORT_SCROLL, False
+            return Decision(ord("R"), "phase", f"{why}: read {TELEPORT_SCROLL}")
+        return None
+
     def can_phase(self, obs: Observation) -> bool:
-        """A Phase Door scroll held, or Portal, Phase Door or Teleport Self castable now."""
+        """A Phase Door or Teleportation scroll held, or Portal, Phase Door or Teleport Self castable now."""
         magic = self.magic
-        return bool(self.phase) or magic.can(obs, PORTAL) or magic.can(obs, PHASE_DOOR) or magic.can(obs, TELEPORT_SELF) \
+        return bool(self.phase) or bool(self.teleports) or magic.can(obs, PORTAL) or magic.can(obs, PHASE_DOOR) or magic.can(obs, TELEPORT_SELF) \
             or self.wands.get(TELEPORT_STAFF, 0) > 0 or self.wands.get(TELEPORT_AWAY, 0) > 0
 
     def drop_junk(self, obs: Observation, view: View) -> Decision | None:

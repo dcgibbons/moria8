@@ -1506,6 +1506,41 @@ class WornOutTest(unittest.TestCase):
         brain.wands[TELEPORT_STAFF] = TELEPORT_CHARGES_RICH
         self.assertNotIn(TELEPORT_STAFF, brain.wands_wanted())
 
+    def test_out_of_phase_door_a_scroll_of_teleportation_is_the_far_escape(self) -> None:
+        """2026-11-08: a level-37 Priest, out of Phase Door and its staff
+        spent, meleed an Earth Elemental to its death with 10,000K gold; the
+        Alchemist sells Scrolls of Teleportation and it never carried one."""
+        from moria_playtest.brain import ALCHEMIST, TELEPORT_RESERVE, TELEPORT_SCROLL, TELEPORT_STAFF
+        brain = Brain(GOALS["deep"])
+        o = command_obs(pos=(5, 5), dlvl=34, clvl=37, hp=140, mhp=291)
+        self.assertIsNone(brain.far_escape(o, "why"))
+        brain.teleports = 2
+        decision = brain.far_escape(o, "why")
+        self.assertEqual((decision.key, decision.reason, brain.picking), (ord("R"), f"why: read {TELEPORT_SCROLL}", TELEPORT_SCROLL))
+        brain.wands[TELEPORT_STAFF] = 3
+        self.assertEqual(brain.far_escape(o, "why").reason, f"why: use the {TELEPORT_STAFF}")   # the staff's charges first
+        self.assertTrue(brain.can_phase(command_obs(pos=(5, 5), dlvl=34, clvl=37)))
+        # Deep, it keeps a reserve and the Alchemist sells it
+        brain.teleports, brain.max_dlvl = 0, 34
+        self.assertEqual(brain.teleport_reserve(), TELEPORT_RESERVE)
+        brain.at_store = ALCHEMIST
+        self.assertIn(TELEPORT_SCROLL, brain.shopping_list(None))
+        brain.max_dlvl = 5
+        self.assertEqual(brain.teleport_reserve(), 0)
+
+    def test_a_fast_breather_counts_both_breaths(self) -> None:
+        """2026-11-08: a level-37 Priest at 186/296 HP fought an Ancient
+        White Dragon (234 a breath, two moves a turn) and took 468 at once."""
+        from moria_playtest import knowledge
+        from moria_playtest.view import Creature
+        brain = Brain(GOALS["deep"])
+        fast = next(k for k, v in knowledge.moves().items() if v == 2.0 and knowledge.spell_burst().get(k))
+        slow = next(k for k, v in knowledge.moves().items() if v == 1.0 and knowledge.spell_burst().get(k))
+        burst = knowledge.spell_burst()
+        o = command_obs(pos=(10, 10), dlvl=34)
+        self.assertEqual(brain.turn_burst(Creature(glyph=fast[0], level=fast[1]), o), 2 * burst[fast])
+        self.assertEqual(brain.turn_burst(Creature(glyph=slow[0], level=slow[1]), o), burst[slow])
+
     def test_a_deep_rich_character_stocks_for_the_depth(self) -> None:
         brain = Brain(GOALS["deep"])
         brain.clvl, brain.max_dlvl, brain.gold_seen = 34, 31, 4_000_000
@@ -1636,12 +1671,41 @@ class ResistFireTest(unittest.TestCase):
         brain.magic.caster = lambda obs: True                          # type: ignore[method-assign]
         brain.magic.can = lambda obs, name: name == RESIST_HEAT_COLD   # type: ignore[method-assign]
         view = town_view((10, 10), (40, 40), dlvl=31)
-        view.creatures = {(16, 10): Creature("d", 29)}                  # breathes 88
+        infos = knowledge.breath_info()
+        fire = max((k for k, (b, e, _) in infos.items() if e == {"fire"} and b < 245), key=lambda k: infos[k][0])
+        view.creatures = {(16, 10): Creature(*fire)}
         o = command_obs(pos=(10, 10), dlvl=31, clvl=34, hp=245, mhp=245)
         self.assertIn(RESIST_HEAT_COLD, brain.resist_fire(o, view).reason)
         brain.magic.can = lambda obs, name: False                      # type: ignore[method-assign]
         brain.resist_heat = 2
-        self.assertEqual(brain.resist_fire(o, view).reason, "a breath of 88 in view: drink Resist Heat")
+        self.assertEqual(brain.resist_fire(o, view).reason,
+                         f"a breath of {brain.turn_burst(Creature(*fire), o)} in view: drink Resist Heat")
+        # Lightning, gas and acid are not resisted (monster_cast_breath): nothing to drink for them
+        other = next(k for k, (b, e, _) in infos.items() if e == {"lightning"} and b >= 100)
+        view.creatures = {(16, 10): Creature(*other)}
+        self.assertIsNone(brain.resist_fire(o, view))
+
+    def test_a_fast_breather_lethal_in_two_resisted_breaths_is_escaped(self) -> None:
+        """2026-11-08 review: at 100 HP the bot prayed Resist Heat and Cold
+        at an Ancient White Dragon, one resisted breath 78, but it breathes
+        twice a turn: 156."""
+        from moria_playtest.brain import TELEPORT_STAFF
+        from moria_playtest.goals import for_character
+        from moria_playtest.magic import RESIST_HEAT_COLD
+        infos, moves = knowledge.breath_info(), knowledge.moves()
+        fast = max((k for k, (b, e, _) in infos.items() if "fire" in e and e <= {"fire", "frost"}
+                    and moves.get(k, 1.0) == 2.0), key=lambda k: infos[k][0])
+        one_resisted = infos[fast][0] // 3
+        brain = Brain(for_character(GOALS["deep"], "half-troll-priest"))
+        brain.magic.caster = lambda obs: True                          # type: ignore[method-assign]
+        brain.magic.can = lambda obs, name: name == RESIST_HEAT_COLD   # type: ignore[method-assign]
+        brain.wands[TELEPORT_STAFF] = 3
+        view = town_view((10, 10), (40, 40), dlvl=31)
+        view.creatures = {(16, 10): Creature(*fast)}
+        hp = int(one_resisted / 0.9) + 2                               # one resisted breath is survivable, two are not
+        o = command_obs(pos=(10, 10), dlvl=31, clvl=37, hp=hp, mhp=300)
+        self.assertIsNone(brain.resist_fire(o, view))
+        self.assertEqual(brain.breath_guard(o, view).layer, "phase")
 
     def test_a_breath_lethal_even_resisted_is_escaped_not_resisted(self) -> None:
         """2026-11-07: a level-34 Priest at 38/245 prayed Resist Heat and
@@ -1665,11 +1729,16 @@ class ResistFireTest(unittest.TestCase):
         Mature Black Dragon, explored on at 121/264, and its next breath did
         153."""
         brain = Brain(GOALS["deep"])
-        brain.resisting = lambda obs: True                             # type: ignore[method-assign]
+        brain.resist_div = lambda obs, element, lasting=False, assume=frozenset(): (   # type: ignore[method-assign]
+            3 if element in ("fire", "frost") and not lasting else 1)   # the potion's timer running, no ring
         o = command_obs(pos=(10, 10), dlvl=32, clvl=36, hp=109, mhp=264)
-        brain.note_breath(o, town_view((10, 10), (40, 40), dlvl=32), 50)
+        brain.note_breath(o, town_view((10, 10), (40, 40), dlvl=32), 50, "fire")
         self.assertEqual(brain.level.breath[1], 150)
         self.assertEqual(brain.level.breather[1], 150)
+        self.assertEqual(brain.level.breather_elements, {"fire"})
+        brain.level.breath = brain.level.breather = None
+        brain.note_breath(o, town_view((10, 10), (40, 40), dlvl=32), 50, "acid")   # acid: nothing resists it
+        self.assertEqual(brain.level.breath[1], 50)
 
     def test_with_a_lethal_breather_about_it_rests_before_exploring(self) -> None:
         """2026-11-07: a level-35 Priest phased from a Mature Black Dragon
@@ -1717,6 +1786,7 @@ class ResistFireTest(unittest.TestCase):
         brain.magic.can = lambda obs, name: name == RESIST_HEAT_COLD   # type: ignore[method-assign]
         o = command_obs(pos=(10, 10), dlvl=31, clvl=36, hp=259, mhp=259)
         brain.level.deadly, brain.level.breather = (30, 10), (o.step, 234)
+        brain.level.breather_elements = frozenset({"fire"})
         view = town_view((10, 10), (40, 40), dlvl=31)                 # nothing in view
         self.assertIn(RESIST_HEAT_COLD, brain.resist_fire(o, view).reason)
 
@@ -1727,24 +1797,33 @@ class ResistFireTest(unittest.TestCase):
         brain = Brain(GOALS["deep"])
         kind = max(knowledge.spell_burst().items(), key=lambda kv: kv[1])[0]
         worst = knowledge.spell_burst()[kind]
-        brain.resisting = lambda obs: True                             # type: ignore[method-assign]
+        brain.resist_div = lambda obs, element, lasting=False, assume=frozenset(): (   # type: ignore[method-assign]
+            3 if element in ("fire", "frost") and not lasting else 1)   # the potion's timer running, no ring
         view = town_view((10, 10), (40, 40), dlvl=31)
         view.creatures = {(30, 10): Creature(*kind)}
         o = command_obs(pos=(10, 10), dlvl=31, clvl=34, hp=worst + 10, mhp=worst + 10)
         brain.leave_deadly(o, view)
         self.assertEqual(brain.level.deadly, (30, 10))
 
-    def test_the_ring_of_resist_fire_cuts_every_breath_to_a_third(self) -> None:
+    def test_the_ring_of_resist_fire_cuts_a_fire_breath_to_a_third_and_no_other(self) -> None:
+        """2026-11-08: breath is by element (VMS spells 20-24): the ring
+        divides fire, not a lightning dragon's breath."""
         from moria_playtest.brain import TELEPORT_STAFF
-        brain = Brain(GOALS["deep"])
-        brain.wands[TELEPORT_STAFF] = 3
-        view = town_view((10, 10), (40, 40), dlvl=29)
-        view.creatures = {(16, 10): Creature("d", 29)}
-        o = command_obs(pos=(10, 10), dlvl=29, clvl=32, hp=80, mhp=166)
-        self.assertIsNotNone(brain.breath_guard(o, view))              # 88 against 80 HP: the staff
-        brain.jewel_names["Ring"] = "Ring of Resist Fire"
-        self.assertEqual(brain.fire_divisor(o), 3)
-        self.assertIsNone(brain.breath_guard(o, view))                 # 29 resisted
+        infos = knowledge.breath_info()
+        fire = next(k for k, (b, e, _) in infos.items() if e == {"fire"} and b >= 30)
+        lightning = next(k for k, (b, e, _) in infos.items() if e == {"lightning"} and b >= 30)
+        for kind, resisted in ((fire, True), (lightning, False)):
+            brain = Brain(GOALS["deep"])
+            brain.wands[TELEPORT_STAFF] = 3
+            view = town_view((10, 10), (40, 40), dlvl=29)
+            view.creatures = {(16, 10): Creature(*kind)}
+            hp = brain.turn_burst(Creature(*kind), command_obs(pos=(10, 10), dlvl=29))
+            o = command_obs(pos=(10, 10), dlvl=29, clvl=32, hp=hp, mhp=2 * hp)
+            self.assertIsNotNone(brain.breath_guard(o, view))          # one turn's breath against its HP
+            brain.jewel_names["Ring"] = "Ring of Resist Fire"
+            self.assertEqual(brain.resist_div(o, "fire"), 3)
+            self.assertEqual(brain.resist_div(o, "lightning"), 1)
+            self.assertEqual(brain.breath_guard(o, view) is None, resisted)
         self.assertGreater(brain.jewel_value("Ring of Resist Fire"), brain.jewel_value("Ring of Protection [+20]"))
 
 

@@ -168,13 +168,36 @@ def attack_tohit() -> list[int]:
 
 
 SPELL_WOUND_LIGHT, SPELL_BREATH, SPELL_WOUND_SERIOUS = 0x01, 0x02, 0x40   # cr_spell_flags (mm_spell_handlers)
+# cr_spell_chance (core/monster.s MS_*): the 1-in-N cast frequency in bits 0-3,
+# the breath element in bits 4-6 (all five: 6), Hold Person in bit 7.
+SPELL_FREQ_MASK = 0x0F
+BREATH_ELEMENTS = {1: "lightning", 2: "gas", 3: "acid", 4: "frost", 5: "fire"}
+ALL_ELEMENTS = frozenset(BREATH_ELEMENTS.values())
+
+
+def breath_elements(chance: int) -> frozenset[str]:
+    """The elements a breather's cr_spell_chance byte names (all five for a
+    Multi-Hued dragon)."""
+    kind = chance >> 4 & 7
+    return ALL_ELEMENTS if kind == 6 else frozenset({BREATH_ELEMENTS[kind]}) if kind in BREATH_ELEMENTS else ALL_ELEMENTS
+
+
+def breath_damage(chance: int, num: int, sides: int) -> int:
+    """A breath from full HP (monster_cast_breath, VMS spells 20-24): a
+    quarter for lightning, a third for the others; the bigger, all five."""
+    return num * sides // (4 if breath_elements(chance) == {"lightning"} else 3)
+
+
+def wound_burst(flags: int) -> int:
+    """The most Cause Light (3d8) or Serious (8d8) Wounds does."""
+    return max(24 if flags & SPELL_WOUND_LIGHT else 0, 64 if flags & SPELL_WOUND_SERIOUS else 0)
 
 
 @lru_cache(maxsize=1)
 def spell_burst() -> dict[tuple[str, int], int]:
     """(screen glyph, creature level) -> the most damage one spell does from
     the strongest shipped caster drawn that way: Cause Light Wounds 3d8,
-    Cause Serious Wounds 8d8, breath a third of its HP."""
+    Cause Serious Wounds 8d8, breath (``breath_damage``), resistance aside."""
     out: dict[tuple[str, int], int] = {}
     for _, tables in _tiers():
         for code, level, flags, chance, num, sides in zip(tables["display"], tables["level"],
@@ -182,37 +205,53 @@ def spell_burst() -> dict[tuple[str, int], int]:
                                                          tables["hd_num"], tables["hd_sides"]):
             if chance:
                 key = (screen_code_to_char(code), level)
-                most = max(24 if flags & SPELL_WOUND_LIGHT else 0, 64 if flags & SPELL_WOUND_SERIOUS else 0,
-                           num * sides // 3 if flags & SPELL_BREATH else 0)
+                most = max(wound_burst(flags), breath_damage(chance, num, sides) if flags & SPELL_BREATH else 0)
                 out[key] = max(out.get(key, 0), most)
+    return out
+
+
+@lru_cache(maxsize=1)
+def breath_info() -> dict[tuple[str, int], tuple[int, frozenset[str], int]]:
+    """(screen glyph, creature level) -> (the biggest breath, every element
+    breathed, the biggest other spell) of the shipped breathers drawn that
+    way: resistance divides a breath by its element (monster_cast_breath)."""
+    out: dict[tuple[str, int], tuple[int, frozenset[str], int]] = {}
+    for _, tables in _tiers():
+        for code, level, flags, chance, num, sides in zip(tables["display"], tables["level"],
+                                                         tables["spell_flags"], tables["spell_chance"],
+                                                         tables["hd_num"], tables["hd_sides"]):
+            if chance and flags & SPELL_BREATH:
+                key = (screen_code_to_char(code), level)
+                held = out.get(key, (0, frozenset(), 0))
+                out[key] = (max(held[0], breath_damage(chance, num, sides)), held[1] | breath_elements(chance),
+                            max(held[2], wound_burst(flags)))
     return out
 
 
 @lru_cache(maxsize=1)
 def spell_rate() -> dict[tuple[str, int], float]:
     """(screen glyph, creature level) -> the largest share of its turns the
-    shipped casters drawn that way spend casting (``spell_chance``, a percent)."""
+    shipped casters drawn that way spend casting (``spell_chance``: 1 in N)."""
     out: dict[tuple[str, int], float] = {}
     for _, tables in _tiers():
         for code, level, chance in zip(tables["display"], tables["level"], tables["spell_chance"]):
-            if chance:
+            if chance & SPELL_FREQ_MASK:
                 key = (screen_code_to_char(code), level)
-                out[key] = max(out.get(key, 0.0), chance / 100)
+                out[key] = max(out.get(key, 0.0), 1 / (chance & SPELL_FREQ_MASK))
     return out
 
 
 @lru_cache(maxsize=None)
 def spell_max(depth: int) -> int:
     """Most damage one spell can do from a shipped caster native to ``depth``
-    or shallower: Cause Light Wounds 3d8, Cause Serious Wounds 8d8, breath a
-    third of the caster's HP (``core/monster_magic.s``)."""
+    or shallower: Cause Light Wounds 3d8, Cause Serious Wounds 8d8, breath
+    (``breath_damage``; ``core/monster_magic.s``)."""
     most = 0
     for _, tables in _tiers():
         for level, flags, chance, num, sides in zip(tables["level"], tables["spell_flags"], tables["spell_chance"],
                                                     tables["hd_num"], tables["hd_sides"]):
             if chance and level <= depth:
-                most = max(most, 24 if flags & SPELL_WOUND_LIGHT else 0, 64 if flags & SPELL_WOUND_SERIOUS else 0,
-                           num * sides // 3 if flags & SPELL_BREATH else 0)
+                most = max(most, wound_burst(flags), breath_damage(chance, num, sides) if flags & SPELL_BREATH else 0)
     return most
 
 
