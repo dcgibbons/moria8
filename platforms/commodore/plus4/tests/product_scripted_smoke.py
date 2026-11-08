@@ -309,6 +309,19 @@ def run_vice(args: argparse.Namespace, pass_addr: str, fail_addr: str | None, du
                 f"break ${normalize_addr(addr)} if @cpu:${args.current_overlay_addr} == ${ovl:02X}", **kwargs)
 
         connector.break_at = break_at
+    if args.symbols.get(".c64_test_input_idx"):
+        # C64: $A000-$BFFF is also BASIC ROM, which the loader's RUN executes
+        # with $01 = $37. A bare breakpoint there stops in ROM code at the
+        # symbol's address (2026-11-07: game_over_product_smoke's fail label
+        # at $B899, a BMI in the BASIC ROM), so it waits for BASIC banked out.
+        rom_break_at = connector.break_at
+
+        def break_at(addr, **kwargs):
+            if 0xA000 <= int(normalize_addr(addr), 16) <= 0xBFFF:
+                return connector.send_command(f"break ${normalize_addr(addr)} if @cpu:$01 != $37", **kwargs)
+            return rom_break_at(addr, **kwargs)
+
+        connector.break_at = break_at
     dumps: list[str] = []
     native_tmp_dir: tempfile.TemporaryDirectory[str] | None = None
     try:
