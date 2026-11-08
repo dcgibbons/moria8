@@ -1249,9 +1249,11 @@ a2_ego_suffix_defender: .text " (Defender)" ; .byte 0
     .fill 16 - (* - a2_ego_suffix_defender), 0
 a2_ego_suffix_holy_avenger: .text " (Holy Avenger)" ; .byte 0
     .fill 16 - (* - a2_ego_suffix_holy_avenger), 0
+a2_ego_suffix_slay_dragon: .text " (Slay Dragon)" ; .byte 0
+    .fill 16 - (* - a2_ego_suffix_slay_dragon), 0
 a2_ego_suffix_slots_end:
 .assert "Apple ego suffix slots are page aligned", <a2_ego_suffix_slots, 0
-.assert "Apple ego suffix slots are 8 x 16 bytes", a2_ego_suffix_slots_end - a2_ego_suffix_slots, EGO_TYPE_COUNT * 16
+.assert "Apple ego suffix slots are EGO_TYPE_COUNT x 16 bytes", a2_ego_suffix_slots_end - a2_ego_suffix_slots, EGO_TYPE_COUNT * 16
 
 // Platform-externalized game_loop message strings (welcome, search toggle,
 // stairs). Staged to main RAM by a2_msg_print_indirect_aux at print time;
@@ -1556,7 +1558,17 @@ ovl_items_end:
     #import "../../core/scroll_effects_p3.s"
     #undef SCROLL_P3_EXISTING_OWNER
 
+// Potions of gain stat run from the resident image (the SPELL cache slot is
+// full); everything they call is resident too.
+.segment Default
+#import "../../core/eff_gain_stat.s"
+.segment SpellOverlay
+
 iq_dispatch_p3_spell:
+    cmp #ITEM_TYPE_POT_GAIN_STR
+    bcc !iqp3_not_gain+
+    jmp eff_potion_gain_stat        // potions of gain stat (140-145)
+!iqp3_not_gain:
     cmp #ITEM_TYPE_POT_HEALING
     beq iqp3_healing
     cmp #ITEM_TYPE_POT_RESTORATION
@@ -1569,7 +1581,7 @@ iq_dispatch_p3_spell:
     beq iqp3_cure_critical
     cmp #ITEM_TYPE_POT_NEUTRALIZE
     beq iqp3_neutralize
-    // Fall through: caller constrains A to {96-100, 126}
+    // Fall through: caller constrains A to {96-100, 126} (140-145 above)
 
 iqp3_healing:
     jmp eff_potion_healing          // 1000 HP + cures (eff_potion_cure.s)

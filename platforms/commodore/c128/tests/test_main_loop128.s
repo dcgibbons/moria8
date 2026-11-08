@@ -855,6 +855,7 @@ test_help_clear_calls: .byte 0
 test_game_over_prompt_calls: .byte 0
 test_exit_calls: .byte 0
 test_case_id: .byte 0
+t38_plain_views: .byte 0
 test_cast_spell_calls: .byte 0
 test_pray_calls: .byte 0
 test_gain_calls: .byte 0
@@ -2583,6 +2584,40 @@ test_entry:
     beq *+5
     jmp test_fail
     lda test_game_over_prompt_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+
+    // Test 38: a disk prompt since the last pass (asset_load_ask_for_disk
+    // sets disk_prompt_redraw_pending) rebuilds the gameplay view once
+    // before the next command is read, and the flag is cleared: one view
+    // update more than the same REST without it. A Plus/4 playtest
+    // level-up's failed load left "Insert program disk" over the map
+    // (2026-11-07).
+    lda #38
+    sta test_case_id
+    jsr reset_state
+    lda #CMD_REST
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    jsr run_case
+    lda test_viewport_calls
+    sta t38_plain_views
+    jsr reset_state
+    lda #1
+    sta disk_prompt_redraw_pending
+    lda #CMD_REST
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    jsr run_case
+    lda disk_prompt_redraw_pending
+    beq *+5
+    jmp test_fail
+    lda test_viewport_calls
+    sec
+    sbc t38_plain_views
     cmp #1
     beq *+5
     jmp test_fail

@@ -246,14 +246,8 @@ draw_store:
     :MapWrite_ptr0_y()
 
     // Top horizontal wall
-    ldy zp_temp1
-    iny                 // Start at left+1
     lda #TILE_WALL_H | TOWN_FLAGS
-!top_h:
-    :MapWrite_ptr0_y()
-    iny
-    cpy zp_temp3
-    bne !top_h-
+    jsr dg_fill_row_span
 
     // --- Bottom wall of store ---
     ldx zp_temp4        // bottom row
@@ -270,14 +264,8 @@ draw_store:
     :MapWrite_ptr0_y()
 
     // Bottom horizontal wall (with door gap)
-    ldy zp_temp1
-    iny
     lda #TILE_WALL_H | TOWN_FLAGS
-!bot_h:
-    :MapWrite_ptr0_y()
-    iny
-    cpy zp_temp3
-    bne !bot_h-
+    jsr dg_fill_row_span
 
     // --- Side walls (interior rows) ---
     lda zp_temp2
@@ -294,14 +282,8 @@ draw_store:
     ldy zp_temp3
     :MapWrite_ptr0_y()
     // Fill interior with opaque wall (no flags → invisible, non-walkable)
-    ldy zp_temp1
-    iny
     lda #TILE_WALL_H
-!interior:
-    :MapWrite_ptr0_y()
-    iny
-    cpy zp_temp3
-    bne !interior-
+    jsr dg_fill_row_span
     inx
     cpx zp_temp4
     bne !sides-
@@ -354,11 +336,21 @@ draw_store:
 
 // dg_set_row_ptr — zp_ptr0 = map row pointer for row X.
 // Input: X = map row. Output: zp_ptr0/zp_ptr0_hi set. Preserves: X, Y. Clobbers: A.
-dg_set_row_ptr:
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
+// The resident map_row_ptr0_x, instruction for instruction; the overlay kept
+// its own copy until 2026-11-07.
+.label dg_set_row_ptr = map_row_ptr0_x
+
+// dg_fill_row_span — Write tile A across row zp_ptr0 from column zp_temp1 + 1
+// up to (not including) zp_temp3: the walls and floors between two corners.
+// Preserves: X. Clobbers: Y
+dg_fill_row_span:
+    ldy zp_temp1
+    iny
+!loop:
+    :MapWrite_ptr0_y()
+    iny
+    cpy zp_temp3
+    bne !loop-
     rts
 
 
@@ -405,10 +397,7 @@ place_secrets:
 
     ldx #1                  // Start at row 1
 !ps_row:
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
+    jsr map_row_ptr0_x
     stx df_target_y         // Save row
 
 #if HAL_LAYOUT_DUNGEON_GEN_ROW_BATCHED_MAP
@@ -465,7 +454,6 @@ place_secrets:
     sta df_found            // Number to convert
 
     // Clamp to door_scan_count
-    lda df_found
     cmp door_scan_count
     bcc !ps_convert+
     lda door_scan_count
@@ -521,10 +509,7 @@ place_secrets:
     // core/dungeon_features.s.
     ldx #1
 !pss_row:
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
+    jsr map_row_ptr0_x
     stx df_target_y
     ldy #1
 !pss_col:
@@ -1126,14 +1111,8 @@ draw_dungeon_room:
     :MapWrite_ptr0_y()
 
     // Horizontal wall between corners
-    ldy zp_temp1
-    iny
     lda #TILE_WALL_H | DUNGEON_FLAGS
-!dr_top_h:
-    :MapWrite_ptr0_y()
-    iny
-    cpy zp_temp3
-    bne !dr_top_h-
+    jsr dg_fill_row_span
 
     // --- Bottom wall ---
     ldx zp_temp4
@@ -1150,14 +1129,8 @@ draw_dungeon_room:
     :MapWrite_ptr0_y()
 
     // Horizontal wall between corners
-    ldy zp_temp1
-    iny
     lda #TILE_WALL_H | DUNGEON_FLAGS
-!dr_bot_h:
-    :MapWrite_ptr0_y()
-    iny
-    cpy zp_temp3
-    bne !dr_bot_h-
+    jsr dg_fill_row_span
 
     // --- Side walls + interior ---
     lda zp_temp2
@@ -1177,14 +1150,8 @@ draw_dungeon_room:
     :MapWrite_ptr0_y()
 
     // Fill interior with floor
-    ldy zp_temp1
-    iny
     lda #TILE_FLOOR | DUNGEON_FLAGS
-!dr_interior:
-    :MapWrite_ptr0_y()
-    iny
-    cpy zp_temp3
-    bne !dr_interior-
+    jsr dg_fill_row_span
 
     inx
     cpx zp_temp4
@@ -1214,53 +1181,27 @@ shuffle_rooms:
     cpx shuf_j_tmp
     beq !shuf_skip+
 
-    // Swap room_x[i] ↔ room_x[j]
+    // Swap entry i and entry j of room_x, room_y, room_w, room_h, room_lit
+    // and room_type: six contiguous MAX_ROOMS-byte arrays, one pass each.
+    lda #6
+    sta shuf_arrays
+!shuf_swap:
     lda room_x,x
     pha
     lda room_x,y
     sta room_x,x
     pla
     sta room_x,y
-
-    // Swap room_y[i] ↔ room_y[j]
-    lda room_y,x
-    pha
-    lda room_y,y
-    sta room_y,x
-    pla
-    sta room_y,y
-
-    // Swap room_w[i] ↔ room_w[j]
-    lda room_w,x
-    pha
-    lda room_w,y
-    sta room_w,x
-    pla
-    sta room_w,y
-
-    // Swap room_h[i] ↔ room_h[j]
-    lda room_h,x
-    pha
-    lda room_h,y
-    sta room_h,x
-    pla
-    sta room_h,y
-
-    // Swap room_lit[i] ↔ room_lit[j]
-    lda room_lit,x
-    pha
-    lda room_lit,y
-    sta room_lit,x
-    pla
-    sta room_lit,y
-
-    // Swap room_type[i] ↔ room_type[j]
-    lda room_type,x
-    pha
-    lda room_type,y
-    sta room_type,x
-    pla
-    sta room_type,y
+    txa
+    clc
+    adc #MAX_ROOMS
+    tax
+    tya
+    clc
+    adc #MAX_ROOMS
+    tay
+    dec shuf_arrays
+    bne !shuf_swap-
 
 !shuf_skip:
     ldx shuf_i
@@ -1271,6 +1212,9 @@ shuffle_rooms:
 
 shuf_i:     .byte 0
 shuf_j_tmp: .byte 0
+shuf_arrays: .byte 0
+.assert "shuffle_rooms: the six room arrays are contiguous in order", room_y - room_x == MAX_ROOMS && room_w - room_y == MAX_ROOMS && room_h - room_w == MAX_ROOMS && room_lit - room_h == MAX_ROOMS && room_type - room_lit == MAX_ROOMS, true
+.assert "shuffle_rooms: the six arrays index within a page", 6 * MAX_ROOMS <= 256, true
 
 // ============================================================
 // connect_rooms — Connect shuffled room centers as an upstream-style ring.
@@ -1438,25 +1382,21 @@ tst_random_or_correct:
     beq !tst_rand_down+
     dex
     beq !tst_rand_left+
-    lda #1
-    sta dg_tun_dir
-    inc dg_cx1
-    rts
+    lda #1                      // right; each exit sets the direction and
+    sta dg_tun_dir              // takes the matching step tail below (bne:
+    bne !tst_h_inc+             // always, the direction is non-zero)
 !tst_rand_left:
     lda #1
     sta dg_tun_dir
-    dec dg_cx1
-    rts
+    bne !tst_h_dec+
 !tst_rand_up:
     lda #2
     sta dg_tun_dir
-    dec dg_cy1
-    rts
+    bne !tst_v_dec+
 !tst_rand_down:
     lda #2
     sta dg_tun_dir
-    inc dg_cy1
-    rts
+    bne !tst_v_inc+
 
 !tst_vertical:
     lda #2
@@ -1464,6 +1404,7 @@ tst_random_or_correct:
     lda dg_cy1
     cmp dg_cy2
     bcc !tst_v_inc+
+!tst_v_dec:
     dec dg_cy1
     rts
 !tst_v_inc:
@@ -1476,6 +1417,7 @@ tst_random_or_correct:
     lda dg_cx1
     cmp dg_cx2
     bcc !tst_h_inc+
+!tst_h_dec:
     dec dg_cx1
     rts
 !tst_h_inc:
@@ -2619,10 +2561,7 @@ verify_connectivity:
     // Check interior tile at (room_x[i], room_y[i])
     stx bfs_cur_x               // Save room index (reuse scratch)
     ldy room_y,x
-    lda map_row_lo,y
-    sta zp_ptr0
-    lda map_row_hi,y
-    sta zp_ptr0_hi
+    jsr map_row_ptr0_y
     ldy room_x,x
     :MapRead_ptr0_y()
     and #FLAG_OCCUPIED

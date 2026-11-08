@@ -94,14 +94,7 @@ throw_item:
     sta proj_steps
 
     // 4. Trace projectile
-    lda zp_player_x
-    sta proj_cx
-    sta tw_last_x
-    lda zp_player_y
-    sta proj_cy
-    sta tw_last_y
-    lda #0
-    sta rf_dist                 // squares flown (ranged_fire.s)
+    jsr proj_start_at_player
 
 !tw_trace:
     dec proj_steps
@@ -111,26 +104,11 @@ throw_item:
 !tw_miss_dark_tramp:
     jmp tw_miss_darkness
 !tw_step_ok:
-
-    inc rf_dist
-    // Update last walkable position
-    lda proj_cx
-    sta tw_last_x
-    lda proj_cy
-    sta tw_last_y
-
-    // Check for monster
-    lda proj_cx
-    ldy proj_cy
-    jsr monster_find_at
+    jsr proj_landed             // carry set: a monster here, X = its slot
     bcc !tw_trace-              // No monster, keep tracing
 
     // 5. Hit a monster! X = slot index
-    stx cmb_slot
-    jsr monster_get_ptr
-    ldy #MX_TYPE
-    lda (zp_ptr0),y
-    sta cmb_type
+    jsr proj_hit_setup
 
     // Calculate BOW-based to-hit (75% of BOW BTH)
     jsr throw_calc_tohit
@@ -149,15 +127,8 @@ throw_item:
     // 6. Hit! Roll damage
     jsr tw_roll_damage
 
-    // Critical hit by the item's weight (VMS critical_blow)
-    ldx tw_item_id
-    lda it_weight,x
-    jsr combat_critical_blow_weight
-
-    // Apply damage
-    ldx cmb_slot
-    lda cmb_damage
-    jsr combat_apply_damage
+    // Critical hit by the item's weight (VMS critical_blow), applied
+    jsr proj_crit_and_damage
     bcc !tw_hit_alive+
 
     // Monster killed — "YOU HAVE SLAIN THE <name>."

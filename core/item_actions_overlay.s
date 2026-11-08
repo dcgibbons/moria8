@@ -180,10 +180,12 @@ irs_effect_enchant_weapon:
     jmp !irs_ew_msg+
 
 !irs_ew_not_cursed:
-    lda inv_to_hit,x
+    lda inv_to_hit,x                // signed: a bonus below zero is under +5
+    bmi !irs_ew_inc+
     cmp #5
     bcc !irs_ew_inc+
     lda inv_to_dam,x
+    bmi !irs_ew_inc+
     cmp #5
     bcc !irs_ew_inc+
     ldx #HSTR_PIQ_NOTHING
@@ -208,56 +210,93 @@ irs_effect_enchant_weapon:
     sec
     rts
 
+// irs_effect_enchant_armor — Enchant Armor (VMS scrolls.inc case 4 with
+// enchant(), spells.inc:1935): a cursed worn armour piece if there is one,
+// else one at random among those worn (body, shield, head, hands, feet;
+// Moria8 has no cloak slot). Its to-AC rises by one: always at +0 or below
+// (acid damage is undone), else when rng(1000) reaches the VMS chance for
+// its bonus (40, 100, 200, 400, 600, 700, 800, 900, 950 for +1..+9, 995
+// above); success also lifts a curse. Until 2026-11-06 it took the first
+// piece under +5 by an unsigned compare, so armour worn below zero was never
+// enchanted, and it stopped at +5.
 irs_effect_enchant_armor:
+    ldy #0                          // pieces worn
+    lda #$ff
+    sta piw_slot                    // a cursed one: none yet
     ldx #EQUIP_BODY
 !irs_ea_scan:
-    cpx #EQUIP_FEET + 1
-    bcs !irs_ea_none+
     lda inv_item_id,x
     cmp #FI_EMPTY
     beq !irs_ea_next+
+    iny
+    lda piw_slot
+    bpl !irs_ea_next+               // the first cursed one stays
     lda inv_flags,x
     and #IF_CURSED
-    bne !irs_ea_has+
-    lda inv_to_ac,x
-    cmp #5
-    bcc !irs_ea_has+
+    beq !irs_ea_next+
+    stx piw_slot
 !irs_ea_next:
     inx
-    jmp !irs_ea_scan-
-
-!irs_ea_none:
-    ldx #HSTR_PIQ_VIBRATION
+    cpx #EQUIP_FEET + 1
+    bcc !irs_ea_scan-
+    tya
+    bne !irs_ea_worn+
+    ldx #HSTR_PIQ_VIBRATION         // nothing worn
     jmp hpm_sec_rts
-
-!irs_ea_has:
+!irs_ea_worn:
+    lda piw_slot
+    bpl !irs_ea_roll+               // cursed first
+    tya
+    jsr rng_range                   // the k-th piece worn, 0..count-1
+    sta zp_temp0
+    ldx #EQUIP_BODY
+!irs_ea_pick:
+    lda inv_item_id,x
+    cmp #FI_EMPTY
+    beq !irs_ea_pnext+
+    lda zp_temp0
+    beq !irs_ea_picked+
+    dec zp_temp0
+!irs_ea_pnext:
+    inx
+    bne !irs_ea_pick-               // always: k is under the count
+!irs_ea_picked:
     stx piw_slot
-    lda inv_flags,x
-    and #IF_CURSED
-    beq !irs_ea_not_cursed+
+!irs_ea_roll:
+    lda #<1000
+    sta zp_temp0
+    lda #>1000
+    sta zp_temp1
+    jsr rng_range_word              // zp_temp2/3 = 0..999 (randint(1000) - 1)
+    ldx piw_slot
+    lda inv_to_ac,x
+    beq !irs_ea_inc+                // +0: always
+    bmi !irs_ea_inc+                // below zero: always
+    cmp #10
+    bcc !irs_ea_chance+
+    lda #10                         // +10 and above: 995
+!irs_ea_chance:
+    tay
+    lda zp_temp2                    // randint(1000) > chance <=> roll >= chance
+    cmp irs_ea_chance_lo - 1,y
+    lda zp_temp3
+    sbc irs_ea_chance_hi - 1,y
+    bcs !irs_ea_inc+
+    ldx #HSTR_PIQ_ENCH_FAIL
+    jmp hpm_sec_rts
+!irs_ea_inc:
+    ldx piw_slot
+    inc inv_to_ac,x
     lda inv_flags,x
     and #~IF_CURSED & $ff
     sta inv_flags,x
-    lda #0
-    sta inv_to_ac,x
     jsr player_recalc_equipment
-    jmp !irs_ea_msg+
-
-!irs_ea_not_cursed:
-    ldx piw_slot
-    lda inv_to_ac,x
-    cmp #5
-    bcc !irs_ea_inc+
-    ldx #HSTR_PIQ_NOTHING
-    jmp hpm_sec_rts
-
-!irs_ea_inc:
-    inc inv_to_ac,x
-    jsr player_recalc_equipment
-
-!irs_ea_msg:
     ldx #HSTR_PIQ_ARM_GLOW
     jmp hpm_sec_rts
+
+// VMS enchant() chances out of 1000 for a bonus of +1..+9 and +10 and above.
+irs_ea_chance_lo: .byte <40, <100, <200, <400, <600, <700, <800, <900, <950, <995
+irs_ea_chance_hi: .byte >40, >100, >200, >400, >600, >700, >800, >900, >950, >995
 
 irs_effect_mon_confuse:
     lda #1

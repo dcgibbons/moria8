@@ -27,6 +27,7 @@ combat_msg_buf:  .fill 42, 0
 .const CF_UNDEAD  = $02
 .const CF_EVIL    = $04
 .const CF_ANIMAL  = $08
+.const CF_DRAGON  = $10
 .const STORE_TOTAL_SLOTS = 96
 .const MAX_CREATURES = 65
 .label cmb_period = $00
@@ -58,6 +59,7 @@ viewport_update:
 render_viewport:
 player_update_hunger_state:
 eff_heal:
+eff_heal_full:
 eff_detect_monsters:
 eff_light_room:
 eff_identify_prompt:

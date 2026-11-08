@@ -55,6 +55,7 @@ viewport_update:
 render_viewport:
 player_update_hunger_state:
 eff_heal:
+eff_heal_full:
 eff_detect_monsters:
 eff_light_room:
 eff_identify_prompt:

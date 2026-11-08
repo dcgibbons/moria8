@@ -355,12 +355,10 @@ wizard_cmd_heal_cure:
     lda player_data + PL_MHP_LO
     sta player_data + PL_HP_LO
     sta zp_player_hp_lo
+    sta zp_player_mhp_lo
     lda player_data + PL_MHP_HI
     sta player_data + PL_HP_HI
     sta zp_player_hp_hi
-    lda player_data + PL_MHP_LO
-    sta zp_player_mhp_lo
-    lda player_data + PL_MHP_HI
     sta zp_player_mhp_hi
     lda player_data + PL_MAX_MANA
     sta player_data + PL_MANA
@@ -709,7 +707,7 @@ wiz_done_str:
 wiz_fail_str:
     .text "FAIL" ; .byte 0
 wiz_item_prompt_str:
-    .text "ITEM 0-139: " ; .byte 0
+    .text "ITEM 0-145: " ; .byte 0
 wiz_jump_prompt_str:
     .text "DLVL 0-99: " ; .byte 0
 wiz_title_str:
@@ -721,7 +719,6 @@ wiz_row2_str:
 wiz_row3_str:
     .text "S summon  T tele      W wall" ; .byte 0
 wiz_row4_str:
-    .text "Q to cancel" ; .byte 0
-wiz_footer_str:
+wiz_footer_str:                 // one copy: the same words
     .text "Q to cancel" ; .byte 0
 #endif

@@ -16,7 +16,7 @@ test_bootstrap:
 test_exit_trampoline:
     sei                         // Disable IRQs during copy
     :BankOutBasic()             // Ensure BASIC ROM off (tc_results in $A000+)
-    ldx #65-1
+    ldx #68-1
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -134,7 +134,7 @@ press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
 // Test result buffer — copy to $0400 at end (msg_print clobbers $0400)
-tc_results: .fill 65, $ff
+tc_results: .fill 68, $ff
 tc_loop_ctr: .byte 0          // Loop counter (safe from ZP clobber)
 tc_valid_ctr: .byte 0         // Valid item counter for test 22
 t16_base_ac: .byte 0          // Stable scratch for Test 16 across item_wear
@@ -2000,7 +2000,9 @@ test_start:
     sta tc_results + 39
 
     // ==========================================
-    // Test 41: Enchant Armor on cursed item clears curse, sets p1=0
+    // Test 41: Enchant Armor on a cursed piece lifts the curse and adds one
+    // (VMS scrolls.inc + enchant(): at 0 or below it always rises; success
+    // clears the curse). It reset the bonus to 0 until 2026-11-06.
     // ==========================================
 !t41:
     jsr item_init_inventory
@@ -2037,8 +2039,9 @@ test_start:
 
     jsr item_read_scroll
 
-    // AC at EQUIP_BODY should be 0 (curse removed, reset)
+    // AC at EQUIP_BODY should be -2 (-3 + 1)
     lda inv_to_ac + EQUIP_BODY
+    cmp #$fe
     bne !t41_fail+
 
     // IF_CURSED should be cleared
@@ -2054,7 +2057,8 @@ test_start:
     sta tc_results + 40
 
     // ==========================================
-    // Test 42: Enchant Armor at cap (p1=5) does nothing
+    // Test 42: Enchant Armor at +5 adds at most one (VMS enchant(): 600 in
+    // 1000 fail there). It never went past +5 until 2026-11-06.
     // ==========================================
 !t42:
     jsr item_init_inventory
@@ -2091,10 +2095,12 @@ test_start:
 
     jsr item_read_scroll
 
-    // AC should still be 5 (not 6)
+    // AC should be 5 or 6
     lda inv_to_ac + EQUIP_BODY
     cmp #5
-    bne !t42_fail+
+    bcc !t42_fail+
+    cmp #7
+    bcs !t42_fail+
 
     lda #$01
     sta tc_results + 41
@@ -3214,14 +3220,119 @@ test_start:
     bcc !t65_fail+              // still on the floor
     lda #$01
     sta tc_results + 64
-    jmp !tests_done+
+    jmp !t66+
 !t65_fail:
     lda #$00
     sta tc_results + 64
 
+    // Test 66: Enchant Armor raises worn armour below zero (VMS enchant():
+    // a bonus of 0 or less always rises): Mithril Plate Mail [14,-14] from
+    // acid. An unsigned "to-AC < 5" skipped it until 2026-11-06.
+!t66:
+    jsr t66_armor_setup
+    lda #$f2                        // -14
+    sta inv_to_ac + EQUIP_BODY
+    jsr t66_read_one
+    lda inv_to_ac + EQUIP_BODY
+    cmp #$f3                        // -13
+    bne !t66_fail+
+    lda #$01
+    sta tc_results + 65
+    jmp !t67+
+!t66_fail:
+    lda #$00
+    sta tc_results + 65
+
+    // Test 67: a cursed piece is enchanted first, and the curse lifts (VMS
+    // scrolls.inc: the cursed slot is chosen; success clears the flag).
+!t67:
+    jsr t66_armor_setup
+    lda #0
+    sta inv_to_ac + EQUIP_BODY
+    lda #9                          // a Small shield
+    sta inv_item_id + EQUIP_SHIELD
+    lda #1
+    sta inv_qty + EQUIP_SHIELD
+    lda #$fd                        // -3
+    sta inv_to_ac + EQUIP_SHIELD
+    lda #IF_CURSED
+    sta inv_flags + EQUIP_SHIELD
+    jsr t66_read_one
+    lda inv_to_ac + EQUIP_SHIELD
+    cmp #$fe                        // -2
+    bne !t67_fail+
+    lda inv_flags + EQUIP_SHIELD
+    and #IF_CURSED
+    bne !t67_fail+
+    lda inv_to_ac + EQUIP_BODY      // the clean body armour untouched
+    bne !t67_fail+
+    lda #$01
+    sta tc_results + 66
+    jmp !t68+
+!t67_fail:
+    lda #$00
+    sta tc_results + 66
+
+    // Test 68: at +10 a scroll succeeds 5 times in 1000 (VMS enchant()):
+    // ten scrolls leave it at +10 or +11, never the old flat +1 each.
+!t68:
+    jsr t66_armor_setup
+    lda #10
+    sta inv_to_ac + EQUIP_BODY
+    lda #10
+    sta t68_left
+!t68_loop:
+    jsr t66_read_one
+    dec t68_left
+    bne !t68_loop-
+    lda inv_to_ac + EQUIP_BODY
+    cmp #10
+    bcc !t68_fail+
+    cmp #12
+    bcs !t68_fail+
+    lda #$01
+    sta tc_results + 67
+    jmp !tests_done+
+!t68_fail:
+    lda #$00
+    sta tc_results + 67
+
 !tests_done:
     // Jump to trampoline at $033C (below $A000) to copy results + BRK
     jmp test_exit_trampoline
+
+// t66_armor_setup — empty pack and equipment, Chain mail (item 8) worn,
+// clean; the caller sets its to-AC and any other piece.
+t66_armor_setup:
+    jsr item_init_inventory
+    lda #0
+    sta zp_msg_flags
+    lda #8                          // Chain mail
+    sta inv_item_id + EQUIP_BODY
+    lda #1
+    sta inv_qty + EQUIP_BODY
+    lda #0
+    sta inv_flags + EQUIP_BODY
+    rts
+
+// t66_read_one — read one Enchant Armor scroll (type 35) from pack slot 0.
+t66_read_one:
+    lda #35
+    sta inv_item_id
+    lda #1
+    sta inv_qty
+    lda #0
+    sta inv_p1
+    sta inv_flags
+    lda #2
+    sta $c6
+    lda #$41                        // 'a': the scroll
+    sta $0277
+    lda #$20
+    sta $0278
+    jmp item_read_scroll
+
+t68_left: .byte 0
 
 // t62_add_torch — inv_add_item one wooden torch with A turns (p1).
 t62_add_torch:

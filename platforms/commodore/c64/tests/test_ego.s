@@ -3,7 +3,7 @@
 // Tests: roll_ego_type (non-weapon, dlvl 0, deep weapon), ego_apply_damage
 //        (slay x2, slay x3, bonus dice), ego_get_ac_bonus, pickup/drop lifecycle.
 //
-// Results at $0400-$0409: $01 = pass, $00 = fail per test (10 tests)
+// Results at $0400-$040B: $01 = pass, $00 = fail per test (12 tests)
 // NOTE: msg_print writes to screen row 0 ($0400+), so we store results
 // in tc_results[] and copy to $0400 at the very end.
 
@@ -17,7 +17,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #9
+    ldx #11
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -95,7 +95,7 @@ press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
 // Test scratch
-tc_results: .fill 10, $ff      // Result buffer (copied to $0400 at end)
+tc_results: .fill 12, $ff      // Result buffer (copied to $0400 at end)
 tc_loop:    .byte 0
 tc_count:   .byte 0
 
@@ -375,4 +375,90 @@ test_start:
 !t10_store:
     sta tc_results + 9
 
+    // ============================================================
+    // Test 11: ego_apply_damage — Slay Dragon x4 vs CF_DRAGON (VMS tot_dam,
+    // moria.inc: tdam*4), capped at 255; nothing against a non-dragon.
+    // Creature 20 is flagged a dragon here.
+    // ============================================================
+    lda #CF_DRAGON
+    sta cr_mflags + 20
+    lda #10
+    sta cmb_damage
+    lda #20
+    sta cmb_type
+    lda #EGO_SLAY_DRAGON
+    jsr ego_apply_damage
+    lda cmb_damage
+    cmp #40
+    bne !t11_fail+
+    lda #100
+    sta cmb_damage
+    lda #EGO_SLAY_DRAGON
+    jsr ego_apply_damage
+    lda cmb_damage
+    cmp #255
+    bne !t11_fail+
+    lda #0
+    sta cr_mflags + 20
+    lda #10
+    sta cmb_damage
+    lda #EGO_SLAY_DRAGON
+    jsr ego_apply_damage
+    lda cmb_damage
+    cmp #10
+    bne !t11_fail+
+    lda #$01
+    bne !t11_store+
+!t11_fail:
+    lda #$00
+!t11_store:
+    sta tc_results + 10
+
+    // ============================================================
+    // Test 12: a floor item keeps ego 8 (bit 3 packed in fi_meta bit 7) and
+    // its flags through the real floor_item_add pack.
+    // ============================================================
+    ldx #0
+    lda #FI_EMPTY
+!t12_clr:
+    sta fi_item_id,x
+    inx
+    cpx #MAX_FLOOR_ITEMS
+    bne !t12_clr-
+    lda #0
+    sta zp_item_count
+    lda #2                      // Dagger
+    sta fi_add_id
+    lda #6
+    sta fi_add_x
+    sta fi_add_y
+    lda #1
+    sta fi_add_qty
+    lda #0
+    sta fi_add_p1
+    sta fi_add_to_hit
+    sta fi_add_to_dam
+    sta fi_add_to_ac
+    lda #IF_IDENTIFIED
+    sta fi_add_flags
+    lda #EGO_SLAY_DRAGON
+    sta fi_add_ego
+    jsr floor_item_add
+    bcc !t12_fail+
+    stx t12_slot
+    jsr floor_item_get_ego_x
+    cmp #EGO_SLAY_DRAGON
+    bne !t12_fail+
+    ldx t12_slot
+    jsr floor_item_get_flags_x
+    cmp #IF_IDENTIFIED
+    bne !t12_fail+
+    lda #$01
+    bne !t12_store+
+!t12_fail:
+    lda #$00
+!t12_store:
+    sta tc_results + 11
+
     jmp test_exit_trampoline
+t12_slot: .byte 0

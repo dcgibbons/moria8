@@ -338,6 +338,12 @@ local function east_mobile()
     end
     return ok >= 3
 end
+-- A static scene: a creature that moves between the before and after views
+-- reads as a mismatched cell, and which creatures DL1 holds follows the
+-- boot-timing RNG (a 5-byte resident shift failed this, 2026-11-07). The
+-- teleports below redraw the view (the X16's scroll test clears them too).
+for i = 0, 31 do prog:write_u8(MONSTER_TABLE_ADDR + i * 12 + 2, 0xFF) end
+prog:write_u8(MON_COUNT_ADDR, 0)
 for t = 1, 10 do
     -- Pinned RNG makes every teleport land identically; re-seed per attempt
     -- so retries actually sample different destinations while the dungeon
@@ -1812,7 +1818,9 @@ def save_slot_tracking_lua() -> str:
 
 
 def scroll_delta_lua() -> str:
-    return _chargen_body("A") + LUA_SCROLL_DELTA_BODY
+    return _chargen_body("A") + (LUA_SCROLL_DELTA_BODY
+                                 .replace("MONSTER_TABLE_ADDR", hex(_sym_addr("monster_table")))
+                                 .replace("MON_COUNT_ADDR", hex(_sym_addr("zp_mon_count"))))
 
 
 LUA_ACID_BODY = r"""

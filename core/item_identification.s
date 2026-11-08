@@ -18,11 +18,8 @@
 #if HAL_PLATFORM_AUX_PERSISTENT_DATA
 :AuxDataSegment()
 #endif
-#if HAL_PLATFORM_ITEM_TABLES_SPLIT_RESIDENT
-// On C128 the table rides the Bank 1 item-names payload (read via
-// mmu_safe_db_read_ptr1 below) to keep the resident items payload in bounds.
-:ResidentItemNamesSegment()
-#endif
+// C128 keeps it in the resident items payload: it rode the Bank 1 names
+// payload until 2026-11-07, when the potions of gain stat needed the room.
 it_unknown_idx:
     .fill 9, 0              // types 0-17: fixed, 17 = potion 0
     .byte $21               // 18: potion 1, 19: potion 2
@@ -63,6 +60,7 @@ it_unknown_idx:
     .fill 4, 0              // 128-134: fixed chest names
     .byte $06               // 136: scroll 6 (pool wrap, as 96-127); 137: fixed
     .byte $00               // 138-139: fixed launcher names
+    .byte $54, $76, $98     // 140-145: potions 4-9 (pool wrap, as 96-127)
 it_unknown_idx_end:
 .assert "it_unknown_idx size", it_unknown_idx_end - it_unknown_idx, (ITEM_TYPE_COUNT + 1) >> 1
 #if HAL_PLATFORM_AUX_PERSISTENT_DATA
@@ -79,6 +77,39 @@ scroll_shuffle: .fill 12, 0
 ring_shuffle:   .fill 4, 0
 wand_shuffle:   .fill 5, 0
 staff_shuffle:  .fill 5, 0
+.assert "The shuffle tables are contiguous in class order", staff_shuffle - potion_shuffle, 33
+
+// iuk_flavour_x — The global flavour index of unknown item type X: carry
+// clear and X = the index into flavour_name_lo/hi and flavour_colors for a
+// potion, scroll, ring, wand or staff; carry set for any other category.
+// Sets item_display_id. Clobbers: A, X, Y.
+iuk_flavour_x:
+    stx item_display_id
+    ldy it_category,x
+    cpy #ICAT_POTION
+    bcc !iuf_none+
+    cpy #ICAT_STAFF + 1
+    bcs !iuf_none+
+    lda iuf_class_base - ICAT_POTION,y
+    bmi !iuf_none+              // a book
+    sta iuf_base
+    jsr iuk_index_for_type      // A = class-local index (X preserved)
+    clc
+    adc iuf_base
+    tax
+    lda potion_shuffle,x        // shuffled class-local description index
+    clc
+    adc iuf_base
+    tax
+    clc
+    rts
+!iuf_none:
+    sec
+    rts
+iuf_class_base: .byte 0, 12, 24, $ff, 28, 33   // potion, scroll, ring, book, wand, staff
+iuf_base:       .byte 0
+.assert "ICAT ids iuf_class_base assumes", ICAT_STAFF - ICAT_POTION, 5
+.assert "ICAT_BOOK sits between rings and wands", ICAT_BOOK - ICAT_POTION, 3
 
 // iuk_index_for_type — Class-local unknown-description index for item type X.
 // Input: X = item type ID. Output: A = index (0-15). Preserves X. Clobbers: A, Y.
@@ -88,34 +119,16 @@ iuk_index_for_type:
     lsr
     tay
     bcs !iuk_odd+
-#if HAL_PLATFORM_ITEM_TABLES_SPLIT_RESIDENT
-    jsr iuk_read_y_bank1
-#else
     :AuxReadY(it_unknown_idx)
-#endif
     and #$0f
     rts
 !iuk_odd:
-#if HAL_PLATFORM_ITEM_TABLES_SPLIT_RESIDENT
-    jsr iuk_read_y_bank1
-#else
     :AuxReadY(it_unknown_idx)
-#endif
     lsr
     lsr
     lsr
     lsr
     rts
-
-#if HAL_PLATFORM_ITEM_TABLES_SPLIT_RESIDENT
-// iuk_read_y_bank1 — Bank 1 read of it_unknown_idx,y (names payload).
-iuk_read_y_bank1:
-    lda #<it_unknown_idx
-    sta zp_ptr1
-    lda #>it_unknown_idx
-    sta zp_ptr1_hi
-    jmp mmu_safe_db_read_ptr1
-#endif
 
 // Unidentified name strings (screen codes, null-terminated). No article, as
 // identified names have none ("Potion of Cure Light Wounds"): with one, the
@@ -151,31 +164,6 @@ rn_1: .byte ITOK_A_SILVER ; .byte ITOK_RING_SUFFIX ; .byte 0
 rn_2: .text "Bronze" ; .byte ITOK_RING_SUFFIX ; .byte 0
 rn_3: .byte ITOK_A_COPPER ; .byte ITOK_RING_SUFFIX ; .byte 0
 
-// Pointer tables for unidentified names
-potion_name_lo:
-    .byte <pn_0, <pn_1, <pn_2, <pn_3, <pn_4, <pn_5
-    .byte <pn_6, <pn_7, <pn_8, <pn_9, <pn_10, <pn_11
-potion_name_hi:
-    .byte >pn_0, >pn_1, >pn_2, >pn_3, >pn_4, >pn_5
-    .byte >pn_6, >pn_7, >pn_8, >pn_9, >pn_10, >pn_11
-
-scroll_name_lo:
-    .byte <sn_0, <sn_1, <sn_2, <sn_3, <sn_4, <sn_5
-    .byte <sn_6, <sn_7, <sn_8, <sn_9, <sn_10, <sn_11
-
-ring_name_lo: .byte <rn_0, <rn_1, <rn_2, <rn_3
-ring_name_hi: .byte >rn_0, >rn_1, >rn_2, >rn_3
-
-.assert "Scroll unidentified names stay within two pages", floor(sn_11 / 256) - floor(sn_0 / 256) <= 1, true
-
-// Unidentified color tables (indexed by shuffle output)
-potion_colors:
-    .byte COL_BLUE, COL_LRED, COL_GREEN, COL_YELLOW, COL_WHITE, COL_CYAN
-    .byte COL_GREY, COL_BROWN, COL_LGREY, COL_LRED, COL_WHITE, COL_YELLOW
-scroll_colors:
-    .byte COL_WHITE, COL_BROWN, COL_GREY, COL_LGREY, COL_LGREEN, COL_CYAN
-    .byte COL_BLUE, COL_ORANGE, COL_PURPLE, COL_LRED, COL_RED, COL_YELLOW
-ring_colors:   .byte COL_YELLOW, COL_LGREY, COL_BROWN, COL_ORANGE
 
 // Wand identification
 wn_0: .text "Iron " ; .byte ITOK_WAND ; .byte 0
@@ -184,9 +172,6 @@ wn_2: .byte ITOK_A_SILVER ; .text " " ; .byte ITOK_WAND ; .byte 0
 wn_3: .text "Bone " ; .byte ITOK_WAND ; .byte 0
 wn_4: .text "Oak " ; .byte ITOK_WAND ; .byte 0
 
-wand_name_lo: .byte <wn_0, <wn_1, <wn_2, <wn_3, <wn_4
-wand_name_hi: .byte >wn_0, >wn_1, >wn_2, >wn_3, >wn_4
-wand_colors:  .byte COL_LGREY, COL_ORANGE, COL_WHITE, COL_LGREY, COL_BROWN
 
 // Staff identification
 sfn_0: .text "Birch " ; .byte ITOK_STAFF ; .byte 0
@@ -195,9 +180,36 @@ sfn_2: .text "Maple " ; .byte ITOK_STAFF ; .byte 0
 sfn_3: .text "Willow " ; .byte ITOK_STAFF ; .byte 0
 sfn_4: .text "Ash " ; .byte ITOK_STAFF ; .byte 0
 
-staff_name_lo: .byte <sfn_0, <sfn_1, <sfn_2, <sfn_3, <sfn_4
-staff_name_hi: .byte >sfn_0, >sfn_1, >sfn_2, >sfn_3, >sfn_4
-staff_colors:  .byte COL_WHITE, COL_BROWN, COL_ORANGE, COL_LGREEN, COL_LGREY
+// Unidentified names and colours, one table each in class order (potions
+// 0-11, scrolls 12-23, rings 24-27, wands 28-32, staffs 33-37: the shuffle
+// tables' order), indexed by the global flavour index iuk_flavour_x returns.
+// One per class, and one copy of each lookup per class, until 2026-11-07.
+flavour_name_lo:
+    .byte <pn_0, <pn_1, <pn_2, <pn_3, <pn_4, <pn_5
+    .byte <pn_6, <pn_7, <pn_8, <pn_9, <pn_10, <pn_11
+    .byte <sn_0, <sn_1, <sn_2, <sn_3, <sn_4, <sn_5
+    .byte <sn_6, <sn_7, <sn_8, <sn_9, <sn_10, <sn_11
+    .byte <rn_0, <rn_1, <rn_2, <rn_3
+    .byte <wn_0, <wn_1, <wn_2, <wn_3, <wn_4
+    .byte <sfn_0, <sfn_1, <sfn_2, <sfn_3, <sfn_4
+flavour_name_hi:
+    .byte >pn_0, >pn_1, >pn_2, >pn_3, >pn_4, >pn_5
+    .byte >pn_6, >pn_7, >pn_8, >pn_9, >pn_10, >pn_11
+    .byte >sn_0, >sn_1, >sn_2, >sn_3, >sn_4, >sn_5
+    .byte >sn_6, >sn_7, >sn_8, >sn_9, >sn_10, >sn_11
+    .byte >rn_0, >rn_1, >rn_2, >rn_3
+    .byte >wn_0, >wn_1, >wn_2, >wn_3, >wn_4
+    .byte >sfn_0, >sfn_1, >sfn_2, >sfn_3, >sfn_4
+flavour_colors:
+    .byte COL_BLUE, COL_LRED, COL_GREEN, COL_YELLOW, COL_WHITE, COL_CYAN
+    .byte COL_GREY, COL_BROWN, COL_LGREY, COL_LRED, COL_WHITE, COL_YELLOW
+    .byte COL_WHITE, COL_BROWN, COL_GREY, COL_LGREY, COL_LGREEN, COL_CYAN
+    .byte COL_BLUE, COL_ORANGE, COL_PURPLE, COL_LRED, COL_RED, COL_YELLOW
+    .byte COL_YELLOW, COL_LGREY, COL_BROWN, COL_ORANGE
+    .byte COL_LGREY, COL_ORANGE, COL_WHITE, COL_LGREY, COL_BROWN
+    .byte COL_WHITE, COL_BROWN, COL_ORANGE, COL_LGREEN, COL_LGREY
+.assert "flavour_name_lo covers the five classes", flavour_name_hi - flavour_name_lo, 38
+.assert "flavour_colors covers the five classes", * - flavour_colors, 38
 
 #if PLATFORM_PRODUCT_OVERLAY_RUNTIME
 :ItemInitIdentSegment()
@@ -336,84 +348,15 @@ item_get_name_ptr:
 
     // Unknown — look up randomized description
 !ignp_unknown:
-    stx item_display_id
-    ldy it_category,x
-    cpy #ICAT_POTION
-    beq !ignp_potion+
-    cpy #ICAT_SCROLL
-    beq !ignp_scroll+
-    cpy #ICAT_RING
-    beq !ignp_ring+
-    cpy #ICAT_WAND
-    beq !ignp_wand+
-    cpy #ICAT_STAFF
-    beq !ignp_staff+
-    jmp !ignp_known+
-
-!ignp_staff:
-    ldx item_display_id
-    jsr iuk_index_for_type
-    tax
-    lda staff_shuffle,x
-    tax
-    lda staff_name_lo,x
+    jsr iuk_flavour_x
+    bcs !ignp_fallback+
+    lda flavour_name_lo,x
     sta zp_ptr0
-    lda staff_name_hi,x
+    lda flavour_name_hi,x
     sta zp_ptr0_hi
     jmp item_decode_name_ptr
-
-!ignp_potion:
+!ignp_fallback:
     ldx item_display_id
-    jsr iuk_index_for_type
-    tax
-    lda potion_shuffle,x            // Shuffled description index
-    tax
-    lda potion_name_lo,x
-    sta zp_ptr0
-    lda potion_name_hi,x
-    sta zp_ptr0_hi
-    jmp item_decode_name_ptr
-
-!ignp_scroll:
-    ldx item_display_id
-    jsr iuk_index_for_type
-    tax
-    lda scroll_shuffle,x
-    tax
-    lda scroll_name_lo,x
-    sta zp_ptr0
-    lda #>sn_0
-    ldy zp_ptr0
-    cpy #<sn_0
-    bcs !ignp_scroll_same_page+
-    adc #1
-!ignp_scroll_same_page:
-    sta zp_ptr0_hi
-    jmp item_decode_name_ptr
-
-!ignp_ring:
-    ldx item_display_id
-    jsr iuk_index_for_type
-    tax
-    lda ring_shuffle,x
-    tax
-    lda ring_name_lo,x
-    sta zp_ptr0
-    lda ring_name_hi,x
-    sta zp_ptr0_hi
-    jmp item_decode_name_ptr
-
-!ignp_wand:
-    ldx item_display_id
-    jsr iuk_index_for_type
-    tax
-    lda wand_shuffle,x
-    tax
-    lda wand_name_lo,x
-    sta zp_ptr0
-    lda wand_name_hi,x
-    sta zp_ptr0_hi
-    jmp item_decode_name_ptr
 
     // Fallback (shouldn't happen): return real name
 !ignp_known:
@@ -575,6 +518,30 @@ ilkn_save_a: .byte 0
 
 // Decode an item-name token stream from zp_ptr0 into item_name_decode_buf.
 // Bytes below $80 copy literally; bytes $80+ index item_name_token_lo/hi.
+// ItemNameExpandToken — Append token A ($80 | index) to item_name_decode_buf
+// and step past it in the stream; Z clear after (the source index is
+// non-zero). One copy, called by both decoders, where the banked streams
+// need a second decoder; inline otherwise.
+.macro ItemNameExpandToken() {
+    and #$7f
+    tax
+    lda item_name_token_lo,x
+    sta zp_ptr1
+    lda item_name_token_hi,x
+    sta zp_ptr1_hi
+    ldy #0
+!copy:
+    lda (zp_ptr1),y
+    beq !done+
+    ldx item_name_dst_idx
+    sta item_name_decode_buf,x
+    inc item_name_dst_idx
+    iny
+    bne !copy-
+!done:
+    inc item_name_src_idx
+}
+
 item_decode_name_ptr:
     lda #0
     sta item_name_dst_idx
@@ -588,7 +555,7 @@ item_decode_name_ptr_at_dst:
 !idnp_loop:
     ldy item_name_src_idx
     lda (zp_ptr0),y
-    beq !idnp_done+
+    beq item_name_decode_finish
     bmi !idnp_token+
     ldx item_name_dst_idx
     sta item_name_decode_buf,x
@@ -596,25 +563,15 @@ item_decode_name_ptr_at_dst:
     inc item_name_src_idx
     bne !idnp_loop-
 !idnp_token:
-    and #$7f
-    tax
-    lda item_name_token_lo,x
-    sta zp_ptr1
-    lda item_name_token_hi,x
-    sta zp_ptr1_hi
-    ldy #0
-!idnp_copy_token:
-    lda (zp_ptr1),y
-    beq !idnp_token_done+
-    ldx item_name_dst_idx
-    sta item_name_decode_buf,x
-    inc item_name_dst_idx
-    iny
-    bne !idnp_copy_token-
-!idnp_token_done:
-    inc item_name_src_idx
+#if HAL_PLATFORM_ITEM_NAME_STREAMS_BANKED
+    jsr item_name_expand_token
+#else
+    :ItemNameExpandToken()
+#endif
     bne !idnp_loop-
-!idnp_done:
+// item_name_decode_finish — Terminate the buffer, restore zp_ptr1 and point
+// zp_ptr0 at the decoded name (both decoders end here).
+item_name_decode_finish:
     ldx item_name_dst_idx
     lda #0
     sta item_name_decode_buf,x
@@ -629,6 +586,10 @@ item_decode_name_ptr_at_dst:
     rts
 
 #if HAL_PLATFORM_ITEM_NAME_STREAMS_BANKED
+item_name_expand_token:
+    :ItemNameExpandToken()
+    rts
+
 // C128 known item-name streams live in Bank 1 DB RAM (mmu_safe_db_read_ptr0);
 // on Apple II they live in aux RAM (mmu_safe_map_read_ptr0 aux thunk). Token
 // strings remain resident, so only source stream reads need the safe read.
@@ -653,37 +614,10 @@ item_decode_name_ptr_bank1_at_dst:
     inc item_name_src_idx
     bne !idnp_loop-
 !idnp_token:
-    and #$7f
-    tax
-    lda item_name_token_lo,x
-    sta zp_ptr1
-    lda item_name_token_hi,x
-    sta zp_ptr1_hi
-    ldy #0
-!idnp_copy_token:
-    lda (zp_ptr1),y
-    beq !idnp_token_done+
-    ldx item_name_dst_idx
-    sta item_name_decode_buf,x
-    inc item_name_dst_idx
-    iny
-    bne !idnp_copy_token-
-!idnp_token_done:
-    inc item_name_src_idx
+    jsr item_name_expand_token
     bne !idnp_loop-
 !idnp_done:
-    ldx item_name_dst_idx
-    lda #0
-    sta item_name_decode_buf,x
-    lda item_name_save_ptr1
-    sta zp_ptr1
-    lda item_name_save_ptr1_hi
-    sta zp_ptr1_hi
-    lda #<item_name_decode_buf
-    sta zp_ptr0
-    lda #>item_name_decode_buf
-    sta zp_ptr0_hi
-    rts
+    jmp item_name_decode_finish
 #endif
 
 .const ITEM_NAME_DECODE_BUF_SIZE = 48
@@ -711,29 +645,12 @@ item_get_floor_color:
     bne !igfc_known+
 
     // Unknown — return randomized color
-    stx item_display_id
-    ldy it_category,x
-    cpy #ICAT_POTION
-    beq !igfc_potion+
-    cpy #ICAT_SCROLL
-    beq !igfc_scroll+
-    cpy #ICAT_RING
-    beq !igfc_ring+
-    cpy #ICAT_WAND
-    beq !igfc_wand+
-    cpy #ICAT_STAFF
-    beq !igfc_staff+
-    jmp !igfc_known+
-
-!igfc_staff:
-    ldx item_display_id
-    jsr iuk_index_for_type
-    tax
-    lda staff_shuffle,x
-    tax
-    lda staff_colors,x
+    jsr iuk_flavour_x
+    bcs !igfc_fallback+
+    lda flavour_colors,x
     rts
-
+!igfc_fallback:
+    ldx item_display_id
 !igfc_known:
     lda it_color_ac,x
     lsr
@@ -742,38 +659,3 @@ item_get_floor_color:
     lsr
     rts
 
-!igfc_potion:
-    ldx item_display_id
-    jsr iuk_index_for_type
-    tax
-    lda potion_shuffle,x
-    tax
-    lda potion_colors,x
-    rts
-
-!igfc_scroll:
-    ldx item_display_id
-    jsr iuk_index_for_type
-    tax
-    lda scroll_shuffle,x
-    tax
-    lda scroll_colors,x
-    rts
-
-!igfc_ring:
-    ldx item_display_id
-    jsr iuk_index_for_type
-    tax
-    lda ring_shuffle,x
-    tax
-    lda ring_colors,x
-    rts
-
-!igfc_wand:
-    ldx item_display_id
-    jsr iuk_index_for_type
-    tax
-    lda wand_shuffle,x
-    tax
-    lda wand_colors,x
-    rts

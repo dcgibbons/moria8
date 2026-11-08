@@ -1,25 +1,19 @@
 #importonce
 
 #if HAL_LAYOUT_EQUIPMENT_WRAP
+// The two vectors hold screen_put_char and screen_put_string outside an
+// enable..disable pair, so disable writes those back rather than a saved copy.
 ueq_wrap_enable:
     php
     sei
-    lda screen_vectors + 4
-    sta ueq_saved_char_lo
-    lda screen_vectors + 5
-    sta ueq_saved_char_hi
-    lda screen_vectors + 7
-    sta ueq_saved_string_lo
-    lda screen_vectors + 8
-    sta ueq_saved_string_hi
     lda #<ueq_wrap_put_char
-    sta screen_vectors + 4
+    sta screen_vectors + 1
     lda #>ueq_wrap_put_char
-    sta screen_vectors + 5
+    sta screen_vectors + 2
     lda #<ueq_wrap_put_string
-    sta screen_vectors + 7
+    sta screen_vectors + 4
     lda #>ueq_wrap_put_string
-    sta screen_vectors + 8
+    sta screen_vectors + 5
     lda #0
     sta ueq_pending_space
     plp
@@ -28,14 +22,14 @@ ueq_wrap_enable:
 ueq_wrap_disable:
     php
     sei
-    lda ueq_saved_char_lo
+    lda #<screen_put_char
+    sta screen_vectors + 1
+    lda #>screen_put_char
+    sta screen_vectors + 2
+    lda #<screen_put_string
     sta screen_vectors + 4
-    lda ueq_saved_char_hi
+    lda #>screen_put_string
     sta screen_vectors + 5
-    lda ueq_saved_string_lo
-    sta screen_vectors + 7
-    lda ueq_saved_string_hi
-    sta screen_vectors + 8
     plp
     rts
 
@@ -129,10 +123,6 @@ ueq_wrap_put_string:
 !ueqws_done:
     rts
 
-ueq_saved_char_lo: .byte 0
-ueq_saved_char_hi: .byte 0
-ueq_saved_string_lo: .byte 0
-ueq_saved_string_hi: .byte 0
 ueq_wrap_col: .byte 0
 ueq_wrap_line: .byte 0
 ueq_string_idx: .byte 0

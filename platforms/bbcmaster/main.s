@@ -1114,9 +1114,11 @@ beeb_ego_suffix_defender: .text " (Defender)" ; .byte 0
     .fill 16 - (* - beeb_ego_suffix_defender), 0
 beeb_ego_suffix_holy_avenger: .text " (Holy Avenger)" ; .byte 0
     .fill 16 - (* - beeb_ego_suffix_holy_avenger), 0
+beeb_ego_suffix_slay_dragon: .text " (Slay Dragon)" ; .byte 0
+    .fill 16 - (* - beeb_ego_suffix_slay_dragon), 0
 beeb_ego_suffix_slots_end:
 .assert "Beeb ego suffix slots are page aligned", <beeb_ego_suffix_slots, 0
-.assert "Beeb ego suffix slots are 8 x 16 bytes", beeb_ego_suffix_slots_end - beeb_ego_suffix_slots, EGO_TYPE_COUNT * 16
+.assert "Beeb ego suffix slots are EGO_TYPE_COUNT x 16 bytes", beeb_ego_suffix_slots_end - beeb_ego_suffix_slots, EGO_TYPE_COUNT * 16
 
 welcome_str:
     .text "Welcome to Moria! ?=help. Shift+Q=quit." ; .byte 0
@@ -1367,7 +1369,13 @@ ovl_items_end:
     #import "../../core/scroll_effects_p3.s"
     #undef SCROLL_P3_EXISTING_OWNER
 
+    #import "../../core/eff_gain_stat.s"
+
 iq_dispatch_p3_spell:
+    cmp #ITEM_TYPE_POT_GAIN_STR
+    bcc !iqp3_not_gain+
+    jmp eff_potion_gain_stat        // potions of gain stat (140-145)
+!iqp3_not_gain:
     cmp #ITEM_TYPE_POT_HEALING
     beq iqp3_healing
     cmp #ITEM_TYPE_POT_RESTORATION

@@ -1047,9 +1047,11 @@ cx16_ego_suffix_defender: .text " (Defender)" ; .byte 0
     .fill 16 - (* - cx16_ego_suffix_defender), 0
 cx16_ego_suffix_holy_avenger: .text " (Holy Avenger)" ; .byte 0
     .fill 16 - (* - cx16_ego_suffix_holy_avenger), 0
+cx16_ego_suffix_slay_dragon: .text " (Slay Dragon)" ; .byte 0
+    .fill 16 - (* - cx16_ego_suffix_slay_dragon), 0
 cx16_ego_suffix_slots_end:
 .assert "CX16 ego suffix slots are page aligned", <cx16_ego_suffix_slots, 0
-.assert "CX16 ego suffix slots are 8 x 16 bytes", cx16_ego_suffix_slots_end - cx16_ego_suffix_slots, EGO_TYPE_COUNT * 16
+.assert "CX16 ego suffix slots are EGO_TYPE_COUNT x 16 bytes", cx16_ego_suffix_slots_end - cx16_ego_suffix_slots, EGO_TYPE_COUNT * 16
 
 ovl_auxdata_end:
 .print "CX16 AuxData: " + (ovl_auxdata_end - $6000) + " bytes"

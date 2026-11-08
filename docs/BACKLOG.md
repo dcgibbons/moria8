@@ -1254,6 +1254,38 @@ Acceptance target:
   appropriate dungeon depths without breaking C64/C128 memory, loading, save,
   recall, or monster behavior contracts.
 
+### Byte recovery held back for speed or disk loads (2026-11-07)
+
+The 2026-11-07 memory pass (for the potions of gain stat) applied every
+candidate that kept the game as fast and loaded no more from disk. The
+maintainer held these three until they are needed ("hold off on any that are
+not and backlog them"). Estimates are the memory analysis's, not measured.
+
+- **Phase-3 potion handlers into an overlay (~190 B resident on C64, Plus/4,
+  Atari).** The eight special potions' handlers
+  (`core/player_item_commands.s`, `!piq_*`, ~210 B) would run from
+  `ItemActionsOverlay` or `ChestOverlay`, as on BBC, Apple and CX16. On ports
+  without a cache, drinking one of them would then load an overlay from disk.
+  A load-once home (Atari's `RuntimeBanked`, where the gain-stat effect went)
+  costs no disk load, but C64's `RuntimeBanked` has 65 B free and Plus/4's needs a
+  ROM-banking trampoline.
+- **`core/dungeon_los.s` row pointers and room bounds (~56 B).** Four inline
+  `map_row_lo/hi` loads become `jsr map_row_ptr0_x`, and the room-bounds
+  calculation in `light_room_x` and `reveal_room` becomes one helper.
+  Visibility runs every turn; the call is per row, not per cell, so the cost
+  is likely small, but it is unmeasured.
+- **C128 save/load per-byte step (~68 B in `128.runtime`).** The checksum,
+  pointer and counter tail shared by `save_stage_from_ptr0_c128`,
+  `load_unstage_to_ptr0_c128`, `save_stage_map_c128` and
+  `load_unstage_map_c128` (`platforms/shared/save.s`) becomes one
+  subroutine: 12 cycles more for every byte saved or loaded (~0.1-0.2 s a
+  save, beside the disk time). `128.runtime` had 5 B free.
+
+Acceptance target:
+
+- Each is applied only when a feature needs the room, with its cost measured
+  (cycles on the hot path, or the disk loads added) and accepted.
+
 ## Apple IIe
 
 ### Fix wizard summon in town rendering as `@` / unknown `?`

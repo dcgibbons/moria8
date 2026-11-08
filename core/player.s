@@ -602,40 +602,6 @@ stat_bonus_index:
 // Umoria combat/stat adjustment helpers. These intentionally do not use
 // stat_bonus_index because exceptional 18/xx values have distinct thresholds.
 #if !PLAYER_STAT_HELPERS_EXTERNAL
-player_adj_0:
-    lda #0
-    rts
-player_adj_m4:
-    lda #<-4
-    rts
-player_adj_m3:
-    lda #<-3
-    rts
-player_adj_m2:
-    lda #<-2
-    rts
-player_adj_m1:
-    lda #<-1
-    rts
-player_adj_1:
-    lda #1
-    rts
-player_adj_2:
-    lda #2
-    rts
-player_adj_3:
-    lda #3
-    rts
-player_adj_4:
-    lda #4
-    rts
-player_adj_5:
-    lda #5
-    rts
-player_adj_6:
-    lda #6
-    rts
-
 player_str_tohit_adj:
     cmp #4
     bcc player_adj_m3
@@ -691,57 +657,62 @@ player_dex_tohit_adj:
     bcc player_adj_4
     bcs player_adj_5
 
-player_adj2_m4:
-    lda #<-4
-    rts
-player_adj2_m3:
-    lda #<-3
-    rts
-player_adj2_m2:
-    lda #<-2
-    rts
-player_adj2_m1:
-    lda #<-1
-    rts
-player_adj2_0:
+// One return sled, midway so every branch above and below reaches it
+// (a second copy, player_adj_*, cost 30 bytes until 2026-11-07).
+player_adj_0:
     lda #0
     rts
-player_adj2_1:
+player_adj_m4:
+    lda #<-4
+    rts
+player_adj_m3:
+    lda #<-3
+    rts
+player_adj_m2:
+    lda #<-2
+    rts
+player_adj_m1:
+    lda #<-1
+    rts
+player_adj_1:
     lda #1
     rts
-player_adj2_2:
+player_adj_2:
     lda #2
     rts
-player_adj2_3:
+player_adj_3:
     lda #3
     rts
-player_adj2_4:
+player_adj_4:
     lda #4
     rts
-player_adj2_5:
+player_adj_5:
     lda #5
+    rts
+player_adj_6:
+    lda #6
     rts
 
 player_dex_ac_adj:
     cmp #4
-    bcc player_adj2_m4
+    bcc player_adj_m4
     cmp #5
-    bcc player_adj2_m3
+    bcc player_adj_m3
     cmp #6
-    bcc player_adj2_m2
+    bcc player_adj_m2
     cmp #7
-    bcc player_adj2_m1
+    bcc player_adj_m1
     cmp #15
-    bcc player_adj2_0
+    bcc player_adj_0
     cmp #18
-    bcc player_adj2_1
+    bcc player_adj_1
     cmp #59
-    bcc player_adj2_2
+    bcc player_adj_2
     cmp #94
-    bcc player_adj2_3
+    bcc player_adj_3
     cmp #117
-    bcc player_adj2_4
-    bcs player_adj2_5
+    bcc player_adj_4
+    bcs player_adj_5
 
 player_con_hp_adj:
     cmp #7
@@ -751,14 +722,14 @@ player_con_hp_adj:
     rts
 !check17:
     cmp #17
-    bcc player_adj2_0
+    bcc player_adj_0
     cmp #18
-    bcc player_adj2_1
+    bcc player_adj_1
     cmp #94
-    bcc player_adj2_2
+    bcc player_adj_2
     cmp #117
-    bcc player_adj2_3
-    bcs player_adj2_4
+    bcc player_adj_3
+    bcs player_adj_4
 #endif
 
 // player_calc_combat — Calculate combat bonuses from current stats

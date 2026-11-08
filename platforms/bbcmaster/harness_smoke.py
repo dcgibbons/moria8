@@ -118,6 +118,8 @@ def build_lua_script(scenario: str, syms: dict[str, int]) -> str:
     inv_item_id = syms.get("inv_item_id", 0x2500)
     inv_qty = syms.get("inv_qty", 0x2521)
     monster_table = syms.get("monster_table", 0x2600)
+    mon_count = syms["zp_mon_count"]
+    recall_query_sc = syms["recall_query_sc"]
     cr_level = syms.get("cr_level", 0x2700)
     cat_ids = "\n".join(f"local {name.upper()}_ADDR = 0x{syms.get(name, 0):04X}" for name in (
         "cat_slot_id_lo", "cat_slot_id_hi", "cr_name_lo", "cr_name_hi"))
@@ -151,6 +153,8 @@ local INV_ITEM_ID_ADDR = 0x{inv_item_id:04X}
 local INV_QTY_ADDR = 0x{inv_qty:04X}
 local INV_STRIDE = INV_QTY_ADDR - INV_ITEM_ID_ADDR   -- TOTAL_INV_SLOTS (33)
 local MONSTER_TABLE_ADDR = 0x{monster_table:04X}
+local MON_COUNT_ADDR = 0x{mon_count:04X}
+local RECALL_QUERY_SC_ADDR = 0x{recall_query_sc:04X}
 local CR_LEVEL_ADDR = 0x{cr_level:04X}
 local SAVE_DEV_ADDR = 0x{save_device:04X}
 local DISK_SETUP_DONE_ADDR = 0x{disk_setup_done:04X}
@@ -215,6 +219,20 @@ local function write_map_u8(x, y, val)
     prog:write_u8(0xFE30, MAP_BANK)
     prog:write_u8(MAP_BASE + y * MAP_COLS + x, val)
     prog:write_u8(0xFE30, rom)
+end
+
+-- Removes every live monster (its map square's monster bit too), so nothing
+-- on the level can see, disturb or reach the character.
+local function clear_monsters()
+    for i = 0, 31 do
+        local b = MONSTER_TABLE_ADDR + i * 12
+        if prog:read_u8(b + 2) ~= 0xFF then
+            local x, y = prog:read_u8(b), prog:read_u8(b + 1)
+            write_map_u8(x, y, read_map_u8(x, y) & 0xFE)
+            prog:write_u8(b + 2, 0xFF)
+        end
+    end
+    prog:write_u8(MON_COUNT_ADDR, 0)
 end
 
 local function rowtext(r)
@@ -488,7 +506,10 @@ function run()
     end
     assert_line("catalog_species_loaded", species)
     -- Hurt, Ctrl+R auto-rests for many turns: the held-key probe's flags
-    -- once cancelled it at once (M6 playtest, input_run_key_held).
+    -- once cancelled it at once (M6 playtest, input_run_key_held). DL1 is
+    -- the boot's random level, and a creature in view would end the rest:
+    -- none is left to.
+    clear_monsters()
     prog:write_u8(PLAYER_HP_ADDR, 1)
     prog:write_u8(PLAYER_HP_ADDR + 1, 0)
     local t0 = prog:read_u8(TURN_ADDR) | (prog:read_u8(TURN_ADDR + 1) << 8)
@@ -629,6 +650,20 @@ function run()
     send_key(0x53) -- 'S' (search)
     wait_frames(60)
     assert_line("play_goes_on", in_town() and prog:read_u8(TURN_ADDR) ~= turn1)
+    -- A Scroll of Genocide reads its letter through recall_key_to_screen_code,
+    -- which lived in the recall view's overlay: with SPELL loaded the call ran
+    -- SPELL's bytes there, a stray store into the play slot that hung a later
+    -- level-up (2026-11-07). The letter must reach recall_query_sc.
+    drain_more(4)
+    prog:write_u8(RECALL_QUERY_SC_ADDR, 0)
+    inv_seed(1, {106, 1, 0, 0, 0, 0, 0, 0})
+    send_key(0x52) -- 'R' (read)
+    assert_line("genocide_read_prompt", wait_screen("Read which scroll", 80))
+    send_key(0x41) -- 'A'
+    assert_line("genocide_type_prompt", wait_screen("Type?", 80))
+    send_key(0x4A) -- 'J'
+    wait_frames(60)
+    assert_line("genocide_letter_read", prog:read_u8(RECALL_QUERY_SC_ADDR) == 0x0A)
     -- A Scroll of Identify asks which item (2026-11-06: the BBC build
     -- queue's two Identify reads showed a blank prompt).
     drain_more(4)

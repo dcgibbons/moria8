@@ -59,8 +59,7 @@ ui_wizard_display:
     cmp #$4c                    // L
     beq !wiz_jump+
 !wiz_cancel:
-    jsr ui_wizard_restore_gameplay_view
-    rts
+    jmp ui_wizard_restore_gameplay_view
 !wiz_heal:
     jmp ui_wizard_cmd_heal_cure
 !wiz_reveal:
@@ -80,6 +79,13 @@ ui_wizard_display:
 !wiz_jump:
     jmp ui_wizard_cmd_level_jump
 
+// wiz_put_menu_row — A/Y = a menu line, X = its row, at UWIZ_MENU_COL.
+wiz_put_menu_row:
+    stx zp_cursor_row
+    ldx #UWIZ_MENU_COL
+    stx zp_cursor_col
+    jmp screen_put_string_ay
+
 ui_wizard_draw_menu:
     lda #COL_WHITE
     sta zp_text_color
@@ -96,29 +102,20 @@ ui_wizard_draw_menu:
     lda #COL_LGREY
     sta zp_text_color
 
-    lda #2
-    sta zp_cursor_row
-    lda #UWIZ_MENU_COL
-    sta zp_cursor_col
+    ldx #2
     lda #<wiz_row1_str
     ldy #>wiz_row1_str
-    jsr screen_put_string_ay
+    jsr wiz_put_menu_row
 
-    lda #3
-    sta zp_cursor_row
-    lda #UWIZ_MENU_COL
-    sta zp_cursor_col
+    ldx #3
     lda #<wiz_row2_str
     ldy #>wiz_row2_str
-    jsr screen_put_string_ay
+    jsr wiz_put_menu_row
 
-    lda #4
-    sta zp_cursor_row
-    lda #UWIZ_MENU_COL
-    sta zp_cursor_col
+    ldx #4
     lda #<wiz_row3_str
     ldy #>wiz_row3_str
-    jsr screen_put_string_ay
+    jsr wiz_put_menu_row
 
     lda #5
     sta zp_cursor_row
@@ -147,77 +144,50 @@ ui_wizard_draw_menu:
     lda #COL_LGREY
     sta zp_text_color
 
-    lda #2
-    sta zp_cursor_row
-    lda #UWIZ_MENU_COL
-    sta zp_cursor_col
+    ldx #2
     lda #<wiz_l_str
     ldy #>wiz_l_str
-    jsr screen_put_string_ay
+    jsr wiz_put_menu_row
 
-    lda #3
-    sta zp_cursor_row
-    lda #UWIZ_MENU_COL
-    sta zp_cursor_col
+    ldx #3
     lda #<wiz_a_str
     ldy #>wiz_a_str
-    jsr screen_put_string_ay
+    jsr wiz_put_menu_row
 
-    lda #4
-    sta zp_cursor_row
-    lda #UWIZ_MENU_COL
-    sta zp_cursor_col
+    ldx #4
     lda #<wiz_h_str
     ldy #>wiz_h_str
-    jsr screen_put_string_ay
+    jsr wiz_put_menu_row
 
-    lda #5
-    sta zp_cursor_row
-    lda #UWIZ_MENU_COL
-    sta zp_cursor_col
+    ldx #5
     lda #<wiz_i_str
     ldy #>wiz_i_str
-    jsr screen_put_string_ay
+    jsr wiz_put_menu_row
 
-    lda #6
-    sta zp_cursor_row
-    lda #UWIZ_MENU_COL
-    sta zp_cursor_col
+    ldx #6
     lda #<wiz_x_str
     ldy #>wiz_x_str
-    jsr screen_put_string_ay
+    jsr wiz_put_menu_row
 
-    lda #7
-    sta zp_cursor_row
-    lda #UWIZ_MENU_COL
-    sta zp_cursor_col
+    ldx #7
     lda #<wiz_g_str
     ldy #>wiz_g_str
-    jsr screen_put_string_ay
+    jsr wiz_put_menu_row
 
-    lda #8
-    sta zp_cursor_row
-    lda #UWIZ_MENU_COL
-    sta zp_cursor_col
+    ldx #8
     lda #<wiz_s_str
     ldy #>wiz_s_str
-    jsr screen_put_string_ay
+    jsr wiz_put_menu_row
 
-    lda #9
-    sta zp_cursor_row
-    lda #UWIZ_MENU_COL
-    sta zp_cursor_col
+    ldx #9
     lda #<wiz_t_str
     ldy #>wiz_t_str
-    jsr screen_put_string_ay
+    jsr wiz_put_menu_row
 
-    lda #10
-    sta zp_cursor_row
-    lda #UWIZ_MENU_COL
-    sta zp_cursor_col
+    ldx #10
     lda #<wiz_w_str
     ldy #>wiz_w_str
-    jsr screen_put_string_ay
+    jsr wiz_put_menu_row
 
     lda #COL_WHITE
     sta zp_text_color
@@ -234,12 +204,10 @@ ui_wizard_cmd_heal_cure:
     lda player_data + PL_MHP_LO
     sta player_data + PL_HP_LO
     sta zp_player_hp_lo
+    sta zp_player_mhp_lo
     lda player_data + PL_MHP_HI
     sta player_data + PL_HP_HI
     sta zp_player_hp_hi
-    lda player_data + PL_MHP_LO
-    sta zp_player_mhp_lo
-    lda player_data + PL_MHP_HI
     sta zp_player_mhp_hi
     lda player_data + PL_MAX_MANA
     sta player_data + PL_MANA
@@ -468,7 +436,6 @@ ui_wizard_parse_two_digit:
     cpx wizard_num_digits
     bcs !wiz_pd_done+
     lda wizard_prompt_value
-    sta wiz_pd_tmp
     asl
     sta zp_temp0
     asl
@@ -496,8 +463,6 @@ ui_wizard_parse_two_digit:
 !wiz_parse_fail:
     clc
     rts
-
-wiz_pd_tmp: .byte 0
 
 ui_wizard_restore_gameplay_with_visibility_message:
     jsr update_visibility
@@ -535,9 +500,7 @@ c64_test_wizard_item_redraw_done_sym:
     sta zp_ptr0_hi
     jmp msg_print              // tail call
 
-ui_wizard_restore_gameplay_view:
-    jsr ui_view_redraw_gameplay_view
-    rts
+.label ui_wizard_restore_gameplay_view = ui_view_redraw_gameplay_view
 
 #if HAL_LAYOUT_WIZARD_40COL_MENU
 wiz_title_str:
@@ -549,8 +512,7 @@ wiz_row2_str:
 wiz_row3_str:
     .text "S summon  T tele      W wall" ; .byte 0
 wiz_row4_str:
-    .text "Q to cancel" ; .byte 0
-wiz_footer_str:
+wiz_footer_str:                 // one copy: the same words
     .text "Q to cancel" ; .byte 0
 #else
 wiz_title_str:
@@ -591,6 +553,6 @@ wiz_done_str:
 wiz_fail_str:
     .text "FAIL" ; .byte 0
 wiz_item_prompt_str:
-    .text "ITEM 0-139: " ; .byte 0
+    .text "ITEM 0-145: " ; .byte 0
 wiz_jump_prompt_str:
     .text "DLVL 0-99: " ; .byte 0

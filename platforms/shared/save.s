@@ -2172,7 +2172,9 @@ save_version_uses_legacy_floor_layout:
 // (aux-RAM map through the p0 thunk instead of MMU banks).
 // ============================================================
 save_write_map_banked:
-save_write_map_c128:
+// save_map_span_c128 — zp_ptr0 = MAP_BASE, save_count = MAP_SIZE (both map
+// streams start here).
+save_map_span_c128:
     lda #<MAP_BASE
     sta zp_ptr0
     lda #>MAP_BASE
@@ -2181,6 +2183,10 @@ save_write_map_c128:
     sta save_count_lo
     lda #>MAP_SIZE
     sta save_count_hi
+    rts
+
+save_write_map_c128:
+    jsr save_map_span_c128
 !swm_loop:
     lda save_count_lo
     ora save_count_hi
@@ -2194,14 +2200,7 @@ save_write_map_c128:
 
 load_read_map_banked:
 load_read_map_c128:
-    lda #<MAP_BASE
-    sta zp_ptr0
-    lda #>MAP_BASE
-    sta zp_ptr0_hi
-    lda #<MAP_SIZE
-    sta save_count_lo
-    lda #>MAP_SIZE
-    sta save_count_hi
+    jsr save_map_span_c128
 !lrm_loop:
     lda save_io_error
     bne !lrm_done+

@@ -151,6 +151,8 @@ it_category:
     .byte ICAT_WEAPON   // 137: Long Bow
     .byte ICAT_WEAPON   // 138: Composite Bow
     .byte ICAT_WEAPON   // 139: Heavy Crossbow
+    .byte ICAT_POTION, ICAT_POTION, ICAT_POTION   // 140-142: Gain Strength, Intelligence, Wisdom
+    .byte ICAT_POTION, ICAT_POTION, ICAT_POTION   // 143-145: Gain Dexterity, Constitution, Charisma
 
 // Color and base armor class packed per type: high nibble = display color,
 // low nibble = base AC (<=9).
@@ -295,6 +297,7 @@ it_color_ac:
     .byte COL_BROWN << 4                        // 137: Long Bow
     .byte COL_BROWN << 4                        // 138: Composite Bow
     .byte COL_LGREY << 4                        // 139: Heavy Crossbow
+    .fill 6, COL_WHITE << 4                     // 140-145: potions of gain stat
 
 // Weight (in 1/10 lbs)
 it_weight:
@@ -330,6 +333,7 @@ it_weight:
     .byte 10                                // 135: Iron Spike
     .byte 5                                 // 136: Phase Door (scroll, 0.5 lb)
     .byte 40, 40, 200                       // 137-139: Long Bow, Composite Bow, Heavy Crossbow (VMS)
+    .fill 6, 4                              // 140-145: potions of gain stat (VMS 0.4 lb)
 
 // Damage dice packed per type: high nibble = dice count (<=3), low nibble =
 // dice sides (<=9). 0 = no damage dice.
@@ -359,6 +363,7 @@ it_dmg_packed:
     .byte $11                                 // 135: Iron Spike (1d1)
     .byte 0                                   // 136: Phase Door
     .byte 0, 0, 0                             // 137-139: launchers 0d0
+    .fill 6, 0                                // 140-145: potions
 it_dmg_packed_end:
 
 #if HAL_PLATFORM_ITEM_COST_IN_TOWN_OVERLAY
@@ -395,6 +400,7 @@ it_cost_lo:
     .byte <20, <60, <100, <150, <200, <250, <0, <1 // 135: Iron Spike
     .byte <15                               // 136: Phase Door (VMS 15 gp)
     .byte <120, <240, <300                  // 137-139: Long Bow, Composite Bow, Heavy Crossbow (VMS)
+    .byte <200, <300, <300, <300, <300, <300   // 140-145: Gain Strength 200, the others 300 (VMS)
 it_cost_lo_end:
 
 #if PLATFORM_PRODUCT_OVERLAY_RUNTIME
@@ -408,12 +414,14 @@ it_cost_hi_extra_id:
     .byte 115, 116, 117, 118, 119, 120, 121, 122, 123, 124
     .byte 125, 127, 139
     .byte 24, 40, 41, 42, 75, 76, 93, 94, 95   // VMS prices (2026-10-26)
+    .byte 141, 142, 143, 144, 145              // potions of gain stat at 300 (2026-11-07)
 it_cost_hi_extra_value:
     .byte >300, >530, >400, >400, >800, >300, >800, >350, >430, >1050
     .byte >400, >300, >500, >750, >1000, >750, >3000, >500, >1000, >500
     .byte >300, >350, >1800, >1500, >1200, >2500, >1000, >600, >1200, >300
     .byte >5000, >500, >300
     .byte >400, >600, >800, >400, >358, >430, >376, >304, >340
+    .byte >300, >300, >300, >300, >300
 it_cost_hi_extra_end:
 .const IT_COST_HI_EXTRA_COUNT = it_cost_hi_extra_value - it_cost_hi_extra_id
 
@@ -451,6 +459,7 @@ it_cost_hi:
     .byte >1                                      // 135: Iron Spike
     .byte >15                                     // 136: Phase Door
     .byte >120, >240, >300                        // 137-139: launchers
+    .byte >200, >300, >300, >300, >300, >300      // 140-145: potions of gain stat
 it_cost_hi_end:
 #endif
 
@@ -483,6 +492,7 @@ it_min_level:
     .byte $42, $97, $cb, $10        // 128-134: chest levels 2/4/7/9/11/12, ruined 0; 135: spike level 1 (high nibble)
     .byte $41                       // 136: Phase Door level 1 (VMS level 1); 137: Long Bow 4
     .byte $8a                       // 138: Composite Bow 10, 139: Heavy Crossbow 8
+    .byte $88, $88, $88             // 140-145: potions of gain stat 8 (VMS level 25, as Restoration)
     // Launchers on Moria8's compressed scale (VMS depth 10 -> 3-6, 30 -> 4-8,
     // 40 -> 6-10 elsewhere in this table): VMS 10, 40 and 30.
 it_min_level_end:
@@ -532,7 +542,7 @@ it_missile2:
     .byte 1             // 138: Composite Bow — fires arrows
     .byte 2             // 139: Heavy Crossbow — fires bolts
 .assert "it_missile2 covers its range", * - it_missile2, IT_MISSILE2_END - IT_MISSILE2_BASE
-.assert "The appended launchers are the last item types", IT_MISSILE2_END, ITEM_TYPE_COUNT
+.assert "The appended launchers end within the catalog", IT_MISSILE2_END <= ITEM_TYPE_COUNT, true
 
 // item_get_missile — Get missile type for an item
 // Input: X = item type ID
@@ -548,6 +558,8 @@ item_get_missile:
     lda it_missile - IT_MISSILE_BASE,x
     rts
 !igm_late:
+    cpx #IT_MISSILE2_END
+    bcs !igm_zero+                  // the potions past the launchers (140-145)
     lda it_missile2 - IT_MISSILE2_BASE,x
     rts
 !igm_zero:
@@ -605,7 +617,11 @@ item_get_display_char:
     rts
 !igd_not_ranged:
     cpx #IT_MISSILE2_BASE           // the appended launchers
-    bcs !igd_bow-
+    bcc !igd_not_late+
+    cpx #IT_MISSILE2_END
+    bcc !igd_bow-
+    bcs !igd_cat+                   // the potions past them (140-145)
+!igd_not_late:
     cpx #ITEM_FLASK_OIL
     bne !igd_cat+
     lda #$21                    // '!' flask
@@ -659,6 +675,7 @@ it_name_lo:
     .byte <itn_128, <itn_129, <itn_130, <itn_131
     .byte <itn_132, <itn_133, <itn_134, <itn_135
     .byte <itn_136, <itn_137, <itn_138, <itn_139
+    .byte <itn_140, <itn_141, <itn_142, <itn_143, <itn_144, <itn_145
 it_name_lo_end:
 #if HAL_PLATFORM_ITEM_TABLES_SPLIT_RESIDENT
 :ResidentItemsSegment()
@@ -699,13 +716,14 @@ it_name_hi:
     .byte >itn_128, >itn_129, >itn_130, >itn_131
     .byte >itn_132, >itn_133, >itn_134, >itn_135
     .byte >itn_136, >itn_137, >itn_138, >itn_139
+    .byte >itn_140, >itn_141, >itn_142, >itn_143, >itn_144, >itn_145
 it_name_hi_end:
 #else
 it_name_hi_end:
 #endif
 
 // Tokenized item-name string pool.
-// Bytes below $80 are literal screen codes; bytes $80-$95 expand through
+// Bytes below $80 are literal screen codes; bytes $80-$a5 expand through
 // item_name_token_lo/hi. item_get_name_ptr decodes streams into its resident
 // item-name buffer.
 .const ITOK_SCROLL_OF_ART     = $80
@@ -735,20 +753,21 @@ it_name_hi_end:
 .const ITOK_ARMOR_SUFFIX      = $98
 .const ITOK_MAIL_SUFFIX       = $99
 .const ITOK_SHIELD_SUFFIX     = $9a
-// Chest-name tokens exist only where name streams are resident (C64/Plus4
-// and unit tests). C128/Apple IIe streams live in Bank 1/aux and spell the
-// chest names literally, so the token strings would be dead resident bytes.
+// The chest-name tokens (and Iron/Wooden/Steel in itn_10, 13, 83) were
+// resident-stream ports' only until 2026-11-07: the banked streams spelled
+// them out, 90 bytes more than their tokens cost.
 .const ITOK_SMALL             = $9b
 .const ITOK_LARGE             = $9c
 .const ITOK_WOODEN            = $9d
 .const ITOK_IRON              = $9e
 .const ITOK_STEEL             = $9f
 .const ITOK_CHEST_SUFFIX      = $a0
-#if HAL_PLATFORM_ITEM_NAME_STREAMS_BANKED
-.const ITEM_NAME_TOKEN_COUNT  = $1b
-#else
-.const ITEM_NAME_TOKEN_COUNT  = $21
-#endif
+.const ITOK_GAIN              = $a1
+.const ITOK_RESIST            = $a2
+.const ITOK_WISDOM            = $a3
+.const ITOK_PROTECTION        = $a4
+.const ITOK_CROSSBOW          = $a5
+.const ITEM_NAME_TOKEN_COUNT  = $26
 
 item_name_token_lo:
     .byte <itok_scroll_of_art, <itok_potion_suffix, <itok_of, <itok_scroll
@@ -758,10 +777,11 @@ item_name_token_lo:
     .byte <itok_cure, <itok_beginners, <itok_enchant, <itok_a_copper
     .byte <itok_cloud_suffix, <itok_sword_suffix, <itok_a_space, <itok_an_space
     .byte <itok_armor_suffix, <itok_mail_suffix, <itok_shield_suffix
-#if !HAL_PLATFORM_ITEM_NAME_STREAMS_BANKED
     .byte <itok_small, <itok_large, <itok_wooden, <itok_iron
-    .byte <itok_steel, <itok_chest_suffix
-#endif
+    .byte <itok_steel, <itok_chest_suffix, <itok_gain
+    .byte <itok_resist, <itok_wisdom, <itok_protection, <itok_crossbow
+.assert "item_name_token_lo holds every token", * - item_name_token_lo, ITEM_NAME_TOKEN_COUNT
+.assert "The last token is ITEM_NAME_TOKEN_COUNT - 1", ITOK_CROSSBOW - $80, ITEM_NAME_TOKEN_COUNT - 1
 item_name_token_hi:
     .byte >itok_scroll_of_art, >itok_potion_suffix, >itok_of, >itok_scroll
     .byte >itok_light, >itok_wand, >itok_a_silver, >itok_leather
@@ -770,10 +790,9 @@ item_name_token_hi:
     .byte >itok_cure, >itok_beginners, >itok_enchant, >itok_a_copper
     .byte >itok_cloud_suffix, >itok_sword_suffix, >itok_a_space, >itok_an_space
     .byte >itok_armor_suffix, >itok_mail_suffix, >itok_shield_suffix
-#if !HAL_PLATFORM_ITEM_NAME_STREAMS_BANKED
     .byte >itok_small, >itok_large, >itok_wooden, >itok_iron
-    .byte >itok_steel, >itok_chest_suffix
-#endif
+    .byte >itok_steel, >itok_chest_suffix, >itok_gain
+    .byte >itok_resist, >itok_wisdom, >itok_protection, >itok_crossbow
 
 // The flavour names carry no article since 2026-11-05 ("You see a a Blue
 // Potion."): ITOK_A_SILVER and ITOK_A_COPPER keep their names, not the "a ".
@@ -804,14 +823,17 @@ itok_an_space:        .text "an " ; .byte 0
 itok_armor_suffix:    .text "Armor" ; .byte 0
 itok_mail_suffix:     .text " Mail" ; .byte 0
 itok_shield_suffix:   .text " Shield" ; .byte 0
-#if !HAL_PLATFORM_ITEM_NAME_STREAMS_BANKED
 itok_small:           .text "Small " ; .byte 0
 itok_large:           .text "Large " ; .byte 0
 itok_wooden:          .text "Wooden " ; .byte 0
 itok_iron:            .text "Iron " ; .byte 0
 itok_steel:           .text "Steel " ; .byte 0
 itok_chest_suffix:    .text "Chest" ; .byte 0
-#endif
+itok_gain:            .text "Gain " ; .byte 0
+itok_resist:          .text "Resist " ; .byte 0
+itok_wisdom:          .text "Wisdom" ; .byte 0
+itok_protection:      .text "Protection" ; .byte 0
+itok_crossbow:        .text " Crossbow" ; .byte 0
 
 // Name streams (screen codes plus item-name tokens, null-terminated)
 #if HAL_PLATFORM_ITEM_NAME_STREAMS_BANKED
@@ -833,18 +855,10 @@ itn_6:  .text "Robe" ; .byte 0
 itn_7:  .byte ITOK_LEATHER ; .byte ITOK_ARMOR_SUFFIX ; .byte 0
 itn_8:  .text "Chain" ; .byte ITOK_MAIL_SUFFIX ; .byte 0
 itn_9:  .text "Small" ; .byte ITOK_SHIELD_SUFFIX ; .byte 0
-#if HAL_PLATFORM_ITEM_NAME_STREAMS_BANKED
-itn_10: .text "Iron Helm" ; .byte 0
-#else
 itn_10: .byte ITOK_IRON ; .text "Helm" ; .byte 0
-#endif
 itn_11: .byte ITOK_LEATHER ; .text "Gloves" ; .byte 0
 itn_12: .byte ITOK_LEATHER ; .text "Boots" ; .byte 0
-#if HAL_PLATFORM_ITEM_NAME_STREAMS_BANKED
-itn_13: .text "Wooden Torch" ; .byte 0
-#else
 itn_13: .byte ITOK_WOODEN ; .text "Torch" ; .byte 0
-#endif
 itn_14: .text "Brass Lantern" ; .byte 0
 itn_15: .text "Ration" ; .byte ITOK_OF ; .text "Food" ; .byte 0
 itn_16: .text "Slime Mold" ; .byte 0
@@ -854,7 +868,7 @@ itn_19: .text "Poison" ; .byte 0
 itn_20: .byte ITOK_LIGHT ; .byte 0
 itn_21: .text "Identify" ; .byte 0
 itn_22: .byte ITOK_TELEPORTATION ; .byte 0
-itn_23: .text "Protection" ; .byte 0
+itn_23: .byte ITOK_PROTECTION ; .byte 0
 itn_24: .text "Strength" ; .byte 0
 itn_25: .byte ITOK_CURE ; .text "Serious" ; .byte ITOK_WOUNDS_SUFFIX ; .byte 0
 itn_26: .text "Restore Mana" ; .byte 0
@@ -881,7 +895,7 @@ itn_46: .byte ITOK_STAFF ; .byte ITOK_OF ; .byte ITOK_CURE ; .byte ITOK_LIGHT ; 
 itn_47: .byte ITOK_BEGINNERS ; .text "-" ; .byte ITOK_MAGICK ; .byte 0
 itn_48: .byte ITOK_BEGINNERS ; .text " Handbook" ; .byte 0
 itn_49: .text "Short Bow" ; .byte 0
-itn_50: .byte ITOK_LIGHT ; .text " Crossbow" ; .byte 0
+itn_50: .byte ITOK_LIGHT ; .byte ITOK_CROSSBOW ; .byte 0
 itn_51: .text "Sling" ; .byte 0
 itn_52: .text "Arrow" ; .byte 0
 itn_53: .text "Bolt" ; .byte 0
@@ -889,7 +903,7 @@ itn_54: .text "Rock" ; .byte 0
 itn_55: .byte ITOK_MAGICK ; .text " I" ; .byte 0
 itn_56: .byte ITOK_MAGICK ; .text " II" ; .byte 0
 itn_57: .text "The Mages Guide to Power" ; .byte 0
-itn_58: .text "Words" ; .byte ITOK_OF ; .text "Wisdom" ; .byte 0
+itn_58: .text "Words" ; .byte ITOK_OF ; .byte ITOK_WISDOM ; .byte 0
 itn_59: .text "Chants and Blessings" ; .byte 0
 itn_60: .text "Exorcism" ; .byte 0
 itn_61: .text "Flask" ; .byte ITOK_OF ; .text "Oil" ; .byte 0
@@ -914,11 +928,7 @@ itn_79: .text "Hard " ; .byte ITOK_LEATHER ; .byte ITOK_ARMOR_SUFFIX ; .byte 0
 itn_80: .text "Scale" ; .byte ITOK_MAIL_SUFFIX ; .byte 0
 itn_81: .text "Plate" ; .byte ITOK_MAIL_SUFFIX ; .byte 0
 itn_82: .text "Cloak" ; .byte 0
-#if HAL_PLATFORM_ITEM_NAME_STREAMS_BANKED
-itn_83: .text "Steel Helm" ; .byte 0
-#else
 itn_83: .byte ITOK_STEEL ; .text "Helm" ; .byte 0
-#endif
 itn_84: .text "Gauntlets" ; .byte 0
 itn_85: .text "Soft " ; .byte ITOK_LEATHER ; .text "Boots" ; .byte 0
 itn_86: .text "Hard " ; .byte ITOK_LEATHER ; .text "Boots" ; .byte 0
@@ -933,19 +943,19 @@ itn_94: .text "Broad Axe" ; .byte 0
 itn_95: .text "Awl-Pike" ; .byte 0
 itn_96: .text "Healing" ; .byte 0
 itn_97: .text "Restoration" ; .byte 0
-itn_98: .text "Resist Heat" ; .byte 0
-itn_99: .text "Resist Cold" ; .byte 0
+itn_98: .byte ITOK_RESIST ; .text "Heat" ; .byte 0
+itn_99: .byte ITOK_RESIST ; .text "Cold" ; .byte 0
 itn_100: .byte ITOK_CURE ; .text "Critical" ; .byte ITOK_WOUNDS_SUFFIX ; .byte 0
 itn_101: .text "Teleport Level" ; .byte 0
 itn_102: .text "Magic Mapping" ; .byte 0
 itn_103: .text "Object Detection" ; .byte 0
 itn_104: .text "Recharging" ; .byte 0
-itn_105: .text "Rune" ; .byte ITOK_OF ; .text "Protection" ; .byte 0
+itn_105: .text "Rune" ; .byte ITOK_OF ; .byte ITOK_PROTECTION ; .byte 0
 itn_106: .text "Genocide" ; .byte 0
 itn_107: .text "Mass Genocide" ; .byte 0
 itn_108: .text "*Destruction*" ; .byte 0
-itn_109: .text "Resist Fire" ; .byte 0
-itn_110: .text "Resist Cold" ; .byte 0
+itn_109: .byte ITOK_RESIST ; .text "Fire" ; .byte 0
+itn_110: .byte ITOK_RESIST ; .text "Cold" ; .byte 0
 itn_111: .text "Speed" ; .byte 0
 itn_112: .text "See Invisible" ; .byte 0
 itn_113: .text "Slaying" ; .byte 0
@@ -959,20 +969,10 @@ itn_120: .byte ITOK_STAFF ; .byte ITOK_OF ; .text "Destruction" ; .byte 0
 itn_121: .byte ITOK_STAFF ; .byte ITOK_OF ; .text "Speed" ; .byte 0
 itn_122: .text "Mithril Chain" ; .byte ITOK_MAIL_SUFFIX ; .byte 0
 itn_123: .text "Mithril Plate" ; .byte ITOK_MAIL_SUFFIX ; .byte 0
-itn_124: .text "Wisdom" ; .byte 0
+itn_124: .byte ITOK_WISDOM ; .byte 0
 itn_125: .text "the Magi" ; .byte 0
 itn_126: .text "Neutralize Poison" ; .byte 0
 itn_127: .byte ITOK_STAFF ; .byte ITOK_OF ; .text "Remove Curse" ; .byte 0
-#if HAL_PLATFORM_ITEM_NAME_STREAMS_BANKED
-itn_128: .text "Small Wooden Chest" ; .byte 0
-itn_129: .text "Large Wooden Chest" ; .byte 0
-itn_130: .text "Small Iron Chest" ; .byte 0
-itn_131: .text "Large Iron Chest" ; .byte 0
-itn_132: .text "Small Steel Chest" ; .byte 0
-itn_133: .text "Large Steel Chest" ; .byte 0
-itn_134: .text "Ruined Chest" ; .byte 0
-itn_135: .text "Iron Spike" ; .byte 0
-#else
 itn_128: .byte ITOK_SMALL ; .byte ITOK_WOODEN ; .byte ITOK_CHEST_SUFFIX ; .byte 0
 itn_129: .byte ITOK_LARGE ; .byte ITOK_WOODEN ; .byte ITOK_CHEST_SUFFIX ; .byte 0
 itn_130: .byte ITOK_SMALL ; .byte ITOK_IRON ; .byte ITOK_CHEST_SUFFIX ; .byte 0
@@ -981,12 +981,18 @@ itn_132: .byte ITOK_SMALL ; .byte ITOK_STEEL ; .byte ITOK_CHEST_SUFFIX ; .byte 0
 itn_133: .byte ITOK_LARGE ; .byte ITOK_STEEL ; .byte ITOK_CHEST_SUFFIX ; .byte 0
 itn_134: .text "Ruined " ; .byte ITOK_CHEST_SUFFIX ; .byte 0
 itn_135: .byte ITOK_IRON ; .text "Spike" ; .byte 0
-#endif
 // Emitted after 135: product builds find a name by stream order.
 itn_136: .text "Phase Door" ; .byte 0
 itn_137: .text "Long Bow" ; .byte 0
 itn_138: .text "Composite Bow" ; .byte 0
-itn_139: .text "Heavy Crossbow" ; .byte 0
+itn_139: .text "Heavy" ; .byte ITOK_CROSSBOW ; .byte 0
+// VMS Moria names (values.inc): Charisma's has no "Gain".
+itn_140: .byte ITOK_GAIN ; .text "Strength" ; .byte 0
+itn_141: .byte ITOK_GAIN ; .text "Intelligence" ; .byte 0
+itn_142: .byte ITOK_GAIN ; .byte ITOK_WISDOM ; .byte 0
+itn_143: .byte ITOK_GAIN ; .text "Dexterity" ; .byte 0
+itn_144: .byte ITOK_GAIN ; .text "Constitution" ; .byte 0
+itn_145: .text "Charisma" ; .byte 0
 #if C64_UNIT_TEST && C64_TEST_NAME_STREAMS_A000
 .segment Default
 #endif

@@ -394,6 +394,7 @@ expected_item_name_lo:
     .byte <ein_128, <ein_129, <ein_130, <ein_131
     .byte <ein_132, <ein_133, <ein_134, <ein_135, <ein_136
     .byte <ein_137, <ein_138, <ein_139
+    .byte <ein_140, <ein_141, <ein_142, <ein_143, <ein_144, <ein_145
 expected_item_name_hi:
     .byte >ein_0, >ein_1, >ein_2, >ein_3, >ein_4, >ein_5, >ein_6, >ein_7
     .byte >ein_8, >ein_9, >ein_10, >ein_11, >ein_12, >ein_13, >ein_14, >ein_15
@@ -423,6 +424,8 @@ expected_item_name_hi:
     .byte >ein_128, >ein_129, >ein_130, >ein_131
     .byte >ein_132, >ein_133, >ein_134, >ein_135, >ein_136
     .byte >ein_137, >ein_138, >ein_139
+    .byte >ein_140, >ein_141, >ein_142, >ein_143, >ein_144, >ein_145
+.assert "expected_item_name_hi covers every item type", * - expected_item_name_hi, ITEM_TYPE_COUNT
 
 ein_0:  .text "Gold (small)" ; .byte 0
 ein_1:  .text "Gold (large)" ; .byte 0
@@ -564,6 +567,12 @@ ein_136: .text "Scroll of Phase Door" ; .byte 0
 ein_137: .text "Long Bow" ; .byte 0
 ein_138: .text "Composite Bow" ; .byte 0
 ein_139: .text "Heavy Crossbow" ; .byte 0
+ein_140: .text "Potion of Gain Strength" ; .byte 0
+ein_141: .text "Potion of Gain Intelligence" ; .byte 0
+ein_142: .text "Potion of Gain Wisdom" ; .byte 0
+ein_143: .text "Potion of Gain Dexterity" ; .byte 0
+ein_144: .text "Potion of Gain Constitution" ; .byte 0
+ein_145: .text "Potion of Charisma" ; .byte 0
 
 assert_col: .byte 0
 assert_idx: .byte 0

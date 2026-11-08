@@ -330,6 +330,11 @@ high_resident_end:
 }
 #import "../../core/chest_loot.s"
 #define ITEM_ACTIONS_OVERLAY_EXTERNAL
+// Potions of gain stat: imported here first (#importonce) so the quaff
+// dispatch's own import is empty and the code stays out of a full Default.
+.segment RuntimeBanked
+#import "../../core/eff_gain_stat.s"
+.segment Default
 #import "../../core/player_items.s"
 #import "../../core/spell_data.s"
 #define SPELL_EFFECTS_INCLUDE_IDENTIFY

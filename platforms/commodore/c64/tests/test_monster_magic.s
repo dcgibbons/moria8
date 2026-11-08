@@ -45,6 +45,7 @@ magic_check_new_spells:
 #import "../../../../core/zeropage.s"
 #import "../memory.s"
 #define REU_DETECT_EXTERNAL      // not exercised here; frees room below MAP_BASE
+#define ITEM_ACTIONS_OVERLAY_EXTERNAL   // not exercised here; frees room below MAP_BASE (below)
 #import "../../common/reu.s"
 #import "../screen.s"
 #import "../../../../core/color.s"
@@ -96,6 +97,14 @@ store_restock_all:
 store_enter:
     rts
 #import "../../../../core/ui_trampoline_stubs.s"
+
+// The item actions (an overlay in the product) are not exercised here: out of
+// the way above the I/O hole, as player_create is (the enchantment rules of
+// 2026-11-06 took the body past MAP_BASE).
+.segmentdef TestItemActions [start=$E000]
+.segment TestItemActions
+#import "../../../../core/item_actions_overlay.s"
+.segment Default
 
 // Strings referenced by imported modules but defined in main.s
 press_key_str:
@@ -149,6 +158,12 @@ test_start:
     lda #3
     sta zp_player_dlvl
     jsr dungeon_generate
+    // DL3's tier is the one in memory: with none (current_tier 0) the summon
+    // test's tier_check_transition loaded tier 1 from the drive, which has
+    // no disk here, and whether that serial exchange came back followed the
+    // cycle timing (an 18-byte layout shift hung it, 2026-11-07).
+    lda #1
+    sta current_tier
 
     // Place player at a known position
     lda #10

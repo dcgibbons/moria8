@@ -114,7 +114,7 @@
 .const MMU_COPY_MAP_ROW_LEN = 78
 .const MAP_END          = BANK1_MAP_RESERVED_END
 .const BANK1_DB_BASE    = $7400
-.const BANK1_DB_END     = $7a5f   // the names payload ends with it_unknown_idx at $7a4f, 16 bytes to grow; the tier cache has the rest
+.const BANK1_DB_END     = $7a5f   // the names payload ends with its streams at $79e6, 121 bytes to grow; the catalog has the rest
 // The tier cache took the DB region's last page when tiers gained the
 // cr_treasure SoA field (MON-014): tiers 1-4 needed 5520 bytes. Five DL 1
 // creatures added to tier 1 (2026-10-25) needed 5733: the cache's end moved
@@ -122,9 +122,11 @@
 // needed). Twenty-five more the same day: its start moved down to $7a00, into
 // the DB region's free tail above the item names ($79e1). The Long Bow,
 // Composite Bow and Heavy Crossbow names (2026-10-26) took 16 bytes back.
-// The names payload ends with it_unknown_idx at $7a4f, past its name
-// streams; the cache starts after it and 16 bytes of room to grow (main.s
-// checks the payload's true end).
+// The names payload ended with it_unknown_idx at $7a4f, past its name
+// streams, until the potions of gain stat (2026-11-07): it_unknown_idx moved
+// to the resident items payload and the banked streams took the chest-name
+// tokens, so it ends at $79e6 with 121 bytes to grow (main.s checks the
+// payload's true end).
 .const BANK1_TIER_CACHE_BASE = $7a60
 .const BANK1_TIER_CACHE_SIZE = $9568 - BANK1_TIER_CACHE_BASE  // up to reserved gap 0
 .const BANK1_TIER_CACHE_END  = BANK1_TIER_CACHE_BASE + BANK1_TIER_CACHE_SIZE - 1

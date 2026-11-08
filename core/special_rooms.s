@@ -75,6 +75,7 @@ assign_special_room:
     bcs !asr_pit_or_nest+
 
     // dlvl 3-4: nest only
+!asr_is_nest:
     lda #RT_NEST
     jmp !asr_store+
 
@@ -82,11 +83,8 @@ assign_special_room:
     // dlvl 5-7: pit or nest (50/50)
     lda #2
     jsr rng_range               // [0, 1]
-    beq !asr_is_nest+
+    beq !asr_is_nest-
     lda #RT_PIT
-    jmp !asr_store+
-!asr_is_nest:
-    lda #RT_NEST
     jmp !asr_store+
 
 !asr_all_three:
@@ -195,11 +193,11 @@ vault_seal_entrance:
 
 // Scan horizontal wall for door — zp_ptr0 = row base, Y = start col, X = count
 // Returns carry set if found and sealed
+.assert "vse scans test TILE_FLOOR by Z after the mask", TILE_FLOOR, 0
 vse_scan_hwall:
 !vsh_loop:
 	    :MapRead_ptr0_y()
-	    and #TILE_TYPE_MASK
-	    cmp #TILE_FLOOR
+	    and #TILE_TYPE_MASK     // Z: TILE_FLOOR (0)
 	    beq !vsh_seal+
 	    cmp #TILE_DOOR_OPEN
 	    beq !vsh_seal+
@@ -224,22 +222,16 @@ vse_scan_vwall:
     jsr map_row_ptr0_y
     ldy vse_x
 	    :MapRead_ptr0_y()
-	    and #TILE_TYPE_MASK
-	    cmp #TILE_FLOOR
-	    beq !vsv_seal+
+	    and #TILE_TYPE_MASK     // Z: TILE_FLOOR (0)
+	    beq !vsh_seal-          // the same seal: zp_ptr0 row, Y column
 	    cmp #TILE_DOOR_OPEN
-	    beq !vsv_seal+
+	    beq !vsh_seal-
 	    cmp #TILE_DOOR_CLOSED
-    beq !vsv_seal+
+    beq !vsh_seal-
     inc vse_y_iter
     dex
     bne !vsv_loop-
 	    clc
-	    rts
-!vsv_seal:
-	    lda #TILE_SECRET | DUNGEON_FLAGS
-	    :MapWrite_ptr0_y()
-	    sec
 	    rts
 
 #if !SPECIAL_ROOMS_GENERATION_ONLY

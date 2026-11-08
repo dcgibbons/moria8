@@ -980,6 +980,14 @@ c128_town_move_diag_loop_top:
     jsr status_draw
 !no_levelup_magic:
 #endif
+    // A disk prompt cleared the screen since the last pass: in a turn's
+    // load, a command that took no turn, or the level-up recalc above, all
+    // after the last render. Rebuild the view before the next command (a
+    // Plus/4 playtest level-up left "Insert program disk" over the map).
+    lsr disk_prompt_redraw_pending
+    bcc !no_prompt_redraw+
+    jsr ui_view_redraw_gameplay_view
+!no_prompt_redraw:
 #if C128_TEST_TOWN_SELF_DUMP
     lda c128_town_dump_countdown
     beq !town_dump_trap+
@@ -1135,6 +1143,13 @@ c128_town_move_diag_loop_top:
     jsr huff_print_msg
     jmp !not_paralyzed+
 !paralyzed_tick:
+    // A paralyzed turn ends as any turn does (visibility, viewport, redraw,
+    // status): the monsters' turn can move the player (a Lich's Teleport To),
+    // and with the status line alone the map kept the old view and '@'
+    // until the next command's full redraw (TURN_RENDER_CONTRACT: teleport
+    // invalidates the scene at once; C64 Balrog playtest,
+    // 2026-11-07: view_mismatch on DL29).
+    jsr main_loop_snapshot_view
     jsr turn_post_action
     lda zp_game_flags
     and #$01
@@ -1149,7 +1164,6 @@ c128_town_move_diag_loop_top:
     lda #$1e
     jsr c128_town_dump_log
 #endif
-    jsr status_draw
 #if C128_REAL_BOOT_DIAG || C128_STATUS_SP_CANARY_DIAG
     jsr c128_stack_guard_check
     .byte $94
@@ -1158,7 +1172,7 @@ c128_town_move_diag_loop_top:
     lda #$1f
     jsr c128_town_dump_log
 #endif
-    jmp main_loop
+    jmp post_turn_update_visibility_after_action   // draws the status line too
 !not_paralyzed:
 #if C128_TEST_TOWN_SELF_DUMP
     lda #$11
@@ -1167,14 +1181,7 @@ c128_town_move_diag_loop_top:
     // Snapshot the pre-command player/view state once per main-loop
     // iteration so any later stationary command can safely use the shared
     // post-turn redraw helpers.
-    ldx zp_player_x
-    stx old_player_x
-    ldx zp_player_y
-    stx old_player_y
-    ldx zp_view_x
-    stx old_view_x
-    ldx zp_view_y
-    stx old_view_y
+    jsr main_loop_snapshot_view
     jsr hal_input_get_command
 #if HAL_PLATFORM_GAME_LOOP_PLAYER_MOVE_DIAG_LABELS
 c128_town_move_diag_after_input_get_command:

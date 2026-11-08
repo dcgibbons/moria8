@@ -191,8 +191,7 @@ sfx_bump:
     sta SID_V3_AD
     lda #$00                // Sustain=0, Release=0
     sta SID_V3_SR
-    lda #$00                // Low frequency
-    sta SID_V3_FREQ_LO
+    sta SID_V3_FREQ_LO      // Low frequency (A is still 0)
     lda #$04
     sta SID_V3_FREQ_HI
     lda #WAVE_NOISE | WAVE_GATE
@@ -205,7 +204,6 @@ sfx_hit:
     sta SID_V3_AD
     lda #$00
     sta SID_V3_SR
-    lda #$00
     sta SID_V3_FREQ_LO
     lda #$10
     sta SID_V3_FREQ_HI
@@ -219,7 +217,6 @@ sfx_miss:
     sta SID_V3_AD
     lda #$00
     sta SID_V3_SR
-    lda #$00
     sta SID_V3_FREQ_LO
     lda #$20
     sta SID_V3_FREQ_HI
@@ -233,7 +230,6 @@ sfx_pickup:
     sta SID_V3_AD
     lda #$00                // Sustain=0, Release=0
     sta SID_V3_SR
-    lda #$00
     sta SID_V3_FREQ_LO
     lda #$18
     sta SID_V3_FREQ_HI
@@ -261,8 +257,7 @@ sfx_levelup:
     sta SID_V3_AD
     lda #$00                // Sustain=0, Release=0
     sta SID_V3_SR
-    lda #$00                // Pulse width 50%
-    sta SID_V3_PW_LO
+    sta SID_V3_PW_LO        // Pulse width 50% (A is still 0)
     lda #$08
     sta SID_V3_PW_HI
     lda #$00
@@ -279,7 +274,6 @@ sfx_spell:
     sta SID_V3_AD
     lda #$00
     sta SID_V3_SR
-    lda #$00
     sta SID_V3_FREQ_LO
     lda #$14
     sta SID_V3_FREQ_HI
@@ -293,7 +287,6 @@ sfx_spell_fail:
     sta SID_V3_AD
     lda #$00
     sta SID_V3_SR
-    lda #$00
     sta SID_V3_FREQ_LO
     lda #$0c
     sta SID_V3_FREQ_HI
@@ -307,7 +300,6 @@ sfx_hunger_warn:
     sta SID_V3_AD
     lda #$00
     sta SID_V3_SR
-    lda #$00
     sta SID_V3_PW_LO
     lda #$02
     sta SID_V3_PW_HI
@@ -325,7 +317,6 @@ sfx_hunger_faint:
     sta SID_V3_AD
     lda #$00
     sta SID_V3_SR
-    lda #$00
     sta SID_V3_PW_LO
     lda #$01
     sta SID_V3_PW_HI

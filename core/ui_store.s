@@ -965,6 +965,31 @@ hg_div_mul_result_24x8:
 // hg_calc_percent_from_tmp_den — Convert tmp/den concession ratio into percent.
 // Input: hg_tmp0/1 = numerator, hg_den_lo/hi = denominator
 // Output: A = percentage (0-255, saturated)
+// hg_concession_pct — hg_pct = the concession percent
+// (hg_calc_percent_from_tmp_den), damped above HG_MAX_CONCESSION: carry set.
+// Below HG_MIN_CONCESSION, an insult: carry clear and hg_pct unchanged.
+hg_concession_pct:
+    jsr hg_calc_percent_from_tmp_den
+    cmp #HG_MIN_CONCESSION
+    bcc !done+
+    cmp #HG_MAX_CONCESSION + 1
+    bcc !ok+
+    sta hg_pct
+    lsr
+    lsr
+    sta hg_tmp0
+    lda hg_pct
+    sec
+    sbc hg_tmp0
+    cmp #HG_MAX_CONCESSION
+    bcs !ok+
+    lda #HG_MAX_CONCESSION
+!ok:
+    sta hg_pct
+    sec
+!done:
+    rts
+
 hg_calc_percent_from_tmp_den:
 !scale:
     lda hg_den_hi
@@ -1059,7 +1084,6 @@ haggle_buy:
     lda hg_min_lo
     ror
     sta hg_last_lo
-    lda hg_last_lo
     ora hg_last_hi
     bne !hb_last_ok+
     lda #1
@@ -1129,25 +1153,10 @@ haggle_buy:
     sbc hg_last_hi
     sta hg_den_hi
 
-    jsr hg_calc_percent_from_tmp_den
-    cmp #HG_MIN_CONCESSION
-    bcs !hb_pct_floor_ok+
-    jmp !hb_insult+
-!hb_pct_floor_ok:
-    cmp #HG_MAX_CONCESSION + 1
-    bcc !hb_pct_ok+
-    sta hg_pct
-    lsr
-    lsr
-    sta hg_tmp0
-    lda hg_pct
-    sec
-    sbc hg_tmp0
-    cmp #HG_MAX_CONCESSION
+    jsr hg_concession_pct
     bcs !hb_pct_ok+
-    lda #HG_MAX_CONCESSION
+    jmp !hb_insult+
 !hb_pct_ok:
-    sta hg_pct
 
     // step = ((ask - input) * pct) / 100 + 1
     lda hg_ask_lo
@@ -1200,19 +1209,10 @@ haggle_buy:
     cmp hg_ask_lo
     bcc !hb_store_last+
 !hb_accept_input:
-    lda hg_input_lo
-    sta hg_ask_lo
-    lda hg_input_hi
-    sta hg_ask_hi
-    jmp hg_do_accept
+    jmp hg_accept_input
 
 !hb_store_last:
-    lda hg_input_lo
-    sta hg_last_lo
-    lda hg_input_hi
-    sta hg_last_hi
-    jsr hg_show_counter
-    jsr hg_wait_for_ack
+    jsr hg_store_last_counter
     jmp !hb_loop-
 
 !hb_insult:
@@ -1240,7 +1240,6 @@ haggle_sell:
     lda hg_min_lo
     ror
     sta hg_ask_lo
-    lda hg_ask_lo
     ora hg_ask_hi
     bne !hs_init_ok+
     lda #1
@@ -1325,25 +1324,10 @@ haggle_sell:
     sbc hg_ask_hi
     sta hg_den_hi
 
-    jsr hg_calc_percent_from_tmp_den
-    cmp #HG_MIN_CONCESSION
-    bcs !hs_pct_floor_ok+
-    jmp !hs_insult+
-!hs_pct_floor_ok:
-    cmp #HG_MAX_CONCESSION + 1
-    bcc !hs_pct_ok+
-    sta hg_pct
-    lsr
-    lsr
-    sta hg_tmp0
-    lda hg_pct
-    sec
-    sbc hg_tmp0
-    cmp #HG_MAX_CONCESSION
+    jsr hg_concession_pct
     bcs !hs_pct_ok+
-    lda #HG_MAX_CONCESSION
+    jmp !hs_insult+
 !hs_pct_ok:
-    sta hg_pct
 
     // step = ((input - ask) * pct) / 100 + 1
     lda hg_input_lo
@@ -1403,19 +1387,10 @@ haggle_sell:
     jmp !hs_loop-
 
 !hs_accept_input:
-    lda hg_input_lo
-    sta hg_ask_lo
-    lda hg_input_hi
-    sta hg_ask_hi
-    jmp hg_do_accept
+    jmp hg_accept_input
 
 !hs_store_last:
-    lda hg_input_lo
-    sta hg_last_lo
-    lda hg_input_hi
-    sta hg_last_hi
-    jsr hg_show_counter
-    jsr hg_wait_for_ack
+    jsr hg_store_last_counter
     jmp !hs_loop-
 
 !hs_insult:
@@ -1443,6 +1418,22 @@ hg_do_kick:
     clc
     rts
 
+// hg_store_last_counter — The offer becomes the last one; show the counter
+// and wait for a key (both haggles).
+hg_store_last_counter:
+    lda hg_input_lo
+    sta hg_last_lo
+    lda hg_input_hi
+    sta hg_last_hi
+    jsr hg_show_counter
+    jmp hg_wait_for_ack
+
+// hg_accept_input — The offer becomes the price asked, and is accepted.
+hg_accept_input:
+    lda hg_input_lo
+    sta hg_ask_lo
+    lda hg_input_hi
+    sta hg_ask_hi
 // hg_do_accept — Shared accept handler (terminal)
 // Copies ask to price, shows "AGREED!", returns with carry set
 hg_do_accept:

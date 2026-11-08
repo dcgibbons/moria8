@@ -93,6 +93,21 @@ frf_attempts:    .byte 0
 frf_attempts_hi: .byte 0
 frf_limit:       .byte 0    // dis; 0 = no distance limit
 
+// df_roll_interior_xy — df_target_x/y = a random square off the map edge:
+// x in [1, MAP_COLS-2], then y in [1, MAP_ROWS-2]. Clobbers: A, X
+df_roll_interior_xy:
+    lda #MAP_COLS - 2
+    jsr rng_range           // [0, 77]
+    clc
+    adc #1                  // [1, 78]
+    sta df_target_x
+    lda #MAP_ROWS - 2
+    jsr rng_range           // [0, 45]
+    clc
+    adc #1                  // [1, 46]
+    sta df_target_y
+    rts
+
 find_random_floor:
     lda #0                  // No distance limit
 find_random_floor_near:
@@ -101,19 +116,7 @@ find_random_floor_near:
     sta frf_attempts_hi
 
 !frf_loop:
-    // Random x in [1, MAP_COLS-2]
-    lda #MAP_COLS - 2
-    jsr rng_range           // [0, 77]
-    clc
-    adc #1                  // [1, 78]
-    sta df_target_x
-
-    // Random y in [1, MAP_ROWS-2]
-    lda #MAP_ROWS - 2
-    jsr rng_range           // [0, 45]
-    clc
-    adc #1                  // [1, 46]
-    sta df_target_y
+    jsr df_roll_interior_xy
 
     lda frf_limit
     beq !frf_check+         // No limit: any square
@@ -268,7 +271,6 @@ place_secrets:
     sta df_found            // Number to convert
 
     // Clamp to door_scan_count
-    lda df_found
     cmp door_scan_count
     bcc !ps_convert+
     lda door_scan_count
@@ -730,8 +732,8 @@ trap_apply_damage:
     sbc zp_math_b
     sta zp_player_hp_hi
 
-    // Clamp lethal trap damage before syncing the player struct.
-    lda zp_player_hp_hi
+    // Clamp lethal trap damage before syncing the player struct (A and N
+    // still hold the high byte).
     bmi !trap_lethal+
     ora zp_player_hp_lo
     bne !trap_sync+
@@ -815,19 +817,7 @@ trap_teleport:
     lda #100                // Max attempts
     sta df_found
 !tt_loop:
-    // Random x in [1, MAP_COLS-2]
-    lda #MAP_COLS - 2
-    jsr rng_range
-    clc
-    adc #1
-    sta df_target_x
-
-    // Random y in [1, MAP_ROWS-2]
-    lda #MAP_ROWS - 2
-    jsr rng_range
-    clc
-    adc #1
-    sta df_target_y
+    jsr df_roll_interior_xy
 
     // Check if floor
     jsr df_target_row_ptr
@@ -842,6 +832,9 @@ trap_teleport:
 
 !tt_found:
     // Move player to new position
+#if PLATFORM_DISARM_COMMAND_INLINE || !DISARM_COMMAND_EXTERNAL
+    jmp disarm_move_player_to_target   // the same six stores
+#else
     lda df_target_x
     sta zp_player_x
     sta player_data + PL_MAP_X
@@ -849,6 +842,7 @@ trap_teleport:
     sta zp_player_y
     sta player_data + PL_MAP_Y
     rts
+#endif
 
 // ============================================================
 // get_direction_target — Prompt for direction and compute target

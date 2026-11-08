@@ -53,7 +53,7 @@ design record; current ownership is enforced by `platforms/apple2/memory.s`,
 | main `$BB00-$BEFF` | ProDOS MLI I/O/staging buffer |
 | main `$BF00-$BFFF` | ProDOS global page |
 | aux `$0800-$3B0B` | Live 198x66 map |
-| aux `$3B0C-$4FFF` | Current immutable/mutable aux data payload (ends `$4F7D`, 130 B to grow; capped at `$4FFF` for the monster catalog, 2026-11-05): Huffman data, item-name streams, store inventory, recall arrays, class-spell tables, spell names, ego suffix slots, externalized message strings, the screen-code char-map table, and the message-history ring buffer (`MSG_HISTORY_IN_AUX`, doors phase 2026-09: resident always-region was full; writes execute only via the ZP thunk `mmu_safe_map_write_ptr1`); boundary raised from `$56FF` for the 128-row catalog (Phase 3, 2026-08-01) |
+| aux `$3B0C-$4FFF` | Current immutable/mutable aux data payload (ends `$4F8D`, 114 B to grow, 2026-11-07; capped at `$4FFF` for the monster catalog, 2026-11-05): Huffman data, item-name streams, store inventory, recall arrays, class-spell tables, spell names, ego suffix slots, externalized message strings, the screen-code char-map table, and the message-history ring buffer (`MSG_HISTORY_IN_AUX`, doors phase 2026-09: resident always-region was full; writes execute only via the ZP thunk `mmu_safe_map_write_ptr1`); boundary raised from `$56FF` for the 128-row catalog (Phase 3, 2026-08-01) |
 | aux `$5000-$66FF` | Monster catalog fields (`A2.CATALOG`, 5,859 B, boot pack) |
 | aux `$6700-$BFFF` | Cache manifest v8: UI `$6700`, SPELL `$6D00`, MODAL `$8100`, the Huffman corpus with the catalog's names `$8D00` (to `$A829`, 470 B spare), ITEMS `$AA00`. OVL.TOWN and OVL.GEN load from disk |
 

@@ -4594,7 +4594,7 @@ check_static_contract "wizard_cancel_text_contract" "../../../core/wizard.s" \
 check_static_contract "wizard_menu_aligned_rows_contract" "../../../core/wizard.s" \
     "wiz_row1_str:|||.text \"L jump    A reveal    H heal\"|||wiz_row2_str:|||.text \"I ident   X level     G item\"|||wiz_row3_str:|||.text \"S summon  T tele      W wall\""
 check_static_contract "wizard_item_prompt_range_contract" "../../../core/wizard.s" \
-    "wiz_item_prompt_str:|||.text \"ITEM 0-139: \""
+    "wiz_item_prompt_str:|||.text \"ITEM 0-145: \""
 check_static_contract "wizard_bad_prompt_cleanup_contract" "../../../core/wizard.s" \
     "wizard_prompt_bad_value:|||jsr msg_print|||jmp wizard_prompt_clear_digits|||wizard_prompt_two_digit:|||jsr wizard_prompt_bad_value|||jmp !wiz_num_loop-"
 check_static_contract "c64_disk_prompt_dismiss_clears_full_modal_contract" "../common/disk_swap.s" \
@@ -4708,7 +4708,7 @@ run_test "rng"    "tests/test_rng.s"    "0400 0409" 10
 run_test "memory" "tests/test_memory.s" "0400 0402" 3
 run_test "config" "tests/test_config.s" "0400 0400" 1
 run_test "input"  "tests/test_input.s"  "0400 040e" 15
-run_test "main_loop" "tests/test_main_loop.s" "0400 0434" 53 500000000
+run_test "main_loop" "tests/test_main_loop.s" "0400 0435" 54 500000000
 run_test "run_visibility_bank" "tests/test_run_visibility_bank.s" "0400 0400" 1 500000000
 run_test "turn" "tests/test_turn.s" "0400 0420" 33 500000000
 run_test "player" "tests/test_player.s" "0400 0409" 10
@@ -4791,12 +4791,12 @@ run_test "remove_curse_prayer" "tests/test_remove_curse_prayer.s" "0400 0402" 3 
 run_test "orb_of_draining_prayer" "tests/test_orb_of_draining_prayer.s" "0400 0402" 3 500000000
     run_test "prayer_feedback" "tests/test_prayer_feedback.s" "0400 040c" 13 500000000
 run_test "detect_feedback" "tests/test_detect_feedback.s" "0400 0403" 4 500000000
-run_test "item" "tests/test_item.s" "0400 0440" 65 1000000000
+run_test "item" "tests/test_item.s" "0400 0443" 68 1000000000
 run_test "item_exchange" "tests/test_item_exchange.s" "0400 040d" 14 1000000000
 run_test "scroll_p3" "tests/test_scroll_p3.s" "0400 040e" 15 1000000000
 run_test "item_desc" "tests/test_item_desc.s" "0400 040a" 11 500000000
 run_test "item_ui" "tests/test_item_ui.s" "0400 040f" 16 1000000000
-run_test "potion_cures" "tests/test_potion_cures.s" "0400 040b" 12 1000000000
+run_test "potion_cures" "tests/test_potion_cures.s" "0400 0410" 17 1000000000
 run_test "timed_buffs" "tests/test_timed_buffs.s" "0400 0409" 10 1000000000
 run_test "store" "tests/test_store.s" "0400 0437" 56 1000000000
 run_test "ui_views" "tests/test_ui_views.s" "0400 0414" 21 500000000
@@ -4811,7 +4811,7 @@ run_test "tier" "tests/test_tier.s" "0400 0410" 17 500000000
 run_test "disk_swap" "tests/test_disk_swap.s" "0400 040e" 15 500000000
 run_test "render" "tests/test_render.s" "0400 0417" 24 500000000
 run_test "ranged" "tests/test_ranged.s" "0400 040f" 16 500000000
-run_test "ego" "tests/test_ego.s" "0400 0409" 10 500000000
+run_test "ego" "tests/test_ego.s" "0400 040b" 12 500000000
 run_test "throw" "tests/test_throw.s" "0400 040f" 16 500000000
 run_test "bash" "tests/test_bash.s" "0400 040c" 13 500000000
 run_test "tunnel" "tests/test_tunnel.s" "0400 0407" 8 500000000

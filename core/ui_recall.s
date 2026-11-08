@@ -64,33 +64,27 @@ ui_recall_display:
     lda #2
     sta zp_cursor_col
 
-    jsr rcl_grey
     lda #<rcl_s_lv
     ldy #>rcl_s_lv
-    jsr rcl_put_str
-    jsr rcl_white
+    jsr rcl_label
     ldx recall_found_type
     lda cr_level,x
     jsr screen_put_decimal
 
     lda #10
     sta zp_cursor_col
-    jsr rcl_grey
     lda #<rcl_s_ac
     ldy #>rcl_s_ac
-    jsr rcl_put_str
-    jsr rcl_white
+    jsr rcl_label
     ldx recall_found_type
     lda cr_ac,x
     jsr screen_put_decimal
 
     lda #18
     sta zp_cursor_col
-    jsr rcl_grey
     lda #<rcl_s_hp
     ldy #>rcl_s_hp
-    jsr rcl_put_str
-    jsr rcl_white
+    jsr rcl_label
     ldx recall_found_type
     lda cr_hd_num,x
     jsr screen_put_decimal
@@ -105,12 +99,9 @@ ui_recall_display:
     sta zp_cursor_row
     lda #2
     sta zp_cursor_col
-    jsr rcl_grey
     lda #<rcl_s_atk
     ldy #>rcl_s_atk
-    jsr rcl_put_str
-
-    jsr rcl_white
+    jsr rcl_label
     lda #0
     sta rcl_any_atk
 
@@ -166,12 +157,9 @@ ui_recall_display:
     sta zp_cursor_row
     lda #2
     sta zp_cursor_col
-    jsr rcl_grey
     lda #<rcl_s_spl
     ldy #>rcl_s_spl
-    jsr rcl_put_str
-
-    jsr rcl_white
+    jsr rcl_label
     ldx recall_found_type
     :AuxReadX(recall_spells)
     bne !rcl_has_spl+
@@ -189,22 +177,18 @@ ui_recall_display:
     sta zp_cursor_row
     lda #2
     sta zp_cursor_col
-    jsr rcl_grey
     lda #<rcl_s_kill
     ldy #>rcl_s_kill
-    jsr rcl_put_str
-    jsr rcl_white
+    jsr rcl_label
     ldx recall_found_type
     :AuxReadX(recall_kills)
     jsr screen_put_decimal
 
     lda #16
     sta zp_cursor_col
-    jsr rcl_grey
     lda #<rcl_s_died
     ldy #>rcl_s_died
-    jsr rcl_put_str
-    jsr rcl_white
+    jsr rcl_label
     ldx recall_found_type
     :AuxReadX(recall_deaths)
     jsr screen_put_decimal
@@ -225,11 +209,18 @@ ui_recall_display:
 // Helpers
 // ============================================================
 
-// rcl_put_str — Set zp_ptr0/hi from A/Y and call screen_put_string
-rcl_put_str:
+// rcl_put_str — Set zp_ptr0/hi from A/Y and call screen_put_string: the
+// resident screen_put_string_ay, instruction for instruction.
+.label rcl_put_str = screen_put_string_ay
+
+// rcl_label — A/Y = a field label: printed grey, then the text colour is
+// white again for its value.
+rcl_label:
     sta zp_ptr0
     sty zp_ptr0_hi
-    jmp hal_screen_put_string       // Tail call
+    jsr rcl_grey
+    jsr hal_screen_put_string
+    jmp rcl_white
 
 // rcl_grey / rcl_white — Set text color
 rcl_grey:

@@ -40,7 +40,7 @@ overlap assertions are the executable authority; never edit this table alone.
 | `$3000-$3fff` | ITEMS overlay cache |
 | `$4000-$730b` | reserved 198x66 live map span |
 | `$730c-$73ff` | reserved unowned gap between map and DB regions |
-| `$7400-$7a5f` | DB/data region: the `128.names` payload, item-name streams then `it_name_lo` and `it_unknown_idx`, which ends it at `$7a4f`, with 16 bytes to grow (`main.s` asserts the payload's true end; its segment max is `$7a5f`) |
+| `$7400-$7a5f` | DB/data region: the `128.names` payload, `it_name_lo` then the item-name streams, which end it at `$79e6`, with 121 bytes to grow (`main.s` asserts the payload's true end; its segment max is `$7a5f`). `it_unknown_idx` moved to `128.item` on 2026-11-07 |
 | `$7a60-$9567` | the monster catalog (C128M-007): `$7a60-$7e5f` the name pool, 32 species slots x 32 B written at species fetch; `$7e60-$9542` `128.cat`, the catalog's 21 fields x 279 creatures, loaded at boot; 37 B spare. Until 2026-11-02 the tier cache, 6920 bytes |
 | `$9568-$97ff` | title marker/data cache (663 data bytes; the title art needs 593-624) |
 | `$9800-$9cff` | MODAL small-overlay cache |

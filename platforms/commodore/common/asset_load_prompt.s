@@ -2,8 +2,11 @@
 // asset_load_ask_for_disk — "Insert program disk", the file's name and
 // "Press any key" on a cleared screen, then a key. Everything it uses is
 // resident: the load that failed may be the one holding any other prompt.
+// The next main_loop pass redraws the gameplay view (disk_prompt_redraw_pending).
 .const ALR_PROMPT_ROW = 10
 asset_load_ask_for_disk:
+    lda #1
+    sta disk_prompt_redraw_pending
     lda #COL_WHITE
     sta zp_text_color
     jsr ui_clear_full_screen_safe   // not msg_init: the message history stays

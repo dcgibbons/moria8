@@ -1064,6 +1064,12 @@ def scenario_death_flow(tb: X16Bench) -> None:
     tb.assert_line("wizard_menu2", tb.wizard_menu_open(), "wizard menu did not reopen")
     tb.press("S")
     tb.drain_more()
+    # Whether the summoned creature kills a level-1 character in time follows
+    # the boot-timing RNG (a 5-byte resident shift failed this, 2026-11-07):
+    # 1 HP and poisoned, the next turn's poison damage ends it either way.
+    tb.write_u8(tb.syms["zp_player_hp_lo"], 1)
+    tb.write_u8(tb.syms["zp_player_hp_hi"], 0)
+    tb.write_u8(tb.syms["zp_eff_poison"], 10)
     died = False
     for _ in range(120):
         if tb.screen_has("You have died"):

@@ -1710,7 +1710,8 @@ for bad_wizard_cancel_text in ('.text "Q cancel"', '.text "Q cancels"'):
     if any(bad_wizard_cancel_text in line for line in ui_wizard_mod):
         print(f"Wizard cancel text must not use inconsistent wording: {bad_wizard_cancel_text}")
         raise SystemExit(1)
-if sum(1 for line in ui_wizard_mod if '.text "Q to cancel"' in line) != 3:
+# Two copies since 2026-11-07: wiz_row4_str and wiz_footer_str share one.
+if sum(1 for line in ui_wizard_mod if '.text "Q to cancel"' in line) != 2:
     print("All ui_wizard cancel/footer strings should say: Q to cancel")
     raise SystemExit(1)
 
