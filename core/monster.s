@@ -996,6 +996,9 @@ monster_spawn_level:
     jsr tramp_catalog_place_win
 #elif HAL_PLATFORM_MONSTER_CATALOG
     jsr catalog_place_win_creature
+    // A direct call reaches it only where it is resident: from the C64's
+    // $F000 runtime it ran KERNAL bytes instead (2026-11-07).
+    .assert "catalog_place_win_creature is called directly only below $E000", catalog_place_win_creature < $E000, true
 #endif
     jmp tramp_spawn_special_room_monsters
 

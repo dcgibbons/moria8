@@ -11,7 +11,9 @@
 
 // Win-creature placement (generation only, from DL50) lives in the $F000
 // runtime: the resident image has no room for it.
+#if !HAL_PLATFORM_CATALOG_WIN_TRAMPOLINE   // hal/lifecycle_policy.s defines it first
 #define HAL_PLATFORM_CATALOG_WIN_TRAMPOLINE
+#endif
 .macro CatalogWinBegin() {
     .segment RuntimeBanked
 }
