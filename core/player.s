@@ -96,7 +96,7 @@
 // Player flags
 .const PLF_MALE     = $01
 .const PLF_SEE_INV  = $02
-.const PLF_FREE_ACT = $04
+// $04 is free: Free Action is equipment-derived (player_pflags PFLAG_FREE_ACT)
 .const PLF_SLOW_DIG = $08
 .const PLF_SEARCHING = $10
 .const PLF_RESTING  = $20
@@ -391,12 +391,12 @@ player_recalc_pflags_equipment:
     tax
     lda pf_bit_table,x
 !pcs_pf_none:
-    // Amulet of the Magi also grants see-invisible
+    // Amulet of the Magi also grants see-invisible and Free Action
     ldx #EQUIP_AMULET
     ldy inv_item_id,x
     cpy #ITEM_TYPE_AMULET_MAGI
     bne !pcs_pf_store+
-    ora #PFLAG_SEE_INVIS
+    ora #PFLAG_SEE_INVIS | PFLAG_FREE_ACT
 !pcs_pf_store:
     sta player_pflags
 
@@ -410,9 +410,11 @@ pf_bit_table:
 stat_work: .byte 0
 
 // Persistent equipment-granted effect flags, recomputed by player_calc_stats.
-// PFLAG_RESIST_FIRE: fire breath damage reduced (like the temp resist timer).
-// PFLAG_RESIST_COLD: reserved for cold mitigation (no cold-breath consumer yet).
+// PFLAG_RESIST_FIRE / PFLAG_RESIST_COLD: fire / frost breath damage div 3
+// (like the temp resist timers; monster_breath.s).
 // PFLAG_SPEED and PFLAG_SEE_INVIS are consumed alongside their timed effects.
+// PFLAG_FREE_ACT: Hold Person, the paralysis touch and the chest's gas trap
+// leave the player unaffected.
 player_pflags: .byte 0
 
 #if !HAL_PLATFORM_COMPACT_PLAY_SLOT

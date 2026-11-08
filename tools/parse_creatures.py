@@ -321,6 +321,24 @@ MSF_CONFUSE       = 0x20
 MSF_WOUND_SERIOUS = 0x40
 MSF_FEAR          = 0x80
 
+# cr_spell_chance (2026-11-08, maintainer: "do your limited but faithful
+# version"): bits 0-3 the upstream 1-in-N cast frequency (VMS creature.inc
+# cast_spell: randint(N) = 1 casts), bits 4-6 the breath element, bit 7 Hold
+# Person (core/monster_magic.s). Until then a percentage, int(100 / N).
+MS_FREQ_MASK = 0x0F
+MS_BREATH_SHIFT = 4
+BREATH_KINDS = ((0x080000, 1), (0x100000, 2), (0x200000, 3), (0x400000, 4), (0x800000, 5))  # lightning, gas, acid, frost, fire
+MS_BREATH_ALL = 6               # all five: each cast picks one
+MS_HOLD = 0x80
+
+
+def breath_kind(spell_word):
+    """The breath element of an upstream spell word: 1-5, MS_BREATH_ALL, or 0."""
+    kinds = [kind for bit, kind in BREATH_KINDS if spell_word & bit]
+    assert len(kinds) in (0, 1, 5), hex(spell_word)   # every upstream breather: one element or all five
+    return 0 if not kinds else kinds[0] if len(kinds) == 1 else MS_BREATH_ALL
+
+
 def map_spells(spell_word):
     """Map umoria spell flags to our spell_flags and spell_chance."""
     if spell_word == 0:
@@ -330,8 +348,7 @@ def map_spells(spell_word):
     freq = spell_word & 0x0F
     if freq == 0:
         return 0, 0
-    # Convert to percentage: 100/freq, cap at 100
-    chance = min(100, int(100 / freq)) if freq > 0 else 0
+    chance = freq | (breath_kind(spell_word) << MS_BREATH_SHIFT) | (MS_HOLD if spell_word & 0x000200 else 0)
 
     flags = 0
     # Map spell bits
@@ -340,7 +357,7 @@ def map_spells(spell_word):
     if spell_word & 0x000100:  # Cause serious wound (8d8)
         flags |= MSF_WOUND_SERIOUS
     if spell_word & 0x000200:  # Hold person
-        pass  # Not mapped to our flags
+        pass  # cr_spell_chance bit 7 (MS_HOLD)
     if spell_word & 0x000400:  # Blindness
         flags |= MSF_BLIND
     if spell_word & 0x000800:  # Confusion
@@ -361,9 +378,9 @@ def map_spells(spell_word):
         flags |= MSF_BREATH
 
     # None of the creature's spells exists in Moria8 (blink, teleport self,
-    # hold person, slow, drain mana): no chance either, or monster_can_cast
-    # would spend the turn on a pick with nothing to cast.
-    if flags == 0:
+    # slow, drain mana): no chance either, or monster_can_cast would spend
+    # the turn on a pick with nothing to cast. Hold Person exists.
+    if flags == 0 and not chance & MS_HOLD:
         return 0, 0
 
     return chance, flags
@@ -854,7 +871,7 @@ def print_all(creatures, selected_indices):
         a1 = cr['attacks'][1]
         atk0_str = f"{ATK_NAMES.get(a0['type'],'?')[:6]} {a0['dice']}d{a0['sides']}" if a0['dice'] > 0 else "-"
         atk1_str = f"{ATK_NAMES.get(a1['type'],'?')[:6]} {a1['dice']}d{a1['sides']}" if a1['dice'] > 0 else "-"
-        sp = f"{cr['c64_spell_chance']}%" if cr['c64_spell_chance'] > 0 else "-"
+        sp = f"1/{cr['c64_spell_chance'] & MS_FREQ_MASK}" if cr['c64_spell_chance'] > 0 else "-"
         sel = "*" if i in selected_indices else " "
         print(f"{i:>3}{sel}{cr['dlvl']:>2} {cr['name']:<30} {cr['sprite']:>3} "
               f"{cr['c64_speed']:>3} {cr['hd_num']}d{cr['hd_sides']:<4} {cr['ac']:>3} "
@@ -1012,7 +1029,7 @@ SOA_FIELDS = [
     ("cr_atk1_type",    None,               "Attack 1 type"),
     ("cr_atk1_dice",    None,               "Attack 1 dice count"),
     ("cr_atk1_sides",   None,               "Attack 1 dice sides"),
-    ("cr_spell_chance", "c64_spell_chance",  "Spell chance (0-100)"),
+    ("cr_spell_chance", "c64_spell_chance",  "Spells: 1-in-N frequency (bits 0-3), breath element (4-6), Hold Person (7)"),
     ("cr_spell_flags",  "c64_spell_flags",   "Spell flags bitmask"),
     ("cr_treasure",     "c64_treasure",      "Treasure flags: Umoria CMOVE bits 24-30 (carry obj/gold, 60%, 90%, 1d2, 2d2, 4d2/VMS 4d3)"),
 ]

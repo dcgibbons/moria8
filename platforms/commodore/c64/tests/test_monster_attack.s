@@ -1166,11 +1166,13 @@ test_start:
     // Test 41: no shipped tier4 creature has a spell chance without a spell
     // (tools/parse_creatures.py map_spells: none of the upstream spells maps,
     // e.g. the Banshee and Ghost, VMS spells %X'0001002F' = teleport self and
-    // drain mana, so chance 0; monster_can_cast then never spends a turn)
+    // drain mana, so chance 0; monster_can_cast then never spends a turn).
+    // Hold Person, with no MSF bit, is cr_spell_chance's MS_HOLD.
     ldx #tier4_cr_spell_flags - tier4_cr_spell_chance - 1   // TIER_COUNT - 1
 !t41_loop:
     lda tier4_cr_spell_chance,x
     beq !t41_next+
+    bmi !t41_next+              // Hold Person
     lda tier4_cr_spell_flags,x
     beq !t41_fail+
 !t41_next:

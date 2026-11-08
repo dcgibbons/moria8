@@ -149,6 +149,7 @@
 .const PFLAG_RESIST_COLD = $02
 .const PFLAG_SPEED       = $04
 .const PFLAG_SEE_INVIS   = $08
+.const PFLAG_FREE_ACT    = $10   // Free Action: the Amulet of the Magi (VMS)
 
 // Master Item Type Count
 // Save Format V1 serializes 64 known-item bytes. Do not renumber IDs 0-63.

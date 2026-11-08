@@ -33,12 +33,20 @@
 .segmentdef ChestOverlay      [outPrg=OVL_OUT + "/ovl.chest", start=$e000, min=$e000, max=$efff]
 .segmentdef DungeonGenOverlay [outPrg=OVL_OUT + "/ovl.gen",   start=$e000, min=$e000, max=$efff]
 .segmentdef RuntimeBanked     [outPrg=OVL_OUT + "/4.bank",    start=$f000, min=$f000, max=$fbff]
+// Assembled for free RAM above the catalog index, stored in the init-only tail.
+.segmentdef Plus4HuffIndex    [start=$dd00, max=$deff]   // memory.s HUFF_INDEX_HIDDEN_BASE/END
 
 #import "../common/save_slot_policy.s"
 
 // Huffman data placement: resident on this platform.
 .macro HuffmanDataSegment() {
     .segment Default
+}
+// The Huffman string index lives in free RAM at HUFF_INDEX_HIDDEN_BASE
+// (memory.s; 2026-11-08, for the dragon breath's room), copied there at boot.
+#define HUFFMAN_INDEX_EXTERNAL
+.macro HuffmanIndexSegment() {
+    .segment Plus4HuffIndex
 }
 
 // Cast/pray cores stay resident on this platform.
@@ -715,6 +723,7 @@ entry_main:
 
     // Load banked runtime payload to $F000 before any $F000 trampoline calls.
     jsr init_load_banked
+    jsr plus4_huff_index_install    // before any message
 
     jsr generation_busy_install
     jsr plus4_platform_services_install
@@ -2156,6 +2165,25 @@ init_load_banked:
     lda plus4_color_attr + COL_RED
     sta TED_BORDER
     jmp !load_failed-
+
+// plus4_huff_index_install — The Huffman string index to its RAM span.
+plus4_huff_index_install:
+    ldx #0
+!phii_copy:
+    lda huff_index_stage,x
+    sta HUFF_INDEX_HIDDEN_BASE,x
+    lda huff_index_stage + $100,x
+    sta HUFF_INDEX_HIDDEN_BASE + $100,x
+    inx
+    bne !phii_copy-
+    rts
+huff_index_stage:
+    .segmentout [segments="Plus4HuffIndex"]
+huff_index_stage_end:
+.assert "The Huffman index fits its two staged pages", huff_index_stage_end - huff_index_stage <= $200, true
+.assert "The Huffman index's stage is the index", huff_index_stage_end - huff_index_stage, huff_str_index_end - huff_str_index
+.assert "The Huffman index starts its RAM span", huff_str_index == HUFF_INDEX_HIDDEN_BASE && HUFF_INDEX_HIDDEN_BASE == $dd00 && HUFF_INDEX_HIDDEN_END == $deff, true
+.assert "The Huffman index install lives in the init-only tail", plus4_huff_index_install >= program_end, true
 
 #if HAL_PLATFORM_CATALOG_RECORDS
 // MONSTER.IDX loads past the init-only tail at boot (catalog_boot_load).

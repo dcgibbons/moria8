@@ -22,9 +22,12 @@
 #import "recall_array_data.s"
 #endif
 
-// Spell bit lookup table (7 entries, indexed by spell position 0-6)
+// Spell bit lookup table, indexed by spell handler (monster_magic.s): the
+// eight MSF bits, then Hold Person, which has no bit of its own and marks
+// bit 0 (recall shows only SPELLS: YES / NONE, ui_recall.s).
 recall_spell_bit:
     .byte 1, 2, 4, 8, 16, 32, 64, 128
+    .byte 1
 
 // ============================================================
 // recall_clear — Zero all recall data

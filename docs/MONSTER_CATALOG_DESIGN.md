@@ -105,13 +105,13 @@ table and the name block never shift. Which creatures spawn (maintainer,
 | Creature levels | Plays |
 | --- | --- |
 | 0 (town) | 8 of 8 |
-| 1-5 | 60 of 65 |
-| 6-10 | 37 of 40 |
-| 11-20 | 57 of 65 |
-| 21-30 | 46 of 49 |
-| 31-40 | 43 of 50 |
+| 1-5 | 63 of 65 |
+| 6-10 | 40 of 40 |
+| 11-20 | 61 of 65 |
+| 21-30 | 48 of 49 |
+| 31-40 | 47 of 50 |
 | 41-100 | 2 of 2 (Evil Iggy, the Balrog) |
-| **All** | **266 of 279** (130 with degraded abilities) |
+| **All** | **269 of 279** (113 with degraded abilities; 2026-11-08, after every breath element and Hold Person; the White Dragon Bat, Giant Black Dragon Fly and Blue Dragon Bat joined) |
 
 Kept, degraded (in today's game with most abilities missing; maintainer,
 2026-11-02: "keep all"): Blubbering Icky-Thing, Poltergeist, Radiation Eye,

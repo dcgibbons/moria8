@@ -29,12 +29,17 @@
 .const CATALOG_NAME_POOL_BASE = PLATFORM_TIER_NAME_POOL_BASE
 .const CATALOG_NAME_POOL_END  = $dbff
 .const CATALOG_HIDDEN_BASE    = CATALOG_NAME_POOL_END + 1
-.const CATALOG_HIDDEN_END     = PLATFORM_TIER_NAME_POOL_END
+.const CATALOG_HIDDEN_END     = $dcff
+// The rest of that span (2026-11-08): the Huffman string index, copied there
+// at boot (main.s plus4_huff_index_install) and read directly, RAM being
+// visible in play. Two pages are copied, so the span is two pages.
+.const HUFF_INDEX_HIDDEN_BASE = CATALOG_HIDDEN_END + 1
+.const HUFF_INDEX_HIDDEN_END  = $deff
 // MONSTER.IDX's boot buffer: the map's last page, unused until the first
 // level, past the init-only tail; the $E000 window holds the title's overlay.
 .const CATALOG_IDX_LOAD       = $d600
 .assert "MONSTER.IDX's boot buffer is in the map", CATALOG_IDX_LOAD >= MAP_BASE && CATALOG_IDX_LOAD + $ff <= MAP_END, true
-.assert "Catalog hidden spans tile the old tier name pool", CATALOG_HIDDEN_END, PLATFORM_TIER_NAME_POOL_END
+.assert "Catalog hidden span, then the Huffman index, lie in the old tier name pool", HUFF_INDEX_HIDDEN_BASE == CATALOG_HIDDEN_END + 1 && HUFF_INDEX_HIDDEN_END <= PLATFORM_TIER_NAME_POOL_END, true
 .const BANKED_DATA_BASE = $e000
 .const BANKED_DATA_END  = $ffff
 .const BANK1_DB_BASE    = $e000

@@ -20,6 +20,12 @@
 #define PLATFORM_PRODUCT_OVERLAY_RUNTIME
 #define C64_PRODUCT_IRQ_VECTOR_RUNTIME
 #define PLATFORM_PRODUCT_IRQ_VECTOR_RUNTIME
+// The Huffman string index lives in RAM under I/O (memory.s
+// HUFF_INDEX_HIDDEN_BASE; 2026-11-08, for the dragon breath's room):
+// platform_services_install64 copies it there at boot, hal_huff_index_word
+// reads it.
+#define HUFFMAN_INDEX_EXTERNAL
+#define HAL_PLATFORM_HUFFMAN_INDEX_HIDDEN
 .if (!cmdLineVars.containsKey("OVL_OUT")) {
     .error "OVL_OUT is required; generated files belong under build/"
 }
@@ -35,13 +41,18 @@
 .segmentdef ChestOverlay      [outPrg=OVL_OUT + "/ovl.chest", start=$e000, min=$e000, max=$efff]
 .segmentdef DungeonGenOverlay [outPrg=OVL_OUT + "/ovl.gen",   start=$e000, min=$e000, max=$efff]
 .segmentdef RuntimeBanked     [outPrg=OVL_OUT + "/64.bank",   start=$f000, min=$f000, max=$fffa]
+// Assembled for RAM under I/O, stored in the init-only tail (.segmentout).
+.segmentdef C64HuffIndex      [start=$d800, max=$d9ff]   // memory.s HUFF_INDEX_HIDDEN_BASE/END
 
 #import "hal/storage_policy.s"
 #import "../common/save_slot_policy.s"
 
-// Huffman data placement: resident on this platform.
+// Huffman data placement: resident on this platform, but for the index.
 .macro HuffmanDataSegment() {
     .segment Default
+}
+.macro HuffmanIndexSegment() {
+    .segment C64HuffIndex
 }
 
 // Cast/pray cores stay resident on this platform.
@@ -445,6 +456,34 @@ tramp_dig_ability:
 #import "../../../core/stat_display.s"
 #import "../../../core/sound.s"
 #import "../../../core/huffman.s"
+
+// hal_huff_index_word — Entry X of the Huffman string index, in RAM under
+// I/O: A = offset lo, Y = offset hi. Keeps the caller's banking and
+// interrupt state. Clobbers: X
+hal_huff_index_word:
+    txa
+    asl
+    tax                         // C = entry 128 or above
+    php
+    sei
+    lda hal_memory_cpu_port
+    pha
+    lda #BANK_ALL_RAM
+    sta hal_memory_cpu_port
+    bcs !hhiw_hi+
+    ldy huff_str_index + 1,x
+    lda huff_str_index,x
+    bcc !hhiw_done+             // Always (C clear)
+!hhiw_hi:
+    ldy huff_str_index + 257,x
+    lda huff_str_index + 256,x
+!hhiw_done:
+    tax
+    pla
+    sta hal_memory_cpu_port
+    plp
+    txa
+    rts
 #import "../../../core/dungeon_data.s"
 // The jam command handler parks in the items overlay with the other
 // directional action commands (resident budget).
@@ -2241,6 +2280,24 @@ program_end:
 // exists). Lives in the init-only tail so the resident runtime image keeps
 // room for the chest routing trampolines.
 platform_services_install64:
+    // The Huffman string index into RAM under I/O, before any message
+    php
+    sei
+    lda hal_memory_cpu_port
+    pha
+    lda #BANK_ALL_RAM
+    sta hal_memory_cpu_port
+    ldx #0
+!psi_index:
+    lda huff_index_stage,x
+    sta HUFF_INDEX_HIDDEN_BASE,x
+    lda huff_index_stage + $100,x
+    sta HUFF_INDEX_HIDDEN_BASE + $100,x
+    inx
+    bne !psi_index-
+    pla
+    sta hal_memory_cpu_port
+    plp
     lda #$4c
     sta platform_main_loop_begin_api
     sta platform_vector_reassert_api
@@ -2666,6 +2723,15 @@ init_load_banked:
 c64_banked_fname:
     .byte $36,$34,$2e,$42,$41,$4e,$4b  // "64.BANK" in PETSCII/ASCII bytes
 .label c64_banked_fname_len = * - c64_banked_fname
+
+// The Huffman string index's bytes, copied to RAM under I/O at boot.
+huff_index_stage:
+    .segmentout [segments="C64HuffIndex"]
+huff_index_stage_end:
+.assert "The Huffman index fits its two staged pages", huff_index_stage_end - huff_index_stage <= $200, true
+.assert "The Huffman index's stage is the index", huff_index_stage_end - huff_index_stage, huff_str_index_end - huff_str_index
+.assert "The Huffman index starts its hidden span", huff_str_index, HUFF_INDEX_HIDDEN_BASE
+.assert "C64HuffIndex is memory.s's hidden span", HUFF_INDEX_HIDDEN_BASE == $d800 && HUFF_INDEX_HIDDEN_END == $d9ff, true
 
 #if HAL_PLATFORM_CATALOG_RECORDS
 // MONSTER.IDX loads past the init-only tail at boot (catalog_boot_load).

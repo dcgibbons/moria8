@@ -28,7 +28,11 @@ Sorry, what was that again?
 
 # ===== Monster magic strings (Pattern B) =====
 @MM_CAST  casts a spell.
-@MM_BREATH  breathes fire!
+@MM_BREATH_LIGHTNING  breathes lightning.
+@MM_BREATH_GAS  breathes gas.
+@MM_BREATH_ACID  breathes acid.
+@MM_BREATH_FROST  breathes frost.
+@MM_BREATH_FIRE  breathes fire.
 @MM_SUMMON  summons help!
 @MM_BLIND  blinds you!
 @MM_CONFUSE  confuses you!

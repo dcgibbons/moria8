@@ -5,10 +5,10 @@
 // handlers for monster casters. Called from monster_process_one when
 // the monster is awake, before confused/movement logic.
 //
-// Wound, blind, confuse and fear follow pinned VMS Moria creature.inc
-// cast_spell (spells 8, 9, 11, 12, 13; Umoria monster.cpp is identical): the
+// Wound, Hold Person, blind, confuse and fear follow pinned VMS Moria
+// creature.inc cast_spell (spells 8-13; Umoria monster.cpp is identical): the
 // player first gets a saving throw (player_save.s) with wis_adj + level
-// (ledger MON-011).
+// (ledger MON-011). Breath is spells 20-24 (MON-025).
 
 // ============================================================
 // Spell constants (MSF_* flags defined in monster.s)
@@ -18,6 +18,8 @@
 .const MM_EFF_BLIND   = 0      // mm_effect_* table rows
 .const MM_EFF_CONFUSE = 1
 .const MM_EFF_FEAR    = 2
+.const MM_EFF_HOLD    = 3
+.const MM_SPELL_HOLD  = MM_SPELL_COUNT   // Hold Person's handler, after the MSF bits
 
 #import "los_trace.s"
 #import "player_save.s"
@@ -28,6 +30,9 @@
 mm_flags:      .byte 0         // Available spell flags for current monster
 mm_bit_count:  .byte 0         // Number of set bits (available spells)
 mm_chosen:     .byte 0         // Randomly chosen spell index
+mm_msf_count:  .byte 0         // How many of the choices are MSF bits
+mm_kind:       .byte 0         // Breath element (MS_BREATH_*)
+mm_divisor:    .byte 0         // Breath damage divisor
 
 // ============================================================
 // monster_can_cast — Check if monster wants to cast a spell
@@ -39,11 +44,12 @@ monster_can_cast:
     // Check spell chance — if 0, never casts
     ldx zp_mon_type
     lda cr_spell_chance,x
+    and #MS_FREQ_MASK
     beq !mcc_no+
 !mcc_has_chance:
 
-    // Save spell chance for later roll
-    sta mm_flags              // Reuse as temp for chance
+    // Save the 1-in-N frequency for later roll
+    sta mm_flags              // Reuse as temp for N
 
     jsr monster_distance_to_player
     sta zp_los_step
@@ -63,11 +69,10 @@ monster_can_cast:
     jsr mm_los_clear_to_target
     bcc !mcc_no+
 
-    // LOS is clear — roll to decide if monster casts
-    lda #100
-    jsr rng_range             // [0, 99]
-    cmp mm_flags              // Compare with spell chance
-    bcs !mcc_no+              // roll >= chance → chose melee
+    // LOS is clear: VMS randint(N) = 1 casts
+    lda mm_flags
+    jsr rng_range             // [0, N-1]; Z for A
+    bne !mcc_no+
 
     sec                       // Monster casts
     rts
@@ -100,11 +105,44 @@ monster_pick_spell:
     dex
     bne !mps_count-
 
+    // VMS lists every spell bit as a choice: Hold Person is one more after
+    // the MSF bits, and a Multi-Hued dragon's five breaths are five (its
+    // MSF_BREATH and four more).
+    lda mm_bit_count
+    sta mm_msf_count
+    ldx zp_mon_type
+    lda cr_spell_chance,x
+    asl                       // C = Hold Person; the element in bits 5-7
+    bcc !mps_no_hold+
+    inc mm_bit_count
+!mps_no_hold:
+    and #$e0
+    cmp #MS_BREATH_ALL << (MS_BREATH_SHIFT + 1)
+    bne !mps_one_breath+
+    lda mm_bit_count
+    adc #4 - 1                // C set: four more breaths
+    sta mm_bit_count
+!mps_one_breath:
+
     // Pick random spell index [0, bit_count-1]
     lda mm_bit_count
     beq !mps_done+            // No spells (shouldn't happen)
     jsr rng_range
     sta mm_chosen
+    cmp mm_msf_count
+    bcc !mps_msf+
+    // Past the MSF bits: the first is Hold Person if the caster has it,
+    // the others (or all of them without it) more breaths.
+    bne !mps_breath+          // Not the first past them (Z from the cmp)
+    ldy zp_mon_type
+    lda cr_spell_chance,y
+    bpl !mps_breath+          // No Hold Person: a breath
+    ldx #MM_SPELL_HOLD
+    bne !mps_dispatch+        // Always
+!mps_breath:
+    ldx #1                    // MSF_BREATH's handler
+    bne !mps_dispatch+        // Always
+!mps_msf:
 
     // Walk bits again to find the Nth set bit
     lda mm_flags
@@ -126,7 +164,7 @@ monster_pick_spell:
     rts
 
 !mps_dispatch:
-    // X = bit position (spell index 0-7)
+    // X = handler: the bit position (0-7), or MM_SPELL_HOLD
     // Track spell in recall
 #if HAL_PLATFORM_AUX_PERSISTENT_DATA
     ldy zp_mon_type
@@ -149,11 +187,12 @@ monster_pick_spell:
 // Handlers in cr_spell_flags bit order (MSF_* in monster.s)
 .var mm_spell_handlers = List().add(monster_cast_wound_light, monster_cast_breath,
     monster_cast_summon, monster_cast_teleport, monster_cast_blind,
-    monster_cast_confuse, monster_cast_wound_serious, monster_cast_fear)
+    monster_cast_confuse, monster_cast_wound_serious, monster_cast_fear,
+    monster_cast_hold)
 mm_spell_lo:
-    .fill MM_SPELL_COUNT, <(mm_spell_handlers.get(i) - 1)
+    .fill MM_SPELL_COUNT + 1, <(mm_spell_handlers.get(i) - 1)
 mm_spell_hi:
-    .fill MM_SPELL_COUNT, >(mm_spell_handlers.get(i) - 1)
+    .fill MM_SPELL_COUNT + 1, >(mm_spell_handlers.get(i) - 1)
 
 // ============================================================
 // mm_print_spell_msg — Print "THE <name> <suffix>"
@@ -211,11 +250,23 @@ mm_print_resist:
     jmp huff_print_msg
 
 // ============================================================
-// Spell handlers 5, 6 and 8: blind, confuse, fear (VMS spells 11-13)
-// Saved: "casts a spell." + resist message. Failed: Moria8's effect message
-// (no status-line indicators, MON-011) and the VMS timer: a fresh effect
-// rolls base + randint(sides), an active one is extended by a fixed step.
+// Spell handlers 5, 6, 8 and 9: blind, confuse, fear, Hold Person (VMS
+// spells 11-13 and 10). Saved: "casts a spell." + resist message. Failed:
+// Moria8's effect message (no status-line indicators, MON-011) and the VMS
+// timer: a fresh effect rolls base + randint(sides), an active one is
+// extended by a fixed step. Hold Person first leaves a player with Free
+// Action (the Amulet of the Magi) unaffected.
 // ============================================================
+monster_cast_hold:
+    lda player_pflags
+    and #PFLAG_FREE_ACT
+    beq !mch_held+
+    jsr mm_print_cast_msg
+    ldx #HSTR_CHEST_UNAFFECTED  // VMS "You are unaffected..." (MON-025)
+    jmp huff_print_msg
+!mch_held:
+    ldx #MM_EFF_HOLD
+    .byte $2c                 // BIT abs: skip the next ldx
 monster_cast_blind:
     ldx #MM_EFF_BLIND
     .byte $2c                 // BIT abs: skip the next ldx
@@ -284,24 +335,68 @@ mm_effect_timer:
     adc mm_effect_base,x
     rts
 
-//                    blind          confuse          fear
-mm_effect_msg:   .byte HSTR_MM_BLIND, HSTR_MM_CONFUSE, HSTR_MAT_FEAR
-mm_effect_base:  .byte 12, 3, 3       // VMS: 12+randint(3), randint(5)+3 x2
-mm_effect_sides: .byte 3, 5, 5
-mm_effect_step:  .byte 6, 2, 2        // Extension when already active
-mm_effect_zp:    .byte zp_eff_blind, zp_eff_confuse
+//                    blind          confuse          fear           hold
+mm_effect_msg:   .byte HSTR_MM_BLIND, HSTR_MM_CONFUSE, HSTR_MAT_FEAR, HSTR_MAT_PARALYZE
+mm_effect_base:  .byte 12, 3, 3, 4    // VMS: 12+randint(3), randint(5)+3 x2, randint(5)+4
+mm_effect_sides: .byte 3, 5, 5, 5
+mm_effect_step:  .byte 6, 2, 2, 2     // Extension when already active
+mm_effect_zp:    .byte zp_eff_blind, zp_eff_confuse, 0, zp_eff_paralyze   // fear: eff_fear_timer
+.assert "mm_effect_zp holds zero-page timers", zp_eff_blind < $100 && zp_eff_confuse < $100 && zp_eff_paralyze < $100, true
 
 // ============================================================
-// Spell handler 2: monster_cast_breath
-// Breath does monster HP/3 damage (capped at 255)
+// Spell handler 2: monster_cast_breath (VMS spells 20-24, MON-025)
+// "The <name> breathes lightning." (gas, acid, frost, fire), then the
+// element's damage to the player from dam_hp = the breather's HP / 4 for
+// lightning, / 3 otherwise, 16-bit and uncapped (VMS moria.inc light_dam,
+// poison_gas, acid_dam, cold_dam, fire_dam). Acid: a worn armour piece takes
+// it first (minus_ac) and halves it. Frost and fire: div 3 for the Resist
+// Cold / Fire ring, div 3 again for the potion's timer. Gas: poisoned +
+// 12 + randint(dam). One divide: trunc(trunc(a / b) / c) = trunc(a / bc).
+// Moria8 leaves out the ball's effect on monsters, floor items and doors,
+// and the pack damage (docs/BACKLOG.md, docs/FEATURE_MAP.md).
 // ============================================================
 monster_cast_breath:
-    // Print "THE <name> BREATHES FIRE!"
-    ldx #HSTR_MM_BREATH
+    ldx zp_mon_type
+    lda cr_spell_chance,x
+    lsr
+    lsr
+    lsr
+    lsr
+    and #MS_BREATH_ALL | 1    // Bits 4-6 (Hold Person shifted out of them)
+    cmp #MS_BREATH_ALL
+    bcc !mcb_kind+
+    lda #5                    // Multi-Hued: one of the five
+    jsr rng_range
+    adc #1                    // C clear: 1-5
+!mcb_kind:
+    sta mm_kind
+    tax
+    lda mm_breath_msg - 1,x
+    tax
     jsr huff_decode_to_ptr2
     jsr mm_print_spell_msg
 
-    // Get monster HP (16-bit)
+    ldx mm_kind
+    lda mm_breath_div - 1,x
+    sta mm_divisor
+    cpx #MS_BREATH_ACID
+    bne !mcb_not_acid+
+    jsr mon_atk_acid_armour   // C set: an armour piece was damaged
+    bcc !mcb_divide+
+    asl mm_divisor            // dam div 2
+    bcc !mcb_divide+          // Always (3 x 2)
+!mcb_not_acid:
+    bcc !mcb_divide+          // Lightning, gas: no resistance here
+    lda player_pflags
+    and mm_resist_flag - MS_BREATH_FROST,x
+    beq !mcb_no_ring+
+    jsr mm_triple_divisor
+!mcb_no_ring:
+    ldy mm_resist_timer - MS_BREATH_FROST,x
+    lda $0000,y
+    beq !mcb_divide+
+    jsr mm_triple_divisor
+!mcb_divide:
     ldx zp_mon_idx
     jsr monster_get_ptr
     ldy #MX_HP_LO
@@ -310,41 +405,64 @@ monster_cast_breath:
     ldy #MX_HP_HI
     lda (zp_ptr0),y
     sta zp_math_b
-
-    // HP div 3, then (this path models only fire breath) VMS Moria
-    // fire_dam (moria.inc; Umoria inventory.cpp damageFire): the Resist
-    // Fire ring divides by 3 and the Resist Heat timer by 3 again, so both
-    // together leave dam div 9. Resistance applies before the 8-bit damage
-    // cap. Resist Cold has no cold damage to reduce in Moria8.
-    lda player_pflags
-    and #PFLAG_RESIST_FIRE    // 1 with the ring
-    ldy zp_eff_resist
-    beq !mcb_no_timer+
-    clc
-    adc #1                    // +1 with the timer
-!mcb_no_timer:
-    tay
-    iny                       // Y = 1-3 divides by 3
-!mcb_div3:
-    ldx #3
-    jsr math_div_16x8         // zp_math_a/b = quotient; preserves Y
-    dey
-    bne !mcb_div3-
-
-    // Cap at 255 (if hi byte nonzero)
-    lda zp_math_b
-    beq !mcb_no_cap+
-    lda #255
-    bne !mcb_apply+             // Always
-!mcb_no_cap:
+    ldx mm_divisor
+    jsr math_div_16x8
+    lda mm_kind
+    cmp #MS_BREATH_GAS
+    bne !mcb_take+
+    // Gas: poisoned + 12 + randint(dam) (randint(0) is 1 upstream), the
+    // 8-bit timer saturating
     lda zp_math_a
-!mcb_apply:
-    // Fall through
-.assert "monster_cast_breath counts PFLAG_RESIST_FIRE as 1", PFLAG_RESIST_FIRE, 1
+    sta zp_temp0
+    ldx zp_math_b
+    stx zp_temp1
+    ora zp_math_b
+    bne !mcb_gas_roll+
+    inc zp_temp0
+!mcb_gas_roll:
+    jsr rng_range_word        // zp_temp2/3 = randint(dam) - 1
+    lda zp_temp3
+    bne !mcb_gas_max+
+    lda zp_temp2
+    clc
+    adc #13
+    bcs !mcb_gas_max+
+    adc zp_eff_poison
+    bcc !mcb_gas_set+
+!mcb_gas_max:
+    lda #255
+!mcb_gas_set:
+    sta zp_eff_poison
+!mcb_take:
+    lda zp_math_a
+    ldx zp_math_b
+    jmp mm_apply_spell_damage_16
 
+// mm_triple_divisor — mm_divisor x 3 (at most 3 x 3 x 3). Clobbers: A
+mm_triple_divisor:
+    lda mm_divisor
+    asl
+    adc mm_divisor            // C clear: the divisor is under 128
+    sta mm_divisor
+    rts
+
+// By element (MS_BREATH_LIGHTNING = 1 .. MS_BREATH_FIRE = 5)
+mm_breath_msg:
+    .byte HSTR_MM_BREATH_LIGHTNING, HSTR_MM_BREATH_GAS, HSTR_MM_BREATH_ACID
+    .byte HSTR_MM_BREATH_FROST, HSTR_MM_BREATH_FIRE
+mm_breath_div:   .byte 4, 3, 3, 3, 3
+mm_resist_flag:  .byte PFLAG_RESIST_COLD, PFLAG_RESIST_FIRE
+mm_resist_timer: .byte eff_resist_cold_timer, zp_eff_resist
+.assert "Breath tables follow the elements", MS_BREATH_LIGHTNING == 1 && MS_BREATH_GAS == 2 && MS_BREATH_ACID == 3 && MS_BREATH_FROST == 4 && MS_BREATH_FIRE == 5, true
+.assert "Resist timers are zero-page", eff_resist_cold_timer < $100 && zp_eff_resist < $100, true
+
+// mm_apply_spell_damage — A = damage; mm_apply_spell_damage_16: A = lo, X = hi
 mm_apply_spell_damage:
+    ldx #0
+mm_apply_spell_damage_16:
     sta zp_combat_dmg
-    jsr mon_atk_apply_damage
+    stx mad_dmg_hi
+    jsr mon_atk_apply_damage_16
     bcs !masd_dead+
     lda #SFX_HIT
     jmp hal_sound_play

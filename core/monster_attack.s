@@ -248,10 +248,14 @@ mon_atk_roll_tohit:
     rts
 
 // mon_atk_apply_damage — Subtract damage from player HP
-// Input: zp_combat_dmg = damage amount (already reduced)
+// Input: zp_combat_dmg = damage amount (already reduced); the _16 entry
+// takes the high byte in mad_dmg_hi (monster breath is uncapped).
 // Output: carry set = player dead
 // Clobbers: A
 mon_atk_apply_damage:
+    lda #0
+    sta mad_dmg_hi
+mon_atk_apply_damage_16:
     lda eff_invuln_timer
     beq !mad_apply+
     clc
@@ -265,7 +269,7 @@ mon_atk_apply_damage:
     sta player_data + PL_HP_LO
 
     lda zp_player_hp_hi
-    sbc #0
+    sbc mad_dmg_hi
     sta zp_player_hp_hi
     sta player_data + PL_HP_HI
 
@@ -281,6 +285,8 @@ mon_atk_apply_damage:
 !mad_dead:
     sec                         // Dead
     rts
+
+mad_dmg_hi: .byte 0
 
 // mon_atk_ac_reduce — AC damage reduction for normal attacks
 // damage -= (player_AC * damage) / 200
@@ -470,6 +476,13 @@ mon_atk_effect_paralyze:
     jsr player_con_hp_adj       // VMS con_adj
     jsr player_saving_throw
     bcc !mepa_resist+           // Saved → resist
+    // Free Action (the Amulet of the Magi): VMS "You are unaffected."
+    lda player_pflags
+    and #PFLAG_FREE_ACT
+    beq !mepa_held+
+    ldx #HSTR_CHEST_UNAFFECTED
+    jmp huff_print_msg
+!mepa_held:
 
     // Failed save — set paralysis timer (umoria: randomNumber(level) + 3)
     // rng_range(level) gives [0, level-1], + 4 gives [4, level+3]

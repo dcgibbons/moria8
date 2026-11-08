@@ -239,8 +239,8 @@ chest_trigger_traps:
     beq !ctt_no_para+
     ldx #HSTR_CHEST_GAS
     jsr huff_print_msg
-    lda player_data + PL_FLAGS
-    and #PLF_FREE_ACT
+    lda player_pflags
+    and #PFLAG_FREE_ACT
     beq !ctt_para_apply+
     ldx #HSTR_CHEST_UNAFFECTED
     jsr huff_print_msg

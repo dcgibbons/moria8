@@ -123,6 +123,17 @@ hd_tree_right_ptr: .word huff_tree_right
 // Clobbers: A, X, Y, zp_ptr0/zp_ptr0_hi
 // ============================================================
 huff_decode_string:
+#if HAL_PLATFORM_HUFFMAN_INDEX_HIDDEN
+    // The index lives where the decoder cannot read it directly (C64: RAM
+    // under I/O): the port's hal_huff_index_word reads entry X.
+    jsr hal_huff_index_word     // A = offset lo, Y = offset hi
+    clc
+    adc #<huff_str_data
+    sta zp_ptr0
+    tya
+    adc #>huff_str_data
+    sta zp_ptr0_hi
+#else
     // Look up 16-bit byte offset from index table
     // X*2 may exceed 255 for string IDs >= 128, so branch on carry
     txa
@@ -161,6 +172,7 @@ huff_decode_string:
 #endif
     adc #>huff_str_data
     sta zp_ptr0_hi
+#endif
     // Fall through
 
 // ============================================================

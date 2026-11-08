@@ -4171,7 +4171,7 @@ c128_player_recalc_pflags:
     ldy inv_item_id,x
     cpy #ITEM_TYPE_AMULET_MAGI
     bne !c128_pf_store+
-    ora #PFLAG_SEE_INVIS
+    ora #PFLAG_SEE_INVIS | PFLAG_FREE_ACT
 !c128_pf_store:
     sta player_pflags
     rts

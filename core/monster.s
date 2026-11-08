@@ -72,6 +72,18 @@
 .const MSF_WOUND_SERIOUS = $40 // Bit 6: Cause Serious Wounds (8d8, save)
 .const MSF_FEAR          = $80 // Bit 7: cause fear (save)
 
+// cr_spell_chance (tools/parse_creatures.py map_spells): the upstream 1-in-N
+// cast frequency, the breath element and Hold Person, which has no MSF bit.
+.const MS_FREQ_MASK       = $0f // Bits 0-3: casts when randint(N) = 1 (VMS)
+.const MS_BREATH_SHIFT    = 4   // Bits 4-6: the breath element, with MSF_BREATH
+.const MS_BREATH_LIGHTNING = 1
+.const MS_BREATH_GAS      = 2
+.const MS_BREATH_ACID     = 3
+.const MS_BREATH_FROST    = 4
+.const MS_BREATH_FIRE     = 5
+.const MS_BREATH_ALL      = 6   // Multi-Hued: each breath picks one of the five
+.const MS_HOLD            = $80 // Bit 7: Hold Person (VMS spell 10)
+
 // ============================================================
 // Active creature buffers — Struct-of-Arrays (65 entries)
 //
@@ -318,12 +330,12 @@ cr_atk1_sides:
 #endif
     .fill 8, 0                                               // 57-64: town
 
-// Spell chance (probability out of 100 that monster casts instead of melee)
+// Spells: 1-in-N frequency, breath element, Hold Person (MS_* above)
 cr_spell_chance:
 #if COMPILE_EMBEDDED_DUNGEON_TEST_ROSTER
     .byte  0,  0,  0,  0,  0,  0,  0,  0,  0,  0           // 0-9
     .byte  0,  0,  0,  0,  0,  0,  0,  0,  0,  0           // 10-19
-    .byte 30,  0, 40, 35, 25, 35                            // 20-25
+    .byte 3, 0, 2, 3, 4 | MS_BREATH_FIRE << MS_BREATH_SHIFT, 3   // 20-25 (24: Giant salamander)
     .fill MAX_DUNGEON_CREATURES - 26, 0                    // 26-56
 #else
     .fill MAX_DUNGEON_CREATURES, 0                          // 0-56: loaded from tier data

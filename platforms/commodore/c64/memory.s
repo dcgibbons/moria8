@@ -47,6 +47,12 @@
 .assert "MONSTER.IDX's boot buffer is in the map", CATALOG_IDX_LOAD >= MAP_BASE && CATALOG_IDX_LOAD + $ff <= MAP_END, true
 .assert "Catalog hidden spans tile the old tier name pool", CATALOG_HIDDEN_END, PLATFORM_TIER_NAME_POOL_END
 .const C64_TIER_NAME_POOL_BASE = PLATFORM_TIER_NAME_POOL_BASE // Legacy C64 tests
+// RAM under color RAM and the CIAs (2026-11-08): the Huffman string index
+// (main.s; read by hal_huff_index_word, copied there at boot). Two pages
+// are copied, so the span is two pages.
+.const HUFF_INDEX_HIDDEN_BASE = $d800
+.const HUFF_INDEX_HIDDEN_END  = $d9ff
+.assert "The Huffman index's span follows the tier name pool", HUFF_INDEX_HIDDEN_BASE, PLATFORM_TIER_NAME_POOL_END + 1
 .const C64_TIER_NAME_POOL_END  = PLATFORM_TIER_NAME_POOL_END
 .const BANKED_DATA_BASE = $e000 // Item tiers, recall, spells (under KERNAL ROM)
 .const BANKED_DATA_END  = $ffff

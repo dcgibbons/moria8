@@ -11,7 +11,7 @@
 cat_level_raw:      // creatures per level 0-40, win creatures excluded (VMS m_level before summing)
     .byte $08, $0b, $0f, $0f, $0a, $0e, $08, $09, $06, $09, $08, $05, $0a, $07, $08, $0a, $07, $04, $03, $07, $04, $04, $05, $06, $04, $05, $06, $04, $03, $06, $06, $05, $04, $04, $05, $06, $06, $05, $04, $05, $06
 cat_level_playable: // the same, playable creatures only
-    .byte $08, $0b, $0f, $0f, $0a, $0c, $08, $09, $06, $09, $08, $05, $08, $07, $07, $0a, $07, $04, $03, $05, $03, $03, $05, $06, $04, $05, $06, $04, $03, $06, $05, $04, $04, $04, $05, $05, $06, $05, $04, $05, $05
+    .byte $08, $0b, $0f, $0f, $0a, $0c, $08, $09, $06, $09, $08, $05, $08, $07, $08, $0a, $07, $04, $03, $05, $04, $04, $05, $06, $04, $05, $06, $04, $03, $06, $05, $04, $04, $04, $05, $05, $06, $05, $04, $05, $05
 cat_available:      // bit i%8 of byte i/8: creature i spawns
-    .byte $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ef, $f7, $ff, $ff, $ff, $ff, $ff, $7f, $bf, $ff, $df, $ff, $ff, $ff, $fc, $f6, $ff, $ff, $ff, $ff, $ff, $7b, $ff, $ff, $fd, $ff, $ff, $7e
+    .byte $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ef, $f7, $ff, $ff, $ff, $ff, $ff, $7f, $bf, $ff, $ff, $ff, $ff, $ff, $fc, $ff, $ff, $ff, $ff, $ff, $ff, $7b, $ff, $ff, $fd, $ff, $ff, $7e
 catalog_index_end:

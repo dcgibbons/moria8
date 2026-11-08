@@ -88,7 +88,7 @@ tier0_cr_atk1_dice:
 tier0_cr_atk1_sides:
     .byte $00, $00, $00, $00, $00, $00, $00, $00
 
-// Spell chance (0-100)
+// Spells: 1-in-N frequency (bits 0-3), breath element (4-6), Hold Person (7)
 tier0_cr_spell_chance:
     .byte $00, $00, $00, $00, $00, $00, $00, $00
 

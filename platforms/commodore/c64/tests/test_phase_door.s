@@ -71,7 +71,16 @@ test_finish:
 #import "../../common/overlay.s"
 #import "../../../../core/monster_ai.s"
 #import "../../../../core/recall.s"
+// Monster spells are not exercised here (no monster turn runs): out of the
+// way above the I/O hole, as player_create is (the faithful dragon breath of
+// 2026-11-08 took the body past MAP_BASE). Their imports, the shared saving
+// throw and line of sight, stay below.
+#import "../../../../core/los_trace.s"
+#import "../../../../core/player_save.s"
+.segmentdef TestMonsterMagic [start=$E100]
+.segment TestMonsterMagic
 #import "../../../../core/monster_magic.s"
+.segment Default
 #import "../../../../core/item.s"
 #import "../../../../core/special_rooms.s"
 #import "../../../../core/ego_items.s"

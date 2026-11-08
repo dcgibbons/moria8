@@ -4835,6 +4835,17 @@ test_start:
     sta $0278
     sta $0279
     sta $027a
+    // A real trap each trial, as test 38's: trap_do_rockfall takes trap
+    // index X and turns that square to rubble. With X and the table left as
+    // they were, it read a stale entry and wrote rubble through an
+    // out-of-range map row, over this test's exit code once the layout moved
+    // (2026-11-08).
+    ldx #1
+    stx trap_count
+    lda #T38_TRAP_X
+    sta trap_x
+    sta trap_y
+    dex
     jsr trap_do_rockfall
     lda zp_player_hp_hi
     bne !t67_fail+

@@ -109,7 +109,10 @@ monster_attack_player:
 player_update_hunger_state:
     sec
     rts
+mad_dmg_hi: .byte 0               // the 16-bit damage entry's high byte (monster_attack.s)
 mon_atk_apply_damage:
+mon_atk_apply_damage_16:
+mon_atk_acid_armour:
     clc
     rts
 player_death_check:

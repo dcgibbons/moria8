@@ -127,6 +127,8 @@ cmb_term_and_print:
 player_death_check:
 monster_attack_player:
 mon_atk_apply_damage:
+mon_atk_apply_damage_16:
+mon_atk_acid_armour:
 viewport_update:
 render_viewport:
 player_update_hunger_state:
@@ -139,6 +141,7 @@ combat_award_xp:
 combat_check_levelup:
 combat_note_kill:
     rts
+mad_dmg_hi: .byte 0               // the 16-bit damage entry's high byte (monster_attack.s)
 
 player_get_infra_range:
     lda #0

@@ -40,7 +40,8 @@ SUPPORTED_SPELLS = (0x0000000F                              # cast frequency
                     | 0x00000080 | 0x00000100               # cause light, serious wounds
                     | 0x00000400 | 0x00000800 | 0x00001000  # blindness, confusion, fear
                     | 0x00002000 | 0x00004000               # summon monster, undead
-                    | 0x00800000)                           # fire breath
+                    | 0x00000200                            # hold person (cr_spell_chance bit 7)
+                    | 0x00F80000)                           # breath: lightning, gas, acid, frost, fire
 SUPPORTED_CMOVE = (0x00000001 | 0x00000002 | 0x00000004     # attack only, normal move, only magic
                    | 0x00000038                             # 20/40/75% random move
                    | 0x00020000 | 0x00200000                # open doors, multiply
