@@ -274,6 +274,20 @@ def ranged_kinds() -> frozenset[tuple[str, int]]:
                      if chance)
 
 
+ATK_PARALYZE = 11   # core/monster.s: the paralysing touch or gaze (mon_atk_effect_paralyze)
+
+
+@lru_cache(maxsize=1)
+def touch_paralyzers() -> frozenset[str]:
+    """Names of the shipped creatures whose blows paralyse (the Floating
+    Eye's gaze, the Iridescent Beetle's bite): its melee reach is the danger.
+    A Hold Person caster's "paralyzes you." reads the same, from any range
+    (monster_cast_hold), so walking out of its reach does nothing."""
+    return frozenset(name for names, tables in _tiers()
+                     for name, a, b in zip(names, tables["atk0_type"], tables["atk1_type"])
+                     if ATK_PARALYZE in (a, b))
+
+
 def casts(glyph: str, level: int) -> bool:
     return (glyph, level) in ranged_kinds()
 

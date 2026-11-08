@@ -1685,6 +1685,47 @@ class ResistFireTest(unittest.TestCase):
         view.creatures = {(16, 10): Creature(*other)}
         self.assertIsNone(brain.resist_fire(o, view))
 
+    def test_each_breather_is_resisted_by_its_own_element(self) -> None:
+        """Review 2026-11-08: one lightning breather in view (or remembered)
+        made the worst breath unresistable, and a fire breath that resisting
+        cut to a third went unresisted; frost is resisted by the Resist Cold
+        potion, and its ring is worth the Resist Fire ring."""
+        from moria_playtest.brain import BLACK_MARKET, RESIST_COLD
+        from moria_playtest.goals import for_character
+        from moria_playtest.magic import RESIST_HEAT_COLD
+        brain = Brain(for_character(GOALS["deep"], "half-troll-priest"))
+        brain.magic.caster = lambda obs: True                          # type: ignore[method-assign]
+        brain.magic.can = lambda obs, name: name == RESIST_HEAT_COLD   # type: ignore[method-assign]
+        infos = knowledge.breath_info()
+        fire = max((k for k, (b, e, _) in infos.items() if e == {"fire"} and b < 245), key=lambda k: infos[k][0])
+        bolt = max((k for k, (b, e, _) in infos.items() if e == {"lightning"}), key=lambda k: infos[k][0])
+        view = town_view((10, 10), (40, 40), dlvl=31)
+        view.creatures = {(16, 10): Creature(*fire), (18, 10): Creature(*bolt)}
+        o = command_obs(pos=(10, 10), dlvl=31, clvl=38, hp=400, mhp=400)   # the bolt survivable
+        self.assertLess(brain.turn_burst(Creature(*bolt), o), 0.9 * o.hp)
+        self.assertIn(RESIST_HEAT_COLD, brain.resist_fire(o, view).reason)
+        # The same out of sight, both remembered on a deadly level
+        brain.note_breathers(o, view)
+        self.assertEqual(set(brain.level.breathers), {frozenset({"fire"}), frozenset({"lightning"}), frozenset()}
+                         if infos[fire][2] or infos[bolt][2] else {frozenset({"fire"}), frozenset({"lightning"})})
+        brain.level.deadly = (16, 10)
+        self.assertIn(RESIST_HEAT_COLD, brain.resist_fire(o, town_view((10, 10), (40, 40), dlvl=31)).reason)
+        # Frost: the Resist Cold potion, not Resist Heat
+        brain.level = type(brain.level)()
+        brain.magic.can = lambda obs, name: False                      # type: ignore[method-assign]
+        frost = max((k for k, (b, e, _) in infos.items() if e == {"frost"} and b < 245), key=lambda k: infos[k][0])
+        view.creatures = {(16, 10): Creature(*frost)}
+        brain.resist_heat = 2
+        self.assertIsNone(brain.resist_fire(o, view))
+        brain.resist_cold = 2
+        self.assertEqual(brain.resist_fire(o, view).reason,
+                         f"a breath of {brain.turn_burst(Creature(*frost), o)} in view: drink Resist Cold")
+        self.assertEqual(brain.picking, RESIST_COLD)
+        # Bought rich at the Black Market from SCOUT_FROM deep, as Resist Heat
+        brain.max_dlvl, brain.resist_cold, brain.at_store = 31, 0, BLACK_MARKET
+        self.assertIn(RESIST_COLD, brain.shopping_list(100000))
+        self.assertEqual(brain.jewel_value("Ring of Resist Cold"), brain.jewel_value("Ring of Resist Fire"))
+
     def test_a_fast_breather_lethal_in_two_resisted_breaths_is_escaped(self) -> None:
         """2026-11-08 review: at 100 HP the bot prayed Resist Heat and Cold
         at an Ancient White Dragon, one resisted breath 78, but it breathes
@@ -1735,7 +1776,7 @@ class ResistFireTest(unittest.TestCase):
         brain.note_breath(o, town_view((10, 10), (40, 40), dlvl=32), 50, "fire")
         self.assertEqual(brain.level.breath[1], 150)
         self.assertEqual(brain.level.breather[1], 150)
-        self.assertEqual(brain.level.breather_elements, {"fire"})
+        self.assertEqual(brain.level.breathers, {frozenset({"fire"}): (o.step, 150)})
         brain.level.breath = brain.level.breather = None
         brain.note_breath(o, town_view((10, 10), (40, 40), dlvl=32), 50, "acid")   # acid: nothing resists it
         self.assertEqual(brain.level.breath[1], 50)
@@ -1746,7 +1787,8 @@ class ResistFireTest(unittest.TestCase):
         from moria_playtest.brain import BREATHER_MEMORY, Decision
         brain = Brain(GOALS["deep"])
         kind = max(knowledge.spell_burst().items(), key=lambda kv: kv[1])[0]
-        worst = knowledge.spell_burst()[kind]
+        # A turn's worth: a fast breather breathes twice (review, 2026-11-08)
+        worst = int(knowledge.spell_burst()[kind] * max(1.0, knowledge.moves().get(kind, 1.0)))
         seen = town_view((10, 10), (40, 40), dlvl=31)
         seen.creatures = {(16, 10): Creature(*kind)}
         brain.note_breathers(command_obs(pos=(10, 10), dlvl=31, clvl=35, hp=250, mhp=252), seen)
@@ -1786,7 +1828,7 @@ class ResistFireTest(unittest.TestCase):
         brain.magic.can = lambda obs, name: name == RESIST_HEAT_COLD   # type: ignore[method-assign]
         o = command_obs(pos=(10, 10), dlvl=31, clvl=36, hp=259, mhp=259)
         brain.level.deadly, brain.level.breather = (30, 10), (o.step, 234)
-        brain.level.breather_elements = frozenset({"fire"})
+        brain.level.breathers = {frozenset({"fire"}): (o.step, 234)}
         view = town_view((10, 10), (40, 40), dlvl=31)                 # nothing in view
         self.assertIn(RESIST_HEAT_COLD, brain.resist_fire(o, view).reason)
 
@@ -1911,6 +1953,20 @@ class ParalyzerTest(unittest.TestCase):
         step = {v: k for k, v in DIRS.items()}[decision.key]
         from moria_playtest.brain import chebyshev
         self.assertGreater(chebyshev((10 + step[0], 10 + step[1]), (11, 10)), 1)
+        brain.jewel_names["Amulet"] = "Amulet of the Magi"           # Free Action: no blow paralyses
+        self.assertIsNone(brain.shake_paralyzer(o, view))
+
+    def test_a_hold_person_caster_is_not_a_touch_paralyser(self) -> None:
+        """Review 2026-11-08: Hold Person's "paralyzes you." comes from any
+        range (monster_cast_hold); fleeing its glyph's neighbours did nothing."""
+        self.assertIn("Iridescent Beetle", knowledge.touch_paralyzers())
+        self.assertNotIn("Sorcerer", knowledge.touch_paralyzers())
+        brain = Brain(GOALS["deep"])
+        more = command_obs(pos=(10, 10), dlvl=31, clvl=35, hp=67, mhp=253,
+                           rows={0: "the Sorcerer paralyzes you. -more-"})
+        more.mode, more.stage = Mode.DISMISS, "more"
+        brain.decide(more, None)
+        self.assertEqual(brain.paralyzers, set())
 
 
 class BlockerMassTest(unittest.TestCase):
