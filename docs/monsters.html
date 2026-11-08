@@ -306,7 +306,7 @@ const ATK_INFO = {
 // Spell flags (core/monster.s, core/monster_magic.s).
 const SPELL_BITS = [
   {mask: 0x01, name: "Cause Light Wounds",   short: "CLW (3d8)",     dmg: 24, desc: "3d8 direct wound (player saving throw reduces effect)"},
-  {mask: 0x02, name: "Breath Attack",        short: "Breath (HP/3)", dmg: -1, desc: "Breathes fire for 1/3 of the creature's current HP, at most 255 (ignores AC; Resist Fire and Resist Heat each divide by 3)"},
+  {mask: 0x02, name: "Breath Attack",        short: "Breath (HP/3)", dmg: -1, desc: "Breathes its element for 1/3 of the creature's current HP (lightning 1/4), uncapped, ignoring AC: fire is divided by 3 for the Ring of Resist Fire and again for Resist Heat, frost likewise by Resist Cold; acid is halved when it damages a worn armour piece; gas also poisons"},
   {mask: 0x04, name: "Summon Monster",       short: "Summon",        dmg: 0,  desc: "Summons a depth-appropriate monster next to the caster (upstream: next to the player)"},
   {mask: 0x08, name: "Teleport-To",          short: "Blink-To",      dmg: 0,  desc: "Teleports the player directly adjacent to the caster"},
   {mask: 0x10, name: "Blindness",            short: "Blind",         dmg: 0,  desc: "Blinds the player unless saved (cannot read scrolls or see map)"},
@@ -314,6 +314,12 @@ const SPELL_BITS = [
   {mask: 0x40, name: "Cause Serious Wounds", short: "CSW (8d8)",     dmg: 64, desc: "8d8 heavy wound (up to 64 damage, average 36)"},
   {mask: 0x80, name: "Cause Fear",           short: "Fear",          dmg: 0,  desc: "Inflicts terror unless saved (cannot attack in melee while afraid)"}
 ];
+// cr_spell_chance bit 7 (core/monster.s MS_HOLD): a spell choice like the bits above
+const HOLD_PERSON = {mask: 0, name: "Hold Person", short: "Hold", dmg: 0, desc: "Paralyzes the player from range unless saved; the Amulet of the Magi (Free Action) leaves you unaffected"};
+// cr_spell_chance bits 4-6: the element breathed (6: Multi-Hued, one of the five at random each breath)
+const BREATH_ELEMENTS = ["", "lightning", "poison gas", "acid", "frost", "fire", "all five elements"];
+// The spells a creature can choose: its cr_spell_flags bits, then Hold Person
+const creatureSpells = cr => SPELL_BITS.filter(b => cr.spellFlags & b.mask).concat(cr.holdPerson ? [HOLD_PERSON] : []);
 
 // Authoritative SoA tier tables from platforms/commodore/c64/creature_data/tier0.s..tier4.s
 // BEGIN GENERATED_CREATURE_DATA
@@ -539,6 +545,8 @@ const CREATURES = (() => {
         spellFreq: spFreq,
         spellFlags: spFlags,
         breathDmg,
+        breathElement: (spFlags & 0x02) ? BREATH_ELEMENTS[breathKind] || "" : "",
+        holdPerson: !!(spByte & 0x80),
         spellBurst,
         treasure: t.treasure[i]
       });
@@ -963,7 +971,13 @@ function buildStrategy(cr) {
   // 4. Defense & status hazards
   const hazards = [];
   if (cr.breathDmg > 0) {
-    hazards.push(`<b class="bad">Breath Attack (${cr.breathDmg} max dmg):</b> Breath deals <code>current_HP / 3</code>, at most 255, and ignores AC. Every hit you land directly reduces its breath damage!`);
+    const resist = cr.breathElement === "fire" ? " The Ring of Resist Fire and a Potion of Resist Heat each divide it by 3." :
+                   cr.breathElement === "frost" ? " The Ring of Resist Cold and a Potion of Resist Cold each divide it by 3." :
+                   cr.breathElement === "all five elements" ? " Fire and frost breaths are resisted as above; the other three are not." : "";
+    hazards.push(`<b class="bad">Breath Attack, ${esc(cr.breathElement)} (${cr.breathDmg} max dmg):</b> Breath deals <code>current_HP / ${cr.breathElement === "lightning" ? 4 : 3}</code>, uncapped, and ignores AC.${resist} Every hit you land directly reduces its breath damage!`);
+  }
+  if (cr.holdPerson) {
+    hazards.push(`<b class="bad">Hold Person:</b> Paralyzes you from range unless you save; the Amulet of the Magi (Free Action) leaves you unaffected.`);
   }
   if (cr.spellFlags & 0x40) {
     hazards.push(`<b class="bad">Cause Serious Wounds (8d8, up to 64 dmg):</b> High-WIS/high-level saving throw mitigates this; keep Cure Serious/Critical potions ready.`);
@@ -1059,12 +1073,12 @@ function renderActive() {
     meter("XP award", cr.xp.toLocaleString(), Math.max(100, Math.min(55000, cr.xp * 1.2)), "#6c5eb5", `Tiers: ${tiersText}`);
 
   // Detailed Stat Grid
-  const activeSpells = SPELL_BITS.filter(b => cr.spellFlags & b.mask);
+  const activeSpells = creatureSpells(cr);
   const spellHtml = cr.spellChance > 0
     ? `<div><b>1 in ${cr.spellFreq}</b> cast chance/turn (range ≤ 8 tiles in LOS)</div>` +
       (activeSpells.length
         ? `<div class="pill-row" style="margin-top:4px">` +
-          activeSpells.map(s => `<span class="tag ${s.mask === 0x02 || s.mask === 0x40 ? "breath" : "cast"}" title="${esc(s.desc)}">${esc(s.name)}${s.mask === 0x02 ? ` (~${cr.breathDmg} dmg)` : ""}</span>`).join("") +
+          activeSpells.map(s => `<span class="tag ${s.mask === 0x02 || s.mask === 0x40 ? "breath" : "cast"}" title="${esc(s.desc)}">${esc(s.name)}${s.mask === 0x02 ? `: ${esc(cr.breathElement)} (~${cr.breathDmg} dmg)` : ""}</span>`).join("") +
           `</div>`
         : `<div class="dim" style="font-size:11px">Innate gaze/effect roll (${cr.spellChance}% frequency)</div>`)
     : `<span class="dim">None (0% cast chance)</span>`;
@@ -1136,7 +1150,7 @@ function getFilteredCreatures() {
     if (q) {
       const atkNames = [ATK_INFO[cr.atk0.type]?.label || "", ATK_INFO[cr.atk1.type]?.label || "",
                         ATK_INFO[cr.atk0.type]?.code || "", ATK_INFO[cr.atk1.type]?.code || ""].join(" ").toLowerCase();
-      const spNames = SPELL_BITS.filter(b => cr.spellFlags & b.mask).map(b => b.name.toLowerCase()).join(" ");
+      const spNames = creatureSpells(cr).map(b => b.name.toLowerCase()).concat(cr.breathElement ? [cr.breathElement] : []).join(" ");
       const traits = [
         cr.undead ? "undead" : "", cr.evil ? "evil" : "", cr.animal ? "animal" : "",
         cr.dragon ? "dragon" : "", cr.breeder ? "breeder multiply" : "",

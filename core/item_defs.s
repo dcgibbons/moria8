@@ -254,7 +254,9 @@ id_known_set_y:
     tya
     jmp idks_a
 
-// id_known_clear — Mark item type X as unknown.
+#if C64_UNIT_TEST || C128_UNIT_TEST
+// id_known_clear — Mark item type X as unknown. No product caller; the unit
+// tests keep it to reset knowledge (test_identify128.s has its own copy).
 // Input:  X = item type ID
 // Clobbers: A, Y (X preserved)
 id_known_clear:
@@ -264,3 +266,4 @@ id_known_clear:
     and id_known_bits,y
     sta id_known_bits,y
     rts
+#endif

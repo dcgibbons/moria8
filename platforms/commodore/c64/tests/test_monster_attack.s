@@ -410,7 +410,7 @@ test_start:
 !t9:
     lda #0
     sta zp_eff_paralyze
-    sta player_data + PL_FLAGS  // No free action
+    sta player_pflags           // No Free Action
     lda #CLASS_WARRIOR
     sta player_data + PL_CLASS
     lda #1
@@ -434,7 +434,32 @@ test_start:
     sta tc_results + 8
     jmp !t10+
 !t9_pass:
+    // With Free Action (PFLAG_FREE_ACT, the Amulet of the Magi) the same 20
+    // attempts never paralyse: "You are unaffected." after a failed save, as
+    // VMS creature.inc's paralysis attack (MON-025)
+    lda #PFLAG_FREE_ACT
+    sta player_pflags
+    lda #20
+    sta tc_loop
+!t9_free:
+    jsr msg_init                // A fresh line: twenty "unaffected" would
+                                // outrun the pre-stuffed -more- keys
+    lda #0
+    sta zp_eff_paralyze
+    jsr mon_atk_effect_paralyze
+    lda zp_eff_paralyze
+    bne !t9_free_fail+
+    dec tc_loop
+    bne !t9_free-
+    lda #0
+    sta player_pflags
     lda #$01
+    sta tc_results + 8
+    jmp !t10+
+!t9_free_fail:
+    lda #0
+    sta player_pflags
+    lda #$00
     sta tc_results + 8
 
     // ==========================================

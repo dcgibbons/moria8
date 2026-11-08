@@ -714,8 +714,6 @@ plus4_dos_status_codes:
 // Entry point
 // ============================================================
 entry_main:
-    // Save BASIC's zero page state so we can restore on exit
-    jsr save_zp
     jsr disk_reset_session_state
     jsr plus4_install_ram_irq_vectors
 
@@ -2127,15 +2125,19 @@ program_end:
 .assert "Program fits below MAP_BASE", program_end <= MAP_BASE, true
 
 // ============================================================
-// Init-only code below — lives past CREATURE_BASE, safe because
-// it runs once at startup before dungeon map or RLE workspace
-// are used. Overwritten during normal gameplay.
+// Past program_end: code and data the game no longer needs once a map is
+// drawn, overwritten from MAP_BASE on. Most runs once at startup; the
+// catalog boot load runs again on restart, so it is asserted below MAP_BASE.
 // ============================================================
 
 #if HAL_PLATFORM_CATALOG_RECORDS
-// The monster catalog's boot load (tier_init, once, before the title).
+// The monster catalog's boot load: tier_init runs it at boot and again on
+// every restart (game_over_prompt jumps to restart_entry), after a game has
+// overwritten the map. So it is not init-only: it sits here, past
+// program_end, and must end below MAP_BASE, which the map overwrites.
 #import "../common/catalog_boot.s"
-.assert "Catalog boot loads live in the init-only tail", catalog_boot_load >= program_end, true
+.assert "Catalog boot loads follow the resident image", catalog_boot_load >= program_end, true
+.assert "Catalog boot loads end below the map (restart runs them again)", catalog_boot_end <= MAP_BASE, true
 #endif
 
 // init_load_banked — Load banked runtime payload to $F000.
@@ -2167,20 +2169,26 @@ init_load_banked:
     jmp !load_failed-
 
 // plus4_huff_index_install — The Huffman string index to its RAM span.
+// Exactly the index: the first page, then the rest from its end down.
 plus4_huff_index_install:
     ldx #0
 !phii_copy:
     lda huff_index_stage,x
     sta HUFF_INDEX_HIDDEN_BASE,x
-    lda huff_index_stage + $100,x
-    sta HUFF_INDEX_HIDDEN_BASE + $100,x
     inx
     bne !phii_copy-
+    ldx #huff_index_stage_end - huff_index_stage - $100
+!phii_rest:
+    lda huff_index_stage + $ff,x
+    sta HUFF_INDEX_HIDDEN_BASE + $ff,x
+    dex
+    bne !phii_rest-
     rts
 huff_index_stage:
     .segmentout [segments="Plus4HuffIndex"]
 huff_index_stage_end:
 .assert "The Huffman index fits its two staged pages", huff_index_stage_end - huff_index_stage <= $200, true
+.assert "The Huffman index is past one page (plus4_huff_index_install)", huff_index_stage_end - huff_index_stage > $100, true
 .assert "The Huffman index's stage is the index", huff_index_stage_end - huff_index_stage, huff_str_index_end - huff_str_index
 .assert "The Huffman index starts its RAM span", huff_str_index == HUFF_INDEX_HIDDEN_BASE && HUFF_INDEX_HIDDEN_BASE == $dd00 && HUFF_INDEX_HIDDEN_END == $deff, true
 .assert "The Huffman index install lives in the init-only tail", plus4_huff_index_install >= program_end, true

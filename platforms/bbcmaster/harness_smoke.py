@@ -132,7 +132,7 @@ def build_lua_script(scenario: str, syms: dict[str, int]) -> str:
     acccon_shadow = syms.get("beeb_acccon_shadow", 0x009D)
     acid_syms = "\n".join(f"local {name.upper()}_ADDR = 0x{syms.get(name, 0):04X}" for name in (
         "cr_atk0_type", "cr_atk0_dice", "cr_atk0_sides", "cr_atk1_type", "cr_spell_chance", "cr_speed",
-        "inv_to_ac", "zp_player_ac"))
+        "inv_to_ac", "zp_player_ac", "player_pflags"))
 
     header = f"""
 local prog = manager.machine.devices[":maincpu"].spaces["program"]
@@ -673,6 +673,28 @@ function run()
     send_key(0x41) -- 'A'
     local identify = wait_screen("Identify which item", 80)
     assert_line("identify_prompt", identify)
+    send_key(0x1B) -- ESC: no item
+    -- Last, as the wears reorder the pack: wearing a ring or amulet rebuilds the equipment flags (player_pflags)
+    -- at once: on the compact play slot they stayed stale until the next
+    -- stats rebuild (2026-11-08 review). Resist Fire sets $01, a Ring of
+    -- Protection worn over it clears it, the Amulet of the Magi sets See
+    -- Invisible ($08) and Free Action ($10).
+    local function wear_slot_a(id, what)
+        drain_more(4)
+        wait_frames(30)
+        inv_seed(0, {id, 1, 0, 0, 0, 0, 2, 0})
+        send_key(0x57) -- 'W' (wear)
+        assert_line(what .. "_wear_prompt", wait_screen("Wear which item", 80))
+        send_key(0x41) -- 'A'
+        assert_line(what .. "_worn", wait_screen("You are wearing", 80))
+    end
+    prog:write_u8(PLAYER_PFLAGS_ADDR, 0)
+    wear_slot_a(109, "resist_fire_ring")
+    assert_line("resist_fire_flag", prog:read_u8(PLAYER_PFLAGS_ADDR) & 0x01 == 0x01)
+    wear_slot_a(23, "protection_ring")
+    assert_line("resist_fire_flag_cleared", prog:read_u8(PLAYER_PFLAGS_ADDR) & 0x01 == 0)
+    wear_slot_a(125, "magi_amulet")
+    assert_line("free_action_flag", prog:read_u8(PLAYER_PFLAGS_ADDR) & 0x18 == 0x18)
     manager.machine:exit()
 end
 """.replace("ANDY_MOS_BYTES", andy_mos_bytes())

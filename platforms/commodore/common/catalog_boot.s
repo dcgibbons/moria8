@@ -1,7 +1,10 @@
 #importonce
 // catalog_boot.s — Boot-time loads for the monster catalog on the C64 and
-// Plus/4 (catalog_fetch.s): once, before the title screen. The C64 places
-// it in the init-only tail.
+// Plus/4 (catalog_fetch.s), from tier_init before the title screen. The C64
+// runs tier_init once, at boot; the Plus/4 runs it again on every restart
+// (game_over_prompt -> restart_entry), so there catalog_boot_load must stay
+// clear of the map (plus4/main.s asserts it). Both place it after
+// program_end, in the tail below MAP_BASE.
 
 // catalog_boot_load — MONSTER.IDX (the level index and the record sectors'
 // places on this disk) into the hidden span, through a buffer in the map:
@@ -94,3 +97,4 @@ cbl_cat_name: .text "MONSTER.CAT"
 cbl_cat_digit: .text "1"
 cbl_cat_name_end:
     .byte 0                     // reu_show_file reads a 0-terminated name
+catalog_boot_end:

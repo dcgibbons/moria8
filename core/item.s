@@ -485,7 +485,9 @@ inv_clear_slot:
     sta inv_ego,x
     rts
 
-// inv_count_items — Count used carried slots (0-21)
+#if C64_UNIT_TEST || C128_UNIT_TEST
+// inv_count_items — Count used carried slots (0-21). No product caller; the
+// unit tests keep it (test_item.s).
 // Output: A = count
 // Clobbers: X
 inv_count_items:
@@ -500,6 +502,7 @@ inv_count_items:
 !ici_done:
     txa
     rts
+#endif
 
 #if ITEM_SPAWN_IN_GEN_OVERLAY
 // The port runs this from OVL.GEN behind a resident item_spawn_level

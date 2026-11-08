@@ -2590,7 +2590,9 @@ test_start:
     jsr player_calc_stats
     lda player_pflags
     and #PFLAG_RESIST_FIRE
-    beq !t49_fail+
+    bne !t49_fire_ok+
+    jmp !t49_fail+
+!t49_fire_ok:
 
     // Ring of Speed equipped → PFLAG_SPEED
     jsr item_init_inventory
@@ -2601,10 +2603,13 @@ test_start:
     jsr player_calc_stats
     lda player_pflags
     and #PFLAG_SPEED
-    beq !t49_fail+
+    beq !t49_speed_fail+
     lda player_pflags
     and #PFLAG_RESIST_FIRE
-    bne !t49_fail+
+    beq !t49_speed_ok+
+!t49_speed_fail:
+    jmp !t49_fail+
+!t49_speed_ok:
 
     // Amulet of the Magi equipped → PFLAG_SEE_INVIS
     jsr item_init_inventory
@@ -2616,6 +2621,18 @@ test_start:
     lda player_pflags
     and #PFLAG_SEE_INVIS
     beq !t49_fail+
+    lda player_pflags            // and Free Action (2026-11-08, MON-025)
+    and #PFLAG_FREE_ACT
+    beq !t49_fail+
+    // The wear path rebuilds them too (player_recalc_equipment, as item_wear
+    // and item_takeoff run it): stale flags cleared, the amulet's set again
+    lda #0
+    sta player_pflags
+    jsr player_recalc_equipment
+    lda player_pflags
+    and #PFLAG_SEE_INVIS | PFLAG_FREE_ACT
+    cmp #PFLAG_SEE_INVIS | PFLAG_FREE_ACT
+    bne !t49_fail+
 
     // Ring of Slaying with +3/+4 to-hit/dam adds them to PL_TOHIT/PL_TODMG
     // (measure delta vs empty ring since stat adjustments also contribute)

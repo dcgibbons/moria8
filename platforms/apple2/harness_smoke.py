@@ -1396,6 +1396,26 @@ press("S")
 emu.wait(1.0)
 assert_line("play_goes_on", in_town() and prog:read_u8(TURN_LO_ADDR) ~= turn1,
             "no turn after the aim: " .. rowtext(0))
+-- Wearing a ring or amulet rebuilds the equipment flags (player_pflags) at
+-- once: on the compact play slot they stayed stale until the next stats
+-- rebuild (2026-11-08 review). The Ring of Resist Fire sets
+-- PFLAG_RESIST_FIRE ($01); a Ring of Protection worn over it clears it; the
+-- Amulet of the Magi sets See Invisible ($08) and Free Action ($10).
+local function wear_slot_a(id, what)
+    for _ = 1, 4 do if screen_has("-more-") then press(" ") emu.wait(0.3) end end
+    inv_seed(0, {id, 1, 0, 0, 0, 0, 2, 0})
+    press("W")
+    assert_line(what .. "_wear_prompt", wait_screen("Wear which item"), "wear prompt missing: " .. rowtext(0))
+    press("A")
+    assert_line(what .. "_worn", wait_screen("You are wearing"), "no wear message: " .. rowtext(0))
+end
+prog:write_u8(PFLAGS_ADDR, 0)
+wear_slot_a(109, "resist_fire_ring")
+assert_line("resist_fire_flag", prog:read_u8(PFLAGS_ADDR) & 0x01 == 0x01, "pflags " .. prog:read_u8(PFLAGS_ADDR))
+wear_slot_a(23, "protection_ring")
+assert_line("resist_fire_flag_cleared", prog:read_u8(PFLAGS_ADDR) & 0x01 == 0, "pflags " .. prog:read_u8(PFLAGS_ADDR))
+wear_slot_a(125, "magi_amulet")
+assert_line("free_action_flag", prog:read_u8(PFLAGS_ADDR) & 0x18 == 0x18, "pflags " .. prog:read_u8(PFLAGS_ADDR))
 dump("after_exchange")
 print("SCENARIO DONE")
 """
@@ -1790,7 +1810,8 @@ def _inv_helpers() -> str:
 
 def weapon_exchange_lua() -> str:
     return (_chargen_body("A") + _inv_helpers() + LUA_WEAPON_EXCHANGE_BODY
-            ).replace("TURN_LO_ADDR", hex(_sym_addr("zp_turn_lo")))
+            ).replace("TURN_LO_ADDR", hex(_sym_addr("zp_turn_lo"))).replace(
+            "PFLAGS_ADDR", hex(_sym_addr("player_pflags")))
 
 
 def save_load_lua() -> str:

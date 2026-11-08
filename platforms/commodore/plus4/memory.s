@@ -32,7 +32,7 @@
 .const CATALOG_HIDDEN_END     = $dcff
 // The rest of that span (2026-11-08): the Huffman string index, copied there
 // at boot (main.s plus4_huff_index_install) and read directly, RAM being
-// visible in play. Two pages are copied, so the span is two pages.
+// visible in play. Two pages leave the index room to grow.
 .const HUFF_INDEX_HIDDEN_BASE = CATALOG_HIDDEN_END + 1
 .const HUFF_INDEX_HIDDEN_END  = $deff
 // MONSTER.IDX's boot buffer: the map's last page, unused until the first
@@ -53,7 +53,6 @@
 
 .const PLUS4_ROM_ENABLE = $ff3e
 .const PLUS4_RAM_ENABLE = $ff3f
-.const ZP_SAVE_SIZE     = 142
 
 .const TED_SND1_LO      = $ff0e
 .const TED_SND2_LO      = $ff0f
@@ -125,27 +124,10 @@ plus4_bank_rom:
     sta PLUS4_ROM_ENABLE
     rts
 
-zp_save_buf: .fill ZP_SAVE_SIZE, 0
-
-save_zp:
-    ldx #0
-!loop:
-    lda zp_temp0,x
-    sta zp_save_buf,x
-    inx
-    cpx #ZP_SAVE_SIZE
-    bne !loop-
-    rts
-
-restore_zp:
-    ldx #0
-!loop:
-    lda zp_save_buf,x
-    sta zp_temp0,x
-    inx
-    cpx #ZP_SAVE_SIZE
-    bne !loop-
-    rts
+// No zero-page snapshot (the C64 keeps one): the Plus/4 exit rebuilds BASIC
+// and jumps through the KERNAL reset (main.s exit_trampoline), so BASIC's
+// zero page is never restored. The 142-byte copy taken at boot went unread
+// until 2026-11-08.
 
 mmu_select_bank1:
     rts
@@ -158,5 +140,3 @@ mmu_select_bank0:
 .assert "Dungeon-gen scan scratch remains page-aligned", <DUNGEON_GEN_SCAN_SCRATCH_BASE, 0
 .assert "Dungeon-gen scan scratch stays in low scratch window", DUNGEON_GEN_SCAN_SCRATCH_END <= $07ff, true
 .assert "Dungeon-gen door scan stays in cassette buffer", DUNGEON_GEN_DOOR_SCAN_BASE >= $033c && DUNGEON_GEN_DOOR_SCAN_BASE + 65 <= $0400, true
-.assert "ZP save buffer doesn't overlap CREATURE_BASE", zp_save_buf + ZP_SAVE_SIZE <= CREATURE_BASE, true
-.assert "ZP save buffer size", ZP_SAVE_SIZE, 142

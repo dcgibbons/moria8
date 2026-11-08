@@ -156,6 +156,9 @@ mul_result_1: .byte 0
 mul_result_2: .byte 0
 mul_saved_x:  .byte 0
 
+#if C64_UNIT_TEST || C128_UNIT_TEST
+// math_min / math_max / math_clamp: no product caller; the unit tests keep
+// them (test_math.s).
 // math_min — Return min(A, X)
 // Output: A = min value
 math_min:
@@ -193,3 +196,4 @@ math_clamp:
     lda zp_temp4            // A > max, return max
 !done:
     rts
+#endif

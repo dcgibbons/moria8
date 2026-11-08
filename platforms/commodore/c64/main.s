@@ -42,7 +42,7 @@
 .segmentdef DungeonGenOverlay [outPrg=OVL_OUT + "/ovl.gen",   start=$e000, min=$e000, max=$efff]
 .segmentdef RuntimeBanked     [outPrg=OVL_OUT + "/64.bank",   start=$f000, min=$f000, max=$fffa]
 // Assembled for RAM under I/O, stored in the init-only tail (.segmentout).
-.segmentdef C64HuffIndex      [start=$d800, max=$d9ff]   // memory.s HUFF_INDEX_HIDDEN_BASE/END
+.segmentdef C64HuffIndex      [start=$d500, max=$d6ff]   // memory.s HUFF_INDEX_HIDDEN_BASE/END
 
 #import "hal/storage_policy.s"
 #import "../common/save_slot_policy.s"
@@ -2287,14 +2287,19 @@ platform_services_install64:
     pha
     lda #BANK_ALL_RAM
     sta hal_memory_cpu_port
+    // Exactly the index: the first page, then the rest from its end down
     ldx #0
 !psi_index:
     lda huff_index_stage,x
     sta HUFF_INDEX_HIDDEN_BASE,x
-    lda huff_index_stage + $100,x
-    sta HUFF_INDEX_HIDDEN_BASE + $100,x
     inx
     bne !psi_index-
+    ldx #huff_index_stage_end - huff_index_stage - $100
+!psi_rest:
+    lda huff_index_stage + $ff,x
+    sta HUFF_INDEX_HIDDEN_BASE + $ff,x
+    dex
+    bne !psi_rest-
     pla
     sta hal_memory_cpu_port
     plp
@@ -2729,9 +2734,10 @@ huff_index_stage:
     .segmentout [segments="C64HuffIndex"]
 huff_index_stage_end:
 .assert "The Huffman index fits its two staged pages", huff_index_stage_end - huff_index_stage <= $200, true
+.assert "The Huffman index is past one page (platform_services_install64)", huff_index_stage_end - huff_index_stage > $100, true
 .assert "The Huffman index's stage is the index", huff_index_stage_end - huff_index_stage, huff_str_index_end - huff_str_index
 .assert "The Huffman index starts its hidden span", huff_str_index, HUFF_INDEX_HIDDEN_BASE
-.assert "C64HuffIndex is memory.s's hidden span", HUFF_INDEX_HIDDEN_BASE == $d800 && HUFF_INDEX_HIDDEN_END == $d9ff, true
+.assert "C64HuffIndex is memory.s's hidden span", HUFF_INDEX_HIDDEN_BASE == $d500 && HUFF_INDEX_HIDDEN_END == $d6ff, true
 
 #if HAL_PLATFORM_CATALOG_RECORDS
 // MONSTER.IDX loads past the init-only tail at boot (catalog_boot_load).

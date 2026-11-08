@@ -54,6 +54,16 @@ itok_detect_monsters:
 #import "../config128.s"
 #import "../../../../core/color.s"
 #import "../../../../core/item_defs.s"
+// id_known_clear — Mark item type X as unknown (item_defs.s ships it only to
+// the C64/C128 unit-test builds; this test does not define C128_UNIT_TEST).
+// Clobbers: A, Y (X preserved)
+id_known_clear:
+    jsr idk_index_x
+    lda idk_mask
+    eor #$ff
+    and id_known_bits,y
+    sta id_known_bits,y
+    rts
 #import "../../../../core/rng.s"
 #import "../../../../core/math.s"
 #import "../../../../core/tables.s"
