@@ -325,6 +325,7 @@ PREPARED_ROW = {"mage": "mage", "priest": "priest", "rogue": "priest", "ranger":
                 "warrior": "warrior", "paladin": "warrior"}
 PREPARED_CURES, PREPARED_CURES_DLVL = 2, 3
 PREPARED_RECALL_DLVL = 5
+PREPARED_HP_WAIVE = 6    # character levels past a depth from which its HP floor no longer holds it back
 MISSILE_FIRST = ("rogue", "ranger")   # classes whose launcher comes before a better melee weapon (M5d)
 STRONG_RESERVE = 10      # strong potions to carry from STRONG_LEVEL (5 until an Elf Priest died on DL23 with 33,687 gold)
 STRONG_LEVEL = 10
@@ -351,6 +352,7 @@ SUMMON_PEER_NUM, SUMMON_PEER_DEN = 2, 3   # after a summoning, contact with a cr
 BREATHER_MEMORY = 300    # steps a breather seen on the level keeps the bot resting to its breath
 RECALL_CLIMB = 1         # Word of Recall down to a deepest level this many past ready: climb from there
 BREATHS_TO_LEAVE = 2     # breaths taken on one level that make it one to leave (leave_deadly)
+RETREAT_STUCK = 3        # retreat steps that leave the bot on its square before the escapes take over
 LEAVE_WALK_STEPS = 10    # stairs farther than this on a deadly level: Word of Recall first
 TELEPORT_JUMP = 10       # a move farther than this within a level: teleported, the unseen breath behind
 DEEP_HEAL_HP = 0.75      # from SCOUT_FROM deep, below this share of HP: heal (potions, prayers) before walking on
@@ -518,6 +520,8 @@ class LevelMemory:
     glyphs: dict[Pos, str] = field(default_factory=dict)   # unidentified glyphs seen, on screen or not
     retreat_path: set[Pos] = field(default_factory=set)   # tiles the current retreat crossed
     retreat_failed: bool = False    # it doubled back: stand and fight until it ends
+    retreat_from: Pos | None = None  # where the last retreat step was taken from
+    retreat_stuck: int = 0          # retreat steps taken from there that left the bot there (RETREAT_STUCK)
     bumped: dict[Pos, int] = field(default_factory=dict)   # tile -> step it is blocked until
     collected: set[Pos] = field(default_factory=set)   # tiles a pickup was tried on, or given up
     collect_walks: dict[Pos, int] = field(default_factory=dict)   # walk decisions toward each
@@ -783,7 +787,13 @@ class Brain:
         self.standing = False
         self.track(obs, view)
         self.remember_tiles(view)
-        self.light_left -= 2 if "Search" in obs.rows[21] else 1   # rough time: search mode spends two turns a step
+        # Rough time: search mode spends two turns a step. Never below none:
+        # the count ran to -133,633 with the torch still lit (no "gone out"
+        # came), and deep, where the light carried is weighed, the four spare
+        # torches never made up for it: a level-7 Half-Troll Warrior went up
+        # from DL1 on arrival 861 times in 100,000 steps (C64 build queue,
+        # 2026-11-09).
+        self.light_left = max(0, self.light_left - (2 if "Search" in obs.rows[21] else 1))
         if self.afraid and not fear_news:
             self.afraid -= 1
         attacker, self.recent_attacker = self.recent_attacker, None
@@ -1382,7 +1392,15 @@ class Brain:
         raw = loss * (self.resist_div(obs, element) if element else 1)
         loss = raw // (self.resist_div(obs, element, lasting=True) if element else 1)
         self.level.breath = (obs.step, loss)
-        self.remember_burst(obs, frozenset({element}) if element else frozenset(), raw)
+        burst = knowledge.spell_burst()
+        unseen = not any((c.glyph, c.level) in burst for c in view.creatures.values())
+        # Out of sight it is weighed as breath_guard weighs it, as big again
+        # before the bot finds it or gets away: a level-37 Priest took 106
+        # from an unseen Mature Multi-Hued Dragon, cast Portal, explored on at
+        # 189/295 (one breath of 106 did not keep it resting) and died to the
+        # next, 212 (C64 Balrog, 2026-11-09).
+        self.remember_burst(obs, frozenset({element}) if element else frozenset(),
+                            raw * UNSEEN_BREATHS if unseen else raw)
         self.level.breaths_taken += 1
         if self.level.deadly is None and (loss >= BREATH_LETHAL * obs.mhp
                                           or self.level.breaths_taken >= BREATHS_TO_LEAVE):
@@ -2922,7 +2940,12 @@ class Brain:
         potions from DL3, Word of Recall from DL5."""
         row = PREPARED.get(PREPARED_ROW.get(self.goal.klass or "", "warrior"), PREPARED["warrior"])
         for depth, mhp, clvl in row:
-            if dlvl >= depth and (obs.mhp < mhp or obs.clvl < clvl):
+            # The HP floor is for a character still early for the depth: a
+            # level-8 Gnome Mage with 28 of the Mage's 30 for DL2 could not
+            # level on DL1 to reach it and hopped town-DL1 for 100,000 steps
+            # (Plus/4 build queue, 2026-11-09). Well past it, the level speaks.
+            hp_short = obs.mhp < mhp and obs.clvl < dlvl + PREPARED_HP_WAIVE
+            if dlvl >= depth and (hp_short or obs.clvl < clvl):
                 return False
         if dlvl >= PREPARED_CURES_DLVL and self.clw + sum(self.strong.values()) < PREPARED_CURES:
             return False
@@ -3158,6 +3181,18 @@ class Brain:
                 # round 34: seed 1014 fought a Black Naga to the death).
                 self.standing = True
                 return None
+        if self.level.retreat_from == view.pos:
+            self.level.retreat_stuck += 1
+            if self.level.retreat_stuck >= RETREAT_STUCK:
+                # Steps that leave the bot where it stood are no retreat:
+                # blind, a level-37 Priest's view of a Sorcerer and an Ant Lion
+                # went stale, and 40 steps toward the stairs bumped into them
+                # from 155 HP to death without Portal or a potion, afraid so
+                # retreat_failed was passed over (C64 Balrog, 2026-11-09).
+                # Let the escapes (phase) act instead.
+                return None
+        else:
+            self.level.retreat_from, self.level.retreat_stuck = view.pos, 0
         self.level.retreat_path.add(view.pos)
         if (view.pos[0] + step[0], view.pos[1] + step[1]) in self.level.retreat_path and not trapped:
             # Doubling back: creatures block every way to the stairs in turn (round 16).

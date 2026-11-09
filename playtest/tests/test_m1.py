@@ -779,6 +779,20 @@ class LightTest(unittest.TestCase):
         brain.light_left = 1000
         self.assertTrue(brain.light_low())
 
+    def test_the_light_count_stops_at_none_and_spares_make_up_for_it(self) -> None:
+        """2026-11-09: the count ran to -133,633 with the torch still lit, and
+        a level-7 Warrior with four spare torches went up from DL1 on arrival
+        861 times."""
+        brain = Brain(GOALS["clvl10"])
+        brain.food, brain.recall, brain.torches, brain.light_left = 10, 0, 4, 1
+        view = town_view((5, 5), (40, 40), dlvl=1)
+        for step in range(3):
+            o = command_obs(pos=(5, 5), dlvl=1, clvl=7, hp=93, mhp=93)
+            o.step = step
+            brain.decide(o, view)
+        self.assertEqual(brain.light_left, 0)
+        self.assertFalse(brain.light_low())                    # four torches carry the climb from DL1
+
     def test_in_the_dark_with_no_way_up_take_the_down_stairs(self) -> None:
         # 2026-11-04: a level-11 Mage groped and searched DL1 for 140,000
         # steps beside a down staircase it knew, and starved.
@@ -1890,11 +1904,27 @@ class ResistFireTest(unittest.TestCase):
         o = command_obs(pos=(10, 10), dlvl=32, clvl=36, hp=109, mhp=264)
         brain.note_breath(o, town_view((10, 10), (40, 40), dlvl=32), 50, "fire")
         self.assertEqual(brain.level.breath[1], 150)
-        self.assertEqual(brain.level.breather[1], 150)
-        self.assertEqual(brain.level.breathers, {frozenset({"fire"}): (o.step, 150)})
+        # Nothing in view: remembered as big again (UNSEEN_BREATHS, 2026-11-09)
+        self.assertEqual(brain.level.breather[1], 300)
+        self.assertEqual(brain.level.breathers, {frozenset({"fire"}): (o.step, 300)})
         brain.level.breath = brain.level.breather = None
         brain.note_breath(o, town_view((10, 10), (40, 40), dlvl=32), 50, "acid")   # acid: nothing resists it
         self.assertEqual(brain.level.breath[1], 50)
+
+    def test_an_unseen_breath_is_remembered_as_big_again(self) -> None:
+        """2026-11-09: a level-37 Priest took 106 from an unseen Mature
+        Multi-Hued Dragon, explored on at 189/295 and died to the next."""
+        brain = Brain(GOALS["deep"])
+        o = command_obs(pos=(10, 10), dlvl=37, clvl=37, hp=189, mhp=295)
+        brain.note_breath(o, town_view((10, 10), (40, 40), dlvl=37), 106, "acid")
+        self.assertEqual(brain.level.breathers[frozenset({"acid"})][1], 212)
+        self.assertIn("about, rest first", brain.rest(o, town_view((10, 10), (40, 40), dlvl=37)).reason)
+        seen = Brain(GOALS["deep"])
+        view = town_view((10, 10), (40, 40), dlvl=37)
+        kind = max(knowledge.spell_burst().items(), key=lambda kv: kv[1])[0]
+        view.creatures = {(16, 10): Creature(*kind)}
+        seen.note_breath(o, view, 106, "acid")
+        self.assertEqual(seen.level.breathers[frozenset({"acid"})][1], 106)   # its breather in view: as taken
 
     def test_a_second_breath_on_a_level_makes_it_one_to_leave(self) -> None:
         """2026-11-09: a level-37 Priest took four breaths of about 100 from a
@@ -2428,6 +2458,17 @@ class MemoryTest(unittest.TestCase):
         plain = command_obs(rows={12: "             Press any key"})
         plain.mode, plain.stage = Mode.DISMISS, "anykey"
         self.assertEqual(brain.decide(plain, None).reason, "dismiss anykey")
+
+    def test_a_low_hp_mage_well_past_dl2_may_go_there(self) -> None:
+        """2026-11-09: a level-8 Gnome Mage with 28 HP (DL2 asks a Mage for
+        30) hopped town-DL1 for 100,000 steps unable to level on DL1."""
+        from moria_playtest.goals import for_character
+        brain = Brain(for_character(GOALS["clvl10"], "gnome-mage"))
+        brain.food = 5
+        early = command_obs(pos=(5, 5), dlvl=1, clvl=5, hp=20, mhp=20)
+        self.assertFalse(brain.prepared(early, 2))             # early and short of HP: not yet
+        past = command_obs(pos=(5, 5), dlvl=1, clvl=8, hp=28, mhp=28)
+        self.assertTrue(brain.prepared(past, 2))
 
     def test_the_last_scroll_is_kept_for_the_way_home(self) -> None:
         brain = Brain(GOALS["reach_dl8"])
@@ -4426,6 +4467,18 @@ class RetreatCommitTest(unittest.TestCase):
         self.assertEqual((decision.layer, decision.key), ("retreat", DIRS[(-1, 0)]))   # west way round
         decision = brain.decide(command_obs(pos=(9, 5), **hurt), self.ring((9, 5), {(6, 5)}))
         self.assertNotEqual((decision.layer, decision.key), ("retreat", DIRS[(1, 0)]))  # not back east
+
+    def test_retreat_steps_that_go_nowhere_give_way_to_the_escapes(self) -> None:
+        """2026-11-09: blind and afraid, a level-37 Priest stepped toward the
+        stairs 40 times from one square into a Sorcerer it could not see."""
+        from moria_playtest.brain import RETREAT_STUCK
+        brain = Brain(GOALS["clvl5"])
+        brain.food = 3
+        hurt = dict(dlvl=3, clvl=3, hp=10, mhp=40)
+        decisions = [brain.retreat(command_obs(pos=(10, 5), **hurt), self.ring((10, 5), {(12, 5)}))
+                     for _ in range(RETREAT_STUCK + 1)]
+        self.assertEqual(decisions[0].layer, "retreat")
+        self.assertIsNone(decisions[-1])                     # still on (10, 5): the escapes' turn
 
 
 class BumpTest(unittest.TestCase):
