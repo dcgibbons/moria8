@@ -2828,9 +2828,12 @@ and their frozen suites stay as they are, one game per goal.
   14 of 24 workers had been replaying successes.
 - **The build queue (maintainer, 2026-11-05).** Beside the main queue, one
   run at a time on every port, of the branch's newest commit, so each port
-  is played as it changes. Each port cycles through all 31 combinations in
-  table order, whatever each run's outcome, at a short goal (`clvl10`, its
-  budget scaled by the port's map area) so a cycle takes days, not weeks.
+  is played as it changes. Each port plays all 31 combinations in table
+  order, whatever each run's outcome, at a short goal (`clvl10`, its
+  budget scaled by the port's map area): once per build, then it waits for
+  the next build (maintainer, 2026-11-08: "it should just be after coverage
+  is complete, until the next build"). A new build starts again from the
+  first combination.
   Its runs count only in its own state; they move nothing in the main or
   Balrog queues and are not rated.
 - **Seeds.** Every run draws a new seed, recorded with the run (with the
@@ -3119,7 +3122,7 @@ removes `build/` and the run records are kept for good:
 | `builds/<id>/` | a build snapshot (below); removed once no kept run or open subqueue uses it |
 | `subqueues/<name>.json` | a subqueue, its items, results and report; `<name>.cancel` cancels it, or only the characters it lists |
 | `state-balrog.json` | the Balrog queue (§23.9): its graduates, their turn order, runs, wins and best run |
-| `state-build.json` | the build queue: each port's place in its cycle, and every combination's runs, goals reached, last and best run |
+| `state-build.json` | the build queue: each port's build and its place in that build's coverage, and every combination's runs, goals reached, last and best run |
 | `balrog/<run>/` | a Balrog start: the M7 success's clvl-25 snapshot and saved brain; removed once no graduate or run uses it |
 | `service.json` | the service's heartbeat, config, build state and recent log |
 | `strategy-evidence.md` | `make playtest-strategy-evidence`'s report: the evidence behind the strategy guide (§23.7), regenerated from the records |
@@ -3164,14 +3167,19 @@ platform waits a minute. Seeds come from the system's random source.
 when HEAD has moved, snapshots HEAD's commit (`git archive`, never the
 working tree's edits) for every port in `build_platforms`; a failed build
 keeps the one before and shows its error. Each port with no build-queue run
-playing starts one: the combination after the last, or again one whose run
-did not count (stale, abandoned). Its workers come out of the total, as the
+playing starts one: the next combination not yet played on this build, or
+again one whose run on it did not count (stale, abandoned); a port that has
+played every combination on the build waits for the next
+(`BuildQueue.pending`). Its workers come out of the total, as the
 Balrog queue's do. The MAME and Plus/4 ports need their ROMs in the
 service's environment (a drop-in beside `x16.conf`: `A2ROMS`,
 `ATARI8ROMS`, `BBCMROMS`, and JiffyDOS for the Plus/4 and so the C64). The
-dashboard's Build queue panel is a grid like M6's "every port plays" (the
-maintainer, 2026-11-06): a row per combination, a cell per port with its
-last game's character level coloured by outcome, or the game playing now; the
+dashboard's Build queue panel shows the build being played alone (the
+maintainer, 2026-11-08: the counts reset with each build): a row per port
+with its games, goals reached, deaths, findings, median level, coverage of
+the 31 combinations and the game playing now, and below it, collapsed, a
+grid like M6's "every port plays" with this build's last game per
+combination and port; the
 Builds over time card below it (`dashboard.build_history`, maintainer
 2026-11-06) draws each build's live span (its first game to the next build's)
 as a band labelled with the short hash, the share of its counted games that

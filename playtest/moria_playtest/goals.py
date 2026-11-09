@@ -103,6 +103,11 @@ class Goal:
     qualify_bar: int = 16  # of the 20 qualification seeds, how many must reach it (§7.2)
     ready_margin: int = 2  # character levels over the depth before going deeper (brain.ready_level)
     ready_taper: tuple[int, int, int] | None = None   # brain.ready_level past a knee (M7)
+    # From brain.THREAT_DEPTH_FROM, deeper than ``ready_margin`` allows where
+    # nothing native can kill from full HP in a turn, to the character's own
+    # level (brain.threat_ready; maintainer, 2026-11-08: "be like a real
+    # human player").
+    threat_depth: bool = False
     exercise: bool = False  # cast every spell known until its effect is seen (M7 criterion 2)
     # Classes that buy a launcher and shoot (brain.missile_pick): the best bow
     # skills (core/tables.s class_properties BOW: Ranger 72, Rogue 66).
@@ -169,7 +174,7 @@ GOALS: dict[str, Goal] = {
         "each depth, then goes down to where the Balrog appears: DL100 with the tiers, DL50 with the "
         "monster catalog.",
         lambda o: bool(o.game_flags & CONSTS["GAME_FLAG_WINNER"][1]), step_budget=3_000_000, target_dlvl=100,
-        want_xp=True, ready_margin=3, exercise=True,
+        want_xp=True, ready_margin=3, threat_depth=True, exercise=True,
         missile_classes=("rogue", "ranger", "warrior"), tactics=frozenset(TACTICS)),
 }
 

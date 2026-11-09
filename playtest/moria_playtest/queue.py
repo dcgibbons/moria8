@@ -974,9 +974,12 @@ class Balrog:
 class BuildQueue:
     """The continuous build queue (§23.4; maintainer 2026-11-05): one run at
     a time on each port in ``build_platforms``, of the branch's newest
-    commit, cycling through every race/class combination in table order
-    whatever each run's outcome, at ``build_goal``. It shows each port
-    playing as it changes; it moves nothing in the main or Balrog queues."""
+    commit, through every race/class combination in table order whatever
+    each run's outcome, at ``build_goal``: once each per build, then the
+    port waits for the next build (maintainer, 2026-11-08: "it should just
+    be after coverage is complete, until the next build"). It shows each
+    port playing as it changes; it moves nothing in the main or Balrog
+    queues."""
 
     def __init__(self, home: Path = HOME) -> None:
         self.path = home / "state-build.json"
@@ -991,24 +994,41 @@ class BuildQueue:
             entry["items"].setdefault(combo, {"runs": 0, "reached": 0, "last": None, "best": None})
         return entry
 
-    def take(self, name: str) -> str:
-        """The next combination: one whose run did not count (stale,
-        abandoned, cancelled) first, else the cycle's next."""
-        entry = self.platform(name)
+    def take(self, name: str, build: str | None = None) -> str | None:
+        """The next combination of ``build``'s coverage: one whose run did
+        not count (stale, abandoned, cancelled) first, else the next not yet
+        played; None once every one has played on ``build``. A new build
+        starts again from the first (``cycle`` counts the builds covered)."""
+        entry = self.coverage(name, build)
         if entry["retry"]:
             combo, entry["retry"] = entry["retry"], None
             return combo
         order = combos(name)
-        combo = order[entry["next"] % len(order)]
-        entry["next"] += 1
         if entry["next"] >= len(order):
-            entry["next"], entry["cycle"] = 0, entry["cycle"] + 1
+            return None
+        combo = order[entry["next"]]
+        entry["next"] += 1
         return combo
+
+    def pending(self, name: str, build: str | None) -> bool:
+        """``take`` has a combination for ``build`` on port ``name``."""
+        entry = self.platform(name)
+        return entry.get("build") != build or bool(entry["retry"]) or entry["next"] < len(combos(name))
+
+    def coverage(self, name: str, build: str | None) -> dict[str, Any]:
+        """Port ``name``'s entry, its coverage started again for a new ``build``."""
+        entry = self.platform(name)
+        if entry.get("build") != build:
+            if entry.get("build") is not None:
+                entry["cycle"] += 1
+            entry.update(build=build, next=0, retry=None)
+        return entry
 
     def finish(self, record: dict[str, Any]) -> None:
         entry = self.platform(record["platform"])
         if record["outcome"] not in COUNTED:
-            entry["retry"] = record["character"]
+            if record.get("build") in (None, entry.get("build")):   # not an older build's run
+                entry["retry"] = record["character"]
             return
         item = entry["items"][record["character"]]
         item["runs"] += 1
@@ -1676,7 +1696,8 @@ class Service:
         # The build queue: one run per port, out of the total as the Balrog queue's are.
         build_playing = {j["platform"] for j in self.running.values() if j["queue"] == "build"}
         build_ready = [p for p in config.get("build_platforms") or [] if p not in build_playing
-                       and self.backoff.get(f"build/{p}", 0) < time.time()] if self.ci_build else []
+                       and self.backoff.get(f"build/{p}", 0) < time.time()
+                       and self.buildq.pending(p, self.ci_build)] if self.ci_build else []
         pending = sum(self.sub_pending(sub) for sub in subs.values()) + balrog_pending + len(build_ready)
         target = max(minimum, total - sub_running - pending)
         if len(main_active) > target:
@@ -1771,7 +1792,8 @@ class Service:
         own budget for the port."""
         assert self.ci_build is not None
         goal = str(self.config.get("build_goal") or "clvl10")
-        combo = self.buildq.take(platform)
+        combo = self.buildq.take(platform, self.ci_build)
+        assert combo is not None   # build_ready asked pending
         self.buildq.save()
         seed = random.SystemRandom().randrange(1, 2**31)
         budget = for_port(GOALS[goal], PORTS[platform]).step_budget
@@ -2081,8 +2103,9 @@ def status() -> int:
             entry = buildq.platform(name)
             items = entry["items"]
             runs = sum(i["runs"] for i in items.values())
-            print(f"  {name}: cycle {entry['cycle']} ({entry['next']}/{len(items)}), {runs} runs, "
-                  f"{sum(i['reached'] for i in items.values())} reached")
+            covered = " covered" if entry["next"] >= len(items) and not entry["retry"] else ""
+            print(f"  {name}: build {str(entry.get('build') or '-')[:12]} {entry['next']}/{len(items)}{covered}, "
+                  f"{runs} runs, {sum(i['reached'] for i in items.values())} reached")
     for path in sorted((HOME / "subqueues").glob("*.json")):
         sub = read_json(path) or {}
         state = "done" if sub.get("done") else "cancelled" if sub.get("cancelled") else "running"

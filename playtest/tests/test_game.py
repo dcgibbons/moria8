@@ -82,7 +82,7 @@ class ClassifyTest(unittest.TestCase):
         self.assertEqual(self.mode(obs({18: "         Press any key"})), (Mode.DISMISS, "anykey"))
 
     def test_store_stages(self) -> None:
-        menu = {0: " General Store", 5: " c) Ration of Food             3 GP", 18: " B)uy  S)ell  Q)uit"}
+        menu = {0: " General Store", 5: " c) Ration of Food             3 GP", 19: " B)uy  S)ell  Q)uit"}
         self.assertEqual(self.mode(obs(menu)), (Mode.STORE, "menu"))
         self.assertEqual(self.mode(obs({**menu, 20: " Buy which item? (a-l)"})), (Mode.STORE, "buy_which"))
         self.assertEqual(self.mode(obs({**menu, 21: " Price: 3 gp. Buy? (Y/N)"})), (Mode.STORE, "buy_confirm"))

@@ -205,6 +205,21 @@ class ScheduleTest(unittest.TestCase):
         service.schedule(q, {})
         self.assertEqual(stopped, [])
 
+    def test_a_port_that_covered_its_build_waits_for_the_next(self) -> None:
+        service = self.service(6)
+        service.config.update(build_platforms=["c64", "atari8"], build_goal="clvl10")
+        service.ci_build = "head1"
+        entry = service.buildq.coverage("c64", "head1")
+        entry["next"] = len(queue.combos("c64"))                         # every combination played on head1
+        q = queue.Queue("deep", service.home)
+        q.platform("c64")
+        service.schedule(q, {})
+        self.assertEqual([j["platform"] for j in service.running.values() if j["queue"] == "build"], ["atari8"])
+        service.ci_build = "head2"                                       # the next build: covered again
+        service.schedule(q, {})
+        self.assertEqual(sorted(j["platform"] for j in service.running.values() if j["queue"] == "build"),
+                         ["atari8", "c64"])
+
     def test_no_build_queue_run_without_its_build(self) -> None:
         service = self.service(3)
         service.config["build_platforms"] = ["c64"]
@@ -256,8 +271,9 @@ class ScheduleTest(unittest.TestCase):
 
 
 class BuildQueueTest(unittest.TestCase):
-    """The build queue cycles every combination in table order whatever
-    the outcome; a run that did not count plays again first."""
+    """The build queue plays every combination in table order whatever the
+    outcome, once per build, then waits for the next build; a run that did
+    not count plays again first."""
 
     def setUp(self) -> None:
         tmp = tempfile.TemporaryDirectory()
@@ -265,11 +281,22 @@ class BuildQueueTest(unittest.TestCase):
         self.home = Path(tmp.name)
         self.buildq = queue.BuildQueue(self.home)
 
-    def test_cycles_in_table_order(self) -> None:
+    def test_covers_each_build_once_in_table_order(self) -> None:
+        """Maintainer, 2026-11-08: "it should just be after coverage is
+        complete, until the next build"."""
         order = queue.combos("bbcmaster")
-        taken = [self.buildq.take("bbcmaster") for _ in range(len(order) + 2)]
-        self.assertEqual(taken, order + order[:2])
+        taken = [self.buildq.take("bbcmaster", "b1") for _ in range(len(order) + 2)]
+        self.assertEqual(taken, order + [None, None])                    # covered: nothing more on b1
+        self.assertFalse(self.buildq.pending("bbcmaster", "b1"))
+        self.assertTrue(self.buildq.pending("bbcmaster", "b2"))
+        self.assertEqual(self.buildq.take("bbcmaster", "b2"), order[0])   # a new build starts again
         self.assertEqual(self.buildq.platform("bbcmaster")["cycle"], 2)
+
+    def test_an_older_builds_abandoned_run_is_not_retried(self) -> None:
+        first = self.buildq.take("c64", "b1")
+        self.buildq.take("c64", "b2")
+        self.buildq.finish({**record(first, "abandoned"), "build": "b1"})
+        self.assertNotEqual(self.buildq.take("c64", "b2"), first)
 
     def test_a_death_moves_on_and_an_abandoned_run_plays_again(self) -> None:
         first = self.buildq.take("c64")

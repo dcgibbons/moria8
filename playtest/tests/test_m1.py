@@ -183,7 +183,7 @@ class BrainM2Test(unittest.TestCase):
     def test_store_buys_food_then_leaves(self) -> None:
         brain = Brain(GOALS["reach_dl2"])
         stock = {3: " a) Iron Spike                 1 GP", 5: " c) Ration of Food             3 GP",
-                 7: " e) Ration of Food             3 GP", 18: " B)uy  S)ell  Q)uit"}
+                 7: " e) Ration of Food             3 GP", 19: " B)uy  S)ell  Q)uit"}
         keys = [brain.decide(self.store_obs("menu", stock), None).key,
                 brain.decide(self.store_obs("buy_which", stock), None).key,
                 brain.decide(self.store_obs("buy_confirm", stock), None).key]
@@ -191,14 +191,14 @@ class BrainM2Test(unittest.TestCase):
         sold = {**stock, 5: " c)"}
         self.assertEqual(brain.decide(self.store_obs("menu", sold), None).key, ord("B"))
         self.assertEqual(brain.decide(self.store_obs("buy_which", sold), None).key, ord("E"))
-        self.assertEqual(brain.decide(self.store_obs("menu", {3: stock[3], 18: stock[18]}), None).key, ord("Q"))
+        self.assertEqual(brain.decide(self.store_obs("menu", {3: stock[3], 19: stock[19]}), None).key, ord("Q"))
         self.assertTrue(brain.shopped)
 
     def test_store_buys_from_a_stack(self) -> None:
         # A store stack shows its count first, as the pack does (stores
         # stack since 2026-10-25, Umoria storeCarryItem).
         brain = Brain(GOALS["reach_dl2"])
-        stock = {5: " c) 5 Ration of Food           3 GP", 18: " B)uy  S)ell  Q)uit"}
+        stock = {5: " c) 5 Ration of Food           3 GP", 19: " B)uy  S)ell  Q)uit"}
         self.assertEqual(brain.decide(self.store_obs("menu", stock), None).key, ord("B"))
         self.assertEqual(brain.decide(self.store_obs("buy_which", stock), None).key, ord("C"))
 
@@ -207,7 +207,7 @@ class BrainM2Test(unittest.TestCase):
         # Sling and two Rock (+1,+1), and had none left for potions.
         brain = Brain(GOALS["reach_dl2"])
         brain.launcher, brain.ammo, brain.food, brain.oil, brain.torches = "Sling", 0, 20, 30, 5
-        dear = {3: " a) Rock (+1,+1)              203 GP", 18: " B)uy  S)ell  Q)uit"}
+        dear = {3: " a) Rock (+1,+1)              203 GP", 19: " B)uy  S)ell  Q)uit"}
         self.assertEqual(brain.decide(self.store_obs("menu", dear), None).key, ord("Q"))
         brain = Brain(GOALS["reach_dl2"])
         brain.launcher, brain.ammo, brain.food, brain.oil, brain.torches = "Sling", 0, 20, 30, 5
@@ -217,7 +217,7 @@ class BrainM2Test(unittest.TestCase):
 
     def test_store_message_ends_shopping(self) -> None:
         brain = Brain(GOALS["reach_dl2"])
-        rows = {5: " c) Ration of Food             3 GP", 18: " B)uy  S)ell  Q)uit"}
+        rows = {5: " c) Ration of Food             3 GP", 19: " B)uy  S)ell  Q)uit"}
         self.assertEqual(brain.decide(self.store_obs("message", rows), None).key, KEY_SPACE)
         self.assertEqual(brain.decide(self.store_obs("menu", rows), None).key, ord("Q"))
 
@@ -537,7 +537,7 @@ class FoodSupplyTest(unittest.TestCase):
     def test_purchases_count_and_a_refused_one_is_undone(self) -> None:
         brain = Brain(GOALS["reach_dl2"])
         brain.food = 1                                      # one ration carried
-        menu = {5: " c) Slime Mold                 2 GP", 18: " B)uy  S)ell  Q)uit"}
+        menu = {5: " c) Slime Mold                 2 GP", 19: " B)uy  S)ell  Q)uit"}
         store = BrainM2Test.store_obs
         for stage in ("menu", "buy_which", "buy_confirm"):
             brain.decide(store(BrainM2Test(), stage, menu), None)
@@ -581,7 +581,7 @@ class LightTest(unittest.TestCase):
     """M3 round 13 (§14.3): a lantern and oil, so the light never goes out."""
 
     STOCK = {3: " a) Iron Spike                 1 GP", 4: " b) Flask of Oil (250 turns)   12 GP",
-             13: " k) Brass Lantern (250 turns)  24 GP", 16: " Gold: 265", 18: " B)uy  S)ell  Q)uit"}
+             13: " k) Brass Lantern (250 turns)  24 GP", 19: " B)uy  S)ell  Q)uit  Gold: 265"}
 
     def store(self, brain, stage, rows):
         return brain.decide(BrainM2Test.store_obs(BrainM2Test(), stage, rows), None).key
@@ -595,7 +595,7 @@ class LightTest(unittest.TestCase):
         self.assertEqual([self.store(brain, "haggle", haggle) for _ in range(3)],
                          [ord("2"), ord("4"), KEY_RETURN])
         self.assertTrue(brain.lamp_packed)
-        sold = {**self.STOCK, 13: " k)", 16: " Gold: 241"}
+        sold = {**self.STOCK, 13: " k)", 19: " B)uy  S)ell  Q)uit  Gold: 241"}
         self.assertEqual(self.store(brain, "menu", sold), ord("B"))
         self.assertEqual(self.store(brain, "buy_which", sold), ord("B"))
 
@@ -603,7 +603,7 @@ class LightTest(unittest.TestCase):
         brain = Brain(GOALS["reach_dl2"])
         brain.shop_buys = FOOD_PER_VISIT
         # 10 gp: neither the lantern (24) nor oil (12, wanted since M4) is affordable.
-        self.assertEqual(self.store(brain, "menu", {**self.STOCK, 16: " Gold: 10"}), ord("Q"))
+        self.assertEqual(self.store(brain, "menu", {**self.STOCK, 19: " B)uy  S)ell  Q)uit  Gold: 10"}), ord("Q"))
 
     def test_picks_the_last_item_of_a_full_pack(self) -> None:
         """M4 seed 1006: 21 items (a-u) list down to row 21; the newest
@@ -1150,7 +1150,7 @@ class LoopFixTest(unittest.TestCase):
         brain.food = 0.5                                     # under the shallow reserve (M5b round 35)
         brain.hops = RESTOCK_HOPS                            # round 15: restock hops used up
         o = BrainM2Test.store_obs(BrainM2Test(), "menu", {3: " a) Iron Spike                 1 GP",
-                                                          18: " B)uy  S)ell  Q)uit"})
+                                                          19: " B)uy  S)ell  Q)uit"})
         self.assertEqual(brain.decide(o, None).key, ord("Q"))
         view = town_view((5, 5), (5, 5), dlvl=1)            # on a down staircase
         view.types[5 * COLS + 20] = 0xA                      # up stairs known
@@ -1625,6 +1625,23 @@ class BreathGuardTest(unittest.TestCase):
         brain.decide(far, town_view((35, 12), (40, 40), dlvl=31))       # teleported 25 squares
         self.assertIsNone(brain.level.breath)
 
+    def test_after_a_lethal_breath_it_escapes_before_a_small_heal(self) -> None:
+        """2026-11-08: a level-37 Priest at 40/286, a Mature Multi-Hued Dragon's
+        218 just taken, drank Cure Serious Wounds twice (the quaff layer came
+        first) with its mana full for Portal; the next breath killed it."""
+        from moria_playtest.brain import CSW
+        brain = Brain(GOALS["deep"])
+        brain.phase, brain.strong[CSW], brain.recall, brain.food, brain.clw = 2, 5, 3, 5, 20   # a deep Priest's stock
+        view = town_view((10, 10), (40, 40), dlvl=34)                 # the breather out of sight
+        brain.track(command_obs(pos=(10, 10), dlvl=34, clvl=37, hp=258, mhp=286), view)   # on the level already
+        vampire = min(k for k in knowledge.strength() if k[0] == "V")   # in melee with it, as then
+        view.creatures = {(11, 10): Creature(*vampire)}
+        o = command_obs(pos=(10, 10), dlvl=34, clvl=37, hp=40, mhp=286, monsters=[(11, 10)])
+        brain.level.breath = (o.step, 218)
+        decision = brain.decide(o, view)
+        self.assertEqual(decision.layer, "phase")
+        self.assertIn("breaths unseen could breathe 436", decision.reason)
+
     def test_an_unseen_breath_counts_twice(self) -> None:
         """2026-11-08: a level-37 Priest took 106 from an unseen Young
         Multi-Hued Dragon, explored on at 179/285, and was at 74 after the
@@ -1637,6 +1654,66 @@ class BreathGuardTest(unittest.TestCase):
         self.assertEqual(brain.breath_guard(o, view).reason, "breaths unseen could breathe 212: read Phase Door")
         well = command_obs(pos=(10, 10), dlvl=34, clvl=37, hp=250, mhp=285)
         self.assertIsNone(brain.breath_guard(well, view))             # 212 of 250: survivable
+
+
+class ThreatDepthTest(unittest.TestCase):
+    """Maintainer, 2026-11-08: "be like a real human player": a level-37
+    Half-Troll Priest farmed DL34 for 235 experience a kill under the Balrog
+    goal's three levels over each depth."""
+
+    def priest(self, goal: str = "balrog") -> Brain:
+        from moria_playtest.brain import CSW
+        from moria_playtest.goals import for_character
+        brain = Brain(for_character(GOALS[goal], "half-troll-priest"))
+        brain.recall, brain.clw, brain.strong[CSW] = 3, 20, 5
+        brain.wants_book_trip = lambda obs: False   # type: ignore[method-assign]   # its books bought
+        return brain
+
+    def deeper(self, brain: Brain, dlvl: int, clvl: int = 37, mhp: int = 290) -> bool:
+        return brain.deeper_ok(command_obs(pos=(10, 10), dlvl=dlvl, clvl=clvl, hp=mhp, mhp=mhp))
+
+    def test_as_deep_as_nothing_native_kills_in_a_turn(self) -> None:
+        brain = self.priest()
+        self.assertTrue(self.deeper(brain, 34))            # DL35: a Young Black Dragon's 128
+        self.assertTrue(self.deeper(brain, 36))            # DL37: a Mature Red Dragon's 160
+        self.assertFalse(self.deeper(brain, 37))           # no deeper than its own level
+        self.assertFalse(self.deeper(brain, 37, clvl=38))  # DL38: an Ancient White Dragon's 468 of 290
+        brain.jewel_names["Ring"] = "Ring of Resist Cold"
+        self.assertTrue(self.deeper(brain, 37, clvl=38))   # 156 through the ring
+
+    def test_resupply_and_recall_agree_with_it(self) -> None:
+        """2026-11-09: resupply climbed from DL36 and town refused Word of
+        Recall down to DL37 by the old margin: level-37 Priests walked down
+        from DL1 and recalled up from DL16 for light, over and over."""
+        brain = self.priest()
+        o = command_obs(pos=(10, 10), dlvl=36, clvl=37, hp=290, mhp=290)
+        self.assertTrue(brain.depth_ready(o, 36))
+        self.assertTrue(brain.depth_ready(o, 37, slack=1))     # Word of Recall back down to DL37
+        self.assertFalse(brain.depth_ready(o, 38, slack=1))    # an Ancient White Dragon's 468
+        view = town_view((10, 10), (40, 40), dlvl=36)
+        self.assertIsNone(brain.resupply(o, view))             # no climb from a depth it survives
+
+    def test_town_recalls_to_one_level_past_ready_and_climbs(self) -> None:
+        """2026-11-09: level-37 Priests whose deepest was DL38 walked down
+        from DL1 every town trip; one level too deep is a climb."""
+        decisions = {}
+        for deepest in (38, 39):
+            brain = self.priest()
+            brain.food, brain.max_dlvl = 20, deepest
+            brain.lamp, brain.light_left, brain.oil = True, 9000, 5
+            brain.shopped = brain.potions_done = brain.magic_done = brain.alchemist_done = True
+            brain.market_done = brain.weapons_done = brain.armoury_done = True
+            o = command_obs(pos=(5, 5), dlvl=0, clvl=37, hp=290, mhp=290)
+            decisions[deepest] = brain.recall_trip(o, town_view((5, 5), (40, 40)))
+        self.assertEqual(decisions[38].reason, "read Word of Recall")   # then up a level
+        self.assertIsNone(decisions[39])                                # two too deep: the stairs
+        brain = self.priest()
+        o = command_obs(pos=(10, 10), dlvl=38, clvl=37, hp=290, mhp=290)
+        self.assertIsNotNone(brain.resupply(o, town_view((10, 10), (40, 40), dlvl=38)))   # climbs at DL38
+
+    def test_only_from_level_30_and_only_for_the_balrog_goal(self) -> None:
+        self.assertFalse(self.deeper(self.priest(), 27, clvl=29, mhp=230))   # the margin: DL26
+        self.assertFalse(self.deeper(self.priest("deep"), 34))
 
 
 class ScoutTest(unittest.TestCase):
@@ -1819,6 +1896,18 @@ class ResistFireTest(unittest.TestCase):
         brain.note_breath(o, town_view((10, 10), (40, 40), dlvl=32), 50, "acid")   # acid: nothing resists it
         self.assertEqual(brain.level.breath[1], 50)
 
+    def test_a_second_breath_on_a_level_makes_it_one_to_leave(self) -> None:
+        """2026-11-09: a level-37 Priest took four breaths of about 100 from a
+        Young Multi-Hued Dragon on one level, healing and exploring between
+        them, and died to the last."""
+        brain = Brain(GOALS["deep"])
+        view = town_view((10, 10), (40, 40), dlvl=37)
+        o = command_obs(pos=(10, 10), dlvl=37, clvl=37, hp=184, mhp=285)
+        brain.note_breath(o, view, 101, "gas")
+        self.assertIsNone(brain.level.deadly)                          # one breath: not yet
+        brain.note_breath(o, view, 82, "frost")
+        self.assertEqual(brain.level.deadly, (10, 10))                 # the second: leave the level
+
     def test_with_a_lethal_breather_about_it_rests_before_exploring(self) -> None:
         """2026-11-07: a level-35 Priest phased from a Mature Black Dragon
         (160), explored on at 137-152/252 and died to its next breath."""
@@ -1870,6 +1959,23 @@ class ResistFireTest(unittest.TestCase):
         view = town_view((10, 10), (40, 40), dlvl=31)                 # nothing in view
         self.assertIn(RESIST_HEAT_COLD, brain.resist_fire(o, view).reason)
 
+    def test_hurt_it_resists_a_remembered_breath_that_could_kill_now(self) -> None:
+        """2026-11-09: a level-37 Priest took 160 from an unseen Mature Red
+        Dragon, cast Portal and prayed Cure Medium Wounds at 137/296; the next
+        breath killed it."""
+        from moria_playtest.goals import for_character
+        from moria_playtest.magic import RESIST_HEAT_COLD
+        brain = Brain(for_character(GOALS["deep"], "half-troll-priest"))
+        brain.magic.caster = lambda obs: True                          # type: ignore[method-assign]
+        brain.magic.can = lambda obs, name: name == RESIST_HEAT_COLD   # type: ignore[method-assign]
+        view = town_view((10, 10), (40, 40), dlvl=37)                 # nothing in view
+        hurt = command_obs(pos=(10, 10), dlvl=37, clvl=37, hp=137, mhp=296)
+        brain.level.breather = (hurt.step, 160)
+        brain.level.breathers = {frozenset({"fire"}): (hurt.step, 160)}
+        self.assertIn(RESIST_HEAT_COLD, brain.resist_fire(hurt, view).reason)
+        full = command_obs(pos=(10, 10), dlvl=37, clvl=37, hp=296, mhp=296)
+        self.assertIsNone(brain.resist_fire(full, view))               # it cannot kill from full HP
+
     def test_a_resistance_timer_does_not_make_a_deadly_level_safe(self) -> None:
         """2026-11-07: a level-34 Priest resisted on sight of an Ancient White
         Dragon (234 as 78), so the level never read deadly; it explored on and
@@ -1884,6 +1990,22 @@ class ResistFireTest(unittest.TestCase):
         o = command_obs(pos=(10, 10), dlvl=31, clvl=34, hp=worst + 10, mhp=worst + 10)
         brain.leave_deadly(o, view)
         self.assertEqual(brain.level.deadly, (30, 10))
+
+    def test_seeing_a_creature_that_could_kill_from_full_hp_marks_the_level_deadly(self) -> None:
+        """2026-11-09: a level-37 Priest saw an Ancient White Dragon while
+        other layers decided (resist, then leave-caster); the level never read
+        deadly, and after a teleport it rested and explored until the next
+        breath killed it."""
+        brain = Brain(GOALS["deep"])
+        kind = max(knowledge.spell_burst().items(), key=lambda kv: kv[1])[0]
+        worst = int(knowledge.spell_burst()[kind] * max(1.0, knowledge.moves().get(kind, 1.0)))
+        view = town_view((10, 10), (40, 40), dlvl=31)
+        view.creatures = {(30, 10): Creature(*kind)}
+        brain.note_breathers(command_obs(pos=(10, 10), dlvl=31, clvl=37, hp=worst + 10, mhp=worst + 10), view)
+        self.assertEqual(brain.level.deadly, (30, 10))
+        safe = Brain(GOALS["deep"])                                     # a breath it survives from full HP
+        safe.note_breathers(command_obs(pos=(10, 10), dlvl=31, clvl=37, hp=worst * 2, mhp=worst * 2), view)
+        self.assertIsNone(safe.level.deadly)
 
     def test_the_ring_of_resist_fire_cuts_a_fire_breath_to_a_third_and_no_other(self) -> None:
         """2026-11-08: breath is by element (VMS spells 20-24): the ring
@@ -1938,6 +2060,21 @@ class LeaveCasterTest(unittest.TestCase):
         self.assertIn("far from the stairs: drink Cure Serious Wounds", brain.leave_caster(o, view).reason)
         brain.strong["Potion of Cure Serious"] = 0
         self.assertEqual(brain.leave_caster(o, view).layer, "recall")
+
+    def test_well_it_takes_the_stairs_rather_than_recall(self) -> None:
+        """2026-11-09: at 285/285 a level-37 Priest read Word of Recall on DL35
+        at casters Detect Evil had shown, over and over, town and back."""
+        from moria_playtest.brain import LEAVE_WALK_STEPS
+        kind = max(knowledge.spell_burst().items(), key=lambda kv: kv[1])[0]
+        brain = Brain(GOALS["deep"])
+        o = command_obs(pos=(10, 10), dlvl=35, clvl=37, hp=285, mhp=285)
+        brain.level.casters[kind] = o.step
+        brain.recall = 3
+        view = town_view((10, 10), (60, 40), dlvl=35)
+        view.stairs_up = lambda: {(10 + LEAVE_WALK_STEPS + 5, 10)}      # type: ignore[method-assign]
+        decision = brain.leave_caster(o, view)
+        self.assertEqual(decision.layer, "leave-caster")
+        self.assertIn("path to the nearest staircase", decision.reason)
 
 
 class DeepHealTest(unittest.TestCase):
@@ -2735,6 +2872,20 @@ class PotionTest(unittest.TestCase):
         brain.track(command_obs(pos=(5, 5), dlvl=1, clvl=5), town_view((5, 5), (40, 40), dlvl=1))
         self.assertFalse(brain.light_low())
 
+    def test_deep_without_a_lantern_it_carries_more_torches_and_seeks_one(self) -> None:
+        """2026-11-09: level-37 Priests with no lantern lit torches and went
+        home by Word of Recall for more every 4,000 steps on DL37."""
+        from moria_playtest.brain import BLACK_MARKET, LANTERN, TORCH, TORCH_RESERVE, TORCH_RESERVE_DEEP
+        brain = Brain(GOALS["deep"])
+        brain.clvl, brain.max_dlvl, brain.torches = 37, 37, TORCH_RESERVE
+        self.assertEqual(brain.torch_reserve(), TORCH_RESERVE_DEEP)
+        self.assertIn(TORCH, brain.shopping_list())
+        self.assertIn(LANTERN, brain.shopping_list())
+        brain.at_store, brain.gold_seen = BLACK_MARKET, 10_000_000
+        self.assertIn(LANTERN, brain.shopping_list(10_000_000))       # the Black Market's too, rich
+        brain.lamp = True
+        self.assertEqual(brain.torch_reserve(), TORCH_RESERVE)        # with a lantern: the backup only
+
     def test_food_shopping_leaves_pack_room(self) -> None:
         """M4 round 54: items never stack, and 20 single foods filled the
         pack so Word of Recall could not be bought (seed 1020)."""
@@ -2876,7 +3027,7 @@ class GearTest(unittest.TestCase):
 
     def store(self, brain, store, items, gold):
         brain.at_store = store
-        rows = {0: "Store", 16: f" Gold: {gold}", 18: " B)uy  S)ell  Q)uit"}
+        rows = {0: "Store", 19: f" B)uy  S)ell  Q)uit  Gold: {gold}"}
         rows.update({3 + i: f" {chr(97 + i)}) {name:<26}{price:>4} GP" for i, (name, price) in enumerate(items)})
         o = BrainM2Test.store_obs(BrainM2Test(), "menu", rows)
         o.rows[22] = "ST:18  IN: 6  WI:11  DX:12  CO:14  CH: 6"
@@ -2897,10 +3048,29 @@ class GearTest(unittest.TestCase):
         o = self.store(brain, MAGIC_SHOP, [("Ring of Protection [+7]", 700), ("Ring of Strength (+3)", 1200),
                                            ("Amulet of Wisdom (+2)", 900), ("Wand of Light (8 charges)", 200)], 900000)
         self.assertEqual(brain.jewel_pick(o), ("a", "Ring of Protection [+7]"))   # +40 over +30 worn
-        # bought: the next pick counts it as worn; then the amulet
+        # bought: the next pick counts it as going on the free right hand, so
+        # a ring now goes on the left (two hands, VMS moria.inc:528); the
+        # store no longer lists the one bought, and the amulet gains most
         brain.credit("Ring of Protection [+7]", 1)
-        self.assertEqual(brain.jewel_pick(o), ("c", "Amulet of Wisdom (+2)"))
+        self.assertEqual(brain.jewel_slot("Ring"), "Ring2")
+        o = self.store(brain, MAGIC_SHOP, [("Ring of Strength (+3)", 1200), ("Amulet of Wisdom (+2)", 900),
+                                           ("Wand of Light (8 charges)", 200)], 900000)
+        self.assertEqual(brain.jewel_pick(o), ("b", "Amulet of Wisdom (+2)"))
         self.assertEqual(brain.to_wear, ["Ring of Protection [+7]"])
+
+    def test_two_ring_hands_are_read_and_a_ring_judged_by_the_one_it_replaces(self) -> None:
+        """2026-11-08: two ring hands (VMS moria.inc:528): a ring goes on the
+        right hand when free, else on the left, replacing its ring."""
+        brain = Brain(GOALS["deep"])
+        rows = ["Equipment", " h) Ring:   Ring of Speed", " i) Amulet: Amulet of the Magi", "    Ring:   (none)"]
+        self.assertEqual(brain.read_jewels(rows), {"Ring": 1000, "Amulet": 300, "Ring2": 0})
+        self.assertEqual(brain.jewel_slot("Ring"), "Ring2")                       # the right hand is taken
+        self.assertTrue(brain.jewel_better("Ring of Resist Cold"))               # the free left hand
+        rows[3] = " j) Ring:   Ring of Resist Fire"
+        brain.jewels = brain.read_jewels(rows)
+        self.assertEqual(brain.jewel_names["Ring2"], "Ring of Resist Fire")
+        self.assertFalse(brain.jewel_better("Ring of Resist Cold"))              # no better than the left's
+        self.assertEqual(brain.resist_div(command_obs(pos=(5, 5), dlvl=30), "fire", lasting=True), 3)
 
     def test_an_ego_weapon_is_valued_and_bought(self) -> None:
         """2026-11-07: "Dagger (Defender)" was looked up whole, scored 0 and
@@ -3197,7 +3367,7 @@ class RecallTest(unittest.TestCase):
         reset the gear trip's gold and wait."""
         from moria_playtest import goals
         from moria_playtest.brain import WEAPONSMITH
-        rows = {16: "Gold: 27000", 18: " B)uy  S)ell  Q)uit"}
+        rows = {19: " B)uy  S)ell  Q)uit  Gold: 27000"}
         bought = {}
         for kind, pick in (("arrows", ("a", "Arrow")), ("bow", ("b", "Long Bow")), ("sword", ("c", "Long Sword"))):
             brain = Brain(goals.for_character(GOALS["deep"], "half-orc-warrior"))
@@ -4400,7 +4570,7 @@ class RestockHopTest(unittest.TestCase):
     """M3 round 15: stores restock on every return to town, so with no food
     for sale a player hops down to DL1 and straight back up."""
 
-    MENU = {3: " a) Iron Spike                 1 GP", 16: " Gold: 200", 18: " B)uy  S)ell  Q)uit"}
+    MENU = {3: " a) Iron Spike                 1 GP", 19: " B)uy  S)ell  Q)uit  Gold: 200"}
 
     def test_an_empty_store_means_a_hop_then_a_wait(self) -> None:
         brain = Brain(GOALS["reach_dl5"])
@@ -4419,7 +4589,7 @@ class RestockHopTest(unittest.TestCase):
         that." and the bot hopped for 15,000 steps (seed 1006)."""
         brain = Brain(GOALS["reach_dl5"])
         brain.light_left, brain.torches = 0, 0              # out of light, no spare torch
-        menu = {**self.MENU, 4: " b) Wooden Torch (134 turns)   2 GP", 16: " Gold: 200"}
+        menu = {**self.MENU, 4: " b) Wooden Torch (134 turns)   2 GP", 19: " B)uy  S)ell  Q)uit  Gold: 200"}
         refused = {**menu, 22: " You cannot afford that."}
         for _ in range(RESTOCK_HOPS + 1):
             brain.shopped = False
