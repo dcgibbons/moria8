@@ -30,15 +30,16 @@
 // is 160 bytes, not 260 (2026-11-05). Older saves do not fit, so $1A is the
 // oldest the loader takes and the legacy feature versions are pinned at it
 // (the 31-slot inventory version just below it, so its loader compiles out).
-.const hal_storage_save_v1_version = $1A
-.const hal_storage_save_known96_version = $1A
-.const hal_storage_save_inv31_version = $19
-.const hal_storage_save_known_bits_version = $1A
-.const hal_storage_save_baked_stats_version = $1A
-.const hal_storage_save_known160_version = $1A
-.const hal_storage_save_door_state_version = $1A
-.const hal_storage_save_inv33_version = $1A
-.const hal_storage_save_version = $1A
+// $1B: 16-item stores (the store block grew); older saves are refused.
+.const hal_storage_save_v1_version = $1B
+.const hal_storage_save_known96_version = $1B
+.const hal_storage_save_inv31_version = $1A
+.const hal_storage_save_known_bits_version = $1B
+.const hal_storage_save_baked_stats_version = $1B
+.const hal_storage_save_known160_version = $1B
+.const hal_storage_save_door_state_version = $1B
+.const hal_storage_save_inv33_version = $1B
+.const hal_storage_save_version = $1B
 #else
 .const hal_storage_save_v1_version = $10
 .const hal_storage_save_known96_version = $11
@@ -48,7 +49,7 @@
 .const hal_storage_save_known160_version = $16
 .const hal_storage_save_door_state_version = $17
 .const hal_storage_save_inv33_version = $18
-.const hal_storage_save_version = $18
+.const hal_storage_save_version = $19
 #endif
 
 #define HAL_STORAGE_DISK_SETUP_OTHER_DRIVE
@@ -77,7 +78,7 @@
 // reports a write-protected or full disk only there.
 #define HAL_STORAGE_SAVE_CHECKS_DOS_STATUS
 #define HAL_STORAGE_SCORE_IO_USES_RAM_THUNKS
-#if !HAL_PLATFORM_MONSTER_CATALOG          // Catalog saves start at $1A
+#if !HAL_PLATFORM_MONSTER_CATALOG          // Catalog saves start at $1B
 #define HAL_STORAGE_LEGACY_ROOM8_MIGRATION
 #endif
 #define HAL_STORAGE_SAVE_SLOT_ASCII_CHARS

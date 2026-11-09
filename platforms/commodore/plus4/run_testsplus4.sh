@@ -739,7 +739,7 @@ run_exchange_product_smoke() {
         --expect-byte-symbol ".exchange_product_primary_ego=0x06" \
         --expect-byte-symbol ".exchange_product_secondary_id=0x05" \
         --expect-byte-symbol ".exchange_product_secondary_hit=0x01" \
-        --expect-byte-symbol ".exchange_product_cloak_id=0xff" \
+        --expect-byte-symbol ".exchange_product_ring2_id=0xff" \
         --expect-byte-symbol ".zp_turn_lo=0x01" \
         --expect-byte-symbol ".current_overlay=0x07" \
         --expect-byte-symbol ".exchange_product_r0c0=0x50" \
@@ -1557,7 +1557,7 @@ plus4_load_written_save_check() {
         --expect-byte-symbol ".save_product_secondary_dam=0x04" \
         --expect-byte-symbol ".save_product_secondary_flags=0x02" \
         --expect-byte-symbol ".save_product_secondary_ego=0x06" \
-        --expect-byte-symbol ".save_product_cloak_id=0xff" \
+        --expect-byte-symbol ".save_product_ring2_id=0xff" \
         --timeout 20 \
         --retry-timeouts 0 \
         --vice "$VICE"; then
@@ -1663,7 +1663,7 @@ run_save_write_product_smoke() {
             local save_seq="$out_dir/$name.the_game.seq"
             rm -f "$save_seq"
             if ! "$C1541" -attach "$save_d64" -read "the.game,s" "$save_seq" >>"$build_log" 2>&1 \
-                    || ! python3 ../c64/tests/check_save_secondary.py "$save_seq" 0x09 >>"$build_log" 2>&1; then
+                    || ! python3 ../c64/tests/check_save_secondary.py "$save_seq" 0x0A >>"$build_log" 2>&1; then
                 echo "FAIL: $name (secondary weapon not in the written save)"
                 tail -3 "$build_log"
                 FAIL=$((FAIL + 1))

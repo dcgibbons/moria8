@@ -28,6 +28,13 @@ item_wear:
     lda it_category,x
     tax
     lda equip_slot_for_cat,x
+    cmp #EQUIP_RING             // VMS moria.inc:528: the right hand when free,
+    bne !iw_slot+               // else the left, replacing its ring
+    ldy inv_item_id + EQUIP_RING
+    iny                         // FI_EMPTY ($ff): free
+    beq !iw_slot+
+    lda #EQUIP_RING2
+!iw_slot:
     sta piw_equip
 
     // VMS wear (moria.inc:539-552): a cursed item in the target slot stays on.

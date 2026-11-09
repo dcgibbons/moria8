@@ -4,12 +4,12 @@ from __future__ import annotations
 from pathlib import Path
 import sys
 
-# The product build plays the monster catalog: its saves are version $09 and
+# The product build plays the monster catalog: its saves are version $0A and
 # older ones are refused (hal/storage_policy.s), so the fixture is written in
 # that format: 33 inventory slots, the 20-byte known-item bitset, the
 # door-state block followed by the species table, and 40 creature rows of
 # recall (save.s, as the C128 fixture).
-SAVE_VERSION = 0x09
+SAVE_VERSION = 0x0A
 ID_KNOWN_BYTES = 20
 MAX_DOOR_STATES = 16
 CATALOG_SLOTS = 32
@@ -17,7 +17,7 @@ CATALOG_SLOTS = 32
 PL_STRUCT_SIZE = 111
 ITEM_TYPE_COUNT = 96
 ITEM_ID_CAPACITY = 96
-STORE_TOTAL_SLOTS = 96
+STORE_TOTAL_SLOTS = 128
 MAX_ROOMS = 8
 MAX_TRAPS = 16
 MAX_MONSTERS = 32

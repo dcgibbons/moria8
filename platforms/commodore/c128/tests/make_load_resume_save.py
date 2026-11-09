@@ -5,10 +5,10 @@ import os
 import sys
 
 # The C128 product build plays the monster catalog: its saves are version
-# $19 and older ones are refused (hal/storage_policy.s), so the fixture is
+# $1B and older ones are refused (hal/storage_policy.s), so the fixture is
 # written in that format: 33 inventory slots, the 20-byte known-item bitset,
 # and the door-state block followed by the species table (save.s).
-SAVE_VERSION = 0x1A
+SAVE_VERSION = 0x1B
 LEGACY_ROOM8_SAVE_VERSION = 0x12
 LEGACY_TOTAL_INV_SLOTS = 31
 ID_KNOWN_BYTES = 20
@@ -18,7 +18,7 @@ CATALOG_SLOTS = 32
 PL_STRUCT_SIZE = 111
 ITEM_TYPE_COUNT = 96
 ITEM_ID_CAPACITY = 96
-STORE_TOTAL_SLOTS = 96
+STORE_TOTAL_SLOTS = 128
 MAX_ROOMS = 21
 LEGACY_MAX_ROOMS = 8
 MAX_TRAPS = 16

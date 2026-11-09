@@ -16,7 +16,7 @@ test_bootstrap:
 test_exit_trampoline:
     sei                         // Disable IRQs during copy
     :BankOutBasic()             // Ensure BASIC ROM off (tc_results in $A000+)
-    ldx #68-1
+    ldx #69-1
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -144,7 +144,7 @@ press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
 // Test result buffer — copy to $0400 at end (msg_print clobbers $0400)
-tc_results: .fill 68, $ff
+tc_results: .fill 69, $ff
 tc_loop_ctr: .byte 0          // Loop counter (safe from ZP clobber)
 tc_valid_ctr: .byte 0         // Valid item counter for test 22
 t16_base_ac: .byte 0          // Stable scratch for Test 16 across item_wear
@@ -3349,14 +3349,101 @@ test_start:
     bcs !t68_fail+
     lda #$01
     sta tc_results + 67
-    jmp !tests_done+
+    jmp !t69+
 !t68_fail:
     lda #$00
     sta tc_results + 67
 
+    // Test 69: two ring hands (VMS moria.inc:528, 2026-11-08): a ring goes
+    // on the right hand when it is free, else on the left, replacing its
+    // ring; both rings' flags and Slaying bonuses count.
+!t69:
+    jsr item_init_inventory
+    lda #ITEM_TYPE_RING_RESIST_FIRE
+    jsr t69_wear_ring
+    lda inv_item_id + EQUIP_RING
+    cmp #ITEM_TYPE_RING_RESIST_FIRE
+    bne !t69_fail_near+
+    lda inv_item_id + EQUIP_RING2           // the right hand first
+    cmp #FI_EMPTY
+    bne !t69_fail_near+
+    lda #ITEM_TYPE_RING_RESIST_COLD
+    jsr t69_wear_ring
+    lda inv_item_id + EQUIP_RING2           // then the left
+    cmp #ITEM_TYPE_RING_RESIST_COLD
+    bne !t69_fail_near+
+    jsr player_calc_stats
+    lda player_pflags
+    and #PFLAG_RESIST_FIRE | PFLAG_RESIST_COLD
+    cmp #PFLAG_RESIST_FIRE | PFLAG_RESIST_COLD
+    beq !t69_both+
+!t69_fail_near:
+    jmp !t69_fail+
+!t69_both:
+    lda #ITEM_TYPE_RING_SPEED
+    jsr t69_wear_ring
+    lda inv_item_id + EQUIP_RING2           // the left hand's ring replaced
+    cmp #ITEM_TYPE_RING_SPEED
+    bne !t69_fail+
+    lda inv_item_id + EQUIP_RING
+    cmp #ITEM_TYPE_RING_RESIST_FIRE
+    bne !t69_fail+
+    lda inv_item_id                         // ... and back in the pack
+    cmp #ITEM_TYPE_RING_RESIST_COLD
+    bne !t69_fail+
+    jsr player_calc_stats
+    lda player_pflags
+    and #PFLAG_RESIST_FIRE | PFLAG_RESIST_COLD | PFLAG_SPEED
+    cmp #PFLAG_RESIST_FIRE | PFLAG_SPEED
+    bne !t69_fail+
+    // Slaying on the left hand adds its to-hit and to-damage
+    jsr item_init_inventory
+    jsr player_recalc_equipment
+    lda player_data + PL_TOHIT
+    sta t49_base_tohit
+    lda #ITEM_TYPE_RING_SLAYING
+    sta inv_item_id + EQUIP_RING2
+    lda #1
+    sta inv_qty + EQUIP_RING2
+    lda #3
+    sta inv_to_hit + EQUIP_RING2
+    jsr player_recalc_equipment
+    lda player_data + PL_TOHIT
+    sec
+    sbc t49_base_tohit
+    cmp #3
+    bne !t69_fail+
+    lda #$01
+    sta tc_results + 68
+    jmp !tests_done+
+!t69_fail:
+    lda #$00
+    sta tc_results + 68
+
 !tests_done:
     // Jump to trampoline at $033C (below $A000) to copy results + BRK
     jmp test_exit_trampoline
+
+// t69_wear_ring — wear ring type A from pack slot 0 through item_wear ('A').
+t69_wear_ring:
+    sta inv_item_id
+    lda #1
+    sta inv_qty
+    lda #0
+    sta inv_p1
+    sta inv_flags
+    sta inv_to_hit
+    sta inv_to_dam
+    sta inv_to_ac
+    sta inv_ego
+    sta zp_msg_flags
+    lda #2
+    sta $c6
+    lda #$41
+    sta $0277
+    lda #$20
+    sta $0278
+    jmp item_wear
 
 // t66_armor_setup — empty pack and equipment, Chain mail (item 8) worn,
 // clean; the caller sets its to-AC and any other piece.

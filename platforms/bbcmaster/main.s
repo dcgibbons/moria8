@@ -949,19 +949,19 @@ hal_msg_print_indirect_aux:
 
 .segment Default
 player_adjust_equipment_stat:
+    // By the item, as core/player_adjust_equipment_stat.s: by the slot, every
+    // ring added its p1 to Strength, and the left hand (2026-11-08) would too.
     jsr player_adjust_equipment_stat_prepare
-    cpx #EQUIP_RING
-    bcc !paes_done+
-    cpx #EQUIP_AMULET
-    bne !paes_str+
     lda inv_item_id,x
-    and #1
-    eor #3
-    sbc #1
-    tax
-    jmp !paes_apply+
-!paes_str:
     ldx #0
+    cmp #ITEM_TYPE_RING_STRENGTH
+    beq !paes_apply+
+    ldx #PL_WIS_CUR - PL_STR_CUR
+    cmp #ITEM_TYPE_AMULET_WISDOM
+    beq !paes_apply+
+    ldx #PL_INT_CUR - PL_STR_CUR
+    cmp #ITEM_TYPE_AMULET_MAGI
+    bne !paes_done+
 !paes_apply:
     jmp player_adjust_equipment_stat_apply
 !paes_done:

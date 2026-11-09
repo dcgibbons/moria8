@@ -21,6 +21,8 @@
 .const HG_MAX_CONCESSION = 15
 
 .const USTORE_PRICE_COL = hal_layout_store_price_col
+// The gold sits right of the menu, on STORE_MENU_ROW.
+.const USTORE_GOLD_COL = 21
 
 // Message table indices for show_msg
 .const MSG_GOLD       = 0
@@ -144,7 +146,7 @@ store_draw_screen:
     lda #2
     jsr draw_separator_at_a
 
-    // Rows 3-14: Item list
+    // Rows 3-18: Item list
     lda #COL_LGREY
     sta zp_text_color
 
@@ -155,7 +157,7 @@ store_draw_screen:
     lda #3
     sta sd_row                  // Current display row
     lda #0
-    sta sd_save_x               // Slot counter 0-11
+    sta sd_save_x               // Slot counter 0-15
 
 !sds_item_loop:
     lda sd_save_x
@@ -236,15 +238,12 @@ store_draw_screen:
     jmp !sds_item_loop-
 
 !sds_items_done:
-    // Row 15: Separator
-    lda #COL_DGREY
-    sta zp_text_color
-    lda #15
-    jsr draw_separator_at_a
-
-    // Row 16: Gold display
-    ldx #MSG_GOLD
+    // Row 19: Menu, then the gold to its right
+    ldx #MSG_MENU
     jsr show_msg
+    ldx #MSG_GOLD
+    lda #USTORE_GOLD_COL
+    jsr show_msg_at_col
 
     lda player_data + PL_GOLD_0
     sta zp_temp0
@@ -252,11 +251,7 @@ store_draw_screen:
     sta zp_temp1
     lda player_data + PL_GOLD_2
     sta nf_value_2
-    jsr screen_put_decimal_u24
-
-    // Row 18: Menu
-    ldx #MSG_MENU
-    jmp show_msg
+    jmp screen_put_decimal_u24
 
 // ============================================================
 // Buy flow
@@ -266,7 +261,7 @@ store_draw_screen:
 // Input: zp_store_idx
 // Clobbers: everything
 store_buy:
-    // Prompt: "BUY WHICH ITEM? (A-L)"
+    // Prompt: "BUY WHICH ITEM? (A-P)"
     ldx #MSG_BUY_WHICH
     jsr store_clear_show_msg
 
@@ -280,7 +275,7 @@ store_buy:
     rts
 !sb_not_cancel:
 
-    // Convert PETSCII letter to slot index (A=0, L=11)
+    // Convert PETSCII letter to slot index (A=0, P=15)
     sec
     sbc #PETSCII_A
     bcs !sb_above_a+
@@ -288,7 +283,7 @@ store_buy:
 !sb_above_a:
     cmp #STORE_MAX_ITEMS
     bcc !sb_valid_slot+
-    rts                         // Above 'L'
+    rts                         // Above 'P'
 !sb_valid_slot:
 
     sta zp_store_slot
@@ -702,17 +697,18 @@ ssell_show_offer:
 // Helpers
 // ============================================================
 
-// show_msg — Display a table-driven overlay-local message
+// show_msg — Display a table-driven overlay-local message at column 1
+// (show_msg_at_col: at column A)
 // Input: X = message index (MSG_* constant)
-// All messages use column 1.
 // Clobbers: A, X, Y
 show_msg:
+    lda #1
+show_msg_at_col:
+    sta zp_cursor_col
     lda msg_tbl_color,x
     sta zp_text_color
     lda msg_tbl_row,x
     sta zp_cursor_row
-    lda #1
-    sta zp_cursor_col
     lda msg_tbl_lo,x
     sta zp_ptr0
     lda msg_tbl_hi,x
@@ -1575,7 +1571,7 @@ uis_store_gp_pad_str:
 uis_menu_str:
     .text "B)uy  S)ell  Q)uit" ; .byte 0
 uis_buy_which_str:
-    .text "Buy which item? (a-l)" ; .byte 0
+    .text "Buy which item? (a-p)" ; .byte 0
 uis_price_str:
     .text "Price: " ; .byte 0
 uis_gp_buy_str:
@@ -1637,7 +1633,7 @@ msg_tbl_color:
     .byte COL_WHITE, COL_LGREEN, COL_WHITE, COL_WHITE, COL_WHITE
     .byte COL_WHITE, COL_WHITE, COL_WHITE, COL_WHITE, COL_LGREEN
 msg_tbl_row:
-    .byte 16, 18, 20, 22, 22
+    .byte STORE_MENU_ROW, STORE_MENU_ROW, 20, 22, 22
     .byte 21, 22, 22, 0, 23
     .byte 22, 23, 20, 21, 20
     .byte 21, 20, 20, 21, 22

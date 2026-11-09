@@ -359,6 +359,7 @@ player_bake_apply_one:
     // stats upward on every save/load rebuild, while wear/takeoff apply p1
     // as raw arithmetic.
     ldx #EQUIP_RING
+!pcs_str_ring:                  // each hand: EQUIP_RING, then EQUIP_RING2
     lda inv_item_id,x
     cmp #24
     bne !pcs_no_str_ring+
@@ -367,6 +368,9 @@ player_bake_apply_one:
     adc inv_p1,x
     sta player_data + PL_STR_CUR
 !pcs_no_str_ring:
+    cpx #EQUIP_RING2
+    ldx #EQUIP_RING2
+    bcc !pcs_str_ring-
 
     // Amulet of Wisdom uses p1 as a signed WIS modifier; Amulet of the Magi
     // uses p1 as a signed INT modifier. Same deterministic rule as above.
@@ -392,17 +396,17 @@ player_bake_apply_one:
 player_recalc_pflags_equipment:
     lda #0
     ldx #EQUIP_RING
+!pcs_pf_ring:                   // each hand: EQUIP_RING, then EQUIP_RING2
     ldy inv_item_id,x
     cpy #ITEM_TYPE_RING_RESIST_FIRE
     bcc !pcs_pf_none+
     cpy #ITEM_TYPE_RING_SLAYING
     bcs !pcs_pf_none+
-    tya
-    sec
-    sbc #ITEM_TYPE_RING_RESIST_FIRE
-    tax
-    lda pf_bit_table,x
+    ora pf_bit_table - ITEM_TYPE_RING_RESIST_FIRE,y
 !pcs_pf_none:
+    cpx #EQUIP_RING2
+    ldx #EQUIP_RING2
+    bcc !pcs_pf_ring-
     // Amulet of the Magi also grants see-invisible and Free Action
     ldx #EQUIP_AMULET
     ldy inv_item_id,x
@@ -435,9 +439,10 @@ player_pflags: .byte 0
 // Clobbers: A, X
 player_apply_slaying_bonuses:
     ldx #EQUIP_RING
+!pasb_ring:                     // each hand: EQUIP_RING, then EQUIP_RING2
     lda inv_item_id,x
     cmp #ITEM_TYPE_RING_SLAYING
-    bne !pasb_done+
+    bne !pasb_next+
     lda inv_to_hit,x
     clc
     adc player_data + PL_TOHIT
@@ -446,7 +451,10 @@ player_apply_slaying_bonuses:
     clc
     adc player_data + PL_TODMG
     sta player_data + PL_TODMG
-!pasb_done:
+!pasb_next:
+    cpx #EQUIP_RING2
+    ldx #EQUIP_RING2
+    bcc !pasb_ring-
     rts
 #endif
 

@@ -1093,9 +1093,9 @@ test_home_view:
     lda #STORE_HOME
     sta zp_store_idx
     lda #2
-    sta si_item_id + 84
+    sta si_item_id + STORE_HOME * STORE_MAX_ITEMS
     lda #1
-    sta si_qty + 84
+    sta si_qty + STORE_HOME * STORE_MAX_ITEMS
 
     jsr home_enter
     :PatchJump(ui_help_clear_all, ui_clear_full_screen_safe)
@@ -1122,7 +1122,7 @@ test_home_view:
     sta zp_ptr0
     lda #>hm_menu_str
     sta zp_ptr0_hi
-    lda #18
+    lda #STORE_MENU_ROW
     ldx #1
     jsr assert_screen_string
     bcc !fail+

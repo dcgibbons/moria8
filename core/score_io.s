@@ -71,6 +71,18 @@ hiscore_load:
     cpx #HISCORE_MAX_ENTRIES * HISCORE_ENTRY_SIZE
     bne !hl_clear-
 
+#if HAL_STORAGE_SCORE_PROBES_FILE
+    // A save disk without the file yet: no CHKIN. The drive has already failed
+    // the OPEN (62 FILE NOT FOUND) when the TALK can arrive, and the KERNAL's
+    // talker turnaround then waits forever (docs/BACKLOG.md); ask the drive.
+    lda #hal_storage_score_read_name_len
+    ldx #<hal_storage_score_read_name
+    ldy #>hal_storage_score_read_name
+    jsr storage_file_exists
+    bcs !hl_open+
+    rts                         // the table stays empty
+!hl_open:
+#endif
     // Open file for reading
     lda #hal_storage_score_read_name_len
     ldx #<hal_storage_score_read_name

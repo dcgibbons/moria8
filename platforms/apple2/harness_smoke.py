@@ -1412,8 +1412,12 @@ end
 prog:write_u8(PFLAGS_ADDR, 0)
 wear_slot_a(109, "resist_fire_ring")
 assert_line("resist_fire_flag", prog:read_u8(PFLAGS_ADDR) & 0x01 == 0x01, "pflags " .. prog:read_u8(PFLAGS_ADDR))
+-- Two ring hands (VMS moria.inc:528, 2026-11-08): the left hand next, then
+-- a third ring replaces the left-hand one
+wear_slot_a(110, "resist_cold_ring")
+assert_line("both_resist_flags", prog:read_u8(PFLAGS_ADDR) & 0x03 == 0x03, "pflags " .. prog:read_u8(PFLAGS_ADDR))
 wear_slot_a(23, "protection_ring")
-assert_line("resist_fire_flag_cleared", prog:read_u8(PFLAGS_ADDR) & 0x01 == 0, "pflags " .. prog:read_u8(PFLAGS_ADDR))
+assert_line("left_ring_replaced", prog:read_u8(PFLAGS_ADDR) & 0x03 == 0x01, "pflags " .. prog:read_u8(PFLAGS_ADDR))
 wear_slot_a(125, "magi_amulet")
 assert_line("free_action_flag", prog:read_u8(PFLAGS_ADDR) & 0x18 == 0x18, "pflags " .. prog:read_u8(PFLAGS_ADDR))
 dump("after_exchange")

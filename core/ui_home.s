@@ -40,12 +40,10 @@ home_put_col1_string:
 home_enter:
     jsr store_draw_screen       // Reuses overlay's draw (skips prices for home)
 
-    // Overwrite menu row 18 with home menu
+    // Overwrite the store menu with the home menu (the gold stays beside it)
     lda #COL_WHITE
     sta zp_text_color
-    lda #18
-    jsr hal_screen_clear_row
-    lda #18
+    lda #STORE_MENU_ROW
     ldx #<hm_menu_str
     ldy #>hm_menu_str
     jsr home_put_col1_string
@@ -107,12 +105,12 @@ home_retrieve:
     cmp #PETSCII_HM_SPACE
     beq !hr_cancel_relay+
 
-    // Convert PETSCII letter to slot index (A=0, L=11)
+    // Convert PETSCII letter to slot index (A=0, P=15)
     sec
     sbc #PETSCII_HM_A
     bcc !hr_cancel_relay+       // Below 'A'
     cmp #STORE_MAX_ITEMS
-    bcs !hr_cancel_relay+       // Above 'L'
+    bcs !hr_cancel_relay+       // Above 'P'
 
     jmp !hr_valid_slot+
 !hr_cancel_relay:

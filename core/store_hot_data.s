@@ -3,6 +3,6 @@
 
 hg_kicked:      .fill 8, 0                    // Resets on town re-entry
 
-// Base index into SoA arrays for each store (store * 12).
+// Base index into SoA arrays for each store (store * STORE_MAX_ITEMS).
 store_base_idx:
-    .byte 0, 12, 24, 36, 48, 60, 72, 84
+    .fill 8, i * STORE_MAX_ITEMS

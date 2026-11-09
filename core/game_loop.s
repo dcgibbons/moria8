@@ -2255,7 +2255,7 @@ spss_fields: .byte 2, 1, 0, 3, 4, 0, IF_IDENTIFIED, 6   // 6 = EGO_DEFENDER
 .label save_product_secondary_dam   = inv_to_dam + EQUIP_SECONDARY
 .label save_product_secondary_flags = inv_flags + EQUIP_SECONDARY
 .label save_product_secondary_ego   = inv_ego + EQUIP_SECONDARY
-.label save_product_cloak_id        = inv_item_id + EQUIP_CLOAK
+.label save_product_ring2_id        = inv_item_id + EQUIP_RING2
 #endif
 
 #if C64_TEST_SCRIPTED_EXCHANGE_PRODUCT || PLUS4_TEST_SCRIPTED_EXCHANGE_PRODUCT || C128_TEST_SCRIPTED_EXCHANGE_PRODUCT
@@ -2301,7 +2301,7 @@ xps_secondary: .byte 2, 1, 0, 3, 4, 0, IF_IDENTIFIED, 6   // 6 = EGO_DEFENDER
 .label exchange_product_primary_ego  = inv_ego + EQUIP_WEAPON
 .label exchange_product_secondary_id = inv_item_id + EQUIP_SECONDARY
 .label exchange_product_secondary_hit = inv_to_hit + EQUIP_SECONDARY
-.label exchange_product_cloak_id     = inv_item_id + EQUIP_CLOAK
+.label exchange_product_ring2_id     = inv_item_id + EQUIP_RING2
 #if PLUS4_TEST_SCRIPTED_EXCHANGE_PRODUCT
 // Screen cells the smoke reads (no bytes): "Primary: Dagger" on row 0,
 // "Secondary: Mace" on row 1.

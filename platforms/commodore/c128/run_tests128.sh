@@ -4452,7 +4452,7 @@ run_boot_title_save_write_product_smoke() {
     check_log="$(test128_tmp_file "test128_${name}_check.log")"
     rm -f "$save_seq"
     if ! "$c1541_bin" -attach "$abs_save_d64" -read "the.game,s" "$save_seq" >"$check_log" 2>&1 \
-            || ! python3 ../c64/tests/check_save_secondary.py "$save_seq" 0x1A >>"$check_log" 2>&1; then
+            || ! python3 ../c64/tests/check_save_secondary.py "$save_seq" 0x1B >>"$check_log" 2>&1; then
         echo "FAIL (secondary weapon not in the written save)"
         tail -3 "$check_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -6240,7 +6240,7 @@ run_exchange_product_smoke128() {
         --expect-byte-symbol ".exchange_product_primary_ego=0x06" \
         --expect-byte-symbol ".exchange_product_secondary_id=0x05" \
         --expect-byte-symbol ".exchange_product_secondary_hit=0x01" \
-        --expect-byte-symbol ".exchange_product_cloak_id=0xff" \
+        --expect-byte-symbol ".exchange_product_ring2_id=0xff" \
         --expect-byte-symbol ".zp_turn_lo=0x01" \
         --expect-byte-symbol ".current_overlay=0x07" \
         --timeout 30 \

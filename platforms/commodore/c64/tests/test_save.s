@@ -27,7 +27,7 @@ bootstrap:
 // Must be in low memory (before imports) so BRK address is below $A000.
 // VICE breakpoint on $A000+ can false-trigger during BASIC ROM execution.
 test_finish:
-    ldx #37
+    ldx #38
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -110,7 +110,6 @@ random_floor_in_room:
 #import "../../../../core/player_items.s"
 #import "../../../../core/spell_data.s"
 #import "../../../../core/projectile.s"
-#import "../../../../core/spell_effects.s"
 #import "../../../../core/dungeon_los.s"
 #import "../../../../core/player_move.s"
 #import "../../../../core/combat.s"
@@ -125,6 +124,9 @@ random_floor_in_room:
 .segment TestStoreOverlay
 #import "../../../../core/store.s"
 #import "../../../../core/ui_store.s"
+// spell_effects.s only links here (no save test casts): 16-item stores
+// grew the store arrays in the test body.
+#import "../../../../core/spell_effects.s"
 #import "../dungeon_render.s"
 .segment Default
 
@@ -151,6 +153,9 @@ random_floor_in_room:
 .const hal_storage_save_known_bits_version = $11
 .const hal_storage_save_known160_version = $12
 .const hal_storage_save_door_state_version = $12
+.const hal_storage_save_store16_version = $12
+// TODO(release): remove with the 12-item store migration (test 39).
+#define HAL_STORAGE_LEGACY_STORE12_MIGRATION
 .const KERNAL_ERR_DEVICE_NOT_PRESENT = 5
 .const KERNAL_SETNAM = test_save_setnam
 .const KERNAL_SETLFS = test_save_setlfs
@@ -323,7 +328,7 @@ rle_decompress_map:
 !:  rts
 
 // Test result buffer — copy to $0400 at end (msg_print clobbers $0400)
-tc_results: .fill 38, $ff
+tc_results: .fill 39, $ff
 
 test_t31_ptr_lo: .byte 0
 test_t31_ptr_hi: .byte 0
@@ -2791,22 +2796,12 @@ t29_fail_code:
 
     // ============================================================
     // Test 36: a current-version inventory section round-trips all
-    // 8 x 33 = 264 bytes (slot 32 = the secondary weapon populated,
-    // reserved slot 31 empty), and the loader reads exactly 264.
+    // 8 x 33 = 264 bytes (slot 32 = the secondary weapon and slot 31 = the
+    // left-hand ring populated), and the loader reads exactly 264.
     // ============================================================
     jsr ts_reset_io_state
     sta test_save_sink_writes
-    jsr ts_fill_inventory_pattern
-    lda #FI_EMPTY                   // reserved cloak slot: empty, fields 0
-    sta inv_item_id + EQUIP_CLOAK
-    lda #0
-    sta inv_qty + EQUIP_CLOAK
-    sta inv_p1 + EQUIP_CLOAK
-    sta inv_to_hit + EQUIP_CLOAK
-    sta inv_to_dam + EQUIP_CLOAK
-    sta inv_to_ac + EQUIP_CLOAK
-    sta inv_flags + EQUIP_CLOAK
-    sta inv_ego + EQUIP_CLOAK
+    jsr ts_fill_inventory_pattern   // every slot, the left-hand ring's too
     ldx #0
 !t36_snap:                          // snapshot all 264 bytes
     lda inv_item_id,x
@@ -2848,9 +2843,6 @@ t29_fail_code:
     lda inv_ego + EQUIP_SECONDARY
     cmp #$50
     bne !t36_fail+
-    lda inv_item_id + EQUIP_CLOAK
-    cmp #FI_EMPTY
-    bne !t36_fail+
     lda save_io_error
     bne !t36_fail+
     lda #$01
@@ -2881,9 +2873,9 @@ t29_fail_code:
     jsr test_save_inv31_inventory_state_blocks
     jsr test_save_sentinel
     jsr item_init_inventory
-    lda #2                          // stale secondary/cloak before the load
+    lda #2                          // stale secondary/left ring before the load
     sta inv_item_id + EQUIP_SECONDARY
-    sta inv_item_id + EQUIP_CLOAK
+    sta inv_item_id + EQUIP_RING2
     lda #9
     sta inv_qty + EQUIP_SECONDARY
     lda #SAVE_INV31_VERSION
@@ -2903,7 +2895,7 @@ t29_fail_code:
     lda inv_p1 + EQUIP_AMULET
     cmp #$7f
     bne !t37_fail+
-    lda inv_item_id + EQUIP_CLOAK
+    lda inv_item_id + EQUIP_RING2
     cmp #FI_EMPTY
     bne !t37_fail+
     lda inv_item_id + EQUIP_SECONDARY
@@ -2938,6 +2930,87 @@ t29_fail_code:
     lda #$00
 !t38_store:
     sta tc_results + 37
+
+    // ============================================================
+    // Test 39: a 12-item store save loads into the 16-item rows: each
+    // store's 12 items keep their order and the 4 new slots are empty, and
+    // the stream stays aligned for the blocks after the stores.
+    // TODO(release): remove with load_read_post_known_store12.
+    // ============================================================
+    .const T39_PRE = 12 + 12 + 4 + 5 + 5
+    .const T39_STORES = 7 * 8 * LEGACY_STORE_MAX_ITEMS
+    .const T39_POST = 7 + 1 + MAX_ROOMS * 6 + 1 + MAX_TRAPS * 3 + MAX_MONSTERS * MONSTER_ENTRY_SIZE
+    .const T39_SENTINEL = T39_PRE + T39_STORES + T39_POST
+    .assert "Test 39 stream fits five pages", T39_SENTINEL < $500, true
+    .assert "Test 39 pattern covers 672 store bytes", T39_STORES, $2a0
+    ldx #0
+!t39_seed:
+    lda #$77                        // poison: every slot must be rewritten
+    sta si_item_id,x
+    sta si_item_id + $100,x
+    sta si_item_id + $200,x
+    sta si_item_id + $280,x
+    lda #0
+    sta SAVE_STREAM_BUF,x
+    sta SAVE_STREAM_BUF + $100,x
+    sta SAVE_STREAM_BUF + $200,x
+    sta SAVE_STREAM_BUF + $300,x
+    sta SAVE_STREAM_BUF + $400,x
+    inx
+    bne !t39_seed-
+!t39_pattern:                       // legacy store byte n holds n & $ff
+    txa
+    sta SAVE_STREAM_BUF + T39_PRE,x
+    sta SAVE_STREAM_BUF + T39_PRE + $100,x
+    cpx #T39_STORES - $200
+    bcs !t39_pattern_next+
+    sta SAVE_STREAM_BUF + T39_PRE + $200,x
+!t39_pattern_next:
+    inx
+    bne !t39_pattern-
+    lda #$5a
+    sta SAVE_STREAM_BUF + T39_SENTINEL
+
+    lda #SAVE_STORE16_VERSION - 1
+    sta load_save_version
+    jsr test_stream_reset_read
+    jsr ts_reset_io_state
+    jsr load_read_post_known_store12
+
+    lda save_io_error
+    bne !t39_fail+
+    lda si_item_id                  // store 0 item 0: n = 0
+    bne !t39_fail+
+    lda si_item_id + 1 * 16         // store 1 item 0: n = 12
+    cmp #12
+    bne !t39_fail+
+    lda si_item_id + 7 * 16 + 11    // store 7 item 11: n = 95
+    cmp #95
+    bne !t39_fail+
+    lda si_item_id + 12             // new slots: empty
+    cmp #FI_EMPTY
+    bne !t39_fail+
+    lda si_item_id + 7 * 16 + 15
+    cmp #FI_EMPTY
+    bne !t39_fail+
+    lda si_qty                      // si_qty store 0 item 0: n = 96
+    cmp #96
+    bne !t39_fail+
+    lda si_qty + 12                 // new slots of the other arrays: 0
+    bne !t39_fail+
+    lda si_meta + 7 * 16 + 11       // the last legacy byte: n = 671
+    cmp #<671
+    bne !t39_fail+
+    lda si_meta + 7 * 16 + 15
+    bne !t39_fail+
+    jsr test_load_sentinel          // the blocks after the stores line up
+    bne !t39_fail+
+    lda #$01
+    bne !t39_store+
+!t39_fail:
+    lda #$00
+!t39_store:
+    sta tc_results + 38
 
     jmp test_finish
 

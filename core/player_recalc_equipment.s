@@ -41,6 +41,7 @@ player_recalc_equipment:
     // Add Ring of Slaying to-hit and to-damage bonuses
 #if HAL_PLATFORM_COMPACT_PLAY_SLOT
     ldx #EQUIP_RING
+!pre_slay_ring:                 // each hand: EQUIP_RING, then EQUIP_RING2
     lda inv_item_id,x
     cmp #ITEM_TYPE_RING_SLAYING
     bne !pre_no_slay+
@@ -53,6 +54,9 @@ player_recalc_equipment:
     adc player_data + PL_TODMG
     sta player_data + PL_TODMG
 !pre_no_slay:
+    cpx #EQUIP_RING2
+    ldx #EQUIP_RING2
+    bcc !pre_slay_ring-
 #else
     jsr player_apply_slaying_bonuses
 #endif

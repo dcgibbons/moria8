@@ -136,7 +136,6 @@ press_key_str:
 tc_results: .fill 56, $ff
 tc_count: .byte 0
 t28_slot:       .byte 0
-t28_unit:       .byte 0
 
 .macro PatchJump(target, replacement) {
     lda #$4c
@@ -873,55 +872,36 @@ test_start:
 
     // ============================================================
     // Test 28: VMS store_maint, under-stocked branch — an empty store
-    // stocks store$min_inven - store_ctr + 2 items (store1.inc), scaled:
-    // STORE_MIN_KEEP + 2 = 9 stockings, stacks sharing a slot (Umoria
-    // storeCarryItem), each of the VMS store count (sro_stock_qty).
+    // stocks store$min_inven - store_ctr + 2 items (store1.inc), stopping
+    // when it is full: the Armoury (no stacking stock) takes
+    // min(STORE_MIN_KEEP + 2, STORE_MAX_ITEMS) items.
     // ============================================================
-    ldx #0
+    .const T28_WANT = min(STORE_MIN_KEEP + 2, STORE_MAX_ITEMS)
+    ldx #STORE_MAX_ITEMS
 !t28_clr:
-    cpx #STORE_MAX_ITEMS
-    bcs !t28_clr_done+
     lda #FI_EMPTY
     sta si_item_id,x
     inx
-    jmp !t28_clr-
-!t28_clr_done:
-    lda #0
+    cpx #2 * STORE_MAX_ITEMS
+    bcc !t28_clr-
+    lda #1
     sta zp_store_idx
     jsr store_restock_one
 
-    // Count the items in store 0
     lda #0
     sta tc_count
-    ldx #0
+    ldx #STORE_MAX_ITEMS
 !t28_loop:
-    cpx #STORE_MAX_ITEMS
-    bcs !t28_done+
     lda si_item_id,x
     cmp #FI_EMPTY
     beq !t28_next+
-    // Each stocking brings the VMS store count (sro_stock_qty): count
-    // stockings, the slot's quantity in units of that count.
-    stx t28_slot
-    tax
-    jsr sro_stock_qty
-    sta t28_unit
-    ldx t28_slot
-    lda si_qty,x
-!t28_units:
     inc tc_count
-    sec
-    sbc t28_unit
-    beq !t28_next+
-    bcs !t28_units-
-    lda #$80                    // not a whole number of stockings
-    sta tc_count
 !t28_next:
     inx
-    jmp !t28_loop-
-!t28_done:
+    cpx #2 * STORE_MAX_ITEMS
+    bcc !t28_loop-
     lda tc_count
-    cmp #STORE_MIN_KEEP + 2
+    cmp #T28_WANT
     bne !t28_fail+
     lda #$01
     jmp !t28_store+
@@ -1665,20 +1645,21 @@ test_start:
 
     // ============================================================
     // Test 44: VMS store_maint turnover — between the keep bounds a store
-    // sells off 1+randint(3) items before restocking (store1.inc). Nine
-    // daggers (never General Store stock) in store 0 leave 5..7 daggers.
+    // sells off 1+randint(3) items before restocking (store1.inc).
+    // VMS randint(3) is 1..3, so 2..4 go: STORE_MIN_KEEP daggers (never
+    // General Store stock) in store 0 leave STORE_MIN_KEEP - 4 .. - 2.
     // ============================================================
     lda #2                      // Dagger
-    ldx #9
+    ldx #STORE_MIN_KEEP
     jsr t44_fill_store0
     lda #0
     sta zp_store_idx
     jsr store_restock_one
     lda #2
     jsr t44_count_id
-    cmp #5
+    cmp #STORE_MIN_KEEP - 4
     bcc !t44_fail+
-    cmp #8
+    cmp #STORE_MIN_KEEP - 1
     bcs !t44_fail+
     lda #$01
     jmp !t44_store+
@@ -1688,9 +1669,9 @@ test_start:
     sta tc_results + 43
 
     // ============================================================
-    // Test 45: VMS store_maint over-stocked branch — a full store sells off
-    // store_ctr - store$max_inven + 2 items and stocks none: 12 daggers
-    // leave exactly 12 - (12 - STORE_MAX_KEEP + 2) = 8 items.
+    // Test 45: a full store takes VMS store_maint's turnover branch: with
+    // 16 slots it never passes store$max_inven (20), so it sells off
+    // 1+randint(3) (2..4) of its 16 daggers and restocks into the room left.
     // ============================================================
     lda #2
     ldx #STORE_MAX_ITEMS
@@ -1700,11 +1681,13 @@ test_start:
     jsr store_restock_one
     lda #2
     jsr t44_count_id
-    cmp #STORE_MAX_KEEP - 2
-    bne !t45_fail+
+    cmp #STORE_MAX_ITEMS - 4
+    bcc !t45_fail+
+    cmp #STORE_MAX_ITEMS - 1
+    bcs !t45_fail+
     lda tc_count
-    cmp #STORE_MAX_KEEP - 2
-    bne !t45_fail+
+    cmp #STORE_MAX_ITEMS + 1
+    bcs !t45_fail+
     lda #$01
     jmp !t45_store+
 !t45_fail:

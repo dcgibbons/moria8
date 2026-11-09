@@ -25,15 +25,16 @@
 // block is 160 bytes, not 260 (2026-11-05). Older saves do not fit, so $18 is
 // the oldest the loader takes and the legacy feature versions are pinned at
 // it (the 31-slot inventory version just below it, so its loader compiles out).
-.const hal_storage_save_v1_version = $18
-.const hal_storage_save_known96_version = $18
-.const hal_storage_save_inv31_version = $17
-.const hal_storage_save_known_bits_version = $18
-.const hal_storage_save_baked_stats_version = $18
-.const hal_storage_save_known160_version = $18
-.const hal_storage_save_door_state_version = $18
-.const hal_storage_save_inv33_version = $18
-.const hal_storage_save_version = $18
+// $19: 16-item stores (the store block grew); older saves are refused.
+.const hal_storage_save_v1_version = $19
+.const hal_storage_save_known96_version = $19
+.const hal_storage_save_inv31_version = $18
+.const hal_storage_save_known_bits_version = $19
+.const hal_storage_save_baked_stats_version = $19
+.const hal_storage_save_known160_version = $19
+.const hal_storage_save_door_state_version = $19
+.const hal_storage_save_inv33_version = $19
+.const hal_storage_save_version = $19
 
 #define HAL_STORAGE_MARKER_PRESENT_DIRECT
 #define HAL_STORAGE_SAVE_CONFIRM_OVERWRITE_PROBE

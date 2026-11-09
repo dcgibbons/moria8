@@ -23,6 +23,9 @@
 .const FI_EMPTY        = $ff
 
 // Equipment Slot Constants (indices 22-32 in unified table)
+// Rings: VMS's two hands (moria.inc:528, inventory[29] right, [30] left):
+// EQUIP_RING the right, EQUIP_RING2 the left (2026-11-08; slot 31 was
+// reserved for a cloak slot, which will take a new slot when it lands).
 .const EQUIP_WEAPON = 22
 .const EQUIP_BODY   = 23
 .const EQUIP_SHIELD = 24
@@ -30,11 +33,11 @@
 .const EQUIP_HANDS  = 26
 .const EQUIP_FEET   = 27
 .const EQUIP_LIGHT  = 28
-.const EQUIP_RING   = 29
+.const EQUIP_RING   = 29               // right hand: a ring goes here when it is free
 .const EQUIP_AMULET = 30
-.const EQUIP_CLOAK  = 31               // RESERVED: always empty until the cloak slot lands
+.const EQUIP_RING2  = 31               // left hand: else here, replacing what is worn
 .const EQUIP_SECONDARY = 32            // VMS inventory[34]: SHIFT+X swaps it with EQUIP_WEAPON
-.const EQUIP_LAST   = EQUIP_AMULET     // becomes EQUIP_CLOAK with the cloak
+.const EQUIP_LAST   = EQUIP_RING2
 .const EQUIP_END    = EQUIP_LAST + 1   // AC sum / pseudo-ID: never the secondary
 .const VISIBLE_EQUIP_LAST = EQUIP_SECONDARY   // equipment screen and take-off
 .const VISIBLE_EQUIP_END  = VISIBLE_EQUIP_LAST + 1
@@ -45,9 +48,9 @@
 .const TOTAL_INV_SLOTS = 33
 .const MAX_EQUIP_SLOTS = TOTAL_INV_SLOTS - MAX_INV_SLOTS
 .const LEGACY_INV30_SLOTS = 30         // saves before the amulet slot
-.const LEGACY_INV31_SLOTS = 31         // saves before the reserved cloak and secondary slots
-.assert "Reserved cloak slot follows the AC range", EQUIP_CLOAK, EQUIP_END
-.assert "Secondary weapon is the last inventory slot", EQUIP_SECONDARY == EQUIP_CLOAK + 1 && EQUIP_SECONDARY == TOTAL_INV_SLOTS - 1, true
+.const LEGACY_INV31_SLOTS = 31         // saves before the slot-31 (left ring) and secondary slots
+.assert "The left-hand ring ends the AC range", EQUIP_RING2 + 1, EQUIP_END
+.assert "Secondary weapon is the last inventory slot", EQUIP_SECONDARY == EQUIP_RING2 + 1 && EQUIP_SECONDARY == TOTAL_INV_SLOTS - 1, true
 .assert "Visible equipment covers every equipment slot", VISIBLE_EQUIP_END, TOTAL_INV_SLOTS
 
 // Item Category for Digging Tools

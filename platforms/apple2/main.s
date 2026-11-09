@@ -174,6 +174,32 @@ press_key_str:
 #import "../../core/huffman.s"
 .segment A2HuffData
 #import "../shared/catalog/catalog_names.s"    // The catalog's names, read like the corpus
+// Read-only aux tables ride the corpus slot (boot-loaded, never evicted):
+// 16-item stores filled A2AuxData. Readers use 16-bit aux pointers.
+// Screen-code -> Apple display-code table for inputs $00-$7F (P6). Must
+// reproduce a2_map_char (screen_a2.s) exactly for that range: $00->$C0,
+// $01-$1A->$E1-$FA, $1B-$1F->$DB-$DF, $20-$5A->code|$80, $5B-$5F->$9B-$9F,
+// $60-$7F->$A0. High-half inputs stay on the branch chain. Block-read into
+// the tail of a2_ss_buf once per render_viewport (rv_char_map).
+a2_char_map_aux:
+    .fill $80, i == 0 ? $c0 : i < $1b ? (i + $60) | $80 : i < $20 ? (i + $40) | $80 : i < $5b ? i | $80 : i < $60 ? (i + $40) | $80 : $a0
+.assert "Char map table covers $00-$7F", * - a2_char_map_aux, $80
+
+// Speaker sound patterns for hal_sound_play (services.s): one 16-byte slot
+// per SFX ID, as (period, toggles) pairs with period 0 = end. Period:
+// smaller = higher pitch. Shapes mirror the C64 SID intent (core/sound.s).
+a2_sfx_patterns:
+    .byte $e0, 10, $c0, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0   // BUMP: low double thud
+    .byte $50, 8, $90, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0    // HIT: high-to-low snap
+    .byte $28, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0       // MISS: quick high blip
+    .byte $a0, 6, $70, 6, $48, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0  // PICKUP: rising chirp
+    .byte $60, 20, $90, 20, $c0, 24, $f0, 28, 0, 0, 0, 0, 0, 0, 0, 0 // DEATH: long descent
+    .byte $80, 8, $60, 8, $40, 16, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0  // LEVELUP: arpeggio up
+    .byte $58, 12, $66, 12, $58, 12, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 // SPELL: wobble
+    .byte $d0, 16, $b0, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0    // SPELL_FAIL: low buzz
+    .byte $c8, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0      // HUNGER_WARN: single low tone
+    .byte $e8, 18, $d8, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0   // HUNGER_FAINT: lower, harsher
+.assert "Sound patterns are 10 x 16-byte slots", * - a2_sfx_patterns, 160
 ovl_huffdata_end:
 .segment Default
 #import "../../core/dungeon_data.s"
@@ -1083,19 +1109,19 @@ a2_play_body:
 // Apple item commands call this resident routine while the item overlay is
 // active. Keep the stat transition code in the always-loaded play payload.
 player_adjust_equipment_stat:
+    // By the item, as core/player_adjust_equipment_stat.s: by the slot, every
+    // ring added its p1 to Strength, and the left hand (2026-11-08) would too.
     jsr player_adjust_equipment_stat_prepare
-    cpx #EQUIP_RING
-    bcc !paes_done+
-    cpx #EQUIP_AMULET
-    bne !paes_str+
     lda inv_item_id,x
-    and #1
-    eor #3
-    sbc #1
-    tax
-    jmp !paes_apply+
-!paes_str:
     ldx #0
+    cmp #ITEM_TYPE_RING_STRENGTH
+    beq !paes_apply+
+    ldx #PL_WIS_CUR - PL_STR_CUR
+    cmp #ITEM_TYPE_AMULET_WISDOM
+    beq !paes_apply+
+    ldx #PL_INT_CUR - PL_STR_CUR
+    cmp #ITEM_TYPE_AMULET_MAGI
+    bne !paes_done+
 !paes_apply:
     jmp player_adjust_equipment_stat_apply
 !paes_done:
@@ -1275,30 +1301,6 @@ no_stairs_str:
 cmb_winner_str:
     .text "You have won! Shift+Q to claim victory." ; .byte 0
 
-// Screen-code -> Apple display-code table for inputs $00-$7F (P6). Must
-// reproduce a2_map_char (screen_a2.s) exactly for that range: $00->$C0,
-// $01-$1A->$E1-$FA, $1B-$1F->$DB-$DF, $20-$5A->code|$80, $5B-$5F->$9B-$9F,
-// $60-$7F->$A0. High-half inputs stay on the branch chain. Block-read into
-// the tail of a2_ss_buf once per render_viewport (rv_char_map).
-a2_char_map_aux:
-    .fill $80, i == 0 ? $c0 : i < $1b ? (i + $60) | $80 : i < $20 ? (i + $40) | $80 : i < $5b ? i | $80 : i < $60 ? (i + $40) | $80 : $a0
-.assert "Char map table covers $00-$7F", * - a2_char_map_aux, $80
-
-// Speaker sound patterns for hal_sound_play (services.s): one 16-byte slot
-// per SFX ID, as (period, toggles) pairs with period 0 = end. Period:
-// smaller = higher pitch. Shapes mirror the C64 SID intent (core/sound.s).
-a2_sfx_patterns:
-    .byte $e0, 10, $c0, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0   // BUMP: low double thud
-    .byte $50, 8, $90, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0    // HIT: high-to-low snap
-    .byte $28, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0       // MISS: quick high blip
-    .byte $a0, 6, $70, 6, $48, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0  // PICKUP: rising chirp
-    .byte $60, 20, $90, 20, $c0, 24, $f0, 28, 0, 0, 0, 0, 0, 0, 0, 0 // DEATH: long descent
-    .byte $80, 8, $60, 8, $40, 16, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0  // LEVELUP: arpeggio up
-    .byte $58, 12, $66, 12, $58, 12, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 // SPELL: wobble
-    .byte $d0, 16, $b0, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0    // SPELL_FAIL: low buzz
-    .byte $c8, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0      // HUNGER_WARN: single low tone
-    .byte $e8, 18, $d8, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0   // HUNGER_FAINT: lower, harsher
-.assert "Sound patterns are 10 x 16-byte slots", * - a2_sfx_patterns, 160
 .segment Default
 
 // Auto-rest disturbance flag (core/turn.s, TRN-007) in resident main RAM:

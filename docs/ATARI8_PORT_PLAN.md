@@ -447,7 +447,7 @@ across C64, C128, Plus/4, Apple IIe, and Commander X16:
    * `OLDEST_SAVE_VERSION` is `$15` in `platforms/atari8/hal/storage_policy.s`
      and every feature-version constant is pinned to it, so no dead legacy save
      migration code is carried. The one exception is the 33-slot inventory
-     (reserved cloak + secondary weapon): `SAVE_VERSION` is `$16`, and `$15`
+     (slot 31, then a reserved cloak, now the left-hand ring, + secondary weapon): `SAVE_VERSION` is `$16`, and `$15`
      saves still load through the shared 31-slot inventory path
      (`docs/X_WEAPON_SWAP_DESIGN.md` §6.2; asserted in the policy file).
    * At boot, `disk_setup_done = 1`, `disk_mode = 2` (no-swap mode),

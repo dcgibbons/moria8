@@ -41,7 +41,7 @@
 
 // ============================================================
 // Inventory Table — TOTAL_INV_SLOTS slots: 22 carried, then equipment
-// (EQUIP_WEAPON..EQUIP_AMULET, reserved EQUIP_CLOAK, EQUIP_SECONDARY)
+// (EQUIP_WEAPON..EQUIP_AMULET, EQUIP_RING2, EQUIP_SECONDARY)
 // ============================================================
 inv_item_id: .fill TOTAL_INV_SLOTS, FI_EMPTY
 inv_qty:     .fill TOTAL_INV_SLOTS, 0

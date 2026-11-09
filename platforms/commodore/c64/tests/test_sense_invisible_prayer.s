@@ -61,7 +61,11 @@ test_finish:
 #import "../../../../core/recall.s"
 #import "../../../../core/monster_magic.s"
 #import "../../../../core/item.s"
+// Special rooms run in level generation only, never here: parked in the $D000
+// test overlay (the second ring hand, 2026-11-08, left the code 15 bytes over).
+.segment TestCreateOverlay
 #import "../../../../core/special_rooms.s"
+.segment Default
 #import "../../../../core/ego_items.s"
 #import "../../../../core/special_rooms_stubs.s"
 #import "../../../../core/player_items.s"

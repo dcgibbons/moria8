@@ -55,9 +55,11 @@ test_finish:
 status_draw:
     rts
 #import "../../../../core/ui_help_clear.s"
-#import "../../../../core/stat_display.s"
 .segmentdef TestCreateOverlay [start=$D000]
 .segment TestCreateOverlay
+// stat_display.s: its callers (status line, character sheet, creation) never
+// run here, and the second ring hand (2026-11-08) left the body 7 bytes over.
+#import "../../../../core/stat_display.s"
 #import "../../../../core/background_data.s"
 #import "../../../../core/player_create.s"
 .segment Default

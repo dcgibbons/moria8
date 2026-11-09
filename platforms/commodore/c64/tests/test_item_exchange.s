@@ -385,7 +385,7 @@ test_start:
     jsr item_exchange
     :EXPECT_CC()
     :EXPECT_SLOT(EQUIP_WEAPON, rec_empty)
-    :EXPECT_SLOT(EQUIP_CLOAK, rec_empty)
+    :EXPECT_SLOT(EQUIP_RING2, rec_empty)
     :EXPECT_SLOT(EQUIP_SECONDARY, rec_empty)
     :EXPECT_ROW(0, s_no_weapons)
     :END_TEST(0)
@@ -555,7 +555,7 @@ test_start:
     :SEED(EQUIP_BODY, rec_armor)
     :SEED(EQUIP_SECONDARY, rec_dagger)
     jsr item_exchange
-    :EXPECT_SLOT(EQUIP_CLOAK, rec_empty)
+    :EXPECT_SLOT(EQUIP_RING2, rec_empty)
     jsr piw_build_visible_equip_cache
     :EXPECT_A(3)
     :EXPECT_MEM(piw_visible_slots + 0, 22)

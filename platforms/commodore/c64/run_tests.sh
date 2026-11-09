@@ -2148,7 +2148,7 @@ run_exchange_product_smoke() {
             --expect-byte-symbol ".exchange_product_primary_ego=0x06" \
             --expect-byte-symbol ".exchange_product_secondary_id=0x05" \
             --expect-byte-symbol ".exchange_product_secondary_hit=0x01" \
-            --expect-byte-symbol ".exchange_product_cloak_id=0xff" \
+            --expect-byte-symbol ".exchange_product_ring2_id=0xff" \
             --expect-byte-symbol ".zp_turn_lo=0x01" \
             --expect-byte-symbol ".current_overlay=0x0a" \
             --expect-screen-symbol ".exchange_product_expect_row0:0:0" \
@@ -2788,7 +2788,7 @@ c64_load_written_save_check() {
             --expect-byte-symbol ".save_product_secondary_dam=0x04" \
             --expect-byte-symbol ".save_product_secondary_flags=0x02" \
             --expect-byte-symbol ".save_product_secondary_ego=0x06" \
-            --expect-byte-symbol ".save_product_cloak_id=0xff" \
+            --expect-byte-symbol ".save_product_ring2_id=0xff" \
             --timeout 30 \
             --retry-timeouts 0 \
             --vice "$VICE" \
@@ -2948,7 +2948,7 @@ run_save_write_product_smoke_impl() {
             local save_seq="../../../build/test/c64/${name}_the_game.seq"
             rm -f "$save_seq"
             if ! "$C1541" -attach "$save_d64" -read "$save_filename" "$save_seq" >>"$build_log" 2>&1 \
-                    || ! python3 tests/check_save_secondary.py "$save_seq" 0x17 >>"$build_log" 2>&1; then
+                    || ! python3 tests/check_save_secondary.py "$save_seq" 0x18 >>"$build_log" 2>&1; then
                 echo "FAIL (secondary weapon not in the written save)"
                 tail -5 "$build_log" | sed 's/^/    /'
                 FAIL=$((FAIL + 1))
@@ -4795,7 +4795,7 @@ run_test "remove_curse_prayer" "tests/test_remove_curse_prayer.s" "0400 0402" 3 
 run_test "orb_of_draining_prayer" "tests/test_orb_of_draining_prayer.s" "0400 0402" 3 500000000
     run_test "prayer_feedback" "tests/test_prayer_feedback.s" "0400 040c" 13 500000000
 run_test "detect_feedback" "tests/test_detect_feedback.s" "0400 0403" 4 500000000
-run_test "item" "tests/test_item.s" "0400 0443" 68 1000000000
+run_test "item" "tests/test_item.s" "0400 0444" 69 1000000000
 run_test "item_exchange" "tests/test_item_exchange.s" "0400 040d" 14 1000000000
 run_test "scroll_p3" "tests/test_scroll_p3.s" "0400 040e" 15 1000000000
 run_test "item_desc" "tests/test_item_desc.s" "0400 040a" 11 500000000
@@ -4807,7 +4807,7 @@ run_test "ui_views" "tests/test_ui_views.s" "0400 0414" 21 500000000
 run_test "ui_views_filters" "tests/test_ui_views_filters.s" "0400 0413" 7 500000000
 run_test "subsystems" "tests/test_subsystems.s" "0400 040a" 11
 run_sound_monitor_test
-run_test "save"  "tests/test_save.s"  "0400 0425" 38 1000000000
+run_test "save"  "tests/test_save.s"  "0400 0426" 39 1000000000
 run_test "score" "tests/test_score.s" "0400 040e" 15 500000000
 run_test "wands_staves" "tests/test_wands_staves.s" "0400 0407" 8 100000000
 run_test "monster_magic" "tests/test_monster_magic.s" "0400 0424" 37 500000000

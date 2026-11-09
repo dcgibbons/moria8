@@ -4032,6 +4032,10 @@ wizard_wall_walk_active:
 ego_str_holy_avenger_common:
     .text " (Holy Avenger)" ; .byte 0
 
+// The program-media probe (and its file name) rides the resident world
+// payload (C128M-008): 16-item stores filled the items payload. World loads
+// before items, and both stay resident in Bank 0.
+.segment C128ResidentWorld
 // Detect program media on the selected save drive.
 // Output: carry clear = program media present, carry set = not program media
 disk_program_media_present:
@@ -4132,6 +4136,14 @@ c128_program_read_command_status:
 !done:
     rts
 
+c128_program_play_read_filename:
+    .byte $30, $3a                              // "0:"
+    .text "128.PLAY"
+    .byte $2c, $50, $2c, $52                    // ",P,R"
+.label c128_program_play_read_filename_len = * - c128_program_play_read_filename
+
+.segment C128ResidentItems
+
 // Run a Phase 3 item effect from resident code. The caller is in OVL.ITEMS;
 // the dispatch lives in OVL.MODAL_MISC and established handlers may briefly
 // load OVL.DEATH. The return continuation remains resident throughout.
@@ -4152,27 +4164,21 @@ tramp_p3_dispatch_items_return:     // the modal handlers return here (scroll_p3
     sec
     rts
 
-c128_program_play_read_filename:
-    .byte $30, $3a                              // "0:"
-    .text "128.PLAY"
-    .byte $2c, $50, $2c, $52                    // ",P,R"
-.label c128_program_play_read_filename_len = * - c128_program_play_read_filename
-
 hal_player_recalc_pflags:
 c128_player_recalc_pflags:
     lda #0
     ldx #EQUIP_RING
+!c128_pf_ring:                  // each hand: EQUIP_RING, then EQUIP_RING2
     ldy inv_item_id,x
     cpy #ITEM_TYPE_RING_RESIST_FIRE
     bcc !c128_pf_none+
     cpy #ITEM_TYPE_RING_SLAYING
     bcs !c128_pf_none+
-    tya
-    sec
-    sbc #ITEM_TYPE_RING_RESIST_FIRE
-    tax
-    lda pf_bit_table,x
+    ora pf_bit_table - ITEM_TYPE_RING_RESIST_FIRE,y
 !c128_pf_none:
+    cpx #EQUIP_RING2
+    ldx #EQUIP_RING2
+    bcc !c128_pf_ring-
     ldx #EQUIP_AMULET
     ldy inv_item_id,x
     cpy #ITEM_TYPE_AMULET_MAGI
@@ -5372,6 +5378,7 @@ program_end:
 .assert "C128 resident world fits below items payload", c128_resident_world_end <= c128_resident_items_start, true
 .assert "C128 resident items starts at $8C50", c128_resident_items_start == $8C50, true
 .assert "C128 resident items fits below selector payload", c128_resident_items_end <= $A800, true
+.assert "C128 program-media probe lives in the resident world payload (C128M-008)", disk_program_media_present >= c128_resident_world_start && c128_program_play_read_filename + c128_program_play_read_filename_len <= c128_resident_world_end, true
 .assert "C128 resident selector starts at $A800", c128_resident_select_start == $A800, true
 .assert "C128 resident selector fits below disk-I/O payload", c128_resident_select_end <= $AB00, true
 .assert "C128 resident disk-I/O starts at $AB00", c128_resident_diskio_start == $AB00, true
