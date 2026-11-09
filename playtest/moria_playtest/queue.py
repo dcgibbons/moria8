@@ -99,7 +99,9 @@ DEFAULTS: dict[str, Any] = {
     # Focus (maintainer, 2026-11-07: "hyperfocus on this half-troll priest,
     # run multiple copies of it"): non-empty, the Balrog queue plays only
     # these characters, ``balrog_copies`` games of each at once (each with
-    # its own dice), and the service stops every other run.
+    # its own dice), and the service stops every other run but the build
+    # queue's (maintainer, 2026-11-08: the build queue "ready to test each
+    # platform" beside the Balrog games).
     "balrog_characters": [], "balrog_copies": 1,
 }
 
@@ -1652,10 +1654,11 @@ class Service:
                 self.pause(run_id, False)
         focus = config.get("balrog_characters") or ()
         if focus:
-            # Every run but the focused characters' Balrog games ends: their
-            # workers are the focus's.
+            # Every run but the focused characters' Balrog games and the build
+            # queue's ends: their workers are the focus's.
             for run_id, job in list(self.running.items()):
-                if not job.get("cancelled") and not (job["queue"] == "balrog" and job["character"] in focus):
+                if not job.get("cancelled") and job["queue"] != "build" \
+                        and not (job["queue"] == "balrog" and job["character"] in focus):
                     self.log(f"focus on {', '.join(focus)}: stop {run_id}")
                     self.stop_run(run_id)
             platforms, minimum = [], 0
@@ -1673,7 +1676,7 @@ class Service:
         # The build queue: one run per port, out of the total as the Balrog queue's are.
         build_playing = {j["platform"] for j in self.running.values() if j["queue"] == "build"}
         build_ready = [p for p in config.get("build_platforms") or [] if p not in build_playing
-                       and self.backoff.get(f"build/{p}", 0) < time.time()] if self.ci_build and not focus else []
+                       and self.backoff.get(f"build/{p}", 0) < time.time()] if self.ci_build else []
         pending = sum(self.sub_pending(sub) for sub in subs.values()) + balrog_pending + len(build_ready)
         target = max(minimum, total - sub_running - pending)
         if len(main_active) > target:

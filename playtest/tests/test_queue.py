@@ -186,6 +186,25 @@ class ScheduleTest(unittest.TestCase):
         service.schedule(q, {})   # one each: nothing more starts
         self.assertEqual(sum(j["queue"] == "build" for j in service.running.values()), 3)
 
+    def test_the_build_queue_plays_beside_a_focus(self) -> None:
+        """Maintainer, 2026-11-08: the build queue "ready to test each
+        platform" while the Balrog queue focuses on one character; a focus
+        stopped every build run and started none."""
+        service = self.service(4)
+        service.config.update(build_platforms=["c64", "atari8"], build_goal="clvl10",
+                              balrog_characters=["half-troll-priest"], platforms=["c128"])
+        service.ci_build = "head1"
+        q = queue.Queue("deep", service.home)
+        q.platform("c128")
+        service.schedule(q, {})
+        build = [j for j in service.running.values() if j["queue"] == "build"]
+        self.assertEqual(sorted(j["platform"] for j in build), ["atari8", "c64"])
+        self.assertFalse(any(j["queue"] == "main" for j in service.running.values()))   # the focus's workers
+        stopped = []
+        service.stop_run = stopped.append   # type: ignore[method-assign]
+        service.schedule(q, {})
+        self.assertEqual(stopped, [])
+
     def test_no_build_queue_run_without_its_build(self) -> None:
         service = self.service(3)
         service.config["build_platforms"] = ["c64"]
