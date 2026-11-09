@@ -5,7 +5,10 @@ written in platform-specific assembly. It targets the Commodore 64, Plus/4, and
 128 systems, the Apple II, the Commander X16, Atari 8-bit systems, and the
 Acorn BBC Master 128.
 
-![Animated GIF of Commodore 64 Play Testing](docs/assets/moria8-c64-gameplay.gif)
+Visit **[moria8.org](https://moria8.org)** for downloads, guides, the monster
+compendium, and platform gameplay previews.
+
+![Animated GIF of Commodore 64 Play Testing](docs/assets/moria8-c64-gameplay-1.gif)
 
 ## Port Status
 
@@ -40,115 +43,36 @@ Want a real floppy disk of Moria8? Please fill out the
 
 ### Requirements
 
-- macOS or Linux host
-- `make`
-- Java, for Kick Assembler
-- VICE 3.10+ (`x64sc`, `x128`, `xplus4`, and `c1541`)
-- MAME, for Apple II (`apple2ee`), Atari 8-bit (`a800xl` / `a130xe`), and
-  Acorn BBC Master 128 (`bbcm`) run/test; system ROMs via the `A2ROMS`,
-  `ATARI8ROMS`, and `BBCMROMS` env vars (not redistributable)
-- `x16emu`, for Commander X16 run/test (`X16EMU` and optional `X16ROM` env vars)
-- Python 3 for build and test helper scripts
+- macOS or Linux host, `make`, Java (for Kick Assembler, auto-downloaded into
+  `tools/kickass/` unless `KICKASS=/path/to/KickAss.jar` is set), and Python 3
+- Emulators (required only for `run*` and runtime `test*` targets):
+  - **Commodore 64 / 128 / Plus/4:** VICE 3.10+ (`x64sc`, `x128`, `xplus4`, `c1541`)
+  - **Apple IIe / Atari 8-bit / BBC Master 128:** MAME (`apple2ee`, `a800xl` /
+    `a130xe`, `bbcm`) with system ROM paths in `A2ROMS`, `ATARI8ROMS`, and
+    `BBCMROMS`
+  - **Commander X16:** `x16emu` (`X16EMU` and optional `X16ROM`)
 
-Kick Assembler is downloaded into `tools/kickass/` by the makefiles on first
-use. To use an existing jar, pass `KICKASS=/path/to/KickAss.jar`.
-
-VICE tool paths can be overridden through make variables when needed, for
-example `make run VICE=/path/to/x64sc`.
-
-### Build
+### Common Commands
 
 ```sh
-make
-make build
-make disk
-make disk64
-make disk128
-make diskplus4
-make diskapple2
-make diskcx16
-make diskatari8
-make diskbbcmaster
+make build        # Build binaries for all platforms (default target)
+make disk         # Build all shipping disk and bundle images under build/
+make run          # Launch the Commodore 64 disk in VICE
+make test         # Run the regression suite (`make -j7 -O test` runs all 7 platforms in parallel)
+make clean        # Remove build/ artifacts
 ```
 
-`make` and `make build` will build the entire project for all platforms.
-`make disk` builds all shipping disk/bundle images, or use `make disk64`,
-`make disk128`, `make diskplus4`, `make diskapple2`, `make diskcx16`,
-`make diskatari8`, and `make diskbbcmaster` to build the individual images.
+### Platform Targets
 
-Disk images are emitted under `build/`:
-
-- `build/moria8-c64.d64`
-- `build/moria8-c128.d64`
-- `build/moria8-c128.d71`
-- `build/moria8-c128.d81`
-- `build/moria8-plus4.d64`
-- `build/moria8-apple2.po`
-- `build/moria8-cx16.zip`
-- `build/moria8-atari8.atr`
-- `build/moria8-bbcmaster.ssd`
-
-### Run
-
-```sh
-make run
-make run64
-make run128
-make runplus4
-make runapple2
-make runcx16
-make runatari8
-make runatari8-130xe
-make runbbcmaster
-```
-
-`make run` and `make run64` launch the C64 disk. `make run128` launches the
-C128 disk. `make runplus4` launches the Plus/4 disk in `xplus4` with a 1541
-drive configuration. The Plus/4 artifact is a standard Commodore D64 image.
-`make runapple2` launches the Apple II image under MAME `apple2ee` (requires
-`A2ROMS`). `make runcx16` launches the Commander X16 build in `x16emu` with
-HostFS mounted at `build/cx16/`. `make runatari8` and `make runatari8-130xe`
-launch the Atari 8-bit disk under MAME `a800xl` and `a130xe` (requires
-`ATARI8ROMS`). `make runbbcmaster` launches the BBC Master 128 disk under MAME
-`bbcm` (requires `BBCMROMS`).
-
-### Test
-
-```sh
-make test
-make test64
-make test128-fast
-make test128-fast-smoke
-make test128
-make testplus4
-make testapple2
-make testcx16
-make testatari8
-make testbbcmaster
-```
-
-`make test` runs the default regression mix. `make test64` and `make testplus4`
-run the C64 and Plus/4 suites. `make test128-fast` is the fast C128 unit batch,
-`make test128-fast-smoke` covers high-value C128 runtime boot and town paths,
-and `make test128` is the broader C128 shell harness. `make testapple2` is the
-Apple II static memory-contract gate; `make testapple2-runtime` also runs the
-MAME scenario harness (`platforms/apple2/harness_smoke.py`, which needs
-`A2ROMS`). `make testcx16` runs the Commander X16 static memory-contract gate
-and the `x16emu -testbench` runtime scenario suite
-(`platforms/cx16/harness_smoke.py`). `make testatari8` runs the Atari 8-bit
-static memory-contract gate and the MAME `a800xl`/`a130xe` runtime scenario
-suite (`platforms/atari8/harness_smoke.py`, which needs `ATARI8ROMS`).
-`make testbbcmaster` runs the Acorn BBC Master 128 static memory-contract gate
-and the MAME `bbcm` runtime scenario suite
-(`platforms/bbcmaster/harness_smoke.py`, which needs `BBCMROMS`).
-
-On Linux, emulator test targets run inside a private network namespace
-(`tools/isolated.sh`) so parallel runs on one machine cannot collide on
-emulator monitor ports. `ISOLATE=1` requires isolation, `ISOLATE=0` turns it
-off, and the default `auto` falls back to a normal run where unprivileged
-namespaces are unavailable (for example on macOS). Because each stage is
-isolated, `make -j7 -O test` runs the C64, C128, Plus/4, Apple IIe, Commander
-X16, Atari 8-bit and BBC Master 128 stages in parallel after one shared build.
+| Platform | Disk / Bundle | Run | Test | Output (`build/`) |
+| -------- | ------------- | --- | ---- | ----------------- |
+| Commodore 64 | `make disk64` | `make run64` | `make test64` | `moria8-c64.d64` |
+| Commodore 128 | `make disk128` | `make run128` | `make test128` (`test128-fast`) | `moria8-c128.d64` / `.d71` / `.d81` |
+| Commodore Plus/4 | `make diskplus4` | `make runplus4` | `make testplus4` | `moria8-plus4.d64` |
+| Apple IIe | `make diskapple2` | `make runapple2` | `make testapple2` (`testapple2-runtime`) | `moria8-apple2.po` |
+| Commander X16 | `make diskcx16` | `make runcx16` | `make testcx16` | `moria8-cx16.zip` |
+| Atari 8-bit | `make diskatari8` | `make runatari8` (`runatari8-130xe`) | `make testatari8` | `moria8-atari8.atr` |
+| BBC Master 128 | `make diskbbcmaster` | `make runbbcmaster` | `make testbbcmaster` | `moria8-bbcmaster.ssd` |
 
 ## Documentation
 
