@@ -44,6 +44,8 @@ SUITES = ROOT / "playtest" / "suites"
 PLATEAU_CHARACTERS = 10
 WIND_DOWN_SECONDS = 5   # a failed run waits this long per worker before SIGTERM
 MAX_RESTARTS_PER_STEP = 2
+ASSET_PROMPT = "Insert program disk"   # asset_load_ask_for_disk: every attempt at a required load failed
+ASSET_PROMPT_LIMIT = 20  # that prompt this many steps running: the game is stuck under it (Plus/4, 2026-11-09)
 
 
 LOOP_STAY = 300         # one square entered this often in one stay on a level is a loop ...
@@ -238,6 +240,35 @@ class Character:
             "keys": list(self.keys), "screen": obs.rows if obs else None,
             "observation": obs.summary() if obs else None})
 
+    def file_asset_load(self, obs: Observation) -> None:
+        """File a required load that keeps failing (``asset_load_required``):
+        the file name it asks for, read from memory, and a snapshot of the
+        machine stuck at the prompt."""
+        game = self.worker.game
+        assert game is not None
+        symbols = game.abi.all_symbols
+
+        def byte(name: str) -> int | None:
+            symbol = symbols.get(name)
+            return None if symbol is None else game.mon.mem_get(symbol[0], 1, game.ram)[0]
+
+        length, lo, hi = byte("alr_len"), byte("alr_name_lo"), byte("alr_name_hi")
+        name = b""
+        if length and lo is not None and hi is not None:
+            name = game.mon.mem_get(hi << 8 | lo, length, game.ram)
+        stuck = self.worker.snapshot(f"{self.goal.name}-{self.seed}-s{self.result.steps}-asset",
+                                     {"seed": self.seed, "step": self.result.steps, "dlvl": obs.dlvl,
+                                      "brain": self.brain.state(), "auditor_command_sp": self.auditor.command_sp})
+        if stuck is not None:
+            self.snapshot = stuck
+        where = f"${hi:02X}{lo:02X}" if lo is not None and hi is not None else "?"
+        self.file_finding("asset_load", "game",
+                          f"\"{ASSET_PROMPT}\" stayed {ASSET_PROMPT_LIMIT} steps: last asset {name!r} "
+                          f"(length {length}, at {where}), overlay {byte('current_overlay')}, "
+                          f"asset_load_retries {byte('asset_load_retries')} (0: the program-media "
+                          f"probe's prompt, not a failed load)", obs)
+        self.result.outcome = "finding"
+
     def check_load_retries(self, obs: Observation) -> None:
         """A repeated disk load (asset_load_retry) is a load the drive failed
         once: filed so it shows, without ending the character."""
@@ -315,6 +346,7 @@ class Character:
             obs = self.start()
             dlvl_seen: int | None = None
             levels_seen = LevelWatch()
+            asset_prompts = 0
             while self.result.steps < self.goal.step_budget:
                 game = self.worker.game
                 assert game is not None
@@ -334,6 +366,15 @@ class Character:
                     break
                 if obs.mode == Mode.DEATH:
                     self.result.outcome = "died"
+                    break
+                asset_prompts = asset_prompts + 1 if obs.mode == Mode.DISMISS and any(
+                    ASSET_PROMPT in row for row in obs.rows) else 0
+                if asset_prompts >= ASSET_PROMPT_LIMIT:
+                    # A required load failing forever: eight Plus/4 build-queue
+                    # games sat on "Insert program disk" to their step budgets,
+                    # filed as budget-outs (2026-11-07..09). A finding instead,
+                    # with what was being loaded and the machine as it stands.
+                    self.file_asset_load(obs)
                     break
                 if obs.mode == Mode.COMMAND:
                     stuck = levels_seen.note(self.result.steps, obs.clvl, obs.dlvl, self.goal.level_steps)

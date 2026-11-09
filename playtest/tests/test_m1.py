@@ -2405,6 +2405,30 @@ class MemoryTest(unittest.TestCase):
         o.step = 10
         self.assertFalse(brain.needs_resupply(o))        # not straight back: the Alchemist may have had none
 
+    def test_no_town_trip_for_light_without_the_gold_to_buy_it(self) -> None:
+        """2026-11-09: a level-9 Gnome Rogue with no gold and its light low
+        went up to town and back to DL1 for 100,000 steps (BBC)."""
+        brain = Brain(GOALS["clvl10"])
+        brain.food, brain.recall, brain.torches, brain.light_left = 10, 1, 0, 50
+        broke = command_obs(pos=(5, 5), dlvl=1, clvl=9, hp=69, mhp=69,
+                            rows={23: "HP:69/69  MP:6/6   AC:5   AU:0"})
+        self.assertTrue(brain.light_low())
+        self.assertFalse(brain.needs_resupply(broke))
+        paid = command_obs(pos=(5, 5), dlvl=1, clvl=9, hp=69, mhp=69,
+                           rows={23: "HP:69/69  MP:6/6   AC:5   AU:40"})
+        self.assertTrue(brain.needs_resupply(paid))
+
+    def test_the_program_disk_prompt_gets_a_held_turn_not_space(self) -> None:
+        """2026-11-09: the Plus/4 kept "Insert program disk" on screen at the
+        command prompt after a load recovered; SPACE changed nothing there."""
+        brain = Brain(GOALS["clvl10"])
+        o = command_obs(rows={0: "Direction?", 10: "          Insert program disk", 12: "             Press any key"})
+        o.mode, o.stage = Mode.DISMISS, "anykey"
+        self.assertEqual(brain.decide(o, None).key, ord("5"))
+        plain = command_obs(rows={12: "             Press any key"})
+        plain.mode, plain.stage = Mode.DISMISS, "anykey"
+        self.assertEqual(brain.decide(plain, None).reason, "dismiss anykey")
+
     def test_the_last_scroll_is_kept_for_the_way_home(self) -> None:
         brain = Brain(GOALS["reach_dl8"])
         brain.food, brain.recall, brain.max_dlvl = 10, 1, 6

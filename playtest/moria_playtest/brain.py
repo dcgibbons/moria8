@@ -406,6 +406,8 @@ OIL_THROW = 7            # flasks carried to throw, beyond the lantern's reserve
 OIL_EARLY = 10           # flasks to throw bought first while early, whatever else waits (M5b; 5 at 10 gp until round 48)
 OIL_WORTH_HP = 8         # lore HP at which an approaching creature is worth a flask (M5a)
 OIL_GOLD = 3             # a flask's base price (core/item_tables.s; VMS, 10 until M5b round 46)
+SUPPLY_GOLD = 5          # gold below which a town trip for food or light buys nothing (a torch, a ration)
+ASSET_PROMPT = "Insert program disk"   # the game's prompt after a required load fails (asset_load_ask_for_disk)
 TORCH_RESERVE = 3        # spare torches to carry: the light, or the lantern's backup (M4; 2 until M5b round 46)
 TORCH_RESERVE_DEEP = 8   # ... from SCOUT_FROM deep with no lantern: a trip home costs a Word of Recall each way
 EXPLORE_PINGPONG = 8     # explore steps spent between two squares that mark their frontier dead (M5b)
@@ -1619,6 +1621,13 @@ class Brain:
                 self.armour.update(worn)
                 self.armour_hits = 0
                 return Decision(KEY_SPACE, "prompt", f"armour worn: AC {sum(worn.values())} by the list")
+        if obs.mode == Mode.DISMISS and any(ASSET_PROMPT in row for row in obs.rows):
+            # "Insert program disk": any key retries the load, and '5' too.
+            # After a retry that loads, the Plus/4 keeps the prompt on screen
+            # at the command prompt, where SPACE is no command and changes
+            # nothing; '5' holds a turn and brings the view back. Eight Plus/4
+            # build-queue games pressed SPACE there to their budgets (2026-11-09).
+            return Decision(ord("5"), "prompt", "program disk prompt: any key, or a turn held")
         if obs.mode == Mode.DISMISS:
             return Decision(KEY_SPACE, "prompt", f"dismiss {obs.stage}")
         if obs.mode == Mode.DEATH:
@@ -2568,6 +2577,12 @@ class Brain:
         Word of Recall and can now afford one."""
         # A caster who can pray Create Food does not climb for food.
         low = self.light_low() or (self.food_low() and not self.magic.feeds(obs)) or self.out_of_cures(obs)
+        if low and self.gold(obs) < SUPPLY_GOLD:
+            # Nothing to buy it with: town cannot help. A level-9 Gnome Rogue
+            # with no gold and its light low went up to town and straight back
+            # down to DL1, over and over, for 100,000 steps (BBC build queue,
+            # 2026-11-09); in the dungeon it finds gold.
+            low = False
         # Deep goal: out of the strong potions with the gold for more: every
         # level-16-21 death on the first potion builds had drunk all five
         # and never went back for more (M7 queue, 2026-10-31).
