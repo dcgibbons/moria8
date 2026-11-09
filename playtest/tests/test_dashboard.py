@@ -319,7 +319,8 @@ class BuildHistoryTest(unittest.TestCase):
 
         def run(build, started, port, outcome, clvl=10, findings=()):
             return {"queue": "build", "build": build, "commit": build * 4, "started": started, "platform": port,
-                    "outcome": outcome, "clvl": clvl, "findings": list(findings)}
+                    "outcome": outcome, "clvl": clvl, "findings": list(findings), "id": f"{build}-{started}",
+                    "character": "human-warrior"}
         records = [run("bbb", 200, "c64", "reached"), run("aaa", 100, "c64", "reached"),
                    run("aaa", 110, "bbcmaster", "died", 4, ["stall: x", "hang: y"]),
                    run("aaa", 120, "c64", "abandoned"), {"queue": "main", "build": "zzz", "started": 1, "outcome": "died"}]
@@ -328,6 +329,12 @@ class BuildHistoryTest(unittest.TestCase):
         self.assertEqual([(b["build"], b["start"], b["end"]) for b in builds], [("aaa", 100, 200), ("bbb", 200, None)])
         aaa = builds[0]
         self.assertEqual((aaa["games"], aaa["reached"], aaa["median_clvl"], aaa["findings"]), (2, 1, 10, 1))
+        # The build-queue panel's counts by port, this build's alone (2026-11-08)
+        self.assertEqual(aaa["detail"]["bbcmaster"], {"games": 1, "reached": 0, "died": 1, "median_clvl": 4, "played": 1,
+                                                      "findings": [{"id": "aaa-110", "character": "human-warrior",
+                                                                    "text": "hang: y"}]})
+        self.assertEqual((aaa["detail"]["c64"]["games"], aaa["detail"]["c64"]["reached"]), (1, 1))   # abandoned not counted
+        self.assertEqual(builds[1]["detail"]["c64"]["games"], 1)
         self.assertEqual(aaa["ports"], {"c64": [1, 1], "bbcmaster": [1, 0]})
         self.assertEqual(aaa["subject"], "subject aaa")
         self.assertLess(aaa["lo"], 0.5)

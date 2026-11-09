@@ -165,6 +165,8 @@
   .btable td { padding: 2px 6px; border-top: 1px solid #2a2416; white-space: nowrap; }
   .btable td.subj { white-space: normal; color: var(--muted); }
   .btable tr.thin td { opacity: .55; }
+  .cov { display: inline-block; width: 64px; height: 7px; background: var(--track); vertical-align: middle; margin-left: 6px; }
+  .cov i { display: block; height: 100%; background: var(--green); }
   .bchip { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
   .diff h3 { margin: 0 0 6px; font-size: 11px; color: var(--muted); font-weight: normal; }
   .smalls { display: grid; grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr)); gap: 10px 14px; margin-bottom: 14px; }
@@ -235,15 +237,19 @@
   <section style="grid-area: buildq">
     <h2><span>The build queue</span><small id="cicount"></small></h2>
     <div class="qline" id="ciline"></div>
+    <div class="tablewrap"><table class="btable" id="citable"></table></div>
+    <div class="mlegend"><span class="dim">this build's games only: the counts start again with each new build</span></div>
+    <details style="margin-top:10px"><summary class="muted">every combination on this build</summary>
     <div class="pgrid" id="buildq"></div>
     <div class="mlegend">
       <span><i style="background:rgba(154,210,132,.4)"></i>reached the goal</span>
       <span><i style="background:rgba(224,96,60,.35)"></i>died</span>
       <span><i style="background:rgba(197,121,0,.45)"></i>ended short: budget, finding or error</span>
       <span><i style="background:repeating-linear-gradient(45deg,#4a3c20 0 2px,var(--track) 2px 4px)"></i>playing now</span>
-      <span><i style="background:var(--black-soft)"></i>not played yet</span>
-      <span class="dim">each cell: the last game's character level</span>
+      <span><i style="background:var(--black-soft)"></i>not played on this build yet</span>
+      <span class="dim">each cell: this build's last game's character level</span>
     </div>
+    </details>
   </section>
   <section style="grid-area: builds" class="diff">
     <h2><span>Builds over time</span><small id="bscount"></small></h2>
@@ -877,19 +883,40 @@ function renderQueue() {
   // commit, cycling every race/class combination.
   const ci = (q.build_queue || {}).platforms || {}, cports = q.config.build_platforms || [];
   const cstate = q.service.build_queue_state || {}, cbuild = (cstate.playing || {}).commit;
+  // The build being played alone (maintainer, 2026-11-08: the counts reset
+  // with each new build), from its Builds-card entry.
+  const cid = q.service.build_queue_build || "";
+  const cur = (q.builds || []).find(b => b.build === cid) || null;
+  const onBuild = c => !!(cbuild && c && String(c).slice(0, 12) === cbuild.slice(0, 12));
   $("ciline").innerHTML = `goal <b>${esc(q.config.build_goal)}</b> · one run per port, every combination in turn · ` +
-    `build <b>${esc(cbuild ? cbuild.slice(0, 12) : q.service.build_queue_build || "–")}</b>` +
+    `build <b>${esc(cbuild ? cbuild.slice(0, 12) : cid || "–")}</b>` +
+    (cur && cur.subject ? ` <span class="muted">“${esc(cur.subject)}”</span>` : "") +
+    (cur ? ` · playing ${esc(ago(cur.start))}` : "") +
     (cstate.error ? ` · <span class="bad">build failed: ${esc(cstate.error.slice(-160))}</span>` : "");
-  const citems = cports.flatMap(p => Object.values((ci[p] || {}).items || {}));
-  $("cicount").textContent = cports.length ? `${cports.length} ports · ${citems.reduce((n, it) => n + it.runs, 0)} runs · ` +
-    `${citems.reduce((n, it) => n + it.reached, 0)} reached` : "";
-  // Every port plays (as M6's grid): a row per combination in cycle order,
-  // a cell per port with its last game, or the one playing now.
+  const none = {games: 0, reached: 0, died: 0, median_clvl: null, played: 0, findings: []};
+  const det = p => (cur && cur.detail && cur.detail[p]) || none;
+  const combos = p => Object.keys((ci[p] || {}).items || {}).length || q.characters.length;
+  const ctot = cports.map(det).reduce((t, d) => ({g: t.g + d.games, r: t.r + d.reached, f: t.f + d.findings.length}), {g: 0, r: 0, f: 0});
+  $("cicount").textContent = cports.length ? `${cports.length} ports · ${ctot.g} games · ${ctot.r} reached · ` +
+    `${ctot.f} finding${ctot.f === 1 ? "" : "s"}` : "";
+  $("citable").innerHTML = cports.length ? `<tr><th>Port</th><th>Games</th><th>clvl ${esc(String(q.config.build_goal || "").replace(/\D/g, ""))}</th>` +
+    `<th>Died</th><th>Findings</th><th>Median clvl</th><th>Coverage</th><th>Now</th></tr>` + cports.map(p => {
+      const d = det(p), n = combos(p), pct = n ? Math.min(100, Math.round(100 * d.played / n)) : 0;
+      const live = q.live.find(r => r.queue === "build" && r.platform === p), w = (live && live.status) || {};
+      const ftip = d.findings.map(f => `${f.id}: ${cap(f.character || "")} — ${f.text}`).join("\n");
+      return `<tr><td>${esc(PORT_NAMES[p] || p)}</td><td>${d.games}</td><td>${d.reached}</td><td>${d.died}</td>` +
+        `<td class="${d.findings.length ? "bad" : "ok"}" title="${esc(ftip)}">${d.findings.length ? `${d.findings.length} ⚠` : "0"}</td>` +
+        `<td>${d.median_clvl ?? "–"}</td>` +
+        `<td>${d.played}/${n}<span class="cov" role="img" aria-label="${pct}% of combinations played"><i style="width:${pct}%"></i></span></td>` +
+        `<td>${live ? `▸ ${esc(cap(live.character))}${w.clvl != null ? ` L${w.clvl} DL${w.dlvl}` : ""}${live.paused ? " (paused)" : ""}` : `<span class="dim">–</span>`}</td></tr>`;
+    }).join("") : "";
+  // Every combination (as M6's grid): a row per combination in cycle order,
+  // a cell per port with this build's last game, or the one playing now.
   const crows = Object.keys((ci[cports[0]] || {}).items || {}).length ? Object.keys(ci[cports[0]].items) : q.characters;
   const CI_CLASS = {reached: "frozen", died: "short"};
   let cgrid = `<div></div>` + cports.map(p => {
-    const entry = ci[p] || {items: {}, cycle: 1, next: 0}, its = Object.values(entry.items);
-    return `<div class="h">${esc(PORT_NAMES[p] || p)}<b>${its.reduce((n, it) => n + it.reached, 0)} of ${its.reduce((n, it) => n + it.runs, 0)} reached · cycle ${entry.cycle}</b></div>`;
+    const d = det(p);
+    return `<div class="h">${esc(PORT_NAMES[p] || p)}<b>${d.reached} of ${d.games} reached</b></div>`;
   }).join("");
   crows.forEach(ch => {
     cgrid += `<div class="r">${esc(cap(ch))}</div>`;
@@ -901,11 +928,12 @@ function renderQueue() {
         const w = live.status || {};
         cls = "playing"; label = w.clvl != null ? `▸${w.clvl}` : "▸";
         tip += `playing now${w.clvl != null ? `, L${w.clvl} DL${w.dlvl}` : ""}${live.paused ? " (paused)" : ""}`;
-      } else if (last) {
+      } else if (last && onBuild(last.commit)) {
         cls = CI_CLASS[last.outcome] || "near"; label = last.clvl ?? "–";
-        tip += `${last.outcome} at L${last.clvl ?? "–"} DL${last.max_dlvl ?? "–"}${last.cause ? ` (${last.cause})` : ""}, ${ago(last.ended)} ago, ${String(last.commit || "").slice(0, 7)}`;
-      } else tip += "not played yet";
-      if (it && it.runs) tip += ` · ${it.reached}/${it.runs} reached, best L${it.best.clvl} DL${it.best.max_dlvl}`;
+        tip += `${last.outcome} at L${last.clvl ?? "–"} DL${last.max_dlvl ?? "–"}${last.cause ? ` (${last.cause})` : ""}, ${ago(last.ended)} ago`;
+      } else {
+        tip += "not played on this build yet" + (last ? ` (last: ${last.outcome} at L${last.clvl ?? "–"} on ${String(last.commit || "").slice(0, 7)})` : "");
+      }
       cgrid += `<div class="box ${cls}" title="${esc(tip)}">${esc(label)}</div>`;
     });
   });

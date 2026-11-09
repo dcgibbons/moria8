@@ -550,7 +550,11 @@ def build_history(records: list[dict[str, Any]], counted: tuple[str, ...]) -> li
     """The build queue's builds in the order they started playing (§23.4
     Builds card): each one's live span (its first game's start to the next
     build's), its counted games and goals reached, a 95% range on the rate,
-    the median last level, its findings, and the same counts by port."""
+    the median last level, its findings, and the same counts by port. Each
+    build's ``detail`` by port feeds the build-queue panel, which shows the
+    build being played alone (maintainer, 2026-11-08: the counts reset with
+    each build): its counted games, goals reached, deaths, median last level,
+    the combinations played, and every finding with its run."""
     by: dict[str, list[dict[str, Any]]] = {}
     for r in records:
         if r.get("queue") == "build" and r.get("build"):
@@ -568,6 +572,24 @@ def build_history(records: list[dict[str, Any]], counted: tuple[str, ...]) -> li
             entry = ports.setdefault(r.get("platform") or "?", [0, 0])
             entry[0] += 1
             entry[1] += r["outcome"] == "reached"
+        detail: dict[str, dict[str, Any]] = {}
+        for r in runs:
+            d = detail.setdefault(r.get("platform") or "?", {"games": 0, "reached": 0, "died": 0, "levels": [],
+                                                             "played": set(), "findings": []})
+            found = [f for f in r.get("findings") or [] if not f.startswith(NOISE_FINDINGS)]
+            if found:
+                d["findings"].append({"id": r.get("id"), "character": r.get("character"), "text": found[0]})
+            if r.get("outcome") not in counted:
+                continue
+            d["games"] += 1
+            d["reached"] += r["outcome"] == "reached"
+            d["died"] += r["outcome"] == "died"
+            d["levels"].append(r.get("clvl") or 0)
+            d["played"].add(r.get("character"))
+        for d in detail.values():
+            port_levels = sorted(d.pop("levels"))
+            d["median_clvl"] = port_levels[len(port_levels) // 2] if port_levels else None
+            d["played"] = len(d["played"])
         lo, hi = wilson(reached, len(games))
         commit = runs[0].get("commit") or ""
         out.append({"build": build, "ordinal": first + i,   # its place in the whole history: its colour
@@ -578,7 +600,7 @@ def build_history(records: list[dict[str, Any]], counted: tuple[str, ...]) -> li
                     "median_clvl": levels[len(levels) // 2] if levels else None,
                     "findings": sum(any(not f.startswith(NOISE_FINDINGS) for f in r.get("findings") or [])
                                     for r in runs),
-                    "ports": ports})
+                    "ports": ports, "detail": detail})
     return out
 
 
