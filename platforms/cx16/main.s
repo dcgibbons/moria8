@@ -223,7 +223,6 @@ cmb_in_way_str:
 #import "../../core/player_items.s"
 #define SPELL_EFFECTS_INCLUDE_IDENTIFY
 #import "../../core/spell_effects.s"
-#import "../../core/spell_effects_overlay.s"
 #undef SPELL_EFFECTS_INCLUDE_IDENTIFY
 
 #import "../../core/store_data_defs.s"
@@ -1097,6 +1096,7 @@ winner_apply_retirement_bonus_overlay:
     lda player_data + PL_GOLD_2
     adc #$03
     sta player_data + PL_GOLD_2
+    :GoldCapOnCarry()               // 250,000 more stops at 16,777,215
     lda player_data + PL_XP_0
     clc
     adc #$40
@@ -1256,6 +1256,10 @@ ovl_items_end:
 #undef PMX_DETECT_EFFECTS_EXTERNAL
 #undef PMX_MAP_AREA_TRAMPOLINE
 #undef PMX_MAP_AREA_EXTERNAL
+// Find Traps and Destroy Traps/Doors (2026-11-08): their only callers are
+// the spell dispatch above, so they run here, not resident (as on the C64).
+#import "../../core/spell_effects_overlay.s"
+.assert "The trap effects are in OVL.SPELL with their callers", eff_find_traps >= $a000 && eff_destroy_traps_doors >= $a000, true
 
     #define SCROLL_P3_NEW_OWNER
     #define SCROLL_P3_EXISTING_OWNER

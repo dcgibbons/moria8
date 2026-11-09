@@ -4617,6 +4617,10 @@ check_static_contract "c64_charset_switch_locked_before_irq_release_contract" "i
 # pick_item_type has loaded the chest overlay (M5b round 33 code corruption).
 check_static_contract "nest_gold_restores_generation_overlay_contract" "main.s" \
     "tramp_spawn_nest_gold:|||lda #OVL_DUNGEON_GEN|||jsr overlay_load|||jsr spawn_nest_gold"
+# Special rooms run in OVL.GEN (2026-11-08): monster population loads it back
+# too, if anything replaced it after generation.
+check_static_contract "special_room_monsters_restore_generation_overlay_contract" "main.s" \
+    "tramp_spawn_special_room_monsters:|||lda #OVL_DUNGEON_GEN|||jsr overlay_load|||jsr spawn_special_room_monsters"
 check_static_contract "c64_input_restores_bank_before_irq_contract" "input.s" \
     "input_get_key:|||jsr KERNAL_GETIN|||sta igk_key|||sei|||pla|||sta \$01|||jsr c64_install_ram_irq_vectors|||plp|||lda igk_key"
 check_static_contract "inventory_overlay_fresh_key_contract" "../../../core/player_items.s" \

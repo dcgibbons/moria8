@@ -46,7 +46,7 @@ Each 8 KB RAM bank (`$A000-$BFFF`) has a dedicated, non-overlapping owner:
 | `13` | `$A000-$BFFF` | `OVL.HELP` (`OVL_HELP = 5`) | Preloaded at boot: 80-col help, inventory, and equipment screens |
 | `14` | `$A000-$BFFF` | `OVL.UI` (`OVL_UI = 6`) | Preloaded at boot: character sheet & symbol identify UI |
 | `15` | `$A000-$BFFF` | `OVL.ITEMS` (`OVL_ITEMS = 7`) | Preloaded at boot: item actions, wear/takeoff/eat/quaff, bash/disarm/tunnel |
-| `16` | `$A000-$BFFF` | `OVL.SPELL` (`OVL_SPELL = 8`) | Preloaded at boot: spell/prayer selection, execution, and level-up |
+| `16` | `$A000-$BFFF` | `OVL.SPELL` (`OVL_SPELL = 8`) | Preloaded at boot: spell/prayer selection, execution, and level-up; Find Traps and Destroy Traps/Doors (`core/spell_effects_overlay.s`), whose only callers are its dispatch tables |
 | `17` | `$A000-$BFFF` | `OVL.MODAL` (`OVL_MODAL_MISC = 9`) | Preloaded at boot: monster recall, wizard UI, royal screen, look |
 | `18` | `$A000-$BFFF` | `OVL.CHEST` (`OVL_CHEST = 10`) | Preloaded at boot: chest open/disarm/bash, door jam/pick, store restock |
 | `19` | `$A000-$BFFF` | `OVL.STORAGE` (`OVL_STORAGE = 11`) | Preloaded at boot: shared save/load engine & slot menu |
@@ -85,4 +85,4 @@ freely read and write the Map, `Cx16AuxData`, and `Cx16HuffData`.
 
 * Static memory contract self-test: `make testcx16-memory-contract-selftest`
 * Static linked-symbol & PRG extent gate: `make testcx16-memory-contract`
-* Runtime TestBench suite: `make testcx16-runtime` (24 scenarios in `platforms/cx16/harness_smoke.py`)
+* Runtime TestBench suite: `make testcx16-runtime` (25 scenarios in `platforms/cx16/harness_smoke.py`)

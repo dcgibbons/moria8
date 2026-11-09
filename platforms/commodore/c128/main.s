@@ -1108,6 +1108,12 @@ winner_apply_retirement_bonus:
     lda player_data + WIN_PL_GOLD_2
     adc #$03
     sta player_data + WIN_PL_GOLD_2
+    bcc !win_gold_capped+           // 250,000 more stops at 16,777,215 (core/player.s GoldCapOnCarry)
+    lda #$ff
+    sta player_data + WIN_PL_GOLD_0
+    sta player_data + WIN_PL_GOLD_1
+    sta player_data + WIN_PL_GOLD_2
+!win_gold_capped:
     lda player_data + WIN_PL_XP_0
     clc
     adc #$40

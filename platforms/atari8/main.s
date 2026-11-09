@@ -641,21 +641,29 @@ tramp_do_look:
 .label tramp_level_generate = level_generate
 .label tramp_assign_special_room = assign_special_room
 .label tramp_vault_seal_entrance = vault_seal_entrance
-.label tramp_spawn_special_room_monsters = spawn_special_room_monsters
+// Special rooms run in OVL.GEN (2026-11-08): population runs right after
+// generation, and nest gold after pick_item_type has left the chest overlay
+// (PICKER_IN_CHEST_OVERLAY) in the $E000 window (M5b round 33: nest gold
+// placed off the map corrupted code), so both load GEN back first, as the
+// Apple IIe and CX16 trampolines do.
+tramp_spawn_special_room_monsters:
+    jsr tramp_sr_gen_loaded
+    jmp spawn_special_room_monsters
 tramp_spawn_nest_gold:
-    // pick_item_type leaves the chest overlay (PICKER_IN_CHEST_OVERLAY) in the
-    // $E000 window, and spawn_nest_gold calls random_floor_in_room in the
-    // dungeon-generation overlay: load it back first, as the Apple IIe and CX16
-    // trampolines do (M5b round 33: nest gold placed off the map corrupted code)
+    jsr tramp_sr_gen_loaded
+    jmp spawn_nest_gold
+// tramp_sr_gen_loaded — OVL.GEN in the $E000 window (asks for the program
+// disk until it loads). Clobbers: A, X
+tramp_sr_gen_loaded:
     lda current_overlay
     cmp #OVL_DUNGEON_GEN
-    beq !tsng_loaded+
+    beq !tsgl_loaded+
     ldx #OVL_DUNGEON_GEN - 1
-    jsr overlay_load_disk       // asks for the program disk until it loads
+    jsr overlay_load_disk
     lda #OVL_DUNGEON_GEN
     sta current_overlay
-!tsng_loaded:
-    jmp spawn_nest_gold
+!tsgl_loaded:
+    rts
 .label tramp_find_special_room = find_special_room
 .label tramp_sr_epilogue = atari_platform_runtime_resync
 
@@ -1098,7 +1106,9 @@ program_end:
     // Asks for the program disk when a required load keeps failing. Safe
     // here: every load that reaches it comes after ATARI.BNK is in place.
     #import "../commodore/common/asset_load_prompt.s"
-    #import "../../core/special_rooms.s"
+    // find_special_room only: item placement calls it with OVL.CHEST loaded
+    // (the rest of special_rooms.s is in OVL.GEN, 2026-11-08).
+    #import "../../core/special_rooms_find.s"
     #import "../../core/ego_items.s"
     #import "../../core/ui_home.s"
     #import "../../core/item_desc_banked.s"
@@ -1213,6 +1223,7 @@ winner_apply_retirement_bonus_overlay:
     lda player_data + PL_GOLD_2
     adc #$03
     sta player_data + PL_GOLD_2
+    :GoldCapOnCarry()               // 250,000 more stops at 16,777,215
     lda player_data + PL_XP_0
     clc
     adc #$40
@@ -1291,8 +1302,11 @@ ovl_items_end:
 .assert "Items overlay fits in $E000-$EFFF", ovl_items_end <= $f000, true
 
 .segment DungeonGenOverlay
+    #import "../../core/special_rooms.s"
     #import "../../core/dungeon_gen.s"
 ovl_gen_end:
+.assert "Special rooms run in OVL.GEN", assign_special_room >= $e000 && spawn_nest_gold < ovl_gen_end, true
+.assert "find_special_room is outside the $E000 window (the CHEST-loaded picker calls it)", find_special_room >= $f000, true
 .print "DungeonGen overlay: " + (ovl_gen_end - $e000) + " bytes at $E000-$" + toHexString(ovl_gen_end)
 .assert "DungeonGen overlay fits in $E000-$EFFF", ovl_gen_end <= $f000, true
 

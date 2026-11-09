@@ -497,6 +497,44 @@ def scenario_priest_map_area(tb: X16Bench) -> None:
     tb.log("SCENARIO DONE")
 
 
+def scenario_priest_find_traps(tb: X16Bench) -> None:
+    """Find Traps runs from OVL.SPELL (core/spell_effects_overlay.s, moved
+    out of resident RAM 2026-11-08): a seeded trap is revealed on the map in
+    Banks 1-2 and the game returns to the town view."""
+    tb.chargen("C")
+    pd = tb.syms["player_data"]
+    tb.write_u8(pd + 19, 33)                          # PL_LEVEL
+    tb.write_u8(0x33, 33)
+    tb.write_u8(pd + 37, 50)                          # PL_MANA
+    tb.write_u8(0x31, 50)
+    tb.write_u8(pd + 61, tb.read_u8(pd + 61) | 0x20)  # Find Traps learnt (prayer 5)
+    px, py = tb.read_u8(0x2B), tb.read_u8(0x2C)
+    tx, ty = px + 2, py
+    tb.write_u8(tb.syms["trap_x"], tx)
+    tb.write_u8(tb.syms["trap_y"], ty)
+    tb.write_u8(tb.syms["trap_count"], 1)
+    virt = 0x2000 + ty * 198 + tx                     # MAP_BASE, 198 columns
+    bank, window = virt >> 13, 0xA000 | (virt & 0x1FFF)
+    revealed = False
+    for _ in range(4):                                # a cast can fail
+        tb.press("P")
+        tb.press("A")
+        tb.shift("/")                                 # the list names learnt prayers only
+        tb.assert_line("find_traps_list", tb.screen_has("d) Find Traps"), "Find Traps not prayer d")
+        tb.press("D")
+        tb.drain_more()
+        tile = tb.read_bank_u8(bank, window)
+        if tile & 0xF0 == 0xE0 and tile & 0x04:       # TILE_TRAP, FLAG_VISITED
+            revealed = True
+            break
+        tb.write_u8(pd + 37, 50)
+        tb.write_u8(0x31, 50)
+    tb.assert_line("trap_revealed", revealed, f"tile at ({tx},{ty}) not a visited trap: {tile:#04x}")
+    tb.assert_line("find_traps_return", tb.in_town(), "did not return to the town view")
+    tb.dump("after_find_traps")
+    tb.log("SCENARIO DONE")
+
+
 def scenario_help_overlay(tb: X16Bench) -> None:
     tb.chargen("A")
     key_event(tb, KEYNUM_Y)     # a key-down whose key-up never arrives
@@ -1376,6 +1414,7 @@ SCENARIO_FUNCS = {
     "boot_title": scenario_boot_title,
     "priest_pray": scenario_priest_pray,
     "priest_map_area": scenario_priest_map_area,
+    "priest_find_traps": scenario_priest_find_traps,
     "help_overlay": scenario_help_overlay,
     "wizard_flow": scenario_wizard_flow,
     "wizard_summon_town": scenario_wizard_summon_town,

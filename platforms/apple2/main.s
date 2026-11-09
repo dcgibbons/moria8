@@ -1353,6 +1353,7 @@ winner_apply_retirement_bonus_overlay:
     lda player_data + PL_GOLD_2
     adc #$03
     sta player_data + PL_GOLD_2
+    :GoldCapOnCarry()               // 250,000 more stops at 16,777,215
     lda player_data + PL_XP_0
     clc
     adc #$40

@@ -5,6 +5,13 @@
 //   RT_PIT  (dlvl >= 5): 4-8 monsters of a single creature type
 //   RT_VAULT (dlvl >= 8): Enhanced treasure, entrance sealed with secret door
 //   RT_NEST (dlvl >= 3): 3-6 weaker mixed monsters + extra gold
+//
+// Owner: OVL.GEN on every port (2026-11-08; the C64, Plus/4 and Atari 8-bit
+// had it in RuntimeBanked). Lifetime: one level's generation and population.
+// Callers: dungeon_gen.s (in GEN), monster_spawn_level and item_spawn_level
+// right after it through the port's tramp_* entries; those that can follow an
+// overlay swap (nest gold after the CHEST-loaded picker, monster population)
+// load GEN back first. find_special_room is apart (special_rooms_find.s).
 
 // Vault seal scratch
 vse_x:      .byte 0         // Current x for vertical wall scan
@@ -101,28 +108,10 @@ assign_special_room:
 !asr_done:
     rts
 
-// ============================================================
-// find_special_room — Find room with given type
-// Input:  A = room type to find (RT_PIT, RT_VAULT, RT_NEST)
-// Output: X = room index, carry set = found
-//         carry clear = not found
-// Clobbers: X
-// ============================================================
-find_special_room:
-    ldx room_count
-    beq !fsr_fail+
-    dex
-!fsr_loop:
-    cmp room_type,x
-    beq !fsr_found+
-    dex
-    bpl !fsr_loop-
-!fsr_fail:
-    clc
-    rts
-!fsr_found:
-    sec
-    rts
+// find_special_room: its own file, which a port imports outside OVL.GEN
+// first when its item picker runs in another overlay (#importonce: this is
+// then a no-op).
+#import "special_rooms_find.s"
 
 // ============================================================
 // vault_seal_entrance — Convert first door/mouth on vault perimeter to secret door

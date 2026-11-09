@@ -44,6 +44,20 @@ product reason, and verify the rendered path on the affected target.
 - Test code entered directly through BASIC must start below `$A000`, or use a
   bootstrap trampoline that banks out BASIC ROM first.
 
+Placement is decided with the feature, not when a segment runs out. A module
+whose placement differs by port, or that runs in an overlay or banked segment,
+states in its header: its **owner** on each port (segment or overlay), its
+**lifetime** (one call, one cast, one level, the session; boot-only code that a
+restart runs again is not boot-only), and its **callers** that can arrive with
+another overlay loaded, and how that entry gets its owner back. Where a fact can
+be checked, an `.assert` beside the placement checks it (e.g. a routine called
+from another overlay lies outside the `$E000` window). Moving a module updates
+its header, the assert, and the port's memory contract row. Code whose only
+callers live in an overlay belongs in that overlay where it fits, on unshipped
+ports too: don't leave a misplacement for later. Keep three results apart:
+removing code (smaller product), moving it (pressure redistributed), and
+shortening a copy (less transfer, often no space freed).
+
 After import reordering, segment movement, banking changes, or runtime payload
 layout changes, rebuild and inspect the assembler memory map and `.print`
 output. Existing boundary `.assert` statements are part of the contract; fix

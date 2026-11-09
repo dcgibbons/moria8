@@ -504,6 +504,22 @@ test_start:
     lda player_data + PL_GOLD_0
     cmp #95
     bne !t14_fail+
+    // A sale past 16,777,215 stops there, not wrapping (GoldCapOnCarry)
+    lda #$00
+    sta player_data + PL_GOLD_0
+    lda #$ff
+    sta player_data + PL_GOLD_1
+    sta player_data + PL_GOLD_2
+    lda #$00
+    sta sb_price_lo
+    lda #$02                    // 512 more than 16,776,960
+    sta sb_price_hi
+    jsr gold_add_price
+    lda player_data + PL_GOLD_0
+    and player_data + PL_GOLD_1
+    and player_data + PL_GOLD_2
+    cmp #$ff
+    bne !t14_fail+
     lda #$01
     jmp !t14_store+
 !t14_fail:

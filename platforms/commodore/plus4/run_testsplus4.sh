@@ -3156,6 +3156,10 @@ run_dungeon_ascent_smoke
 # pick_item_type has loaded the chest overlay (M5b round 33 code corruption).
 check_static_contract "nest_gold_restores_generation_overlay_contract" "main.s" \
     "tramp_spawn_nest_gold:|||ldx #OVL_DUNGEON_GEN - 1|||jsr overlay_load_disk|||jsr spawn_nest_gold"
+# Special rooms run in OVL.GEN (2026-11-08): monster population loads it back
+# too, if anything replaced it after generation.
+check_static_contract "special_room_monsters_restore_generation_overlay_contract" "main.s" \
+    "tramp_spawn_special_room_monsters:|||ldx #OVL_DUNGEON_GEN - 1|||jsr overlay_load_disk|||jsr spawn_special_room_monsters"
 check_static_contract "disarm_command_external_import_contract" "main.s" \
     "#define DISARM_COMMAND_EXTERNAL|||#import \"../../../core/game_loop.s\"|||#undef DISARM_COMMAND_EXTERNAL"
 run_disarm_smoke

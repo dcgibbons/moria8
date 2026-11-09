@@ -48,6 +48,18 @@
 .const PL_GOLD_0    = 43   // Gold (24-bit, up to 16M)
 .const PL_GOLD_1    = 44
 .const PL_GOLD_2    = 45
+// GoldCapOnCarry — After a 24-bit addition to the gold whose last step left
+// the carry out of PL_GOLD_2: stop at 16,777,215 rather than wrap
+// (2026-11-08). VMS Moria and Umoria keep a 32-bit integer no game fills and
+// wrap it; Moria8's 24 bits a long game can fill. Preserves: X, Y. 13 bytes.
+.macro GoldCapOnCarry() {
+    bcc !gcc_done+
+    lda #$ff
+    sta player_data + PL_GOLD_0
+    sta player_data + PL_GOLD_1
+    sta player_data + PL_GOLD_2
+!gcc_done:
+}
 .const PL_XP_0      = 46   // Experience (24-bit)
 .const PL_XP_1      = 47
 .const PL_XP_2      = 48

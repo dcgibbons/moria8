@@ -2992,6 +2992,26 @@ test_start:
     bne !t58_fail+
     lda player_data + PL_GOLD_2
     bne !t58_fail+
+    // At 16,777,000 a pickup of 1,000 stops at 16,777,215, not 784
+    // (GoldCapOnCarry, 2026-11-08)
+    jsr t58_gold_setup
+    lda #$28                    // 16,777,000 = $FFFF28
+    sta player_data + PL_GOLD_0
+    lda #$ff
+    sta player_data + PL_GOLD_1
+    sta player_data + PL_GOLD_2
+    lda #<1000
+    sta fi_add_qty
+    lda #>1000
+    sta fi_add_qty_hi
+    jsr floor_item_add
+    jsr item_pickup
+    bcc !t58_fail+
+    lda player_data + PL_GOLD_0
+    and player_data + PL_GOLD_1
+    and player_data + PL_GOLD_2
+    cmp #$ff
+    bne !t58_fail+
     lda #$01
     sta tc_results + 57
     jmp !t59+

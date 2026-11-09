@@ -1266,7 +1266,8 @@ tramp_level_generate:
     rts
 
 // ============================================================
-// Special rooms trampolines — SEI + bank out KERNAL, call $F000+
+// Special rooms trampolines — SEI + bank out KERNAL, call OVL.GEN at $E000
+// (find_special_room: $F000)
 // ============================================================
 tramp_assign_special_room:
     php                         // Save interrupt state (caller may be in sei context)
@@ -1295,11 +1296,18 @@ tramp_vault_seal_entrance:
     rts
 
 tramp_spawn_special_room_monsters:
+    // In OVL.GEN: monster_spawn_level runs right after generation, but load
+    // it back if anything since has replaced it (a no-op when loaded)
+    lda #OVL_DUNGEON_GEN
+    jsr overlay_load
+    bcs !tssrm_failed+
     sei
     lda #BANK_NO_ROMS
     sta $01
     jsr spawn_special_room_monsters
     jmp tramp_sr_epilogue
+!tssrm_failed:
+    rts                         // no special-room monsters on a media error
 
 tramp_spawn_nest_gold:
     // pick_item_type leaves the chest overlay (PICKER_IN_CHEST_OVERLAY) in the
@@ -2749,7 +2757,9 @@ catalog_init_tail_end:
 // Banked runtime payload — loadable PRG at $F000.
 // ============================================================
 .segment RuntimeBanked
-    #import "../../../core/special_rooms.s"
+    // find_special_room only: item placement calls it with OVL.CHEST loaded
+    // (the rest of special_rooms.s is in OVL.GEN, 2026-11-08).
+    #import "../../../core/special_rooms_find.s"
     #import "../../../core/ego_items.s"
     #import "../../../core/ui_home.s"
     #import "../../../core/ui_recall.s"
@@ -2915,6 +2925,7 @@ winner_apply_retirement_bonus_overlay:
     lda player_data + PL_GOLD_2
     adc #$03
     sta player_data + PL_GOLD_2
+    :GoldCapOnCarry()               // 250,000 more stops at 16,777,215
     lda player_data + PL_XP_0
     clc
     adc #$40
@@ -3018,9 +3029,12 @@ ovl_items_end:
 // Loaded on demand whenever stairs are used or a new game starts.
 // Shared constants and data tables stay in dungeon_data.s (main segment).
 .segment DungeonGenOverlay
+    #import "../../../core/special_rooms.s"
     #import "../../../core/dungeon_gen.s"
 
 ovl_gen_end:
+.assert "Special rooms run in OVL.GEN", assign_special_room >= $e000 && spawn_nest_gold < ovl_gen_end, true
+.assert "find_special_room is outside the $E000 window (the CHEST-loaded picker calls it)", find_special_room >= $f000, true
 .print "DungeonGen overlay: " + (ovl_gen_end - $e000) + " bytes at $E000-$" + toHexString(ovl_gen_end)
 .assert "DungeonGen overlay fits in $E000-$EFFF", ovl_gen_end <= $F000, true
 

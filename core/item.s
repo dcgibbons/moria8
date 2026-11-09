@@ -877,6 +877,7 @@ item_pickup:
     lda player_data + PL_GOLD_2
     adc #0
     sta player_data + PL_GOLD_2
+    :GoldCapOnCarry()
 
     // Build message: "You found N gold pieces."
     lda #0
