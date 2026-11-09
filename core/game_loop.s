@@ -855,6 +855,12 @@ disk_prompt_game_required:
 #endif
     bcc !ready+
 disk_prompt_game_required_error:
+    // The screen is cleared: the next main_loop pass rebuilds the view, as
+    // after asset_load_ask_for_disk. A Plus/4 look's program-media probe
+    // failed, a key brought the disk back, and the game played on under the
+    // prompt (build queue, 2026-11-06..09: 17 games to their step budgets).
+    lda #1
+    sta disk_prompt_redraw_pending
     jsr ui_clear_full_screen_safe
     jsr msg_init
     lda #COL_WHITE

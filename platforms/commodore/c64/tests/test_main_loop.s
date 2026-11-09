@@ -23,7 +23,7 @@ bootstrap:
     jmp test_start
 
 test_finish:
-    ldx #53
+    ldx #54
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -333,7 +333,7 @@ random_floor_in_room:
 save_welcome_str:
     .text "WELCOME BACK" ; .byte 0
 
-tc_results: .fill 54, $ff
+tc_results: .fill 55, $ff
 
 test_cmd_idx: .byte 0
 test_cmd_len: .byte 0
@@ -3039,12 +3039,41 @@ test_start:
     bne !t54_fail+
     lda #$01
     sta tc_results + 53
-    jmp test_finish
+    jmp !t55+
 !t54_fail:
     lda #0
     sta disk_prompt_redraw_pending
     sta tc_results + 53
+
+    // Test 55: the program-media prompt (disk_prompt_game_required_error)
+    // clears the screen, so it owes the next pass a redraw too: a Plus/4
+    // look's probe failed, a key brought the disk back and the game played
+    // on under "Insert program disk" (build queue, 2026-11-09).
+!t55:
+    lda #0
+    sta disk_prompt_redraw_pending
+#if PLATFORM_REQUIRES_MEDIA_PROBE
+    :PatchJump(hal_storage_require_program_media, t55_probe_ok)
+    :PatchJump(hal_storage_init_selected_drive, t55_return)
+#else
+    :PatchJump(disk_prompt_game, t55_probe_ok)
+#endif
+    :PatchJump(input_get_modal_dismiss_key, t55_return)
+    jsr disk_prompt_game_required_error
+    lda disk_prompt_redraw_pending
+    beq !t55_fail+
+    lda #$01
+    sta tc_results + 54
     jmp test_finish
+!t55_fail:
+    lda #0
+    sta tc_results + 54
+    jmp test_finish
+
+t55_probe_ok:
+    clc                              // the program disk answers this time
+t55_return:
+    rts
 
 // A trap of type 0 at the player's reset position (10, 10).
 t49_trap_under_player:
